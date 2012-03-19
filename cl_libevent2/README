@@ -1,0 +1,10 @@
+Libevent2
+
+Libevent2 has a number of differences with Libevent, however, it annoyingly
+clashes with header files.
+
+In order to do this build, I downloaded libevent2 from libevent.org, and did
+
+./configure --prefix=/usr/local ; make ; sudo make install
+
+

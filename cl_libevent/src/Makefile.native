@@ -1,0 +1,36 @@
+# Citrusleaf Foundation
+# Makefile
+
+include Makefile.in
+include Makefile.files
+
+DIR_INCLUDE = ../include
+DIR_OBJECT = ../obj/native
+DIR_TARGET = ../lib
+
+TARGET = libevcitrusleaf.a
+
+INCLUDES = -I$(DIR_INCLUDE) 
+
+OBJECTS = $(SOURCES:%.c=$(DIR_OBJECT)/%.o)
+DEPENDENCIES = $(OBJECTS:%.o=%.d)
+
+.PHONY: all
+all: libevcitrusleaf
+
+.PHONY: clean
+clean:
+	/bin/rm -f $(OBJECTS) $(DIR_TARGET)/$(TARGET)
+
+.PHONY: depclean
+depclean: clean
+	/bin/rm -f $(DEPENDENCIES)
+
+.PHONY: libevcitrusleaf
+libevcitrusleaf: $(OBJECTS)
+	ar rs $(DIR_TARGET)/$(TARGET) $(OBJECTS)
+
+-include $(DEPENDENCIES)
+
+$(DIR_OBJECT)/%.o: %.c
+	$(CC) $(CFLAGS_NATIVE) -MMD -o $@ -c $(INCLUDES) $<

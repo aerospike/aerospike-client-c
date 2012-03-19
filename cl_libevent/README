@@ -1,0 +1,35 @@
+
+Installation for Linux
+
+Only the libc, openssl, and libevent packages must be installed to compile the client library.
+
+For Debian based distributions, like Ubuntu, the following packages must be installed: 
+
+    sudo apt-get install libevent-dev
+    sudo apt-get install libc6-dev
+    sudo apt-get install libssl-dev
+
+For redhat derived distributions such as Fedora Core and Centos, excute:
+
+    sudo yum install openssl-devel glibc-devel
+
+Installation of these packages will also install gcc. gcc -version must show a version of 4.1 or better. 
+g++ is also supported, with the same version restriction.
+
+Download the Citrusleaf C client tarball and decompress it. 
+    tar xzf citrusleaf_client_libevent-2.0.x.tgz
+
+For the examples to work properly, you may need to download libevent 1.4 
+from http://monkey.org/~provos/libevent/.
+Decompress the tarball to a directory at the same level as citrusleaf_client_libevent. 
+
+In the example subdirectory, you'll find an example makefile and short C program that shows how 
+to write a short program to link against the provided evcitrusleaf, and the main-line libevent 
+distribution. The provided makefile simply links against local libraries. Alternately, 
+the provided evcitrusleaf code can be compiled directly into the libevent library similar to evdns 
+and evhttp. If this type of installation is desired, you will need to manually move the provided 
+Citrusleaf files into a libevent source directory and update the libevent Makefile.in, as you would
+a patch. 
+Choosing the appropriate linkage and distribution option for your application and environment 
+is beyond the scope of this document. 
+

@@ -1,0 +1,44 @@
+# Citrusleaf Foundation
+# Makefile
+
+#DEPTH = ../../..
+#include $(DEPTH)/make_in/Makefile.in
+include Makefile.in
+include Makefile.files
+
+DIR_INCLUDE = ../include
+DIR_OBJECT = ../obj/x64
+DIR_TARGET = ../lib64
+
+TARGET_S = libcitrusleaf.a
+TARGET_D = $(SONAME)
+
+INCLUDES = -I$(DIR_INCLUDE) 
+
+OBJECTS = $(SOURCES:%.c=$(DIR_OBJECT)/%.o)
+DEPENDENCIES = $(OBJECTS:%.o=%.d)
+
+.PHONY: all
+all: libcitrusleaf
+
+.PHONY: clean
+clean:
+	/bin/rm -f $(OBJECTS) $(DIR_TARGET)/$(TARGET_S) $(DIR_TARGET)/$(TARGET_D)
+
+.PHONY: depclean
+depclean: clean
+	/bin/rm -f $(DEPENDENCIES)
+
+.PHONY: libcitrusleaf
+libcitrusleaf: $(OBJECTS)
+	mkdir -p $(DIR_TARGET)
+	ar rs $(DIR_TARGET)/$(TARGET_S) $(OBJECTS)
+ifeq (${MARCH_NATIVE},x86_64)
+	$(LD) $(LDFLAGS) -o $(DIR_TARGET)/$(TARGET_D) $(OBJECTS)
+endif
+
+-include $(DEPENDENCIES)
+
+$(DIR_OBJECT)/%.o: %.c
+	mkdir -p $(DIR_OBJECT)
+	$(CC) $(CFLAGS_64) -fPIC -MMD -o $@ -c $(INCLUDES) $<

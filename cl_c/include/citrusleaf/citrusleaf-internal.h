@@ -25,12 +25,12 @@
 #include "citrusleaf/citrusleaf.h"
 #include "citrusleaf/cl_cluster.h"
 #include "citrusleaf/proto.h"
-#include "cf_atomic.h"
-#include "cf_ll.h"
-#include "cf_vector.h"
-#include "cf_queue.h"
-#include "cf_alloc.h"
-#include "cf_digest.h"
+#include "citrusleaf/cf_atomic.h"
+#include "citrusleaf/cf_ll.h"
+#include "citrusleaf/cf_vector.h"
+#include "citrusleaf/cf_queue.h"
+#include "citrusleaf/cf_alloc.h"
+#include "citrusleaf/cf_digest.h"
 
 #ifdef __cplusplus
 extern "C" {

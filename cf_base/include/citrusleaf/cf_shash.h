@@ -32,6 +32,36 @@ typedef uint8_t byte;
 #define cf_info( __UNIT, __fmt, __args...) fprintf(stderr, "INFO"__fmt, ## __args)
 #endif
 
+/* cf_hash_fnv
+ * The 64-bit Fowler-Noll-Voll hash function (FNV-1a) */
+//
+// This algorithm is PUBLIC DOMAIN:
+//
+// FNV hash algorithms and source code have been released into the public domain. The authors of the
+// FNV algorithmm look deliberate steps to disclose the algorhtm in a public forum soon after it was
+// invented. More than a year passed after this public disclosure and the authors deliberatly took no
+// steps to patent the FNV algorithm. Therefore it is safe to say that the FNV authors have no patent
+// claims on the FNV algorithm as published.
+// Source: http://www.isthe.com/chongo/tech/comp/fnv/index.html
+//
+// FNV on Wikipedia: http://en.wikipedia.org/wiki/Fowler%E2%80%93Noll%E2%80%93Vo_hash_function
+//
+static inline uint64_t
+cf_hash_fnv(void *buf, size_t bufsz)
+{
+	uint64_t hash = 0xcbf29ce484222325ULL;
+	uint8_t *bufp = (uint8_t *)buf, *bufe = bufp + bufsz;
+
+	while (bufp < bufe) {
+		/* XOR the current byte into the bottom of the hash */
+		hash ^= (uint64_t)*bufp++;
+
+		/* Multiply by the 64-bit FNV magic prime */
+		hash *= 0x100000001b3ULL;
+	}
+
+	return(hash);
+}
 
 /*
  * A generic call for hash functions the user can create

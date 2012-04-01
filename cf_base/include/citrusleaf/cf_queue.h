@@ -8,6 +8,10 @@
  */
 #pragma once
 
+#include <pthread.h>
+#include <inttypes.h>
+#include <stdbool.h>
+
 
 /* SYNOPSIS
  * Queue
@@ -28,8 +32,12 @@ typedef struct cf_queue_s {
 						   // write is always greater than or equal to read
 	unsigned int read_offset; // 
 	size_t elementsz;     // number of bytes in an element
+#ifdef EXTERNAL_LOCKS
+	void *LOCK; // the lock object
+#else
 	pthread_mutex_t LOCK;  // the mutex lock
 	pthread_cond_t CV;    // hte condvar
+#endif // EXTERNAL_LOCKS
 	uint8_t *queue;         // the actual bytes that make up the queue
 } cf_queue;
 
@@ -39,7 +47,7 @@ typedef struct cf_queue_s {
 
 // todo: maybe it's faster to keep the read and write offsets in bytes,
 // to avoid the extra multiply?
-#define CF_Q_ELEM_PTR(__q, __i) (&q->queue[ (__i % __q->allocsz) * q->elementsz ] )
+#define CF_Q_ELEM_PTR(__q, __i) (&__q->queue[ (__i % __q->allocsz) * __q->elementsz ] )
 
 
 /* External functions */
@@ -100,9 +108,12 @@ typedef struct cf_queue_priority_s {
 	cf_queue	*low_q;
 	cf_queue	*medium_q;
 	cf_queue	*high_q;
-	
+#ifdef EXTERNAL_LOCKS
+	void *		LOCK;
+#else	
 	pthread_mutex_t		LOCK;
 	pthread_cond_t	 	CV;
+#endif
 } cf_queue_priority;
 
 #define CF_QUEUE_PRIORITY_HIGH 1

@@ -17,8 +17,31 @@
 #include <unistd.h>
 
 
-#include "citrusleaf/citrusleaf.h"
+#include "citrusleaf/cf_ll.h"
 
+#ifdef EXTERNAL_LOCKS
+#include "citrusleaf/cf_hooks.h"
+#endif
+
+#ifdef EXTERNAL_LOCKS
+#define LL_UNLOCK(_ll) if (_ll->uselock) { \
+		cf_hooked_mutex_unlock(_ll->LOCK); \
+	}
+#else
+#define LL_UNLOCK(_ll) if (_ll->uselock) { \
+		pthread_mutex_unlock(&(_ll->LOCK)); \
+	}
+#endif // EXTERNAL_LOCKS
+
+#ifdef EXTERNAL_LOCKS
+#define LL_LOCK(_ll) if (_ll->uselock) { \
+		cf_hooked_mutex_lock(_ll->LOCK); \
+	} 
+#else
+#define LL_LOCK(_ll) if (_ll->uselock) { \
+		pthread_mutex_lock(&(_ll->LOCK)); \
+	} 
+#endif // EXTERNAL_LOCKS
 
 #define DEBUG 1
 
@@ -56,13 +79,11 @@ cf_ll_prepend_lockfree(cf_ll *ll, cf_ll_element *e  )
 void
 cf_ll_prepend(cf_ll *ll, cf_ll_element *e  )
 {
-	if (ll->uselock)
-		pthread_mutex_lock(&ll->LOCK);
+	LL_LOCK(ll);
 
 	cf_ll_prepend_lockfree(ll, e);
 
-	if (ll->uselock)
-		pthread_mutex_unlock(&ll->LOCK);
+	LL_UNLOCK(ll)
 }
 
 void
@@ -90,13 +111,11 @@ cf_ll_append_lockfree(cf_ll *ll, cf_ll_element *e  )
 void
 cf_ll_append(cf_ll *ll, cf_ll_element *e  )
 {
-	if (ll->uselock)
-		pthread_mutex_lock(&ll->LOCK);
+	LL_LOCK(ll);
 
 	cf_ll_append_lockfree(ll, e);
 
-	if (ll->uselock)
-		pthread_mutex_unlock(&ll->LOCK);
+	LL_UNLOCK(ll);
 }
 
 void
@@ -119,13 +138,11 @@ cf_ll_insert_after_lockfree(cf_ll *ll, cf_ll_element *cur, cf_ll_element *ins)
 void
 cf_ll_insert_after(cf_ll *ll, cf_ll_element *cur, cf_ll_element *ins)
 {
-	if (ll->uselock)
-		pthread_mutex_lock(&ll->LOCK);
+	LL_LOCK(ll);
 
 	cf_ll_insert_after_lockfree(ll, cur, ins);
 	
-	if (ll->uselock)
-		pthread_mutex_unlock(&ll->LOCK);	
+	LL_UNLOCK(ll);
 }
 
 void
@@ -149,13 +166,11 @@ cf_ll_insert_before_lockfree(cf_ll *ll, cf_ll_element *cur, cf_ll_element *ins)
 void
 cf_ll_insert_before(cf_ll *ll, cf_ll_element *cur, cf_ll_element *ins)
 {
-	if (ll->uselock)
-		pthread_mutex_lock(&ll->LOCK);
+	LL_LOCK(ll);
 	
 	cf_ll_insert_before_lockfree( ll, cur, ins);
 	
-	if (ll->uselock)
-		pthread_mutex_unlock(&ll->LOCK);	
+	LL_UNLOCK(ll);
 }
 
 
@@ -196,13 +211,11 @@ cf_ll_delete(cf_ll *ll, cf_ll_element *e )
 	// extra check for fun
 	if (ll->sz == 0)	return;
 
-	if (ll->uselock)
-		pthread_mutex_lock(&ll->LOCK);
+	LL_LOCK(ll);
 
 	cf_ll_delete_lockfree(ll, e);
 	
-	if (ll->uselock)
-		pthread_mutex_unlock(&ll->LOCK);
+	LL_UNLOCK(ll);
 	
 }
 
@@ -212,8 +225,7 @@ cf_ll_reduce( cf_ll *ll, bool forward, cf_ll_reduce_fn fn, void *udata)
 {
 	int rv = 0;
 	
-	if (ll->uselock)
-		pthread_mutex_lock(&ll->LOCK);
+	LL_LOCK(ll);
 	
 	cf_ll_element *cur = forward ? ll->head : ll->tail;
 	
@@ -238,8 +250,7 @@ cf_ll_reduce( cf_ll *ll, bool forward, cf_ll_reduce_fn fn, void *udata)
 	}
 
 Exit:		
-	if (ll->uselock)
-		pthread_mutex_unlock(&ll->LOCK);
+	LL_UNLOCK(ll);
 	return(rv);
 }
 
@@ -247,8 +258,7 @@ int
 cf_ll_insert_reduce(cf_ll *ll, cf_ll_element *e, bool forward, cf_ll_reduce_fn fn, void *udata)
 {
 	int rv = 0;
-	if (ll->uselock)
-		pthread_mutex_lock(&ll->LOCK);
+	LL_LOCK(ll);
 
 	cf_ll_element *cur = forward ? ll->head : ll->tail;
 	
@@ -286,21 +296,18 @@ cf_ll_insert_reduce(cf_ll *ll, cf_ll_element *e, bool forward, cf_ll_reduce_fn f
 	}
 
 Exit:
-	if (ll->uselock)
-		pthread_mutex_unlock(&ll->LOCK);
+	LL_UNLOCK(ll);
 	return(rv);
 }
 
 uint32_t
 cf_ll_size(cf_ll *ll)
 {
-	if (ll->uselock)
-		pthread_mutex_lock(&ll->LOCK);
+	LL_LOCK(ll);
 	
 	uint32_t sz = ll->sz;
 	
-	if (ll->uselock)
-		pthread_mutex_unlock(&ll->LOCK);
+	LL_UNLOCK(ll);
 	
 	return(sz);
 }	
@@ -313,7 +320,12 @@ cf_ll_init(cf_ll *ll, cf_ll_destructor destroy_fn, bool uselock)
 	ll->destroy_fn = destroy_fn;
 	ll->sz = 0;
 	ll->uselock = uselock;
-	if (uselock) 
+	if (uselock) {
+#ifdef EXTERNAL_LOCKS
+		ll->LOCK = cf_hooked_mutex_alloc();
+#else
 		pthread_mutex_init(&ll->LOCK, 0);
+#endif 
+	}
 	return(0);	
 }

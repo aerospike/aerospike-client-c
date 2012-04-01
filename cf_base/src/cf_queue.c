@@ -16,9 +16,29 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "citrusleaf/citrusleaf.h"
+#ifdef EXTERNAL_LOCKS
+#include "citrusleaf/cf_hooks.h"
+#endif
+
+#include "citrusleaf/cf_queue.h"
 
 // #define DEBUG 1
+
+#ifdef EXTERNAL_LOCKS
+#define QUEUE_LOCK(_q) if (_q->threadsafe) \
+		cf_hooked_mutex_lock(_q->LOCK);
+#else
+#define QUEUE_LOCK(_q) if (_q->threadsafe) \
+		pthread_mutex_lock(&_q->LOCK);
+#endif 
+
+#ifdef EXTERNAL_LOCKS
+#define QUEUE_UNLOCK(_q) if (_q->threadsafe) \
+		cf_hooked_mutex_unlock(_q->LOCK);
+#else
+#define QUEUE_UNLOCK(_q) if (_q->threadsafe) \
+		pthread_mutex_unlock(&_q->LOCK);
+#endif 
 
 /* SYNOPSIS
  * Queue
@@ -50,6 +70,18 @@ cf_queue_create(size_t elementsz, bool threadsafe)
 	if (!q->threadsafe)
 		return(q);
 
+#ifdef EXTERNAL_LOCKS
+	if (!g_mutex_hooks)
+		return(q);
+
+	if ((q->LOCK = cf_hooked_mutex_alloc()) == NULL) {
+		/* FIXME error msg */
+		free(q->queue);
+		free(q);
+		return(NULL);
+	}
+
+#else
 	if (0 != pthread_mutex_init(&q->LOCK, NULL)) {
 		/* FIXME error msg */
 		free(q->queue);
@@ -63,7 +95,7 @@ cf_queue_create(size_t elementsz, bool threadsafe)
 		free(q);
 		return(NULL);
 	}
-
+#endif // EXTERNAL_LOCKS
 	return(q);
 }
 
@@ -75,10 +107,14 @@ void
 cf_queue_destroy(cf_queue *q)
 {
 	if (q->threadsafe) {
+#ifdef EXTERNAL_LOCKS
+		cf_hooked_mutex_free(q->LOCK);
+#else
 		pthread_cond_destroy(&q->CV);
 		pthread_mutex_destroy(&q->LOCK);
+#endif // EXTERNAL_LOCKS
 	}
-	memset(q->queue, 0, sizeof(q->allocsz * q->elementsz));
+	memset(q->queue, 0, q->allocsz * q->elementsz);
 	free(q->queue);
 	memset(q, 0, sizeof(cf_queue) );
 	free(q);
@@ -89,11 +125,10 @@ cf_queue_sz(cf_queue *q)
 {
 	int rv;
 
-	if (q->threadsafe)
-		pthread_mutex_lock(&q->LOCK);
+	QUEUE_LOCK(q);
 	rv = CF_Q_SZ(q);
-	if (q->threadsafe)
-		pthread_mutex_unlock(&q->LOCK);
+	QUEUE_UNLOCK(q);
+
 	return(rv);
 	
 }
@@ -147,6 +182,8 @@ cf_queue_resize(cf_queue *q, uint new_sz)
 
 // we have to guard against wraparound, call this occasionally
 // I really expect this will never get called....
+// HOWEVER it can be a symptom of a queue getting really, really deep
+//
 void
 cf_queue_unwrap(cf_queue *q)
 {
@@ -158,7 +195,6 @@ cf_queue_unwrap(cf_queue *q)
 
 /* cf_queue_push
  * Push goes to the front, which currently means memcpying the entire queue contents
- * which is suck-licious
  * */
 int
 cf_queue_push(cf_queue *q, void *ptr)
@@ -166,15 +202,14 @@ cf_queue_push(cf_queue *q, void *ptr)
 	/* FIXME arg check - and how do you do that, boyo? Magic numbers? */
 
 	/* FIXME error */
-	if (q->threadsafe && (0 != pthread_mutex_lock(&q->LOCK)))
-			return(-1);
+
+	QUEUE_LOCK(q);
 
 	/* Check queue length */
 	if (CF_Q_SZ(q) == q->allocsz) {
 		/* resize is a pain for circular buffers */
 		if (0 != cf_queue_resize(q, q->allocsz + CF_QUEUE_ALLOCSZ)) {
-			if (q->threadsafe)
-				pthread_mutex_unlock(&q->LOCK);
+			QUEUE_UNLOCK(q);
 			return(-1);
 		}
 	}
@@ -184,12 +219,13 @@ cf_queue_push(cf_queue *q, void *ptr)
 	q->write_offset++;
 	// we're at risk of overflow if the write offset is that high
 	if (q->write_offset & 0xC0000000) cf_queue_unwrap(q);
-	
+
+#ifndef EXTERNAL_LOCKS	
 	if (q->threadsafe)
 		pthread_cond_signal(&q->CV);
+#endif 
 
-	if (q->threadsafe && (0 != pthread_mutex_unlock(&q->LOCK)))
-		return(-1);
+	QUEUE_UNLOCK(q);
 
 	return(0);
 }
@@ -203,12 +239,19 @@ cf_queue_push(cf_queue *q, void *ptr)
 int
 cf_queue_pop(cf_queue *q, void *buf, int ms_wait)
 {
-	if (NULL == q)
+	if (NULL == q) {
+		fprintf(stderr, "cf_queue_pop: try passing in a queue\n");
 		return(-1);
+	}
 
-	/* FIXME error checking */
-	if (q->threadsafe && (0 != pthread_mutex_lock(&q->LOCK)))
+#ifdef EXTERNAL_LOCKS 
+	if (ms_wait != CF_QUEUE_NOWAIT) {   // this implementation won't wait
+		fprintf(stderr, "cf_queue_pop: only nowait supported\n");
 		return(-1);
+	}
+#endif // EXTERNAL_LOCKS
+
+	QUEUE_LOCK(q);
 
 	struct timespec tp;
 	if (ms_wait > 0) {
@@ -232,6 +275,14 @@ cf_queue_pop(cf_queue *q, void *buf, int ms_wait)
 	 * of the pthread_cond_signal() documentation says that AT LEAST ONE
 	 * waiting thread will be awakened... */
 	if (q->threadsafe) {
+#ifdef EXTERNAL_LOCKS
+		QUEUE_LOCK(q);
+
+		if (CF_Q_EMPTY(q)) {
+			QUEUE_UNLOCK(q);
+			return(CF_QUEUE_EMPTY);
+		}
+#else
 		while (CF_Q_EMPTY(q)) {
 			if (CF_QUEUE_FOREVER == ms_wait) {
 				pthread_cond_wait(&q->CV, &q->LOCK);
@@ -248,6 +299,7 @@ cf_queue_pop(cf_queue *q, void *buf, int ms_wait)
 				}
 			}
 		}
+#endif // EXTERNAL_LOCKS
 	} else if (CF_Q_EMPTY(q))
 		return(CF_QUEUE_EMPTY);
 
@@ -255,12 +307,12 @@ cf_queue_pop(cf_queue *q, void *buf, int ms_wait)
 	q->read_offset++;
 	
 	// interesting idea - this probably keeps the cache fresher
+	// because the queue is fully empty just make it all zero
 	if (q->read_offset == q->write_offset) {
 		q->read_offset = q->write_offset = 0;
 	}
 
-	if (q->threadsafe && (0 != pthread_mutex_unlock(&q->LOCK)))
-		return(-1);
+	QUEUE_UNLOCK(q);
 
 	return(0);
 }
@@ -316,9 +368,7 @@ cf_queue_reduce(cf_queue *q,  cf_queue_reduce_fn cb, void *udata)
 	if (NULL == q)
 		return(-1);
 
-	/* FIXME error checking */
-	if (q->threadsafe && (0 != pthread_mutex_lock(&q->LOCK)))
-		return(-1);
+	QUEUE_LOCK(q);	
 
 	if (CF_Q_SZ(q)) {
 		
@@ -346,10 +396,7 @@ cf_queue_reduce(cf_queue *q,  cf_queue_reduce_fn cb, void *udata)
 	}
 	
 Found:	
-	if (q->threadsafe && (0 != pthread_mutex_unlock(&q->LOCK))) {
-		fprintf(stderr, "unlock failed\n");
-		return(-1);
-	}
+	QUEUE_UNLOCK(q);
 
 	return(0);
 	
@@ -365,10 +412,8 @@ cf_queue_delete(cf_queue *q, void *buf, bool only_one)
 	if (NULL == q)
 		return(CF_QUEUE_ERR);
 
-	/* FIXME error checking */
-	if (q->threadsafe && (0 != pthread_mutex_lock(&q->LOCK)))
-		return(CF_QUEUE_ERR);
-
+	QUEUE_LOCK(q);
+	
 	bool found = false;
 	
 	if (CF_Q_SZ(q)) {
@@ -389,10 +434,7 @@ cf_queue_delete(cf_queue *q, void *buf, bool only_one)
 	}
 
 Done:
-	if (q->threadsafe && (0 != pthread_mutex_unlock(&q->LOCK))) {
-		fprintf(stderr, "unlock failed\n");
-		return(-1);
-	}
+	QUEUE_UNLOCK(q);
 
 	if (found == false)
 		return(CF_QUEUE_EMPTY);
@@ -421,17 +463,25 @@ cf_queue_priority_create(size_t elementsz, bool threadsafe)
 	
 	if (threadsafe == false)
 		return(q);
-	
+#ifdef EXTERNAL_LOCKS
+	q->LOCK = cf_hooked_mutex_alloc();
+	if (!q->LOCK ) goto Fail5;
+#else	
 	if (0 != pthread_mutex_init(&q->LOCK, NULL))
 		goto Fail4;
 
 	if (0 != pthread_cond_init(&q->CV, NULL))
 		goto Fail5;
+#endif // EXTERNAL_LOCKS
 	
 	return(q);
 	
 Fail5:	
+#ifdef EXTERNAL_LOCKS
+	cf_hooked_mutex_free(q->LOCK);
+#else
 	pthread_mutex_destroy(&q->LOCK);
+#endif // EXTERNAL_LOCKS
 Fail4:	
 	cf_queue_destroy(q->high_q);
 Fail3:	
@@ -450,8 +500,12 @@ cf_queue_priority_destroy(cf_queue_priority *q)
 	cf_queue_destroy(q->medium_q);
 	cf_queue_destroy(q->low_q);
 	if (q->threadsafe) {
+#ifdef EXTERNAL_LOCKS
+		cf_hooked_mutex_free(q->LOCK);
+#else
 		pthread_mutex_destroy(&q->LOCK);
 		pthread_cond_destroy(&q->CV);
+#endif // EXTERNAL_LOCKS
 	}
 	free(q);
 }
@@ -460,8 +514,7 @@ int
 cf_queue_priority_push(cf_queue_priority *q, void *ptr, int pri)
 {
 	
-	if (q->threadsafe && (0 != pthread_mutex_lock(&q->LOCK)))
-			return(-1);
+	QUEUE_LOCK(q);
 	
 	int rv;
 	if (pri == CF_QUEUE_PRIORITY_HIGH)
@@ -474,12 +527,12 @@ cf_queue_priority_push(cf_queue_priority *q, void *ptr, int pri)
 		rv = -1;
 	}
 
+#ifndef EXTERNAL_LOCKS
 	if (rv == 0 && q->threadsafe)
 		pthread_cond_signal(&q->CV);
+#endif 
 
-	if (q->threadsafe && (0 != pthread_mutex_unlock(&q->LOCK)))
-		return(-1);
-
+	QUEUE_UNLOCK(q);
 		
 	return(rv);	
 }
@@ -487,8 +540,7 @@ cf_queue_priority_push(cf_queue_priority *q, void *ptr, int pri)
 int 
 cf_queue_priority_pop(cf_queue_priority *q, void *buf, int ms_wait)
 {
-	if (q->threadsafe && (0 != pthread_mutex_lock(&q->LOCK)))
-			return(-1);
+	QUEUE_LOCK(q);
 
 	struct timespec tp;
 	if (ms_wait > 0) {
@@ -508,6 +560,12 @@ cf_queue_priority_pop(cf_queue_priority *q, void *buf, int ms_wait)
 	}
 
 	if (q->threadsafe) {
+#ifdef EXTERNAL_LOCKS
+		if (CF_Q_PRI_EMPTY(q)) {
+			QUEUE_UNLOCK(q);
+			return -1;
+		}
+#else
 		while (CF_Q_PRI_EMPTY(q)) {
 			if (CF_QUEUE_FOREVER == ms_wait) {
 				pthread_cond_wait(&q->CV, &q->LOCK);
@@ -524,6 +582,7 @@ cf_queue_priority_pop(cf_queue_priority *q, void *buf, int ms_wait)
 				}
 			}
 		}
+#endif //EXERNAL_LOCKS
 	}
 	
 	int rv;
@@ -535,8 +594,7 @@ cf_queue_priority_pop(cf_queue_priority *q, void *buf, int ms_wait)
 		rv = cf_queue_pop(q->low_q, buf, 0);
 	else rv = CF_QUEUE_EMPTY;
 		
-	if (q->threadsafe && (0 != pthread_mutex_unlock(&q->LOCK)))
-		return(-1);
+	QUEUE_UNLOCK(q);
 
 		
 	return(rv);
@@ -546,13 +604,11 @@ int
 cf_queue_priority_sz(cf_queue_priority *q)
 {
 	int rv = 0;
-	if (q->threadsafe)
-		pthread_mutex_lock(&q->LOCK);
+	QUEUE_LOCK(q);
 	rv += cf_queue_sz(q->high_q);
 	rv += cf_queue_sz(q->medium_q);
 	rv += cf_queue_sz(q->low_q);
-	if (q->threadsafe)
-		pthread_mutex_unlock(&q->LOCK);
+	QUEUE_UNLOCK(q);
 	return(rv);
 }
 

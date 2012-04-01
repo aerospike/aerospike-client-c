@@ -21,8 +21,8 @@
 #include "citrusleaf_event2/ev2citrusleaf.h"
 #include "citrusleaf_event2/ev2citrusleaf-internal.h"
 #include "citrusleaf_event2/cl_cluster.h"
-#include "citrusleaf_event2/proto.h"
-#include "citrusleaf_event2/cf_clock.h"
+#include "citrusleaf/proto.h"
+#include "citrusleaf/cf_clock.h"
 
 //
 // Globals to track transaction counts to clean up properly
@@ -134,7 +134,7 @@ info_make_request(cl_info_request *cir, char *names)
 	}
 
 	cl_proto *proto = (cl_proto *) cir->wr_buf;
-	proto->size = cir->wr_buf_size - sizeof(cl_proto); 
+	proto->sz = cir->wr_buf_size - sizeof(cl_proto); 
 	proto->version = PROTO_VERSION;
 	proto->type = PROTO_TYPE_INFO;
 	cl_proto_swap(proto);
@@ -204,14 +204,14 @@ info_event_fn(int fd, short event, void *udata)
 				cl_proto_swap(proto);
 				
 				// set up the read buffer
-				cir->rd_buf = malloc(proto->size + 1);
+				cir->rd_buf = malloc(proto->sz + 1);
 				if (!cir->rd_buf) {
 					CL_LOG(CL_WARNING, "cl info malloc fail\n");
 					goto Fail;
 				}
-				cir->rd_buf[proto->size] = 0;
+				cir->rd_buf[proto->sz] = 0;
 				cir->rd_buf_pos = 0;
-				cir->rd_buf_size = proto->size;
+				cir->rd_buf_size = proto->sz;
 			}
 			if (cir->rd_buf_pos < cir->rd_buf_size) {
 				rv = recv(fd, &cir->rd_buf[cir->rd_buf_pos], cir->rd_buf_size - cir->rd_buf_pos, MSG_NOSIGNAL | MSG_DONTWAIT);

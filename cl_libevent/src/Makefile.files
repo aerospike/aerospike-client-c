@@ -2,8 +2,10 @@
 # Makefiles
 #
 
-HEADERS = evcitrusleaf.h evcitrusleaf-internal.h proto.h cl_cluster.h cf_hist.h cf_atomic.h cf_clock.h 
-HEADERS += cf_vector.h cf_queue.h cf_alloc.h cf_ll.h cf_digest.h cf_average.h
-SOURCES = evcitrusleaf.c cl_info.c cl_cluster.c cl_lookup.c proto.c cl_partition.c cf_hist.c
-SOURCES += cf_vector.c cf_queue.c cf_alloc.c cf_ll.c cf_average.c
-
+HEADERS = evcitrusleaf.h evcitrusleaf-internal.h cl_cluster.h 
+#proto.h cf_hist.h cf_atomic.h cf_clock.h 
+#HEADERS += cf_vector.h cf_queue.h cf_alloc.h cf_ll.h cf_digest.h cf_average.h
+SOURCES = evcitrusleaf.c cl_info.c cl_cluster.c cl_lookup.c proto.c cl_partition.c 
+#SOURCES += cf_hist.c cf_vector.c cf_queue.c cf_alloc.c cf_ll.c cf_average.c
+CF_SOURCES = cf_alloc.c cf_average.c cf_hist.c cf_hooks.c cf_ll.c cf_queue.c cf_shash.c 
+CF_SOURCES += cf_socket.c cf_vector.c

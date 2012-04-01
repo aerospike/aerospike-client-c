@@ -3,7 +3,9 @@
 
 # interesting directories
 DIR_INCLUDE = ../include
+DIR_CF_INCLUDE = ../../cf_base/include
 DIR_LIB = ../lib
+DIR_CF_LIB = ../../cf_base/lib
 DIR_OBJECT = obj
 DIR_TARGET = .
 
@@ -18,7 +20,7 @@ CFLAGS_NATIVE += -D_REENTRANT -D MARCH_$(ARCH_NATIVE)
 
 # this code wants libevent-1.4, which I have installed locally. Change this to suit.
 LD = gcc
-LDFLAGS = $(CFLAGS_NATIVE) -L$(DIR_LIB)
+LDFLAGS = $(CFLAGS_NATIVE) -L$(DIR_LIB) -L$(DIR_CF_LIB)
 LIBRARIES = -levcitrusleaf -levent -lssl -lpthread -lrt
 # LIBRARIES = -levcitrusleaf /usr/local/lib/libevent.a -lssl -lpthread -lrt
 
@@ -48,4 +50,4 @@ example5: $(OBJECTS)
 -include $(DEPENDENCIES)
 
 $(DIR_OBJECT)/%.o: %.c
-	$(CC) $(CFLAGS_NATIVE) -MMD -o $@ -c -I$(DIR_INCLUDE) $<
+	$(CC) $(CFLAGS_NATIVE) -MMD -o $@ -c -I$(DIR_INCLUDE) -I$(DIR_CF_INCLUDE) $<

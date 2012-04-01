@@ -13,7 +13,7 @@
 #include <unistd.h>
 #include <arpa/inet.h> // ntohl
 
-#include "citrusleaf_event2/proto.h"
+#include "citrusleaf/proto.h"
 
 #include <asm/byteorder.h> // get swab
 
@@ -23,7 +23,7 @@ cl_proto_swap(cl_proto *p)
 	uint8_t	 version = p->version;
 	uint8_t  type = p->type;
 	p->version = p->type = 0;
-	p->size = __be64_to_cpup((const __be64 *)p);
+	p->sz = __be64_to_cpup((const __be64 *)p);
 	p->version = version;
 	p->type = type;
 	
@@ -57,7 +57,7 @@ cl_msg_swap_header(cl_msg *m)
 void
 cl_msg_swap_op(cl_msg_op *op)
 {
-	op->op_size = ntohl(op->op_size);
+	op->op_sz = ntohl(op->op_sz);
 }
 
 // fields better be swapped before you call this

@@ -20,12 +20,12 @@
 #include <arpa/inet.h>
 #include <signal.h>
 
-#include "citrusleaf_event2/cf_atomic.h"
+#include "citrusleaf/cf_atomic.h"
 #include "citrusleaf_event2/ev2citrusleaf.h"
 #include "citrusleaf_event2/ev2citrusleaf-internal.h"
 #include "citrusleaf_event2/cl_cluster.h"
-#include "citrusleaf_event2/proto.h"
-#include "citrusleaf_event2/cf_clock.h"
+#include "citrusleaf/proto.h"
+#include "citrusleaf/cf_clock.h"
 
 extern int ev2citrusleaf_restart(cl_request *req);
 
@@ -288,7 +288,7 @@ ev2citrusleaf_cluster_create(struct event_base *base)
 	// all the nodes
 	cf_vector_pointer_init(&asc->node_v, 10, 0 /*flag*/);
 	
-	asc->request_q = cf_queue_create(sizeof(void *));
+	asc->request_q = cf_queue_create(sizeof(void *), false);
 	if (asc->request_q == 0) {
 		cluster_destroy(asc);
 		return(0);
@@ -801,7 +801,7 @@ cl_cluster_node_create(char *name, ev2citrusleaf_cluster *asc)
 	
 	cf_vector_init(&cn->sockaddr_in_v, sizeof( struct sockaddr_in ), 5, VECTOR_FLAG_BIGLOCK);
 	
-	cn->conn_q = cf_queue_create( sizeof(int) );
+	cn->conn_q = cf_queue_create( sizeof(int), false);
 	if (cn->conn_q == 0) {
 		CL_LOG(CL_WARNING," cl_cluster create: can't make a file descriptor queue\n");
 		// To balance the ref-count logs, we need this:

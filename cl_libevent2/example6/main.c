@@ -24,7 +24,7 @@
 #include <event2/dns.h>
 #include <event2/event.h>
 
-#include "citrusleaf_event2/cf_clock.h"
+#include "citrusleaf/cf_clock.h"
 #include "citrusleaf_event2/ev2citrusleaf.h"
 
 

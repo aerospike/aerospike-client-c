@@ -3,7 +3,9 @@
 
 # interesting directories
 DIR_INCLUDE = ../include
+DIR_CF_INCLUDE = ../../cf_base/include
 DIR_LIB = ../lib
+DIR_CF_LIB = ../../cf_base/lib
 DIR_OBJECT = obj
 DIR_TARGET = .
 
@@ -11,14 +13,15 @@ DIR_TARGET = .
 # users of older version should pick a more appropriate value
 CC = gcc
 ARCH_NATIVE = $(shell uname -m)
-CFLAGS_NATIVE = -g -march=native -fno-common -fomit-frame-pointer 
+CFLAGS_NATIVE = -g -fno-common -fomit-frame-pointer
+#CFLAGS_NATIVE = -g -march=native -fno-common -fomit-frame-pointer 
 CFLAGS_NATIVE += -fno-strict-aliasing -rdynamic -std=gnu99 -Wall 
 CFLAGS_NATIVE += -D_REENTRANT -D MARCH_$(ARCH_NATIVE)
 # CFLAGS_NATIVE += -O3
 
 LD = gcc
-LDFLAGS = $(CFLAGS_NATIVE) -L$(DIR_LIB)
-LIBRARIES = -lcitrusleaf -lssl -lpthread -lrt
+LDFLAGS = $(CFLAGS_NATIVE) -L$(DIR_LIB) -L$(DIR_CF_LIB)
+LIBRARIES = -lcitrusleaf  -lssl -lpthread -lrt
 
 HEADERS = 
 SOURCES = api_test.c
@@ -46,4 +49,4 @@ cl_example: $(OBJECTS)
 -include $(DEPENDENCIES)
 
 $(DIR_OBJECT)/%.o: %.c
-	$(CC) $(CFLAGS_NATIVE) -MMD -o $@ -c -I$(DIR_INCLUDE) $<
+	$(CC) $(CFLAGS_NATIVE) -MMD -o $@ -c -I$(DIR_INCLUDE) -I$(DIR_CF_INCLUDE) $<

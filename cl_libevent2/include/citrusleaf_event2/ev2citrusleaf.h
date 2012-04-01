@@ -22,7 +22,8 @@
 #include <event2/event.h>
 #include <event2/dns.h>
 
-#include "cf_digest.h"
+#include "citrusleaf/cf_digest.h"
+#include "citrusleaf/cf_hooks.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -143,17 +144,8 @@ void ev2citrusleaf_bins_free(ev2citrusleaf_bin *bins, int n_bins);
 
 typedef void (*ev2citrusleaf_callback) (int return_value,  ev2citrusleaf_bin *bins, int n_bins, uint32_t generation, void *udata );
 
-// So far the locks assume one type and mode - the pthread defaults.
-typedef struct ev2citrusleaf_lock_callbacks_s {
-	// Allocate and initialize new lock.
-	void *(*alloc)(void);
-	// Release all storage held in 'lock'.
-	void (*free)(void *lock);
-	// Acquire an already-allocated lock at 'lock'.
-	int (*lock)(void *lock);
-	// Release a lock at 'lock'.
-	int (*unlock)(void *lock);
-} ev2citrusleaf_lock_callbacks;
+typedef cf_mutex_hooks ev2citrusleaf_lock_callbacks;
+
 
 /**
   Initialize the asynchronous Citrusleaf library

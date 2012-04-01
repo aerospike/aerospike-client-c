@@ -24,8 +24,8 @@
 #include "citrusleaf_event/evcitrusleaf.h"
 #include "citrusleaf_event/evcitrusleaf-internal.h"
 #include "citrusleaf_event/cl_cluster.h"
-#include "citrusleaf_event/proto.h"
-#include "citrusleaf_event/cf_clock.h"
+#include "citrusleaf/proto.h"
+#include "citrusleaf/cf_clock.h"
 
 extern int evcitrusleaf_restart(cl_request *req);
 

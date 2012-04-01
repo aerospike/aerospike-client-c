@@ -19,6 +19,7 @@ OBJECTS = $(SOURCES:%.c=$(DIR_OBJECT)/%.o)
 DEPENDENCIES = $(OBJECTS:%.o=%.d)
 
 .PHONY: all
+all: libcf-client
 #all: libcitrusleaf
 
 .PHONY: clean

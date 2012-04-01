@@ -10,7 +10,28 @@
 #include <stdlib.h>
 
 
+#ifdef EXTERNAL_LOCKS
+#include "citrusleaf/cf_hooks.h"
+#endif
+
 #include "citrusleaf/cf_vector.h"
+
+#ifdef EXTERNAL_LOCKS
+#define VECTOR_LOCK(_v) \
+	cf_hooked_mutex_lock(v->LOCK)
+#else
+#define VECTOR_LOCK(_v) \
+	pthread_mutex_lock(&_v->LOCK)
+#endif
+
+#ifdef EXTERNAL_LOCKS
+#define VECTOR_UNLOCK(_v) \
+	cf_hooked_mutex_unlock(v->LOCK)
+#else
+#define VECTOR_UNLOCK(_v) \
+	pthread_mutex_unlock(&_v->LOCK)
+#endif
+
 
 
 
@@ -36,8 +57,13 @@ cf_vector_create( uint32_t value_len, uint32_t init_sz, unsigned int flags)
 		v->vector = 0;
 	if (flags & VECTOR_FLAG_INITZERO)
 		memset(v->vector, 0, init_sz * value_len);
-	if (flags & VECTOR_FLAG_BIGLOCK)
+	if (flags & VECTOR_FLAG_BIGLOCK){
+#ifdef EXTERNAL_LOCKS
+		v->LOCK = cf_hooked_mutex_alloc();
+#else
 		pthread_mutex_init(&v->LOCK, 0);
+#endif // EXTERNAL_LOCKS
+	}
 	return(v);
 }
 
@@ -58,8 +84,13 @@ cf_vector_init(cf_vector *v, uint32_t value_len, uint32_t init_sz, unsigned int 
 		v->vector = 0;
 	if (flags & VECTOR_FLAG_INITZERO)
 		memset(v->vector, 0, init_sz * value_len);
-	if (flags & VECTOR_FLAG_BIGLOCK)
+	if (flags & VECTOR_FLAG_BIGLOCK){
+#ifdef EXTERNAL_LOCKS
+		v->LOCK = cf_hooked_mutex_alloc();
+#else
 		pthread_mutex_init(&v->LOCK, 0);
+#endif // EXTERNAL_LOCKS
+	}
 	return(0);
 }
 
@@ -75,16 +106,26 @@ cf_vector_init_smalloc(cf_vector *v, uint32_t value_len, uint8_t *sbuf, int sbuf
 	v->vector = sbuf;
 	if (flags & VECTOR_FLAG_INITZERO)
 		memset(v->vector, 0, sbuf_sz);
-	if (flags & VECTOR_FLAG_BIGLOCK)
+	if (flags & VECTOR_FLAG_BIGLOCK){
+#ifdef EXTERNAL_LOCKS
+	v->LOCK = cf_hooked_mutex_alloc();
+#else
 		pthread_mutex_init(&v->LOCK, 0);
+#endif
+	}
 }
 
 
 void
 cf_vector_destroy(cf_vector *v)
 {
-	if (v->flags & VECTOR_FLAG_BIGLOCK)
+	if (v->flags & VECTOR_FLAG_BIGLOCK){
+#ifdef EXTERNAL_LOCKS
+		cf_hooked_mutex_free(v->LOCK);
+#else
 		pthread_mutex_destroy(&v->LOCK);
+#endif // EXTERNAL_LOCKS
+	}
 	if (v->vector && (v->stack_vector == false))	free(v->vector);
 	if (v->stack_struct == false) free(v);
 }
@@ -115,18 +156,17 @@ cf_vector_resize(cf_vector *v, uint32_t new_sz)
 	return(0);
 }
 
-
 int
 cf_vector_set(cf_vector *v, uint32_t index, void *value)
 {
 	if (v->flags & VECTOR_FLAG_BIGLOCK)
-		pthread_mutex_lock(&v->LOCK);
+		VECTOR_LOCK(v);
 	if (index >= v->alloc_len)
 		if (0 != cf_vector_resize(v, index+1))	return(-1);
 	memcpy(v->vector + (index * v->value_len), value, v->value_len);
 	if (index > v->len)	v->len = index;
 	if (v->flags & VECTOR_FLAG_BIGLOCK)
-		pthread_mutex_unlock(&v->LOCK);
+		VECTOR_UNLOCK(v);
 	return(0);
 }
 
@@ -148,10 +188,10 @@ cf_vector_append(cf_vector *v, void *value)
 {
 	int rv;
 	if (v->flags & VECTOR_FLAG_BIGLOCK)
-		pthread_mutex_lock(&v->LOCK);
+		VECTOR_LOCK(v);
 	rv = cf_vector_append_lockfree(v, value);
 	if (v->flags & VECTOR_FLAG_BIGLOCK)
-		pthread_mutex_unlock(&v->LOCK);
+		VECTOR_UNLOCK(v);
 	return(rv);
 }
 
@@ -160,7 +200,7 @@ cf_vector_append_unique(cf_vector *v, void *value)
 {
 	int rv=0;
 	if (v->flags & VECTOR_FLAG_BIGLOCK)
-		pthread_mutex_lock(&v->LOCK);
+		VECTOR_LOCK(v);
 	uint8_t	*_b = v->vector;
 	uint32_t	_l = v->value_len;
 	for (unsigned int i=0;i<v->len;i++) {
@@ -172,7 +212,7 @@ cf_vector_append_unique(cf_vector *v, void *value)
 	rv = cf_vector_append_lockfree(v, value);
 Found:	
 	if (v->flags & VECTOR_FLAG_BIGLOCK)
-		pthread_mutex_unlock(&v->LOCK);
+		VECTOR_UNLOCK(v);
 	return(rv);
 }
 
@@ -182,12 +222,12 @@ int
 cf_vector_get(cf_vector *v, uint32_t index, void *value_p)
 {
 	if (v->flags & VECTOR_FLAG_BIGLOCK)
-		pthread_mutex_lock(&v->LOCK);
+		VECTOR_LOCK(v);
 	if (index >= v->alloc_len)
 		return(-1);
 	memcpy(value_p, v->vector + (index * v->value_len), v->value_len);
 	if (v->flags & VECTOR_FLAG_BIGLOCK)
-		pthread_mutex_unlock(&v->LOCK);
+		VECTOR_UNLOCK(v);
 	return(0);
 }
 
@@ -195,15 +235,16 @@ void *
 cf_vector_getp(cf_vector *v, uint32_t index)
 {
 	if (v->flags & VECTOR_FLAG_BIGLOCK)
-		pthread_mutex_lock(&v->LOCK);
+		VECTOR_LOCK(v);
 	if (index >= v->alloc_len)
 		return(0);
 	void *r = v->vector + (index * v->value_len);
 	if (v->flags & VECTOR_FLAG_BIGLOCK)
-		pthread_mutex_unlock(&v->LOCK);
+		VECTOR_UNLOCK(v);
 	return( r );
 }
 
+// XXX - this function needs to be modified for hooked case
 void *
 cf_vector_getp_vlock(cf_vector *v, uint32_t index, pthread_mutex_t **vlock)
 {
@@ -211,7 +252,7 @@ cf_vector_getp_vlock(cf_vector *v, uint32_t index, pthread_mutex_t **vlock)
 		return(0);
 	if (index >= v->alloc_len)
 		return(0);
-	pthread_mutex_lock(&v->LOCK);
+	VECTOR_LOCK(v);
 	*vlock = &v->LOCK;
 	return(v->vector + (index * v->value_len));
 }
@@ -220,7 +261,7 @@ int
 cf_vector_delete(cf_vector *v, uint32_t index)
 {
 	if (v->flags & VECTOR_FLAG_BIGLOCK)
-		pthread_mutex_lock(&v->LOCK);
+		VECTOR_LOCK(v);
 	// check bounds
 	if (index >= v->len)
 		return (-1);
@@ -233,7 +274,7 @@ cf_vector_delete(cf_vector *v, uint32_t index)
 	v->len --;
 	
 	if (v->flags & VECTOR_FLAG_BIGLOCK)
-		pthread_mutex_unlock(&v->LOCK);
+		VECTOR_UNLOCK(v);
 	return(0);
 }
 
@@ -241,7 +282,7 @@ int
 cf_vector_delete_range(cf_vector *v, uint32_t idx_start, uint32_t idx_end)
 {
 	if (v->flags & VECTOR_FLAG_BIGLOCK)
-		pthread_mutex_lock(&v->LOCK);
+		VECTOR_LOCK(v);
 	// check bounds
 	if (idx_start >= idx_end)
 		return (-1);
@@ -260,7 +301,7 @@ cf_vector_delete_range(cf_vector *v, uint32_t idx_start, uint32_t idx_end)
 	v->len -= (idx_end - idx_start) + 1;
 	
 	if (v->flags & VECTOR_FLAG_BIGLOCK)
-		pthread_mutex_unlock(&v->LOCK);
+		VECTOR_UNLOCK(v);
 	return(0);
 }
 
@@ -268,13 +309,13 @@ void
 cf_vector_compact(cf_vector *v)
 {
 	if (v->flags & VECTOR_FLAG_BIGLOCK)
-		pthread_mutex_lock(&v->LOCK);
+		VECTOR_LOCK(v);
 	if (v->alloc_len && (v->len != v->alloc_len)) {
 		v->vector = realloc(v->vector, v->len * v->alloc_len);
 		v->alloc_len = v->len;
 	}
 	if (v->flags & VECTOR_FLAG_BIGLOCK)
-		pthread_mutex_unlock(&v->LOCK);
+		VECTOR_UNLOCK(v);
 	return;
 }
 

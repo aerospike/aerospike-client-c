@@ -7,6 +7,9 @@ default: libevcitrusleaf
 	$(MAKE) -C example3
 	$(MAKE) -C example4
 	$(MAKE) -C example5
+	cp lib/libevcitrusleaf.a ../../../shared/lib
+	cp -r include/* ../../../shared/include
+	rm ../../../shared/include/citrusleaf_event/*internal*
 	@echo "done."
 
 clean:

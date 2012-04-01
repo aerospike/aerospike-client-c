@@ -12,6 +12,10 @@
 #include <string.h>
 #include <inttypes.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* SYNOPSIS
  * For timing things, you want to know this histogram of what took how much time.
  * So have an interface where you create a histogram object, can dump a histogram object,
@@ -76,3 +80,6 @@ static inline uint64_t cf_roundup_64( uint64_t i, uint32_t modulus) {
 	return(  i + (modulus - t ) );
 }
 
+#ifdef __cplusplus
+} // end extern "C"
+#endif

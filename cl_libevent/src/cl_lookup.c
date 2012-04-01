@@ -23,8 +23,8 @@
 
 #include "citrusleaf_event/evcitrusleaf.h"
 #include "citrusleaf_event/cl_cluster.h"
-#include "citrusleaf_event/cf_clock.h"
-#include "citrusleaf_event/proto.h"
+#include "citrusleaf/cf_clock.h"
+#include "citrusleaf/proto.h"
 
 
 // #define DEBUG 1

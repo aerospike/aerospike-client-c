@@ -30,7 +30,11 @@ typedef struct cf_vector_s {
 	uint8_t *vector;
 	bool	stack_struct;
 	bool	stack_vector;
+#ifdef EXTERNAL_LOCKS
+	void    *LOCK;
+#else
 	pthread_mutex_t		LOCK;
+#endif // EXTERNAL_LOCKS
 } cf_vector;
 
 

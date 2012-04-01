@@ -24,14 +24,14 @@
 
 #ifndef XDS	// Hack for the sake of XDS. XDS includes the main CF libs. 
 		// We do not want to include them again from client API
-#include "cf_atomic.h"
-#include "cf_ll.h"
-#include "cf_clock.h"
-#include "cf_vector.h"
-#include "cf_queue.h"
-#include "cf_alloc.h"
-#include "cf_digest.h"
-#include "cf_shash.h"
+#include "citrusleaf/cf_atomic.h"
+#include "citrusleaf/cf_ll.h"
+#include "citrusleaf/cf_clock.h"
+#include "citrusleaf/cf_vector.h"
+#include "citrusleaf/cf_queue.h"
+#include "citrusleaf/cf_alloc.h"
+#include "citrusleaf/cf_digest.h"
+#include "citrusleaf/cf_shash.h"
 #endif
 
 #define STACK_BUF_SZ (1024 * 16) // provide a safe number for your system - linux tends to have 8M stacks these days

@@ -10,7 +10,7 @@
 #include <stdlib.h>
 
 
-#include "citrusleaf_event2/cf_average.h"
+#include "citrusleaf/cf_average.h"
 
 
 

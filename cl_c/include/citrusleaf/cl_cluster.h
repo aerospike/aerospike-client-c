@@ -111,7 +111,7 @@ extern void cl_cluster_node_put(cl_cluster_node *cn);          // put node back
 extern void cl_cluster_node_dun(cl_cluster_node *cn);			// node is bad!
 extern int cl_cluster_node_fd_get(cl_cluster_node *cn, bool asyncfd);			// get an FD to the node
 extern void cl_cluster_node_fd_put(cl_cluster_node *cn, int fd, bool asyncfd); 		// put the FD back
-
+extern int citrusleaf_cluster_init();
 //
 extern int citrusleaf_info_parse_single(char *values, char **value);
 

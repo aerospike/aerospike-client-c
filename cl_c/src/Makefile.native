@@ -7,15 +7,18 @@ include Makefile.in
 include Makefile.files
 
 DIR_INCLUDE = ../include
+DIR_CF_INCLUDE = ../../cf_base/include
 DIR_OBJECT = ../obj/native
 DIR_TARGET = ../lib
+DIR_CF_OBJECT = ../../cf_base/obj/native
 
 TARGET_S = libcitrusleaf.a
 TARGET_D = $(SONAME)
 
-INCLUDES = -I$(DIR_INCLUDE) 
+INCLUDES = -I$(DIR_INCLUDE) -I$(DIR_CF_INCLUDE)
 
 OBJECTS = $(SOURCES:%.c=$(DIR_OBJECT)/%.o)
+CF_OBJECTS= $(CF_SOURCES:%c=$(DIR_CF_OBJECT)/%o)
 DEPENDENCIES = $(OBJECTS:%.o=%.d)
 
 .PHONY: all
@@ -31,9 +34,11 @@ depclean: clean
 
 .PHONY: libcitrusleaf
 libcitrusleaf: $(OBJECTS)
+	echo $(LDFLAGS)
+	echo $(CF_OBJECTS)
 	mkdir -p $(DIR_TARGET)
-	ar rs $(DIR_TARGET)/$(TARGET_S) $(OBJECTS)
-	$(LD) $(LDFLAGS) -o $(DIR_TARGET)/$(TARGET_D) $(OBJECTS)
+	ar rs $(DIR_TARGET)/$(TARGET_S) $(OBJECTS) $(CF_OBJECTS)
+	$(LD) $(LDFLAGS) -o $(DIR_TARGET)/$(TARGET_D) $(OBJECTS) $(CF_OBJECTS) $(LIBRARIES)
 
 -include $(DEPENDENCIES)
 

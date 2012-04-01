@@ -3,7 +3,9 @@
 
 # interesting directories
 DIR_INCLUDE = ../../include
+DIR_CF_INCLUDE = ../../../cf_base/include
 DIR_LIB = ../../lib
+DIR_CF_LIB = ../../../cf_base/lib
 DIR_OBJECT = ../obj
 DIR_TARGET = ../bin
 
@@ -18,7 +20,7 @@ CFLAGS_NATIVE += -D_REENTRANT -D MARCH_$(ARCH_NATIVE)
 # CFLAGS_NATIVE += -O3
 
 LD = gcc
-LDFLAGS = $(CFLAGS_NATIVE) -L$(DIR_LIB)
+LDFLAGS = $(CFLAGS_NATIVE) -L$(DIR_LIB) -L$(DIR_CF_LIB)
 LIBRARIES = -lcitrusleaf -lssl -lpthread -lrt
 
 HEADERS = 
@@ -47,4 +49,4 @@ $(TARGET): $(OBJECTS)
 -include $(DEPENDENCIES)
 
 $(DIR_OBJECT)/%.o: %.c
-	$(CC) $(CFLAGS_NATIVE) -MMD -o $@ -c -I$(DIR_INCLUDE) $<
+	$(CC) $(CFLAGS_NATIVE) -MMD -o $@ -c -I$(DIR_INCLUDE) -I$(DIR_CF_INCLUDE) $<

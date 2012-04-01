@@ -22,13 +22,13 @@
 
 #include <asm/byteorder.h> // 64-bit swap macro
 
-#include "citrusleaf_event/cf_clock.h"
-#include "citrusleaf_event/cf_atomic.h"
-#include "citrusleaf_event/cf_hist.h"
-#include "citrusleaf_event/cf_ll.h"
+#include "citrusleaf/cf_clock.h"
+#include "citrusleaf/cf_atomic.h"
+#include "citrusleaf/cf_hist.h"
+#include "citrusleaf/cf_ll.h"
 #include "citrusleaf_event/evcitrusleaf-internal.h"
 #include "citrusleaf_event/cl_cluster.h"
-#include "citrusleaf_event/proto.h"
+#include "citrusleaf/proto.h"
 
 
 // #define CLDEBUG_HISTOGRAM 1
@@ -192,7 +192,7 @@ write_header(uint8_t *buf, size_t msg_size, int info1, int info2, uint32_t gener
 	as_msg *msg = (as_msg *) buf;
 	msg->proto.version = PROTO_VERSION;
 	msg->proto.type = PROTO_TYPE_CL_MSG;
-	msg->proto.size = msg_size - sizeof(cl_proto);
+	msg->proto.sz = msg_size - sizeof(cl_proto);
 	cl_proto_swap(&msg->proto);
 	msg->m.header_sz = sizeof(cl_msg);
 	msg->m.info1 = info1;
@@ -447,10 +447,10 @@ void
 bin_to_op(int operation, evcitrusleaf_bin *v, cl_msg_op *op)
 {
 	int	bin_len = strlen(v->bin_name);
-	op->op_size = sizeof(cl_msg_op) + bin_len - sizeof(uint32_t);
+	op->op_sz = sizeof(cl_msg_op) + bin_len - sizeof(uint32_t);
 	op->op = operation;
 	op->version = 0;
-	op->name_size = bin_len;
+	op->name_sz = bin_len;
 	memcpy(op->name, v->bin_name, bin_len);
 
 	// read operations are very simple because you don't have to copy the body
@@ -466,15 +466,15 @@ bin_to_op(int operation, evcitrusleaf_bin *v, cl_msg_op *op)
 				break;
 			case CL_INT:
 				op->particle_type = CL_PARTICLE_TYPE_INTEGER;
-				op->op_size += value_to_op_int(v->object.u.i64, data);
+				op->op_sz += value_to_op_int(v->object.u.i64, data);
 				break;
 			case CL_STR:
-				op->op_size += v->object.size;
+				op->op_sz += v->object.size;
 				op->particle_type = CL_PARTICLE_TYPE_STRING;
 				memcpy(data, v->object.u.str, v->object.size);
 				break;
 			case CL_BLOB:
-				op->op_size += v->object.size;
+				op->op_sz += v->object.size;
 				op->particle_type = CL_PARTICLE_TYPE_BLOB;
 				memcpy(data, v->object.u.blob, v->object.size);
 				break;
@@ -490,8 +490,8 @@ void
 operation_to_op(evcitrusleaf_operation *v, cl_msg_op *op)
 {
 	int	bin_len = strlen(v->bin_name);
-	op->op_size = sizeof(cl_msg_op) + bin_len - sizeof(uint32_t);
-	op->name_size = bin_len;
+	op->op_sz = sizeof(cl_msg_op) + bin_len - sizeof(uint32_t);
+	op->name_sz = bin_len;
 	memcpy(op->name, v->bin_name, bin_len);
 
 	// convert. would be better to use a table or something.
@@ -521,15 +521,15 @@ operation_to_op(evcitrusleaf_operation *v, cl_msg_op *op)
 				break;
 			case CL_INT:
 				op->particle_type = CL_PARTICLE_TYPE_INTEGER;
-				op->op_size += value_to_op_int(v->object.u.i64, data);
+				op->op_sz += value_to_op_int(v->object.u.i64, data);
 				break;
 			case CL_STR:
-				op->op_size += v->object.size;
+				op->op_sz += v->object.size;
 				op->particle_type = CL_PARTICLE_TYPE_STRING;
 				memcpy(data, v->object.u.str, v->object.size);
 				break;
 			case CL_BLOB:
-				op->op_size += v->object.size;
+				op->op_sz += v->object.size;
 				op->particle_type = CL_PARTICLE_TYPE_BLOB;
 				memcpy(data, v->object.u.blob, v->object.size);
 				break;
@@ -739,11 +739,11 @@ set_object(cl_msg_op *op, evcitrusleaf_object *obj)
 		case CL_PARTICLE_TYPE_INTEGER:
 			obj->size = 0; // unused in integer case
 			obj->free = 0;
-			return( op_to_value_int(cl_msg_op_get_value_p(op), cl_msg_op_get_value_size(op),&(obj->u.i64)) );
+			return( op_to_value_int(cl_msg_op_get_value_p(op), cl_msg_op_get_value_sz(op),&(obj->u.i64)) );
 
 		// regrettably, we have to add the null. I hate null termination.
 		case CL_PARTICLE_TYPE_STRING:
-			obj->size = cl_msg_op_get_value_size(op);
+			obj->size = cl_msg_op_get_value_sz(op);
 			obj->free = obj->u.str = malloc(obj->size+1);
 			if (obj->free == 0) return(-1);
 			memcpy(obj->u.str, cl_msg_op_get_value_p(op), obj->size);
@@ -757,7 +757,7 @@ set_object(cl_msg_op *op, evcitrusleaf_object *obj)
 		case CL_PARTICLE_TYPE_PYTHON_BLOB:
 		case CL_PARTICLE_TYPE_RUBY_BLOB:
 
-			obj->size = cl_msg_op_get_value_size(op);
+			obj->size = cl_msg_op_get_value_sz(op);
 			obj->u.blob = cl_msg_op_get_value_p(op);
 			obj->free = 0;
 			break;
@@ -781,7 +781,7 @@ set_value_search(cl_msg_op *op, evcitrusleaf_bin *values, int n_values)
 	int i;
 	for (i=0;i<n_values;i++)
 	{
-		if (memcmp(values[i].bin_name, op->name, op->name_size) == 0)
+		if (memcmp(values[i].bin_name, op->name, op->name_sz) == 0)
 			break;
 	}
 	if (i == n_values) {
@@ -800,13 +800,13 @@ set_value_search(cl_msg_op *op, evcitrusleaf_bin *values, int n_values)
 void
 set_value_particular(cl_msg_op *op, evcitrusleaf_bin *value)
 {
-	if (op->name_size > sizeof(value->bin_name)) {
+	if (op->name_sz > sizeof(value->bin_name)) {
 		CL_LOG(CL_WARNING, "Set Value Particular: bad response from server");
 		return;
 	}
 	
-	memcpy(value->bin_name, op->name, op->name_size);
-	value->bin_name[op->name_size] = 0;
+	memcpy(value->bin_name, op->name, op->name_sz);
+	value->bin_name[op->name_sz] = 0;
 	set_object(op, &value->object);
 }
 	
@@ -1115,17 +1115,17 @@ evcitrusleaf_event(int fd, short event, void *udata)
 				cl_proto_swap(proto);
 				
 				// set up the read buffer
-				if (proto->size <= sizeof(req->rd_tmp))
+				if (proto->sz <= sizeof(req->rd_tmp))
 					req->rd_buf = req->rd_tmp;
 				else {
-					req->rd_buf = malloc(proto->size);
+					req->rd_buf = malloc(proto->sz);
 					if (!req->rd_buf) {
 						CL_LOG(CL_WARNING, "malloc fail\n");
 						goto Fail;
 					}
 				}
 				req->rd_buf_pos = 0;
-				req->rd_buf_size = proto->size;
+				req->rd_buf_size = proto->sz;
 			}
 			if (req->rd_buf_pos < req->rd_buf_size) {
 				rv = recv(fd, &req->rd_buf[req->rd_buf_pos], req->rd_buf_size - req->rd_buf_pos,MSG_DONTWAIT | MSG_NOSIGNAL);

@@ -19,7 +19,7 @@
 // speed, and compatibility
 #pragma once
 
-#include "cf_atomic.h"
+#include "citrusleaf/cf_atomic.h"
 #include "ev2citrusleaf-internal.h"
 
 #ifdef __cplusplus

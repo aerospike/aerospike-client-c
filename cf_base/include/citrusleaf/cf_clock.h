@@ -11,7 +11,13 @@
 
 #include <time.h>
 #include <stdint.h>
-#ifdef OSX // Because Steve Knows Best - Macs aren't posix compliant
+
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#ifdef OSX // Macs aren't posix compliant
 #include <sys/time.h>
 #include <mach/mach.h>
 #include <mach/mach_time.h>
@@ -63,6 +69,15 @@ cf_getms() {
 }	
 
 
+static inline uint64_t 
+cf_getmicros()
+{
+	struct timespec ts = { 0, 0};
+	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &ts);
+	uint64_t micro = (ts.tv_sec * 1000000) + (ts.tv_nsec / 1000);
+	return(micro);
+}
+
 inline static uint64_t 
 TIMESPEC_TO_US( struct timespec *ts )
 {
@@ -72,8 +87,6 @@ TIMESPEC_TO_US( struct timespec *ts )
 	r2 *= 1000000;
 	return( r1 + r2 );
 }
-
-
 // FIXME ought to be cf_clock_getvolatile 
 inline static uint64_t
 cf_getus() {
@@ -108,3 +121,7 @@ cf_clock_getabsolute() {
 	return(TIMESPEC_TO_MS(&ts));
 #endif
 }
+#ifdef __cplusplus
+} // end extern "C"
+#endif
+

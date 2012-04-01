@@ -32,6 +32,29 @@ struct cl_bin_s;
 // NOTE! This is the only place where datamodel.h is exported in the external
 // proto.h. Maybe I should make a different (annotated) proto.h?
 
+/* cl_particle_type
+ * Particles are typed, which reflects their contents:
+ *    NULL: no associated content (not sure I really need this internally?)
+ *    INTEGER: a signed, 64-bit integer
+ *    BIGNUM: a big number
+ *    STRING: a null-terminated UTF-8 string
+ *    BLOB: arbitrary-length binary data
+ *    TIMESTAMP: milliseconds since 1 January 1970, 00:00:00 GMT
+ *    DIGEST: an internal Aerospike key digest */
+typedef enum {
+    CL_PARTICLE_TYPE_NULL = 0,
+    CL_PARTICLE_TYPE_INTEGER = 1,
+    CL_PARTICLE_TYPE_FLOAT = 2,
+    CL_PARTICLE_TYPE_STRING = 3,
+    CL_PARTICLE_TYPE_BLOB = 4,
+    CL_PARTICLE_TYPE_TIMESTAMP = 5,
+    CL_PARTICLE_TYPE_DIGEST = 6,
+    CL_PARTICLE_TYPE_JAVA_BLOB = 7,
+	CL_PARTICLE_TYPE_CSHARP_BLOB = 8,
+	CL_PARTICLE_TYPE_PYTHON_BLOB = 9,
+	CL_PARTICLE_TYPE_RUBY_BLOB = 10,
+	CL_PARTICLE_TYPE_MAX = 11
+} cl_particle_type;
 
 
 /* SYNOPSIS
@@ -71,9 +94,9 @@ typedef struct cl_proto_s {
 typedef struct cl_msg_field_s {
 #define CL_MSG_FIELD_TYPE_NAMESPACE 0 // UTF8 string
 #define CL_MSG_FIELD_TYPE_SET 1
-#define CL_MSG_FIELD_TYPE_KEY 2
-#define CL_MSG_FIELD_TYPE_BIN 3 // could be used for secondary field access 
-#define CL_MSG_FIELD_TYPE_DIGEST_RIPE 4
+#define CL_MSG_FIELD_TYPE_KEY 2  // contains a key type
+#define CL_MSG_FIELD_TYPE_BIN 3  // used for secondary key access - contains a bin, thus a name and value
+#define CL_MSG_FIELD_TYPE_DIGEST_RIPE 4  // used to send the digest just computed to the server so it doesn't have to
 #define CL_MSG_FIELD_TYPE_GU_TID 5
 #define CL_MSG_FIELD_TYPE_DIGEST_RIPE_ARRAY 6
 #define CL_MSG_FIELD_TYPE_TRID 7
@@ -89,6 +112,9 @@ typedef struct cl_msg_field_s {
 #define CL_MSG_OP_WRITE_UNIQUE 3	// write a namespace-wide unique value
 #define CL_MSG_OP_WRITE_NOW 4		// write the server-current time
 #define CL_MSG_OP_ADD 5
+#define CL_MSG_OP_APPEND 6
+#define CL_MSG_OP_APPEND_EXT 7
+#define CL_MSG_OP_APPEND_QUERY 8
 
 typedef struct cl_msg_op_s {
 	uint32_t op_sz;
@@ -131,6 +157,9 @@ typedef struct cl_msg_number_s {
 #define AEROSPIKE_CL_RESULT_FAIL 1
 #define AEROSPIKE_CL_RESULT_NOTFOUND 2
 
+/* cl_msg
+ * Aerospike message
+ * size: size of the payload, not including the header */
 typedef struct cl_msg_s {
 /*00*/	uint8_t 	header_sz;    // number of uint8_ts in this header
 /*01*/	uint8_t 	info1; 		  // bitfield about this request
@@ -154,23 +183,23 @@ typedef struct as_msg_s {
 		cl_msg		m;
 } __attribute__((__packed__)) as_msg;
 
-#define CL_MSG_INFO1_READ		(1 << 0)	// contains a read operation
+#define CL_MSG_INFO1_READ		    (1 << 0)	// contains a read operation
 #define CL_MSG_INFO1_GET_ALL		(1 << 1)	// get all bins, period
 #define CL_MSG_INFO1_GET_ALL_NODATA	(1 << 2)	// get all bins WITHOUT data (currently unimplemented)
-#define CL_MSG_INFO1_VERIFY		(1 << 3)	// verify is a GET transaction that includes data, and assert if the data aint right
-#define CL_MSG_INFO1_XDS		(1 << 4)	// operation is being performed by XDS
+#define CL_MSG_INFO1_VERIFY		    (1 << 3)	// verify is a GET transaction that includes data, and assert if the data aint right
+#define CL_MSG_INFO1_XDS		    (1 << 4)	// operation is being performed by XDS
 #define CL_MSG_INFO1_NOBINDATA		(1 << 5)	// do not read the bin information
 
-#define CL_MSG_INFO2_WRITE		(1 << 0)	// contains a write semantic
-#define CL_MSG_INFO2_DELETE		(1 << 1)	// fling a record into the belly of Moloch
+#define CL_MSG_INFO2_WRITE		    (1 << 0)	// contains a write semantic
+#define CL_MSG_INFO2_DELETE		    (1 << 1)	// fling a record into the belly of Moloch
 #define CL_MSG_INFO2_GENERATION		(1 << 2)	// pay attention to the generation
 #define CL_MSG_INFO2_GENERATION_GT	(1 << 3)	// apply write if new generation >= old, good for restore
 #define CL_MSG_INFO2_GENERATION_DUP	(1 << 4)	// if a generation collision, create a duplicate
 #define CL_MSG_INFO2_WRITE_UNIQUE	(1 << 5)	// write only if it doesn't exist
 #define CL_MSG_INFO2_WRITE_BINUNIQUE	(1 << 6)
 
-#define CL_MSG_INFO3_LAST		(1 << 0)	// this is the last of a multi-part message
-#define CL_MSG_INFO3_TRACE		(1 << 1)	// apply server trace logging for this transaction
+#define CL_MSG_INFO3_LAST		    (1 << 0)	// this is the last of a multi-part message
+#define CL_MSG_INFO3_TRACE		    (1 << 1)	// apply server trace logging for this transaction
 #define CL_MSG_INFO3_TOMBSTONE		(1 << 2)	// if set on response, a version was a delete tombstone
 
 static inline cl_msg_field *

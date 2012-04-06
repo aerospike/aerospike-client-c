@@ -1823,7 +1823,7 @@ citrusleaf_calculate_digest(const char *set, const cl_object *key, cf_digest *di
 //
 
 extern cl_rv
-citrusleaf_operate(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, cl_operation *operations, int n_operations, const cl_write_parameters *cl_w_p)
+citrusleaf_operate(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, cl_operation *operations, int n_operations, const cl_write_parameters *cl_w_p, uint32_t *generation)
 {
     if (!g_initialized) return(-1);
     
@@ -1844,7 +1844,7 @@ citrusleaf_operate(cl_cluster *asc, const char *ns, const char *set, const cl_ob
 		
 	}
 	
-	return( do_the_full_monte( asc, info1, info2, ns, set, key, 0, 0, 0, &operations, &n_operations, 0, cl_w_p, &trid) ); 
+	return( do_the_full_monte( asc, info1, info2, ns, set, key, 0, 0, 0, &operations, &n_operations, generation, cl_w_p, &trid) );
 }
 
 extern int citrusleaf_cluster_init();

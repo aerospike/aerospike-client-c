@@ -1,7 +1,7 @@
 # Citrusleaf Foundation
 # Makefile
 
-default: libcitrusleaf
+all: libcitrusleaf
 	cp lib/* ../../../shared/lib
 	cp include/citrusleaf/citrusleaf.h ../../../shared/include/citrusleaf
 	cp include/citrusleaf/cl_cluster.h ../../../shared/include/citrusleaf

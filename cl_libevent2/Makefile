@@ -1,7 +1,7 @@
 # Citrusleaf Foundation
 # Makefile
 
-default: libev2citrusleaf
+all: libev2citrusleaf
 	$(MAKE) -C example
 	$(MAKE) -C example2
 	$(MAKE) -C example3

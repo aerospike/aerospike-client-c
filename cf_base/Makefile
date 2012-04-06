@@ -1,7 +1,7 @@
 # Citrusleaf Foundation
 # Makefile
 
-default: libcf-client
+all: libcf-client
 	cp lib/* ../../../shared/lib
 	cp -r include/* ../../../shared/include
 	@echo "done."

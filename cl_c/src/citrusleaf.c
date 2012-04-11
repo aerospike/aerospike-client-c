@@ -782,6 +782,7 @@ set_object(cl_msg_op *op, cl_object *obj)
 		case CL_STR:
 			obj->sz = cl_msg_op_get_value_sz(op);
 			obj->free = obj->u.str = malloc(obj->sz+1);
+			if (obj->free == NULL)	return(-1);
 			memcpy(obj->u.str, cl_msg_op_get_value_p(op), obj->sz);
 			obj->u.str[obj->sz] = 0;
 			break;
@@ -1417,6 +1418,8 @@ do_many_monte(cl_cluster *asc, uint operation_info, uint operation_info2, const 
 				rd_buf = malloc(rd_buf_sz);
 			else
 				rd_buf = rd_stack_buf;
+			if (rd_buf == NULL) 		return (-1);
+
 			if ((rv = cf_socket_read_forever(fd, rd_buf, rd_buf_sz))) {
 				fprintf(stderr, "network error: errno %d fd %d\n",rv, fd);
 				if (rd_buf != rd_stack_buf)	{ free(rd_buf); }
@@ -1481,6 +1484,7 @@ do_many_monte(cl_cluster *asc, uint operation_info, uint operation_info2, const 
 			else {
 				bins = stack_bins;
 			}
+			if (bins == NULL)	return (-1);
 			
 			// parse through the bins/ops
 			cl_msg_op *op = (cl_msg_op *)buf;

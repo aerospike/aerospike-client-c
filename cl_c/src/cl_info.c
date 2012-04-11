@@ -135,6 +135,8 @@ citrusleaf_info_host(struct sockaddr_in *sa_in, char *names, char **values, int 
 			req = (cl_proto *) buf;
 		else
 			req = (cl_proto *) malloc(buf_sz);
+		if (req == NULL)	goto Done;
+
 		req->sz = sz;
 		memcpy(req->data,names,sz);
 	}

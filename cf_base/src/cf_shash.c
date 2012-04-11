@@ -168,6 +168,7 @@ shash_put(shash *h, void *key, void *value)
 	}
 
 	e = (shash_elem *) malloc( SHASH_ELEM_SZ(h) );
+	if (!e)  return (SHASH_ERR);
 	e->next = e_head->next;
 	e_head->next = e;
 	
@@ -220,6 +221,7 @@ shash_put_unique(shash *h, void *key, void *value)
 	}
 
 	e = (shash_elem *) malloc( SHASH_ELEM_SZ(h) );
+	if (!e) return (SHASH_ERR);
 	e->next = e_head->next;
 	e_head->next = e;
 	

@@ -57,7 +57,7 @@ extern "C" {
 extern ev2citrusleaf_lock_callbacks *g_lock_cb;
 
 #define MUTEX_ALLOC(__l)	{ __l = g_lock_cb ? g_lock_cb->alloc() : 0; }
-#define MUTEX_FREE(__l)		if (__l) { g_lock_cb->lock(__l); }
+#define MUTEX_FREE(__l)		if (__l) { g_lock_cb->free(__l); }
 #define MUTEX_LOCK(__l)		if (__l) { g_lock_cb->lock(__l); }
 #define MUTEX_UNLOCK(__l)	if (__l) { g_lock_cb->unlock(__l); }
 

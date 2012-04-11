@@ -381,7 +381,7 @@ citrusleaf_scan(cl_cluster *asc, char *ns, char *set, cl_bin *bins, int n_bins, 
 
 //
 // Get many digest
-// This version of the call acts exactly as the above call, but takes an array
+// This version of the call acts exactly as the get digest call, but takes an array
 // of digests. Those digests will be retrieved with the same API conventions as the
 // previous ones.
 // To come: an array of keys, but it'll just be a wrapper on this.
@@ -389,6 +389,18 @@ citrusleaf_scan(cl_cluster *asc, char *ns, char *set, cl_bin *bins, int n_bins, 
 
 cl_rv
 citrusleaf_get_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_bin *bins, int n_bins, bool get_key /*if true, retrieve key instead of simply digest*/, 
+	citrusleaf_get_many_cb cb, void *udata);
+
+//
+// Key exists many digest
+// This version of the call acts exactly as the exists digest call, but takes an array
+// of digests. Those digests will be retrieved with the same API conventions as the
+// previous ones.
+// To come: an array of keys, but it'll just be a wrapper on this.
+//
+
+cl_rv
+citrusleaf_exists_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_bin *bins, int n_bins, bool get_key /*if true, retrieve key instead of simply digest*/, 
 	citrusleaf_get_many_cb cb, void *udata);
 
 //

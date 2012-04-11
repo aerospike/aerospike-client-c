@@ -228,10 +228,12 @@ batch_compile(uint info1, uint info2, char *ns, cf_digest *digests, cl_cluster_n
 #define STACK_BINS 100
 
 //
-// do_batch_monte(cl_cluster *asc, const char *ns, const cf_digest *digests, const cf_node *nodes, int n_digests,
+// do_batch_monte(cl_cluster *asc, int info1, int info2, const char *ns, const cf_digest *digests, const cf_node *nodes, int n_digests,
 //					cf_node node, citrusleaf_get_many_cb cb, void *udata)
 //
 // asc - cluster to send to 
+// info1 - INFO1 options
+// info2 - INFO2 options
 // ns - namespace for all the digests
 // digests - array of digests to fetch
 // nodes - array of nodes for those digests
@@ -242,7 +244,7 @@ batch_compile(uint info1, uint info2, char *ns, cf_digest *digests, cl_cluster_n
 //
 
 static int
-do_batch_monte(cl_cluster *asc, char *ns, cf_digest *digests, cl_cluster_node **nodes, int n_digests, cl_bin *bins, cl_operator operator, cl_operation *operations, int n_ops,
+do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *digests, cl_cluster_node **nodes, int n_digests, cl_bin *bins, cl_operator operator, cl_operation *operations, int n_ops,
 	cl_cluster_node *node, int n_node_digests, citrusleaf_get_many_cb cb, void *udata)
 {
 	int rv = -1;
@@ -255,9 +257,8 @@ do_batch_monte(cl_cluster *asc, char *ns, cf_digest *digests, cl_cluster_node **
 	size_t		wr_buf_sz = sizeof(wr_stack_buf);
 
 	// we have a list of many keys
-	int info1 = CL_MSG_INFO1_READ;
-	if (0 == bins) info1 |= CL_MSG_INFO1_GET_ALL;
-	rv = batch_compile(info1, 0, ns, digests, nodes, n_digests, node, n_node_digests, bins, operator, operations, n_ops, 
+//	if (0 == bins && CL_MSG_INFO1_READ == info1) info1 |= CL_MSG_INFO1_GET_ALL;
+	rv = batch_compile(info1, info2, ns, digests, nodes, n_digests, node, n_node_digests, bins, operator, operations, n_ops, 
 		&wr_buf, &wr_buf_sz, 0);
 	if (rv != 0) {
 		fprintf(stderr, " do batch monte: batch compile failed: some kind of intermediate error\n");
@@ -321,6 +322,8 @@ do_batch_monte(cl_cluster *asc, char *ns, cf_digest *digests, cl_cluster_node **
 				rd_buf = malloc(rd_buf_sz);
 			else
 				rd_buf = rd_stack_buf;
+			if (rd_buf == NULL)		return (-1);
+
 			if ((rv = cf_socket_read_forever(fd, rd_buf, rd_buf_sz))) {
 				fprintf(stderr, "network error: errno %d fd %d\n",rv, fd);
 				if (rd_buf != rd_stack_buf)	{ free(rd_buf); }
@@ -406,7 +409,8 @@ do_batch_monte(cl_cluster *asc, char *ns, cf_digest *digests, cl_cluster_node **
 			else {
 				bins = stack_bins;
 			}
-			
+			if (bins == NULL)		return (-1);
+
 			// parse through the bins/ops
 			cl_msg_op *op = (cl_msg_op *)buf;
 			for (int i=0;i<msg->n_ops;i++) {
@@ -415,7 +419,7 @@ do_batch_monte(cl_cluster *asc, char *ns, cf_digest *digests, cl_cluster_node **
 
 #ifdef DEBUG_VERBOSE
 				fprintf(stderr, "op receive: %p size %d op %d ptype %d pversion %d namesz %d \n",
-					op,op->op_sz, op->op, op->particle_type, op->version, op->name_sz);				
+					op,op->op_sz, op->op, op->particle_type, op->version, op->name_sz);
 #endif			
 
 #ifdef DEBUG_VERBOSE
@@ -433,9 +437,10 @@ do_batch_monte(cl_cluster *asc, char *ns, cf_digest *digests, cl_cluster_node **
 #endif				
 				done = true;
 			}
-			
-			if (msg->n_ops) {
+
+			if (cb && (msg->n_ops || (msg->info1 & CL_MSG_INFO1_NOBINDATA))) {
 				// got one good value? call it a success!
+				// (Note:  In the key exists case, there is no bin data.)
 				(*cb) ( ns_ret, 0 /*key*/, keyd, msg->generation, msg->record_ttl, bins, msg->n_ops, false /*islast*/, udata);
 				rv = 0;
 			}
@@ -446,7 +451,6 @@ do_batch_monte(cl_cluster *asc, char *ns, cf_digest *digests, cl_cluster_node **
 				free(bins);
 				bins = 0;
 			}
-
 
 			// don't have to free object internals. They point into the read buffer, where
 			// a pointer is required
@@ -494,6 +498,8 @@ typedef struct {
 	
 	// these sections are the same for the same query
 	cl_cluster 	*asc; 
+    int          info1;
+	int          info2;
 	char 		*ns;
 	cf_digest 	*digests; 
 	cl_cluster_node **nodes;
@@ -527,19 +533,20 @@ batch_worker_fn(void *gcc_is_ass)
 			fprintf(stderr, "queue pop failed\n");
 		}
 
-		int an_int = do_batch_monte( work.asc, work.ns, work.digests, work.nodes, work.n_digests, work.bins, work.operator, work.operations, work.n_ops, work.my_node, work.my_node_digest_count, work.cb, work.udata );
+		int an_int = do_batch_monte( work.asc, work.info1, work.info2, work.ns, work.digests, work.nodes, work.n_digests, work.bins, work.operator, work.operations, work.n_ops, work.my_node, work.my_node_digest_count, work.cb, work.udata );
 		
 		cf_queue_push(work.complete_q, (void *) &an_int);
 		
 	} while (1);
 }
 
+
 #define MAX_NODES 32
 
+
 cl_rv
-citrusleaf_get_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_bin *bins, int n_bins, bool get_key, citrusleaf_get_many_cb cb, void *udata)
+do_get_exists_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_bin *bins, int n_bins, bool get_key, bool get_bin_data, citrusleaf_get_many_cb cb, void *udata)
 {
-	
 	// fast path: if there's only one node, or the number of digests is super short, just dispatch to the server directly
 
 	// TODO FAST PATH
@@ -571,6 +578,7 @@ citrusleaf_get_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, 
 		}
 			
 	}
+
 	// find unique set
 	cl_cluster_node *unique_nodes[MAX_NODES];
 	int				unique_nodes_count[MAX_NODES];
@@ -593,9 +601,12 @@ citrusleaf_get_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, 
 	}
 	
 	// 
+	// Note:  The digest exists case does not retrieve bin data.
 	//
 	digest_work work;
 	work.asc = asc;
+	work.info1 = CL_MSG_INFO1_READ | (get_bin_data ? 0 : CL_MSG_INFO1_NOBINDATA);
+	work.info2 = 0;
 	work.ns = ns;
 	work.digests = (cf_digest *) digests; // discarding const to make compiler happy
 	work.nodes = nodes;
@@ -650,6 +661,18 @@ citrusleaf_get_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, 
 }
 
 
+cl_rv
+citrusleaf_get_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_bin *bins, int n_bins, bool get_key, citrusleaf_get_many_cb cb, void *udata)
+{
+	return do_get_exists_many_digest(asc, ns, digests, n_digests, bins, n_bins, get_key, true, cb, udata);
+}
+
+
+cl_rv
+citrusleaf_exists_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_bin *bins, int n_bins, bool get_key, citrusleaf_get_many_cb cb, void *udata)
+{
+	return do_get_exists_many_digest(asc, ns, digests, n_digests, bins, n_bins, get_key, false, cb, udata);
+}
 
 
 //

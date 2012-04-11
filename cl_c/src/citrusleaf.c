@@ -1290,10 +1290,10 @@ Ok:
 	if (rv == 0 && (values || operations) && n_values) {
 		for (int i=0;i<*n_values;i++) {
 			cl_bin *bin = values? &(*values)[i] : &((*operations)[i].bin);
-			if ( bin->object.type == CL_NULL ) {
-				fprintf(stderr, " return object with null type: name %s digest %"PRIx64"\n",bin->bin_name, *(uint64_t *) &d_ret);
-				// raise(SIGINT);
-			}
+//			if ( bin->object.type == CL_NULL ) {
+//				fprintf(stderr, " return object with null type: name %s digest %"PRIx64"\n",bin->bin_name, *(uint64_t *) &d_ret);
+//				// raise(SIGINT);
+//			}
 		}
 	}
 #ifdef DEBUG_HISTOGRAM	
@@ -1823,27 +1823,30 @@ citrusleaf_calculate_digest(const char *set, const cl_object *key, cf_digest *di
 //
 
 extern cl_rv
-citrusleaf_operate(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, cl_operation *operations, int n_operations, const cl_write_parameters *cl_w_p, uint32_t *generation)
+citrusleaf_operate(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, cl_operation *operations, int n_operations, const cl_write_parameters *cl_w_p, int touch, uint32_t *generation)
 {
     if (!g_initialized) return(-1);
     
 	// see if there are any read or write bits ---
 	//   (this is slightly obscure c usage....)
 	int info1 = 0, info2 = 0;
-    	uint64_t trid=0;
+	uint64_t trid=0;
 
 	for (int i=0;i<n_operations;i++) {
 		
-		if ((operations[i].op & CL_OP_WRITE)) info2 = CL_MSG_INFO2_WRITE;
-		
-		if ((operations[i].op & CL_OP_READ)) info1 = CL_MSG_INFO1_READ;
-		
-		if ((operations[i].op & CL_OP_ADD)) info2 = CL_MSG_INFO2_WRITE;
+		if (operations[i].op  == CL_OP_WRITE)
+			info2 = CL_MSG_INFO2_WRITE;
+		else if (operations[i].op == CL_OP_READ)
+			info1 = CL_MSG_INFO1_READ;
+		else if (operations[i].op == CL_OP_ADD)
+			info2 = CL_MSG_INFO2_WRITE;
 		
 		if (info1 && info2) break;
-		
 	}
 	
+	if (touch)
+		info2 = CL_MSG_INFO2_WRITE;
+
 	return( do_the_full_monte( asc, info1, info2, ns, set, key, 0, 0, 0, &operations, &n_operations, generation, cl_w_p, &trid) );
 }
 

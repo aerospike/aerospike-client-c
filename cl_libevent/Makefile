@@ -21,13 +21,13 @@ clean:
 	rm -f lib64/*
 	rm -f example/cl_evexample
 	rm -f example/obj/*
-	rm -f example2/cl_evexample
+	rm -f example2/example2
 	rm -f example2/obj/*
-	rm -f example3/cl_evexample
+	rm -f example3/example3
 	rm -f example3/obj/*
-	rm -f example4/cl_evexample
+	rm -f example4/example4
 	rm -f example4/obj/*
-	rm -f example5/cl_eveample
+	rm -f example5/example5
 	rm -f example5/obj/*
 
 

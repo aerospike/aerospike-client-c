@@ -19,27 +19,27 @@
 
 
 int
-bits_find_last_set(uint32_t v)
+cf_bits_find_last_set(uint32_t v)
 {
 
 	int r;
 	uint32_t t, tt;
 	
 	if ((tt = v >> 16))
-		r = (t = tt >> 8) ? (24 + LogTable256[t]) : (16 + LogTable256[tt]);
+		r = (t = tt >> 8) ? (24 + cf_LogTable256[t]) : (16 + cf_LogTable256[tt]);
 	else
-		r = (t = v >> 8) ? (8 + LogTable256[t]) : LogTable256[v];
+		r = (t = v >> 8) ? (8 + cf_LogTable256[t]) : cf_LogTable256[v];
 	return (r);
 }
 
 int
-bits_find_last_set_64(uint64_t v) 
+cf_bits_find_last_set_64(uint64_t v)
 {
 	uint64_t t;
 	if ((t = v >> 32))
-		return( bits_find_last_set(t) + 32 );
+		return( cf_bits_find_last_set(t) + 32 );
 	else
-		return( bits_find_last_set(v) );
+		return( cf_bits_find_last_set(v) );
 }
 
 
@@ -55,7 +55,8 @@ cf_histogram_create(char *name)
 	return(h);
 }
 
-void cf_histogram_dump( cf_histogram *h )
+void 
+cf_histogram_dump( cf_histogram *h )
 {
 	char printbuf[100];
 	int pos = 0; // location to print from
@@ -64,8 +65,8 @@ void cf_histogram_dump( cf_histogram *h )
 	fprintf(stderr, "histogram dump: %s (%zu total)\n",h->name, h->n_counts);
 	int i, j;
 	int k = 0;
-	for (j=N_COUNTS-1 ; j >= 0 ; j-- ) if (h->count[j]) break;
-	for (i=0;i<N_COUNTS;i++) if (h->count[i]) break;
+	for (j=CF_N_HIST_COUNTS-1 ; j >= 0 ; j-- ) if (h->count[j]) break;
+	for (i=0;i<CF_N_HIST_COUNTS;i++) if (h->count[i]) break;
 	for (; i<=j;i++) {
 		if (h->count[i] > 0) { // print only non zero columns
 			int bytes = sprintf((char *) (printbuf + pos), " (%02d: %010zu) ", i, h->count[i]);
@@ -87,14 +88,15 @@ void cf_histogram_dump( cf_histogram *h )
 	    fprintf(stderr, "%s\n", (char *) printbuf);
 }
 
-void cf_histogram_insert_data_point( cf_histogram *h, uint64_t start)
+void 
+cf_histogram_insert_data_point( cf_histogram *h, uint64_t start)
 {
     cf_atomic_int_incr(&h->n_counts);
 	
     uint64_t end = cf_getms(); 
     uint64_t delta = end - start;
 	
-	int index = bits_find_last_set_64(delta);
+	int index = cf_bits_find_last_set_64(delta);
 	if (index < 0) index = 0;   
 	if (start > end)
 	{
@@ -108,9 +110,10 @@ void cf_histogram_insert_data_point( cf_histogram *h, uint64_t start)
 	
 }
 
-void cf_histogram_get_counts(cf_histogram *h, cf_histogram_counts *hc)
+void 
+cf_histogram_get_counts(cf_histogram *h, cf_histogram_counts *hc)
 {
-	for (int i=0;i<N_COUNTS;i++)
+	for (int i=0;i<CF_N_HIST_COUNTS;i++)
 		hc->count[i] = h->count[i];
 	return;
 }

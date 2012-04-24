@@ -18,31 +18,43 @@
 #include <citrusleaf/cf_socket.h>
 #include <citrusleaf/cf_shash.h>
 
+// Structure used to maintain information about the work submitted
+// for asynchronous command execution
+#define MAX_ASYNC_RECEIVER_THREADS	32	//Max number of receiver threads for async work
+#define ONEASYNCFD			0
+typedef struct async_stats {
+	cf_atomic_int	retries;
+	cf_atomic_int	dropouts;
+} async_stats;
+
+// forward refs..
+static void* async_receiver_fn(void *thdata);
+
 //Global variables related to async work
-cf_atomic32 	g_async_initialized = 0;
-cf_queue	*g_async_q;
-cf_queue	*g_workitems_freepool_q;
-int		g_async_q_szlimit = 0;
-int		g_async_nw_progress_timeout = 1000;
-pthread_t	g_async_reciever[MAX_ASYNC_RECEIVER_THREADS];
-cf_atomic32 	g_async_num_threads = 0;
-cf_atomic32 	g_thread_count = 0;
+static cf_atomic32 	g_async_initialized = 0;
+cf_queue	   *g_cl_async_q;
+cf_queue	   *g_cl_workitems_freepool_q;
+static int		    g_async_q_szlimit = 0;
+static int		    g_async_nw_progress_timeout = 1000;
+static pthread_t	g_async_reciever[MAX_ASYNC_RECEIVER_THREADS];
+static cf_atomic32 	g_async_num_threads = 0;
+static cf_atomic32 	g_thread_count = 0;
 //Hashtable used in case of single async FD per node
-shash		*g_async_hashtab;
-uint32_t	g_async_h_szlimit = 0;
-uint32_t	g_async_h_buckets = 0;
-async_stats	g_async_stats;
-cl_async_fail_cb g_fail_cb_fn = NULL;
-cl_async_success_cb g_success_cb_fn = NULL;
+shash		  		*g_cl_async_hashtab;
+static uint32_t	    g_async_h_szlimit = 0;
+static uint32_t	    g_async_h_buckets = 0;
+static async_stats	g_async_stats;
+static cl_async_fail_cb g_fail_cb_fn = NULL;
+static cl_async_success_cb g_success_cb_fn = NULL;
 
 void citrusleaf_async_getstats(uint64_t *retries, uint64_t *dropouts, int *workitems)
 {
 	*retries = g_async_stats.retries;
 	*dropouts = g_async_stats.dropouts;
 #if ONEASYNCFD
-	*workitems = shash_get_size(g_async_hashtab);
+	*workitems = shash_get_size(g_cl_async_hashtab);
 #else
-	*workitems = cf_queue_sz(g_async_q);
+	*workitems = cf_queue_sz(g_cl_async_q);
 #endif
 }
 
@@ -54,26 +66,29 @@ void citrusleaf_async_set_nw_timeout(int timeout)
 //A trivial hash function to distribute the trids. We simply do a modulo
 //of the number of buckets of the hashtable. As the trid is random enough
 //this hash function should fare well.
-uint32_t async_trid_hash(void *udata)
+static uint32_t 
+async_trid_hash(void *udata)
 {
 	return (*((uint64_t *)udata) % g_async_h_buckets);
 }
 
-int del_node_asyncworkitems(void *key, void *value, void *clnode)
+int
+cl_del_node_asyncworkitems(void *key, void *value, void *clnode)
 {
-	if (((async_work *)value)->node == (cl_cluster_node *)clnode) {
+	if (((cl_async_work *)value)->node == (cl_cluster_node *)clnode) {
 		return SHASH_REDUCE_DELETE;
 	} else {
 		return 0;
 	}
 }
 
-void* async_receiver_fn(void *thdata)
+static void* 
+async_receiver_fn(void *thdata)
 {
 	int 		rv = -1;
 	bool 		network_error = false;
-	async_work	*workitem = NULL;
-	async_work	*tmpworkitem = NULL;
+	cl_async_work	*workitem = NULL;
+	cl_async_work	*tmpworkitem = NULL;
 	as_msg 		msg;
 	cf_queue	*q_to_use = NULL;
 	cl_cluster_node	*thisnode = NULL;
@@ -88,7 +103,7 @@ void* async_receiver_fn(void *thdata)
 	unsigned int 	thread_id = cf_atomic32_incr(&g_thread_count);
 
 	if (thdata == NULL) {
-		q_to_use = g_async_q;
+		q_to_use = g_cl_async_q;
 	} else {
 		thisnode = (cl_cluster_node *)thdata;
 		q_to_use = thisnode->asyncwork_q;
@@ -108,7 +123,7 @@ void* async_receiver_fn(void *thdata)
 			} while (rv == CF_QUEUE_OK);
 
 			//We want to delete all the workitems of this node
-			shash_reduce_delete(g_async_hashtab, del_node_asyncworkitems, thisnode);
+			shash_reduce_delete(g_cl_async_hashtab, cl_del_node_asyncworkitems, thisnode);
 			break;
 		}
 #endif
@@ -117,7 +132,7 @@ void* async_receiver_fn(void *thdata)
 		//TODO: What if the node gets dunned while this pop call is blocked ?
 #if ONEASYNCFD
 		//fprintf(stderr, "Elements remaining in this node's queue=%d, Hash table size=%d\n", 
-		//		cf_queue_sz(thisnode->asyncwork_q), shash_get_size(g_async_hashtab));
+		//		cf_queue_sz(thisnode->asyncwork_q), shash_get_size(g_cl_async_hashtab));
 #endif
 
 		// If we have no progress in 50ms, we should move to the next workitem 
@@ -229,7 +244,7 @@ Ok:
 			//As of now, async functionality is there only for put call.
 			//In put call, we do not get anything back other than the trid field.
 			//So, just pass variable to get back the trid and ignore others.
-			if (0 != parse(&msg.m, rd_buf, rd_buf_sz, NULL, NULL, NULL, &acktrid)) {
+			if (0 != cl_parse(&msg.m, rd_buf, rd_buf_sz, NULL, NULL, NULL, &acktrid)) {
 				rv = CITRUSLEAF_FAIL_UNKNOWN;
 			}
 			else {
@@ -239,7 +254,7 @@ Ok:
 					//It is likely that we may get response for a different trid.
 					//Just delete the correct one from the queue 
 					//put back the current workitem back in the queue.
-					shash_get(g_async_hashtab, &acktrid, &tmpworkitem);
+					shash_get(g_cl_async_hashtab, &acktrid, &tmpworkitem);
 					cf_queue_delete(q_to_use, &tmpworkitem, true);
 					cf_queue_push(q_to_use, &workitem);
 					//From now on workitem will be the one for which we got ack
@@ -266,7 +281,7 @@ Ok:
 
 #if ONEASYNCFD
 		//Delete the item from the global hashtable
-		if (shash_delete(g_async_hashtab, &workitem->trid) != SHASH_OK)
+		if (shash_delete(g_cl_async_hashtab, &workitem->trid) != SHASH_OK)
 		{
 #if DEBUG
 			fprintf(stderr,"Failure while trying to delete trid=%"PRIu64" from hashtable\n", workitem->trid);
@@ -275,7 +290,7 @@ Ok:
 #endif
 
 		//Push it back into the free pool. If the attempt fails, free it.
-		if (cf_queue_push(g_workitems_freepool_q, &workitem) == -1) {
+		if (cf_queue_push(g_cl_workitems_freepool_q, &workitem) == -1) {
 			free(workitem);
 		}
 
@@ -296,12 +311,13 @@ Ok:
 
 //Same as do_the_full_monte, but only till the command is sent to the node.
 //Most of the code is duplicated. Bad.
-int do_async_monte(cl_cluster *asc, int info1, int info2, const char *ns, const char *set, const cl_object *key, 
+int
+cl_do_async_monte(cl_cluster *asc, int info1, int info2, const char *ns, const char *set, const cl_object *key,
 			const cf_digest *digest, cl_bin **values, cl_operator operator, cl_operation **operations, 
 			int *n_values, uint32_t *cl_gen, const cl_write_parameters *cl_w_p, uint64_t *trid, void *udata)
 
 {
-	async_work	*workitem = NULL;
+	cl_async_work	*workitem = NULL;
 
 	uint8_t		wr_stack_buf[STACK_BUF_SZ];
 	uint8_t		*wr_buf = wr_stack_buf;
@@ -318,13 +334,13 @@ int do_async_monte(cl_cluster *asc, int info1, int info2, const char *ns, const 
 	cl_cluster_node	*node = 0;
 
 #if ONEASYNCFD
-	if (shash_get_size(g_async_hashtab) >= g_async_h_szlimit) {
+	if (shash_get_size(g_cl_async_hashtab) >= g_async_h_szlimit) {
 		//fprintf(stderr, "Async hashtab is full. Cannot insert any more elements\n");
 		return CITRUSLEAF_FAIL_ASYNCQ_FULL;
 	}
 #else
 	//If the async buffer is at the max limit, do not entertain more requests.
-	if (cf_queue_sz(g_async_q) >= cf_atomic32_get(g_async_q_szlimit)) {
+	if (cf_queue_sz(g_cl_async_q) >= cf_atomic32_get(g_async_q_szlimit)) {
 		//fprintf(stderr, "Async buffer is full. Cannot insert any more elements\n");
 		return CITRUSLEAF_FAIL_ASYNCQ_FULL;
 	}
@@ -332,10 +348,10 @@ int do_async_monte(cl_cluster *asc, int info1, int info2, const char *ns, const 
 
 	//Allocate memory for work item that will be added to the async work list
 
-	if (cf_queue_sz(g_workitems_freepool_q) > 0) {
-		cf_queue_pop(g_workitems_freepool_q, &workitem, CF_QUEUE_FOREVER);
+	if (cf_queue_sz(g_cl_workitems_freepool_q) > 0) {
+		cf_queue_pop(g_cl_workitems_freepool_q, &workitem, CF_QUEUE_FOREVER);
 	} else {
-		workitem = malloc(sizeof(async_work));
+		workitem = malloc(sizeof(cl_async_work));
 		if (workitem == NULL) {
 			return CITRUSLEAF_FAIL_CLIENT;
 		}
@@ -343,10 +359,10 @@ int do_async_monte(cl_cluster *asc, int info1, int info2, const char *ns, const 
 
 	//Compile the write buffer to be sent to the cluster
 	if (n_values && ( values || operations) ){
-		compile(info1, info2, ns, set, key, digest, values?*values:NULL, operator, operations?*operations:NULL, 
+		cl_compile(info1, info2, ns, set, key, digest, values?*values:NULL, operator, operations?*operations:NULL,
 				*n_values , &wr_buf, &wr_buf_sz, cl_w_p, &d_ret, *trid);
 	}else{
-		compile(info1, info2, ns, set, key, digest, 0, 0, 0, 0, &wr_buf, &wr_buf_sz, cl_w_p, &d_ret, *trid);
+		cl_compile(info1, info2, ns, set, key, digest, 0, 0, 0, 0, &wr_buf, &wr_buf_sz, cl_w_p, &d_ret, *trid);
 	}	
 
 	deadline_ms = 0;
@@ -505,13 +521,13 @@ Ok:
 	workitem->fd = fd;
 	//We are storing only the pointer to the workitem
 #if ONEASYNCFD
-	if (shash_put_unique(g_async_hashtab, trid, &workitem) != SHASH_OK) {
+	if (shash_put_unique(g_cl_async_hashtab, trid, &workitem) != SHASH_OK) {
 		//This should always succeed.
 		fprintf(stderr, "Unable to add unique entry into the hash table\n");
 	}
 	cf_queue_push(node->asyncwork_q, &workitem);	//Also put in the node's q
 #else
-	cf_queue_push(g_async_q, &workitem);
+	cf_queue_push(g_cl_async_q, &workitem);
 #endif
 
 	if (wr_buf != wr_stack_buf) {
@@ -571,7 +587,7 @@ int citrusleaf_async_init(int size_limit, int num_receiver_threads, cl_async_fai
 		g_async_h_szlimit = size_limit * 3;	//Max number of elements in the hash table
 		g_async_h_buckets = g_async_h_szlimit/10;//Number of buckets in the hash table
 
-		if (shash_create(&g_async_hashtab, async_trid_hash, sizeof(uint64_t), sizeof(async_work *), 
+		if (shash_create(&g_cl_async_hashtab, async_trid_hash, sizeof(uint64_t), sizeof(cl_async_work *),
 					g_async_h_buckets, SHASH_CR_MT_BIGLOCK) != SHASH_OK) {
 			fprintf(stderr, "Failed to initialize the async work hastable\n");
 			cf_atomic32_decr(&g_async_initialized);
@@ -580,7 +596,7 @@ int citrusleaf_async_init(int size_limit, int num_receiver_threads, cl_async_fai
 #else
 		// create work queue
 		g_async_q_szlimit = size_limit;
-		if ((g_async_q = cf_queue_create(sizeof(async_work *), true)) == NULL) {
+		if ((g_cl_async_q = cf_queue_create(sizeof(cl_async_work *), true)) == NULL) {
 			fprintf(stderr, "Failed to initialize the async work queue\n");
 			cf_atomic32_decr(&g_async_initialized);
 			return -1;
@@ -592,7 +608,7 @@ int citrusleaf_async_init(int size_limit, int num_receiver_threads, cl_async_fai
 		g_async_num_threads = num_threads;
 #endif
 
-		if ((g_workitems_freepool_q = cf_queue_create(sizeof(async_work *), true)) == NULL) {
+		if ((g_cl_workitems_freepool_q = cf_queue_create(sizeof(cl_async_work *), true)) == NULL) {
 			fprintf(stderr, "Failed to create memory pool for workitems\n");
 			return -1;
 		}

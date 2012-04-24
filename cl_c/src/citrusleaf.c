@@ -19,6 +19,7 @@
 #include <pthread.h>
 #include <fcntl.h>
 #include <arpa/inet.h>  // ntonl
+#include <inttypes.h> // PRIu64
 
 #ifdef OSX
 #include <libkern/OSByteOrder.h> // for the 64-bit swap macro.
@@ -43,7 +44,7 @@
 // 
 
 static bool g_initialized = false;
-int g_turn_debug_on = false;
+int g_cl_turn_debug_on = false;
 
 
 // #define DEBUG_HISTOGRAM 1 // histogram printed in citrusleaf_print_stats()
@@ -53,6 +54,19 @@ int g_turn_debug_on = false;
 
 #ifdef DEBUG_HISTOGRAM
     static cf_histogram *cf_hist;
+#endif
+
+#ifdef DEBUG_TIME
+static void debug_printf(long before_write_time, long after_write_time, long before_read_header_time, long after_read_header_time, 
+		long before_read_body_time, long after_read_body_time, long deadline_ms, int progress_timeout_ms)
+{
+	fprintf(stderr, "tid %zu - Before Write - deadline %"PRIu64" progress_timeout %d now is %"PRIu64"\n", (uint64_t)pthread_self(), deadline_ms, progress_timeout_ms, before_write_time);
+	fprintf(stderr, "tid %zu - After Write - now is %"PRIu64"\n", (uint64_t)pthread_self(), after_write_time);
+	fprintf(stderr, "tid %zu - Before Read header - deadline %"PRIu64" progress_timeout %d now is %"PRIu64"\n", (uint64_t)pthread_self(), deadline_ms, progress_timeout_ms, before_read_header_time);        
+	fprintf(stderr, "tid %zu - After Read header - now is %"PRIu64"\n", (uint64_t)pthread_self(), after_read_header_time);
+	fprintf(stderr, "tid %zu - Before Read body - deadline %"PRIu64" progress_timeout %d now is %"PRIu64"\n", (uint64_t)pthread_self(), deadline_ms, progress_timeout_ms, before_read_body_time);
+	fprintf(stderr, "tid %zu - After Read body - now is %"PRIu64"\n", (uint64_t)pthread_self(), after_read_body_time);
+}
 #endif
 
 //
@@ -156,9 +170,9 @@ dump_buf(char *info, uint8_t *buf, size_t buf_len)
 #endif
 	
 // forward ref
-int value_to_op_int(int64_t value, uint8_t *data);
+static int value_to_op_int(int64_t value, uint8_t *data);
 
-void
+static void
 dump_values(cl_bin *bins, cl_operation *operations, int n_bins)
 {
 	fprintf(stderr, " n bins: %d\n",n_bins);
@@ -183,7 +197,7 @@ dump_values(cl_bin *bins, cl_operation *operations, int n_bins)
 	}
 }
 
-void
+static void
 dump_key(char *msg, cl_object const *key)
 {
 	switch (key->type) {
@@ -208,12 +222,12 @@ dump_key(char *msg, cl_object const *key)
 //
 
 uint8_t *
-write_header(uint8_t *buf, size_t msg_sz, uint info1, uint info2, uint info3, uint32_t generation, uint32_t record_ttl, uint32_t transaction_ttl, uint32_t n_fields, uint32_t n_ops )
+cl_write_header(uint8_t *buf, size_t msg_sz, uint info1, uint info2, uint info3, uint32_t generation, uint32_t record_ttl, uint32_t transaction_ttl, uint32_t n_fields, uint32_t n_ops )
 {
 	as_msg *msg = (as_msg *) buf;
 	
-	msg->proto.version = PROTO_VERSION;
-	msg->proto.type = PROTO_TYPE_CL_MSG;
+	msg->proto.version = CL_PROTO_VERSION;
+	msg->proto.type = CL_PROTO_TYPE_CL_MSG;
 	msg->proto.sz = msg_sz - sizeof(cl_proto);
 	cl_proto_swap(&msg->proto);
 	msg->m.header_sz = sizeof(cl_msg);
@@ -377,7 +391,7 @@ write_fields_digests(uint8_t *buf, const char *ns, int ns_len, const cf_digest *
 
 // Convert the int value to the wire protocol
 
-int
+static int
 value_to_op_int(int64_t value, uint8_t *data)
 {
 #ifdef OSX
@@ -392,7 +406,7 @@ value_to_op_int(int64_t value, uint8_t *data)
 // Get the size of the wire protocol value
 // Must match previous function EXACTLY 
 
-int
+static int
 value_to_op_int_sz(int64_t i)
 {
 	return(8);
@@ -400,7 +414,7 @@ value_to_op_int_sz(int64_t i)
 
 
 // convert a wire protocol integer value to a local int64
-int
+static int
 op_to_value_int(uint8_t	*buf, int sz, int64_t *value)
 {
 //	fprintf(stderr, "op to value int: sz %d\n",sz);
@@ -452,7 +466,7 @@ op_to_value_int(uint8_t	*buf, int sz, int64_t *value)
 }
 
 int
-value_to_op_get_size(cl_bin *v, size_t *sz)
+cl_value_to_op_get_size(cl_bin *v, size_t *sz)
 {
 	switch(v->object.type) {
 		case CL_NULL:
@@ -483,7 +497,7 @@ value_to_op_get_size(cl_bin *v, size_t *sz)
 // Lay an C structure bin into network order operation
 
 int
-value_to_op(cl_bin *v, cl_operator operator, cl_operation *operation, cl_msg_op *op)
+cl_value_to_op(cl_bin *v, cl_operator operator, cl_operation *operation, cl_msg_op *op)
 {
 	cl_bin *bin = v?v:&operation->bin;
 	int	bin_len = strlen(bin->bin_name);
@@ -555,7 +569,7 @@ value_to_op(cl_bin *v, cl_operator operator, cl_operation *operation, cl_msg_op 
 
 
 int
-compile(uint info1, uint info2, const char *ns, const char *set, const cl_object *key, const cf_digest *digest, 
+cl_compile(uint info1, uint info2, const char *ns, const char *set, const cl_object *key, const cf_digest *digest,
 	cl_bin *values, cl_operator operator, cl_operation *operations, int n_values,  
 	uint8_t **buf_r, size_t *buf_sz_r, const cl_write_parameters *cl_w_p, cf_digest *d_ret, uint64_t trid)
 {
@@ -584,7 +598,7 @@ compile(uint info1, uint info2, const char *ns, const char *set, const cl_object
 		
 		msg_sz += sizeof(cl_msg_op) + strlen(tmpValue->bin_name);
 
-        	if (0 != value_to_op_get_size(tmpValue, &msg_sz)) {
+        	if (0 != cl_value_to_op_get_size(tmpValue, &msg_sz)) {
 			fprintf(stderr,"illegal parameter: bad type %d write op %d\n",tmpValue->object.type,i);
 			return(-1);
 		}
@@ -630,7 +644,7 @@ compile(uint info1, uint info2, const char *ns, const char *set, const cl_object
 
 	// lay out the header
 	int n_fields = ( ns ? 1 : 0 ) + (set ? 1 : 0) + (key ? 1 : 0) + (digest ? 1 : 0) + (trid ? 1 : 0);
-	buf = write_header(buf, msg_sz, info1, info2, 0, generation, record_ttl, transaction_ttl, n_fields, n_values);  
+	buf = cl_write_header(buf, msg_sz, info1, info2, 0, generation, record_ttl, transaction_ttl, n_fields, n_values);
 		
 	// now the fields
 	buf = write_fields(buf, ns, ns_len, set, set_len, key, digest, d_ret, trid);
@@ -645,9 +659,9 @@ compile(uint info1, uint info2, const char *ns, const char *set, const cl_object
 		cl_msg_op *op_tmp;
 		for (i = 0; i< n_values;i++) {
 			if( values ) {
-				value_to_op( &values[i], operator, NULL, op);		
+				cl_value_to_op( &values[i], operator, NULL, op);
 			}else if (operations) {
-				value_to_op( NULL, 0, &operations[i], op);
+				cl_value_to_op( NULL, 0, &operations[i], op);
 			}
 	
 			op_tmp = cl_msg_op_get_next(op);
@@ -680,7 +694,7 @@ compile_digests(uint info1, uint info2, const char *ns, const cf_digest *digests
 		cl_bin *tmpValue = values?&values[i]:&(operations[i].bin);
 		msg_sz += sizeof(cl_msg_op) + strlen(tmpValue->bin_name);
 
-        if (0 != value_to_op_get_size(tmpValue, &msg_sz)) {
+        if (0 != cl_value_to_op_get_size(tmpValue, &msg_sz)) {
             fprintf(stderr,"illegal parameter: bad type %d write op %d\n",tmpValue->object.type,i);
             return(-1);
         }
@@ -727,7 +741,7 @@ compile_digests(uint info1, uint info2, const char *ns, const cf_digest *digests
 
 	// lay out the header - currently always 2, the digest array and the ns
 	int n_fields = 2;
-	buf = write_header(buf, msg_sz, info1, info2, 0, generation, record_ttl, transaction_ttl, n_fields, 0/*n_values*/);  
+	buf = cl_write_header(buf, msg_sz, info1, info2, 0, generation, record_ttl, transaction_ttl, n_fields, 0/*n_values*/);
 		
 	// now the fields
 	buf = write_fields_digests(buf, ns, ns_len, digests, n_digests);
@@ -744,9 +758,9 @@ compile_digests(uint info1, uint info2, const char *ns, const cf_digest *digests
 		cl_msg_op *op_tmp;
 		for (i = 0; i< n_values;i++) {
 			if( values ){	
-				value_to_op( &values[i], operator, NULL, op);
+				cl_value_to_op( &values[i], operator, NULL, op);
 			}else{
-				value_to_op(NULL, 0, &operations[i], op);
+				cl_value_to_op(NULL, 0, &operations[i], op);
 			}
 	
 			op_tmp = cl_msg_op_get_next(op);
@@ -761,7 +775,7 @@ compile_digests(uint info1, uint info2, const char *ns, const cf_digest *digests
 
 // 0 if OK, -1 if fail
 
-int
+static int
 set_object(cl_msg_op *op, cl_object *obj)
 {
 	int rv = 0;
@@ -810,7 +824,7 @@ set_object(cl_msg_op *op, cl_object *obj)
 // Search through the value list and set the pre-existing correct one
 // Leads ot n-squared in this section of code
 // See other comment....
-int
+static int
 set_value_search(cl_msg_op *op, cl_bin *values, cl_operation *operations, int n_values)
 {
 	// currently have to loop through the values to find the right one
@@ -839,7 +853,7 @@ set_value_search(cl_msg_op *op, cl_bin *values, cl_operation *operations, int n_
 //
 // Copy this particular operation to that particular value
 void
-set_value_particular(cl_msg_op *op, cl_bin *value)
+cl_set_value_particular(cl_msg_op *op, cl_bin *value)
 {
 	if (op->name_sz > sizeof(value->bin_name)) {
 #ifdef DEBUG		
@@ -865,7 +879,7 @@ set_value_particular(cl_msg_op *op, cl_bin *value)
 //
 
 int
-parse(cl_msg *msg, uint8_t *buf, size_t buf_len, cl_bin **values_r, cl_operation **operations_r, int *n_values_r, uint64_t *trid)
+cl_parse(cl_msg *msg, uint8_t *buf, size_t buf_len, cl_bin **values_r, cl_operation **operations_r, int *n_values_r, uint64_t *trid)
 {
 	uint8_t *buf_lim = buf + buf_len;
 	
@@ -933,7 +947,7 @@ parse(cl_msg *msg, uint8_t *buf, size_t buf_len, cl_bin **values_r, cl_operation
 
 				cl_msg_swap_op(op);
 				
-				set_value_particular(op, value);
+				cl_set_value_particular(op, value);
 				
 				op = cl_msg_op_get_next(op);
 				
@@ -978,7 +992,7 @@ parse(cl_msg *msg, uint8_t *buf, size_t buf_len, cl_bin **values_r, cl_operation
 //
 // Similarly, either values or operations must be set, but not both.
 
-int
+static int
 do_the_full_monte(cl_cluster *asc, int info1, int info2, const char *ns, const char *set, const cl_object *key, 
 	const cf_digest *digest, cl_bin **values, cl_operator operator, cl_operation **operations, int *n_values, 
 	uint32_t *cl_gen, const cl_write_parameters *cl_w_p, uint64_t *trid)
@@ -1004,7 +1018,6 @@ do_the_full_monte(cl_cluster *asc, int info1, int info2, const char *ns, const c
 	cl_cluster_node *node = 0;
 
 	int fd = -1;
-	bool network_error;
 
 //	if( *values ){
 //		dump_values(*values, null, *n_values);
@@ -1014,12 +1027,12 @@ do_the_full_monte(cl_cluster *asc, int info1, int info2, const char *ns, const c
 	// 
 	cf_digest d_ret;	
 	if (n_values && ( values || operations) ){
-		if (compile(info1, info2, ns, set, key, digest, values?*values:NULL, operator, operations?*operations:NULL, 
+		if (cl_compile(info1, info2, ns, set, key, digest, values?*values:NULL, operator, operations?*operations:NULL,
 				*n_values , &wr_buf, &wr_buf_sz, cl_w_p, &d_ret, *trid)) {
 			return(rv);
 		}
 	}else{
-		if (compile(info1, info2, ns, set, key, digest, 0, 0, 0, 0, &wr_buf, &wr_buf_sz, cl_w_p, &d_ret, *trid)) {
+		if (cl_compile(info1, info2, ns, set, key, digest, 0, 0, 0, 0, &wr_buf, &wr_buf_sz, cl_w_p, &d_ret, *trid)) {
 			return(rv);
 		}
 	}	
@@ -1071,8 +1084,6 @@ do_the_full_monte(cl_cluster *asc, int info1, int info2, const char *ns, const c
 		before_read_body_time = 0;
 		after_read_body_time = 0;
 #endif
-
-		network_error = false;
         
 #ifdef DEBUG		
 		if (try > 0)
@@ -1129,8 +1140,8 @@ do_the_full_monte(cl_cluster *asc, int info1, int info2, const char *ns, const c
             debug_printf(before_write_time, after_write_time, before_read_header_time, after_read_header_time, before_read_body_time, after_read_body_time,
                          deadline_ms, progress_timeout_ms);           	
 #endif
-            if (rv != ETIMEDOUT)
-                network_error = true;
+
+			cl_cluster_node_dun(node, rv == ETIMEDOUT ? NODE_DUN_TIMEOUT : NODE_DUN_NET_ERR);
 			goto Retry;
 		}
 
@@ -1156,8 +1167,8 @@ do_the_full_monte(cl_cluster *asc, int info1, int info2, const char *ns, const c
             debug_printf(before_write_time, after_write_time, before_read_header_time, after_read_header_time, before_read_body_time, after_read_body_time,
                          deadline_ms, progress_timeout_ms);           	
 #endif            
-            if (rv != ETIMEDOUT)
-                network_error = true;
+
+			cl_cluster_node_dun(node, rv == ETIMEDOUT ? NODE_DUN_TIMEOUT : NODE_DUN_NET_ERR);
 			goto Retry;
 	
 		}
@@ -1202,8 +1213,8 @@ do_the_full_monte(cl_cluster *asc, int info1, int info2, const char *ns, const c
 				debug_printf(before_write_time, after_write_time, before_read_header_time, after_read_header_time, before_read_body_time, after_read_body_time, 
                              deadline_ms, progress_timeout_ms);           	
 #endif
-                if (rv != ETIMEDOUT)
-                    network_error = true;
+
+				cl_cluster_node_dun(node, rv == ETIMEDOUT ? NODE_DUN_TIMEOUT : NODE_DUN_NET_ERR);
 				goto Retry;
 			}
 
@@ -1217,11 +1228,8 @@ do_the_full_monte(cl_cluster *asc, int info1, int info2, const char *ns, const c
         goto Ok;
 		
 Retry:		
-		if (network_error == true) {
-#ifdef DEBUG            
-            fprintf(stderr, "dunning node  %s\n", node->name);
-#endif            
-			cl_cluster_node_dun(node);
+
+		if (fd != -1) {
 			close(fd);
 			fd = -1;
 		}
@@ -1230,12 +1238,7 @@ Retry:
             cl_cluster_node_put(node); 
             node = 0; 
         }
-        
-        if (fd != -1) {
-            close(fd);
-            fd = -1;
-        }
-        
+
         if (deadline_ms && (deadline_ms < cf_getms() ) ) {
 #ifdef DEBUG            
             fprintf(stderr, "out of luck out of time : deadline %"PRIu64" now %"PRIu64"\n",
@@ -1250,8 +1253,8 @@ Retry:
 Error:	
 	
 #ifdef DEBUG	
-	fprintf(stderr, "exiting with failure: network_error %d wpol %d timeleft %d rv %d\n",
-		(int)network_error, (int)(cl_w_p ? cl_w_p->w_pol : 0), 
+	fprintf(stderr, "exiting with failure: wpol %d timeleft %d rv %d\n",
+		(int)(cl_w_p ? cl_w_p->w_pol : 0),
 		(int)(deadline_ms - cf_getms() ), rv );
 #endif	
 
@@ -1264,13 +1267,14 @@ Error:
     
 Ok:    
 
+	cl_cluster_node_ok(node);
     cl_cluster_node_fd_put(node, fd, false);
 	cl_cluster_node_put(node);
    
 	if (wr_buf != wr_stack_buf)		free(wr_buf);
 
 	if (rd_buf) {
-		if (0 != parse(&msg.m, rd_buf, rd_buf_sz, values, operations, n_values, trid)) {
+		if (0 != cl_parse(&msg.m, rd_buf, rd_buf_sz, values, operations, n_values, trid)) {
 			rv = CITRUSLEAF_FAIL_UNKNOWN;
 		}
 		else {
@@ -1300,10 +1304,10 @@ Ok:
 #ifdef DEBUG_HISTOGRAM	
     cf_histogram_insert_data_point(cf_hist, start_time);
 #endif	
-#ifdef DEBUG	
+#ifdef DEBUG_VERBOSE
 	if (rv != 0) {
-		fprintf(stderr, "exiting OK clause with failure: network_error %d wpol %d timeleft %d rv %d\n",
-			(int)network_error, (int)(cl_w_p ? cl_w_p->w_pol : 0), 
+		fprintf(stderr, "exiting OK clause with failure: wpol %d timeleft %d rv %d\n",
+			(int)(cl_w_p ? cl_w_p->w_pol : 0),
 			(int)(deadline_ms - cf_getms() ), rv );
 	}
 #endif	
@@ -1323,7 +1327,7 @@ Ok:
 #define STACK_BINS 100
 
 
-int
+static int
 do_many_monte(cl_cluster *asc, uint operation_info, uint operation_info2, const char *ns, const char *set, 
 	const cf_digest *digests, int n_digests, citrusleaf_get_many_cb cb, void *udata)
 {
@@ -1346,7 +1350,7 @@ do_many_monte(cl_cluster *asc, uint operation_info, uint operation_info2, const 
 	}
 	else {
 		// we have a single namespace and/or set to get
-		if (compile(operation_info, operation_info2, ns, set, 0, 0, 0, 0, 0, 0, &wr_buf, &wr_buf_sz, 0, &d, 0)) {
+		if (cl_compile(operation_info, operation_info2, ns, set, 0, 0, 0, 0, 0, 0, &wr_buf, &wr_buf_sz, 0, &d, 0)) {
 			return(rv);
 		}
 	}
@@ -1397,11 +1401,11 @@ do_many_monte(cl_cluster *asc, uint operation_info, uint operation_info2, const 
 #endif	
 		cl_proto_swap(&proto);
 
-		if (proto.version != PROTO_VERSION) {
+		if (proto.version != CL_PROTO_VERSION) {
 			fprintf(stderr, "network error: received protocol message of wrong version %d\n",proto.version);
 			return(-1);
 		}
-		if (proto.type != PROTO_TYPE_CL_MSG) {
+		if (proto.type != CL_PROTO_TYPE_CL_MSG) {
 			fprintf(stderr, "network error: received incorrect message version %d\n",proto.type);
 			return(-1);
 		}
@@ -1501,7 +1505,7 @@ do_many_monte(cl_cluster *asc, uint operation_info, uint operation_info2, const 
 				dump_buf("individual op (host order)", (uint8_t *) op, op->op_sz + sizeof(uint32_t));
 #endif	
 
-				set_value_particular(op, &bins[i]);
+				cl_set_value_particular(op, &bins[i]);
 				op = cl_msg_op_get_next(op);
 			}
 			buf = (uint8_t *) op;
@@ -1622,7 +1626,7 @@ citrusleaf_async_put(cl_cluster *asc, const char *ns, const char *set, const cl_
 
 	//Hardcoding to say that the client is XDS(in info1 bitmap). 
 	//If this is used by some other clients in the future, we should parameterize it.
-	return( do_async_monte( asc, CL_MSG_INFO1_XDS, CL_MSG_INFO2_WRITE, ns, set, key, 0, (cl_bin **) &values, 
+	return( cl_do_async_monte( asc, CL_MSG_INFO1_XDS, CL_MSG_INFO2_WRITE, ns, set, key, 0, (cl_bin **) &values,
 					CL_OP_WRITE, 0, &n_values, NULL, cl_w_p, &trid, udata) ); 
 }
 
@@ -1634,7 +1638,7 @@ citrusleaf_async_put_digest(cl_cluster *asc, const char *ns, const cf_digest *di
 
 	//Hardcoding to say that the client is XDS(in info1 bitmap). 
 	//If this is used by some other clients in the future, we should parameterize it.
-	return( do_async_monte( asc, CL_MSG_INFO1_XDS, CL_MSG_INFO2_WRITE, ns, 0, 0, digest, (cl_bin **) &values, 
+	return( cl_do_async_monte( asc, CL_MSG_INFO1_XDS, CL_MSG_INFO2_WRITE, ns, 0, 0, digest, (cl_bin **) &values,
 					CL_OP_WRITE, 0, &n_values, NULL, cl_w_p, &trid, udata) ); 
 }
 
@@ -1858,7 +1862,7 @@ extern int citrusleaf_cluster_init();
 
 void citrusleaf_set_debug(bool debug_flag) 
 {
-   g_turn_debug_on = debug_flag;
+   g_cl_turn_debug_on = debug_flag;
 }
 
 int citrusleaf_init() 
@@ -1883,7 +1887,7 @@ void citrusleaf_shutdown(void) {
 	if (g_initialized == false)	return;
 
 	citrusleaf_cluster_shutdown();
-
+	citrusleaf_batch_shutdown();
 	// citrusleaf_info_shutdown();
 
 	g_initialized = false;

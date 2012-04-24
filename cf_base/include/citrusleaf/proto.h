@@ -76,10 +76,10 @@ typedef enum {
  */
 
  
-#define PROTO_VERSION 2
-#define PROTO_TYPE_INFO 1       // ascii-format message for determining server info
-#define PROTO_TYPE_CL_MSG 3
-#define PROTO_TYPE_CL_MSG_COMPRESSED 4
+#define CL_PROTO_VERSION 2
+#define CL_PROTO_TYPE_INFO 1       // ascii-format message for determining server info
+#define CL_PROTO_TYPE_CL_MSG 3
+#define CL_PROTO_TYPE_CL_MSG_COMPRESSED 4
 
 typedef struct cl_proto_s {
 	uint8_t		version;
@@ -153,9 +153,9 @@ typedef struct cl_msg_number_s {
 } __attribute__ ((__packed__)) cl_msg_number;
 
 
-#define AEROSPIKE_CL_RESULT_OK	0
-#define AEROSPIKE_CL_RESULT_FAIL 1
-#define AEROSPIKE_CL_RESULT_NOTFOUND 2
+#define CL_RESULT_OK	0
+#define CL_RESULT_FAIL 1
+#define CL_RESULT_NOTFOUND 2
 
 /* cl_msg
  * Aerospike message

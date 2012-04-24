@@ -35,7 +35,7 @@
 //
 
 
-int
+static int
 batch_decompress(uint8_t *in_buf, size_t in_sz, uint8_t **out_buf, size_t *out_sz) 
 {
 	z_stream 	strm;
@@ -144,7 +144,7 @@ batch_compile(uint info1, uint info2, char *ns, cf_digest *digests, cl_cluster_n
 	for (i=0;i<n_values;i++) {
 		msg_sz += sizeof(cl_msg_op) + strlen(values[i].bin_name);
 
-        if (0 != value_to_op_get_size(&values[i], &msg_sz)) {
+        if (0 != cl_value_to_op_get_size(&values[i], &msg_sz)) {
             fprintf(stderr,"illegal parameter: bad type %d write op %d\n",values[i].object.type,i);
             return(-1);
         }
@@ -191,7 +191,7 @@ batch_compile(uint info1, uint info2, char *ns, cf_digest *digests, cl_cluster_n
 	
 	// lay out the header - currently always 2, the digest array and the ns
 	int n_fields = 2;
-	buf = write_header(buf, msg_sz, info1, info2, 0, generation, record_ttl, transaction_ttl, n_fields, n_values);  
+	buf = cl_write_header(buf, msg_sz, info1, info2, 0, generation, record_ttl, transaction_ttl, n_fields, n_values);
 		
 	// now the fields
 	buf = write_fields_batch_digests(buf, ns, ns_len, digests, nodes, n_digests,n_my_digests, my_node);
@@ -207,9 +207,9 @@ batch_compile(uint info1, uint info2, char *ns, cf_digest *digests, cl_cluster_n
 		cl_msg_op *op_tmp;
 		for (i = 0; i< n_values;i++) {
 			if( values ){
-				value_to_op( &values[i], operator, 0, op);
+				cl_value_to_op( &values[i], operator, 0, op);
 			}else{
-				value_to_op(0,0,&operations[i],op);
+				cl_value_to_op(0,0,&operations[i],op);
 			}
 	
 			op_tmp = cl_msg_op_get_next(op);
@@ -301,11 +301,11 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 #endif	
 		cl_proto_swap(&proto);
 
-		if (proto.version != PROTO_VERSION) {
+		if (proto.version != CL_PROTO_VERSION) {
 			fprintf(stderr, "network error: received protocol message of wrong version %d\n",proto.version);
 			return(-1);
 		}
-		if ((proto.type != PROTO_TYPE_CL_MSG) && (proto.type != PROTO_TYPE_CL_MSG_COMPRESSED)) {
+		if ((proto.type != CL_PROTO_TYPE_CL_MSG) && (proto.type != CL_PROTO_TYPE_CL_MSG_COMPRESSED)) {
 			fprintf(stderr, "network error: received incorrect message version %d\n",proto.type);
 			return(-1);
 		}
@@ -335,10 +335,10 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 #endif	
 		}
 		
-		if (proto.type == PROTO_TYPE_CL_MSG_COMPRESSED) {
+		if (proto.type == CL_PROTO_TYPE_CL_MSG_COMPRESSED) {
 			
-			uint8_t *new_rd_buf;
-			size_t  new_rd_buf_sz;
+			uint8_t *new_rd_buf   = NULL;
+			size_t  new_rd_buf_sz = 0;
 			
 			rv = batch_decompress(rd_buf, rd_buf_sz, &new_rd_buf, &new_rd_buf_sz);
 			if (rv != 0) {
@@ -352,7 +352,7 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 			
 			// also re-touch the proto - not certain if this matters
 			proto.sz = rd_buf_sz;
-			proto.type = PROTO_TYPE_CL_MSG;
+			proto.type = CL_PROTO_TYPE_CL_MSG;
 
 		}
 		
@@ -426,7 +426,7 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 				dump_buf("individual op (host order)", (uint8_t *) op, op->op_sz + sizeof(uint32_t));
 #endif	
 
-				set_value_particular(op, &bins[i]);
+				cl_set_value_particular(op, &bins[i]);
 				op = cl_msg_op_get_next(op);
 			}
 			buf = (uint8_t *) op;
@@ -483,11 +483,11 @@ Final:
 	return(rv);
 }
 
-cf_atomic32 batch_initialized = 0;
+static cf_atomic32 batch_initialized = 0;
 
 #define N_BATCH_THREADS 6
-cf_queue *g_batch_q = 0;
-pthread_t g_batch_th[N_BATCH_THREADS];
+static cf_queue *g_batch_q = 0;
+static pthread_t g_batch_th[N_BATCH_THREADS];
 
 
 //
@@ -523,14 +523,19 @@ typedef struct {
 } digest_work;
 
 
-void *
-batch_worker_fn(void *gcc_is_ass)
+static void *
+batch_worker_fn(void *dummy)
 {
 	do {
 		digest_work work;
 		
 		if (0 != cf_queue_pop(g_batch_q, &work, CF_QUEUE_FOREVER)) {
 			fprintf(stderr, "queue pop failed\n");
+		}
+		
+		/* See function citrusleaf_batch_shutdown() for more details */
+		if(work.digests==NULL) {
+			pthread_exit(NULL);
 		}
 
 		int an_int = do_batch_monte( work.asc, work.info1, work.info2, work.ns, work.digests, work.nodes, work.n_digests, work.bins, work.operator, work.operations, work.n_ops, work.my_node, work.my_node_digest_count, work.cb, work.udata );
@@ -544,7 +549,7 @@ batch_worker_fn(void *gcc_is_ass)
 #define MAX_NODES 32
 
 
-cl_rv
+static cl_rv
 do_get_exists_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_bin *bins, int n_bins, bool get_key, bool get_bin_data, citrusleaf_get_many_cb cb, void *udata)
 {
 	// fast path: if there's only one node, or the number of digests is super short, just dispatch to the server directly
@@ -696,4 +701,28 @@ citrusleaf_batch_init()
 	return(0);	
 }
 
+/*
+* This function is used to close the batch threads gracefully. The earlier plan was to use pthread_cancel
+* with pthread_join. When the cancellation request comes, the thread is waiting on a cond variable. (see batch_worker_fn)
+* The pthread_cond_wait is a cancellation point. If a thread that's blocked on a condition variable is canceled,
+* the thread reacquires the mutex that's guarding the condition variable, so that the thread's cleanup handlers run
+* in the same state as the critical code before and after the call to this function. If some other thread owns the lock,
+* the canceled thread blocks until the mutex is available. So the first thread, holds the mutex, gets unlocked on the cond
+* variable and then dies. The case maybe that the mutex might be released or not. When the next thread gets the cancellation
+* request, it waits on the mutex to get free which may never happen and it blocks itself forever. This is why we use our own
+* thread cleanup routine. We push NULL work items in the queue. When we pop them, we signal the thread to exit. We join on the
+* thread thereafter.
+*/
+void citrusleaf_batch_shutdown() {
+
+        int i;
+        digest_work work;
+        memset(&work,0,sizeof(digest_work));
+        for(i=0;i<N_BATCH_THREADS;i++) {
+                cf_queue_push(g_batch_q,&work);
+        }
+        for(i=0;i<N_BATCH_THREADS;i++) {
+                pthread_join(g_batch_th[i],NULL);
+        }
+}
 

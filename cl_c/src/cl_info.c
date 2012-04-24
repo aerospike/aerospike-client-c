@@ -43,7 +43,7 @@
 //
 
 
-int
+static int
 info_expire_transaction( void *udata)
 {
 	int fd = (int) (size_t) udata;
@@ -146,8 +146,8 @@ citrusleaf_info_host(struct sockaddr_in *sa_in, char *names, char **values, int 
 		buf_sz = sizeof(cl_proto);
 	}
 		
-	req->version = PROTO_VERSION;
-	req->type = PROTO_TYPE_INFO;
+	req->version = CL_PROTO_VERSION;
+	req->type = CL_PROTO_TYPE_INFO;
 	cl_proto_swap(req);
 	
     if (timeout_ms)

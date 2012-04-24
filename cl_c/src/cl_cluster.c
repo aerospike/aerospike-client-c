@@ -46,13 +46,13 @@ static inline void print_ms(char *pre)
 
 static int g_clust_initialized = 0;
 static int g_clust_tend_speed = 1;
-extern int g_turn_debug_on;
+extern int g_cl_turn_debug_on;
 
 //
 // Debug function. Should be elsewhere.
 //
 
-void
+static void
 dump_sockaddr_in(char *prefix, struct sockaddr_in *sa_in)
 {
 	char str[INET_ADDRSTRLEN];
@@ -60,7 +60,7 @@ dump_sockaddr_in(char *prefix, struct sockaddr_in *sa_in)
 	fprintf(stderr,"%s %s:%d\n",prefix,str,(int)ntohs(sa_in->sin_port));
 }
 
-void
+static void
 dump_cluster(cl_cluster *asc)
 {
 	pthread_mutex_lock(&asc->LOCK);
@@ -120,9 +120,9 @@ str_split(char split_c, char *str, cf_vector *v)
 
 // List of all current clusters so the tender can maintain them
 // 
-pthread_t	tender_thr;
-cf_ll		cluster_ll;
-pthread_mutex_t cluster_ll_LOCK = PTHREAD_MUTEX_INITIALIZER; 
+static pthread_t	tender_thr;
+static cf_ll		cluster_ll;
+static pthread_mutex_t cluster_ll_LOCK = PTHREAD_MUTEX_INITIALIZER; 
 
 cl_cluster *
 citrusleaf_cluster_create(void)
@@ -311,6 +311,11 @@ citrusleaf_cluster_shutdown(void)
     cl_cluster *asc = (cl_cluster *)e; 
     citrusleaf_cluster_destroy(asc); // safe?
   }
+ 
+  /* Cancel tender thread */	
+  pthread_cancel(tender_thr);
+  pthread_join(tender_thr,NULL);
+
   // pthread_mutex_unlock(&cluster_ll_LOCK);
  }
 
@@ -519,7 +524,7 @@ citrusleaf_cluster_get(char const *url)
     // check to see if we actually got some initial node
 	uint node_v_sz = cf_vector_size(&asc->node_v);
     if (node_v_sz==0) {
-		fprintf(stderr, " no node added in initial create ");
+		fprintf(stderr, " no node added in initial create \n");
         citrusleaf_cluster_destroy(asc);
     	free(urlx);
         return NULL;
@@ -540,6 +545,8 @@ cl_cluster_node_create(char *name, struct sockaddr_in *sa_in)
 	if (!cn)	return(0);
 	
 	strcpy(cn->name, name);
+
+	cn->dun_score = 0;
 	cn->dunned = false;
 	
 	cf_vector_init(&cn->sockaddr_in_v, sizeof( struct sockaddr_in ), 5, 0);
@@ -549,7 +556,7 @@ cl_cluster_node_create(char *name, struct sockaddr_in *sa_in)
 	cn->conn_q_asyncfd = cf_queue_create( sizeof(int), true );
 
 	cn->asyncfd = -1;
-	cn->asyncwork_q = cf_queue_create(sizeof(async_work *), true);
+	cn->asyncwork_q = cf_queue_create(sizeof(cl_async_work *), true);
 	
 	cn->partition_generation = 0xFFFFFFFF;
 	
@@ -562,7 +569,7 @@ void
 cl_cluster_node_release(cl_cluster_node *cn)
 {
 	int i;
-	async_work *aw;
+	cl_async_work *aw;
 	if (0 == cf_rc_release(cn)) {
 		
 		cf_vector_destroy(&cn->sockaddr_in_v);
@@ -591,8 +598,8 @@ cl_cluster_node_release(cl_cluster_node *cn)
 		} while (rv == CF_QUEUE_OK);
 
 		//We want to delete all the workitems of this node
-		if (g_async_hashtab) {
-			shash_reduce_delete(g_async_hashtab, del_node_asyncworkitems, cn);
+		if (g_cl_async_hashtab) {
+			shash_reduce_delete(g_cl_async_hashtab, cl_del_node_asyncworkitems, cn);
 		}
 
 		//Now that all the workitems are released the FD can be closed
@@ -728,10 +735,33 @@ cl_cluster_node_put(cl_cluster_node *cn)
 //
 
 void
-cl_cluster_node_dun(cl_cluster_node *cn)
+cl_cluster_node_dun(cl_cluster_node *cn, int32_t score)
 {
-//	fprintf(stderr, "dun node: %s\n",cn->name);
-	cn->dunned = true;
+	if (cn->dunned) {
+		return;
+	}
+
+#ifdef DEBUG_VERBOSE
+	if (score > 1) {
+		fprintf(stderr, "node %s health decreased %d\n", cn->name, score);
+	}
+#endif
+
+	if (cf_atomic32_add(&cn->dun_score, score) > NODE_DUN_THRESHOLD) {
+		cn->dunned = true;
+
+#ifdef DEBUG
+		fprintf(stderr, "dunning node %s\n", cn->name);
+#endif
+	}
+}
+
+void
+cl_cluster_node_ok(cl_cluster_node *cn)
+{
+	if (! cn->dunned) {
+		cf_atomic32_set(&cn->dun_score, 0);
+	}
 }
 
 int
@@ -968,10 +998,12 @@ cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 		if (0 != citrusleaf_info_host(sa_in, "node\npartition-generation\nservices", &values, INFO_TIMEOUT_MS, false)) {
 			// todo: this address is no longer right for this node, update the node's list
 			// and if there's no addresses left, dun node
-            cn->dunned = true;
+			cl_cluster_node_dun(cn, NODE_DUN_INFO_ERR);
 			continue;
 		}
-		
+
+		cl_cluster_node_ok(cn);
+
 		// reminder: returned list is name1\tvalue1\nname2\tvalue2\n
 		cf_vector_define(lines_v, sizeof(void *), 0);
 		str_split('\n',values,&lines_v);
@@ -991,7 +1023,7 @@ cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 						// from the list of addresses for this node, and only dun if there
 						// are no addresses left
 						fprintf(stderr, "node name has changed!!!\n");
-						cn->dunned = true;
+						cl_cluster_node_dun(cn, NODE_DUN_INFO_ERR);
 					}
 				}
 				else if (strcmp(name, "partition-generation") == 0) {
@@ -1089,7 +1121,7 @@ cluster_ping_address(cl_cluster *asc, struct sockaddr_in *sa_in)
 	// if new nodename, add to cluster
 	cl_cluster_node *cn = cl_cluster_node_get_byname(asc, value);
 	if (!cn) {
-		if (g_turn_debug_on) {
+		if (g_cl_turn_debug_on) {
 			fprintf(stderr, "%s node unknown, creating new\n", value);
 			dump_sockaddr_in("New node is ",sa_in);
 		}
@@ -1171,7 +1203,7 @@ cluster_tend( cl_cluster *asc)
 	cf_vector_define(sockaddr_in_v, sizeof( struct sockaddr_in ), 0);
 	for (uint i=0;i<n_hosts;i++) {
 		
-        if (g_turn_debug_on) {
+        if (g_cl_turn_debug_on) {
 		    char *host = cf_vector_pointer_get(&asc->host_str_v, i);
 		    int port = cf_vector_integer_get(&asc->host_port_v, i);
     		fprintf(stderr, "lookup hosts: %s:%d\n",host,port);
@@ -1212,11 +1244,11 @@ cluster_tend( cl_cluster *asc)
 		int n_new = 0;
 		for (uint i=0;i<cf_vector_size(&sockaddr_in_v);i++) {
 			struct sockaddr_in *sin = cf_vector_getp(&sockaddr_in_v, i);
-			if (g_turn_debug_on) {
+			if (g_cl_turn_debug_on) {
 				dump_sockaddr_in("testing service address",sin);
 			}		
 			if (0 == cl_cluster_node_get_byaddr(asc, sin)) {
-				if (g_turn_debug_on) {
+				if (g_cl_turn_debug_on) {
 					dump_sockaddr_in("pinging",sin);
 				}		
 				cluster_ping_address(asc, sin);
@@ -1255,7 +1287,7 @@ citrusleaf_change_tend_speed(int secs)
 // This rolls through every cluster, tries to add and delete nodes that might
 // have gone bad
 //
-void *
+static void *
 cluster_tender_fn(void *gcc_is_ass)
 {
 	do {

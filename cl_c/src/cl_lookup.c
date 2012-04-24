@@ -36,7 +36,7 @@
 // Return 0 in case of success
 //
 extern int h_errno;
-extern int g_turn_debug_on;
+extern int g_cl_turn_debug_on;
 
 int
 cl_lookup(cl_cluster *asc, char *hostname, short port, cf_vector *sockaddr_in_v)
@@ -45,10 +45,10 @@ cl_lookup(cl_cluster *asc, char *hostname, short port, cf_vector *sockaddr_in_v)
 	size_t hstbuflen = 1024;
 	uint8_t	stack_hstbuf[hstbuflen];
 	void *tmphstbuf = stack_hstbuf;
-	int i, rv, herr, addrmapsz;
+	int rv, herr, addrmapsz;
 	struct hostent hostbuf, *hp;
 	cl_addrmap *map;
-
+	int retry = 0;
 	//Find if there is an alternate address that should be used for this hostname.
 	if (asc && (asc->host_addr_map_v.len > 0)) {
 		addrmapsz = asc->host_addr_map_v.len;
@@ -56,7 +56,7 @@ cl_lookup(cl_cluster *asc, char *hostname, short port, cf_vector *sockaddr_in_v)
 			map = cf_vector_pointer_get(&asc->host_addr_map_v, i);
 			if (map && strcmp(map->orig, hostname) == 0) {
 				//found a mapping for this address. Use the alternate one.
-				if (g_turn_debug_on) {
+				if (g_cl_turn_debug_on) {
 					fprintf(stderr, "Using %s instead of %s\n", map->alt, hostname);
 				}
 				hostname = map->alt;
@@ -76,6 +76,12 @@ cl_lookup(cl_cluster *asc, char *hostname, short port, cf_vector *sockaddr_in_v)
 		rv = gethostbyname2_r(hostname, AF_INET, &hostbuf, tmphstbuf, hstbuflen,
 				&hp, &herr);
 #endif
+		/* TRY_AGAIN for a maximun of 3 times, after which throw an error */
+		if(retry > 2) {
+			fprintf(stderr,"gethostbyname of %s - maxmimum retries failed\n",hostname);
+			retry = 0;
+			return -1;
+		}
 		if (hp == NULL) {
 			hostname = hostname ? hostname : "NONAME";
 			switch(herr) {
@@ -90,9 +96,11 @@ cl_lookup(cl_cluster *asc, char *hostname, short port, cf_vector *sockaddr_in_v)
 					break;
 				case TRY_AGAIN:
 					fprintf(stderr, "gethostbyname of %s returned TRY_AGAIN, try again (rv=%d)\n",hostname, rv);
+					retry++;
 					continue;
 				default:
 					fprintf(stderr, "gethostbyname of %s returned an unknown error (errno %d)\n",hostname, herr);
+					break;
 			}
 			if (tmphstbuf != stack_hstbuf)		free(tmphstbuf);
 			return(-1);
@@ -111,6 +119,7 @@ cl_lookup(cl_cluster *asc, char *hostname, short port, cf_vector *sockaddr_in_v)
 			}
 			else if (rv == EAGAIN || herr == TRY_AGAIN) {
 				fprintf(stderr, "gethostbyname returned EAGAIN, try again\n");
+				retry++;
 			}
 			else if (rv == ETIMEDOUT) {
 				fprintf(stderr, "gethostbyname for %s timed out\n", hostname ? (hostname): "NONAME");
@@ -128,12 +137,11 @@ cl_lookup(cl_cluster *asc, char *hostname, short port, cf_vector *sockaddr_in_v)
 #ifdef DEBUG
 	fprintf(stderr, "host lookup: %s canonical: %s addrtype %d length: %d\n", 
 		hostname, hp->h_name, hp->h_addrtype, hp->h_length);
-	
-	int i;
-	for (i=0;hp->h_aliases[i];i++) {
+
+	for (int i=0;hp->h_aliases[i];i++) {
 		fprintf(stderr, "  alias %d: %s\n",i, hp->h_aliases[i]);
 	}
-	for (i=0;hp->h_addr_list[i];i++) {
+	for (int i=0;hp->h_addr_list[i];i++) {
 		// todo: print something about the actual address
 		fprintf(stderr, "  address %d: %x\n",i,*(uint32_t *) hp->h_addr_list[i]);
 	}

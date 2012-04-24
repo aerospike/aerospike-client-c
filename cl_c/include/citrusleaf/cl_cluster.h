@@ -23,10 +23,16 @@
 #ifndef __CL_C_H__
 #define __CL_C_H__
 
+#define NODE_DUN_THRESHOLD	800
+#define NODE_DUN_INFO_ERR	801
+#define NODE_DUN_NET_ERR	50
+#define NODE_DUN_TIMEOUT	1
+
 typedef struct cl_cluster_node_s {
 	
 	char		name[20];
 	
+	cf_atomic32	dun_score;	// keep track of how "unhealthy" a node is
 	bool 		dunned;		// had a problem. Will get deleted next pass through.
 	
 	// A vector of sockaddr_in which the host is currently known by
@@ -108,7 +114,8 @@ extern cl_cluster_node *cl_cluster_node_get_random(cl_cluster *asc);  // get nod
 extern cl_cluster_node *cl_cluster_node_get(cl_cluster *asc, const char *ns, const cf_digest *d, bool write);  // get node from cluster
 extern void cl_cluster_node_release(cl_cluster_node *cn);
 extern void cl_cluster_node_put(cl_cluster_node *cn);          // put node back
-extern void cl_cluster_node_dun(cl_cluster_node *cn);			// node is bad!
+extern void cl_cluster_node_dun(cl_cluster_node *cn, int32_t score);			// node is less healthy!
+extern void cl_cluster_node_ok(cl_cluster_node *cn);
 extern int cl_cluster_node_fd_get(cl_cluster_node *cn, bool asyncfd);			// get an FD to the node
 extern void cl_cluster_node_fd_put(cl_cluster_node *cn, int fd, bool asyncfd); 		// put the FD back
 extern int citrusleaf_cluster_init();

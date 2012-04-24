@@ -19,6 +19,8 @@
 #include <fcntl.h>
 #include <arpa/inet.h>  // ntonl
 #include <stdbool.h>
+#include <inttypes.h> // PRIu64
+#include <pthread.h>
 
 #include <asm/byteorder.h> // 64-bit swap macro
 
@@ -43,18 +45,6 @@ static void debug_read_printf(long time_before_fcntl, long time_after_fcntl, lon
         fprintf(stderr, "tid %zu - Read - Before fcntl %"PRIu64" After fcntl %"PRIu64"\n", (uint64_t)pthread_self(), time_before_fcntl, time_after_fcntl);
         fprintf(stderr, "tid %zu - Read - Before Select %"PRIu64" After Select %"PRIu64" After Read %"PRIu64"\n", (uint64_t)pthread_self(), time_before_select, time_after_select_before_read, time_after_read);
 }
-
-static void debug_printf(long before_write_time, long after_write_time, long before_read_header_time, long after_read_header_time, 
-                  long before_read_body_time, long after_read_body_time, long deadline_ms, int progress_timeout_ms)         	
-
-{
-        fprintf(stderr, "tid %zu - Before Write - deadline %"PRIu64" progress_timeout %d now is %"PRIu64"\n", (uint64_t)pthread_self(), deadline_ms, progress_timeout_ms, before_write_time);
-        fprintf(stderr, "tid %zu - After Write - now is %"PRIu64"\n", (uint64_t)pthread_self(), after_write_time);
-        fprintf(stderr, "tid %zu - Before Read header - deadline %"PRIu64" progress_timeout %d now is %"PRIu64"\n", (uint64_t)pthread_self(), deadline_ms, progress_timeout_ms, before_read_header_time);        
-        fprintf(stderr, "tid %zu - After Read header - now is %"PRIu64"\n", (uint64_t)pthread_self(), after_read_header_time);
-        fprintf(stderr, "tid %zu - Before Read body - deadline %"PRIu64" progress_timeout %d now is %"PRIu64"\n", (uint64_t)pthread_self(), deadline_ms, progress_timeout_ms, before_read_body_time);
-        fprintf(stderr, "tid %zu - After Read body - now is %"PRIu64"\n", (uint64_t)pthread_self(), after_read_body_time);
-}
 #endif
 
 //
@@ -68,7 +58,7 @@ static void debug_printf(long before_write_time, long after_write_time, long bef
 // The reality is 8 bits per byte, but this calculation is a little more general
 
 
-size_t
+static size_t
 get_fdset_size( int fd ) {
 	if (fd < FD_SETSIZE)	return(sizeof(fd_set));
 	int bytes_per_512 = sizeof(fd_set)  / (FD_SETSIZE / 512);
@@ -198,20 +188,32 @@ cf_socket_read_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_dead
 			if (r_bytes > 0) {
 				pos += r_bytes;
             }
-            else if (r_bytes <= 0 && errno != ETIMEDOUT) {
-#ifdef DEBUG                    
-                fprintf(stderr, "Citrusleaf: error when reading from server - %d fd %d errno %d\n",r_bytes,fd, errno);
+			else if (r_bytes == 0) {
+				// We believe this means that the server has closed this socket.
+#ifdef DEBUG
+				fprintf(stderr, "Citrusleaf: read returned 0, fd %d\n", fd);
+#endif
+				rv = EBADF;
+				goto Out;
+			}
+            else if (errno != ETIMEDOUT
+					// It's apparently possible that select() returns successfully yet
+					// the socket is not ready for reading.
+					&& errno != EWOULDBLOCK && errno != EINPROGRESS && errno != EAGAIN) {
+#ifdef DEBUG
+                fprintf(stderr, "Citrusleaf: error when reading from server - %d fd %d errno %d : %s\n",r_bytes,fd, errno, strerror(errno));
 #endif
 #ifdef DEBUG_TIME
 				debug_read_printf(time_before_fcntl, time_after_fcntl, time_before_select, time_after_select_before_read, time_after_read);
 #endif				
-				if (r_bytes == 0) {
-					rv = EBADF;
-					goto Out;
-				}
 				rv = errno;
 				goto Out;
             }
+#ifdef DEBUG
+			else {
+				fprintf(stderr, "Citrusleaf: will retry - error when reading from server - %d fd %d errno %d : %s\n", r_bytes, fd, errno, strerror(errno));
+			}
+#endif
 		}
 		else if (rv == 0) {
 #ifdef DEBUG			
@@ -228,7 +230,7 @@ cf_socket_read_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_dead
 			}
 
         }
-        
+
         try++;
 
 	} while( pos < buf_len );
@@ -315,7 +317,7 @@ cf_socket_write_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_dea
                 fd,deadline, cf_getms(),try );
 #endif
 #ifdef DEBUG_TIME
-			debug_read_printf(time_before_fcntl, time_after_fcntl, time_before_select, time_after_select_before_read, time_after_read);
+			debug_write_printf(time_before_fcntl, time_after_fcntl, time_before_select, time_after_select_before_write, time_after_write);
 #endif    
 			rv = ETIMEDOUT;
 			goto Out;
@@ -348,7 +350,16 @@ cf_socket_write_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_dea
 				pos += r_bytes;
 				if (pos >= buf_len)	{ rv = 0; goto Out; } // done happily
             }
-            else if (r_bytes < 0 && errno != ETIMEDOUT) {
+			else if (r_bytes == 0) {
+				// We shouldn't see 0 returned unless we try to write 0 bytes, which we don't.
+#ifdef DEBUG
+				fprintf(stderr, "Citrusleaf: write returned 0, fd %d\n", fd);
+#endif
+				rv = EBADF;
+				goto Out;
+			}
+            else if (errno != ETIMEDOUT
+					&& errno != EWOULDBLOCK && errno != EINPROGRESS && errno != EAGAIN) {
 #ifdef DEBUG              
                 fprintf(stderr, "Citrusleaf: error when writing to server - %d fd %d errno %d\n",r_bytes,fd, errno);
 #endif                    
@@ -360,7 +371,7 @@ cf_socket_write_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_dea
 			}
 #ifdef DEBUG        
             else {
-                fprintf(stderr, "write forver: ret 0 errno %d, is error?\n",errno);
+                fprintf(stderr, "Citrusleaf: will retry - error when writing to server - %d fd %d errno %d\n", r_bytes, fd, errno);
             }
 #endif        
 		}

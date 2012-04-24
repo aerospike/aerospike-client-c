@@ -34,8 +34,6 @@ depclean: clean
 
 .PHONY: libcitrusleaf
 libcitrusleaf: $(OBJECTS)
-	echo $(LDFLAGS)
-	echo $(CF_OBJECTS)
 	mkdir -p $(DIR_TARGET)
 	ar rs $(DIR_TARGET)/$(TARGET_S) $(OBJECTS) $(CF_OBJECTS)
 	$(LD) $(LDFLAGS) -o $(DIR_TARGET)/$(TARGET_D) $(OBJECTS) $(CF_OBJECTS) $(LIBRARIES)

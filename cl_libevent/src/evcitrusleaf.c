@@ -190,8 +190,8 @@ static uint8_t *
 write_header(uint8_t *buf, size_t msg_size, int info1, int info2, uint32_t generation, uint32_t expiration, uint32_t timeout, uint32_t n_fields, uint32_t n_ops )
 {
 	as_msg *msg = (as_msg *) buf;
-	msg->proto.version = PROTO_VERSION;
-	msg->proto.type = PROTO_TYPE_CL_MSG;
+	msg->proto.version = CL_PROTO_VERSION;
+	msg->proto.type = CL_PROTO_TYPE_CL_MSG;
 	msg->proto.sz = msg_size - sizeof(cl_proto);
 	cl_proto_swap(&msg->proto);
 	msg->m.header_sz = sizeof(cl_msg);

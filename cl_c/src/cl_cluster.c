@@ -30,8 +30,7 @@
 
 // #define INFO_TIMEOUT_MS 100
 #define INFO_TIMEOUT_MS 300
-
-// #define DEBUG 1
+//#define DEBUG 1
 // #define DEBUG_VERBOSE 1
 
 // Forward references
@@ -137,6 +136,10 @@ citrusleaf_cluster_create(void)
 	asc->found_all = false;
 	asc->last_node = 0;
 	asc->ref_count = 1;
+	// Default is 0 so the cluster uses global tend speed.
+	// For the cluster user has to specifically set the own
+	// value
+	asc->tend_speed = 0;
 	
 	pthread_mutex_init(&asc->LOCK, 0);
 	
@@ -684,6 +687,37 @@ cl_cluster_node_get(cl_cluster *asc, const char *ns, const cf_digest *d, bool wr
 	cn = cl_cluster_node_get_random(asc);
 	pthread_mutex_unlock(&asc->LOCK);
 	return(cn);
+}
+
+void 
+cl_cluster_get_node_names(cl_cluster *asc, int *n_nodes, char **node_names)
+{
+	if (node_names) {
+		*node_names = NULL;
+	}
+	if (n_nodes) {
+		*n_nodes = 0;
+	}
+
+	pthread_mutex_lock(&asc->LOCK);
+	if (n_nodes) {
+		*n_nodes = cf_vector_size(&asc->node_v);
+	}
+	if (node_names) {
+		*node_names = malloc(NODE_NAME_SIZE*cf_vector_size(&asc->node_v));
+		if (*node_names==NULL) {
+			pthread_mutex_unlock(&asc->LOCK);
+			return;	
+		}		
+
+		char *nptr = *node_names;
+		for (uint i=0;i<cf_vector_size(&asc->node_v);i++) {
+			cl_cluster_node *cn = cf_vector_pointer_get(&asc->node_v, i);
+			memcpy(nptr, cn->name,NODE_NAME_SIZE);
+			nptr+=NODE_NAME_SIZE;
+		}	
+	}
+	pthread_mutex_unlock(&asc->LOCK);
 }
 
 cl_cluster_node *
@@ -1277,6 +1311,11 @@ cluster_tend( cl_cluster *asc)
 	return;
 }
 
+void 
+citrusleaf_cluster_change_tend_speed(cl_cluster *asc, int secs)
+{
+	asc->tend_speed = secs;
+}
 void
 citrusleaf_change_tend_speed(int secs)
 {
@@ -1290,15 +1329,27 @@ citrusleaf_change_tend_speed(int secs)
 static void *
 cluster_tender_fn(void *gcc_is_ass)
 {
+	uint64_t cnt = 1;
 	do {
-		sleep(g_clust_tend_speed);
+		sleep(1);
 		
+		// if tend speed is non zero tend at that speed
+		// otherwise at default speed
 		cf_ll_element *e = cf_ll_get_head(&cluster_ll);
 		while (e) {
-			cluster_tend( (cl_cluster *) e);
+			int speed = ((cl_cluster *)e)->tend_speed;
+			if (speed) {
+				if ((cnt % speed) == 0) {
+					cluster_tend( (cl_cluster *) e);
+				}
+			} else {
+				if ((cnt % g_clust_tend_speed) == 0) {
+					cluster_tend( (cl_cluster *) e);
+				}
+			}
 			e = cf_ll_get_next(e);
 		}
-		
+		cnt++;
 	} while (1);
 	return(0);
 }
@@ -1319,7 +1370,7 @@ int citrusleaf_cluster_init()
 	
     g_clust_initialized = 1;
     
-    	g_clust_tend_speed = 1;
+   	g_clust_tend_speed = 1;
 	pthread_create( &tender_thr, 0, cluster_tender_fn, 0);
 	return(0);	
 }

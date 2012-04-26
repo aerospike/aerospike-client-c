@@ -37,6 +37,8 @@
 #define STACK_BUF_SZ (1024 * 16) // provide a safe number for your system - linux tends to have 8M stacks these days
 #define DEFAULT_PROGRESS_TIMEOUT 50
 
+#define NODE_NAME_SIZE 20	
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -74,6 +76,11 @@ typedef enum cl_type cl_type;
 enum cl_write_policy { CL_WRITE_ASYNC, CL_WRITE_ONESHOT, CL_WRITE_RETRY, CL_WRITE_ASSURED };
 
 typedef enum cl_write_policy cl_write_policy;
+
+enum cl_scan_priority { CL_SCAN_PRIORITY_AUTO, CL_SCAN_PRIORITY_LOW, CL_SCAN_PRIORITY_MEDIUM, CL_SCAN_PRIORITY_HIGH };
+
+typedef enum cl_scan_priority cl_scan_priority;
+
 
 //
 // An object is the value in a bin, or it is used as a key
@@ -212,6 +219,7 @@ extern void citrusleaf_cluster_shutdown(void);
 
 extern cl_cluster * citrusleaf_cluster_get_or_create(char *host, short port, int timeout_ms);
 extern void citrusleaf_cluster_release_or_destroy(cl_cluster **asc);
+extern void citrusleaf_cluster_change_tend_speed(struct cl_cluster_s *asc, int secs);
 
 // the timeout is how long to wait before the cluster is "settled"
 // 0 - a sensible default
@@ -225,6 +233,10 @@ extern void  citrusleaf_cluster_add_addr_map(cl_cluster *asc, char *orig, char *
 extern bool citrusleaf_cluster_settled(cl_cluster *asc);
 
 extern int citrusleaf_cluster_get_nodecount(cl_cluster *asc);
+
+// must free node_names when done
+extern void cl_cluster_get_node_names(cl_cluster *asc, int *n_nodes, char **node_names);
+
 
 // in the PHP system, URLs are lingua franca. We expect that
 // a single cluster will be created with one name - the URL - and 
@@ -291,6 +303,28 @@ cl_write_parameters_set_generation_dup( cl_write_parameters *cl_w_p, uint32_t ge
 	cl_w_p->use_generation_dup = true;
 }
 
+
+// scan_option info
+typedef struct cl_scan_parameters_s {
+	bool fail_on_cluster_change;	// honored by server: terminate scan if cluster in fluctuating state
+	cl_scan_priority	priority;	// honored by server: priority of scan
+	bool concurrent_nodes;	  		// honored on client: work on nodes in parallel or serially
+	uint8_t	threads_per_node;		// honored on client: have multiple threads per node. @TODO
+} cl_scan_parameters;
+
+static inline void
+cl_scan_parameters_set_default(cl_scan_parameters *cl_scan_p)
+{
+	cl_scan_p->fail_on_cluster_change = false;
+	cl_scan_p->concurrent_nodes = false;
+	cl_scan_p->threads_per_node = 1;	// not honored currently
+	cl_scan_p->priority = CL_SCAN_PRIORITY_AUTO;
+}
+
+typedef struct cl_node_response_s {
+	char	node_name[NODE_NAME_SIZE];
+	cl_rv	node_response;
+} cl_node_response;
 //
 // get-all will malloc an array of values and return all current values for a row.
 // thus, it is SELECT * in SQL. So pass in a pointer to cl_value to be filled, and a
@@ -321,6 +355,9 @@ citrusleaf_put(cl_cluster *asc, const char *ns, const char *set, const cl_object
 
 cl_rv
 citrusleaf_put_digest(cl_cluster *asc, const char *ns, const cf_digest *d, const cl_bin *bins, int n_bins, const cl_write_parameters *cl_w_p);
+
+cl_rv
+citrusleaf_restore(cl_cluster *asc, const char *ns, const cf_digest *digest, const char *set, const cl_bin *values, int n_values, const cl_write_parameters *cl_w_p);
 
 //Async versions of the put calls
 cl_rv
@@ -368,16 +405,20 @@ citrusleaf_exists_digest(cl_cluster *asc, const char *ns, const cf_digest *d, cl
 // you can pass null either with the namespace or the set, and a large iteration will occur
 // Memory available vanishes after 'return', if you want a copy, make a copy
 // Non-zero return in the callback aborts the call
-typedef int (*citrusleaf_get_many_cb) (char *ns, cl_object *key, cf_digest *keyd, uint32_t generation, uint32_t record_ttl,
+typedef int (*citrusleaf_get_many_cb) (char *ns, cf_digest *keyd, char *set, uint32_t generation, uint32_t record_ttl,
 	cl_bin *bins, int n_bins, bool is_last, void *udata);
-
-// This function is now replaced with citrusleaf_scan()
-//cl_rv
-//citrusleaf_get_many(cl_cluster *asc, char *ns, char *set, cl_bin *bins, int n_bins, bool get_key /*if true, retrieve key instead of simply digest*/, 
-//	citrusleaf_get_many_cb cb, void *udata);
 
 cl_rv
 citrusleaf_scan(cl_cluster *asc, char *ns, char *set, cl_bin *bins, int n_bins, bool get_key, citrusleaf_get_many_cb cb, void *udata, bool nobindata);
+
+// response is a vector of cl_node_response
+cf_vector *
+citrusleaf_scan_all_nodes (cl_cluster *asc, char *ns, char *set, cl_bin *bins, int n_bins, bool nobindata, uint8_t scan_pct,
+		citrusleaf_get_many_cb cb, void *udata, cl_scan_parameters *scan_p);
+
+cl_rv
+citrusleaf_scan_node (cl_cluster *asc, char *node_name, char *ns, char *set, cl_bin *bins, int n_bins, bool nobindata, uint8_t scan_pct,
+		citrusleaf_get_many_cb cb, void *udata, cl_scan_parameters *scan_p);
 
 //
 // Get many digest

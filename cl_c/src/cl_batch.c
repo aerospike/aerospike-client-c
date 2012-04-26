@@ -382,6 +382,7 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 			// parse through the fields
 			cf_digest *keyd = 0;
 			char ns_ret[33] = {0};
+			char *set_ret = NULL;
 			cl_msg_field *mf = (cl_msg_field *)buf;
 			for (int i=0;i<msg->n_fields;i++) {
 				cl_msg_swap_field(mf);
@@ -393,6 +394,12 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 				else if (mf->type == CL_MSG_FIELD_TYPE_NAMESPACE) {
 					memcpy(ns_ret, mf->data, cl_msg_field_get_value_sz(mf));
 					ns_ret[ cl_msg_field_get_value_sz(mf) ] = 0;
+				}
+				else if (mf->type == CL_MSG_FIELD_TYPE_SET) {
+					uint32_t set_name_len = cl_msg_field_get_value_sz(mf);
+					set_ret = (char *)malloc(set_name_len + 1);
+					memcpy(set_ret, mf->data, set_name_len);
+					set_ret[ set_name_len ] = '\0';
 				}
 				mf = cl_msg_field_get_next(mf);
 			}
@@ -409,7 +416,12 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 			else {
 				bins = stack_bins;
 			}
-			if (bins == NULL)		return (-1);
+			if (bins == NULL) {
+				if (set_ret) {
+					free(set_ret);
+				}
+				return (-1);
+			}
 
 			// parse through the bins/ops
 			cl_msg_op *op = (cl_msg_op *)buf;
@@ -441,7 +453,7 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 			if (cb && (msg->n_ops || (msg->info1 & CL_MSG_INFO1_NOBINDATA))) {
 				// got one good value? call it a success!
 				// (Note:  In the key exists case, there is no bin data.)
-				(*cb) ( ns_ret, 0 /*key*/, keyd, msg->generation, msg->record_ttl, bins, msg->n_ops, false /*islast*/, udata);
+				(*cb) ( ns_ret, keyd, set_ret, msg->generation, msg->record_ttl, bins, msg->n_ops, false /*islast*/, udata);
 				rv = 0;
 			}
 //			else
@@ -450,6 +462,11 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 			if (bins != stack_bins) {
 				free(bins);
 				bins = 0;
+			}
+
+			if (set_ret) {
+				free(set_ret);
+				set_ret = NULL;
 			}
 
 			// don't have to free object internals. They point into the read buffer, where
@@ -465,10 +482,10 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 
 	} while ( done == false );
 
-		if (wr_buf != wr_stack_buf) { 
-			free(wr_buf);
-			wr_buf = 0;
-		}
+	if (wr_buf != wr_stack_buf) {
+		free(wr_buf);
+		wr_buf = 0;
+	}
 	
 	cl_cluster_node_fd_put(node, fd, false);
 	

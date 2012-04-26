@@ -256,7 +256,8 @@ cl_write_header(uint8_t *buf, size_t msg_sz, uint info1, uint info2, uint info3,
 // The digest will be  
 
 static uint8_t *
-write_fields(uint8_t *buf, const char *ns, int ns_len, const char *set, int set_len, const cl_object *key, const cf_digest *d, cf_digest *d_ret, uint64_t trid)
+write_fields(uint8_t *buf, const char *ns, int ns_len, const char *set, int set_len, const cl_object *key, const cf_digest *d, cf_digest *d_ret, 
+	uint64_t trid, cl_scan_param_field *scan_param_field)
 {
 	
 	// lay out the fields
@@ -291,7 +292,16 @@ write_fields(uint8_t *buf, const char *ns, int ns_len, const char *set, int set_
 		cl_msg_swap_field(mf);
 		mf = mf_tmp;
 	}
-	
+
+	if (scan_param_field) {
+		mf->type = CL_MSG_FIELD_TYPE_SCAN_OPTIONS;
+		mf->field_sz = sizeof(cl_scan_param_field) + 1;
+		memcpy(mf->data, scan_param_field, sizeof(cl_scan_param_field));
+		mf_tmp = cl_msg_field_get_next(mf);
+		cl_msg_swap_field(mf);
+		mf = mf_tmp;
+	}	
+
 	if (key) {
 		mf->type = CL_MSG_FIELD_TYPE_KEY;
 		// make a function call here, similar to our prototype code in the server
@@ -571,7 +581,7 @@ cl_value_to_op(cl_bin *v, cl_operator operator, cl_operation *operation, cl_msg_
 int
 cl_compile(uint info1, uint info2, const char *ns, const char *set, const cl_object *key, const cf_digest *digest,
 	cl_bin *values, cl_operator operator, cl_operation *operations, int n_values,  
-	uint8_t **buf_r, size_t *buf_sz_r, const cl_write_parameters *cl_w_p, cf_digest *d_ret, uint64_t trid)
+	uint8_t **buf_r, size_t *buf_sz_r, const cl_write_parameters *cl_w_p, cf_digest *d_ret, uint64_t trid, cl_scan_param_field *scan_param_field)
 {
 	// I hate strlen
 	int		ns_len = ns ? strlen(ns) : 0;
@@ -586,6 +596,7 @@ cl_compile(uint info1, uint info2, const char *ns, const char *set, const cl_obj
 	if (key)    msg_sz += sizeof(cl_msg_field) + 1 + key->sz;
 	if (digest) msg_sz += sizeof(cl_msg_field) + 1 + sizeof(cf_digest);
 	if (trid)   msg_sz += sizeof(cl_msg_field) + sizeof(trid);
+	if (scan_param_field)	msg_sz += sizeof(cl_msg_field) + 1 + sizeof(cl_scan_param_field);
 
 	// ops
 	for (i=0;i<n_values;i++) {
@@ -598,7 +609,7 @@ cl_compile(uint info1, uint info2, const char *ns, const char *set, const cl_obj
 		
 		msg_sz += sizeof(cl_msg_op) + strlen(tmpValue->bin_name);
 
-        	if (0 != cl_value_to_op_get_size(tmpValue, &msg_sz)) {
+        if (0 != cl_value_to_op_get_size(tmpValue, &msg_sz)) {
 			fprintf(stderr,"illegal parameter: bad type %d write op %d\n",tmpValue->object.type,i);
 			return(-1);
 		}
@@ -643,11 +654,11 @@ cl_compile(uint info1, uint info2, const char *ns, const char *set, const cl_obj
 	uint32_t transaction_ttl = cl_w_p ? cl_w_p->timeout_ms : 0;
 
 	// lay out the header
-	int n_fields = ( ns ? 1 : 0 ) + (set ? 1 : 0) + (key ? 1 : 0) + (digest ? 1 : 0) + (trid ? 1 : 0);
+	int n_fields = ( ns ? 1 : 0 ) + (set ? 1 : 0) + (key ? 1 : 0) + (digest ? 1 : 0) + (trid ? 1 : 0) + (scan_param_field ? 1 : 0);
 	buf = cl_write_header(buf, msg_sz, info1, info2, 0, generation, record_ttl, transaction_ttl, n_fields, n_values);
 		
 	// now the fields
-	buf = write_fields(buf, ns, ns_len, set, set_len, key, digest, d_ret, trid);
+	buf = write_fields(buf, ns, ns_len, set, set_len, key, digest, d_ret, trid,scan_param_field);
 	if (!buf) {
 		if (mbuf)	free(mbuf);
 		return(-1);
@@ -1028,11 +1039,11 @@ do_the_full_monte(cl_cluster *asc, int info1, int info2, const char *ns, const c
 	cf_digest d_ret;	
 	if (n_values && ( values || operations) ){
 		if (cl_compile(info1, info2, ns, set, key, digest, values?*values:NULL, operator, operations?*operations:NULL,
-				*n_values , &wr_buf, &wr_buf_sz, cl_w_p, &d_ret, *trid)) {
+				*n_values , &wr_buf, &wr_buf_sz, cl_w_p, &d_ret, *trid, NULL)) {
 			return(rv);
 		}
 	}else{
-		if (cl_compile(info1, info2, ns, set, key, digest, 0, 0, 0, 0, &wr_buf, &wr_buf_sz, cl_w_p, &d_ret, *trid)) {
+		if (cl_compile(info1, info2, ns, set, key, digest, 0, 0, 0, 0, &wr_buf, &wr_buf_sz, cl_w_p, &d_ret, *trid, NULL)) {
 			return(rv);
 		}
 	}	
@@ -1316,254 +1327,6 @@ Ok:
 
 }
 
-//
-// Omnibus internal function that the externals can map to which returns many results
-//
-// This function is a bit different from the single-type one, because this one
-// has to read multiple proto-messages, and multiple cl_msg within them. So it really
-// does read just 8 byte, then the second header each time. More system calls, but much
-// cleaner.
-
-#define STACK_BINS 100
-
-
-static int
-do_many_monte(cl_cluster *asc, uint operation_info, uint operation_info2, const char *ns, const char *set, 
-	const cf_digest *digests, int n_digests, citrusleaf_get_many_cb cb, void *udata)
-{
-	int rv = -1;
-
-	uint8_t		rd_stack_buf[STACK_BUF_SZ];	
-	uint8_t		*rd_buf = 0;
-	size_t		rd_buf_sz = 0;
-	uint8_t		wr_stack_buf[STACK_BUF_SZ];
-	uint8_t		*wr_buf = wr_stack_buf;
-	size_t		wr_buf_sz = sizeof(wr_stack_buf);
-
-	cf_digest d;
-	if (0 != digests) {
-		// we have a list of many keys
-		if (compile_digests(operation_info, operation_info2, ns, digests, n_digests, NULL, 0, NULL, 0, 
-				&wr_buf, &wr_buf_sz, 0)) {
-			return(rv);
-		}
-	}
-	else {
-		// we have a single namespace and/or set to get
-		if (cl_compile(operation_info, operation_info2, ns, set, 0, 0, 0, 0, 0, 0, &wr_buf, &wr_buf_sz, 0, &d, 0)) {
-			return(rv);
-		}
-	}
-	
-#ifdef DEBUG_VERBOSE
-	dump_buf("sending request to cluster:", wr_buf, wr_buf_sz);
-#endif	
-
-	int fd;
-	cl_cluster_node *node = 0;
-
-	// Get an FD from a cluster
-	node = cl_cluster_node_get_random(asc);
-	if (!node) {
-#ifdef DEBUG
-		fprintf(stderr, "warning: no healthy nodes in cluster, failing\n");
-#endif			
-		return(-1);
-	}
-	fd = cl_cluster_node_fd_get(node, false);
-	if (fd == -1) {
-#ifdef DEBUG			
-		fprintf(stderr, "warning: node %s has no file descriptors, retrying transaction\n",node->name);
-#endif
-		return(-1);
-	}
-	
-	// send it to the cluster - non blocking socket, but we're blocking
-	if (0 != cf_socket_write_forever(fd, wr_buf, wr_buf_sz)) {
-#ifdef DEBUG			
-		fprintf(stderr, "Citrusleaf: write timeout or error when writing header to server - %d fd %d errno %d\n",rv,fd,errno);
-#endif
-		return(-1);
-	}
-
-	cl_proto 		proto;
-	bool done = false;
-	
-	do { // multiple CL proto per response
-		
-		// Now turn around and read a fine cl_pro - that's the first 8 bytes that has types and lengths
-		if ((rv = cf_socket_read_forever(fd, (uint8_t *) &proto, sizeof(cl_proto) ) ) ) {
-			fprintf(stderr, "network error: errno %d fd %d\n",rv, fd);
-			return(-1);
-		}
-#ifdef DEBUG_VERBOSE
-		dump_buf("read proto header from cluster", (uint8_t *) &proto, sizeof(cl_proto));
-#endif	
-		cl_proto_swap(&proto);
-
-		if (proto.version != CL_PROTO_VERSION) {
-			fprintf(stderr, "network error: received protocol message of wrong version %d\n",proto.version);
-			return(-1);
-		}
-		if (proto.type != CL_PROTO_TYPE_CL_MSG) {
-			fprintf(stderr, "network error: received incorrect message version %d\n",proto.type);
-			return(-1);
-		}
-		
-		// second read for the remainder of the message - expect this to cover lots of data, many lines
-		//
-		// if there's no error
-		rd_buf_sz =  proto.sz;
-		if (rd_buf_sz > 0) {
-                                                         
-//            fprintf(stderr, "message read: size %u\n",(uint)proto.sz);
-            
-			if (rd_buf_sz > sizeof(rd_stack_buf))
-				rd_buf = malloc(rd_buf_sz);
-			else
-				rd_buf = rd_stack_buf;
-			if (rd_buf == NULL) 		return (-1);
-
-			if ((rv = cf_socket_read_forever(fd, rd_buf, rd_buf_sz))) {
-				fprintf(stderr, "network error: errno %d fd %d\n",rv, fd);
-				if (rd_buf != rd_stack_buf)	{ free(rd_buf); }
-				return(-1);
-			}
-// this one's a little much: printing the entire body before printing the other bits			
-#ifdef DEBUG_VERBOSE
-			dump_buf("read msg body header (multiple msgs)", rd_buf, rd_buf_sz);
-#endif	
-		}
-		
-		// process all the cl_msg in this proto
-		uint8_t *buf = rd_buf;
-		uint pos = 0;
-		cl_bin stack_bins[STACK_BINS];
-		cl_bin *bins;
-		
-		while (pos < rd_buf_sz) {
-
-#ifdef DEBUG_VERBOSE
-			dump_buf("individual message header", buf, sizeof(cl_msg));
-#endif	
-			
-			uint8_t *buf_start = buf;
-			cl_msg *msg = (cl_msg *) buf;
-			cl_msg_swap_header(msg);
-			buf += sizeof(cl_msg);
-			
-			if (msg->header_sz != sizeof(cl_msg)) {
-				fprintf(stderr, "received cl msg of unexpected size: expecting %zd found %d, internal error\n",
-					sizeof(cl_msg),msg->header_sz);
-				return(-1);
-			}
-
-			// parse through the fields
-			cf_digest *keyd = 0;
-			char ns_ret[33] = {0};
-			cl_msg_field *mf = (cl_msg_field *)buf;
-			for (int i=0;i<msg->n_fields;i++) {
-				cl_msg_swap_field(mf);
-				if (mf->type == CL_MSG_FIELD_TYPE_KEY)
-					fprintf(stderr, "read: found a key - unexpected\n");
-				else if (mf->type == CL_MSG_FIELD_TYPE_DIGEST_RIPE) {
-					keyd = (cf_digest *) mf->data;
-				}
-				else if (mf->type == CL_MSG_FIELD_TYPE_NAMESPACE) {
-					memcpy(ns_ret, mf->data, cl_msg_field_get_value_sz(mf));
-					ns_ret[ cl_msg_field_get_value_sz(mf) ] = 0;
-				}
-				mf = cl_msg_field_get_next(mf);
-			}
-			buf = (uint8_t *) mf;
-
-#ifdef DEBUG_VERBOSE
-			fprintf(stderr, "message header fields: nfields %u nops %u\n",msg->n_fields,msg->n_ops);
-#endif
-
-
-			if (msg->n_ops > STACK_BINS) {
-				bins = malloc(sizeof(cl_bin) * msg->n_ops);
-			}
-			else {
-				bins = stack_bins;
-			}
-			if (bins == NULL)	return (-1);
-			
-			// parse through the bins/ops
-			cl_msg_op *op = (cl_msg_op *)buf;
-			for (int i=0;i<msg->n_ops;i++) {
-
-				cl_msg_swap_op(op);
-
-#ifdef DEBUG_VERBOSE
-				fprintf(stderr, "op receive: %p size %d op %d ptype %d pversion %d namesz %d \n",
-					op,op->op_sz, op->op, op->particle_type, op->version, op->name_sz);				
-#endif			
-
-#ifdef DEBUG_VERBOSE
-				dump_buf("individual op (host order)", (uint8_t *) op, op->op_sz + sizeof(uint32_t));
-#endif	
-
-				cl_set_value_particular(op, &bins[i]);
-				op = cl_msg_op_get_next(op);
-			}
-			buf = (uint8_t *) op;
-			
-			if (msg->info3 & CL_MSG_INFO3_LAST)	{
-#ifdef DEBUG				
-				fprintf(stderr, "received final message\n");
-#endif				
-				done = true;
-			}
-			else if ((msg->n_ops) || (operation_info & CL_MSG_INFO1_NOBINDATA)) {
-				// got one good value? call it a success!
-				(*cb) ( ns_ret, 0 /*key*/, keyd, msg->generation, msg->record_ttl, bins, msg->n_ops, false /*islast*/, udata);
-				rv = 0;
-			}
-//			else
-//				fprintf(stderr, "received message with no bins, signal of an error\n");
-
-			if (bins != stack_bins) {
-				free(bins);
-				bins = 0;
-			}
-
-
-			// don't have to free object internals. They point into the read buffer, where
-			// a pointer is required
-			pos += buf - buf_start;
-			
-		}
-		
-		if (rd_buf && (rd_buf != rd_stack_buf))	{
-			free(rd_buf);
-			rd_buf = 0;
-		}
-
-	} while ( done == false );
-
-		if (wr_buf != wr_stack_buf) { 
-			free(wr_buf);
-			wr_buf = 0;
-		}
-	
-	cl_cluster_node_fd_put(node, fd, false);
-	cl_cluster_node_put(node);
-	node = 0;
-	
-	goto Final;
-	
-	if (node) cl_cluster_node_put(node);
-		
-Final:	
-	
-#ifdef DEBUG_VERBOSE	
-	fprintf(stderr, "exited loop: rv %d\n", rv );
-#endif	
-	
-	return(rv);
-}
 
 //
 // head functions
@@ -1616,6 +1379,15 @@ citrusleaf_put_digest(cl_cluster *asc, const char *ns, const cf_digest *digest, 
     
     	uint64_t trid=0;
 	return( do_the_full_monte( asc, 0, CL_MSG_INFO2_WRITE, ns, 0, 0, digest, (cl_bin **) &values, CL_OP_WRITE, 0, &n_values, NULL, cl_w_p, &trid) ); 
+}
+
+extern cl_rv
+citrusleaf_restore(cl_cluster *asc, const char *ns, const cf_digest *digest, const char *set, const cl_bin *values, int n_values, const cl_write_parameters *cl_w_p)
+{
+    if (!g_initialized) return(-1);
+
+    uint64_t trid=0;
+	return( do_the_full_monte( asc, 0, CL_MSG_INFO2_WRITE, ns, set, 0, digest, (cl_bin **) &values, CL_OP_WRITE, 0, &n_values, NULL, cl_w_p, &trid) );
 }
 
 extern cl_rv
@@ -1735,32 +1507,6 @@ citrusleaf_get_all_digest(cl_cluster *asc, const char *ns, const cf_digest *dige
 	return( do_the_full_monte( asc, CL_MSG_INFO1_READ | CL_MSG_INFO1_GET_ALL, 0, ns, 0, 0, digest, values, CL_OP_READ, 0, n_values, cl_gen, &cl_w_p, &trid) ); 
 }
 
-// This function is now replaced with citrusleaf_scan()
-//extern cl_rv
-//citrusleaf_get_many(cl_cluster *asc, char *ns, char *set, cl_bin *bins, int n_bins, bool get_key, citrusleaf_get_many_cb cb, void *udata)
-//{
-//	if (n_bins != 0) {
-//		fprintf(stderr, "citrusleaf get many: does not yet support bin-specific requests\n");
-//	}
-//	return( do_many_monte( asc, CL_MSG_INFO1_READ, 0, ns, set, 0/*digests*/, 0 /*ndigests*/, cb, udata ) ); 
-//}
-
-extern cl_rv
-citrusleaf_scan(cl_cluster *asc, char *ns, char *set, cl_bin *bins, int n_bins, bool get_key, citrusleaf_get_many_cb cb, void *udata, bool nobindata)
-{
-	if (n_bins != 0) {
-		fprintf(stderr, "citrusleaf get many: does not yet support bin-specific requests\n");
-	}
-
-	uint info=0;
-	if (nobindata == true) {
-		info = (CL_MSG_INFO1_READ | CL_MSG_INFO1_NOBINDATA);
-	} else {
-		info = CL_MSG_INFO1_READ; 
-	}
-
-	return( do_many_monte( asc, info, 0, ns, set, 0/*digests*/, 0 /*ndigests*/, cb, udata ) ); 
-}
 
 extern cl_rv
 citrusleaf_verify(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, const cl_bin *values, int n_values, int timeout_ms, uint32_t *cl_gen)

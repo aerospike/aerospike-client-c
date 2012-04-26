@@ -30,7 +30,7 @@
 
 typedef struct cl_cluster_node_s {
 	
-	char		name[20];
+	char		name[NODE_NAME_SIZE];
 	
 	cf_atomic32	dun_score;	// keep track of how "unhealthy" a node is
 	bool 		dunned;		// had a problem. Will get deleted next pass through.
@@ -97,6 +97,7 @@ struct cl_cluster_s {
 	cl_partition_table *partition_table_head;
 	
 	uint32_t		ref_count;
+	uint32_t		tend_speed;
 	// Need a lock
 	pthread_mutex_t	LOCK;
 	
@@ -119,6 +120,8 @@ extern void cl_cluster_node_ok(cl_cluster_node *cn);
 extern int cl_cluster_node_fd_get(cl_cluster_node *cn, bool asyncfd);			// get an FD to the node
 extern void cl_cluster_node_fd_put(cl_cluster_node *cn, int fd, bool asyncfd); 		// put the FD back
 extern int citrusleaf_cluster_init();
+extern cl_cluster_node *cl_cluster_node_get_byname(cl_cluster *asc, char *name);
+
 //
 extern int citrusleaf_info_parse_single(char *values, char **value);
 

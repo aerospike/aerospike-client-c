@@ -64,6 +64,17 @@ typedef struct cl_async_work {
 int cl_del_node_asyncworkitems(void *key, void *value, void *clnode);
 
 
+// scan fields
+// left-to-right bits
+// 0-3 priority hint = ClScanningPriority
+// 4 = failOnClusterChange
+// 5-7 = unused 
+// 8-15 = scan_pct
+ typedef struct cl_scan_param_field_s {
+	uint8_t	byte1;
+	uint8_t scan_pct;
+} cl_scan_param_field;
+
 // For XDS...
 extern cf_queue	   *g_cl_async_q;
 extern cf_queue	   *g_cl_workitems_freepool_q;
@@ -104,7 +115,7 @@ citrusleaf_batch_shutdown();
 int
 cl_compile(uint info1, uint info2, const char *ns, const char *set, const cl_object *key, const cf_digest *digest,
 	cl_bin *values, cl_operator operator, cl_operation *operations, int n_values,  
-	uint8_t **buf_r, size_t *buf_sz_r, const cl_write_parameters *cl_w_p, cf_digest *d_ret, uint64_t trid);
+	uint8_t **buf_r, size_t *buf_sz_r, const cl_write_parameters *cl_w_p, cf_digest *d_ret, uint64_t trid, cl_scan_param_field *scan_field);
 
 int
 cl_parse(cl_msg *msg, uint8_t *buf, size_t buf_len, cl_bin **values_r, cl_operation **operations_r, int *n_values_r, uint64_t *trid);

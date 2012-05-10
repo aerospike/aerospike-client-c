@@ -158,7 +158,7 @@ citrusleaf_info_host(struct sockaddr_in *sa_in, char *names, char **values, int 
 	if ((uint8_t *)req != buf)	free(req);
 	if (io_rv != 0) {
 #ifdef DEBUG        
-		fprintf(stderr, "info returned error, rv %d errno %d bufsz %d\n",io_rv, buf_sz, errno);
+		fprintf(stderr, "info returned error, rv %d errno %d bufsz %d\n",io_rv, errno, buf_sz);
 #endif        
 		goto Done;
 	}

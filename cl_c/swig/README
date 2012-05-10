@@ -1,0 +1,36 @@
+SECTION I: INSTALLING SWIG
+	Installing swig:
+	1. For centOS, run 'sudo yum install swig.x86_64'
+	2. For Ubuntu, run 'sudo apt-get install swig'
+
+SECTION II: LANGUAGE SPECIFIC
+	Note: 1. Before creating the language modules, build the C client. To do that, run 'make' from cl_c directory.
+	2. For creating the language module, in swig directory under client/client/cl_c, run 'make LANG=<lang_name>' where
+	   <lang_name> is the language you are creating the module for.  
+	3. For cleanup, run 'make clean LANG=<lang_name>'. In make clean, if you do not provide a variable, all existing language
+	   directories will be cleaned up.
+	4. Do not add files to the <lang_name> directory. (For running examples etc)
+  
+	i. PYTHON
+		Creating python module
+		1. In swig directory under client/client/cl_c, run 'make LANG=python'
+		2. python/python_citrusleaf.py is a python file which has all the helper function that an application file might need. 
+ 
+		Testing python client 
+		1. From examples directory, run 'python test.py' /*Citrusleaf library is imported as 'cl' in this file*/
+		2. For writing your own applications, import citrusleaf in your python file.
+		   All functions, unless otherwise specified, are called just like in C. 
+		   See more details on the C documentation here - http://citrusleaf.net/apis/capi.php .
+   		   For citrusleaf_get_all, after the function is called, the bins are returned in the bins array.
+		   To get the value of these bins, use the python helper function defined in python_citrusleaf.py,
+		   get_bins(bins,<noofbins>)
+		3. There is add on python file python/python_citrusleaf.py which has python helper functions defined.
+ 
+		Other add ons: (Ref: test.py)
+		1. Defining structures: Call cl.<structurename>(). For examples, see the definition of o_key.
+		2. Passing integer pointers: cl.new_intp() /*Creating an integer pointer to be passed*/
+   		   cl.intp_value(gen) /*Deferencing the integer pointer gen */
+   		   These pointeres are declared using pointer class in citrusleaf.i file like %pointer_functions(int,intp).
+	     	   Similarly other pointers are declared in this file and are used accordingly.
+		3. Defining arrays: The arrays are declared in citrusleaf.i as %array_class(<structname>,<arrayname>). 
+		   They are defined in .py file as <name> = cl.<arrayname>(<arraysize>). For example, see the use of cl_bin_arr. 

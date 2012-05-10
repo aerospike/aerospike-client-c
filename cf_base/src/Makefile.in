@@ -28,10 +28,10 @@ CFLAGS_64 = -g -O3 -m64 -march=nocona -fno-common -rdynamic -Wextra $(AS_CFLAGS)
 #CFLAGS_32 = -g -m32 -march=nocona -fno-common -rdynamic -Wextra -Wredundant-decls $(AS_CFLAGS) -D MARCH_i686
 CFLAGS_32 = -g -O3 -m32 -march=nocona -fno-common -rdynamic -Wextra $(AS_CFLAGS) -D MARCH_i686
 
+CFLAGS_HOOKED = $(CFLAGS_NATIVE) -D EXTERNAL_LOCKS
 CPP = g++
 CPPFLAGS = -g 
 
-#CFLAGS_NATIVE += -D EXTERNAL_LOCKS
 
 SONAME = libcf-client-2.0.so.1
 LD = $(CC)

@@ -7,7 +7,7 @@ include Makefile.files
 DIR_INCLUDE = ../include
 DIR_CF_INCLUDE = ../../cf_base/include
 DIR_OBJECT = ../obj/native
-DIR_CF_OBJECT = ../../cf_base/obj/native
+DIR_CF_OBJECT = ../../cf_base/obj/hooked
 DIR_TARGET = ../lib
 
 TARGET = libev2citrusleaf.a

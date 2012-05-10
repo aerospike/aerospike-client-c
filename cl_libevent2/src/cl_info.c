@@ -135,8 +135,8 @@ info_make_request(cl_info_request *cir, char *names)
 
 	cl_proto *proto = (cl_proto *) cir->wr_buf;
 	proto->sz = cir->wr_buf_size - sizeof(cl_proto); 
-	proto->version = PROTO_VERSION;
-	proto->type = PROTO_TYPE_INFO;
+	proto->version = CL_PROTO_VERSION;
+	proto->type = CL_PROTO_TYPE_INFO;
 	cl_proto_swap(proto);
 	return(0);
 }

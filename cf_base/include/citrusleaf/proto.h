@@ -22,6 +22,10 @@ extern "C" {
 #define CL_PROTO_RESULT_FAIL_BIN_EXISTS 6
 #define CL_PROTO_RESULT_FAIL_CLUSTER_KEY_MISMATCH 7
 #define CL_PROTO_RESULT_FAIL_PARTITION_OUT_OF_SPACE 8
+#define CL_PROTO_RESULT_FAIL_TIMEOUT 9
+#define CL_PROTO_RESULT_FAIL_NOXDS 10
+#define CL_PROTO_RESULT_FAIL_UNAVAILABLE 11       // error returned during node down and partition isn't available
+#define CL_PROTO_RESULT_FAIL_INCOMPATIBLE_TYPE 12  // op and bin type incompatibilty
 
 // Forward definitions
 struct cl_bin_s;
@@ -112,10 +116,13 @@ typedef struct cl_msg_field_s {
 #define CL_MSG_OP_WRITE 2			// write the value in question
 #define CL_MSG_OP_WRITE_UNIQUE 3	// write a namespace-wide unique value
 #define CL_MSG_OP_WRITE_NOW 4		// write the server-current time
-#define CL_MSG_OP_ADD 5
-#define CL_MSG_OP_APPEND 6
-#define CL_MSG_OP_APPEND_EXT 7
-#define CL_MSG_OP_APPEND_QUERY 8
+#define CL_MSG_OP_INCR 5
+#define CL_MSG_OP_APPEND_SEGMENT 6          // Append segment to a particle
+#define CL_MSG_OP_APPEND_SEGMENT_EXT 7      // Extended append - with parameters
+#define CL_MSG_OP_APPEND_SEGMENT_QUERY 8    // Query to return subset of segments
+#define CL_MSG_OP_MC_INCR 9         // Memcache-compatible version of the increment command
+#define CL_MSG_OP_PREPEND 10        // Prepend the value to an existing value. Works on strings and blobs
+#define CL_MSG_OP_APPEND  11        // Append a value to an existing value. Works on strings and blobs
 
  
 typedef struct cl_msg_op_s {
@@ -185,12 +192,12 @@ typedef struct as_msg_s {
 		cl_msg		m;
 } __attribute__((__packed__)) as_msg;
 
-#define CL_MSG_INFO1_READ			(1 << 0)		// contains a read operation
+#define CL_MSG_INFO1_READ				(1 << 0)		// contains a read operation
 #define CL_MSG_INFO1_GET_ALL			(1 << 1) 		// get all bins, period
-#define CL_MSG_INFO1_GET_ALL_NODATA 		(1 << 2) 		// get all bins WITHOUT data (currently unimplemented)
+#define CL_MSG_INFO1_GET_ALL_NODATA 	(1 << 2) 		// get all bins WITHOUT data (currently unimplemented)
 #define CL_MSG_INFO1_VERIFY     		(1 << 3) 		// verify is a GET transaction that includes data, and assert if the data aint right
-#define CL_MSG_INFO1_XDS                        (1 << 4)                // operation is being performed by XDS
-#define CL_MSG_INFO1_NOBINDATA                  (1 << 5)                // dOBo not read the bin information
+#define CL_MSG_INFO1_XDS				(1 << 4)                // operation is being performed by XDS
+#define CL_MSG_INFO1_NOBINDATA			(1 << 5)                // dOBo not read the bin information
 
 #define CL_MSG_INFO2_WRITE				(1 << 0)		// contains a write semantic
 #define CL_MSG_INFO2_DELETE 			(1 << 1)  		// fling a record into the belly of Moloch
@@ -199,10 +206,12 @@ typedef struct as_msg_s {
 #define CL_MSG_INFO2_GENERATION_DUP  	(1 << 4)		// if a generation collision, create a duplicate
 #define CL_MSG_INFO2_WRITE_UNIQUE		(1 << 5) 		// write only if it doesn't exist
 #define CL_MSG_INFO2_WRITE_BINUNIQUE	(1 << 6)
+#define CL_MSG_INFO2_WRITE_MERGE		(1 << 7)		// merge this with current
 
 #define CL_MSG_INFO3_LAST      			(1 << 0)     	// this is the last of a multi-part message
 #define CL_MSG_INFO3_TRACE				(1 << 1)		// apply server trace logging for this transaction
 #define CL_MSG_INFO3_TOMBSTONE			(1 << 2)		// if set on response, a version was a delete tombstone
+#define CL_MSG_INFO3_REPLACE			(1 << 3)		// properly a write option, but there are no more bits. Overwrite existing record only; do not create new record
 
 
 static inline cl_msg_field *

@@ -112,7 +112,7 @@ do_example(config *c)
 
 
 void usage(void) {
-	fprintf(stderr, "Usage key_c:\n");
+	fprintf(stderr, "Usage example:\n");
 	fprintf(stderr, "-h host [default 127.0.0.1] \n");
 	fprintf(stderr, "-p port [default 3000]\n");
 	fprintf(stderr, "-n namespace [default bar]\n");

@@ -1,7 +1,7 @@
 # Citrusleaf Foundation
 # Makefile
 
-all: libcf-client
+all: libcf-client libcf-hooked
 	cp lib/* ../../../shared/lib
 	cp -r include/* ../../../shared/include
 	@echo "done."
@@ -9,6 +9,7 @@ all: libcf-client
 clean:
 	rm -f obj/native/*
 	rm -f lib/*
+	rm -f obj/hooked/*
 
 %:
 #	$(MAKE) -f Makefile.32 -C src $@   # some are having trouble with the xcompile

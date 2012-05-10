@@ -503,7 +503,7 @@ operation_to_op(evcitrusleaf_operation *v, cl_msg_op *op)
 			op->op = CL_MSG_OP_READ;
 			break;
 		case CL_OP_ADD:
-			op->op = CL_MSG_OP_ADD;
+			op->op = CL_MSG_OP_INCR;
 			break;
 	}
 

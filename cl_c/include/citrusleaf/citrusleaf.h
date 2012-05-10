@@ -61,7 +61,9 @@ typedef enum cl_rv {
 	CITRUSLEAF_FAIL_CLUSTER_KEY_MISMATCH = 7,
 	CITRUSLEAF_FAIL_PARTITION_OUT_OF_SPACE = 8,
 	CITRUSLEAF_FAIL_SERVERSIDE_TIMEOUT = 9,
-	CITRUSLEAF_FAIL_NOXDS = 10
+	CITRUSLEAF_FAIL_NOXDS = 10,
+	CITRUSLEAF_FAIL_UNAVAILABLE = 11,
+	CITRUSLEAF_FAIL_INCOMPATIBLE_TYPE = 12  // specified operation cannot be performed on that data type
 } cl_rv;
 
 
@@ -102,7 +104,7 @@ typedef struct cl_object_s {
 } cl_object;
 
 
-typedef enum cl_operator_type { CL_OP_WRITE, CL_OP_READ, CL_OP_ADD } cl_operator;
+typedef enum cl_operator_type { CL_OP_WRITE, CL_OP_READ, CL_OP_ADD, CL_OP_MC_INCR , CL_OP_PREPEND, CL_OP_APPEND} cl_operator;
 
 // A bin is the bin name, and the value set or gotten
 
@@ -357,6 +359,9 @@ cl_rv
 citrusleaf_put_digest(cl_cluster *asc, const char *ns, const cf_digest *d, const cl_bin *bins, int n_bins, const cl_write_parameters *cl_w_p);
 
 cl_rv
+citrusleaf_put_replace(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, const cl_bin *values, int n_values, const cl_write_parameters *cl_w_p);
+
+cl_rv
 citrusleaf_restore(cl_cluster *asc, const char *ns, const cf_digest *digest, const char *set, const cl_bin *values, int n_values, const cl_write_parameters *cl_w_p);
 
 //Async versions of the put calls
@@ -478,7 +483,7 @@ citrusleaf_delete_verify(cl_cluster *asc, const char *ns, const char *set, const
 // can be specified in a single call.//
 
 cl_rv
-citrusleaf_operate(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, cl_operation *operations, int n_operations, const cl_write_parameters *cl_w_p, int touch, uint32_t *generation);
+citrusleaf_operate(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, cl_operation *operations, int n_operations, const cl_write_parameters *cl_w_p, int touch, int replace, uint32_t *generation);
 
 //
 // This debugging call can be useful for tracking down errors and coordinating with server failures

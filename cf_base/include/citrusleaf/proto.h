@@ -120,10 +120,14 @@ typedef struct cl_msg_field_s {
 #define CL_MSG_OP_APPEND_SEGMENT 6          // Append segment to a particle
 #define CL_MSG_OP_APPEND_SEGMENT_EXT 7      // Extended append - with parameters
 #define CL_MSG_OP_APPEND_SEGMENT_QUERY 8    // Query to return subset of segments
-#define CL_MSG_OP_MC_INCR 9         // Memcache-compatible version of the increment command
-#define CL_MSG_OP_PREPEND 10        // Prepend the value to an existing value. Works on strings and blobs
-#define CL_MSG_OP_APPEND  11        // Append a value to an existing value. Works on strings and blobs
+#define CL_MSG_OP_APPEND 9                  // Add to an existing particle
+#define CL_MSG_OP_PREPEND 10                // Add to the beginning of an existing particle
+#define CL_MSG_OP_TOUCH   11                // Touch 
 
+#define CL_MSG_OP_MC_INCR 129         // Memcache-compatible version of the increment command
+#define CL_MSG_OP_MC_PREPEND 130        // Memcache compatile prepend. Allow prepending to ints.
+#define CL_MSG_OP_MC_TOUCH   131        // Memcache compatible touch - does not change generation count
+#define CL_MSG_OP_MC_APPEND  132        // Memcache compatible append. Allow appending to ints.
  
 typedef struct cl_msg_op_s {
 	uint32_t op_sz;

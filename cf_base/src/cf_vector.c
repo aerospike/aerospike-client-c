@@ -248,6 +248,7 @@ cf_vector_getp(cf_vector *v, uint32_t index)
 	return( r );
 }
 
+#ifndef EXTERNAL_LOCKS
 // XXX - this function needs to be modified for hooked case
 void *
 cf_vector_getp_vlock(cf_vector *v, uint32_t index, pthread_mutex_t **vlock)
@@ -260,6 +261,7 @@ cf_vector_getp_vlock(cf_vector *v, uint32_t index, pthread_mutex_t **vlock)
 	*vlock = &v->LOCK;
 	return(v->vector + (index * v->value_len));
 }
+#endif // EXTERNAL_LOCKS
 
 int
 cf_vector_delete(cf_vector *v, uint32_t index)

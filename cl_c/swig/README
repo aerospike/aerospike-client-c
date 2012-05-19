@@ -127,3 +127,8 @@ SECTION II: LANGUAGE SPECIFIC
 					$var_uint64 = Math::BigInt->new($var_uint64);
 					print $var_uint64;		// prints 9223372036854775807
 					print $var_uint64 + 1;	// prints 9223372036854775808
+
+SECTION II: FOR EVERY LANGUAGE 
+	1. Type of each bin of bins array while calling 'citrusleaf_get()' or 'citrusleaf_get_digest()' should be initialized to 'CL_NULL'.
+	   This can be done by calling citrusleaf_object_init_null(cl_object*).
+	   ex: See bin array declaration sectioon under CITRUSLEAF_GET of examples/test.pl

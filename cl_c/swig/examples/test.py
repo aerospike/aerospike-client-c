@@ -124,13 +124,13 @@ bins_get = cl.cl_bin_arr(num_bins)
 
 #Bin names for the bins
 for i in xrange(num_bins):
+	b = bins_get[i]
 	cl.citrusleaf_object_init_null(b.object)
 	b.bin_name = bin_name[i]
 	bins_get[i] = b
 
 #Create a int * pointer for generation 
 gen = cl.new_intp()
-#gen = c_int()
 
 #Call citrusleaf_get 
 timeout = 1000
@@ -221,7 +221,6 @@ if p.rv == cl.CITRUSLEAF_OK:
 		print "Record_ttl = ",sp[i].record_ttl
 		n_bins_batch = sp[i].n_bins
 		array = get_bins(sp[i].bin,n_bins_batch)
-		cl.free(sp[i].bin)
 		for k in xrange(n_bins_batch):
 			if array[k].object.type == cl.CL_STR:
 				print "Bin name:",array[k].bin_name ,"Resulting string: ",array[k].object.u.str
@@ -233,7 +232,8 @@ if p.rv == cl.CITRUSLEAF_OK:
 			else:
 				print "Bin name: ",array[k].bin_name,"Unknown bin type: ",array[k].object.type
 		#Free bins array 
-		#cl.citrusleaf_free_bins(array,n_bins_batch,None)
+		cl.citrusleaf_free_bins(array,n_bins_batch,sp[i].bin)
+		cl.free(sp[i].bin)
 	cl.free(p.records)
 else:
 	print "Citrusleaf batch get failed with ",p.rv
@@ -315,3 +315,4 @@ cl.citrusleaf_cluster_destroy(asc);
 
 #CITRUSLEAF SHUTDOWN
 cl.citrusleaf_shutdown();
+

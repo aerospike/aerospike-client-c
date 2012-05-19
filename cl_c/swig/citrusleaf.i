@@ -38,8 +38,14 @@ int cb(char *ns, cf_digest *keyd, char *set, uint32_t generation, uint32_t recor
         int ind = p->index;
         re[ind].gen = generation;
         re[ind].digest = keyd;
-        re[ind].bin = (cl_bin**)malloc(sizeof(cl_bin*)); 
-        *(re[ind].bin) = bin;
+        
+        // copy bin array into new memory
+        cl_bin* bins = (cl_bin*)malloc(n_bins * sizeof(cl_bin));
+        memcpy(bins, bin, n_bins*sizeof(cl_bin));
+	
+        re[ind].bin = (cl_bin**)malloc(sizeof(cl_bin*));
+        *(re[ind].bin) = bins;
+	
         re[ind].n_bins = n_bins;
         re[ind].record_ttl = record_ttl; 
         (p->index)++;

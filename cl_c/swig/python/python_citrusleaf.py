@@ -11,7 +11,7 @@ def get_bins(pointer,n):
 	binp = cl.cl_bin_p_value(pointer)
 	for i in xrange(n):
 		#Define a cl_bin structure 'b'
-		b = cl.cl_bin()
+		b = array[i]
 		#get name of ith index of binp
 		b.bin_name = cl.get_name(binp,i)
 		#get object with name bn	

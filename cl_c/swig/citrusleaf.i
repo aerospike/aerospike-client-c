@@ -2,20 +2,76 @@
 %include <typemaps.i>
 %include "carrays.i"
 %include "cpointer.i"
+%include "cdata.i"
 
 %{
 #include "citrusleaf/citrusleaf.h"
+
+/*Structure Definitions*/
+typedef struct cl_record {
+        int gen;
+        cl_bin **bin;
+        cf_digest * digest;
+        char * ns;
+        char * set;
+        uint32_t record_ttl;
+        int n_bins;
+}cl_record;
+
+typedef struct batchresult {
+        cl_record * records;
+        int index;
+        cl_rv rv;
+}BatchResult;
+
+/*Wrapper functions*/
 char * get_name(cl_bin * bin, int in) {
         return (bin[in].bin_name);
 }
 cl_object get_object(cl_bin * bin,int in) {
         return bin[in].object;
 }
+
+int cb(char *ns, cf_digest *keyd, char *set, uint32_t generation, uint32_t record_ttl, cl_bin *bin, int n_bins, bool is_last, void *udata) {
+        BatchResult * p = (BatchResult*) udata;
+        cl_record * re = p->records;
+        int ind = p->index;
+        re[ind].gen = generation;
+        re[ind].digest = keyd;
+        re[ind].bin = (cl_bin**)malloc(sizeof(cl_bin*)); 
+        *(re[ind].bin) = bin;
+        re[ind].n_bins = n_bins;
+        re[ind].record_ttl = record_ttl; 
+        (p->index)++;
+}
+
+BatchResult  citrusleaf_batch_get(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_bin *bins, int n_bins, bool get_key) {
+        cl_record * ret = (cl_record *)malloc(sizeof(cl_record)*n_digests);
+        BatchResult val;
+        val.records = ret;
+        val.index = 0;
+        int rv = citrusleaf_get_many_digest(asc,ns,digests,n_digests,bins,n_bins,get_key,cb,&val);      
+        val.rv = rv;
+        return val;
+}
+void citrusleaf_free_bins(cl_bin * bin, int n, cl_bin**binp) {
+        if(bin) {
+                citrusleaf_bins_free(bin,n);
+        }
+        if (binp && *binp) {
+                free(*binp);
+                *binp = NULL;
+        }
+        return;
+}
+
 %}
 
 
 /*Declaring an array*/
 %array_class(cl_bin,cl_bin_arr);
+%array_class(cf_digest,cf_digest_arr);
+%array_class(cl_record,cl_record_arr);
 
 /*Declaring pointers*/
 %pointer_functions(int,intp);
@@ -23,7 +79,23 @@ cl_object get_object(cl_bin * bin,int in) {
 %pointer_functions(char,charp);
 %pointer_functions(cf_digest,cf_digest_p);
 
-/*Exposing C structures to python applications*/
+/* Exposing Structures to python applications*/
+typedef struct cl_record {
+        int gen;
+        cl_bin* * bin;
+         char * ns;
+        char * set;
+        unsigned int  record_ttl;
+        int n_bins;
+        cf_digest * digest;
+}cl_record;
+
+typedef struct batchresult {
+        cl_record_arr * records;
+        int index;
+        int rv;
+}BatchResult;
+
 typedef struct { char digest[CF_DIGEST_KEY_SZ]; } cf_digest;
 
 typedef struct cl_bin_s {
@@ -69,33 +141,38 @@ typedef struct {
         bool use_generation;     
         bool use_generation_gt;  
         bool use_generation_dup;    
-        unsigned int generation;
+        unsigned int  generation;
         int timeout_ms;
-        unsigned int record_ttl;    
+        unsigned int  record_ttl;    
         cl_write_policy w_pol;
 } cl_write_parameters;
+
 
 /*Exposed functions to the python application*/
 int citrusleaf_init(void);
 void citrusleaf_shutdown(void);
 cl_cluster * citrusleaf_cluster_create(void);
-int citrusleaf_cluster_add_host(cl_cluster *asc, char const *host, short port, int timeout_ms);
+int citrusleaf_cluster_add_host(cl_cluster *asc, char *host, short port, int timeout_ms);
 void citrusleaf_cluster_destroy(cl_cluster * asc);
-static inline void cl_write_parameters_set_default(cl_write_parameters *cl_w_p);
+static void cl_write_parameters_set_default(cl_write_parameters *cl_w_p);
 void citrusleaf_object_init(cl_object *o);
-void citrusleaf_object_init_str(cl_object *o, char const *str);
-void citrusleaf_object_init_str2(cl_object *o, char const *str, size_t str_len);
-void citrusleaf_object_init_blob(cl_object *o, void const *buf, size_t buf_len);
-void citrusleaf_object_init_blob2(cl_object *o, void const *buf, size_t buf_len, cl_type type); // several blob types
+void citrusleaf_object_init_str(cl_object *o, char *str);
+void citrusleaf_object_init_str2(cl_object *o, char *str, size_t str_len);
+void citrusleaf_object_init_blob(cl_object *o, char *buf, size_t buf_len);
+void citrusleaf_object_init_blob2(cl_object *o, char *buf, size_t buf_len, cl_type type); // several blob types
 void citrusleaf_object_init_int(cl_object *o, long long i);
 void citrusleaf_object_init_null(cl_object *o);
-int citrusleaf_put(cl_cluster * asc, const char * ns, const char * set, const cl_object *key, cl_bin_arr * values, int n_bins,const cl_write_parameters *cl_w_p);
-int citrusleaf_get(cl_cluster * asc, const char * ns, const char * set, const cl_object * key, cl_bin_arr * bins, int n_bins, int timeout_ms, int * cl_gen);
-int citrusleaf_get_all(cl_cluster * asc, const char *ns , const char * set, const cl_object * key,cl_bin ** bins, int * sz, int timeout_ms, int * cl_gen);
-int citrusleaf_get_digest(cl_cluster *asc, const char *ns, const cf_digest * d, cl_bin_arr *bins, int n_bins, int timeout_ms, int *cl_gen);
-int citrusleaf_put_digest(cl_cluster *asc, const char *ns, const cf_digest *d, cl_bin_arr *bins, int n_bins, cl_write_parameters * cl_wp);
-int citrusleaf_delete_digest(cl_cluster *asc, const char *ns,  const cf_digest *d, const cl_write_parameters *cl_w_p);
-int citrusleaf_delete(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, const cl_write_parameters *cl_w_p);
+int citrusleaf_put(cl_cluster * asc, char * ns, char * set, const cl_object *key, cl_bin_arr * values, int n_bins,const cl_write_parameters *cl_w_p);
+int citrusleaf_get(cl_cluster * asc,  char * ns, char * set, const cl_object * key, cl_bin_arr * bins, int n_bins, int timeout_ms, int * cl_gen);
+int citrusleaf_get_all(cl_cluster * asc,  char *ns , char * set, const cl_object * key,cl_bin ** bins, int * sz, int timeout_ms, int * cl_gen);
+int citrusleaf_get_digest(cl_cluster *asc, char *ns, const cf_digest * d, cl_bin_arr *bins, int n_bins, int timeout_ms, int *cl_gen);
+int citrusleaf_put_digest(cl_cluster *asc, char *ns, const cf_digest *d, cl_bin_arr *bins, int n_bins, cl_write_parameters * cl_wp);
+int citrusleaf_delete_digest(cl_cluster *asc, char *ns,  const cf_digest *d, const cl_write_parameters *cl_w_p);
+int citrusleaf_delete(cl_cluster *asc, char *ns, char *set, const cl_object *key, const cl_write_parameters *cl_w_p);
 char * get_name(cl_bin * bin, int in);
 cl_object get_object(cl_bin * bin, int in);
 void citrusleaf_bins_free(cl_bin_arr *bins, int n_bins);
+BatchResult  citrusleaf_batch_get(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_bin *bins, int n_bins, bool get_key);
+int citrusleaf_calculate_digest(char *set, const cl_object *key, cf_digest *digest);
+void free(void *ptr);
+void citrusleaf_free_bins(cl_bin_arr * bin,int n_bins, cl_bin**binp);

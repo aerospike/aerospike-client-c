@@ -567,6 +567,18 @@ cl_value_to_op(cl_bin *v, cl_operator operator, cl_operation *operation, cl_msg_
 		case CL_OP_PREPEND:
 			op->op = CL_MSG_OP_PREPEND;
 			break;
+		case CL_OP_MC_APPEND:
+			op->op = CL_MSG_OP_MC_APPEND;
+			break;
+		case CL_OP_MC_PREPEND:
+			op->op = CL_MSG_OP_MC_PREPEND;
+			break;
+		case CL_OP_TOUCH:
+			op->op = CL_MSG_OP_TOUCH;
+			break;
+		case CL_OP_MC_TOUCH:
+			op->op = CL_MSG_OP_MC_TOUCH;
+			break;
 		default:
 			fprintf(stderr, "API user requested unknown operation type %d, fail",(int)tmpOp);
 			return(-1);
@@ -1223,8 +1235,6 @@ do_the_full_monte(cl_cluster *asc, int info1, int info2, int info3, const char *
 		cl_proto_swap(&msg.proto);
 		cl_msg_swap_header(&msg.m);
 
-		fprintf(stdout, "Generation returned is %d\n", msg.m.generation);
-
 		if (/*(info1 & CL_MSG_INFO1_READ) &&*/ cl_gen) {
 			*cl_gen = msg.m.generation;
 		}
@@ -1622,7 +1632,7 @@ citrusleaf_calculate_digest(const char *set, const cl_object *key, cf_digest *di
 //
 
 extern cl_rv
-citrusleaf_operate(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, cl_operation *operations, int n_operations, const cl_write_parameters *cl_w_p, int touch, int replace, uint32_t *generation)
+citrusleaf_operate(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, cl_operation *operations, int n_operations, const cl_write_parameters *cl_w_p,  int replace, uint32_t *generation)
 {
     if (!g_initialized) return(-1);
     
@@ -1637,6 +1647,10 @@ citrusleaf_operate(cl_cluster *asc, const char *ns, const char *set, const cl_ob
 		case CL_OP_MC_INCR:
 		case CL_OP_APPEND:
 		case CL_OP_PREPEND:
+		case CL_OP_MC_APPEND:
+		case CL_OP_MC_PREPEND:
+		case CL_OP_MC_TOUCH:
+		case CL_OP_TOUCH:
 			info2 = CL_MSG_INFO2_WRITE;
 			break;
 		case CL_OP_READ:
@@ -1649,8 +1663,6 @@ citrusleaf_operate(cl_cluster *asc, const char *ns, const char *set, const cl_ob
 		if (info1 && info2) break;
 	}
 	
-	if (touch)
-		info2 = CL_MSG_INFO2_WRITE;
 
 	if (replace)
 		info3 = CL_MSG_INFO3_REPLACE;

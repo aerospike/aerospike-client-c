@@ -125,9 +125,9 @@ typedef struct cl_msg_field_s {
 #define CL_MSG_OP_TOUCH   11                // Touch 
 
 #define CL_MSG_OP_MC_INCR 129         // Memcache-compatible version of the increment command
-#define CL_MSG_OP_MC_PREPEND 130        // Memcache compatile prepend. Allow prepending to ints.
-#define CL_MSG_OP_MC_TOUCH   131        // Memcache compatible touch - does not change generation count
-#define CL_MSG_OP_MC_APPEND  132        // Memcache compatible append. Allow appending to ints.
+#define CL_MSG_OP_MC_APPEND  130        // Memcache compatible append. Allow appending to ints.
+#define CL_MSG_OP_MC_PREPEND 131        // Memcache compatile prepend. Allow prepending to ints.
+#define CL_MSG_OP_MC_TOUCH   132        // Memcache compatible touch - does not change generation count
  
 typedef struct cl_msg_op_s {
 	uint32_t op_sz;

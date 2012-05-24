@@ -1,5 +1,6 @@
 C_DEPTH = ..
 DIR_INCLUDE_C =  $(C_DEPTH)/include/
+DIR_INCLUDE_CF =  $(C_DEPTH)/../cf_base/include/
 DIR_OBJECT = ./obj
 CLEANALL = 1
 
@@ -18,7 +19,7 @@ TARGET_S = _citrusleaf.so
 SOURCE = citrusleaf.i
 
 # Include path of each target language
-DIR_INCLUDE_PYTHON =  /usr/include/python2.7/
+DIR_INCLUDE_PYTHON =  /usr/include/python2.6/
 DIR_INCLUDE_PERL   =  /usr/lib/perl/5.14/CORE/
 
 # Target language name
@@ -56,8 +57,8 @@ all: $(TARGET_S) putobj
 $(TARGET_S): citrusleaf_wrap.o $(C_LIB)
 	ld $(LDFLAGS) citrusleaf_wrap.o -lrt -lz -lssl $(C_LIB) -o $(LANG)/$(TARGET_S)
 
-citrusleaf_wrap.o: citrusleaf_wrap.c $(DIR_INCLUDE_C)
-	$(CC) $(CFLAGS_NATIVE) -c -I$(DIR_INCLUDE_C)  -I$(DIR_INCLUDE_TARGET) $(OPTS_CC_TARGET) $< 
+citrusleaf_wrap.o: citrusleaf_wrap.c $(DIR_INCLUDE_C) $(DIR_INCLUDE_CF)
+	$(CC) $(CFLAGS_NATIVE) -c -I$(DIR_INCLUDE_C) -I$(DIR_INCLUDE_CF) -I$(DIR_INCLUDE_TARGET) $(OPTS_CC_TARGET) $< 
 
 citrusleaf_wrap.c: $(SOURCE)
 	mkdir -p $(LANG)

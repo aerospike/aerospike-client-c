@@ -358,7 +358,9 @@ printf("n_fields: %d\n", n_fields);
 
 #define HACK_MAX_RESULT_CODE 100
 
-static int do_batch_monte(cl_cluster *asc, int info1, int info2, int info3, char *ns, cf_digest *digests, cl_cluster_node **nodes, int n_digests, cl_bin *bins, cl_operator operator, cl_operation *operations, int n_ops, cl_cluster_node *node, int n_node_digests, citrusleaf_get_many_cb cb, void *udata, char *lua_mapf, int lmflen, char *lua_rdcf, int lrflen, char *lua_fnzf, int lfflen, int mrjid, int imatch, map_args_t *margs, int reg_mrjid) {
+static int do_batch_monte(cl_cluster *asc, int info1, int info2, int info3, char *ns, cf_digest *digests, cl_cluster_node **nodes, int n_digests, cl_bin *bins, 
+	cl_operator operator, cl_operation *operations, int n_ops, cl_cluster_node *node, int n_node_digests, citrusleaf_get_many_cb cb, void *udata, 
+	char *lua_mapf, int lmflen, char *lua_rdcf, int lrflen, char *lua_fnzf, int lfflen, int mrjid, int imatch, map_args_t *margs, int reg_mrjid) {
 
 printf("do_batch_monte: n_digests: %d n_node_digests: %d\n", n_digests, n_node_digests);
 
@@ -458,7 +460,7 @@ printf("do_batch_monte: n_digests: %d n_node_digests: %d\n", n_digests, n_node_d
 			
 //ALCHEMY RUSS HACK
             if (msg->result_code >= HACK_MAX_RESULT_CODE && cb) {
-				(*cb) (NULL, NULL, NULL, 0, 0, NULL, 1, true, (void *)msg->result_code);
+				(*cb) (NULL/*ns*/, NULL/*keyd*/, NULL/*set*/, 0/*gen*/, 0/*rec_ttl*/, NULL/*bins*/, 1/*n_bins*/, true/*islast*/, (void *)msg->result_code);
 				done = true;
                 rv = 0;
             }
@@ -657,7 +659,9 @@ batch_worker_fn(void *dummy)
 
 int   NumNodes  = 0;
 int   Responses = 0;
-static cl_rv citrusleaf_sik_traversal(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_bin *bins, int n_bins, bool get_key, citrusleaf_get_many_cb cb, void *udata, unsigned int mrjid, char *lua_mapf, char *lua_rdcf, char *lua_fnzf, int imatch, map_args_t *margs, int reg_mrjid) {
+static cl_rv citrusleaf_sik_traversal(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_bin *bins, int n_bins, bool get_key, citrusleaf_get_many_cb cb, void *udata, 
+			unsigned int mrjid, char *lua_mapf, char *lua_rdcf, char *lua_fnzf, int imatch, map_args_t *margs, int reg_mrjid) {
+
     int lmflen = lua_mapf ? strlen(lua_mapf) : 0;
     int lrflen = lua_rdcf ? strlen(lua_rdcf) : 0;
     int lfflen = lua_fnzf ? strlen(lua_fnzf) : 0;
@@ -670,7 +674,7 @@ static cl_rv citrusleaf_sik_traversal(cl_cluster *asc, char *ns, const cf_digest
     NumNodes = n_nodes; //NOTE: used in callbacks -> num responses
 	cl_cluster_node **nodes = malloc(sizeof(cl_cluster_node *) * n_nodes);
 	if (!nodes) { fprintf(stderr, " allocation failed "); return(-1); }
-    for (uint i = 0; i < n_nodes; i++) {
+    for (int i = 0; i < n_nodes; i++) {
         nodes[i] = cf_vector_pointer_get(&asc->node_v, i);
     }
 

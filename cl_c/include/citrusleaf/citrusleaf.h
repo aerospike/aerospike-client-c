@@ -491,6 +491,17 @@ citrusleaf_operate(cl_cluster *asc, const char *ns, const char *set, const cl_ob
 int
 citrusleaf_calculate_digest(const char *set, const cl_object *key, cf_digest *digest);
 
+//
+// Lua and secondary index functions
+//
+struct map_args_t;
+cl_rv 
+citrusleaf_register_lua_function(cl_cluster *asc, char *ns, citrusleaf_get_many_cb cb, char *lua_mapf, char *lua_rdcf, char *lua_fnzf, int reg_mrjid);
+cl_rv 
+citrusleaf_get_sik_digest(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_bin *bins, int n_bins, bool get_key, citrusleaf_get_many_cb cb, void *udata, int imatch);
+cl_rv 
+citrusleaf_run_mr_sik_digest(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_bin *bins, int n_bins, bool get_key, citrusleaf_get_many_cb cb, void *udata, int mrjid, int imatch, struct map_args_t *margs);
+
 
 #ifdef __cplusplus
 } // end extern "C"

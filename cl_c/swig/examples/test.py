@@ -257,9 +257,11 @@ print "\nCITRUSLEAF PUT DIGEST"
 d = cl.cf_digest()
 
 #Assign the digest to cf_digest manually
-cd = "testdigesttestdigest"
-d.digest = cd
-rv = cl.citrusleaf_put_digest(asc,ns,d,bins,n,cl_wp)
+#Create a hex string and convert it to a byte string to be passed to the put function
+cd = "aefdefaefdefaefdefaefdefaefdefffffffffff"
+cd_str = cd.decode("hex")
+d.digest = cd_str
+rv = cl.citrusleaf_put_digest(asc,ns,d,bins,num_bins,cl_wp)
 if rv==cl.CITRUSLEAF_OK:
 	print "Citrusleaf put digest succeeded"
 else:
@@ -286,17 +288,23 @@ rv = cl.citrusleaf_get_digest(asc,ns,d,bins_gd,n,1000,gen_gd)
 if rv==cl.CITRUSLEAF_OK:
 	print "Citrusleaf get digest succeeded"
 	#print the resulting values and the generation
-	for i in xrange(num_bins):
+	for i in xrange(n):
 		if bins_gd[i].object.type == cl.CL_STR:
 			print "Bin name: ",bins_gd[i].bin_name,"Resulting string: ",bins_gd[i].object.u.str
 		elif bins_gd[i].object.type == cl.CL_INT:
 			print "Bin name: ",bins_gd[i].bin_name,"Resulting int: ",bins_gd[i].object.u.i64
+		elif bins_gd[k].object.type == cl.CL_BLOB:
+			binary_data = cl.cdata(bins_gd[k].object.u.blob, bins_gd[k].object.sz)
+			print "Bin name: ",bins_gd[k].bin_name,"Resulting decompressed blob: ",zlib.decompress(binary_data)
+		else:
+			print "Bin name: ",bins_gd[k].bin_name,"Unknown bin type: ",bins_gd[k].object.type
+
 	print "Generation ",cl.intp_value(gen_gd)
 else:
 	print "Citrusleaf get digest failed with ",rv
 
 #Free the bins received and the generation pointers
-cl.citrusleaf_free_bins(bins_gd,n,None)
+cl.citrusleaf_free_bins(bins_gd,num_bins,None)
 cl.delete_intp(gen_gd)
 cl.delete_intp(gen)
 

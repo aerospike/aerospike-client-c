@@ -220,19 +220,19 @@ if p.rv == cl.CITRUSLEAF_OK:
 		print "Generation = ",sp[i].gen
 		print "Record_ttl = ",sp[i].record_ttl
 		n_bins_batch = sp[i].n_bins
-		array = get_bins(sp[i].bin,n_bins_batch)
+		arr_bins = get_bins(sp[i].bin,n_bins_batch)
 		for k in xrange(n_bins_batch):
-			if array[k].object.type == cl.CL_STR:
-				print "Bin name:",array[k].bin_name ,"Resulting string: ",array[k].object.u.str
-			elif array[k].object.type == cl.CL_INT:
-				print "Bin name: ",array[k].bin_name,"Resulting int: ",array[k].object.u.i64
-			elif array[k].object.type == cl.CL_BLOB:
-				binary_data = cl.cdata(array[k].object.u.blob, array[k].object.sz)
-				print "Bin name: ",array[k].bin_name,"Resulting decompressed blob: ",zlib.decompress(binary_data)
+			if arr_bins[k].object.type == cl.CL_STR:
+				print "Bin name:",arr_bins[k].bin_name ,"Resulting string: ",arr_bins[k].object.u.str
+			elif arr_bins[k].object.type == cl.CL_INT:
+				print "Bin name: ",arr_bins[k].bin_name,"Resulting int: ",arr_bins[k].object.u.i64
+			elif arr_bins[k].object.type == cl.CL_BLOB:
+				binary_data = cl.cdata(arr_bins[k].object.u.blob, arr_bins[k].object.sz)
+				print "Bin name: ",arr_bins[k].bin_name,"Resulting decompressed blob: ",zlib.decompress(binary_data)
 			else:
-				print "Bin name: ",array[k].bin_name,"Unknown bin type: ",array[k].object.type
+				print "Bin name: ",arr_bins[k].bin_name,"Unknown bin type: ",arr_bins[k].object.type
 		#Free bins array 
-		cl.citrusleaf_free_bins(array,n_bins_batch,sp[i].bin)
+		cl.citrusleaf_free_bins(arr_bins,n_bins_batch,sp[i].bin)
 		cl.free(sp[i].bin)
 	cl.free(p.records)
 else:

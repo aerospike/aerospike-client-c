@@ -80,7 +80,7 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 #endif			
 		return(-1);
 	}
-	fd = cl_cluster_node_fd_get(node, false);
+	fd = cl_cluster_node_fd_get(node, false, asc->nbconnect);
 	if (fd == -1) {
 #ifdef DEBUG			
 		fprintf(stderr, "warning: node %s has no file descriptors, retrying transaction\n",node->name);

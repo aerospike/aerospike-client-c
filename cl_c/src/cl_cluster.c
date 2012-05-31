@@ -133,6 +133,7 @@ citrusleaf_cluster_create(void)
 	
 	asc->state = 0;
 	asc->follow = true;
+	asc->nbconnect = false;
 	asc->found_all = false;
 	asc->last_node = 0;
 	asc->ref_count = 1;
@@ -851,8 +852,10 @@ cl_cluster_node_fd_create(cl_cluster_node *cn, bool nonblocking)
 			//in-progress is a valid return value. We can do select later and use the socket.
 			if (nonblocking && (errno == EINPROGRESS))
 			{
+#if XDS //Hack for XDS
 				dump_sockaddr_in("Connecting to ", sa_in);
 				fprintf(stderr, "Non-blocking connect returned EINPROGRESS as expected\n");
+#endif
 				goto Done;
 			}
 			// todo: remove this sockaddr from the list, or dun the node?
@@ -874,7 +877,7 @@ Done:
 }
 
 int
-cl_cluster_node_fd_get(cl_cluster_node *cn, bool asyncfd)
+cl_cluster_node_fd_get(cl_cluster_node *cn, bool asyncfd, bool nbconnect)
 {
 	int fd;
 #if ONEASYNCFD
@@ -897,7 +900,7 @@ cl_cluster_node_fd_get(cl_cluster_node *cn, bool asyncfd)
 	if (rv == CF_QUEUE_OK)
 		;
 	else if (rv == CF_QUEUE_EMPTY) {
-		if (asyncfd == true) {
+		if ((asyncfd == true) || (nbconnect == true)) {
 			//Use a non-blocking socket for async client
 			fd = cl_cluster_node_fd_create(cn, true);
 		} else {
@@ -1316,6 +1319,13 @@ citrusleaf_cluster_change_tend_speed(cl_cluster *asc, int secs)
 {
 	asc->tend_speed = secs;
 }
+
+void 
+citrusleaf_cluster_use_nbconnect(struct cl_cluster_s *asc)
+{
+	asc->nbconnect = true;
+}
+
 void
 citrusleaf_change_tend_speed(int secs)
 {

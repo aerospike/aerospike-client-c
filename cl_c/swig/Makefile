@@ -19,8 +19,10 @@ TARGET_S = _citrusleaf.so
 SOURCE = citrusleaf.i
 
 # Include path of each target language
-DIR_INCLUDE_PYTHON =  /usr/include/python2.6/
-DIR_INCLUDE_PERL   =  /usr/lib/perl/5.14/CORE/
+#DIR_INCLUDE_PYTHON =  /usr/include/python2.6/
+#DIR_INCLUDE_PERL   =  /usr/lib/perl/5.14/CORE/
+DIR_INCLUDE_PYTHON = $(shell python -c 'from distutils import sysconfig as s; print s.get_config_vars()["INCLUDEPY"]')
+DIR_INCLUDE_PERL   =  $(shell perl -MConfig -e 'print "$$Config{archlib}/CORE"')
 
 # Target language name
 LANG_PYTHON = python

@@ -158,6 +158,7 @@ typedef struct {
 int citrusleaf_init(void);
 void citrusleaf_shutdown(void);
 cl_cluster * citrusleaf_cluster_create(void);
+void citrusleaf_cluster_use_nbconnect(cl_cluster *asc);
 int citrusleaf_cluster_add_host(cl_cluster *asc, char *host, short port, int timeout_ms);
 void citrusleaf_cluster_destroy(cl_cluster * asc);
 static void cl_write_parameters_set_default(cl_write_parameters *cl_w_p);

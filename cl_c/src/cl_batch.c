@@ -270,7 +270,7 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 	dump_buf("sending request to cluster:", wr_buf, wr_buf_sz);
 #endif	
 
-	int fd = cl_cluster_node_fd_get(node, false);
+	int fd = cl_cluster_node_fd_get(node, false, asc->nbconnect);
 	if (fd == -1) {
 #ifdef DEBUG			
 		fprintf(stderr, "warning: node %s has no file descriptors, retrying transaction\n",node->name);

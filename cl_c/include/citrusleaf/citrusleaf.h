@@ -222,6 +222,7 @@ extern void citrusleaf_cluster_shutdown(void);
 extern cl_cluster * citrusleaf_cluster_get_or_create(char *host, short port, int timeout_ms);
 extern void citrusleaf_cluster_release_or_destroy(cl_cluster **asc);
 extern void citrusleaf_cluster_change_tend_speed(struct cl_cluster_s *asc, int secs);
+extern void citrusleaf_cluster_use_nbconnect(struct cl_cluster_s *asc);
 
 // the timeout is how long to wait before the cluster is "settled"
 // 0 - a sensible default

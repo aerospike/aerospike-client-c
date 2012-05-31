@@ -555,7 +555,7 @@ cl_value_to_op(cl_bin *v, cl_operator operator, cl_operation *operation, cl_msg_
 		case CL_OP_READ:
 			op->op = CL_MSG_OP_READ;
 			break;
-		case CL_OP_ADD:
+		case CL_OP_INCR:
 			op->op = CL_MSG_OP_INCR;
 			break;
 		case CL_OP_MC_INCR:
@@ -1645,6 +1645,7 @@ citrusleaf_operate(cl_cluster *asc, const char *ns, const char *set, const cl_ob
 		switch (operations[i].op) {
 		case CL_OP_WRITE:
 		case CL_OP_MC_INCR:
+		case CL_OP_INCR:
 		case CL_OP_APPEND:
 		case CL_OP_PREPEND:
 		case CL_OP_MC_APPEND:

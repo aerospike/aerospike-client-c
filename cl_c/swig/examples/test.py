@@ -154,6 +154,43 @@ if rv==cl.CITRUSLEAF_OK:
 else:
 	print "Citrusleaf get failed with ",rv
 
+#CITRUSLEAF_OPERATE
+print "\nCITRUSLEAF OPERATE"
+
+n_ops = 3
+op = cl.cl_op_arr(n_ops)
+
+#One operation of incrementing an integer bin
+cl_op = op[0]
+cl_op.bin.bin_name = "bin3"
+cl_op.op = cl.CL_OP_INCR
+cl.citrusleaf_object_init_int(cl_op.bin.object, -4)
+op[0] = cl_op
+
+#One operation of appending a string bin
+cl_op = op[1]
+cl_op.bin.bin_name = "bin1"
+cl_op.op = cl.CL_OP_APPEND
+cl.citrusleaf_object_init_str(cl_op.bin.object,"append")
+op[1] = cl_op
+
+#One operation of prepending a string bin
+cl_op = op[2]
+cl_op.bin.bin_name = "bin2"
+cl_op.op = cl.CL_OP_PREPEND
+cl.citrusleaf_object_init_str(cl_op.bin.object,"prepend")
+op[2] = cl_op
+
+
+#Call citrusleaf operate on the complete opertations array
+rv = cl.citrusleaf_operate(asc,ns,set,key[0],op,n_ops,cl_wp,0,gen)
+if rv==cl.CITRUSLEAF_OK:
+	print "Citrusleaf operate succeeded with ",rv
+else:
+	print "Citrusleaf operate failed with ",rv
+
+print "Generation ",cl.intp_value(gen)
+
 #Free the bins that we recieved
 cl.citrusleaf_free_bins(bins_get,num_bins,None)
 
@@ -216,14 +253,14 @@ if p.rv == cl.CITRUSLEAF_OK:
 	sp = p.records
 	n_loop = p.index
 	for i in xrange(n_loop):
-		print "\nFor record ",i
-		print "Generation = ",sp[i].gen
-		print "Record_ttl = ",sp[i].record_ttl
+		print "\n--- For record ",i,"---"
+		print "Generation ",sp[i].gen
+		print "Record_ttl ",sp[i].record_ttl
 		n_bins_batch = sp[i].n_bins
 		arr_bins = get_bins(sp[i].bin,n_bins_batch)
 		for k in xrange(n_bins_batch):
 			if arr_bins[k].object.type == cl.CL_STR:
-				print "Bin name:",arr_bins[k].bin_name ,"Resulting string: ",arr_bins[k].object.u.str
+				print "Bin name: ",arr_bins[k].bin_name ,"Resulting string: ",arr_bins[k].object.u.str
 			elif arr_bins[k].object.type == cl.CL_INT:
 				print "Bin name: ",arr_bins[k].bin_name,"Resulting int: ",arr_bins[k].object.u.i64
 			elif arr_bins[k].object.type == cl.CL_BLOB:
@@ -293,11 +330,11 @@ if rv==cl.CITRUSLEAF_OK:
 			print "Bin name: ",bins_gd[i].bin_name,"Resulting string: ",bins_gd[i].object.u.str
 		elif bins_gd[i].object.type == cl.CL_INT:
 			print "Bin name: ",bins_gd[i].bin_name,"Resulting int: ",bins_gd[i].object.u.i64
-		elif bins_gd[k].object.type == cl.CL_BLOB:
-			binary_data = cl.cdata(bins_gd[k].object.u.blob, bins_gd[k].object.sz)
-			print "Bin name: ",bins_gd[k].bin_name,"Resulting decompressed blob: ",zlib.decompress(binary_data)
+		elif bins_gd[i].object.type == cl.CL_BLOB:
+			binary_data = cl.cdata(bins_gd[i].object.u.blob, bins_gd[i].object.sz)
+			print "Bin name: ",bins_gd[i].bin_name,"Resulting decompressed blob: ",zlib.decompress(binary_data)
 		else:
-			print "Bin name: ",bins_gd[k].bin_name,"Unknown bin type: ",bins_gd[k].object.type
+			print "Bin name: ",bins_gd[i].bin_name,"Unknown bin type: ",bins_gd[i].object.type
 
 	print "Generation ",cl.intp_value(gen_gd)
 else:

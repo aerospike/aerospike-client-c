@@ -9,15 +9,19 @@ SECTION II: LANGUAGE SPECIFIC
 	3. For cleanup, run 'make clean LANG=<lang_name>'. In make clean, if you do not provide a variable, all existing language
 	   directories will be cleaned up.
 	4. Do not add files to the <lang_name> directory. (For running examples etc)
-  
+ 	5. For all languages. the type of each bin of bins array while calling 'citrusleaf_get()' or 'citrusleaf_get_digest()'
+	   should be initialized to 'CL_NULL'. This can be done by calling citrusleaf_object_init_null(cl_object*).
+	
 	i. PYTHON
 		Creating python module
-		1. Install python-devel for writing python extensions. Due to incompatibility issues, we suggest you to use the same
-		   version of python of which you have installed the devel libraries. 
-		   For centos, run 'sudo yum install python26-devel.x86_64'. This will create a directory /usr/include/python2.6/ 
-		   which will be later included during compilation. If you install any other version of python-devel, please change
-		   the include directory in the swig/Makefile. The variable name is "DIR_INCLUDE_PYTHON". 
-		   For ubuntu, run 'sudo apt-get install python-dev'
+		1. Install python-devel for writing python extensions. Due to incompatibility issues,
+		   we suggest you to use the same version of python of which you have installed the devel libraries. 
+		   -- For centos, run 'sudo yum install python26-devel.x86_64'. 
+		   This will create a directory /usr/include/python2.6/ which will be later included during compilation.
+		   If you install any other version of python-devel, please change the include directory in the swig/Makefile.
+		   The variable name is "DIR_INCLUDE_PYTHON". 
+		   
+		   -- For ubuntu, run 'sudo apt-get install python-dev'
 		   
 		2. In 'swig' directory, run 'make LANG=python'
 		3. python/python_citrusleaf.py is a python file which has all the helper function that an application might need. 
@@ -43,18 +47,20 @@ SECTION II: LANGUAGE SPECIFIC
 		3. Defining arrays: The arrays are declared in citrusleaf.i as %array_class(<structname>,<arrayname>). 
 		   They are defined in .py file as <name> = cl.<arrayname>(<arraysize>). For example, see the use of cl_bin_arr.
 		4. Freeing bins - citrusleaf_free_bins(cl_bin *, int , cl_bin **) Takes three arguments, the array of cl_bins, the
-		   size of the array and a cl_bin **. If we want to free just the array, we pass a None for cl_bin ** and vice versa. 
-		5. Using blobs - For getting the blobs back, use cl.cdata(blob,size), where 'blob' is the blob object that is returned
-		   and 'size' is the object size. 
-		   For example, binary_data = cl.cdata(bins_get[i].object.u.blob, bins_get[i].object.sz) where 'bins_get' is the array
-		   of bins returned after the get call. 
+		   size of the array and a cl_bin **. If we want to free just the array,
+		   we pass a None for cl_bin ** and vice versa. 
+		5. Using blobs - For getting the blobs back, use cl.cdata(blob,size),
+		   where 'blob' is the blob object that is returned and 'size' is the object size. 
+		   For example, binary_data = cl.cdata(bins_get[i].object.u.blob, bins_get[i].object.sz)
+		   where 'bins_get' is the array of bins returned after the get call. 
 
 	ii. PERL
 		Creating perl module
 		1. Install PERL and make sure that C libraries for perl also get installed. Package name is: 'libgnome2-perl'.
-		   According to your installed version of perl, change the include path of perl CORE lib. The variable name is "DIR_INCLUDE_PERL".
+		   According to your installed version of perl, change the include path of perl CORE lib.
+		   The variable name is "DIR_INCLUDE_PERL".
 		   If you are not able to assign the value of 'DIR_INCLUDE_PERL', execute following command to know it:
-				perl -MConfig -e 'print "$Config{archlib}/CORE"'
+	           perl -MConfig -e 'print "$Config{archlib}/CORE"'
 		   For ubuntu, run 'sudo apt-get install libgnome2-perl'
 		2. In 'swig' directory, run 'make LANG=perl'
 		3. perl/perl_citrusleaf.pl is a perl file which has all the helper function that an application might need.
@@ -75,7 +81,7 @@ SECTION II: LANGUAGE SPECIFIC
    		   citrusleaf::intp_value(gen) /*Deferencing the integer pointer gen */
    		   These pointeres are declared using pointer class in citrusleaf.i file like %pointer_functions(int,intp).
 	     	   Similarly other pointers are declared in this file and are used accordingly.
-	       Some tips on how to use pointers in perl:
+	       	3. Some tips on how to use pointers in perl:
 			   $ptr = citrusleaf::new_intp();
 			   $ptr1 = citrusleaf::new_intp();
 			   Check if NULL
@@ -90,24 +96,28 @@ SECTION II: LANGUAGE SPECIFIC
 				   } else {
 					   print "ptr and ptr1 point to different objects.";
 				   }
-		3. Defining arrays: The arrays are declared in citrusleaf.i as %array_class(<structname>,<arrayname>). 
-		   They are defined in test.pl file as <array_name> = new citrusleaf::<arrayname>(<arraysize>). For example, see the use of cl_bin_arr.
-			   Similarly other arrays are declared in this file and are used accordingly.
-		   Assign values to array members: For each element of array, create a new element and use 'setitem' function of array to set ith 
+		4. Defining arrays: The arrays are declared in citrusleaf.i as %array_class(<structname>,<arrayname>). 
+		   They are defined in test.pl file as <array_name> = new citrusleaf::<arrayname>(<arraysize>).
+		   For example, see the use of cl_bin_arr.
+		   Similarly other arrays are declared in this file and are used accordingly.
+		   Assign values to array members: For each element of array, create a new element
+		   and use 'setitem' function of array to set ith 
 		   element of array. After setting the ith element, delete the newly created element by using DESTROY() function.
-		   'setitem' takes two arguments: $array_name->setitem($i, $element). This fuction will copy element into the ith index of array_name.
-				To have a look into example see code chunk in file test.pl:78-87.
+		   'setitem' takes two arguments: $array_name->setitem($i, $element). 
+		   This fuction will copy element into the ith index of array_name.
+	           To have a look into example see code chunk in file test.pl:78-87.
 		   'getitem' takes exactly one argument: $array_name->getitem($i) which returns the ith element of array_name.
-		4. Freeing bins - citrusleaf::citrusleaf_free_bins(cl_bin *, int , cl_bin **) Takes three arguments, the array of cl_bins, the
-		   size of the array and a cl_bin **. If we want to free just the array, we pass a 'undef'(without quotes) for cl_bin ** and vice versa. 
-		5. Using blobs - For getting the blobs back, use citrusleaf::cdata(blob,size), where 'blob' is the blob object that is returned
-		   and 'size' is the object size. 
-		   For example, binary_data = citrusleaf::cdata($bins_get->getitem($i)->{object}->{u}->{blob}, $bin->{object}->{sz}) where 'bins_get' is the array
-		   of bins returned after the get call.
-	    6. Accessing constants: constants can be defined by define statement or it could be an enumeration
-	       ex: #define FOO 35
-	       Access FOO in perl code by writing citrusleaf::FOO
-		7. More than 32bit integers:
+		5. Freeing bins - citrusleaf::citrusleaf_free_bins(cl_bin *, int , cl_bin **) takes three arguments, 
+		   the array of cl_bins, the size of the array and a cl_bin **. If we want to free just the array,
+		   we pass a 'undef'(without quotes) for cl_bin ** and vice versa. 
+		6. Using blobs - For getting the blobs back, use citrusleaf::cdata(blob,size),
+		   where 'blob' is the blob object that is returned and 'size' is the object size. For example, 
+		   binary_data = citrusleaf::cdata($bins_get->getitem($i)->{object}->{u}->{blob}, $bin->{object}->{sz}) 
+		   where 'bins_get' is the array of bins returned after the get call.
+	    	7. Accessing constants: constants can be defined by define statement or it could be an enumeration
+	       	   ex: #define FOO 35
+	       	   Access FOO in perl code by writing citrusleaf::FOO
+		8. More than 32bit integers:
 		   64 bit integers gets converted into string while interfacing with C via perl.
 		   PERL is able to perform arithmetic operation on string only after converting them into real numbers.
 		   String value gets converted into double if value exceeds signed-64-bit value, which will lose precision.
@@ -127,8 +137,4 @@ SECTION II: LANGUAGE SPECIFIC
 					$var_uint64 = Math::BigInt->new($var_uint64);
 					print $var_uint64;		// prints 9223372036854775807
 					print $var_uint64 + 1;	// prints 9223372036854775808
-
-SECTION II: FOR EVERY LANGUAGE 
-	1. Type of each bin of bins array while calling 'citrusleaf_get()' or 'citrusleaf_get_digest()' should be initialized to 'CL_NULL'.
-	   This can be done by calling citrusleaf_object_init_null(cl_object*).
-	   ex: See bin array declaration sectioon under CITRUSLEAF_GET of examples/test.pl
+	

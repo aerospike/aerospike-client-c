@@ -78,6 +78,7 @@ void citrusleaf_free_bins(cl_bin * bin, int n, cl_bin**binp) {
 %array_class(cl_bin,cl_bin_arr);
 %array_class(cf_digest,cf_digest_arr);
 %array_class(cl_record,cl_record_arr);
+%array_class(cl_operation,cl_op_arr);
 
 /*Declaring pointers*/
 %pointer_functions(int,intp);
@@ -153,6 +154,12 @@ typedef struct {
         cl_write_policy w_pol;
 } cl_write_parameters;
 
+typedef enum cl_operator_type { CL_OP_WRITE, CL_OP_READ, CL_OP_INCR, CL_OP_MC_INCR , CL_OP_PREPEND, CL_OP_APPEND, CL_OP_MC_PREPEND, CL_OP_MC_APPEND, CL_OP_TOUCH, CL_OP_MC_TOUCH} cl_operator;
+
+typedef struct cl_operation_s {
+        cl_bin                bin;
+        enum cl_operator_type op; 
+}cl_operation;
 
 /*Exposed functions to the python application*/
 int citrusleaf_init(void);
@@ -183,3 +190,4 @@ BatchResult  citrusleaf_batch_get(cl_cluster *asc, char *ns, const cf_digest *di
 int citrusleaf_calculate_digest(char *set, const cl_object *key, cf_digest *digest);
 void free(void *ptr);
 void citrusleaf_free_bins(cl_bin_arr * bin,int n_bins, cl_bin**binp);
+int citrusleaf_operate(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, cl_op_arr *operations, int n_operations, const cl_write_parameters *cl_w_p, int replace, int *generation);

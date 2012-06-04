@@ -352,6 +352,7 @@ evcitrusleaf_calculate_digest(const char *set, const evcitrusleaf_object *key, c
 			return(-1);
 	}
 
+printf("AAAAAAAAAAAHHHHHHH\n");
 	cf_digest_compute2((char *)set, set_len, k, key->size + 1, digest);
 	
 	return(0);

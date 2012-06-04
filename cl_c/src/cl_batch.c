@@ -15,6 +15,7 @@
 #include <string.h>
 #include <pthread.h>
 #include <fcntl.h>
+#include <assert.h>
 #include <zlib.h>
 
 
@@ -91,14 +92,11 @@ batch_decompress(uint8_t *in_buf, size_t in_sz, uint8_t **out_buf, size_t *out_s
 
 
 static uint8_t *
-write_fields_batch_digests(uint8_t *buf, char *ns, int ns_len, cf_digest *digests, cl_cluster_node **nodes, int n_digests, 
-	int n_my_digests, cl_cluster_node *my_node )
-{
-	
+write_fields_batch_digests(uint8_t *buf, char *ns, int ns_len, cf_digest *digests, cl_cluster_node **nodes, int n_digests, int n_my_digests, cl_cluster_node *my_node, int mrjid) {
+    printf("write_fields_batch_digests: mrjid: %d\n", mrjid);
 	// lay out the fields
 	cl_msg_field *mf = (cl_msg_field *) buf;
 	cl_msg_field *mf_tmp = mf;
-	
 	if (ns) {
 		mf->type = CL_MSG_FIELD_TYPE_NAMESPACE;
 		mf->field_sz = ns_len + 1;
@@ -108,17 +106,26 @@ write_fields_batch_digests(uint8_t *buf, char *ns, int ns_len, cf_digest *digest
 		mf = mf_tmp;
 	}
 
-	mf->type = CL_MSG_FIELD_TYPE_DIGEST_RIPE_ARRAY;
+    if (mrjid) {
+	    mf->type = CL_MSG_FIELD_TYPE_MAP_REDUCE_JOB_ID;
+        char ibuf[32];
+        sprintf(ibuf, "%u", mrjid);
+	    mf->field_sz = strlen(ibuf) + 1;
+	    memcpy(mf->data, ibuf, strlen(ibuf));
+	    mf_tmp = cl_msg_field_get_next(mf);
+	    cl_msg_swap_field(mf);
+	    mf = mf_tmp;
+    }
+
+	mf->type = CL_MSG_FIELD_TYPE_SECONDARY_INDEX_SINGLE;
+printf("n_digests: %d n_my_digests: %d\n", n_digests, n_my_digests);
 	int digest_sz = sizeof(cf_digest) * n_my_digests;
 	mf->field_sz = digest_sz + 1;
 	uint8_t *b = mf->data;
 	for (int i=0;i<n_digests;i++) {
-		if (nodes[i] == my_node) { 
-			memcpy(b, &digests[i], sizeof(cf_digest));
-			b += sizeof(cf_digest);
-		}
+		memcpy(b, &digests[i], sizeof(cf_digest));
+		b += sizeof(cf_digest);
 	}
-		
 	mf_tmp = cl_msg_field_get_next(mf);
 	cl_msg_swap_field(mf);		
 	mf = mf_tmp;
@@ -126,29 +133,75 @@ write_fields_batch_digests(uint8_t *buf, char *ns, int ns_len, cf_digest *digest
 	return ( (uint8_t *) mf_tmp );
 }
 
+static uint8_t *write_fields_lua_func_register(
+                               uint8_t *buf, char *ns, int ns_len,
+                               char *lua_mapf, int lmflen,
+                               char *lua_rdcf, int lrflen,
+                               char *lua_fnzf, int lfflen) {
+printf("write_fields_lua_func_register lua_mapf(%s) lua_rdcf,(%s) lua_fnzf(%s)\n", lua_mapf, lua_rdcf, lua_fnzf);
+	cl_msg_field *mf = (cl_msg_field *) buf;
+	cl_msg_field *mf_tmp = mf;
+	if (ns) {
+		mf->type = CL_MSG_FIELD_TYPE_NAMESPACE;
+		mf->field_sz = ns_len + 1;
+		memcpy(mf->data, ns, ns_len);
+		mf_tmp = cl_msg_field_get_next(mf);
+		cl_msg_swap_field(mf);
+		mf = mf_tmp;
+	}
+	mf->type = CL_MSG_FIELD_TYPE_LUA_MAP_FUNCTION_REGISTER;
+	mf->field_sz = lmflen + 1;
+	memcpy(mf->data, lua_mapf, lmflen);
+	mf_tmp = cl_msg_field_get_next(mf);
+	cl_msg_swap_field(mf);
+	mf = mf_tmp;
+
+	mf->type = CL_MSG_FIELD_TYPE_LUA_REDUCE_FUNCTION_REGISTER;
+	mf->field_sz = lrflen + 1;
+	memcpy(mf->data, lua_rdcf, lrflen);
+	mf_tmp = cl_msg_field_get_next(mf);
+	cl_msg_swap_field(mf);
+	mf = mf_tmp;
+
+	mf->type = CL_MSG_FIELD_TYPE_LUA_FINALIZE_FUNCTION_REGISTER;
+	mf->field_sz = lfflen + 1;
+	memcpy(mf->data, lua_fnzf, lfflen);
+	mf_tmp = cl_msg_field_get_next(mf);
+	cl_msg_swap_field(mf);
+	mf = mf_tmp;
+
+	return ( (uint8_t *) mf_tmp );
+}
+
+
 
 static int
-batch_compile(uint info1, uint info2, char *ns, cf_digest *digests, cl_cluster_node **nodes, int n_digests, cl_cluster_node *my_node, int n_my_digests, cl_bin *values, cl_operator operator, cl_operation *operations, int n_values,  
-	uint8_t **buf_r, size_t *buf_sz_r, const cl_write_parameters *cl_w_p)
-{
-	// I hate strlen
+batch_compile(uint info1, uint info2, uint info3, char *ns, cf_digest *digests, cl_cluster_node **nodes, int n_digests, cl_cluster_node *my_node, int n_my_digests, cl_bin *values, cl_operator operator, cl_operation *operations, int n_values,  uint8_t **buf_r, size_t *buf_sz_r, const cl_write_parameters *cl_w_p, char *lua_mapf, int lmflen, char *lua_rdcf, int lrflen, char *lua_fnzf, int lfflen, int mrjid) {
+    printf("batch_compile: lua_fnzf: %s\n", lua_fnzf);
 	int		ns_len = ns ? strlen(ns) : 0;
 	int		i;
 	
 	// determine the size
 	size_t	msg_sz = sizeof(as_msg); // header
-	// fields
-	if (ns) msg_sz += ns_len + sizeof(cl_msg_field);
-	msg_sz += sizeof(cl_msg_field) + 1 + (sizeof(cf_digest) * n_my_digests);
-	// ops
-	for (i=0;i<n_values;i++) {
-		msg_sz += sizeof(cl_msg_op) + strlen(values[i].bin_name);
+	if (ns) msg_sz += ns_len + sizeof(cl_msg_field); // fields
 
-        if (0 != cl_value_to_op_get_size(&values[i], &msg_sz)) {
-            fprintf(stderr,"illegal parameter: bad type %d write op %d\n",values[i].object.type,i);
-            return(-1);
-        }
-	}
+    if (n_my_digests) {
+	    msg_sz += sizeof(cl_msg_field) + 1 + (sizeof(cf_digest) * n_my_digests);
+	    // ops
+	    for (i=0;i<n_values;i++) {
+		    msg_sz += sizeof(cl_msg_op) + strlen(values[i].bin_name);
+
+            if (0 != cl_value_to_op_get_size(&values[i], &msg_sz)) {
+                fprintf(stderr,"illegal parameter: bad type %d write op %d\n",values[i].object.type,i);
+                return(-1);
+            }
+	    }
+    }
+    if (lmflen) {
+	    msg_sz += sizeof(cl_msg_field) + 1 + lmflen;
+	    msg_sz += sizeof(cl_msg_field) + 1 + lrflen;
+	    msg_sz += sizeof(cl_msg_field) + 1 + lfflen;
+    }
 	
 	// size too small? malloc!
 	uint8_t	*buf;
@@ -158,8 +211,7 @@ batch_compile(uint info1, uint info2, char *ns, cf_digest *digests, cl_cluster_n
 		if (!buf) 			return(-1);
 		*buf_r = buf;
 	}
-	else
-		buf = *buf_r;
+	else buf = *buf_r;
 	
 	*buf_sz_r = msg_sz;
 	
@@ -186,31 +238,42 @@ batch_compile(uint info1, uint info2, char *ns, cf_digest *digests, cl_cluster_n
 		}
 	}
 	
-	uint32_t record_ttl = cl_w_p ? cl_w_p->record_ttl : 0;
+	uint32_t record_ttl      = cl_w_p ? cl_w_p->record_ttl : 0;
 	uint32_t transaction_ttl = cl_w_p ? cl_w_p->timeout_ms : 0;
 	
-	// lay out the header - currently always 2, the digest array and the ns
-	int n_fields = 2;
-	buf = cl_write_header(buf, msg_sz, info1, info2, 0, generation, record_ttl, transaction_ttl, n_fields, n_values);
+	// lay out the header - currently always 3
+	//   digest array, lua_mapf, and the ns
+	int n_fields;
+    if (n_my_digests) {
+        n_fields = n_my_digests + 1;
+        if (mrjid)  n_fields++;
+    } else {
+        if (lmflen) n_fields = 4;
+        else        n_fields = 0;
+    }
+printf("n_my_digests: %d n_fields: %d\n", n_my_digests, n_fields);
+
+	buf = cl_write_header(buf, msg_sz, info1, info2, info3, generation, record_ttl, transaction_ttl, n_fields, n_values);
 		
 	// now the fields
-	buf = write_fields_batch_digests(buf, ns, ns_len, digests, nodes, n_digests,n_my_digests, my_node);
-	if (!buf) {
-		if (mbuf)	free(mbuf);
-		return(-1);
-	}
+	if (n_my_digests) {
+	    buf = write_fields_batch_digests(buf, ns, ns_len, digests, nodes, n_digests,n_my_digests, my_node, mrjid);
+    } else if (lmflen) {
+	    buf = write_fields_lua_func_register(buf, ns, ns_len,
+                                             lua_mapf, lmflen,
+                                             lua_rdcf, lrflen,
+                                             lua_fnzf, lfflen);
+    } else assert(!"batch_compile() define n_my_digests OR lmflen");
+
+	if (!buf) { if (mbuf) free(mbuf); return(-1); }
 
 	// lay out the ops
 	if (n_values) {
-
 		cl_msg_op *op = (cl_msg_op *) buf;
 		cl_msg_op *op_tmp;
 		for (i = 0; i< n_values;i++) {
-			if( values ){
-				cl_value_to_op( &values[i], operator, 0, op);
-			}else{
-				cl_value_to_op(0,0,&operations[i],op);
-			}
+			if (values) { cl_value_to_op( &values[i], operator, 0, op);
+			} else {      cl_value_to_op(0,0,&operations[i],op); }
 	
 			op_tmp = cl_msg_op_get_next(op);
 			cl_msg_swap_op(op);
@@ -227,28 +290,15 @@ batch_compile(uint info1, uint info2, char *ns, cf_digest *digests, cl_cluster_n
 #define STACK_BUF_SZ (1024 * 16) // provide a safe number for your system - linux tends to have 8M stacks these days
 #define STACK_BINS 100
 
-//
-// do_batch_monte(cl_cluster *asc, int info1, int info2, const char *ns, const cf_digest *digests, const cf_node *nodes, int n_digests,
-//					cf_node node, citrusleaf_get_many_cb cb, void *udata)
-//
-// asc - cluster to send to 
-// info1 - INFO1 options
-// info2 - INFO2 options
-// ns - namespace for all the digests
-// digests - array of digests to fetch
-// nodes - array of nodes for those digests
-// n_digests - size of the two preceeding arrays
-// node - node of this particular request (thus will send a subset of digests)
-// cb - callback that gets called back MULTITHREADED when data arrives
-// udata - user data for the callback
-//
+#define HACK_MAX_RESULT_CODE 100
 
 static int
-do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *digests, cl_cluster_node **nodes, int n_digests, cl_bin *bins, cl_operator operator, cl_operation *operations, int n_ops,
-	cl_cluster_node *node, int n_node_digests, citrusleaf_get_many_cb cb, void *udata)
-{
-	int rv = -1;
+do_batch_monte(cl_cluster *asc, int info1, int info2, int info3, char *ns, cf_digest *digests, cl_cluster_node **nodes, int n_digests, cl_bin *bins, cl_operator operator, cl_operation *operations, int n_ops, cl_cluster_node *node, int n_node_digests, citrusleaf_get_many_cb cb, void *udata, char *lua_mapf, int lmflen, char *lua_rdcf, int lrflen, char *lua_fnzf, int lfflen, int mrjid) {
 
+
+printf("do_batch_monte: n_digests: %d n_node_digests: %d\n", n_digests, n_node_digests);
+
+	int rv = -1;
 	uint8_t		rd_stack_buf[STACK_BUF_SZ];	
 	uint8_t		*rd_buf = 0;
 	size_t		rd_buf_sz = 0;
@@ -256,10 +306,11 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 	uint8_t		*wr_buf = wr_stack_buf;
 	size_t		wr_buf_sz = sizeof(wr_stack_buf);
 
-	// we have a list of many keys
-//	if (0 == bins && CL_MSG_INFO1_READ == info1) info1 |= CL_MSG_INFO1_GET_ALL;
-	rv = batch_compile(info1, info2, ns, digests, nodes, n_digests, node, n_node_digests, bins, operator, operations, n_ops, 
-		&wr_buf, &wr_buf_sz, 0);
+	rv = batch_compile(info1, info2, info3, ns, digests, nodes, n_digests,
+                       node, n_node_digests, bins, operator, operations,
+                       n_ops, &wr_buf, &wr_buf_sz, 0,
+                       lua_mapf, lmflen, lua_rdcf, lrflen, lua_fnzf, lfflen,
+                       mrjid);
 	if (rv != 0) {
 		fprintf(stderr, " do batch monte: batch compile failed: some kind of intermediate error\n");
 		return (rv);
@@ -270,7 +321,7 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 	dump_buf("sending request to cluster:", wr_buf, wr_buf_sz);
 #endif	
 
-	int fd = cl_cluster_node_fd_get(node, false, asc->nbconnect);
+	int fd = cl_cluster_node_fd_get(node, false);
 	if (fd == -1) {
 #ifdef DEBUG			
 		fprintf(stderr, "warning: node %s has no file descriptors, retrying transaction\n",node->name);
@@ -292,7 +343,8 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 	do { // multiple CL proto per response
 		
 		// Now turn around and read a fine cl_pro - that's the first 8 bytes that has types and lenghts
-		if ((rv = cf_socket_read_forever(fd, (uint8_t *) &proto, sizeof(cl_proto) ) ) ) {
+		if ((rv = cf_socket_read_forever(fd, (uint8_t *) &proto,
+                                         sizeof(cl_proto) ) ) ) {
 			fprintf(stderr, "network error: errno %d fd %d\n",rv, fd);
 			return(-1);
 		}
@@ -305,7 +357,8 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 			fprintf(stderr, "network error: received protocol message of wrong version %d\n",proto.version);
 			return(-1);
 		}
-		if ((proto.type != CL_PROTO_TYPE_CL_MSG) && (proto.type != CL_PROTO_TYPE_CL_MSG_COMPRESSED)) {
+		if ((proto.type != CL_PROTO_TYPE_CL_MSG) &&
+            (proto.type != CL_PROTO_TYPE_CL_MSG_COMPRESSED)) {
 			fprintf(stderr, "network error: received incorrect message version %d\n",proto.type);
 			return(-1);
 		}
@@ -330,16 +383,15 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 				return(-1);
 			}
 // this one's a little much: printing the entire body before printing the other bits			
+printf("rd_buf_sz: %d\n", rd_buf_sz);
 #ifdef DEBUG_VERBOSE
 			dump_buf("read msg body header (multiple msgs)", rd_buf, rd_buf_sz);
 #endif	
 		}
 		
 		if (proto.type == CL_PROTO_TYPE_CL_MSG_COMPRESSED) {
-			
 			uint8_t *new_rd_buf   = NULL;
 			size_t  new_rd_buf_sz = 0;
-			
 			rv = batch_decompress(rd_buf, rd_buf_sz, &new_rd_buf, &new_rd_buf_sz);
 			if (rv != 0) {
 				fprintf(stderr, "could not decompress compressed message: error %d\n",rv);
@@ -363,6 +415,7 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 		cl_bin *bins;
 		
 		while (pos < rd_buf_sz) {
+printf("pos: %d rd_buf_sz: %d\n", pos, rd_buf_sz);
 
 #ifdef DEBUG_VERBOSE
 			dump_buf("individual message header", buf, sizeof(cl_msg));
@@ -373,6 +426,14 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 			cl_msg_swap_header(msg);
 			buf += sizeof(cl_msg);
 			
+printf("msg->result_code: %d\n", msg->result_code);
+//ALCHEMY RUSS HACK
+            if (msg->result_code >= HACK_MAX_RESULT_CODE && cb) {
+				(*cb) (NULL, NULL, NULL, 0, 0, NULL, 1, true, (void *)msg->result_code);
+				done = true;
+                rv = 0;
+            }
+
 			if (msg->header_sz != sizeof(cl_msg)) {
 				fprintf(stderr, "received cl msg of unexpected size: expecting %zd found %d, internal error\n",
 					sizeof(cl_msg),msg->header_sz);
@@ -517,6 +578,7 @@ typedef struct {
 	cl_cluster 	*asc; 
     int          info1;
 	int          info2;
+	int          info3;
 	char 		*ns;
 	cf_digest 	*digests; 
 	cl_cluster_node **nodes;
@@ -537,6 +599,13 @@ typedef struct {
 	
 	int 			index; // debug only
 	
+    unsigned int  mrjid;
+    char         *lua_mapf;
+    int           lmflen;
+    char         *lua_rdcf;
+    int           lrflen;
+    char         *lua_fnzf;
+    int           lfflen;
 } digest_work;
 
 
@@ -551,20 +620,105 @@ batch_worker_fn(void *dummy)
 		}
 		
 		/* See function citrusleaf_batch_shutdown() for more details */
-		if(work.digests==NULL) {
+		if(!work.digests && !work.lua_mapf) {
 			pthread_exit(NULL);
 		}
 
-		int an_int = do_batch_monte( work.asc, work.info1, work.info2, work.ns, work.digests, work.nodes, work.n_digests, work.bins, work.operator, work.operations, work.n_ops, work.my_node, work.my_node_digest_count, work.cb, work.udata );
+
+		int an_int = do_batch_monte(work.asc, work.info1, work.info2, work.info3, work.ns, work.digests, work.nodes, work.n_digests, work.bins, work.operator, work.operations, work.n_ops, work.my_node, work.my_node_digest_count, work.cb, work.udata, work.lua_mapf, work.lmflen, work.lua_rdcf, work.lrflen, work.lua_fnzf, work.lfflen, work.mrjid);
 		
 		cf_queue_push(work.complete_q, (void *) &an_int);
 		
 	} while (1);
 }
 
+static cl_rv citrusleaf_sik_traversal(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_bin *bins, int n_bins, bool get_key, citrusleaf_get_many_cb cb, void *udata, unsigned int mrjid, char *lua_mapf, char *lua_rdcf, char *lua_fnzf) {
+    int lmflen = lua_mapf ? strlen(lua_mapf) : 0;
+    int lrflen = lua_rdcf ? strlen(lua_rdcf) : 0;
+    int lfflen = lua_fnzf ? strlen(lua_fnzf) : 0;
+
+    printf("citrusleaf_sik_traversal: mrjid: %d "\
+           "lmflen: %d lrflen: %d lfflen: %d\n",
+           mrjid, lmflen, lrflen, lfflen);
+
+	cl_cluster_node **nodes = malloc(sizeof(cl_cluster_node *) * n_digests);
+	if (!nodes) { fprintf(stderr, " allocation failed "); return(-1); }
+	
+	int	n_nodes = cf_vector_size(&asc->node_v);
+    for (uint i = 0; i < n_nodes; i++) {
+        nodes[i] = cf_vector_pointer_get(&asc->node_v, 0);
+    }
+
+    printf("citrusleaf_sik_traversal: n_digests: %d n_bins: %d\n",
+           n_digests, n_bins);
+
+	// Note:  The digest exists case does not retrieve bin data.
+	digest_work work;
+	work.asc        = asc;
+	work.info1      = CL_MSG_INFO1_READ;
+	work.info2      = 0;
+	work.info3      = 0;
+	work.ns         = ns;
+	work.digests    = (cf_digest *)digests;
+	work.nodes      = nodes;
+	work.n_digests  = n_digests;
+	work.get_key    = get_key;
+	work.bins       = bins;
+	work.operator   = CL_OP_READ;
+	work.operations = 0;
+	work.n_ops      = n_bins;
+	work.cb         = cb;
+	work.udata      = udata;
+    work.mrjid      = mrjid;
+    work.lua_mapf   = lua_mapf;
+    work.lmflen     = lmflen;
+    work.lua_rdcf   = lua_rdcf;
+    work.lrflen     = lrflen;
+    work.lua_fnzf   = lua_fnzf;
+    work.lfflen     = lfflen;
+	work.complete_q = cf_queue_create(sizeof(int),true);
+
+	// dispatch work to the worker queue to allow the transactions in parallel
+	for (int i=0;i<n_nodes;i++) {
+		// fill in per-request specifics
+		work.my_node = nodes[i];
+printf("%d: n_nodes: %d my_node: %p\n", i, n_nodes, work.my_node);
+		work.my_node_digest_count = n_digests;
+		work.index = i;
+		// dispatch - copies data
+		cf_queue_push(g_batch_q, &work);
+	}
+	
+	// wait for the work to complete
+	int retval = 0;
+	for (int i=0;i<n_nodes;i++) {
+		int z;
+		cf_queue_pop(work.complete_q, &z, CF_QUEUE_FOREVER);
+		if (z != 0) retval = z;
+	}
+	
+	// free and return what needs freeing and putting
+	cf_queue_destroy(work.complete_q);
+	//for (int i=0;i<n_digests;i++) { cl_cluster_node_put(nodes[i]); }
+	free(nodes);
+
+	if (retval != 0) return( CITRUSLEAF_FAIL_CLIENT );
+	else             return 0;
+}
+
+cl_rv citrusleaf_register_lua_function(cl_cluster *asc, char *ns, citrusleaf_get_many_cb cb, char *lua_mapf, char *lua_rdcf, char *lua_fnzf) {
+    return citrusleaf_sik_traversal(asc, ns, NULL, 0, NULL, 0, 0, cb, NULL, 0, lua_mapf, lua_rdcf, lua_fnzf);
+}
+cl_rv citrusleaf_get_sik_digest(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_bin *bins, int n_bins, bool get_key, citrusleaf_get_many_cb cb, void *udata) {
+    return citrusleaf_sik_traversal(asc, ns, digests, n_digests, bins, n_bins, get_key, cb, udata, 0, NULL, NULL, NULL);
+}
+cl_rv citrusleaf_run_mr_sik_digest(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_bin *bins, int n_bins, bool get_key, citrusleaf_get_many_cb cb, void *udata, int mrjid) {
+    return citrusleaf_sik_traversal(asc, ns, digests, n_digests, bins, n_bins, get_key, cb, udata, mrjid, NULL, NULL, NULL);
+}
+
+
 
 #define MAX_NODES 32
-
 
 static cl_rv
 do_get_exists_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_bin *bins, int n_bins, bool get_key, bool get_bin_data, citrusleaf_get_many_cb cb, void *udata)
@@ -682,10 +836,10 @@ do_get_exists_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, i
 
 }
 
-
 cl_rv
 citrusleaf_get_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_bin *bins, int n_bins, bool get_key, citrusleaf_get_many_cb cb, void *udata)
 {
+printf("IN citrusleaf_get_many_digest\n");
 	return do_get_exists_many_digest(asc, ns, digests, n_digests, bins, n_bins, get_key, true, cb, udata);
 }
 

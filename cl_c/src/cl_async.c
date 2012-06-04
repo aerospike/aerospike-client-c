@@ -410,7 +410,7 @@ cl_do_async_monte(cl_cluster *asc, int info1, int info2, const char *ns, const c
 
 		// Now get the dedicated async FD of this node
 		starttime = cf_getms();
-		fd = cl_cluster_node_fd_get(node, true, asc->nbconnect);
+		fd = cl_cluster_node_fd_get(node, true);
 		endtime = cf_getms();
 		if ((endtime - starttime) > 10) {
 			fprintf(stderr, "Time to get FD for a node (>10ms)=%"PRIu64"\n", (endtime - starttime));

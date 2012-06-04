@@ -259,7 +259,7 @@ static uint8_t *
 write_fields(uint8_t *buf, const char *ns, int ns_len, const char *set, int set_len, const cl_object *key, const cf_digest *d, cf_digest *d_ret, 
 	uint64_t trid, cl_scan_param_field *scan_param_field)
 {
-	
+	printf("write_fields\n");
 	// lay out the fields
 	cl_msg_field *mf = (cl_msg_field *) buf;
 	cl_msg_field *mf_tmp = mf;
@@ -267,6 +267,7 @@ write_fields(uint8_t *buf, const char *ns, int ns_len, const char *set, int set_
 	if (ns) {
 		mf->type = CL_MSG_FIELD_TYPE_NAMESPACE;
 		mf->field_sz = ns_len + 1;
+printf("write_fields: ns: write_fields: %d\n", mf->field_sz);
 		memcpy(mf->data, ns, ns_len);
 		mf_tmp = cl_msg_field_get_next(mf);
 		cl_msg_swap_field(mf);
@@ -276,6 +277,7 @@ write_fields(uint8_t *buf, const char *ns, int ns_len, const char *set, int set_
 	if (set) {	
 		mf->type = CL_MSG_FIELD_TYPE_SET;
 		mf->field_sz = set_len + 1;
+printf("write_fields: set: write_fields: %d\n", mf->field_sz);
 		memcpy(mf->data, set, set_len);
 		mf_tmp = cl_msg_field_get_next(mf);
 		cl_msg_swap_field(mf);
@@ -287,6 +289,7 @@ write_fields(uint8_t *buf, const char *ns, int ns_len, const char *set, int set_
 		//Convert the transaction-id to network byte order (big-endian)
 		uint64_t trid_nbo = __cpu_to_be64(trid); //swaps in place
 		mf->field_sz = sizeof(trid_nbo) + 1;
+printf("write_fields: trid: write_fields: %d\n", mf->field_sz);
 		memcpy(mf->data, &trid_nbo, sizeof(trid_nbo));
 		mf_tmp = cl_msg_field_get_next(mf);
 		cl_msg_swap_field(mf);
@@ -296,6 +299,7 @@ write_fields(uint8_t *buf, const char *ns, int ns_len, const char *set, int set_
 	if (scan_param_field) {
 		mf->type = CL_MSG_FIELD_TYPE_SCAN_OPTIONS;
 		mf->field_sz = sizeof(cl_scan_param_field) + 1;
+printf("write_fields: scan: write_fields: %d\n", mf->field_sz);
 		memcpy(mf->data, scan_param_field, sizeof(cl_scan_param_field));
 		mf_tmp = cl_msg_field_get_next(mf);
 		cl_msg_swap_field(mf);
@@ -371,7 +375,7 @@ write_fields(uint8_t *buf, const char *ns, int ns_len, const char *set, int set_
 static uint8_t *
 write_fields_digests(uint8_t *buf, const char *ns, int ns_len, const cf_digest *digests, int n_digests)
 {
-	
+	printf("write_fields_digests\n");
 	// lay out the fields
 	cl_msg_field *mf = (cl_msg_field *) buf;
 	cl_msg_field *mf_tmp = mf;
@@ -555,7 +559,7 @@ cl_value_to_op(cl_bin *v, cl_operator operator, cl_operation *operation, cl_msg_
 		case CL_OP_READ:
 			op->op = CL_MSG_OP_READ;
 			break;
-		case CL_OP_INCR:
+		case CL_OP_ADD:
 			op->op = CL_MSG_OP_INCR;
 			break;
 		case CL_OP_MC_INCR:
@@ -1157,7 +1161,7 @@ do_the_full_monte(cl_cluster *asc, int info1, int info2, int info3, const char *
 			usleep(10000);
 			goto Retry;
 		}
-		fd = cl_cluster_node_fd_get(node, false, asc->nbconnect);
+		fd = cl_cluster_node_fd_get(node, false);
 		if (fd == -1) {
 #ifdef DEBUG			
 			fprintf(stderr, "warning: node %s has no file descriptors, retrying transaction (tid %zu)\n",node->name,(uint64_t)pthread_self() );
@@ -1621,6 +1625,8 @@ citrusleaf_calculate_digest(const char *set, const cl_object *key, cf_digest *di
 	}
 
 	cf_digest_compute2((char *)set, set_len, k, key->sz + 1, digest);
+        char *x = (char *)digest;
+        bzero(x + 16, 4);
 	
 	return(0);
 }
@@ -1645,7 +1651,6 @@ citrusleaf_operate(cl_cluster *asc, const char *ns, const char *set, const cl_ob
 		switch (operations[i].op) {
 		case CL_OP_WRITE:
 		case CL_OP_MC_INCR:
-		case CL_OP_INCR:
 		case CL_OP_APPEND:
 		case CL_OP_PREPEND:
 		case CL_OP_MC_APPEND:

@@ -706,13 +706,22 @@ printf("%d: n_nodes: %d my_node: %p\n", i, n_nodes, work.my_node);
 	else             return 0;
 }
 
+int   CurrentMRJid      = -1;
+char *CurrentLuaMapFunc = NULL;
+char *CurrentLuaRdcFunc = NULL;
+char *CurrentLuaFnzFunc = NULL;
+
 cl_rv citrusleaf_register_lua_function(cl_cluster *asc, char *ns, citrusleaf_get_many_cb cb, char *lua_mapf, char *lua_rdcf, char *lua_fnzf) {
+    CurrentLuaMapFunc = lua_mapf;
+    CurrentLuaRdcFunc = lua_rdcf;
+    CurrentLuaFnzFunc = lua_fnzf;
     return citrusleaf_sik_traversal(asc, ns, NULL, 0, NULL, 0, 0, cb, NULL, 0, lua_mapf, lua_rdcf, lua_fnzf);
 }
 cl_rv citrusleaf_get_sik_digest(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_bin *bins, int n_bins, bool get_key, citrusleaf_get_many_cb cb, void *udata) {
     return citrusleaf_sik_traversal(asc, ns, digests, n_digests, bins, n_bins, get_key, cb, udata, 0, NULL, NULL, NULL);
 }
 cl_rv citrusleaf_run_mr_sik_digest(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_bin *bins, int n_bins, bool get_key, citrusleaf_get_many_cb cb, void *udata, int mrjid) {
+    CurrentMRJid = mrjid;
     return citrusleaf_sik_traversal(asc, ns, digests, n_digests, bins, n_bins, get_key, cb, udata, mrjid, NULL, NULL, NULL);
 }
 

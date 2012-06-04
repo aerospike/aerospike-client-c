@@ -105,6 +105,17 @@ typedef struct cl_msg_field_s {
 #define CL_MSG_FIELD_TYPE_DIGEST_RIPE_ARRAY 6
 #define CL_MSG_FIELD_TYPE_TRID 7
 #define CL_MSG_FIELD_TYPE_SCAN_OPTIONS 8
+
+#define CL_MSG_FIELD_TYPE_SECONDARY_INDEX_SINGLE          9
+#define CL_MSG_FIELD_TYPE_SECONDARY_INDEX_LIMIT          10
+#define CL_MSG_FIELD_TYPE_SECONDARY_INDEX_RANGE          11
+#define CL_MSG_FIELD_TYPE_COMPOUND_SECONDARY_INDEX       12
+#define CL_MSG_FIELD_TYPE_LUA_MAP_FUNCTION_REGISTER      13 
+#define CL_MSG_FIELD_TYPE_LUA_REDUCE_FUNCTION_REGISTER   14 
+#define CL_MSG_FIELD_TYPE_LUA_FINALIZE_FUNCTION_REGISTER 15 
+#define CL_MSG_FIELD_TYPE_MAP_REDUCE_JOB_ID              16 
+
+
 	uint32_t field_sz; // get the data size through the accessor function, don't worry, it's a small macro
 	uint8_t type;
 	uint8_t data[];
@@ -216,6 +227,7 @@ typedef struct as_msg_s {
 #define CL_MSG_INFO3_TRACE				(1 << 1)		// apply server trace logging for this transaction
 #define CL_MSG_INFO3_TOMBSTONE			(1 << 2)		// if set on response, a version was a delete tombstone
 #define CL_MSG_INFO3_REPLACE			(1 << 3)		// properly a write option, but there are no more bits. Overwrite existing record only; do not create new record
+
 
 
 static inline cl_msg_field *

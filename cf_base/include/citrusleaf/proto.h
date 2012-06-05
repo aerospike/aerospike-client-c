@@ -116,6 +116,7 @@ typedef struct cl_msg_field_s {
 #define CL_MSG_FIELD_TYPE_MAP_REDUCE_JOB_ID              16 
 #define CL_MSG_FIELD_TYPE_SECONDARY_INDEX_ID             17 
 #define CL_MSG_FIELD_TYPE_MAP_REDUCE_ARG                 18 
+#define CL_MSG_FIELD_TYPE_MAP_REDUCE_ID                  19 
 
 	uint32_t field_sz; // get the data size through the accessor function, don't worry, it's a small macro
 	uint8_t type;

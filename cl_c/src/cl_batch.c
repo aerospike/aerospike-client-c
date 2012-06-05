@@ -655,6 +655,8 @@ batch_worker_fn(void *dummy)
 	} while (1);
 }
 
+int   NumNodes  = 0;
+int   Responses = 0;
 static cl_rv citrusleaf_sik_traversal(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_bin *bins, int n_bins, bool get_key, citrusleaf_get_many_cb cb, void *udata, unsigned int mrjid, char *lua_mapf, char *lua_rdcf, char *lua_fnzf, int imatch, map_args_t *margs, int reg_mrjid) {
     int lmflen = lua_mapf ? strlen(lua_mapf) : 0;
     int lrflen = lua_rdcf ? strlen(lua_rdcf) : 0;
@@ -665,7 +667,7 @@ static cl_rv citrusleaf_sik_traversal(cl_cluster *asc, char *ns, const cf_digest
            mrjid, lmflen, lrflen, lfflen);
 
 	int	n_nodes = cf_vector_size(&asc->node_v);
-printf("n_nodes: %d\n", n_nodes);
+    NumNodes = n_nodes; //NOTE: used in callbacks -> num responses
 	cl_cluster_node **nodes = malloc(sizeof(cl_cluster_node *) * n_nodes);
 	if (!nodes) { fprintf(stderr, " allocation failed "); return(-1); }
     for (uint i = 0; i < n_nodes; i++) {
@@ -744,10 +746,12 @@ cl_rv citrusleaf_register_lua_function(cl_cluster *asc, char *ns, citrusleaf_get
     return citrusleaf_sik_traversal(asc, ns, NULL, 0, NULL, 0, 0, cb, NULL, 0, lua_mapf, lua_rdcf, lua_fnzf, -1, NULL, reg_mrjid);
 }
 cl_rv citrusleaf_get_sik_digest(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_bin *bins, int n_bins, bool get_key, citrusleaf_get_many_cb cb, void *udata, int imatch) {
+    Responses = 0;
     return citrusleaf_sik_traversal(asc, ns, digests, n_digests, bins, n_bins, get_key, cb, udata, 0, NULL, NULL, NULL, imatch, NULL, 0);
 }
 cl_rv citrusleaf_run_mr_sik_digest(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_bin *bins, int n_bins, bool get_key, citrusleaf_get_many_cb cb, void *udata, int mrjid, int imatch, map_args_t *margs) {
     CurrentMRJid = mrjid;
+    Responses    = 0;
     return citrusleaf_sik_traversal(asc, ns, digests, n_digests, bins, n_bins, get_key, cb, udata, mrjid, NULL, NULL, NULL, imatch, margs, 0);
 }
 

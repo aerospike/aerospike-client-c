@@ -147,16 +147,26 @@ static uint8_t *write_fields_batch_digests(uint8_t *buf, char *ns, int ns_len, c
 	    uint8_t *b      = mf->data;
 	    b              += sizeof(int);
         for (int i = 0; i < margs->argc; i++) {
-            int mlen = strlen(margs->argv[i]);
-            printf("writing: i: %d mlen: %d\n", i, mlen);
-		    memcpy(b, &mlen, sizeof(int));
-		    b += sizeof(int);
+            int klen = strlen(margs->kargv[i]);
+		    memcpy(b, &klen, sizeof(int));
+		    b += sizeof(int); //printf("writing: i: %d klen: %d\n", i, klen);
         }
         for (int i = 0; i < margs->argc; i++) {
-            int mlen = strlen(margs->argv[i]);
-            printf("writing MARGV[%d]: len: %d %s\n", i, mlen, margs->argv[i]);
-		    memcpy(b, margs->argv[i], mlen);
-		    b += mlen;
+            int vlen = strlen(margs->vargv[i]);
+		    memcpy(b, &vlen, sizeof(int));
+		    b += sizeof(int); //printf("writing: i: %d vlen: %d\n", i, vlen);
+        }
+        for (int i = 0; i < margs->argc; i++) {
+            int klen = strlen(margs->kargv[i]);
+            //printf("writn KARGV[%d]: len: %d %s\n", i, klen, margs->kargv[i]);
+		    memcpy(b, margs->kargv[i], klen);
+		    b += klen;
+        }
+        for (int i = 0; i < margs->argc; i++) {
+            int vlen = strlen(margs->vargv[i]);
+            //printf("writn VARGV[%d]: len: %d %s\n", i, vlen, margs->vargv[i]);
+		    memcpy(b, margs->vargv[i], vlen);
+		    b += vlen;
         }
 	    mf_tmp = cl_msg_field_get_next(mf);
 	    cl_msg_swap_field(mf);
@@ -209,7 +219,6 @@ printf("write_fields_lua_func_register lua_mapf(%s) lua_rdcf,(%s) lua_fnzf(%s)\n
 
 static int batch_compile(uint info1, uint info2, uint info3, char *ns, cf_digest *digests, cl_cluster_node **nodes, int n_digests, cl_cluster_node *my_node, int n_my_digests, cl_bin *values, cl_operator operator, cl_operation *operations, int n_values,  uint8_t **buf_r, size_t *buf_sz_r, const cl_write_parameters *cl_w_p, char *lua_mapf, int lmflen, char *lua_rdcf, int lrflen, char *lua_fnzf, int lfflen, int mrjid, int imatch, map_args_t *margs) {
     printf("batch_compile: n_values: %d\n", n_values);
-    printf("batch_compile: margs: %p\n", margs);
 	int		ns_len = ns ? strlen(ns) : 0;
 	int		i;
 	
@@ -227,8 +236,10 @@ static int batch_compile(uint info1, uint info2, uint info3, char *ns, cf_digest
     if (margs) {
 	    marg_sz = sizeof(cl_msg_field) + sizeof(int); // argc(int)
         for (int i = 0; i < margs->argc; i++) {
-	        int mlen  = strlen(margs->argv[i]);
-	        marg_sz   += (sizeof(int) + mlen); // Length(int) + string_arg
+	        int klen  = strlen(margs->kargv[i]);
+	        marg_sz   += (sizeof(int) + klen); // Length(int) + string_arg
+	        int vlen  = strlen(margs->vargv[i]);
+	        marg_sz   += (sizeof(int) + vlen); // Length(int) + string_arg
         }
 	    msg_sz += marg_sz;
     }

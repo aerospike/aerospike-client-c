@@ -125,7 +125,8 @@ typedef struct cl_msg_field_s {
 
 typedef struct map_args_t {
     int    argc;
-    char **argv;
+    char **kargv;
+    char **vargv;
 } map_args_t;
  
 #define CL_MSG_OP_READ 1			// read the value in question

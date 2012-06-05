@@ -27,6 +27,7 @@
 #include "citrusleaf/cf_socket.h"
 
 
+//#define RUSS_DEBUG
 //
 // Decompresses a compressed CL msg
 // The buffer passed in is the space *after* the header, just the compressed data
@@ -735,7 +736,7 @@ static cl_rv citrusleaf_sik_traversal(cl_cluster *asc, char *ns, const cf_digest
 	for (int i=0;i<n_nodes;i++) {
 		// fill in per-request specifics
 		work.my_node = nodes[i];
-printf("%d: n_nodes: %d my_node: %p\n", i, n_nodes, work.my_node);
+        //printf("%d: n_nodes: %d my_node: %p\n", i, n_nodes, work.my_node);
 		work.my_node_digest_count = n_digests;
 		work.index = i;
 		// dispatch - copies data
@@ -777,6 +778,7 @@ cl_rv citrusleaf_get_sik_digest(cl_cluster *asc, char *ns, const cf_digest *dige
 cl_rv citrusleaf_run_mr_sik_digest(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_bin *bins, int n_bins, bool get_key, citrusleaf_get_many_cb cb, void *udata, int mrjid, int imatch, map_args_t *margs) {
     CurrentMRJid = mrjid;
     Responses    = 0;
+printf("citrusleaf_run_mr_sik_digest: CurrentMRJid: %d Responses: %d\n", CurrentMRJid, Responses);
     return citrusleaf_sik_traversal(asc, ns, digests, n_digests, bins, n_bins, get_key, cb, udata, mrjid, NULL, NULL, NULL, imatch, margs, 0);
 }
 

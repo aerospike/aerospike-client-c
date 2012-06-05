@@ -115,7 +115,7 @@ typedef struct cl_msg_field_s {
 #define CL_MSG_FIELD_TYPE_LUA_FINALIZE_FUNCTION_REGISTER 15 
 #define CL_MSG_FIELD_TYPE_MAP_REDUCE_JOB_ID              16 
 #define CL_MSG_FIELD_TYPE_SECONDARY_INDEX_ID             17 
-
+#define CL_MSG_FIELD_TYPE_MAP_REDUCE_ARG                 18 
 
 	uint32_t field_sz; // get the data size through the accessor function, don't worry, it's a small macro
 	uint8_t type;
@@ -123,6 +123,10 @@ typedef struct cl_msg_field_s {
 } __attribute__((__packed__)) cl_msg_field;
 
 
+typedef struct map_args_t {
+    int    argc;
+    char **argv;
+} map_args_t;
  
 #define CL_MSG_OP_READ 1			// read the value in question
 #define CL_MSG_OP_WRITE 2			// write the value in question

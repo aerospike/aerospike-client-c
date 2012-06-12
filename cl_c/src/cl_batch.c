@@ -608,10 +608,11 @@ static cl_rv citrusleaf_sik_traversal(cl_cluster *asc, char *ns, const cf_digest
            "lmflen: %d lrflen: %d lfflen: %d\n",
            mrjid, lmflen, lrflen, lfflen);
 
-	cl_cluster_node **nodes = malloc(sizeof(cl_cluster_node *) * n_digests);
+	int	n_nodes = cf_vector_size(&asc->node_v);
+
+	cl_cluster_node **nodes = malloc(sizeof(cl_cluster_node *) * n_nodes);
 	if (!nodes) { fprintf(stderr, " allocation failed "); return(-1); }
 	
-	int	n_nodes = cf_vector_size(&asc->node_v);
     for (uint i = 0; i < n_nodes; i++) {
         nodes[i] = cf_vector_pointer_get(&asc->node_v, 0);
     }

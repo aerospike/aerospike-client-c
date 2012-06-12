@@ -259,7 +259,7 @@ static uint8_t *
 write_fields(uint8_t *buf, const char *ns, int ns_len, const char *set, int set_len, const cl_object *key, const cf_digest *d, cf_digest *d_ret, 
 	uint64_t trid, cl_scan_param_field *scan_param_field)
 {
-	printf("write_fields\n");
+	// printf("write_fields\n");
 	// lay out the fields
 	cl_msg_field *mf = (cl_msg_field *) buf;
 	cl_msg_field *mf_tmp = mf;
@@ -267,7 +267,7 @@ write_fields(uint8_t *buf, const char *ns, int ns_len, const char *set, int set_
 	if (ns) {
 		mf->type = CL_MSG_FIELD_TYPE_NAMESPACE;
 		mf->field_sz = ns_len + 1;
-printf("write_fields: ns: write_fields: %d\n", mf->field_sz);
+	// printf("write_fields: ns: write_fields: %d\n", mf->field_sz);
 		memcpy(mf->data, ns, ns_len);
 		mf_tmp = cl_msg_field_get_next(mf);
 		cl_msg_swap_field(mf);
@@ -277,7 +277,7 @@ printf("write_fields: ns: write_fields: %d\n", mf->field_sz);
 	if (set) {	
 		mf->type = CL_MSG_FIELD_TYPE_SET;
 		mf->field_sz = set_len + 1;
-printf("write_fields: set: write_fields: %d\n", mf->field_sz);
+		//printf("write_fields: set: write_fields: %d\n", mf->field_sz);
 		memcpy(mf->data, set, set_len);
 		mf_tmp = cl_msg_field_get_next(mf);
 		cl_msg_swap_field(mf);
@@ -289,7 +289,7 @@ printf("write_fields: set: write_fields: %d\n", mf->field_sz);
 		//Convert the transaction-id to network byte order (big-endian)
 		uint64_t trid_nbo = __cpu_to_be64(trid); //swaps in place
 		mf->field_sz = sizeof(trid_nbo) + 1;
-printf("write_fields: trid: write_fields: %d\n", mf->field_sz);
+		//printf("write_fields: trid: write_fields: %d\n", mf->field_sz);
 		memcpy(mf->data, &trid_nbo, sizeof(trid_nbo));
 		mf_tmp = cl_msg_field_get_next(mf);
 		cl_msg_swap_field(mf);
@@ -299,7 +299,7 @@ printf("write_fields: trid: write_fields: %d\n", mf->field_sz);
 	if (scan_param_field) {
 		mf->type = CL_MSG_FIELD_TYPE_SCAN_OPTIONS;
 		mf->field_sz = sizeof(cl_scan_param_field) + 1;
-printf("write_fields: scan: write_fields: %d\n", mf->field_sz);
+		//printf("write_fields: scan: write_fields: %d\n", mf->field_sz);
 		memcpy(mf->data, scan_param_field, sizeof(cl_scan_param_field));
 		mf_tmp = cl_msg_field_get_next(mf);
 		cl_msg_swap_field(mf);
@@ -375,7 +375,7 @@ printf("write_fields: scan: write_fields: %d\n", mf->field_sz);
 static uint8_t *
 write_fields_digests(uint8_t *buf, const char *ns, int ns_len, const cf_digest *digests, int n_digests)
 {
-	printf("write_fields_digests\n");
+	//printf("write_fields_digests\n");
 	// lay out the fields
 	cl_msg_field *mf = (cl_msg_field *) buf;
 	cl_msg_field *mf_tmp = mf;

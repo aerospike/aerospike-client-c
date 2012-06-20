@@ -154,7 +154,7 @@ typedef struct {
         cl_write_policy w_pol;
 } cl_write_parameters;
 
-typedef enum cl_operator_type { CL_OP_WRITE, CL_OP_READ, CL_OP_INCR, CL_OP_MC_INCR , CL_OP_PREPEND, CL_OP_APPEND, CL_OP_MC_PREPEND, CL_OP_MC_APPEND, CL_OP_TOUCH, CL_OP_MC_TOUCH} cl_operator;
+typedef enum cl_operator_type { CL_OP_WRITE, CL_OP_READ, CL_OP_ADD, CL_OP_MC_INCR , CL_OP_PREPEND, CL_OP_APPEND, CL_OP_MC_PREPEND, CL_OP_MC_APPEND, CL_OP_TOUCH, CL_OP_MC_TOUCH} cl_operator;
 
 typedef struct cl_operation_s {
         cl_bin                bin;

@@ -489,7 +489,6 @@ cf_create_nb_socket(struct sockaddr_in *sa, int timeout)
 {
 	int flags;
 
-    fd_set  rset;
     struct timeval  ts;
     
     ts.tv_sec = timeout;
@@ -502,22 +501,23 @@ cf_create_nb_socket(struct sockaddr_in *sa, int timeout)
 		return(-1);
 	}
 
-    // clear out descriptor sets for select
-    // add socket to the descriptor sets
-    FD_ZERO(&rset);
-    FD_SET(fd, &rset);
-    
     //set socket nonblocking flag
-    if( (flags = fcntl(fd, F_GETFL, 0)) < 0)
+    if( (flags = fcntl(fd, F_GETFL, 0)) < 0) {
+		close(fd);
         return -1;
+	}
     
-    if(fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0)
+    if(fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
+		close(fd);
         return -1;
+	}	
 
     //initiate non-blocking connect
 	if (0 != connect(fd, (struct sockaddr *) sa, sizeof( *sa ) ))
-        if (errno != EINPROGRESS)
+        if (errno != EINPROGRESS) {
+			close(fd);
             return -1;
+		}
 
 	return fd;
 }

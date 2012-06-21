@@ -1700,7 +1700,7 @@ void citrusleaf_shutdown(void) {
 	if (g_initialized == false)	return;
 
 	citrusleaf_cluster_shutdown();
-	citrusleaf_batch_shutdown();
+	// citrusleaf_batch_shutdown();
 	// citrusleaf_info_shutdown();
 
 	g_initialized = false;

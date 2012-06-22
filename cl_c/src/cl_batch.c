@@ -93,8 +93,11 @@ batch_decompress(uint8_t *in_buf, size_t in_sz, uint8_t **out_buf, size_t *out_s
 
 
 static uint8_t *write_fields_batch_digests(uint8_t *buf, char *ns, int ns_len, cf_digest *digests, cl_cluster_node **nodes, int n_digests, int n_my_digests, cl_cluster_node *my_node, char *mrjids, char *imatchs, map_args_t *margs, int marg_sz) {
-    printf("write_fields_batch_digests: ns: %p mrjid: %s imatch: %s margs: %p\n",
-           ns, mrjids, imatchs, margs);
+
+#ifdef SIK_DEBUG	
+    printf("write_fields_batch_digests: ns: %p mrjid: %s imatch: %s margs: %p\n", ns, mrjids, imatchs, margs);
+#endif
+
 	cl_msg_field *mf = (cl_msg_field *) buf;
 	cl_msg_field *mf_tmp = mf;
 	if (ns) {

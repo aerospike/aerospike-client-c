@@ -36,6 +36,9 @@
 extern "C" {
 #endif
 
+// TUNING PARAMETER FOR BATCH
+#define N_BATCH_THREADS 20
+
 
 // citrusleaf.c used by cl_batch
 int
@@ -62,6 +65,48 @@ typedef struct cl_async_work {
 } cl_async_work;
 
 int cl_del_node_asyncworkitems(void *key, void *value, void *clnode);
+
+typedef struct cl_batch_work {
+	
+	// these sections are the same for the same query
+	cl_cluster 	*asc; 
+    int          info1;
+	int          info2;
+	int          info3;
+	char 		*ns;
+	cf_digest 	*digests; 
+	cl_cluster_node **nodes;
+	int 		n_digests; 
+	bool 		get_key;
+	cl_bin 		*bins;         // Bins. If this is used, 'operation' should be null, and 'operator' should be the operation to be used on the bins
+	cl_operator     operator;      // Operator.  The single operator used on all the bins, if bins is non-null
+	cl_operation    *operations;   // Operations.  Set of operations (bins + operators).  Should be used if bins is not used.
+	int		n_ops;          // Number of operations (count of elements in 'bins' or count of elements in 'operations', depending on which is used. 
+	citrusleaf_get_many_cb cb; 
+	void *udata;
+
+	cf_queue *complete_q;
+	
+	// this is different for every work
+	cl_cluster_node *my_node;				
+	int				my_node_digest_count;
+	
+	int 			index; // debug only
+	
+    unsigned int  mrjid;
+    char         *lua_mapf;
+    int           lmflen;
+    char         *lua_rdcf;
+    int           lrflen;
+    char         *lua_fnzf;
+    int           lfflen;
+
+    int           imatch;
+    map_args_t   *margs;
+    int           reg_mrjid;
+} cl_batch_work;
+
+extern cf_queue		  		*g_batch_q;
 
 
 // scan fields

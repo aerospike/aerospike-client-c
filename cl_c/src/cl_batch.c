@@ -18,14 +18,12 @@
 #include <assert.h>
 #include <zlib.h>
 
-
 #include "citrusleaf/citrusleaf.h"
 #include "citrusleaf/cl_cluster.h"
 #include "citrusleaf/citrusleaf-internal.h"
 #include "citrusleaf/cf_atomic.h"
 #include "citrusleaf/proto.h"
 #include "citrusleaf/cf_socket.h"
-
 
 // Decompresses a compressed CL msg
 //The buffer passed in is the space *after* the header, just the compressed data
@@ -89,8 +87,6 @@ static uint8_t *write_fields_batch_digests(
                          int n_digests, int n_my_digests,
                          cl_cluster_node *my_node, char *mrjids,
                          char *imatchs, map_args_t *margs, int marg_sz) {
-    printf("write_fields_batch_dgsts: ns: %p mrjid: %s imatch: %s margs: %p\n",
-           ns, mrjids, imatchs, margs);
     cl_msg_field *mf = (cl_msg_field *) buf;
     cl_msg_field *mf_tmp = mf;
     if (ns) {
@@ -126,7 +122,6 @@ static uint8_t *write_fields_batch_digests(
     uint8_t *b = mf->data;
     for (int i = 0; i < n_digests; i++) {
         memcpy(b, &digests[i], sizeof(cf_digest));
-        //printf("B: %lu\n", *(uint64_t *)&digests[i]);
         b += sizeof(cf_digest);
     }
     mf_tmp = cl_msg_field_get_next(mf);
@@ -173,7 +168,9 @@ static uint8_t *write_fields_lua_func_register(
                                char *lua_mapf, int lmflen,
                                char *lua_rdcf, int lrflen,
                                char *lua_fnzf, int lfflen, int reg_mrjid) {
-    printf("write_fields_lua_func_register lua_mapf(%s) lua_rdcf,(%s) lua_fnzf(%s)\n reg_mrjid: %d", lua_mapf, lua_rdcf, lua_fnzf, reg_mrjid);
+    //printf("write_fields_lua_func_register lua_mapf(%s) lua_rdcf(%s)" 
+    //       " lua_fnzf(%s)\n reg_mrjid: %d",
+    //       lua_mapf, lua_rdcf, lua_fnzf, reg_mrjid);
     cl_msg_field *mf = (cl_msg_field *) buf;
     cl_msg_field *mf_tmp = mf;
     if (ns) {
@@ -217,8 +214,8 @@ static uint8_t *write_fields_lua_func_register(
 static uint8_t *write_fields_create_secondary_index(
                                uint8_t *buf, char *ns, int ns_len,
                                index_metadata_t *imd) {
-    printf("write_fields_create_secondary_index: iname: %s bname: %s\n",
-           imd->iname, imd->bname);
+    //printf("write_fields_create_secondary_index: iname: %s bname: %s\n",
+           //imd->iname, imd->bname);
     cl_msg_field *mf = (cl_msg_field *) buf;
     cl_msg_field *mf_tmp = mf;
     if (ns) {
@@ -241,7 +238,6 @@ static uint8_t *write_fields_create_secondary_index(
     memcpy(b, imd->type,    imd->tlen);       b += imd->tlen;
     memcpy(b, &imd->isuniq, sizeof(uint8_t)); b += sizeof(uint8_t);
     memcpy(b, &imd->istime, sizeof(uint8_t)); b += sizeof(uint8_t);
-printf("wrote: %d bytes\n", (int)(b - mf->data));
 
     mf_tmp = cl_msg_field_get_next(mf);
     cl_msg_swap_field(mf);
@@ -281,8 +277,6 @@ static int batch_compile(uint info1, uint info2, uint info3, char *ns,
         msg_sz += marg_sz;
     }
 
-printf("batch_compile: msg_sz: %lu ns_len: %d\n", msg_sz, ns_len);
-
     //DDL
     if (lmflen) {
         if (reg_mrjid == -1) {
@@ -302,9 +296,7 @@ printf("batch_compile: msg_sz: %lu ns_len: %d\n", msg_sz, ns_len);
         msg_sz +=             sizeof(uint8_t); // isuniq
         msg_sz +=             sizeof(uint8_t); // istime
         imd->msg_sz = (msg_sz - o_msg_sz);
-printf("msg_sz: %d imd.msg_sz: %d\n", msg_sz, imd->msg_sz);
     }
-
     if (n_my_digests) {
         msg_sz += sizeof(cl_msg_field) + 1 + (sizeof(cf_digest) * n_my_digests);
         for (int i = 0; i < n_values; i++) { // ops
@@ -322,8 +314,7 @@ printf("msg_sz: %d imd.msg_sz: %d\n", msg_sz, imd->msg_sz);
         return -1;
     }
 
-    uint8_t *buf;
-    uint8_t *mbuf = 0;
+    uint8_t *buf; uint8_t *mbuf = 0;
     if ((*buf_r) && (msg_sz > *buf_sz_r)) { // size too small? malloc!
         mbuf   = buf = malloc(msg_sz); if (!buf) return(-1);
         *buf_r = buf;
@@ -365,8 +356,8 @@ printf("msg_sz: %d imd.msg_sz: %d\n", msg_sz, imd->msg_sz);
     // now the fields
     if (n_my_digests) {
         buf = write_fields_batch_digests(buf, ns, ns_len, digests, nodes,
-                                        n_digests, n_my_digests, my_node,
-                                        mrjids, imatchs, margs, marg_sz);
+                                         n_digests, n_my_digests, my_node,
+                                         mrjids, imatchs, margs, marg_sz);
     } else if (lmflen) {
         buf = write_fields_lua_func_register(buf, ns, ns_len,
                                              lua_mapf, lmflen,
@@ -503,13 +494,21 @@ static int do_batch_monte(cl_cluster *asc, int info1, int info2, int info3,
             cl_msg_swap_header(msg);
             buf += sizeof(cl_msg);
             
-//ALCHEMY RUSS HACK
+            //ALCHEMY RUSS HACK
             if (msg->result_code >= HACK_MAX_RESULT_CODE && cb) {
+                // BBFIX:::
+                // We need to return the msg's result code properly
+                //  - we're not doing that here.
+#if 1
+                fprintf(stderr, "want to return a result code, haven't " \
+                                "implemented how and where to do it yet\n");
+#endif				
+
                 (*cb) (NULL/*ns*/, NULL/*keyd*/, NULL/*set*/, 0/*gen*/,
                        0/*rec_ttl*/, NULL/*bins*/, 1/*n_bins*/, true/*islast*/,
                        (void *)(long)msg->result_code);
                 done = true;
-                rv = 0;
+                rv   = 0;
             }
 
             if (msg->header_sz != sizeof(cl_msg)) {
@@ -633,16 +632,9 @@ Final:
     return(rv);
 }
 
-static cf_atomic32 batch_initialized = 0;
-
-#define N_BATCH_THREADS 6
-static cf_queue *g_batch_q = 0;
-static pthread_t g_batch_th[N_BATCH_THREADS];
-
-
-//
-// These externally visible functions are exposed through citrusleaf.h
-//
+static cf_atomic32  batch_initialized = 0;
+cf_queue           *g_batch_q         = 0;
+static pthread_t    g_batch_th[N_BATCH_THREADS];
 
 typedef struct {
     // these sections are the same for the same query
@@ -836,20 +828,15 @@ cl_rv citrusleaf_run_mr_sik_digest(cl_cluster *asc, char *ns,
                                     imatch, margs, -1, NULL);
 }
 
+#define MAX_NODES 64
 
-
-#define MAX_NODES 32
-
-static cl_rv
-do_get_exists_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_bin *bins, int n_bins, bool get_key, bool get_bin_data, citrusleaf_get_many_cb cb, void *udata)
-{
+static cl_rv do_get_exists_many_digest(
+                 cl_cluster *asc, char *ns, const cf_digest *digests,
+                 int n_digests, cl_bin *bins, int n_bins, bool get_key,
+                 bool get_bin_data, citrusleaf_get_many_cb cb, void *udata) {
     // fast path: if there's only one node, or the number of digests is super short, just dispatch to the server directly
-
     // TODO FAST PATH
-
-    //
     // allocate the digest-node array, and populate it
-    // 
     cl_cluster_node **nodes = malloc( sizeof(cl_cluster_node *)  * n_digests);
     if (!nodes) {
         fprintf(stderr, " allocation failed ");
@@ -947,26 +934,17 @@ do_get_exists_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, i
         cl_cluster_node_put(nodes[i]);    
     }
     free(nodes);
-    if (retval != 0) {
-        return( CITRUSLEAF_FAIL_CLIENT );
-    } 
-    else {
-        return ( 0 );
-    }
-
+    if (retval != 0) return( CITRUSLEAF_FAIL_CLIENT );
+    else             return ( 0 );
 }
 
-cl_rv
-citrusleaf_get_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_bin *bins, int n_bins, bool get_key, citrusleaf_get_many_cb cb, void *udata)
-{
+cl_rv citrusleaf_get_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_bin *bins, int n_bins, bool get_key, citrusleaf_get_many_cb cb, void *udata) {
     //printf("IN citrusleaf_get_many_digest\n");
     return do_get_exists_many_digest(asc, ns, digests, n_digests, bins, n_bins, get_key, true, cb, udata);
 }
 
 
-cl_rv
-citrusleaf_exists_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_bin *bins, int n_bins, bool get_key, citrusleaf_get_many_cb cb, void *udata)
-{
+cl_rv citrusleaf_exists_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_bin *bins, int n_bins, bool get_key, citrusleaf_get_many_cb cb, void *udata) {
     return do_get_exists_many_digest(asc, ns, digests, n_digests, bins, n_bins, get_key, false, cb, udata);
 }
 
@@ -974,10 +952,7 @@ citrusleaf_exists_many_digest(cl_cluster *asc, char *ns, const cf_digest *digest
 //
 // Initializes the shared thread pool and whatever queues
 //
-
-int
-citrusleaf_batch_init()
-{
+int citrusleaf_batch_init() {
     if (1 == cf_atomic32_incr(&batch_initialized)) {
 
         // create dispatch queue
@@ -988,7 +963,6 @@ citrusleaf_batch_init()
             pthread_create(&g_batch_th[i], 0, batch_worker_fn, 0);
 
     }
-    
     return(0);    
 }
 
@@ -1005,10 +979,10 @@ citrusleaf_batch_init()
 * thread thereafter.
 */
 void citrusleaf_batch_shutdown() {
-
         int i;
-        digest_work work;
-        memset(&work,0,sizeof(digest_work));
+        cl_batch_work work;
+        // all zero message is a death message
+        memset(&work,0,sizeof(cl_batch_work));
         for(i=0;i<N_BATCH_THREADS;i++) {
                 cf_queue_push(g_batch_q,&work);
         }
@@ -1016,4 +990,3 @@ void citrusleaf_batch_shutdown() {
                 pthread_join(g_batch_th[i],NULL);
         }
 }
-

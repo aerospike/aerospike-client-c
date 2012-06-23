@@ -92,7 +92,11 @@ batch_decompress(uint8_t *in_buf, size_t in_sz, uint8_t **out_buf, size_t *out_s
 }
 
 
-static uint8_t *write_fields_batch_digests(uint8_t *buf, char *ns, int ns_len, cf_digest *digests, cl_cluster_node **nodes, int n_digests, int n_my_digests, cl_cluster_node *my_node, char *mrjids, char *imatchs, map_args_t *margs, int marg_sz) {
+static uint8_t *
+write_fields_batch_digests(uint8_t *buf, char *ns, int ns_len, cf_digest *digests, 
+	cl_cluster_node **nodes, int n_digests, int n_my_digests, cl_cluster_node *my_node, 
+	char *mrjids, char *imatchs, map_args_t *margs, int marg_sz) 
+{
 
 #ifdef SIK_DEBUG	
     printf("write_fields_batch_digests: ns: %p mrjid: %s imatch: %s margs: %p\n", ns, mrjids, imatchs, margs);
@@ -240,7 +244,13 @@ static uint8_t *write_fields_lua_func_register(
 
 
 
-static int batch_compile(uint info1, uint info2, uint info3, char *ns, cf_digest *digests, cl_cluster_node **nodes, int n_digests, cl_cluster_node *my_node, int n_my_digests, cl_bin *values, cl_operator operator, cl_operation *operations, int n_values,  uint8_t **buf_r, size_t *buf_sz_r, const cl_write_parameters *cl_w_p, char *lua_mapf, int lmflen, char *lua_rdcf, int lrflen, char *lua_fnzf, int lfflen, int mrjid, int imatch, map_args_t *margs, int reg_mrjid) {
+static int 
+batch_compile(uint info1, uint info2, uint info3, char *ns, cf_digest *digests, cl_cluster_node **nodes, 
+	int n_digests, cl_cluster_node *my_node, int n_my_digests, 
+	cl_bin *values, cl_operator operator, cl_operation *operations, int n_values,  
+	uint8_t **buf_r, size_t *buf_sz_r, const cl_write_parameters *cl_w_p, 
+	char *lua_mapf, int lmflen, char *lua_rdcf, int lrflen, char *lua_fnzf, int lfflen, int mrjid, 
+	int imatch, map_args_t *margs, int reg_mrjid) {
 #ifdef SIK_DEBUG 
     printf("batch_compile: n_values: %d\n", n_values);
 #endif
@@ -379,9 +389,13 @@ printf("n_fields: %d\n", n_fields);
 
 #define HACK_MAX_RESULT_CODE 100
 
-static int do_batch_monte(cl_cluster *asc, int info1, int info2, int info3, char *ns, cf_digest *digests, cl_cluster_node **nodes, int n_digests, cl_bin *bins, 
-	cl_operator operator, cl_operation *operations, int n_ops, cl_cluster_node *node, int n_node_digests, citrusleaf_get_many_cb cb, void *udata, 
-	char *lua_mapf, int lmflen, char *lua_rdcf, int lrflen, char *lua_fnzf, int lfflen, int mrjid, int imatch, map_args_t *margs, int reg_mrjid) {
+static int 
+do_batch_monte(cl_cluster *asc, int info1, int info2, int info3, char *ns, cf_digest *digests, cl_cluster_node **nodes, int n_digests, 
+	cl_bin *bins, 	cl_operator operator, cl_operation *operations, int n_ops, 
+	cl_cluster_node *node, int n_node_digests, 	citrusleaf_get_many_cb cb, void *udata, 
+	char *lua_mapf, int lmflen, char *lua_rdcf, int lrflen, char *lua_fnzf, int lfflen, int mrjid, 
+	int imatch, map_args_t *margs, int reg_mrjid) 
+{
 
 #ifdef SIK_DEBUG 
 	printf("do_batch_monte: n_digests: %d n_node_digests: %d\n", n_digests, n_node_digests);
@@ -486,7 +500,7 @@ static int do_batch_monte(cl_cluster *asc, int info1, int info2, int info3, char
 				// We need to return the msg's result code properly - we're not doing that here.
 //#ifdef SIK_DEBUG
 #if 1
-				fprintf(stderr, "want to return a result code, haven't implemented how and where to do it yet\n");
+				fprintf(stderr, "want to return a result code, %d, haven't implemented how and where to do it yet\n",msg->result_code);
 #endif				
 				(*cb) (NULL/*ns*/, NULL/*keyd*/, NULL/*set*/, 0/*gen*/, 0/*rec_ttl*/, NULL/*bins*/, 1/*n_bins*/, true/*islast*/, udata);
 				done = true;

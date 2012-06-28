@@ -163,7 +163,7 @@ op = cl.cl_op_arr(n_ops)
 #One operation of incrementing an integer bin
 cl_op = op[0]
 cl_op.bin.bin_name = "bin3"
-cl_op.op = cl.CL_OP_ADD
+cl_op.op = cl.CL_OP_INCR
 cl.citrusleaf_object_init_int(cl_op.bin.object, -4)
 op[0] = cl_op
 

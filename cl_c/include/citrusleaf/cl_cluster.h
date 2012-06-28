@@ -77,6 +77,7 @@ struct cl_cluster_s {
 	cf_ll_element		ll_e;
 	
 	bool		follow;   // possible to create a no-follow cluster
+	bool		nbconnect;	
 						  // mostly for testing
 						  // that only targets specific nodes
 						  
@@ -117,7 +118,7 @@ extern void cl_cluster_node_release(cl_cluster_node *cn);
 extern void cl_cluster_node_put(cl_cluster_node *cn);          // put node back
 extern void cl_cluster_node_dun(cl_cluster_node *cn, int32_t score);			// node is less healthy!
 extern void cl_cluster_node_ok(cl_cluster_node *cn);
-extern int cl_cluster_node_fd_get(cl_cluster_node *cn, bool asyncfd);			// get an FD to the node
+extern int cl_cluster_node_fd_get(cl_cluster_node *cn, bool asyncfd, bool nbconnect);	// get an FD to the node
 extern void cl_cluster_node_fd_put(cl_cluster_node *cn, int fd, bool asyncfd); 		// put the FD back
 extern int citrusleaf_cluster_init();
 extern cl_cluster_node *cl_cluster_node_get_byname(cl_cluster *asc, char *name);

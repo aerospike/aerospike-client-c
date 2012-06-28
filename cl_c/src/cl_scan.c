@@ -83,7 +83,7 @@ printf("2: do_scan_monte\n");
 #endif			
 		return(-1);
 	}
-	fd = cl_cluster_node_fd_get(node, false);
+	fd = cl_cluster_node_fd_get(node, false, asc->nbconnect);
 printf("3: do_scan_monte\n");
 	if (fd == -1) {
 #ifdef DEBUG			

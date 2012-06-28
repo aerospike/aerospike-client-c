@@ -104,7 +104,7 @@ typedef struct cl_object_s {
 } cl_object;
 
 
-typedef enum cl_operator_type { CL_OP_WRITE, CL_OP_READ, CL_OP_ADD, CL_OP_MC_INCR , CL_OP_PREPEND, CL_OP_APPEND, CL_OP_MC_PREPEND, CL_OP_MC_APPEND, CL_OP_TOUCH, CL_OP_MC_TOUCH} cl_operator;
+typedef enum cl_operator_type { CL_OP_WRITE, CL_OP_READ, CL_OP_INCR, CL_OP_MC_INCR , CL_OP_PREPEND, CL_OP_APPEND, CL_OP_MC_PREPEND, CL_OP_MC_APPEND, CL_OP_TOUCH, CL_OP_MC_TOUCH} cl_operator;
 
 // A bin is the bin name, and the value set or gotten
 
@@ -222,6 +222,7 @@ extern void citrusleaf_cluster_shutdown(void);
 extern cl_cluster * citrusleaf_cluster_get_or_create(char *host, short port, int timeout_ms);
 extern void citrusleaf_cluster_release_or_destroy(cl_cluster **asc);
 extern void citrusleaf_cluster_change_tend_speed(struct cl_cluster_s *asc, int secs);
+extern void citrusleaf_cluster_use_nbconnect(struct cl_cluster_s *asc);
 
 // the timeout is how long to wait before the cluster is "settled"
 // 0 - a sensible default

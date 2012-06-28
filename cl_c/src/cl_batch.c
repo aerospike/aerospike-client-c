@@ -418,7 +418,7 @@ static int do_batch_monte(cl_cluster *asc, int info1, int info2, int info3,
         return (rv);
     }
 
-    int fd = cl_cluster_node_fd_get(node, false);
+    int fd = cl_cluster_node_fd_get(node, false, asc->nbconnect);
     if (fd == -1) { return(-1); }
     
     // send it to the cluster - non blocking socket, but we're blocking

@@ -559,7 +559,7 @@ cl_value_to_op(cl_bin *v, cl_operator operator, cl_operation *operation, cl_msg_
 		case CL_OP_READ:
 			op->op = CL_MSG_OP_READ;
 			break;
-		case CL_OP_ADD:
+		case CL_OP_INCR:
 			op->op = CL_MSG_OP_INCR;
 			break;
 		case CL_OP_MC_INCR:
@@ -1161,7 +1161,7 @@ do_the_full_monte(cl_cluster *asc, int info1, int info2, int info3, const char *
 			usleep(10000);
 			goto Retry;
 		}
-		fd = cl_cluster_node_fd_get(node, false);
+		fd = cl_cluster_node_fd_get(node, false, asc->nbconnect);
 		if (fd == -1) {
 #ifdef DEBUG			
 			fprintf(stderr, "warning: node %s has no file descriptors, retrying transaction (tid %zu)\n",node->name,(uint64_t)pthread_self() );
@@ -1651,6 +1651,7 @@ citrusleaf_operate(cl_cluster *asc, const char *ns, const char *set, const cl_ob
 		switch (operations[i].op) {
 		case CL_OP_WRITE:
 		case CL_OP_MC_INCR:
+		case CL_OP_INCR:
 		case CL_OP_APPEND:
 		case CL_OP_PREPEND:
 		case CL_OP_MC_APPEND:

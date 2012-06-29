@@ -328,6 +328,8 @@ write_fields(uint8_t *buf, const char *ns, int ns_len, const char *set, int set_
 			case CL_PYTHON_BLOB:
 			case CL_RUBY_BLOB:
 			case CL_PHP_BLOB:
+			case CL_LUA_BLOB:
+			case CL_JSON_BLOB:
 				fd[0] = key->type;
 				mf->field_sz = key->sz + 2;
 				memcpy(&fd[1], key->u.blob, key->sz);
@@ -518,6 +520,8 @@ cl_value_to_op_get_size(cl_bin *v, size_t *sz)
 		case CL_CSHARP_BLOB:
 		case CL_BLOB:
 		case CL_PHP_BLOB:
+		case CL_LUA_BLOB:
+		case CL_JSON_BLOB:
 			*sz += v->object.sz;
 			break;
 		default:
@@ -606,6 +610,8 @@ cl_value_to_op(cl_bin *v, cl_operator operator, cl_operation *operation, cl_msg_
 		case CL_PYTHON_BLOB:
 		case CL_RUBY_BLOB:
 		case CL_PHP_BLOB:
+		case CL_LUA_BLOB:
+		case CL_JSON_BLOB:
 			if (op->op == CL_MSG_OP_MC_INCR) {
 				op->op_sz += value_to_op_two_ints(tmpValue->object.u.blob, data);
 			} else {
@@ -867,6 +873,8 @@ set_object(cl_msg_op *op, cl_object *obj)
 		case CL_PYTHON_BLOB:
 		case CL_RUBY_BLOB:
 		case CL_PHP_BLOB:
+		case CL_LUA_BLOB:
+		case CL_JSON_BLOB:
 			obj->sz = cl_msg_op_get_value_sz(op);
 			obj->free = obj->u.blob = malloc(obj->sz);
 			if (obj->free == 0)	return(-1);
@@ -1614,6 +1622,8 @@ citrusleaf_calculate_digest(const char *set, const cl_object *key, cf_digest *di
 		case CL_PYTHON_BLOB:
 		case CL_RUBY_BLOB:
 		case CL_PHP_BLOB:
+		case CL_LUA_BLOB:
+		case CL_JSON_BLOB:
 			k[0] = key->type;
 			memcpy(&k[1], key->u.blob, key->sz);
 			break;

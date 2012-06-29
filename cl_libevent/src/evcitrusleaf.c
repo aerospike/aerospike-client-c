@@ -344,6 +344,9 @@ evcitrusleaf_calculate_digest(const char *set, const evcitrusleaf_object *key, c
 		case CL_CSHARP_BLOB:
 		case CL_PYTHON_BLOB:
 		case CL_RUBY_BLOB:
+		case CL_ERLANG_BLOB:
+		case CL_LUA_BLOB:
+		case CL_JSON_BLOB:
 			k[0] = key->type;
 			memcpy(&k[1], key->u.blob, key->size);
 			break;
@@ -433,6 +436,9 @@ value_to_op_get_size(evcitrusleaf_object *v, size_t *sz)
 		case CL_JAVA_BLOB:
 		case CL_CSHARP_BLOB:
 		case CL_BLOB:
+		case CL_ERLANG_BLOB:
+		case CL_LUA_BLOB:
+		case CL_JSON_BLOB:
 			*sz += v->size;
 			break;
 		default:

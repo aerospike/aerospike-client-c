@@ -503,10 +503,26 @@ cl_rv citrusleaf_register_lua_function(cl_cluster *asc, char *ns,
                                        citrusleaf_get_many_cb cb,
                                        char *lua_mapf, char *lua_rdcf,
                                        char *lua_fnzf, int reg_mrjid);
+// To Be obsoleted                                       
 struct index_metadata_t;
 cl_rv citrusleaf_create_secondary_index(cl_cluster *asc, char *ns,
                                         citrusleaf_get_many_cb cb,
                                         struct index_metadata_t *imd);
+
+#define MAX_SINDEX_NAME_SIZE	128
+typedef struct sindex_metadata_t {
+	char	iname[MAX_SINDEX_NAME_SIZE];
+    char    binname[32];
+    char    type[32];
+    uint8_t   isuniq;
+    uint8_t   istime;
+} sindex_metadata_t;
+
+
+cl_rv citrusleaf_secondary_index_create(cl_cluster *asc, const char *ns, const char *set, struct sindex_metadata_t *simd);
+cl_rv citrusleaf_secondary_index_delete(cl_cluster *asc, const char *ns, const char *set, const char *indexname);
+
+
 // RANGE QUERIES
 cl_rv citrusleaf_get_sik_digest(cl_cluster *asc, char *ns,
                                 const cf_digest *digests, int n_digests,

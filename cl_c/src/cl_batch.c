@@ -244,7 +244,8 @@ batch_compile(uint info1, uint info2, char *ns, cf_digest *digests, cl_cluster_n
 //
 
 static int
-do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *digests, cl_cluster_node **nodes, int n_digests, cl_bin *bins, cl_operator operator, cl_operation *operations, int n_ops,
+do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *digests, cl_cluster_node **nodes, 
+	int n_digests, cl_bin *bins, cl_operator operator, cl_operation *operations, int n_ops,
 	cl_cluster_node *node, int n_node_digests, citrusleaf_get_many_cb cb, void *udata)
 {
 	int rv = -1;
@@ -689,6 +690,72 @@ citrusleaf_get_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, 
 	return do_get_exists_many_digest(asc, ns, digests, n_digests, bins, n_bins, get_key, true, cb, udata);
 }
 
+//This is an internal batch helper function which will collect all the records and put it in an array.
+int direct_batchget_cb(char *ns, cf_digest *keyd, char *set, uint32_t generation,
+			uint32_t record_voidtime, cl_bin *bins, int n_bins, bool islast, void *udata)
+{
+	cl_batchresult *br = (cl_batchresult *)udata;
+
+	//Set all the interesting fields into the result structure
+	int slot = br->numrecs;
+	memcpy(&(br->records[slot].digest), keyd, sizeof(cf_digest));
+	br->records[slot].generation = generation;
+	br->records[slot].record_voidtime = record_voidtime;
+	citrusleaf_copy_bins(&(br->records[slot].bins), bins, n_bins);
+	br->records[slot].n_bins = n_bins;
+	br->numrecs++;
+
+	//We are supposed to free the bins in the callback
+	citrusleaf_bins_free(bins,n_bins);
+}
+
+void
+citrusleaf_free_batchresult(cl_batchresult *br)
+{
+	if (br && br->records) {
+		//We should free the bins in each of the records
+		for (int i=0; i<(br->numrecs); i++) {
+			citrusleaf_bins_free(br->records[i].bins, br->records[i].n_bins);
+			free(br->records[i].bins);
+		}
+
+		//Finally free the record array and the whole structure
+		free(br->records);
+		free(br);
+	}
+}
+
+cl_rv
+citrusleaf_get_many_digest_direct(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_batchresult **br)
+{
+	//Fist allocate the result structure
+	cl_batchresult *localbr = (cl_batchresult *) malloc(sizeof(struct cl_batchresult));
+	if (localbr == NULL) {
+		return CITRUSLEAF_FAIL_CLIENT;
+	} else {
+		//Assume that we are going to get all the records and allocate memory for them
+		localbr->records = malloc(sizeof(struct cl_rec) * n_digests);
+		if (localbr->records == NULL) {
+			free(localbr);
+			return CITRUSLEAF_FAIL_CLIENT;
+		}
+	}
+	
+	//Call the actual batch-get with our internal callback function which will store the results in an array
+	localbr->numrecs = 0;
+	cl_rv rv = citrusleaf_get_many_digest(asc, ns, digests, n_digests, 0, 0, true, &direct_batchget_cb, localbr);
+
+	//If something goes wrong we are responsible for freeing up the allocated memory. The caller may not free it.
+	if (rv == CITRUSLEAF_FAIL_CLIENT) {
+		citrusleaf_free_batchresult(localbr);
+		return CITRUSLEAF_FAIL_CLIENT;
+	} else {
+		*br = localbr;
+	}
+
+	return CITRUSLEAF_OK;
+	
+}
 
 cl_rv
 citrusleaf_exists_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_bin *bins, int n_bins, bool get_key, citrusleaf_get_many_cb cb, void *udata)

@@ -137,17 +137,87 @@ void citrusleaf_object_init_null(cl_object *o)
 }
 
 
-void citrusleaf_object_free(cl_object *o) {
+void citrusleaf_object_free(cl_object *o) 
+{
 	if (o->free){	
 		free(o->free);
 		o->free = NULL;
 	}
 }
 
-void citrusleaf_bins_free(cl_bin *bins, int n_bins) {
+void citrusleaf_bins_free(cl_bin *bins, int n_bins)
+{
 	for (int i=0;i<n_bins;i++) {
 		if (bins[i].object.free) free(bins[i].object.free);
 	}
+}
+
+int citrusleaf_copy_object(cl_object *destobj, cl_object *srcobj)
+{
+	destobj->type = srcobj->type;
+	destobj->sz = srcobj->sz;
+	destobj->free = 0; //By default assume that there is nothing to free
+
+	//Each of the types of bins needs a different treatment in copying.
+	switch(srcobj->type) {
+		case CL_NULL:
+			break;
+		case CL_INT:
+			destobj->u.i64 = srcobj->u.i64;
+			break;
+		case CL_STR:
+			//dont know why this sz+1, this is how set_object() does.
+			destobj->free = destobj->u.str = malloc(destobj->sz+1);
+			if (destobj->free == NULL) {
+				return -1;
+			}
+			memcpy(destobj->u.str, srcobj->u.str, destobj->sz);
+			break;
+		case CL_BLOB:
+		case CL_DIGEST:
+		case CL_JAVA_BLOB:
+		case CL_CSHARP_BLOB:
+		case CL_PYTHON_BLOB:
+		case CL_RUBY_BLOB:
+		case CL_PHP_BLOB:
+			destobj->free = destobj->u.blob = malloc(destobj->sz);
+			if (destobj->free == NULL) {
+				return -1;
+			}
+			memcpy(destobj->u.blob, srcobj->u.blob, destobj->sz);
+			break;
+		default:
+			fprintf(stderr, "Encountered an unknown bin type %d", srcobj->type);
+			return -1;
+			break;
+	}
+
+	return 0;
+}
+
+int citrusleaf_copy_bin(cl_bin *destbin, cl_bin *srcbin)
+{
+	strcpy(destbin->bin_name, srcbin->bin_name);
+	int rv = citrusleaf_copy_object(&(destbin->object), &(srcbin->object));
+	if (rv == -1) {
+		return -1;
+	}
+}
+
+int citrusleaf_copy_bins(cl_bin **destbins, cl_bin *srcbins, int n_bins)
+{
+	int rv;
+
+	*destbins = malloc(sizeof(struct cl_bin_s) * n_bins);
+	for (int i=0; i<n_bins; i++) {
+		rv = citrusleaf_copy_bin(destbins[i], &srcbins[i]);
+		if (rv == -1) {
+			free(destbins);
+			return -1;
+		}
+	}
+
+	return 0;
 }
 
 //

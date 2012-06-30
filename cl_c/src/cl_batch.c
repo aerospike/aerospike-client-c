@@ -25,6 +25,8 @@
 #include "citrusleaf/proto.h"
 #include "citrusleaf/cf_socket.h"
 
+extern int g_init_pid;
+
 
 //
 // Decompresses a compressed CL msg
@@ -500,7 +502,7 @@ Final:
 	return(rv);
 }
 
-static cf_atomic32 batch_initialized = 0;
+cf_atomic32 batch_initialized = 0;
 
 #define N_BATCH_THREADS 6
 static cf_queue *g_batch_q = 0;
@@ -734,12 +736,22 @@ void citrusleaf_batch_shutdown() {
 
         int i;
         digest_work work;
-        memset(&work,0,sizeof(digest_work));
-        for(i=0;i<N_BATCH_THREADS;i++) {
-                cf_queue_push(g_batch_q,&work);
-        }
-        for(i=0;i<N_BATCH_THREADS;i++) {
-                pthread_join(g_batch_th[i],NULL);
-        }
+
+	/* 
+	 * If a process is forked, the threads in it do not get spawned in the child process.
+	 * In citrusleaf_init(), we are remembering the processid(g_init_pid) of the process who spawned the 
+	 * background threads. If the current process is not the process who spawned the background threads
+	 * then it cannot call pthread_join() on the threads which does not exist in this process.
+	 */
+	if(g_init_pid == getpid()) {
+       		memset(&work,0,sizeof(digest_work));
+        	for(i=0;i<N_BATCH_THREADS;i++) {
+                	cf_queue_push(g_batch_q,&work);
+        	}
+
+       		for(i=0;i<N_BATCH_THREADS;i++) {
+               		pthread_join(g_batch_th[i],NULL);
+       		}
+	}
 }
 

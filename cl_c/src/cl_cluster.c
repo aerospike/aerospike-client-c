@@ -43,9 +43,10 @@ static inline void print_ms(char *pre)
 	fprintf(stderr,"%s %"PRIu64"\n",pre,cf_getms());
 }
 
-static int g_clust_initialized = 0;
+int g_clust_initialized = 0;
 static int g_clust_tend_speed = 1;
 extern int g_cl_turn_debug_on;
+extern int g_init_pid;
 
 //
 // Debug function. Should be elsewhere.
@@ -305,23 +306,33 @@ citrusleaf_cluster_release_or_destroy(cl_cluster **asc) {
 	pthread_mutex_unlock(&(*asc)->LOCK);
 }
 
+
 void
 citrusleaf_cluster_shutdown(void)
 {
-  // this one use has to be threadsafe, because two simultaneous shutdowns???
-  cf_ll_element *e;
-  // pthread_mutex_lock(&cluster_ll_LOCK);
-  while ((e = cf_ll_get_head(&cluster_ll))) {
-    cl_cluster *asc = (cl_cluster *)e; 
-    citrusleaf_cluster_destroy(asc); // safe?
-  }
- 
-  /* Cancel tender thread */	
-  pthread_cancel(tender_thr);
-  pthread_join(tender_thr,NULL);
+	// this one use has to be threadsafe, because two simultaneous shutdowns???
+	cf_ll_element *e;
+	// pthread_mutex_lock(&cluster_ll_LOCK);
+	while ((e = cf_ll_get_head(&cluster_ll))) {
+		cl_cluster *asc = (cl_cluster *)e; 
+		citrusleaf_cluster_destroy(asc); // safe?
+	}
 
-  // pthread_mutex_unlock(&cluster_ll_LOCK);
- }
+	/* Cancel tender thread */	
+	pthread_cancel(tender_thr);
+
+	/* 
+	 * If a process is forked, the threads in it do not get spawned in the child process.
+	 * In citrusleaf_init(), we are remembering the processid(g_init_pid) of the process who spawned the 
+	 * background threads. If the current process is not the process who spawned the background threads
+	 * then it cannot call pthread_join() on the threads which does not exist in this process.
+	 */
+	if(g_init_pid == getpid()) {
+		pthread_join(tender_thr,NULL);
+	}
+
+	// pthread_mutex_unlock(&cluster_ll_LOCK);
+}
 
 cl_rv
 citrusleaf_cluster_add_host(cl_cluster *asc, char const *host_in, short port, int timeout_ms)

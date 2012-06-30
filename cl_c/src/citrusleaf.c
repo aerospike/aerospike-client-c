@@ -45,6 +45,9 @@
 
 static bool g_initialized = false;
 int g_cl_turn_debug_on = false;
+int g_init_pid;
+extern cf_atomic32 batch_initialized;
+extern int g_clust_initialized;
 
 
 // #define DEBUG_HISTOGRAM 1 // histogram printed in citrusleaf_print_stats()
@@ -1107,6 +1110,7 @@ cl_parse(cl_msg *msg, uint8_t *buf, size_t buf_len, cl_bin **values_r, cl_operat
 	return(0);
 }
 
+
 //
 // Omnibus (!beep!! !beep!!) internal function that the externals can map to
 // If you don't want any values back, pass the values and n_values pointers as null
@@ -1151,7 +1155,19 @@ do_the_full_monte(cl_cluster *asc, int info1, int info2, int info3, const char *
 //	}else if( *operations ){
 //		dump_values(null, *operations, *n_values);
 //	}	
-	// 
+	 
+	/* 
+	 * Check if the current process is the one which spawned the background threads (tend,batch).
+	 * If it is not, it means that this process is a forked child process. The threads would not
+	 * be running in this case. So, spawn the background threads and remember that this process
+	 * has started the threads.
+	 */
+	if(g_init_pid != getpid()) {
+		cf_atomic32_set(&batch_initialized,0);
+		g_clust_initialized = 0;
+		citrusleaf_init();
+	}
+
 	cf_digest d_ret;	
 	if (n_values && ( values || operations) ){
 		if (cl_compile(info1, info2, info3, ns, set, key, digest, values?*values:NULL, operator, operations?*operations:NULL,
@@ -1750,6 +1766,9 @@ void citrusleaf_set_debug(bool debug_flag)
 
 int citrusleaf_init() 
 {
+	// remember the process id which is spawning the background threads.
+	// only this process can call a pthread_join() on the threads that it spawned.
+	g_init_pid = getpid();
 
  	citrusleaf_batch_init();
 
@@ -1770,7 +1789,7 @@ void citrusleaf_shutdown(void) {
 	if (g_initialized == false)	return;
 
 	citrusleaf_cluster_shutdown();
-	// citrusleaf_batch_shutdown();
+	citrusleaf_batch_shutdown();
 	// citrusleaf_info_shutdown();
 
 	g_initialized = false;

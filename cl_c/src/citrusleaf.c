@@ -533,6 +533,38 @@ cl_value_to_op_get_size(cl_bin *v, size_t *sz)
 	return(0);
 }
 
+// TODO to be consolidated w/ cl_value_to_op_get_size
+int
+cl_object_get_size(cl_object *obj, size_t *sz)
+{
+	switch(obj->type) {
+		case CL_NULL:
+			break;
+		case CL_INT:
+			*sz += value_to_op_int_sz(obj->u.i64);
+			break;
+		case CL_STR:
+			*sz += obj->sz;
+			break;
+		case CL_PYTHON_BLOB:
+		case CL_RUBY_BLOB:
+		case CL_JAVA_BLOB:
+		case CL_CSHARP_BLOB:
+		case CL_BLOB:
+		case CL_PHP_BLOB:
+		case CL_LUA_BLOB:
+		case CL_JSON_BLOB:
+			*sz += obj->sz;
+			break;
+		default:
+//#ifdef DEBUG			
+			fprintf(stderr, "internal error value_to_op get size has unknown value type %d\n",obj->type);
+//#endif			
+			return(-1);
+	}
+	return(0);
+}
+
 // Lay an C structure bin into network order operation
 
 int
@@ -628,6 +660,39 @@ cl_value_to_op(cl_bin *v, cl_operator operator, cl_operation *operation, cl_msg_
 	return(0);
 }
 
+int
+cl_object_to_buf (cl_object *obj, uint8_t *data)
+{
+	int sz = 0;
+	switch(obj->type) {
+		case CL_NULL:
+			break;
+		case CL_INT:
+			sz += value_to_op_int(obj->u.i64, data);
+			break;
+		case CL_STR:
+			sz += obj->sz;
+			memcpy(data, obj->u.str, obj->sz);
+			break;
+		case CL_BLOB:
+		case CL_JAVA_BLOB:
+		case CL_CSHARP_BLOB:
+		case CL_PYTHON_BLOB:
+		case CL_RUBY_BLOB:
+		case CL_PHP_BLOB:
+		case CL_LUA_BLOB:
+		case CL_JSON_BLOB:
+			sz += obj->sz;
+			memcpy(data, obj->u.blob, obj->sz);
+			break;
+		default:
+#ifdef DEBUG				
+			fprintf(stderr, "internal error value_to_op has unknown value type %d\n",obj->type);
+#endif				
+			return(-1);
+	}
+	return(0);
+}
 //
 // n_values can be passed in 0, and then values is undefined / probably 0.
 //
@@ -1698,7 +1763,7 @@ int citrusleaf_init()
 {
 
  	citrusleaf_batch_init();
-
+	citrusleaf_query_init();
 	citrusleaf_cluster_init();
 
 #ifdef DEBUG_HISTOGRAM	
@@ -1716,7 +1781,8 @@ void citrusleaf_shutdown(void) {
 	if (g_initialized == false)	return;
 
 	citrusleaf_cluster_shutdown();
-	// citrusleaf_batch_shutdown();
+	citrusleaf_query_shutdown();
+	citrusleaf_batch_shutdown();
 	// citrusleaf_info_shutdown();
 
 	g_initialized = false;

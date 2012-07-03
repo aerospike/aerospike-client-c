@@ -53,6 +53,12 @@ cl_value_to_op(cl_bin *v, cl_operator clOperator, cl_operation *operation, cl_ms
 void
 cl_set_value_particular(cl_msg_op *op, cl_bin *value);
 
+int
+cl_object_get_size(cl_object *obj, size_t *sz);
+
+int
+cl_object_to_buf (cl_object *obj, uint8_t *data);
+
 extern shash		  		*g_cl_async_hashtab;
 
 typedef struct cl_async_work {
@@ -156,6 +162,11 @@ citrusleaf_batch_init();
 void
 citrusleaf_batch_shutdown();
 
+int
+citrusleaf_query_init();
+
+void
+citrusleaf_query_shutdown();
 
 int
 cl_compile(uint info1, uint info2, uint info3, const char *ns, const char *set, const cl_object *key, const cf_digest *digest,

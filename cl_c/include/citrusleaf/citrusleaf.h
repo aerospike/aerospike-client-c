@@ -39,6 +39,8 @@
 
 #define NODE_NAME_SIZE 20	
 
+#define BINNAME_SIZE	16
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -111,7 +113,7 @@ typedef enum cl_operator_type { CL_OP_WRITE, CL_OP_READ, CL_OP_INCR, CL_OP_MC_IN
 // A bin is the bin name, and the value set or gotten
 
 typedef struct cl_bin_s {
-	char		bin_name[32];
+	char		bin_name[BINNAME_SIZE];
 	cl_object	object;
 } cl_bin;
 
@@ -124,12 +126,66 @@ typedef struct cl_operation_s {
 	enum cl_operator_type op;
 }cl_operation;
 	
-//Structure to map the internal address to the external address
+// Structure to map the internal address to the external address
 typedef struct cl_addrmap {
 	char *orig;
 	char *alt;
 } cl_addrmap;
 
+// 
+// Query related structures:
+#define MAX_SINDEX_NAME_SIZE	128
+// indicate metadata needed to create a secondary index
+typedef struct sindex_metadata_t {
+	char	iname[MAX_SINDEX_NAME_SIZE];
+    char    binname[32];
+    char    type[32];
+    uint8_t   isuniq;
+    uint8_t   istime;
+} sindex_metadata_t;
+
+// Range indicates start/end condition for the columns of the indexes.
+// Example1: (index on "last_activity" bin) where last_activity < start_time and last_activity > end_time
+// Example2: (index on "last_activity" bin for equality) where last_activity == start_time
+// Example3: (compound index on "last_activity","state","age") 
+//    where last_activity < start_time and last_activity > end_time
+//    and state in ["ca","wa","or"]
+// 	  and age == 28
+typedef struct cl_query_range {
+	char		bin_name[BINNAME_SIZE];
+	cl_object	start_obj;
+	cl_object	end_obj;
+} cl_query_range;
+
+typedef enum cl_query_filter_op { CL_FLTR_EQ, CL_FLTR_LT, CL_FLTR_GT, CL_FLTR_LE, CL_FLTR_GE, CL_FLTR_NE, CL_FLTR_EXISTS} cl_query_filter_op;
+
+// Filter indicate a series of post look-up condition in an equivalent "where" clause
+// applied to bins other than the indexed bins
+// Example1: where 
+// Q: how do we nest filters? don't care?
+typedef struct cl_query_filter {
+	char		bin_name[BINNAME_SIZE];
+	cl_object	compare_obj;
+	cl_query_filter_op	ftype;
+} cl_query_filter;
+
+typedef enum cl_query_orderby_op { CL_ORDERBY_ASC, CL_ORDERBY_DESC} cl_query_orderby_op;
+
+// Order-by indicate a post look-up result ordering
+typedef struct cl_query_orderby {
+	char		bin_name[BINNAME_SIZE];
+	cl_query_orderby_op	ordertype;
+} cl_query_orderby;
+
+typedef struct cl_query {
+	char		indexname[MAX_SINDEX_NAME_SIZE];
+	cf_vector	*binnames;
+	cf_vector	*ranges;
+	cf_vector	*filters;
+	cf_vector	*orderbys;
+	int			limit;	
+} cl_query;
+ 
 //
 // All citrusleaf functions return an integer. This integer is 0 if the
 // call has succeeded, and a negative number if it has failed.
@@ -498,32 +554,24 @@ citrusleaf_calculate_digest(const char *set, const cl_object *key, cf_digest *di
 // Lua and secondary index functions
 //
 struct map_args_t;
-// DDL
+// DDL To Be obsoleted                                       
 cl_rv citrusleaf_register_lua_function(cl_cluster *asc, char *ns,
                                        citrusleaf_get_many_cb cb,
                                        char *lua_mapf, char *lua_rdcf,
                                        char *lua_fnzf, int reg_mrjid);
-// To Be obsoleted                                       
 struct index_metadata_t;
 cl_rv citrusleaf_create_secondary_index(cl_cluster *asc, char *ns,
                                         citrusleaf_get_many_cb cb,
                                         struct index_metadata_t *imd);
 
-#define MAX_SINDEX_NAME_SIZE	128
-typedef struct sindex_metadata_t {
-	char	iname[MAX_SINDEX_NAME_SIZE];
-    char    binname[32];
-    char    type[32];
-    uint8_t   isuniq;
-    uint8_t   istime;
-} sindex_metadata_t;
+// New
+cl_rv citrusleaf_secondary_index_create(cl_cluster *asc, const char *ns, 
+		const char *set, struct sindex_metadata_t *simd);
+cl_rv citrusleaf_secondary_index_delete(cl_cluster *asc, const char *ns, 
+		const char *set, const char *indexname);
 
 
-cl_rv citrusleaf_secondary_index_create(cl_cluster *asc, const char *ns, const char *set, struct sindex_metadata_t *simd);
-cl_rv citrusleaf_secondary_index_delete(cl_cluster *asc, const char *ns, const char *set, const char *indexname);
-
-
-// RANGE QUERIES
+// RANGE QUERIES To Be obsoleted
 cl_rv citrusleaf_get_sik_digest(cl_cluster *asc, char *ns,
                                 const cf_digest *digests, int n_digests,
                                 cl_bin *bins, int n_bins, bool get_key,
@@ -534,8 +582,20 @@ cl_rv citrusleaf_run_mr_sik_digest(cl_cluster *asc, char *ns,
                                    cl_bin *bins, int n_bins, bool get_key,
                                    citrusleaf_get_many_cb cb, void *udata,
                                    int mrjid, int imatch,
-                                    struct map_args_t *margs);
+                                   struct map_args_t *margs);
+// New
+cl_query *citrusleaf_query_create(const char *indexname);
+void citrusleaf_query_destroy(cl_query *query_obj);
+cl_rv citrusleaf_query_add_binname(cl_query *query_obj, const char *binname);
+cl_rv citrusleaf_query_add_range_numeric(cl_query *query_obj, const char *binname,int64_t start,int64_t end);
+cl_rv citrusleaf_query_add_range_string(cl_query *query_obj, const char *binname, const char *start, const char *end);
+cl_rv citrusleaf_query_add_filter_numeric(cl_query *query_obj, const char *binname, int64_t comparer, cl_query_filter_op op);
+cl_rv citrusleaf_query_add_filter_string(cl_query *query_obj, const char *binname, const char *comparer, cl_query_filter_op op);
+cl_rv citrusleaf_query_add_orderby(cl_query *query_obj, const char *binname, cl_query_orderby_op order);
+cl_rv citrusleaf_query_set_limit(cl_query *query_obj, uint64_t limit);
 
+cl_rv citrusleaf_query(cl_cluster *asc, const char *ns, const cl_query *query_obj,
+							citrusleaf_get_many_cb cb, void *udata);
 
 #ifdef __cplusplus
 } // end extern "C"

@@ -123,6 +123,18 @@ typedef struct cl_msg_field_s {
 #define CL_MSG_FIELD_TYPE_MAP_REDUCE_ID                  19 
 #define CL_MSG_FIELD_TYPE_CREATE_SECONDARY_INDEX         20
 
+
+#define CL_MSG_FIELD_TYPE_INDEX_NAME			21
+#define	CL_MSG_FIELD_TYPE_INDEX_RANGE			22
+#define CL_MSG_FIELD_TYPE_INDEX_FILTER			23
+#define CL_MSG_FIELD_TYPE_INDEX_LIMIT			24
+#define CL_MSG_FIELD_TYPE_INDEX_ORDER_BY		25
+#define CL_MSG_FIELD_TYPE_SPROC_PACKAGE			30
+#define	CL_MSG_FIELD_TYPE_SPROC_MAP				31
+#define CL_MSG_FIELD_TYPE_SPROC_REDUCE			32
+#define CL_MSG_FIELD_TYPE_SPROC_FINALIZE		33
+
+
 	uint32_t field_sz; // get the data size through the accessor function, don't worry, it's a small macro
 	uint8_t type;
 	uint8_t data[];

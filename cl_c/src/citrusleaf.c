@@ -1870,10 +1870,7 @@ void citrusleaf_shutdown(void) {
 	if (g_initialized == false)	return;
 
 	citrusleaf_cluster_shutdown();
-<<<<<<< HEAD
 	citrusleaf_query_shutdown();
-=======
->>>>>>> master
 	citrusleaf_batch_shutdown();
 	// citrusleaf_info_shutdown();
 

@@ -556,7 +556,7 @@ cl_cluster_node *
 cl_cluster_node_create(char *name, struct sockaddr_in *sa_in)
 {
 	int i;
-	cl_cluster_node *cn = cf_rc_alloc( sizeof(cl_cluster_node ) );
+	cl_cluster_node *cn = cf_client_rc_alloc( sizeof(cl_cluster_node ) );
 	if (!cn)	return(0);
 	
 	strcpy(cn->name, name);
@@ -585,7 +585,7 @@ cl_cluster_node_release(cl_cluster_node *cn)
 {
 	int i;
 	cl_async_work *aw;
-	if (0 == cf_rc_release(cn)) {
+	if (0 == cf_client_rc_release(cn)) {
 		
 		cf_vector_destroy(&cn->sockaddr_in_v);
 		
@@ -626,7 +626,7 @@ cl_cluster_node_release(cl_cluster_node *cn)
 		cf_queue_destroy(cn->conn_q);
 		cf_queue_destroy(cn->conn_q_asyncfd);
 		pthread_mutex_destroy(&cn->LOCK);
-		cf_rc_free(cn);
+		cf_client_rc_free(cn);
 	}
 	
 }
@@ -667,7 +667,7 @@ cl_cluster_node_get_random(cl_cluster *asc)
 #endif    
     
 	// grab a reservation
-	cf_rc_reserve(cn);
+	cf_client_rc_reserve(cn);
 
 	return(cn);
 }
@@ -688,7 +688,7 @@ cl_cluster_node_get(cl_cluster *asc, const char *ns, const cf_digest *d, bool wr
 		fprintf(stderr, "cluster node get: found match key %"PRIx64" node %s (%s):\n",
 											*(uint64_t*)d, cn->name, write?"write":"read");
 #endif		
-		cf_rc_reserve(cn);
+		cf_client_rc_reserve(cn);
 		pthread_mutex_unlock(&asc->LOCK);
 		return(cn);
 	}

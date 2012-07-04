@@ -133,6 +133,9 @@ typedef struct cl_msg_field_s {
 #define	CL_MSG_FIELD_TYPE_SPROC_MAP				31
 #define CL_MSG_FIELD_TYPE_SPROC_REDUCE			32
 #define CL_MSG_FIELD_TYPE_SPROC_FINALIZE		33
+#define	CL_MSG_FIELD_TYPE_SPROC_MAP_ARG			34
+#define CL_MSG_FIELD_TYPE_SPROC_REDUCE_ARG		35
+#define CL_MSG_FIELD_TYPE_SPROC_FINALIZE_ARG	36
 
 
 	uint32_t field_sz; // get the data size through the accessor function, don't worry, it's a small macro

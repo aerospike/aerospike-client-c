@@ -39,7 +39,7 @@
 
 #define NODE_NAME_SIZE 20	
 
-#define BINNAME_SIZE	16
+#define CL_BINNAME_SIZE	16
 
 #ifdef __cplusplus
 extern "C" {
@@ -113,7 +113,7 @@ typedef enum cl_operator_type { CL_OP_WRITE, CL_OP_READ, CL_OP_INCR, CL_OP_MC_IN
 // A bin is the bin name, and the value set or gotten
 
 typedef struct cl_bin_s {
-	char		bin_name[BINNAME_SIZE];
+	char		bin_name[CL_BINNAME_SIZE];
 	cl_object	object;
 } cl_bin;
 
@@ -134,11 +134,11 @@ typedef struct cl_addrmap {
 
 // 
 // Query related structures:
-#define MAX_SINDEX_NAME_SIZE	128
+#define CL_MAX_SINDEX_NAME_SIZE	128
 // indicate metadata needed to create a secondary index
 typedef struct sindex_metadata_t {
-	char	iname[MAX_SINDEX_NAME_SIZE];
-    char    binname[32];
+	char	iname[CL_MAX_SINDEX_NAME_SIZE];
+    char    binname[CL_BINNAME_SIZE];
     char    type[32];
     uint8_t   isuniq;
     uint8_t   istime;
@@ -152,7 +152,7 @@ typedef struct sindex_metadata_t {
 //    and state in ["ca","wa","or"]
 // 	  and age == 28
 typedef struct cl_query_range {
-	char		bin_name[BINNAME_SIZE];
+	char		bin_name[CL_BINNAME_SIZE];
 	cl_object	start_obj;
 	cl_object	end_obj;
 } cl_query_range;
@@ -164,7 +164,7 @@ typedef enum cl_query_filter_op { CL_FLTR_EQ, CL_FLTR_LT, CL_FLTR_GT, CL_FLTR_LE
 // Example1: where 
 // Q: how do we nest filters? don't care?
 typedef struct cl_query_filter {
-	char		bin_name[BINNAME_SIZE];
+	char		bin_name[CL_BINNAME_SIZE];
 	cl_object	compare_obj;
 	cl_query_filter_op	ftype;
 } cl_query_filter;
@@ -173,12 +173,12 @@ typedef enum cl_query_orderby_op { CL_ORDERBY_ASC, CL_ORDERBY_DESC} cl_query_ord
 
 // Order-by indicate a post look-up result ordering
 typedef struct cl_query_orderby {
-	char		bin_name[BINNAME_SIZE];
+	char		bin_name[CL_BINNAME_SIZE];
 	cl_query_orderby_op	ordertype;
 } cl_query_orderby;
 
 typedef struct cl_query {
-	char		indexname[MAX_SINDEX_NAME_SIZE];
+	char		indexname[CL_MAX_SINDEX_NAME_SIZE];
 	cf_vector	*binnames;
 	cf_vector	*ranges;
 	cf_vector	*filters;
@@ -186,6 +186,30 @@ typedef struct cl_query {
 	int			limit;	
 } cl_query;
  
+typedef enum cl_script_func_t {
+	CL_SCRIPT_FUNC_TYPE_MAP,
+	CL_SCRIPT_FUNC_TYPE_REDUCE,
+	CL_SCRIPT_FUNC_TYPE_FINALIZE,
+} cl_script_func_t;
+
+#define CL_MAX_NUM_FUNC_ARGC	10 
+
+typedef struct cl_mrjob {
+	char		*package;
+	char		*map_fname;
+	char		*rdc_fname;
+	char		*fnz_fname;
+	int			map_argc;
+	char		*map_argk[CL_MAX_NUM_FUNC_ARGC];
+	cl_object	*map_argv[CL_MAX_NUM_FUNC_ARGC];
+	int			rdc_argc;
+	char		*rdc_argk[CL_MAX_NUM_FUNC_ARGC];
+	cl_object	*rdc_argv[CL_MAX_NUM_FUNC_ARGC];
+	int			fnz_argc;
+	char		*fnz_argk[CL_MAX_NUM_FUNC_ARGC];
+	cl_object	*fnz_argv[CL_MAX_NUM_FUNC_ARGC];
+	char		*generation;
+} cl_mrjob; 
 //
 // All citrusleaf functions return an integer. This integer is 0 if the
 // call has succeeded, and a negative number if it has failed.
@@ -569,6 +593,7 @@ cl_rv citrusleaf_secondary_index_create(cl_cluster *asc, const char *ns,
 		const char *set, struct sindex_metadata_t *simd);
 cl_rv citrusleaf_secondary_index_delete(cl_cluster *asc, const char *ns, 
 		const char *set, const char *indexname);
+cl_rv citrusleaf_load_sproc_context(cl_cluster *asc);
 
 
 // RANGE QUERIES To Be obsoleted
@@ -594,9 +619,15 @@ cl_rv citrusleaf_query_add_filter_string(cl_query *query_obj, const char *binnam
 cl_rv citrusleaf_query_add_orderby(cl_query *query_obj, const char *binname, cl_query_orderby_op order);
 cl_rv citrusleaf_query_set_limit(cl_query *query_obj, uint64_t limit);
 
-cl_rv citrusleaf_query(cl_cluster *asc, const char *ns, const cl_query *query_obj,
+cl_rv citrusleaf_query(cl_cluster *asc, const char *ns, const cl_query *query_obj,const cl_mrjob *mrjob,
 							citrusleaf_get_many_cb cb, void *udata);
 
+cl_mrjob *citrusleaf_mrjob_create(const char *package, const char *map_fname, const char *rdc_fname, const char *fnz_fname );
+cl_rv citrusleaf_mrjob_add_parameter_string(cl_mrjob *mrjob, cl_script_func_t ftype, const char *key, const char *value);
+cl_rv citrusleaf_mrjob_add_parameter_numeric(cl_mrjob *mrjob, cl_script_func_t ftype, const char *key, uint64_t value);
+cl_rv citrusleaf_mrjob_add_parameter_blob(cl_mrjob *mrjob, cl_script_func_t ftype, cl_type blobtype, const char *key, const uint8_t *value, int val_len);
+void citrusleaf_mrjob_destroy(cl_mrjob *mrjob);
+ 
 #ifdef __cplusplus
 } // end extern "C"
 #endif

@@ -33,6 +33,7 @@ typedef struct {
     cl_cluster				*asc; 
     const char				*ns;
  	const cl_query			*query; 
+ 	const cl_mrjob			*mrjob; 
     citrusleaf_get_many_cb	cb; 
     void					*udata;
    	cf_queue				*node_complete_q;	// used to synchronize work from all nodes are finished
@@ -48,7 +49,86 @@ static pthread_t    g_query_th[N_MAX_QUERY_THREADS];
 static query_work	g_null_work;
 
 
-// layout
+// mrj argument field layout: contains - numargs, key1_len, key1, value1_len, val1, ....
+// 
+// generic field header
+// 0   4 size = size of data only
+// 4   1 field_type = CL_MSG_FIELD_TYPE_SPROC_XXX_ARG
+//
+// numarg
+// 5   1 argc (max 255 ranges) 
+//
+// argk
+// 6     1 argk_len x
+// 7     x argk
+//
+// argv
+// +x    1 argv_particle_type
+// +x+1  1 argv_particle_len
+// +x+2 xx argv_particle_data
+// 
+// repeat argk
+//
+static int mrj_compile_arg_field(char * const*argk, cl_object * const*argv, int argc, uint8_t *buf, int *sz_p)
+{
+	int sz = 0;
+		
+	// argc
+	sz += 1;
+	if (buf) {
+		*buf++ = argc;
+	}
+	
+	// iterate through each k,v pair	
+	for (int i=0; i<argc; i++) {
+		// argk size
+		int argk_sz = strlen(argk[i]);
+		sz += 1;
+		if (buf) {
+			*buf++ = argk_sz;
+		}
+		
+		// argk
+		sz += argk_sz;
+		if (buf) {
+			memcpy(buf,argk[i],argk_sz);
+			buf += argk_sz;
+		}
+		
+		// argv type
+		sz += 1;
+		if (buf) {
+			*buf++ = argv[i]->type;
+		}
+		
+		// argv particle len
+		// particle len will be in network order 
+		sz += 4;
+		size_t psz = 0;
+		cl_object_get_size(argv[i],&psz);
+		if (buf) {
+			uint32_t ss = psz; 
+			*((uint32_t *)buf) = ntohl(ss);
+			// fprintf(stderr, "*** ss %ld buf %ld\n",ss,*((uint32_t *)buf));
+			buf += sizeof(uint32_t);
+		} 
+		
+		// particle data
+		sz += psz;
+		if (buf) {
+			fprintf(stderr, "*** buf %ld\n",*((uint64_t *)buf));
+			cl_object_to_buf(argv[i],buf);
+			fprintf(stderr, "*** buf %ld\n",*((uint64_t *)buf));
+			buf += psz;
+		}
+		
+	}		
+	
+	*sz_p = sz;
+}
+
+
+// query range field layout: contains - numranges, binname, start, end
 // 
 // generic field header
 // 0   4 size = size of data only
@@ -149,7 +229,7 @@ static int query_compile_range_field(cf_vector *range_v, uint8_t *buf, int *sz_p
 	*sz_p = sz;
 }
 
-static int query_compile (const char *ns, const cl_query *query,
+static int query_compile (const char *ns, const cl_query *query, const cl_mrjob *mrjob,
                          uint8_t **buf_r, size_t *buf_sz_r) {
 		
 	if (ns==NULL || query == NULL) {
@@ -172,7 +252,7 @@ static int query_compile (const char *ns, const cl_query *query,
 	
 	// query field    
 	n_fields++;
-	int range_sz = 0; 
+	int 	range_sz = 0; 
 	query_compile_range_field(query->ranges, NULL, &range_sz);
 	msg_sz += range_sz + sizeof(cl_msg_field);
 	
@@ -181,6 +261,60 @@ static int query_compile (const char *ns, const cl_query *query,
 	// TODO orderby field
 	// TODO limit field
 	
+	// mrj package name field
+	int 	package_len = 0;
+	if (mrjob && mrjob->package) {
+		n_fields++;
+		package_len = strlen(mrjob->package); 
+		msg_sz += package_len  + sizeof(cl_msg_field);
+	}	
+	
+	// mrj map field
+	int 	mapper_len = 0;
+	int 	maparg_len = 0;
+	if (mrjob && mrjob->map_fname) {
+		n_fields++;
+		mapper_len = strlen(mrjob->map_fname); 
+		msg_sz += mapper_len  + sizeof(cl_msg_field);
+		
+		if (mrjob->map_argc > 0) {
+			n_fields++;
+			int maparg_len;
+			mrj_compile_arg_field(mrjob->map_argk, mrjob->map_argv, mrjob->map_argc, NULL, &maparg_len); 
+		} 
+	}	
+
+	// mrj reduce field
+	int 	reducer_len = 0;
+	int 	rdcarg_len = 0;
+	if (mrjob && mrjob->rdc_fname) {
+		n_fields++;
+		reducer_len = strlen(mrjob->rdc_fname); 
+		msg_sz += reducer_len  + sizeof(cl_msg_field);
+		
+		if (mrjob->rdc_argc > 0) {
+			n_fields++;
+			int rdcarg_len;
+			mrj_compile_arg_field(mrjob->rdc_argk, mrjob->rdc_argv, mrjob->rdc_argc, NULL, &rdcarg_len); 
+		} 
+	}	
+
+	// mrj finalize field
+	int 	finalizer_len = 0;
+	int 	fnzarg_len = 0;
+	if (mrjob && mrjob->fnz_fname) {
+		n_fields++;
+		finalizer_len = strlen(mrjob->fnz_fname); 
+		msg_sz += finalizer_len  + sizeof(cl_msg_field);
+		
+		if (mrjob->fnz_argc > 0) {
+			n_fields++;
+			int fnzarg_len;
+			mrj_compile_arg_field(mrjob->fnz_argk, mrjob->fnz_argv, mrjob->fnz_argc, NULL, &fnzarg_len); 
+		} 
+	}	
+
+	// get a buffer to write to.
     uint8_t *buf; uint8_t *mbuf = 0;
     if ((*buf_r) && (msg_sz > *buf_sz_r)) { 
         mbuf   = buf = malloc(msg_sz); if (!buf) return(-1);
@@ -229,6 +363,75 @@ static int query_compile (const char *ns, const cl_query *query,
         mf = mf_tmp;
     }
 
+    if (mrjob && mrjob->package) {
+        mf->type = CL_MSG_FIELD_TYPE_SPROC_PACKAGE;
+        mf->field_sz = package_len + 1;
+        memcpy(mf->data, mrjob->package, package_len);
+        mf_tmp = cl_msg_field_get_next(mf);
+        cl_msg_swap_field(mf);
+        mf = mf_tmp;
+		if (g_cl_turn_debug_on) {
+			fprintf(stderr,"adding package %s\n", mrjob->package);
+		}
+    }
+
+	// map
+	if (mrjob && mrjob->map_fname) {
+        mf->type = CL_MSG_FIELD_TYPE_SPROC_MAP;
+        mf->field_sz = mapper_len + 1;
+        memcpy(mf->data, mrjob->map_fname, mapper_len);
+        mf_tmp = cl_msg_field_get_next(mf);
+        cl_msg_swap_field(mf);
+        mf = mf_tmp;
+	}
+
+	if (mrjob && mrjob->map_argc > 0) {
+        mf->type = CL_MSG_FIELD_TYPE_SPROC_MAP_ARG;
+        mf->field_sz = maparg_len + 1;
+		mrj_compile_arg_field(mrjob->map_argk, mrjob->map_argv, mrjob->map_argc, mf->data, &maparg_len); 
+        mf_tmp = cl_msg_field_get_next(mf);
+        cl_msg_swap_field(mf);
+        mf = mf_tmp;
+	}
+
+	// reduce
+	if (mrjob && mrjob->rdc_fname) {
+        mf->type = CL_MSG_FIELD_TYPE_SPROC_REDUCE;
+        mf->field_sz = reducer_len + 1;
+        memcpy(mf->data, mrjob->rdc_fname, reducer_len);
+        mf_tmp = cl_msg_field_get_next(mf);
+        cl_msg_swap_field(mf);
+        mf = mf_tmp;
+	}
+
+	if (mrjob && mrjob->rdc_argc > 0) {
+        mf->type = CL_MSG_FIELD_TYPE_SPROC_REDUCE_ARG;
+        mf->field_sz = rdcarg_len + 1;
+		mrj_compile_arg_field(mrjob->rdc_argk, mrjob->rdc_argv, mrjob->rdc_argc, mf->data, &rdcarg_len); 
+        mf_tmp = cl_msg_field_get_next(mf);
+        cl_msg_swap_field(mf);
+        mf = mf_tmp;
+	}
+
+	// finalize
+	if (mrjob && mrjob->fnz_fname) {
+        mf->type = CL_MSG_FIELD_TYPE_SPROC_FINALIZE;
+        mf->field_sz = finalizer_len + 1;
+        memcpy(mf->data, mrjob->fnz_fname, finalizer_len);
+        mf_tmp = cl_msg_field_get_next(mf);
+        cl_msg_swap_field(mf);
+        mf = mf_tmp;
+	}
+
+	if (mrjob && mrjob->fnz_argc > 0) {
+        mf->type = CL_MSG_FIELD_TYPE_SPROC_FINALIZE_ARG;
+        mf->field_sz = fnzarg_len + 1;
+		mrj_compile_arg_field(mrjob->fnz_argk, mrjob->fnz_argv, mrjob->fnz_argc, mf->data, &fnzarg_len); 
+        mf_tmp = cl_msg_field_get_next(mf);
+        cl_msg_swap_field(mf);
+        mf = mf_tmp;
+	}
+
     if (!buf) { 
     	if (mbuf) {
     		free(mbuf); 
@@ -245,7 +448,7 @@ static int query_compile (const char *ns, const cl_query *query,
 
 #define HACK_MAX_RESULT_CODE 100
 
-static int do_query_monte(cl_cluster_node *node, const char *ns, const cl_query *query, 
+static int do_query_monte(cl_cluster_node *node, const char *ns, const cl_query *query, const cl_mrjob *mrjob,
                           citrusleaf_get_many_cb cb, void *udata, bool isnbconnect) {
 	uint8_t		rd_stack_buf[STACK_BUF_SZ];	
 	uint8_t		*rd_buf = rd_stack_buf;
@@ -257,7 +460,7 @@ static int do_query_monte(cl_cluster_node *node, const char *ns, const cl_query 
 
 	as_msg 		msg;    
 
-    int rv = query_compile(ns, query, &wr_buf, &wr_buf_sz);
+    int rv = query_compile(ns, query, mrjob, &wr_buf, &wr_buf_sz);
     if (rv) {
         fprintf(stderr,"do query monte: query compile failed: ");
         return (rv);
@@ -482,7 +685,7 @@ static void *query_worker_fn(void *dummy) {
 		cl_cluster_node *node = cl_cluster_node_get_byname(work.asc, work.node_name);
 		int an_int = CITRUSLEAF_FAIL_UNAVAILABLE;
 		if (node) {
-        	an_int = do_query_monte(node, work.ns, work.query,work.cb, work.udata, work.asc->nbconnect);
+        	an_int = do_query_monte(node, work.ns, work.query, work.mrjob, work.cb, work.udata, work.asc->nbconnect);
         }
                                     
         cf_queue_push(work.node_complete_q, (void *)&an_int);
@@ -490,13 +693,7 @@ static void *query_worker_fn(void *dummy) {
 }
 
 
-cl_rv citrusleaf_query(cl_cluster *asc, const char *ns, const cl_query *query,
-		/*,
-		const char *package_name,
-		const char *package_generation,
-		const char *mapfunc, const ???,
-		const char *rdcfunc, const ???,
-		const char *fnzfunc, const ???,*/
+cl_rv citrusleaf_query(cl_cluster *asc, const char *ns, const cl_query *query, const cl_mrjob *mrjob,
 		citrusleaf_get_many_cb cb, void *udata) 
 {
     query_work work;
@@ -504,6 +701,7 @@ cl_rv citrusleaf_query(cl_cluster *asc, const char *ns, const cl_query *query,
     work.asc = asc;
     work.ns = ns;
     work.query = query;
+    work.mrjob = mrjob;
     
     // shared between threads
     work.cb = cb;

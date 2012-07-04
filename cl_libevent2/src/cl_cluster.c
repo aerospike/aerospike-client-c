@@ -123,7 +123,7 @@ cluster_get_timer_event(ev2citrusleaf_cluster *asc)
 cl_cluster_node *
 cluster_node_create()
 {
-	cl_cluster_node *cn = cf_rc_alloc(sizeof(cl_cluster_node) + event_get_struct_event_size() );
+	cl_cluster_node *cn = cf_client_rc_alloc(sizeof(cl_cluster_node) + event_get_struct_event_size() );
 	if (cn) memset(cn,0,sizeof(cl_cluster_node) + event_get_struct_event_size());
 	return(cn);
 }
@@ -698,7 +698,7 @@ node_timer_fn(int fd, short event, void *udata)
 	cn->timer_event_registered = false;
 		
 
-	CL_LOG(CL_DEBUG, "node timer function called: %s dunned %d references %d\n",cn->name, cf_atomic_int_get(cn->dunned), cf_rc_count(cn));
+	CL_LOG(CL_DEBUG, "node timer function called: %s dunned %d references %d\n",cn->name, cf_atomic_int_get(cn->dunned), cf_client_rc_count(cn));
 
 	if (cf_atomic_int_get(cn->dunned)) {
 
@@ -790,7 +790,7 @@ cl_cluster_node_create(char *name, ev2citrusleaf_cluster *asc)
 	cl_cluster_node *cn = cluster_node_create();
 	if (!cn)	return(0);
 	// To balance the ref-count logs, we need this:
-	CL_LOG(CL_VERBOSE, "node reserve: %s %s %p : %d\n", "O+", name, cn, cf_rc_count(cn));
+	CL_LOG(CL_VERBOSE, "node reserve: %s %s %p : %d\n", "O+", name, cn, cf_client_rc_count(cn));
 	
 	cn->MAGIC = CLUSTER_NODE_MAGIC;
 	
@@ -805,8 +805,8 @@ cl_cluster_node_create(char *name, ev2citrusleaf_cluster *asc)
 	if (cn->conn_q == 0) {
 		CL_LOG(CL_WARNING," cl_cluster create: can't make a file descriptor queue\n");
 		// To balance the ref-count logs, we need this:
-		CL_LOG(CL_VERBOSE, "node release: %s %s %p : %d\n", "O-", cn->name, cn, cf_rc_count(cn));
-		cf_rc_free(cn);
+		CL_LOG(CL_VERBOSE, "node release: %s %s %p : %d\n", "O-", cn->name, cn, cf_client_rc_count(cn));
+		cf_client_rc_free(cn);
 		return(0);
 	}
 	
@@ -851,9 +851,9 @@ cl_cluster_node_release(cl_cluster_node *cn, char *msg)
 	// PW: partition table, write
 	// T:  transaction
 
-	CL_LOG(CL_VERBOSE, "node release: %s %s %p : %d\n",msg,cn->name,cn,cf_rc_count(cn));
+	CL_LOG(CL_VERBOSE, "node release: %s %s %p : %d\n",msg,cn->name,cn,cf_client_rc_count(cn));
 	
-	if (0 == cf_rc_release(cn)) {
+	if (0 == cf_client_rc_release(cn)) {
 
 		CL_LOG(CL_INFO, "************* cluster node destroy: node %s : %p\n",cn->name,cn);
 
@@ -878,7 +878,7 @@ cl_cluster_node_release(cl_cluster_node *cn, char *msg)
 		// rare, might as well be safe - and destroy the magic
 		memset(cn, 0xff, sizeof(cl_cluster_node));
 		
-		cf_rc_free(cn);
+		cf_client_rc_free(cn);
 		
 		
 	}
@@ -898,9 +898,9 @@ cl_cluster_node_reserve(cl_cluster_node *cn, char *msg)
 	// PW: partition table, write
 	// T:  transaction
 
-	CL_LOG(CL_VERBOSE, "node reserve: %s %s %p : %d\n",msg,cn->name,cn,cf_rc_count(cn));
+	CL_LOG(CL_VERBOSE, "node reserve: %s %s %p : %d\n",msg,cn->name,cn,cf_client_rc_count(cn));
 	
-	cf_rc_reserve(cn);
+	cf_client_rc_reserve(cn);
 }
 
 

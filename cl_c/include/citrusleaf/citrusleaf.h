@@ -117,6 +117,21 @@ typedef struct cl_bin_s {
 	cl_object	object;
 } cl_bin;
 
+// A record structure containing the most common fileds of a record
+typedef struct cl_rec {
+	cf_digest	digest;
+	uint32_t	generation;
+	uint32_t	record_voidtime;
+	cl_bin		*bins;
+	int		n_bins;
+} cl_rec;
+
+// Structure used by functions which want to return a bunch of records
+typedef struct cl_batchresult {
+	int 		numrecs;
+	cl_rec		*records;
+} cl_batchresult;
+
 // An operation is the bin, plus the operator (write, read, add, etc)
 // This structure is used for the more complex 'operate' call,
 // which can specify simultaneous operations on multiple bins
@@ -276,6 +291,8 @@ void citrusleaf_object_free(cl_object *o);
 
 // frees all the memory in a bin array that would be returned from get_all but not the bin array itself
 void citrusleaf_bins_free(cl_bin *bins, int n_bins);
+
+int citrusleaf_copy_bins(cl_bin **destbins, cl_bin *srcbins, int n_bins);
 
 
 // use:
@@ -519,6 +536,20 @@ citrusleaf_scan_node (cl_cluster *asc, char *node_name, char *ns, char *set, cl_
 cl_rv
 citrusleaf_get_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_bin *bins, int n_bins, bool get_key /*if true, retrieve key instead of simply digest*/, 
 	citrusleaf_get_many_cb cb, void *udata);
+
+//
+// Get many digest without a callback
+// This version of the batch-get call does not need the callback function. It will return an array of records. 
+// The results are returned in an array. No ordering is guaranteed between the input digest array and 
+// the returned rows. If the corresponding records for the digests are not found in the cluster, there wont 
+// be any corresponding entry in the result array indicating that the records are missing. The caller must 
+// call the citrusleaf_free_batchresult() to free the memory allocated during this operation.
+cl_rv
+citrusleaf_get_many_digest_direct(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_batchresult **br);
+
+// Utility function to free the memory allocated by the citrusleaf_get_many_digest_direct() function
+void
+citrusleaf_free_batchresult(cl_batchresult *br);
 
 //
 // Key exists many digest

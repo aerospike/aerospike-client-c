@@ -72,7 +72,7 @@ printf("1: do_scan_monte\n");
 		node = cl_cluster_node_get_byname(asc,node_name);
 		// grab a reservation
 		if (node)
-			cf_rc_reserve(node);
+			cf_client_rc_reserve(node);
 	} else {
 		node = cl_cluster_node_get_random(asc);
 	}

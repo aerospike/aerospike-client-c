@@ -45,6 +45,9 @@
 
 static bool g_initialized = false;
 int g_cl_turn_debug_on = false;
+int g_init_pid;
+extern cf_atomic32 batch_initialized;
+extern int g_clust_initialized;
 
 
 // #define DEBUG_HISTOGRAM 1 // histogram printed in citrusleaf_print_stats()
@@ -137,17 +140,87 @@ void citrusleaf_object_init_null(cl_object *o)
 }
 
 
-void citrusleaf_object_free(cl_object *o) {
+void citrusleaf_object_free(cl_object *o) 
+{
 	if (o->free){	
 		free(o->free);
 		o->free = NULL;
 	}
 }
 
-void citrusleaf_bins_free(cl_bin *bins, int n_bins) {
+void citrusleaf_bins_free(cl_bin *bins, int n_bins)
+{
 	for (int i=0;i<n_bins;i++) {
 		if (bins[i].object.free) free(bins[i].object.free);
 	}
+}
+
+int citrusleaf_copy_object(cl_object *destobj, cl_object *srcobj)
+{
+	destobj->type = srcobj->type;
+	destobj->sz = srcobj->sz;
+	destobj->free = 0; //By default assume that there is nothing to free
+
+	//Each of the types of bins needs a different treatment in copying.
+	switch(srcobj->type) {
+		case CL_NULL:
+			break;
+		case CL_INT:
+			destobj->u.i64 = srcobj->u.i64;
+			break;
+		case CL_STR:
+			//dont know why this sz+1, this is how set_object() does.
+			destobj->free = destobj->u.str = malloc(destobj->sz+1);
+			if (destobj->free == NULL) {
+				return -1;
+			}
+			memcpy(destobj->u.str, srcobj->u.str, destobj->sz);
+			break;
+		case CL_BLOB:
+		case CL_DIGEST:
+		case CL_JAVA_BLOB:
+		case CL_CSHARP_BLOB:
+		case CL_PYTHON_BLOB:
+		case CL_RUBY_BLOB:
+		case CL_PHP_BLOB:
+			destobj->free = destobj->u.blob = malloc(destobj->sz);
+			if (destobj->free == NULL) {
+				return -1;
+			}
+			memcpy(destobj->u.blob, srcobj->u.blob, destobj->sz);
+			break;
+		default:
+			fprintf(stderr, "Encountered an unknown bin type %d", srcobj->type);
+			return -1;
+			break;
+	}
+
+	return 0;
+}
+
+int citrusleaf_copy_bin(cl_bin *destbin, cl_bin *srcbin)
+{
+	strcpy(destbin->bin_name, srcbin->bin_name);
+	int rv = citrusleaf_copy_object(&(destbin->object), &(srcbin->object));
+	if (rv == -1) {
+		return -1;
+	}
+}
+
+int citrusleaf_copy_bins(cl_bin **destbins, cl_bin *srcbins, int n_bins)
+{
+	int rv;
+
+	*destbins = malloc(sizeof(struct cl_bin_s) * n_bins);
+	for (int i=0; i<n_bins; i++) {
+		rv = citrusleaf_copy_bin(destbins[i], &srcbins[i]);
+		if (rv == -1) {
+			free(destbins);
+			return -1;
+		}
+	}
+
+	return 0;
 }
 
 //
@@ -1114,6 +1187,7 @@ cl_parse(cl_msg *msg, uint8_t *buf, size_t buf_len, cl_bin **values_r, cl_operat
 	return(0);
 }
 
+
 //
 // Omnibus (!beep!! !beep!!) internal function that the externals can map to
 // If you don't want any values back, pass the values and n_values pointers as null
@@ -1158,7 +1232,19 @@ do_the_full_monte(cl_cluster *asc, int info1, int info2, int info3, const char *
 //	}else if( *operations ){
 //		dump_values(null, *operations, *n_values);
 //	}	
-	// 
+	 
+	/* 
+	 * Check if the current process is the one which spawned the background threads (tend,batch).
+	 * If it is not, it means that this process is a forked child process. The threads would not
+	 * be running in this case. So, spawn the background threads and remember that this process
+	 * has started the threads.
+	 */
+	if(g_init_pid != getpid()) {
+		cf_atomic32_set(&batch_initialized,0);
+		g_clust_initialized = 0;
+		citrusleaf_init();
+	}
+
 	cf_digest d_ret;	
 	if (n_values && ( values || operations) ){
 		if (cl_compile(info1, info2, info3, ns, set, key, digest, values?*values:NULL, operator, operations?*operations:NULL,
@@ -1761,6 +1847,9 @@ void citrusleaf_set_debug(bool debug_flag)
 
 int citrusleaf_init() 
 {
+	// remember the process id which is spawning the background threads.
+	// only this process can call a pthread_join() on the threads that it spawned.
+	g_init_pid = getpid();
 
  	citrusleaf_batch_init();
 	citrusleaf_query_init();
@@ -1781,7 +1870,10 @@ void citrusleaf_shutdown(void) {
 	if (g_initialized == false)	return;
 
 	citrusleaf_cluster_shutdown();
+<<<<<<< HEAD
 	citrusleaf_query_shutdown();
+=======
+>>>>>>> master
 	citrusleaf_batch_shutdown();
 	// citrusleaf_info_shutdown();
 

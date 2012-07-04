@@ -30,6 +30,10 @@
 #include "citrusleaf/proto.h"
 #include "citrusleaf/cf_socket.h"
 
+extern int g_init_pid;
+
+
+//
 // Decompresses a compressed CL msg
 //The buffer passed in is the space *after* the header, just the compressed data
 // returns -1 if it can't be decompressed for some reason
@@ -652,6 +656,13 @@ static cf_atomic32  batch_initialized = 0;
 cf_queue           *g_batch_q         = 0;
 static pthread_t    g_batch_th[N_BATCH_THREADS];
 
+#define N_BATCH_THREADS 6
+
+
+//
+// These externally visible functions are exposed through citrusleaf.h
+//
+
 typedef struct {
     // these sections are the same for the same query
     cl_cluster            *asc; 
@@ -950,6 +961,72 @@ cl_rv citrusleaf_get_many_digest(cl_cluster *asc, char *ns, const cf_digest *dig
     return do_get_exists_many_digest(asc, ns, digests, n_digests, bins, n_bins, get_key, true, cb, udata);
 }
 
+//This is an internal batch helper function which will collect all the records and put it in an array.
+int direct_batchget_cb(char *ns, cf_digest *keyd, char *set, uint32_t generation,
+			uint32_t record_voidtime, cl_bin *bins, int n_bins, bool islast, void *udata)
+{
+	cl_batchresult *br = (cl_batchresult *)udata;
+
+	//Set all the interesting fields into the result structure
+	int slot = br->numrecs;
+	memcpy(&(br->records[slot].digest), keyd, sizeof(cf_digest));
+	br->records[slot].generation = generation;
+	br->records[slot].record_voidtime = record_voidtime;
+	citrusleaf_copy_bins(&(br->records[slot].bins), bins, n_bins);
+	br->records[slot].n_bins = n_bins;
+	br->numrecs++;
+
+	//We are supposed to free the bins in the callback
+	citrusleaf_bins_free(bins,n_bins);
+}
+
+void
+citrusleaf_free_batchresult(cl_batchresult *br)
+{
+	if (br && br->records) {
+		//We should free the bins in each of the records
+		for (int i=0; i<(br->numrecs); i++) {
+			citrusleaf_bins_free(br->records[i].bins, br->records[i].n_bins);
+			free(br->records[i].bins);
+		}
+
+		//Finally free the record array and the whole structure
+		free(br->records);
+		free(br);
+	}
+}
+
+cl_rv
+citrusleaf_get_many_digest_direct(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_batchresult **br)
+{
+	//Fist allocate the result structure
+	cl_batchresult *localbr = (cl_batchresult *) malloc(sizeof(struct cl_batchresult));
+	if (localbr == NULL) {
+		return CITRUSLEAF_FAIL_CLIENT;
+	} else {
+		//Assume that we are going to get all the records and allocate memory for them
+		localbr->records = malloc(sizeof(struct cl_rec) * n_digests);
+		if (localbr->records == NULL) {
+			free(localbr);
+			return CITRUSLEAF_FAIL_CLIENT;
+		}
+	}
+	
+	//Call the actual batch-get with our internal callback function which will store the results in an array
+	localbr->numrecs = 0;
+	cl_rv rv = citrusleaf_get_many_digest(asc, ns, digests, n_digests, 0, 0, true, &direct_batchget_cb, localbr);
+
+	//If something goes wrong we are responsible for freeing up the allocated memory. The caller may not free it.
+	if (rv == CITRUSLEAF_FAIL_CLIENT) {
+		citrusleaf_free_batchresult(localbr);
+		return CITRUSLEAF_FAIL_CLIENT;
+	} else {
+		*br = localbr;
+	}
+
+	return CITRUSLEAF_OK;
+	
+}
 
 cl_rv citrusleaf_exists_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_bin *bins, int n_bins, bool get_key, citrusleaf_get_many_cb cb, void *udata) {
     return do_get_exists_many_digest(asc, ns, digests, n_digests, bins, n_bins, get_key, false, cb, udata);
@@ -986,14 +1063,23 @@ int citrusleaf_batch_init() {
 * thread thereafter.
 */
 void citrusleaf_batch_shutdown() {
-        int i;
-        cl_batch_work work;
-        // all zero message is a death message
-        memset(&work,0,sizeof(cl_batch_work));
-        for(i=0;i<N_BATCH_THREADS;i++) {
-                cf_queue_push(g_batch_q,&work);
-        }
-        for(i=0;i<N_BATCH_THREADS;i++) {
-                pthread_join(g_batch_th[i],NULL);
-        }
+	int i;
+	digest_work work;
+
+	/* 
+	 * If a process is forked, the threads in it do not get spawned in the child process.
+	 * In citrusleaf_init(), we are remembering the processid(g_init_pid) of the process who spawned the 
+	 * background threads. If the current process is not the process who spawned the background threads
+	 * then it cannot call pthread_join() on the threads which does not exist in this process.
+	 */
+	if(g_init_pid == getpid()) {
+		memset(&work,0,sizeof(digest_work));
+		for(i=0;i<N_BATCH_THREADS;i++) {
+			cf_queue_push(g_batch_q,&work);
+		}
+
+		for(i=0;i<N_BATCH_THREADS;i++) {
+			pthread_join(g_batch_th[i],NULL);
+		}
+	}
 }

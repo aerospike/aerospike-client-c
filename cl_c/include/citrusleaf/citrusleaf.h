@@ -628,6 +628,19 @@ cl_rv citrusleaf_mrjob_add_parameter_numeric(cl_mrjob *mrjob, cl_script_func_t f
 cl_rv citrusleaf_mrjob_add_parameter_blob(cl_mrjob *mrjob, cl_script_func_t ftype, cl_type blobtype, const char *key, const uint8_t *value, int val_len);
 void citrusleaf_mrjob_destroy(cl_mrjob *mrjob);
  
+// MAP REDUCE
+//
+
+// when we register a mrjid, we keep the 3 "scripts" that have been
+// registered. The mrjid will be converted to a "package name",
+// and the three "scripts" will turn into one
+typedef struct citrusleaf_package_lua_s {
+    int   mrjid; 
+    char *lua_map; char *lua_reduce; char *lua_finalize;
+} citrusleaf_package_lua;
+
+extern int citrusleaf_load_script_lua(int mrjid, citrusleaf_package_lua *lscripts);
+
 #ifdef __cplusplus
 } // end extern "C"
 #endif

@@ -1,6 +1,11 @@
 /*
  * The batch interface has some cleverness, it makes parallel requests
- * under the covers to different servers
+ * under the covers to different servers. The batch function
+ * puts an element on the main queue for each transaction that will be sent
+ * in parallel to each server.
+ *
+ * In the case where the batch request is a map-reduce request, we need
+ * the responses to share state.
  *
  *
  * Brian Bulkowski, 2011
@@ -211,6 +216,7 @@ static uint8_t *write_fields_lua_func_register(
 
     return ( (uint8_t *) mf_tmp );
 }
+
 static uint8_t *write_fields_create_secondary_index(
                                uint8_t *buf, char *ns, int ns_len,
                                index_metadata_t *imd) {
@@ -252,40 +258,43 @@ static int batch_compile(uint info1, uint info2, uint info3, char *ns,
                          cl_operation *operations, int n_values,
                          uint8_t **buf_r, size_t *buf_sz_r,
                          const cl_write_parameters *cl_w_p,
-                         char *lua_mapf, int lmflen, char *lua_rdcf, int lrflen,
-                         char *lua_fnzf, int lfflen, int mrjid, int imatch,
-                         map_args_t *margs, int reg_mrjid,
-                         index_metadata_t *imd) {
+                         mr_state *mrs, int imatch,
+                         int reg_mrjid, index_metadata_t *imd) {
+
     int     ns_len  = ns ? strlen(ns) : 0;
     char   *imatchs = NULL; char imbuf [32];
-    char   *mrjids  = NULL; char mrjbuf[32];
     if (imatch != -1) { sprintf(imbuf,  "%d", imatch); imatchs = imbuf; }
-    if (mrjid)        { sprintf(mrjbuf, "%d", mrjid);  mrjids  = mrjbuf; }
+    char   *package_ids  = NULL; char package_id_buf[32];
+    if (mrs)        { sprintf(package_id_buf, "%d", mrs->package_p->package_id);  package_ids  = package_id_buf; }
     size_t  msg_sz  = sizeof(as_msg); // header
     size_t  marg_sz = 0;
     if (ns)      msg_sz += ns_len          + sizeof(cl_msg_field); // fields
     if (imatchs) msg_sz += strlen(imatchs) + sizeof(cl_msg_field);
-    if (mrjids)  msg_sz += strlen(mrjids)  + sizeof(cl_msg_field);
-    if (margs) {
-        marg_sz = sizeof(cl_msg_field) + sizeof(int); // argc(int)
-        for (int i = 0; i < margs->argc; i++) {
-            int klen  = strlen(margs->kargv[i]);
-            marg_sz   += (sizeof(int) + klen); // Length(int) + string_arg
-            int vlen  = strlen(margs->vargv[i]);
-            marg_sz   += (sizeof(int) + vlen); // Length(int) + string_arg
-        }
-        msg_sz += marg_sz;
-    }
+    if (mrs)  {
+    	msg_sz += strlen(package_ids)  + sizeof(cl_msg_field);
+		if (mrs->margs) {
+			map_args_t *margs = mrs->margs;
+			marg_sz = sizeof(cl_msg_field) + sizeof(int); // argc(int)
+			for (int i = 0; i < margs->argc; i++) {
+				int klen  = strlen(margs->kargv[i]);
+				marg_sz   += (sizeof(int) + klen); // Length(int) + string_arg
+				int vlen  = strlen(margs->vargv[i]);
+				marg_sz   += (sizeof(int) + vlen); // Length(int) + string_arg
+			}
+			msg_sz += marg_sz;
+		}
+	}
 
     //DDL
-    if (lmflen) {
+    if (mrs) {
+    	mr_package *mrp = mrs->package_p;
         if (reg_mrjid == -1) {
             printf("register MRJ requires an id"); return -1;
         }
         msg_sz += sizeof(cl_msg_field) + sizeof(int); //reg_mrjid
-        msg_sz += sizeof(cl_msg_field) + 1 + lmflen;
-        msg_sz += sizeof(cl_msg_field) + 1 + lrflen;
-        msg_sz += sizeof(cl_msg_field) + 1 + lfflen;
+        msg_sz += sizeof(cl_msg_field) + 1 + mrp->map_func_len;
+        msg_sz += sizeof(cl_msg_field) + 1 + mrp->rdc_func_len;
+        msg_sz += sizeof(cl_msg_field) + 1 + mrp->fnz_func_len;
     }
     if (imd) {
         size_t o_msg_sz = msg_sz;
@@ -309,7 +318,7 @@ static int batch_compile(uint info1, uint info2, uint info3, char *ns,
         }
     }
     
-    if (!n_my_digests && !lmflen && !imd) {
+    if (!n_my_digests && !mrs && !imd) {
         printf("batch_compile() define [n_my_digests, lmflen, OR imd]");
         return -1;
     }
@@ -340,11 +349,15 @@ static int batch_compile(uint info1, uint info2, uint info3, char *ns,
     int n_fields; // lay out the header
     if (n_my_digests) {
         n_fields = 1 + (ns ? 1 : 0) + (imatchs ? 1 : 0);
-        if (mrjid)  n_fields++;
-        if (margs)  n_fields++;
-    } else if (lmflen) {
+        if (mrs) { 
+        	n_fields++;
+        	if (mrs->margs)  n_fields++;
+        }
+    } 
+    if (mrs) {
         n_fields = 4 + (ns ? 1 : 0);
-    } else { // imd
+    } 
+    if (imd) {
         n_fields = 1 + (ns ? 1 : 0); // [iname, bname, type, isuniq, ists]
     }
 
@@ -357,13 +370,19 @@ static int batch_compile(uint info1, uint info2, uint info3, char *ns,
     if (n_my_digests) {
         buf = write_fields_batch_digests(buf, ns, ns_len, digests, nodes,
                                          n_digests, n_my_digests, my_node,
-                                         mrjids, imatchs, margs, marg_sz);
-    } else if (lmflen) {
+                                         package_ids, imatchs, mrs ? mrs->margs : 0, marg_sz);
+    } 
+    if (mrs) {
+    	mr_package *mrp = mrs->package_p;
+    	pthread_mutex_lock(mrp->func_lock);
         buf = write_fields_lua_func_register(buf, ns, ns_len,
-                                             lua_mapf, lmflen,
-                                             lua_rdcf, lrflen,
-                                             lua_fnzf, lfflen, reg_mrjid);
-    } else { // imd
+                                             mrp->map_func, mrp->map_func_len,
+                                             mrp->rdc_func, mrp->rdc_func_len,
+                                             mrp->fnz_func, mrp->fnz_func_len,
+                                             reg_mrjid);
+        pthread_mutex_unlock(mrp->func_lock);
+    } 
+    if (imd) {
         buf = write_fields_create_secondary_index(buf, ns, ns_len, imd);
     }
     if (!buf) { if (mbuf) free(mbuf); return(-1); }
@@ -394,11 +413,9 @@ static int do_batch_monte(cl_cluster *asc, int info1, int info2, int info3,
                           cl_operation *operations, int n_ops,
                           cl_cluster_node *node, int n_node_digests,
                           citrusleaf_get_many_cb cb, void *udata, 
-                          char *lua_mapf, int lmflen,
-                          char *lua_rdcf, int lrflen,
-                          char *lua_fnzf, int lfflen, int mrjid, int imatch,
-                          map_args_t *margs, int reg_mrjid,
-                          index_metadata_t *imd) {
+                          struct mr_state_s *mrs,
+                          int imatch, index_metadata_t *imd) 
+{
     int      rv        = -1;
     uint8_t  rd_stack_buf[STACK_BUF_SZ];    
     uint8_t *rd_buf    = 0;
@@ -410,8 +427,7 @@ static int do_batch_monte(cl_cluster *asc, int info1, int info2, int info3,
     rv = batch_compile(info1, info2, info3, ns, digests, nodes, n_digests,
                        node, n_node_digests, bins, operator, operations,
                        n_ops, &wr_buf, &wr_buf_sz, 0,
-                       lua_mapf, lmflen, lua_rdcf, lrflen, lua_fnzf, lfflen,
-                       mrjid, imatch, margs, reg_mrjid, imd);
+                       mrs, imatch, reg_mrjid, imd);
     if (rv) {
         printf("do batch monte: batch compile failed: " \
                "some kind of intermediate error\n");
@@ -663,19 +679,13 @@ typedef struct {
     void                   *udata;
     cf_queue               *complete_q;
     
+    struct mr_state_s		*mr_state;
+    
     // this is different for every work
     cl_cluster_node       *my_node;                
     int                    my_node_digest_count;
     int                    index; // debug only
-    unsigned int           mrjid;
-    char                  *lua_mapf;
-    int                    lmflen;
-    char                  *lua_rdcf;
-    int                    lrflen;
-    char                  *lua_fnzf;
-    int                    lfflen;
-    int                    imatch;
-    map_args_t            *margs;
+
     int                    reg_mrjid;
     index_metadata_t      *imd;
 } digest_work;
@@ -696,10 +706,8 @@ static void *batch_worker_fn(void *dummy) {
                                     work.nodes, work.n_digests, work.bins,
                                     work.operator, work.operations, work.n_ops,
                                     work.my_node, work.my_node_digest_count,
-                                    work.cb, work.udata, work.lua_mapf,
-                                    work.lmflen, work.lua_rdcf, work.lrflen,
-                                    work.lua_fnzf, work.lfflen, work.mrjid,
-                                    work.imatch, work.margs, work.reg_mrjid,
+                                    work.cb, work.udata, work.mr_state,
+                                    work.imatch, work.reg_mrjid,
                                     work.imd);
         cf_queue_push(work.complete_q, (void *)&an_int);
     }
@@ -711,9 +719,7 @@ static cl_rv citrusleaf_sik_traversal(cl_cluster *asc, char *ns,
                                       const cf_digest *digests, int n_digests,
                                       cl_bin *bins, int n_bins, bool get_key,
                                       citrusleaf_get_many_cb cb, void *udata, 
-                                      unsigned int mrjid, char *lua_mapf,
-                                      char *lua_rdcf, char *lua_fnzf,
-                                      int imatch, map_args_t *margs,
+                                      unsigned int mrjid, map_args *margs, int imatch, 
                                       int reg_mrjid, index_metadata_t *imd) {
     int lmflen  = lua_mapf ? strlen(lua_mapf) : 0;
     int lrflen  = lua_rdcf ? strlen(lua_rdcf) : 0;
@@ -724,6 +730,14 @@ static cl_rv citrusleaf_sik_traversal(cl_cluster *asc, char *ns,
     if (!nodes) { fprintf(stderr, " allocation failed "); return(-1); }
     for (int i = 0; i < n_nodes; i++) {
         nodes[i] = cf_vector_pointer_get(&asc->node_v, i);
+    }
+    
+    // if a map reduce is required, create a state
+    struct mr_state_s mr_state * = (mrjid, margs);
+    if (mr_state == 0) { 
+    	fprintf(stderr, " mr state could not be created "); 
+    	free(nodes);
+    	return(-1); 
     }
 
     // Note:  The digest exists case does not retrieve bin data.
@@ -743,15 +757,8 @@ static cl_rv citrusleaf_sik_traversal(cl_cluster *asc, char *ns,
     work.n_ops      = n_bins;
     work.cb         = cb;
     work.udata      = udata;
-    work.mrjid      = mrjid;
-    work.lua_mapf   = lua_mapf;
-    work.lmflen     = lmflen;
-    work.lua_rdcf   = lua_rdcf;
-    work.lrflen     = lrflen;
-    work.lua_fnzf   = lua_fnzf;
-    work.lfflen     = lfflen;
+    work.mr_state	= mr_state;
     work.imatch     = imatch;
-    work.margs      = margs;
     work.reg_mrjid  = reg_mrjid;
     work.imd        = imd;
     work.complete_q = cf_queue_create(sizeof(int),true);

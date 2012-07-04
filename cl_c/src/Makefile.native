@@ -1,25 +1,27 @@
 # Citrusleaf Foundation
 # Makefile
 
-#DEPTH = ../../..
-#include $(DEPTH)/make_in/Makefile.in
 include Makefile.in
 include Makefile.files
 
-DIR_INCLUDE = ../include
+DEPTH = ../../../..
+DIR_INCLUDE = ../include $(DEPTH)/../alchemy/redis/deps/lua/src
 DIR_CF_INCLUDE = ../../cf_base/include
 DIR_OBJECT = ../obj/native
 DIR_TARGET = ../lib
 DIR_CF_OBJECT = ../../cf_base/obj/native
+DIR_INCLUDES = $(DIR_INCLUDE) $(DIR_CF_INCLUDE)
 
 TARGET_S = libcitrusleaf.a
 TARGET_D = $(SONAME)
 
-INCLUDES = -I$(DIR_INCLUDE) -I$(DIR_CF_INCLUDE)
+INCLUDES = $(DIR_INCLUDES:%=-I%)
 
 OBJECTS = $(SOURCES:%.c=$(DIR_OBJECT)/%.o)
 CF_OBJECTS= $(CF_SOURCES:%c=$(DIR_CF_OBJECT)/%o)
 DEPENDENCIES = $(OBJECTS:%.o=%.d)
+
+LDFLAGS += -L$(DEPTH)/../alchemy/redis/deps/lua/src
 
 .PHONY: all
 all: libcitrusleaf

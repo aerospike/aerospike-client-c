@@ -72,6 +72,9 @@ typedef struct cl_async_work {
 
 int cl_del_node_asyncworkitems(void *key, void *value, void *clnode);
 
+struct mr_state_s; // forward definition, specifics in cl_mapreduce.c
+struct mr_package_s; // forward definition, specifics in cl_mapreduce.c
+
 typedef struct cl_batch_work {
 	
 	// these sections are the same for the same query
@@ -90,6 +93,8 @@ typedef struct cl_batch_work {
 	int		n_ops;          // Number of operations (count of elements in 'bins' or count of elements in 'operations', depending on which is used. 
 	citrusleaf_get_many_cb cb; 
 	void *udata;
+	
+	struct mr_state_s *mr_state;
 
 	cf_queue *complete_q;
 	
@@ -98,22 +103,64 @@ typedef struct cl_batch_work {
 	int				my_node_digest_count;
 	
 	int 			index; // debug only
-	
-    unsigned int  mrjid;
-    char         *lua_mapf;
-    int           lmflen;
-    char         *lua_rdcf;
-    int           lrflen;
-    char         *lua_fnzf;
-    int           lfflen;
 
     int           imatch;
-    map_args_t   *margs;
     int           reg_mrjid;
 } cl_batch_work;
 
 extern cf_queue		  		*g_batch_q;
 
+//
+// map reduce structures and functions
+//
+
+typedef struct mr_package_s {
+	
+//	char *package_name;
+	int		package_id;
+	
+	// "func" is the code, "name" is the symbol to invoke
+    char      *map_func; int map_func_len; char *map_name;
+    char      *rdc_func; int rdc_func_len; char *rdc_name;
+    char      *fnz_func; int fnz_func_len; char *fnz_name;
+    pthread_mutex_t func_lock;
+    
+    // Queue of mr_state pointers, anything in this queue  will have the above functions loaded
+	cf_queue	*mr_states_q;
+
+} mr_package;	
+
+mr_package * mr_package_create(int package_id, char *map_func, int map_func_len,
+									char *rdc_func, int rdc_func_len,
+									char *fnz_func, int fnz_func_len );
+
+void mr_package_destroy(mr_package *mrp_p);
+
+
+//
+// This is the state of a current map reduce job
+// It has all the functions, and it has the number of nodes and number of
+// responses currently received, and the current LUA object
+// (may require a mutex, because you can get responses from multiple
+// servers at the same time?)
+//
+typedef struct mr_state_s {
+
+	// state of the current response - when are we done	
+	int			num_nodes;
+	int			responses;
+	
+	// which package spawned this
+	mr_package *package_p;
+
+	struct map_args_t	*margs;
+	
+    void *lua_state; // don't want to require lua_State here
+    
+} mr_state;
+
+mr_state * mr_state_create(mr_package *mrp_p);
+void mr_state_destroy(mr_state *mrs_p);
 
 // scan fields
 // left-to-right bits

@@ -510,15 +510,15 @@ cf_create_nb_socket(struct sockaddr_in *sa, int timeout)
     if(fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
 		close(fd);
         return -1;
-	}	
+	}
 
     //initiate non-blocking connect
-	if (0 != connect(fd, (struct sockaddr *) sa, sizeof( *sa ) ))
+	if (0 != connect(fd, (struct sockaddr *) sa, sizeof( *sa ) )) {
         if (errno != EINPROGRESS) {
 			close(fd);
             return -1;
 		}
-
+	}
 	return fd;
 }
 

@@ -62,12 +62,12 @@ static query_work	g_null_work;
 // 5   1 argc (max 255 ranges) 
 //
 // argk
-// 6     1 argk_len x
+// 6     1 argk_len 1
 // 7     x argk
 //
 // argv
 // +x    1 argv_particle_type
-// +x+1  1 argv_particle_len
+// +x+1  4 argv_particle_len
 // +x+2 xx argv_particle_data
 // 
 // repeat argk
@@ -119,14 +119,17 @@ static int mrj_compile_arg_field(char * const*argk, cl_object * const*argv, int 
 		// particle data
 		sz += psz;
 		if (buf) {
-			fprintf(stderr, "*** buf %ld\n",*((uint64_t *)buf));
+			//fprintf(stderr, "*** buf %ld\n",*((uint64_t *)buf));
 			cl_object_to_buf(argv[i],buf);
-			fprintf(stderr, "*** buf %ld\n",*((uint64_t *)buf));
+			//fprintf(stderr, "*** buf %ld\n",*((uint64_t *)buf));
 			buf += psz;
 		}
 		
 	}		
 	
+	if (g_cl_turn_debug_on) {
+		fprintf(stderr, "processing %d arguments to be %d long\n",argc,sz);
+	}
 	*sz_p = sz;
 }
 
@@ -201,9 +204,9 @@ static int query_compile_range_field(cf_vector *range_v, uint8_t *buf, int *sz_p
 		// start particle data
 		sz += psz;
 		if (buf) {
-			fprintf(stderr, "*** buf %ld\n",*((uint64_t *)buf));
+			//fprintf(stderr, "*** buf %ld\n",*((uint64_t *)buf));
 			cl_object_to_buf(&range->start_obj,buf);
-			fprintf(stderr, "*** buf %ld\n",*((uint64_t *)buf));
+			//fprintf(stderr, "*** buf %ld\n",*((uint64_t *)buf));
 			buf += psz;
 		}
 		
@@ -222,9 +225,9 @@ static int query_compile_range_field(cf_vector *range_v, uint8_t *buf, int *sz_p
 		// end particle data
 		sz += psz;
 		if (buf) {
-			fprintf(stderr, "*** buf %ld\n",*((uint64_t *)buf));
+			//fprintf(stderr, "*** buf %ld\n",*((uint64_t *)buf));
 			cl_object_to_buf(&range->end_obj,buf);
-			fprintf(stderr, "*** buf %ld\n",*((uint64_t *)buf));
+			//fprintf(stderr, "*** buf %ld\n",*((uint64_t *)buf));
 			buf += psz;
 		}
 	}		
@@ -270,6 +273,13 @@ static int query_compile (const char *ns, const cl_query *query, const cl_mr_job
 		n_fields++;
 		package_len = strlen(mr_job->package); 
 		msg_sz += package_len  + sizeof(cl_msg_field);
+	}
+	
+	int gen_len = 0;	
+	if (mr_job && mr_job->generation) {
+		n_fields++;
+		gen_len = strlen(mr_job->generation); 
+		msg_sz += gen_len  + sizeof(cl_msg_field);
 	}	
 	
 	// mrj map field
@@ -282,8 +292,8 @@ static int query_compile (const char *ns, const cl_query *query, const cl_mr_job
 		
 		if (mr_job->map_argc > 0) {
 			n_fields++;
-			int maparg_len;
 			mrj_compile_arg_field(mr_job->map_argk, mr_job->map_argv, mr_job->map_argc, NULL, &maparg_len); 
+			msg_sz += maparg_len + sizeof(cl_msg_field);
 		} 
 	}	
 
@@ -297,8 +307,8 @@ static int query_compile (const char *ns, const cl_query *query, const cl_mr_job
 		
 		if (mr_job->rdc_argc > 0) {
 			n_fields++;
-			int rdcarg_len;
 			mrj_compile_arg_field(mr_job->rdc_argk, mr_job->rdc_argv, mr_job->rdc_argc, NULL, &rdcarg_len); 
+			msg_sz += rdcarg_len + sizeof(cl_msg_field);
 		} 
 	}	
 
@@ -312,8 +322,8 @@ static int query_compile (const char *ns, const cl_query *query, const cl_mr_job
 		
 		if (mr_job->fnz_argc > 0) {
 			n_fields++;
-			int fnzarg_len;
 			mrj_compile_arg_field(mr_job->fnz_argk, mr_job->fnz_argv, mr_job->fnz_argc, NULL, &fnzarg_len); 
+			msg_sz += fnzarg_len + sizeof(cl_msg_field);
 		} 
 	}	
 
@@ -375,6 +385,18 @@ static int query_compile (const char *ns, const cl_query *query, const cl_mr_job
         mf = mf_tmp;
 		if (g_cl_turn_debug_on) {
 			fprintf(stderr,"adding package %s\n", mr_job->package);
+		}
+    }
+
+    if (mr_job && mr_job->generation) {
+        mf->type = CL_MSG_FIELD_TYPE_SPROC_PACKAGE_GEN;
+        mf->field_sz = gen_len + 1;
+        memcpy(mf->data, mr_job->generation, gen_len);
+        mf_tmp = cl_msg_field_get_next(mf);
+        cl_msg_swap_field(mf);
+        mf = mf_tmp;
+		if (g_cl_turn_debug_on) {
+			fprintf(stderr,"adding generation %s\n", mr_job->generation);
 		}
     }
 

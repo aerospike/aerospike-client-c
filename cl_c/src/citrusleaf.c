@@ -211,15 +211,20 @@ int citrusleaf_copy_bins(cl_bin **destbins, cl_bin *srcbins, int n_bins)
 {
 	int rv;
 
-	*destbins = malloc(sizeof(struct cl_bin_s) * n_bins);
+	cl_bin *newbins = calloc(sizeof(struct cl_bin_s), n_bins);
+	if (newbins == NULL) {
+		return -1;
+	}
+
 	for (int i=0; i<n_bins; i++) {
-		rv = citrusleaf_copy_bin(destbins[i], &srcbins[i]);
+		rv = citrusleaf_copy_bin(&newbins[i], &srcbins[i]);
 		if (rv == -1) {
-			free(destbins);
+			free(newbins);
 			return -1;
 		}
 	}
 
+	*destbins = newbins;
 	return 0;
 }
 

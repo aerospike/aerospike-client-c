@@ -116,6 +116,7 @@ typedef struct cl_batch_work {
 // with defines
 struct lua_State;
 
+#define MAX_PACKAGE_NAME_SIZE 64
 
 //
 // This is the state of a current map reduce job
@@ -130,6 +131,8 @@ typedef struct mr_state_s {
 	int			num_nodes;
 	int			responses;
 	
+	char 	package_name[MAX_PACKAGE_NAME_SIZE]; // used to queue state after done
+	
 	// enough information to find the package -- but don't need to load code
 	const cl_mr_job 	*mr_job;
 
@@ -142,15 +145,15 @@ typedef struct mr_state_s {
 cl_mr_state * cl_mr_state_get(const cl_mr_job *mrj);
 void cl_mr_state_put(cl_mr_state *mrs);
 
-// All data has been done. Do finalize and any necessary callbacks
-int cl_mr_state_done(cl_mr_state *mrs);
-
 // hand a row to the map reduce system
 // call with "islast" on the final bit! important!
 int
-cl_mr_row(cl_mr_state *mr_state, char *ns, cf_digest *keyd, char *set, uint32_t generation, uint32_t record_ttl,
-	cl_bin *bins, int n_bins, bool is_last, void *udata);
-
+cl_mr_state_row(cl_mr_state *mr_state, char *ns, cf_digest *keyd, char *set, 
+	uint32_t generation, uint32_t record_ttl,
+	cl_bin *bins, int n_bins, bool islast, citrusleaf_get_many_cb cb, void *udata);
+// All data has been done. Do finalize and any necessary callbacks
+int
+cl_mr_state_done(cl_mr_state *mr_state, citrusleaf_get_many_cb cb, void *udata);
 
 int citrusleaf_mr_init(void);
 void citrusleaf_mr_shutdown(void);

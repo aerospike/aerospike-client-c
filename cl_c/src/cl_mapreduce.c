@@ -271,6 +271,21 @@ cl_mr_state * mr_state_create(mr_package *mrp_p) {
 }
 
 
+cl_mr_state * 
+cl_mr_state_get(const cl_mr_job *mrj) {
+
+	// get the package	
+	
+}
+
+void 
+cl_mr_state_put(cl_mr_state *mrs) {
+	
+	// get the package
+	
+}
+
+
 void mr_package_destroy(void *arg)
 {
 	mr_package *mrp_p = (mr_package *) arg;
@@ -370,12 +385,10 @@ Cleanup:
 // ??? call the client ???
 //
 
-int mrs_record_cb(char *ns, cf_digest *keyd, char *set, uint32_t generation,
+int cl_mr_state_row(cl_mr_state *mrs_p, char *ns, cf_digest *keyd, char *set, uint32_t generation,
            uint32_t record_ttl, cl_bin *bin, int n_bins,
-           bool is_last, void *udata) 
+           bool is_last, citrusleaf_get_many_cb cb, void *udata) 
 {
-
-	cl_mr_state *mrs_p = (cl_mr_state *) udata;
 
 	mrs_p->responses++; // atomic? lock?
     lua_State *lua   = mrs_p->lua;
@@ -426,45 +439,46 @@ int mrs_record_cb(char *ns, cf_digest *keyd, char *set, uint32_t generation,
         }
     }
 
-    if (mrs_p->responses == mrs_p->num_nodes) {
-
-    	// call the reduce wrapper
-        if (mrs_p->mr_job->rdc_fname) {
-            lua_getglobal(lua, "ReduceWrapper");
-            lua_getglobal(lua, mrs_p->mr_job->rdc_fname);
-            int ret = lua_pcall(lua, 1, 0, 0);
-            if (ret) {
-                printf("ReduceWrapper: FAILED: msg: (%s)\n",
-                       lua_tostring(lua, -1));
-                return -1; //TODO throw an error
-            }
-        }
-        if (mrs_p->mr_job->fnz_fname) {
-            lua_getglobal(lua, "FinalizeWrapper");
-            lua_getglobal(lua, mrs_p->mr_job->fnz_fname);
-            int ret = lua_pcall(lua, 1, 0, 0);
-            if (ret) {
-                printf("FinalizeWrapper: FAILED: (%s)\n",
-                       lua_tostring(lua, -1));
-                return -1; //TODO throw an error
-            }
-        }
-
-        lua_getglobal(lua, "DebugWrapper");
-        lua_getglobal(lua, "print_user_and_value");
-        ret = lua_pcall(lua, 1, 0, 0);
-        if (ret) {
-            printf("DebugWrapper: FAILED: (%s)\n",
-                   lua_tostring(lua, -1));
-            return -1; //TODO throw an error
-        }
-        
-        // TODO: Need to call the actual client about the response
-        
-    }
     return 0;
 }
 
+int mr_state_done(cl_mr_state *mrs_p,  citrusleaf_get_many_cb cb, void *udata) 
+{
+    lua_State *lua   = mrs_p->lua;
+    int ret;
+    
+	// call the reduce wrapper
+	if (mrs_p->mr_job->rdc_fname) {
+		lua_getglobal(lua, "ReduceWrapper");
+		lua_getglobal(lua, mrs_p->mr_job->rdc_fname);
+		int ret = lua_pcall(lua, 1, 0, 0);
+		if (ret) {
+			printf("ReduceWrapper: FAILED: msg: (%s)\n",
+				   lua_tostring(lua, -1));
+			return -1; //TODO throw an error
+		}
+	}
+	if (mrs_p->mr_job->fnz_fname) {
+		lua_getglobal(lua, "FinalizeWrapper");
+		lua_getglobal(lua, mrs_p->mr_job->fnz_fname);
+		int ret = lua_pcall(lua, 1, 0, 0);
+		if (ret) {
+			printf("FinalizeWrapper: FAILED: (%s)\n",
+				   lua_tostring(lua, -1));
+			return -1; //TODO throw an error
+		}
+	}
+
+	lua_getglobal(lua, "DebugWrapper");
+	lua_getglobal(lua, "print_user_and_value");
+	ret = lua_pcall(lua, 1, 0, 0);
+	if (ret) {
+		printf("DebugWrapper: FAILED: (%s)\n",
+			   lua_tostring(lua, -1));
+		return -1; //TODO throw an error
+	}
+        
+}
 
 #define MAX_LUA_SIZE    4096
 
@@ -559,11 +573,13 @@ uint32_t cf_mr_string_hash_fn(void *value, uint32_t value_len)
     return ( hash_value );
 }
 
-int citrusleaf_mr_package_init() {
+int citrusleaf_mr_init() {
 
 	cf_rchash_create(&mr_package_hash, cf_mr_string_hash_fn, mr_package_destroy, 
 		0 /*keylen*/, 100 /*sz*/, CF_RCHASH_CR_MT_BIGLOCK);
-	
+	return(0);
 }
 
-
+void citrusleaf_mr_shutdown() {
+	// todo: free the rchash
+}

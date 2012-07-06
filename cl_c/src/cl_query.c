@@ -622,7 +622,8 @@ static int do_query_monte(cl_cluster_node *node, const char *ns, const uint8_t *
             if ((msg->n_ops || (msg->info1 & CL_MSG_INFO1_NOBINDATA))) {
             	
 				if (mr_state) {
-					cl_mr_row(mr_state, ns_ret, keyd, set_ret, msg->generation, msg->record_ttl, bins, msg->n_ops, false /*islast*/, udata);
+					cl_mr_state_row(mr_state, ns_ret, keyd, set_ret, msg->generation, 
+						msg->record_ttl, bins, msg->n_ops, false /*islast*/, cb, udata);
 				}
 				else if (cb) {
 					// got one good value? call it a success!
@@ -760,7 +761,7 @@ cl_rv citrusleaf_query(cl_cluster *asc, const char *ns, const cl_query *query, c
     // do the final reduce, big operation, then done
     if ((retval == 0) && work.mr_state) {
     
-    	retval = cl_mr_state_done(work.mr_state);
+    	retval = cl_mr_state_done(work.mr_state, work.cb, work.udata);
     	
     	cl_mr_state_put(work.mr_state);
     }

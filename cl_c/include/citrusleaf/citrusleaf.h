@@ -209,7 +209,7 @@ typedef enum cl_script_func_t {
 
 #define CL_MAX_NUM_FUNC_ARGC	10 
 
-typedef struct cl_mrjob {
+typedef struct cl_mr_job {
 	char		*package;
 	char		*map_fname;
 	char		*rdc_fname;
@@ -224,7 +224,7 @@ typedef struct cl_mrjob {
 	char		*fnz_argk[CL_MAX_NUM_FUNC_ARGC];
 	cl_object	*fnz_argv[CL_MAX_NUM_FUNC_ARGC];
 	char		*generation;
-} cl_mrjob; 
+} cl_mr_job; 
 //
 // All citrusleaf functions return an integer. This integer is 0 if the
 // call has succeeded, and a negative number if it has failed.
@@ -610,10 +610,11 @@ citrusleaf_calculate_digest(const char *set, const cl_object *key, cf_digest *di
 //
 struct map_args_t;
 // DDL To Be obsoleted                                       
-cl_rv citrusleaf_register_lua_function(cl_cluster *asc, char *ns,
+cl_rv citrusleaf_register_package_lua(cl_cluster *asc, char *ns,
                                        citrusleaf_get_many_cb cb,
+                                       int mrjid,
                                        char *lua_mapf, char *lua_rdcf,
-                                       char *lua_fnzf, int reg_mrjid);
+                                       char *lua_fnzf);
 struct index_metadata_t;
 cl_rv citrusleaf_create_secondary_index(cl_cluster *asc, char *ns,
                                         citrusleaf_get_many_cb cb,
@@ -650,14 +651,14 @@ cl_rv citrusleaf_query_add_filter_string(cl_query *query_obj, const char *binnam
 cl_rv citrusleaf_query_add_orderby(cl_query *query_obj, const char *binname, cl_query_orderby_op order);
 cl_rv citrusleaf_query_set_limit(cl_query *query_obj, uint64_t limit);
 
-cl_rv citrusleaf_query(cl_cluster *asc, const char *ns, const cl_query *query_obj,const cl_mrjob *mrjob,
+cl_rv citrusleaf_query(cl_cluster *asc, const char *ns, const cl_query *query_obj,const cl_mr_job *mr_job,
 							citrusleaf_get_many_cb cb, void *udata);
 
-cl_mrjob *citrusleaf_mrjob_create(const char *package, const char *map_fname, const char *rdc_fname, const char *fnz_fname );
-cl_rv citrusleaf_mrjob_add_parameter_string(cl_mrjob *mrjob, cl_script_func_t ftype, const char *key, const char *value);
-cl_rv citrusleaf_mrjob_add_parameter_numeric(cl_mrjob *mrjob, cl_script_func_t ftype, const char *key, uint64_t value);
-cl_rv citrusleaf_mrjob_add_parameter_blob(cl_mrjob *mrjob, cl_script_func_t ftype, cl_type blobtype, const char *key, const uint8_t *value, int val_len);
-void citrusleaf_mrjob_destroy(cl_mrjob *mrjob);
+cl_mr_job *citrusleaf_mr_job_create(const char *package, const char *map_fname, const char *rdc_fname, const char *fnz_fname );
+cl_rv citrusleaf_mr_job_add_parameter_string(cl_mr_job *mr_job, cl_script_func_t ftype, const char *key, const char *value);
+cl_rv citrusleaf_mr_job_add_parameter_numeric(cl_mr_job *mr_job, cl_script_func_t ftype, const char *key, uint64_t value);
+cl_rv citrusleaf_mr_job_add_parameter_blob(cl_mr_job *mr_job, cl_script_func_t ftype, cl_type blobtype, const char *key, const uint8_t *value, int val_len);
+void citrusleaf_mr_job_destroy(cl_mr_job *mr_job);
  
 // MAP REDUCE
 //

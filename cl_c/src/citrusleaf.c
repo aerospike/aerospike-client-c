@@ -1852,6 +1852,7 @@ int citrusleaf_init()
 	g_init_pid = getpid();
 
  	citrusleaf_batch_init();
+	citrusleaf_mr_init();
 	citrusleaf_query_init();
 	citrusleaf_cluster_init();
 
@@ -1871,6 +1872,7 @@ void citrusleaf_shutdown(void) {
 
 	citrusleaf_cluster_shutdown();
 	citrusleaf_query_shutdown();
+	citrusleaf_mr_shutdown();
 	citrusleaf_batch_shutdown();
 	// citrusleaf_info_shutdown();
 

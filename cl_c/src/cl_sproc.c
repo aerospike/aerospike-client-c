@@ -54,76 +54,76 @@ cl_rv citrusleaf_load_sproc_context (cl_cluster *asc)
 	}
 }
 
-cl_mrjob *citrusleaf_mrjob_create(const char *package, const char *map_fname, const char *rdc_fname, const char *fnz_fname )
+cl_mr_job *citrusleaf_mr_job_create(const char *package, const char *map_fname, const char *rdc_fname, const char *fnz_fname )
 {
-	cl_mrjob *mrjob = malloc(sizeof(cl_mrjob));
-	if (mrjob==NULL) {
+	cl_mr_job *mr_job = malloc(sizeof(cl_mr_job));
+	if (mr_job==NULL) {
 		return NULL;
 	}
-	memset(mrjob,0,sizeof(cl_mrjob));
-	mrjob->package = strdup(package);
-	if (mrjob->package==NULL) {
+	memset(mr_job,0,sizeof(cl_mr_job));
+	mr_job->package = strdup(package);
+	if (mr_job->package==NULL) {
 		goto Cleanup;
 	}
 		
 	if (map_fname) {
-		mrjob->map_fname = strdup(map_fname);
-		if (mrjob->map_fname==NULL) {
+		mr_job->map_fname = strdup(map_fname);
+		if (mr_job->map_fname==NULL) {
 			goto Cleanup;
 		}
 	}	
 	if (rdc_fname) {
-		mrjob->rdc_fname = strdup(rdc_fname);
-		if (mrjob->rdc_fname==NULL) {
+		mr_job->rdc_fname = strdup(rdc_fname);
+		if (mr_job->rdc_fname==NULL) {
 			goto Cleanup;
 		}
 	}
 	if (fnz_fname) {
-		mrjob->fnz_fname = strdup(fnz_fname);
-		if (mrjob->fnz_fname==NULL) {
+		mr_job->fnz_fname = strdup(fnz_fname);
+		if (mr_job->fnz_fname==NULL) {
 			goto Cleanup;
 		}
 	}
-	return mrjob;
+	return mr_job;
 	
 Cleanup:	
-	citrusleaf_mrjob_destroy(mrjob);
+	citrusleaf_mr_job_destroy(mr_job);
 	return NULL;	
 }
 
-cl_rv citrusleaf_mrjob_add_parameter_string(cl_mrjob *mrjob, cl_script_func_t ftype, const char *key, const char *value)
+cl_rv citrusleaf_mr_job_add_parameter_string(cl_mr_job *mr_job, cl_script_func_t ftype, const char *key, const char *value)
 {
 	cl_rv rsp = CITRUSLEAF_OK;
 	char 		**argk;
 	cl_object 	**argv; 
 	int 		*argc;
 	if ( CL_SCRIPT_FUNC_TYPE_MAP == ftype) {
-		if (mrjob->map_argc>=CL_MAX_NUM_FUNC_ARGC) {
-			fprintf(stderr,"too many map_arg %d\n",mrjob->map_argc);
+		if (mr_job->map_argc>=CL_MAX_NUM_FUNC_ARGC) {
+			fprintf(stderr,"too many map_arg %d\n",mr_job->map_argc);
 			rsp = CITRUSLEAF_FAIL_CLIENT;
 			goto Cleanup;
 		}
-		argk = &mrjob->map_argk[mrjob->map_argc];
-		argv = &mrjob->map_argv[mrjob->map_argc];
-		argc = &mrjob->map_argc;
+		argk = &mr_job->map_argk[mr_job->map_argc];
+		argv = &mr_job->map_argv[mr_job->map_argc];
+		argc = &mr_job->map_argc;
 	} else if ( CL_SCRIPT_FUNC_TYPE_REDUCE == ftype) {
-		if (mrjob->rdc_argc>=CL_MAX_NUM_FUNC_ARGC) {
-			fprintf(stderr,"too many rdc_arg %d\n",mrjob->rdc_argc);
+		if (mr_job->rdc_argc>=CL_MAX_NUM_FUNC_ARGC) {
+			fprintf(stderr,"too many rdc_arg %d\n",mr_job->rdc_argc);
 			rsp = CITRUSLEAF_FAIL_CLIENT;
 			goto Cleanup;
 		}
-		argk = &mrjob->rdc_argk[mrjob->rdc_argc];
-		argv = &mrjob->rdc_argv[mrjob->rdc_argc];
-		argc = &mrjob->rdc_argc;
+		argk = &mr_job->rdc_argk[mr_job->rdc_argc];
+		argv = &mr_job->rdc_argv[mr_job->rdc_argc];
+		argc = &mr_job->rdc_argc;
 	} else if ( CL_SCRIPT_FUNC_TYPE_FINALIZE == ftype) {
-		if (mrjob->fnz_argc>=CL_MAX_NUM_FUNC_ARGC) {
-			fprintf(stderr,"too many map_arg %d\n",mrjob->fnz_argc);
+		if (mr_job->fnz_argc>=CL_MAX_NUM_FUNC_ARGC) {
+			fprintf(stderr,"too many map_arg %d\n",mr_job->fnz_argc);
 			rsp = CITRUSLEAF_FAIL_CLIENT;
 			goto Cleanup;
 		}
-		argk = &mrjob->fnz_argk[mrjob->fnz_argc];
-		argv = &mrjob->fnz_argv[mrjob->fnz_argc];
-		argc = &mrjob->fnz_argc;
+		argk = &mr_job->fnz_argk[mr_job->fnz_argc];
+		argv = &mr_job->fnz_argv[mr_job->fnz_argc];
+		argc = &mr_job->fnz_argc;
 	} else {
 		fprintf(stderr,"unrecognized job type %d\n",ftype);
 		rsp = CITRUSLEAF_FAIL_CLIENT;
@@ -146,41 +146,41 @@ Cleanup:
 	return rsp;
 }
 
-cl_rv citrusleaf_mrjob_add_parameter_numeric(cl_mrjob *mrjob, cl_script_func_t ftype, const char *key, uint64_t value)
+cl_rv citrusleaf_mr_job_add_parameter_numeric(cl_mr_job *mr_job, cl_script_func_t ftype, const char *key, uint64_t value)
 {
 	fprintf(stderr, "unimplemented\n");
 	return CITRUSLEAF_FAIL_CLIENT;
 }
 
-cl_rv citrusleaf_mrjob_add_parameter_blob(cl_mrjob *mrjob, cl_script_func_t ftype, cl_type blobtype, const char *key, const uint8_t *value, int val_len)
+cl_rv citrusleaf_mr_job_add_parameter_blob(cl_mr_job *mr_job, cl_script_func_t ftype, cl_type blobtype, const char *key, const uint8_t *value, int val_len)
 {
 	fprintf(stderr, "unimplemented\n");
 	return CITRUSLEAF_FAIL_CLIENT;
 }
 
 
-void citrusleaf_mrjob_destroy(cl_mrjob *mrjob)
+void citrusleaf_mr_job_destroy(cl_mr_job *mr_job)
 {
-	if (!mrjob) return;
-	if (mrjob->map_fname) free(mrjob->map_fname);
-	if (mrjob->rdc_fname) free(mrjob->rdc_fname);
-	if (mrjob->fnz_fname) free(mrjob->fnz_fname);
+	if (!mr_job) return;
+	if (mr_job->map_fname) free(mr_job->map_fname);
+	if (mr_job->rdc_fname) free(mr_job->rdc_fname);
+	if (mr_job->fnz_fname) free(mr_job->fnz_fname);
 	
-	for (int i=0; i<mrjob->map_argc; i++) {
-		free (mrjob->map_argk[i]);
-		citrusleaf_object_free (mrjob->map_argv[i]);
+	for (int i=0; i<mr_job->map_argc; i++) {
+		free (mr_job->map_argk[i]);
+		citrusleaf_object_free (mr_job->map_argv[i]);
 	}
 
-	for (int i=0; i<mrjob->rdc_argc; i++) {
-		free (mrjob->rdc_argk[i]);
-		citrusleaf_object_free (mrjob->rdc_argv[i]);
+	for (int i=0; i<mr_job->rdc_argc; i++) {
+		free (mr_job->rdc_argk[i]);
+		citrusleaf_object_free (mr_job->rdc_argv[i]);
 	}
 
-	for (int i=0; i<mrjob->fnz_argc; i++) {
-		free (mrjob->fnz_argk[i]);
-		citrusleaf_object_free (mrjob->fnz_argv[i]);
+	for (int i=0; i<mr_job->fnz_argc; i++) {
+		free (mr_job->fnz_argk[i]);
+		citrusleaf_object_free (mr_job->fnz_argv[i]);
 	}
 
-	free (mrjob);
+	free (mr_job);
 }
 

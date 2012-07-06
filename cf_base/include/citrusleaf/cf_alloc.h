@@ -11,7 +11,6 @@
 
 #include "cf_atomic.h"
 
-
 /* SYNOPSIS
  * Reference counting allocation
  * This extends the traditional C memory allocation system to support

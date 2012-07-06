@@ -105,36 +105,16 @@ typedef struct cl_batch_work {
 	int 			index; // debug only
 
     int           imatch;
-    int           reg_mrjid;
+
 } cl_batch_work;
 
-extern cf_queue		  		*g_batch_q;
+
+
 
 //
-// map reduce structures and functions
-//
-
-typedef struct mr_package_s {
-	
-//	char *package_name;
-	int		package_id;
-	
-	// "func" is the code, "name" is the symbol to invoke
-    char      *map_func; int map_func_len; char *map_name;
-    char      *rdc_func; int rdc_func_len; char *rdc_name;
-    char      *fnz_func; int fnz_func_len; char *fnz_name;
-    pthread_mutex_t func_lock;
-    
-    // Queue of mr_state pointers, anything in this queue  will have the above functions loaded
-	cf_queue	*mr_states_q;
-
-} mr_package;	
-
-mr_package * mr_package_create(int package_id, char *map_func, int map_func_len,
-									char *rdc_func, int rdc_func_len,
-									char *fnz_func, int fnz_func_len );
-
-void mr_package_destroy(mr_package *mrp_p);
+// Treat the lua state pointer as an exteral, saves us a lot of hassle
+// with defines
+struct lua_State;
 
 
 //
@@ -150,17 +130,30 @@ typedef struct mr_state_s {
 	int			num_nodes;
 	int			responses;
 	
-	// which package spawned this
-	mr_package *package_p;
+	// enough information to find the package -- but don't need to load code
+	const cl_mr_job 	*mr_job;
 
-	struct map_args_t	*margs;
-	
-    void *lua_state; // don't want to require lua_State here
+    struct lua_State *lua; // don't want to require the entire lua headers
     
-} mr_state;
+} cl_mr_state;
 
-mr_state * mr_state_create(mr_package *mrp_p);
-void mr_state_destroy(mr_state *mrs_p);
+
+// Get a map reduce state - the instance - based on the job description
+cl_mr_state * cl_mr_state_get(const cl_mr_job *mrj);
+void cl_mr_state_put(cl_mr_state *mrs);
+
+// All data has been done. Do finalize and any necessary callbacks
+int cl_mr_state_done(cl_mr_state *mrs);
+
+// hand a row to the map reduce system
+// call with "islast" on the final bit! important!
+int
+cl_mr_row(cl_mr_state *mr_state, char *ns, cf_digest *keyd, char *set, uint32_t generation, uint32_t record_ttl,
+	cl_bin *bins, int n_bins, bool is_last, void *udata);
+
+
+int citrusleaf_mr_init(void);
+void citrusleaf_mr_shutdown(void);
 
 // scan fields
 // left-to-right bits

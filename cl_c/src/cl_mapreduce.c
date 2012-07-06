@@ -28,6 +28,8 @@
 #include "citrusleaf/citrusleaf.h"
 #include "citrusleaf/citrusleaf-internal.h"
 #include "citrusleaf/proto.h"
+#include "citrusleaf/cf_rchash.h"
+#include "citrusleaf/cf_alloc.h"
 
 //ALCHEMY
 #include <lua.h>
@@ -35,11 +37,29 @@
 #include <lualib.h>
 
 
+// Key is a string
+// Value is a pointer to mr_package
 
+static cf_rchash *mr_package_hash = 0;
 
-#define MAX_NUM_MR_PACKAGES 255
+//
+// map reduce structures and functions
+//
 
-static mr_package *MR_packages[MAX_NUM_MR_PACKAGES];
+typedef struct mr_package_s {
+	
+	char *package_name;
+	
+	// "func" is the code, "name" is the symbol to invoke
+    char      *map_func; int map_func_len; 
+    char      *rdc_func; int rdc_func_len; 
+    char      *fnz_func; int fnz_func_len; 
+    pthread_mutex_t func_lock;
+    
+    // Queue of mr_state pointers, anything in this queue  will have the above functions loaded
+	cf_queue	*mr_states_q;
+
+} mr_package;	
 
 
 //
@@ -48,17 +68,6 @@ static mr_package *MR_packages[MAX_NUM_MR_PACKAGES];
 #define ISBLANK(c)           (c == 32 || c == 9)
 #define SKIP_SPACES(tok)     while (ISBLANK(*tok)) tok++;
 
-static char *getFuncNameFromFuncDecl(char *lfuncdecl) {
-    if (strncmp(lfuncdecl, "function ", 9)) return NULL;
-    char *fbeg = lfuncdecl + 9;
-    if (ISBLANK(*fbeg)) SKIP_SPACES(fbeg)
-    char *paren = strchr(fbeg, '(');
-    if (!paren) return NULL;
-    char *fname = malloc(paren - fbeg + 1);
-    memcpy(fname, fbeg, paren - fbeg);
-    fname[paren - fbeg] = '\0';
-    return fname;
-}
 
 #define DEFINE_ADD_TO_MAP_RESULTS								\
     "function AddTableToMapResults(hasrdc, k, v) " 				\
@@ -146,7 +155,8 @@ static void assertOnLuaError(lua_State *lua, char *assert_string) {
 // which only has to be done when the load 
 //
 
-static int state_create_lua(mr_state *mrs_p) {
+static int 
+mr_state_lua_create(cl_mr_state *mrs_p) {
 	
 	if (mrs_p->lua) { lua_close(mrs_p->lua); mrs_p->lua = 0; }
 	
@@ -201,7 +211,7 @@ Cleanup:
 // Load in the dynamic functions necessary for this map reduce job
 //
 
-static int mr_state_load_package_lua(mr_state *mrs_p, mr_package *mrp_p) {
+static int mr_state_load_package_lua(cl_mr_state *mrs_p, mr_package *mrp_p) {
 	
     lua_State *lua  = mrs_p->lua;
 
@@ -224,60 +234,73 @@ static int mr_state_load_package_lua(mr_state *mrs_p, mr_package *mrp_p) {
     return(0);
 }
 
-void mr_state_destroy(mr_state *mrs_p)
+void mr_state_destroy(cl_mr_state *mrs_p)
 {
 	if (mrs_p->lua) lua_close(mrs_p->lua);
 	free(mrs_p);	
 }
 
-// input: an mrj_pd and the functions to register
-// allocates copies the functions into the mrj_pd, creates the LUA universe, and loads all functions
+// input: an mrs_pd and the functions to register
+// allocates copies the functions into the mrs_pd, creates the LUA universe, and loads all functions
 
-mr_state * mr_state_create(mr_package *mrp_p) {
+cl_mr_state * mr_state_create(mr_package *mrp_p) {
 
-	mr_state *mrs_p = calloc(sizeof(mr_state),1);
+	cl_mr_state *mrs_p = calloc(sizeof(cl_mr_state),1);
 	if (!mrs_p) return(0);
 
-	// todo: increase reference count
-	mrs_p->package_p = mrp_p;
-	
 	// create the lua universe and load in static funcs
-    if (! state_create_lua(mrs_p) ) {
+    if (! mr_state_lua_create(mrs_p) ) {
     	mr_state_destroy(mrs_p);
     	return(0);
 	}
     
-    // load in the dynamic functions, this can actually fail if the Lua
-    // registered is bad
-    if (! state_load_package_lua(mrs_p, mrp_p) ) {
+    // load in the dynamic code, this can actually fail if the Lua
+    // registered is bad, take a copy of the functions
+    pthread_mutex_lock(&mrp_p->func_lock);
+
+	// copy the bits we need
+
+    if (! mr_state_load_package_lua(mrs_p, mrp_p) ) {
+    	pthread_mutex_unlock(&mrp_p->func_lock);
     	mr_state_destroy(mrs_p);
     	return(0);
     }
+    pthread_mutex_unlock(&mrp_p->func_lock);
     
     return(mrs_p);
 }
 
 
-//
-//
-
-void mr_package_destroy(mr_package *mrp_p)
+void mr_package_destroy(void *arg)
 {
-	// TODO
+	mr_package *mrp_p = (mr_package *) arg;
+	if (0 == cf_client_rc_release(mrp_p)) {
+		
+		if (mrp_p->map_func) free(mrp_p->map_func);
+		if (mrp_p->rdc_func) free(mrp_p->rdc_func);
+		if (mrp_p->fnz_func) free(mrp_p->fnz_func);
+
+		cl_mr_state *mrs_p;
+    	while (CF_QUEUE_OK == cf_queue_pop(mrp_p->mr_states_q, &mrs_p,0/*nowait*/)) {
+    		mr_state_destroy(mrs_p);
+    	}
+		
+		cf_client_rc_free(mrp_p);
+	}
 	return;
 }
 
-mr_package * mr_package_create(int package_id, char *map_func, int map_func_len,
+mr_package * mr_package_create(char *package_name, char *map_func, int map_func_len,
 									char *rdc_func, int rdc_func_len,
 									char *fnz_func, int fnz_func_len )
 {
-	if (package_id >= MAX_NUM_MR_PACKAGES) return(0);	
 	mr_package *mrp_p = 0;
 	bool reusing = false;
 	
-	// are we reusing? if so, need to lock, and clean cache later
-	if (MR_packages[package_id]) {
-		mrp_p = MR_packages[package_id];
+	// already registered?
+	int found = cf_rchash_get(mr_package_hash, package_name, strlen(package_name)+1, (void **) &mrp_p);
+	if (found == CF_RCHASH_OK) {
+		reusing = true;
 		pthread_mutex_lock(&mrp_p->func_lock);
 		if (mrp_p->map_func)	{ free(mrp_p->map_func); mrp_p->map_func = 0; } 
 		if (mrp_p->rdc_func)	{ free(mrp_p->rdc_func); mrp_p->rdc_func = 0; } 
@@ -285,13 +308,13 @@ mr_package * mr_package_create(int package_id, char *map_func, int map_func_len,
 		reusing = true;
 	}
 	else {
-		mrp_p = cf_rc_alloc(sizeof(mr_package));
+		mrp_p = cf_client_rc_alloc(sizeof(mr_package));
 		if (!mrp_p) goto Cleanup;
 		memset(mrp_p, 0, sizeof(mr_package));
 	
-		mrp_p->package_id = package_id;
+		mrp_p->package_name = strdup(package_name);
 		pthread_mutex_init(&mrp_p->func_lock, 0/*default addr*/);
-		mrp_p->mr_states_q = cf_queue_create(sizeof(mr_state *), true/*multithreaded*/);
+		mrp_p->mr_states_q = cf_queue_create(sizeof(cl_mr_state *), true/*multithreaded*/);
 	}
 	
 	if (map_func) {
@@ -299,7 +322,6 @@ mr_package * mr_package_create(int package_id, char *map_func, int map_func_len,
 		if (!mrp_p->map_func)			goto Cleanup;
 		memcpy(mrp_p->map_func, map_func, map_func_len);
 		mrp_p->map_func[map_func_len]     = '\0';
-		mrp_p->map_name                 = getFuncNameFromFuncDecl(map_func);
 	}
     
     if (rdc_func) {
@@ -307,7 +329,6 @@ mr_package * mr_package_create(int package_id, char *map_func, int map_func_len,
         if (!mrp_p->rdc_func)	goto Cleanup;
         memcpy(mrp_p->rdc_func, rdc_func, rdc_func_len);
         mrp_p->rdc_func[rdc_func_len] = '\0';
-        mrp_p->rdc_name             = getFuncNameFromFuncDecl(rdc_func);
     }
     
     if (fnz_func) {
@@ -315,86 +336,32 @@ mr_package * mr_package_create(int package_id, char *map_func, int map_func_len,
         if (!mrp_p->fnz_func)	goto Cleanup;
         memcpy(mrp_p->fnz_func, fnz_func, fnz_func_len);
         mrp_p->fnz_func[fnz_func_len] = '\0';
-        mrp_p->fnz_name             = getFuncNameFromFuncDecl(fnz_func);
     }
     
     if (reusing) {
     	pthread_mutex_unlock(&mrp_p->func_lock);
     	
-    	// clean queue
-    	mr_state *mrs_p = 0;
+    	// clean queue/cache
+    	cl_mr_state *mrs_p = 0;
     	while (CF_QUEUE_OK == cf_queue_pop(mrp_p->mr_states_q, &mrs_p,0/*nowait*/))
     		mr_state_destroy(mrs_p);
     	
     }
     else {
-		// stash package locally, open for business
-		MR_packages[package_id] = mrp_p;
+    	// add to the rchash
+    	cf_client_rc_reserve(mrp_p);
+    	cf_rchash_put_unique(mr_package_hash, package_name, strlen(package_name)+1, mrp_p);
 	}
-   	cf_rc_reserve(mrp_p); // increase the reference count
 	return(mrp_p);
 Cleanup:
 	if (!mrp_p)	return(0);
 	if (mrp_p->map_func)	free(mrp_p->map_func);
 	if (mrp_p->rdc_func)	free(mrp_p->rdc_func);
 	if (mrp_p->fnz_func)	free(mrp_p->fnz_func);
-	// TODO TRICKY - if reuse, possibly allow jobs to fail? reference count???
 	return(0);
 }
 
-//
-// going to run a particular map reduce job
-// look up the name in the shared table, grab / make a new state
-//
 
-static int register_luafunc_cb(char *ns, cf_digest *keyd, char *set, uint32_t generation,
-                  uint32_t record_ttl, cl_bin *bin, int n_bins,
-                  bool is_last, void *udata) {
-
-    int mrjid = (int)(long)udata;
-    printf("cl_mapreduce: register_luafunc_cb: mrj_id: %d\n", mrjid);
-
-	// see if this mrjid is registered, grab a state
-	
-	    
-    
-    char *mapfunc    = CurrentLuaMapFunc;
-    int   mapfunclen = strlen(CurrentLuaMapFunc);
-    
-    char *rdcfunc    = strncmp(CurrentLuaRdcFunc, "NULL", 4) ? 
-    								CurrentLuaRdcFunc : NULL;
-    int   rdcfunclen = rdcfunc ? strlen(rdcfunc) : 0;
-    
-    char *fnzfunc    = strncmp(CurrentLuaFnzFunc, "NULL", 4) ?
-    								CurrentLuaFnzFunc : NULL;
-    int   fnzfunclen = fnzfunc ? strlen(fnzfunc) : 0;
-    
-    regMRJ(&MRJ[mrjid], mapfunc, mapfunclen, rdcfunc, rdcfunclen,
-                        fnzfunc, fnzfunclen);
-
-    return 0;
-}
-
-int ignore_cb(char *ns, cf_digest *keyd, char *set, uint32_t generation,
-              uint32_t record_ttl, cl_bin *bin, int n_bins,
-              bool is_last, void *udata) {
-    return 0;
-}
-
-int createsecindx_cb(char *ns, cf_digest *keyd, char *set, uint32_t generation,
-                     uint32_t record_ttl, cl_bin *bin, int n_bins,
-                     bool is_last, void *udata) {
-    printf("createsecindx_cb\n");
-    return 0;
-}
-
-mrj_state *get_MRJ(int mrjid) { 
-	if (mrjid >= MAX_NUM_MR_IDS) {
-		printf("using mrj id greater than compiled maximum %d, will fail badly\n",MAX_NUM_MR_IDS);
-		return(0);
-	}
-	return &MRJ[mrjid];
-}
 
 //
 // receiving a record from the server. Load it into the results structure.  
@@ -403,12 +370,12 @@ mrj_state *get_MRJ(int mrjid) {
 // ??? call the client ???
 //
 
-int mrj_record_cb(char *ns, cf_digest *keyd, char *set, uint32_t generation,
+int mrs_record_cb(char *ns, cf_digest *keyd, char *set, uint32_t generation,
            uint32_t record_ttl, cl_bin *bin, int n_bins,
            bool is_last, void *udata) 
 {
 
-	mrs_p = (mr_state *) udata;
+	cl_mr_state *mrs_p = (cl_mr_state *) udata;
 
 	mrs_p->responses++; // atomic? lock?
     lua_State *lua   = mrs_p->lua;
@@ -439,7 +406,7 @@ int mrj_record_cb(char *ns, cf_digest *keyd, char *set, uint32_t generation,
               break;
           case CL_STR:
 			  lua_getglobal(lua, "AddStringToMapResults");
-			  lua_pushboolean(lua, mrji->rdcname? 1 : 0);
+			  lua_pushboolean(lua, mrs_p->mr_job->rdc_fname? 1 : 0); // true if a reduce will be called
 			  lua_pushstring (lua, bin_name);
 			  lua_pushstring (lua, o->u.str);
 			  ret = lua_pcall(lua, 3, 0, 0);
@@ -447,7 +414,7 @@ int mrj_record_cb(char *ns, cf_digest *keyd, char *set, uint32_t generation,
               break;
           case CL_LUA_BLOB:
 			  lua_getglobal  (lua, "AddTableToMapResults");
-			  lua_pushboolean(lua, mrji->rdcname? 1 : 0);
+			  lua_pushboolean(lua, mrs_p->mr_job->rdc_fname? 1 : 0); // true if a reduce will be called
 			  lua_pushstring (lua, bin_name);
 			  lua_pushstring (lua, o->u.str);
 			  ret = lua_pcall(lua, 3, 0, 0);
@@ -462,9 +429,9 @@ int mrj_record_cb(char *ns, cf_digest *keyd, char *set, uint32_t generation,
     if (mrs_p->responses == mrs_p->num_nodes) {
 
     	// call the reduce wrapper
-        if (mrji->rdcname) {
+        if (mrs_p->mr_job->rdc_fname) {
             lua_getglobal(lua, "ReduceWrapper");
-            lua_getglobal(lua, mrs_p->mrp_p->rdc_name);
+            lua_getglobal(lua, mrs_p->mr_job->rdc_fname);
             int ret = lua_pcall(lua, 1, 0, 0);
             if (ret) {
                 printf("ReduceWrapper: FAILED: msg: (%s)\n",
@@ -472,9 +439,9 @@ int mrj_record_cb(char *ns, cf_digest *keyd, char *set, uint32_t generation,
                 return -1; //TODO throw an error
             }
         }
-        if (mrji->fnzname) {
+        if (mrs_p->mr_job->fnz_fname) {
             lua_getglobal(lua, "FinalizeWrapper");
-            lua_getglobal(lua, mrs_p->mrp_p->fnz_name);
+            lua_getglobal(lua, mrs_p->mr_job->fnz_fname);
             int ret = lua_pcall(lua, 1, 0, 0);
             if (ret) {
                 printf("FinalizeWrapper: FAILED: (%s)\n",
@@ -492,7 +459,7 @@ int mrj_record_cb(char *ns, cf_digest *keyd, char *set, uint32_t generation,
             return -1; //TODO throw an error
         }
         
-        // Need to call the actual client about the response
+        // TODO: Need to call the actual client about the response
         
     }
     return 0;
@@ -510,30 +477,31 @@ static char *trim_end_space(char *str) {
     return str;
 }
 
-// Load from disk the ID mrjid, and fill out the lscripts structure
+// Load from disk the ID mrsid, and fill out the lscripts structure
 // structure (which has a pointer/memory for map, reduce, finalize snips)
-// INPUT: mrjid
+// INPUT: mrsid
 // OUTPUT: lscripts
 
-int citrusleaf_package_register_lua(int mrjid, citrusleaf_package_lua *lscripts) {
+#if 0
+int citrusleaf_package_register_lua(int mrsid, citrusleaf_package_lua *lscripts) {
     char rpath[128] = "lua_files/";
-    lscripts->mrjid = mrjid;
+    lscripts->mrsid = mrsid;
 
     char fname[512];
-    sprintf(fname,"%s%d.map",rpath,mrjid);
+    sprintf(fname,"%s%d.map",rpath,mrsid);
     FILE *fmap = fopen(fname,"r"); // open the files
     fprintf(stderr,"loading map_reduce files %s\n",fname);
     if (fmap==NULL) {
         fprintf(stderr,"can't open map file %s\n",fname); return -1;
     } 
    
-    sprintf(fname,"%s%d.reduce",rpath,mrjid);
+    sprintf(fname,"%s%d.reduce",rpath,mrsid);
     FILE *frd = fopen(fname,"r");
     if (frd==NULL) {
         fprintf(stderr,"can't open reduce file %s\n",fname); return -1;
     } 
 
-    sprintf(fname,"%s%d.finalize",rpath,mrjid);
+    sprintf(fname,"%s%d.finalize",rpath,mrsid);
     FILE *ffn = fopen(fname,"r");
     if (ffn==NULL) {
         fprintf(stderr,"can't open finalize file %s\n",fname); return -1;
@@ -554,17 +522,48 @@ int citrusleaf_package_register_lua(int mrjid, citrusleaf_package_lua *lscripts)
     trim_end_space(lscripts->lua_finalize);
     
     char tmpStr[1024];
-    sprintf(tmpStr, "map.%d=[%s] %ld\n", mrjid, lscripts->lua_map,
+    sprintf(tmpStr, "map.%d=[%s] %ld\n", mrsid, lscripts->lua_map,
                                         strlen(lscripts->lua_map));
     fprintf(stderr, tmpStr);
-    sprintf(tmpStr, "reduce.%d=[%s] %ld\n", mrjid, lscripts->lua_reduce,
+    sprintf(tmpStr, "reduce.%d=[%s] %ld\n", mrsid, lscripts->lua_reduce,
                                             strlen(lscripts->lua_reduce));
     fprintf(stderr,tmpStr);
-    sprintf(tmpStr, "finalize.%d=[%s] %ld\n", mrjid, lscripts->lua_finalize,
+    sprintf(tmpStr, "finalize.%d=[%s] %ld\n", mrsid, lscripts->lua_finalize,
                                               strlen(lscripts->lua_finalize));
     fprintf(stderr,tmpStr);
     fclose(fmap); fclose(frd); fclose(ffn);
     return 0;
+}
+#endif
+
+#define BITS_IN_int     ( 32 )
+#define THREE_QUARTERS  ((int) ((BITS_IN_int * 3) / 4))
+#define ONE_EIGHTH      ((int) (BITS_IN_int / 8))
+#define HIGH_BITS       ( ~((unsigned int)(~0) >> ONE_EIGHTH ))
+
+// ignoring value_len - know it's null terminated
+uint32_t cf_mr_string_hash_fn(void *value, uint32_t value_len)
+{
+	uint8_t *v = value;
+    uint32_t hash_value = 0, i;
+
+    while (*v) 
+    {
+        hash_value = ( hash_value << ONE_EIGHTH ) + *v;
+        if (( i = hash_value & HIGH_BITS ) != 0 )
+            hash_value =
+                ( hash_value ^ ( i >> THREE_QUARTERS )) &
+                        ~HIGH_BITS;
+        v++;
+    }
+    return ( hash_value );
+}
+
+int citrusleaf_mr_package_init() {
+
+	cf_rchash_create(&mr_package_hash, cf_mr_string_hash_fn, mr_package_destroy, 
+		0 /*keylen*/, 100 /*sz*/, CF_RCHASH_CR_MT_BIGLOCK);
+	
 }
 
 

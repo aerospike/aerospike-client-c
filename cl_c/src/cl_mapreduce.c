@@ -442,7 +442,7 @@ int cl_mr_state_row(cl_mr_state *mrs_p, char *ns, cf_digest *keyd, char *set, ui
     return 0;
 }
 
-int mr_state_done(cl_mr_state *mrs_p,  citrusleaf_get_many_cb cb, void *udata) 
+int cl_mr_state_done(cl_mr_state *mrs_p,  citrusleaf_get_many_cb cb, void *udata) 
 {
     lua_State *lua   = mrs_p->lua;
     int ret;

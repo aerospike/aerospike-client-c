@@ -410,7 +410,7 @@ int test_operate(cl_cluster *clc)
 	citrusleaf_object_init_blob(&ops[2].bin.object, blobData2, strlen(blobData2)+1);
 	
 	ops[0].op = CL_OP_READ;
-	ops[1].op = CL_OP_ADD;
+	ops[1].op = CL_OP_INCR;
 	ops[2].op = CL_OP_WRITE;
 	
 	rv = citrusleaf_operate(clc, ns, myset, &key, &ops[0], 3, NULL);

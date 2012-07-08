@@ -51,16 +51,17 @@ typedef struct mr_package_s {
 	char *package_name;
 	
 	// "func" is the code, "name" is the symbol to invoke
-    char      *map_func; int map_func_len; 
-    char      *rdc_func; int rdc_func_len; 
-    char      *fnz_func; int fnz_func_len; 
-    pthread_mutex_t func_lock;
+    char      *script; int script_len; 
+    pthread_mutex_t script_lock;
     
     // Queue of mr_state pointers, anything in this queue  will have the above functions loaded
-	cf_queue	*mr_states_q;
+	cf_queue	*mr_state_q;
 
 } mr_package;	
 
+
+// forward define
+void mr_package_release(mr_package *mrp_p);
 
 //
 // helpers
@@ -215,28 +216,22 @@ static int mr_state_load_package_lua(cl_mr_state *mrs_p, mr_package *mrp_p) {
 	
     lua_State *lua  = mrs_p->lua;
 
-    if (mrp_p->map_func) {
-		int ret     = luaL_dostring(lua, mrp_p->map_func);
+    if (mrp_p->script) {
+		int ret     = luaL_dostring(lua, mrp_p->script);
 		if (ret) { assertOnLuaError(lua, "ERROR: luaL_dostring(map_func)"); return(-1); }
 	}
+	else {
+		fprintf(stderr, "attempting to run package without registered script, failure\n");
+		return(-1);
+	}
 
-    if (mrp_p->rdc_func) {
-//      printf("loadFuncMapReduceLua: rdcfunc: %s\n", mrp_p->rdcfunc);
-      int ret   = luaL_dostring(lua, mrp_p->rdc_func);
-      if (ret) { assertOnLuaError(lua, "ERROR: luaL_dostring(rdc_func)"); return(-1); }
-    }
-
-    if (mrp_p->fnz_func) {
-//      printf("loadFuncMapReduceLua: fnzfunc: %s\n", mrp_p->fnzfunc);
-      int ret   = luaL_dostring(lua, mrp_p->fnz_func);
-      if (ret) { assertOnLuaError(lua, "ERROR: luaL_dostring(fnz_func)"); return(-1); }
-    }
     return(0);
 }
 
 void mr_state_destroy(cl_mr_state *mrs_p)
 {
 	if (mrs_p->lua) lua_close(mrs_p->lua);
+	if (mrs_p->package_name) free(mrs_p->package_name);
 	free(mrs_p);	
 }
 
@@ -256,16 +251,16 @@ cl_mr_state * mr_state_create(mr_package *mrp_p) {
     
     // load in the dynamic code, this can actually fail if the Lua
     // registered is bad, take a copy of the functions
-    pthread_mutex_lock(&mrp_p->func_lock);
+    pthread_mutex_lock(&mrp_p->script_lock);
 
 	// copy the bits we need
 
     if (! mr_state_load_package_lua(mrs_p, mrp_p) ) {
-    	pthread_mutex_unlock(&mrp_p->func_lock);
+    	pthread_mutex_unlock(&mrp_p->script_lock);
     	mr_state_destroy(mrs_p);
     	return(0);
     }
-    pthread_mutex_unlock(&mrp_p->func_lock);
+    pthread_mutex_unlock(&mrp_p->script_lock);
     
     return(mrs_p);
 }
@@ -274,14 +269,55 @@ cl_mr_state * mr_state_create(mr_package *mrp_p) {
 cl_mr_state * 
 cl_mr_state_get(const cl_mr_job *mrj) {
 
-	// get the package	
+	// get the package with this name
+	mr_package *mrp_p = 0;
+	cf_rchash_get(mr_package_hash,mrj->package,strlen(mrj->package),(void **)&mrp_p);
 	
+	if (! mrp_p) {
+		fprintf(stderr, "package %s has not been registered locally\n",mrj->package);
+		return(0);
+	}
+	
+	// try to pop a cached state
+	cl_mr_state	*mrs_p = 0;
+	
+	int rv = cf_queue_pop(mrp_p->mr_state_q , (void *)&mrs_p, 0/*nowait*/);
+	if (rv != CF_QUEUE_OK) {
+		mrs_p = mr_state_create(mrp_p);
+		if (!mrs_p) {
+			fprintf(stderr, "could not create new state from package %s\n",mrj->package);
+			mr_package_release(mrp_p);
+			return(0);
+		}
+	}
+	
+	mr_package_release(mrp_p);
+	
+	return(mrs_p);
 }
 
 void 
-cl_mr_state_put(cl_mr_state *mrs) {
+cl_mr_state_put(cl_mr_state *mrs_p) {
 	
-	// get the package
+	// get the package with this name
+	mr_package *mrp_p = 0;
+	cf_rchash_get(mr_package_hash,mrs_p->package_name,strlen(mrs_p->package_name),(void **)&mrp_p);
+	
+	if (! mrp_p) {
+		fprintf(stderr, "package %s has not been registered locally\n",mrs_p->package_name);
+		mr_state_destroy(mrs_p);
+		return;
+	}
+	
+	// push the state
+	fprintf(stderr, "pushing state %p onto package %s ( %p )\n",mrs_p,mrs_p->package_name,mrp_p);
+	int rv = cf_queue_push(mrp_p->mr_state_q , (void *)&mrs_p);
+	if (rv != CF_QUEUE_OK) {
+		// could not push for some reason, destroy I guess
+		mr_state_destroy(mrs_p);
+	}
+	
+	mr_package_release(mrp_p);
 	
 }
 
@@ -291,12 +327,10 @@ void mr_package_destroy(void *arg)
 	mr_package *mrp_p = (mr_package *) arg;
 	if (0 == cf_client_rc_release(mrp_p)) {
 		
-		if (mrp_p->map_func) free(mrp_p->map_func);
-		if (mrp_p->rdc_func) free(mrp_p->rdc_func);
-		if (mrp_p->fnz_func) free(mrp_p->fnz_func);
+		if (mrp_p->script)	free(mrp_p->script);
 
 		cl_mr_state *mrs_p;
-    	while (CF_QUEUE_OK == cf_queue_pop(mrp_p->mr_states_q, &mrs_p,0/*nowait*/)) {
+    	while (CF_QUEUE_OK == cf_queue_pop(mrp_p->mr_state_q, &mrs_p,0/*nowait*/)) {
     		mr_state_destroy(mrs_p);
     	}
 		
@@ -305,9 +339,15 @@ void mr_package_destroy(void *arg)
 	return;
 }
 
-mr_package * mr_package_create(char *package_name, char *map_func, int map_func_len,
-									char *rdc_func, int rdc_func_len,
-									char *fnz_func, int fnz_func_len )
+void mr_package_release(mr_package *mrp_p) {
+	mr_package_destroy((void *)mrp_p);
+}
+
+//
+// Todo: check if package exists on server, if so, load from there, if not, load to there
+//
+
+mr_package * mr_package_create(const char *package_name, const char *script, int script_len )
 {
 	mr_package *mrp_p = 0;
 	bool reusing = false;
@@ -316,10 +356,8 @@ mr_package * mr_package_create(char *package_name, char *map_func, int map_func_
 	int found = cf_rchash_get(mr_package_hash, package_name, strlen(package_name)+1, (void **) &mrp_p);
 	if (found == CF_RCHASH_OK) {
 		reusing = true;
-		pthread_mutex_lock(&mrp_p->func_lock);
-		if (mrp_p->map_func)	{ free(mrp_p->map_func); mrp_p->map_func = 0; } 
-		if (mrp_p->rdc_func)	{ free(mrp_p->rdc_func); mrp_p->rdc_func = 0; } 
-		if (mrp_p->fnz_func)	{ free(mrp_p->fnz_func); mrp_p->fnz_func = 0; }
+		pthread_mutex_lock(&mrp_p->script_lock);
+		if (mrp_p->script)	{ free(mrp_p->script); mrp_p->script = 0; }
 		reusing = true;
 	}
 	else {
@@ -328,37 +366,26 @@ mr_package * mr_package_create(char *package_name, char *map_func, int map_func_
 		memset(mrp_p, 0, sizeof(mr_package));
 	
 		mrp_p->package_name = strdup(package_name);
-		pthread_mutex_init(&mrp_p->func_lock, 0/*default addr*/);
-		mrp_p->mr_states_q = cf_queue_create(sizeof(cl_mr_state *), true/*multithreaded*/);
+		pthread_mutex_init(&mrp_p->script_lock, 0/*default addr*/);
+		mrp_p->mr_state_q = cf_queue_create(sizeof(cl_mr_state *), true/*multithreaded*/);
 	}
 	
-	if (map_func) {
-		mrp_p->map_func                 = malloc(map_func_len + 1);
-		if (!mrp_p->map_func)			goto Cleanup;
-		memcpy(mrp_p->map_func, map_func, map_func_len);
-		mrp_p->map_func[map_func_len]     = '\0';
+	if (script) {
+		// trim ---
+		while (script_len && (script[script_len - 1] == 0)) script_len--;
+		// then allocate with a null on the end
+		mrp_p->script                 = malloc(script_len + 1);
+		if (!mrp_p->script)			goto Cleanup;
+		memcpy(mrp_p->script, script, script_len);
+		mrp_p->script[script_len]     = '\0';
 	}
     
-    if (rdc_func) {
-        mrp_p->rdc_func             = malloc(rdc_func_len + 1);
-        if (!mrp_p->rdc_func)	goto Cleanup;
-        memcpy(mrp_p->rdc_func, rdc_func, rdc_func_len);
-        mrp_p->rdc_func[rdc_func_len] = '\0';
-    }
-    
-    if (fnz_func) {
-        mrp_p->fnz_func             = malloc(fnz_func_len + 1);
-        if (!mrp_p->fnz_func)	goto Cleanup;
-        memcpy(mrp_p->fnz_func, fnz_func, fnz_func_len);
-        mrp_p->fnz_func[fnz_func_len] = '\0';
-    }
-    
     if (reusing) {
-    	pthread_mutex_unlock(&mrp_p->func_lock);
+    	pthread_mutex_unlock(&mrp_p->script_lock);
     	
     	// clean queue/cache
     	cl_mr_state *mrs_p = 0;
-    	while (CF_QUEUE_OK == cf_queue_pop(mrp_p->mr_states_q, &mrs_p,0/*nowait*/))
+    	while (CF_QUEUE_OK == cf_queue_pop(mrp_p->mr_state_q, &mrs_p,0/*nowait*/))
     		mr_state_destroy(mrs_p);
     	
     }
@@ -370,12 +397,22 @@ mr_package * mr_package_create(char *package_name, char *map_func, int map_func_
 	return(mrp_p);
 Cleanup:
 	if (!mrp_p)	return(0);
-	if (mrp_p->map_func)	free(mrp_p->map_func);
-	if (mrp_p->rdc_func)	free(mrp_p->rdc_func);
-	if (mrp_p->fnz_func)	free(mrp_p->fnz_func);
+	if (mrp_p->script)	{ free(mrp_p->script); mrp_p->script = 0; }
 	return(0);
 }
 
+
+int
+citrusleaf_mr_package_register(const char *package_name, const char *script, size_t script_len)
+{
+	mr_package *package = mr_package_create(package_name, script, script_len );
+	if (package == 0) {
+		fprintf(stderr, "could not register package %s\n",package_name);
+		return(-1);
+	}
+	mr_package_release(package);
+	return(0);
+}
 
 
 //
@@ -581,5 +618,7 @@ int citrusleaf_mr_init() {
 }
 
 void citrusleaf_mr_shutdown() {
-	// todo: free the rchash
+	
+	cf_rchash_destroy(mr_package_hash);
+	
 }

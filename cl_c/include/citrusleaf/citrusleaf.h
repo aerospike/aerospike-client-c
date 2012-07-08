@@ -620,7 +620,7 @@ cl_rv citrusleaf_create_secondary_index(cl_cluster *asc, char *ns,
                                         citrusleaf_get_many_cb cb,
                                         struct index_metadata_t *imd);
 
-// New
+// Create and delete secondary indexes for the entire cluster
 cl_rv citrusleaf_secondary_index_create(cl_cluster *asc, const char *ns, 
 		const char *set, struct sindex_metadata_t *simd);
 cl_rv citrusleaf_secondary_index_delete(cl_cluster *asc, const char *ns, 
@@ -628,19 +628,7 @@ cl_rv citrusleaf_secondary_index_delete(cl_cluster *asc, const char *ns,
 cl_rv citrusleaf_load_sproc_context(cl_cluster *asc);
 
 
-// RANGE QUERIES To Be obsoleted
-cl_rv citrusleaf_get_sik_digest(cl_cluster *asc, char *ns,
-                                const cf_digest *digests, int n_digests,
-                                cl_bin *bins, int n_bins, bool get_key,
-                                citrusleaf_get_many_cb cb, void *udata,
-                                int imatch);
-cl_rv citrusleaf_run_mr_sik_digest(cl_cluster *asc, char *ns,
-                                   const cf_digest *digests, int n_digests,
-                                   cl_bin *bins, int n_bins, bool get_key,
-                                   citrusleaf_get_many_cb cb, void *udata,
-                                   int mrjid, int imatch,
-                                   struct map_args_t *margs);
-// New
+// New query primitives against secondary indexes
 cl_query *citrusleaf_query_create(const char *indexname);
 void citrusleaf_query_destroy(cl_query *query_obj);
 cl_rv citrusleaf_query_add_binname(cl_query *query_obj, const char *binname);
@@ -654,24 +642,19 @@ cl_rv citrusleaf_query_set_limit(cl_query *query_obj, uint64_t limit);
 cl_rv citrusleaf_query(cl_cluster *asc, const char *ns, const cl_query *query_obj,const cl_mr_job *mr_job,
 							citrusleaf_get_many_cb cb, void *udata);
 
+// MAP REDUCE
+//
+
 cl_mr_job *citrusleaf_mr_job_create(const char *package, const char *map_fname, const char *rdc_fname, const char *fnz_fname );
 cl_rv citrusleaf_mr_job_add_parameter_string(cl_mr_job *mr_job, cl_script_func_t ftype, const char *key, const char *value);
 cl_rv citrusleaf_mr_job_add_parameter_numeric(cl_mr_job *mr_job, cl_script_func_t ftype, const char *key, uint64_t value);
 cl_rv citrusleaf_mr_job_add_parameter_blob(cl_mr_job *mr_job, cl_script_func_t ftype, cl_type blobtype, const char *key, const uint8_t *value, int val_len);
 void citrusleaf_mr_job_destroy(cl_mr_job *mr_job);
- 
-// MAP REDUCE
-//
 
-// when we register a mrjid, we keep the 3 "scripts" that have been
-// registered. The mrjid will be converted to a "package name",
-// and the three "scripts" will turn into one
-typedef struct citrusleaf_package_lua_s {
-    int   mrjid; 
-    char *lua_map; char *lua_reduce; char *lua_finalize;
-} citrusleaf_package_lua;
+int citrusleaf_mr_package_register(const char *package, const char *script, size_t script_len);
 
-extern int citrusleaf_load_script_lua(int mrjid, citrusleaf_package_lua *lscripts);
+
+
 
 #ifdef __cplusplus
 } // end extern "C"

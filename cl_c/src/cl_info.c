@@ -18,6 +18,7 @@
 #include <string.h>
 #include <pthread.h>
 #include <fcntl.h>
+#include <arpa/inet.h>
 
 #include "citrusleaf/citrusleaf.h"
 #include "citrusleaf/cl_cluster.h"
@@ -211,8 +212,8 @@ Done:
 //
 // External function is helper which goes after a particular hostname.
 //
-// TODO: timeouts are wrong here. If there are 3 host names, you'll end up with
-// 3x timeout_ms
+// TODO: timeouts are wrong here. If there are 3 addresses for a host name,
+// you'll end up with 3x timeout_ms
 //
 
 int
@@ -240,6 +241,55 @@ citrusleaf_info(char *hostname, short port, char *names, char **values, int time
 Done:
 	cf_vector_destroy( &sockaddr_in_v );	
 	return(rv);
+}
+
+static void
+dump_sockaddr_in(char *prefix, struct sockaddr_in *sa_in)
+{
+	char str[INET_ADDRSTRLEN];
+	inet_ntop(AF_INET, &(sa_in->sin_addr), str, INET_ADDRSTRLEN);	
+	fprintf(stderr,"%s %s:%d\n",prefix,str,(int)ntohs(sa_in->sin_port));
+}
+
+
+int
+citrusleaf_info_cluster(cl_cluster *asc, char *names, char **values_r, int timeout_ms)
+{
+	if (timeout_ms == 0) timeout_ms = 100; // milliseconds
+	uint64_t start = cf_getms();
+	uint64_t end = start + timeout_ms;
+	char *values = 0;
+
+	//
+	// not sure yet about the thread safety of this - I have only read-only use
+	// of these vectors
+	// 
+	for (uint i=0;i<cf_vector_size(&asc->node_v);i++) {
+		
+		cl_cluster_node *cn = cf_vector_pointer_get(&asc->node_v, i);
+		if (cn == 0) continue;
+		
+		fprintf(stderr, "info_cluster call to node %s\n",cn->name);
+
+		for (uint j=0;j<cf_vector_size(&cn->sockaddr_in_v);j++) {
+			
+			struct sockaddr_in *sa_in = cf_vector_getp(&cn->sockaddr_in_v, j);
+			if (sa_in == 0) continue;
+			
+			dump_sockaddr_in("info_cluster call to address ",sa_in);
+			
+			values = 0;
+			
+			if (0 == citrusleaf_info_host(sa_in, names, &values, end - cf_getms(), false)) {
+				// success
+				*values_r = values;
+				return(0);
+			}
+			if (cf_getms() >= end) 
+				return(-1);
+		}
+	}
+	return(-1);
 }
 	
 

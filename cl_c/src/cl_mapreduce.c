@@ -353,7 +353,7 @@ mr_package * mr_package_create(const char *package_name, const char *script, int
 	bool reusing = false;
 	
 	// already registered?
-	int found = cf_rchash_get(mr_package_hash, package_name, strlen(package_name)+1, (void **) &mrp_p);
+	int found = cf_rchash_get(mr_package_hash, (char *)package_name, strlen(package_name)+1, (void **) &mrp_p);
 	if (found == CF_RCHASH_OK) {
 		reusing = true;
 		pthread_mutex_lock(&mrp_p->script_lock);
@@ -392,7 +392,7 @@ mr_package * mr_package_create(const char *package_name, const char *script, int
     else {
     	// add to the rchash
     	cf_client_rc_reserve(mrp_p);
-    	cf_rchash_put_unique(mr_package_hash, package_name, strlen(package_name)+1, mrp_p);
+    	cf_rchash_put_unique(mr_package_hash, (char *)package_name, strlen(package_name)+1, mrp_p);
 	}
 	return(mrp_p);
 Cleanup:
@@ -414,6 +414,47 @@ citrusleaf_mr_package_register(const char *package_name, const char *script, siz
 	return(0);
 }
 
+//
+// grab the package from a server
+// Not sure whether to do sync or async. Start with sync.
+int
+citrusleaf_mr_package_preload(cl_cluster *asc, const char *package_name)
+{
+	
+	char info_query[512];
+	if (sizeof(info_query) >= snprintf(info_query, sizeof(info_query), "get-package:package=%s;lang=lua;",package_name)) {
+		return(-1);
+	}
+	char *values = 0;
+	// shouldn't do this on a blocking thread --- todo, queue
+	if (0 != citrusleaf_info_cluster(asc, info_query, &values, 100)) {
+		fprintf(stderr, "could not get package %s from cluster\n",package_name);
+		return(-1);
+	}
+	
+	// got response, add into cache
+	// format: gen=asdf;script=xxyefu
+	// where gen is a simple string, and script
+	// error is something else entirely
+	
+	fprintf(stderr, "package %s is: %s\n",package_name,values);
+	
+	int n_tok=0;
+	char sep[] = "=;:";
+	char *brkb;
+	char *words[10];
+	char *word;
+	for ( word = strtok_r(values,sep,&brkb); word ; word = strtok_r(0,sep,&brkb) ) {
+		words[n_tok] = word;
+		n_tok++;
+	}
+
+	fprintf(stderr, "n_tok is %d word1 is %s word2 is %s\n",n_tok, words[0],words[1]);
+
+	
+	return(0);
+	
+}
 
 //
 // receiving a record from the server. Load it into the results structure.  
@@ -528,64 +569,6 @@ static char *trim_end_space(char *str) {
     return str;
 }
 
-// Load from disk the ID mrsid, and fill out the lscripts structure
-// structure (which has a pointer/memory for map, reduce, finalize snips)
-// INPUT: mrsid
-// OUTPUT: lscripts
-
-#if 0
-int citrusleaf_package_register_lua(int mrsid, citrusleaf_package_lua *lscripts) {
-    char rpath[128] = "lua_files/";
-    lscripts->mrsid = mrsid;
-
-    char fname[512];
-    sprintf(fname,"%s%d.map",rpath,mrsid);
-    FILE *fmap = fopen(fname,"r"); // open the files
-    fprintf(stderr,"loading map_reduce files %s\n",fname);
-    if (fmap==NULL) {
-        fprintf(stderr,"can't open map file %s\n",fname); return -1;
-    } 
-   
-    sprintf(fname,"%s%d.reduce",rpath,mrsid);
-    FILE *frd = fopen(fname,"r");
-    if (frd==NULL) {
-        fprintf(stderr,"can't open reduce file %s\n",fname); return -1;
-    } 
-
-    sprintf(fname,"%s%d.finalize",rpath,mrsid);
-    FILE *ffn = fopen(fname,"r");
-    if (ffn==NULL) {
-        fprintf(stderr,"can't open finalize file %s\n",fname); return -1;
-    } 
-   
-    lscripts->lua_map = malloc(MAX_LUA_SIZE); // allocate memory
-    lscripts->lua_reduce = malloc(MAX_LUA_SIZE);
-    lscripts->lua_finalize = malloc(MAX_LUA_SIZE);
-    if (!lscripts->lua_map || !lscripts->lua_reduce || !lscripts->lua_finalize){
-        fprintf(stderr, "can't allocate memory\n"); return -1;
-    }
-
-    fgets(lscripts->lua_map,MAX_LUA_SIZE,fmap); // read the data in   
-    trim_end_space(lscripts->lua_map);
-    fgets(lscripts->lua_reduce,MAX_LUA_SIZE,frd);
-    trim_end_space(lscripts->lua_reduce);
-    fgets(lscripts->lua_finalize,MAX_LUA_SIZE,ffn);
-    trim_end_space(lscripts->lua_finalize);
-    
-    char tmpStr[1024];
-    sprintf(tmpStr, "map.%d=[%s] %ld\n", mrsid, lscripts->lua_map,
-                                        strlen(lscripts->lua_map));
-    fprintf(stderr, tmpStr);
-    sprintf(tmpStr, "reduce.%d=[%s] %ld\n", mrsid, lscripts->lua_reduce,
-                                            strlen(lscripts->lua_reduce));
-    fprintf(stderr,tmpStr);
-    sprintf(tmpStr, "finalize.%d=[%s] %ld\n", mrsid, lscripts->lua_finalize,
-                                              strlen(lscripts->lua_finalize));
-    fprintf(stderr,tmpStr);
-    fclose(fmap); fclose(frd); fclose(ffn);
-    return 0;
-}
-#endif
 
 #define BITS_IN_int     ( 32 )
 #define THREE_QUARTERS  ((int) ((BITS_IN_int * 3) / 4))

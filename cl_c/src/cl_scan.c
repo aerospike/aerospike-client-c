@@ -42,7 +42,6 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 {
 	int rv = -1;
 
-printf("0: do_scan_monte\n");
 	uint8_t		rd_stack_buf[STACK_BUF_SZ];	
 	uint8_t		*rd_buf = 0;
 	size_t		rd_buf_sz = 0;
@@ -54,9 +53,8 @@ printf("0: do_scan_monte\n");
 	scan_param_field.scan_pct = scan_pct>100? 100:scan_pct;
 	scan_param_field.byte1 = (scan_opt->priority<<4) | (scan_opt->fail_on_cluster_change<<3); 
 
-printf("1: do_scan_monte\n");
 	// we have a single namespace and/or set to get
-	if (cl_compile(operation_info, operation_info2, 0, ns, set, 0, 0, 0, 0, 0, 0, &wr_buf, &wr_buf_sz, 0, NULL, 0, &scan_param_field)) {
+	if (cl_compile(operation_info, operation_info2, 0, ns, set, 0, 0, 0, 0, 0, 0, &wr_buf, &wr_buf_sz, 0, NULL, 0, &scan_param_field,NULL)) {
 		return(rv);
 	}
 	

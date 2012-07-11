@@ -360,9 +360,9 @@ cl_do_async_monte(cl_cluster *asc, int info1, int info2, const char *ns, const c
 	//Compile the write buffer to be sent to the cluster
 	if (n_values && ( values || operations) ){
 		cl_compile(info1, info2, 0, ns, set, key, digest, values?*values:NULL, operator, operations?*operations:NULL,
-				*n_values , &wr_buf, &wr_buf_sz, cl_w_p, &d_ret, *trid,NULL);
+				*n_values , &wr_buf, &wr_buf_sz, cl_w_p, &d_ret, *trid,NULL,NULL);
 	}else{
-		cl_compile(info1, info2, 0, ns, set, key, digest, 0, 0, 0, 0, &wr_buf, &wr_buf_sz, cl_w_p, &d_ret, *trid,NULL);
+		cl_compile(info1, info2, 0, ns, set, key, digest, 0, 0, 0, 0, &wr_buf, &wr_buf_sz, cl_w_p, &d_ret, *trid,NULL,NULL);
 	}	
 
 	deadline_ms = 0;

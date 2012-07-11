@@ -335,7 +335,7 @@ cl_write_header(uint8_t *buf, size_t msg_sz, uint info1, uint info2, uint info3,
 
 static uint8_t *
 write_fields(uint8_t *buf, const char *ns, int ns_len, const char *set, int set_len, const cl_object *key, const cf_digest *d, cf_digest *d_ret, 
-	uint64_t trid, cl_scan_param_field *scan_param_field)
+	uint64_t trid, cl_scan_param_field *scan_param_field, cl_sproc_def *sproc_def)
 {
 	// printf("write_fields\n");
 	// lay out the fields
@@ -384,6 +384,37 @@ write_fields(uint8_t *buf, const char *ns, int ns_len, const char *set, int set_
 		mf = mf_tmp;
 	}	
 
+	// record sproc fields
+	if (sproc_def && sproc_def->package) {
+		int slen = strlen(sproc_def->package);
+        mf->type = CL_MSG_FIELD_TYPE_SPROC_PACKAGE;
+        mf->field_sz =  slen + 1;
+        memcpy(mf->data, sproc_def->package, slen);
+        mf_tmp = cl_msg_field_get_next(mf);
+        cl_msg_swap_field(mf);
+        mf = mf_tmp;
+	}
+
+	if (sproc_def && sproc_def->fname) {
+		int slen = strlen(sproc_def->fname);
+        mf->type = CL_MSG_FIELD_TYPE_SPROC_RECORD;
+        mf->field_sz =  slen + 1;
+        memcpy(mf->data, sproc_def->fname, slen);
+        mf_tmp = cl_msg_field_get_next(mf);
+        cl_msg_swap_field(mf);
+        mf = mf_tmp;
+	}
+
+	if (sproc_def && sproc_def->num_param > 0) {
+		int plen=0;
+        mf->type = CL_MSG_FIELD_TYPE_SPROC_RECORD_PARAMS;
+		sproc_compile_arg_field(sproc_def->param_key, sproc_def->param_val, sproc_def->num_param, mf->data, &plen); 
+        mf->field_sz = plen + 1;
+        mf_tmp = cl_msg_field_get_next(mf);
+        cl_msg_swap_field(mf);
+        mf = mf_tmp;
+	}
+	
 	if (key) {
 		mf->type = CL_MSG_FIELD_TYPE_KEY;
 		// make a function call here, similar to our prototype code in the server
@@ -780,7 +811,7 @@ cl_object_to_buf (cl_object *obj, uint8_t *data)
 int
 cl_compile(uint info1, uint info2, uint info3, const char *ns, const char *set, const cl_object *key, const cf_digest *digest,
 	cl_bin *values, cl_operator operator, cl_operation *operations, int n_values,  
-	uint8_t **buf_r, size_t *buf_sz_r, const cl_write_parameters *cl_w_p, cf_digest *d_ret, uint64_t trid, cl_scan_param_field *scan_param_field)
+	uint8_t **buf_r, size_t *buf_sz_r, const cl_write_parameters *cl_w_p, cf_digest *d_ret, uint64_t trid, cl_scan_param_field *scan_param_field, cl_sproc_def *sproc_def)
 {
 	// I hate strlen
 	int		ns_len = ns ? strlen(ns) : 0;
@@ -796,6 +827,28 @@ cl_compile(uint info1, uint info2, uint info3, const char *ns, const char *set, 
 	if (digest) msg_sz += sizeof(cl_msg_field) + 1 + sizeof(cf_digest);
 	if (trid)   msg_sz += sizeof(cl_msg_field) + sizeof(trid);
 	if (scan_param_field)	msg_sz += sizeof(cl_msg_field) + 1 + sizeof(cl_scan_param_field);
+
+	// sproc fields
+	int 	sproc_package_len = 0;
+	int 	sproc_len = 0;
+	int 	sproc_arg_len = 0;
+	int		sproc_fields = 0;
+	if (sproc_def  && sproc_def->package) {
+
+		sproc_fields++;
+		sproc_package_len = strlen(sproc_def->package); 
+		msg_sz += sproc_package_len  + sizeof(cl_msg_field);
+
+		sproc_fields++;
+		sproc_len = strlen(sproc_def->fname); 
+		msg_sz += sproc_len  + sizeof(cl_msg_field);
+		
+		if (sproc_def->num_param > 0) {
+			sproc_fields++;
+			sproc_compile_arg_field(sproc_def->param_key, sproc_def->param_val, sproc_def->num_param, NULL, &sproc_arg_len); 
+			msg_sz += sproc_arg_len + sizeof(cl_msg_field);
+		} 
+	}	
 
 	// ops
 	for (i=0;i<n_values;i++) {
@@ -853,11 +906,11 @@ cl_compile(uint info1, uint info2, uint info3, const char *ns, const char *set, 
 	uint32_t transaction_ttl = cl_w_p ? cl_w_p->timeout_ms : 0;
 
 	// lay out the header
-	int n_fields = ( ns ? 1 : 0 ) + (set ? 1 : 0) + (key ? 1 : 0) + (digest ? 1 : 0) + (trid ? 1 : 0) + (scan_param_field ? 1 : 0);
+	int n_fields = ( ns ? 1 : 0 ) + (set ? 1 : 0) + (key ? 1 : 0) + (digest ? 1 : 0) + (trid ? 1 : 0) + (scan_param_field ? 1 : 0) + sproc_fields;
 	buf = cl_write_header(buf, msg_sz, info1, info2, info3, generation, record_ttl, transaction_ttl, n_fields, n_values);
 		
 	// now the fields
-	buf = write_fields(buf, ns, ns_len, set, set_len, key, digest, d_ret, trid,scan_param_field);
+	buf = write_fields(buf, ns, ns_len, set, set_len, key, digest, d_ret, trid,scan_param_field,sproc_def);
 	if (!buf) {
 		if (mbuf)	free(mbuf);
 		return(-1);
@@ -1208,7 +1261,7 @@ cl_parse(cl_msg *msg, uint8_t *buf, size_t buf_len, cl_bin **values_r, cl_operat
 static int
 do_the_full_monte(cl_cluster *asc, int info1, int info2, int info3, const char *ns, const char *set, const cl_object *key,
 	const cf_digest *digest, cl_bin **values, cl_operator operator, cl_operation **operations, int *n_values, 
-	uint32_t *cl_gen, const cl_write_parameters *cl_w_p, uint64_t *trid)
+	uint32_t *cl_gen, const cl_write_parameters *cl_w_p, uint64_t *trid, cl_sproc_def *sproc_def)
 {
 	int rv = -1;
 #ifdef DEBUG_HISTOGRAM	
@@ -1253,11 +1306,11 @@ do_the_full_monte(cl_cluster *asc, int info1, int info2, int info3, const char *
 	cf_digest d_ret;	
 	if (n_values && ( values || operations) ){
 		if (cl_compile(info1, info2, info3, ns, set, key, digest, values?*values:NULL, operator, operations?*operations:NULL,
-				*n_values , &wr_buf, &wr_buf_sz, cl_w_p, &d_ret, *trid, NULL)) {
+				*n_values , &wr_buf, &wr_buf_sz, cl_w_p, &d_ret, *trid, NULL,sproc_def)) {
 			return(rv);
 		}
 	}else{
-		if (cl_compile(info1, info2, info3, ns, set, key, digest, 0, 0, 0, 0, &wr_buf, &wr_buf_sz, cl_w_p, &d_ret, *trid, NULL)) {
+		if (cl_compile(info1, info2, info3, ns, set, key, digest, 0, 0, 0, 0, &wr_buf, &wr_buf_sz, cl_w_p, &d_ret, *trid, NULL,sproc_def)) {
 			return(rv);
 		}
 	}	
@@ -1558,7 +1611,7 @@ citrusleaf_get(cl_cluster *asc, const char *ns, const char *set, const cl_object
 	cl_write_parameters_set_default(&cl_w_p);
 	cl_w_p.timeout_ms = timeout_ms;
 
-	return( do_the_full_monte( asc, CL_MSG_INFO1_READ, 0, 0, ns, set, key, 0, &values, CL_OP_READ, 0, &n_values, cl_gen, &cl_w_p, &trid) );
+	return( do_the_full_monte( asc, CL_MSG_INFO1_READ, 0, 0, ns, set, key, 0, &values, CL_OP_READ, 0, &n_values, cl_gen, &cl_w_p, &trid, NULL) );
 }
 
 extern cl_rv
@@ -1572,7 +1625,7 @@ citrusleaf_get_digest(cl_cluster *asc, const char *ns, const cf_digest *digest, 
 	cl_write_parameters_set_default(&cl_w_p);
 	cl_w_p.timeout_ms = timeout_ms;
 
-	return( do_the_full_monte( asc, CL_MSG_INFO1_READ, 0, 0, ns, 0,0, digest, &values, CL_OP_READ, 0, &n_values, cl_gen, &cl_w_p, &trid) );
+	return( do_the_full_monte( asc, CL_MSG_INFO1_READ, 0, 0, ns, 0,0, digest, &values, CL_OP_READ, 0, &n_values, cl_gen, &cl_w_p, &trid, NULL) );
 }
 
 
@@ -1582,7 +1635,7 @@ citrusleaf_put(cl_cluster *asc, const char *ns, const char *set, const cl_object
     if (!g_initialized) return(-1);
 
     	uint64_t trid=0;
-	return( do_the_full_monte( asc, 0, CL_MSG_INFO2_WRITE, 0, ns, set, key, 0, (cl_bin **) &values, CL_OP_WRITE, 0, &n_values, NULL, cl_w_p, &trid) );
+	return( do_the_full_monte( asc, 0, CL_MSG_INFO2_WRITE, 0, ns, set, key, 0, (cl_bin **) &values, CL_OP_WRITE, 0, &n_values, NULL, cl_w_p, &trid, NULL) );
 }
 
 extern cl_rv
@@ -1592,7 +1645,7 @@ citrusleaf_put_digest(cl_cluster *asc, const char *ns, const cf_digest *digest, 
 
     
     	uint64_t trid=0;
-	return( do_the_full_monte( asc, 0, CL_MSG_INFO2_WRITE, 0, ns, 0, 0, digest, (cl_bin **) &values, CL_OP_WRITE, 0, &n_values, NULL, cl_w_p, &trid) );
+	return( do_the_full_monte( asc, 0, CL_MSG_INFO2_WRITE, 0, ns, 0, 0, digest, (cl_bin **) &values, CL_OP_WRITE, 0, &n_values, NULL, cl_w_p, &trid, NULL) );
 }
 
 cl_rv
@@ -1601,7 +1654,7 @@ citrusleaf_put_replace(cl_cluster *asc, const char *ns, const char *set, const c
     if (!g_initialized) return(-1);
 
     uint64_t trid=0;
-	return( do_the_full_monte( asc, 0, CL_MSG_INFO2_WRITE, CL_MSG_INFO3_REPLACE, ns, set, key, 0, (cl_bin **) &values, CL_OP_WRITE, 0, &n_values, NULL, cl_w_p, &trid) );
+	return( do_the_full_monte( asc, 0, CL_MSG_INFO2_WRITE, CL_MSG_INFO3_REPLACE, ns, set, key, 0, (cl_bin **) &values, CL_OP_WRITE, 0, &n_values, NULL, cl_w_p, &trid, NULL) );
 }
 
 extern cl_rv
@@ -1610,7 +1663,7 @@ citrusleaf_restore(cl_cluster *asc, const char *ns, const cf_digest *digest, con
     if (!g_initialized) return(-1);
 
     uint64_t trid=0;
-	return( do_the_full_monte( asc, 0, CL_MSG_INFO2_WRITE, 0, ns, set, 0, digest, (cl_bin **) &values, CL_OP_WRITE, 0, &n_values, NULL, cl_w_p, &trid) );
+	return( do_the_full_monte( asc, 0, CL_MSG_INFO2_WRITE, 0, ns, set, 0, digest, (cl_bin **) &values, CL_OP_WRITE, 0, &n_values, NULL, cl_w_p, &trid, NULL) );
 }
 
 extern cl_rv
@@ -1644,7 +1697,7 @@ citrusleaf_delete(cl_cluster *asc, const char *ns, const char *set, const cl_obj
     if (!g_initialized) return(-1);
     
     	uint64_t trid=0;
-	return( do_the_full_monte( asc, 0, CL_MSG_INFO2_DELETE | CL_MSG_INFO2_WRITE, 0, ns, set, key, 0, 0, 0, 0, 0, NULL, cl_w_p, &trid) );
+	return( do_the_full_monte( asc, 0, CL_MSG_INFO2_DELETE | CL_MSG_INFO2_WRITE, 0, ns, set, key, 0, 0, 0, 0, 0, NULL, cl_w_p, &trid, NULL) );
 }
 
 extern cl_rv
@@ -1653,7 +1706,7 @@ citrusleaf_delete_digest(cl_cluster *asc, const char *ns, const cf_digest *diges
     if (!g_initialized) return(-1);
     
     	uint64_t trid=0;
-	return( do_the_full_monte( asc, 0, CL_MSG_INFO2_DELETE | CL_MSG_INFO2_WRITE, 0, ns, 0, 0, digest, 0, 0, 0, 0, NULL, cl_w_p, &trid) );
+	return( do_the_full_monte( asc, 0, CL_MSG_INFO2_DELETE | CL_MSG_INFO2_WRITE, 0, ns, 0, 0, digest, 0, 0, 0, 0, NULL, cl_w_p, &trid,NULL) );
 }
 
 
@@ -1672,7 +1725,7 @@ citrusleaf_exists_key(cl_cluster *asc, const char *ns, const char *set, const cl
 	cl_write_parameters_set_default(&cl_w_p);
 	cl_w_p.timeout_ms = timeout_ms;
 
-	return( do_the_full_monte( asc, CL_MSG_INFO1_READ | CL_MSG_INFO1_NOBINDATA, 0, 0, ns, set, key, 0, &values, CL_OP_READ, 0, &n_values, cl_gen, &cl_w_p, &trid) );
+	return( do_the_full_monte( asc, CL_MSG_INFO1_READ | CL_MSG_INFO1_NOBINDATA, 0, 0, ns, set, key, 0, &values, CL_OP_READ, 0, &n_values, cl_gen, &cl_w_p, &trid, NULL) );
 }
 
 extern cl_rv
@@ -1686,7 +1739,7 @@ citrusleaf_exists_digest(cl_cluster *asc, const char *ns, const cf_digest *diges
 	cl_write_parameters_set_default(&cl_w_p);
 	cl_w_p.timeout_ms = timeout_ms;
 
-	return( do_the_full_monte( asc, CL_MSG_INFO1_READ | CL_MSG_INFO1_NOBINDATA, 0, 0, ns, 0,0, digest, &values, CL_OP_READ, 0, &n_values, cl_gen, &cl_w_p, &trid) );
+	return( do_the_full_monte( asc, CL_MSG_INFO1_READ | CL_MSG_INFO1_NOBINDATA, 0, 0, ns, 0,0, digest, &values, CL_OP_READ, 0, &n_values, cl_gen, &cl_w_p, &trid, NULL) );
 }
 
 
@@ -1707,7 +1760,7 @@ citrusleaf_get_all(cl_cluster *asc, const char *ns, const char *set, const cl_ob
 	cl_write_parameters_set_default(&cl_w_p);
 	cl_w_p.timeout_ms = timeout_ms;
 	
-	return( do_the_full_monte( asc, CL_MSG_INFO1_READ | CL_MSG_INFO1_GET_ALL, 0, 0, ns, set, key, 0/*dig*/, values, CL_OP_READ, 0, n_values, cl_gen, &cl_w_p, &trid) );
+	return( do_the_full_monte( asc, CL_MSG_INFO1_READ | CL_MSG_INFO1_GET_ALL, 0, 0, ns, set, key, 0/*dig*/, values, CL_OP_READ, 0, n_values, cl_gen, &cl_w_p, &trid, NULL) );
 }
 
 extern cl_rv
@@ -1727,7 +1780,7 @@ citrusleaf_get_all_digest(cl_cluster *asc, const char *ns, const cf_digest *dige
 	cl_write_parameters_set_default(&cl_w_p);
 	cl_w_p.timeout_ms = timeout_ms;
 	
-	return( do_the_full_monte( asc, CL_MSG_INFO1_READ | CL_MSG_INFO1_GET_ALL, 0, 0, ns, 0, 0, digest, values, CL_OP_READ, 0, n_values, cl_gen, &cl_w_p, &trid) );
+	return( do_the_full_monte( asc, CL_MSG_INFO1_READ | CL_MSG_INFO1_GET_ALL, 0, 0, ns, 0, 0, digest, values, CL_OP_READ, 0, n_values, cl_gen, &cl_w_p, &trid, NULL) );
 }
 
 
@@ -1742,7 +1795,7 @@ citrusleaf_verify(cl_cluster *asc, const char *ns, const char *set, const cl_obj
 	cl_write_parameters_set_default(&cl_w_p);
 	cl_w_p.timeout_ms = timeout_ms;
 	
-	return( do_the_full_monte( asc, CL_MSG_INFO1_READ | CL_MSG_INFO1_VERIFY, 0, 0, ns, set, key, 0, (cl_bin **) &values, CL_OP_READ, 0, &n_values, cl_gen, &cl_w_p, &trid) );
+	return( do_the_full_monte( asc, CL_MSG_INFO1_READ | CL_MSG_INFO1_VERIFY, 0, 0, ns, set, key, 0, (cl_bin **) &values, CL_OP_READ, 0, &n_values, cl_gen, &cl_w_p, &trid, NULL) );
 }
 
 extern cl_rv
@@ -1751,7 +1804,7 @@ citrusleaf_delete_verify(cl_cluster *asc, const char *ns, const char *set, const
     if (!g_initialized) return(-1);
     
     	uint64_t trid=0;
-	return( do_the_full_monte( asc, CL_MSG_INFO1_VERIFY, CL_MSG_INFO2_DELETE | CL_MSG_INFO2_WRITE, 0, ns, set, key, 0, 0, 0, 0, 0, NULL, cl_w_p, &trid) );
+	return( do_the_full_monte( asc, CL_MSG_INFO1_VERIFY, CL_MSG_INFO2_DELETE | CL_MSG_INFO2_WRITE, 0, ns, set, key, 0, 0, 0, 0, 0, NULL, cl_w_p, &trid, NULL) );
 }
 
 extern int
@@ -1840,8 +1893,22 @@ citrusleaf_operate(cl_cluster *asc, const char *ns, const char *set, const cl_ob
 	if (replace)
 		info3 = CL_MSG_INFO3_REPLACE;
 
-	return( do_the_full_monte( asc, info1, info2, info3, ns, set, key, 0, 0, 0, &operations, &n_operations, generation, cl_w_p, &trid) );
+	return( do_the_full_monte( asc, info1, info2, info3, ns, set, key, 0, 0, 0, &operations, &n_operations, generation, cl_w_p, &trid, NULL) );
 }
+
+
+cl_rv citrusleaf_run_sproc(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, cl_sproc_def *sproc_def, int timeout_ms, uint32_t *cl_gen)
+{
+    if (!g_initialized) return(-1);
+
+    uint64_t trid=0;
+	cl_write_parameters cl_w_p;
+	cl_write_parameters_set_default(&cl_w_p);
+	cl_w_p.timeout_ms = timeout_ms;
+
+	return( do_the_full_monte( asc, 0, CL_MSG_INFO2_WRITE, 0, ns, set, key, 0, NULL, CL_OP_WRITE, 0, NULL, NULL, &cl_w_p, &trid, sproc_def) );
+}
+
 
 extern int citrusleaf_cluster_init();
 

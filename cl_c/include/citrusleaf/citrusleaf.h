@@ -176,8 +176,6 @@ typedef enum cl_query_filter_op { CL_FLTR_EQ, CL_FLTR_LT, CL_FLTR_GT, CL_FLTR_LE
 
 // Filter indicate a series of post look-up condition in an equivalent "where" clause
 // applied to bins other than the indexed bins
-// Example1: where 
-// Q: how do we nest filters? don't care?
 typedef struct cl_query_filter {
 	char		bin_name[CL_BINNAME_SIZE];
 	cl_object	compare_obj;
@@ -205,6 +203,7 @@ typedef enum cl_script_func_t {
 	CL_SCRIPT_FUNC_TYPE_MAP,
 	CL_SCRIPT_FUNC_TYPE_REDUCE,
 	CL_SCRIPT_FUNC_TYPE_FINALIZE,
+	CL_SCRIPT_FUNC_TYPE_RECORD,
 } cl_script_func_t;
 
 #define CL_MAX_NUM_FUNC_ARGC	10 
@@ -225,6 +224,16 @@ typedef struct cl_mr_job {
 	cl_object	*fnz_argv[CL_MAX_NUM_FUNC_ARGC];
 	char		*generation;
 } cl_mr_job; 
+
+typedef struct cl_sproc_def {
+	char		*package;
+	char		*fname;
+	int			num_param;
+	char		*param_key[CL_MAX_NUM_FUNC_ARGC];
+	cl_object	*param_val[CL_MAX_NUM_FUNC_ARGC];
+} cl_sproc_def;
+
+
 //
 // All citrusleaf functions return an integer. This integer is 0 if the
 // call has succeeded, and a negative number if it has failed.
@@ -656,7 +665,13 @@ void citrusleaf_mr_job_destroy(cl_mr_job *mr_job);
 
 int citrusleaf_mr_package_preload(cl_cluster *asc, const char *package);
 
+// per record stored procedure invokations
+cl_sproc_def *citrusleaf_sproc_definition_create(const char *package, const char *fname);
+void citrusleaf_sproc_definition_destroy(cl_sproc_def *sproc_def);
 
+cl_rv citrusleaf_sproc_def_add_parameter_string(cl_sproc_def *sproc_def, const char *param_key, const char *param_value);
+
+cl_rv citrusleaf_run_sproc(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, cl_sproc_def *sproc_def, int timeout_ms, uint32_t *cl_gen);
 
 
 #ifdef __cplusplus

@@ -52,88 +52,6 @@ static pthread_t    g_query_th[N_MAX_QUERY_THREADS];
 static query_work	g_null_work;
 
 
-// mrj argument field layout: contains - numargs, key1_len, key1, value1_len, val1, ....
-// 
-// generic field header
-// 0   4 size = size of data only
-// 4   1 field_type = CL_MSG_FIELD_TYPE_SPROC_XXX_ARG
-//
-// numarg
-// 5   1 argc (max 255 ranges) 
-//
-// argk
-// 6     1 argk_len 1
-// 7     x argk
-//
-// argv
-// +x    1 argv_particle_type
-// +x+1  4 argv_particle_len
-// +x+2 xx argv_particle_data
-// 
-// repeat argk
-//
-static int mrj_compile_arg_field(char * const*argk, cl_object * const*argv, int argc, uint8_t *buf, int *sz_p)
-{
-	int sz = 0;
-		
-	// argc
-	sz += 1;
-	if (buf) {
-		*buf++ = argc;
-	}
-	
-	// iterate through each k,v pair	
-	for (int i=0; i<argc; i++) {
-		// argk size
-		int argk_sz = strlen(argk[i]);
-		sz += 1;
-		if (buf) {
-			*buf++ = argk_sz;
-		}
-		
-		// argk
-		sz += argk_sz;
-		if (buf) {
-			memcpy(buf,argk[i],argk_sz);
-			buf += argk_sz;
-		}
-		
-		// argv type
-		sz += 1;
-		if (buf) {
-			*buf++ = argv[i]->type;
-		}
-		
-		// argv particle len
-		// particle len will be in network order 
-		sz += 4;
-		size_t psz = 0;
-		cl_object_get_size(argv[i],&psz);
-		if (buf) {
-			uint32_t ss = psz; 
-			*((uint32_t *)buf) = ntohl(ss);
-			// fprintf(stderr, "*** ss %ld buf %ld\n",ss,*((uint32_t *)buf));
-			buf += sizeof(uint32_t);
-		} 
-		
-		// particle data
-		sz += psz;
-		if (buf) {
-			//fprintf(stderr, "*** buf %ld\n",*((uint64_t *)buf));
-			cl_object_to_buf(argv[i],buf);
-			//fprintf(stderr, "*** buf %ld\n",*((uint64_t *)buf));
-			buf += psz;
-		}
-		
-	}		
-	
-	if (g_cl_turn_debug_on) {
-		fprintf(stderr, "processing %d arguments to be %d long\n",argc,sz);
-	}
-	*sz_p = sz;
-}
-
-
 // query range field layout: contains - numranges, binname, start, end
 // 
 // generic field header
@@ -292,7 +210,7 @@ static int query_compile (const char *ns, const cl_query *query, const cl_mr_job
 		
 		if (mr_job->map_argc > 0) {
 			n_fields++;
-			mrj_compile_arg_field(mr_job->map_argk, mr_job->map_argv, mr_job->map_argc, NULL, &maparg_len); 
+			sproc_compile_arg_field(mr_job->map_argk, mr_job->map_argv, mr_job->map_argc, NULL, &maparg_len); 
 			msg_sz += maparg_len + sizeof(cl_msg_field);
 		} 
 	}	
@@ -307,7 +225,7 @@ static int query_compile (const char *ns, const cl_query *query, const cl_mr_job
 		
 		if (mr_job->rdc_argc > 0) {
 			n_fields++;
-			mrj_compile_arg_field(mr_job->rdc_argk, mr_job->rdc_argv, mr_job->rdc_argc, NULL, &rdcarg_len); 
+			sproc_compile_arg_field(mr_job->rdc_argk, mr_job->rdc_argv, mr_job->rdc_argc, NULL, &rdcarg_len); 
 			msg_sz += rdcarg_len + sizeof(cl_msg_field);
 		} 
 	}	
@@ -322,7 +240,7 @@ static int query_compile (const char *ns, const cl_query *query, const cl_mr_job
 		
 		if (mr_job->fnz_argc > 0) {
 			n_fields++;
-			mrj_compile_arg_field(mr_job->fnz_argk, mr_job->fnz_argv, mr_job->fnz_argc, NULL, &fnzarg_len); 
+			sproc_compile_arg_field(mr_job->fnz_argk, mr_job->fnz_argv, mr_job->fnz_argc, NULL, &fnzarg_len); 
 			msg_sz += fnzarg_len + sizeof(cl_msg_field);
 		} 
 	}	
@@ -413,7 +331,7 @@ static int query_compile (const char *ns, const cl_query *query, const cl_mr_job
 	if (mr_job && mr_job->map_argc > 0) {
         mf->type = CL_MSG_FIELD_TYPE_SPROC_MAP_ARG;
         mf->field_sz = maparg_len + 1;
-		mrj_compile_arg_field(mr_job->map_argk, mr_job->map_argv, mr_job->map_argc, mf->data, &maparg_len); 
+		sproc_compile_arg_field(mr_job->map_argk, mr_job->map_argv, mr_job->map_argc, mf->data, &maparg_len); 
         mf_tmp = cl_msg_field_get_next(mf);
         cl_msg_swap_field(mf);
         mf = mf_tmp;
@@ -432,7 +350,7 @@ static int query_compile (const char *ns, const cl_query *query, const cl_mr_job
 	if (mr_job && mr_job->rdc_argc > 0) {
         mf->type = CL_MSG_FIELD_TYPE_SPROC_REDUCE_ARG;
         mf->field_sz = rdcarg_len + 1;
-		mrj_compile_arg_field(mr_job->rdc_argk, mr_job->rdc_argv, mr_job->rdc_argc, mf->data, &rdcarg_len); 
+		sproc_compile_arg_field(mr_job->rdc_argk, mr_job->rdc_argv, mr_job->rdc_argc, mf->data, &rdcarg_len); 
         mf_tmp = cl_msg_field_get_next(mf);
         cl_msg_swap_field(mf);
         mf = mf_tmp;
@@ -451,7 +369,7 @@ static int query_compile (const char *ns, const cl_query *query, const cl_mr_job
 	if (mr_job && mr_job->fnz_argc > 0) {
         mf->type = CL_MSG_FIELD_TYPE_SPROC_FINALIZE_ARG;
         mf->field_sz = fnzarg_len + 1;
-		mrj_compile_arg_field(mr_job->fnz_argk, mr_job->fnz_argv, mr_job->fnz_argc, mf->data, &fnzarg_len); 
+		sproc_compile_arg_field(mr_job->fnz_argk, mr_job->fnz_argv, mr_job->fnz_argc, mf->data, &fnzarg_len); 
         mf_tmp = cl_msg_field_get_next(mf);
         cl_msg_swap_field(mf);
         mf = mf_tmp;

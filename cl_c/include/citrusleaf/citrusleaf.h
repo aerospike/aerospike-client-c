@@ -671,7 +671,7 @@ void citrusleaf_sproc_definition_destroy(cl_sproc_def *sproc_def);
 
 cl_rv citrusleaf_sproc_def_add_parameter_string(cl_sproc_def *sproc_def, const char *param_key, const char *param_value);
 
-cl_rv citrusleaf_run_sproc(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, cl_sproc_def *sproc_def, int timeout_ms, uint32_t *cl_gen);
+cl_rv citrusleaf_run_sproc(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, cl_sproc_def *sproc_def, cl_bin **bins, int *n_bins, int timeout_ms, uint32_t *cl_gen);
 
 
 #ifdef __cplusplus

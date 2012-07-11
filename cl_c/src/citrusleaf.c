@@ -1897,7 +1897,7 @@ citrusleaf_operate(cl_cluster *asc, const char *ns, const char *set, const cl_ob
 }
 
 
-cl_rv citrusleaf_run_sproc(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, cl_sproc_def *sproc_def, int timeout_ms, uint32_t *cl_gen)
+cl_rv citrusleaf_run_sproc(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, cl_sproc_def *sproc_def, cl_bin **bins, int *n_bins,int timeout_ms, uint32_t *cl_gen)
 {
     if (!g_initialized) return(-1);
 
@@ -1906,7 +1906,7 @@ cl_rv citrusleaf_run_sproc(cl_cluster *asc, const char *ns, const char *set, con
 	cl_write_parameters_set_default(&cl_w_p);
 	cl_w_p.timeout_ms = timeout_ms;
 
-	return( do_the_full_monte( asc, 0, CL_MSG_INFO2_WRITE, 0, ns, set, key, 0, NULL, CL_OP_WRITE, 0, NULL, NULL, &cl_w_p, &trid, sproc_def) );
+	return( do_the_full_monte( asc, 0, CL_MSG_INFO2_WRITE, 0, ns, set, key, 0, bins, CL_OP_WRITE, 0, n_bins, NULL, &cl_w_p, &trid, sproc_def) );
 }
 
 

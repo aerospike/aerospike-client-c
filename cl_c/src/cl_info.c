@@ -25,8 +25,7 @@
 #include "citrusleaf/proto.h"
 #include "citrusleaf/cf_socket.h"
 
-
-
+// #define DEBUG 1
 
 //
 // The interesting note here is that using blocking calls - if you're in a non-event-oriented
@@ -122,6 +121,7 @@ citrusleaf_info_host(struct sockaddr_in *sa_in, char *names, char **values, int 
 	// Actually doing a non-blocking connect
 	int fd = cf_create_nb_socket(sa_in, timeout_ms);
 	if (fd == -1) {
+		fprintf(stderr, "info host: could not create socket\n");
 		return (-1);
 	}
 
@@ -194,9 +194,9 @@ citrusleaf_info_host(struct sockaddr_in *sa_in, char *names, char **values, int 
 			
 		v_buf[rsp->sz] = 0;
 		*values = (char *) v_buf;
-		
 	}                                                                                               
 	else {
+		fprintf(stderr, "rsp size is 0\n");
 		*values = 0;
 	}
 	rv = 0;
@@ -253,13 +253,13 @@ dump_sockaddr_in(char *prefix, struct sockaddr_in *sa_in)
 
 
 int
-citrusleaf_info_cluster(cl_cluster *asc, char *names, char **values_r, int timeout_ms)
+citrusleaf_info_cluster(cl_cluster *asc, char *names, char **values_r, bool send_asis, int timeout_ms)
 {
 	if (timeout_ms == 0) timeout_ms = 100; // milliseconds
 	uint64_t start = cf_getms();
 	uint64_t end = start + timeout_ms;
 	char *values = 0;
-
+	
 	//
 	// not sure yet about the thread safety of this - I have only read-only use
 	// of these vectors
@@ -269,18 +269,16 @@ citrusleaf_info_cluster(cl_cluster *asc, char *names, char **values_r, int timeo
 		cl_cluster_node *cn = cf_vector_pointer_get(&asc->node_v, i);
 		if (cn == 0) continue;
 		
-		fprintf(stderr, "info_cluster call to node %s\n",cn->name);
-
 		for (uint j=0;j<cf_vector_size(&cn->sockaddr_in_v);j++) {
 			
 			struct sockaddr_in *sa_in = cf_vector_getp(&cn->sockaddr_in_v, j);
 			if (sa_in == 0) continue;
 			
-			dump_sockaddr_in("info_cluster call to address ",sa_in);
+//			dump_sockaddr_in("info_cluster call to address ",sa_in);
 			
 			values = 0;
 			
-			if (0 == citrusleaf_info_host(sa_in, names, &values, end - cf_getms(), false)) {
+			if (0 == citrusleaf_info_host(sa_in, names, &values, end - cf_getms(), send_asis)) {
 				// success
 				*values_r = values;
 				return(0);

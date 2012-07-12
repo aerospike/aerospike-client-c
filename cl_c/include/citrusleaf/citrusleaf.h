@@ -586,7 +586,7 @@ int
 citrusleaf_info_host(struct sockaddr_in *sa_in, char *names, char **values, int timeout_ms, bool send_asis);
 
 int 
-citrusleaf_info_cluster(cl_cluster *asc, char *names, char **values, int timeout_ms);
+citrusleaf_info_cluster(cl_cluster *asc, char *names, char **values, bool send_asis, int timeout_ms);
 
 // Do a lookup with this name and port, and add the sockaddr to the
 // vector using the unique lookup
@@ -662,7 +662,7 @@ cl_rv citrusleaf_mr_job_add_parameter_numeric(cl_mr_job *mr_job, cl_script_func_
 cl_rv citrusleaf_mr_job_add_parameter_blob(cl_mr_job *mr_job, cl_script_func_t ftype, cl_type blobtype, const char *key, const uint8_t *value, int val_len);
 void citrusleaf_mr_job_destroy(cl_mr_job *mr_job);
 
-int citrusleaf_mr_package_load(cl_cluster *asc, const char *package);
+int citrusleaf_mr_package_load(cl_cluster *asc, const char *package, const char *lang);
 
 // per record stored procedure invokations
 cl_sproc_def *citrusleaf_sproc_definition_create(const char *package, const char *fname);

@@ -52,6 +52,7 @@ typedef struct mr_package_s {
 	
 	// "func" is the code, "name" is the symbol to invoke
 	// generation is the server-returned value that equals this code's version
+	char lang[MAX_PACKAGE_NAME_SIZE];
 	char generation[MAX_PACKAGE_NAME_SIZE];
     char      *script; int script_len; 
     pthread_mutex_t script_lock;
@@ -233,7 +234,6 @@ static int mr_state_load_package_lua(cl_mr_state *mrs_p, mr_package *mrp_p) {
 void mr_state_destroy(cl_mr_state *mrs_p)
 {
 	if (mrs_p->lua) lua_close(mrs_p->lua);
-	if (mrs_p->package_name) free(mrs_p->package_name);
 	free(mrs_p);	
 }
 
@@ -362,16 +362,22 @@ void mr_package_release(mr_package *mrp_p) {
 // Todo: check if package exists on server, if so, load from there, if not, load to there
 //
 
-mr_package * mr_package_create(const char *package_name, const char *script, int script_len )
+mr_package * mr_package_create(const char *package_name,  const char *lang, 
+								const char *script, int script_len, const char *generation )
 {
 	mr_package *mrp_p = 0;
 	bool reusing = false;
-	
+
 	// already registered?
-	int found = cf_rchash_get(mr_package_hash, (char *)package_name, strlen(package_name)+1, (void **) &mrp_p);
+	int found = cf_rchash_get(mr_package_hash, (char *)package_name, strlen(package_name), (void **) &mrp_p);
 	if (found == CF_RCHASH_OK) {
 		reusing = true;
 		pthread_mutex_lock(&mrp_p->script_lock);
+		// bail if it hasn't changed
+		if (0 == strcmp(generation, mrp_p->generation)) {
+			pthread_mutex_unlock(&mrp_p->script_lock);
+			return(mrp_p);
+		}
 		if (mrp_p->script)	{ free(mrp_p->script); mrp_p->script = 0; }
 		reusing = true;
 	}
@@ -386,7 +392,7 @@ mr_package * mr_package_create(const char *package_name, const char *script, int
 	}
 	
 	if (script) {
-		// trim ---
+		// trim input ---
 		while (script_len && (script[script_len - 1] == 0)) script_len--;
 		// then allocate with a null on the end
 		mrp_p->script                 = malloc(script_len + 1);
@@ -394,6 +400,9 @@ mr_package * mr_package_create(const char *package_name, const char *script, int
 		memcpy(mrp_p->script, script, script_len);
 		mrp_p->script[script_len]     = '\0';
 	}
+	
+	strcpy(mrp_p->lang, lang);
+	strcpy(mrp_p->generation, generation);
     
     if (reusing) {
     	pthread_mutex_unlock(&mrp_p->script_lock);
@@ -407,7 +416,7 @@ mr_package * mr_package_create(const char *package_name, const char *script, int
     else {
     	// add to the rchash
     	cf_client_rc_reserve(mrp_p);
-    	cf_rchash_put_unique(mr_package_hash, (char *)package_name, strlen(package_name)+1, mrp_p);
+    	cf_rchash_put_unique(mr_package_hash, (char *)package_name, strlen(package_name), mrp_p);
 	}
 	return(mrp_p);
 Cleanup:
@@ -417,33 +426,21 @@ Cleanup:
 }
 
 
-int
-citrusleaf_mr_package_register(const char *package_name, const char *script, size_t script_len)
-{
-	mr_package *package = mr_package_create(package_name, script, script_len );
-	if (package == 0) {
-		fprintf(stderr, "could not register package %s\n",package_name);
-		return(-1);
-	}
-	mr_package_release(package);
-	return(0);
-}
-
 //
 // grab the package from a server
 // Not sure whether to do sync or async. Start with sync.
 int
-citrusleaf_mr_package_load(cl_cluster *asc, const char *package_name)
+citrusleaf_mr_package_load(cl_cluster *asc, const char *package_name, const char *lang)
 {
-	fprintf(stderr, "citrusleaf mr package preload %s\n",package_name);
+//	fprintf(stderr, "citrusleaf mr package load %s\n",package_name);
 	
 	char info_query[512];
-	if (sizeof(info_query) <= (size_t) snprintf(info_query, sizeof(info_query), "get-package:package=%s;lang=lua;",package_name)) {
+	if (sizeof(info_query) <= (size_t) snprintf(info_query, sizeof(info_query), "get-package:package=%s;lang=%s;",package_name,lang)) {
 		return(-1);
 	}
 	char *values = 0;
 	// shouldn't do this on a blocking thread --- todo, queue
-	if (0 != citrusleaf_info_cluster(asc, info_query, &values, 100)) {
+	if (0 != citrusleaf_info_cluster(asc, info_query, &values, true/*asis*/, 100/*timeout*/)) {
 		fprintf(stderr, "could not get package %s from cluster\n",package_name);
 		return(-1);
 	}
@@ -453,24 +450,61 @@ citrusleaf_mr_package_load(cl_cluster *asc, const char *package_name)
 	}
 	
 	// got response, add into cache
-	// format: gen=asdf;script=xxyefu
+	// format: request\tresponse
+	// response is gen=asdf;script=xxyefu
 	// where gen is a simple string, and script
 	// error is something else entirely
 	
-	fprintf(stderr, "package %s is: %s\n",package_name,values);
+	char *value = strchr(values, '\t') + 1; // skip request, parse resposne 
 	
 	int n_tok=0;
-	char sep[] = "=;:";
-	char *brkb;
-	char *words[10];
-	char *word;
-	for ( word = strtok_r(values,sep,&brkb); word ; word = strtok_r(0,sep,&brkb) ) {
-		words[n_tok] = word;
-		n_tok++;
+	char *brkb = 0;
+	char *words[20];
+	do {
+		words[n_tok] = strtok_r(value,"=",&brkb);
+		if (0 == words[n_tok]) break;
+		value = 0;
+		words[n_tok+1] = strtok_r(value,";",&brkb);
+		if (0 == words[n_tok+1]) break;
+		n_tok += 2;
+		if (n_tok >= 20) {
+			fprintf(stderr, "too many tokens\n");
+			free(values);
+			return(-1);
+		}
+	} while(true);
+	
+	char *gen_str = 0;
+	char *script_str = 0;
+	
+	for (int i = 0; i < n_tok ; i += 2) {
+		char *key = words[i];
+		char *value = words[i+1];
+		if (0 == strcmp(key,"gen")) {
+			gen_str = value;
+		}
+		else if (0 == strcmp(key,"script")) {
+			script_str = value;
+		} else {
+			fprintf(stderr, "package load: unknown key %s value %s\n",key,value);
+		}
 	}
+	if ( (!gen_str) || (!script_str)) {
+		fprintf(stderr, "get package did not return enough data\n");
+		free(values);
+		return(-1);
+	}
+		
+	mr_package *mrp_p = mr_package_create(package_name, lang, script_str, strlen(script_str), gen_str );
+	if (!mrp_p) {
+		fprintf(stderr, "could not create package: %s\n",package_name);
+		free(values);
+		return(-1);
+	}
+	
+	mr_package_release(mrp_p);
 
-	fprintf(stderr, "n_tok is %d word1 is %s word2 is %s\n",n_tok, words[0],words[1]);
-
+	free(values);
 	
 	return(0);
 	

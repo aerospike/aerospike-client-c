@@ -222,7 +222,6 @@ typedef struct cl_mr_job {
 	int			fnz_argc;
 	char		*fnz_argk[CL_MAX_NUM_FUNC_ARGC];
 	cl_object	*fnz_argv[CL_MAX_NUM_FUNC_ARGC];
-	char		*generation;
 } cl_mr_job; 
 
 typedef struct cl_sproc_def {
@@ -663,7 +662,7 @@ cl_rv citrusleaf_mr_job_add_parameter_numeric(cl_mr_job *mr_job, cl_script_func_
 cl_rv citrusleaf_mr_job_add_parameter_blob(cl_mr_job *mr_job, cl_script_func_t ftype, cl_type blobtype, const char *key, const uint8_t *value, int val_len);
 void citrusleaf_mr_job_destroy(cl_mr_job *mr_job);
 
-int citrusleaf_mr_package_preload(cl_cluster *asc, const char *package);
+int citrusleaf_mr_package_load(cl_cluster *asc, const char *package);
 
 // per record stored procedure invokations
 cl_sproc_def *citrusleaf_sproc_definition_create(const char *package, const char *fname);

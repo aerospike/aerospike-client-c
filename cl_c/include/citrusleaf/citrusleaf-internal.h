@@ -133,6 +133,8 @@ typedef struct mr_state_s {
 	
 	char 	package_name[MAX_PACKAGE_NAME_SIZE]; // used to queue state after done
 	
+	char	generation[MAX_PACKAGE_NAME_SIZE];
+	
 	// enough information to find the package -- but don't need to load code
 	const cl_mr_job 	*mr_job;
 

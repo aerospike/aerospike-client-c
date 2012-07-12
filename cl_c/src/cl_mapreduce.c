@@ -48,9 +48,11 @@ static cf_rchash *mr_package_hash = 0;
 
 typedef struct mr_package_s {
 	
-	char *package_name;
+	char package_name[MAX_PACKAGE_NAME_SIZE];
 	
 	// "func" is the code, "name" is the symbol to invoke
+	// generation is the server-returned value that equals this code's version
+	char generation[MAX_PACKAGE_NAME_SIZE];
     char      *script; int script_len; 
     pthread_mutex_t script_lock;
     
@@ -240,9 +242,20 @@ void mr_state_destroy(cl_mr_state *mrs_p)
 
 cl_mr_state * mr_state_create(mr_package *mrp_p) {
 
+	// some validation of the package - it should have code & generation
+	if (mrp_p->generation[0] == 0) {
+		fprintf(stderr, "creating mr_state from mr_package with no generation, illegal %s\n",mrp_p->generation);		
+		return(0);
+	}
+	if (mrp_p->script == 0) {
+		fprintf(stderr, "creating mr_state from mr_package with no code, illegal %s\n",mrp_p->package_name);
+		return(0);
+	}
+
 	cl_mr_state *mrs_p = calloc(sizeof(cl_mr_state),1);
 	if (!mrs_p) return(0);
-
+		
+	
 	// create the lua universe and load in static funcs
     if (! mr_state_lua_create(mrs_p) ) {
     	mr_state_destroy(mrs_p);
@@ -253,13 +266,15 @@ cl_mr_state * mr_state_create(mr_package *mrp_p) {
     // registered is bad, take a copy of the functions
     pthread_mutex_lock(&mrp_p->script_lock);
 
-	// copy the bits we need
-
     if (! mr_state_load_package_lua(mrs_p, mrp_p) ) {
     	pthread_mutex_unlock(&mrp_p->script_lock);
     	mr_state_destroy(mrs_p);
     	return(0);
     }
+    
+    strncpy(mrs_p->package_name, mrp_p->package_name, MAX_PACKAGE_NAME_SIZE);
+    strncpy(mrs_p->generation, mrp_p->generation, MAX_PACKAGE_NAME_SIZE);
+    
     pthread_mutex_unlock(&mrp_p->script_lock);
     
     return(mrs_p);
@@ -365,7 +380,7 @@ mr_package * mr_package_create(const char *package_name, const char *script, int
 		if (!mrp_p) goto Cleanup;
 		memset(mrp_p, 0, sizeof(mr_package));
 	
-		mrp_p->package_name = strdup(package_name);
+		strncpy(mrp_p->package_name, strdup(package_name), MAX_PACKAGE_NAME_SIZE);
 		pthread_mutex_init(&mrp_p->script_lock, 0/*default addr*/);
 		mrp_p->mr_state_q = cf_queue_create(sizeof(cl_mr_state *), true/*multithreaded*/);
 	}
@@ -418,11 +433,12 @@ citrusleaf_mr_package_register(const char *package_name, const char *script, siz
 // grab the package from a server
 // Not sure whether to do sync or async. Start with sync.
 int
-citrusleaf_mr_package_preload(cl_cluster *asc, const char *package_name)
+citrusleaf_mr_package_load(cl_cluster *asc, const char *package_name)
 {
+	fprintf(stderr, "citrusleaf mr package preload %s\n",package_name);
 	
 	char info_query[512];
-	if (sizeof(info_query) >= snprintf(info_query, sizeof(info_query), "get-package:package=%s;lang=lua;",package_name)) {
+	if (sizeof(info_query) >= (size_t) snprintf(info_query, sizeof(info_query), "get-package:package=%s;lang=lua;",package_name)) {
 		return(-1);
 	}
 	char *values = 0;

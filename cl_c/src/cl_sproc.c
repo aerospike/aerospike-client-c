@@ -168,6 +168,7 @@ cl_mr_job *citrusleaf_mr_job_create(const char *package, const char *map_fname, 
 			goto Cleanup;
 		}
 	}
+	
 	return mr_job;
 	
 Cleanup:	

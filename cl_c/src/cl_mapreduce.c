@@ -30,6 +30,7 @@
 #include "citrusleaf/proto.h"
 #include "citrusleaf/cf_rchash.h"
 #include "citrusleaf/cf_alloc.h"
+#include "citrusleaf/cf_b64.h"
 
 //ALCHEMY
 #include <lua.h>
@@ -73,7 +74,7 @@ void mr_package_release(mr_package *mrp_p);
 #define SKIP_SPACES(tok)     while (ISBLANK(*tok)) tok++;
 
 
-#define DEFINE_ADD_TO_MAP_RESULTS								\
+static char luaPredefinedFunctions[] = \
     "function AddTableToMapResults(hasrdc, k, v) " 				\
     "  local cmd; " 											\
     "  if (hasrdc) then " 										\
@@ -90,9 +91,7 @@ void mr_package_release(mr_package *mrp_p);
     "  else " 													\
     "    ReduceResults[k] = v; " 								\
     "  end " 													\
-    "end "
-
-#define DEFINE_POST_FINALIZE_CLEANUP                                    \
+    "end "														\
     "local function GlobalCheck(tab, name, value) " 					\
     "  if (ReadOnly[name] == nil) then " 								\
     "    error(name ..' is a Global Variable, use \\'Sandbox\\'', 2); " \
@@ -110,31 +109,27 @@ void mr_package_release(mr_package *mrp_p);
     "     Sandbox       = {}; " 										\
     "  }; " 															\
     "  setmetatable(_G, {__index=ReadOnly, __newindex=GlobalCheck});  " \
-    "end                                                              "
+    "end "																\
+    "function ReduceWrapper(func) "  						\
+    "  print('ReduceWrapper'); " 							\
+    "  ReduceCount = 0; " 									\
+    "  local res   = {}; " 									\
+    "  for k, t in pairs(MapResults) do " 					\
+    "    ReduceResults[k] = func(t); "						\
+    "    ReduceCount = ReduceCount + 1; "					\
+    "  end " 												\
+    "  MapResults = {}; "									\
+    "  MapCount   = 0; "				 					\
+    "end "													\
+    "function FinalizeWrapper(func) "						\
+    "  ReduceResults = func(ReduceResults); "				\
+    "  ReduceCount = 0; "					  				\
+    "  for i, v in pairs(ReduceResults) do "				\
+    "    ReduceCount = ReduceCount + 1; "					\
+    "  end "												\
+    "end ";
 
-#define DEFINE_REDUCE_WRAPPER                                 \
-    "function ReduceWrapper(func)       "                     \
-    "  print('ReduceWrapper');          "                     \
-    "  ReduceCount = 0;                 "                     \
-    "  local res   = {};                "                     \
-    "  for k, t in pairs(MapResults) do "                     \
-    "    ReduceResults[k] = func(t);    "                     \
-    "    ReduceCount = ReduceCount + 1; "                     \
-    "  end                              "                     \
-    "  MapResults = {};                 "                     \
-    "  MapCount   = 0;                  "                     \
-    "end                                "
-
-#define DEFINE_FINALIZE_WRAPPER               \
-    "function FinalizeWrapper(func)         " \
-    "  ReduceResults = func(ReduceResults); " \
-    "  ReduceCount = 0; "					  \
-    "  for i, v in pairs(ReduceResults) do " \
-    "    ReduceCount = ReduceCount + 1; "     \
-    "  end "								  \
-    "end "
-
-#define DEFINE_DEBUG_WRAPPER                        \
+static char luaDebugWrapper[] = \
     "function DebugWrapper(func) "					\
     "  print('DebugWrapper'); "          			\
     "  for k, t in pairs(ReduceResults) do "        \
@@ -143,7 +138,7 @@ void mr_package_release(mr_package *mrp_p);
     "end "          								\
     "function print_user_and_value(k, t) "          \
     "  print('v: ' .. t); "  						\
-    "end "
+    "end ";
 
     //"  print('user: ' .. t.user_id .. ' score: ' .. t.score .. ' cats: ' .. t.cats); " 
 
@@ -169,43 +164,19 @@ mr_state_lua_create(cl_mr_state *mrs_p) {
     lua_State *lua  = mrs_p->lua;
     luaL_openlibs(lua);
 
-    int ret = luaL_dostring(lua, DEFINE_ADD_TO_MAP_RESULTS);
+    int ret = luaL_dostring(lua, luaPredefinedFunctions);
+//    int ret = luaL_loadbuffer(lua, luaPredefinedFunctions, sizeof(luaPredefinedFunctions)-1, "mr_wrapper");
     if (ret) {
-    	assertOnLuaError(lua, "ERROR: adding(AddTableToMapResults)");
+    	assertOnLuaError(lua, "ERROR: adding(luaPredefinedFunctions)");
     	goto Cleanup;
     }
     
-    ret     = luaL_dostring(lua, DEFINE_POST_FINALIZE_CLEANUP);
-    if (ret) {
-    	assertOnLuaError(lua, "ERROR: luaL_dostring(PostFinalizeCleanup)");
-    	goto Cleanup;
-    }
-
-    ret     = luaL_dostring(lua, DEFINE_REDUCE_WRAPPER);
-    if (ret) {
-    	assertOnLuaError(lua, "ERROR: luaL_dostring(ReduceWrapper)");
-    	goto Cleanup;
-    }
-    
-    ret     = luaL_dostring(lua, DEFINE_FINALIZE_WRAPPER);
-    if (ret) {
-    	assertOnLuaError(lua, "ERROR: luaL_dostring(FinalizeWrapper)");
-    	goto Cleanup;
-    }
-
-    ret     = luaL_dostring(lua, DEFINE_DEBUG_WRAPPER);
+    ret     = luaL_dostring(lua, luaDebugWrapper);
     if (ret) {
     	assertOnLuaError(lua, "ERROR: luaL_dostring(DebugWrapper)");
     	goto Cleanup; 
     }
 
-    ret     = luaL_dostring(lua, "PostFinalizeCleanup();");
-    if (ret) { 
-    	assertOnLuaError(lua, "ERROR: luaL_dostring(PostFinalizeCleanup)"); 
-    	goto Cleanup; 
-    }
-    return(0);
-    
 Cleanup:
 	if (mrs_p->lua)  lua_close(mrs_p->lua);
 	  return(-1);
@@ -220,7 +191,9 @@ static int mr_state_load_package_lua(cl_mr_state *mrs_p, mr_package *mrp_p) {
     lua_State *lua  = mrs_p->lua;
 
     if (mrp_p->script) {
+    	fprintf(stderr, "mrp script1 %p %s\n",mrp_p->script,mrp_p->script);
 		int ret     = luaL_dostring(lua, mrp_p->script);
+//		int ret     = luaL_loadbuffer(lua, mrp_p->script, mrp_p->script_len,mrp_p->package_name);
 		if (ret) { assertOnLuaError(lua, "ERROR: luaL_dostring(map_func)"); return(-1); }
 	}
 	else {
@@ -342,6 +315,8 @@ void mr_package_destroy(void *arg)
 	mr_package *mrp_p = (mr_package *) arg;
 	if (0 == cf_client_rc_release(mrp_p)) {
 		
+		fprintf(stderr, "mr_package_destroy: free %p\n",mrp_p);
+
 		if (mrp_p->script)	free(mrp_p->script);
 
 		cl_mr_state *mrs_p;
@@ -351,19 +326,24 @@ void mr_package_destroy(void *arg)
 		
 		cf_client_rc_free(mrp_p);
 	}
+	else {
+		fprintf(stderr, "mr_package_destroy: %p still a refcount\n",mrp_p);
+	}
 	return;
 }
 
 void mr_package_release(mr_package *mrp_p) {
+	fprintf(stderr, "mr_package_release %p\n",mrp_p); 
 	mr_package_destroy((void *)mrp_p);
 }
 
 //
 // Todo: check if package exists on server, if so, load from there, if not, load to there
-//
+// char *script - must be malloc'ed, will be consumed / registered - must be null terminated
+// script will be freed after this call
 
 mr_package * mr_package_create(const char *package_name,  const char *lang, 
-								const char *script, int script_len, const char *generation )
+								char *script, int script_len, const char *generation )
 {
 	mr_package *mrp_p = 0;
 	bool reusing = false;
@@ -375,6 +355,7 @@ mr_package * mr_package_create(const char *package_name,  const char *lang,
 		pthread_mutex_lock(&mrp_p->script_lock);
 		// bail if it hasn't changed
 		if (0 == strcmp(generation, mrp_p->generation)) {
+			free(script);
 			pthread_mutex_unlock(&mrp_p->script_lock);
 			return(mrp_p);
 		}
@@ -385,21 +366,16 @@ mr_package * mr_package_create(const char *package_name,  const char *lang,
 		mrp_p = cf_client_rc_alloc(sizeof(mr_package));
 		if (!mrp_p) goto Cleanup;
 		memset(mrp_p, 0, sizeof(mr_package));
-	
+
+		fprintf(stderr, "mr_package_create: alloc %p\n",mrp_p);
+		
 		strncpy(mrp_p->package_name, strdup(package_name), MAX_PACKAGE_NAME_SIZE);
 		pthread_mutex_init(&mrp_p->script_lock, 0/*default addr*/);
 		mrp_p->mr_state_q = cf_queue_create(sizeof(cl_mr_state *), true/*multithreaded*/);
 	}
 	
-	if (script) {
-		// trim input ---
-		while (script_len && (script[script_len - 1] == 0)) script_len--;
-		// then allocate with a null on the end
-		mrp_p->script                 = malloc(script_len + 1);
-		if (!mrp_p->script)			goto Cleanup;
-		memcpy(mrp_p->script, script, script_len);
-		mrp_p->script[script_len]     = '\0';
-	}
+	mrp_p->script = script;
+	mrp_p->script_len = script_len;
 	
 	strcpy(mrp_p->lang, lang);
 	strcpy(mrp_p->generation, generation);
@@ -419,6 +395,7 @@ mr_package * mr_package_create(const char *package_name,  const char *lang,
     	cf_rchash_put_unique(mr_package_hash, (char *)package_name, strlen(package_name), mrp_p);
 	}
 	return(mrp_p);
+	
 Cleanup:
 	if (!mrp_p)	return(0);
 	if (mrp_p->script)	{ free(mrp_p->script); mrp_p->script = 0; }
@@ -466,6 +443,8 @@ citrusleaf_mr_package_load(cl_cluster *asc, const char *package_name, const char
 		value = 0;
 		words[n_tok+1] = strtok_r(value,";",&brkb);
 		if (0 == words[n_tok+1]) break;
+		char *newline = strchr(words[n_tok+1],'\n');
+		if (newline) *newline = 0;
 		n_tok += 2;
 		if (n_tok >= 20) {
 			fprintf(stderr, "too many tokens\n");
@@ -475,7 +454,7 @@ citrusleaf_mr_package_load(cl_cluster *asc, const char *package_name, const char
 	} while(true);
 	
 	char *gen_str = 0;
-	char *script_str = 0;
+	char *script64_str = 0;
 	
 	for (int i = 0; i < n_tok ; i += 2) {
 		char *key = words[i];
@@ -484,23 +463,42 @@ citrusleaf_mr_package_load(cl_cluster *asc, const char *package_name, const char
 			gen_str = value;
 		}
 		else if (0 == strcmp(key,"script")) {
-			script_str = value;
+			script64_str = value;
 		} else {
 			fprintf(stderr, "package load: unknown key %s value %s\n",key,value);
 		}
 	}
-	if ( (!gen_str) || (!script_str)) {
+	if ( (!gen_str) || (!script64_str)) {
 		fprintf(stderr, "get package did not return enough data\n");
 		free(values);
 		return(-1);
 	}
+	
+	// unbase64
+	int script_str_len = strlen(script64_str);
+	char *script_str = malloc(script_str_len+1); // guarenteed to shrink it
+	if (!script_str) {
+		free(values);
+		return(-1);
+	}
+	fprintf(stderr, "Script64 strlen: %d\n",script_str_len);
+	int rv = cf_base64_decode(script64_str, script_str, &script_str_len, true/*validate*/);
+	if (rv != 0) {
+		fprintf(stderr,"could not decode base64 from server %s\n",script64_str);
+		free(script_str);
+		free(values);
+		return(-1);
+	}
+	script_str[script_str_len] = 0;
+	fprintf(stderr, "script len: %d strlen %d script %p\n",script_str_len,strlen(script_str),script_str);
 		
-	mr_package *mrp_p = mr_package_create(package_name, lang, script_str, strlen(script_str), gen_str );
+	mr_package *mrp_p = mr_package_create(package_name, lang, script_str, script_str_len, gen_str );
 	if (!mrp_p) {
 		fprintf(stderr, "could not create package: %s\n",package_name);
 		free(values);
 		return(-1);
 	}
+	script_str = 0;
 	
 	mr_package_release(mrp_p);
 

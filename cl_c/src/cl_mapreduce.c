@@ -157,7 +157,10 @@ static void assertOnLuaError(lua_State *lua, char *assert_string) {
 static int 
 mr_state_lua_create(cl_mr_state *mrs_p) {
 	
-	if (mrs_p->lua) { lua_close(mrs_p->lua); mrs_p->lua = 0; }
+	if (mrs_p->lua) {
+		// fprintf(stderr, "closing lua %p\n",mrs_p->lua);
+		lua_close(mrs_p->lua); mrs_p->lua = 0; 
+	}
 	
     mrs_p->lua       = lua_open();
     if (!mrs_p->lua) return(-1);
@@ -177,9 +180,13 @@ mr_state_lua_create(cl_mr_state *mrs_p) {
     	goto Cleanup; 
     }
 
+	// fprintf(stderr, "lua state create success\n");    
+    return(0);
+    
 Cleanup:
+	fprintf(stderr, "lua state create failed\n");
 	if (mrs_p->lua)  lua_close(mrs_p->lua);
-	  return(-1);
+	return(-1);
 }
 
 //
@@ -191,7 +198,6 @@ static int mr_state_load_package_lua(cl_mr_state *mrs_p, mr_package *mrp_p) {
     lua_State *lua  = mrs_p->lua;
 
     if (mrp_p->script) {
-    	fprintf(stderr, "mrp script1 %p %s\n",mrp_p->script,mrp_p->script);
 		int ret     = luaL_dostring(lua, mrp_p->script);
 //		int ret     = luaL_loadbuffer(lua, mrp_p->script, mrp_p->script_len,mrp_p->package_name);
 		if (ret) { assertOnLuaError(lua, "ERROR: luaL_dostring(map_func)"); return(-1); }
@@ -228,9 +234,10 @@ cl_mr_state * mr_state_create(mr_package *mrp_p) {
 	cl_mr_state *mrs_p = calloc(sizeof(cl_mr_state),1);
 	if (!mrs_p) return(0);
 		
-	
+	pthread_mutex_init(&mrs_p->lua_lock, 0);
+
 	// create the lua universe and load in static funcs
-    if (! mr_state_lua_create(mrs_p) ) {
+    if (0 != mr_state_lua_create(mrs_p) ) {
     	mr_state_destroy(mrs_p);
     	return(0);
 	}
@@ -239,7 +246,7 @@ cl_mr_state * mr_state_create(mr_package *mrp_p) {
     // registered is bad, take a copy of the functions
     pthread_mutex_lock(&mrp_p->script_lock);
 
-    if (! mr_state_load_package_lua(mrs_p, mrp_p) ) {
+    if (0 != mr_state_load_package_lua(mrs_p, mrp_p) ) {
     	pthread_mutex_unlock(&mrp_p->script_lock);
     	mr_state_destroy(mrs_p);
     	return(0);
@@ -281,11 +288,15 @@ cl_mr_state_get(const cl_mr_job *mrj) {
 	
 	mr_package_release(mrp_p);
 	
+	mrs_p->mr_job = mrj;
+	
 	return(mrs_p);
 }
 
 void 
 cl_mr_state_put(cl_mr_state *mrs_p) {
+	
+	mrs_p->mr_job = 0;
 	
 	// get the package with this name
 	mr_package *mrp_p = 0;
@@ -298,7 +309,7 @@ cl_mr_state_put(cl_mr_state *mrs_p) {
 	}
 	
 	// push the state
-	fprintf(stderr, "pushing state %p onto package %s ( %p )\n",mrs_p,mrs_p->package_name,mrp_p);
+	fprintf(stderr, "pushing state %p onto queue, package %s ( %p )\n",mrs_p,mrs_p->package_name,mrp_p);
 	int rv = cf_queue_push(mrp_p->mr_state_q , (void *)&mrs_p);
 	if (rv != CF_QUEUE_OK) {
 		// could not push for some reason, destroy I guess
@@ -326,14 +337,14 @@ void mr_package_destroy(void *arg)
 		
 		cf_client_rc_free(mrp_p);
 	}
-	else {
-		fprintf(stderr, "mr_package_destroy: %p still a refcount\n",mrp_p);
-	}
+//	else {
+//		fprintf(stderr, "mr_package_destroy: %p still a refcount\n",mrp_p);
+//	}
 	return;
 }
 
 void mr_package_release(mr_package *mrp_p) {
-	fprintf(stderr, "mr_package_release %p\n",mrp_p); 
+//	fprintf(stderr, "mr_package_release %p\n",mrp_p); 
 	mr_package_destroy((void *)mrp_p);
 }
 
@@ -367,8 +378,6 @@ mr_package * mr_package_create(const char *package_name,  const char *lang,
 		if (!mrp_p) goto Cleanup;
 		memset(mrp_p, 0, sizeof(mr_package));
 
-		fprintf(stderr, "mr_package_create: alloc %p\n",mrp_p);
-		
 		strncpy(mrp_p->package_name, strdup(package_name), MAX_PACKAGE_NAME_SIZE);
 		pthread_mutex_init(&mrp_p->script_lock, 0/*default addr*/);
 		mrp_p->mr_state_q = cf_queue_create(sizeof(cl_mr_state *), true/*multithreaded*/);
@@ -481,7 +490,6 @@ citrusleaf_mr_package_load(cl_cluster *asc, const char *package_name, const char
 		free(values);
 		return(-1);
 	}
-	fprintf(stderr, "Script64 strlen: %d\n",script_str_len);
 	int rv = cf_base64_decode(script64_str, script_str, &script_str_len, true/*validate*/);
 	if (rv != 0) {
 		fprintf(stderr,"could not decode base64 from server %s\n",script64_str);
@@ -490,7 +498,6 @@ citrusleaf_mr_package_load(cl_cluster *asc, const char *package_name, const char
 		return(-1);
 	}
 	script_str[script_str_len] = 0;
-	fprintf(stderr, "script len: %d strlen %d script %p\n",script_str_len,strlen(script_str),script_str);
 		
 	mr_package *mrp_p = mr_package_create(package_name, lang, script_str, script_str_len, gen_str );
 	if (!mrp_p) {
@@ -520,10 +527,16 @@ int cl_mr_state_row(cl_mr_state *mrs_p, char *ns, cf_digest *keyd, char *set, ui
            bool is_last, citrusleaf_get_many_cb cb, void *udata) 
 {
 
-	mrs_p->responses++; // atomic? lock?
     lua_State *lua   = mrs_p->lua;
     
+    // fprintf(stderr, "cl_mr_state_row: received a row in response\n");
+    
+    pthread_mutex_lock( & mrs_p->lua_lock );
+
+	mrs_p->responses++;
+    
     int ret;
+    
     if (mrs_p->responses == 1) {
         lua_getglobal(lua, "PostFinalizeCleanup");
         ret = lua_pcall(lua, 0, 0, 0);
@@ -531,6 +544,7 @@ int cl_mr_state_row(cl_mr_state *mrs_p, char *ns, cf_digest *keyd, char *set, ui
             assertOnLuaError(lua, "ERROR: luaL_dostring(PostFinalizeCleanup)");
         }
     }
+    
     for (int i=0;i<n_bins;i++) {
         char bin_name[32];
         strcpy(bin_name, bin[i].bin_name);
@@ -569,6 +583,8 @@ int cl_mr_state_row(cl_mr_state *mrs_p, char *ns, cf_digest *keyd, char *set, ui
         }
     }
 
+    pthread_mutex_unlock( & mrs_p->lua_lock );
+    
     return 0;
 }
 

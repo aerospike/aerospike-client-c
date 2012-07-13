@@ -129,7 +129,8 @@ typedef struct mr_state_s {
 
 	// state of the current response - when are we done	
 	int			num_nodes;
-	int			responses;
+	
+	int 		responses;
 	
 	char 	package_name[MAX_PACKAGE_NAME_SIZE]; // used to queue state after done
 	
@@ -138,6 +139,7 @@ typedef struct mr_state_s {
 	// enough information to find the package -- but don't need to load code
 	const cl_mr_job 	*mr_job;
 
+	pthread_mutex_t	lua_lock;
     struct lua_State *lua; // don't want to require the entire lua headers
     
 } cl_mr_state;

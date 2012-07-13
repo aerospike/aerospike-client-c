@@ -111,7 +111,6 @@ static char luaPredefinedFunctions[] = \
     "  setmetatable(_G, {__index=ReadOnly, __newindex=GlobalCheck});  " \
     "end "																\
     "function ReduceWrapper(func) "  						\
-    "  print('ReduceWrapper'); " 							\
     "  ReduceCount = 0; " 									\
     "  local res   = {}; " 									\
     "  for k, t in pairs(MapResults) do " 					\

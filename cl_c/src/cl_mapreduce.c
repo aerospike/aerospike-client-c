@@ -415,7 +415,7 @@ Cleanup:
 // grab the package from a server
 // Not sure whether to do sync or async. Start with sync.
 int
-citrusleaf_mr_package_get(cl_cluster *asc, const char *package_name, const char *lang)
+citrusleaf_sproc_package_get(cl_cluster *asc, const char *package_name, const char *lang)
 {
 //	fprintf(stderr, "citrusleaf mr package load %s\n",package_name);
 	

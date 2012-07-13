@@ -649,7 +649,7 @@ cl_rv citrusleaf_mr_job_add_parameter_blob(cl_mr_job *mr_job, cl_script_func_t f
 void citrusleaf_mr_job_destroy(cl_mr_job *mr_job);
 
 // Stored Procedure putting and getting
-int citrusleaf_mr_package_get(cl_cluster *asc, const char *package, const char *lang);
+int citrusleaf_sproc_package_get(cl_cluster *asc, const char *package, const char *lang);
 
 // Record level Stored procedure invokations
 cl_sproc_def *citrusleaf_sproc_definition_create(const char *package, const char *fname);

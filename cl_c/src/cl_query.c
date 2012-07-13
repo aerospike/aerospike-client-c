@@ -683,7 +683,7 @@ cl_rv citrusleaf_query(cl_cluster *asc, const char *ns, const cl_query *query, c
 	if (mr_job) {
 		
 		// make sure it's in the cache before you do a "get" with the same package name
-		if (0 != citrusleaf_mr_package_get( asc, mr_job->package, "lua" ) ) {
+		if (0 != citrusleaf_sproc_package_get( asc, mr_job->package, "lua" ) ) {
 			return CITRUSLEAF_FAIL_CLIENT;
 		}
 

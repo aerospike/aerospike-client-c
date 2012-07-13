@@ -619,25 +619,11 @@ citrusleaf_calculate_digest(const char *set, const cl_object *key, cf_digest *di
 //
 // Lua and secondary index functions
 //
-struct map_args_t;
-// DDL To Be obsoleted                                       
-cl_rv citrusleaf_register_package_lua(cl_cluster *asc, char *ns,
-                                       citrusleaf_get_many_cb cb,
-                                       int mrjid,
-                                       char *lua_mapf, char *lua_rdcf,
-                                       char *lua_fnzf);
-struct index_metadata_t;
-cl_rv citrusleaf_create_secondary_index(cl_cluster *asc, char *ns,
-                                        citrusleaf_get_many_cb cb,
-                                        struct index_metadata_t *imd);
-
 // Create and delete secondary indexes for the entire cluster
 cl_rv citrusleaf_secondary_index_create(cl_cluster *asc, const char *ns, 
 		const char *set, struct sindex_metadata_t *simd);
 cl_rv citrusleaf_secondary_index_delete(cl_cluster *asc, const char *ns, 
 		const char *set, const char *indexname);
-cl_rv citrusleaf_load_sproc_context(cl_cluster *asc);
-
 
 // New query primitives against secondary indexes
 cl_query *citrusleaf_query_create(const char *indexname);
@@ -662,9 +648,10 @@ cl_rv citrusleaf_mr_job_add_parameter_numeric(cl_mr_job *mr_job, cl_script_func_
 cl_rv citrusleaf_mr_job_add_parameter_blob(cl_mr_job *mr_job, cl_script_func_t ftype, cl_type blobtype, const char *key, const uint8_t *value, int val_len);
 void citrusleaf_mr_job_destroy(cl_mr_job *mr_job);
 
-int citrusleaf_mr_package_load(cl_cluster *asc, const char *package, const char *lang);
+// Stored Procedure putting and getting
+int citrusleaf_mr_package_get(cl_cluster *asc, const char *package, const char *lang);
 
-// per record stored procedure invokations
+// Record level Stored procedure invokations
 cl_sproc_def *citrusleaf_sproc_definition_create(const char *package, const char *fname);
 void citrusleaf_sproc_definition_destroy(cl_sproc_def *sproc_def);
 

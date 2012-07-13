@@ -112,32 +112,6 @@ int sproc_compile_arg_field(char * const*argk, cl_object * const*argv, int argc,
 }
 
 
-
-cl_rv citrusleaf_load_sproc_context (cl_cluster *asc)
-{
-	// go to the 1st node and get all the stored procedures
-	for (uint i=0;i<cf_vector_size(&asc->node_v);i++) {
-		cl_cluster_node *cn = cf_vector_pointer_get(&asc->node_v, i);
-		
-		struct sockaddr_in *sa_in = cf_vector_getp(&cn->sockaddr_in_v, 0);
-		
-		// HACK hard coded to one package right now until server can return listing		
-		int num_packages = 1;
-		char *packname = "mrf101";
-
-		for (int j=0; j<num_packages; j++) {
-			char tmpBuf[1024];
-			sprintf(tmpBuf,"get-package:package=%s;",packname);
-			char *values = 0;
-			
-			int resp =  citrusleaf_info_host(sa_in, tmpBuf, &values, INFO_TIMEOUT_MS, true);
-			if (g_cl_turn_debug_on) {
-				fprintf(stderr, "packages: response: %d [%s]\n",resp,values);
-			}
-		}
-	}
-}
-
 cl_mr_job *citrusleaf_mr_job_create(const char *package, const char *map_fname, const char *rdc_fname, const char *fnz_fname )
 {
 	cl_mr_job *mr_job = malloc(sizeof(cl_mr_job));

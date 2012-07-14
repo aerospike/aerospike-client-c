@@ -617,15 +617,19 @@ int
 citrusleaf_calculate_digest(const char *set, const cl_object *key, cf_digest *digest);
 
 //
-// Lua and secondary index functions
+// Stored Procedure and Secondary Index Functionalities
 //
-// Create and delete secondary indexes for the entire cluster
+// Stored Procedure Management 
+int citrusleaf_sproc_package_get(cl_cluster *asc, const char *package, const char *lang);
+int citrusleaf_sproc_package_set(cl_cluster *asc, const char *package, const char *content, const char *lang);
+
+// Create and Delete Secondary indexes for the entire cluster
 cl_rv citrusleaf_secondary_index_create(cl_cluster *asc, const char *ns, 
 		const char *set, struct sindex_metadata_t *simd);
 cl_rv citrusleaf_secondary_index_delete(cl_cluster *asc, const char *ns, 
 		const char *set, const char *indexname);
 
-// New query primitives against secondary indexes
+// Query  
 cl_query *citrusleaf_query_create(const char *indexname);
 void citrusleaf_query_destroy(cl_query *query_obj);
 cl_rv citrusleaf_query_add_binname(cl_query *query_obj, const char *binname);
@@ -640,21 +644,15 @@ cl_rv citrusleaf_query(cl_cluster *asc, const char *ns, const cl_query *query_ob
 							citrusleaf_get_many_cb cb, void *udata);
 
 // MAP REDUCE
-//
-
 cl_mr_job *citrusleaf_mr_job_create(const char *package, const char *map_fname, const char *rdc_fname, const char *fnz_fname );
 cl_rv citrusleaf_mr_job_add_parameter_string(cl_mr_job *mr_job, cl_script_func_t ftype, const char *key, const char *value);
 cl_rv citrusleaf_mr_job_add_parameter_numeric(cl_mr_job *mr_job, cl_script_func_t ftype, const char *key, uint64_t value);
 cl_rv citrusleaf_mr_job_add_parameter_blob(cl_mr_job *mr_job, cl_script_func_t ftype, cl_type blobtype, const char *key, const uint8_t *value, int val_len);
 void citrusleaf_mr_job_destroy(cl_mr_job *mr_job);
 
-// Stored Procedure putting and getting
-int citrusleaf_sproc_package_get(cl_cluster *asc, const char *package, const char *lang);
-
-// Record level Stored procedure invokations
+// Record-level Stored Procedure
 cl_sproc_def *citrusleaf_sproc_definition_create(const char *package, const char *fname);
 void citrusleaf_sproc_definition_destroy(cl_sproc_def *sproc_def);
-
 cl_rv citrusleaf_sproc_def_add_parameter_string(cl_sproc_def *sproc_def, const char *param_key, const char *param_value);
 
 cl_rv citrusleaf_run_sproc(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, cl_sproc_def *sproc_def, cl_bin **bins, int *n_bins, int timeout_ms, uint32_t *cl_gen);

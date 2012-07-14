@@ -417,7 +417,7 @@ Cleanup:
 int
 citrusleaf_sproc_package_get(cl_cluster *asc, const char *package_name, const char *lang)
 {
-//	fprintf(stderr, "citrusleaf mr package load %s\n",package_name);
+//	fprintf(stderr, "citrusleaf mr package get %s\n",package_name);
 	
 	char info_query[512];
 	if (sizeof(info_query) <= (size_t) snprintf(info_query, sizeof(info_query), "get-package:package=%s;lang=%s;",package_name,lang)) {
@@ -440,7 +440,7 @@ citrusleaf_sproc_package_get(cl_cluster *asc, const char *package_name, const ch
 	// where gen is a simple string, and script
 	// error is something else entirely
 	
-	char *value = strchr(values, '\t') + 1; // skip request, parse resposne 
+	char *value = strchr(values, '\t') + 1; // skip request, parse response 
 	
 	int n_tok=0;
 	char *brkb = 0;
@@ -473,7 +473,7 @@ citrusleaf_sproc_package_get(cl_cluster *asc, const char *package_name, const ch
 		else if (0 == strcmp(key,"script")) {
 			script64_str = value;
 		} else {
-			fprintf(stderr, "package load: unknown key %s value %s\n",key,value);
+			fprintf(stderr, "package get: unknown key %s value %s\n",key,value);
 		}
 	}
 	if ( (!gen_str) || (!script64_str)) {
@@ -508,6 +508,88 @@ citrusleaf_sproc_package_get(cl_cluster *asc, const char *package_name, const ch
 	
 	mr_package_release(mrp_p);
 
+	free(values);
+	
+	return(0);
+	
+}
+
+int
+citrusleaf_sproc_package_set(cl_cluster *asc, const char *package_name, const char *script_str, const char *lang)
+{	
+	if (!package_name || !script_str) {
+		fprintf(stderr, "package name and script required\n");
+		return CITRUSLEAF_FAIL_CLIENT;
+	}
+	if (!lang) lang = "lua";
+	int script_str_len = strlen(script_str);
+	
+	int  info_query_len = cf_base64_encode_maxlen(script_str_len)+strlen(package_name)+strlen(lang)+100;
+	char *info_query = malloc(info_query_len);	
+	if (!info_query) {
+		fprintf(stderr, "cannot malloc\n");
+		return CITRUSLEAF_FAIL_CLIENT;
+	}
+
+	// put in the default stuff first
+	snprintf(info_query, info_query_len, "get-package:package=%s;lang=%s;code=",package_name,lang);
+
+	cf_base64_tostring((uint8_t *)script_str, (uint8_t *)(info_query+strlen(info_query)), &script_str_len);
+		
+	//fprintf(stderr, "**[%s]\n",info_query);
+
+	char *values = 0;
+	// shouldn't do this on a blocking thread --- todo, queue
+	if (0 != citrusleaf_info_cluster(asc, info_query, &values, true/*asis*/, 100/*timeout*/)) {
+		fprintf(stderr, "could not set package %s from cluster\n",package_name);
+		return CITRUSLEAF_FAIL_UNKNOWN;
+	}
+	if (0 == values) {
+		fprintf(stderr, "info cluster success, but no response from server\n");
+		return CITRUSLEAF_FAIL_UNKNOWN;
+	}
+	
+	// got response, 
+	// format: request\tresponse
+	// response is a string "ok" or ???
+	
+	char *value = strchr(values, '\t') + 1; // skip request, parse response 
+	
+	int n_tok=0;
+	char *brkb = 0;
+	char *words[20];
+	do {
+		words[n_tok] = strtok_r(value,"=",&brkb);
+		if (0 == words[n_tok]) break;
+		value = 0;
+		words[n_tok+1] = strtok_r(value,";",&brkb);
+		if (0 == words[n_tok+1]) break;
+		char *newline = strchr(words[n_tok+1],'\n');
+		if (newline) *newline = 0;
+		n_tok += 2;
+		if (n_tok >= 20) {
+			fprintf(stderr, "too many tokens\n");
+			return CITRUSLEAF_FAIL_UNKNOWN;
+		}
+	} while(true);
+	
+	char *err_str = 0;
+	
+	for (int i = 0; i < n_tok ; i += 2) {
+		char *key = words[i];
+		char *value = words[i+1];
+		if (0 == strcmp(key,"error")) {
+			err_str = value;
+		} else {
+			//fprintf(stderr, "package set: unknown key %s value %s\n",key,value);
+		}
+	}
+	if (err_str) {
+		fprintf(stderr, "package set: server returned error %d\n",err_str);
+		free(values);
+		return CITRUSLEAF_FAIL_UNKNOWN;
+	}	
+	
 	free(values);
 	
 	return(0);

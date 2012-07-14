@@ -532,7 +532,7 @@ citrusleaf_sproc_package_set(cl_cluster *asc, const char *package_name, const ch
 	}
 
 	// put in the default stuff first
-	snprintf(info_query, info_query_len, "get-package:package=%s;lang=%s;code=",package_name,lang);
+	snprintf(info_query, info_query_len, "set-package:package=%s;lang=%s;script=",package_name,lang);
 
 	cf_base64_tostring((uint8_t *)script_str, (uint8_t *)(info_query+strlen(info_query)), &script_str_len);
 		
@@ -540,7 +540,7 @@ citrusleaf_sproc_package_set(cl_cluster *asc, const char *package_name, const ch
 
 	char *values = 0;
 	// shouldn't do this on a blocking thread --- todo, queue
-	if (0 != citrusleaf_info_cluster(asc, info_query, &values, true/*asis*/, 100/*timeout*/)) {
+	if (0 != citrusleaf_info_cluster_all(asc, info_query, &values, true/*asis*/, 5000/*timeout*/)) {
 		fprintf(stderr, "could not set package %s from cluster\n",package_name);
 		return CITRUSLEAF_FAIL_UNKNOWN;
 	}

@@ -153,6 +153,8 @@ static void assertOnLuaError(lua_State *lua, char *assert_string) {
 // which only has to be done when the load 
 //
 
+int luaSendReduceObject(lua_State *lua);
+
 static int 
 mr_state_lua_create(cl_mr_state *mrs_p) {
 	
@@ -172,6 +174,10 @@ mr_state_lua_create(cl_mr_state *mrs_p) {
     	assertOnLuaError(lua, "ERROR: adding(luaPredefinedFunctions)");
     	goto Cleanup;
     }
+    
+    // register C functions
+    lua_pushcfunction(lua, luaSendReduceObject);
+    lua_setglobal    (lua, "SendReduceObject");
     
     ret     = luaL_dostring(lua, luaDebugWrapper);
     if (ret) {
@@ -539,6 +545,7 @@ citrusleaf_sproc_package_set(cl_cluster *asc, const char *package_name, const ch
 	//fprintf(stderr, "**[%s]\n",info_query);
 
 	char *values = 0;
+
 	// shouldn't do this on a blocking thread --- todo, queue
 	if (0 != citrusleaf_info_cluster_all(asc, info_query, &values, true/*asis*/, 5000/*timeout*/)) {
 		fprintf(stderr, "could not set package %s from cluster\n",package_name);
@@ -598,7 +605,6 @@ citrusleaf_sproc_package_set(cl_cluster *asc, const char *package_name, const ch
 
 //
 // receiving a record from the server. Load it into the results structure.  
-// If this seems like the last row, invoke Lua to do the Reduce/Finalize structures
 //
 // ??? call the client ???
 //
@@ -669,6 +675,10 @@ int cl_mr_state_row(cl_mr_state *mrs_p, char *ns, cf_digest *keyd, char *set, ui
     return 0;
 }
 
+//
+// All the rows are done. call map and reduce.
+//
+
 int cl_mr_state_done(cl_mr_state *mrs_p,  citrusleaf_get_many_cb cb, void *udata) 
 {
     lua_State *lua   = mrs_p->lua;
@@ -685,6 +695,7 @@ int cl_mr_state_done(cl_mr_state *mrs_p,  citrusleaf_get_many_cb cb, void *udata
 			return -1; //TODO throw an error
 		}
 	}
+	// call the finalize - puts the answer in ReduceResults global
 	if (mrs_p->mr_job->fnz_fname) {
 		lua_getglobal(lua, "FinalizeWrapper");
 		lua_getglobal(lua, mrs_p->mr_job->fnz_fname);
@@ -695,7 +706,18 @@ int cl_mr_state_done(cl_mr_state *mrs_p,  citrusleaf_get_many_cb cb, void *udata
 			return -1; //TODO throw an error
 		}
 	}
+	// call the SendResults - takes ReduceResults global, call back into the row function
+	lua_getglobal(lua, "SendReduceResults");
+	lua_pushlightuserdata(lua, cb);
+	lua_pushlightuserdata(lua, udata);
+	ret = lua_pcall(lua, 2, 0, 0);
+	if (ret) {
+		printf("DebugWrapper: FAILED: (%s)\n",
+			   lua_tostring(lua, -1));
+		return -1; //TODO throw an error
+	}
 
+	
 	lua_getglobal(lua, "DebugWrapper");
 	lua_getglobal(lua, "print_user_and_value");
 	ret = lua_pcall(lua, 1, 0, 0);
@@ -705,6 +727,76 @@ int cl_mr_state_done(cl_mr_state *mrs_p,  citrusleaf_get_many_cb cb, void *udata
 		return -1; //TODO throw an error
 	}
         
+}
+
+
+// parameter 1 is the key object
+// parameter 2 is the value object
+// parameter 3 is the (opaque) callback
+// parameter 4 is the (opaque) userdata
+
+int luaSendReduceObject(lua_State *lua) {
+
+    int argc = lua_gettop(lua);
+    if (argc != 4 || !lua_isuserdata(lua, 3) || !lua_isuserdata(lua, 4)) {
+        lua_settop(lua, 0);
+        // Todo: this was throwing a Redis error
+        // luaPushError(lua, "Lua USAGE: SendReduceObject(k, v, cb, udata)");
+        fprintf(stderr, "luaSendReduceObject USAGE: SendReduceObject(k, v, cb, udata)");
+        return 1;
+    }
+    citrusleaf_get_many_cb cb = (citrusleaf_get_many_cb) lua_touserdata(lua, 3);
+    void *udata     = (void *)      lua_touserdata(lua, 4);
+
+    cl_bin	bins[2];
+    strcpy(bins[0].bin_name,"key");
+    strcpy(bins[1].bin_name,"value");
+    
+    // loop over the key and the value, which are 1 and 2 on the stack
+    for (int i=1; i <= 2; i++) {
+    	cl_object *o = &bins[i-1].object;
+    	o->free = 0;
+
+    	int ltype = lua_type(lua, i);
+    	switch (ltype) {
+    		case LUA_TNIL:
+				o->type = CL_INT;
+				o->sz = sizeof(o->u.i64);
+				o->u.i64 = 0;
+				break;
+    		case LUA_TNUMBER: {
+				uint64_t k = lua_tonumber(lua,i);
+				o->type = CL_INT;
+				o->sz = sizeof(k);
+				o->u.i64 = k;
+				}   break;
+    		case LUA_TBOOLEAN: {
+				bool b = lua_toboolean(lua, i);
+				o->type = CL_INT;
+				o->sz = sizeof(o->u.i64);
+				o->u.i64 = b ? 1 : 0;
+				}   break;
+			case LUA_TSTRING: { 
+				size_t k_len;
+				char *k = (char *) lua_tolstring(lua,i,&k_len);
+				o->type = CL_STR;
+				o->sz = k_len;
+				o->u.str = k;
+				} break;
+    		case LUA_TTABLE:
+    		case LUA_TFUNCTION:
+    		case LUA_TUSERDATA:
+    		case LUA_TTHREAD:
+    		case LUA_TLIGHTUSERDATA:
+    		default:
+    			fprintf(stderr, "map reduce: should not have tables\n");
+    			break;
+    	}
+	}	
+	
+	(*cb) ( 0/*ns*/, 0/*keyd*/, 0/*set*/, 0/*gen*/, 0/*recordttl*/, bins, 2, false /*islast*/, udata);
+
+	return(0);
 }
 
 #define MAX_LUA_SIZE    4096

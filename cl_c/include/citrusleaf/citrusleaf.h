@@ -588,6 +588,9 @@ citrusleaf_info_host(struct sockaddr_in *sa_in, char *names, char **values, int 
 int 
 citrusleaf_info_cluster(cl_cluster *asc, char *names, char **values, bool send_asis, int timeout_ms);
 
+int 
+citrusleaf_info_cluster_all(cl_cluster *asc, char *names, char **values, bool send_asis, int timeout_ms);
+
 // Do a lookup with this name and port, and add the sockaddr to the
 // vector using the unique lookup
 int cl_lookup(cl_cluster *asc, char *hostname, short port, cf_vector *sockaddr_in_v);

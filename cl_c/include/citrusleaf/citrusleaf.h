@@ -206,6 +206,10 @@ typedef enum cl_script_func_t {
 	CL_SCRIPT_FUNC_TYPE_RECORD,
 } cl_script_func_t;
 
+
+typedef enum cl_script_lang_t {
+	CL_SCRIPT_LANG_LUA
+} cl_script_lang_t;
 #define CL_MAX_NUM_FUNC_ARGC	10 
 
 typedef struct cl_mr_job {
@@ -623,8 +627,8 @@ citrusleaf_calculate_digest(const char *set, const cl_object *key, cf_digest *di
 // Stored Procedure and Secondary Index Functionalities
 //
 // Stored Procedure Management 
-int citrusleaf_sproc_package_get(cl_cluster *asc, const char *package, const char *lang);
-int citrusleaf_sproc_package_set(cl_cluster *asc, const char *package, const char *content, const char *lang);
+int citrusleaf_sproc_package_get(cl_cluster *asc, const char *package, cl_script_lang_t lang);
+int citrusleaf_sproc_package_set(cl_cluster *asc, const char *package, const char *content, cl_script_lang_t lang);
 
 // Create and Delete Secondary indexes for the entire cluster
 cl_rv citrusleaf_secondary_index_create(cl_cluster *asc, const char *ns, 

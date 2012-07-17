@@ -421,9 +421,15 @@ Cleanup:
 // grab the package from a server
 // Not sure whether to do sync or async. Start with sync.
 int
-citrusleaf_sproc_package_get(cl_cluster *asc, const char *package_name, const char *lang)
+citrusleaf_sproc_package_get(cl_cluster *asc, const char *package_name, cl_script_lang_t lang_t)
 {
 //	fprintf(stderr, "citrusleaf mr package get %s\n",package_name);
+	
+	if (lang_t!=CL_SCRIPT_LANG_LUA) {
+		fprintf(stderr, "unrecognized script language %d\n",lang_t);
+		return(-1);
+	}	
+	const char lang = "lua";
 	
 	char info_query[512];
 	if (sizeof(info_query) <= (size_t) snprintf(info_query, sizeof(info_query), "get-package:package=%s;lang=%s;",package_name,lang)) {
@@ -521,13 +527,18 @@ citrusleaf_sproc_package_get(cl_cluster *asc, const char *package_name, const ch
 }
 
 int
-citrusleaf_sproc_package_set(cl_cluster *asc, const char *package_name, const char *script_str, const char *lang)
+citrusleaf_sproc_package_set(cl_cluster *asc, const char *package_name, const char *script_str, cl_script_lang_t lang_t)
 {	
+	if (lang_t!=CL_SCRIPT_LANG_LUA) {
+		fprintf(stderr, "unrecognized script language %d\n",lang_t);
+		return(-1);
+	}	
+	const char lang = "lua";
+
 	if (!package_name || !script_str) {
 		fprintf(stderr, "package name and script required\n");
 		return CITRUSLEAF_FAIL_CLIENT;
 	}
-	if (!lang) lang = "lua";
 	int script_str_len = strlen(script_str);
 	
 	int  info_query_len = cf_base64_encode_maxlen(script_str_len)+strlen(package_name)+strlen(lang)+100;

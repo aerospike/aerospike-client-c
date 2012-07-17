@@ -50,11 +50,15 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 	size_t		wr_buf_sz = sizeof(wr_stack_buf);
 
 	cl_scan_param_field	scan_param_field;
-	scan_param_field.scan_pct = scan_pct>100? 100:scan_pct;
-	scan_param_field.byte1 = (scan_opt->priority<<4) | (scan_opt->fail_on_cluster_change<<3); 
+
+	if (scan_opt) {
+		scan_param_field.scan_pct = scan_pct>100? 100:scan_pct;
+		scan_param_field.byte1 = (scan_opt->priority<<4) | (scan_opt->fail_on_cluster_change<<3);
+	}
 
 	// we have a single namespace and/or set to get
-	if (cl_compile(operation_info, operation_info2, 0, ns, set, 0, 0, 0, 0, 0, 0, &wr_buf, &wr_buf_sz, 0, NULL, 0, &scan_param_field)) {
+	if (cl_compile(operation_info, operation_info2, 0, ns, set, 0, 0, 0, 0, 0, 0, &wr_buf, &wr_buf_sz, 0, NULL, 0,
+			scan_opt ? &scan_param_field : NULL)) {
 		return(rv);
 	}
 	
@@ -307,7 +311,7 @@ citrusleaf_scan(cl_cluster *asc, char *ns, char *set, cl_bin *bins, int n_bins, 
 		info = CL_MSG_INFO1_READ; 
 	}
 
-	return( do_scan_monte( asc, NULL, info, 0, ns, set, bins,n_bins, 100, cb, udata, NULL ) ); 
+	return( do_scan_monte( asc, NULL, info, 0, ns, set, bins,n_bins, 100, cb, udata, NULL ) );
 }
 
 extern cl_rv
@@ -355,7 +359,8 @@ citrusleaf_scan_all_nodes (cl_cluster *asc, char *ns, char *set, cl_bin *bins, i
 		return NULL;
 	}
 	 
-	if (scan_param->concurrent_nodes) {
+	if (scan_param && scan_param->concurrent_nodes) {
+		fprintf(stderr, "citrusleaf scan all nodes: concurrent node scanning not yet supported\n");
 	} else {
 		char *nptr = node_names;
 		for (int i=0;i< n_nodes; i++) {

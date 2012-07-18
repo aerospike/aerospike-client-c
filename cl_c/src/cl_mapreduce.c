@@ -533,7 +533,7 @@ citrusleaf_sproc_package_set(cl_cluster *asc, const char *package_name, const ch
 		fprintf(stderr, "unrecognized script language %d\n",lang_t);
 		return(-1);
 	}	
-	const char lang = "lua";
+	const char lang[] = "lua";
 
 	if (!package_name || !script_str) {
 		fprintf(stderr, "package name and script required\n");

@@ -914,12 +914,14 @@ cl_cluster_node_get_random(ev2citrusleaf_cluster *asc)
 	
 	cl_cluster_node *cn = 0;
 	uint i=0;
+	uint node_v_sz = 0;
+
 	do {
 
 		// get a node from the node list round-robbin
 		MUTEX_LOCK(asc->node_v_lock);
 
-		uint node_v_sz = cf_vector_size(&asc->node_v);
+		node_v_sz = cf_vector_size(&asc->node_v);
 		if (node_v_sz == 0) {
 	
 			MUTEX_UNLOCK(asc->node_v_lock);	
@@ -956,7 +958,7 @@ cl_cluster_node_get_random(ev2citrusleaf_cluster *asc)
 
 		MUTEX_UNLOCK(asc->node_v_lock);
 
-	} while( cn == 0 );
+	} while( cn == 0 && i < node_v_sz );
 
 	return(cn);
 }

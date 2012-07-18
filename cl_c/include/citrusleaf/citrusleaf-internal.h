@@ -109,6 +109,13 @@ typedef struct cl_batch_work {
 } cl_batch_work;
 
 
+// wrapper structure
+typedef struct cl_sproc_def {
+        char            *package;
+        char            *fname;
+        cl_sproc_params *params;
+} cl_sproc_def;
+
 
 
 //
@@ -218,12 +225,16 @@ citrusleaf_query_shutdown();
 int
 cl_compile(uint info1, uint info2, uint info3, const char *ns, const char *set, const cl_object *key, const cf_digest *digest,
 	cl_bin *values, cl_operator operator, cl_operation *operations, int n_values,  
-	uint8_t **buf_r, size_t *buf_sz_r, const cl_write_parameters *cl_w_p, cf_digest *d_ret, uint64_t trid, cl_scan_param_field *scan_field, cl_sproc_def *sproc_def);
+	uint8_t **buf_r, size_t *buf_sz_r, const cl_write_parameters *cl_w_p, cf_digest *d_ret, uint64_t trid, 
+	cl_scan_param_field *scan_field, cl_sproc_def *sproc_def);
 
 int
 cl_parse(cl_msg *msg, uint8_t *buf, size_t buf_len, cl_bin **values_r, cl_operation **operations_r, int *n_values_r, uint64_t *trid);
 
 int sproc_compile_arg_field(char * const*argk, cl_object * const*argv, int argc, uint8_t *buf, int *sz_p);
+
+
+int citrusleaf_sproc_package_get(cl_cluster *asc, const char *package, cl_script_lang_t lang);
 
 #ifdef __cplusplus
 } // end extern "C"

@@ -405,10 +405,10 @@ write_fields(uint8_t *buf, const char *ns, int ns_len, const char *set, int set_
         mf = mf_tmp;
 	}
 
-	if (sproc_def && sproc_def->num_param > 0) {
+	if (sproc_def && sproc_def->params && sproc_def->params->num_param > 0) {
 		int plen=0;
         mf->type = CL_MSG_FIELD_TYPE_SPROC_RECORD_PARAMS;
-		sproc_compile_arg_field(sproc_def->param_key, sproc_def->param_val, sproc_def->num_param, mf->data, &plen); 
+		sproc_compile_arg_field(sproc_def->params->param_key, sproc_def->params->param_val, sproc_def->params->num_param, mf->data, &plen); 
         mf->field_sz = plen + 1;
         mf_tmp = cl_msg_field_get_next(mf);
         cl_msg_swap_field(mf);
@@ -843,9 +843,9 @@ cl_compile(uint info1, uint info2, uint info3, const char *ns, const char *set, 
 		sproc_len = strlen(sproc_def->fname); 
 		msg_sz += sproc_len  + sizeof(cl_msg_field);
 		
-		if (sproc_def->num_param > 0) {
+		if (sproc_def->params && sproc_def->params->num_param > 0) {
 			sproc_fields++;
-			sproc_compile_arg_field(sproc_def->param_key, sproc_def->param_val, sproc_def->num_param, NULL, &sproc_arg_len); 
+			sproc_compile_arg_field(sproc_def->params->param_key, sproc_def->params->param_val, sproc_def->params->num_param, NULL, &sproc_arg_len); 
 			msg_sz += sproc_arg_len + sizeof(cl_msg_field);
 		} 
 	}	
@@ -1897,7 +1897,9 @@ citrusleaf_operate(cl_cluster *asc, const char *ns, const char *set, const cl_ob
 }
 
 
-cl_rv citrusleaf_run_sproc(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, cl_sproc_def *sproc_def, cl_bin **bins, int *n_bins,int timeout_ms, uint32_t *cl_gen)
+cl_rv citrusleaf_sproc_execute(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, 
+	const char *package_name, const char *fname, cl_sproc_params *sproc_params, 
+	cl_bin **bins, int *n_bins,int timeout_ms, uint32_t *cl_gen)
 {
     if (!g_initialized) return(-1);
 
@@ -1905,8 +1907,14 @@ cl_rv citrusleaf_run_sproc(cl_cluster *asc, const char *ns, const char *set, con
 	cl_write_parameters cl_w_p;
 	cl_write_parameters_set_default(&cl_w_p);
 	cl_w_p.timeout_ms = timeout_ms;
+	
+	// internal translation now
+	cl_sproc_def sproc_def; 
+	sproc_def.package = (char *)package_name;
+	sproc_def.fname = (char *)fname;
+	sproc_def.params = sproc_params;
 
-	return( do_the_full_monte( asc, 0, CL_MSG_INFO2_WRITE, 0, ns, set, key, 0, bins, CL_OP_WRITE, 0, n_bins, NULL, &cl_w_p, &trid, sproc_def) );
+	return( do_the_full_monte( asc, 0, CL_MSG_INFO2_WRITE, 0, ns, set, key, 0, bins, CL_OP_WRITE, 0, n_bins, NULL, &cl_w_p, &trid, &sproc_def) );
 }
 
 

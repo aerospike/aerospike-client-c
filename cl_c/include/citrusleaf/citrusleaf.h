@@ -228,13 +228,11 @@ typedef struct cl_mr_job {
 	cl_object	*fnz_argv[CL_MAX_NUM_FUNC_ARGC];
 } cl_mr_job; 
 
-typedef struct cl_sproc_def {
-	char		*package;
-	char		*fname;
+typedef struct cl_sproc_params {
 	int			num_param;
 	char		*param_key[CL_MAX_NUM_FUNC_ARGC];
 	cl_object	*param_val[CL_MAX_NUM_FUNC_ARGC];
-} cl_sproc_def;
+} cl_sproc_params;
 
 
 //
@@ -627,7 +625,6 @@ citrusleaf_calculate_digest(const char *set, const cl_object *key, cf_digest *di
 // Stored Procedure and Secondary Index Functionalities
 //
 // Stored Procedure Management 
-int citrusleaf_sproc_package_get(cl_cluster *asc, const char *package, cl_script_lang_t lang);
 int citrusleaf_sproc_package_set(cl_cluster *asc, const char *package, const char *content, cl_script_lang_t lang);
 
 // Create and Delete Secondary indexes for the entire cluster
@@ -658,11 +655,13 @@ cl_rv citrusleaf_mr_job_add_parameter_blob(cl_mr_job *mr_job, cl_script_func_t f
 void citrusleaf_mr_job_destroy(cl_mr_job *mr_job);
 
 // Record-level Stored Procedure
-cl_sproc_def *citrusleaf_sproc_definition_create(const char *package, const char *fname);
-void citrusleaf_sproc_definition_destroy(cl_sproc_def *sproc_def);
-cl_rv citrusleaf_sproc_def_add_parameter_string(cl_sproc_def *sproc_def, const char *param_key, const char *param_value);
+cl_sproc_params *citrusleaf_sproc_params_create();
+void citrusleaf_sproc_params_destroy(cl_sproc_params *sproc_params);
+cl_rv citrusleaf_sproc_params_add_string(cl_sproc_params *sproc_params, const char *param_key, const char *param_value);
 
-cl_rv citrusleaf_run_sproc(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, cl_sproc_def *sproc_def, cl_bin **bins, int *n_bins, int timeout_ms, uint32_t *cl_gen);
+cl_rv citrusleaf_sproc_execute(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, 
+	const char *package_name, const char *sproc_name, cl_sproc_params *sproc_params, 
+	cl_bin **bins, int *n_bins, int timeout_ms, uint32_t *cl_gen);
 
 
 #ifdef __cplusplus

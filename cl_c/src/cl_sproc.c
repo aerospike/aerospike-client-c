@@ -244,47 +244,28 @@ void citrusleaf_mr_job_destroy(cl_mr_job *mr_job)
 }
 
 
-cl_sproc_def *citrusleaf_sproc_definition_create(const char *package, const char *fname)
+cl_sproc_params *citrusleaf_sproc_params_create()
 {
-	if (!package || !fname || strlen(package)==0 || strlen(fname)==0) {
-		return NULL;
-	}
-	
-	cl_sproc_def *sd = malloc(sizeof(cl_sproc_def));
+	cl_sproc_params *sd = malloc(sizeof(cl_sproc_params));
 	if (sd==NULL) {
 		return NULL;
 	}
-	memset(sd,0,sizeof(cl_sproc_def));
-	sd->package = strdup(package);
-	if (sd->package==NULL) {
-		goto Cleanup;
-	}
-		
-	sd->fname = strdup(fname);
-	if (sd->fname==NULL) {
-		goto Cleanup;
-	}
+	memset(sd,0,sizeof(cl_sproc_params));
 	return sd;
-	
-Cleanup:	
-	citrusleaf_sproc_definition_destroy(sd);
-	return NULL;		
 }
 
-void citrusleaf_sproc_definition_destroy(cl_sproc_def *sproc_def)
+void citrusleaf_sproc_params_destroy(cl_sproc_params *params)
 {
-	if (!sproc_def) return;
-	if (sproc_def->fname) free(sproc_def->fname);
-	
-	for (int i=0; i<sproc_def->num_param; i++) {
-		free (sproc_def->param_key[i]);
-		citrusleaf_object_free (sproc_def->param_val[i]);
+	if (!params) return;
+	for (int i=0; i<params->num_param; i++) {
+		free (params->param_key[i]);
+		citrusleaf_object_free (params->param_val[i]);
 	}
 
-	free (sproc_def);
+	free (params);
 }
 
-cl_rv citrusleaf_sproc_def_add_parameter_string(cl_sproc_def *sproc_def, const char *param_key, const char *param_value)
+cl_rv citrusleaf_sproc_params_add_string(cl_sproc_params *sproc_def, const char *param_key, const char *param_value)
 {
 	cl_rv rsp = CITRUSLEAF_OK;
 	

@@ -57,8 +57,10 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 	}
 
 	// we have a single namespace and/or set to get
-	if (cl_compile(operation_info, operation_info2, 0, ns, set, 0, 0, 0, 0, 0, 0, &wr_buf, &wr_buf_sz, 0, NULL, 0,
-			scan_opt ? &scan_param_field : NULL)) {
+	if (cl_compile(operation_info, operation_info2, 0/*info3*/, ns, set, 
+			0/*key*/, 0/*digest*/, 0/*values*/, 0/*op*/, 0/*operations*/, 
+			0/*n_values*/, &wr_buf, &wr_buf_sz, 0/*w_p*/, NULL/*d_ret*/, 0/*trid*/,
+			scan_opt ? &scan_param_field : NULL, 0/*sproc*/)) {
 		return(rv);
 	}
 	

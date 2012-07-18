@@ -63,7 +63,9 @@ typedef enum cl_rv {
 	CITRUSLEAF_FAIL_SERVERSIDE_TIMEOUT = 9,
 	CITRUSLEAF_FAIL_NOXDS = 10,
 	CITRUSLEAF_FAIL_UNAVAILABLE = 11,
-	CITRUSLEAF_FAIL_INCOMPATIBLE_TYPE = 12  // specified operation cannot be performed on that data type
+	CITRUSLEAF_FAIL_INCOMPATIBLE_TYPE = 12,  // specified operation cannot be performed on that data type
+	CITRUSLEAF_FAIL_RECORD_TOO_BIG = 13,
+	CITRUSLEAF_FAIL_KEY_BUSY = 14
 } cl_rv;
 
 

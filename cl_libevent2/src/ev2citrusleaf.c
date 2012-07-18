@@ -974,7 +974,7 @@ ev2citrusleaf_request_complete(cl_request *req, bool timedout)
 	
 		// For simplicity & backwards-compatibility, convert server-side
 		// timeouts to the usual timeout return-code:
-		if (return_code == 9) {
+		if (return_code == EV2CITRUSLEAF_FAIL_SERVERSIDE_TIMEOUT) {
 			return_code = EV2CITRUSLEAF_FAIL_TIMEOUT;
 			CL_LOG(CL_VERBOSE, "server-side timeout\n");
 		}

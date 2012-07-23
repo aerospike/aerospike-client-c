@@ -51,7 +51,7 @@ int cl_shm_init() {
 		return SHM_OK;
 	}
 	pthread_mutexattr_t attr;
-	fprintf(stderr,"I am here, just about to init\n");
+	//fprintf(stderr,"I am here, just about to init\n");
 	pthread_mutexattr_init (&attr);
 	pthread_mutexattr_setpshared (&attr, PTHREAD_PROCESS_SHARED);
 	pthread_mutexattr_setrobust_np (&attr, PTHREAD_MUTEX_ROBUST_NP);
@@ -79,26 +79,30 @@ void cl_shm_set_updater_id(size_t pid) {
 	*g_shm_updater_id = pid;
 	return;
 }
+//enum SHM_HEADER_NAMES = {"node\n"=1,
+//			"node\npartition-generation\nservices\n",
+//			"replicas-read\nreplicas-write\n",
+//			"partitions\n"}
 //Where the major chunk of the memory starts
 void *g_shm_chunk_base;
 uint8_t* cl_shm_alloc(struct sockaddr_in * sa_in, char * names) {
 	int place=0;
-	fprintf(stderr,"In alloc names = %s\n",names);
+//	fprintf(stderr,"In alloc names = %s\n",names);
 	if(strcmp(names,"node\n")==0) {
 		place = 0;
-		fprintf(stderr,"Compared with node\n");
+	//	fprintf(stderr,"Compared with node\n");
 	}
 	else if(strcmp(names,"node\npartition-generation\nservices\n")==0) {
 		place = 1;
-		fprintf(stderr,"Compared with node\npartition-generation\nservices\n");
+//		fprintf(stderr,"Compared with node\npartition-generation\nservices\n");
 	}
 	else if(strcmp(names,"replicas-read\nreplicas-write\n")==0) {
 		place = 2;
-		fprintf(stderr,"Compared with replicas-read\nreplicas-write\n");
+//		fprintf(stderr,"Compared with replicas-read\nreplicas-write\n");
 	}
 	else if(strcmp(names,"partitions\n")==0) {
 		place = 3;
-		fprintf(stderr,"Compared with partitions\n");
+//		fprintf(stderr,"Compared with partitions\n");
 	}
 	//The chunk of the memory starts after updater_id and the mutex lock
 	g_shm_chunk_base = (void*)((char*)g_shm_base + sizeof(size_t) + sizeof(pthread_mutex_t));
@@ -107,7 +111,7 @@ uint8_t* cl_shm_alloc(struct sockaddr_in * sa_in, char * names) {
 	//Search for the current sockaddr
 	for(int i=0;i<NUM_NODES;i++) {
 		if(memcmp(pt,sa_in,sizeof(struct sockaddr_in))==0) {
-			fprintf(stderr,"Found socket address in memory %d\n",place);
+//			fprintf(stderr,"Found socket address in memory %d\n",place);
 			found = 1;
 			break;
 		}
@@ -120,7 +124,7 @@ uint8_t* cl_shm_alloc(struct sockaddr_in * sa_in, char * names) {
 		return (pt + SZ_SOCK + place*SZ_SOCK_DATA);
 	}
 	else {
-		fprintf(stderr,"Allocating memory for %d\n",place);
+//		fprintf(stderr,"Allocating memory for %d\n",place);
 		memcpy(g_shm_base + g_shm_last_offset,sa_in,sizeof(struct sockaddr_in));
 		pt = g_shm_base + g_shm_last_offset;
 		g_shm_last_offset = g_shm_last_offset + SZ_NODE;
@@ -130,7 +134,7 @@ uint8_t* cl_shm_alloc(struct sockaddr_in * sa_in, char * names) {
 }
 
 int cl_shm_info_host(struct sockaddr_in * sa_in, char * names, char ** values, int timeout_ms, bool send_asis) {
-	fprintf(stderr,"Names %s\n",names);
+//	fprintf(stderr,"Names %s\n",names);
 	int rv = -1;
     int io_rv;
 	*values = 0;
@@ -268,6 +272,55 @@ Done:
 	
 }
 
+int cl_shm_read(struct sockaddr_in * sa_in, char *names, char **values, int timeout, bool send_as_is){
+	//Search in the shared memory with sa_in. 
+	int place=0;
+	fprintf(stderr,"In alloc names = %s\n",names);
+	if(strcmp(names,"node\n")==0) {
+		place = 0;
+		fprintf(stderr,"Compared with node\n");
+	}
+	else if(strcmp(names,"node\npartition-generation\nservices\n")==0) {
+		place = 1;
+		fprintf(stderr,"Compared with node\npartition-generation\nservices\n");
+	}
+	else if(strcmp(names,"replicas-read\nreplicas-write\n")==0) {
+		place = 2;
+		fprintf(stderr,"Compared with replicas-read\nreplicas-write\n");
+	}
+	else if(strcmp(names,"partitions\n")==0) {
+		place = 3;
+		fprintf(stderr,"Compared with partitions\n");
+	}
+	int n_nodes = NUM_NODES;
+	fprintf(stderr,"num of nodes = %d\n",n_nodes);
+	void * pt = g_shm_chunk_base;
+	int i;
+	for(i=0;i<NUM_NODES;i++){
+		if(memcmp(pt + SZ_NODE*i,sa_in,sizeof(struct sockaddr_in))==0){
+			fprintf(stderr,"Yes! Found socket address\n");
+			void *socket_data_ptr = pt +SZ_NODE*i+ SZ_SOCK + place * SZ_SOCK_DATA;
+			fprintf(stderr,"socket_data_ptr = %p\n",socket_data_ptr);
+			fprintf(stderr,"stored value in this is = %c\n",*((char*)socket_data_ptr));
+			fprintf(stderr,"stored value in this is = %s\n",(char*)socket_data_ptr);
+			if(*((char*)(socket_data_ptr)) != 0) {
+				fprintf(stderr,"Before memcopy\n");
+				int socket_data_sz = SZ_SOCK_DATA;
+				memcpy(*values, socket_data_ptr, SZ_SOCK_DATA);
+				return 0;
+			}
+			else {
+				return -1;
+			}
+		}
+//		else {
+//			pt = pt + SZ_NODE;
+//		}
+		
+	}
+	return -1*(i+1);	
+}
+
 #define INFO_TIMEOUT_MS 300
 //extern int errno;
 void cl_shm_update(cl_cluster * asc) {
@@ -277,7 +330,7 @@ void cl_shm_update(cl_cluster * asc) {
 		//Update and print owner id
 		size_t self_pid = getpid();
 		cl_shm_set_updater_id(self_pid);
-		fprintf(stderr,"Update pid = %d\n",*g_shm_updater_id);	
+		//fprintf(stderr,"Update pid = %d\n",*g_shm_updater_id);	
 		//Update shared memory
 		uint n_hosts = cf_vector_size(&asc->host_str_v);
 		cf_vector_define(sockaddr_in_v, sizeof( struct sockaddr_in ), 0);
@@ -285,7 +338,7 @@ void cl_shm_update(cl_cluster * asc) {
 			//For debug
 			char *host = cf_vector_pointer_get(&asc->host_str_v, i);	
 	        	int port = cf_vector_integer_get(&asc->host_port_v, i);
-    			fprintf(stderr, "lookup hosts: %s:%d\n",host,port);
+    			//fprintf(stderr, "lookup hosts: %s:%d\n",host,port);
 			
 			//Resolve hosts and store them in sockaddr_in_v
 			cl_lookup(asc, cf_vector_pointer_get(&asc->host_str_v, i), 

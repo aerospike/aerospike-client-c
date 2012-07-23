@@ -1032,14 +1032,14 @@ cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 	for (uint i=0;i<cf_vector_size(&cn->sockaddr_in_v);i++) {
 		struct sockaddr_in *sa_in = cf_vector_getp(&cn->sockaddr_in_v, i);
 		
-		char *values = 0;
+		char *values = (char*)malloc(sizeof(SZ_SOCK_DATA));
 //		if (0 != citrusleaf_info_host(sa_in, "node\npartition-generation\nservices", &values, INFO_TIMEOUT_MS, false)) {
 			// todo: this address is no longer right for this node, update the node's list
 			// and if there's no addresses left, dun node
 //			cl_cluster_node_dun(cn, NODE_DUN_INFO_ERR);
 //			continue;
 //		}
-		if (0 != cl_shm_info_host(sa_in, "node\npartition-generation\nservices", &values, INFO_TIMEOUT_MS, false)) {
+		if (0 != cl_shm_read(sa_in, "node\npartition-generation\nservices", &values, INFO_TIMEOUT_MS, false)) {
 			// todo: this address is no longer right for this node, update the node's list
 			// and if there's no addresses left, dun node
 			cl_cluster_node_dun(cn, NODE_DUN_INFO_ERR);
@@ -1088,7 +1088,7 @@ cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 		
 		cf_vector_destroy(&lines_v);
 		
-		//free(values);
+		free(values);
 		
 	}
 	

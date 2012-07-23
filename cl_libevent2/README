@@ -1,10 +1,9 @@
-Libevent2
+Libevent2 has a number of differences with Libevent, has
+clashes with header files. On a machine which has both old libevent and the new 
+libevent2, there can be subtle run-time failures.
 
-Libevent2 has a number of differences with Libevent, however, it annoyingly
-clashes with header files.
-
-In order to do this build, I downloaded libevent2 from libevent.org, and did
-
+In order to allow the old libevent to co-exist with libevent2, this is the process we have followed:
+-- download libevent2 from libevent.org.
+-- configure the build to be installed in /usr/local.
 ./configure --prefix=/usr/local ; make ; sudo make install
-
-
+-- the Makefiles in this package will explicitly link to /usr/local/lib/libevent-2.0.so.5 

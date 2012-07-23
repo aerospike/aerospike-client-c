@@ -23,7 +23,7 @@ LD = gcc
 LDFLAGS = $(CFLAGS_NATIVE) -L$(DIR_LIB) -L$(DIR_CF_LIB)
 #LIBRARIES = -lev2citrusleaf  -levent -levent_openssl -lssl -lpthread -lrt
 #LIBRARIES = -lev2citrusleaf /usr/local/lib/libevent-2.0.so.5.1.3 -lssl -lpthread -lrt
-LIBRARIES = -lev2citrusleaf /usr/local/lib/libevent-2.0.so.5 -lssl -lpthread -lrt
+LIBRARIES = -lev2citrusleaf /usr/local/lib/libevent-2.0.so.5 -lssl -lcrypto -lpthread -lrt
 
 HEADERS = 
 SOURCES = main.c

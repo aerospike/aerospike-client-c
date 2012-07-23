@@ -138,6 +138,7 @@ citrusleaf_info_host(struct sockaddr_in *sa_in, char *names, char **values, int 
 		if (req == NULL)	goto Done;
 
 		req->sz = sz;
+		//req->data = malloc(sz+1);
 		memcpy(req->data,names,sz);
 	}
 	else {
@@ -199,7 +200,7 @@ citrusleaf_info_host(struct sockaddr_in *sa_in, char *names, char **values, int 
 		*values = 0;
 	}
 	rv = 0;
-
+	//fprintf(stderr,"%s\n",*values);
 Done:	
 	shutdown(fd, SHUT_RDWR);
 	close(fd);

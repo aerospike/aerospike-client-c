@@ -27,6 +27,7 @@
 #include "citrusleaf/citrusleaf-internal.h"
 #include "citrusleaf/cl_cluster.h"
 #include "citrusleaf/proto.h"
+#include "citrusleaf/cl_shm.h"
 
 // #define INFO_TIMEOUT_MS 100
 #define INFO_TIMEOUT_MS 300
@@ -120,7 +121,7 @@ str_split(char split_c, char *str, cf_vector *v)
 // List of all current clusters so the tender can maintain them
 // 
 static pthread_t	tender_thr;
-static cf_ll		cluster_ll;
+cf_ll		cluster_ll;
 static pthread_mutex_t cluster_ll_LOCK = PTHREAD_MUTEX_INITIALIZER; 
 
 cl_cluster *
@@ -1032,12 +1033,19 @@ cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 		struct sockaddr_in *sa_in = cf_vector_getp(&cn->sockaddr_in_v, i);
 		
 		char *values = 0;
-		if (0 != citrusleaf_info_host(sa_in, "node\npartition-generation\nservices", &values, INFO_TIMEOUT_MS, false)) {
+//		if (0 != citrusleaf_info_host(sa_in, "node\npartition-generation\nservices", &values, INFO_TIMEOUT_MS, false)) {
+			// todo: this address is no longer right for this node, update the node's list
+			// and if there's no addresses left, dun node
+//			cl_cluster_node_dun(cn, NODE_DUN_INFO_ERR);
+//			continue;
+//		}
+		if (0 != cl_shm_info_host(sa_in, "node\npartition-generation\nservices", &values, INFO_TIMEOUT_MS, false)) {
 			// todo: this address is no longer right for this node, update the node's list
 			// and if there's no addresses left, dun node
 			cl_cluster_node_dun(cn, NODE_DUN_INFO_ERR);
 			continue;
 		}
+
 
 		cl_cluster_node_ok(cn);
 
@@ -1080,7 +1088,7 @@ cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 		
 		cf_vector_destroy(&lines_v);
 		
-		free(values);
+		//free(values);
 		
 	}
 	
@@ -1096,7 +1104,12 @@ cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 		for (uint i=0;i<cf_vector_size(&cn->sockaddr_in_v);i++) {
 			struct sockaddr_in *sa_in = cf_vector_getp(&cn->sockaddr_in_v, i);
 			char *values = 0;
-			if (0 != citrusleaf_info_host(sa_in, "replicas-read\nreplicas-write", &values, INFO_TIMEOUT_MS, false)) {
+	//		if (0 != citrusleaf_info_host(sa_in, "replicas-read\nreplicas-write", &values, INFO_TIMEOUT_MS, false)) {
+                // it's a little peculiar to have just talked to the host then have this call
+                // fail, but sometimes strange things happen.
+          //      goto Updated;
+	//		}
+		if (0 != cl_shm_info_host(sa_in, "replicas-read\nreplicas-write", &values, INFO_TIMEOUT_MS, false)) {
                 // it's a little peculiar to have just talked to the host then have this call
                 // fail, but sometimes strange things happen.
                 goto Updated;
@@ -1126,7 +1139,7 @@ cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 			}
 			cf_vector_destroy(&lines_v);
 			
-			free(values);
+			//free(values);
 			
 			goto Updated;
 		}
@@ -1145,13 +1158,16 @@ cluster_ping_address(cl_cluster *asc, struct sockaddr_in *sa_in)
 {
 		
 	char *values = 0;
-	if (0 != citrusleaf_info_host(sa_in, "node", &values, INFO_TIMEOUT_MS, false)){
+	//if (0 != citrusleaf_info_host(sa_in, "node", &values, INFO_TIMEOUT_MS, false)){
+	// return;
+//	}
+	
+	if (0 != cl_shm_info_host(sa_in, "node", &values, INFO_TIMEOUT_MS, false)){
 	 return;
 	}
-	
 	char *value = 0;
 	if (0 != citrusleaf_info_parse_single(values, &value)) {
-		free(values);
+//		free(values);
 		return;
 	}
 		
@@ -1170,7 +1186,7 @@ cluster_ping_address(cl_cluster *asc, struct sockaddr_in *sa_in)
 		cf_vector_append_unique(&cn->sockaddr_in_v, sa_in);
 	}
 	
-	free(values);
+//	free(values);
 		
 }
 
@@ -1188,19 +1204,22 @@ cluster_get_n_partitions( cl_cluster *asc, cf_vector *sockaddr_in_v )
 		struct sockaddr_in *sa_in = cf_vector_getp(sockaddr_in_v, i);
 
 		char *values = 0;
-		if (0 != citrusleaf_info_host(sa_in, "partitions", &values, INFO_TIMEOUT_MS, false)) {
+		//if (0 != citrusleaf_info_host(sa_in, "partitions", &values, INFO_TIMEOUT_MS, false)) {
+		//	continue;
+	//	}
+		if (0 != cl_shm_info_host(sa_in, "partitions", &values, INFO_TIMEOUT_MS, false)) {
 			continue;
 		}
 		
 		char *value = 0;
 		if (0 != citrusleaf_info_parse_single(values, &value)) {
-			free(values);
+			//free(values);
 			continue;
 		}
 	
 		asc->n_partitions = atoi(value);
 		
-		free(values);
+//		free(values);
 		
 	}
 
@@ -1364,6 +1383,7 @@ cluster_tender_fn(void *gcc_is_ass)
 	return(0);
 }
 
+pthread_t shm_update_thr;
 
 //
 // Initialize the thread that keeps track of the cluster
@@ -1381,7 +1401,10 @@ int citrusleaf_cluster_init()
     g_clust_initialized = 1;
     
    	g_clust_tend_speed = 1;
+	cl_shm_init();
 	pthread_create( &tender_thr, 0, cluster_tender_fn, 0);
+	pthread_create( &shm_update_thr, 0, cl_shm_updater_fn, 0);
+	
 	return(0);	
 }
 

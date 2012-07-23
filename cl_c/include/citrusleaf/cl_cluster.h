@@ -110,7 +110,7 @@ struct cl_cluster_s {
 #define CLS_UNUSED2		0x00000008
 #define CLS_UNUSED3		0x00000010
 
-
+extern cf_ll cluster_ll;
 // Cluster calls
 extern cl_cluster_node *cl_cluster_node_get_random(cl_cluster *asc);  // get node from cluster
 extern cl_cluster_node *cl_cluster_node_get(cl_cluster *asc, const char *ns, const cf_digest *d, bool write);  // get node from cluster

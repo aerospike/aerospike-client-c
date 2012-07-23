@@ -20,7 +20,7 @@ CFLAGS_NATIVE += -D_REENTRANT -D MARCH_$(ARCH_NATIVE)
 # CFLAGS_NATIVE += -O3
 
 LD = gcc
-LDFLAGS = $(CFLAGS_NATIVE) -L$(DIR_LIB) -L$(DIR_CF_LIB) -L$(ALCHEMYREPO)/redis/deps/lua/src
+LDFLAGS = $(CFLAGS_NATIVE) -L$(DIR_LIB) -L$(DIR_CF_LIB) 
 LIBRARIES = -lcitrusleaf  -lssl -lpthread -lrt -llua -lm
 
 HEADERS = 

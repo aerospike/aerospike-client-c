@@ -5,7 +5,7 @@ include Makefile.in
 include Makefile.files
 
 DEPTH = ../../../..
-DIR_INCLUDE = ../include $(DEPTH)/../alchemy/redis/deps/lua/src
+DIR_INCLUDE = ../include 
 DIR_CF_INCLUDE = ../../cf_base/include
 DIR_OBJECT = ../obj/native
 DIR_TARGET = ../lib
@@ -21,7 +21,6 @@ OBJECTS = $(SOURCES:%.c=$(DIR_OBJECT)/%.o)
 CF_OBJECTS= $(CF_SOURCES:%c=$(DIR_CF_OBJECT)/%o)
 DEPENDENCIES = $(OBJECTS:%.o=%.d)
 
-LDFLAGS += -L$(DEPTH)/../alchemy/redis/deps/lua/src
 
 .PHONY: all
 all: libcitrusleaf

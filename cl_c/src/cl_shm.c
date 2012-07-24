@@ -26,11 +26,38 @@ bool SHARED_MEMORY=true;
 extern int errno;
 pthread_mutex_t *g_shm_mutex;
 size_t g_shm_last_offset;
+
+shm_header_info g_shm_header_info[SHM_HEADER_COUNT];
+void cl_shm_header_info_init() {
+	char names[SHM_HEADER_COUNT][64] = {	"node\n",
+						"node\npartition-generation\nservices\n",
+						"replicas-read\nreplicas-write\n",
+						"partitions\n"
+					   };
+	size_t size[SHM_HEADER_COUNT] = {	64 + 32, //String name + node name
+					//string name + node name + partition-generation + max neighbours * size of each 
+						64 + 32+8+NUM_NODES*32,
+					//string name + (namespace + : + partition_number + ; ) * max number of partitions * number of nodes
+						64 + (32+1+8+1)*4096*NUM_NODES,
+						64 + 8
+					};
+						
+	for(int i=0;i<SHM_HEADER_COUNT;i++) {
+		memcpy(g_shm_header_info[i].name,names[i],64);
+		if(i==0) {
+			g_shm_header_info[i].offset = 0;
+		}
+		else {
+			g_shm_header_info[i].offset = g_shm_header_info[i-1].offset + g_shm_header_info[i-1].size;
+		}
+		g_shm_header_info[i].size = size[i];
+	}
+}
+
 /* Initialize shared memory segment */
 int cl_shm_init() {
 	key_t key = 12349;
 	void * shm = (void*)0;
-	//size_t sz = SHM_ARRAY_SZ * SZ_PARTITION_TABLE_NODE + SZ_CL_PARTITION_ID + SZ_HEAD_POINTER;
 	if((g_shmid=shmget(key,SZ_SHM,IPC_CREAT | 0666))<0) {
 		fprintf(stderr,"%s\n",strerror(errno));
 		return SHM_ERROR;	
@@ -51,7 +78,6 @@ int cl_shm_init() {
 		return SHM_OK;
 	}
 	pthread_mutexattr_t attr;
-	//fprintf(stderr,"I am here, just about to init\n");
 	pthread_mutexattr_init (&attr);
 	pthread_mutexattr_setpshared (&attr, PTHREAD_PROCESS_SHARED);
 	pthread_mutexattr_setrobust_np (&attr, PTHREAD_MUTEX_ROBUST_NP);
@@ -62,7 +88,7 @@ int cl_shm_init() {
 	int len = sizeof(int);
 	fwrite(inno,len,1,p);
 	fclose(p);
-
+	cl_shm_header_info_init();
 	return SHM_OK;
 }
 
@@ -79,39 +105,40 @@ void cl_shm_set_updater_id(size_t pid) {
 	*g_shm_updater_id = pid;
 	return;
 }
-//enum SHM_HEADER_NAMES = {"node\n"=1,
-//			"node\npartition-generation\nservices\n",
-//			"replicas-read\nreplicas-write\n",
-//			"partitions\n"}
+
+int cl_shm_get_size(char * name){
+	for(int i=0;i<SHM_HEADER_COUNT;i++){
+		if(memcmp(name,g_shm_header_info[i].name,strlen(name))==0)
+			return g_shm_header_info[i].size;
+	}
+	return -1;
+}
+
+
 //Where the major chunk of the memory starts
 void *g_shm_chunk_base;
 uint8_t* cl_shm_alloc(struct sockaddr_in * sa_in, char * names) {
-	int place=0;
-//	fprintf(stderr,"In alloc names = %s\n",names);
-	if(strcmp(names,"node\n")==0) {
-		place = 0;
-	//	fprintf(stderr,"Compared with node\n");
+	int place=-1;
+	for(int i=0;i<SHM_HEADER_COUNT;i++) {
+		if(memcmp(g_shm_header_info[i].name,names,strlen(names))==0) {
+			place = i;
+			break;
+		}
 	}
-	else if(strcmp(names,"node\npartition-generation\nservices\n")==0) {
-		place = 1;
-//		fprintf(stderr,"Compared with node\npartition-generation\nservices\n");
-	}
-	else if(strcmp(names,"replicas-read\nreplicas-write\n")==0) {
-		place = 2;
-//		fprintf(stderr,"Compared with replicas-read\nreplicas-write\n");
-	}
-	else if(strcmp(names,"partitions\n")==0) {
-		place = 3;
-//		fprintf(stderr,"Compared with partitions\n");
+	if(place==-1) {
+		printf("Dude its a problem\n");
+		return NULL;
 	}
 	//The chunk of the memory starts after updater_id and the mutex lock
+	if(!g_shm_base){ 
+		return NULL;
+	}
 	g_shm_chunk_base = (void*)((char*)g_shm_base + sizeof(size_t) + sizeof(pthread_mutex_t));
 	void * pt = g_shm_chunk_base;
 	int found = 0;
 	//Search for the current sockaddr
 	for(int i=0;i<NUM_NODES;i++) {
 		if(memcmp(pt,sa_in,sizeof(struct sockaddr_in))==0) {
-//			fprintf(stderr,"Found socket address in memory %d\n",place);
 			found = 1;
 			break;
 		}
@@ -121,22 +148,19 @@ uint8_t* cl_shm_alloc(struct sockaddr_in * sa_in, char * names) {
 	}
 	//Found the socket address! Yay! Just need to place the data
 	if(found==1) {
-		return (pt + SZ_SOCK + place*SZ_SOCK_DATA);
+		return (pt + SZ_SOCK + g_shm_header_info[place].offset);
 	}
 	else {
-//		fprintf(stderr,"Allocating memory for %d\n",place);
 		memcpy(g_shm_base + g_shm_last_offset,sa_in,sizeof(struct sockaddr_in));
 		pt = g_shm_base + g_shm_last_offset;
 		g_shm_last_offset = g_shm_last_offset + SZ_NODE;
-		return (pt + SZ_SOCK + place*SZ_SOCK_DATA);
+		return (pt + SZ_SOCK + g_shm_header_info[place].offset);
 	}	
-	//return NULL;
 }
 
 int cl_shm_info_host(struct sockaddr_in * sa_in, char * names, char ** values, int timeout_ms, bool send_asis) {
-//	fprintf(stderr,"Names %s\n",names);
 	int rv = -1;
-    int io_rv;
+    	int io_rv;
 	*values = 0;
 	
 	// Deal with the incoming 'names' parameter
@@ -193,10 +217,7 @@ int cl_shm_info_host(struct sockaddr_in * sa_in, char * names, char ** values, i
 		if (req == NULL)	goto Done;
 
 		req->sz = sz;
-		//req->data = (uint8_t*)malloc(sz+1);
 		memcpy(req->data,names,sz);
-	//	fprintf(stderr,"Req data in loop = %s\n",req->data);
-		fprintf(stderr,"Name in loop = %s\n",names);
 	}
 	else {
 		req = (cl_proto *) buf;
@@ -239,10 +260,7 @@ int cl_shm_info_host(struct sockaddr_in * sa_in, char * names, char ** values, i
 	cl_proto_swap(rsp);
 	
 	if (rsp->sz) {
-		//fprintf(stderr,"Req data in loop = %s\n",req->data);
-		//fprintf(stderr,"Name in loop = %s\n",names);
 		uint8_t *v_buf = cl_shm_alloc(sa_in,names );
-		//uint8_t *v_buf = malloc(rsp->sz + 1);
 		if (!v_buf) goto Done;
         
         if (timeout_ms)
@@ -274,51 +292,37 @@ Done:
 
 int cl_shm_read(struct sockaddr_in * sa_in, char *names, char **values, int timeout, bool send_as_is){
 	//Search in the shared memory with sa_in. 
-	int place=0;
-	fprintf(stderr,"In alloc names = %s\n",names);
-	if(strcmp(names,"node\n")==0) {
-		place = 0;
-		fprintf(stderr,"Compared with node\n");
+	int place=-1;
+	for(int i=0;i<SHM_HEADER_COUNT;i++) {
+		if(memcmp(g_shm_header_info[i].name,names,strlen(names))==0) {
+			place = i;
+			break;
+		}
 	}
-	else if(strcmp(names,"node\npartition-generation\nservices\n")==0) {
-		place = 1;
-		fprintf(stderr,"Compared with node\npartition-generation\nservices\n");
+	if(place==-1) {
+		printf("Dude its a problem\n");
+		return -1;
 	}
-	else if(strcmp(names,"replicas-read\nreplicas-write\n")==0) {
-		place = 2;
-		fprintf(stderr,"Compared with replicas-read\nreplicas-write\n");
-	}
-	else if(strcmp(names,"partitions\n")==0) {
-		place = 3;
-		fprintf(stderr,"Compared with partitions\n");
-	}
+
 	int n_nodes = NUM_NODES;
-	fprintf(stderr,"num of nodes = %d\n",n_nodes);
 	void * pt = g_shm_chunk_base;
-	int i;
-	for(i=0;i<NUM_NODES;i++){
+	if(!pt) {
+		return -1;
+	}
+	for(int i=0;i<NUM_NODES;i++){
 		if(memcmp(pt + SZ_NODE*i,sa_in,sizeof(struct sockaddr_in))==0){
-			fprintf(stderr,"Yes! Found socket address\n");
-			void *socket_data_ptr = pt +SZ_NODE*i+ SZ_SOCK + place * SZ_SOCK_DATA;
-			fprintf(stderr,"socket_data_ptr = %p\n",socket_data_ptr);
-			fprintf(stderr,"stored value in this is = %c\n",*((char*)socket_data_ptr));
-			fprintf(stderr,"stored value in this is = %s\n",(char*)socket_data_ptr);
+			void *socket_data_ptr = pt +SZ_NODE*i+ SZ_SOCK + g_shm_header_info[place].offset;
 			if(*((char*)(socket_data_ptr)) != 0) {
-				fprintf(stderr,"Before memcopy\n");
-				int socket_data_sz = SZ_SOCK_DATA;
-				memcpy(*values, socket_data_ptr, SZ_SOCK_DATA);
+				memcpy(*values, socket_data_ptr, g_shm_header_info[place].size);
 				return 0;
 			}
 			else {
 				return -1;
 			}
 		}
-//		else {
-//			pt = pt + SZ_NODE;
-//		}
 		
 	}
-	return -1*(i+1);	
+	return -1;	
 }
 
 #define INFO_TIMEOUT_MS 300
@@ -330,7 +334,6 @@ void cl_shm_update(cl_cluster * asc) {
 		//Update and print owner id
 		size_t self_pid = getpid();
 		cl_shm_set_updater_id(self_pid);
-		//fprintf(stderr,"Update pid = %d\n",*g_shm_updater_id);	
 		//Update shared memory
 		uint n_hosts = cf_vector_size(&asc->host_str_v);
 		cf_vector_define(sockaddr_in_v, sizeof( struct sockaddr_in ), 0);
@@ -338,7 +341,6 @@ void cl_shm_update(cl_cluster * asc) {
 			//For debug
 			char *host = cf_vector_pointer_get(&asc->host_str_v, i);	
 	        	int port = cf_vector_integer_get(&asc->host_port_v, i);
-    			//fprintf(stderr, "lookup hosts: %s:%d\n",host,port);
 			
 			//Resolve hosts and store them in sockaddr_in_v
 			cl_lookup(asc, cf_vector_pointer_get(&asc->host_str_v, i), 
@@ -363,13 +365,11 @@ int g_shm_update_speed = 1;
 void * cl_shm_updater_fn(void * gcc_is_ass) {
 	uint64_t cnt = 1;
 	do {
-		//sleep(1);
+		sleep(1);
 		cf_ll_element *e = cf_ll_get_head(&cluster_ll);
 		while(e) {
-		//	fprintf(stderr,"Here here here!!\n");
 			if((cnt % g_shm_update_speed) == 0) {
 				cl_shm_update((cl_cluster*)e);
-				//update function
 			}
 		}
 		cnt++;

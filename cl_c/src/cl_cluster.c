@@ -365,8 +365,8 @@ citrusleaf_cluster_add_host(cl_cluster *asc, char const *host_in, short port, in
 	pthread_mutex_unlock(&asc->LOCK);
 
 	// Fire the normal tender function to speed up resolution
-	if (asc->found_all == false)
-		cluster_tend(asc);
+//	if (asc->found_all == false)
+//		cluster_tend(asc);
 
 	if (timeout_ms == 0)	timeout_ms = 100;
 	
@@ -375,7 +375,7 @@ citrusleaf_cluster_add_host(cl_cluster *asc, char const *host_in, short port, in
 		uint64_t start_ms = cf_getms();
 		do {
 			n_tends++;
-			if (asc->found_all == false) { cluster_tend(asc); }
+//			if (asc->found_all == false) { cluster_tend(asc); }
 			if (asc->found_all == false) usleep(1000);
 		} while ((asc->found_all == false) && ((cf_getms() - start_ms) < (unsigned int) timeout_ms) );
 #ifdef DEBUG		
@@ -1018,35 +1018,40 @@ Next:
 // Grab the services and insert them into the services vector.
 // Try all known addresses of this node, too
 
+
 static void
 cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 {
 	bool update_partitions = false;
 
-#ifdef DEBUG	
+#ifdef DEBUG
 	fprintf(stderr, "cluster ping node: %s\n",cn->name);
-#endif	
+#endif
 	
 	// for all elements in the sockaddr_in list - ping and add hosts, if not
 	// already extant
 	for (uint i=0;i<cf_vector_size(&cn->sockaddr_in_v);i++) {
 		struct sockaddr_in *sa_in = cf_vector_getp(&cn->sockaddr_in_v, i);
-		
-		char *values = (char*)malloc(sizeof(SZ_SOCK_DATA));
-//		if (0 != citrusleaf_info_host(sa_in, "node\npartition-generation\nservices", &values, INFO_TIMEOUT_MS, false)) {
-			// todo: this address is no longer right for this node, update the node's list
-			// and if there's no addresses left, dun node
-//			cl_cluster_node_dun(cn, NODE_DUN_INFO_ERR);
-//			continue;
-//		}
-		if (0 != cl_shm_read(sa_in, "node\npartition-generation\nservices", &values, INFO_TIMEOUT_MS, false)) {
-			// todo: this address is no longer right for this node, update the node's list
-			// and if there's no addresses left, dun node
-			cl_cluster_node_dun(cn, NODE_DUN_INFO_ERR);
-			continue;
+		char * values;	
+		if(!SHARED_MEMORY) {
+			values = 0;
+			if (0 != citrusleaf_info_host(sa_in, "node\npartition-generation\nservices", &values, INFO_TIMEOUT_MS, false)) 
+			{
+				// todo: this address is no longer right for this node, update the node's list
+				// and if there's no addresses left, dun node
+				cl_cluster_node_dun(cn, NODE_DUN_INFO_ERR);
+				continue;
+			}
 		}
+		else {
+			values = (char*)malloc(cl_shm_get_size("node\npartition-generation\nservices\n"));
+			if (0 != cl_shm_read(sa_in, "node\npartition-generation\nservices\n",&values, INFO_TIMEOUT_MS, false))
+			{
+				cl_cluster_node_dun(cn, NODE_DUN_INFO_ERR);
+				continue;
+			}
 
-
+		}
 		cl_cluster_node_ok(cn);
 
 		// reminder: returned list is name1\tvalue1\nname2\tvalue2\n
@@ -1088,8 +1093,7 @@ cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 		
 		cf_vector_destroy(&lines_v);
 		
-		free(values);
-		
+		if(values) free(values);
 	}
 	
 	
@@ -1103,16 +1107,24 @@ cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 
 		for (uint i=0;i<cf_vector_size(&cn->sockaddr_in_v);i++) {
 			struct sockaddr_in *sa_in = cf_vector_getp(&cn->sockaddr_in_v, i);
-			char *values = 0;
-	//		if (0 != citrusleaf_info_host(sa_in, "replicas-read\nreplicas-write", &values, INFO_TIMEOUT_MS, false)) {
-                // it's a little peculiar to have just talked to the host then have this call
-                // fail, but sometimes strange things happen.
-          //      goto Updated;
-	//		}
-		if (0 != cl_shm_info_host(sa_in, "replicas-read\nreplicas-write", &values, INFO_TIMEOUT_MS, false)) {
-                // it's a little peculiar to have just talked to the host then have this call
-                // fail, but sometimes strange things happen.
-                goto Updated;
+			char * values;
+			if(!SHARED_MEMORY) {
+				values = 0;
+				if (0 != citrusleaf_info_host(sa_in, "replicas-read\nreplicas-write", &values, INFO_TIMEOUT_MS, false))
+				{
+               		 		// it's a little peculiar to have just talked to the host then have this call
+                			// fail, but sometimes strange things happen.
+          		        	goto Updated;
+				}
+			}
+			else {
+				values = (char*)malloc(cl_shm_get_size("replicas-read\nreplicas-write\n"));
+				if (0 != cl_shm_read(sa_in, "replicas-read\nreplicas-write\n", &values, INFO_TIMEOUT_MS, false)) 
+				{
+                		// it's a little peculiar to have just talked to the host then have this call
+                		// fail, but sometimes strange things happen.
+                		goto Updated;
+				}
 			}
 			
 			// reminder: returned list is name1\tvalue1\nname2\tvalue2\n
@@ -1139,7 +1151,7 @@ cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 			}
 			cf_vector_destroy(&lines_v);
 			
-			//free(values);
+			if(values) free(values);
 			
 			goto Updated;
 		}
@@ -1156,18 +1168,26 @@ Updated:
 static void
 cluster_ping_address(cl_cluster *asc, struct sockaddr_in *sa_in)
 {
-		
-	char *values = 0;
-	//if (0 != citrusleaf_info_host(sa_in, "node", &values, INFO_TIMEOUT_MS, false)){
-	// return;
-//	}
-	
-	if (0 != cl_shm_info_host(sa_in, "node", &values, INFO_TIMEOUT_MS, false)){
-	 return;
+	char * values;		
+	if(!SHARED_MEMORY) {
+		values = 0;
+		if (0 != citrusleaf_info_host(sa_in, "node", &values, INFO_TIMEOUT_MS, false)){
+			return;
+		}
+	}
+	else {
+		values = (char*)calloc(1,cl_shm_get_size("node\n"));
+		//Check for malloc failure
+		if(values==NULL) 
+			return;
+
+		if (0 != cl_shm_read(sa_in, "node\n", &values, INFO_TIMEOUT_MS, false)){
+		 return;
+		}
 	}
 	char *value = 0;
 	if (0 != citrusleaf_info_parse_single(values, &value)) {
-//		free(values);
+		if(values) free(values);
 		return;
 	}
 		
@@ -1186,7 +1206,7 @@ cluster_ping_address(cl_cluster *asc, struct sockaddr_in *sa_in)
 		cf_vector_append_unique(&cn->sockaddr_in_v, sa_in);
 	}
 	
-//	free(values);
+	if(values) free(values);
 		
 }
 
@@ -1202,24 +1222,32 @@ cluster_get_n_partitions( cl_cluster *asc, cf_vector *sockaddr_in_v )
 		if (asc->n_partitions != 0)	return;
 		
 		struct sockaddr_in *sa_in = cf_vector_getp(sockaddr_in_v, i);
+		char * values;
+		if(!SHARED_MEMORY) {
+			values = 0;
+			if (0 != citrusleaf_info_host(sa_in, "partitions", &values, INFO_TIMEOUT_MS, false)) {
+				continue;
+			}
+		}	
+		else {
+			values = (char*)calloc(1,cl_shm_get_size("partitions\n"));
+			//Check for malloc failed 
+			if(values==NULL) 
+				return;
 
-		char *values = 0;
-		//if (0 != citrusleaf_info_host(sa_in, "partitions", &values, INFO_TIMEOUT_MS, false)) {
-		//	continue;
-	//	}
-		if (0 != cl_shm_info_host(sa_in, "partitions", &values, INFO_TIMEOUT_MS, false)) {
-			continue;
+			if (0 != cl_shm_read(sa_in, "partitions\n", &values, INFO_TIMEOUT_MS, false)) {
+				continue;
+			}
 		}
-		
 		char *value = 0;
 		if (0 != citrusleaf_info_parse_single(values, &value)) {
-			//free(values);
+			if(values) free(values);
 			continue;
 		}
 	
 		asc->n_partitions = atoi(value);
 		
-//		free(values);
+		if(values) free(values);
 		
 	}
 

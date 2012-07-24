@@ -24,8 +24,11 @@ void * g_shm_base;
 int g_shmid;
 bool SHARED_MEMORY=true;
 extern int errno;
-pthread_mutex_t *g_shm_mutex;
+pthread_mutex_t *g_shm_mutex_update;
+pthread_mutex_t *g_shm_mutex_read;
 size_t g_shm_last_offset;
+//Where the major chunk of the memory starts
+void *g_shm_chunk_base;
 
 shm_header_info g_shm_header_info[SHM_HEADER_COUNT];
 void cl_shm_header_info_init() {
@@ -34,12 +37,12 @@ void cl_shm_header_info_init() {
 						"replicas-read\nreplicas-write\n",
 						"partitions\n"
 					   };
-	size_t size[SHM_HEADER_COUNT] = {	64 + 32, //String name + node name
+	size_t size[SHM_HEADER_COUNT] = {	32 + 32, //String name + node name
 					//string name + node name + partition-generation + max neighbours * size of each 
-						64 + 32+8+NUM_NODES*32,
+						32*3 + 32+8+(NUM_NODES-1)*32,
 					//string name + (namespace + : + partition_number + ; ) * max number of partitions * number of nodes
-						64 + (32+1+8+1)*4096*NUM_NODES,
-						64 + 8
+						2*(32 + (32+1+4+1)*4096*NUM_NAMESPACES),
+						32 + 4
 					};
 						
 	for(int i=0;i<SHM_HEADER_COUNT;i++) {
@@ -53,12 +56,20 @@ void cl_shm_header_info_init() {
 		g_shm_header_info[i].size = size[i];
 	}
 }
-
+static size_t g_shm_node_sz;
+static size_t g_shm_sz;
 /* Initialize shared memory segment */
 int cl_shm_init() {
 	key_t key = 12349;
 	void * shm = (void*)0;
-	if((g_shmid=shmget(key,SZ_SHM,IPC_CREAT | 0666))<0) {
+	cl_shm_header_info_init();
+	for(int i=0;i<SHM_HEADER_COUNT;i++) {
+		fprintf(stderr,"%d\n",g_shm_header_info[i].size);
+		g_shm_node_sz = g_shm_node_sz +  g_shm_header_info[i].size;
+	}
+	g_shm_sz = g_shm_node_sz * NUM_NODES;
+	fprintf(stderr,"Size if %u\n",g_shm_sz);
+	 if((g_shmid=shmget(key,g_shm_sz,IPC_CREAT | 0666))<0) {
 		fprintf(stderr,"%s\n",strerror(errno));
 		return SHM_ERROR;	
 	}
@@ -67,8 +78,11 @@ int cl_shm_init() {
 		return SHM_ERROR;
 	}
 	g_shm_base = shm;
+	g_shm_chunk_base = (void*)((char*)g_shm_base + sizeof(size_t) + sizeof(pthread_mutex_t));
 	g_shm_last_offset = 0;
-	g_shm_mutex = (pthread_mutex_t*)(g_shm_base + g_shm_last_offset);
+	g_shm_mutex_update = (pthread_mutex_t*)(g_shm_base + g_shm_last_offset);
+	g_shm_last_offset = g_shm_last_offset + sizeof(pthread_mutex_t);
+	g_shm_mutex_read = (pthread_mutex_t*)(g_shm_base + g_shm_last_offset);
 	g_shm_last_offset = g_shm_last_offset + sizeof(pthread_mutex_t);
 	int * buffer = (int*)malloc(sizeof(int));
 	FILE * r = fopen("./init.txt","r");
@@ -81,20 +95,20 @@ int cl_shm_init() {
 	pthread_mutexattr_init (&attr);
 	pthread_mutexattr_setpshared (&attr, PTHREAD_PROCESS_SHARED);
 	pthread_mutexattr_setrobust_np (&attr, PTHREAD_MUTEX_ROBUST_NP);
-	pthread_mutex_init (g_shm_mutex, &attr);
+	pthread_mutex_init (g_shm_mutex_update, &attr);
 	FILE * p = fopen("./init.txt","w");
 	int *inno = (int*)malloc(sizeof(int));
 	*inno = 1234;
 	int len = sizeof(int);
 	fwrite(inno,len,1,p);
+	fprintf(stderr,"Initing mutex my pid = %d\n",getpid());
 	fclose(p);
-	cl_shm_header_info_init();
 	return SHM_OK;
 }
 
 /* Detach and remove shared memory */
 int cl_shm_free() {
-	memset(g_shm_base,0,SZ_SHM);
+	memset(g_shm_base,0,g_shm_sz);
 	if(shmdt(g_shm_base) < 0 ) return SHM_ERROR;
 	if(shmctl(g_shmid,IPC_RMID,0) < 0 ) return SHM_ERROR;
 }
@@ -115,8 +129,6 @@ int cl_shm_get_size(char * name){
 }
 
 
-//Where the major chunk of the memory starts
-void *g_shm_chunk_base;
 uint8_t* cl_shm_alloc(struct sockaddr_in * sa_in, char * names) {
 	int place=-1;
 	for(int i=0;i<SHM_HEADER_COUNT;i++) {
@@ -133,7 +145,6 @@ uint8_t* cl_shm_alloc(struct sockaddr_in * sa_in, char * names) {
 	if(!g_shm_base){ 
 		return NULL;
 	}
-	g_shm_chunk_base = (void*)((char*)g_shm_base + sizeof(size_t) + sizeof(pthread_mutex_t));
 	void * pt = g_shm_chunk_base;
 	int found = 0;
 	//Search for the current sockaddr
@@ -143,7 +154,7 @@ uint8_t* cl_shm_alloc(struct sockaddr_in * sa_in, char * names) {
 			break;
 		}
 		else {
-			pt = pt + SZ_NODE;
+			pt = pt + g_shm_node_sz;
 		}
 	}
 	//Found the socket address! Yay! Just need to place the data
@@ -153,7 +164,7 @@ uint8_t* cl_shm_alloc(struct sockaddr_in * sa_in, char * names) {
 	else {
 		memcpy(g_shm_base + g_shm_last_offset,sa_in,sizeof(struct sockaddr_in));
 		pt = g_shm_base + g_shm_last_offset;
-		g_shm_last_offset = g_shm_last_offset + SZ_NODE;
+		g_shm_last_offset = g_shm_last_offset + g_shm_node_sz;
 		return (pt + SZ_SOCK + g_shm_header_info[place].offset);
 	}	
 }
@@ -281,6 +292,7 @@ int cl_shm_info_host(struct sockaddr_in * sa_in, char * names, char ** values, i
 		*values = 0;
 	}
 	rv = 0;
+	fprintf(stderr,"%s\n",*values);
 
 Done:	
 	shutdown(fd, SHUT_RDWR);
@@ -307,13 +319,15 @@ int cl_shm_read(struct sockaddr_in * sa_in, char *names, char **values, int time
 	int n_nodes = NUM_NODES;
 	void * pt = g_shm_chunk_base;
 	if(!pt) {
+		fprintf(stderr,"My chunk base is NULL : pid %d\n",getpid());
 		return -1;
 	}
 	for(int i=0;i<NUM_NODES;i++){
-		if(memcmp(pt + SZ_NODE*i,sa_in,sizeof(struct sockaddr_in))==0){
-			void *socket_data_ptr = pt +SZ_NODE*i+ SZ_SOCK + g_shm_header_info[place].offset;
+		if(memcmp(pt + g_shm_node_sz*i,sa_in,sizeof(struct sockaddr_in))==0){
+			void *socket_data_ptr = pt + g_shm_node_sz*i+ SZ_SOCK + g_shm_header_info[place].offset;
 			if(*((char*)(socket_data_ptr)) != 0) {
 				memcpy(*values, socket_data_ptr, g_shm_header_info[place].size);
+				//fprintf(stderr,"pid is %d : In shm_read I am reading %s\n",getpid(),*values);
 				return 0;
 			}
 			else {
@@ -329,7 +343,7 @@ int cl_shm_read(struct sockaddr_in * sa_in, char *names, char **values, int time
 //extern int errno;
 void cl_shm_update(cl_cluster * asc) {
 	//Take Lock
-	int rv = pthread_mutex_trylock(g_shm_mutex);
+	int rv = pthread_mutex_trylock(g_shm_mutex_update);
 	if(rv==0) {
 		//Update and print owner id
 		size_t self_pid = getpid();

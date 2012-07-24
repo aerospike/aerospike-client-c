@@ -1044,6 +1044,7 @@ cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 			}
 		}
 		else {
+//			fprintf(stderr,"Before shm_read for place 1 : pid %d\n",getpid());
 			values = (char*)malloc(cl_shm_get_size("node\npartition-generation\nservices\n"));
 			if (0 != cl_shm_read(sa_in, "node\npartition-generation\nservices\n",&values, INFO_TIMEOUT_MS, false))
 			{
@@ -1182,7 +1183,7 @@ cluster_ping_address(cl_cluster *asc, struct sockaddr_in *sa_in)
 			return;
 
 		if (0 != cl_shm_read(sa_in, "node\n", &values, INFO_TIMEOUT_MS, false)){
-		 return;
+		 	return;
 		}
 	}
 	char *value = 0;
@@ -1234,7 +1235,6 @@ cluster_get_n_partitions( cl_cluster *asc, cf_vector *sockaddr_in_v )
 			//Check for malloc failed 
 			if(values==NULL) 
 				return;
-
 			if (0 != cl_shm_read(sa_in, "partitions\n", &values, INFO_TIMEOUT_MS, false)) {
 				continue;
 			}

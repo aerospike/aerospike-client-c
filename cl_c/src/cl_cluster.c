@@ -272,7 +272,7 @@ retry:
 	cl_partition_table_destroy_all(asc);
 	
 	pthread_mutex_destroy(&asc->LOCK);
-
+	cl_shm_free();
 	free(asc);
 
 }
@@ -309,6 +309,11 @@ citrusleaf_cluster_release_or_destroy(cl_cluster **asc) {
 void
 citrusleaf_cluster_shutdown(void)
 {
+  /* Cancel updater thread for shared memory*/
+  if(0==pthread_cancel(shm_update_thr)) {
+  	pthread_detach(shm_update_thr);
+  }
+
   // this one use has to be threadsafe, because two simultaneous shutdowns???
   cf_ll_element *e;
   // pthread_mutex_lock(&cluster_ll_LOCK);

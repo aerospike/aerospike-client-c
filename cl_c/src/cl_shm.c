@@ -26,7 +26,7 @@ bool SHARED_MEMORY=true;
 extern int errno;
 pthread_mutex_t *g_shm_mutex_update;
 pthread_mutex_t *g_shm_mutex_read;
-size_t g_shm_last_offset;
+size_t *g_shm_last_offset;
 //Where the major chunk of the memory starts
 void *g_shm_chunk_base;
 
@@ -63,63 +63,94 @@ int cl_shm_init() {
 	key_t key = 12349;
 	void * shm = (void*)0;
 	cl_shm_header_info_init();
+	bool eexist=false;
+	
+	/*The size of the shared memory to be allocated is determined by adding the size of all the data
+ 	 * each header can carry and then multiplying the sum by the total no of nodes */
 	for(int i=0;i<SHM_HEADER_COUNT;i++) {
-		fprintf(stderr,"%d\n",g_shm_header_info[i].size);
 		g_shm_node_sz = g_shm_node_sz +  g_shm_header_info[i].size;
 	}
 	g_shm_sz = g_shm_node_sz * NUM_NODES;
-	fprintf(stderr,"Size if %u\n",g_shm_sz);
-	 if((g_shmid=shmget(key,g_shm_sz,IPC_CREAT | 0666))<0) {
+	
+	/*First try to exclusively create a shared memory, for this only one process will succeed.
+ 	 * others will fail giving an errno of EEXIST*/
+	 if((g_shmid=shmget(key,g_shm_sz,IPC_CREAT | IPC_EXCL | 0666))<0) {
 		fprintf(stderr,"%s\n",strerror(errno));
-		return SHM_ERROR;	
+		/*if there are any other errors apart from EEXIST, we can return gracefully */
+		if(errno != EEXIST) {
+			return SHM_ERROR;	
+		}
+		else {
+			/* set eexist to true */
+			eexist = true;
+			fprintf(stderr,"I tried creating an already existing shared memory : pid %d\n",getpid());
+		}
 	}
+	else {
+		fprintf(stderr,"I succeeded in creating shm : pid %d\n",getpid());
+	}
+
+	/*For all the processes that failed to create with EEXIST, we try to get the shared memory again so that we
+ 	 * have a valid shmid */
+	if((g_shmid=shmget(key,g_shm_sz,IPC_CREAT | 0666))<0) {
+		return SHM_ERROR;
+	}
+	
+	/* Attach to the shared memory */	
 	if((shm = shmat(g_shmid,NULL,0))==(void*)-1) {
 		printf("Error in attaching\n");
 		return SHM_ERROR;
 	}
+
+	/*The shared memory base pointer*/	
 	g_shm_base = shm;
-	g_shm_chunk_base = (void*)((char*)g_shm_base + sizeof(size_t) + sizeof(pthread_mutex_t));
-	g_shm_last_offset = 0;
-	g_shm_mutex_update = (pthread_mutex_t*)(g_shm_base + g_shm_last_offset);
-	g_shm_last_offset = g_shm_last_offset + sizeof(pthread_mutex_t);
-	g_shm_mutex_read = (pthread_mutex_t*)(g_shm_base + g_shm_last_offset);
-	g_shm_last_offset = g_shm_last_offset + sizeof(pthread_mutex_t);
-	int * buffer = (int*)malloc(sizeof(int));
-	FILE * r = fopen("./init.txt","r");
-	fread(buffer,sizeof(int),1,r);
-	fclose(r);
-	if(*buffer==1234) {
-		return SHM_OK;
+
+	/* The actual data starts from here, after the updater_id and two locks*/
+	g_shm_chunk_base = (void*)((char*)g_shm_base + 2*sizeof(size_t) + 2*sizeof(pthread_mutex_t));
+
+	/* Last allocated offset -- put in shared memory and initialise to zero*/
+	g_shm_last_offset = (size_t *)(g_shm_base);
+	*g_shm_last_offset = sizeof(size_t);
+	
+	/*Then comes the update lock. Allocate it some space and then move the last offset to base + sizeof one lock*/
+	g_shm_mutex_update = (pthread_mutex_t*)(g_shm_base + *g_shm_last_offset);
+	*g_shm_last_offset = *g_shm_last_offset + sizeof(pthread_mutex_t);
+	
+	/*Then add the read/block level lock*/
+	g_shm_mutex_read = (pthread_mutex_t*)(g_shm_base + *g_shm_last_offset);
+	*g_shm_last_offset = *g_shm_last_offset + sizeof(pthread_mutex_t);
+	
+	/* If you are the one who created the shared memory, only you can initialize the mutexes. Seems fair!
+ 	 * because if we let everyone initialize the mutexes, we are in deep deep trouble */	
+	if(!eexist) {
+		fprintf(stderr,"%u %d\n",*g_shm_last_offset,getpid());
+		pthread_mutexattr_t attr;
+		pthread_mutexattr_init (&attr);
+		pthread_mutexattr_setpshared (&attr, PTHREAD_PROCESS_SHARED);
+		pthread_mutexattr_setrobust_np (&attr, PTHREAD_MUTEX_ROBUST_NP);
+		pthread_mutex_init (g_shm_mutex_update, &attr);
+		fprintf(stderr,"Initing mutex my pid = %d\n",getpid());
 	}
-	pthread_mutexattr_t attr;
-	pthread_mutexattr_init (&attr);
-	pthread_mutexattr_setpshared (&attr, PTHREAD_PROCESS_SHARED);
-	pthread_mutexattr_setrobust_np (&attr, PTHREAD_MUTEX_ROBUST_NP);
-	pthread_mutex_init (g_shm_mutex_update, &attr);
-	FILE * p = fopen("./init.txt","w");
-	int *inno = (int*)malloc(sizeof(int));
-	*inno = 1234;
-	int len = sizeof(int);
-	fwrite(inno,len,1,p);
-	fprintf(stderr,"Initing mutex my pid = %d\n",getpid());
-	fclose(p);
+	/* all well? return aok!*/
 	return SHM_OK;
 }
 
 /* Detach and remove shared memory */
 int cl_shm_free() {
-	memset(g_shm_base,0,g_shm_sz);
 	if(shmdt(g_shm_base) < 0 ) return SHM_ERROR;
 	if(shmctl(g_shmid,IPC_RMID,0) < 0 ) return SHM_ERROR;
 }
+
+/*Just for testing purposes, we want to see who is updating the shared memory*/
 size_t *g_shm_updater_id;
 void cl_shm_set_updater_id(size_t pid) {
-	g_shm_updater_id = (size_t*)(g_shm_base + g_shm_last_offset);
-	g_shm_last_offset = g_shm_last_offset + sizeof(size_t);
+	g_shm_updater_id = (size_t*)(g_shm_base + *g_shm_last_offset);
+	*g_shm_last_offset = *g_shm_last_offset + sizeof(size_t);
 	*g_shm_updater_id = pid;
 	return;
 }
 
+/*Get the maximum size under each header which is saved in the shared memory*/
 int cl_shm_get_size(char * name){
 	for(int i=0;i<SHM_HEADER_COUNT;i++){
 		if(memcmp(name,g_shm_header_info[i].name,strlen(name))==0)
@@ -162,9 +193,9 @@ uint8_t* cl_shm_alloc(struct sockaddr_in * sa_in, char * names) {
 		return (pt + SZ_SOCK + g_shm_header_info[place].offset);
 	}
 	else {
-		memcpy(g_shm_base + g_shm_last_offset,sa_in,sizeof(struct sockaddr_in));
-		pt = g_shm_base + g_shm_last_offset;
-		g_shm_last_offset = g_shm_last_offset + g_shm_node_sz;
+		memcpy(g_shm_base + *g_shm_last_offset,sa_in,sizeof(struct sockaddr_in));
+		pt = g_shm_base + *g_shm_last_offset;
+		*g_shm_last_offset = *g_shm_last_offset + g_shm_node_sz;
 		return (pt + SZ_SOCK + g_shm_header_info[place].offset);
 	}	
 }
@@ -292,7 +323,6 @@ int cl_shm_info_host(struct sockaddr_in * sa_in, char * names, char ** values, i
 		*values = 0;
 	}
 	rv = 0;
-	fprintf(stderr,"%s\n",*values);
 
 Done:	
 	shutdown(fd, SHUT_RDWR);

@@ -309,11 +309,6 @@ citrusleaf_cluster_release_or_destroy(cl_cluster **asc) {
 void
 citrusleaf_cluster_shutdown(void)
 {
-  /* Cancel updater thread for shared memory*/
-  if(0==pthread_cancel(shm_update_thr)) {
-  	pthread_detach(shm_update_thr);
-  }
-
   // this one use has to be threadsafe, because two simultaneous shutdowns???
   cf_ll_element *e;
   // pthread_mutex_lock(&cluster_ll_LOCK);
@@ -1037,9 +1032,8 @@ cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 	// already extant
 	for (uint i=0;i<cf_vector_size(&cn->sockaddr_in_v);i++) {
 		struct sockaddr_in *sa_in = cf_vector_getp(&cn->sockaddr_in_v, i);
-		char * values;	
+		char * values = 0;	
 		if(!SHARED_MEMORY) {
-			values = 0;
 			if (0 != citrusleaf_info_host(sa_in, "node\npartition-generation\nservices", &values, INFO_TIMEOUT_MS, false)) 
 			{
 				// todo: this address is no longer right for this node, update the node's list
@@ -1098,7 +1092,7 @@ cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 		}
 		
 		cf_vector_destroy(&lines_v);
-		
+			
 		if(values) free(values);
 	}
 	

@@ -62,11 +62,6 @@ int cl_shm_init() {
 	
 	/*The size of the shared memory to be allocated is determined by adding the size of all the data
  	 * each header can carry and then multiplying the sum by the total no of nodes */
-	//g_shm_info.node_sz = sizeof(struct sockaddr_in) + sizeof(pthread_mutex_t);
-	//for(int i=0;i<SHM_FIELD_COUNT;i++) {
-	//	g_shm_info.node_sz = g_shm_info.node_sz +  g_shm_header_info[i].size;
-//	}
-//	g_shm_info.shm_sz = g_shm_info.node_sz * NUM_NODES;
 	g_shm_info.shm_sz = sizeof(shm);
 	fprintf(stderr,"Shared memory size %u\n",g_shm_info.shm_sz);
 	/*First try to exclusively create a shared memory, for this only one process will succeed.
@@ -148,7 +143,7 @@ int cl_shm_get_size(char * name){
 	return -1;
 }
 
-char ** get_field_address(shm_ninfo * node_info , int field_id) {
+char * get_field_address(shm_ninfo * node_info , int field_id) {
 	switch(field_id) {
 		case 0:
 			return &(node_info->node_name);
@@ -159,6 +154,7 @@ char ** get_field_address(shm_ninfo * node_info , int field_id) {
 		case 3:
 			return &(node_info->num_partitions);
 	}
+	return NULL;
 }
 int  cl_shm_alloc(struct sockaddr_in * sa_in, int field_id,char ** values, int * nc) {
 	int rv;
@@ -173,7 +169,7 @@ int  cl_shm_alloc(struct sockaddr_in * sa_in, int field_id,char ** values, int *
 	}
 	//Found the socket address! Yay! Just need to place the data
 	if(found==1) {
-		char ** field_addr = get_field_address(&(g_shm_pt->node_info[*nc]),field_id);
+		char * field_addr = get_field_address(&(g_shm_pt->node_info[*nc]),field_id);
 		/*The starting pointer of the node and then move by the size of sockaddr, the lock and the offset of the 
  		 * particular "string name".*/
 		*values = field_addr;
@@ -185,7 +181,6 @@ int  cl_shm_alloc(struct sockaddr_in * sa_in, int field_id,char ** values, int *
 		/*Initialise the lock*/
 		size_t mypid = getpid();
 		if(mypid == g_shm_pt->updater_id) {
-			fprintf(stderr,"%d %d\n",mypid,g_shm_pt->updater_id);
 			pthread_mutexattr_t attr;
 			pthread_mutexattr_init (&attr);
 			pthread_mutexattr_setpshared (&attr, PTHREAD_PROCESS_SHARED);
@@ -195,7 +190,7 @@ int  cl_shm_alloc(struct sockaddr_in * sa_in, int field_id,char ** values, int *
 				return -1;
 			}
 		}	
-		char ** field_addr = get_field_address(&(g_shm_pt->node_info[g_shm_pt->free_offset]),field_id);
+		char * field_addr = get_field_address(&(g_shm_pt->node_info[g_shm_pt->free_offset]),field_id);
 
 		/*Return the position of the data of the particular string name. Move by sizeof a socket address, a lock
  		 * and the offset of string name in the process*/
@@ -367,18 +362,16 @@ int cl_shm_read(struct sockaddr_in * sa_in, int field_id, char **values, int tim
 		/*Search for this socket address in the shared memory*/
 		if(memcmp(&(g_shm_pt->node_info[i].sa_in),sa_in,sizeof(struct sockaddr_in))==0){
 			/* Found it! */
-			char ** field_addr = get_field_address(&(g_shm_pt->node_info[i]),field_id);
-				if(field_addr==0) {
-					return -1;
-				}
-				/* Take the lock to read the data into *values from the shared memory*/
-				pthread_mutex_lock(&(g_shm_pt->node_info[i].ninfo_lock));
-				memcpy(*values, field_addr, strlen((char*)field_addr));
-				pthread_mutex_unlock(&(g_shm_pt->node_info[i].ninfo_lock));
-
-				/*Everything went well, return 0*/
-				return 0;
-//			}
+			char * field_addr = get_field_address(&(g_shm_pt->node_info[i]),field_id);
+			if(field_addr==0) {
+				return -1;
+			}
+			/* Take the lock to read the data into *values from the shared memory*/
+			pthread_mutex_lock(&(g_shm_pt->node_info[i].ninfo_lock));
+			memcpy(*values, field_addr, strlen((char*)field_addr));
+			pthread_mutex_unlock(&(g_shm_pt->node_info[i].ninfo_lock));
+			/*Everything went well, return 0*/
+			return 0;
 		}
 		
 	}

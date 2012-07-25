@@ -67,6 +67,7 @@ int cl_shm_init() {
 	
 	/*The size of the shared memory to be allocated is determined by adding the size of all the data
  	 * each header can carry and then multiplying the sum by the total no of nodes */
+	g_shm_node_sz = sizeof(struct sockaddr_in) + sizeof(pthread_mutex_t);
 	for(int i=0;i<SHM_HEADER_COUNT;i++) {
 		g_shm_node_sz = g_shm_node_sz +  g_shm_header_info[i].size;
 	}
@@ -188,22 +189,25 @@ int cl_shm_get_size(char * name){
 	return -1;
 }
 
+static int node_count;
 
-void* cl_shm_alloc(struct sockaddr_in * sa_in, char * names) {
+int  cl_shm_alloc(struct sockaddr_in * sa_in, char * names,char ** values, int * nc) {
+	int rv;
 	int place=-1;
+	/*Get the place of "names" in the node structure*/
 	for(int i=0;i<SHM_HEADER_COUNT;i++) {
 		if(memcmp(g_shm_header_info[i].name,names,strlen(names))==0) {
 			place = i;
 			break;
 		}
 	}
+	/* Do some sanity checks, return error if they fail */
 	if(place==-1) {
 		printf("Dude its a problem\n");
-		return NULL;
+		return -1;
 	}
-	//The chunk of the memory starts after updater_id and the mutex lock
 	if(!g_shm_base){ 
-		return NULL;
+		return -1;
 	}
 	void * pt = g_shm_chunk_base;
 	int found = 0;
@@ -211,6 +215,7 @@ void* cl_shm_alloc(struct sockaddr_in * sa_in, char * names) {
 	for(int i=0;i<NUM_NODES;i++) {
 		if(memcmp(pt,sa_in,sizeof(struct sockaddr_in))==0) {
 			found = 1;
+			*nc = i;
 			break;
 		}
 		else {
@@ -219,14 +224,41 @@ void* cl_shm_alloc(struct sockaddr_in * sa_in, char * names) {
 	}
 	//Found the socket address! Yay! Just need to place the data
 	if(found==1) {
-		return (pt + SZ_SOCK + g_shm_header_info[place].offset);
+		/*The starting pointer of the node and then move by the size of sockaddr, the lock and the offset of the 
+ 		 * particular "string name".*/
+		*values = (char*)(pt + sizeof(struct sockaddr_in) + sizeof(pthread_mutex_t) + g_shm_header_info[place].offset);
 	}
 	else {
+		/*In the case the node is not found, place the node at the last offset*/
 		memcpy(g_shm_base + *g_shm_last_offset,sa_in,sizeof(struct sockaddr_in));
 		pt = g_shm_base + *g_shm_last_offset;
 		*g_shm_last_offset = *g_shm_last_offset + g_shm_node_sz;
-		return (pt + SZ_SOCK + g_shm_header_info[place].offset);
-	}	
+		*nc = node_count;
+		
+		/*Assign some memory for the lock*/
+		pthread_mutex_t *node_mutex = (pthread_mutex_t*)(pt+sizeof(struct sockaddr_in));	
+	
+		/*Initialise the lock*/
+		size_t mypid = getpid();
+		if(mypid == *g_shm_updater_id) {
+			fprintf(stderr,"%d %d\n",mypid,*g_shm_updater_id);
+			pthread_mutexattr_t attr;
+			pthread_mutexattr_init (&attr);
+			pthread_mutexattr_setpshared (&attr, PTHREAD_PROCESS_SHARED);
+			pthread_mutexattr_setrobust_np (&attr, PTHREAD_MUTEX_ROBUST_NP);
+			if(pthread_mutex_init (node_mutex, &attr)!=0) {
+				fprintf(stderr,"mutex init failed pid %d\n",getpid());
+				return -1;
+			}
+		}	
+		/*Increase the total node count*/
+		node_count++;
+
+		/*Return the position of the data of the particular string name. Move by sizeof a socket address, a lock
+ 		 * and the offset of string name in the process*/
+		*values = (char*)(pt + sizeof(struct sockaddr_in) + sizeof(pthread_mutex_t) + g_shm_header_info[place].offset);
+	}
+	return 0;	
 }
 
 int cl_shm_info_host(struct sockaddr_in * sa_in, char * names, char ** values, int timeout_ms, bool send_asis) {
@@ -346,9 +378,18 @@ int cl_shm_info_host(struct sockaddr_in * sa_in, char * names, char ** values, i
 		}
 			
 		v_buf[rsp->sz] = 0;
+		int nc;
 		/*This buffer is then copied to *values and sent back to the program that called for it*/
-		*values = (char*)cl_shm_alloc(sa_in,names);
+		rv = cl_shm_alloc(sa_in,names,values,&nc);
+		if(rv!=0) {
+			goto Done;
+		}
+		/*Read the lock for this node from the shared memory*/
+		pthread_mutex_t * node_mutex = (pthread_mutex_t*)(g_shm_chunk_base + nc*g_shm_node_sz + sizeof(struct sockaddr_in));
+		/* Take the lock while updating the shared memory so that no one else can read it */
+		pthread_mutex_lock(node_mutex);
 		memcpy(*values,v_buf,rsp->sz + 1);
+		pthread_mutex_unlock(node_mutex);
 		
 	}                                                                                               
 	else {
@@ -385,10 +426,22 @@ int cl_shm_read(struct sockaddr_in * sa_in, char *names, char **values, int time
 		return -1;
 	}
 	for(int i=0;i<NUM_NODES;i++){
+		/*Search for this socket address in the shared memory*/
 		if(memcmp(pt + g_shm_node_sz*i,sa_in,sizeof(struct sockaddr_in))==0){
-			void *socket_data_ptr = pt + g_shm_node_sz*i+ SZ_SOCK + g_shm_header_info[place].offset;
+			/* Found it! */
+			void *socket_data_ptr = pt + g_shm_node_sz*i
+						+ sizeof(struct sockaddr_in)
+						+ sizeof(pthread_mutex_t)
+						+ g_shm_header_info[place].offset;
 			if(*((char*)(socket_data_ptr)) != 0) {
+				/* Read the lock for this node from the memory*/
+				pthread_mutex_t * node_mutex = (pthread_mutex_t*)(pt + sizeof(struct sockaddr_in));
+				/* Take the lock to read the data into *values from the shared memory*/
+				pthread_mutex_lock(node_mutex);
 				memcpy(*values, socket_data_ptr, g_shm_header_info[place].size);
+				pthread_mutex_unlock(node_mutex);
+
+				/*Everything went well, return 0*/
 				return 0;
 			}
 			else {

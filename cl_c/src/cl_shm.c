@@ -20,43 +20,21 @@
 #include "citrusleaf/cf_socket.h"
 
 /* Shared memory global variables */
-typedef struct{
-	size_t updater_id;
-	size_t free_offset;
-	/*Change to count?*/
-
-	pthread_mutex_t shm_lock;
-	shm_ninfo node_info[NUM_NODES];
-} shm;
+shm_info g_shm_info;
 
 
-typedef struct {
-	struct sockaddr_in sa_in;
-	pthread_mutex_t ninfo_lock;
-	shm_ninfo_field field[SHM_FIELD_COUNT];
-} shm_ninfo;
-
-
-
-
+shm_header_info g_shm_header_info[SHM_FIELD_COUNT];
 shm * g_shm_pt;
-int g_shmid;
 bool SHARED_MEMORY=true;
 extern int errno;
-pthread_mutex_t *g_shm_mutex_update;
-pthread_mutex_t *g_shm_mutex_read;
-size_t *g_shm_last_offset;
-//Where the major chunk of the memory starts
-void *g_shm_chunk_base;
 
-shm_header_info g_shm_header_info[SHM_HEADER_COUNT];
 void cl_shm_header_info_init() {
-	char names[SHM_HEADER_COUNT][64] = {	"node\n",
+	char names[SHM_FIELD_COUNT][64] = {	"node\n",
 						"node\npartition-generation\nservices\n",
 						"replicas-read\nreplicas-write\n",
 						"partitions\n"
 					   };
-	size_t size[SHM_HEADER_COUNT] = {	32 + 32, //String name + node name
+	size_t size[SHM_FIELD_COUNT] = {	32 + 32, //String name + node name
 					//string name + node name + partition-generation + max neighbours * size of each 
 						32*3 + 32+8+(NUM_NODES-1)*32,
 					//string name + (namespace + : + partition_number + ; ) * max number of partitions * number of nodes
@@ -64,7 +42,7 @@ void cl_shm_header_info_init() {
 						32 + 4
 					};
 						
-	for(int i=0;i<SHM_HEADER_COUNT;i++) {
+	for(int i=0;i<SHM_FIELD_COUNT;i++) {
 		memcpy(g_shm_header_info[i].name,names[i],64);
 		if(i==0) {
 			g_shm_header_info[i].offset = 0;
@@ -75,109 +53,74 @@ void cl_shm_header_info_init() {
 		g_shm_header_info[i].size = size[i];
 	}
 }
-static size_t g_shm_node_sz;
-static size_t g_shm_sz;
 /* Initialize shared memory segment */
 int cl_shm_init() {
 	key_t key = 12349;
-	void * shm = (void*)0;
+	void * shm_pt = (void*)0;
 	cl_shm_header_info_init();
 	bool eexist=false;
 	
 	/*The size of the shared memory to be allocated is determined by adding the size of all the data
  	 * each header can carry and then multiplying the sum by the total no of nodes */
-	g_shm_node_sz = sizeof(struct sockaddr_in) + sizeof(pthread_mutex_t);
-	for(int i=0;i<SHM_HEADER_COUNT;i++) {
-		g_shm_node_sz = g_shm_node_sz +  g_shm_header_info[i].size;
-	}
-	g_shm_sz = g_shm_node_sz * NUM_NODES;
-	
+	//g_shm_info.node_sz = sizeof(struct sockaddr_in) + sizeof(pthread_mutex_t);
+	//for(int i=0;i<SHM_FIELD_COUNT;i++) {
+	//	g_shm_info.node_sz = g_shm_info.node_sz +  g_shm_header_info[i].size;
+//	}
+//	g_shm_info.shm_sz = g_shm_info.node_sz * NUM_NODES;
+	g_shm_info.shm_sz = sizeof(shm);
+	fprintf(stderr,"Shared memory size %u\n",g_shm_info.shm_sz);
 	/*First try to exclusively create a shared memory, for this only one process will succeed.
  	 * others will fail giving an errno of EEXIST*/
-	 if((g_shmid=shmget(key,g_shm_sz,IPC_CREAT | IPC_EXCL | 0666))<0) {
+	 if((g_shm_info.id = shmget(key,g_shm_info.shm_sz,IPC_CREAT | IPC_EXCL | 0666))<0) {
 		fprintf(stderr,"%s\n",strerror(errno));
 		/*if there are any other errors apart from EEXIST, we can return gracefully */
 		if(errno != EEXIST) {
 			return SHM_ERROR;	
 		}
 		else {
-			/* set eexist to true */
-			eexist = true;
-			fprintf(stderr,"I tried creating an already existing shared memory : pid %d\n",getpid());
-			
+		/*For all the processes that failed to create with EEXIST, we try to get the shared memory again so that we
+ 		* have a valid shmid */
+			if((g_shm_info.id = shmget(key,g_shm_info.shm_sz,IPC_CREAT | 0666))<0) {
+				return SHM_ERROR;
+			}
+	
+			/* Attach to the shared memory */	
+			if((shm_pt = shmat(g_shm_info.id,NULL,0))==(void*)-1) {
+				printf("Error in attaching\n");
+				return SHM_ERROR;
+			}
+		
+			/*The shared memory base pointer*/	
+			g_shm_pt = (shm*)shm_pt;
+			g_shm_pt->free_offset = 0;
 		}
 	}
 	else {
-		fprintf(stderr,"I succeeded in creating shm : pid %d shmid %d\n",getpid(),g_shmid);
+		fprintf(stderr,"I succeeded in creating shm : pid %d shmid %d\n",getpid(),g_shm_info.id);
 		/* Attach to the shared memory */	
-		if((shm = shmat(g_shmid,NULL,0))==(void*)-1) {
+		if((shm_pt = shmat(g_shm_info.id,NULL,0))==(void*)-1) {
 			printf("Error in attaching\n");
 			return SHM_ERROR;
 		}
 		/*The shared memory base pointer*/	
-		g_shm_pt = (shm*)shm;
-		memset(g_shm_pt,0,g_shm_sz);	
-		/* The actual data starts from here, after the updater_id and two locks*/
-//		g_shm_chunk_base = (void*)((char*)g_shm_base + 2*sizeof(size_t) + 2*sizeof(pthread_mutex_t));
-	
-		/* Last allocated offset -- put in shared memory and initialise to zero*/
-//		g_shm_last_offset = (size_t *)(g_shm_base);
-//		*g_shm_last_offset = sizeof(size_t);
-	
-		/*Then comes the update lock. Allocate it some space and then move the last offset to base + sizeof one lock*/
-//		g_shm_mutex_update = (pthread_mutex_t*)(g_shm_base + *g_shm_last_offset);
-//		*g_shm_last_offset = *g_shm_last_offset + sizeof(pthread_mutex_t);
-	
-		/*Then add the read/block level lock*/
-//		g_shm_mutex_read = (pthread_mutex_t*)(g_shm_base + *g_shm_last_offset);
-//		*g_shm_last_offset = *g_shm_last_offset + sizeof(pthread_mutex_t);
-	
+		g_shm_pt = (shm*)shm_pt;
+		memset(g_shm_pt,0,g_shm_info.shm_sz);	
 		/* If you are the one who created the shared memory, only you can initialize the mutexes. Seems fair!
  	 	* because if we let everyone initialize the mutexes, we are in deep deep trouble */	
 		pthread_mutexattr_t attr;
 		pthread_mutexattr_init (&attr);
 		pthread_mutexattr_setpshared (&attr, PTHREAD_PROCESS_SHARED);
 		pthread_mutexattr_setrobust_np (&attr, PTHREAD_MUTEX_ROBUST_NP);
-		if(pthread_mutex_init (g_shm_pt->shm_lock, &attr)!=0) {
+		if(pthread_mutex_init (&(g_shm_pt->shm_lock), &attr)!=0) {
 			fprintf(stderr,"mutex init failed pid %d\n",getpid());
 			return SHM_ERROR;
 		}
 		return SHM_OK;	
 	}
-	/*For all the processes that failed to create with EEXIST, we try to get the shared memory again so that we
- 	* have a valid shmid */
-	if((g_shmid=shmget(key,g_shm_sz,IPC_CREAT | 0666))<0) {
-		return SHM_ERROR;
-	}
-	
-	/* Attach to the shared memory */	
-	if((shm = shmat(g_shmid,NULL,0))==(void*)-1) {
-		printf("Error in attaching\n");
-		return SHM_ERROR;
-	}
-	
-	/*The shared memory base pointer*/	
-	g_shm_base = shm;
-	
-	/* The actual data starts from here, after the updater_id and two locks*/
-	g_shm_chunk_base = (void*)((char*)g_shm_base + 2*sizeof(size_t) + 2*sizeof(pthread_mutex_t));
-
-	/* Last allocated offset -- put in shared memory and initialise to zero*/
-	g_shm_last_offset = (size_t *)(g_shm_base);
-	*g_shm_last_offset = sizeof(size_t);
-	
-	/*Then comes the update lock. Allocate it some space and then move the last offset to base + sizeof one lock*/
-	g_shm_mutex_update = (pthread_mutex_t*)(g_shm_base + *g_shm_last_offset);
-	*g_shm_last_offset = *g_shm_last_offset + sizeof(pthread_mutex_t);
-	
-	/*Then add the read/block level lock*/
-	g_shm_mutex_read = (pthread_mutex_t*)(g_shm_base + *g_shm_last_offset);
-	*g_shm_last_offset = *g_shm_last_offset + sizeof(pthread_mutex_t);
-	
-
 	/* all well? return aok!*/
 	return SHM_OK;
 }
+
 bool update_thread_end=false;
 /* Detach and remove shared memory */
 int cl_shm_free() {
@@ -185,97 +128,79 @@ int cl_shm_free() {
 	update_thread_end = true;
 	pthread_join(shm_update_thr,NULL);
 
-	pthread_mutex_destroy(g_shm_mutex_update);
-	if(shmdt(g_shm_base) < 0 ) return SHM_ERROR;
-	if(shmctl(g_shmid,IPC_RMID,0) < 0 ) return SHM_ERROR;
+	pthread_mutex_destroy(&(g_shm_pt->shm_lock));
+	if(shmdt(g_shm_pt) < 0 ) return SHM_ERROR;
+	if(shmctl(g_shm_info.id,IPC_RMID,0) < 0 ) return SHM_ERROR;
 }
 
 /*Just for testing purposes, we want to see who is updating the shared memory*/
-size_t *g_shm_updater_id;
 void cl_shm_set_updater_id(size_t pid) {
-	g_shm_updater_id = (size_t*)(g_shm_base + *g_shm_last_offset);
-	*g_shm_last_offset = *g_shm_last_offset + sizeof(size_t);
-	*g_shm_updater_id = pid;
+	g_shm_pt->updater_id = pid;
 	return;
 }
 
 /*Get the maximum size under each header which is saved in the shared memory*/
 int cl_shm_get_size(char * name){
-	for(int i=0;i<SHM_HEADER_COUNT;i++){
+	for(int i=0;i<SHM_FIELD_COUNT;i++){
 		if(memcmp(name,g_shm_header_info[i].name,strlen(name))==0)
 			return g_shm_header_info[i].size;
 	}
 	return -1;
 }
 
-static int node_count;
-
-int  cl_shm_alloc(struct sockaddr_in * sa_in, char * names,char ** values, int * nc) {
+char ** get_field_address(shm_ninfo * node_info , int field_id) {
+	switch(field_id) {
+		case 0:
+			return &(node_info->node_name);
+		case 1:
+			return &(node_info->neighbors);
+		case 2:
+			return &(node_info->partitions);
+		case 3:
+			return &(node_info->num_partitions);
+	}
+}
+int  cl_shm_alloc(struct sockaddr_in * sa_in, int field_id,char ** values, int * nc) {
 	int rv;
-	int place=-1;
-	/*Get the place of "names" in the node structure*/
-	for(int i=0;i<SHM_HEADER_COUNT;i++) {
-		if(memcmp(g_shm_header_info[i].name,names,strlen(names))==0) {
-			place = i;
-			break;
-		}
-	}
-	/* Do some sanity checks, return error if they fail */
-	if(place==-1) {
-		printf("Dude its a problem\n");
-		return -1;
-	}
-	if(!g_shm_base){ 
-		return -1;
-	}
-	void * pt = g_shm_chunk_base;
 	int found = 0;
 	//Search for the current sockaddr
 	for(int i=0;i<NUM_NODES;i++) {
-		if(memcmp(pt,sa_in,sizeof(struct sockaddr_in))==0) {
+		if(memcmp(&(g_shm_pt->node_info[i].sa_in),sa_in,sizeof(struct sockaddr_in))==0) {
 			found = 1;
 			*nc = i;
 			break;
 		}
-		else {
-			pt = pt + g_shm_node_sz;
-		}
 	}
 	//Found the socket address! Yay! Just need to place the data
 	if(found==1) {
+		char ** field_addr = get_field_address(&(g_shm_pt->node_info[*nc]),field_id);
 		/*The starting pointer of the node and then move by the size of sockaddr, the lock and the offset of the 
  		 * particular "string name".*/
-		*values = (char*)(pt + sizeof(struct sockaddr_in) + sizeof(pthread_mutex_t) + g_shm_header_info[place].offset);
+		*values = field_addr;
 	}
 	else {
 		/*In the case the node is not found, place the node at the last offset*/
-		memcpy(g_shm_base + *g_shm_last_offset,sa_in,sizeof(struct sockaddr_in));
-		pt = g_shm_base + *g_shm_last_offset;
-		*g_shm_last_offset = *g_shm_last_offset + g_shm_node_sz;
-		*nc = node_count;
+		memcpy(&(g_shm_pt->node_info[g_shm_pt->free_offset].sa_in),sa_in,sizeof(struct sockaddr_in));
 		
-		/*Assign some memory for the lock*/
-		pthread_mutex_t *node_mutex = (pthread_mutex_t*)(pt+sizeof(struct sockaddr_in));	
-	
 		/*Initialise the lock*/
 		size_t mypid = getpid();
-		if(mypid == *g_shm_updater_id) {
-			fprintf(stderr,"%d %d\n",mypid,*g_shm_updater_id);
+		if(mypid == g_shm_pt->updater_id) {
+			fprintf(stderr,"%d %d\n",mypid,g_shm_pt->updater_id);
 			pthread_mutexattr_t attr;
 			pthread_mutexattr_init (&attr);
 			pthread_mutexattr_setpshared (&attr, PTHREAD_PROCESS_SHARED);
 			pthread_mutexattr_setrobust_np (&attr, PTHREAD_MUTEX_ROBUST_NP);
-			if(pthread_mutex_init (node_mutex, &attr)!=0) {
+			if(pthread_mutex_init (&(g_shm_pt->node_info[g_shm_pt->free_offset].ninfo_lock), &attr)!=0) {
 				fprintf(stderr,"mutex init failed pid %d\n",getpid());
 				return -1;
 			}
 		}	
-		/*Increase the total node count*/
-		node_count++;
+		char ** field_addr = get_field_address(&(g_shm_pt->node_info[g_shm_pt->free_offset]),field_id);
 
 		/*Return the position of the data of the particular string name. Move by sizeof a socket address, a lock
  		 * and the offset of string name in the process*/
-		*values = (char*)(pt + sizeof(struct sockaddr_in) + sizeof(pthread_mutex_t) + g_shm_header_info[place].offset);
+		*values = field_addr;
+		g_shm_pt->free_offset++;
 	}
 	return 0;	
 }
@@ -398,17 +323,28 @@ int cl_shm_info_host(struct sockaddr_in * sa_in, char * names, char ** values, i
 			
 		v_buf[rsp->sz] = 0;
 		int nc;
+		int field_id;
+		if(strcmp(names,"node\n")==0) {
+			field_id = 0;
+		}
+		else if(strcmp(names,"node\npartition-generation\nservices\n")==0) {
+			field_id = 1;
+		}
+		else if(strcmp(names,"replicas-read\nreplicas-write\n")==0) {
+			field_id = 2;
+		}
+		else if(strcmp(names,"partitions\n")==0) {
+			field_id = 3;
+		}
 		/*This buffer is then copied to *values and sent back to the program that called for it*/
-		rv = cl_shm_alloc(sa_in,names,values,&nc);
-		if(rv!=0) {
+		rv = cl_shm_alloc(sa_in,field_id,values,&nc);
+		if(*values==NULL ||  rv!=0) {
 			goto Done;
 		}
-		/*Read the lock for this node from the shared memory*/
-		pthread_mutex_t * node_mutex = (pthread_mutex_t*)(g_shm_chunk_base + nc*g_shm_node_sz + sizeof(struct sockaddr_in));
 		/* Take the lock while updating the shared memory so that no one else can read it */
-		pthread_mutex_lock(node_mutex);
+		pthread_mutex_lock(&(g_shm_pt->node_info[nc].ninfo_lock));
 		memcpy(*values,v_buf,rsp->sz + 1);
-		pthread_mutex_unlock(node_mutex);
+		pthread_mutex_unlock(&(g_shm_pt->node_info[nc].ninfo_lock));
 		
 	}                                                                                               
 	else {
@@ -424,48 +360,25 @@ Done:
 	
 }
 
-int cl_shm_read(struct sockaddr_in * sa_in, char *names, char **values, int timeout, bool send_as_is){
+int cl_shm_read(struct sockaddr_in * sa_in, int field_id, char **values, int timeout, bool send_as_is){
 	//Search in the shared memory with sa_in. 
-	int place=-1;
-	for(int i=0;i<SHM_HEADER_COUNT;i++) {
-		if(memcmp(g_shm_header_info[i].name,names,strlen(names))==0) {
-			place = i;
-			break;
-		}
-	}
-	if(place==-1) {
-		printf("Dude its a problem\n");
-		return -1;
-	}
 
-	int n_nodes = NUM_NODES;
-	void * pt = g_shm_chunk_base;
-	if(!pt) {
-		fprintf(stderr,"My chunk base is NULL : pid %d\n",getpid());
-		return -1;
-	}
 	for(int i=0;i<NUM_NODES;i++){
 		/*Search for this socket address in the shared memory*/
-		if(memcmp(pt + g_shm_node_sz*i,sa_in,sizeof(struct sockaddr_in))==0){
+		if(memcmp(&(g_shm_pt->node_info[i].sa_in),sa_in,sizeof(struct sockaddr_in))==0){
 			/* Found it! */
-			void *socket_data_ptr = pt + g_shm_node_sz*i
-						+ sizeof(struct sockaddr_in)
-						+ sizeof(pthread_mutex_t)
-						+ g_shm_header_info[place].offset;
-			if(*((char*)(socket_data_ptr)) != 0) {
-				/* Read the lock for this node from the memory*/
-				pthread_mutex_t * node_mutex = (pthread_mutex_t*)(pt + sizeof(struct sockaddr_in));
+			char ** field_addr = get_field_address(&(g_shm_pt->node_info[i]),field_id);
+				if(field_addr==0) {
+					return -1;
+				}
 				/* Take the lock to read the data into *values from the shared memory*/
-				pthread_mutex_lock(node_mutex);
-				memcpy(*values, socket_data_ptr, g_shm_header_info[place].size);
-				pthread_mutex_unlock(node_mutex);
+				pthread_mutex_lock(&(g_shm_pt->node_info[i].ninfo_lock));
+				memcpy(*values, field_addr, strlen((char*)field_addr));
+				pthread_mutex_unlock(&(g_shm_pt->node_info[i].ninfo_lock));
 
 				/*Everything went well, return 0*/
 				return 0;
-			}
-			else {
-				return -1;
-			}
+//			}
 		}
 		
 	}
@@ -480,7 +393,7 @@ void cl_shm_update(cl_cluster * asc) {
 		pthread_exit(NULL);
 	}
 	//Take Lock
-	int rv = pthread_mutex_trylock(g_shm_mutex_update);
+	int rv = pthread_mutex_trylock(&(g_shm_pt->shm_lock));
 	if(rv==0) {
 		//Update and print owner id
 		size_t self_pid = getpid();

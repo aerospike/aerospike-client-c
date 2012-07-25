@@ -1044,8 +1044,8 @@ cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 		}
 		else {
 //			fprintf(stderr,"Before shm_read for place 1 : pid %d\n",getpid());
-			values = (char*)malloc(cl_shm_get_size("node\npartition-generation\nservices\n"));
-			if (0 != cl_shm_read(sa_in, "node\npartition-generation\nservices\n",&values, INFO_TIMEOUT_MS, false))
+			values = (char*)malloc(SZ_FIELD_NEIGHBORS);
+			if (0 != cl_shm_read(sa_in,1,&values, INFO_TIMEOUT_MS, false))
 			{
 				cl_cluster_node_dun(cn, NODE_DUN_INFO_ERR);
 				continue;
@@ -1118,8 +1118,8 @@ cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 				}
 			}
 			else {
-				values = (char*)malloc(cl_shm_get_size("replicas-read\nreplicas-write\n"));
-				if (0 != cl_shm_read(sa_in, "replicas-read\nreplicas-write\n", &values, INFO_TIMEOUT_MS, false)) 
+				values = (char*)malloc(SZ_FIELD_PARTITIONS);
+				if (0 != cl_shm_read(sa_in,2, &values, INFO_TIMEOUT_MS, false)) 
 				{
                 		// it's a little peculiar to have just talked to the host then have this call
                 		// fail, but sometimes strange things happen.
@@ -1176,12 +1176,12 @@ cluster_ping_address(cl_cluster *asc, struct sockaddr_in *sa_in)
 		}
 	}
 	else {
-		values = (char*)calloc(1,cl_shm_get_size("node\n"));
+		values = (char*)calloc(1,SZ_FIELD_NAME);
 		//Check for malloc failure
 		if(values==NULL) 
 			return;
 
-		if (0 != cl_shm_read(sa_in, "node\n", &values, INFO_TIMEOUT_MS, false)){
+		if (0 != cl_shm_read(sa_in,0, &values, INFO_TIMEOUT_MS, false)){
 		 	return;
 		}
 	}
@@ -1230,11 +1230,11 @@ cluster_get_n_partitions( cl_cluster *asc, cf_vector *sockaddr_in_v )
 			}
 		}	
 		else {
-			values = (char*)calloc(1,cl_shm_get_size("partitions\n"));
+			values = (char*)calloc(1,SZ_FIELD_NUM_PARTITIONS);
 			//Check for malloc failed 
 			if(values==NULL) 
 				return;
-			if (0 != cl_shm_read(sa_in, "partitions\n", &values, INFO_TIMEOUT_MS, false)) {
+			if (0 != cl_shm_read(sa_in,3, &values, INFO_TIMEOUT_MS, false)) {
 				continue;
 			}
 		}

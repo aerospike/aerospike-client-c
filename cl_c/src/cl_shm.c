@@ -20,7 +20,26 @@
 #include "citrusleaf/cf_socket.h"
 
 /* Shared memory global variables */
-void * g_shm_base;
+typedef struct{
+	size_t updater_id;
+	size_t free_offset;
+	/*Change to count?*/
+
+	pthread_mutex_t shm_lock;
+	shm_ninfo node_info[NUM_NODES];
+} shm;
+
+
+typedef struct {
+	struct sockaddr_in sa_in;
+	pthread_mutex_t ninfo_lock;
+	shm_ninfo_field field[SHM_FIELD_COUNT];
+} shm_ninfo;
+
+
+
+
+shm * g_shm_pt;
 int g_shmid;
 bool SHARED_MEMORY=true;
 extern int errno;
@@ -96,22 +115,22 @@ int cl_shm_init() {
 			return SHM_ERROR;
 		}
 		/*The shared memory base pointer*/	
-		g_shm_base = shm;
-		memset(g_shm_base,0,g_shm_sz);	
+		g_shm_pt = (shm*)shm;
+		memset(g_shm_pt,0,g_shm_sz);	
 		/* The actual data starts from here, after the updater_id and two locks*/
-		g_shm_chunk_base = (void*)((char*)g_shm_base + 2*sizeof(size_t) + 2*sizeof(pthread_mutex_t));
+//		g_shm_chunk_base = (void*)((char*)g_shm_base + 2*sizeof(size_t) + 2*sizeof(pthread_mutex_t));
 	
 		/* Last allocated offset -- put in shared memory and initialise to zero*/
-		g_shm_last_offset = (size_t *)(g_shm_base);
-		*g_shm_last_offset = sizeof(size_t);
+//		g_shm_last_offset = (size_t *)(g_shm_base);
+//		*g_shm_last_offset = sizeof(size_t);
 	
 		/*Then comes the update lock. Allocate it some space and then move the last offset to base + sizeof one lock*/
-		g_shm_mutex_update = (pthread_mutex_t*)(g_shm_base + *g_shm_last_offset);
-		*g_shm_last_offset = *g_shm_last_offset + sizeof(pthread_mutex_t);
+//		g_shm_mutex_update = (pthread_mutex_t*)(g_shm_base + *g_shm_last_offset);
+//		*g_shm_last_offset = *g_shm_last_offset + sizeof(pthread_mutex_t);
 	
 		/*Then add the read/block level lock*/
-		g_shm_mutex_read = (pthread_mutex_t*)(g_shm_base + *g_shm_last_offset);
-		*g_shm_last_offset = *g_shm_last_offset + sizeof(pthread_mutex_t);
+//		g_shm_mutex_read = (pthread_mutex_t*)(g_shm_base + *g_shm_last_offset);
+//		*g_shm_last_offset = *g_shm_last_offset + sizeof(pthread_mutex_t);
 	
 		/* If you are the one who created the shared memory, only you can initialize the mutexes. Seems fair!
  	 	* because if we let everyone initialize the mutexes, we are in deep deep trouble */	
@@ -119,7 +138,7 @@ int cl_shm_init() {
 		pthread_mutexattr_init (&attr);
 		pthread_mutexattr_setpshared (&attr, PTHREAD_PROCESS_SHARED);
 		pthread_mutexattr_setrobust_np (&attr, PTHREAD_MUTEX_ROBUST_NP);
-		if(pthread_mutex_init (g_shm_mutex_update, &attr)!=0) {
+		if(pthread_mutex_init (g_shm_pt->shm_lock, &attr)!=0) {
 			fprintf(stderr,"mutex init failed pid %d\n",getpid());
 			return SHM_ERROR;
 		}

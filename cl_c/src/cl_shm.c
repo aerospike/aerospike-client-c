@@ -158,16 +158,14 @@ int cl_shm_init() {
 	/* all well? return aok!*/
 	return SHM_OK;
 }
-
+bool update_thread_end=false;
 /* Detach and remove shared memory */
 int cl_shm_free() {
-	  /* Cancel updater thread for shared memory*/
- 	 if(0==pthread_cancel(shm_update_thr)) {
-  //		pthread_join(shm_update_thr,NULL);
-  		pthread_detach(shm_update_thr);
-  	}
+	/* signal the update thread to exit and wait till it exits */
+	update_thread_end = true;
+	pthread_join(shm_update_thr,NULL);
 
-//	pthread_mutex_destroy(g_shm_mutex_update);
+	pthread_mutex_destroy(g_shm_mutex_update);
 	if(shmdt(g_shm_base) < 0 ) return SHM_ERROR;
 	if(shmctl(g_shmid,IPC_RMID,0) < 0 ) return SHM_ERROR;
 }
@@ -405,6 +403,10 @@ int cl_shm_read(struct sockaddr_in * sa_in, char *names, char **values, int time
 #define INFO_TIMEOUT_MS 300
 //extern int errno;
 void cl_shm_update(cl_cluster * asc) {
+	/* Check if the thread is set to exit or not. If it is, gracefully exit*/	
+	if(update_thread_end) {
+		pthread_exit(NULL);
+	}
 	//Take Lock
 	int rv = pthread_mutex_trylock(g_shm_mutex_update);
 	if(rv==0) {

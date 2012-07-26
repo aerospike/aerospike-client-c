@@ -1410,7 +1410,6 @@ cluster_tender_fn(void *gcc_is_ass)
 	return(0);
 }
 
-pthread_t shm_update_thr;
 
 //
 // Initialize the thread that keeps track of the cluster
@@ -1430,9 +1429,9 @@ int citrusleaf_cluster_init()
    	g_clust_tend_speed = 1;
 	cl_shm_init();
 	pthread_create( &tender_thr, 0, cluster_tender_fn, 0);
-	update_thread_end = false;
-	pthread_create( &shm_update_thr, 0, cl_shm_updater_fn, 0);
-	
+	if(SHARED_MEMORY) {
+		pthread_create( &shm_update_thr, 0, cl_shm_updater_fn, 0);
+	}
 	return(0);	
 }
 

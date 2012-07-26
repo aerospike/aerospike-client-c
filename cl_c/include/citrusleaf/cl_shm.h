@@ -42,9 +42,7 @@ typedef struct {
 
 typedef struct{
 	size_t updater_id;
-	size_t free_offset;
-	/*Change to count?*/
-
+	int node_count;
 	pthread_mutex_t shm_lock;
 	shm_ninfo node_info[NUM_NODES];
 } shm;
@@ -54,6 +52,11 @@ typedef struct {
 	int id;
 	size_t shm_sz;
 	size_t node_sz;
+	/*Condition on which the updater thread will exit*/
+	bool update_thread_end_cond;
+	int update_speed;
+
+
 }shm_info;	
 
 typedef struct shm_header_info_s {
@@ -64,7 +67,6 @@ typedef struct shm_header_info_s {
 
 /*Switch to move between shared memory and back*/
 extern bool SHARED_MEMORY;
-extern bool update_thread_end;
 extern shm_header_info g_shm_header_info[SHM_FIELD_COUNT];
 /*Shared memory functions*/
 int cl_shm_init(void);
@@ -72,7 +74,6 @@ extern void * g_shm_base;
 int cl_shm_free();
 extern int g_shmid;
 
-extern pthread_mutex_t *g_shm_mutex;
 void * cl_shm_updater_fn(void *);
 extern pthread_t shm_update_thr;
 int cl_shm_info_host(struct sockaddr_in * sa_in, char * names, char ** values, int timeout_ms, bool send_asis);

@@ -272,9 +272,6 @@ retry:
 	cl_partition_table_destroy_all(asc);
 	
 	pthread_mutex_destroy(&asc->LOCK);
-	if(SHARED_MEMORY) {
-		cl_shm_free();
-	}
 	free(asc);
 
 }
@@ -1439,15 +1436,7 @@ int citrusleaf_cluster_init()
     
    	g_clust_tend_speed = 1;
 	pthread_create( &tender_thr, 0, cluster_tender_fn, 0);
-	if(SHARED_MEMORY) {
-		if (cl_shm_init() !=0) {
-			#ifdef DEBUG
-				fprintf(stderr,"Failed to initialise the shared memory, returning\n");
-			#endif
-			return (-1);
-		}
-		pthread_create( &shm_update_thr, 0, cl_shm_updater_fn, 0);
-	}
+	
 	return(0);	
 }
 

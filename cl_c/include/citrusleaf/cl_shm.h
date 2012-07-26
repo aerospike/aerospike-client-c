@@ -51,7 +51,9 @@ typedef struct{
 	size_t updater_id;
 	int node_count;
 	pthread_mutex_t shm_lock;
-	shm_ninfo node_info[NUM_NODES];
+	/* Change this approach to calculating address 
+ 	 * of all the structures in the shared memory upfront*/
+	shm_ninfo node_info[];
 } shm;
 
 /* This is a global structure which has shared memory information like size,
@@ -72,8 +74,8 @@ extern bool SHARED_MEMORY;
 extern pthread_t shm_update_thr;
 
 /*Shared memory functions*/
-int cl_shm_init(void);
-int cl_shm_free();
+int citrusleaf_shm_free();
+int citrusleaf_shm_init(int num_nodes);
 void * cl_shm_updater_fn(void *);
 int cl_shm_info_host(struct sockaddr_in * sa_in, char * names, int timeout_ms, bool send_asis);
 int cl_shm_read(struct sockaddr_in * sa_in, int field_type, char **values, int timeout, bool send_asis, bool * dun);

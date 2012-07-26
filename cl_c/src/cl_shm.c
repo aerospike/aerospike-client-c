@@ -22,8 +22,7 @@
 #define INFO_TIMEOUT_MS 300
 #define DEBUG 1
 
-/*Do we want shared memory?*/
-bool SHARED_MEMORY=true;
+bool SHARED_MEMORY;
 
 /* Shared memory global variables */
 shm_info g_shm_info;
@@ -35,7 +34,13 @@ shm * g_shm_pt;
 pthread_t shm_update_thr;
 
 /* Initialize shared memory segment */
-int cl_shm_init() {
+int citrusleaf_shm_init(int num_nodes) {
+	/* Time to use shared memory */
+	SHARED_MEMORY = true;
+	
+	/* Create shared memory updater thread */
+	pthread_create( &shm_update_thr, 0, cl_shm_updater_fn, 0);
+
 	/* Get key */
 	key_t key = SHM_KEY;
 #ifdef DEBUG
@@ -50,7 +55,7 @@ int cl_shm_init() {
 	void * shm_pt = (void*)0;
 	
 	/* The size of the shared memory is the size of the shm structure*/
-	g_shm_info.shm_sz = sizeof(shm);
+	g_shm_info.shm_sz = sizeof(shm) + sizeof(shm_ninfo)*num_nodes;
 	
 	/* Fix the update thread end condition to false and update speed to 1*/
 	g_shm_info.update_thread_end_cond = false;
@@ -127,30 +132,6 @@ int cl_shm_init() {
 
 	/* all well? return aok!*/
 	return SHM_OK;
-}
-
-/* Detach and remove shared memory */
-int cl_shm_free() {
-	/* signal the update thread to exit and wait till it exits */
-	g_shm_info.update_thread_end_cond = true;
-	pthread_join(shm_update_thr,NULL);
-
-	/*Destroy all the mutexes - that includes the global lock as well as all the node level locks*/
-	pthread_mutex_destroy(&(g_shm_pt->shm_lock));
-	for(int i=0; i < g_shm_pt->node_count; i++) {
-		pthread_mutex_destroy(&(g_shm_pt->node_info[i].ninfo_lock));	
-	}
-	
-	/*Detach shared memory*/
-	if(shmdt(g_shm_pt) < 0 ) {
-#ifdef DEBUG
-			fprintf(stderr,"Error in detaching from shared memory: %s pid: %d\n",strerror(errno),getpid());
-#endif
-		return SHM_ERROR;
-	}
-	
-	/*Try removing the shared memory - it will fail if any other process is still attached*/
-	if(shmctl(g_shm_info.id,IPC_RMID,0) < 0 ) return SHM_ERROR;
 }
 
 /*Just for testing purposes, we want to see who is updating the shared memory*/
@@ -521,3 +502,29 @@ void * cl_shm_updater_fn(void * gcc_is_ass) {
 	} while(1);
 	return (0);
 }
+
+/* Detach and remove shared memory */
+int citrusleaf_shm_free() {
+	/* signal the update thread to exit and wait till it exits */
+	g_shm_info.update_thread_end_cond = true;
+	pthread_join(shm_update_thr,NULL);
+
+	/*Destroy all the mutexes - that includes the global lock as well as all the node level locks*/
+	pthread_mutex_destroy(&(g_shm_pt->shm_lock));
+	for(int i=0; i < g_shm_pt->node_count; i++) {
+		pthread_mutex_destroy(&(g_shm_pt->node_info[i].ninfo_lock));	
+	}
+	
+	/*Detach shared memory*/
+	if(shmdt(g_shm_pt) < 0 ) {
+#ifdef DEBUG
+			fprintf(stderr,"Error in detaching from shared memory: %s pid: %d\n",strerror(errno),getpid());
+#endif
+		return SHM_ERROR;
+	}
+	
+	/*Try removing the shared memory - it will fail if any other process is still attached*/
+	if(shmctl(g_shm_info.id,IPC_RMID,0) < 0 ) return SHM_ERROR;
+}
+
+

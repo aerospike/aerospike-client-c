@@ -367,8 +367,8 @@ citrusleaf_cluster_add_host(cl_cluster *asc, char const *host_in, short port, in
 	pthread_mutex_unlock(&asc->LOCK);
 
 	// Fire the normal tender function to speed up resolution
-//	if (asc->found_all == false)
-//		cluster_tend(asc);
+	if (asc->found_all == false)
+		cluster_tend(asc);
 
 	if (timeout_ms == 0)	timeout_ms = 100;
 	
@@ -377,7 +377,7 @@ citrusleaf_cluster_add_host(cl_cluster *asc, char const *host_in, short port, in
 		uint64_t start_ms = cf_getms();
 		do {
 			n_tends++;
-//			if (asc->found_all == false) { cluster_tend(asc); }
+			if (asc->found_all == false) { cluster_tend(asc); }
 			if (asc->found_all == false) usleep(1000);
 		} while ((asc->found_all == false) && ((cf_getms() - start_ms) < (unsigned int) timeout_ms) );
 #ifdef DEBUG		

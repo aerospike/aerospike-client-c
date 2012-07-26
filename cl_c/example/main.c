@@ -17,6 +17,7 @@
 
 
 #include "citrusleaf/citrusleaf.h"
+#include "citrusleaf/cl_shm.h"
 
 typedef struct config_s {
 	
@@ -59,24 +60,24 @@ do_example(config *c)
 	// set a non-default write parameter
 	cl_write_parameters cl_wp;
 	cl_write_parameters_set_default(&cl_wp);
-	cl_wp.timeout_ms = 1000;
+	cl_wp.timeout_ms = 100000;
 	
 	if (0 != (rv = citrusleaf_put(c->asc, c->ns, c->set, &o_key, values, 2, &cl_wp))) {
-		fprintf(stderr, "citrusleaf put failed: error %d\n",rv);
+		fprintf(stderr, "citrusleaf put failed: error %d pid: %d\n",rv,getpid());
 		return(-1);
 	}
-	fprintf(stderr, "citrusleaf put succeeded\n");
+	fprintf(stderr, "citrusleaf put succeeded : pid: %d\n",getpid());
 	
 	// Get all the values in this key (enjoy the fine c99 standard)
 	cl_bin *cl_v = 0;
 	uint32_t generation;
 	int 	cl_v_len;
 	if (0 != (rv = citrusleaf_get_all(c->asc, c->ns, c->set, &o_key, &cl_v, &cl_v_len, c->timeout_ms, &generation))) {
-		fprintf(stderr, "get after put failed, but there should be a key here - %d\n",rv);
+		fprintf(stderr, "get after put failed, but there should be a key here - %d pid: %d\n",rv,getpid());
 		if (cl_v)	free(cl_v);
 		return(-1);
 	}
-	fprintf(stderr, "get all returned %d bins:\n",cl_v_len);
+	fprintf(stderr, "get all returned %d bins: pid: %d\n",cl_v_len,getpid());
 	for (int i=0;i<cl_v_len;i++) {
 		fprintf(stderr, "%d:  bin %s ",i,cl_v[i].bin_name);
 		switch (cl_v[i].object.type) {
@@ -97,14 +98,14 @@ do_example(config *c)
 		citrusleaf_bins_free(cl_v, cl_v_len);
 		free(cl_v); // only one free for all bins
 	}
-	fprintf(stderr,"citrusleaf getall succeeded\n");
+	fprintf(stderr,"citrusleaf getall succeeded: pid: %d\n",getpid());
 	
 	// Delete the key you just set
 	if (0 != (rv = citrusleaf_delete(c->asc, c->ns, c->set, &o_key, 0/*default write params*/))) {
-		fprintf(stderr, "citrusleaf delete failed: error %d\n",rv);
+		fprintf(stderr, "citrusleaf delete failed: error %d pid: %d\n",rv,getpid());
 		return(-1);
 	}
-	fprintf(stderr, "citrusleaf delete succeeded\n");
+	fprintf(stderr, "citrusleaf delete succeeded: pid: %d\n",getpid());
 	
 	return(0);
 }
@@ -186,7 +187,11 @@ main(int argc, char **argv)
 		g_config.host,g_config.port,g_config.ns,g_config.set);
 
 	// init the unit before creating any clusters
-	citrusleaf_init();
+	citrusleaf_shm_init(10);
+	int rv = citrusleaf_init();
+	if(rv!=0) {
+		fprintf(stderr,"Citrusleaf init failed\n");
+	}
 	
 	// Create a citrusleaf cluster object for subsequent requests
 	g_config.asc = citrusleaf_cluster_create();
@@ -197,14 +202,15 @@ main(int argc, char **argv)
 	if (g_config.follow == false)
 		citrusleaf_cluster_follow(g_config.asc, false);
 	
-	citrusleaf_cluster_add_host(g_config.asc, g_config.host, g_config.port, 100 /*timeout*/);
-	
+	citrusleaf_cluster_add_host(g_config.asc, g_config.host, g_config.port, 1000000 /*timeout*/);
+	sleep(10);	
 	// Make some example requests against the cluster
 	if (0 != do_example(&g_config)) {
 		fprintf(stderr, "example failed!\n");
 		return(-1);
 	}
-	fprintf(stderr, "example succeeded!\n");
-	
+	fprintf(stderr, "example succeeded! pid is %d\n",getpid());
+	citrusleaf_cluster_shutdown();
+	citrusleaf_shm_free();
 	return(0);
 }

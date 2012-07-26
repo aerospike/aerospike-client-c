@@ -20,6 +20,7 @@
 #include "citrusleaf/cf_socket.h"
 
 #define INFO_TIMEOUT_MS 300
+#define DEBUG 1
 
 /*Do we want shared memory?*/
 bool SHARED_MEMORY=true;
@@ -36,7 +37,20 @@ pthread_t shm_update_thr;
 /* Initialize shared memory segment */
 int cl_shm_init() {
 	/* Get key */
-	key_t key = 12349;
+	key_t key;
+	
+	/* Use ftok to generate a key associated with a file. Every process will get the same key
+ 	 * back if the caller calls the same parameters */
+	key = ftok("/home/sunanda/shar_client/client/client/c_clients/cl_c/shm_key",42);
+	#ifdef DEBUG
+		fprintf(stderr,"Shared memory key is %d\n",key);
+	#endif
+	if(key == -1) {
+		#ifdef DEBUG
+			fprintf(stderr,"Ftok failed with error = %s\n",strerror(errno));
+		#endif
+		return SHM_ERROR;
+	}
 	void * shm_pt = (void*)0;
 	
 	/* The size of the shared memory is the size of the shm structure*/
@@ -52,7 +66,7 @@ int cl_shm_init() {
 		/*if there are any other errors apart from EEXIST, we can return gracefully */
 		if(errno != EEXIST) {
 			#ifdef DEBUG
-				fprintf("Error in getting shared memory: %s\n",strerror(errno));
+				fprintf(stderr,"Error in getting shared memory: %s\n",strerror(errno));
 			#endif
 			return SHM_ERROR;	
 		}
@@ -61,7 +75,7 @@ int cl_shm_init() {
  		* have a valid shmid */
 			if((g_shm_info.id = shmget(key,g_shm_info.shm_sz,IPC_CREAT | 0666))<0) {
 				#ifdef DEBUG
-					fprintf("Error in getting shared memory: %s\n",strerror(errno));
+					fprintf(stderr,"Error in getting shared memory: %s\n",strerror(errno));
 				#endif
 				return SHM_ERROR;
 			}
@@ -69,7 +83,7 @@ int cl_shm_init() {
 			/* Attach to the shared memory */	
 			if((shm_pt = shmat(g_shm_info.id,NULL,0))==(void*)-1) {
 				#ifdef DEBUG
-					fprintf("Error in attaching to shared memory: %s pid: %d\n",strerror(errno),getpid());
+					fprintf(stderr,"Error in attaching to shared memory: %s pid: %d\n",strerror(errno),getpid());
 				#endif	
 				return SHM_ERROR;
 			}
@@ -89,7 +103,7 @@ int cl_shm_init() {
 		/* Attach to the shared memory */	
 		if((shm_pt = shmat(g_shm_info.id,NULL,0))==(void*)-1) {
 			#ifdef DEBUG
-				fprintf("Error in attaching to shared memory: %s pid: %d\n",strerror(errno),getpid());
+				fprintf(stderr,"Error in attaching to shared memory: %s pid: %d\n",strerror(errno),getpid());
 			#endif	
 			return SHM_ERROR;
 		}
@@ -394,7 +408,7 @@ int cl_shm_read(struct sockaddr_in * sa_in, int field_id, char **values, int tim
 		if(memcmp(&(g_shm_pt->node_info[i].sa_in),sa_in,sizeof(struct sockaddr_in))==0){
 			/* Found it! */
 			char * field_addr = get_field_address(&(g_shm_pt->node_info[i]),field_id);
-			if(field_addr==0) {
+			if(field_addr==NULL) {
 				#ifdef DEBUG
 					fprintf(stderr,"Failed to return a field address, returning\n");
 				#endif

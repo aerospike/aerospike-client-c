@@ -1683,7 +1683,10 @@ int citrusleaf_init()
 
  	citrusleaf_batch_init();
 
-	citrusleaf_cluster_init();
+	int rv = citrusleaf_cluster_init();
+	if(rv!=0) {
+		return rv;
+	}
 
 #ifdef DEBUG_HISTOGRAM	
     if (NULL == (cf_hist = cf_histogram_create("transaction times")))

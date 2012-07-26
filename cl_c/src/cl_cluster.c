@@ -272,7 +272,9 @@ retry:
 	cl_partition_table_destroy_all(asc);
 	
 	pthread_mutex_destroy(&asc->LOCK);
-	cl_shm_free();
+	if(SHARED_MEMORY) {
+		cl_shm_free();
+	}
 	free(asc);
 
 }
@@ -1043,10 +1045,12 @@ cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 			}
 		}
 		else {
-//			fprintf(stderr,"Before shm_read for place 1 : pid %d\n",getpid());
 			values = (char*)malloc(SZ_FIELD_NEIGHBORS);
 			if (0 != cl_shm_read(sa_in,1,&values, INFO_TIMEOUT_MS, false))
-			{
+			{	
+				#ifdef DEBUG
+					fprintf(stderr,"Reading from the shared memory failed\n");
+				#endif
 				cl_cluster_node_dun(cn, NODE_DUN_INFO_ERR);
 				continue;
 			}
@@ -1427,9 +1431,14 @@ int citrusleaf_cluster_init()
     g_clust_initialized = 1;
     
    	g_clust_tend_speed = 1;
-	cl_shm_init();
 	pthread_create( &tender_thr, 0, cluster_tender_fn, 0);
 	if(SHARED_MEMORY) {
+		if (cl_shm_init() !=0) {
+			#ifdef DEBUG
+				fprintf(stderr,"Failed to initialise the shared memory, returning\n");
+			#endif
+			return (-1);
+		}
 		pthread_create( &shm_update_thr, 0, cl_shm_updater_fn, 0);
 	}
 	return(0);	

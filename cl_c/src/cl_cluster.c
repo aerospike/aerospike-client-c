@@ -1046,12 +1046,15 @@ cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 		}
 		else {
 			values = (char*)malloc(SZ_FIELD_NEIGHBORS);
-			if (0 != cl_shm_read(sa_in,1,&values, INFO_TIMEOUT_MS, false))
+			bool dun = false;
+			if (0 != cl_shm_read(sa_in,1,&values, INFO_TIMEOUT_MS, false,&dun))
 			{	
 				#ifdef DEBUG
 					fprintf(stderr,"Reading from the shared memory failed\n");
 				#endif
-				cl_cluster_node_dun(cn, NODE_DUN_INFO_ERR);
+				if(dun==true){
+					cl_cluster_node_dun(cn, NODE_DUN_INFO_ERR);
+				}
 				continue;
 			}
 
@@ -1123,11 +1126,12 @@ cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 			}
 			else {
 				values = (char*)malloc(SZ_FIELD_PARTITIONS);
-				if (0 != cl_shm_read(sa_in,2, &values, INFO_TIMEOUT_MS, false)) 
+				bool dun = false;
+				if (0 != cl_shm_read(sa_in,2, &values, INFO_TIMEOUT_MS, false,&dun)) 
 				{
-                		// it's a little peculiar to have just talked to the host then have this call
-                		// fail, but sometimes strange things happen.
-                		goto Updated;
+                			// it's a little peculiar to have just talked to the host then have this call
+                			// fail, but sometimes strange things happen.
+                			goto Updated;
 				}
 			}
 			
@@ -1180,12 +1184,13 @@ cluster_ping_address(cl_cluster *asc, struct sockaddr_in *sa_in)
 		}
 	}
 	else {
+		bool dun = false;
 		values = (char*)calloc(1,SZ_FIELD_NAME);
 		//Check for malloc failure
-		if(values==NULL) 
+		if(values==NULL) {
 			return;
-
-		if (0 != cl_shm_read(sa_in,0, &values, INFO_TIMEOUT_MS, false)){
+		}
+		if (0 != cl_shm_read(sa_in,0, &values, INFO_TIMEOUT_MS, false,&dun)){
 		 	return;
 		}
 	}
@@ -1234,11 +1239,13 @@ cluster_get_n_partitions( cl_cluster *asc, cf_vector *sockaddr_in_v )
 			}
 		}	
 		else {
+			bool dun = false;
 			values = (char*)calloc(1,SZ_FIELD_NUM_PARTITIONS);
 			//Check for malloc failed 
-			if(values==NULL) 
+			if(values==NULL) {
 				return;
-			if (0 != cl_shm_read(sa_in,3, &values, INFO_TIMEOUT_MS, false)) {
+			}
+			if (0 != cl_shm_read(sa_in,3, &values, INFO_TIMEOUT_MS, false,&dun)) {
 				continue;
 			}
 		}

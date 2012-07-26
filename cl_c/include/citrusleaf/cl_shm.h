@@ -12,6 +12,8 @@
 #define SHM_ERROR -1
 #define SHM_OK 0
 
+#define SHM_KEY 788722985
+
 //The shared memory is divided into nodes, each node has a socket address structure and 
 //the data associated with that structure. 
 #define SZ_SOCK sizeof(struct sockaddr_in)
@@ -36,6 +38,7 @@
 typedef struct {
 	struct sockaddr_in sa_in;
 	pthread_mutex_t ninfo_lock;
+	bool dun;
 	/*Field data*/	
 	char node_name[SZ_FIELD_NODE_NAME];
 	char neighbors[SZ_FIELD_NEIGHBORS];
@@ -72,5 +75,5 @@ extern pthread_t shm_update_thr;
 int cl_shm_init(void);
 int cl_shm_free();
 void * cl_shm_updater_fn(void *);
-int cl_shm_info_host(struct sockaddr_in * sa_in, char * names, char ** values, int timeout_ms, bool send_asis);
-int cl_shm_read(struct sockaddr_in * sa_in, int field_type, char **values, int timeout, bool send_asis);
+int cl_shm_info_host(struct sockaddr_in * sa_in, char * names, int timeout_ms, bool send_asis);
+int cl_shm_read(struct sockaddr_in * sa_in, int field_type, char **values, int timeout, bool send_asis, bool * dun);

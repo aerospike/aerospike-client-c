@@ -10,4 +10,4 @@ default: all
 	$(MAKE) -C cf_base $@
 	$(MAKE) -C cl_c $@
 	$(MAKE) -C cl_libevent $@
-	$(MAKE) -C cl_libevent2 $@
+#	$(MAKE) -C cl_libevent2 $@

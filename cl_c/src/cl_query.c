@@ -593,8 +593,10 @@ static int do_query_monte(cl_cluster_node *node, const char *ns, const uint8_t *
             if ((msg->n_ops || (msg->info1 & CL_MSG_INFO1_NOBINDATA))) {
             	
 				if (mr_state) {
+#ifdef USE_LUA_MR
 					cl_mr_state_row(mr_state, ns_ret, keyd, set_ret, msg->generation, 
 						msg->record_ttl, bins, msg->n_ops, false /*islast*/, cb, udata);
+#endif
 				}
 				else if (cb) {
 					// got one good value? call it a success!
@@ -680,6 +682,7 @@ cl_rv citrusleaf_query(cl_cluster *asc, const char *ns, const cl_query *query, c
     work.mr_state = 0;
 
 	// This must be before the compile because the 
+#ifdef USE_LUA_MR
 	if (mr_job) {
 		
 		// make sure it's in the cache before you do a "get" with the same package name
@@ -692,6 +695,7 @@ cl_rv citrusleaf_query(cl_cluster *asc, const char *ns, const cl_query *query, c
 			return CITRUSLEAF_FAIL_CLIENT;
 		}
 	}
+#endif
 
 	uint8_t		wr_stack_buf[STACK_BUF_SZ];
 	uint8_t		*wr_buf = wr_stack_buf;
@@ -701,7 +705,9 @@ cl_rv citrusleaf_query(cl_cluster *asc, const char *ns, const cl_query *query, c
     int rv = query_compile(ns, query, work.mr_state, mr_job, &wr_buf, &wr_buf_sz);
     if (rv) {
         fprintf(stderr,"do query monte: query compile failed: ");
+#ifdef USE_LUA_MR
         if (work.mr_state) cl_mr_state_put( work.mr_state );
+#endif
         return (rv);
     }
     work.query_buf = wr_buf;
@@ -717,7 +723,9 @@ cl_rv citrusleaf_query(cl_cluster *asc, const char *ns, const cl_query *query, c
 	cl_cluster_get_node_names(asc, &n_nodes, &node_names);
 	if (n_nodes == 0) {
 		fprintf(stderr, "citrusleaf query nodes: don't have any nodes?\n");
+#ifdef USE_LUA_MR
 		if (work.mr_state) cl_mr_state_put( work.mr_state );
+#endif
 		cf_queue_destroy(work.node_complete_q);
 		if (wr_buf && (wr_buf != wr_stack_buf)) { free(wr_buf); wr_buf = 0; }
 		return CITRUSLEAF_FAIL_CLIENT;
@@ -746,10 +754,11 @@ cl_rv citrusleaf_query(cl_cluster *asc, const char *ns, const cl_query *query, c
 
     // do the final reduce, big operation, then done
     if ((retval == 0) && work.mr_state) {
-    
+#ifdef USE_LUA_MR    
     	retval = cl_mr_state_done(work.mr_state, work.cb, work.udata);
     	
     	cl_mr_state_put(work.mr_state);
+#endif
     }
 
     if (wr_buf && (wr_buf != wr_stack_buf)) { free(wr_buf); wr_buf = 0; }

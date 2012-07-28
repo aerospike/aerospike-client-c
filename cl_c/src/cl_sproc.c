@@ -380,7 +380,7 @@ citrusleaf_sproc_package_set(cl_cluster *asc, const char *package_name, const ch
 		}
 	}
 	if (err_str) {
-		fprintf(stderr, "package set: server returned error %d\n",err_str);
+		fprintf(stderr, "package set: server returned error %s\n",err_str);
 		free(values);
 		return CITRUSLEAF_FAIL_UNKNOWN;
 	}	

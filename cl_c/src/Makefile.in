@@ -14,6 +14,9 @@ CC = $(shell perl gcc.pl c)
 CC_V = $(shell perl gcc.pl v)
 
 AS_CFLAGS = -D_FILE_OFFSET_BITS=64 -std=gnu99 -D_REENTRANT
+ifeq (${MR_LANG},LUA)
+AS_CFLAGS += -D USE_LUA_MR
+endif
 
 # Popular values:
 # x86_64 for 64-bit intel

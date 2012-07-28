@@ -26,6 +26,9 @@ extern "C" {
 #define CL_PROTO_RESULT_FAIL_NOXDS 10
 #define CL_PROTO_RESULT_FAIL_UNAVAILABLE 11       // error returned during node down and partition isn't available
 #define CL_PROTO_RESULT_FAIL_INCOMPATIBLE_TYPE 12  // op and bin type incompatibilty
+#define CL_PROTO_RESULT_FAIL_RECORD_TOO_BIG 13
+#define CL_PROTO_RESULT_FAIL_KEY_BUSY 14
+#define CL_PROTO_RESULT_FAIL_SPROC_EXECUTION 15
 
 // Forward definitions
 struct cl_bin_s;

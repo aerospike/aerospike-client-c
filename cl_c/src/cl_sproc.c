@@ -22,6 +22,7 @@
 #include "citrusleaf/citrusleaf-internal.h"
 #include "citrusleaf/cf_atomic.h"
 #include "citrusleaf/proto.h"
+#include "citrusleaf/cf_b64.h"
 #include "citrusleaf/cf_socket.h"
 #include "citrusleaf/cf_vector.h"
 

@@ -239,7 +239,7 @@ int cl_shm_info_host(struct sockaddr_in * sa_in, char * names, int timeout_ms, b
 	/* The id of the field represented by "names"*/
 	int field_id = -1;
 	/* Position of this node in the shared memory */
-	int pos;
+	int pos=0;
 	
 	// Deal with the incoming 'names' parameter
 	// Translate interior ';'  in the passed-in names to \n
@@ -424,6 +424,7 @@ Done:
 
 /* Read from the shared memory and put into the pointer passed (values) */
 int cl_shm_read(struct sockaddr_in * sa_in, int field_id, char **values, int timeout, bool send_as_is, bool * dun){
+
 	//Search in the shared memory with sa_in. 
 	for(int i=0; i<g_shm_pt->node_count; i++){
 		/*Search for this socket address in the shared memory*/

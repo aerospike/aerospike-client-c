@@ -525,6 +525,10 @@ citrusleaf_cluster_get(char const *url)
 	asc = citrusleaf_cluster_create();
 	citrusleaf_cluster_add_host(asc, host, port_i, 0);
 
+	/* node_v might not have been updated just yet*/
+	if(SHARED_MEMORY) {
+		sleep(3);
+	}
     // check to see if we actually got some initial node
 	uint node_v_sz = cf_vector_size(&asc->node_v);
     if (node_v_sz==0) {

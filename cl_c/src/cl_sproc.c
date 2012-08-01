@@ -303,7 +303,7 @@ Cleanup:
 	return rsp;
 }
 
-int
+cl_rv
 citrusleaf_sproc_package_set(cl_cluster *asc, const char *package_name, const char *script_str, cl_script_lang_t lang_t)
 {	
 	if (lang_t!=CL_SCRIPT_LANG_LUA) {
@@ -390,4 +390,304 @@ citrusleaf_sproc_package_set(cl_cluster *asc, const char *package_name, const ch
 	return(0);
 	
 }
+
+
+cl_rv
+citrusleaf_sproc_package_list(cl_cluster *asc, char ***package_names, int *n_packages, cl_script_lang_t lang_t)
+{
+//	fprintf(stderr, "citrusleaf list get \n");
+	
+	*package_names = NULL;
+	*n_packages = 0;
+
+	if (lang_t!=CL_SCRIPT_LANG_LUA) {
+		fprintf(stderr, "unrecognized script language %d\n",lang_t); 
+		return(-1);
+	}	
+	const char *lang = "lua";
+	
+	char info_query[512];
+	if (sizeof(info_query) <= (size_t) snprintf(info_query, sizeof(info_query), "packages:lang=%s;",lang)) {
+		fprintf(stderr, "string too long \n"); 
+		return(-1);
+	}
+	char *values = 0;
+	// shouldn't do this on a blocking thread --- todo, queue
+	if (0 != citrusleaf_info_cluster(asc, info_query, &values, true/*asis*/, 100/*timeout*/)) {
+		fprintf(stderr, "could not get package_list from cluster\n");
+		return(-1);
+	}
+	if (0 == values) {
+		fprintf(stderr, "info cluster success, but no response on server\n");
+		return(-1);
+	}
+	
+	// got response, 
+	// format: request\tresponse
+	// response is packages=p1,p2,p3;
+	
+	char *value = strchr(values, '\t') + 1; // skip request, parse response 
+	
+	int n_tok=0;
+	char *brkb = 0;
+	char *words[20];
+	do {
+		words[n_tok] = strtok_r(value,"=",&brkb);
+		if (0 == words[n_tok]) break;
+		value = 0;
+		words[n_tok+1] = strtok_r(value,";",&brkb);
+		if (0 == words[n_tok+1]) break;
+		char *newline = strchr(words[n_tok+1],'\n');
+		if (newline) *newline = 0;
+		n_tok += 2;
+		if (n_tok >= 20) {
+			fprintf(stderr, "too many tokens\n");
+			free(values);
+			return(-1);
+		}
+	} while(true);
+	
+	char *packages_str = 0;
+	char *error_str = 0;
+	
+	
+	for (int i = 0; i < n_tok ; i += 2) {
+		char *key = words[i];
+		char *value = words[i+1];
+		if (0 == strcmp(key,"packages")) {
+			packages_str = value;
+		}
+		if (0 == strcmp(key,"error")) {
+			error_str = value;
+		}
+	}
+	
+	// now break down all the package names
+	n_tok = 0;
+	do {
+		words[n_tok] = strtok_r(packages_str,",",&brkb);
+		if (0 == words[n_tok]) break;
+		packages_str = NULL;
+		n_tok ++;
+		if (n_tok >= 20) {
+			fprintf(stderr, "too many tokens\n");
+			free(values);
+			return(-1);
+		}
+	} while(true);
+	
+	char **p_names = (char **)malloc(sizeof(char *)*n_tok);
+	if (!p_names) {
+		fprintf(stderr,"cannot allocate\n");
+		free(values);
+		return -1;
+	}
+	
+	for (int i=0; i< n_tok; i++) {
+		p_names[i] = strdup(words[i]);
+	}
+	*package_names = p_names;
+	*n_packages = n_tok;
+
+	free(values);
+	
+	return(0);
+	
+}
+
+cl_rv citrusleaf_sproc_package_delete(cl_cluster *asc, const char *package_name, cl_script_lang_t lang_t)
+{
+	if (lang_t!=CL_SCRIPT_LANG_LUA) {
+		fprintf(stderr, "unrecognized script language %d\n",lang_t);
+		return(-1);
+	}	
+	const char *lang = "lua";
+
+	if (!package_name) {
+		fprintf(stderr, "package name required\n");
+		return CITRUSLEAF_FAIL_CLIENT;
+	}
+
+	char info_query[512];
+	if (sizeof(info_query) <= (size_t) snprintf(info_query, sizeof(info_query), "package-delete:package=%s:lang=%s;",package_name, lang)) {
+		return(-1);
+	}
+	char *values = 0;
+
+	// shouldn't do this on a blocking thread --- todo, queue
+	if (0 != citrusleaf_info_cluster_all(asc, info_query, &values, true/*asis*/, 5000/*timeout*/)) {
+		fprintf(stderr, "could not delete package %s from cluster\n",package_name);
+		return CITRUSLEAF_FAIL_UNKNOWN;
+	}
+	if (0 == values) {
+		fprintf(stderr, "info cluster success, but no response from server\n");
+		return CITRUSLEAF_FAIL_UNKNOWN;
+	}
+	
+	// got response, 
+	// format: request\tresponse
+	// response is a string "ok" or ???
+	
+	char *value = strchr(values, '\t') + 1; // skip request, parse response 
+	
+	int n_tok=0;
+	char *brkb = 0;
+	char *words[20];
+	do {
+		words[n_tok] = strtok_r(value,"=",&brkb);
+		if (0 == words[n_tok]) break;
+		value = 0;
+		words[n_tok+1] = strtok_r(value,";",&brkb);
+		if (0 == words[n_tok+1]) break;
+		char *newline = strchr(words[n_tok+1],'\n');
+		if (newline) *newline = 0;
+		n_tok += 2;
+		if (n_tok >= 20) {
+			fprintf(stderr, "too many tokens\n");
+			return CITRUSLEAF_FAIL_UNKNOWN;
+		}
+	} while(true);
+	
+	char *err_str = 0;
+	
+	for (int i = 0; i < n_tok ; i += 2) {
+		char *key = words[i];
+		char *value = words[i+1];
+		if (0 == strcmp(key,"error")) {
+			err_str = value;
+		} else {
+			//fprintf(stderr, "package set: unknown key %s value %s\n",key,value);
+		}
+	}
+	if (err_str) {
+		fprintf(stderr, "package set: server returned error %s\n",err_str);
+		free(values);
+		return CITRUSLEAF_FAIL_UNKNOWN;
+	}	
+	
+	free(values);
+	
+	return(0);
+	
+}		
+
+cl_rv
+citrusleaf_sproc_package_get_content(cl_cluster *asc, const char *package_name, char **content, int *content_len, cl_script_lang_t lang_t)
+{
+	return citrusleaf_sproc_package_get_with_gen(asc, package_name, content, content_len, NULL, lang_t);
+}
+
+//
+// grab the package from a server
+// Not sure whether to do sync or async. Start with sync.
+int
+citrusleaf_sproc_package_get_with_gen(cl_cluster *asc, const char *package_name, char **content, int *content_len, char **gen, cl_script_lang_t lang_t)
+{
+//	fprintf(stderr, "citrusleaf mr package get %s\n",package_name);
+	if (content) {
+		*content = NULL;
+		*content_len = 0;
+	}
+	if (gen) {
+		*gen = NULL;
+	}
+	
+	if (lang_t!=CL_SCRIPT_LANG_LUA) {
+		fprintf(stderr, "unrecognized script language %d\n",lang_t);
+		return(-1);
+	}	
+	const char *lang = "lua";
+	
+	char info_query[512];
+	if (sizeof(info_query) <= (size_t) snprintf(info_query, sizeof(info_query), "get-package:package=%s;lang=%s;",package_name,lang)) {
+		return(-1);
+	}
+	char *values = 0;
+	// shouldn't do this on a blocking thread --- todo, queue
+	if (0 != citrusleaf_info_cluster(asc, info_query, &values, true/*asis*/, 100/*timeout*/)) {
+		fprintf(stderr, "could not get package %s from cluster\n",package_name);
+		return(-1);
+	}
+	if (0 == values) {
+		fprintf(stderr, "info cluster success, but no package %s on server\n",package_name);
+		return(-1);
+	}
+	
+	// got response, add into cache
+	// format: request\tresponse
+	// response is gen=asdf;script=xxyefu
+	// where gen is a simple string, and script
+	// error is something else entirely
+	
+	char *value = strchr(values, '\t') + 1; // skip request, parse response 
+	
+	int n_tok=0;
+	char *brkb = 0;
+	char *words[20];
+	do {
+		words[n_tok] = strtok_r(value,"=",&brkb);
+		if (0 == words[n_tok]) break;
+		value = 0;
+		words[n_tok+1] = strtok_r(value,";",&brkb);
+		if (0 == words[n_tok+1]) break;
+		char *newline = strchr(words[n_tok+1],'\n');
+		if (newline) *newline = 0;
+		n_tok += 2;
+		if (n_tok >= 20) {
+			fprintf(stderr, "too many tokens\n");
+			free(values);
+			return(-1);
+		}
+	} while(true);
+	
+	char *gen_str = 0;
+	char *script64_str = 0;
+	
+	for (int i = 0; i < n_tok ; i += 2) {
+		char *key = words[i];
+		char *value = words[i+1];
+		if (0 == strcmp(key,"gen")) {
+			gen_str = value;
+		}
+		else if (0 == strcmp(key,"script")) {
+			script64_str = value;
+		} else {
+			fprintf(stderr, "package get: unknown key %s value %s\n",key,value);
+		}
+	}
+	if ( (!gen_str) || (!script64_str)) {
+		fprintf(stderr, "get package did not return enough data\n");
+		free(values);
+		return(-1);
+	}
+	
+	// unbase64
+	int script_str_len = strlen(script64_str);
+	char *script_str = malloc(script_str_len+1); // guarenteed to shrink it
+	if (!script_str) {
+		free(values);
+		return(-1);
+	}
+	int rv = cf_base64_decode(script64_str, script_str, &script_str_len, true/*validate*/);
+	if (rv != 0) {
+		fprintf(stderr,"could not decode base64 from server %s\n",script64_str);
+		free(script_str);
+		free(values);
+		return(-1);
+	}
+	script_str[script_str_len] = 0;
+	
+	if (content) {
+		*content = strdup(script_str);
+		*content_len = script_str_len;
+	}
+	if (gen) {
+		*gen = strdup(gen_str);
+	}
+	free(values);
+	
+	return(0);
+	
+}
+
 

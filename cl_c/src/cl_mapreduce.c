@@ -421,106 +421,29 @@ Cleanup:
 // grab the package from a server
 // Not sure whether to do sync or async. Start with sync.
 int
-citrusleaf_sproc_package_get(cl_cluster *asc, const char *package_name, cl_script_lang_t lang_t)
+citrusleaf_sproc_package_get_and_create(cl_cluster *asc, const char *package_name, cl_script_lang_t lang_t)
 {
-//	fprintf(stderr, "citrusleaf mr package get %s\n",package_name);
+	char *content = NULL;
+	int content_len = 0;
+	char *gen = NULL;
 	
-	if (lang_t!=CL_SCRIPT_LANG_LUA) {
-		fprintf(stderr, "unrecognized script language %d\n",lang_t);
-		return(-1);
-	}	
-	const char *lang = "lua";
-	
-	char info_query[512];
-	if (sizeof(info_query) <= (size_t) snprintf(info_query, sizeof(info_query), "get-package:package=%s;lang=%s;",package_name,lang)) {
-		return(-1);
+	int rsp = citrusleaf_sproc_package_get_with_gen(asc, package_name, &content, &content_len, &gen, lang_t);
+	if (rsp !=0 ) {
+		return rsp;
 	}
-	char *values = 0;
-	// shouldn't do this on a blocking thread --- todo, queue
-	if (0 != citrusleaf_info_cluster(asc, info_query, &values, true/*asis*/, 100/*timeout*/)) {
-		fprintf(stderr, "could not get package %s from cluster\n",package_name);
-		return(-1);
-	}
-	if (0 == values) {
-		fprintf(stderr, "info cluster success, but no package %s on server\n",package_name);
-		return(-1);
-	}
-	
-	// got response, add into cache
-	// format: request\tresponse
-	// response is gen=asdf;script=xxyefu
-	// where gen is a simple string, and script
-	// error is something else entirely
-	
-	char *value = strchr(values, '\t') + 1; // skip request, parse response 
-	
-	int n_tok=0;
-	char *brkb = 0;
-	char *words[20];
-	do {
-		words[n_tok] = strtok_r(value,"=",&brkb);
-		if (0 == words[n_tok]) break;
-		value = 0;
-		words[n_tok+1] = strtok_r(value,";",&brkb);
-		if (0 == words[n_tok+1]) break;
-		char *newline = strchr(words[n_tok+1],'\n');
-		if (newline) *newline = 0;
-		n_tok += 2;
-		if (n_tok >= 20) {
-			fprintf(stderr, "too many tokens\n");
-			free(values);
-			return(-1);
-		}
-	} while(true);
-	
-	char *gen_str = 0;
-	char *script64_str = 0;
-	
-	for (int i = 0; i < n_tok ; i += 2) {
-		char *key = words[i];
-		char *value = words[i+1];
-		if (0 == strcmp(key,"gen")) {
-			gen_str = value;
-		}
-		else if (0 == strcmp(key,"script")) {
-			script64_str = value;
-		} else {
-			fprintf(stderr, "package get: unknown key %s value %s\n",key,value);
-		}
-	}
-	if ( (!gen_str) || (!script64_str)) {
-		fprintf(stderr, "get package did not return enough data\n");
-		free(values);
-		return(-1);
-	}
-	
-	// unbase64
-	int script_str_len = strlen(script64_str);
-	char *script_str = malloc(script_str_len+1); // guarenteed to shrink it
-	if (!script_str) {
-		free(values);
-		return(-1);
-	}
-	int rv = cf_base64_decode(script64_str, script_str, &script_str_len, true/*validate*/);
-	if (rv != 0) {
-		fprintf(stderr,"could not decode base64 from server %s\n",script64_str);
-		free(script_str);
-		free(values);
-		return(-1);
-	}
-	script_str[script_str_len] = 0;
-		
-	mr_package *mrp_p = mr_package_create(package_name, lang, script_str, script_str_len, gen_str );
+			
+	mr_package *mrp_p = mr_package_create(package_name, lang, content, content_len, gen );
 	if (!mrp_p) {
 		fprintf(stderr, "could not create package: %s\n",package_name);
-		free(values);
+		free (content);
+		free (gen);
 		return(-1);
 	}
-	script_str = 0;
-	
+		
 	mr_package_release(mrp_p);
 
-	free(values);
+	free (content);
+	free (gen);
 	
 	return(0);
 	

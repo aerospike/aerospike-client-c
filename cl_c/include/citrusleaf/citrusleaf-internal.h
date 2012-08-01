@@ -236,6 +236,8 @@ int sproc_compile_arg_field(char * const*argk, cl_object * const*argv, int argc,
 
 int citrusleaf_sproc_package_get(cl_cluster *asc, const char *package, cl_script_lang_t lang);
 
+int citrusleaf_sproc_package_get_with_gen(cl_cluster *asc, const char *package_name, char **content, int *content_len, char **gen, cl_script_lang_t lang_t);
+
 #ifdef __cplusplus
 } // end extern "C"
 #endif

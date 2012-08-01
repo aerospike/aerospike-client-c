@@ -628,7 +628,10 @@ citrusleaf_calculate_digest(const char *set, const cl_object *key, cf_digest *di
 // Stored Procedure and Secondary Index Functionalities
 //
 // Stored Procedure Management 
-int citrusleaf_sproc_package_set(cl_cluster *asc, const char *package, const char *content, cl_script_lang_t lang);
+cl_rv citrusleaf_sproc_package_set(cl_cluster *asc, const char *package, const char *content, cl_script_lang_t lang);
+cl_rv citrusleaf_sproc_package_get_content(cl_cluster *asc, const char *package_name, char **content, int *content_len, cl_script_lang_t lang);
+cl_rv citrusleaf_sproc_package_delete(cl_cluster *asc, const char *package, cl_script_lang_t lang);
+cl_rv citrusleaf_sproc_package_list(cl_cluster *asc, char ***package_names, int *n_packages, cl_script_lang_t lang);
 
 // Create and Delete Secondary indexes for the entire cluster
 cl_rv citrusleaf_secondary_index_create(cl_cluster *asc, const char *ns, 

@@ -252,6 +252,7 @@ dump_sockaddr_in(char *prefix, struct sockaddr_in *sa_in)
 }
 
 
+/* gets information back from any of the nodes in the cluster */
 int
 citrusleaf_info_cluster(cl_cluster *asc, char *names, char **values_r, bool send_asis, int timeout_ms)
 {
@@ -290,6 +291,8 @@ citrusleaf_info_cluster(cl_cluster *asc, char *names, char **values_r, bool send
 	return(-1);
 }
 	
+/* gets information back from ALL of the nodes in the cluster */
+/* @TODO error checking in case a node doens't return the same value as another */
 int
 citrusleaf_info_cluster_all(cl_cluster *asc, char *names, char **values_r, bool send_asis, int timeout_ms)
 {

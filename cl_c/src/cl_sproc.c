@@ -304,7 +304,7 @@ Cleanup:
 }
 
 cl_rv
-citrusleaf_sproc_package_set(cl_cluster *asc, const char *package_name, const char *script_str, cl_script_lang_t lang_t)
+citrusleaf_sproc_package_set(cl_cluster *asc, const char *package_name, const char *script_str, char **err, cl_script_lang_t lang_t)
 {	
 	if (lang_t!=CL_SCRIPT_LANG_LUA) {
 		fprintf(stderr, "unrecognized script language %d\n",lang_t);
@@ -380,7 +380,17 @@ citrusleaf_sproc_package_set(cl_cluster *asc, const char *package_name, const ch
 		}
 	}
 	if (err_str) {
-		fprintf(stderr, "package set: server returned error %s\n",err_str);
+		int err_str_len = strlen(err_str);
+		// fprintf(stderr, "package set: server returned error %s\n",err_str);
+		// fprintf(stderr, "package set: server returned error bytes %d\n",err_str_len);
+		char *err_de64 = malloc(err_str_len+1); // guarenteed to shrink it
+		if (!err_str) {
+			free(values);
+			return(-1);
+		}
+		cf_base64_decode(err_str, err_de64, &err_str_len, true/*validate*/);
+		*err = err_de64;
+		err_de64[err_str_len] = 0;
 		free(values);
 		return CITRUSLEAF_FAIL_UNKNOWN;
 	}	

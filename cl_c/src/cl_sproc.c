@@ -509,7 +509,7 @@ cl_rv citrusleaf_sproc_package_delete(cl_cluster *asc, const char *package_name,
 	}
 
 	char info_query[512];
-	if (sizeof(info_query) <= (size_t) snprintf(info_query, sizeof(info_query), "package-delete:package=%s:lang=%s;",package_name, lang)) {
+	if (sizeof(info_query) <= (size_t) snprintf(info_query, sizeof(info_query), "package-delete:package=%s;lang=%s;",package_name, lang)) {
 		return(-1);
 	}
 	char *values = 0;

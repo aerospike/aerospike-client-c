@@ -1812,6 +1812,9 @@ int ev2citrusleaf_init(ev2citrusleaf_lock_callbacks *lock_cb)
 
 	g_lock_cb = lock_cb;
 
+	// Tell cf_base code to use the same locking calls as we'll use here:
+	cf_hook_mutex(lock_cb);
+
 	memset(&g_cl_stats, 0, sizeof(g_cl_stats)); 
 	
 	citrusleaf_cluster_init();

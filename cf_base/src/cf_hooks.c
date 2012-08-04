@@ -10,12 +10,6 @@
 
 cf_mutex_hooks *g_mutex_hooks = (void *)0;
 
-void
-cf_hook_mutex(cf_mutex_hooks *hooks)
-{
-	g_mutex_hooks = hooks;
-}
-
 /*
 void 
 cf_hook_alloc(cf_alloc_hooks *hooks)

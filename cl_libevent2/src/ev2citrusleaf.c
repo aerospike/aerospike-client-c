@@ -42,7 +42,34 @@
 ev2citrusleaf_log_callback cl_log_fn;
 int cl_log_level;
 
-// Pointer to app-implemented mutex lock functions:
+//
+// Default mutex lock functions:
+//
+
+static void* mutex_alloc() {
+	pthread_mutex_t* p_lock = malloc(sizeof(pthread_mutex_t));
+
+	return p_lock && pthread_mutex_init(p_lock, NULL) == 0 ?
+		(void*)p_lock : NULL;
+}
+
+static void mutex_free(void* pv_lock) {
+	pthread_mutex_destroy((pthread_mutex_t*)pv_lock);
+	free(pv_lock);
+}
+
+static inline int mutex_lock(void* pv_lock) {
+	return pthread_mutex_lock((pthread_mutex_t*)pv_lock);
+}
+
+static inline int mutex_unlock(void* pv_lock) {
+	return pthread_mutex_unlock((pthread_mutex_t*)pv_lock);
+}
+
+// Container struct for default mutex lock functions:
+ev2citrusleaf_lock_callbacks g_default_lock_callbacks;
+
+// Pointer to app-implemented or default mutex lock functions:
 ev2citrusleaf_lock_callbacks *g_lock_cb = 0;
 
 //
@@ -1804,10 +1831,20 @@ int ev2citrusleaf_init(ev2citrusleaf_lock_callbacks *lock_cb)
 	}
 	ev2citrusleaf_inited = true;
 
-	g_lock_cb = lock_cb;
+	// TODO - add extra API to specify no locking (for single-threaded use).
+	if (lock_cb) {
+		g_lock_cb = lock_cb;
+	}
+	else {
+		g_lock_cb = &g_default_lock_callbacks;
+		g_lock_cb->alloc = mutex_alloc;
+		g_lock_cb->free = mutex_free;
+		g_lock_cb->lock = mutex_lock;
+		g_lock_cb->unlock = mutex_unlock;
+	}
 
 	// Tell cf_base code to use the same locking calls as we'll use here:
-	cf_hook_mutex(lock_cb);
+	cf_hook_mutex(g_lock_cb);
 
 	memset(&g_cl_stats, 0, sizeof(g_cl_stats)); 
 	

@@ -153,6 +153,25 @@ void ev2citrusleaf_bins_free(ev2citrusleaf_bin *bins, int n_bins);
 
 typedef void (*ev2citrusleaf_callback) (int return_value,  ev2citrusleaf_bin *bins, int n_bins, uint32_t generation, void *udata );
 
+
+// Caller may replace client library's mutex calls with these callbacks (e.g. to
+// include them in an application monitoring scheme). To use this feature, pass
+// a valid ev2citrusleaf_lock_callbacks pointer in ev2citrusleaf_init(). To let
+// the client library do its own mutex calls, pass null in ev2citrusleaf_init().
+//
+// As defined in cf_base/include/citrusleaf/cf_hooks.h:
+//
+//	typedef struct cf_mutex_hooks_s {
+//		// Allocate and initialize new lock.
+//		void *(*alloc)(void);
+//		// Release all storage held in 'lock'.
+//		void (*free)(void *lock);
+//		// Acquire an already-allocated lock at 'lock'.
+//		int (*lock)(void *lock);
+//		// Release a lock at 'lock'.
+//		int (*unlock)(void *lock);
+//	} cf_mutex_hooks;
+
 typedef cf_mutex_hooks ev2citrusleaf_lock_callbacks;
 
 

@@ -733,7 +733,7 @@ cl_cluster_get_node_names(cl_cluster *asc, int *n_nodes, char **node_names)
 }
 
 cl_cluster_node *
-cl_cluster_node_get_byname(cl_cluster *asc, char *name)
+cl_cluster_node_get_byname(cl_cluster *asc, const char *name)
 {
 	pthread_mutex_lock(&asc->LOCK);
 	for (uint i=0;i<cf_vector_size(&asc->node_v);i++) {

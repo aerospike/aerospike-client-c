@@ -111,9 +111,9 @@ typedef struct cl_batch_work {
 
 // wrapper structure
 typedef struct cl_sproc_def {
-        char            *package;
-        char            *fname;
-        cl_sproc_params *params;
+	const char            *package;
+	const char            *fname;
+	const cl_sproc_params *params;
 } cl_sproc_def;
 
 
@@ -173,7 +173,8 @@ void citrusleaf_mr_shutdown(void);
 // left-to-right bits
 // 0-3 priority hint = ClScanningPriority
 // 4 = failOnClusterChange
-// 5-7 = unused 
+// 5 = disconnected job (won't stay connected after it starts)
+// 6-7 = unused
 // 8-15 = scan_pct
  typedef struct cl_scan_param_field_s {
 	uint8_t	byte1;

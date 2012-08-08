@@ -539,6 +539,23 @@ citrusleaf_scan_node (cl_cluster *asc, char *node_name, char *ns, char *set, cl_
 		citrusleaf_get_many_cb cb, void *udata, cl_scan_parameters *scan_p);
 
 //
+// Asynchronous calls to perform operations on many records.
+//
+
+cf_vector *
+citrusleaf_sproc_execute_all_nodes(cl_cluster *asc, char *ns, char *set,
+		const char *package_name, const char *sproc_name, const cl_sproc_params *sproc_params,
+		citrusleaf_get_many_cb cb, void *udata, cl_scan_parameters *scan_p, uint64_t *job_uid_p);
+
+// TODO
+cf_vector *
+citrusleaf_terminate_job_all_nodes(cl_cluster *asc, uint64_t job_uid);
+
+// TODO
+cf_vector *
+citrusleaf_get_job_status_all_nodes(cl_cluster *asc, uint64_t job_uid);
+
+//
 // Get many digest
 // This version of the call acts exactly as the get digest call, but takes an array
 // of digests. Those digests will be retrieved with the same API conventions as the
@@ -666,7 +683,7 @@ void citrusleaf_sproc_params_destroy(cl_sproc_params *sproc_params);
 cl_rv citrusleaf_sproc_params_add_string(cl_sproc_params *sproc_params, const char *param_key, const char *param_value);
 
 cl_rv citrusleaf_sproc_execute(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, 
-	const char *package_name, const char *sproc_name, cl_sproc_params *sproc_params, 
+	const char *package_name, const char *sproc_name, const cl_sproc_params *sproc_params,
 	cl_bin **bins, int *n_bins, int timeout_ms, uint32_t *cl_gen);
 
 

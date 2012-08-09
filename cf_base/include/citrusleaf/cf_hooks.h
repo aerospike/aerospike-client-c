@@ -27,39 +27,36 @@ typedef struct cf_mutex_hooks_s {
 
 extern cf_mutex_hooks* g_mutex_hooks;
 
+static inline void
+cf_hook_mutex(cf_mutex_hooks *hooks)
+{
+	g_mutex_hooks = hooks;
+}
+
 static inline void* 
 cf_hooked_mutex_alloc()
 {
- 
-	return g_mutex_hooks->alloc(); 
+	return g_mutex_hooks ? g_mutex_hooks->alloc() : 0;
 }
 
 static inline void
 cf_hooked_mutex_free(void *lock)
 {
-	if (lock) { 
-		 g_mutex_hooks->free(lock); 
+	if (lock) {
+		g_mutex_hooks->free(lock);
 	}
 }
 
 static inline int
 cf_hooked_mutex_lock(void *lock)
 {
-	if (lock) { 
-		return g_mutex_hooks->lock(lock); 
-	}else{
-		return 0;
-	}
+	return lock ? g_mutex_hooks->lock(lock) : 0;
 }
 
 static inline int
 cf_hooked_mutex_unlock(void *lock)
 {
-	if (lock) { 
-		return g_mutex_hooks->unlock(lock); 
-	}else{
-		return 0;
-	}
+	return lock ? g_mutex_hooks->unlock(lock) : 0;
 }
 
 #ifdef __cplusplus

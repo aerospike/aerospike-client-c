@@ -13,7 +13,7 @@ SYSTEM = $(shell uname -s)
 CC = $(shell perl gcc.pl c)
 CC_V = $(shell perl gcc.pl v)
 
-AS_CFLAGS = -D_FILE_OFFSET_BITS=64 -std=gnu99 -D_REENTRANT
+AS_CFLAGS = -D_FILE_OFFSET_BITS=64 -std=gnu99 -D_REENTRANT -D EXTERNAL_LOCKS
 
 # Popular values:
 # x86_64 for 64-bit intel

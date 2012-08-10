@@ -22,7 +22,7 @@ CFLAGS_NATIVE += -D_REENTRANT -D MARCH_$(ARCH_NATIVE)
 LD = gcc
 LDFLAGS = $(CFLAGS_NATIVE) -L$(DIR_LIB) 
 #-L$(DIR_CF_LIB)
-LIBRARIES = -lcitrusleaf -lssl -lpthread -lrt
+LIBRARIES = -lcitrusleaf -lssl -lpthread -lrt -lcrypto -lz
 
 HEADERS = 
 SOURCES = main.c

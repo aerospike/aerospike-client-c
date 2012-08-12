@@ -73,8 +73,10 @@ typedef struct cl_partition_table_s {
 
 
 struct cl_cluster_s {
-	uint32_t		state;		//bitmap representing state information
+	// Linked list element should be first element in the structure
 	cf_ll_element		ll_e;
+
+	uint32_t		state;		//bitmap representing state information
 	
 	bool		follow;   // possible to create a no-follow cluster
 	bool		nbconnect;	

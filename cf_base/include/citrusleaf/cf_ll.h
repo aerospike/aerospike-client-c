@@ -43,6 +43,7 @@ typedef void (*cf_ll_destructor) (struct cf_ll_element_s *e);
  
 /* cf_ll_element
  * The element that must be included in structures
+ * This element should be the FIRST element in the structure where it is being included
  */
 
 typedef struct cf_ll_element_s {

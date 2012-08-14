@@ -81,7 +81,6 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 	} else {
 		node = cl_cluster_node_get_random(asc);
 	}
-printf("2: do_scan_monte\n");
 	if (!node) {
 #ifdef DEBUG
 		fprintf(stderr, "warning: no healthy nodes in cluster, failing\n");
@@ -89,7 +88,6 @@ printf("2: do_scan_monte\n");
 		return(-1);
 	}
 	fd = cl_cluster_node_fd_get(node, false, asc->nbconnect);
-printf("3: do_scan_monte\n");
 	if (fd == -1) {
 #ifdef DEBUG			
 		fprintf(stderr, "warning: node %s has no file descriptors, retrying transaction\n",node->name);
@@ -98,7 +96,6 @@ printf("3: do_scan_monte\n");
 	}
 	
 	// send it to the cluster - non blocking socket, but we're blocking
-printf("4: do_scan_monte\n");
 	if (0 != cf_socket_write_forever(fd, wr_buf, wr_buf_sz)) {
 #ifdef DEBUG			
 		fprintf(stderr, "Citrusleaf: write timeout or error when writing header to server - %d fd %d errno %d\n",rv,fd,errno);
@@ -111,7 +108,6 @@ printf("4: do_scan_monte\n");
 	
 	do { // multiple CL proto per response
 		
-printf("5: do_scan_monte\n");
 		// Now turn around and read a fine cl_pro - that's the first 8 bytes that has types and lengths
 		if ((rv = cf_socket_read_forever(fd, (uint8_t *) &proto, sizeof(cl_proto) ) ) ) {
 			fprintf(stderr, "network error: errno %d fd %d\n",rv, fd);
@@ -120,15 +116,12 @@ printf("5: do_scan_monte\n");
 #ifdef DEBUG_VERBOSE
 		dump_buf("read proto header from cluster", (uint8_t *) &proto, sizeof(cl_proto));
 #endif	
-printf("5A: do_scan_monte\n");
 		cl_proto_swap(&proto);
 
-printf("6: do_scan_monte\n");
 		if (proto.version != CL_PROTO_VERSION) {
 			fprintf(stderr, "network error: received protocol message of wrong version %d\n",proto.version);
 			return(-1);
 		}
-printf("7: do_scan_monte\n");
 		if (proto.type != CL_PROTO_TYPE_CL_MSG) {
 			fprintf(stderr, "network error: received incorrect message version %d\n",proto.type);
 			return(-1);
@@ -139,7 +132,6 @@ printf("7: do_scan_monte\n");
 		// if there's no error
 		rd_buf_sz =  proto.sz;
 		if (rd_buf_sz > 0) {
-printf("8: do_scan_monte\n");
                                                          
 //            fprintf(stderr, "message read: size %u\n",(uint)proto.sz);
             
@@ -149,7 +141,6 @@ printf("8: do_scan_monte\n");
 				rd_buf = rd_stack_buf;
 			if (rd_buf == NULL) 		return (-1);
 
-printf("9: do_scan_monte\n");
 			if ((rv = cf_socket_read_forever(fd, rd_buf, rd_buf_sz))) {
 				fprintf(stderr, "network error: errno %d fd %d\n",rv, fd);
 				if (rd_buf != rd_stack_buf)	{ free(rd_buf); }
@@ -160,7 +151,6 @@ printf("9: do_scan_monte\n");
 			dump_buf("read msg body header (multiple msgs)", rd_buf, rd_buf_sz);
 #endif	
 		}
-printf("A: do_scan_monte\n");
 		
 		// process all the cl_msg in this proto
 		uint8_t *buf = rd_buf;
@@ -169,7 +159,6 @@ printf("A: do_scan_monte\n");
 		cl_bin *bins;
 		
 		while (pos < rd_buf_sz) {
-printf("B: do_scan_monte\n");
 
 #ifdef DEBUG_VERBOSE
 			dump_buf("individual message header", buf, sizeof(cl_msg));
@@ -180,7 +169,6 @@ printf("B: do_scan_monte\n");
 			cl_msg_swap_header(msg);
 			buf += sizeof(cl_msg);
 			
-printf("C: do_scan_monte\n");
 			if (msg->header_sz != sizeof(cl_msg)) {
 				fprintf(stderr, "received cl msg of unexpected size: expecting %zd found %d, internal error\n",
 					sizeof(cl_msg),msg->header_sz);
@@ -288,7 +276,6 @@ printf("C: do_scan_monte\n");
 		}
 
 	} while ( done == false );
-printf("Z: do_scan_monte\n");
 
 	if (wr_buf != wr_stack_buf) {
 		free(wr_buf);
@@ -308,7 +295,6 @@ Final:
 #ifdef DEBUG_VERBOSE	
 	fprintf(stderr, "exited loop: rv %d\n", rv );
 #endif	
-	printf("do_scan_monte: exited loop: rv %d\n", rv );
 	
 	return(rv);
 }
@@ -335,14 +321,11 @@ extern cl_rv
 citrusleaf_scan_node (cl_cluster *asc, char *node_name, char *ns, char *set, cl_bin *bins, int n_bins, bool nobindata, uint8_t scan_pct,
 		citrusleaf_get_many_cb cb, void *udata, cl_scan_parameters *scan_param)
 {
-scan_pct = 99;
-printf("START citrusleaf_scan_node: scan_pct: %d\n", scan_pct);
 
 	if (n_bins != 0) {
 		fprintf(stderr, "citrusleaf get many: does not yet support bin-specific requests\n");
 	}
 
-printf("2: citrusleaf_scan_node\n");
 	uint info=0;
 	if (nobindata == true) {
 		info = (CL_MSG_INFO1_READ | CL_MSG_INFO1_NOBINDATA);
@@ -350,14 +333,12 @@ printf("2: citrusleaf_scan_node\n");
 		info = CL_MSG_INFO1_READ; 
 	}
 
-printf("3: citrusleaf_scan_node\n");
 	cl_scan_parameters default_scan_param;
 	if (scan_param == NULL) {
 		cl_scan_parameters_set_default(&default_scan_param);
 		scan_param = &default_scan_param;
 	}
 		
-printf("4: citrusleaf_scan_node\n");
 	return( do_scan_monte( asc, node_name, info, 0, ns, set, bins, n_bins, scan_pct, cb, udata, scan_param ) ); 
 }
 

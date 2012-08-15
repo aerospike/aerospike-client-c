@@ -23,7 +23,11 @@ LD = gcc
 #LDFLAGS = $(CFLAGS_NATIVE) -L$(DIR_LIB) 
 LDFLAGS = $(CFLAGS_NATIVE) -L$(DIR_LIB)
 #-L$(DIR_CF_LIB)
-LIBRARIES = -lcitrusleaf -lssl -lpthread -lrt -lcrypto -lz -llua -lm
+LIBRARIES = -lcitrusleaf -lssl -lpthread -lrt -lcrypto -lz 
+ifeq (${MR_LANG},LUA)
+LIBRARIES += -llua -lw
+endif
+
 
 HEADERS = 
 SOURCES = main.c

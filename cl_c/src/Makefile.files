@@ -13,4 +13,4 @@ SOURCES += cl_mapreduce.c
 endif
 #SOURCES += cf_hist.c
 #SOURCES += cf_ll.c cf_vector.c cf_queue.c cf_alloc.c cf_socket.c cf_shash.c
-CF_SOURCES = cf_alloc.c cf_hist.c cf_hooks.c cf_average.c cf_ll.c cf_queue.c cf_shash.c cf_rchash.c cf_socket.c cf_vector.c cf_service.c cf_b64.c
+CF_SOURCES = cf_alloc.c cf_hist.c cf_hooks.c cf_average.c cf_ll.c cf_queue.c cf_shash.c cf_rchash.c cf_socket.c cf_vector.c cf_service.c cf_b64.c cf_random.c

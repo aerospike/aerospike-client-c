@@ -1,8 +1,8 @@
 /*
- *  Citrusleaf Tools
- *  src/ascli.c - command-line interface
+ *  Citrusleaf Example
+ *  src/main.c - Simple example of the Citrusleaf C API
  *
- *  Copyright 2008 by Citrusleaf.  All rights reserved.
+ *  Copyright 2008-2012 by Citrusleaf.  All rights reserved.
  *  THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE.  THE COPYRIGHT NOTICE
  *  ABOVE DOES NOT EVIDENCE ANY ACTUAL OR INTENDED PUBLICATION.
  */

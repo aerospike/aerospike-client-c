@@ -1,6 +1,6 @@
 /*
- *  Citrusleaf Tools
- *  src/ascli.c - command-line interface
+ *  Citrusleaf Example
+ *  src/main.c - LibEvent2 Example 4
  *
  *  Copyright 2008 by Citrusleaf.  All rights reserved.
  *  THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE.  THE COPYRIGHT NOTICE

@@ -1844,8 +1844,8 @@ citrusleaf_calculate_digest(const char *set, const cl_object *key, cf_digest *di
 	}
 
 	cf_digest_compute2((char *)set, set_len, k, key->sz + 1, digest);
-        char *x = (char *)digest;
-        bzero(x + 16, 4);
+        // char *x = (char *)digest;
+        // bzero(x + 16, 4);
 	
 	return(0);
 }

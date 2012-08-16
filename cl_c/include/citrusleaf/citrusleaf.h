@@ -65,7 +65,9 @@ typedef enum cl_rv {
 	CITRUSLEAF_FAIL_UNAVAILABLE = 11,
 	CITRUSLEAF_FAIL_INCOMPATIBLE_TYPE = 12,  // specified operation cannot be performed on that data type
 	CITRUSLEAF_FAIL_RECORD_TOO_BIG = 13,
-	CITRUSLEAF_FAIL_KEY_BUSY = 14
+	CITRUSLEAF_FAIL_KEY_BUSY = 14,
+	CITRUSLEAF_FAIL_DC_DOWN = 15,
+	CITRUSLEAF_FAIL_DC_UP= 16
 } cl_rv;
 
 
@@ -393,6 +395,8 @@ cl_rv
 citrusleaf_async_put_digest(cl_cluster *asc, const char *ns, const cf_digest *d, const cl_bin *bins, int n_bins, 
 						const cl_write_parameters *cl_w_p, uint64_t trid, void *udata);
 
+cl_rv
+citrusleaf_check_cluster_health(cl_cluster *asc);
 
 //
 // Get is like select in SQL. Create a list of bins to get, and call this function to retrieve

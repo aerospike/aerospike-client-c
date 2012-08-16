@@ -237,10 +237,20 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 			}
 			buf = (uint8_t *) op;
 			
-			if (msg->info3 & CL_MSG_INFO3_LAST)	{
-#ifdef DEBUG				
+			if (msg->result_code != CL_RESULT_OK) {
+				// Special case - if we scan a set name that doesn't exist on a
+				// node, it will return "not found" - we unify this with the
+				// case where OK is returned and no callbacks were made. [AKG]
+				if (msg->result_code == CL_RESULT_NOTFOUND) {
+					msg->result_code = CL_RESULT_OK;
+				}
+				rv = (int)msg->result_code;
+				done = true;
+			}
+			else if (msg->info3 & CL_MSG_INFO3_LAST)	{
+#ifdef DEBUG
 				fprintf(stderr, "received final message\n");
-#endif				
+#endif
 				done = true;
 			}
 			else if ((msg->n_ops) || (operation_info & CL_MSG_INFO1_NOBINDATA)) {
@@ -282,12 +292,6 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 	cl_cluster_node_fd_put(node, fd, false);
 	cl_cluster_node_put(node);
 	node = 0;
-	
-	goto Final;
-	
-	if (node) cl_cluster_node_put(node);
-		
-Final:	
 	
 #ifdef DEBUG_VERBOSE	
 	fprintf(stderr, "exited loop: rv %d\n", rv );

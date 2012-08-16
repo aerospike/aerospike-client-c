@@ -1562,6 +1562,25 @@ citrusleaf_async_put_digest(cl_cluster *asc, const char *ns, const cf_digest *di
 
 
 extern cl_rv
+citrusleaf_check_cluster_health(cl_cluster *asc)
+{
+	int number_of_nodes_alive = 0;
+	for (uint i=0;i<cf_vector_size(&asc->node_v);i++) {
+		cl_cluster_node *cn = cf_vector_pointer_get(&asc->node_v, i);
+
+		if (cn->dunned == false){
+			number_of_nodes_alive++;
+		}
+	}
+
+	if (number_of_nodes_alive > 0)
+		return CITRUSLEAF_FAIL_DC_UP;
+	else
+		return CITRUSLEAF_FAIL_DC_DOWN;
+
+}
+
+extern cl_rv
 citrusleaf_delete(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, const cl_write_parameters *cl_w_p)
 {
     if (!g_initialized) return(-1);

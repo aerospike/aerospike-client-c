@@ -446,6 +446,11 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 			}
 			buf = (uint8_t *) op;
 			
+			if (msg->result_code != CL_RESULT_OK) {
+				rv = (int)msg->result_code;
+				done = true;
+			}
+
 			if (msg->info3 & CL_MSG_INFO3_LAST)	{
 #ifdef DEBUG				
 				fprintf(stderr, "received final message\n");
@@ -491,11 +496,7 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 	}
 	
 	cl_cluster_node_fd_put(node, fd, false);
-	
-	goto Final;
-	
-Final:	
-	
+
 #ifdef DEBUG_VERBOSE	
 	fprintf(stderr, "exited loop: rv %d\n", rv );
 #endif	
@@ -666,8 +667,10 @@ do_get_exists_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, i
 	for (int i=0;i<n_nodes;i++) {
 		int z;
 		cf_queue_pop(work.complete_q, &z, CF_QUEUE_FOREVER);
-		if (z != 0)
+		if (z != 0) {
+			fprintf(stderr,"Node %d retcode error: %d\n", i, z);
 			retval = z;
+		}
 	}
 	
 	// free and return what needs freeing and putting
@@ -676,13 +679,7 @@ do_get_exists_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, i
 		cl_cluster_node_put(nodes[i]);	
 	}
 	free(nodes);
-	if (retval != 0) {
-		return( CITRUSLEAF_FAIL_CLIENT );
-	} 
-	else {
-		return ( 0 );
-	}
-
+	return retval;
 }
 
 

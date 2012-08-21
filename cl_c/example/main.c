@@ -187,7 +187,7 @@ main(int argc, char **argv)
 		g_config.host,g_config.port,g_config.ns,g_config.set);
 
 	// init the unit before creating any clusters
-	citrusleaf_shm_init(10);
+	citrusleaf_use_shm(10,788722985);
 	int rv = citrusleaf_init();
 	if(rv!=0) {
 		fprintf(stderr,"Citrusleaf init failed\n");
@@ -211,6 +211,6 @@ main(int argc, char **argv)
 	}
 	fprintf(stderr, "example succeeded! pid is %d\n",getpid());
 	citrusleaf_cluster_shutdown();
-	citrusleaf_shm_free();
+	//citrusleaf_shm_free();
 	return(0);
 }

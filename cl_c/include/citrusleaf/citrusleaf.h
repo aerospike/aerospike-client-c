@@ -150,7 +150,7 @@ int
 citrusleaf_init(void);
 
 void
-citrusleaf_change_tend_speed(int secs);
+citrusleaf_change_tend_period(int secs);
 
 int
 citrusleaf_async_init(int size_limit, int num_receiver_threads, cl_async_fail_cb fail_cb_fn, cl_async_success_cb success_cb_fn);
@@ -221,7 +221,7 @@ extern void citrusleaf_cluster_shutdown(void);
 
 extern cl_cluster * citrusleaf_cluster_get_or_create(char *host, short port, int timeout_ms);
 extern void citrusleaf_cluster_release_or_destroy(cl_cluster **asc);
-extern void citrusleaf_cluster_change_tend_speed(struct cl_cluster_s *asc, int secs);
+extern void citrusleaf_cluster_change_tend_period(struct cl_cluster_s *asc, int secs);
 extern void citrusleaf_cluster_use_nbconnect(struct cl_cluster_s *asc);
 
 // the timeout is how long to wait before the cluster is "settled"

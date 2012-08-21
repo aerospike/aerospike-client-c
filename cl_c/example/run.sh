@@ -1,0 +1,10 @@
+./cl_example &
+./cl_example &
+./cl_example &
+./cl_example &
+./cl_example &
+./cl_example &
+./cl_example &
+./cl_example &
+./cl_example &
+./cl_example &

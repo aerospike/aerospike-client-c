@@ -22,7 +22,7 @@
 #define INFO_TIMEOUT_MS 300
 #define DEBUG 1
 
-bool SHARED_MEMORY;
+bool G_SHARED_MEMORY;
 
 /* Shared memory global variables */
 shm_info g_shm_info;
@@ -30,19 +30,24 @@ shm_info g_shm_info;
 /* Shared memory pointer */
 shm * g_shm_pt;
 
+/* This variable is set to true when we first time do the shm initialization,
+ * so that next time if we call shm_init then looking at it we will come to 
+ * know that we have already done the shm initialization and we do not 
+ * initialize shm again */
+bool g_shm_initiated = false;
+
 /* Shared memory updater thread */
 pthread_t shm_update_thr;
 
 /* Initialize shared memory segment */
-int citrusleaf_shm_init(int num_nodes) {
+int citrusleaf_use_shm(int num_nodes, key_t key) 
+{
+	if (g_shm_initiated) {
+		return SHM_OK;
+	}
 	/* Time to use shared memory */
-	SHARED_MEMORY = true;
+	G_SHARED_MEMORY = true;
 	
-	/* Create shared memory updater thread */
-	pthread_create( &shm_update_thr, 0, cl_shm_updater_fn, 0);
-
-	/* Get key */
-	key_t key = SHM_KEY;
 #ifdef DEBUG
 		fprintf(stderr,"Shared memory key is %d\n",key);
 #endif
@@ -57,9 +62,9 @@ int citrusleaf_shm_init(int num_nodes) {
 	/* The size of the shared memory is the size of the shm structure*/
 	g_shm_info.shm_sz = sizeof(shm) + sizeof(shm_ninfo)*num_nodes;
 	
-	/* Fix the update thread end condition to false and update speed to 1*/
+	/* Fix the update thread end condition to false and update period to 1*/
 	g_shm_info.update_thread_end_cond = false;
-	g_shm_info.update_speed = 1;
+	g_shm_info.update_period = 1;
 	
 	/*First try to exclusively create a shared memory, for this only one process will succeed.
  	 * others will fail giving an errno of EEXIST*/
@@ -67,7 +72,7 @@ int citrusleaf_shm_init(int num_nodes) {
 		/*if there are any other errors apart from EEXIST, we can return gracefully */
 		if(errno != EEXIST) {
 #ifdef DEBUG
-				fprintf(stderr,"Error in getting shared memory: %s\n",strerror(errno));
+				fprintf(stderr,"Error in getting shared memory exclusively : %s\n",strerror(errno));
 #endif
 			return SHM_ERROR;	
 		}
@@ -76,7 +81,7 @@ int citrusleaf_shm_init(int num_nodes) {
  		* have a valid shmid */
 			if((g_shm_info.id = shmget(key,g_shm_info.shm_sz,IPC_CREAT | 0666))<0) {
 #ifdef DEBUG
-					fprintf(stderr,"Error in getting shared memory: %s\n",strerror(errno));
+					fprintf(stderr,"Error in attaching to shared memory: %s\n",strerror(errno));
 #endif
 				return SHM_ERROR;
 			}
@@ -118,7 +123,7 @@ int citrusleaf_shm_init(int num_nodes) {
 		pthread_mutexattr_t attr;
 		pthread_mutexattr_init (&attr);
 		pthread_mutexattr_setpshared (&attr, PTHREAD_PROCESS_SHARED);
-		pthread_mutexattr_setrobust_np (&attr, PTHREAD_MUTEX_ROBUST_NP);
+		pthread_mutexattr_setrobust(&attr, PTHREAD_MUTEX_ROBUST);
 		if(pthread_mutex_init (&(g_shm_pt->shm_lock), &attr)!=0) {
 #ifdef DEBUG
 				fprintf(stderr,"Mutex init failed pid %d\n",getpid());
@@ -127,10 +132,14 @@ int citrusleaf_shm_init(int num_nodes) {
 			return SHM_ERROR;
 		}
 		pthread_mutexattr_destroy(&attr);
-		return SHM_OK;	
 	}
 
+	/* Create shared memory updater thread */
+	pthread_create( &shm_update_thr, 0, cl_shm_updater_fn, 0);
+
+
 	/* all well? return aok!*/
+	g_shm_initiated = true;
 	return SHM_OK;
 }
 
@@ -399,17 +408,35 @@ Alloc:
 	}
 		
 	/* Take the lock while updating the shared memory so that no one else can read it */
-	pthread_mutex_lock(&(g_shm_pt->node_info[pos].ninfo_lock));
-
-	if(rv==0) {
-		memcpy(values,v_buf,rsp->sz + 1);
-		g_shm_pt->node_info[pos].dun = false;
+	int error_in_getting_ninfo_lock = pthread_mutex_lock(&(g_shm_pt->node_info[pos].ninfo_lock));
+	/* Check if the lock is in not recoverable state then exit the process
+	 * With Robust mutexes the lock gets in not recoverable state when the process holding the lock
+ 	 * dies and the other process that gets the lock unlocks it without making it consistent 
+ 	 * (via pthread_mutex_consistent function) */
+    if (error_in_getting_ninfo_lock == ENOTRECOVERABLE) {
+#ifdef DEBUG
+		fprintf(stderr, "Updater lock is found in irrecoverable state. Cannot continue... aborting\n");
+#endif
+        exit(EXIT_FAILURE);
+    }
+	/* Make the lock consistent if the last owner of the lock died while holding the lock */
+	/* We should ideally clean the memory here and then make the lock consistent */
+    if(error_in_getting_ninfo_lock == EOWNERDEAD){
+        pthread_mutex_consistent(&(g_shm_pt->node_info[pos].ninfo_lock));
+    }
+	/* There are only two valid cases when we can access the protected data 
+	 * 1. We get the lock without any error and 
+	 * 2. The thread holding the lock died without releasing it */
+    if(error_in_getting_ninfo_lock == 0 || error_in_getting_ninfo_lock == EOWNERDEAD) {
+		if(rv==0){
+			memcpy(values,v_buf,rsp->sz + 1);
+			g_shm_pt->node_info[pos].dun = false;
+		}
+		else if(rv==2){
+		/* Failed to connect/read/write to the server*/
+			g_shm_pt->node_info[pos].dun = true;
+		}
 	}
-	else if(rv==2){
-	/* Failed to connect/read/write to the server*/
-		g_shm_pt->node_info[pos].dun = true;
-	}
-
 	pthread_mutex_unlock(&(g_shm_pt->node_info[pos].ninfo_lock));
 
 	if(v_buf) free(v_buf);
@@ -439,79 +466,125 @@ int cl_shm_read(struct sockaddr_in * sa_in, int field_id, char **values, int tim
 			}
 			/* Take the lock to read the data into *values from the shared memory so that the updater
 			 * can not update in between */
-			pthread_mutex_lock(&(g_shm_pt->node_info[i].ninfo_lock));
-			memcpy(*values, field_addr, strlen((char*)field_addr));
-			*dun = g_shm_pt->node_info[i].dun;
-			pthread_mutex_unlock(&(g_shm_pt->node_info[i].ninfo_lock));
-			/*Everything went well, return  aok */
-			return SHM_OK;
+			int error_in_getting_ninfo_lock = pthread_mutex_lock(&(g_shm_pt->node_info[i].ninfo_lock));
+			/* Check if the lock is in not recoverable state then exit the process
+			 * With Robust mutexes the lock gets in not recoverable state when the process holding the lock
+			 * dies and the other process that gets the lock unlocks it without making it consistent 
+			 * (via pthread_mutex_consistent function) */
+			if(error_in_getting_ninfo_lock == ENOTRECOVERABLE){
+				exit(EXIT_FAILURE);
+			}
+			/* Make the lock consistent if the last owner of the lock died while holding the lock */
+			/* We should ideally clean the memory here and then make the lock consistent */
+			if(error_in_getting_ninfo_lock == EOWNERDEAD){
+				pthread_mutex_consistent(&(g_shm_pt->node_info[i].ninfo_lock));
+			}
+			/* There are only two valid cases when we can access the protected data 
+			 * 1. We get the lock without any error and 
+			 * 2. The thread holding the lock died without releasing it */
+			if(error_in_getting_ninfo_lock == 0 || error_in_getting_ninfo_lock == EOWNERDEAD) {
+				memcpy(*values, field_addr, strlen((char*)field_addr));
+				*dun = g_shm_pt->node_info[i].dun;
+				pthread_mutex_unlock(&(g_shm_pt->node_info[i].ninfo_lock));
+				/*Everything went well, return ok */
+				return SHM_OK;
+			}
+			else{
+				pthread_mutex_unlock(&(g_shm_pt->node_info[i].ninfo_lock));
+				return SHM_ERROR;
+			}
 		}
 
 	}
 	return SHM_ERROR;	
 }
 
+/* This function (cl_shm_update) should only be called from cl_shm_updater_fn
+ * because shm should not be tempered without taking the lock on it and 
+ * we take the lock on shm in cl_shm_updater_fn
+ */
 void cl_shm_update(cl_cluster * asc) {
-	/* Check if the thread is set to exit or not. If it is, gracefully exit*/	
-	if(g_shm_info.update_thread_end_cond) {
-		pthread_exit(NULL);
-	}
-	//Take Lock - only one process can update
-	int rv = pthread_mutex_trylock(&(g_shm_pt->shm_lock));
-	if(rv==0) {
-		//Update the updater id in the shared memory
-		size_t self_pid = getpid();
-		cl_shm_set_updater_id(self_pid);
+	//Update the updater id in the shared memory
+	size_t self_pid = getpid();
+	cl_shm_set_updater_id(self_pid);
 
-		//Update shared memory
-		uint n_hosts = cf_vector_size(&asc->host_str_v);
-		cf_vector_define(sockaddr_in_v, sizeof( struct sockaddr_in ), 0);
-		for (uint i=0;i<n_hosts;i++) {
-			//For debug
-			char *host = cf_vector_pointer_get(&asc->host_str_v, i);	
-	        	int port = cf_vector_integer_get(&asc->host_port_v, i);
-			
-			//Resolve hosts and store them in sockaddr_in_v
-			cl_lookup(asc, cf_vector_pointer_get(&asc->host_str_v, i), 
-					cf_vector_integer_get(&asc->host_port_v, i),
-					&sockaddr_in_v);
-		}
-		for (uint i=0;i<cf_vector_size(&sockaddr_in_v);i++) {
-			struct sockaddr_in *sa_in = cf_vector_getp(&sockaddr_in_v,i);
-			cl_shm_info_host(sa_in,"node",INFO_TIMEOUT_MS, false);
-			cl_shm_info_host(sa_in,"node\npartition-generation\nservices",INFO_TIMEOUT_MS, false);
-			cl_shm_info_host(sa_in,"replicas-read\nreplicas-write",INFO_TIMEOUT_MS,false);
-			cl_shm_info_host(sa_in,"partitions",INFO_TIMEOUT_MS,false);
-		}
+	//Update shared memory
+	uint n_hosts = cf_vector_size(&asc->host_str_v);
+	cf_vector_define(sockaddr_in_v, sizeof( struct sockaddr_in ), 0);
+	for (uint i=0;i<n_hosts;i++) {
+		//For debug
+		char *host = cf_vector_pointer_get(&asc->host_str_v, i);	
+			int port = cf_vector_integer_get(&asc->host_port_v, i);
 		
+		//Resolve hosts and store them in sockaddr_in_v
+		cl_lookup(asc, cf_vector_pointer_get(&asc->host_str_v, i), 
+				cf_vector_integer_get(&asc->host_port_v, i),
+				&sockaddr_in_v);
 	}
-	else {
-		return;
+	for (uint i=0;i<cf_vector_size(&sockaddr_in_v);i++) {
+		struct sockaddr_in *sa_in = cf_vector_getp(&sockaddr_in_v,i);
+		cl_shm_info_host(sa_in,"node",INFO_TIMEOUT_MS, false);
+		cl_shm_info_host(sa_in,"node\npartition-generation\nservices",INFO_TIMEOUT_MS, false);
+		cl_shm_info_host(sa_in,"replicas-read\nreplicas-write",INFO_TIMEOUT_MS,false);
+		cl_shm_info_host(sa_in,"partitions",INFO_TIMEOUT_MS,false);
 	}
 }
 void * cl_shm_updater_fn(void * gcc_is_ass) {
-	uint64_t cnt = 1;
-	do {
-		sleep(1);
-		cf_ll_element *e = cf_ll_get_head(&cluster_ll);
-		while(e) {
-			if((cnt % g_shm_info.update_speed) == 0) {
-				cl_shm_update((cl_cluster*)e);
+	//Take Lock - only one process can update
+	int error_in_getting_shm_lock  = pthread_mutex_lock(&(g_shm_pt->shm_lock));
+	/* Check if the lock is in not recoverable state then exit the process
+	 * With Robust mutexes the lock gets in not recoverable state when the process holding the lock
+	 * dies and the other process that gets the lock unlocks it without making it consistent 
+	 * (via pthread_mutex_consistent function) */
+	if(error_in_getting_shm_lock == ENOTRECOVERABLE){
+		exit(EXIT_FAILURE);
+	}
+	/* Make the lock consistent if the last owner of the lock died while holding the lock */
+	/* We should ideally clean the memory here and then make the lock consistent */
+	if(error_in_getting_shm_lock == EOWNERDEAD){
+#ifdef DEBUG
+		fprintf(stderr,"\n\n\n\n\n Previous process got killed \n");
+#endif
+		pthread_mutex_consistent(&(g_shm_pt->shm_lock));
+	}
+#ifdef DEBUG
+	fprintf(stderr,"\n\n process %d took over control with pthread_mutex_lock returning %d \n\n\n\n\n",getpid(), error_in_getting_shm_lock);
+#endif
+	/* There are only two valid cases when we can access the protected data 
+	 * 1. We get the lock without any error and 
+	 * 2. The thread holding the lock died without releasing it */
+	if(error_in_getting_shm_lock == 0 || error_in_getting_shm_lock == EOWNERDEAD) {
+		do {
+			/* Check if the thread is set to exit or not. If it is, gracefully exit*/	
+			if(g_shm_info.update_thread_end_cond) {
+#ifdef DEBUG
+				fprintf(stderr,"\n\n\n\n\n in pthread exit \n");
+#endif
+				pthread_exit(0);
 			}
-		}
-		cnt++;
-	} while(1);
+			sleep(g_shm_info.update_period);
+			cf_ll_element *e = cf_ll_get_head(&cluster_ll);
+			while(e) {
+				cl_shm_update((cl_cluster*)e);
+				e = cf_ll_get_next(e);
+			}
+		} while(1);
+	}
 	return (0);
 }
 
 /* Detach and remove shared memory */
 int citrusleaf_shm_free() {
 	/* signal the update thread to exit and wait till it exits */
+	G_SHARED_MEMORY = false;
 	g_shm_info.update_thread_end_cond = true;
 	pthread_join(shm_update_thr,NULL);
 
 	/*Destroy all the mutexes - that includes the global lock as well as all the node level locks*/
 	pthread_mutex_destroy(&(g_shm_pt->shm_lock));
+#ifdef DEBUG
+	fprintf(stderr,"mutex destroyed: %s pid: %d\n",strerror(errno),getpid());
+#endif
 	for(int i=0; i < g_shm_pt->node_count; i++) {
 		pthread_mutex_destroy(&(g_shm_pt->node_info[i].ninfo_lock));	
 	}

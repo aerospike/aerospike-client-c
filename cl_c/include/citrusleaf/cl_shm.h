@@ -12,7 +12,8 @@
 #define SHM_ERROR -1
 #define SHM_OK 0
 
-#define SHM_KEY 788722985
+/* SHM_KEY is not used anymore since it is being taken from the application now */
+//#define SHM_KEY 788722985
 
 //The shared memory is divided into nodes, each node has a socket address structure and 
 //the data associated with that structure. 
@@ -57,25 +58,25 @@ typedef struct{
 } shm;
 
 /* This is a global structure which has shared memory information like size,
- * its nodes size, and id, the update thread speed and the condition on which it will end itself*/
+ * its nodes size, and id, the update thread period and the condition on which it will end itself*/
 typedef struct {
 	int id;
 	size_t shm_sz;
 	size_t node_sz;
 	/*Condition on which the updater thread will exit*/
 	bool update_thread_end_cond;
-	int update_speed;
+	int update_period;
 }shm_info;	
 
 /*Switch to move between shared memory and back*/
-extern bool SHARED_MEMORY;
+extern bool G_SHARED_MEMORY;
 
 /*The update thread of the shared memory*/
 extern pthread_t shm_update_thr;
 
 /*Shared memory functions*/
 int citrusleaf_shm_free();
-int citrusleaf_shm_init(int num_nodes);
+int citrusleaf_use_shm(int num_nodes, key_t key);
 void * cl_shm_updater_fn(void *);
 int cl_shm_info_host(struct sockaddr_in * sa_in, char * names, int timeout_ms, bool send_asis);
 int cl_shm_read(struct sockaddr_in * sa_in, int field_type, char **values, int timeout, bool send_asis, bool * dun);

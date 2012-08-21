@@ -276,8 +276,6 @@ cf_queue_pop(cf_queue *q, void *buf, int ms_wait)
 	 * waiting thread will be awakened... */
 	if (q->threadsafe) {
 #ifdef EXTERNAL_LOCKS
-		QUEUE_LOCK(q);
-
 		if (CF_Q_EMPTY(q)) {
 			QUEUE_UNLOCK(q);
 			return(CF_QUEUE_EMPTY);

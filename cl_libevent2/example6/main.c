@@ -45,6 +45,9 @@ const int DEFAULT_WRITE_PCT = 20;
 const char BIN_NAME[] = "test-bin-name";
 const char BIN_DATA[] = "test-object";
 
+const int CLUSTER_VERIFY_TRIES = 3;
+const __useconds_t CLUSTER_VERIFY_INTERVAL = 1000 * 1000; // 1 second
+
 #define TRANS_FMT "base %2d, lap %d, op-count %d, key %d"
 #define TRANS_PARAMS(_b, _k) _b, g_bases[_b].lap, g_bases[_b].op_count, _k
 
@@ -363,6 +366,27 @@ static bool begin_cluster_mgr() {
 
 	if (pthread_create(&g_cluster_mgr.thread, NULL, run_cluster_mgr, NULL)) {
 		fprintf(stdout, "ERROR: creating cluster manager thread\n");
+		return false;
+	}
+
+	// Verify cluster is ready.
+	int tries = 0;
+
+	while (tries < CLUSTER_VERIFY_TRIES) {
+		int n = ev2citrusleaf_cluster_get_active_node_count(
+				g_cluster_mgr.p_cluster);
+
+		if (n > 0) {
+			fprintf(stdout, "found %d cluster node%s\n", n, n > 1 ? "s" : "");
+			break;
+		}
+
+		usleep(CLUSTER_VERIFY_INTERVAL);
+		tries++;
+	}
+
+	if (tries == CLUSTER_VERIFY_TRIES) {
+		fprintf(stdout, "ERROR: connecting to cluster\n");
 		return false;
 	}
 

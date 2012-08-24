@@ -10,6 +10,11 @@
 #include <arpa/inet.h> // inet_ntop
 #include <signal.h>
 
+//#include <sys/sysctl.h>
+//#include <linux/sysctl.h>
+//#include <unistd.h>
+//#include <sys/syscall.h>
+
 #include <netdb.h> //gethostbyname_r
 
 #include "citrusleaf/citrusleaf.h"
@@ -21,6 +26,7 @@
 
 #define INFO_TIMEOUT_MS 300
 #define DEBUG 1
+#define SHMMAX_SYS_FILE "/proc/sys/kernel/shmmax"
 
 bool G_SHARED_MEMORY;
 
@@ -38,6 +44,9 @@ bool g_shm_initiated = false;
 
 /* Shared memory updater thread */
 pthread_t shm_update_thr;
+
+int _sysctl(struct __sysctl_args *args );
+#define OSNAMESZ 100
 
 /* Initialize shared memory segment */
 int citrusleaf_use_shm(int num_nodes, key_t key) 
@@ -66,60 +75,127 @@ int citrusleaf_use_shm(int num_nodes, key_t key)
 	g_shm_info.update_thread_end_cond = false;
 	g_shm_info.update_period = 1;
 	
-	/*First try to exclusively create a shared memory, for this only one process will succeed.
- 	 * others will fail giving an errno of EEXIST*/
-	 if((g_shm_info.id = shmget(key,g_shm_info.shm_sz,IPC_CREAT | IPC_EXCL | 0666))<0) {
-		/*if there are any other errors apart from EEXIST, we can return gracefully */
-		if(errno != EEXIST) {
+	// Checking if the value of kernel.shmmax is less than g_shm_info.shm_sz
+	// In that case we should exit specifying the error
+
+	size_t shm_max;
+    FILE *f = fopen(SHMMAX_SYS_FILE, "r");
+
+    if (!f) {
+        fprintf(stderr, "Failed to open file: `%s'\n", SHMMAX_SYS_FILE);
+        return SHM_ERROR;
+    }
+
+    if (fscanf(f, "%zu", &shm_max) != 1) {
+        fprintf(stderr, "Failed to read shmmax from file: `%s'\n", SHMMAX_SYS_FILE);
+        fclose(f);
+        return SHM_ERROR;
+    }
+
+    fclose(f);
+
+/*
+           struct __sysctl_args args;
+           int osname;
+           size_t osnamelth;
+           int name[] = { KERN_SHMMAX};
+
+           memset(&args, 0, sizeof(struct __sysctl_args));
+           args.name = name;
+           args.nlen = sizeof(name)/sizeof(name[0]);
+           args.oldval = &osname;
+           args.oldlenp = &osnamelth;
+
+           osnamelth = sizeof(osname);
+
+           if (syscall(SYS__sysctl, &args) == -1) {
+               perror("_sysctl");
+               exit(EXIT_FAILURE);
+           }
+           fprintf(stderr, "This machine is running %d\n", osname);
+           exit(EXIT_SUCCESS);
+
+*/
+
+/*
+			int name[] = {KERN_SHMMAX};
+			int namelen = 1;
+			int oldval[1];
+			size_t oldlen = sizeof(oldval);
+			int rv = sysctl(name, namelen, (void*) oldval, &oldlen, NULL, 0);
+			if (rv!=0) {
+				fprintf(stderr, "while quering for shared memory size, sysctl returned error: %s\n",
+				strerror(errno));
+				return SHM_ERROR;
+			}
+			size_t shm_max = oldval[0];
+*/
+
 #ifdef DEBUG
-				fprintf(stderr,"Error in getting shared memory exclusively : %s\n",strerror(errno));
+	fprintf(stderr, "shm maximum size on system is %zu \n", shm_max);
 #endif
+
+	if(shm_max < g_shm_info.shm_sz) {
+		fprintf(stderr, "shm maximum size on system is %zu, where as needed by this ", shm_max);
+		fprintf(stderr, "process is %zu.\nYou can increase it by running the ", g_shm_info.shm_sz);
+		fprintf(stderr, "command \"$ sysctl -w kernel.shmmax=<new_size>\"\n");
+		return SHM_ERROR;
+	}
+	
+	// First try to exclusively create a shared memory, for this only one process will succeed.
+ 	// others will fail giving an errno of EEXIST
+	 if((g_shm_info.id = shmget(key,g_shm_info.shm_sz,IPC_CREAT | IPC_EXCL | 0666))<0) {
+		// if there are any other errors apart from EEXIST, we can return gracefully 
+		if(errno != EEXIST) {
+			fprintf(stderr, "Error in getting shared memory exclusively : %s\n", strerror(errno));
 			return SHM_ERROR;	
 		}
 		else {
-		/*For all the processes that failed to create with EEXIST, we try to get the shared memory again so that we
- 		* have a valid shmid */
+		// For all the processes that failed to create with EEXIST, 
+		// we try to get the shared memory again so that we
+ 		// have a valid shmid
 			if((g_shm_info.id = shmget(key,g_shm_info.shm_sz,IPC_CREAT | 0666))<0) {
-#ifdef DEBUG
-					fprintf(stderr,"Error in attaching to shared memory: %s\n",strerror(errno));
-#endif
+				fprintf(stderr,"Error in attaching to shared memory: %s\n",strerror(errno));
 				return SHM_ERROR;
 			}
 	
-			/* Attach to the shared memory */	
+			// Attach to the shared memory
 			if((shm_pt = shmat(g_shm_info.id,NULL,0))==(void*)-1) {
 #ifdef DEBUG
-					fprintf(stderr,"Error in attaching to shared memory: %s pid: %d\n",strerror(errno),getpid());
+				fprintf(stderr,"Error in attaching to shared memory: %s pid: %d\n",strerror(errno),
+				getpid());
 #endif	
 				return SHM_ERROR;
 			}
 		
-			/*The shared memory base pointer*/	
+			// The shared memory base pointer
 			g_shm_pt = (shm*)shm_pt;
 			g_shm_pt->node_count = 0;
 		}
 	}
 	else {
-	/* The process who got the shared memory in the exclusive case */
+	// The process who got the shared memory in the exclusive case
 		
 #ifdef DEBUG
 			fprintf(stderr,"Succeeded in creating shm : pid %d shmid %d\n",getpid(),g_shm_info.id);
 #endif
 		
-		/* Attach to the shared memory */	
+		// Attach to the shared memory
 		if((shm_pt = shmat(g_shm_info.id,NULL,0))==(void*)-1) {
 #ifdef DEBUG
-				fprintf(stderr,"Error in attaching to shared memory: %s pid: %d\n",strerror(errno),getpid());
+			fprintf(stderr,"Error in attaching to shared memory: %s pid: %d\n",strerror(errno),
+			getpid());
 #endif	
 			return SHM_ERROR;
 		}
 
-		/*The shared memory base pointer*/	
+		// The shared memory base pointer
 		g_shm_pt = (shm*)shm_pt;
 		memset(g_shm_pt,0,g_shm_info.shm_sz);	
 
-		/* If you are the one who created the shared memory, only you can initialize the mutexes. Seems fair!
- 	 	* because if we let everyone initialize the mutexes, we are in deep deep trouble */	
+		// If you are the one who created the shared memory, only you can initialize the mutexes. 
+		// Seems fair!
+ 	 	// because if we let everyone initialize the mutexes, we are in deep deep trouble
 		pthread_mutexattr_t attr;
 		pthread_mutexattr_init (&attr);
 		pthread_mutexattr_setpshared (&attr, PTHREAD_PROCESS_SHARED);
@@ -134,11 +210,11 @@ int citrusleaf_use_shm(int num_nodes, key_t key)
 		pthread_mutexattr_destroy(&attr);
 	}
 
-	/* Create shared memory updater thread */
+	// Create shared memory updater thread
 	pthread_create( &shm_update_thr, 0, cl_shm_updater_fn, 0);
 
 
-	/* all well? return aok!*/
+	// all well? return aok!
 	g_shm_initiated = true;
 	return SHM_OK;
 }
@@ -201,7 +277,7 @@ int  cl_shm_alloc(struct sockaddr_in * sa_in, int field_id, char ** values, int 
 			pthread_mutexattr_t attr;
 			pthread_mutexattr_init (&attr);
 			pthread_mutexattr_setpshared (&attr, PTHREAD_PROCESS_SHARED);
-			pthread_mutexattr_setrobust_np (&attr, PTHREAD_MUTEX_ROBUST_NP);
+			pthread_mutexattr_setrobust (&attr, PTHREAD_MUTEX_ROBUST);
 			if(pthread_mutex_init (&(g_shm_pt->node_info[g_shm_pt->node_count].ninfo_lock), &attr)!=0) {
 #ifdef DEBUG
 					fprintf(stderr,"node level mutex init failed pid %d\n",getpid());

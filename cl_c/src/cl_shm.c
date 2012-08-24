@@ -94,43 +94,6 @@ int citrusleaf_use_shm(int num_nodes, key_t key)
 
     fclose(f);
 
-/*
-           struct __sysctl_args args;
-           int osname;
-           size_t osnamelth;
-           int name[] = { KERN_SHMMAX};
-
-           memset(&args, 0, sizeof(struct __sysctl_args));
-           args.name = name;
-           args.nlen = sizeof(name)/sizeof(name[0]);
-           args.oldval = &osname;
-           args.oldlenp = &osnamelth;
-
-           osnamelth = sizeof(osname);
-
-           if (syscall(SYS__sysctl, &args) == -1) {
-               perror("_sysctl");
-               exit(EXIT_FAILURE);
-           }
-           fprintf(stderr, "This machine is running %d\n", osname);
-           exit(EXIT_SUCCESS);
-
-*/
-
-/*
-			int name[] = {KERN_SHMMAX};
-			int namelen = 1;
-			int oldval[1];
-			size_t oldlen = sizeof(oldval);
-			int rv = sysctl(name, namelen, (void*) oldval, &oldlen, NULL, 0);
-			if (rv!=0) {
-				fprintf(stderr, "while quering for shared memory size, sysctl returned error: %s\n",
-				strerror(errno));
-				return SHM_ERROR;
-			}
-			size_t shm_max = oldval[0];
-*/
-
 #ifdef DEBUG
 	fprintf(stderr, "shm maximum size on system is %zu \n", shm_max);
 #endif

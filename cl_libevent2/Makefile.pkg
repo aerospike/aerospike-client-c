@@ -6,7 +6,6 @@ all: libev2citrusleaf
 	$(MAKE) -C example2
 	$(MAKE) -C example3
 	$(MAKE) -C example4
-	$(MAKE) -C example5
 	$(MAKE) -C example6
 	$(MAKE) -C tests/loop_c_ev2
 	@echo "done."
@@ -26,8 +25,6 @@ clean:
 	rm -f example3/obj/*
 	rm -f example4/example4
 	rm -f example4/obj/*
-	rm -f example5/example5
-	rm -f example5/obj/*
 	rm -f example6/example6
 	rm -f example6/obj/*
 	rm -f tests/loop_c_ev2/obj/*

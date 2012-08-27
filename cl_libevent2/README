@@ -1,3 +1,13 @@
+Linux Installation:
+
+Only the libc and openssl packages must be installed to compile the client library.
+For Debian-based distributions, execute:
+sudo apt-get install libc6-dev libssl-dev
+
+For redhat derived distributions such as Fedora Core and Centos, excute:
+sudo yum install openssl-devel glibc-devel
+
+
 Libevent2 has a number of differences with Libevent, has
 clashes with header files. On a machine which has both old libevent and the new 
 libevent2, there can be subtle run-time failures.

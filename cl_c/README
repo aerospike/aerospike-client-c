@@ -1,31 +1,36 @@
-
 Installation for Linux
 
-Only the libc and openssl packages must be installed to compile the client library.
+libc and openssl packages must be installed to compile the client library.
+
 For Debian-based distributions, execute:
-sudo apt-get install libc6-dev libssl-dev
+
+    sudo apt-get install libc6-dev libssl-dev
 
 For redhat derived distributions such as Fedora Core and Centos, excute:
-sudo yum install openssl-devel glibc-devel
 
-Installation of these packages will also install gcc. gcc -version must show a version of 4.1 or better. 
-g++ is also supported, with the same version restriction.
+    sudo yum install openssl-devel glibc-devel
+
+Installation of these packages will also install gcc. 
+gcc -version must show a version of 4.1 or better. 
+g++ is also supported with the same version restriction.
 
 Download the C client tarball and decompress it. 
-tar -xzf citrusleaf_client_c-2.0.23.tgz
 
-There are two ways to use the library: statically link the provided source code into your 
-application, or dynamically link against the library. Statically linking prevents you 
-from having to install the libraries on your target platform; dynamically linking avoids a client
-rebuild if you upgrade the client.  Choose the option that is right for you.
+    tar -xzf citrusleaf_client_c-2.0.23.tgz
 
-In the example subdirectory, you'll find an example 
-makefile and short C program that links against the provided libraries. The provided makefile
-links against local libraries.
+There are two ways to use the library: static link the provided source code into
+your application, or dynamic link against the library. Static linking prevents 
+you from having to install the libraries on your target platform. Dynamic 
+linking avoids a client rebuild if you upgrade the client.  Choose the option
+that is right for you.
 
-The root level 'Makefile' automatically executed make -f src/Makefile.native , which uses
-that GCC -march=native as a compilation target. Other examples, such as src/Makefile.32 and src/Makefile.64,
-build explicitly for 32 and 64 bit environments.
+In the example subdirectory, you'll find an example makefile and short C program
+that links against the provided libraries.
 
-If the resulting executable will be run on multiple cpu platforms, "-march=native" should be
-replaced with "-march=nocona". This turns off cpu specific optimizations.
+The root level Makefile automatically executes "make -f src/Makefile.native", 
+which uses the GCC "-march=native" as a compilation target. Other examples, 
+such as src/Makefile.32 and src/Makefile.64, build explicitly for 32 and 64 
+bit environments.
+
+If the resulting executable will be run on multiple cpu platforms, "-march=native" 
+should be replaced with "-march=nocona". This turns off cpu specific optimizations.

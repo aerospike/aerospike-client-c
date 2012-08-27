@@ -34,7 +34,7 @@
 
 const char DEFAULT_HOST[] = "127.0.0.1";
 const int DEFAULT_PORT = 3000;
-const char DEFAULT_NAMESPACE[] = "rwtest";
+const char DEFAULT_NAMESPACE[] = "test";
 const char DEFAULT_SET[] = "set";
 const int DEFAULT_TIMEOUT_MS = 10;
 const int DEFAULT_NUM_BASES = 16;

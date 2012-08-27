@@ -1,9 +1,6 @@
-SECTION I: INSTALLING SWIG
-	Installing swig:
-	Install swig version 2.0.0 or above from the link http://www.swig.org/download.html
+WORKNIG WITH THE PYTHON CLIENT
 
-SECTION II: LANGUAGE SPECIFIC
-Note:	1. Before creating the language modules, build the C client. To do that, run 'make' from the C directory.
+	1. Before creating the language modules, build the C client. To do that, run 'make' from the C directory.
 	2. For creating the language module, in 'swig' directory, run 'make LANG=<lang_name>' where
 	   <lang_name> is the language you are creating the module for.  
 	3. For cleanup, run 'make clean LANG=<lang_name>'. 
@@ -13,19 +10,19 @@ Note:	1. Before creating the language modules, build the C client. To do that, r
 	   'citrusleaf_get_digest()' should be initialized to 'CL_NULL'. This can be done by calling
 	   citrusleaf_object_init_null(cl_object*).
 	
-	For PYTHON
 	Creating python module
-		1. Install python-devel for writing python extensions. Due to incompatibility issues,
-		   we suggest you to use the same version of python of which you have installed the devel libraries. 
-		   -- For centos, run 'sudo yum install python26-devel.x86_64'. 
-		   * This will create a directory /usr/include/python2.6/ which will be later
+ 		   Installing swig and python-devel:
+	
+		   For centos 5, install swig version 1.3, with default python devel and python (2.4) libraries.
+		   For centos 6 and ubuntu, install swig version 2.0 and above, with default python devel and python (2.6 or 2.7) libraries.
+		   Link to download swig:  http://www.swig.org/download.html
+		   * This will create a directory /usr/include/python2.4(2.6)/ which will be later
 		     included during compilation.
 		   * If you install any other version of python-devel, please change the include directory
 		     in the swig/Makefile.
 		   * The variable name is "DIR_INCLUDE_PYTHON". 
 		   * By default, the directory picked up is corresponding to the current 'INCLUDEPY' path in the system.
 		   
-		   -- For ubuntu, run 'sudo apt-get install python-dev'
 		   
 		2. In 'swig' directory, run 'make LANG=python'
 		3. python/python_citrusleaf.py is a python file which has all the helper function

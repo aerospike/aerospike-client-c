@@ -12,16 +12,13 @@
 #define SHM_ERROR -1
 #define SHM_OK 0
 
-/* SHM_KEY is not used anymore since it is being taken from the application now */
-//#define SHM_KEY 788722985
-
 //The shared memory is divided into nodes, each node has a socket address structure and 
 //the data associated with that structure. 
 #define SZ_SOCK sizeof(struct sockaddr_in)
 #define SHM_FIELD_COUNT 4
 #define SZ_FIELD_NAME 32
 #define SZ_NODE_NAME 32
-#define SZ_NAMESPACE 32
+#define SZ_NAMESPACE 16
 #define SZ_PARTITION_ID sizeof(size_t)
 #define MAX_NEIGHBORS (NUM_NODES-1)
 #define NUM_PARTITIONS 4096
@@ -31,6 +28,10 @@
 #define SZ_FIELD_NEIGHBORS SZ_FIELD_NAME*3 + SZ_NODE_NAME + SZ_PARTITION_GEN + MAX_NEIGHBORS*SZ_NODE_NAME
 #define SZ_FIELD_PARTITIONS 2*(SZ_FIELD_NAME + (SZ_NAMESPACE + 2 + SZ_PARTITION_ID)*NUM_PARTITIONS*NUM_NAMESPACES)
 #define SZ_FIELD_NUM_PARTITIONS SZ_FIELD_NAME + sizeof(size_t)
+
+#define SHMMAX_SYS_FILE "/proc/sys/kernel/shmmax"
+#define DEFAULT_NUM_NODES_FOR_SHM 64
+#define DEFAULT_SHM_KEY 229857887
 
 /* The shm structure has some metadata (updater_id, node_count, global lock)
  * and then start the actual node information. Each node's information is further

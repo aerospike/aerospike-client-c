@@ -26,7 +26,6 @@
 
 #define INFO_TIMEOUT_MS 300
 #define DEBUG 1
-#define SHMMAX_SYS_FILE "/proc/sys/kernel/shmmax"
 
 bool G_SHARED_MEMORY;
 
@@ -51,6 +50,13 @@ int _sysctl(struct __sysctl_args *args );
 /* Initialize shared memory segment */
 int citrusleaf_use_shm(int num_nodes, key_t key) 
 {
+	if (0 >= num_nodes) {
+		num_nodes = DEFAULT_NUM_NODES_FOR_SHM;
+	}
+	
+	if (0==key) {
+		key = DEFAULT_SHM_KEY;
+	}
 	if (g_shm_initiated) {
 		return SHM_OK;
 	}
@@ -58,11 +64,11 @@ int citrusleaf_use_shm(int num_nodes, key_t key)
 	G_SHARED_MEMORY = true;
 	
 #ifdef DEBUG
-		fprintf(stderr,"Shared memory key is %d\n",key);
+	fprintf(stderr,"Shared memory key is %d\n",key);
 #endif
 	if(key == -1) {
 #ifdef DEBUG
-			fprintf(stderr,"Ftok failed with error = %s\n",strerror(errno));
+		fprintf(stderr,"Ftok failed with error = %s\n",strerror(errno));
 #endif
 		return SHM_ERROR;
 	}
@@ -79,20 +85,20 @@ int citrusleaf_use_shm(int num_nodes, key_t key)
 	// In that case we should exit specifying the error
 
 	size_t shm_max;
-    FILE *f = fopen(SHMMAX_SYS_FILE, "r");
+	FILE *f = fopen(SHMMAX_SYS_FILE, "r");
 
-    if (!f) {
-        fprintf(stderr, "Failed to open file: `%s'\n", SHMMAX_SYS_FILE);
-        return SHM_ERROR;
-    }
+	if (!f) {
+		fprintf(stderr, "Failed to open file: `%s'\n", SHMMAX_SYS_FILE);
+		return SHM_ERROR;
+	}
 
-    if (fscanf(f, "%zu", &shm_max) != 1) {
-        fprintf(stderr, "Failed to read shmmax from file: `%s'\n", SHMMAX_SYS_FILE);
-        fclose(f);
-        return SHM_ERROR;
-    }
+	if (fscanf(f, "%zu", &shm_max) != 1) {
+		fprintf(stderr, "Failed to read shmmax from file: `%s'\n", SHMMAX_SYS_FILE);
+		fclose(f);
+		return SHM_ERROR;
+	}
 
-    fclose(f);
+	fclose(f);
 
 #ifdef DEBUG
 	fprintf(stderr, "shm maximum size on system is %zu \n", shm_max);

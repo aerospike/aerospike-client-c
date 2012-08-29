@@ -1036,7 +1036,24 @@ cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 	for (uint i=0;i<cf_vector_size(&cn->sockaddr_in_v);i++) {
 		struct sockaddr_in *sa_in = cf_vector_getp(&cn->sockaddr_in_v, i);
 		char * values = 0;	
-		if(!G_SHARED_MEMORY) {
+		bool not_found_in_shm = false;
+		if(G_SHARED_MEMORY) {
+			values = (char*)malloc(SZ_FIELD_NEIGHBORS);
+			bool dun = false;
+			if (0 != cl_shm_read(sa_in,1,&values, INFO_TIMEOUT_MS, false,&dun))
+			{
+#ifdef DEBUG
+				fprintf(stderr,"Reading from the shared memory failed\n");
+#endif
+				if(dun==true){
+					cl_cluster_node_dun(cn, NODE_DUN_INFO_ERR);
+				}
+				not_found_in_shm = true;
+			}
+
+		}
+
+		if(!G_SHARED_MEMORY || not_found_in_shm){
 			if (0 != citrusleaf_info_host(sa_in, "node\npartition-generation\nservices", &values, INFO_TIMEOUT_MS, false)) 
 			{
 				// todo: this address is no longer right for this node, update the node's list
@@ -1045,21 +1062,7 @@ cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 				continue;
 			}
 		}
-		else {
-			values = (char*)malloc(SZ_FIELD_NEIGHBORS);
-			bool dun = false;
-			if (0 != cl_shm_read(sa_in,1,&values, INFO_TIMEOUT_MS, false,&dun))
-			{	
-				#ifdef DEBUG
-					fprintf(stderr,"Reading from the shared memory failed\n");
-				#endif
-				if(dun==true){
-					cl_cluster_node_dun(cn, NODE_DUN_INFO_ERR);
-				}
-				continue;
-			}
-
-		}
+		
 		cl_cluster_node_ok(cn);
 
 		// reminder: returned list is name1\tvalue1\nname2\tvalue2\n
@@ -1116,23 +1119,25 @@ cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 		for (uint i=0;i<cf_vector_size(&cn->sockaddr_in_v);i++) {
 			struct sockaddr_in *sa_in = cf_vector_getp(&cn->sockaddr_in_v, i);
 			char * values;
-			if(!G_SHARED_MEMORY) {
-				values = 0;
-				if (0 != citrusleaf_info_host(sa_in, "replicas-read\nreplicas-write", &values, INFO_TIMEOUT_MS, false))
-				{
-               		 		// it's a little peculiar to have just talked to the host then have this call
-                			// fail, but sometimes strange things happen.
-          		        	goto Updated;
-				}
-			}
-			else {
+			bool not_found_in_shm = false;
+			if(G_SHARED_MEMORY) {
 				values = (char*)malloc(SZ_FIELD_PARTITIONS);
 				bool dun = false;
 				if (0 != cl_shm_read(sa_in,2, &values, INFO_TIMEOUT_MS, false,&dun)) 
 				{
                 			// it's a little peculiar to have just talked to the host then have this call
                 			// fail, but sometimes strange things happen.
-                			goto Updated;
+					not_found_in_shm = true;
+				}
+			}
+
+			if(!G_SHARED_MEMORY || not_found_in_shm){
+				values = 0;
+				if (0 != citrusleaf_info_host(sa_in, "replicas-read\nreplicas-write", &values, INFO_TIMEOUT_MS, false))
+				{
+               		 		// it's a little peculiar to have just talked to the host then have this call
+                			// fail, but sometimes strange things happen.
+          		        	goto Updated;
 				}
 			}
 			
@@ -1177,14 +1182,10 @@ Updated:
 static void
 cluster_ping_address(cl_cluster *asc, struct sockaddr_in *sa_in)
 {
-	char * values;		
-	if(!G_SHARED_MEMORY) {
-		values = 0;
-		if (0 != citrusleaf_info_host(sa_in, "node", &values, INFO_TIMEOUT_MS, false)){
-			return;
-		}
-	}
-	else {
+	char * values;
+	bool not_found_in_shm = false;
+
+	if(G_SHARED_MEMORY) {
 		bool dun = false;
 		values = (char*)calloc(1,SZ_FIELD_NAME);
 		//Check for malloc failure
@@ -1192,9 +1193,17 @@ cluster_ping_address(cl_cluster *asc, struct sockaddr_in *sa_in)
 			return;
 		}
 		if (0 != cl_shm_read(sa_in,0, &values, INFO_TIMEOUT_MS, false,&dun)){
-		 	return;
+		 	not_found_in_shm = true;
 		}
 	}
+
+	if(!G_SHARED_MEMORY || not_found_in_shm){
+		values = 0;
+		if (0 != citrusleaf_info_host(sa_in, "node", &values, INFO_TIMEOUT_MS, false)){
+			return;
+		}
+	}
+
 	char *value = 0;
 	if (0 != citrusleaf_info_parse_single(values, &value)) {
 		if(values) free(values);
@@ -1233,13 +1242,9 @@ cluster_get_n_partitions( cl_cluster *asc, cf_vector *sockaddr_in_v )
 		
 		struct sockaddr_in *sa_in = cf_vector_getp(sockaddr_in_v, i);
 		char * values;
-		if(!G_SHARED_MEMORY) {
-			values = 0;
-			if (0 != citrusleaf_info_host(sa_in, "partitions", &values, INFO_TIMEOUT_MS, false)) {
-				continue;
-			}
-		}	
-		else {
+		bool not_found_in_shm = false;
+
+		if(G_SHARED_MEMORY) {
 			bool dun = false;
 			values = (char*)calloc(1,SZ_FIELD_NUM_PARTITIONS);
 			//Check for malloc failed 
@@ -1247,9 +1252,17 @@ cluster_get_n_partitions( cl_cluster *asc, cf_vector *sockaddr_in_v )
 				return;
 			}
 			if (0 != cl_shm_read(sa_in,3, &values, INFO_TIMEOUT_MS, false,&dun)) {
+				not_found_in_shm = true;
+			}
+		}
+
+		if(!G_SHARED_MEMORY || not_found_in_shm){
+			values = 0;
+			if (0 != citrusleaf_info_host(sa_in, "partitions", &values, INFO_TIMEOUT_MS, false)) {
 				continue;
 			}
 		}
+
 		char *value = 0;
 		if (0 != citrusleaf_info_parse_single(values, &value)) {
 			if(values) free(values);

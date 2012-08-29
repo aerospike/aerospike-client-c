@@ -420,8 +420,6 @@ static int query_compile (const char *ns, const cl_query *query, const cl_mr_sta
                                  // - linux tends to have 8M stacks these days
 #define STACK_BINS 100
 
-#define HACK_MAX_RESULT_CODE 100
-
 // 
 // this is an actual instance of a query, running on a query thread
 //
@@ -499,23 +497,6 @@ static int do_query_monte(cl_cluster_node *node, const char *ns, const uint8_t *
             cl_msg_swap_header(msg);
             buf += sizeof(cl_msg);
             
-            //ALCHEMY RUSS HACK
-            if (msg->result_code >= HACK_MAX_RESULT_CODE && cb) {
-                // BBFIX:::
-                // We need to return the msg's result code properly
-                //  - we're not doing that here.
-#if 1
-                fprintf(stderr, "want to return a result code, haven't " \
-                                "implemented how and where to do it yet\n");
-#endif				
-
-                (*cb) (NULL/*ns*/, NULL/*keyd*/, NULL/*set*/, 0/*gen*/,
-                       0/*rec_ttl*/, NULL/*bins*/, 1/*n_bins*/, true/*islast*/,
-                       (void *)(long)msg->result_code);
-                done = true;
-                rv   = 0;
-            }
-
             if (msg->header_sz != sizeof(cl_msg)) {
                 fprintf(stderr, "received cl msg of unexpected size: expecting %zd found %d, internal error\n",
                     sizeof(cl_msg),msg->header_sz);

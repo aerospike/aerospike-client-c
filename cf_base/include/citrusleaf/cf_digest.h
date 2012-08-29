@@ -46,6 +46,7 @@ static inline void
 cf_digest_compute(void *data, size_t len, cf_digest *d)
 {
 	RIPEMD160((const unsigned char *) data, len, (unsigned char *) d->digest);
+    char *x = (char *)d; bzero(x + 16, 4);
 }
 
 
@@ -68,6 +69,7 @@ cf_digest_compute2(void *data1, size_t len1, void *data2, size_t len2, cf_digest
 		RIPEMD160_Update(&c, data2, len2);
 		RIPEMD160_Final( (unsigned char *)(d->digest), &c);
 	}
+    char *x = (char *)d; bzero(x + 16, 4);
 }
 
 /* as_partition_getid

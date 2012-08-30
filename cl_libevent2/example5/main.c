@@ -322,7 +322,7 @@ main(int argc, char **argv)
 	// validate that all transactions have completed
 	for (int i=0;i<g_config.n_req;i++) {
 		request *req = &g_config.req_array[i];
-		if (req->status != STATUS_COMPLETE) {
+		if (req->status != STATUS_COMPLETE && req->status != STATUS_INPROGRESS) {
 			fprintf(stderr, "ERROR! transaction %d is not complete!\n",i);
 			g_config.return_value = -1;
 			break;

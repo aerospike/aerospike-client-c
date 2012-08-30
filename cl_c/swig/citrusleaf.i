@@ -124,8 +124,9 @@ typedef struct cl_object_s {
 
 enum cl_type { CL_NULL = 0x00, CL_INT = 0x01, CL_FLOAT = 2, CL_STR = 0x03, CL_BLOB = 0x04,
         CL_TIMESTAMP = 5, CL_DIGEST = 6, CL_JAVA_BLOB = 7, CL_CSHARP_BLOB = 8, CL_PYTHON_BLOB = 9,
-        CL_RUBY_BLOB = 10, CL_PHP_BLOB = 11, CL_APPEND = 12, CL_LUA_BLOB = 13, CL_JSON_BLOB = 14, CL_UNKNOWN = 666666};
-        CL_RUBY_BLOB = 10, CL_PHP_BLOB = 11, CL_UNKNOWN = 666666};
+        CL_RUBY_BLOB = 10, CL_PHP_BLOB = 11, CL_APPEND = 12, CL_LUA_BLOB = 13, CL_JSON_BLOB = 14, 
+        CL_UNKNOWN = 666666
+};
 
 typedef enum cl_rv {
     CITRUSLEAF_FAIL_ASYNCQ_FULL = -3,

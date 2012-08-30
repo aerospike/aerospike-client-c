@@ -18,6 +18,14 @@ Run the following commands (replace version with the current client version):
 	$ cd swig
 	$ make LANG=python  # Build python bindings to C client library
 
+The root level Makefile automatically executes "make -f src/Makefile.native", 
+which uses the GCC "-march=native" as a compilation target. Other examples, 
+such as src/Makefile.32 and src/Makefile.64, build explicitly for 32 and 64 
+bit environments.
+
+If the resulting executable will be run on multiple cpu platforms, "-march=native" 
+should be replaced with "-march=nocona". This turns off cpu specific optimizations.
+
 For cleanup, run the following commands:
 	$ make clean
 	$ cd swig

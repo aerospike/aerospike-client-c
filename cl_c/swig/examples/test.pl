@@ -16,6 +16,7 @@ use Compress::Zlib;
 # Default settings
 $arg_host = "127.0.0.1";
 $arg_port = 3000;
+$arg_ns = "test";
 $arg_keys = 10000;
 $arg_reads = 10000;
 $arg_writes = 10000;
@@ -27,21 +28,24 @@ sub usage
 	print "Usage:" . "\n";
 	print " -h host (default 127.0.0.1)" . "\n";
 	print " -p port (default 3000)" . "\n";
+	print " -n namespace (default test)" . "\n";
 }
 
 # Get opts
 use warnings;
 use Getopt::Std;
 my %opt;
-getopt('hp', \%opt);
+getopt('hpn', \%opt);
 
 $arg_host = $opt{'h'} if (defined $opt{'h'});
 $arg_port = int($opt{'p'}) if (defined $opt{'p'});
+$arg_ns = $opt{'n'} if (defined $opt{'n'});
 usage(),exit(-1) if $ARGV[0];
 
 #Test host and port
 print $arg_host . "\n";
 print $arg_port . "\n";
+print $arg_ns . "\n";
 
 #Initialize citrusleaf
 citrusleaf::citrusleaf_init();
@@ -84,7 +88,6 @@ $bins_2 = new citrusleaf::cl_bin_arr($num_bins);
 @bins = ($bins_1, $bins_2);
 
 #define namespace, set and write parameters for put
-$ns = "test";
 $set = "";
 $cl_wp = new citrusleaf::cl_write_parameters();
 citrusleaf::cl_write_parameters_set_default($cl_wp);
@@ -117,7 +120,7 @@ for ($k = 0; $k < $n_keys; $k++) {
 	$bins[$k]->setitem(3, $b);
 
 	#Call citrusleaf put for two keys
-	$rv = citrusleaf::citrusleaf_put($asc,$ns,$set,$key[$k],$bins[$k],$num_bins,$cl_wp);
+	$rv = citrusleaf::citrusleaf_put($asc,$arg_ns,$set,$key[$k],$bins[$k],$num_bins,$cl_wp);
 	if ($rv == citrusleaf::CITRUSLEAF_OK){
 		print "Citrusleaf put succeeded" . "\n";
 	} else {
@@ -140,7 +143,7 @@ for ($i = 0; $i < $num_bins; $i++) {
 #Create a int * pointer for generation 
 $gen = citrusleaf::new_intp();
 $timeout = 1000;
-$rv = citrusleaf::citrusleaf_get($asc,$ns,$set,$key[0],$bins_get,$num_bins,$timeout,$gen);
+$rv = citrusleaf::citrusleaf_get($asc,$arg_ns,$set,$key[0],$bins_get,$num_bins,$timeout,$gen);
 
 if ($rv == citrusleaf::CITRUSLEAF_OK) {
 	print "Citrusleaf get succeeded" . "\n";
@@ -179,7 +182,7 @@ $sz = citrusleaf::new_intp();
 $bins_get_all = citrusleaf::new_cl_bin_p();
 
 #Call citrusleaf_get_all with the pointer bins and pointer sz 
-$rv = citrusleaf::citrusleaf_get_all($asc,$ns,$set,$key[0],$bins_get_all,$sz,1000, $gen);
+$rv = citrusleaf::citrusleaf_get_all($asc,$arg_ns,$set,$key[0],$bins_get_all,$sz,1000, $gen);
 if ($rv==citrusleaf::CITRUSLEAF_OK){
 	print "Citrusleaf get all succeeded" , "\n";
 }else{
@@ -230,7 +233,7 @@ for ($i = 0; $i < $n_digests; $i++) {
 }
 
 #Call wrapper function get many digest
-$p = citrusleaf::citrusleaf_batch_get($asc,$ns,$di,$n_digests,undef,0,1);
+$p = citrusleaf::citrusleaf_batch_get($asc,$arg_ns,$di,$n_digests,undef,0,1);
 
 if ($p->{rv} == citrusleaf::CITRUSLEAF_OK) {
 	print "Citrusleaf batch get succeeded\n";
@@ -273,7 +276,7 @@ if ($p->{rv} == citrusleaf::CITRUSLEAF_OK) {
 print "\nCITRUSLEAF DELETE\n";
 
 for ($i = 0; $i < $n_keys; $i++) {
-	$rv = citrusleaf::citrusleaf_delete($asc,$ns,$set,$key[$i],$cl_wp);
+	$rv = citrusleaf::citrusleaf_delete($asc,$arg_ns,$set,$key[$i],$cl_wp);
 	if ($rv==citrusleaf::CITRUSLEAF_OK) {
 		print "Citrusleaf delete succeeded", "\n";
 	}else {
@@ -292,7 +295,7 @@ $d = new citrusleaf::cf_digest();
 $cd = "testdigesttestdigest";
 $d->{digest} = $cd;
 
-$rv = citrusleaf::citrusleaf_put_digest($asc,$ns,$d,$bins[0],$n,$cl_wp);
+$rv = citrusleaf::citrusleaf_put_digest($asc,$arg_ns,$d,$bins[0],$n,$cl_wp);
 if ($rv == citrusleaf::CITRUSLEAF_OK) {
 	print "Citrusleaf put digest succeeded", "\n";
 }else{
@@ -316,7 +319,7 @@ for ($i = 0; $i < $num_bins; $i++) {
 #Create a int * pointer for generation 
 $gen_gd = citrusleaf::new_intp();
 
-$rv = citrusleaf::citrusleaf_get_digest($asc,$ns,$d,$bins_gd,$n,1000,$gen_gd);
+$rv = citrusleaf::citrusleaf_get_digest($asc,$arg_ns,$d,$bins_gd,$n,1000,$gen_gd);
 if ($rv==citrusleaf::CITRUSLEAF_OK) {
 	print "Citrusleaf get digest succeeded", "\n";
 	#print the resulting values and the generation
@@ -348,7 +351,7 @@ citrusleaf::delete_intp($gen);
 
 ################ CITRUSLEAF DELETE DIGEST ################
 print "\nCITRUSLEAF DELETE DIGEST\n";
-$rv = citrusleaf::citrusleaf_delete_digest($asc, $ns, $d, $cl_wp);
+$rv = citrusleaf::citrusleaf_delete_digest($asc, $arg_ns, $d, $cl_wp);
 if ($rv==citrusleaf::CITRUSLEAF_OK) {
 	print "Citrusleaf delete digest succeeded", "\n";
 }else{

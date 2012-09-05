@@ -27,13 +27,13 @@ LIBRARIES = -lev2citrusleaf /usr/local/lib/libevent-2.0.so.5 -lssl -lcrypto -lpt
 
 HEADERS = 
 SOURCES = main.c
-TARGET = cl_ev2example
+TARGET = example
 
 OBJECTS = $(SOURCES:%.c=$(DIR_OBJECT)/%.o)
 DEPENDENCIES = $(OBJECTS:%.o=%.d)
 
 .PHONY: all
-all: cl_ev2example
+all: example
 
 .PHONY: clean
 clean:
@@ -43,10 +43,10 @@ clean:
 depclean: clean
 	/bin/rm -f $(DEPENDENCIES)
 
-.PHONY: cl_ev2example
-cl_ev2example: $(OBJECTS)
+.PHONY: example
+example: $(OBJECTS)
 	$(LD) $(LDFLAGS) -o $(DIR_TARGET)/$(TARGET) $(OBJECTS) $(LIBRARIES)
-	chmod +x cl_ev2example
+	chmod +x example
 
 -include $(DEPENDENCIES)
 

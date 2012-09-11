@@ -1343,6 +1343,15 @@ citrusleaf_change_tend_speed(int secs)
 	g_clust_tend_speed = secs;
 }
 
+void
+citrusleaf_sleep_for_tender(cl_cluster *asc)
+{
+	if (asc->tend_speed  > 0)
+		sleep(asc->tend_speed * 2);
+	else
+		sleep(g_clust_tend_speed * 2);
+}
+
 //
 // This rolls through every cluster, tries to add and delete nodes that might
 // have gone bad

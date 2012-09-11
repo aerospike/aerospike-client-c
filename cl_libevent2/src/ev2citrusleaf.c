@@ -1820,16 +1820,16 @@ ev2citrusleaf_operate(ev2citrusleaf_cluster *cl, char *ns, char *set, ev2citrusl
 
 }
 
-bool        ev2citrusleaf_inited = false;
+bool g_ev2citrusleaf_initialized = false;
 
 int ev2citrusleaf_init(ev2citrusleaf_lock_callbacks *lock_cb) 
 {
-	
-	if (ev2citrusleaf_inited == true) {
+	if (g_ev2citrusleaf_initialized) {
 		CL_LOG(CL_INFO, "citrusleaf: init called twice, benign\n");
 		return(0);
 	}
-	ev2citrusleaf_inited = true;
+
+	g_ev2citrusleaf_initialized = true;
 
 	// TODO - add extra API to specify no locking (for single-threaded use).
 	if (lock_cb) {
@@ -1865,7 +1865,7 @@ ev2citrusleaf_shutdown(bool fail_requests)
 	
 	ev2citrusleaf_info_shutdown();
 	
-	ev2citrusleaf_inited = false;
+	g_ev2citrusleaf_initialized = false;
 }
 
 

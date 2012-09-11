@@ -22,6 +22,7 @@
 #include <signal.h>
 
 #include <netdb.h> //gethostbyname_r
+#include <netinet/tcp.h>
 
 #include "citrusleaf/citrusleaf.h"
 #include "citrusleaf/citrusleaf-internal.h"
@@ -840,6 +841,9 @@ cl_cluster_node_fd_create(cl_cluster_node *cn, bool nonblocking)
 		}
 	}
 	
+	int f = 1;
+	setsockopt(fd, SOL_TCP, TCP_NODELAY, &f, sizeof(f));
+
 	// loop over all known IP addresses for the server
 	for (uint i=0;i< cf_vector_size(&cn->sockaddr_in_v);i++) {
 		struct sockaddr_in *sa_in = cf_vector_getp(&cn->sockaddr_in_v, i);

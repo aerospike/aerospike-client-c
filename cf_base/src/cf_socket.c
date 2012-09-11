@@ -27,6 +27,7 @@
 #include "citrusleaf/cf_clock.h"
 
 #include <signal.h>
+#include <netinet/tcp.h>
 
 // #define DEBUG_TIME
 // #define DEBUG_VERBOSE
@@ -512,7 +513,10 @@ cf_create_nb_socket(struct sockaddr_in *sa, int timeout)
         return -1;
 	}
 
-    //initiate non-blocking connect
+	int f = 1;
+	setsockopt(fd, SOL_TCP, TCP_NODELAY, &f, sizeof(f));
+
+	//initiate non-blocking connect
 	if (0 != connect(fd, (struct sockaddr *) sa, sizeof( *sa ) )) {
         if (errno != EINPROGRESS) {
 			close(fd);

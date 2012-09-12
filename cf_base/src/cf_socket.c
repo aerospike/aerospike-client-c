@@ -29,22 +29,23 @@
 #include <signal.h>
 #include <netinet/tcp.h>
 
-// #define DEBUG_TIME
-// #define DEBUG_VERBOSE
+#define DEBUG_TIME
 // #define DEBUG
+// #define DEBUG_VERBOSE
 
 
 #ifdef DEBUG_TIME
-static void debug_write_printf(long time_before_fcntl, long time_after_fcntl, long time_before_select, long time_after_select_before_write, long time_after_write)
+static void debug_time_printf(const char* desc, int try, int select_busy, long start, long end, long deadline)
 {
-        fprintf(stderr, "tid %zu - Write - Before fcntl %"PRIu64" After fcntl %"PRIu64"\n", (uint64_t)pthread_self(), time_before_fcntl, time_after_fcntl);
-        fprintf(stderr, "tid %zu - Write - Before Select %"PRIu64" After Select %"PRIu64" After Write %"PRIu64"\n", (uint64_t)pthread_self(), time_before_select, time_after_select_before_write, time_after_write);
-}
-
-static void debug_read_printf(long time_before_fcntl, long time_after_fcntl, long time_before_select, long time_after_select_before_read, long time_after_read)
-{
-        fprintf(stderr, "tid %zu - Read - Before fcntl %"PRIu64" After fcntl %"PRIu64"\n", (uint64_t)pthread_self(), time_before_fcntl, time_after_fcntl);
-        fprintf(stderr, "tid %zu - Read - Before Select %"PRIu64" After Select %"PRIu64" After Read %"PRIu64"\n", (uint64_t)pthread_self(), time_before_select, time_after_select_before_read, time_after_read);
+	fprintf(stderr, "%s|%zu|%d|%d|%"PRIu64"|%"PRIu64"|%"PRIu64"\n",
+		desc,
+		(uint64_t)pthread_self(),
+		try,
+		select_busy,
+		start,
+		end,
+		deadline
+	);
 }
 #endif
 
@@ -85,22 +86,15 @@ get_fdset_size( int fd ) {
 int
 cf_socket_read_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_deadline, int attempt_ms)
 {
+#ifdef DEBUG_VERBOSE
+	fprintf(stderr, "read timeout %d %p %zd\n",fd, buf, buf_len);
+#endif
+#ifdef DEBUG_TIME
+	uint64_t start = cf_getms();
+#endif
 	struct timeval tv;
 	size_t pos = 0;
 
-
-#ifdef DEBUG_TIME
-        uint64_t time_before_fcntl = 0;        
-        uint64_t time_after_fcntl = 0;        
-        uint64_t time_before_select = 0;
-        uint64_t time_after_select_before_read = 0;
-        uint64_t time_after_read = 0;
-#endif    
-    
-#ifdef DEBUG_TIME                    
-		time_before_fcntl = cf_getms();
-#endif                    
-	// 
 	int flags;
 	if (-1 == (flags = fcntl(fd, F_GETFL, 0)))
 		flags = 0;
@@ -109,13 +103,6 @@ cf_socket_read_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_dead
 			return(EBADF);
 		}
 	}
-#ifdef DEBUG_TIME                    
-		time_after_fcntl = cf_getms();
-#endif                    
-
-#ifdef DEBUG_VERBOSE	
-	fprintf(stderr, "read timeout %d %p %zd\n",fd, buf, buf_len);
-#endif    
 	
 	// between the transaction deadline and the attempt_ms, find the lesser
 	// and create a deadline for this attempt
@@ -143,14 +130,11 @@ cf_socket_read_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_dead
 	
 	int rv = 0;
 	int try = 0;
+#ifdef DEBUG_TIME
+	int select_busy = 0;
+#endif
 	
 	do {
-#ifdef DEBUG_TIME    
-        time_before_select = 0;
-        time_after_select_before_read = 0;
-        time_after_read = 0;
-#endif    
-
 		uint64_t now = cf_getms();
 		if (now > deadline) {
 #ifdef DEBUG    
@@ -158,7 +142,7 @@ cf_socket_read_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_dead
                 fd,deadline, cf_getms() );
 #endif
 #ifdef DEBUG_TIME
-			debug_read_printf(time_before_fcntl, time_after_fcntl, time_before_select, time_after_select_before_read, time_after_read);
+			debug_time_printf("socket readselect timeout", try, select_busy, start, now, deadline);
 #endif    
 			rv = ETIMEDOUT;
 			goto Out;
@@ -168,24 +152,15 @@ cf_socket_read_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_dead
 		tv.tv_sec = ms_left / 1000;
 		tv.tv_usec = (ms_left % 1000) * 1000;
 		
-#ifdef DEBUG_TIME                   
-		time_before_select = cf_getms();
-#endif                    
 		memset(rset, 0, rset_size);
 		FD_SET(fd, rset);
 		rv = select(fd +1, rset /*readfd*/, 0 /*writefd*/, 0 /*oobfd*/, &tv);
-
-#ifdef DEBUG_TIME                    
-		time_after_select_before_read = cf_getms();
-#endif                    
 
 		// we only have one fd, so we know it's ours?
 		if ((rv > 0) && FD_ISSET(fd, rset)) {
 			
 			int r_bytes = read(fd, buf + pos, buf_len - pos );
-#ifdef DEBUG_TIME                   
-			time_after_read = cf_getms();
-#endif            
+
 			if (r_bytes > 0) {
 				pos += r_bytes;
             }
@@ -205,7 +180,7 @@ cf_socket_read_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_dead
                 fprintf(stderr, "Citrusleaf: error when reading from server - %d fd %d errno %d : %s\n",r_bytes,fd, errno, strerror(errno));
 #endif
 #ifdef DEBUG_TIME
-				debug_read_printf(time_before_fcntl, time_after_fcntl, time_before_select, time_after_select_before_read, time_after_read);
+    			debug_time_printf("socket read timeout", try, select_busy, start, now, deadline);
 #endif				
 				rv = errno;
 				goto Out;
@@ -217,6 +192,9 @@ cf_socket_read_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_dead
 #endif
 		}
 		else if (rv == 0) {
+#ifdef DEBUG_TIME
+			select_busy++;
+#endif
 #ifdef DEBUG			
             fprintf(stderr, "read select: returned 0 likely timeout fd %d errno %d\n",fd, errno);
 #endif            
@@ -247,21 +225,15 @@ Out:
 int
 cf_socket_write_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_deadline, int attempt_ms)
 {
+#ifdef DEBUG_VERBOSE
+	fprintf(stderr, "write with timeout %d %p %zd\n",fd,buf,buf_len);
+#endif
+#ifdef DEBUG_TIME
+	uint64_t start = cf_getms();
+#endif
 	struct timeval tv;
 	size_t pos = 0;
-#ifdef DEBUG_TIME
-        uint64_t time_before_fcntl = 0;
-        uint64_t time_after_fcntl = 0;
-        uint64_t time_before_select = 0;
-        uint64_t time_after_select_before_write = 0;
-        uint64_t time_after_write = 0;
- #endif    
 	
- 
-#ifdef DEBUG_TIME               
-		time_before_fcntl = cf_getms();
-#endif 
-	// 
 	int flags;
 	if (-1 == (flags = fcntl(fd, F_GETFL, 0)))
 		flags = 0;
@@ -270,9 +242,6 @@ cf_socket_write_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_dea
 			return(ENOENT);
 		}
 	}
-#ifdef DEBUG_TIME             
-		time_after_fcntl = cf_getms();
-#endif 
 
 	// between the transaction deadline and the attempt_ms, find the lesser
 	// and create a deadline for this attempt
@@ -280,10 +249,6 @@ cf_socket_write_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_dea
     if ((trans_deadline != 0) && (trans_deadline < deadline)) 
 		deadline = trans_deadline;
     
-#ifdef DEBUG_VERBOSE	
-	fprintf(stderr, "write with timeout %d %p %zd\n",fd,buf,buf_len);
-#endif    
-
 	// Setup fdset. This looks weird, but there's no guarentee
 	// that FD_SETSIZE this was compiled on has much to do with the machine
 	// we're running on.
@@ -300,17 +265,13 @@ cf_socket_write_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_dea
  		if (wset == 0)	return(-1);
  	}
 
-	int try=0;
 	int rv = 0;
+	int try = 0;
+#ifdef DEBUG_TIME
+	int select_busy = 0;
+#endif
 	
 	do {
-		
-#ifdef DEBUG_TIME
-        time_before_select = 0;
-        time_after_select_before_write = 0;
-        time_after_write = 0;
-#endif    
-
 		uint64_t now = cf_getms();
 		if (now > deadline) {
 #ifdef DEBUG    
@@ -318,7 +279,7 @@ cf_socket_write_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_dea
                 fd,deadline, cf_getms(),try );
 #endif
 #ifdef DEBUG_TIME
-			debug_write_printf(time_before_fcntl, time_after_fcntl, time_before_select, time_after_select_before_write, time_after_write);
+			debug_time_printf("socket writeselect timeout", try, select_busy, start, now, deadline);
 #endif    
 			rv = ETIMEDOUT;
 			goto Out;
@@ -328,25 +289,16 @@ cf_socket_write_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_dea
 		tv.tv_sec = ms_left / 1000;
 		tv.tv_usec = (ms_left % 1000) * 1000;
 
-#ifdef DEBUG_TIME               
-		time_before_select = cf_getms();
-#endif
 		memset(wset, 0, wset_size);
 		FD_SET(fd, wset);
 		
 		rv = select(fd +1, 0 /*readfd*/, wset /*writefd*/, 0/*oobfd*/, &tv);
 		
-#ifdef DEBUG_TIME               
-		time_after_select_before_write = cf_getms();
-#endif                    
-
 		// we only have one fd, so we know it's ours, but select seems confused sometimes - do the safest thing
 		if ((rv > 0) && FD_ISSET(fd, wset)) {
 			
 			int r_bytes = write(fd, buf + pos, buf_len - pos );
-#ifdef DEBUG_TIME               
-			time_after_write = cf_getms();
-#endif                    
+
 			if (r_bytes > 0) {
 				pos += r_bytes;
 				if (pos >= buf_len)	{ rv = 0; goto Out; } // done happily
@@ -365,7 +317,7 @@ cf_socket_write_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_dea
                 fprintf(stderr, "Citrusleaf: error when writing to server - %d fd %d errno %d\n",r_bytes,fd, errno);
 #endif                    
 #ifdef DEBUG_TIME
-				debug_write_printf(time_before_fcntl, time_after_fcntl, time_before_select, time_after_select_before_write, time_after_write);
+    			debug_time_printf("socket write timeout", try, select_busy, start, now, deadline);
 #endif				
                 rv = errno;
                 goto Out;
@@ -377,6 +329,9 @@ cf_socket_write_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_dea
 #endif        
 		}
         else if (rv == 0) {
+#ifdef DEBUG_TIME
+        	select_busy++;
+#endif
 #ifdef DEBUG        	
         	fprintf(stderr, "write: select returned 0, likely timeout fd %d errno %d\n",fd,errno);
 #endif        	

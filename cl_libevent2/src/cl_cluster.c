@@ -272,6 +272,11 @@ cluster_timer_fn(int fd, short event, void *udata)
 ev2citrusleaf_cluster *
 ev2citrusleaf_cluster_create(struct event_base *base)
 {
+	if (! g_ev2citrusleaf_initialized) {
+		CL_LOG(CL_WARNING, "must call ev2citrusleaf_init() before ev2citrusleaf_cluster_create()\n");
+		return 0;
+	}
+
 	ev2citrusleaf_cluster *asc = cluster_create();
 	if (!asc)	return(0);
 	

@@ -54,6 +54,8 @@ extern "C" {
 //
 //
 
+extern bool g_ev2citrusleaf_initialized;
+
 extern ev2citrusleaf_lock_callbacks *g_lock_cb;
 
 #define MUTEX_ALLOC(__l)	{ __l = g_lock_cb ? g_lock_cb->alloc() : 0; }

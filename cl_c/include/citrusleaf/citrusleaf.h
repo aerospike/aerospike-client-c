@@ -398,6 +398,9 @@ citrusleaf_async_put_digest(cl_cluster *asc, const char *ns, const cf_digest *d,
 cl_rv
 citrusleaf_check_cluster_health(cl_cluster *asc);
 
+void
+citrusleaf_sleep_for_tender(cl_cluster *asc);
+
 //
 // Get is like select in SQL. Create a list of bins to get, and call this function to retrieve
 // the values.

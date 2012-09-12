@@ -1050,6 +1050,7 @@ cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 		if (0 != citrusleaf_info_host(sa_in, "node\npartition-generation\nservices", &values, INFO_TIMEOUT_MS, false)) {
 			// todo: this address is no longer right for this node, update the node's list
 			// and if there's no addresses left, dun node
+			fprintf(stderr, "Info request failed for %s\n",cn->name);
 			cl_cluster_node_dun(cn, NODE_DUN_INFO_ERR);
 			continue;
 		}
@@ -1075,7 +1076,7 @@ cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 						// from the list of addresses for this node, and only dun if there
 						// are no addresses left
 						fprintf(stderr, "node name has changed!!!\n");
-						cl_cluster_node_dun(cn, NODE_DUN_INFO_ERR);
+						cl_cluster_node_dun(cn, NODE_DUN_NAME_CHG);
 					}
 				}
 				else if (strcmp(name, "partition-generation") == 0) {

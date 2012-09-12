@@ -24,7 +24,8 @@
 #define __CL_C_H__
 
 #define NODE_DUN_THRESHOLD	800
-#define NODE_DUN_INFO_ERR	801
+#define NODE_DUN_INFO_ERR	300
+#define NODE_DUN_NAME_CHG	801
 #define NODE_DUN_NET_ERR	50
 #define NODE_DUN_TIMEOUT	1
 

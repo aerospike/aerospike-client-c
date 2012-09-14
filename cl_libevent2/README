@@ -7,9 +7,11 @@ sudo apt-get install libc6-dev libssl-dev
 For redhat derived distributions such as Fedora Core and Centos, excute:
 sudo yum install openssl-devel glibc-devel
 
+Some newer Linux systems (Ubuntu 12.04) come with libevent2 already installed. 
+The dev version is still required:
+		$ sudo apt-get install libssl-dev
 
-Some newer Linux systems come with libevent2 already installed. However on older
-systems libevent2 must be installed manually, following these steps:
+On older systems, libevent2 must be installed manually, following these steps:
 
 1. Remove the old libevent. The libevent2 library will be backward compatible,
    so software relying on the old libevent will still work with libevent2.

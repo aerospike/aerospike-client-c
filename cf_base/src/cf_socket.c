@@ -25,6 +25,7 @@
 #include <asm/byteorder.h> // 64-bit swap macro
 
 #include "citrusleaf/cf_clock.h"
+#include "citrusleaf/cf_log.h"
 
 #include <signal.h>
 #include <netinet/tcp.h>
@@ -35,9 +36,9 @@
 
 
 #ifdef DEBUG_TIME
-static void debug_time_printf(const char* desc, int try, int select_busy, long start, long end, long deadline)
+static void debug_time_printf(const char* desc, int try, int select_busy, uint64_t start, uint64_t end, uint64_t deadline)
 {
-	fprintf(stderr, "%s|%zu|%d|%d|%"PRIu64"|%"PRIu64"|%"PRIu64"\n",
+	cf_info("%s|%zu|%d|%d|%lu|%lu|%lu",
 		desc,
 		(uint64_t)pthread_self(),
 		try,
@@ -86,9 +87,6 @@ get_fdset_size( int fd ) {
 int
 cf_socket_read_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_deadline, int attempt_ms)
 {
-#ifdef DEBUG_VERBOSE
-	fprintf(stderr, "read timeout %d %p %zd\n",fd, buf, buf_len);
-#endif
 #ifdef DEBUG_TIME
 	uint64_t start = cf_getms();
 #endif
@@ -122,8 +120,6 @@ cf_socket_read_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_dead
  	}
  	else {
  		rset_size = get_fdset_size(fd);
-// 		fprintf(stderr, "fd too large for compiled constant: fd %d setsize %d calcsize %d\n",
-// 			fd,sizeof(fd_set),rset_size);
  		rset = malloc ( rset_size );
  		if (!rset)	return(-1);
  	}
@@ -137,10 +133,6 @@ cf_socket_read_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_dead
 	do {
 		uint64_t now = cf_getms();
 		if (now > deadline) {
-#ifdef DEBUG    
-            fprintf(stderr, "Citrusleaf: timeout when reading (%d) - deadline was %"PRIu64" now is %"PRIu64"\n",
-                fd,deadline, cf_getms() );
-#endif
 #ifdef DEBUG_TIME
 			debug_time_printf("socket readselect timeout", try, select_busy, start, now, deadline);
 #endif    
@@ -166,9 +158,6 @@ cf_socket_read_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_dead
             }
 			else if (r_bytes == 0) {
 				// We believe this means that the server has closed this socket.
-#ifdef DEBUG
-				fprintf(stderr, "Citrusleaf: read returned 0, fd %d\n", fd);
-#endif
 				rv = EBADF;
 				goto Out;
 			}
@@ -176,38 +165,23 @@ cf_socket_read_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_dead
 					// It's apparently possible that select() returns successfully yet
 					// the socket is not ready for reading.
 					&& errno != EWOULDBLOCK && errno != EINPROGRESS && errno != EAGAIN) {
-#ifdef DEBUG
-                fprintf(stderr, "Citrusleaf: error when reading from server - %d fd %d errno %d : %s\n",r_bytes,fd, errno, strerror(errno));
-#endif
 #ifdef DEBUG_TIME
     			debug_time_printf("socket read timeout", try, select_busy, start, now, deadline);
 #endif				
 				rv = errno;
 				goto Out;
             }
-#ifdef DEBUG
-			else {
-				fprintf(stderr, "Citrusleaf: will retry - error when reading from server - %d fd %d errno %d : %s\n", r_bytes, fd, errno, strerror(errno));
-			}
-#endif
 		}
 		else if (rv == 0) {
 #ifdef DEBUG_TIME
 			select_busy++;
 #endif
-#ifdef DEBUG			
-            fprintf(stderr, "read select: returned 0 likely timeout fd %d errno %d\n",fd, errno);
-#endif            
         }
         else {
-#ifdef DEBUG
-            fprintf(stderr, "read select: (%d) returned odd answer  %d errno %d try %d fdnotset\n",fd,rv, errno, try);
-#endif
 			if (rv == -1)  {
 				rv = errno;
 				goto Out;
 			}
-
         }
 
         try++;
@@ -225,9 +199,6 @@ Out:
 int
 cf_socket_write_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_deadline, int attempt_ms)
 {
-#ifdef DEBUG_VERBOSE
-	fprintf(stderr, "write with timeout %d %p %zd\n",fd,buf,buf_len);
-#endif
 #ifdef DEBUG_TIME
 	uint64_t start = cf_getms();
 #endif
@@ -274,10 +245,6 @@ cf_socket_write_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_dea
 	do {
 		uint64_t now = cf_getms();
 		if (now > deadline) {
-#ifdef DEBUG    
-            fprintf(stderr, "Citrusleaf: timeout when writing (%d) - deadline was %"PRIu64" now is %"PRIu64" try %d\n",
-                fd,deadline, cf_getms(),try );
-#endif
 #ifdef DEBUG_TIME
 			debug_time_printf("socket writeselect timeout", try, select_busy, start, now, deadline);
 #endif    
@@ -305,41 +272,24 @@ cf_socket_write_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_dea
             }
 			else if (r_bytes == 0) {
 				// We shouldn't see 0 returned unless we try to write 0 bytes, which we don't.
-#ifdef DEBUG
-				fprintf(stderr, "Citrusleaf: write returned 0, fd %d\n", fd);
-#endif
 				rv = EBADF;
 				goto Out;
 			}
             else if (errno != ETIMEDOUT
 					&& errno != EWOULDBLOCK && errno != EINPROGRESS && errno != EAGAIN) {
-#ifdef DEBUG              
-                fprintf(stderr, "Citrusleaf: error when writing to server - %d fd %d errno %d\n",r_bytes,fd, errno);
-#endif                    
 #ifdef DEBUG_TIME
     			debug_time_printf("socket write timeout", try, select_busy, start, now, deadline);
 #endif				
                 rv = errno;
                 goto Out;
 			}
-#ifdef DEBUG        
-            else {
-                fprintf(stderr, "Citrusleaf: will retry - error when writing to server - %d fd %d errno %d\n", r_bytes, fd, errno);
-            }
-#endif        
 		}
         else if (rv == 0) {
 #ifdef DEBUG_TIME
         	select_busy++;
 #endif
-#ifdef DEBUG        	
-        	fprintf(stderr, "write: select returned 0, likely timeout fd %d errno %d\n",fd,errno);
-#endif        	
     	}
         else {
-#ifdef DEBUG
-            fprintf(stderr, "write select: (%d) returned odd answer %d errno %d try %d tvsec %d tvusec %d\n",rv, errno,try,tv.tv_sec,tv.tv_usec);
-#endif
 			if (rv == -1)	{ rv = errno; goto Out; }
         }
 			
@@ -374,18 +324,11 @@ cf_socket_read_forever(int fd, uint8_t *buf, size_t buf_len)
 		}
 	}
 
-//	fprintf(stderr, "read forever %d %p %zd\n",fd,buf,buf_len);
-	
 	size_t pos = 0;
 	do {
-//		fprintf(stderr, "read: fd %d buf %p len %zd\n",fd,buf+pos,buf_len-pos);
 		int r_bytes = read(fd, buf + pos, buf_len - pos );
-//		fprintf(stderr, "read: fd %d rb %d err %d\n",fd,r_bytes,errno);
 		if (r_bytes < 0) { // don't combine these into one line! think about it!
 			if (errno != ETIMEDOUT) {
-#ifdef DEBUG                
-				fprintf(stderr, "Citrusleaf: error when reading from server - %d fd %d errno %d\n",r_bytes,fd, errno);
-#endif                
 				return(errno);
 			}
 		}
@@ -415,16 +358,11 @@ cf_socket_write_forever(int fd, uint8_t *buf, size_t buf_len)
 		}
 	}
 	
-//	fprintf(stderr, "write forever %d %p %zd\n",fd,buf, buf_len);
-	
 	size_t pos = 0;
 	do {
 		int r_bytes = write(fd, buf + pos, buf_len - pos );
 		if (r_bytes < 0) { // don't combine these into one line! think about it!
 			if (errno != ETIMEDOUT) {
-#ifdef DEBUG                
-				fprintf(stderr, "Citrusleaf: error when writing to server - %d fd %d errno %d\n",r_bytes,fd, errno);
-#endif                
 				return(errno);
 			}
 		}
@@ -453,7 +391,7 @@ cf_create_nb_socket(struct sockaddr_in *sa, int timeout)
 	// Create the socket 
 	int fd = -1;
 	if (-1 == (fd = socket ( AF_INET, SOCK_STREAM, 0 ))) {
-		fprintf(stderr, "could not allocate socket errno %d\n",errno);
+		cf_error("could not allocate socket errno %d", errno);
 		return(-1);
 	}
 

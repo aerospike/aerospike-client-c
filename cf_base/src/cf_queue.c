@@ -21,6 +21,7 @@
 #endif
 
 #include "citrusleaf/cf_queue.h"
+#include "citrusleaf/cf_log.h"
 
 // #define DEBUG 1
 
@@ -240,13 +241,13 @@ int
 cf_queue_pop(cf_queue *q, void *buf, int ms_wait)
 {
 	if (NULL == q) {
-		fprintf(stderr, "cf_queue_pop: try passing in a queue\n");
+		cf_error("cf_queue_pop: try passing in a queue");
 		return(-1);
 	}
 
 #ifdef EXTERNAL_LOCKS 
 	if (ms_wait != CF_QUEUE_NOWAIT) {   // this implementation won't wait
-		fprintf(stderr, "cf_queue_pop: only nowait supported\n");
+		cf_error("cf_queue_pop: only nowait supported");
 		return(-1);
 	}
 #endif // EXTERNAL_LOCKS
@@ -634,7 +635,7 @@ cf_queue_test_1_write(void *arg)
 		int rv;
 		rv = cf_queue_push(q, &i);
 		if (0 != rv) {
-			fprintf(stderr, "queue push failed: error %d",rv);
+			cf_error("queue push failed: error %d",rv);
 			return((void *)-1);
 		}
 	}
@@ -656,11 +657,11 @@ cf_queue_test_1_read(void *arg)
 		int  v = -1;
 		int rv = cf_queue_pop(q, &v, CF_QUEUE_FOREVER);
 		if (rv != CF_QUEUE_OK) {
-			fprintf(stderr, "cf_queue_test1: pop error %d",rv);
+			cf_error("cf_queue_test1: pop error %d",rv);
 			return((void *) -1);
 		}
 		if (v != i) {
-			fprintf(stderr, "cf_queue_test1: pop value error: %d should be %d",v,i);
+			cf_error("cf_queue_test1: pop value error: %d should be %d",v,i);
 			return((void *) -1);
 		}
 		
@@ -685,22 +686,22 @@ cf_queue_test_1()
 	void *th_return;
 	
 	if (0 != pthread_join(write_th, &th_return)) {
-		fprintf(stderr, "queue test 1: could not join1 %d\n",errno);
+		cf_error("queue test 1: could not join1 %d",errno);
 		return(-1);
 	}
 	
 	if (0 != th_return) {
-		fprintf(stderr, "queue test 1: returned error %p\n",th_return);
+		cf_error("queue test 1: returned error %p",th_return);
 		return(-1);
 	}
 	
 	if (0 != pthread_join(read_th, &th_return)) {
-		fprintf(stderr, "queue test 1: could not join2 %d\n",errno);
+		cf_error("queue test 1: could not join2 %d",errno);
 		return(-1);
 	}
 	
 	if (0 != th_return) {
-		fprintf(stderr, "queue test 1: returned error 2 %p\n",th_return);
+		cf_error("queue test 1: returned error 2 %p",th_return);
 		return(-1);
 	}
 	
@@ -713,10 +714,9 @@ int
 cf_queue_test()
 {
 	if (0 != cf_queue_test_1()) {
-		fprintf(stderr, "CF QUEUE TEST ONE FAILED\n");
+		cf_error("CF QUEUE TEST ONE FAILED");
 		return(-1);
 	}
 	
 	return(0);
 }
-

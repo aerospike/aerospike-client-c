@@ -7,9 +7,11 @@ sudo apt-get install libc6-dev libssl-dev
 For redhat derived distributions such as Fedora Core and Centos, excute:
 sudo yum install openssl-devel glibc-devel
 
+Some newer Linux systems (Ubuntu 12.04) come with libevent2 already installed. 
+The dev version is still required:
+		$ sudo apt-get install libssl-dev
 
-Some newer Linux systems come with libevent2 already installed. However on older
-systems libevent2 must be installed manually, following these steps:
+On older systems, libevent2 must be installed manually, following these steps:
 
 1. Remove the old libevent. The libevent2 library will be backward compatible,
    so software relying on the old libevent will still work with libevent2.
@@ -33,8 +35,7 @@ systems libevent2 must be installed manually, following these steps:
 
 
 The root level 'Makefile' automatically executed make -f src/Makefile.native , which uses
-that GCC -march=native as a compilation target. Other examples, such as src/Makefile.32 and src/Makefile.64,
-build explicitly for 32 and 64 bit environments.
+that GCC -march=noarch as a compilation target. Other examples, such as src/Makefile.32 and 
+src/Makefile.64, build explicitly for 32 and 64 bit environments.
 
-If the resulting executable will be run on multiple cpu platforms, "-march=native" should be
-replaced with "-march=nocona". This turns off cpu specific optimizations.
+

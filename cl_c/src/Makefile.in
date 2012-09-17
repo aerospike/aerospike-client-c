@@ -45,4 +45,5 @@ endif
 #    CFLAGS_NATIVE += -march=nocona
 #else
 #    CFLAGS_NATIVE += -march=nocona -msse4
+    CFLAGS_NATIVE += -march=nocona
 #endif

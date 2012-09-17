@@ -44,7 +44,8 @@ endif
 ifeq (${CC_V},4.1)
     CFLAGS_NATIVE += -march=nocona
 else
-    CFLAGS_NATIVE += -march=native -msse4
+#    CFLAGS_NATIVE += -march=native -msse4
+    CFLAGS_NATIVE += -march=nocona
 endif
 
 

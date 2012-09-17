@@ -4,40 +4,106 @@
 #pragma once
 
 #include <stdarg.h>
+#include "cf_atomic.h"
 
+extern cf_atomic32 g_log_level;
+extern cf_atomic_p g_log_callback;
+
+#define G_LOG_LEVEL ((int)cf_atomic32_get(g_log_level))
+#define G_LOG_CB ((cf_log_callback)cf_atomic_p_get(g_log_callback))
+
+
+//====================================================================
+// Public API
+//
+
+/**
+ * Log escalation level.
+ */
 typedef enum {
+	/**
+	 * Pass this in cf_set_log_level() to suppress all logging.
+	 */
 	CF_NO_LOGGING = -1,
+
+	/**
+	 * Error condition has occurred.
+	 */
 	CF_ERROR,
+
+	/**
+	 * Unusual non-error condition has occurred.
+	 */
 	CF_WARN,
+
+	/**
+	 * Normal information message.
+	 */
 	CF_INFO,
+
+	/**
+	 * Message used for debugging purposes.
+	 */
 	CF_DEBUG
 } cf_log_level;
 
+/**
+ * A callback function of this signature may be passed in cf_set_log_callback(),
+ * so the caller can channel Aerospike client logs as desired.
+ *
+ * @param level				log level for this log statement
+ * @param fmt				format string for this log statement (does not end
+ * 							with '\n')
+ * @param ...				arguments corresponding to conversion characters in
+ * 							format string
+ */
 typedef void (*cf_log_callback)(cf_log_level level, const char* fmt, ...);
 
-extern cf_log_level g_log_level;
-extern cf_log_callback g_log_callback;
-
+/**
+ * Set logging level filter.
+ * <p>
+ * Thread-safe - may be called at any time.
+ * <p>
+ * To suppress logs, either set log level to CF_NO_LOGGING or ignore callbacks.
+ *
+ * @param level				only show logs at this or more urgent level
+ */
 static inline void cf_set_log_level(cf_log_level level)
 {
-	g_log_level = level;
+	cf_atomic32_set(&g_log_level, (cf_atomic32)level);
 }
 
+/**
+ * Set optional log callback.
+ * <p>
+ * Thread-safe - may be called at any time.
+ * <p>
+ * If no callback is registered, the Aerospike client writes logs to stderr.
+ * <p>
+ * To suppress logs, either set log level to CF_NO_LOGGING or ignore callbacks.
+ *
+ * @param callback			cf_log_callback implementation
+ */
 static inline void cf_set_log_callback(cf_log_callback callback)
 {
 	if (callback) {
-		g_log_callback = callback;
+		cf_atomic_p_set(&g_log_callback, (cf_atomic_p)callback);
 	}
 }
 
+
+//====================================================================
+// Internal API - for use by Aerospike client only
+//
+
 #define cf_error(__fmt, __args...) \
-	if (CF_ERROR <= g_log_level) {(*g_log_callback)(CF_ERROR, __fmt, ## __args);}
+	if (CF_ERROR <= G_LOG_LEVEL) {(*G_LOG_CB)(CF_ERROR, __fmt, ## __args);}
 
 #define cf_warn(__fmt, __args...) \
-	if (CF_WARN <= g_log_level) {(*g_log_callback)(CF_WARN, __fmt, ## __args);}
+	if (CF_WARN <= G_LOG_LEVEL) {(*G_LOG_CB)(CF_WARN, __fmt, ## __args);}
 
 #define cf_info(__fmt, __args...) \
-	if (CF_INFO <= g_log_level) {(*g_log_callback)(CF_INFO, __fmt, ## __args);}
+	if (CF_INFO <= G_LOG_LEVEL) {(*G_LOG_CB)(CF_INFO, __fmt, ## __args);}
 
 #define cf_debug(__fmt, __args...) \
-	if (CF_DEBUG <= g_log_level) {(*g_log_callback)(CF_DEBUG, __fmt, ## __args);}
+	if (CF_DEBUG <= G_LOG_LEVEL) {(*G_LOG_CB)(CF_DEBUG, __fmt, ## __args);}

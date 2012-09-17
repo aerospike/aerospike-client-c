@@ -3,6 +3,7 @@
  */
 #include <stdio.h>
 #include "citrusleaf/cf_log.h"
+#include "citrusleaf/cf_atomic.h"
 
 static void cf_default_log(cf_log_level level, const char* fmt, ...)
 {
@@ -15,5 +16,5 @@ static void cf_default_log(cf_log_level level, const char* fmt, ...)
 	va_end(ap);
 }
 
-cf_log_level g_log_level = CF_INFO;
-cf_log_callback g_log_callback = cf_default_log;
+cf_atomic32 g_log_level = (cf_atomic32)CF_INFO;
+cf_atomic_p g_log_callback = (cf_atomic_p)cf_default_log;

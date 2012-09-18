@@ -84,8 +84,6 @@ cl_lookup_result_fn(int result, char type, int count, int ttl, void *addresses, 
 	
 	uint64_t _s = cf_getms();
 
-	CL_LOG( CL_VERBOSE, "libevent dns result %d type %d count %d ttl %d\n",result,type,count,ttl);
-	
 	if ((result == 0) && (count > 0) && (type == DNS_IPv4_A)) 
 	{
 		cf_vector_define(result_v, sizeof(struct sockaddr_in), 0);
@@ -96,9 +94,6 @@ cl_lookup_result_fn(int result, char type, int count, int ttl, void *addresses, 
 			memset(&sin, 0, sizeof(sin));
 			sin.sin_family = AF_INET;
 			sin.sin_addr.s_addr = s_addr[i];
-			
-			CL_LOG(CL_VERBOSE, "libevent dns: %d: %x\n",i,sin.sin_addr.s_addr);
-			
 			sin.sin_port = htons(cls->port);
 			cf_vector_append(&result_v, &sin );
 		}
@@ -116,16 +111,12 @@ cl_lookup_result_fn(int result, char type, int count, int ttl, void *addresses, 
 	free(cls);
 	
 	uint64_t delta = cf_getms() - _s;
-	if (delta > CL_LOG_DELAY_WARN) CL_LOG(CL_WARNING, " CL DELAY: cl_lookup result fn: %"PRIu64"\n",delta);
-
+	if (delta > CL_LOG_DELAY_INFO) cf_info("CL DELAY: cl_lookup result fn: %"PRIu64, delta);
 }
 
 int
 cl_lookup(struct evdns_base *dns_base, char *hostname, short port, cl_lookup_async_fn cb, void *udata)
 {
-	
-	CL_LOG( CL_VERBOSE, "libevent dns start: hostname %s\n",hostname);
-
 	uint64_t _s = cf_getms();
 
 	cl_lookup_state *cls = malloc(sizeof(cl_lookup_state));
@@ -137,15 +128,14 @@ cl_lookup(struct evdns_base *dns_base, char *hostname, short port, cl_lookup_asy
 	// the req obj is what you use to cancel before the job is done
 	cls->evdns_req = evdns_base_resolve_ipv4( dns_base, (const char *)hostname, 0 /*search flag*/, cl_lookup_result_fn, cls);
 	if (0 == cls->evdns_req) {
-
-		CL_LOG(CL_INFO, "libevent dns fail: hostname %s\n",hostname);
+		cf_info("libevent dns fail: hostname %s", hostname);
 		free(cls);
 		uint64_t delta = cf_getms() - _s;
-		if (delta > CL_LOG_DELAY_WARN) CL_LOG(CL_INFO," CL_DELAY: cl_lookup: error: %"PRIu64"\n",delta);
+		if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: cl_lookup: error: %"PRIu64, delta);
 		return(-1);
 	}
 	uint64_t delta = cf_getms() - _s;
-	if (delta > CL_LOG_DELAY_WARN) CL_LOG(CL_WARNING," CL_DELAY: cl_lookup: %"PRIu64"\n",delta);
+	if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: cl_lookup: %"PRIu64, delta);
 	return(0);
 }	
 

@@ -145,6 +145,9 @@ int main(int argc, char* argv[]) {
 		exit(-1);
 	}
 
+	// Use default client logging, but set a filter.
+	cf_set_log_level(CF_WARN);
+
 	srand(time(NULL));
 
 	key keys[g_total_keys];

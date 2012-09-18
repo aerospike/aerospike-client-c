@@ -20,7 +20,7 @@ clean:
 	rm -f lib/*
 	rm -f lib32/*
 	rm -f lib64/*
-	rm -f example/cl_ev2example
+	rm -f example/example
 	rm -f example/obj/*
 	rm -f example2/example2
 	rm -f example2/obj/*

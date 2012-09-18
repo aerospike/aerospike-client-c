@@ -131,7 +131,7 @@ async_receiver_fn(void *thdata)
 		cf_queue_pop(q_to_use, &workitem, CF_QUEUE_FOREVER);
 		//TODO: What if the node gets dunned while this pop call is blocked ?
 #if ONEASYNCFD
-		//fprintf(stderr, "Elements remaining in this node's queue=%d, Hash table size=%d\n", 
+		//cf_debug("Elements remaining in this node's queue=%d, Hash table size=%d",
 		//		cf_queue_sz(thisnode->asyncwork_q), shash_get_size(g_cl_async_hashtab));
 #endif
 
@@ -143,10 +143,10 @@ async_receiver_fn(void *thdata)
 		rv = cf_socket_read_timeout(workitem->fd, (uint8_t *) &msg, sizeof(as_msg), workitem->deadline, progress_timeout_ms);
 		if (rv) {
 #if DEBUG
-			fprintf(stderr, "Citrusleaf: error when reading header from server - rv %d fd %d\n",rv,workitem->fd);
+			cf_debug("Citrusleaf: error when reading header from server - rv %d fd %d", rv, workitem->fd);
 #endif
 			if (rv != ETIMEDOUT) {
-				fprintf(stderr, "Citrusleaf: error when reading header from server - rv %d fd %d\n",rv,workitem->fd);
+				cf_error("Citrusleaf: error when reading header from server - rv %d fd %d",rv,workitem->fd);
 				network_error = true;
 				goto Error;
 			} else {
@@ -156,7 +156,7 @@ async_receiver_fn(void *thdata)
 		}
 #ifdef DEBUG_VERBOSE
 		dump_buf("read header from cluster", (uint8_t *) &msg, sizeof(cl_msg));
-#endif	
+#endif
 		cl_proto_swap(&msg.proto);
 		cl_msg_swap_header(&msg.m);
 
@@ -166,7 +166,7 @@ async_receiver_fn(void *thdata)
 			if (rd_buf_sz > sizeof(rd_stack_buf)) {
 				rd_buf = malloc(rd_buf_sz);
 				if (!rd_buf) {
-					fprintf(stderr, "malloc fail: trying %zu\n",rd_buf_sz);
+					cf_error("malloc fail: trying %zu",rd_buf_sz);
 					rv = -1; 
 					goto Error; 
 				}
@@ -177,7 +177,7 @@ async_receiver_fn(void *thdata)
 				//We already read some part of the message before but failed to read the
 				//remaining data for whatever reason (network error or timeout). We cannot
 				//reread as we already read partial data. Declare this as error.
-				fprintf(stderr, "Timeout after reading the header but before reading the body\n");
+				cf_error("Timeout after reading the header but before reading the body");
 				goto Error;
 			}
 #ifdef DEBUG_VERBOSE
@@ -191,9 +191,9 @@ async_receiver_fn(void *thdata)
 Retry:
 		//We are trying to postpone the reading
 		if (workitem->deadline && workitem->deadline < cf_getms()) {
-			fprintf(stderr, "async receiver: out of time : deadline %"PRIu64" now %"PRIu64"\n",
+			cf_error("async receiver: out of time : deadline %"PRIu64" now %"PRIu64,
 					workitem->deadline, cf_getms());
-			//fprintf(stderr, "async receiver: Workitem missed the final deadline\n");
+			//cf_error("async receiver: Workitem missed the final deadline");
 			rv = CITRUSLEAF_FAIL_TIMEOUT;
 			goto Error;
 		} else {
@@ -225,7 +225,7 @@ Error:
 #else
 		//We do not know the state of FD. It may have pending data to be read.
 		//We cannot reuse the FD. So, close it to be on safe side.
-		fprintf(stderr, "async receiver: Closing the fd %d because of error\n", workitem->fd);
+		cf_error("async receiver: Closing the fd %d because of error", workitem->fd);
 		close(workitem->fd);
 		workitem->fd = -1;
 #endif
@@ -261,7 +261,7 @@ Ok:
 					workitem = tmpworkitem;
 #endif
 #ifdef DEBUG
-					fprintf(stderr, "Got reply for a different trid. Expected=%"PRIu64" Got=%"PRIu64" FD=%d\n", 
+					cf_debug("Got reply for a different trid. Expected=%"PRIu64" Got=%"PRIu64" FD=%d",
 							workitem->trid, acktrid, workitem->fd);
 #endif
 				}
@@ -284,7 +284,7 @@ Ok:
 		if (shash_delete(g_cl_async_hashtab, &workitem->trid) != SHASH_OK)
 		{
 #if DEBUG
-			fprintf(stderr,"Failure while trying to delete trid=%"PRIu64" from hashtable\n", workitem->trid);
+			cf_debug("Failure while trying to delete trid=%"PRIu64" from hashtable", workitem->trid);
 #endif
 		}
 #endif
@@ -335,13 +335,13 @@ cl_do_async_monte(cl_cluster *asc, int info1, int info2, const char *ns, const c
 
 #if ONEASYNCFD
 	if (shash_get_size(g_cl_async_hashtab) >= g_async_h_szlimit) {
-		//fprintf(stderr, "Async hashtab is full. Cannot insert any more elements\n");
+		//cf_error("Async hashtab is full. Cannot insert any more elements");
 		return CITRUSLEAF_FAIL_ASYNCQ_FULL;
 	}
 #else
 	//If the async buffer is at the max limit, do not entertain more requests.
 	if (cf_queue_sz(g_cl_async_q) >= cf_atomic32_get(g_async_q_szlimit)) {
-		//fprintf(stderr, "Async buffer is full. Cannot insert any more elements\n");
+		//cf_error("Async buffer is full. Cannot insert any more elements");
 		return CITRUSLEAF_FAIL_ASYNCQ_FULL;
 	}
 #endif
@@ -394,7 +394,7 @@ cl_do_async_monte(cl_cluster *asc, int info1, int info2, const char *ns, const c
 		try++;
 #ifdef DEBUG		
 		if (try > 1) {
-			fprintf(stderr,"request retrying try %d tid %zu\n",try,(uint64_t)pthread_self());
+			cf_debug("request retrying try %d tid %zu", try, (uint64_t)pthread_self());
 		}
 #endif        
 
@@ -402,7 +402,7 @@ cl_do_async_monte(cl_cluster *asc, int info1, int info2, const char *ns, const c
 		node = cl_cluster_node_get(asc, ns, &d_ret, info2 & CL_MSG_INFO2_WRITE ? true : false);
 		if (!node) {
 #ifdef DEBUG
-			fprintf(stderr, "warning: no healthy nodes in cluster, retrying\n");
+			cf_debug("warning: no healthy nodes in cluster, retrying");
 #endif
 			usleep(10000);	//Sleep for 10ms
 			goto Retry;
@@ -413,11 +413,11 @@ cl_do_async_monte(cl_cluster *asc, int info1, int info2, const char *ns, const c
 		fd = cl_cluster_node_fd_get(node, true, asc->nbconnect);
 		endtime = cf_getms();
 		if ((endtime - starttime) > 10) {
-			fprintf(stderr, "Time to get FD for a node (>10ms)=%"PRIu64"\n", (endtime - starttime));
+			cf_debug("Time to get FD for a node (>10ms)=%"PRIu64, (endtime - starttime));
 		}
 		if (fd == -1) {
 #ifdef DEBUG			
-			fprintf(stderr, "warning: node %s has no async file descriptors, retrying transaction (tid %zu)\n",node->name,(uint64_t)pthread_self() );
+			cf_debug("warning: node %s has no async file descriptors, retrying transaction (tid %zu)",node->name,(uint64_t)pthread_self() );
 #endif			
 			usleep(1000);
 			goto Retry;
@@ -435,10 +435,10 @@ cl_do_async_monte(cl_cluster *asc, int info1, int info2, const char *ns, const c
 		rv = cf_socket_write_timeout(fd, wr_buf, wr_buf_sz, deadline_ms, progress_timeout_ms);
 		endtime = cf_getms();
 		if ((endtime - starttime) > 10) {
-			fprintf(stderr, "Time to write to the socket (>10ms)=%"PRIu64"\n", (endtime - starttime));
+			cf_debug("Time to write to the socket (>10ms)=%"PRIu64, (endtime - starttime));
 		}
 		if (rv != 0) {
-			fprintf(stderr, "Citrusleaf: write timeout or error when writing header to server - %d fd %d errno %d (tid %zu)\n",
+			cf_debug("Citrusleaf: write timeout or error when writing header to server - %d fd %d errno %d (tid %zu)",
 					rv,fd,errno,(uint64_t)pthread_self());
 			if (rv != ETIMEDOUT)
 				network_error = true;
@@ -460,14 +460,14 @@ Retry:
 #if ONEASYNCFD
 //Do not close the FD
 #else
-			fprintf(stderr, "async sender: Closing the fd %d because of network error\n", fd);
+			cf_error("async sender: Closing the fd %d because of network error", fd);
 			close(fd);
 			fd = -1;
 #endif
 		}
 
 		if (fd != -1) {
-			fprintf(stderr, "async sender: Closing the fd %d because of retry\n", fd);
+			cf_error("async sender: Closing the fd %d because of retry", fd);
 			close(fd);
 			fd = -1;
 		}
@@ -479,7 +479,7 @@ Retry:
 
 		if (deadline_ms && (deadline_ms < cf_getms() ) ) {
 #ifdef DEBUG            
-			fprintf(stderr, "async sender: out of time : deadline %"PRIu64" now %"PRIu64"\n", deadline_ms, cf_getms());
+			cf_debug("async sender: out of time : deadline %"PRIu64" now %"PRIu64, deadline_ms, cf_getms());
 #endif            
 			rv = CITRUSLEAF_FAIL_TIMEOUT;
 			goto Error;
@@ -488,7 +488,7 @@ Retry:
 
 Error:	
 #ifdef DEBUG	
-	fprintf(stderr, "exiting with failure: network_error %d wpol %d timeleft %d rv %d\n",
+	cf_debug("exiting with failure: network_error %d wpol %d timeleft %d rv %d",
 			(int)network_error, (int)(cl_w_p ? cl_w_p->w_pol : 0), 
 			(int)(deadline_ms - cf_getms() ), rv );
 #endif	
@@ -503,7 +503,7 @@ Error:
 	//If it is a network error, the fd would be closed and set to -1.
 	//So, we reach this place with a valid FD in case of timeout.
 	if (fd != -1) {
-		fprintf(stderr, "async sender: Closing the fd %d because of timeout\n", fd);
+		cf_error("async sender: Closing the fd %d because of timeout", fd);
 		close(fd);
 	}
 #endif
@@ -523,7 +523,7 @@ Ok:
 #if ONEASYNCFD
 	if (shash_put_unique(g_cl_async_hashtab, trid, &workitem) != SHASH_OK) {
 		//This should always succeed.
-		fprintf(stderr, "Unable to add unique entry into the hash table\n");
+		cf_error("Unable to add unique entry into the hash table");
 	}
 	cf_queue_push(node->asyncwork_q, &workitem);	//Also put in the node's q
 #else
@@ -544,7 +544,7 @@ int citrusleaf_async_reinit(int size_limit, unsigned int num_receiver_threads)
 	int num_threads;
 
 	if (0 == cf_atomic32_get(g_async_initialized)) {
-		fprintf(stderr, "Async client not initialized cannot reinit");
+		cf_error("Async client not initialized cannot reinit");
 		return -1;
 	}
 	
@@ -589,7 +589,7 @@ int citrusleaf_async_init(int size_limit, int num_receiver_threads, cl_async_fai
 
 		if (shash_create(&g_cl_async_hashtab, async_trid_hash, sizeof(uint64_t), sizeof(cl_async_work *),
 					g_async_h_buckets, SHASH_CR_MT_BIGLOCK) != SHASH_OK) {
-			fprintf(stderr, "Failed to initialize the async work hastable\n");
+			cf_error("Failed to initialize the async work hastable");
 			cf_atomic32_decr(&g_async_initialized);
 			return -1;
 		}
@@ -597,7 +597,7 @@ int citrusleaf_async_init(int size_limit, int num_receiver_threads, cl_async_fai
 		// create work queue
 		g_async_q_szlimit = size_limit;
 		if ((g_cl_async_q = cf_queue_create(sizeof(cl_async_work *), true)) == NULL) {
-			fprintf(stderr, "Failed to initialize the async work queue\n");
+			cf_error("Failed to initialize the async work queue");
 			cf_atomic32_decr(&g_async_initialized);
 			return -1;
 		}
@@ -609,7 +609,7 @@ int citrusleaf_async_init(int size_limit, int num_receiver_threads, cl_async_fai
 #endif
 
 		if ((g_cl_workitems_freepool_q = cf_queue_create(sizeof(cl_async_work *), true)) == NULL) {
-			fprintf(stderr, "Failed to create memory pool for workitems\n");
+			cf_error("Failed to create memory pool for workitems");
 			return -1;
 		}
 

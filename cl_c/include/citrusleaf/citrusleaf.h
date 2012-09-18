@@ -25,6 +25,7 @@
 #ifndef XDS	// Hack for the sake of XDS. XDS includes the main CF libs. 
 		// We do not want to include them again from client API
 #include "citrusleaf/cf_atomic.h"
+#include "citrusleaf/cf_log.h"
 #include "citrusleaf/cf_ll.h"
 #include "citrusleaf/cf_clock.h"
 #include "citrusleaf/cf_vector.h"

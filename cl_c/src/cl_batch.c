@@ -56,7 +56,7 @@ batch_decompress(uint8_t *in_buf, size_t in_sz, uint8_t **out_buf, size_t *out_s
     size_t  	b_sz_alloc = *(uint64_t *)in_buf;
     uint8_t 	*b = malloc(b_sz_alloc);
     if (0 == b) {
-    	fprintf(stderr, "batch_decompress: could not malloc %"PRIu64" bytes\n",b_sz_alloc);
+    	cf_error("batch_decompress: could not malloc %"PRIu64" bytes", b_sz_alloc);
     	inflateEnd(&strm);
     	return(-1);
     }
@@ -67,17 +67,10 @@ batch_decompress(uint8_t *in_buf, size_t in_sz, uint8_t **out_buf, size_t *out_s
 	strm.avail_out = b_sz_alloc; // round up: seems to like that
 	strm.next_out = b;
 
-
-//	fprintf(stderr, "before deflate: in_buf %p in_sz %"PRIu64" outbuf %p out_sz %"PRIu64"\n",
-//		strm.next_in, strm.avail_in, strm.next_out, strm.avail_out);
-
 	rv = inflate(&strm, Z_FINISH);
-	
-//	fprintf(stderr, "after deflate: rv %d in_buf %p in_sz %"PRIu64" outbuf %p out_sz %"PRIu64" ms %"PRIu64"\n",
-//		rv, strm.next_in, strm.avail_in, strm.next_out, strm.avail_out, cf_getms() - now);
 
 	if (rv != Z_STREAM_END) {
-		fprintf(stderr, "could not deflate data: zlib error %d (check zlib.h)\n",rv);
+		cf_error("could not deflate data: zlib error %d (check zlib.h)", rv);
 		free(b);
 		inflateEnd(&strm);
 		return(-1);
@@ -147,7 +140,7 @@ batch_compile(uint info1, uint info2, char *ns, cf_digest *digests, cl_cluster_n
 		msg_sz += sizeof(cl_msg_op) + strlen(values[i].bin_name);
 
         if (0 != cl_value_to_op_get_size(&values[i], &msg_sz)) {
-            fprintf(stderr,"illegal parameter: bad type %d write op %d\n",values[i].object.type,i);
+            cf_error("illegal parameter: bad type %d write op %d", values[i].object.type, i);
             return(-1);
         }
 	}
@@ -264,7 +257,7 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 	rv = batch_compile(info1, info2, ns, digests, nodes, n_digests, node, n_node_digests, bins, operator, operations, n_ops, 
 		&wr_buf, &wr_buf_sz, 0);
 	if (rv != 0) {
-		fprintf(stderr, " do batch monte: batch compile failed: some kind of intermediate error\n");
+		cf_error("do batch monte: batch compile failed: some kind of intermediate error");
 		return (rv);
 	}
 
@@ -276,7 +269,7 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 	int fd = cl_cluster_node_fd_get(node, false, asc->nbconnect);
 	if (fd == -1) {
 #ifdef DEBUG			
-		fprintf(stderr, "warning: node %s has no file descriptors, retrying transaction\n",node->name);
+		cf_debug("warning: node %s has no file descriptors, retrying transaction", node->name);
 #endif
 		return(-1);
 	}
@@ -284,7 +277,7 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 	// send it to the cluster - non blocking socket, but we're blocking
 	if (0 != cf_socket_write_forever(fd, wr_buf, wr_buf_sz)) {
 #ifdef DEBUG			
-		fprintf(stderr, "Citrusleaf: write timeout or error when writing header to server - %d fd %d errno %d\n",rv,fd,errno);
+		cf_debug("Citrusleaf: write timeout or error when writing header to server - %d fd %d errno %d", rv, fd, errno);
 #endif
 		return(-1);
 	}
@@ -296,7 +289,7 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 		
 		// Now turn around and read a fine cl_pro - that's the first 8 bytes that has types and lenghts
 		if ((rv = cf_socket_read_forever(fd, (uint8_t *) &proto, sizeof(cl_proto) ) ) ) {
-			fprintf(stderr, "network error: errno %d fd %d\n",rv, fd);
+			cf_error("network error: errno %d fd %d", rv, fd);
 			return(-1);
 		}
 #ifdef DEBUG_VERBOSE
@@ -305,11 +298,11 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 		cl_proto_swap(&proto);
 
 		if (proto.version != CL_PROTO_VERSION) {
-			fprintf(stderr, "network error: received protocol message of wrong version %d\n",proto.version);
+			cf_error("network error: received protocol message of wrong version %d", proto.version);
 			return(-1);
 		}
 		if ((proto.type != CL_PROTO_TYPE_CL_MSG) && (proto.type != CL_PROTO_TYPE_CL_MSG_COMPRESSED)) {
-			fprintf(stderr, "network error: received incorrect message version %d\n",proto.type);
+			cf_error("network error: received incorrect message version %d", proto.type);
 			return(-1);
 		}
 		
@@ -319,8 +312,6 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 		rd_buf_sz =  proto.sz;
 		if (rd_buf_sz > 0) {
                                                          
-//            fprintf(stderr, "message read: size %u\n",(uint)proto.sz);
-            
 			if (rd_buf_sz > sizeof(rd_stack_buf))
 				rd_buf = malloc(rd_buf_sz);
 			else
@@ -328,7 +319,7 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 			if (rd_buf == NULL)		return (-1);
 
 			if ((rv = cf_socket_read_forever(fd, rd_buf, rd_buf_sz))) {
-				fprintf(stderr, "network error: errno %d fd %d\n",rv, fd);
+				cf_error("network error: errno %d fd %d", rv, fd);
 				if (rd_buf != rd_stack_buf)	{ free(rd_buf); }
 				return(-1);
 			}
@@ -345,7 +336,7 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 			
 			rv = batch_decompress(rd_buf, rd_buf_sz, &new_rd_buf, &new_rd_buf_sz);
 			if (rv != 0) {
-				fprintf(stderr, "could not decompress compressed message: error %d\n",rv);
+				cf_error("could not decompress compressed message: error %d", rv);
 				if (rd_buf != rd_stack_buf)	{ free(rd_buf); }
 			}				
 				
@@ -377,7 +368,7 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 			buf += sizeof(cl_msg);
 			
 			if (msg->header_sz != sizeof(cl_msg)) {
-				fprintf(stderr, "received cl msg of unexpected size: expecting %zd found %d, internal error\n",
+				cf_error("received cl msg of unexpected size: expecting %zd found %d, internal error",
 					sizeof(cl_msg),msg->header_sz);
 				return(-1);
 			}
@@ -389,8 +380,9 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 			cl_msg_field *mf = (cl_msg_field *)buf;
 			for (int i=0;i<msg->n_fields;i++) {
 				cl_msg_swap_field(mf);
-				if (mf->type == CL_MSG_FIELD_TYPE_KEY)
-					fprintf(stderr, "read: found a key - unexpected\n");
+				if (mf->type == CL_MSG_FIELD_TYPE_KEY) {
+					cf_error("read: found a key - unexpected");
+				}
 				else if (mf->type == CL_MSG_FIELD_TYPE_DIGEST_RIPE) {
 					keyd = (cf_digest *) mf->data;
 				}
@@ -409,7 +401,7 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 			buf = (uint8_t *) mf;
 
 #ifdef DEBUG_VERBOSE
-			fprintf(stderr, "message header fields: nfields %u nops %u\n",msg->n_fields,msg->n_ops);
+			cf_debug("message header fields: nfields %u nops %u",msg->n_fields,msg->n_ops);
 #endif
 
 
@@ -433,7 +425,7 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 				cl_msg_swap_op(op);
 
 #ifdef DEBUG_VERBOSE
-				fprintf(stderr, "op receive: %p size %d op %d ptype %d pversion %d namesz %d \n",
+				cf_debug("op receive: %p size %d op %d ptype %d pversion %d namesz %d",
 					op,op->op_sz, op->op, op->particle_type, op->version, op->name_sz);
 #endif			
 
@@ -453,7 +445,7 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 
 			if (msg->info3 & CL_MSG_INFO3_LAST)	{
 #ifdef DEBUG				
-				fprintf(stderr, "received final message\n");
+				cf_debug("received final message");
 #endif				
 				done = true;
 			}
@@ -464,8 +456,6 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 				(*cb) ( ns_ret, keyd, set_ret, msg->generation, msg->record_ttl, bins, msg->n_ops, false /*islast*/, udata);
 				rv = 0;
 			}
-//			else
-//				fprintf(stderr, "received message with no bins, signal of an error\n");
 
 			if (bins != stack_bins) {
 				free(bins);
@@ -498,7 +488,7 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 	cl_cluster_node_fd_put(node, fd, false);
 
 #ifdef DEBUG_VERBOSE	
-	fprintf(stderr, "exited loop: rv %d\n", rv );
+	cf_debug("exited loop: rv %d", rv );
 #endif	
 	
 	return(rv);
@@ -551,7 +541,7 @@ batch_worker_fn(void *dummy)
 		digest_work work;
 		
 		if (0 != cf_queue_pop(g_batch_q, &work, CF_QUEUE_FOREVER)) {
-			fprintf(stderr, "queue pop failed\n");
+			cf_error("queue pop failed");
 		}
 		
 		/* See function citrusleaf_batch_shutdown() for more details */
@@ -582,7 +572,7 @@ do_get_exists_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, i
 	// 
 	cl_cluster_node **nodes = malloc( sizeof(cl_cluster_node *)  * n_digests);
 	if (!nodes) {
-		fprintf(stderr, " allocation failed ");
+		cf_error("allocation failed");
 		return(-1);
 	}
 	
@@ -594,11 +584,11 @@ do_get_exists_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, i
 		// not sure if this is required - it looks like cluster_node_get automatically calls random?
 		// it's certainly safer though
 		if (nodes[i] == 0) {
-			fprintf(stderr, "index %d: no specific node, getting random\n",i);
+			cf_error("index %d: no specific node, getting random", i);
 			nodes[i] = cl_cluster_node_get_random(asc);
 		}
 		if (nodes[i] == 0) {
-			fprintf(stderr, "index %d: can't get any node\n", i);
+			cf_error("index %d: can't get any node", i);
 			free(nodes);
 			return(-1);
 		}
@@ -656,8 +646,6 @@ do_get_exists_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, i
 		work.my_node_digest_count = unique_nodes_count[i];
 		work.index = i;
 		
-//		fprintf(stderr,"dispatching work: index %d node %p n_digeset %d\n",i,work.my_node,work.my_node_digest_count); 
-		
 		// dispatch - copies data
 		cf_queue_push(g_batch_q, &work);
 	}
@@ -668,7 +656,7 @@ do_get_exists_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, i
 		int z;
 		cf_queue_pop(work.complete_q, &z, CF_QUEUE_FOREVER);
 		if (z != 0) {
-			fprintf(stderr,"Node %d retcode error: %d\n", i, z);
+			cf_error("Node %d retcode error: %d", i, z);
 			retval = z;
 		}
 	}

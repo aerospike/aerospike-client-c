@@ -120,6 +120,11 @@ cl_compile(uint info1, uint info2, uint info3, const char *ns, const char *set, 
 int
 cl_parse(cl_msg *msg, uint8_t *buf, size_t buf_len, cl_bin **values_r, cl_operation **operations_r, int *n_values_r, uint64_t *trid);
 
+#ifdef DEBUG_VERBOSE
+void
+dump_buf(char *info, uint8_t *buf, size_t buf_len);
+#endif
+
 #ifdef __cplusplus
 } // end extern "C"
 #endif

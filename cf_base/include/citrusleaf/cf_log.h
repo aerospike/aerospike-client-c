@@ -96,6 +96,11 @@ static inline void cf_set_log_callback(cf_log_callback callback)
 // Internal API - for use by Aerospike client only
 //
 
+static inline int cf_info_enabled()
+{
+	return CF_INFO <= G_LOG_LEVEL;
+}
+
 static inline int cf_debug_enabled()
 {
 	return CF_DEBUG <= G_LOG_LEVEL;

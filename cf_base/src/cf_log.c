@@ -19,7 +19,7 @@ cf_default_log(cf_log_level level, const char* fmt_no_newline, ...)
 
 	va_list ap;
 
-	va_start(ap, fmt);
+	va_start(ap, fmt_no_newline);
 	vfprintf(stderr, fmt, ap);
 	va_end(ap);
 }

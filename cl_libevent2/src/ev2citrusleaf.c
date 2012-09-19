@@ -39,9 +39,6 @@
     static cf_histogram* cf_hist;
 #endif
 
-ev2citrusleaf_log_callback cl_log_fn;
-int cl_log_level;
-
 //
 // Default mutex lock functions:
 //
@@ -184,22 +181,35 @@ ev2citrusleaf_bins_free(ev2citrusleaf_bin *bins, int n_bins) {
 
 //
 // Debug calls for printing the buffers. Very useful for debugging....
-// NO LONGER WORKS RIGHT. Need to convert to building a buffer out of each line
 //
 #if 0
 static void
 dump_buf(char *info, uint8_t *buf, size_t buf_len)
 {
-	CL_LOG(CL_VERBOSE,"dump_buf: %s\n",info);
-	uint i;
-	for (i=0;i<buf_len;i++) {
-		if (i % 16 == 8)
-			CL_LOG( CL_VERBOSE, " :");
-		if (i && (i % 16 == 0))
-			CL_LOG(CL_VERBOSE, "\n");
-		CL_LOG(CL_VERBOSE, "%02x ",buf[i]);
+	if (cf_debug_enabled()) {
+		char msg[buf_len * 4 + 2];
+		char* p = msg;
+
+		strcpy(p, "dump_buf: ");
+		p += 10;
+		strcpy(p, info);
+		p += strlen(info);
+
+		for (uint i = 0; i < buf_len; i++) {
+			if (i % 16 == 8) {
+				*p++ = ' ';
+				*p++ = ':';
+			}
+			if (i && (i % 16 == 0)) {
+				*p++ = '\n';
+			}
+			sprintf(p, "%02x ", buf[i]);
+			p += 3;
+		}
+
+		*p = 0;
+		cf_debug(msg);
 	}
-	CL_LOG(CL_VERBOSE, "\n");
 }
 #endif
 
@@ -322,7 +332,7 @@ write_fields(uint8_t *buf, char *ns, int ns_len, char *set, int set_len, ev2citr
 			memcpy(&fd[1], &swapped, sizeof(swapped));
 		}
 		else {
-			CL_LOG(CL_WARNING, " unknown citrusleaf type %d",key->type);
+			cf_warn("unknown citrusleaf type %d", key->type);
 			return(0);
 		}
 		mf_tmp = cl_msg_field_get_next(mf);
@@ -409,7 +419,7 @@ ev2citrusleaf_calculate_digest(const char *set, const ev2citrusleaf_object *key,
 			memcpy(&k[1], key->u.blob, key->size);
 			break;
 		default:
-			CL_LOG( CL_DEBUG, " transmit key: unknown citrusleaf type %d\n",key->type);
+			cf_warn("transmit key: unknown citrusleaf type %d", key->type);
 			return(-1);
 	}
 
@@ -499,7 +509,7 @@ value_to_op_get_size(ev2citrusleaf_object *v, size_t *sz)
 			*sz += v->size;
 			break;
 		default:
-			CL_LOG(CL_DEBUG, "internal error value_to_op get size has unknown value type %d\n",v->type);
+			cf_warn("internal error value_to_op get size has unknown value type %d", v->type);
 			return(-1);
 	}
 	return(0);
@@ -543,7 +553,7 @@ bin_to_op(int operation, ev2citrusleaf_bin *v, cl_msg_op *op)
 				memcpy(data, v->object.u.blob, v->object.size);
 				break;
 			default:
-				CL_LOG(CL_WARNING, "internal error value_to_op has unknown value type\n");
+				cf_warn("internal error value_to_op has unknown value type");
 				return;
 		}
 	}
@@ -598,7 +608,7 @@ operation_to_op(ev2citrusleaf_operation *v, cl_msg_op *op)
 				memcpy(data, v->object.u.blob, v->object.size);
 				break;
 			default:
-				CL_LOG(CL_WARNING, "internal error value_to_op has unknown value type\n");
+				cf_warn("internal error value_to_op has unknown value type");
 				return;
 		}
 	}
@@ -632,7 +642,7 @@ compile(int info1, int info2, char *ns, char *set, ev2citrusleaf_object *key, cf
 		msg_size += sizeof(cl_msg_op) + strlen(values[i].bin_name);
 		if (info2 & CL_MSG_INFO2_WRITE) {
 			if (0 != value_to_op_get_size(&values[i].object, &msg_size)) {
-				CL_LOG(CL_WARNING, "bad operation, writing with unknown type\n");
+				cf_warn("bad operation, writing with unknown type");
 				return(-1);
 			}
 		}
@@ -827,7 +837,7 @@ set_object(cl_msg_op *op, ev2citrusleaf_object *obj)
 			break;
 			
 		default:
-			CL_LOG(CL_WARNING, "parse: internal error: received unknown object type %d",op->particle_type);
+			cf_warn("parse: internal error: received unknown object type %d",op->particle_type);
 			return(-1);
 	}
 	return(0);
@@ -849,7 +859,7 @@ set_value_search(cl_msg_op *op, ev2citrusleaf_bin *values, int n_values)
 			break;
 	}
 	if (i == n_values) {
-		CL_LOG(CL_WARNING, "set value: but value wasn't there to begin with. Don't understand.\n");
+		cf_warn("set value: but value wasn't there to begin with. Don't understand.");
 		return(-1);
 	}
 	
@@ -865,7 +875,7 @@ void
 set_value_particular(cl_msg_op *op, ev2citrusleaf_bin *value)
 {
 	if (op->name_sz > sizeof(value->bin_name)) {
-		CL_LOG(CL_WARNING, "Set Value Particular: bad response from server");
+		cf_warn("Set Value Particular: bad response from server");
 		return;
 	}
 	
@@ -908,12 +918,12 @@ parse(uint8_t *buf, size_t buf_len, ev2citrusleaf_bin *values, int n_values,  in
 	if (generation)	*generation = msg->generation;
 	
 	if (msg->n_fields) {
-		CL_LOG(CL_WARNING, "unusual - not sure what fields are doing in a response\n");
+		cf_warn("unusual - not sure what fields are doing in a response");
 		cl_msg_field *mf = (cl_msg_field *)buf;
 		for (i=0;i<msg->n_fields;i++) {
 
 			if ((uint8_t *)mf >= limit) {
-				CL_LOG(CL_WARNING, "poorly formatted response: fail\n");
+				cf_warn("poorly formatted response: fail");
 				return(-1);
 			}
 
@@ -933,7 +943,7 @@ parse(uint8_t *buf, size_t buf_len, ev2citrusleaf_bin *values, int n_values,  in
 	for (i=0;i<msg->n_ops;i++) {
 		
 		if ((uint8_t *)op >= limit) {
-			CL_LOG(CL_WARNING, "poorly formatted response2\n");
+			cf_warn("poorly formatted response2");
 			return(-1);
 		}
 		
@@ -952,23 +962,19 @@ void
 ev2citrusleaf_request_complete(cl_request *req, bool timedout)
 {
 	if (req->MAGIC != CL_REQUEST_MAGIC) {
-		CL_LOG(CL_WARNING,"passed bad request %p\n");
+		cf_warn("passed bad request %p");
 		return;
 	}
-	
-#if 0
-	dump_buf(CL_VERBOSE, "request complete :",req->rd_buf, req->rd_buf_size);
-#endif // dump buf don't work anymore
+
+//	dump_buf("request complete :", req->rd_buf, req->rd_buf_size);
 
 	if (req->timeout_set) {
-		// CL_LOG(CL_VERBOSE, "request complete: timeout event still active\n");
 		evtimer_del(cl_request_get_timeout_event(req));
 	}
 	
 	// critical to close this before the file descriptor associated, for some
 	// reason
 	if (req->network_set) {	
-		// CL_LOG(CL_VERBOSE, "request complete: network event still active\n");
 		event_del(cl_request_get_network_event(req));
 	}
 
@@ -1009,7 +1015,7 @@ ev2citrusleaf_request_complete(cl_request *req, bool timedout)
 		// timeouts to the usual timeout return-code:
 		if (return_code == EV2CITRUSLEAF_FAIL_SERVERSIDE_TIMEOUT) {
 			return_code = EV2CITRUSLEAF_FAIL_TIMEOUT;
-			CL_LOG(CL_VERBOSE, "server-side timeout\n");
+			cf_debug("server-side timeout");
 		}
 
 		// Call the callback
@@ -1065,26 +1071,24 @@ ev2citrusleaf_is_connected(int fd)
 	uint8_t buf[8];
 	int rv = recv(fd, buf, sizeof(buf), MSG_PEEK | MSG_DONTWAIT | MSG_NOSIGNAL);
 	if (rv == 0) {
-		CL_LOG(CL_DEBUG, "connected check: found disconnected fd %d\n",fd);
+		cf_debug("connected check: found disconnected fd %d", fd);
 		return(CONNECTED_NOT);
 	}
 	
 	if (rv < 0) {
 		if (errno == EBADF) {
-			CL_LOG(CL_WARNING, "connected check: INTERNAL ERROR fd %d error %d\n",fd,errno);
+			cf_warn("connected check: INTERNAL ERROR fd %d error %d", fd, errno);
 			return(CONNECTED_BADFD);
 		}
 		else if ((errno == EWOULDBLOCK) || (errno == EAGAIN)) {
-			CL_LOG(CL_VERBOSE, "connected check: found connected fd %d\n",fd);
 			return(CONNECTED);
 		}
 		else {
-			CL_LOG(CL_INFO, "connected check: fd %d error %d\n",fd,errno);
+			cf_info("connected check: fd %d error %d", fd, errno);
 			return(CONNECTED_ERROR);
 		}
 	}
 	
-	CL_LOG(CL_VERBOSE, "connected check: found connected and readable fd %d\n",fd);
 	return(CONNECTED);
 }
 
@@ -1104,74 +1108,51 @@ ev2citrusleaf_event(int fd, short event, void *udata)
 	cf_atomic_int_incr(&g_cl_stats.event_counter);
 	
 	req->network_set = false;
-	
-	CL_LOG(CL_VERBOSE, "ev2citrusleaf_event: fd %d event %x\n",fd,(int)event);
-	
-	if (event & EV_WRITE) {
-		CL_LOG(CL_VERBOSE, "ev2citrusleaf_event: write wrbufpos %zd wrbufsize %zd\n",req->wr_buf_pos,req->wr_buf_size);
 
+	if (event & EV_WRITE) {
 		if (req->wr_buf_pos < req->wr_buf_size) {
 			rv = send(fd, &req->wr_buf[req->wr_buf_pos], req->wr_buf_size - req->wr_buf_pos,MSG_DONTWAIT | MSG_NOSIGNAL);
-
-			CL_LOG(CL_VERBOSE, "ev2citrusleaf_write: fd %d rv %d errno %d\n",fd,rv,errno);
 
 			if (rv > 0) {
 				req->wr_buf_pos += rv;
 				if (req->wr_buf_pos == req->wr_buf_size) {
-
-					CL_LOG(CL_VERBOSE, "ev2citrusleaf_write: fd %d write finished, switching to read\n",fd);
-
 					event_assign(cl_request_get_network_event(req),req->base ,fd, EV_READ, ev2citrusleaf_event, req);
-			
 				}
 			}
 			// according to man, send never returns 0. But do we trust it?
 			else if (rv == 0) {
-				CL_LOG( CL_DEBUG, "ev2citrusleaf_write failed with 0, posix not followed: fd %d rv %d errno %d\n",fd,rv,errno);
+				cf_debug("ev2citrusleaf_write failed with 0, posix not followed: fd %d rv %d errno %d", fd, rv, errno);
 				goto Fail;
 			}
 			else if ((errno != EAGAIN) && (errno != EWOULDBLOCK)) {
-				CL_LOG( CL_DEBUG, "ev2citrusleaf_write failed: fd %d rv %d errno %d\n",fd,rv,errno);
+				cf_debug("ev2citrusleaf_write failed: fd %d rv %d errno %d", fd, rv, errno);
 				goto Fail;
 			}
 			
 		}
-
-		else {
-			CL_LOG(CL_VERBOSE, "ev2citrusleaf event: received write while no work to do, signal of a hup? fd %d\n",fd);
-		}
-
 	}
-	
-	
+
 	if (event & EV_READ) {
-		CL_LOG(CL_VERBOSE, "ev2citrusleaf_event: read rdbufpos %zd rdbufsize %zd rdheaderpos %zd\n",
-			req->rd_buf_pos,req->rd_buf_size,req->rd_header_pos);
 		if (req->rd_header_pos < sizeof(cl_proto) ) {
 			rv = recv(fd, &req->rd_header_buf[req->rd_header_pos], sizeof(cl_proto) - req->rd_header_pos, MSG_DONTWAIT | MSG_NOSIGNAL);
-			CL_LOG(CL_VERBOSE,  "ev2citrusleaf initial_read: fd %d rv %d errno %d\n",fd,rv,errno);
+
 			if (rv > 0) {
 				req->rd_header_pos += rv;
 			}
 			else if (rv == 0) {
 				// connection has been closed by the server. A normal occurrance, perhaps.
-				CL_LOG(CL_DEBUG, "ev2citrusleaf read2: connection closed: fd %d rv %d errno %d\n",fd,rv,errno);
+				cf_debug("ev2citrusleaf read2: connection closed: fd %d rv %d errno %d", fd, rv, errno);
 				goto Fail;					
 			}
 			else {
 				if ((errno != EAGAIN) && (errno != EINPROGRESS)) {
-
-					CL_LOG(CL_DEBUG, "read failed: rv %d errno %d\n",rv,errno);
+					cf_debug("read failed: rv %d errno %d", rv, errno);
 					goto Fail;
 				}
 			}
 		}
+
 		if (req->rd_header_pos == sizeof(cl_proto)) {
-
-			CL_LOG(CL_VERBOSE, "read: read first part, now read last part rd size %zd\n",req->rd_buf_size);
-			
-//			dump_buf("event:read:proto",req->rd_header_buf,sizeof(cl_proto));
-
 			// initialize the read buffer
 			if (req->rd_buf_size == 0) {
 				// calculate msg size
@@ -1184,7 +1165,7 @@ ev2citrusleaf_event(int fd, short event, void *udata)
 				else {
 					req->rd_buf = malloc(proto->sz);
 					if (!req->rd_buf) {
-						CL_LOG(CL_WARNING, "malloc fail\n");
+						cf_error("malloc fail");
 						goto Fail;
 					}
 				}
@@ -1193,8 +1174,6 @@ ev2citrusleaf_event(int fd, short event, void *udata)
 			}
 			if (req->rd_buf_pos < req->rd_buf_size) {
 				rv = recv(fd, &req->rd_buf[req->rd_buf_pos], req->rd_buf_size - req->rd_buf_pos,MSG_DONTWAIT | MSG_NOSIGNAL);
-
-				CL_LOG(CL_VERBOSE, "ev2citrusleaf read: fd %d rv %d errno %d\n",fd,rv,errno);
 
 				if (rv > 0) {
 					req->rd_buf_pos += rv;
@@ -1206,20 +1185,17 @@ ev2citrusleaf_event(int fd, short event, void *udata)
 				}
 				else if (rv == 0) {
 					// connection has been closed by the server. Errno is invalid. A normal occurrance, perhaps.
-					CL_LOG(CL_DEBUG, "ev2citrusleaf read2: connection closed: fd %d rv %d errno %d\n",fd,rv,errno);
+					cf_debug("ev2citrusleaf read2: connection closed: fd %d rv %d errno %d", fd, rv, errno);
 					goto Fail;					
 				}
 				else if ((errno != EAGAIN) && (errno != EINPROGRESS)) {
-
-					CL_LOG(CL_DEBUG, "ev2citrusleaf read2: fail: fd %d rv %d errno %d\n",fd,rv,errno);
-				
+					cf_debug("ev2citrusleaf read2: fail: fd %d rv %d errno %d", fd, rv, errno);
 					goto Fail;
 				}
 			}
 		}
-
 		else {
-			CL_LOG(CL_DEBUG, "ev2citrusleaf event: received read while not expecting fd %d\n",fd);
+			cf_debug("ev2citrusleaf event: received read while not expecting fd %d", fd);
 		}
 	
 	}
@@ -1232,9 +1208,8 @@ ev2citrusleaf_event(int fd, short event, void *udata)
 	}		
 	
 	uint64_t delta = cf_getms() - _s;
-	if (delta > CL_LOG_DELAY_WARN) CL_LOG(CL_WARNING, "  *** event took %"PRIu64"\n",delta);
+	if (delta > CL_LOG_DELAY_INFO) cf_info(" *** event took %"PRIu64, delta);
 
-	
 	return;
 	
 Fail:
@@ -1250,21 +1225,16 @@ Fail:
 	}
 	
 	if (req->wpol == CL_WRITE_ONESHOT) {
-		CL_LOG(CL_INFO, "ev2citrusleaf: write oneshot with network error, terminating now\n");
+		cf_info("ev2citrusleaf: write oneshot with network error, terminating now");
 		ev2citrusleaf_request_complete(req, true);
 	}
 	else {
-
-		CL_LOG(CL_DEBUG, "ev2citrusleaf failed a request, calling restart\n");
-
+		cf_debug("ev2citrusleaf failed a request, calling restart");
 		ev2citrusleaf_restart(req);
 	}
 
 	delta =  cf_getms() - _s;
-	if (delta > CL_LOG_DELAY_WARN) CL_LOG(CL_WARNING,"  *** event_ok took %"PRIu64"\n",delta);
-
-	return;
-
+	if (delta > CL_LOG_DELAY_INFO) cf_info(" *** event_ok took %"PRIu64, delta);
 }
 
 //
@@ -1277,35 +1247,22 @@ ev2citrusleaf_timer_expired(int fd, short event, void *udata)
 	cl_request *req = udata;
 
 	if (req->MAGIC != CL_REQUEST_MAGIC)	{
-		CL_LOG(CL_WARNING, " timer expired: BAD MAGIC\n");
+		cf_error("timer expired: BAD MAGIC");
 		return;
 	}
 	
 	uint64_t _s = cf_getms();
 	
 	req->timeout_set = false;
-	
-
-	if (req->node) {
-		CL_LOG( CL_VERBOSE, "request timer expired: req %p node %s real delta %"PRIu64"\n",
-			req, req->node->name,cf_getms() - req->start_time);
-	}
-	else {
-		CL_LOG(CL_VERBOSE, "request timer expired: req %p unknown node real delta %"PRIu64"\n",req,cf_getms() - req->start_time);
-	}
-
 
 	if (req->node) {
 		cl_cluster_node_dun(req->node,DUN_USER_TIMEOUT);
 	}
-		
-	
+
 	ev2citrusleaf_request_complete(req, true /*timedout*/); // frees the req
-	
+
 	uint64_t delta = cf_getms() - _s;
-	if (delta > CL_LOG_DELAY_WARN) CL_LOG(CL_WARNING, " CL_DELAY: timer expired took %"PRIu64"\n",delta);
-	
-	return;
+	if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: timer expired took %"PRIu64, delta);
 }
 
 
@@ -1329,10 +1286,9 @@ ev2citrusleaf_restart(cl_request *req)
 	req->rd_header_pos = 0;
 	// going to overwrite the node and fd, so better check it's all 0 here
 	if (req->node)
-		CL_LOG(CL_DEBUG, "restart: should not have node (%s) on entry, going to assign node\n",req->node->name);
+		cf_debug("restart: should not have node (%s) on entry, going to assign node", req->node->name);
 	if (req->fd > 0)
-		CL_LOG(CL_DEBUG, "restart: should not have fd (%d) on entry, going to assign node\n",req->fd);
-		
+		cf_debug("restart: should not have fd (%d) on entry, going to assign node", req->fd);
 
 	// Get an FD from a cluster
 	cl_cluster_node *node;
@@ -1340,14 +1296,11 @@ ev2citrusleaf_restart(cl_request *req)
 	int try = 0;
 	
 	do {
-		
 		node = cl_cluster_node_get(req->asc, req->ns, &req->d, req->write );
 		if (!node) {
 			// situation where there are currently no nodes known. Could be transent.
 			// enqueue!
 
-			CL_LOG(CL_VERBOSE, "restart: enqueue request %p due to no nodes\n",req);
-			
 			req->node = 0;
 			req->fd = 0;
 			cf_queue_push(req->asc->request_q, &req);
@@ -1368,7 +1321,7 @@ ev2citrusleaf_restart(cl_request *req)
 			cl_cluster_node_put(node);
 		}
 		
-		if (try++ > CL_LOG_RESTARTLOOP_WARN) 			CL_LOG(CL_WARNING, " restart loop: iteration %d\n",try);
+		if (try++ > CL_LOG_RESTARTLOOP_WARN) cf_warn("restart loop: iteration %d", try);
 		
 //		if (req->start_time + req->timeout_ms < cf_getms()) {
 //			ev2citrusleaf_request_complete(req, true);
@@ -1382,7 +1335,6 @@ ev2citrusleaf_restart(cl_request *req)
 	return;
 	
 GoodFd:
-	CL_LOG(CL_VERBOSE, "enabling network event for initial write: fd %d req %p\n",fd,req);
 
 	// request has a refcount on the node from the node_get
 	req->node = node;
@@ -1395,7 +1347,7 @@ GoodFd:
 		req->network_set = true;
 	}
 	else {
-		CL_LOG(CL_WARNING, "unable to add event for request %p: will hang forever\n",req);
+		cf_warn("unable to add event for request %p: will hang forever", req);
 		req->network_set = false;
 	}
 	return;	
@@ -1411,21 +1363,19 @@ int
 ev2citrusleaf_start(cl_request *req, int info1, int info2, char *ns, char *set, ev2citrusleaf_object *key, cf_digest *digest,
 	ev2citrusleaf_write_parameters *wparam, ev2citrusleaf_bin *bins, int n_bins)
 {
-
 //	if (req->asc->requests_in_progress > 10) {
-//		CL_LOG(CL_INFO, " too many requests in progress: %d\n",req->asc->requests_in_progress );
+//		cf_info("too many requests in progress: %d", req->asc->requests_in_progress);
 //		return(-1);
 //	}
 
-	
 	// if you can't set up the timer, best to bail early	
 	if (req->timeout_ms) {
 		if (req->timeout_ms < 0) {
-			CL_LOG( CL_WARNING, "don't set timeouts in the past\n");
+			cf_warn("don't set timeouts in the past");
 			return(-1);
 		}
 		if (req->timeout_ms > 1000 * 60) {
-			CL_LOG(CL_INFO, "unlikely you meant to set a timeout more than 60 seconds in the future, examine your code\n");
+			cf_info("unlikely you meant to set a timeout more than 60 seconds in the future, examine your code");
 		}
 		// set up a whole-transaction timer, as we need to signal back in all possible failure causes
 		evtimer_assign(cl_request_get_timeout_event(req), req->base, ev2citrusleaf_timer_expired, req);
@@ -1433,14 +1383,14 @@ ev2citrusleaf_start(cl_request *req, int info1, int info2, char *ns, char *set, 
 		tv.tv_sec = req->timeout_ms / 1000;
 		tv.tv_usec = (req->timeout_ms % 1000) * 1000;
 		if (0 != evtimer_add(cl_request_get_timeout_event(req), &tv)) {
-			CL_LOG(CL_WARNING, "libevent returned -1 in timer add: surprising\n");
+			cf_warn("libevent returned -1 in timer add: surprising");
 			return(-1);
 		}
 		req->timeout_set = true;
 	}
 	else {
 		req->timeout_set = false;
-		CL_LOG(CL_INFO," citrusleaf request with infinite timeout. Rare, examine caller.\n");
+		cf_info("citrusleaf request with infinite timeout. Rare, examine caller.");
 	}
 
     // set start time
@@ -1458,12 +1408,11 @@ ev2citrusleaf_start(cl_request *req, int info1, int info2, char *ns, char *set, 
 	// Take all the request parameters and fill out the request buffer
 	if (0 != compile(info1, info2, ns, set, key, digest, wparam, req->timeout_ms, bins, n_bins , &req->wr_buf, &req->wr_buf_size, &req->d)) {
 		if (req->timeout_set) {
-			CL_LOG(CL_INFO," citrusleaf: compile failed : deleting event\n");
+			cf_info("citrusleaf: compile failed : deleting event");
 			evtimer_del(cl_request_get_timeout_event(req));
 		}
 		return(-1);
 	}
-	
 
 //	dump_buf("sending request to cluster:", req->wr_buf, req->wr_buf_size);
 
@@ -1488,11 +1437,11 @@ ev2citrusleaf_start_op(cl_request *req, char *ns, char *set, ev2citrusleaf_objec
 	// if you can't set up the timer, best to bail early	
 	if (req->timeout_ms) {
 		if (req->timeout_ms < 0) {
-			CL_LOG( CL_WARNING, "don't set timeouts in the past\n");
+			cf_warn("don't set timeouts in the past");
 			return(-1);
 		}
 		if (req->timeout_ms > 1000 * 60) {
-			CL_LOG(CL_INFO, "unlikely you meant to set a timeout more than 60 seconds in the future, examine your code\n");
+			cf_info("unlikely you meant to set a timeout more than 60 seconds in the future, examine your code");
 		}
 		// set up a whole-transaction timer, as we need to signal back in all possible failure causes
 		evtimer_assign(cl_request_get_timeout_event(req), req->base, ev2citrusleaf_timer_expired, req);
@@ -1500,14 +1449,14 @@ ev2citrusleaf_start_op(cl_request *req, char *ns, char *set, ev2citrusleaf_objec
 		tv.tv_sec = req->timeout_ms / 1000;
 		tv.tv_usec = (req->timeout_ms % 1000) * 1000;
 		if (0 != evtimer_add(cl_request_get_timeout_event(req), &tv)) {
-			CL_LOG(CL_WARNING, "libevent returned -1 in timer add: surprising\n");
+			cf_warn("libevent returned -1 in timer add: surprising");
 			return(-1);
 		}
 		req->timeout_set = true;
 	}
 	else {
 		req->timeout_set = false;
-		CL_LOG(CL_INFO," citrusleaf request with infinite timeout. Rare, examine caller.\n");
+		cf_info("citrusleaf request with infinite timeout. Rare, examine caller.");
 	}
 
     // set start time
@@ -1524,13 +1473,11 @@ ev2citrusleaf_start_op(cl_request *req, char *ns, char *set, ev2citrusleaf_objec
 	// Take all the request parameters and fill out the request buffer
 	if (0 != compile_ops(ns, set, key, digest, ops, n_ops, wparam , &req->wr_buf, &req->wr_buf_size, &req->d, &req->write)) {
 		if (req->timeout_set) {
-			CL_LOG(CL_INFO," citrusleaf: compile failed : deleting event\n");
+			cf_info("citrusleaf: compile failed : deleting event");
 			evtimer_del(cl_request_get_timeout_event(req));
 		}
 		return(-1);
 	}
-	
-	
 
 //	dump_buf("sending request to cluster:", req->wr_buf, req->wr_buf_size);
 
@@ -1553,9 +1500,6 @@ int
 ev2citrusleaf_get_all(ev2citrusleaf_cluster *cl, char *ns, char *set, ev2citrusleaf_object *key, 
 	int timeout_ms, ev2citrusleaf_callback cb, void *udata, struct event_base *base)
 {
-
-	CL_LOG(CL_VERBOSE, " ev2citrusleaf_get_all:\n");
-	
 	// Allocate a new request object
 	cl_request *req = cl_request_create();
 	if (!req)	return(-1);
@@ -1582,9 +1526,6 @@ int
 ev2citrusleaf_get_all_digest(ev2citrusleaf_cluster *cl, char *ns, cf_digest *d, 
 	int timeout_ms, ev2citrusleaf_callback cb, void *udata, struct event_base *base)
 {
-
-	CL_LOG(CL_VERBOSE, " ev2citrusleaf_get_all_digest:\n");
-	
 	// Allocate a new request object
 	cl_request *req = cl_request_create();
 	if (!req)	return(-1);
@@ -1826,16 +1767,16 @@ ev2citrusleaf_operate(ev2citrusleaf_cluster *cl, char *ns, char *set, ev2citrusl
 
 }
 
-bool        ev2citrusleaf_inited = false;
+bool g_ev2citrusleaf_initialized = false;
 
 int ev2citrusleaf_init(ev2citrusleaf_lock_callbacks *lock_cb) 
 {
-	
-	if (ev2citrusleaf_inited == true) {
-		CL_LOG(CL_INFO, "citrusleaf: init called twice, benign\n");
+	if (g_ev2citrusleaf_initialized) {
+		cf_info("citrusleaf: init called twice, benign");
 		return(0);
 	}
-	ev2citrusleaf_inited = true;
+
+	g_ev2citrusleaf_initialized = true;
 
 	// TODO - add extra API to specify no locking (for single-threaded use).
 	if (lock_cb) {
@@ -1857,10 +1798,11 @@ int ev2citrusleaf_init(ev2citrusleaf_lock_callbacks *lock_cb)
 	citrusleaf_cluster_init();
 
 #ifdef CLDEBUG_HISTOGRAM
-        if (NULL == (cf_hist = cf_histogram_create("transaction times")))
-                CL_LOG( "couldn't create histogram for client");
+	if (NULL == (cf_hist = cf_histogram_create("transaction times"))) {
+		cf_error("couldn't create histogram for client");
+	}
 #endif
-	
+
 	return(0);
 }
 
@@ -1871,7 +1813,7 @@ ev2citrusleaf_shutdown(bool fail_requests)
 	
 	ev2citrusleaf_info_shutdown();
 	
-	ev2citrusleaf_inited = false;
+	g_ev2citrusleaf_initialized = false;
 }
 
 
@@ -1889,8 +1831,9 @@ void ev2citrusleaf_print_stats(void)
 #endif
 
 	// if you're not logging get out - match with the logs below
-	if (false == CL_LOG_CHK(CL_INFO)) return;
-	
+	if (! cf_info_enabled()) {
+		return;
+	}
 
 	// gather summary stats about the cluster
 	int n_clusters = 0;
@@ -1920,37 +1863,16 @@ void ev2citrusleaf_print_stats(void)
 	double ev_per_req = (g_cl_stats.req_start == 0) ? 0.0 : 
 		(((double)g_cl_stats.event_counter) / ((double)g_cl_stats.req_start));
 
-	CL_LOG(CL_INFO, "stats:: info : info_r %"PRIu64" info_host_r %"PRIu64" info_fin %"PRIu64" info events %"PRIu64"\n",
+	cf_info("stats:: info : info_r %"PRIu64" info_host_r %"PRIu64" info_fin %"PRIu64" info events %"PRIu64,
 		g_cl_stats.info_requests, g_cl_stats.info_host_requests, g_cl_stats.info_complete, g_cl_stats.info_events);
-	CL_LOG(CL_INFO, "     :: part : process %"PRIu64" create %"PRIu64" destroy %"PRIu64"\n",
+	cf_info("     :: part : process %"PRIu64" create %"PRIu64" destroy %"PRIu64,
 		g_cl_stats.partition_process, g_cl_stats.partition_create, g_cl_stats.partition_destroy);
-	CL_LOG(CL_INFO, "     :: conn : created %"PRIu64" connected %"PRIu64" destroyed %"PRIu64" fd in_q %d\n",  
+	cf_info("     :: conn : created %"PRIu64" connected %"PRIu64" destroyed %"PRIu64" fd in_q %d",
 		g_cl_stats.conns_created, g_cl_stats.conns_connected, g_cl_stats.conns_destroyed, conns_in_queue);
-	CL_LOG(CL_INFO, "     :: conn2: destroy timeout %"PRIu64" destroy queue %"PRIu64"\n",  
+	cf_info("     :: conn2: destroy timeout %"PRIu64" destroy queue %"PRIu64,
 		g_cl_stats.conns_destroyed_timeout, g_cl_stats.conns_destroyed_queue);
-	CL_LOG(CL_INFO, "     :: node : created %"PRIu64" destroyed %"PRIu64" active %d\n",
+	cf_info("     :: node : created %"PRIu64" destroyed %"PRIu64" active %d",
 		g_cl_stats.nodes_created, g_cl_stats.nodes_destroyed, nodes_active );
-	CL_LOG(CL_INFO, "     :: req  : start %"PRIu64" restart %"PRIu64" success %"PRIu64" timeout %"PRIu64" ev_per_req %0.2f requestq_sz %d\n",
+	cf_info("     :: req  : start %"PRIu64" restart %"PRIu64" success %"PRIu64" timeout %"PRIu64" ev_per_req %0.2f requestq_sz %d",
 		g_cl_stats.req_start, g_cl_stats.req_restart, g_cl_stats.req_success, g_cl_stats.req_timedout, ev_per_req, reqs_in_queue );
-
-
 }
-
-ev2citrusleaf_log_callback cl_log_fn = 0;
-int cl_log_level = CL_INFO;
-
-void 
-ev2citrusleaf_log_register( ev2citrusleaf_log_callback cb )
-{
-	cl_log_fn = cb;
-}
-
-
-void 
-ev2citrusleaf_log_level_set( int level )
-{
-	fprintf(stderr, "LOG LEVEL SET: %d\n",level);
-	cl_log_level = level;
-}
-
-

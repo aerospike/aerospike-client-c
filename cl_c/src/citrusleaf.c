@@ -44,7 +44,6 @@
 // 
 
 static bool g_initialized = false;
-int g_cl_turn_debug_on = false;
 int g_init_pid;
 extern cf_atomic32 batch_initialized;
 extern int g_clust_initialized;
@@ -63,12 +62,12 @@ extern int g_clust_initialized;
 static void debug_printf(long before_write_time, long after_write_time, long before_read_header_time, long after_read_header_time, 
 		long before_read_body_time, long after_read_body_time, long deadline_ms, int progress_timeout_ms)
 {
-	fprintf(stderr, "tid %zu - Before Write - deadline %"PRIu64" progress_timeout %d now is %"PRIu64"\n", (uint64_t)pthread_self(), deadline_ms, progress_timeout_ms, before_write_time);
-	fprintf(stderr, "tid %zu - After Write - now is %"PRIu64"\n", (uint64_t)pthread_self(), after_write_time);
-	fprintf(stderr, "tid %zu - Before Read header - deadline %"PRIu64" progress_timeout %d now is %"PRIu64"\n", (uint64_t)pthread_self(), deadline_ms, progress_timeout_ms, before_read_header_time);        
-	fprintf(stderr, "tid %zu - After Read header - now is %"PRIu64"\n", (uint64_t)pthread_self(), after_read_header_time);
-	fprintf(stderr, "tid %zu - Before Read body - deadline %"PRIu64" progress_timeout %d now is %"PRIu64"\n", (uint64_t)pthread_self(), deadline_ms, progress_timeout_ms, before_read_body_time);
-	fprintf(stderr, "tid %zu - After Read body - now is %"PRIu64"\n", (uint64_t)pthread_self(), after_read_body_time);
+	cf_info("tid %zu - Before Write - deadline %"PRIu64" progress_timeout %d now is %"PRIu64, (uint64_t)pthread_self(), deadline_ms, progress_timeout_ms, before_write_time);
+	cf_info("tid %zu - After Write - now is %"PRIu64, (uint64_t)pthread_self(), after_write_time);
+	cf_info("tid %zu - Before Read header - deadline %"PRIu64" progress_timeout %d now is %"PRIu64, (uint64_t)pthread_self(), deadline_ms, progress_timeout_ms, before_read_header_time);
+	cf_info("tid %zu - After Read header - now is %"PRIu64, (uint64_t)pthread_self(), after_read_header_time);
+	cf_info("tid %zu - Before Read body - deadline %"PRIu64" progress_timeout %d now is %"PRIu64, (uint64_t)pthread_self(), deadline_ms, progress_timeout_ms, before_read_body_time);
+	cf_info("tid %zu - After Read body - now is %"PRIu64, (uint64_t)pthread_self(), after_read_body_time);
 }
 #endif
 
@@ -190,7 +189,7 @@ int citrusleaf_copy_object(cl_object *destobj, cl_object *srcobj)
 			memcpy(destobj->u.blob, srcobj->u.blob, destobj->sz);
 			break;
 		default:
-			fprintf(stderr, "Encountered an unknown bin type %d", srcobj->type);
+			cf_error("Encountered an unknown bin type %d", srcobj->type);
 			return -1;
 			break;
 	}
@@ -231,19 +230,33 @@ int citrusleaf_copy_bins(cl_bin **destbins, cl_bin *srcbins, int n_bins)
 //
 // Debug calls for printing the buffers. Very useful for debugging....
 #ifdef DEBUG_VERBOSE
-static void
+void
 dump_buf(char *info, uint8_t *buf, size_t buf_len)
 {
-	fprintf(stderr, "dump_buf: %s\n",info);
-	uint i;
-	for (i=0;i<buf_len;i++) {
-		if (i % 16 == 8)
-			fprintf(stderr, " :");
-		if (i && (i % 16 == 0))
-			fprintf(stderr, "\n");
-		fprintf(stderr, "%02x ",buf[i]);
+	if (cf_debug_enabled()) {
+		char msg[buf_len * 4 + 2];
+		char* p = msg;
+
+		strcpy(p, "dump_buf: ");
+		p += 10;
+		strcpy(p, info);
+		p += strlen(info);
+
+		uint i;
+		for (i = 0; i < buf_len; i++) {
+			if (i % 16 == 8) {
+				*p++ = ' ';
+				*p++ = ':';
+			}
+			if (i && (i % 16 == 0)) {
+				*p++ = '\n';
+			}
+			sprintf(p, "%02x ", buf[i]);
+			p += 3;
+		}
+		*p = 0;
+		cf_debug(msg);
 	}
-	fprintf(stderr, "\n");
 }
 #endif
 	
@@ -253,24 +266,26 @@ static int value_to_op_int(int64_t value, uint8_t *data);
 static void
 dump_values(cl_bin *bins, cl_operation *operations, int n_bins)
 {
-	fprintf(stderr, " n bins: %d\n",n_bins);
-	for (int i=0;i<n_bins;i++) {
-		cl_object *object = (bins ? &bins[i].object : &operations[i].bin.object);
-		char *name        = (bins ? bins[i].bin_name : operations[i].bin.bin_name);
-		fprintf(stderr, "%d %s:  (sz %zd)\n",i, name,object->sz);
-		switch (object->type) {
-			case CL_NULL:
-				fprintf(stderr, "NULL \n");
-				break;
-			case CL_INT:
-				fprintf(stderr, "int   %"PRIu64"\n",object->u.i64);
-				break;
-			case CL_STR:
-				fprintf(stderr, "str   %s\n",object->u.str);
-				break;
-			default:
-			    fprintf(stderr, "unk type %d\n",object->type);
-				break;
+	if (cf_debug_enabled()) {
+		cf_debug(" n bins: %d", n_bins);
+		for (int i=0;i<n_bins;i++) {
+			cl_object *object = (bins ? &bins[i].object : &operations[i].bin.object);
+			char *name        = (bins ? bins[i].bin_name : operations[i].bin.bin_name);
+			cf_debug("%d %s:  (sz %zd)",i, name,object->sz);
+			switch (object->type) {
+				case CL_NULL:
+					cf_debug("NULL ");
+					break;
+				case CL_INT:
+					cf_debug("int   %"PRIu64,object->u.i64);
+					break;
+				case CL_STR:
+					cf_debug("str   %s",object->u.str);
+					break;
+				default:
+					cf_debug("unk type %d",object->type);
+					break;
+			}
 		}
 	}
 }
@@ -280,16 +295,16 @@ dump_key(char *msg, cl_object const *key)
 {
 	switch (key->type) {
 		case CL_NULL:
-			fprintf(stderr, "%s: key NULL \n",msg);
+			cf_debug("%s: key NULL ",msg);
 			break;
 		case CL_INT:
-			fprintf(stderr, "%s: key int   %"PRIu64"\n",msg,key->u.i64);
+			cf_debug("%s: key int   %"PRIu64,msg,key->u.i64);
 			break;
 		case CL_STR:
-			fprintf(stderr, "%s: key str   %s\n",msg,key->u.str);
+			cf_debug("%s: key str   %s",msg,key->u.str);
 			break;
 		default:
-			fprintf(stderr, "%s: key unk type %d\n",msg,key->type);
+			cf_debug("%s: key unk type %d",msg,key->type);
 			break;
 	}
 }
@@ -444,9 +459,7 @@ write_fields(uint8_t *buf, const char *ns, int ns_len, const char *set, int set_
 				memcpy(&fd[1], key->u.blob, key->sz);
 				break;
 			default:
-//	#ifdef DEBUG		
-				fprintf(stderr, " transmit key: unknown citrusleaf type %d",key->type);
-//	#endif		
+				cf_error("transmit key: unknown citrusleaf type %d",key->type);
 				return(0);
 		}
 		mf_tmp = cl_msg_field_get_next(mf);
@@ -454,15 +467,7 @@ write_fields(uint8_t *buf, const char *ns, int ns_len, const char *set, int set_
 		
 		// calculate digest
 		if (d_ret) {
-
 			cf_digest_compute2( (char *)set, set_len, mf->data, key->sz + 1, d_ret);
-
-//			fprintf(stderr, "digest compute: %d : %02x %02x %02x %02x\n",
-//				key->sz+1, mf->data[0],mf->data[1],mf->data[2],mf->data[3]);
-			
-//			fprintf(stderr, "digest compute: %02x %02x %02x %02x\n",
-//				d_ret->digest[0],d_ret->digest[1],d_ret->digest[2],d_ret->digest[3]);
-			
 		}
 		
 		mf = mf_tmp;
@@ -563,7 +568,6 @@ value_to_op_two_ints(void *value, uint8_t *data)
 static int
 op_to_value_int(uint8_t	*buf, int sz, int64_t *value)
 {
-//	fprintf(stderr, "op to value int: sz %d\n",sz);
 	if (sz > 8)	return(-1);
 	if (sz == 8) {
 		// no need to worry about sign extension - blast it
@@ -634,9 +638,7 @@ cl_value_to_op_get_size(cl_bin *v, size_t *sz)
 			*sz += v->object.sz;
 			break;
 		default:
-//#ifdef DEBUG			
-			fprintf(stderr, "internal error value_to_op get size has unknown value type %d\n",v->object.type);
-//#endif			
+			cf_error("internal error value_to_op get size has unknown value type %d", v->object.type);
 			return(-1);
 	}
 	return(0);
@@ -729,7 +731,7 @@ cl_value_to_op(cl_bin *v, cl_operator operator, cl_operation *operation, cl_msg_
 			op->op = CL_MSG_OP_MC_TOUCH;
 			break;
 		default:
-			fprintf(stderr, "API user requested unknown operation type %d, fail",(int)tmpOp);
+			cf_error("API user requested unknown operation type %d, fail", (int)tmpOp);
 			return(-1);
 	}
 
@@ -762,7 +764,7 @@ cl_value_to_op(cl_bin *v, cl_operator operator, cl_operation *operation, cl_msg_
 			break;
 		default:
 #ifdef DEBUG				
-			fprintf(stderr, "internal error value_to_op has unknown value type %d\n",tmpValue->object.type);
+			cf_debug("internal error value_to_op has unknown value type %d",tmpValue->object.type);
 #endif				
 			return(-1);
 	}
@@ -862,7 +864,7 @@ cl_compile(uint info1, uint info2, uint info3, const char *ns, const char *set, 
 		msg_sz += sizeof(cl_msg_op) + strlen(tmpValue->bin_name);
 
         if (0 != cl_value_to_op_get_size(tmpValue, &msg_sz)) {
-			fprintf(stderr,"illegal parameter: bad type %d write op %d\n",tmpValue->object.type,i);
+			cf_error("illegal parameter: bad type %d write op %d", tmpValue->object.type,i);
 			return(-1);
 		}
 	}
@@ -958,7 +960,7 @@ compile_digests(uint info1, uint info2, uint info3, const char *ns, const cf_dig
 		msg_sz += sizeof(cl_msg_op) + strlen(tmpValue->bin_name);
 
         if (0 != cl_value_to_op_get_size(tmpValue, &msg_sz)) {
-            fprintf(stderr,"illegal parameter: bad type %d write op %d\n",tmpValue->object.type,i);
+            cf_error("illegal parameter: bad type %d write op %d", tmpValue->object.type, i);
             return(-1);
         }
 	}
@@ -1047,7 +1049,6 @@ set_object(cl_msg_op *op, cl_object *obj)
 	
 	switch(op->particle_type) {
 		case CL_NULL:
-			//fprintf(stderr, "parse: received null object\n");
 			obj->sz = 0;
 			obj->free = 0;
 			break;
@@ -1077,9 +1078,7 @@ set_object(cl_msg_op *op, cl_object *obj)
 			memcpy(obj->u.blob, cl_msg_op_get_value_p(op), obj->sz);
 			break;
 		default:
-// #ifdef DEBUG	
-			fprintf(stderr, "parse: received unknown object type %d",op->particle_type);
-// #endif	
+			cf_error("parse: received unknown object type %d", op->particle_type);
 			return(-1);
 	}
 	return(rv);
@@ -1104,7 +1103,7 @@ set_value_search(cl_msg_op *op, cl_bin *values, cl_operation *operations, int n_
 	}
 	if (i == n_values) {
 #ifdef DEBUG		
-		fprintf(stderr, "set value: but value wasn't there to begin with. Don't understand.\n");
+		cf_debug("set value: but value wasn't there to begin with. Don't understand.");
 #endif		
 		return(-1);
 	}
@@ -1122,7 +1121,7 @@ cl_set_value_particular(cl_msg_op *op, cl_bin *value)
 {
 	if (op->name_sz > sizeof(value->bin_name)) {
 #ifdef DEBUG		
-		fprintf(stderr, "Set Value Particular: bad response from server");
+		cf_debug("Set Value Particular: bad response from server");
 #endif	
 		return;
 	}
@@ -1156,7 +1155,7 @@ cl_parse(cl_msg *msg, uint8_t *buf, size_t buf_len, cl_bin **values_r, cl_operat
 			
 			if (buf_lim < buf + sizeof(cl_msg_field)) {
 #ifdef DEBUG
-				fprintf(stderr, "parse: too short message: said there was a field, but too short\n");
+				cf_error("parse: too short message: said there was a field, but too short");
 #endif
 				return(-1);
 			}
@@ -1168,7 +1167,6 @@ cl_parse(cl_msg *msg, uint8_t *buf, size_t buf_len, cl_bin **values_r, cl_operat
 				//We should convert to host byte order
 				memcpy(&trid_nbo, mf->data, sizeof(trid_nbo));
 				*trid = __be64_to_cpu(trid_nbo);
-				//fprintf(stderr, "Field is trid with value %"PRIu64"\n", *trid);
 			}
 
 			mf = cl_msg_field_get_next(mf);
@@ -1205,7 +1203,7 @@ cl_parse(cl_msg *msg, uint8_t *buf, size_t buf_len, cl_bin **values_r, cl_operat
 				
 				if (buf_lim < buf + sizeof(cl_msg_op)) {
 #ifdef DEBUG
-					fprintf(stderr, "parse: too short message: said there was ops, iteration %d, but too short\n",i);
+					cf_debug("parse: too short message: said there was ops, iteration %d, but too short", i);
 #endif
 					return(-1);
 				}
@@ -1225,7 +1223,7 @@ cl_parse(cl_msg *msg, uint8_t *buf, size_t buf_len, cl_bin **values_r, cl_operat
 
 				if (buf_lim < buf + sizeof(cl_msg_op)) {
 #ifdef DEBUG
-					fprintf(stderr, "parse: too short message: said there was ops, iteration %d, but too short\n",i);
+					cf_debug("parse: too short message: said there was ops, iteration %d, but too short", i);
 #endif
 					return(-1);
 				}
@@ -1343,7 +1341,7 @@ do_the_full_monte(cl_cluster *asc, int info1, int info2, int info3, const char *
 			progress_timeout_ms = cl_w_p->timeout_ms;
 		}
 #ifdef DEBUG_VERBOSE        
-        fprintf(stderr, "transaction has deadline: in %d deadlinems %"PRIu64" progress %d \n",
+        cf_debug("transaction has deadline: in %d deadlinems %"PRIu64" progress %d",
         	(int)cl_w_p->timeout_ms,deadline_ms,progress_timeout_ms);
 #endif        
     }
@@ -1365,7 +1363,7 @@ do_the_full_monte(cl_cluster *asc, int info1, int info2, int info3, const char *
         
 #ifdef DEBUG		
 		if (try > 0)
-			fprintf(stderr,"request retrying try %d tid %zu\n",try,(uint64_t)pthread_self());
+			cf_debug("request retrying try %d tid %zu\n", try, (uint64_t)pthread_self());
 #endif        
 		try++;
 		
@@ -1373,7 +1371,7 @@ do_the_full_monte(cl_cluster *asc, int info1, int info2, int info3, const char *
 		node = cl_cluster_node_get(asc, ns, &d_ret, info2 & CL_MSG_INFO2_WRITE ? true : false);
 		if (!node) {
 #ifdef DEBUG
-			fprintf(stderr, "warning: no healthy nodes in cluster, retrying\n");
+			cf_debug("warning: no healthy nodes in cluster, retrying");
 #endif
 			usleep(10000);
 			goto Retry;
@@ -1381,14 +1379,14 @@ do_the_full_monte(cl_cluster *asc, int info1, int info2, int info3, const char *
 		fd = cl_cluster_node_fd_get(node, false, asc->nbconnect);
 		if (fd == -1) {
 #ifdef DEBUG			
-			fprintf(stderr, "warning: node %s has no file descriptors, retrying transaction (tid %zu)\n",node->name,(uint64_t)pthread_self() );
+			cf_debug("warning: node %s has no file descriptors, retrying transaction (tid %zu)", node->name, (uint64_t)pthread_self());
 #endif			
 			usleep(1000);
 			goto Retry;
 		}
 
 #ifdef DEBUG_VERBOSE
-		fprintf(stderr, "node %s fd %d\n",node->name, fd);
+		cf_debug("node %s fd %d", node->name, fd);
 #endif		
 		
 		// Hate special cases, but we have to clear the verify bit on delete verify
@@ -1399,7 +1397,6 @@ do_the_full_monte(cl_cluster *asc, int info1, int info2, int info3, const char *
 		}
 		
 		// send it to the cluster - non blocking socket, but we're blocking
-//		fprintf(stderr, "+w1 %d\n",fd);
 
 #ifdef DEBUG_TIME
         before_write_time = cf_getms();
@@ -1408,11 +1405,10 @@ do_the_full_monte(cl_cluster *asc, int info1, int info2, int info3, const char *
 #ifdef DEBUG_TIME
         after_write_time = cf_getms();
 #endif
-//		fprintf(stderr, "-w1 %d\n",fd);
 
 		if (rv != 0) {
 #ifdef DEBUG			
-			fprintf(stderr, "Citrusleaf: write timeout or error when writing header to server - %d fd %d errno %d (tid %zu)\n",rv,fd,errno,(uint64_t)pthread_self());
+			cf_debug("Citrusleaf: write timeout or error when writing header to server - %d fd %d errno %d (tid %zu)",rv,fd,errno,(uint64_t)pthread_self());
 #endif
 #ifdef DEBUG_TIME
             debug_printf(before_write_time, after_write_time, before_read_header_time, after_read_header_time, before_read_body_time, after_read_body_time,
@@ -1439,7 +1435,7 @@ do_the_full_monte(cl_cluster *asc, int info1, int info2, int info3, const char *
 		if (rv) {
 
 #ifdef DEBUG            
-			fprintf(stderr, "Citrusleaf: error when reading header from server - rv %d fd %d\n",rv,fd);
+			cf_debug("Citrusleaf: error when reading header from server - rv %d fd %d", rv, fd);
 #endif
 #ifdef DEBUG_TIME
             debug_printf(before_write_time, after_write_time, before_read_header_time, after_read_header_time, before_read_body_time, after_read_body_time,
@@ -1468,7 +1464,7 @@ do_the_full_monte(cl_cluster *asc, int info1, int info2, int info3, const char *
 			if (rd_buf_sz > sizeof(rd_stack_buf)) {
 				rd_buf = malloc(rd_buf_sz);
 				if (!rd_buf) {
-                    fprintf(stderr, "malloc fail: trying %zu\n",rd_buf_sz);
+                    cf_error("malloc fail: trying %zu", rd_buf_sz);
                     rv = -1; 
                     goto Error; 
                 }
@@ -1485,7 +1481,7 @@ do_the_full_monte(cl_cluster *asc, int info1, int info2, int info3, const char *
                 rd_buf = 0;
                 
 #ifdef DEBUG            
-                fprintf(stderr, "Citrusleaf: error when reading from server - rv %d fd %d\n",rv,fd);
+                cf_debug("Citrusleaf: error when reading from server - rv %d fd %d", rv, fd);
 #endif
 #ifdef DEBUG_TIME
 				debug_printf(before_write_time, after_write_time, before_read_header_time, after_read_header_time, before_read_body_time, after_read_body_time, 
@@ -1519,7 +1515,7 @@ Retry:
 
         if (deadline_ms && (deadline_ms < cf_getms() ) ) {
 #ifdef DEBUG            
-            fprintf(stderr, "out of luck out of time : deadline %"PRIu64" now %"PRIu64"\n",
+            cf_debug("out of luck out of time : deadline %"PRIu64" now %"PRIu64,
                 deadline_ms, cf_getms());
 #endif            
             rv = CITRUSLEAF_FAIL_TIMEOUT;
@@ -1531,7 +1527,7 @@ Retry:
 Error:	
 	
 #ifdef DEBUG	
-	fprintf(stderr, "exiting with failure: wpol %d timeleft %d rv %d\n",
+	cf_debug("exiting with failure: wpol %d timeleft %d rv %d",
 		(int)(cl_w_p ? cl_w_p->w_pol : 0),
 		(int)(deadline_ms - cf_getms() ), rv );
 #endif	
@@ -1574,7 +1570,6 @@ Ok:
 		for (int i=0;i<*n_values;i++) {
 			cl_bin *bin = values? &(*values)[i] : &((*operations)[i].bin);
 //			if ( bin->object.type == CL_NULL ) {
-//				fprintf(stderr, " return object with null type: name %s digest %"PRIx64"\n",bin->bin_name, *(uint64_t *) &d_ret);
 //				// raise(SIGINT);
 //			}
 		}
@@ -1584,14 +1579,13 @@ Ok:
 #endif	
 #ifdef DEBUG_VERBOSE
 	if (rv != 0) {
-		fprintf(stderr, "exiting OK clause with failure: wpol %d timeleft %d rv %d\n",
+		cf_debug("exiting OK clause with failure: wpol %d timeleft %d rv %d",
 			(int)(cl_w_p ? cl_w_p->w_pol : 0),
 			(int)(deadline_ms - cf_getms() ), rv );
 	}
 #endif	
 
 	return(rv);
-
 }
 
 
@@ -1766,7 +1760,7 @@ extern cl_rv
 citrusleaf_get_all(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, cl_bin **values, int *n_values, int timeout_ms, uint32_t *cl_gen)
 {
 	if ((values == 0) || (n_values == 0)) {
-		fprintf(stderr, "citrusleaf_get_all: illegal parameters passed\n");
+		cf_error("citrusleaf_get_all: illegal parameters passed");
 		return(-1);
 	}
     if (!g_initialized) return(-1);
@@ -1786,7 +1780,7 @@ extern cl_rv
 citrusleaf_get_all_digest(cl_cluster *asc, const char *ns, const cf_digest *digest, cl_bin **values, int *n_values, int timeout_ms, uint32_t *cl_gen)
 {
 	if ((values == 0) || (n_values == 0)) {
-		fprintf(stderr, "citrusleaf_get_all: illegal parameters passed\n");
+		cf_error("citrusleaf_get_all: illegal parameters passed");
 		return(-1);
 	}
     if (!g_initialized) return(-1);
@@ -1856,9 +1850,7 @@ citrusleaf_calculate_digest(const char *set, const cl_object *key, cf_digest *di
 			memcpy(&k[1], key->u.blob, key->sz);
 			break;
 		default:
-//	#ifdef DEBUG		
-			fprintf(stderr, " transmit key: unknown citrusleaf type %d",key->type);
-//	#endif		
+			cf_error(" transmit key: unknown citrusleaf type %d", key->type);
 			return(-1);
 	}
 
@@ -1941,7 +1933,7 @@ extern int citrusleaf_cluster_init();
 
 void citrusleaf_set_debug(bool debug_flag) 
 {
-   g_cl_turn_debug_on = debug_flag;
+	cf_set_log_level(debug_flag? CF_DEBUG : CF_INFO);
 }
 
 int citrusleaf_init() 
@@ -1959,7 +1951,7 @@ int citrusleaf_init()
 
 #ifdef DEBUG_HISTOGRAM	
     if (NULL == (cf_hist = cf_histogram_create("transaction times")))
-        fprintf(stderr, "couldn't create histogram for client");
+        cf_error("couldn't create histogram for client");
 #endif	
 
     g_initialized = true;

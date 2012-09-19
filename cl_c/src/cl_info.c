@@ -159,7 +159,7 @@ citrusleaf_info_host(struct sockaddr_in *sa_in, char *names, char **values, int 
 	if ((uint8_t *)req != buf)	free(req);
 	if (io_rv != 0) {
 #ifdef DEBUG        
-		fprintf(stderr, "info returned error, rv %d errno %d bufsz %d\n",io_rv, errno, buf_sz);
+		cf_debug("info returned error, rv %d errno %d bufsz %d", io_rv, errno, buf_sz);
 #endif        
 		goto Done;
 	}
@@ -172,7 +172,7 @@ citrusleaf_info_host(struct sockaddr_in *sa_in, char *names, char **values, int 
     
     if (0 != io_rv) {
 #ifdef DEBUG        
-		fprintf(stderr, "info read not 8 bytes, fail, rv %d errno %d\n",rv, errno);
+		cf_debug("info read not 8 bytes, fail, rv %d errno %d", rv, errno);
 #endif        
 		goto Done;
 	}
@@ -223,7 +223,7 @@ citrusleaf_info(char *hostname, short port, char *names, char **values, int time
 	cf_vector sockaddr_in_v;
 	cf_vector_init(&sockaddr_in_v, sizeof( struct sockaddr_in ), 5, 0);
 	if (0 != cl_lookup(NULL, hostname, port, &sockaddr_in_v)) {
-		fprintf(stderr, "Could not find host %s\n",hostname);
+		cf_debug("Could not find host %s", hostname);
 		goto Done;
 	}
 	

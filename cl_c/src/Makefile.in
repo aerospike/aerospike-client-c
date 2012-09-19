@@ -44,11 +44,9 @@ ifeq ($(SYSTEM),Darwin)
 endif
 
 # if our version is 4.1, can't use the native flag
-ifeq (${CC_V},4.1)
+#ifeq (${CC_V},4.1)
+#    CFLAGS_NATIVE += -march=nocona
+#else
+#    CFLAGS_NATIVE += -march=nocona -msse4
     CFLAGS_NATIVE += -march=nocona
-else
-    CFLAGS_NATIVE += -march=nocona -msse4
-endif
-
-
-
+#endif

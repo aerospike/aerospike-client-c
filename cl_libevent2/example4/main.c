@@ -247,11 +247,17 @@ log_open(char *logfilename)
 
 
 void
-log_callback(int level, const char *fmt, ...)
+log_callback(cf_log_level level, const char *fmt_no_newline, ...)
 {
+	size_t fmt_size = strlen(fmt_no_newline) + 2;
+	char fmt[fmt_size];
+
+	strncpy(fmt, fmt_no_newline, fmt_size);
+	fmt[fmt_size - 2] = '\n';
+
 	va_list argp;
 	if (g_logfile_fd == 0) {
-		va_start(argp, fmt);
+		va_start(argp, fmt_no_newline);
 		vfprintf(stderr,  fmt, argp);
 		va_end(argp);
 	}
@@ -265,7 +271,7 @@ log_callback(int level, const char *fmt, ...)
 		
 		// user buf
 		char ubuf[2000];
-		va_start(argp, fmt);
+		va_start(argp, fmt_no_newline);
 		int ulen = vsnprintf(ubuf, sizeof(ubuf)-1, fmt, argp);
 		va_end(argp);
 		
@@ -364,8 +370,8 @@ main(int argc, char **argv)
 	
 	g_config.base = event_base_new();
 	
-	ev2citrusleaf_log_register( log_callback );
-	ev2citrusleaf_log_level_set(EV2CITRUSLEAF_DEBUG);
+	cf_set_log_callback(log_callback);
+	cf_set_log_level(CF_DEBUG);
 	log_open("example4.log");
 	
 	ev2citrusleaf_init(0);    // initialize citrusleaf

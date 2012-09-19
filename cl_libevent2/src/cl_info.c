@@ -33,25 +33,8 @@ cf_atomic_int g_cl_info_transactions = 0;
 
 
 // debug
-extern  void sockaddr_in_dump(int level,char *prefix, struct sockaddr_in *sa_in);
+extern  void sockaddr_in_dump(char *prefix, struct sockaddr_in *sa_in);
 
-#ifdef CLDEBUG_VERBOSE
-// this is broken with new logging system. need to dump into a temp buf then log that out.
-static void
-dump_buf(char *info, uint8_t *buf, size_t buf_len)
-{
-	CL_LOG(CL_VERBOSE, "dump_buf: %s\n",info);
-	uint i;
-	for (i=0;i<buf_len;i++) {
-		if (i % 16 == 8)
-			CL_LOG( CL_VERBOSE," :");
-		if (i && (i % 16 == 0))
-			CL_LOG(CL_VERBOSE, "\n");
-		CL_LOG( "%02x ",buf[i]);
-	}
-	CL_LOG(CL_VERBOSE, "\n");
-}
-#endif
 
 cl_info_request *
 info_request_create()
@@ -151,12 +134,7 @@ info_event_fn(int fd, short event, void *udata)
 	cf_atomic_int_incr(&g_cl_stats.info_events);
 	
 	uint64_t _s = cf_getms();
-	
 
-	CL_LOG(CL_VERBOSE, "info_event: fd %d event %x cir %p\n",fd,(int)event,cir);
-	CL_LOG(CL_VERBOSE, "  -- wrbufpos %zu wrbufsize %zu\n",cir->wr_buf_pos,cir->wr_buf_size);
-	CL_LOG(CL_VERBOSE, "  -- rdbufpos %zu rdbufsize %zu rdheaderpos %zu\n",cir->rd_buf_pos,cir->rd_buf_size,cir->rd_header_pos);
-	
 	if (event & EV_WRITE) {
 		if (cir->wr_buf_pos < cir->wr_buf_size) {
 			rv = send(fd, &cir->wr_buf[cir->wr_buf_pos], cir->wr_buf_size - cir->wr_buf_pos, MSG_NOSIGNAL | MSG_DONTWAIT);
@@ -168,11 +146,11 @@ info_event_fn(int fd, short event, void *udata)
 				}
 			}
 			else if (rv == 0) {
-				CL_LOG(CL_DEBUG, "write info failed: illegal send return 0: errno %d\n",errno);				
+				cf_debug("write info failed: illegal send return 0: errno %d", errno);
 				goto Fail;
 			}
 			else if ((errno != EAGAIN) && (errno != EWOULDBLOCK)) {
-				CL_LOG(CL_DEBUG, "write info failed: rv %d errno %d\n",rv, errno);
+				cf_debug("write info failed: rv %d errno %d", rv, errno);
 				goto Fail;
 			}
 		}
@@ -185,19 +163,15 @@ info_event_fn(int fd, short event, void *udata)
 				cir->rd_header_pos += rv;
 			}				
 			else if (rv == 0) {
-				CL_LOG(CL_INFO, "read info failed: remote close: rv %d errno %d\n",rv,errno);
+				cf_info("read info failed: remote close: rv %d errno %d", rv, errno);
 				goto Fail;
 			}
 			else if ((errno != EAGAIN) && (errno != EWOULDBLOCK)) {
-				CL_LOG(CL_INFO, "read info failed: unknown error: rv %d errno %d\n",rv,errno);
+				cf_info("read info failed: unknown error: rv %d errno %d", rv, errno);
 				goto Fail;
 			}
 		}
 		if (cir->rd_header_pos == sizeof(cl_proto)) {
-
-			CL_LOG( CL_VERBOSE, "read: read first part, now read last part rd size %zd\n",cir->rd_buf_size);
-//			dump_buf("event:read:proto",cir->rd_header_buf,sizeof(cl_proto));
-			
 			if (cir->rd_buf_size == 0) {
 				// calculate msg size
 				cl_proto *proto = (cl_proto *) cir->rd_header_buf;
@@ -206,7 +180,7 @@ info_event_fn(int fd, short event, void *udata)
 				// set up the read buffer
 				cir->rd_buf = malloc(proto->sz + 1);
 				if (!cir->rd_buf) {
-					CL_LOG(CL_WARNING, "cl info malloc fail\n");
+					cf_warn("cl info malloc fail");
 					goto Fail;
 				}
 				cir->rd_buf[proto->sz] = 0;
@@ -218,9 +192,6 @@ info_event_fn(int fd, short event, void *udata)
 				if (rv > 0) {
 					cir->rd_buf_pos += rv;
 					if (cir->rd_buf_pos >= cir->rd_buf_size) {
-						
-						CL_LOG(CL_VERBOSE, "info completed! fd %d cir %p\n", fd, cir);
-						
 						// caller frees rdbuf
 						(*cir->user_cb) ( 0 /*return value*/, (void *)cir->rd_buf , cir->rd_buf_size ,cir->user_data );
 						cir->rd_buf = 0;
@@ -233,17 +204,17 @@ info_event_fn(int fd, short event, void *udata)
 						cf_atomic_int_decr(&g_cl_info_transactions);
 						
 						uint64_t delta = cf_getms() - _s;
-						if (delta > CL_LOG_DELAY_WARN) CL_LOG(CL_WARNING," CL_DELAY cl_info event OK fn: %"PRIu64"\n",delta);
+						if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY cl_info event OK fn: %"PRIu64, delta);
 
 						return;
 					}
 				}
 				else if (rv == 0) {
-					CL_LOG(CL_INFO, "info failed: remote termination fd %d cir %p rv %d errno %d\n", fd, cir, rv, errno);
+					cf_info("info failed: remote termination fd %d cir %p rv %d errno %d", fd, cir, rv, errno);
 					goto Fail;
 				}
 				else if ((errno != EAGAIN) && (errno != EWOULDBLOCK)) {
-					CL_LOG(CL_INFO, "info failed: connection has unknown error fd %d cir %p rv %d errno %d\n", fd, cir, rv, errno);
+					cf_info("info failed: connection has unknown error fd %d cir %p rv %d errno %d", fd, cir, rv, errno);
 					goto Fail;
 				}
 			}
@@ -253,7 +224,7 @@ info_event_fn(int fd, short event, void *udata)
 	event_add(info_request_get_network_event(cir), 0 /*timeout*/);					
 	
 	uint64_t delta = cf_getms() - _s;
-	if (delta > CL_LOG_DELAY_WARN) CL_LOG(CL_WARNING," CL_DELAY cl_info event again fn: %"PRIu64"\n",delta);
+	if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY cl_info event again fn: %"PRIu64, delta);
 
 	return;
 	
@@ -266,10 +237,7 @@ Fail:
 	cf_atomic_int_decr(&g_cl_info_transactions);
 	
 	delta = cf_getms() - _s;
-	if (delta > CL_LOG_DELAY_WARN) CL_LOG(CL_WARNING,"  CL_DELAY: cl_info event fail OK took %"PRIu64"\n",delta);
-
-	return;
-	
+	if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: cl_info event fail OK took %"PRIu64, delta);
 }
 
 
@@ -295,18 +263,15 @@ ev2citrusleaf_info_host(struct event_base *base, struct sockaddr_in *sa_in, char
 	cir->user_data = udata;
 	cir->base = base;
 
-	CL_LOG(CL_VERBOSE, "info: host: request for: %s\n",names);
-
 	// Create the socket a little early, just in case
 	int fd;
 	if (-1 == (fd = socket ( AF_INET, SOCK_STREAM, 0 ))) {
-
-		CL_LOG(CL_INFO, "could not allocate socket errno %d\n",errno);
+		cf_info("could not allocate socket errno %d", errno);
 
 		info_request_destroy(cir);
 		
 		uint64_t delta = cf_getms() - _s;
-		if (delta > CL_LOG_DELAY_WARN) CL_LOG(CL_WARNING," CL_DELAY: info host no socket: %"PRIu64"\n",delta);
+		if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: info host no socket: %"PRIu64, delta);
 		
 		return(-1);
 	}
@@ -314,25 +279,22 @@ ev2citrusleaf_info_host(struct event_base *base, struct sockaddr_in *sa_in, char
 	// set nonblocking
 	evutil_make_socket_nonblocking(fd);
 
-	sockaddr_in_dump(CL_VERBOSE, "  info connect to: ",sa_in);
-
 	// Actually do the connect
 	if (0 != connect(fd, (struct sockaddr *) sa_in, sizeof( *sa_in ) ))
 	{
 		if (errno != EINPROGRESS) {
 
 			if (errno == ECONNREFUSED) {
-				CL_LOG(CL_INFO, "host is refusing connections\n");
+				cf_info("host is refusing connections");
 			} else {
-				CL_LOG(CL_INFO, "info: connect request failed errno %d\n", errno);
-				sockaddr_in_dump( CL_VERBOSE, "   sockaddr was ",sa_in);
+				cf_info("info: connect request failed errno %d", errno);
 			}
 			
 			info_request_destroy(cir);
 			close(fd);
 
 			uint64_t delta = cf_getms() - _s;
-			if (delta > CL_LOG_DELAY_WARN) CL_LOG(CL_WARNING," CL_DELAY: info host no connect: %"PRIu64"\n",delta);
+			if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: info host no connect: %"PRIu64, delta);
 
 			return(-1);
 		}
@@ -340,14 +302,13 @@ ev2citrusleaf_info_host(struct event_base *base, struct sockaddr_in *sa_in, char
 	
 	// fill the buffer while I'm waiting
 	if (0 != info_make_request(cir, names)) {
-
-		CL_LOG(CL_WARNING, "buffer fill failed\n");
+		cf_warn("buffer fill failed");
 		
 		info_request_destroy(cir);
 		close(fd);
 		
 		uint64_t delta = cf_getms() - _s;
-		if (delta > CL_LOG_DELAY_WARN) CL_LOG(CL_WARNING," CL_DELAY: info host bad request: %"PRIu64"\n",delta);
+		if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: info host bad request: %"PRIu64, delta);
 		
 		return(-1);
 	}
@@ -359,7 +320,7 @@ ev2citrusleaf_info_host(struct event_base *base, struct sockaddr_in *sa_in, char
 	cf_atomic_int_incr(&g_cl_info_transactions);
 	
 	uint64_t delta = cf_getms() - _s;
-	if (delta > CL_LOG_DELAY_WARN) CL_LOG(CL_WARNING," CL_DELAY: info host standard: %"PRIu64"\n",delta);
+	if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: info host standard: %"PRIu64, delta);
 
 	
 	return(0);
@@ -384,7 +345,7 @@ info_resolve_cb(int result, cf_vector *sockaddr_in_v, void *udata)
 {
 	info_resolve_state *irs = (info_resolve_state *)udata;
 	if (result != 0) {
-		CL_LOG(CL_INFO, "info resolution: async fail %d\n",result);
+		cf_info("info resolution: async fail %d", result);
 		(irs->cb) ( -1 /*return value*/, 0, 0 ,irs->udata );
 		goto Done;
 	}		
@@ -394,7 +355,7 @@ info_resolve_cb(int result, cf_vector *sockaddr_in_v, void *udata)
 		cf_vector_get(sockaddr_in_v, i, &sa_in);
 
 		if (0 != ev2citrusleaf_info_host(irs->base, &sa_in, irs->names, irs->timeout_ms, irs->cb, irs->udata )) {
-			CL_LOG( CL_INFO, "info resolution: can't start infohost after resolve just failed\n");
+			cf_info("info resolution: can't start infohost after resolve just failed");
 
 			(irs->cb) ( -1 /*return value*/, 0, 0 ,irs->udata );
 			goto Done;
@@ -404,7 +365,6 @@ Done:
 	cf_atomic_int_decr(&g_cl_info_transactions);
 	free(irs->names);
 	free(irs);
-	
 }
 
 //

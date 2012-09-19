@@ -24,6 +24,7 @@
 
 #include "citrusleaf/cf_digest.h"
 #include "citrusleaf/cf_hooks.h"
+#include "citrusleaf/cf_log.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -329,37 +330,7 @@ int
 ev2citrusleaf_calculate_digest(const char *set, const ev2citrusleaf_object *key, cf_digest *digest);
 
 //
-// Logging. Register to be called back on every callback. For higher performance
-// and filtering, you may set the severity mask and have the library not call you
-//
-
-typedef void (*ev2citrusleaf_log_callback) (int level, const char *fmt, ... );
-
-
-void ev2citrusleaf_log_register( ev2citrusleaf_log_callback cb );
-
-#define EV2CITRUSLEAF_NOLOGGING  -1
-#define EV2CITRUSLEAF_EMERG    0  // system is unusable                 
-#define EV2CITRUSLEAF_ALERT    1  /* action must be taken immediately */
-#define EV2CITRUSLEAF_CRIT     2  /* critical conditions              */
-#define EV2CITRUSLEAF_ERR      3  /* error conditions                 */
-#define EV2CITRUSLEAF_WARNING  4  /* warning conditions               */
-#define EV2CITRUSLEAF_NOTICE   5  /* normal but significant condition */
-#define EV2CITRUSLEAF_INFO     6  /* informational                    */
-#define EV2CITRUSLEAF_DEBUG    7  /* debug-level messages      */
-
-
-
-void ev2citrusleaf_log_level_set( int level );
-
-// An example logging function that simply prints to standard out
-//
-// void sample_logging_function( int level, const char *format, ...) {
-//			va_list ap;
-//        	va_start(ap, format);
-//          (void) vfprintf(stderr, format, ap);
-//        	va_end(ap);
-//  }
+// Logging - see cf_log.h
 //
 
 #ifdef __cplusplus

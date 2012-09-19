@@ -502,6 +502,9 @@ main(int argc, char **argv)
 	fprintf(stderr, "example: host %s port %d ns %s set %s\n",
 		g_config.host,g_config.port,g_config.ns,g_config.set);
 
+	// Use default client logging, but set a filter.
+	cf_set_log_level(CF_WARN);
+
 	g_config.base = event_base_new();			// initialize the libevent system
 	g_config.dns_base = evdns_base_new(g_config.base, 1);
 	ev2citrusleaf_init(0);    // initialize citrusleaf

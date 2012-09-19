@@ -27,9 +27,6 @@
 #include "cf.h"
 #else
 typedef uint8_t byte;
-#define cf_detail( __UNIT, __fmt, __args...) fprintf(stderr, "DETAIL"__fmt, ## __args)
-#define cf_debug( __UNIT, __fmt, __args...) fprintf(stderr, "DEBUG"__fmt, ## __args)
-#define cf_info( __UNIT, __fmt, __args...) fprintf(stderr, "INFO"__fmt, ## __args)
 #endif
 
 /* cf_hash_fnv

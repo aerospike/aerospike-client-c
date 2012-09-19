@@ -16,6 +16,7 @@
 #include "citrusleaf/cf_clock.h"
 #include "citrusleaf/cf_atomic.h"
 #include "citrusleaf/cf_hist.h"
+#include "citrusleaf/cf_log.h"
 
 
 int
@@ -62,7 +63,7 @@ cf_histogram_dump( cf_histogram *h )
 	int pos = 0; // location to print from
 	printbuf[0] = '\0';
 	
-	fprintf(stderr, "histogram dump: %s (%zu total)\n",h->name, h->n_counts);
+	cf_debug("histogram dump: %s (%zu total)", h->name, h->n_counts);
 	int i, j;
 	int k = 0;
 	for (j=CF_N_HIST_COUNTS-1 ; j >= 0 ; j-- ) if (h->count[j]) break;
@@ -72,12 +73,12 @@ cf_histogram_dump( cf_histogram *h )
 			int bytes = sprintf((char *) (printbuf + pos), " (%02d: %010zu) ", i, h->count[i]);
 			if (bytes <= 0) 
 			{
-				fprintf(stderr, "histogram printing error. Bailing ...");
+				cf_debug("histogram printing error. Bailing ...");
 				return;
 			}
 			pos += bytes;
 		    if (k % 4 == 3){
-		    	 fprintf(stderr, "%s\n", (char *) printbuf);
+		    	 cf_debug("%s", (char *) printbuf);
 		    	 pos = 0;
 		    	 printbuf[0] = '\0';
 		    }
@@ -85,7 +86,7 @@ cf_histogram_dump( cf_histogram *h )
 		}
 	}
 	if (pos > 0) 
-	    fprintf(stderr, "%s\n", (char *) printbuf);
+		cf_debug("%s", (char *) printbuf);
 }
 
 void 

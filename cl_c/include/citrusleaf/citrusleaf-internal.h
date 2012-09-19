@@ -239,6 +239,11 @@ int citrusleaf_sproc_package_get(cl_cluster *asc, const char *package, cl_script
 
 int citrusleaf_sproc_package_get_with_gen(cl_cluster *asc, const char *package_name, char **content, int *content_len, char **gen, cl_script_lang_t lang_t);
 
+#ifdef DEBUG_VERBOSE
+void
+dump_buf(char *info, uint8_t *buf, size_t buf_len);
+#endif
+
 #ifdef __cplusplus
 } // end extern "C"
 #endif

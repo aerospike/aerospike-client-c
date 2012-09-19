@@ -7,20 +7,35 @@ sudo apt-get install libc6-dev libssl-dev
 For redhat derived distributions such as Fedora Core and Centos, excute:
 sudo yum install openssl-devel glibc-devel
 
+Some newer Linux systems (Ubuntu 12.04) come with libevent2 already installed. 
+The dev version is still required:
+		$ sudo apt-get install libssl-dev
 
-Libevent2 has a number of differences with Libevent, has
-clashes with header files. On a machine which has both old libevent and the new 
-libevent2, there can be subtle run-time failures.
+On older systems, libevent2 must be installed manually, following these steps:
 
-In order to allow the old libevent to co-exist with libevent2, this is the process we have followed:
--- download libevent2 from libevent.org.
--- configure the build to be installed in /usr/local.
-./configure --prefix=/usr/local ; make ; sudo make install
--- the Makefiles in this package will explicitly link to /usr/local/lib/libevent-2.0.so.5 
+1. Remove the old libevent. The libevent2 library will be backward compatible,
+   so software relying on the old libevent will still work with libevent2.
+		$ sudo yum remove libevent
+
+2. Download the latest libevent2 from libevent.org, e.g.
+   libevent-2.0.20-stable.tar.gz.
+
+3. Extract, and go to the resulting directory, e.g.
+		$ tar -xzvf libevent-2.0.20-stable.tar.gz
+		$ cd libevent-2.0.20-stable
+
+4. Configure libevent2 to be installed in /usr/lib and install it. (Amazingly,
+   we have found the default configuration may install in /usr/local/lib.)
+		$ ./configure --prefix=/usr
+		$ make
+		$ sudo make install
+
+5. Make sure the new library is recognized.
+		$ sudo /sbin/ldconfig
+
 
 The root level 'Makefile' automatically executed make -f src/Makefile.native , which uses
-that GCC -march=native as a compilation target. Other examples, such as src/Makefile.32 and src/Makefile.64,
-build explicitly for 32 and 64 bit environments.
+that GCC -march=noarch as a compilation target. Other examples, such as src/Makefile.32 and 
+src/Makefile.64, build explicitly for 32 and 64 bit environments.
 
-If the resulting executable will be run on multiple cpu platforms, "-march=native" should be
-replaced with "-march=nocona". This turns off cpu specific optimizations.
+

@@ -1782,6 +1782,9 @@ void citrusleaf_set_debug(bool debug_flag)
 
 int citrusleaf_init() 
 {
+	extern char *citrusleaf_build_string;
+	cf_info("Aerospike client version %s", citrusleaf_build_string);
+
 	// remember the process id which is spawning the background threads.
 	// only this process can call a pthread_join() on the threads that it spawned.
 	g_init_pid = getpid();

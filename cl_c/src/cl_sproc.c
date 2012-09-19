@@ -26,8 +26,6 @@
 #include "citrusleaf/cf_socket.h"
 #include "citrusleaf/cf_vector.h"
 
-extern int g_cl_turn_debug_on;
-
 #define INFO_TIMEOUT_MS 300
 
 
@@ -106,7 +104,7 @@ int sproc_compile_arg_field(char * const*argk, cl_object * const*argv, int argc,
 		
 	}		
 	
-	if (g_cl_turn_debug_on) {
+	if (cf_debug_enabled()) {
 		fprintf(stderr, "processing %d arguments to be %d long\n",argc,sz);
 	}
 	*sz_p = sz;

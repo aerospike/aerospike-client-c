@@ -27,8 +27,6 @@
 
 #define EXTRA_CHECKS 1
 
-extern int g_cl_turn_debug_on;
-
 // work item given to each node
 typedef struct {
     // these sections are the same for the same query
@@ -311,7 +309,7 @@ static int query_compile (const char *ns, const cl_query *query, const cl_mr_sta
         mf_tmp = cl_msg_field_get_next(mf);
         cl_msg_swap_field(mf);
         mf = mf_tmp;
-		if (g_cl_turn_debug_on) {
+		if (cf_debug_enabled()) {
 			fprintf(stderr,"adding indexname %d %s\n",iname_len+1, query->indexname);
 		}
     }
@@ -332,7 +330,7 @@ static int query_compile (const char *ns, const cl_query *query, const cl_mr_sta
         mf_tmp = cl_msg_field_get_next(mf);
         cl_msg_swap_field(mf);
         mf = mf_tmp;
-		if (g_cl_turn_debug_on) {
+		if (cf_debug_enabled()) {
 			fprintf(stderr,"adding package %s\n", mr_job->package);
 		}
     }
@@ -344,7 +342,7 @@ static int query_compile (const char *ns, const cl_query *query, const cl_mr_sta
         mf_tmp = cl_msg_field_get_next(mf);
         cl_msg_swap_field(mf);
         mf = mf_tmp;
-		if (g_cl_turn_debug_on) {
+		if (cf_debug_enabled()) {
 			fprintf(stderr,"adding generation %s\n", mr_state->generation);
 		}
     }
@@ -632,7 +630,7 @@ static void *query_worker_fn(void *dummy) {
             fprintf(stderr, "queue pop failed\n");
         }
         
-		if (g_cl_turn_debug_on) {
+		if (cf_debug_enabled()) {
 			fprintf(stderr, "query_worker_fn: getting one work item\n");
 		}
         // a NULL structure is the condition that we should exit. See shutdown()
@@ -864,7 +862,7 @@ cl_rv citrusleaf_query_set_limit (cl_query *query, uint64_t limit )
 int citrusleaf_query_init() {
     if (1 == cf_atomic32_incr(&query_initialized)) {
 
-		if (g_cl_turn_debug_on) {
+		if (cf_debug_enabled()) {
 			fprintf(stderr, "query_init: creating %d threads\n",N_MAX_QUERY_THREADS);
 		}
 				

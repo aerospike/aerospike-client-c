@@ -12,6 +12,7 @@ clean:
 	rm -f obj/hooked/*
 
 %:
+	cp ../../../make_in/version.c src
 #	$(MAKE) -f Makefile.32 -C src $@   # some are having trouble with the xcompile
 #	$(MAKE) -f Makefile.64 -C src $@
 	$(MAKE) -f Makefile.native -C src $@

@@ -1778,6 +1778,9 @@ int ev2citrusleaf_init(ev2citrusleaf_lock_callbacks *lock_cb)
 
 	g_ev2citrusleaf_initialized = true;
 
+	extern char *citrusleaf_build_string;
+	cf_info("Aerospike client version %s", citrusleaf_build_string);
+
 	// TODO - add extra API to specify no locking (for single-threaded use).
 	if (lock_cb) {
 		g_lock_cb = lock_cb;

@@ -1767,6 +1767,9 @@ int evcitrusleaf_init(void)
 	}
 	evcitrusleaf_inited = true;
 	
+	extern char *citrusleaf_build_string;
+	cf_info("Aerospike client version %s", citrusleaf_build_string);
+
 	memset(&g_cl_stats, 0, sizeof(g_cl_stats)); 
 	
 	citrusleaf_cluster_init();

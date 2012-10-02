@@ -371,7 +371,7 @@ int ev2citrusleaf_cluster_requests_in_progress(ev2citrusleaf_cluster *cl) {
 void
 ev2citrusleaf_cluster_destroy(ev2citrusleaf_cluster *asc)
 {
-	cf_info("cluster destroy: %p");
+	cf_info("cluster destroy: %p", asc);
 
 	if (asc->MAGIC != CLUSTER_MAGIC) {
 		cf_warn("cluster destroy on non-cluster object %p", asc);

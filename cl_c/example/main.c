@@ -143,7 +143,7 @@ main(int argc, char **argv)
 	
 	printf("example of the C citrusleaf library\n");
 	
-	while ((c = getopt(argc, argv, "h:p:n:b:m:v")) != -1) 
+	while ((c = getopt(argc, argv, "h:p:n:s:b:m:v")) != -1) 
 	{
 		switch (c)
 		{

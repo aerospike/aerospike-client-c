@@ -1003,6 +1003,10 @@ cl_cluster_node_dun(cl_cluster_node *cn, enum cl_cluster_dun_type type)
 			dun_factor = 1;
 			break;
 		case DUN_INFO_FAIL:
+			cf_debug("dun node: %s reason: %s count: %d",
+					cn->name, cl_cluster_dun_human[type], cf_atomic_int_get(cn->dun_count));
+			dun_factor = 300;
+			break;
 		case DUN_REPLICAS_FETCH:
 		case DUN_NO_SOCKADDR:
 			cf_debug("dun node: %s reason: %s count: %d",

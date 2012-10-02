@@ -972,6 +972,9 @@ cl_cluster_node_dun(cl_cluster_node *cn, enum cl_cluster_dun_type type)
 			dun_factor = 1;
 			break;
 		case DUN_INFO_FAIL:
+			CL_LOG(CL_DEBUG, "dun node: %s reason: %s count: %d\n",cn->name,cl_cluster_dun_human[type],cn->dun_count);
+			dun_factor = 300;
+			break;
 		case DUN_REPLICAS_FETCH:
 		case DUN_NO_SOCKADDR:
 			CL_LOG(CL_DEBUG, "dun node: %s reason: %s count: %d\n",cn->name,cl_cluster_dun_human[type],cn->dun_count);

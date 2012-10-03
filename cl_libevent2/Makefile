@@ -8,6 +8,7 @@ all: libev2citrusleaf
 	$(MAKE) -C example4
 	$(MAKE) -C example5
 	$(MAKE) -C example6
+	$(MAKE) -C operate_example
 	cp lib/libev2citrusleaf.a ../../../shared/lib
 	cp -r include/* ../../../shared/include
 	rm ../../../shared/include/citrusleaf_event2/*internal*
@@ -32,6 +33,8 @@ clean:
 	rm -f example5/obj/*
 	rm -f example6/example6
 	rm -f example6/obj/*
+	rm -f operate_example/example
+	rm -f operate_example/obj/*
 
 
 %:

@@ -241,6 +241,7 @@ dump_buf(char *info, uint8_t *buf, size_t buf_len)
 		p += 10;
 		strcpy(p, info);
 		p += strlen(info);
+		*p++ = '\n';
 
 		uint i;
 		for (i = 0; i < buf_len; i++) {

@@ -438,7 +438,7 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 			}
 			buf = (uint8_t *) op;
 			
-			if (msg->result_code != CL_RESULT_OK) {
+			if (n_ops == 0 && msg->result_code != CL_RESULT_OK && msg->result_code != CL_RESULT_NOTFOUND) {
 				rv = (int)msg->result_code;
 				done = true;
 			}

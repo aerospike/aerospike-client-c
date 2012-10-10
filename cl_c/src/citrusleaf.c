@@ -241,6 +241,7 @@ dump_buf(char *info, uint8_t *buf, size_t buf_len)
 		p += 10;
 		strcpy(p, info);
 		p += strlen(info);
+		*p++ = '\n';
 
 		uint i;
 		for (i = 0; i < buf_len; i++) {
@@ -1363,7 +1364,7 @@ do_the_full_monte(cl_cluster *asc, int info1, int info2, int info3, const char *
         
 #ifdef DEBUG		
 		if (try > 0)
-			cf_debug("request retrying try %d tid %zu\n", try, (uint64_t)pthread_self());
+			cf_debug("request retrying try %d tid %zu", try, (uint64_t)pthread_self());
 #endif        
 		try++;
 		

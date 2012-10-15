@@ -172,7 +172,7 @@ citrusleaf_info_host(struct sockaddr_in *sa_in, char *names, char **values, int 
     
     if (0 != io_rv) {
 #ifdef DEBUG        
-		cf_debug("info read not 8 bytes, fail, rv %d errno %d", rv, errno);
+		cf_debug("info socket read failed: rv %d errno %d", io_rv, errno);
 #endif        
 		goto Done;
 	}

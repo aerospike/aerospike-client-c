@@ -15,10 +15,12 @@
  * Memory barriers
  * > */
 
-#if ( ! defined(MARCH_i686) ) && ( ! defined (MARCH_x86_64) )
-// It's better to define one of these, but we'll assume you meant the less
-// restrictive 32-bit version
-#define MARCH_i686
+#if ! (defined(MARCH_i686) || defined(MARCH_x86_64))
+#if defined(__LP64__) || defined(_LP64)
+#define MARCH_x86_64 1
+#else
+#define MARCH_i686 1
+#endif
 #endif
 
 /* Atomic memory operations */

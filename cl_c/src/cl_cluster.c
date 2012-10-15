@@ -1351,9 +1351,9 @@ void
 citrusleaf_sleep_for_tender(cl_cluster *asc)
 {
 	if (asc->tend_speed  > 0)
-		sleep(asc->tend_speed * 2);
+		sleep(asc->tend_speed);
 	else
-		sleep(g_clust_tend_speed * 2);
+		sleep(g_clust_tend_speed);
 }
 
 //

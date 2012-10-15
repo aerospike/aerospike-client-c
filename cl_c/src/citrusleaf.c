@@ -1556,7 +1556,7 @@ citrusleaf_async_put_digest(cl_cluster *asc, const char *ns, const cf_digest *di
 }
 
 
-extern cl_rv
+extern cl_rvclient
 citrusleaf_check_cluster_health(cl_cluster *asc)
 {
 	int number_of_nodes_alive = 0;

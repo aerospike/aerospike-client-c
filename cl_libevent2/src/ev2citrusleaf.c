@@ -1336,15 +1336,18 @@ GoodFd:
 	
 	// signal ready for event ---- write the buffer in the callback
 
+	req->network_set = true;
+
+	// Make sure no req fields are touched after the event is added. It's
+	// possible req->base does not correspond to the thread we're in here, so
+	// the event callback might happen (immediately) in another thread.
+
 	event_assign(cl_request_get_network_event(req), req->base, fd, EV_WRITE, ev2citrusleaf_event, req);
-	if (0 == event_add(cl_request_get_network_event(req), 0 /*timeout*/)) {
-		req->network_set = true;
-	}
-	else {
+
+	if (0 != event_add(cl_request_get_network_event(req), 0 /*timeout*/)) {
 		cf_warn("unable to add event for request %p: will hang forever", req);
 		req->network_set = false;
 	}
-	return;	
 }
 
 

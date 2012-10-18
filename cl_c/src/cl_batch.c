@@ -485,6 +485,11 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 		wr_buf = 0;
 	}
 
+	// We should close the connection fd in case of error
+	// to throw away any unread data on connection socket.
+	// Instead if we put back fd into pull the subsequent
+	// call will read stale data.
+
 	if (rv == 0) {
 		cl_cluster_node_fd_put(node, fd, false);
 	} else {

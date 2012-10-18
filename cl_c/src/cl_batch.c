@@ -484,8 +484,12 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 		free(wr_buf);
 		wr_buf = 0;
 	}
-	
-	cl_cluster_node_fd_put(node, fd, false);
+
+	if (rv == 0) {
+		cl_cluster_node_fd_put(node, fd, false);
+	} else {
+		close(fd);
+	}
 
 #ifdef DEBUG_VERBOSE	
 	cf_debug("exited loop: rv %d", rv );

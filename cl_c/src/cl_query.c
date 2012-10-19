@@ -209,6 +209,7 @@ static int query_compile (const char *ns, const cl_query *query, const cl_mr_sta
 		msg_sz += strlen(query->indexname) + sizeof(cl_msg_field);
 		
 		if (query->setname) {
+		    n_fields++;
 			setname_len = strlen(query->setname);
 			msg_sz += setname_len + sizeof(cl_msg_field);
 		}

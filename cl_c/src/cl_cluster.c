@@ -625,6 +625,7 @@ cl_cluster_node_release(cl_cluster_node *cn)
 
 		cf_queue_destroy(cn->conn_q);
 		cf_queue_destroy(cn->conn_q_asyncfd);
+		cf_queue_destroy(cn->asyncwork_q);
 		pthread_mutex_destroy(&cn->LOCK);
 		cf_client_rc_free(cn);
 	}

@@ -981,42 +981,40 @@ cluster_services_parse(cl_cluster *asc, char *services, cf_vector *sockaddr_t_v)
 static void
 cluster_partitions_process(cl_cluster *asc, cl_cluster_node *cn, char *partitions, bool write) 
 {
-#ifdef DEBUG	
-	cf_debug("process partitions: for node %s %s",cn->name, write?"write":"read");
-#endif
-	
 	// use a create instead of a define because we know the size, and the size will likely be larger
 	// than a stack allocation
 	cf_vector *partitions_v = cf_vector_create(sizeof(void *), asc->n_partitions+1, 0);
 	str_split(';',partitions, partitions_v);
+
 	// partition_v is a vector of namespace:part_id
-	for (uint i=0;i<cf_vector_size(partitions_v);i++) {
+	for (uint i = 0; i < cf_vector_size(partitions_v); i++) {
 		char *partition_str = cf_vector_pointer_get(partitions_v, i);
 		cf_vector_define(partition_v, sizeof(void *), 0);
 		str_split(':', partition_str, &partition_v);
-		if (cf_vector_size(&partition_v) == 2) {
+
+		unsigned int vsize = cf_vector_size(&partition_v);
+		if (vsize == 2) {
 			char *namespace_s = cf_vector_pointer_get(&partition_v,0);
 			char *partid_s = cf_vector_pointer_get(&partition_v,1);
 			int partid = atoi(partid_s);
+
 			// it's coming over the wire, so validate it
 			if (strlen(namespace_s) > 30) {
-				cf_error("cluster partitions process: bad namespace: len %zd space %s",strlen(namespace_s),
-					namespace_s);
+				cf_warn("Invalid partition namespace %s. values=%s", namespace_s, partitions);
 				goto Next;
 			}
-			if (partid > asc->n_partitions) {
-				cf_error("cluster partitions process: partitions out of scale: found %d max %d",
-					partid, asc->n_partitions);
+
+			if (partid < 0 || partid >= (int)asc->n_partitions) {
+				cf_warn("Invalid partition id %s. max=%u values=%s", partid, asc->n_partitions, partitions);
 				goto Next;
 			}
 				
 			pthread_mutex_lock(&asc->LOCK);
 			cl_partition_table_set(asc, cn, namespace_s, partid, write);
 			pthread_mutex_unlock(&asc->LOCK);
-#ifdef DEBUG_VERBOSE			
-			cf_debug("process_partitions: node %s responsible for %s partition: %s : %d",
-				cn->name,write ? "write" : "read",namespace_s,partid);
-#endif			
+		}
+		else {
+			cf_warn("Invalid partition vector size %u. element=%s values=%s", vsize, partition_str, partitions);
 		}
 Next:
 		cf_vector_destroy(&partition_v);
@@ -1047,7 +1045,7 @@ cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 		struct sockaddr_in *sa_in = cf_vector_getp(&cn->sockaddr_in_v, i);
 		
 		char *values = 0;
-		if (0 != citrusleaf_info_host(sa_in, "node\npartition-generation\nservices", &values, INFO_TIMEOUT_MS, false)) {
+		if (0 != citrusleaf_info_host_limit(sa_in, "node\npartition-generation\nservices", &values, INFO_TIMEOUT_MS, false, 10000)) {
 			// todo: this address is no longer right for this node, update the node's list
 			// and if there's no addresses left, dun node
 			cf_info("Info request failed for %s", cn->name);
@@ -1089,20 +1087,14 @@ cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 					cluster_services_parse(asc, value, services_v);
 				}
 			}
-			
 			cf_vector_destroy(&pair_v);
-			
 		}
-		
 		cf_vector_destroy(&lines_v);
-		
 		free(values);
-		
 	}
 	
-	
 	if (update_partitions == true) {
-//		cf_debug("node %s: partitions have changed, need update", cn->name);
+		// cf_debug("node %s: partitions have changed, need update", cn->name);
 
 		// remove all current values, then add up-to-date values
 		pthread_mutex_lock(&asc->LOCK);
@@ -1112,7 +1104,7 @@ cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 		for (uint i=0;i<cf_vector_size(&cn->sockaddr_in_v);i++) {
 			struct sockaddr_in *sa_in = cf_vector_getp(&cn->sockaddr_in_v, i);
 			char *values = 0;
-			if (0 != citrusleaf_info_host(sa_in, "replicas-read\nreplicas-write", &values, INFO_TIMEOUT_MS, false)) {
+			if (0 != citrusleaf_info_host_limit(sa_in, "replicas-read\nreplicas-write", &values, INFO_TIMEOUT_MS, false, 2000000)) {
                 // it's a little peculiar to have just talked to the host then have this call
                 // fail, but sometimes strange things happen.
                 goto Updated;
@@ -1126,17 +1118,23 @@ cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 				cf_vector_define(pair_v, sizeof(void *), 0);
 				str_split('\t',line, &pair_v);
 				
-				if (cf_vector_size(&pair_v) == 2) {
+				unsigned int vsize = cf_vector_size(&pair_v);
+				if (vsize == 2) {
 					char *name = cf_vector_pointer_get(&pair_v,0);
 					char *value = cf_vector_pointer_get(&pair_v,1);
-
 					
-					if (strcmp(name, "replicas-read")== 0)
+					if (strcmp(name, "replicas-read") == 0) {
 						cluster_partitions_process(asc, cn, value, false);
-
-					else if (strcmp(name, "replicas-write")==0)
+					}
+					else if (strcmp(name, "replicas-write") == 0) {
 						cluster_partitions_process(asc, cn, value, true);
-						
+					}
+					else {
+						cf_warn("Invalid replicas response name %s. values=%s", name, values);
+					}
+				}
+				else {
+					cf_warn("Invalid replicas vector size %u. values=%s", vsize, values);
 				}
 				cf_vector_destroy(&pair_v);
 			}

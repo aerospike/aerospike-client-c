@@ -111,6 +111,8 @@ citrusleaf_batch_init();
 void
 citrusleaf_batch_shutdown();
 
+int
+citrusleaf_info_host_limit(struct sockaddr_in *sa_in, char *names, char **values, int timeout_ms, bool send_asis, uint64_t max_response_length);
 
 int
 cl_compile(uint info1, uint info2, uint info3, const char *ns, const char *set, const cl_object *key, const cf_digest *digest,

@@ -136,35 +136,32 @@ cl_partition_table_get_byns(cl_cluster *asc, char *ns)
 void
 cl_partition_table_set( cl_cluster *asc, cl_cluster_node *node, char *ns, cl_partition_id pid, bool write)
 {
-#ifdef DEBUG
-	cf_debug("partition-table-set: ns %s partition %d node %s write %d", ns, pid,node->name, (int)write);
-#endif
-
-	//
 	cl_partition_table *pt = cl_partition_table_get_byns(asc, ns);
+
 	if (!pt) {
 		pt = cl_partition_table_create(asc, ns);
-		if (!pt)	return; // could not add, quite the shame
+		if (!pt) {
+			cf_warn("Failed to create partition table.");
+			return;
+		}
 	}
-	
-#ifdef EXTRA_CHECKS
-	if (pid > asc->n_partitions) {
-		cf_warn("internal error: partition table set got out of range partition id %d", pid);
-		return;
-	}
-#endif	
-	
-	if (write)
+	//cf_info("Set %s partition %s:%u", write? "write":"read", ns, pid);
+
+	if (write) {
 		pt->partitions[pid].write = node;
+	}
 	else {
 		cl_partition *p = &pt->partitions[pid];
-		for (int i=0;i < p->n_read ; i++) {
-			if (p->read[i] == node)	return; // already in!
+
+		for (int i = 0; i < p->n_read ; i++) {
+			if (p->read[i] == node) {
+				return; // already in!
+			}
 		}
-		if (MAX_REPLICA_COUNT == p->n_read) { // full, replace 0 for fun
-#ifdef DEBUG
+
+		if (MAX_REPLICA_COUNT == p->n_read) {
+			// full, replace 0
 			cf_debug("read replica set full");
-#endif
 			p->read[0] = node;
 		}
 		else {
@@ -172,8 +169,6 @@ cl_partition_table_set( cl_cluster *asc, cl_cluster_node *node, char *ns, cl_par
 			p->n_read++;
 		}
 	}
-		
-	return;
 }
 
 static uint32_t round_robin_counter = 0;

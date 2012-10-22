@@ -156,6 +156,7 @@ typedef struct cl_addrmap {
 // 
 // Query related structures:
 #define CL_MAX_SINDEX_NAME_SIZE	128
+#define CL_MAX_SETNAME_SIZE		32	
 // indicate metadata needed to create a secondary index
 typedef struct sindex_metadata_t {
 	char	iname[CL_MAX_SINDEX_NAME_SIZE];
@@ -198,6 +199,7 @@ typedef struct cl_query_orderby {
 
 typedef struct cl_query {
 	char		indexname[CL_MAX_SINDEX_NAME_SIZE];
+	char		setname[CL_MAX_SETNAME_SIZE];
 	cf_vector	*binnames;
 	cf_vector	*ranges;
 	cf_vector	*filters;
@@ -665,7 +667,7 @@ cl_rv citrusleaf_secondary_index_delete(cl_cluster *asc, const char *ns,
 		const char *set, const char *indexname);
 
 // Query  
-cl_query *citrusleaf_query_create(const char *indexname);
+cl_query *citrusleaf_query_create(const char *indexname, const char *setname);
 void citrusleaf_query_destroy(cl_query *query_obj);
 cl_rv citrusleaf_query_add_binname(cl_query *query_obj, const char *binname);
 cl_rv citrusleaf_query_add_range_numeric(cl_query *query_obj, const char *binname,int64_t start,int64_t end);

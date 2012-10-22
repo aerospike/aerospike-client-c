@@ -200,12 +200,18 @@ static int query_compile (const char *ns, const cl_query *query, const cl_mr_sta
     msg_sz += ns_len  + sizeof(cl_msg_field); 
 
     int     iname_len = 0;
+	int		setname_len = 0;
     int 	range_sz = 0;
 	if (query) {
 		// indexname field
 		n_fields++;
 		iname_len  = strlen(query->indexname);
 		msg_sz += strlen(query->indexname) + sizeof(cl_msg_field);
+		
+		if (query->setname) {
+			setname_len = strlen(query->setname);
+			msg_sz += setname_len + sizeof(cl_msg_field);
+		}
 
 		// query field    
 		n_fields++;
@@ -311,6 +317,18 @@ static int query_compile (const char *ns, const cl_query *query, const cl_mr_sta
         mf = mf_tmp;
 		if (cf_debug_enabled()) {
 			fprintf(stderr,"adding indexname %d %s\n",iname_len+1, query->indexname);
+		}
+    }
+
+	if (query->setname) {
+        mf->type = CL_MSG_FIELD_TYPE_SET;
+        mf->field_sz = setname_len + 1;
+        memcpy(mf->data, query->setname, setname_len);
+        mf_tmp = cl_msg_field_get_next(mf);
+        cl_msg_swap_field(mf);
+        mf = mf_tmp;
+		if (cf_debug_enabled()) {
+			fprintf(stderr,"adding setname %d %s\n",setname_len+1, query->setname);
 		}
     }
 
@@ -749,7 +767,7 @@ cl_rv citrusleaf_query(cl_cluster *asc, const char *ns, const cl_query *query, c
     return 0;
 }
 
-cl_query *citrusleaf_query_create(const char *indexname)
+cl_query *citrusleaf_query_create(const char *indexname, const char *setname)
 {
 	cl_query *query = malloc(sizeof(cl_query));
 	if (query==NULL) {
@@ -757,6 +775,8 @@ cl_query *citrusleaf_query_create(const char *indexname)
 	}
 	memset(query,0,sizeof(cl_query));
 	memcpy(query->indexname,indexname,strlen(indexname));
+	if (setname)
+		memcpy(query->setname, setname, strlen(setname));
 
 	return query;	
 }

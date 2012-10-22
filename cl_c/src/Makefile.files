@@ -6,7 +6,7 @@ HEADERS = citrusleaf.h cl_cluster.h
 
 #HEADERS = citrusleaf.h proto.h cl_cluster.h cf_ll.h cf_timer.h cf_atomic.h cf_hist.h
 #HEADERS += cf_vector.h cf_queue.h cf_digest.h cf_socket.h cf_shash.h
-SOURCES = citrusleaf.c cl_info.c cl_cluster.c cl_partition.c cl_lookup.c proto.c cl_batch.c cl_scan.c cl_async.c cl_sindex.c cl_query.c
+SOURCES = citrusleaf.c cl_info.c cl_cluster.c cl_partition.c cl_lookup.c proto.c cl_batch.c cl_scan.c cl_async.c cl_sindex.c cl_query.c cl_mapreduce.c
 SOURCES += cl_sproc.c 
 ifeq (${MR_LANG},LUA)
 SOURCES += cl_mapreduce.c 

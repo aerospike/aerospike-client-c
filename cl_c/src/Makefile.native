@@ -43,4 +43,4 @@ libcitrusleaf: $(OBJECTS)
 
 $(DIR_OBJECT)/%.o: %.c
 	mkdir -p $(DIR_OBJECT)
-	$(CC) $(CFLAGS_NATIVE) -fPIC -MMD -o $@ -c $(INCLUDES) $<
+	$(CC) $(CFLAGS_NATIVE) -DUSE_LUA_MR -fPIC -MMD -o $@ -c $(INCLUDES) $<

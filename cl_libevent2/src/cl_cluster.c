@@ -107,6 +107,10 @@ cluster_create()
 
 void
 cluster_destroy(ev2citrusleaf_cluster *asc) {
+	if (asc->base) {
+		event_base_free(asc->base);
+	}
+
 	MUTEX_FREE(asc->node_v_lock);
 	memset(asc, 0, sizeof(ev2citrusleaf_cluster) + event_get_struct_event_size() );
 	free(asc);
@@ -263,8 +267,21 @@ cluster_timer_fn(int fd, short event, void *udata)
 }
 
 
+static void* run_cluster_mgr(void* base) {
+	// Blocks until there are no more added events, or until something calls
+	// event_base_loopbreak() or event_base_loopexit().
+	int result = event_base_dispatch((struct event_base*)base);
+
+	if (result != 0) {
+		cf_warn("cluster manager event_base_dispatch() returned %d", result);
+	}
+
+	return NULL;
+}
+
+
 ev2citrusleaf_cluster *
-ev2citrusleaf_cluster_create(struct event_base *base)
+ev2citrusleaf_cluster_create()
 {
 	if (! g_ev2citrusleaf_initialized) {
 		cf_warn("must call ev2citrusleaf_init() before ev2citrusleaf_cluster_create()");
@@ -277,8 +294,14 @@ ev2citrusleaf_cluster_create(struct event_base *base)
 	asc->MAGIC = CLUSTER_MAGIC;
 	asc->follow = true;
 	asc->last_node = 0;
-	asc->base = base;
-	asc->dns_base = evdns_base_new(base, 1);
+	asc->base = event_base_new();
+
+	if (! asc->base) {
+		cf_warn("error creating cluster manager event base");
+		return NULL;
+	}
+
+	asc->dns_base = evdns_base_new(asc->base, 1);
 	
 	// bookkeeping for the set hosts
 	cf_vector_pointer_init(&asc->host_str_v, 10, VECTOR_FLAG_BIGLOCK);
@@ -308,7 +331,16 @@ ev2citrusleaf_cluster_create(struct event_base *base)
 		return(0);
 	}
 	asc->timer_set = true;
-	
+
+	if (0 != pthread_create(&asc->mgr_thread, NULL, run_cluster_mgr, (void*)asc->base)) {
+		cf_warn("error creating cluster manager thread");
+		event_del(cluster_get_timer_event(asc));
+		cf_queue_destroy(asc->request_q);
+		cf_ll_delete(&cluster_ll, (cf_ll_element*)asc);
+		cluster_destroy(asc);
+		return NULL;
+	}
+
 	return(asc);
 }
 
@@ -369,13 +401,29 @@ int ev2citrusleaf_cluster_requests_in_progress(ev2citrusleaf_cluster *cl) {
 
 
 void
-ev2citrusleaf_cluster_destroy(ev2citrusleaf_cluster *asc)
+ev2citrusleaf_cluster_destroy(ev2citrusleaf_cluster *asc, int delay_ms)
 {
 	cf_info("cluster destroy: %p", asc);
 
 	if (asc->MAGIC != CLUSTER_MAGIC) {
 		cf_warn("cluster destroy on non-cluster object %p", asc);
 		return;
+	}
+
+	if (delay_ms < 0 || delay_ms > 60 * 1000) {
+		cf_warn("cluster destroy delay_ms %d doesn't look right, using 100", delay_ms);
+		delay_ms = 100;
+	}
+
+	// Stop the cluster manager event dispatcher.
+	if (asc->base) {
+		// No significant difference between this and calling
+		// event_base_loopexit() with a delay.
+		usleep((__useconds_t)(delay_ms * 1000));
+		event_base_loopbreak(asc->base);
+
+		void* pv_value;
+		pthread_join(asc->mgr_thread, &pv_value);
 	}
 
 	if (cf_atomic_int_get(asc->requests_in_progress)) {
@@ -1437,7 +1485,7 @@ int citrusleaf_cluster_shutdown()
 	cf_ll_element *e;
 	while ((e = cf_ll_get_head(&cluster_ll))) {
 		ev2citrusleaf_cluster *asc = (ev2citrusleaf_cluster *)e; 
-		ev2citrusleaf_cluster_destroy(asc);
+		ev2citrusleaf_cluster_destroy(asc, 0);
 	}
 	
 	return(0);	

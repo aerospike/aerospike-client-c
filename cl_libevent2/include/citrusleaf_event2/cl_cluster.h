@@ -19,6 +19,8 @@
 // speed, and compatibility
 #pragma once
 
+#include <pthread.h>
+
 #include "citrusleaf/cf_atomic.h"
 #include "ev2citrusleaf-internal.h"
 
@@ -101,6 +103,7 @@ struct ev2citrusleaf_cluster_s {
 	bool		shutdown; // we might be in shutdown phase, don't start more info
 							// requests or similar
 
+	pthread_t mgr_thread;
 	struct event_base *base; // base that this cluster serves		
 	struct evdns_base *dns_base;
 							

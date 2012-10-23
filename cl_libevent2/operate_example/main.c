@@ -283,7 +283,7 @@ main(int argc, char **argv)
 	
 	
 	// Create a citrusleaf cluster object for subsequent requests
-	g_config.asc = ev2citrusleaf_cluster_create(g_config.base);
+	g_config.asc = ev2citrusleaf_cluster_create();
 	if (!g_config.asc) {
 		fprintf(stderr, "could not create cluster, internal error\n");
 		return(-1);
@@ -314,7 +314,7 @@ main(int argc, char **argv)
 	
 	if (tries == 20) {
 		fprintf(stderr, "example: could not connect to cluster, configuration bad?\n");
-		ev2citrusleaf_cluster_destroy(g_config.asc);
+		ev2citrusleaf_cluster_destroy(g_config.asc, 0);
 		return(-1);
 	}
 

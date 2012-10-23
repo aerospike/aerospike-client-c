@@ -114,6 +114,10 @@ static char luaPredefinedFunctions[] = \
     "  }; " 															\
     "  setmetatable(_G, {__index=ReadOnly, __newindex=GlobalCheck});  " \
     "end "																\
+    "function SetRecordMargval(arg, val)                              " \
+    "  if (Sandbox.__Args == nil) then Sandbox.__Args = {}; end       " \
+    "  Sandbox.__Args[arg] = val;                                     " \
+    "end                                                              " \
     "function ReduceWrapper(func) "  						\
     "  ReduceCount = 0; " 									\
     "  local res   = {}; " 									\
@@ -476,10 +480,7 @@ int cl_mr_state_row(cl_mr_state *mrs_p, char *ns, cf_digest *keyd, char *set, ui
     
     if (mrs_p->responses == 1) {
         lua_getglobal(lua, "PostFinalizeCleanup");
-        ret = lua_pcall(lua, 0, 0, 0);
-        if (ret) {
-            assertOnLuaError(lua, "ERROR: luaL_dostring(PostFinalizeCleanup)");
-        }
+        lua_pcall(lua, 0, 0, 0);
     }
     
     for (int i=0;i<n_bins;i++) {
@@ -539,6 +540,13 @@ int cl_mr_state_done(cl_mr_state *mrs_p,
 		// no responses
 		return ret;
     
+    for (int i = 0; i < mrs_p->mr_job->map_argc; i++) {
+        lua_getglobal (lua, "SetRecordMargval");
+        lua_pushstring(lua, mrs_p->mr_job->map_argk[i]);
+        lua_pushstring(lua, mrs_p->mr_job->map_argv[i]->u.str);
+        lua_pcall(lua, 2, 0, 0);
+    }
+
 	// call the reduce wrapper
 	if (mrs_p->mr_job->rdc_fname) {
 		lua_getglobal(lua, "ReduceWrapper");

@@ -155,6 +155,7 @@ cl_rv citrusleaf_mr_job_add_parameter_string(cl_mr_job *mr_job, cl_script_func_t
 	char 		**argk;
 	cl_object 	**argv; 
 	int 		*argc;
+
 	if ( CL_SCRIPT_FUNC_TYPE_MAP == ftype) {
 		if (mr_job->map_argc>=CL_MAX_NUM_FUNC_ARGC) {
 			fprintf(stderr,"too many map_arg %d\n",mr_job->map_argc);

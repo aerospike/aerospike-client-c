@@ -101,7 +101,6 @@ static uint64_t g_start_ms;
 // Forward Declarations
 //
 
-static void* run_cluster_mgr(void* pv_unused);
 static void* run_transactions(void* pv_b);
 static void transaction_cb(int return_value, ev2citrusleaf_bin* bins,
 	int n_bins, uint32_t generation, void* pv_udata);

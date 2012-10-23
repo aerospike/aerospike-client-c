@@ -75,10 +75,14 @@ void mr_package_release(mr_package *mrp_p);
 
 
 static char luaPredefinedFunctions[] = \
-    "function AddTableToMapResults(hasrdc, k, v) " 				\
-    "  local cmd; " 											\
-    "  if (hasrdc) then " 										\
-    "    cmd = 'MapResults[' .. k .. '] = ' .. v .. ';'; " 		\
+    "function AddTableToMapResults(hasrdc, k, v) "                   \
+    "  local cmd; "                                                  \
+    "  if (hasrdc) then "                                            \
+    "    cmd = 'if (MapResults[' .. k .. '] == nil) then "           \
+    "             MapResults[' .. k .. '] = {};          "           \
+    "           end                                      "           \
+    "          table.insert(MapResults[' .. k .. '], ' .. v .. '); " \
+    "          MapCount        = MapCount + 1;';                   " \
     "  else " 													\
     "    cmd = 'table.insert(ReduceResults, ' .. v .. ');'; " 	\
     "    ReduceCount      = ReduceCount + 1; " 					\
@@ -138,14 +142,16 @@ static char luaPredefinedFunctions[] = \
 
 static char luaDebugWrapper[] =                     \
     "function DebugWrapper(func) "					\
+    "  print('DebugWrapper');              "        \
     "  for k, t in pairs(ReduceResults) do "        \
     "    func(k, t); "          					\
     "  end "          								\
     "end "          								\
     "function print_user_and_value(k, t) "          \
     "  if (type(t) == 'table') then "               \
+    "    print('k: ' .. k);         "               \
     "    for kk, vv in pairs(t) do "                \
-    "      print('k: ' .. kk .. ' v: ' .. vv); "    \
+    "      print('\tt_k: ' .. kk .. ' t_v: ' .. vv); "    \
     "    end                        "               \
     "  else                         "               \
     "    print('k: ' .. k);         "               \
@@ -317,7 +323,8 @@ void cl_mr_state_put(cl_mr_state *mrs_p) {
 	}
 	
 	// push the state
-	fprintf(stderr, "pushing state %p onto queue, package %s ( %p )\n",mrs_p,mrs_p->package_name,mrp_p);
+	//fprintf(stderr, "pushing state %p onto queue, package %s ( %p )\n",
+	//                mrs_p,mrs_p->package_name,mrp_p);
 	int rv = cf_queue_push(mrp_p->mr_state_q , (void *)&mrs_p);
 	if (rv != CF_QUEUE_OK) {
 		// could not push for some reason, destroy I guess

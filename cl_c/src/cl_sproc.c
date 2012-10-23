@@ -611,13 +611,17 @@ citrusleaf_sproc_package_get_with_gen(cl_cluster *asc, const char *package_name,
 	const char *lang = "lua";
 	
 	char info_query[512];
-	if (sizeof(info_query) <= (size_t) snprintf(info_query, sizeof(info_query), "get-package:package=%s;lang=%s;",package_name,lang)) {
+	if (sizeof(info_query) <= 
+       (size_t)snprintf(info_query, sizeof(info_query),
+                        "package-get:package=%s\n", package_name)) {
 		return(-1);
 	}
+
 	char *values = 0;
 	// shouldn't do this on a blocking thread --- todo, queue
 	if (0 != citrusleaf_info_cluster(asc, info_query, &values, true/*asis*/, 100/*timeout*/)) {
-		fprintf(stderr, "could not get package %s from cluster\n",package_name);
+		fprintf(stderr, "could not get package '%s' from cluster\n",
+                        package_name);
 		return(-1);
 	}
 	if (0 == values) {

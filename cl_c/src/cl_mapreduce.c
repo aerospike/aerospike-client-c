@@ -120,36 +120,36 @@ static char luaPredefinedFunctions[] = \
     "  MapResults = {}; "									\
     "  MapCount   = 0; "				 					\
     "end "													\
-	"function SendReduceResults(cb, udata)"					\
-	"  for k, v in pairs(ReduceResults) do"					\
-	"    SendReduceObject(k, v, cb, udata)"					\
-    "  end "                                                \
-    " end "                                                 \
     "function FinalizeWrapper(func) "						\
     "  ReduceResults = func(ReduceResults); "				\
     "  ReduceCount = 0; "					  				\
     "  for i, v in pairs(ReduceResults) do "				\
     "    ReduceCount = ReduceCount + 1; "					\
     "  end "												\
-    "end " \
-" function SendReduceResults(cb, udata)\n" \
-"   for k,v in pairs(ReduceResults) do  \n" \
-"     local ks;\n" \
-"     if (v.__mrkey == nil) then ks = k; \n" \
-"     else                       ks = tostring(v.__mrkey); end \n" \
-"     SendReduceObject(ks, v, cb, udata); \n" \
-"   end \n" \
-" end \n";
+    "end "                                                  \
+    " function SendReduceResults(cb, udata)"                        \
+    "   for k,v in pairs(ReduceResults) do"                         \
+    "     local ks;"                                                \
+    "     if (v.__mrkey == nil) then ks = k;"                       \
+    "     else                       ks = tostring(v.__mrkey); end" \
+    "     SendReduceObject(ks, v, cb, udata);"                      \
+    "   end"                                                        \
+    " end";
 
-static char luaDebugWrapper[] = \
+static char luaDebugWrapper[] =                     \
     "function DebugWrapper(func) "					\
-    "  print('DebugWrapper'); "          			\
     "  for k, t in pairs(ReduceResults) do "        \
     "    func(k, t); "          					\
     "  end "          								\
     "end "          								\
     "function print_user_and_value(k, t) "          \
-    "  print('v: ' .. t); "  						\
+    "  if (type(t) == 'table') then "               \
+    "    for kk, vv in pairs(t) do "                \
+    "      print('k: ' .. kk .. ' v: ' .. vv); "    \
+    "    end                        "               \
+    "  else                         "               \
+    "    print('k: ' .. k);         "               \
+    "  end                          "               \
     "end ";
 
     //"  print('user: ' .. t.user_id .. ' score: ' .. t.score .. ' cats: ' .. t.cats); " 
@@ -168,9 +168,7 @@ static void assertOnLuaError(lua_State *lua, char *assert_string) {
 
 int luaSendReduceObject(lua_State *lua);
 
-static int 
-mr_state_lua_create(cl_mr_state *mrs_p) {
-	
+static int mr_state_lua_create(cl_mr_state *mrs_p) {
 	if (mrs_p->lua) {
 		// fprintf(stderr, "closing lua %p\n",mrs_p->lua);
 		lua_close(mrs_p->lua); mrs_p->lua = 0; 
@@ -182,7 +180,6 @@ mr_state_lua_create(cl_mr_state *mrs_p) {
     luaL_openlibs(lua);
 
     int ret = luaL_dostring(lua, luaPredefinedFunctions);
-//    int ret = luaL_loadbuffer(lua, luaPredefinedFunctions, sizeof(luaPredefinedFunctions)-1, "mr_wrapper");
     if (ret) {
     	assertOnLuaError(lua, "ERROR: adding(luaPredefinedFunctions)");
     	goto Cleanup;
@@ -191,7 +188,6 @@ mr_state_lua_create(cl_mr_state *mrs_p) {
     // register C functions
     lua_pushcfunction(lua, luaSendReduceObject);
     lua_setglobal    (lua, "SendReduceObject");
-    
     ret     = luaL_dostring(lua, luaDebugWrapper);
     if (ret) {
     	assertOnLuaError(lua, "ERROR: luaL_dostring(DebugWrapper)");
@@ -212,19 +208,15 @@ Cleanup:
 //
 
 static int mr_state_load_package_lua(cl_mr_state *mrs_p, mr_package *mrp_p) {
-	
     lua_State *lua  = mrs_p->lua;
-
 	//fprintf(stderr, "load_package_lua incoming[%s]\n",mrp_p->script);
     if (mrp_p->script) {
 		int ret     = luaL_dostring(lua, mrp_p->script);
-//		int ret     = luaL_loadbuffer(lua, mrp_p->script, mrp_p->script_len,mrp_p->package_name);
 		if (ret) { 
 			assertOnLuaError(lua, "ERROR: luaL_dostring(map_func)"); 
 			return(-1); 
 		} 
-	}
-	else {
+	} else {
 		fprintf(stderr, "attempting to run package without registered script, failure\n");
 		return(-1);
 	}
@@ -232,8 +224,7 @@ static int mr_state_load_package_lua(cl_mr_state *mrs_p, mr_package *mrp_p) {
     return(0);
 }
 
-void mr_state_destroy(cl_mr_state *mrs_p)
-{
+void mr_state_destroy(cl_mr_state *mrs_p) {
 	if (mrs_p->lua) lua_close(mrs_p->lua);
 	free(mrs_p);	
 }
@@ -242,7 +233,6 @@ void mr_state_destroy(cl_mr_state *mrs_p)
 // allocates copies the functions into the mrs_pd, creates the LUA universe, and loads all functions
 
 cl_mr_state * mr_state_create(mr_package *mrp_p) {
-
 	// some validation of the package - it should have code & generation
 	if (mrp_p->generation[0] == 0) {
 		fprintf(stderr, "creating mr_state from mr_package with no generation, illegal %s\n",mrp_p->generation);		
@@ -284,14 +274,13 @@ cl_mr_state * mr_state_create(mr_package *mrp_p) {
 }
 
 
-cl_mr_state * 
-cl_mr_state_get(const cl_mr_job *mrj) {
-
+cl_mr_state *cl_mr_state_get(const cl_mr_job *mrj) {
 	// get the package with this name
 	mr_package *mrp_p = 0;
-	cf_rchash_get(mr_package_hash,mrj->package,strlen(mrj->package),(void **)&mrp_p);
+	cf_rchash_get(mr_package_hash, mrj->package, strlen(mrj->package),
+                  (void **)&mrp_p);
 	
-	if (! mrp_p) {
+	if (!mrp_p) {
 		fprintf(stderr, "package %s has not been registered locally\n",mrj->package);
 		return(0);
 	}
@@ -310,15 +299,11 @@ cl_mr_state_get(const cl_mr_job *mrj) {
 	}
 	
 	mr_package_release(mrp_p);
-	
 	mrs_p->mr_job = mrj;
-	
 	return(mrs_p);
 }
 
-void 
-cl_mr_state_put(cl_mr_state *mrs_p) {
-	
+void cl_mr_state_put(cl_mr_state *mrs_p) {
 	mrs_p->mr_job = 0;
 	
 	// get the package with this name
@@ -343,26 +328,20 @@ cl_mr_state_put(cl_mr_state *mrs_p) {
 	
 }
 
-
-void mr_package_destroy(void *arg)
-{
+void mr_package_destroy(void *arg) {
 	mr_package *mrp_p = (mr_package *) arg;
 	if (0 == cf_client_rc_release(mrp_p)) {
-		
 		fprintf(stderr, "mr_package_destroy: free %p\n",mrp_p);
-
 		if (mrp_p->script)	free(mrp_p->script);
 
 		cl_mr_state *mrs_p;
-    	while (CF_QUEUE_OK == cf_queue_pop(mrp_p->mr_state_q, &mrs_p,0/*nowait*/)) {
+    	while (CF_QUEUE_OK == 
+               cf_queue_pop(mrp_p->mr_state_q, &mrs_p,0/*nowait*/)) {
     		mr_state_destroy(mrs_p);
     	}
 		
 		cf_client_rc_free(mrp_p);
 	}
-//	else {
-//		fprintf(stderr, "mr_package_destroy: %p still a refcount\n",mrp_p);
-//	}
 	return;
 }
 
@@ -395,8 +374,7 @@ mr_package * mr_package_create(const char *package_name,  cl_script_lang_t lang_
 		}
 		if (mrp_p->script)	{ free(mrp_p->script); mrp_p->script = 0; }
 		reusing = true;
-	}
-	else {
+	} else {
 		mrp_p = cf_client_rc_alloc(sizeof(mr_package));
 		if (!mrp_p) goto Cleanup;
 		memset(mrp_p, 0, sizeof(mr_package));
@@ -426,9 +404,7 @@ mr_package * mr_package_create(const char *package_name,  cl_script_lang_t lang_
     	while (CF_QUEUE_OK == cf_queue_pop(mrp_p->mr_state_q, &mrs_p,0/*nowait*/))
     		mr_state_destroy(mrs_p);
     	
-    }
-    else {
-    	// add to the rchash
+    } else { // add to the rchash
     	cf_client_rc_reserve(mrp_p);
     	cf_rchash_put_unique(mr_package_hash, (char *)package_name, strlen(package_name), mrp_p);
 	}
@@ -444,17 +420,15 @@ Cleanup:
 //
 // grab the package from a server
 // Not sure whether to do sync or async. Start with sync.
-int
-citrusleaf_sproc_package_get_and_create(cl_cluster *asc, const char *package_name, cl_script_lang_t lang_t)
-{
+int citrusleaf_sproc_package_get_and_create(cl_cluster *asc,
+                                            const char *package_name,
+                                            cl_script_lang_t lang_t) {
 	char *content = NULL;
 	int content_len = 0;
 	char *gen = NULL;
 	
 	int rsp = citrusleaf_sproc_package_get_with_gen(asc, package_name, &content, &content_len, &gen, lang_t);
-	if (rsp !=0 ) {
-		return rsp;
-	}
+	if (rsp !=0 ) { return rsp; }
 			
 	mr_package *mrp_p = mr_package_create(package_name, lang_t, content, content_len, gen );
 	if (!mrp_p) {
@@ -481,10 +455,7 @@ citrusleaf_sproc_package_get_and_create(cl_cluster *asc, const char *package_nam
 // ??? call the client ???
 //
 
-int cl_mr_state_row(cl_mr_state *mrs_p, char *ns, cf_digest *keyd, char *set, uint32_t generation,
-           uint32_t record_ttl, cl_bin *bin, int n_bins,
-           bool is_last, citrusleaf_get_many_cb cb, void *udata) 
-{
+int cl_mr_state_row(cl_mr_state *mrs_p, char *ns, cf_digest *keyd, char *set, uint32_t generation, uint32_t record_ttl, cl_bin *bin, int n_bins, bool is_last, citrusleaf_get_many_cb cb, void *udata) {
 
     lua_State *lua   = mrs_p->lua;
     
@@ -522,7 +493,8 @@ int cl_mr_state_row(cl_mr_state *mrs_p, char *ns, cf_digest *keyd, char *set, ui
               break;
           case CL_STR:
 			  lua_getglobal(lua, "AddStringToMapResults");
-			  lua_pushboolean(lua, mrs_p->mr_job->rdc_fname? 1 : 0); // true if a reduce will be called
+			  // true if a reduce will be called
+			  lua_pushboolean(lua, mrs_p->mr_job->rdc_fname? 1 : 0);
 			  lua_pushstring (lua, bin_name);
 			  lua_pushstring (lua, o->u.str);
 			  ret = lua_pcall(lua, 3, 0, 0);
@@ -530,7 +502,8 @@ int cl_mr_state_row(cl_mr_state *mrs_p, char *ns, cf_digest *keyd, char *set, ui
               break;
           case CL_LUA_BLOB:
  			  lua_getglobal  (lua, "AddTableToMapResults");
-			  lua_pushboolean(lua, mrs_p->mr_job->rdc_fname? 1 : 0); // true if a reduce will be called
+			  // true if a reduce will be called
+			  lua_pushboolean(lua, mrs_p->mr_job->rdc_fname? 1 : 0);
 			  lua_pushstring (lua, bin_name);
 			  lua_pushlstring (lua, o->u.blob,o->sz);
 			  ret = lua_pcall(lua, 3, 0, 0);
@@ -543,7 +516,6 @@ int cl_mr_state_row(cl_mr_state *mrs_p, char *ns, cf_digest *keyd, char *set, ui
     }
 
     pthread_mutex_unlock( & mrs_p->lua_lock );
-    
     return 0;
 }
 
@@ -551,8 +523,8 @@ int cl_mr_state_row(cl_mr_state *mrs_p, char *ns, cf_digest *keyd, char *set, ui
 // All the rows are done. call map and reduce.
 //
 
-int cl_mr_state_done(cl_mr_state *mrs_p,  citrusleaf_get_many_cb cb, void *udata) 
-{
+int cl_mr_state_done(cl_mr_state *mrs_p,
+                     citrusleaf_get_many_cb cb, void *udata) {
     lua_State *lua   = mrs_p->lua;
     int ret = 0;
 	
@@ -582,7 +554,8 @@ int cl_mr_state_done(cl_mr_state *mrs_p,  citrusleaf_get_many_cb cb, void *udata
 			return -1; //TODO throw an error
 		}
 	}
-	// call the SendResults - takes ReduceResults global, call back into the row function
+	// call the SendResults - takes ReduceResults global,
+    //    call back into the row function
 	lua_getglobal(lua, "SendReduceResults");
 	lua_pushlightuserdata(lua, cb);
 	lua_pushlightuserdata(lua, udata);
@@ -597,42 +570,38 @@ int cl_mr_state_done(cl_mr_state *mrs_p,  citrusleaf_get_many_cb cb, void *udata
 	lua_getglobal(lua, "print_user_and_value");
 	ret = lua_pcall(lua, 1, 0, 0);
 	if (ret) {
-		printf("DebugWrapper: FAILED2: (%s)\n",
-			   lua_tostring(lua, -1));
+		printf("DebugWrapper: FAILED2: (%s)\n", lua_tostring(lua, -1));
 		return -1; //TODO throw an error
 	}
         
 }
 
-
 // parameter 1 is the key object
 // parameter 2 is the value object
 // parameter 3 is the (opaque) callback
 // parameter 4 is the (opaque) userdata
-
 int luaSendReduceObject(lua_State *lua) {
-
     int argc = lua_gettop(lua);
     if (argc != 4 || !lua_isuserdata(lua, 3) || !lua_isuserdata(lua, 4)) {
         lua_settop(lua, 0);
         // Todo: this was throwing a Redis error
         // luaPushError(lua, "Lua USAGE: SendReduceObject(k, v, cb, udata)");
-        fprintf(stderr, "luaSendReduceObject USAGE: SendReduceObject(k, v, cb, udata)");
+        fprintf(stderr,
+               "luaSendReduceObject USAGE: SendReduceObject(k, v, cb, udata)");
         return 1;
     }
-    citrusleaf_get_many_cb cb = (citrusleaf_get_many_cb) lua_touserdata(lua, 3);
-    void *udata     = (void *)      lua_touserdata(lua, 4);
+    citrusleaf_get_many_cb cb = (citrusleaf_get_many_cb)lua_touserdata(lua, 3);
+    void *udata               = (void *)                lua_touserdata(lua, 4);
 
-    cl_bin	bins[2];
-    strcpy(bins[0].bin_name,"key");
-    strcpy(bins[1].bin_name,"value");
+    cl_bin bins[2];
+    strcpy(bins[0].bin_name, "key");
+    strcpy(bins[1].bin_name, "value");
     
     // loop over the key and the value, which are 1 and 2 on the stack
-    for (int i=1; i <= 2; i++) {
-    	cl_object *o = &bins[i-1].object;
-    	o->free = 0;
-
-    	int ltype = lua_type(lua, i);
+    for (int i = 1; i <= 2; i++) {
+    	cl_object *o     = &bins[i-1].object;
+    	o->free          = 0;
+    	int        ltype = lua_type(lua, i);
     	switch (ltype) {
     		case LUA_TNIL:
 				o->type = CL_INT;
@@ -659,11 +628,14 @@ int luaSendReduceObject(lua_State *lua) {
 				o->u.str = k;
 				} break;
     		case LUA_TTABLE:
+                break;
     		case LUA_TFUNCTION:
     		case LUA_TUSERDATA:
     		case LUA_TTHREAD:
     		case LUA_TLIGHTUSERDATA:
-    		default:
+    			fprintf(stderr, "map reduce: unsupported Lua Type returned\n");
+    			break;
+    		default: 
     			fprintf(stderr, "map reduce: should not have tables\n");
     			break;
     	}
@@ -678,8 +650,7 @@ int luaSendReduceObject(lua_State *lua) {
 
 // lousy helper
 static char *trim_end_space(char *str) {
-    char *end;
-    end = str + strlen(str) - 1; // Trim trailing space
+    char *end = str + strlen(str) - 1; // Trim trailing space
     while(end > str && isspace(*end)) end--;
     *(end + 1) = 0; // Write new null terminator
     return str;
@@ -692,32 +663,27 @@ static char *trim_end_space(char *str) {
 #define HIGH_BITS       ( ~((unsigned int)(~0) >> ONE_EIGHTH ))
 
 // ignoring value_len - know it's null terminated
-uint32_t cf_mr_string_hash_fn(void *value, uint32_t value_len)
-{
-	uint8_t *v = value;
-    uint32_t hash_value = 0, i;
+uint32_t cf_mr_string_hash_fn(void *value, uint32_t value_len) {
+	uint8_t  *v = value;
+    uint32_t  hash_value = 0, i;
 
-    while (*v) 
-    {
+    while (*v) {
         hash_value = ( hash_value << ONE_EIGHTH ) + *v;
-        if (( i = hash_value & HIGH_BITS ) != 0 )
+        if ((i = hash_value & HIGH_BITS) != 0 )
             hash_value =
                 ( hash_value ^ ( i >> THREE_QUARTERS )) &
                         ~HIGH_BITS;
         v++;
     }
-    return ( hash_value );
+    return hash_value;
 }
 
 int citrusleaf_mr_init() {
-
-	cf_rchash_create(&mr_package_hash, cf_mr_string_hash_fn, mr_package_destroy, 
+	cf_rchash_create(&mr_package_hash, cf_mr_string_hash_fn, mr_package_destroy,
 		0 /*keylen*/, 100 /*sz*/, CF_RCHASH_CR_MT_BIGLOCK);
-	return(0);
+	return 0;
 }
 
 void citrusleaf_mr_shutdown() {
-	
 	cf_rchash_destroy(mr_package_hash);
-	
 }

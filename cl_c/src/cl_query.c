@@ -194,6 +194,7 @@ static int query_compile_binnames_field(cf_vector *binnames, uint8_t *buf, int *
 			memcpy(buf, binname, binnamesz);
 			buf += binnamesz;
 		}
+		//fprintf(stderr, "Packing binname %s of size %d \n",binname, binnamesz);
 	}		
 	*sz_p = sz;
 }
@@ -891,12 +892,13 @@ void citrusleaf_query_destroy(cl_query *query)
 cl_rv citrusleaf_query_add_binname(cl_query *query, const char *binname)
 {
 	if ( !query->binnames ) {
-		query->binnames = cf_vector_create(sizeof(CL_BINNAME_SIZE), 5, 0);
+		query->binnames = cf_vector_create(CL_BINNAME_SIZE, 5, 0);
 		if (query->binnames==NULL) {
 			return CITRUSLEAF_FAIL_CLIENT;
 		}
 	}
 	cf_vector_append(query->binnames, (void *)binname);	
+	//fprintf(stderr,"Appending binname %s\n",binname);
 	return CITRUSLEAF_OK;	
 }
 

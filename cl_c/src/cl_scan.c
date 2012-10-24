@@ -76,7 +76,9 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 		if (node)
 			cf_client_rc_reserve(node);
 	} else {
+		pthread_mutex_lock(&asc->LOCK);
 		node = cl_cluster_node_get_random(asc);
+		pthread_mutex_unlock(&asc->LOCK);
 	}
 	if (!node) {
 #ifdef DEBUG
@@ -153,7 +155,7 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 		uint8_t *buf = rd_buf;
 		uint pos = 0;
 		cl_bin stack_bins[STACK_BINS];
-		cl_bin *bins;
+		cl_bin *bins_local;
 		
 		while (pos < rd_buf_sz) {
 
@@ -206,12 +208,12 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 
 
 			if (msg->n_ops > STACK_BINS) {
-				bins = malloc(sizeof(cl_bin) * msg->n_ops);
+				bins_local = malloc(sizeof(cl_bin) * msg->n_ops);
 			}
 			else {
-				bins = stack_bins;
+				bins_local = stack_bins;
 			}
-			if (bins == NULL) {
+			if (bins_local == NULL) {
 				if (set_ret) {
 					free(set_ret);
 				}
@@ -233,7 +235,7 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 				dump_buf("individual op (host order)", (uint8_t *) op, op->op_sz + sizeof(uint32_t));
 #endif	
 
-				cl_set_value_particular(op, &bins[i]);
+				cl_set_value_particular(op, &bins_local[i]);
 				op = cl_msg_op_get_next(op);
 			}
 			buf = (uint8_t *) op;
@@ -256,15 +258,15 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 			}
 			else if ((msg->n_ops) || (operation_info & CL_MSG_INFO1_NOBINDATA)) {
 				// got one good value? call it a success!
-				(*cb) ( ns_ret, keyd, set_ret, msg->generation, msg->record_ttl, bins, msg->n_ops, false /*islast*/, udata);
+				(*cb) ( ns_ret, keyd, set_ret, msg->generation, msg->record_ttl, bins_local, msg->n_ops, false /*islast*/, udata);
 				rv = 0;
 			}
 //			else
 //				cf_debug("received message with no bins, signal of an error");
 
 			if (bins != stack_bins) {
-				free(bins);
-				bins = 0;
+				free(bins_local);
+				bins_local = 0;
 			}
 
 			if (set_ret) {

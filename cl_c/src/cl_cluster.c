@@ -84,9 +84,7 @@ dump_cluster(cl_cluster *asc)
 				(int)ntohs(sa_in->sin_port),cf_queue_sz(cn->conn_q),
 				cf_queue_sz(cn->conn_q_asyncfd));
 		}
-
 		cf_debug("partitions: %d",asc->n_partitions);
-
 		pthread_mutex_unlock(&asc->LOCK);
 	}
 }
@@ -290,9 +288,13 @@ citrusleaf_cluster_release_or_destroy(cl_cluster **asc) {
 	}
 #endif
 
+	if (!asc || !(*asc))
+		return;
+
 	pthread_mutex_lock(&(*asc)->LOCK);
-	if (asc && (*asc) && ((*asc)->ref_count > 0 )) {
+	if ((*asc)->ref_count > 0) {
 		(*asc)->ref_count--;
+
 		if (0 == (*asc)->ref_count) {
 			pthread_mutex_unlock(&(*asc)->LOCK);
 			// Destroy the object as reference count is 0
@@ -705,30 +707,27 @@ cl_cluster_node_get(cl_cluster *asc, const char *ns, const cf_digest *d, bool wr
 void 
 cl_cluster_get_node_names(cl_cluster *asc, int *n_nodes, char **node_names)
 {
-	if (node_names) {
-		*node_names = NULL;
-	}
-	if (n_nodes) {
-		*n_nodes = 0;
-	}
-
 	pthread_mutex_lock(&asc->LOCK);
-	if (n_nodes) {
-		*n_nodes = cf_vector_size(&asc->node_v);
-	}
-	if (node_names) {
-		*node_names = malloc(NODE_NAME_SIZE*cf_vector_size(&asc->node_v));
-		if (*node_names==NULL) {
-			pthread_mutex_unlock(&asc->LOCK);
-			return;	
-		}		
+	uint size = cf_vector_size(&asc->node_v);
+	*n_nodes = size;
 
-		char *nptr = *node_names;
-		for (uint i=0;i<cf_vector_size(&asc->node_v);i++) {
-			cl_cluster_node *cn = cf_vector_pointer_get(&asc->node_v, i);
-			memcpy(nptr, cn->name,NODE_NAME_SIZE);
-			nptr+=NODE_NAME_SIZE;
-		}	
+	if (size == 0) {
+		*node_names = 0;
+		pthread_mutex_unlock(&asc->LOCK);
+		return;
+	}
+
+	*node_names = malloc(NODE_NAME_SIZE * size);
+	if (*node_names == 0) {
+		pthread_mutex_unlock(&asc->LOCK);
+		return;
+	}
+
+	char *nptr = *node_names;
+	for (uint i = 0; i < size; i++) {
+		cl_cluster_node *cn = cf_vector_pointer_get(&asc->node_v, i);
+		memcpy(nptr, cn->name, NODE_NAME_SIZE);
+		nptr += NODE_NAME_SIZE;
 	}
 	pthread_mutex_unlock(&asc->LOCK);
 }
@@ -737,7 +736,8 @@ cl_cluster_node *
 cl_cluster_node_get_byname(cl_cluster *asc, char *name)
 {
 	pthread_mutex_lock(&asc->LOCK);
-	for (uint i=0;i<cf_vector_size(&asc->node_v);i++) {
+
+	for (uint i = 0; i < cf_vector_size(&asc->node_v); i++) {
 		cl_cluster_node *cn = cf_vector_pointer_get(&asc->node_v, i);
 		if (strcmp(name, cn->name) == 0) {
 			pthread_mutex_unlock(&asc->LOCK);
@@ -746,13 +746,13 @@ cl_cluster_node_get_byname(cl_cluster *asc, char *name)
 	}
 	pthread_mutex_unlock(&asc->LOCK);
 	return(0);
-	
 }
 
 cl_cluster_node *
 cl_cluster_node_get_byaddr(cl_cluster *asc, struct sockaddr_in *sa_in)
 {
-	pthread_mutex_lock(&asc->LOCK);
+	// No need to lock nodes list because this function is only called by
+	// cluster_tend() thread which has exclusive write access.
 	for (uint i=0;i<cf_vector_size(&asc->node_v);i++) {
 		cl_cluster_node *cn = cf_vector_pointer_get(&asc->node_v, i);
 		for (uint j=0;j<cf_vector_size(&cn->sockaddr_in_v);j++) {
@@ -763,11 +763,8 @@ cl_cluster_node_get_byaddr(cl_cluster *asc, struct sockaddr_in *sa_in)
 			}
 		}
 	}
-	pthread_mutex_unlock(&asc->LOCK);
 	return(0);
-	
 }
-
 
 // Put the node back, whatever that means (release the reference count?)
 
@@ -1109,7 +1106,7 @@ cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
                 // fail, but sometimes strange things happen.
                 goto Updated;
 			}
-			
+
 			// reminder: returned list is name1\tvalue1\nname2\tvalue2\n
 			cf_vector_define(lines_v, sizeof(void *), 0);
 			str_split('\n',values,&lines_v);
@@ -1177,7 +1174,12 @@ cluster_ping_address(cl_cluster *asc, struct sockaddr_in *sa_in)
 			dump_sockaddr_in("New node is ",sa_in);
 		}
 		cl_cluster_node *node = cl_cluster_node_create(value, sa_in);
+
+		// Appends must be locked regardless of only being called from tend thread, because
+		// other threads reads need to wait on their locks for the append to complete.
+		pthread_mutex_lock(&asc->LOCK);
 		cf_vector_pointer_append(&asc->node_v, node);
+		pthread_mutex_unlock(&asc->LOCK);
 	}
 	// if not new, add address to node
 	else {
@@ -1215,20 +1217,12 @@ cluster_get_n_partitions( cl_cluster *asc, cf_vector *sockaddr_in_v )
 		asc->n_partitions = atoi(value);
 		
 		free(values);
-		
 	}
-
 }
 
 static void
-cluster_tend( cl_cluster *asc) 
+cluster_tend(cl_cluster *asc)
 {
-
-#ifdef DEBUG
-	print_ms("cluster tend");
-	cf_debug("************ cluster tend:");
-#endif	
-
 	// Start off by removing dunned hosts
 	pthread_mutex_lock(&asc->LOCK);
 	if (asc->state & CLS_FREED) {
@@ -1236,6 +1230,7 @@ cluster_tend( cl_cluster *asc)
 		return;
 	}
 	asc->state |= CLS_TENDER_RUNNING;
+
 	for (uint i=0;i<cf_vector_size(&asc->node_v);i++) {
 		cl_cluster_node *cn = cf_vector_pointer_get(&asc->node_v, i);
 		if (!cn)	continue;
@@ -1279,7 +1274,8 @@ cluster_tend( cl_cluster *asc)
 	cf_vector_reset(&sockaddr_in_v);
 
 	// Now, ping known nodes to see if there's an update
-	for (uint i=0;i<cf_vector_size(&asc->node_v);i++) {
+	// No need to lock node list because nodes are only added/removed in this thread.
+	for (uint i = 0; i < cf_vector_size(&asc->node_v); i++) {
 		cl_cluster_node *cn = cf_vector_pointer_get(&asc->node_v, i);
 		cluster_ping_node(asc, cn, &sockaddr_in_v);
 		for (uint j=0;j<cf_vector_size(&cn->sockaddr_in_v);j++) {
@@ -1288,7 +1284,7 @@ cluster_tend( cl_cluster *asc)
 		}
 	}
 	
-//	cf_debug("CLUSTER TEND: sockaddr_in_v len %d %s",cf_vector_size(&sockaddr_in_v), asc->found_all?"foundall":"notfound" );
+	// cf_debug("CLUSTER TEND: sockaddr_in_v len %d %s",cf_vector_size(&sockaddr_in_v), asc->found_all?"foundall":"notfound" );
 	
 	// Compare all services with known nodes - explore if new
 	if (asc->follow == true) {
@@ -1323,8 +1319,6 @@ cluster_tend( cl_cluster *asc)
 	asc->state &= ~CLS_TENDER_RUNNING;
 	pthread_mutex_unlock(&asc->LOCK);
 
-//	print_ms("end tend");
-	
 	return;
 }
 

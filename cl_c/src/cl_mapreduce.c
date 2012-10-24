@@ -451,7 +451,7 @@ int citrusleaf_sproc_package_get_and_create(cl_cluster *asc,
 		
 	mr_package_release(mrp_p);
 
-	if (content) free (content);
+	//if (content) free (content); //TODO RAJ: this SEGV's on repititive calls
 	if (gen)     free (gen);
 	
 	return(0);

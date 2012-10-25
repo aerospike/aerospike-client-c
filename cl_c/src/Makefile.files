@@ -4,13 +4,10 @@
 
 HEADERS = citrusleaf.h cl_cluster.h 
 
-#HEADERS = citrusleaf.h proto.h cl_cluster.h cf_ll.h cf_timer.h cf_atomic.h cf_hist.h
-#HEADERS += cf_vector.h cf_queue.h cf_digest.h cf_socket.h cf_shash.h
 SOURCES = citrusleaf.c cl_info.c cl_cluster.c cl_partition.c cl_lookup.c proto.c cl_batch.c cl_scan.c cl_async.c cl_sindex.c cl_query.c 
 SOURCES += cl_sproc.c 
 ifeq (${MR_LANG},LUA)
 SOURCES += cl_mapreduce.c 
+SOURCES += lua_cmsgpack.c
 endif
-#SOURCES += cf_hist.c
-#SOURCES += cf_ll.c cf_vector.c cf_queue.c cf_alloc.c cf_socket.c cf_shash.c
 CF_SOURCES = cf_alloc.c cf_average.c cf_b64.c cf_hist.c cf_hooks.c cf_ll.c cf_log.c cf_queue.c cf_random.c cf_rchash.c cf_service.c cf_shash.c cf_socket.c cf_vector.c version.c

@@ -37,12 +37,15 @@
 #include <lauxlib.h>
 #include <lualib.h>
 
+// PROTOTYPE from lua_cmsgpack.c
+LUALIB_API int luaopen_cmsgpack (lua_State *L);
 
 // Key is a string
 // Value is a pointer to mr_package
 
 static cf_rchash *mr_package_hash = 0;
 
+int luaSendReduceObject(lua_State *lua);
 //
 // map reduce structures and functions
 //
@@ -74,27 +77,25 @@ void mr_package_release(mr_package *mrp_p);
 #define SKIP_SPACES(tok)     while (ISBLANK(*tok)) tok++;
 
 static char luaPredefinedFunctions[] =                               \
-    "function AddTableToMapResults(hasrdc, k, v) "                   \
-    "  local cmd; "                                                  \
-    "  if (hasrdc) then "                                            \
-    "    cmd = 'if (MapResults[' .. k .. '] == nil) then "           \
-    "             MapResults[' .. k .. '] = {};          "           \
-    "           end                                      "           \
-    "          table.insert(MapResults[' .. k .. '], ' .. v .. '); " \
-    "          MapCount        = MapCount + 1;';                   " \
-    "  else " 													\
-    "    cmd = 'table.insert(ReduceResults, ' .. v .. ');'; " 	\
-    "    ReduceCount      = ReduceCount + 1; " 					\
-    "  end " 													\
-    "  assert(loadstring(cmd))() " 								\
-    "end " 														\
-    "function AddStringToMapResults(hasrdc, k, v) " 			\
-    "  if (hasrdc) then " 										\
-    "    MapResults[k] = v; " 									\
-    "  else " 													\
-    "    ReduceResults[k] = v; " 								\
-    "  end " 													\
-    "end "														\
+    "function AddTableToMapResults(hasrdc, k, v)                   " \
+    "  print('AddTableToMapResults');                              " \
+    "  local t = cmsgpack.unpack(v);                               " \
+    "  if (hasrdc) then                                            " \
+    "    if (MapResults[k] == nil) then MapResults[k] = {}; end    " \
+    "    table.insert(MapResults[k], t);                           " \
+    "    MapCount    = MapCount + 1;                               " \
+    "  else                                                        " \
+    "    table.insert(ReduceResults[k], t);                        " \
+    "    ReduceCount = ReduceCount + 1;                            " \
+    "  end                                                         " \
+    "end                                                           " \
+    "function AddStringToMapResults(hasrdc, k, v)                  " \
+    "  if (hasrdc) then                                            " \
+    "    MapResults[k]    = v;                                     " \
+    "  else                                                        " \
+    "    ReduceResults[k] = v;                                     " \
+    "  end                                                         " \
+    "end                                                           " \
     "local function GlobalCheck(tab, name, value) " 					\
     "  if (ReadOnly[name] == nil) then " 								\
     "    error(name ..' is a Global Variable, use \\'Sandbox\\'', 2); " \
@@ -175,7 +176,13 @@ static void assertOnLuaError(lua_State *lua, char *assert_string) {
 // which only has to be done when the load 
 //
 
-int luaSendReduceObject(lua_State *lua);
+
+static void luaLoadLib(lua_State *lua, const char *libname,
+                       lua_CFunction luafunc) {
+  lua_pushcfunction(lua, luafunc);
+  lua_pushstring(lua, libname);
+  lua_call(lua, 1, 0);
+}
 
 static int mr_state_lua_create(cl_mr_state *mrs_p) {
 	if (mrs_p->lua) {
@@ -188,6 +195,7 @@ static int mr_state_lua_create(cl_mr_state *mrs_p) {
     lua_State *lua  = mrs_p->lua;
     luaL_openlibs(lua);
 
+    luaLoadLib(lua, "cmsgpack", luaopen_cmsgpack);
     int ret = luaL_dostring(lua, luaPredefinedFunctions);
     if (ret) {
     	assertOnLuaError(lua, "ERROR: adding(luaPredefinedFunctions)");
@@ -510,7 +518,7 @@ int cl_mr_state_row(cl_mr_state *mrs_p, char *ns, cf_digest *keyd, char *set, ui
 			  // true if a reduce will be called
 			  lua_pushboolean(lua, mrs_p->mr_job->rdc_fname? 1 : 0);
 			  lua_pushstring (lua, bin_name);
-			  lua_pushlstring (lua, o->u.blob,o->sz);
+			  lua_pushlstring(lua, o->u.blob, o->sz);
 			  ret = lua_pcall(lua, 3, 0, 0);
 			  if (ret) assertOnLuaError(lua, "ERR: AddTableToMapResults");
           	  break;

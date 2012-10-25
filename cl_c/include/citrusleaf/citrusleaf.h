@@ -69,7 +69,7 @@ typedef enum cl_rv {
 	CITRUSLEAF_FAIL_INCOMPATIBLE_TYPE = 12,  // specified operation cannot be performed on that data type
 	CITRUSLEAF_FAIL_RECORD_TOO_BIG = 13,
 	CITRUSLEAF_FAIL_KEY_BUSY = 14,
-	CITRUSLEAF_FAIL_SPROC_EXECUTION = 15
+	CITRUSLEAF_FAIL_SPROC_EXECUTION = 100
 } cl_rv;
 
 typedef enum cl_rvclient {

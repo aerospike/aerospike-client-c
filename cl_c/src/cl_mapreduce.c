@@ -158,9 +158,8 @@ static char luaPredefinedFunctions[] =                               \
     "  return ret;                                                " \
     "end                                                          " \
     "function DumpLuaTableBin(v, ismysql)                         " \
-    "  local t      = cmsgpack.unpack(v);                         " \
-    "  local output = DumpTableAsMysql(t);                        " \
-    "  print(output);                                             " \
+    "  local t = cmsgpack.unpack(v);                              " \
+    "  return DumpTableAsMysql(t);                                " \
     "end                                                          ";
 
 static char luaDebugWrapper[] =                     \
@@ -580,16 +579,20 @@ int cl_mr_state_done(cl_mr_state *mrs_p,
 	}
 }
 
-void dump_lua_table_bin(char *luat, int luatlen, bool ismysql) {
+char *dump_lua_table_bin(char *luat, int luatlen, bool ismysql) {
     static lua_State *lua = NULL;
     if (!lua) mr_state_lua_create(&lua); //TODO not at ALL thread-safe
 	lua_getglobal  (lua, "DumpLuaTableBin");
 	lua_pushlstring(lua, luat, luatlen);
 	lua_pushboolean(lua, ismysql);
-	int ret = lua_pcall(lua, 2, 0, 0);
+	int ret = lua_pcall(lua, 2, 1, 0);
 	if (ret) {
 		printf("DumpLuaTableBin: FAILED: (%s)\n", lua_tostring(lua, -1));
 	}
+    int  len = lua_strlen(lua, -1);
+    char *x  = malloc(len + 1);
+    memcpy(x, (char*)lua_tostring(lua, -1), len); x[len] = '\0';
+    return x;
 }
 // parameter 1 is the key object
 // parameter 2 is the value object

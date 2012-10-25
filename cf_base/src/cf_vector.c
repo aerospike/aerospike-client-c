@@ -118,6 +118,32 @@ cf_vector_init_smalloc(cf_vector *v, uint32_t value_len, uint8_t *sbuf, int sbuf
 	}
 }
 
+void
+cf_vector_clone_stack(cf_vector *v, cf_vector *target, uint8_t *target_buf)
+{
+	if (v->flags & VECTOR_FLAG_BIGLOCK)
+		VECTOR_LOCK(v);
+
+	target->value_len = v->value_len;
+	target->flags = v->flags;
+	target->alloc_len = v->len;
+	target->len = v->len;
+	target->stack_struct = true;
+	target->stack_vector = true;
+	target->vector = target_buf;
+	memcpy(target->vector, v->vector, v->value_len * v->len);
+
+	if (target->flags & VECTOR_FLAG_BIGLOCK){
+#ifdef EXTERNAL_LOCKS
+		target->LOCK = cf_hooked_mutex_alloc();
+#else
+		pthread_mutex_init(&target->LOCK, 0);
+#endif
+	}
+
+	if (v->flags & VECTOR_FLAG_BIGLOCK)
+		VECTOR_UNLOCK(v);
+}
 
 void
 cf_vector_destroy(cf_vector *v)
@@ -324,4 +350,3 @@ cf_vector_compact(cf_vector *v)
 		VECTOR_UNLOCK(v);
 	return;
 }
-

@@ -21,6 +21,7 @@
 #include <arpa/inet.h>
 
 #include "citrusleaf/citrusleaf.h"
+#include "citrusleaf/citrusleaf-internal.h"
 #include "citrusleaf/cl_cluster.h"
 #include "citrusleaf/proto.h"
 #include "citrusleaf/cf_socket.h"
@@ -71,14 +72,20 @@ citrusleaf_info_parse_single(char *values, char **value)
 	
 }
 
-
-//
-// Request the info of a particular sockaddr_in,
-// used internally for host-crawling as well as supporting the external interface
-//
-
+// Request the info of a particular sockaddr_in.
+// Used internally for host-crawling as well as supporting the external interface.
+// Return 0 on success and -1 on error.
 int
-citrusleaf_info_host(struct sockaddr_in *sa_in, char *names, char **values, int timeout_ms, bool send_asis) 
+citrusleaf_info_host(struct sockaddr_in *sa_in, char *names, char **values, int timeout_ms, bool send_asis)
+{
+	return citrusleaf_info_host_limit(sa_in, names, values, timeout_ms, send_asis, 0);
+}
+
+// Request the info of a particular sockaddr_in.
+// Reject info request if response length is greater than max_response_length.
+// Return 0 on success and -1 on error.
+int
+citrusleaf_info_host_limit(struct sockaddr_in *sa_in, char *names, char **values, int timeout_ms, bool send_asis, uint64_t max_response_length)
 {
 	uint bb_size = 16384;
 	int rv = -1;
@@ -145,6 +152,7 @@ citrusleaf_info_host(struct sockaddr_in *sa_in, char *names, char **values, int 
 		req = (cl_proto *) buf;
 		req->sz = 0;
 		buf_sz = sizeof(cl_proto);
+		names = "";
 	}
 		
 	req->version = CL_PROTO_VERSION;
@@ -179,20 +187,41 @@ citrusleaf_info_host(struct sockaddr_in *sa_in, char *names, char **values, int 
 	cl_proto_swap(rsp);
 	
 	if (rsp->sz) {
-		uint8_t *v_buf = malloc(rsp->sz + 1);
-		if (!v_buf) goto Done;
-        
+		size_t read_length = rsp->sz;
+		bool limit_reached = false;
+
+		if (max_response_length > 0 && rsp->sz > max_response_length) {
+			// Response buffer is too big.  Read a few bytes just to see what the buffer contains.
+			read_length = 100;
+			limit_reached = true;
+		}
+
+		uint8_t *v_buf = malloc(read_length + 1);
+		if (!v_buf) {
+			cf_warn("Info request '%s' failed. Failed to malloc %d bytes", names, read_length);
+			goto Done;
+		}
+
         if (timeout_ms)
-            io_rv = cf_socket_read_timeout(fd, v_buf, rsp->sz, 0, timeout_ms);
+            io_rv = cf_socket_read_timeout(fd, v_buf, read_length, 0, timeout_ms);
         else
-            io_rv = cf_socket_read_forever(fd, v_buf, rsp->sz);
+            io_rv = cf_socket_read_forever(fd, v_buf, read_length);
         
         if (io_rv != 0) {
             free(v_buf);
+
+            if (io_rv != ETIMEDOUT) {
+            	cf_warn("Info request '%s' failed. Failed to read %d bytes. Return code %d", names, read_length, io_rv);
+            }
             goto Done;
 		}
-			
-		v_buf[rsp->sz] = 0;
+		v_buf[read_length] = 0;
+
+		if (limit_reached) {
+			// Response buffer is too big.  Log warning and reject.
+			cf_warn("Info request '%s' failed. Response buffer length %lu is excessive. Buffer: %s", names, rsp->sz, v_buf);
+			goto Done;
+		}
 		*values = (char *) v_buf;
 	}                                                                                               
 	else {
@@ -204,9 +233,7 @@ citrusleaf_info_host(struct sockaddr_in *sa_in, char *names, char **values, int 
 Done:	
 	shutdown(fd, SHUT_RDWR);
 	close(fd);
-	
 	return(rv);
-	
 }
 
 //

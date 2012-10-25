@@ -1685,24 +1685,25 @@ citrusleaf_async_put_digest(cl_cluster *asc, const char *ns, const cf_digest *di
 					CL_OP_WRITE, 0, &n_values, NULL, cl_w_p, &trid, udata) ); 
 }
 
-
-extern cl_rv
+extern cl_rvclient
 citrusleaf_check_cluster_health(cl_cluster *asc)
 {
 	int number_of_nodes_alive = 0;
-	for (uint i=0;i<cf_vector_size(&asc->node_v);i++) {
+
+	pthread_mutex_lock(&asc->LOCK);
+	for (uint i = 0; i < cf_vector_size(&asc->node_v); i++) {
 		cl_cluster_node *cn = cf_vector_pointer_get(&asc->node_v, i);
 
 		if (cn->dunned == false){
 			number_of_nodes_alive++;
 		}
 	}
+	pthread_mutex_unlock(&asc->LOCK);
 
 	if (number_of_nodes_alive > 0)
 		return CITRUSLEAF_FAIL_DC_UP;
 	else
 		return CITRUSLEAF_FAIL_DC_DOWN;
-
 }
 
 extern cl_rv

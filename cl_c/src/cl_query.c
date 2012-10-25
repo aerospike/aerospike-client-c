@@ -909,4 +909,5 @@ void citrusleaf_query_shutdown() {
     for( int i=0; i<N_MAX_QUERY_THREADS; i++) {
     	pthread_join(g_query_th[i],NULL);
     }
+    cf_queue_destroy(g_query_q);
 }

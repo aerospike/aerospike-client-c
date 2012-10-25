@@ -259,7 +259,8 @@ void citrusleaf_sproc_params_destroy(cl_sproc_params *params)
 	for (int i=0; i<params->num_param; i++) {
 		free (params->param_key[i]);
 		citrusleaf_object_free (params->param_val[i]);
-	}
+		free (params->param_val[i]);
+	}                    
 
 	free (params);
 }
@@ -335,12 +336,15 @@ citrusleaf_sproc_package_set(cl_cluster *asc, const char *package_name, const ch
 	// shouldn't do this on a blocking thread --- todo, queue
 	if (0 != citrusleaf_info_cluster_all(asc, info_query, &values, true/*asis*/, 5000/*timeout*/)) {
 		fprintf(stderr, "could not set package %s from cluster\n",package_name);
+		free(info_query);
 		return CITRUSLEAF_FAIL_UNKNOWN;
 	}
 	if (0 == values) {
 		fprintf(stderr, "info cluster success, but no response from server\n");
+		free(info_query);
 		return CITRUSLEAF_FAIL_UNKNOWN;
 	}
+	free(info_query);
 	
 	// got response, 
 	// format: request\tresponse

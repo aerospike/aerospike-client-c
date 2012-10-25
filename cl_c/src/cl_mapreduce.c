@@ -73,8 +73,7 @@ void mr_package_release(mr_package *mrp_p);
 #define ISBLANK(c)           (c == 32 || c == 9)
 #define SKIP_SPACES(tok)     while (ISBLANK(*tok)) tok++;
 
-
-static char luaPredefinedFunctions[] = \
+static char luaPredefinedFunctions[] =                               \
     "function AddTableToMapResults(hasrdc, k, v) "                   \
     "  local cmd; "                                                  \
     "  if (hasrdc) then "                                            \

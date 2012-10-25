@@ -45,7 +45,7 @@ LUALIB_API int luaopen_cmsgpack (lua_State *L);
 
 static cf_rchash *mr_package_hash = 0;
 
-int luaSendReduceObject(lua_State *lua);
+int luaCallBackOnReduceObject(lua_State *lua);
 //
 // map reduce structures and functions
 //
@@ -135,14 +135,33 @@ static char luaPredefinedFunctions[] =                               \
     "    ReduceCount = ReduceCount + 1; "					\
     "  end "												\
     "end "                                                  \
-    " function SendReduceResults(cb, udata)"                        \
-    "   for k,v in pairs(ReduceResults) do"                         \
-    "     local ks;"                                                \
-    "     if (v.__mrkey == nil) then ks = k;"                       \
-    "     else                       ks = tostring(v.__mrkey); end" \
-    "     SendReduceObject(ks, v, cb, udata);"                      \
-    "   end"                                                        \
-    " end";
+    "function CallBackOnReduceResults(cb, udata)                  " \
+    "  for k,v in pairs(ReduceResults) do                         " \
+    "    local ks;                                                " \
+    "    if (v.__mrkey == nil) then ks = k;                       " \
+    "    else                       ks = tostring(v.__mrkey); end " \
+    "    CallBackOnReduceObject(ks, v, cb, udata);                " \
+    "  end                                                        " \
+    "end                                                          " \
+    "function DumpTableAsMysql(t)                                 " \
+    "  local ret ='{ ';                                           " \
+    "  for k, v in pairs(t) do                                    " \
+    "    ret = ret .. ' ' .. k .. ':';                            " \
+    "    if (type(v) == 'table') then                             " \
+    "      ret = ret .. DumpTableAsMysql(v);                      " \
+    "    else                                                     " \
+    "      ret = ret .. v;                                        " \
+    "    end                                                      " \
+    "    ret = ret .. ', ';                                       " \
+    "  end                                                        " \
+    "  ret = ret .. ' }';                                         " \
+    "  return ret;                                                " \
+    "end                                                          " \
+    "function DumpLuaTableBin(v, ismysql)                         " \
+    "  local t      = cmsgpack.unpack(v);                         " \
+    "  local output = DumpTableAsMysql(t);                        " \
+    "  print(output);                                             " \
+    "end                                                          ";
 
 static char luaDebugWrapper[] =                     \
     "function DebugWrapper(func) "					\
@@ -170,11 +189,6 @@ static void assertOnLuaError(lua_State *lua, char *assert_string) {
     assert(!assert_string);
 }
 
-//
-// Creates a new lua functions, and loads the predefined 
-// This loads into the lua state table the DEFINEd code above,
-// which only has to be done when the load 
-//
 
 
 static void luaLoadLib(lua_State *lua, const char *libname,
@@ -184,15 +198,15 @@ static void luaLoadLib(lua_State *lua, const char *libname,
   lua_call(lua, 1, 0);
 }
 
-static int mr_state_lua_create(cl_mr_state *mrs_p) {
-	if (mrs_p->lua) {
-		// fprintf(stderr, "closing lua %p\n",mrs_p->lua);
-		lua_close(mrs_p->lua); mrs_p->lua = 0; 
-	}
+// Creates a new lua functions, and loads the predefined 
+// This loads into the lua state table the DEFINEd code above,
+// which only has to be done when the load 
+static int mr_state_lua_create(lua_State **plua) {
+	if (*plua) lua_close(*plua);
 	
-    mrs_p->lua       = lua_open();
-    if (!mrs_p->lua) return(-1);
-    lua_State *lua  = mrs_p->lua;
+    *plua            = lua_open();
+    lua_State *lua   = *plua;
+    if (!lua) return(-1);
     luaL_openlibs(lua);
 
     luaLoadLib(lua, "cmsgpack", luaopen_cmsgpack);
@@ -203,8 +217,8 @@ static int mr_state_lua_create(cl_mr_state *mrs_p) {
     }
     
     // register C functions
-    lua_pushcfunction(lua, luaSendReduceObject);
-    lua_setglobal    (lua, "SendReduceObject");
+    lua_pushcfunction(lua, luaCallBackOnReduceObject);
+    lua_setglobal    (lua, "CallBackOnReduceObject");
     ret     = luaL_dostring(lua, luaDebugWrapper);
     if (ret) {
     	assertOnLuaError(lua, "ERROR: luaL_dostring(DebugWrapper)");
@@ -216,28 +230,26 @@ static int mr_state_lua_create(cl_mr_state *mrs_p) {
     
 Cleanup:
 	fprintf(stderr, "lua state create failed\n");
-	if (mrs_p->lua)  lua_close(mrs_p->lua);
+	if (*plua)  lua_close(*plua);
 	return(-1);
 }
 
 //
 // Load in the dynamic functions necessary for this map reduce job
 //
-
 static int mr_state_load_package_lua(cl_mr_state *mrs_p, mr_package *mrp_p) {
     lua_State *lua  = mrs_p->lua;
 	//fprintf(stderr, "load_package_lua incoming[%s]\n",mrp_p->script);
     if (mrp_p->script) {
 		int ret     = luaL_dostring(lua, mrp_p->script);
 		if (ret) { 
-			assertOnLuaError(lua, "ERROR: luaL_dostring(map_func)"); 
-			return(-1); 
+			assertOnLuaError(lua, "ERROR: luaL_dostring(map_func)"); return(-1);
 		} 
 	} else {
-		fprintf(stderr, "attempting to run package without registered script, failure\n");
+		fprintf(stderr,
+              "attempting to run package without registered script, failure\n");
 		return(-1);
 	}
-
     return(0);
 }
 
@@ -248,15 +260,16 @@ void mr_state_destroy(cl_mr_state *mrs_p) {
 
 // input: an mrs_pd and the functions to register
 // allocates copies the functions into the mrs_pd, creates the LUA universe, and loads all functions
-
 cl_mr_state * mr_state_create(mr_package *mrp_p) {
 	// some validation of the package - it should have code & generation
 	if (mrp_p->generation[0] == 0) {
-		fprintf(stderr, "creating mr_state from mr_package with no generation, illegal %s\n",mrp_p->generation);		
+		fprintf(stderr, "creating mr_state from mr_package with no generation,"\
+                        " illegal %s\n", mrp_p->generation);		
 		return(0);
 	}
 	if (mrp_p->script == 0) {
-		fprintf(stderr, "creating mr_state from mr_package with no code, illegal %s\n",mrp_p->package_name);
+		fprintf(stderr, "creating mr_state from mr_package with no code, " \
+                        "illegal %s\n", mrp_p->package_name);
 		return(0);
 	}
 
@@ -267,7 +280,7 @@ cl_mr_state * mr_state_create(mr_package *mrp_p) {
 	pthread_mutex_init(&mrs_p->lua_lock, 0);
 
 	// create the lua universe and load in static funcs
-    if (0 != mr_state_lua_create(mrs_p) ) {
+    if (0 != mr_state_lua_create(&mrs_p->lua) ) {
     	mr_state_destroy(mrs_p);
     	return(0);
 	}
@@ -296,39 +309,35 @@ cl_mr_state *cl_mr_state_get(const cl_mr_job *mrj) {
 	mr_package *mrp_p = 0;
 	cf_rchash_get(mr_package_hash, mrj->package, strlen(mrj->package),
                   (void **)&mrp_p);
-	
 	if (!mrp_p) {
-		fprintf(stderr, "package %s has not been registered locally\n",mrj->package);
+		fprintf(stderr, "package %s has not been registered locally\n",
+                        mrj->package);
 		return(0);
 	}
-	
-	// try to pop a cached state
-	cl_mr_state	*mrs_p = 0;
-	
+	cl_mr_state	*mrs_p = 0; // try to pop a cached state
 	int rv = cf_queue_pop(mrp_p->mr_state_q , (void *)&mrs_p, 0/*nowait*/);
 	if (rv != CF_QUEUE_OK) {
 		mrs_p = mr_state_create(mrp_p);
 		if (!mrs_p) {
-			fprintf(stderr, "could not create new state from package %s\n",mrj->package);
+			fprintf(stderr, "could not create new state from package %s\n",
+                            mrj->package);
 			mr_package_release(mrp_p);
 			return(0);
 		}
 	}
-	
 	mr_package_release(mrp_p);
 	mrs_p->mr_job = mrj;
 	return(mrs_p);
 }
 
 void cl_mr_state_put(cl_mr_state *mrs_p) {
-	mrs_p->mr_job = 0;
-	
-	// get the package with this name
-	mr_package *mrp_p = 0;
-	cf_rchash_get(mr_package_hash,mrs_p->package_name,strlen(mrs_p->package_name),(void **)&mrp_p);
-	
+	mrs_p->mr_job     = 0;
+	mr_package *mrp_p = 0; // get the package with this name
+	cf_rchash_get(mr_package_hash, mrs_p->package_name,
+                  strlen(mrs_p->package_name), (void **)&mrp_p);
 	if (! mrp_p) {
-		fprintf(stderr, "package %s has not been registered locally\n",mrs_p->package_name);
+		fprintf(stderr, "package %s has not been registered locally\n",
+                        mrs_p->package_name);
 		mr_state_destroy(mrs_p);
 		return;
 	}
@@ -341,9 +350,7 @@ void cl_mr_state_put(cl_mr_state *mrs_p) {
 		// could not push for some reason, destroy I guess
 		mr_state_destroy(mrs_p);
 	}
-	
 	mr_package_release(mrp_p);
-	
 }
 
 void mr_package_destroy(void *arg) {
@@ -351,13 +358,11 @@ void mr_package_destroy(void *arg) {
 	if (0 == cf_client_rc_release(mrp_p)) {
 		fprintf(stderr, "mr_package_destroy: free %p\n",mrp_p);
 		if (mrp_p->script)	free(mrp_p->script);
-
 		cl_mr_state *mrs_p;
     	while (CF_QUEUE_OK == 
                cf_queue_pop(mrp_p->mr_state_q, &mrs_p,0/*nowait*/)) {
     		mr_state_destroy(mrs_p);
     	}
-		
 		cf_client_rc_free(mrp_p);
 	}
 	return;
@@ -369,18 +374,21 @@ void mr_package_release(mr_package *mrp_p) {
 }
 
 //
-// Todo: check if package exists on server, if so, load from there, if not, load to there
-// char *script - must be malloc'ed, will be consumed / registered - must be null terminated
+// TODO: check if package exists on server,
+//       if so, load from there, if not, load to there
+// char *script - must be malloc'ed, will be consumed / registered
+//              - must be null terminated
 // script will be freed after this call
-
-mr_package * mr_package_create(const char *package_name,  cl_script_lang_t lang_t,
-								char *script, int script_len, const char *generation )
-{
-	mr_package *mrp_p = 0;
-	bool reusing = false;
+mr_package * mr_package_create(const char *package_name,
+                               cl_script_lang_t lang_t,
+                               char *script, int script_len,
+                               const char *generation ) {
+	mr_package *mrp_p   = 0;
+	bool        reusing = false;
 
 	// already registered?
-	int found = cf_rchash_get(mr_package_hash, (char *)package_name, strlen(package_name), (void **) &mrp_p);
+	int found = cf_rchash_get(mr_package_hash, (char *)package_name,
+                              strlen(package_name), (void **) &mrp_p);
 	if (found == CF_RCHASH_OK) {
 		reusing = true;
 		pthread_mutex_lock(&mrp_p->script_lock);
@@ -396,22 +404,20 @@ mr_package * mr_package_create(const char *package_name,  cl_script_lang_t lang_
 		mrp_p = cf_client_rc_alloc(sizeof(mr_package));
 		if (!mrp_p) goto Cleanup;
 		memset(mrp_p, 0, sizeof(mr_package));
-
-		strncpy(mrp_p->package_name, strdup(package_name), MAX_PACKAGE_NAME_SIZE);
+		strncpy(mrp_p->package_name, strdup(package_name),
+                MAX_PACKAGE_NAME_SIZE);
 		pthread_mutex_init(&mrp_p->script_lock, 0/*default addr*/);
-		mrp_p->mr_state_q = cf_queue_create(sizeof(cl_mr_state *), true/*multithreaded*/);
+		mrp_p->mr_state_q = cf_queue_create(sizeof(cl_mr_state *),
+                                            true/*multithreaded*/);
 	}
-	
-	mrp_p->script = strdup(script);
+	mrp_p->script     = strdup(script);
 	mrp_p->script_len = script_len;
-	
-	if (lang_t!=CL_SCRIPT_LANG_LUA) {
-		fprintf(stderr, "unrecognized script language %d\n",lang_t);
+	if (lang_t != CL_SCRIPT_LANG_LUA) {
+		fprintf(stderr, "unrecognized script language %d\n", lang_t);
 		return NULL;
 	}	
 	const char *lang = "lua";
-
-	strcpy(mrp_p->lang, lang);
+	strcpy(mrp_p->lang,       lang);
 	strcpy(mrp_p->generation, generation);
     
     if (reusing) {
@@ -419,12 +425,14 @@ mr_package * mr_package_create(const char *package_name,  cl_script_lang_t lang_
     	
     	// clean queue/cache
     	cl_mr_state *mrs_p = 0;
-    	while (CF_QUEUE_OK == cf_queue_pop(mrp_p->mr_state_q, &mrs_p,0/*nowait*/))
+    	while (CF_QUEUE_OK == 
+               cf_queue_pop(mrp_p->mr_state_q, &mrs_p,0/*nowait*/)) {
     		mr_state_destroy(mrs_p);
-    	
+        }
     } else { // add to the rchash
     	cf_client_rc_reserve(mrp_p);
-    	cf_rchash_put_unique(mr_package_hash, (char *)package_name, strlen(package_name), mrp_p);
+    	cf_rchash_put_unique(mr_package_hash, (char *)package_name,
+                             strlen(package_name), mrp_p);
 	}
 	return(mrp_p);
 	
@@ -434,61 +442,48 @@ Cleanup:
 	return(0);
 }
 
-
 //
 // grab the package from a server
 // Not sure whether to do sync or async. Start with sync.
 int citrusleaf_sproc_package_get_and_create(cl_cluster *asc,
                                             const char *package_name,
                                             cl_script_lang_t lang_t) {
-	char *content = NULL;
-	int content_len = 0;
-	char *gen = NULL;
-	
-	int rsp = citrusleaf_sproc_package_get_with_gen(asc, package_name, &content, &content_len, &gen, lang_t);
+	char *content     = NULL;
+	int   content_len = 0;
+	char *gen         = NULL;
+	int rsp = citrusleaf_sproc_package_get_with_gen(asc, package_name, &content,
+                                                    &content_len, &gen, lang_t);
 	if (rsp !=0 ) { return rsp; }
-			
-	mr_package *mrp_p = mr_package_create(package_name, lang_t, content, content_len, gen );
+	mr_package *mrp_p = mr_package_create(package_name, lang_t, content,
+                                          content_len, gen );
 	if (!mrp_p) {
-		if (gen)     free (gen);
+		if (gen) free(gen);
 		fprintf(stderr, "could not create package: %s\n",package_name);
-		return(-1);
+		return -1;
 	}
-		
 	mr_package_release(mrp_p);
-	//if (content) free (content); //TODO RAJ: this SEGV's on repititive calls
-	if (gen)     free (gen);
-	
-	return(0);
-	
+	if (gen) free (gen);
+	return 0;
 }
 
 
-
-//
 // receiving a record from the server. Load it into the results structure.  
-//
-// ??? call the client ???
-//
-
-int cl_mr_state_row(cl_mr_state *mrs_p, char *ns, cf_digest *keyd, char *set, uint32_t generation, uint32_t record_ttl, cl_bin *bin, int n_bins, bool is_last, citrusleaf_get_many_cb cb, void *udata) {
-
-    lua_State *lua   = mrs_p->lua;
-    
-    // fprintf(stderr, "cl_mr_state_row: received a row in response\n");
-    
-    pthread_mutex_lock( & mrs_p->lua_lock );
-
-	mrs_p->responses++;
-    
+int cl_mr_state_row(cl_mr_state *mrs_p, char *ns, cf_digest *keyd, char *set,
+                    uint32_t generation, uint32_t record_ttl, cl_bin *bin,
+                    int n_bins, bool is_last, citrusleaf_get_many_cb cb,
+                    void *udata) {
     int ret;
+    lua_State *lua = mrs_p->lua;
+    // fprintf(stderr, "cl_mr_state_row: received a row in response\n");
+    pthread_mutex_lock(&mrs_p->lua_lock);
+	mrs_p->responses++;
     
     if (mrs_p->responses == 1) {
         lua_getglobal(lua, "PostFinalizeCleanup");
         lua_pcall(lua, 0, 0, 0);
     }
     
-    for (int i=0;i<n_bins;i++) {
+    for (int i = 0; i < n_bins; i++) {
         char bin_name[32];
         strcpy(bin_name, bin[i].bin_name);
         if (bin_name[0] == 0) { bin_name[0] = '.'; bin_name[1] = 0; }
@@ -502,7 +497,8 @@ int cl_mr_state_row(cl_mr_state *mrs_p, char *ns, cf_digest *keyd, char *set, ui
               fprintf(stderr, " UNHANDLED BLOB type response received\n"); 
               break;
           case CL_INT:
-              fprintf(stderr, " UNHANDLED: integer type response received: %"PRIi64"\n", o->u.i64 ); 
+              fprintf(stderr, " UNHANDLED: integer type response " \
+                              "received: %"PRIi64"\n", o->u.i64 ); 
               break;
           case CL_STR:
 			  lua_getglobal(lua, "AddStringToMapResults");
@@ -527,23 +523,16 @@ int cl_mr_state_row(cl_mr_state *mrs_p, char *ns, cf_digest *keyd, char *set, ui
           	  break;
         }
     }
-
-    pthread_mutex_unlock( & mrs_p->lua_lock );
+    pthread_mutex_unlock(&mrs_p->lua_lock);
     return 0;
 }
 
-//
 // All the rows are done. call map and reduce.
-//
-
 int cl_mr_state_done(cl_mr_state *mrs_p,
                      citrusleaf_get_many_cb cb, void *udata) {
-    lua_State *lua   = mrs_p->lua;
-    int ret = 0;
-	
-	if (mrs_p->responses == 0)
-		// no responses
-		return ret;
+    lua_State *lua = mrs_p->lua;
+    int        ret = 0;
+	if (mrs_p->responses == 0) return ret; // no responses
     
     for (int i = 0; i < mrs_p->mr_job->map_argc; i++) {
         lua_getglobal (lua, "SetRecordMargval");
@@ -552,62 +541,65 @@ int cl_mr_state_done(cl_mr_state *mrs_p,
         lua_pcall(lua, 2, 0, 0);
     }
 
-	// call the reduce wrapper
 	if (mrs_p->mr_job->rdc_fname) {
 		lua_getglobal(lua, "ReduceWrapper");
 		lua_getglobal(lua, mrs_p->mr_job->rdc_fname);
 		int ret = lua_pcall(lua, 1, 0, 0);
 		if (ret) {
-			printf("ReduceWrapper: FAILED: msg: (%s)\n",
-				   lua_tostring(lua, -1));
+			printf("ReduceWrapper: FAILED: msg: (%s)\n", lua_tostring(lua, -1));
 			return -1; //TODO throw an error
 		}
 	}
-	// call the finalize - puts the answer in ReduceResults global
 	if (mrs_p->mr_job->fnz_fname) {
 		lua_getglobal(lua, "FinalizeWrapper");
 		lua_getglobal(lua, mrs_p->mr_job->fnz_fname);
 		int ret = lua_pcall(lua, 1, 0, 0);
 		if (ret) {
-			printf("FinalizeWrapper: FAILED: (%s)\n",
-				   lua_tostring(lua, -1));
+			printf("FinalizeWrapper: FAILED: (%s)\n", lua_tostring(lua, -1));
 			return -1; //TODO throw an error
 		}
 	}
-	// call the SendResults - takes ReduceResults global,
-    //    call back into the row function
-	lua_getglobal(lua, "SendReduceResults");
+
+	// call back on each row of the ReduceResults global,
+	lua_getglobal(lua, "CallBackOnReduceResults");
 	lua_pushlightuserdata(lua, cb);
 	lua_pushlightuserdata(lua, udata);
 	ret = lua_pcall(lua, 2, 0, 0);
 	if (ret) {
-		printf("DebugWrapper: FAILED1: (%s)\n",
-			   lua_tostring(lua, -1));
+		printf("CallBackOnReduceResults: FAILED:(%s)\n", lua_tostring(lua, -1));
 		return -1; //TODO throw an error
 	}
 
+    //TODO take this out this is a DEBUGWRAPPER
 	lua_getglobal(lua, "DebugWrapper");
 	lua_getglobal(lua, "print_user_and_value");
 	ret = lua_pcall(lua, 1, 0, 0);
 	if (ret) {
-		printf("DebugWrapper: FAILED2: (%s)\n", lua_tostring(lua, -1));
+		printf("DebugWrapper: FAILED: (%s)\n", lua_tostring(lua, -1));
 		return -1; //TODO throw an error
 	}
-        
 }
 
+void dump_lua_table_bin(char *luat, int luatlen, bool ismysql) {
+    static lua_State *lua = NULL;
+    if (!lua) mr_state_lua_create(&lua); //TODO not at ALL thread-safe
+	lua_getglobal  (lua, "DumpLuaTableBin");
+	lua_pushlstring(lua, luat, luatlen);
+	lua_pushboolean(lua, ismysql);
+	int ret = lua_pcall(lua, 2, 0, 0);
+	if (ret) {
+		printf("DumpLuaTableBin: FAILED: (%s)\n", lua_tostring(lua, -1));
+	}
+}
 // parameter 1 is the key object
 // parameter 2 is the value object
 // parameter 3 is the (opaque) callback
 // parameter 4 is the (opaque) userdata
-int luaSendReduceObject(lua_State *lua) {
+int luaCallBackOnReduceObject(lua_State *lua) {
     int argc = lua_gettop(lua);
     if (argc != 4 || !lua_isuserdata(lua, 3) || !lua_isuserdata(lua, 4)) {
         lua_settop(lua, 0);
-        // Todo: this was throwing a Redis error
-        // luaPushError(lua, "Lua USAGE: SendReduceObject(k, v, cb, udata)");
-        fprintf(stderr,
-               "luaSendReduceObject USAGE: SendReduceObject(k, v, cb, udata)");
+        fprintf(stderr, "C USAGE: CallBackOnReduceObject(k, v, cb, udata)");
         return 1;
     }
     citrusleaf_get_many_cb cb = (citrusleaf_get_many_cb)lua_touserdata(lua, 3);

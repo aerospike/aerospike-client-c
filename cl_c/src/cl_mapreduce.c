@@ -149,9 +149,8 @@ static char luaPredefinedFunctions[] =                               \
     "  ret = ret .. ' }';                                         " \
     "  return ret;                                                " \
     "end                                                          " \
-    "function DumpLuaTableBin(v, ismysql)                         " \
-    "  local t = cmsgpack.unpack(v);                              " \
-    "  return DumpTableAsMysql(t);                                " \
+    "function CmsqpackUnpack(v)                                   " \
+    "  return cmsgpack.unpack(v);                                 " \
     "end                                                          ";
 
 static char luaDebugWrapper[] =                     \
@@ -601,22 +600,6 @@ int cl_mr_state_done(cl_mr_state *mrs_p,
 #endif
 }
 
-char *dump_lua_table_bin(char *luat, int luatlen, bool ismysql) {
-    static lua_State *lua = NULL;
-    if (!lua) mr_state_lua_create(&lua); //TODO not at ALL thread-safe
-	lua_getglobal  (lua, "DumpLuaTableBin");
-	lua_pushlstring(lua, luat, luatlen);
-	lua_pushboolean(lua, ismysql);
-	int ret = lua_pcall(lua, 2, 1, 0);
-	if (ret) {
-		printf("DumpLuaTableBin: FAILED: (%s)\n", lua_tostring(lua, -1));
-	}
-    int  len = lua_strlen(lua, -1);
-    char *x  = malloc(len + 1);
-    memcpy(x, (char*)lua_tostring(lua, -1), len); x[len] = '\0';
-    return x;
-}
-
 // JOKE_HASH JOKE_HASH JOKE_HASH JOKE_HASH JOKE_HASH JOKE_HASH JOKE_HASH
 // JOKE_HASH JOKE_HASH JOKE_HASH JOKE_HASH JOKE_HASH JOKE_HASH JOKE_HASH
 //
@@ -628,7 +611,6 @@ void put_in_joke_hash_table(joke_hash *jhash, void *k, void *v) {
     jhash->v[jhash->nels] = v;
     jhash->nels++;
 }
-
 void joke_hash_reduce(joke_hash *jhash, joke_hash_reduce_fn reduce_fn,
                       void *udata) { //printf("joke_hash_reduce\n");
     for (int i = 0; i < jhash->nels; i++) {
@@ -742,6 +724,23 @@ static void pop_object_from_lua(cl_object *o, lua_State *lua) {
             break;
     }
 }    
+
+cl_object *unpack_to_map(char *luat, int luatlen) {
+    static lua_State *lua = NULL;
+    if (!lua) mr_state_lua_create(&lua); //TODO not at ALL thread-safe
+	lua_getglobal  (lua, "CmsqpackUnpack");
+	lua_pushlstring(lua, luat, luatlen);
+	int ret = lua_pcall(lua, 1, 1, 0);
+	if (ret) {
+		printf("CmsqpackUnpack: FAILED: (%s)\n", lua_tostring(lua, -1));
+        return NULL;
+	}
+    cl_object *o = malloc(sizeof(cl_object)); if (!o) return NULL;
+    o->free      = 0;
+    pop_object_from_lua(o, lua);
+    return o;
+}
+
 // params [1,2,3,4] [value, key, (opaque)callback, (opaque) userdata]
 int luaCallBackOnReduceObject(lua_State *lua) {
     int argc = lua_gettop(lua);

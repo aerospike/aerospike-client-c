@@ -1936,6 +1936,16 @@ cl_rv citrusleaf_sproc_exec_cb(cl_cluster *asc, const char *ns, const char *set,
                                        sproc_params, bins, n_bins, timeout_ms,
                                        cl_gen);
     if (rsp != CITRUSLEAF_OK) return rsp;
+    for (int i = 0; i < *n_bins; i++) {
+        cl_object *object = &(*bins)[i].object;
+        // CL_LUA_BLOB needs to be cmgpack.unpacked() and then -> CL_MAP
+        if (object->type == CL_LUA_BLOB) {
+            cl_object     *uobj = unpack_to_map(object->u.str, object->sz);
+            free(object->u.str); object->sz = 0;
+            object->type   = CL_MAP;
+            object->u.blob = uobj->u.blob;
+        }
+    }
     (*cb)(0, 0, 0, 0, 0, *bins, *n_bins, false, udata);
     return 0;
 }

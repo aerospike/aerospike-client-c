@@ -111,14 +111,14 @@ typedef int (*joke_hash_reduce_fn)(void *key, void *object, void *udata);
 void joke_hash_reduce(joke_hash *jhash, joke_hash_reduce_fn reduce_fn,
                       void *udata);
 
-// ALSO TEMP
-char *dump_lua_table_bin(char *luat, int luatlen, bool ismysql);
-
 // MAP OBJECT (of MapEntry's)
 #include "citrusleaf/cf_rchash.h"
 typedef struct cl_map_object_s {
     joke_hash *hash;
 } cl_map_object;
+
+// UDF's need to take a CL_LUA_BLOB -> cmsgpack.unpack() -> cl_map_object
+cl_object *unpack_to_map(char *luat, int luatlen);
 
 //
 // An object is the value in a bin, or it is used as a key

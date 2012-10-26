@@ -20,6 +20,7 @@
 #include <fcntl.h>
 #include <arpa/inet.h> // inet_ntop
 #include <signal.h>
+#include <ctype.h>
 
 #include <netdb.h> //gethostbyname_r
 #include <netinet/tcp.h>
@@ -969,6 +970,32 @@ cluster_services_parse(cl_cluster *asc, char *services, cf_vector *sockaddr_t_v)
 	cf_vector_destroy(&host_str_v);
 }
 
+static char*
+trim(char *str)
+{
+	// Warning: This method walks on input string.
+	char *begin = str;
+
+	// Trim leading space
+	while (isspace(*begin)) {
+		begin++;
+	}
+
+	if(*begin == 0) {
+		return begin;
+	}
+
+	// Trim trailing space.  Go to end first so whitespace is preserved
+	// in the middle of the string.
+	char *end = begin + strlen(begin) - 1;
+
+	while (end > begin && isspace(*end)) {
+		end--;
+	}
+	*(end + 1) = 0;
+	return begin;
+}
+
 //
 // Process new partitions information
 // namespace:part_id;namespace:part_id
@@ -978,14 +1005,21 @@ cluster_services_parse(cl_cluster *asc, char *services, cf_vector *sockaddr_t_v)
 static void
 cluster_partitions_process(cl_cluster *asc, cl_cluster_node *cn, char *partitions, bool write) 
 {
-	// use a create instead of a define because we know the size, and the size will likely be larger
-	// than a stack allocation
-	cf_vector *partitions_v = cf_vector_create(sizeof(void *), asc->n_partitions+1, 0);
-	str_split(';',partitions, partitions_v);
+	// Partitions format: <namespace1>:<partition id1>;<namespace2>:<partition id2>; ...
+	// Warning: This method walks on partitions string argument.
+	char *p = partitions;
 
-	// partition_v is a vector of namespace:part_id
-	for (uint i = 0; i < cf_vector_size(partitions_v); i++) {
-		char *partition_str = cf_vector_pointer_get(partitions_v, i);
+	while (*p)
+	{
+		char *partition_str = p;
+		// loop till split and set it to null
+		while ((*p) && (*p != ';')) {
+			p++;
+		}
+		if (*p == ';'){
+			*p = 0;
+			p++;
+		}
 		cf_vector_define(partition_v, sizeof(void *), 0);
 		str_split(':', partition_str, &partition_v);
 
@@ -993,33 +1027,34 @@ cluster_partitions_process(cl_cluster *asc, cl_cluster_node *cn, char *partition
 		if (vsize == 2) {
 			char *namespace_s = cf_vector_pointer_get(&partition_v,0);
 			char *partid_s = cf_vector_pointer_get(&partition_v,1);
-			int partid = atoi(partid_s);
 
 			// it's coming over the wire, so validate it
-			if (strlen(namespace_s) > 30) {
-				cf_warn("Invalid partition namespace %s. values=%s", namespace_s, partitions);
+			char *ns = trim(namespace_s);
+			int len = strlen(ns);
+
+			if (len == 0 || len > 31) {
+				cf_warn("Invalid partition namespace %s", ns);
 				goto Next;
 			}
 
+			int partid = atoi(partid_s);
+
 			if (partid < 0 || partid >= (int)asc->n_partitions) {
-				cf_warn("Invalid partition id %s. max=%u values=%s", partid, asc->n_partitions, partitions);
+				cf_warn("Invalid partition id %s. max=%u", partid, asc->n_partitions);
 				goto Next;
 			}
 				
 			pthread_mutex_lock(&asc->LOCK);
-			cl_partition_table_set(asc, cn, namespace_s, partid, write);
+			cl_partition_table_set(asc, cn, ns, partid, write);
 			pthread_mutex_unlock(&asc->LOCK);
 		}
 		else {
-			cf_warn("Invalid partition vector size %u. element=%s values=%s", vsize, partition_str, partitions);
+			cf_warn("Invalid partition vector size %u. element=%s", vsize, partition_str);
 		}
 Next:
 		cf_vector_destroy(&partition_v);
 	}
-	cf_vector_destroy(partitions_v);
 }
-
-
 
 //
 // Ping a given node. Make sure it's node name is still its node name.

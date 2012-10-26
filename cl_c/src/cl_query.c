@@ -751,30 +751,31 @@ cl_rv citrusleaf_query(cl_cluster *asc, const char *ns, const cl_query *query, c
     // This must be before the compile because the 
 #ifdef USE_LUA_MR
     if (mr_job) {
-        
-        // make sure it's in the cache before you do a "get" with the same package name
-        if (0 != citrusleaf_sproc_package_get_and_create( asc, mr_job->package, CL_SCRIPT_LANG_LUA ) ) {
+        // make sure it's in the cache before you do a "get"
+        // with the same package name
+        if (citrusleaf_sproc_package_get_and_create(asc, mr_job->package,
+                                                    CL_SCRIPT_LANG_LUA)) {
             return CITRUSLEAF_FAIL_CLIENT;
         }
 
         work.mr_state = cl_mr_state_get( mr_job );
-        if (! work.mr_state) {
-            return CITRUSLEAF_FAIL_CLIENT;
-        }
+        if (!work.mr_state) { return CITRUSLEAF_FAIL_CLIENT; }
     }
 #else
     if (mr_job) {
-        fprintf(stderr,"MR job called but Aerospike client not compiled w/ Lua/MR capability\n");
+        fprintf(stderr, "MR job called but Aerospike client not " \
+                        "compiled w/ Lua/MR capability\n");
         return CITRUSLEAF_FAIL_CLIENT;
     }
 #endif
 
-    uint8_t        wr_stack_buf[STACK_BUF_SZ];
-    uint8_t        *wr_buf = wr_stack_buf;
-    size_t        wr_buf_sz = sizeof(wr_stack_buf);
+    uint8_t  wr_stack_buf[STACK_BUF_SZ];
+    uint8_t *wr_buf = wr_stack_buf;
+    size_t   wr_buf_sz = sizeof(wr_stack_buf);
     
     // compile the query - a good place to fail    
-    int rv = query_compile(ns, query, work.mr_state, mr_job, &wr_buf, &wr_buf_sz);
+    int rv = query_compile(ns, query, work.mr_state, mr_job, &wr_buf,
+                           &wr_buf_sz);
     if (rv) {
         fprintf(stderr,"do query monte: query compile failed: ");
 #ifdef USE_LUA_MR
@@ -791,7 +792,7 @@ cl_rv citrusleaf_query(cl_cluster *asc, const char *ns, const cl_query *query, c
     work.node_complete_q = cf_queue_create(sizeof(int),true);
 
     char *node_names = NULL;    
-    int    n_nodes = 0;
+    int   n_nodes    = 0;
     cl_cluster_get_node_names(asc, &n_nodes, &node_names);
     if (n_nodes == 0) {
         fprintf(stderr, "citrusleaf query nodes: don't have any nodes?\n");
@@ -803,7 +804,6 @@ cl_rv citrusleaf_query(cl_cluster *asc, const char *ns, const cl_query *query, c
         return CITRUSLEAF_FAIL_CLIENT;
     }
     
-    
     // dispatch work to the worker queue to allow the transactions in parallel
     // note: if a new node is introduced in the middle, it is NOT taken care of
     char *nptr = node_names;
@@ -811,7 +811,7 @@ cl_rv citrusleaf_query(cl_cluster *asc, const char *ns, const cl_query *query, c
         // fill in per-request specifics
         strcpy(work.node_name,nptr);
         cf_queue_push(g_query_q, &work);
-        nptr+=NODE_NAME_SIZE;                    
+        nptr += NODE_NAME_SIZE;                    
     }
     free(node_names); node_names = 0;
     
@@ -828,7 +828,6 @@ cl_rv citrusleaf_query(cl_cluster *asc, const char *ns, const cl_query *query, c
     if ((retval == 0) && work.mr_state) {
 #ifdef USE_LUA_MR    
         retval = cl_mr_state_done(work.mr_state, work.cb, work.udata);
-        
         cl_mr_state_put(work.mr_state);
 #endif
     }
@@ -836,9 +835,7 @@ cl_rv citrusleaf_query(cl_cluster *asc, const char *ns, const cl_query *query, c
     if (wr_buf && (wr_buf != wr_stack_buf)) { free(wr_buf); wr_buf = 0; }
     
     cf_queue_destroy(work.node_complete_q);
-    if (retval != 0)  {
-        return( CITRUSLEAF_FAIL_CLIENT );
-    }
+    if (retval != 0)  { return( CITRUSLEAF_FAIL_CLIENT ); }
     return 0;
 }
 

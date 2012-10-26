@@ -81,9 +81,12 @@ typedef enum cl_rvclient {
 // hidden forward reference
 typedef struct cl_conn_s cl_conn;
 
-enum cl_type { CL_NULL = 0x00, CL_INT = 0x01, CL_FLOAT = 2, CL_STR = 0x03, CL_BLOB = 0x04,
-	CL_TIMESTAMP = 5, CL_DIGEST = 6, CL_JAVA_BLOB = 7, CL_CSHARP_BLOB = 8, CL_PYTHON_BLOB = 9, 
-	CL_RUBY_BLOB = 10, CL_PHP_BLOB = 11, CL_ERLANG_BLOB=12, CL_APPEND = 13, CL_LUA_BLOB = 14, CL_UNKNOWN = 666666};
+enum cl_type { 
+  CL_NULL        = 0,  CL_INT         = 1,  CL_FLOAT     = 2,  CL_STR       = 3,
+  CL_BLOB        = 4,  CL_TIMESTAMP   = 5,  CL_DIGEST    = 6,  CL_JAVA_BLOB = 7,
+  CL_CSHARP_BLOB = 8,  CL_PYTHON_BLOB = 9,  CL_RUBY_BLOB = 10, CL_PHP_BLOB = 11,
+  CL_ERLANG_BLOB = 12, CL_APPEND      = 13, CL_LUA_BLOB  = 14, CL_MAP      = 15,
+  CL_UNKNOWN     = 666666};
 
 typedef enum cl_type cl_type;
 
@@ -96,12 +99,31 @@ enum cl_scan_priority { CL_SCAN_PRIORITY_AUTO, CL_SCAN_PRIORITY_LOW, CL_SCAN_PRI
 typedef enum cl_scan_priority cl_scan_priority;
 
 
+// MAP ENTRY
+typedef struct cl_map_entry_s {
+    cl_type  type;
+    void    *s;
+} cl_map_entry;
+
+// THE JOKE HASH (throw away immediately)
+typedef struct joke_hash_s { void *k[100]; void *v[100]; int nels; } joke_hash;
+typedef int (*joke_hash_reduce_fn)(void *key, void *object, void *udata);
+void joke_hash_reduce(joke_hash *jhash, joke_hash_reduce_fn reduce_fn,
+                      void *udata);
+
+// ALSO TEMP
+char *dump_lua_table_bin(char *luat, int luatlen, bool ismysql);
+
+// MAP OBJECT (of MapEntry's)
+#include "citrusleaf/cf_rchash.h"
+typedef struct cl_map_object_s {
+    joke_hash *hash;
+} cl_map_object;
+
 //
 // An object is the value in a bin, or it is used as a key
 // The object is typed according to the citrusleaf typing system
 // These are often stack allocated, and are assigned using the 'wrap' calls
-//
-
 typedef struct cl_object_s {
 	enum cl_type    type;
 	size_t			sz; 
@@ -110,9 +132,7 @@ typedef struct cl_object_s {
 		void 		*blob;
 		int64_t		i64;   // easiest to have one large int type
 	} u;
-
 	void *free; // if this is set, this must be freed on destructuion	
-
 } cl_object;
 
 
@@ -697,6 +717,13 @@ cl_rv citrusleaf_sproc_params_add_string(cl_sproc_params *sproc_params, const ch
 cl_rv citrusleaf_sproc_execute(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, 
 	const char *package_name, const char *sproc_name, const cl_sproc_params *sproc_params,
 	cl_bin **bins, int *n_bins, int timeout_ms, uint32_t *cl_gen);
+cl_rv citrusleaf_sproc_exec_cb(cl_cluster *asc, const char *ns, const char *set,
+                               const cl_object *key, const char *package_name,
+                               const char *fname,
+                               const cl_sproc_params *sproc_params,
+                               cl_bin **bins, int *n_bins, int timeout_ms,
+                               uint32_t *cl_gen,
+                               citrusleaf_get_many_cb cb, void *udata);
 
 
 #ifdef __cplusplus

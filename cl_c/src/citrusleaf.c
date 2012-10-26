@@ -1903,10 +1903,12 @@ citrusleaf_operate(cl_cluster *asc, const char *ns, const char *set, const cl_ob
 }
 
 
-cl_rv citrusleaf_sproc_execute(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, 
-	const char *package_name, const char *fname, const cl_sproc_params *sproc_params,
-	cl_bin **bins, int *n_bins,int timeout_ms, uint32_t *cl_gen)
-{
+cl_rv citrusleaf_sproc_execute(cl_cluster *asc, const char *ns, const char *set,
+                               const cl_object *key, const char *package_name,
+                               const char *fname,
+                               const cl_sproc_params *sproc_params,
+                               cl_bin **bins, int *n_bins, int timeout_ms,
+                               uint32_t *cl_gen) {
     if (!g_initialized) return(-1);
 
     uint64_t trid=0;
@@ -1923,6 +1925,20 @@ cl_rv citrusleaf_sproc_execute(cl_cluster *asc, const char *ns, const char *set,
 	return( do_the_full_monte( asc, 0, CL_MSG_INFO2_WRITE, 0, ns, set, key, 0, bins, CL_OP_WRITE, 0, n_bins, NULL, &cl_w_p, &trid, &sproc_def) );
 }
 
+cl_rv citrusleaf_sproc_exec_cb(cl_cluster *asc, const char *ns, const char *set,
+                               const cl_object *key, const char *package_name,
+                               const char *fname,
+                               const cl_sproc_params *sproc_params,
+                               cl_bin **bins, int *n_bins, int timeout_ms,
+                               uint32_t *cl_gen,
+                               citrusleaf_get_many_cb cb, void *udata) {
+    int rsp = citrusleaf_sproc_execute(asc, ns, set, key, package_name, fname,
+                                       sproc_params, bins, n_bins, timeout_ms,
+                                       cl_gen);
+    if (rsp != CITRUSLEAF_OK) return rsp;
+    (*cb)(0, 0, 0, 0, 0, *bins, *n_bins, false, udata);
+    return 0;
+}
 
 extern int citrusleaf_cluster_init();
 

@@ -470,7 +470,6 @@ cf_rchash_reduce(cf_rchash *h, cf_rchash_reduce_fn reduce_fn, void *udata)
 		pthread_mutex_lock(&h->biglock);
 	
 	for (uint i=0; i<h->table_len ; i++) {
-
 		pthread_mutex_t *l = 0;
 		if (h->flags & CF_RCHASH_CR_MT_MANYLOCK) {
 			l = &(h->lock_table[i]);

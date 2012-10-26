@@ -42,43 +42,35 @@ LUALIB_API int luaopen_cmsgpack (lua_State *L);
 
 // Key is a string
 // Value is a pointer to mr_package
-
 static cf_rchash *mr_package_hash = 0;
 
 int luaCallBackOnReduceObject(lua_State *lua);
-//
-// map reduce structures and functions
-//
 
+// map reduce structures and functions
 typedef struct mr_package_s {
-	
-	char package_name[MAX_PACKAGE_NAME_SIZE];
-	
+	char             package_name[MAX_PACKAGE_NAME_SIZE];
 	// "func" is the code, "name" is the symbol to invoke
 	// generation is the server-returned value that equals this code's version
-	char lang[MAX_PACKAGE_NAME_SIZE];
-	char generation[MAX_PACKAGE_NAME_SIZE];
-    char      *script; int script_len; 
-    pthread_mutex_t script_lock;
-    
-    // Queue of mr_state pointers, anything in this queue  will have the above functions loaded
-	cf_queue	*mr_state_q;
-
+	char             lang[MAX_PACKAGE_NAME_SIZE];
+	char             generation[MAX_PACKAGE_NAME_SIZE];
+    char            *script; int script_len; 
+    pthread_mutex_t  script_lock;
+    // Queue of mr_state pointers, anything in this queue
+    // will have the above functions loaded
+	cf_queue        *mr_state_q;
 } mr_package;	
 
-
-// forward define
-void mr_package_release(mr_package *mrp_p);
-
-//
-// helpers
+// HELPERS HELPERS HELPERS HELPERS HELPERS HELPERS HELPERS HELPERS HELPERS
+// HELPERS HELPERS HELPERS HELPERS HELPERS HELPERS HELPERS HELPERS HELPERS
 //
 #define ISBLANK(c)           (c == 32 || c == 9)
 #define SKIP_SPACES(tok)     while (ISBLANK(*tok)) tok++;
 
+// LUA_FUNCS LUA_FUNCS LUA_FUNCS LUA_FUNCS LUA_FUNCS LUA_FUNCS LUA_FUNCS
+// LUA_FUNCS LUA_FUNCS LUA_FUNCS LUA_FUNCS LUA_FUNCS LUA_FUNCS LUA_FUNCS
+//
 static char luaPredefinedFunctions[] =                               \
     "function AddTableToMapResults(hasrdc, k, v)                   " \
-    "  print('AddTableToMapResults');                              " \
     "  local t = cmsgpack.unpack(v);                               " \
     "  if (hasrdc) then                                            " \
     "    if (MapResults[k] == nil) then MapResults[k] = {}; end    " \
@@ -140,7 +132,7 @@ static char luaPredefinedFunctions[] =                               \
     "    local ks;                                                " \
     "    if (v.__mrkey == nil) then ks = k;                       " \
     "    else                       ks = tostring(v.__mrkey); end " \
-    "    CallBackOnReduceObject(ks, v, cb, udata);                " \
+    "    CallBackOnReduceObject(v, ks, cb, udata);                " \
     "  end                                                        " \
     "end                                                          " \
     "function DumpTableAsMysql(t)                                 " \
@@ -173,28 +165,84 @@ static char luaDebugWrapper[] =                     \
     "  if (type(t) == 'table') then "               \
     "    print('k: ' .. k);         "               \
     "    for kk, vv in pairs(t) do "                \
-    "      print('\tt_k: ' .. kk .. ' t_v: ' .. vv); "    \
+    "      if (type(vv) == 'table') then "          \
+    "        print('\tNESTED');          "          \
+    "      else                          "          \
+    "        print('\tt_k: ' .. kk .. ' t_v: ' .. vv); " \
+    "      end                           "          \
     "    end                        "               \
     "  else                         "               \
     "    print('k: ' .. k);         "               \
     "  end                          "               \
     "end ";
 
-    //"  print('user: ' .. t.user_id .. ' score: ' .. t.score .. ' cats: ' .. t.cats); " 
-
 static void assertOnLuaError(lua_State *lua, char *assert_string) {
     const char *lerr = lua_tostring(lua, -1);
     printf("lerr: %s assert: %s\n", lerr, assert_string);
     assert(!assert_string);
 }
-
-
-
 static void luaLoadLib(lua_State *lua, const char *libname,
                        lua_CFunction luafunc) {
   lua_pushcfunction(lua, luafunc);
   lua_pushstring(lua, libname);
   lua_call(lua, 1, 0);
+}
+
+// MR_HASH MR_HASH MR_HASH MR_HASH MR_HASH MR_HASH MR_HASH MR_HASH
+// MR_HASH MR_HASH MR_HASH MR_HASH MR_HASH MR_HASH MR_HASH MR_HASH
+//
+#define BITS_IN_int     ( 32 )
+#define THREE_QUARTERS  ((int) ((BITS_IN_int * 3) / 4))
+#define ONE_EIGHTH      ((int) (BITS_IN_int / 8))
+#define HIGH_BITS       ( ~((unsigned int)(~0) >> ONE_EIGHTH ))
+
+// ignoring value_len - know it's null terminated
+uint32_t cf_mr_string_hash_fn(void *value, uint32_t value_len) {
+    uint8_t  *v          = value;
+    uint32_t  hash_value = 0, i;
+    while (*v) {
+        hash_value = ( hash_value << ONE_EIGHTH ) + *v;
+        if ((i = hash_value & HIGH_BITS) != 0 ) {
+            hash_value = ( hash_value ^ ( i >> THREE_QUARTERS )) & ~HIGH_BITS;
+        }
+        v++;
+    }
+    return hash_value;
+}
+
+void mr_state_destroy(cl_mr_state *mrs_p) {
+	if (mrs_p->lua) lua_close(mrs_p->lua);
+	free(mrs_p);	
+}
+
+void mr_package_destroy(void *arg) {
+	mr_package *mrp_p = (mr_package *) arg;
+	if (0 == cf_client_rc_release(mrp_p)) {
+		fprintf(stderr, "mr_package_destroy: free %p\n",mrp_p);
+		if (mrp_p->script)	free(mrp_p->script);
+		cl_mr_state *mrs_p;
+    	while (CF_QUEUE_OK == 
+               cf_queue_pop(mrp_p->mr_state_q, &mrs_p,0/*nowait*/)) {
+    		mr_state_destroy(mrs_p);
+    	}
+		cf_client_rc_free(mrp_p);
+	}
+	return;
+}
+
+void mr_package_release(mr_package *mrp_p) {
+//	fprintf(stderr, "mr_package_release %p\n",mrp_p); 
+	mr_package_destroy((void *)mrp_p);
+}
+
+int citrusleaf_mr_init() {
+    cf_rchash_create(&mr_package_hash, cf_mr_string_hash_fn, mr_package_destroy,
+                     0 /*keylen*/, 100 /*sz*/, CF_RCHASH_CR_MT_BIGLOCK);
+    return 0;
+}
+
+void citrusleaf_mr_shutdown() {
+    cf_rchash_destroy(mr_package_hash);
 }
 
 // Creates a new lua functions, and loads the predefined 
@@ -215,17 +263,14 @@ static int mr_state_lua_create(lua_State **plua) {
     	goto Cleanup;
     }
     
-    // register C functions
     lua_pushcfunction(lua, luaCallBackOnReduceObject);
     lua_setglobal    (lua, "CallBackOnReduceObject");
     ret     = luaL_dostring(lua, luaDebugWrapper);
     if (ret) {
     	assertOnLuaError(lua, "ERROR: luaL_dostring(DebugWrapper)");
     	goto Cleanup; 
-    }
-
-	// fprintf(stderr, "lua state create success\n");    
-    return(0);
+    } // fprintf(stderr, "lua state create success\n");    
+    return 0;
     
 Cleanup:
 	fprintf(stderr, "lua state create failed\n");
@@ -252,10 +297,6 @@ static int mr_state_load_package_lua(cl_mr_state *mrs_p, mr_package *mrp_p) {
     return(0);
 }
 
-void mr_state_destroy(cl_mr_state *mrs_p) {
-	if (mrs_p->lua) lua_close(mrs_p->lua);
-	free(mrs_p);	
-}
 
 // input: an mrs_pd and the functions to register
 // allocates copies the functions into the mrs_pd, creates the LUA universe, and loads all functions
@@ -301,7 +342,6 @@ cl_mr_state * mr_state_create(mr_package *mrp_p) {
     
     return(mrs_p);
 }
-
 
 cl_mr_state *cl_mr_state_get(const cl_mr_job *mrj) {
 	// get the package with this name
@@ -352,25 +392,6 @@ void cl_mr_state_put(cl_mr_state *mrs_p) {
 	mr_package_release(mrp_p);
 }
 
-void mr_package_destroy(void *arg) {
-	mr_package *mrp_p = (mr_package *) arg;
-	if (0 == cf_client_rc_release(mrp_p)) {
-		fprintf(stderr, "mr_package_destroy: free %p\n",mrp_p);
-		if (mrp_p->script)	free(mrp_p->script);
-		cl_mr_state *mrs_p;
-    	while (CF_QUEUE_OK == 
-               cf_queue_pop(mrp_p->mr_state_q, &mrs_p,0/*nowait*/)) {
-    		mr_state_destroy(mrs_p);
-    	}
-		cf_client_rc_free(mrp_p);
-	}
-	return;
-}
-
-void mr_package_release(mr_package *mrp_p) {
-//	fprintf(stderr, "mr_package_release %p\n",mrp_p); 
-	mr_package_destroy((void *)mrp_p);
-}
 
 //
 // TODO: check if package exists on server,
@@ -569,7 +590,7 @@ int cl_mr_state_done(cl_mr_state *mrs_p,
 		return -1; //TODO throw an error
 	}
 
-    //TODO take this out this is a DEBUGWRAPPER
+#if 0
 	lua_getglobal(lua, "DebugWrapper");
 	lua_getglobal(lua, "print_user_and_value");
 	ret = lua_pcall(lua, 1, 0, 0);
@@ -577,6 +598,7 @@ int cl_mr_state_done(cl_mr_state *mrs_p,
 		printf("DebugWrapper: FAILED: (%s)\n", lua_tostring(lua, -1));
 		return -1; //TODO throw an error
 	}
+#endif
 }
 
 char *dump_lua_table_bin(char *luat, int luatlen, bool ismysql) {
@@ -594,71 +616,158 @@ char *dump_lua_table_bin(char *luat, int luatlen, bool ismysql) {
     memcpy(x, (char*)lua_tostring(lua, -1), len); x[len] = '\0';
     return x;
 }
-// parameter 1 is the key object
-// parameter 2 is the value object
-// parameter 3 is the (opaque) callback
-// parameter 4 is the (opaque) userdata
+
+// JOKE_HASH JOKE_HASH JOKE_HASH JOKE_HASH JOKE_HASH JOKE_HASH JOKE_HASH
+// JOKE_HASH JOKE_HASH JOKE_HASH JOKE_HASH JOKE_HASH JOKE_HASH JOKE_HASH
+//
+void init_joke_hash_table(joke_hash **jhash) {
+    *jhash = malloc(sizeof(joke_hash)); bzero(*jhash, sizeof(joke_hash));
+}
+void put_in_joke_hash_table(joke_hash *jhash, void *k, void *v) {
+    jhash->k[jhash->nels] = k;
+    jhash->v[jhash->nels] = v;
+    jhash->nels++;
+}
+
+void joke_hash_reduce(joke_hash *jhash, joke_hash_reduce_fn reduce_fn,
+                      void *udata) { //printf("joke_hash_reduce\n");
+    for (int i = 0; i < jhash->nels; i++) {
+        if ((*reduce_fn)(jhash->k[i], jhash->v[i], udata)) return;
+    }
+}
+
+// MAP_OBJECT MAP_OBJECT MAP_OBJECT MAP_OBJECT MAP_OBJECT MAP_OBJECT MAP_OBJECT
+// MAP_OBJECT MAP_OBJECT MAP_OBJECT MAP_OBJECT MAP_OBJECT MAP_OBJECT MAP_OBJECT
+//
+void map_object_destroy(void *arg) {
+    printf("map_object_destroy\n");
+}
+cl_map_object *cl_create_map_object() {
+    cl_map_object *map = malloc(sizeof(cl_map_object));
+    init_joke_hash_table(&map->hash);
+    return map;
+}
+void add_string_to_map(cl_map_object *map, const char *k, const char *v) {
+    cl_map_entry *me = malloc(sizeof(cl_map_entry));
+    me->type         = CL_STR;
+    me->s            = strdup(v);
+    put_in_joke_hash_table(map->hash, strdup(k), me);
+    //printf("Add to map(%p) k: %s STRING: %s\n", map, k, v);
+}
+void add_integer_to_map(cl_map_object *map, const char *k, ulong v) {
+    cl_map_entry *me = malloc(sizeof(cl_map_entry));
+    me->type         = CL_INT;
+    me->s            = (void *)v;
+    put_in_joke_hash_table(map->hash, strdup(k), me);
+    //printf("Add to map(%p) k: %s NUMBER: %lu\n", map, k, v);
+}
+void add_map_to_map(cl_map_object *map, const char *k, cl_map_object *v) {
+    cl_map_entry *me = malloc(sizeof(cl_map_entry));
+    me->type         = CL_MAP;
+    me->s            = (void *)v;
+    put_in_joke_hash_table(map->hash, strdup(k), me);
+    //printf("Add to map(%p) k: %s MAP: %p\n", map, k, v);
+}
+
+void build_map_from_lua(lua_State *lua, cl_map_object *map, int t) {
+    lua_pushnil(lua);  /* first key */
+    while (lua_next(lua, t) != 0) {
+        int ktype = lua_type(lua, - 2);
+        int vtype = lua_type(lua, - 1);
+        switch(vtype) {
+            case LUA_TSTRING:
+                add_string_to_map(map, lua_tostring(lua, -2),
+                                  lua_tostring(lua, -1));
+                break;
+            case LUA_TBOOLEAN:
+                add_integer_to_map(map, lua_tostring(lua, -2),
+                                   lua_toboolean(lua, -1));
+                break;
+            case LUA_TNUMBER:
+                add_integer_to_map(map, lua_tostring(lua, -2),
+                                   lua_tointeger(lua, -1));
+                break;
+            case LUA_TTABLE: {
+                cl_map_object *imap = cl_create_map_object();
+                add_map_to_map(map, lua_tostring(lua, -2), imap);
+                build_map_from_lua(lua, imap, lua_gettop(lua));
+                break;
+            }
+        }
+        lua_pop(lua, 1);
+    }
+}
+
+// LUA_TABLE_TO_MAP LUA_TABLE_TO_MAP LUA_TABLE_TO_MAP LUA_TABLE_TO_MAP
+// LUA_TABLE_TO_MAP LUA_TABLE_TO_MAP LUA_TABLE_TO_MAP LUA_TABLE_TO_MAP
+//
+static void pop_object_from_lua(cl_object *o, lua_State *lua) {
+    int        ltype = lua_type(lua, -1);
+    switch (ltype) {
+        case LUA_TNIL: {
+            o->type    = CL_INT;
+            o->sz      = sizeof(o->u.i64);
+            o->u.i64   = 0;
+            break; }
+        case LUA_TNUMBER: {
+            o->type    = CL_INT;
+            uint64_t k = lua_tonumber(lua, -1);
+            o->sz      = sizeof(k);
+            o->u.i64   = k;
+            break; }
+        case LUA_TBOOLEAN: {
+            o->type    = CL_INT;
+            bool b     = lua_toboolean(lua, -1);
+            o->sz      = sizeof(o->u.i64);
+            o->u.i64   = b ? 1 : 0;
+            break; }
+        case LUA_TSTRING: { size_t k_len;
+            o->type    = CL_STR;
+            char *k    = (char *)lua_tolstring(lua, -1, &k_len);
+            o->sz      = k_len;
+            o->u.str   = strdup(k);
+            break; }
+        case LUA_TTABLE: {
+            o->type            = CL_MAP;
+            cl_map_object *map = cl_create_map_object();
+            build_map_from_lua(lua, map, 1);
+            o->u.blob          = map;
+            break; }
+        case LUA_TFUNCTION:
+        case LUA_TUSERDATA:
+        case LUA_TTHREAD:
+        case LUA_TLIGHTUSERDATA:
+        default: 
+            fprintf(stderr, "MapReduce: unsupported Lua Type: %d\n", ltype);
+            break;
+    }
+}    
+// params [1,2,3,4] [value, key, (opaque)callback, (opaque) userdata]
 int luaCallBackOnReduceObject(lua_State *lua) {
     int argc = lua_gettop(lua);
     if (argc != 4 || !lua_isuserdata(lua, 3) || !lua_isuserdata(lua, 4)) {
         lua_settop(lua, 0);
-        fprintf(stderr, "C USAGE: CallBackOnReduceObject(k, v, cb, udata)");
+        fprintf(stderr, "C USAGE: CallBackOnReduceObject(v, k, cb, udata)");
         return 1;
     }
     citrusleaf_get_many_cb cb = (citrusleaf_get_many_cb)lua_touserdata(lua, 3);
     void *udata               = (void *)                lua_touserdata(lua, 4);
+    lua_pop(lua, 2);
 
     cl_bin bins[2];
     strcpy(bins[0].bin_name, "key");
     strcpy(bins[1].bin_name, "value");
     
-    // loop over the key and the value, which are 1 and 2 on the stack
-    for (int i = 1; i <= 2; i++) {
-    	cl_object *o     = &bins[i-1].object;
-    	o->free          = 0;
-    	int        ltype = lua_type(lua, i);
-    	switch (ltype) {
-    		case LUA_TNIL:
-				o->type = CL_INT;
-				o->sz = sizeof(o->u.i64);
-				o->u.i64 = 0;
-				break;
-    		case LUA_TNUMBER: {
-				uint64_t k = lua_tonumber(lua,i);
-				o->type = CL_INT;
-				o->sz = sizeof(k);
-				o->u.i64 = k;
-				}   break;
-    		case LUA_TBOOLEAN: {
-				bool b = lua_toboolean(lua, i);
-				o->type = CL_INT;
-				o->sz = sizeof(o->u.i64);
-				o->u.i64 = b ? 1 : 0;
-				}   break;
-			case LUA_TSTRING: { 
-				size_t k_len;
-				char *k = (char *) lua_tolstring(lua,i,&k_len);
-				o->type = CL_STR;
-				o->sz = k_len;
-				o->u.str = k;
-				} break;
-    		case LUA_TTABLE:
-                break;
-    		case LUA_TFUNCTION:
-    		case LUA_TUSERDATA:
-    		case LUA_TTHREAD:
-    		case LUA_TLIGHTUSERDATA:
-    			fprintf(stderr, "map reduce: unsupported Lua Type returned\n");
-    			break;
-    		default: 
-    			fprintf(stderr, "map reduce: should not have tables\n");
-    			break;
-    	}
-	}	
-	
-	(*cb) ( 0/*ns*/, 0/*keyd*/, 0/*set*/, 0/*gen*/, 0/*recordttl*/, bins, 2, false /*islast*/, udata);
+    cl_object *o = &bins[0].object; o->free = 0;
+    pop_object_from_lua(o, lua);
+    lua_pop(lua, 1);
+    o            = &bins[1].object; o->free = 0;
+    pop_object_from_lua(o, lua);
 
-	return(0);
+    (*cb) (0/*ns*/, 0/*keyd*/, 0/*set*/, 0/*gen*/, 0/*recordttl*/, bins, 2,
+           false /*islast*/, udata);
+
+    return 0;
 }
 
 #define MAX_LUA_SIZE    4096
@@ -671,34 +780,3 @@ static char *trim_end_space(char *str) {
     return str;
 }
 
-
-#define BITS_IN_int     ( 32 )
-#define THREE_QUARTERS  ((int) ((BITS_IN_int * 3) / 4))
-#define ONE_EIGHTH      ((int) (BITS_IN_int / 8))
-#define HIGH_BITS       ( ~((unsigned int)(~0) >> ONE_EIGHTH ))
-
-// ignoring value_len - know it's null terminated
-uint32_t cf_mr_string_hash_fn(void *value, uint32_t value_len) {
-	uint8_t  *v = value;
-    uint32_t  hash_value = 0, i;
-
-    while (*v) {
-        hash_value = ( hash_value << ONE_EIGHTH ) + *v;
-        if ((i = hash_value & HIGH_BITS) != 0 )
-            hash_value =
-                ( hash_value ^ ( i >> THREE_QUARTERS )) &
-                        ~HIGH_BITS;
-        v++;
-    }
-    return hash_value;
-}
-
-int citrusleaf_mr_init() {
-	cf_rchash_create(&mr_package_hash, cf_mr_string_hash_fn, mr_package_destroy,
-		0 /*keylen*/, 100 /*sz*/, CF_RCHASH_CR_MT_BIGLOCK);
-	return 0;
-}
-
-void citrusleaf_mr_shutdown() {
-	cf_rchash_destroy(mr_package_hash);
-}

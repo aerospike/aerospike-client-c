@@ -6,7 +6,6 @@
 #include<pthread.h>
 #define NUM_NODES 128
 #define NUM_NAMESPACES 10
-#define SZ_SHM (sizeof(size_t) + 2*sizeof(pthread_mutex_t) + 2*sizeof(int) + (NUM_NODES * SZ_NODE))
 #include<sys/shm.h>
 /*Shared memory return values*/
 #define SHM_ERROR -1
@@ -14,24 +13,52 @@
 
 //The shared memory is divided into nodes, each node has a socket address structure and 
 //the data associated with that structure. 
-#define SZ_SOCK sizeof(struct sockaddr_in)
-#define SHM_FIELD_COUNT 4
-#define SZ_FIELD_NAME 32
-#define SZ_NODE_NAME 32
-#define SZ_NAMESPACE 16
-#define SZ_PARTITION_ID sizeof(size_t)
-#define MAX_NEIGHBORS (NUM_NODES-1)
-#define NUM_PARTITIONS 4096
-#define SZ_PARTITION_GEN sizeof(size_t)
+#define SZ_SOCK 			sizeof(struct sockaddr_in)
+#define SHM_FIELD_COUNT 		4
+#define SZ_FIELD_NAME 			32
+#define SZ_NODE_NAME 			32
+#define SZ_NODE_IP			32
+#define SZ_NAMESPACE 			16
+#define SZ_PARTITION_ID 		sizeof(size_t)
+#define MAX_NEIGHBORS 			(NUM_NODES-1)
+#define NUM_PARTITIONS 			4096
+#define SZ_PARTITION_GEN 		sizeof(size_t)
 
-#define SZ_FIELD_NODE_NAME SZ_FIELD_NAME + SZ_NODE_NAME
-#define SZ_FIELD_NEIGHBORS SZ_FIELD_NAME*3 + SZ_NODE_NAME + SZ_PARTITION_GEN + MAX_NEIGHBORS*SZ_NODE_NAME
-#define SZ_FIELD_PARTITIONS 2*(SZ_FIELD_NAME + (SZ_NAMESPACE + 2 + SZ_PARTITION_ID)*NUM_PARTITIONS*NUM_NAMESPACES)
-#define SZ_FIELD_NUM_PARTITIONS SZ_FIELD_NAME + sizeof(size_t)
 
-#define SHMMAX_SYS_FILE "/proc/sys/kernel/shmmax"
-#define DEFAULT_NUM_NODES_FOR_SHM 64
-#define DEFAULT_SHM_KEY 229857887
+#define SZ_FIELD_NODE_NAME 		SZ_FIELD_NAME + SZ_NODE_NAME
+/*
+ *  Example:
+ * 	node    BB958DE9B776038
+ */
+
+
+#define SZ_FIELD_NEIGHBORS 		SZ_FIELD_NAME*3 + SZ_NODE_NAME + SZ_PARTITION_GEN + MAX_NEIGHBORS*SZ_NODE_IP
+/*
+ *  Example:
+ *	node BB958DE9B776038
+ *	partition-generation 29218
+ *	services 192.168.3.102:3000;192.168.3.103:3000
+ */
+
+
+#define SZ_FIELD_PARTITIONS 		2*(SZ_FIELD_NAME + (SZ_NAMESPACE + 2 + SZ_PARTITION_ID)*NUM_PARTITIONS*NUM_NAMESPACES)
+/*
+ *  Example:
+ * 	replicas-read   bar:0;bar:2;bar:3;.....
+ *	replicas-write  bar:0;bar:4;bar:5;.....
+ */
+
+
+#define SZ_FIELD_NUM_PARTITIONS 	SZ_FIELD_NAME + sizeof(size_t)
+/*
+ *  Example:
+ * 	partitions 4096
+ */
+
+
+#define SHMMAX_SYS_FILE 		"/proc/sys/kernel/shmmax"
+#define DEFAULT_NUM_NODES_FOR_SHM 	64
+#define DEFAULT_SHM_KEY 		229857887
 
 /* The shm structure has some metadata (updater_id, node_count, global lock)
  * and then start the actual node information. Each node's information is further
@@ -46,7 +73,6 @@ typedef struct {
 	char neighbors[SZ_FIELD_NEIGHBORS];
 	char partitions[SZ_FIELD_PARTITIONS];
 	char num_partitions[SZ_FIELD_NUM_PARTITIONS];
-	
 } shm_ninfo;
 
 typedef struct{

@@ -684,7 +684,7 @@ cl_rv citrusleaf_query(cl_cluster *asc, const char *ns, const cl_query *query, c
 	if (mr_job) {
 		
 		// make sure it's in the cache before you do a "get" with the same package name
-		if (0 != citrusleaf_sproc_package_get( asc, mr_job->package, CL_SCRIPT_LANG_LUA ) ) {
+		if (0 != citrusleaf_sproc_package_get_and_create( asc, mr_job->package, CL_SCRIPT_LANG_LUA ) ) {
 			return CITRUSLEAF_FAIL_CLIENT;
 		}
 
@@ -692,6 +692,11 @@ cl_rv citrusleaf_query(cl_cluster *asc, const char *ns, const cl_query *query, c
 		if (! work.mr_state) {
 			return CITRUSLEAF_FAIL_CLIENT;
 		}
+	}
+#else
+	if (mr_job) {
+        fprintf(stderr,"MR job called but Aerospike client not compiled w/ Lua/MR capability\n");
+		return CITRUSLEAF_FAIL_CLIENT;
 	}
 #endif
 

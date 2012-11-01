@@ -358,7 +358,7 @@ void mr_package_release(mr_package *mrp_p) {
 // char *script - must be malloc'ed, will be consumed / registered - must be null terminated
 // script will be freed after this call
 
-mr_package * mr_package_create(const char *package_name,  const char *lang, 
+mr_package * mr_package_create(const char *package_name,  cl_script_lang_t lang_t,
 								char *script, int script_len, const char *generation )
 {
 	mr_package *mrp_p = 0;
@@ -391,6 +391,12 @@ mr_package * mr_package_create(const char *package_name,  const char *lang,
 	mrp_p->script = script;
 	mrp_p->script_len = script_len;
 	
+	if (lang_t!=CL_SCRIPT_LANG_LUA) {
+		fprintf(stderr, "unrecognized script language %d\n",lang_t);
+		return NULL;
+	}	
+	const char *lang = "lua";
+
 	strcpy(mrp_p->lang, lang);
 	strcpy(mrp_p->generation, generation);
     
@@ -432,7 +438,7 @@ citrusleaf_sproc_package_get_and_create(cl_cluster *asc, const char *package_nam
 		return rsp;
 	}
 			
-	mr_package *mrp_p = mr_package_create(package_name, lang, content, content_len, gen );
+	mr_package *mrp_p = mr_package_create(package_name, lang_t, content, content_len, gen );
 	if (!mrp_p) {
 		fprintf(stderr, "could not create package: %s\n",package_name);
 		free (content);

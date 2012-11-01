@@ -780,9 +780,8 @@ cl_query *citrusleaf_query_create(const char *indexname, const char *setname)
 		return NULL;
 	}
 	memset(query,0,sizeof(cl_query));
-	memcpy(query->indexname,indexname,strlen(indexname));
-	if (setname)
-		memcpy(query->setname, setname, strlen(setname));
+	if (indexname) memcpy(query->indexname, indexname, strlen(indexname));
+	if (setname)   memcpy(query->setname,   setname,   strlen(setname));
 
 	return query;	
 }

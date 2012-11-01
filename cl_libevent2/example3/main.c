@@ -175,6 +175,8 @@ main(int argc, char* argv[])
 	stop_cluster_management();
 	destroy_config();
 
+	LOG("example3 is done");
+
 	return 0;
 }
 
@@ -412,7 +414,7 @@ block_until_transactions_done()
 		total_not_found += g_bases[b].num_not_found;
 	}
 
-	LOG("example3 done");
+	LOG("example3 transactions done");
 	LOG("total put timeouts: %u, total get timeouts: %u, total not found: %u",
 			total_put_timeouts, total_get_timeouts, total_not_found);
 }
@@ -553,7 +555,7 @@ put(int b, int k)
 	strcpy(bin.bin_name, BIN_NAME);
 	ev2citrusleaf_object_init_int(&bin.object, (int64_t)k);
 
-	if (ev2citrusleaf_put(
+	if (0 != ev2citrusleaf_put(
 			g_p_cluster,					// cluster
 			(char*)g_config.p_namespace,	// namespace
 			(char*)g_config.p_set,			// set name
@@ -605,7 +607,7 @@ put_cb(int return_value, ev2citrusleaf_bin* bins, int n_bins,
 static bool
 get(int b, int k)
 {
-	if (ev2citrusleaf_get_all(
+	if (0 != ev2citrusleaf_get_all(
 			g_p_cluster,					// cluster
 			(char*)g_config.p_namespace,	// namespace
 			(char*)g_config.p_set,			// set name

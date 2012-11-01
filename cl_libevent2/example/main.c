@@ -1,572 +1,859 @@
 /*
- *  Citrusleaf Tools
- *  src/ascli.c - command-line interface
+ * cl_libevent2/example/main.c
  *
- *  Copyright 2008 by Citrusleaf.  All rights reserved.
- *  THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE.  THE COPYRIGHT NOTICE
- *  ABOVE DOES NOT EVIDENCE ANY ACTUAL OR INTENDED PUBLICATION.
+ * Simple API demonstration for the Citrusleaf libevent2 client.
+ *
+ * This example demonstrates some basic database operations. The example uses
+ * a single transaction thread (the programs's main thread) and event base. The
+ * callback that completes an operation initiates the next one. This is not
+ * intended to mimic a realistic application transaction model.
+ *
+ * The main steps are:
+ *	- Initialize database cluster management.
+ *	- Do a series of demonstration database operations.
+ *	- Clean up.
  */
-#include <errno.h>
+
+
+//==========================================================
+// Includes
+//
+
+#include <getopt.h>
+#include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <stdint.h>
-#include <stdbool.h>
-#include <getopt.h>
-#include <pthread.h>
-
+#include <bits/types.h>
 #include <event2/event.h>
-#include <event2/dns.h>
 
 #include "citrusleaf_event2/ev2citrusleaf.h"
 
 
+//==========================================================
+// Local Logging Macros
+//
+
+#define LOG(_fmt, _args...) { printf(_fmt "\n", ## _args); fflush(stdout); }
+
+#ifdef SHOW_DETAIL
+#define DETAIL(_fmt, _args...) { printf(_fmt "\n", ## _args); fflush(stdout); }
+#else
+#define DETAIL(_fmt, _args...)
+#endif
+
+
+//==========================================================
+// Constants
+//
+
+const char DEFAULT_HOST[] = "127.0.0.1";
+const int DEFAULT_PORT = 3000;
+const char DEFAULT_NAMESPACE[] = "test";
+const char DEFAULT_SET[] = "test-set";
+const int DEFAULT_TIMEOUT_MSEC = 200;
+
+const int CLUSTER_VERIFY_TRIES = 3;
+const __useconds_t CLUSTER_VERIFY_INTERVAL = 1000 * 1000; // 1 second
+
+const char KEY_STRING[] = "test-key";
+const uint8_t BLOB[] = {
+		0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF
+};
+
+
+
+//==========================================================
+// Typedefs
+//
 
 typedef struct config_s {
-	
-	char *host;
-	int   port;
-	char *ns;
-	char *set;
-	
-	bool verbose;
-	bool follow;
-	
-	int  timeout_ms;
-	
-	ev2citrusleaf_object  o_key;
-		
-	ev2citrusleaf_cluster	*asc;
-	
-	struct event_base *base;
-	struct evdns_base *dns_base;
-	
-	volatile int	return_value;   // return value from the test
-	
-	uint32_t	blob_size;
-	uint8_t	*blob;
-	
+	const char* p_host;
+	int port;
+	const char* p_namespace;
+	const char* p_set;
+	int timeout_msec;
 } config;
 
-
-config g_config;
-
-// one of the good ways to make this cast work
-typedef void * pthread_fn(void *);
-
-#define BLOB_SIZE ((1024 * 6) + 3)
-
-void
-blob_set( uint8_t *blob, uint32_t blob_size)
-{
-	for (int i = 0; i < blob_size ; i++) {
-		blob[i] = i % 0xFF;
-	}
-}
-
-int
-blob_check( uint8_t *blob, uint32_t blob_size)
-{
-	for (int i = 0; i < blob_size ; i++) {
-		if (blob[i] != i % 0xFF) {
-			fprintf(stderr, " VALIDATION ERROR IN BLOB: byte %u should be %u is %u\n",
-				i,blob[i],i % 0xFF);
-			return(-1);
-		}
-	}
-	return(0);
-}
-
-void
-test_terminate(int r)
-{
-	g_config.return_value = r;
-	struct timeval x = { 0, 0 };
-	event_base_loopexit(g_config.base, &x);
-	g_config.base = 0;
-}
-
-void
-example_phase_eight(int return_value, ev2citrusleaf_bin *bins, int n_bins, uint32_t generation, void *udata)
-{
-	fprintf(stderr, "example phase 8 received\n");
-	
-	if (return_value != EV2CITRUSLEAF_FAIL_GENERATION) {
-		fprintf(stderr, "example has FAILED? stage 8 return value %d should be %d\n",
-			return_value, EV2CITRUSLEAF_FAIL_GENERATION);
-		test_terminate(-1);
-		return;
-	}
-
-	fprintf(stderr, " THAT IS ALL! SUCCESS!\n");	
-	
-	if (bins)		ev2citrusleaf_bins_free(bins, n_bins);
-	
-	// signals success
-	test_terminate(1);
-}
+typedef bool (*phase_start_fn)(uint32_t generation);
+typedef bool (*phase_complete_fn)(int return_value, ev2citrusleaf_bin* bins,
+		int n_bins, uint32_t generation, void* pv_udata);
 
 
+//==========================================================
+// Globals
+//
 
-void
-example_phase_seven(int return_value, ev2citrusleaf_bin *bins, int n_bins, uint32_t generation, void *udata)
-{
-	fprintf(stderr, "example phase 7 received\n");
-	
-	if (return_value != 0) {
-		fprintf(stderr, "example has FAILED? stage 7 return value %d\n",return_value);
-		test_terminate(-1);
-		return;
-	}
-
-	// Validate that the get returned the right data
-	if (n_bins != 1) {
-		fprintf(stderr, "phase 7: number of bins is wrong, should be 1 is %d\n",n_bins);
-		test_terminate(-1);
-		return;
-	}
-	if (strcmp(bins[0].bin_name,"test_bin_blob") != 0) {
-		fprintf(stderr, "phase 7: name of bin returned is wrong, should be test_bin_blob, is %s\n",bins[0].bin_name);
-		test_terminate(-1);
-		return;
-	}
-	if (bins[0].object.type != CL_BLOB) {
-		fprintf(stderr, "phase 7: get returned wrong type, should be blob, is  %d\n",(int) bins[0].object.type);
-		test_terminate(-1);
-		return;
-	}
-	if (bins[0].object.size != BLOB_SIZE) {
-		fprintf(stderr, "phase 6: get returned wrong size, should be %d, is %d\n", BLOB_SIZE, (int) bins[0].object.size);
-		test_terminate(-1);
-		return;
-	}
-	if (0 != blob_check( bins[0].object.u.blob, BLOB_SIZE) ) {
-		test_terminate(-1);
-		return;
-	}
-
-	if (bins)		ev2citrusleaf_bins_free(bins, n_bins);
-
-	config *c = (config *) udata;
-	
-	// Do a write with the wrong generation count, make sure it fails
-	ev2citrusleaf_bin values[1];
-	strcpy(values[0].bin_name, "test_bin_bleb");
-	ev2citrusleaf_object_init_blob(&values[0].object, c->blob, c->blob_size);
-	
-	ev2citrusleaf_write_parameters wparam;
-	ev2citrusleaf_write_parameters_init(&wparam);
-	wparam.use_generation = true;
-	wparam.generation = generation - 1; // one too small!
-	
-	if (0 != ev2citrusleaf_put(c->asc, c->ns, c->set, &c->o_key, values, 1, 
-		&wparam, c->timeout_ms, example_phase_eight, c, c->base)) {
-	
-		fprintf(stderr, "citrusleaf put could not dispatch - phase 4\n");
-		test_terminate(-1);
-		return;
-	}
-	
-}
-
-void
-example_phase_six(int return_value, ev2citrusleaf_bin *bins, int n_bins, uint32_t generation, void *udata)
-{
-	config *c = (config *) udata;
-	
-	fprintf(stderr, "example phase 6 received\n");
-	
-	if (return_value != 0) { 
-		fprintf(stderr, "example has FAILED? stage 6 return value %d\n",return_value);
-		test_terminate(-1);
-		return;
-	}
-	
-	// Validate that the get returned the right data
-	if (n_bins != 1) {
-		fprintf(stderr, "phase 6: number of bins is wrong, should be 1 is %d\n",n_bins);
-		test_terminate(-1);
-		return;
-	}
-	if (strcmp(bins[0].bin_name,"test_bin_blob") != 0) {
-		fprintf(stderr, "phase 6: name of bin returned is wrong, should be test-bin_blob is %s\n",bins[0].bin_name);
-		test_terminate(-1);
-		return;
-	}
-	if (bins[0].object.type != CL_BLOB) {
-		fprintf(stderr, "phase 6: get returned wrong type, should be blob, is  %d\n",(int) bins[0].object.type);
-		test_terminate(-1);
-		return;
-	}
-	if (bins[0].object.size != BLOB_SIZE) {
-		fprintf(stderr, "phase 6: get returned wrong type, should be blob, is  %d\n",(int) bins[0].object.type);
-		test_terminate(-1);
-		return;
-	}
-	if (0 != blob_check( bins[0].object.u.blob, BLOB_SIZE) ) {
-		test_terminate(-1);
-		return;
-	}
-
-	if (bins)		ev2citrusleaf_bins_free(bins, n_bins);
-	
-	ev2citrusleaf_operation ops[3];
-	
-	strcpy(ops[0].bin_name, "test_bin_zulu");
-	ops[0].op = CL_OP_WRITE;
-	ev2citrusleaf_object_init_str(&ops[0].object, "yodel!yodel!");
-	
-	strcpy(ops[1].bin_name, "test_bin_two");  // an overwrite!
-	ops[1].op = CL_OP_WRITE; 
-	ev2citrusleaf_object_init_int(&ops[1].object, 2);
-	
-	strcpy(ops[2].bin_name, "test_bin_blob");
-	ops[2].op = CL_OP_READ;	
-
-	ev2citrusleaf_write_parameters wparam;
-	ev2citrusleaf_write_parameters_init(&wparam);
-	wparam.use_generation = true;
-	wparam.generation = generation;
-	
-	fprintf(stderr, "phase 6 - sending generation %d\n",generation);
-	
-	if (0 != ev2citrusleaf_operate(c->asc, c->ns, c->set, &c->o_key, ops, 3, &wparam, c->timeout_ms, example_phase_seven, c, c->base)) {
-		fprintf(stderr, "citrusleaf operate could not dispatch - phase 6\n");
-		g_config.return_value = -1;
-		return;
-	}
-	fprintf(stderr, "citrusleaf operate dispatched - phase 6\n");
-	
-}
+static config g_config;
+static ev2citrusleaf_cluster* g_p_cluster = NULL;
+static struct event_base* g_p_event_base = NULL;
+static ev2citrusleaf_object g_key;
+static ev2citrusleaf_write_parameters g_write_parameters;
+static int g_phase_index = 0;
 
 
+//==========================================================
+// Forward Declarations
+//
+
+static bool set_config();
+static void destroy_config();
+static void usage();
+static bool start_cluster_management();
+static void stop_cluster_management();
+static void start_transactions();
+static void client_cb(int return_value, ev2citrusleaf_bin* bins, int n_bins,
+		uint32_t generation, void* pv_udata);
+static bool start_phase_1(uint32_t generation);
+static bool start_phase_2(uint32_t generation);
+static bool complete_phase_2(int return_value, ev2citrusleaf_bin* bins,
+		int n_bins, uint32_t generation, void* pv_udata);
+static bool start_phase_3(uint32_t generation);
+static bool start_phase_4(uint32_t generation);
+static bool complete_phase_4(int return_value, ev2citrusleaf_bin* bins,
+		int n_bins, uint32_t generation, void* pv_udata);
+static bool start_phase_5(uint32_t generation);
+static bool start_phase_6(uint32_t generation);
+static bool complete_phase_6(int return_value, ev2citrusleaf_bin* bins,
+		int n_bins, uint32_t generation, void* pv_udata);
+static bool start_phase_7(uint32_t generation);
+static bool verify_return_value(int return_value, ev2citrusleaf_bin* bins,
+		int n_bins, uint32_t generation, void* pv_udata);
 
 
-void
-example_phase_five(int return_value, ev2citrusleaf_bin *bins_ignore, int n_bins_ignore, uint32_t generation,void *udata)
-{
-	config *c = (config *) udata;
+//==========================================================
+// Demonstration Phases
+//
 
-	fprintf(stderr, "example phase 5 received\n");
-	
-	if (return_value != 0) {
-		fprintf(stderr, "example has FAILED? stage 5 return value %d\n",return_value);
-		test_terminate(-1);
-		return;
-	}
-	
-	if (bins_ignore)		ev2citrusleaf_bins_free(bins_ignore, n_bins_ignore);
-	
-	const char *bins[1] = { "test_bin_blob" }; 
-	
-	if (0 != ev2citrusleaf_get(c->asc, c->ns, c->set, &c->o_key, bins, 1, c->timeout_ms, example_phase_six, c, c->base)) {
-		fprintf(stderr, "citrusleaf put could not dispatch - phase 5\n");
-		test_terminate(-1);
-		return;
-	}
-	fprintf(stderr, "citrusleaf get dispatched - phase 5\n");
-	
-}
+const phase_start_fn PHASE_START_FUNCTIONS[] = {
+	start_phase_1,			// write a 2-bin record
+	start_phase_2,			// read all bins of record
+	start_phase_3,			// overwrite one existing bin and add 3rd bin
+	start_phase_4,			// read 2 of 3 bins (overwritten and added bin)
+	start_phase_5,			// overwrite a bin, using correct generation
+	start_phase_6,			// overwrite a bin, using incorrect generation
+	start_phase_7,			// delete the record
+	NULL
+};
 
-/* SYNOPSIS */
-/* This is an example of getting and setting values using the asynchronous
-**	libevent-oriented asynchronous API.
-**
-** The example has several phases: phase I puts some values,
-** phase II gets them back out
-** phase III deletes the key.
-** Phase IV checks the return code on the delete
-**
-** As the code is async, there is a different function for each one.
-*/
-
-void
-example_phase_four(int return_value, ev2citrusleaf_bin *bins, int n_bins, uint32_t generation, void *udata)
-{
-	config *c = (config *) udata;
-	
-	fprintf(stderr, "example phase 4 received\n");
-	
-	if (return_value != 0) {
-		fprintf(stderr, "example has FAILED! stage 4 return value %d\n",return_value);
-		test_terminate(-1);
-		return;
-	}
-
-	if (bins)		ev2citrusleaf_bins_free(bins, n_bins);
-
-	// Try doing a put with a large blob
-	c->blob = malloc( BLOB_SIZE );
-	c->blob_size = BLOB_SIZE;
-	blob_set(c->blob, c->blob_size);
-	
-	ev2citrusleaf_bin values[1];
-	strcpy(values[0].bin_name, "test_bin_blob");
-	ev2citrusleaf_object_init_blob(&values[0].object, c->blob, c->blob_size);
-	
-	ev2citrusleaf_write_parameters wparam;
-	ev2citrusleaf_write_parameters_init(&wparam);
-	
-	if (0 != ev2citrusleaf_put(c->asc, c->ns, c->set, &c->o_key, values, 1, 
-		&wparam, c->timeout_ms, example_phase_five, c, c->base)) {
-	
-		fprintf(stderr, "citrusleaf put could not dispatch - phase 4\n");
-		test_terminate(-1);
-		return;
-	}
-	fprintf(stderr, "citrusleaf put dispatched - phase 4\n");
-	
-}
+const phase_complete_fn PHASE_COMPLETE_FUNCTIONS[] = {
+	verify_return_value,	// verify write success
+	complete_phase_2,		// verify everything that was read
+	verify_return_value,	// verify write success
+	complete_phase_4,		// verify everything that was read
+	verify_return_value,	// verify write success
+	complete_phase_6,		// verify write failure (generation)
+	verify_return_value		// verify delete success
+};
 
 
-void
-example_phase_three(int return_value, ev2citrusleaf_bin *bins, int n_bins, uint32_t generation, void *udata)
-{
-	config *c = (config *) udata;
-	
-	fprintf(stderr, "example phase 3 received\n");
-	
-	if (return_value != 0) {
-		fprintf(stderr, "example has FAILED? stage 3 return value %d\n",return_value);
-		test_terminate(-1);
-		return;
-	}
-
-	// validate the request from phase II
-	fprintf(stderr, "get all returned %d bins:\n",n_bins);
-	for (int i=0;i<n_bins;i++) {
-		fprintf(stderr, "%d:  bin %s ",i,bins[i].bin_name);
-		switch (bins[i].object.type) {
-			case CL_STR:
-				fprintf(stderr, "type string: value %s\n", bins[i].object.u.str);
-				break;
-			case CL_INT:
-				fprintf(stderr, "type int: value %"PRId64"\n",bins[i].object.u.i64);
-				break;
-			default:
-				fprintf(stderr, "type unknown! (%d)\n",(int)bins[i].object.type);
-				break;
-		}
-	}
-
-	if (bins)		ev2citrusleaf_bins_free(bins, n_bins);
-	fprintf(stderr,"citrusleaf getall succeeded\n");
-
-	// Delete the key you just set
-	ev2citrusleaf_write_parameters wparam;
-	ev2citrusleaf_write_parameters_init(&wparam);
-	if (0 != ev2citrusleaf_delete(c->asc, c->ns, c->set, &c->o_key, &wparam,
-			c->timeout_ms, example_phase_four, c, c->base)) {
-	
-		fprintf(stderr, "citrusleaf delete failed\n");
-		c->return_value = -1;
-		
-	}
-	else
-		fprintf(stderr, "citrusleaf delete dispatched\n");
-
-}
-
-void
-example_phase_two(int return_value, ev2citrusleaf_bin *bins, int n_bins, uint32_t generation, void *udata)
-{
-	config *c = (config *) udata;
-
-	if (return_value != EV2CITRUSLEAF_OK) {
-		fprintf(stderr, "put failed: return code %d\n",return_value);
-		c->return_value = return_value;
-		test_terminate(-1);
-		return;
-	}
-	
-	if (bins)		ev2citrusleaf_bins_free(bins, n_bins);
-
-	// Get all the values in this key (enjoy the fine c99 standard)
-	if (0 != ev2citrusleaf_get_all(c->asc, c->ns, c->set, &c->o_key, c->timeout_ms,
-				example_phase_three, c, c->base)) {
-		fprintf(stderr, "get after put could not dispatch\n");
-		test_terminate(-1);
-		return;
-	}
-	fprintf(stderr, "get all dispatched\n");
-
-}
-
-void
-example_phase_one(config *c)
-{
-	// Set up the key, used in all phases ---
-	// be a little careful here, because the o_key will contain a pointer
-	// to strings
-	ev2citrusleaf_object_init_str(&c->o_key, "example_key");
-	
-	ev2citrusleaf_bin values[2];
-	strcpy(values[0].bin_name, "test_bin_one");
-	ev2citrusleaf_object_init_str(&values[0].object, "example_value_one");
-	strcpy(values[1].bin_name, "test_bin_two");
-	ev2citrusleaf_object_init_int(&values[1].object, 0xDEADBEEF);
-	
-	ev2citrusleaf_write_parameters wparam;
-	ev2citrusleaf_write_parameters_init(&wparam);
-	
-	if (0 != ev2citrusleaf_put(c->asc, c->ns, c->set, &c->o_key, values, 2, &wparam, c->timeout_ms, example_phase_two, c, c->base)) {
-		fprintf(stderr, "citrusleaf put could not dispatch\n");
-		test_terminate(-1);
-		return;
-	}
-	fprintf(stderr, "citrusleaf put dispatched\n");
-	
-}
-
-
-void
-example_info_fn(int return_value, char *response, size_t response_len, void *udata)
-{
-//	fprintf(stderr, "example info return: rv %d response len %zd response %s\n",return_value,response_len, response);
-	fprintf(stderr, "example info return: rv %d response len %zd\n",return_value,response_len);
-	if (response) free(response);
-	
-}
-
-void usage(void) {
-	fprintf(stderr, "Usage key_c:\n");
-	fprintf(stderr, "-h host [default 127.0.0.1] \n");
-	fprintf(stderr, "-p port [default 3000]\n");
-	fprintf(stderr, "-n namespace [default test]\n");
-	fprintf(stderr, "-b bin [default value]\n");
-	fprintf(stderr, "-m milliseconds timeout [default 200]\n");
-	fprintf(stderr, "-f do not follow cluster [default do follow]\n");
-	fprintf(stderr, "-v is verbose\n");
-}
-
+//==========================================================
+// Main
+//
 
 int
-main(int argc, char **argv)
+main(int argc, char* argv[])
 {
-	memset(&g_config, 0, sizeof(g_config));
-	
-	g_config.host = "127.0.0.1";
-	g_config.port = 3000;
-	g_config.ns = "test";
-	g_config.set = "example_set";
-	g_config.verbose = false;
-	g_config.follow = true;
-	g_config.timeout_ms = 200;
-	g_config.base = 0;
-	g_config.dns_base = 0;
-	
-	int		c;
-	
-	printf("example of the C libevent2 citrusleaf library\n");
-	
-	while ((c = getopt(argc, argv, "h:p:n:b:m:v")) != -1) 
-	{
-		switch (c)
-		{
+	// Parse command line arguments.
+	if (! set_config(argc, argv)) {
+		exit(-1);
+	}
+
+	// Use default Citrusleaf client logging, but set a filter.
+	cf_set_log_level(CF_WARN);
+
+	// Connect to the database server cluster.
+	if (! start_cluster_management()) {
+		stop_cluster_management();
+		destroy_config();
+		exit(-1);
+	}
+
+	// Start the series of database operations.
+	start_transactions();
+
+	// Exit cleanly.
+	stop_cluster_management();
+	destroy_config();
+
+	LOG("example is done");
+
+	return 0;
+}
+
+
+//==========================================================
+// Command Line Options
+//
+
+//------------------------------------------------
+// Parse command line options.
+//
+static bool
+set_config(int argc, char* argv[])
+{
+	g_config.p_host = DEFAULT_HOST;
+	g_config.port = DEFAULT_PORT;
+	g_config.p_namespace = DEFAULT_NAMESPACE;
+	g_config.p_set = DEFAULT_SET;
+	g_config.timeout_msec = DEFAULT_TIMEOUT_MSEC;
+
+	int c;
+
+	while ((c = getopt(argc, argv, "h:p:n:s:m:")) != -1) {
+		switch (c) {
 		case 'h':
-			g_config.host = strdup(optarg);
+			g_config.p_host = strdup(optarg);
 			break;
-		
+
 		case 'p':
 			g_config.port = atoi(optarg);
 			break;
-		
+
 		case 'n':
-			g_config.ns = strdup(optarg);
+			g_config.p_namespace = strdup(optarg);
 			break;
-			
+
 		case 's':
-			g_config.set = strdup(optarg);
+			g_config.p_set = strdup(optarg);
 			break;
 
 		case 'm':
-			g_config.timeout_ms = atoi(optarg);
-			break;
-			
-		case 'v':
-			g_config.verbose = true;
+			g_config.timeout_msec = atoi(optarg);
 			break;
 
-		case 'f':
-			g_config.follow = false;
-			break;
-			
 		default:
+			destroy_config();
 			usage();
-			return(-1);
-			
+			return false;
 		}
 	}
 
-	fprintf(stderr, "example: host %s port %d ns %s set %s\n",
-		g_config.host,g_config.port,g_config.ns,g_config.set);
+	LOG("host:                %s", g_config.p_host);
+	LOG("port:                %d", g_config.port);
+	LOG("namespace:           %s", g_config.p_namespace);
+	LOG("set name:            %s", g_config.p_set);
+	LOG("transaction timeout: %d msec", g_config.timeout_msec);
 
-	// Use default client logging, but set a filter.
-	cf_set_log_level(CF_WARN);
+	return true;
+}
 
-	g_config.base = event_base_new();			// initialize the libevent system
-	g_config.dns_base = evdns_base_new(g_config.base, 1);
-	ev2citrusleaf_init(0);    // initialize citrusleaf
-	
-	
-	// Create a citrusleaf cluster object for subsequent requests
-	g_config.asc = ev2citrusleaf_cluster_create();
-	if (!g_config.asc) {
-		fprintf(stderr, "could not create cluster, internal error\n");
-		return(-1);
+//------------------------------------------------
+// Free any resources allocated for configuration.
+//
+static void
+destroy_config()
+{
+	if (g_config.p_host != DEFAULT_HOST) {
+		free((char*)g_config.p_host);
 	}
-	if (g_config.follow == false)
-		ev2citrusleaf_cluster_follow(g_config.asc, false);
-	
-	ev2citrusleaf_cluster_add_host(g_config.asc, g_config.host, g_config.port);
-	
-	// complexity: we won't start doing all our node validation until a thread is sunk in event_dispatch.
-	// so start a completecly different thread for event_dispatch. It'll probably like being its own thread --
-	// and that leaves this thread as a good "monitor" to clean the process on error.
-	//
-	// THe more normal way is to simply call event dispatch from this thread
-	pthread_t event_thread;
-	pthread_create(&event_thread, 0, (pthread_fn *) event_base_dispatch, g_config.base);
-	
-	// Up to the application: wait to see if this cluster has good nodes, or just
-	// start using?
-	int node_count;
+
+	if (g_config.p_namespace != DEFAULT_NAMESPACE) {
+		free((char*)g_config.p_namespace);
+	}
+
+	if (g_config.p_set != DEFAULT_SET) {
+		free((char*)g_config.p_set);
+	}
+}
+
+//------------------------------------------------
+// Display supported command line options.
+//
+static void
+usage()
+{
+	LOG("Usage:");
+	LOG("-h host [default: %s]", DEFAULT_HOST);
+	LOG("-p port [default: %d]", DEFAULT_PORT);
+	LOG("-n namespace [default: %s]", DEFAULT_NAMESPACE);
+	LOG("-s set name [default: %s]", DEFAULT_SET);
+	LOG("-m transaction timeout msec [default: %d]", DEFAULT_TIMEOUT_MSEC);
+}
+
+
+//==========================================================
+// Cluster Management
+//
+
+//------------------------------------------------
+// Initialize client and connect to database.
+//
+static bool
+start_cluster_management()
+{
+	// Initialize Citrusleaf client.
+	int result = ev2citrusleaf_init(NULL);
+
+	if (result != 0) {
+		LOG("ERROR: initializing cluster [%d]", result);
+		return false;
+	}
+
+	// Create cluster object needed for all database operations.
+	g_p_cluster = ev2citrusleaf_cluster_create();
+
+	if (! g_p_cluster) {
+		LOG("ERROR: creating cluster");
+		return false;
+	}
+
+	// Connect to Citrusleaf database server cluster.
+	result = ev2citrusleaf_cluster_add_host(g_p_cluster, (char*)g_config.p_host,
+			g_config.port);
+
+	if (result != 0) {
+		LOG("ERROR: adding host [%d]", result);
+		return false;
+	}
+
+	// Verify database server cluster is ready.
 	int tries = 0;
-	do {
-		node_count = ev2citrusleaf_cluster_get_active_node_count(g_config.asc);
-		if (node_count > 0)		break;
-		usleep( 50 * 1000 );
+
+	while (tries < CLUSTER_VERIFY_TRIES) {
+		int n = ev2citrusleaf_cluster_get_active_node_count(g_p_cluster);
+
+		if (n > 0) {
+			LOG("found %d cluster node%s", n, n > 1 ? "s" : "");
+			break;
+		}
+
+		usleep(CLUSTER_VERIFY_INTERVAL);
 		tries++;
-	} while ( tries < 20);
-	
-	if (tries == 20) {
-		fprintf(stderr, "example: could not connect to cluster, configuration bad?\n");
-		ev2citrusleaf_cluster_destroy(g_config.asc, 0);
-		return(-1);
 	}
 
+	if (tries == CLUSTER_VERIFY_TRIES) {
+		LOG("ERROR: connecting to cluster");
+		return false;
+	}
 
-	// info test
-	fprintf(stderr, "starting info test\n");
-	ev2citrusleaf_info(g_config.base, g_config.dns_base,
-		g_config.host, g_config.port, 0, g_config.timeout_ms, example_info_fn, 0);
-	
-	// Start the train of example stuff
-	example_phase_one(&g_config);
-	
-	// join on the event thread
-	void *value_ptr;
-	pthread_join(event_thread, &value_ptr); 
-	
-	if (g_config.return_value != 1)
-		fprintf(stderr, "TEST FAILED!\n");
-	else
-		fprintf(stderr, "TEST SUCCESS!\n");
+	return true;
+}
 
-	if (g_config.blob)	free(g_config.blob);
-	
+//------------------------------------------------
+// Disconnect from database and clean up client.
+//
+static void
+stop_cluster_management()
+{
+	if (g_p_cluster) {
+		ev2citrusleaf_cluster_destroy(g_p_cluster, 0);
+	}
+
 	ev2citrusleaf_shutdown(true);
-	
-	return(0);
+}
+
+
+//==========================================================
+// Transaction Management
+//
+
+//------------------------------------------------
+// Start the series of database operations.
+//
+static void
+start_transactions()
+{
+	// Create the event base for transactions.
+	if ((g_p_event_base = event_base_new()) == NULL) {
+		LOG("ERROR: creating event base");
+		return;
+	}
+
+	// Initialize a key to be used in multiple phases.
+	ev2citrusleaf_object_init_str(&g_key, (char*)KEY_STRING);
+
+	// Initialize (default) write parameters - used in multiple phases.
+	ev2citrusleaf_write_parameters_init(&g_write_parameters);
+
+	// Start the event loop. There must be an event added on the base before
+	// calling event_base_dispatch(), or the event loop will just exit. Here we
+	// start our first transaction to ensure an event is added.
+
+	g_phase_index = 0;
+
+	if (PHASE_START_FUNCTIONS[g_phase_index](0)) {
+
+		// event_base_dispatch() will block and run the event loop until no more
+		// events are added, or until something calls event_base_loopbreak() or
+		// event_base_loopexit().
+
+		// To keep an event loop running, an application must therefore ensure
+		// at least one event is always added.
+
+		// In this example, we'll exit the event loop when a transaction
+		// callback is made in which we don't start another transaction.
+
+		if (event_base_dispatch(g_p_event_base) < 0) {
+			LOG("ERROR: event base dispatch");
+		}
+	}
+	else {
+		LOG("ERROR: starting phase 1");
+	}
+
+	// Free the event base.
+	event_base_free(g_p_event_base);
+}
+
+//------------------------------------------------
+// Complete a database operation, start the next.
+//
+static void
+client_cb(int return_value, ev2citrusleaf_bin* bins, int n_bins,
+		uint32_t generation, void* pv_udata)
+{
+	// Complete the current phase.
+	if (PHASE_COMPLETE_FUNCTIONS[g_phase_index](
+			return_value, bins, n_bins, generation, pv_udata)) {
+		LOG("completed phase %d", g_phase_index + 1);
+	}
+	else {
+		LOG("ERROR: completing phase %d", g_phase_index + 1);
+		// Will exit event loop.
+		return;
+	}
+
+	// Start the next phase, if there is one. If not, exit the event loop.
+
+	if (! PHASE_START_FUNCTIONS[++g_phase_index]) {
+		LOG("example completed all %d database transactions", g_phase_index);
+		// Will exit event loop.
+		return;
+	}
+
+	if (! PHASE_START_FUNCTIONS[g_phase_index](generation)) {
+		LOG("ERROR: starting phase %d", g_phase_index + 1);
+		// Will exit event loop.
+	}
+}
+
+
+//==========================================================
+// Transaction Operations
+//
+
+//------------------------------------------------
+// Write a record with two bins.
+//
+static bool
+start_phase_1(uint32_t generation)
+{
+	ev2citrusleaf_bin bins[2];
+
+	// First bin has a string value.
+	strcpy(bins[0].bin_name, "test-bin-A");
+	ev2citrusleaf_object_init_str(&bins[0].object, "test-value-A");
+
+	// Second bin has an integer value.
+	strcpy(bins[1].bin_name, "test-bin-B");
+	ev2citrusleaf_object_init_int(&bins[1].object, 0xBBBBbbbb);
+
+	if (0 != ev2citrusleaf_put(
+			g_p_cluster,					// cluster
+			(char*)g_config.p_namespace,	// namespace
+			(char*)g_config.p_set,			// set name
+			&g_key,							// key of record to write
+			bins,							// bins (array) to write
+			2,								// two bins for this transaction
+			&g_write_parameters,			// write parameters
+			g_config.timeout_msec,			// transaction timeout
+			client_cb,						// callback for this transaction
+			NULL,							// "user data" - nothing for us
+			g_p_event_base)) {				// event base for this transaction
+		LOG("ERROR: fail put() for 2-bin record");
+		return false;
+	}
+
+	return true;
+}
+
+//------------------------------------------------
+// Read all bins of the record we just wrote.
+//
+static bool
+start_phase_2(uint32_t generation)
+{
+	if (0 != ev2citrusleaf_get_all(
+			g_p_cluster,					// cluster
+			(char*)g_config.p_namespace,	// namespace
+			(char*)g_config.p_set,			// set name
+			&g_key,							// key of record to get
+			g_config.timeout_msec,			// transaction timeout
+			client_cb,						// callback for this transaction
+			NULL,							// "user data" - nothing for us
+			g_p_event_base)) {				// event base for this transaction
+		LOG("ERROR: fail get_all() for 2-bin record");
+		return false;
+	}
+
+	return true;
+}
+
+//------------------------------------------------
+// Verify the record is as it was written.
+//
+static bool
+complete_phase_2(int return_value, ev2citrusleaf_bin* bins, int n_bins,
+		uint32_t generation, void* pv_udata)
+{
+	if (return_value != EV2CITRUSLEAF_OK) {
+		LOG("ERROR: client callback return_value %d", return_value);
+		return false;
+	}
+
+	if (! bins) {
+		LOG("ERROR: no bin data");
+		return false;
+	}
+
+	if (n_bins != 2) {
+		LOG("ERROR: unexpected n_bins %d - already existing record?", n_bins);
+
+		// Free any allocated bin resources.
+		ev2citrusleaf_bins_free(bins, n_bins);
+
+		return false;
+	}
+
+	// Order of bins in array is not guaranteed - find which is which by name.
+
+	ev2citrusleaf_bin* p_bin_A = NULL;
+	ev2citrusleaf_bin* p_bin_B = NULL;
+	bool valid = true;
+
+	// Find out what bins[0] is.
+	if (strcmp(bins[0].bin_name, "test-bin-A") == 0) {
+		p_bin_A = &bins[0];
+	}
+	else if (strcmp(bins[0].bin_name, "test-bin-B") == 0) {
+		p_bin_B = &bins[0];
+	}
+	else {
+		LOG("ERROR: unexpected bins[0] name %s", bins[0].bin_name);
+		valid = false;
+	}
+
+	// Find out what bins[1] is.
+	if (strcmp(bins[1].bin_name, "test-bin-A") == 0 && ! p_bin_A) {
+		p_bin_A = &bins[1];
+	}
+	else if (strcmp(bins[1].bin_name, "test-bin-B") == 0 && ! p_bin_B) {
+		p_bin_B = &bins[1];
+	}
+	else {
+		LOG("ERROR: unexpected bins[1] name %s", bins[1].bin_name);
+		valid = false;
+	}
+
+	// Validate bin-A.
+	if (p_bin_A) {
+		if (p_bin_A->object.type != CL_STR) {
+			LOG("ERROR: unexpected bin-A type %d", p_bin_A->object.type);
+			valid = false;
+		}
+		else if (strcmp(p_bin_A->object.u.str, "test-value-A") != 0) {
+			LOG("ERROR: unexpected bin-A value %s", p_bin_A->object.u.str);
+			valid = false;
+		}
+	}
+
+	// Validate bin-B.
+	if (p_bin_B) {
+		if (p_bin_B->object.type != CL_INT) {
+			LOG("ERROR: unexpected bin-B type %d", p_bin_B->object.type);
+			valid = false;
+		}
+		else if (p_bin_B->object.u.i64 != (int64_t)0xBBBBbbbb) {
+			LOG("ERROR: unexpected bin-B value 0x%lx", p_bin_B->object.u.i64);
+			valid = false;
+		}
+	}
+
+	// Free any allocated bin resources.
+	ev2citrusleaf_bins_free(bins, n_bins);
+
+	return valid;
+}
+
+//------------------------------------------------
+// Overwrite an existing bin and add a third bin.
+//
+static bool
+start_phase_3(uint32_t generation)
+{
+	ev2citrusleaf_bin bins[2];
+
+	// Overwrite the second bin, now with a string value.
+	strcpy(bins[0].bin_name, "test-bin-B");
+	ev2citrusleaf_object_init_str(&bins[0].object, "test-value-B");
+
+	// Third bin has a blob value.
+	strcpy(bins[1].bin_name, "test-bin-C");
+	ev2citrusleaf_object_init_blob(&bins[1].object, (void*)BLOB, sizeof(BLOB));
+
+	if (0 != ev2citrusleaf_put(
+			g_p_cluster,					// cluster
+			(char*)g_config.p_namespace,	// namespace
+			(char*)g_config.p_set,			// set name
+			&g_key,							// key of record to write
+			bins,							// bins (array) to write
+			2,								// two bins for this transaction
+			&g_write_parameters,			// write parameters
+			g_config.timeout_msec,			// transaction timeout
+			client_cb,						// callback for this transaction
+			NULL,							// "user data" - nothing for us
+			g_p_event_base)) {				// event base for this transaction
+		LOG("ERROR: fail put() to overwrite 2nd bin and add 3rd bin");
+		return false;
+	}
+
+	return true;
+}
+
+//------------------------------------------------
+// Read the two bins we just wrote.
+//
+static bool
+start_phase_4(uint32_t generation)
+{
+	const char* bin_names[] = { "test-bin-B", "test-bin-C" };
+
+	if (0 != ev2citrusleaf_get(
+			g_p_cluster,					// cluster
+			(char*)g_config.p_namespace,	// namespace
+			(char*)g_config.p_set,			// set name
+			&g_key,							// key of record to get
+			bin_names,						// names of bins to get
+			2,								// get two (of the three) bins
+			g_config.timeout_msec,			// transaction timeout
+			client_cb,						// callback for this transaction
+			NULL,							// "user data" - nothing for us
+			g_p_event_base)) {				// event base for this transaction
+		LOG("ERROR: fail get() for 2 bins of 3-bin record");
+		return false;
+	}
+
+	return true;
+}
+
+//------------------------------------------------
+// Verify the two bins are as expected.
+//
+static bool
+complete_phase_4(int return_value, ev2citrusleaf_bin* bins, int n_bins,
+		uint32_t generation, void* pv_udata)
+{
+	if (return_value != EV2CITRUSLEAF_OK) {
+		LOG("ERROR: client callback return_value %d", return_value);
+		return false;
+	}
+
+	if (! bins) {
+		LOG("ERROR: no bin data");
+		return false;
+	}
+
+	if (n_bins != 2) {
+		LOG("ERROR: unexpected n_bins %d", n_bins);
+
+		// Free any allocated bin resources.
+		ev2citrusleaf_bins_free(bins, n_bins);
+
+		return false;
+	}
+
+	// Order of bins in array is not guaranteed - find which is which by name.
+
+	ev2citrusleaf_bin* p_bin_B = NULL;
+	ev2citrusleaf_bin* p_bin_C = NULL;
+	bool valid = true;
+
+	// Find out what bins[0] is.
+	if (strcmp(bins[0].bin_name, "test-bin-B") == 0) {
+		p_bin_B = &bins[0];
+	}
+	else if (strcmp(bins[0].bin_name, "test-bin-C") == 0) {
+		p_bin_C = &bins[0];
+	}
+	else {
+		LOG("ERROR: unexpected bins[0] name %s", bins[0].bin_name);
+		valid = false;
+	}
+
+	// Find out what bins[1] is.
+	if (strcmp(bins[1].bin_name, "test-bin-B") == 0 && ! p_bin_B) {
+		p_bin_B = &bins[1];
+	}
+	else if (strcmp(bins[1].bin_name, "test-bin-C") == 0 && ! p_bin_C) {
+		p_bin_C = &bins[1];
+	}
+	else {
+		LOG("ERROR: unexpected bins[1] name %s", bins[1].bin_name);
+		valid = false;
+	}
+
+	// Validate bin-B.
+	if (p_bin_B) {
+		if (p_bin_B->object.type != CL_STR) {
+			LOG("ERROR: unexpected bin-B type %d", p_bin_B->object.type);
+			valid = false;
+		}
+		else if (strcmp(p_bin_B->object.u.str, "test-value-B") != 0) {
+			LOG("ERROR: unexpected bin-B value %s", p_bin_B->object.u.str);
+			valid = false;
+		}
+	}
+
+	// Validate bin-C.
+	if (p_bin_C) {
+		if (p_bin_C->object.type != CL_BLOB) {
+			LOG("ERROR: unexpected bin-C type %d", p_bin_C->object.type);
+			valid = false;
+		}
+		else if (p_bin_C->object.size != sizeof(BLOB)) {
+			LOG("ERROR: unexpected bin-C blob size %lu", p_bin_C->object.size);
+			valid = false;
+		}
+		else if (memcmp(p_bin_C->object.u.blob, BLOB, sizeof(BLOB)) != 0) {
+			LOG("ERROR: unexpected bin-C blob value");
+			valid = false;
+		}
+	}
+
+	// Free any allocated bin resources.
+	ev2citrusleaf_bins_free(bins, n_bins);
+
+	return valid;
+}
+
+//------------------------------------------------
+// Overwrite a bin, using correct generation.
+//
+static bool
+start_phase_5(uint32_t generation)
+{
+	ev2citrusleaf_bin bin;
+
+	// Overwrite the first bin.
+	strcpy(bin.bin_name, "test-bin-A");
+	ev2citrusleaf_object_init_str(&bin.object, "overwritten-value-A");
+
+	ev2citrusleaf_write_parameters write_parameters;
+
+	// Specify correct generation in write parameters.
+	ev2citrusleaf_write_parameters_init(&write_parameters);
+	write_parameters.use_generation = true;
+	write_parameters.generation = generation;
+
+	if (0 != ev2citrusleaf_put(
+			g_p_cluster,					// cluster
+			(char*)g_config.p_namespace,	// namespace
+			(char*)g_config.p_set,			// set name
+			&g_key,							// key of record to write
+			&bin,							// bin (as array) to write
+			1,								// one bin for this transaction
+			&write_parameters,				// write parameters using generation
+			g_config.timeout_msec,			// transaction timeout
+			client_cb,						// callback for this transaction
+			NULL,							// "user data" - nothing for us
+			g_p_event_base)) {				// event base for this transaction
+		LOG("ERROR: fail put() to overwrite bin with correct generation");
+		return false;
+	}
+
+	return true;
+}
+
+//------------------------------------------------
+// Overwrite a bin, using incorrect generation.
+//
+static bool
+start_phase_6(uint32_t generation)
+{
+	ev2citrusleaf_bin bin;
+
+	// Overwrite the second bin.
+	strcpy(bin.bin_name, "test-bin-B");
+	ev2citrusleaf_object_init_str(&bin.object, "overwritten-value-B");
+
+	ev2citrusleaf_write_parameters write_parameters;
+
+	// Specify incorrect generation in write parameters.
+	ev2citrusleaf_write_parameters_init(&write_parameters);
+	write_parameters.use_generation = true;
+	write_parameters.generation = generation - 1;
+
+	if (0 != ev2citrusleaf_put(
+			g_p_cluster,					// cluster
+			(char*)g_config.p_namespace,	// namespace
+			(char*)g_config.p_set,			// set name
+			&g_key,							// key of record to write
+			&bin,							// bin (as array) to write
+			1,								// one bin for this transaction
+			&write_parameters,				// write parameters using generation
+			g_config.timeout_msec,			// transaction timeout
+			client_cb,						// callback for this transaction
+			NULL,							// "user data" - nothing for us
+			g_p_event_base)) {				// event base for this transaction
+		LOG("ERROR: fail put() to overwrite bin with incorrect generation");
+		return false;
+	}
+
+	return true;
+}
+
+//------------------------------------------------
+// Verify the write failed as expected.
+//
+static bool
+complete_phase_6(int return_value, ev2citrusleaf_bin* bins, int n_bins,
+		uint32_t generation, void* pv_udata)
+{
+	if (return_value != EV2CITRUSLEAF_FAIL_GENERATION) {
+		LOG("ERROR: client callback return_value %d", return_value);
+		return false;
+	}
+
+	return true;
+}
+
+//------------------------------------------------
+// Delete the record.
+//
+static bool
+start_phase_7(uint32_t generation)
+{
+	if (0 != ev2citrusleaf_delete(
+			g_p_cluster,					// cluster
+			(char*)g_config.p_namespace,	// namespace
+			(char*)g_config.p_set,			// set name
+			&g_key,							// key of record to delete
+			&g_write_parameters,			// write parameters
+			g_config.timeout_msec,			// transaction timeout
+			client_cb,						// callback for this transaction
+			NULL,							// "user data" - nothing for us
+			g_p_event_base)) {				// event base for this transaction
+		LOG("ERROR: fail delete()");
+		return false;
+	}
+
+	return true;
+}
+
+//------------------------------------------------
+// Verify a write or delete operation succeeded.
+//
+static bool
+verify_return_value(int return_value, ev2citrusleaf_bin* bins, int n_bins,
+		uint32_t generation, void* pv_udata)
+{
+	if (return_value != EV2CITRUSLEAF_OK) {
+		LOG("ERROR: client callback return_value %d", return_value);
+		return false;
+	}
+
+	return true;
 }

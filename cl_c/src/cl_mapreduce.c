@@ -202,10 +202,14 @@ static int mr_state_load_package_lua(cl_mr_state *mrs_p, mr_package *mrp_p) {
 	
     lua_State *lua  = mrs_p->lua;
 
+	//fprintf(stderr, "load_package_lua incoming[%s]\n",mrp_p->script);
     if (mrp_p->script) {
 		int ret     = luaL_dostring(lua, mrp_p->script);
 //		int ret     = luaL_loadbuffer(lua, mrp_p->script, mrp_p->script_len,mrp_p->package_name);
-		if (ret) { assertOnLuaError(lua, "ERROR: luaL_dostring(map_func)"); return(-1); }
+		if (ret) { 
+			assertOnLuaError(lua, "ERROR: luaL_dostring(map_func)"); 
+			return(-1); 
+		} 
 	}
 	else {
 		fprintf(stderr, "attempting to run package without registered script, failure\n");
@@ -237,6 +241,7 @@ cl_mr_state * mr_state_create(mr_package *mrp_p) {
 	}
 
 	cl_mr_state *mrs_p = calloc(sizeof(cl_mr_state),1);
+	bzero(mrs_p,sizeof(cl_mr_state));
 	if (!mrs_p) return(0);
 		
 	pthread_mutex_init(&mrs_p->lua_lock, 0);
@@ -388,7 +393,7 @@ mr_package * mr_package_create(const char *package_name,  cl_script_lang_t lang_
 		mrp_p->mr_state_q = cf_queue_create(sizeof(cl_mr_state *), true/*multithreaded*/);
 	}
 	
-	mrp_p->script = script;
+	mrp_p->script = strdup(script);
 	mrp_p->script_len = script_len;
 	
 	if (lang_t!=CL_SCRIPT_LANG_LUA) {

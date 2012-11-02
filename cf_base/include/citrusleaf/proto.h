@@ -145,6 +145,7 @@ typedef struct cl_msg_field_s {
 #define CL_MSG_FIELD_TYPE_SPROC_RECORD			38
 #define CL_MSG_FIELD_TYPE_SPROC_RECORD_PARAMS	39
 
+#define CL_MSG_FIELD_TYPE_QUERY_BINLIST			40
 
 
 	uint32_t field_sz; // get the data size through the accessor function, don't worry, it's a small macro

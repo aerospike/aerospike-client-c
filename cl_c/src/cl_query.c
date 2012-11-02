@@ -153,6 +153,51 @@ static int query_compile_range_field(cf_vector *range_v, uint8_t *buf, int *sz_p
 	*sz_p = sz;
 }
 
+// generic field header
+// 0   4 size = size of data only
+// 4   1 field_type = CL_MSG_FIELD_TYPE_INDEX_RANGE
+//
+// numbins
+// 5   1 binnames (max 255 binnames) 
+//
+// binnames 
+// 6   1 binnamelen b
+// 7   b binname
+// 
+// numbins times
+
+
+static int query_compile_binnames_field(cf_vector *binnames, uint8_t *buf, int *sz_p)
+{
+	int sz = 0;
+		
+	// numbins
+	sz += 1;
+	if (buf) {
+		*buf++ = cf_vector_size(binnames);
+	}
+	
+	// iterate through each biname	
+	for (uint i=0; i<cf_vector_size(binnames); i++) {
+		char *binname = (char *)cf_vector_getp(binnames, i);
+		
+		// binname size
+		int binnamesz = strlen(binname);
+		sz += 1;
+		if (buf) {
+			*buf++ = binnamesz;
+		}
+		
+		// binname
+		sz += binnamesz;
+		if (buf) {
+			memcpy(buf, binname, binnamesz);
+			buf += binnamesz;
+		}
+	}		
+	*sz_p = sz;
+}
+
 //
 // Both query and mr_job are allowed to be null
 // if the query is null, then you run the MR job over the entire set or namespace
@@ -202,6 +247,7 @@ static int query_compile (const char *ns, const cl_query *query, const cl_mr_sta
     int     iname_len = 0;
 	int		setname_len = 0;
     int 	range_sz = 0;
+	int		num_bins = 0;
 	if (query) {
 		// indexname field
 		n_fields++;
@@ -219,9 +265,16 @@ static int query_compile (const char *ns, const cl_query *query, const cl_mr_sta
 		range_sz = 0; 
 		query_compile_range_field(query->ranges, NULL, &range_sz);
 		msg_sz += range_sz + sizeof(cl_msg_field);
+
+		// bin field	
+		if (query->binnames) {
+			n_fields++;
+			num_bins = 0;
+			query_compile_binnames_field(query->binnames, NULL, &num_bins);
+			msg_sz += num_bins + sizeof(cl_msg_field);
+		}
 	}
 	
-	// TODO bin field	
 	// TODO filter field
 	// TODO orderby field
 	// TODO limit field
@@ -337,6 +390,15 @@ static int query_compile (const char *ns, const cl_query *query, const cl_mr_sta
         mf->type = CL_MSG_FIELD_TYPE_INDEX_RANGE;
         mf->field_sz = range_sz + 1;
 		query_compile_range_field(query->ranges, mf->data, &range_sz);
+        mf_tmp = cl_msg_field_get_next(mf);
+        cl_msg_swap_field(mf);
+        mf = mf_tmp;
+    }
+	
+	if (query->binnames) {
+        mf->type = CL_MSG_FIELD_TYPE_QUERY_BINLIST;
+        mf->field_sz = num_bins + 1;
+		query_compile_binnames_field(query->binnames, mf->data, &num_bins);
         mf_tmp = cl_msg_field_get_next(mf);
         cl_msg_swap_field(mf);
         mf = mf_tmp;
@@ -826,8 +888,15 @@ void citrusleaf_query_destroy(cl_query *query)
 	free(query);
 }
 
-cl_rv citrusleaf_query_add_bin(cl_query *query, const char *binname)
+cl_rv citrusleaf_query_add_binname(cl_query *query, const char *binname)
 {
+	if ( !query->binnames ) {
+		query->binnames = cf_vector_create(sizeof(CL_BINNAME_SIZE), 5, 0);
+		if (query->binnames==NULL) {
+			return CITRUSLEAF_FAIL_CLIENT;
+		}
+	}
+	cf_vector_append(query->binnames, (void *)binname);	
 	return CITRUSLEAF_OK;	
 }
 

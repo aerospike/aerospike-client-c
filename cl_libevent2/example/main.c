@@ -10,6 +10,7 @@
  *
  * The main steps are:
  *	- Initialize database cluster management.
+ *	- Do a database info query.
  *	- Do a series of demonstration database operations.
  *	- Clean up.
  */
@@ -27,6 +28,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <bits/types.h>
+#include <event2/dns.h>
 #include <event2/event.h>
 
 #include "citrusleaf_event2/ev2citrusleaf.h"
@@ -62,7 +64,6 @@ const char KEY_STRING[] = "test-key";
 const uint8_t BLOB[] = {
 		0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF
 };
-
 
 
 //==========================================================
@@ -103,7 +104,10 @@ static void destroy_config();
 static void usage();
 static bool start_cluster_management();
 static void stop_cluster_management();
-static void start_transactions();
+static void do_info_query();
+static void client_info_cb(int return_value, char* response,
+		size_t response_len, void* pv_udata);
+static void do_transactions();
 static void client_cb(int return_value, ev2citrusleaf_bin* bins, int n_bins,
 		uint32_t generation, void* pv_udata);
 static bool start_phase_1(uint32_t generation);
@@ -171,8 +175,11 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
-	// Start the series of database operations.
-	start_transactions();
+	// Do a database info query.
+	do_info_query();
+
+	// Do the series of database operations.
+	do_transactions();
 
 	// Exit cleanly.
 	stop_cluster_management();
@@ -347,14 +354,114 @@ stop_cluster_management()
 
 
 //==========================================================
+// Info API Demo
+//
+
+//------------------------------------------------
+// Do a database info query.
+//
+static void
+do_info_query()
+{
+	// We could use the same event base for the info query and the transaction
+	// series, but we'll do it this way just to keep the info query separate.
+	struct event_base* p_event_base = event_base_new();
+
+	if (! p_event_base) {
+		LOG("ERROR: creating event base for info query");
+		return;
+	}
+
+	// Info calls need a DNS event base.
+	struct evdns_base* p_dns_base = evdns_base_new(p_event_base, 1);
+
+	if (! p_dns_base) {
+		LOG("ERROR: creating dns base for info query");
+		event_base_free(p_event_base);
+		return;
+	}
+
+	char info_names[256];
+
+	// We'll do an info query to get only the namespace information. (Consult
+	// the handbook to see what's possible with info queries.)
+	strcpy(info_names, "namespace/");
+	strcat(info_names, g_config.p_namespace);
+
+	// Start our info query.
+	if (0 == ev2citrusleaf_info(
+			p_event_base,					// event base for this transaction
+			p_dns_base,						// DNS base for this transaction
+			g_config.p_host,				// database server host
+			g_config.port,					// database server port
+			info_names,						// what info to get
+			g_config.timeout_msec,			// transaction timeout
+			client_info_cb,					// callback for this transaction
+			(void*)p_event_base)) {			// "user data" - the event base
+
+		// Normally, we would exit the event loop when no more events are added.
+		// However because we created a DNS base, the event loop will continue
+		// to run (i.e. event_base_dispatch() will block) even with no events
+		// added. Therefore we must exit the event loop explicitly via the info
+		// callback.
+
+		if (event_base_dispatch(p_event_base) < 0) {
+			LOG("ERROR: event base dispatch");
+		}
+	}
+	else {
+		LOG("ERROR: starting info query");
+	}
+
+	evdns_base_free(p_dns_base, 0);
+	event_base_free(p_event_base);
+}
+
+//------------------------------------------------
+// Complete the database info query.
+//
+void
+client_info_cb(int return_value, char* response, size_t response_len,
+		void* pv_udata)
+{
+	if (return_value == EV2CITRUSLEAF_OK) {
+		DETAIL("info callback response_len: %lu", response_len);
+		DETAIL("info callback response:");
+		DETAIL("%s", response);
+
+		// Do something useful with the info.
+		if (strstr(response, "single-bin=true")) {
+			LOG("VERY BAD: server is single-bin - example is muti-bin!");
+		}
+	}
+	else {
+		LOG("ERROR: info callback return_value %d", return_value);
+	}
+
+	// Application is responsible for freeing response.
+	if (response) {
+		free(response);
+	}
+
+	LOG("completed info query");
+
+	// Because of the DNS base, we have to exit the event loop explicitly.
+	// (Calling evdns_base_free() here would also work, but we'll do it this way
+	// so the evdns_base_free() in do_info_query() can cover failure cases too.)
+
+	event_base_loopbreak((struct event_base*)pv_udata);
+}
+
+
+//==========================================================
 // Transaction Management
 //
 
 //------------------------------------------------
-// Start the series of database operations.
+// Do the series of database operations.
 //
 static void
-start_transactions()
+do_transactions()
 {
 	// Create the event base for transactions.
 	if ((g_p_event_base = event_base_new()) == NULL) {
@@ -365,7 +472,7 @@ start_transactions()
 	// Initialize a key to be used in multiple phases.
 	ev2citrusleaf_object_init_str(&g_key, (char*)KEY_STRING);
 
-	// Initialize (default) write parameters - used in multiple phases.
+	// Initialize (default) write parameters - used in many phases.
 	ev2citrusleaf_write_parameters_init(&g_write_parameters);
 
 	// Start the event loop. There must be an event added on the base before

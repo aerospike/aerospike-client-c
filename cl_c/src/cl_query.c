@@ -297,7 +297,7 @@ static int query_compile (const char *ns, const cl_query *query, const cl_mr_sta
 		gen_len = strlen(mr_state->generation); 
 		msg_sz += gen_len  + sizeof(cl_msg_field);
 	
-		if (mr_job->rdc_fname) {
+		if (mr_job->map_fname) {
 			n_fields++;
 			mapper_len = strlen(mr_job->map_fname); 
 			msg_sz += mapper_len  + sizeof(cl_msg_field);

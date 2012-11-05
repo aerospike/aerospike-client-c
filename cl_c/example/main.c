@@ -115,7 +115,7 @@ void usage(void) {
 	fprintf(stderr, "Usage example:\n");
 	fprintf(stderr, "-h host [default 127.0.0.1] \n");
 	fprintf(stderr, "-p port [default 3000]\n");
-	fprintf(stderr, "-n namespace [default bar]\n");
+	fprintf(stderr, "-n namespace [default test]\n");
 	fprintf(stderr, "-b bin [default value]\n");
 	fprintf(stderr, "-m milliseconds timeout [default 200]\n");
 	fprintf(stderr, "-f do not follow cluster [default do follow]\n");
@@ -134,7 +134,7 @@ main(int argc, char **argv)
 	
 	g_config.host = "127.0.0.1";
 	g_config.port = 3000;
-	g_config.ns = "bar";
+	g_config.ns = "test";
 	g_config.set = "example_set";
 	g_config.verbose = false;
 	g_config.follow = true;

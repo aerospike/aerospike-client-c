@@ -131,7 +131,15 @@ static char luaPredefinedFunctions[] = \
     "  for i, v in pairs(ReduceResults) do "				\
     "    ReduceCount = ReduceCount + 1; "					\
     "  end "												\
-    "end ";
+    "end " \
+" function SendReduceResults(cb, udata)\n" \
+"   for k,v in pairs(ReduceResults) do  \n" \
+"     local ks;\n" \
+"     if (v.__mrkey == nil) then ks = k; \n" \
+"     else                       ks = tostring(v.__mrkey); end \n" \
+"     SendReduceObject(ks, v, cb, udata); \n" \
+"   end \n" \
+" end \n";
 
 static char luaDebugWrapper[] = \
     "function DebugWrapper(func) "					\
@@ -521,10 +529,10 @@ int cl_mr_state_row(cl_mr_state *mrs_p, char *ns, cf_digest *keyd, char *set, ui
 			  if (ret) assertOnLuaError(lua, "ERR: AddStringToMapResults");
               break;
           case CL_LUA_BLOB:
-			  lua_getglobal  (lua, "AddTableToMapResults");
+ 			  lua_getglobal  (lua, "AddTableToMapResults");
 			  lua_pushboolean(lua, mrs_p->mr_job->rdc_fname? 1 : 0); // true if a reduce will be called
 			  lua_pushstring (lua, bin_name);
-			  lua_pushstring (lua, o->u.str);
+			  lua_pushlstring (lua, o->u.blob,o->sz);
 			  ret = lua_pcall(lua, 3, 0, 0);
 			  if (ret) assertOnLuaError(lua, "ERR: AddTableToMapResults");
           	  break;
@@ -580,17 +588,16 @@ int cl_mr_state_done(cl_mr_state *mrs_p,  citrusleaf_get_many_cb cb, void *udata
 	lua_pushlightuserdata(lua, udata);
 	ret = lua_pcall(lua, 2, 0, 0);
 	if (ret) {
-		printf("DebugWrapper: FAILED: (%s)\n",
+		printf("DebugWrapper: FAILED1: (%s)\n",
 			   lua_tostring(lua, -1));
 		return -1; //TODO throw an error
 	}
 
-	
 	lua_getglobal(lua, "DebugWrapper");
 	lua_getglobal(lua, "print_user_and_value");
 	ret = lua_pcall(lua, 1, 0, 0);
 	if (ret) {
-		printf("DebugWrapper: FAILED: (%s)\n",
+		printf("DebugWrapper: FAILED2: (%s)\n",
 			   lua_tostring(lua, -1));
 		return -1; //TODO throw an error
 	}

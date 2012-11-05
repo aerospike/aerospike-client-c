@@ -267,7 +267,7 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 //			else
 //				cf_debug("received message with no bins, signal of an error");
 
-			if (bins != stack_bins) {
+			if (bins_local != stack_bins) {
 				free(bins_local);
 				bins_local = 0;
 			}

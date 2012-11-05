@@ -120,6 +120,11 @@ static char luaPredefinedFunctions[] = \
     "  MapResults = {}; "									\
     "  MapCount   = 0; "				 					\
     "end "													\
+	"function SendReduceResults(cb, udata)"					\
+	"  for k, v in pairs(ReduceResults) do"					\
+	"    SendReduceObject(k, v, cb, udata)"					\
+    "  end "                                                \
+    " end "                                                 \
     "function FinalizeWrapper(func) "						\
     "  ReduceResults = func(ReduceResults); "				\
     "  ReduceCount = 0; "					  				\
@@ -446,15 +451,15 @@ citrusleaf_sproc_package_get_and_create(cl_cluster *asc, const char *package_nam
 	mr_package *mrp_p = mr_package_create(package_name, lang_t, content, content_len, gen );
 	if (!mrp_p) {
 		fprintf(stderr, "could not create package: %s\n",package_name);
-		free (content);
-		free (gen);
+		if (content) free (content);
+		if (gen)     free (gen);
 		return(-1);
 	}
 		
 	mr_package_release(mrp_p);
 
-	free (content);
-	free (gen);
+	if (content) free (content);
+	if (gen)     free (gen);
 	
 	return(0);
 	
@@ -541,7 +546,11 @@ int cl_mr_state_row(cl_mr_state *mrs_p, char *ns, cf_digest *keyd, char *set, ui
 int cl_mr_state_done(cl_mr_state *mrs_p,  citrusleaf_get_many_cb cb, void *udata) 
 {
     lua_State *lua   = mrs_p->lua;
-    int ret;
+    int ret = 0;
+	
+	if (mrs_p->responses == 0)
+		// no responses
+		return ret;
     
 	// call the reduce wrapper
 	if (mrs_p->mr_job->rdc_fname) {

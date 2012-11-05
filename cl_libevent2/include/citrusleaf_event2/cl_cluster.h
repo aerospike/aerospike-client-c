@@ -103,9 +103,10 @@ struct ev2citrusleaf_cluster_s {
 	bool		shutdown; // we might be in shutdown phase, don't start more info
 							// requests or similar
 
-	pthread_t mgr_thread;
-	struct event_base *base; // base that this cluster serves		
-	struct evdns_base *dns_base;
+	pthread_t			mgr_thread;		// (optional) internally created cluster manager thread
+	bool				internal_mgr;	// is there an internally created cluster manager thread and base?
+	struct event_base	*base;			// cluster manager base, specified by app or internally created
+	struct evdns_base	*dns_base;
 							
 	// List of host-strings added by the user.
 	cf_vector		host_str_v;	// vector is pointer-type

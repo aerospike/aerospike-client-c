@@ -107,7 +107,11 @@ cluster_create()
 
 void
 cluster_destroy(ev2citrusleaf_cluster *asc) {
-	if (asc->base) {
+	if (asc->dns_base) {
+		evdns_base_free(asc->dns_base, 0);
+	}
+
+	if (asc->internal_mgr) {
 		event_base_free(asc->base);
 	}
 
@@ -281,7 +285,7 @@ static void* run_cluster_mgr(void* base) {
 
 
 ev2citrusleaf_cluster *
-ev2citrusleaf_cluster_create()
+ev2citrusleaf_cluster_create(struct event_base *base)
 {
 	if (! g_ev2citrusleaf_initialized) {
 		cf_warn("must call ev2citrusleaf_init() before ev2citrusleaf_cluster_create()");
@@ -294,13 +298,22 @@ ev2citrusleaf_cluster_create()
 	asc->MAGIC = CLUSTER_MAGIC;
 	asc->follow = true;
 	asc->last_node = 0;
-	asc->base = event_base_new();
 
-	if (! asc->base) {
-		cf_warn("error creating cluster manager event base");
-		return NULL;
+	if (base) {
+		asc->internal_mgr = false;
+		asc->base = base;
+	}
+	else {
+		asc->internal_mgr = true;
+		asc->base = event_base_new();
+
+		if (! asc->base) {
+			cf_warn("error creating cluster manager event base");
+			return NULL;
+		}
 	}
 
+	// Note - this keeps this base's event loop alive even with no events added.
 	asc->dns_base = evdns_base_new(asc->base, 1);
 	
 	// bookkeeping for the set hosts
@@ -332,7 +345,8 @@ ev2citrusleaf_cluster_create()
 	}
 	asc->timer_set = true;
 
-	if (0 != pthread_create(&asc->mgr_thread, NULL, run_cluster_mgr, (void*)asc->base)) {
+	if (asc->internal_mgr &&
+			0 != pthread_create(&asc->mgr_thread, NULL, run_cluster_mgr, (void*)asc->base)) {
 		cf_warn("error creating cluster manager thread");
 		event_del(cluster_get_timer_event(asc));
 		cf_queue_destroy(asc->request_q);
@@ -401,7 +415,7 @@ int ev2citrusleaf_cluster_requests_in_progress(ev2citrusleaf_cluster *cl) {
 
 
 void
-ev2citrusleaf_cluster_destroy(ev2citrusleaf_cluster *asc, int delay_ms)
+ev2citrusleaf_cluster_destroy(ev2citrusleaf_cluster *asc)
 {
 	cf_info("cluster destroy: %p", asc);
 
@@ -410,16 +424,8 @@ ev2citrusleaf_cluster_destroy(ev2citrusleaf_cluster *asc, int delay_ms)
 		return;
 	}
 
-	if (delay_ms < 0 || delay_ms > 60 * 1000) {
-		cf_warn("cluster destroy delay_ms %d doesn't look right, using 100", delay_ms);
-		delay_ms = 100;
-	}
-
-	// Stop the cluster manager event dispatcher.
-	if (asc->base) {
-		// No significant difference between this and calling
-		// event_base_loopexit() with a delay.
-		usleep((__useconds_t)(delay_ms * 1000));
+	if (asc->internal_mgr) {
+		// Exit the cluster manager event loop.
 		event_base_loopbreak(asc->base);
 
 		void* pv_value;
@@ -472,10 +478,6 @@ ev2citrusleaf_cluster_destroy(ev2citrusleaf_cluster *asc, int delay_ms)
 	cl_partition_table_destroy_all(asc);
 
 	cf_ll_delete(&cluster_ll , (cf_ll_element *)asc);
-
-	if (asc->dns_base) {
-		evdns_base_free(asc->dns_base, 0);
-	}
 
 	cluster_destroy(asc);
 }
@@ -1485,7 +1487,7 @@ int citrusleaf_cluster_shutdown()
 	cf_ll_element *e;
 	while ((e = cf_ll_get_head(&cluster_ll))) {
 		ev2citrusleaf_cluster *asc = (ev2citrusleaf_cluster *)e; 
-		ev2citrusleaf_cluster_destroy(asc, 0);
+		ev2citrusleaf_cluster_destroy(asc);
 	}
 	
 	return(0);	

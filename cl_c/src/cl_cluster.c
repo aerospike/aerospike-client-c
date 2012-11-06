@@ -90,6 +90,23 @@ dump_cluster(cl_cluster *asc)
 	}
 }
 
+cl_cluster_node *
+cl_cluster_node_get_byaddr(cl_cluster *asc, struct sockaddr_in *sa_in)
+{
+	// No need to lock nodes list because this function is only called by
+	// cluster_tend() thread which has exclusive write access.
+	for (uint i=0;i<cf_vector_size(&asc->node_v);i++) {
+		cl_cluster_node *cn = cf_vector_pointer_get(&asc->node_v, i);
+		for (uint j=0;j<cf_vector_size(&cn->sockaddr_in_v);j++) {
+			struct sockaddr_in *node_sa_in = cf_vector_getp(&cn->sockaddr_in_v, j);
+			if (memcmp(sa_in, node_sa_in, sizeof(struct sockaddr_in) ) == 0 ) {
+				return(cn);
+			}
+		}
+	}
+	return(0);
+}
+
 
 //
 // Useful utility function for splitting into a vector
@@ -181,9 +198,9 @@ citrusleaf_cluster_get_or_create(char *host, short port, int timeout_ms)
 		asc = (cl_cluster *) cur_element;
 		pthread_mutex_lock(&asc->LOCK);
 		for (uint32_t i=0; i<cf_vector_size(&asc->host_str_v); i++) {
-			hostp = (char*) cf_vector_getp(&asc->host_str_v, i);
+			hostp = (char*) cf_vector_pointer_get(&asc->host_str_v, i);
 			portp = (int ) cf_vector_integer_get(&asc->host_port_v, i);
-			if (strncmp(host,hostp,strlen(host)+1) && (port == portp)) {
+			if ((strncmp(host,hostp,strlen(host)+1) == 0) && (port == portp)) {
 				// Found the cluster object.
 				// Increment the reference count
 				#ifdef DEBUG
@@ -341,6 +358,7 @@ citrusleaf_cluster_shutdown(void)
 cl_rv
 citrusleaf_cluster_add_host(cl_cluster *asc, char const *host_in, short port, int timeout_ms)
 {
+	int rv = CITRUSLEAF_OK;
 #ifdef DEBUG	
 	cf_debug("adding host %s:%d timeout %d",host_in, (int)port, timeout_ms);
 #endif	
@@ -348,10 +366,10 @@ citrusleaf_cluster_add_host(cl_cluster *asc, char const *host_in, short port, in
 	char *hostp;
 	int portp, found = 0;
 	pthread_mutex_lock(&asc->LOCK);
-	for (uint32_t i=0; i<asc->host_str_v.len; i++) {
-		hostp = (char*) cf_vector_getp(&asc->host_str_v, i);
+	for (uint32_t i=0; i<cf_vector_size(&asc->host_str_v); i++) {
+		hostp = (char*) cf_vector_pointer_get(&asc->host_str_v, i);
 		portp = (int ) cf_vector_integer_get(&asc->host_port_v, i);
-		if (strncmp(host_in,hostp,strlen(host_in)+1) && (port == portp)) {
+		if ((strncmp(host_in,hostp,strlen(host_in)+1)==0) && (port == portp)) {
 			// Return OK if host is already added in the list
 			pthread_mutex_unlock(&asc->LOCK);
 			#ifdef DEBUG
@@ -367,8 +385,10 @@ citrusleaf_cluster_add_host(cl_cluster *asc, char const *host_in, short port, in
 	// Lookup the address before adding to asc. If lookup fails
 	// return CITRUSLEAF_FAIL_CLIENT
 	// Resolve - error message need to change.
- 	if(cl_lookup(asc, host, port, (cf_vector *)NULL) != 0) {
-		return (CITRUSLEAF_FAIL_CLIENT);
+	cf_vector_define(sockaddr_in_v, sizeof( struct sockaddr_in ), 0);
+ 	if(cl_lookup(asc, host, port, &sockaddr_in_v) != 0) {
+		rv = CITRUSLEAF_FAIL_CLIENT;
+		goto cleanup;
 	}
 	
 	// Host not found on this cluster object
@@ -377,10 +397,10 @@ citrusleaf_cluster_add_host(cl_cluster *asc, char const *host_in, short port, in
 	cf_vector_pointer_append(&asc->host_str_v, host);
 	cf_vector_integer_append(&asc->host_port_v, (int) port);
 	pthread_mutex_unlock(&asc->LOCK);
+	asc->found_all = false; // Added a new item in the list. Mark the cluster not fully discovered.
 
 	// Fire the normal tender function to speed up resolution
-	if (asc->found_all == false)
-		cluster_tend(asc);
+	cluster_tend(asc);
 
 	if (timeout_ms == 0)	timeout_ms = 100;
 	
@@ -396,12 +416,26 @@ citrusleaf_cluster_add_host(cl_cluster *asc, char const *host_in, short port, in
 		cf_debug("add host: required %d tends %"PRIu64"ms to set right", n_tends, cf_getms() - start_ms);
 #endif		
 	}
-	
-	if(!asc->found_all){
-		return CITRUSLEAF_FAIL_TIMEOUT;
+
+	// The cluster may or many not be fully discovered (found_all is true/false). 
+	// found_all flag only signifies if the full cluster is discovered or not.
+	// It does not signify if the newly added node is reacheable or not.
+	// We should check if the newly added node is in the list of reacheable nodes. 
+	bool reacheable = false;
+	for (uint i=0;i<cf_vector_size(&sockaddr_in_v);i++) {
+		struct sockaddr_in *sin = cf_vector_getp(&sockaddr_in_v, i);
+		if (0 != cl_cluster_node_get_byaddr(asc, sin)) {
+			reacheable = true;
+		}
+	}
+	if (!reacheable) {
+		rv = CITRUSLEAF_FAIL_TIMEOUT;
+		goto cleanup;
 	}
 
-	return(0); // CITRUSLEAF_OK;
+cleanup:
+	cf_vector_destroy(&sockaddr_in_v);
+	return rv;
 }
 
 void
@@ -746,24 +780,6 @@ cl_cluster_node_get_byname(cl_cluster *asc, char *name)
 		}
 	}
 	pthread_mutex_unlock(&asc->LOCK);
-	return(0);
-}
-
-cl_cluster_node *
-cl_cluster_node_get_byaddr(cl_cluster *asc, struct sockaddr_in *sa_in)
-{
-	// No need to lock nodes list because this function is only called by
-	// cluster_tend() thread which has exclusive write access.
-	for (uint i=0;i<cf_vector_size(&asc->node_v);i++) {
-		cl_cluster_node *cn = cf_vector_pointer_get(&asc->node_v, i);
-		for (uint j=0;j<cf_vector_size(&cn->sockaddr_in_v);j++) {
-			struct sockaddr_in *node_sa_in = cf_vector_getp(&cn->sockaddr_in_v, j);
-			if (memcmp(sa_in, node_sa_in, sizeof(struct sockaddr_in) ) == 0 ) {
-				pthread_mutex_unlock(&asc->LOCK);
-				return(cn);
-			}
-		}
-	}
 	return(0);
 }
 
@@ -1258,14 +1274,18 @@ cluster_get_n_partitions( cl_cluster *asc, cf_vector *sockaddr_in_v )
 static void
 cluster_tend(cl_cluster *asc)
 {
-	// Start off by removing dunned hosts
 	pthread_mutex_lock(&asc->LOCK);
-	if (asc->state & CLS_FREED) {
+	// If thre is already a tending process running for this cluster, there is no
+	// point in running one more immediately. Moreover, there are assumptions in
+	// the code that only one tender function is running at a time. So, abort.
+	if ((asc->state & CLS_FREED) || (asc->state & CLS_TENDER_RUNNING)) {
+		cf_debug("Not running cluster tend as the state of the cluster is 0x%x", asc->state);
 		pthread_mutex_unlock(&asc->LOCK);
 		return;
 	}
 	asc->state |= CLS_TENDER_RUNNING;
 
+	// Start off by removing dunned hosts
 	for (uint i=0;i<cf_vector_size(&asc->node_v);i++) {
 		cl_cluster_node *cn = cf_vector_pointer_get(&asc->node_v, i);
 		if (!cn)	continue;

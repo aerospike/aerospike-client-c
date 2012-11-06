@@ -392,7 +392,7 @@ do_info_query()
 	if (0 == ev2citrusleaf_info(
 			p_event_base,					// event base for this transaction
 			p_dns_base,						// DNS base for this transaction
-			g_config.p_host,				// database server host
+			(char*)g_config.p_host,			// database server host
 			g_config.port,					// database server port
 			info_names,						// what info to get
 			g_config.timeout_msec,			// transaction timeout

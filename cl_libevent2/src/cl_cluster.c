@@ -27,7 +27,7 @@
 #include "citrusleaf/proto.h"
 #include "citrusleaf/cf_clock.h"
 
-extern int ev2citrusleaf_restart(cl_request *req);
+extern void ev2citrusleaf_base_hop(cl_request *req);
 
 // #define CLDEBUG_VERBOSE 1
 // #define CLDEBUG_DUN 1
@@ -102,6 +102,7 @@ cluster_create()
 	if (!asc) return(0);
 	memset(asc,0,sizeof(ev2citrusleaf_cluster) + event_get_struct_event_size());
 	MUTEX_ALLOC(asc->node_v_lock);
+	MUTEX_ALLOC(asc->request_q_lock);
 	return(asc);
 }
 
@@ -115,6 +116,7 @@ cluster_destroy(ev2citrusleaf_cluster *asc) {
 		event_base_free(asc->base);
 	}
 
+	MUTEX_FREE(asc->request_q_lock);
 	MUTEX_FREE(asc->node_v_lock);
 	memset(asc, 0, sizeof(ev2citrusleaf_cluster) + event_get_struct_event_size() );
 	free(asc);
@@ -1333,11 +1335,11 @@ cluster_ping_node_fn(int return_value, char *values, size_t values_len, void *ud
 	MUTEX_UNLOCK(asc->node_v_lock);
 	if (sz != 0) {
 		void *req;
+		MUTEX_LOCK(asc->request_q_lock);
 		while (CF_QUEUE_OK == cf_queue_pop(asc->request_q, (void *)&req,0)) {
-			cf_debug("have node now, restart request %p", req);
-
-			ev2citrusleaf_restart(req);
+			ev2citrusleaf_base_hop(req);
 		}
+		MUTEX_UNLOCK(asc->request_q_lock);
 	}
 }
 

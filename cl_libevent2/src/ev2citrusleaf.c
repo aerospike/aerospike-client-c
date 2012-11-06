@@ -1027,8 +1027,16 @@ ev2citrusleaf_request_complete(cl_request *req, bool timedout)
 		// timedout
 		
 		// could still be in the cluster's pending queue. Scrub it out.
+		MUTEX_LOCK(req->asc->request_q_lock);
 		cf_queue_delete(req->asc->request_q ,&req , true /*onlyone*/ );
-		
+		MUTEX_UNLOCK(req->asc->request_q_lock);
+
+		// If the request had been popped from the queue, base-hopped, and
+		// activated (so it's about to be processed after this event) we need to
+		// delete it. This should just no-op if there's no such event. Remember
+		// we're using the network event slot for the base-hop.
+		event_del(cl_request_get_network_event(req));
+
 		// call with a timeout specifier
 		(req->user_cb) (EV2CITRUSLEAF_FAIL_TIMEOUT , 0, 0, 0, req->user_data);
 		
@@ -1260,6 +1268,31 @@ ev2citrusleaf_timer_expired(int fd, short event, void *udata)
 }
 
 
+static void
+ev2citrusleaf_base_hop_event(int fd, short event, void *udata)
+{
+	cf_debug("have node now, restart request %p", udata);
+
+	ev2citrusleaf_restart((cl_request*)udata);
+}
+
+
+void
+ev2citrusleaf_base_hop(cl_request *req)
+{
+	// We'll use the unused network event slot.
+	event_assign(cl_request_get_network_event(req), req->base, -1, 0, ev2citrusleaf_base_hop_event, req);
+
+	if (0 != event_add(cl_request_get_network_event(req), 0)) {
+		cf_warn("unable to add base-hop event for request %p: will hang forever", req);
+		return;
+	}
+
+	// Tell the event to fire on the appropriate base ASAP.
+	event_active(cl_request_get_network_event(req), 0, 0);
+}
+
+
 //
 // Called when we couldn't get a node before, and now we might have a node,
 // so we're going to retry starting the request
@@ -1270,6 +1303,10 @@ ev2citrusleaf_restart(cl_request *req)
 	cf_atomic_int_incr(&g_cl_stats.req_restart);
 	
 	if (req->start_time + req->timeout_ms < cf_getms()) {
+		// AKG - there's a problem here if we're in the scope of the start call
+		// (i.e. first attempt) - we don't want to give an app a callback in the
+		// scope of its transaction call (or in the wrong thread if transactions
+		// are "cross-threaded"). We'll fix this when we decide on the best way.
 		ev2citrusleaf_request_complete(req, true);
 		return;
 	}

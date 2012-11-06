@@ -59,8 +59,8 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 
 	// we have a single namespace and/or set to get
 	if (cl_compile(operation_info, operation_info2, 0/*info3*/, ns, set, 
-			0/*key*/, 0/*digest*/, 0/*values*/, 0/*op*/, 0/*operations*/, 
-			0/*n_values*/, &wr_buf, &wr_buf_sz, 0/*w_p*/, NULL/*d_ret*/, 0/*trid*/,
+			0/*key*/, 0/*digest*/, bins/*values*/, 0/*op*/, 0/*operations*/, 
+			n_bins/*n_values*/, &wr_buf, &wr_buf_sz, 0/*w_p*/, NULL/*d_ret*/, 0/*trid*/,
 			scan_opt ? &scan_param_field : NULL, 0/*sproc*/)) {
 		return(rv);
 	}
@@ -310,9 +310,11 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 extern cl_rv
 citrusleaf_scan(cl_cluster *asc, char *ns, char *set, cl_bin *bins, int n_bins, bool get_key, citrusleaf_get_many_cb cb, void *udata, bool nobindata)
 {
+#if 0
 	if (n_bins != 0) {
 		cf_error("citrusleaf get many: does not yet support bin-specific requests");
 	}
+#endif
 
 	uint info=0;
 	if (nobindata == true) {
@@ -328,10 +330,11 @@ extern cl_rv
 citrusleaf_scan_node (cl_cluster *asc, char *node_name, char *ns, char *set, cl_bin *bins, int n_bins, bool nobindata, uint8_t scan_pct,
 		citrusleaf_get_many_cb cb, void *udata, cl_scan_parameters *scan_param)
 {
-
+#if 0
 	if (n_bins != 0) {
 		cf_error("citrusleaf get many: does not yet support bin-specific requests");
 	}
+#endif
 
 	uint info=0;
 	if (nobindata == true) {

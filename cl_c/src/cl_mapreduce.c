@@ -443,15 +443,12 @@ int citrusleaf_sproc_package_get_and_create(cl_cluster *asc,
 			
 	mr_package *mrp_p = mr_package_create(package_name, lang_t, content, content_len, gen );
 	if (!mrp_p) {
-		fprintf(stderr, "could not create package: %s\n",package_name);
-		if (content) free (content);
 		if (gen)     free (gen);
+		fprintf(stderr, "could not create package: %s\n",package_name);
 		return(-1);
 	}
 		
 	mr_package_release(mrp_p);
-
-	if (content) free (content);
 	if (gen)     free (gen);
 	
 	return(0);

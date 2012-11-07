@@ -641,7 +641,11 @@ static int do_query_monte(cl_cluster_node *node, const char *ns, const uint8_t *
             }
             buf = (uint8_t *) op;
             
-            if (msg->info3 & CL_MSG_INFO3_LAST)    {
+			if (msg->result_code != CL_RESULT_OK) {
+				rv = (int)msg->result_code;
+				done = true;
+			}
+            else if (msg->info3 & CL_MSG_INFO3_LAST)    {
 #ifdef DEBUG                
                 fprintf(stderr, "received final message\n");
 #endif                
@@ -651,7 +655,7 @@ static int do_query_monte(cl_cluster_node *node, const char *ns, const uint8_t *
             // if there's a map-reduce on this query, callback into the mr system
             // (which ends up accumulating into the mr state), or just return the responses now)
             //
-            if ((msg->n_ops || (msg->info1 & CL_MSG_INFO1_NOBINDATA))) {
+            else if ((msg->n_ops || (msg->info1 & CL_MSG_INFO1_NOBINDATA))) {
             	
 				if (mr_state) {
 #ifdef USE_LUA_MR

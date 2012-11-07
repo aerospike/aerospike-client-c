@@ -1033,9 +1033,10 @@ ev2citrusleaf_request_complete(cl_request *req, bool timedout)
 
 		// If the request had been popped from the queue, base-hopped, and
 		// activated (so it's about to be processed after this event) we need to
-		// delete it. This should just no-op if there's no such event. Remember
-		// we're using the network event slot for the base-hop.
-		event_del(cl_request_get_network_event(req));
+		// delete it. Note - using network event slot for base-hop event.
+		if (req->base_hop_set) {
+			event_del(cl_request_get_network_event(req));
+		}
 
 		// call with a timeout specifier
 		(req->user_cb) (EV2CITRUSLEAF_FAIL_TIMEOUT , 0, 0, 0, req->user_data);
@@ -1287,6 +1288,9 @@ ev2citrusleaf_base_hop(cl_request *req)
 		cf_warn("unable to add base-hop event for request %p: will hang forever", req);
 		return;
 	}
+
+	// Ok to do this after event_add() - we're under request queue lock.
+	req->base_hop_set = true;
 
 	// Tell the event to fire on the appropriate base ASAP.
 	event_active(cl_request_get_network_event(req), 0, 0);

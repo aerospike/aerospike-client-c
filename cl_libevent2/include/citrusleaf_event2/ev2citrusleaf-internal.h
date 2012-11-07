@@ -99,6 +99,7 @@ typedef struct cl_request_s {
 	
 	bool		 network_set;
 	bool         timeout_set;
+	bool         base_hop_set;
 	
 	uint8_t	wr_tmp[1024];
 	uint8_t rd_tmp[1024];

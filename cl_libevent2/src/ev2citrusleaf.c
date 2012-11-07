@@ -1272,9 +1272,18 @@ ev2citrusleaf_timer_expired(int fd, short event, void *udata)
 static void
 ev2citrusleaf_base_hop_event(int fd, short event, void *udata)
 {
-	cf_debug("have node now, restart request %p", udata);
+	cl_request* req = (cl_request*)udata;
 
-	ev2citrusleaf_restart((cl_request*)udata);
+	if (req->MAGIC != CL_REQUEST_MAGIC)	{
+		cf_error("base hop event: BAD MAGIC");
+		return;
+	}
+
+	req->base_hop_set = false;
+
+	cf_debug("have node now, restart request %p", req);
+
+	ev2citrusleaf_restart(req);
 }
 
 
@@ -1285,11 +1294,10 @@ ev2citrusleaf_base_hop(cl_request *req)
 	event_assign(cl_request_get_network_event(req), req->base, -1, 0, ev2citrusleaf_base_hop_event, req);
 
 	if (0 != event_add(cl_request_get_network_event(req), 0)) {
-		cf_warn("unable to add base-hop event for request %p: will hang forever", req);
+		cf_warn("unable to add base-hop event for request %p: will time out", req);
 		return;
 	}
 
-	// Ok to do this after event_add() - we're under request queue lock.
 	req->base_hop_set = true;
 
 	// Tell the event to fire on the appropriate base ASAP.
@@ -1377,13 +1385,13 @@ GoodFd:
 	
 	// signal ready for event ---- write the buffer in the callback
 
+	event_assign(cl_request_get_network_event(req), req->base, fd, EV_WRITE, ev2citrusleaf_event, req);
+
 	req->network_set = true;
 
 	// Make sure no req fields are touched after the event is added. It's
 	// possible req->base does not correspond to the thread we're in here, so
 	// the event callback might happen (immediately) in another thread.
-
-	event_assign(cl_request_get_network_event(req), req->base, fd, EV_WRITE, ev2citrusleaf_event, req);
 
 	if (0 != event_add(cl_request_get_network_event(req), 0 /*timeout*/)) {
 		cf_warn("unable to add event for request %p: will hang forever", req);

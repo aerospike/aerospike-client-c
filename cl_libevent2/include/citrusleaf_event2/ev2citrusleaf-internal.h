@@ -97,8 +97,9 @@ typedef struct cl_request_s {
 	size_t		    rd_buf_pos;
 	size_t		    rd_buf_size;
 	
-	bool		 network_set;
-	bool         timeout_set;
+	uint32_t		network_set;
+	uint32_t		timeout_set;
+	uint32_t		base_hop_set;
 	
 	uint8_t	wr_tmp[1024];
 	uint8_t rd_tmp[1024];

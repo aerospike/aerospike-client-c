@@ -1,41 +1,45 @@
-Linux Installation:
+Prerequisites:
 
-Only the libc and openssl packages must be installed to compile the client library.
-For Debian-based distributions, execute:
-sudo apt-get install libc6-dev libssl-dev
+RHEL, Centos:
+$ sudo yum install make glibc-devel openssl-devel
 
-For redhat derived distributions such as Fedora Core and Centos, excute:
-sudo yum install openssl-devel glibc-devel
+Debian, Ubuntu:
+$ sudo apt-get install make libc6-dev libssl-dev
 
-Some newer Linux systems (Ubuntu 12.04) come with libevent2 already installed. 
-The dev version is still required:
-		$ sudo apt-get install libssl-dev
 
+Libevent2:
+
+Some newer Linux systems (Ubuntu 12.04) come with libevent2 already installed.
 On older systems, libevent2 must be installed manually, following these steps:
 
 1. Remove the old libevent. The libevent2 library will be backward compatible,
    so software relying on the old libevent will still work with libevent2.
-		$ sudo yum remove libevent
 
-2. Download the latest libevent2 from libevent.org, e.g.
-   libevent-2.0.20-stable.tar.gz.
+   $ sudo yum remove libevent
 
-3. Extract, and go to the resulting directory, e.g.
-		$ tar -xzvf libevent-2.0.20-stable.tar.gz
-		$ cd libevent-2.0.20-stable
+2. Download the latest libevent2 from libevent.org, e.g. libevent-2.0.20-stable.tar.gz.
+
+   $ wget https://github.com/downloads/libevent/libevent/libevent-2.0.20-stable.tar.gz
+
+3. Extract, and go to the resulting directory.
+   
+   $ tar -xvf libevent-2.0.20-stable.tar.gz
+   $ cd libevent-2.0.20-stable
 
 4. Configure libevent2 to be installed in /usr/lib and install it. (Amazingly,
    we have found the default configuration may install in /usr/local/lib.)
-		$ ./configure --prefix=/usr
-		$ make
-		$ sudo make install
+		
+   $ ./configure --prefix=/usr
+   $ make
+   $ sudo make install
 
 5. Make sure the new library is recognized.
-		$ sudo /sbin/ldconfig
+ 
+   $ sudo /sbin/ldconfig
 
 
-The root level 'Makefile' automatically executed make -f src/Makefile.native , which uses
-that GCC -march=noarch as a compilation target. Other examples, such as src/Makefile.32 and 
-src/Makefile.64, build explicitly for 32 and 64 bit environments.
+Aerospike libevent2 client:
 
-
+   $ tar xvf citrusleaf_client_libevent2_2.0.23.94CP.tgz
+   $ cd citrusleaf_client_libevent2_2.0.23.94CP
+   $ make

@@ -124,7 +124,8 @@ struct ev2citrusleaf_cluster_s {
 	// There are occasions where we want to stash pending transactions in a queue
 	// for when nodes come available (like, embarrasingly, the first request)
 	cf_queue	*request_q;
-	
+	void 		*request_q_lock;
+
 	// in progress requests pointing to this asc.
 	// necessary so we can drain out on shutdown.
 	// *includes* requests in the request queue above (everything needing a callback)

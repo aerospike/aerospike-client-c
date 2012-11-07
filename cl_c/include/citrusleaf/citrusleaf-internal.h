@@ -120,7 +120,8 @@ cl_compile(uint info1, uint info2, uint info3, const char *ns, const char *set, 
 	uint8_t **buf_r, size_t *buf_sz_r, const cl_write_parameters *cl_w_p, cf_digest *d_ret, uint64_t trid, cl_scan_param_field *scan_field);
 
 int
-cl_parse(cl_msg *msg, uint8_t *buf, size_t buf_len, cl_bin **values_r, cl_operation **operations_r, int *n_values_r, uint64_t *trid);
+cl_parse(cl_msg *msg, uint8_t *buf, size_t buf_len, cl_bin **values_r, cl_operation **operations_r, 
+	int *n_values_r, uint64_t *trid, char **setname_r);
 
 #ifdef DEBUG_VERBOSE
 void

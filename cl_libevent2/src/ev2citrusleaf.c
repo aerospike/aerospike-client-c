@@ -912,7 +912,7 @@ parse(uint8_t *buf, size_t buf_len, ev2citrusleaf_bin *values, int n_values,  in
 	if (generation)	*generation = msg->generation;
 	
 	if (msg->n_fields) {
-		cf_warn("unusual - not sure what fields are doing in a response");
+		cf_debug("Got %d fields in the response", msg->n_fields);
 		cl_msg_field *mf = (cl_msg_field *)buf;
 		for (i=0;i<msg->n_fields;i++) {
 

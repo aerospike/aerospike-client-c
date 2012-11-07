@@ -844,7 +844,7 @@ parse(uint8_t *buf, size_t buf_len, evcitrusleaf_bin *values, int n_values,  int
 	if (generation)	*generation = msg->generation;
 	
 	if (msg->n_fields) {
-		CL_LOG(CL_WARNING, "unusual - not sure what fields are doing in a response\n");
+		CL_LOG(CL_VERBOSE, "Got %d fields in the response\n", msg->n_fields);
 		cl_msg_field *mf = (cl_msg_field *)buf;
 		for (i=0;i<msg->n_fields;i++) {
 

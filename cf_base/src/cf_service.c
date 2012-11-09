@@ -20,7 +20,7 @@
 #include <unistd.h>
 #include <grp.h>
 
-#include "citrusleaf/cf_log.h"
+#include "citrusleaf/cf_log_internal.h"
 
 
 void

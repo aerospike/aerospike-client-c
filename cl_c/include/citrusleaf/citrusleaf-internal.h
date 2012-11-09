@@ -31,6 +31,7 @@
 #include "citrusleaf/cf_queue.h"
 #include "citrusleaf/cf_alloc.h"
 #include "citrusleaf/cf_digest.h"
+#include "citrusleaf/cf_log_internal.h"
 
 #ifdef __cplusplus
 extern "C" {

@@ -21,7 +21,7 @@
 #endif
 
 #include "citrusleaf/cf_queue.h"
-#include "citrusleaf/cf_log.h"
+#include "citrusleaf/cf_log_internal.h"
 
 // #define DEBUG 1
 
@@ -480,8 +480,8 @@ Fail5:
 	cf_hooked_mutex_free(q->LOCK);
 #else
 	pthread_mutex_destroy(&q->LOCK);
-#endif // EXTERNAL_LOCKS
 Fail4:	
+#endif // EXTERNAL_LOCKS
 	cf_queue_destroy(q->high_q);
 Fail3:	
 	cf_queue_destroy(q->medium_q);

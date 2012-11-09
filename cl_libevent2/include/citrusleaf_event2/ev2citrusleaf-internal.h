@@ -29,6 +29,7 @@
 #include "citrusleaf/cf_alloc.h"
 #include "citrusleaf/cf_ll.h"
 #include "citrusleaf/cf_digest.h"
+#include "citrusleaf/cf_log_internal.h"
 
 #include "citrusleaf/proto.h"
 

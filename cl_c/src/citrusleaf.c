@@ -9,6 +9,9 @@
  * All rights reserved
  */
 
+// This define is needed to use strndup().
+#define _GNU_SOURCE
+
 #include <sys/types.h>
 #include <sys/socket.h> // socket calls
 #include <stdio.h>

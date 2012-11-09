@@ -16,7 +16,7 @@
 #include "citrusleaf/cf_clock.h"
 #include "citrusleaf/cf_atomic.h"
 #include "citrusleaf/cf_hist.h"
-#include "citrusleaf/cf_log.h"
+#include "citrusleaf/cf_log_internal.h"
 
 
 int

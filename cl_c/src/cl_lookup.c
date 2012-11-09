@@ -24,6 +24,7 @@
 #include "citrusleaf/citrusleaf.h"
 #include "citrusleaf/cl_cluster.h"
 #include "citrusleaf/proto.h"
+#include "citrusleaf/cf_log_internal.h"
 
 // #define DEBUG
 

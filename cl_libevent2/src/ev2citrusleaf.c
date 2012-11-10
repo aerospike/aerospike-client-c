@@ -1309,20 +1309,21 @@ ev2citrusleaf_base_hop(cl_request *req)
 // Called when we couldn't get a node before, and now we might have a node,
 // so we're going to retry starting the request
 //
+// AKG - there's a problem here if we're in the scope of the start call (i.e.
+// first attempt), the transaction is "cross-threaded", and the timeout event
+// fires. We'll fix this if/when we revise the transaction flow.
+//
 void
 ev2citrusleaf_restart(cl_request *req)
 {
 	cf_atomic_int_incr(&g_cl_stats.req_restart);
-	
-	if (req->start_time + req->timeout_ms < cf_getms()) {
-		// AKG - there's a problem here if we're in the scope of the start call
-		// (i.e. first attempt) - we don't want to give an app a callback in the
-		// scope of its transaction call (or in the wrong thread if transactions
-		// are "cross-threaded"). We'll fix this when we decide on the best way.
-		ev2citrusleaf_request_complete(req, true);
+
+	// If we've already timed out, don't bother adding the network event, just
+	// let the timeout event (which no doubt is about to fire) clean up.
+	if (req->timeout_ms > 0 && req->start_time + req->timeout_ms < cf_getms()) {
 		return;
 	}
-	
+
 	// set state to "haven't sent or received"
 	req->wr_buf_pos = 0;
 	req->rd_buf_pos = 0;
@@ -1365,12 +1366,7 @@ ev2citrusleaf_restart(cl_request *req)
 		}
 		
 		if (try++ > CL_LOG_RESTARTLOOP_WARN) cf_warn("restart loop: iteration %d", try);
-		
-//		if (req->start_time + req->timeout_ms < cf_getms()) {
-//			ev2citrusleaf_request_complete(req, true);
-//			return;
-//		}	
-		
+
 	} while (try++ < 5);
 		
 	// Not sure why so delayed. We're going to put this on the cluster queue.
@@ -1394,7 +1390,7 @@ GoodFd:
 	// the event callback might happen (immediately) in another thread.
 
 	if (0 != event_add(cl_request_get_network_event(req), 0 /*timeout*/)) {
-		cf_warn("unable to add event for request %p: will hang forever", req);
+		cf_warn("unable to add event for request %p: will time out", req);
 		req->network_set = false;
 	}
 }
@@ -1897,11 +1893,14 @@ void ev2citrusleaf_print_stats(void)
 
 		reqs_in_queue += cf_queue_sz(asc->request_q);
 		
+		MUTEX_LOCK(asc->node_v_lock);
 		for (unsigned int i=0 ; i<cf_vector_size(&asc->node_v) ; i++) {
 			cl_cluster_node *cn = cf_vector_pointer_get(&asc->node_v, i);
 			conns_in_queue += cf_queue_sz(cn->conn_q);
 			nodes_active++;
 		}
+		MUTEX_UNLOCK(asc->node_v_lock);
+
 		n_clusters++;		
 	}
 

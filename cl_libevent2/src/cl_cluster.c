@@ -19,6 +19,8 @@
 #include <fcntl.h>
 #include <arpa/inet.h>
 #include <signal.h>
+#include <ctype.h>
+#include <netinet/tcp.h>
 
 #include "citrusleaf/cf_atomic.h"
 #include "citrusleaf_event2/ev2citrusleaf.h"
@@ -184,6 +186,32 @@ cluster_services_parse(ev2citrusleaf_cluster *asc, char *services)
 	cf_vector_destroy(&host_str_v);
 }
 
+static char*
+trim(char *str)
+{
+	// Warning: This method walks on input string.
+	char *begin = str;
+
+	// Trim leading space.
+	while (isspace(*begin)) {
+		begin++;
+	}
+
+	if(*begin == 0) {
+		return begin;
+	}
+
+	// Trim trailing space. Go to end first so whitespace is preserved in the
+	// middle of the string.
+	char *end = begin + strlen(begin) - 1;
+
+	while (end > begin && isspace(*end)) {
+		end--;
+	}
+	*(end + 1) = 0;
+	return begin;
+}
+
 //
 // Process new partitions information
 // namespace:part_id;namespace:part_id
@@ -198,39 +226,55 @@ cluster_partitions_process(ev2citrusleaf_cluster *asc, cl_cluster_node *cn, char
 {
 	cf_atomic_int_incr(&g_cl_stats.partition_process);
 	uint64_t _s = cf_getms();
-	
-	// use a create instead of a define because we know the size, and the size will likely be larger
-	// than a stack allocation
-	cf_vector *partitions_v = cf_vector_create(sizeof(void *), asc->n_partitions+1, 0);
-	str_split(';',partitions, partitions_v);
-	// partition_v is a vector of namespace:part_id
-	for (uint i=0;i<cf_vector_size(partitions_v);i++) {
-		char *partition_str = cf_vector_pointer_get(partitions_v, i);
+
+	// Partitions format: <namespace1>:<partition id1>;<namespace2>:<partition id2>; ...
+	// Warning: This method walks on partitions string argument.
+	char *p = partitions;
+
+	while (*p)
+	{
+		char *partition_str = p;
+		// Loop until split and set it to null.
+		while ((*p) && (*p != ';')) {
+			p++;
+		}
+		if (*p == ';') {
+			*p = 0;
+			p++;
+		}
 		cf_vector_define(partition_v, sizeof(void *), 0);
 		str_split(':', partition_str, &partition_v);
-		if (cf_vector_size(&partition_v) == 2) {
+
+		unsigned int vsize = cf_vector_size(&partition_v);
+		if (vsize == 2) {
 			char *namespace_s = cf_vector_pointer_get(&partition_v,0);
 			char *partid_s = cf_vector_pointer_get(&partition_v,1);
-			int partid = atoi(partid_s);
-			// it's coming over the wire, so validate it
-			if (strlen(namespace_s) > 30) {
 
-				cf_info("cluster partitions process: bad namespace: len %zd space %s", strlen(namespace_s), namespace_s);
+			// It's coming over the wire, so validate it.
+			char *ns = trim(namespace_s);
+			int len = strlen(ns);
+
+			if (len == 0 || len > 31) {
+				cf_warn("Invalid partition namespace %s", ns);
 				goto Next;
 			}
-			if (partid > asc->n_partitions) {
-				cf_warn("cluster partitions process: partitions out of scale: found %d max %d",
-					partid, asc->n_partitions);
+
+			int partid = atoi(partid_s);
+
+			if (partid < 0 || partid >= (int)asc->n_partitions) {
+				cf_warn("Invalid partition id %s, max %u", partid, asc->n_partitions);
 				goto Next;
 			}
-			
-			cl_partition_table_set(asc, cn, namespace_s, partid, write); 
+
+			cl_partition_table_set(asc, cn, ns, partid, write);
 		}
-Next:		
+		else {
+			cf_warn("Invalid partition vector size %u, element %s", vsize, partition_str);
+		}
+Next:
 		cf_vector_destroy(&partition_v);
 	}
-	cf_vector_destroy(partitions_v);
-	
+
 	uint64_t delta = cf_getms() - _s;
 	if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: partition process: %"PRIu64, delta);
 }
@@ -1165,7 +1209,10 @@ cl_cluster_node_fd_get(cl_cluster_node *cn)
 		cf_warn("could not set nonblocking");
 		return(-2);
 	}
-	
+
+	int f = 1;
+	setsockopt(fd, SOL_TCP, TCP_NODELAY, &f, sizeof(f));
+
 	cf_atomic_int_incr(&g_cl_stats.conns_created);
 
 	for (uint i=0;i< cf_vector_size(&cn->sockaddr_in_v);i++) {

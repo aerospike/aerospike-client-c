@@ -117,8 +117,6 @@ typedef struct cl_map_object_s {
     joke_hash *hash;
 } cl_map_object;
 
-// UDF's need to take a CL_LUA_BLOB -> cmsgpack.unpack() -> cl_map_object
-cl_object *unpack_to_map(char *luat, int luatlen);
 
 //
 // An object is the value in a bin, or it is used as a key
@@ -135,6 +133,8 @@ typedef struct cl_object_s {
 	void *free; // if this is set, this must be freed on destructuion	
 } cl_object;
 
+// UDF's need to take a CL_LUA_BLOB -> cmsgpack.unpack() -> cl_map_object
+cl_object *unpack_to_map(char *luat, int luatlen);
 
 typedef enum cl_operator_type { CL_OP_WRITE, CL_OP_READ, CL_OP_INCR, CL_OP_MC_INCR , CL_OP_PREPEND, CL_OP_APPEND, CL_OP_MC_PREPEND, CL_OP_MC_APPEND, CL_OP_TOUCH, CL_OP_MC_TOUCH} cl_operator;
 

@@ -1,30 +1,32 @@
-*************
-Aerospike
-*************
+..  lua:module:: aerospike
 
-Types
------
+**********************
+aerospike (Lua Object)
+**********************
 
-..  type:: Aerospike
+The :lua:mod:`aerospike` object is a global object that exposes database operations to the Lua environment.
 
-    An interface to the Aerospike Database.
+..  lua:function:: aerospike:create(as_rec r)
 
-Functions
----------
+    Create a new record in the database.::
 
-..  function:: aerospike:create(Record r)
+        aerospike:create(rec)
 
-    Create a new record in the database.
+..  lua:function:: aerospike:update(as_rec r)
 
-..  function:: aerospike:update(Record r)
+    Update an existing record in the database.::
 
-    Update an existing record in the database.
+        aerospike:update(rec)
 
-..  function:: aerospike:exists(Record r)
+..  lua:function:: aerospike:exists(as_rec r)
 
-    Checks for the existance of a record in the database.
+    Checks for the existance of a record in the database.::
 
-..  function:: aerospike:remove(Record r)
+        aerospike:exists(rec)
 
-    Remove an existing record from the database.
+..  lua:function:: aerospike:remove(as_rec r)
+
+    Remove an existing record from the database.::
+
+        aerospike:remove(rec)
 

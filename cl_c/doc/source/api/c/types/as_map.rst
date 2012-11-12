@@ -92,9 +92,9 @@ Functions
 
 ..  function:: inline as_iterator * as_map_iterator(const as_map * m)
 
-    .. recounting:: new
+    .. refcounting:: new
 
-    Returns a new iterator over the entries of this map. Each entry is an as_pair *. 
+    Returns a new iterator over the entries of this map. Each entry is an ``as_pair *``. 
 
     Example::
 

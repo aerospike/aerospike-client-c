@@ -1080,7 +1080,7 @@ cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 		if (0 != citrusleaf_info_host_limit(sa_in, "node\npartition-generation\nservices", &values, INFO_TIMEOUT_MS, false, 10000)) {
 			// todo: this address is no longer right for this node, update the node's list
 			// and if there's no addresses left, dun node
-			cf_info("Info request failed for %s", cn->name);
+			cf_debug("Info request failed for %s", cn->name);
 			cl_cluster_node_dun(cn, NODE_DUN_INFO_ERR);
 			continue;
 		}

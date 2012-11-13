@@ -63,6 +63,7 @@ const int DEFAULT_TIMEOUT_MSEC = 10;
 const int DEFAULT_NUM_BASES = 16;
 const int DEFAULT_NUM_KEYS = 1000 * 16;
 const int DEFAULT_READ_PERCENT = 80;
+const int DEFAULT_VALUE_SIZE = 1300;
 
 const char BIN_NAME[] = "test-bin-name";
 const char BIN_DATA[] = "test-object";
@@ -87,6 +88,7 @@ typedef struct config_s {
 	int num_bases;
 	int num_keys;
 	int read_percent;
+	int value_size;
 } config;
 
 typedef enum {
@@ -219,10 +221,11 @@ set_config(int argc, char* argv[])
 	g_config.num_bases = DEFAULT_NUM_BASES;
 	g_config.num_keys = DEFAULT_NUM_KEYS;
 	g_config.read_percent = DEFAULT_READ_PERCENT;
+	g_config.value_size = DEFAULT_VALUE_SIZE;
 
 	int c;
 
-	while ((c = getopt(argc, argv, "h:p:n:s:u:m:b:k:r:")) != -1) {
+	while ((c = getopt(argc, argv, "h:p:n:s:u:m:b:k:r:x:")) != -1) {
 		switch (c) {
 		case 'h':
 			g_config.p_host = strdup(optarg);
@@ -260,6 +263,10 @@ set_config(int argc, char* argv[])
 			g_config.read_percent = atoi(optarg);
 			break;
 
+		case 'x':
+			g_config.value_size = atoi(optarg);
+			break;
+
 		default:
 			destroy_config();
 			usage();
@@ -276,6 +283,7 @@ set_config(int argc, char* argv[])
 	LOG("number of bases:     %d", g_config.num_bases);
 	LOG("number of keys:      %d", g_config.num_keys);
 	LOG("read percent:        %d", g_config.read_percent);
+	LOG("value size:          %d bytes", g_config.value_size);
 
 	return true;
 }
@@ -315,6 +323,7 @@ usage()
 	LOG("-b number of bases [default: %d]", DEFAULT_NUM_BASES);
 	LOG("-k number of keys [default: %d]", DEFAULT_NUM_KEYS);
 	LOG("-r read percent [default: %d]", DEFAULT_READ_PERCENT);
+	LOG("-x value size in bytes [default: %d]", DEFAULT_VALUE_SIZE);
 }
 
 
@@ -638,9 +647,15 @@ put(int b, int k)
 	// Write just one bin per record.
 	ev2citrusleaf_bin bin;
 
-	// Always the same bin name, use key index as (integer type) value.
+	// Always the same bin name.
 	strcpy(bin.bin_name, BIN_NAME);
-	ev2citrusleaf_object_init_int(&bin.object, (int64_t)k);
+
+	// Always the same size blob-type value, with key index embedded.
+	char value[g_config.value_size];
+
+	*(uint64_t*)value = (uint64_t)k;
+	ev2citrusleaf_object_init_blob(&bin.object, (void*)value,
+			(size_t)g_config.value_size);
 
 	if (0 != ev2citrusleaf_put(
 			g_p_cluster,					// cluster
@@ -771,13 +786,17 @@ validate_data(int b, int k, ev2citrusleaf_bin* bins, int n_bins)
 		LOG("ERROR: base %2d, key %d, got unexpected bin name %s", b, k,
 				bins[0].bin_name);
 	}
-	else if (bins[0].object.type != CL_INT) {
+	else if (bins[0].object.type != CL_BLOB) {
 		LOG("ERROR: base %2d, key %d, got unexpected data type %d", b, k,
 				bins[0].object.type);
 	}
-	else if (bins[0].object.u.i64 != (int64_t)k) {
-		LOG("ERROR: base %2d, key %d, got unexpected data value %ld", b, k,
-				bins[0].object.u.i64);
+	else if (bins[0].object.size != (size_t)g_config.value_size) {
+		LOG("ERROR: base %2d, key %d, got unexpected data size %lu", b, k,
+				bins[0].object.size);
+	}
+	else if (*(uint64_t*)bins[0].object.u.blob != (int64_t)k) {
+		LOG("ERROR: base %2d, key %d, got unexpected data value %lu", b, k,
+				*(uint64_t*)bins[0].object.u.blob);
 	}
 
 	// Bins with integer data type don't need this, but it's good form.

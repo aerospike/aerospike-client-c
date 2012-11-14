@@ -1252,9 +1252,11 @@ Done:
 void
 cl_cluster_node_fd_put(cl_cluster_node *cn, int fd)
 {
-	cf_queue_push(cn->conn_q, &fd);
+	if (! cf_queue_push_limit(cn->conn_q, &fd, 300)) {
+		cf_atomic_int_incr(&g_cl_stats.conns_destroyed);
+		close(fd);
+	}
 }
-
 
 //
 // Debug function. Should be elsewhere.

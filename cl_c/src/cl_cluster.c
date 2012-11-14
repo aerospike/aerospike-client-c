@@ -956,7 +956,9 @@ cl_cluster_node_fd_put(cl_cluster_node *cn, int fd, bool asyncfd)
 		q = cn->conn_q;
 	}
 	
-	cf_queue_push(q, &fd);
+	if (! cf_queue_push_limit(q, &fd, 300)) {
+		close(fd);
+	}
 }
 
 

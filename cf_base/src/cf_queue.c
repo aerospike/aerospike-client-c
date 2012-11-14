@@ -231,6 +231,42 @@ cf_queue_push(cf_queue *q, void *ptr)
 	return(0);
 }
 
+/* cf_queue_push_limit
+ * Push element on the queue only if size < limit.
+ * */
+bool
+cf_queue_push_limit(cf_queue *q, void *ptr, uint limit)
+{
+	QUEUE_LOCK(q);
+	uint size = CF_Q_SZ(q);
+
+	if (size >= limit) {
+		QUEUE_UNLOCK(q);
+		return false;
+	}
+
+	/* Check queue length */
+	if (size == q->allocsz) {
+		/* resize is a pain for circular buffers */
+		if (0 != cf_queue_resize(q, q->allocsz + CF_QUEUE_ALLOCSZ)) {
+			QUEUE_UNLOCK(q);
+			return false;
+		}
+	}
+
+	memcpy(CF_Q_ELEM_PTR(q,q->write_offset), ptr, q->elementsz);
+	q->write_offset++;
+	// we're at risk of overflow if the write offset is that high
+	if (q->write_offset & 0xC0000000) cf_queue_unwrap(q);
+
+#ifndef EXTERNAL_LOCKS
+	if (q->threadsafe)
+		pthread_cond_signal(&q->CV);
+#endif
+
+	QUEUE_UNLOCK(q);
+	return true;
+}
 
 /* cf_queue_pop
  * if ms_wait < 0, wait forever

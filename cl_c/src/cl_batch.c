@@ -454,7 +454,6 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 			}
 
 			if (cb && (msg->n_ops || (msg->info1 & CL_MSG_INFO1_NOBINDATA))) {
-				// got one good value? call it a success!
 				// (Note:  In the key exists case, there is no bin data.)
 				(*cb) ( ns_ret, keyd, set_ret, msg->generation, msg->record_ttl, bins_local, msg->n_ops, false /*islast*/, udata);
 				rv = 0;
@@ -696,18 +695,24 @@ int direct_batchget_cb(char *ns, cf_digest *keyd, char *set, uint32_t generation
 			uint32_t record_voidtime, cl_bin *bins, int n_bins, bool islast, void *udata)
 {
 	cl_batchresult *br = (cl_batchresult *)udata;
-
-	//Set all the interesting fields into the result structure
 	int slot = br->numrecs;
-	memcpy(&(br->records[slot].digest), keyd, sizeof(cf_digest));
-	br->records[slot].generation = generation;
-	br->records[slot].record_voidtime = record_voidtime;
-	citrusleaf_copy_bins(&(br->records[slot].bins), bins, n_bins);
-	br->records[slot].n_bins = n_bins;
-	br->numrecs++;
 
-	//We are supposed to free the bins in the callback
-	citrusleaf_bins_free(bins,n_bins);
+	if (citrusleaf_copy_bins(&(br->records[slot].bins), bins, n_bins) == 0) {
+		//Set all the interesting fields into the result structure
+		memcpy(&(br->records[slot].digest), keyd, sizeof(cf_digest));
+		br->records[slot].generation = generation;
+		br->records[slot].record_voidtime = record_voidtime;
+		br->records[slot].n_bins = n_bins;
+		br->numrecs++;
+		//We are supposed to free the bins in the callback
+		citrusleaf_bins_free(bins,n_bins);
+	}
+	else {
+		// Do not include record in array.  Bins have already been freed.
+		char digest[CF_DIGEST_KEY_SZ*2 + 3];
+		cf_digest_string(keyd, digest);
+		cf_warn("Failed to copy bin(s) for record digest %s", digest);
+	}
 }
 
 void

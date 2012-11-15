@@ -171,12 +171,12 @@ int citrusleaf_copy_object(cl_object *destobj, cl_object *srcobj)
 			destobj->u.i64 = srcobj->u.i64;
 			break;
 		case CL_STR:
-			//dont know why this sz+1, this is how set_object() does.
 			destobj->free = destobj->u.str = malloc(destobj->sz+1);
 			if (destobj->free == NULL) {
 				return -1;
 			}
 			memcpy(destobj->u.str, srcobj->u.str, destobj->sz);
+			destobj->u.str[destobj->sz] = 0;
 			break;
 		case CL_BLOB:
 		case CL_DIGEST:
@@ -203,10 +203,7 @@ int citrusleaf_copy_object(cl_object *destobj, cl_object *srcobj)
 int citrusleaf_copy_bin(cl_bin *destbin, cl_bin *srcbin)
 {
 	strcpy(destbin->bin_name, srcbin->bin_name);
-	int rv = citrusleaf_copy_object(&(destbin->object), &(srcbin->object));
-	if (rv == -1) {
-		return -1;
-	}
+	return citrusleaf_copy_object(&(destbin->object), &(srcbin->object));
 }
 
 int citrusleaf_copy_bins(cl_bin **destbins, cl_bin *srcbins, int n_bins)
@@ -221,6 +218,10 @@ int citrusleaf_copy_bins(cl_bin **destbins, cl_bin *srcbins, int n_bins)
 	for (int i=0; i<n_bins; i++) {
 		rv = citrusleaf_copy_bin(&newbins[i], &srcbins[i]);
 		if (rv == -1) {
+			// Unwind previous bin allocations.
+			if (i > 0) {
+				citrusleaf_bins_free(newbins, i);
+			}
 			free(newbins);
 			return -1;
 		}

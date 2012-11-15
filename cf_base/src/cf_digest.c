@@ -5,6 +5,21 @@
 #include "citrusleaf/cf_log_internal.h"
 
 void
+cf_digest_string(cf_digest *digest, char* output)
+{
+	uint8_t *d = (uint8_t *) digest;
+	char* p = output;
+
+	*p++ = '0';
+	*p++ = 'x';
+
+	for (int i = 0; i < CF_DIGEST_KEY_SZ; i++) {
+		sprintf(p, "%02x", d[i]);
+		p += 2;
+	}
+}
+
+void
 cf_digest_dump(cf_digest *digest)
 {
 	uint8_t *d = (uint8_t *) digest;

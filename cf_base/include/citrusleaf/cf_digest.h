@@ -27,6 +27,7 @@ extern "C" {
 #define CF_DIGEST_KEY_SZ RIPEMD160_DIGEST_LENGTH
 typedef struct { uint8_t digest[CF_DIGEST_KEY_SZ]; } cf_digest;
 
+void cf_digest_string(cf_digest *digest, char* output);
 void cf_digest_dump(cf_digest *digest);
 
 /* cf_digest_compute

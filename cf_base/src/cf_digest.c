@@ -1,6 +1,7 @@
 /*
  * Copyright 2012 Aerospike. All rights reserved.
  */
+#include <stdio.h>
 #include "citrusleaf/cf_digest.h"
 #include "citrusleaf/cf_log_internal.h"
 

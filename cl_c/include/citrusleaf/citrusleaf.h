@@ -132,6 +132,7 @@ typedef struct cl_rec {
 
 // Structure used by functions which want to return a bunch of records
 typedef struct cl_batchresult {
+	pthread_mutex_t lock;
 	int 		numrecs;
 	cl_rec		*records;
 } cl_batchresult;

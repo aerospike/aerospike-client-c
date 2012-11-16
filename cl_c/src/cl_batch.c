@@ -694,28 +694,34 @@ citrusleaf_get_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, 
 int direct_batchget_cb(char *ns, cf_digest *keyd, char *set, uint32_t generation,
 			uint32_t record_voidtime, cl_bin *bins, int n_bins, bool islast, void *udata)
 {
-	cl_batchresult *br = (cl_batchresult *)udata;
-	pthread_mutex_lock(&br->lock);
+	cl_bin* targetBins;
 
-	int slot = br->numrecs;
+	if (citrusleaf_copy_bins(&targetBins, bins, n_bins) == 0) {
+		cl_batchresult *br = (cl_batchresult *)udata;
 
-	if (citrusleaf_copy_bins(&(br->records[slot].bins), bins, n_bins) == 0) {
-		//Set all the interesting fields into the result structure
-		memcpy(&(br->records[slot].digest), keyd, sizeof(cf_digest));
-		br->records[slot].generation = generation;
-		br->records[slot].record_voidtime = record_voidtime;
-		br->records[slot].n_bins = n_bins;
+		// Get record slot in a lock.
+		pthread_mutex_lock(&br->lock);
+		cl_rec *rec = &br->records[br->numrecs];
 		br->numrecs++;
-		//We are supposed to free the bins in the callback
-		citrusleaf_bins_free(bins,n_bins);
+		pthread_mutex_unlock(&br->lock);
+
+		// Copy data to record slot.
+		memcpy(&rec->digest, keyd, sizeof(cf_digest));
+		rec->generation = generation;
+		rec->record_voidtime = record_voidtime;
+		rec->bins = targetBins;
+		rec->n_bins = n_bins;
 	}
 	else {
-		// Do not include record in array.  Bins have already been freed.
+		// Do not include record in array.
 		char digest[CF_DIGEST_KEY_SZ*2 + 3];
 		cf_digest_string(keyd, digest);
 		cf_warn("Failed to copy bin(s) for record digest %s", digest);
 	}
-	pthread_mutex_unlock(&br->lock);
+
+	// We are supposed to free the bins in the callback.
+	citrusleaf_bins_free(bins, n_bins);
+	return 0;
 }
 
 void

@@ -1,10 +1,12 @@
 # Citrusleaf Foundation
 # Makefile
 
+DEPTH = ../../../..
+
+include $(DEPTH)/make_in/Makefile.in
 include Makefile.in
 include Makefile.files
 
-DEPTH = ../../../..
 DIR_INCLUDE = ../include 
 DIR_CF_INCLUDE = ../../cf_base/include
 DIR_OBJECT = ../obj/native

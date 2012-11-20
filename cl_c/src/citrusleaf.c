@@ -1121,6 +1121,7 @@ cl_set_value_particular(cl_msg_op *op, cl_bin *value)
 		return;
 	}
 	
+
 	memcpy(value->bin_name, op->name, op->name_sz);
 	value->bin_name[op->name_sz] = 0;
 	set_object(op, &value->object);
@@ -1935,7 +1936,15 @@ cl_rv citrusleaf_sproc_exec_cb(cl_cluster *asc, const char *ns, const char *set,
     int rsp = citrusleaf_sproc_execute(asc, ns, set, key, package_name, fname,
                                        sproc_params, bins, n_bins, timeout_ms,
                                        cl_gen);
-    if (rsp != CITRUSLEAF_OK) return rsp;
+    if (rsp != CITRUSLEAF_OK) {
+    	if ( *n_bins == 1 ) {
+    		cl_bin * bin = bins[0];
+    		if ( strcmp(bin->bin_name,"ERROR") == 0 ) {
+    			printf("Error: %s\n", bin->object.u.str);
+    		}
+    	}
+    	return rsp;
+    }
     for (int i = 0; i < *n_bins; i++) {
         cl_object *object = &(*bins)[i].object;
         // CL_LUA_BLOB needs to be cmgpack.unpacked() and then -> CL_MAP

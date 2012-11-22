@@ -501,7 +501,7 @@ static int query_compile (const char *ns, const cl_query *query, const cl_mr_sta
 // 
 // this is an actual instance of a query, running on a query thread
 //
-bool g_abort = false;
+bool gasq_abort = false;
 static int do_query_monte(cl_cluster_node *node, const char *ns, const uint8_t *query_buf, size_t query_sz,  cl_mr_state *mr_state,
                           citrusleaf_get_many_cb cb, void *udata, bool isnbconnect) {
 
@@ -684,7 +684,7 @@ static int do_query_monte(cl_cluster_node *node, const char *ns, const uint8_t *
             // don't have to free object internals. They point into the read buffer, where
             // a pointer is required
             pos += buf - buf_start;
-			if (g_abort) {
+			if (gasq_abort) {
 				break;
 			}
             
@@ -696,7 +696,7 @@ static int do_query_monte(cl_cluster_node *node, const char *ns, const uint8_t *
         }
 
 		// abort requested by the user
-		if (g_abort) {
+		if (gasq_abort) {
 			close(fd);
 			goto Final;
 		}

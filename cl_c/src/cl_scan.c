@@ -36,7 +36,7 @@
 #define STACK_BINS 100
 
 
-extern bool g_abort;
+extern bool gasq_abort;
 static int
 do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operation_info2, const char *ns, const char *set, 
 	cl_bin *bins, int n_bins, uint8_t scan_pct, 
@@ -281,7 +281,7 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 			// don't have to free object internals. They point into the read buffer, where
 			// a pointer is required
 			pos += buf - buf_start;
-			if (g_abort)
+			if (gasq_abort)
 				break;
 			
 		}
@@ -291,7 +291,7 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 			rd_buf = 0;
 		}
 		
-		if (g_abort) {
+		if (gasq_abort) {
 			close(fd);
 			cl_cluster_node_put(node);
 			node = 0;

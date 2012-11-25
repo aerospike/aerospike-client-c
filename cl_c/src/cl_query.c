@@ -684,9 +684,9 @@ static int do_query_monte(cl_cluster_node *node, const char *ns, const uint8_t *
             // don't have to free object internals. They point into the read buffer, where
             // a pointer is required
             pos += buf - buf_start;
-			if (gasq_abort) {
-				break;
-			}
+            if (gasq_abort) {
+                break;
+            }
             
         }
         
@@ -695,11 +695,11 @@ static int do_query_monte(cl_cluster_node *node, const char *ns, const uint8_t *
             rd_buf = 0;
         }
 
-		// abort requested by the user
-		if (gasq_abort) {
-			close(fd);
-			goto Final;
-		}
+        // abort requested by the user
+        if (gasq_abort) {
+            close(fd);
+            goto Final;
+        }
     } while ( done == false );
 
     cl_cluster_node_fd_put(node, fd, false);
@@ -824,9 +824,14 @@ cl_rv citrusleaf_query(cl_cluster *asc, const char *ns, const cl_query *query, c
     for (int i=0;i<n_nodes;i++) {
         int z;
         cf_queue_pop(work.node_complete_q, &z, CF_QUEUE_FOREVER);
-        if (z != 0)
+        if (z != 0) {
+            // Got failure from one node. Trigger abort for all 
+            // the ongoing request
+            gasq_abort = true;
             retval = z;
+        }
     }
+    gasq_abort = false;
 
     // do the final reduce, big operation, then done
     if ((retval == 0) && work.mr_state) {
@@ -839,8 +844,7 @@ cl_rv citrusleaf_query(cl_cluster *asc, const char *ns, const cl_query *query, c
     if (wr_buf && (wr_buf != wr_stack_buf)) { free(wr_buf); wr_buf = 0; }
     
     cf_queue_destroy(work.node_complete_q);
-    if (retval != 0)  { return( CITRUSLEAF_FAIL_CLIENT ); }
-    return 0;
+	return retval;
 }
 
 cl_query *citrusleaf_query_create(const char *indexname, const char *setname)

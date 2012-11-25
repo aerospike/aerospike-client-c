@@ -1,5 +1,5 @@
 HEADERS = citrusleaf.h cl_cluster.h 
-SOURCES = citrusleaf.c cl_info.c cl_cluster.c cl_partition.c cl_lookup.c proto.c cl_batch.c cl_scan.c cl_async.c
+SOURCES = citrusleaf.c cl_info.c cl_cluster.c cl_partition.c cl_lookup.c proto.c cl_batch.c cl_scan.c cl_async.c cl_query.c
 SOURCES += cl_sproc.c 
 ifeq (${MR_LANG},LUA)
 SOURCES += cl_mapreduce.c 

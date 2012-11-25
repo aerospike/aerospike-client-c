@@ -31,6 +31,7 @@
 #include "citrusleaf/cf_queue.h"
 #include "citrusleaf/cf_alloc.h"
 #include "citrusleaf/cf_digest.h"
+#include "citrusleaf/cf_log_internal.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -233,7 +234,8 @@ cl_compile(uint info1, uint info2, uint info3, const char *ns, const char *set, 
 	cl_scan_param_field *scan_field, cl_sproc_def *sproc_def);
 
 int
-cl_parse(cl_msg *msg, uint8_t *buf, size_t buf_len, cl_bin **values_r, cl_operation **operations_r, int *n_values_r, uint64_t *trid);
+cl_parse(cl_msg *msg, uint8_t *buf, size_t buf_len, cl_bin **values_r, cl_operation **operations_r, 
+	int *n_values_r, uint64_t *trid, char **setname_r);
 
 int sproc_compile_arg_field(char * const*argk, cl_object * const*argv, int argc, uint8_t *buf, int *sz_p);
 

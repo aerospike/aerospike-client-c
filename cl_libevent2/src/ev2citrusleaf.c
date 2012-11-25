@@ -916,7 +916,7 @@ parse(uint8_t *buf, size_t buf_len, ev2citrusleaf_bin *values, int n_values,  in
 	if (generation)	*generation = msg->generation;
 	
 	if (msg->n_fields) {
-		cf_warn("unusual - not sure what fields are doing in a response");
+		cf_debug("Got %d fields in the response", msg->n_fields);
 		cl_msg_field *mf = (cl_msg_field *)buf;
 		for (i=0;i<msg->n_fields;i++) {
 
@@ -1031,8 +1031,17 @@ ev2citrusleaf_request_complete(cl_request *req, bool timedout)
 		// timedout
 		
 		// could still be in the cluster's pending queue. Scrub it out.
+		MUTEX_LOCK(req->asc->request_q_lock);
 		cf_queue_delete(req->asc->request_q ,&req , true /*onlyone*/ );
-		
+		MUTEX_UNLOCK(req->asc->request_q_lock);
+
+		// If the request had been popped from the queue, base-hopped, and
+		// activated (so it's about to be processed after this event) we need to
+		// delete it. Note - using network event slot for base-hop event.
+		if (req->base_hop_set) {
+			event_del(cl_request_get_network_event(req));
+		}
+
 		// call with a timeout specifier
 		(req->user_cb) (EV2CITRUSLEAF_FAIL_TIMEOUT , 0, 0, 0, req->user_data);
 		
@@ -1264,20 +1273,61 @@ ev2citrusleaf_timer_expired(int fd, short event, void *udata)
 }
 
 
+static void
+ev2citrusleaf_base_hop_event(int fd, short event, void *udata)
+{
+	cl_request* req = (cl_request*)udata;
+
+	if (req->MAGIC != CL_REQUEST_MAGIC)	{
+		cf_error("base hop event: BAD MAGIC");
+		return;
+	}
+
+	req->base_hop_set = false;
+
+	cf_debug("have node now, restart request %p", req);
+
+	ev2citrusleaf_restart(req);
+}
+
+
+void
+ev2citrusleaf_base_hop(cl_request *req)
+{
+	// We'll use the unused network event slot.
+	event_assign(cl_request_get_network_event(req), req->base, -1, 0, ev2citrusleaf_base_hop_event, req);
+
+	if (0 != event_add(cl_request_get_network_event(req), 0)) {
+		cf_warn("unable to add base-hop event for request %p: will time out", req);
+		return;
+	}
+
+	req->base_hop_set = true;
+
+	// Tell the event to fire on the appropriate base ASAP.
+	event_active(cl_request_get_network_event(req), 0, 0);
+}
+
+
 //
 // Called when we couldn't get a node before, and now we might have a node,
 // so we're going to retry starting the request
+//
+// AKG - there's a problem here if we're in the scope of the start call (i.e.
+// first attempt), the transaction is "cross-threaded", and the timeout event
+// fires. We'll fix this if/when we revise the transaction flow.
 //
 void
 ev2citrusleaf_restart(cl_request *req)
 {
 	cf_atomic_int_incr(&g_cl_stats.req_restart);
-	
-	if (req->start_time + req->timeout_ms < cf_getms()) {
-		ev2citrusleaf_request_complete(req, true);
+
+	// If we've already timed out, don't bother adding the network event, just
+	// let the timeout event (which no doubt is about to fire) clean up.
+	if (req->timeout_ms > 0 && req->start_time + req->timeout_ms < cf_getms()) {
 		return;
 	}
-	
+
 	// set state to "haven't sent or received"
 	req->wr_buf_pos = 0;
 	req->rd_buf_pos = 0;
@@ -1320,12 +1370,7 @@ ev2citrusleaf_restart(cl_request *req)
 		}
 		
 		if (try++ > CL_LOG_RESTARTLOOP_WARN) cf_warn("restart loop: iteration %d", try);
-		
-//		if (req->start_time + req->timeout_ms < cf_getms()) {
-//			ev2citrusleaf_request_complete(req, true);
-//			return;
-//		}	
-		
+
 	} while (try++ < 5);
 		
 	// Not sure why so delayed. We're going to put this on the cluster queue.
@@ -1340,16 +1385,16 @@ GoodFd:
 	
 	// signal ready for event ---- write the buffer in the callback
 
+	event_assign(cl_request_get_network_event(req), req->base, fd, EV_WRITE, ev2citrusleaf_event, req);
+
 	req->network_set = true;
 
 	// Make sure no req fields are touched after the event is added. It's
 	// possible req->base does not correspond to the thread we're in here, so
 	// the event callback might happen (immediately) in another thread.
 
-	event_assign(cl_request_get_network_event(req), req->base, fd, EV_WRITE, ev2citrusleaf_event, req);
-
 	if (0 != event_add(cl_request_get_network_event(req), 0 /*timeout*/)) {
-		cf_warn("unable to add event for request %p: will hang forever", req);
+		cf_warn("unable to add event for request %p: will time out", req);
 		req->network_set = false;
 	}
 }
@@ -1852,11 +1897,14 @@ void ev2citrusleaf_print_stats(void)
 
 		reqs_in_queue += cf_queue_sz(asc->request_q);
 		
+		MUTEX_LOCK(asc->node_v_lock);
 		for (unsigned int i=0 ; i<cf_vector_size(&asc->node_v) ; i++) {
 			cl_cluster_node *cn = cf_vector_pointer_get(&asc->node_v, i);
 			conns_in_queue += cf_queue_sz(cn->conn_q);
 			nodes_active++;
 		}
+		MUTEX_UNLOCK(asc->node_v_lock);
+
 		n_clusters++;		
 	}
 

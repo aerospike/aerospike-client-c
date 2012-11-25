@@ -244,7 +244,7 @@ Ok:
 			//As of now, async functionality is there only for put call.
 			//In put call, we do not get anything back other than the trid field.
 			//So, just pass variable to get back the trid and ignore others.
-			if (0 != cl_parse(&msg.m, rd_buf, rd_buf_sz, NULL, NULL, NULL, &acktrid)) {
+			if (0 != cl_parse(&msg.m, rd_buf, rd_buf_sz, NULL, NULL, NULL, &acktrid, NULL)) {
 				rv = CITRUSLEAF_FAIL_UNKNOWN;
 			}
 			else {

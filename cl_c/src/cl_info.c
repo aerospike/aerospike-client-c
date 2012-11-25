@@ -358,5 +358,4 @@ citrusleaf_info_cluster_all(cl_cluster *asc, char *names, char **values_r, bool 
 		}
 	}
 	return(0);
-}	
-
+}

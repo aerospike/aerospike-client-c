@@ -25,7 +25,7 @@
 #include <asm/byteorder.h> // 64-bit swap macro
 
 #include "citrusleaf/cf_clock.h"
-#include "citrusleaf/cf_log.h"
+#include "citrusleaf/cf_log_internal.h"
 
 #include <signal.h>
 #include <netinet/tcp.h>

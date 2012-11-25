@@ -301,7 +301,7 @@ start_cluster_management()
 	}
 
 	// Create cluster object needed for all database operations.
-	g_p_cluster = ev2citrusleaf_cluster_create();
+	g_p_cluster = ev2citrusleaf_cluster_create(NULL);
 
 	if (! g_p_cluster) {
 		LOG("ERROR: creating cluster");
@@ -347,7 +347,7 @@ static void
 stop_cluster_management()
 {
 	if (g_p_cluster) {
-		ev2citrusleaf_cluster_destroy(g_p_cluster, 0);
+		ev2citrusleaf_cluster_destroy(g_p_cluster);
 	}
 
 	ev2citrusleaf_shutdown(true);
@@ -393,7 +393,7 @@ do_info_query()
 	if (0 == ev2citrusleaf_info(
 			p_event_base,					// event base for this transaction
 			p_dns_base,						// DNS base for this transaction
-			g_config.p_host,				// database server host
+			(char*)g_config.p_host,			// database server host
 			g_config.port,					// database server port
 			info_names,						// what info to get
 			g_config.timeout_msec,			// transaction timeout

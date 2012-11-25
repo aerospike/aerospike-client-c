@@ -19,6 +19,8 @@
 #include <fcntl.h>
 #include <arpa/inet.h>
 #include <signal.h>
+#include <ctype.h>
+#include <netinet/tcp.h>
 
 #include "citrusleaf/cf_atomic.h"
 #include "citrusleaf_event2/ev2citrusleaf.h"
@@ -27,7 +29,7 @@
 #include "citrusleaf/proto.h"
 #include "citrusleaf/cf_clock.h"
 
-extern int ev2citrusleaf_restart(cl_request *req);
+extern void ev2citrusleaf_base_hop(cl_request *req);
 
 // #define CLDEBUG_VERBOSE 1
 // #define CLDEBUG_DUN 1
@@ -102,15 +104,21 @@ cluster_create()
 	if (!asc) return(0);
 	memset(asc,0,sizeof(ev2citrusleaf_cluster) + event_get_struct_event_size());
 	MUTEX_ALLOC(asc->node_v_lock);
+	MUTEX_ALLOC(asc->request_q_lock);
 	return(asc);
 }
 
 void
 cluster_destroy(ev2citrusleaf_cluster *asc) {
-	if (asc->base) {
+	if (asc->dns_base) {
+		evdns_base_free(asc->dns_base, 0);
+	}
+
+	if (asc->internal_mgr) {
 		event_base_free(asc->base);
 	}
 
+	MUTEX_FREE(asc->request_q_lock);
 	MUTEX_FREE(asc->node_v_lock);
 	memset(asc, 0, sizeof(ev2citrusleaf_cluster) + event_get_struct_event_size() );
 	free(asc);
@@ -178,6 +186,32 @@ cluster_services_parse(ev2citrusleaf_cluster *asc, char *services)
 	cf_vector_destroy(&host_str_v);
 }
 
+static char*
+trim(char *str)
+{
+	// Warning: This method walks on input string.
+	char *begin = str;
+
+	// Trim leading space.
+	while (isspace(*begin)) {
+		begin++;
+	}
+
+	if(*begin == 0) {
+		return begin;
+	}
+
+	// Trim trailing space. Go to end first so whitespace is preserved in the
+	// middle of the string.
+	char *end = begin + strlen(begin) - 1;
+
+	while (end > begin && isspace(*end)) {
+		end--;
+	}
+	*(end + 1) = 0;
+	return begin;
+}
+
 //
 // Process new partitions information
 // namespace:part_id;namespace:part_id
@@ -192,39 +226,55 @@ cluster_partitions_process(ev2citrusleaf_cluster *asc, cl_cluster_node *cn, char
 {
 	cf_atomic_int_incr(&g_cl_stats.partition_process);
 	uint64_t _s = cf_getms();
-	
-	// use a create instead of a define because we know the size, and the size will likely be larger
-	// than a stack allocation
-	cf_vector *partitions_v = cf_vector_create(sizeof(void *), asc->n_partitions+1, 0);
-	str_split(';',partitions, partitions_v);
-	// partition_v is a vector of namespace:part_id
-	for (uint i=0;i<cf_vector_size(partitions_v);i++) {
-		char *partition_str = cf_vector_pointer_get(partitions_v, i);
+
+	// Partitions format: <namespace1>:<partition id1>;<namespace2>:<partition id2>; ...
+	// Warning: This method walks on partitions string argument.
+	char *p = partitions;
+
+	while (*p)
+	{
+		char *partition_str = p;
+		// Loop until split and set it to null.
+		while ((*p) && (*p != ';')) {
+			p++;
+		}
+		if (*p == ';') {
+			*p = 0;
+			p++;
+		}
 		cf_vector_define(partition_v, sizeof(void *), 0);
 		str_split(':', partition_str, &partition_v);
-		if (cf_vector_size(&partition_v) == 2) {
+
+		unsigned int vsize = cf_vector_size(&partition_v);
+		if (vsize == 2) {
 			char *namespace_s = cf_vector_pointer_get(&partition_v,0);
 			char *partid_s = cf_vector_pointer_get(&partition_v,1);
-			int partid = atoi(partid_s);
-			// it's coming over the wire, so validate it
-			if (strlen(namespace_s) > 30) {
 
-				cf_info("cluster partitions process: bad namespace: len %zd space %s", strlen(namespace_s), namespace_s);
+			// It's coming over the wire, so validate it.
+			char *ns = trim(namespace_s);
+			int len = strlen(ns);
+
+			if (len == 0 || len > 31) {
+				cf_warn("Invalid partition namespace %s", ns);
 				goto Next;
 			}
-			if (partid > asc->n_partitions) {
-				cf_warn("cluster partitions process: partitions out of scale: found %d max %d",
-					partid, asc->n_partitions);
+
+			int partid = atoi(partid_s);
+
+			if (partid < 0 || partid >= (int)asc->n_partitions) {
+				cf_warn("Invalid partition id %s, max %u", partid, asc->n_partitions);
 				goto Next;
 			}
-			
-			cl_partition_table_set(asc, cn, namespace_s, partid, write); 
+
+			cl_partition_table_set(asc, cn, ns, partid, write);
 		}
-Next:		
+		else {
+			cf_warn("Invalid partition vector size %u, element %s", vsize, partition_str);
+		}
+Next:
 		cf_vector_destroy(&partition_v);
 	}
-	cf_vector_destroy(partitions_v);
-	
+
 	uint64_t delta = cf_getms() - _s;
 	if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: partition process: %"PRIu64, delta);
 }
@@ -281,7 +331,7 @@ static void* run_cluster_mgr(void* base) {
 
 
 ev2citrusleaf_cluster *
-ev2citrusleaf_cluster_create()
+ev2citrusleaf_cluster_create(struct event_base *base)
 {
 	if (! g_ev2citrusleaf_initialized) {
 		cf_warn("must call ev2citrusleaf_init() before ev2citrusleaf_cluster_create()");
@@ -294,13 +344,22 @@ ev2citrusleaf_cluster_create()
 	asc->MAGIC = CLUSTER_MAGIC;
 	asc->follow = true;
 	asc->last_node = 0;
-	asc->base = event_base_new();
 
-	if (! asc->base) {
-		cf_warn("error creating cluster manager event base");
-		return NULL;
+	if (base) {
+		asc->internal_mgr = false;
+		asc->base = base;
+	}
+	else {
+		asc->internal_mgr = true;
+		asc->base = event_base_new();
+
+		if (! asc->base) {
+			cf_warn("error creating cluster manager event base");
+			return NULL;
+		}
 	}
 
+	// Note - this keeps this base's event loop alive even with no events added.
 	asc->dns_base = evdns_base_new(asc->base, 1);
 	
 	// bookkeeping for the set hosts
@@ -332,7 +391,8 @@ ev2citrusleaf_cluster_create()
 	}
 	asc->timer_set = true;
 
-	if (0 != pthread_create(&asc->mgr_thread, NULL, run_cluster_mgr, (void*)asc->base)) {
+	if (asc->internal_mgr &&
+			0 != pthread_create(&asc->mgr_thread, NULL, run_cluster_mgr, (void*)asc->base)) {
 		cf_warn("error creating cluster manager thread");
 		event_del(cluster_get_timer_event(asc));
 		cf_queue_destroy(asc->request_q);
@@ -401,7 +461,7 @@ int ev2citrusleaf_cluster_requests_in_progress(ev2citrusleaf_cluster *cl) {
 
 
 void
-ev2citrusleaf_cluster_destroy(ev2citrusleaf_cluster *asc, int delay_ms)
+ev2citrusleaf_cluster_destroy(ev2citrusleaf_cluster *asc)
 {
 	cf_info("cluster destroy: %p", asc);
 
@@ -410,16 +470,8 @@ ev2citrusleaf_cluster_destroy(ev2citrusleaf_cluster *asc, int delay_ms)
 		return;
 	}
 
-	if (delay_ms < 0 || delay_ms > 60 * 1000) {
-		cf_warn("cluster destroy delay_ms %d doesn't look right, using 100", delay_ms);
-		delay_ms = 100;
-	}
-
-	// Stop the cluster manager event dispatcher.
-	if (asc->base) {
-		// No significant difference between this and calling
-		// event_base_loopexit() with a delay.
-		usleep((__useconds_t)(delay_ms * 1000));
+	if (asc->internal_mgr) {
+		// Exit the cluster manager event loop.
 		event_base_loopbreak(asc->base);
 
 		void* pv_value;
@@ -472,10 +524,6 @@ ev2citrusleaf_cluster_destroy(ev2citrusleaf_cluster *asc, int delay_ms)
 	cl_partition_table_destroy_all(asc);
 
 	cf_ll_delete(&cluster_ll , (cf_ll_element *)asc);
-
-	if (asc->dns_base) {
-		evdns_base_free(asc->dns_base, 0);
-	}
 
 	cluster_destroy(asc);
 }
@@ -1161,7 +1209,10 @@ cl_cluster_node_fd_get(cl_cluster_node *cn)
 		cf_warn("could not set nonblocking");
 		return(-2);
 	}
-	
+
+	int f = 1;
+	setsockopt(fd, SOL_TCP, TCP_NODELAY, &f, sizeof(f));
+
 	cf_atomic_int_incr(&g_cl_stats.conns_created);
 
 	for (uint i=0;i< cf_vector_size(&cn->sockaddr_in_v);i++) {
@@ -1201,9 +1252,11 @@ Done:
 void
 cl_cluster_node_fd_put(cl_cluster_node *cn, int fd)
 {
-	cf_queue_push(cn->conn_q, &fd);
+	if (! cf_queue_push_limit(cn->conn_q, &fd, 300)) {
+		cf_atomic_int_incr(&g_cl_stats.conns_destroyed);
+		close(fd);
+	}
 }
-
 
 //
 // Debug function. Should be elsewhere.
@@ -1331,11 +1384,11 @@ cluster_ping_node_fn(int return_value, char *values, size_t values_len, void *ud
 	MUTEX_UNLOCK(asc->node_v_lock);
 	if (sz != 0) {
 		void *req;
+		MUTEX_LOCK(asc->request_q_lock);
 		while (CF_QUEUE_OK == cf_queue_pop(asc->request_q, (void *)&req,0)) {
-			cf_debug("have node now, restart request %p", req);
-
-			ev2citrusleaf_restart(req);
+			ev2citrusleaf_base_hop(req);
 		}
+		MUTEX_UNLOCK(asc->request_q_lock);
 	}
 }
 
@@ -1485,7 +1538,7 @@ int citrusleaf_cluster_shutdown()
 	cf_ll_element *e;
 	while ((e = cf_ll_get_head(&cluster_ll))) {
 		ev2citrusleaf_cluster *asc = (ev2citrusleaf_cluster *)e; 
-		ev2citrusleaf_cluster_destroy(asc, 0);
+		ev2citrusleaf_cluster_destroy(asc);
 	}
 	
 	return(0);	

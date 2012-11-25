@@ -196,18 +196,21 @@ void ev2citrusleaf_print_stats(void);
 struct ev2citrusleaf_cluster_s;
 typedef struct ev2citrusleaf_cluster_s ev2citrusleaf_cluster;
 
-// Creates an event_base and thread internally, for maintenance and monitoring.
-ev2citrusleaf_cluster *ev2citrusleaf_cluster_create();
+// Client uses base for internal cluster management events. If NULL is passed,
+// an event base and thread are created internally for cluster management.
+ev2citrusleaf_cluster *ev2citrusleaf_cluster_create(struct event_base *base);
 
 // Before calling ev2citrusleaf_cluster_destroy(), stop initiating transaction
 // requests to this cluster, and make sure that all in-progress transactions are
-// completed, i.e. their callbacks have been made. One way to satisfy this
-// requirement is to stop initiating transaction requests, then call
-// ev2citrusleaf_cluster_destroy() with a delay_ms safely in excess of any
-// timeout_ms value passed in requests.
+// completed, i.e. their callbacks have been made.
 //
-// This call will block for delay_ms milliseconds.
-void ev2citrusleaf_cluster_destroy(ev2citrusleaf_cluster *asc, int delay_ms);
+// If a base was passed in ev2citrusleaf_cluster_create(), the app must:
+// - First, exit the base's event loop.
+// - Next, call ev2citrusleaf_cluster_destroy().
+// - Finally, free the base.
+// During ev2citrusleaf_cluster_destroy() the client will re-run the base's
+// event loop to handle all outstanding internal cluster management events.
+void ev2citrusleaf_cluster_destroy(ev2citrusleaf_cluster *asc);
 
 // Adding a host to the cluster list which will always be checked for membership
 // As this entire interface is async, the number of hosts in the cluster must be

@@ -334,7 +334,7 @@ static int mutex_unlock(void* pv_lock) {
 //
 
 static bool begin_cluster_mgr() {
-	g_p_cluster = ev2citrusleaf_cluster_create();
+	g_p_cluster = ev2citrusleaf_cluster_create(NULL);
 
 	if (! g_p_cluster) {
 		fprintf(stdout, "ERROR: creating cluster\n");
@@ -437,7 +437,7 @@ static void cleanup() {
 	}
 
 	if (g_p_cluster) {
-		ev2citrusleaf_cluster_destroy(g_p_cluster, 0);
+		ev2citrusleaf_cluster_destroy(g_p_cluster);
 	}
 
 	ev2citrusleaf_shutdown(true);

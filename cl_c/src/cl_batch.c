@@ -454,7 +454,6 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 			}
 
 			if (cb && (msg->n_ops || (msg->info1 & CL_MSG_INFO1_NOBINDATA))) {
-				// got one good value? call it a success!
 				// (Note:  In the key exists case, there is no bin data.)
 				(*cb) ( ns_ret, keyd, set_ret, msg->generation, msg->record_ttl, bins_local, msg->n_ops, false /*islast*/, udata);
 				rv = 0;
@@ -694,19 +693,34 @@ citrusleaf_get_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, 
 int direct_batchget_cb(char *ns, cf_digest *keyd, char *set, uint32_t generation,
 			uint32_t record_voidtime, cl_bin *bins, int n_bins, bool islast, void *udata)
 {
-	cl_batchresult *br = (cl_batchresult *)udata;
+	cl_bin* targetBins;
 
-	//Set all the interesting fields into the result structure
-	int slot = br->numrecs;
-	memcpy(&(br->records[slot].digest), keyd, sizeof(cf_digest));
-	br->records[slot].generation = generation;
-	br->records[slot].record_voidtime = record_voidtime;
-	citrusleaf_copy_bins(&(br->records[slot].bins), bins, n_bins);
-	br->records[slot].n_bins = n_bins;
-	br->numrecs++;
+	if (citrusleaf_copy_bins(&targetBins, bins, n_bins) == 0) {
+		cl_batchresult *br = (cl_batchresult *)udata;
 
-	//We are supposed to free the bins in the callback
-	citrusleaf_bins_free(bins,n_bins);
+		// Get record slot in a lock.
+		pthread_mutex_lock(&br->lock);
+		cl_rec *rec = &br->records[br->numrecs];
+		br->numrecs++;
+		pthread_mutex_unlock(&br->lock);
+
+		// Copy data to record slot.
+		memcpy(&rec->digest, keyd, sizeof(cf_digest));
+		rec->generation = generation;
+		rec->record_voidtime = record_voidtime;
+		rec->bins = targetBins;
+		rec->n_bins = n_bins;
+	}
+	else {
+		// Do not include record in array.
+		char digest[CF_DIGEST_KEY_SZ*2 + 3];
+		cf_digest_string(keyd, digest);
+		cf_warn("Failed to copy bin(s) for record digest %s", digest);
+	}
+
+	// We are supposed to free the bins in the callback.
+	citrusleaf_bins_free(bins, n_bins);
+	return 0;
 }
 
 void
@@ -740,10 +754,14 @@ citrusleaf_get_many_digest_direct(cl_cluster *asc, char *ns, const cf_digest *di
 			return CITRUSLEAF_FAIL_CLIENT;
 		}
 	}
-	
+
+	pthread_mutex_init(&localbr->lock, 0);
+
 	//Call the actual batch-get with our internal callback function which will store the results in an array
 	localbr->numrecs = 0;
 	cl_rv rv = citrusleaf_get_many_digest(asc, ns, digests, n_digests, 0, 0, true, &direct_batchget_cb, localbr);
+
+	pthread_mutex_destroy(&localbr->lock);
 
 	//If something goes wrong we are responsible for freeing up the allocated memory. The caller may not free it.
 	if (rv == CITRUSLEAF_FAIL_CLIENT) {

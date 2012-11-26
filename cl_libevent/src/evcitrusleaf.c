@@ -844,7 +844,7 @@ parse(uint8_t *buf, size_t buf_len, evcitrusleaf_bin *values, int n_values,  int
 	if (generation)	*generation = msg->generation;
 	
 	if (msg->n_fields) {
-		CL_LOG(CL_WARNING, "unusual - not sure what fields are doing in a response\n");
+		CL_LOG(CL_VERBOSE, "Got %d fields in the response\n", msg->n_fields);
 		cl_msg_field *mf = (cl_msg_field *)buf;
 		for (i=0;i<msg->n_fields;i++) {
 
@@ -943,7 +943,7 @@ evcitrusleaf_request_complete(cl_request *req, bool timedout)
 	
 		// For simplicity & backwards-compatibility, convert server-side
 		// timeouts to the usual timeout return-code:
-		if (return_code == 9) {
+		if (return_code == EVCITRUSLEAF_FAIL_SERVERSIDE_TIMEOUT) {
 			return_code = EVCITRUSLEAF_FAIL_TIMEOUT;
 			CL_LOG(CL_VERBOSE, "server-side timeout\n");
 		}
@@ -1761,6 +1761,9 @@ int evcitrusleaf_init(void)
 	}
 	evcitrusleaf_inited = true;
 	
+	extern char *citrusleaf_build_string;
+	cf_info("Aerospike client version %s", citrusleaf_build_string);
+
 	memset(&g_cl_stats, 0, sizeof(g_cl_stats)); 
 	
 	citrusleaf_cluster_init();

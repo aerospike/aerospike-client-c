@@ -6,67 +6,27 @@ SECTION II: LANGUAGE SPECIFIC
 	Note: 1. Before creating the language modules, build the C client. To do that, run 'make' from the C directory.
 	2. For creating the language module, in 'swig' directory, run 'make LANG=<lang_name>' where
 	   <lang_name> is the language you are creating the module for.  
-	3. For cleanup, run 'make clean LANG=<lang_name>'. In make clean, if you do not provide a variable, all existing language
-	   directories will be cleaned up.
+	3. For cleanup, run 'make clean LANG=<lang_name>'. In make clean, if you do not provide a variable, 
+	   all existing language directories will be cleaned up.
 	4. Do not add files to the <lang_name> directory. (For running examples etc)
- 	5. For all languages. the type of each bin of bins array while calling 'citrusleaf_get()' or 'citrusleaf_get_digest()'
-	   should be initialized to 'CL_NULL'. This can be done by calling citrusleaf_object_init_null(cl_object*).
+ 	5. For all languages. the type of each bin of bins array while calling 'citrusleaf_get()' or 
+	   'citrusleaf_get_digest()' should be initialized to 'CL_NULL'. This can be done by calling
+	   citrusleaf_object_init_null(cl_object*).
 	
-	i. PYTHON
-		Creating python module
-		1. Install python-devel for writing python extensions. Due to incompatibility issues,
-		   we suggest you to use the same version of python of which you have installed the devel libraries. 
-		   -- For centos, run 'sudo yum install python26-devel.x86_64'. 
-		   This will create a directory /usr/include/python2.6/ which will be later included during compilation.
-		   If you install any other version of python-devel, please change the include directory in the swig/Makefile.
-		   The variable name is "DIR_INCLUDE_PYTHON". 
-		   
-		   -- For ubuntu, run 'sudo apt-get install python-dev'
-		   
-		2. In 'swig' directory, run 'make LANG=python'
-		3. python/python_citrusleaf.py is a python file which has all the helper function that an application might need. 
- 
-		Testing python client 
-		1. From examples directory, run 'python test.py' /*Citrusleaf library is imported as 'cl' in this file*/
-		2. For writing your own applications, import citrusleaf in your python file.
-		   All functions, unless otherwise specified, are called just like in C. 
-		   See more details on the C documentation here - http://citrusleaf.net/apis/capi.php .
-   		   For citrusleaf_get_all, after the function is called, the bins are returned in the bins array.
-		   To get the value of these bins, use the python helper function defined in python_citrusleaf.py,
-		   get_bins(bins,<noofbins>)
-		3. There is add on python file python/python_citrusleaf.py which has python helper functions defined.
- 
-		Other add ons: (Ref: test.py)
-		   Note: Whenever you pass a bin array to get a get call. In addition to sending the bin name, 
-		   always initialize the type to NULL.
-		1. Defining structures: Call cl.<structurename>(). For examples, see the definition of o_key.
-		2. Passing integer pointers: cl.new_intp() /*Creating an integer pointer to be passed*/
-   		   cl.intp_value(gen) /*Deferencing the integer pointer gen */
-   		   These pointeres are declared using pointer class in citrusleaf.i file like %pointer_functions(int,intp).
-	     	   Similarly other pointers are declared in this file and are used accordingly.
-		3. Defining arrays: The arrays are declared in citrusleaf.i as %array_class(<structname>,<arrayname>). 
-		   They are defined in .py file as <name> = cl.<arrayname>(<arraysize>). For example, see the use of cl_bin_arr.
-		4. Freeing bins - citrusleaf_free_bins(cl_bin *, int , cl_bin **) Takes three arguments, the array of cl_bins, the
-		   size of the array and a cl_bin **. If we want to free just the array,
-		   we pass a None for cl_bin ** and vice versa. 
-		5. Using blobs - For getting the blobs back, use cl.cdata(blob,size),
-		   where 'blob' is the blob object that is returned and 'size' is the object size. 
-		   For example, binary_data = cl.cdata(bins_get[i].object.u.blob, bins_get[i].object.sz)
-		   where 'bins_get' is the array of bins returned after the get call. 
-
-	ii. PERL
-		Creating perl module
-		1. Install PERL and make sure that C libraries for perl also get installed. Package name is: 'libgnome2-perl'.
-		   According to your installed version of perl, change the include path of perl CORE lib.
-		   The variable name is "DIR_INCLUDE_PERL".
-		   If you are not able to assign the value of 'DIR_INCLUDE_PERL', execute following command to know it:
-	           perl -MConfig -e 'print "$Config{archlib}/CORE"'
-		   For ubuntu, run 'sudo apt-get install libgnome2-perl'
+	PERL
+	Creating perl module
+		1. Install PERL and make sure that C libraries for perl also get installed. 
+		   Package name is: 'libgnome2-perl'.
+		     By default the current perl path is added to "DIR_INCLUDE_PERL" in the Makefile.
+		   * If using any other version, change the include path of perl CORE lib.
+		   * For ubuntu, run 'sudo apt-get install libgnome2-perl'
 		2. In 'swig' directory, run 'make LANG=perl'
-		3. perl/perl_citrusleaf.pl is a perl file which has all the helper function that an application might need.
+		3. perl/perl_citrusleaf.pl is a perl file which has all the helper functions 
+		   that an application might need.
 		
-		Testing perl client 
-		1. From examples directory, run 'perl test.pl' /*Citrusleaf library is imported as 'citrusleaf' in this file*/
+	Testing perl client 
+		1. From examples directory, run 'perl test.pl' /*Citrusleaf library is imported as 
+		   'citrusleaf' in this file*/
 		2. For writing your own applications, 'use citrusleaf' in your perl file.
 		   All functions, unless otherwise specified, are called just like in C. 
 		   See more details on the C documentation here - http://citrusleaf.net/apis/capi.php .
@@ -75,8 +35,9 @@ SECTION II: LANGUAGE SPECIFIC
 		   get_bins(bins,<noofbins>)
 		3. There is add on perl file perl/perl_citrusleaf.py which has perl helper functions defined.
 		
-		Other add ons: (Ref: test.pl)
-		1. Defining structures: Call 'new citrusleaf::<structurename>()'. For examples, see the definition of o_key.
+	Other add ons: (Ref: test.pl)
+		1. Defining structures: Call 'new citrusleaf::<structurename>()'. 
+		   For examples, see the definition of o_key.
 		2. Passing integer pointers: 'citrusleaf::new_intp()' /*Creating an integer pointer to be passed*/
    		   citrusleaf::intp_value(gen) /*Deferencing the integer pointer gen */
    		   These pointeres are declared using pointer class in citrusleaf.i file like %pointer_functions(int,intp).

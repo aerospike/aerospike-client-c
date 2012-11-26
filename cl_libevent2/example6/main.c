@@ -34,7 +34,7 @@
 
 const char DEFAULT_HOST[] = "127.0.0.1";
 const int DEFAULT_PORT = 3000;
-const char DEFAULT_NAMESPACE[] = "rwtest";
+const char DEFAULT_NAMESPACE[] = "test";
 const char DEFAULT_SET[] = "set";
 const int DEFAULT_TIMEOUT_MS = 10;
 const int DEFAULT_NUM_BASES = 16;
@@ -44,6 +44,9 @@ const int DEFAULT_WRITE_PCT = 20;
 
 const char BIN_NAME[] = "test-bin-name";
 const char BIN_DATA[] = "test-object";
+
+const int CLUSTER_VERIFY_TRIES = 3;
+const __useconds_t CLUSTER_VERIFY_INTERVAL = 1000 * 1000; // 1 second
 
 #define TRANS_FMT "base %2d, lap %d, op-count %d, key %d"
 #define TRANS_PARAMS(_b, _k) _b, g_bases[_b].lap, g_bases[_b].op_count, _k
@@ -65,12 +68,6 @@ typedef struct _config {
 	int write_pct;
 } config;
 
-typedef struct _cluster_mgr {
-	ev2citrusleaf_cluster* p_cluster;
-	struct event_base* p_event_base;
-	pthread_t thread;
-} cluster_mgr;
-
 typedef struct _base {
 	struct event_base* p_event_base;
 	pthread_t thread;
@@ -91,7 +88,7 @@ typedef struct _key {
 //
 
 static config g_config;
-static cluster_mgr g_cluster_mgr;
+static ev2citrusleaf_cluster* g_p_cluster = NULL;
 static base* g_bases = NULL;
 static key* g_keys = NULL;
 static int g_total_keys;
@@ -104,7 +101,6 @@ static uint64_t g_start_ms;
 // Forward Declarations
 //
 
-static void* run_cluster_mgr(void* pv_unused);
 static void* run_transactions(void* pv_b);
 static void transaction_cb(int return_value, ev2citrusleaf_bin* bins,
 	int n_bins, uint32_t generation, void* pv_udata);
@@ -141,6 +137,9 @@ int main(int argc, char* argv[]) {
 	if (! set_config(argc, argv)) {
 		exit(-1);
 	}
+
+	// Use default client logging, but set a filter.
+	cf_set_log_level(CF_WARN);
 
 	srand(time(NULL));
 
@@ -181,12 +180,6 @@ int main(int argc, char* argv[]) {
 //==========================================================
 // Thread "Run" Functions
 //
-
-static void* run_cluster_mgr(void* pv_unused) {
-	event_base_dispatch(g_cluster_mgr.p_event_base);
-
-	return NULL;
-}
 
 static void* run_transactions(void* pv_b) {
 	int b = (int)(uint64_t)pv_b;
@@ -281,10 +274,9 @@ static void transaction_cb(int return_value, ev2citrusleaf_bin* bins,
 //
 
 static bool get(int b, int k) {
-	if (ev2citrusleaf_get_all(g_cluster_mgr.p_cluster,
-			(char*)g_config.p_namespace, (char*)g_config.p_set, &g_keys[k].obj,
-			g_config.timeout_ms, transaction_cb, pack_user_data(b, k),
-			g_bases[b].p_event_base)) {
+	if (ev2citrusleaf_get_all(g_p_cluster, (char*)g_config.p_namespace,
+			(char*)g_config.p_set, &g_keys[k].obj, g_config.timeout_ms,
+			transaction_cb, pack_user_data(b, k), g_bases[b].p_event_base)) {
 		fprintf(stdout, "ERROR: get(), " TRANS_FMT "\n", TRANS_PARAMS(b, k));
 		return false;
 	}
@@ -293,7 +285,7 @@ static bool get(int b, int k) {
 }
 
 static bool put(int b, int k) {
-	if (ev2citrusleaf_put(g_cluster_mgr.p_cluster, (char*)g_config.p_namespace,
+	if (ev2citrusleaf_put(g_p_cluster, (char*)g_config.p_namespace,
 			(char*)g_config.p_set, &g_keys[k].obj, &g_bin, 1,
 			&g_write_parameters, g_config.timeout_ms, transaction_cb,
 			pack_user_data(b, k), g_bases[b].p_event_base)) {
@@ -342,27 +334,38 @@ static int mutex_unlock(void* pv_lock) {
 //
 
 static bool begin_cluster_mgr() {
-	memset(&g_cluster_mgr, 0, sizeof(cluster_mgr));
-	g_cluster_mgr.p_event_base = event_base_new();
+	g_p_cluster = ev2citrusleaf_cluster_create(NULL);
 
-	if (! g_cluster_mgr.p_event_base) {
-		fprintf(stdout, "ERROR: creating cluster event base\n");
-		return false;
-	}
-
-	g_cluster_mgr.p_cluster =
-		ev2citrusleaf_cluster_create(g_cluster_mgr.p_event_base);
-
-	if (! g_cluster_mgr.p_cluster) {
+	if (! g_p_cluster) {
 		fprintf(stdout, "ERROR: creating cluster\n");
 		return false;
 	}
 
-	ev2citrusleaf_cluster_add_host(g_cluster_mgr.p_cluster,
-		(char*)g_config.p_host, g_config.port);
+	int result = ev2citrusleaf_cluster_add_host(g_p_cluster,
+			(char*)g_config.p_host, g_config.port);
 
-	if (pthread_create(&g_cluster_mgr.thread, NULL, run_cluster_mgr, NULL)) {
-		fprintf(stdout, "ERROR: creating cluster manager thread\n");
+	if (result != 0) {
+		fprintf(stdout, "ERROR: cluster add host [%d]\n", result);
+		return false;
+	}
+
+	// Verify cluster is ready.
+	int tries = 0;
+
+	while (tries < CLUSTER_VERIFY_TRIES) {
+		int n = ev2citrusleaf_cluster_get_active_node_count(g_p_cluster);
+
+		if (n > 0) {
+			fprintf(stdout, "found %d cluster node%s\n", n, n > 1 ? "s" : "");
+			break;
+		}
+
+		usleep(CLUSTER_VERIFY_INTERVAL);
+		tries++;
+	}
+
+	if (tries == CLUSTER_VERIFY_TRIES) {
+		fprintf(stdout, "ERROR: connecting to cluster\n");
 		return false;
 	}
 
@@ -433,18 +436,8 @@ static void cleanup() {
 		}
 	}
 
-	if (g_cluster_mgr.p_event_base) {
-		// Is it ok to assume 0 is not a valid pthread ID?
-		if (g_cluster_mgr.thread) {
-			event_base_loopbreak(g_cluster_mgr.p_event_base);
-			pthread_join(g_cluster_mgr.thread, &pv_value);
-		}
-
-		if (g_cluster_mgr.p_cluster) {
-			ev2citrusleaf_cluster_destroy(g_cluster_mgr.p_cluster);
-		}
-
-		event_base_free(g_cluster_mgr.p_event_base);
+	if (g_p_cluster) {
+		ev2citrusleaf_cluster_destroy(g_p_cluster);
 	}
 
 	ev2citrusleaf_shutdown(true);

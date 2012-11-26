@@ -24,7 +24,8 @@
 #define __CL_C_H__
 
 #define NODE_DUN_THRESHOLD	800
-#define NODE_DUN_INFO_ERR	801
+#define NODE_DUN_INFO_ERR	300
+#define NODE_DUN_NAME_CHG	801
 #define NODE_DUN_NET_ERR	50
 #define NODE_DUN_TIMEOUT	1
 
@@ -73,8 +74,10 @@ typedef struct cl_partition_table_s {
 
 
 struct cl_cluster_s {
-	uint32_t		state;		//bitmap representing state information
+	// Linked list element should be first element in the structure
 	cf_ll_element		ll_e;
+
+	uint32_t		state;		//bitmap representing state information
 	
 	bool		follow;   // possible to create a no-follow cluster
 	bool		nbconnect;

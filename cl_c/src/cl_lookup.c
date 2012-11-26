@@ -24,6 +24,7 @@
 #include "citrusleaf/citrusleaf.h"
 #include "citrusleaf/cl_cluster.h"
 #include "citrusleaf/proto.h"
+#include "citrusleaf/cf_log_internal.h"
 
 // #define DEBUG
 
@@ -36,7 +37,6 @@
 // Return 0 in case of success
 //
 extern int h_errno;
-extern int g_cl_turn_debug_on;
 
 int
 cl_lookup(cl_cluster *asc, char *hostname, short port, cf_vector *sockaddr_in_v)
@@ -56,9 +56,7 @@ cl_lookup(cl_cluster *asc, char *hostname, short port, cf_vector *sockaddr_in_v)
 			map = cf_vector_pointer_get(&asc->host_addr_map_v, i);
 			if (map && strcmp(map->orig, hostname) == 0) {
 				//found a mapping for this address. Use the alternate one.
-				if (g_cl_turn_debug_on) {
-					fprintf(stderr, "Using %s instead of %s\n", map->alt, hostname);
-				}
+				cf_debug("Using %s instead of %s", map->alt, hostname);
 				hostname = map->alt;
 				break;
 			}
@@ -78,7 +76,7 @@ cl_lookup(cl_cluster *asc, char *hostname, short port, cf_vector *sockaddr_in_v)
 #endif
 		/* TRY_AGAIN for a maximun of 3 times, after which throw an error */
 		if(retry > 2) {
-			fprintf(stderr,"gethostbyname of %s - maxmimum retries failed\n",hostname);
+			cf_error("gethostbyname of %s - maxmimum retries failed", hostname);
 			retry = 0;
 			return -1;
 		}
@@ -86,20 +84,20 @@ cl_lookup(cl_cluster *asc, char *hostname, short port, cf_vector *sockaddr_in_v)
 			hostname = hostname ? hostname : "NONAME";
 			switch(herr) {
 				case HOST_NOT_FOUND:
-					fprintf(stderr, "gethostbyname says no host at %s\n", hostname);
+					cf_error("gethostbyname says no host at %s", hostname);
 					break;
 				case NO_ADDRESS:
-					fprintf(stderr, "gethostbyname of %s says invalid address (errno %d)\n",hostname, herr);
+					cf_error("gethostbyname of %s says invalid address (errno %d)", hostname, herr);
 					break;
 				case NO_RECOVERY:
-					fprintf(stderr, "gethostbyname of %s says form error (errno %d)\n",hostname, herr);
+					cf_error("gethostbyname of %s says form error (errno %d)", hostname, herr);
 					break;
 				case TRY_AGAIN:
-					fprintf(stderr, "gethostbyname of %s returned TRY_AGAIN, try again (rv=%d)\n",hostname, rv);
+					cf_error("gethostbyname of %s returned TRY_AGAIN, try again (rv=%d)", hostname, rv);
 					retry++;
 					continue;
 				default:
-					fprintf(stderr, "gethostbyname of %s returned an unknown error (errno %d)\n",hostname, herr);
+					cf_error("gethostbyname of %s returned an unknown error (errno %d)", hostname, herr);
 					break;
 			}
 			if (tmphstbuf != stack_hstbuf)		free(tmphstbuf);
@@ -113,21 +111,21 @@ cl_lookup(cl_cluster *asc, char *hostname, short port, cf_vector *sockaddr_in_v)
 				else
 					tmphstbuf = realloc (tmphstbuf, hstbuflen);
 				if (!tmphstbuf) {
-					fprintf(stderr, "malloc fail");
+					cf_error("malloc fail");
 					return(-1);
 				}
 			}
 			else if (rv == EAGAIN || herr == TRY_AGAIN) {
-				fprintf(stderr, "gethostbyname returned EAGAIN, try again\n");
+				cf_error("gethostbyname returned EAGAIN, try again");
 				retry++;
 			}
 			else if (rv == ETIMEDOUT) {
-				fprintf(stderr, "gethostbyname for %s timed out\n", hostname ? (hostname): "NONAME");
+				cf_error("gethostbyname for %s timed out", hostname ? (hostname): "NONAME");
 				if (tmphstbuf != stack_hstbuf)		free(tmphstbuf);
 				return(-1);
 			}
 			else {
-				fprintf(stderr, "gethostbyname returned an unknown error %d %d (errno %d)\n",rv,herr, errno);
+				cf_error("gethostbyname returned an unknown error %d %d (errno %d)",rv,herr, errno);
 				if (tmphstbuf != stack_hstbuf)		free(tmphstbuf);
 				return(-1);
 			}
@@ -135,20 +133,20 @@ cl_lookup(cl_cluster *asc, char *hostname, short port, cf_vector *sockaddr_in_v)
 	} while ((rv != 0) || (hp == NULL));
 
 #ifdef DEBUG
-	fprintf(stderr, "host lookup: %s canonical: %s addrtype %d length: %d\n", 
+	cf_debug("host lookup: %s canonical: %s addrtype %d length: %d",
 		hostname, hp->h_name, hp->h_addrtype, hp->h_length);
 
 	for (int i=0;hp->h_aliases[i];i++) {
-		fprintf(stderr, "  alias %d: %s\n",i, hp->h_aliases[i]);
+		cf_debug("  alias %d: %s",i, hp->h_aliases[i]);
 	}
 	for (int i=0;hp->h_addr_list[i];i++) {
 		// todo: print something about the actual address
-		fprintf(stderr, "  address %d: %x\n",i,*(uint32_t *) hp->h_addr_list[i]);
+		cf_debug("  address %d: %x",i,*(uint32_t *) hp->h_addr_list[i]);
 	}
-#endif	
+#endif
 
 	if (hp->h_addrtype != AF_INET) {
-		fprintf(stderr, "unknown address type %d\n",hp->h_addrtype);
+		cf_error("unknown address type %d", hp->h_addrtype);
 		if (tmphstbuf != stack_hstbuf)		free(tmphstbuf);
 		return(-1);
 	}

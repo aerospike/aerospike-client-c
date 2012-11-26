@@ -25,7 +25,7 @@ def usage():
 
 #arg processing
 try:
-        opts, args = getopt.getopt(sys.argv[1:], "h:p:", ["host=","port="])
+        opts, args = getopt.getopt(sys.argv[1:], "h:p:n:", ["host=","port=","namespace="])
 except getopt.GetoptError, err:
         print str(err)
         usage()
@@ -37,11 +37,15 @@ arg_reads = 10000
 arg_writes = 10000
 arg_value_length = 100
 arg_verbose = False
+ns = "test"
+
 for o, a in opts:
         if ((o == "-h") or (o == "--host")):
                 arg_host = a
         if (o == "-p" or o == "--port"):
                 arg_port = int(a)
+        if (o == "-n" or o == "--namespace"):
+                ns = a
     
 #Test host and port
 print arg_host
@@ -101,8 +105,7 @@ val = zlib.compress(value[3])
 cl.citrusleaf_object_init_blob(b.object,val, len(val))
 bins[3] = b
 
-#define namespace, set and write parameters for put
-ns = "usermap"
+#define set and write parameters for put
 set = ""
 cl_wp = cl.cl_write_parameters()
 cl.cl_write_parameters_set_default(cl_wp)
@@ -163,7 +166,7 @@ op = cl.cl_op_arr(n_ops)
 #One operation of incrementing an integer bin
 cl_op = op[0]
 cl_op.bin.bin_name = "bin3"
-cl_op.op = cl.CL_OP_ADD
+cl_op.op = cl.CL_OP_INCR
 cl.citrusleaf_object_init_int(cl_op.bin.object, -4)
 op[0] = cl_op
 

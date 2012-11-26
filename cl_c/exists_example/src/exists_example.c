@@ -147,7 +147,7 @@ void usage(int argc, char *argv[]) {
 	fprintf(stderr, "Usage %s:\n", argv[0]);
 	fprintf(stderr, "-h host [default 127.0.0.1] \n");
 	fprintf(stderr, "-p port [default 3000]\n");
-	fprintf(stderr, "-n namespace [default bar]\n");
+	fprintf(stderr, "-n namespace [default test]\n");
 	fprintf(stderr, "-b bin [default value]\n");
 	fprintf(stderr, "-m milliseconds timeout [default 200]\n");
 	fprintf(stderr, "-f do not follow cluster [default do follow]\n");

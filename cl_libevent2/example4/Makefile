@@ -21,7 +21,7 @@ CFLAGS_NATIVE += -D_REENTRANT -D MARCH_$(ARCH_NATIVE)
 # this code wants libevent-1.4, which I have installed locally. Change this to suit.
 LD = gcc
 LDFLAGS = $(CFLAGS_NATIVE) -L$(DIR_LIB) -L$(DIR_CF_LIB)
-LIBRARIES = -lev2citrusleaf /usr/local/lib/libevent-2.0.so.5 -lssl -lpthread -lrt
+LIBRARIES = -lev2citrusleaf -levent -lcrypto -lssl -lpthread -lrt
 
 HEADERS = 
 SOURCES = main.c

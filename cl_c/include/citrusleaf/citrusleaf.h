@@ -25,6 +25,7 @@
 #ifndef XDS	// Hack for the sake of XDS. XDS includes the main CF libs. 
 		// We do not want to include them again from client API
 #include "citrusleaf/cf_atomic.h"
+#include "citrusleaf/cf_log.h"
 #include "citrusleaf/cf_ll.h"
 #include "citrusleaf/cf_clock.h"
 #include "citrusleaf/cf_vector.h"
@@ -63,8 +64,15 @@ typedef enum cl_rv {
 	CITRUSLEAF_FAIL_SERVERSIDE_TIMEOUT = 9,
 	CITRUSLEAF_FAIL_NOXDS = 10,
 	CITRUSLEAF_FAIL_UNAVAILABLE = 11,
-	CITRUSLEAF_FAIL_INCOMPATIBLE_TYPE = 12  // specified operation cannot be performed on that data type
+	CITRUSLEAF_FAIL_INCOMPATIBLE_TYPE = 12,  // specified operation cannot be performed on that data type
+	CITRUSLEAF_FAIL_RECORD_TOO_BIG = 13,
+	CITRUSLEAF_FAIL_KEY_BUSY = 14
 } cl_rv;
+
+typedef enum cl_rvclient {
+	CITRUSLEAF_FAIL_DC_DOWN = 1,
+	CITRUSLEAF_FAIL_DC_UP = 2
+} cl_rvclient;
 
 
 // hidden forward reference
@@ -112,6 +120,22 @@ typedef struct cl_bin_s {
 	char		bin_name[32];
 	cl_object	object;
 } cl_bin;
+
+// A record structure containing the most common fileds of a record
+typedef struct cl_rec {
+	cf_digest	digest;
+	uint32_t	generation;
+	uint32_t	record_voidtime;
+	cl_bin		*bins;
+	int		n_bins;
+} cl_rec;
+
+// Structure used by functions which want to return a bunch of records
+typedef struct cl_batchresult {
+	pthread_mutex_t lock;
+	int 		numrecs;
+	cl_rec		*records;
+} cl_batchresult;
 
 // An operation is the bin, plus the operator (write, read, add, etc)
 // This structure is used for the more complex 'operate' call,
@@ -194,6 +218,8 @@ void citrusleaf_object_free(cl_object *o);
 
 // frees all the memory in a bin array that would be returned from get_all but not the bin array itself
 void citrusleaf_bins_free(cl_bin *bins, int n_bins);
+
+int citrusleaf_copy_bins(cl_bin **destbins, cl_bin *srcbins, int n_bins);
 
 
 // use:
@@ -349,6 +375,9 @@ citrusleaf_get_all(cl_cluster *asc, const char *ns, const char *set, const cl_ob
 cl_rv
 citrusleaf_get_all_digest(cl_cluster *asc, const char *ns, const cf_digest *d, cl_bin **bins, int *n_bins, int timeout_ms, uint32_t *cl_gen);
 
+cl_rv
+citrusleaf_get_all_digest_getsetname(cl_cluster *asc, const char *ns, const cf_digest *d, cl_bin **bins, int *n_bins, int timeout_ms, uint32_t *cl_gen, char **setname);
+
 //
 // Put is like insert. Create a list of bins, and call this function to set them.
 //
@@ -371,9 +400,15 @@ citrusleaf_async_put(cl_cluster *asc, const char *ns, const char *set, const cl_
 						int n_bins, const cl_write_parameters *cl_w_p, uint64_t trid, void *udata);
 
 cl_rv
-citrusleaf_async_put_digest(cl_cluster *asc, const char *ns, const cf_digest *d, const cl_bin *bins, int n_bins, 
-						const cl_write_parameters *cl_w_p, uint64_t trid, void *udata);
+citrusleaf_async_put_digest(cl_cluster *asc, const char *ns, const cf_digest *d, char *setname, 
+						const cl_bin *bins, int n_bins, const cl_write_parameters *cl_w_p, 
+						uint64_t trid, void *udata);
 
+cl_rvclient
+citrusleaf_check_cluster_health(cl_cluster *asc);
+
+void
+citrusleaf_sleep_for_tender(cl_cluster *asc);
 
 //
 // Get is like select in SQL. Create a list of bins to get, and call this function to retrieve
@@ -437,6 +472,20 @@ citrusleaf_scan_node (cl_cluster *asc, char *node_name, char *ns, char *set, cl_
 cl_rv
 citrusleaf_get_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_bin *bins, int n_bins, bool get_key /*if true, retrieve key instead of simply digest*/, 
 	citrusleaf_get_many_cb cb, void *udata);
+
+//
+// Get many digest without a callback
+// This version of the batch-get call does not need the callback function. It will return an array of records. 
+// The results are returned in an array. No ordering is guaranteed between the input digest array and 
+// the returned rows. If the corresponding records for the digests are not found in the cluster, there wont 
+// be any corresponding entry in the result array indicating that the records are missing. The caller must 
+// call the citrusleaf_free_batchresult() to free the memory allocated during this operation.
+cl_rv
+citrusleaf_get_many_digest_direct(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_batchresult **br);
+
+// Utility function to free the memory allocated by the citrusleaf_get_many_digest_direct() function
+void
+citrusleaf_free_batchresult(cl_batchresult *br);
 
 //
 // Key exists many digest

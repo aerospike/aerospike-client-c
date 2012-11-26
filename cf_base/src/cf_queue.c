@@ -21,6 +21,7 @@
 #endif
 
 #include "citrusleaf/cf_queue.h"
+#include "citrusleaf/cf_log_internal.h"
 
 // #define DEBUG 1
 
@@ -230,6 +231,42 @@ cf_queue_push(cf_queue *q, void *ptr)
 	return(0);
 }
 
+/* cf_queue_push_limit
+ * Push element on the queue only if size < limit.
+ * */
+bool
+cf_queue_push_limit(cf_queue *q, void *ptr, uint limit)
+{
+	QUEUE_LOCK(q);
+	uint size = CF_Q_SZ(q);
+
+	if (size >= limit) {
+		QUEUE_UNLOCK(q);
+		return false;
+	}
+
+	/* Check queue length */
+	if (size == q->allocsz) {
+		/* resize is a pain for circular buffers */
+		if (0 != cf_queue_resize(q, q->allocsz + CF_QUEUE_ALLOCSZ)) {
+			QUEUE_UNLOCK(q);
+			return false;
+		}
+	}
+
+	memcpy(CF_Q_ELEM_PTR(q,q->write_offset), ptr, q->elementsz);
+	q->write_offset++;
+	// we're at risk of overflow if the write offset is that high
+	if (q->write_offset & 0xC0000000) cf_queue_unwrap(q);
+
+#ifndef EXTERNAL_LOCKS
+	if (q->threadsafe)
+		pthread_cond_signal(&q->CV);
+#endif
+
+	QUEUE_UNLOCK(q);
+	return true;
+}
 
 /* cf_queue_pop
  * if ms_wait < 0, wait forever
@@ -240,13 +277,13 @@ int
 cf_queue_pop(cf_queue *q, void *buf, int ms_wait)
 {
 	if (NULL == q) {
-		fprintf(stderr, "cf_queue_pop: try passing in a queue\n");
+		cf_error("cf_queue_pop: try passing in a queue");
 		return(-1);
 	}
 
 #ifdef EXTERNAL_LOCKS 
 	if (ms_wait != CF_QUEUE_NOWAIT) {   // this implementation won't wait
-		fprintf(stderr, "cf_queue_pop: only nowait supported\n");
+		cf_error("cf_queue_pop: only nowait supported");
 		return(-1);
 	}
 #endif // EXTERNAL_LOCKS
@@ -276,8 +313,6 @@ cf_queue_pop(cf_queue *q, void *buf, int ms_wait)
 	 * waiting thread will be awakened... */
 	if (q->threadsafe) {
 #ifdef EXTERNAL_LOCKS
-		QUEUE_LOCK(q);
-
 		if (CF_Q_EMPTY(q)) {
 			QUEUE_UNLOCK(q);
 			return(CF_QUEUE_EMPTY);
@@ -481,8 +516,8 @@ Fail5:
 	cf_hooked_mutex_free(q->LOCK);
 #else
 	pthread_mutex_destroy(&q->LOCK);
-#endif // EXTERNAL_LOCKS
 Fail4:	
+#endif // EXTERNAL_LOCKS
 	cf_queue_destroy(q->high_q);
 Fail3:	
 	cf_queue_destroy(q->medium_q);
@@ -636,7 +671,7 @@ cf_queue_test_1_write(void *arg)
 		int rv;
 		rv = cf_queue_push(q, &i);
 		if (0 != rv) {
-			fprintf(stderr, "queue push failed: error %d",rv);
+			cf_error("queue push failed: error %d",rv);
 			return((void *)-1);
 		}
 	}
@@ -658,11 +693,11 @@ cf_queue_test_1_read(void *arg)
 		int  v = -1;
 		int rv = cf_queue_pop(q, &v, CF_QUEUE_FOREVER);
 		if (rv != CF_QUEUE_OK) {
-			fprintf(stderr, "cf_queue_test1: pop error %d",rv);
+			cf_error("cf_queue_test1: pop error %d",rv);
 			return((void *) -1);
 		}
 		if (v != i) {
-			fprintf(stderr, "cf_queue_test1: pop value error: %d should be %d",v,i);
+			cf_error("cf_queue_test1: pop value error: %d should be %d",v,i);
 			return((void *) -1);
 		}
 		
@@ -687,22 +722,22 @@ cf_queue_test_1()
 	void *th_return;
 	
 	if (0 != pthread_join(write_th, &th_return)) {
-		fprintf(stderr, "queue test 1: could not join1 %d\n",errno);
+		cf_error("queue test 1: could not join1 %d",errno);
 		return(-1);
 	}
 	
 	if (0 != th_return) {
-		fprintf(stderr, "queue test 1: returned error %p\n",th_return);
+		cf_error("queue test 1: returned error %p",th_return);
 		return(-1);
 	}
 	
 	if (0 != pthread_join(read_th, &th_return)) {
-		fprintf(stderr, "queue test 1: could not join2 %d\n",errno);
+		cf_error("queue test 1: could not join2 %d",errno);
 		return(-1);
 	}
 	
 	if (0 != th_return) {
-		fprintf(stderr, "queue test 1: returned error 2 %p\n",th_return);
+		cf_error("queue test 1: returned error 2 %p",th_return);
 		return(-1);
 	}
 	
@@ -715,10 +750,9 @@ int
 cf_queue_test()
 {
 	if (0 != cf_queue_test_1()) {
-		fprintf(stderr, "CF QUEUE TEST ONE FAILED\n");
+		cf_error("CF QUEUE TEST ONE FAILED");
 		return(-1);
 	}
 	
 	return(0);
 }
-

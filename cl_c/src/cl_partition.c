@@ -24,6 +24,7 @@
 
 #include "citrusleaf/citrusleaf.h"
 #include "citrusleaf/cl_cluster.h"
+#include "citrusleaf/cf_log_internal.h"
 
 // #define DEBUG 1
 // #define DEBUG_VERBOSE 1
@@ -39,7 +40,7 @@ void
 cl_partition_table_remove_node( cl_cluster *asc, cl_cluster_node *node )
 {
 #ifdef DEBUG
-	fprintf(stderr, "remove node %s\n",node->name);
+	cf_debug("remove node %s",node->name);
 #endif	
 	
 	cl_partition_table *pt = asc->partition_table_head;
@@ -69,7 +70,7 @@ cl_partition_table *
 cl_partition_table_create(cl_cluster *asc, char *ns) 
 {
 #ifdef DEBUG
-	fprintf(stderr, "partition table create: npartitions %d\n",asc->n_partitions);
+	cf_debug("partition table create: npartitions %d", asc->n_partitions);
 #endif
 
 	cl_partition_table *pt = malloc( sizeof(cl_partition_table) + (sizeof(cl_partition) * asc->n_partitions) );
@@ -100,7 +101,7 @@ cl_partition_table_destroy(cl_cluster *asc, cl_partition_table *pt)
 	}
 #ifdef EXTRA_CHECKS	
 	if (now == 0) {
-		fprintf(stderr, "warning! passed in partition table %p not in list\n",pt);
+		cf_warn("warning! passed in partition table %p not in list", pt);
 		return;
 	}
 #endif
@@ -136,35 +137,32 @@ cl_partition_table_get_byns(cl_cluster *asc, char *ns)
 void
 cl_partition_table_set( cl_cluster *asc, cl_cluster_node *node, char *ns, cl_partition_id pid, bool write)
 {
-#ifdef DEBUG
-	fprintf(stderr, "partition-table-set: ns %s partition %d node %s write %d\n",ns,pid,node->name,(int)write);
-#endif
-
-	//
 	cl_partition_table *pt = cl_partition_table_get_byns(asc, ns);
+
 	if (!pt) {
 		pt = cl_partition_table_create(asc, ns);
-		if (!pt)	return; // could not add, quite the shame
+		if (!pt) {
+			cf_warn("Failed to create partition table.");
+			return;
+		}
 	}
-	
-#ifdef EXTRA_CHECKS
-	if (pid > asc->n_partitions) {
-		fprintf(stderr, "internal error: partition table set got out of range partition id %d\n",pid);
-		return;
-	}
-#endif	
-	
-	if (write)
+	//cf_info("Set %s partition %s:%u", write? "write":"read", ns, pid);
+
+	if (write) {
 		pt->partitions[pid].write = node;
+	}
 	else {
 		cl_partition *p = &pt->partitions[pid];
-		for (int i=0;i < p->n_read ; i++) {
-			if (p->read[i] == node)	return; // already in!
+
+		for (int i = 0; i < p->n_read ; i++) {
+			if (p->read[i] == node) {
+				return; // already in!
+			}
 		}
-		if (MAX_REPLICA_COUNT == p->n_read) { // full, replace 0 for fun
-#ifdef DEBUG
-			fprintf(stderr, "read replica set full\n");
-#endif
+
+		if (MAX_REPLICA_COUNT == p->n_read) {
+			// full, replace 0
+			cf_debug("read replica set full");
 			p->read[0] = node;
 		}
 		else {
@@ -172,8 +170,6 @@ cl_partition_table_set( cl_cluster *asc, cl_cluster_node *node, char *ns, cl_par
 			p->n_read++;
 		}
 	}
-		
-	return;
 }
 
 static uint32_t round_robin_counter = 0;
@@ -184,7 +180,7 @@ cl_partition_table_get( cl_cluster *asc, char *ns, cl_partition_id pid, bool wri
 	cl_partition_table *pt = cl_partition_table_get_byns(asc,ns);
 	if (!pt)	{
 #ifdef DEBUG        
-        fprintf(stderr, "partition table: no partition table\n");
+        cf_debug("partition table: no partition table");
 #endif        
         return(0);
     }
@@ -207,8 +203,8 @@ cl_partition_table_get( cl_cluster *asc, char *ns, cl_partition_id pid, bool wri
 	}
 
 #ifdef DEBUG_VERBOSE
-		fprintf(stderr, "partition-table-get: ns %s pid %d write %d: node %s \n",ns,pid,write,
-			node ? node->name : "nope" );
+		cf_debug("partition-table-get: ns %s pid %d write %d: node %s", ns, pid,write,
+			node ? node->name : "nope");
 #endif		
 	
 	return(node);

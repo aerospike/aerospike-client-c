@@ -20,6 +20,7 @@
 #include <fcntl.h>
 
 #include "citrusleaf/citrusleaf.h"
+#include "citrusleaf/citrusleaf-internal.h"
 #include "citrusleaf/cl_cluster.h"
 #include "citrusleaf/proto.h"
 #include "citrusleaf/cf_socket.h"
@@ -71,14 +72,20 @@ citrusleaf_info_parse_single(char *values, char **value)
 	
 }
 
-
-//
-// Request the info of a particular sockaddr_in,
-// used internally for host-crawling as well as supporting the external interface
-//
-
+// Request the info of a particular sockaddr_in.
+// Used internally for host-crawling as well as supporting the external interface.
+// Return 0 on success and -1 on error.
 int
-citrusleaf_info_host(struct sockaddr_in *sa_in, char *names, char **values, int timeout_ms, bool send_asis) 
+citrusleaf_info_host(struct sockaddr_in *sa_in, char *names, char **values, int timeout_ms, bool send_asis)
+{
+	return citrusleaf_info_host_limit(sa_in, names, values, timeout_ms, send_asis, 0);
+}
+
+// Request the info of a particular sockaddr_in.
+// Reject info request if response length is greater than max_response_length.
+// Return 0 on success and -1 on error.
+int
+citrusleaf_info_host_limit(struct sockaddr_in *sa_in, char *names, char **values, int timeout_ms, bool send_asis, uint64_t max_response_length)
 {
 	int rv = -1;
     int io_rv;
@@ -121,7 +128,7 @@ citrusleaf_info_host(struct sockaddr_in *sa_in, char *names, char **values, int 
 	// Actually doing a non-blocking connect
 	int fd = cf_create_nb_socket(sa_in, timeout_ms);
 	if (fd == -1) {
-		return (-1);
+		return -1;
 	}
 
 	cl_proto 	*req;
@@ -138,13 +145,13 @@ citrusleaf_info_host(struct sockaddr_in *sa_in, char *names, char **values, int 
 		if (req == NULL)	goto Done;
 
 		req->sz = sz;
-		//req->data = malloc(sz+1);
 		memcpy(req->data,names,sz);
 	}
 	else {
 		req = (cl_proto *) buf;
 		req->sz = 0;
-		buf_sz = sizeof(cl_proto);
+		buf_sz = sizeof(cl_proto);i
+		names = "";
 	}
 		
 	req->version = CL_PROTO_VERSION;
@@ -159,7 +166,7 @@ citrusleaf_info_host(struct sockaddr_in *sa_in, char *names, char **values, int 
 	if ((uint8_t *)req != buf)	free(req);
 	if (io_rv != 0) {
 #ifdef DEBUG        
-		fprintf(stderr, "info returned error, rv %d errno %d bufsz %d\n",io_rv, errno, buf_sz);
+		cf_debug("info returned error, rv %d errno %d bufsz %d", io_rv, errno, buf_sz);
 #endif        
 		goto Done;
 	}
@@ -172,7 +179,7 @@ citrusleaf_info_host(struct sockaddr_in *sa_in, char *names, char **values, int 
     
     if (0 != io_rv) {
 #ifdef DEBUG        
-		fprintf(stderr, "info read not 8 bytes, fail, rv %d errno %d\n",rv, errno);
+		cf_debug("info socket read failed: rv %d errno %d", io_rv, errno);
 #endif        
 		goto Done;
 	}
@@ -200,13 +207,11 @@ citrusleaf_info_host(struct sockaddr_in *sa_in, char *names, char **values, int 
 		*values = 0;
 	}
 	rv = 0;
-	//fprintf(stderr,"%s\n",*values);
+
 Done:	
 	shutdown(fd, SHUT_RDWR);
 	close(fd);
-	
 	return(rv);
-	
 }
 
 //
@@ -223,7 +228,7 @@ citrusleaf_info(char *hostname, short port, char *names, char **values, int time
 	cf_vector sockaddr_in_v;
 	cf_vector_init(&sockaddr_in_v, sizeof( struct sockaddr_in ), 5, 0);
 	if (0 != cl_lookup(NULL, hostname, port, &sockaddr_in_v)) {
-		fprintf(stderr, "Could not find host %s\n",hostname);
+		cf_debug("Could not find host %s", hostname);
 		goto Done;
 	}
 	

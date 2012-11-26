@@ -39,7 +39,7 @@ typedef struct cf_histogram_s {
 } cf_histogram;
 
 extern cf_histogram * cf_histogram_create(char *name);
-extern void cf_histogram_dump( cf_histogram *h );  // for debugging, dumps to stderr
+extern void cf_histogram_dump( cf_histogram *h );  // for debugging
 extern void cf_histogram_get_counts(cf_histogram *h, cf_histogram_counts *hc);
 extern void cf_histogram_insert_data_point(cf_histogram *h, uint64_t start);
 

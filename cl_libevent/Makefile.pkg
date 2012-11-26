@@ -1,17 +1,12 @@
 # Citrusleaf Foundation
 # Makefile
 
-all: libev2citrusleaf
+all: libevcitrusleaf
 	$(MAKE) -C example
 	$(MAKE) -C example2
 	$(MAKE) -C example3
 	$(MAKE) -C example4
 	$(MAKE) -C example5
-	$(MAKE) -C example6
-	$(MAKE) -C operate_example
-	cp lib/libev2citrusleaf.a ../../../shared/lib
-	cp -r include/* ../../../shared/include
-	rm ../../../shared/include/citrusleaf_event2/*internal*
 	@echo "done."
 
 clean:
@@ -21,7 +16,7 @@ clean:
 	rm -f lib/*
 	rm -f lib32/*
 	rm -f lib64/*
-	rm -f example/example
+	rm -f example/cl_evexample
 	rm -f example/obj/*
 	rm -f example2/example2
 	rm -f example2/obj/*
@@ -31,10 +26,6 @@ clean:
 	rm -f example4/obj/*
 	rm -f example5/example5
 	rm -f example5/obj/*
-	rm -f example6/example6
-	rm -f example6/obj/*
-	rm -f operate_example/example
-	rm -f operate_example/obj/*
 
 
 %:

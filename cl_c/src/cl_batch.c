@@ -25,6 +25,8 @@
 #include "citrusleaf/proto.h"
 #include "citrusleaf/cf_socket.h"
 
+extern int g_init_pid;
+
 
 //
 // Decompresses a compressed CL msg
@@ -54,7 +56,7 @@ batch_decompress(uint8_t *in_buf, size_t in_sz, uint8_t **out_buf, size_t *out_s
     size_t  	b_sz_alloc = *(uint64_t *)in_buf;
     uint8_t 	*b = malloc(b_sz_alloc);
     if (0 == b) {
-    	fprintf(stderr, "batch_decompress: could not malloc %"PRIu64" bytes\n",b_sz_alloc);
+    	cf_error("batch_decompress: could not malloc %"PRIu64" bytes", b_sz_alloc);
     	inflateEnd(&strm);
     	return(-1);
     }
@@ -65,17 +67,10 @@ batch_decompress(uint8_t *in_buf, size_t in_sz, uint8_t **out_buf, size_t *out_s
 	strm.avail_out = b_sz_alloc; // round up: seems to like that
 	strm.next_out = b;
 
-
-//	fprintf(stderr, "before deflate: in_buf %p in_sz %"PRIu64" outbuf %p out_sz %"PRIu64"\n",
-//		strm.next_in, strm.avail_in, strm.next_out, strm.avail_out);
-
 	rv = inflate(&strm, Z_FINISH);
-	
-//	fprintf(stderr, "after deflate: rv %d in_buf %p in_sz %"PRIu64" outbuf %p out_sz %"PRIu64" ms %"PRIu64"\n",
-//		rv, strm.next_in, strm.avail_in, strm.next_out, strm.avail_out, cf_getms() - now);
 
 	if (rv != Z_STREAM_END) {
-		fprintf(stderr, "could not deflate data: zlib error %d (check zlib.h)\n",rv);
+		cf_error("could not deflate data: zlib error %d (check zlib.h)", rv);
 		free(b);
 		inflateEnd(&strm);
 		return(-1);
@@ -145,7 +140,7 @@ batch_compile(uint info1, uint info2, char *ns, cf_digest *digests, cl_cluster_n
 		msg_sz += sizeof(cl_msg_op) + strlen(values[i].bin_name);
 
         if (0 != cl_value_to_op_get_size(&values[i], &msg_sz)) {
-            fprintf(stderr,"illegal parameter: bad type %d write op %d\n",values[i].object.type,i);
+            cf_error("illegal parameter: bad type %d write op %d", values[i].object.type, i);
             return(-1);
         }
 	}
@@ -244,7 +239,8 @@ batch_compile(uint info1, uint info2, char *ns, cf_digest *digests, cl_cluster_n
 //
 
 static int
-do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *digests, cl_cluster_node **nodes, int n_digests, cl_bin *bins, cl_operator operator, cl_operation *operations, int n_ops,
+do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *digests, cl_cluster_node **nodes, 
+	int n_digests, cl_bin *bins, cl_operator operator, cl_operation *operations, int n_ops,
 	cl_cluster_node *node, int n_node_digests, citrusleaf_get_many_cb cb, void *udata)
 {
 	int rv = -1;
@@ -261,7 +257,7 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 	rv = batch_compile(info1, info2, ns, digests, nodes, n_digests, node, n_node_digests, bins, operator, operations, n_ops, 
 		&wr_buf, &wr_buf_sz, 0);
 	if (rv != 0) {
-		fprintf(stderr, " do batch monte: batch compile failed: some kind of intermediate error\n");
+		cf_error("do batch monte: batch compile failed: some kind of intermediate error");
 		return (rv);
 	}
 
@@ -273,7 +269,7 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 	int fd = cl_cluster_node_fd_get(node, false, asc->nbconnect);
 	if (fd == -1) {
 #ifdef DEBUG			
-		fprintf(stderr, "warning: node %s has no file descriptors, retrying transaction\n",node->name);
+		cf_debug("warning: node %s has no file descriptors, retrying transaction", node->name);
 #endif
 		return(-1);
 	}
@@ -281,7 +277,7 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 	// send it to the cluster - non blocking socket, but we're blocking
 	if (0 != cf_socket_write_forever(fd, wr_buf, wr_buf_sz)) {
 #ifdef DEBUG			
-		fprintf(stderr, "Citrusleaf: write timeout or error when writing header to server - %d fd %d errno %d\n",rv,fd,errno);
+		cf_debug("Citrusleaf: write timeout or error when writing header to server - %d fd %d errno %d", rv, fd, errno);
 #endif
 		return(-1);
 	}
@@ -293,7 +289,7 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 		
 		// Now turn around and read a fine cl_pro - that's the first 8 bytes that has types and lenghts
 		if ((rv = cf_socket_read_forever(fd, (uint8_t *) &proto, sizeof(cl_proto) ) ) ) {
-			fprintf(stderr, "network error: errno %d fd %d\n",rv, fd);
+			cf_error("network error: errno %d fd %d", rv, fd);
 			return(-1);
 		}
 #ifdef DEBUG_VERBOSE
@@ -302,11 +298,11 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 		cl_proto_swap(&proto);
 
 		if (proto.version != CL_PROTO_VERSION) {
-			fprintf(stderr, "network error: received protocol message of wrong version %d\n",proto.version);
+			cf_error("network error: received protocol message of wrong version %d", proto.version);
 			return(-1);
 		}
 		if ((proto.type != CL_PROTO_TYPE_CL_MSG) && (proto.type != CL_PROTO_TYPE_CL_MSG_COMPRESSED)) {
-			fprintf(stderr, "network error: received incorrect message version %d\n",proto.type);
+			cf_error("network error: received incorrect message version %d", proto.type);
 			return(-1);
 		}
 		
@@ -316,8 +312,6 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 		rd_buf_sz =  proto.sz;
 		if (rd_buf_sz > 0) {
                                                          
-//            fprintf(stderr, "message read: size %u\n",(uint)proto.sz);
-            
 			if (rd_buf_sz > sizeof(rd_stack_buf))
 				rd_buf = malloc(rd_buf_sz);
 			else
@@ -325,7 +319,7 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 			if (rd_buf == NULL)		return (-1);
 
 			if ((rv = cf_socket_read_forever(fd, rd_buf, rd_buf_sz))) {
-				fprintf(stderr, "network error: errno %d fd %d\n",rv, fd);
+				cf_error("network error: errno %d fd %d", rv, fd);
 				if (rd_buf != rd_stack_buf)	{ free(rd_buf); }
 				return(-1);
 			}
@@ -342,8 +336,9 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 			
 			rv = batch_decompress(rd_buf, rd_buf_sz, &new_rd_buf, &new_rd_buf_sz);
 			if (rv != 0) {
-				fprintf(stderr, "could not decompress compressed message: error %d\n",rv);
+				cf_error("could not decompress compressed message: error %d", rv);
 				if (rd_buf != rd_stack_buf)	{ free(rd_buf); }
+				return -1;
 			}				
 				
 			if (rd_buf != rd_stack_buf)	{ free(rd_buf); }
@@ -360,7 +355,7 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 		uint8_t *buf = rd_buf;
 		uint pos = 0;
 		cl_bin stack_bins[STACK_BINS];
-		cl_bin *bins;
+		cl_bin *bins_local;
 		
 		while (pos < rd_buf_sz) {
 
@@ -374,7 +369,7 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 			buf += sizeof(cl_msg);
 			
 			if (msg->header_sz != sizeof(cl_msg)) {
-				fprintf(stderr, "received cl msg of unexpected size: expecting %zd found %d, internal error\n",
+				cf_error("received cl msg of unexpected size: expecting %zd found %d, internal error",
 					sizeof(cl_msg),msg->header_sz);
 				return(-1);
 			}
@@ -386,8 +381,9 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 			cl_msg_field *mf = (cl_msg_field *)buf;
 			for (int i=0;i<msg->n_fields;i++) {
 				cl_msg_swap_field(mf);
-				if (mf->type == CL_MSG_FIELD_TYPE_KEY)
-					fprintf(stderr, "read: found a key - unexpected\n");
+				if (mf->type == CL_MSG_FIELD_TYPE_KEY) {
+					cf_error("read: found a key - unexpected");
+				}
 				else if (mf->type == CL_MSG_FIELD_TYPE_DIGEST_RIPE) {
 					keyd = (cf_digest *) mf->data;
 				}
@@ -406,17 +402,17 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 			buf = (uint8_t *) mf;
 
 #ifdef DEBUG_VERBOSE
-			fprintf(stderr, "message header fields: nfields %u nops %u\n",msg->n_fields,msg->n_ops);
+			cf_debug("message header fields: nfields %u nops %u",msg->n_fields,msg->n_ops);
 #endif
 
 
 			if (msg->n_ops > STACK_BINS) {
-				bins = malloc(sizeof(cl_bin) * msg->n_ops);
+				bins_local = malloc(sizeof(cl_bin) * msg->n_ops);
 			}
 			else {
-				bins = stack_bins;
+				bins_local = stack_bins;
 			}
-			if (bins == NULL) {
+			if (bins_local == NULL) {
 				if (set_ret) {
 					free(set_ret);
 				}
@@ -430,7 +426,7 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 				cl_msg_swap_op(op);
 
 #ifdef DEBUG_VERBOSE
-				fprintf(stderr, "op receive: %p size %d op %d ptype %d pversion %d namesz %d \n",
+				cf_debug("op receive: %p size %d op %d ptype %d pversion %d namesz %d",
 					op,op->op_sz, op->op, op->particle_type, op->version, op->name_sz);
 #endif			
 
@@ -438,30 +434,34 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 				dump_buf("individual op (host order)", (uint8_t *) op, op->op_sz + sizeof(uint32_t));
 #endif	
 
-				cl_set_value_particular(op, &bins[i]);
+				cl_set_value_particular(op, &bins_local[i]);
 				op = cl_msg_op_get_next(op);
 			}
 			buf = (uint8_t *) op;
 			
+			// Keep processing batch on OK and NOTFOUND return codes.
+			// All other return codes indicate a error has occurred and the batch was aborted.
+			if (msg->result_code != CL_RESULT_OK && msg->result_code != CL_RESULT_NOTFOUND) {
+				rv = (int)msg->result_code;
+				done = true;
+			}
+
 			if (msg->info3 & CL_MSG_INFO3_LAST)	{
 #ifdef DEBUG				
-				fprintf(stderr, "received final message\n");
+				cf_debug("received final message");
 #endif				
 				done = true;
 			}
 
 			if (cb && (msg->n_ops || (msg->info1 & CL_MSG_INFO1_NOBINDATA))) {
-				// got one good value? call it a success!
 				// (Note:  In the key exists case, there is no bin data.)
-				(*cb) ( ns_ret, keyd, set_ret, msg->generation, msg->record_ttl, bins, msg->n_ops, false /*islast*/, udata);
+				(*cb) ( ns_ret, keyd, set_ret, msg->generation, msg->record_ttl, bins_local, msg->n_ops, false /*islast*/, udata);
 				rv = 0;
 			}
-//			else
-//				fprintf(stderr, "received message with no bins, signal of an error\n");
 
-			if (bins != stack_bins) {
-				free(bins);
-				bins = 0;
+			if (bins_local != stack_bins) {
+				free(bins_local);
+				bins_local = 0;
 			}
 
 			if (set_ret) {
@@ -486,21 +486,26 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 		free(wr_buf);
 		wr_buf = 0;
 	}
-	
-	cl_cluster_node_fd_put(node, fd, false);
-	
-	goto Final;
-	
-Final:	
-	
+
+	// We should close the connection fd in case of error
+	// to throw away any unread data on connection socket.
+	// Instead if we put back fd into pull the subsequent
+	// call will read stale data.
+
+	if (rv == 0) {
+		cl_cluster_node_fd_put(node, fd, false);
+	} else {
+		close(fd);
+	}
+
 #ifdef DEBUG_VERBOSE	
-	fprintf(stderr, "exited loop: rv %d\n", rv );
+	cf_debug("exited loop: rv %d", rv );
 #endif	
 	
 	return(rv);
 }
 
-static cf_atomic32 batch_initialized = 0;
+cf_atomic32 batch_initialized = 0;
 
 #define N_BATCH_THREADS 6
 static cf_queue *g_batch_q = 0;
@@ -547,7 +552,7 @@ batch_worker_fn(void *dummy)
 		digest_work work;
 		
 		if (0 != cf_queue_pop(g_batch_q, &work, CF_QUEUE_FOREVER)) {
-			fprintf(stderr, "queue pop failed\n");
+			cf_error("queue pop failed");
 		}
 		
 		/* See function citrusleaf_batch_shutdown() for more details */
@@ -578,7 +583,7 @@ do_get_exists_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, i
 	// 
 	cl_cluster_node **nodes = malloc( sizeof(cl_cluster_node *)  * n_digests);
 	if (!nodes) {
-		fprintf(stderr, " allocation failed ");
+		cf_error("allocation failed");
 		return(-1);
 	}
 	
@@ -590,11 +595,13 @@ do_get_exists_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, i
 		// not sure if this is required - it looks like cluster_node_get automatically calls random?
 		// it's certainly safer though
 		if (nodes[i] == 0) {
-			fprintf(stderr, "index %d: no specific node, getting random\n",i);
+			cf_error("index %d: no specific node, getting random", i);
+			pthread_mutex_lock(&asc->LOCK);
 			nodes[i] = cl_cluster_node_get_random(asc);
+			pthread_mutex_unlock(&asc->LOCK);
 		}
 		if (nodes[i] == 0) {
-			fprintf(stderr, "index %d: can't get any node\n", i);
+			cf_error("index %d: can't get any node", i);
 			free(nodes);
 			return(-1);
 		}
@@ -652,8 +659,6 @@ do_get_exists_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, i
 		work.my_node_digest_count = unique_nodes_count[i];
 		work.index = i;
 		
-//		fprintf(stderr,"dispatching work: index %d node %p n_digeset %d\n",i,work.my_node,work.my_node_digest_count); 
-		
 		// dispatch - copies data
 		cf_queue_push(g_batch_q, &work);
 	}
@@ -663,8 +668,10 @@ do_get_exists_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, i
 	for (int i=0;i<n_nodes;i++) {
 		int z;
 		cf_queue_pop(work.complete_q, &z, CF_QUEUE_FOREVER);
-		if (z != 0)
+		if (z != 0) {
+			cf_error("Node %d retcode error: %d", i, z);
 			retval = z;
+		}
 	}
 	
 	// free and return what needs freeing and putting
@@ -673,13 +680,7 @@ do_get_exists_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, i
 		cl_cluster_node_put(nodes[i]);	
 	}
 	free(nodes);
-	if (retval != 0) {
-		return( CITRUSLEAF_FAIL_CLIENT );
-	} 
-	else {
-		return ( 0 );
-	}
-
+	return retval;
 }
 
 
@@ -689,6 +690,91 @@ citrusleaf_get_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, 
 	return do_get_exists_many_digest(asc, ns, digests, n_digests, bins, n_bins, get_key, true, cb, udata);
 }
 
+//This is an internal batch helper function which will collect all the records and put it in an array.
+int direct_batchget_cb(char *ns, cf_digest *keyd, char *set, uint32_t generation,
+			uint32_t record_voidtime, cl_bin *bins, int n_bins, bool islast, void *udata)
+{
+	cl_bin* targetBins;
+
+	if (citrusleaf_copy_bins(&targetBins, bins, n_bins) == 0) {
+		cl_batchresult *br = (cl_batchresult *)udata;
+
+		// Get record slot in a lock.
+		pthread_mutex_lock(&br->lock);
+		cl_rec *rec = &br->records[br->numrecs];
+		br->numrecs++;
+		pthread_mutex_unlock(&br->lock);
+
+		// Copy data to record slot.
+		memcpy(&rec->digest, keyd, sizeof(cf_digest));
+		rec->generation = generation;
+		rec->record_voidtime = record_voidtime;
+		rec->bins = targetBins;
+		rec->n_bins = n_bins;
+	}
+	else {
+		// Do not include record in array.
+		char digest[CF_DIGEST_KEY_SZ*2 + 3];
+		cf_digest_string(keyd, digest);
+		cf_warn("Failed to copy bin(s) for record digest %s", digest);
+	}
+
+	// We are supposed to free the bins in the callback.
+	citrusleaf_bins_free(bins, n_bins);
+	return 0;
+}
+
+void
+citrusleaf_free_batchresult(cl_batchresult *br)
+{
+	if (br && br->records) {
+		//We should free the bins in each of the records
+		for (int i=0; i<(br->numrecs); i++) {
+			citrusleaf_bins_free(br->records[i].bins, br->records[i].n_bins);
+			free(br->records[i].bins);
+		}
+
+		//Finally free the record array and the whole structure
+		free(br->records);
+		free(br);
+	}
+}
+
+cl_rv
+citrusleaf_get_many_digest_direct(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_batchresult **br)
+{
+	//Fist allocate the result structure
+	cl_batchresult *localbr = (cl_batchresult *) malloc(sizeof(struct cl_batchresult));
+	if (localbr == NULL) {
+		return CITRUSLEAF_FAIL_CLIENT;
+	} else {
+		//Assume that we are going to get all the records and allocate memory for them
+		localbr->records = malloc(sizeof(struct cl_rec) * n_digests);
+		if (localbr->records == NULL) {
+			free(localbr);
+			return CITRUSLEAF_FAIL_CLIENT;
+		}
+	}
+
+	pthread_mutex_init(&localbr->lock, 0);
+
+	//Call the actual batch-get with our internal callback function which will store the results in an array
+	localbr->numrecs = 0;
+	cl_rv rv = citrusleaf_get_many_digest(asc, ns, digests, n_digests, 0, 0, true, &direct_batchget_cb, localbr);
+
+	pthread_mutex_destroy(&localbr->lock);
+
+	//If something goes wrong we are responsible for freeing up the allocated memory. The caller may not free it.
+	if (rv == CITRUSLEAF_FAIL_CLIENT) {
+		citrusleaf_free_batchresult(localbr);
+		return CITRUSLEAF_FAIL_CLIENT;
+	} else {
+		*br = localbr;
+	}
+
+	return CITRUSLEAF_OK;
+	
+}
 
 cl_rv
 citrusleaf_exists_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_bin *bins, int n_bins, bool get_key, citrusleaf_get_many_cb cb, void *udata)
@@ -732,14 +818,26 @@ citrusleaf_batch_init()
 */
 void citrusleaf_batch_shutdown() {
 
-        int i;
-        digest_work work;
-        memset(&work,0,sizeof(digest_work));
-        for(i=0;i<N_BATCH_THREADS;i++) {
-                cf_queue_push(g_batch_q,&work);
-        }
-        for(i=0;i<N_BATCH_THREADS;i++) {
-                pthread_join(g_batch_th[i],NULL);
-        }
+	int i;
+	digest_work work;
+
+	/* 
+	 * If a process is forked, the threads in it do not get spawned in the child process.
+	 * In citrusleaf_init(), we are remembering the processid(g_init_pid) of the process who spawned the 
+	 * background threads. If the current process is not the process who spawned the background threads
+	 * then it cannot call pthread_join() on the threads which does not exist in this process.
+	 */
+	if(g_init_pid == getpid()) {
+		memset(&work,0,sizeof(digest_work));
+		for(i=0;i<N_BATCH_THREADS;i++) {
+			cf_queue_push(g_batch_q,&work);
+		}
+
+		for(i=0;i<N_BATCH_THREADS;i++) {
+			pthread_join(g_batch_th[i],NULL);
+		}
+		cf_queue_destroy(g_batch_q);
+		g_batch_q = 0;
+	}
 }
 

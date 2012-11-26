@@ -50,17 +50,21 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 	size_t		wr_buf_sz = sizeof(wr_stack_buf);
 
 	cl_scan_param_field	scan_param_field;
-	scan_param_field.scan_pct = scan_pct>100? 100:scan_pct;
-	scan_param_field.byte1 = (scan_opt->priority<<4) | (scan_opt->fail_on_cluster_change<<3); 
+
+	if (scan_opt) {
+		scan_param_field.scan_pct = scan_pct>100? 100:scan_pct;
+		scan_param_field.byte1 = (scan_opt->priority<<4) | (scan_opt->fail_on_cluster_change<<3);
+	}
 
 	// we have a single namespace and/or set to get
-	if (cl_compile(operation_info, operation_info2, 0, ns, set, 0, 0, 0, 0, 0, 0, &wr_buf, &wr_buf_sz, 0, NULL, 0, &scan_param_field)) {
+	if (cl_compile(operation_info, operation_info2, 0, ns, set, 0, 0, 0, 0, 0, 0, &wr_buf, &wr_buf_sz, 0, NULL, 0,
+			scan_opt ? &scan_param_field : NULL)) {
 		return(rv);
 	}
 	
 #ifdef DEBUG_VERBOSE
 	dump_buf("sending request to cluster:", wr_buf, wr_buf_sz);
-#endif	
+#endif
 
 	int fd;
 	cl_cluster_node *node = 0;
@@ -70,20 +74,22 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 		node = cl_cluster_node_get_byname(asc,node_name);
 		// grab a reservation
 		if (node)
-			cf_rc_reserve(node);
+			cf_client_rc_reserve(node);
 	} else {
+		pthread_mutex_lock(&asc->LOCK);
 		node = cl_cluster_node_get_random(asc);
+		pthread_mutex_unlock(&asc->LOCK);
 	}
 	if (!node) {
 #ifdef DEBUG
-		fprintf(stderr, "warning: no healthy nodes in cluster, failing\n");
+		cf_debug("warning: no healthy nodes in cluster, failing");
 #endif			
 		return(-1);
 	}
 	fd = cl_cluster_node_fd_get(node, false, asc->nbconnect);
 	if (fd == -1) {
 #ifdef DEBUG			
-		fprintf(stderr, "warning: node %s has no file descriptors, retrying transaction\n",node->name);
+		cf_debug("warning: node %s has no file descriptors, retrying transaction", node->name);
 #endif
 		return(-1);
 	}
@@ -91,7 +97,7 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 	// send it to the cluster - non blocking socket, but we're blocking
 	if (0 != cf_socket_write_forever(fd, wr_buf, wr_buf_sz)) {
 #ifdef DEBUG			
-		fprintf(stderr, "Citrusleaf: write timeout or error when writing header to server - %d fd %d errno %d\n",rv,fd,errno);
+		cf_debug("Citrusleaf: write timeout or error when writing header to server - %d fd %d errno %d", rv, fd, errno);
 #endif
 		return(-1);
 	}
@@ -103,7 +109,7 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 		
 		// Now turn around and read a fine cl_pro - that's the first 8 bytes that has types and lengths
 		if ((rv = cf_socket_read_forever(fd, (uint8_t *) &proto, sizeof(cl_proto) ) ) ) {
-			fprintf(stderr, "network error: errno %d fd %d\n",rv, fd);
+			cf_error("network error: errno %d fd %d",rv, fd);
 			return(-1);
 		}
 #ifdef DEBUG_VERBOSE
@@ -112,11 +118,11 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 		cl_proto_swap(&proto);
 
 		if (proto.version != CL_PROTO_VERSION) {
-			fprintf(stderr, "network error: received protocol message of wrong version %d\n",proto.version);
+			cf_error("network error: received protocol message of wrong version %d", proto.version);
 			return(-1);
 		}
 		if (proto.type != CL_PROTO_TYPE_CL_MSG) {
-			fprintf(stderr, "network error: received incorrect message version %d\n",proto.type);
+			cf_error("network error: received incorrect message version %d", proto.type);
 			return(-1);
 		}
 		
@@ -126,8 +132,8 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 		rd_buf_sz =  proto.sz;
 		if (rd_buf_sz > 0) {
                                                          
-//            fprintf(stderr, "message read: size %u\n",(uint)proto.sz);
-            
+//            cf_debug("message read: size %u",(uint)proto.sz);
+
 			if (rd_buf_sz > sizeof(rd_stack_buf))
 				rd_buf = malloc(rd_buf_sz);
 			else
@@ -135,7 +141,7 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 			if (rd_buf == NULL) 		return (-1);
 
 			if ((rv = cf_socket_read_forever(fd, rd_buf, rd_buf_sz))) {
-				fprintf(stderr, "network error: errno %d fd %d\n",rv, fd);
+				cf_error("network error: errno %d fd %d", rv, fd);
 				if (rd_buf != rd_stack_buf)	{ free(rd_buf); }
 				return(-1);
 			}
@@ -149,7 +155,7 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 		uint8_t *buf = rd_buf;
 		uint pos = 0;
 		cl_bin stack_bins[STACK_BINS];
-		cl_bin *bins;
+		cl_bin *bins_local;
 		
 		while (pos < rd_buf_sz) {
 
@@ -163,7 +169,7 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 			buf += sizeof(cl_msg);
 			
 			if (msg->header_sz != sizeof(cl_msg)) {
-				fprintf(stderr, "received cl msg of unexpected size: expecting %zd found %d, internal error\n",
+				cf_error("received cl msg of unexpected size: expecting %zd found %d, internal error",
 					sizeof(cl_msg),msg->header_sz);
 				return(-1);
 			}
@@ -175,8 +181,9 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 			cl_msg_field *mf = (cl_msg_field *)buf;
 			for (int i=0;i<msg->n_fields;i++) {
 				cl_msg_swap_field(mf);
-				if (mf->type == CL_MSG_FIELD_TYPE_KEY)
-					fprintf(stderr, "read: found a key - unexpected\n");
+				if (mf->type == CL_MSG_FIELD_TYPE_KEY) {
+					cf_error("read: found a key - unexpected");
+				}
 				else if (mf->type == CL_MSG_FIELD_TYPE_DIGEST_RIPE) {
 					keyd = (cf_digest *) mf->data;
 				}
@@ -196,17 +203,17 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 			buf = (uint8_t *) mf;
 
 #ifdef DEBUG_VERBOSE
-			fprintf(stderr, "message header fields: nfields %u nops %u\n",msg->n_fields,msg->n_ops);
+			cf_debug("message header fields: nfields %u nops %u", msg->n_fields, msg->n_ops);
 #endif
 
 
 			if (msg->n_ops > STACK_BINS) {
-				bins = malloc(sizeof(cl_bin) * msg->n_ops);
+				bins_local = malloc(sizeof(cl_bin) * msg->n_ops);
 			}
 			else {
-				bins = stack_bins;
+				bins_local = stack_bins;
 			}
-			if (bins == NULL) {
+			if (bins_local == NULL) {
 				if (set_ret) {
 					free(set_ret);
 				}
@@ -220,7 +227,7 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 				cl_msg_swap_op(op);
 
 #ifdef DEBUG_VERBOSE
-				fprintf(stderr, "op receive: %p size %d op %d ptype %d pversion %d namesz %d \n",
+				cf_debug("op receive: %p size %d op %d ptype %d pversion %d namesz %d",
 					op,op->op_sz, op->op, op->particle_type, op->version, op->name_sz);				
 #endif			
 
@@ -228,28 +235,38 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 				dump_buf("individual op (host order)", (uint8_t *) op, op->op_sz + sizeof(uint32_t));
 #endif	
 
-				cl_set_value_particular(op, &bins[i]);
+				cl_set_value_particular(op, &bins_local[i]);
 				op = cl_msg_op_get_next(op);
 			}
 			buf = (uint8_t *) op;
 			
-			if (msg->info3 & CL_MSG_INFO3_LAST)	{
-#ifdef DEBUG				
-				fprintf(stderr, "received final message\n");
-#endif				
+			if (msg->result_code != CL_RESULT_OK) {
+				// Special case - if we scan a set name that doesn't exist on a
+				// node, it will return "not found" - we unify this with the
+				// case where OK is returned and no callbacks were made. [AKG]
+				if (msg->result_code == CL_RESULT_NOTFOUND) {
+					msg->result_code = CL_RESULT_OK;
+				}
+				rv = (int)msg->result_code;
+				done = true;
+			}
+			else if (msg->info3 & CL_MSG_INFO3_LAST)	{
+#ifdef DEBUG
+				cf_debug("received final message");
+#endif
 				done = true;
 			}
 			else if ((msg->n_ops) || (operation_info & CL_MSG_INFO1_NOBINDATA)) {
 				// got one good value? call it a success!
-				(*cb) ( ns_ret, keyd, set_ret, msg->generation, msg->record_ttl, bins, msg->n_ops, false /*islast*/, udata);
+				(*cb) ( ns_ret, keyd, set_ret, msg->generation, msg->record_ttl, bins_local, msg->n_ops, false /*islast*/, udata);
 				rv = 0;
 			}
 //			else
-//				fprintf(stderr, "received message with no bins, signal of an error\n");
+//				cf_debug("received message with no bins, signal of an error");
 
-			if (bins != stack_bins) {
-				free(bins);
-				bins = 0;
+			if (bins_local != stack_bins) {
+				free(bins_local);
+				bins_local = 0;
 			}
 
 			if (set_ret) {
@@ -279,14 +296,8 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 	cl_cluster_node_put(node);
 	node = 0;
 	
-	goto Final;
-	
-	if (node) cl_cluster_node_put(node);
-		
-Final:	
-	
 #ifdef DEBUG_VERBOSE	
-	fprintf(stderr, "exited loop: rv %d\n", rv );
+	cf_debug("exited loop: rv %d", rv );
 #endif	
 	
 	return(rv);
@@ -297,7 +308,7 @@ extern cl_rv
 citrusleaf_scan(cl_cluster *asc, char *ns, char *set, cl_bin *bins, int n_bins, bool get_key, citrusleaf_get_many_cb cb, void *udata, bool nobindata)
 {
 	if (n_bins != 0) {
-		fprintf(stderr, "citrusleaf get many: does not yet support bin-specific requests\n");
+		cf_error("citrusleaf get many: does not yet support bin-specific requests");
 	}
 
 	uint info=0;
@@ -307,7 +318,7 @@ citrusleaf_scan(cl_cluster *asc, char *ns, char *set, cl_bin *bins, int n_bins, 
 		info = CL_MSG_INFO1_READ; 
 	}
 
-	return( do_scan_monte( asc, NULL, info, 0, ns, set, bins,n_bins, 100, cb, udata, NULL ) ); 
+	return( do_scan_monte( asc, NULL, info, 0, ns, set, bins,n_bins, 100, cb, udata, NULL ) );
 }
 
 extern cl_rv
@@ -316,7 +327,7 @@ citrusleaf_scan_node (cl_cluster *asc, char *node_name, char *ns, char *set, cl_
 {
 
 	if (n_bins != 0) {
-		fprintf(stderr, "citrusleaf get many: does not yet support bin-specific requests\n");
+		cf_error("citrusleaf get many: does not yet support bin-specific requests");
 	}
 
 	uint info=0;
@@ -344,18 +355,19 @@ citrusleaf_scan_all_nodes (cl_cluster *asc, char *ns, char *set, cl_bin *bins, i
 	cl_cluster_get_node_names(asc, &n_nodes, &node_names);
 
 	if (n_nodes == 0) {
-		fprintf(stderr, "citrusleaf scan all nodes: don't have any nodes?\n");
+		cf_error("citrusleaf scan all nodes: don't have any nodes?");
 		return NULL;
 	}
 
 	cf_vector *rsp_v = cf_vector_create(sizeof(cl_node_response), n_nodes, 0);
 	if (rsp_v == NULL) {
-		fprintf(stderr, "citrusleaf scan all nodes: cannot allocate for response array for %d nodes\n",n_nodes);
+		cf_error("citrusleaf scan all nodes: cannot allocate for response array for %d nodes", n_nodes);
 		free(node_names);
 		return NULL;
 	}
 	 
-	if (scan_param->concurrent_nodes) {
+	if (scan_param && scan_param->concurrent_nodes) {
+		cf_error("citrusleaf scan all nodes: concurrent node scanning not yet supported");
 	} else {
 		char *nptr = node_names;
 		for (int i=0;i< n_nodes; i++) {

@@ -19,6 +19,8 @@
 // speed, and compatibility
 #pragma once
 
+#include <pthread.h>
+
 #include "citrusleaf/cf_atomic.h"
 #include "ev2citrusleaf-internal.h"
 
@@ -101,8 +103,10 @@ struct ev2citrusleaf_cluster_s {
 	bool		shutdown; // we might be in shutdown phase, don't start more info
 							// requests or similar
 
-	struct event_base *base; // base that this cluster serves		
-	struct evdns_base *dns_base;
+	pthread_t			mgr_thread;		// (optional) internally created cluster manager thread
+	bool				internal_mgr;	// is there an internally created cluster manager thread and base?
+	struct event_base	*base;			// cluster manager base, specified by app or internally created
+	struct evdns_base	*dns_base;
 							
 	// List of host-strings added by the user.
 	cf_vector		host_str_v;	// vector is pointer-type
@@ -120,7 +124,8 @@ struct ev2citrusleaf_cluster_s {
 	// There are occasions where we want to stash pending transactions in a queue
 	// for when nodes come available (like, embarrasingly, the first request)
 	cf_queue	*request_q;
-	
+	void 		*request_q_lock;
+
 	// in progress requests pointing to this asc.
 	// necessary so we can drain out on shutdown.
 	// *includes* requests in the request queue above (everything needing a callback)

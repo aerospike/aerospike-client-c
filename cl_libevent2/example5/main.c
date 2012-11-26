@@ -151,11 +151,17 @@ log_open(char *logfilename)
 
 
 void
-log_callback(int level, const char *fmt, ...)
+log_callback(cf_log_level level, const char *fmt_no_newline, ...)
 {
+	size_t fmt_size = strlen(fmt_no_newline) + 2;
+	char fmt[fmt_size];
+
+	strncpy(fmt, fmt_no_newline, fmt_size);
+	fmt[fmt_size - 2] = '\n';
+
 	va_list argp;
 	if (g_logfile_fd == 0) {
-		va_start(argp, fmt);
+		va_start(argp, fmt_no_newline);
 		vfprintf(stderr,  fmt, argp);
 		va_end(argp);
 	}
@@ -169,7 +175,7 @@ log_callback(int level, const char *fmt, ...)
 		
 		// user buf
 		char ubuf[2000];
-		va_start(argp, fmt);
+		va_start(argp, fmt_no_newline);
 		int ulen = vsnprintf(ubuf, sizeof(ubuf)-1, fmt, argp);
 		va_end(argp);
 		
@@ -279,16 +285,15 @@ main(int argc, char **argv)
 	fprintf(stderr, "EXAMPLE5 -- tests shutdown while many transactions are in progress\n");
 
 	g_config.base = event_base_new();
-	
-	ev2citrusleaf_log_register( log_callback );
-//	ev2citrusleaf_log_level_set(EV2CITRUSLEAF_NOTICE);
-	ev2citrusleaf_log_level_set(EV2CITRUSLEAF_INFO);
+
+	cf_set_log_callback(log_callback);
+	cf_set_log_level(CF_INFO);
 	log_open("example5.log");
 	
 	ev2citrusleaf_init(0);    // initialize citrusleaf
 	
 	// Create a citrusleaf cluster object for subsequent requests
-	g_config.asc = ev2citrusleaf_cluster_create(g_config.base);
+	g_config.asc = ev2citrusleaf_cluster_create(0);
 	if (!g_config.asc) {
 		fprintf(stderr, "could not create cluster, internal error\n");
 		return(-1);
@@ -322,7 +327,7 @@ main(int argc, char **argv)
 	// validate that all transactions have completed
 	for (int i=0;i<g_config.n_req;i++) {
 		request *req = &g_config.req_array[i];
-		if (req->status != STATUS_COMPLETE) {
+		if (req->status != STATUS_COMPLETE && req->status != STATUS_INPROGRESS) {
 			fprintf(stderr, "ERROR! transaction %d is not complete!\n",i);
 			g_config.return_value = -1;
 			break;

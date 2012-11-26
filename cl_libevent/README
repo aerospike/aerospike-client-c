@@ -33,3 +33,8 @@ a patch.
 Choosing the appropriate linkage and distribution option for your application and environment 
 is beyond the scope of this document. 
 
+The root level 'Makefile' automatically executed make -f src/Makefile.native , which uses
+that GCC -march=noarch as a compilation target. Other examples, such as src/Makefile.32 and src/Makefile.64,
+build explicitly for 32 and 64 bit environments.
+
+

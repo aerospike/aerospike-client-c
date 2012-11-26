@@ -29,6 +29,7 @@
 #include "citrusleaf/cf_alloc.h"
 #include "citrusleaf/cf_ll.h"
 #include "citrusleaf/cf_digest.h"
+#include "citrusleaf/cf_log_internal.h"
 
 #include "citrusleaf/proto.h"
 
@@ -40,8 +41,8 @@ extern "C" {
 // Some log-oriented primitives.
 //
 
-// how much of a delay in any processing loop is considered 'warning' material?
-#define CL_LOG_DELAY_WARN 10
+// how much of a delay in any processing loop is considered 'info' material?
+#define CL_LOG_DELAY_INFO 10
 
 #define CL_LOG_STATS_INTERVAL 10 // how often (in seconds) to dump 5 lines of stats
 
@@ -53,6 +54,8 @@ extern "C" {
 //
 //
 //
+
+extern bool g_ev2citrusleaf_initialized;
 
 extern ev2citrusleaf_lock_callbacks *g_lock_cb;
 
@@ -95,8 +98,9 @@ typedef struct cl_request_s {
 	size_t		    rd_buf_pos;
 	size_t		    rd_buf_size;
 	
-	bool		 network_set;
-	bool         timeout_set;
+	uint32_t		network_set;
+	uint32_t		timeout_set;
+	uint32_t		base_hop_set;
 	
 	uint8_t	wr_tmp[1024];
 	uint8_t rd_tmp[1024];
@@ -188,30 +192,6 @@ extern void ev2citrusleaf_request_complete(cl_request *req, bool timedout);
 #define CONNECTED_BADFD 3 // bad FD
 
 extern int ev2citrusleaf_is_connected(int fd);
-
-
-//
-//
-
-extern ev2citrusleaf_log_callback cl_log_fn;
-extern int cl_log_level;
-
-#define CL_NOLOG      EV2CITRUSLEAF_NOLOGGING // not allowed to use this in the code
-#define CL_WARNING    EV2CITRUSLEAF_ERR
-#define CL_INFO       EV2CITRUSLEAF_NOTICE   
-#define CL_DEBUG      EV2CITRUSLEAF_INFO
-#define CL_VERBOSE    EV2CITRUSLEAF_DEBUG
-
-
-#define CL_LOG( __level,  ... )  if ((cl_log_fn) && (__level <= cl_log_level)) { (*cl_log_fn) (__level,  __VA_ARGS__ ); }  
-
-static inline bool
-CL_LOG_CHK(int __level) {
-    if (cl_log_fn == 0) return(false);
-    if (__level > cl_log_level) return(false);
-    return(true);
-}
-
 
 
 #ifdef __cplusplus

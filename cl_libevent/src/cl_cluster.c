@@ -670,7 +670,7 @@ node_timer_fn(int fd, short event, void *udata)
 	cn->timer_event_registered = false;
 		
 
-	CL_LOG(CL_DEBUG, "node timer function called: %s dunned %d references %d\n",cn->name, cn->dunned, cf_rc_count(cn));
+	CL_LOG(CL_DEBUG, "node timer function called: %s dunned %d references %d\n",cn->name, cn->dunned, cf_client_rc_count(cn));
 
 	if (cn->dunned) {
 
@@ -751,7 +751,7 @@ cl_cluster_node_create(char *name, evcitrusleaf_cluster *asc)
 	CL_LOG(CL_INFO, " cl_cluster: creating node, name %s, cluster %p\n",name,asc);
 
 	
-	cl_cluster_node *cn = cf_rc_alloc( sizeof(cl_cluster_node ) );
+	cl_cluster_node *cn = cf_client_rc_alloc( sizeof(cl_cluster_node ) );
 	if (!cn)	return(0);
 	
 	cn->MAGIC = CLUSTER_NODE_MAGIC;
@@ -766,7 +766,7 @@ cl_cluster_node_create(char *name, evcitrusleaf_cluster *asc)
 	cn->conn_q = cf_queue_create( sizeof(int), false );
 	if (cn->conn_q == 0) {
 		CL_LOG(CL_WARNING," cl_cluster create: can't make a file descriptor queue\n");
-		cf_rc_free(cn);
+		cf_client_rc_free(cn);
 		return(0);
 	}
 	
@@ -775,7 +775,7 @@ cl_cluster_node_create(char *name, evcitrusleaf_cluster *asc)
 	cn->partition_last_req_ms = 0;
 	
 	// Hand off a copy of the object to the health system
-	cf_rc_reserve(cn);
+	cf_client_rc_reserve(cn);
 	event_set(&cn->timer_event, -1, EV_TIMEOUT , node_timer_fn, cn);
 	if (0 != event_add(&cn->timer_event, &g_node_tend_timeout)) {
 		CL_LOG(CL_WARNING, " can't add perpetual node timer, can't pretend node exists\n");
@@ -787,7 +787,7 @@ cl_cluster_node_create(char *name, evcitrusleaf_cluster *asc)
 	cn->timer_event_registered = true;
 
 	// link node to cluster and cluster to node
-	cf_rc_reserve(cn);
+	cf_client_rc_reserve(cn);
 	cn->asc = asc;
 	cf_vector_pointer_append(&asc->node_v, cn); 
 	
@@ -799,9 +799,9 @@ cl_cluster_node_create(char *name, evcitrusleaf_cluster *asc)
 void
 cl_cluster_node_release(cl_cluster_node *cn, char *msg)
 {
-	CL_LOG(CL_VERBOSE, "node release: %s %s %p : %d\n",msg,cn->name,cn,cf_rc_count(cn));
+	CL_LOG(CL_VERBOSE, "node release: %s %s %p : %d\n",msg,cn->name,cn,cf_client_rc_count(cn));
 	
-	if (0 == cf_rc_release(cn)) {
+	if (0 == cf_client_rc_release(cn)) {
 
 		CL_LOG(CL_INFO, "************* cluster node destroy: node %s : %p\n",cn->name,cn);
 		
@@ -835,7 +835,7 @@ cl_cluster_node_release(cl_cluster_node *cn, char *msg)
 		// rare, might as well be safe - and destroy the magic
 		memset(cn, 0xff, sizeof(cl_cluster_node));
 		
-		cf_rc_free(cn);
+		cf_client_rc_free(cn);
 		
 		
 	}
@@ -845,9 +845,9 @@ cl_cluster_node_release(cl_cluster_node *cn, char *msg)
 void
 cl_cluster_node_reserve(cl_cluster_node *cn, char *msg)
 {
-//	CL_LOG(CL_VERBOSE, "node reserve: %s %s %p : %d\n",msg,cn->name,cn,cf_rc_count(cn));
+//	CL_LOG(CL_VERBOSE, "node reserve: %s %s %p : %d\n",msg,cn->name,cn,cf_client_rc_count(cn));
 	
-	cf_rc_reserve(cn);
+	cf_client_rc_reserve(cn);
 }
 
 
@@ -972,6 +972,9 @@ cl_cluster_node_dun(cl_cluster_node *cn, enum cl_cluster_dun_type type)
 			dun_factor = 1;
 			break;
 		case DUN_INFO_FAIL:
+			CL_LOG(CL_DEBUG, "dun node: %s reason: %s count: %d\n",cn->name,cl_cluster_dun_human[type],cn->dun_count);
+			dun_factor = 300;
+			break;
 		case DUN_REPLICAS_FETCH:
 		case DUN_NO_SOCKADDR:
 			CL_LOG(CL_DEBUG, "dun node: %s reason: %s count: %d\n",cn->name,cl_cluster_dun_human[type],cn->dun_count);

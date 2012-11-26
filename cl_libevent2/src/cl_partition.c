@@ -33,9 +33,6 @@
 void
 cl_partition_table_remove_node( ev2citrusleaf_cluster *asc, cl_cluster_node *node )
 {
-
-	CL_LOG(CL_VERBOSE, "partition table remove node %s %p\n",node->name,node);
-	
 	cl_partition_table *pt = asc->partition_table_head;
 	while(pt) {
 		
@@ -75,9 +72,6 @@ cl_partition_table_remove_node( ev2citrusleaf_cluster *asc, cl_cluster_node *nod
 cl_partition_table *
 cl_partition_table_create(ev2citrusleaf_cluster *asc, char *ns) 
 {
-
-	CL_LOG(CL_VERBOSE, "partition table create: npartitions %d\n",asc->n_partitions);
-
 	cf_atomic_int_incr(&g_cl_stats.partition_create);
 
 	cl_partition_table *pt = malloc( sizeof(cl_partition_table) + (sizeof(cl_partition) * asc->n_partitions) );
@@ -115,7 +109,7 @@ cl_partition_table_destroy(ev2citrusleaf_cluster *asc, cl_partition_table *pt)
 	}
 #ifdef EXTRA_CHECKS	
 	if (now == 0) {
-		CL_LOG(CL_WARNING, "warning! passed in partition table %p not in list\n",pt);
+		cf_warn("warning! passed in partition table %p not in list", pt);
 		return;
 	}
 #endif
@@ -182,10 +176,6 @@ cl_partition_table_get_byns(ev2citrusleaf_cluster *asc, char *ns)
 void
 cl_partition_table_set( ev2citrusleaf_cluster *asc, cl_cluster_node *node, char *ns, cl_partition_id pid, bool write)
 {
-
-	CL_LOG(CL_VERBOSE, "partition-table-set: ns %s partition %d node %s write %d\n",ns,pid,node->name,(int)write);
-
-	//
 	cl_partition_table *pt = cl_partition_table_get_byns(asc, ns);
 	if (!pt) {
 		pt = cl_partition_table_create(asc, ns);
@@ -194,7 +184,7 @@ cl_partition_table_set( ev2citrusleaf_cluster *asc, cl_cluster_node *node, char 
 	
 #ifdef EXTRA_CHECKS
 	if (pid > asc->n_partitions) {
-		CL_LOG(CL_WARNING, "internal error: partition table set got out of range partition id %d\n",pid);
+		cf_warn("internal error: partition table set got out of range partition id %d", pid);
 		return;
 	}
 #endif	
@@ -216,7 +206,7 @@ cl_partition_table_set( ev2citrusleaf_cluster *asc, cl_cluster_node *node, char 
 			}
 		}
 		if (MAX_REPLICA_COUNT == p->n_read) { // full, replace 0 for fun
-//			CL_LOG(CL_WARNING, "read replica set full\n");
+//			cf_warn("read replica set full");
 			if (p->read[0]) cl_cluster_node_release(p->read[0], "PR-");
 			p->read[0] = node;
 			if (node)  cl_cluster_node_reserve(node, "PR+");		
@@ -261,9 +251,6 @@ cl_partition_table_get( ev2citrusleaf_cluster *asc, char *ns, cl_partition_id pi
 
 	MUTEX_UNLOCK(pt->partitions[pid].lock);
 
-	CL_LOG(CL_VERBOSE, "partition-table-get: ns %s pid %d write %d: node %s \n",ns,pid,write,
-		node ? node->name : "nope" );
-	
 	return(node);
 }
 

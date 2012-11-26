@@ -24,6 +24,7 @@
 
 #include "citrusleaf/cf_digest.h"
 #include "citrusleaf/cf_hooks.h"
+#include "citrusleaf/cf_log.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -39,6 +40,14 @@ extern "C" {
 #define EV2CITRUSLEAF_FAIL_PARAMETER 4
 #define EV2CITRUSLEAF_FAIL_KEY_EXISTS 5 // if 'WRITE_ADD', could fail because already exists
 #define EV2CITRUSLEAF_FAIL_BIN_EXISTS 6
+#define EV2CITRUSLEAF_FAIL_CLUSTER_KEY_MISMATCH 7
+#define EV2CITRUSLEAF_FAIL_PARTITION_OUT_OF_SPACE 8
+#define EV2CITRUSLEAF_FAIL_SERVERSIDE_TIMEOUT 9 // internal - this is mapped to EV2CITRUSLEAF_FAIL_TIMEOUT
+#define EV2CITRUSLEAF_FAIL_NOXDS 10
+#define EV2CITRUSLEAF_FAIL_UNAVAILABLE 11
+#define EV2CITRUSLEAF_FAIL_INCOMPATIBLE_TYPE 12 // specified operation cannot be performed on that data type
+#define EV2CITRUSLEAF_FAIL_RECORD_TOO_BIG 13
+#define EV2CITRUSLEAF_FAIL_KEY_BUSY 14
 
 
 
@@ -144,6 +153,25 @@ void ev2citrusleaf_bins_free(ev2citrusleaf_bin *bins, int n_bins);
 
 typedef void (*ev2citrusleaf_callback) (int return_value,  ev2citrusleaf_bin *bins, int n_bins, uint32_t generation, void *udata );
 
+
+// Caller may replace client library's mutex calls with these callbacks (e.g. to
+// include them in an application monitoring scheme). To use this feature, pass
+// a valid ev2citrusleaf_lock_callbacks pointer in ev2citrusleaf_init(). To let
+// the client library do its own mutex calls, pass null in ev2citrusleaf_init().
+//
+// As defined in cf_base/include/citrusleaf/cf_hooks.h:
+//
+//	typedef struct cf_mutex_hooks_s {
+//		// Allocate and initialize new lock.
+//		void *(*alloc)(void);
+//		// Release all storage held in 'lock'.
+//		void (*free)(void *lock);
+//		// Acquire an already-allocated lock at 'lock'.
+//		int (*lock)(void *lock);
+//		// Release a lock at 'lock'.
+//		int (*unlock)(void *lock);
+//	} cf_mutex_hooks;
+
 typedef cf_mutex_hooks ev2citrusleaf_lock_callbacks;
 
 
@@ -167,17 +195,20 @@ void ev2citrusleaf_print_stats(void);
 struct ev2citrusleaf_cluster_s;
 typedef struct ev2citrusleaf_cluster_s ev2citrusleaf_cluster;
 
-// The event_base passed here is used for maintenance and monitoring chores.
+// Client uses base for internal cluster management events. If NULL is passed,
+// an event base and thread are created internally for cluster management.
 ev2citrusleaf_cluster *ev2citrusleaf_cluster_create(struct event_base *base);
 
-// Before calling ev2citrusleaf_cluster_destroy():
-// - Stop initiating requests to this cluster, and make sure that all
-//   in-progress requests are completed.
-// - Call event_base_loopbreak() for the event base that was passed in
-//   ev2citrusleaf_cluster_create(), or otherwise ensure the dispatcher is not
-//   active, but do not free the event base.
-// Otherwise, ev2citrusleaf_cluster_destroy() will proceed, but with unknown
-// effects.
+// Before calling ev2citrusleaf_cluster_destroy(), stop initiating transaction
+// requests to this cluster, and make sure that all in-progress transactions are
+// completed, i.e. their callbacks have been made.
+//
+// If a base was passed in ev2citrusleaf_cluster_create(), the app must:
+// - First, exit the base's event loop.
+// - Next, call ev2citrusleaf_cluster_destroy().
+// - Finally, free the base.
+// During ev2citrusleaf_cluster_destroy() the client will re-run the base's
+// event loop to handle all outstanding internal cluster management events.
 void ev2citrusleaf_cluster_destroy(ev2citrusleaf_cluster *asc);
 
 // Adding a host to the cluster list which will always be checked for membership
@@ -301,37 +332,7 @@ int
 ev2citrusleaf_calculate_digest(const char *set, const ev2citrusleaf_object *key, cf_digest *digest);
 
 //
-// Logging. Register to be called back on every callback. For higher performance
-// and filtering, you may set the severity mask and have the library not call you
-//
-
-typedef void (*ev2citrusleaf_log_callback) (int level, const char *fmt, ... );
-
-
-void ev2citrusleaf_log_register( ev2citrusleaf_log_callback cb );
-
-#define EV2CITRUSLEAF_NOLOGGING  -1
-#define EV2CITRUSLEAF_EMERG    0  // system is unusable                 
-#define EV2CITRUSLEAF_ALERT    1  /* action must be taken immediately */
-#define EV2CITRUSLEAF_CRIT     2  /* critical conditions              */
-#define EV2CITRUSLEAF_ERR      3  /* error conditions                 */
-#define EV2CITRUSLEAF_WARNING  4  /* warning conditions               */
-#define EV2CITRUSLEAF_NOTICE   5  /* normal but significant condition */
-#define EV2CITRUSLEAF_INFO     6  /* informational                    */
-#define EV2CITRUSLEAF_DEBUG    7  /* debug-level messages      */
-
-
-
-void ev2citrusleaf_log_level_set( int level );
-
-// An example logging function that simply prints to standard out
-//
-// void sample_logging_function( int level, const char *format, ...) {
-//			va_list ap;
-//        	va_start(ap, format);
-//          (void) vfprintf(stderr, format, ap);
-//        	va_end(ap);
-//  }
+// Logging - see cf_log.h
 //
 
 #ifdef __cplusplus

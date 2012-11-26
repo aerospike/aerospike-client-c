@@ -31,6 +31,7 @@
 #include "citrusleaf/cf_queue.h"
 #include "citrusleaf/cf_alloc.h"
 #include "citrusleaf/cf_digest.h"
+#include "citrusleaf/cf_log_internal.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -111,6 +112,8 @@ citrusleaf_batch_init();
 void
 citrusleaf_batch_shutdown();
 
+int
+citrusleaf_info_host_limit(struct sockaddr_in *sa_in, char *names, char **values, int timeout_ms, bool send_asis, uint64_t max_response_length);
 
 int
 cl_compile(uint info1, uint info2, uint info3, const char *ns, const char *set, const cl_object *key, const cf_digest *digest,
@@ -118,7 +121,13 @@ cl_compile(uint info1, uint info2, uint info3, const char *ns, const char *set, 
 	uint8_t **buf_r, size_t *buf_sz_r, const cl_write_parameters *cl_w_p, cf_digest *d_ret, uint64_t trid, cl_scan_param_field *scan_field);
 
 int
-cl_parse(cl_msg *msg, uint8_t *buf, size_t buf_len, cl_bin **values_r, cl_operation **operations_r, int *n_values_r, uint64_t *trid);
+cl_parse(cl_msg *msg, uint8_t *buf, size_t buf_len, cl_bin **values_r, cl_operation **operations_r, 
+	int *n_values_r, uint64_t *trid, char **setname_r);
+
+#ifdef DEBUG_VERBOSE
+void
+dump_buf(char *info, uint8_t *buf, size_t buf_len);
+#endif
 
 #ifdef __cplusplus
 } // end extern "C"

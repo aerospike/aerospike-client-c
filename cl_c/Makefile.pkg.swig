@@ -1,18 +1,20 @@
-# Citrusleaf Foundation
+# Aerospike Inc.
 # Makefile
 
-all: libcf-client libcf-hooked
-	cp lib/* ../../../shared/lib
-	cp -r include/* ../../../shared/include
+all: libcitrusleaf
+
 	@echo "done."
 
 clean:
+	rm -f obj/i86/*
+	rm -f obj/x64/*
 	rm -f obj/native/*
 	rm -f lib/*
-	rm -f obj/hooked/*
+	rm -f lib32/*
+	rm -f lib64/*
 
 %:
-	cp ../../../make_in/version.c src
 #	$(MAKE) -f Makefile.32 -C src $@   # some are having trouble with the xcompile
 #	$(MAKE) -f Makefile.64 -C src $@
 	$(MAKE) -f Makefile.native -C src $@
+

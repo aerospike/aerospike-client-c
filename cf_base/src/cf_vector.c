@@ -118,6 +118,32 @@ cf_vector_init_smalloc(cf_vector *v, uint32_t value_len, uint8_t *sbuf, int sbuf
 	}
 }
 
+void
+cf_vector_clone_stack(cf_vector *v, cf_vector *target, uint8_t *target_buf)
+{
+	if (v->flags & VECTOR_FLAG_BIGLOCK)
+		VECTOR_LOCK(v);
+
+	target->value_len = v->value_len;
+	target->flags = v->flags;
+	target->alloc_len = v->len;
+	target->len = v->len;
+	target->stack_struct = true;
+	target->stack_vector = true;
+	target->vector = target_buf;
+	memcpy(target->vector, v->vector, v->value_len * v->len);
+
+	if (target->flags & VECTOR_FLAG_BIGLOCK){
+#ifdef EXTERNAL_LOCKS
+		target->LOCK = cf_hooked_mutex_alloc();
+#else
+		pthread_mutex_init(&target->LOCK, 0);
+#endif
+	}
+
+	if (v->flags & VECTOR_FLAG_BIGLOCK)
+		VECTOR_UNLOCK(v);
+}
 
 void
 cf_vector_destroy(cf_vector *v)
@@ -138,8 +164,6 @@ cf_vector_resize(cf_vector *v, uint32_t new_sz)
 {
 	if (v->flags & VECTOR_FLAG_BIGRESIZE) {
 		if (new_sz < 50)	new_sz = 50;
-		else if (new_sz < v->alloc_len * 2)
-			new_sz = v->alloc_len * 2;
 	}
 	uint8_t *_t;
 	if (v->vector == 0 || v->stack_vector) {
@@ -165,8 +189,11 @@ cf_vector_set(cf_vector *v, uint32_t index, void *value)
 {
 	if (v->flags & VECTOR_FLAG_BIGLOCK)
 		VECTOR_LOCK(v);
+
+	// Return error if index is not within current array bounds.
 	if (index >= v->alloc_len)
-		if (0 != cf_vector_resize(v, index+1))	return(-1);
+		return(-1);
+
 	memcpy(v->vector + (index * v->value_len), value, v->value_len);
 	if (index > v->len)	v->len = index;
 	if (v->flags & VECTOR_FLAG_BIGLOCK)
@@ -178,7 +205,7 @@ int
 cf_vector_append_lockfree(cf_vector *v, void *value)
 {
 	if (v->len + 1 >= v->alloc_len)
-		if (0 != cf_vector_resize(v, v->len + 2))	return(-1);
+		if (0 != cf_vector_resize(v, v->len * 2))	return(-1);
 	memcpy(v->vector + (v->len * v->value_len), value, v->value_len);
 	v->len ++;
 	return(0);
@@ -324,4 +351,3 @@ cf_vector_compact(cf_vector *v)
 		VECTOR_UNLOCK(v);
 	return;
 }
-

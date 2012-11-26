@@ -66,10 +66,11 @@ cf_vector_init_smalloc(cf_vector *v, uint32_t value_len, uint8_t *sbuf, int sbuf
 #define cf_vector_define(__x, __value_len, __flags) \
 	uint8_t cf_vector##__x[1024]; cf_vector __x; cf_vector_init_smalloc(&__x, __value_len, cf_vector##__x, sizeof(cf_vector##__x), __flags);
 
-/*
-** todo: static allocate a vector, with passed-in memory?
-*/
+void
+cf_vector_clone_stack(cf_vector *source, cf_vector *target, uint8_t *target_buf);
 
+#define cf_vector_define_clone(__source, __target) \
+	uint8_t cf_vector##__target[__source.len]; cf_vector __target; cf_vector_clone_stack(&__source, &__target, cf_vector##__target);
 
 /* Place a value into the hash
  * Value will be copied into the hash

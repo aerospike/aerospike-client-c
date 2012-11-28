@@ -1908,6 +1908,47 @@ citrusleaf_calculate_digest(const char *set, const cl_object *key, cf_digest *di
 // operate allows the caller to specify any set of operations on any record.
 // any bin. It can't be used to operate and 'get many' in the response, though.
 //
+extern cl_rv
+citrusleaf_operate_digest(cl_cluster *asc, const char *ns, cf_digest *digest, cl_operation *operations, int n_operations, const cl_write_parameters *cl_w_p,  int replace, uint32_t *generation)
+{
+    if (!g_initialized) return(-1);
+    
+	// see if there are any read or write bits ---
+	//   (this is slightly obscure c usage....)
+	int info1 = 0, info2 = 0, info3 = 0;
+	uint64_t trid=0;
+
+	for (int i=0;i<n_operations;i++) {
+		switch (operations[i].op) {
+		case CL_OP_WRITE:
+		case CL_OP_MC_INCR:
+		case CL_OP_INCR:
+		case CL_OP_APPEND:
+		case CL_OP_PREPEND:
+		case CL_OP_MC_APPEND:
+		case CL_OP_MC_PREPEND:
+		case CL_OP_MC_TOUCH:
+		case CL_OP_TOUCH:
+			info2 = CL_MSG_INFO2_WRITE;
+			break;
+		case CL_OP_READ:
+			info1 = CL_MSG_INFO1_READ;
+			break;
+		default:
+			break;
+		}
+		
+		if (info1 && info2) break;
+	}
+	
+
+	if (replace)
+		info3 = CL_MSG_INFO3_REPLACE;
+
+	return( do_the_full_monte( asc, info1, info2, info3, ns, NULL, NULL, digest, 0, 0, 
+			&operations, &n_operations, generation, cl_w_p, &trid, NULL, NULL) );
+}
+
 
 extern cl_rv
 citrusleaf_operate(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, cl_operation *operations, int n_operations, const cl_write_parameters *cl_w_p,  int replace, uint32_t *generation)

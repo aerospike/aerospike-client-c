@@ -316,19 +316,15 @@ start_cluster_management()
 
 		if (n > 0) {
 			LOG("found %d cluster node%s", n, n > 1 ? "s" : "");
-			break;
+			return true;
 		}
 
 		usleep(CLUSTER_VERIFY_INTERVAL);
 		tries++;
 	}
 
-	if (tries == CLUSTER_VERIFY_TRIES) {
-		LOG("ERROR: connecting to cluster");
-		return false;
-	}
-
-	return true;
+	LOG("ERROR: connecting to cluster");
+	return false;
 }
 
 //------------------------------------------------
@@ -382,13 +378,12 @@ start_transactions()
 static void
 block_until_transactions_done()
 {
-	void* pv_value;
 	uint32_t total_put_timeouts = 0;
 	uint32_t total_get_timeouts = 0;
 	uint32_t total_not_found = 0;
 
 	for (int b = 0; b < g_config.num_bases; b++) {
-		pthread_join(g_bases[b].thread, &pv_value);
+		pthread_join(g_bases[b].thread, NULL);
 
 		total_put_timeouts += g_bases[b].num_put_timeouts;
 		total_get_timeouts += g_bases[b].num_get_timeouts;

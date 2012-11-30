@@ -1822,10 +1822,16 @@ citrusleaf_get_all_digest_getsetname(cl_cluster *asc, const char *ns, const cf_d
 	cl_write_parameters cl_w_p;
 	cl_write_parameters_set_default(&cl_w_p);
 	cl_w_p.timeout_ms = timeout_ms;
+
+	int info1 = CL_MSG_INFO1_READ | CL_MSG_INFO1_GET_ALL;
+	// Currently, the setname is returned only if XDS bit is set (for backward compatibility reasons).
+	// This will/should be made the default in the future.
+	if (setname != NULL) {
+		info1 |= CL_MSG_INFO1_XDS;
+	}
 	
-	return( do_the_full_monte( asc, CL_MSG_INFO1_READ | CL_MSG_INFO1_GET_ALL, 0, 0, 
-			ns, 0, 0, digest, values, CL_OP_READ, 0, n_values, cl_gen, 
-			&cl_w_p, &trid, setname, NULL) );
+	return( do_the_full_monte( asc, info1, 0, 0, ns, 0, 0, digest, values, 
+			CL_OP_READ, 0, n_values, cl_gen, &cl_w_p, &trid, setname,NULL) );
 }
 
 extern cl_rv

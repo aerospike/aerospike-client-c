@@ -370,19 +370,15 @@ start_cluster_management()
 
 		if (n > 0) {
 			LOG("found %d cluster node%s", n, n > 1 ? "s" : "");
-			break;
+			return true;
 		}
 
 		usleep(CLUSTER_VERIFY_INTERVAL);
 		tries++;
 	}
 
-	if (tries == CLUSTER_VERIFY_TRIES) {
-		LOG("ERROR: connecting to cluster");
-		return false;
-	}
-
-	return true;
+	LOG("ERROR: connecting to cluster");
+	return false;
 }
 
 //------------------------------------------------
@@ -447,11 +443,8 @@ block_until_transactions_done()
 	}
 
 	// Make sure all transaction threads are done.
-
-	void* pv_value;
-
 	for (int b = 0; b < g_config.num_bases; b++) {
-		pthread_join(g_bases[b].thread, &pv_value);
+		pthread_join(g_bases[b].thread, NULL);
 	}
 
 	LOG("example4 transactions done");

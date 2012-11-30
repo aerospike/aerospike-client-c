@@ -423,7 +423,7 @@ start_transactions()
 
 	for (int b = 0; b < g_config.num_bases; b++) {
 		if (pthread_create(&g_bases[b].thread, NULL, run_event_loop,
-				(void*)(uint64_t)b)) {
+				(void*)(uint64_t)b) != 0) {
 			LOG("ERROR: creating event base thread %d", b);
 		}
 	}

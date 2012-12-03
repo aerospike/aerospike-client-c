@@ -957,12 +957,14 @@ cl_cluster_node_fd_put(cl_cluster_node *cn, int fd, bool asyncfd)
 	cf_queue *q;
 	if (asyncfd == true) {
 		q = cn->conn_q_asyncfd;
+		// Async queue is used by XDS. It can open lot of connections 
+		// depending on batch-size. Dont worry about limiting the pool.
+		cf_queue_push(q, &fd);
 	} else {
 		q = cn->conn_q;
-	}
-	
-	if (! cf_queue_push_limit(q, &fd, 300)) {
-		close(fd);
+		if (! cf_queue_push_limit(q, &fd, 300)) {
+			close(fd);
+		}
 	}
 }
 

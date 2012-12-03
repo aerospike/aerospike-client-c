@@ -324,19 +324,15 @@ start_cluster_management()
 
 		if (n > 0) {
 			LOG("found %d cluster node%s", n, n > 1 ? "s" : "");
-			break;
+			return true;
 		}
 
 		usleep(CLUSTER_VERIFY_INTERVAL);
 		tries++;
 	}
 
-	if (tries == CLUSTER_VERIFY_TRIES) {
-		LOG("ERROR: connecting to cluster");
-		return false;
-	}
-
-	return true;
+	LOG("ERROR: connecting to cluster");
+	return false;
 }
 
 //------------------------------------------------

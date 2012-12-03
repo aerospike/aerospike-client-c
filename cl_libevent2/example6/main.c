@@ -349,7 +349,7 @@ static bool begin_cluster_mgr() {
 		return false;
 	}
 
-	// Verify cluster is ready.
+	// Verify database server cluster is ready.
 	int tries = 0;
 
 	while (tries < CLUSTER_VERIFY_TRIES) {
@@ -357,19 +357,15 @@ static bool begin_cluster_mgr() {
 
 		if (n > 0) {
 			fprintf(stdout, "found %d cluster node%s\n", n, n > 1 ? "s" : "");
-			break;
+			return true;
 		}
 
 		usleep(CLUSTER_VERIFY_INTERVAL);
 		tries++;
 	}
 
-	if (tries == CLUSTER_VERIFY_TRIES) {
-		fprintf(stdout, "ERROR: connecting to cluster\n");
-		return false;
-	}
-
-	return true;
+	fprintf(stdout, "ERROR: connecting to cluster\n");
+	return false;
 }
 
 static bool begin_transactions() {
@@ -386,7 +382,7 @@ static bool begin_transactions() {
 
 	for (int b = 0; b < g_config.num_bases; b++) {
 		if (pthread_create(&g_bases[b].thread, NULL, run_transactions,
-				(void*)(uint64_t)b)) {
+				(void*)(uint64_t)b) != 0) {
 			fprintf(stdout, "ERROR: creating thread %d\n", b);
 			return false;
 		}
@@ -396,11 +392,10 @@ static bool begin_transactions() {
 }
 
 static void block_until_transactions_done() {
-	void* pv_value;
 	int total_timeouts = 0;
 
 	for (int b = 0; b < g_config.num_bases; b++) {
-		pthread_join(g_bases[b].thread, &pv_value);
+		pthread_join(g_bases[b].thread, NULL);
 		event_base_free(g_bases[b].p_event_base);
 		g_bases[b].p_event_base = NULL;
 
@@ -417,8 +412,6 @@ static void block_until_transactions_done() {
 }
 
 static void cleanup() {
-	void* pv_value;
-
 	if (g_bases) {
 		for (int b = 0; b < g_config.num_bases; b++) {
 			if (g_bases[b].p_event_base) {
@@ -428,7 +421,7 @@ static void cleanup() {
 					// progress, causing ev2citrusleaf_cluster_destroy() to
 					// leak transaction resources. TODO - deal with this!
 					event_base_loopbreak(g_bases[b].p_event_base);
-					pthread_join(g_bases[b].thread, &pv_value);
+					pthread_join(g_bases[b].thread, NULL);
 				}
 
 				event_base_free(g_bases[b].p_event_base);

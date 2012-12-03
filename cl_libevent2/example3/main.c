@@ -84,8 +84,8 @@ typedef struct config_s {
 } config;
 
 typedef enum {
-	PUT,
-	GET
+	INSERT,
+	READ
 } base_phase;
 
 typedef struct base_s {
@@ -335,19 +335,15 @@ start_cluster_management()
 
 		if (n > 0) {
 			LOG("found %d cluster node%s", n, n > 1 ? "s" : "");
-			break;
+			return true;
 		}
 
 		usleep(CLUSTER_VERIFY_INTERVAL);
 		tries++;
 	}
 
-	if (tries == CLUSTER_VERIFY_TRIES) {
-		LOG("ERROR: connecting to cluster");
-		return false;
-	}
-
-	return true;
+	LOG("ERROR: connecting to cluster");
+	return false;
 }
 
 //------------------------------------------------
@@ -389,7 +385,7 @@ start_transactions()
 
 	for (int b = 0; b < g_config.num_bases; b++) {
 		if (pthread_create(&g_bases[b].thread, NULL, run_event_loop,
-				(void*)(uint64_t)b)) {
+				(void*)(uint64_t)b) != 0) {
 			LOG("ERROR: creating event base thread %d", b);
 		}
 	}
@@ -401,13 +397,12 @@ start_transactions()
 static void
 block_until_transactions_done()
 {
-	void* pv_value;
 	uint32_t total_put_timeouts = 0;
 	uint32_t total_get_timeouts = 0;
 	uint32_t total_not_found = 0;
 
 	for (int b = 0; b < g_config.num_bases; b++) {
-		pthread_join(g_bases[b].thread, &pv_value);
+		pthread_join(g_bases[b].thread, NULL);
 
 		total_put_timeouts += g_bases[b].num_put_timeouts;
 		total_get_timeouts += g_bases[b].num_get_timeouts;
@@ -446,7 +441,7 @@ run_event_loop(void* pv_b)
 	//		k = b + (N * i), for i = 0, 1, 2, 3...
 	// and so together all the bases will cover all the keys.
 
-	g_bases[b].trigger_phase = PUT;
+	g_bases[b].trigger_phase = INSERT;
 	g_bases[b].trigger_k = b;
 
 	// Start the event loop. There must be an event added on the base before
@@ -497,7 +492,7 @@ trigger_cb(int fd, short event, void* pv_udata)
 	int b = (int)(uint64_t)pv_udata;
 
 	// Continue the current transaction phase.
-	if (! (g_bases[b].trigger_phase == PUT ?
+	if (! (g_bases[b].trigger_phase == INSERT ?
 			put(b, g_bases[b].trigger_k) : get(b, g_bases[b].trigger_k))) {
 		// Will exit event loop if put/get call failed.
 		return;
@@ -508,12 +503,12 @@ trigger_cb(int fd, short event, void* pv_udata)
 
 	// Check whether the current phase is done.
 	if (g_bases[b].trigger_k >= g_config.num_keys) {
-		if (g_bases[b].trigger_phase == PUT) {
+		if (g_bases[b].trigger_phase == INSERT) {
 			LOG("base %2d - done puts [%d timeouts]", b,
 					g_bases[b].num_put_timeouts);
 
 			// Done with the write phase on this base, start the read phase.
-			g_bases[b].trigger_phase = GET;
+			g_bases[b].trigger_phase = READ;
 			g_bases[b].trigger_k = b;
 		}
 		else {

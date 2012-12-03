@@ -1194,7 +1194,7 @@ cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 
 			if (!G_SHARED_MEMORY || not_found_in_shm) {
 				values = 0;
-				if (0 != citrusleaf_info_host(sa_in, "replicas-read\nreplicas-write", &values, INFO_TIMEOUT_MS, false, 2000000))
+				if (0 != citrusleaf_info_host_limit(sa_in, "replicas-read\nreplicas-write", &values, INFO_TIMEOUT_MS, false, 2000000))
 				{
                		 		// it's a little peculiar to have just talked to the host then have this call
                 			// fail, but sometimes strange things happen.
@@ -1476,10 +1476,10 @@ citrusleaf_change_tend_period(int secs)
 void
 citrusleaf_sleep_for_tender(cl_cluster *asc)
 {
-	if (asc->tend_speed  > 0)
-		sleep(asc->tend_speed);
+	if (asc->tend_period  > 0)
+		sleep(asc->tend_period);
 	else
-		sleep(g_clust_tend_speed);
+		sleep(g_clust_tend_period);
 }
 
 //

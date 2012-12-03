@@ -150,7 +150,7 @@ citrusleaf_info_host_limit(struct sockaddr_in *sa_in, char *names, char **values
 	else {
 		req = (cl_proto *) buf;
 		req->sz = 0;
-		buf_sz = sizeof(cl_proto);i
+		buf_sz = sizeof(cl_proto);
 		names = "";
 	}
 		

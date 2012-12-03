@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <sys/types.h>
 #include <sys/socket.h> // socket calls
 #include <stdio.h>
@@ -24,6 +25,12 @@
 #include "citrusleaf/cl_shm.h"
 #include "citrusleaf/cf_socket.h"
 
+#ifndef PTHREAD_MUTEX_ROBUST
+#define PTHREAD_MUTEX_ROBUST PTHREAD_MUTEX_ROBUST_NP
+#define pthread_mutexattr_setrobust pthread_mutexattr_setrobust_np
+#define pthread_mutex_consistent pthread_mutex_consistent_np
+#endif
+
 #define INFO_TIMEOUT_MS 300
 #define DEBUG 1
 
@@ -44,7 +51,6 @@ bool g_shm_initiated = false;
 /* Shared memory updater thread */
 pthread_t shm_update_thr;
 
-int _sysctl(struct __sysctl_args *args );
 #define OSNAMESZ 100
 
 /* Initialize shared memory segment */

@@ -25,12 +25,6 @@
 #include "citrusleaf/cl_shm.h"
 #include "citrusleaf/cf_socket.h"
 
-#ifndef PTHREAD_MUTEX_ROBUST
-#define PTHREAD_MUTEX_ROBUST PTHREAD_MUTEX_ROBUST_NP
-#define pthread_mutexattr_setrobust pthread_mutexattr_setrobust_np
-#define pthread_mutex_consistent pthread_mutex_consistent_np
-#endif
-
 #define INFO_TIMEOUT_MS 300
 #define DEBUG 1
 
@@ -50,8 +44,6 @@ bool g_shm_initiated = false;
 
 /* Shared memory updater thread */
 pthread_t shm_update_thr;
-
-#define OSNAMESZ 100
 
 /* Initialize shared memory segment */
 int citrusleaf_use_shm(int num_nodes, key_t key) 
@@ -73,9 +65,6 @@ int citrusleaf_use_shm(int num_nodes, key_t key)
 	fprintf(stderr,"Shared memory key is %d\n",key);
 #endif
 	if(key == -1) {
-#ifdef DEBUG
-		fprintf(stderr,"Ftok failed with error = %s\n",strerror(errno));
-#endif
 		return SHM_ERROR;
 	}
 	void * shm_pt = (void*)0;
@@ -174,7 +163,7 @@ int citrusleaf_use_shm(int num_nodes, key_t key)
 		pthread_mutexattr_t attr;
 		pthread_mutexattr_init (&attr);
 		pthread_mutexattr_setpshared (&attr, PTHREAD_PROCESS_SHARED);
-		pthread_mutexattr_setrobust(&attr, PTHREAD_MUTEX_ROBUST);
+		pthread_mutexattr_setrobust_np(&attr, PTHREAD_MUTEX_ROBUST_NP);
 		if(pthread_mutex_init (&(g_shm_pt->shm_lock), &attr)!=0) {
 #ifdef DEBUG
 				fprintf(stderr,"Mutex init failed pid %d\n",getpid());
@@ -252,7 +241,7 @@ int  cl_shm_alloc(struct sockaddr_in * sa_in, int field_id, char ** values, int 
 			pthread_mutexattr_t attr;
 			pthread_mutexattr_init (&attr);
 			pthread_mutexattr_setpshared (&attr, PTHREAD_PROCESS_SHARED);
-			pthread_mutexattr_setrobust (&attr, PTHREAD_MUTEX_ROBUST);
+			pthread_mutexattr_setrobust_np (&attr, PTHREAD_MUTEX_ROBUST_NP);
 			if(pthread_mutex_init (&(g_shm_pt->node_info[g_shm_pt->node_count].ninfo_lock), &attr)!=0) {
 #ifdef DEBUG
 					fprintf(stderr,"node level mutex init failed pid %d\n",getpid());
@@ -473,7 +462,7 @@ Alloc:
 	/* Make the lock consistent if the last owner of the lock died while holding the lock */
 	/* We should ideally clean the memory here and then make the lock consistent */
     if(error_in_getting_ninfo_lock == EOWNERDEAD){
-        pthread_mutex_consistent(&(g_shm_pt->node_info[pos].ninfo_lock));
+        pthread_mutex_consistent_np(&(g_shm_pt->node_info[pos].ninfo_lock));
     }
 	/* There are only two valid cases when we can access the protected data 
 	 * 1. We get the lock without any error and 
@@ -528,7 +517,7 @@ int cl_shm_read(struct sockaddr_in * sa_in, int field_id, char **values, int tim
 			/* Make the lock consistent if the last owner of the lock died while holding the lock */
 			/* We should ideally clean the memory here and then make the lock consistent */
 			if(error_in_getting_ninfo_lock == EOWNERDEAD){
-				pthread_mutex_consistent(&(g_shm_pt->node_info[i].ninfo_lock));
+				pthread_mutex_consistent_np(&(g_shm_pt->node_info[i].ninfo_lock));
 			}
 			/* There are only two valid cases when we can access the protected data 
 			 * 1. We get the lock without any error and 
@@ -596,7 +585,7 @@ void * cl_shm_updater_fn(void * gcc_is_ass) {
 #ifdef DEBUG
 		fprintf(stderr,"\n\n\n\n\n Previous process got killed \n");
 #endif
-		pthread_mutex_consistent(&(g_shm_pt->shm_lock));
+		pthread_mutex_consistent_np(&(g_shm_pt->shm_lock));
 	}
 #ifdef DEBUG
 	fprintf(stderr,"\n\n process %d took over control with pthread_mutex_lock returning %d \n\n\n\n\n",getpid(), error_in_getting_shm_lock);

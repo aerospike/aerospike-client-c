@@ -17,7 +17,7 @@
 #include <unistd.h>
 
 #include "citrusleaf/cf_atomic.h"
-#include "citrusleaf/cf_alloc.h"
+#include "citrusleaf/cf_client_rc.h"
 
 
 /* cf_client_rc_count

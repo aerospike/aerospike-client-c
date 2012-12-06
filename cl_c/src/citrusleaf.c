@@ -1071,6 +1071,8 @@ set_object(cl_msg_op *op, cl_object *obj)
 		case CL_RUBY_BLOB:
 		case CL_PHP_BLOB:
 		case CL_LUA_BLOB:
+		case CL_MAP:
+		case CL_LIST:
 			obj->sz = cl_msg_op_get_value_sz(op);
 			obj->free = obj->u.blob = malloc(obj->sz);
 			if (obj->free == 0)	return(-1);

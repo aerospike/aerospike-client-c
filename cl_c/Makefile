@@ -1,21 +1,44 @@
-# Citrusleaf Foundation
-# Makefile
+include project/build.makefile
 
-all: libcitrusleaf
-	cp lib/* ../../../shared/lib
-	cp include/citrusleaf/citrusleaf.h ../../../shared/include/citrusleaf
-	cp include/citrusleaf/cl_cluster.h ../../../shared/include/citrusleaf
-	@echo "done."
+CFLAGS = -std=gnu99 -g -O3 -fno-common -fno-strict-aliasing -rdynamic  -Wall $(AS_CFLAGS) -DMARCH_$(ARCH) -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_GNU_SOURCE 
 
-clean:
-	rm -f obj/i86/*
-	rm -f obj/x64/*
-	rm -f obj/native/*
-	rm -f lib/*
-	rm -f lib32/*
-	rm -f lib64/*
+INC_PATH += modules/common/$(TARGET_INCL)/client
 
-%:
-#	$(MAKE) -f Makefile.32 -C src $@   # some are having trouble with the xcompile
-#	$(MAKE) -f Makefile.64 -C src $@
-	$(MAKE) -f Makefile.native -C src $@
+MODULES += common
+
+CITRUSLEAF = 
+CITRUSLEAF += citrusleaf.o
+CITRUSLEAF += cl_async.o
+CITRUSLEAF += cl_batch.o
+CITRUSLEAF += cl_cluster.o
+CITRUSLEAF += cl_info.o
+CITRUSLEAF += cl_partition.o
+CITRUSLEAF += cl_query.o
+CITRUSLEAF += cl_lookup.o
+CITRUSLEAF += cl_scan.o
+CITRUSLEAF += cl_sproc.o
+CITRUSLEAF += proto.o
+
+ifeq ($(MEM_COUNT),1)
+  LDFLAGS += -lm
+  CFLAGS += -DMEM_COUNT
+endif
+
+common: 
+	make -C modules/common all MEM_COUNT=$(MEM_COUNT) 
+
+libcitrusleaf.a: $(call objects, $(CITRUSLEAF)) | $(TARGET_LIB) common
+	$(call archive, $(empty), $(empty), $(empty), $(empty))
+
+prepare:
+	mkdir -p $(TARGET_INCL)/citrusleaf
+	cp -R $(SOURCE_INCL)/*.h $(TARGET_INCL)/citrusleaf/.
+
+move: libcitrusleaf.a prepare
+	mkdir -p ../../../shared/lib
+	cp $(TARGET_LIB)/libcitrusleaf.a ../../../shared/lib/.
+	mkdir -p ../../../shared/include
+	cp -R $(TARGET_INCL)/* ../../../shared/include/.
+	cp -R modules/common/$(TARGET_INCL)/client/* ../../../shared/include/.
+
+all: move

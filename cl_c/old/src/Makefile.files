@@ -1,0 +1,13 @@
+HEADERS = citrusleaf.h cl_cluster.h 
+SOURCES = 
+SOURCES += citrusleaf.c 
+SOURCES += cl_async.c 
+SOURCES += cl_batch.c 
+SOURCES += cl_cluster.c 
+SOURCES += cl_info.c 
+SOURCES += cl_partition.c 
+SOURCES += cl_query.c
+SOURCES += cl_lookup.c 
+SOURCES += cl_scan.c 
+SOURCES += cl_sproc.c 
+SOURCES += proto.c 

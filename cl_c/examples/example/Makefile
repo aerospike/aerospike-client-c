@@ -2,10 +2,10 @@
 # Makefile for an example program
 
 # interesting directories
-DIR_INCLUDE = ../include
-DIR_CF_INCLUDE = ../../cf_base/include
-DIR_LIB = ../lib
-#DIR_CF_LIB = ../../cf_base/lib
+DIR_INCLUDE = ../../target/Linux-x86_64/include
+DIR_CF_INCLUDE = ../../modules/common/target/Linux-x86_64/include/client
+DIR_LIB = ../../target/Linux-x86_64/lib
+DIR_CF_LIB = ../../modules/common/target/Linux-x86_64/lib
 DIR_OBJECT = obj
 DIR_TARGET = .
 
@@ -21,9 +21,9 @@ CFLAGS_NATIVE += -D_REENTRANT -D MARCH_$(ARCH_NATIVE)
 
 LD = gcc
 #LDFLAGS = $(CFLAGS_NATIVE) -L$(DIR_LIB) 
-LDFLAGS = $(CFLAGS_NATIVE) -L$(DIR_LIB)
+LDFLAGS = $(CFLAGS_NATIVE) -L$(DIR_LIB) -L$(DIR_CF_LIB)
 #-L$(DIR_CF_LIB)
-LIBRARIES = -lcitrusleaf -lssl -lpthread -lrt -lcrypto -lz 
+LIBRARIES = -lcitrusleaf -lssl -lpthread -lrt -lcrypto -lz -lcf-client
 ifeq (${MR_LANG},LUA)
 LIBRARIES += -llua -lw
 endif

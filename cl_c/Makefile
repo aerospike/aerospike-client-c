@@ -13,10 +13,10 @@ CITRUSLEAF += cl_batch.o
 CITRUSLEAF += cl_cluster.o
 CITRUSLEAF += cl_info.o
 CITRUSLEAF += cl_partition.o
-CITRUSLEAF += cl_query.o
+# CITRUSLEAF += cl_query.o
 CITRUSLEAF += cl_lookup.o
-CITRUSLEAF += cl_scan.o
-CITRUSLEAF += cl_sproc.o
+# CITRUSLEAF += cl_scan.o
+# CITRUSLEAF += cl_sproc.o
 CITRUSLEAF += proto.o
 
 ifeq ($(MEM_COUNT),1)

@@ -11,7 +11,7 @@
 
 #include "citrusleaf.h"
 #include "citrusleaf-internal.h"
-#include "cl_cluster.h"
+#include "cluster.h"
 
 #include <citrusleaf/proto.h>
 

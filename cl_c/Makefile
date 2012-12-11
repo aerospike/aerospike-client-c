@@ -31,14 +31,14 @@ mod-lua:
 common: 
 	make -C modules/common all MEM_COUNT=$(MEM_COUNT) 
 
-libcitrusleaf.a: $(call objects, $(CITRUSLEAF)) | $(TARGET_LIB) common mod-lua
+libcitrusleaf.a: $(call objects, $(CITRUSLEAF)) |  common mod-lua $(TARGET_LIB)
 	$(call archive, $(empty), $(empty), $(empty), $(empty))
 
 prepare:
 	mkdir -p $(TARGET_INCL)/citrusleaf
 	cp -R $(SOURCE_INCL)/*.h $(TARGET_INCL)/citrusleaf/.
 
-move: libcitrusleaf.a prepare
+move: | common mod-lua  libcitrusleaf.a prepare
 	mkdir -p ../../../shared/lib
 	cp $(TARGET_LIB)/libcitrusleaf.a ../../../shared/lib/.
 	mkdir -p ../../../shared/include

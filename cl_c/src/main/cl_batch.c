@@ -10,6 +10,7 @@
 #include "citrusleaf.h"
 #include "cl_cluster.h"
 #include "citrusleaf-internal.h"
+#include "types.h"
 
 #include <citrusleaf/cf_atomic.h>
 #include <citrusleaf/cf_socket.h>
@@ -744,12 +745,12 @@ cl_rv
 citrusleaf_get_many_digest_direct(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_batchresult **br)
 {
 	//Fist allocate the result structure
-	cl_batchresult *localbr = (cl_batchresult *) malloc(sizeof(struct cl_batchresult));
+	cl_batchresult *localbr = (cl_batchresult *) malloc(sizeof(cl_batchresult));
 	if (localbr == NULL) {
 		return CITRUSLEAF_FAIL_CLIENT;
 	} else {
 		//Assume that we are going to get all the records and allocate memory for them
-		localbr->records = malloc(sizeof(struct cl_rec) * n_digests);
+		localbr->records = malloc(sizeof(cl_rec) * n_digests);
 		if (localbr->records == NULL) {
 			free(localbr);
 			return CITRUSLEAF_FAIL_CLIENT;

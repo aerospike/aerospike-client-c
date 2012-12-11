@@ -461,7 +461,7 @@ citrusleaf_cluster_add_addr_map(cl_cluster *asc, char *orig, char *alt)
 
 	//We need to add the supplied map only if does not already exist
 	if (i==vsz) {
-		cl_addrmap *newmap = (cl_addrmap *) malloc(sizeof(struct cl_addrmap));
+		cl_addrmap *newmap = (cl_addrmap *) malloc(sizeof(cl_addrmap));
 		if (newmap == NULL) {
 			return;
 		}

@@ -41,7 +41,7 @@ typedef enum cl_rv_e cl_rv;
 typedef enum cl_rvclient_e cl_rvclient;
 typedef enum cl_type_e cl_type;
 typedef enum cl_write_policy_e cl_write_policy;
-typedef enum cl_operator_type_e cl_operator_type;
+typedef enum cl_operator_type_e cl_operator;
 
 typedef struct cl_object_s cl_object;
 typedef struct cl_bin_s cl_bin;
@@ -202,7 +202,7 @@ struct cl_batchresult_s {
  */
 struct cl_operation_s {
     cl_bin              bin;
-    cl_operator_type    op;
+    cl_operator         op;
 };
     
 /**

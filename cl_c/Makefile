@@ -2,7 +2,7 @@ include project/build.makefile
 
 CFLAGS = -std=gnu99 -g -O3 -fno-common -fno-strict-aliasing -rdynamic  -Wall $(AS_CFLAGS) -DMARCH_$(ARCH) -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_GNU_SOURCE 
 
-INC_PATH += modules/common/$(TARGET_INCL)/client
+INC_PATH += modules/common/$(TARGET_INCL)/client modules/aerospike-mod-lua/src/include
 
 MODULES += common
 
@@ -17,6 +17,7 @@ CITRUSLEAF += cl_partition.o
 CITRUSLEAF += cl_lookup.o
 # CITRUSLEAF += cl_scan.o
 # CITRUSLEAF += cl_sproc.o
+CITRUSLEAF += cl_udf.o
 CITRUSLEAF += proto.o
 
 ifeq ($(MEM_COUNT),1)
@@ -24,10 +25,13 @@ ifeq ($(MEM_COUNT),1)
   CFLAGS += -DMEM_COUNT
 endif
 
+mod-lua: 
+	make -C modules/aerospike-mod-lua all MEM_COUNT=$(MEM_COUNT) 
+
 common: 
 	make -C modules/common all MEM_COUNT=$(MEM_COUNT) 
 
-libcitrusleaf.a: $(call objects, $(CITRUSLEAF)) | $(TARGET_LIB) common
+libcitrusleaf.a: $(call objects, $(CITRUSLEAF)) | $(TARGET_LIB) common mod-lua
 	$(call archive, $(empty), $(empty), $(empty), $(empty))
 
 prepare:

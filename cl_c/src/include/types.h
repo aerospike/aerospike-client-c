@@ -37,15 +37,13 @@
 
 typedef struct cl_conn_s cl_conn;
 
-typedef enum cl_rv cl_rv;
-typedef enum cl_rvclient cl_rvclient;
-
-typedef enum cl_type cl_type;
-typedef enum cl_write_policy cl_write_policy;
+typedef enum cl_rv_e cl_rv;
+typedef enum cl_rvclient_e cl_rvclient;
+typedef enum cl_type_e cl_type;
+typedef enum cl_write_policy_e cl_write_policy;
+typedef enum cl_operator_type_e cl_operator_type;
 
 typedef struct cl_object_s cl_object;
-typedef enum cl_operator_type cl_operator;
-
 typedef struct cl_bin_s cl_bin;
 typedef struct cl_rec_s cl_rec;
 typedef struct cl_batchresult_s cl_batchresult;
@@ -57,7 +55,7 @@ typedef struct cl_write_parameters_s cl_write_parameters;
 
 
 
-enum cl_rv {
+enum cl_rv_e {
     CITRUSLEAF_FAIL_ASYNCQ_FULL = -3,
     CITRUSLEAF_FAIL_TIMEOUT = -2,
     CITRUSLEAF_FAIL_CLIENT = -1,                // an out of memory or similar locally
@@ -90,13 +88,13 @@ enum cl_rv {
     CITRUSLEAF_FAIL_INDEX_FOUND = 208
 };
 
-enum cl_rvclient {
+enum cl_rvclient_e {
     CITRUSLEAF_FAIL_DC_DOWN = 1,
     CITRUSLEAF_FAIL_DC_UP = 2
 };
 
 
-enum cl_type { 
+enum cl_type_e { 
     CL_NULL        = 0,     CL_INT         = 1,     CL_FLOAT     = 2,   CL_STR       = 3,
     CL_BLOB        = 4,     CL_TIMESTAMP   = 5,     CL_DIGEST    = 6,   CL_JAVA_BLOB = 7,
     CL_CSHARP_BLOB = 8,     CL_PYTHON_BLOB = 9,     CL_RUBY_BLOB = 10,  CL_PHP_BLOB = 11,
@@ -105,14 +103,14 @@ enum cl_type {
 };
 
 
-enum cl_write_policy { 
+enum cl_write_policy_e { 
     CL_WRITE_ASYNC, 
     CL_WRITE_ONESHOT, 
     CL_WRITE_RETRY, 
     CL_WRITE_ASSURED
 };
 
-enum cl_operator_type { 
+enum cl_operator_type_e { 
     CL_OP_WRITE, 
     CL_OP_READ, 
     CL_OP_INCR, 
@@ -158,7 +156,7 @@ enum cl_operator_type {
  * These are often stack allocated, and are assigned using the 'wrap' calls
  */
 struct cl_object_s {
-    enum cl_type    type;
+    cl_type         type;
     size_t          sz; 
     union {
         char *      str;    // note for str: sz is strlen (not strlen+1 

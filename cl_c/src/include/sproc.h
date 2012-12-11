@@ -7,6 +7,8 @@
 #pragma once
 
 #include "types.h"
+#include "cluster.h"
+#include "scan.h"
 
 
 typedef enum cl_script_func_t {

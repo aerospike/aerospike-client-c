@@ -17,6 +17,12 @@
 #include <assert.h>
 
 
+#ifdef OSX
+#include <libkern/OSByteOrder.h> // for the 64-bit swap macro.
+#else //Linux
+#include <asm/byteorder.h> // 64-bit swap macro
+#endif
+
 #include "citrusleaf/citrusleaf.h"
 #include "citrusleaf/cl_cluster.h"
 #include "citrusleaf/citrusleaf-internal.h"
@@ -259,6 +265,11 @@ static int query_compile (const char *ns, const cl_query *query, const cl_mr_sta
             msg_sz += setname_len + sizeof(cl_msg_field);
         }
 
+    	if (query->job_id) {
+			n_fields++;
+        	msg_sz += sizeof(cl_msg_field) + sizeof(query->job_id);
+		}
+
         // query field    
         n_fields++;
         range_sz = 0; 
@@ -479,6 +490,18 @@ static int query_compile (const char *ns, const cl_query *query, const cl_mr_sta
         mf->type = CL_MSG_FIELD_TYPE_SPROC_FINALIZE_ARG;
         mf->field_sz = fnzarg_len + 1;
         sproc_compile_arg_field(mr_job->fnz_argk, mr_job->fnz_argv, mr_job->fnz_argc, mf->data, &fnzarg_len); 
+        mf_tmp = cl_msg_field_get_next(mf);
+        cl_msg_swap_field(mf);
+        mf = mf_tmp;
+    }
+
+    if (query->job_id) {
+        mf->type = CL_MSG_FIELD_TYPE_TRID;
+        // Convert the transaction-id to network byte order (big-endian)
+        uint64_t trid_nbo = __cpu_to_be64(query->job_id); //swaps in place
+        mf->field_sz = sizeof(trid_nbo) + 1;
+        //printf("write_fields: trid: write_fields: %d\n", mf->field_sz);
+        memcpy(mf->data, &trid_nbo, sizeof(trid_nbo));
         mf_tmp = cl_msg_field_get_next(mf);
         cl_msg_swap_field(mf);
         mf = mf_tmp;
@@ -741,7 +764,6 @@ static void *query_worker_fn(void *dummy) {
     }
 }
 
-
 cl_rv citrusleaf_query(cl_cluster *asc, const char *ns, const cl_query *query, const cl_mr_job *mr_job,
         citrusleaf_get_many_cb cb, void *udata) 
 {
@@ -844,7 +866,7 @@ cl_rv citrusleaf_query(cl_cluster *asc, const char *ns, const cl_query *query, c
     if (wr_buf && (wr_buf != wr_stack_buf)) { free(wr_buf); wr_buf = 0; }
     
     cf_queue_destroy(work.node_complete_q);
-	return retval;
+    return retval;
 }
 
 cl_query *citrusleaf_query_create(const char *indexname, const char *setname)
@@ -856,7 +878,7 @@ cl_query *citrusleaf_query_create(const char *indexname, const char *setname)
     memset(query,0,sizeof(cl_query));
     if (indexname) memcpy(query->indexname, indexname, strlen(indexname));
     if (setname)   memcpy(query->setname,   setname,   strlen(setname));
-
+	query->job_id = cf_get_rand64();
     return query;    
 }
 

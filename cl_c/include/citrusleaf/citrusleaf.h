@@ -79,7 +79,9 @@ typedef enum cl_rv {
     CITRUSLEAF_FAIL_INDEX_EXISTS = 205,
     CITRUSLEAF_FAIL_INDEX_SINGLEBIN_NS = 206,
     CITRUSLEAF_FAIL_INDEX_UNKNOWN_TYPE = 207,
-    CITRUSLEAF_FAIL_INDEX_FOUND = 208
+    CITRUSLEAF_FAIL_INDEX_FOUND = 208,
+    CITRUSLEAF_FAIL_INDEX_NOTREADABLE = 209,
+    CITRUSLEAF_FAIL_INDEX_QUERY_ABORTED = 210,
 } cl_rv;
 
 typedef enum cl_rvclient {
@@ -239,6 +241,7 @@ typedef struct cl_query {
 	cf_vector	*filters;
 	cf_vector	*orderbys;
 	int			limit;	
+	uint64_t    job_id;
 } cl_query;
  
 typedef enum cl_script_func_t {

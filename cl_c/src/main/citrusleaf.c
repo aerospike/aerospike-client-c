@@ -354,7 +354,7 @@ cl_write_header(uint8_t *buf, size_t msg_sz, uint info1, uint info2, uint info3,
 
 static uint8_t *
 write_fields(uint8_t *buf, const char *ns, int ns_len, const char *set, int set_len, const cl_object *key, const cf_digest *d, cf_digest *d_ret, 
-	uint64_t trid, cl_scan_param_field *scan_param_field, cl_sproc_def *sproc_def)
+	uint64_t trid, cl_scan_param_field *scan_param_field, as_call * call)
 {
 	// printf("write_fields\n");
 	// lay out the fields
@@ -403,36 +403,45 @@ write_fields(uint8_t *buf, const char *ns, int ns_len, const char *set, int set_
 		mf = mf_tmp;
 	}	
 
-	// record sproc fields
-	if (sproc_def && sproc_def->package) {
-		int slen = strlen(sproc_def->package);
-        mf->type = CL_MSG_FIELD_TYPE_SPROC_PACKAGE;
-        mf->field_sz =  slen + 1;
-        memcpy(mf->data, sproc_def->package, slen);
-        mf_tmp = cl_msg_field_get_next(mf);
-        cl_msg_swap_field(mf);
-        mf = mf_tmp;
-	}
+	/**
+	 * UDF 
+	 */
+	if ( call ) {
 
-	if (sproc_def && sproc_def->fname) {
-		int slen = strlen(sproc_def->fname);
-        mf->type = CL_MSG_FIELD_TYPE_SPROC_RECORD;
-        mf->field_sz =  slen + 1;
-        memcpy(mf->data, sproc_def->fname, slen);
-        mf_tmp = cl_msg_field_get_next(mf);
-        cl_msg_swap_field(mf);
-        mf = mf_tmp;
-	}
+		int len = 0;
 
-	if (sproc_def && sproc_def->params && sproc_def->params->num_param > 0) {
-		int plen=0;
-        mf->type = CL_MSG_FIELD_TYPE_SPROC_RECORD_PARAMS;
-		sproc_compile_arg_field(sproc_def->params->param_key, sproc_def->params->param_val, sproc_def->params->num_param, mf->data, &plen); 
-        mf->field_sz = plen + 1;
+		// Append filename to message fields
+		len = as_string_len(call->file) * sizeof(char);
+        mf->type = CL_MSG_FIELD_TYPE_UDF_FILENAME;
+        mf->field_sz =  len + 1;
+        memcpy(mf->data, as_string_tostring(call->file), len);
+
         mf_tmp = cl_msg_field_get_next(mf);
         cl_msg_swap_field(mf);
         mf = mf_tmp;
+
+		// Append function name to message fields
+		len = as_string_len(call->func) * sizeof(char);
+        mf->type = CL_MSG_FIELD_TYPE_UDF_FUNCTION;
+        mf->field_sz =  len + 1;
+        memcpy(mf->data, as_string_tostring(call->func), len);
+
+        mf_tmp = cl_msg_field_get_next(mf);
+        cl_msg_swap_field(mf);
+        mf = mf_tmp;
+
+        // Append arglist to message fields
+		len = call->args->size * sizeof(char);
+        mf->type = CL_MSG_FIELD_TYPE_UDF_ARGLIST;
+        mf->field_sz = len + 1;
+        memcpy(mf->data, call->args->data, len);
+
+        mf_tmp = cl_msg_field_get_next(mf);
+        cl_msg_swap_field(mf);
+        mf = mf_tmp;
+
 	}
+	
 	
 	if (key) {
 		mf->type = CL_MSG_FIELD_TYPE_KEY;
@@ -812,7 +821,7 @@ cl_object_to_buf (cl_object *obj, uint8_t *data)
 int
 cl_compile(uint info1, uint info2, uint info3, const char *ns, const char *set, const cl_object *key, const cf_digest *digest,
 	cl_bin *values, cl_operator operator, cl_operation *operations, int n_values,  
-	uint8_t **buf_r, size_t *buf_sz_r, const cl_write_parameters *cl_w_p, cf_digest *d_ret, uint64_t trid, cl_scan_param_field *scan_param_field, cl_sproc_def *sproc_def)
+	uint8_t **buf_r, size_t *buf_sz_r, const cl_write_parameters *cl_w_p, cf_digest *d_ret, uint64_t trid, cl_scan_param_field *scan_param_field, as_call * call)
 {
 	// I hate strlen
 	int		ns_len = ns ? strlen(ns) : 0;
@@ -829,27 +838,11 @@ cl_compile(uint info1, uint info2, uint info3, const char *ns, const char *set, 
 	if (trid)   msg_sz += sizeof(cl_msg_field) + sizeof(trid);
 	if (scan_param_field)	msg_sz += sizeof(cl_msg_field) + 1 + sizeof(cl_scan_param_field);
 
-	// sproc fields
-	int 	sproc_package_len = 0;
-	int 	sproc_len = 0;
-	int 	sproc_arg_len = 0;
-	int		sproc_fields = 0;
-	if (sproc_def  && sproc_def->package) {
-
-		sproc_fields++;
-		sproc_package_len = strlen(sproc_def->package); 
-		msg_sz += sproc_package_len  + sizeof(cl_msg_field);
-
-		sproc_fields++;
-		sproc_len = strlen(sproc_def->fname); 
-		msg_sz += sproc_len  + sizeof(cl_msg_field);
-		
-		if (sproc_def->params && sproc_def->params->num_param > 0) {
-			sproc_fields++;
-			sproc_compile_arg_field(sproc_def->params->param_key, sproc_def->params->param_val, sproc_def->params->num_param, NULL, &sproc_arg_len); 
-			msg_sz += sproc_arg_len + sizeof(cl_msg_field);
-		} 
-	}	
+	if ( call ) {
+		msg_sz += as_string_len(call->file) + sizeof(cl_msg_field);
+		msg_sz += as_string_len(call->func) + sizeof(cl_msg_field);
+		msg_sz += call->args->size + sizeof(cl_msg_field);
+	}
 
 	// ops
 	for (i=0;i<n_values;i++) {
@@ -907,11 +900,11 @@ cl_compile(uint info1, uint info2, uint info3, const char *ns, const char *set, 
 	uint32_t transaction_ttl = cl_w_p ? cl_w_p->timeout_ms : 0;
 
 	// lay out the header
-	int n_fields = ( ns ? 1 : 0 ) + (set ? 1 : 0) + (key ? 1 : 0) + (digest ? 1 : 0) + (trid ? 1 : 0) + (scan_param_field ? 1 : 0) + sproc_fields;
+	int n_fields = ( ns ? 1 : 0 ) + (set ? 1 : 0) + (key ? 1 : 0) + (digest ? 1 : 0) + (trid ? 1 : 0) + (scan_param_field ? 1 : 0) + 3;
 	buf = cl_write_header(buf, msg_sz, info1, info2, info3, generation, record_ttl, transaction_ttl, n_fields, n_values);
 		
 	// now the fields
-	buf = write_fields(buf, ns, ns_len, set, set_len, key, digest, d_ret, trid,scan_param_field,sproc_def);
+	buf = write_fields(buf, ns, ns_len, set, set_len, key, digest, d_ret, trid,scan_param_field, call);
 	if (!buf) {
 		if (mbuf)	free(mbuf);
 		return(-1);
@@ -1063,6 +1056,8 @@ set_object(cl_msg_op *op, cl_object *obj)
 			memcpy(obj->u.str, cl_msg_op_get_value_p(op), obj->sz);
 			obj->u.str[obj->sz] = 0;
 			break;
+		case CL_LIST:
+		case CL_MAP:
 		case CL_BLOB:
 		case CL_JAVA_BLOB:
 		case CL_CSHARP_BLOB:
@@ -1264,10 +1259,10 @@ cl_parse(cl_msg *msg, uint8_t *buf, size_t buf_len, cl_bin **values_r, cl_operat
 //
 // Similarly, either values or operations must be set, but not both.
 
-static int
+int
 do_the_full_monte(cl_cluster *asc, int info1, int info2, int info3, const char *ns, const char *set, const cl_object *key,
 	const cf_digest *digest, cl_bin **values, cl_operator operator, cl_operation **operations, int *n_values, 
-	uint32_t *cl_gen, const cl_write_parameters *cl_w_p, uint64_t *trid, char **setname_r, cl_sproc_def *sproc_def)
+	uint32_t *cl_gen, const cl_write_parameters *cl_w_p, uint64_t *trid, char **setname_r, as_call * call)
 {
 	int rv = -1;
 #ifdef DEBUG_HISTOGRAM	
@@ -1312,11 +1307,11 @@ do_the_full_monte(cl_cluster *asc, int info1, int info2, int info3, const char *
 	cf_digest d_ret;	
 	if (n_values && ( values || operations) ){
 		if (cl_compile(info1, info2, info3, ns, set, key, digest, values?*values:NULL, operator, operations?*operations:NULL,
-				*n_values , &wr_buf, &wr_buf_sz, cl_w_p, &d_ret, *trid, NULL,sproc_def)) {
+				*n_values , &wr_buf, &wr_buf_sz, cl_w_p, &d_ret, *trid, NULL, call)) {
 			return(rv);
 		}
 	}else{
-		if (cl_compile(info1, info2, info3, ns, set, key, digest, 0, 0, 0, 0, &wr_buf, &wr_buf_sz, cl_w_p, &d_ret, *trid, NULL,sproc_def)) {
+		if (cl_compile(info1, info2, info3, ns, set, key, digest, 0, 0, 0, 0, &wr_buf, &wr_buf_sz, cl_w_p, &d_ret, *trid, NULL, call)) {
 			return(rv);
 		}
 	}	
@@ -1997,62 +1992,6 @@ citrusleaf_operate(cl_cluster *asc, const char *ns, const char *set, const cl_ob
 }
 
 
-cl_rv citrusleaf_sproc_execute(cl_cluster *asc, const char *ns, const char *set,
-                               const cl_object *key, const char *package_name,
-                               const char *fname,
-                               const cl_sproc_params *sproc_params,
-                               cl_bin **bins, int *n_bins, int timeout_ms,
-                               uint32_t *cl_gen) {
-    if (!g_initialized) return(-1);
-
-    uint64_t trid=0;
-	cl_write_parameters cl_w_p;
-	cl_write_parameters_set_default(&cl_w_p);
-	cl_w_p.timeout_ms = timeout_ms;
-	
-	// internal translation now
-	cl_sproc_def sproc_def; 
-	sproc_def.package = package_name;
-	sproc_def.fname = fname;
-	sproc_def.params = sproc_params;
-
-	return( do_the_full_monte( asc, 0, CL_MSG_INFO2_WRITE, 0, ns, set, key, 0, bins, 
-		CL_OP_WRITE, 0, n_bins, NULL, &cl_w_p, &trid, NULL, &sproc_def) );
-}
-
-cl_rv citrusleaf_sproc_exec_cb(cl_cluster *asc, const char *ns, const char *set,
-                               const cl_object *key, const char *package_name,
-                               const char *fname,
-                               const cl_sproc_params *sproc_params,
-                               cl_bin **bins, int *n_bins, int timeout_ms,
-                               uint32_t *cl_gen,
-                               citrusleaf_get_many_cb cb, void *udata) {
-    int rsp = citrusleaf_sproc_execute(asc, ns, set, key, package_name, fname,
-                                       sproc_params, bins, n_bins, timeout_ms,
-                                       cl_gen);
-    if (rsp != CITRUSLEAF_OK) {
-    	if ( *n_bins == 1 ) {
-    		cl_bin * bin = bins[0];
-    		if ( strcmp(bin->bin_name,"ERROR") == 0 ) {
-    			printf("Error: %s\n", bin->object.u.str);
-    		}
-    	}
-    	return rsp;
-    }
-    for (int i = 0; i < *n_bins; i++) {
-        cl_object *object = &(*bins)[i].object;
-        // CL_LUA_BLOB needs to be cmgpack.unpacked() and then -> CL_MAP
-        // if (object->type == CL_LUA_BLOB) {
-        //     cl_object     *uobj = unpack_to_map(object->u.str, object->sz);
-        //     free(object->u.str); object->sz = 0;
-        //     object->type   = CL_MAP;
-        //     object->u.blob = uobj->u.blob;
-        // }
-    }
-    (*cb)(0, 0, 0, 0, 0, *bins, *n_bins, false, udata);
-    return 0;
-}
-
 extern int citrusleaf_cluster_init();
 
 void citrusleaf_set_debug(bool debug_flag) 
@@ -2070,10 +2009,10 @@ int citrusleaf_init()
 	g_init_pid = getpid();
 
  	citrusleaf_batch_init();
-#ifdef USE_LUA_MR
-	citrusleaf_mr_init();
-#endif
-	citrusleaf_query_init();
+// #ifdef USE_LUA_MR
+	// citrusleaf_mr_init();
+// #endif
+	// citrusleaf_query_init();
 	citrusleaf_cluster_init();
 
 #ifdef DEBUG_HISTOGRAM	
@@ -2091,10 +2030,10 @@ void citrusleaf_shutdown(void) {
 	if (g_initialized == false)	return;
 
 	citrusleaf_cluster_shutdown();
-	citrusleaf_query_shutdown();
-#ifdef USE_LUA_MR
-	citrusleaf_mr_shutdown();
-#endif
+	// citrusleaf_query_shutdown();
+// #ifdef USE_LUA_MR
+	// citrusleaf_mr_shutdown();
+// #endif
 	citrusleaf_batch_shutdown();
 	// citrusleaf_info_shutdown();
 

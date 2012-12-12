@@ -103,6 +103,7 @@ define build
 endef
 
 define executable
+	@mkdir -p $(TARGET_BIN)/`dirname $@`
 	$(strip $(CC) \
 		$(addprefix -I, $(MODULES:%=modules/%/$(TARGET_INCL))) \
 		$(addprefix -I, $(INC_PATH)) \
@@ -115,10 +116,12 @@ define executable
 		$(addprefix -l, $($@_lib)) \
 		$(addprefix -l, $(3)) \
 		$(4) \
+		$(CFLAGS) \
 		$(LDFLAGS) \
 		$($@_flags) \
 		-o $(TARGET_BIN)/$@ \
 		$^ \
+		$(5) \
 	)
 endef
 
@@ -128,7 +131,7 @@ define archive
 endef
 
 define library
-	@mkdir -p `dirname $@`
+	@mkdir -p $(TARGET_LIB)/`dirname $@`
 	$(strip $(CC) -shared \
 		$(addprefix -I, $(MODULES:%=modules/%/$(TARGET_INCL))) \
 		$(addprefix -I, $(INC_PATH)) \
@@ -145,6 +148,7 @@ define library
 		$($@_flags) \
 		-o $(TARGET_LIB)/$@ \
 		$^ \
+		$(5) \
 	)
 endef
 
@@ -166,6 +170,7 @@ define object
 		$($@_flags) \
 		-o $@ \
 		-c $^ \
+		$(5) \
 	)
 endef
 

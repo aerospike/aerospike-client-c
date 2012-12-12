@@ -61,6 +61,32 @@ void maps_show(cl_cluster * c, cl_object * key, as_result * res) {
     as_list_free(arglist);
 }
 
+void maps_putmap(cl_cluster * c, cl_object * key, as_result * res) {
+
+    as_map * map = as_hashmap_new(32);
+    as_map_set(map, (as_val *) as_string_new(strdup("A")), (as_val *) as_string_new(strdup("alex")));
+    as_map_set(map, (as_val *) as_string_new(strdup("B")), (as_val *) as_string_new(strdup("bob")));
+    as_map_set(map, (as_val *) as_string_new(strdup("C")), (as_val *) as_string_new(strdup("chuck")));
+
+    as_list * arglist = as_arglist_new(2);
+    as_list_add_string(arglist, "mapperito");
+    as_list_add_map(arglist, map);
+
+    citrusleaf_udf_record_apply(c, "test", "demo", key, "maps", "putmap", arglist, TIMEOUT, res);
+
+    as_list_free(arglist);
+}
+
+void maps_getmap(cl_cluster * c, cl_object * key, as_result * res) {
+
+    as_list * arglist = as_arglist_new(2);
+    as_list_add_string(arglist, "mapperito");
+
+    citrusleaf_udf_record_apply(c, "test", "demo", key, "maps", "getmap", arglist, TIMEOUT, res);
+
+    as_list_free(arglist);
+}
+
 int main() {
 
 
@@ -68,6 +94,8 @@ int main() {
         lists_lappend,
         maps_mapput,
         maps_show,
+        maps_putmap,
+        maps_getmap,
         NULL
     };
 

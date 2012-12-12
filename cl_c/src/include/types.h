@@ -53,7 +53,7 @@ typedef struct cl_bin_s cl_bin;
 typedef struct cl_rec_s cl_rec;
 typedef struct cl_batchresult_s cl_batchresult;
 typedef struct cl_operation_s cl_operation;
-typedef struct cl_addrmap_s cl_addrmap;
+typedef struct cl_addrmap cl_addrmap;
 
 
 enum cl_rv_e {
@@ -151,7 +151,7 @@ struct cl_operation_s {
 /**
  * Structure to map the internal address to the external address
  */
-struct cl_addrmap_s {
+struct cl_addrmap {
     char *  orig;
     char *  alt;
 };

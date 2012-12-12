@@ -9,35 +9,41 @@
 #include "types.h"
 #include "async.h"
 #include "cluster.h"
+#include "object.h"
+#include "write.h"
 #include "info.h"
 #include "kv.h"
 #include "lookup.h"
-#include "mapreduce.h"
+// #include "mapreduce.h"
 #include "object.h"
 #include "partition.h"
 // #include "query.h"
-// #include "scan.h"
+#include "scan.h"
 // #include "sindex.h"
 // #include "sproc.h"
 
-//
-// All citrusleaf functions return an integer. This integer is 0 if the
-// call has succeeded, and a negative number if it has failed.
-// All returns of pointers and objects are done through the parameters.
-// (When in C++, use & parameters for return, but we're not there yet)
-//
-// 'void' return functions are only used for functions that are syntactically
-// unable to fail.
-//
-//
-// Call this init function sometime early, create our mutexes and a few other things.
-// We'd prefer if this is only called once
-//
+/******************************************************************************
+ * FUNCTIONS
+ ******************************************************************************/
 
+/**
+ * All citrusleaf functions return an integer. This integer is 0 if the
+ * call has succeeded, and a negative number if it has failed.
+ * All returns of pointers and objects are done through the parameters.
+ * (When in C++, use & parameters for return, but we're not there yet)
+ *
+ * 'void' return functions are only used for functions that are syntactically
+ * unable to fail.
+ */
+
+
+/**
+ * Call this init function sometime early, create our mutexes and a few other things.
+ * We'd prefer if this is only called once
+ */
 int citrusleaf_init(void);
 
 void citrusleaf_change_tend_speed(int secs);
-
 
 /**
  * If you wish to free up resources used by the citrusleaf client in your process,

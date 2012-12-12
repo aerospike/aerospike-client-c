@@ -7,6 +7,7 @@
 #pragma once
 
 #include "types.h"
+#include "cluster.h"
 
 // 
 // Query related structures:

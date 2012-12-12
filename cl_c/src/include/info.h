@@ -7,6 +7,14 @@
 #pragma once
 
 #include "types.h"
+#include "cluster.h"
+#include <sys/socket.h> // socket calls
+#include <arpa/inet.h> // inet_ntop
+#include <netinet/in.h>
+
+/******************************************************************************
+ * FUNCTIONS
+ ******************************************************************************/
 
 //
 // Use the information system to request data from a given node
@@ -19,4 +27,4 @@
 int citrusleaf_info(char *host, short port, char *names, char **values, int timeout_ms);
 int citrusleaf_info_host(struct sockaddr_in *sa_in, char *names, char **values, int timeout_ms, bool send_asis);
 int citrusleaf_info_cluster(cl_cluster *asc, char *names, char **values, bool send_asis, int timeout_ms);
-int citrusleaf_info_cluster_all(cl_cluster *asc, char *names, char **values, bool send_asis, int timeout_ms);
+int citrusleaf_info_cluster_all(cl_cluster * asc, char * names, char ** values, bool send_asis, int timeout_ms);

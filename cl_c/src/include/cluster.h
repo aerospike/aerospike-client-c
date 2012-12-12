@@ -5,8 +5,15 @@
  ******************************************************************************/
 
 #pragma once
-#include "citrusleaf.h"
+ 
+#include "types.h"
+#include <citrusleaf/cf_atomic.h>
+#include <citrusleaf/cf_queue.h>
+#include <citrusleaf/cf_vector.h>
 
+/******************************************************************************
+ * CONSTANTS
+ ******************************************************************************/
 
 #define NODE_DUN_THRESHOLD	800
 #define NODE_DUN_INFO_ERR	300
@@ -14,88 +21,7 @@
 #define NODE_DUN_NET_ERR	50
 #define NODE_DUN_TIMEOUT	1
 
-
-// forward, hidden reference
-struct cl_cluster_s;
-typedef struct cl_cluster_s cl_cluster;
-
-typedef struct cl_cluster_node_s {
-	
-	char		name[NODE_NAME_SIZE];
-	
-	cf_atomic32	dun_score;	// keep track of how "unhealthy" a node is
-	bool 		dunned;		// had a problem. Will get deleted next pass through.
-	
-	// A vector of sockaddr_in which the host is currently known by
-	cf_vector		sockaddr_in_v;
-	
-	// the server's generation count for all its partition management
-	uint32_t	partition_generation;
-	
-	// pool of current, cached FDs
-	cf_queue	*conn_q;
-	cf_queue	*conn_q_asyncfd;	// FDs for async command execution
-
-	int		asyncfd;
-	cf_queue	*asyncwork_q;
-	
-	pthread_mutex_t LOCK;
-	
-} cl_cluster_node;
-
 #define MAX_REPLICA_COUNT 5
-
-typedef struct cl_partition_s {
-	cl_cluster_node	*write;
-	int n_read;
-	cl_cluster_node *read[MAX_REPLICA_COUNT];
-} cl_partition;
-
-
-typedef struct cl_partition_table_s {
-	
-	struct cl_partition_table_s *next;
-	
-	char ns[33];  // the namespace name
-	
-	cl_partition partitions[];
-	
-} cl_partition_table;
-
-
-struct cl_cluster_s {
-	// Linked list element should be first element in the structure
-	cf_ll_element		ll_e;
-
-	uint32_t		state;		//bitmap representing state information
-	
-	bool		follow;   // possible to create a no-follow cluster
-	bool		nbconnect;	
-						  // mostly for testing
-						  // that only targets specific nodes
-						  
-	volatile bool		found_all; // have, at some time, found all cluster memebers
-	
-	// List of host-strings added by the user.
-	cf_vector		host_str_v;	// vector is pointer-type
-	cf_vector		host_port_v;  // vector is integer-type
-	
-	cf_vector		host_addr_map_v; //Mapping from host string to its alternate
-	
-	// list actual node objects that represent the cluster
-	uint			last_node;
-	cf_vector		node_v;      // vector is pointer-type, host objects are ref-counted
-	
-	// information about where all the partitions are
-	cl_partition_id		n_partitions;
-	cl_partition_table *partition_table_head;
-	
-	uint32_t		ref_count;
-	uint32_t		tend_speed;
-	// Need a lock
-	pthread_mutex_t	LOCK;
-	
-};
 
 #define CLS_TENDER_RUNNING	0x00000001
 #define CLS_FREED		0x00000002
@@ -103,13 +29,85 @@ struct cl_cluster_s {
 #define CLS_UNUSED2		0x00000008
 #define CLS_UNUSED3		0x00000010
 
+/******************************************************************************
+ * TYPES
+ ******************************************************************************/
+
+typedef struct cl_cluster_s cl_cluster;
+typedef struct cl_cluster_node_s cl_cluster_node;
+typedef struct cl_partition_s cl_partition;
+typedef struct cl_partition_table_s cl_partition_table;
 
 
+struct cl_cluster_node_s {
+	char			name[NODE_NAME_SIZE];
+	cf_atomic32		dun_score;				// keep track of how "unhealthy" a node is
+	bool 			dunned;					// had a problem. Will get deleted next pass through.
+	cf_vector		sockaddr_in_v; 			// A vector of sockaddr_in which the host is currently known by
+	uint32_t		partition_generation; 	// the server's generation count for all its partition management
+	cf_queue * 		conn_q;					// pool of current, cached FDs
+	cf_queue * 		conn_q_asyncfd;			// FDs for async command execution
+	int				asyncfd;
+	cf_queue * 		asyncwork_q;
+	pthread_mutex_t LOCK;
+	
+};
 
+struct cl_cluster_s {
+	// Linked list element should be first element in the structure
+	cf_ll_element		ll_e;
+
+	uint32_t			state;		//bitmap representing state information
+	
+	bool				follow;   // possible to create a no-follow cluster
+	bool				nbconnect;	
+						  // mostly for testing
+						  // that only targets specific nodes
+
+	volatile bool		found_all; // have, at some time, found all cluster memebers
+	
+	// List of host-strings added by the user.
+	cf_vector			host_str_v;	// vector is pointer-type
+	cf_vector			host_port_v;  // vector is integer-type
+	
+	cf_vector			host_addr_map_v; //Mapping from host string to its alternate
+	
+	// list actual node objects that represent the cluster
+	uint				last_node;
+	cf_vector			node_v;      // vector is pointer-type, host objects are ref-counted
+	
+	// information about where all the partitions are
+	cl_partition_id		n_partitions;
+	cl_partition_table *partition_table_head;
+	
+	uint32_t			ref_count;
+	uint32_t			tend_speed;
+	// Need a lock
+	pthread_mutex_t		LOCK;
+	
+};
+
+struct cl_partition_s {
+    cl_cluster_node *   write;
+    int                 n_read;
+    cl_cluster_node *   read[MAX_REPLICA_COUNT];
+};
+
+
+struct cl_partition_table_s {
+    cl_partition_table *    next;
+    char                    ns[33];  // the namespace name
+    cl_partition            partitions[];  
+};
+
+
+/******************************************************************************
+ * FUNCTIONS
+ ******************************************************************************/
 
 // Cluster calls
-extern cl_cluster_node *cl_cluster_node_get_random(cl_cluster *asc);  // get node from cluster
-extern cl_cluster_node *cl_cluster_node_get(cl_cluster *asc, const char *ns, const cf_digest *d, bool write);  // get node from cluster
+extern cl_cluster_node * cl_cluster_node_get_random(cl_cluster *asc);  // get node from cluster
+extern cl_cluster_node * cl_cluster_node_get(cl_cluster *asc, const char *ns, const cf_digest *d, bool write);  // get node from cluster
 extern void cl_cluster_node_release(cl_cluster_node *cn);
 extern void cl_cluster_node_put(cl_cluster_node *cn);          // put node back
 extern void cl_cluster_node_dun(cl_cluster_node *cn, int32_t score);			// node is less healthy!
@@ -124,7 +122,7 @@ extern int citrusleaf_info_parse_single(char *values, char **value);
 
 
 
-extern cl_cluster *citrusleaf_cluster_create(void);
+extern cl_cluster * citrusleaf_cluster_create(void);
 extern void citrusleaf_cluster_destroy(cl_cluster *asc);
 extern void citrusleaf_cluster_shutdown(void);
 
@@ -156,7 +154,7 @@ extern void cl_cluster_get_node_names(cl_cluster *asc, int *n_nodes, char **node
 //
 // URLs are of the form;
 // citrusleaf://host:port (or similar)
-extern cl_cluster *citrusleaf_cluster_get(char const *url);
+extern cl_cluster * citrusleaf_cluster_get(char const *url);
 
 
 // By default, the C client will "follow" the cluster, that is,

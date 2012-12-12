@@ -7,7 +7,14 @@
 #pragma once
 
 #include "types.h"
+#include "cluster.h"
 
-// Do a lookup with this name and port, and add the sockaddr to the
-// vector using the unique lookup
+/******************************************************************************
+ * FUNCTIONS
+ ******************************************************************************/
+
+/**
+ * Do a lookup with this name and port, and add the sockaddr to the
+ * vector using the unique lookup
+ */
 int cl_lookup(cl_cluster *asc, char *hostname, short port, cf_vector *sockaddr_in_v);

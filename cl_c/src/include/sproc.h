@@ -10,27 +10,34 @@
 #include "cluster.h"
 #include "scan.h"
 
+/******************************************************************************
+ * TYPES
+ ******************************************************************************/
 
-typedef enum cl_script_func_t {
+typedef enum cl_script_func_t cl_script_func_t;
+typedef enum cl_script_lang_t cl_script_lang_t;
+typedef struct cl_sproc_params cl_sproc_params;
+
+enum cl_script_func_t {
     CL_SCRIPT_FUNC_TYPE_MAP,
     CL_SCRIPT_FUNC_TYPE_REDUCE,
     CL_SCRIPT_FUNC_TYPE_FINALIZE,
     CL_SCRIPT_FUNC_TYPE_RECORD,
-} cl_script_func_t;
+};
 
-
-typedef enum cl_script_lang_t {
+enum cl_script_lang_t {
     CL_SCRIPT_LANG_LUA
-} cl_script_lang_t;
+};
 
-typedef struct cl_sproc_params {
+struct cl_sproc_params {
     int         num_param;
     char        *param_key[CL_MAX_NUM_FUNC_ARGC];
     cl_object   *param_val[CL_MAX_NUM_FUNC_ARGC];
-} cl_sproc_params;
+};
 
-
-
+/******************************************************************************
+ * FUNCTIONS
+ ******************************************************************************/
 
 cl_rv citrusleaf_sproc_package_set(cl_cluster *asc, const char *package, const char *content, char **err_str, cl_script_lang_t lang);
 cl_rv citrusleaf_sproc_package_get_content(cl_cluster *asc, const char *package_name, char **content, int *content_len, cl_script_lang_t lang);

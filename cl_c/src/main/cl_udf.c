@@ -60,7 +60,6 @@ cl_rv citrusleaf_udf_record_apply(cl_cluster * cl, const char * ns, const char *
 
     cl_rv rv = CITRUSLEAF_OK;
 
-    LOG("citrusleaf_udf_record_apply: start");
     as_serializer ser;
     as_msgpack_init(&ser);
 
@@ -90,7 +89,7 @@ cl_rv citrusleaf_udf_record_apply(cl_cluster * cl, const char * ns, const char *
     cl_bin * bins = NULL;
     int nbins = 0;
 
-    print_buffer(&args);
+    // print_buffer(&args);
 
     do_the_full_monte( 
         cl, 0, CL_MSG_INFO2_WRITE, 0, 
@@ -121,6 +120,7 @@ cl_rv citrusleaf_udf_record_apply(cl_cluster * cl, const char * ns, const char *
                     .size = (uint32_t) bin.object.sz,
                     .data = (char *) bin.object.u.blob
                 };
+                // print_buffer(&buf);
                 as_serializer_deserialize(&ser, &buf, &val);
                 break;
             }
@@ -138,23 +138,22 @@ cl_rv citrusleaf_udf_record_apply(cl_cluster * cl, const char * ns, const char *
                 as_result_tosuccess(res, val);
             }
             else {
-                as_result_tofailure(res, as_string_new("Invalid response."));
+                as_result_tofailure(res, as_string_new("Invalid response. (1)"));
                 rv = CITRUSLEAF_FAIL_UDF_BAD_RESPONSE;
             }
         }
         else {
-            as_result_tofailure(res, as_string_new("Invalid response."));
+            as_result_tofailure(res, as_string_new("Invalid response. (2)"));
             rv = CITRUSLEAF_FAIL_UDF_BAD_RESPONSE;
         }
     }
     else {
-        as_result_tofailure(res, as_string_new("Invalid response."));
+        as_result_tofailure(res, as_string_new("Invalid response. (3)"));
         rv = CITRUSLEAF_FAIL_UDF_BAD_RESPONSE;
     }
 
     as_serializer_destroy(&ser);
-
-    LOG("citrusleaf_udf_record_apply: end %d",rv);
+    
     return rv;
 }
 

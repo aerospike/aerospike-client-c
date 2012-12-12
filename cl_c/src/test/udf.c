@@ -37,6 +37,8 @@ void maps_mapput(cl_cluster * c, cl_object * key, as_result * res) {
 
     as_list * arglist = as_arglist_new(1);
     as_list_add_map(arglist, map);
+    as_list_add_string(arglist, "Z");
+    as_list_add_string(arglist, "Zed");
 
     citrusleaf_udf_record_apply(c, "test", "demo", key, "maps", "mapput", arglist, TIMEOUT, res);
 

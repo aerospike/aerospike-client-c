@@ -14,4 +14,10 @@
  * FUNCTIONS
  ******************************************************************************/
 
-cl_rv citrusleaf_udf_record_apply(cl_cluster * cl, const char * ns, const char * set, const cl_object * key, const char * filename, const char * function, as_list * arglist, int timeout_ms, as_result * r);
+cl_rv citrusleaf_udf_record_apply(cl_cluster *, const char *, const char *, const cl_object *, const char *, const char *, as_list *, int, as_result *);
+
+cl_rv citrusleaf_udf_list(cl_cluster *, char ***, int *);
+cl_rv citrusleaf_udf_get(cl_cluster *, const char *, char **, int *);
+cl_rv citrusleaf_udf_get_with_gen(cl_cluster *, const char *, char **, int *, char **) ;
+cl_rv citrusleaf_udf_put(cl_cluster *, const char *, const char *, char **);
+cl_rv citrusleaf_udf_remove(cl_cluster *, const char *);

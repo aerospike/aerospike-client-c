@@ -62,33 +62,35 @@ dump_sockaddr_in(char *prefix, struct sockaddr_in *sa_in)
 	}
 }
 
-// static void
-// dump_cluster(cl_cluster *asc)
-// {
-// 	if (cf_debug_enabled()) {
-// 		pthread_mutex_lock(&asc->LOCK);
+#ifdef DEBUG	
+static void
+dump_cluster(cl_cluster *asc)
+{
+	if (cf_debug_enabled()) {
+		pthread_mutex_lock(&asc->LOCK);
 
-// 		cf_debug("registered hosts:");
-// 		for (uint i=0;i<cf_vector_size(&asc->host_str_v);i++) {
-// 			char *host_s = cf_vector_pointer_get(&asc->host_str_v,i);
-// 			int   port = cf_vector_integer_get(&asc->host_port_v,i);
-// 			cf_debug(" host %d: %s:%d",i,host_s,port);
-// 		}
+		cf_debug("registered hosts:");
+		for (uint i=0;i<cf_vector_size(&asc->host_str_v);i++) {
+			char *host_s = cf_vector_pointer_get(&asc->host_str_v,i);
+			int   port = cf_vector_integer_get(&asc->host_port_v,i);
+			cf_debug(" host %d: %s:%d",i,host_s,port);
+		}
 
-// 		cf_debug("nodes: %u",cf_vector_size(&asc->node_v));
-// 		for (uint i=0;i<cf_vector_size(&asc->node_v);i++) {
-// 			cl_cluster_node *cn = cf_vector_pointer_get(&asc->node_v, i);
-// 			struct sockaddr_in *sa_in = cf_vector_getp(&cn->sockaddr_in_v, 0);
-// 			char str[INET_ADDRSTRLEN];
-// 			inet_ntop(AF_INET, &(sa_in->sin_addr), str, INET_ADDRSTRLEN);
-// 			cf_debug("%d %s : %s:%d (%d conns) (%d async conns)",i,cn->name,str,
-// 				(int)ntohs(sa_in->sin_port),cf_queue_sz(cn->conn_q),
-// 				cf_queue_sz(cn->conn_q_asyncfd));
-// 		}
-// 		cf_debug("partitions: %d",asc->n_partitions);
-// 		pthread_mutex_unlock(&asc->LOCK);
-// 	}
-// }
+		cf_debug("nodes: %u",cf_vector_size(&asc->node_v));
+		for (uint i=0;i<cf_vector_size(&asc->node_v);i++) {
+			cl_cluster_node *cn = cf_vector_pointer_get(&asc->node_v, i);
+			struct sockaddr_in *sa_in = cf_vector_getp(&cn->sockaddr_in_v, 0);
+			char str[INET_ADDRSTRLEN];
+			inet_ntop(AF_INET, &(sa_in->sin_addr), str, INET_ADDRSTRLEN);
+			cf_debug("%d %s : %s:%d (%d conns) (%d async conns)",i,cn->name,str,
+				(int)ntohs(sa_in->sin_port),cf_queue_sz(cn->conn_q),
+				cf_queue_sz(cn->conn_q_asyncfd));
+		}
+		cf_debug("partitions: %d",asc->n_partitions);
+		pthread_mutex_unlock(&asc->LOCK);
+	}
+}
+#endif
 
 cl_cluster_node *
 cl_cluster_node_get_byaddr(cl_cluster *asc, struct sockaddr_in *sa_in)

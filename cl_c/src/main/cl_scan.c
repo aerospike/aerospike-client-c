@@ -39,7 +39,7 @@
 #define STACK_BINS 100
 
 
-extern bool gasq_abort;
+bool gasq_abort;
 static int
 do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operation_info2, const char *ns, const char *set, 
 	cl_bin *bins, int n_bins, uint8_t scan_pct, 

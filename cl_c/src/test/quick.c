@@ -50,6 +50,7 @@ do_example(config *c)
   // Put some test values
   cl_object o_key;
   citrusleaf_object_init_str(&o_key, "example_key");
+  
   cl_bin values[2];
   strcpy(values[0].bin_name, "test_bin_one");
   citrusleaf_object_init_str(&values[0].object, "example_value_one");

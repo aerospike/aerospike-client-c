@@ -107,12 +107,14 @@ int main() {
     cl_object key;
     citrusleaf_object_init_str(&key, "1");
 
-    udf_test * test = tests;
-    while ( *test != NULL ) {
-        as_result res;
-        (*test)(c, &key, &res);
-        LOG("%s: %s", res.is_success ? "SUCCESS" : "FAILURE", as_val_tostring(res.value));
-        test++;
+    for (int i =0 ; i < 1; i++) {
+        udf_test * test = tests;
+        while ( *test != NULL ) {
+            as_result res;
+            (*test)(c, &key, &res);
+            LOG("%s: %s", res.is_success ? "SUCCESS" : "FAILURE", as_val_tostring(res.value));
+            test++;
+        }   
     }
 
     return 0;

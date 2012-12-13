@@ -900,7 +900,7 @@ cl_compile(uint info1, uint info2, uint info3, const char *ns, const char *set, 
 	uint32_t transaction_ttl = cl_w_p ? cl_w_p->timeout_ms : 0;
 
 	// lay out the header
-	int n_fields = ( ns ? 1 : 0 ) + (set ? 1 : 0) + (key ? 1 : 0) + (digest ? 1 : 0) + (trid ? 1 : 0) + (scan_param_field ? 1 : 0) + 3;
+	int n_fields = ( ns ? 1 : 0 ) + (set ? 1 : 0) + (key ? 1 : 0) + (digest ? 1 : 0) + (trid ? 1 : 0) + (scan_param_field ? 1 : 0) + (call ? 3 : 0);
 	buf = cl_write_header(buf, msg_sz, info1, info2, info3, generation, record_ttl, transaction_ttl, n_fields, n_values);
 		
 	// now the fields

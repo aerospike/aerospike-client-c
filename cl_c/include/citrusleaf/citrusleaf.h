@@ -219,7 +219,7 @@ void citrusleaf_object_free(cl_object *o);
 // frees all the memory in a bin array that would be returned from get_all but not the bin array itself
 void citrusleaf_bins_free(cl_bin *bins, int n_bins);
 
-int citrusleaf_copy_bins(cl_bin **destbins, cl_bin *srcbins, int n_bins);
+int citrusleaf_copy_bins(cl_bin **destbins, const cl_bin *srcbins, int n_bins);
 
 
 // use:
@@ -394,6 +394,32 @@ citrusleaf_put_replace(cl_cluster *asc, const char *ns, const char *set, const c
 cl_rv
 citrusleaf_restore(cl_cluster *asc, const char *ns, const cf_digest *digest, const char *set, const cl_bin *values, int n_values, const cl_write_parameters *cl_w_p);
 
+//
+// Initialize put queue and worker threads.
+// size_limit: Maximum number of items allowed in queue. Puts are rejected when the maximum is reached.
+// n_threads: Number of worker threads to create (Maximum is 6).
+//
+int
+citrusleaf_put_queue_init(int size_limit, int n_threads);
+
+//
+// Add put request to put queue and return immediately. Background thread(s) will process the
+// queue and send the put request to the appropriate server node.  The returned write status will
+// not be available.
+//
+cl_rv
+citrusleaf_put_forget(cl_cluster *asc, const char *ns, const char *set, const cl_object *key,
+	const cl_bin *values, int n_values, const cl_write_parameters *wp);
+
+//
+// Add put request with digest key to put queue and return immediately.  Background thread(s)
+// will process the queue and send the put request to the appropriate server node.  The returned
+// write status will not be available.
+//
+cl_rv
+citrusleaf_put_forget_digest(cl_cluster *asc, const char *ns, const cf_digest *digest,
+	const cl_bin *values, int n_values, const cl_write_parameters *wp);
+
 //Async versions of the put calls
 cl_rv
 citrusleaf_async_put(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, const cl_bin *bins, 
@@ -462,13 +488,18 @@ citrusleaf_scan_node (cl_cluster *asc, char *node_name, char *ns, char *set, cl_
 		citrusleaf_get_many_cb cb, void *udata, cl_scan_parameters *scan_p);
 
 //
+// Initialize batch queue and specified number of worker threads (Maximum thread count is 6).
+//
+cl_rv
+citrusleaf_batch_init(int n_threads);
+
+//
 // Get many digest
 // This version of the call acts exactly as the get digest call, but takes an array
 // of digests. Those digests will be retrieved with the same API conventions as the
 // previous ones.
 // To come: an array of keys, but it'll just be a wrapper on this.
 //
-
 cl_rv
 citrusleaf_get_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_bin *bins, int n_bins, bool get_key /*if true, retrieve key instead of simply digest*/, 
 	citrusleaf_get_many_cb cb, void *udata);

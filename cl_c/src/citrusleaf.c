@@ -157,7 +157,7 @@ void citrusleaf_bins_free(cl_bin *bins, int n_bins)
 	}
 }
 
-int citrusleaf_copy_object(cl_object *destobj, cl_object *srcobj)
+int citrusleaf_copy_object(cl_object *destobj, const cl_object *srcobj)
 {
 	destobj->type = srcobj->type;
 	destobj->sz = srcobj->sz;
@@ -206,7 +206,7 @@ int citrusleaf_copy_bin(cl_bin *destbin, cl_bin *srcbin)
 	return citrusleaf_copy_object(&(destbin->object), &(srcbin->object));
 }
 
-int citrusleaf_copy_bins(cl_bin **destbins, cl_bin *srcbins, int n_bins)
+int citrusleaf_copy_bins(cl_bin **destbins, const cl_bin *srcbins, int n_bins)
 {
 	int rv;
 
@@ -1844,8 +1844,6 @@ int citrusleaf_init()
 	// only this process can call a pthread_join() on the threads that it spawned.
 	g_init_pid = getpid();
 
- 	citrusleaf_batch_init();
-
 	citrusleaf_cluster_init();
 
 #ifdef DEBUG_HISTOGRAM	
@@ -1860,14 +1858,14 @@ int citrusleaf_init()
 
 void citrusleaf_shutdown(void) {
 
-	if (g_initialized == false)	return;
+	if (g_initialized == false)
+		return;
 
 	citrusleaf_cluster_shutdown();
 	citrusleaf_batch_shutdown();
-	// citrusleaf_info_shutdown();
+	citrusleaf_put_queue_shutdown();
 
 	g_initialized = false;
-
 }
 
 extern void citrusleaf_print_stats();

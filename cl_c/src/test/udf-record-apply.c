@@ -3,6 +3,7 @@
 #include <citrusleaf/as_hashmap.h>
 #include <citrusleaf/as_buffer.h>
 #include <citrusleaf/as_msgpack.h>
+#include <citrusleaf/as_linkedlist.h>
 #include <stdio.h>
 
 
@@ -14,9 +15,15 @@
     { printf("%s:%d - ", __FILE__, __LINE__); printf(msg, ##__VA_ARGS__ ); printf("\n"); }
 
 
+as_list * getarglist(int argc, char ** argv) {
+    if ( argc == 0 || argv == NULL ) return cons(NULL,NULL);
+    return cons(as_string_new(argv[0]), getarglist(argc-1, argv+1));
+}
+
+
 int main(int argc, char ** argv) {
     
-    if ( argc != 6 ) {
+    if ( argc < 6 ) {
         LOG("invalid arguments.");
         return 1;
     }
@@ -28,7 +35,6 @@ int main(int argc, char ** argv) {
     char *          func        = argv[5];
 
     cl_cluster *    cluster     = NULL;
-    as_list *       list        = NULL;
     as_list *       arglist     = NULL;
     int             rc          = 0;
 
@@ -42,17 +48,14 @@ int main(int argc, char ** argv) {
 
     citrusleaf_object_init_str(&okey, key);
 
-    list = as_arraylist_new(3,0);
-    as_list_add_string(list, "alex");
-    as_list_add_string(list, "bob");
-    as_list_add_string(list, "chuck");
     
-    arglist = as_arglist_new(1);
-    as_list_add_list(arglist, list);
+    // arglist = as_arglist_new(1);
+    // as_list_add_list(arglist, list);
+    arglist = getarglist(argc-6,argv+=6);
 
     rc = citrusleaf_udf_record_apply(cluster, ns, set, &okey, file, func, arglist, TIMEOUT, &res);
 
-    as_list_free(arglist);
+    // as_list_free(arglist);
 
     if ( rc ) {
         printf("error: %d\n", rc);

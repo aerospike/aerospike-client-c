@@ -69,13 +69,12 @@ common:
 ## TEST
 ##
 
-test_flags = -lcitrusleaf -llua -lcrypto -lssl -lmsgpack -lpthread -lrt -Wl,-rpath,/usr/local/lib
+test_flags = -L/usr/local/lib $(TARGET_LIB)/libcitrusleaf.a -llua -lcrypto -lssl -lmsgpack -lpthread -lrt -Wl,-rpath,/usr/local/lib
 
-test/%: $(SOURCE_TEST)/%.c | install $(TARGET_BIN)
-#	$(call executable, $(TARGET_INCL), /usr/local/lib, citrusleaf lua crypto ssl msgpack pthread rt, $(empty), $(test_flags) )
-	$(call executable, $(TARGET_INCL), /usr/local/lib, $(empty) , $(empty), $(test_flags) )
+test/%: $(SOURCE_TEST)/%.c | $(TARGET_BIN)
+	$(call executable, $(TARGET_INCL), $(empty), $(empty) , $(empty), $(test_flags) )
 
-test/udf-record-apply: $(SOURCE_TEST)/udf-record-apply.c | install $(TARGET_BIN)
-	$(call executable, $(TARGET_INCL), /usr/local/lib, citrusleaf msgpackc lua, $(empty), $(test_flags) )
+test/udf-record-apply: $(SOURCE_TEST)/udf-record-apply.c | $(TARGET_BIN)
+	$(call executable, $(TARGET_INCL), $(empty), $(empty), $(empty), $(test_flags) )
 
 test: test/get test/put test/quick test/udf test/udf-list test/udf-get test/udf-put test/udf-remove test/udf-record-apply

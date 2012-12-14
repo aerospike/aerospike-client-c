@@ -69,7 +69,7 @@ common:
 ## TEST
 ##
 
-test_flags = -Wl,-rpath,/usr/local/lib -Wl,-rpath,$(TARGET_LIB) 
+test_flags = -Wl,-rpath,/usr/local/lib
 
 test/%: $(SOURCE_TEST)/%.c | install $(TARGET_BIN)
 	$(call executable, $(TARGET_INCL), /usr/local/lib, citrusleaf msgpackc lua, $(empty), $(test_flags) )
@@ -77,4 +77,4 @@ test/%: $(SOURCE_TEST)/%.c | install $(TARGET_BIN)
 test/udf-record-apply: $(SOURCE_TEST)/udf-record-apply.c | install $(TARGET_BIN)
 	$(call executable, $(TARGET_INCL), /usr/local/lib, citrusleaf msgpackc lua, $(empty), $(test_flags) )
 
-test: test/quick test/udf test/udf-list test/udf-get test/udf-put test/udf-remove test/udf-record-apply
+test: test/get test/put test/quick test/udf test/udf-list test/udf-get test/udf-put test/udf-remove test/udf-record-apply

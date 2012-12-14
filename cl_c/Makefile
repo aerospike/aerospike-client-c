@@ -45,6 +45,7 @@ move: | common msgpack mod-lua  libcitrusleaf.a prepare
 	cp $(SOURCE_INCL)/*.h $(TARGET_INCL)/citrusleaf/.
 	cp modules/msgpack/src/.libs/libmsgpackc.a $(TARGET_LIB)/.
 	cp modules/msgpack/src/.libs/libmsgpackc.so.2 $(TARGET_LIB)/.
+	cp modules/mod-lua/src/include $(TARGET_INCL)/citrusleaf/.
 
 ##
 ## modules

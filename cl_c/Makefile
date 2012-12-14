@@ -1,7 +1,7 @@
 include project/build.makefile
 
 CFLAGS = -std=gnu99 -g -O3 -fno-common -fno-strict-aliasing -rdynamic -fPIC -Wall $(AS_CFLAGS) -DMARCH_$(ARCH) -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_GNU_SOURCE
-LDFLAGS = -lssl -lpthread -lrt -lcrypto -lz -fPIC 
+LDFLAGS = 
 
 MODULES = common mod-lua
 
@@ -69,10 +69,11 @@ common:
 ## TEST
 ##
 
-test_flags = -Wl,-rpath,/usr/local/lib
+test_flags = -lcitrusleaf -llua -lcrypto -lssl -lmsgpack -lpthread -lrt -Wl,-rpath,/usr/local/lib
 
 test/%: $(SOURCE_TEST)/%.c | install $(TARGET_BIN)
-	$(call executable, $(TARGET_INCL), /usr/local/lib, citrusleaf msgpackc lua, $(empty), $(test_flags) )
+#	$(call executable, $(TARGET_INCL), /usr/local/lib, citrusleaf lua crypto ssl msgpack pthread rt, $(empty), $(test_flags) )
+	$(call executable, $(TARGET_INCL), /usr/local/lib, $(empty) , $(empty), $(test_flags) )
 
 test/udf-record-apply: $(SOURCE_TEST)/udf-record-apply.c | install $(TARGET_BIN)
 	$(call executable, $(TARGET_INCL), /usr/local/lib, citrusleaf msgpackc lua, $(empty), $(test_flags) )

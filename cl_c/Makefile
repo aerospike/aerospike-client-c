@@ -1,13 +1,13 @@
 include project/build.makefile
 
-CFLAGS = -std=gnu99 -g -O3 -fno-common -fno-strict-aliasing -rdynamic  -Wall $(AS_CFLAGS) -DMARCH_$(ARCH) -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_GNU_SOURCE
-LDFLAGS = -lssl -lpthread -lrt -lcrypto -lz
+CFLAGS = -std=gnu99 -g -O3 -fno-common -fno-strict-aliasing -rdynamic -fPIC -Wall $(AS_CFLAGS) -DMARCH_$(ARCH) -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_GNU_SOURCE
+LDFLAGS = -lssl -lpthread -lrt -lcrypto -lz -fPIC
 
 INC_PATH += modules/common/$(TARGET_INCL)
-INC_PATH += modules/aerospike-mod-lua/src/include
+INC_PATH += modules/mod-lua/src/include
 INC_PATH += modules/msgpack/src
 
-MODULES += common
+# MODULES += common
 
 CITRUSLEAF = 
 CITRUSLEAF += citrusleaf.o
@@ -33,6 +33,9 @@ all: move
 libcitrusleaf.a: $(call objects, $(CITRUSLEAF)) |  common msgpack mod-lua $(TARGET_LIB)
 	$(call archive, $(empty), $(empty), $(empty), $(empty))
 
+libcitrusleaf.so: $(call objects, $(CITRUSLEAF)) | common msgpack mod-lua $(TARGET_LIB)
+	$(call library, $(empty), $(empty), $(empty), $(empty), $(TARGET_LIB)/libcitrusleaf.a modules/mod-lua/$(TARGET_LIB)/libmod_lua.a modules/common/$(TARGET_LIB)/libcf-client.a modules/common/$(TARGET_LIB)/libcf-shared.a modules/msgpack/src/.libs/libmsgpackc.so.2 )
+
 prepare:
 	mkdir -p $(TARGET_INCL)/citrusleaf
 	cp -R $(SOURCE_INCL)/*.h $(TARGET_INCL)/citrusleaf/.
@@ -40,6 +43,8 @@ prepare:
 move: | common msgpack mod-lua  libcitrusleaf.a prepare
 	mkdir -p $(TARGET_INCL)/citrusleaf
 	cp $(SOURCE_INCL)/*.h $(TARGET_INCL)/citrusleaf/.
+	cp modules/msgpack/src/.libs/libmsgpackc.a $(TARGET_LIB)/.
+	cp modules/msgpack/src/.libs/libmsgpackc.so.2 $(TARGET_LIB)/.
 
 ##
 ## modules
@@ -52,7 +57,7 @@ msgpack: modules/msgpack/Makefile
 	cd modules/msgpack && make
 
 mod-lua: 
-	make -C modules/aerospike-mod-lua all MEM_COUNT=$(MEM_COUNT) 
+	make -C modules/mod-lua all MEM_COUNT=$(MEM_COUNT) 
 
 common: 
 	make -C modules/common all MEM_COUNT=$(MEM_COUNT) 
@@ -61,7 +66,7 @@ common:
 ## TEST
 ##
 
-test/%: $(SOURCE_TEST)/%.c |  $(TARGET_BIN)
-	$(call executable, $(TARGET_INCL), $(empty), lua, $(empty), $(TARGET_LIB)/libcitrusleaf.a modules/aerospike-mod-lua/$(TARGET_LIB)/libmod_lua.a modules/common/$(TARGET_LIB)/libcf-client.a modules/common/$(TARGET_LIB)/libcf-shared.a modules/msgpack/src/.libs/libmsgpack.a $(LDFLAGS) )
+test/%: $(SOURCE_TEST)/%.c | move $(TARGET_BIN)
+	$(call executable, $(TARGET_INCL), $(TARGET_LIB), lua citrusleaf msgpackc, $(empty), $(empty))
 
 test: test/quick test/udf test/udf-list test/udf-get test/udf-put test/udf-remove test/udf-record-apply

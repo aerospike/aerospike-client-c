@@ -33,7 +33,7 @@ endif
 ## main targets
 ##
 
-all: includes libcitrusleaf.so
+all: libcitrusleaf.so includes
 
 libcitrusleaf.a: $(call objects, $(CITRUSLEAF)) | mod-lua common msgpack $(TARGET_LIB)
 	$(call archive, $(empty), $(empty), $(empty), $(empty))

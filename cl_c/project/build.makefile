@@ -127,7 +127,7 @@ endef
 
 define archive
 	@mkdir -p `dirname $@`
-	$(strip $(AR) rcs $(ARFLAGS) $(4) $(TARGET_LIB)/$@ $^ )
+	$(strip $(AR) rcs $(ARFLAGS) $(4) $(TARGET_LIB)/$@ $^ $(5))
 endef
 
 define library

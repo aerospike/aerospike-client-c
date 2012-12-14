@@ -3,9 +3,17 @@ include project/build.makefile
 CFLAGS = -std=gnu99 -g -O3 -fno-common -fno-strict-aliasing -rdynamic -fPIC -Wall $(AS_CFLAGS) -DMARCH_$(ARCH) -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_GNU_SOURCE
 LDFLAGS = -lssl -lpthread -lrt -lcrypto -lz -fPIC 
 
+MODULES = common mod-lua
+
 INC_PATH += modules/common/$(TARGET_INCL)
 INC_PATH += modules/mod-lua/src/include
-INC_PATH += modules/msgpack/src
+
+ifeq ($(MEM_COUNT),1)
+  LDFLAGS += -lm
+  CFLAGS += -DMEM_COUNT
+endif
+
+
 
 CITRUSLEAF = 
 CITRUSLEAF += citrusleaf.o
@@ -21,49 +29,35 @@ CITRUSLEAF += cl_scan.o
 CITRUSLEAF += cl_udf.o
 CITRUSLEAF += proto.o
 
-SO = -L$(TARGET_BASE)/deps -lmsgpackc -Wl,--whole-archive $(TARGET_LIB)/libcitrusleaf.a modules/mod-lua/$(TARGET_LIB)/libmod_lua.a modules/common/$(TARGET_LIB)/libcf-client.a modules/common/$(TARGET_LIB)/libcf-shared.a -Wl,-no-whole-archive
-
-ifeq ($(MEM_COUNT),1)
-  LDFLAGS += -lm
-  CFLAGS += -DMEM_COUNT
-endif
-
+OBJECTS = $(TARGET_OBJ)/*.o modules/mod-lua/$(TARGET_OBJ)/*.o modules/common/$(TARGET_OBJ)/shared/*.o modules/common/$(TARGET_OBJ)/client/*.o
 
 ##
-## main targets
+## MAIN
 ##
 
-all: includes libcitrusleaf.so
+all: libcitrusleaf.so libcitrusleaf.a prepare
 
-libcitrusleaf.a: $(call objects, $(CITRUSLEAF)) | mod-lua common msgpack $(TARGET_LIB)
-	$(call archive, $(empty), $(empty), $(empty), $(empty))
+libcitrusleaf.o: $(call objects, $(CITRUSLEAF))
 
-libcitrusleaf.so: | mod-lua common libcitrusleaf.a $(TARGET_LIB)
-	$(call library, $(empty), $(empty), $(empty), $(SO), $(empty))
+libcitrusleaf.a: | mod-lua common libcitrusleaf.o $(TARGET_LIB)
+	$(call archive, $(empty), $(empty), $(empty), $(empty), $(OBJECTS))
 
-includes:
+libcitrusleaf.so: | mod-lua common libcitrusleaf.o $(TARGET_LIB)
+	$(call library, $(empty), $(empty), $(empty), $(empty), $(OBJECTS))
+
+prepare:
 	mkdir -p $(TARGET_INCL)/citrusleaf
 	cp -R $(SOURCE_INCL)/*.h $(TARGET_INCL)/citrusleaf/.
 	cp modules/mod-lua/src/include/*.h $(TARGET_INCL)/citrusleaf/.
 	cp modules/common/$(TARGET_INCL)/*.h $(TARGET_INCL)/.
 	cp modules/common/$(TARGET_INCL)/citrusleaf/*.h $(TARGET_INCL)/citrusleaf/.
 
-install: libcitrusleaf.so
-	sudo cp $(TARGET_LIB)/libcitrusleaf.so /usr/local/lib/.
-	sudo cp $(TARGET_BASE)/deps/* /usr/local/lib/.
+install: | libcitrusleaf.a libcitrusleaf.so prepare
+	sudo cp $(TARGET_LIB)/* /usr/local/lib/.
 
 ##
-## modules
+## SUBMODULES
 ##
-
-modules/msgpack/Makefile: 
-	cd modules/msgpack && ./configure
-
-msgpack: modules/msgpack/Makefile
-	cd modules/msgpack && make
-	mkdir -p $(TARGET_BASE)/deps
-	cp modules/msgpack/src/.libs/libmsgpackc.so $(TARGET_BASE)/deps/.
-	cp modules/msgpack/src/.libs/libmsgpackc.so.2 $(TARGET_BASE)/deps/.
 
 mod-lua: 
 	make -C modules/mod-lua all MEM_COUNT=$(MEM_COUNT) 
@@ -78,6 +72,9 @@ common:
 test_flags = -Wl,-rpath,/usr/local/lib -Wl,-rpath,$(TARGET_LIB) 
 
 test/%: $(SOURCE_TEST)/%.c | install $(TARGET_BIN)
+	$(call executable, $(TARGET_INCL), /usr/local/lib, citrusleaf msgpackc lua, $(empty), $(test_flags) )
+
+test/udf-record-apply: $(SOURCE_TEST)/udf-record-apply.c | install $(TARGET_BIN)
 	$(call executable, $(TARGET_INCL), /usr/local/lib, citrusleaf msgpackc lua, $(empty), $(test_flags) )
 
 test: test/quick test/udf test/udf-list test/udf-get test/udf-put test/udf-remove test/udf-record-apply

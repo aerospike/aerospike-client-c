@@ -19,8 +19,8 @@ CITRUSLEAF += cl_cluster.o
 CITRUSLEAF += cl_info.o
 CITRUSLEAF += cl_lookup.o
 CITRUSLEAF += cl_partition.o
-CITRUSLEAF += cl_scan.o
 # CITRUSLEAF += cl_query.o
+CITRUSLEAF += cl_scan.o
 # CITRUSLEAF += cl_sproc.o
 CITRUSLEAF += cl_udf.o
 CITRUSLEAF += proto.o
@@ -67,4 +67,4 @@ common:
 test/%: $(SOURCE_TEST)/%.c |  $(TARGET_BIN)
 	$(call executable, $(TARGET_INCL), $(empty), lua, $(empty), $(TARGET_LIB)/libcitrusleaf.a modules/aerospike-mod-lua/$(TARGET_LIB)/libmod_lua.a modules/common/$(TARGET_LIB)/libcf-client.a modules/common/$(TARGET_LIB)/libcf-shared.a modules/msgpack/src/.libs/libmsgpack.a $(LDFLAGS) )
 
-test: test/udf test/quick
+test: test/quick test/udf test/udf-list test/udf-get test/udf-put test/udf-remove test/udf-record-apply

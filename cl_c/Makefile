@@ -48,7 +48,7 @@ libcitrusleaf.so: | mod-lua common libcitrusleaf.o $(TARGET_LIB)
 prepare:
 	mkdir -p $(TARGET_INCL)/citrusleaf
 	cp -R $(SOURCE_INCL)/*.h $(TARGET_INCL)/citrusleaf/.
-	cp modules/mod-lua/src/include/*.h $(TARGET_INCL)/citrusleaf/.
+	cp modules/mod-lua/src/include/as_*.h $(TARGET_INCL)/citrusleaf/.
 	cp modules/common/$(TARGET_INCL)/*.h $(TARGET_INCL)/.
 	cp modules/common/$(TARGET_INCL)/citrusleaf/*.h $(TARGET_INCL)/citrusleaf/.
 

@@ -1,8 +1,8 @@
 #include <citrusleaf/citrusleaf.h>
 #include <citrusleaf/udf.h>
-#include <as_hashmap.h>
-#include <as_buffer.h>
-#include <as_msgpack.h>
+#include <citrusleaf/as_hashmap.h>
+#include <citrusleaf/as_buffer.h>
+#include <citrusleaf/as_msgpack.h>
 #include <stdio.h>
 
 

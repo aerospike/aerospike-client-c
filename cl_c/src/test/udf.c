@@ -1,6 +1,6 @@
 #include <citrusleaf/citrusleaf.h>
 #include <citrusleaf/udf.h>
-#include <as_hashmap.h>
+#include <citrusleaf/as_hashmap.h>
 #include <stdio.h>
 
 

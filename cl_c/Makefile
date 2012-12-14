@@ -38,18 +38,19 @@ all: includes libcitrusleaf.so
 libcitrusleaf.a: $(call objects, $(CITRUSLEAF)) | mod-lua common msgpack $(TARGET_LIB)
 	$(call archive, $(empty), $(empty), $(empty), $(empty))
 
-libcitrusleaf.so: | mod-lua common msgpack $(TARGET_LIB)
+libcitrusleaf.so: | mod-lua common libcitrusleaf.a $(TARGET_LIB)
 	$(call library, $(empty), $(empty), $(empty), $(SO), $(empty))
 
 includes:
 	mkdir -p $(TARGET_INCL)/citrusleaf
 	cp -R $(SOURCE_INCL)/*.h $(TARGET_INCL)/citrusleaf/.
 	cp modules/mod-lua/src/include/*.h $(TARGET_INCL)/citrusleaf/.
+	cp modules/common/$(TARGET_INCL)/*.h $(TARGET_INCL)/.
+	cp modules/common/$(TARGET_INCL)/citrusleaf/*.h $(TARGET_INCL)/citrusleaf/.
 
-install:
+install: libcitrusleaf.so
 	sudo cp $(TARGET_LIB)/libcitrusleaf.so /usr/local/lib/.
-	sudo cp $(TARGET_BASE)/deps/libmsgpackc.so /usr/local/lib/.
-	sudo cp $(TARGET_BASE)/deps/libmsgpackc.so.2 /usr/local/lib/.
+	sudo cp $(TARGET_BASE)/deps/* /usr/local/lib/.
 
 ##
 ## modules
@@ -74,7 +75,9 @@ common:
 ## TEST
 ##
 
-test/%: $(SOURCE_TEST)/%.c | move $(TARGET_BIN)
-	$(call executable, $(TARGET_INCL), $(TARGET_LIB), lua citrusleaf msgpackc, $(empty), $(empty))
+test_flags = -Wl,-rpath,/usr/local/lib -Wl,-rpath,$(TARGET_LIB) 
+
+test/%: $(SOURCE_TEST)/%.c | install $(TARGET_BIN)
+	$(call executable, $(TARGET_INCL), /usr/local/lib, citrusleaf msgpackc lua, $(empty), $(test_flags) )
 
 test: test/quick test/udf test/udf-list test/udf-get test/udf-put test/udf-remove test/udf-record-apply

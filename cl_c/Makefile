@@ -1,13 +1,11 @@
 include project/build.makefile
 
 CFLAGS = -std=gnu99 -g -O3 -fno-common -fno-strict-aliasing -rdynamic -fPIC -Wall $(AS_CFLAGS) -DMARCH_$(ARCH) -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_GNU_SOURCE
-LDFLAGS = -lssl -lpthread -lrt -lcrypto -lz -fPIC
+LDFLAGS = -lssl -lpthread -lrt -lcrypto -lz -fPIC 
 
 INC_PATH += modules/common/$(TARGET_INCL)
 INC_PATH += modules/mod-lua/src/include
 INC_PATH += modules/msgpack/src
-
-# MODULES += common
 
 CITRUSLEAF = 
 CITRUSLEAF += citrusleaf.o
@@ -23,29 +21,35 @@ CITRUSLEAF += cl_scan.o
 CITRUSLEAF += cl_udf.o
 CITRUSLEAF += proto.o
 
+SO = -L$(TARGET_BASE)/deps -lmsgpackc -Wl,--whole-archive $(TARGET_LIB)/libcitrusleaf.a modules/mod-lua/$(TARGET_LIB)/libmod_lua.a modules/common/$(TARGET_LIB)/libcf-client.a modules/common/$(TARGET_LIB)/libcf-shared.a -Wl,-no-whole-archive
+
 ifeq ($(MEM_COUNT),1)
   LDFLAGS += -lm
   CFLAGS += -DMEM_COUNT
 endif
 
-all: move
 
-libcitrusleaf.a: $(call objects, $(CITRUSLEAF)) |  common msgpack mod-lua $(TARGET_LIB)
+##
+## main targets
+##
+
+all: includes libcitrusleaf.so
+
+libcitrusleaf.a: $(call objects, $(CITRUSLEAF)) | mod-lua common msgpack $(TARGET_LIB)
 	$(call archive, $(empty), $(empty), $(empty), $(empty))
 
-libcitrusleaf.so: $(call objects, $(CITRUSLEAF)) | common msgpack mod-lua $(TARGET_LIB)
-	$(call library, $(empty), $(empty), $(empty), $(empty), $(TARGET_LIB)/libcitrusleaf.a modules/mod-lua/$(TARGET_LIB)/libmod_lua.a modules/common/$(TARGET_LIB)/libcf-client.a modules/common/$(TARGET_LIB)/libcf-shared.a modules/msgpack/src/.libs/libmsgpackc.so.2 )
+libcitrusleaf.so: | mod-lua common msgpack $(TARGET_LIB)
+	$(call library, $(empty), $(empty), $(empty), $(SO), $(empty))
 
-prepare:
+includes:
 	mkdir -p $(TARGET_INCL)/citrusleaf
 	cp -R $(SOURCE_INCL)/*.h $(TARGET_INCL)/citrusleaf/.
+	cp modules/mod-lua/src/include/*.h $(TARGET_INCL)/citrusleaf/.
 
-move: | common msgpack mod-lua  libcitrusleaf.a prepare
-	mkdir -p $(TARGET_INCL)/citrusleaf
-	cp $(SOURCE_INCL)/*.h $(TARGET_INCL)/citrusleaf/.
-	cp modules/msgpack/src/.libs/libmsgpackc.a $(TARGET_LIB)/.
-	cp modules/msgpack/src/.libs/libmsgpackc.so.2 $(TARGET_LIB)/.
-	cp modules/mod-lua/src/include $(TARGET_INCL)/citrusleaf/.
+install:
+	sudo cp $(TARGET_LIB)/libcitrusleaf.so /usr/local/lib/.
+	sudo cp $(TARGET_BASE)/deps/libmsgpackc.so /usr/local/lib/.
+	sudo cp $(TARGET_BASE)/deps/libmsgpackc.so.2 /usr/local/lib/.
 
 ##
 ## modules
@@ -56,6 +60,9 @@ modules/msgpack/Makefile:
 
 msgpack: modules/msgpack/Makefile
 	cd modules/msgpack && make
+	mkdir -p $(TARGET_BASE)/deps
+	cp modules/msgpack/src/.libs/libmsgpackc.so $(TARGET_BASE)/deps/.
+	cp modules/msgpack/src/.libs/libmsgpackc.so.2 $(TARGET_BASE)/deps/.
 
 mod-lua: 
 	make -C modules/mod-lua all MEM_COUNT=$(MEM_COUNT) 

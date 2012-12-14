@@ -143,9 +143,9 @@ define library
 		$(addprefix -L, $(2)) \
 		$(addprefix -l, $($@_lib)) \
 		$(addprefix -l, $(3)) \
-		$(4) \
 		$(LDFLAGS) \
 		$($@_flags) \
+		$(4) \
 		-o $(TARGET_LIB)/$@ \
 		$^ \
 		$(5) \

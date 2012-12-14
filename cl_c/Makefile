@@ -3,8 +3,10 @@ include project/build.makefile
 CFLAGS = -std=gnu99 -g -O3 -fno-common -fno-strict-aliasing -rdynamic  -Wall $(AS_CFLAGS) -DMARCH_$(ARCH) -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_GNU_SOURCE
 LDFLAGS = -lssl -lpthread -lrt -lcrypto -lz
 
+MOD_LUA_INCL = modules/aerospike-mod-lua/src/include
+
 INC_PATH += modules/common/$(TARGET_INCL)
-INC_PATH += modules/aerospike-mod-lua/src/include
+INC_PATH += $(MOD_LUA_INCL)
 INC_PATH += modules/msgpack/src
 
 MODULES += common
@@ -40,6 +42,7 @@ prepare:
 move: | common msgpack mod-lua  libcitrusleaf.a prepare
 	mkdir -p $(TARGET_INCL)/citrusleaf
 	cp $(SOURCE_INCL)/*.h $(TARGET_INCL)/citrusleaf/.
+	cp $(MOD_LUA_INCL)/*.h $(TARGET_INCL)/citrusleaf/.
 
 ##
 ## modules

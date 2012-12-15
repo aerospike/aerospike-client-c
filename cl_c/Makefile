@@ -75,6 +75,6 @@ test/%: $(SOURCE_TEST)/%.c | $(TARGET_BIN)
 	$(call executable, $(TARGET_INCL), $(empty), $(empty) , $(empty), $(test_flags) )
 
 test/udf-record-apply: $(SOURCE_TEST)/udf-record-apply.c | $(TARGET_BIN)
-	$(call executable, $(TARGET_INCL), $(empty), $(empty), $(empty), $(test_flags) )
+	$(call executable, $(TARGET_INCL), $(empty),  jansson, $(empty), $(test_flags))
 
 test: test/get test/put test/quick test/udf test/udf-list test/udf-get test/udf-put test/udf-remove test/udf-record-apply

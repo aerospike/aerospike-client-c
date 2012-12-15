@@ -7,7 +7,7 @@
 
 
 #define HOST "127.0.0.1"
-#define PORT 3000
+#define PORT 3010
 #define TIMEOUT 100
 
 #define LOG(msg, ...) \

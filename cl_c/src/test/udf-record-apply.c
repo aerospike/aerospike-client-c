@@ -1,3 +1,9 @@
+/******************************************************************************
+ * Copyright 2008-2012 by Aerospike.  All rights reserved.
+ * THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE.  THE COPYRIGHT NOTICE
+ * ABOVE DOES NOT EVIDENCE ANY ACTUAL OR INTENDED PUBLICATION.
+ ******************************************************************************/
+
 #include <citrusleaf/citrusleaf.h>
 #include <citrusleaf/udf.h>
 #include <citrusleaf/as_hashmap.h>
@@ -10,22 +16,112 @@
 
 #include <jansson.h>
 
+/******************************************************************************
+ * CONSTANTS
+ ******************************************************************************/
 
-#define HOST "127.0.0.1"
-#define PORT 3010
+#define HOST    "127.0.0.1"
+#define PORT    3000
 #define TIMEOUT 100
+
+/******************************************************************************
+ * TYPES
+ ******************************************************************************/
+
+typedef struct config_s config;
+
+struct config_s {
+    char *  host;
+    int     port;
+    int     timeout;
+};
+
+/******************************************************************************
+ * MACROS
+ ******************************************************************************/
 
 #define LOG(msg, ...) \
     { printf("%s:%d - ", __FILE__, __LINE__); printf(msg, ##__VA_ARGS__ ); printf("\n"); }
 
-as_list * json_array_to_list(json_t * a);
-as_map * json_object_to_map(json_t * o);
-as_string * json_string_to_string(json_t * s);
-as_integer * json_number_to_integer(json_t * n);
-as_val * json_to_val(json_t * j);
+/******************************************************************************
+ * STATIC FUNCTION DECLARATIONS
+ ******************************************************************************/
+
+static int usage(const char * program);
+static int configure(config * c, int argc, char *argv[]);
+
+static as_list * json_array_to_list(json_t * a);
+static as_map * json_object_to_map(json_t * o);
+static as_string * json_string_to_string(json_t * s);
+static as_integer * json_number_to_integer(json_t * n);
+static as_val * json_to_val(json_t * j);
+
+static as_list * getarglist(int argc, char ** argv);
+
+/******************************************************************************
+ * FUNCTIONS
+ ******************************************************************************/
 
 
-as_list * json_array_to_list(json_t * a) {
+int main(int argc, char ** argv) {
+    
+    int rc = 0;
+    // const char * program = argv[0];
+
+    config c = {
+        .host       = HOST,
+        .port       = PORT,
+        .timeout    = TIMEOUT
+    };
+
+    rc = configure(&c, argc, argv);
+
+    if ( rc != 0 ) {
+        return rc;
+    }
+
+    argv += optind;
+    argc -= optind;
+
+    char *          ns          = argv[0];
+    char *          set         = argv[1];
+    char *          key         = argv[2];
+    char *          file        = argv[3];
+    char *          func        = argv[4];
+
+    cl_cluster *    cluster     = NULL;
+    as_list *       arglist     = NULL;
+
+    cl_object       okey;
+    as_result       res;
+
+    citrusleaf_init();
+
+    cluster = citrusleaf_cluster_create();
+    citrusleaf_cluster_add_host(cluster, c.host, c.port, c.timeout);
+
+    citrusleaf_object_init_str(&okey, key);
+
+    
+    // arglist = as_arglist_new(1);
+    // as_list_add_list(arglist, list);
+    arglist = getarglist(argc-5,argv+5);
+
+    rc = citrusleaf_udf_record_apply(cluster, ns, set, &okey, file, func, arglist, TIMEOUT, &res);
+
+    // as_list_free(arglist);
+
+    if ( rc ) {
+        printf("error: %d\n", rc);
+    }
+    else {
+        printf("%s: %s\n", res.is_success ? "SUCCESS" : "FAILURE", as_val_tostring(res.value));
+    }
+
+    return rc;
+}
+
+static as_list * json_array_to_list(json_t * a) {
 
     int size = json_array_size(a);
     as_list * l = as_arraylist_new(size,0);
@@ -38,7 +134,7 @@ as_list * json_array_to_list(json_t * a) {
     return l;
 }
 
-as_map * json_object_to_map(json_t * o) {
+static as_map * json_object_to_map(json_t * o) {
 
     int size = json_array_size(o);
     as_map * m = as_hashmap_new(size);
@@ -54,15 +150,15 @@ as_map * json_object_to_map(json_t * o) {
     return m;
 }
 
-as_string * json_string_to_string(json_t * s) {
+static as_string * json_string_to_string(json_t * s) {
     return as_string_new(strdup(json_string_value(s)));
 }
 
-as_integer * json_number_to_integer(json_t * n) {
+static as_integer * json_number_to_integer(json_t * n) {
     return as_integer_new((int64_t) json_integer_value(n));
 }
 
-as_val * json_to_val(json_t * j) {
+static as_val * json_to_val(json_t * j) {
     if ( json_is_array(j) )  return (as_val *) json_array_to_list(j);
     if ( json_is_object(j) ) return (as_val *) json_object_to_map(j);
     if ( json_is_string(j) ) return (as_val *) json_string_to_string(j);
@@ -71,7 +167,7 @@ as_val * json_to_val(json_t * j) {
 }
 
 
-as_list * getarglist(int argc, char ** argv) {
+static as_list * getarglist(int argc, char ** argv) {
     if ( argc == 0 || argv == NULL ) return cons(NULL,NULL);
 
     as_val * val = NULL;
@@ -95,54 +191,25 @@ as_list * getarglist(int argc, char ** argv) {
         val = json_to_val(root);
     }
 
-
-
     return cons(val, getarglist(argc-1, argv+1));
 }
 
 
-int main(int argc, char ** argv) {
-    
-    if ( argc < 6 ) {
-        LOG("invalid arguments.");
-        return 1;
+static int usage(const char * program) {
+    fprintf(stderr, "Usage %s:\n", program);
+    fprintf(stderr, "-h host [default 127.0.0.1] \n");
+    fprintf(stderr, "-p port [default 3000]\n");
+    return 0;
+}
+
+static int configure(config * c, int argc, char *argv[]) {
+    int optcase;
+    while ((optcase = getopt(argc, argv, "h:p:")) != -1) {
+        switch (optcase) {
+            case 'h':   c->host = strdup(optarg); break;
+            case 'p':   c->port = atoi(optarg); break;
+            default:    return usage(argv[0]);
+        }
     }
-
-    char *          ns          = argv[1];
-    char *          set         = argv[2];
-    char *          key         = argv[3];
-    char *          file        = argv[4];
-    char *          func        = argv[5];
-
-    cl_cluster *    cluster     = NULL;
-    as_list *       arglist     = NULL;
-    int             rc          = 0;
-
-    cl_object       okey;
-    as_result       res;
-
-    citrusleaf_init();
-
-    cluster = citrusleaf_cluster_create();
-    citrusleaf_cluster_add_host(cluster, HOST, PORT, TIMEOUT);
-
-    citrusleaf_object_init_str(&okey, key);
-
-    
-    // arglist = as_arglist_new(1);
-    // as_list_add_list(arglist, list);
-    arglist = getarglist(argc-6,argv+=6);
-
-    rc = citrusleaf_udf_record_apply(cluster, ns, set, &okey, file, func, arglist, TIMEOUT, &res);
-
-    // as_list_free(arglist);
-
-    if ( rc ) {
-        printf("error: %d\n", rc);
-    }
-    else {
-        printf("%s: %s\n", res.is_success ? "SUCCESS" : "FAILURE", as_val_tostring(res.value));
-    }
-
-    return rc;
+    return 0;
 }

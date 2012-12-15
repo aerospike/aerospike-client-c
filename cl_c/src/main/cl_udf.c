@@ -156,7 +156,7 @@ cl_rv citrusleaf_udf_record_apply(cl_cluster * cl, const char * ns, const char *
 
     // print_buffer(&args);
 
-    do_the_full_monte( 
+    rv = do_the_full_monte( 
         cl, 0, CL_MSG_INFO2_WRITE, 0, 
         ns, set, key, 0, &bins, CL_OP_WRITE, 0, &nbins, 
         NULL, &wp, &trid, NULL, &call
@@ -164,7 +164,9 @@ cl_rv citrusleaf_udf_record_apply(cl_cluster * cl, const char * ns, const char *
 
     as_buffer_destroy(&args);
 
-    if ( nbins == 1 && bins != NULL ) {
+	if (! (rv == CITRUSLEAF_OK || rv == CITRUSLEAF_FAIL_UDF_BAD_RESPONSE)) {
+    	as_result_tofailure(res, (as_val *) as_string_new("None UDF failure"));
+    } else if ( nbins == 1 && bins != NULL ) {
         cl_bin bin = *bins;
 
         as_val * val = NULL;
@@ -204,17 +206,14 @@ cl_rv citrusleaf_udf_record_apply(cl_cluster * cl, const char * ns, const char *
             }
             else {
                 as_result_tofailure(res, (as_val *) as_string_new("Invalid response. (1)"));
-                rv = CITRUSLEAF_FAIL_UDF_BAD_RESPONSE;
             }
         }
         else {
             as_result_tofailure(res, (as_val *) as_string_new("Invalid response. (2)"));
-            rv = CITRUSLEAF_FAIL_UDF_BAD_RESPONSE;
         }
     }
     else {
         as_result_tofailure(res, (as_val *) as_string_new("Invalid response. (3)"));
-        rv = CITRUSLEAF_FAIL_UDF_BAD_RESPONSE;
     }
 
     as_serializer_destroy(&ser);

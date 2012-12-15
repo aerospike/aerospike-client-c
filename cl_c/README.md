@@ -126,7 +126,7 @@ Example:
 
 Send to stdout the contents of the file on the server/cluster.
 
-	$ ./udf-get another_udf.lua
+	$ ./udf-get <filename>
 	
 Example:
 

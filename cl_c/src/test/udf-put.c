@@ -46,6 +46,9 @@ struct linebuffer_s {
 #define LOG(msg, ...) \
     { printf("%s:%d - ", __FILE__, __LINE__); printf(msg, ##__VA_ARGS__ ); printf("\n"); }
 
+#define ERROR(msg, ...) \
+    { fprintf(stderr,"error: "); fprintf(stderr,msg, ##__VA_ARGS__ ); fprintf(stderr, "\n"); }
+
 /******************************************************************************
  * STATIC FUNCTION DECLARATIONS
  ******************************************************************************/
@@ -63,7 +66,7 @@ static char * readfile(char * filepath);
 int main(int argc, char ** argv) {
     
     int rc = 0;
-    // const char * program = argv[0];
+    const char * program = argv[0];
 
     config c = {
         .host       = HOST,
@@ -80,6 +83,12 @@ int main(int argc, char ** argv) {
     argv += optind;
     argc -= optind;
 
+    if ( argc != 1 ) {
+        ERROR("missing filepath.");
+        usage(program);
+        return 1;
+    }
+
     char *          filename    = argv[0];
     cl_cluster *    cluster     = NULL;
     char *          content     = readfile(filename);
@@ -93,7 +102,7 @@ int main(int argc, char ** argv) {
     rc = citrusleaf_udf_put(cluster, basename(filename), content, &error);
 
     if ( rc ) {
-        printf("error: %s\n", error);
+        ERROR(error);
         free(error);
         error = NULL;
     }
@@ -141,9 +150,13 @@ static char * readfile(char * filepath) {
 
 
 static int usage(const char * program) {
-    fprintf(stderr, "Usage %s:\n", program);
-    fprintf(stderr, "-h host [default 127.0.0.1] \n");
-    fprintf(stderr, "-p port [default 3000]\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "Usage: %s <filepath>\n", basename(program));
+    fprintf(stderr, "\n");
+    fprintf(stderr, "Options:\n");
+    fprintf(stderr, "    -h host [default %s] \n", HOST);
+    fprintf(stderr, "    -p port [default %d]\n", PORT);
+    fprintf(stderr, "\n");
     return 0;
 }
 

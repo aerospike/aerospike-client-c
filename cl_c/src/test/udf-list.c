@@ -38,6 +38,9 @@ struct config_s {
 #define LOG(msg, ...) \
     { printf("%s:%d - ", __FILE__, __LINE__); printf(msg, ##__VA_ARGS__ ); printf("\n"); }
 
+#define ERROR(msg, ...) \
+    { fprintf(stderr,"error: "); fprintf(stderr,msg, ##__VA_ARGS__ ); fprintf(stderr, "\n"); }
+
 /******************************************************************************
  * STATIC FUNCTION DECLARATIONS
  ******************************************************************************/
@@ -82,7 +85,7 @@ int main(int argc, char ** argv) {
     citrusleaf_udf_list(cluster, &files, &count, &error);
     
     if ( rc ) {
-        printf("error: %s\n", error);
+        ERROR(error);
         free(error);
         error = NULL;
     }
@@ -101,9 +104,13 @@ int main(int argc, char ** argv) {
 
 
 static int usage(const char * program) {
-    fprintf(stderr, "Usage %s:\n", program);
-    fprintf(stderr, "-h host [default 127.0.0.1] \n");
-    fprintf(stderr, "-p port [default 3000]\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "Usage: %s\n", basename(program));
+    fprintf(stderr, "\n");
+    fprintf(stderr, "Options:\n");
+    fprintf(stderr, "    -h host [default %s] \n", HOST);
+    fprintf(stderr, "    -p port [default %d]\n", PORT);
+    fprintf(stderr, "\n");
     return 0;
 }
 

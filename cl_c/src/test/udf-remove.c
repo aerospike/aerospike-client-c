@@ -38,6 +38,9 @@ struct config_s {
 #define LOG(msg, ...) \
     { printf("%s:%d - ", __FILE__, __LINE__); printf(msg, ##__VA_ARGS__ ); printf("\n"); }
 
+#define ERROR(msg, ...) \
+    { fprintf(stderr,"error: "); fprintf(stderr,msg, ##__VA_ARGS__ ); fprintf(stderr, "\n"); }
+
 /******************************************************************************
  * STATIC FUNCTION DECLARATIONS
  ******************************************************************************/
@@ -52,7 +55,7 @@ static int configure(config * c, int argc, char *argv[]);
 int main(int argc, char ** argv) {
     
     int rc = 0;
-    // const char * program = argv[0];
+    const char * program = argv[0];
 
     config c = {
         .host       = HOST,
@@ -69,6 +72,12 @@ int main(int argc, char ** argv) {
     argv += optind;
     argc -= optind;
 
+    if ( argc != 1 ) {
+        ERROR("missing filename.");
+        usage(program);
+        return 1;
+    }
+
     char *          filename    = argv[0];
     cl_cluster *    cluster     = NULL;
     char *          error       = NULL;
@@ -81,7 +90,7 @@ int main(int argc, char ** argv) {
     rc = citrusleaf_udf_remove(cluster, filename, &error);
     
     if ( rc ) {
-        printf("error: %s\n", error);
+        ERROR(error);
         free(error);
         error = NULL;
     }
@@ -92,9 +101,13 @@ int main(int argc, char ** argv) {
 
 
 static int usage(const char * program) {
-    fprintf(stderr, "Usage %s:\n", program);
-    fprintf(stderr, "-h host [default 127.0.0.1] \n");
-    fprintf(stderr, "-p port [default 3000]\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "Usage: %s <filename>\n", basename(program));
+    fprintf(stderr, "\n");
+    fprintf(stderr, "Options:\n");
+    fprintf(stderr, "    -h host [default %s] \n", HOST);
+    fprintf(stderr, "    -p port [default %d]\n", PORT);
+    fprintf(stderr, "\n");
     return 0;
 }
 

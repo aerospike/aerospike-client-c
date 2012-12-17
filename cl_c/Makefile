@@ -6,6 +6,7 @@ LDFLAGS =
 MODULES = common mod-lua
 
 INC_PATH += modules/common/$(TARGET_INCL)
+INC_PATH += modules/mod-lua/modules/msgpack/src/
 INC_PATH += modules/mod-lua/src/include
 
 ifeq ($(MEM_COUNT),1)

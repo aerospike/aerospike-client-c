@@ -16,8 +16,8 @@
  * CONSTANTS
  ******************************************************************************/
 
-#define HOST "127.0.0.1"
-#define PORT 3010
+#define ADDR "127.0.0.1"
+#define PORT 3000
 #define TIMEOUT 100
 
 /******************************************************************************
@@ -27,7 +27,7 @@
 typedef struct config_s config;
 
 struct config_s {
-    char *  host;
+    char *  addr;
     int     port;
     int     timeout;
 };
@@ -60,7 +60,7 @@ int main(int argc, char ** argv) {
     const char * program = argv[0];
 
     config c = {
-        .host       = HOST,
+        .addr       = ADDR,
         .port       = PORT,
         .timeout    = TIMEOUT
     };
@@ -87,7 +87,7 @@ int main(int argc, char ** argv) {
     citrusleaf_init();
 
     cl_cluster * cluster = citrusleaf_cluster_create();
-    citrusleaf_cluster_add_host(cluster, HOST, PORT, TIMEOUT);
+    citrusleaf_cluster_add_host(cluster, c.addr, c.port, TIMEOUT);
 
     cl_object key;
     citrusleaf_object_init_str(&key, k);
@@ -152,21 +152,22 @@ static int usage(const char * program) {
     fprintf(stderr, "\n");
     fprintf(stderr, "Usage: %s <namespace> <set> <key>\n", basename(program));
     fprintf(stderr, "\n");
-    fprintf(stderr, "Retrieves and prints the record.\n");
+    fprintf(stderr, "Get the object at specified key. The object will be displayed as a JSON object.\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "Options:\n");
-    fprintf(stderr, "    -h host [default %s] \n", HOST);
-    fprintf(stderr, "    -p port [default %d]\n", PORT);
+    fprintf(stderr, "    -a remote address [default %s] \n", ADDR);
+    fprintf(stderr, "    -p remote port [default %d]\n", PORT);
     fprintf(stderr, "\n");
-    return 0;
+    return 1;
 }
 
 static int configure(config * c, int argc, char *argv[]) {
     int optcase;
-    while ((optcase = getopt(argc, argv, "h:p:")) != -1) {
+    while ((optcase = getopt(argc, argv, "ha:p:")) != -1) {
         switch (optcase) {
-            case 'h':   c->host = strdup(optarg); break;
+            case 'a':   c->addr = strdup(optarg); break;
             case 'p':   c->port = atoi(optarg); break;
+            case 'h':
             default:    return usage(argv[0]);
         }
     }

@@ -6,7 +6,7 @@ LDFLAGS =
 MODULES = common mod-lua
 
 INC_PATH += modules/common/$(TARGET_INCL)
-INC_PATH += modules/mod-lua/modules/msgpack/src/
+INC_PATH += modules/msgpack/src
 INC_PATH += modules/mod-lua/src/include
 
 ifeq ($(MEM_COUNT),1)
@@ -30,7 +30,7 @@ CITRUSLEAF += cl_scan.o
 CITRUSLEAF += cl_udf.o
 CITRUSLEAF += proto.o
 
-OBJECTS = $(TARGET_OBJ)/*.o modules/mod-lua/$(TARGET_OBJ)/*.o modules/common/$(TARGET_OBJ)/shared/*.o modules/common/$(TARGET_OBJ)/client/*.o
+OBJECTS = $(TARGET_OBJ)/*.o modules/mod-lua/$(TARGET_OBJ)/*.o modules/common/$(TARGET_OBJ)/client/*.o modules/common/$(TARGET_OBJ)/shared/*.o modules/msgpack/src/.libs/*.o
 
 ##
 ## MAIN
@@ -40,10 +40,10 @@ all: libcitrusleaf.so libcitrusleaf.a prepare
 
 libcitrusleaf.o: $(call objects, $(CITRUSLEAF))
 
-libcitrusleaf.a: | mod-lua common libcitrusleaf.o $(TARGET_LIB)
+libcitrusleaf.a: | msgpack mod-lua common libcitrusleaf.o $(TARGET_LIB)
 	$(call archive, $(empty), $(empty), $(empty), $(empty), $(OBJECTS))
 
-libcitrusleaf.so: | mod-lua common libcitrusleaf.o $(TARGET_LIB)
+libcitrusleaf.so: | msgpack mod-lua common libcitrusleaf.o $(TARGET_LIB)
 	$(call library, $(empty), $(empty), $(empty), $(empty), $(OBJECTS))
 
 prepare:
@@ -60,6 +60,12 @@ install: | libcitrusleaf.a libcitrusleaf.so prepare
 ## SUBMODULES
 ##
 
+modules/msgpack/Makefile: 
+	cd modules/msgpack && ./configure
+
+msgpack: modules/msgpack/Makefile
+	make -C modules/msgpack all CFLAGS="-fPIC"
+
 mod-lua: 
 	make -C modules/mod-lua all MEM_COUNT=$(MEM_COUNT) 
 
@@ -75,7 +81,13 @@ test_flags = -L/usr/local/lib $(TARGET_LIB)/libcitrusleaf.a -llua -lcrypto -lssl
 test/%: $(SOURCE_TEST)/%.c | $(TARGET_BIN)
 	$(call executable, $(TARGET_INCL), $(empty), $(empty) , $(empty), $(test_flags) )
 
-test/udf-record-apply: $(SOURCE_TEST)/udf-record-apply.c | $(TARGET_BIN)
+test/get: $(SOURCE_TEST)/get.c $(SOURCE_TEST)/as_json.c | $(TARGET_BIN)
+	$(call executable, $(TARGET_INCL), $(empty),  jansson, $(empty), $(test_flags))
+
+test/put: $(SOURCE_TEST)/put.c $(SOURCE_TEST)/as_json.c | $(TARGET_BIN)
+	$(call executable, $(TARGET_INCL), $(empty),  jansson, $(empty), $(test_flags))
+
+test/udf-record-apply: $(SOURCE_TEST)/udf-record-apply.c $(SOURCE_TEST)/as_json.c | $(TARGET_BIN)
 	$(call executable, $(TARGET_INCL), $(empty),  jansson, $(empty), $(test_flags))
 
 test: test/get test/put test/quick test/udf test/udf-list test/udf-get test/udf-put test/udf-remove test/udf-record-apply

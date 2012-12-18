@@ -90,4 +90,4 @@ test/put: $(SOURCE_TEST)/put.c $(SOURCE_TEST)/as_json.c | $(TARGET_BIN)
 test/udf-record-apply: $(SOURCE_TEST)/udf-record-apply.c $(SOURCE_TEST)/as_json.c | $(TARGET_BIN)
 	$(call executable, $(TARGET_INCL), $(empty),  jansson, $(empty), $(test_flags))
 
-test: test/get test/put test/quick test/udf test/udf-list test/udf-get test/udf-put test/udf-remove test/udf-record-apply
+test: test/quick test/get test/put test/remove test/exists test/udf test/udf-list test/udf-get test/udf-put test/udf-remove test/udf-record-apply

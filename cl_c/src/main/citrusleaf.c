@@ -177,6 +177,8 @@ int citrusleaf_copy_object(cl_object *destobj, cl_object *srcobj)
 			memcpy(destobj->u.str, srcobj->u.str, destobj->sz);
 			destobj->u.str[destobj->sz] = 0;
 			break;
+		case CL_LIST:
+		case CL_MAP:
 		case CL_BLOB:
 		case CL_DIGEST:
 		case CL_JAVA_BLOB:
@@ -459,6 +461,8 @@ write_fields(uint8_t *buf, const char *ns, int ns_len, const char *set, int set_
                 uint64_t swapped = __swab64(key->u.i64);
                 memcpy(&fd[1], &swapped, sizeof(swapped));
 				break;
+			case CL_LIST:
+			case CL_MAP:
 			case CL_BLOB:
 			case CL_JAVA_BLOB:
 			case CL_CSHARP_BLOB:
@@ -639,11 +643,13 @@ cl_value_to_op_get_size(cl_bin *v, size_t *sz)
 		case CL_STR:
 			*sz += v->object.sz;
 			break;
+		case CL_LIST:
+		case CL_MAP:
+		case CL_BLOB:
 		case CL_PYTHON_BLOB:
 		case CL_RUBY_BLOB:
 		case CL_JAVA_BLOB:
 		case CL_CSHARP_BLOB:
-		case CL_BLOB:
 		case CL_PHP_BLOB:
 		case CL_LUA_BLOB:
 			*sz += v->object.sz;
@@ -668,11 +674,13 @@ cl_object_get_size(cl_object *obj, size_t *sz)
 		case CL_STR:
 			*sz += obj->sz;
 			break;
+		case CL_LIST:
+		case CL_MAP:
+		case CL_BLOB:
 		case CL_PYTHON_BLOB:
 		case CL_RUBY_BLOB:
 		case CL_JAVA_BLOB:
 		case CL_CSHARP_BLOB:
-		case CL_BLOB:
 		case CL_PHP_BLOB:
 		case CL_LUA_BLOB:
 			*sz += obj->sz;
@@ -757,6 +765,8 @@ cl_value_to_op(cl_bin *v, cl_operator operator, cl_operation *operation, cl_msg_
 			op->op_sz += tmpValue->object.sz;
 			memcpy(data, tmpValue->object.u.str, tmpValue->object.sz);
 			break;
+		case CL_LIST:
+		case CL_MAP:
 		case CL_BLOB:
 		case CL_JAVA_BLOB:
 		case CL_CSHARP_BLOB:
@@ -794,6 +804,8 @@ cl_object_to_buf (cl_object *obj, uint8_t *data)
 			sz += obj->sz;
 			memcpy(data, obj->u.str, obj->sz);
 			break;
+		case CL_LIST:
+		case CL_MAP:
 		case CL_BLOB:
 		case CL_JAVA_BLOB:
 		case CL_CSHARP_BLOB:
@@ -1881,6 +1893,8 @@ citrusleaf_calculate_digest(const char *set, const cl_object *key, cf_digest *di
 			k[0] = key->type;
 			value_to_op_int(key->u.i64,&k[1]);
 			break;
+		case CL_LIST:
+		case CL_MAP:
 		case CL_BLOB:
 		case CL_JAVA_BLOB:
 		case CL_CSHARP_BLOB:

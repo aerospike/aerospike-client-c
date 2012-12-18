@@ -200,7 +200,7 @@ int citrusleaf_copy_object(cl_object *destobj, const cl_object *srcobj)
 	return 0;
 }
 
-int citrusleaf_copy_bin(cl_bin *destbin, cl_bin *srcbin)
+int citrusleaf_copy_bin(cl_bin *destbin, const cl_bin *srcbin)
 {
 	strcpy(destbin->bin_name, srcbin->bin_name);
 	return citrusleaf_copy_object(&(destbin->object), &(srcbin->object));

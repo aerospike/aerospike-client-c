@@ -39,7 +39,7 @@ struct config_s {
     { printf("%s:%d - ", __FILE__, __LINE__); printf(msg, ##__VA_ARGS__ ); printf("\n"); }
 
 #define ERROR(msg, ...) \
-    { fprintf(stderr,"error: "); fprintf(stderr,msg, ##__VA_ARGS__ ); fprintf(stderr, "\n"); }
+    { fprintf(stderr,"error: "); fprintf(stderr, msg, ##__VA_ARGS__ ); fprintf(stderr, "\n"); }
 
 /******************************************************************************
  * STATIC FUNCTION DECLARATIONS

@@ -84,15 +84,56 @@ Tests require the following dependencies installed:
 
 #### put
 
-Put a record in the database
+Store an object in the database
 
-	$ ./put <namespace> <set> <key> <name> <value>
-	
+	$ ./put <namespace> <set> <key> <object>
+
+The `<object>` should be formatted as a JSON object. Each field of the object maps to a bin in the database.
+
+Example:
+
+	$ ./put test demo 1 '{"name": "Bob", "age": 30, "children": ["Billy", "Barry"]}'
+
 #### get
 
-Get a record new record in the database
+Retrieve an object from the database
 
-	$ ./put <namespace> <set> <key> <name> <value>
+	$ ./get <namespace> <set> <key>
+
+The output will a formatted as a JSON object. Each field of the object maps to a bin in the database.
+
+Example:
+
+	$ ./get test demo 1
+	{"name": "Bob", "age": 30, "children": ["Billy", "Barry"]}
+
+#### exists
+
+For the existence of an object in the database
+
+	$ ./exists <namespace> <set> <key>
+
+Example:
+
+	$ ./exists test demo 1
+	$ echo $?
+	0
+
+#### remove
+
+Remove an object from the database
+
+	$ ./remove <namespace> <set> <key>
+
+Example:
+
+	$ ./remove test demo 1
+	$ ./exists test demo 1
+	$ echo $?
+	2
+
+
+
 
 ### UDF Tests
 

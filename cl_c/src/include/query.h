@@ -7,7 +7,7 @@
 #pragma once
 
 #include "types.h"
-#include "scan.h"
+#include "sindex.h"
 
 // Range indicates start/end condition for the columns of the indexes.
 // Example1: (index on "last_activity" bin) where last_activity < start_time and last_activity > end_time
@@ -63,4 +63,4 @@ cl_rv citrusleaf_query_add_filter_string(cl_query *query_obj, const char *binnam
 cl_rv citrusleaf_query_add_orderby(cl_query *query_obj, const char *binname, cl_query_orderby_op order);
 cl_rv citrusleaf_query_set_limit(cl_query *query_obj, uint64_t limit);
 
-cl_rv citrusleaf_query(cl_cluster *asc, const char *ns, const cl_query *query_obj,const cl_mr_job *mr_job, citrusleaf_get_many_cb cb, void *udata);
+cl_rv citrusleaf_query(cl_cluster *asc, const char *ns, const cl_query *query_obj, citrusleaf_get_many_cb cb, void *udata);

@@ -9,6 +9,7 @@
 #include "citrusleaf.h"
 #include "cl_cluster.h"
 #include "citrusleaf-internal.h"
+#include "query.h"
 
 #include <citrusleaf/cf_atomic.h>
 #include <citrusleaf/cf_socket.h>
@@ -25,9 +26,6 @@
 #include <fcntl.h>
 #include <assert.h>
 #include <asm/byteorder.h> // 64-bit swap macro
-#include "citrusleaf/citrusleaf.h"
-#include "citrusleaf/cl_cluster.h"
-#include "citrusleaf/citrusleaf-internal.h"
 #include "citrusleaf/cf_atomic.h"
 #include "citrusleaf/proto.h"
 #include "citrusleaf/cf_socket.h"
@@ -38,19 +36,15 @@
 // work item given to each node
 typedef struct {
     // these sections are the same for the same query
-    cl_cluster                *asc; 
-    const char                *ns;
-     const uint8_t            *query_buf;
-     size_t                    query_sz;
-     const cl_mr_job            *mr_job; 
+    cl_cluster               *asc; 
+    const char               *ns;
+    const uint8_t            *query_buf;
+    size_t                    query_sz;
     citrusleaf_get_many_cb    cb; 
-    void                    *udata;
-       cf_queue                *node_complete_q;    // used to synchronize work from all nodes are finished
-    
-       cl_mr_state                *mr_state;                // 0 if no map reduce, created by cl_mapreduce
-       
+    void                     *udata;
+    cf_queue                 *node_complete_q;    // used to synchronize work from all nodes are finished
     // different for each node
-    char                    node_name[NODE_NAME_SIZE];    
+    char                      node_name[NODE_NAME_SIZE];    
 } query_work;
 
 #define    N_MAX_QUERY_THREADS 5
@@ -217,11 +211,10 @@ static int query_compile_binnames_field(cf_vector *binnames, uint8_t *buf, int *
 }
 
 //
-// Both query and mr_job are allowed to be null
 // if the query is null, then you run the MR job over the entire set or namespace
 // If the job is null, just run the query
 
-static int query_compile (const char *ns, const cl_query *query, const cl_mr_state *mr_state, const cl_mr_job *mr_job,
+static int query_compile (const char *ns, const cl_query *query, 
                          uint8_t **buf_r, size_t *buf_sz_r) {
         
     if (ns==NULL)         return -1;
@@ -232,20 +225,6 @@ static int query_compile (const char *ns, const cl_query *query, const cl_mr_sta
     if (query) {
         if ( ! query->ranges ) {
             fprintf(stderr, "query compile internal error: query with no range\n");
-            return(-1);
-        }
-    }
-    if (mr_job) {
-        if ( ! mr_job->package ) {
-            fprintf(stderr, "query compile internal error: job but no package\n");
-            return(-1);
-        }
-        if ( ! mr_state ) {
-            fprintf(stderr, "query compile internal error: job but no state\n");
-            return(-1);
-        }
-        if ( ! mr_state->generation) {
-            fprintf(stderr, "query compile internal error: state but no generation\n");
             return(-1);
         }
     }
@@ -278,10 +257,10 @@ static int query_compile (const char *ns, const cl_query *query, const cl_mr_sta
             msg_sz += setname_len + sizeof(cl_msg_field);
         }
 
-    	if (query->job_id) {
-			n_fields++;
-        	msg_sz += sizeof(cl_msg_field) + sizeof(query->job_id);
-		}
+        if (query->job_id) {
+            n_fields++;
+            msg_sz += sizeof(cl_msg_field) + sizeof(query->job_id);
+        }
 
         // query field    
         n_fields++;
@@ -302,61 +281,6 @@ static int query_compile (const char *ns, const cl_query *query, const cl_mr_sta
     // TODO orderby field
     // TODO limit field
     
-    // mrj package name field
-    int     package_len = 0;
-    int     gen_len = 0;    
-    int     mapper_len = 0;
-    int     maparg_len = 0;
-    int     reducer_len = 0;
-    int     rdcarg_len = 0;
-    int     finalizer_len = 0;
-    int     fnzarg_len = 0;
-    if (mr_job) {
-        n_fields++;
-        package_len = strlen(mr_job->package); 
-        msg_sz += package_len  + sizeof(cl_msg_field);
-        
-        n_fields++;
-        gen_len = strlen(mr_state->generation); 
-        msg_sz += gen_len  + sizeof(cl_msg_field);
-    
-        if (mr_job->map_fname) {
-            n_fields++;
-            mapper_len = strlen(mr_job->map_fname); 
-            msg_sz += mapper_len  + sizeof(cl_msg_field);
-            
-            if (mr_job->map_argc > 0) {
-                n_fields++;
-                sproc_compile_arg_field(mr_job->map_argk, mr_job->map_argv, mr_job->map_argc, NULL, &maparg_len); 
-                msg_sz += maparg_len + sizeof(cl_msg_field);
-            }
-        }
-
-        if (mr_job->rdc_fname) {
-            n_fields++;
-            reducer_len = strlen(mr_job->rdc_fname); 
-            msg_sz += reducer_len  + sizeof(cl_msg_field);
-            
-            if (mr_job->rdc_argc > 0) {
-                n_fields++;
-                sproc_compile_arg_field(mr_job->rdc_argk, mr_job->rdc_argv, mr_job->rdc_argc, NULL, &rdcarg_len); 
-                msg_sz += rdcarg_len + sizeof(cl_msg_field);
-            }
-        }
-
-        if (mr_job->fnz_fname) {
-            n_fields++;
-            finalizer_len = strlen(mr_job->fnz_fname); 
-            msg_sz += finalizer_len  + sizeof(cl_msg_field);
-            
-            if (mr_job->fnz_argc > 0) {
-                n_fields++;
-                sproc_compile_arg_field(mr_job->fnz_argk, mr_job->fnz_argv, mr_job->fnz_argc, NULL, &fnzarg_len); 
-                msg_sz += fnzarg_len + sizeof(cl_msg_field);
-            }
-        }
-    }
-
     // get a buffer to write to.
     uint8_t *buf; uint8_t *mbuf = 0;
     if ((*buf_r) && (msg_sz > *buf_sz_r)) { 
@@ -427,87 +351,6 @@ static int query_compile (const char *ns, const cl_query *query, const cl_mr_sta
         mf = mf_tmp;
     }
 
-    if (package_len) {
-        mf->type = CL_MSG_FIELD_TYPE_SPROC_PACKAGE;
-        mf->field_sz = package_len + 1;
-        memcpy(mf->data, mr_job->package, package_len);
-        mf_tmp = cl_msg_field_get_next(mf);
-        cl_msg_swap_field(mf);
-        mf = mf_tmp;
-        if (cf_debug_enabled()) {
-            fprintf(stderr,"adding package %s\n", mr_job->package);
-        }
-    }
-
-    if (gen_len) {
-        mf->type = CL_MSG_FIELD_TYPE_SPROC_PACKAGE_GEN;
-        mf->field_sz = gen_len + 1;
-        memcpy(mf->data, mr_state->generation, gen_len);
-        mf_tmp = cl_msg_field_get_next(mf);
-        cl_msg_swap_field(mf);
-        mf = mf_tmp;
-        if (cf_debug_enabled()) {
-            fprintf(stderr,"adding generation %s\n", mr_state->generation);
-        }
-    }
-
-    // map
-    if (mapper_len) {
-        mf->type = CL_MSG_FIELD_TYPE_SPROC_MAP;
-        mf->field_sz = mapper_len + 1;
-        memcpy(mf->data, mr_job->map_fname, mapper_len);
-        mf_tmp = cl_msg_field_get_next(mf);
-        cl_msg_swap_field(mf);
-        mf = mf_tmp;
-    }
-
-    if (maparg_len) {
-        mf->type = CL_MSG_FIELD_TYPE_SPROC_MAP_ARG;
-        mf->field_sz = maparg_len + 1;
-        sproc_compile_arg_field(mr_job->map_argk, mr_job->map_argv, mr_job->map_argc, mf->data, &maparg_len); 
-        mf_tmp = cl_msg_field_get_next(mf);
-        cl_msg_swap_field(mf);
-        mf = mf_tmp;
-    }
-
-    // reduce
-    if (reducer_len) {
-        mf->type = CL_MSG_FIELD_TYPE_SPROC_REDUCE;
-        mf->field_sz = reducer_len + 1;
-        memcpy(mf->data, mr_job->rdc_fname, reducer_len);
-        mf_tmp = cl_msg_field_get_next(mf);
-        cl_msg_swap_field(mf);
-        mf = mf_tmp;
-    }
-
-    if (rdcarg_len) {
-        mf->type = CL_MSG_FIELD_TYPE_SPROC_REDUCE_ARG;
-        mf->field_sz = rdcarg_len + 1;
-        sproc_compile_arg_field(mr_job->rdc_argk, mr_job->rdc_argv, mr_job->rdc_argc, mf->data, &rdcarg_len); 
-        mf_tmp = cl_msg_field_get_next(mf);
-        cl_msg_swap_field(mf);
-        mf = mf_tmp;
-    }
-
-    // finalize
-    if (finalizer_len) {
-        mf->type = CL_MSG_FIELD_TYPE_SPROC_FINALIZE;
-        mf->field_sz = finalizer_len + 1;
-        memcpy(mf->data, mr_job->fnz_fname, finalizer_len);
-        mf_tmp = cl_msg_field_get_next(mf);
-        cl_msg_swap_field(mf);
-        mf = mf_tmp;
-    }
-
-    if (fnzarg_len > 0) {
-        mf->type = CL_MSG_FIELD_TYPE_SPROC_FINALIZE_ARG;
-        mf->field_sz = fnzarg_len + 1;
-        sproc_compile_arg_field(mr_job->fnz_argk, mr_job->fnz_argv, mr_job->fnz_argc, mf->data, &fnzarg_len); 
-        mf_tmp = cl_msg_field_get_next(mf);
-        cl_msg_swap_field(mf);
-        mf = mf_tmp;
-    }
-
     if (query->job_id) {
         mf->type = CL_MSG_FIELD_TYPE_TRID;
         // Convert the transaction-id to network byte order (big-endian)
@@ -538,7 +381,7 @@ static int query_compile (const char *ns, const cl_query *query, const cl_mr_sta
 // this is an actual instance of a query, running on a query thread
 //
 bool gasq_abort = false;
-static int do_query_monte(cl_cluster_node *node, const char *ns, const uint8_t *query_buf, size_t query_sz,  cl_mr_state *mr_state,
+static int do_query_monte(cl_cluster_node *node, const char *ns, const uint8_t *query_buf, size_t query_sz, 
                           citrusleaf_get_many_cb cb, void *udata, bool isnbconnect) {
 
     uint8_t        rd_stack_buf[STACK_BUF_SZ];    
@@ -686,18 +529,9 @@ static int do_query_monte(cl_cluster_node *node, const char *ns, const uint8_t *
                 done = true;
             }
 
-            // if there's a map-reduce on this query, callback into the mr system
-            // (which ends up accumulating into the mr state), or just return the responses now)
-            //
             else if ((msg->n_ops || (msg->info1 & CL_MSG_INFO1_NOBINDATA))) {
                 
-                if (mr_state) {
-#ifdef USE_LUA_MR
-                    cl_mr_state_row(mr_state, ns_ret, keyd, set_ret, msg->generation, 
-                        msg->record_ttl, bins, msg->n_ops, false /*islast*/, cb, udata);
-#endif
-                }
-                else if (cb) {
+                if (cb) {
                     // got one good value? call it a success!
                     // (Note:  In the key exists case, there is no bin data.)
                     (*cb) ( ns_ret, keyd, set_ret, msg->generation, msg->record_ttl, bins, msg->n_ops, false /*islast*/, udata);
@@ -770,56 +604,29 @@ static void *query_worker_fn(void *dummy) {
         cl_cluster_node *node = cl_cluster_node_get_byname(work.asc, work.node_name);
         int an_int = CITRUSLEAF_FAIL_UNAVAILABLE;
         if (node) {
-            an_int = do_query_monte(node, work.ns, work.query_buf, work.query_sz, work.mr_state, work.cb, work.udata, work.asc->nbconnect);
+            an_int = do_query_monte(node, work.ns, work.query_buf, work.query_sz, work.cb, work.udata, work.asc->nbconnect);
         }
                                     
         cf_queue_push(work.node_complete_q, (void *)&an_int);
     }
 }
 
-cl_rv citrusleaf_query(cl_cluster *asc, const char *ns, const cl_query *query, const cl_mr_job *mr_job,
-        citrusleaf_get_many_cb cb, void *udata) 
+cl_rv citrusleaf_query(cl_cluster *asc, const char *ns, const cl_query *query, 
+                       citrusleaf_get_many_cb cb, void *udata) 
 {
     query_work work;
         
     work.asc = asc;
     work.ns = ns;
-    work.mr_job = mr_job;
-    work.mr_state = 0;
-
-    // This must be before the compile because the 
-#ifdef USE_LUA_MR
-    if (mr_job) {
-        // make sure it's in the cache before you do a "get"
-        // with the same package name
-        if (citrusleaf_sproc_package_get_and_create(asc, mr_job->package,
-                                                    CL_SCRIPT_LANG_LUA)) {
-            return CITRUSLEAF_FAIL_CLIENT;
-        }
-
-        work.mr_state = cl_mr_state_get( mr_job );
-        if (!work.mr_state) { return CITRUSLEAF_FAIL_CLIENT; }
-    }
-#else
-    if (mr_job) {
-        fprintf(stderr, "MR job called but Aerospike client not " \
-                        "compiled w/ Lua/MR capability\n");
-        return CITRUSLEAF_FAIL_CLIENT;
-    }
-#endif
 
     uint8_t  wr_stack_buf[STACK_BUF_SZ];
     uint8_t *wr_buf = wr_stack_buf;
     size_t   wr_buf_sz = sizeof(wr_stack_buf);
     
     // compile the query - a good place to fail    
-    int rv = query_compile(ns, query, work.mr_state, mr_job, &wr_buf,
-                           &wr_buf_sz);
+    int rv = query_compile(ns, query, &wr_buf, &wr_buf_sz);
     if (rv) {
         fprintf(stderr,"do query monte: query compile failed: ");
-#ifdef USE_LUA_MR
-        if (work.mr_state) cl_mr_state_put( work.mr_state );
-#endif
         return (rv);
     }
     work.query_buf = wr_buf;
@@ -835,9 +642,6 @@ cl_rv citrusleaf_query(cl_cluster *asc, const char *ns, const cl_query *query, c
     cl_cluster_get_node_names(asc, &n_nodes, &node_names);
     if (n_nodes == 0) {
         fprintf(stderr, "citrusleaf query nodes: don't have any nodes?\n");
-#ifdef USE_LUA_MR
-        if (work.mr_state) cl_mr_state_put( work.mr_state );
-#endif
         cf_queue_destroy(work.node_complete_q);
         if (wr_buf && (wr_buf != wr_stack_buf)) { free(wr_buf); wr_buf = 0; }
         return CITRUSLEAF_FAIL_CLIENT;
@@ -868,14 +672,6 @@ cl_rv citrusleaf_query(cl_cluster *asc, const char *ns, const cl_query *query, c
     }
     gasq_abort = false;
 
-    // do the final reduce, big operation, then done
-    if ((retval == 0) && work.mr_state) {
-#ifdef USE_LUA_MR    
-        retval = cl_mr_state_done(work.mr_state, work.cb, work.udata);
-        cl_mr_state_put(work.mr_state);
-#endif
-    }
-
     if (wr_buf && (wr_buf != wr_stack_buf)) { free(wr_buf); wr_buf = 0; }
     
     cf_queue_destroy(work.node_complete_q);
@@ -891,7 +687,7 @@ cl_query *citrusleaf_query_create(const char *indexname, const char *setname)
     memset(query,0,sizeof(cl_query));
     if (indexname) memcpy(query->indexname, indexname, strlen(indexname));
     if (setname)   memcpy(query->setname,   setname,   strlen(setname));
-	query->job_id = cf_get_rand64();
+    query->job_id = cf_get_rand64();
     return query;    
 }
 

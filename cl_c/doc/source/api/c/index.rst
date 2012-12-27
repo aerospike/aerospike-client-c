@@ -1,6 +1,6 @@
+***************
 C API Reference
-=================================
-
+***************
 
 Types
 
@@ -18,6 +18,7 @@ Types
     as_result
     as_stream
     as_string
+    cl_cluster
 
 Modules
 

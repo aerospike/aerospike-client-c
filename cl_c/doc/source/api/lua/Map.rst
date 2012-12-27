@@ -1,5 +1,3 @@
-.. _apiref:
-
 *************
 Map
 *************
@@ -30,6 +28,6 @@ Types
 Functions
 ---------
 
-..  function:: map.size(m)
+..  function:: map.size(as_map m)
 
     Get the number of key-value pairs in a :type:`Map` *m*.

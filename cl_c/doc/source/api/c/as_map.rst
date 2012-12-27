@@ -1,8 +1,6 @@
-.. _apiref:
-
-*************
+******
 as_map
-*************
+******
 
 A collection of key-value pairs. The key and value can be any :type:`as_val` type.
 

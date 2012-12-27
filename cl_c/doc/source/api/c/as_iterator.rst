@@ -1,8 +1,6 @@
-.. _apiref:
-
-*************
+***********
 as_iterator
-*************
+***********
 
 Iterators are data structures that provide the ability to iterate over a sequence of elements.
 

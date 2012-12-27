@@ -1,5 +1,6 @@
+*****************
 Lua API Reference
-=================================
+*****************
 
 
 Contents:
@@ -9,5 +10,6 @@ Contents:
 
     Globals
     Aerospike
+    Record
     List
     Map

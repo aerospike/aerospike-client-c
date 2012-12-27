@@ -1,8 +1,6 @@
-.. _apiref:
-
-*************
+*******
 as_list
-*************
+*******
 
 A collection of values. 
 

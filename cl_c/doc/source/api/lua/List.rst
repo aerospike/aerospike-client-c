@@ -1,5 +1,3 @@
-.. _apiref:
-
 *************
 List
 *************
@@ -29,26 +27,26 @@ Types
 Functions
 ---------
 
-..  function:: list.size(m)
+..  function:: list.size(as_list l)
 
     Get the number of key-value pairs in a :type:`List` *l*.
 
-..  function:: list.iterator(l)
+..  function:: list.iterator(as_list l)
 
     Get an iterator for the elements of the :type:`List` *l*.
 
-..  function:: list.append(l,v)
+..  function:: list.append(as_list l, as_val v)
 
     Append a value to the end of the :type:`List` *l*.
 
-..  function:: list.prepend(l,v)
+..  function:: list.prepend(as_list l, as_val v)
 
     Prepend a value to the beginning of the :type:`List` *l*.
     
-..  function:: list.take(m)
+..  function:: list.take(as_list l)
 
     Select the first *n* elements of the :type:`List` *l*
 
-..  function:: list.drop(m)
+..  function:: list.drop(as_list l)
 
     Select all elements except the first *n* elements of the :type:`List` *l*.

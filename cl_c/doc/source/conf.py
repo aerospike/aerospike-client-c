@@ -40,7 +40,7 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = u'Aerospike C API'
+project = u'Aerospike Development Guide'
 copyright = u'2008-2012, Aerospike Inc.'
 
 # The version info for the project you're documenting, acts as replacement for

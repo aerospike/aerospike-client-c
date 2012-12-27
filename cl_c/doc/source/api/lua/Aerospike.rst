@@ -1,5 +1,3 @@
-.. _apiref:
-
 *************
 Aerospike
 *************
@@ -14,19 +12,19 @@ Types
 Functions
 ---------
 
-..  function:: aerospike:create(r)
+..  function:: aerospike:create(Record r)
 
     Create a new record in the database.
 
-..  function:: aerospike:update(r)
+..  function:: aerospike:update(Record r)
 
     Update an existing record in the database.
 
-..  function:: aerospike:exists(r)
+..  function:: aerospike:exists(Record r)
 
     Checks for the existance of a record in the database.
 
-..  function:: aerospike:remove(r)
+..  function:: aerospike:remove(Record r)
 
     Remove an existing record from the database.
 

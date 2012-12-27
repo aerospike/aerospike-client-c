@@ -97,7 +97,7 @@ common:
 ## TEST
 ##
 
-test_flags = -L/usr/local/lib $(TARGET_LIB)/libcitrusleaf.a -llua -ljansson -lcrypto -lssl -lmsgpack -lpthread -lrt -Wl,-rpath,/usr/local/lib
+test_flags = -L/usr/local/lib $(TARGET_LIB)/libcitrusleaf.a -Wl,-l,:liblua.so -Wl,-l,:libjansson.a -lcrypto -lssl -Wl,-l,:libmsgpack.a -lpthread -lrt -Wl,-rpath,/usr/local/lib -Wl,-rpath,/opt/citrusleaf/lib
 
 test/%: $(SOURCE_TEST)/%.c | $(TARGET_BIN)
 	$(call executable, $(TARGET_INCL), $(empty), $(empty) , $(empty), $(test_flags) )

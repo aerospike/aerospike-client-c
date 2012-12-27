@@ -7,4 +7,4 @@ Tutorials
    :maxdepth: 2
 
    kv
-   udf
+   udf/index

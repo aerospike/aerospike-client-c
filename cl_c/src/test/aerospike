@@ -1,0 +1,84 @@
+#!/bin/bash
+
+if [ -z "$AEROSPIKE_PATH" ]; then
+  AEROSPIKE_PATH=/opt/citrusleaf/bin/commands
+fi
+
+usage () {
+  local program=$1
+  local path=$2
+  local commands=`ls $path`
+
+  echo ""
+  echo "Usage:" $program " [--path=PATH] [--help] COMMAND [ARGS]"
+  echo ""
+  echo "Options: "
+  echo "    --help          Prints this message."
+  echo "    --path=PATH     Sets the search path for aerospike commands."
+  echo "                    Default: $AEROSPIKE_PATH"
+  echo ""
+  echo "Commands:"
+  for c in $commands; do
+    echo "    "$c
+  done
+  echo "      "
+}
+
+exec () {
+  local program=$1
+  local path=$2
+  local command=$3
+  local arguments=${*:4}
+
+  # echo $@
+
+  if [ -e "$path/$command" ]; then
+    $path/$command $arguments
+  else
+    echo "$program: '$command' is not an $program command. See '$program --help'." >&2
+    exit 1
+  fi
+}
+
+main () {
+  local program=`basename $0`
+
+  # OPTIONS
+  local path=$AEROSPIKE_PATH
+  local help=0
+
+  # Process OPTIONS
+  while [ $# -gt 0 ]; do
+    case $1 in
+      --help )
+        help=1
+        ;;
+      --path=* )
+        path=${1:7}
+        ;;
+      --* )
+        echo "error: unrecognized option '$1'" >&2
+        help=1
+        ;;
+      * )
+        break
+        ;;
+    esac
+    shift
+  done
+  
+  if [ help == 1 ]; then
+    usage $program $path
+    exit 1
+  fi
+
+  if [ $# == 0 ]; then
+    usage $program $path
+    exit 1
+  fi
+
+  exec $program $path $@
+  exit 0
+}
+
+main $*

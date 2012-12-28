@@ -8,8 +8,8 @@ Contents:
 ..  toctree::
     :maxdepth: 1
 
-    Globals
-    Aerospike
-    Record
-    List
-    Map
+    globals
+    aerospike
+    record
+    list
+    map

@@ -1,8 +1,6 @@
 Aerospike Development Guide
 =================================
 
-Contents:
-
 .. toctree::
    :maxdepth: 2
 

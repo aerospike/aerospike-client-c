@@ -25,7 +25,7 @@ needs_sphinx = '1.0'
 
 # Add any Sphinx extension module names here, as strings. They can be extensions
 # coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
-extensions = ['refcounting']
+extensions = ['refcounting', 'lua']
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -92,12 +92,25 @@ pygments_style = 'sphinx'
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-#html_theme = 'default'
+html_theme = 'default'
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
 # documentation.
 #html_theme_options = {}
+html_theme_options = {
+    "stickysidebar": True,
+    # "footerbgcolor": "white",
+    # "sidebarbgcolor": "white",
+    # "relbarbgcolor": "white",
+    # "relbartextcolor": "black",
+    # "relbarlinkcolor": "black",
+    # "bodyfont": "Segoe WP, Helvetica, Arial",
+    # "headfont": "Segoe WP, Helvetica, Arial",
+    # "codebgcolor": "#EFE",
+    # "codetextcolor": "#222",
+    # "headbgcolor": "#EEE",
+}
 
 # Add any paths that contain custom themes here, relative to this directory.
 #html_theme_path = []
@@ -132,17 +145,20 @@ pygments_style = 'sphinx'
 #html_use_smartypants = True
 
 # Custom sidebar templates, maps document names to template names.
-#html_sidebars = {}
+# html_sidebars = {}
+html_sidebars = {
+  '**': ['localtoc.html']
+}
 
 # Additional templates that should be rendered to pages, maps page names to
 # template names.
-#html_additional_pages = {}
+html_additional_pages = {}
 
 # If false, no module index is generated.
-#html_domain_indices = True
+html_domain_indices = False
 
 # If false, no index is generated.
-#html_use_index = True
+html_use_index = True
 
 # If true, the index is split into individual pages for each letter.
 #html_split_index = False
@@ -151,7 +167,7 @@ pygments_style = 'sphinx'
 #html_show_sourcelink = True
 
 # If true, "Created using Sphinx" is shown in the HTML footer. Default is True.
-#html_show_sphinx = True
+html_show_sphinx = False
 
 # If true, "(C) Copyright ..." is shown in the HTML footer. Default is True.
 #html_show_copyright = True
@@ -159,14 +175,13 @@ pygments_style = 'sphinx'
 # If true, an OpenSearch description file will be output, and all pages will
 # contain a <link> tag referring to it.  The value of this option must be the
 # base URL from which the finished HTML is served.
-#html_use_opensearch = ''
+html_use_opensearch = ''
 
 # This is the file name suffix for HTML files (e.g. ".xhtml").
 #html_file_suffix = None
 
 # Output file base name for HTML help builder.
 htmlhelp_basename = 'aerospike'
-
 
 # -- Options for LaTeX output --------------------------------------------------
 

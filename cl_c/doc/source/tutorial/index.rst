@@ -6,5 +6,5 @@ Tutorials
 .. toctree::
    :maxdepth: 2
 
-   kv
+   kv/index
    udf/index

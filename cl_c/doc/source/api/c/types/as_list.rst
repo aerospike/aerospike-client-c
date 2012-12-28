@@ -111,11 +111,13 @@ Functions
 ..  function:: inline as_list * as_list_drop(const as_list * l, uint32_t n)
 
     .. refcounting:: new
+
     Selects all elements except first *n* elements.
 
 ..  function:: inline as_list * as_list_take(const as_list * l, uint32_t n)
 
     .. refcounting:: new
+    
     Selects first *n* elements.
 
 ..  function:: inline as_iterator * as_list_iterator(const as_list * l)

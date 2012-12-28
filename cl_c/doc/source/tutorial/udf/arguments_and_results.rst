@@ -28,7 +28,7 @@ A common C pattern is::
 Constraints
 ===========
 
-The return values of a UDF must be of one of the supported types: Integer, String, List and Map. 
+The return values of a UDF must be of one of the supported types: ``Integer``, ``String``, :type:`List` and :type:`Map`. 
 
 A UDF in Lua, cannot return a Lua Table, nor can it have multiple return values. Instead, you will need to use either a :type:`List` or a :type:`Map`.
 
@@ -60,9 +60,9 @@ Alternative::
         return map {a=a, b=b, c=c}
     end
 
-However, as you can see from the "alternative" above, we can use Lua Tables to populate both a :type:`List` and a :type:`Map`. The reason we cannot support directly returning a Lua Table, is because a Table can be both a dictionary type and an index type at the same time, which makes it difficult to map to other environments, which provide explicitly separates these two types.
+You will notice that the "alternative" above, uses Lua Tables to initialize a :type:`List` and a :type:`Map`. We do not support returning a Lua Table, is because a Table can be both a dictionary type and an index type at the same time, which makes it difficult to map to other environments that have explicit structures for the two types.
 
-Also, Numbers returned from Lua will be converted to Integers whenever possible. 
+Lua Numbers represent both a Float and Integer value, but Aerospike does not support Float values, so all Lua Numbers will be converted to Integers whenever possible. 
 
 Records
 =======
@@ -85,9 +85,7 @@ However, when a UDF requires additional arguments, the arguments should always f
 
 The additional arguments must be one of the supported types: Integer, String, :type:`List` and :type:`Map`. 
 
-
-**NOTE**
-Currently, a record cannot be returned from a UDF. Instead, you will need to return a :type:`Map` containing the specific keys and values your want returned from the record::
+**NOTE:** A record cannot be returned from a UDF. Instead, you will need to return a :type:`Map` containing the specific keys and values your want returned from the record::
 
     function specific_fields(r)
         local m = map()

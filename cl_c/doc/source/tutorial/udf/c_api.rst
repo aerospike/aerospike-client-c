@@ -2,6 +2,8 @@
 Using the C API
 ***************
 
+The following assumes that you have basic knowledge in C programming, and have the ``Lua`` and ``libcitrusleaf.so`` installed.
+
 Before we begin, you should create a text file named ``my_functions.lua``, containing::
 
     function hello()
@@ -86,7 +88,7 @@ You are responsible for freeing ``error`` and ``content``.
 Call a UDF
 ----------
 
-Currently, a UDF can be applied to a single record in the database. In order, to call a UDF, you have to specify which record it can be applied against::
+Currently, a UDF can be applied to a single record in the database. In order, to call a UDF, you have to specify which record it can be applied against.
 
 First, we will define the namespace, set and key::
     

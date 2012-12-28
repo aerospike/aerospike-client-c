@@ -2,7 +2,6 @@
 as_val
 *************
 
-How the hell do I explain this? There is no sub-typing and such in C, but this effectively provides it.
 
 Types
 =====

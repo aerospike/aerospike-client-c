@@ -109,8 +109,8 @@ As an example, in a file named ``my_functions.lua`` will define a function that 
 
 We will upload this file then call the function::
 
-    $ udf-put my_functions.lua
-    $ udf-record-apply test test 1 my_functions sum 2 3
+    $ aerospike udf-put my_functions.lua
+    $ aerospike udf-record-apply test test 1 my_functions sum 2 3
     5
 
 **In C**, you can add integers to the arglist for a function::
@@ -139,8 +139,8 @@ As an example, in a file named ``my_functions.lua`` we will define a function th
 
 We will upload this file then call the function::
 
-    $ udf-put my_functions.lua
-    $ udf-record-apply test test 1 my_functions concat "hello" "world"
+    $ aerospike udf-put my_functions.lua
+    $ aerospike udf-record-apply test test 1 my_functions concat "hello" "world"
     hello world
 
 **In C**, you can add strings to the arglist for a function::
@@ -169,8 +169,8 @@ As an example, in a file named ``my_functions.lua`` we will define a function th
 
 We will upload this file then call the function::
 
-    $ udf-put my_functions.lua
-    $ udf-record-apply test test 1 my_functions lappend "[1,2,3]" 4
+    $ aerospike udf-put my_functions.lua
+    $ aerospike udf-record-apply test test 1 my_functions lappend "[1,2,3]" 4
     [ 1, 2, 3, 4 ]
 
 For the command-line utility, we use a JSON Array to encode lists.
@@ -207,8 +207,8 @@ As an example, in a file named ``my_functions.lua`` we will define a function th
 
 We will upload this file then call the function::
     
-    $ udf-put my_functions.lua
-    $ udf-record-apply test test 1 my_functions mput '["a":"A", "b":"B", "c":"C"]' "d" "D"
+    $ aerospike udf-put my_functions.lua
+    $ aerospike udf-record-apply test test 1 my_functions mput '["a":"A", "b":"B", "c":"C"]' "d" "D"
     { "a": "A", "b": "B", "c": "C", "d": "D" }
 
 For the command-line utility, we use a JSON Object to encode a Map.

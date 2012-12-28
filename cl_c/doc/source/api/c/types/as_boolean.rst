@@ -1,4 +1,3 @@
-.. module:: as
 **********
 as_boolean
 **********

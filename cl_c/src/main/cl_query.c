@@ -219,8 +219,6 @@ static int query_compile (const char *ns, const cl_query *query,
         
     if (ns==NULL)         return -1;
 
-    printf("FUCK YEAH! THIS IS CHRIS'S SHIT RIGHT HERE!!!\n\n");
-
 #ifdef EXTRA_CHECKS
     if (query) {
         if ( ! query->ranges ) {
@@ -231,7 +229,7 @@ static int query_compile (const char *ns, const cl_query *query,
 #endif    
     
     // calculating buffer size & n_fields
-       int     n_fields = 0; 
+    int     n_fields = 0; 
     size_t  msg_sz  = sizeof(as_msg);
     
     // namespace field 

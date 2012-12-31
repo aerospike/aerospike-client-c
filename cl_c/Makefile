@@ -103,12 +103,12 @@ test/%: $(SOURCE_TEST)/%.c | $(TARGET_BIN)
 	$(call executable, $(TARGET_INCL), $(empty), $(empty) , $(empty), $(test_flags) )
 
 test/get: $(SOURCE_TEST)/get.c $(SOURCE_TEST)/as_json.c | $(TARGET_BIN)
-	$(call executable, $(TARGET_INCL), $(empty),  jansson, $(empty), $(test_flags))
+	$(call executable, $(TARGET_INCL), $(empty), $(empty), $(empty), $(test_flags))
 
 test/put: $(SOURCE_TEST)/put.c $(SOURCE_TEST)/as_json.c | $(TARGET_BIN)
-	$(call executable, $(TARGET_INCL), $(empty),  jansson, $(empty), $(test_flags))
+	$(call executable, $(TARGET_INCL), $(empty), $(empty), $(empty), $(test_flags))
 
 test/udf-record-apply: $(SOURCE_TEST)/udf-record-apply.c $(SOURCE_TEST)/as_json.c | $(TARGET_BIN)
-	$(call executable, $(TARGET_INCL), $(empty),  jansson, $(empty), $(test_flags))
+	$(call executable, $(TARGET_INCL), $(empty), $(empty), $(empty), $(test_flags))
 
 test: test/quick test/get test/put test/remove test/exists test/udf test/udf-list test/udf-get test/udf-put test/udf-remove test/udf-record-apply

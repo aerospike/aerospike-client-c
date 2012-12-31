@@ -8,10 +8,7 @@ Aerospike Development Guide
    api/index
 
 
-Indices and tables
-==================
+Indices
+=======
 
 * :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
-

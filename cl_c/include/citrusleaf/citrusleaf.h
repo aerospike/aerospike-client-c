@@ -429,6 +429,10 @@ cl_rv
 citrusleaf_async_put_digest(cl_cluster *asc, const char *ns, const cf_digest *d, char *setname, 
 						const cl_bin *bins, int n_bins, const cl_write_parameters *cl_w_p, 
 						uint64_t trid, void *udata);
+cl_rv
+citrusleaf_async_put_digest_xdr(cl_cluster *asc, const char *ns, const cf_digest *d, char *setname, 
+						const cl_bin *bins, int n_bins, const cl_write_parameters *cl_w_p, 
+						uint64_t trid, void *udata);
 
 cl_rvclient
 citrusleaf_check_cluster_health(cl_cluster *asc);

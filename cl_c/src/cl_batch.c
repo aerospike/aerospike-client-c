@@ -507,10 +507,10 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 
 cf_atomic32 batch_initialized = 0;
 
-#define N_BATCH_THREADS 6
+#define MAX_BATCH_THREADS 6
 static cf_queue *g_batch_q = 0;
-static pthread_t g_batch_th[N_BATCH_THREADS];
-
+static pthread_t g_batch_th[MAX_BATCH_THREADS];
+static int g_batch_thread_count = 0;
 
 //
 // These externally visible functions are exposed through citrusleaf.h
@@ -565,6 +565,8 @@ batch_worker_fn(void *dummy)
 		cf_queue_push(work.complete_q, (void *) &an_int);
 		
 	} while (1);
+
+	return 0;
 }
 
 
@@ -574,9 +576,15 @@ batch_worker_fn(void *dummy)
 static cl_rv
 do_get_exists_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_bin *bins, int n_bins, bool get_key, bool get_bin_data, citrusleaf_get_many_cb cb, void *udata)
 {
+	// TODO FAST PATH
 	// fast path: if there's only one node, or the number of digests is super short, just dispatch to the server directly
 
-	// TODO FAST PATH
+	// Use lazy instantiation for batch threads.
+	// The user can override the number of threads by calling citrusleaf_batch_init() directly
+	// before making batch calls.
+	if (cf_atomic32_get(batch_initialized) == 0) {
+		citrusleaf_batch_init(MAX_BATCH_THREADS);
+	}
 
 	//
 	// allocate the digest-node array, and populate it
@@ -784,24 +792,33 @@ citrusleaf_exists_many_digest(cl_cluster *asc, char *ns, const cf_digest *digest
 
 
 //
-// Initializes the shared thread pool and whatever queues
+// Initialize batch queue and specified number of worker threads (Maximum thread count is 6).
 //
-
-int
-citrusleaf_batch_init()
+cl_rv
+citrusleaf_batch_init(int n_threads)
 {
-	if (1 == cf_atomic32_incr(&batch_initialized)) {
-
-		// create dispatch queue
-		g_batch_q = cf_queue_create(sizeof(digest_work), true);
-		
-		// create thread pool
-		for (int i=0;i<N_BATCH_THREADS;i++)
-			pthread_create(&g_batch_th[i], 0, batch_worker_fn, 0);
-
+	if (cf_atomic32_incr(&batch_initialized) != 1) {
+		return CITRUSLEAF_OK;
 	}
-	
-	return(0);	
+
+	// create dispatch queue
+	g_batch_q = cf_queue_create(sizeof(digest_work), true);
+
+	if (n_threads <= 0) {
+		n_threads = 1;
+	}
+	else if (n_threads > MAX_BATCH_THREADS) {
+		n_threads = MAX_BATCH_THREADS;
+		cf_warn("Batch threads are limited to %d", MAX_BATCH_THREADS);
+	}
+
+	g_batch_thread_count = n_threads;
+
+	// create thread pool
+	for (int i = 0; i < n_threads; i++) {
+		pthread_create(&g_batch_th[i], 0, batch_worker_fn, 0);
+	}
+	return CITRUSLEAF_OK;
 }
 
 /*
@@ -816,10 +833,10 @@ citrusleaf_batch_init()
 * thread cleanup routine. We push NULL work items in the queue. When we pop them, we signal the thread to exit. We join on the
 * thread thereafter.
 */
-void citrusleaf_batch_shutdown() {
-
-	int i;
-	digest_work work;
+void citrusleaf_batch_shutdown()
+{
+	if (g_batch_thread_count <= 0)
+		return;
 
 	/* 
 	 * If a process is forked, the threads in it do not get spawned in the child process.
@@ -828,16 +845,21 @@ void citrusleaf_batch_shutdown() {
 	 * then it cannot call pthread_join() on the threads which does not exist in this process.
 	 */
 	if(g_init_pid == getpid()) {
-		memset(&work,0,sizeof(digest_work));
-		for(i=0;i<N_BATCH_THREADS;i++) {
-			cf_queue_push(g_batch_q,&work);
+		digest_work work;
+
+		memset(&work, 0, sizeof(digest_work));
+
+		int i;
+
+		for (i = 0; i < g_batch_thread_count; i++) {
+			cf_queue_push(g_batch_q, &work);
 		}
 
-		for(i=0;i<N_BATCH_THREADS;i++) {
-			pthread_join(g_batch_th[i],NULL);
+		for (i = 0; i < g_batch_thread_count; i++) {
+			pthread_join(g_batch_th[i], NULL);
 		}
+
 		cf_queue_destroy(g_batch_q);
 		g_batch_q = 0;
 	}
 }
-

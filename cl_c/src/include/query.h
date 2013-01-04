@@ -72,6 +72,8 @@ typedef struct cl_query {
  
 
 // Query  
+int citrusleaf_query_init();
+void citrusleaf_query_shutdown();
 cl_query *citrusleaf_query_create(const char *indexname, const char *setname);
 void citrusleaf_query_destroy(cl_query *query_obj);
 cl_rv citrusleaf_query_add_binname(cl_query *query_obj, const char *binname);

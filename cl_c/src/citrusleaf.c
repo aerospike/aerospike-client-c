@@ -1554,29 +1554,70 @@ citrusleaf_restore(cl_cluster *asc, const char *ns, const cf_digest *digest, con
 			&trid, NULL) );
 }
 
+//
+// Send asynchronous put request to server and return without waiting for response.
+// The response is available in callback specified in citrusleaf_async_init().
+//
 extern cl_rv
-citrusleaf_async_put(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, const cl_bin *values, 
-			int n_values, const cl_write_parameters *cl_w_p, uint64_t trid, void *udata)
+citrusleaf_async_put(cl_cluster *asc, const char *ns, const char *set, const cl_object *key,
+	const cl_bin *bins, int n_bins, const cl_write_parameters *cl_w_p, uint64_t trid, void *udata)
 {
 	if (!g_initialized) return(-1);
 
-	//Hardcoding to say that the client is XDS(in info1 bitmap). 
-	//If this is used by some other clients in the future, we should parameterize it.
-	return( cl_do_async_monte( asc, CL_MSG_INFO1_XDS, CL_MSG_INFO2_WRITE, ns, set, key, 0, (cl_bin **) &values,
-					CL_OP_WRITE, 0, &n_values, NULL, cl_w_p, &trid, udata) ); 
+	return( cl_do_async_monte( asc, 0, CL_MSG_INFO2_WRITE, ns, set, key, 0, (cl_bin **) &bins,
+		CL_OP_WRITE, 0, &n_bins, NULL, cl_w_p, &trid, udata) );
+}
+
+//
+// Send asynchronous put request with digest key to server and return without waiting for response.
+// The response is available in callback specified in citrusleaf_async_init().
+//
+extern cl_rv
+citrusleaf_async_put_digest(cl_cluster *asc, const char *ns, const cf_digest *d, const char *set,
+	const cl_bin *bins, int n_bins, const cl_write_parameters *cl_w_p, uint64_t trid, void *udata)
+{
+	if (!g_initialized) return(-1);
+
+	return( cl_do_async_monte( asc, 0, CL_MSG_INFO2_WRITE, ns, set, 0, d, (cl_bin **) &bins,
+		CL_OP_WRITE, 0, &n_bins, NULL, cl_w_p, &trid, udata) );
+}
+
+//
+// Send asynchronous put request to server and return without waiting for response.
+//
+extern cl_rv
+citrusleaf_async_put_forget(cl_cluster *asc, const char *ns, const char *set, const cl_object *key,
+	const cl_bin *bins, int n_bins, const cl_write_parameters *cl_w_p)
+{
+	if (!g_initialized) return(-1);
+	uint64_t trid = 0;
+
+	return( cl_do_async_monte( asc, 0, CL_MSG_INFO2_WRITE, ns, set, key, 0, (cl_bin **) &bins,
+		CL_OP_WRITE, 0, &n_bins, NULL, cl_w_p, &trid, 0) );
+}
+
+//
+// Send asynchronous put request with digest key to server and return without waiting for response.
+//
+extern cl_rv
+citrusleaf_async_put_digest_forget(cl_cluster *asc, const char *ns, const cf_digest *d, const char *set,
+	const cl_bin *bins, int n_bins, const cl_write_parameters *cl_w_p)
+{
+	if (!g_initialized) return(-1);
+	uint64_t trid = 0;
+
+	return( cl_do_async_monte( asc, 0, CL_MSG_INFO2_WRITE, ns, set, 0, d, (cl_bin **) &bins,
+		CL_OP_WRITE, 0, &n_bins, NULL, cl_w_p, &trid, 0) );
 }
 
 extern cl_rv
-citrusleaf_async_put_digest(cl_cluster *asc, const char *ns, const cf_digest *digest, 
-			char *setname, const cl_bin *values, int n_values, 
-			const cl_write_parameters *cl_w_p, uint64_t trid, void *udata)
+citrusleaf_async_put_digest_xdr(cl_cluster *asc, const char *ns, const cf_digest *d, char *set,
+	const cl_bin *bins, int n_bins, const cl_write_parameters *cl_w_p, uint64_t trid, void *udata)
 {
 	if (!g_initialized) return(-1);
 
-	//Hardcoding to say that the client is XDS(in info1 bitmap). 
-	//If this is used by some other clients in the future, we should parameterize it.
-	return( cl_do_async_monte( asc, CL_MSG_INFO1_XDS, CL_MSG_INFO2_WRITE, ns, setname, 0, digest, (cl_bin **) &values,
-					CL_OP_WRITE, 0, &n_values, NULL, cl_w_p, &trid, udata) ); 
+	return( cl_do_async_monte( asc, CL_MSG_INFO1_XDS, CL_MSG_INFO2_WRITE, ns, set, 0, d, (cl_bin **) &bins,
+		CL_OP_WRITE, 0, &n_bins, NULL, cl_w_p, &trid, udata) );
 }
 
 extern cl_rvclient
@@ -1863,7 +1904,7 @@ void citrusleaf_shutdown(void) {
 
 	citrusleaf_cluster_shutdown();
 	citrusleaf_batch_shutdown();
-	citrusleaf_put_queue_shutdown();
+	citrusleaf_async_shutdown();
 
 	g_initialized = false;
 }

@@ -24,9 +24,8 @@
 #include "citrusleaf/proto.h"
 #include "citrusleaf/cl_shm.h"
 #include "citrusleaf/cf_socket.h"
-
+#include "citrusleaf/cf_log.h"
 #define INFO_TIMEOUT_MS 300
-#define DEBUG 1
 
 bool G_SHARED_MEMORY;
 
@@ -44,10 +43,10 @@ bool g_shm_initiated = false;
 
 /* Shared memory updater thread */
 pthread_t shm_update_thr;
-
 /* Initialize shared memory segment */
 int citrusleaf_use_shm(int num_nodes, key_t key) 
 {
+//	citrusleaf_set_debug(CF_DEBUG);
 	if (0 >= num_nodes) {
 		num_nodes = DEFAULT_NUM_NODES_FOR_SHM;
 	}
@@ -61,9 +60,8 @@ int citrusleaf_use_shm(int num_nodes, key_t key)
 	/* Time to use shared memory */
 	G_SHARED_MEMORY = true;
 	
-#ifdef DEBUG
-	fprintf(stderr,"Shared memory key is %d\n",key);
-#endif
+	cf_debug("Shared memory key is %d",key);
+	//cf_set_log_level(CF_INFO);
 	if(key == -1) {
 		return SHM_ERROR;
 	}
@@ -95,10 +93,7 @@ int citrusleaf_use_shm(int num_nodes, key_t key)
 
 	fclose(f);
 
-#ifdef DEBUG
-	fprintf(stderr, "shm maximum size on system is %zu \n", shm_max);
-#endif
-
+	cf_debug("Shm maximum size on system is %zu", shm_max);
 	if(shm_max < g_shm_info.shm_sz) {
 		fprintf(stderr, "shm maximum size on system is %zu, where as needed by this ", shm_max);
 		fprintf(stderr, "process is %zu.\nYou can increase it by running the ", g_shm_info.shm_sz);
@@ -125,10 +120,8 @@ int citrusleaf_use_shm(int num_nodes, key_t key)
 	
 			// Attach to the shared memory
 			if((shm_pt = shmat(g_shm_info.id,NULL,0))==(void*)-1) {
-#ifdef DEBUG
-				fprintf(stderr,"Error in attaching to shared memory: %s pid: %d\n",strerror(errno),
+				cf_debug("Error in attaching to shared memory: %s pid: %d",strerror(errno),
 				getpid());
-#endif	
 				return SHM_ERROR;
 			}
 		
@@ -137,42 +130,36 @@ int citrusleaf_use_shm(int num_nodes, key_t key)
 			g_shm_pt->node_count = 0;
 		}
 	}
-	else {
-	// The process who got the shared memory in the exclusive case
-		
-#ifdef DEBUG
-			fprintf(stderr,"Succeeded in creating shm : pid %d shmid %d\n",getpid(),g_shm_info.id);
-#endif
-		
-		// Attach to the shared memory
-		if((shm_pt = shmat(g_shm_info.id,NULL,0))==(void*)-1) {
-#ifdef DEBUG
-			fprintf(stderr,"Error in attaching to shared memory: %s pid: %d\n",strerror(errno),
-			getpid());
-#endif	
-			return SHM_ERROR;
-		}
+	 else {
+	     // The process who got the shared memory in the exclusive case
 
-		// The shared memory base pointer
-		g_shm_pt = (shm*)shm_pt;
-		memset(g_shm_pt,0,g_shm_info.shm_sz);	
+	     cf_debug("Succeeded in creating shm : pid %d shmid %d",getpid(),g_shm_info.id);
 
-		// If you are the one who created the shared memory, only you can initialize the mutexes. 
-		// Seems fair!
- 	 	// because if we let everyone initialize the mutexes, we are in deep deep trouble
-		pthread_mutexattr_t attr;
-		pthread_mutexattr_init (&attr);
-		pthread_mutexattr_setpshared (&attr, PTHREAD_PROCESS_SHARED);
-		pthread_mutexattr_setrobust_np(&attr, PTHREAD_MUTEX_ROBUST_NP);
-		if(pthread_mutex_init (&(g_shm_pt->shm_lock), &attr)!=0) {
-#ifdef DEBUG
-				fprintf(stderr,"Mutex init failed pid %d\n",getpid());
-#endif
-			pthread_mutexattr_destroy(&attr);
-			return SHM_ERROR;
-		}
-		pthread_mutexattr_destroy(&attr);
-	}
+	     // Attach to the shared memory
+	     if((shm_pt = shmat(g_shm_info.id,NULL,0))==(void*)-1) {
+		 cf_debug("Error in attaching to shared memory: %s pid: %d",strerror(errno),
+			 getpid());
+		 return SHM_ERROR;
+	     }
+
+	     // The shared memory base pointer
+	     g_shm_pt = (shm*)shm_pt;
+	     memset(g_shm_pt,0,g_shm_info.shm_sz);	
+
+	     // If you are the one who created the shared memory, only you can initialize the mutexes. 
+	     // Seems fair!
+	     // because if we let everyone initialize the mutexes, we are in deep deep trouble
+	     pthread_mutexattr_t attr;
+	     pthread_mutexattr_init (&attr);
+	     pthread_mutexattr_setpshared (&attr, PTHREAD_PROCESS_SHARED);
+	     pthread_mutexattr_setrobust_np(&attr, PTHREAD_MUTEX_ROBUST_NP);
+	     if(pthread_mutex_init (&(g_shm_pt->shm_lock), &attr)!=0) {
+		 cf_debug("Mutex init failed pid %d",getpid());
+		 pthread_mutexattr_destroy(&attr);
+		 return SHM_ERROR;
+	     }
+	     pthread_mutexattr_destroy(&attr);
+	 }
 
 	// Create shared memory updater thread
 	pthread_create( &shm_update_thr, 0, cl_shm_updater_fn, 0);
@@ -207,67 +194,61 @@ char * get_field_address(shm_ninfo * node_info , int field_id) {
 
 /* Allocate from the shared memory*/
 int  cl_shm_alloc(struct sockaddr_in * sa_in, int field_id, char ** values, int * pos) {
-	int rv;
-	int found = 0;
-	char * field_addr;
-	//Search for the current sockaddr
-	for(int i=0; i<g_shm_pt->node_count; i++) {
-		if(memcmp(&(g_shm_pt->node_info[i].sa_in),sa_in,sizeof(struct sockaddr_in))==0) {
-			found = 1;
-			/*Fills the position of the node in the shared memory*/
-			*pos = i;
-			break;
-		}
+    int rv;
+    int found = 0;
+    char * field_addr;
+    //Search for the current sockaddr
+    for(int i=0; i<g_shm_pt->node_count; i++) {
+	if(memcmp(&(g_shm_pt->node_info[i].sa_in),sa_in,sizeof(struct sockaddr_in))==0) {
+	    found = 1;
+	    /*Fills the position of the node in the shared memory*/
+	    *pos = i;
+	    break;
 	}
-	//Found the socket address! Yay! Just need to place the data
-	if(found==1) {
-		field_addr = get_field_address(&(g_shm_pt->node_info[*pos]),field_id);
-		if(field_addr==NULL) {
-#ifdef DEBUG
-				fprintf(stderr,"Failed to get a field address, returning\n");
-#endif
-			return SHM_ERROR;
-		}
-		/* Fill the returning values with the address of the field returned from the above function*/
-		*values = field_addr;
+    }
+    //Found the socket address! Yay! Just need to place the data
+    if(found == 1) {
+	field_addr = get_field_address(&(g_shm_pt->node_info[*pos]),field_id);
+	if(field_addr==NULL) {
+	    cf_debug("Failed to get a field address, returning");
+	    return SHM_ERROR;
 	}
-	else {
-		/*In the case the node is not found, place the node at the last offset*/
-		memcpy(&(g_shm_pt->node_info[g_shm_pt->node_count].sa_in),sa_in,sizeof(struct sockaddr_in));
-		
-		/*Initialise the lock - only the updater can initialize the node level mutex*/
-		size_t selfpid = getpid();
-		if(selfpid == g_shm_pt->updater_id) {
-			pthread_mutexattr_t attr;
-			pthread_mutexattr_init (&attr);
-			pthread_mutexattr_setpshared (&attr, PTHREAD_PROCESS_SHARED);
-			pthread_mutexattr_setrobust_np (&attr, PTHREAD_MUTEX_ROBUST_NP);
-			if(pthread_mutex_init (&(g_shm_pt->node_info[g_shm_pt->node_count].ninfo_lock), &attr)!=0) {
-#ifdef DEBUG
-					fprintf(stderr,"node level mutex init failed pid %d\n",getpid());
-#endif
-				pthread_mutexattr_destroy(&attr);
-				return SHM_ERROR;
-			}
-			pthread_mutexattr_destroy(&attr);
-		}	
-		field_addr = get_field_address(&(g_shm_pt->node_info[g_shm_pt->node_count]),field_id);
-		
-		if(field_addr==NULL) {
-#ifdef DEBUG
-				fprintf(stderr,"Failed to get the field address\n");
-#endif
-			return SHM_ERROR;
-		}
+	/* Fill the returning values with the address of the field returned from the above function*/
+	*values = field_addr;
+    }
+    else {
+	/*In the case the node is not found, place the node at the last offset*/
+	memcpy(&(g_shm_pt->node_info[g_shm_pt->node_count].sa_in),sa_in,sizeof(struct sockaddr_in));
 
-		/*Return the position of the data of the particular string name. Move by sizeof a socket address, a lock
- 		 * and the offset of string name in the process*/
-		*values = field_addr;
-		
-		/* A new node is allocated, increase the count*/
-		g_shm_pt->node_count++;
+	/*Initialise the lock - only the updater can initialize the node level mutex*/
+	size_t selfpid = getpid();
+	if(selfpid == g_shm_pt->updater_id) {
+	    pthread_mutexattr_t attr;
+	    pthread_mutexattr_init (&attr);
+	    pthread_mutexattr_setpshared (&attr, PTHREAD_PROCESS_SHARED);
+	    pthread_mutexattr_setrobust_np (&attr, PTHREAD_MUTEX_ROBUST_NP);
+	    if(pthread_mutex_init (&(g_shm_pt->node_info[g_shm_pt->node_count].ninfo_lock), &attr)!=0) {
+		cf_debug("Node level mutex init failed pid %d",getpid());
+		pthread_mutexattr_destroy(&attr);
+		return SHM_ERROR;
+	    }
+	    pthread_mutexattr_destroy(&attr);
+	}	
+	field_addr = get_field_address(&(g_shm_pt->node_info[g_shm_pt->node_count]),field_id);
+
+	if(field_addr==NULL) {
+	    cf_debug("Failed to get the field address");
+	    return SHM_ERROR;
 	}
-	return SHM_OK;	
+
+	/*Return the position of the data of the particular string name. Move by sizeof a socket address, a lock
+	 * and the offset of string name in the process*/
+	*values = field_addr;
+
+	/* A new node is allocated, increase the count*/
+	g_shm_pt->node_count++;
+    }
+    return SHM_OK;	
 }
 
 /* Get data from the host and update the shared memory*/
@@ -330,9 +311,7 @@ int cl_shm_info_host(struct sockaddr_in * sa_in, char * names, int timeout_ms, b
 	if (fd == -1) {
 		/* Can't connect to the socket address, mark the node dun*/
 		rv = 2;
-#ifdef DEBUG
-		fprintf(stderr,"Non blocking connect failed. pid = %d\n",getpid());
-#endif
+		cf_debug("Non blocking connect failed. pid = %d",getpid());
 	}
 	else {
 		cl_proto 	*req;
@@ -375,9 +354,7 @@ int cl_shm_info_host(struct sockaddr_in * sa_in, char * names, int timeout_ms, b
 			free(req);
 		}
 		if (io_rv != 0) {
-#ifdef DEBUG        
-			fprintf(stderr, "info returned error, rv %d errno %d bufsz %d pid %d\n",io_rv, errno, buf_sz,getpid());
-#endif        
+			cf_debug("info returned error, rv %d errno %d bufsz %d pid %d",io_rv, errno, buf_sz,getpid());
 			rv = 2;
 			goto Alloc;
 		}
@@ -389,9 +366,7 @@ int cl_shm_info_host(struct sockaddr_in * sa_in, char * names, int timeout_ms, b
 			io_rv = cf_socket_read_forever(fd, buf, 8);
 
 		if (0 != io_rv) {
-#ifdef DEBUG        
-			fprintf(stderr, "info read not 8 bytes, fail, rv %d errno %d pid %d\n",rv, errno,getpid());
-#endif        
+			cf_debug("info read not 8 bytes, fail, rv %d errno %d pid %d",rv, errno,getpid());
 			rv = 2;
 			goto Alloc;
 		}
@@ -440,42 +415,38 @@ Alloc:
 	}
 	/*This buffer is then copied to *values and sent back to the program that called for it*/
 	if( cl_shm_alloc(sa_in,field_id,&values,&pos) < 0) {
-#ifdef DEBUG
-		fprintf(stderr,"Shared memory allocation for this node failed, returning. pid : %d\n",getpid());
-#endif
+		cf_debug("Shared memory allocation for this node failed, returning. pid : %d",getpid());
 		rv = -1;
 		goto Done;
 	}
-		
+
 	/* Take the lock while updating the shared memory so that no one else can read it */
 	int error_in_getting_ninfo_lock = pthread_mutex_lock(&(g_shm_pt->node_info[pos].ninfo_lock));
 	/* Check if the lock is in not recoverable state then exit the process
 	 * With Robust mutexes the lock gets in not recoverable state when the process holding the lock
- 	 * dies and the other process that gets the lock unlocks it without making it consistent 
- 	 * (via pthread_mutex_consistent function) */
-    if (error_in_getting_ninfo_lock == ENOTRECOVERABLE) {
-#ifdef DEBUG
-		fprintf(stderr, "Updater lock is found in irrecoverable state. Cannot continue... aborting\n");
-#endif
-        exit(EXIT_FAILURE);
-    }
+	 * dies and the other process that gets the lock unlocks it without making it consistent 
+	 * (via pthread_mutex_consistent function) */
+	if (error_in_getting_ninfo_lock == ENOTRECOVERABLE) {
+	    cf_debug("Updater lock is found in irrecoverable state. Cannot continue... aborting");
+	    exit(EXIT_FAILURE);
+	}
 	/* Make the lock consistent if the last owner of the lock died while holding the lock */
 	/* We should ideally clean the memory here and then make the lock consistent */
-    if(error_in_getting_ninfo_lock == EOWNERDEAD){
-        pthread_mutex_consistent_np(&(g_shm_pt->node_info[pos].ninfo_lock));
-    }
+	if(error_in_getting_ninfo_lock == EOWNERDEAD){
+	    pthread_mutex_consistent_np(&(g_shm_pt->node_info[pos].ninfo_lock));
+	}
 	/* There are only two valid cases when we can access the protected data 
 	 * 1. We get the lock without any error and 
 	 * 2. The thread holding the lock died without releasing it */
-    if(error_in_getting_ninfo_lock == 0 || error_in_getting_ninfo_lock == EOWNERDEAD) {
-		if(rv==0){
-			memcpy(values,v_buf,rsp->sz + 1);
-			g_shm_pt->node_info[pos].dun = false;
-		}
-		else if(rv==2){
+	if(error_in_getting_ninfo_lock == 0 || error_in_getting_ninfo_lock == EOWNERDEAD) {
+	    if(rv==0){
+		memcpy(values,v_buf,rsp->sz + 1);
+		g_shm_pt->node_info[pos].dun = false;
+	    }
+	    else if(rv==2){
 		/* Failed to connect/read/write to the server*/
-			g_shm_pt->node_info[pos].dun = true;
-		}
+		g_shm_pt->node_info[pos].dun = true;
+	    }
 	}
 	pthread_mutex_unlock(&(g_shm_pt->node_info[pos].ninfo_lock));
 
@@ -484,9 +455,9 @@ Alloc:
 Done:	
 	shutdown(fd, SHUT_RDWR);
 	close(fd);
-	
+
 	return(rv);
-	
+
 }
 
 /* Read from the shared memory and put into the pointer passed (values) */
@@ -495,18 +466,16 @@ int cl_shm_read(struct sockaddr_in * sa_in, int field_id, char **values, int tim
 	//Search in the shared memory with sa_in. 
 	for(int i=0; i<g_shm_pt->node_count; i++){
 		/*Search for this socket address in the shared memory*/
-		if(memcmp(&(g_shm_pt->node_info[i].sa_in),sa_in,sizeof(struct sockaddr_in))==0){
-			/* Found it! */
-			char * field_addr = get_field_address(&(g_shm_pt->node_info[i]),field_id);
-			if(field_addr==NULL) {
-#ifdef DEBUG
-				fprintf(stderr,"Failed to return a field address, returning\n");
-#endif
-				return SHM_ERROR;
-			}
-			/* Take the lock to read the data into *values from the shared memory so that the updater
-			 * can not update in between */
-			int error_in_getting_ninfo_lock = pthread_mutex_lock(&(g_shm_pt->node_info[i].ninfo_lock));
+	    if(memcmp(&(g_shm_pt->node_info[i].sa_in),sa_in,sizeof(struct sockaddr_in))==0){
+		/* Found it! */
+		char * field_addr = get_field_address(&(g_shm_pt->node_info[i]),field_id);
+		if(field_addr==NULL) {
+		    cf_debug("Failed to return a field address, returning");
+		    return SHM_ERROR;
+		}
+		/* Take the lock to read the data into *values from the shared memory so that the updater
+		 * can not update in between */
+		int error_in_getting_ninfo_lock = pthread_mutex_lock(&(g_shm_pt->node_info[i].ninfo_lock));
 			/* Check if the lock is in not recoverable state then exit the process
 			 * With Robust mutexes the lock gets in not recoverable state when the process holding the lock
 			 * dies and the other process that gets the lock unlocks it without making it consistent 
@@ -582,14 +551,10 @@ void * cl_shm_updater_fn(void * gcc_is_ass) {
 	/* Make the lock consistent if the last owner of the lock died while holding the lock */
 	/* We should ideally clean the memory here and then make the lock consistent */
 	if(error_in_getting_shm_lock == EOWNERDEAD){
-#ifdef DEBUG
-		fprintf(stderr,"\n\n\n\n\n Previous process got killed \n");
-#endif
+		cf_debug("Previous process got killed");
 		pthread_mutex_consistent_np(&(g_shm_pt->shm_lock));
 	}
-#ifdef DEBUG
-	fprintf(stderr,"\n\n process %d took over control with pthread_mutex_lock returning %d \n\n\n\n\n",getpid(), error_in_getting_shm_lock);
-#endif
+	cf_debug("Process %d took over control with pthread_mutex_lock returning %d",getpid(), error_in_getting_shm_lock);
 	/* There are only two valid cases when we can access the protected data 
 	 * 1. We get the lock without any error and 
 	 * 2. The thread holding the lock died without releasing it */
@@ -597,9 +562,7 @@ void * cl_shm_updater_fn(void * gcc_is_ass) {
 		do {
 			/* Check if the thread is set to exit or not. If it is, gracefully exit*/	
 			if(g_shm_info.update_thread_end_cond) {
-#ifdef DEBUG
-				fprintf(stderr,"\n\n\n\n\n in pthread exit \n");
-#endif
+				cf_debug("In pthread exit");
 				pthread_exit(0);
 			}
 			sleep(g_shm_info.update_period);
@@ -622,18 +585,14 @@ int citrusleaf_shm_free() {
 
 	/*Destroy all the mutexes - that includes the global lock as well as all the node level locks*/
 	pthread_mutex_destroy(&(g_shm_pt->shm_lock));
-#ifdef DEBUG
-	fprintf(stderr,"mutex destroyed: %s pid: %d\n",strerror(errno),getpid());
-#endif
+	cf_debug("Mutex destroyed: %s pid: %d",strerror(errno),getpid());
 	for(int i=0; i < g_shm_pt->node_count; i++) {
 		pthread_mutex_destroy(&(g_shm_pt->node_info[i].ninfo_lock));	
 	}
 	
 	/*Detach shared memory*/
 	if(shmdt(g_shm_pt) < 0 ) {
-#ifdef DEBUG
-			fprintf(stderr,"Error in detaching from shared memory: %s pid: %d\n",strerror(errno),getpid());
-#endif
+		cf_debug("Error in detaching from shared memory: %s pid: %d",strerror(errno),getpid());
 		return SHM_ERROR;
 	}
 	

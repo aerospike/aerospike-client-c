@@ -6,7 +6,7 @@
 
 %{
 #include "citrusleaf/citrusleaf.h"
-
+#include "citrusleaf/cl_shm.h"
 /*Structure Definitions*/
 typedef struct cl_record {
         int gen;
@@ -196,3 +196,5 @@ int citrusleaf_calculate_digest(char *set, const cl_object *key, cf_digest *dige
 void free(void *ptr);
 void citrusleaf_free_bins(cl_bin_arr * bin,int n_bins, cl_bin**binp);
 int citrusleaf_operate(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, cl_op_arr *operations, int n_operations, const cl_write_parameters *cl_w_p, int replace, int *generation);
+int citrusleaf_use_shm(int num_nodes, int key);
+void citrusleaf_shm_free();

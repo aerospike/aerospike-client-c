@@ -51,6 +51,12 @@ for o, a in opts:
 print arg_host
 print arg_port
 
+# Init shm before creating cluster (if using shared memory)
+# The first argument should be the maximum number of nodes the cluster 
+# can have. The second argument is the shm key.
+# If both arguments are zero, default number of nodes, i.e 64 and default key is used
+# cl.citrusleaf_use_shm(10,788722985);
+
 #Initialize citrusleaf
 cl.citrusleaf_init()
 
@@ -360,6 +366,9 @@ else:
 #DESTROY CLUSTER
 #Cluster destroy
 cl.citrusleaf_cluster_destroy(asc);
+
+#Free Shared memory if necessary
+#cl.citrusleaf_shm_free()
 
 #CITRUSLEAF SHUTDOWN
 cl.citrusleaf_shutdown();

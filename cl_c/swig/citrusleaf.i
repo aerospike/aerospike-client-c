@@ -60,6 +60,7 @@ BatchResult  citrusleaf_batch_get(cl_cluster *asc, char *ns, const cf_digest *di
         val.rv = rv;
         return val;
 }
+
 void citrusleaf_free_bins(cl_bin * bin, int n, cl_bin**binp) {
         if(bin) {
                 citrusleaf_bins_free(bin,n);
@@ -69,6 +70,10 @@ void citrusleaf_free_bins(cl_bin * bin, int n, cl_bin**binp) {
                 *binp = NULL;
         }
         return;
+}
+
+int citrusleaf_async_initialize(int size_limit, int num_receiver_threads) {
+	return citrusleaf_async_init(size_limit, num_receiver_threads, 0, 0);
 }
 
 %}
@@ -196,3 +201,8 @@ int citrusleaf_calculate_digest(char *set, const cl_object *key, cf_digest *dige
 void free(void *ptr);
 void citrusleaf_free_bins(cl_bin_arr * bin,int n_bins, cl_bin**binp);
 int citrusleaf_operate(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, cl_op_arr *operations, int n_operations, const cl_write_parameters *cl_w_p, int replace, int *generation);
+int citrusleaf_async_initialize(int size_limit, int num_receiver_threads);
+int citrusleaf_async_put(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, cl_bin_arr * bins, int n_bins, const cl_write_parameters *cl_w_p, uint64_t trid, void *udata);
+int citrusleaf_async_put_digest(cl_cluster *asc, const char *ns, const cf_digest *d, const char *set, cl_bin_arr * bins, int n_bins, const cl_write_parameters *cl_w_p, uint64_t trid, void *udata);
+int citrusleaf_async_put_forget(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, cl_bin_arr * bins, int n_bins, const cl_write_parameters *cl_w_p);
+int citrusleaf_async_put_digest_forget(cl_cluster *asc, const char *ns, const cf_digest *d, const char *set, cl_bin_arr * bins, int n_bins, const cl_write_parameters *cl_w_p);

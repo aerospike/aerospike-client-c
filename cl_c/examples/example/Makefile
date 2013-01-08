@@ -18,7 +18,6 @@ LD = gcc
 LDFLAGS = $(CFLAGS_NATIVE) -L$(DIR_LIB) 
 LIBRARIES = $(DIR_LIB)/libcitrusleaf.a -lssl -lpthread -lrt -lcrypto -lz
 
-
 HEADERS = 
 SOURCES = main.c
 TARGET = cl_example

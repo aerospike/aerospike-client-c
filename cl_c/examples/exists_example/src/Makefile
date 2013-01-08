@@ -2,10 +2,8 @@
 # Makefile for an example program
 
 # interesting directories
-DIR_INCLUDE = ../../include
-DIR_CF_INCLUDE = ../../../cf_base/include
-DIR_LIB = ../../lib
-DIR_CF_LIB = ../../../cf_base/lib
+DIR_INCLUDE = ../../../target/Linux-x86_64/include
+DIR_LIB = ../../../target/Linux-x86_64/lib
 DIR_OBJECT = ../obj
 DIR_TARGET = ../bin
 
@@ -13,15 +11,13 @@ DIR_TARGET = ../bin
 # users of older version should pick a more appropriate value
 CC = gcc
 ARCH_NATIVE = $(shell uname -m)
-#CFLAGS_NATIVE = -g -march=native -fno-common -fomit-frame-pointer 
-CFLAGS_NATIVE = -g -fno-common -fomit-frame-pointer 
-CFLAGS_NATIVE += -fno-strict-aliasing -rdynamic -std=gnu99 -Wall 
-CFLAGS_NATIVE += -D_REENTRANT -D MARCH_$(ARCH_NATIVE)
-# CFLAGS_NATIVE += -O3
+CFLAGS_NATIVE = -std=gnu99 -g -O3 -fno-common -fno-strict-aliasing -rdynamic -fPIC -Wall -DMARCH_$(ARCH) -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_GNU_SOURCE
+LDFLAGS = 
 
 LD = gcc
-LDFLAGS = $(CFLAGS_NATIVE) -L$(DIR_LIB) -L$(DIR_CF_LIB)
-LIBRARIES = -lcitrusleaf -lssl -lpthread -lrt -lcrypto -lz
+LDFLAGS = $(CFLAGS_NATIVE) -L$(DIR_LIB) 
+LIBRARIES = $(DIR_LIB)/libcitrusleaf.a -lssl -lpthread -lrt -lcrypto -lz
+
 
 HEADERS = 
 SOURCES = exists_example.c
@@ -48,5 +44,9 @@ $(TARGET): $(OBJECTS)
 
 -include $(DEPENDENCIES)
 
-$(DIR_OBJECT)/%.o: %.c
-	$(CC) $(CFLAGS_NATIVE) -MMD -o $@ -c -I$(DIR_INCLUDE) -I$(DIR_CF_INCLUDE) $<
+$(DIR_OBJECT)/%.o: %.c | prepare
+	$(CC) $(CFLAGS_NATIVE) -MMD -o $@ -c -I$(DIR_INCLUDE) $<
+
+prepare: 
+	mkdir -p $(DIR_OBJECT)
+	mkdir -p $(DIR_TARGET)

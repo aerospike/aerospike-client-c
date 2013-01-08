@@ -1,13 +1,2 @@
-# Citrusleaf Tools
-# Makefile
-
-.PHONY: default
-default: all
-	@echo "done."
-
-clean:
-	rm -f obj/*
-	rm -f bin/*
-
-%:
+all clean depclean:
 	$(MAKE) -C src $@

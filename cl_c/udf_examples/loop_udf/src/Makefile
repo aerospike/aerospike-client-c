@@ -1,48 +1,50 @@
-# Citrusleaf Tools
-# Makefile
+# Citrusleaf Foundation
+# Makefile for an example program
 
-DEPTH = ../../../..
-include $(DEPTH)/make_in/Makefile.in
-
-DIR_INCLUDE = ../include 
-DIR_INCLUDE += $(DEPTH)/client/c_clients/cl_c/target/Linux-x86_64/include 
-
+# interesting directories
+DIR_INCLUDE = ../../../target/Linux-x86_64/include
+DIR_LIB = ../../../target/Linux-x86_64/lib
 DIR_OBJECT = ../obj
-DIR_TARGET = ../bin
+DIR_TARGET = ..
 
-HEADERS = loop_sproc.h 
-SOURCES =  loop_sproc.c 
-TARGET = loop_sproc 
+# common variables. Note that march=native first supported in GCC 4.2; 
+# users of older version should pick a more appropriate value
+CC = gcc
+ARCH_NATIVE = $(shell uname -m)
+CFLAGS_NATIVE = -std=gnu99 -g -O3 -fno-common -fno-strict-aliasing -rdynamic -fPIC -Wall -DMARCH_$(ARCH) -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_GNU_SOURCE
+LDFLAGS = 
 
-CFLAGS_NATIVE += -DMARCH_x86_64
+LD = gcc
+LDFLAGS = $(CFLAGS_NATIVE) -L$(DIR_LIB) 
+LIBRARIES = $(DIR_LIB)/libcitrusleaf.a -lssl -lpthread -lrt -lcrypto -lz
 
-INCLUDES = $(DIR_INCLUDE:%=-I%) 
-LDFLAGS += -L$(DEPTH)/client/c_clients/cl_c/target/Linux-x86_64/lib
-LDFLAGS += -L$(DEPTH)/client/c_clients/cl_c/target/Linux-x86_64/deps
-LIBRARIES += $(DEPTH)/client/c_clients/cl_c/target/Linux-x86_64/lib/libcitrusleaf.a
-LIBRARIES += $(DEPTH)/client/c_clients/cl_c/modules/msgpack/src/.libs/libmsgpackc.a
-LIBRARIES +=  -llua -lcrypto -lssl -lpthread -lrt 
+HEADERS = loop_udf.h 
+SOURCES = loop_udf.c 
+TARGET = loop_udf
 
 OBJECTS = $(SOURCES:%.c=$(DIR_OBJECT)/%.o)
 DEPENDENCIES = $(OBJECTS:%.o=%.d)
 
 .PHONY: all
-all: loop_sproc 
+all: $(TARGET)
 
 .PHONY: clean
 clean:
-	/bin/rm -f $(OBJECTS) $(DIR_TARGET)/$(TARGET) 
+	/bin/rm -f $(DIR_TARGET)/$(TARGET) $(DIR_OBJECT)/*.d $(DIR_OBJECT)/*.o
 
 .PHONY: depclean
 depclean: clean
-	/bin/rm -f $(DEPENDENCIES) 
+	/bin/rm -f $(DEPENDENCIES)
 
 .PHONY: $(TARGET)
 $(TARGET): $(OBJECTS)
-	$(CC) $(LDFLAGS) -o $(DIR_TARGET)/$(TARGET) $(OBJECTS) $(LIBRARIES) -Wl,-rpath,/usr/local/lib
+	$(LD) $(LDFLAGS) -o $(DIR_TARGET)/$(TARGET) $(OBJECTS) $(LIBRARIES)
+	chmod +x $(DIR_TARGET)/$(TARGET)
 
--include $(DEPENDENCIES) 
+-include $(DEPENDENCIES)
 
-$(DIR_OBJECT)/%.o: %.c
-	$(CC) $(CFLAGS_NATIVE) -MMD -o $@ -c $(INCLUDES) $<
+$(DIR_OBJECT)/%.o: %.c | prepare
+	$(CC) $(CFLAGS_NATIVE) -MMD -o $@ -c -I$(DIR_INCLUDE) $<
 
+prepare: 
+	mkdir -p $(DIR_OBJECT)

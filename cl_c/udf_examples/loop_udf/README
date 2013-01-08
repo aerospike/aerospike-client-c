@@ -1,0 +1,21 @@
+this is a multi-threaded program which will execute a registered store-procedure on a given record.
+
+There is 1 string parameter passed to the sproc, "read_or_write", which will be "1" 80% of the time
+if read/write ratio is set to 80.
+
+
+Other possible parameters to pass:
+Usage bin/loop_sproc:
+-h host [default 127.0.0.1] 
+-p port [default 3000]
+-n namespace [default test]
+-s set [default *all*]
+-f package_file [default lua_packages/sproc_unit_test.lua]
+-P package_name [default sproc_unit_test] 
+-x f_name [default sproc_loop_test] 
+-v is verbose
+-r read/write ratio (0-100) [default 80]
+-t thread_count [default 8]
+-i start_key [default 0]
+-i n_keys [default 1000]
+

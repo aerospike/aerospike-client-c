@@ -105,12 +105,11 @@ do_async_monte(cl_cluster *asc, int info1, int info2, const char *ns, const char
 //
 // cl_batch.c
 //
-
-int
-citrusleaf_batch_init();
-
 void
 citrusleaf_batch_shutdown();
+
+void
+citrusleaf_async_shutdown();
 
 int
 citrusleaf_info_host_limit(struct sockaddr_in *sa_in, char *names, char **values, int timeout_ms, bool send_asis, uint64_t max_response_length);

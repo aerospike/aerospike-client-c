@@ -176,6 +176,18 @@ citrusleaf_init(void);
 void
 citrusleaf_change_tend_period(int secs);
 
+//
+// Initialize async queue and async worker threads.
+//
+// size_limit: Maximum number of items allowed in queue. Puts are rejected when maximum is reached.
+//
+// num_receiver_threads: Number of worker threads to create.
+//     If running in multi-process mode from python or perl, num_receiver_threads should be 1.
+//     The maximum num_receiver_threads is 32.
+//
+// fail_cb_fn: Callback for failed transactions. Use null if callback is not desired.
+// success_cb_fn: Callback for successful transactions. Use null if callback is not desired.
+//
 int
 citrusleaf_async_init(int size_limit, int num_receiver_threads, cl_async_fail_cb fail_cb_fn, cl_async_success_cb success_cb_fn);
 
@@ -219,7 +231,7 @@ void citrusleaf_object_free(cl_object *o);
 // frees all the memory in a bin array that would be returned from get_all but not the bin array itself
 void citrusleaf_bins_free(cl_bin *bins, int n_bins);
 
-int citrusleaf_copy_bins(cl_bin **destbins, cl_bin *srcbins, int n_bins);
+int citrusleaf_copy_bins(cl_bin **destbins, const cl_bin *srcbins, int n_bins);
 
 
 // use:
@@ -394,15 +406,39 @@ citrusleaf_put_replace(cl_cluster *asc, const char *ns, const char *set, const c
 cl_rv
 citrusleaf_restore(cl_cluster *asc, const char *ns, const cf_digest *digest, const char *set, const cl_bin *values, int n_values, const cl_write_parameters *cl_w_p);
 
-//Async versions of the put calls
+//
+// Send asynchronous put request to server and return without waiting for response.
+// The response is available in callback specified in citrusleaf_async_init().
+//
 cl_rv
-citrusleaf_async_put(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, const cl_bin *bins, 
-						int n_bins, const cl_write_parameters *cl_w_p, uint64_t trid, void *udata);
+citrusleaf_async_put(cl_cluster *asc, const char *ns, const char *set, const cl_object *key,
+	const cl_bin *bins, int n_bins, const cl_write_parameters *cl_w_p, uint64_t trid, void *udata);
+
+//
+// Send asynchronous put request with digest key to server and return without waiting for response.
+// The response is available in callback specified in citrusleaf_async_init().
+//
+cl_rv
+citrusleaf_async_put_digest(cl_cluster *asc, const char *ns, const cf_digest *d, const char *set,
+	const cl_bin *bins, int n_bins, const cl_write_parameters *cl_w_p, uint64_t trid, void *udata);
+
+//
+// Send asynchronous put request to server and return without waiting for response.
+//
+cl_rv
+citrusleaf_async_put_forget(cl_cluster *asc, const char *ns, const char *set, const cl_object *key,
+	const cl_bin *bins, int n_bins, const cl_write_parameters *cl_w_p);
+
+//
+// Send asynchronous put request with digest key to server and return without waiting for response.
+//
+cl_rv
+citrusleaf_async_put_digest_forget(cl_cluster *asc, const char *ns, const cf_digest *d, const char *set,
+	const cl_bin *bins, int n_bins, const cl_write_parameters *cl_w_p);
 
 cl_rv
-citrusleaf_async_put_digest(cl_cluster *asc, const char *ns, const cf_digest *d, char *setname, 
-						const cl_bin *bins, int n_bins, const cl_write_parameters *cl_w_p, 
-						uint64_t trid, void *udata);
+citrusleaf_async_put_digest_xdr(cl_cluster *asc, const char *ns, const cf_digest *d, char *set,
+	const cl_bin *bins, int n_bins, const cl_write_parameters *cl_w_p, uint64_t trid, void *udata);
 
 cl_rvclient
 citrusleaf_check_cluster_health(cl_cluster *asc);
@@ -462,13 +498,18 @@ citrusleaf_scan_node (cl_cluster *asc, char *node_name, char *ns, char *set, cl_
 		citrusleaf_get_many_cb cb, void *udata, cl_scan_parameters *scan_p);
 
 //
+// Initialize batch queue and specified number of worker threads (Maximum thread count is 6).
+//
+cl_rv
+citrusleaf_batch_init(int n_threads);
+
+//
 // Get many digest
 // This version of the call acts exactly as the get digest call, but takes an array
 // of digests. Those digests will be retrieved with the same API conventions as the
 // previous ones.
 // To come: an array of keys, but it'll just be a wrapper on this.
 //
-
 cl_rv
 citrusleaf_get_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_bin *bins, int n_bins, bool get_key /*if true, retrieve key instead of simply digest*/, 
 	citrusleaf_get_many_cb cb, void *udata);

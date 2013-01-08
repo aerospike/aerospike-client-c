@@ -9,6 +9,7 @@
 
 #include <unistd.h>
 #include <stdlib.h>
+#include <string.h>
 #include <errno.h>
 #include <citrusleaf/citrusleaf.h>
 #include <citrusleaf/cl_cluster.h>
@@ -17,6 +18,8 @@
 #include <citrusleaf/cf_atomic.h>
 #include <citrusleaf/cf_socket.h>
 #include <citrusleaf/cf_shash.h>
+
+extern int g_init_pid;
 
 // Structure used to maintain information about the work submitted
 // for asynchronous command execution
@@ -32,7 +35,7 @@ static void* async_receiver_fn(void *thdata);
 
 //Global variables related to async work
 static cf_atomic32 	g_async_initialized = 0;
-cf_queue	   *g_cl_async_q;
+cf_queue	   *g_cl_async_q = 0;
 cf_queue	   *g_cl_workitems_freepool_q;
 static int		    g_async_q_szlimit = 0;
 static int		    g_async_nw_progress_timeout = 1000;
@@ -129,6 +132,13 @@ async_receiver_fn(void *thdata)
 #endif
 		//This call will block if there is no element in the queue
 		cf_queue_pop(q_to_use, &workitem, CF_QUEUE_FOREVER);
+
+		// Check for thread shutdown message.
+		if (workitem->fd == -1) {
+			// Exit thread. Workitem will be freed in citrusleaf_async_shutdown().
+			pthread_exit(NULL);
+		}
+
 		//TODO: What if the node gets dunned while this pop call is blocked ?
 #if ONEASYNCFD
 		//cf_debug("Elements remaining in this node's queue=%d, Hash table size=%d",
@@ -569,6 +579,19 @@ int citrusleaf_async_reinit(int size_limit, unsigned int num_receiver_threads)
 	return ( 0 );
 
 }
+
+//
+// Initialize async queue and async worker threads.
+//
+// size_limit: Maximum number of items allowed in queue. Puts are rejected when maximum is reached.
+//
+// num_receiver_threads: Number of worker threads to create.
+//     If running in multi-process mode from python or perl, num_receiver_threads should be 1.
+//     The maximum num_receiver_threads is 32.
+//
+// fail_cb_fn: Callback for failed transactions. Use null if callback is not desired.
+// success_cb_fn: Callback for successful transactions. Use null if callback is not desired.
+//
 int citrusleaf_async_init(int size_limit, int num_receiver_threads, cl_async_fail_cb fail_cb_fn, cl_async_success_cb success_cb_fn)
 {
 	int i, num_threads;
@@ -625,3 +648,39 @@ int citrusleaf_async_init(int size_limit, int num_receiver_threads, cl_async_fai
 	return(0);	
 }
 
+//
+// Close async worker threads gracefully.
+//
+void
+citrusleaf_async_shutdown()
+{
+	if (g_cl_async_q == 0)
+		return;
+
+	/*
+	 * If a process is forked, the threads in it do not get spawned in the child process.
+	 * In citrusleaf_init(), we are remembering the process id(g_init_pid) of the process who spawned the
+	 * background threads. If the current process is not the process who spawned the background threads
+	 * then it cannot call pthread_join() on the threads which does not exist in this process.
+	 */
+	if(g_init_pid == getpid()) {
+		// Send shutdown message to each worker thread.
+		cl_async_work *workitem = malloc(sizeof(cl_async_work));
+		memset(workitem, 0, sizeof(cl_async_work));
+		workitem->fd = -1;
+
+		uint i;
+
+		for (i = 0; i < g_async_num_threads; i++) {
+			cf_queue_push(g_cl_async_q, &workitem);
+		}
+
+		for (i = 0; i < g_async_num_threads; i++) {
+			pthread_join(g_async_reciever[i], NULL);
+		}
+
+		free(workitem);
+		cf_queue_destroy(g_cl_async_q);
+		g_cl_async_q = 0;
+	}
+}

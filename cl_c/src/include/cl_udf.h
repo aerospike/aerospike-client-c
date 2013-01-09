@@ -1,5 +1,5 @@
 /*
- *      arglist.h
+ *      cl_udf.h
  *
  * Copyright 2008-2013 by Aerospike.
  *
@@ -25,32 +25,18 @@
 
 #pragma once
 
-#include "as_arraylist.h"
-#include "as_integer.h"
-#include "as_list.h"
-#include "as_map.h"
-#include "as_string.h"
+#include "cluster.h"
+#include "as_result.h"
+#include "cl_arglist.h"
 
 /******************************************************************************
- * INLINE FUNCTIONS
+ * FUNCTIONS
  ******************************************************************************/
 
-static inline as_list * as_arglist_new(uint32_t size) {
-    return as_arraylist_new(size, 1);
-}
+cl_rv citrusleaf_udf_record_apply(cl_cluster *, const char *, const char *, const cl_object *, const char *, const char *, as_list *, int, as_result *);
 
-static inline int as_list_add_string(as_list * arglist, const char * s) {
-    return as_list_append(arglist, (as_val *) as_string_new(cf_strdup(s)));
-}
-
-static inline int as_list_add_integer(as_list * arglist, uint64_t i) {
-    return as_list_append(arglist, (as_val *) as_integer_new(i));
-}
-
-static inline int as_list_add_list(as_list * arglist, as_list * l) {
-    return as_list_append(arglist, (as_val *) l);
-}
-
-static inline int as_list_add_map(as_list * arglist, as_map * m) {
-    return as_list_append(arglist, (as_val *) m);
-}
+cl_rv citrusleaf_udf_list(cl_cluster *, char ***, int *, char **);
+cl_rv citrusleaf_udf_get(cl_cluster *, const char *, char **, int *, char **);
+cl_rv citrusleaf_udf_get_with_gen(cl_cluster *, const char *, char **, int *, char **, char **) ;
+cl_rv citrusleaf_udf_put(cl_cluster *, const char *, const char *, char **);
+cl_rv citrusleaf_udf_remove(cl_cluster *, const char *, char **);

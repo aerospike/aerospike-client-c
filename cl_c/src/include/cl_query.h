@@ -1,5 +1,5 @@
 /*
- *      query.h
+ *      cl_query.h
  *
  * Copyright Aerospike, 2013
  *
@@ -25,8 +25,8 @@
 
 #pragma once
 
-#include "types.h"
-#include "sindex.h"
+#include "cl_types.h"
+#include "cl_sindex.h"
 
 // Range indicates start/end condition for the columns of the indexes.
 // Example1: (index on "last_activity" bin) where last_activity < start_time and last_activity > end_time

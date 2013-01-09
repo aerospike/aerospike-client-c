@@ -1,5 +1,5 @@
 /*
- *      async.h
+ *      cl_arglist.h
  *
  * Copyright 2008-2013 by Aerospike.
  *
@@ -25,20 +25,32 @@
 
 #pragma once
 
-#include "types.h"
+#include "as_arraylist.h"
+#include "as_integer.h"
+#include "as_list.h"
+#include "as_map.h"
+#include "as_string.h"
 
 /******************************************************************************
- * TYPES
+ * INLINE FUNCTIONS
  ******************************************************************************/
 
-typedef void (*cl_async_fail_cb) (void *udata, int rv, uint64_t);
-typedef void (*cl_async_success_cb) (void *udata, int rv, uint64_t);
+static inline as_list * as_arglist_new(uint32_t size) {
+    return as_arraylist_new(size, 1);
+}
 
-/******************************************************************************
- * FUNCTIONS
- ******************************************************************************/
+static inline int as_list_add_string(as_list * arglist, const char * s) {
+    return as_list_append(arglist, (as_val *) as_string_new(cf_strdup(s)));
+}
 
-int citrusleaf_async_init(int size_limit, int num_receiver_threads, cl_async_fail_cb fail_cb_fn, cl_async_success_cb success_cb_fn);
-int citrusleaf_async_reinit(int size_limit, unsigned int num_receiver_threads);
-void citrusleaf_async_getstats(uint64_t *retries, uint64_t *dropouts, int *workitems);
-void citrusleaf_async_set_nw_timeout(int nw_timeout);
+static inline int as_list_add_integer(as_list * arglist, uint64_t i) {
+    return as_list_append(arglist, (as_val *) as_integer_new(i));
+}
+
+static inline int as_list_add_list(as_list * arglist, as_list * l) {
+    return as_list_append(arglist, (as_val *) l);
+}
+
+static inline int as_list_add_map(as_list * arglist, as_map * m) {
+    return as_list_append(arglist, (as_val *) m);
+}

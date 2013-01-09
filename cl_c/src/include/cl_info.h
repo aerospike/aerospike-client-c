@@ -1,5 +1,5 @@
 /*
- *      info.h
+ *      cl_info.h
  *
  * Copyright 2008-2013 by Aerospike.
  *
@@ -24,7 +24,7 @@
  */
 #pragma once
 
-#include "types.h"
+#include "cl_types.h"
 #include "cluster.h"
 #include <sys/socket.h> // socket calls
 #include <arpa/inet.h> // inet_ntop

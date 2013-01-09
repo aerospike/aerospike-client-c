@@ -1,5 +1,5 @@
 /*
- *      sindex.h
+ *      cl_async.h
  *
  * Copyright 2008-2013 by Aerospike.
  *
@@ -25,25 +25,20 @@
 
 #pragma once
 
-#include "types.h"
-#include "cluster.h"
+#include "cl_types.h"
 
-// 
-// Query related structures:
-#define CL_MAX_SINDEX_NAME_SIZE 128
-#define CL_MAX_SETNAME_SIZE     32  
-// indicate metadata needed to create a secondary index
-typedef struct sindex_metadata_t {
-    char    iname[CL_MAX_SINDEX_NAME_SIZE];
-    char    binname[CL_BINNAME_SIZE];
-    char    type[32];
-    uint8_t   isuniq;
-    uint8_t   istime;
-} sindex_metadata_t;
+/******************************************************************************
+ * TYPES
+ ******************************************************************************/
 
+typedef void (*cl_async_fail_cb) (void *udata, int rv, uint64_t);
+typedef void (*cl_async_success_cb) (void *udata, int rv, uint64_t);
 
-// Create and Delete Secondary indexes for the entire cluster
-cl_rv citrusleaf_secondary_index_create(cl_cluster *asc, const char *ns, 
-        const char *set, struct sindex_metadata_t *simd);
-cl_rv citrusleaf_secondary_index_delete(cl_cluster *asc, const char *ns, 
-        const char *set, const char *indexname);
+/******************************************************************************
+ * FUNCTIONS
+ ******************************************************************************/
+
+int citrusleaf_async_init(int size_limit, int num_receiver_threads, cl_async_fail_cb fail_cb_fn, cl_async_success_cb success_cb_fn);
+int citrusleaf_async_reinit(int size_limit, unsigned int num_receiver_threads);
+void citrusleaf_async_getstats(uint64_t *retries, uint64_t *dropouts, int *workitems);
+void citrusleaf_async_set_nw_timeout(int nw_timeout);

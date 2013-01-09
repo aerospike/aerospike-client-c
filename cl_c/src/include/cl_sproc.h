@@ -1,5 +1,5 @@
 /*
- *      sproc.h
+ *      cl_sproc.h
  *
  * Copyright 2008-2013 by Aerospike.
  *
@@ -24,9 +24,9 @@
  */
 #pragma once
 
-#include "types.h"
+#include "cl_types.h"
 #include "cluster.h"
-#include "scan.h"
+#include "cl_scan.h"
 
 /******************************************************************************
  * TYPES

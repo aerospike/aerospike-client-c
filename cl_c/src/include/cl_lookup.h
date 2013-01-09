@@ -1,5 +1,5 @@
 /*
- *      partition.h
+ *      cl_lookup.h
  *
  * Copyright 2008-2013 by Aerospike.
  *
@@ -25,14 +25,15 @@
 
 #pragma once
 
-#include "types.h"
+#include "cl_types.h"
 #include "cluster.h"
 
 /******************************************************************************
  * FUNCTIONS
  ******************************************************************************/
 
-extern void cl_partition_table_remove_node( cl_cluster * asc, cl_cluster_node * node );
-extern void cl_partition_table_destroy_all(cl_cluster * asc);
-extern void cl_partition_table_set( cl_cluster * asc, cl_cluster_node * node, char *ns, cl_partition_id pid, bool write);
-extern cl_cluster_node *cl_partition_table_get( cl_cluster * asc, char *ns, cl_partition_id pid, bool write);
+/**
+ * Do a lookup with this name and port, and add the sockaddr to the
+ * vector using the unique lookup
+ */
+int cl_lookup(cl_cluster *asc, char *hostname, short port, cf_vector *sockaddr_in_v);

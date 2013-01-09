@@ -1,5 +1,5 @@
 /*
- *      types.h
+ *      cl_types.h
  *
  * Copyright 2008-2013 by Aerospike.
  *
@@ -25,7 +25,7 @@
 
 #pragma once
 
-#include "object.h"
+#include "cl_object.h"
 
 #include <inttypes.h>
 #include <stdbool.h>

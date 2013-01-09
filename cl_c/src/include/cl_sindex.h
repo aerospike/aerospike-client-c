@@ -1,5 +1,5 @@
 /*
- *      udf.h
+ *      cl_sindex.h
  *
  * Copyright 2008-2013 by Aerospike.
  *
@@ -25,18 +25,25 @@
 
 #pragma once
 
+#include "cl_types.h"
 #include "cluster.h"
-#include "as_result.h"
-#include "arglist.h"
 
-/******************************************************************************
- * FUNCTIONS
- ******************************************************************************/
+// 
+// Query related structures:
+#define CL_MAX_SINDEX_NAME_SIZE 128
+#define CL_MAX_SETNAME_SIZE     32  
+// indicate metadata needed to create a secondary index
+typedef struct sindex_metadata_t {
+    char    iname[CL_MAX_SINDEX_NAME_SIZE];
+    char    binname[CL_BINNAME_SIZE];
+    char    type[32];
+    uint8_t   isuniq;
+    uint8_t   istime;
+} sindex_metadata_t;
 
-cl_rv citrusleaf_udf_record_apply(cl_cluster *, const char *, const char *, const cl_object *, const char *, const char *, as_list *, int, as_result *);
 
-cl_rv citrusleaf_udf_list(cl_cluster *, char ***, int *, char **);
-cl_rv citrusleaf_udf_get(cl_cluster *, const char *, char **, int *, char **);
-cl_rv citrusleaf_udf_get_with_gen(cl_cluster *, const char *, char **, int *, char **, char **) ;
-cl_rv citrusleaf_udf_put(cl_cluster *, const char *, const char *, char **);
-cl_rv citrusleaf_udf_remove(cl_cluster *, const char *, char **);
+// Create and Delete Secondary indexes for the entire cluster
+cl_rv citrusleaf_secondary_index_create(cl_cluster *asc, const char *ns, 
+        const char *set, struct sindex_metadata_t *simd);
+cl_rv citrusleaf_secondary_index_delete(cl_cluster *asc, const char *ns, 
+        const char *set, const char *indexname);

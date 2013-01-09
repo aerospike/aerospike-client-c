@@ -1,5 +1,5 @@
 /*
- *      scan.h
+ *      cl_scan.h
  *
  * Copyright 2008-2013 by Aerospike.
  *
@@ -25,7 +25,7 @@
 
 #pragma once
 
-#include "types.h"
+#include "cl_types.h"
 #include "cluster.h"
 
 /******************************************************************************

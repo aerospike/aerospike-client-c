@@ -1,5 +1,5 @@
 /*
- *      mapreduce.h
+ *      cl_mapreduce.h
  *
  * Copyright 2008-2013 by Aerospike.
  *
@@ -25,8 +25,8 @@
 
 #pragma once
 
-#include "types.h"
-#include "sproc.h"
+#include "cl_types.h"
+#include "cl_sproc.h"
 
 typedef struct cl_mr_job {
     char        *package;

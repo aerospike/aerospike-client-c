@@ -1,5 +1,5 @@
 /*
- *      kv.h
+ *      cl_kv.h
  *
  * Copyright 2008-2013 by Aerospike.
  *
@@ -25,8 +25,8 @@
 
 #pragma once
 
-#include "types.h"
-#include "cluster.h"
+#include "cl_types.h"
+#include "cl_cluster.h"
 
 /******************************************************************************
  * FUNCTIONS

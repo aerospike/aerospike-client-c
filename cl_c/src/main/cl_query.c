@@ -9,11 +9,12 @@
 #include "citrusleaf.h"
 #include "cl_cluster.h"
 #include "citrusleaf-internal.h"
-#include "query.h"
+#include "cl_query.h"
 
 #include <citrusleaf/cf_atomic.h>
 #include <citrusleaf/cf_socket.h>
 #include <citrusleaf/cf_vector.h>
+#include <citrusleaf/cf_random.h>
 #include <citrusleaf/proto.h>
 
 #include <sys/types.h>

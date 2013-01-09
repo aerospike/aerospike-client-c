@@ -5,7 +5,7 @@
 DIR_INCLUDE = ../../../target/Linux-x86_64/include
 DIR_LIB = ../../../target/Linux-x86_64/lib
 DIR_OBJECT = ../obj
-DIR_TARGET = ../bin
+DIR_TARGET = ..
 
 # common variables. Note that march=native first supported in GCC 4.2; 
 # users of older version should pick a more appropriate value
@@ -18,10 +18,9 @@ LD = gcc
 LDFLAGS = $(CFLAGS_NATIVE) -L$(DIR_LIB) 
 LIBRARIES = $(DIR_LIB)/libcitrusleaf.a -lssl -lpthread -lrt -lcrypto -lz
 
-
-HEADERS = 
-SOURCES = exists_example.c
-TARGET = exists_example
+HEADERS = loop_udf.h 
+SOURCES = loop_udf.c 
+TARGET = loop_udf
 
 OBJECTS = $(SOURCES:%.c=$(DIR_OBJECT)/%.o)
 DEPENDENCIES = $(OBJECTS:%.o=%.d)
@@ -49,4 +48,3 @@ $(DIR_OBJECT)/%.o: %.c | prepare
 
 prepare: 
 	mkdir -p $(DIR_OBJECT)
-	mkdir -p $(DIR_TARGET)

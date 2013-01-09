@@ -1,12 +1,16 @@
 include project/build.makefile
 
+ifndef MSGPACK_PATH
+MSGPACK_PATH = modules/msgpack
+endif
+
 CFLAGS = -std=gnu99 -g -O3 -fno-common -fno-strict-aliasing -rdynamic -fPIC -Wall $(AS_CFLAGS) -DMARCH_$(ARCH) -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_GNU_SOURCE
 LDFLAGS = 
 
 MODULES = common mod-lua
 
 INC_PATH += modules/common/$(TARGET_INCL)
-INC_PATH += modules/msgpack/src
+INC_PATH += $(MSGPACK_PATH)/src
 INC_PATH += modules/mod-lua/src/include
 
 ifeq ($(MEM_COUNT),1)
@@ -26,11 +30,10 @@ CITRUSLEAF += cl_lookup.o
 CITRUSLEAF += cl_partition.o
 CITRUSLEAF += cl_query.o
 CITRUSLEAF += cl_scan.o
-# CITRUSLEAF += cl_sproc.o
 CITRUSLEAF += cl_udf.o
 CITRUSLEAF += proto.o
 
-OBJECTS = $(TARGET_OBJ)/*.o modules/mod-lua/$(TARGET_OBJ)/*.o modules/common/$(TARGET_OBJ)/client/*.o modules/common/$(TARGET_OBJ)/shared/*.o modules/msgpack/src/.libs/*.o
+OBJECTS = $(TARGET_OBJ)/*.o modules/mod-lua/$(TARGET_OBJ)/*.o modules/common/$(TARGET_OBJ)/client/*.o modules/common/$(TARGET_OBJ)/shared/*.o $(MSGPACK_PATH)/src/.libs/*.o
 
 ##
 ## MAIN
@@ -82,33 +85,37 @@ package: | libcitrusleaf.a libcitrusleaf.so prepare
 ##
 
 modules/msgpack/Makefile: 
-	cd modules/msgpack && ./configure
+	cd $(MSGPACK_PATH) && ./configure
 
 msgpack: modules/msgpack/Makefile
-	make -C modules/msgpack all CFLAGS="-fPIC"
+	make -C $(MSGPACK_PATH) all CFLAGS="-fPIC"
 
 mod-lua: 
-	make -C modules/mod-lua all MEM_COUNT=$(MEM_COUNT) 
+	make -C modules/mod-lua libtypes.o MEM_COUNT=$(MEM_COUNT) 
 
 common: 
-	make -C modules/common all MEM_COUNT=$(MEM_COUNT) 
+	make -C modules/common client_only MEM_COUNT=$(MEM_COUNT) 
 
 ##
 ## TEST
 ##
+check_jansson:
+ifndef JANSSON_PATH
+	$(error JANSSON_PATH is not set. Please download, build and set JANSSON_PATH)
+endif
 
-test_flags = -L/usr/local/lib $(TARGET_LIB)/libcitrusleaf.a -Wl,-l,:liblua.so -Wl,-l,:libjansson.a -lcrypto -lssl -Wl,-l,:libmsgpack.a -lpthread -lrt -Wl,-rpath,/usr/local/lib -Wl,-rpath,/opt/citrusleaf/lib
+test_flags = $(TARGET_LIB)/libcitrusleaf.a -L$(JANSSON_PATH)/src/.libs -Wl,-l,:libjansson.a -lcrypto -lssl -L$(MSGPACK_PATH)/src/.libs -Wl,-l,:libmsgpack.a -lpthread -lrt 
 
-test/%: $(SOURCE_TEST)/%.c | $(TARGET_BIN)
-	$(call executable, $(TARGET_INCL), $(empty), $(empty) , $(empty), $(test_flags) )
+test/%:  $(SOURCE_TEST)/%.c | $(TARGET_BIN) check_jansson
+	$(call executable, $(TARGET_INCL) $(JANSSON_PATH)/src, $(empty), $(empty) , $(empty), $(test_flags) )
 
-test/get: $(SOURCE_TEST)/get.c $(SOURCE_TEST)/as_json.c | $(TARGET_BIN)
-	$(call executable, $(TARGET_INCL), $(empty), $(empty), $(empty), $(test_flags))
+test/get:  $(SOURCE_TEST)/get.c $(SOURCE_TEST)/as_json.c | $(TARGET_BIN) check_jansson
+	$(call executable, $(TARGET_INCL) $(JANSSON_PATH)/src, $(empty), $(empty), $(empty), $(test_flags))
 
-test/put: $(SOURCE_TEST)/put.c $(SOURCE_TEST)/as_json.c | $(TARGET_BIN)
-	$(call executable, $(TARGET_INCL), $(empty), $(empty), $(empty), $(test_flags))
+test/put:  $(SOURCE_TEST)/put.c $(SOURCE_TEST)/as_json.c | $(TARGET_BIN) check_jansson
+	$(call executable, $(TARGET_INCL) $(JANSSON_PATH)/src, $(empty), $(empty), $(empty), $(test_flags))
 
-test/udf-record-apply: $(SOURCE_TEST)/udf-record-apply.c $(SOURCE_TEST)/as_json.c | $(TARGET_BIN)
-	$(call executable, $(TARGET_INCL), $(empty), $(empty), $(empty), $(test_flags))
+test/udf-record-apply:  $(SOURCE_TEST)/udf-record-apply.c $(SOURCE_TEST)/as_json.c | $(TARGET_BIN) check_jansson
+	$(call executable, $(TARGET_INCL) $(JANSSON_PATH)/src, $(empty), $(empty), $(empty), $(test_flags))
 
 test: test/quick test/get test/put test/remove test/exists test/udf test/udf-list test/udf-get test/udf-put test/udf-remove test/udf-record-apply

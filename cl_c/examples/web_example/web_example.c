@@ -10,7 +10,6 @@ static const char *bin1     = "email";
 static const char *bin2     = "hits";
 static const char *bin3     = "blob";
 static const char *host     = "192.168.4.22";
-static const char *badhost  = "192.168.5.2"; // this one doesn't exist
 static const char *blobData = "foobar"; 
 static const char *blobData2 = "barfoo";
 static uint64_t    intData  = 314;
@@ -404,6 +403,8 @@ int test_operate(cl_cluster *clc)
 	cl_object key;
 	cl_operation ops[3];
 	cl_rv rv;
+	int replace=0;
+	uint32_t gen=0;
 	
 	citrusleaf_object_init_str(&key, myKey);
 	strcpy(&ops[0].bin.bin_name[0],bin1);
@@ -414,12 +415,12 @@ int test_operate(cl_cluster *clc)
 	citrusleaf_object_init_blob(&ops[2].bin.object, blobData2, strlen(blobData2)+1);
 	
 	ops[0].op = CL_OP_READ;
-	ops[1].op = CL_OP_ADD;
+	ops[1].op = CL_OP_INCR;
 	ops[2].op = CL_OP_WRITE;
 	
 	printf(" OPERATE!!!\n");
 	
-	rv = citrusleaf_operate(clc, ns, myset, &key, &ops[0], 1, NULL);
+	rv = citrusleaf_operate(clc, ns, myset, &key, &ops[0], 1, NULL, replace, &gen);
 	if( rv != CITRUSLEAF_OK ){
 		printf(" TEST FAILED - go-right case of Operate is failing with %d\n", rv);
 		return -1;
@@ -442,7 +443,8 @@ int test_operate(cl_cluster *clc)
 	citrusleaf_object_init(&ops[1].bin.object);
 	citrusleaf_object_init(&ops[2].bin.object);
 
-	rv = citrusleaf_operate(clc, ns, myset, &key, &ops[0], 3, NULL );
+	replace = 0; gen = 0;
+	rv = citrusleaf_operate(clc, ns, myset, &key, &ops[0], 3, NULL, replace, &gen );
 	if( rv != CITRUSLEAF_OK ){
 		printf(" TEST FAILED - go-right case of Operate is failing with %d\n", rv);
 		return -1;
@@ -479,7 +481,7 @@ int test_operate(cl_cluster *clc)
 
 
 int count = 0;
-int batch_cb(char *ns, cl_object *key, cf_digest *ked, uint32_t generation, uint32_t record_ttl, cl_bin *bins, int n_bins, 
+int batch_cb(char *ns, cf_digest *ked, char *set, uint32_t generation, uint32_t record_ttl, cl_bin *bins, int n_bins, 
 	bool is_last, void *udata)
 {
 	printf(" batch cb - number is %d\n", count++);
@@ -488,12 +490,10 @@ int batch_cb(char *ns, cl_object *key, cf_digest *ked, uint32_t generation, uint
 		count=0;
 	}
 
-	printf(" batch cb - we've got namespace %s, key %p, digest %p, generation %d, ttl %d, bins %p, n_bins %d, is last %d, udata %s\n", 
-		ns, key, ked, generation, record_ttl, bins, n_bins, is_last, (char *)udata);
+	printf(" batch cb - we've got namespace %s, digest %p, generation %d, ttl %d, bins %p, n_bins %d, is last %d, udata %s\n", 
+		ns, ked, generation, record_ttl, bins, n_bins, is_last, (char *)udata);
 	
 	
-	// XXX what happens with the return value here?
-
 	return 1;
 }
 

@@ -25,21 +25,17 @@
 
 #pragma once
 
-#include "types.h"
-#include "async.h"
+#include "cl_types.h"
+#include "cl_async.h"
 #include "cluster.h"
-#include "object.h"
-#include "write.h"
-#include "info.h"
-#include "kv.h"
-#include "lookup.h"
-// #include "mapreduce.h"
-#include "object.h"
-#include "partition.h"
-// #include "query.h"
-#include "scan.h"
-// #include "sindex.h"
-// #include "sproc.h"
+#include "cl_object.h"
+#include "cl_write.h"
+#include "cl_info.h"
+#include "cl_kv.h"
+#include "cl_lookup.h"
+#include "cl_object.h"
+#include "cl_partition.h"
+#include "cl_scan.h"
 
 /******************************************************************************
  * FUNCTIONS

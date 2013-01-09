@@ -5,8 +5,8 @@
  ******************************************************************************/
 
 #include "citrusleaf-internal.h"
-#include "udf.h"
-#include "write.h"
+#include "cl_udf.h"
+#include "cl_write.h"
 
 #include <as_msgpack.h>
 #include <citrusleaf/cf_b64.h>

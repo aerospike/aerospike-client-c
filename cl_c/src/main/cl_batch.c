@@ -10,7 +10,7 @@
 #include "citrusleaf.h"
 #include "cl_cluster.h"
 #include "citrusleaf-internal.h"
-#include "types.h"
+#include "cl_types.h"
 
 #include <citrusleaf/cf_atomic.h>
 #include <citrusleaf/cf_socket.h>

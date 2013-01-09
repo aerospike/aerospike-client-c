@@ -8,9 +8,9 @@
 
 #include "citrusleaf.h"
 #include "cluster.h"
-#include "udf.h"
-#include "arglist.h"
-#include "scan.h"
+#include "cl_udf.h"
+#include "cl_arglist.h"
+#include "cl_scan.h"
 
 #include <as_buffer.h>
 #include <as_string.h>

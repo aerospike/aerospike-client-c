@@ -56,29 +56,17 @@ prepare:
 	cp modules/common/$(TARGET_INCL)/*.h $(TARGET_INCL)/.
 	cp modules/common/$(TARGET_INCL)/citrusleaf/*.h $(TARGET_INCL)/citrusleaf/.
 
-install: | libcitrusleaf.a libcitrusleaf.so prepare
-	sudo cp $(TARGET_LIB)/* /usr/local/lib/.
-
-package: | libcitrusleaf.a libcitrusleaf.so prepare
-	mkdir -p $(TARGET_BASE)/package/opt/citrusleaf
-	mkdir -p $(TARGET_BASE)/package/opt/citrusleaf/include
-	mkdir -p $(TARGET_BASE)/package/opt/citrusleaf/lib
-	mkdir -p $(TARGET_BASE)/package/opt/citrusleaf/bin
-	mkdir -p $(TARGET_BASE)/package/opt/citrusleaf/bin/commands
-	cp -R $(TARGET_INCL)/* $(TARGET_BASE)/package/opt/citrusleaf/include/.
-	cp $(TARGET_LIB)/libcitrusleaf.a $(TARGET_BASE)/package/opt/citrusleaf/lib/.
-	cp $(TARGET_LIB)/libcitrusleaf.so $(TARGET_BASE)/package/opt/citrusleaf/lib/.
-	cp $(SOURCE_TEST)/aerospike $(TARGET_BASE)/package/opt/citrusleaf/bin/.
-	cp $(TARGET_BIN)/test/exists $(TARGET_BASE)/package/opt/citrusleaf/bin/commands/.
-	cp $(TARGET_BIN)/test/get $(TARGET_BASE)/package/opt/citrusleaf/bin/commands/.
-	cp $(TARGET_BIN)/test/put $(TARGET_BASE)/package/opt/citrusleaf/bin/commands/.
-	cp $(TARGET_BIN)/test/remove $(TARGET_BASE)/package/opt/citrusleaf/bin/commands/.
-	cp $(TARGET_BIN)/test/udf-get $(TARGET_BASE)/package/opt/citrusleaf/bin/commands/.
-	cp $(TARGET_BIN)/test/udf-list $(TARGET_BASE)/package/opt/citrusleaf/bin/commands/.
-	cp $(TARGET_BIN)/test/udf-put $(TARGET_BASE)/package/opt/citrusleaf/bin/commands/.
-	cp $(TARGET_BIN)/test/udf-record-apply $(TARGET_BASE)/package/opt/citrusleaf/bin/commands/.
-	cp $(TARGET_BIN)/test/udf-remove $(TARGET_BASE)/package/opt/citrusleaf/bin/commands/.
-	cd $(TARGET_BASE)/package && tar -cvzf aerospike-3.0-beta-1.tgz opt
+install: | test libcitrusleaf.a libcitrusleaf.so prepare
+	cp $(SOURCE_TEST)/aerospike /opt/citrusleaf/bin/.
+	cp $(TARGET_BIN)/test/exists /opt/citrusleaf/bin/commands/.
+	cp $(TARGET_BIN)/test/get /opt/citrusleaf/bin/commands/.
+	cp $(TARGET_BIN)/test/put /opt/citrusleaf/bin/commands/.
+	cp $(TARGET_BIN)/test/remove /opt/citrusleaf/bin/commands/.
+	cp $(TARGET_BIN)/test/udf-get /opt/citrusleaf/bin/commands/.
+	cp $(TARGET_BIN)/test/udf-list /opt/citrusleaf/bin/commands/.
+	cp $(TARGET_BIN)/test/udf-put /opt/citrusleaf/bin/commands/.
+	cp $(TARGET_BIN)/test/udf-record-apply /opt/citrusleaf/bin/commands/.
+	cp $(TARGET_BIN)/test/udf-remove /opt/citrusleaf/bin/commands/.
 	
 ##
 ## SUBMODULES

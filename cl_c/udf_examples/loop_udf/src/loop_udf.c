@@ -21,7 +21,7 @@
 #include <citrusleaf/cf_atomic.h>
 #include <citrusleaf/cf_hist.h>
 #include <citrusleaf/citrusleaf.h>
-#include <citrusleaf/udf.h>
+#include <citrusleaf/cl_udf.h>
 
 
 typedef struct config_s {

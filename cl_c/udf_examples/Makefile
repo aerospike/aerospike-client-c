@@ -1,4 +1,3 @@
-# entire sproc_tests project
 #
 
 .PHONY: default
@@ -7,7 +6,6 @@ default: all
 
 
 %:
-	$(MAKE) -C rec_sproc $@
-	$(MAKE) -C loop_sproc $@
-	$(MAKE) -C ad_sproc $@
-	$(MAKE) -C scan_sproc $@
+#	$(MAKE) -C rec_udf $@
+	$(MAKE) -C loop_udf $@
+

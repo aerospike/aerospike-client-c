@@ -58,7 +58,7 @@ prepare:
 
 install: | test libcitrusleaf.a libcitrusleaf.so prepare
 	mkdir -p /opt/citrusleaf/bin/commands
-	cp $(SOURCE_TEST)/aerospike /opt/citrusleaf/bin/.
+	cp $(SOURCE_TEST)/ascli.py /opt/citrusleaf/bin/ascli
 	cp $(TARGET_BIN)/test/exists /opt/citrusleaf/bin/commands/.
 	cp $(TARGET_BIN)/test/get /opt/citrusleaf/bin/commands/.
 	cp $(TARGET_BIN)/test/put /opt/citrusleaf/bin/commands/.
@@ -68,7 +68,7 @@ install: | test libcitrusleaf.a libcitrusleaf.so prepare
 	cp $(TARGET_BIN)/test/udf-put /opt/citrusleaf/bin/commands/.
 	cp $(TARGET_BIN)/test/udf-record-apply /opt/citrusleaf/bin/commands/.
 	cp $(TARGET_BIN)/test/udf-remove /opt/citrusleaf/bin/commands/.
-	ln -s /opt/citrusleaf/bin/aerospike /usr/bin/aerospike 
+	ln -s /opt/citrusleaf/bin/ascli /usr/bin/ascli 
 
 gendoc:
 	cd doc; make html

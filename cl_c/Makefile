@@ -57,6 +57,7 @@ prepare:
 	cp modules/common/$(TARGET_INCL)/citrusleaf/*.h $(TARGET_INCL)/citrusleaf/.
 
 install: | test libcitrusleaf.a libcitrusleaf.so prepare
+	mkdir -p /opt/citrusleaf/bin/commands
 	cp $(SOURCE_TEST)/aerospike /opt/citrusleaf/bin/.
 	cp $(TARGET_BIN)/test/exists /opt/citrusleaf/bin/commands/.
 	cp $(TARGET_BIN)/test/get /opt/citrusleaf/bin/commands/.
@@ -67,6 +68,10 @@ install: | test libcitrusleaf.a libcitrusleaf.so prepare
 	cp $(TARGET_BIN)/test/udf-put /opt/citrusleaf/bin/commands/.
 	cp $(TARGET_BIN)/test/udf-record-apply /opt/citrusleaf/bin/commands/.
 	cp $(TARGET_BIN)/test/udf-remove /opt/citrusleaf/bin/commands/.
+	ln -s /opt/citrusleaf/bin/aerospike /usr/bin/aerospike 
+
+gendoc:
+	cd doc; make html
 	
 ##
 ## SUBMODULES

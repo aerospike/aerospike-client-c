@@ -1,12 +1,16 @@
 # Aerospike C-client API
 
 C client API for the Aerospike Database.
+In this README, enclosed you will find information on:
+(1) Dependencies
+(2) Build
+(3) Tests (KV, UDF)
+(4) Examples
+(5) API Documentation
 
-## Dependencies
+(1) Dependencies
 
 The following are prerequisites required before you can successfully build a C client application. 
-
-### Linux Dependencies
 
 #### Redhat Dependencies
 
@@ -14,11 +18,10 @@ Redhat based Linux Distributions (Redhat, Fedora, CentOS, SUS, etc.)require the 
 
 * `libc6-dev`
 * `libssl-dev`
-* `lua-devel.x86_64` - should install development resources for `lua-5.1.4` 
 
 If `yum` is your package manager, then you should be able to run the following command:
 
-    $ sudo yum install openssl-devel glibc-devel lua-devel.x86_64
+    $ sudo yum install openssl-devel glibc-devel 
 
 #### Debian Dependencies
 
@@ -26,11 +29,10 @@ Debian based Linux Distributions (Debian, Ubuntu, etc.) require the following pa
 
 * `libc6-dev`
 * `libssl-dev`
-* `liblua5.1-dev` - should install development resources for `lua-5.1.4` 
 
 If `apt-get` is your package manager, then you should be able to run the following command:
 
-	$ sudo apt-get install libc6-dev libssl-dev liblua5.1-dev
+	$ sudo apt-get install libc6-dev libssl-dev 
 
 ***NOTE:*** Provided package name for debian apt-get
 
@@ -38,10 +40,22 @@ If `apt-get` is your package manager, then you should be able to run the followi
 
 #### msgpack-0.5.7
 
-Aerospike utilizes msgpack for serializing some data. We recommend you follow the instructions provided on the msgpacks's [QuickStart for C Language](http://wiki.msgpack.org/display/MSGPACK/QuickStart+for+C+Language).
+Aerospike utilizes msgpack for serializing some data. http://msgpack.org/ (Currently latest, http://msgpack.org/releases/cpp/msgpack-0.5.7.tar.gz)
 
-## Build
+Once downloaded and unpacked, set the environment variable MSGPACK_PATH to point to the path and Aerospike build will pick it up:
+export MSGPACK_PATH=~/msgpack-0.5.7
+ 
+#### jansson
 
+Aerospike utilizes jannson for some of the test utility.
+
+Once downloaded and unpacked, set the environment variable JANSSON_PATH to point to the path and Aerospike build will pick it up:
+export JANSSON_PATH=~/jansson-2.4
+
+(2) Build
+
+Make sure the two dependency environment variables MSGPACK_PATH & JANSSON_PATH are set:
+ 
 To build libraries:
 
 	$ make all
@@ -58,108 +72,84 @@ To build test applications:
 
 	$ make test
 
-## Install
-
-To install libraries:
+To install the test utilities:
 
 	$ make install
 
-## Testing
+This will install the utilities in the "/opt/citrusleaf/bin" directory
 
-You can run any of the test applications in the test directory: `target/(ARCH)/bin/test`
+(3) Testing
 
-To build tests:
+## KV Testing
 
-	$ make test
+#### put - Store an object in the database
 
-Or a specific test in `src/test`:
-
-	$ make <filename-without-extension>
-
-Tests require the following dependencies installed:
-
-* [Jansson](http://www.digip.org/jansson/) – JSON parsing library
-
-### Record Tests
-
-#### put
-
-Store an object in the database
-
-	$ ./put <namespace> <set> <key> <object>
+	$ aerospike put <namespace> <set> <key> <object>
 
 The `<object>` should be formatted as a JSON object. Each field of the object maps to a bin in the database.
 
 Example:
 
-	$ ./put test demo 1 '{"name": "Bob", "age": 30, "children": ["Billy", "Barry"]}'
+	$ aerospike put test demo 1 '{"name": "Bob", "age": 30, "children": ["Billy", "Barry"]}'
 
-#### get
+#### get - Retrieve an object from the database
 
-Retrieve an object from the database
-
-	$ ./get <namespace> <set> <key>
+	$ aerospike get <namespace> <set> <key>
 
 The output will a formatted as a JSON object. Each field of the object maps to a bin in the database.
 
 Example:
 
-	$ ./get test demo 1
+	$ aerospike get test demo 1
 	{"name": "Bob", "age": 30, "children": ["Billy", "Barry"]}
 
-#### exists
+#### exists - For the existence of an object in the database
 
-For the existence of an object in the database
-
-	$ ./exists <namespace> <set> <key>
+	$ aerospike exists <namespace> <set> <key>
 
 Example:
 
-	$ ./exists test demo 1
+	$ aerospike exists test demo 1
 	$ echo $?
 	0
 
-#### remove
+#### remove - Remove an object from the database
 
-Remove an object from the database
-
-	$ ./remove <namespace> <set> <key>
+	$ aerospike remove <namespace> <set> <key>
 
 Example:
 
-	$ ./remove test demo 1
-	$ ./exists test demo 1
+	$ aerospike remove test demo 1
+	$ aerospike exists test demo 1
 	$ echo $?
 	2
 
 
-
-
-### UDF Tests
+## UDF Tests
 
 #### udf-list
 
 List UDF files loaded on the server/cluster.
 
-	$ ./udf-list
+	$ aerospike udf-list
 
 The output will contain new line separated list of filenames.
 
 Example: assuming the server already contains `a_udf.lua`
 
-	$ ./udf-list
+	$ aerospike udf-list
 	a_udf.lua
 
 #### udf-put
 
 To upload a UDF file to the server/cluster.
 
-	$ ./udf-put <filepath>
+	$ aerospike udf-put <filepath>
 
 Example:
 
-	$ ./udf-put ~/another_udf.lua
-	$ ./udf-list
+	$ aerospike udf-put ~/another_udf.lua
+	$ aerospike udf-list
 	a_udf.lua
 	another_udf.lua
 
@@ -167,11 +157,11 @@ Example:
 
 Send to stdout the contents of the file on the server/cluster.
 
-	$ ./udf-get <filename>
+	$ aerospike udf-get <filename>
 	
 Example:
 
-	$ ./udf-get another_udf.lua
+	$ aerospike udf-get another_udf.lua
 	-- append to a list
 	function lappend(r, l, ...)
         local len = select('#',...)
@@ -185,15 +175,15 @@ Example:
 
 Send to stdout the contents of the file on the server/cluster.
 
-	$ ./udf-remove another_udf.lua
-	# ./udf-list
+	$ aerospike udf-remove another_udf.lua
+	# aerospike udf-list
 	a_udf.lua
 
 #### udf-record-apply
 
 Apply a UDF function to a record.
 
-	$ ./udf-record-apply <namespace> <set> <key> <filename> <function> [args …]
+	$ aerospike udf-record-apply <namespace> <set> <key> <filename> <function> [args …]
 
 `args` can be one of the following types:
 
@@ -206,5 +196,20 @@ Each `arg` can be quoted to ensure it is properly captured from the argument lis
 
 Example:
 
-	$ ./udf-record-apply test demo 1 another_udf lappend "[1,2,3,4]" 5 6 7
+	$ aerospike udf-record-apply test demo 1 another_udf lappend "[1,2,3,4]" 5 6 7
 	SUCCESS: List(1,2,3,4,5,6,7)
+
+(4) Examples
+
+## KV Example
+
+In the "example" directory, there is a simple program for showing usage of basic "get" and "put" using the C api.
+In addition, in the "tools" directory, there are "key_c" and "loop_c" programs.
+
+## UDF Example
+
+In the "udf_example" directory, there is a "loop_udf" program.
+
+(5) API Documentation
+In the "gendoc" directory is the detailed html API documentation
+

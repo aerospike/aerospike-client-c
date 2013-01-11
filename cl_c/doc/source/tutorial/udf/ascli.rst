@@ -1,42 +1,42 @@
-***************************
-Using the aerospike Utility
-***************************
+************************
+Using ascli UDF commands
+************************
 
-Aerospike provides a command-line utility to assist in the managing of UDFs and to call UDFs from command-line::
-
-    $ /opt/citrusleaf/bin/aerospike
-
-If you run ``aerospike`` without any arguments, it will display usage information.
-
-We recommend you add the path to ``aerospike`` to your ``PATH`` environment variable::
+``ascli`` is a command-line utility that provides the ability to execute commands against an Aerospike cluster. The 
+``ascli`` utility can be found at ``/opt/citrusleaf/bin/``.  If you find yourself using ``ascli`` often, then you 
+may want to add it to your ``PATH`` environment variable::
 
     $ export PATH=$PATH:/opt/citrusleaf/bin
 
-Each of the following examples depend on a UDF file named ``my_functions.lua``, containing::
+Running ``acli`` with the ``--help`` option will provide you will additional usage information, including the available commands.
+
+
+The examples in this document require you to create the following file named ``my_functions.lua``::
 
     function hello()
         return "Hello World!"
     end
+
 
 Upload a UDF file
 -----------------
 
 To upload a UDF file, use the ``udf-put`` command::
 
-    $ aerospike udf-put <file>
+    $ ascli udf-put <file>
 
 You can specify the path to the file. The file itself will be uploaded, but the directories will not be created.
 
 For example, to upload ``my_functions.lua``::
 
-    $ aerospike udf-put my_functions.lua
+    $ ascli udf-put my_functions.lua
 
 List UDF files
 --------------
 
 To list UDF files, use the ``udf-list`` command::
 
-    $ aerospike udf-list
+    $ ascli udf-list
     my_functions.lua
 
 Get a UDF File
@@ -44,13 +44,13 @@ Get a UDF File
 
 To get the contents of a UDF file, use the ``udf-get`` comamand::
 
-    $ aerospike udf-get <filename>
+    $ ascli udf-get <filename>
 
 This will output the contents of the file.
 
 For example, to get ``my_functions.lua``::
     
-    $ aerospike udf-get my_functions.lua
+    $ ascli udf-get my_functions.lua
     function hello()
         return "Hello World!"
     end
@@ -60,11 +60,11 @@ Call a UDF
 
 To call a function in a UDF file, use the ``udf-record-apply`` command::
 
-    $ aerospike udf-record-apply <namespace> <set> <key> <filename> <function> [args ...]
+    $ ascli udf-record-apply <namespace> <set> <key> <filename> <function> [args ...]
 
 For example, to call the ``hello()`` function in ``my_functions.lua``::
 
-    $ aerospike udf-record-apply test test 1 my_functions hello
+    $ ascli udf-record-apply test test 1 my_functions hello
     "Hello World!"
 
 You will notice that ``udf-record-apply`` does not require a file extension for the ``<filename>`` argument. The reason is we support
@@ -77,8 +77,8 @@ Remove a UDF File
 
 To remove a UDF file, use the ``udf-remove`` command::
 
-    $ aerospike udf-remove <filename>
+    $ ascli udf-remove <filename>
 
 For example, to remove ``my_functions.lua``::
 
-    $ aerospike udf-remove my_functions.lua
+    $ ascli udf-remove my_functions.lua

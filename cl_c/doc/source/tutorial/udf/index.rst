@@ -6,7 +6,7 @@ User-Defined Functions
 .. toctree::
    :maxdepth: 2
 
-   aerospike_utility
+   ascli
    c_api
    arguments_and_results
    records

@@ -1,10 +1,26 @@
 /*
- *  Citrusleaf Tests
- *  src/loop_sproc.c
+ *      loop_udf.c
  *
- *  Copyright 2008 by Citrusleaf.  All rights reserved.
- *  THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE.  THE COPYRIGHT NOTICE
- *  ABOVE DOES NOT EVIDENCE ANY ACTUAL OR INTENDED PUBLICATION.
+ * Copyright 2008-2013 by Aerospike.
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of
+ * this software and associated documentation files (the "Software"), to deal in
+ * the Software without restriction, including without limitation the rights to
+ * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+ * of the Software, and to permit persons to whom the Software is furnished to do
+ * so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ *
  */
 #include <errno.h>
 #include <stdio.h>
@@ -281,9 +297,8 @@ void usage(int argc, char *argv[]) {
     fprintf(stderr, "-p port [default 3000]\n");
     fprintf(stderr, "-n namespace [default test]\n");
     fprintf(stderr, "-s set [default *all*]\n");
-    fprintf(stderr, "-f package_file [default lua_packages/sproc_unit_test.lua]\n");
-    fprintf(stderr, "-P package_name [default sproc_unit_test] \n");
-    fprintf(stderr, "-x f_name [default sproc_loop_test] \n");    
+    fprintf(stderr, "-f udf_file [default lua_files/udf_loop_test.lua]\n");
+    fprintf(stderr, "-x f_name [default udf_loop_test] \n");    
     fprintf(stderr, "-v is verbose\n");
     fprintf(stderr, "-r read/write ratio (0-100) [default 80]\n");
     fprintf(stderr, "-t thread_count [default 8]\n");
@@ -303,8 +318,8 @@ int init_configuration (int argc, char *argv[])
 	g_config->timeout_ms   = 1000;
 	g_config->record_ttl   = 864000;
 	g_config->verbose      = false;
-	g_config->package_file = "../lua_packages/sproc_loop_test.lua";
-	g_config->package_name = "sproc_loop_test";
+	g_config->package_file = "../lua_files/udf_loop_test.lua";
+	g_config->package_name = "udf_loop_test";
 	g_config->n_threads    = 8;
 	g_config->f_name       = "do_loop_test";
 	g_config->value_type   = CL_STR;

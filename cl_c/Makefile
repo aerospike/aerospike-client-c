@@ -57,8 +57,21 @@ prepare:
 	cp modules/common/$(TARGET_INCL)/*.h $(TARGET_INCL)/.
 	cp modules/common/$(TARGET_INCL)/citrusleaf/*.h $(TARGET_INCL)/citrusleaf/.
 
-install: | libcitrusleaf.a libcitrusleaf.so prepare
-	sudo cp $(TARGET_LIB)/* /usr/local/lib/.
+install: 
+	cp $(TARGET_LIB)/* /usr/local/lib/.
+	mkdir -p /opt/citrusleaf/bin/commands
+	cp $(SOURCE_TEST)/ascli.py /opt/citrusleaf/bin/ascli
+	cp $(TARGET_BIN)/test/exists /opt/citrusleaf/bin/commands/.
+	cp $(TARGET_BIN)/test/get /opt/citrusleaf/bin/commands/.
+	cp $(TARGET_BIN)/test/put /opt/citrusleaf/bin/commands/.
+	cp $(TARGET_BIN)/test/remove /opt/citrusleaf/bin/commands/.
+	cp $(TARGET_BIN)/test/udf-get /opt/citrusleaf/bin/commands/.
+	cp $(TARGET_BIN)/test/udf-list /opt/citrusleaf/bin/commands/.
+	cp $(TARGET_BIN)/test/udf-put /opt/citrusleaf/bin/commands/.
+	cp $(TARGET_BIN)/test/udf-record-apply /opt/citrusleaf/bin/commands/.
+	cp $(TARGET_BIN)/test/udf-remove /opt/citrusleaf/bin/commands/.
+	ln -s /opt/citrusleaf/bin/ascli /usr/bin/ascli
+
 
 
 gendoc:

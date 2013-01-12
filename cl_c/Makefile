@@ -57,7 +57,8 @@ prepare:
 	cp modules/common/$(TARGET_INCL)/*.h $(TARGET_INCL)/.
 	cp modules/common/$(TARGET_INCL)/citrusleaf/*.h $(TARGET_INCL)/citrusleaf/.
 
-install: | test libcitrusleaf.a libcitrusleaf.so prepare
+install: 
+	cp $(TARGET_LIB)/* /usr/local/lib/.
 	mkdir -p /opt/citrusleaf/bin/commands
 	cp $(SOURCE_TEST)/ascli.py /opt/citrusleaf/bin/ascli
 	cp $(TARGET_BIN)/test/exists /opt/citrusleaf/bin/commands/.
@@ -69,7 +70,9 @@ install: | test libcitrusleaf.a libcitrusleaf.so prepare
 	cp $(TARGET_BIN)/test/udf-put /opt/citrusleaf/bin/commands/.
 	cp $(TARGET_BIN)/test/udf-record-apply /opt/citrusleaf/bin/commands/.
 	cp $(TARGET_BIN)/test/udf-remove /opt/citrusleaf/bin/commands/.
-	ln -s /opt/citrusleaf/bin/ascli /usr/bin/ascli 
+	ln -s /opt/citrusleaf/bin/ascli /usr/bin/ascli
+
+
 
 gendoc:
 	cd doc; make html
@@ -90,6 +93,11 @@ mod-lua:
 common: 
 	make -C modules/common client_only MEM_COUNT=$(MEM_COUNT) 
 
+jansson/Makefile: check_jansson
+	cd $(JANSSON_PATH) && ./configure
+
+jansson: jansson/Makefile
+	make -C $(JANSSON_PATH) all CFLAGS="-fPIC"
 ##
 ## TEST
 ##
@@ -100,16 +108,16 @@ endif
 
 test_flags = $(TARGET_LIB)/libcitrusleaf.a -L$(JANSSON_PATH)/src/.libs -Wl,-l,:libjansson.a -lcrypto -lssl -L$(MSGPACK_PATH)/src/.libs -Wl,-l,:libmsgpack.a -lpthread -lrt 
 
-test/%:  $(SOURCE_TEST)/%.c | $(TARGET_BIN) check_jansson
+test/%:  $(SOURCE_TEST)/%.c | $(TARGET_BIN) jansson
 	$(call executable, $(TARGET_INCL) $(JANSSON_PATH)/src, $(empty), $(empty) , $(empty), $(test_flags) )
 
-test/get:  $(SOURCE_TEST)/get.c $(SOURCE_TEST)/as_json.c | $(TARGET_BIN) check_jansson
+test/get:  $(SOURCE_TEST)/get.c $(SOURCE_TEST)/as_json.c | $(TARGET_BIN)  jansson
 	$(call executable, $(TARGET_INCL) $(JANSSON_PATH)/src, $(empty), $(empty), $(empty), $(test_flags))
 
-test/put:  $(SOURCE_TEST)/put.c $(SOURCE_TEST)/as_json.c | $(TARGET_BIN) check_jansson
+test/put:  $(SOURCE_TEST)/put.c $(SOURCE_TEST)/as_json.c | $(TARGET_BIN)  jansson
 	$(call executable, $(TARGET_INCL) $(JANSSON_PATH)/src, $(empty), $(empty), $(empty), $(test_flags))
 
-test/udf-record-apply:  $(SOURCE_TEST)/udf-record-apply.c $(SOURCE_TEST)/as_json.c | $(TARGET_BIN) check_jansson
+test/udf-record-apply:  $(SOURCE_TEST)/udf-record-apply.c $(SOURCE_TEST)/as_json.c | $(TARGET_BIN)  jansson
 	$(call executable, $(TARGET_INCL) $(JANSSON_PATH)/src, $(empty), $(empty), $(empty), $(test_flags))
 
 test: test/quick test/get test/put test/remove test/exists test/udf test/udf-list test/udf-get test/udf-put test/udf-remove test/udf-record-apply

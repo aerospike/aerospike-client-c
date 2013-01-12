@@ -65,7 +65,7 @@ cf_digest_compute2(void *data1, size_t len1, void *data2, size_t len2, cf_digest
 
 typedef uint16_t cl_partition_id;
 static inline cl_partition_id
-cl_partition_getid(uint32_t n_partitions, cf_digest *d)
+cl_partition_getid(uint32_t n_partitions, const cf_digest *d)
 {
 	uint16_t *d_int = (uint16_t *)&d->digest[0];
 	cl_partition_id r = *d_int & (n_partitions - 1);

@@ -70,7 +70,7 @@ cl_partition_table_remove_node( ev2citrusleaf_cluster *asc, cl_cluster_node *nod
 }
 
 cl_partition_table *
-cl_partition_table_create(ev2citrusleaf_cluster *asc, char *ns) 
+cl_partition_table_create(ev2citrusleaf_cluster *asc, const char *ns)
 {
 	cf_atomic_int_incr(&g_cl_stats.partition_create);
 
@@ -162,7 +162,7 @@ cl_partition_table_destroy_all(ev2citrusleaf_cluster *asc)
 }
 
 cl_partition_table *
-cl_partition_table_get_byns(ev2citrusleaf_cluster *asc, char *ns)
+cl_partition_table_get_byns(ev2citrusleaf_cluster *asc, const char *ns)
 {
 	cl_partition_table *pt = asc->partition_table_head;
 	while (pt) {
@@ -174,7 +174,7 @@ cl_partition_table_get_byns(ev2citrusleaf_cluster *asc, char *ns)
 
 
 void
-cl_partition_table_set( ev2citrusleaf_cluster *asc, cl_cluster_node *node, char *ns, cl_partition_id pid, bool write)
+cl_partition_table_set( ev2citrusleaf_cluster *asc, cl_cluster_node *node, const char *ns, cl_partition_id pid, bool write)
 {
 	cl_partition_table *pt = cl_partition_table_get_byns(asc, ns);
 	if (!pt) {
@@ -225,7 +225,7 @@ cl_partition_table_set( ev2citrusleaf_cluster *asc, cl_cluster_node *node, char 
 static cf_atomic_int round_robin_counter = 0;
 
 cl_cluster_node *
-cl_partition_table_get( ev2citrusleaf_cluster *asc, char *ns, cl_partition_id pid, bool write)
+cl_partition_table_get( ev2citrusleaf_cluster *asc, const char *ns, cl_partition_id pid, bool write)
 {
 	cl_partition_table *pt = cl_partition_table_get_byns(asc,ns);
 	if (!pt)	return(0);

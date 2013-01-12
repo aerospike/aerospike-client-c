@@ -1,7 +1,7 @@
 include project/build.makefile
 
 ifndef MSGPACK_PATH
-$(warning *** warnig env MSGPACK_PATH not set. Using modules/msgpack as default)
+$(warning *** warning env MSGPACK_PATH not set. Using modules/msgpack as default)
 MSGPACK_PATH = modules/msgpack
 endif
 
@@ -90,6 +90,11 @@ mod-lua:
 common: 
 	make -C modules/common client_only MEM_COUNT=$(MEM_COUNT) 
 
+jansson/Makefile: check_jansson
+	cd $(JANSSON_PATH) && ./configure
+
+jansson: jansson/Makefile
+	make -C $(JANSSON_PATH) all CFLAGS="-fPIC"
 ##
 ## TEST
 ##
@@ -100,16 +105,16 @@ endif
 
 test_flags = $(TARGET_LIB)/libcitrusleaf.a -L$(JANSSON_PATH)/src/.libs -Wl,-l,:libjansson.a -lcrypto -lssl -L$(MSGPACK_PATH)/src/.libs -Wl,-l,:libmsgpack.a -lpthread -lrt 
 
-test/%:  $(SOURCE_TEST)/%.c | $(TARGET_BIN) check_jansson
+test/%:  $(SOURCE_TEST)/%.c | $(TARGET_BIN) jansson
 	$(call executable, $(TARGET_INCL) $(JANSSON_PATH)/src, $(empty), $(empty) , $(empty), $(test_flags) )
 
-test/get:  $(SOURCE_TEST)/get.c $(SOURCE_TEST)/as_json.c | $(TARGET_BIN) check_jansson
+test/get:  $(SOURCE_TEST)/get.c $(SOURCE_TEST)/as_json.c | $(TARGET_BIN)  jansson
 	$(call executable, $(TARGET_INCL) $(JANSSON_PATH)/src, $(empty), $(empty), $(empty), $(test_flags))
 
-test/put:  $(SOURCE_TEST)/put.c $(SOURCE_TEST)/as_json.c | $(TARGET_BIN) check_jansson
+test/put:  $(SOURCE_TEST)/put.c $(SOURCE_TEST)/as_json.c | $(TARGET_BIN)  jansson
 	$(call executable, $(TARGET_INCL) $(JANSSON_PATH)/src, $(empty), $(empty), $(empty), $(test_flags))
 
-test/udf-record-apply:  $(SOURCE_TEST)/udf-record-apply.c $(SOURCE_TEST)/as_json.c | $(TARGET_BIN) check_jansson
+test/udf-record-apply:  $(SOURCE_TEST)/udf-record-apply.c $(SOURCE_TEST)/as_json.c | $(TARGET_BIN)  jansson
 	$(call executable, $(TARGET_INCL) $(JANSSON_PATH)/src, $(empty), $(empty), $(empty), $(test_flags))
 
 test: test/quick test/get test/put test/remove test/exists test/udf test/udf-list test/udf-get test/udf-put test/udf-remove test/udf-record-apply

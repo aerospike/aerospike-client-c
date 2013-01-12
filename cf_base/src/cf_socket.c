@@ -419,3 +419,12 @@ cf_create_nb_socket(struct sockaddr_in *sa, int timeout)
 	return fd;
 }
 
+void
+cf_debug_sockaddr_in(char *prefix, struct sockaddr_in *sa_in)
+{
+	if (cf_debug_enabled()) {
+		char str[INET_ADDRSTRLEN];
+		inet_ntop(AF_INET, &(sa_in->sin_addr), str, INET_ADDRSTRLEN);
+		cf_debug("%s %s:%d", prefix, str, (int)ntohs(sa_in->sin_port));
+	}
+}

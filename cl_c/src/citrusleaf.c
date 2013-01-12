@@ -32,12 +32,12 @@
 
 #include "citrusleaf/citrusleaf.h"
 #include "citrusleaf/cl_cluster.h"
+#include "citrusleaf/cl_shm.h"
 #include "citrusleaf/citrusleaf-internal.h"
 #include "citrusleaf/cf_atomic.h"
 #include "citrusleaf/proto.h"
 #include "citrusleaf/cf_hist.h"
 #include "citrusleaf/cf_socket.h"
-
 
 #include <signal.h>
 
@@ -1905,6 +1905,10 @@ void citrusleaf_shutdown(void) {
 	citrusleaf_cluster_shutdown();
 	citrusleaf_batch_shutdown();
 	citrusleaf_async_shutdown();
+
+	if (g_shared_memory) {
+		citrusleaf_shm_free();
+	}
 
 	g_initialized = false;
 }

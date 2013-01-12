@@ -1,3 +1,3 @@
 HEADERS = citrusleaf.h cl_cluster.h 
-SOURCES = citrusleaf.c cl_info.c cl_cluster.c cl_partition.c cl_lookup.c proto.c cl_batch.c cl_scan.c cl_async.c cl_shm.c
+SOURCES = citrusleaf.c cl_info.c cl_cluster.c cl_partition.c cl_lookup.c proto.c cl_batch.c cl_scan.c cl_async.c cl_shm.c cl_request.c
 CF_SOURCES = cf_alloc.c cf_average.c cf_digest.c cf_hist.c cf_hooks.c cf_ll.c cf_log.c cf_queue.c cf_service.c cf_shash.c cf_socket.c cf_vector.c version.c

@@ -29,12 +29,11 @@
 #include "citrusleaf/citrusleaf-internal.h"
 #include "citrusleaf/cl_cluster.h"
 #include "citrusleaf/proto.h"
-#include "citrusleaf/cl_shm.h"
+#include "citrusleaf/cl_request.h"
+#include "citrusleaf/cf_socket.h"
 
-// #define INFO_TIMEOUT_MS 100
-#define INFO_TIMEOUT_MS 300
 //#define DEBUG 1
-// #define DEBUG_VERBOSE 1
+//#define DEBUG_VERBOSE 1
 
 // Forward references
 static void cluster_tend( cl_cluster *asc); 
@@ -53,16 +52,6 @@ extern int g_init_pid;
 //
 // Debug function. Should be elsewhere.
 //
-
-static void
-dump_sockaddr_in(char *prefix, struct sockaddr_in *sa_in)
-{
-	if (cf_debug_enabled()) {
-		char str[INET_ADDRSTRLEN];
-		inet_ntop(AF_INET, &(sa_in->sin_addr), str, INET_ADDRSTRLEN);
-		cf_debug("%s %s:%d", prefix, str, (int)ntohs(sa_in->sin_port));
-	}
-}
 
 static void
 dump_cluster(cl_cluster *asc)
@@ -575,10 +564,6 @@ citrusleaf_cluster_get(char const *url)
 	asc = citrusleaf_cluster_create();
 	citrusleaf_cluster_add_host(asc, host, port_i, 0);
 
-	/* node_v might not have been updated just yet*/
-	if(G_SHARED_MEMORY) {
-		sleep(3);
-	}
     // check to see if we actually got some initial node
 	uint node_v_sz = cf_vector_size(&asc->node_v);
     if (node_v_sz==0) {
@@ -887,7 +872,7 @@ cl_cluster_node_fd_create(cl_cluster_node *cn, bool nonblocking)
 			if (nonblocking && (errno == EINPROGRESS))
 			{
 #if XDS //Hack for XDS
-				dump_sockaddr_in("Connecting to ", sa_in);
+				cf_debug_sockaddr_in("Connecting to ", sa_in);
 				cf_debug("Non-blocking connect returned EINPROGRESS as expected");
 #endif
 				goto Done;
@@ -1086,92 +1071,54 @@ Next:
 // See if there's been a re-vote of the cluster.
 // Grab the services and insert them into the services vector.
 // Try all known addresses of this node, too
-
-
+//
 static void
 cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 {
+	// cf_debug("cluster ping node: %s",cn->name);
+
 	bool update_partitions = false;
 
-#ifdef DEBUG	
-	cf_debug("cluster ping node: %s",cn->name);
-#endif	
-	
-	// for all elements in the sockaddr_in list - ping and add hosts, if not
-	// already extant
+	// for all elements in the sockaddr_in list - ping and add hosts.
 	for (uint i=0;i<cf_vector_size(&cn->sockaddr_in_v);i++) {
 		struct sockaddr_in *sa_in = cf_vector_getp(&cn->sockaddr_in_v, i);
-		char * values = 0;	
-		bool not_found_in_shm = false;
-		if(G_SHARED_MEMORY) {
-			values = (char*)malloc(SZ_FIELD_NEIGHBORS);
-			bool dun = false;
-			if (0 != cl_shm_read(sa_in,1,&values, INFO_TIMEOUT_MS, false,&dun))
-			{
-#ifdef DEBUG
-				fprintf(stderr,"Reading from the shared memory failed\n");
-#endif
-				if(dun==true){
-					cl_cluster_node_dun(cn, NODE_DUN_INFO_ERR);
-				}
-				not_found_in_shm = true;
-			}
+		cl_node_info node_info;
 
+		if (cl_get_node_info(sa_in, &node_info) != 0) {
+			// todo: this address is no longer right for this node, update the node's list
+			// and if there's no addresses left, dun node
+			cf_debug("Info request failed for %s", cn->name);
+			cl_cluster_node_dun(cn, NODE_DUN_INFO_ERR);
+			continue;
 		}
 
-		if(!G_SHARED_MEMORY || not_found_in_shm){
-			if (0 != citrusleaf_info_host_limit(sa_in, "node\npartition-generation\nservices", &values, INFO_TIMEOUT_MS, false, 10000)) 
-			{
-				// todo: this address is no longer right for this node, update the node's list
-				// and if there's no addresses left, dun node
-				cl_cluster_node_dun(cn, NODE_DUN_INFO_ERR);
-				continue;
-			}
+		if (node_info.dun) {
+			cl_cluster_node_dun(cn, NODE_DUN_INFO_ERR);
+			cl_node_info_free(&node_info);
+			break;
 		}
-		
+
 		cl_cluster_node_ok(cn);
 
-		// reminder: returned list is name1\tvalue1\nname2\tvalue2\n
-		cf_vector_define(lines_v, sizeof(void *), 0);
-		str_split('\n',values,&lines_v);
-		for (uint j=0;j<cf_vector_size(&lines_v);j++) {
-			char *line = cf_vector_pointer_get(&lines_v, j);
-			cf_vector_define(pair_v, sizeof(void *), 0);
-			str_split('\t',line, &pair_v);
-			
-			if (cf_vector_size(&pair_v) == 2) {
-				char *name = cf_vector_pointer_get(&pair_v,0);
-				char *value = cf_vector_pointer_get(&pair_v,1);
-				
-				if ( strcmp(name, "node") == 0) {
-					
-					if (strcmp(value, cn->name) != 0) {
-						// node name has changed. Dun is easy, would be better to remove the address
-						// from the list of addresses for this node, and only dun if there
-						// are no addresses left
-						cf_info("node name has changed!");
-						cl_cluster_node_dun(cn, NODE_DUN_NAME_CHG);
-					}
-				}
-				else if (strcmp(name, "partition-generation") == 0) {
-					if (cn->partition_generation != (uint32_t) atoi(value)) {
-						update_partitions = true;				
-						cn->partition_generation = atoi(value);
-					}
-				}
-				else if (strcmp(name, "services")==0) {
-					cluster_services_parse(asc, value, services_v);
-				}
-			}
-			cf_vector_destroy(&pair_v);
+		if (strcmp(node_info.node_name, cn->name) != 0) {
+			// node name has changed. Dun is easy, would be better to remove the address
+			// from the list of addresses for this node, and only dun if there
+			// are no addresses left
+			cf_info("node name has changed! old='%s' new='%s'", cn->name, node_info.node_name);
+			cl_cluster_node_dun(cn, NODE_DUN_NAME_CHG);
 		}
-		cf_vector_destroy(&lines_v);
-		if (values) {
-			free(values);
+
+		if (cn->partition_generation != node_info.partition_generation) {
+			update_partitions = true;
+			cn->partition_generation = node_info.partition_generation;
 		}
+
+		cluster_services_parse(asc, node_info.services, services_v);
+		cl_node_info_free(&node_info);
+		break;
 	}
 	
-	if (update_partitions == true) {
+	if (update_partitions) {
 		// cf_debug("node %s: partitions have changed, need update", cn->name);
 
 		// remove all current values, then add up-to-date values
@@ -1181,69 +1128,25 @@ cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 
 		for (uint i=0;i<cf_vector_size(&cn->sockaddr_in_v);i++) {
 			struct sockaddr_in *sa_in = cf_vector_getp(&cn->sockaddr_in_v, i);
-			char * values;
-			bool not_found_in_shm = false;
-			if(G_SHARED_MEMORY) {
-				values = (char*)malloc(SZ_FIELD_PARTITIONS);
-				bool dun = false;
-				if (0 != cl_shm_read(sa_in,2, &values, INFO_TIMEOUT_MS, false,&dun)) 
-				{
-                			// it's a little peculiar to have just talked to the host then have this call
-                			// fail, but sometimes strange things happen.
-					not_found_in_shm = true;
-				}
+			cl_replicas replicas;
+
+			if (cl_get_replicas(sa_in, &replicas) != 0) {
+				continue;
 			}
 
-			if (!G_SHARED_MEMORY || not_found_in_shm) {
-				values = 0;
-				if (0 != citrusleaf_info_host_limit(sa_in, "replicas-read\nreplicas-write", &values, INFO_TIMEOUT_MS, false, 2000000))
-				{
-               		 		// it's a little peculiar to have just talked to the host then have this call
-                			// fail, but sometimes strange things happen.
-          		        	goto Updated;
-				}
+			if (replicas.write_replicas) {
+				cluster_partitions_process(asc, cn, replicas.write_replicas, true);
 			}
 
-			// reminder: returned list is name1\tvalue1\nname2\tvalue2\n
-			cf_vector_define(lines_v, sizeof(void *), 0);
-			str_split('\n',values,&lines_v);
-			for (uint j=0;j<cf_vector_size(&lines_v);j++) {
-				char *line = cf_vector_pointer_get(&lines_v, j);
-				cf_vector_define(pair_v, sizeof(void *), 0);
-				str_split('\t',line, &pair_v);
-				
-				unsigned int vsize = cf_vector_size(&pair_v);
-				if (vsize == 2) {
-					char *name = cf_vector_pointer_get(&pair_v,0);
-					char *value = cf_vector_pointer_get(&pair_v,1);
-					
-					if (strcmp(name, "replicas-read") == 0) {
-						cluster_partitions_process(asc, cn, value, false);
-					}
-					else if (strcmp(name, "replicas-write") == 0) {
-						cluster_partitions_process(asc, cn, value, true);
-					}
-					else {
-						cf_warn("Invalid replicas response name %s. values=%s", name, values);
-					}
-				}
-				else {
-					cf_warn("Invalid replicas vector size %u. values=%s", vsize, values);
-				}
-				cf_vector_destroy(&pair_v);
+			if (replicas.read_replicas) {
+				cluster_partitions_process(asc, cn, replicas.read_replicas, false);
 			}
-			cf_vector_destroy(&lines_v);
-			
-			if(values) free(values);
-			
-			goto Updated;
+
+			cl_replicas_free(&replicas);
+			break;
 		}
 	}
-Updated:	
-	;
 }
-
-
 
 //
 // Ping this address, get its node name, see if it's unique
@@ -1251,42 +1154,22 @@ Updated:
 static void
 cluster_ping_address(cl_cluster *asc, struct sockaddr_in *sa_in)
 {
-	char * values;
-	bool not_found_in_shm = false;
+	char node_name[NODE_NAME_SIZE];
 
-	if(G_SHARED_MEMORY) {
-		bool dun = false;
-		values = (char*)calloc(1,SZ_FIELD_NAME);
-		//Check for malloc failure
-		if(values==NULL) {
-			return;
-		}
-		if (0 != cl_shm_read(sa_in,0, &values, INFO_TIMEOUT_MS, false,&dun)){
-		 	not_found_in_shm = true;
-		}
-	}
-
-	if(!G_SHARED_MEMORY || not_found_in_shm){
-		values = 0;
-		if (0 != citrusleaf_info_host(sa_in, "node", &values, INFO_TIMEOUT_MS, false)){
-			return;
-		}
-	}
-
-	char *value = 0;
-	if (0 != citrusleaf_info_parse_single(values, &value)) {
-		if(values) free(values);
+	if (cl_get_node_name(sa_in, node_name) != 0) {
 		return;
 	}
 		
 	// if new nodename, add to cluster
-	cl_cluster_node *cn = cl_cluster_node_get_byname(asc, value);
+	cl_cluster_node *cn = cl_cluster_node_get_byname(asc, node_name);
 	if (!cn) {
+		/*
 		if (cf_debug_enabled()) {
-			cf_debug("%s node unknown, creating new", value);
+			cf_debug("%s node unknown, creating new", node_name);
 			dump_sockaddr_in("New node is ",sa_in);
 		}
-		cl_cluster_node *node = cl_cluster_node_create(value, sa_in);
+		*/
+		cl_cluster_node *node = cl_cluster_node_create(node_name, sa_in);
 
 		// Appends must be locked regardless of only being called from tend thread, because
 		// other threads reads need to wait on their locks for the append to complete.
@@ -1298,56 +1181,27 @@ cluster_ping_address(cl_cluster *asc, struct sockaddr_in *sa_in)
 	else {
 		cf_vector_append_unique(&cn->sockaddr_in_v, sa_in);
 	}
-	
-	if(values) free(values);
-		
 }
 
-
+//
 // number of partitions for a cluster never changes, but you do have to get it once
-
+//
 void
 cluster_get_n_partitions( cl_cluster *asc, cf_vector *sockaddr_in_v )
 {
+	// check if someone found the value
+	if (asc->n_partitions != 0)
+		return;
+
 	for (uint i=0;i<cf_vector_size(sockaddr_in_v);i++) {
-		
-		// check if someone found the value
-		if (asc->n_partitions != 0)	return;
-		
 		struct sockaddr_in *sa_in = cf_vector_getp(sockaddr_in_v, i);
-		char * values;
-		bool not_found_in_shm = false;
+		int n_partitions = 0;
 
-		if(G_SHARED_MEMORY) {
-			bool dun = false;
-			values = (char*)calloc(1,SZ_FIELD_NUM_PARTITIONS);
-			//Check for malloc failed 
-			if(values==NULL) {
-				return;
-			}
-			if (0 != cl_shm_read(sa_in,3, &values, INFO_TIMEOUT_MS, false,&dun)) {
-				not_found_in_shm = true;
-			}
-		}
-
-		if(!G_SHARED_MEMORY || not_found_in_shm){
-			values = 0;
-			if (0 != citrusleaf_info_host(sa_in, "partitions", &values, INFO_TIMEOUT_MS, false)) {
-				continue;
-			}
-		}
-
-		char *value = 0;
-		if (0 != citrusleaf_info_parse_single(values, &value)) {
-			if(values) free(values);
+		if (cl_get_n_partitions(sa_in, &n_partitions) != 0) {
 			continue;
 		}
-	
-		asc->n_partitions = atoi(value);
-		
-		if (values) {
-			free(values);
-		}
+		asc->n_partitions = n_partitions;
+		break;
 	}
 }
 
@@ -1383,12 +1237,13 @@ cluster_tend(cl_cluster *asc)
 	uint n_hosts = cf_vector_size(&asc->host_str_v);
 	cf_vector_define(sockaddr_in_v, sizeof( struct sockaddr_in ), 0);
 	for (uint i=0;i<n_hosts;i++) {
-		
+		/*
         if (cf_debug_enabled()) {
 		    char *host = cf_vector_pointer_get(&asc->host_str_v, i);
 		    int port = cf_vector_integer_get(&asc->host_port_v, i);
     		cf_debug("lookup hosts: %s:%d",host,port);
-        }		
+        }
+        */
 		cl_lookup(asc, cf_vector_pointer_get(&asc->host_str_v, i), 
 					cf_vector_integer_get(&asc->host_port_v, i),
 					&sockaddr_in_v);
@@ -1426,12 +1281,14 @@ cluster_tend(cl_cluster *asc)
 		int n_new = 0;
 		for (uint i=0;i<cf_vector_size(&sockaddr_in_v);i++) {
 			struct sockaddr_in *sin = cf_vector_getp(&sockaddr_in_v, i);
+			/*
 			if (cf_debug_enabled()) {
 				dump_sockaddr_in("testing service address",sin);
-			}		
+			}
+			*/
 			if (0 == cl_cluster_node_get_byaddr(asc, sin)) {
 				if (cf_debug_enabled()) {
-					dump_sockaddr_in("pinging",sin);
+					cf_debug_sockaddr_in("pinging",sin);
 				}		
 				cluster_ping_address(asc, sin);
 				n_new++;
@@ -1522,20 +1379,19 @@ cluster_tender_fn(void *gcc_is_ass)
 //
 int citrusleaf_cluster_init()
 {
-    if (g_clust_initialized)    return(0);
+    if (g_clust_initialized) {
+    	return(0);
+	}
     
-    	// No destruction function is used. 
+    // No destruction function is used.
 	// NOTE: A destruction function should not be used because elements
 	// in this list are used even after they are removed from the list.
 	// Refer to the function citrusleaf_cluster_destroy() for more info.
 	cf_ll_init(&cluster_ll, 0, false);
 	
     g_clust_initialized = 1;
-    
    	g_clust_tend_period = 1;
 	pthread_create( &tender_thr, 0, cluster_tender_fn, 0);
-	
+
 	return(0);	
 }
-
-

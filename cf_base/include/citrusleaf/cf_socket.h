@@ -23,3 +23,6 @@ cf_socket_write_forever(int fd, uint8_t *buf, size_t buf_len);
 
 extern int
 cf_create_nb_socket(struct sockaddr_in *sa, int timeout);
+
+extern void
+cf_debug_sockaddr_in(char *prefix, struct sockaddr_in *sa_in);

@@ -1,6 +1,7 @@
 include project/build.makefile
 
 ifndef MSGPACK_PATH
+$(warning *** warnig env MSGPACK_PATH not set. Using modules/msgpack as default)
 MSGPACK_PATH = modules/msgpack
 endif
 

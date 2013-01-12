@@ -66,7 +66,6 @@ const int DEFAULT_READ_PERCENT = 80;
 const int DEFAULT_VALUE_SIZE = 1300;
 
 const char BIN_NAME[] = "test-bin-name";
-const char BIN_DATA[] = "test-object";
 
 const int CLUSTER_VERIFY_TRIES = 3;
 const __useconds_t CLUSTER_VERIFY_INTERVAL = 1000 * 1000; // 1 second

@@ -1017,7 +1017,7 @@ cl_cluster_node_get_random(ev2citrusleaf_cluster *asc)
 }
 
 cl_cluster_node *
-cl_cluster_node_get(ev2citrusleaf_cluster *asc, char *ns, cf_digest *d, bool write)
+cl_cluster_node_get(ev2citrusleaf_cluster *asc, const char *ns, const cf_digest *d, bool write)
 {
 	cl_cluster_node *cn = 0;
 	

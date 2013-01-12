@@ -165,7 +165,7 @@ typedef void (*cl_lookup_async_fn) (int result, cf_vector *sockaddr_in_v, void *
 extern int cl_lookup(struct evdns_base *base, char *hostname, short port, cl_lookup_async_fn cb, void *udata);
 
 // Cluster calls
-extern cl_cluster_node *cl_cluster_node_get(ev2citrusleaf_cluster *asc, char *ns, cf_digest *d, bool write);  // get node from cluster
+extern cl_cluster_node *cl_cluster_node_get(ev2citrusleaf_cluster *asc, const char *ns, const cf_digest *d, bool write);  // get node from cluster
 extern void cl_cluster_node_release(cl_cluster_node *cn, char *msg);
 extern void cl_cluster_node_reserve(cl_cluster_node *cn, char *msg);
 extern void cl_cluster_node_put(cl_cluster_node *cn);          // put node back
@@ -185,8 +185,8 @@ extern int citrusleaf_cluster_shutdown();
 // --- all these assume the partition lock is held
 extern void cl_partition_table_remove_node( ev2citrusleaf_cluster *asc, cl_cluster_node *node );
 extern void cl_partition_table_destroy_all(ev2citrusleaf_cluster *asc);
-extern void cl_partition_table_set( ev2citrusleaf_cluster *asc, cl_cluster_node *node, char *ns, cl_partition_id pid, bool write);
-extern cl_cluster_node *cl_partition_table_get( ev2citrusleaf_cluster *asc, char *ns, cl_partition_id pid, bool write);
+extern void cl_partition_table_set( ev2citrusleaf_cluster *asc, cl_cluster_node *node, const char *ns, cl_partition_id pid, bool write);
+extern cl_cluster_node *cl_partition_table_get( ev2citrusleaf_cluster *asc, const char *ns, cl_partition_id pid, bool write);
 
 #ifdef __cplusplus
 } // end extern "C"

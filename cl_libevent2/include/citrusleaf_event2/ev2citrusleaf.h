@@ -313,6 +313,56 @@ ev2citrusleaf_operate_digest(ev2citrusleaf_cluster *cl, char *ns, cf_digest *d,
 	ev2citrusleaf_operation *ops, int n_ops, ev2citrusleaf_write_parameters *wparam, 
 	int timeout_ms, ev2citrusleaf_callback cb, void *udata, struct event_base *base);
 
+//
+// Batch calls
+//
+
+// An array of these is returned via ev2citrusleaf_get_many_cb.
+//
+// result will be either EV2CITRUSLEAF_OK or EV2CITRUSLEAF_FAIL_NOTFOUND.
+//
+// For the result of a ev2citrusleaf_exists_many_digest() call, bins and n_bins
+// will always be NULL and 0 respectively.
+//
+// For the result of a ev2citrusleaf_get_many_digest() call, if result is
+// EV2CITRUSLEAF_OK bin data will be present. Application is responsible for
+// freeing bins' objects using ev2citrusleaf_bins_free(), but client will free
+// bins array.
+typedef struct ev2citrusleaf_rec_s {
+	int					result;				// result for this record
+	cf_digest			digest;				// digest identifying record
+	uint32_t			generation;			// record generation
+	uint32_t			record_void_time;	// record void-time
+	ev2citrusleaf_bin	*bins;				// record data - array of bins
+	int					n_bins;				// number of bins in bins array
+} ev2citrusleaf_rec;
+
+// Batch-get callback, to report results of ev2citrusleaf_get_many_digest() and
+// ev2citrusleaf_exists_many_digest() calls.
+//
+// result is "overall" result - may be OK while individual record results are
+// EV2CITRUSLEAF_FAIL_NOTFOUND. Typically not OK when batch job times out or one
+// or more nodes' transactions fail. In all failure cases partial record results
+// may be returned, therefore n_recs may be less than n_digests requested.
+//
+// recs is the array of individual record results. Client will free recs array.
+// n_recs is the number of records in recs array.
+//
+// The order of records in recs array does not necessarily correspond to the
+// order of digests in request.
+typedef void (*ev2citrusleaf_get_many_cb) (int result, ev2citrusleaf_rec *recs, int n_recs, void *udata);
+
+// Get a batch of records, specified by array of digests.
+// Pass NULL bins, 0 n_bins, to get all bins. (Note - bin name filter not yet
+// supported by server - pass NULL, 0.)
+int
+ev2citrusleaf_get_many_digest(ev2citrusleaf_cluster *cl, const char *ns, const cf_digest *digests, int n_digests,
+		const char **bins, int n_bins, int timeout_ms, ev2citrusleaf_get_many_cb cb, void *udata, struct event_base *base);
+
+// Check existence of a batch of records, specified by array of digests.
+int
+ev2citrusleaf_exists_many_digest(ev2citrusleaf_cluster *cl, const char *ns, const cf_digest *digests, int n_digests,
+		int timeout_ms, ev2citrusleaf_get_many_cb cb, void *udata, struct event_base *base);
 
 //
 // the info interface allows

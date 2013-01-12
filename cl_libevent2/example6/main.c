@@ -1,7 +1,20 @@
 /*
  * cl_libevent2/example6/main.c
  *
- * Simple multi-event-base usage of the Citrusleaf libevent2 client.
+ * Simple batch API demonstration for the Citrusleaf libevent2 client.
+ *
+ * This example demonstrates batch database operations. The example uses a
+ * single transaction thread (the programs's main thread) and event base. The
+ * callback that completes an operation initiates the next one. This is not
+ * intended to mimic a realistic application transaction model.
+ *
+ * The main steps are:
+ *	- Initialize database cluster management.
+ *	- Write several simple records to the database.
+ *	- Using the batch API, check for the existence of all the records.
+ *	- Delete 10% of the records.
+ *	- Using the batch API, read all the records.
+ *	- Clean up.
  */
 
 
@@ -9,23 +22,31 @@
 // Includes
 //
 
-#include <errno.h>
-#include <execinfo.h>	// for debugging
 #include <getopt.h>
-#include <pthread.h>
-#include <signal.h>		// for debugging
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 #include <unistd.h>
+#include <bits/types.h>
 #include <event2/dns.h>
 #include <event2/event.h>
 
-#include "citrusleaf/cf_clock.h"
 #include "citrusleaf_event2/ev2citrusleaf.h"
+
+
+//==========================================================
+// Local Logging Macros
+//
+
+#define LOG(_fmt, _args...) { printf(_fmt "\n", ## _args); fflush(stdout); }
+
+#ifdef SHOW_DETAIL
+#define DETAIL(_fmt, _args...) { printf(_fmt "\n", ## _args); fflush(stdout); }
+#else
+#define DETAIL(_fmt, _args...)
+#endif
 
 
 //==========================================================
@@ -35,52 +56,32 @@
 const char DEFAULT_HOST[] = "127.0.0.1";
 const int DEFAULT_PORT = 3000;
 const char DEFAULT_NAMESPACE[] = "test";
-const char DEFAULT_SET[] = "set";
-const int DEFAULT_TIMEOUT_MS = 10;
-const int DEFAULT_NUM_BASES = 16;
-const int DEFAULT_KEYS_PER_BASE = 1000;
-const int DEFAULT_EXTRA_LAPS = 10;
-const int DEFAULT_WRITE_PCT = 20;
+const char DEFAULT_SET[] = "test-set";
+const int DEFAULT_TIMEOUT_MSEC = 200;
+const int DEFAULT_NUM_KEYS = 100;
 
 const char BIN_NAME[] = "test-bin-name";
-const char BIN_DATA[] = "test-object";
 
 const int CLUSTER_VERIFY_TRIES = 3;
 const __useconds_t CLUSTER_VERIFY_INTERVAL = 1000 * 1000; // 1 second
-
-#define TRANS_FMT "base %2d, lap %d, op-count %d, key %d"
-#define TRANS_PARAMS(_b, _k) _b, g_bases[_b].lap, g_bases[_b].op_count, _k
 
 
 //==========================================================
 // Typedefs
 //
 
-typedef struct _config {
+typedef struct config_s {
 	const char* p_host;
 	int port;
 	const char* p_namespace;
 	const char* p_set;
-	int timeout_ms;
-	int num_bases;
-	int keys_per_base;
-	int extra_laps;
-	int write_pct;
+	int timeout_msec;
+	int num_keys;
 } config;
 
-typedef struct _base {
-	struct event_base* p_event_base;
-	pthread_t thread;
-	int lap;
-	int op_count;
-	int num_timeouts;
-	int num_not_found;
-} base;
-
-typedef struct _key {
-	ev2citrusleaf_object obj;
-	char str[64];
-} key;
+typedef bool (*phase_start_fn)(uint32_t generation);
+typedef bool (*phase_complete_fn)(int return_value, ev2citrusleaf_bin* bins,
+		int n_bins, uint32_t generation, void* pv_udata);
 
 
 //==========================================================
@@ -89,406 +90,103 @@ typedef struct _key {
 
 static config g_config;
 static ev2citrusleaf_cluster* g_p_cluster = NULL;
-static base* g_bases = NULL;
-static key* g_keys = NULL;
-static int g_total_keys;
-static ev2citrusleaf_bin g_bin;
+static struct event_base* g_p_event_base = NULL;
+static ev2citrusleaf_object* g_keys = NULL;
+static cf_digest* g_digests = NULL;
 static ev2citrusleaf_write_parameters g_write_parameters;
-static uint64_t g_start_ms;
+static uint32_t g_num_puts_ok = 0;
+static uint32_t g_num_keys_to_delete = 0;
+static uint32_t g_num_deletes_ok = 0;
 
 
 //==========================================================
 // Forward Declarations
 //
 
-static void* run_transactions(void* pv_b);
-static void transaction_cb(int return_value, ev2citrusleaf_bin* bins,
-	int n_bins, uint32_t generation, void* pv_udata);
-static bool get(int b, int k);
-static bool put(int b, int k);
-static void init_lock_cbs(ev2citrusleaf_lock_callbacks* p_lock_cbs);
-static void* mutex_alloc();
-static void mutex_free(void* pv_lock);
-static int mutex_lock(void* pv_lock);
-static int mutex_unlock(void* pv_lock);
-static bool begin_cluster_mgr();
-static bool begin_transactions();
-static void block_until_transactions_done();
-static void cleanup();
-static void destroy_config();
-static void init_keys();
-static void init_value();
-static void* pack_user_data(int b, int k);
-static void parse_user_data(void* pv_udata, int* p_b, int* p_k);
 static bool set_config();
+static void destroy_config();
 static void usage();
-static void as_sig_handle_segv(int sig_num);
-static void as_sig_handle_term(int sig_num);
+static bool start_cluster_management();
+static void stop_cluster_management();
+static void do_transactions();
+static bool put(int k);
+static void put_cb(int return_value, ev2citrusleaf_bin* bins, int n_bins,
+		uint32_t generation, void* pv_udata);
+static void batch_exists();
+static void batch_exists_cb(int result, ev2citrusleaf_rec* recs, int n_recs,
+		void* pv_udata);
+static void delete(int k);
+static void delete_cb(int return_value, ev2citrusleaf_bin* bins, int n_bins,
+		uint32_t generation, void* pv_udata);
+static void batch_get();
+static void batch_get_cb(int result, ev2citrusleaf_rec* recs, int n_recs,
+		void* pv_udata);
+static void validate_data(ev2citrusleaf_rec* p_rec);
 
 
 //==========================================================
 // Main
 //
 
-int main(int argc, char* argv[]) {
-	signal(SIGSEGV, as_sig_handle_segv);
-	signal(SIGTERM , as_sig_handle_term);
-
+int
+main(int argc, char* argv[])
+{
+	// Parse command line arguments.
 	if (! set_config(argc, argv)) {
 		exit(-1);
 	}
 
-	// Use default client logging, but set a filter.
+	// Use default Citrusleaf client logging, but set a filter.
 	cf_set_log_level(CF_WARN);
 
-	srand(time(NULL));
+	// Connect to the database server cluster.
+	if (! start_cluster_management()) {
+		stop_cluster_management();
+		destroy_config();
+		exit(-1);
+	}
 
-	key keys[g_total_keys];
+	// Set up arrays of record keys and digests on the stack.
+	ev2citrusleaf_object keys[g_config.num_keys];
+	cf_digest digests[g_config.num_keys];
 
+	// Make these globally available.
 	g_keys = keys;
+	g_digests = digests;
 
-	init_keys();
-	init_value();
-	ev2citrusleaf_write_parameters_init(&g_write_parameters);
+	// Do the series of database operations.
+	do_transactions();
 
-	ev2citrusleaf_lock_callbacks lock_cbs;
+	// Exit cleanly.
+	stop_cluster_management();
+	destroy_config();
 
-	init_lock_cbs(&lock_cbs);
-	ev2citrusleaf_init(&lock_cbs);
-
-	if (! begin_cluster_mgr()) {
-		cleanup();
-		exit(-1);
-	}
-
-	base bases[g_config.num_bases];
-
-	g_bases = bases;
-
-	if (! begin_transactions()) {
-		cleanup();
-		exit(-1);
-	}
-
-	block_until_transactions_done();
-	cleanup();
+	LOG("example6 is done");
 
 	return 0;
 }
 
 
 //==========================================================
-// Thread "Run" Functions
+// Command Line Options
 //
 
-static void* run_transactions(void* pv_b) {
-	int b = (int)(uint64_t)pv_b;
-
-	// There's always an insertion lap - start it here.
-	if (put(b, b * g_config.keys_per_base)) {
-		event_base_dispatch(g_bases[b].p_event_base);
-	}
-
-	return NULL;
-}
-
-
-//==========================================================
-// Citrusleaf Client Callback Functions
+//------------------------------------------------
+// Parse command line options.
 //
-
-static void transaction_cb(int return_value, ev2citrusleaf_bin* bins,
-		int n_bins, uint32_t generation, void* pv_udata) {
-	int b;
-	int k;
-
-	parse_user_data(pv_udata, &b, &k);
-
-	if (bins) {
-		ev2citrusleaf_bins_free(bins, n_bins);
-	}
-
-	switch (return_value) {
-	case EV2CITRUSLEAF_OK:
-		break;
-
-	case EV2CITRUSLEAF_FAIL_TIMEOUT:
-//		fprintf(stdout, "TIMEOUT: " TRANS_FMT "\n", TRANS_PARAMS(b, k));
-//		fflush(stdout);
-		g_bases[b].num_timeouts++;
-		// Otherwise ok...
-		break;
-
-	case EV2CITRUSLEAF_FAIL_NOTFOUND:
-//		fprintf(stdout, "NOT FOUND: " TRANS_FMT "\n", TRANS_PARAMS(b, k));
-//		fflush(stdout);
-		g_bases[b].num_not_found++;
-		// Otherwise ok...
-		break;
-
-	default:
-		fprintf(stdout, "ERROR: return-value %d, " TRANS_FMT "\n", return_value,
-			TRANS_PARAMS(b, k));
-		// Will exit dispatch loop.
-		return;
-	}
-
-	if (++g_bases[b].op_count >= g_config.keys_per_base) {
-		if (++g_bases[b].lap > g_config.extra_laps) {
-			fprintf(stdout, "base %2d - done [timeouts %d, not-found %d]\n", b,
-				g_bases[b].num_timeouts, g_bases[b].num_not_found);
-			fflush(stdout);
-			// Will exit dispatch loop.
-			return;
-		}
-
-		g_bases[b].op_count = 0;
-
-		fprintf(stdout, "base %2d - lap %d\n", b, g_bases[b].lap);
-		fflush(stdout);
-	}
-
-	bool is_put = true;
-
-	if (g_bases[b].lap == 0) {
-		// Lap 0 sequentially inserts every key in this base's key range.
-		k = (b * g_config.keys_per_base) + g_bases[b].op_count;
-	}
-	else {
-		// Extra laps are reads and writes, in the ratio specified by config.
-		// The key is randomly selected from among this base's key range.
-
-		int r = rand();
-
-		k = (b * g_config.keys_per_base) + (r % g_config.keys_per_base);
-		is_put = (r >> 16) % 100 < g_config.write_pct;
-	}
-
-	is_put ? put(b, k) : get(b, k);
-	// Will exit dispatch loop if put/get call failed.
-}
-
-
-//==========================================================
-// Transaction Operations
-//
-
-static bool get(int b, int k) {
-	if (ev2citrusleaf_get_all(g_p_cluster, (char*)g_config.p_namespace,
-			(char*)g_config.p_set, &g_keys[k].obj, g_config.timeout_ms,
-			transaction_cb, pack_user_data(b, k), g_bases[b].p_event_base)) {
-		fprintf(stdout, "ERROR: get(), " TRANS_FMT "\n", TRANS_PARAMS(b, k));
-		return false;
-	}
-
-	return true;
-}
-
-static bool put(int b, int k) {
-	if (ev2citrusleaf_put(g_p_cluster, (char*)g_config.p_namespace,
-			(char*)g_config.p_set, &g_keys[k].obj, &g_bin, 1,
-			&g_write_parameters, g_config.timeout_ms, transaction_cb,
-			pack_user_data(b, k), g_bases[b].p_event_base)) {
-		fprintf(stdout, "ERROR: put(), " TRANS_FMT "\n", TRANS_PARAMS(b, k));
-		return false;
-	}
-
-	return true;
-}
-
-
-//==========================================================
-// Mutex Callbacks
-//
-
-static void init_lock_cbs(ev2citrusleaf_lock_callbacks* p_lock_cbs) {
-	p_lock_cbs->alloc = mutex_alloc;
-	p_lock_cbs->free = mutex_free;
-	p_lock_cbs->lock = mutex_lock;
-	p_lock_cbs->unlock = mutex_unlock;
-}
-
-static void* mutex_alloc() {
-	pthread_mutex_t* p_lock = malloc(sizeof(pthread_mutex_t));
-
-	return p_lock && pthread_mutex_init(p_lock, NULL) == 0 ?
-		(void*)p_lock : NULL;
-}
-
-static void mutex_free(void* pv_lock) {
-	pthread_mutex_destroy((pthread_mutex_t*)pv_lock);
-	free(pv_lock);
-}
-
-static int mutex_lock(void* pv_lock) {
-	return pthread_mutex_lock((pthread_mutex_t*)pv_lock);
-}
-
-static int mutex_unlock(void* pv_lock) {
-	return pthread_mutex_unlock((pthread_mutex_t*)pv_lock);
-}
-
-
-//==========================================================
-// Helpers
-//
-
-static bool begin_cluster_mgr() {
-	g_p_cluster = ev2citrusleaf_cluster_create(NULL);
-
-	if (! g_p_cluster) {
-		fprintf(stdout, "ERROR: creating cluster\n");
-		return false;
-	}
-
-	int result = ev2citrusleaf_cluster_add_host(g_p_cluster,
-			(char*)g_config.p_host, g_config.port);
-
-	if (result != 0) {
-		fprintf(stdout, "ERROR: cluster add host [%d]\n", result);
-		return false;
-	}
-
-	// Verify database server cluster is ready.
-	int tries = 0;
-
-	while (tries < CLUSTER_VERIFY_TRIES) {
-		int n = ev2citrusleaf_cluster_get_active_node_count(g_p_cluster);
-
-		if (n > 0) {
-			fprintf(stdout, "found %d cluster node%s\n", n, n > 1 ? "s" : "");
-			return true;
-		}
-
-		usleep(CLUSTER_VERIFY_INTERVAL);
-		tries++;
-	}
-
-	fprintf(stdout, "ERROR: connecting to cluster\n");
-	return false;
-}
-
-static bool begin_transactions() {
-	memset(g_bases, 0, sizeof(base) * g_config.num_bases);
-
-	for (int b = 0; b < g_config.num_bases; b++) {
-		if ((g_bases[b].p_event_base = event_base_new()) == NULL) {
-			fprintf(stdout, "ERROR: creating event base %d\n", b);
-			return false;
-		}
-	}
-
-	g_start_ms = cf_getms();
-
-	for (int b = 0; b < g_config.num_bases; b++) {
-		if (pthread_create(&g_bases[b].thread, NULL, run_transactions,
-				(void*)(uint64_t)b) != 0) {
-			fprintf(stdout, "ERROR: creating thread %d\n", b);
-			return false;
-		}
-	}
-
-	return true;
-}
-
-static void block_until_transactions_done() {
-	int total_timeouts = 0;
-
-	for (int b = 0; b < g_config.num_bases; b++) {
-		pthread_join(g_bases[b].thread, NULL);
-		event_base_free(g_bases[b].p_event_base);
-		g_bases[b].p_event_base = NULL;
-
-		total_timeouts += g_bases[b].num_timeouts;
-	}
-
-	int total_transactions = g_total_keys * (g_config.extra_laps + 1);
-	uint64_t elapsed_ms = cf_getms() - g_start_ms;
-
-	fprintf(stdout, "elapsed-ms %" PRIu64 ", tps %" PRIu64 "\n", elapsed_ms,
-		((uint64_t)total_transactions * 1000) / elapsed_ms);
-	fprintf(stdout, "timeouts %d, timeout-percent %.2lf\n", total_timeouts,
-		(double)(total_timeouts * 100) / (double)total_transactions);
-}
-
-static void cleanup() {
-	if (g_bases) {
-		for (int b = 0; b < g_config.num_bases; b++) {
-			if (g_bases[b].p_event_base) {
-				// Is it ok to assume 0 is not a valid pthread ID?
-				if (g_bases[b].thread) {
-					// This is not rigorous - it will leave transactions in
-					// progress, causing ev2citrusleaf_cluster_destroy() to
-					// leak transaction resources. TODO - deal with this!
-					event_base_loopbreak(g_bases[b].p_event_base);
-					pthread_join(g_bases[b].thread, NULL);
-				}
-
-				event_base_free(g_bases[b].p_event_base);
-			}
-		}
-	}
-
-	if (g_p_cluster) {
-		ev2citrusleaf_cluster_destroy(g_p_cluster);
-	}
-
-	ev2citrusleaf_shutdown(true);
-	destroy_config();
-}
-
-static void destroy_config() {
-	if (g_config.p_host != DEFAULT_HOST) {
-		free((char*)g_config.p_host);
-	}
-
-	if (g_config.p_namespace != DEFAULT_NAMESPACE) {
-		free((char*)g_config.p_namespace);
-	}
-
-	if (g_config.p_set != DEFAULT_SET) {
-		free((char*)g_config.p_set);
-	}
-}
-
-static void init_keys() {
-	for (int i = 0; i < g_total_keys; i++) {
-		sprintf(g_keys[i].str, "%063d", i);
-		// Do keys have to be string types? Why this length?
-//		fprintf(stdout, "key %6d: %s\n", i, g_keys[i].str);
-		ev2citrusleaf_object_init_str(&g_keys[i].obj, g_keys[i].str);
-	}
-}
-
-static void init_value() {
-	strcpy(g_bin.bin_name, BIN_NAME);
-	ev2citrusleaf_object_init_str(&g_bin.object, (char*)BIN_DATA);
-}
-
-static void* pack_user_data(int b, int k) {
-	// Yes, we're assuming a void* is 64 bits...
-	return (void*)(((uint64_t)b << 48) + (uint64_t)k);
-}
-
-static void parse_user_data(void* pv_udata, int* p_b, int* p_k) {
-	*p_b = (int)((uint64_t)pv_udata >> 48);
-	*p_k = (int)((uint64_t)pv_udata & 0xffffFFFFffff);
-}
-
-static bool set_config(int argc, char* argv[]) {
+static bool
+set_config(int argc, char* argv[])
+{
 	g_config.p_host = DEFAULT_HOST;
 	g_config.port = DEFAULT_PORT;
 	g_config.p_namespace = DEFAULT_NAMESPACE;
 	g_config.p_set = DEFAULT_SET;
-	g_config.timeout_ms = DEFAULT_TIMEOUT_MS;
-	g_config.num_bases = DEFAULT_NUM_BASES;
-	g_config.keys_per_base = DEFAULT_KEYS_PER_BASE;
-	g_config.extra_laps = DEFAULT_EXTRA_LAPS;
-	g_config.write_pct = DEFAULT_WRITE_PCT;
+	g_config.timeout_msec = DEFAULT_TIMEOUT_MSEC;
+	g_config.num_keys = DEFAULT_NUM_KEYS;
 
 	int c;
 
-	while ((c = getopt(argc, argv, "h:p:n:s:m:b:k:x:w:")) != -1) {
+	while ((c = getopt(argc, argv, "h:p:n:s:m:k:")) != -1) {
 		switch (c) {
 		case 'h':
 			g_config.p_host = strdup(optarg);
@@ -507,98 +205,531 @@ static bool set_config(int argc, char* argv[]) {
 			break;
 
 		case 'm':
-			g_config.timeout_ms = atoi(optarg);
-			break;
-
-		case 'b':
-			g_config.num_bases = atoi(optarg);
+			g_config.timeout_msec = atoi(optarg);
 			break;
 
 		case 'k':
-			g_config.keys_per_base = atoi(optarg);
-			break;
-
-		case 'x':
-			g_config.extra_laps = atoi(optarg);
-			break;
-
-		case 'w':
-			g_config.write_pct = atoi(optarg);
+			g_config.num_keys = atoi(optarg);
 			break;
 
 		default:
+			destroy_config();
 			usage();
 			return false;
 		}
 	}
 
-	g_total_keys = g_config.num_bases * g_config.keys_per_base;
-
-	fprintf(stderr, "example6:\n");
-	fprintf(stderr, "host %s, port %d\n", g_config.p_host, g_config.port);
-	fprintf(stderr, "namespace %s, set %s, timeout-ms %d\n",
-		g_config.p_namespace, g_config.p_set, g_config.timeout_ms);
-	fprintf(stderr, "num-bases %d, keys-per-base %d, total-keys %d\n",
-		g_config.num_bases, g_config.keys_per_base, g_total_keys);
-	fprintf(stderr, "extra-laps %d, write-pct %d\n", g_config.extra_laps,
-		g_config.write_pct);
+	LOG("host:                %s", g_config.p_host);
+	LOG("port:                %d", g_config.port);
+	LOG("namespace:           %s", g_config.p_namespace);
+	LOG("set name:            %s", g_config.p_set);
+	LOG("transaction timeout: %d msec", g_config.timeout_msec);
+	LOG("number of keys:      %d", g_config.num_keys);
 
 	return true;
 }
 
-static void usage() {
-	fprintf(stderr, "Usage:\n");
-	fprintf(stderr, "-h host [default: %s]\n", DEFAULT_HOST);
-	fprintf(stderr, "-p port [default: %d]\n", DEFAULT_PORT);
-	fprintf(stderr, "-n namespace [default: %s]\n", DEFAULT_NAMESPACE);
-	fprintf(stderr, "-s set [default: %s]\n", DEFAULT_SET);
-	fprintf(stderr, "-m timeout ms [default: %d]\n", DEFAULT_TIMEOUT_MS);
-	fprintf(stderr, "-b number of bases [default: %d]\n", DEFAULT_NUM_BASES);
-	fprintf(stderr, "-k keys per base [default: %d]\n", DEFAULT_KEYS_PER_BASE);
-	fprintf(stderr, "-x extra laps [default: %d]\n", DEFAULT_EXTRA_LAPS);
-	fprintf(stderr, "-w write percent [default: %d]\n", DEFAULT_WRITE_PCT);
+//------------------------------------------------
+// Free any resources allocated for configuration.
+//
+static void
+destroy_config()
+{
+	if (g_config.p_host != DEFAULT_HOST) {
+		free((char*)g_config.p_host);
+	}
 
-	destroy_config();
+	if (g_config.p_namespace != DEFAULT_NAMESPACE) {
+		free((char*)g_config.p_namespace);
+	}
+
+	if (g_config.p_set != DEFAULT_SET) {
+		free((char*)g_config.p_set);
+	}
+}
+
+//------------------------------------------------
+// Display supported command line options.
+//
+static void
+usage()
+{
+	LOG("Usage:");
+	LOG("-h host [default: %s]", DEFAULT_HOST);
+	LOG("-p port [default: %d]", DEFAULT_PORT);
+	LOG("-n namespace [default: %s]", DEFAULT_NAMESPACE);
+	LOG("-s set name [default: %s]", DEFAULT_SET);
+	LOG("-m transaction timeout msec [default: %d]", DEFAULT_TIMEOUT_MSEC);
+	LOG("-k number of keys [default: %d]", DEFAULT_NUM_KEYS);
 }
 
 
 //==========================================================
-// Debugging Helpers
+// Cluster Management
 //
 
-static void as_sig_handle_segv(int sig_num) {
-	fprintf(stdout, "Signal SEGV received: stack trace\n");
+//------------------------------------------------
+// Initialize client and connect to database.
+//
+static bool
+start_cluster_management()
+{
+	// Initialize Citrusleaf client.
+	int result = ev2citrusleaf_init(NULL);
 
-	void* bt[50];
-	uint sz = backtrace(bt, 50);
-	
-	char** strings = backtrace_symbols(bt, sz);
-
-	for (int i = 0; i < sz; ++i) {
-		fprintf(stdout, "stacktrace: frame %d: %s\n", i, strings[i]);
+	if (result != 0) {
+		LOG("ERROR: initializing cluster [%d]", result);
+		return false;
 	}
 
-	free(strings);
-	
-	fflush(stdout);
-	_exit(-1);
+	// Create cluster object needed for all database operations.
+	g_p_cluster = ev2citrusleaf_cluster_create(NULL);
+
+	if (! g_p_cluster) {
+		LOG("ERROR: creating cluster");
+		return false;
+	}
+
+	// Connect to Citrusleaf database server cluster.
+	result = ev2citrusleaf_cluster_add_host(g_p_cluster, (char*)g_config.p_host,
+			g_config.port);
+
+	if (result != 0) {
+		LOG("ERROR: adding host [%d]", result);
+		return false;
+	}
+
+	// Verify database server cluster is ready.
+	int tries = 0;
+
+	while (tries < CLUSTER_VERIFY_TRIES) {
+		int n = ev2citrusleaf_cluster_get_active_node_count(g_p_cluster);
+
+		if (n > 0) {
+			LOG("found %d cluster node%s", n, n > 1 ? "s" : "");
+			return true;
+		}
+
+		usleep(CLUSTER_VERIFY_INTERVAL);
+		tries++;
+	}
+
+	LOG("ERROR: connecting to cluster");
+	return false;
 }
 
-static void as_sig_handle_term(int sig_num) {
-	fprintf(stdout, "Signal TERM received, aborting\n");
-
-  	void* bt[50];
-	uint sz = backtrace(bt, 50);
-
-	char** strings = backtrace_symbols(bt, sz);
-
-	for (int i = 0; i < sz; ++i) {
-		fprintf(stdout, "stacktrace: frame %d: %s\n", i, strings[i]);
+//------------------------------------------------
+// Disconnect from database and clean up client.
+//
+static void
+stop_cluster_management()
+{
+	if (g_p_cluster) {
+		ev2citrusleaf_cluster_destroy(g_p_cluster);
 	}
 
-	free(strings);
+	ev2citrusleaf_shutdown(true);
+}
 
-	fflush(stdout);
-	_exit(0);
+
+//==========================================================
+// Transaction Management
+//
+
+//------------------------------------------------
+// Do the series of database operations.
+//
+static void
+do_transactions()
+{
+	// Initialize the record keys and digests.
+	for (int k = 0; k < g_config.num_keys; k++) {
+		ev2citrusleaf_object_init_int(&g_keys[k], (int64_t)k);
+
+		if (0 != ev2citrusleaf_calculate_digest(g_config.p_set, &g_keys[k],
+				&g_digests[k])) {
+			LOG("ERROR: calculating digest");
+			return;
+		}
+	}
+
+	// Initialize (default) write parameters - used in insert phase.
+	ev2citrusleaf_write_parameters_init(&g_write_parameters);
+
+	// Create the event base for transactions.
+	if ((g_p_event_base = event_base_new()) == NULL) {
+		LOG("ERROR: creating event base");
+		return;
+	}
+
+	// Start the event loop. There must be an event added on the base before
+	// calling event_base_dispatch(), or the event loop will just exit. Here we
+	// start our first transaction to ensure an event is added.
+
+	if (put(0)) {
+
+		// event_base_dispatch() will block and run the event loop until no more
+		// events are added, or until something calls event_base_loopbreak() or
+		// event_base_loopexit().
+
+		// To keep an event loop running, an application must therefore ensure
+		// at least one event is always added.
+
+		// In this example, we'll exit the event loop when a transaction
+		// callback is made in which we don't start another transaction.
+
+		if (event_base_dispatch(g_p_event_base) < 0) {
+			LOG("ERROR: event base dispatch");
+		}
+	}
+	else {
+		LOG("ERROR: starting phase 1");
+	}
+
+	// Free the event base.
+	event_base_free(g_p_event_base);
+}
+
+
+//==========================================================
+// Transaction Operations
+//
+
+//------------------------------------------------
+// Start a database write operation.
+//
+static bool
+put(int k)
+{
+	// Write just one bin per record.
+	ev2citrusleaf_bin bin;
+
+	// Always the same bin name, use truncated digest as (integer type) value.
+	strcpy(bin.bin_name, BIN_NAME);
+	ev2citrusleaf_object_init_int(&bin.object, *(int64_t*)&g_digests[k]);
+
+	if (0 != ev2citrusleaf_put(
+			g_p_cluster,					// cluster
+			(char*)g_config.p_namespace,	// namespace
+			(char*)g_config.p_set,			// set name
+			&g_keys[k],						// key of record to write
+			&bin,							// bin (array) to write
+			1,								// just one bin for us
+			&g_write_parameters,			// write parameters
+			g_config.timeout_msec,			// transaction timeout
+			put_cb,							// callback for this transaction
+			(void*)(uint64_t)k,				// "user data" - key index for us
+			g_p_event_base)) {				// event base for this transaction
+		LOG("ERROR: put(), key %d", k);
+		return false;
+	}
+
+	return true;
+}
+
+//------------------------------------------------
+// Complete a database write operation.
+//
+static void
+put_cb(int return_value, ev2citrusleaf_bin* bins, int n_bins,
+		uint32_t generation, void* pv_udata)
+{
+	int k = (int)(uint64_t)pv_udata;
+
+	switch (return_value) {
+	case EV2CITRUSLEAF_OK:
+		g_num_puts_ok++;
+		break;
+
+	case EV2CITRUSLEAF_FAIL_TIMEOUT:
+		DETAIL("PUT TIMEOUT: digest %lx", *(uint64_t*)&g_digests[k]);
+		// Causes EV2CITRUSLEAF_FAIL_NOTFOUND on existence check, delete, get.
+		break;
+
+	default:
+		LOG("ERROR: put return-value %d, digest %lx", return_value,
+				*(uint64_t*)&g_digests[k]);
+		break;
+	}
+
+	// Insert the next record if this wasn't the last one. Obviously inserting
+	// all the records in series like this is sub-optimal, but it's simple, and
+	// the purpose here is to demonstrate the batch-exists and batch-get APIs.
+	// Perhaps in the future we'll implement a batch put API.
+
+	if (++k < g_config.num_keys) {
+		put(k);
+	}
+	else {
+		// Done inserting records.
+		LOG("inserted %d records ok, %d failed", g_num_puts_ok,
+				g_config.num_keys - g_num_puts_ok);
+
+		// Do batch existence check.
+		batch_exists();
+	}
+
+	// Will exit event loop if put() or batch_exists() fails...
+}
+
+//------------------------------------------------
+// Start the batch existence check operation.
+//
+static void
+batch_exists()
+{
+	if (0 != ev2citrusleaf_exists_many_digest(
+			g_p_cluster,					// cluster
+			(char*)g_config.p_namespace,	// namespace
+			g_digests,						// batch of digests to check
+			g_config.num_keys,				// number of digests in batch
+			g_config.timeout_msec,			// transaction timeout
+			batch_exists_cb,				// callback for this transaction
+			NULL,							// "user data" - nothing for us
+			g_p_event_base)) {				// event base for this transaction
+		LOG("ERROR: batch_exists()");
+	}
+}
+
+//------------------------------------------------
+// Complete the batch existence check operation.
+//
+static void
+batch_exists_cb(int result, ev2citrusleaf_rec* recs, int n_recs, void* pv_udata)
+{
+	switch (result) {
+	case EV2CITRUSLEAF_OK:
+		LOG("batch exists result ok, full record results");
+		break;
+
+	case EV2CITRUSLEAF_FAIL_TIMEOUT:
+		LOG("BATCH EXISTS TIMEOUT: partial record results");
+		break;
+
+	default:
+		LOG("ERROR: batch exists result %d, partial record results", result);
+		break;
+	}
+
+	// Examine the result.
+
+	int n_found = 0;
+
+	for (int i = 0; i < n_recs; i++) {
+		switch (recs[i].result) {
+		case EV2CITRUSLEAF_OK:
+			n_found++;
+			break;
+
+		case EV2CITRUSLEAF_FAIL_NOTFOUND:
+			DETAIL("batch exists record %lx not found",
+					*(uint64_t*)&recs[i].digest);
+			break;
+
+		default:
+			// Individual records' result should be either OK or NOTFOUND.
+			LOG("ERROR: batch exists record %lx result %d",
+					*(uint64_t*)&recs[i].digest, recs[i].result);
+			break;
+		}
+
+		// Sanity check - no bin data should ever be returned.
+		if (recs[i].bins || recs[i].n_bins) {
+			LOG("ERROR: batch exists unexpectedly returned bins");
+		}
+	}
+
+	LOG("batch exists queried %d records, returned %d, found %d",
+			g_config.num_keys, n_recs, n_found);
+
+	// Delete 10% of the records, somewhere in the middle of the key range.
+
+	g_num_keys_to_delete = g_config.num_keys / 10;
+
+	if (g_num_keys_to_delete == 0) {
+		g_num_keys_to_delete = 1;
+	}
+
+	int k_start = g_config.num_keys / 2;
+
+	if (k_start + g_num_keys_to_delete > g_config.num_keys) {
+		k_start = 0;
+	}
+
+	delete(k_start);
+	// Will exit event loop if delete() fails...
+}
+
+//------------------------------------------------
+// Delete a record.
+//
+static void
+delete(int k)
+{
+	if (0 != ev2citrusleaf_delete(
+			g_p_cluster,					// cluster
+			(char*)g_config.p_namespace,	// namespace
+			(char*)g_config.p_set,			// set name
+			&g_keys[k],						// key of record to delete
+			&g_write_parameters,			// write parameters
+			g_config.timeout_msec,			// transaction timeout
+			delete_cb,						// callback for this transaction
+			(void*)(uint64_t)k,				// "user data" - key index for us
+			g_p_event_base)) {				// event base for this transaction
+		LOG("ERROR: fail delete()");
+	}
+}
+
+//------------------------------------------------
+// Complete delete operation.
+//
+static void
+delete_cb(int return_value, ev2citrusleaf_bin* bins, int n_bins,
+		uint32_t generation, void* pv_udata)
+{
+	int k = (int)(uint64_t)pv_udata;
+
+	switch (return_value) {
+	case EV2CITRUSLEAF_OK:
+		g_num_deletes_ok++;
+		// Causes EV2CITRUSLEAF_FAIL_NOTFOUND on get.
+		break;
+
+	case EV2CITRUSLEAF_FAIL_TIMEOUT:
+		DETAIL("DELETE TIMEOUT: digest %lx", *(uint64_t*)&g_digests[k]);
+		break;
+
+	default:
+		LOG("ERROR: delete return-value %d, digest %lx", return_value,
+				*(uint64_t*)&g_digests[k]);
+		break;
+	}
+
+	// Delete the next record if this wasn't the last one.
+
+	if (--g_num_keys_to_delete > 0) {
+		delete(k + 1);
+	}
+	else {
+		// Done deleting records.
+		LOG("deleted %d records", g_num_deletes_ok);
+
+		// Do batch get.
+		batch_get();
+	}
+
+	// Will exit event loop if delete() or batch_get() fails...
+}
+
+//------------------------------------------------
+// Start the batch read operation.
+//
+static void
+batch_get()
+{
+	if (0 != ev2citrusleaf_get_many_digest(
+			g_p_cluster,					// cluster
+			(char*)g_config.p_namespace,	// namespace
+			g_digests,						// batch of digests to check
+			g_config.num_keys,				// number of digests in batch
+			NULL,							// bin name filter, NULL means all
+			0,								// number of bin names
+			g_config.timeout_msec,			// transaction timeout
+			batch_get_cb,					// callback for this transaction
+			NULL,							// "user data" - nothing for us
+			g_p_event_base)) {				// event base for this transaction
+		LOG("ERROR: batch_get()");
+	}
+}
+
+//------------------------------------------------
+// Complete the batch read operation.
+//
+static void
+batch_get_cb(int result, ev2citrusleaf_rec* recs, int n_recs, void* pv_udata)
+{
+	switch (result) {
+	case EV2CITRUSLEAF_OK:
+		LOG("batch get result ok, full record results");
+		break;
+
+	case EV2CITRUSLEAF_FAIL_TIMEOUT:
+		LOG("BATCH GET TIMEOUT: partial record results");
+		break;
+
+	default:
+		LOG("ERROR: batch get result %d, partial record results", result);
+		break;
+	}
+
+	// Examine the result.
+
+	int n_found = 0;
+
+	for (int i = 0; i < n_recs; i++) {
+		switch (recs[i].result) {
+		case EV2CITRUSLEAF_OK:
+			n_found++;
+			validate_data(&recs[i]);
+			break;
+
+		case EV2CITRUSLEAF_FAIL_NOTFOUND:
+			DETAIL("batch get record %lx not found",
+					*(uint64_t*)&recs[i].digest);
+			// Sanity check - no bin data should ever be returned.
+			if (recs[i].bins || recs[i].n_bins) {
+				LOG("ERROR: batch get returned bins on record not-found");
+			}
+			break;
+
+		default:
+			// Individual records' result should be either OK or NOTFOUND.
+			LOG("ERROR: batch get record %lx result %d",
+					*(uint64_t*)&recs[i].digest, recs[i].result);
+			// Sanity check - no bin data should ever be returned.
+			if (recs[i].bins || recs[i].n_bins) {
+				LOG("ERROR: batch get returned bins on record error");
+			}
+			break;
+		}
+	}
+
+	LOG("batch get queried %d records, returned %d, found %d",
+			g_config.num_keys, n_recs, n_found);
+
+	// Done with last test, will exit event loop...
+}
+
+//------------------------------------------------
+// Validate bin data read from database.
+//
+static void
+validate_data(ev2citrusleaf_rec* p_rec)
+{
+	uint64_t d = *(uint64_t*)&p_rec->digest;
+
+	if (! p_rec->bins) {
+		LOG("ERROR: no bin data with returned record %lx", d);
+		return;
+	}
+
+	if (p_rec->n_bins != 1) {
+		LOG("ERROR: record %lx had unexpected n_bins %d", d, p_rec->n_bins);
+	}
+	else if (strcmp(p_rec->bins[0].bin_name, BIN_NAME) != 0) {
+		LOG("ERROR: record %lx had unexpected bin name %s", d,
+				p_rec->bins[0].bin_name);
+	}
+	else if (p_rec->bins[0].object.type != CL_INT) {
+		LOG("ERROR: record %lx had unexpected data type %d", d,
+				p_rec->bins[0].object.type);
+	}
+	else if (p_rec->bins[0].object.u.i64 != (int64_t)d) {
+		LOG("ERROR: record %lx had unexpected data value %ld", d,
+				p_rec->bins[0].object.u.i64);
+	}
+
+	// Bins with integer data type don't need this, but it's good form.
+	ev2citrusleaf_bins_free(p_rec->bins, p_rec->n_bins);
 }
 

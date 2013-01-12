@@ -40,16 +40,24 @@ get_name_value(char* p, char** name, char** value)
 	return p;
 }
 
-// Sensible and fast strncpy implementation.
-void
+// Fast strncpy implementation.
+// Return true if truncation occurred.
+bool
 cl_strncpy(char* trg, const char* src, int len)
 {
 	int max = len - 1;
+	int i = 0;
 
-	for (int i = 0; *src && i < max; i++) {
+	while (*src) {
+		if (i >= max) {
+			*trg = 0;
+			return true;
+		}
 		*trg++ = *src++;
+		i++;
 	}
 	*trg = 0;
+	return false;
 }
 
 int

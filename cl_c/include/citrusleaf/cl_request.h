@@ -34,4 +34,4 @@ int cl_request_node_name(struct sockaddr_in* sa_in, char* node_name);
 int cl_get_n_partitions(struct sockaddr_in* sa_in, int* n_partitions);
 int cl_request_n_partitions(struct sockaddr_in* sa_in, int* n_partitions);
 
-void cl_strncpy(char* trg, const char* src, int len);
+bool cl_strncpy(char* trg, const char* src, int len);

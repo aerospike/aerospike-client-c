@@ -78,8 +78,8 @@ gendoc:
 ##
 check_msgpack:
 ifndef MSGPACK_PATH
-	$(warning *** warning env MSGPACK_PATH not set. Using modules/msgpack as default)
-	MSGPACK_PATH = modules/msgpack
+$(warning *** warning env MSGPACK_PATH not set. Using modules/msgpack as default)
+MSGPACK_PATH := modules/msgpack
 endif
 
 modules/msgpack/Makefile: check_msgpack

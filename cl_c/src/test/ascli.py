@@ -4,15 +4,17 @@ import getopt
 from subprocess import call
 
 def Usage():
-	print ('Helper script to Execute a command against an Aerospike cluster')
+	print ('Helper script to Execute a command against an Aerospike cluster. ')
 	print ('Usage: ascli')
 	print ('-l, --location           location of the executables')
 	print ('     	                 default: /opt/citrusleaf/bin/commands')
 	print ('-u, --usage              usage')
 	print ('-v, --verbose            verbose')
 	print ('')
+	print ('For more usage, see client documentation.')
 	print ('Example: ')
 	print ('ascli udf-record-apply test myset mykey test sum 4 5')
+	print ('')
 	sys.exit(0)
 
 if __name__ == '__main__':

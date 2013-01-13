@@ -1,10 +1,5 @@
 include project/build.makefile
 
-ifndef MSGPACK_PATH
-$(warning *** warning env MSGPACK_PATH not set. Using modules/msgpack as default)
-MSGPACK_PATH = modules/msgpack
-endif
-
 CFLAGS = -std=gnu99 -g -O3 -fno-common -fno-strict-aliasing -rdynamic -fPIC -Wall $(AS_CFLAGS) -DMARCH_$(ARCH) -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_GNU_SOURCE
 LDFLAGS = 
 
@@ -39,8 +34,9 @@ OBJECTS = $(TARGET_OBJ)/*.o modules/mod-lua/$(TARGET_OBJ)/*.o modules/common/$(T
 ##
 ## MAIN
 ##
+.DEFAULT_GOAL := all
 
-all: libcitrusleaf.so libcitrusleaf.a prepare
+all: libcitrusleaf.so libcitrusleaf.a prepare test 
 
 libcitrusleaf.o: $(call objects, $(CITRUSLEAF))
 
@@ -58,7 +54,7 @@ prepare:
 	cp modules/common/$(TARGET_INCL)/citrusleaf/*.h $(TARGET_INCL)/citrusleaf/.
 
 install: 
-	cp $(TARGET_LIB)/* /usr/local/lib/.
+	cp $(TARGET_LIB)/* /usr/lib/.
 	mkdir -p /opt/citrusleaf/bin/commands
 	cp $(SOURCE_TEST)/ascli.py /opt/citrusleaf/bin/ascli
 	cp $(TARGET_BIN)/test/exists /opt/citrusleaf/bin/commands/.
@@ -70,9 +66,9 @@ install:
 	cp $(TARGET_BIN)/test/udf-put /opt/citrusleaf/bin/commands/.
 	cp $(TARGET_BIN)/test/udf-record-apply /opt/citrusleaf/bin/commands/.
 	cp $(TARGET_BIN)/test/udf-remove /opt/citrusleaf/bin/commands/.
+ifeq ($(wildcard /usr/bin/ascli),)
 	ln -s /opt/citrusleaf/bin/ascli /usr/bin/ascli
-
-
+endif
 
 gendoc:
 	cd doc; make html
@@ -80,8 +76,13 @@ gendoc:
 ##
 ## SUBMODULES
 ##
+check_msgpack:
+ifndef MSGPACK_PATH
+	$(warning *** warning env MSGPACK_PATH not set. Using modules/msgpack as default)
+	MSGPACK_PATH = modules/msgpack
+endif
 
-modules/msgpack/Makefile: 
+modules/msgpack/Makefile: check_msgpack
 	cd $(MSGPACK_PATH) && ./configure
 
 msgpack: modules/msgpack/Makefile

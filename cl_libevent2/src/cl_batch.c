@@ -83,7 +83,7 @@ static void cl_batch_job_timeout_event(int fd, short event, void* pv_this);
 //
 
 struct cl_batch_job_s {
-	// All events use this base - a batch job is single-threaded.
+	// All events use this base.
 	struct event_base*			p_event_base;
 
 	// User supplied callback and data.
@@ -316,7 +316,10 @@ cl_batch_job_create(struct event_base* base, ev2citrusleaf_get_many_cb user_cb,
 
 	memset(this, 0, size);
 
-	// Add the timeout event right away.
+	// Add the timeout event right away. Note that "cross-threaded" requests are
+	// not safe against this timer firing before the end of this non-blocking
+	// get_many() call - for now we just rely on reasonable timeout values.
+
 	evtimer_assign((struct event*)this->timer_event_space, base,
 			cl_batch_job_timeout_event, this);
 
@@ -774,12 +777,15 @@ cl_batch_node_req_start(cl_batch_node_req* this)
 			cl_batch_job_get_base(this->p_job), this->fd, EV_WRITE,
 			cl_batch_node_req_event, this);
 
-	if (0 != event_add((struct event*)this->event_space, 0)) {
-		cf_warn("batch node request add event failed: will get partial result");
-		return;
-	}
+	// In "cross-threaded" requests, don't access member data after adding the
+	// event - the callback may occur and destroy this object immediately.
 
 	this->event_added = true;
+
+	if (0 != event_add((struct event*)this->event_space, 0)) {
+		cf_warn("batch node request add event failed: will get partial result");
+		this->event_added = false;
+	}
 }
 
 //------------------------------------------------

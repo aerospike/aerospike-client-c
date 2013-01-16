@@ -1,4 +1,3 @@
-
 function printTable(t)
   local k, v;
   for k, v in pairs(t) do
@@ -21,18 +20,22 @@ function prefetch_and_print(record)
 end
 
 function do_trim_bin(record)
-  local my_ceil = tonumber(record:GetArg('limits'));
+--  local my_ceil = tonumber(record:GetArg('limits'));
+  local my_ceil = (record.limits);
   local cat2 = record.cats;
   local y = string.len(cat2);
   if (y > my_ceil) then
     record.cats = 'new string';
   end
+  aerospike:update(record)
   return 'TRIM_BIN: ' .. record.cats;
 end
 
-function do_update_bin(record) 
-  record.bin_to_change    = "changed by lua at "..os.time(); 
+function do_update_bin(record)
+--  record.bin_to_change    = "changed by lua at "..os.time(); 
+  record.bin_to_change    = "changed by lua";
   print('CLIENT: reverted do_update_bin: ' .. record.bin_to_change);
+  aerospike:update(record)
   return {s = 'UPDATED_BIN: ' .. record.bin_to_change };
 end
 
@@ -42,23 +45,27 @@ function do_new_bin(record)
   else
      print('CLIENT: new_bin already exists');
   end
+  aerospike:update(record)
   return 'NEW_BIN';
 end
 
 function do_delete_bin(record) 
     print('CLIENT: DEL BIN');
-    record.bin3 = nil; 
+    record.bin3 = nil;
+  aerospike:update(record); 
   return 'DELETE_BIN: ';
 end
 
 function do_add_record(record)
    record.lua_bin = "new_value";	
    record.second_bin = "another_value";
+   aerospike:create(record);
    return 'ADD_RECORD';
 end
 
 function do_delete_record(record) 
-  record:Delete();
+--  record:Delete();
+  aerospike:remove(record);
   return 'DELETE_RECORD: ';
 end
 
@@ -218,6 +225,7 @@ function do_updated_copy(record)
    local t = record
    t.c_bin = "new_value"
    t.a_bin = nil
+   aerospike:update(record)
    return t
 end
 

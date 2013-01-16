@@ -50,6 +50,9 @@ static cl_seed_node*
 cl_shm_init_seed_array(int seed_count)
 {
 	if (seed_count > g_seed_count) {
+		if (g_seed_array) {
+			free(g_seed_array);
+		}
 		g_seed_array = (cl_seed_node*) malloc(seed_count * sizeof(cl_seed_node));
 		g_seed_count = seed_count;
 	}

@@ -20,11 +20,11 @@ typedef struct {
 	char* read_replicas;
 } cl_replicas;
 
-int cl_get_node_info(struct sockaddr_in* sa_in, cl_node_info* node_info);
+int cl_get_node_info(const char* node_name, struct sockaddr_in* sa_in, cl_node_info* node_info);
 int cl_request_node_info(struct sockaddr_in* sa_in, cl_node_info* node_info);
 void cl_node_info_free(cl_node_info* node_info);
 
-int cl_get_replicas(struct sockaddr_in* sa_in, cl_replicas* replicas);
+int cl_get_replicas(const char* node_name, struct sockaddr_in* sa_in, cl_replicas* replicas);
 int cl_request_replicas(struct sockaddr_in* sa_in, cl_replicas* replicas);
 void cl_replicas_free(cl_replicas* replicas);
 

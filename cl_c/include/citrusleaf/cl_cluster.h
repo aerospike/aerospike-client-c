@@ -101,7 +101,7 @@ struct cl_cluster_s {
 	cl_partition_table *partition_table_head;
 	
 	uint32_t		ref_count;
-	uint32_t		tend_period;
+	uint32_t		tend_speed;
 	// Need a lock
 	pthread_mutex_t	LOCK;
 	

@@ -126,6 +126,9 @@ extern void cl_cluster_node_fd_put(cl_cluster_node *cn, int fd, bool asyncfd); 	
 extern int citrusleaf_cluster_init();
 extern cl_cluster_node *cl_cluster_node_get_byname(cl_cluster *asc, char *name);
 
+// must free node_names when done
+extern int cl_cluster_get_node_names_byhostportlist(cl_cluster *asc, char *list_nodes, int *n_nodes, char **node_names);
+
 //
 extern int citrusleaf_info_parse_single(char *values, char **value);
 

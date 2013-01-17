@@ -901,7 +901,7 @@ parse_get_maxbins(uint8_t *buf, size_t buf_len)
 
 int
 parse(uint8_t *buf, size_t buf_len, ev2citrusleaf_bin *values, int n_values,
-		int *result_code, uint32_t *generation, uint32_t *p_void_time)
+		int *result_code, uint32_t *generation, uint32_t *p_expiration)
 {
 	int i;
 	cl_msg	*msg = (cl_msg *)buf;
@@ -912,7 +912,10 @@ parse(uint8_t *buf, size_t buf_len, ev2citrusleaf_bin *values, int n_values,
 
 	*result_code = msg->result_code;
 	*generation = msg->generation;
-	*p_void_time = msg->record_ttl;
+
+	uint32_t now = cf_clepoch_seconds();
+
+	*p_expiration = msg->record_ttl > now ? msg->record_ttl - now : 0;
 
 	if (msg->n_fields) {
 		cf_debug("Got %d fields in the response", msg->n_fields);
@@ -1006,9 +1009,9 @@ ev2citrusleaf_request_complete(cl_request *req, bool timedout)
 		// parse up into the response
 		int			return_code;
 		uint32_t	generation;
-		uint32_t	void_time;
+		uint32_t	expiration;
 
-		parse(req->rd_buf, req->rd_buf_size, &bins[0], n_bins, &return_code, &generation, &void_time);
+		parse(req->rd_buf, req->rd_buf_size, &bins[0], n_bins, &return_code, &generation, &expiration);
 
 		// For simplicity & backwards-compatibility, convert server-side
 		// timeouts to the usual timeout return-code:
@@ -1018,7 +1021,7 @@ ev2citrusleaf_request_complete(cl_request *req, bool timedout)
 		}
 
 		// Call the callback
-		(req->user_cb) (return_code ,bins, n_bins, generation, void_time, req->user_data);
+		(req->user_cb) (return_code ,bins, n_bins, generation, expiration, req->user_data);
 
 		cf_atomic_int_incr(&g_cl_stats.req_success);
 		

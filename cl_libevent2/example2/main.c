@@ -125,7 +125,7 @@ static void stop_cluster_management();
 static void* run_cluster_mgr_event_loop(void* pv_unused);
 static void do_transactions();
 static void client_cb(int return_value, ev2citrusleaf_bin* bins, int n_bins,
-		uint32_t generation, uint32_t void_time, void* pv_udata);
+		uint32_t generation, uint32_t expiration, void* pv_udata);
 static bool start_phase_1();
 static bool start_phase_2();
 static bool complete_phase_2(int return_value, ev2citrusleaf_bin* bins,
@@ -550,7 +550,7 @@ do_transactions()
 //
 static void
 client_cb(int return_value, ev2citrusleaf_bin* bins, int n_bins,
-		uint32_t generation, uint32_t void_time, void* pv_udata)
+		uint32_t generation, uint32_t expiration, void* pv_udata)
 {
 	// Complete the current phase.
 	if (PHASE_COMPLETE_FUNCTIONS[g_phase_index](

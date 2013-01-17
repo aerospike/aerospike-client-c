@@ -109,7 +109,7 @@ static void client_info_cb(int return_value, char* response,
 		size_t response_len, void* pv_udata);
 static void do_transactions();
 static void client_cb(int return_value, ev2citrusleaf_bin* bins, int n_bins,
-		uint32_t generation, uint32_t void_time, void* pv_udata);
+		uint32_t generation, uint32_t expiration, void* pv_udata);
 static bool start_phase_1(uint32_t generation);
 static bool start_phase_2(uint32_t generation);
 static bool complete_phase_2(int return_value, ev2citrusleaf_bin* bins,
@@ -506,7 +506,7 @@ do_transactions()
 //
 static void
 client_cb(int return_value, ev2citrusleaf_bin* bins, int n_bins,
-		uint32_t generation, uint32_t void_time, void* pv_udata)
+		uint32_t generation, uint32_t expiration, void* pv_udata)
 {
 	// Complete the current phase.
 	if (PHASE_COMPLETE_FUNCTIONS[g_phase_index](

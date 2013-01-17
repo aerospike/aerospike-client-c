@@ -131,9 +131,15 @@ void ev2citrusleaf_bins_free(ev2citrusleaf_bin *bins, int n_bins);
 //
 // If bins array is present, application is responsible for freeing bins'
 // objects using ev2citrusleaf_bins_free(), but client will free bins array.
+//
+// expiration is reported as seconds from now, the time the callback is made.
+// (Currently the server returns an epoch-based time which the client converts
+// to seconds from now. So if the server's and client's real time clocks are out
+// of sync, the reported expiration will be inaccurate. We plan to have the
+// server do the conversion, eventually.)
 
 typedef void (*ev2citrusleaf_callback) (int return_value,  ev2citrusleaf_bin *bins, int n_bins,
-		uint32_t generation, uint32_t record_void_time, void *udata );
+		uint32_t generation, uint32_t expiration, void *udata );
 
 
 // Caller may replace client library's mutex calls with these callbacks (e.g. to
@@ -312,12 +318,12 @@ ev2citrusleaf_operate_digest(ev2citrusleaf_cluster *cl, char *ns, cf_digest *d,
 // bins array.
 
 typedef struct ev2citrusleaf_rec_s {
-	int					result;				// result for this record
-	cf_digest			digest;				// digest identifying record
-	uint32_t			generation;			// record generation
-	uint32_t			record_void_time;	// record void-time
-	ev2citrusleaf_bin	*bins;				// record data - array of bins
-	int					n_bins;				// number of bins in bins array
+	int					result;			// result for this record
+	cf_digest			digest;			// digest identifying record
+	uint32_t			generation;		// record generation
+	uint32_t			expiration;		// record expiration, seconds from now
+	ev2citrusleaf_bin	*bins;			// record data - array of bins
+	int					n_bins;			// number of bins in bins array
 } ev2citrusleaf_rec;
 
 // Batch-get callback, to report results of ev2citrusleaf_get_many_digest() and

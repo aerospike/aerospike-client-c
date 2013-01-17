@@ -137,10 +137,10 @@ static void log_statistics();
 static void trigger_cb(int fd, short event, void* pv_udata);
 static bool put(int b, int k);
 static void put_cb(int return_value, ev2citrusleaf_bin* bins, int n_bins,
-		uint32_t generation, uint32_t void_time, void* pv_udata);
+		uint32_t generation, uint32_t expiration, void* pv_udata);
 static bool get(int b, int k);
 static void get_cb(int return_value, ev2citrusleaf_bin* bins, int n_bins,
-		uint32_t generation, uint32_t void_time, void* pv_udata);
+		uint32_t generation, uint32_t expiration, void* pv_udata);
 static void validate_data(int b, int k, ev2citrusleaf_bin* bins, int n_bins);
 static void sig_handle_segv(int sig_num);
 static void sig_handle_user_stop(int sig_num);
@@ -673,7 +673,7 @@ put(int b, int k)
 //
 static void
 put_cb(int return_value, ev2citrusleaf_bin* bins, int n_bins,
-		uint32_t generation, uint32_t void_time, void* pv_udata)
+		uint32_t generation, uint32_t expiration, void* pv_udata)
 {
 	int k = (int)((uint64_t)pv_udata & 0xFFFF);
 	int b = (int)((uint64_t)pv_udata >> 32);
@@ -727,7 +727,7 @@ get(int b, int k)
 //
 static void
 get_cb(int return_value, ev2citrusleaf_bin* bins, int n_bins,
-		uint32_t generation, uint32_t void_time, void* pv_udata)
+		uint32_t generation, uint32_t expiration, void* pv_udata)
 {
 	int k = (int)((uint64_t)pv_udata & 0xFFFF);
 	int b = (int)((uint64_t)pv_udata >> 32);

@@ -331,7 +331,8 @@ static void* run_cluster_mgr(void* base) {
 
 
 ev2citrusleaf_cluster *
-ev2citrusleaf_cluster_create(struct event_base *base)
+ev2citrusleaf_cluster_create(struct event_base *base,
+		ev2citrusleaf_cluster_options *opts)
 {
 	if (! g_ev2citrusleaf_initialized) {
 		cf_warn("must call ev2citrusleaf_init() before ev2citrusleaf_cluster_create()");
@@ -361,7 +362,13 @@ ev2citrusleaf_cluster_create(struct event_base *base)
 
 	// Note - this keeps this base's event loop alive even with no events added.
 	asc->dns_base = evdns_base_new(asc->base, 1);
-	
+
+	// Copy the cluster options if any are passed in.
+	if (opts) {
+		asc->options = *opts;
+	}
+	// else defaults are all 0, from memset() in cluster_create()
+
 	// bookkeeping for the set hosts
 	cf_vector_pointer_init(&asc->host_str_v, 10, VECTOR_FLAG_BIGLOCK);
 	cf_vector_integer_init(&asc->host_port_v, 10, VECTOR_FLAG_BIGLOCK);

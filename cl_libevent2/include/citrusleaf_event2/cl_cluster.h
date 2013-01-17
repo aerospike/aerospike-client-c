@@ -107,7 +107,10 @@ struct ev2citrusleaf_cluster_s {
 	bool				internal_mgr;	// is there an internally created cluster manager thread and base?
 	struct event_base	*base;			// cluster manager base, specified by app or internally created
 	struct evdns_base	*dns_base;
-							
+
+	// Cluster-specific functionality options.
+	ev2citrusleaf_cluster_options	options;
+
 	// List of host-strings added by the user.
 	cf_vector		host_str_v;	// vector is pointer-type
 	cf_vector		host_port_v;  // vector is integer-type

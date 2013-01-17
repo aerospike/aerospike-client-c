@@ -300,7 +300,7 @@ start_cluster_management()
 	}
 
 	// Create cluster object needed for all database operations.
-	g_p_cluster = ev2citrusleaf_cluster_create(NULL);
+	g_p_cluster = ev2citrusleaf_cluster_create(NULL, NULL);
 
 	if (! g_p_cluster) {
 		LOG("ERROR: creating cluster");

@@ -183,9 +183,25 @@ void ev2citrusleaf_print_stats(void);
 struct ev2citrusleaf_cluster_s;
 typedef struct ev2citrusleaf_cluster_s ev2citrusleaf_cluster;
 
+typedef struct ev2citrusleaf_cluster_options_s {
+	// true		- Force all get transactions to read only the master copy.
+	// false	- Default - Allow get transactions to read master or replica.
+	bool	read_master_only;
+
+	// TBD - not supported yet.
+	// true		- A transaction may specify that its callback be made in a
+	//			  different thread from that of the transaction call.
+	// false	- Default - A transaction always specifies that its callback be
+	//			  made in the same thread as that of the transaction call.
+	bool	cross_threaded;
+} ev2citrusleaf_cluster_options;
+
 // Client uses base for internal cluster management events. If NULL is passed,
 // an event base and thread are created internally for cluster management.
-ev2citrusleaf_cluster *ev2citrusleaf_cluster_create(struct event_base *base);
+//
+// If NULL opts is passed, ev2citrusleaf_cluster_options defaults are used.
+ev2citrusleaf_cluster *ev2citrusleaf_cluster_create(struct event_base *base,
+		ev2citrusleaf_cluster_options *opts);
 
 // Before calling ev2citrusleaf_cluster_destroy(), stop initiating transaction
 // requests to this cluster, and make sure that all in-progress transactions are

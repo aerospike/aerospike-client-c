@@ -283,7 +283,7 @@ main(int argc, char **argv)
 	
 	
 	// Create a citrusleaf cluster object for subsequent requests
-	g_config.asc = ev2citrusleaf_cluster_create(0);
+	g_config.asc = ev2citrusleaf_cluster_create(0, 0);
 	if (!g_config.asc) {
 		fprintf(stderr, "could not create cluster, internal error\n");
 		return(-1);

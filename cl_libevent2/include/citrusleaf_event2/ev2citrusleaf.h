@@ -127,31 +127,13 @@ void ev2citrusleaf_object_free(ev2citrusleaf_object *o);
 void ev2citrusleaf_bins_free(ev2citrusleaf_bin *bins, int n_bins);
 
 
-
-// use:
-// Calling this will return an cl_conn, which is a structure internal to the library.
-// You can use this to do multiple calls to Aerospike instead of returning
-// and re-getting each time
-// although if you have an error, it might be because that particular cluster
-// went down and you might need to get a new connection to the cluster.
-// (perhaps we'll hide that detail in future APIs)
+// Callback to report results of database operations.
 //
-// You will be required to return your connections! That would be called a leak.
-//
-// the host-port combo should be some way to get to the cluster (often a DNS name)
-// However, it might be done. Using the cluster name allows the clustering
-// internals to keep track of other host-ports which are the same cluster,
-// and match your request to other hosts
+// If bins array is present, application is responsible for freeing bins'
+// objects using ev2citrusleaf_bins_free(), but client will free bins array.
 
-/*
-** when your result comes back,
-** the 'bins' field will be allocated for you as a single block.
-** you'll have to free it. Because, let's face it, we need to allocate out some
-** space like this anyway, and we'll try to do that with only one alloc, and you
-** might as well be able to enqueue the answer and send it somewhere else.
-*/
-
-typedef void (*ev2citrusleaf_callback) (int return_value,  ev2citrusleaf_bin *bins, int n_bins, uint32_t generation, void *udata );
+typedef void (*ev2citrusleaf_callback) (int return_value,  ev2citrusleaf_bin *bins, int n_bins,
+		uint32_t generation, uint32_t record_void_time, void *udata );
 
 
 // Caller may replace client library's mutex calls with these callbacks (e.g. to
@@ -328,6 +310,7 @@ ev2citrusleaf_operate_digest(ev2citrusleaf_cluster *cl, char *ns, cf_digest *d,
 // EV2CITRUSLEAF_OK bin data will be present. Application is responsible for
 // freeing bins' objects using ev2citrusleaf_bins_free(), but client will free
 // bins array.
+
 typedef struct ev2citrusleaf_rec_s {
 	int					result;				// result for this record
 	cf_digest			digest;				// digest identifying record
@@ -350,19 +333,30 @@ typedef struct ev2citrusleaf_rec_s {
 //
 // The order of records in recs array does not necessarily correspond to the
 // order of digests in request.
+
 typedef void (*ev2citrusleaf_get_many_cb) (int result, ev2citrusleaf_rec *recs, int n_recs, void *udata);
 
 // Get a batch of records, specified by array of digests.
+//
 // Pass NULL bins, 0 n_bins, to get all bins. (Note - bin name filter not yet
 // supported by server - pass NULL, 0.)
+//
+// If return value is EV2CITRUSLEAF_OK, the callback will always be made. If
+// not, the callback will not be made.
+
 int
 ev2citrusleaf_get_many_digest(ev2citrusleaf_cluster *cl, const char *ns, const cf_digest *digests, int n_digests,
 		const char **bins, int n_bins, int timeout_ms, ev2citrusleaf_get_many_cb cb, void *udata, struct event_base *base);
 
 // Check existence of a batch of records, specified by array of digests.
+//
+// If return value is EV2CITRUSLEAF_OK, the callback will always be made. If
+// not, the callback will not be made.
+
 int
 ev2citrusleaf_exists_many_digest(ev2citrusleaf_cluster *cl, const char *ns, const cf_digest *digests, int n_digests,
 		int timeout_ms, ev2citrusleaf_get_many_cb cb, void *udata, struct event_base *base);
+
 
 //
 // the info interface allows

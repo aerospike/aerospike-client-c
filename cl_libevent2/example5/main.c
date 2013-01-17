@@ -85,12 +85,12 @@ config g_config;
 
 
 void example5_request(uint64_t i);
-void example5_response(int return_value, ev2citrusleaf_bin *bins, int n_bins, uint32_t generation, void *udata);
+void example5_response(int return_value, ev2citrusleaf_bin *bins, int n_bins, uint32_t generation, uint32_t void_time, void *udata);
 
 
 
 void
-example5_response(int return_value, ev2citrusleaf_bin *bins, int n_bins, uint32_t generation, void *udata)
+example5_response(int return_value, ev2citrusleaf_bin *bins, int n_bins, uint32_t generation, uint32_t void_time, void *udata)
 {
 	uint64_t i = (uint64_t) udata;
 

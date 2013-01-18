@@ -28,13 +28,46 @@ static pthread_t g_shm_update_thr;
 static int g_max_nodes;
 
 /* This variable is set to true when we first time do the shm initialization,
- * so that next time if we call shm_init then looking at it we will come to 
- * know that we have already done the shm initialization and we do not 
+ * so that next time if we call shm_init then looking at it we will come to
+ * know that we have already done the shm initialization and we do not
  * initialize shm again */
 static bool g_shm_initiated = false;
 
 // Is this the process that issues server info requests and updates shared memory.
 static bool g_shm_updater = false;
+
+// Seed nodes contain the original nodes created by the non-shared-memory tender.
+typedef struct {
+	char name[NODE_NAME_SIZE];
+	struct sockaddr_in address_array[MAX_ADDRESSES_PER_NODE];
+	int address_count;
+} cl_seed_node;
+
+static cl_seed_node* g_seed_array = 0;
+static int g_seed_count = 0;
+
+static cl_seed_node*
+cl_shm_init_seed_array(int seed_count)
+{
+	if (seed_count > g_seed_count) {
+		if (g_seed_array) {
+			free(g_seed_array);
+		}
+		g_seed_array = (cl_seed_node*) malloc(seed_count * sizeof(cl_seed_node));
+		g_seed_count = seed_count;
+	}
+	return g_seed_array;
+}
+
+static void
+cl_shm_free_seed_array()
+{
+	if (g_seed_array) {
+		free(g_seed_array);
+		g_seed_array = 0;
+	}
+	g_seed_count = 0;
+}
 
 void* cl_shm_updater_fn(void *);
 
@@ -185,33 +218,69 @@ cl_shm_node_unlock(shm_ninfo* shared_node)
 	pthread_mutex_unlock(&shared_node->ninfo_lock);
 }
 
-shm_ninfo*
-cl_shm_find_node(struct sockaddr_in* sa_in)
+int
+cl_shm_get_partition_count()
 {
-    //Search nodes for the current sockaddr
+	return g_shm_pt->partition_count;
+}
+
+shm_ninfo*
+cl_shm_find_node_from_name(const char* node_name)
+{
+    // Search nodes for node name
     for (int i = 0; i < g_shm_pt->node_count; i++) {
     	shm_ninfo* node_info = &g_shm_pt->node_info[i];
 
-		if (memcmp(&node_info->sa_in, sa_in, sizeof(struct sockaddr_in)) == 0) {
+    	if (strcmp(node_info->node_name, node_name) == 0) {
 			return node_info;
 		}
     }
     return 0;
 }
 
+shm_ninfo*
+cl_shm_find_node_from_address(struct sockaddr_in* sa_in)
+{
+    // Search nodes for sockaddr
+    for (int i = 0; i < g_shm_pt->node_count; i++) {
+    	shm_ninfo* node_info = &g_shm_pt->node_info[i];
+    	int max = node_info->address_count;
+
+        //Search address for the current sockaddr
+    	for (int j = 0; j < max; j++) {
+    		if (memcmp(&node_info->address_array[j], sa_in, sizeof(struct sockaddr_in)) == 0) {
+    			return node_info;
+    		}
+		}
+    }
+    return 0;
+}
+
+static void
+cl_shm_copy_addresses(cl_seed_node* src, shm_ninfo* trg)
+{
+	trg->address_count = src->address_count;
+
+	for (int i = 0; i < src->address_count; i++) {
+		memcpy(&trg->address_array[i], &src->address_array[i], sizeof(struct sockaddr_in));
+	}
+}
+
 static shm_ninfo*
-cl_shm_add_node(struct sockaddr_in* sa_in)
+cl_shm_add_node(cl_seed_node* seed)
 {
 	if (g_shm_pt->node_count >= g_max_nodes) {
 		cf_error("Shared memory node limit breached: %d", g_max_nodes);
 		return 0;
 	}
 
-	/* Place the node at the last offset*/
-	shm_ninfo* node_info = &(g_shm_pt->node_info[g_shm_pt->node_count]);
-	memcpy(&node_info->sa_in, sa_in, sizeof(struct sockaddr_in));
+	// Place the node at the last offset.
+	shm_ninfo* shared_node = &(g_shm_pt->node_info[g_shm_pt->node_count]);
 
-	/* Initialise the lock - only the updater can initialize the node level mutex*/
+	// Copy node addresses.
+	cl_shm_copy_addresses(seed, shared_node);
+
+	// Initialise the lock - only the updater can initialize the node level mutex.
 	size_t selfpid = getpid();
 
 	if (selfpid == g_shm_pt->updater_id) {
@@ -220,7 +289,7 @@ cl_shm_add_node(struct sockaddr_in* sa_in)
 	    pthread_mutexattr_setpshared(&attr, PTHREAD_PROCESS_SHARED);
 	    pthread_mutexattr_setrobust_np(&attr, PTHREAD_MUTEX_ROBUST_NP);
 
-	    if (pthread_mutex_init(&node_info->ninfo_lock, &attr) != 0) {
+	    if (pthread_mutex_init(&shared_node->ninfo_lock, &attr) != 0) {
 			cf_warn("Shared memory node level mutex init failed pid %d", getpid());
 			pthread_mutexattr_destroy(&attr);
 			return 0;
@@ -228,32 +297,71 @@ cl_shm_add_node(struct sockaddr_in* sa_in)
 	    pthread_mutexattr_destroy(&attr);
 	}
 	// Do not increase node count just yet.
-	return node_info;
+	return shared_node;
 }
 
 static int
-cl_shm_node_ping(struct sockaddr_in* sa_in)
+cl_shm_request_n_partitions(struct sockaddr_in* address_array, int address_count, int* n_partitions)
 {
-	// cf_debug_sockaddr_in("Ping", sa_in);
+	// Loop through node's addresses and make request.
+	for (int i = 0; i < address_count; i++) {
+		if (cl_request_n_partitions(&address_array[i], n_partitions) == 0) {
+			// Return on first successful request.
+			return SHM_OK;
+		}
+	}
+	return SHM_ERROR;
+}
+
+static int
+cl_shm_request_node_info(struct sockaddr_in* address_array, int address_count, cl_node_info* node_info)
+{
+	// Loop through node's addresses and make request.
+	for (int i = 0; i < address_count; i++) {
+		if (cl_request_node_info(&address_array[i], node_info) == 0) {
+			// Return on first successful request.
+			return SHM_OK;
+		}
+	}
+	return SHM_ERROR;
+}
+
+static int
+cl_shm_request_replicas(struct sockaddr_in* address_array, int address_count, cl_replicas* replicas)
+{
+	// Loop through node's addresses and make request.
+	for (int i = 0; i < address_count; i++) {
+		if (cl_request_replicas(&address_array[i], replicas) == 0) {
+			// Return on first successful request.
+			return SHM_OK;
+		}
+	}
+	return SHM_ERROR;
+}
+
+static int
+cl_shm_node_ping(cl_seed_node* seed)
+{
+	// cf_debug("Ping %s", seed->name);
 
 	// Set partition_count only once.
 	if (g_shm_pt->partition_count == 0) {
-		cl_request_n_partitions(sa_in, &g_shm_pt->partition_count);
+		cl_shm_request_n_partitions(seed->address_array, seed->address_count, &g_shm_pt->partition_count);
 	}
 
 	// Request node information.
 	cl_node_info request;
 
-	if (cl_request_node_info(sa_in, &request) != 0) {
+	if (cl_shm_request_node_info(seed->address_array, seed->address_count, &request) != SHM_OK) {
 		return -1;
 	}
 
-	shm_ninfo* shared = cl_shm_find_node(sa_in);
+	shm_ninfo* shared = cl_shm_find_node_from_name(seed->name);
 	bool add = false;
 
 	if (shared == 0) {
 		add = true;
-		shared = cl_shm_add_node(sa_in);
+		shared = cl_shm_add_node(seed);
 
 		if (shared == 0) {
 			cl_node_info_free(&request);
@@ -263,10 +371,12 @@ cl_shm_node_ping(struct sockaddr_in* sa_in)
 
 	cl_shm_node_lock(shared);
 
-	// Set node name.
-	if (strncmp(shared->node_name, request.node_name, sizeof(shared->node_name)) != 0) {
-		cl_strncpy(shared->node_name, request.node_name, sizeof(shared->node_name));
+	if (seed->address_count != shared->address_count) {
+		cl_shm_copy_addresses(seed, shared);
 	}
+
+	// Set node name.
+	cl_strncpy(shared->node_name, request.node_name, sizeof(shared->node_name));
 
 	// Set partition generation after determining if replicas should be requested.
 	bool request_replicas = false;
@@ -292,7 +402,7 @@ cl_shm_node_ping(struct sockaddr_in* sa_in)
 	if (request_replicas) {
 		cl_replicas replicas;
 
-		if (cl_request_replicas(sa_in, &replicas) != 0) {
+		if (cl_shm_request_replicas(seed->address_array, seed->address_count, &replicas) != SHM_OK) {
 			return -3;
 		}
 
@@ -309,13 +419,7 @@ cl_shm_node_ping(struct sockaddr_in* sa_in)
 		cl_shm_node_unlock(shared);
 		cl_replicas_free(&replicas);
 	}
-	return 0;
-}
-
-int
-cl_shm_get_partition_count()
-{
-	return g_shm_pt->partition_count;
+	return SHM_OK;
 }
 
 /* This function (cl_shm_update) should only be called from cl_shm_updater_fn
@@ -325,24 +429,42 @@ cl_shm_get_partition_count()
 static void
 cl_shm_update(cl_cluster * asc)
 {
-	// Update the updater id in the shared memory
+	// Update the updater id in shared memory.
 	g_shm_pt->updater_id = getpid();
 
-	// Update shared memory
-	uint n_hosts = cf_vector_size(&asc->host_str_v);
-	cf_vector_define(sockaddr_in_v, sizeof( struct sockaddr_in ), 0);
+	// Make copy of node names and addresses.
+	pthread_mutex_lock(&asc->LOCK);
+	int node_count = cf_vector_size(&asc->node_v);
 
-	for (uint i=0;i<n_hosts;i++) {
-		char* host = cf_vector_pointer_get(&asc->host_str_v, i);
-		int port = cf_vector_integer_get(&asc->host_port_v, i);
-		
-		// Resolve hosts and store them in sockaddr_in_v
-		cl_lookup(asc, host, port, &sockaddr_in_v);
+	if (node_count <= 0) {
+		pthread_mutex_unlock(&asc->LOCK);
+		return;
 	}
 
-	for (uint i=0;i<cf_vector_size(&sockaddr_in_v);i++) {
-		struct sockaddr_in *sa_in = cf_vector_getp(&sockaddr_in_v,i);
-		cl_shm_node_ping(sa_in);
+	cl_seed_node* seed_array = cl_shm_init_seed_array(node_count);
+
+	for (int i = 0; i < node_count; i++) {
+		cl_cluster_node* src = cf_vector_pointer_get(&asc->node_v, i);
+		cl_seed_node* trg = &seed_array[i];
+		cl_strncpy(trg->name, src->name, NODE_NAME_SIZE);
+
+		trg->address_count = cf_vector_size(&src->sockaddr_in_v);
+
+		if (trg->address_count > MAX_ADDRESSES_PER_NODE) {
+			cf_debug("Node %s addresses truncated. Requested size=%d", src->name, trg->address_count);
+			trg->address_count = MAX_ADDRESSES_PER_NODE;
+		}
+
+		for (int j = 0; j < trg->address_count ; j++) {
+			struct sockaddr_in *sa_in = cf_vector_getp(&src->sockaddr_in_v, j);
+			memcpy(&trg->address_array[j], sa_in, sizeof(struct sockaddr_in));
+		}
+	}
+	pthread_mutex_unlock(&asc->LOCK);
+
+	// Ping all nodes and update shared memory.
+	for (int i = 0; i < node_count; i++) {
+		cl_shm_node_ping(&seed_array[i]);
 	}
 }
 
@@ -380,12 +502,14 @@ cl_shm_updater_fn(void* gas)
 	do {
 		/* Check if the thread is set to exit or not. If it is, gracefully exit*/
 		if (g_shm_info.update_thread_end_cond) {
+			cl_shm_free_seed_array();
 			pthread_exit(0);
 		}
 
 		sleep(g_shm_info.update_period);
 
 		if (g_shm_info.update_thread_end_cond) {
+			cl_shm_free_seed_array();
 			pthread_exit(0);
 		}
 

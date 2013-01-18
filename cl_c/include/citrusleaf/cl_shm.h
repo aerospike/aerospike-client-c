@@ -19,6 +19,7 @@
 #define SZ_PARTITION_ID 		4
 #define MAX_NEIGHBORS 			(NUM_NODES-1)
 #define NUM_PARTITIONS 			4096
+#define MAX_ADDRESSES_PER_NODE 	4
 
 #define SZ_FIELD_NEIGHBORS 		(MAX_NEIGHBORS * SZ_NODE_IP + 1)
 /*
@@ -44,8 +45,9 @@
  * represented by a structure shm_ninfo which has a socket address, node level lock
  * and the fields */
 typedef struct {
-	struct sockaddr_in sa_in;
+	struct sockaddr_in address_array[MAX_ADDRESSES_PER_NODE];
 	pthread_mutex_t ninfo_lock;
+	int address_count;
 	uint32_t partition_generation;
 	char node_name[NODE_NAME_SIZE];
 	char services[SZ_FIELD_NEIGHBORS];
@@ -82,7 +84,11 @@ extern bool g_shared_memory;
 /*Shared memory functions*/
 int citrusleaf_use_shm(int num_nodes, key_t key);
 int citrusleaf_shm_free();
+
 int cl_shm_get_partition_count();
-shm_ninfo* cl_shm_find_node(struct sockaddr_in* sa_in);
+
+shm_ninfo* cl_shm_find_node_from_name(const char* node_name);
+shm_ninfo* cl_shm_find_node_from_address(struct sockaddr_in* sa_in);
+
 int cl_shm_node_lock(shm_ninfo* shared_node);
 void cl_shm_node_unlock(shm_ninfo* shared_node);

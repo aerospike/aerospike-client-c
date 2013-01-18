@@ -45,7 +45,7 @@ static inline void print_ms(char *pre)
 }
 
 int g_clust_initialized = 0;
-static int g_clust_tend_period = 1;
+static int g_clust_tend_speed = 1;
 extern int g_cl_turn_debug_on;
 extern int g_init_pid;
 
@@ -149,7 +149,7 @@ citrusleaf_cluster_create(void)
 	// Default is 0 so the cluster uses global tend period.
 	// For the cluster user has to specifically set the own
 	// value
-	asc->tend_period = 0;
+	asc->tend_speed = 0;
 	
 	pthread_mutex_init(&asc->LOCK, 0);
 	
@@ -1164,7 +1164,7 @@ cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 		struct sockaddr_in *sa_in = cf_vector_getp(&cn->sockaddr_in_v, i);
 		cl_node_info node_info;
 
-		if (cl_get_node_info(sa_in, &node_info) != 0) {
+		if (cl_get_node_info(cn->name, sa_in, &node_info) != 0) {
 			// todo: this address is no longer right for this node, update the node's list
 			// and if there's no addresses left, dun node
 			cf_debug("Info request failed for %s", cn->name);
@@ -1210,7 +1210,7 @@ cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 			struct sockaddr_in *sa_in = cf_vector_getp(&cn->sockaddr_in_v, i);
 			cl_replicas replicas;
 
-			if (cl_get_replicas(sa_in, &replicas) != 0) {
+			if (cl_get_replicas(cn->name, sa_in, &replicas) != 0) {
 				continue;
 			}
 
@@ -1395,9 +1395,9 @@ cluster_tend(cl_cluster *asc)
 }
 
 void 
-citrusleaf_cluster_change_tend_period(cl_cluster *asc, int secs)
+citrusleaf_cluster_change_tend_speed(cl_cluster *asc, int secs)
 {
-	asc->tend_period = secs;
+	asc->tend_speed = secs;
 }
 
 void 
@@ -1407,18 +1407,18 @@ citrusleaf_cluster_use_nbconnect(struct cl_cluster_s *asc)
 }
 
 void
-citrusleaf_change_tend_period(int secs)
+citrusleaf_change_tend_speed(int secs)
 {
-	g_clust_tend_period = secs;
+	g_clust_tend_speed = secs;
 }
 
 void
 citrusleaf_sleep_for_tender(cl_cluster *asc)
 {
-	if (asc->tend_period  > 0)
-		sleep(asc->tend_period);
+	if (asc->tend_speed  > 0)
+		sleep(asc->tend_speed);
 	else
-		sleep(g_clust_tend_period);
+		sleep(g_clust_tend_speed);
 }
 
 //
@@ -1436,13 +1436,13 @@ cluster_tender_fn(void *gcc_is_ass)
 		// otherwise at default period
 		cf_ll_element *e = cf_ll_get_head(&cluster_ll);
 		while (e) {
-			int period = ((cl_cluster *)e)->tend_period;
+			int period = ((cl_cluster *)e)->tend_speed;
 			if (period) {
 				if ((cnt % period) == 0) {
 					cluster_tend( (cl_cluster *) e);
 				}
 			} else {
-				if ((cnt % g_clust_tend_period) == 0) {
+				if ((cnt % g_clust_tend_speed) == 0) {
 					cluster_tend( (cl_cluster *) e);
 				}
 			}
@@ -1470,7 +1470,7 @@ int citrusleaf_cluster_init()
 	cf_ll_init(&cluster_ll, 0, false);
 	
     g_clust_initialized = 1;
-   	g_clust_tend_period = 1;
+   	g_clust_tend_speed = 1;
 	pthread_create( &tender_thr, 0, cluster_tender_fn, 0);
 
 	return(0);	

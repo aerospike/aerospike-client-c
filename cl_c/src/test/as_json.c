@@ -8,7 +8,7 @@
 as_list * as_json_array_to_list(json_t * a) {
 
     int size = json_array_size(a);
-    as_list * l = as_arraylist_new(size,0);
+    as_list * l = as_list_new(as_arraylist_new(size,0), &as_arraylist_list);
 
     for (int i = 0; i < json_array_size(a); i++) {
         as_val * v = as_json_to_val(json_array_get(a,i));
@@ -21,7 +21,7 @@ as_list * as_json_array_to_list(json_t * a) {
 as_map * as_json_object_to_map(json_t * o) {
 
     int             n = json_object_size(o);
-    as_map *        m = as_hashmap_new(n);
+    as_map *        m = as_map_new(as_hashmap_new(n), &as_hashmap_map);
     const char *    k = NULL;
     json_t *        v = NULL;
 
@@ -78,7 +78,7 @@ as_val * as_json_arg(char * arg) {
     return val;
 }
 
-as_list * as_json_arglist(int argc, char ** argv) {
+as_linkedlist * as_json_arglist(int argc, char ** argv) {
     if ( argc == 0 || argv == NULL ) return NULL;//cons(NULL,NULL);
     return cons(as_json_arg(argv[0]), as_json_arglist(argc-1, argv+1));
 }

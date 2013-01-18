@@ -36,7 +36,7 @@
  ******************************************************************************/
 
 static inline as_list * as_arglist_new(uint32_t size) {
-    return as_arraylist_new(size, 1);
+    return as_list_new(as_arraylist_new(size, 1), &as_arraylist_list);
 }
 
 static inline int as_list_add_string(as_list * arglist, const char * s) {

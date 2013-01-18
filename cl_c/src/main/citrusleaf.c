@@ -851,9 +851,9 @@ cl_compile(uint info1, uint info2, uint info3, const char *ns, const char *set, 
 	if (scan_param_field)	msg_sz += sizeof(cl_msg_field) + 1 + sizeof(cl_scan_param_field);
 
 	if ( call ) {
-		msg_sz += as_string_len(call->file) + sizeof(cl_msg_field);
-		msg_sz += as_string_len(call->func) + sizeof(cl_msg_field);
-		msg_sz += call->args->size + sizeof(cl_msg_field);
+		msg_sz += sizeof(cl_msg_field) + as_string_len(call->file);
+		msg_sz += sizeof(cl_msg_field) + as_string_len(call->func) ;
+		msg_sz += sizeof(cl_msg_field) + call->args->size;
 	}
 
 	// ops

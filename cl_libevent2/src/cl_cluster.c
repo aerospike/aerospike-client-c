@@ -440,7 +440,7 @@ ev2citrusleaf_cluster_get_active_node_count(ev2citrusleaf_cluster *asc)
 		}
 		
 		if (cf_atomic_int_get(node->dunned)) {
-			cf_debug("cluster node %s (%d) is dunned", node->name, i);
+			cf_info("cluster node %s (%d) is dunned", node->name, i);
 			continue; // dunned nodes aren't active
 		}
 		
@@ -457,6 +457,8 @@ ev2citrusleaf_cluster_get_active_node_count(ev2citrusleaf_cluster *asc)
 	int rv = cf_vector_size(&asc->node_v);
 
 	MUTEX_UNLOCK(asc->node_v_lock);
+
+	cf_info("cluster has %d nodes, %d ok", rv, count);
 
 	return(rv);
 }
@@ -1082,7 +1084,8 @@ cl_cluster_node_put(cl_cluster_node *cn)
 // Todo: will dunned hosts be in the host list with a flag, or in a different list?
 //
 
-char *cl_cluster_dun_human[] = {"user timeout","info fail","replicas fetch","network error","restart fd","no sockaddr"};
+// MUST be in sync with cl_cluster_dun_type enum:
+char *cl_cluster_dun_human[] = {"user timeout","info fail","replicas fetch","network error","restart fd","bad name","no sockaddr"};
 
 
 void
@@ -1096,43 +1099,41 @@ cl_cluster_node_dun(cl_cluster_node *cn, enum cl_cluster_dun_type type)
 	int dun_factor;
 	switch (type) {
 		case DUN_USER_TIMEOUT:
-			if (cf_atomic_int_get(cn->dun_count) == 0 ||
-				cf_atomic_int_get(cn->dun_count) == 50 ||
-				cf_atomic_int_get(cn->dun_count) == 100 ||
-				cf_atomic_int_get(cn->dun_count) == 200) {
+			if (cf_atomic_int_get(cn->dun_count) % 50 == 0) {
 				cf_debug("dun node: %s reason: %s count: %d",
 						cn->name, cl_cluster_dun_human[type], cf_atomic_int_get(cn->dun_count));
 			}
 			dun_factor = 1;
 			break;
 		case DUN_INFO_FAIL:
-			cf_debug("dun node: %s reason: %s count: %d",
+			cf_info("dun node: %s reason: %s count: %d",
 					cn->name, cl_cluster_dun_human[type], cf_atomic_int_get(cn->dun_count));
-			dun_factor = 300;
+			dun_factor = 100;
 			break;
 		case DUN_REPLICAS_FETCH:
+		case DUN_BAD_NAME:
 		case DUN_NO_SOCKADDR:
-			cf_debug("dun node: %s reason: %s count: %d",
+			cf_info("dun node: %s reason: %s count: %d",
 					cn->name, cl_cluster_dun_human[type], cf_atomic_int_get(cn->dun_count));
 			dun_factor = 1000;
 			break;
 		case DUN_NETWORK_ERROR:
 		case DUN_RESTART_FD:
-			cf_debug("dun node: %s reason: %s count: %d",
+			cf_info("dun node: %s reason: %s count: %d",
 					cn->name, cl_cluster_dun_human[type], cf_atomic_int_get(cn->dun_count));
 			dun_factor = 50;
 			break;
 		default:
-			cf_debug("dun node: %s UNKNOWN REASON count: %d",
+			cf_error("dun node: %s UNKNOWN REASON count: %d",
 					cn->name, cf_atomic_int_get(cn->dun_count));
 			dun_factor = 1;
 			break;
 	}
 
-	cf_atomic_int_add(&cn->dun_count, dun_factor);
-	
-	if (cf_atomic_int_get(cn->dun_count) > CL_NODE_DUN_THRESHOLD) {
-		cf_info("dun node: node %s fully dunned %d", cn->name, cf_atomic_int_get(cn->dun_count));
+	int dun_count = (int)cf_atomic_int_add(&cn->dun_count, dun_factor);
+
+	if (dun_count > CL_NODE_DUN_THRESHOLD) {
+		cf_info("dun node: node %s fully dunned %d", cn->name, dun_count);
 
 		cf_atomic_int_set(&cn->dunned, 1);
 	}
@@ -1146,7 +1147,14 @@ cl_cluster_node_ok(cl_cluster_node *cn)
 		return;
 	}
 
-	cf_debug("ok node: %s", cn->name);
+	int dun_count = cf_atomic_int_get(cn->dun_count);
+
+	if (cf_atomic_int_get(cn->dunned) == 1) {
+		cf_info("ok node: %s had dun_count %d", cn->name, dun_count);
+	}
+	else if (dun_count > 0) {
+		cf_debug("ok node: %s had dun_count %d", cn->name, dun_count);
+	}
 
 	cf_atomic_int_set(&cn->dun_count, 0);
 	cf_atomic_int_set(&cn->dunned, 0);

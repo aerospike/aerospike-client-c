@@ -102,7 +102,7 @@ int main(int argc, char ** argv) {
 
     citrusleaf_object_init_str(&okey, key);
     
-    arglist = as_json_arglist(argc-5,argv+5);
+    arglist = as_list_new(as_json_arglist(argc-5,argv+5), &as_linkedlist_list);
 
     rc = citrusleaf_udf_record_apply(cluster, ns, set, &okey, file, func, arglist, TIMEOUT, &res);
 

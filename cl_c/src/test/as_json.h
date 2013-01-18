@@ -11,4 +11,4 @@ as_val * as_json_to_val(json_t *);
 int as_json_print(const as_val *);
 
 as_val * as_json_arg(char *);
-as_list * as_json_arglist(int, char **);
+as_linkedlist * as_json_arglist(int, char **);

@@ -15,7 +15,7 @@ typedef void (* udf_test)(cl_cluster *, cl_object *, as_result *);
 
 void lists_lappend(cl_cluster * c, cl_object * key, as_result * res) {
 
-    as_list * list = as_arraylist_new(3,0);
+    as_list * list = as_list_new(as_arraylist_new(3,0), &as_arraylist_list);
     as_list_add_string(list, "alex");
     as_list_add_string(list, "bob");
     as_list_add_string(list, "chuck");
@@ -30,7 +30,7 @@ void lists_lappend(cl_cluster * c, cl_object * key, as_result * res) {
 
 void maps_mapput(cl_cluster * c, cl_object * key, as_result * res) {
 
-    as_map * map = as_hashmap_new(32);
+    as_map * map = as_map_new(as_hashmap_new(32), &as_hashmap_map);
     as_map_set(map, (as_val *) as_string_new(strdup("A")), (as_val *) as_string_new(strdup("alex")));
     as_map_set(map, (as_val *) as_string_new(strdup("B")), (as_val *) as_string_new(strdup("bob")));
     as_map_set(map, (as_val *) as_string_new(strdup("C")), (as_val *) as_string_new(strdup("chuck")));
@@ -47,7 +47,7 @@ void maps_mapput(cl_cluster * c, cl_object * key, as_result * res) {
 
 void maps_show(cl_cluster * c, cl_object * key, as_result * res) {
 
-    as_map * map = as_hashmap_new(32);
+    as_map * map = as_map_new(as_hashmap_new(32), &as_hashmap_map);
     as_map_set(map, (as_val *) as_string_new(strdup("A")), (as_val *) as_string_new(strdup("alex")));
     as_map_set(map, (as_val *) as_string_new(strdup("B")), (as_val *) as_string_new(strdup("bob")));
     as_map_set(map, (as_val *) as_string_new(strdup("C")), (as_val *) as_string_new(strdup("chuck")));
@@ -63,7 +63,7 @@ void maps_show(cl_cluster * c, cl_object * key, as_result * res) {
 
 void maps_putmap(cl_cluster * c, cl_object * key, as_result * res) {
 
-    as_map * map = as_hashmap_new(32);
+    as_map * map = as_map_new(as_hashmap_new(32), &as_hashmap_map);
     as_map_set(map, (as_val *) as_string_new(strdup("A")), (as_val *) as_string_new(strdup("alex")));
     as_map_set(map, (as_val *) as_string_new(strdup("B")), (as_val *) as_string_new(strdup("bob")));
     as_map_set(map, (as_val *) as_string_new(strdup("C")), (as_val *) as_string_new(strdup("chuck")));

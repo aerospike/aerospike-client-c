@@ -1,4 +1,3 @@
-
 function printTable(t)
   local k, v;
   for k, v in pairs(t) do
@@ -20,20 +19,23 @@ function prefetch_and_print(record)
   end
 end
 
-function do_trim_bin(record)
-  local my_ceil = tonumber(record:GetArg('limits'));
+function do_trim_bin(record, limits, value)
   local cat2 = record.cats;
   local y = string.len(cat2);
-  if (y > my_ceil) then
+  local myceil = tonumber(value);
+  if (y > myceil) then
     record.cats = 'new string';
   end
+  aerospike:update(record)
   return 'TRIM_BIN: ' .. record.cats;
 end
 
-function do_update_bin(record) 
-  record.bin_to_change    = "changed by lua at "..os.time(); 
+function do_update_bin(record)
+--  record.bin_to_change    = "changed by lua at "..os.time();
+  record.bin_to_change    = "changed by lua";
   print('CLIENT: reverted do_update_bin: ' .. record.bin_to_change);
-  return {s = 'UPDATED_BIN: ' .. record.bin_to_change };
+  aerospike:update(record)
+  return 'UPDATED_BIN: ' .. record.bin_to_change;
 end
 
 function do_new_bin(record)
@@ -42,23 +44,27 @@ function do_new_bin(record)
   else
      print('CLIENT: new_bin already exists');
   end
+  aerospike:update(record)
   return 'NEW_BIN';
 end
 
 function do_delete_bin(record) 
     print('CLIENT: DEL BIN');
-    record.bin3 = nil; 
+    record.bin3 = nil;
+  aerospike:update(record); 
   return 'DELETE_BIN: ';
 end
 
 function do_add_record(record)
    record.lua_bin = "new_value";	
    record.second_bin = "another_value";
+   aerospike:create(record); 
    return 'ADD_RECORD';
 end
 
 function do_delete_record(record) 
-  record:Delete();
+--  record:Delete();
+  aerospike:remove(record);
   return 'DELETE_RECORD: ';
 end
 
@@ -78,7 +84,8 @@ function do_read1_record(record)
 end
 
 function do_noop_function(record)
-  print 'CLIENT: This function does not touch any record'
+  print 'CLIENT: This function does not touch any record' 
+  return 'OK';
 end
 
 -- random runtime crash
@@ -90,9 +97,11 @@ end
 
 -- try to write a bin name too long
 function do_handle_bad_lua_2(record)
-  local x;
-  record[bin_with_a_really_long_name] = "five";
-  return 'OK';
+-- This makes server crash
+--  record[bin_with_a_really_long_name] = "five";
+	record.very_long_name_that_should_fail = "bin 2 value";
+	aerospike:create(record);
+	return 'OK';
 end
 
 function do_lua_functional_test(record)
@@ -111,9 +120,9 @@ function do_lua_functional_test(record)
 end
 
 
-function do_return_types(record)
+function do_return_types(record, d, desired_type)
 
-  local desired_type = record:GetArg('desired_type');
+--  local desired_type = record:GetArg('desired_type');
   if (desired_type == "none") then
     print("none");
     return;
@@ -147,6 +156,7 @@ function do_bin_types(record)
    record.n_int_b = -1;
    record.str_b = "this is a string";
 --   record.doc_b = {t1 = 't1 val', t2=77, t3 = {s1="s1 val", s2 = "s2 val"}}; 	
+   aerospike:create(record);
    return 'BIN_TYPES';
 end
 
@@ -171,7 +181,8 @@ function do_long_binname(record)
 	record.short_bin = "bin 1 value";
 	record.very_long_name_that_should_fail = "bin 2 value";
 	record.last_bin = "bin 3 value";
-	return record
+	aerospike:create(record);
+ 	return "Long binname test";	
 end	
 
 function do_too_many_bins(record)
@@ -183,7 +194,7 @@ end
 
 function game_my_test(record)
    local ret = {}
-   if (not record:Exists()) then
+   if (not aerospike:exists(record)) then
       ret['type'] = 'bar'
       record.type = 'bar'
       return ret
@@ -215,10 +226,11 @@ function do_copy_record(record)
 end
 
 function do_updated_copy(record)
-   local t = record
-   t.c_bin = "new_value"
-   t.a_bin = nil
-   return t
+	local t = record
+	t.c_bin = "new_value"
+	t.a_bin = nil
+	aerospike:update(record);
+	return "Updated Record";
 end
 
 function game_echo(record)
@@ -243,13 +255,17 @@ end
 
 function game_double_str(record)
    local ret = {}
-   if (not record:Exists()) then
+   if (not aerospike:exists(record)) then
       record.type = 'x'
+      aerospike:create(record)
    else
       record.type = record.type .. record.type
+      aerospike:update(record)
    end
-   ret['type'] = record.type
-   return ret
+ --  ret['type'] = record.type
+ --  ret['status'] = 'OK';
+ --  return ret
+   return 'OK';
 end
 
 

@@ -23,20 +23,20 @@ extern void *start_counter_thread(atomic_int *records, atomic_int *bytes);
 extern void stop_counter_thread(void *id);
 
 typedef struct config_s {
-	
-	char *host;
-	int   port;
-	char *ns;
-	char *set;
-	int   timeout_ms;
-	
-	bool verbose;
 
-	cl_cluster	*asc;
-		
-	char *package_file;
-	char *package_name;
-			
+        char  *host;
+        int    port;
+        char  *ns;
+        char  *set;
+        uint32_t timeout_ms;
+        uint32_t record_ttl;
+        char *package_file;
+        char *package_name;
+        cl_cluster      *asc;
+        bool    verbose;
+        cf_atomic_int success;
+        cf_atomic_int fail;
 } config;
+
 
 

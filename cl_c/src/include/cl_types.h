@@ -178,6 +178,11 @@ struct cl_addrmap {
     char *  alt;
 };
 
+/**
+ * Callback function type used by batch and scan
+ */
+typedef int (*citrusleaf_get_many_cb) (char *ns, cf_digest *keyd, char *set, uint32_t generation, uint32_t record_ttl, cl_bin *bins, int n_bins, bool is_last, void *udata);
+
 /******************************************************************************
  * FUNCTIONS
  ******************************************************************************/

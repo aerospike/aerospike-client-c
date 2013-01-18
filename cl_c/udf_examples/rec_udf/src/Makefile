@@ -1,16 +1,15 @@
 # Citrusleaf Tools
 # Makefile
 
-DEPTH = ../../../..
+DEPTH = ../../../../../..
 include $(DEPTH)/make_in/Makefile.in
 
-DIR_INCLUDE = ../include $(DEPTH)/shared/include/ $(DEPTH)/include/
 DIR_OBJECT = ../obj
 DIR_TARGET = ../bin
+DIR_LIB = ../../../target/Linux-x86_64/lib
 
-HEADERS       = rec_sproc.h utils.h 
-SOURCES       = rec_sproc.c utils.c 
-TARGET        = rec_sproc
+SOURCES       = rec_udf.c utils.c 
+TARGET        = rec_udf
 DOC_HEADERS   = doc_sproc.h utils.h 
 DOC_SOURCES   = doc_sproc.c utils.c 
 DOC_TARGET    = doc_sproc
@@ -21,8 +20,8 @@ RLIST_TARGET  = redis_list_sproc
 MANAGE_SOURCES = manage_sproc.c
 MANAGE_TARGET  = manage_sproc
 
-INCLUDES = $(DIR_INCLUDE:%=-I%) 
-LIBRARIES = -lcitrusleaf  -lssl -lcrypto -lpthread -lrt
+INCLUDES = -I../include/ -I../../../target/Linux-x86_64/include/
+LIBRARIES = $(DIR_LIB)/libcitrusleaf.a  -lssl -lcrypto -lpthread -lrt
 ifeq (${MR_LANG},LUA)
 LIBRARIES += -llua
 endif
@@ -45,7 +44,8 @@ MANAGE_DEPENDENCIES = $(MANAGE_OBJECTS:%.o=%.d)
 
 
 .PHONY: all
-all: rec_sproc doc_sproc manage_sproc redis_list_sproc
+all: rec_udf
+#all: rec_sproc doc_sproc manage_sproc redis_list_sproc
 
 .PHONY: clean
 clean:

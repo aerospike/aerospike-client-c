@@ -1,9 +1,5 @@
 include project/build.makefile
 
-ifndef MSGPACK_PATH
-MSGPACK_PATH = modules/msgpack
-endif
-
 CFLAGS = -std=gnu99 -g -O3 -fno-common -fno-strict-aliasing -rdynamic -fPIC -Wall $(AS_CFLAGS) -DMARCH_$(ARCH) -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_GNU_SOURCE
 LDFLAGS = 
 
@@ -38,8 +34,9 @@ OBJECTS = $(TARGET_OBJ)/*.o modules/mod-lua/$(TARGET_OBJ)/*.o modules/common/$(T
 ##
 ## MAIN
 ##
+.DEFAULT_GOAL := all
 
-all: libcitrusleaf.so libcitrusleaf.a prepare
+all: libcitrusleaf.so libcitrusleaf.a prepare test 
 
 libcitrusleaf.o: $(call objects, $(CITRUSLEAF))
 
@@ -56,35 +53,36 @@ prepare:
 	cp modules/common/$(TARGET_INCL)/*.h $(TARGET_INCL)/.
 	cp modules/common/$(TARGET_INCL)/citrusleaf/*.h $(TARGET_INCL)/citrusleaf/.
 
-install: | libcitrusleaf.a libcitrusleaf.so prepare
-	sudo cp $(TARGET_LIB)/* /usr/local/lib/.
+install: 
+	cp $(TARGET_LIB)/* /usr/lib/.
+	mkdir -p /opt/citrusleaf/bin/commands
+	cp $(SOURCE_TEST)/ascli.py /opt/citrusleaf/bin/ascli
+	cp $(TARGET_BIN)/test/exists /opt/citrusleaf/bin/commands/.
+	cp $(TARGET_BIN)/test/get /opt/citrusleaf/bin/commands/.
+	cp $(TARGET_BIN)/test/put /opt/citrusleaf/bin/commands/.
+	cp $(TARGET_BIN)/test/remove /opt/citrusleaf/bin/commands/.
+	cp $(TARGET_BIN)/test/udf-get /opt/citrusleaf/bin/commands/.
+	cp $(TARGET_BIN)/test/udf-list /opt/citrusleaf/bin/commands/.
+	cp $(TARGET_BIN)/test/udf-put /opt/citrusleaf/bin/commands/.
+	cp $(TARGET_BIN)/test/udf-record-apply /opt/citrusleaf/bin/commands/.
+	cp $(TARGET_BIN)/test/udf-remove /opt/citrusleaf/bin/commands/.
+ifeq ($(wildcard /usr/bin/ascli),)
+	ln -s /opt/citrusleaf/bin/ascli /usr/bin/ascli
+endif
 
-package: | libcitrusleaf.a libcitrusleaf.so prepare
-	mkdir -p $(TARGET_BASE)/package/opt/citrusleaf
-	mkdir -p $(TARGET_BASE)/package/opt/citrusleaf/include
-	mkdir -p $(TARGET_BASE)/package/opt/citrusleaf/lib
-	mkdir -p $(TARGET_BASE)/package/opt/citrusleaf/bin
-	mkdir -p $(TARGET_BASE)/package/opt/citrusleaf/bin/commands
-	cp -R $(TARGET_INCL)/* $(TARGET_BASE)/package/opt/citrusleaf/include/.
-	cp $(TARGET_LIB)/libcitrusleaf.a $(TARGET_BASE)/package/opt/citrusleaf/lib/.
-	cp $(TARGET_LIB)/libcitrusleaf.so $(TARGET_BASE)/package/opt/citrusleaf/lib/.
-	cp $(SOURCE_TEST)/aerospike $(TARGET_BASE)/package/opt/citrusleaf/bin/.
-	cp $(TARGET_BIN)/test/exists $(TARGET_BASE)/package/opt/citrusleaf/bin/commands/.
-	cp $(TARGET_BIN)/test/get $(TARGET_BASE)/package/opt/citrusleaf/bin/commands/.
-	cp $(TARGET_BIN)/test/put $(TARGET_BASE)/package/opt/citrusleaf/bin/commands/.
-	cp $(TARGET_BIN)/test/remove $(TARGET_BASE)/package/opt/citrusleaf/bin/commands/.
-	cp $(TARGET_BIN)/test/udf-get $(TARGET_BASE)/package/opt/citrusleaf/bin/commands/.
-	cp $(TARGET_BIN)/test/udf-list $(TARGET_BASE)/package/opt/citrusleaf/bin/commands/.
-	cp $(TARGET_BIN)/test/udf-put $(TARGET_BASE)/package/opt/citrusleaf/bin/commands/.
-	cp $(TARGET_BIN)/test/udf-record-apply $(TARGET_BASE)/package/opt/citrusleaf/bin/commands/.
-	cp $(TARGET_BIN)/test/udf-remove $(TARGET_BASE)/package/opt/citrusleaf/bin/commands/.
-	cd $(TARGET_BASE)/package && tar -cvzf aerospike-3.0-beta-1.tgz opt
+gendoc:
+	cd doc; make html
 	
 ##
 ## SUBMODULES
 ##
+check_msgpack:
+ifndef MSGPACK_PATH
+$(warning *** warning env MSGPACK_PATH not set. Using modules/msgpack as default)
+MSGPACK_PATH := modules/msgpack
+endif
 
-modules/msgpack/Makefile: 
+modules/msgpack/Makefile: check_msgpack
 	cd $(MSGPACK_PATH) && ./configure
 
 msgpack: modules/msgpack/Makefile
@@ -96,6 +94,11 @@ mod-lua:
 common: 
 	make -C modules/common client_only MEM_COUNT=$(MEM_COUNT) 
 
+jansson/Makefile: check_jansson
+	cd $(JANSSON_PATH) && ./configure
+
+jansson: jansson/Makefile
+	make -C $(JANSSON_PATH) all CFLAGS="-fPIC"
 ##
 ## TEST
 ##
@@ -106,16 +109,16 @@ endif
 
 test_flags = $(TARGET_LIB)/libcitrusleaf.a -L$(JANSSON_PATH)/src/.libs -Wl,-l,:libjansson.a -lcrypto -lssl -L$(MSGPACK_PATH)/src/.libs -Wl,-l,:libmsgpack.a -lpthread -lrt 
 
-test/%:  $(SOURCE_TEST)/%.c | $(TARGET_BIN) check_jansson
+test/%:  $(SOURCE_TEST)/%.c | $(TARGET_BIN) jansson
 	$(call executable, $(TARGET_INCL) $(JANSSON_PATH)/src, $(empty), $(empty) , $(empty), $(test_flags) )
 
-test/get:  $(SOURCE_TEST)/get.c $(SOURCE_TEST)/as_json.c | $(TARGET_BIN) check_jansson
+test/get:  $(SOURCE_TEST)/get.c $(SOURCE_TEST)/as_json.c | $(TARGET_BIN)  jansson
 	$(call executable, $(TARGET_INCL) $(JANSSON_PATH)/src, $(empty), $(empty), $(empty), $(test_flags))
 
-test/put:  $(SOURCE_TEST)/put.c $(SOURCE_TEST)/as_json.c | $(TARGET_BIN) check_jansson
+test/put:  $(SOURCE_TEST)/put.c $(SOURCE_TEST)/as_json.c | $(TARGET_BIN)  jansson
 	$(call executable, $(TARGET_INCL) $(JANSSON_PATH)/src, $(empty), $(empty), $(empty), $(test_flags))
 
-test/udf-record-apply:  $(SOURCE_TEST)/udf-record-apply.c $(SOURCE_TEST)/as_json.c | $(TARGET_BIN) check_jansson
+test/udf-record-apply:  $(SOURCE_TEST)/udf-record-apply.c $(SOURCE_TEST)/as_json.c | $(TARGET_BIN)  jansson
 	$(call executable, $(TARGET_INCL) $(JANSSON_PATH)/src, $(empty), $(empty), $(empty), $(test_flags))
 
 test: test/quick test/get test/put test/remove test/exists test/udf test/udf-list test/udf-get test/udf-put test/udf-remove test/udf-record-apply

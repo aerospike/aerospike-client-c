@@ -6,7 +6,7 @@
 
 #include "as_json.h"
 #include <citrusleaf/citrusleaf.h>
-#include <citrusleaf/udf.h>
+#include <citrusleaf/cl_udf.h>
 #include <citrusleaf/as_hashmap.h>
 #include <citrusleaf/as_buffer.h>
 #include <citrusleaf/as_msgpack.h>

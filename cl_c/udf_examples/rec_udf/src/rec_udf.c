@@ -110,7 +110,7 @@ int do_udf_bin_update_test() {
 
 	// arg #2 -> bin value
 	as_list_add_string(arglist, "original_bin_val");
-
+	fprintf(stderr,"Bin value intially : original_bin_val\n");
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
 			g_config->package_name,"do_update_bin", arglist, g_config->timeout_ms, &res);  
 	
@@ -138,8 +138,8 @@ int do_udf_bin_update_test() {
 		}
 
 		for (int b=0; b<rsp_n_bins; b++) {
-			fprintf(stderr,"validation read returned %s=[%s]\n",rsp_bins[b].bin_name,rsp_bins[b].object.u.str);
-			if (strcmp(rsp_bins[b].bin_name,"bin_to_change") == 0) {
+			fprintf(stderr,"validation read returned %s = [%s]\n",rsp_bins[b].bin_name,rsp_bins[b].object.u.str);
+			if (strcmp(rsp_bins[b].bin_name, "bin_to_change") == 0) {
 				if ( rsp_bins[b].object.type != CL_STR || strncmp(rsp_bins[b].object.u.str,"changed by lua", strlen("changed by lua")) != 0) {
 					fprintf(stderr,"data validation failed on round %i\n",i);
 					citrusleaf_object_free(&rsp_bins[b].object);		
@@ -1021,7 +1021,7 @@ int do_udf_long_biname_test() {
 	return 0;
 }
 
-int do_sproc_too_many_bins_test() {
+int do_udf_too_many_bins_test() {
 
 	cl_write_parameters cl_wp;
 	cl_write_parameters_set_default(&cl_wp);
@@ -1043,15 +1043,17 @@ int do_sproc_too_many_bins_test() {
 	as_result res;
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
 			g_config->package_name,"do_too_many_bins", NULL, g_config->timeout_ms, &res);  
+
+	fprintf(stderr,"Citrusleaf udf apply %s: %s\n", res.is_success ? "SUCCESS" : "FAILURE", as_val_tostring(res.value));
 	if (rsp != CITRUSLEAF_OK) {
-		fprintf(stderr,"citrusleaf_run_sproc failed as rsp=%d\n",rsp);
+		fprintf(stderr,"citrusleaf_run_udf failed as rsp=%d\n",rsp);
 		return -1;
 	}
 	citrusleaf_object_free(&o_key);		
 	return 0;
 }
 
-int do_sproc_lua_functional_test() {
+int do_udf_lua_functional_test() {
 
 	// (1) Call a lua function that simply executes functional tests
 	// lets try with a key that doesn't exist
@@ -1065,14 +1067,14 @@ int do_sproc_lua_functional_test() {
 
 	fprintf(stderr,"Citrusleaf udf apply %s: %s\n", res.is_success ? "SUCCESS" : "FAILURE", as_val_tostring(res.value));
 	if (rsp != CITRUSLEAF_OK) {
-		fprintf(stderr,"citrusleaf_run_sproc failed as rsp=%d\n",rsp);
+		fprintf(stderr,"citrusleaf_run_udf failed as rsp=%d\n",rsp);
 		return -1;
 	}
 	citrusleaf_object_free(&o_key);	
 	return 0;
 } 	
 
-int do_sproc_return_type_test() {
+int do_udf_return_type_test() {
 
 	cl_write_parameters cl_wp;
 	cl_write_parameters_set_default(&cl_wp);
@@ -1098,7 +1100,7 @@ int do_sproc_return_type_test() {
 	fprintf(stderr,"Citrusleaf udf apply for none %s: %s\n", res.is_success ? "SUCCESS" : "FAILURE", as_val_tostring(res.value));
 
 	if (rsp != CITRUSLEAF_OK) {
-		fprintf(stderr,"citrusleaf_run_sproc failed as rsp=%d\n",rsp);
+		fprintf(stderr,"citrusleaf_run_udf failed as rsp=%d\n",rsp);
 		return -1;
 	}
 	// Start afresh, next data type	
@@ -1111,7 +1113,7 @@ int do_sproc_return_type_test() {
 			g_config->package_name,"do_return_types", arglist, g_config->timeout_ms, &res);  
 	
 	if (rsp != CITRUSLEAF_OK) {
-		fprintf(stderr,"citrusleaf_run_sproc failed as rsp=%d\n",rsp);
+		fprintf(stderr,"citrusleaf_run_udf failed as rsp=%d\n",rsp);
 		return -1;
 	}
 	if (res.is_success) {
@@ -1133,7 +1135,7 @@ int do_sproc_return_type_test() {
 			g_config->package_name,"do_return_types", arglist, g_config->timeout_ms, &res);  
 	
 	if (rsp != CITRUSLEAF_OK) {
-		fprintf(stderr,"citrusleaf_run_sproc failed as rsp=%d\n",rsp);
+		fprintf(stderr,"citrusleaf_run_udf failed as rsp=%d\n",rsp);
 		return -1;
 	}
 	fprintf(stderr,"Citrusleaf udf apply for postive integer %s: %s\n", res.is_success ? "SUCCESS" : "FAILURE", as_val_tostring(res.value));
@@ -1155,7 +1157,7 @@ int do_sproc_return_type_test() {
 			g_config->package_name,"do_return_types", arglist, g_config->timeout_ms, &res);  
 	
 	if (rsp != CITRUSLEAF_OK) {
-		fprintf(stderr,"citrusleaf_run_sproc failed as rsp=%d\n",rsp);
+		fprintf(stderr,"citrusleaf_run_udf failed as rsp=%d\n",rsp);
 		return -1;
 	}
 	fprintf(stderr,"Citrusleaf udf apply for negative integer %s: %s\n", res.is_success ? "SUCCESS" : "FAILURE", as_val_tostring(res.value));
@@ -1176,11 +1178,12 @@ int do_sproc_return_type_test() {
 			g_config->package_name,"do_return_types", arglist, g_config->timeout_ms, &res);  
 
 	if (rsp != CITRUSLEAF_OK) {
-		fprintf(stderr,"citrusleaf_run_sproc failed as rsp=%d\n",rsp);
+		fprintf(stderr,"citrusleaf_run_udf failed as rsp=%d\n",rsp);
 		return -1;
 	}
 	fprintf(stderr,"Citrusleaf udf apply for list %s\n", res.is_success ? "SUCCESS" : "FAILURE");
 	if (res.is_success) {
+		fprintf(stderr,"List is : %s\n",as_val_tostring(res.value));
 		int ret_type = as_val_type(res.value);
 		if (ret_type != AS_LIST) {
 			fprintf(stderr,"Return type is %d, should be %d ?\n",ret_type,AS_LIST);
@@ -1189,11 +1192,59 @@ int do_sproc_return_type_test() {
 
 	}
 	as_list_free(arglist);
-	citrusleaf_object_free(&o_key);		
+	// (5) call to return nested list
+	arglist = as_arglist_new(2);	
+	as_list_add_string(arglist, "desired_type");
+	as_list_add_string(arglist, "bin_nested_list");
+	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
+			g_config->package_name,"do_return_types", arglist, g_config->timeout_ms, &res);  
+
+	if (rsp != CITRUSLEAF_OK) {
+		fprintf(stderr,"citrusleaf_run_udf failed as rsp=%d\n",rsp);
+		return -1;
+	}
+	fprintf(stderr,"Citrusleaf udf apply for nested list %s\n", res.is_success ? "SUCCESS" : "FAILURE");
+	if (res.is_success) {
+		fprintf(stderr,"Nested List is : %s\n",as_val_tostring(res.value));
+		int ret_type = as_val_type(res.value);
+		if (ret_type != AS_LIST) {
+			fprintf(stderr,"Return type is %d, should be %d ?\n",ret_type,AS_LIST);
+			return -1;
+		}
+
+	}
+	as_list_free(arglist);
+	// (5) call to return map
+/*	arglist = as_arglist_new(2);	
+	as_list_add_string(arglist, "desired_type");
+	as_list_add_string(arglist, "bin_map");
+	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
+			g_config->package_name,"do_return_types", arglist, g_config->timeout_ms, &res);  
+
+	if (rsp != CITRUSLEAF_OK) {
+		fprintf(stderr,"citrusleaf_run_udf failed as rsp=%d\n",rsp);
+		return -1;
+	}
+	fprintf(stderr,"Citrusleaf udf apply for map %s\n", res.is_success ? "SUCCESS" : "FAILURE");
+	if (res.is_success) {
+		fprintf(stderr,"Map is : %s\n",as_val_tostring(res.value));
+		int ret_type = as_val_type(res.value);
+		if (ret_type != AS_MAP) {
+			fprintf(stderr,"Return type is %d, should be %d\n",ret_type,AS_MAP);
+			as_list_free(arglist);
+			return -1;
+		}
+
+	}
+	else {
+		fprintf(stderr,"Failed with : %s\n",as_val_tostring(res.value));
+	}
+	as_list_free(arglist);
+*/	citrusleaf_object_free(&o_key);		
 	return 0;
 }
 
-int do_sproc_handle_bad_lua_test() {
+int do_udf_handle_bad_lua_test() {
 
 	// (0) let's try with an existing record
 	char *keyStr = "key_badlua";
@@ -1277,6 +1328,289 @@ int register_package()
 
 	return 0;
 }
+//
+// test cases created by a gaming customer
+//
+const char *ORDER_SET = "Order";
+const int TEST_COUNT = 4;
+
+const char *GREE_FUNCS = "udf_unit_test";
+const char *MY_TEST = "game_my_test";
+const char *MY_FOREACH = "game_foreach";
+const char *MY_COPY = "game_copy";
+const char *MY_ECHO = "game_echo";
+const char *MY_META = "game_meta";
+const char *MY_DOUBLE_STR = "game_double_str";
+const char *MY_INC = "game_inc";
+
+static int lastOrderID;
+
+int game_next_order_id(){
+	int 			nextID = -1;
+	cl_rv 			rv;
+	cl_object		key;
+	cl_operation 	ops[1];
+	uint32_t		generation;
+
+	citrusleaf_object_init_str(&key, ORDER_SET);
+	ops[0].op = CL_OP_INCR;
+	strcpy(ops[0].bin.bin_name, "nextID");
+	citrusleaf_object_init_int(&ops[0].bin.object, 1);
+	if (0 != (rv = citrusleaf_operate(g_config->asc, g_config->ns, "IDtable", &key, ops, 1, 0, 0, &generation))) {
+		fprintf(stderr, "get nextID failed: %d\n",rv);
+		return(-1);
+	}
+
+	cl_bin bin;
+	strcpy(&bin.bin_name[0], "nextID");
+	citrusleaf_object_init(&bin.object);
+	cl_write_parameters	cl_wp;
+	cl_write_parameters_set_default(&cl_wp);
+	cl_write_parameters_set_generation_gt(&cl_wp, generation);
+	rv = citrusleaf_get(g_config->asc, g_config->ns, "IDtable", &key, &bin, 1, 0, &generation);
+	nextID = bin.object.u.i64;
+	fprintf(stderr, "got nextID of %d:\n", nextID);
+	lastOrderID = nextID;
+	return nextID;
+}
+
+cl_object game_make_order_key(int id){
+	cl_object order_key;
+	citrusleaf_object_init_int(&order_key, id);
+	return order_key;
+}
+
+int game_create_order(char *customer_name, char *stock_name, char *type, int quantity, int price){
+	int rv;
+
+	cl_object	key;
+	int orderID = game_next_order_id();
+	if (orderID == -1)
+		return -1;
+	key = game_make_order_key(orderID);
+	cl_bin bins[6];
+	strcpy(&bins[0].bin_name[0], "OrderID");
+	citrusleaf_object_init_int(&bins[0].object, orderID);
+
+	strcpy(&bins[1].bin_name[0], "StockName");
+	citrusleaf_object_init_str(&bins[1].object, stock_name);
+
+	strcpy(&bins[2].bin_name[0], "CustomerName");
+	citrusleaf_object_init_str(&bins[2].object, customer_name);
+
+	strcpy(&bins[3].bin_name[0], "Price");
+	citrusleaf_object_init_int(&bins[3].object, price);
+
+	strcpy(&bins[4].bin_name[0], "Quantity");
+	citrusleaf_object_init_int(&bins[4].object, quantity);
+
+	strcpy(&bins[5].bin_name[0], "type");
+	citrusleaf_object_init_str(&bins[5].object, type);
+
+
+	cl_write_parameters cl_wp;
+	cl_write_parameters_set_default(&cl_wp);
+	cl_wp.timeout_ms = 1000;
+
+
+	if (CITRUSLEAF_OK != (rv = citrusleaf_put(g_config->asc, g_config->ns, ORDER_SET, &key, bins, 6, &cl_wp))) {
+		fprintf(stderr, "Create order failed: error %d\n",rv);
+	} else {
+		fprintf(stderr, "%s's %s Order for %d %s at %d submitted with id: %d\n", customer_name, type, quantity, stock_name, price, orderID);
+	}
+	return orderID;
+}
+
+int game_create_holding(char *customer_name, char *stock_name, int quantity, int price){
+	int rv;
+
+	cl_object	key;
+	cl_bin bins[4];
+
+	char holdingSetStr[50];
+	strcpy(holdingSetStr, customer_name);
+	strcat(holdingSetStr, "Holding");
+
+	char holdingKeyStr[50];
+	strcpy(holdingKeyStr, customer_name);
+	strcat(holdingKeyStr, stock_name);
+	citrusleaf_object_init_str(&key, holdingKeyStr);
+
+	strcpy(&bins[0].bin_name[0], "CustomerName");
+	citrusleaf_object_init_str(&bins[0].object, customer_name);
+
+	strcpy(&bins[1].bin_name[0], "StockName");
+	citrusleaf_object_init_str(&bins[1].object, stock_name);
+
+	strcpy(&bins[2].bin_name[0], "Quantity");
+	citrusleaf_object_init_int(&bins[2].object, quantity);
+
+	strcpy(&bins[3].bin_name[0], "Price");
+	citrusleaf_object_init_int(&bins[3].object, price);
+
+	cl_write_parameters cl_wp;
+	cl_write_parameters_set_default(&cl_wp);
+	cl_wp.timeout_ms = 1000;
+
+
+	if (CITRUSLEAF_OK != (rv = citrusleaf_put(g_config->asc, g_config->ns, holdingSetStr, &key, bins, 4, &cl_wp))) {
+		fprintf(stderr, "Create Holding failed: error %d\n",rv);
+	} else {
+		fprintf(stderr, "%s's holding of %d %s at %d created in set %s\n", customer_name, quantity, stock_name, price, holdingSetStr);
+	}
+	return rv;
+}
+
+
+int *game_create_holdings()
+{
+	fprintf(stderr, "Create n holdings\n");
+
+	game_create_holding( "Pat", "CostLess", 300, 25);
+	game_create_holding( "Pat", "MacDonna", 300, 25);
+	game_create_holding( "Pat", "PacBella", 300, 25);
+	game_create_holding( "Pat", "UnSafeway", 300, 25);
+
+	game_create_holding( "Bill", "CostLess", 300, 25);
+	game_create_holding( "Bill", "MacDonna", 300, 25);
+	game_create_holding( "Bill", "PacBella", 300, 25);
+	game_create_holding( "Bill", "UnSafeway", 300, 25);
+
+	return 0;
+}
+
+
+int *game_create_orders()
+{
+	fprintf(stderr, "Create n Buy/Sell orders\n");
+
+
+	// Create sell orders
+	game_create_order("Pat", "CostLess", "Sell", 10, 50);
+	game_create_order("Pat", "MacDonna", "Sell", 10, 50);
+	game_create_order("Pat", "PacBella", "Sell", 10, 50);
+	game_create_order( "Pat", "UnSafeway", "Sell", 10, 50);
+
+	// Create buy orders
+	game_create_order("Bill", "CostLess", "Buy", 10, 50);
+	game_create_order("Bill", "MacDonna", "Buy", 10, 50);
+	game_create_order("Bill", "PacBella", "Buy", 10, 50);
+	game_create_order("Bill", "UnSafeway", "Buy", 10, 50);
+
+	return 0;
+}
+
+int game_execute_udf(cl_object *key, const char *udf_name){
+	cl_rv 		rv;
+	as_result res;
+	rv = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, ORDER_SET, key,
+			GREE_FUNCS,
+			udf_name,
+			(void *)0,
+			g_config->timeout_ms,
+			&res);
+
+	if (rv != CITRUSLEAF_OK){
+		fprintf(stderr, "Could not execute %s on: %ld Return code %d\n", udf_name, key->u.i64, rv);
+		fprintf(stderr,"%s: %s\n", res.is_success ? "SUCCESS" : "FAILURE", as_val_tostring(res.value));
+	} else {
+		fprintf(stderr, "Executed %s on: %ld Return code %d\n", udf_name, key->u.i64, rv);
+		fprintf(stderr,"%s: %s\n", res.is_success ? "SUCCESS" : "FAILURE", as_val_tostring(res.value));
+	}
+	return rv;
+}
+
+int test_game_funcs()
+{
+	game_create_holdings();
+	game_create_orders();
+	for (int orderID = 1; orderID <= lastOrderID; orderID++){
+		cl_bin 		*buy_bins = 0;
+
+		int 		buy_bins_len = 0;
+
+
+		cl_object	buy_order_key;
+
+		cl_rv 		rv;
+		uint32_t	generation;
+
+		// get the order
+		buy_order_key = game_make_order_key(orderID);
+		rv = citrusleaf_get_all(g_config->asc, g_config->ns, ORDER_SET, &buy_order_key, &buy_bins, &buy_bins_len, g_config->timeout_ms, &generation);
+		if (rv != CITRUSLEAF_OK){
+			fprintf(stderr, "Could not retrieve order: %d Return code %d\n", orderID, rv);
+			continue;
+		} else {
+			/*
+			fprintf(stderr, "\nRetrieved order: %d\n", orderID);
+
+			fprintf(stderr, "Bins: %s=%ld %s=%s %s=%s %s=%ld %s=%ld %s=%s\n",
+					buy_bins[0].bin_name,
+					buy_bins[0].object.u.i64,
+					buy_bins[1].bin_name,
+					buy_bins[1].object.u.str,
+					buy_bins[2].bin_name,
+					buy_bins[2].object.u.str,
+					buy_bins[3].bin_name,
+					buy_bins[3].object.u.i64,
+					buy_bins[4].bin_name,
+					buy_bins[4].object.u.i64,
+					buy_bins[5].bin_name,
+					buy_bins[5].object.u.str
+			);
+			*/
+
+			/*
+			 * Execute my_meta
+			 *
+			 * Causes server to crash. Log entries:
+			 * Sep 25 2012 08:00:37 GMT: WARNING (udf): (base/rw_sproc.c:37) SprocWrapper: FAILED: msg: (/var/cache/citrusleaf//lua_include/gree_funcs.lua:39: attempt to call global 'citrusleaf_meta_set' (a nil value))
+			 * Sep 25 2012 08:00:37 GMT: INFO (udf): (base/rw_sproc.c:372) run_sproc_on_rec failure -1
+			 * --- does not seem to crash, but the meta function is no longer available
+			 */
+			// rv = game_execute_udf(c, &buy_order_key, MY_META);
+
+			/*
+			 * Execute my_echo
+			 * Currrently not supported, returns null every time
+			 */
+//			rv = game_execute_udf(&buy_order_key, MY_ECHO);
+
+			/*
+			 * Execute my_inc
+			 */
+			rv = game_execute_udf(&buy_order_key, MY_INC);
+
+			/*
+			 * Execute my_copy
+			 * causes server to crash
+			 * --- validated
+			 */
+//			rv = game_execute_udf( &buy_order_key, MY_COPY);
+
+			/*
+			 * Execute my_double_str -- crashes server if trying to return the bin data
+			 * Crashes server also when you do not try to return (different traces for both)
+			 */
+			for (int i=0;i<20;i++) {
+				rv = game_execute_udf(&buy_order_key, MY_DOUBLE_STR);
+			}
+
+			/*
+			 * Execute my_double_str
+			 * Crashes the server
+			 */
+			rv = game_execute_udf(&buy_order_key, MY_TEST);
+
+
+			citrusleaf_object_free(&buy_order_key);
+			free(buy_bins);
+		}
+	}
+	return 0;
+}
+
 
 int main(int argc, char **argv) {
 	// reading parameters
@@ -1305,19 +1639,21 @@ int main(int argc, char **argv) {
 	if (register_package() !=0 ) {
 		return -1;
 	}
+	// Test passes
 	fprintf(stderr, "\n*** do_udf_read_bins_test started\n"); 
 	if (do_udf_read_bins_test()) {
 		fprintf(stderr, "*** do_udf_read_bins_test failed\n"); return(-1);
 	} else {
 		fprintf(stderr, "*** do_udf_read_bins_test succeeded\n"); 
 	}
-
+	
 	fprintf(stderr, "\n*** do_udf_bin_update_test started\n"); 
 	if (do_udf_bin_update_test()) {
-		fprintf(stderr, "*** do_udf_bin_update_test failed\n"); return(-1);
+		fprintf(stderr, "*** do_udf_bin_update_test failed\n"); //return(-1);
 	} else {
 		fprintf(stderr, "*** do_udf_bin_update_test succeeded\n"); 
 	}
+
 	fprintf(stderr, "\n*** do_udf_trim_test started\n"); 
 	if (do_udf_trim_bin_test()) {
 		fprintf(stderr, "*** do_udf_trim_test failed\n"); //return(-1);
@@ -1353,12 +1689,13 @@ int main(int argc, char **argv) {
 		fprintf(stderr, "*** do_udf_copy_record_test succeeded\n"); 
 	}
 
-	fprintf(stderr, "\n*** do_sproc_return_type_test started\n"); 
-	if (do_sproc_return_type_test()) {
-		fprintf(stderr, "do_sproc_return_type_test failed\n"); //return(-1);
+/*	fprintf(stderr, "\n*** do_udf_return_type_test started\n"); 
+	if (do_udf_return_type_test()) {
+		fprintf(stderr, "do_udf_return_type_test failed\n"); //return(-1);
 	} else {
-		fprintf(stderr, "*** do_sproc_return_type_test succeeded\n"); 
+		fprintf(stderr, "*** do_udf_return_type_test succeeded\n"); 
 	}
+*/
 
 	fprintf(stderr, "\n*** do_udf_bin_type_test started\n"); 
 	if (do_udf_bin_type_test()) {
@@ -1373,7 +1710,7 @@ int main(int argc, char **argv) {
 //	} else {
 //		fprintf(stderr, "*** do_udf_long_bindata_test succeeded\n"); 
 //	}
-
+	
 	fprintf(stderr, "\n*** do_udf_long_biname_test started\n"); 
 	if (do_udf_long_biname_test()) {
 		fprintf(stderr, "do_udf_long_biname_test failed\n"); // return(-1);
@@ -1381,25 +1718,25 @@ int main(int argc, char **argv) {
 		fprintf(stderr, "*** do_udf_long_biname_test succeeded\n"); 
 	}
 
-	fprintf(stderr, "\n*** do_sproc_too_many_bins started\n"); 
-	if (do_sproc_too_many_bins_test()) {
-		fprintf(stderr, "do_sproc_too_many_bins failed\n"); return(-1);
+	fprintf(stderr, "\n*** do_udf_too_many_bins started\n"); 
+	if (do_udf_too_many_bins_test()) {
+		fprintf(stderr, "do_udf_too_many_bins failed\n"); //return(-1);
 	} else {
-		fprintf(stderr, "*** do_sproc_too_many_bins succeeded\n"); 
+		fprintf(stderr, "*** do_udf_too_many_bins succeeded\n"); 
 	}
 
-	fprintf(stderr, "\n*** do_sproc_handle_bad_lua_test started\n"); 
-	if (do_sproc_handle_bad_lua_test()) {
-		fprintf(stderr, "do_sproc_handle_bad_lua_test failed\n"); //return(-1);
+	fprintf(stderr, "\n*** do_udf_handle_bad_lua_test started\n"); 
+	if (do_udf_handle_bad_lua_test()) {
+		fprintf(stderr, "do_udf_handle_bad_lua_test failed\n"); //return(-1);
 	} else {
-		fprintf(stderr, "*** do_sproc_handle_bad_lua_test succeeded\n"); 
+		fprintf(stderr, "*** do_udf_handle_bad_lua_test succeeded\n"); 
 	}
 
-	fprintf(stderr, "\n*** do_sproc_lua_functional_test started\n"); 
-	if (do_sproc_lua_functional_test()) {
-		fprintf(stderr, "do_sproc_lua_functional_test failed\n"); //return(-1);
+	fprintf(stderr, "\n*** do_udf_lua_functional_test started\n"); 
+	if (do_udf_lua_functional_test()) {
+		fprintf(stderr, "do_udf_lua_functional_test failed\n"); //return(-1);
 	} else {
-		fprintf(stderr, "*** do_sproc_lua_functional_test succeeded\n"); 
+		fprintf(stderr, "*** do_udf_lua_functional_test succeeded\n"); 
 	}
 
 	fprintf(stderr, "\n*** do_udf_delete_bin_test started\n"); 
@@ -1415,6 +1752,15 @@ int main(int argc, char **argv) {
 	} else {
 		fprintf(stderr, "*** do_udf_delete_record_test succeeded\n"); 
 	}
+	
+/*    fprintf(stderr, "\n*** test_game_funcs started\n"); 
+    if (test_game_funcs()) {
+        fprintf(stderr, "test_game_funcs failed\n"); return(-1);
+    } else {
+        fprintf(stderr, "*** test_game_funcs succeeded\n"); 
+    }
+*/	
+
 	citrusleaf_cluster_destroy(asc);
 	citrusleaf_shutdown();
 

@@ -51,8 +51,17 @@ for o, a in opts:
 print arg_host
 print arg_port
 
+# Init shm before creating cluster (if using shared memory)
+# The first argument should be the maximum number of nodes the cluster 
+# can have. The second argument is the shm key.
+# If both arguments are zero, default number of nodes, i.e 64 and default key is used
+# cl.citrusleaf_use_shm(10,788722985);
+
 #Initialize citrusleaf
 cl.citrusleaf_init()
+
+#Initialize async threads.
+cl.citrusleaf_async_initialize(5000,1)
 
 #Create citrusleaf cluster
 asc=cl.citrusleaf_cluster_create()
@@ -112,13 +121,21 @@ cl.cl_write_parameters_set_default(cl_wp)
 cl_wp.timeout_ms = 1000
 cl_wp.record_ttl = 100 #Define record_ttl as part of the write parameters
 
-#Call citrusleaf put for two keys
+#Call put for two keys
 for i in xrange(n_keys):
 	rv = cl.citrusleaf_put(asc,ns,set,key[i],bins,num_bins,cl_wp)
 	if rv==cl.CITRUSLEAF_OK:
 		print "Citrusleaf put succeeded"
 	else:
 		print "Citrusleaf put failed with ",rv
+
+#Call asynchronous put for two keys
+for i in xrange(n_keys):
+	rv = cl.citrusleaf_async_put_forget(asc,ns,set,key[i],bins,num_bins,cl_wp)
+	if rv==cl.CITRUSLEAF_OK:
+		print "Citrusleaf asynchronous put succeeded"
+	else:
+		print "Citrusleaf asynchronous put failed with ",rv
 
 #CITRUSLEAF GET
 print "\nCITRUSLEAF GET"
@@ -360,6 +377,9 @@ else:
 #DESTROY CLUSTER
 #Cluster destroy
 cl.citrusleaf_cluster_destroy(asc);
+
+#Free Shared memory if necessary
+#cl.citrusleaf_shm_free()
 
 #CITRUSLEAF SHUTDOWN
 cl.citrusleaf_shutdown();

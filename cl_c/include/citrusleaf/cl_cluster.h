@@ -113,7 +113,7 @@ struct cl_cluster_s {
 #define CLS_UNUSED2		0x00000008
 #define CLS_UNUSED3		0x00000010
 
-
+extern cf_ll cluster_ll;
 // Cluster calls
 extern cl_cluster_node *cl_cluster_node_get_random(cl_cluster *asc);  // get node from cluster
 extern cl_cluster_node *cl_cluster_node_get(cl_cluster *asc, const char *ns, const cf_digest *d, bool write);  // get node from cluster
@@ -125,6 +125,9 @@ extern int cl_cluster_node_fd_get(cl_cluster_node *cn, bool asyncfd, bool nbconn
 extern void cl_cluster_node_fd_put(cl_cluster_node *cn, int fd, bool asyncfd); 		// put the FD back
 extern int citrusleaf_cluster_init();
 extern cl_cluster_node *cl_cluster_node_get_byname(cl_cluster *asc, char *name);
+
+// must free node_names when done
+extern int cl_cluster_get_node_names_byhostportlist(cl_cluster *asc, char *list_nodes, int *n_nodes, char **node_names);
 
 //
 extern int citrusleaf_info_parse_single(char *values, char **value);

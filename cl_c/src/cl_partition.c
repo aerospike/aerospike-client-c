@@ -137,6 +137,7 @@ cl_partition_table_get_byns(cl_cluster *asc, char *ns)
 void
 cl_partition_table_set( cl_cluster *asc, cl_cluster_node *node, char *ns, cl_partition_id pid, bool write)
 {
+	//cf_debug("Set %s %d", ns, pid);
 	cl_partition_table *pt = cl_partition_table_get_byns(asc, ns);
 
 	if (!pt) {

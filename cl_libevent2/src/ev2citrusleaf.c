@@ -224,8 +224,10 @@ void ev2citrusleaf_restart(cl_request *req);
 // Buffer formatting calls
 //
 
-static uint8_t *
-write_header(uint8_t *buf, size_t msg_size, int info1, int info2, uint32_t generation, uint32_t expiration, uint32_t timeout, uint32_t n_fields, uint32_t n_ops )
+uint8_t*
+cl_write_header(uint8_t* buf, size_t msg_size, int info1, int info2,
+		uint32_t generation, uint32_t expiration, uint32_t timeout,
+		uint32_t n_fields, uint32_t n_ops)
 {
 	as_msg *msg = (as_msg *) buf;
 	msg->proto.version = CL_PROTO_VERSION;
@@ -669,7 +671,7 @@ compile(int info1, int info2, char *ns, char *set, ev2citrusleaf_object *key, cf
 	}
 	
 	int n_fields = ( ns ? 1 : 0 ) + (set ? 1 : 0) + (key ? 1 : 0) + (digest ? 1 : 0);
-	buf = write_header(buf, msg_size, info1, info2, generation,expiration, timeout, n_fields, n_values);  
+	buf = cl_write_header(buf, msg_size, info1, info2, generation,expiration, timeout, n_fields, n_values);
 		
 	// now the fields
 	buf = write_fields(buf, ns, ns_len, set, set_len, key, digest, digest_r);
@@ -763,7 +765,7 @@ compile_ops(char *ns, char *set, ev2citrusleaf_object *key, cf_digest *digest,
 	}
 	
 	int n_fields = ( ns ? 1 : 0 ) + (set ? 1 : 0) + (key ? 1 : 0) + (digest ? 1 : 0);
-	buf = write_header(buf, msg_size, info1, info2, generation, expiration, expiration, n_fields, n_ops);  
+	buf = cl_write_header(buf, msg_size, info1, info2, generation, expiration, expiration, n_fields, n_ops);
 		
 	// now the fields
 	buf = write_fields(buf, ns, ns_len, set, set_len, key, digest,digest_r);
@@ -866,7 +868,7 @@ set_value_search(cl_msg_op *op, ev2citrusleaf_bin *values, int n_values)
 //
 // Copy this particular operation to that particular value
 void
-set_value_particular(cl_msg_op *op, ev2citrusleaf_bin *value)
+cl_set_value_particular(cl_msg_op *op, ev2citrusleaf_bin *value)
 {
 	if (op->name_sz > sizeof(value->bin_name)) {
 		cf_warn("Set Value Particular: bad response from server");
@@ -943,7 +945,7 @@ parse(uint8_t *buf, size_t buf_len, ev2citrusleaf_bin *values, int n_values,  in
 		
 		cl_msg_swap_op(op);
 		
-		set_value_particular(op, &values[i]);
+		cl_set_value_particular(op, &values[i]);
 		
 		op = cl_msg_op_get_next(op);
 	}

@@ -17,6 +17,7 @@
 
 
 #include "citrusleaf/citrusleaf.h"
+#include "citrusleaf/cl_shm.h"
 
 typedef struct config_s {
 	
@@ -76,7 +77,7 @@ do_example(config *c)
 		if (cl_v)	free(cl_v);
 		return(-1);
 	}
-	fprintf(stderr, "get all returned %d bins:\n",cl_v_len);
+	fprintf(stderr, "get all returned %d bins\n",cl_v_len);
 	for (int i=0;i<cl_v_len;i++) {
 		fprintf(stderr, "%d:  bin %s ",i,cl_v[i].bin_name);
 		switch (cl_v[i].object.type) {
@@ -119,6 +120,7 @@ void usage(void) {
 	fprintf(stderr, "-b bin [default value]\n");
 	fprintf(stderr, "-m milliseconds timeout [default 200]\n");
 	fprintf(stderr, "-f do not follow cluster [default do follow]\n");
+	fprintf(stderr, "-r use shared memory [default false]\n");
 	fprintf(stderr, "-v is verbose\n");
 }
 
@@ -139,11 +141,12 @@ main(int argc, char **argv)
 	g_config.verbose = false;
 	g_config.follow = true;
 	
-	int		c;
+	bool use_shm = false;
+	int	c;
 	
 	printf("example of the C citrusleaf library\n");
 	
-	while ((c = getopt(argc, argv, "h:p:n:s:b:m:v")) != -1) 
+	while ((c = getopt(argc, argv, "h:p:n:s:b:m:vr")) != -1)
 	{
 		switch (c)
 		{
@@ -175,6 +178,10 @@ main(int argc, char **argv)
 			g_config.follow = false;
 			break;
 			
+		case 'r':
+			use_shm = true;
+			break;
+
 		default:
 			usage();
 			return(-1);
@@ -185,8 +192,15 @@ main(int argc, char **argv)
 	fprintf(stderr, "example: host %s port %d ns %s set %s\n",
 		g_config.host,g_config.port,g_config.ns,g_config.set);
 
+	if (use_shm) {
+		citrusleaf_use_shm(10,788722985);
+	}
+
 	// init the unit before creating any clusters
-	citrusleaf_init();
+	int rv = citrusleaf_init();
+	if(rv!=0) {
+		fprintf(stderr,"Citrusleaf init failed\n");
+	}
 	
 	// Create a citrusleaf cluster object for subsequent requests
 	g_config.asc = citrusleaf_cluster_create();
@@ -197,14 +211,14 @@ main(int argc, char **argv)
 	if (g_config.follow == false)
 		citrusleaf_cluster_follow(g_config.asc, false);
 	
-	citrusleaf_cluster_add_host(g_config.asc, g_config.host, g_config.port, 100 /*timeout*/);
-	
+	citrusleaf_cluster_add_host(g_config.asc, g_config.host, g_config.port, 200 /*timeout*/);
+
 	// Make some example requests against the cluster
 	if (0 != do_example(&g_config)) {
 		fprintf(stderr, "example failed!\n");
 		return(-1);
 	}
 	fprintf(stderr, "example succeeded!\n");
-	
+	citrusleaf_shutdown();
 	return(0);
 }

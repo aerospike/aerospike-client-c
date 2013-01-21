@@ -193,6 +193,12 @@ extern void ev2citrusleaf_request_complete(cl_request *req, bool timedout);
 
 extern int ev2citrusleaf_is_connected(int fd);
 
+// Used in ev2citrusleaf.c and cl_batch.c:
+void cl_set_value_particular(cl_msg_op* op, ev2citrusleaf_bin* value);
+uint8_t* cl_write_header(uint8_t* buf, size_t msg_size, int info1, int info2,
+		uint32_t generation, uint32_t expiration, uint32_t timeout,
+		uint32_t n_fields, uint32_t n_ops);
+
 
 #ifdef __cplusplus
 } // end extern "C"

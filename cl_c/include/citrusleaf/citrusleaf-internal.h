@@ -109,7 +109,7 @@ void
 citrusleaf_batch_shutdown();
 
 void
-citrusleaf_put_queue_shutdown();
+citrusleaf_async_shutdown();
 
 int
 citrusleaf_info_host_limit(struct sockaddr_in *sa_in, char *names, char **values, int timeout_ms, bool send_asis, uint64_t max_response_length);

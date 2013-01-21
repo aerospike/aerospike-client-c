@@ -71,6 +71,14 @@ void citrusleaf_free_bins(cl_bin * bin, int n, cl_bin**binp) {
         return;
 }
 
+char* cl_cluster_node_get(char* key,char* set){
+       cl_object keyobj;
+       cf_digest digest;
+       citrusleaf_object_init_str(&keyobj,key);
+       citrusleaf_calculate_digest(set,&keyobj,&digest);
+ 
+}
+
 %}
 
 

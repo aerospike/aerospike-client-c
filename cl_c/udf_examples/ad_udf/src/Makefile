@@ -1,19 +1,19 @@
 # Citrusleaf Tools
 # Makefile
 
-DEPTH = ../../../..
+DEPTH = ../../../../../..
 include $(DEPTH)/make_in/Makefile.in
 
-DIR_INCLUDE = ../include $(DEPTH)/shared/include/ $(DEPTH)/include/
 DIR_OBJECT = ../obj
 DIR_TARGET = ../bin
+DIR_LIB = ../../../target/Linux-x86_64/lib
 
-HEADERS = ad_sproc.h utils.h 
-SOURCES =  ad_sproc.c utils.c 
-TARGET = ad_sproc
+HEADERS = ad_udf.h utils.h 
+SOURCES =  ad_udf.c utils.c 
+TARGET = ad_udf
 
-INCLUDES = $(DIR_INCLUDE:%=-I%) 
-LIBRARIES = -lcitrusleaf -lcf-client  -lssl -lpthread -lrt  -lcrypto
+INCLUDES = -I../include/ -I../../../target/Linux-x86_64/include
+LIBRARIES = $(DIR_LIB)/libcitrusleaf.a  -lssl -lpthread -lrt  -lcrypto
 ifeq (${MR_LANG},LUA)
 LIBRARIES += -llua
 endif
@@ -25,7 +25,7 @@ OBJECTS = $(SOURCES:%.c=$(DIR_OBJECT)/%.o)
 DEPENDENCIES = $(OBJECTS:%.o=%.d)
 
 .PHONY: all
-all: ad_sproc 
+all: ad_udf 
 
 .PHONY: clean
 clean:

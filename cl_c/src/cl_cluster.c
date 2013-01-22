@@ -952,7 +952,7 @@ cl_cluster_node_fd_create(cl_cluster_node *cn, bool nonblocking)
 			if (nonblocking && (errno == EINPROGRESS))
 			{
 #if XDS //Hack for XDS
-				cf_debug_sockaddr_in("Connecting to ", sa_in);
+				cf_print_sockaddr_in("Connecting to ", sa_in);
 				cf_debug("Non-blocking connect returned EINPROGRESS as expected");
 #endif
 				goto Done;
@@ -1368,7 +1368,7 @@ cluster_tend(cl_cluster *asc)
 			*/
 			if (0 == cl_cluster_node_get_byaddr(asc, sin)) {
 				if (cf_debug_enabled()) {
-					cf_debug_sockaddr_in("pinging",sin);
+					cf_print_sockaddr_in("pinging",sin);
 				}		
 				cluster_ping_address(asc, sin);
 				n_new++;

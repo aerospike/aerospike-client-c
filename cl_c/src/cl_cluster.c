@@ -776,23 +776,6 @@ cl_cluster_node_get_byname(cl_cluster *asc, char *name)
 int
 cl_cluster_get_node_names_byhostportlist(cl_cluster *asc, char *list_nodes, int *n_nodes, char **node_names)
 {
-	char *temp;
-	temp = strdup(list_nodes);
-	char *head_temp=temp; //head_temp used to free temp
-	char *p_t;
-	// list_nodes input format checking
-	p_t = strtok( temp, ":" );
-	while(p_t != NULL)
-	{
-		p_t = strtok( NULL, ";");
-		if (p_t == NULL || strstr(p_t, ":")) {
-			fprintf(stderr, "Command line input format error for option l\n");
-			return(-1);
-		}
-		p_t = strtok( NULL, ":" );
-	}
-	free(head_temp);
-
 	//get vector containing host:port
 	cf_vector_define(host_str_v, sizeof(void *), 0);// host_str_v is vector of addr:port
 	str_split(';', list_nodes, &host_str_v);
@@ -812,43 +795,26 @@ cl_cluster_get_node_names_byhostportlist(cl_cluster *asc, char *list_nodes, int 
 		if (cf_vector_size(&host_port_v) == 2) {
 			char *host_s = cf_vector_pointer_get(&host_port_v, 0);
 			char *port_s = cf_vector_pointer_get(&host_port_v, 1);
-			int port = atoi(port_s);
-			fprintf(stderr, "host-port:%s:%d, ", host_s, port);
+			uint port = atoi(port_s);
+			cf_debug("host-port:%s:%d, ", host_s, port);
 			char *info_name;
 			char *value;
-			//fprintf(stderr,"erro no %d \n", citrusleaf_info(host_s, port, "node", &info_name, 5));
 			if (0 == citrusleaf_info(host_s, port, "node", &info_name, 3000)) {
 				citrusleaf_info_parse_single(info_name, &value);
-				//checking node names are from same cluster or not
-				if (cl_cluster_node_get_byname(asc, value) != 0) {
-					fprintf(stderr, "node-name:%s\n", value);
-					memcpy(nptr, value, NODE_NAME_SIZE);
-					nptr += (NODE_NAME_SIZE);
-				} else {
-					fprintf(stderr, "All nodes are not from same cluster. Give proper node list\n");
-					return(-1);
-				}
+				cf_debug("node-name:%s\n", value);
+				memcpy(nptr, value, NODE_NAME_SIZE);
+				nptr += (NODE_NAME_SIZE);
 			} else {
-				fprintf(stderr, " \n%s:%d is not accessible or timed out.\n", host_s, port);
-				return(-1);
-			} free(info_name);
+				cf_debug("%s:%u is not accessible or timed out. \n", host_s, port);
+				return (-2);
+			}
+			free(info_name);
+		} else {
+				cf_debug("Command line input format error for option l\n");
+				return (-1);
 		}
 		cf_vector_destroy(&host_port_v);
 	}
-
-	//checking duplicate node names, puting this check here to print both node host:port for which duplicate comes
-	char *nptr_dup = *node_names;
-	for(uint j = 0; j < size; j++) {
-		for(uint i = j+1; i < size; i++) {
-			if(!strcmp( nptr_dup + (NODE_NAME_SIZE * i), nptr_dup + (NODE_NAME_SIZE * j))) {
-				char *s1 = cf_vector_pointer_get(&host_str_v, j);
-				char *s2 = cf_vector_pointer_get(&host_str_v, i);
-				fprintf(stderr, "Nodes: %s, %s- are repeated or different addresses of same node. Give proper input\n",  s1, s2);
-				return(-1);
-			}
-		}
-	}
-
 	cf_vector_destroy(&host_str_v);
 	return(0);
 }

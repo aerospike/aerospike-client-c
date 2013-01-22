@@ -1,0 +1,34 @@
+# Build SDK rpm distribution.
+
+export RPM_SOURCE_ROOT = $(shell echo `pwd`/dist)
+export RPM_BUILD_ROOT = $(RPM_SOURCE_ROOT)/BUILD
+
+REV = $(shell grep build_string src/version.c | cut -d ' ' -f 4 | sed 's/;//' | sed 's/"//g' | sed 's/-/_/g' )
+
+.PHONY: default
+default: dist
+	@echo $(REV)
+	mkdir -p $(RPM_BUILD_ROOT)
+	mkdir -p $(RPM_SOURCE_ROOT)/RPMS/x86_64
+	sed 's/@VERSION@/'$(REV)'/g' < aero_libevent2_vspec.tmpl > aero_libevent2_v.spec
+	
+	sed -i 's/@RELEASE@/'$(OS)'/g' aero_libevent2_v.spec
+	rpmbuild -bb -vv --buildroot $(RPM_BUILD_ROOT) aero_libevent2_v.spec
+    
+distclean:
+	rm -rf $(RPM_BUILD_ROOT)
+
+.PHONY: dist
+dist: 
+	# make RPM directories
+	mkdir -p $(RPM_BUILD_ROOT)
+	install -d $(RPM_BUILD_ROOT)/usr/lib
+	install lib/libev2citrusleaf.a $(RPM_BUILD_ROOT)/usr/lib/libev2citrusleaf.a
+
+	install -d $(RPM_BUILD_ROOT)/usr/include/citrusleaf
+	install include/citrusleaf/*.h $(RPM_BUILD_ROOT)/usr/include/citrusleaf
+
+	install -d $(RPM_BUILD_ROOT)/usr/include/citrusleaf_event2
+	install include/citrusleaf_event2/*.h $(RPM_BUILD_ROOT)/usr/include/citrusleaf_event2
+
+

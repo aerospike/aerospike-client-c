@@ -24,13 +24,13 @@ function prefetch_and_print(record)
   end
 end
 
-function sp_doc_test(record) 
+function sp_doc_test(record, limits) 
   print('--------CLIENT: START: sp_doc_test');
   --record:SaveAsJSON();
   local exists  = record:Exists();
   local pf      = false; --pf      = true;
   if (pf) then prefetch_and_print(record) end
-  local limits = tonumber(record:GetArg('limits'));
+  local limits = tonumber(limits);
   local first;
   if (limits == 20) then first = true; else first = false; end
 

@@ -1,5 +1,5 @@
 /* *  Citrusleaf Stored Procedure Test Program
- *  doc_sproc.c - Validates stored procedure functionality
+ *  doc_udf.c - Validates stored procedure functionality
  *
  *  Copyright 2012 by Citrusleaf.  All rights reserved.
  *  THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE.  THE COPYRIGHT NOTICE
@@ -19,17 +19,20 @@
 #include <sys/stat.h>
 
 #include "citrusleaf/citrusleaf.h"
+#include "citrusleaf/cl_udf.h"
+#include <citrusleaf/cf_random.h>
+#include <citrusleaf/cf_atomic.h>
+#include <citrusleaf/cf_hist.h>
+#include "doc_udf.h"
 
-#include "doc_sproc.h"
 
-
-int do_doc_sproc_test(config *c) {
+int do_doc_udf_test(config *c) {
     cl_write_parameters cl_wp;
     cl_write_parameters_set_default(&cl_wp);
     cl_wp.timeout_ms    = c->timeout_ms;
     cl_wp.record_ttl    = 864000;
     int num_records     = 1;
-    int num_sproc_calls = 2;
+    int num_udf_calls = 2;
 
     // (0) delete old record to start afresh
     for (int i = 0; i < num_records; i++) {
@@ -74,40 +77,30 @@ int do_doc_sproc_test(config *c) {
         }
     }
     
-    for (int i = 0; i < num_sproc_calls; i++) {
-        cl_sproc_params *sproc_params = citrusleaf_sproc_params_create();
-        if (!sproc_params) { printf("can't create sproc_params\n"); return -1; }
-        citrusleaf_sproc_params_add_string(sproc_params, "limits",
-                                                          i ? "10" : "20");
-           
-        uint32_t  cl_gen;
-        cl_bin   *rsp_bins   = NULL;
-        int       rsp_n_bins = 0;
+    for (int i = 0; i < num_udf_calls; i++) {
+        as_list * arglist = as_arglist_new(2);
+        if (!arglist) { 
+		printf("can't create udf arglist\n"); 
+		return -1; 
+	}
+	as_list_add_string(arglist, i ? "10": "20");
+	
         char     *keyStr     = "key1";
+	as_result res;
+
         cl_object o_key; citrusleaf_object_init_str(&o_key,keyStr);        
-        int rsp = citrusleaf_sproc_execute(c->asc, c->ns, c->set, &o_key, 
+        int rsp = citrusleaf_udf_record_apply(c->asc, c->ns, c->set, &o_key, 
                                            c->package_name, "sp_doc_test",
-                                           sproc_params, &rsp_bins,
-                                           &rsp_n_bins, c->timeout_ms,
-                                           &cl_gen);  
+                                           arglist, c->timeout_ms,
+                                           &res);  
         if (rsp != CITRUSLEAF_OK) {
             citrusleaf_object_free(&o_key);        
-            printf("failed record_sproc test data %d rsp=%d\n", i, rsp);
+            printf("failed record_udf test data %d rsp=%d\n", i, rsp);
+		as_list_free(arglist);
             return -1;
         }
         citrusleaf_object_free(&o_key);        
-        for (int b = 0; b < rsp_n_bins; b++) {
-            if (rsp_bins[b].object.type == CL_STR) {
-                printf("sproc returned record[%d] %s=%s\n",
-                        i, rsp_bins[b].bin_name,rsp_bins[b].object.u.str);
-            } else {
-                printf("warning: expected string type but object type %s=%d\n",
-                       rsp_bins[b].bin_name,rsp_bins[b].object.type);
-            }
-            citrusleaf_object_free(&rsp_bins[b].object);        
-        }      
-        free(rsp_bins);    
-        citrusleaf_sproc_params_destroy(sproc_params);
+	as_list_free(arglist);
     }
     
     // (4) verify record is updated 
@@ -120,7 +113,7 @@ int do_doc_sproc_test(config *c) {
         int rsp = citrusleaf_get_all(c->asc, c->ns, c->set, &o_key, &rsp_bins,
                                      &rsp_n_bins, c->timeout_ms, &cl_gen);  
         if (rsp != CITRUSLEAF_OK) {
-            printf("failed record_sproc test data %d rsp=%d\n", i, rsp);
+            printf("failed record_udf test data %d rsp=%d\n", i, rsp);
             citrusleaf_object_free(&o_key); return -1;
         }
         citrusleaf_object_free(&o_key);        
@@ -147,9 +140,49 @@ void usage(int argc, char *argv[]) {
     printf("-p port [default 3000]\n");
     printf("-n namespace [test]\n");
     printf("-s set [default *all*]\n");
-    printf("-f package_file [lua_packages/sproc_unit_test.lua]\n");
-    printf("-P package_name [sproc_unit_test] \n");
+    printf("-f package_file [../lua_files/document_store_test.lua\n");
+    printf("-P package_name [udf_unit_test] \n");
     printf("-v is verbose\n");
+}
+
+int register_package(config * c) 
+{ 
+	fprintf(stderr, "Opening package file %s\n",c->package_file);  
+	FILE *fptr = fopen(c->package_file,"r"); 
+	if (!fptr) { 
+		fprintf(stderr, "cannot open script file %s : %s\n",c->package_file,strerror(errno));  
+		return(-1); 
+	} 
+	int max_script_len = 1048576; 
+	char *script_code = malloc(max_script_len); 
+	if (script_code == NULL) { 
+		fprintf(stderr, "malloc failed"); return(-1); 
+	}     
+
+	char *script_ptr = script_code; 
+	int b_read = fread(script_ptr,1,512,fptr); 
+	int b_tot = 0; 
+	while (b_read) { 
+		b_tot      += b_read; 
+		script_ptr += b_read; 
+		b_read      = fread(script_ptr,1,512,fptr); 
+	}                        
+	fclose(fptr); 
+
+	char *err_str = NULL; 
+	if (b_tot>0) { 
+		int resp = citrusleaf_udf_put(c->asc, basename(c->package_file), script_code, &err_str); 
+		if (resp!=0) { 
+			fprintf(stderr, "unable to register package file %s as %s resp = %d\n",c->package_file,c->package_name,resp); return(-1);
+			fprintf(stderr, "%s\n",err_str); free(err_str);
+			return(-1);
+		}
+		fprintf(stderr, "successfully registered package file %s as %s\n", c->package_file,c->package_name); 
+	} else {   
+		fprintf(stderr, "unable to read package file %s as %s b_tot = %d\n",c->package_file, c->package_name,b_tot); return(-1);    
+	}
+
+	return 0;
 }
 
 int main(int argc, char **argv) {
@@ -157,11 +190,11 @@ int main(int argc, char **argv) {
     c.host         = "127.0.0.1";
     c.port         = 3000;
     c.ns           = "test";
-    c.set          = 0;
+    c.set          = "demo";
     c.timeout_ms   = 1000;
     c.verbose      = true;
-    c.package_file = "lua_packages/document_store_test.lua";
-    c.package_name = "doc_sproc_unit_test";
+    c.package_file = "../../lua_files/document_store_test.lua";
+    c.package_name = "doc_udf_unit_test";
         
     printf("Starting DocumentStore stored-procedure Unit Tests\n");
     int optcase;
@@ -190,49 +223,16 @@ int main(int argc, char **argv) {
         return -1;
     }
     c.asc           = asc;
-    
+
     // register our package. 
-    printf("Opening package file %s\n", c.package_file); 
-    FILE *fptr = fopen(c.package_file,"r");
-    if (!fptr) {
-        printf("cannot open script file %s : %s\n",
-               c.package_file, strerror(errno)); 
-        return -1;
+
+    if (register_package(&c) !=0 ) {
+	    return -1;
     }
-    int   max_script_len = 1048576;
-    char *script_code    = malloc(max_script_len);
-    if (script_code == NULL) { printf( "malloc failed"); return -1; }    
-    
-    char *script_ptr = script_code;
-    int   b_read     = fread(script_ptr,1,512,fptr);
-    int   b_tot      = 0;
-    while (b_read) {
-        b_tot      += b_read;
-        script_ptr += b_read;
-        b_read      = fread(script_ptr,1,512,fptr);
-    }            
-    fclose(fptr);
-    char *err_str = NULL;
-    if (b_tot > 0) {
-        int resp = citrusleaf_sproc_package_set(asc, c.package_name,
-                                               script_code, &err_str, CL_SCRIPT_LANG_LUA);
-        if (resp) {
-            printf("unable to register package file %s as %s resp = %d\n",
-                   c.package_file,c.package_name,resp);
-	        fprintf(stderr, "%s\n",err_str); free(err_str);
-            return -1;
-        }
-        printf("successfully registered package file %s as %s\n",
-               c.package_file,c.package_name); 
-    } else {   
-        printf("unable to read package file %s as %s b_tot = %d\n",
-               c.package_file,c.package_name,b_tot);
-        return -1;    
-    }
-    if (do_doc_sproc_test(&c)) {
-        printf("FAILED: do_doc_sproc_test\n"); return -1;
+    if (do_doc_udf_test(&c)) {
+        printf("FAILED: do_doc_udf_test\n"); return -1;
     } else {
-        printf("SUCCESS: do_doc_sproc_test\n");
+        printf("SUCCESS: do_doc_udf_test\n");
     }
     citrusleaf_cluster_destroy(asc);
     printf("\n\nFinished DocumentStore stored-procedure Unit Tests\n");

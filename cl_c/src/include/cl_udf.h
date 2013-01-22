@@ -33,10 +33,45 @@
  * FUNCTIONS
  ******************************************************************************/
 
-cl_rv citrusleaf_udf_record_apply(cl_cluster *, const char *, const char *, const cl_object *, const char *, const char *, as_list *, int, as_result *);
+/**
+ * Apply a UDF to a record.
+ * @param result will be updated with the result of the call. The as_result.value member should be freed by the user.
+ */
+cl_rv citrusleaf_udf_record_apply(cl_cluster * cluster, const char * namespace, const char * set, const cl_object * key, const char * filename, const char * function, as_list * arglist, int timeout, as_result * result);
 
-cl_rv citrusleaf_udf_list(cl_cluster *, char ***, int *, char **);
-cl_rv citrusleaf_udf_get(cl_cluster *, const char *, char **, int *, char **);
-cl_rv citrusleaf_udf_get_with_gen(cl_cluster *, const char *, char **, int *, char **, char **) ;
-cl_rv citrusleaf_udf_put(cl_cluster *, const char *, const char *, char **);
-cl_rv citrusleaf_udf_remove(cl_cluster *, const char *, char **);
+/**
+ * @param files - An array of filenames. Each entry is string. The array and each entry must be freed by the user.
+ * @param count - Number of entries.
+ * @param error - Contains an error message, if the return value was non-zero. The value must be freed by the user.
+ */
+cl_rv citrusleaf_udf_list(cl_cluster * cluster, char *** files, int * count, char ** error);
+
+/**
+ * @param filename - The name of the file to download from the cluster.
+ * @param contents - The contents of the file. The contents must be freed by the user.
+ * @param size - The size of the contents of the file.
+ * @param error - Contains an error message, if the return value was non-zero. The value must be freed by the user.
+ */
+cl_rv citrusleaf_udf_get(cl_cluster * cluster, const char * filename, char ** contents, int * size, char ** error);
+
+/**
+ * @param filename - The name of the file to download from the cluster.
+ * @param contents - The contents of the file. The value must be freed by the user.
+ * @param size - The size of the contents of the file.
+ * @param gen - The generation value of the file. The value must be freed by the user.
+ * @param error - Contains an error message, if the return value was non-zero. The value must be freed by the user.
+ */
+cl_rv citrusleaf_udf_get_with_gen(cl_cluster * cluster, const char * filename, char ** contents, int * size, char ** gen, char ** error) ;
+
+/**
+ * @param filename - The name of the file being uploaded to the cluster.
+ * @param contents - The contents of the file being uploaded to the cluster.
+ * @param error - Contains an error message, if the return value was non-zero. The value must be freed by the user.
+ */
+cl_rv citrusleaf_udf_put(cl_cluster * cluster, const char * filename, const char * contents, char ** error);
+
+/**
+ * @param filename - The file to be removed from the cluster.
+ * @param error - Contains an error message, if the return value was non-zero. The value must be freed by the user.
+ */
+cl_rv citrusleaf_udf_remove(cl_cluster * cluster, const char * filename, char ** error);

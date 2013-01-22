@@ -26,16 +26,24 @@ function do_trim_bin(record, limits, value)
   if (y > myceil) then
     record.cats = 'new string';
   end
-  aerospike:update(record)
-  return 'TRIM_BIN: ' .. record.cats;
+  local x = aerospike:update(record);
+  if (x == 0) then
+	return 'TRIM_BIN: ' .. record.cats;
+  else 
+	return 'Aerospike update failed with '..x; 
+  end
 end
 
 function do_update_bin(record)
 --  record.bin_to_change    = "changed by lua at "..os.time();
-  record.bin_to_change    = "changed by lua";
-  print('CLIENT: reverted do_update_bin: ' .. record.bin_to_change);
-  aerospike:update(record)
-  return 'UPDATED_BIN: ' .. record.bin_to_change;
+  record['bin_to_change']    = "changed by lua";
+  print('CLIENT: do_update_bin: ' .. record.bin_to_change);
+  local x = aerospike:update(record);
+  if ( x == 0 ) then
+     return 'UPDATED_BIN: ' .. record.bin_to_change;
+  else 
+     return 'Bin update failed with '..x;
+  end
 end
 
 function do_new_bin(record)
@@ -43,23 +51,28 @@ function do_new_bin(record)
      record.new_bin = 'new string'; 
   else
      print('CLIENT: new_bin already exists');
+     return('new_bin already exists');
   end
-  aerospike:update(record)
-  return 'NEW_BIN';
+  local x = aerospike:update(record);
+  if ( x == 0 ) then
+	return 'Successfully added new_bin';
+  else 
+	return 'Failed to add new_bin %d'..x;
+  end
 end
 
 function do_delete_bin(record) 
     print('CLIENT: DEL BIN');
     record.bin3 = nil;
-  aerospike:update(record); 
-  return 'DELETE_BIN: ';
+  local x = aerospike:update(record); 
+  return 'Record updation returned '..x;
 end
 
 function do_add_record(record)
    record.lua_bin = "new_value";	
    record.second_bin = "another_value";
-   aerospike:create(record); 
-   return 'ADD_RECORD';
+   local x = aerospike:create(record);
+   return 'Record creation returned '..x;
 end
 
 function do_delete_record(record) 
@@ -73,12 +86,12 @@ function do_echo_record(record)
 end
 
 function do_read1_record(record)
-
   if (record.bin1 ~= 'val1') then return 'FAILURE' ; end
   print ('CLIENT: Read bin1 success');
   if (record.bin2 ~= 'val2') then return 'FAILURE' ; end
   print ('CLIENT: Read bin2 success');
-  local x = "bin" .. tostring(3);
+  local y = 3;
+  local x = "bin"..y;
   if (record[x] ~= 'val3') then return 'FAILURE' ; end
   return 'SUCCESS';
 end
@@ -100,8 +113,8 @@ function do_handle_bad_lua_2(record)
 -- This makes server crash
 --  record[bin_with_a_really_long_name] = "five";
 	record.very_long_name_that_should_fail = "bin 2 value";
-	aerospike:create(record);
-	return 'OK';
+	local x = aerospike:update(record);
+	return 'Creation of record returned '..x;
 end
 
 function do_lua_functional_test(record)
@@ -116,7 +129,8 @@ function do_lua_functional_test(record)
   if ( x["foo"] ~= "bar" ) then record.status = "FAIL"; return "FAIL3"; end
   -- add more tests here
   record.status = "OK";
-  return 'OK';
+  local ret = aerospike:create(record);
+  return 'Creation of record returned '..ret;
 end
 
 
@@ -141,11 +155,31 @@ function do_return_types(record, d, desired_type)
   end  
   if (desired_type == "bin_array") then
     print("bin_array");
-    return  {s1 = 'have s1', i1=55};
+    local l = list();
+	list.append(l,'have s1');
+	list.append(l,55);
+    return  l;
   end
-  if (desired_type == "bin_array_with_nesting") then
-    print("bin_array_with_nesting");
-  	return {s = 'string_resp ', i=22, t={nesting=1, s='yup'}};
+  if (desired_type == "bin_nested_list") then
+    	info("bin_nested_list");
+	local x = list();
+	local y = list();
+	list.append(x,1);
+	list.append(x,'yup');
+	list.append(y,'string_resp');
+	list.append(y,x);
+	return y
+  end
+  if (desired_type == "bin_map") then
+	info("bin_map");
+	local x = map();
+	local y = "map"
+	local l = list();
+	list.append(l,"ting");
+	list.append(l,"ding");
+	x[y] = "yes";
+	x["i"] = l;
+	return x;
   end
 end
 
@@ -156,8 +190,8 @@ function do_bin_types(record)
    record.n_int_b = -1;
    record.str_b = "this is a string";
 --   record.doc_b = {t1 = 't1 val', t2=77, t3 = {s1="s1 val", s2 = "s2 val"}}; 	
-   aerospike:create(record);
-   return 'BIN_TYPES';
+   local x = aerospike:create(record);
+   return 'Record creation returned '..x;
 end
 
 
@@ -179,25 +213,40 @@ end
 
 function do_long_binname(record)
 	record.short_bin = "bin 1 value";
-	record.very_long_name_that_should_fail = "bin 2 value";
+	info("short_bin added to record");
+	record['very_long_name_that_should_fail'] = "bin 2 value";
+	info("very_long_name_that_should_fail added to record");
 	record.last_bin = "bin 3 value";
-	aerospike:create(record);
- 	return "Long binname test";	
+	info("last_bin added to record");
+	local x = aerospike:create(record);
+ 	return "Long binname test returned "..x;	
 end	
 
 function do_too_many_bins(record)
+   local count = 0, x, y;
    for i = 1,10000 do
       record[i] = i
+      y = aerospike:exists(record);
+      if ( y == 0 ) then 
+	      x = aerospike:create(record); 
+      else  
+              x = aerospike:update(record);
+      end 
+      if ( x == 0 ) then 
+        count = count + 1;
+      else 
+      	info("Bin not added for %d with %d",i,x);
+      end
    end
-   return record
+   info ("count of objects updated is %d",count);
+   return 'Updated '..count..' records';
 end	
 
 function game_my_test(record)
    local ret = {}
    if (not aerospike:exists(record)) then
-      ret['type'] = 'bar'
       record.type = 'bar'
-      return ret
+      return record.type
    else
       ret['foo'] = record.foo
       ret['name'] = record.CustomerName
@@ -206,7 +255,7 @@ function game_my_test(record)
       --                          ret[k] = v
       --                       end
       -- )
-      return ret
+      return ret['name'];
    end
 end
 
@@ -222,35 +271,41 @@ end
 
 function do_copy_record(record)
 	local t = record
-    return t
+	return 'No-op for now';
 end
 
 function do_updated_copy(record)
 	local t = record
 	t.c_bin = "new_value"
 	t.a_bin = nil
-	aerospike:update(record);
-	return "Updated Record";
+	local x = aerospike:update(record);
+	if ( x == 0 ) then
+		return "Successfully updated record";
+	else 
+		return "Recrod updation failed with "..x;
+	end
 end
 
 function game_echo(record)
-    return record
+    return record;
 end
-
+function game_orderid(record)
+	return 'Order ID is '..record['OrderID'];
+end
 function game_meta(record)
    local meta = citrusleaf_meta_set(record)
    return meta
 end
 
 function game_inc(record)
-   local ret = {}
-   if (not record:Exists()) then
+   if (not aerospike:exists(record)) then
       record.Quantity = 1
+      aerospike:create(record);
    else
-      record.Quantity = record.Quantity + 1
+      record.Quantity = record.Quantity + 1;
+      aerospike:update(record);
    end
-   ret['num'] = record.Quantity
-   return ret
+   return 'Quantity is '..record.Quantity;
 end
 
 function game_double_str(record)
@@ -262,10 +317,7 @@ function game_double_str(record)
       record.type = record.type .. record.type
       aerospike:update(record)
    end
- --  ret['type'] = record.type
- --  ret['status'] = 'OK';
- --  return ret
-   return 'OK';
+--   return 'Record updated with '..record.type;
 end
 
 

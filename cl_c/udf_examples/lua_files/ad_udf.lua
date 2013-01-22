@@ -1,4 +1,6 @@
-function ssplit(prev_str, delimiter)
+-- Declare this function as local, o/w applying UDF fails
+-- as it assumes it to be a global whose definition it cannot find
+local function ssplit(prev_str, delimiter)
   local result = { }
   local from  = 1
   local delim_from, delim_to = string.find( prev_str, delimiter, from  )
@@ -15,45 +17,47 @@ end
 -- make sure we always keep a click
 
 -- read function
-function get_campaign(record)
-  print("get campain info called3 "..tostring(record:GetArg('w')));
-  local camps = ssplit( tostring(record:GetArg('w')), "," );
-  local result = {}
+function get_campaign(record, y)
+  print("get campaign info called3 "..tostring(y));
+  local camps = ssplit( tostring(y), "," );
+  local result = map();
   for i,camp in ipairs(camps) do
-	local campain = "camp_" .. camp;
-	if (nil ~= record[campain]) then
-	  result[camp] = record[campain]
+	local campaign = "camp_" .. camp;
+	if (nil ~= record[campaign]) then
+	  result[camp] = record[campaign]
 	else
 	  result[camp] = "NONE"
 	end
   end
   result["code"] = "OK"
-  for k,v in pairs(result) do
-    print("Result "..k..","..v);
-  end
   return( result );
 end
 
 -- write function
-function put_behavior(record)
-  local behavior = tostring(record:GetArg('w'));
+function put_behavior(record, y)
+  local behavior = tostring(y);
   if (nil == behavior) then return('FAIL'); end
   local b_tab = ssplit(behavior,",");
   local b_name = "camp_" .. b_tab[1];
   if (nil ~= record[b_name]) then
-    local user = ssplit(record[b_name],",");
-    if (user[2] == 'click') then
-      if (b_tab[1] == 'click') then
-        record[b_name] = b_tab[2] .. ',' .. b_tab[3];
-      end
-      return 'OK';
-    elseif (b_tab[2] > user[2]) then
-      record[b_name] = b_tab[2] .. ',' .. b_tab[3];
-    end
+  	local user = ssplit(record[b_name],",");
+	if (user[2] == 'click') then
+		if (b_tab[1] == 'click') then
+        		record[b_name] = b_tab[2] .. ',' .. b_tab[3];
+      		end
+      		return 'OK';
+    	elseif (b_tab[2] > user[2]) then
+      		record[b_name] = b_tab[2] .. ',' .. b_tab[3];
+    	end
   else
-    record[b_name] = b_tab[2] .. ',' .. b_tab[3];
+  	record[b_name] = b_tab[2] .. ',' .. b_tab[3]; 
   end
-  return 'OK';
+  local e = aerospike:exists(record);
+  if (e == 0) then
+	c = aerospike:create(record);
+  else
+	c = aerospike:update(record);
+  end
+  return "Record creation/updation returned "..c;
 end
-
 

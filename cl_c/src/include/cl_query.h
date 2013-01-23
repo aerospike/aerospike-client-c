@@ -34,10 +34,10 @@
  * TYPES
  *******************************************************************************/
 
-typedef enum cl_query_op         { CL_EQ, CL_LT, CL_GT, CL_LE, CL_GE, CL_RANGE } cl_query_op;
-typedef enum cl_query_orderby_op { CL_ORDERBY_ASC, CL_ORDERBY_DESC } cl_query_orderby_op;
+typedef enum as_query_op         { CL_EQ, CL_LT, CL_GT, CL_LE, CL_GE, CL_RANGE } as_query_op;
+typedef enum as_query_orderby_op { CL_ORDERBY_ASC, CL_ORDERBY_DESC } as_query_orderby_op;
 
-typedef struct cl_query {
+typedef struct as_query {
     char        * ns;
     char        * indexname;
     char        * setname;
@@ -47,21 +47,39 @@ typedef struct cl_query {
     cf_vector   * orderbys;
     int           limit;  
     uint64_t      job_id;
-} cl_query;
+} as_query;
 
-typedef int (* citrusleaf_query_cb) (char *ns, cf_digest *keyd, char *set, uint32_t generation, uint32_t record_ttl, cl_bin *bins, int num_bins, bool is_last, void *udata);
+typedef struct as_query_cb_record_t {
+	char        * ns;
+	cf_digest   * keyd;
+	char        * set;
+	uint32_t      generation;
+	uint32_t      record_ttl;
+	cl_bin      * bins;
+	int           n_bins;
+	bool          is_last;
+	void        * udata;
+} as_query_cb_rec;
+
+typedef int (* as_query_cb) (as_query_cb_rec *rec);
+
 
 /******************************************************************************
  * FUNCTIONS
  ******************************************************************************/
-int   cl_query_init(cl_query **query_obj, const char *ns, const char *setname);
-void  cl_query_destroy(cl_query *query_obj);
-int   cl_query_select (cl_query *query_obj, const char *binname);
-int   cl_query_where(cl_query *query_obj, const char *binname, cl_query_op, ...);
-int   cl_query_where_function(cl_query *query_obj, const char *finame, cl_query_op, ...);
-int   cl_query_filter(cl_query *query_obj, const char *binname, cl_query_op op, ...);
-int   cl_query_orderby(cl_query *query_obj, const char *binname, cl_query_orderby_op order);
-int   cl_query_limit(cl_query *query_obj, uint64_t limit);
+#define integer_equals(val) CL_EQ, CL_INT, val 
+#define integer_range(start, end) CL_RANGE, CL_INT, start, end
+#define string_equals(val) CL_EQ, CL_STR, val
+
+int   as_query_init(as_query **query_obj, const char *ns, const char *setname);
+void  as_query_destroy(as_query *query_obj);
+int   as_query_select (as_query *query_obj, const char *binname);
+int   as_query_where(as_query *query_obj, const char *binname, as_query_op, ...);
+int   as_query_where_function(as_query *query_obj, const char *finame, as_query_op, ...);
+int   as_query_filter(as_query *query_obj, const char *binname, as_query_op op, ...);
+int   as_query_orderby(as_query *query_obj, const char *binname, as_query_orderby_op order);
+int   as_query_limit(as_query *query_obj, uint64_t limit);
+cl_rv as_query_foreach(cl_cluster *asc, const as_query *query_obj, as_query_cb cb, void *udata);
 
 /*
  * Init and destroy for client query environment. Should be called for once per client
@@ -69,4 +87,3 @@ int   cl_query_limit(cl_query *query_obj, uint64_t limit);
  */
 int    citrusleaf_query_init();
 void   citrusleaf_query_shutdown();
-cl_rv  citrusleaf_query(cl_cluster *asc, const cl_query *query_obj, citrusleaf_query_cb cb, void *udata);

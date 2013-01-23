@@ -6,6 +6,7 @@ default: all
 
 
 %:
-#	$(MAKE) -C rec_udf $@
+	$(MAKE) -C rec_udf $@
 	$(MAKE) -C loop_udf $@
+	$(MAKE) -C ad_udf $@
 

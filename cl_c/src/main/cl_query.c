@@ -52,7 +52,7 @@ typedef struct {
     const char           * ns;
     const uint8_t        * query_buf;
     size_t                 query_sz;
-    citrusleaf_query_cb    cb; 
+    as_query_cb            cb; 
     void                 * udata;
     cf_queue             * node_complete_q;     // Asyncwork item queue
     char                   node_name[NODE_NAME_SIZE];    
@@ -95,12 +95,12 @@ typedef struct query_range {
 typedef struct query_filter {
     char        bin_name[CL_BINNAME_SIZE];
     cl_object   compare_obj;
-    cl_query_op ftype;
+    as_query_op ftype;
 } query_filter;
 
 typedef struct query_orderby_clause {
     char                bin_name[CL_BINNAME_SIZE];
-    cl_query_orderby_op ordertype;
+    as_query_orderby_op ordertype;
 } query_orderby;
 
 
@@ -112,8 +112,8 @@ static int query_compile_range(cf_vector *range_v, uint8_t *buf, int *sz_p);
 static int query_compile_filter(cf_vector *filter_v, uint8_t *buf, int *sz_p)  { return 0; }
 static int query_compile_orderby(cf_vector *filter_v, uint8_t *buf, int *sz_p) { return 0; }
 static int query_compile_function(cf_vector *range_v, uint8_t *buf, int *sz_p) { return 0; }
-static int query_compile(const cl_query * query, uint8_t **buf_r, size_t *buf_sz_r);
-static int do_query_monte(cl_cluster_node *node, const char *ns, const uint8_t *query_buf, size_t query_sz, citrusleaf_query_cb cb, void *udata, bool isnbconnect);
+static int query_compile(const as_query * query, uint8_t **buf_r, size_t *buf_sz_r);
+static int do_query_monte(cl_cluster_node *node, const char *ns, const uint8_t *query_buf, size_t query_sz, as_query_cb cb, void *udata, bool isnbconnect);
 
 
 
@@ -267,7 +267,7 @@ static int query_compile_select(cf_vector *binnames, uint8_t *buf, int *sz_p) {
 // if the query is null, then you run the MR job over the entire set or namespace
 // If the job is null, just run the query
 
-static int query_compile(const cl_query *query, uint8_t **buf_r, size_t *buf_sz_r) {
+static int query_compile(const as_query *query, uint8_t **buf_r, size_t *buf_sz_r) {
         
     if (!query || !query->ranges) return CITRUSLEAF_FAIL_CLIENT;
 
@@ -431,7 +431,7 @@ static int query_compile(const cl_query *query, uint8_t **buf_r, size_t *buf_sz_
 // this is an actual instance of a query, running on a query thread
 //
 static int do_query_monte(cl_cluster_node *node, const char *ns, const uint8_t *query_buf, size_t query_sz, 
-                          citrusleaf_query_cb cb, void *udata, bool isnbconnect) {
+                          as_query_cb cb, void *udata, bool isnbconnect) {
 
     uint8_t        rd_stack_buf[STACK_BUF_SZ];    
     uint8_t        *rd_buf = rd_stack_buf;
@@ -583,9 +583,20 @@ static int do_query_monte(cl_cluster_node *node, const char *ns, const uint8_t *
             else if ((msg->n_ops || (msg->info1 & CL_MSG_INFO1_NOBINDATA))) {
                 
                 if (cb) {
+					as_query_cb_rec rec = {
+						.ns         = ns_ret,
+						.keyd       = keyd,
+						.set        = set_ret,
+						.generation = msg->generation,
+						.record_ttl = msg->record_ttl,
+						.bins       = bins,
+						.n_bins     = msg->n_ops,
+						.is_last     = false,
+						.udata      = udata
+					};
                     // got one good value? call it a success!
                     // (Note:  In the key exists case, there is no bin data.)
-                    (*cb) ( ns_ret, keyd, set_ret, msg->generation, msg->record_ttl, bins, msg->n_ops, false /*islast*/, udata);
+                    (*cb) (&rec);
                 }
                 rv = 0;
             }
@@ -662,8 +673,8 @@ static void *query_worker_fn(void *dummy) {
     }
 }
 
-cl_rv citrusleaf_query(cl_cluster *asc, const cl_query *query, 
-                       citrusleaf_query_cb cb, void *udata) 
+cl_rv as_query_foreach(cl_cluster *asc, const as_query *query, 
+                       as_query_cb cb, void *udata) 
 {
     query_work work;
         
@@ -729,13 +740,13 @@ cl_rv citrusleaf_query(cl_cluster *asc, const cl_query *query,
     return retval;
 }
 
-int cl_query_init(cl_query **query, const char *ns, const char *setname)
+int as_query_init(as_query **query, const char *ns, const char *setname)
 {
-    *query = malloc(sizeof(cl_query));
+    *query = malloc(sizeof(as_query));
     if (query == NULL) {
         return CITRUSLEAF_FAIL_CLIENT;
     }
-    memset(*query, 0, sizeof(cl_query));
+    memset(*query, 0, sizeof(as_query));
     if (setname) {
         (*query)->setname = malloc(strlen(setname));
         if (!(*query)->setname) goto Cleanup;
@@ -772,7 +783,7 @@ Cleanup:
     citrusleaf_object_free(&filter->compare_obj);
 }
 
-void cl_query_destroy(cl_query *query) {
+void as_query_destroy(as_query *query) {
     if (query->binnames) {
         cf_vector_destroy(query->binnames);
     }
@@ -800,7 +811,7 @@ void cl_query_destroy(cl_query *query) {
     query = NULL;
 }
 
-cl_rv cl_query_select(cl_query *query, const char *binname) {
+cl_rv as_query_select(as_query *query, const char *binname) {
     if ( !query->binnames ) {
         query->binnames = cf_vector_create(CL_BINNAME_SIZE, 5, 0);
         if (query->binnames==NULL) {
@@ -811,7 +822,7 @@ cl_rv cl_query_select(cl_query *query, const char *binname) {
     return CITRUSLEAF_OK;    
 }
 
-static cl_rv query_where_generic(bool isfunction, cl_query *query, const char *binname, cl_query_op op, va_list list) { 
+static cl_rv query_where_generic(bool isfunction, as_query *query, const char *binname, as_query_op op, va_list list) { 
     query_range range;
     range.isfunction = isfunction;
 //    va_list list; 
@@ -878,7 +889,7 @@ Cleanup:
     return CITRUSLEAF_FAIL_CLIENT;
 }
 
-cl_rv cl_query_where_function(cl_query *query, const char *finame, cl_query_op op, ...) {
+cl_rv as_query_where_function(as_query *query, const char *finame, as_query_op op, ...) {
     va_list args;
     va_start(args, op);
     cl_rv rv = query_where_generic(true, query, finame, op, args); 
@@ -886,7 +897,7 @@ cl_rv cl_query_where_function(cl_query *query, const char *finame, cl_query_op o
     return rv;
 }
 
-cl_rv cl_query_where(cl_query *query, const char *binname, cl_query_op op, ...) {
+cl_rv as_query_where(as_query *query, const char *binname, as_query_op op, ...) {
     va_list args;
     va_start(args, op);
     cl_rv rv = query_where_generic(false, query, binname, op, args); 
@@ -894,15 +905,15 @@ cl_rv cl_query_where(cl_query *query, const char *binname, cl_query_op op, ...) 
     return rv;
 }
 
-cl_rv cl_query_filter(cl_query *query, const char *binname, cl_query_op op, ...) {
+cl_rv as_query_filter(as_query *query, const char *binname, as_query_op op, ...) {
     return CITRUSLEAF_OK;
 }
 
-cl_rv cl_query_orderby(cl_query *query, const char *binname, cl_query_orderby_op op) {
+cl_rv as_query_orderby(as_query *query, const char *binname, as_query_orderby_op op) {
     return CITRUSLEAF_OK;
 }
 
-cl_rv cl_query_limit(cl_query *query, uint64_t limit) {
+cl_rv as_query_limit(as_query *query, uint64_t limit) {
     return CITRUSLEAF_OK;    
 }
 

@@ -40,6 +40,10 @@
 #include <citrusleaf/cl_udf.h>
 
 
+ //#define DEBUG 1 
+ //#define DEBUG_VERBOSE 1
+// #define PRINT_KEY 1
+
 typedef struct config_s {
 	
 	char  *host;
@@ -70,6 +74,7 @@ typedef struct config_s {
 
 	cf_atomic_int success;
 	cf_atomic_int fail;
+	cf_atomic_int transactions;
 			
 } config;
 
@@ -104,13 +109,16 @@ dump_buf(char *msg, uint8_t *buf, size_t buf_len)
 void *
 counter_fn(void *arg)
 {
+	uint64_t t = 0;
 	while (1) {
-		
-		sleep(5);
-		fprintf(stderr, "5 sec check: success %ld fail %ld\n",g_config->success,g_config->fail);
+		sleep(1);
+		fprintf(stderr,"Transactions in the last second %ld\n",g_config->transactions - t);	
+#ifdef DEBUG
+		fprintf(stderr, "Every sec check: success %ld fail %ld\n",g_config->success,g_config->fail);
+#endif
 		cf_histogram_dump(g_read_histogram); 
 		cf_histogram_dump(g_write_histogram); 
-		
+		t = g_config->transactions;
 	}
 	return(0);
 }
@@ -123,11 +131,6 @@ start_counter_thread()
 	
 	return(NULL);
 }
-
-
-// #define DEBUG 1
-// #define DEBUG_VERBOSE 1
-// #define PRINT_KEY 1
 
 typedef struct key_value_s {
 	
@@ -205,7 +208,7 @@ static key_value *make_key_value(uint seed, uint key_len, uint value_len)
 
 	
 #ifdef DEBUG_VERBOSE
-	fprintf(stderr, "make key value: key_len %d key %s value_len %d value_str %s value_int %"PRIu64"\n",key_len,kv->key,value_len,kv->value_str,kv->value_int);
+	fprintf(stderr, "make key value: key_len %d key %s value_len %d value_str %s value_int %"PRIu64"\n",key_len,kv->key_str,value_len,kv->value_str,kv->value_int);
 #endif
 	
 	return(kv);	
@@ -259,6 +262,9 @@ worker_fn(void *udata)
         uint64_t start_time = cf_getms();
     	cl_rv rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, g_config->package_name, g_config->f_name, arglist, g_config->timeout_ms, &res);
 
+#ifdef DEBUG_VERBOSE
+	fprintf(stderr,"%s: %s\n", res.is_success ? "SUCCESS" : "FAILURE", as_val_tostring(res.value));
+#endif
         as_list_free(arglist);
         arglist = NULL;
 
@@ -266,11 +272,12 @@ worker_fn(void *udata)
 		
 		if (rsp != CITRUSLEAF_OK) {
 			//fprintf(stderr,"failed citrusleaf_run_sproc rsp=%d\n",rsp);
+			fprintf(stderr,"Key_str is %s, key_int %ld\n",kv->key_str,kv->key_int);
 			cf_atomic_int_incr(&g_config->fail);
 		} else {
 			cf_atomic_int_incr(&g_config->success);
 		}
-
+		cf_atomic_int_incr(&g_config->transactions);
 		citrusleaf_object_free(&o_key);		
 		free(kv);
 		
@@ -330,7 +337,7 @@ int init_configuration (int argc, char *argv[])
 	g_config->value_len    = 128;
 	g_config->rw_ratio     = 80;
 	g_config->delay        = 0;
-                
+   	g_config->transactions = 0;             
 	fprintf(stderr, "Starting Loop Test Record Sproc\n");
 	int optcase;
 	while ((optcase = getopt(argc, argv, "ckmh:p:n:s:P:f:v:x:r:t:i:j:")) != -1) {

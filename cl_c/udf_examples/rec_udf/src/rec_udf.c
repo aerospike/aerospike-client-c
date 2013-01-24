@@ -25,7 +25,6 @@
 #include <citrusleaf/cf_atomic.h>
 #include <citrusleaf/cf_hist.h>
 #include <citrusleaf/citrusleaf.h>
-#include <citrusleaf/cl_udf.h>
 
 static config *g_config = NULL;
 void usage(int argc, char *argv[]) {
@@ -109,7 +108,7 @@ int do_udf_bin_update_test() {
 	as_list_add_string(arglist, "bin_to_change");
 
 	// arg #2 -> bin value
-	as_list_add_string(arglist, "original_bin_val");
+	as_list_add_string(arglist,"changed by lua");
 	fprintf(stderr,"Bin value intially : original_bin_val\n");
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
 			g_config->package_name,"do_update_bin", arglist, g_config->timeout_ms, &res);  
@@ -214,21 +213,14 @@ int do_udf_trim_bin_test() {
 		cl_object o_key;
 		citrusleaf_object_init_str(&o_key,keyStr);	
 		// (2) set up stored procedure to call
-		as_list * arglist = as_arglist_new(5);
+		as_list * arglist = as_arglist_new(2);
 
 		if (!arglist) {
 			fprintf(stderr, "can't create udf_params\n");
 			return(-1);
 		}
 		// Send information about limit on the string len
-		as_list_add_string(arglist, "limits");
 		as_list_add_string(arglist, "20");
-		// Send the actual bin/value
-		as_list_add_string(arglist, "id");
-		as_list_add_string(arglist, keyStr);
-		as_list_add_string(arglist, "cats");
-		char *valStr = (i==0 ? "short line" : "longer than 10 character line");
-		as_list_add_string(arglist, valStr);
 
 		as_result res;
 		int rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
@@ -334,13 +326,6 @@ int do_udf_add_bin_test() {
 	int     rsp_n_bins = 0;
 	as_result res;
 	uint32_t cl_gen;
-	as_list * arglist = as_arglist_new(3);
-
-	// arg 1 -> bin name
-	as_list_add_string(arglist, "old_bin");
-
-	// arg #2 -> bin value
-	as_list_add_string(arglist, "old_val");
 
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
 			g_config->package_name, "do_new_bin", NULL, 
@@ -353,8 +338,6 @@ int do_udf_add_bin_test() {
 		ret = -1;
 		goto Cleanup;
 	}
-	as_list_free(arglist);
-        arglist = NULL;
 
 	// (3) verify bin is added 
 	rsp = citrusleaf_get_all(g_config->asc, g_config->ns, g_config->set, &o_key, &rsp_bins, &rsp_n_bins, g_config->timeout_ms, &cl_gen);  
@@ -641,27 +624,12 @@ int do_udf_read_bins_test() {
 		fprintf(stderr,"citrusleaf put succeeded\n");
 	}
 
-	// Check if the three bins that we inserted are present
-	as_list * arglist = as_arglist_new(7);
-
-	// arg 1 -> bin name
-	as_list_add_string(arglist, "bin1");
-
-	// arg #2 -> bin value
-	as_list_add_string(arglist, "val1");
-	as_list_add_string(arglist, "bin2");
-	as_list_add_string(arglist, "val2");
-	as_list_add_string(arglist, "bin3");
-	as_list_add_string(arglist, "val3");
-
 	// (2) call udf_record_apply - "do_read1_record" function in udf_unit_test.lua 
 	as_result res;
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
-			g_config->package_name, "do_read1_record", arglist, 
+			g_config->package_name, "do_read1_record", NULL, 
 			g_config->timeout_ms, &res);  
 	fprintf(stderr,"%s: %s\n", res.is_success ? "SUCCESS" : "FAILURE", as_val_tostring(res.value));
-	as_list_free(arglist);
-	arglist = NULL;
 	if (rsp != CITRUSLEAF_OK) {
 		fprintf(stderr,"failed citrusleaf_run_udf rsp=%d\n",rsp);
 	}
@@ -1087,8 +1055,6 @@ int do_udf_return_type_test() {
 	citrusleaf_object_init_str(&o_key,keyStr);		
 
 	as_list * arglist = as_arglist_new(2);	
-	// arg 1 -> bin name
-	as_list_add_string(arglist, "desired_type");
 
 	// arg #2 -> bin value
 	as_list_add_string(arglist, "none");
@@ -1106,7 +1072,6 @@ int do_udf_return_type_test() {
 	// Start afresh, next data type	
 	as_list_free(arglist);
 	arglist = as_arglist_new(2);	
-	as_list_add_string(arglist, "desired_type");
 	as_list_add_string(arglist, "string_primitive");
 
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
@@ -1128,7 +1093,6 @@ int do_udf_return_type_test() {
 	}
 	// (2) call to return positive integer primitive
 	arglist = as_arglist_new(2);	
-	as_list_add_string(arglist, "desired_type");
 	as_list_add_string(arglist, "p_int_primitive");
 
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
@@ -1150,7 +1114,6 @@ int do_udf_return_type_test() {
 	as_list_free(arglist);
 	// (3) call to return negative integer primitive
 	arglist = as_arglist_new(2);	
-	as_list_add_string(arglist, "desired_type");
 	as_list_add_string(arglist, "n_int_primitive");
 
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
@@ -1172,7 +1135,6 @@ int do_udf_return_type_test() {
 	as_list_free(arglist);
 	// (4) call to return bin array
 	arglist = as_arglist_new(2);	
-	as_list_add_string(arglist, "desired_type");
 	as_list_add_string(arglist, "bin_array");
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
 			g_config->package_name,"do_return_types", arglist, g_config->timeout_ms, &res);  
@@ -1194,7 +1156,6 @@ int do_udf_return_type_test() {
 	as_list_free(arglist);
 	// (5) call to return nested list
 	arglist = as_arglist_new(2);	
-	as_list_add_string(arglist, "desired_type");
 	as_list_add_string(arglist, "bin_nested_list");
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
 			g_config->package_name,"do_return_types", arglist, g_config->timeout_ms, &res);  
@@ -1215,8 +1176,7 @@ int do_udf_return_type_test() {
 	}
 	as_list_free(arglist);
 	// (5) call to return map
-/*	arglist = as_arglist_new(2);	
-	as_list_add_string(arglist, "desired_type");
+	arglist = as_arglist_new(2);	
 	as_list_add_string(arglist, "bin_map");
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
 			g_config->package_name,"do_return_types", arglist, g_config->timeout_ms, &res);  
@@ -1240,7 +1200,7 @@ int do_udf_return_type_test() {
 		fprintf(stderr,"Failed with : %s\n",as_val_tostring(res.value));
 	}
 	as_list_free(arglist);
-*/	citrusleaf_object_free(&o_key);		
+	citrusleaf_object_free(&o_key);		
 	return 0;
 }
 
@@ -1689,13 +1649,13 @@ int main(int argc, char **argv) {
 		fprintf(stderr, "*** do_udf_copy_record_test succeeded\n"); 
 	}
 
-/*	fprintf(stderr, "\n*** do_udf_return_type_test started\n"); 
+	fprintf(stderr, "\n*** do_udf_return_type_test started\n"); 
 	if (do_udf_return_type_test()) {
 		fprintf(stderr, "do_udf_return_type_test failed\n"); //return(-1);
 	} else {
 		fprintf(stderr, "*** do_udf_return_type_test succeeded\n"); 
 	}
-*/
+
 
 	fprintf(stderr, "\n*** do_udf_bin_type_test started\n"); 
 	if (do_udf_bin_type_test()) {

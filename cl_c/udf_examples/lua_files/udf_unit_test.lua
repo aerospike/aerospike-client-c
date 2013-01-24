@@ -19,10 +19,10 @@ function prefetch_and_print(record)
   end
 end
 
-function do_trim_bin(record, limits, value)
+function do_trim_bin(record, limits)
   local cat2 = record.cats;
   local y = string.len(cat2);
-  local myceil = tonumber(value);
+  local myceil = tonumber(limits);
   if (y > myceil) then
     record.cats = 'new string';
   end
@@ -34,13 +34,17 @@ function do_trim_bin(record, limits, value)
   end
 end
 
-function do_update_bin(record)
---  record.bin_to_change    = "changed by lua at "..os.time();
-  record['bin_to_change']    = "changed by lua";
-  print('CLIENT: do_update_bin: ' .. record.bin_to_change);
-  local x = aerospike:update(record);
+function do_update_bin(record, k, v)
+  record[k] = v
+  info("Value of bin = %s",record[k]);
+  local x;
+  if not aerospike:exists(record) then
+	x = aerospike:create(record);
+  else
+	x = aerospike:update(record);
+  end
   if ( x == 0 ) then
-     return 'UPDATED_BIN: ' .. record.bin_to_change;
+     return 'Bin update/create returned '..x;
   else 
      return 'Bin update failed with '..x;
   end
@@ -134,7 +138,7 @@ function do_lua_functional_test(record)
 end
 
 
-function do_return_types(record, d, desired_type)
+function do_return_types(record, desired_type)
 
 --  local desired_type = record:GetArg('desired_type');
   if (desired_type == "none") then

@@ -38,10 +38,9 @@
 #include <citrusleaf/cf_hist.h>
 #include <citrusleaf/citrusleaf.h>
 #include <citrusleaf/cl_udf.h>
+#include <citrusleaf/cf_log_internal.h>
 
-
- //#define DEBUG 1 
- //#define DEBUG_VERBOSE 1
+//#define DEBUG_VERBOSE 1
 // #define PRINT_KEY 1
 
 typedef struct config_s {
@@ -112,10 +111,8 @@ counter_fn(void *arg)
 	uint64_t t = 0;
 	while (1) {
 		sleep(1);
-		fprintf(stderr,"Transactions in the last second %ld\n",g_config->transactions - t);	
-#ifdef DEBUG
-		fprintf(stderr, "Every sec check: success %ld fail %ld\n",g_config->success,g_config->fail);
-#endif
+		cf_info("Transactions in the last second %ld",g_config->transactions - t);	
+		cf_debug("Every sec check: total success %ld fail %ld",g_config->success,g_config->fail);
 		cf_histogram_dump(g_read_histogram); 
 		cf_histogram_dump(g_write_histogram); 
 		t = g_config->transactions;
@@ -271,7 +268,7 @@ worker_fn(void *udata)
 		cf_histogram_insert_data_point(isRead ? g_read_histogram : g_write_histogram, start_time);		
 		
 		if (rsp != CITRUSLEAF_OK) {
-			//fprintf(stderr,"failed citrusleaf_run_sproc rsp=%d\n",rsp);
+			//fprintf(stderr,"failed citrusleaf_run_udf rsp=%d\n",rsp);
 			fprintf(stderr,"Key_str is %s, key_int %ld\n",kv->key_str,kv->key_int);
 			cf_atomic_int_incr(&g_config->fail);
 		} else {
@@ -392,17 +389,18 @@ int register_package()
     
     char *err_str = NULL;
     if (b_tot>0) {
-    	int resp = citrusleaf_udf_put(g_config->asc, basename(g_config->package_file), script_code, &err_str);
-		if (resp!=0) {
-	        fprintf(stderr, "unable to register package file %s as %s resp = %d\n",g_config->package_file,g_config->package_name,resp); return(-1);
-	        fprintf(stderr, "%s\n",err_str); free(err_str);
-			return(-1);
-		}
+	    int resp = citrusleaf_udf_put(g_config->asc, basename(g_config->package_file), script_code, &err_str);
+	    if (resp!=0) {
+		    fprintf(stderr, "unable to register package file %s as %s resp = %d\n",g_config->package_file,g_config->package_name,resp); return(-1);
+		    fprintf(stderr, "%s\n",err_str); free(err_str);
+		    free(script_code);
+		    return(-1);
+	    }
 	    fprintf(stderr, "successfully registered package file %s as %s\n",g_config->package_file,g_config->package_name); 
     } else {   
 	    fprintf(stderr, "unable to read package file %s as %s b_tot = %d\n",g_config->package_file,g_config->package_name,b_tot); return(-1);    
     }
-    
+    free(script_code); 
     return 0;
 }
 
@@ -413,7 +411,7 @@ int main(int argc, char **argv) {
 	if (init_configuration(argc,argv) !=0 ) {
 		return -1;
 	}
-    //citrusleaf_set_debug(true);
+    citrusleaf_set_debug(true);
 	
 	// setting up cluster
     fprintf(stderr, "Startup: host %s port %d ns %s set %s file %s\n",
@@ -441,8 +439,8 @@ int main(int argc, char **argv) {
     // create and fire off n worker threads
 	pthread_t	*thr_array = malloc(sizeof(pthread_t) * g_config->n_threads);
 
-    g_read_histogram = cf_histogram_create("r_sproc");
-    g_write_histogram = cf_histogram_create("w_sproc");
+    g_read_histogram = cf_histogram_create("r_udf");
+    g_write_histogram = cf_histogram_create("w_udf");
     if (g_read_histogram==NULL || g_write_histogram==NULL) {
         fprintf(stderr," cannot create histograms \n");
         return -1;

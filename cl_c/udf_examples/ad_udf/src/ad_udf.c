@@ -36,7 +36,7 @@ void usage(int argc, char *argv[]) {
     fprintf(stderr, "-p port [default 3000]\n");
     fprintf(stderr, "-n namespace [default test]\n");
     fprintf(stderr, "-s set [default *all*]\n");
-    fprintf(stderr, "-f udf_file [default lua_files/udf_unit_test.lua]\n");
+    fprintf(stderr, "-f udf_file [default ../../lua_files/ad_udf.lua]\n");
 }
 
 

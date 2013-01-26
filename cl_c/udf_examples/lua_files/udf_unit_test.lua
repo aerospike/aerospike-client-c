@@ -106,19 +106,10 @@ function do_noop_function(record)
 end
 
 -- random runtime crash
-function do_handle_bad_lua_1()
+function do_undefined_global()
   local x;
   i_dont_exist(x);
   return 'OK';
-end
-
--- try to write a bin name too long
-function do_handle_bad_lua_2(record)
--- This makes server crash
---  record[bin_with_a_really_long_name] = "five";
-	record.very_long_name_that_should_fail = "bin 2 value";
-	local x = aerospike:update(record);
-	return 'Creation of record returned '..x;
 end
 
 function do_lua_functional_test(record)
@@ -143,7 +134,7 @@ function do_return_types(record, desired_type)
 --  local desired_type = record:GetArg('desired_type');
   if (desired_type == "none") then
     print("none");
-    return;
+    return nil;
   end
   if (desired_type == "p_int_primitive") then
     print("positive int");
@@ -176,13 +167,21 @@ function do_return_types(record, desired_type)
   end
   if (desired_type == "bin_map") then
     info("bin_map");
-    local x = map();
-    local y = "map";
+    
+    local m = map{};
+    m["i"] = 456
+    m["s"] = "def"
+    m["l"] = list{4,5,6};
+
     local l = list();
-    list.append(l,"ting");
-    list.append(l,"ding");
-    x[y] = "yes";
-    x["i"] = l;
+    list.append(l,456);
+    list.append(l,"def");
+
+    local x = map{};
+    x["i"] = 123;
+    x["s"] = "abc";
+    x["l"] = l;
+    x["m"] = m;
     return x;
   end
 end

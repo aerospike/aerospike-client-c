@@ -68,7 +68,8 @@ typedef struct config_s {
 	
 	cl_cluster	*asc;		
 		
-	bool 	verbose;
+	bool 	verbose; // verbose for our system
+	bool	debug; // debug for the citrusleaf library
 	int 	delay;
 
 	cf_atomic_int success;
@@ -308,6 +309,7 @@ void usage(int argc, char *argv[]) {
     fprintf(stderr, "-t thread_count [default 8]\n");
     fprintf(stderr, "-i start_key [default 0]\n");
     fprintf(stderr, "-j n_keys [default 1000]\n");
+	fprintf(stderr, "-d debug [default false]\n");
 }
 
 int init_configuration (int argc, char *argv[])
@@ -322,6 +324,7 @@ int init_configuration (int argc, char *argv[])
 	g_config->timeout_ms   = 1000;
 	g_config->record_ttl   = 864000;
 	g_config->verbose      = false;
+	g_config->debug		   = false;
 	g_config->package_file = "../lua_files/udf_loop_test.lua";
 	g_config->package_name = "udf_loop_test";
 	g_config->n_threads    = 8;
@@ -337,7 +340,7 @@ int init_configuration (int argc, char *argv[])
    	g_config->transactions = 0;             
 	fprintf(stderr, "Starting Loop Test Record Sproc\n");
 	int optcase;
-	while ((optcase = getopt(argc, argv, "ckmh:p:n:s:P:f:v:x:r:t:i:j:")) != -1) {
+	while ((optcase = getopt(argc, argv, "ckmh:p:n:s:P:f:v:x:r:t:i:j:d")) != -1) {
 		switch (optcase) {
 		case 'h': g_config->host         = strdup(optarg);          break;
 		case 'p': g_config->port         = atoi(optarg);            break;
@@ -356,6 +359,7 @@ int init_configuration (int argc, char *argv[])
         	break;
 		case 'i': g_config->start_key    = atoi(optarg);            break;
 		case 'j': g_config->n_keys       = atoi(optarg);            break;
+		case 'd': g_config->debug = true; break;
 		default:  usage(argc, argv);                      return(-1);
         }
     }
@@ -411,7 +415,9 @@ int main(int argc, char **argv) {
 	if (init_configuration(argc,argv) !=0 ) {
 		return -1;
 	}
-    citrusleaf_set_debug(true);
+	if (g_config->debug) {
+    	citrusleaf_set_debug(true);
+	}
 	
 	// setting up cluster
     fprintf(stderr, "Startup: host %s port %d ns %s set %s file %s\n",

@@ -18,7 +18,6 @@ end
 
 -- read function
 function get_campaign(record, y)
-  print("get campaign info called3 "..tostring(y));
   local camps = ssplit( tostring(y), "," );
   local result = map();
   for i,camp in ipairs(camps) do
@@ -52,12 +51,11 @@ function put_behavior(record, y)
   else
   	record[b_name] = b_tab[2] .. ',' .. b_tab[3]; 
   end
-  local e = aerospike:exists(record);
-  if (e == 0) then
-	c = aerospike:create(record);
-  else
+  if (aerospike:exists(record)) then
 	c = aerospike:update(record);
+  else
+	c = aerospike:create(record);
   end
-  return "Record creation/updation returned "..c;
+  return "Record creation/update returned "..c;
 end
 

@@ -30,14 +30,14 @@ If `apt-get` is your package manager, then you should be able to run the followi
 #### msgpack-0.5.7
 Aerospike utilizes msgpack for serializing some data. http://msgpack.org/  
 http://msgpack.org/releases/cpp/msgpack-0.5.7.tar.gz 
-You don't have to make, install, or configure - just unpack, and set the environment
+You don't have to make or install. Just unpack and run ./configure in the directory and set the environment
 variable MSGPACK_PATH pointing to that directory.
 	$ export MSGPACK_PATH=~/msgpack-0.5.7
  
 #### jansson
 Aerospike utilizes jannson for some of the test utility. 
-Download jansson from: http://www.digip.org/jansson/releases/jansson-2.4.tar.gz 
-You don't have to make, install, or configure - just unpack, and set the environment
+Download jansson from: http://www.digip.org/jansson/releases/jansson-2.4.tar.gz
+Configure, make and install this package and set the environment
 environment variable JANSSON_PATH to point to the path and Aerospike build will pick it up:
 	$ export JANSSON_PATH=~/jansson-2.4
 

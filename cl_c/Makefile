@@ -63,7 +63,7 @@ prepare:
 
 install:
 	cp -p $(TARGET_LIB)/* /usr/lib/.
-	if [ ! -e /opt/citrusleaf/bin/commands]; then mkdir -p /opt/citrusleaf/bin/commands; fi
+	if [ ! -e /opt/citrusleaf/bin/commands ]; then mkdir -p /opt/citrusleaf/bin/commands; fi
 	cp -p $(SOURCE_TEST)/ascli.py /opt/citrusleaf/bin/ascli
 	cp -p $(TARGET_BIN)/test/exists /opt/citrusleaf/bin/commands/.
 	cp -p $(TARGET_BIN)/test/get /opt/citrusleaf/bin/commands/.
@@ -74,9 +74,9 @@ install:
 	cp -p $(TARGET_BIN)/test/udf-put /opt/citrusleaf/bin/commands/.
 	cp -p $(TARGET_BIN)/test/udf-record-apply /opt/citrusleaf/bin/commands/.
 	cp -p $(TARGET_BIN)/test/udf-remove /opt/citrusleaf/bin/commands/.
-	ifeq ($(wildcard /usr/bin/ascli),)
-		ln -s /opt/citrusleaf/bin/ascli /usr/bin/ascli
-	endif
+ifeq ($(wildcard /usr/bin/ascli),)
+	ln -s /opt/citrusleaf/bin/ascli /usr/bin/ascli
+endif
 
 gendoc:
 	cd doc; make html

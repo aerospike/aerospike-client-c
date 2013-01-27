@@ -88,9 +88,9 @@ typedef struct config_s {
 	int timeout_msec;
 } config;
 
-typedef bool (*phase_start_fn)(uint32_t generation);
+typedef bool (*phase_start_fn)();
 typedef bool (*phase_complete_fn)(int return_value, ev2citrusleaf_bin* bins,
-		int n_bins, uint32_t generation, void* pv_udata);
+		int n_bins, void* pv_udata);
 
 
 //==========================================================
@@ -125,14 +125,14 @@ static void stop_cluster_management();
 static void* run_cluster_mgr_event_loop(void* pv_unused);
 static void do_transactions();
 static void client_cb(int return_value, ev2citrusleaf_bin* bins, int n_bins,
-		uint32_t generation, void* pv_udata);
-static bool start_phase_1(uint32_t generation);
-static bool start_phase_2(uint32_t generation);
+		uint32_t generation, uint32_t expiration, void* pv_udata);
+static bool start_phase_1();
+static bool start_phase_2();
 static bool complete_phase_2(int return_value, ev2citrusleaf_bin* bins,
-		int n_bins, uint32_t generation, void* pv_udata);
-static bool start_phase_3(uint32_t generation);
+		int n_bins, void* pv_udata);
+static bool start_phase_3();
 static bool verify_return_value(int return_value, ev2citrusleaf_bin* bins,
-		int n_bins, uint32_t generation, void* pv_udata);
+		int n_bins, void* pv_udata);
 
 
 //==========================================================
@@ -394,7 +394,8 @@ start_cluster_management()
 	}
 
 	// Create cluster object needed for all database operations.
-	g_p_cluster = ev2citrusleaf_cluster_create(g_p_cluster_mgr_event_base);
+	g_p_cluster = ev2citrusleaf_cluster_create(g_p_cluster_mgr_event_base,
+			NULL);
 
 	if (! g_p_cluster) {
 		LOG("ERROR: creating cluster");
@@ -550,11 +551,11 @@ do_transactions()
 //
 static void
 client_cb(int return_value, ev2citrusleaf_bin* bins, int n_bins,
-		uint32_t generation, void* pv_udata)
+		uint32_t generation, uint32_t expiration, void* pv_udata)
 {
 	// Complete the current phase.
 	if (PHASE_COMPLETE_FUNCTIONS[g_phase_index](
-			return_value, bins, n_bins, generation, pv_udata)) {
+			return_value, bins, n_bins, pv_udata)) {
 		LOG("completed phase %d", g_phase_index + 1);
 	}
 	else {
@@ -571,7 +572,7 @@ client_cb(int return_value, ev2citrusleaf_bin* bins, int n_bins,
 		return;
 	}
 
-	if (! PHASE_START_FUNCTIONS[g_phase_index](generation)) {
+	if (! PHASE_START_FUNCTIONS[g_phase_index]()) {
 		LOG("ERROR: starting phase %d", g_phase_index + 1);
 		// Will exit event loop.
 	}
@@ -586,7 +587,7 @@ client_cb(int return_value, ev2citrusleaf_bin* bins, int n_bins,
 // Write a record with two bins.
 //
 static bool
-start_phase_1(uint32_t generation)
+start_phase_1()
 {
 	ev2citrusleaf_bin bins[2];
 
@@ -621,7 +622,7 @@ start_phase_1(uint32_t generation)
 // Read all bins of the record we just wrote.
 //
 static bool
-start_phase_2(uint32_t generation)
+start_phase_2()
 {
 	if (0 != ev2citrusleaf_get_all(
 			g_p_cluster,					// cluster
@@ -644,7 +645,7 @@ start_phase_2(uint32_t generation)
 //
 static bool
 complete_phase_2(int return_value, ev2citrusleaf_bin* bins, int n_bins,
-		uint32_t generation, void* pv_udata)
+		void* pv_udata)
 {
 	if (return_value != EV2CITRUSLEAF_OK) {
 		LOG("ERROR: client callback return_value %d", return_value);
@@ -729,7 +730,7 @@ complete_phase_2(int return_value, ev2citrusleaf_bin* bins, int n_bins,
 // Delete the record.
 //
 static bool
-start_phase_3(uint32_t generation)
+start_phase_3()
 {
 	if (0 != ev2citrusleaf_delete(
 			g_p_cluster,					// cluster
@@ -753,7 +754,7 @@ start_phase_3(uint32_t generation)
 //
 static bool
 verify_return_value(int return_value, ev2citrusleaf_bin* bins, int n_bins,
-		uint32_t generation, void* pv_udata)
+		void* pv_udata)
 {
 	if (return_value != EV2CITRUSLEAF_OK) {
 		LOG("ERROR: client callback return_value %d", return_value);

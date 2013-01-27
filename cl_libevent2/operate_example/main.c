@@ -89,7 +89,7 @@ test_terminate(int r)
 
 
 void
-example_phase_three(int return_value, ev2citrusleaf_bin *bins, int n_bins, uint32_t generation, void *udata)
+example_phase_three(int return_value, ev2citrusleaf_bin *bins, int n_bins, uint32_t generation, uint32_t expiration, void *udata)
 {
 	fprintf(stderr, "example phase 3 received\n");
 
@@ -122,7 +122,7 @@ example_phase_three(int return_value, ev2citrusleaf_bin *bins, int n_bins, uint3
 }
 
 void
-example_phase_two(int return_value, ev2citrusleaf_bin *bins, int n_bins, uint32_t generation, void *udata)
+example_phase_two(int return_value, ev2citrusleaf_bin *bins, int n_bins, uint32_t generation, uint32_t expiration, void *udata)
 {
 	config *c = (config *) udata;
 
@@ -143,7 +143,7 @@ example_phase_two(int return_value, ev2citrusleaf_bin *bins, int n_bins, uint32_
 }
 
 void
-example_phase_one(int return_value, ev2citrusleaf_bin *bins, int n_bins, uint32_t generation, void *udata)
+example_phase_one(int return_value, ev2citrusleaf_bin *bins, int n_bins, uint32_t generation, uint32_t expiration, void *udata)
 {
 	fprintf(stderr, "citrusleaf phase one\n");
 
@@ -283,7 +283,7 @@ main(int argc, char **argv)
 	
 	
 	// Create a citrusleaf cluster object for subsequent requests
-	g_config.asc = ev2citrusleaf_cluster_create(0);
+	g_config.asc = ev2citrusleaf_cluster_create(0, 0);
 	if (!g_config.asc) {
 		fprintf(stderr, "could not create cluster, internal error\n");
 		return(-1);

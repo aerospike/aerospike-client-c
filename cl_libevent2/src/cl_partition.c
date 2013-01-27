@@ -234,7 +234,7 @@ cl_partition_table_get( ev2citrusleaf_cluster *asc, const char *ns, cl_partition
 
 	MUTEX_LOCK(pt->partitions[pid].lock);
 
-	if (write) {
+	if (write || asc->options.read_master_only) {
 		node = pt->partitions[pid].write;
 	}
 	else {

@@ -23,6 +23,7 @@
 #include <event2/event.h>
 #include <sys/socket.h>
 
+#include "citrusleaf/cf_clock.h"
 #include "citrusleaf/cf_digest.h"
 #include "citrusleaf/cf_log_internal.h"
 #include "citrusleaf/proto.h"
@@ -53,7 +54,7 @@ static int get_many(ev2citrusleaf_cluster* cl, const char* ns,
 
 
 //==========================================================
-// cl_batch_job Class Members
+// cl_batch_job Class Header
 //
 
 //------------------------------------------------
@@ -65,6 +66,7 @@ static cl_batch_job* cl_batch_job_create(struct event_base* base,
 		int timeout_ms);
 static void cl_batch_job_destroy(cl_batch_job* this);
 static inline struct event_base* cl_batch_job_get_base(cl_batch_job* this);
+static inline uint32_t cl_batch_job_clepoch_seconds(cl_batch_job* this);
 static bool cl_batch_job_add_node_unique(cl_batch_job* this,
 		cl_cluster_node* p_node);
 static bool cl_batch_job_compile(cl_batch_job* this, const char* ns,
@@ -107,6 +109,10 @@ struct cl_batch_job_s {
 	ev2citrusleaf_rec*			recs;
 	int							n_recs;
 
+	// Citrusleaf epoch time used for calculating expirations of returned
+	// records - hopefully temporary until expirations are returned by server.
+	uint32_t					now;
+
 	// The timeout event.
 	bool						timer_event_added;
 	uint8_t						timer_event_space[];
@@ -114,7 +120,7 @@ struct cl_batch_job_s {
 
 
 //==========================================================
-// cl_batch_node_req Class Members
+// cl_batch_node_req Class Header
 //
 
 //------------------------------------------------
@@ -390,6 +396,20 @@ static inline struct event_base*
 cl_batch_job_get_base(cl_batch_job* this)
 {
 	return this->p_event_base;
+}
+
+//------------------------------------------------
+// Get Citrusleaf epoch time used for calculating
+// expirations. Lazily set this so it's as late as
+// possible.
+//
+static inline uint32_t cl_batch_job_clepoch_seconds(cl_batch_job* this)
+{
+	if (this->now == 0) {
+		this->now = cf_clepoch_seconds();
+	}
+
+	return this->now;
 }
 
 //------------------------------------------------
@@ -1048,7 +1068,10 @@ cl_batch_node_req_parse_proto_body(cl_batch_node_req* this, bool* p_is_last)
 
 		p_rec->result = (int)msg->result_code;
 		p_rec->generation = msg->generation;
-		p_rec->record_void_time = msg->record_ttl;
+
+		uint32_t now = cl_batch_job_clepoch_seconds(this->p_job);
+
+		p_rec->expiration = msg->record_ttl > now ? msg->record_ttl - now : 0;
 
 		// Parse the fields.
 		bool got_digest = false;

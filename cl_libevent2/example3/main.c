@@ -125,10 +125,10 @@ static void* run_event_loop(void* pv_b);
 static void trigger_cb(int fd, short event, void* pv_udata);
 static bool put(int b, int k);
 static void put_cb(int return_value, ev2citrusleaf_bin* bins, int n_bins,
-		uint32_t generation, void* pv_udata);
+		uint32_t generation, uint32_t expiration, void* pv_udata);
 static bool get(int b, int k);
 static void get_cb(int return_value, ev2citrusleaf_bin* bins, int n_bins,
-		uint32_t generation, void* pv_udata);
+		uint32_t generation, uint32_t expiration, void* pv_udata);
 static void validate_data(int b, int k, ev2citrusleaf_bin* bins, int n_bins);
 
 
@@ -310,7 +310,7 @@ start_cluster_management()
 	}
 
 	// Create cluster object needed for all database operations.
-	g_p_cluster = ev2citrusleaf_cluster_create(NULL);
+	g_p_cluster = ev2citrusleaf_cluster_create(NULL, NULL);
 
 	if (! g_p_cluster) {
 		LOG("ERROR: creating cluster");
@@ -573,7 +573,7 @@ put(int b, int k)
 //
 static void
 put_cb(int return_value, ev2citrusleaf_bin* bins, int n_bins,
-		uint32_t generation, void* pv_udata)
+		uint32_t generation, uint32_t expiration, void* pv_udata)
 {
 	int k = (int)(uint64_t)pv_udata;
 	int b = k % g_config.num_bases;
@@ -622,7 +622,7 @@ get(int b, int k)
 //
 static void
 get_cb(int return_value, ev2citrusleaf_bin* bins, int n_bins,
-		uint32_t generation, void* pv_udata)
+		uint32_t generation, uint32_t expiration, void* pv_udata)
 {
 	int k = (int)(uint64_t)pv_udata;
 	int b = k % g_config.num_bases;

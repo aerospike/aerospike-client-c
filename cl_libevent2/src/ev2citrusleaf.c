@@ -899,20 +899,24 @@ parse_get_maxbins(uint8_t *buf, size_t buf_len)
 // Unlike some of the read calls, the msg contains all of its data, contiguous
 // And has been swapped?
 
-
 int
-parse(uint8_t *buf, size_t buf_len, ev2citrusleaf_bin *values, int n_values,  int *result_code, uint32_t *generation)
+parse(uint8_t *buf, size_t buf_len, ev2citrusleaf_bin *values, int n_values,
+		int *result_code, uint32_t *generation, uint32_t *p_expiration)
 {
-	
 	int i;
 	cl_msg	*msg = (cl_msg *)buf;
 	uint8_t *limit = buf + buf_len;
 	buf += sizeof(cl_msg);
-	
+
 	cl_msg_swap_header(msg);
+
 	*result_code = msg->result_code;
-	if (generation)	*generation = msg->generation;
-	
+	*generation = msg->generation;
+
+	uint32_t now = cf_clepoch_seconds();
+
+	*p_expiration = msg->record_ttl > now ? msg->record_ttl - now : 0;
+
 	if (msg->n_fields) {
 		cf_debug("Got %d fields in the response", msg->n_fields);
 		cl_msg_field *mf = (cl_msg_field *)buf;
@@ -1003,10 +1007,12 @@ ev2citrusleaf_request_complete(cl_request *req, bool timedout)
 		if (n_bins) bins = alloca(n_bins * sizeof(ev2citrusleaf_bin) );
 	
 		// parse up into the response
-		int			return_code = 0;
+		int			return_code;
 		uint32_t	generation;
-		parse(req->rd_buf, req->rd_buf_size, &bins[0], n_bins, &return_code, &generation);
-	
+		uint32_t	expiration;
+
+		parse(req->rd_buf, req->rd_buf_size, &bins[0], n_bins, &return_code, &generation, &expiration);
+
 		// For simplicity & backwards-compatibility, convert server-side
 		// timeouts to the usual timeout return-code:
 		if (return_code == EV2CITRUSLEAF_FAIL_SERVERSIDE_TIMEOUT) {
@@ -1015,7 +1021,7 @@ ev2citrusleaf_request_complete(cl_request *req, bool timedout)
 		}
 
 		// Call the callback
-		(req->user_cb) (return_code ,bins, n_bins, generation, req->user_data);
+		(req->user_cb) (return_code ,bins, n_bins, generation, expiration, req->user_data);
 
 		cf_atomic_int_incr(&g_cl_stats.req_success);
 		
@@ -1041,7 +1047,7 @@ ev2citrusleaf_request_complete(cl_request *req, bool timedout)
 		}
 
 		// call with a timeout specifier
-		(req->user_cb) (EV2CITRUSLEAF_FAIL_TIMEOUT , 0, 0, 0, req->user_data);
+		(req->user_cb) (EV2CITRUSLEAF_FAIL_TIMEOUT , 0, 0, 0, 0, req->user_data);
 		
 		cf_atomic_int_incr(&g_cl_stats.req_timedout);
 

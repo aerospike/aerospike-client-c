@@ -125,3 +125,17 @@ cf_clock_getabsolute() {
 } // end extern "C"
 #endif
 
+//
+// Citrusleaf Epoch RTC API
+//
+
+#define CITRUSLEAF_EPOCH 1262304000
+
+static inline uint32_t
+cf_clepoch_seconds()
+{
+	struct timespec ts;
+	clock_gettime(CLOCK_REALTIME, &ts);
+	return (uint32_t)(ts.tv_sec - CITRUSLEAF_EPOCH);
+}
+

@@ -85,12 +85,12 @@ config g_config;
 
 
 void example5_request(uint64_t i);
-void example5_response(int return_value, ev2citrusleaf_bin *bins, int n_bins, uint32_t generation, void *udata);
+void example5_response(int return_value, ev2citrusleaf_bin *bins, int n_bins, uint32_t generation, uint32_t expiration, void *udata);
 
 
 
 void
-example5_response(int return_value, ev2citrusleaf_bin *bins, int n_bins, uint32_t generation, void *udata)
+example5_response(int return_value, ev2citrusleaf_bin *bins, int n_bins, uint32_t generation, uint32_t expiration, void *udata)
 {
 	uint64_t i = (uint64_t) udata;
 
@@ -293,7 +293,7 @@ main(int argc, char **argv)
 	ev2citrusleaf_init(0);    // initialize citrusleaf
 	
 	// Create a citrusleaf cluster object for subsequent requests
-	g_config.asc = ev2citrusleaf_cluster_create(0);
+	g_config.asc = ev2citrusleaf_cluster_create(0, 0);
 	if (!g_config.asc) {
 		fprintf(stderr, "could not create cluster, internal error\n");
 		return(-1);

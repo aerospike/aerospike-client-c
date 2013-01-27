@@ -6,7 +6,7 @@
 
 %{
 #include "citrusleaf/citrusleaf.h"
-#include "citrusleaf/cl_shm.h"
+
 /*Structure Definitions*/
 typedef struct cl_record {
         int gen;
@@ -60,7 +60,6 @@ BatchResult  citrusleaf_batch_get(cl_cluster *asc, char *ns, const cf_digest *di
         val.rv = rv;
         return val;
 }
-
 void citrusleaf_free_bins(cl_bin * bin, int n, cl_bin**binp) {
         if(bin) {
                 citrusleaf_bins_free(bin,n);
@@ -70,10 +69,6 @@ void citrusleaf_free_bins(cl_bin * bin, int n, cl_bin**binp) {
                 *binp = NULL;
         }
         return;
-}
-
-int citrusleaf_async_initialize(int size_limit, int num_receiver_threads) {
-	return citrusleaf_async_init(size_limit, num_receiver_threads, 0, 0);
 }
 
 %}
@@ -134,74 +129,5 @@ enum cl_type { CL_NULL = 0x00, CL_INT = 0x01, CL_FLOAT = 2, CL_STR = 0x03, CL_BL
 typedef enum cl_rv {
     CITRUSLEAF_FAIL_ASYNCQ_FULL = -3,
     CITRUSLEAF_FAIL_TIMEOUT = -2,
-        CITRUSLEAF_FAIL_CLIENT = -1,    
-        CITRUSLEAF_OK = 0,
-        CITRUSLEAF_FAIL_UNKNOWN = 1,    
-        CITRUSLEAF_FAIL_NOTFOUND = 2,   
-        CITRUSLEAF_FAIL_GENERATION = 3, 
-        CITRUSLEAF_FAIL_PARAMETER = 4,  
-        CITRUSLEAF_FAIL_KEY_EXISTS = 5,
-        CITRUSLEAF_FAIL_BIN_EXISTS = 6,
-        CITRUSLEAF_FAIL_CLUSTER_KEY_MISMATCH = 7,
-        CITRUSLEAF_FAIL_PARTITION_OUT_OF_SPACE = 8,
-        CITRUSLEAF_FAIL_SERVERSIDE_TIMEOUT = 9,
-        CITRUSLEAF_FAIL_NOXDS = 10,
-        CITRUSLEAF_FAIL_UNAVAILABLE = 11,
-        CITRUSLEAF_FAIL_INCOMPATIBLE_TYPE = 12,
-        CITRUSLEAF_FAIL_RECORD_TOO_BIG = 13,
-        CITRUSLEAF_FAIL_KEY_BUSY = 14
-} cl_rv;
-
-typedef struct {
-        bool unique;  
-        bool unique_bin; 
-        bool use_generation;     
-        bool use_generation_gt;  
-        bool use_generation_dup;    
-        unsigned int  generation;
-        int timeout_ms;
-        unsigned int  record_ttl;    
-        cl_write_policy w_pol;
-} cl_write_parameters;
-
-typedef enum cl_operator_type { CL_OP_WRITE, CL_OP_READ, CL_OP_INCR, CL_OP_MC_INCR , CL_OP_PREPEND, CL_OP_APPEND, CL_OP_MC_PREPEND, CL_OP_MC_APPEND, CL_OP_TOUCH, CL_OP_MC_TOUCH} cl_operator;
-
-typedef struct cl_operation_s {
-        cl_bin                bin;
-        enum cl_operator_type op; 
-}cl_operation;
-
-/*Exposed functions to the python application*/
-int citrusleaf_init(void);
-void citrusleaf_shutdown(void);
-cl_cluster * citrusleaf_cluster_create(void);
-void citrusleaf_cluster_use_nbconnect(cl_cluster *asc);
-int citrusleaf_cluster_add_host(cl_cluster *asc, char *host, short port, int timeout_ms);
-void citrusleaf_cluster_destroy(cl_cluster * asc);
-static void cl_write_parameters_set_default(cl_write_parameters *cl_w_p);
-void citrusleaf_object_init(cl_object *o);
-void citrusleaf_object_init_str(cl_object *o, char *str);
-void citrusleaf_object_init_str2(cl_object *o, char *str, size_t str_len);
-void citrusleaf_object_init_blob(cl_object *o, char *buf, size_t buf_len);
-void citrusleaf_object_init_blob2(cl_object *o, char *buf, size_t buf_len, cl_type type); // several blob types
-void citrusleaf_object_init_int(cl_object *o, long long i);
-void citrusleaf_object_init_null(cl_object *o);
-int citrusleaf_put(cl_cluster * asc, char * ns, char * set, const cl_object *key, cl_bin_arr * values, int n_bins,const cl_write_parameters *cl_w_p);
-int citrusleaf_get(cl_cluster * asc,  char * ns, char * set, const cl_object * key, cl_bin_arr * bins, int n_bins, int timeout_ms, int * cl_gen);
-int citrusleaf_get_all(cl_cluster * asc,  char *ns , char * set, const cl_object * key,cl_bin ** bins, int * sz, int timeout_ms, int * cl_gen);
-int citrusleaf_get_digest(cl_cluster *asc, char *ns, const cf_digest * d, cl_bin_arr *bins, int n_bins, int timeout_ms, int *cl_gen);
-int citrusleaf_put_digest(cl_cluster *asc, char *ns, const cf_digest *d, cl_bin_arr *bins, int n_bins, cl_write_parameters * cl_wp);
-int citrusleaf_delete_digest(cl_cluster *asc, char *ns,  const cf_digest *d, const cl_write_parameters *cl_w_p);
-int citrusleaf_delete(cl_cluster *asc, char *ns, char *set, const cl_object *key, const cl_write_parameters *cl_w_p);
-char * get_name(cl_bin * bin, int in);
-cl_object get_object(cl_bin * bin, int in);
-void citrusleaf_bins_free(cl_bin_arr *bins, int n_bins);
-BatchResult  citrusleaf_batch_get(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_bin *bins, int n_bins, bool get_key);
-int citrusleaf_calculate_digest(char *set, const cl_object *key, cf_digest *digest);
-void free(void *ptr);
-void citrusleaf_free_bins(cl_bin_arr * bin,int n_bins, cl_bin**binp);
+???LINES MISSING
 int citrusleaf_operate(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, cl_op_arr *operations, int n_operations, const cl_write_parameters *cl_w_p, int replace, int *generation);
-int citrusleaf_use_shm(int num_nodes, int key);
-int citrusleaf_async_initialize(int size_limit, int num_receiver_threads);
-int citrusleaf_async_put_forget(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, cl_bin_arr * bins, int n_bins, const cl_write_parameters *cl_w_p);
-int citrusleaf_async_put_digest_forget(cl_cluster *asc, const char *ns, const cf_digest *d, const char *set, cl_bin_arr * bins, int n_bins, const cl_write_parameters *cl_w_p);

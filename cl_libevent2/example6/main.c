@@ -79,10 +79,6 @@ typedef struct config_s {
 	int num_keys;
 } config;
 
-typedef bool (*phase_start_fn)(uint32_t generation);
-typedef bool (*phase_complete_fn)(int return_value, ev2citrusleaf_bin* bins,
-		int n_bins, uint32_t generation, void* pv_udata);
-
 
 //==========================================================
 // Globals
@@ -111,13 +107,13 @@ static void stop_cluster_management();
 static void do_transactions();
 static bool put(int k);
 static void put_cb(int return_value, ev2citrusleaf_bin* bins, int n_bins,
-		uint32_t generation, void* pv_udata);
+		uint32_t generation, uint32_t expiration, void* pv_udata);
 static void batch_exists();
 static void batch_exists_cb(int result, ev2citrusleaf_rec* recs, int n_recs,
 		void* pv_udata);
 static void delete(int k);
 static void delete_cb(int return_value, ev2citrusleaf_bin* bins, int n_bins,
-		uint32_t generation, void* pv_udata);
+		uint32_t generation, uint32_t expiration, void* pv_udata);
 static void batch_get();
 static void batch_get_cb(int result, ev2citrusleaf_rec* recs, int n_recs,
 		void* pv_udata);
@@ -283,7 +279,7 @@ start_cluster_management()
 	}
 
 	// Create cluster object needed for all database operations.
-	g_p_cluster = ev2citrusleaf_cluster_create(NULL);
+	g_p_cluster = ev2citrusleaf_cluster_create(NULL, NULL);
 
 	if (! g_p_cluster) {
 		LOG("ERROR: creating cluster");
@@ -432,7 +428,7 @@ put(int k)
 //
 static void
 put_cb(int return_value, ev2citrusleaf_bin* bins, int n_bins,
-		uint32_t generation, void* pv_udata)
+		uint32_t generation, uint32_t expiration, void* pv_udata)
 {
 	int k = (int)(uint64_t)pv_udata;
 
@@ -585,7 +581,7 @@ delete(int k)
 //
 static void
 delete_cb(int return_value, ev2citrusleaf_bin* bins, int n_bins,
-		uint32_t generation, void* pv_udata)
+		uint32_t generation, uint32_t expiration, void* pv_udata)
 {
 	int k = (int)(uint64_t)pv_udata;
 

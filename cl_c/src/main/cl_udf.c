@@ -207,7 +207,7 @@ cl_rv citrusleaf_udf_record_apply(cl_cluster * cl, const char * ns, const char *
     as_buffer_destroy(&args);
 
 	if (! (rv == CITRUSLEAF_OK || rv == CITRUSLEAF_FAIL_UDF_BAD_RESPONSE)) {
-    	as_result_tofailure(res, (as_val *) as_string_new("None UDF failure",false));
+    	as_result_setfailure(res, (as_val *) as_string_new("None UDF failure",false));
     } else if ( nbins == 1 && bins != NULL ) {
         cl_bin bin = *bins;
 		
@@ -215,21 +215,21 @@ cl_rv citrusleaf_udf_record_apply(cl_cluster * cl, const char * ns, const char *
 
         if ( val ) {
             if ( strcmp(bin.bin_name,"FAILURE") == 0 ) {
-                as_result_tofailure(res, val);
+                as_result_setfailure(res, val);
             }
             else if ( strcmp(bin.bin_name,"SUCCESS") == 0 ) {
-                as_result_tosuccess(res, val);
+                as_result_setsuccess(res, val);
             }
             else {
-                as_result_tofailure(res, (as_val *) as_string_new("Invalid response. (1)",false/*ismalloc*/));
+                as_result_setfailure(res, (as_val *) as_string_new("Invalid response. (1)",false/*ismalloc*/));
             }
         }
         else {
-            as_result_tofailure(res, (as_val *) as_string_new("Invalid response. (2)",false/*ismalloc*/));
+            as_result_setfailure(res, (as_val *) as_string_new("Invalid response. (2)",false/*ismalloc*/));
         }
     }
     else {
-        as_result_tofailure(res, (as_val *) as_string_new("Invalid response. (3)",false/*ismalloc*/));
+        as_result_setfailure(res, (as_val *) as_string_new("Invalid response. (3)",false/*ismalloc*/));
     }
 
     as_serializer_destroy(&ser);

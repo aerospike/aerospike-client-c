@@ -52,7 +52,7 @@ int init_configuration (int argc, char *argv[])
 	g_config->timeout_ms   = 1000;
 	g_config->record_ttl   = 864000;
 	g_config->verbose      = false;
-	g_config->package_file = "../../lua_files/ad_udf.lua";
+	g_config->package_file = "../lua_files/ad_udf.lua";
 	g_config->package_name = "ad_udf";
 	g_config->n_behaviors = 1000;
 	g_config->n_users = 100;

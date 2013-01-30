@@ -69,7 +69,7 @@ int init_configuration (int argc, char *argv[])
 	g_config->timeout_ms   = 1000;
 	g_config->record_ttl   = 864000;
 	g_config->verbose      = false;
-	g_config->package_file = "../../lua_files/udf_unit_test.lua";
+	g_config->package_file = "../lua_files/udf_unit_test.lua";
 	g_config->package_name = "udf_unit_test";
 
 	INFO("Starting Record stored-procedure Unit Tests");
@@ -1886,7 +1886,7 @@ int do_udf_ttl_gen_test() {
 	cl_write_parameters cl_wp;
 	cl_write_parameters_set_default(&cl_wp);
 	cl_wp.timeout_ms = g_config->timeout_ms;
-	cl_wp.record_ttl = 864000;
+	cl_wp.record_ttl = 5;
 
 	// (0) delete & reinsert record to start afresh
 	char *keyStr = "key_ttl_gen_test";

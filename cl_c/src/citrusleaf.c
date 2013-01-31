@@ -1661,6 +1661,15 @@ citrusleaf_delete_digest(cl_cluster *asc, const char *ns, const cf_digest *diges
 			ns, 0, 0, digest, 0, 0, 0, 0, NULL, cl_w_p, &trid, NULL) );
 }
 
+extern cl_rv
+citrusleaf_async_delete_digest_xdr(cl_cluster *asc, const char *ns, const cf_digest *digest, const cl_write_parameters *cl_w_p, void *udata)
+{
+    if (!g_initialized) return(-1);
+    
+    	uint64_t trid=0;
+	return( cl_do_async_monte( asc, CL_MSG_INFO1_XDS, CL_MSG_INFO2_DELETE | CL_MSG_INFO2_WRITE, ns,
+			NULL, 0, digest, NULL, CL_OP_WRITE, 0, NULL, NULL, cl_w_p, &trid, udata));
+}
 
 //
 // Efficiently determine if the key exists.

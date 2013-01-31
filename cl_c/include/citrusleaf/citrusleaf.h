@@ -468,6 +468,9 @@ citrusleaf_delete(cl_cluster *asc, const char *ns, const char *set, const cl_obj
 cl_rv
 citrusleaf_delete_digest(cl_cluster *asc, const char *ns,  const cf_digest *d, const cl_write_parameters *cl_w_p);
 
+cl_rv
+citrusleaf_async_delete_digest_xdr(cl_cluster *asc, const char *ns, const cf_digest *digest, const cl_write_parameters *cl_w_p, void *udata);
+
 //
 // Efficiently determine if the key exists.
 //  (Note:  The bins are currently ignored but may be testable in the future.)

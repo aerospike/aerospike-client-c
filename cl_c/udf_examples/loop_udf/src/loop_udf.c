@@ -269,13 +269,15 @@ worker_fn(void *udata)
 		cf_histogram_insert_data_point(isRead ? g_read_histogram : g_write_histogram, start_time);		
 		
 		if (rsp != CITRUSLEAF_OK) {
-			//fprintf(stderr,"failed citrusleaf_run_udf rsp=%d\n",rsp);
+#ifdef DEBUG_VERBOSE
+			fprintf(stderr,"failed citrusleaf_run_udf rsp=%d\n",rsp);
 			fprintf(stderr,"Key_str is %s, key_int %ld\n",kv->key_str,kv->key_int);
+#endif
 			cf_atomic_int_incr(&g_config->fail);
 		} else {
+			cf_atomic_int_incr(&g_config->transactions);
 			cf_atomic_int_incr(&g_config->success);
 		}
-		cf_atomic_int_incr(&g_config->transactions);
 		citrusleaf_object_free(&o_key);		
 		free(kv);
 		

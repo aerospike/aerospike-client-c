@@ -8,23 +8,21 @@
  * All rights reserved
  */
 
-#include <sys/types.h>
-#include <sys/socket.h> // socket calls
-#include <stdio.h>
-#include <errno.h> //errno
-#include <stdlib.h> //fprintf
-#include <unistd.h> // close
+#include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
-#include <fcntl.h>
 #include <arpa/inet.h>
+#include <event2/dns.h>
+#include <event2/event.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
 
-#include <event.h>
-#include <evdns.h>
-
-#include "citrusleaf_event2/ev2citrusleaf.h"
-#include "citrusleaf_event2/cl_cluster.h"
 #include "citrusleaf/cf_clock.h"
-#include "citrusleaf/proto.h"
+#include "citrusleaf/cf_log_internal.h"
+#include "citrusleaf/cf_vector.h"
+
+#include "citrusleaf_event2/cl_cluster.h"
+#include "citrusleaf_event2/ev2citrusleaf-internal.h"
 
 
 // #define DEBUG 1
@@ -88,12 +86,12 @@ cl_lookup_result_fn(int result, char type, int count, int ttl, void *addresses, 
 	{
 		cf_vector_define(result_v, sizeof(struct sockaddr_in), 0);
 		
-		uint32_t *s_addr = (uint32_t *)addresses;
+		uint32_t *s_addr_a = (uint32_t *)addresses;
 		for (int i=0;i<count;i++) {
 			struct sockaddr_in sin;
 			memset(&sin, 0, sizeof(sin));
 			sin.sin_family = AF_INET;
-			sin.sin_addr.s_addr = s_addr[i];
+			sin.sin_addr.s_addr = s_addr_a[i];
 			sin.sin_port = htons(cls->port);
 			cf_vector_append(&result_v, &sin );
 		}
@@ -119,7 +117,7 @@ cl_lookup(struct evdns_base *dns_base, char *hostname, short port, cl_lookup_asy
 {
 	uint64_t _s = cf_getms();
 
-	cl_lookup_state *cls = malloc(sizeof(cl_lookup_state));
+	cl_lookup_state *cls = (cl_lookup_state*)malloc(sizeof(cl_lookup_state));
 	if (!cls)	return(-1);
 	cls->cb = cb;
 	cls->udata = udata;

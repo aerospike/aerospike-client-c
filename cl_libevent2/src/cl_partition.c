@@ -9,18 +9,16 @@
  * All rights reserved
  */
 
-#include <sys/types.h>
-#include <sys/socket.h> // socket calls
-#include <stdio.h>
-#include <errno.h> //errno
-#include <stdlib.h> //fprintf
-#include <unistd.h> // close
+#include <stdlib.h>
 #include <string.h>
-#include <fcntl.h>
-#include <arpa/inet.h> // inet_ntop
 
-#include "citrusleaf_event2/ev2citrusleaf.h"
+#include "citrusleaf/cf_atomic.h"
+#include "citrusleaf/cf_log_internal.h"
+
 #include "citrusleaf_event2/cl_cluster.h"
+#include "citrusleaf_event2/ev2citrusleaf.h"
+#include "citrusleaf_event2/ev2citrusleaf-internal.h"
+
 
 #define EXTRA_CHECKS 1
 
@@ -74,7 +72,7 @@ cl_partition_table_create(ev2citrusleaf_cluster *asc, const char *ns)
 {
 	cf_atomic_int_incr(&g_cl_stats.partition_create);
 
-	cl_partition_table *pt = malloc( sizeof(cl_partition_table) + (sizeof(cl_partition) * asc->n_partitions) );
+	cl_partition_table *pt = (cl_partition_table*)malloc( sizeof(cl_partition_table) + (sizeof(cl_partition) * asc->n_partitions) );
 	if (!pt)	return(0);
 	memset(pt, 0, sizeof(cl_partition_table) + (sizeof(cl_partition) * asc->n_partitions) );
 	strcpy( pt->ns, ns );

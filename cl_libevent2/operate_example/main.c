@@ -108,7 +108,7 @@ example_phase_three(int return_value, ev2citrusleaf_bin *bins, int n_bins, uint3
 				fprintf(stderr, "type string: value %s\n", bins[i].object.u.str);
 				break;
 			case CL_INT:
-				fprintf(stderr, "type int: value %"PRId64"\n",bins[i].object.u.i64);
+				fprintf(stderr, "type int: value %ld\n",bins[i].object.u.i64);
 				break;
 			default:
 				fprintf(stderr, "type unknown! (%d)\n",(int)bins[i].object.type);

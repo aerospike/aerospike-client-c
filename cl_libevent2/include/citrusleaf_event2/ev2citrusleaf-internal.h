@@ -14,24 +14,19 @@
 // speed, and compatibility
 #pragma once
 
-#include <inttypes.h>
 #include <stdbool.h>
-#include <netinet/in.h>
-#include <event2/event.h>
+#include <stddef.h>
+#include <stdint.h>
 #include <event2/dns.h>
-#include <stdarg.h>
+#include <event2/event.h>
+
+#include "citrusleaf/cf_atomic.h"
+#include "citrusleaf/cf_digest.h"
+#include "citrusleaf/cf_hooks.h"
+#include "citrusleaf/proto.h"
 
 #include "ev2citrusleaf.h"
 
-#include "citrusleaf/cf_atomic.h"
-#include "citrusleaf/cf_vector.h"
-#include "citrusleaf/cf_queue.h"
-#include "citrusleaf/cf_alloc.h"
-#include "citrusleaf/cf_ll.h"
-#include "citrusleaf/cf_digest.h"
-#include "citrusleaf/cf_log_internal.h"
-
-#include "citrusleaf/proto.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -65,6 +60,7 @@ extern ev2citrusleaf_lock_callbacks *g_lock_cb;
 #define MUTEX_UNLOCK(__l)	if (__l) { g_lock_cb->unlock(__l); }
 
 struct cl_cluster_node_s;
+struct sockaddr_in;
 
 
 #define CL_REQUEST_MAGIC 0xBEEF1070

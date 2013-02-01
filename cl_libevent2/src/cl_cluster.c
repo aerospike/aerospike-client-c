@@ -9,25 +9,39 @@
  * All rights reserved
  */
 
-#include <sys/types.h>
-#include <sys/socket.h> // socket calls
-#include <stdio.h>
-#include <errno.h> //errno
-#include <stdlib.h> //fprintf
-#include <unistd.h> // close
-#include <string.h>
-#include <fcntl.h>
-#include <arpa/inet.h>
-#include <signal.h>
 #include <ctype.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <inttypes.h>
+#include <pthread.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <bits/time.h>
+#include <event2/dns.h>
+#include <event2/event.h>
+#include <netinet/in.h>
 #include <netinet/tcp.h>
 
+#include "citrusleaf/cf_alloc.h"
 #include "citrusleaf/cf_atomic.h"
+#include "citrusleaf/cf_clock.h"
+#include "citrusleaf/cf_digest.h"
+#include "citrusleaf/cf_ll.h"
+#include "citrusleaf/cf_log_internal.h"
+#include "citrusleaf/cf_queue.h"
+#include "citrusleaf/cf_vector.h"
+
 #include "citrusleaf_event2/ev2citrusleaf.h"
 #include "citrusleaf_event2/ev2citrusleaf-internal.h"
+
 #include "citrusleaf_event2/cl_cluster.h"
-#include "citrusleaf/proto.h"
-#include "citrusleaf/cf_clock.h"
+
 
 extern void ev2citrusleaf_base_hop(cl_request *req);
 
@@ -100,7 +114,7 @@ str_split(char split_c, char *str, cf_vector *v)
 ev2citrusleaf_cluster *
 cluster_create()
 {
-	ev2citrusleaf_cluster *asc = malloc(sizeof(ev2citrusleaf_cluster) + event_get_struct_event_size() );
+	ev2citrusleaf_cluster *asc = (ev2citrusleaf_cluster*)malloc(sizeof(ev2citrusleaf_cluster) + event_get_struct_event_size() );
 	if (!asc) return(0);
 	memset(asc,0,sizeof(ev2citrusleaf_cluster) + event_get_struct_event_size());
 	MUTEX_ALLOC(asc->node_v_lock);
@@ -1473,7 +1487,7 @@ cluster_new_sockaddr(ev2citrusleaf_cluster *asc, struct sockaddr_in *new_sin)
 		sockaddr_in_dump("new sockaddr found: ", new_sin);
 	}
 
-	ping_nodes_data *pnd = malloc(sizeof(ping_nodes_data));
+	ping_nodes_data *pnd = (ping_nodes_data*)malloc(sizeof(ping_nodes_data));
 	if (!pnd)	return;
 	pnd->sa_in = *new_sin;
 	pnd->asc = asc;

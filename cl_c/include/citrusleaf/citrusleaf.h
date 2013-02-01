@@ -78,9 +78,11 @@ typedef enum cl_rvclient {
 // hidden forward reference
 typedef struct cl_conn_s cl_conn;
 
-enum cl_type { CL_NULL = 0x00, CL_INT = 0x01, CL_FLOAT = 2, CL_STR = 0x03, CL_BLOB = 0x04,
-	CL_TIMESTAMP = 5, CL_DIGEST = 6, CL_JAVA_BLOB = 7, CL_CSHARP_BLOB = 8, CL_PYTHON_BLOB = 9, 
-	CL_RUBY_BLOB = 10, CL_PHP_BLOB = 11, CL_UNKNOWN = 666666};
+enum cl_type {
+  CL_NULL = 0x00, CL_INT = 0x01, CL_FLOAT = 2, CL_STR = 0x03, CL_BLOB = 0x04,
+	CL_TIMESTAMP = 5, CL_DIGEST = 6, CL_JAVA_BLOB = 7, CL_CSHARP_BLOB = 8,
+  CL_PYTHON_BLOB = 9, CL_RUBY_BLOB = 10, CL_PHP_BLOB = 11, CL_ERLANG_BLOB = 12,
+  CL_UNKNOWN = 666666};
 typedef enum cl_type cl_type;
 
 enum cl_write_policy { CL_WRITE_ASYNC, CL_WRITE_ONESHOT, CL_WRITE_RETRY, CL_WRITE_ASSURED };
@@ -465,6 +467,9 @@ citrusleaf_delete(cl_cluster *asc, const char *ns, const char *set, const cl_obj
 
 cl_rv
 citrusleaf_delete_digest(cl_cluster *asc, const char *ns,  const cf_digest *d, const cl_write_parameters *cl_w_p);
+
+cl_rv
+citrusleaf_async_delete_digest_xdr(cl_cluster *asc, const char *ns, const cf_digest *digest, const cl_write_parameters *cl_w_p, void *udata);
 
 //
 // Efficiently determine if the key exists.

@@ -492,7 +492,15 @@ ev2citrusleaf_cluster_destroy(ev2citrusleaf_cluster *asc)
 		// Proceed and hope for the best (will likely at least leak memory)...
 	}
 
+	// Clear cluster manager timer.
 	event_del(cluster_get_timer_event(asc));
+
+	// Clear all node timers.
+	for (uint32_t i = 0; i < cf_vector_size(&asc->node_v); i++) {
+		cl_cluster_node *cn = cf_vector_pointer_get(&asc->node_v, i);
+		event_del(cluster_node_get_timer_event(cn));
+		// ... so the event_del() in cl_cluster_node_release() will be a no-op.
+	}
 
 	// Clear all outstanding info requests.
 	while (cf_atomic_int_get(asc->infos_in_progress)) {
@@ -508,15 +516,12 @@ ev2citrusleaf_cluster_destroy(ev2citrusleaf_cluster *asc)
 		}
 	}
 
-	// Destroy all the nodes - this deletes their timer events.
-	// Shouldn't need locks at this stage, but...
-	MUTEX_LOCK(asc->node_v_lock);
+	// Destroy all the nodes.
 	for (uint32_t i = 0; i < cf_vector_size(&asc->node_v); i++) {
 		cl_cluster_node *cn = cf_vector_pointer_get(&asc->node_v, i);
 		cl_cluster_node_release(cn, "C-");
 		cl_cluster_node_release(cn, "L-");
 	}
-	MUTEX_UNLOCK(asc->node_v_lock);
 
 	cf_queue_destroy(asc->request_q);
 	asc->request_q = 0;

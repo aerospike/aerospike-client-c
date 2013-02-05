@@ -29,6 +29,18 @@
 #include "as_result.h"
 #include "cl_arglist.h"
 
+#define AS_UDF_LUA 0
+
+/******************************************************************************
+ * DATA TYPES
+ ******************************************************************************/
+struct as_bytes_s {
+  byte * data;
+  uint32_t size;
+};
+typedef struct as_bytes_s as_bytes;
+typedef uint8_t as_udf_type;
+
 /******************************************************************************
  * FUNCTIONS
  ******************************************************************************/
@@ -68,7 +80,7 @@ cl_rv citrusleaf_udf_get_with_gen(cl_cluster * cluster, const char * filename, c
  * @param contents - The contents of the file being uploaded to the cluster.
  * @param error - Contains an error message, if the return value was non-zero. The value must be freed by the user.
  */
-cl_rv citrusleaf_udf_put(cl_cluster * cluster, const char * filename, const char * contents, char ** error);
+cl_rv citrusleaf_udf_put(cl_cluster * cluster, const char * filename, as_bytes *content, as_udf_type udf_type, char ** error);
 
 /**
  * @param filename - The file to be removed from the cluster.

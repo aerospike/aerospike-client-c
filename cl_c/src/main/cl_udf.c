@@ -371,30 +371,24 @@ cl_rv citrusleaf_udf_get_with_gen(cl_cluster *asc, const char * filename, char *
     return 0;
 }
 
-cl_rv citrusleaf_udf_put(cl_cluster *asc, const char * filename, const char * content, char ** error) {
+cl_rv citrusleaf_udf_put(cl_cluster *asc, const char * filename, as_bytes *content, as_udf_type udf_type, char ** error) {
 
-    if ( !filename || !content) {
+    if ( !filename || !(content->data && content->size > 0)) {
         fprintf(stderr, "filename and content required\n");
         return CITRUSLEAF_FAIL_CLIENT;
     }
 
-    int     content_len = strlen(content);
-    int     query_len   = strlen("udf-put:filename=;content=;") + strlen(filename) + cf_base64_encode_maxlen(content_len) + 1;
-    char *  query       = malloc(query_len); 
+    char * query = NULL;    
     char *  result      = NULL;
     char *  filepath    = strdup(filename);
     char *  filebase    = basename(filepath);
 
-    if ( !query ) {
-        fprintf(stderr, "cannot malloc\n");
+    char * content_base64 = malloc(cf_base64_encode_maxlen(content->size));
+    cf_base64_tostring(content->data, content_base64, &(content->size));
+    if (! asprintf(&query, "udf-put:filename=%s;content=%s;content-len=%d;udf-type=%d;", filebase, content_base64, content->size, udf_type)) {
+        fprintf(stderr, "Query allocation failed");
         return CITRUSLEAF_FAIL_CLIENT;
     }
-    
-    snprintf(query, query_len, "udf-put:filename=%s;content=",filebase);
-    int qlen = strlen(query);
-    cf_base64_tostring((uint8_t *)content, (char *)(query+qlen), &content_len);
-    query[qlen+content_len] = ';';
-    query[qlen+content_len+1] = 0;
     
     free(filepath);
 
@@ -408,16 +402,19 @@ cl_rv citrusleaf_udf_put(cl_cluster *asc, const char * filename, const char * co
             strncpy(*error+emsg_len, query, query_len);
         }
         free(query);
+        free(content_base64);
         return -1;
     }
 
     if ( !result ) {
         if ( error ) *error = strdup("invalid_response");
         free(query);
-        return -2;
+        free(content_base64);
+    	return -2;
     }
 
     free(query);
+    free(content_base64);
     query = NULL;
     
     /**

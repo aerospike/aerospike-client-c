@@ -1585,8 +1585,12 @@ int register_package()
 	fclose(fptr); 
 
 	char *err_str = NULL; 
+	as_bytes udf_content = {
+		.size = b_tot,
+		.data = script_code
+	}; 
 	if (b_tot>0) { 
-		int resp = citrusleaf_udf_put(g_config->asc, basename(g_config->package_file), script_code, &err_str); 
+		int resp = citrusleaf_udf_put(g_config->asc, basename(g_config->package_file), &udf_content, AS_UDF_LUA, &err_str); 
 		if (resp!=0) { 
 			INFO("unable to register package file %s as %s resp = %d",g_config->package_file,g_config->package_name,resp); return(-1);
 			INFO("%s",err_str); free(err_str);
@@ -1969,7 +1973,7 @@ int main(int argc, char **argv) {
 		LOG("");
 	}
 	
-
+	free(g_config);
 	citrusleaf_cluster_destroy(asc);
 	citrusleaf_shutdown();
 	

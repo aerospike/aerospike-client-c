@@ -1,44 +1,68 @@
+###############################################################################
+##  BUILD VARIABLES                                                          ##
+###############################################################################
+
+export CFLAGS =
+export LDFLAGS =
+export ARFLAGS =
+
+###############################################################################
+##  BUILD ENVIRONMENT                                                        ##
+###############################################################################
+
 ROOT = $(CURDIR)
 NAME = $(shell basename $(ROOT))
 OS = $(shell uname)
 ARCH = $(shell arch)
+DISTRO_NAME = $(shell lsb_release -is)
+DISTRO_VERS = $(shell lsb_release -rs)
 
 PROJECT = project
-MODULES = 
+MODULES = modules
+SOURCE  = src
+TARGET  = target
 
-#
-# Setup Tools
-#
+SUBMODULES = $(filter-out .%, $(wildcard $(MODULES)/*))
+
+###############################################################################
+##  BUILD TOOLS                                                              ##
+###############################################################################
 
 CC = gcc
-CFLAGS = -Werror
+CC_FLAGS =
 
 LD = gcc
-LDFLAGS =
+LD_FLAGS =
 
 AR = ar
-ARFLAGS =
+AR_FLAGS =
 
-#
-# Setup Source
-#
+###############################################################################
+##  SOURCE PATHS                                                             ##
+###############################################################################
 
-SOURCE = src
-SOURCE_MAIN = $(SOURCE)/main
-SOURCE_INCL = $(SOURCE)/include
-SOURCE_TEST = $(SOURCE)/test
+SOURCE_PATH = $(SOURCE)
+SOURCE_MAIN = $(SOURCE_PATH)/main
+SOURCE_INCL = $(SOURCE_PATH)/include
+SOURCE_TEST = $(SOURCE_PATH)/test
 
 VPATH = $(SOURCE_MAIN) $(SOURCE_INCL)
 
 LIB_PATH = 
 INC_PATH = $(SOURCE_INCL)
 
-#
-# Setup Target
-#
+###############################################################################
+##  TARGET PATHS                                                             ##
+###############################################################################
 
-TARGET = target
-
+ifeq ($(shell test -e $(PROJECT)/target.$(DISTRO_NAME)-$(DISTRO_VERS)-$(ARCH).makefile && echo 1), 1)
+PLATFORM = $(DISTRO_NAME)-$(DISTRO_VERS)-$(ARCH)
+include $(PROJECT)/target.$(PLATFORM).makefile
+else
+ifeq ($(shell test -e $(PROJECT)/target.$(DISTRO_NAME)-$(ARCH).makefile && echo 1), 1)
+PLATFORM = $(DISTRO_NAME)-$(ARCH)
+include $(PROJECT)/target.$(PLATFORM).makefile
+else
 ifeq ($(shell test -e $(PROJECT)/target.$(OS)-$(ARCH).makefile && echo 1), 1)
 PLATFORM = $(OS)-$(ARCH)
 include $(PROJECT)/target.$(PLATFORM).makefile
@@ -50,13 +74,20 @@ else
 PLATFORM = $(OS)-$(ARCH)
 endif
 endif
+endif
+endif
 
-TARGET_BASE = $(TARGET)/$(PLATFORM)
-TARGET_BIN = $(TARGET_BASE)/bin
-TARGET_DOC = $(TARGET_BASE)/doc
-TARGET_LIB = $(TARGET_BASE)/lib
-TARGET_OBJ = $(TARGET_BASE)/obj
+TARGET_PATH = $(TARGET)
+TARGET_BASE = $(TARGET_PATH)/$(PLATFORM)
+TARGET_BIN 	= $(TARGET_BASE)/bin
+TARGET_DOC 	= $(TARGET_BASE)/doc
+TARGET_LIB 	= $(TARGET_BASE)/lib
+TARGET_OBJ 	= $(TARGET_BASE)/obj
 TARGET_INCL = $(TARGET_BASE)/include
+
+###############################################################################
+##  FUNCTIONS                                                                ##
+###############################################################################
 
 #
 # Builds an object, library, archive or executable using the dependencies specified for the target.
@@ -65,19 +96,19 @@ TARGET_INCL = $(TARGET_BASE)/include
 #   $(call <command>, include_paths, library_paths, libraries, flags)
 #
 # Commands:
-# 		build 				- Automatically determine build type based on target name.
-# 		object 				- Build an object: .o
-# 		library 			- Build a dynamic shared library: .so
-# 		archive 			- Build a static library (archive): .a
-#		executable 			- Build an executable
+# 		build 			- Automatically determine build type based on target name.
+# 		object 			- Build an object: .o
+# 		library 		- Build a dynamic shared library: .so
+# 		archive 		- Build a static library (archive): .a
+#		executable 		- Build an executable
 # 
 # Arguments:
-#		include_paths		- Space separated list of search paths for include files.
-#							  Relative paths are relative to the project root.
-#		library_paths		- Space separated list of search paths for libraries.
-#							  Relative paths are relative to the project root.
-#		libraries			- space separated list of libraries.
-#		flags 				- space separated list of linking flags.
+#		include_paths	- Space separated list of search paths for include files.
+#						  Relative paths are relative to the project root.
+#		library_paths	- Space separated list of search paths for libraries.
+#						  Relative paths are relative to the project root.
+#		libraries		- space separated list of libraries.
+#		flags 			- space separated list of linking flags.
 #
 # You can optionally define variables, rather than arguments as:
 #
@@ -105,88 +136,60 @@ endef
 define executable
 	@if [ ! -d `dirname $@` ]; then mkdir -p `dirname $@`; fi
 	$(strip $(CC) \
-		$(addprefix -I, $(MODULES:%=modules/%/$(SOURCE_INCL))) \
+		$(addprefix -I, $(SUBMODULES:%=%/$(SOURCE_INCL))) \
 		$(addprefix -I, $(INC_PATH)) \
-		$(addprefix -I, $($@_inc_path)) \
-		$(addprefix -I, $(1)) \
-		$(addprefix -L, $(MODULES:%=modules/%/$(TARGET_LIB))) \
+		$(addprefix -L, $(SUBMODULES:%=%/$(TARGET_LIB))) \
 		$(addprefix -L, $(LIB_PATH)) \
-		$(addprefix -L, $($@_lib_path)) \
-		$(addprefix -L, $(2)) \
-		$(addprefix -l, $($@_lib)) \
-		$(addprefix -l, $(3)) \
-		$(4) \
+		$(addprefix -l, $(LIBRARIES)) \
+		$(CFLAGS) \
+		$(CC_FLAGS) \
 		$(LDFLAGS) \
-		$($@_flags) \
+		$(LD_FLAGS) \
 		-o $@ \
 		$^ \
-		$(5) \
 	)
 endef
 
 define archive
 	@if [ ! -d `dirname $@` ]; then mkdir -p `dirname $@`; fi
-	$(strip $(AR) rcs $(ARFLAGS) $(4) $@ $^ $(5))
+	$(strip $(AR) \
+		rcs \
+		$(ARFLAGS) \
+		$(AR_FLAGS) \
+		$@ \
+		$^ \
+	)
 endef
 
 define library
 	@if [ ! -d `dirname $@` ]; then mkdir -p `dirname $@`; fi
 	$(strip $(CC) -shared \
-		$(addprefix -I, $(MODULES:%=modules/%/$(SOURCE_INCL))) \
+		$(addprefix -I, $(SUBMODULES:%=%/$(SOURCE_INCL))) \
 		$(addprefix -I, $(INC_PATH)) \
-		$(addprefix -I, $($@_inc_path)) \
-		$(addprefix -I, $(1)) \
-		$(addprefix -L, $(MODULES:%=modules/%/$(TARGET_LIB))) \
+		$(addprefix -L, $(SUBMODULES:%=%/$(TARGET_LIB))) \
 		$(addprefix -L, $(LIB_PATH)) \
-		$(addprefix -L, $($@_lib_path)) \
-		$(addprefix -L, $(2)) \
-		$(addprefix -l, $($@_lib)) \
-		$(addprefix -l, $(3)) \
-		$(4) \
+		$(addprefix -l, $(LIBRARIES)) \
 		$(LDFLAGS) \
-		$($@_flags) \
+		$(LD_FLAGS) \
 		-o $@ \
 		$^ \
-		$(5) \
 	)
 endef
 
 define object
 	@if [ ! -d `dirname $@` ]; then mkdir -p `dirname $@`; fi
 	$(strip $(CC) \
-		-MD \
-		$(addprefix -I, $(MODULES:%=modules/%/$(SOURCE_INCL))) \
+		$(addprefix -I, $(SUBMODULES:%=%/$(SOURCE_INCL))) \
 		$(addprefix -I, $(INC_PATH)) \
-		$(addprefix -I, $($@_inc_path)) \
-		$(addprefix -I, $(1)) \
-		$(addprefix -L, $(MODULES:%=modules/%/$(TARGET_LIB))) \
+		$(addprefix -L, $(SUBMODULES:%=%/$(TARGET_LIB))) \
 		$(addprefix -L, $(LIB_PATH)) \
-		$(addprefix -L, $($@_lib_path)) \
-		$(addprefix -L, $(2)) \
-		$(addprefix -l, $($@_lib)) \
-		$(addprefix -l, $(3)) \
-		$(4) \
+		$(addprefix -l, $(LIBRARIES)) \
 		$(CFLAGS) \
-		$($@_flags) \
+		$(CC_FLAGS) \
 		-o $@ \
 		-c $^ \
-		$(5) \
 	)
 endef
-
-#
-# Builds the objects specified for use by a build target.
-#
-# $(call objects, [objects])
-#
-# Arguments:
-# 		objects				- space separated list of object file names (i.e. x.o)
-#
-
-define objects
-	$(addprefix $(TARGET_OBJ)$(addprefix /, $(2)), $(addprefix /, $(1))) 
-endef
-
 
 define make_each
 	@for i in $(1); do \
@@ -194,15 +197,14 @@ define make_each
 	done;
 endef
 
-# 
-# Common Targets
-#
+###############################################################################
+##  COMMON TARGETS                                                           ##
+###############################################################################
 
-# .PHONY: $(TARGET)
-$(TARGET):
+$(TARGET_PATH):
 	mkdir $@
 
-$(TARGET_BASE): | $(TARGET)
+$(TARGET_BASE): | $(TARGET_PATH)
 	mkdir $@
 
 $(TARGET_BIN): | $(TARGET_BASE)
@@ -223,32 +225,37 @@ info:
 	@echo "  NAME:     " $(NAME) 
 	@echo "  OS:       " $(OS)
 	@echo "  ARCH:     " $(ARCH)
+	@echo "  DISTRO:   " $(DISTRO_NAME)"-"$(DISTRO_VERS)
 	@echo
 	@echo "  PATHS:"
 	@echo "      source:     " $(SOURCE)
 	@echo "      target:     " $(TARGET_BASE)
 	@echo "      includes:   " $(INC_PATH)
 	@echo "      libraries:  " $(LIB_PATH)
-	@echo "      modules:    " $(MODULES:%=modules/%)
+	@echo "      submodules: " $(SUBMODULES)
 	@echo
 	@echo "  COMPILER:"
 	@echo "      command:    " $(CC)
-	@echo "      flags:      " $(CFLAGS)
+	@echo "      flags:      " $(CC_FLAGS)
 	@echo
 	@echo "  LINKER:"
 	@echo "      command:    " $(LD)
-	@echo "      flags:      " $(LDFLAGS)
+	@echo "      flags:      " $(LD_FLAGS)
+	@echo
+	@echo "  ARCHIVER:"
+	@echo "      command:    " $(AR)
+	@echo "      flags:      " $(AR_FLAGS)
 	@echo
 
 .PHONY: clean
 clean: 
-	@rm -rf $(TARGET)
-	$(call make_each, $(MODULES:%=modules/%), clean)
+	rm -rf $(TARGET)
+	$(call make_each, $(SUBMODULES), clean)
 
 
 .PHONY: $(TARGET_OBJ)/%.o
 $(TARGET_OBJ)/%.o : %.c | $(TARGET_OBJ) 
-	$(call object)
+	$(object)
 
 
 .DEFAULT_GOAL := all

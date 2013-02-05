@@ -4,19 +4,18 @@ include project/build.makefile
 ##  FLAGS                                                                    ##
 ###############################################################################
 
-CFLAGS = -std=gnu99 -g -O3 -fno-common -fno-strict-aliasing -rdynamic -fPIC -Wall $(AS_CFLAGS) -DMARCH_$(ARCH) -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_GNU_SOURCE
-LDFLAGS = 
+# CFLAGS = -O3
 
-MODULES := common mod-lua msgpack
+CC_FLAGS = -std=gnu99 -g -rdynamic -Wall 
+CC_FLAGS += -fno-common -fno-strict-aliasing -fPIC 
+CC_FLAGS += -DMARCH_$(ARCH) -D_FILE_OFFSET_BITS=64 
+CC_FLAGS += -D_REENTRANT -D_GNU_SOURCE -DMEM_COUNT
+
+LD_FLAGS = -lm
 
 INC_PATH += modules/common/$(TARGET_INCL)
+INC_PATH += modules/mod-lua/$(TARGET_INCL)
 INC_PATH += $(MSGPACK_PATH)/src
-INC_PATH += modules/mod-lua/src/include
-
-ifeq ($(MEM_COUNT),1)
-	LDFLAGS += -lm
-	CFLAGS += -DMEM_COUNT
-endif
 
 INSTALL_LIB = /usr/lib
 
@@ -47,16 +46,19 @@ CITRUSLEAF += cl_scan.o
 CITRUSLEAF += cl_udf.o
 CITRUSLEAF += proto.o
 
-OBJECTS = $(TARGET_OBJ)/*.o modules/mod-lua/$(TARGET_OBJ)/*.o modules/common/$(TARGET_OBJ)/client/*.o modules/common/$(TARGET_OBJ)/shared/*.o $(MSGPACK_PATH)/src/.libs/*.o
+OBJECTS = modules/mod-lua/$(TARGET_OBJ)/*.o 
+OBJECTS += modules/common/$(TARGET_OBJ)/client/*.o 
+OBJECTS += modules/common/$(TARGET_OBJ)/shared/*.o 
+OBJECTS += $(MSGPACK_PATH)/src/.libs/*.o
 
 ###############################################################################
 ##  MAIN TARGETS                                                             ##
 ###############################################################################
 
-all: modules build prepare
+all: modules build prepare test
 
 .PHONY: modules
-modules: $(MODULES:%=modules/%)
+modules: modules/common modules/mod-lua modules/msgpack
 
 .PHONY: build build-clean
 build: libcitrusleaf.a libcitrusleaf.so
@@ -79,10 +81,10 @@ libcitrusleaf.so: $(TARGET_LIB)/libcitrusleaf.so
 ###############################################################################
 
 $(TARGET_LIB)/libcitrusleaf.a: $(CITRUSLEAF:%=$(TARGET_OBJ)/%) | $(TARGET_LIB) modules
-	$(call archive, $(empty), $(empty), $(empty), $(empty), $(OBJECTS))
+	$(archive) $(OBJECTS)
 
 $(TARGET_LIB)/libcitrusleaf.so: $(CITRUSLEAF:%=$(TARGET_OBJ)/%) | $(TARGET_LIB) modules
-	$(call library, $(empty), $(empty), $(empty), $(empty))
+	$(library) $(OBJECTS)
 
 $(TARGET_INCL): modules/mod-lua/$(TARGET_INCL) modules/common/$(TARGET_INCL)
 	if [ ! -e "$(TARGET_INCL)/citrusleaf" ]; then mkdir -p $(TARGET_INCL)/citrusleaf; fi
@@ -103,15 +105,15 @@ $(INSTALL_LIB)/libcitrusleaf.a:
 
 .PHONY: modules/common
 modules/common:
-	make -C modules/common all MEM_COUNT=1
+	$(MAKE) -e -C modules/common all MEM_COUNT=1
 modules/common/$(TARGET_INCL):
-	make -C modules/common prepare MEM_COUNT=1
+	$(MAKE) -e -C modules/common prepare MEM_COUNT=1
 
 .PHONY: modules/mod-lua
 modules/mod-lua:
-	make -C modules/mod-lua all MEM_COUNT=1
+	$(MAKE) -e -C modules/mod-lua all MEM_COUNT=1
 modules/mod-lua/$(TARGET_INCL):
-	make -C modules/mod-lua prepare MEM_COUNT=1
+	$(MAKE) -e -C modules/mod-lua prepare MEM_COUNT=1
 
 modules/msgpack/Makefile: 
 	cd $(MSGPACK_PATH) && ./configure
@@ -126,7 +128,12 @@ modules/msgpack: modules/msgpack/src/.libs/libmsgpackc.a
 ##  TEST TARGETS                                                      		 ##
 ###############################################################################
 
-TEST_FLAGS = -L$(TARGET_LIB) -Wl,-l,:libcitrusleaf.a -L$(JANSSON_PATH)/src/.libs -Wl,-l,:libjansson.a -lcrypto -lssl -L$(MSGPACK_PATH)/src/.libs -Wl,-l,:libmsgpack.a -lpthread -lrt 
+TEST_CFLAGS = -I$(TARGET_INCL) -I$(JANSSON_PATH)/src
+
+TEST_LDFLAGS = -lpthread -lrt -lcrypto -lssl -llua 
+TEST_LDFLAGS += -L$(TARGET_LIB) -Wl,-l,:libcitrusleaf.a
+TEST_LDFLAGS += -L$(JANSSON_PATH)/src/.libs -Wl,-l,:libjansson.a 
+TEST_LDFLAGS += -L$(MSGPACK_PATH)/src/.libs -Wl,-l,:libmsgpack.a 
  
 TEST_TYPES = types
 TEST_TYPES += types_integer
@@ -142,38 +149,43 @@ TEST_UDF = udf
 TEST_UDF += udf_basics
 TEST_UDF += udf_lists
 
-.PHONY: test test-clean
-test: CFLAGS += -I$(TARGET_INCL) -I$(JANSSON_PATH)/src
+.PHONY: test test-clean test/types test/client test/udf
+
 test: test/types test/client test/udf 
 	@$(TARGET_BIN)/test/types
 	@$(TARGET_BIN)/test/client
 	@$(TARGET_BIN)/test/udf
+
 test-clean: 
 	@rm -rf $(TARGET_BIN)/test
 	@rm -rf $(TARGET_OBJ)/test
 
-.PHONY: test/types
 test/types: $(TARGET_BIN)/test/types
-
-.PHONY: test/client
 test/client: $(TARGET_BIN)/test/client
-
-.PHONY: test/udf
 test/udf: $(TARGET_BIN)/test/udf
 
 
-
+$(TARGET_OBJ)/test/%/%.o: CFLAGS = $(TEST_CFLAGS)
+$(TARGET_OBJ)/test/%/%.o: LDFLAGS += $(TEST_LDFLAGS)
 $(TARGET_OBJ)/test/%/%.o: $(SOURCE_TEST)/%/%.c
-	$(call object, $(empty), $(empty), $(empty), $(empty), $(TEST_FLAGS))
- 
+	$(object)
+
+$(TARGET_OBJ)/test/%.o: CFLAGS = $(TEST_CFLAGS)
+$(TARGET_OBJ)/test/%.o: LDFLAGS += $(TEST_LDFLAGS)
 $(TARGET_OBJ)/test/%.o: $(SOURCE_TEST)/%.c
-	$(call object, $(empty), $(empty), $(empty), $(empty), $(TEST_FLAGS))
+	$(object)
 
-$(TARGET_BIN)/test/types: $(TEST_TYPES:%=$(TARGET_OBJ)/test/types/%.o) $(TARGET_OBJ)/test/test.o | libcitrusleaf.a prepare
-	$(call executable, $(empty), $(empty), $(empty), $(empty), $(TEST_FLAGS))
- 
-$(TARGET_BIN)/test/client: $(TEST_CLIENT:%=$(TARGET_OBJ)/test/client/%.o) $(TARGET_OBJ)/test/test.o | libcitrusleaf.a prepare
-	$(call executable, $(empty), $(empty), $(empty), $(empty), $(TEST_FLAGS))
+$(TARGET_BIN)/test/types: CFLAGS = $(TEST_CFLAGS)
+$(TARGET_BIN)/test/types: LDFLAGS += $(TEST_LDFLAGS)
+$(TARGET_BIN)/test/types: $(TEST_TYPES:%=$(TARGET_OBJ)/test/types/%.o) $(TARGET_OBJ)/test/test.o $(TARGET_LIB)/libcitrusleaf.a | prepare
+	$(executable) 
 
-$(TARGET_BIN)/test/udf: $(TEST_UDF:%=$(TARGET_OBJ)/test/udf/%.o) $(TARGET_OBJ)/test/test.o | libcitrusleaf.a prepare
-	$(call executable, $(empty), $(empty), $(empty), $(empty), $(TEST_FLAGS))
+$(TARGET_BIN)/test/client: CFLAGS += $(TEST_CFLAGS)
+$(TARGET_BIN)/test/client: LDFLAGS += $(TEST_LDFLAGS)
+$(TARGET_BIN)/test/client: $(TEST_CLIENT:%=$(TARGET_OBJ)/test/client/%.o) $(TARGET_OBJ)/test/test.o $(TARGET_LIB)/libcitrusleaf.a | prepare
+	$(executable)
+
+$(TARGET_BIN)/test/udf: CFLAGS = $(TEST_CFLAGS)
+$(TARGET_BIN)/test/udf: LDFLAGS = $(TEST_LDFLAGS)
+$(TARGET_BIN)/test/udf: $(TEST_UDF:%=$(TARGET_OBJ)/test/udf/%.o) $(TARGET_OBJ)/test/test.o $(TARGET_LIB)/libcitrusleaf.a | prepare
+	$(executable)

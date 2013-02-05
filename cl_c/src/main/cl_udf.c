@@ -379,7 +379,7 @@ cl_rv citrusleaf_udf_put(cl_cluster *asc, const char * filename, const char * co
     }
 
     int     content_len = strlen(content);
-    int     query_len   = strlen("udf-put:filename=;content=;") + strlen(filename) + cf_base64_encode_maxlen(content_len);
+    int     query_len   = strlen("udf-put:filename=;content=;") + strlen(filename) + cf_base64_encode_maxlen(content_len) + 1;
     char *  query       = malloc(query_len); 
     char *  result      = NULL;
     char *  filepath    = strdup(filename);

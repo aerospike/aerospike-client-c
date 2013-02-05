@@ -1569,6 +1569,7 @@ int register_package()
 	} 
 	int max_script_len = 1048576; 
 	char *script_code = malloc(max_script_len); 
+	memset(script_code, 0, max_script_len);
 	if (script_code == NULL) { 
 		LOG("malloc failed"); return(-1); 
 	}     

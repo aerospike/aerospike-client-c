@@ -49,9 +49,13 @@ enum cl_type_e {
     CL_PHP_BLOB     = 11,
     CL_ERLANG_BLOB  = 12,
     CL_APPEND       = 13,
-    CL_LUA_BLOB     = 14,
-    CL_MAP          = 15,
-    CL_LIST         = 16,
+    CL_RTA_LIST     = 14,
+    CL_RTA_DICT     = 15,
+    CL_RTA_APPEND_DICT = 16,
+    CL_RTA_APPEND_LIST = 17,
+    CL_LUA_BLOB     = 18,
+    CL_MAP          = 19,
+    CL_LIST         = 20,
     CL_UNKNOWN      = 666666
 };
 

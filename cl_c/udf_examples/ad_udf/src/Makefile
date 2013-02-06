@@ -1,50 +1,46 @@
-# Citrusleaf Foundation
-# Makefile for an example program
+# Citrusleaf Tools
+# Makefile
 
-# interesting directories
-DIR_INCLUDE = ../../../target/Linux-x86_64/include
-DIR_LIB = ../../../target/Linux-x86_64/lib
+DEPTH = ../../../../../..
+include $(DEPTH)/make_in/Makefile.in
+
 DIR_OBJECT = ../obj
-DIR_TARGET = ..
+DIR_TARGET = ../bin
+DIR_LIB = ../../../target/Linux-x86_64/lib
 
-# common variables. Note that march=native first supported in GCC 4.2; 
-# users of older version should pick a more appropriate value
-CC = gcc
-ARCH_NATIVE = $(shell uname -m)
-CFLAGS_NATIVE = -std=gnu99 -g -O3 -fno-common -fno-strict-aliasing -rdynamic -fPIC -Wall -DMARCH_$(ARCH) -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_GNU_SOURCE -I../include
-LDFLAGS = 
-
-LD = gcc
-LDFLAGS = $(CFLAGS_NATIVE) -L$(DIR_LIB) 
-LIBRARIES = $(DIR_LIB)/libcitrusleaf.a -lssl -lpthread -lrt -lcrypto -lz
-
-HEADERS = ad_udf.h 
-SOURCES = ad_udf.c utils.c
+HEADERS = ad_udf.h utils.h 
+SOURCES =  ad_udf.c utils.c 
 TARGET = ad_udf
+
+INCLUDES = -I../include/ -I../../../target/Linux-x86_64/include
+LIBRARIES = $(DIR_LIB)/libcitrusleaf.a  -lssl -lpthread -lrt  -lcrypto
+ifeq (${MR_LANG},LUA)
+LIBRARIES += -llua
+endif
+LIBRARIES += -lm
+
+LDFLAGS += -L$(DEPTH)/lib/ -L$(DEPTH)/shared/lib/ 
 
 OBJECTS = $(SOURCES:%.c=$(DIR_OBJECT)/%.o)
 DEPENDENCIES = $(OBJECTS:%.o=%.d)
 
 .PHONY: all
-all: $(TARGET)
+all: ad_udf 
 
 .PHONY: clean
 clean:
-	/bin/rm -f $(DIR_TARGET)/$(TARGET) $(DIR_OBJECT)/*.d $(DIR_OBJECT)/*.o
+	/bin/rm -f $(OBJECTS) $(DIR_TARGET)/$(TARGET) 
 
 .PHONY: depclean
 depclean: clean
-	/bin/rm -f $(DEPENDENCIES)
+	/bin/rm -f $(DEPENDENCIES) 
 
 .PHONY: $(TARGET)
 $(TARGET): $(OBJECTS)
-	$(LD) $(LDFLAGS) -o $(DIR_TARGET)/$(TARGET) $(OBJECTS) $(LIBRARIES)
-	chmod +x $(DIR_TARGET)/$(TARGET)
+	$(CC) $(LDFLAGS) -o $(DIR_TARGET)/$(TARGET) $(OBJECTS) $(LIBRARIES)
 
--include $(DEPENDENCIES)
+-include $(DEPENDENCIES) 
 
-$(DIR_OBJECT)/%.o: %.c | prepare
-	$(CC) $(CFLAGS_NATIVE) -MMD -o $@ -c -I$(DIR_INCLUDE) $<
+$(DIR_OBJECT)/%.o: %.c
+	$(CC) $(CFLAGS_NATIVE) -MMD -o $@ -c $(INCLUDES) $<
 
-prepare: 
-	mkdir -p $(DIR_OBJECT)

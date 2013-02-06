@@ -63,17 +63,6 @@ prepare:
 
 install:
 	cp -p $(TARGET_LIB)/* /usr/lib/.
-	if [ ! -e /opt/citrusleaf/bin/commands ]; then mkdir -p /opt/citrusleaf/bin/commands; fi
-	cp -p $(SOURCE_TEST)/ascli.py /opt/citrusleaf/bin/ascli
-	cp -p $(TARGET_BIN)/test/exists /opt/citrusleaf/bin/commands/.
-	cp -p $(TARGET_BIN)/test/get /opt/citrusleaf/bin/commands/.
-	cp -p $(TARGET_BIN)/test/put /opt/citrusleaf/bin/commands/.
-	cp -p $(TARGET_BIN)/test/remove /opt/citrusleaf/bin/commands/.
-	cp -p $(TARGET_BIN)/test/udf-get /opt/citrusleaf/bin/commands/.
-	cp -p $(TARGET_BIN)/test/udf-list /opt/citrusleaf/bin/commands/.
-	cp -p $(TARGET_BIN)/test/udf-put /opt/citrusleaf/bin/commands/.
-	cp -p $(TARGET_BIN)/test/udf-record-apply /opt/citrusleaf/bin/commands/.
-	cp -p $(TARGET_BIN)/test/udf-remove /opt/citrusleaf/bin/commands/.
 ifeq ($(wildcard /usr/bin/ascli),)
 	ln -s /opt/citrusleaf/bin/ascli /usr/bin/ascli
 endif
@@ -118,19 +107,45 @@ common:
 ##
 ## TEST
 ##
+TEST_FLAGS += -L$(TARGET_LIB) -Wl,-l,:libcitrusleaf.a -L$(JANSSON_PATH)/src/.libs -Wl,-l,:libjansson.a -lcrypto -lssl -L$(MSGPACK_PATH)/src/.libs -Wl,-l,:libmsgpack.a -lpthread -lrt 
+ 
+TEST_TYPES = types
+TEST_TYPES += types_integer
+TEST_TYPES += types_string
+TEST_TYPES += types_arraylist
+TEST_TYPES += types_linkedlist
+TEST_TYPES += types_hashmap
+ 
+TEST_CLIENT = client
+TEST_CLIENT += client_string
+ 
+TEST_UDF = udf
+TEST_UDF += udf_basics
+TEST_UDF += udf_lists
+ 
+$(TARGET_OBJ)/test/%/%.o: $(SOURCE_TEST)/%/%.c
+	$(call object, $(empty), $(empty), $(empty), $(empty), $(TEST_FLAGS))
+ 
+$(TARGET_OBJ)/test/%.o: $(SOURCE_TEST)/%.c
+	$(call object, $(empty), $(empty), $(empty), $(empty), $(TEST_FLAGS))
+ 
+test/types: $(TEST_TYPES:%=$(TARGET_OBJ)/test/types/%.o) $(TARGET_OBJ)/test/test.o
+	$(call executable, $(empty), $(empty), $(empty), $(empty), $(TEST_FLAGS))
+ 
+test/client: $(TEST_CLIENT:%=$(TARGET_OBJ)/test/client/%.o) $(TARGET_OBJ)/test/test.o
+	$(call executable, $(empty), $(empty), $(empty), $(empty), $(TEST_FLAGS))
 
-test_flags = $(TARGET_LIB)/libcitrusleaf.a -L$(JANSSON_PATH)/src/.libs -Wl,-l,:libjansson.a -lcrypto -lssl -L$(MSGPACK_PATH)/src/.libs -Wl,-l,:libmsgpack.a -lpthread -lrt 
+test/udf: $(TEST_UDF:%=$(TARGET_OBJ)/test/udf/%.o) $(TARGET_OBJ)/test/test.o
+	$(call executable, $(empty), $(empty), $(empty), $(empty), $(TEST_FLAGS))
 
-test/%:  $(SOURCE_TEST)/%.c | $(TARGET_BIN) jansson
-	$(call executable, $(TARGET_INCL) $(JANSSON_PATH)/src, $(empty), $(empty) , $(empty), $(test_flags) )
+test: CFLAGS += -I$(TARGET_INCL) -I$(JANSSON_PATH)/src
+test: test/types test/client test/udf
 
-test/get:  $(SOURCE_TEST)/get.c $(SOURCE_TEST)/as_json.c | $(TARGET_BIN)  jansson
-	$(call executable, $(TARGET_INCL) $(JANSSON_PATH)/src, $(empty), $(empty), $(empty), $(test_flags))
+test-clean: 
+	rm -rf $(TARGET_BIN)/test
+	rm -rf $(TARGET_OBJ)/test
 
-test/put:  $(SOURCE_TEST)/put.c $(SOURCE_TEST)/as_json.c | $(TARGET_BIN)  jansson
-	$(call executable, $(TARGET_INCL) $(JANSSON_PATH)/src, $(empty), $(empty), $(empty), $(test_flags))
-
-test/udf-record-apply:  $(SOURCE_TEST)/udf-record-apply.c $(SOURCE_TEST)/as_json.c | $(TARGET_BIN)  jansson
-	$(call executable, $(TARGET_INCL) $(JANSSON_PATH)/src, $(empty), $(empty), $(empty), $(test_flags))
-
-test: test/quick test/get test/put test/remove test/exists test/udf test/udf-list test/udf-get test/udf-put test/udf-remove test/udf-record-apply
+test-run: test
+	@$(TARGET_BIN)/test/types
+	@$(TARGET_BIN)/test/client
+	@$(TARGET_BIN)/test/udf

@@ -1,10 +1,12 @@
-include project/build.makefile
+###############################################################################
+include project/settings.makefile
+###############################################################################
 
 ###############################################################################
 ##  FLAGS                                                                    ##
 ###############################################################################
 
-# CFLAGS = -O3
+CFLAGS = -O3
 
 CC_FLAGS = -std=gnu99 -g -rdynamic -Wall 
 CC_FLAGS += -fno-common -fno-strict-aliasing -fPIC 
@@ -57,22 +59,22 @@ OBJECTS += $(MSGPACK_PATH)/src/.libs/*.o
 
 all: modules build prepare test
 
-.PHONY: modules
-modules: modules/common modules/mod-lua modules/msgpack
-
-.PHONY: build build-clean
-build: libcitrusleaf.a libcitrusleaf.so
-build-clean:
-	@rm -rf $(TARGET_BIN)
-	@rm -rf $(TARGET_LIB)
-
 .PHONY: prepare
 prepare: $(TARGET_INCL)
 
 .PHONY: install
 install: $(INSTALL_LIB)/libcitrusleaf.so $(INSTALL_LIB)/libcitrusleaf.a
 
-.PHONY: libcitrusleaf.a libcitrusleaf.so
+.PHONY: build
+build: libcitrusleaf.a libcitrusleaf.so
+
+.PHONY: build-clean
+build-clean:
+	@rm -rf $(TARGET_BIN)
+	@rm -rf $(TARGET_LIB)
+
+.PHONY: libcitrusleaf libcitrusleaf.a libcitrusleaf.so
+libcitrusleaf: libcitrusleaf.a libcitrusleaf.so
 libcitrusleaf.a: $(TARGET_LIB)/libcitrusleaf.a
 libcitrusleaf.so: $(TARGET_LIB)/libcitrusleaf.so
 
@@ -80,40 +82,68 @@ libcitrusleaf.so: $(TARGET_LIB)/libcitrusleaf.so
 ##  BUILD TARGETS                                                            ##
 ###############################################################################
 
-$(TARGET_LIB)/libcitrusleaf.a: $(CITRUSLEAF:%=$(TARGET_OBJ)/%) | $(TARGET_LIB) modules
-	$(archive) $(OBJECTS)
+$(TARGET_LIB)/libcitrusleaf.a $(TARGET_LIB)/libcitrusleaf.so: $(CITRUSLEAF:%=$(TARGET_OBJ)/%) $(OBJECTS) | modules
 
-$(TARGET_LIB)/libcitrusleaf.so: $(CITRUSLEAF:%=$(TARGET_OBJ)/%) | $(TARGET_LIB) modules
-	$(library) $(OBJECTS)
-
-$(TARGET_INCL): modules/mod-lua/$(TARGET_INCL) modules/common/$(TARGET_INCL)
-	if [ ! -e "$(TARGET_INCL)/citrusleaf" ]; then mkdir -p $(TARGET_INCL)/citrusleaf; fi
+$(TARGET_INCL): $(SOURCE_INCL)/*.h modules/mod-lua/$(TARGET_INCL)/*.h modules/common/$(TARGET_INCL)/*.h | modules
+	@if [ ! -e "$(TARGET_INCL)/citrusleaf" ]; then mkdir -p $(TARGET_INCL)/citrusleaf; fi
 	cp -pR $(SOURCE_INCL)/*.h $(TARGET_INCL)/citrusleaf/.
 	cp -p modules/mod-lua/src/include/as_*.h $(TARGET_INCL)/citrusleaf/.
 	cp -p modules/common/$(TARGET_INCL)/*.h $(TARGET_INCL)/.
 	cp -p modules/common/$(TARGET_INCL)/citrusleaf/*.h $(TARGET_INCL)/citrusleaf/.
 
-$(INSTALL_LIB)/libcitrusleaf.so:
-	cp -p $(TARGET_LIB)/libcitrusleaf.so /usr/lib/.
-
-$(INSTALL_LIB)/libcitrusleaf.a:
+$(INSTALL_LIB)/libcitrusleaf.a: $(TARGET_LIB)/libcitrusleaf.a
 	cp -p $(TARGET_LIB)/libcitrusleaf.a /usr/lib/.
 
+$(INSTALL_LIB)/libcitrusleaf.so: $(TARGET_LIB)/libcitrusleaf.so
+	cp -p $(TARGET_LIB)/libcitrusleaf.so /usr/lib/.
+
 ###############################################################################
-##  SUB-MODULES TARGETS                                                      ##
+##  MODULE TARGETS                                                           ##
 ###############################################################################
 
-.PHONY: modules/common
-modules/common:
+.PHONY: modules
+modules: modules/common modules/mod-lua modules/msgpack
+
+.PHONY: modules-prepare
+modules-prepare: modules/common/$(TARGET_INCL)/*.h
+
+.PHONY: modules-clean
+modules-clean: 
+	$(MAKE) -e -C modules/common clean
+	$(MAKE) -e -C modules/mod-lua clean
+
+##
+## SUBMODULE: common
+## 
+
+modules/common/$(TARGET_LIB)/libcf-shared.a:
 	$(MAKE) -e -C modules/common all MEM_COUNT=1
-modules/common/$(TARGET_INCL):
+
+modules/common/$(TARGET_LIB)/libcf-client.a:
+	$(MAKE) -e -C modules/common all MEM_COUNT=1
+
+modules/common/$(TARGET_INCL)/*.h:
 	$(MAKE) -e -C modules/common prepare MEM_COUNT=1
 
-.PHONY: modules/mod-lua
-modules/mod-lua:
+.PHONY: modules/common
+modules/common: modules/common/$(TARGET_LIB)/libcf-shared.a modules/common/$(TARGET_LIB)/libcf-client.a modules/common/$(TARGET_INCL)/*.h
+
+##
+## SUBMODULE: mod-lua
+## 
+
+modules/mod-lua/$(TARGET_LIB)/libmod_lua.a:
 	$(MAKE) -e -C modules/mod-lua all MEM_COUNT=1
-modules/mod-lua/$(TARGET_INCL):
+
+modules/mod-lua/$(TARGET_INCL)/*.h:
 	$(MAKE) -e -C modules/mod-lua prepare MEM_COUNT=1
+
+.PHONY: modules/mod-lua
+modules/mod-lua: modules/mod-lua/$(TARGET_LIB)/libmod_lua.a modules/mod-lua/$(TARGET_INCL)/*.h
+
+##
+## SUBMODULE: msgpack
+## 
 
 modules/msgpack/Makefile: 
 	cd $(MSGPACK_PATH) && ./configure
@@ -149,19 +179,24 @@ TEST_UDF = udf
 TEST_UDF += udf_basics
 TEST_UDF += udf_lists
 
-.PHONY: test test-clean test/types test/client test/udf
-
+.PHONY: test
 test: test/types test/client test/udf 
 	@$(TARGET_BIN)/test/types
 	@$(TARGET_BIN)/test/client
 	@$(TARGET_BIN)/test/udf
 
+.PHONY: test-clean
 test-clean: 
 	@rm -rf $(TARGET_BIN)/test
 	@rm -rf $(TARGET_OBJ)/test
 
+.PHONY: test/types
 test/types: $(TARGET_BIN)/test/types
+
+.PHONY: test/client
 test/client: $(TARGET_BIN)/test/client
+
+.PHONY: test/udf
 test/udf: $(TARGET_BIN)/test/udf
 
 
@@ -178,14 +213,15 @@ $(TARGET_OBJ)/test/%.o: $(SOURCE_TEST)/%.c
 $(TARGET_BIN)/test/types: CFLAGS = $(TEST_CFLAGS)
 $(TARGET_BIN)/test/types: LDFLAGS += $(TEST_LDFLAGS)
 $(TARGET_BIN)/test/types: $(TEST_TYPES:%=$(TARGET_OBJ)/test/types/%.o) $(TARGET_OBJ)/test/test.o $(TARGET_LIB)/libcitrusleaf.a | prepare
-	$(executable) 
 
 $(TARGET_BIN)/test/client: CFLAGS += $(TEST_CFLAGS)
 $(TARGET_BIN)/test/client: LDFLAGS += $(TEST_LDFLAGS)
 $(TARGET_BIN)/test/client: $(TEST_CLIENT:%=$(TARGET_OBJ)/test/client/%.o) $(TARGET_OBJ)/test/test.o $(TARGET_LIB)/libcitrusleaf.a | prepare
-	$(executable)
 
-$(TARGET_BIN)/test/udf: CFLAGS = $(TEST_CFLAGS)
-$(TARGET_BIN)/test/udf: LDFLAGS = $(TEST_LDFLAGS)
+$(TARGET_BIN)/test/udf: CFLAGS += $(TEST_CFLAGS)
+$(TARGET_BIN)/test/udf: LDFLAGS += $(TEST_LDFLAGS)
 $(TARGET_BIN)/test/udf: $(TEST_UDF:%=$(TARGET_OBJ)/test/udf/%.o) $(TARGET_OBJ)/test/test.o $(TARGET_LIB)/libcitrusleaf.a | prepare
-	$(executable)
+
+###############################################################################
+include project/rules.makefile
+###############################################################################

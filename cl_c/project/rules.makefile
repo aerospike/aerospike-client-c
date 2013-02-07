@@ -37,15 +37,15 @@ info:
 	@echo
 	@echo "  COMPILER:"
 	@echo "      command:    " $(CC)
-	@echo "      flags:      " $(CC_FLAGS)
+	@echo "      flags:      " $(CC_FLAGS) $(CFLAGS)
 	@echo
 	@echo "  LINKER:"
 	@echo "      command:    " $(LD)
-	@echo "      flags:      " $(LD_FLAGS)
+	@echo "      flags:      " $(LD_FLAGS) $(LDFLAGS)
 	@echo
 	@echo "  ARCHIVER:"
 	@echo "      command:    " $(AR)
-	@echo "      flags:      " $(AR_FLAGS)
+	@echo "      flags:      " $(AR_FLAGS) $(ARFLAGS)
 	@echo
 
 .PHONY: clean

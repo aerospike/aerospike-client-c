@@ -21,7 +21,8 @@ typedef struct citrusleaf_udf_filelist_s citrusleaf_udf_filelist;
 struct citrusleaf_udf_info_s {
     char *      error;
     char *      filename;
-    char *      content;
+    byte *      content;
+    uint32_t content_len;
     char *      gen;
     char *      files;
     int         count;
@@ -78,7 +79,9 @@ static void * citrusleaf_udf_info_parameters(const char * key, const char * valu
         info->gen = strdup(value);
     }
     else if ( strcmp(key,"content") == 0 ) {
-        info->content = strdup(value);
+	info->content = (byte*)calloc(1, sizeof(byte)*(strlen(value)));
+        memcpy(info->content, value, strlen(value));
+	info->content_len = strlen(value);
     }
     else if ( strcmp(key,"files") == 0 ) {
         info->files = strdup(value);
@@ -295,13 +298,13 @@ cl_rv citrusleaf_udf_list(cl_cluster *asc, char *** files, int * count, char ** 
     
 }
 
-cl_rv citrusleaf_udf_get(cl_cluster *asc, const char * filename, char ** content, int * content_len, char ** error) {
-    return citrusleaf_udf_get_with_gen(asc, filename, content, content_len, NULL, error);
+cl_rv citrusleaf_udf_get(cl_cluster *asc, const char * filename, as_udf_file * file, as_udf_type udf_type, char ** error) {
+    return citrusleaf_udf_get_with_gen(asc, filename, file, 0, NULL, error);
 }
 
-cl_rv citrusleaf_udf_get_with_gen(cl_cluster *asc, const char * filename, char ** content, int * content_len, char **gen, char ** error) {
+cl_rv citrusleaf_udf_get_with_gen(cl_cluster *asc, const char * filename, as_udf_file * file, as_udf_type udf_type, char **gen, char ** error) {
 
-    if ( !content ) return -1;
+    if ( !(file->content) ) return -1;
 
     char    query[512]  = {0};
     char *  result      = NULL;
@@ -353,12 +356,13 @@ cl_rv citrusleaf_udf_get_with_gen(cl_cluster *asc, const char * filename, char *
         return 2;
     }
 
-    int clen = info.content ? strlen(info.content) : 0;
-    cf_base64_decode_inplace((uint8_t *) info.content, &clen, true);
-    
-    *content = info.content;
-    *content_len = clen;
-
+    int clen = info.content ? info.content_len : 0;
+    cf_base64_decode_inplace(info.content, &clen, true);
+    strcpy(file->name, filename);
+    file->content->data = calloc(1, sizeof(byte)*(info.content_len)); 
+    memcpy((*(file->content)).data, info.content, info.content_len);
+    (*(file->content)).size = clen;
+    free(info.content);
     info.content = NULL;
     
     if ( gen ) {

@@ -362,6 +362,7 @@ cl_rv citrusleaf_udf_get_with_gen(cl_cluster *asc, const char * filename, as_udf
     file->content->data = calloc(1, sizeof(byte)*(info.content_len)); 
     memcpy((*(file->content)).data, info.content, info.content_len);
     (*(file->content)).size = clen;
+    SHA1(info.content, info.content_len, file->hash);
     free(info.content);
     info.content = NULL;
     

@@ -28,7 +28,7 @@
 #include "cluster.h"
 #include "as_result.h"
 #include "cl_arglist.h"
-
+#include <openssl/sha.h>
 #define AS_UDF_LUA 0
 
 /******************************************************************************

@@ -57,7 +57,7 @@ OBJECTS += $(MSGPACK_PATH)/src/.libs/*.o
 ##  MAIN TARGETS                                                             ##
 ###############################################################################
 
-all: modules build prepare
+all: modules build prepare test-build
 
 .PHONY: prepare
 prepare: $(TARGET_INCL)
@@ -160,10 +160,11 @@ modules/msgpack: modules/msgpack/src/.libs/libmsgpackc.a
 
 TEST_CFLAGS = -I$(TARGET_INCL) -I$(JANSSON_PATH)/src
 
-TEST_LDFLAGS = -L$(TARGET_LIB) -Wl,-l,:libcitrusleaf.a
+TEST_LDFLAGS = -lssl -lcrypto -lpthread -lrt -llua  -lm
+TEST_LDFLAGS += -L$(TARGET_LIB) -Wl,-l,:libcitrusleaf.a
 TEST_LDFLAGS += -L$(JANSSON_PATH)/src/.libs -Wl,-l,:libjansson.a 
 TEST_LDFLAGS += -L$(MSGPACK_PATH)/src/.libs -Wl,-l,:libmsgpack.a 
-TEST_LDFLAGS += -lssl -lcrypto -lpthread -lrt -llua  -lm
+
 
 TEST_TYPES = types
 TEST_TYPES += types_integer
@@ -180,10 +181,13 @@ TEST_UDF += udf_basics
 TEST_UDF += udf_lists
 
 .PHONY: test
-test: test/types test/client test/udf 
+test: test-build
 	@$(TARGET_BIN)/test/types
 	@$(TARGET_BIN)/test/client
 	@$(TARGET_BIN)/test/udf
+
+.PHONY: test-build
+test-build: test/types test/client test/udf 
 
 .PHONY: test-clean
 test-clean: 

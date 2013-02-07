@@ -70,7 +70,7 @@ const char* LOG_PREFIXES[] = {
 	"CL-CLIENT DEBUG: ",
 };
 
-const int CLUSTER_VERIFY_TRIES = 3;
+const int CLUSTER_VERIFY_TRIES = 5;
 const __useconds_t CLUSTER_VERIFY_INTERVAL = 1000 * 1000; // 1 second
 
 const char KEY_STRING[] = "test-key";
@@ -422,17 +422,19 @@ start_cluster_management()
 
 	// Verify database server cluster is ready.
 	int tries = 0;
+	int n_prev = 0;
 
 	while (tries < CLUSTER_VERIFY_TRIES) {
 		int n = ev2citrusleaf_cluster_get_active_node_count(g_p_cluster);
 
-		if (n > 0) {
+		if (n > 0 && n == n_prev) {
 			LOG("found %d cluster node%s", n, n > 1 ? "s" : "");
 			return true;
 		}
 
 		usleep(CLUSTER_VERIFY_INTERVAL);
 		tries++;
+		n_prev = n;
 	}
 
 	LOG("ERROR: connecting to cluster");

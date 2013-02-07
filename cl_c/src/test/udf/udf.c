@@ -8,7 +8,7 @@
  *****************************************************************************/
 
 #define HOST "127.0.0.1"
-#define PORT 3010
+#define PORT 3000
 #define TIMEOUT 1000
 
 #define SCRIPT_LEN_MAX 1048576

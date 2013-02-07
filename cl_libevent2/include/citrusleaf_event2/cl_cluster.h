@@ -20,13 +20,23 @@
 #pragma once
 
 #include <pthread.h>
+#include <stdbool.h>
+#include <stdint.h>
 
 #include "citrusleaf/cf_atomic.h"
-#include "ev2citrusleaf-internal.h"
+#include "citrusleaf/cf_digest.h"
+#include "citrusleaf/cf_ll.h"
+#include "citrusleaf/cf_queue.h"
+#include "citrusleaf/cf_vector.h"
+
+#include "ev2citrusleaf.h"
+
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+struct sockaddr_in;
 
 #define CLUSTER_NODE_MAGIC 0x9B00134C
 

@@ -9,20 +9,27 @@
  * All rights reserved
  */
 
-#include <sys/types.h>
-#include <sys/socket.h> // socket calls
-#include <stdio.h>
-#include <errno.h> //errno
-#include <stdlib.h> //fprintf
-#include <unistd.h> // close
+#include <errno.h>
+#include <inttypes.h>
+#include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
-#include <fcntl.h>
+#include <unistd.h>
+#include <event2/dns.h>
+#include <event2/event.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
 
+#include "citrusleaf/cf_atomic.h"
+#include "citrusleaf/cf_clock.h"
+#include "citrusleaf/cf_log_internal.h"
+#include "citrusleaf/cf_vector.h"
+#include "citrusleaf/proto.h"
+
+#include "citrusleaf_event2/cl_cluster.h"
 #include "citrusleaf_event2/ev2citrusleaf.h"
 #include "citrusleaf_event2/ev2citrusleaf-internal.h"
-#include "citrusleaf_event2/cl_cluster.h"
-#include "citrusleaf/proto.h"
-#include "citrusleaf/cf_clock.h"
+
 
 //
 // Globals to track transaction counts to clean up properly
@@ -39,7 +46,7 @@ extern  void sockaddr_in_dump(char *prefix, struct sockaddr_in *sa_in);
 cl_info_request *
 info_request_create()
 {
-	cl_info_request *cir = malloc( sizeof(cl_info_request) + ( event_get_struct_event_size() ) );
+	cl_info_request *cir = (cl_info_request*)malloc( sizeof(cl_info_request) + ( event_get_struct_event_size() ) );
 	if (cir) memset(cir, 0, sizeof(*cir));
 	return(cir);
 }
@@ -95,7 +102,7 @@ info_make_request(cl_info_request *cir, char *names)
 
 	// set up the buffer pointer
 	if (cir->wr_buf_size > sizeof(cir->wr_tmp)) {
-		cir->wr_buf = malloc( cir->wr_buf_size );
+		cir->wr_buf = (uint8_t*)malloc( cir->wr_buf_size );
 		if (!cir->wr_buf)	return(-1);
 	} else {
 		cir->wr_buf = cir->wr_tmp;
@@ -178,7 +185,7 @@ info_event_fn(int fd, short event, void *udata)
 				cl_proto_swap(proto);
 				
 				// set up the read buffer
-				cir->rd_buf = malloc(proto->sz + 1);
+				cir->rd_buf = (uint8_t*)malloc(proto->sz + 1);
 				if (!cir->rd_buf) {
 					cf_warn("cl info malloc fail");
 					goto Fail;
@@ -393,7 +400,7 @@ ev2citrusleaf_info(struct event_base *base, struct evdns_base *dns_base,
 		}
 	}
 	else {
-		irs = malloc( sizeof(info_resolve_state) );
+		irs = (info_resolve_state*)malloc( sizeof(info_resolve_state) );
 		if (!irs)	goto Done;
 		irs->cb = cb;
 		irs->udata = udata;
@@ -428,7 +435,8 @@ Done:
 
 // AKG - no base available for this... no-op for now.
 void
-ev2citrusleaf_info_shutdown(struct event_base *base)
+//ev2citrusleaf_info_shutdown(struct event_base *base)
+ev2citrusleaf_info_shutdown()
 {
 //	while ( ( cf_atomic_int_get(g_cl_info_transactions) > 0 ) &&
 //		    (event_base_loop(base, EVLOOP_ONCE) == 0) )

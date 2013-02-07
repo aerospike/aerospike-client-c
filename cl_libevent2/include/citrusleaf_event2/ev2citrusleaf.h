@@ -17,8 +17,9 @@
 #ifndef __EV2CITRUSLEAF_H__
 #define __EV2CITRUSLEAF_H__
 
-#include <inttypes.h>
 #include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 #include <event2/event.h>
 #include <event2/dns.h>
 

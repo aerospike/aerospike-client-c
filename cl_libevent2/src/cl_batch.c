@@ -239,7 +239,8 @@ get_many(ev2citrusleaf_cluster* cl, const char* ns, const cf_digest* digests,
 
 	// Allocate an array of node pointers, one per digest. There may be a very
 	// large number of digests, so don't use the stack.
-	cl_cluster_node** nodes = malloc(n_digests * sizeof(cl_cluster_node*));
+	cl_cluster_node** nodes = (cl_cluster_node**)
+			malloc(n_digests * sizeof(cl_cluster_node*));
 
 	if (! nodes) {
 		cf_error("node pointer array allocation failed");
@@ -313,7 +314,7 @@ cl_batch_job_create(struct event_base* base, ev2citrusleaf_get_many_cb user_cb,
 		void* user_data, int n_digests, int timeout_ms)
 {
 	size_t size = sizeof(cl_batch_job) + event_get_struct_event_size();
-	cl_batch_job* this = malloc(size);
+	cl_batch_job* this = (cl_batch_job*)malloc(size);
 
 	if (! this) {
 		cf_error("batch request allocation failed");
@@ -349,7 +350,7 @@ cl_batch_job_create(struct event_base* base, ev2citrusleaf_get_many_cb user_cb,
 
 	size_t recs_size = n_digests * sizeof(ev2citrusleaf_rec);
 
-	this->recs = malloc(recs_size);
+	this->recs = (ev2citrusleaf_rec*)malloc(recs_size);
 
 	if (! this->recs) {
 		cf_error("batch request recs allocation failed");
@@ -592,7 +593,7 @@ static cl_batch_node_req*
 cl_batch_node_req_create(cl_batch_job* p_job, cl_cluster_node* p_node)
 {
 	size_t size = sizeof(cl_batch_node_req) + event_get_struct_event_size();
-	cl_batch_node_req* this = malloc(size);
+	cl_batch_node_req* this = (cl_batch_node_req*)malloc(size);
 
 	if (! this) {
 		cf_error("batch node request allocation failed");
@@ -689,7 +690,7 @@ cl_batch_node_req_compile(cl_batch_node_req* this, const char* ns,
 	}
 
 	// Allocate the buffer.
-	this->wbuf = malloc(msg_size);
+	this->wbuf = (uint8_t*)malloc(msg_size);
 
 	if (! this->wbuf) {
 		cf_error("batch node request wbuf allocation failed");
@@ -946,7 +947,7 @@ cl_batch_node_req_handle_recv(cl_batch_node_req* this)
 				cl_proto_swap(proto);
 
 				this->rbuf_size = proto->sz;
-				this->rbuf = malloc(this->rbuf_size);
+				this->rbuf = (uint8_t*)malloc(this->rbuf_size);
 
 				if (! this->rbuf) {
 					cf_error("batch node request rbuf allocation failed");
@@ -1117,7 +1118,8 @@ cl_batch_node_req_parse_proto_body(cl_batch_node_req* this, bool* p_is_last)
 		p_rec->n_bins = (int)msg->n_ops;
 
 		if (msg->n_ops > 0) {
-			p_rec->bins = malloc(msg->n_ops * sizeof(ev2citrusleaf_bin));
+			p_rec->bins = (ev2citrusleaf_bin*)
+					malloc(msg->n_ops * sizeof(ev2citrusleaf_bin));
 
 			if (! p_rec->bins) {
 				cf_error("batch response bins allocation failed");

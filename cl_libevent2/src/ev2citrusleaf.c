@@ -9,26 +9,35 @@
  * All rights reserved
  */
 
-#include <sys/types.h>
-#include <sys/socket.h> // socket calls
-#include <stdio.h>
-#include <errno.h> //errno
-#include <stdlib.h> //fprintf
-#include <unistd.h> // close
+#include <errno.h>
+#include <inttypes.h>
+#include <pthread.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <arpa/inet.h>  // ntonl
+#include <unistd.h>
+#include <asm/byteorder.h>
+#include <bits/time.h>
+#include <event2/dns.h>
+#include <event2/event.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
 
-#include <asm/byteorder.h> // 64-bit swap macro
-
-#include "citrusleaf/cf_clock.h"
 #include "citrusleaf/cf_atomic.h"
-#include "citrusleaf/cf_hist.h"
+#include "citrusleaf/cf_clock.h"
+#include "citrusleaf/cf_digest.h"
+#include "citrusleaf/cf_hooks.h"
 #include "citrusleaf/cf_ll.h"
-#include "citrusleaf_event2/ev2citrusleaf-internal.h"
-#include "citrusleaf_event2/cl_cluster.h"
+#include "citrusleaf/cf_log_internal.h"
+#include "citrusleaf/cf_queue.h"
+#include "citrusleaf/cf_vector.h"
 #include "citrusleaf/proto.h"
+
+#include "citrusleaf_event2/cl_cluster.h"
+#include "citrusleaf_event2/ev2citrusleaf.h"
+#include "citrusleaf_event2/ev2citrusleaf-internal.h"
 
 
 // #define CLDEBUG_HISTOGRAM 1
@@ -44,7 +53,7 @@
 //
 
 static void* mutex_alloc() {
-	pthread_mutex_t* p_lock = malloc(sizeof(pthread_mutex_t));
+	pthread_mutex_t* p_lock = (pthread_mutex_t*)malloc(sizeof(pthread_mutex_t));
 
 	return p_lock && pthread_mutex_init(p_lock, NULL) == 0 ?
 		(void*)p_lock : NULL;
@@ -256,7 +265,7 @@ cl_write_header(uint8_t* buf, size_t msg_size, int info1, int info2,
 cl_request *
 cl_request_create()
 {
-	cl_request *r = malloc( sizeof(cl_request) + ( event_get_struct_event_size() * 2) );
+	cl_request *r = (cl_request*)malloc( sizeof(cl_request) + ( event_get_struct_event_size() * 2) );
 	return(r);
 }
 
@@ -648,7 +657,7 @@ compile(int info1, int info2, char *ns, char *set, ev2citrusleaf_object *key, cf
 	uint8_t	*buf;
 	uint8_t *mbuf = 0;
 	if ((*buf_r) && (msg_size > *buf_size_r)) {
-		mbuf = buf = malloc(msg_size);
+		mbuf = buf = (uint8_t*)malloc(msg_size);
 		if (!buf) 			return(-1);
 		*buf_r = buf;
 	}
@@ -742,7 +751,7 @@ compile_ops(char *ns, char *set, ev2citrusleaf_object *key, cf_digest *digest,
 	uint8_t	*buf;
 	uint8_t *mbuf = 0;
 	if ((*buf_r) && (msg_size > *buf_size_r)) {
-		mbuf = buf = malloc(msg_size);
+		mbuf = buf = (uint8_t*)malloc(msg_size);
 		if (!buf) 			return(-1);
 		*buf_r = buf;
 	}
@@ -814,7 +823,7 @@ set_object(cl_msg_op *op, ev2citrusleaf_object *obj)
 		// regrettably, we have to add the null. I hate null termination.
 		case CL_PARTICLE_TYPE_STRING:
 			obj->size = cl_msg_op_get_value_sz(op);
-			obj->free = obj->u.str = malloc(obj->size+1);
+			obj->free = obj->u.str = (char*)malloc(obj->size+1);
 			if (obj->free == 0) return(-1);
 			memcpy(obj->u.str, cl_msg_op_get_value_p(op), obj->size);
 			obj->u.str[obj->size] = 0;
@@ -1174,7 +1183,7 @@ ev2citrusleaf_event(int fd, short event, void *udata)
 				if (proto->sz <= sizeof(req->rd_tmp))
 					req->rd_buf = req->rd_tmp;
 				else {
-					req->rd_buf = malloc(proto->sz);
+					req->rd_buf = (uint8_t*)malloc(proto->sz);
 					if (!req->rd_buf) {
 						cf_error("malloc fail");
 						goto Fail;
@@ -1345,7 +1354,7 @@ ev2citrusleaf_restart(cl_request *req)
 	// Get an FD from a cluster
 	cl_cluster_node *node;
 	int fd;
-	int try = 0;
+	int tries = 0;
 	
 	do {
 		node = cl_cluster_node_get(req->asc, req->ns, &req->d, req->write );
@@ -1373,9 +1382,9 @@ ev2citrusleaf_restart(cl_request *req)
 			cl_cluster_node_put(node);
 		}
 		
-		if (try++ > CL_LOG_RESTARTLOOP_WARN) cf_warn("restart loop: iteration %d", try);
+		if (tries++ > CL_LOG_RESTARTLOOP_WARN) cf_warn("restart loop: iteration %d", tries);
 
-	} while (try++ < 5);
+	} while (tries++ < 5);
 		
 	// Not sure why so delayed. We're going to put this on the cluster queue.
 	cf_queue_push(req->asc->request_q, &req);

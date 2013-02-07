@@ -6,16 +6,13 @@
  *  THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE.  THE COPYRIGHT NOTICE
  *  ABOVE DOES NOT EVIDENCE ANY ACTUAL OR INTENDED PUBLICATION.
  */
-#include <errno.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <arpa/inet.h> // ntohl
+
+#include <stdint.h>
+#include <asm/byteorder.h>
+#include <netinet/in.h>
 
 #include "citrusleaf/proto.h"
 
-#include <asm/byteorder.h> // get swab
 
 void
 cl_proto_swap(cl_proto *p)

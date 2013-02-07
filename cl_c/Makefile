@@ -57,7 +57,7 @@ OBJECTS += $(MSGPACK_PATH)/src/.libs/*.o
 ##  MAIN TARGETS                                                             ##
 ###############################################################################
 
-all: modules build prepare test-build
+all: modules build prepare
 
 .PHONY: prepare
 prepare: $(TARGET_INCL)

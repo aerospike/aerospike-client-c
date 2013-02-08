@@ -1568,13 +1568,13 @@ int register_package()
 		return(-1); 
 	} 
 	int max_script_len = 1048576; 
-	char *script_code = malloc(max_script_len); 
+	byte *script_code = (byte *)malloc(max_script_len); 
 	memset(script_code, 0, max_script_len);
 	if (script_code == NULL) { 
 		LOG("malloc failed"); return(-1); 
 	}     
 
-	char *script_ptr = script_code; 
+	byte *script_ptr = script_code; 
 	int b_read = fread(script_ptr,1,512,fptr); 
 	int b_tot = 0; 
 	while (b_read) { 

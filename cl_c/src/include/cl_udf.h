@@ -43,7 +43,7 @@ typedef uint8_t as_udf_type;
 
 struct as_udf_file_s {
   char name[128];
-  byte hash[16];
+  char hash[SHA_DIGEST_LENGTH];
   as_udf_type type;
   as_bytes * content;
 };
@@ -64,7 +64,7 @@ cl_rv citrusleaf_udf_record_apply(cl_cluster * cluster, const char * namespace, 
  * @param count - Number of entries.
  * @param error - Contains an error message, if the return value was non-zero. The value must be freed by the user.
  */
-cl_rv citrusleaf_udf_list(cl_cluster * cluster, char *** files, int * count, char ** error);
+cl_rv citrusleaf_udf_list(cl_cluster * cluster, as_udf_file *** files, int * count, char ** error);
 
 /**
  * @param filename - The name of the file to download from the cluster.

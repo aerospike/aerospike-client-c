@@ -404,7 +404,7 @@ ev2citrusleaf_calculate_digest(const char *set, const ev2citrusleaf_object *key,
 	// make the key as it's laid out for digesting
 	// THIS IS A STRIPPED DOWN VERSION OF THE CODE IN write_fields ABOVE
 	// MUST STAY IN SYNC!!!
-	uint8_t k[key->size + 1];
+	uint8_t* k = (uint8_t*)alloca(key->size + 1);
 	switch (key->type) {
 		case CL_STR:
 			k[0] = key->type;
@@ -1013,14 +1013,14 @@ ev2citrusleaf_request_complete(cl_request *req, bool timedout)
 		// Allocate on the stack for the bins
 		int n_bins = parse_get_maxbins(req->rd_buf, req->rd_buf_size);
 		ev2citrusleaf_bin   	*bins = 0;
-		if (n_bins) bins = alloca(n_bins * sizeof(ev2citrusleaf_bin) );
+		if (n_bins) bins = (ev2citrusleaf_bin*)alloca(n_bins * sizeof(ev2citrusleaf_bin));
 	
 		// parse up into the response
 		int			return_code;
 		uint32_t	generation;
 		uint32_t	expiration;
 
-		parse(req->rd_buf, req->rd_buf_size, &bins[0], n_bins, &return_code, &generation, &expiration);
+		parse(req->rd_buf, req->rd_buf_size, bins, n_bins, &return_code, &generation, &expiration);
 
 		// For simplicity & backwards-compatibility, convert server-side
 		// timeouts to the usual timeout return-code:
@@ -1682,7 +1682,7 @@ ev2citrusleaf_get(ev2citrusleaf_cluster *cl, char *ns, char *set, ev2citrusleaf_
 
 	// kinda sucks, but it's really nice having the 'start' function
 	// taking both 'get' and 'put', which are both bins.
-	ev2citrusleaf_bin bins[n_bin_names];
+	ev2citrusleaf_bin* bins = alloca(n_bin_names);
 	for (int i=0;i<n_bin_names;i++) {
 		strcpy(bins[i].bin_name, bin_names[i]);
 		bins[i].object.type = CL_NULL;
@@ -1718,7 +1718,7 @@ ev2citrusleaf_get_digest(ev2citrusleaf_cluster *cl, char *ns, cf_digest *digest,
 
 	// kinda sucks, but it's really nice having the 'start' function
 	// taking both 'get' and 'put', which are both bins.
-	ev2citrusleaf_bin bins[n_bin_names];
+	ev2citrusleaf_bin* bins = alloca(n_bin_names);
 	for (int i=0;i<n_bin_names;i++) {
 		strcpy(bins[i].bin_name, bin_names[i]);
 		bins[i].object.type = CL_NULL;

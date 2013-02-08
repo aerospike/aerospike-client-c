@@ -5,6 +5,7 @@
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "citrusleaf/cf_atomic.h"
@@ -15,7 +16,7 @@ static void
 cf_default_log(cf_log_level level, const char* fmt_no_newline, ...)
 {
 	size_t fmt_size = strlen(fmt_no_newline) + 2;
-	char fmt[fmt_size];
+	char* fmt = alloca(fmt_size);
 
 	strncpy(fmt, fmt_no_newline, fmt_size);
 	fmt[fmt_size - 2] = '\n';

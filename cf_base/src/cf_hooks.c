@@ -6,13 +6,16 @@
  *
  * Copyright 2012, Citrusleaf inc.
  */
+
+#include <stddef.h>
+
 #include "citrusleaf/cf_hooks.h"
 
-cf_mutex_hooks *g_mutex_hooks = (void *)0;
+cf_mutex_hooks* g_mutex_hooks = NULL;
 
 /*
 void 
-cf_hook_alloc(cf_alloc_hooks *hooks)
+cf_hook_alloc(cf_alloc_hooks* hooks)
 {
 	g_alloc_hooks = hooks;
 }

@@ -8,6 +8,7 @@
  * All rights reserved
  */
 
+#include <inttypes.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -41,7 +42,7 @@ cl_lookup_immediate(char *hostname, short port, struct sockaddr_in *sin)
 
 	uint32_t addr;
 	if (1 == inet_pton(AF_INET, hostname, &addr)) {
-		memset(sin, 0, sizeof(*sin));
+		memset((void*)sin, 0, sizeof(*sin));
 //		sin->sin_addr.s_addr = htonl(addr);
 		sin->sin_addr.s_addr = addr;
 		sin->sin_family = AF_INET;
@@ -89,7 +90,7 @@ cl_lookup_result_fn(int result, char type, int count, int ttl, void *addresses, 
 		uint32_t *s_addr_a = (uint32_t *)addresses;
 		for (int i=0;i<count;i++) {
 			struct sockaddr_in sin;
-			memset(&sin, 0, sizeof(sin));
+			memset((void*)&sin, 0, sizeof(sin));
 			sin.sin_family = AF_INET;
 			sin.sin_addr.s_addr = s_addr_a[i];
 			sin.sin_port = htons(cls->port);

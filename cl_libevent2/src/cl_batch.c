@@ -321,7 +321,7 @@ cl_batch_job_create(struct event_base* base, ev2citrusleaf_get_many_cb user_cb,
 		return NULL;
 	}
 
-	memset(this, 0, size);
+	memset((void*)this, 0, size);
 
 	// Add the timeout event right away. Note that "cross-threaded" requests are
 	// not safe against this timer firing before the end of this non-blocking
@@ -600,7 +600,7 @@ cl_batch_node_req_create(cl_batch_job* p_job, cl_cluster_node* p_node)
 		return NULL;
 	}
 
-	memset(this, 0, size);
+	memset((void*)this, 0, size);
 
 	this->p_job = p_job;
 	this->p_node = p_node;

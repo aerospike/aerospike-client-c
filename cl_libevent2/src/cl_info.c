@@ -47,7 +47,7 @@ cl_info_request *
 info_request_create()
 {
 	cl_info_request *cir = (cl_info_request*)malloc( sizeof(cl_info_request) + ( event_get_struct_event_size() ) );
-	if (cir) memset(cir, 0, sizeof(*cir));
+	if (cir) memset((void*)cir, 0, sizeof(*cir));
 	return(cir);
 }
 
@@ -356,7 +356,7 @@ info_resolve_cb(int result, cf_vector *sockaddr_in_v, void *udata)
 		(irs->cb) ( -1 /*return value*/, 0, 0 ,irs->udata );
 		goto Done;
 	}		
-	for (uint i=0; i < cf_vector_size(sockaddr_in_v) ; i++) 
+	for (uint32_t i=0; i < cf_vector_size(sockaddr_in_v) ; i++)
 	{
 		struct sockaddr_in  sa_in;
 		cf_vector_get(sockaddr_in_v, i, &sa_in);

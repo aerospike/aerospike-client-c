@@ -2,11 +2,14 @@
  * Copyright 2012 Aerospike. All rights reserved.
  */
 
+#include <stdarg.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <string.h>
 
-#include "citrusleaf/cf_log.h"
 #include "citrusleaf/cf_atomic.h"
+
+#include "citrusleaf/cf_log.h"
 
 static void
 cf_default_log(cf_log_level level, const char* fmt_no_newline, ...)

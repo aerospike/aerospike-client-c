@@ -6,7 +6,10 @@
  *  THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE.  THE COPYRIGHT NOTICE
  *  ABOVE DOES NOT EVIDENCE ANY ACTUAL OR INTENDED PUBLICATION.
  */
+
 #pragma once
+#include <stddef.h>
+
 #include <stdint.h>
 #include <openssl/ripemd.h>
 

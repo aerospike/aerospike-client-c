@@ -1,9 +1,13 @@
 /*
  * Copyright 2012 Aerospike. All rights reserved.
  */
+
+#include <stdint.h>
 #include <stdio.h>
-#include "citrusleaf/cf_digest.h"
+
 #include "citrusleaf/cf_log_internal.h"
+
+#include "citrusleaf/cf_digest.h"
 
 void
 cf_digest_string(cf_digest *digest, char* output)

@@ -811,7 +811,7 @@ sig_handle_segv(int sig_num)
 	LOG("signal SEGV received");
 
 	void* bt[50];
-	uint sz = backtrace(bt, 50);
+	int sz = backtrace(bt, 50);
 
 	char** strings = backtrace_symbols(bt, sz);
 

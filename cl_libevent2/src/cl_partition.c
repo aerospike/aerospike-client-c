@@ -74,7 +74,7 @@ cl_partition_table_create(ev2citrusleaf_cluster *asc, const char *ns)
 
 	cl_partition_table *pt = (cl_partition_table*)malloc( sizeof(cl_partition_table) + (sizeof(cl_partition) * asc->n_partitions) );
 	if (!pt)	return(0);
-	memset(pt, 0, sizeof(cl_partition_table) + (sizeof(cl_partition) * asc->n_partitions) );
+	memset((void*)pt, 0, sizeof(cl_partition_table) + (sizeof(cl_partition) * asc->n_partitions) );
 	strcpy( pt->ns, ns );
 	
 	pt->next = asc->partition_table_head;
@@ -154,7 +154,7 @@ cl_partition_table_destroy_all(ev2citrusleaf_cluster *asc)
 			MUTEX_FREE(p->lock);
 		}
 		free( now );
-		now = t;
+		now = (cl_partition_table*)t;
 	}
 	return;
 }

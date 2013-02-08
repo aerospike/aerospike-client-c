@@ -1071,7 +1071,7 @@ ev2citrusleaf_request_complete(cl_request *req, bool timedout)
 	if (req->rd_buf_size && (req->rd_buf != req->rd_tmp))  free(req->rd_buf);
 	
 	// DEBUG
-	memset(req, 0, sizeof (cl_request) );
+	memset((void*)req, 0, sizeof (cl_request) );
 	
 	cl_request_destroy(req);
 }
@@ -1264,7 +1264,7 @@ Fail:
 void
 ev2citrusleaf_timer_expired(int fd, short event, void *udata)
 {
-	cl_request *req = udata;
+	cl_request *req = (cl_request*)udata;
 
 	if (req->MAGIC != CL_REQUEST_MAGIC)	{
 		cf_error("timer expired: BAD MAGIC");
@@ -1562,7 +1562,7 @@ ev2citrusleaf_get_all(ev2citrusleaf_cluster *cl, char *ns, char *set, ev2citrusl
 	// Allocate a new request object
 	cl_request *req = cl_request_create();
 	if (!req)	return(-1);
-	memset(req, 0, sizeof(cl_request));
+	memset((void*)req, 0, sizeof(cl_request));
 	req->MAGIC = CL_REQUEST_MAGIC;
 	req->base = base;
 	req->asc = cl;
@@ -1588,7 +1588,7 @@ ev2citrusleaf_get_all_digest(ev2citrusleaf_cluster *cl, char *ns, cf_digest *d,
 	// Allocate a new request object
 	cl_request *req = cl_request_create();
 	if (!req)	return(-1);
-	memset(req, 0, sizeof(cl_request));
+	memset((void*)req, 0, sizeof(cl_request));
 	req->MAGIC = CL_REQUEST_MAGIC;
 	req->base = base;
 	req->asc = cl;
@@ -1616,7 +1616,7 @@ ev2citrusleaf_put(ev2citrusleaf_cluster *cl, char *ns, char *set, ev2citrusleaf_
 	// Allocate a new request object
 	cl_request *req = cl_request_create();	
 	if (!req)	return(-1);	
-	memset(req, 0, sizeof(cl_request));
+	memset((void*)req, 0, sizeof(cl_request));
 	req->MAGIC = CL_REQUEST_MAGIC;
 	req->base = base;
 	req->asc = cl;
@@ -1642,7 +1642,7 @@ ev2citrusleaf_put_digest(ev2citrusleaf_cluster *cl, char *ns, cf_digest *digest,
 	// Allocate a new request object
 	cl_request *req = cl_request_create();
 	if (!req)	return(-1);	
-	memset(req, 0, sizeof(cl_request));
+	memset((void*)req, 0, sizeof(cl_request));
 	req->MAGIC = CL_REQUEST_MAGIC;
 	req->base = base;
 	req->asc = cl;
@@ -1671,7 +1671,7 @@ ev2citrusleaf_get(ev2citrusleaf_cluster *cl, char *ns, char *set, ev2citrusleaf_
 	// Allocate a new request object
 	cl_request *req = cl_request_create();
 	if (!req)	return(-1);
-	memset(req, 0, sizeof(cl_request));
+	memset((void*)req, 0, sizeof(cl_request));
 	req->MAGIC = CL_REQUEST_MAGIC;
 	req->base = base;
 	req->asc = cl;
@@ -1707,7 +1707,7 @@ ev2citrusleaf_get_digest(ev2citrusleaf_cluster *cl, char *ns, cf_digest *digest,
 	// Allocate a new request object
 	cl_request *req = cl_request_create();
 	if (!req)	return(-1);
-	memset(req, 0, sizeof(cl_request));
+	memset((void*)req, 0, sizeof(cl_request));
 	req->MAGIC = CL_REQUEST_MAGIC;
 	req->base = base;
 	req->asc = cl;
@@ -1744,7 +1744,7 @@ ev2citrusleaf_delete(ev2citrusleaf_cluster *cl, char *ns, char *set, ev2citrusle
 	// Allocate a new request object
 	cl_request *req = cl_request_create();
 	if (!req)	return(-1);
-	memset(req, 0, sizeof(cl_request));
+	memset((void*)req, 0, sizeof(cl_request));
 	req->MAGIC = CL_REQUEST_MAGIC;
 	req->base = base;
 	req->asc = cl;
@@ -1772,7 +1772,7 @@ ev2citrusleaf_delete_digest(ev2citrusleaf_cluster *cl, char *ns, cf_digest *dige
 	// Allocate a new request object
 	cl_request *req = cl_request_create();
 	if (!req)	return(-1);
-	memset(req, 0, sizeof(cl_request));
+	memset((void*)req, 0, sizeof(cl_request));
 	req->MAGIC = CL_REQUEST_MAGIC;
 	req->base = base;
 	req->asc = cl;
@@ -1803,7 +1803,7 @@ ev2citrusleaf_operate(ev2citrusleaf_cluster *cl, char *ns, char *set, ev2citrusl
 	// Allocate a new request object
 	cl_request *req = cl_request_create();
 	if (!req)	return(-1);
-	memset(req, 0, sizeof(cl_request));
+	memset((void*)req, 0, sizeof(cl_request));
 	req->MAGIC = CL_REQUEST_MAGIC;
 	req->base = base;
 	req->asc = cl;
@@ -1855,7 +1855,7 @@ int ev2citrusleaf_init(ev2citrusleaf_lock_callbacks *lock_cb)
 	// Tell cf_base code to use the same locking calls as we'll use here:
 	cf_hook_mutex(g_lock_cb);
 
-	memset(&g_cl_stats, 0, sizeof(g_cl_stats)); 
+	memset((void*)&g_cl_stats, 0, sizeof(g_cl_stats));
 	
 	citrusleaf_cluster_init();
 
@@ -1912,7 +1912,7 @@ void ev2citrusleaf_print_stats(void)
 		
 		MUTEX_LOCK(asc->node_v_lock);
 		for (unsigned int i=0 ; i<cf_vector_size(&asc->node_v) ; i++) {
-			cl_cluster_node *cn = cf_vector_pointer_get(&asc->node_v, i);
+			cl_cluster_node *cn = (cl_cluster_node*)cf_vector_pointer_get(&asc->node_v, i);
 			conns_in_queue += cf_queue_sz(cn->conn_q);
 			nodes_active++;
 		}

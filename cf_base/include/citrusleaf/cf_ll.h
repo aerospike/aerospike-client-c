@@ -9,8 +9,8 @@
 #pragma once
 
 #include <pthread.h>
-#include <inttypes.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 /* SYNOPSIS
  * LinkedList

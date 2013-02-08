@@ -8,9 +8,10 @@
  */
 #pragma once
 
-#include <strings.h>
+#include <stdint.h>
 #include <string.h>
-#include <inttypes.h>
+
+#include "cf_atomic.h"
 
 /* SYNOPSIS
  * For timing things, you want to know this histogram of what took how much time.

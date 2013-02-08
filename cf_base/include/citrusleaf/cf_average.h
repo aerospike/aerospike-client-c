@@ -12,10 +12,9 @@
 
 #pragma once
  
-#include <inttypes.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include <stdio.h>
+
 
 #ifdef __cplusplus
 extern "C" {

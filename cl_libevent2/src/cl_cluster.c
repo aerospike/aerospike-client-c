@@ -116,7 +116,7 @@ cluster_create()
 {
 	ev2citrusleaf_cluster *asc = (ev2citrusleaf_cluster*)malloc(sizeof(ev2citrusleaf_cluster) + event_get_struct_event_size() );
 	if (!asc) return(0);
-	memset(asc,0,sizeof(ev2citrusleaf_cluster) + event_get_struct_event_size());
+	memset((void*)asc,0,sizeof(ev2citrusleaf_cluster) + event_get_struct_event_size());
 	MUTEX_ALLOC(asc->node_v_lock);
 	MUTEX_ALLOC(asc->request_q_lock);
 	return(asc);
@@ -134,7 +134,7 @@ cluster_destroy(ev2citrusleaf_cluster *asc) {
 
 	MUTEX_FREE(asc->request_q_lock);
 	MUTEX_FREE(asc->node_v_lock);
-	memset(asc, 0, sizeof(ev2citrusleaf_cluster) + event_get_struct_event_size() );
+	memset((void*)asc, 0, sizeof(ev2citrusleaf_cluster) + event_get_struct_event_size() );
 	free(asc);
 	return;
 }
@@ -149,8 +149,8 @@ cluster_get_timer_event(ev2citrusleaf_cluster *asc)
 cl_cluster_node *
 cluster_node_create()
 {
-	cl_cluster_node *cn = cf_client_rc_alloc(sizeof(cl_cluster_node) + event_get_struct_event_size() );
-	if (cn) memset(cn,0,sizeof(cl_cluster_node) + event_get_struct_event_size());
+	cl_cluster_node *cn = (cl_cluster_node*)cf_client_rc_alloc(sizeof(cl_cluster_node) + event_get_struct_event_size() );
+	if (cn) memset((void*)cn,0,sizeof(cl_cluster_node) + event_get_struct_event_size());
 	return(cn);
 }
 
@@ -179,13 +179,13 @@ cluster_services_parse(ev2citrusleaf_cluster *asc, char *services)
 {
 	cf_vector_define(host_str_v, sizeof(void *), 0);
 	str_split(';',services, &host_str_v);
-	for (uint i=0;i<cf_vector_size(&host_str_v);i++) {
-		char *host_str = cf_vector_pointer_get(&host_str_v, i);
+	for (uint32_t i=0;i<cf_vector_size(&host_str_v);i++) {
+		char *host_str = (char*)cf_vector_pointer_get(&host_str_v, i);
 		cf_vector_define(host_port_v, sizeof(void *), 0);
 		str_split(':', host_str, &host_port_v);
 		if (cf_vector_size(&host_port_v) == 2) {
-			char *host_s = cf_vector_pointer_get(&host_port_v,0);
-			char *port_s = cf_vector_pointer_get(&host_port_v,1);
+			char *host_s = (char*)cf_vector_pointer_get(&host_port_v,0);
+			char *port_s = (char*)cf_vector_pointer_get(&host_port_v,1);
 			int port = atoi(port_s);
 			struct sockaddr_in sin;
 			if (0 == cl_lookup_immediate(host_s, port, &sin)) {
@@ -261,8 +261,8 @@ cluster_partitions_process(ev2citrusleaf_cluster *asc, cl_cluster_node *cn, char
 
 		unsigned int vsize = cf_vector_size(&partition_v);
 		if (vsize == 2) {
-			char *namespace_s = cf_vector_pointer_get(&partition_v,0);
-			char *partid_s = cf_vector_pointer_get(&partition_v,1);
+			char *namespace_s = (char*)cf_vector_pointer_get(&partition_v,0);
+			char *partid_s = (char*)cf_vector_pointer_get(&partition_v,1);
 
 			// It's coming over the wire, so validate it.
 			char *ns = trim(namespace_s);
@@ -440,8 +440,8 @@ ev2citrusleaf_cluster_get_active_node_count(ev2citrusleaf_cluster *asc)
 
 	MUTEX_LOCK(asc->node_v_lock);
 	
-	for (uint i=0;i<cf_vector_size(&asc->node_v);i++) {
-		cl_cluster_node *node = cf_vector_pointer_get(&asc->node_v, i);
+	for (uint32_t i=0;i<cf_vector_size(&asc->node_v);i++) {
+		cl_cluster_node *node = (cl_cluster_node*)cf_vector_pointer_get(&asc->node_v, i);
 		
 		if (node->MAGIC != CLUSTER_NODE_MAGIC) {
 			cf_error("node in cluster list has no magic!");
@@ -511,7 +511,7 @@ ev2citrusleaf_cluster_destroy(ev2citrusleaf_cluster *asc)
 
 	// Clear all node timers.
 	for (uint32_t i = 0; i < cf_vector_size(&asc->node_v); i++) {
-		cl_cluster_node *cn = cf_vector_pointer_get(&asc->node_v, i);
+		cl_cluster_node *cn = (cl_cluster_node*)cf_vector_pointer_get(&asc->node_v, i);
 		event_del(cluster_node_get_timer_event(cn));
 		// ... so the event_del() in cl_cluster_node_release() will be a no-op.
 	}
@@ -532,7 +532,7 @@ ev2citrusleaf_cluster_destroy(ev2citrusleaf_cluster *asc)
 
 	// Destroy all the nodes.
 	for (uint32_t i = 0; i < cf_vector_size(&asc->node_v); i++) {
-		cl_cluster_node *cn = cf_vector_pointer_get(&asc->node_v, i);
+		cl_cluster_node *cn = (cl_cluster_node*)cf_vector_pointer_get(&asc->node_v, i);
 		cl_cluster_node_release(cn, "C-");
 		cl_cluster_node_release(cn, "L-");
 	}
@@ -541,7 +541,7 @@ ev2citrusleaf_cluster_destroy(ev2citrusleaf_cluster *asc)
 	asc->request_q = 0;
 
 	for (uint32_t i = 0; i < cf_vector_size(&asc->host_str_v); i++) {
-		char *host_str = cf_vector_pointer_get(&asc->host_str_v, i);
+		char *host_str = (char*)cf_vector_pointer_get(&asc->host_str_v, i);
 		free(host_str);
 	}
 
@@ -561,8 +561,8 @@ int
 ev2citrusleaf_cluster_add_host_internal(ev2citrusleaf_cluster *asc, char *host_in, short port_in)
 {
 	// check for uniqueness - do we need a lock here?
-	for (uint i=0;i<cf_vector_size(&asc->host_str_v);i++) {
-		char *host_str = cf_vector_pointer_get(&asc->host_str_v, i);
+	for (uint32_t i=0;i<cf_vector_size(&asc->host_str_v);i++) {
+		char *host_str = (char*)cf_vector_pointer_get(&asc->host_str_v, i);
 		int   port = cf_vector_integer_get(&asc->host_port_v, i);
 		if ( ( 0 == strcmp(host_str, host_in) ) && (port_in == port) ) {
 			return(0); // already here - don't add
@@ -646,14 +646,14 @@ node_replicas_fn(int return_value, char *response, size_t response_len, void *ud
 	// reminder: returned list is name1\tvalue1\nname2\tvalue2\n
 	cf_vector_define(lines_v, sizeof(void *), 0);
 	str_split('\n',response,&lines_v);
-	for (uint j=0;j<cf_vector_size(&lines_v);j++) {
-		char *line = cf_vector_pointer_get(&lines_v, j);
+	for (uint32_t j=0;j<cf_vector_size(&lines_v);j++) {
+		char *line = (char*)cf_vector_pointer_get(&lines_v, j);
 		cf_vector_define(pair_v, sizeof(void *), 0);
 		str_split('\t',line, &pair_v);
 		
 		if (cf_vector_size(&pair_v) == 2) {
-			char *name = cf_vector_pointer_get(&pair_v,0);
-			char *value = cf_vector_pointer_get(&pair_v,1);
+			char *name = (char*)cf_vector_pointer_get(&pair_v,0);
+			char *value = (char*)cf_vector_pointer_get(&pair_v,1);
 
 			
 			if (strcmp(name, "replicas-read")== 0)
@@ -708,14 +708,14 @@ node_timer_infocb_fn(int return_value, char *response, size_t response_len, void
 
 	cf_vector_define(lines_v, sizeof(void *), 0);
 	str_split('\n',response,&lines_v);
-	for (uint i=0;i<cf_vector_size(&lines_v);i++) {
-		char *line = cf_vector_pointer_get(&lines_v, i);
+	for (uint32_t i=0;i<cf_vector_size(&lines_v);i++) {
+		char *line = (char*)cf_vector_pointer_get(&lines_v, i);
 		cf_vector_define(pair_v, sizeof(void *), 0);
 		str_split('\t',line, &pair_v);
 		
 		if (cf_vector_size(&pair_v) == 2) {
-			char *name = cf_vector_pointer_get(&pair_v, 0);
-			char *value = cf_vector_pointer_get(&pair_v, 1);
+			char *name = (char*)cf_vector_pointer_get(&pair_v, 0);
+			char *value = (char*)cf_vector_pointer_get(&pair_v, 1);
 			
 			if (strcmp(name, "node") == 0) {
 				if (strcmp(value, this_cn->name) != 0) {
@@ -808,8 +808,8 @@ node_timer_fn(int fd, short event, void *udata)
 			ev2citrusleaf_cluster *asc = cn->asc;
 			bool deleted = false;
 			MUTEX_LOCK(asc->node_v_lock);
-			for (uint i=0;i<cf_vector_size(&asc->node_v);i++) {
-				cl_cluster_node *iter_node = cf_vector_pointer_get(&asc->node_v, i);
+			for (uint32_t i=0;i<cf_vector_size(&asc->node_v);i++) {
+				cl_cluster_node *iter_node = (cl_cluster_node*)cf_vector_pointer_get(&asc->node_v, i);
 				if (iter_node == cn) {
 					cf_vector_delete(&asc->node_v, i);
 					deleted = true;
@@ -964,7 +964,7 @@ cl_cluster_node_release(cl_cluster_node *cn, char *msg)
 		event_del(cluster_node_get_timer_event(cn));
 
 		// rare, might as well be safe - and destroy the magic
-		memset(cn, 0xff, sizeof(cl_cluster_node));
+		memset((void*)cn, 0xff, sizeof(cl_cluster_node));
 
 		cf_client_rc_free(cn);
 	}
@@ -998,8 +998,8 @@ cl_cluster_node_get_random(ev2citrusleaf_cluster *asc)
 {
 	
 	cl_cluster_node *cn = 0;
-	uint i=0;
-	uint node_v_sz = 0;
+	uint32_t i = 0;
+	uint32_t node_v_sz = 0;
 
 	do {
 		// get a node from the node list round-robin
@@ -1013,13 +1013,13 @@ cl_cluster_node_get_random(ev2citrusleaf_cluster *asc)
 			return(0);
 		}
 
-		int node_i = cf_atomic_int_incr(&asc->last_node);
-		if ((uint)node_i >= node_v_sz) {
+		uint32_t node_i = (uint32_t)cf_atomic_int_incr(&asc->last_node);
+		if (node_i >= node_v_sz) {
 			node_i = 0;
 			cf_atomic_int_set(&asc->last_node, 0);
 		}
 		
-		cn = cf_vector_pointer_get(&asc->node_v, node_i);
+		cn = (cl_cluster_node*)cf_vector_pointer_get(&asc->node_v, node_i);
 		i++;
 		
 		if (cn->MAGIC != CLUSTER_NODE_MAGIC) {
@@ -1078,8 +1078,8 @@ cl_cluster_node *
 cl_cluster_node_get_byname(ev2citrusleaf_cluster *asc, char *name)
 {
 	MUTEX_LOCK(asc->node_v_lock);
-	for (uint i=0;i<cf_vector_size(&asc->node_v);i++) {
-		cl_cluster_node *node = cf_vector_pointer_get(&asc->node_v, i);
+	for (uint32_t i=0;i<cf_vector_size(&asc->node_v);i++) {
+		cl_cluster_node *node = (cl_cluster_node*)cf_vector_pointer_get(&asc->node_v, i);
 		if (strcmp(name, node->name) == 0) {
 			cl_cluster_node_reserve(node,"O+");
 			MUTEX_UNLOCK(asc->node_v_lock);
@@ -1249,7 +1249,7 @@ cl_cluster_node_fd_get(cl_cluster_node *cn)
 
 	cf_atomic_int_incr(&g_cl_stats.conns_created);
 
-	for (uint i=0;i< cf_vector_size(&cn->sockaddr_in_v);i++) {
+	for (uint32_t i=0;i< cf_vector_size(&cn->sockaddr_in_v);i++) {
 		struct sockaddr_in sa_in;
 		cf_vector_get(&cn->sockaddr_in_v, i, &sa_in);
 		
@@ -1314,16 +1314,16 @@ cluster_dump(ev2citrusleaf_cluster *asc)
 	cf_debug("=*=*= cluster %p dump =*=*=", asc);
 	
 	cf_debug("registered hosts:");
-	for (uint i=0;i<cf_vector_size(&asc->host_str_v);i++) {
-		char *host_s = cf_vector_pointer_get(&asc->host_str_v,i);
+	for (uint32_t i=0;i<cf_vector_size(&asc->host_str_v);i++) {
+		char *host_s = (char*)cf_vector_pointer_get(&asc->host_str_v,i);
 		int   port = cf_vector_integer_get(&asc->host_port_v,i);
 		cf_debug(" host %d: %s:%d", i, host_s, port);
 	}
 	
 	MUTEX_LOCK(asc->node_v_lock);
 	cf_debug("nodes: %u", cf_vector_size(&asc->node_v));
-	for (uint i=0;i<cf_vector_size(&asc->node_v);i++) {
-		cl_cluster_node *cn = cf_vector_pointer_get(&asc->node_v, i);
+	for (uint32_t i=0;i<cf_vector_size(&asc->node_v);i++) {
+		cl_cluster_node *cn = (cl_cluster_node*)cf_vector_pointer_get(&asc->node_v, i);
 		struct sockaddr_in sa_in;
 		cf_vector_get(&cn->sockaddr_in_v, 0, &sa_in);
 		char str[INET_ADDRSTRLEN];
@@ -1375,14 +1375,14 @@ cluster_ping_node_fn(int return_value, char *values, size_t values_len, void *ud
 	
 	cf_vector_define(lines_v, sizeof(void *), 0);
 	str_split('\n',values,&lines_v);
-	for (uint i=0;i<cf_vector_size(&lines_v);i++) {
-		char *line = cf_vector_pointer_get(&lines_v, i);
+	for (uint32_t i=0;i<cf_vector_size(&lines_v);i++) {
+		char *line = (char*)cf_vector_pointer_get(&lines_v, i);
 		cf_vector_define(pair_v, sizeof(void *), 0);
 		str_split('\t',line, &pair_v);
 		
 		if (cf_vector_size(&pair_v) == 2) {
-			char *name = cf_vector_pointer_get(&pair_v, 0);
-			char *value = cf_vector_pointer_get(&pair_v, 1);
+			char *name = (char*)cf_vector_pointer_get(&pair_v, 0);
+			char *value = (char*)cf_vector_pointer_get(&pair_v, 1);
 			
 			if (strcmp(name, "node") == 0) {
 
@@ -1442,7 +1442,7 @@ cluster_tend_hostname_resolve(int result, cf_vector *sockaddr_v, void *udata  )
 	cf_info("cluster tend host resolve");
 
 	if ((result == 0) && (sockaddr_v)) {
-		for (uint i=0;i<cf_vector_size(sockaddr_v);i++) {
+		for (uint32_t i=0;i<cf_vector_size(sockaddr_v);i++) {
 			struct sockaddr_in sin;
 			cf_vector_get(sockaddr_v, i, &sin);
 			cluster_new_sockaddr(asc, &sin);
@@ -1466,9 +1466,9 @@ cluster_new_sockaddr(ev2citrusleaf_cluster *asc, struct sockaddr_in *new_sin)
 	
 	cf_vector *node_v = &asc->node_v;
 	MUTEX_LOCK(asc->node_v_lock);
-	for (uint j=0;j<cf_vector_size(node_v);j++) {
-		cl_cluster_node *cn = cf_vector_pointer_get(node_v,j);
-		for (uint k=0;k<cf_vector_size(&cn->sockaddr_in_v);k++) {
+	for (uint32_t j=0;j<cf_vector_size(node_v);j++) {
+		cl_cluster_node *cn = (cl_cluster_node*)cf_vector_pointer_get(node_v,j);
+		for (uint32_t k=0;k<cf_vector_size(&cn->sockaddr_in_v);k++) {
 			struct sockaddr_in sin;
 			cf_vector_get(&cn->sockaddr_in_v, k, &sin);
 
@@ -1521,10 +1521,10 @@ cluster_tend( ev2citrusleaf_cluster *asc)
 	if (0 == sz) {
 		cf_debug("no nodes remaining: lookup original hosts hoststr size %d");
 
-		uint n_hosts = cf_vector_size(&asc->host_str_v);
-		for (uint i=0;i<n_hosts;i++) {
+		uint32_t n_hosts = cf_vector_size(&asc->host_str_v);
+		for (uint32_t i=0;i<n_hosts;i++) {
 			
-			char *host_s = cf_vector_pointer_get(&asc->host_str_v, i);
+			char *host_s = (char*)cf_vector_pointer_get(&asc->host_str_v, i);
 			int  port = cf_vector_integer_get(&asc->host_port_v, i);
 	
 			cf_debug("lookup hosts: %s:%d", host_s, port);
@@ -1536,7 +1536,7 @@ cluster_tend( ev2citrusleaf_cluster *asc)
 			else {
 				// BFIX - if this returns error, ???
 				cl_lookup(	asc->dns_base,
-							cf_vector_pointer_get(&asc->host_str_v, i), 
+							(char*)cf_vector_pointer_get(&asc->host_str_v, i),
 							cf_vector_integer_get(&asc->host_port_v, i),
 							cluster_tend_hostname_resolve, asc);
 			}

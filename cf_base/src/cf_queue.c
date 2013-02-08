@@ -6,22 +6,22 @@
  *  THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE.  THE COPYRIGHT NOTICE
  *  ABOVE DOES NOT EVIDENCE ANY ACTUAL OR INTENDED PUBLICATION.
  */
+
 #include <errno.h>
 #include <pthread.h>
-#include <stdarg.h>
-#include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <strings.h>
 #include <time.h>
-#include <unistd.h>
+#include <bits/time.h>
 
 #ifdef EXTERNAL_LOCKS
 #include "citrusleaf/cf_hooks.h"
 #endif
+#include "citrusleaf/cf_log_internal.h"
 
 #include "citrusleaf/cf_queue.h"
-#include "citrusleaf/cf_log_internal.h"
+
 
 // #define DEBUG 1
 
@@ -53,7 +53,7 @@ cf_queue_create(size_t elementsz, bool threadsafe)
 {
 	cf_queue *q = NULL;
 
-	q = malloc( sizeof(cf_queue));
+	q = (cf_queue*)malloc( sizeof(cf_queue));
 	/* FIXME error msg */
 	if (!q)
 		return(NULL);
@@ -62,7 +62,7 @@ cf_queue_create(size_t elementsz, bool threadsafe)
 	q->elementsz = elementsz;
 	q->threadsafe = threadsafe;
 
-	q->queue = malloc(CF_QUEUE_ALLOCSZ * elementsz);
+	q->queue = (uint8_t*)malloc(CF_QUEUE_ALLOCSZ * elementsz);
 	if (! q->queue) {
 		free(q);
 		return(NULL);
@@ -115,9 +115,9 @@ cf_queue_destroy(cf_queue *q)
 		pthread_mutex_destroy(&q->LOCK);
 #endif // EXTERNAL_LOCKS
 	}
-	memset(q->queue, 0, q->allocsz * q->elementsz);
+	memset((void*)q->queue, 0, q->allocsz * q->elementsz);
 	free(q->queue);
-	memset(q, 0, sizeof(cf_queue) );
+	memset((void*)q, 0, sizeof(cf_queue) );
 	free(q);
 }
 
@@ -150,7 +150,7 @@ cf_queue_resize(cf_queue *q, uint new_sz)
 	// the rare case where the queue is not fragmented, and realloc makes sense
 	// and none of the offsets need to move
 	if (0 == q->read_offset % q->allocsz) {
-		q->queue = realloc(q->queue, new_sz * q->elementsz);
+		q->queue = (uint8_t*)realloc(q->queue, new_sz * q->elementsz);
 		if (!q->queue) {
 //			cf_debug(CF_QUEUE," pfft! out of memory! crash!");
 			return(-1);
@@ -160,7 +160,7 @@ cf_queue_resize(cf_queue *q, uint new_sz)
 	}
 	else {
 		
-		uint8_t *newq = malloc(new_sz * q->elementsz);
+		uint8_t *newq = (uint8_t*)malloc(new_sz * q->elementsz);
 		if (!newq) {
 //			cf_debug(CF_QUEUE," pffth! out of memory! crash!");
 			return(-1);
@@ -485,7 +485,7 @@ Done:
 cf_queue_priority *
 cf_queue_priority_create(size_t elementsz, bool threadsafe)
 {
-	cf_queue_priority *q = malloc(sizeof(cf_queue_priority));
+	cf_queue_priority *q = (cf_queue_priority*)malloc(sizeof(cf_queue_priority));
 	if (!q)	return(0);
 	
 	q->threadsafe = threadsafe;
@@ -654,7 +654,7 @@ cf_queue_priority_sz(cf_queue_priority *q)
 // it's always really annoying to have a queue that malfunctions in some small way
 // so best to have a pretty serious torture test suite
 //
-
+#if 0
 
 #define TEST1_SZ 400
 #define TEST1_INTERVAL 10
@@ -756,3 +756,5 @@ cf_queue_test()
 	
 	return(0);
 }
+
+#endif // 0

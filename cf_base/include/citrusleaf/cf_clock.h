@@ -9,8 +9,9 @@
 
 #pragma once
 
-#include <time.h>
 #include <stdint.h>
+#include <time.h>
+#include <bits/time.h>
 
 
 #ifdef __cplusplus

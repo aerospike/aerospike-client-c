@@ -6,10 +6,13 @@
  *  THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE.  THE COPYRIGHT NOTICE
  *  ABOVE DOES NOT EVIDENCE ANY ACTUAL OR INTENDED PUBLICATION.
  */
+
 #pragma once
-#include <stdbool.h>
+
+#include <stddef.h>
 #include <stdint.h>
 
+struct sockaddr_in;
 
 
 extern int

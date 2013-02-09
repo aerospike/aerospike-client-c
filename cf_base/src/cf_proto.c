@@ -8,7 +8,7 @@
 
 #include <stdint.h>
 
-#include "citrusleaf/cf_base_types.h"
+#include "citrusleaf/cf_byte_order.h"
 
 #include "citrusleaf/proto.h"
 

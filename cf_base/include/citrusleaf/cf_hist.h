@@ -9,7 +9,6 @@
 #pragma once
 
 #include <stdint.h>
-#include <string.h>
 
 #include "cf_atomic.h"
 

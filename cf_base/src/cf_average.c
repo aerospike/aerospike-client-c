@@ -9,6 +9,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#include "citrusleaf/cf_base_types.h"
+
 #include "citrusleaf/cf_average.h"
 
 

@@ -14,7 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "citrusleaf/cf_base_types.h"
+#include "citrusleaf/cf_byte_order.h"
 #include "citrusleaf/cf_clock.h"
 #include "citrusleaf/cf_errno.h"
 #include "citrusleaf/cf_log_internal.h"

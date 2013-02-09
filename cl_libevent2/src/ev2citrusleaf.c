@@ -9,25 +9,22 @@
  * All rights reserved
  */
 
-#include <errno.h>
 #include <inttypes.h>
 #include <pthread.h>
-#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <asm/byteorder.h>
-#include <bits/time.h>
 #include <event2/dns.h>
 #include <event2/event.h>
-#include <netinet/in.h>
 #include <sys/socket.h>
 
 #include "citrusleaf/cf_atomic.h"
+#include "citrusleaf/cf_base_types.h"
 #include "citrusleaf/cf_clock.h"
 #include "citrusleaf/cf_digest.h"
+#include "citrusleaf/cf_errno.h"
 #include "citrusleaf/cf_hooks.h"
 #include "citrusleaf/cf_ll.h"
 #include "citrusleaf/cf_log_internal.h"
@@ -339,7 +336,7 @@ write_fields(uint8_t *buf, char *ns, int ns_len, char *set, int set_len, ev2citr
 			mf->field_sz = sizeof(int64_t) + 2;
 			uint8_t *fd = (uint8_t *) &mf->data;
 			fd[0] = CL_PARTICLE_TYPE_INTEGER;
-			uint64_t swapped = __swab64(key->u.i64);
+			uint64_t swapped = htonll((uint64_t)key->u.i64);
 			memcpy(&fd[1], &swapped, sizeof(swapped));
 		}
 		else {
@@ -376,7 +373,7 @@ int
 value_to_op_int(int64_t value, uint8_t *data)
 {
 	if ((value < 0) || (value >= 0x7FFFFFFF)) {
-		*(__u64 *)data = __cpu_to_be64((__u64) value);  // swap in place
+		*(uint64_t*)data = htonll((uint64_t)value);  // swap in place
 		return(8);
 	}
 	
@@ -414,7 +411,7 @@ ev2citrusleaf_calculate_digest(const char *set, const ev2citrusleaf_object *key,
 			{
 			uint64_t swapped;	
 			k[0] = key->type;
-			swapped = __swab64(key->u.i64);
+			swapped = htonll((uint64_t)key->u.i64);
 			memcpy(&k[1], &swapped, sizeof(swapped)); // THIS MUST LEAD TO A WRONG LENGTH CALCULATION BELOW
 			}
 			break;
@@ -457,7 +454,7 @@ op_to_value_int(uint8_t	*buf, int size, int64_t *value)
 	if (size > 8)	return(-1);
 	if (size == 8) {
 		// no need to worry about sign extension - blast it
-		*value = __cpu_to_be64(*(__u64 *) buf);
+		*value = (int64_t)ntohll(*(uint64_t*)buf);
 		return(0);
 	}
 	if (size == 0) {
@@ -475,7 +472,7 @@ op_to_value_int(uint8_t	*buf, int size, int64_t *value)
 		int i;
 		for (i=0;i<8-size;i++)	lg_buf[i]=0xff;
 		memcpy(&lg_buf[i],buf,size);
-		*value = __cpu_to_be64((__u64) *buf);
+		*value = (int64_t)ntohll((uint64_t)*buf);
 		return(0);
 	}
 	// positive numbers don't
@@ -1165,7 +1162,7 @@ ev2citrusleaf_event(int fd, short event, void *udata)
 				goto Fail;					
 			}
 			else {
-				if ((errno != EAGAIN) && (errno != EINPROGRESS)) {
+				if ((errno != EAGAIN) && (errno != EWOULDBLOCK)) {
 					cf_debug("read failed: rv %d errno %d", rv, errno);
 					goto Fail;
 				}
@@ -1208,7 +1205,7 @@ ev2citrusleaf_event(int fd, short event, void *udata)
 					cf_debug("ev2citrusleaf read2: connection closed: fd %d rv %d errno %d", fd, rv, errno);
 					goto Fail;					
 				}
-				else if ((errno != EAGAIN) && (errno != EINPROGRESS)) {
+				else if ((errno != EAGAIN) && (errno != EWOULDBLOCK)) {
 					cf_debug("ev2citrusleaf read2: fail: fd %d rv %d errno %d", fd, rv, errno);
 					goto Fail;
 				}

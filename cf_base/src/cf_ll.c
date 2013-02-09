@@ -8,8 +8,9 @@
  */
 
 #include <pthread.h>
-#include <stdbool.h>
 #include <stdint.h>
+
+#include "citrusleaf/cf_base_types.h"
 
 #include "citrusleaf/cf_ll.h"
 

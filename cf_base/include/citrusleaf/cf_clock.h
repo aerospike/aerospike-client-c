@@ -9,9 +9,39 @@
 
 #pragma once
 
-#include <stdint.h>
+#ifndef CF_WINDOWS
+//====================================================================
+// Linux
+//
+
 #include <time.h>
 #include <bits/time.h>
+
+
+#else // CF_WINDOWS
+//====================================================================
+// Windows
+//
+
+#include <WinSock2.h>	// for struct timeval
+#include <pthread.h>	// for struct timespec
+
+#define CLOCK_REALTIME				0
+#define CLOCK_MONOTONIC				1
+#define CLOCK_PROCESS_CPUTIME_ID	2
+
+static inline int clock_gettime(int clock_type, struct timespec* p_ts)
+{
+	// TODO
+	p_ts->tv_sec = 0;
+	p_ts->tv_nsec = 0;
+
+	return 0;
+}
+
+#endif // CF_WINDOWS
+
+#include <stdint.h>
 
 
 #ifdef __cplusplus

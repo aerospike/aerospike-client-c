@@ -12,19 +12,18 @@
 // Includes
 //
 
-#include <errno.h>
-#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <bits/time.h>
 #include <event2/event.h>
 #include <sys/socket.h>
 
+#include "citrusleaf/cf_base_types.h"
 #include "citrusleaf/cf_clock.h"
 #include "citrusleaf/cf_digest.h"
+#include "citrusleaf/cf_errno.h"
 #include "citrusleaf/cf_log_internal.h"
 #include "citrusleaf/proto.h"
 
@@ -927,7 +926,7 @@ cl_batch_node_req_handle_recv(cl_batch_node_req* this)
 				cl_batch_node_req_done(this, EV2CITRUSLEAF_FAIL_UNKNOWN);
 				return true;
 			}
-			else if (errno != EAGAIN && errno != EINPROGRESS) {
+			else if (errno != EAGAIN && errno != EWOULDBLOCK) {
 				cf_debug("recv failed: rv %d errno %d", rv, errno);
 				cl_batch_node_req_done(this, EV2CITRUSLEAF_FAIL_UNKNOWN);
 				return true;
@@ -1000,7 +999,7 @@ cl_batch_node_req_handle_recv(cl_batch_node_req* this)
 				cl_batch_node_req_done(this, EV2CITRUSLEAF_FAIL_UNKNOWN);
 				return true;
 			}
-			else if (errno != EAGAIN && errno != EINPROGRESS) {
+			else if (errno != EAGAIN && errno != EWOULDBLOCK) {
 				cf_debug("recv failed: rv %d errno %d", rv, errno);
 				cl_batch_node_req_done(this, EV2CITRUSLEAF_FAIL_UNKNOWN);
 				return true;

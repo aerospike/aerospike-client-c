@@ -9,10 +9,10 @@
 
 #pragma once
 
-#include <stdbool.h>
 #include <stddef.h>
 
 #include "cf_atomic.h"
+#include "citrusleaf/cf_base_types.h"
 
 
 /* SYNOPSIS

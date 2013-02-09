@@ -13,7 +13,8 @@
 #pragma once
  
 #include <stdint.h>
-#include <stdbool.h>
+
+#include "citrusleaf/cf_base_types.h"
 
 
 #ifdef __cplusplus

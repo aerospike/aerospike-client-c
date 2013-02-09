@@ -1,1 +1,1 @@
-SOURCES = cf_alloc.c cf_average.c cf_digest.c cf_hist.c cf_hooks.c cf_ll.c cf_log.c cf_queue.c cf_service.c cf_shash.c cf_socket.c cf_vector.c version.c
+SOURCES = cf_alloc.c cf_average.c cf_digest.c cf_hist.c cf_hooks.c cf_ll.c cf_log.c cf_proto.c cf_queue.c cf_service.c cf_shash.c cf_socket.c cf_vector.c version.c

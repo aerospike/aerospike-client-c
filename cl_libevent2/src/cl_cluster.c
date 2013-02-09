@@ -10,11 +10,9 @@
  */
 
 #include <ctype.h>
-#include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
 #include <pthread.h>
-#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -22,7 +20,6 @@
 #include <time.h>
 #include <unistd.h>
 #include <arpa/inet.h>
-#include <bits/time.h>
 #include <event2/dns.h>
 #include <event2/event.h>
 #include <netinet/in.h>
@@ -30,8 +27,10 @@
 
 #include "citrusleaf/cf_alloc.h"
 #include "citrusleaf/cf_atomic.h"
+#include "citrusleaf/cf_base_types.h"
 #include "citrusleaf/cf_clock.h"
 #include "citrusleaf/cf_digest.h"
+#include "citrusleaf/cf_errno.h"
 #include "citrusleaf/cf_ll.h"
 #include "citrusleaf/cf_log_internal.h"
 #include "citrusleaf/cf_queue.h"

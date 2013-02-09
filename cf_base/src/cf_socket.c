@@ -9,7 +9,6 @@
  * All rights reserved
  */
 
-#include <errno.h>
 #include <fcntl.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -17,13 +16,14 @@
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h> // for print function at bottom
-#include <bits/time.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <sys/select.h>
 #include <sys/socket.h>
 
+#include "citrusleaf/cf_base_types.h"
 #include "citrusleaf/cf_clock.h"
+#include "citrusleaf/cf_errno.h"
 #include "citrusleaf/cf_log_internal.h"
 
 #include "citrusleaf/cf_socket.h"

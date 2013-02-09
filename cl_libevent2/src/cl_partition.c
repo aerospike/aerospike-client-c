@@ -13,6 +13,7 @@
 #include <string.h>
 
 #include "citrusleaf/cf_atomic.h"
+#include "citrusleaf/cf_base_types.h"
 #include "citrusleaf/cf_log_internal.h"
 
 #include "citrusleaf_event2/cl_cluster.h"

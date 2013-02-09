@@ -18,6 +18,7 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 
+#include "citrusleaf/cf_base_types.h"
 #include "citrusleaf/cf_clock.h"
 #include "citrusleaf/cf_log_internal.h"
 #include "citrusleaf/cf_vector.h"

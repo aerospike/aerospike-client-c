@@ -7,14 +7,14 @@
  *  ABOVE DOES NOT EVIDENCE ANY ACTUAL OR INTENDED PUBLICATION.
  */
 
-#include <errno.h>
 #include <pthread.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
-#include <bits/time.h>
 
+#include "citrusleaf/cf_base_types.h"
+#include "citrusleaf/cf_clock.h"
+#include "citrusleaf/cf_errno.h"
 #ifdef EXTERNAL_LOCKS
 #include "citrusleaf/cf_hooks.h"
 #endif

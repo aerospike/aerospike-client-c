@@ -139,7 +139,7 @@ cf_queue_sz(cf_queue *q)
 // *** THIS ONLY WORKS ON FULL QUEUES ***
 //
 int
-cf_queue_resize(cf_queue *q, uint new_sz)
+cf_queue_resize(cf_queue *q, uint32_t new_sz)
 {
 	// check - a lot of the code explodes badly if queue is not full
 	if (CF_Q_SZ(q) != q->allocsz) {
@@ -166,7 +166,7 @@ cf_queue_resize(cf_queue *q, uint new_sz)
 			return(-1);
 		}
 		// endsz is used uint8_ts in the old queue from the insert point to the end
-		uint endsz = (q->allocsz - (q->read_offset % q->allocsz)) * q->elementsz;
+		uint32_t endsz = (q->allocsz - (q->read_offset % q->allocsz)) * q->elementsz;
 		memcpy(&newq[0], CF_Q_ELEM_PTR(q, q->read_offset), endsz);
 		memcpy(&newq[endsz], &q->queue[0], (q->allocsz * q->elementsz) - endsz); 
 		
@@ -235,10 +235,10 @@ cf_queue_push(cf_queue *q, void *ptr)
  * Push element on the queue only if size < limit.
  * */
 bool
-cf_queue_push_limit(cf_queue *q, void *ptr, uint limit)
+cf_queue_push_limit(cf_queue *q, void *ptr, uint32_t limit)
 {
 	QUEUE_LOCK(q);
-	uint size = CF_Q_SZ(q);
+	uint32_t size = CF_Q_SZ(q);
 
 	if (size >= limit) {
 		QUEUE_UNLOCK(q);
@@ -354,11 +354,11 @@ cf_queue_pop(cf_queue *q, void *buf, int ms_wait)
 
 
 void
-cf_queue_delete_offset(cf_queue *q, uint index)
+cf_queue_delete_offset(cf_queue *q, uint32_t index)
 {
 	index %= q->allocsz;
-	uint r_index = q->read_offset % q->allocsz;
-	uint w_index = q->write_offset % q->allocsz;
+	uint32_t r_index = q->read_offset % q->allocsz;
+	uint32_t w_index = q->write_offset % q->allocsz;
 	
 	// assumes index is validated!
 	
@@ -412,7 +412,7 @@ cf_queue_reduce(cf_queue *q,  cf_queue_reduce_fn cb, void *udata)
 		// will change the read and write offset, so this is simpler for now
 		// can optimize if necessary later....
 		
-		for (uint i = q->read_offset ; 
+		for (uint32_t i = q->read_offset ;
 			 i < q->write_offset ;
 			 i++)
 		{
@@ -453,7 +453,7 @@ cf_queue_delete(cf_queue *q, void *buf, bool only_one)
 	
 	if (CF_Q_SZ(q)) {
 
-		for (uint i = q->read_offset ; 
+		for (uint32_t i = q->read_offset ;
 			 i < q->write_offset ;
 			 i++)
 		{

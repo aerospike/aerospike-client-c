@@ -17,6 +17,8 @@
 // Windows
 //
 
+#include <WinSock2.h>
+
 #define errno (WSAGetLastError())
 
 #define EAGAIN			WSAEWOULDBLOCK

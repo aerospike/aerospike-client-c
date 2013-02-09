@@ -126,7 +126,7 @@ citrusleaf_info_host_limit(struct sockaddr_in *sa_in, char *names, char **values
 	}
 		
 	// Actually doing a non-blocking connect
-	int fd = cf_create_nb_socket(sa_in, timeout_ms);
+	int fd = cf_socket_create_and_connect_nb(sa_in);
 	if (fd == -1) {
 		return -1;
 	}

@@ -16,15 +16,14 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <event2/event.h>
-#include <sys/socket.h>
 
 #include "citrusleaf/cf_base_types.h"
 #include "citrusleaf/cf_clock.h"
 #include "citrusleaf/cf_digest.h"
 #include "citrusleaf/cf_errno.h"
 #include "citrusleaf/cf_log_internal.h"
+#include "citrusleaf/cf_socket.h"
 #include "citrusleaf/proto.h"
 
 #include "citrusleaf_event2/cl_cluster.h"
@@ -624,7 +623,7 @@ cl_batch_node_req_destroy(cl_batch_node_req* this)
 	if (this->fd > -1) {
 		// We only get here if the batch job timed out and is aborting this node
 		// request. We can't re-use the socket - it may have unprocessed data.
-		close(this->fd);
+		cf_close(this->fd);
 		cl_cluster_node_dun(this->p_node, DUN_USER_TIMEOUT);
 	}
 
@@ -1186,7 +1185,7 @@ cl_batch_node_req_done(cl_batch_node_req* this, int node_result)
 	else {
 		// The socket may have unprocessed data or otherwise be untrustworthy,
 		// close it and disapprove the node.
-		close(this->fd);
+		cf_close(this->fd);
 		cl_cluster_node_dun(this->p_node, DUN_NETWORK_ERROR);
 	}
 

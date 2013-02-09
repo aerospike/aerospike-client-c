@@ -20,10 +20,10 @@
 #pragma once
 
 #include <pthread.h>
-#include <stdbool.h>
 #include <stdint.h>
 
 #include "citrusleaf/cf_atomic.h"
+#include "citrusleaf/cf_base_types.h"
 #include "citrusleaf/cf_digest.h"
 #include "citrusleaf/cf_ll.h"
 #include "citrusleaf/cf_queue.h"

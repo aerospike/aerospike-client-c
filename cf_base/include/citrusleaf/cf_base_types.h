@@ -22,6 +22,8 @@
 // A real pity that Linux requires this for bool, true & false:
 #include <stdbool.h>
 
+#include <alloca.h>
+
 #include <netinet/in.h>
 #include <asm/byteorder.h>
 
@@ -36,6 +38,9 @@
 //====================================================================
 // Windows
 //
+
+// For alloca():
+#include <malloc.h>
 
 #include <WinSock2.h>
 #include <stdlib.h>

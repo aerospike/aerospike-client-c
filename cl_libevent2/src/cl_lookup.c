@@ -12,15 +12,13 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <arpa/inet.h>
 #include <event2/dns.h>
 #include <event2/event.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
 
 #include "citrusleaf/cf_base_types.h"
 #include "citrusleaf/cf_clock.h"
 #include "citrusleaf/cf_log_internal.h"
+#include "citrusleaf/cf_socket.h"
 #include "citrusleaf/cf_vector.h"
 
 #include "citrusleaf_event2/cl_cluster.h"

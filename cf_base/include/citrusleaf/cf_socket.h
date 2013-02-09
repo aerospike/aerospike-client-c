@@ -12,8 +12,23 @@
 #include <stddef.h>
 #include <stdint.h>
 
-struct sockaddr_in;
 
+#ifndef CF_WINDOWS
+//====================================================================
+// Linux
+//
+
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+
+#define cf_close(fd) (close(fd))
+
+//------------------------------------------------
+// The API below is not used by the libevent2
+// client, so we'll postpone the Windows version.
+//
 
 extern int
 cf_socket_read_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_deadline, int attempt_ms);
@@ -24,8 +39,31 @@ cf_socket_read_forever(int fd, uint8_t *buf, size_t buf_len);
 extern int
 cf_socket_write_forever(int fd, uint8_t *buf, size_t buf_len);
 
-extern int
-cf_create_nb_socket(struct sockaddr_in *sa, int timeout);
-
 extern void
 cf_print_sockaddr_in(char *prefix, struct sockaddr_in *sa_in);
+
+
+#else // CF_WINDOWS
+//====================================================================
+// Windows
+//
+
+// TODO - arpa inet header file
+#include <WinSock2.h>
+
+#define cf_close(fd) (closesocket(fd))
+
+#define MSG_DONTWAIT	// TODO
+#define MSG_NOSIGNAL	// TODO
+#define MSG_PEEK		// TODO
+
+
+#endif // CF_WINDOWS
+
+
+extern int
+cf_socket_create_nb();
+extern int
+cf_socket_connect_nb(int fd, struct sockaddr_in *sa);
+extern int
+cf_socket_create_and_connect_nb(struct sockaddr_in *sa);

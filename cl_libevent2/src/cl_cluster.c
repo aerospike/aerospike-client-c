@@ -10,7 +10,6 @@
  */
 
 #include <ctype.h>
-#include <fcntl.h>
 #include <inttypes.h>
 #include <pthread.h>
 #include <stddef.h>
@@ -18,12 +17,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include <unistd.h>
-#include <arpa/inet.h>
 #include <event2/dns.h>
 #include <event2/event.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
 
 #include "citrusleaf/cf_alloc.h"
 #include "citrusleaf/cf_atomic.h"
@@ -34,6 +29,7 @@
 #include "citrusleaf/cf_ll.h"
 #include "citrusleaf/cf_log_internal.h"
 #include "citrusleaf/cf_queue.h"
+#include "citrusleaf/cf_socket.h"
 #include "citrusleaf/cf_vector.h"
 
 #include "citrusleaf_event2/ev2citrusleaf.h"
@@ -956,7 +952,7 @@ cl_cluster_node_release(cl_cluster_node *cn, char *msg)
 			if (rv == CF_QUEUE_OK) {
 				cf_atomic_int_incr(&g_cl_stats.conns_destroyed); // playing it safe, expect asc good
 				shutdown(fd, SHUT_RDWR); // be good to remote endpoint - worried this might block though?
-				close(fd);
+				cf_close(fd);
 			}
 		} while (rv == CF_QUEUE_OK);
 		cf_queue_destroy(cn->conn_q);
@@ -1200,12 +1196,12 @@ cl_cluster_node_fd_get(cl_cluster_node *cn)
 			case CONNECTED_NOT:
 				cf_atomic_int_incr(&g_cl_stats.conns_destroyed);
 				cf_atomic_int_incr(&g_cl_stats.conns_destroyed_queue);
-				close(fd);
+				cf_close(fd);
 				return(-1);
 			case CONNECTED_ERROR:
 				cf_atomic_int_incr(&g_cl_stats.conns_destroyed);
 				cf_atomic_int_incr(&g_cl_stats.conns_destroyed_queue);
-				close(fd);
+				cf_close(fd);
 				cl_cluster_node_dun(cn,  DUN_RESTART_FD );				
 				return(-2);
 			case CONNECTED_BADFD:
@@ -1223,63 +1219,27 @@ cl_cluster_node_fd_get(cl_cluster_node *cn)
 		return(-2);		
 	
 	// ok, queue was empty - do a connect
-	if (-1 == (fd = socket ( AF_INET, SOCK_STREAM, 0))) {
-		cf_warn("could not allocate a socket, serious problem");
-		return(-2);
-	}
-	else {
-		cf_debug("new socket: fd %d node %s", fd, cn->name);
-	}
-	
-	// set nonblocking - not so important since we're using recv/send, but critical for connect
-	int flags;
-	if (-1 == (flags = fcntl(fd, F_GETFL, 0)))
-		flags = 0;
-	if (-1 == fcntl(fd, F_SETFL, flags | O_NONBLOCK)) {
-		cf_atomic_int_incr(&g_cl_stats.conns_destroyed);
-
-		close(fd);
-		cf_warn("could not set nonblocking");
-		return(-2);
+	if (-1 == (fd = cf_socket_create_nb())) {
+		return -2;
 	}
 
-	int f = 1;
-	setsockopt(fd, SOL_TCP, TCP_NODELAY, &f, sizeof(f));
+	cf_debug("new socket: fd %d node %s", fd, cn->name);
 
-	cf_atomic_int_incr(&g_cl_stats.conns_created);
-
-	for (uint32_t i=0;i< cf_vector_size(&cn->sockaddr_in_v);i++) {
+	// Try socket addresses until we connect.
+	for (uint32_t i = 0; i < cf_vector_size(&cn->sockaddr_in_v); i++) {
 		struct sockaddr_in sa_in;
+
 		cf_vector_get(&cn->sockaddr_in_v, i, &sa_in);
-		
-		if (0 == connect(fd, (struct sockaddr *)&sa_in, sizeof(struct sockaddr_in) ) )
-		{
-			rv = 0;
-			// nonblocking connect: don't really know the connection has suceeded,
-			// but it's a good place for the counter
-			goto Done;
+
+		if (0 == cf_socket_connect_nb(fd, &sa_in)) {
+			cf_atomic_int_incr(&g_cl_stats.conns_connected);
+			return fd;
 		}
-		else {
-			if (errno == EINPROGRESS) {
-				goto Done;
-			}
-	
-			// todo: remove this sockaddr from the list, or dun the node?
-			else if (errno == ECONNREFUSED) {
-				cf_debug("a host is refusing connections");
-			}
-			else {
-				cf_info("connect fail: errno %d", errno);
-			}
-		}
+		// TODO - else remove this sockaddr from the list, or dun the node?
 	}
-	cf_atomic_int_incr(&g_cl_stats.conns_destroyed);
-	close(fd);
-	return(-2);
-		
-Done:
-	cf_atomic_int_incr(&g_cl_stats.conns_connected);
-	return(fd);
+
+	cf_close(fd);
+	return -2;
 }
 
 void
@@ -1287,7 +1247,7 @@ cl_cluster_node_fd_put(cl_cluster_node *cn, int fd)
 {
 	if (! cf_queue_push_limit(cn->conn_q, &fd, 300)) {
 		cf_atomic_int_incr(&g_cl_stats.conns_destroyed);
-		close(fd);
+		cf_close(fd);
 	}
 }
 

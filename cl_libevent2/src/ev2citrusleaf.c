@@ -15,10 +15,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <event2/dns.h>
 #include <event2/event.h>
-#include <sys/socket.h>
 
 #include "citrusleaf/cf_atomic.h"
 #include "citrusleaf/cf_base_types.h"
@@ -29,6 +27,7 @@
 #include "citrusleaf/cf_ll.h"
 #include "citrusleaf/cf_log_internal.h"
 #include "citrusleaf/cf_queue.h"
+#include "citrusleaf/cf_socket.h"
 #include "citrusleaf/cf_vector.h"
 #include "citrusleaf/proto.h"
 
@@ -989,7 +988,7 @@ ev2citrusleaf_request_complete(cl_request *req, bool timedout)
 		if ((timedout == false) && (req->node))
 			cl_cluster_node_fd_put(req->node  , req->fd);
 		else {
-			close(req->fd);
+			cf_close(req->fd);
 			cf_atomic_int_incr(&g_cl_stats.conns_destroyed);
 			if (timedout == true) cf_atomic_int_incr(&g_cl_stats.conns_destroyed_timeout);
 		}
@@ -1232,7 +1231,7 @@ ev2citrusleaf_event(int fd, short event, void *udata)
 Fail:
 	cf_atomic_int_incr(&g_cl_stats.conns_destroyed);
 	
-	close(fd);  // not back in queue,itz bad
+	cf_close(fd);  // not back in queue,itz bad
 	req->fd = 0;
 	
 	if (req->node) {

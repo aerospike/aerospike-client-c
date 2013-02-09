@@ -62,7 +62,7 @@ extern void cf_queue_destroy(cf_queue *q);
 extern int cf_queue_push(cf_queue *q, void *ptr);
 
 // Push element on the queue only if size < limit.
-extern bool cf_queue_push_limit(cf_queue *q, void *ptr, uint limit);
+extern bool cf_queue_push_limit(cf_queue *q, void *ptr, uint32_t limit);
 
 // Get the number of elements currently in the queue
 extern int cf_queue_sz(cf_queue *q);

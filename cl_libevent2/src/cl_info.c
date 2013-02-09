@@ -13,16 +13,14 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <event2/dns.h>
 #include <event2/event.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
 
 #include "citrusleaf/cf_atomic.h"
 #include "citrusleaf/cf_clock.h"
 #include "citrusleaf/cf_errno.h"
 #include "citrusleaf/cf_log_internal.h"
+#include "citrusleaf/cf_socket.h"
 #include "citrusleaf/cf_vector.h"
 #include "citrusleaf/proto.h"
 
@@ -204,7 +202,7 @@ info_event_fn(int fd, short event, void *udata)
 						cir->rd_buf = 0;
 						event_del(info_request_get_network_event(cir) ); // WARNING: this is not necessary. BOK says it is safe: maybe he's right, maybe wrong.
 
-						close(fd);
+						cf_close(fd);
 						info_request_destroy(cir);
 						cir = 0;
 						cf_atomic_int_incr(&g_cl_stats.info_complete);
@@ -238,7 +236,7 @@ info_event_fn(int fd, short event, void *udata)
 Fail:
 	(*cir->user_cb) ( -1, 0 , 0,cir->user_data );
 	event_del(info_request_get_network_event(cir)); // WARNING: this is not necessary. BOK says it is safe: maybe he's right, maybe wrong.
-	close(fd);
+	cf_close(fd);
 	info_request_destroy(cir);
 	cf_atomic_int_incr(&g_cl_stats.info_complete);
 	cf_atomic_int_decr(&g_cl_info_transactions);
@@ -271,40 +269,15 @@ ev2citrusleaf_info_host(struct event_base *base, struct sockaddr_in *sa_in, char
 	cir->base = base;
 
 	// Create the socket a little early, just in case
-	int fd;
-	if (-1 == (fd = socket ( AF_INET, SOCK_STREAM, 0 ))) {
-		cf_info("could not allocate socket errno %d", errno);
+	int fd = cf_socket_create_and_connect_nb(sa_in);
 
+	if (fd == -1) {
 		info_request_destroy(cir);
-		
+
 		uint64_t delta = cf_getms() - _s;
-		if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: info host no socket: %"PRIu64, delta);
-		
-		return(-1);
-	}
+		if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: info host no socket connect: %"PRIu64, delta);
 
-	// set nonblocking
-	evutil_make_socket_nonblocking(fd);
-
-	// Actually do the connect
-	if (0 != connect(fd, (struct sockaddr *) sa_in, sizeof( *sa_in ) ))
-	{
-		if (errno != EINPROGRESS) {
-
-			if (errno == ECONNREFUSED) {
-				cf_info("host is refusing connections");
-			} else {
-				cf_info("info: connect request failed errno %d", errno);
-			}
-			
-			info_request_destroy(cir);
-			close(fd);
-
-			uint64_t delta = cf_getms() - _s;
-			if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: info host no connect: %"PRIu64, delta);
-
-			return(-1);
-		}
+		return -1;
 	}
 	
 	// fill the buffer while I'm waiting
@@ -312,7 +285,7 @@ ev2citrusleaf_info_host(struct event_base *base, struct sockaddr_in *sa_in, char
 		cf_warn("buffer fill failed");
 		
 		info_request_destroy(cir);
-		close(fd);
+		cf_close(fd);
 		
 		uint64_t delta = cf_getms() - _s;
 		if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: info host bad request: %"PRIu64, delta);

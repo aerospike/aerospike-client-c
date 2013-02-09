@@ -9,17 +9,10 @@
  * All rights reserved
  */
 
-#include <fcntl.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
-#include <arpa/inet.h> // for print function at bottom
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <sys/select.h>
-#include <sys/socket.h>
 
 #include "citrusleaf/cf_base_types.h"
 #include "citrusleaf/cf_clock.h"
@@ -27,6 +20,20 @@
 #include "citrusleaf/cf_log_internal.h"
 
 #include "citrusleaf/cf_socket.h"
+
+
+#ifndef CF_WINDOWS
+//====================================================================
+// Linux
+//
+
+#include <fcntl.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <sys/select.h>
+#include <sys/socket.h>
 
 
 // #define DEBUG_TIME
@@ -49,6 +56,40 @@ static void debug_time_printf(const char* desc, int try, int select_busy, uint64
 	);
 }
 #endif
+
+
+int
+cf_socket_create_nb()
+{
+	// Create the socket.
+	int fd = socket(AF_INET, SOCK_STREAM, 0);
+
+	if (-1 == fd) {
+		cf_warn("could not allocate socket, errno %d", errno);
+		return -1;
+	}
+
+    // Make the socket nonblocking.
+	int flags = fcntl(fd, F_GETFL, 0);
+
+    if (flags < 0) {
+		cf_warn("could not read socket flags");
+		close(fd);
+        return -1;
+	}
+
+    if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
+		cf_warn("could not set socket nonblocking");
+		close(fd);
+        return -1;
+	}
+
+	int f = 1;
+	setsockopt(fd, SOL_TCP, TCP_NODELAY, &f, sizeof(f));
+
+	return fd;
+}
+
 
 //
 // There is a conflict even among various versions of
@@ -378,51 +419,79 @@ cf_socket_write_forever(int fd, uint8_t *buf, size_t buf_len)
 	return(0);
 }
 
-int
-cf_create_nb_socket(struct sockaddr_in *sa, int timeout)
-{
-	int flags;
-
-    struct timeval  ts;
-
-    ts.tv_sec = timeout;
-    ts.tv_usec = 0;
-
-	// Create the socket
-	int fd = -1;
-	if (-1 == (fd = socket ( AF_INET, SOCK_STREAM, 0 ))) {
-		cf_error("could not allocate socket errno %d", errno);
-		return(-1);
-	}
-
-    //set socket nonblocking flag
-    if( (flags = fcntl(fd, F_GETFL, 0)) < 0) {
-		close(fd);
-        return -1;
-	}
-
-    if(fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
-		close(fd);
-        return -1;
-	}
-
-	int f = 1;
-	setsockopt(fd, SOL_TCP, TCP_NODELAY, &f, sizeof(f));
-
-	//initiate non-blocking connect
-	if (0 != connect(fd, (struct sockaddr *) sa, sizeof( *sa ) )) {
-        if (errno != EINPROGRESS) {
-			close(fd);
-            return -1;
-		}
-	}
-	return fd;
-}
-
 void
 cf_print_sockaddr_in(char *prefix, struct sockaddr_in *sa_in)
 {
 	char str[INET_ADDRSTRLEN];
 	inet_ntop(AF_INET, &(sa_in->sin_addr), str, INET_ADDRSTRLEN);
 	cf_error("%s %s:%d", prefix, str, (int)ntohs(sa_in->sin_port));
+}
+
+
+#else // CF_WINDOWS
+//====================================================================
+// Windows
+//
+
+#include <WinSock2.h>
+#include <Wintcp2ip.h> // ???
+
+
+int
+cf_socket_create_nb()
+{
+	// Create the socket.
+	int fd = socket(AF_INET, SOCK_STREAM, 0);
+
+	if (-1 == fd) {
+		cf_warn("could not allocate socket, errno %d", errno);
+		return -1;
+	}
+
+    // Make the socket nonblocking.
+	// TODO - ioctl stuff
+
+	int f = 1;
+	setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char*)&f, sizeof(f));
+
+	return fd;
+}
+
+
+#endif // CF_WINDOWS
+
+
+int
+cf_socket_connect_nb(int fd, struct sockaddr_in* sa)
+{
+	if (0 != connect(fd, (struct sockaddr*)sa, sizeof(*sa))) {
+        if (errno != EINPROGRESS) {
+        	if (errno == ECONNREFUSED) {
+        		cf_debug("host refused socket connection");
+        	}
+        	else {
+        		cf_info("could not connect nonblocking socket %d, errno %d", fd, errno);
+        	}
+
+        	return -1;
+		}
+	}
+
+	return 0;
+}
+
+
+int
+cf_socket_create_and_connect_nb(struct sockaddr_in* sa)
+{
+	// Create the socket.
+	int fd = cf_socket_create_nb();
+
+	// Initiate non-blocking connect.
+	if (0 != cf_socket_connect_nb(fd, sa)) {
+		cf_close(fd);
+		return -1;
+	}
+
+	return fd;
 }

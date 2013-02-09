@@ -9,6 +9,9 @@
 
 #pragma once
 
+#include <stdint.h>
+
+
 #ifndef CF_WINDOWS
 //====================================================================
 // Linux
@@ -40,8 +43,6 @@ static inline int clock_gettime(int clock_type, struct timespec* p_ts)
 }
 
 #endif // CF_WINDOWS
-
-#include <stdint.h>
 
 
 #ifdef __cplusplus

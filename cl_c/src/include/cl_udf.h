@@ -43,7 +43,7 @@ typedef uint8_t as_udf_type;
 
 struct as_udf_file_s {
   char name[128];
-  char hash[SHA_DIGEST_LENGTH];
+  char hash[(SHA_DIGEST_LENGTH * 2 + 1)];
   as_udf_type type;
   as_bytes * content;
 };

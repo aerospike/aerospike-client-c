@@ -96,11 +96,11 @@ int do_doc_udf_test(config *c) {
         if (rsp != CITRUSLEAF_OK) {
             citrusleaf_object_free(&o_key);        
             printf("failed record_udf test data %d rsp=%d\n", i, rsp);
-		as_list_free(arglist);
+		as_val_destroy(arglist);
             return -1;
         }
         citrusleaf_object_free(&o_key);        
-	as_list_free(arglist);
+	as_val_destroy(arglist);
     }
     
     // (4) verify record is updated 

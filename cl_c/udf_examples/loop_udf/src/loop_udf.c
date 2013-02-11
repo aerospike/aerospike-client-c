@@ -263,7 +263,7 @@ worker_fn(void *udata)
 #ifdef DEBUG_VERBOSE
 	fprintf(stderr,"%s: %s\n", res.is_success ? "SUCCESS" : "FAILURE", as_val_tostring(res.value));
 #endif
-        as_list_free(arglist);
+        as_val_destroy(arglist);
         arglist = NULL;
 
 		cf_histogram_insert_data_point(isRead ? g_read_histogram : g_write_histogram, start_time);		

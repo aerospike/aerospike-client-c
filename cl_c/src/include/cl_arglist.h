@@ -36,11 +36,11 @@
  ******************************************************************************/
 
 static inline as_list * as_arglist_new(uint32_t size) {
-    return as_list_new(as_arraylist_new(size, 1), &as_arraylist_list);
+    return as_arraylist_new(size, 1);
 }
 
 static inline int as_list_add_string(as_list * arglist, const char * s) {
-    return as_list_append(arglist, (as_val *) as_string_new(cf_strdup(s)));
+    return as_list_append(arglist, (as_val *) as_string_new(cf_strdup(s), true));
 }
 
 static inline int as_list_add_integer(as_list * arglist, uint64_t i) {

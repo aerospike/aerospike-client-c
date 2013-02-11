@@ -53,9 +53,10 @@ cf_print_sockaddr_in(char *prefix, struct sockaddr_in *sa_in);
 
 #define cf_close(fd) (closesocket(fd))
 
-#define MSG_DONTWAIT	// TODO
-#define MSG_NOSIGNAL	// TODO
-#define MSG_PEEK		// TODO
+#define MSG_DONTWAIT	0
+#define MSG_NOSIGNAL	0
+
+#define SHUT_RDWR		SD_BOTH
 
 
 #endif // CF_WINDOWS

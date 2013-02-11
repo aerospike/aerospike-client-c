@@ -141,7 +141,7 @@ info_event_fn(int fd, short event, void *udata)
 
 	if (event & EV_WRITE) {
 		if (cir->wr_buf_pos < cir->wr_buf_size) {
-			rv = send(fd, &cir->wr_buf[cir->wr_buf_pos], cir->wr_buf_size - cir->wr_buf_pos, MSG_NOSIGNAL | MSG_DONTWAIT);
+			rv = send(fd, (char*)&cir->wr_buf[cir->wr_buf_pos], cir->wr_buf_size - cir->wr_buf_pos, MSG_NOSIGNAL | MSG_DONTWAIT);
 			if (rv > 0) {
 				cir->wr_buf_pos += rv;
 				if (cir->wr_buf_pos == cir->wr_buf_size) {
@@ -162,7 +162,7 @@ info_event_fn(int fd, short event, void *udata)
 
 	if (event & EV_READ) {
 		if (cir->rd_header_pos < sizeof(cl_proto) ) {
-			rv = recv(fd, &cir->rd_header_buf[cir->rd_header_pos], sizeof(cl_proto) - cir->rd_header_pos, MSG_NOSIGNAL | MSG_DONTWAIT);
+			rv = recv(fd, (char*)&cir->rd_header_buf[cir->rd_header_pos], sizeof(cl_proto) - cir->rd_header_pos, MSG_NOSIGNAL | MSG_DONTWAIT);
 			if (rv > 0) {
 				cir->rd_header_pos += rv;
 			}				
@@ -192,7 +192,7 @@ info_event_fn(int fd, short event, void *udata)
 				cir->rd_buf_size = proto->sz;
 			}
 			if (cir->rd_buf_pos < cir->rd_buf_size) {
-				rv = recv(fd, &cir->rd_buf[cir->rd_buf_pos], cir->rd_buf_size - cir->rd_buf_pos, MSG_NOSIGNAL | MSG_DONTWAIT);
+				rv = recv(fd, (char*)&cir->rd_buf[cir->rd_buf_pos], cir->rd_buf_size - cir->rd_buf_pos, MSG_NOSIGNAL | MSG_DONTWAIT);
 				if (rv > 0) {
 					cir->rd_buf_pos += rv;
 					if (cir->rd_buf_pos >= cir->rd_buf_size) {

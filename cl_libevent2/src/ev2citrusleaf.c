@@ -1085,7 +1085,7 @@ int
 ev2citrusleaf_is_connected(int fd)
 {
 	uint8_t buf[8];
-	int rv = recv(fd, buf, sizeof(buf), MSG_PEEK | MSG_DONTWAIT | MSG_NOSIGNAL);
+	int rv = recv(fd, (char*)buf, sizeof(buf), MSG_PEEK | MSG_DONTWAIT | MSG_NOSIGNAL);
 	if (rv == 0) {
 		cf_debug("connected check: found disconnected fd %d", fd);
 		return(CONNECTED_NOT);
@@ -1127,7 +1127,7 @@ ev2citrusleaf_event(int fd, short event, void *udata)
 
 	if (event & EV_WRITE) {
 		if (req->wr_buf_pos < req->wr_buf_size) {
-			rv = send(fd, &req->wr_buf[req->wr_buf_pos], req->wr_buf_size - req->wr_buf_pos,MSG_DONTWAIT | MSG_NOSIGNAL);
+			rv = send(fd, (char*)&req->wr_buf[req->wr_buf_pos], req->wr_buf_size - req->wr_buf_pos,MSG_DONTWAIT | MSG_NOSIGNAL);
 
 			if (rv > 0) {
 				req->wr_buf_pos += rv;
@@ -1150,7 +1150,7 @@ ev2citrusleaf_event(int fd, short event, void *udata)
 
 	if (event & EV_READ) {
 		if (req->rd_header_pos < sizeof(cl_proto) ) {
-			rv = recv(fd, &req->rd_header_buf[req->rd_header_pos], sizeof(cl_proto) - req->rd_header_pos, MSG_DONTWAIT | MSG_NOSIGNAL);
+			rv = recv(fd, (char*)&req->rd_header_buf[req->rd_header_pos], sizeof(cl_proto) - req->rd_header_pos, MSG_DONTWAIT | MSG_NOSIGNAL);
 
 			if (rv > 0) {
 				req->rd_header_pos += rv;
@@ -1189,7 +1189,7 @@ ev2citrusleaf_event(int fd, short event, void *udata)
 				req->rd_buf_size = proto->sz;
 			}
 			if (req->rd_buf_pos < req->rd_buf_size) {
-				rv = recv(fd, &req->rd_buf[req->rd_buf_pos], req->rd_buf_size - req->rd_buf_pos,MSG_DONTWAIT | MSG_NOSIGNAL);
+				rv = recv(fd, (char*)&req->rd_buf[req->rd_buf_pos], req->rd_buf_size - req->rd_buf_pos,MSG_DONTWAIT | MSG_NOSIGNAL);
 
 				if (rv > 0) {
 					req->rd_buf_pos += rv;

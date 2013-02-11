@@ -865,7 +865,7 @@ cl_batch_node_req_handle_send(cl_batch_node_req* _this)
 			return true;
 		}
 
-		int rv = send(_this->fd, &_this->wbuf[_this->wbuf_pos],
+		int rv = send(_this->fd, (char*)&_this->wbuf[_this->wbuf_pos],
 				_this->wbuf_size - _this->wbuf_pos,
 				MSG_DONTWAIT | MSG_NOSIGNAL);
 
@@ -912,7 +912,7 @@ cl_batch_node_req_handle_recv(cl_batch_node_req* _this)
 		if (_this->hbuf_pos < sizeof(cl_proto)) {
 			// Read proto header.
 
-			int rv = recv(_this->fd, &_this->hbuf[_this->hbuf_pos],
+			int rv = recv(_this->fd, (char*)&_this->hbuf[_this->hbuf_pos],
 					sizeof(cl_proto) - _this->hbuf_pos,
 					MSG_DONTWAIT | MSG_NOSIGNAL);
 
@@ -962,7 +962,7 @@ cl_batch_node_req_handle_recv(cl_batch_node_req* _this)
 				return true;
 			}
 
-			int rv = recv(_this->fd, &_this->rbuf[_this->rbuf_pos],
+			int rv = recv(_this->fd, (char*)&_this->rbuf[_this->rbuf_pos],
 					_this->rbuf_size - _this->rbuf_pos,
 					MSG_DONTWAIT | MSG_NOSIGNAL);
 

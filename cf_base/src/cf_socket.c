@@ -462,7 +462,7 @@ cf_socket_create_nb()
 
 
 int
-cf_socket_connect_nb(int fd, struct sockaddr_in* sa)
+cf_socket_start_connect_nb(int fd, struct sockaddr_in* sa)
 {
 	if (0 != connect(fd, (struct sockaddr*)sa, sizeof(*sa))) {
         if (errno != EINPROGRESS) {
@@ -488,7 +488,7 @@ cf_socket_create_and_connect_nb(struct sockaddr_in* sa)
 	int fd = cf_socket_create_nb();
 
 	// Initiate non-blocking connect.
-	if (0 != cf_socket_connect_nb(fd, sa)) {
+	if (0 != cf_socket_start_connect_nb(fd, sa)) {
 		cf_close(fd);
 		return -1;
 	}

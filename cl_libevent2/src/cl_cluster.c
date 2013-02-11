@@ -1231,7 +1231,7 @@ cl_cluster_node_fd_get(cl_cluster_node *cn)
 
 		cf_vector_get(&cn->sockaddr_in_v, i, &sa_in);
 
-		if (0 == cf_socket_connect_nb(fd, &sa_in)) {
+		if (0 == cf_socket_start_connect_nb(fd, &sa_in)) {
 			cf_atomic_int_incr(&g_cl_stats.conns_connected);
 			return fd;
 		}

@@ -65,6 +65,6 @@ cf_print_sockaddr_in(char *prefix, struct sockaddr_in *sa_in);
 extern int
 cf_socket_create_nb();
 extern int
-cf_socket_connect_nb(int fd, struct sockaddr_in *sa);
+cf_socket_start_connect_nb(int fd, struct sockaddr_in *sa);
 extern int
 cf_socket_create_and_connect_nb(struct sockaddr_in *sa);

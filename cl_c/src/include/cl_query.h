@@ -27,61 +27,63 @@
 
 #include "cl_types.h"
 #include "cl_sindex.h"
+#include "as_rec.h"
+#include "as_result.h"
 
-// Range indicates start/end condition for the columns of the indexes.
-// Example1: (index on "last_activity" bin) where last_activity < start_time and last_activity > end_time
-// Example2: (index on "last_activity" bin for equality) where last_activity == start_time
-// Example3: (compound index on "last_activity","state","age") 
-//    where last_activity < start_time and last_activity > end_time
-//    and state in ["ca","wa","or"]
-//    and age == 28
-typedef struct cl_query_range {
-    char        bin_name[CL_BINNAME_SIZE];
-    cl_object   start_obj;
-    cl_object   end_obj;
-} cl_query_range;
+/******************************************************************************
+ * TYPES
+ *******************************************************************************/
 
-typedef enum cl_query_filter_op { CL_FLTR_EQ, CL_FLTR_LT, CL_FLTR_GT, CL_FLTR_LE, CL_FLTR_GE, CL_FLTR_NE, CL_FLTR_EXISTS} cl_query_filter_op;
+typedef enum as_query_op         { CL_EQ, CL_LT, CL_GT, CL_LE, CL_GE, CL_RANGE } as_query_op;
+typedef enum as_query_orderby_op { CL_ORDERBY_ASC, CL_ORDERBY_DESC } as_query_orderby_op;
 
-// Filter indicate a series of post look-up condition in an equivalent "where" clause
-// applied to bins other than the indexed bins
-typedef struct cl_query_filter {
-    char        bin_name[CL_BINNAME_SIZE];
-    cl_object   compare_obj;
-    cl_query_filter_op  ftype;
-} cl_query_filter;
+typedef struct as_query {
+    char        * ns;
+    char        * indexname;
+    char        * setname;
+    cf_vector   * binnames;  // Select
+    cf_vector   * ranges;    // Where
+    cf_vector   * filters;
+    cf_vector   * orderbys;
+    int           limit;  
+    uint64_t      job_id;
+} as_query;
 
-typedef enum cl_query_orderby_op { CL_ORDERBY_ASC, CL_ORDERBY_DESC} cl_query_orderby_op;
+typedef struct as_query_cb_record_t {
+	char        * ns;
+	cf_digest   * keyd;
+	char        * set;
+	uint32_t      generation;
+	uint32_t      record_ttl;
+	cl_bin      * bins;
+	int           n_bins;
+	bool          is_last;
+	void        * udata;
+} as_query_cb_rec;
 
-// Order-by indicate a post look-up result ordering
-typedef struct cl_query_orderby {
-    char        bin_name[CL_BINNAME_SIZE];
-    cl_query_orderby_op ordertype;
-} cl_query_orderby;
+typedef int (* as_query_cb) (as_query_cb_rec *rec);
 
-typedef struct cl_query {
-    char        indexname[CL_MAX_SINDEX_NAME_SIZE];
-    char        setname[CL_MAX_SETNAME_SIZE];
-    cf_vector   *binnames;
-    cf_vector   *ranges;
-    cf_vector   *filters;
-    cf_vector   *orderbys;
-    int         limit;  
-    uint64_t    job_id;
-} cl_query;
- 
 
-// Query  
-int citrusleaf_query_init();
-void citrusleaf_query_shutdown();
-cl_query *citrusleaf_query_create(const char *indexname, const char *setname);
-void citrusleaf_query_destroy(cl_query *query_obj);
-cl_rv citrusleaf_query_add_binname(cl_query *query_obj, const char *binname);
-cl_rv citrusleaf_query_add_range_numeric(cl_query *query_obj, const char *binname,int64_t start,int64_t end);
-cl_rv citrusleaf_query_add_range_string(cl_query *query_obj, const char *binname, const char *start, const char *end);
-cl_rv citrusleaf_query_add_filter_numeric(cl_query *query_obj, const char *binname, int64_t comparer, cl_query_filter_op op);
-cl_rv citrusleaf_query_add_filter_string(cl_query *query_obj, const char *binname, const char *comparer, cl_query_filter_op op);
-cl_rv citrusleaf_query_add_orderby(cl_query *query_obj, const char *binname, cl_query_orderby_op order);
-cl_rv citrusleaf_query_set_limit(cl_query *query_obj, uint64_t limit);
+/******************************************************************************
+ * FUNCTIONS
+ ******************************************************************************/
+#define integer_equals(val) CL_EQ, CL_INT, val 
+#define integer_range(start, end) CL_RANGE, CL_INT, start, end
+#define string_equals(val) CL_EQ, CL_STR, val
 
-cl_rv citrusleaf_query(cl_cluster *asc, const char *ns, const cl_query *query_obj, citrusleaf_get_many_cb cb, void *udata);
+int   as_query_init(as_query **query_obj, const char *ns, const char *setname);
+void  as_query_destroy(as_query *query_obj);
+int   as_query_select (as_query *query_obj, const char *binname);
+int   as_query_where(as_query *query_obj, const char *binname, as_query_op, ...);
+int   as_query_where_function(as_query *query_obj, const char *finame, as_query_op, ...);
+int   as_query_filter(as_query *query_obj, const char *binname, as_query_op op, ...);
+int   as_query_orderby(as_query *query_obj, const char *binname, as_query_orderby_op order);
+int   as_query_limit(as_query *query_obj, uint64_t limit);
+cl_rv as_query_foreach(cl_cluster *asc, const as_query *query_obj, as_query_cb cb, void *udata);
+
+/*
+ * Init and destroy for client query environment. Should be called for once per client
+ * instance before performing citrusleaf query
+ */
+int    citrusleaf_query_init();
+void   citrusleaf_query_shutdown();

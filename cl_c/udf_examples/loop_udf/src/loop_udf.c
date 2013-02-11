@@ -38,7 +38,10 @@
 #include <citrusleaf/cf_hist.h>
 #include <citrusleaf/citrusleaf.h>
 #include <citrusleaf/cl_udf.h>
+#include <citrusleaf/cf_log_internal.h>
 
+//#define DEBUG_VERBOSE 1
+// #define PRINT_KEY 1
 
 typedef struct config_s {
 	
@@ -65,11 +68,13 @@ typedef struct config_s {
 	
 	cl_cluster	*asc;		
 		
-	bool 	verbose;
+	bool 	verbose; // verbose for our system
+	bool	debug; // debug for the citrusleaf library
 	int 	delay;
 
 	cf_atomic_int success;
 	cf_atomic_int fail;
+	cf_atomic_int transactions;
 			
 } config;
 
@@ -104,13 +109,14 @@ dump_buf(char *msg, uint8_t *buf, size_t buf_len)
 void *
 counter_fn(void *arg)
 {
+	uint64_t t = 0;
 	while (1) {
-		
-		sleep(5);
-		fprintf(stderr, "5 sec check: success %ld fail %ld\n",g_config->success,g_config->fail);
+		sleep(1);
+		cf_info("Transactions in the last second %ld",g_config->transactions - t);	
+		cf_debug("Every sec check: total success %ld fail %ld",g_config->success,g_config->fail);
 		cf_histogram_dump(g_read_histogram); 
 		cf_histogram_dump(g_write_histogram); 
-		
+		t = g_config->transactions;
 	}
 	return(0);
 }
@@ -123,11 +129,6 @@ start_counter_thread()
 	
 	return(NULL);
 }
-
-
-// #define DEBUG 1
-// #define DEBUG_VERBOSE 1
-// #define PRINT_KEY 1
 
 typedef struct key_value_s {
 	
@@ -205,7 +206,7 @@ static key_value *make_key_value(uint seed, uint key_len, uint value_len)
 
 	
 #ifdef DEBUG_VERBOSE
-	fprintf(stderr, "make key value: key_len %d key %s value_len %d value_str %s value_int %"PRIu64"\n",key_len,kv->key,value_len,kv->value_str,kv->value_int);
+	fprintf(stderr, "make key value: key_len %d key %s value_len %d value_str %s value_int %"PRIu64"\n",key_len,kv->key_str,value_len,kv->value_str,kv->value_int);
 #endif
 	
 	return(kv);	
@@ -259,18 +260,22 @@ worker_fn(void *udata)
         uint64_t start_time = cf_getms();
     	cl_rv rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, g_config->package_name, g_config->f_name, arglist, g_config->timeout_ms, &res);
 
+#ifdef DEBUG_VERBOSE
+	fprintf(stderr,"%s: %s\n", res.is_success ? "SUCCESS" : "FAILURE", as_val_tostring(res.value));
+#endif
         as_list_free(arglist);
         arglist = NULL;
 
 		cf_histogram_insert_data_point(isRead ? g_read_histogram : g_write_histogram, start_time);		
 		
 		if (rsp != CITRUSLEAF_OK) {
-			//fprintf(stderr,"failed citrusleaf_run_sproc rsp=%d\n",rsp);
+			//fprintf(stderr,"failed citrusleaf_run_udf rsp=%d\n",rsp);
+			fprintf(stderr,"Key_str is %s, key_int %ld\n",kv->key_str,kv->key_int);
 			cf_atomic_int_incr(&g_config->fail);
 		} else {
 			cf_atomic_int_incr(&g_config->success);
 		}
-
+		cf_atomic_int_incr(&g_config->transactions);
 		citrusleaf_object_free(&o_key);		
 		free(kv);
 		
@@ -304,6 +309,7 @@ void usage(int argc, char *argv[]) {
     fprintf(stderr, "-t thread_count [default 8]\n");
     fprintf(stderr, "-i start_key [default 0]\n");
     fprintf(stderr, "-j n_keys [default 1000]\n");
+	fprintf(stderr, "-d debug [default false]\n");
 }
 
 int init_configuration (int argc, char *argv[])
@@ -318,6 +324,7 @@ int init_configuration (int argc, char *argv[])
 	g_config->timeout_ms   = 1000;
 	g_config->record_ttl   = 864000;
 	g_config->verbose      = false;
+	g_config->debug		   = false;
 	g_config->package_file = "../lua_files/udf_loop_test.lua";
 	g_config->package_name = "udf_loop_test";
 	g_config->n_threads    = 8;
@@ -330,10 +337,10 @@ int init_configuration (int argc, char *argv[])
 	g_config->value_len    = 128;
 	g_config->rw_ratio     = 80;
 	g_config->delay        = 0;
-                
+   	g_config->transactions = 0;             
 	fprintf(stderr, "Starting Loop Test Record Sproc\n");
 	int optcase;
-	while ((optcase = getopt(argc, argv, "ckmh:p:n:s:P:f:v:x:r:t:i:j:")) != -1) {
+	while ((optcase = getopt(argc, argv, "ckmh:p:n:s:P:f:v:x:r:t:i:j:d")) != -1) {
 		switch (optcase) {
 		case 'h': g_config->host         = strdup(optarg);          break;
 		case 'p': g_config->port         = atoi(optarg);            break;
@@ -352,6 +359,7 @@ int init_configuration (int argc, char *argv[])
         	break;
 		case 'i': g_config->start_key    = atoi(optarg);            break;
 		case 'j': g_config->n_keys       = atoi(optarg);            break;
+		case 'd': g_config->debug = true; break;
 		default:  usage(argc, argv);                      return(-1);
         }
     }
@@ -385,17 +393,18 @@ int register_package()
     
     char *err_str = NULL;
     if (b_tot>0) {
-    	int resp = citrusleaf_udf_put(g_config->asc, basename(g_config->package_file), script_code, &err_str);
-		if (resp!=0) {
-	        fprintf(stderr, "unable to register package file %s as %s resp = %d\n",g_config->package_file,g_config->package_name,resp); return(-1);
-	        fprintf(stderr, "%s\n",err_str); free(err_str);
-			return(-1);
-		}
+	    int resp = citrusleaf_udf_put(g_config->asc, basename(g_config->package_file), script_code, &err_str);
+	    if (resp!=0) {
+		    fprintf(stderr, "unable to register package file %s as %s resp = %d\n",g_config->package_file,g_config->package_name,resp); return(-1);
+		    fprintf(stderr, "%s\n",err_str); free(err_str);
+		    free(script_code);
+		    return(-1);
+	    }
 	    fprintf(stderr, "successfully registered package file %s as %s\n",g_config->package_file,g_config->package_name); 
     } else {   
 	    fprintf(stderr, "unable to read package file %s as %s b_tot = %d\n",g_config->package_file,g_config->package_name,b_tot); return(-1);    
     }
-    
+    free(script_code); 
     return 0;
 }
 
@@ -406,7 +415,9 @@ int main(int argc, char **argv) {
 	if (init_configuration(argc,argv) !=0 ) {
 		return -1;
 	}
-    //citrusleaf_set_debug(true);
+	if (g_config->debug) {
+    	citrusleaf_set_debug(true);
+	}
 	
 	// setting up cluster
     fprintf(stderr, "Startup: host %s port %d ns %s set %s file %s\n",
@@ -434,8 +445,8 @@ int main(int argc, char **argv) {
     // create and fire off n worker threads
 	pthread_t	*thr_array = malloc(sizeof(pthread_t) * g_config->n_threads);
 
-    g_read_histogram = cf_histogram_create("r_sproc");
-    g_write_histogram = cf_histogram_create("w_sproc");
+    g_read_histogram = cf_histogram_create("r_udf");
+    g_write_histogram = cf_histogram_create("w_udf");
     if (g_read_histogram==NULL || g_write_histogram==NULL) {
         fprintf(stderr," cannot create histograms \n");
         return -1;

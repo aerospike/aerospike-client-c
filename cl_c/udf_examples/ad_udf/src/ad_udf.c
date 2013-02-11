@@ -36,7 +36,7 @@ void usage(int argc, char *argv[]) {
     fprintf(stderr, "-p port [default 3000]\n");
     fprintf(stderr, "-n namespace [default test]\n");
     fprintf(stderr, "-s set [default *all*]\n");
-    fprintf(stderr, "-f udf_file [default lua_files/udf_unit_test.lua]\n");
+    fprintf(stderr, "-f udf_file [default ../../lua_files/ad_udf.lua]\n");
 }
 
 
@@ -102,7 +102,6 @@ int do_udf_user_write(int user_id) {
 		return(-1);
 	}
 	// adding parameter to be used by the udf
-//	as_list_add_string(arglist, "w");
 	as_list_add_string(arglist, lua_arg);
 
 	// execute the udf, print the result
@@ -201,7 +200,6 @@ int do_udf_user_read(int user_id) {
 	fprintf(stderr," sending udf campaigns %s\n",lua_arg);
 
 	// adding parameter to be used by the udf
-//	as_list_add_string(arglist, "w");
 	as_list_add_string(arglist, lua_arg);
 
 	// (2) execute the udf, print the result

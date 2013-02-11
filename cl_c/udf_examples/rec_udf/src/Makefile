@@ -10,15 +10,15 @@ DIR_LIB = ../../../target/Linux-x86_64/lib
 
 SOURCES       = rec_udf.c utils.c 
 TARGET        = rec_udf
-DOC_HEADERS   = doc_sproc.h utils.h 
-DOC_SOURCES   = doc_sproc.c utils.c 
-DOC_TARGET    = doc_sproc
+DOC_HEADERS   = doc_udf.h utils.h 
+DOC_SOURCES   = doc_udf.c utils.c 
+DOC_TARGET    = doc_udf
 RLIST_HEADERS = redis_list_sproc.h utils.h 
 RLIST_SOURCES = redis_list_sproc.c utils.c 
 RLIST_TARGET  = redis_list_sproc
 
-MANAGE_SOURCES = manage_sproc.c
-MANAGE_TARGET  = manage_sproc
+MANAGE_SOURCES = manage_udf.c
+MANAGE_TARGET  = manage_udf
 
 INCLUDES = -I../include/ -I../../../target/Linux-x86_64/include/
 LIBRARIES = $(DIR_LIB)/libcitrusleaf.a  -lssl -lcrypto -lpthread -lrt
@@ -44,7 +44,7 @@ MANAGE_DEPENDENCIES = $(MANAGE_OBJECTS:%.o=%.d)
 
 
 .PHONY: all
-all: rec_udf
+all: rec_udf doc_udf manage_udf
 #all: rec_sproc doc_sproc manage_sproc redis_list_sproc
 
 .PHONY: clean

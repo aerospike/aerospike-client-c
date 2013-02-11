@@ -7,8 +7,8 @@
  */
 
 #include "citrusleaf.h"
-#include "cl_cluster.h"
 #include "citrusleaf-internal.h"
+#include "cl_cluster.h"
 #include "cl_query.h"
 
 #include <citrusleaf/cf_atomic.h>
@@ -32,27 +32,89 @@
 #include "citrusleaf/cf_socket.h"
 #include "citrusleaf/cf_vector.h"
 
-#define EXTRA_CHECKS 1
+/******************************************************************************
+ * TYPES
+ ******************************************************************************/
 
-// work item given to each node
+/*
+ * Provide a safe number for your system linux tends to have 8M 
+ * stacks these days
+ */ 
+#define               STACK_BUF_SZ        (1024 * 16) 
+#define               STACK_BINS           100
+#define               N_MAX_QUERY_THREADS  5
+
+/*
+ * Work item which gets queued up to each node
+ */
 typedef struct {
-    // these sections are the same for the same query
-    cl_cluster               *asc; 
-    const char               *ns;
-    const uint8_t            *query_buf;
-    size_t                    query_sz;
-    citrusleaf_get_many_cb    cb; 
-    void                     *udata;
-    cf_queue                 *node_complete_q;    // used to synchronize work from all nodes are finished
-    // different for each node
-    char                      node_name[NODE_NAME_SIZE];    
+    cl_cluster           * asc; 
+    const char           * ns;
+    const uint8_t        * query_buf;
+    size_t                 query_sz;
+    as_query_cb            cb; 
+    void                 * udata;
+    cf_queue             * node_complete_q;     // Asyncwork item queue
+    char                   node_name[NODE_NAME_SIZE];    
 } query_work;
 
-#define    N_MAX_QUERY_THREADS 5
-static cf_atomic32  query_initialized = 0;
-static cf_queue     *g_query_q         = 0;
-static pthread_t    g_query_th[N_MAX_QUERY_THREADS];
-static query_work    g_null_work;
+ cf_atomic32    query_initialized  = 0;
+ cf_queue     * g_query_q          = 0;
+ pthread_t      g_query_th[N_MAX_QUERY_THREADS];
+ query_work     g_null_work;
+
+bool                  gasq_abort = false;
+
+
+/*
+ * where indicates start/end condition for the columns of the indexes.
+ * Example1: (index on "last_activity" bin) 
+ *              WHERE last_activity > start_time AND last_activity < end_time
+ * Example2: (index on "last_activity" bin for equality) 
+ *              WHERE last_activity = start_time
+ * Example3: (compound index on "last_activity","state","age") 
+ *              WHERE last_activity > start_time AND last_activity < end_time
+ *                    AND state IN ["ca","wa","or"]
+ *                    AND age = 28
+ */                    
+typedef struct query_range {
+    char       bin_name[CL_BINNAME_SIZE];
+    bool       closedbound;
+    bool       isfunction;
+    cl_object  start_obj;
+    cl_object  end_obj;
+} query_range;
+
+/*
+ * Filter Indicate condition for the non-indexed columns.
+ * Example3: (index on "last_activity","state","age") 
+ *              WHERE last_activity > start_time AND last_activity < end_time
+ *                    AND state IN ["ca","wa","or"]
+ *                    AND age = 28
+ */
+typedef struct query_filter {
+    char        bin_name[CL_BINNAME_SIZE];
+    cl_object   compare_obj;
+    as_query_op ftype;
+} query_filter;
+
+typedef struct query_orderby_clause {
+    char                bin_name[CL_BINNAME_SIZE];
+    as_query_orderby_op ordertype;
+} query_orderby;
+
+
+/******************************************************************************
+ * STATIC FUNCTIONS
+ ******************************************************************************/
+static int query_compile_select(cf_vector *binnames, uint8_t *buf, int *sz_p);
+static int query_compile_range(cf_vector *range_v, uint8_t *buf, int *sz_p);
+static int query_compile_filter(cf_vector *filter_v, uint8_t *buf, int *sz_p)  { return 0; }
+static int query_compile_orderby(cf_vector *filter_v, uint8_t *buf, int *sz_p) { return 0; }
+static int query_compile_function(cf_vector *range_v, uint8_t *buf, int *sz_p) { return 0; }
+static int query_compile(const as_query * query, uint8_t **buf_r, size_t *buf_sz_r);
+static int do_query_monte(cl_cluster_node *node, const char *ns, const uint8_t *query_buf, size_t query_sz, as_query_cb cb, void *udata, bool isnbconnect);
+
 
 
 // query range field layout: contains - numranges, binname, start, end
@@ -76,7 +138,7 @@ static query_work    g_null_work;
 // +b+5+x+y+4   y end_particle_data
 //
 // repeat "numranges" times from "binname"
-static int query_compile_range_field(cf_vector *range_v, uint8_t *buf, int *sz_p)
+static int query_compile_range(cf_vector *range_v, uint8_t *buf, int *sz_p)
 {
     int sz = 0;
         
@@ -86,9 +148,9 @@ static int query_compile_range_field(cf_vector *range_v, uint8_t *buf, int *sz_p
         *buf++ = cf_vector_size(range_v);
     }
     
-    // iterate through each ranage    
+    // iterate through each range    
     for (uint i=0; i<cf_vector_size(range_v); i++) {
-        cl_query_range *range = (cl_query_range *)cf_vector_getp(range_v,i);
+        query_range *range = (query_range *)cf_vector_getp(range_v,i);
         
         // binname size
         int binnamesz = strlen(range->bin_name);
@@ -118,16 +180,13 @@ static int query_compile_range_field(cf_vector *range_v, uint8_t *buf, int *sz_p
         if (buf) {
             uint32_t ss = psz; 
             *((uint32_t *)buf) = ntohl(ss);
-            // fprintf(stderr, "*** ss %ld buf %ld\n",ss,*((uint32_t *)buf));
             buf += sizeof(uint32_t);
         } 
         
         // start particle data
         sz += psz;
         if (buf) {
-            //fprintf(stderr, "*** buf %ld\n",*((uint64_t *)buf));
             cl_object_to_buf(&range->start_obj,buf);
-            //fprintf(stderr, "*** buf %ld\n",*((uint64_t *)buf));
             buf += psz;
         }
         
@@ -139,16 +198,13 @@ static int query_compile_range_field(cf_vector *range_v, uint8_t *buf, int *sz_p
         if (buf) {
             uint32_t ss = psz; 
             *((uint32_t *)buf) = ntohl(ss);
-            // fprintf(stderr, "*** ss %ld buf %ld\n",ss,*((uint32_t *)buf));
             buf += sizeof(uint32_t);
         } 
         
         // end particle data
         sz += psz;
         if (buf) {
-            //fprintf(stderr, "*** buf %ld\n",*((uint64_t *)buf));
             cl_object_to_buf(&range->end_obj,buf);
-            //fprintf(stderr, "*** buf %ld\n",*((uint64_t *)buf));
             buf += psz;
         }
     }        
@@ -160,22 +216,23 @@ static int query_compile_range_field(cf_vector *range_v, uint8_t *buf, int *sz_p
     return 0; 
 }
 
-// generic field header
-// 0   4 size = size of data only
-// 4   1 field_type = CL_MSG_FIELD_TYPE_INDEX_RANGE
-//
-// numbins
-// 5   1 binnames (max 255 binnames) 
-//
-// binnames 
-// 6   1 binnamelen b
-// 7   b binname
-// 
-// numbins times
-
-
-static int query_compile_binnames_field(cf_vector *binnames, uint8_t *buf, int *sz_p)
-{
+/*
+ * Wire Layout
+ *
+ * Generic field header
+ * 0   4 size = size of data only
+ * 4   1 field_type = CL_MSG_FIELD_TYPE_INDEX_RANGE
+ *
+ * numbins
+ * 5   1 binnames (max 255 binnames) 
+ *
+ * binnames 
+ * 6   1 binnamelen b
+ * 7   b binname
+ * 
+ * numbins times
+ */
+static int query_compile_select(cf_vector *binnames, uint8_t *buf, int *sz_p) {
     int sz = 0;
         
     // numbins
@@ -201,13 +258,8 @@ static int query_compile_binnames_field(cf_vector *binnames, uint8_t *buf, int *
             memcpy(buf, binname, binnamesz);
             buf += binnamesz;
         }
-        //fprintf(stderr, "Packing binname %s of size %d \n",binname, binnamesz);
     }        
     *sz_p = sz;
-
-    // @chris:  This had a return type but no return value
-    //          so I am returning 0, assuming that is what the 
-    //          compiler was defaulting to.
     return 0;
 }
 
@@ -215,46 +267,45 @@ static int query_compile_binnames_field(cf_vector *binnames, uint8_t *buf, int *
 // if the query is null, then you run the MR job over the entire set or namespace
 // If the job is null, just run the query
 
-static int query_compile (const char *ns, const cl_query *query, 
-                         uint8_t **buf_r, size_t *buf_sz_r) {
+static int query_compile(const as_query *query, uint8_t **buf_r, size_t *buf_sz_r) {
         
-    if (ns==NULL)         return -1;
+    if (!query || !query->ranges) return CITRUSLEAF_FAIL_CLIENT;
 
-#ifdef EXTRA_CHECKS
-    if (query) {
-        if ( ! query->ranges ) {
-            fprintf(stderr, "query compile internal error: query with no range\n");
-            return(-1);
-        }
-    }
-#endif    
-    
-    // calculating buffer size & n_fields
+    // Calculating buffer size & n_fields
     int     n_fields = 0; 
     size_t  msg_sz  = sizeof(as_msg);
     
-    // namespace field 
-    n_fields++;
-    int     ns_len  = strlen(ns);
-    msg_sz += ns_len  + sizeof(cl_msg_field); 
-
-    int     iname_len = 0;
-    int     setname_len = 0;
-    int     range_sz = 0;
-    int     num_bins = 0;
+    int ns_len = 0;
+    int setname_len = 0;
+    int iname_len = 0;
+    int range_sz = 0;
+    int num_bins = 0;
     if (query) {
-        // indexname field
-        iname_len = strlen(query->indexname);
-        if (iname_len) {
-            n_fields++;
-            msg_sz += strlen(query->indexname) + sizeof(cl_msg_field);
-        }
         
-        setname_len = strlen(query->setname);
-        if (setname_len) {
+        // namespace field 
+        if (!query->ns) return CITRUSLEAF_FAIL_CLIENT;
+        ns_len  = strlen(query->ns);
+        if (ns_len) {
             n_fields++;
-            msg_sz += setname_len + sizeof(cl_msg_field);
+            msg_sz += ns_len  + sizeof(cl_msg_field); 
         }
+
+        // indexname field
+		if (query->indexname) {
+			iname_len = strlen(query->indexname);
+			if (iname_len) {
+				n_fields++;
+				msg_sz += strlen(query->indexname) + sizeof(cl_msg_field);
+			}
+		}
+        
+		if (query->setname) {
+			setname_len = strlen(query->setname);
+			if (setname_len) {
+				n_fields++;
+				msg_sz += setname_len + sizeof(cl_msg_field);
+			}
+		}
 
         if (query->job_id) {
             n_fields++;
@@ -264,21 +315,27 @@ static int query_compile (const char *ns, const cl_query *query,
         // query field    
         n_fields++;
         range_sz = 0; 
-        query_compile_range_field(query->ranges, NULL, &range_sz);
+        if (query_compile_range(query->ranges, NULL, &range_sz)) {
+            return CITRUSLEAF_FAIL_CLIENT;
+        }
         msg_sz += range_sz + sizeof(cl_msg_field);
 
         // bin field    
         if (query->binnames) {
             n_fields++;
             num_bins = 0;
-            query_compile_binnames_field(query->binnames, NULL, &num_bins);
+            if (!query_compile_select(query->binnames, NULL, &num_bins)) {
+                return CITRUSLEAF_FAIL_CLIENT;
+            }
             msg_sz += num_bins + sizeof(cl_msg_field);
         }
+
+        // TODO filter field
+        // TODO orderby field
+        // TODO limit field
+
     }
     
-    // TODO filter field
-    // TODO orderby field
-    // TODO limit field
     
     // get a buffer to write to.
     uint8_t *buf; uint8_t *mbuf = 0;
@@ -299,10 +356,10 @@ static int query_compile (const char *ns, const cl_query *query,
     // now write the fields
     cl_msg_field *mf = (cl_msg_field *) buf;
     cl_msg_field *mf_tmp = mf;
-    if (ns) {
+    if (query->ns) {
         mf->type = CL_MSG_FIELD_TYPE_NAMESPACE;
         mf->field_sz = ns_len + 1;
-        memcpy(mf->data, ns, ns_len);
+        memcpy(mf->data, query->ns, ns_len);
         mf_tmp = cl_msg_field_get_next(mf);
         cl_msg_swap_field(mf);
         mf = mf_tmp;
@@ -335,7 +392,7 @@ static int query_compile (const char *ns, const cl_query *query,
     if (query->ranges) {
         mf->type = CL_MSG_FIELD_TYPE_INDEX_RANGE;
         mf->field_sz = range_sz + 1;
-        query_compile_range_field(query->ranges, mf->data, &range_sz);
+        query_compile_range(query->ranges, mf->data, &range_sz);
         mf_tmp = cl_msg_field_get_next(mf);
         cl_msg_swap_field(mf);
         mf = mf_tmp;
@@ -344,7 +401,7 @@ static int query_compile (const char *ns, const cl_query *query,
     if (query->binnames) {
         mf->type = CL_MSG_FIELD_TYPE_QUERY_BINLIST;
         mf->field_sz = num_bins + 1;
-        query_compile_binnames_field(query->binnames, mf->data, &num_bins);
+        query_compile_select(query->binnames, mf->data, &num_bins);
         mf_tmp = cl_msg_field_get_next(mf);
         cl_msg_swap_field(mf);
         mf = mf_tmp;
@@ -355,7 +412,6 @@ static int query_compile (const char *ns, const cl_query *query,
         // Convert the transaction-id to network byte order (big-endian)
         uint64_t trid_nbo = __cpu_to_be64(query->job_id); //swaps in place
         mf->field_sz = sizeof(trid_nbo) + 1;
-        //printf("write_fields: trid: write_fields: %d\n", mf->field_sz);
         memcpy(mf->data, &trid_nbo, sizeof(trid_nbo));
         mf_tmp = cl_msg_field_get_next(mf);
         cl_msg_swap_field(mf);
@@ -366,22 +422,16 @@ static int query_compile (const char *ns, const cl_query *query,
         if (mbuf) {
             free(mbuf); 
         }
-        return(-1); 
+        return CITRUSLEAF_FAIL_CLIENT;
     }
-
-    return(0);    
+    return CITRUSLEAF_OK;
 }
-
-#define STACK_BUF_SZ (1024 * 16) // provide a safe number for your system
-                                 // - linux tends to have 8M stacks these days
-#define STACK_BINS 100
 
 // 
 // this is an actual instance of a query, running on a query thread
 //
-bool gasq_abort = false;
 static int do_query_monte(cl_cluster_node *node, const char *ns, const uint8_t *query_buf, size_t query_sz, 
-                          citrusleaf_get_many_cb cb, void *udata, bool isnbconnect) {
+                          as_query_cb cb, void *udata, bool isnbconnect) {
 
     uint8_t        rd_stack_buf[STACK_BUF_SZ];    
     uint8_t        *rd_buf = rd_stack_buf;
@@ -396,36 +446,38 @@ static int do_query_monte(cl_cluster_node *node, const char *ns, const uint8_t *
     }
     
     // send it to the cluster - non blocking socket, but we're blocking
-    if (0 != cf_socket_write_forever(fd, (uint8_t *) query_buf, (size_t) query_sz)) { return(-1); }
+    if (0 != cf_socket_write_forever(fd, (uint8_t *) query_buf, (size_t) query_sz)) {
+        return CITRUSLEAF_FAIL_CLIENT;
+    }
 
-    cl_proto         proto;
-    bool done = false;
-    int rv;
+    cl_proto  proto;
+    int       rv   = CITRUSLEAF_OK;
+    bool      done = false;
     
     do {
     
         // multiple CL proto per response
-        // Now turn around and read a fine cl_pro - that's the first 8 bytes that has types and lenghts
+        // Now turn around and read a fine cl_proto - that's the first 8 bytes 
+        // that has types and lengths
         if ((rv = cf_socket_read_forever(fd, (uint8_t *) &proto,
                                          sizeof(cl_proto) ) ) ) {
             fprintf(stderr, "network error: errno %d fd %d\n",rv, fd);
-            return(-1);
+            return CITRUSLEAF_FAIL_CLIENT;
         }
         cl_proto_swap(&proto);
 
         if (proto.version != CL_PROTO_VERSION) {
             fprintf(stderr, "network error: received protocol message of wrong version %d\n",proto.version);
-            return(-1);
+            return CITRUSLEAF_FAIL_CLIENT;
         }
         if ((proto.type != CL_PROTO_TYPE_CL_MSG) &&
             (proto.type != CL_PROTO_TYPE_CL_MSG_COMPRESSED)) {
             fprintf(stderr, "network error: received incorrect message version %d\n",proto.type);
-            return(-1);
+            return CITRUSLEAF_FAIL_CLIENT;
         }
         
-        // second read for the remainder of the message - expect this to cover lots of data, many lines
-        //
-        // if there's no error
+        // second read for the remainder of the message - expect this to cover 
+        // lots of data, many lines if there's no error
         rd_buf_sz =  proto.sz;
         if (rd_buf_sz > 0) {
             if (rd_buf_sz > sizeof(rd_stack_buf))
@@ -531,9 +583,20 @@ static int do_query_monte(cl_cluster_node *node, const char *ns, const uint8_t *
             else if ((msg->n_ops || (msg->info1 & CL_MSG_INFO1_NOBINDATA))) {
                 
                 if (cb) {
+					as_query_cb_rec rec = {
+						.ns         = ns_ret,
+						.keyd       = keyd,
+						.set        = set_ret,
+						.generation = msg->generation,
+						.record_ttl = msg->record_ttl,
+						.bins       = bins,
+						.n_bins     = msg->n_ops,
+						.is_last     = false,
+						.udata      = udata
+					};
                     // got one good value? call it a success!
                     // (Note:  In the key exists case, there is no bin data.)
-                    (*cb) ( ns_ret, keyd, set_ret, msg->generation, msg->record_ttl, bins, msg->n_ops, false /*islast*/, udata);
+                    (*cb) (&rec);
                 }
                 rv = 0;
             }
@@ -610,20 +673,20 @@ static void *query_worker_fn(void *dummy) {
     }
 }
 
-cl_rv citrusleaf_query(cl_cluster *asc, const char *ns, const cl_query *query, 
-                       citrusleaf_get_many_cb cb, void *udata) 
+cl_rv as_query_foreach(cl_cluster *asc, const as_query *query, 
+                       as_query_cb cb, void *udata) 
 {
     query_work work;
         
     work.asc = asc;
-    work.ns = ns;
+    work.ns = query->ns;
 
     uint8_t  wr_stack_buf[STACK_BUF_SZ];
     uint8_t *wr_buf = wr_stack_buf;
     size_t   wr_buf_sz = sizeof(wr_stack_buf);
     
     // compile the query - a good place to fail    
-    int rv = query_compile(ns, query, &wr_buf, &wr_buf_sz);
+    int rv = query_compile(query, &wr_buf, &wr_buf_sz);
     if (rv) {
         fprintf(stderr,"do query monte: query compile failed: ");
         return (rv);
@@ -677,39 +740,57 @@ cl_rv citrusleaf_query(cl_cluster *asc, const char *ns, const cl_query *query,
     return retval;
 }
 
-cl_query *citrusleaf_query_create(const char *indexname, const char *setname)
+int as_query_init(as_query **query, const char *ns, const char *setname)
 {
-    cl_query *query = malloc(sizeof(cl_query));
-    if (query==NULL) {
-        return NULL;
+    *query = malloc(sizeof(as_query));
+    if (query == NULL) {
+        return CITRUSLEAF_FAIL_CLIENT;
     }
-    memset(query,0,sizeof(cl_query));
-    if (indexname) memcpy(query->indexname, indexname, strlen(indexname));
-    if (setname)   memcpy(query->setname,   setname,   strlen(setname));
-    query->job_id = cf_get_rand64();
-    return query;    
+    memset(*query, 0, sizeof(as_query));
+    if (setname) {
+        (*query)->setname = malloc(strlen(setname));
+        if (!(*query)->setname) goto Cleanup;
+        memcpy((*query)->setname,   setname,   strlen(setname));
+    } else {
+        (*query)->setname = NULL;
+    }
+
+    if (ns) {
+        (*query)->ns = malloc(strlen(ns));
+        if (!(*query)->ns) goto Cleanup;
+        memcpy((*query)->ns,   ns,   strlen(ns));
+    } else {
+        (*query)->ns = NULL;
+    }
+
+
+    if (setname)   memcpy((*query)->ns,   ns,   strlen(ns));
+    (*query)->job_id = cf_get_rand64();
+    return 0;
+Cleanup:
+    if ((*query)->setname) free((*query)->setname);
+    if ((*query)->ns) free((*query)->ns);
+    free(*query);
+    return -1;
 }
 
-static void cl_range_destroy(cl_query_range *range)
-{
+ void cl_range_destroy(query_range *range) {
     citrusleaf_object_free(&range->start_obj);
     citrusleaf_object_free(&range->end_obj);
 }
 
-static void cl_filter_destroy(cl_query_filter *filter)
-{
+ void cl_filter_destroy(query_filter *filter) {
     citrusleaf_object_free(&filter->compare_obj);
 }
 
-void citrusleaf_query_destroy(cl_query *query)
-{
+void as_query_destroy(as_query *query) {
     if (query->binnames) {
         cf_vector_destroy(query->binnames);
     }
 
     if (query->ranges) {
         for (uint i=0; i<cf_vector_size(query->ranges); i++) {
-            cl_query_range *range = (cl_query_range *)cf_vector_getp(query->ranges, i);
+            query_range *range = (query_range *)cf_vector_getp(query->ranges, i);
             cl_range_destroy(range);
         }
         cf_vector_destroy(query->ranges);
@@ -717,7 +798,7 @@ void citrusleaf_query_destroy(cl_query *query)
     
     if (query->filters) {
         for (uint i=0; i<cf_vector_size(query->filters); i++) {
-            cl_query_filter *filter = (cl_query_filter *)cf_vector_getp(query->filters, i);
+            query_filter *filter = (query_filter *)cf_vector_getp(query->filters, i);
             cl_filter_destroy(filter);
         }
         cf_vector_destroy(query->filters);
@@ -726,12 +807,11 @@ void citrusleaf_query_destroy(cl_query *query)
     if (query->orderbys) {
         cf_vector_destroy(query->orderbys);
     }
-
     free(query);
+    query = NULL;
 }
 
-cl_rv citrusleaf_query_add_binname(cl_query *query, const char *binname)
-{
+cl_rv as_query_select(as_query *query, const char *binname) {
     if ( !query->binnames ) {
         query->binnames = cf_vector_create(CL_BINNAME_SIZE, 5, 0);
         if (query->binnames==NULL) {
@@ -739,62 +819,103 @@ cl_rv citrusleaf_query_add_binname(cl_query *query, const char *binname)
         }
     }
     cf_vector_append(query->binnames, (void *)binname);    
-    //fprintf(stderr,"Appending binname %s\n",binname);
     return CITRUSLEAF_OK;    
 }
 
-static cl_rv add_range_generic (cl_query *query, const char *binname, cl_query_range *range)
-{
-    if ( !query->ranges) {
-        query->ranges = cf_vector_create(sizeof(cl_query_range),5,0);
+static cl_rv query_where_generic(bool isfunction, as_query *query, const char *binname, as_query_op op, va_list list) { 
+    query_range range;
+    range.isfunction = isfunction;
+//    va_list list; 
+//    va_start(list, op);
+    int type = va_arg(list, int);
+    if (type == CL_INT)
+    {
+        uint64_t start = 0;
+        uint64_t end   = 0;
+        switch(op) {
+            case CL_EQ:
+                start = end = va_arg(list, uint64_t);
+                break;
+            case CL_LE: range.closedbound = true;
+            case CL_LT:
+                    start = 0;
+                end = va_arg(list, uint64_t);
+                break;
+             case CL_GE: range.closedbound = true;
+            case CL_GT:
+                start = va_arg(list, uint64_t);
+                end = UINT64_MAX;
+                break;
+            case CL_RANGE:
+                start = va_arg(list, uint64_t);
+                end = va_arg(list, uint64_t);
+            break;
+            default: goto Cleanup;
+        }
+        citrusleaf_object_init_int(&range.start_obj, start);
+        citrusleaf_object_init_int(&range.end_obj, end);
+    }
+    else if (type == CL_STR)
+    {
+        char *val = NULL;
+        switch(op) {
+            case CL_EQ:
+                val = va_arg(list, char *);
+                citrusleaf_object_init_str(&range.start_obj, val);
+                citrusleaf_object_init_str(&range.end_obj, val);
+                break;
+            case CL_LE: 
+            case CL_LT:
+            case CL_GE:
+            case CL_GT:
+            case CL_RANGE:
+            default:  goto Cleanup;
+        }
+    } else {
+        goto Cleanup;
+    }
+    va_end(list);
+    if (!query->ranges) {
+        query->ranges = cf_vector_create(sizeof(query_range),5,0);
         if (query->ranges==NULL) {
             return CITRUSLEAF_FAIL_CLIENT;
         }
     }
-    strcpy(range->bin_name,binname);
-    cf_vector_append(query->ranges,(void *)range);
+    strcpy(range.bin_name, binname);
+    cf_vector_append(query->ranges,(void *)&range);
+    return CITRUSLEAF_OK;
+Cleanup:
+    va_end(list);
+    return CITRUSLEAF_FAIL_CLIENT;
+}
+
+cl_rv as_query_where_function(as_query *query, const char *finame, as_query_op op, ...) {
+    va_list args;
+    va_start(args, op);
+    cl_rv rv = query_where_generic(true, query, finame, op, args); 
+    va_end(args);
+    return rv;
+}
+
+cl_rv as_query_where(as_query *query, const char *binname, as_query_op op, ...) {
+    va_list args;
+    va_start(args, op);
+    cl_rv rv = query_where_generic(false, query, binname, op, args); 
+    va_end(args);
+    return rv;
+}
+
+cl_rv as_query_filter(as_query *query, const char *binname, as_query_op op, ...) {
     return CITRUSLEAF_OK;
 }
 
-cl_rv citrusleaf_query_add_range_numeric (cl_query *query, const char *binname, int64_t start, int64_t end)
-{
-    cl_query_range range;
-    citrusleaf_object_init_int(&range.start_obj,start);
-    citrusleaf_object_init_int(&range.end_obj,end);
-
-    return add_range_generic(query,binname, &range);    
-}
-
-cl_rv citrusleaf_query_add_range_string (cl_query *query, const char *binname, const char *start, const char *end)
-{
-    cl_query_range range;
-    citrusleaf_object_init_str(&range.start_obj,start);
-    citrusleaf_object_init_str(&range.end_obj,end);
-
-    return add_range_generic(query,binname, &range);    
-}
-
-cl_rv citrusleaf_query_add_filter_numeric (cl_query *query, const char *binname, int64_t comparer, cl_query_filter_op op)
-{
+cl_rv as_query_orderby(as_query *query, const char *binname, as_query_orderby_op op) {
     return CITRUSLEAF_OK;
 }
 
-cl_rv citrusleaf_query_add_filter_string (cl_query *query, const char *binname, const char* comparer, cl_query_filter_op op)
-{
-    return CITRUSLEAF_OK;
-}
-
-cl_rv citrusleaf_query_add_orderby (cl_query *query, const char *binname, cl_query_orderby_op op)
-{
-    return CITRUSLEAF_OK;
-}
-
-cl_rv citrusleaf_query_set_limit (cl_query *query, uint64_t limit )
-{
-    query->limit = limit;
+cl_rv as_query_limit(as_query *query, uint64_t limit) {
     return CITRUSLEAF_OK;    
 }
-
 
 int citrusleaf_query_init() {
     if (1 == cf_atomic32_incr(&query_initialized)) {
@@ -809,7 +930,7 @@ int citrusleaf_query_init() {
         g_query_q = cf_queue_create(sizeof(query_work), true);
         
         // create thread pool
-        for (int i=0;i<N_MAX_QUERY_THREADS;i++) {
+        for (int i = 0; i < N_MAX_QUERY_THREADS; i++) {
             pthread_create(&g_query_th[i], 0, query_worker_fn, 0);
         }
     }

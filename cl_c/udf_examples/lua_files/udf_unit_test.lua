@@ -19,10 +19,10 @@ function prefetch_and_print(record)
   end
 end
 
-function do_trim_bin(record, limits, value)
+function do_trim_bin(record, limits)
   local cat2 = record.cats;
   local y = string.len(cat2);
-  local myceil = tonumber(value);
+  local myceil = tonumber(limits);
   if (y > myceil) then
     record.cats = 'new string';
   end
@@ -34,13 +34,17 @@ function do_trim_bin(record, limits, value)
   end
 end
 
-function do_update_bin(record)
---  record.bin_to_change    = "changed by lua at "..os.time();
-  record['bin_to_change']    = "changed by lua";
-  print('CLIENT: do_update_bin: ' .. record.bin_to_change);
-  local x = aerospike:update(record);
+function do_update_bin(record, k, v)
+  record[k] = v
+  info("Value of bin = %s",record[k]);
+  local x;
+  if not aerospike:exists(record) then
+	x = aerospike:create(record);
+  else
+	x = aerospike:update(record);
+  end
   if ( x == 0 ) then
-     return 'UPDATED_BIN: ' .. record.bin_to_change;
+     return 'Bin update/create returned '..x;
   else 
      return 'Bin update failed with '..x;
   end
@@ -102,19 +106,10 @@ function do_noop_function(record)
 end
 
 -- random runtime crash
-function do_handle_bad_lua_1()
+function do_undefined_global()
   local x;
   i_dont_exist(x);
   return 'OK';
-end
-
--- try to write a bin name too long
-function do_handle_bad_lua_2(record)
--- This makes server crash
---  record[bin_with_a_really_long_name] = "five";
-	record.very_long_name_that_should_fail = "bin 2 value";
-	local x = aerospike:update(record);
-	return 'Creation of record returned '..x;
 end
 
 function do_lua_functional_test(record)
@@ -134,52 +129,60 @@ function do_lua_functional_test(record)
 end
 
 
-function do_return_types(record, d, desired_type)
+function do_return_types(record, desired_type)
 
 --  local desired_type = record:GetArg('desired_type');
   if (desired_type == "none") then
     print("none");
-    return;
+    return nil;
   end
   if (desired_type == "p_int_primitive") then
     print("positive int");
-	return 5;
+    return 5;
   end  
   if (desired_type == "n_int_primitive") then
     print("negative int");
-	return -5;
+    return -5;
   end  
   if (desired_type == "string_primitive") then
     print("string");
-	return "good";
+    return "good";
   end  
   if (desired_type == "bin_array") then
     print("bin_array");
     local l = list();
-	list.append(l,'have s1');
-	list.append(l,55);
+    list.append(l,'have s1');
+    list.append(l,55);
     return  l;
   end
   if (desired_type == "bin_nested_list") then
-    	info("bin_nested_list");
-	local x = list();
-	local y = list();
-	list.append(x,1);
-	list.append(x,'yup');
-	list.append(y,'string_resp');
-	list.append(y,x);
-	return y
+    info("bin_nested_list");
+	  local x = list();
+    local y = list();
+    list.append(x,1);
+    list.append(x,'yup');
+    list.append(y,'string_resp');
+    list.append(y,x);
+    return y
   end
   if (desired_type == "bin_map") then
-	info("bin_map");
-	local x = map();
-	local y = "map"
-	local l = list();
-	list.append(l,"ting");
-	list.append(l,"ding");
-	x[y] = "yes";
-	x["i"] = l;
-	return x;
+    info("bin_map");
+    
+    local m = map{};
+    m["i"] = 456
+    m["s"] = "def"
+    m["l"] = list{4,5,6};
+
+    local l = list();
+    list.append(l,456);
+    list.append(l,"def");
+
+    local x = map{};
+    x["i"] = 123;
+    x["s"] = "abc";
+    x["l"] = l;
+    x["m"] = m;
+    return x;
   end
 end
 

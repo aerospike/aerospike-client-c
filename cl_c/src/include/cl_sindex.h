@@ -26,24 +26,28 @@
 #pragma once
 
 #include "cl_types.h"
+#include "as_list.h"
 #include "cluster.h"
 
-// 
-// Query related structures:
-#define CL_MAX_SINDEX_NAME_SIZE 128
-#define CL_MAX_SETNAME_SIZE     32  
-// indicate metadata needed to create a secondary index
-typedef struct sindex_metadata_t {
-    char    iname[CL_MAX_SINDEX_NAME_SIZE];
-    char    binname[CL_BINNAME_SIZE];
-    char    type[32];
-    uint8_t   isuniq;
-    uint8_t   istime;
-} sindex_metadata_t;
+/******************************************************************************
+ * TYPES
+ *******************************************************************************/
 
+typedef struct cl_sindex_t {
+	char       * ns;
+	char       * set;
+	char       * iname;
+	char       * binname;
+	char       * file;
+	char       * func;
+	char       * type;
+	as_list    * args;
+} cl_sindex;
 
-// Create and Delete Secondary indexes for the entire cluster
-cl_rv citrusleaf_secondary_index_create(cl_cluster *asc, const char *ns, 
-        const char *set, struct sindex_metadata_t *simd);
-cl_rv citrusleaf_secondary_index_delete(cl_cluster *asc, const char *ns, 
-        const char *set, const char *indexname);
+/******************************************************************************
+ * FUNCTIONS
+ ******************************************************************************/
+cl_rv citrusleaf_secondary_index_create(cl_cluster *asc, const char *ns, const char *set, const char *iname, const char *binname, const char *type, char **response);
+cl_rv citrusleaf_secondary_index_create_functional(cl_cluster *asc, const char *ns, const char *set, const char *finame, const char *file, const char *func, as_list    *arglist, const char *type, char **response);
+cl_rv citrusleaf_secondary_index_drop(cl_cluster *asc, const char *ns, const char *iname, char **response); 
+

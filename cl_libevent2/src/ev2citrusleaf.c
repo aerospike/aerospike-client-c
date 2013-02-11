@@ -9,7 +9,6 @@
  * All rights reserved
  */
 
-#include <inttypes.h>
 #include <pthread.h>
 #include <stddef.h>
 #include <stdint.h>

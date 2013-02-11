@@ -62,18 +62,18 @@ static int get_many(ev2citrusleaf_cluster* cl, const char* ns,
 static cl_batch_job* cl_batch_job_create(struct event_base* base,
 		ev2citrusleaf_get_many_cb user_cb, void* user_data, int n_digests,
 		int timeout_ms);
-static void cl_batch_job_destroy(cl_batch_job* this);
-static inline struct event_base* cl_batch_job_get_base(cl_batch_job* this);
-static inline uint32_t cl_batch_job_clepoch_seconds(cl_batch_job* this);
-static bool cl_batch_job_add_node_unique(cl_batch_job* this,
+static void cl_batch_job_destroy(cl_batch_job* _this);
+static inline struct event_base* cl_batch_job_get_base(cl_batch_job* _this);
+static inline uint32_t cl_batch_job_clepoch_seconds(cl_batch_job* _this);
+static bool cl_batch_job_add_node_unique(cl_batch_job* _this,
 		cl_cluster_node* p_node);
-static bool cl_batch_job_compile(cl_batch_job* this, const char* ns,
+static bool cl_batch_job_compile(cl_batch_job* _this, const char* ns,
 		const cf_digest* digests, const char** bins, int n_bins,
 		bool get_bin_data, cl_cluster_node** nodes);
-static bool cl_batch_job_start(cl_batch_job* this);
-static inline ev2citrusleaf_rec* cl_batch_job_get_rec(cl_batch_job* this);
-static inline void cl_batch_job_rec_done(cl_batch_job* this);
-static void cl_batch_job_node_done(cl_batch_job* this,
+static bool cl_batch_job_start(cl_batch_job* _this);
+static inline ev2citrusleaf_rec* cl_batch_job_get_rec(cl_batch_job* _this);
+static inline void cl_batch_job_rec_done(cl_batch_job* _this);
+static void cl_batch_job_node_done(cl_batch_job* _this,
 		cl_batch_node_req* p_node_req, int node_result);
 // The libevent2 timer event handler:
 static void cl_batch_job_timeout_event(int fd, short event, void* pv_this);
@@ -127,27 +127,27 @@ struct cl_batch_job_s {
 
 static cl_batch_node_req* cl_batch_node_req_create(cl_batch_job* p_job,
 		cl_cluster_node* p_node);
-static void cl_batch_node_req_destroy(cl_batch_node_req* this);
+static void cl_batch_node_req_destroy(cl_batch_node_req* _this);
 static inline const cl_cluster_node* cl_batch_node_req_get_node(
-		cl_batch_node_req* this);
-static inline void cl_batch_node_req_add_digest(cl_batch_node_req* this);
-static bool cl_batch_node_req_compile(cl_batch_node_req* this, const char* ns,
+		cl_batch_node_req* _this);
+static inline void cl_batch_node_req_add_digest(cl_batch_node_req* _this);
+static bool cl_batch_node_req_compile(cl_batch_node_req* _this, const char* ns,
 		size_t ns_len, const cf_digest* all_digests, int n_all_digests,
 		const char** bins, int n_bins, bool get_bin_data,
 		cl_cluster_node** nodes);
-static uint8_t* cl_batch_node_req_write_fields(cl_batch_node_req* this,
+static uint8_t* cl_batch_node_req_write_fields(cl_batch_node_req* _this,
 		uint8_t* p_write, const char* ns, size_t ns_len,
 		const cf_digest* all_digests, int n_all_digests,
 		cl_cluster_node** nodes, size_t digests_size);
-static bool cl_batch_node_req_get_fd(cl_batch_node_req* this);
-static void cl_batch_node_req_start(cl_batch_node_req* this);
+static bool cl_batch_node_req_get_fd(cl_batch_node_req* _this);
+static void cl_batch_node_req_start(cl_batch_node_req* _this);
 // The libevent2 event handler:
 static void cl_batch_node_req_event(int fd, short event, void* pv_this);
-static bool cl_batch_node_req_handle_send(cl_batch_node_req* this);
-static bool cl_batch_node_req_handle_recv(cl_batch_node_req* this);
-static int cl_batch_node_req_parse_proto_body(cl_batch_node_req* this,
+static bool cl_batch_node_req_handle_send(cl_batch_node_req* _this);
+static bool cl_batch_node_req_handle_recv(cl_batch_node_req* _this);
+static int cl_batch_node_req_parse_proto_body(cl_batch_node_req* _this,
 		bool* p_is_last);
-static void cl_batch_node_req_done(cl_batch_node_req* this, int node_result);
+static void cl_batch_node_req_done(cl_batch_node_req* _this, int node_result);
 
 //------------------------------------------------
 // Data
@@ -312,51 +312,51 @@ cl_batch_job_create(struct event_base* base, ev2citrusleaf_get_many_cb user_cb,
 		void* user_data, int n_digests, int timeout_ms)
 {
 	size_t size = sizeof(cl_batch_job) + event_get_struct_event_size();
-	cl_batch_job* this = (cl_batch_job*)malloc(size);
+	cl_batch_job* _this = (cl_batch_job*)malloc(size);
 
-	if (! this) {
+	if (! _this) {
 		cf_error("batch request allocation failed");
 		return NULL;
 	}
 
-	memset((void*)this, 0, size);
+	memset((void*)_this, 0, size);
 
 	// Add the timeout event right away. Note that "cross-threaded" requests are
 	// not safe against this timer firing before the end of this non-blocking
 	// get_many() call - for now we just rely on reasonable timeout values.
 
-	evtimer_assign((struct event*)this->timer_event_space, base,
-			cl_batch_job_timeout_event, this);
+	evtimer_assign((struct event*)_this->timer_event_space, base,
+			cl_batch_job_timeout_event, _this);
 
 	struct timeval tv;
 
 	tv.tv_sec = timeout_ms / 1000;
 	tv.tv_usec = (timeout_ms % 1000) * 1000;
 
-	if (0 != evtimer_add((struct event*)this->timer_event_space, &tv)) {
+	if (0 != evtimer_add((struct event*)_this->timer_event_space, &tv)) {
 		cf_error("batch job add timer event failed");
-		free(this);
+		free(_this);
 		return NULL;
 	}
 
-	this->timer_event_added = true;
+	_this->timer_event_added = true;
 
-	this->p_event_base = base;
-	this->user_cb = user_cb;
-	this->user_data = user_data;
-	this->n_digests = n_digests;
+	_this->p_event_base = base;
+	_this->user_cb = user_cb;
+	_this->user_data = user_data;
+	_this->n_digests = n_digests;
 
 	size_t recs_size = n_digests * sizeof(ev2citrusleaf_rec);
 
-	this->recs = (ev2citrusleaf_rec*)malloc(recs_size);
+	_this->recs = (ev2citrusleaf_rec*)malloc(recs_size);
 
-	if (! this->recs) {
+	if (! _this->recs) {
 		cf_error("batch request recs allocation failed");
-		free(this);
+		free(_this);
 		return NULL;
 	}
 
-	return this;
+	return _this;
 }
 
 //------------------------------------------------
@@ -366,35 +366,35 @@ cl_batch_job_create(struct event_base* base, ev2citrusleaf_get_many_cb user_cb,
 // bins' objects.)
 //
 static void
-cl_batch_job_destroy(cl_batch_job* this)
+cl_batch_job_destroy(cl_batch_job* _this)
 {
-	if (this->timer_event_added) {
-		evtimer_del((struct event*)this->timer_event_space);
+	if (_this->timer_event_added) {
+		evtimer_del((struct event*)_this->timer_event_space);
 	}
 
-	for (int n = 0; n < this->n_node_reqs; n++) {
-		if (this->node_reqs[n]) {
-			cl_batch_node_req_destroy(this->node_reqs[n]);
+	for (int n = 0; n < _this->n_node_reqs; n++) {
+		if (_this->node_reqs[n]) {
+			cl_batch_node_req_destroy(_this->node_reqs[n]);
 		}
 	}
 
-	for (int i = 0; i < this->n_recs; i++) {
-		if (this->recs[i].bins) {
-			free(this->recs[i].bins);
+	for (int i = 0; i < _this->n_recs; i++) {
+		if (_this->recs[i].bins) {
+			free(_this->recs[i].bins);
 		}
 	}
 
-	free(this->recs);
-	free(this);
+	free(_this->recs);
+	free(_this);
 }
 
 //------------------------------------------------
 // Member access function.
 //
 static inline struct event_base*
-cl_batch_job_get_base(cl_batch_job* this)
+cl_batch_job_get_base(cl_batch_job* _this)
 {
-	return this->p_event_base;
+	return _this->p_event_base;
 }
 
 //------------------------------------------------
@@ -402,13 +402,13 @@ cl_batch_job_get_base(cl_batch_job* this)
 // expirations. Lazily set this so it's as late as
 // possible.
 //
-static inline uint32_t cl_batch_job_clepoch_seconds(cl_batch_job* this)
+static inline uint32_t cl_batch_job_clepoch_seconds(cl_batch_job* _this)
 {
-	if (this->now == 0) {
-		this->now = cf_clepoch_seconds();
+	if (_this->now == 0) {
+		_this->now = cf_clepoch_seconds();
 	}
 
-	return this->now;
+	return _this->now;
 }
 
 //------------------------------------------------
@@ -418,28 +418,28 @@ static inline uint32_t cl_batch_job_clepoch_seconds(cl_batch_job* this)
 // digest count.
 //
 static bool
-cl_batch_job_add_node_unique(cl_batch_job* this, cl_cluster_node* p_node)
+cl_batch_job_add_node_unique(cl_batch_job* _this, cl_cluster_node* p_node)
 {
 	int n;
 
 	// Check if this node already has a node request in the list.
-	for (n = 0; n < this->n_node_reqs; n++) {
-		if (p_node == cl_batch_node_req_get_node(this->node_reqs[n])) {
+	for (n = 0; n < _this->n_node_reqs; n++) {
+		if (p_node == cl_batch_node_req_get_node(_this->node_reqs[n])) {
 			// It is already there.
-			cl_batch_node_req_add_digest(this->node_reqs[n]);
+			cl_batch_node_req_add_digest(_this->node_reqs[n]);
 			break;
 		}
 	}
 
 	// It is not already there - add it.
-	if (n == this->n_node_reqs) {
-		cl_batch_node_req* p_node_req = cl_batch_node_req_create(this, p_node);
+	if (n == _this->n_node_reqs) {
+		cl_batch_node_req* p_node_req = cl_batch_node_req_create(_this, p_node);
 
 		if (! p_node_req) {
 			return false;
 		}
 
-		this->node_reqs[this->n_node_reqs++] = p_node_req;
+		_this->node_reqs[_this->n_node_reqs++] = p_node_req;
 	}
 
 	return true;
@@ -449,7 +449,7 @@ cl_batch_job_add_node_unique(cl_batch_job* this, cl_cluster_node* p_node)
 // Call all the node request's compile methods.
 //
 static bool
-cl_batch_job_compile(cl_batch_job* this, const char* ns,
+cl_batch_job_compile(cl_batch_job* _this, const char* ns,
 		const cf_digest* digests, const char** bins, int n_bins,
 		bool get_bin_data, cl_cluster_node** nodes)
 {
@@ -461,9 +461,9 @@ cl_batch_job_compile(cl_batch_job* this, const char* ns,
 	// average of n/2 checks to find the node. But I'm not going to do that now,
 	// I'd rather keep the compile methods looking like those in the C client.
 
-	for (int n = 0; n < this->n_node_reqs; n++) {
-		if (! cl_batch_node_req_compile(this->node_reqs[n], ns, ns_len, digests,
-				this->n_digests, bins, n_bins, get_bin_data, nodes)) {
+	for (int n = 0; n < _this->n_node_reqs; n++) {
+		if (! cl_batch_node_req_compile(_this->node_reqs[n], ns, ns_len,
+				digests, _this->n_digests, bins, n_bins, get_bin_data, nodes)) {
 			cf_error("can't compile batch node request %d", n);
 			return false;
 		}
@@ -477,20 +477,20 @@ cl_batch_job_compile(cl_batch_job* this, const char* ns,
 // all the requests' network transactions.
 //
 static bool
-cl_batch_job_start(cl_batch_job* this)
+cl_batch_job_start(cl_batch_job* _this)
 {
 	// Get all the sockets before adding any events - it's easier to unwind on
 	// failure without worrying about event callbacks.
-	for (int n = 0; n < this->n_node_reqs; n++) {
-		if (! cl_batch_node_req_get_fd(this->node_reqs[n])) {
+	for (int n = 0; n < _this->n_node_reqs; n++) {
+		if (! cl_batch_node_req_get_fd(_this->node_reqs[n])) {
 			cf_error("can't get fd for batch node request %d", n);
 			return false;
 		}
 	}
 
 	// From this point on, we'll always give a callback.
-	for (int n = 0; n < this->n_node_reqs; n++) {
-		cl_batch_node_req_start(this->node_reqs[n]);
+	for (int n = 0; n < _this->n_node_reqs; n++) {
+		cl_batch_node_req_start(_this->node_reqs[n]);
 	}
 
 	return true;
@@ -502,18 +502,18 @@ cl_batch_job_start(cl_batch_job* this)
 // filling this.
 //
 static inline ev2citrusleaf_rec*
-cl_batch_job_get_rec(cl_batch_job* this)
+cl_batch_job_get_rec(cl_batch_job* _this)
 {
-	return &this->recs[this->n_recs];
+	return &_this->recs[_this->n_recs];
 }
 
 //------------------------------------------------
 // Advance index of current record-to-fill.
 //
 static inline void
-cl_batch_job_rec_done(cl_batch_job* this)
+cl_batch_job_rec_done(cl_batch_job* _this)
 {
-	this->n_recs++;
+	_this->n_recs++;
 }
 
 //------------------------------------------------
@@ -522,28 +522,28 @@ cl_batch_job_rec_done(cl_batch_job* this)
 // callback and clean up.
 //
 static void
-cl_batch_job_node_done(cl_batch_job* this, cl_batch_node_req* p_node_req,
+cl_batch_job_node_done(cl_batch_job* _this, cl_batch_node_req* p_node_req,
 		int node_result)
 {
 	// Destroy the completed node request.
 	cl_batch_node_req_destroy(p_node_req);
 
 	// Make sure cl_batch_job destructor skips already destroyed node request.
-	for (int n = 0; n < this->n_node_reqs; n++) {
-		if (this->node_reqs[n] == p_node_req) {
-			this->node_reqs[n] = NULL;
+	for (int n = 0; n < _this->n_node_reqs; n++) {
+		if (_this->node_reqs[n] == p_node_req) {
+			_this->node_reqs[n] = NULL;
 		}
 	}
 
 	// This just reports the result from the last node that doesn't succeed.
 	// TODO - report results per node ???
 	if (node_result != EV2CITRUSLEAF_OK) {
-		this->node_result = node_result;
+		_this->node_result = node_result;
 	}
 
-	this->n_node_reqs_done++;
+	_this->n_node_reqs_done++;
 
-	if (this->n_node_reqs_done < this->n_node_reqs) {
+	if (_this->n_node_reqs_done < _this->n_node_reqs) {
 		// Some node requests are still going, we'll be back.
 		return;
 	}
@@ -551,11 +551,11 @@ cl_batch_job_node_done(cl_batch_job* this, cl_batch_node_req* p_node_req,
 	// All node requests are done.
 
 	// Make the user callback.
-	(*this->user_cb)(this->node_result, this->recs, this->n_recs,
-			this->user_data);
+	(*_this->user_cb)(_this->node_result, _this->recs, _this->n_recs,
+			_this->user_data);
 
 	// Destroy self. This aborts the timeout event.
-	cl_batch_job_destroy(this);
+	cl_batch_job_destroy(_this);
 }
 
 //------------------------------------------------
@@ -566,17 +566,17 @@ cl_batch_job_node_done(cl_batch_job* this, cl_batch_node_req* p_node_req,
 static void
 cl_batch_job_timeout_event(int fd, short event, void* pv_this)
 {
-	cl_batch_job* this = (cl_batch_job*)pv_this;
+	cl_batch_job* _this = (cl_batch_job*)pv_this;
 
-	this->timer_event_added = false;
+	_this->timer_event_added = false;
 
 	// Make the user callback. This reports partial results from any node
 	// requests that finished.
-	(*this->user_cb)(EV2CITRUSLEAF_FAIL_TIMEOUT, this->recs, this->n_recs,
-			this->user_data);
+	(*_this->user_cb)(EV2CITRUSLEAF_FAIL_TIMEOUT, _this->recs, _this->n_recs,
+			_this->user_data);
 
 	// Destroy self. This aborts and destroys all outstanding node requests.
-	cl_batch_job_destroy(this);
+	cl_batch_job_destroy(_this);
 }
 
 
@@ -591,22 +591,22 @@ static cl_batch_node_req*
 cl_batch_node_req_create(cl_batch_job* p_job, cl_cluster_node* p_node)
 {
 	size_t size = sizeof(cl_batch_node_req) + event_get_struct_event_size();
-	cl_batch_node_req* this = (cl_batch_node_req*)malloc(size);
+	cl_batch_node_req* _this = (cl_batch_node_req*)malloc(size);
 
-	if (! this) {
+	if (! _this) {
 		cf_error("batch node request allocation failed");
 		return NULL;
 	}
 
-	memset((void*)this, 0, size);
+	memset((void*)_this, 0, size);
 
-	this->p_job = p_job;
-	this->p_node = p_node;
-	this->n_digests = 1;
+	_this->p_job = p_job;
+	_this->p_node = p_node;
+	_this->n_digests = 1;
 
-	this->fd = -1;
+	_this->fd = -1;
 
-	return this;
+	return _this;
 }
 
 //------------------------------------------------
@@ -614,42 +614,42 @@ cl_batch_node_req_create(cl_batch_job* p_job, cl_cluster_node* p_node)
 // ongoing transaction if needed.
 //
 static void
-cl_batch_node_req_destroy(cl_batch_node_req* this)
+cl_batch_node_req_destroy(cl_batch_node_req* _this)
 {
-	if (this->event_added) {
-		event_del((struct event*)this->event_space);
+	if (_this->event_added) {
+		event_del((struct event*)_this->event_space);
 	}
 
-	if (this->fd > -1) {
+	if (_this->fd > -1) {
 		// We only get here if the batch job timed out and is aborting this node
 		// request. We can't re-use the socket - it may have unprocessed data.
-		cf_close(this->fd);
-		cl_cluster_node_dun(this->p_node, DUN_USER_TIMEOUT);
+		cf_close(_this->fd);
+		cl_cluster_node_dun(_this->p_node, DUN_USER_TIMEOUT);
 	}
 
 	// This balances the ref-counts we incremented in get_many().
-	for (int i = 0; i < this->n_digests; i++) {
-		cl_cluster_node_put(this->p_node);
+	for (int i = 0; i < _this->n_digests; i++) {
+		cl_cluster_node_put(_this->p_node);
 	}
 
-	if (this->wbuf) {
-		free(this->wbuf);
+	if (_this->wbuf) {
+		free(_this->wbuf);
 	}
 
-	if (this->rbuf) {
-		free(this->rbuf);
+	if (_this->rbuf) {
+		free(_this->rbuf);
 	}
 
-	free(this);
+	free(_this);
 }
 
 //------------------------------------------------
 // Member access function.
 //
 static inline const cl_cluster_node*
-cl_batch_node_req_get_node(cl_batch_node_req* this)
+cl_batch_node_req_get_node(cl_batch_node_req* _this)
 {
-	return this->p_node;
+	return _this->p_node;
 }
 
 //------------------------------------------------
@@ -657,9 +657,9 @@ cl_batch_node_req_get_node(cl_batch_node_req* this)
 // this node.
 //
 static inline void
-cl_batch_node_req_add_digest(cl_batch_node_req* this)
+cl_batch_node_req_add_digest(cl_batch_node_req* _this)
 {
-	this->n_digests++;
+	_this->n_digests++;
 }
 
 //------------------------------------------------
@@ -667,12 +667,12 @@ cl_batch_node_req_add_digest(cl_batch_node_req* this)
 // this node request.
 //
 static bool
-cl_batch_node_req_compile(cl_batch_node_req* this, const char* ns,
+cl_batch_node_req_compile(cl_batch_node_req* _this, const char* ns,
 		size_t ns_len, const cf_digest* all_digests, int n_all_digests,
 		const char** bins, int n_bins, bool get_bin_data,
 		cl_cluster_node** nodes)
 {
-	size_t digests_size = this->n_digests * sizeof(cf_digest);
+	size_t digests_size = _this->n_digests * sizeof(cf_digest);
 
 	// Calculate total message size.
 
@@ -688,22 +688,22 @@ cl_batch_node_req_compile(cl_batch_node_req* this, const char* ns,
 	}
 
 	// Allocate the buffer.
-	this->wbuf = (uint8_t*)malloc(msg_size);
+	_this->wbuf = (uint8_t*)malloc(msg_size);
 
-	if (! this->wbuf) {
+	if (! _this->wbuf) {
 		cf_error("batch node request wbuf allocation failed");
 		return false;
 	}
 
-	this->wbuf_size = msg_size;
+	_this->wbuf_size = msg_size;
 
 	// Write the header.
-	uint8_t* p_write = cl_write_header(this->wbuf, msg_size,
+	uint8_t* p_write = cl_write_header(_this->wbuf, msg_size,
 			CL_MSG_INFO1_READ | (get_bin_data ? 0 : CL_MSG_INFO1_NOBINDATA), 0,
 			0, 0, 0, 2, n_bins);
 
 	// Write the (two) fields.
-	p_write = cl_batch_node_req_write_fields(this, p_write, ns, ns_len,
+	p_write = cl_batch_node_req_write_fields(_this, p_write, ns, ns_len,
 			all_digests, n_all_digests, nodes, digests_size);
 
 	// Write the ops (bin name filter) if any.
@@ -732,7 +732,7 @@ cl_batch_node_req_compile(cl_batch_node_req* this, const char* ns,
 // Compile helper - fill in the message fields.
 //
 static uint8_t*
-cl_batch_node_req_write_fields(cl_batch_node_req* this, uint8_t* p_write,
+cl_batch_node_req_write_fields(cl_batch_node_req* _this, uint8_t* p_write,
 		const char* ns, size_t ns_len, const cf_digest* all_digests,
 		int n_all_digests, cl_cluster_node** nodes, size_t digests_size)
 {
@@ -755,7 +755,7 @@ cl_batch_node_req_write_fields(cl_batch_node_req* this, uint8_t* p_write,
 	cf_digest* p_digest = (cf_digest*)mf->data;
 
 	for (int i = 0; i < n_all_digests; i++) {
-		if (nodes[i] == this->p_node) {
+		if (nodes[i] == _this->p_node) {
 			*p_digest++ = all_digests[i];
 		}
 	}
@@ -770,14 +770,14 @@ cl_batch_node_req_write_fields(cl_batch_node_req* this, uint8_t* p_write,
 // Get a socket for this node request.
 //
 static bool
-cl_batch_node_req_get_fd(cl_batch_node_req* this)
+cl_batch_node_req_get_fd(cl_batch_node_req* _this)
 {
-	while (this->fd == -1) {
-		this->fd = cl_cluster_node_fd_get(this->p_node);
+	while (_this->fd == -1) {
+		_this->fd = cl_cluster_node_fd_get(_this->p_node);
 		// Note - apparently 0 is a legitimate fd value.
 
-		if (this->fd < -1) {
-			cl_cluster_node_dun(this->p_node, DUN_RESTART_FD);
+		if (_this->fd < -1) {
+			cl_cluster_node_dun(_this->p_node, DUN_RESTART_FD);
 			// This object's destructor will release node.
 			return false;
 		}
@@ -790,20 +790,20 @@ cl_batch_node_req_get_fd(cl_batch_node_req* this)
 // Start this node request's transaction.
 //
 static void
-cl_batch_node_req_start(cl_batch_node_req* this)
+cl_batch_node_req_start(cl_batch_node_req* _this)
 {
-	event_assign((struct event*)this->event_space,
-			cl_batch_job_get_base(this->p_job), this->fd, EV_WRITE,
-			cl_batch_node_req_event, this);
+	event_assign((struct event*)_this->event_space,
+			cl_batch_job_get_base(_this->p_job), _this->fd, EV_WRITE,
+			cl_batch_node_req_event, _this);
 
 	// In "cross-threaded" requests, don't access member data after adding the
 	// event - the callback may occur and destroy this object immediately.
 
-	this->event_added = true;
+	_this->event_added = true;
 
-	if (0 != event_add((struct event*)this->event_space, 0)) {
+	if (0 != event_add((struct event*)_this->event_space, 0)) {
 		cf_warn("batch node request add event failed: will get partial result");
-		this->event_added = false;
+		_this->event_added = false;
 	}
 }
 
@@ -816,35 +816,35 @@ cl_batch_node_req_start(cl_batch_node_req* this)
 static void
 cl_batch_node_req_event(int fd, short event, void* pv_this)
 {
-	cl_batch_node_req* this = (cl_batch_node_req*)pv_this;
+	cl_batch_node_req* _this = (cl_batch_node_req*)pv_this;
 
-	this->event_added = false;
+	_this->event_added = false;
 
 	bool transaction_done;
 
 	if (event & EV_WRITE) {
 		// Handle write phase.
-		transaction_done = cl_batch_node_req_handle_send(this);
+		transaction_done = cl_batch_node_req_handle_send(_this);
 	}
 	else if (event & EV_READ) {
 		// Handle read phase.
-		transaction_done = cl_batch_node_req_handle_recv(this);
+		transaction_done = cl_batch_node_req_handle_recv(_this);
 	}
 	else {
 		// Should never happen.
 		cf_error("unexpected event flags %d", event);
-		cl_batch_node_req_done(this, EV2CITRUSLEAF_FAIL_CLIENT_ERROR);
+		cl_batch_node_req_done(_this, EV2CITRUSLEAF_FAIL_CLIENT_ERROR);
 		return;
 	}
 
 	if (! transaction_done) {
 		// There's more to do, re-add event.
-		if (0 == event_add((struct event*)this->event_space, 0)) {
-			this->event_added = true;
+		if (0 == event_add((struct event*)_this->event_space, 0)) {
+			_this->event_added = true;
 		}
 		else {
 			cf_error("batch node request add event failed");
-			cl_batch_node_req_done(this, EV2CITRUSLEAF_FAIL_CLIENT_ERROR);
+			cl_batch_node_req_done(_this, EV2CITRUSLEAF_FAIL_CLIENT_ERROR);
 		}
 	}
 }
@@ -854,28 +854,29 @@ cl_batch_node_req_event(int fd, short event, void* pv_this)
 // event to read mode when send phase is done.
 //
 static bool
-cl_batch_node_req_handle_send(cl_batch_node_req* this)
+cl_batch_node_req_handle_send(cl_batch_node_req* _this)
 {
 	while(true) {
 		// Loop until everything is sent or we get would-block.
 
-		if (this->wbuf_pos >= this->wbuf_size) {
+		if (_this->wbuf_pos >= _this->wbuf_size) {
 			cf_error("unexpected write event");
-			cl_batch_node_req_done(this, EV2CITRUSLEAF_FAIL_CLIENT_ERROR);
+			cl_batch_node_req_done(_this, EV2CITRUSLEAF_FAIL_CLIENT_ERROR);
 			return true;
 		}
 
-		int rv = send(this->fd, &this->wbuf[this->wbuf_pos],
-				this->wbuf_size - this->wbuf_pos, MSG_DONTWAIT | MSG_NOSIGNAL);
+		int rv = send(_this->fd, &_this->wbuf[_this->wbuf_pos],
+				_this->wbuf_size - _this->wbuf_pos,
+				MSG_DONTWAIT | MSG_NOSIGNAL);
 
 		if (rv > 0) {
-			this->wbuf_pos += rv;
+			_this->wbuf_pos += rv;
 
 			// If done sending, switch to receive mode.
-			if (this->wbuf_pos == this->wbuf_size) {
-				event_assign((struct event*)this->event_space,
-						cl_batch_job_get_base(this->p_job), this->fd, EV_READ,
-						cl_batch_node_req_event, this);
+			if (_this->wbuf_pos == _this->wbuf_size) {
+				event_assign((struct event*)_this->event_space,
+						cl_batch_job_get_base(_this->p_job), _this->fd, EV_READ,
+						cl_batch_node_req_event, _this);
 				break;
 			}
 
@@ -883,8 +884,8 @@ cl_batch_node_req_handle_send(cl_batch_node_req* this)
 		}
 		else if (rv == 0 || (errno != EAGAIN && errno != EWOULDBLOCK)) {
 			// send() supposedly never returns 0.
-			cf_debug("send failed: fd %d rv %d errno %d", this->fd, rv, errno);
-			cl_batch_node_req_done(this, EV2CITRUSLEAF_FAIL_UNKNOWN);
+			cf_debug("send failed: fd %d rv %d errno %d", _this->fd, rv, errno);
+			cl_batch_node_req_done(_this, EV2CITRUSLEAF_FAIL_UNKNOWN);
 			return true;
 		}
 		else {
@@ -903,31 +904,31 @@ cl_batch_node_req_handle_send(cl_batch_node_req* this)
 // is complete, and reports to parent batch job.
 //
 static bool
-cl_batch_node_req_handle_recv(cl_batch_node_req* this)
+cl_batch_node_req_handle_recv(cl_batch_node_req* _this)
 {
 	while (true) {
 		// Loop until everything is read from socket or we get would-block.
 
-		if (this->hbuf_pos < sizeof(cl_proto)) {
+		if (_this->hbuf_pos < sizeof(cl_proto)) {
 			// Read proto header.
 
-			int rv = recv(this->fd, &this->hbuf[this->hbuf_pos],
-					sizeof(cl_proto) - this->hbuf_pos,
+			int rv = recv(_this->fd, &_this->hbuf[_this->hbuf_pos],
+					sizeof(cl_proto) - _this->hbuf_pos,
 					MSG_DONTWAIT | MSG_NOSIGNAL);
 
 			if (rv > 0) {
-				this->hbuf_pos += rv;
+				_this->hbuf_pos += rv;
 				// Loop, read more header or start reading body.
 			}
 			else if (rv == 0) {
 				// Connection has been closed by the server.
-				cf_debug("recv connection closed: fd %d", this->fd);
-				cl_batch_node_req_done(this, EV2CITRUSLEAF_FAIL_UNKNOWN);
+				cf_debug("recv connection closed: fd %d", _this->fd);
+				cl_batch_node_req_done(_this, EV2CITRUSLEAF_FAIL_UNKNOWN);
 				return true;
 			}
 			else if (errno != EAGAIN && errno != EWOULDBLOCK) {
 				cf_debug("recv failed: rv %d errno %d", rv, errno);
-				cl_batch_node_req_done(this, EV2CITRUSLEAF_FAIL_UNKNOWN);
+				cl_batch_node_req_done(_this, EV2CITRUSLEAF_FAIL_UNKNOWN);
 				return true;
 			}
 			else {
@@ -939,54 +940,54 @@ cl_batch_node_req_handle_recv(cl_batch_node_req* this)
 			// Done with header, read corresponding body.
 
 			// Allocate the read buffer if we haven't yet.
-			if (! this->rbuf) {
-				cl_proto* proto = (cl_proto*)this->hbuf;
+			if (! _this->rbuf) {
+				cl_proto* proto = (cl_proto*)_this->hbuf;
 
 				cl_proto_swap(proto);
 
-				this->rbuf_size = proto->sz;
-				this->rbuf = (uint8_t*)malloc(this->rbuf_size);
+				_this->rbuf_size = proto->sz;
+				_this->rbuf = (uint8_t*)malloc(_this->rbuf_size);
 
-				if (! this->rbuf) {
+				if (! _this->rbuf) {
 					cf_error("batch node request rbuf allocation failed");
-					cl_batch_node_req_done(this,
+					cl_batch_node_req_done(_this,
 							EV2CITRUSLEAF_FAIL_CLIENT_ERROR);
 					return true;
 				}
 			}
 
-			if (this->rbuf_pos >= this->rbuf_size) {
+			if (_this->rbuf_pos >= _this->rbuf_size) {
 				cf_error("unexpected read event");
-				cl_batch_node_req_done(this, EV2CITRUSLEAF_FAIL_CLIENT_ERROR);
+				cl_batch_node_req_done(_this, EV2CITRUSLEAF_FAIL_CLIENT_ERROR);
 				return true;
 			}
 
-			int rv = recv(this->fd, &this->rbuf[this->rbuf_pos],
-					this->rbuf_size - this->rbuf_pos,
+			int rv = recv(_this->fd, &_this->rbuf[_this->rbuf_pos],
+					_this->rbuf_size - _this->rbuf_pos,
 					MSG_DONTWAIT | MSG_NOSIGNAL);
 
 			if (rv > 0) {
-				this->rbuf_pos += rv;
+				_this->rbuf_pos += rv;
 
-				if (this->rbuf_pos == this->rbuf_size) {
+				if (_this->rbuf_pos == _this->rbuf_size) {
 					// Done with proto body.
 
 					bool is_last;
-					int result = cl_batch_node_req_parse_proto_body(this,
+					int result = cl_batch_node_req_parse_proto_body(_this,
 							&is_last);
 
 					if (is_last || result != EV2CITRUSLEAF_OK) {
 						// Done with last proto (or parse error).
-						cl_batch_node_req_done(this, result);
+						cl_batch_node_req_done(_this, result);
 						return true;
 					}
 					else {
 						// We expect another proto - reset read buffers.
-						this->hbuf_pos = 0;
-						free(this->rbuf);
-						this->rbuf = NULL;
-						this->rbuf_size = 0;
-						this->rbuf_pos = 0;
+						_this->hbuf_pos = 0;
+						free(_this->rbuf);
+						_this->rbuf = NULL;
+						_this->rbuf_size = 0;
+						_this->rbuf_pos = 0;
 					}
 				}
 
@@ -994,13 +995,13 @@ cl_batch_node_req_handle_recv(cl_batch_node_req* this)
 			}
 			else if (rv == 0) {
 				// Connection has been closed by the server.
-				cf_debug("recv connection closed: fd %d", this->fd);
-				cl_batch_node_req_done(this, EV2CITRUSLEAF_FAIL_UNKNOWN);
+				cf_debug("recv connection closed: fd %d", _this->fd);
+				cl_batch_node_req_done(_this, EV2CITRUSLEAF_FAIL_UNKNOWN);
 				return true;
 			}
 			else if (errno != EAGAIN && errno != EWOULDBLOCK) {
 				cf_debug("recv failed: rv %d errno %d", rv, errno);
-				cl_batch_node_req_done(this, EV2CITRUSLEAF_FAIL_UNKNOWN);
+				cl_batch_node_req_done(_this, EV2CITRUSLEAF_FAIL_UNKNOWN);
 				return true;
 			}
 			else {
@@ -1019,7 +1020,7 @@ cl_batch_node_req_handle_recv(cl_batch_node_req* this)
 // results to parent batch job.
 //
 static int
-cl_batch_node_req_parse_proto_body(cl_batch_node_req* this, bool* p_is_last)
+cl_batch_node_req_parse_proto_body(cl_batch_node_req* _this, bool* p_is_last)
 {
 	// A proto body should contain either:
 	// a batch of record results where each record result is a cl_msg, or:
@@ -1027,8 +1028,8 @@ cl_batch_node_req_parse_proto_body(cl_batch_node_req* this, bool* p_is_last)
 
 	*p_is_last = false;
 
-	uint8_t* p_read = this->rbuf;
-	uint8_t* p_end = p_read + this->rbuf_size;
+	uint8_t* p_read = _this->rbuf;
+	uint8_t* p_end = p_read + _this->rbuf_size;
 
 	while (p_read < p_end) {
 		// Parse the header.
@@ -1063,12 +1064,12 @@ cl_batch_node_req_parse_proto_body(cl_batch_node_req* this, bool* p_is_last)
 			return (int)msg->result_code;
 		}
 
-		ev2citrusleaf_rec* p_rec = cl_batch_job_get_rec(this->p_job);
+		ev2citrusleaf_rec* p_rec = cl_batch_job_get_rec(_this->p_job);
 
 		p_rec->result = (int)msg->result_code;
 		p_rec->generation = msg->generation;
 
-		uint32_t now = cl_batch_job_clepoch_seconds(this->p_job);
+		uint32_t now = cl_batch_job_clepoch_seconds(_this->p_job);
 
 		p_rec->expiration = msg->record_ttl > now ? msg->record_ttl - now : 0;
 
@@ -1150,18 +1151,18 @@ cl_batch_node_req_parse_proto_body(cl_batch_node_req* this, bool* p_is_last)
 
 		// Inform the job object it now owns this record, and is responsible for
 		// freeing the bins.
-		cl_batch_job_rec_done(this->p_job);
+		cl_batch_job_rec_done(_this->p_job);
 
-		this->n_recs++;
+		_this->n_recs++;
 
 		// Sanity check, ignore extra data.
-		if (this->n_recs == this->n_digests && p_read < p_end) {
+		if (_this->n_recs == _this->n_digests && p_read < p_end) {
 			cf_warn("got last record in batch response but there's more data");
 			break;
 		}
 	}
 
-	return this->n_recs == this->n_digests ?
+	return _this->n_recs == _this->n_digests ?
 			EV2CITRUSLEAF_OK : EV2CITRUSLEAF_FAIL_UNKNOWN;
 }
 
@@ -1171,7 +1172,7 @@ cl_batch_node_req_parse_proto_body(cl_batch_node_req* this, bool* p_is_last)
 // the pool for re-use.
 //
 static void
-cl_batch_node_req_done(cl_batch_node_req* this, int node_result)
+cl_batch_node_req_done(cl_batch_node_req* _this, int node_result)
 {
 	if (node_result == EV2CITRUSLEAF_OK) {
 		// The socket is ok, re-use it and approve the node.
@@ -1179,19 +1180,19 @@ cl_batch_node_req_done(cl_batch_node_req* this, int node_result)
 		// AKG - We trust there's no more data in the socket. We'll re-use this
 		// socket and if there's more to read, the next transaction will suffer.
 
-		cl_cluster_node_fd_put(this->p_node, this->fd);
-		cl_cluster_node_ok(this->p_node);
+		cl_cluster_node_fd_put(_this->p_node, _this->fd);
+		cl_cluster_node_ok(_this->p_node);
 	}
 	else {
 		// The socket may have unprocessed data or otherwise be untrustworthy,
 		// close it and disapprove the node.
-		cf_close(this->fd);
-		cl_cluster_node_dun(this->p_node, DUN_NETWORK_ERROR);
+		cf_close(_this->fd);
+		cl_cluster_node_dun(_this->p_node, DUN_NETWORK_ERROR);
 	}
 
-	// Reset this->fd so the destructor doesn't close it.
-	this->fd = -1;
+	// Reset _this->fd so the destructor doesn't close it.
+	_this->fd = -1;
 
 	// Tell the job object this node request is done (destroys this object).
-	cl_batch_job_node_done(this->p_job, this, node_result);
+	cl_batch_job_node_done(_this->p_job, _this, node_result);
 }

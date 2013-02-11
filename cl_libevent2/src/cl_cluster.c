@@ -286,7 +286,7 @@ Next:
 	}
 
 	uint64_t delta = cf_getms() - _s;
-	if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: partition process: %"PRIu64, delta);
+	if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: partition process: %lu", delta);
 }
 
 
@@ -323,7 +323,7 @@ cluster_timer_fn(int fd, short event, void *udata)
 	}
 	
 	uint64_t delta = cf_getms() - _s;
-	if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: cluster timer: %"PRIu64, delta);
+	if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: cluster timer: %lu", delta);
 }
 
 
@@ -819,7 +819,7 @@ node_timer_fn(int fd, short event, void *udata)
 		cl_cluster_node_release(cn, "L-");
 		
 		uint64_t delta = cf_getms() - _s;
-		if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: node dunned: %"PRIu64, delta);
+		if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: node dunned: %lu", delta);
 
 		return;
 	}
@@ -849,7 +849,7 @@ node_timer_fn(int fd, short event, void *udata)
 		// node has no addrs --- remove
 		cl_cluster_node_dun(cn, DUN_NO_SOCKADDR);
 		uint64_t delta = cf_getms() - _s;
-		if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: node no addrs: %"PRIu64, delta);
+		if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: node no addrs: %lu", delta);
 	}
 
 
@@ -861,7 +861,7 @@ node_timer_fn(int fd, short event, void *udata)
 	}
 
 	uint64_t delta = cf_getms() - _s;
-	if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: node timer: %"PRIu64, delta);
+	if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: node timer: %lu", delta);
 	
 }
 
@@ -1377,7 +1377,7 @@ cluster_ping_node_fn(int return_value, char *values, size_t values_len, void *ud
 	int sz = cf_vector_size(&asc->node_v);
 	MUTEX_UNLOCK(asc->node_v_lock);
 	if (sz != 0) {
-		void *req;
+		cl_request *req;
 		MUTEX_LOCK(asc->request_q_lock);
 		while (CF_QUEUE_OK == cf_queue_pop(asc->request_q, (void *)&req,0)) {
 			ev2citrusleaf_base_hop(req);

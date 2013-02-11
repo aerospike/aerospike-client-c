@@ -103,7 +103,6 @@ cf_histogram_insert_data_point( cf_histogram *h, uint64_t start)
 	{
 	    // Need to investigate why in some cases start is a couple of ms greater than end
 		// Could it be rounding error (usually the difference is 1 but sometimes I have seen 2
-	    // cf_info(AS_INFO, "start = %"PRIu64" > end = %"PRIu64"", start, end);
 		index = 0;
 	}   
        

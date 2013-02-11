@@ -198,7 +198,7 @@ info_event_fn(int fd, short event, void *udata)
 					cir->rd_buf_pos += rv;
 					if (cir->rd_buf_pos >= cir->rd_buf_size) {
 						// caller frees rdbuf
-						(*cir->user_cb) ( 0 /*return value*/, (void *)cir->rd_buf , cir->rd_buf_size ,cir->user_data );
+						(*cir->user_cb)(0 /*return value*/, (char*)cir->rd_buf, cir->rd_buf_size, cir->user_data);
 						cir->rd_buf = 0;
 						event_del(info_request_get_network_event(cir) ); // WARNING: this is not necessary. BOK says it is safe: maybe he's right, maybe wrong.
 
@@ -209,7 +209,7 @@ info_event_fn(int fd, short event, void *udata)
 						cf_atomic_int_decr(&g_cl_info_transactions);
 						
 						uint64_t delta = cf_getms() - _s;
-						if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY cl_info event OK fn: %"PRIu64, delta);
+						if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY cl_info event OK fn: %lu", delta);
 
 						return;
 					}
@@ -229,7 +229,7 @@ info_event_fn(int fd, short event, void *udata)
 	event_add(info_request_get_network_event(cir), 0 /*timeout*/);					
 	
 	uint64_t delta = cf_getms() - _s;
-	if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY cl_info event again fn: %"PRIu64, delta);
+	if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY cl_info event again fn: %lu", delta);
 
 	return;
 	
@@ -242,7 +242,7 @@ Fail:
 	cf_atomic_int_decr(&g_cl_info_transactions);
 	
 	delta = cf_getms() - _s;
-	if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: cl_info event fail OK took %"PRIu64, delta);
+	if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: cl_info event fail OK took %lu", delta);
 }
 
 
@@ -275,7 +275,7 @@ ev2citrusleaf_info_host(struct event_base *base, struct sockaddr_in *sa_in, char
 		info_request_destroy(cir);
 
 		uint64_t delta = cf_getms() - _s;
-		if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: info host no socket connect: %"PRIu64, delta);
+		if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: info host no socket connect: %lu", delta);
 
 		return -1;
 	}
@@ -288,7 +288,7 @@ ev2citrusleaf_info_host(struct event_base *base, struct sockaddr_in *sa_in, char
 		cf_close(fd);
 		
 		uint64_t delta = cf_getms() - _s;
-		if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: info host bad request: %"PRIu64, delta);
+		if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: info host bad request: %lu", delta);
 		
 		return(-1);
 	}
@@ -300,7 +300,7 @@ ev2citrusleaf_info_host(struct event_base *base, struct sockaddr_in *sa_in, char
 	cf_atomic_int_incr(&g_cl_info_transactions);
 	
 	uint64_t delta = cf_getms() - _s;
-	if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: info host standard: %"PRIu64, delta);
+	if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: info host standard: %lu", delta);
 
 	
 	return(0);

@@ -109,7 +109,7 @@ cl_lookup_result_fn(int result, char type, int count, int ttl, void *addresses, 
 	free(cls);
 	
 	uint64_t delta = cf_getms() - _s;
-	if (delta > CL_LOG_DELAY_INFO) cf_info("CL DELAY: cl_lookup result fn: %"PRIu64, delta);
+	if (delta > CL_LOG_DELAY_INFO) cf_info("CL DELAY: cl_lookup result fn: %lu", delta);
 }
 
 int
@@ -129,11 +129,11 @@ cl_lookup(struct evdns_base *dns_base, char *hostname, short port, cl_lookup_asy
 		cf_info("libevent dns fail: hostname %s", hostname);
 		free(cls);
 		uint64_t delta = cf_getms() - _s;
-		if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: cl_lookup: error: %"PRIu64, delta);
+		if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: cl_lookup: error: %lu", delta);
 		return(-1);
 	}
 	uint64_t delta = cf_getms() - _s;
-	if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: cl_lookup: %"PRIu64, delta);
+	if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: cl_lookup: %lu", delta);
 	return(0);
 }	
 

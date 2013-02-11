@@ -272,7 +272,7 @@ cl_msg_op_iterate(cl_msg *msg, cl_msg_op *current, int *n)
 	if (!current) {
 		if (msg->n_ops == 0) return(0); // short cut
 		cl_msg_field *mf = (cl_msg_field *) msg->data;
-		for (uint i=0;i<msg->n_fields;i++)
+		for (uint32_t i = 0; i < msg->n_fields; i++)
 			mf = cl_msg_field_get_next(mf);
 		current = (cl_msg_op *) mf;
 		*n = 0;

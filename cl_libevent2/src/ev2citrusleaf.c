@@ -804,7 +804,7 @@ compile_ops(char *ns, char *set, ev2citrusleaf_object *key, cf_digest *digest,
 int
 set_object(cl_msg_op *op, ev2citrusleaf_object *obj)
 {
-	obj->type = op->particle_type;
+	obj->type = (ev2citrusleaf_type)op->particle_type;
 	
 	switch (op->particle_type) {
 		case CL_PARTICLE_TYPE_NULL:
@@ -1117,7 +1117,7 @@ ev2citrusleaf_is_connected(int fd)
 void
 ev2citrusleaf_event(int fd, short event, void *udata)
 {
-	cl_request *req = udata;
+	cl_request *req = (cl_request*)udata;
 	int rv;
 	
 	uint64_t _s = cf_getms();
@@ -1225,7 +1225,7 @@ ev2citrusleaf_event(int fd, short event, void *udata)
 	}		
 	
 	uint64_t delta = cf_getms() - _s;
-	if (delta > CL_LOG_DELAY_INFO) cf_info(" *** event took %"PRIu64, delta);
+	if (delta > CL_LOG_DELAY_INFO) cf_info(" *** event took %lu", delta);
 
 	return;
 	
@@ -1251,7 +1251,7 @@ Fail:
 	}
 
 	delta =  cf_getms() - _s;
-	if (delta > CL_LOG_DELAY_INFO) cf_info(" *** event_ok took %"PRIu64, delta);
+	if (delta > CL_LOG_DELAY_INFO) cf_info(" *** event_ok took %lu", delta);
 }
 
 //
@@ -1279,7 +1279,7 @@ ev2citrusleaf_timer_expired(int fd, short event, void *udata)
 	ev2citrusleaf_request_complete(req, true /*timedout*/); // frees the req
 
 	uint64_t delta = cf_getms() - _s;
-	if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: timer expired took %"PRIu64, delta);
+	if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: timer expired took %lu", delta);
 }
 
 
@@ -1679,7 +1679,7 @@ ev2citrusleaf_get(ev2citrusleaf_cluster *cl, char *ns, char *set, ev2citrusleaf_
 
 	// kinda sucks, but it's really nice having the 'start' function
 	// taking both 'get' and 'put', which are both bins.
-	ev2citrusleaf_bin* bins = alloca(n_bin_names);
+	ev2citrusleaf_bin* bins = (ev2citrusleaf_bin*)alloca(n_bin_names);
 	for (int i=0;i<n_bin_names;i++) {
 		strcpy(bins[i].bin_name, bin_names[i]);
 		bins[i].object.type = CL_NULL;
@@ -1715,7 +1715,7 @@ ev2citrusleaf_get_digest(ev2citrusleaf_cluster *cl, char *ns, cf_digest *digest,
 
 	// kinda sucks, but it's really nice having the 'start' function
 	// taking both 'get' and 'put', which are both bins.
-	ev2citrusleaf_bin* bins = alloca(n_bin_names);
+	ev2citrusleaf_bin* bins = (ev2citrusleaf_bin*)alloca(n_bin_names);
 	for (int i=0;i<n_bin_names;i++) {
 		strcpy(bins[i].bin_name, bin_names[i]);
 		bins[i].object.type = CL_NULL;
@@ -1925,16 +1925,16 @@ void ev2citrusleaf_print_stats(void)
 	double ev_per_req = (g_cl_stats.req_start == 0) ? 0.0 : 
 		(((double)g_cl_stats.event_counter) / ((double)g_cl_stats.req_start));
 
-	cf_info("stats:: info : info_r %"PRIu64" info_host_r %"PRIu64" info_fin %"PRIu64" info events %"PRIu64,
+	cf_info("stats:: info : info_r %lu info_host_r %lu info_fin %lu info events %lu",
 		g_cl_stats.info_requests, g_cl_stats.info_host_requests, g_cl_stats.info_complete, g_cl_stats.info_events);
-	cf_info("     :: part : process %"PRIu64" create %"PRIu64" destroy %"PRIu64,
+	cf_info("     :: part : process %lu create %lu destroy %lu",
 		g_cl_stats.partition_process, g_cl_stats.partition_create, g_cl_stats.partition_destroy);
-	cf_info("     :: conn : created %"PRIu64" connected %"PRIu64" destroyed %"PRIu64" fd in_q %d",
+	cf_info("     :: conn : created %lu connected %lu destroyed %lu fd in_q %d",
 		g_cl_stats.conns_created, g_cl_stats.conns_connected, g_cl_stats.conns_destroyed, conns_in_queue);
-	cf_info("     :: conn2: destroy timeout %"PRIu64" destroy queue %"PRIu64,
+	cf_info("     :: conn2: destroy timeout %lu destroy queue %lu",
 		g_cl_stats.conns_destroyed_timeout, g_cl_stats.conns_destroyed_queue);
-	cf_info("     :: node : created %"PRIu64" destroyed %"PRIu64" active %d",
+	cf_info("     :: node : created %lu destroyed %lu active %d",
 		g_cl_stats.nodes_created, g_cl_stats.nodes_destroyed, nodes_active );
-	cf_info("     :: req  : start %"PRIu64" restart %"PRIu64" success %"PRIu64" timeout %"PRIu64" ev_per_req %0.2f requestq_sz %d",
+	cf_info("     :: req  : start %lu restart %lu success %lu timeout %lu ev_per_req %0.2f requestq_sz %d",
 		g_cl_stats.req_start, g_cl_stats.req_restart, g_cl_stats.req_success, g_cl_stats.req_timedout, ev_per_req, reqs_in_queue );
 }

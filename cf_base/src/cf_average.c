@@ -15,7 +15,7 @@
 
 
 cf_average *
-cf_average_create( uint32_t initial_size, uint flags)
+cf_average_create(uint32_t initial_size, uint32_t flags)
 {
 	cf_average *a;
 

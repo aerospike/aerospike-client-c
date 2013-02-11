@@ -48,8 +48,8 @@ cf_print_sockaddr_in(char *prefix, struct sockaddr_in *sa_in);
 // Windows
 //
 
-// TODO - arpa inet header file
 #include <WinSock2.h>
+#include <Ws2tcpip.h>
 
 #define cf_close(fd) (closesocket(fd))
 

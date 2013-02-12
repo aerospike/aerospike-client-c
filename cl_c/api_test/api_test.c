@@ -410,10 +410,11 @@ int test_operate(cl_cluster *clc)
 	citrusleaf_object_init_blob(&ops[2].bin.object, blobData2, strlen(blobData2)+1);
 	
 	ops[0].op = CL_OP_READ;
-	ops[1].op = CL_OP_ADD;
+	ops[1].op = CL_OP_INCR;
 	ops[2].op = CL_OP_WRITE;
 	
-	rv = citrusleaf_operate(clc, ns, myset, &key, &ops[0], 3, NULL);
+
+	rv = citrusleaf_operate(clc, ns, myset, &key, &ops[0], 3, NULL, false, NULL);
 	if( rv != CITRUSLEAF_OK ){
 		printf(" TEST FAILED - go-right case of Operate is failing with %d\n", rv);
 		return -1;
@@ -436,7 +437,8 @@ int test_operate(cl_cluster *clc)
 	citrusleaf_object_init(&ops[1].bin.object);
 	citrusleaf_object_init(&ops[2].bin.object);
 
-	rv = citrusleaf_operate(clc, ns, myset, &key, &ops[0], 3, NULL );
+
+	rv = citrusleaf_operate(clc, ns, myset, &key, &ops[0], 3, NULL ,false, NULL);
 	if( rv != CITRUSLEAF_OK ){
 		printf(" TEST FAILED - go-right case of Operate is failing with %d\n", rv);
 		return -1;
@@ -473,7 +475,7 @@ int test_operate(cl_cluster *clc)
 
 
 int count = 0;
-int batch_cb(char *ns, cl_object *key, cf_digest *ked, uint32_t generation, uint32_t record_ttl, cl_bin *bins, int n_bins, 
+int batch_cb(char *ns, cf_digest *ked, char *set, uint32_t generation, uint32_t record_ttl, cl_bin *bins, int n_bins, 
 	bool is_last, void *udata)
 {
 	printf(" batch cb - number is %d\n", count++);
@@ -482,8 +484,8 @@ int batch_cb(char *ns, cl_object *key, cf_digest *ked, uint32_t generation, uint
 		count=0;
 	}
 
-	printf(" batch cb - we've got namespace %s, key %p, digest %p, generation %d, ttl %d, bins %p, n_bins %d, is last %d, udata %s\n", 
-		ns, key, ked, generation, record_ttl, bins, n_bins, is_last, (char *)udata);
+	printf(" batch cb - we've got namespace %s, digest %p, generation %d, ttl %d, bins %p, n_bins %d, is last %d, udata %s\n", 
+		ns, ked, generation, record_ttl, bins, n_bins, is_last, (char *)udata);
 	
 	
 	// XXX what happens with the return value here?

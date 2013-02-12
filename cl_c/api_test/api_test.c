@@ -9,8 +9,7 @@ static const char *myset    = "myset";
 static const char *bin1     = "email";
 static const char *bin2     = "hits";
 static const char *bin3     = "blob";
-static const char *host     = "192.168.4.22";
-static const char *badhost  = "192.168.5.2"; // this one doesn't exist
+static const char *host     = "localhost";
 static const char *blobData = "foobar"; 
 static const char *blobData2 = "barfoo";
 static uint64_t    intData  = 314;
@@ -42,17 +41,6 @@ int main(int argc, char **argv){
 		printf("TEST FAILED: Could not create cluster object");
 	    return(-1);
 	}
-/*
-	return_value = citrusleaf_cluster_add_host(clc, badhost, 3000, 1000);
-	if( return_value != CITRUSLEAF_FAIL_TIMEOUT ){
-		printf("TEST FAILED: return value on bad host connection incorrect. %d\n", return_value);
-		return(-1);
-	}
-	// this test fails.  The code internally checks for cluster completeness before it returns - that is,
-	// whether we have a connection to all the nodes we know about.  However, since the host
-	// I've given it in this test is not a node, the check succeeds. The cluster is complete at 0 nodes
-	// --CSW
-*/
 
 	return_value = citrusleaf_cluster_add_host(clc, host, 3000, 1000);
 	if( return_value != CITRUSLEAF_OK ){

@@ -129,10 +129,10 @@ cl_rv citrusleaf_udf_record_apply(cl_cluster * cl, const char * ns, const char *
     as_msgpack_init(&ser);
 
     as_string file;
-    as_string_init(&file, (char *) filename);
+    as_string_init(&file, (char *) filename, true /*ismalloc*/);
 
     as_string func;
-    as_string_init(&func, (char *) function);
+    as_string_init(&func, (char *) function, true /*ismalloc*/);
     
     as_buffer args;
     as_buffer_init(&args);
@@ -165,7 +165,7 @@ cl_rv citrusleaf_udf_record_apply(cl_cluster * cl, const char * ns, const char *
     as_buffer_destroy(&args);
 
 	if (! (rv == CITRUSLEAF_OK || rv == CITRUSLEAF_FAIL_UDF_BAD_RESPONSE)) {
-    	as_result_tofailure(res, (as_val *) as_string_new("None UDF failure"));
+    	as_result_tofailure(res, (as_val *) as_string_new("None UDF failure",false));
     } else if ( nbins == 1 && bins != NULL ) {
         cl_bin bin = *bins;
 
@@ -177,7 +177,7 @@ cl_rv citrusleaf_udf_record_apply(cl_cluster * cl, const char * ns, const char *
                 break;
             }
             case CL_STR : {
-                val = (as_val *) as_string_new(bin.object.u.str);
+                val = (as_val *) as_string_new(bin.object.u.str, true /*ismalloc*/);
                 break;
             }
             case CL_LIST :
@@ -205,15 +205,15 @@ cl_rv citrusleaf_udf_record_apply(cl_cluster * cl, const char * ns, const char *
                 as_result_tosuccess(res, val);
             }
             else {
-                as_result_tofailure(res, (as_val *) as_string_new("Invalid response. (1)"));
+                as_result_tofailure(res, (as_val *) as_string_new("Invalid response. (1)",false/*ismalloc*/));
             }
         }
         else {
-            as_result_tofailure(res, (as_val *) as_string_new("Invalid response. (2)"));
+            as_result_tofailure(res, (as_val *) as_string_new("Invalid response. (2)",false/*ismalloc*/));
         }
     }
     else {
-        as_result_tofailure(res, (as_val *) as_string_new("Invalid response. (3)"));
+        as_result_tofailure(res, (as_val *) as_string_new("Invalid response. (3)",false/*ismalloc*/));
     }
 
     as_serializer_destroy(&ser);

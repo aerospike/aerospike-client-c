@@ -6,11 +6,14 @@
  *  THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE.  THE COPYRIGHT NOTICE
  *  ABOVE DOES NOT EVIDENCE ANY ACTUAL OR INTENDED PUBLICATION.
  */
+
 #pragma once
 
 #include <pthread.h>
-#include <inttypes.h>
-#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
+#include "citrusleaf/cf_base_types.h"
 
 
 /* SYNOPSIS
@@ -59,7 +62,7 @@ extern void cf_queue_destroy(cf_queue *q);
 extern int cf_queue_push(cf_queue *q, void *ptr);
 
 // Push element on the queue only if size < limit.
-extern bool cf_queue_push_limit(cf_queue *q, void *ptr, uint limit);
+extern bool cf_queue_push_limit(cf_queue *q, void *ptr, uint32_t limit);
 
 // Get the number of elements currently in the queue
 extern int cf_queue_sz(cf_queue *q);

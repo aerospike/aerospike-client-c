@@ -6,20 +6,20 @@
  * All rights reserved
  */
 
-#include <string.h>
+#include <stdint.h>
 #include <stdlib.h>
 
+#include "citrusleaf/cf_base_types.h"
 
 #include "citrusleaf/cf_average.h"
 
 
-
 cf_average *
-cf_average_create( uint32_t initial_size, uint flags)
+cf_average_create(uint32_t initial_size, uint32_t flags)
 {
 	cf_average *a;
 
-	a = malloc(sizeof(cf_average) + (sizeof(uint64_t) * initial_size) );
+	a = (cf_average*)malloc(sizeof(cf_average) + (sizeof(uint64_t) * initial_size) );
 	if (!a)	return(0);
 	
 	a->flags = flags;

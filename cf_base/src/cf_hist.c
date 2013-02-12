@@ -6,17 +6,17 @@
  *  THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE.  THE COPYRIGHT NOTICE
  *  ABOVE DOES NOT EVIDENCE ANY ACTUAL OR INTENDED PUBLICATION.
  */
-#include <errno.h>
-#include <stdarg.h>
+
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
-#include <inttypes.h>
-#include <unistd.h>
-#include "citrusleaf/cf_clock.h"
+#include <string.h>
+
 #include "citrusleaf/cf_atomic.h"
-#include "citrusleaf/cf_hist.h"
+#include "citrusleaf/cf_clock.h"
 #include "citrusleaf/cf_log_internal.h"
+
+#include "citrusleaf/cf_hist.h"
 
 
 int
@@ -47,12 +47,12 @@ cf_bits_find_last_set_64(uint64_t v)
 cf_histogram * 
 cf_histogram_create(char *name)
 {
-	cf_histogram * h = malloc(sizeof(cf_histogram));
+	cf_histogram * h = (cf_histogram*)malloc(sizeof(cf_histogram));
 	if (!h)	return(0);
 	if (strlen(name) >= sizeof(h->name)-1) { free(h); return(0); }
 	strcpy(h->name, name);
 	h->n_counts = 0;
-	memset(&h->count, 0, sizeof(h->count));
+	memset((void*)&h->count, 0, sizeof(h->count));
 	return(h);
 }
 
@@ -103,7 +103,6 @@ cf_histogram_insert_data_point( cf_histogram *h, uint64_t start)
 	{
 	    // Need to investigate why in some cases start is a couple of ms greater than end
 		// Could it be rounding error (usually the difference is 1 but sometimes I have seen 2
-	    // cf_info(AS_INFO, "start = %"PRIu64" > end = %"PRIu64"", start, end);
 		index = 0;
 	}   
        

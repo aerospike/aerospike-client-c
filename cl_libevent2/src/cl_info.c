@@ -9,20 +9,17 @@
  * All rights reserved
  */
 
-#include <errno.h>
-#include <inttypes.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <event2/dns.h>
 #include <event2/event.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
 
 #include "citrusleaf/cf_atomic.h"
 #include "citrusleaf/cf_clock.h"
+#include "citrusleaf/cf_errno.h"
 #include "citrusleaf/cf_log_internal.h"
+#include "citrusleaf/cf_socket.h"
 #include "citrusleaf/cf_vector.h"
 #include "citrusleaf/proto.h"
 
@@ -47,7 +44,7 @@ cl_info_request *
 info_request_create()
 {
 	cl_info_request *cir = (cl_info_request*)malloc( sizeof(cl_info_request) + ( event_get_struct_event_size() ) );
-	if (cir) memset(cir, 0, sizeof(*cir));
+	if (cir) memset((void*)cir, 0, sizeof(*cir));
 	return(cir);
 }
 
@@ -144,7 +141,7 @@ info_event_fn(int fd, short event, void *udata)
 
 	if (event & EV_WRITE) {
 		if (cir->wr_buf_pos < cir->wr_buf_size) {
-			rv = send(fd, &cir->wr_buf[cir->wr_buf_pos], cir->wr_buf_size - cir->wr_buf_pos, MSG_NOSIGNAL | MSG_DONTWAIT);
+			rv = send(fd, (char*)&cir->wr_buf[cir->wr_buf_pos], cir->wr_buf_size - cir->wr_buf_pos, MSG_NOSIGNAL | MSG_DONTWAIT);
 			if (rv > 0) {
 				cir->wr_buf_pos += rv;
 				if (cir->wr_buf_pos == cir->wr_buf_size) {
@@ -165,7 +162,7 @@ info_event_fn(int fd, short event, void *udata)
 
 	if (event & EV_READ) {
 		if (cir->rd_header_pos < sizeof(cl_proto) ) {
-			rv = recv(fd, &cir->rd_header_buf[cir->rd_header_pos], sizeof(cl_proto) - cir->rd_header_pos, MSG_NOSIGNAL | MSG_DONTWAIT);
+			rv = recv(fd, (char*)&cir->rd_header_buf[cir->rd_header_pos], sizeof(cl_proto) - cir->rd_header_pos, MSG_NOSIGNAL | MSG_DONTWAIT);
 			if (rv > 0) {
 				cir->rd_header_pos += rv;
 			}				
@@ -195,23 +192,23 @@ info_event_fn(int fd, short event, void *udata)
 				cir->rd_buf_size = proto->sz;
 			}
 			if (cir->rd_buf_pos < cir->rd_buf_size) {
-				rv = recv(fd, &cir->rd_buf[cir->rd_buf_pos], cir->rd_buf_size - cir->rd_buf_pos, MSG_NOSIGNAL | MSG_DONTWAIT);
+				rv = recv(fd, (char*)&cir->rd_buf[cir->rd_buf_pos], cir->rd_buf_size - cir->rd_buf_pos, MSG_NOSIGNAL | MSG_DONTWAIT);
 				if (rv > 0) {
 					cir->rd_buf_pos += rv;
 					if (cir->rd_buf_pos >= cir->rd_buf_size) {
 						// caller frees rdbuf
-						(*cir->user_cb) ( 0 /*return value*/, (void *)cir->rd_buf , cir->rd_buf_size ,cir->user_data );
+						(*cir->user_cb)(0 /*return value*/, (char*)cir->rd_buf, cir->rd_buf_size, cir->user_data);
 						cir->rd_buf = 0;
 						event_del(info_request_get_network_event(cir) ); // WARNING: this is not necessary. BOK says it is safe: maybe he's right, maybe wrong.
 
-						close(fd);
+						cf_close(fd);
 						info_request_destroy(cir);
 						cir = 0;
 						cf_atomic_int_incr(&g_cl_stats.info_complete);
 						cf_atomic_int_decr(&g_cl_info_transactions);
 						
 						uint64_t delta = cf_getms() - _s;
-						if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY cl_info event OK fn: %"PRIu64, delta);
+						if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY cl_info event OK fn: %lu", delta);
 
 						return;
 					}
@@ -231,20 +228,20 @@ info_event_fn(int fd, short event, void *udata)
 	event_add(info_request_get_network_event(cir), 0 /*timeout*/);					
 	
 	uint64_t delta = cf_getms() - _s;
-	if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY cl_info event again fn: %"PRIu64, delta);
+	if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY cl_info event again fn: %lu", delta);
 
 	return;
 	
 Fail:
 	(*cir->user_cb) ( -1, 0 , 0,cir->user_data );
 	event_del(info_request_get_network_event(cir)); // WARNING: this is not necessary. BOK says it is safe: maybe he's right, maybe wrong.
-	close(fd);
+	cf_close(fd);
 	info_request_destroy(cir);
 	cf_atomic_int_incr(&g_cl_stats.info_complete);
 	cf_atomic_int_decr(&g_cl_info_transactions);
 	
 	delta = cf_getms() - _s;
-	if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: cl_info event fail OK took %"PRIu64, delta);
+	if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: cl_info event fail OK took %lu", delta);
 }
 
 
@@ -271,40 +268,15 @@ ev2citrusleaf_info_host(struct event_base *base, struct sockaddr_in *sa_in, char
 	cir->base = base;
 
 	// Create the socket a little early, just in case
-	int fd;
-	if (-1 == (fd = socket ( AF_INET, SOCK_STREAM, 0 ))) {
-		cf_info("could not allocate socket errno %d", errno);
+	int fd = cf_socket_create_and_connect_nb(sa_in);
 
+	if (fd == -1) {
 		info_request_destroy(cir);
-		
+
 		uint64_t delta = cf_getms() - _s;
-		if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: info host no socket: %"PRIu64, delta);
-		
-		return(-1);
-	}
+		if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: info host no socket connect: %lu", delta);
 
-	// set nonblocking
-	evutil_make_socket_nonblocking(fd);
-
-	// Actually do the connect
-	if (0 != connect(fd, (struct sockaddr *) sa_in, sizeof( *sa_in ) ))
-	{
-		if (errno != EINPROGRESS) {
-
-			if (errno == ECONNREFUSED) {
-				cf_info("host is refusing connections");
-			} else {
-				cf_info("info: connect request failed errno %d", errno);
-			}
-			
-			info_request_destroy(cir);
-			close(fd);
-
-			uint64_t delta = cf_getms() - _s;
-			if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: info host no connect: %"PRIu64, delta);
-
-			return(-1);
-		}
+		return -1;
 	}
 	
 	// fill the buffer while I'm waiting
@@ -312,10 +284,10 @@ ev2citrusleaf_info_host(struct event_base *base, struct sockaddr_in *sa_in, char
 		cf_warn("buffer fill failed");
 		
 		info_request_destroy(cir);
-		close(fd);
+		cf_close(fd);
 		
 		uint64_t delta = cf_getms() - _s;
-		if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: info host bad request: %"PRIu64, delta);
+		if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: info host bad request: %lu", delta);
 		
 		return(-1);
 	}
@@ -327,7 +299,7 @@ ev2citrusleaf_info_host(struct event_base *base, struct sockaddr_in *sa_in, char
 	cf_atomic_int_incr(&g_cl_info_transactions);
 	
 	uint64_t delta = cf_getms() - _s;
-	if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: info host standard: %"PRIu64, delta);
+	if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: info host standard: %lu", delta);
 
 	
 	return(0);
@@ -356,7 +328,7 @@ info_resolve_cb(int result, cf_vector *sockaddr_in_v, void *udata)
 		(irs->cb) ( -1 /*return value*/, 0, 0 ,irs->udata );
 		goto Done;
 	}		
-	for (uint i=0; i < cf_vector_size(sockaddr_in_v) ; i++) 
+	for (uint32_t i=0; i < cf_vector_size(sockaddr_in_v) ; i++)
 	{
 		struct sockaddr_in  sa_in;
 		cf_vector_get(sockaddr_in_v, i, &sa_in);

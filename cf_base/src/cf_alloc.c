@@ -6,17 +6,14 @@
  *  THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE.  THE COPYRIGHT NOTICE
  *  ABOVE DOES NOT EVIDENCE ANY ACTUAL OR INTENDED PUBLICATION.
  */
-#include <errno.h>
-#include <pthread.h>
-#include <stdarg.h>
-#include <stdio.h>
+
+#include <stddef.h>
+#include <stdint.h>
 #include <stdlib.h>
-#include <string.h>
-#include <strings.h>
-#include <time.h>
-#include <unistd.h>
 
 #include "citrusleaf/cf_atomic.h"
+#include "citrusleaf/cf_base_types.h"
+
 #include "citrusleaf/cf_alloc.h"
 
 
@@ -80,7 +77,7 @@ cf_client_rc_alloc(size_t sz)
 	uint8_t *addr;
 	size_t asz = sizeof(cf_client_rc_counter) + sz;
 
-	addr = malloc(asz);
+	addr = (uint8_t*)malloc(asz);
 	if (NULL == addr)
 		return(NULL);
 

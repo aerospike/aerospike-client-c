@@ -9,11 +9,11 @@
 
 #pragma once
  
-#include <inttypes.h>
-#include <stdint.h>
 #include <pthread.h>
-#include <stdbool.h>
-#include <stdio.h>
+#include <stddef.h>
+#include <stdint.h>
+
+#include "citrusleaf/cf_base_types.h"
 
 // #define CITRUSLEAF 1
 
@@ -47,7 +47,8 @@ static inline uint64_t
 cf_hash_fnv(void *buf, size_t bufsz)
 {
 	uint64_t hash = 0xcbf29ce484222325ULL;
-	uint8_t *bufp = (uint8_t *)buf, *bufe = bufp + bufsz;
+	uint8_t *bufp = (uint8_t *)buf;
+	uint8_t *bufe = bufp + bufsz;
 
 	while (bufp < bufe) {
 		/* XOR the current byte into the bottom of the hash */

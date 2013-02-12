@@ -6,10 +6,13 @@
  *  THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE.  THE COPYRIGHT NOTICE
  *  ABOVE DOES NOT EVIDENCE ANY ACTUAL OR INTENDED PUBLICATION.
  */
+
 #pragma once
-#include <stdbool.h>
+
+#include <stddef.h>
 
 #include "cf_atomic.h"
+#include "citrusleaf/cf_base_types.h"
 
 
 /* SYNOPSIS

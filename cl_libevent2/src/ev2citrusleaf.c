@@ -9,29 +9,25 @@
  * All rights reserved
  */
 
-#include <errno.h>
-#include <inttypes.h>
 #include <pthread.h>
-#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
-#include <asm/byteorder.h>
-#include <bits/time.h>
 #include <event2/dns.h>
 #include <event2/event.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
 
 #include "citrusleaf/cf_atomic.h"
+#include "citrusleaf/cf_base_types.h"
+#include "citrusleaf/cf_byte_order.h"
 #include "citrusleaf/cf_clock.h"
 #include "citrusleaf/cf_digest.h"
+#include "citrusleaf/cf_errno.h"
 #include "citrusleaf/cf_hooks.h"
 #include "citrusleaf/cf_ll.h"
 #include "citrusleaf/cf_log_internal.h"
 #include "citrusleaf/cf_queue.h"
+#include "citrusleaf/cf_socket.h"
 #include "citrusleaf/cf_vector.h"
 #include "citrusleaf/proto.h"
 
@@ -339,7 +335,7 @@ write_fields(uint8_t *buf, char *ns, int ns_len, char *set, int set_len, ev2citr
 			mf->field_sz = sizeof(int64_t) + 2;
 			uint8_t *fd = (uint8_t *) &mf->data;
 			fd[0] = CL_PARTICLE_TYPE_INTEGER;
-			uint64_t swapped = __swab64(key->u.i64);
+			uint64_t swapped = htonll((uint64_t)key->u.i64);
 			memcpy(&fd[1], &swapped, sizeof(swapped));
 		}
 		else {
@@ -376,7 +372,7 @@ int
 value_to_op_int(int64_t value, uint8_t *data)
 {
 	if ((value < 0) || (value >= 0x7FFFFFFF)) {
-		*(__u64 *)data = __cpu_to_be64((__u64) value);  // swap in place
+		*(uint64_t*)data = htonll((uint64_t)value);  // swap in place
 		return(8);
 	}
 	
@@ -404,7 +400,7 @@ ev2citrusleaf_calculate_digest(const char *set, const ev2citrusleaf_object *key,
 	// make the key as it's laid out for digesting
 	// THIS IS A STRIPPED DOWN VERSION OF THE CODE IN write_fields ABOVE
 	// MUST STAY IN SYNC!!!
-	uint8_t k[key->size + 1];
+	uint8_t* k = (uint8_t*)alloca(key->size + 1);
 	switch (key->type) {
 		case CL_STR:
 			k[0] = key->type;
@@ -414,7 +410,7 @@ ev2citrusleaf_calculate_digest(const char *set, const ev2citrusleaf_object *key,
 			{
 			uint64_t swapped;	
 			k[0] = key->type;
-			swapped = __swab64(key->u.i64);
+			swapped = htonll((uint64_t)key->u.i64);
 			memcpy(&k[1], &swapped, sizeof(swapped)); // THIS MUST LEAD TO A WRONG LENGTH CALCULATION BELOW
 			}
 			break;
@@ -457,7 +453,7 @@ op_to_value_int(uint8_t	*buf, int size, int64_t *value)
 	if (size > 8)	return(-1);
 	if (size == 8) {
 		// no need to worry about sign extension - blast it
-		*value = __cpu_to_be64(*(__u64 *) buf);
+		*value = (int64_t)ntohll(*(uint64_t*)buf);
 		return(0);
 	}
 	if (size == 0) {
@@ -475,7 +471,7 @@ op_to_value_int(uint8_t	*buf, int size, int64_t *value)
 		int i;
 		for (i=0;i<8-size;i++)	lg_buf[i]=0xff;
 		memcpy(&lg_buf[i],buf,size);
-		*value = __cpu_to_be64((__u64) *buf);
+		*value = (int64_t)ntohll((uint64_t)*buf);
 		return(0);
 	}
 	// positive numbers don't
@@ -807,7 +803,7 @@ compile_ops(char *ns, char *set, ev2citrusleaf_object *key, cf_digest *digest,
 int
 set_object(cl_msg_op *op, ev2citrusleaf_object *obj)
 {
-	obj->type = op->particle_type;
+	obj->type = (ev2citrusleaf_type)op->particle_type;
 	
 	switch (op->particle_type) {
 		case CL_PARTICLE_TYPE_NULL:
@@ -992,7 +988,7 @@ ev2citrusleaf_request_complete(cl_request *req, bool timedout)
 		if ((timedout == false) && (req->node))
 			cl_cluster_node_fd_put(req->node  , req->fd);
 		else {
-			close(req->fd);
+			cf_close(req->fd);
 			cf_atomic_int_incr(&g_cl_stats.conns_destroyed);
 			if (timedout == true) cf_atomic_int_incr(&g_cl_stats.conns_destroyed_timeout);
 		}
@@ -1013,14 +1009,14 @@ ev2citrusleaf_request_complete(cl_request *req, bool timedout)
 		// Allocate on the stack for the bins
 		int n_bins = parse_get_maxbins(req->rd_buf, req->rd_buf_size);
 		ev2citrusleaf_bin   	*bins = 0;
-		if (n_bins) bins = alloca(n_bins * sizeof(ev2citrusleaf_bin) );
+		if (n_bins) bins = (ev2citrusleaf_bin*)alloca(n_bins * sizeof(ev2citrusleaf_bin));
 	
 		// parse up into the response
 		int			return_code;
 		uint32_t	generation;
 		uint32_t	expiration;
 
-		parse(req->rd_buf, req->rd_buf_size, &bins[0], n_bins, &return_code, &generation, &expiration);
+		parse(req->rd_buf, req->rd_buf_size, bins, n_bins, &return_code, &generation, &expiration);
 
 		// For simplicity & backwards-compatibility, convert server-side
 		// timeouts to the usual timeout return-code:
@@ -1071,7 +1067,7 @@ ev2citrusleaf_request_complete(cl_request *req, bool timedout)
 	if (req->rd_buf_size && (req->rd_buf != req->rd_tmp))  free(req->rd_buf);
 	
 	// DEBUG
-	memset(req, 0, sizeof (cl_request) );
+	memset((void*)req, 0, sizeof (cl_request) );
 	
 	cl_request_destroy(req);
 }
@@ -1089,7 +1085,7 @@ int
 ev2citrusleaf_is_connected(int fd)
 {
 	uint8_t buf[8];
-	int rv = recv(fd, buf, sizeof(buf), MSG_PEEK | MSG_DONTWAIT | MSG_NOSIGNAL);
+	int rv = recv(fd, (char*)buf, sizeof(buf), MSG_PEEK | MSG_DONTWAIT | MSG_NOSIGNAL);
 	if (rv == 0) {
 		cf_debug("connected check: found disconnected fd %d", fd);
 		return(CONNECTED_NOT);
@@ -1120,7 +1116,7 @@ ev2citrusleaf_is_connected(int fd)
 void
 ev2citrusleaf_event(int fd, short event, void *udata)
 {
-	cl_request *req = udata;
+	cl_request *req = (cl_request*)udata;
 	int rv;
 	
 	uint64_t _s = cf_getms();
@@ -1131,7 +1127,7 @@ ev2citrusleaf_event(int fd, short event, void *udata)
 
 	if (event & EV_WRITE) {
 		if (req->wr_buf_pos < req->wr_buf_size) {
-			rv = send(fd, &req->wr_buf[req->wr_buf_pos], req->wr_buf_size - req->wr_buf_pos,MSG_DONTWAIT | MSG_NOSIGNAL);
+			rv = send(fd, (char*)&req->wr_buf[req->wr_buf_pos], req->wr_buf_size - req->wr_buf_pos,MSG_DONTWAIT | MSG_NOSIGNAL);
 
 			if (rv > 0) {
 				req->wr_buf_pos += rv;
@@ -1154,7 +1150,7 @@ ev2citrusleaf_event(int fd, short event, void *udata)
 
 	if (event & EV_READ) {
 		if (req->rd_header_pos < sizeof(cl_proto) ) {
-			rv = recv(fd, &req->rd_header_buf[req->rd_header_pos], sizeof(cl_proto) - req->rd_header_pos, MSG_DONTWAIT | MSG_NOSIGNAL);
+			rv = recv(fd, (char*)&req->rd_header_buf[req->rd_header_pos], sizeof(cl_proto) - req->rd_header_pos, MSG_DONTWAIT | MSG_NOSIGNAL);
 
 			if (rv > 0) {
 				req->rd_header_pos += rv;
@@ -1165,7 +1161,7 @@ ev2citrusleaf_event(int fd, short event, void *udata)
 				goto Fail;					
 			}
 			else {
-				if ((errno != EAGAIN) && (errno != EINPROGRESS)) {
+				if ((errno != EAGAIN) && (errno != EWOULDBLOCK)) {
 					cf_debug("read failed: rv %d errno %d", rv, errno);
 					goto Fail;
 				}
@@ -1193,7 +1189,7 @@ ev2citrusleaf_event(int fd, short event, void *udata)
 				req->rd_buf_size = proto->sz;
 			}
 			if (req->rd_buf_pos < req->rd_buf_size) {
-				rv = recv(fd, &req->rd_buf[req->rd_buf_pos], req->rd_buf_size - req->rd_buf_pos,MSG_DONTWAIT | MSG_NOSIGNAL);
+				rv = recv(fd, (char*)&req->rd_buf[req->rd_buf_pos], req->rd_buf_size - req->rd_buf_pos,MSG_DONTWAIT | MSG_NOSIGNAL);
 
 				if (rv > 0) {
 					req->rd_buf_pos += rv;
@@ -1208,7 +1204,7 @@ ev2citrusleaf_event(int fd, short event, void *udata)
 					cf_debug("ev2citrusleaf read2: connection closed: fd %d rv %d errno %d", fd, rv, errno);
 					goto Fail;					
 				}
-				else if ((errno != EAGAIN) && (errno != EINPROGRESS)) {
+				else if ((errno != EAGAIN) && (errno != EWOULDBLOCK)) {
 					cf_debug("ev2citrusleaf read2: fail: fd %d rv %d errno %d", fd, rv, errno);
 					goto Fail;
 				}
@@ -1228,14 +1224,14 @@ ev2citrusleaf_event(int fd, short event, void *udata)
 	}		
 	
 	uint64_t delta = cf_getms() - _s;
-	if (delta > CL_LOG_DELAY_INFO) cf_info(" *** event took %"PRIu64, delta);
+	if (delta > CL_LOG_DELAY_INFO) cf_info(" *** event took %lu", delta);
 
 	return;
 	
 Fail:
 	cf_atomic_int_incr(&g_cl_stats.conns_destroyed);
 	
-	close(fd);  // not back in queue,itz bad
+	cf_close(fd);  // not back in queue,itz bad
 	req->fd = 0;
 	
 	if (req->node) {
@@ -1254,7 +1250,7 @@ Fail:
 	}
 
 	delta =  cf_getms() - _s;
-	if (delta > CL_LOG_DELAY_INFO) cf_info(" *** event_ok took %"PRIu64, delta);
+	if (delta > CL_LOG_DELAY_INFO) cf_info(" *** event_ok took %lu", delta);
 }
 
 //
@@ -1264,7 +1260,7 @@ Fail:
 void
 ev2citrusleaf_timer_expired(int fd, short event, void *udata)
 {
-	cl_request *req = udata;
+	cl_request *req = (cl_request*)udata;
 
 	if (req->MAGIC != CL_REQUEST_MAGIC)	{
 		cf_error("timer expired: BAD MAGIC");
@@ -1282,7 +1278,7 @@ ev2citrusleaf_timer_expired(int fd, short event, void *udata)
 	ev2citrusleaf_request_complete(req, true /*timedout*/); // frees the req
 
 	uint64_t delta = cf_getms() - _s;
-	if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: timer expired took %"PRIu64, delta);
+	if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: timer expired took %lu", delta);
 }
 
 
@@ -1562,7 +1558,7 @@ ev2citrusleaf_get_all(ev2citrusleaf_cluster *cl, char *ns, char *set, ev2citrusl
 	// Allocate a new request object
 	cl_request *req = cl_request_create();
 	if (!req)	return(-1);
-	memset(req, 0, sizeof(cl_request));
+	memset((void*)req, 0, sizeof(cl_request));
 	req->MAGIC = CL_REQUEST_MAGIC;
 	req->base = base;
 	req->asc = cl;
@@ -1588,7 +1584,7 @@ ev2citrusleaf_get_all_digest(ev2citrusleaf_cluster *cl, char *ns, cf_digest *d,
 	// Allocate a new request object
 	cl_request *req = cl_request_create();
 	if (!req)	return(-1);
-	memset(req, 0, sizeof(cl_request));
+	memset((void*)req, 0, sizeof(cl_request));
 	req->MAGIC = CL_REQUEST_MAGIC;
 	req->base = base;
 	req->asc = cl;
@@ -1616,7 +1612,7 @@ ev2citrusleaf_put(ev2citrusleaf_cluster *cl, char *ns, char *set, ev2citrusleaf_
 	// Allocate a new request object
 	cl_request *req = cl_request_create();	
 	if (!req)	return(-1);	
-	memset(req, 0, sizeof(cl_request));
+	memset((void*)req, 0, sizeof(cl_request));
 	req->MAGIC = CL_REQUEST_MAGIC;
 	req->base = base;
 	req->asc = cl;
@@ -1642,7 +1638,7 @@ ev2citrusleaf_put_digest(ev2citrusleaf_cluster *cl, char *ns, cf_digest *digest,
 	// Allocate a new request object
 	cl_request *req = cl_request_create();
 	if (!req)	return(-1);	
-	memset(req, 0, sizeof(cl_request));
+	memset((void*)req, 0, sizeof(cl_request));
 	req->MAGIC = CL_REQUEST_MAGIC;
 	req->base = base;
 	req->asc = cl;
@@ -1671,7 +1667,7 @@ ev2citrusleaf_get(ev2citrusleaf_cluster *cl, char *ns, char *set, ev2citrusleaf_
 	// Allocate a new request object
 	cl_request *req = cl_request_create();
 	if (!req)	return(-1);
-	memset(req, 0, sizeof(cl_request));
+	memset((void*)req, 0, sizeof(cl_request));
 	req->MAGIC = CL_REQUEST_MAGIC;
 	req->base = base;
 	req->asc = cl;
@@ -1682,7 +1678,7 @@ ev2citrusleaf_get(ev2citrusleaf_cluster *cl, char *ns, char *set, ev2citrusleaf_
 
 	// kinda sucks, but it's really nice having the 'start' function
 	// taking both 'get' and 'put', which are both bins.
-	ev2citrusleaf_bin bins[n_bin_names];
+	ev2citrusleaf_bin* bins = (ev2citrusleaf_bin*)alloca(n_bin_names);
 	for (int i=0;i<n_bin_names;i++) {
 		strcpy(bins[i].bin_name, bin_names[i]);
 		bins[i].object.type = CL_NULL;
@@ -1707,7 +1703,7 @@ ev2citrusleaf_get_digest(ev2citrusleaf_cluster *cl, char *ns, cf_digest *digest,
 	// Allocate a new request object
 	cl_request *req = cl_request_create();
 	if (!req)	return(-1);
-	memset(req, 0, sizeof(cl_request));
+	memset((void*)req, 0, sizeof(cl_request));
 	req->MAGIC = CL_REQUEST_MAGIC;
 	req->base = base;
 	req->asc = cl;
@@ -1718,7 +1714,7 @@ ev2citrusleaf_get_digest(ev2citrusleaf_cluster *cl, char *ns, cf_digest *digest,
 
 	// kinda sucks, but it's really nice having the 'start' function
 	// taking both 'get' and 'put', which are both bins.
-	ev2citrusleaf_bin bins[n_bin_names];
+	ev2citrusleaf_bin* bins = (ev2citrusleaf_bin*)alloca(n_bin_names);
 	for (int i=0;i<n_bin_names;i++) {
 		strcpy(bins[i].bin_name, bin_names[i]);
 		bins[i].object.type = CL_NULL;
@@ -1744,7 +1740,7 @@ ev2citrusleaf_delete(ev2citrusleaf_cluster *cl, char *ns, char *set, ev2citrusle
 	// Allocate a new request object
 	cl_request *req = cl_request_create();
 	if (!req)	return(-1);
-	memset(req, 0, sizeof(cl_request));
+	memset((void*)req, 0, sizeof(cl_request));
 	req->MAGIC = CL_REQUEST_MAGIC;
 	req->base = base;
 	req->asc = cl;
@@ -1772,7 +1768,7 @@ ev2citrusleaf_delete_digest(ev2citrusleaf_cluster *cl, char *ns, cf_digest *dige
 	// Allocate a new request object
 	cl_request *req = cl_request_create();
 	if (!req)	return(-1);
-	memset(req, 0, sizeof(cl_request));
+	memset((void*)req, 0, sizeof(cl_request));
 	req->MAGIC = CL_REQUEST_MAGIC;
 	req->base = base;
 	req->asc = cl;
@@ -1803,7 +1799,7 @@ ev2citrusleaf_operate(ev2citrusleaf_cluster *cl, char *ns, char *set, ev2citrusl
 	// Allocate a new request object
 	cl_request *req = cl_request_create();
 	if (!req)	return(-1);
-	memset(req, 0, sizeof(cl_request));
+	memset((void*)req, 0, sizeof(cl_request));
 	req->MAGIC = CL_REQUEST_MAGIC;
 	req->base = base;
 	req->asc = cl;
@@ -1855,7 +1851,7 @@ int ev2citrusleaf_init(ev2citrusleaf_lock_callbacks *lock_cb)
 	// Tell cf_base code to use the same locking calls as we'll use here:
 	cf_hook_mutex(g_lock_cb);
 
-	memset(&g_cl_stats, 0, sizeof(g_cl_stats)); 
+	memset((void*)&g_cl_stats, 0, sizeof(g_cl_stats));
 	
 	citrusleaf_cluster_init();
 
@@ -1912,7 +1908,7 @@ void ev2citrusleaf_print_stats(void)
 		
 		MUTEX_LOCK(asc->node_v_lock);
 		for (unsigned int i=0 ; i<cf_vector_size(&asc->node_v) ; i++) {
-			cl_cluster_node *cn = cf_vector_pointer_get(&asc->node_v, i);
+			cl_cluster_node *cn = (cl_cluster_node*)cf_vector_pointer_get(&asc->node_v, i);
 			conns_in_queue += cf_queue_sz(cn->conn_q);
 			nodes_active++;
 		}
@@ -1928,16 +1924,16 @@ void ev2citrusleaf_print_stats(void)
 	double ev_per_req = (g_cl_stats.req_start == 0) ? 0.0 : 
 		(((double)g_cl_stats.event_counter) / ((double)g_cl_stats.req_start));
 
-	cf_info("stats:: info : info_r %"PRIu64" info_host_r %"PRIu64" info_fin %"PRIu64" info events %"PRIu64,
+	cf_info("stats:: info : info_r %lu info_host_r %lu info_fin %lu info events %lu",
 		g_cl_stats.info_requests, g_cl_stats.info_host_requests, g_cl_stats.info_complete, g_cl_stats.info_events);
-	cf_info("     :: part : process %"PRIu64" create %"PRIu64" destroy %"PRIu64,
+	cf_info("     :: part : process %lu create %lu destroy %lu",
 		g_cl_stats.partition_process, g_cl_stats.partition_create, g_cl_stats.partition_destroy);
-	cf_info("     :: conn : created %"PRIu64" connected %"PRIu64" destroyed %"PRIu64" fd in_q %d",
+	cf_info("     :: conn : created %lu connected %lu destroyed %lu fd in_q %d",
 		g_cl_stats.conns_created, g_cl_stats.conns_connected, g_cl_stats.conns_destroyed, conns_in_queue);
-	cf_info("     :: conn2: destroy timeout %"PRIu64" destroy queue %"PRIu64,
+	cf_info("     :: conn2: destroy timeout %lu destroy queue %lu",
 		g_cl_stats.conns_destroyed_timeout, g_cl_stats.conns_destroyed_queue);
-	cf_info("     :: node : created %"PRIu64" destroyed %"PRIu64" active %d",
+	cf_info("     :: node : created %lu destroyed %lu active %d",
 		g_cl_stats.nodes_created, g_cl_stats.nodes_destroyed, nodes_active );
-	cf_info("     :: req  : start %"PRIu64" restart %"PRIu64" success %"PRIu64" timeout %"PRIu64" ev_per_req %0.2f requestq_sz %d",
+	cf_info("     :: req  : start %lu restart %lu success %lu timeout %lu ev_per_req %0.2f requestq_sz %d",
 		g_cl_stats.req_start, g_cl_stats.req_restart, g_cl_stats.req_success, g_cl_stats.req_timedout, ev_per_req, reqs_in_queue );
 }

@@ -6,22 +6,22 @@
  *  THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE.  THE COPYRIGHT NOTICE
  *  ABOVE DOES NOT EVIDENCE ANY ACTUAL OR INTENDED PUBLICATION.
  */
-#include <errno.h>
+
 #include <pthread.h>
-#include <stdarg.h>
-#include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <strings.h>
-#include <time.h>
-#include <unistd.h>
 
+#include "citrusleaf/cf_base_types.h"
+#include "citrusleaf/cf_clock.h"
+#include "citrusleaf/cf_errno.h"
 #ifdef EXTERNAL_LOCKS
 #include "citrusleaf/cf_hooks.h"
 #endif
+#include "citrusleaf/cf_log_internal.h"
 
 #include "citrusleaf/cf_queue.h"
-#include "citrusleaf/cf_log_internal.h"
+
 
 // #define DEBUG 1
 
@@ -53,7 +53,7 @@ cf_queue_create(size_t elementsz, bool threadsafe)
 {
 	cf_queue *q = NULL;
 
-	q = malloc( sizeof(cf_queue));
+	q = (cf_queue*)malloc( sizeof(cf_queue));
 	/* FIXME error msg */
 	if (!q)
 		return(NULL);
@@ -62,7 +62,7 @@ cf_queue_create(size_t elementsz, bool threadsafe)
 	q->elementsz = elementsz;
 	q->threadsafe = threadsafe;
 
-	q->queue = malloc(CF_QUEUE_ALLOCSZ * elementsz);
+	q->queue = (uint8_t*)malloc(CF_QUEUE_ALLOCSZ * elementsz);
 	if (! q->queue) {
 		free(q);
 		return(NULL);
@@ -115,9 +115,9 @@ cf_queue_destroy(cf_queue *q)
 		pthread_mutex_destroy(&q->LOCK);
 #endif // EXTERNAL_LOCKS
 	}
-	memset(q->queue, 0, q->allocsz * q->elementsz);
+	memset((void*)q->queue, 0, q->allocsz * q->elementsz);
 	free(q->queue);
-	memset(q, 0, sizeof(cf_queue) );
+	memset((void*)q, 0, sizeof(cf_queue) );
 	free(q);
 }
 
@@ -139,7 +139,7 @@ cf_queue_sz(cf_queue *q)
 // *** THIS ONLY WORKS ON FULL QUEUES ***
 //
 int
-cf_queue_resize(cf_queue *q, uint new_sz)
+cf_queue_resize(cf_queue *q, uint32_t new_sz)
 {
 	// check - a lot of the code explodes badly if queue is not full
 	if (CF_Q_SZ(q) != q->allocsz) {
@@ -150,7 +150,7 @@ cf_queue_resize(cf_queue *q, uint new_sz)
 	// the rare case where the queue is not fragmented, and realloc makes sense
 	// and none of the offsets need to move
 	if (0 == q->read_offset % q->allocsz) {
-		q->queue = realloc(q->queue, new_sz * q->elementsz);
+		q->queue = (uint8_t*)realloc(q->queue, new_sz * q->elementsz);
 		if (!q->queue) {
 //			cf_debug(CF_QUEUE," pfft! out of memory! crash!");
 			return(-1);
@@ -160,13 +160,13 @@ cf_queue_resize(cf_queue *q, uint new_sz)
 	}
 	else {
 		
-		uint8_t *newq = malloc(new_sz * q->elementsz);
+		uint8_t *newq = (uint8_t*)malloc(new_sz * q->elementsz);
 		if (!newq) {
 //			cf_debug(CF_QUEUE," pffth! out of memory! crash!");
 			return(-1);
 		}
 		// endsz is used uint8_ts in the old queue from the insert point to the end
-		uint endsz = (q->allocsz - (q->read_offset % q->allocsz)) * q->elementsz;
+		uint32_t endsz = (q->allocsz - (q->read_offset % q->allocsz)) * q->elementsz;
 		memcpy(&newq[0], CF_Q_ELEM_PTR(q, q->read_offset), endsz);
 		memcpy(&newq[endsz], &q->queue[0], (q->allocsz * q->elementsz) - endsz); 
 		
@@ -235,10 +235,10 @@ cf_queue_push(cf_queue *q, void *ptr)
  * Push element on the queue only if size < limit.
  * */
 bool
-cf_queue_push_limit(cf_queue *q, void *ptr, uint limit)
+cf_queue_push_limit(cf_queue *q, void *ptr, uint32_t limit)
 {
 	QUEUE_LOCK(q);
-	uint size = CF_Q_SZ(q);
+	uint32_t size = CF_Q_SZ(q);
 
 	if (size >= limit) {
 		QUEUE_UNLOCK(q);
@@ -354,11 +354,11 @@ cf_queue_pop(cf_queue *q, void *buf, int ms_wait)
 
 
 void
-cf_queue_delete_offset(cf_queue *q, uint index)
+cf_queue_delete_offset(cf_queue *q, uint32_t index)
 {
 	index %= q->allocsz;
-	uint r_index = q->read_offset % q->allocsz;
-	uint w_index = q->write_offset % q->allocsz;
+	uint32_t r_index = q->read_offset % q->allocsz;
+	uint32_t w_index = q->write_offset % q->allocsz;
 	
 	// assumes index is validated!
 	
@@ -412,7 +412,7 @@ cf_queue_reduce(cf_queue *q,  cf_queue_reduce_fn cb, void *udata)
 		// will change the read and write offset, so this is simpler for now
 		// can optimize if necessary later....
 		
-		for (uint i = q->read_offset ; 
+		for (uint32_t i = q->read_offset ;
 			 i < q->write_offset ;
 			 i++)
 		{
@@ -453,7 +453,7 @@ cf_queue_delete(cf_queue *q, void *buf, bool only_one)
 	
 	if (CF_Q_SZ(q)) {
 
-		for (uint i = q->read_offset ; 
+		for (uint32_t i = q->read_offset ;
 			 i < q->write_offset ;
 			 i++)
 		{
@@ -485,7 +485,7 @@ Done:
 cf_queue_priority *
 cf_queue_priority_create(size_t elementsz, bool threadsafe)
 {
-	cf_queue_priority *q = malloc(sizeof(cf_queue_priority));
+	cf_queue_priority *q = (cf_queue_priority*)malloc(sizeof(cf_queue_priority));
 	if (!q)	return(0);
 	
 	q->threadsafe = threadsafe;
@@ -654,7 +654,7 @@ cf_queue_priority_sz(cf_queue_priority *q)
 // it's always really annoying to have a queue that malfunctions in some small way
 // so best to have a pretty serious torture test suite
 //
-
+#if 0
 
 #define TEST1_SZ 400
 #define TEST1_INTERVAL 10
@@ -756,3 +756,5 @@ cf_queue_test()
 	
 	return(0);
 }
+
+#endif // 0

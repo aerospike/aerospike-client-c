@@ -6,12 +6,13 @@
  * All rights reserved
  */
 
-#include <string.h>
+#include <pthread.h>
+#include <stddef.h>
+#include <stdint.h>
 #include <stdlib.h>
-
+#include <string.h>
 
 #include "citrusleaf/cf_shash.h"
-
 
 
 int
@@ -19,7 +20,7 @@ shash_create(shash **h_r, shash_hash_fn h_fn, uint32_t key_len, uint32_t value_l
 {
 	shash *h;
 
-	h = malloc(sizeof(shash));
+	h = (shash*)malloc(sizeof(shash));
 	if (!h)	return(SHASH_ERR);
 
 	h->elements = 0;
@@ -41,7 +42,7 @@ shash_create(shash **h_r, shash_hash_fn h_fn, uint32_t key_len, uint32_t value_l
 		return(SHASH_ERR);
 	}
 	
-	shash_elem *table = h->table;
+	shash_elem *table = (shash_elem*)h->table;
 	for (unsigned int i=0;i<sz;i++) {
 		table->in_use = false;
 		table->next = 0;
@@ -56,10 +57,10 @@ shash_create(shash **h_r, shash_hash_fn h_fn, uint32_t key_len, uint32_t value_l
 		}
 	}
 	else
-		memset( &h->biglock, 0, sizeof( h->biglock ) );
+		memset( (void*)&h->biglock, 0, sizeof( h->biglock ) );
 	
 	if (flags & SHASH_CR_MT_MANYLOCK) {
-		h->lock_table = malloc( sizeof(pthread_mutex_t) * sz);
+		h->lock_table = (pthread_mutex_t*)malloc( sizeof(pthread_mutex_t) * sz);
 		if (! h->lock_table) {
 			free(h);
 			*h_r = 0;
@@ -673,7 +674,7 @@ Out:
 void
 shash_destroy(shash *h)
 {
-	shash_elem *e_table = h->table;
+	shash_elem *e_table = (shash_elem*)h->table;
 	for (unsigned int i=0;i<h->table_len;i++) {
 		if (e_table->next) {
 			shash_elem *e = e_table->next;

@@ -11,14 +11,13 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <arpa/inet.h>
 #include <event2/dns.h>
 #include <event2/event.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
 
+#include "citrusleaf/cf_byte_order.h"
 #include "citrusleaf/cf_clock.h"
 #include "citrusleaf/cf_log_internal.h"
+#include "citrusleaf/cf_socket.h"
 #include "citrusleaf/cf_vector.h"
 
 #include "citrusleaf_event2/cl_cluster.h"
@@ -41,7 +40,7 @@ cl_lookup_immediate(char *hostname, short port, struct sockaddr_in *sin)
 
 	uint32_t addr;
 	if (1 == inet_pton(AF_INET, hostname, &addr)) {
-		memset(sin, 0, sizeof(*sin));
+		memset((void*)sin, 0, sizeof(*sin));
 //		sin->sin_addr.s_addr = htonl(addr);
 		sin->sin_addr.s_addr = addr;
 		sin->sin_family = AF_INET;
@@ -89,7 +88,7 @@ cl_lookup_result_fn(int result, char type, int count, int ttl, void *addresses, 
 		uint32_t *s_addr_a = (uint32_t *)addresses;
 		for (int i=0;i<count;i++) {
 			struct sockaddr_in sin;
-			memset(&sin, 0, sizeof(sin));
+			memset((void*)&sin, 0, sizeof(sin));
 			sin.sin_family = AF_INET;
 			sin.sin_addr.s_addr = s_addr_a[i];
 			sin.sin_port = htons(cls->port);
@@ -109,7 +108,7 @@ cl_lookup_result_fn(int result, char type, int count, int ttl, void *addresses, 
 	free(cls);
 	
 	uint64_t delta = cf_getms() - _s;
-	if (delta > CL_LOG_DELAY_INFO) cf_info("CL DELAY: cl_lookup result fn: %"PRIu64, delta);
+	if (delta > CL_LOG_DELAY_INFO) cf_info("CL DELAY: cl_lookup result fn: %lu", delta);
 }
 
 int
@@ -129,11 +128,11 @@ cl_lookup(struct evdns_base *dns_base, char *hostname, short port, cl_lookup_asy
 		cf_info("libevent dns fail: hostname %s", hostname);
 		free(cls);
 		uint64_t delta = cf_getms() - _s;
-		if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: cl_lookup: error: %"PRIu64, delta);
+		if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: cl_lookup: error: %lu", delta);
 		return(-1);
 	}
 	uint64_t delta = cf_getms() - _s;
-	if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: cl_lookup: %"PRIu64, delta);
+	if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: cl_lookup: %lu", delta);
 	return(0);
 }	
 

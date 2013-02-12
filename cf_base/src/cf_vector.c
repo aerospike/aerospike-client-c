@@ -6,9 +6,10 @@
  * All rights reserved
  */
 
-#include <string.h>
+#include <pthread.h>
+#include <stdint.h>
 #include <stdlib.h>
-
+#include <string.h>
 
 #ifdef EXTERNAL_LOCKS
 #include "citrusleaf/cf_hooks.h"
@@ -40,7 +41,7 @@ cf_vector_create( uint32_t value_len, uint32_t init_sz, unsigned int flags)
 {
 	cf_vector *v;
 
-	v = malloc(sizeof(cf_vector));
+	v = (cf_vector*)malloc(sizeof(cf_vector));
 	if (!v)	return(0);
 
 	v->value_len = value_len;
@@ -50,7 +51,7 @@ cf_vector_create( uint32_t value_len, uint32_t init_sz, unsigned int flags)
 	v->stack_struct = false;
 	v->stack_vector = false;
 	if (init_sz) {
-		v->vector = malloc(init_sz * value_len);
+		v->vector = (uint8_t*)malloc(init_sz * value_len);
 		if (!v->vector)	{
 			free(v);
 			return(0);
@@ -59,7 +60,7 @@ cf_vector_create( uint32_t value_len, uint32_t init_sz, unsigned int flags)
 	else
 		v->vector = 0;
 	if (flags & VECTOR_FLAG_INITZERO)
-		memset(v->vector, 0, init_sz * value_len);
+		memset((void*)v->vector, 0, init_sz * value_len);
 	if (flags & VECTOR_FLAG_BIGLOCK){
 #ifdef EXTERNAL_LOCKS
 		v->LOCK = cf_hooked_mutex_alloc();
@@ -80,13 +81,13 @@ cf_vector_init(cf_vector *v, uint32_t value_len, uint32_t init_sz, unsigned int 
 	v->stack_struct = true;
 	v->stack_vector = false;
 	if (init_sz) {
-		v->vector = malloc(init_sz * value_len);
+		v->vector = (uint8_t*)malloc(init_sz * value_len);
 		if (!v->vector)	return(-1);
 	}
 	else
 		v->vector = 0;
 	if (flags & VECTOR_FLAG_INITZERO)
-		memset(v->vector, 0, init_sz * value_len);
+		memset((void*)v->vector, 0, init_sz * value_len);
 	if (flags & VECTOR_FLAG_BIGLOCK){
 #ifdef EXTERNAL_LOCKS
 		v->LOCK = cf_hooked_mutex_alloc();
@@ -108,7 +109,7 @@ cf_vector_init_smalloc(cf_vector *v, uint32_t value_len, uint8_t *sbuf, int sbuf
 	v->stack_vector = true;
 	v->vector = sbuf;
 	if (flags & VECTOR_FLAG_INITZERO)
-		memset(v->vector, 0, sbuf_sz);
+		memset((void*)v->vector, 0, sbuf_sz);
 	if (flags & VECTOR_FLAG_BIGLOCK){
 #ifdef EXTERNAL_LOCKS
 	v->LOCK = cf_hooked_mutex_alloc();
@@ -167,7 +168,7 @@ cf_vector_resize(cf_vector *v, uint32_t new_sz)
 	}
 	uint8_t *_t;
 	if (v->vector == 0 || v->stack_vector) {
-		_t = malloc(new_sz * v->value_len);
+		_t = (uint8_t*)malloc(new_sz * v->value_len);
 		if (!_t)	return(-1);
 		if (v->stack_vector) {
 			memcpy(_t, v->vector, v->alloc_len * v->value_len); 
@@ -175,11 +176,11 @@ cf_vector_resize(cf_vector *v, uint32_t new_sz)
 		}
 	}
 	else
-		_t = realloc(v->vector, (new_sz) * v->value_len);
+		_t = (uint8_t*)realloc(v->vector, (new_sz) * v->value_len);
 	if (!_t)	return(-1);
 	v->vector = _t;
 	if (v->flags & VECTOR_FLAG_INITZERO)
-		memset(v->vector + (v->alloc_len * v->value_len), 0, (new_sz + 2) - v->alloc_len);
+		memset((void*)(v->vector + (v->alloc_len * v->value_len)), 0, (new_sz + 2) - v->alloc_len);
 	v->alloc_len = new_sz;
 	return(0);
 }
@@ -344,7 +345,7 @@ cf_vector_compact(cf_vector *v)
 	if (v->flags & VECTOR_FLAG_BIGLOCK)
 		VECTOR_LOCK(v);
 	if (v->alloc_len && (v->len != v->alloc_len)) {
-		v->vector = realloc(v->vector, v->len * v->alloc_len);
+		v->vector = (uint8_t*)realloc(v->vector, v->len * v->alloc_len);
 		v->alloc_len = v->len;
 	}
 	if (v->flags & VECTOR_FLAG_BIGLOCK)

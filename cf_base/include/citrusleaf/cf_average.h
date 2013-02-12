@@ -12,10 +12,10 @@
 
 #pragma once
  
-#include <inttypes.h>
 #include <stdint.h>
-#include <stdbool.h>
-#include <stdio.h>
+
+#include "citrusleaf/cf_base_types.h"
+
 
 #ifdef __cplusplus
 extern "C" {
@@ -30,7 +30,7 @@ typedef struct cf_average_s {
 
 
 
-cf_average *cf_average_create( uint32_t initial_size, uint flags);
+cf_average *cf_average_create(uint32_t initial_size, uint32_t flags);
 void cf_average_destroy( cf_average *avg);
 void cf_average_clear(cf_average *avg);
 int cf_average_add(cf_average *avgp, uint64_t value);   // warning! this fails if too many samples

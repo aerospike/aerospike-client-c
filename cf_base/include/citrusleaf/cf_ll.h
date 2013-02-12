@@ -9,8 +9,9 @@
 #pragma once
 
 #include <pthread.h>
-#include <inttypes.h>
-#include <stdbool.h>
+#include <stdint.h>
+
+#include "citrusleaf/cf_base_types.h"
 
 /* SYNOPSIS
  * LinkedList

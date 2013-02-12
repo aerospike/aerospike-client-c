@@ -141,8 +141,8 @@ int do_udf_bin_update_test() {
 	char *res_str = as_val_tostring(res.value); 
 	LOG("%s: %s", res.is_success ? "SUCCESS" : "FAILURE", res_str);
 	free(res_str);
-	as_val_free(res.value);
-	as_list_free(arglist);
+	as_val_destroy(res.value);
+	as_val_destroy(arglist);
 	arglist = NULL;
 
 	// (3) verify record is updated by reading 4 times 
@@ -251,7 +251,7 @@ int do_udf_trim_bin_test() {
 
 		char *res_str = as_val_tostring(res.value); 
 		LOG("%s: %s", res.is_success ? "SUCCESS" : "FAILURE", res_str);
-		as_val_free(res.value);
+		as_val_destroy(res.value);
 		free(res_str);
 
 		if (rsp != CITRUSLEAF_OK) {
@@ -270,7 +270,7 @@ int do_udf_trim_bin_test() {
 			citrusleaf_object_free(&rsp_bins[b].object);		
 		}  	
 		free(rsp_bins);	
-		as_list_free(arglist);
+		as_val_destroy(arglist);
 		arglist = NULL;
 	}
 
@@ -361,7 +361,7 @@ int do_udf_add_bin_test() {
 	char *res_str = as_val_tostring(res.value); 
 	LOG("%s: %s", res.is_success ? "SUCCESS" : "FAILURE", res_str);
 	free(res_str);
-	as_val_free(res.value);
+	as_val_destroy(res.value);
 	
 	if (rsp != CITRUSLEAF_OK) {
 		LOG("failed running udf rsp=%d",rsp);
@@ -445,7 +445,7 @@ int do_udf_copy_record_test() {
 	
 	char * res_str = as_val_tostring(res.value);	
 	LOG("%s: %s", res.is_success ? "SUCCESS" : "FAILURE", res_str);
-	as_val_free(res.value);
+	as_val_destroy(res.value);
 	free(res_str);
 	
 	if (rsp != CITRUSLEAF_OK) {
@@ -461,7 +461,7 @@ int do_udf_copy_record_test() {
 	
 	res_str = as_val_tostring(res.value);	
 	LOG("%s: %s", res.is_success ? "SUCCESS" : "FAILURE", res_str);
-	as_val_free(res.value);
+	as_val_destroy(res.value);
 	free(res_str);
 	
 	if (rsp != CITRUSLEAF_OK) {
@@ -530,7 +530,7 @@ int do_udf_create_record_test() {
 	char *res_str = as_val_tostring(res.value); 
 	LOG("%s: %s", res.is_success ? "SUCCESS" : "FAILURE", res_str);
 	free(res_str);
-	as_val_free(res.value);
+	as_val_destroy(res.value);
 	
 	if (rsp != CITRUSLEAF_OK) {
 		LOG("failed running udf = %d",rsp);
@@ -609,7 +609,7 @@ int do_udf_delete_record_test() {
 	char *res_str = as_val_tostring(res.value); 
 	LOG("%s: %s", res.is_success ? "SUCCESS" : "FAILURE", res_str);
 	free(res_str);
-	as_val_free(res.value);
+	as_val_destroy(res.value);
 
 	if (rsp != CITRUSLEAF_OK) {
 		citrusleaf_object_free(&o_key);		
@@ -679,7 +679,7 @@ int do_udf_read_bins_test() {
 	if (rsp != CITRUSLEAF_OK) {
 		LOG("failed citrusleaf_run_udf rsp=%d",rsp);
 	}
-	as_val_free(res.value);
+	as_val_destroy(res.value);
 	free(res_str);
 	citrusleaf_object_free(&o_key);		
 	return 0;
@@ -709,7 +709,7 @@ int do_udf_noop_test() {
 	char *res_str = as_val_tostring(res.value); 
 	LOG("%s: %s", res.is_success ? "SUCCESS" : "FAILURE", res_str);
 	free(res_str);
-	as_val_free(res.value);
+	as_val_destroy(res.value);
 	if (rsp != CITRUSLEAF_OK) {
 		LOG("failed citrusleaf_run_udf rsp=%d",rsp);
 		return -1;
@@ -943,7 +943,7 @@ int do_udf_long_bindata_test() {
 
 		char *res_str = as_val_tostring(res.value); 
 		LOG("Iteration %d: %s: %s", i, res.is_success ? "SUCCESS" : "FAILURE", res_str);
-		as_val_free(res.value);
+		as_val_destroy(res.value);
 		free(res_str);
 
 		if (rsp != CITRUSLEAF_OK) {
@@ -1013,7 +1013,7 @@ int do_udf_long_biname_test() {
 	char *res_str = as_val_tostring(res.value); 
 	LOG("Citrusleaf udf apply %s: %s", res.is_success ? "SUCCESS" : "FAILURE", res_str);
 	free(res_str);
-	as_val_free(res.value);
+	as_val_destroy(res.value);
 
 	if (rsp != CITRUSLEAF_OK) {
 		LOG("failed citrusleaf_run_udf rsp=%d",rsp);
@@ -1078,7 +1078,7 @@ int do_udf_too_many_bins_test() {
 	char *res_str = as_val_tostring(res.value); 
 	LOG("Citrusleaf udf apply %s: %s", res.is_success ? "SUCCESS" : "FAILURE", res_str);
 	free(res_str);
-	as_val_free(res.value);
+	as_val_destroy(res.value);
 
 	if (rsp != CITRUSLEAF_OK) {
 		LOG("citrusleaf_run_udf failed as rsp=%d",rsp);
@@ -1102,7 +1102,7 @@ int do_udf_lua_functional_test() {
 
 	char *res_str = as_val_tostring(res.value); 
 	LOG("Citrusleaf udf apply %s: %s", res.is_success ? "SUCCESS" : "FAILURE", res_str);
-	as_val_free(res.value);
+	as_val_destroy(res.value);
 	free(res_str);
 
 	if (rsp != CITRUSLEAF_OK) {
@@ -1157,8 +1157,8 @@ int do_udf_return_type_test() {
 		}
 	}
 
-	as_list_free(arglist);
-	as_val_free(res.value);
+	as_val_destroy(arglist);
+	as_val_destroy(res.value);
 	as_result_destroy(&res);
 
 
@@ -1198,8 +1198,8 @@ int do_udf_return_type_test() {
 		}
 	}
 
-	as_list_free(arglist);
-	as_val_free(res.value);
+	as_val_destroy(arglist);
+	as_val_destroy(res.value);
 	as_result_destroy(&res);
 	
 
@@ -1233,8 +1233,8 @@ int do_udf_return_type_test() {
 		}
 	}
 
-	as_list_free(arglist);
-	as_val_free(res.value);
+	as_val_destroy(arglist);
+	as_val_destroy(res.value);
 	as_result_destroy(&res);
 
 
@@ -1268,8 +1268,8 @@ int do_udf_return_type_test() {
 		}
 	}
 
-	as_list_free(arglist);
-	as_val_free(res.value);
+	as_val_destroy(arglist);
+	as_val_destroy(res.value);
 	as_result_destroy(&res);
 
 	/**
@@ -1303,8 +1303,8 @@ int do_udf_return_type_test() {
 		}
 	}
 
-	as_list_free(arglist);
-	as_val_free(res.value);
+	as_val_destroy(arglist);
+	as_val_destroy(res.value);
 	as_result_destroy(&res);
 
 
@@ -1333,11 +1333,12 @@ int do_udf_return_type_test() {
 				errors++;
 			}
 			else {
-				as_iterator * l1_i = as_list_iterator(l1);
+				as_iterator l1_i;
+				as_list_iterator_init(&l1_i, l1);
 				bool l1_string = false;
 				bool l1_list = false;
-				while ( as_iterator_has_next(l1_i) ) {
-					as_val * l1_v = (as_val *) as_iterator_next(l1_i);
+				while ( as_iterator_has_next(&l1_i) ) {
+					as_val * l1_v = (as_val *) as_iterator_next(&l1_i);
 					if ( as_val_type(l1_v) == AS_STRING ) {
 						char * str = as_string_tostring((as_string *) l1_v);
 						if ( strcmp(str,"string_resp") != 0 ) {
@@ -1357,11 +1358,12 @@ int do_udf_return_type_test() {
 						}
 						else {
 
-							as_iterator * l2_i = as_list_iterator(l2);
+							as_iterator l2_i; 
+							as_list_iterator_init(&l2_i, l2);
 							bool l2_string = false;
 							bool l2_integer = false;
-							while ( as_iterator_has_next(l2_i) ) {
-								as_val * l2_v = (as_val *) as_iterator_next(l2_i);
+							while ( as_iterator_has_next(&l2_i) ) {
+								as_val * l2_v = (as_val *) as_iterator_next(&l2_i);
 								if ( as_val_type(l2_v) == AS_STRING ) {
 									char * str = as_string_tostring((as_string *) l2_v);
 									if ( strcmp(str,"yup") != 0 ) {
@@ -1391,6 +1393,8 @@ int do_udf_return_type_test() {
 							if ( l2_integer && l2_string ) {
 								l1_list = true;
 							}
+
+							as_iterator_destroy(&l2_i);
 						}
 					}
 					else {
@@ -1398,6 +1402,7 @@ int do_udf_return_type_test() {
 						errors++;
 					}
 				}
+				as_iterator_destroy(&l1_i);
 			}
 
 			// do something with l1_string and l1_list
@@ -1408,8 +1413,8 @@ int do_udf_return_type_test() {
 		}
 	}
 
-	as_list_free(arglist);
-	as_val_free(res.value);
+	as_val_destroy(arglist);
+	as_val_destroy(res.value);
 	as_result_destroy(&res);
 
 
@@ -1441,7 +1446,7 @@ int do_udf_return_type_test() {
 			else {
 				as_string s;
 
-				as_val * m1_s = as_map_get(m1,(as_val *) as_string_init(&s,"s"));
+				as_val * m1_s = as_map_get(m1,(as_val *) as_string_init(&s,"s",false));
 				if ( as_val_type(m1_s) == AS_STRING ) {
 					if ( strcmp(as_string_tostring((as_string*) m1_s), "abc") != 0 ) {
 						LOG("map: expected=\"abc\", actual=\"%s\"", as_string_tostring((as_string*) m1_s));
@@ -1449,7 +1454,7 @@ int do_udf_return_type_test() {
 					}
 				}
 
-				as_val * m1_i = as_map_get(m1,(as_val *) as_string_init(&s,"i"));
+				as_val * m1_i = as_map_get(m1,(as_val *) as_string_init(&s,"i", false));
 				if ( as_val_type(m1_i) == AS_INTEGER ) {
 					if ( as_integer_toint((as_integer *) m1_i) != 123 ) {
 						LOG("map: expected=123, actual=%d", as_integer_toint((as_integer *) m1_i));
@@ -1457,7 +1462,7 @@ int do_udf_return_type_test() {
 					}
 				}
 
-				as_val * m1_l = as_map_get(m1,(as_val *) as_string_init(&s,"l"));
+				as_val * m1_l = as_map_get(m1,(as_val *) as_string_init(&s,"l",false));
 				if ( as_val_type(m1_l) == AS_LIST ) {
 					if ( as_list_size((as_list *) m1_l) != 2 ) {
 						LOG("map: expected=2 elements, actual=%d elements", as_list_size((as_list *) m1_l));
@@ -1465,7 +1470,7 @@ int do_udf_return_type_test() {
 					}
 				}
 
-				as_val * m1_m = as_map_get(m1,(as_val *) as_string_init(&s,"m"));
+				as_val * m1_m = as_map_get(m1,(as_val *) as_string_init(&s,"m",false));
 				if ( as_val_type(m1_m) == AS_MAP ) {
 					if ( as_map_size((as_map *) m1_m) != 3 ) {
 						LOG("map: expected=3 entries, actual=%d entries", as_map_size((as_map *) m1_m));
@@ -1474,7 +1479,7 @@ int do_udf_return_type_test() {
 					else {
 						as_map * m2 = (as_map *) m1_m;
 
-						as_val * m2_i = as_map_get(m2,(as_val *) as_string_init(&s,"i"));
+						as_val * m2_i = as_map_get(m2,(as_val *) as_string_init(&s,"i",false));
 						if ( as_val_type(m2_i) == AS_INTEGER ) {
 							if ( as_integer_toint((as_integer *) m2_i) != 456 ) {
 								LOG("map: expected=456, actual=%d", as_integer_toint((as_integer *) m2_i));
@@ -1482,7 +1487,7 @@ int do_udf_return_type_test() {
 							}
 						}
 
-						as_val * m2_s = as_map_get(m2,(as_val *) as_string_init(&s,"s"));
+						as_val * m2_s = as_map_get(m2,(as_val *) as_string_init(&s,"s",false));
 						if ( as_val_type(m2_s) == AS_STRING ) {
 							if ( strcmp(as_string_tostring((as_string*) m2_s), "def") != 0 ) {
 								LOG("map: expected=\"def\", actual=\"%s\"", as_string_tostring((as_string*) m2_s));
@@ -1490,7 +1495,7 @@ int do_udf_return_type_test() {
 							}
 						}
 
-						as_val * m2_l = as_map_get(m2,(as_val *) as_string_init(&s,"l"));
+						as_val * m2_l = as_map_get(m2,(as_val *) as_string_init(&s,"l",false));
 						if ( as_val_type(m2_l) == AS_LIST ) {
 							if ( as_list_size((as_list *) m2_l) != 3 ) {
 								LOG("map: expected=3 elements, actual=%d elements", as_list_size((as_list *) m2_l));
@@ -1508,8 +1513,8 @@ int do_udf_return_type_test() {
 
 	}
 
-	as_list_free(arglist);
-	as_val_free(res.value);
+	as_val_destroy(arglist);
+	as_val_destroy(res.value);
 	as_result_destroy(&res);
 
 	citrusleaf_object_free(&o_key);		
@@ -1549,7 +1554,7 @@ int do_udf_undefined_global() {
 	char *res_str = as_val_tostring(res.value); 
 	LOG("%s: %s", res.is_success ? "SUCCESS" : "FAILURE", res_str);
 	free(res_str);
-	as_val_free(res.value);
+	as_val_destroy(res.value);
 
 	citrusleaf_object_free(&o_key);
 		

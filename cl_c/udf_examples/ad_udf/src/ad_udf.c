@@ -115,7 +115,7 @@ int do_udf_user_write(int user_id) {
 
 	if (rv != CITRUSLEAF_OK) {
 		citrusleaf_object_free(&o_key);	
-		as_list_free(arglist);	
+		as_val_destroy(arglist);	
 		fprintf(stderr,"failed citrusleaf_run_udf rsp=%d\n",rv);
 		return -1;
 	}
@@ -123,7 +123,7 @@ int do_udf_user_write(int user_id) {
 	int rsp = citrusleaf_get_all(g_config->asc, g_config->ns, g_config->set, &o_key, &rsp_bins, &rsp_n_bins, g_config->timeout_ms, &gen);  
 	if (rsp!=CITRUSLEAF_OK) {
 		fprintf(stderr,"citrusleaf_get_all failed with %d\n",rsp);
-		as_list_free(arglist);
+		as_val_destroy(arglist);
 		citrusleaf_object_free(&o_key);
 		return -1;
 	}
@@ -144,7 +144,7 @@ int do_udf_user_write(int user_id) {
 			citrusleaf_object_free(&rsp_bins[b].object);		
 		}
 	}
-	as_list_free(arglist);
+	as_val_destroy(arglist);
 
 	citrusleaf_object_free(&o_key);		
 	return 0;
@@ -220,11 +220,11 @@ int do_udf_user_read(int user_id) {
 		goto Fail;
 	}
 	
-	as_list_free(arglist);
+	as_val_destroy(arglist);
 	citrusleaf_object_free(&o_key);		
 	return 0;
 Fail: 
-	if (arglist) as_list_free(arglist);
+	if (arglist) as_val_destroy(arglist);
 	citrusleaf_object_free(&o_key);		
 	return(-1);
 

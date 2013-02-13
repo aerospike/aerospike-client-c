@@ -26,7 +26,7 @@ struct citrusleaf_udf_info_s {
     char *      gen;
     char *      files;
     int         count;
-    unsigned char hash[SHA1_HEX_BUFF_LEN];
+    unsigned char hash[CF_SHA_HEX_BUFF_LEN];
 };
 struct citrusleaf_udf_filelist_s {
     int         capacity;
@@ -103,7 +103,7 @@ void * citrusleaf_udf_list_files(char * filedata, void * context) {
     if ( filelist->size < filelist->capacity ) {
    	filelist->files[filelist->size] = (as_udf_file*)calloc(1,sizeof(as_udf_file));
 	strncpy(filelist->files[filelist->size]->name, file_info.filename, strlen(file_info.filename));
-	memcpy(filelist->files[filelist->size]->hash, file_info.hash, SHA1_HEX_BUFF_LEN);
+	memcpy(filelist->files[filelist->size]->hash, file_info.hash, CF_SHA_HEX_BUFF_LEN);
 	filelist->size++;
     }
 
@@ -375,7 +375,7 @@ cl_rv citrusleaf_udf_get_with_gen(cl_cluster *asc, const char * filename, as_udf
     // Update file hash
     unsigned char hash[SHA_DIGEST_LENGTH];
     SHA1(info.content, info.content_len, hash);
-    sha1_to_hex(hash, file->hash);
+    cf_convert_sha1_to_hex(hash, file->hash);
     
     free(info.content);
     info.content = NULL;

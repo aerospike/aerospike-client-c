@@ -49,7 +49,7 @@ typedef uint8_t as_udf_type;
 
 struct as_udf_file_s {
   char name[128];
-  unsigned char hash[SHA1_HEX_BUFF_LEN];
+  unsigned char hash[CF_SHA_HEX_BUFF_LEN];
   as_udf_type type;
   as_bytes * content;
 };

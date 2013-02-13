@@ -197,14 +197,10 @@ int main(int argc, char **argv) {
 		fprintf(stderr, "unable to retrieve package %s resp = %d\n", package_name2,resp); return(-1);
 	} else {
 		fprintf(stderr, "*** successfully retrieved package content for %s = [%s]\n",package_name2, file.content->data);
-		fprintf(stderr,"CONTENT SIZE is %d\n",file.content->size);
-		fprintf(stderr,"FILENAME is %s\n",file.name);
-		fprintf(stderr,"HASH is %s\n",file.hash);
 	}
 	free(udf_content.data);
 	free(file.content->data);
 	free(file.content);
-	
 	// list the packages
 	num_packages = 0;
 	resp = citrusleaf_udf_list(asc, &packages, &num_packages, &err_str);
@@ -247,6 +243,7 @@ int main(int argc, char **argv) {
 			free (packages);
 		}
 		else if (num_packages != 1) {
+			free(packages);
 			fprintf(stderr,"FAILED: Expected 1 package got %d\n",num_packages);
 			return -1;
 		}
@@ -291,7 +288,7 @@ int main(int argc, char **argv) {
 			fprintf(stderr,"FAILED: Expected 1 package got %d\n",num_packages);
 			return -1;
 		}
-	}	 
+	}
 	citrusleaf_cluster_destroy(asc);
 	fprintf(stderr, "\n\nFinished Record stored-procedure Unit Tests\n");
 	return(0);

@@ -29,6 +29,12 @@
 #include "as_result.h"
 #include "cl_arglist.h"
 #include <openssl/sha.h>
+#include "cf_crypto.h"
+
+/******************************************************************************
+ * CONSTANTS
+ ******************************************************************************/
+
 #define AS_UDF_LUA 0
 
 /******************************************************************************
@@ -36,14 +42,14 @@
  ******************************************************************************/
 struct as_bytes_s {
   byte * data;
-  uint32_t size;
+  int size;
 };
 typedef struct as_bytes_s as_bytes;
 typedef uint8_t as_udf_type;
 
 struct as_udf_file_s {
   char name[128];
-  char hash[(SHA_DIGEST_LENGTH * 2 + 1)];
+  unsigned char hash[SHA1_HEX_BUFF_LEN];
   as_udf_type type;
   as_bytes * content;
 };

@@ -1,7 +1,6 @@
 
 #include "../test.h"
 #include <citrusleaf/citrusleaf.h>
-#include <citrusleaf/cl_arglist.h>
 #include <citrusleaf/as_types.h>
 
 /******************************************************************************
@@ -143,7 +142,7 @@ TEST( udf_basics_concat, "concat() - concatenate two strings, return the result"
 
     int rc = 0;
 
-    as_list * arglist = as_arglist_new(2);
+    as_list * arglist = as_arraylist_new(2, 8);
     as_list_add_string(arglist, "abc");
     as_list_add_string(arglist, "def");
 
@@ -161,7 +160,7 @@ TEST( udf_basics_add, "add() - add two integer, return the result" ) {
 
     int rc = 0;
 
-    as_list * arglist = as_arglist_new(2);
+    as_list * arglist = as_arraylist_new(2, 8);
     as_list_add_integer(arglist, 1000);
     as_list_add_integer(arglist, 1);
 
@@ -179,7 +178,7 @@ TEST( udf_basics_sum, "sum() - UDF calling another UDF should fail" ) {
 
     int rc = 0;
 
-    as_list * arglist = as_arglist_new(2);
+    as_list * arglist = as_arraylist_new(2, 8);
     as_list_add_integer(arglist, 1000);
     as_list_add_integer(arglist, 1);
 
@@ -193,7 +192,7 @@ TEST( udf_basics_diff, "diff() - UDF calling a local function" ) {
 
     int rc = 0;
 
-    as_list * arglist = as_arglist_new(2);
+    as_list * arglist = as_arraylist_new(2, 8);
     as_list_add_integer(arglist, 1000);
     as_list_add_integer(arglist, 1);
 
@@ -211,7 +210,7 @@ TEST( udf_basics_difference, "difference() - calling a local function should fai
 
     int rc = 0;
 
-    as_list * arglist = as_arglist_new(2);
+    as_list * arglist = as_arraylist_new(2, 8);
     as_list_add_integer(arglist, 1000);
     as_list_add_integer(arglist, 1);
 
@@ -229,7 +228,7 @@ TEST( udf_basics_func_does_not_exist, "calling a non-existent function should fa
 
     int rc = 0;
 
-    as_list * arglist = as_arglist_new(2);
+    as_list * arglist = as_arraylist_new(2, 8);
     as_list_add_integer(arglist, 1000);
     as_list_add_integer(arglist, 1);
 
@@ -248,7 +247,7 @@ TEST( udf_basics_file_does_not_exist, "non-existent UDF file should fail" ) {
 
     int rc = 0;
 
-    as_list * arglist = as_arglist_new(2);
+    as_list * arglist = as_arraylist_new(2, 8);
     as_list_add_integer(arglist, 1000);
     as_list_add_integer(arglist, 1);
 

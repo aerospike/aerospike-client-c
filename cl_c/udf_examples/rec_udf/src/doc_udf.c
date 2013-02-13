@@ -78,7 +78,7 @@ int do_doc_udf_test(config *c) {
     }
     
     for (int i = 0; i < num_udf_calls; i++) {
-        as_list * arglist = as_arglist_new(2);
+        as_list * arglist = as_arraylist_new(2, 8);
         if (!arglist) { 
 		printf("can't create udf arglist\n"); 
 		return -1; 

@@ -27,8 +27,8 @@
 
 #include "cluster.h"
 #include "as_result.h"
-#include "cl_arglist.h"
 #include <openssl/sha.h>
+#include "as_types.h"
 #include "cf_crypto.h"
 
 /******************************************************************************
@@ -63,7 +63,9 @@ typedef struct as_udf_file_s as_udf_file;
  * Apply a UDF to a record.
  * @param result will be updated with the result of the call. The as_result.value member should be freed by the user.
  */
-cl_rv citrusleaf_udf_record_apply(cl_cluster * cluster, const char * namespace, const char * set, const cl_object * key, const char * filename, const char * function, as_list * arglist, int timeout, as_result * result);
+cl_rv citrusleaf_udf_record_apply(cl_cluster * cluster, const char * namespace, const char * set, 
+	const cl_object * key, const char * filename, const char * function, as_list * arglist, 
+	int timeout, as_result * result);
 
 /**
  * @param files - An array of filenames. Each entry is string. The array and each entry must be freed by the user.
@@ -78,7 +80,8 @@ cl_rv citrusleaf_udf_list(cl_cluster * cluster, as_udf_file *** files, int * cou
  * @param size - The size of the contents of the file.
  * @param error - Contains an error message, if the return value was non-zero. The value must be freed by the user.
  */
-cl_rv citrusleaf_udf_get(cl_cluster * cluster, const char * filename, as_udf_file * file, as_udf_type udf_type, char ** error);
+cl_rv citrusleaf_udf_get(cl_cluster * cluster, const char * filename, as_udf_file * file, 
+	as_udf_type udf_type, char ** error);
 
 /**
  * @param filename - The name of the file to download from the cluster.
@@ -87,14 +90,16 @@ cl_rv citrusleaf_udf_get(cl_cluster * cluster, const char * filename, as_udf_fil
  * @param gen - The generation value of the file. The value must be freed by the user.
  * @param error - Contains an error message, if the return value was non-zero. The value must be freed by the user.
  */
-cl_rv citrusleaf_udf_get_with_gen(cl_cluster * cluster, const char * filename, as_udf_file * file, as_udf_type udf_type, char ** gen, char ** error) ;
+cl_rv citrusleaf_udf_get_with_gen(cl_cluster * cluster, const char * filename, as_udf_file * file, 
+	as_udf_type udf_type, char ** gen, char ** error) ;
 
 /**
  * @param filename - The name of the file being uploaded to the cluster.
  * @param contents - The contents of the file being uploaded to the cluster.
  * @param error - Contains an error message, if the return value was non-zero. The value must be freed by the user.
  */
-cl_rv citrusleaf_udf_put(cl_cluster * cluster, const char * filename, as_bytes *content, as_udf_type udf_type, char ** error);
+cl_rv citrusleaf_udf_put(cl_cluster * cluster, const char * filename, as_bytes *content, 
+	as_udf_type udf_type, char ** error);
 
 /**
  * @param filename - The file to be removed from the cluster.

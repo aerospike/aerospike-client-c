@@ -12,7 +12,6 @@
 #include "citrusleaf.h"
 #include "citrusleaf-internal.h"
 #include "cl_sindex.h"
-#include "cl_arglist.h"
 
 #include <citrusleaf/proto.h>
 

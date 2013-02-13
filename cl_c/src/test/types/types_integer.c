@@ -1,6 +1,7 @@
 
 #include "../test.h"
 #include <citrusleaf/as_integer.h>
+#include <citrusleaf/as_string.h>
 #include <limits.h>
 
 /******************************************************************************
@@ -11,12 +12,14 @@ TEST( types_integer_0, "as_integer containing 0" ) {
     as_integer i;
     as_integer_init(&i,0);
     assert( as_integer_toint(&i) == 0 );
+    as_val_destroy(&i);
 }
 
 TEST( types_integer_pos_1, "as_integer containing 1" ) {
     as_integer i;
     as_integer_init(&i,1);
     assert( as_integer_toint(&i) == 1 );
+    as_val_destroy(&i);
 }
 
 TEST( types_integer_neg_1, "as_integer containing -1" ) {

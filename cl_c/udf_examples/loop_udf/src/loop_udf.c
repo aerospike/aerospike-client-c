@@ -244,7 +244,7 @@ worker_fn(void *udata)
 			isRead = false;
 		} 
 		
-        as_list * arglist = as_arglist_new(3);
+        as_list * arglist = as_arraylist_new(3, 8);
 
         // arg 1 -> bin name
         as_list_add_string(arglist, "bin1");

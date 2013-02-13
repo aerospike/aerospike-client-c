@@ -1,62 +1,47 @@
 
 #include "../test.h"
-#include <citrusleaf/as_arraylist.h>
-#include <citrusleaf/as_integer.h>
+#include <citrusleaf/as_types.h>
 
 /******************************************************************************
  * TEST CASES
  *****************************************************************************/
 
 TEST( types_arraylist_empty, "as_arraylist is empty" ) {
-    as_arraylist l;
+    as_list l;
     as_arraylist_init(&l,0,0);
-    assert( l.size == 0 );
+    as_val_destroy(&l);
 }
 
 TEST( types_arraylist_cap10_blk0, "as_arraylist w/ capacity 10, block_size 0" ) {
 
     int rc = 0;
 
-    as_arraylist a;
-    as_arraylist_init(&a,10,0);
-
-    assert_int_eq( a.capacity, 10 );
-    assert_int_eq( a.block_size, 0 );
-    assert_int_eq( a.size, 0 );
-
     as_list l;
-    as_list_init(&l, &a, &as_arraylist_list);
+    as_arraylist_init(&l,10,0);
 
-    assert( a.size == as_list_size(&l) );
-    assert_int_eq( a.size, 0 );
+#if 0 // internal and opaque
+    assert_int_eq( l.capacity, 10 );
+    assert_int_eq( l.block_size, 0 );
+    assert_int_eq( l.size, 0 );
+#endif
 
     for ( int i = 1; i < 6; i++) {
         rc = as_list_append(&l, (as_val *) as_integer_new(i));
         assert_int_eq( rc, AS_ARRAYLIST_OK );
-        assert( a.size == as_list_size(&l) );
-        assert_int_eq( a.size, i );
-        assert_int_eq( a.capacity, 10);
     }
 
     for ( int i = 6; i < 11; i++) {
         rc = as_list_prepend(&l, (as_val *) as_integer_new(i));
         assert_int_eq( rc, AS_ARRAYLIST_OK );
-        assert( a.size == as_list_size(&l) );
-        assert_int_eq( a.size, i );
-        assert_int_eq( a.capacity, 10);
     }
 
     rc = as_list_append(&l, (as_val *) as_integer_new(11));
     assert_int_ne( rc, AS_ARRAYLIST_OK );
-    assert( a.size == as_list_size(&l) );
-    assert_int_eq( a.size, 10);
-    assert_int_eq( a.capacity, 10);
 
     rc = as_list_prepend(&l, (as_val *) as_integer_new(12));
     assert_int_ne( rc, AS_ARRAYLIST_OK );
-    assert( a.size == as_list_size(&l));
-    assert_int_eq( a.size, 10);
-    assert_int_eq( a.capacity, 10);
+
+    as_val_destroy(&l);
 
 }
 
@@ -64,46 +49,26 @@ TEST( types_arraylist_cap10_blk10, "as_arraylist w/ capacity 10, block_size 10" 
 
     int rc = 0;
 
-    as_arraylist a;
-    as_arraylist_init(&a,10,10);
-
-    assert_int_eq( a.capacity, 10 );
-    assert_int_eq( a.block_size, 10 );
-    assert_int_eq( a.size, 0 );
-
     as_list l;
-    as_list_init(&l, &a, &as_arraylist_list);
-
-    assert( a.size == as_list_size(&l) );
-    assert_int_eq( a.size, 0 );
+    as_arraylist_init(&l,10,10);
 
     for ( int i = 1; i < 6; i++) {
         rc = as_list_append(&l, (as_val *) as_integer_new(i));
         assert_int_eq( rc, AS_ARRAYLIST_OK );
-        assert( a.size == as_list_size(&l) );
-        assert_int_eq( a.size, i );
-        assert_int_eq( a.capacity, 10);
     }
 
     for ( int i = 6; i < 11; i++) {
         rc = as_list_prepend(&l, (as_val *) as_integer_new(i));
         assert_int_eq( rc, AS_ARRAYLIST_OK );
-        assert( a.size == as_list_size(&l) );
-        assert_int_eq( a.size, i );
-        assert_int_eq( a.capacity, 10);
     }
 
     rc = as_list_append(&l, (as_val *) as_integer_new(11));
     assert_int_eq( rc, AS_ARRAYLIST_OK );
-    assert( a.size == as_list_size(&l) );
-    assert_int_eq( a.size, 11);
-    assert_int_eq( a.capacity, 20);
 
     rc = as_list_prepend(&l, (as_val *) as_integer_new(12));
     assert_int_eq( rc, AS_ARRAYLIST_OK );
-    assert( a.size == as_list_size(&l));
-    assert_int_eq( a.size, 12);
-    assert_int_eq( a.capacity, 20);
+
+    as_val_destroy( &l );
 
 }
 
@@ -111,33 +76,17 @@ TEST( types_arraylist_list, "as_arraylist w/ list ops" ) {
 
     int rc = 0;
 
-    as_arraylist a;
-    as_arraylist_init(&a,10,10);
-
-    assert_int_eq( a.capacity, 10 );
-    assert_int_eq( a.block_size, 10 );
-    assert_int_eq( a.size, 0 );
-
     as_list l;
-    as_list_init(&l, &a, &as_arraylist_list);
-
-    assert( a.size == as_list_size(&l) );
-    assert_int_eq( a.size, 0 );
+    as_arraylist_init(&l,10,10);
 
     for ( int i = 1; i < 6; i++) {
         rc = as_list_append(&l, (as_val *) as_integer_new(i));
         assert_int_eq( rc, AS_ARRAYLIST_OK );
-        assert( a.size == as_list_size(&l) );
-        assert_int_eq( a.size, i );
-        assert_int_eq( a.capacity, 10);
     }
 
     for ( int i = 6; i < 11; i++) {
         rc = as_list_prepend(&l, (as_val *) as_integer_new(i));
         assert_int_eq( rc, AS_ARRAYLIST_OK );
-        assert( a.size == as_list_size(&l) );
-        assert_int_eq( a.size, i );
-        assert_int_eq( a.capacity, 10);
     }
 
     as_list * t = as_list_take(&l, 5);
@@ -156,27 +105,25 @@ TEST( types_arraylist_list, "as_arraylist w/ list ops" ) {
 
     assert( d_0->value == l_5->value );
 
+    as_val_destroy( &l );
+
 }
 
 TEST( types_arraylist_iterator, "as_linkedlist w/ iterator ops" ) {
 
-    as_arraylist al;
+    as_list al;
     as_arraylist_init(&al,10,10);
-    
-    as_list l;
-    as_list_init(&l, &al, &as_arraylist_list);
 
     for ( int i = 1; i < 6; i++) {
-        as_list_append(&l, (as_val *) as_integer_new(i));
+        as_list_append(&al, (as_val *) as_integer_new(i));
     }
 
-    assert_int_eq( as_list_size(&l), 5 );
+    assert_int_eq( as_list_size(&al), 5 );
 
     as_iterator * i = NULL;
     as_integer * v = NULL;
 
-
-    i  = as_list_iterator(&l);
+    i  = as_list_iterator_new(&al);
 
     assert_true( as_iterator_has_next(i) );
 
@@ -197,7 +144,9 @@ TEST( types_arraylist_iterator, "as_linkedlist w/ iterator ops" ) {
 
     assert_false( as_iterator_has_next(i) );
 
-    as_iterator_free(i);
+    as_iterator_destroy(i);
+
+    as_val_destroy(&al);
 }
 /******************************************************************************
  * TEST SUITE

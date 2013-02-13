@@ -465,7 +465,7 @@ int
 cf_socket_start_connect_nb(int fd, struct sockaddr_in* sa)
 {
 	if (0 != connect(fd, (struct sockaddr*)sa, sizeof(*sa))) {
-        if (errno != EINPROGRESS) {
+        if (! IS_CONNECTING()) {
         	if (errno == ECONNREFUSED) {
         		cf_debug("host refused socket connection");
         	}

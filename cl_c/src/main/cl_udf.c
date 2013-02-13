@@ -26,7 +26,7 @@ struct citrusleaf_udf_info_s {
     char *      gen;
     char *      files;
     int         count;
-    char hash[(SHA_DIGEST_LENGTH*2 + 1)];
+    unsigned char hash[SHA1_HEX_BUFF_LEN];
 };
 struct citrusleaf_udf_filelist_s {
     int         capacity;
@@ -35,7 +35,7 @@ struct citrusleaf_udf_filelist_s {
 };
 
 typedef void * (* citrusleaf_parameters_fold_callback)(const char * key, const char * value, void * context);
-typedef void * (* citrusleaf_split_fold_callback)(const char * value, void * context);
+typedef void * (* citrusleaf_split_fold_callback)(char * value, void * context);
 
 /******************************************************************************
  * STATIC FUNCTIONS
@@ -90,12 +90,12 @@ static void * citrusleaf_udf_info_parameters(const char * key, const char * valu
         info->count = atoi(value);
     }
     else if (strcmp(key, "hash") == 0 ) {
-        strncpy(info->hash, value, strlen(value));
+        memcpy(info->hash, value, strlen(value));
     }
     return info;
 }
 
-static void * citrusleaf_udf_list_files(char * filedata, void * context) {
+void * citrusleaf_udf_list_files(char * filedata, void * context) {
     citrusleaf_udf_filelist * filelist = (citrusleaf_udf_filelist *) context;
     citrusleaf_udf_info file_info = {NULL};
     // Got a list of key-value pairs separated with commas
@@ -103,7 +103,7 @@ static void * citrusleaf_udf_list_files(char * filedata, void * context) {
     if ( filelist->size < filelist->capacity ) {
    	filelist->files[filelist->size] = (as_udf_file*)calloc(1,sizeof(as_udf_file));
 	strncpy(filelist->files[filelist->size]->name, file_info.filename, strlen(file_info.filename));
-	strncpy(filelist->files[filelist->size]->hash, file_info.hash, SHA_DIGEST_LENGTH*2 + 1);
+	memcpy(filelist->files[filelist->size]->hash, file_info.hash, SHA1_HEX_BUFF_LEN);
 	filelist->size++;
     }
 
@@ -365,11 +365,18 @@ cl_rv citrusleaf_udf_get_with_gen(cl_cluster *asc, const char * filename, as_udf
 
     int clen = info.content ? info.content_len : 0;
     cf_base64_decode_inplace(info.content, &clen, true);
+   
+    // Update file name, content
     strcpy(file->name, filename);
     file->content->data = calloc(1, sizeof(byte)*(info.content_len)); 
     memcpy((*(file->content)).data, info.content, info.content_len);
     (*(file->content)).size = clen;
-    SHA1(info.content, info.content_len, file->hash);
+    
+    // Update file hash
+    unsigned char hash[SHA_DIGEST_LENGTH];
+    SHA1(info.content, info.content_len, hash);
+    sha1_to_hex(hash, file->hash);
+    
     free(info.content);
     info.content = NULL;
     

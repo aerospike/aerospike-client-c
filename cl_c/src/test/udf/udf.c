@@ -34,7 +34,7 @@ int udf_put(const char * filename) {
         return -1; 
     } 
 
-    char * content = malloc(SCRIPT_LEN_MAX); 
+    byte * content = malloc(SCRIPT_LEN_MAX); 
     if ( content == NULL ) { 
         error("malloc failed"); 
         return -1;
@@ -42,7 +42,7 @@ int udf_put(const char * filename) {
 
     int size = 0; 
 
-    char * buff = content; 
+    byte * buff = content; 
     int read = fread(buff, 1, 512, file); 
     while ( read ) { 
         size += read; 
@@ -50,10 +50,13 @@ int udf_put(const char * filename) {
         read = fread(buff, 1, 512, file); 
     }                        
     fclose(file); 
-    
+    as_bytes udf_content = {
+	.data = content,
+	.size = size
+    }; 
     char * err = NULL;
 
-    int rc = citrusleaf_udf_put(cluster, basename(filename), content, &err); 
+    int rc = citrusleaf_udf_put(cluster, basename(filename), &udf_content, AS_UDF_LUA, &err); 
 
     if ( rc != 0 && err ) {
         error("error caused by citrusleaf_udf_put(): %s", err);
@@ -85,16 +88,18 @@ int udf_exists(const char * filename) {
 
     char * err = NULL;
     char * contents = NULL;
-    int size = 0;
-
-    int rc = citrusleaf_udf_get(cluster, basename(filename), &contents, &size, &err);
+    as_udf_file file;
+    memset(&file,0,sizeof(as_udf_file));
+    file.content = calloc(1,sizeof(as_bytes));
+    int rc = citrusleaf_udf_get(cluster, basename(filename), &file, 0, &err);
 
     if ( rc != 0 && err ) {
         error("error caused by citrusleaf_udf_remove(): %s", err);
         free(err);
     }
     else if ( contents ) {
-        free(contents);
+        free(file.content->data);
+        free(file.content);
         contents = NULL;
     }
 

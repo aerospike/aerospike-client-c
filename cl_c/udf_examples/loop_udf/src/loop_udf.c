@@ -244,7 +244,7 @@ worker_fn(void *udata)
 			isRead = false;
 		} 
 		
-        as_list * arglist = as_arglist_new(3);
+        as_list * arglist = as_arraylist_new(3, 8);
 
         // arg 1 -> bin name
         as_list_add_string(arglist, "bin1");
@@ -376,12 +376,12 @@ int register_package()
         return(-1);
     }
     int max_script_len = 1048576;
-    char *script_code = malloc(max_script_len);
+    byte *script_code = (byte*) malloc(max_script_len);
     if (script_code == NULL) {
         fprintf(stderr, "malloc failed"); return(-1);
 	}    
 	
-	char *script_ptr = script_code;
+	byte *script_ptr = script_code;
 	int b_read = fread(script_ptr,1,512,fptr);
 	int b_tot = 0;
 	while (b_read) {
@@ -390,10 +390,13 @@ int register_package()
 		b_read      = fread(script_ptr,1,512,fptr);
 	}			
     fclose(fptr);
-    
+    as_bytes udf_content = {
+	.size = b_tot,
+	.data = script_code
+    };
     char *err_str = NULL;
     if (b_tot>0) {
-	    int resp = citrusleaf_udf_put(g_config->asc, basename(g_config->package_file), script_code, &err_str);
+	    int resp = citrusleaf_udf_put(g_config->asc, basename(g_config->package_file), &udf_content, AS_UDF_LUA, &err_str);
 	    if (resp!=0) {
 		    fprintf(stderr, "unable to register package file %s as %s resp = %d\n",g_config->package_file,g_config->package_name,resp); return(-1);
 		    fprintf(stderr, "%s\n",err_str); free(err_str);

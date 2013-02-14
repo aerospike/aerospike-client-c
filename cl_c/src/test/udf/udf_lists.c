@@ -1,7 +1,6 @@
 
 #include "../test.h"
 #include <citrusleaf/citrusleaf.h>
-#include <citrusleaf/cl_arglist.h>
 #include <citrusleaf/as_types.h>
 
 /******************************************************************************
@@ -39,7 +38,7 @@ TEST( udf_lists_getlist, "getlist() - get a list" ) {
     assert_true( r.is_success );
     assert_not_null( r.value );
     assert( as_val_type(r.value) == AS_LIST );
-    assert_int_eq( as_list_size((as_list *) r.value), 3 );
+    assert_int_eq( as_list_size((as_list *) r.value), 3);
 }
 
 /******************************************************************************

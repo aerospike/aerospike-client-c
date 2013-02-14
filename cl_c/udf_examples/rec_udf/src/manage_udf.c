@@ -36,7 +36,7 @@ typedef struct config_s {
 } config;
 
 
-int read_file (char * filename, char **content)
+int read_file (char * filename, byte **content, uint32_t * content_len)
 {
     //fprintf(stderr, "Opening package file %s\n", filename); 
     FILE *fptr = fopen(filename,"r");
@@ -45,12 +45,12 @@ int read_file (char * filename, char **content)
         return(-1);
     }
     int max_script_len = 1048576;
-    char *script_code = malloc(max_script_len);
+    byte *script_code = malloc(max_script_len);
     if (script_code == NULL) {
         fprintf(stderr, "malloc failed"); return(-1);
 	}    
 	
-	char *script_ptr = script_code;
+	byte *script_ptr = script_code;
 	int b_read = fread(script_ptr,1,512,fptr);
 	int b_tot = 0;
 	while (b_read) {
@@ -61,7 +61,7 @@ int read_file (char * filename, char **content)
 	script_code[b_tot] = 0;
     fclose(fptr);
     *content = script_code;
-    
+    *content_len = b_tot; 
 	return 0;
 }
 
@@ -102,20 +102,26 @@ int main(int argc, char **argv) {
 	if (!asc) { fprintf(stderr, "could not create cluster\n"); return(-1); }
 	if (0 != citrusleaf_cluster_add_host(asc, c.host, c.port, 5000)) {
 		fprintf(stderr, "could not connect to host %s port %d\n",c.host,c.port);
+		free(asc);
 		return(-1);
 	}
 	c.asc           = asc;
 
 	// register our package. 
-	char *content = NULL;
+	byte *content = NULL;
 	char filename[1024];
 	char *package_name = "test_register";
+	uint32_t content_len;
 	sprintf(filename,"%s%s",c.package_path,"register1.lua");
-	fprintf(stderr,"Filename : %s\n",filename);
-	int rsp = read_file (filename, &content); 	   
+	int rsp = read_file (filename, &content, &content_len); 	   
 	char *err_str = NULL;
+	as_bytes udf_content;
+	udf_content.data = (byte*)calloc(1,sizeof(byte)*(content_len+1));
+	udf_content.size = content_len;
+	memcpy(udf_content.data, content, udf_content.size);
+	udf_content.data[content_len] = 0;
 	if (rsp==0) {
-		int resp = citrusleaf_udf_put(asc, basename(filename), content, &err_str);
+		int resp = citrusleaf_udf_put(asc, basename(filename), &udf_content, AS_UDF_LUA, &err_str);
 		if (resp!=0) {
 			fprintf(stderr, "unable to register package file %s as %s resp = %d\n", filename, package_name,resp); 
 			fprintf(stderr, "[%s]\n",err_str); free(err_str);
@@ -128,17 +134,21 @@ int main(int argc, char **argv) {
 	}
 	
 	/* get the package */    
-	fprintf(stderr,"Filename : %s\n",filename);
-	int content_len = 0;
-	int resp = citrusleaf_udf_get(asc, basename(filename), &content, &content_len, &err_str);
+	as_udf_file file;
+	memset(&file,0,sizeof(as_udf_file));
+	file.content = calloc(1,sizeof(as_bytes));
+	int resp = citrusleaf_udf_get(asc, basename(filename), &file, 0, &err_str);
 	if (resp!=0) {
 		fprintf(stderr, "unable to retrieve package %s resp = %d\n", package_name,resp); return(-1);
 	} else {
-		fprintf(stderr, "*** successfully retrieved package content for %s = [%s]\n",package_name, content);
-		free(content); content = NULL;
+		fprintf(stderr, "*** successfully retrieved package content for %s = [%s]\n",package_name, file.content->data);
 	}
+	free(udf_content.data);
+	free(file.content->data);
+	free(file.content);
+	
 	// list the packages
-	char ** packages = NULL;
+	as_udf_file ** packages = NULL;
 	int num_packages = 0;
 	resp = citrusleaf_udf_list(asc, &packages, &num_packages, &err_str);
 	if (resp!=0) {
@@ -147,13 +157,13 @@ int main(int argc, char **argv) {
 		if (num_packages > 0 ) {
 			fprintf(stderr,"*** successfully retrieved package list with %d items\n",num_packages); 
 			for (int i=0; i<num_packages;i++) {
-				fprintf(stderr,"[%d]=%s\n",i, packages[i]);
-				free (packages[i]);
+				fprintf(stderr,"[%d] = Name: %s, Hash: %s, Type: %d\n",i, packages[i]->name, packages[i]->hash, packages[i]->type);
+				free(packages[i]);
 			}
 			free (packages);
 			if (num_packages != 1) {
 				fprintf(stderr,"FAILED: Expected 1 package, got %d\n",num_packages);
-	//			return -1;
+				return -1;
 			}    
 		}
 	}
@@ -161,11 +171,14 @@ int main(int argc, char **argv) {
 	char filename2[1024];
 	char *package_name2 = "test_register2";
 	sprintf(filename2,"%s%s",c.package_path,"register2.lua");
-	fprintf(stderr,"Filename : %s\n",filename2);
-	rsp = read_file (filename2, &content); 	   
+	rsp = read_file (filename2, &content, &content_len); 	   
+	udf_content.data = (byte*)calloc(1,sizeof(byte)*(content_len+1));
+	udf_content.size = content_len;
+	memcpy(udf_content.data, content, udf_content.size);
+	udf_content.data[content_len] = 0;
 	if (rsp==0) {
 		char *err_str = NULL;
-		int resp = citrusleaf_udf_put(asc, basename(filename2), content, &err_str);
+		int resp = citrusleaf_udf_put(asc, basename(filename2), &udf_content, AS_UDF_LUA, &err_str);
 		if (resp!=0) {
 			fprintf(stderr, "unable to register package file %s as %s resp = %d\n", filename2, package_name2,resp); return(-1);
 			fprintf(stderr, "[%s]\n",err_str); free(err_str);
@@ -177,27 +190,18 @@ int main(int argc, char **argv) {
 	}
 
 	/* get the package */    
-	fprintf(stderr,"Filename : %s\n",filename2);
-	content_len = 0;
-	resp = citrusleaf_udf_get(asc, basename(filename2), &content, &content_len, &err_str);
+	memset(&file,0,sizeof(as_udf_file));
+	file.content = calloc(1,sizeof(as_bytes));
+	resp = citrusleaf_udf_get(asc, basename(filename2), &file, 0, &err_str);
 	if (resp!=0) {
 		fprintf(stderr, "unable to retrieve package %s resp = %d\n", package_name2,resp); return(-1);
 	} else {
-		fprintf(stderr, "*** successfully retrieved package content for %s = [%s]\n",package_name2, content);
-		free(content); content = NULL;
+		fprintf(stderr, "*** successfully retrieved package content for %s = [%s]\n",package_name2, file.content->data);
 	}
-/*
-	as_result res;
-	char * key = "key_register";
-	cl_object o_key;
-	citrusleaf_object_init_str(&o_key,key);
-	citrusleaf_udf_record_apply(asc,"test","demo",&o_key,package_name2, "register_2", NULL, 100, &res); 
-	fprintf(stderr,"%s\n",as_val_tostring(res.value));
-	citrusleaf_udf_record_apply(asc,"test","demo",&o_key,package_name, "register_1", NULL, 100, &res); 
-	fprintf(stderr,"%s\n",as_val_tostring(res.value));
-*/
+	free(udf_content.data);
+	free(file.content->data);
+	free(file.content);
 	// list the packages
-	packages = NULL;
 	num_packages = 0;
 	resp = citrusleaf_udf_list(asc, &packages, &num_packages, &err_str);
 	if (resp!=0) {
@@ -206,18 +210,18 @@ int main(int argc, char **argv) {
 		if (num_packages > 0) {
 			fprintf(stderr,"*** successfully retrieved package list with %d items\n",num_packages); 
 			for (int i=0; i<num_packages;i++) {
-				fprintf(stderr,"[%d]=%s\n",i, packages[i]);
+				fprintf(stderr,"[%d] = Name: %s, Hash: %s, Type: %d\n",i, packages[i]->name, packages[i]->hash, packages[i]->type);
 				free (packages[i]);
 			}
 			free (packages);
 			if (num_packages != 2) {
 				fprintf(stderr,"FAILED: Expected 2 packages, got %d\n",num_packages);
-				//			return -1;
+				return -1;
 			}
 		}
 	}
+
 	/* delete the package */    
-	fprintf(stderr,"Filename : %s\n",filename);
 	resp = citrusleaf_udf_remove(asc, filename, &err_str);
 	if (resp!=0) {
 		fprintf(stderr, "unable to retrieve package %s resp = %d\n", package_name,resp); return(-1);
@@ -225,6 +229,7 @@ int main(int argc, char **argv) {
 		fprintf(stderr, "*** successfully deleted package %s\n",package_name); 
 	}	
 	/* list the packages again */
+	num_packages = 0;	
 	resp = citrusleaf_udf_list(asc, &packages, &num_packages, &err_str);
 	if (resp!=0) {
 		fprintf(stderr, "unable to list package files %d\n", resp); return(-1);
@@ -232,33 +237,42 @@ int main(int argc, char **argv) {
 		if (num_packages == 1) {
 			fprintf(stderr,"*** successfully retrieved package list with %d items\n",num_packages); 
 			for (int i=0; i<num_packages;i++) {
-				fprintf(stderr,"[%d]=%s\n",i, packages[i]);
+				fprintf(stderr,"[%d] = Name: %s, Hash: %s, Type: %d\n",i, packages[i]->name, packages[i]->hash, packages[i]->type);
 				free (packages[i]);
 			}
 			free (packages);
-			if (num_packages != 1) {
-				fprintf(stderr,"FAILED: Expected 1 package got %d\n",num_packages);
-	//			return -1;
-			}
 		}
+		else if (num_packages != 1) {
+			free(packages);
+			fprintf(stderr,"FAILED: Expected 1 package got %d\n",num_packages);
+			return -1;
+		}
+
 	}
+	
 	// register a package with syntax error
 	char *package_name3 = "test_register3";
 	sprintf(filename,"%s%s",c.package_path,"register3.lua");
-	fprintf(stderr,"Filename : %s\n",filename);
-	rsp = read_file (filename, &content); 	   
+	rsp = read_file (filename, &content, &content_len); 	   
+	udf_content.data = (byte*)calloc(1,sizeof(byte)*(content_len+1));
+	udf_content.size = content_len;
+	memcpy(udf_content.data, content, udf_content.size);
+	udf_content.data[content_len] = 0;
 	if (rsp==0) {
 		char *err_str = NULL;
-		int resp = citrusleaf_udf_put(asc, filename, content, &err_str);
+		int resp = citrusleaf_udf_put(asc, filename, &udf_content, AS_UDF_LUA, &err_str);
 		if (resp!=0) {
 			fprintf(stderr, "*** successfully received registration error %s\n",package_name3); 
 			fprintf(stderr, "[%s]\n",err_str); free(err_str);
 		}
 		else {
 			fprintf(stderr,"FAILED: Registration returned 0, should not have happened\n");
-//			return -1;
+			return -1;
 		}
 	}
+	
+	// List packages again
+	num_packages = 0;
 	resp = citrusleaf_udf_list(asc, &packages, &num_packages, &err_str);
 	if (resp!=0) {
 		fprintf(stderr, "unable to list package files %d\n", resp); return(-1);
@@ -266,15 +280,15 @@ int main(int argc, char **argv) {
 		if (num_packages > 0 ) {
 			fprintf(stderr,"*** successfully retrieved package list with %d items\n",num_packages); 
 			for (int i=0; i<num_packages;i++) {
-				fprintf(stderr,"[%d]=%s\n",i, packages[i]);
+				fprintf(stderr,"[%d] = Name: %s, Hash: %s, Type: %d\n",i, packages[i]->name, packages[i]->hash, packages[i]->type);
 				free (packages[i]);
 			}
 			free (packages);
 		} else {
 			fprintf(stderr,"FAILED: Expected 1 package got %d\n",num_packages);
-//			return -1;
+			return -1;
 		}
-	}	 
+	}
 	citrusleaf_cluster_destroy(asc);
 	fprintf(stderr, "\n\nFinished Record stored-procedure Unit Tests\n");
 	return(0);

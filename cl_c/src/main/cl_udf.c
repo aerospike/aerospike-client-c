@@ -20,26 +20,29 @@ typedef struct citrusleaf_udf_filelist_s citrusleaf_udf_filelist;
 
 struct citrusleaf_udf_info_s {
     char *      error;
-    char *      filename;
-    char *      content;
+    char       filename[128];
+    byte *      content;
+    uint32_t content_len;
     char *      gen;
     char *      files;
     int         count;
+    unsigned char hash[CF_SHA_HEX_BUFF_LEN];
 };
 struct citrusleaf_udf_filelist_s {
     int         capacity;
     int         size;
-    char **     files;
+    as_udf_file **     files;
 };
 
 typedef void * (* citrusleaf_parameters_fold_callback)(const char * key, const char * value, void * context);
-typedef void * (* citrusleaf_split_fold_callback)(const char * value, void * context);
+typedef void * (* citrusleaf_split_fold_callback)(char * value, void * context);
 
 /******************************************************************************
  * STATIC FUNCTIONS
  ******************************************************************************/
 
 static int citrusleaf_parameters_fold(char * parameters, void * context, citrusleaf_parameters_fold_callback callback);
+static int citrusleaf_sub_parameters_fold(char * parameters, void * context, citrusleaf_parameters_fold_callback callback);
 static int citrusleaf_split_fold(char * str, const char delim, void * context, citrusleaf_split_fold_callback callback);
 static void citrusleaf_udf_info_destroy(citrusleaf_udf_info * info);
 
@@ -53,13 +56,11 @@ static void citrusleaf_udf_info_destroy(citrusleaf_udf_info * info);
 
 static void citrusleaf_udf_info_destroy(citrusleaf_udf_info * info) {
     if ( info->error ) free(info->error);
-    if ( info->filename ) free(info->filename);
     if ( info->content ) free(info->content);
     if ( info->gen ) free(info->gen);
     if ( info->files ) free(info->files);
 
     info->error = NULL;
-    info->filename = NULL;
     info->content = NULL;
     info->gen = NULL;
     info->files = NULL;
@@ -72,13 +73,15 @@ static void * citrusleaf_udf_info_parameters(const char * key, const char * valu
         info->error = strdup(value);
     }
     if ( strcmp(key,"filename") == 0 ) {
-        info->filename = strdup(value);
+        strncpy(info->filename, value, strlen(value));
     }
     else if ( strcmp(key,"gen") == 0 ) {
         info->gen = strdup(value);
     }
     else if ( strcmp(key,"content") == 0 ) {
-        info->content = strdup(value);
+	info->content = (byte*)calloc(1, sizeof(byte)*(strlen(value)));
+        memcpy(info->content, value, strlen(value));
+	info->content_len = strlen(value);
     }
     else if ( strcmp(key,"files") == 0 ) {
         info->files = strdup(value);
@@ -86,15 +89,22 @@ static void * citrusleaf_udf_info_parameters(const char * key, const char * valu
     else if ( strcmp(key,"count") == 0 ) {
         info->count = atoi(value);
     }
+    else if (strcmp(key, "hash") == 0 ) {
+        memcpy(info->hash, value, strlen(value));
+    }
     return info;
 }
 
-static void * citrusleaf_udf_list_files(const char * filename, void * context) {
+void * citrusleaf_udf_list_files(char * filedata, void * context) {
     citrusleaf_udf_filelist * filelist = (citrusleaf_udf_filelist *) context;
-
+    citrusleaf_udf_info file_info = {NULL};
+    // Got a list of key-value pairs separated with commas
+    citrusleaf_sub_parameters_fold(filedata, &file_info, citrusleaf_udf_info_parameters);
     if ( filelist->size < filelist->capacity ) {
-        filelist->files[filelist->size] = strdup(filename);
-        filelist->size++;
+   	filelist->files[filelist->size] = (as_udf_file*)calloc(1,sizeof(as_udf_file));
+	strncpy(filelist->files[filelist->size]->name, file_info.filename, strlen(file_info.filename));
+	memcpy(filelist->files[filelist->size]->hash, file_info.hash, CF_SHA_HEX_BUFF_LEN);
+	filelist->size++;
     }
 
     return filelist;
@@ -223,7 +233,7 @@ cl_rv citrusleaf_udf_record_apply(cl_cluster * cl, const char * ns, const char *
 
 
 
-cl_rv citrusleaf_udf_list(cl_cluster *asc, char *** files, int * count, char ** error) {
+cl_rv citrusleaf_udf_list(cl_cluster *asc, as_udf_file *** files, int * count, char ** error) {
     
     *files = NULL;
     *count = 0;
@@ -251,7 +261,7 @@ cl_rv citrusleaf_udf_list(cl_cluster *asc, char *** files, int * count, char ** 
     /**
      * result   := {request}\t{response}
      * response := count=<int>;files={files};
-     * files    := <string>[,<string>[,...]]
+     * files    := filename=<name>,hash=<hash>,type=<type>[:filename=<name>...]
      */
     
     char * response = strchr(result, '\t') + 1;
@@ -281,9 +291,9 @@ cl_rv citrusleaf_udf_list(cl_cluster *asc, char *** files, int * count, char ** 
     citrusleaf_udf_filelist filelist = { 
         .capacity   = info.count,
         .size       = 0,
-        .files      = (char **) malloc(info.count * sizeof(char *))
+        .files      = (as_udf_file **) malloc(info.count * sizeof(as_udf_file *))
     };
-
+    // Different files' data are separated by ':'. Parse each file dataset and feed them into the callback 
     citrusleaf_split_fold(info.files, ':', &filelist, citrusleaf_udf_list_files);
 
     *files = filelist.files;
@@ -295,13 +305,13 @@ cl_rv citrusleaf_udf_list(cl_cluster *asc, char *** files, int * count, char ** 
     
 }
 
-cl_rv citrusleaf_udf_get(cl_cluster *asc, const char * filename, char ** content, int * content_len, char ** error) {
-    return citrusleaf_udf_get_with_gen(asc, filename, content, content_len, NULL, error);
+cl_rv citrusleaf_udf_get(cl_cluster *asc, const char * filename, as_udf_file * file, as_udf_type udf_type, char ** error) {
+    return citrusleaf_udf_get_with_gen(asc, filename, file, 0, NULL, error);
 }
 
-cl_rv citrusleaf_udf_get_with_gen(cl_cluster *asc, const char * filename, char ** content, int * content_len, char **gen, char ** error) {
+cl_rv citrusleaf_udf_get_with_gen(cl_cluster *asc, const char * filename, as_udf_file * file, as_udf_type udf_type, char **gen, char ** error) {
 
-    if ( !content ) return -1;
+    if ( !(file->content) ) return -1;
 
     char    query[512]  = {0};
     char *  result      = NULL;
@@ -353,12 +363,21 @@ cl_rv citrusleaf_udf_get_with_gen(cl_cluster *asc, const char * filename, char *
         return 2;
     }
 
-    int clen = info.content ? strlen(info.content) : 0;
-    cf_base64_decode_inplace((uint8_t *) info.content, &clen, true);
+    int clen = info.content ? info.content_len : 0;
+    cf_base64_decode_inplace(info.content, &clen, true);
+   
+    // Update file name, content
+    strcpy(file->name, filename);
+    file->content->data = calloc(1, sizeof(byte)*(info.content_len)); 
+    memcpy((*(file->content)).data, info.content, info.content_len);
+    (*(file->content)).size = clen;
     
-    *content = info.content;
-    *content_len = clen;
-
+    // Update file hash
+    unsigned char hash[SHA_DIGEST_LENGTH];
+    SHA1(info.content, info.content_len, hash);
+    cf_convert_sha1_to_hex(hash, file->hash);
+    
+    free(info.content);
     info.content = NULL;
     
     if ( gen ) {
@@ -371,30 +390,24 @@ cl_rv citrusleaf_udf_get_with_gen(cl_cluster *asc, const char * filename, char *
     return 0;
 }
 
-cl_rv citrusleaf_udf_put(cl_cluster *asc, const char * filename, const char * content, char ** error) {
+cl_rv citrusleaf_udf_put(cl_cluster *asc, const char * filename, as_bytes *content, as_udf_type udf_type, char ** error) {
 
-    if ( !filename || !content) {
+    if ( !filename || !(content->data && content->size > 0)) {
         fprintf(stderr, "filename and content required\n");
         return CITRUSLEAF_FAIL_CLIENT;
     }
 
-    int     content_len = strlen(content);
-    int     query_len   = strlen("udf-put:filename=;content=;") + strlen(filename) + cf_base64_encode_maxlen(content_len);
-    char *  query       = malloc(query_len); 
+    char * query = NULL;    
     char *  result      = NULL;
     char *  filepath    = strdup(filename);
     char *  filebase    = basename(filepath);
 
-    if ( !query ) {
-        fprintf(stderr, "cannot malloc\n");
+    char * content_base64 = malloc(cf_base64_encode_maxlen(content->size));
+    cf_base64_tostring(content->data, content_base64, &(content->size));
+    if (! asprintf(&query, "udf-put:filename=%s;content=%s;content-len=%d;udf-type=%d;", filebase, content_base64, content->size, udf_type)) {
+        fprintf(stderr, "Query allocation failed");
         return CITRUSLEAF_FAIL_CLIENT;
     }
-    
-    snprintf(query, query_len, "udf-put:filename=%s;content=",filebase);
-    int qlen = strlen(query);
-    cf_base64_tostring((uint8_t *)content, (char *)(query+qlen), &content_len);
-    query[qlen+content_len] = ';';
-    query[qlen+content_len+1] = 0;
     
     free(filepath);
 
@@ -408,16 +421,19 @@ cl_rv citrusleaf_udf_put(cl_cluster *asc, const char * filename, const char * co
             strncpy(*error+emsg_len, query, query_len);
         }
         free(query);
+        free(content_base64);
         return -1;
     }
 
     if ( !result ) {
         if ( error ) *error = strdup("invalid_response");
         free(query);
-        return -2;
+        free(content_base64);
+    	return -2;
     }
 
     free(query);
+    free(content_base64);
     query = NULL;
     
     /**
@@ -496,7 +512,36 @@ cl_rv citrusleaf_udf_remove(cl_cluster *asc, const char * filename, char ** erro
     return 0;
     
 }
+// Parameters are key-value pairs separated by ;
+// Sub parameters are key-value pairs contained under a parameter set and are separated by commas
+static int citrusleaf_sub_parameters_fold(char * parameters, void * context, citrusleaf_parameters_fold_callback callback) {
+    if ( !parameters || !(*parameters) ) return 0;
+    char *  ks = NULL;
+    int     ke = 0;
+    char *  vs = NULL;
+    int     ve = 0;
+    ks = parameters;
+    for ( ke = 0; ks[ke] != '=' && ks[ke] != 0; ke++);
 
+    if ( ks[ke] == 0 ) return 1;
+
+    vs = ks + ke + 1;
+    for ( ve = 0; vs[ve] != ',' && vs[ve] != 0; ve++);
+
+    char    k[128]  = {0};
+    char *  v       = strndup(vs, ve);
+    char * p = NULL;
+    if (vs[ve] != 0) {
+	    p = vs + ve + 1;
+    }
+
+    memcpy(k, ks, ke);
+    int rc = citrusleaf_sub_parameters_fold(p, callback(k, v, context), callback);
+    
+    free(v);
+
+    return rc;
+}
 
 static int citrusleaf_parameters_fold(char * parameters, void * context, citrusleaf_parameters_fold_callback callback) {
     if ( !parameters || !(*parameters) ) return 0;
@@ -535,14 +580,15 @@ static int citrusleaf_split_fold(char * str, const char delim, void * context, c
 
     char *  vs = NULL;
     int     ve = 0;
-    
+    char * p = NULL;    
     vs = str;
     for ( ve = 0; vs[ve] != delim && vs[ve] != 0; ve++);
 
-    if ( vs[ve] == 0 ) return 1;
-    
     char *  v       = strndup(vs, ve);
-    char *  p       = vs + ve + 1;
+    // Move p only if this isn't the last string
+    if ( vs[ve] != 0 ) {
+	    p = vs + ve + 1;
+    }
 
     int rc = citrusleaf_split_fold(p, delim, callback(v, context), callback);
     

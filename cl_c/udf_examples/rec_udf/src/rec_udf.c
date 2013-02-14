@@ -123,7 +123,7 @@ int do_udf_bin_update_test() {
 	cl_bin *rsp_bins = NULL;
 	int     rsp_n_bins = 0;
 	as_result res;
-	as_list * arglist = as_arglist_new(3);	
+	as_list * arglist = as_arraylist_new(3, 8);	
 	// arg 1 -> bin name
 	as_list_add_string(arglist, "bin_to_change");
 
@@ -236,7 +236,7 @@ int do_udf_trim_bin_test() {
 		cl_object o_key;
 		citrusleaf_object_init_str(&o_key,keyStr);	
 		// (2) set up stored procedure to call
-		as_list * arglist = as_arglist_new(2);
+		as_list * arglist = as_arraylist_new(2, 8);
 
 		if (!arglist) {
 			LOG("can't create udf_params");
@@ -1136,7 +1136,7 @@ int do_udf_return_type_test() {
 	 * NONE
 	 */
 
-	arglist = as_arglist_new(1);	
+	arglist = as_arraylist_new(1, 8);	
 	as_list_add_string(arglist, "none");
 
 
@@ -1155,6 +1155,9 @@ int do_udf_return_type_test() {
 			LOG("nil: invalid type (%d)", as_val_type(res.value));
 			errors++;
 		}
+		char *str = as_val_tostring(res.value);
+		LOG("do_udf_return_type: first return is %s",str);
+		free(str);
 	}
 
 	as_val_destroy(arglist);
@@ -1166,7 +1169,7 @@ int do_udf_return_type_test() {
 	 * STRING
 	 */
 
-	arglist = as_arglist_new(1);	
+	arglist = as_arraylist_new(1, 8);	
 	as_list_add_string(arglist, "string_primitive");
 
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
@@ -1207,7 +1210,7 @@ int do_udf_return_type_test() {
 	 * POSITIVE INTEGER
 	 */
 	
-	arglist = as_arglist_new(1);	
+	arglist = as_arraylist_new(1, 8);	
 	as_list_add_string(arglist, "p_int_primitive");
 
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
@@ -1242,7 +1245,7 @@ int do_udf_return_type_test() {
 	 * NAGATIVE INTEGER
 	 */
 
-	arglist = as_arglist_new(1);	
+	arglist = as_arraylist_new(1, 8);	
 	as_list_add_string(arglist, "n_int_primitive");
 
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
@@ -1276,7 +1279,7 @@ int do_udf_return_type_test() {
 	 * LIST
 	 */
 
-	arglist = as_arglist_new(1);	
+	arglist = as_arraylist_new(1, 8);	
 	as_list_add_string(arglist, "bin_array");
 
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
@@ -1312,7 +1315,7 @@ int do_udf_return_type_test() {
 	 * NESTED LIST
 	 */
 
-	arglist = as_arglist_new(1);	
+	arglist = as_arraylist_new(1, 8);	
 	as_list_add_string(arglist, "bin_nested_list");
 
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
@@ -1418,12 +1421,11 @@ int do_udf_return_type_test() {
 	as_result_destroy(&res);
 
 
-
 	/**
 	 * MAP
 	 */
 
-	arglist = as_arglist_new(1);	
+	arglist = as_arraylist_new(1, 8);	
 	as_list_add_string(arglist, "bin_map");
 
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
@@ -1573,12 +1575,13 @@ int register_package()
 		return(-1); 
 	} 
 	int max_script_len = 1048576; 
-	char *script_code = malloc(max_script_len); 
+	byte *script_code = (byte *)malloc(max_script_len); 
+	memset(script_code, 0, max_script_len);
 	if (script_code == NULL) { 
 		LOG("malloc failed"); return(-1); 
 	}     
 
-	char *script_ptr = script_code; 
+	byte *script_ptr = script_code; 
 	int b_read = fread(script_ptr,1,512,fptr); 
 	int b_tot = 0; 
 	while (b_read) { 
@@ -1589,8 +1592,12 @@ int register_package()
 	fclose(fptr); 
 
 	char *err_str = NULL; 
+	as_bytes udf_content = {
+		.size = b_tot,
+		.data = script_code
+	}; 
 	if (b_tot>0) { 
-		int resp = citrusleaf_udf_put(g_config->asc, basename(g_config->package_file), script_code, &err_str); 
+		int resp = citrusleaf_udf_put(g_config->asc, basename(g_config->package_file), &udf_content, AS_UDF_LUA, &err_str); 
 		if (resp!=0) { 
 			INFO("unable to register package file %s as %s resp = %d",g_config->package_file,g_config->package_name,resp); return(-1);
 			INFO("%s",err_str); free(err_str);
@@ -1973,7 +1980,7 @@ int main(int argc, char **argv) {
 		LOG("");
 	}
 	
-
+	free(g_config);
 	citrusleaf_cluster_destroy(asc);
 	citrusleaf_shutdown();
 	

@@ -95,7 +95,7 @@ int do_udf_user_write(int user_id) {
 	snprintf(lua_arg, sizeof(lua_arg), "%d,%s,%llu", campaign_id, action, (long long unsigned int)now);
 
 	// (2) set up udf to call
-	as_list * arglist = as_arglist_new(2);
+	as_list * arglist = as_arraylist_new(2, 8);
 	if (!arglist) {
 		citrusleaf_object_free(&o_key);		
 		fprintf(stderr, "can't create argument list\n");
@@ -184,7 +184,7 @@ int do_udf_user_read(int user_id) {
 	free(bins);
 
 	// randomly choose which campaigns to read from
-	as_list * arglist = as_arglist_new(2);
+	as_list * arglist = as_arraylist_new(2, 8);
 	if (!arglist) {
 		citrusleaf_object_free(&o_key);		
 		fprintf(stderr, "can't create udf_def\n");
@@ -239,27 +239,32 @@ int register_package()
 		return(-1); 
 	} 
 	int max_script_len = 1048576; 
-	char *script_code = malloc(max_script_len); 
+	byte *script_code = (byte *)malloc(max_script_len); 
 	if (script_code == NULL) { 
 		fprintf(stderr, "malloc failed"); return(-1); 
 	}     
 
-	char *script_ptr = script_code; 
+	byte *script_ptr = script_code; 
 	int b_read = fread(script_ptr,1,512,fptr); 
 	int b_tot = 0; 
 	while (b_read) { 
 		b_tot      += b_read; 
 		script_ptr += b_read; 
 		b_read      = fread(script_ptr,1,512,fptr); 
-	}                        
-	fclose(fptr); 
+	}                     
+	fclose(fptr);
+	as_bytes udf_content = {
+		.size = b_tot,
+		.data = script_code
+	}; 
 
 	char *err_str = NULL; 
 	if (b_tot>0) { 
-		int resp = citrusleaf_udf_put(g_config->asc, basename(g_config->package_file), script_code, &err_str); 
+		int resp = citrusleaf_udf_put(g_config->asc, basename(g_config->package_file), &udf_content, AS_UDF_LUA, &err_str); 
 		if (resp!=0) { 
 			fprintf(stderr, "unable to register package file %s as %s resp = %d\n",g_config->package_file,g_config->package_name,resp); return(-1);
 			fprintf(stderr, "%s\n",err_str); free(err_str);
+			free(script_code);
 			return(-1);
 		}
 		fprintf(stderr, "successfully registered package file %s as %s\n",g_config->package_file,g_config->package_name); 

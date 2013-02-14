@@ -9,7 +9,6 @@
 #include "citrusleaf.h"
 #include "cluster.h"
 #include "cl_udf.h"
-#include "cl_arglist.h"
 #include "cl_scan.h"
 
 #include <as_buffer.h>

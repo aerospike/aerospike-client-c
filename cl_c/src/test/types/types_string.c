@@ -8,20 +8,23 @@
 
 TEST( types_string_null, "as_string containing NULL" ) {
     as_string s;
-    as_string_init(&s,NULL);
+    as_string_init(&s,NULL,false /*ismalloc*/);
     assert( as_string_len(&s) == 0 );
+    as_val_destroy(&s);
 }
 
 TEST( types_string_empty, "as_string containing \"\"" ) {
     as_string s;
-    as_string_init(&s,"");
+    as_string_init(&s,"",false /*ismalloc*/);
     assert( as_string_len(&s) == 0 );
+    as_val_destroy(&s);
 }
 
 TEST( types_string_random, "as_string containing random values" ) {
     as_string s;
-    as_string_init(&s,"dskghseoighweg");
+    as_string_init(&s,"dskghseoighweg",false/*ismalloc*/);
     assert( as_string_len(&s) == 14 );
+    as_val_destroy(&s);
 }
 
 /******************************************************************************

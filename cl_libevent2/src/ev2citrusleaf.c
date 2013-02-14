@@ -1114,7 +1114,7 @@ ev2citrusleaf_is_connected(int fd)
 // Got an event on one of our file descriptors. DTRT.
 // NETWORK EVENTS ONLY
 void
-ev2citrusleaf_event(int fd, short event, void *udata)
+ev2citrusleaf_event(evutil_socket_t fd, short event, void *udata)
 {
 	cl_request *req = (cl_request*)udata;
 	int rv;
@@ -1258,7 +1258,7 @@ Fail:
 // fd is not set
 
 void
-ev2citrusleaf_timer_expired(int fd, short event, void *udata)
+ev2citrusleaf_timer_expired(evutil_socket_t fd, short event, void *udata)
 {
 	cl_request *req = (cl_request*)udata;
 
@@ -1283,7 +1283,7 @@ ev2citrusleaf_timer_expired(int fd, short event, void *udata)
 
 
 static void
-ev2citrusleaf_base_hop_event(int fd, short event, void *udata)
+ev2citrusleaf_base_hop_event(evutil_socket_t fd, short event, void *udata)
 {
 	cl_request* req = (cl_request*)udata;
 

@@ -434,7 +434,7 @@ cf_print_sockaddr_in(char *prefix, struct sockaddr_in *sa_in)
 //
 
 #include <WinSock2.h>
-#include <Wintcp2ip.h> // ???
+#include <Ws2tcpip.h>
 
 
 int
@@ -449,7 +449,12 @@ cf_socket_create_nb()
 	}
 
     // Make the socket nonblocking.
-	// TODO - ioctl stuff
+	u_long iMode = 1;
+
+	if (ioctlsocket(fd, FIONBIO, &iMode) != NO_ERROR) {
+		cf_info("could not connect nonblocking socket %d, errno %d", fd, errno);
+		return -1;
+	}
 
 	int f = 1;
 	setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char*)&f, sizeof(f));

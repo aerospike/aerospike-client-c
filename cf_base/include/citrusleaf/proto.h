@@ -90,6 +90,112 @@ typedef enum {
 #define CL_PROTO_TYPE_CL_MSG 3
 #define CL_PROTO_TYPE_CL_MSG_COMPRESSED 4
 
+#define CL_RESULT_OK	0
+#define CL_RESULT_FAIL 1
+#define CL_RESULT_NOTFOUND 2
+
+#ifdef CF_WINDOWS
+
+#pragma pack(push, 1) // packing is now 1
+typedef struct cl_proto_s {
+	uint64_t	version	:8;
+	uint64_t	type	:8;
+	uint64_t	sz		:48;
+} cl_proto;
+#pragma pack(pop) // packing is back to what it was
+
+
+/* cl_msg_field
+ * Aerospike message field */
+
+#pragma pack(push, 1)
+typedef struct cl_msg_field_s {
+#define CL_MSG_FIELD_TYPE_NAMESPACE 0 // UTF8 string
+#define CL_MSG_FIELD_TYPE_SET 1
+#define CL_MSG_FIELD_TYPE_KEY 2  // contains a key type
+#define CL_MSG_FIELD_TYPE_BIN 3  // used for secondary key access - contains a bin, thus a name and value
+#define CL_MSG_FIELD_TYPE_DIGEST_RIPE 4  // used to send the digest just computed to the server so it doesn't have to
+#define CL_MSG_FIELD_TYPE_GU_TID 5
+#define CL_MSG_FIELD_TYPE_DIGEST_RIPE_ARRAY 6
+#define CL_MSG_FIELD_TYPE_TRID 7
+#define CL_MSG_FIELD_TYPE_SCAN_OPTIONS 8
+	uint32_t field_sz; // get the data size through the accessor function, don't worry, it's a small macro
+	uint8_t type;
+	uint8_t data[];
+} cl_msg_field;
+#pragma pack(pop)
+
+#pragma pack(push, 1) // packing is now 1
+typedef struct cl_msg_op_s {
+	uint32_t op_sz;
+	uint8_t  op;
+	uint8_t  particle_type;
+	uint8_t  version;
+	uint8_t  name_sz;
+	uint8_t	 name[]; // UTF-8
+	// there's also a value here but you can't have two variable size arrays
+} cl_msg_op;
+#pragma pack(pop) // packing is back to what it was
+
+/* cl_msg_key_s
+*/
+// Not using it anywhere in libevent2 client 
+// Please be aware when using this for any other client
+/*
+#pragma pack(push, 1) // packing is now 1
+typedef struct cl_msg_key_s {
+	cl_msg_field	f;
+	uint8_t  key[];
+} cl_msg_key;
+#pragma pack(pop) // packing is back to what it was
+*/
+/* cl_msg_number_s
+*/
+
+#pragma pack(push, 1) // packing is now 1
+typedef struct cl_msg_number_s {
+	uint32_t number;
+	cl_msg_field	f;
+} cl_msg_number;
+#pragma pack(pop) // packing is back to what it was
+
+
+/* cl_msg
+ * Aerospike message
+ * size: size of the payload, not including the header */
+
+#pragma pack(push, 1) // packing is now 1
+typedef struct cl_msg_s {
+/*00*/	uint8_t 	header_sz;    // number of uint8_ts in this header
+/*01*/	uint8_t 	info1; 		  // bitfield about this request
+/*02*/  uint8_t     info2;
+/*03*/  uint8_t     info3;
+/*04*/  uint8_t     unused;
+/*05*/	uint8_t 	result_code;
+/*06*/	uint32_t 	generation;
+/*10*/  uint32_t	record_ttl;
+/*14*/  uint32_t    transaction_ttl;
+/*18*/	uint16_t 	n_fields; // size in uint8_ts
+/*20*/	uint16_t 	n_ops;     // number of operations
+/*22*/	uint8_t data[0]; // data contains first the fields, then the ops
+}  cl_msg;
+#pragma pack(pop) // packing is back to what it was
+
+
+/* cl_ms
+ * Aerospike message
+ * sz: size of the payload, not including the header */
+
+#pragma pack(push, 1) // packing is now 1
+typedef struct as_msg_s {
+		cl_proto  	proto;
+		cl_msg		m;
+} as_msg;
+#pragma pack(pop) // packing is back to what it was
+
+
+#else
+
 typedef struct cl_proto_s {
 	uint8_t		version;
 	uint8_t		type;
@@ -117,22 +223,6 @@ typedef struct cl_msg_field_s {
 
 
  
-#define CL_MSG_OP_READ 1			// read the value in question
-#define CL_MSG_OP_WRITE 2			// write the value in question
-#define CL_MSG_OP_WRITE_UNIQUE 3	// write a namespace-wide unique value
-#define CL_MSG_OP_WRITE_NOW 4		// write the server-current time
-#define CL_MSG_OP_INCR 5
-#define CL_MSG_OP_APPEND_SEGMENT 6          // Append segment to a particle
-#define CL_MSG_OP_APPEND_SEGMENT_EXT 7      // Extended append - with parameters
-#define CL_MSG_OP_APPEND_SEGMENT_QUERY 8    // Query to return subset of segments
-#define CL_MSG_OP_APPEND 9                  // Add to an existing particle
-#define CL_MSG_OP_PREPEND 10                // Add to the beginning of an existing particle
-#define CL_MSG_OP_TOUCH   11                // Touch 
-
-#define CL_MSG_OP_MC_INCR 129         // Memcache-compatible version of the increment command
-#define CL_MSG_OP_MC_APPEND  130        // Memcache compatible append. Allow appending to ints.
-#define CL_MSG_OP_MC_PREPEND 131        // Memcache compatile prepend. Allow prepending to ints.
-#define CL_MSG_OP_MC_TOUCH   132        // Memcache compatible touch - does not change generation count
  
 typedef struct cl_msg_op_s {
 	uint32_t op_sz;
@@ -144,20 +234,6 @@ typedef struct cl_msg_op_s {
 	// there's also a value here but you can't have two variable size arrays
 } __attribute__((__packed__)) cl_msg_op;
  
-static inline uint8_t * cl_msg_op_get_value_p(cl_msg_op *op)
-{
-	return ( ((uint8_t *)op) + sizeof(cl_msg_op) + op->name_sz);
-}
-
-static inline uint32_t cl_msg_op_get_value_sz(cl_msg_op *op)
-{
-	return( op->op_sz - (4 + op->name_sz) );
-}
-
-static inline uint32_t cl_msg_field_get_value_sz(cl_msg_field *f)
-{
-	return( f->field_sz - 1 );
-}
 
 
 typedef struct cl_msg_key_s {
@@ -171,9 +247,6 @@ typedef struct cl_msg_number_s {
 } __attribute__ ((__packed__)) cl_msg_number;
 
 
-#define CL_RESULT_OK	0
-#define CL_RESULT_FAIL 1
-#define CL_RESULT_NOTFOUND 2
 
 /* cl_msg
  * Aerospike message
@@ -201,6 +274,25 @@ typedef struct as_msg_s {
 		cl_msg		m;
 } __attribute__((__packed__)) as_msg;
 
+#endif
+
+#define CL_MSG_OP_READ 1			// read the value in question
+#define CL_MSG_OP_WRITE 2			// write the value in question
+#define CL_MSG_OP_WRITE_UNIQUE 3	// write a namespace-wide unique value
+#define CL_MSG_OP_WRITE_NOW 4		// write the server-current time
+#define CL_MSG_OP_INCR 5
+#define CL_MSG_OP_APPEND_SEGMENT 6          // Append segment to a particle
+#define CL_MSG_OP_APPEND_SEGMENT_EXT 7      // Extended append - with parameters
+#define CL_MSG_OP_APPEND_SEGMENT_QUERY 8    // Query to return subset of segments
+#define CL_MSG_OP_APPEND 9                  // Add to an existing particle
+#define CL_MSG_OP_PREPEND 10                // Add to the beginning of an existing particle
+#define CL_MSG_OP_TOUCH   11                // Touch 
+
+#define CL_MSG_OP_MC_INCR 129         // Memcache-compatible version of the increment command
+#define CL_MSG_OP_MC_APPEND  130        // Memcache compatible append. Allow appending to ints.
+#define CL_MSG_OP_MC_PREPEND 131        // Memcache compatile prepend. Allow prepending to ints.
+#define CL_MSG_OP_MC_TOUCH   132        // Memcache compatible touch - does not change generation count
+
 #define CL_MSG_INFO1_READ				(1 << 0)		// contains a read operation
 #define CL_MSG_INFO1_GET_ALL			(1 << 1) 		// get all bins, period
 #define CL_MSG_INFO1_GET_ALL_NODATA 	(1 << 2) 		// get all bins WITHOUT data (currently unimplemented)
@@ -222,6 +314,21 @@ typedef struct as_msg_s {
 #define CL_MSG_INFO3_TOMBSTONE			(1 << 2)		// if set on response, a version was a delete tombstone
 #define CL_MSG_INFO3_REPLACE			(1 << 3)		// properly a write option, but there are no more bits. Overwrite existing record only; do not create new record
 
+
+static inline uint8_t * cl_msg_op_get_value_p(cl_msg_op *op)
+{
+	return ( ((uint8_t *)op) + sizeof(cl_msg_op) + op->name_sz);
+}
+
+static inline uint32_t cl_msg_op_get_value_sz(cl_msg_op *op)
+{
+	return( op->op_sz - (4 + op->name_sz) );
+}
+
+static inline uint32_t cl_msg_field_get_value_sz(cl_msg_field *f)
+{
+	return( f->field_sz - 1 );
+}
 
 static inline cl_msg_field *
 cl_msg_field_get_next(cl_msg_field *mf)

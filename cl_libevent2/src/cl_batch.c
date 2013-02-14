@@ -76,7 +76,8 @@ static inline void cl_batch_job_rec_done(cl_batch_job* _this);
 static void cl_batch_job_node_done(cl_batch_job* _this,
 		cl_batch_node_req* p_node_req, int node_result);
 // The libevent2 timer event handler:
-static void cl_batch_job_timeout_event(int fd, short event, void* pv_this);
+static void cl_batch_job_timeout_event(evutil_socket_t fd, short event,
+		void* pv_this);
 
 //------------------------------------------------
 // Data
@@ -142,7 +143,8 @@ static uint8_t* cl_batch_node_req_write_fields(cl_batch_node_req* _this,
 static bool cl_batch_node_req_get_fd(cl_batch_node_req* _this);
 static void cl_batch_node_req_start(cl_batch_node_req* _this);
 // The libevent2 event handler:
-static void cl_batch_node_req_event(int fd, short event, void* pv_this);
+static void cl_batch_node_req_event(evutil_socket_t fd, short event,
+		void* pv_this);
 static bool cl_batch_node_req_handle_send(cl_batch_node_req* _this);
 static bool cl_batch_node_req_handle_recv(cl_batch_node_req* _this);
 static int cl_batch_node_req_parse_proto_body(cl_batch_node_req* _this,
@@ -564,7 +566,7 @@ cl_batch_job_node_done(cl_batch_job* _this, cl_batch_node_req* p_node_req,
 // far, and clean up.
 //
 static void
-cl_batch_job_timeout_event(int fd, short event, void* pv_this)
+cl_batch_job_timeout_event(evutil_socket_t fd, short event, void* pv_this)
 {
 	cl_batch_job* _this = (cl_batch_job*)pv_this;
 
@@ -814,7 +816,7 @@ cl_batch_node_req_start(cl_batch_node_req* _this)
 // if transaction is not done.
 //
 static void
-cl_batch_node_req_event(int fd, short event, void* pv_this)
+cl_batch_node_req_event(evutil_socket_t fd, short event, void* pv_this)
 {
 	cl_batch_node_req* _this = (cl_batch_node_req*)pv_this;
 

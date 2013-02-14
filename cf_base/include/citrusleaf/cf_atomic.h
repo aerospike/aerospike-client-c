@@ -10,6 +10,10 @@
 
 #include <stdint.h>
 
+#ifdef CF_WINDOWS
+#include <intrin.h>
+#endif
+
 /* SYNOPSIS
  * Atomic memory operations
  * Memory barriers
@@ -84,13 +88,24 @@ cf_atomic64_add(cf_atomic64 *a, int64_t b)
 {
 	int64_t i = b;
 
+#ifndef CF_WINDOWS
 	__asm__ __volatile__ ("lock; xaddq %0, %1" : "+r" (b), "+m" (*a) : : "memory");
+#else
+	b = _InterlockedExchangeAdd64((LONGLONG *)a, b);
+#endif
 
 	return(b + i);
 }
 #define cf_atomic64_sub(a,b) (cf_atomic64_add((a), (0 - (b))))
 #define cf_atomic64_incr(a) (cf_atomic64_add((a), 1))
 #define cf_atomic64_decr(a) (cf_atomic64_add((a), -1))
+
+#ifndef CF_WINDOWS
+// This following section is not used by cl_libevent2 client.
+// Thus not ported for libevent2 windows client.
+// This also will help to clear out the sections which are no longer in use.
+// In case somebody wants them in windows environment, please be aware they not ported yet.
+
 
 static inline int64_t
 cf_atomic64_cas(cf_atomic64 *a, int64_t b, int64_t x)
@@ -154,6 +169,8 @@ cf_atomic64_addunless(cf_atomic64 *a, int64_t b, int64_t x)
 	return(cur != b);
 }
 
+#endif
+
 #endif // uint64
 
 #ifdef HAS_ATOMIC_32
@@ -167,13 +184,23 @@ cf_atomic32_add(cf_atomic32 *a, int32_t b)
 {
 	int32_t i = b;
 
+#ifndef CF_WINDOWS
 	__asm__ __volatile__ ("lock; xadd %0, %1" : "+r" (b), "+m" (*a) : : "memory");
+#else
+	b = _InterlockedExchangeAdd((volatile long *)a, b);
+#endif
 
 	return(b + i);
 }
 #define cf_atomic32_sub(a,b) (cf_atomic32_add((a), (0 - (b))))
 #define cf_atomic32_incr(a) (cf_atomic32_add((a), 1))
 #define cf_atomic32_decr(a) (cf_atomic32_add((a), -1))
+
+#ifndef CF_WINDOWS
+// This following section is not used by cl_libevent2 client.
+// Thus not ported for libevent2 windows client.
+// This also will help to clear out the sections which are no longer in use.
+// In case somebody wants them in windows environment, please be aware they not ported yet.
 
 static inline int32_t
 cf_atomic32_cas(cf_atomic32 *a, int32_t b, int32_t x)
@@ -238,6 +265,8 @@ cf_atomic32_addunless(cf_atomic32 *a, int32_t b, int32_t x)
 	return(cur != b);
 }
 
+#endif
+
 #endif // uint32
 
 #ifdef MARCH_i686
@@ -247,11 +276,14 @@ cf_atomic32_addunless(cf_atomic32 *a, int32_t b, int32_t x)
 #define cf_atomic_p_add(_a, _b) cf_atomic32_add(_a, _b)
 #define cf_atomic_p_incr(_a) cf_atomic32_add((_a), 1)
 #define cf_atomic_p_decr(_a) cf_atomic32_add((_a), -1)
+
+#ifndef CF_WINDOWS
 #define cf_atomic_p_cas(_a, _b, _x) cf_atomic32_cas(_a, _b, _x)
 #define cf_atomic_p_cas_m(_a, _b, _x) cf_atomic32_cas_m(_a, _b, _x)
 #define cf_atomic_p_fas(_a, _b) cf_atomic32_fas(_a, _b)
 #define cf_atomic_p_fas_m(_a, _b) cf_atomic32_fas_m(_a, _b)
 #define cf_atomic_p_addunless(_a, _b, _x) cf_atomic32_addunless(_a, _b, _x)
+#endif
 
 #define cf_atomic_int_get(_a) cf_atomic32_get(_a)
 #define cf_atomic_int_set(_a, _b) cf_atomic32_set(_a, _b)
@@ -259,11 +291,14 @@ cf_atomic32_addunless(cf_atomic32 *a, int32_t b, int32_t x)
 #define cf_atomic_int_sub(_a, _b) cf_atomic32_sub(_a, _b)
 #define cf_atomic_int_incr(_a) cf_atomic32_add((_a), 1)
 #define cf_atomic_int_decr(_a) cf_atomic32_add((_a), -1)
+
+#ifndef CF_WINDOWS
 #define cf_atomic_int_cas(_a, _b, _x) cf_atomic32_cas(_a, _b, _x)
 #define cf_atomic_int_cas_m(_a, _b, _x) cf_atomic32_cas_m(_a, _b, _x)
 #define cf_atomic_int_fas(_a, _b) cf_atomic32_fas(_a, _b)
 #define cf_atomic_int_fas_m(_a, _b) cf_atomic32_fas_m(_a, _b)
 #define cf_atomic_int_addunless(_a, _b, _x) cf_atomic32_addunless(_a, _b, _x)
+#endif
 
 #endif
 
@@ -276,11 +311,14 @@ cf_atomic32_addunless(cf_atomic32 *a, int32_t b, int32_t x)
 #define cf_atomic_p_add(_a, _b) cf_atomic64_add(_a, _b)
 #define cf_atomic_p_incr(_a) cf_atomic64_add((_a), 1)
 #define cf_atomic_p_decr(_a) cf_atomic64_add((_a), -1)
+
+#ifndef CF_WINDOWS
 #define cf_atomic_p_cas(_a, _b, _x) cf_atomic64_cas(_a, _b, _x)
 #define cf_atomic_p_cas_m(_a, _b, _x) cf_atomic64_cas_m(_a, _b, _x)
 #define cf_atomic_p_fas(_a, _b) cf_atomic64_fas(_a, _b)
 #define cf_atomic_p_fas_m(_a, _b) cf_atomic64_fas_m(_a, _b)
 #define cf_atomic_p_addunless(_a, _b, _x) cf_atomic64_addunless(_a, _b, _x)
+#endif
 
 #define cf_atomic_int_get(_a) cf_atomic64_get(_a)
 #define cf_atomic_int_set(_a, _b) cf_atomic64_set(_a, _b)
@@ -288,11 +326,14 @@ cf_atomic32_addunless(cf_atomic32 *a, int32_t b, int32_t x)
 #define cf_atomic_int_sub(_a, _b) cf_atomic64_sub(_a, _b)
 #define cf_atomic_int_incr(_a) cf_atomic64_add((_a), 1)
 #define cf_atomic_int_decr(_a) cf_atomic64_add((_a), -1)
+
+#ifndef CF_WINDOWS
 #define cf_atomic_int_cas(_a, _b, _x) cf_atomic64_cas(_a, _b, _x)
 #define cf_atomic_int_cas_m(_a, _b, _x) cf_atomic64_cas_m(_a, _b, _x)
 #define cf_atomic_int_fas(_a, _b) cf_atomic64_fas(_a, _b)
 #define cf_atomic_int_fas_m(_a, _b) cf_atomic64_fas_m(_a, _b)
 #define cf_atomic_int_addunless(_a, _b, _x) cf_atomic64_addunless(_a, _b, _x)
+#endif
 
 #endif
 
@@ -301,8 +342,14 @@ cf_atomic32_addunless(cf_atomic32 *a, int32_t b, int32_t x)
 
 // Knowledge taken from Linux's atomic_ops.h: for x64_64 though.
 
+#ifndef CF_WINDOWS
 #define smb_mb() asm volatile("mfence":::"memory")
+#else 
+#define smb_mb() _ReadWriteBarrier()
+#endif
 
+
+#ifndef CF_WINDOWS
 
 /* CF_BARRIER
  * All preceding memory accesses must commit before any following accesses */
@@ -315,3 +362,5 @@ cf_atomic32_addunless(cf_atomic32 *a, int32_t b, int32_t x)
 /* CF_BARRIER_WRITE
  * All preceding memory accesses must commit before any following accesses */
 #define CF_MEMORY_BARRIER_WRITE() __asm__ __volatile__ ("" : : : "memory")
+
+#endif

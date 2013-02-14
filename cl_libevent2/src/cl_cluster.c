@@ -295,7 +295,7 @@ cf_ll		cluster_ll;
 
 
 void
-cluster_timer_fn(int fd, short event, void *udata)
+cluster_timer_fn(evutil_socket_t fd, short event, void *udata)
 {
 	ev2citrusleaf_cluster *asc = (ev2citrusleaf_cluster *)udata;
 	uint64_t _s = cf_getms();
@@ -775,7 +775,7 @@ Done:
 // see if there's any new services
 
 void
-node_timer_fn(int fd, short event, void *udata)
+node_timer_fn(evutil_socket_t fd, short event, void *udata)
 {
 	cl_cluster_node *cn = (cl_cluster_node *)udata;
 	if (cn->MAGIC != CLUSTER_NODE_MAGIC) {

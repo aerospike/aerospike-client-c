@@ -130,7 +130,7 @@ info_make_request(cl_info_request *cir, char *names)
 
 
 void
-info_event_fn(int fd, short event, void *udata)
+info_event_fn(evutil_socket_t fd, short event, void *udata)
 {
 	cl_info_request *cir = (cl_info_request *)udata;
 	int rv;

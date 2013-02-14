@@ -95,7 +95,7 @@ int do_udf_user_write(int user_id) {
 	snprintf(lua_arg, sizeof(lua_arg), "%d,%s,%llu", campaign_id, action, (long long unsigned int)now);
 
 	// (2) set up udf to call
-	as_list * arglist = as_arglist_new(2);
+	as_list * arglist = as_arraylist_new(2, 8);
 	if (!arglist) {
 		citrusleaf_object_free(&o_key);		
 		fprintf(stderr, "can't create argument list\n");
@@ -184,7 +184,7 @@ int do_udf_user_read(int user_id) {
 	free(bins);
 
 	// randomly choose which campaigns to read from
-	as_list * arglist = as_arglist_new(2);
+	as_list * arglist = as_arraylist_new(2, 8);
 	if (!arglist) {
 		citrusleaf_object_free(&o_key);		
 		fprintf(stderr, "can't create udf_def\n");

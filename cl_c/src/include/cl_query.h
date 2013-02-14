@@ -45,6 +45,8 @@ typedef struct as_query {
     cf_vector   * ranges;    // Where
     cf_vector   * filters;
     cf_vector   * orderbys;
+	void        * udf;
+	byte          udf_op;
     int           limit;  
     uint64_t      job_id;
 } as_query;
@@ -78,6 +80,7 @@ int   as_query_where(as_query *query_obj, const char *binname, as_query_op, ...)
 int   as_query_where_function(as_query *query_obj, const char *finame, as_query_op, ...);
 int   as_query_filter(as_query *query_obj, const char *binname, as_query_op op, ...);
 int   as_query_orderby(as_query *query_obj, const char *binname, as_query_orderby_op order);
+cl_rv as_query_aggregate(as_query *query, const char *filename, const char *function, as_list *arglist);
 int   as_query_limit(as_query *query_obj, uint64_t limit);
 cl_rv as_query_foreach(cl_cluster *asc, const as_query *query_obj, as_query_cb cb, void *udata);
 

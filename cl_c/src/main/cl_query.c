@@ -31,6 +31,10 @@
 #include "citrusleaf/proto.h"
 #include "citrusleaf/cf_socket.h"
 #include "citrusleaf/cf_vector.h"
+#include "as_msgpack.h"
+#include "as_serializer.h"
+#include "as_list.h"
+#include "as_string.h"
 
 /******************************************************************************
  * TYPES
@@ -114,8 +118,6 @@ static int query_compile_orderby(cf_vector *filter_v, uint8_t *buf, int *sz_p) {
 static int query_compile_function(cf_vector *range_v, uint8_t *buf, int *sz_p) { return 0; }
 static int query_compile(const as_query * query, uint8_t **buf_r, size_t *buf_sz_r);
 static int do_query_monte(cl_cluster_node *node, const char *ns, const uint8_t *query_buf, size_t query_sz, as_query_cb cb, void *udata, bool isnbconnect);
-
-
 
 // query range field layout: contains - numranges, binname, start, end
 // 
@@ -333,7 +335,15 @@ static int query_compile(const as_query *query, uint8_t **buf_r, size_t *buf_sz_
         // TODO filter field
         // TODO orderby field
         // TODO limit field
-
+        if ( query->udf ) {
+			as_call *udf = (as_call *)query->udf;
+			msg_sz += sizeof(cl_msg_field) + as_string_len(udf->file);
+			msg_sz += sizeof(cl_msg_field) + as_string_len(udf->func);
+			msg_sz += sizeof(cl_msg_field) + udf->args->size;
+			msg_sz += sizeof(cl_msg_field) + 1;
+			n_fields += 4;
+		}
+		
     }
     
     
@@ -417,6 +427,49 @@ static int query_compile(const as_query *query, uint8_t **buf_r, size_t *buf_sz_
         cl_msg_swap_field(mf);
         mf = mf_tmp;
     }
+
+	if (query->udf) {
+
+		as_call *udf = (as_call *)query->udf;
+		mf->type = CL_MSG_FIELD_TYPE_UDF_OP;
+        mf->field_sz =  1 + 1;
+        memcpy(mf->data, &query->udf_op, 1);
+
+        mf_tmp = cl_msg_field_get_next(mf);
+        cl_msg_swap_field(mf);
+        mf = mf_tmp;
+
+		// Append filename to message fields
+		int len = 0;
+		len = as_string_len(udf->file) * sizeof(char);
+        mf->type = CL_MSG_FIELD_TYPE_UDF_FILENAME;
+        mf->field_sz =  len + 1;
+        memcpy(mf->data, as_string_tostring(udf->file), len);
+
+        mf_tmp = cl_msg_field_get_next(mf);
+        cl_msg_swap_field(mf);
+        mf = mf_tmp;
+
+		// Append function name to message fields
+		len = as_string_len(udf->func) * sizeof(char);
+        mf->type = CL_MSG_FIELD_TYPE_UDF_FUNCTION;
+        mf->field_sz =  len + 1;
+        memcpy(mf->data, as_string_tostring(udf->func), len);
+
+        mf_tmp = cl_msg_field_get_next(mf);
+        cl_msg_swap_field(mf);
+        mf = mf_tmp;
+
+        // Append arglist to message fields
+		len = udf->args->size * sizeof(char);
+        mf->type = CL_MSG_FIELD_TYPE_UDF_ARGLIST;
+        mf->field_sz = len + 1;
+        memcpy(mf->data, udf->args->data, len);
+
+        mf_tmp = cl_msg_field_get_next(mf);
+        cl_msg_swap_field(mf);
+        mf = mf_tmp;
+	}
 
     if (!buf) { 
         if (mbuf) {
@@ -807,6 +860,17 @@ void as_query_destroy(as_query *query) {
     if (query->orderbys) {
         cf_vector_destroy(query->orderbys);
     }
+
+	if (query->udf) {
+		as_call *udf = (as_call*)query->udf;
+		as_string_destroy(udf->file);
+		free(udf->file);
+		as_string_destroy(udf->func);
+		free(udf->func);
+		as_buffer_destroy(udf->args);
+		cf_free(udf->args);
+		cf_free(udf);
+	}
     free(query);
     query = NULL;
 }
@@ -912,6 +976,37 @@ cl_rv as_query_filter(as_query *query, const char *binname, as_query_op op, ...)
 cl_rv as_query_orderby(as_query *query, const char *binname, as_query_orderby_op op) {
     return CITRUSLEAF_OK;
 }
+
+typedef enum as_query_udf_op         { CL_QUERY_UDF, CL_QUERY_AGGREGATE, CL_QUERY_MR } as_query_udf_op;
+cl_rv generic_query_udf(as_query *query, const char *filename, const char *function, as_list *arglist) {
+	
+	as_call *udf = (as_call *)query->udf;
+    udf->file = as_string_new((char *) filename, true);
+    udf->func = as_string_new((char *) function, true);
+	udf->args = cf_malloc(sizeof(as_buffer));
+    as_buffer_init(udf->args);
+	as_serializer ser;
+    as_serializer_serialize(&ser, (as_val *) arglist, udf->args);
+	//as_serializer_destroy(ser);
+	return CITRUSLEAF_OK;
+}
+
+cl_rv as_query_aggregate(as_query *query, const char *filename, const char *function, as_list *arglist) {
+	if (!query->udf)
+		query->udf = cf_malloc(sizeof(as_call));
+	cl_rv rv = generic_query_udf(query, filename, function, arglist);
+	query->udf_op = CL_QUERY_AGGREGATE;
+	return rv;
+}
+
+cl_rv as_query_udf(as_query *query, const char *filename, const char *function, as_list *arglist) {
+	if (!query->udf)
+		query->udf = cf_malloc(sizeof(as_call));
+	cl_rv rv = generic_query_udf(query, filename, function, arglist);
+	query->udf_op = CL_QUERY_UDF;
+	return rv;
+}
+
 
 cl_rv as_query_limit(as_query *query, uint64_t limit) {
     return CITRUSLEAF_OK;    

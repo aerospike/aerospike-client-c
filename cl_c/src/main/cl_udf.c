@@ -4,6 +4,7 @@
  * ABOVE DOES NOT EVIDENCE ANY ACTUAL OR INTENDED PUBLICATION.
  ******************************************************************************/
 
+#include "citrusleaf.h"
 #include "citrusleaf-internal.h"
 #include "cl_udf.h"
 #include "cl_write.h"

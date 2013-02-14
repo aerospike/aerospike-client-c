@@ -31,7 +31,7 @@
 
 #define CLOCK_REALTIME				0
 #define CLOCK_MONOTONIC				1
-#define CLOCK_PROCESS_CPUTIME_ID		2
+#define CLOCK_PROCESS_CPUTIME_ID	2
 
 
 inline static LARGE_INTEGER

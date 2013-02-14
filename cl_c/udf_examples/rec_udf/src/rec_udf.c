@@ -123,6 +123,8 @@ int do_udf_bin_update_test() {
 	cl_bin *rsp_bins = NULL;
 	int     rsp_n_bins = 0;
 	as_result res;
+	as_result_init(&res);
+
 	as_list * arglist = as_arraylist_new(3, 8);	
 	// arg 1 -> bin name
 	as_list_add_string(arglist, "bin_to_change");
@@ -141,7 +143,8 @@ int do_udf_bin_update_test() {
 	char *res_str = as_val_tostring(res.value); 
 	LOG("%s: %s", res.is_success ? "SUCCESS" : "FAILURE", res_str);
 	free(res_str);
-	as_val_destroy(res.value);
+
+	as_result_destroy(&res);
 	as_val_destroy(arglist);
 	arglist = NULL;
 
@@ -246,13 +249,16 @@ int do_udf_trim_bin_test() {
 		as_list_add_string(arglist, "20");
 
 		as_result res;
+		as_result_init(&res);
 		int rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
 				g_config->package_name, "do_trim_bin", arglist, g_config->timeout_ms, &res);  
 
 		char *res_str = as_val_tostring(res.value); 
 		LOG("%s: %s", res.is_success ? "SUCCESS" : "FAILURE", res_str);
-		as_val_destroy(res.value);
 		free(res_str);
+
+		as_result_destroy(&res);
+
 
 		if (rsp != CITRUSLEAF_OK) {
 			citrusleaf_object_free(&o_key);	
@@ -352,6 +358,7 @@ int do_udf_add_bin_test() {
 	cl_bin *rsp_bins = NULL;
 	int     rsp_n_bins = 0;
 	as_result res;
+	as_result_init(&res);
 	uint32_t cl_gen;
 
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
@@ -361,7 +368,7 @@ int do_udf_add_bin_test() {
 	char *res_str = as_val_tostring(res.value); 
 	LOG("%s: %s", res.is_success ? "SUCCESS" : "FAILURE", res_str);
 	free(res_str);
-	as_val_destroy(res.value);
+	as_result_destroy(&res);
 	
 	if (rsp != CITRUSLEAF_OK) {
 		LOG("failed running udf rsp=%d",rsp);
@@ -439,14 +446,15 @@ int do_udf_copy_record_test() {
 	int     rsp_n_bins = 0;
 	uint32_t cl_gen;
 	as_result res;
+	as_result_init(&res);
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
 			g_config->package_name, "do_copy_record", NULL, 
 			g_config->timeout_ms, &res);  
 	
 	char * res_str = as_val_tostring(res.value);	
 	LOG("%s: %s", res.is_success ? "SUCCESS" : "FAILURE", res_str);
-	as_val_destroy(res.value);
 	free(res_str);
+	as_result_destroy(&res);
 	
 	if (rsp != CITRUSLEAF_OK) {
 		citrusleaf_object_free(&o_key);		
@@ -523,6 +531,7 @@ int do_udf_create_record_test() {
 	int     rsp_n_bins = 0;
 	uint32_t cl_gen;
 	as_result res;
+	as_result_init(&res);
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
 			g_config->package_name, "do_add_record", NULL, 
 			g_config->timeout_ms, &res);  
@@ -530,7 +539,7 @@ int do_udf_create_record_test() {
 	char *res_str = as_val_tostring(res.value); 
 	LOG("%s: %s", res.is_success ? "SUCCESS" : "FAILURE", res_str);
 	free(res_str);
-	as_val_destroy(res.value);
+	as_result_destroy(&res);
 	
 	if (rsp != CITRUSLEAF_OK) {
 		LOG("failed running udf = %d",rsp);
@@ -603,13 +612,14 @@ int do_udf_delete_record_test() {
 	cl_bin *rsp_bins = NULL;
 	int     rsp_n_bins = 0;
 	as_result res;
+	as_result_init(&res);
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
 			g_config->package_name, "do_delete_record", NULL, 
 			g_config->timeout_ms, &res);  
 	char *res_str = as_val_tostring(res.value); 
 	LOG("%s: %s", res.is_success ? "SUCCESS" : "FAILURE", res_str);
 	free(res_str);
-	as_val_destroy(res.value);
+	as_result_destroy(&res);
 
 	if (rsp != CITRUSLEAF_OK) {
 		citrusleaf_object_free(&o_key);		
@@ -671,6 +681,7 @@ int do_udf_read_bins_test() {
 
 	// (2) call udf_record_apply - "do_read1_record" function in udf_unit_test.lua 
 	as_result res;
+	as_result_init(&res);
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
 			g_config->package_name, "do_read1_record", NULL, 
 			g_config->timeout_ms, &res); 
@@ -679,7 +690,7 @@ int do_udf_read_bins_test() {
 	if (rsp != CITRUSLEAF_OK) {
 		LOG("failed citrusleaf_run_udf rsp=%d",rsp);
 	}
-	as_val_destroy(res.value);
+	as_result_destroy(&res);
 	free(res_str);
 	citrusleaf_object_free(&o_key);		
 	return 0;
@@ -702,6 +713,7 @@ int do_udf_noop_test() {
 	cl_bin *rsp_bins = NULL;
 	int     rsp_n_bins = 0;
 	as_result res;
+	as_result_init(&res);
 	int rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
 			g_config->package_name, "do_noop_function", NULL, 
 			g_config->timeout_ms, &res); 
@@ -709,7 +721,7 @@ int do_udf_noop_test() {
 	char *res_str = as_val_tostring(res.value); 
 	LOG("%s: %s", res.is_success ? "SUCCESS" : "FAILURE", res_str);
 	free(res_str);
-	as_val_destroy(res.value);
+	as_result_destroy(&res);
 	if (rsp != CITRUSLEAF_OK) {
 		LOG("failed citrusleaf_run_udf rsp=%d",rsp);
 		return -1;
@@ -764,6 +776,7 @@ int do_udf_delete_bin_test() {
 	int     rsp_n_bins = 0;
 	uint32_t cl_gen;
 	as_result res;
+	as_result_init(&res);
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
 			g_config->package_name, "do_delete_bin", NULL, 
 			g_config->timeout_ms, &res);  
@@ -775,6 +788,7 @@ int do_udf_delete_bin_test() {
 		ret = -1;
 		goto Cleanup;
 	}
+	as_result_destroy(&res);
 
 	// (3) verify bin is deleted
 	rsp = citrusleaf_get_all(g_config->asc, g_config->ns, g_config->set, &o_key, &rsp_bins, &rsp_n_bins, g_config->timeout_ms, &cl_gen);  
@@ -834,6 +848,7 @@ int do_udf_bin_type_test() {
 	int     rsp_n_bins = 0;
 	uint32_t cl_gen;
 	as_result res;
+	as_result_init(&res);
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
 			g_config->package_name, "do_bin_types", NULL, 
 			g_config->timeout_ms, &res);  
@@ -846,6 +861,7 @@ int do_udf_bin_type_test() {
 		ret = -1;
 		goto Cleanup;
 	}
+	as_result_destroy(&res);
 
 	// (2) verify each bin type 
 	rsp = citrusleaf_get_all(g_config->asc, g_config->ns, g_config->set, &o_key, &rsp_bins, &rsp_n_bins, g_config->timeout_ms, &cl_gen);  
@@ -938,12 +954,13 @@ int do_udf_long_bindata_test() {
 		cl_bin *rsp_bins = NULL;
 		int     rsp_n_bins = 0;
 		as_result res;
+		as_result_init(&res);
 		rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
 				g_config->package_name,"game_double_str", NULL, g_config->timeout_ms, &res);  
 
 		char *res_str = as_val_tostring(res.value); 
 		LOG("Iteration %d: %s: %s", i, res.is_success ? "SUCCESS" : "FAILURE", res_str);
-		as_val_destroy(res.value);
+		as_result_destroy(&res);
 		free(res_str);
 
 		if (rsp != CITRUSLEAF_OK) {
@@ -1007,13 +1024,14 @@ int do_udf_long_biname_test() {
 	cl_bin *rsp_bins = NULL;
 	int     rsp_n_bins = 0;
 	as_result res;
+	as_result_init(&res);
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
 			g_config->package_name,"do_long_binname", NULL, g_config->timeout_ms, &res);  
 
 	char *res_str = as_val_tostring(res.value); 
 	LOG("Citrusleaf udf apply %s: %s", res.is_success ? "SUCCESS" : "FAILURE", res_str);
 	free(res_str);
-	as_val_destroy(res.value);
+	as_result_destroy(&res);
 
 	if (rsp != CITRUSLEAF_OK) {
 		LOG("failed citrusleaf_run_udf rsp=%d",rsp);
@@ -1072,13 +1090,14 @@ int do_udf_too_many_bins_test() {
 
 	// (1) set up stored procedure which will insert lot of bins
 	as_result res;
+	as_result_init(&res);
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
 			g_config->package_name,"do_too_many_bins", NULL, g_config->timeout_ms, &res);  
 
 	char *res_str = as_val_tostring(res.value); 
 	LOG("Citrusleaf udf apply %s: %s", res.is_success ? "SUCCESS" : "FAILURE", res_str);
 	free(res_str);
-	as_val_destroy(res.value);
+	as_result_destroy(&res);
 
 	if (rsp != CITRUSLEAF_OK) {
 		LOG("citrusleaf_run_udf failed as rsp=%d",rsp);
@@ -1096,13 +1115,14 @@ int do_udf_lua_functional_test() {
 	cl_object o_key;
 	citrusleaf_object_init_str(&o_key,keyStr);		
 	as_result res;
+	as_result_init(&res);
 	int rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
 			g_config->package_name, "do_lua_functional_test", NULL, 
 			g_config->timeout_ms, &res);  
 
 	char *res_str = as_val_tostring(res.value); 
 	LOG("Citrusleaf udf apply %s: %s", res.is_success ? "SUCCESS" : "FAILURE", res_str);
-	as_val_destroy(res.value);
+	as_result_destroy(&res);
 	free(res_str);
 
 	if (rsp != CITRUSLEAF_OK) {
@@ -1130,7 +1150,7 @@ int do_udf_return_type_test() {
 	as_list * arglist = NULL;
 
 	as_result res;
-	as_result_tofailure(&res,NULL);
+	as_result_init(&res);
 
 	/**
 	 * NONE
@@ -1161,7 +1181,7 @@ int do_udf_return_type_test() {
 	}
 
 	as_val_destroy(arglist);
-	as_val_destroy(res.value);
+
 	as_result_destroy(&res);
 
 
@@ -1171,6 +1191,8 @@ int do_udf_return_type_test() {
 
 	arglist = as_arraylist_new(1, 8);	
 	as_list_add_string(arglist, "string_primitive");
+
+	as_result_init(&res);
 
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
 			g_config->package_name,"do_return_types", arglist, g_config->timeout_ms, &res);  
@@ -1202,7 +1224,7 @@ int do_udf_return_type_test() {
 	}
 
 	as_val_destroy(arglist);
-	as_val_destroy(res.value);
+
 	as_result_destroy(&res);
 	
 
@@ -1248,6 +1270,8 @@ int do_udf_return_type_test() {
 	arglist = as_arraylist_new(1, 8);	
 	as_list_add_string(arglist, "n_int_primitive");
 
+	as_result_init(&res);
+
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
 			g_config->package_name,"do_return_types", arglist, g_config->timeout_ms, &res);  
 	
@@ -1272,7 +1296,7 @@ int do_udf_return_type_test() {
 	}
 
 	as_val_destroy(arglist);
-	as_val_destroy(res.value);
+
 	as_result_destroy(&res);
 
 	/**
@@ -1281,6 +1305,8 @@ int do_udf_return_type_test() {
 
 	arglist = as_arraylist_new(1, 8);	
 	as_list_add_string(arglist, "bin_array");
+
+	as_result_init(&res);
 
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
 			g_config->package_name,"do_return_types", arglist, g_config->timeout_ms, &res);  
@@ -1307,7 +1333,7 @@ int do_udf_return_type_test() {
 	}
 
 	as_val_destroy(arglist);
-	as_val_destroy(res.value);
+
 	as_result_destroy(&res);
 
 
@@ -1317,6 +1343,7 @@ int do_udf_return_type_test() {
 
 	arglist = as_arraylist_new(1, 8);	
 	as_list_add_string(arglist, "bin_nested_list");
+	as_result_init(&res);
 
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
 			g_config->package_name,"do_return_types", arglist, g_config->timeout_ms, &res);  
@@ -1417,7 +1444,7 @@ int do_udf_return_type_test() {
 	}
 
 	as_val_destroy(arglist);
-	as_val_destroy(res.value);
+
 	as_result_destroy(&res);
 
 
@@ -1427,6 +1454,8 @@ int do_udf_return_type_test() {
 
 	arglist = as_arraylist_new(1, 8);	
 	as_list_add_string(arglist, "bin_map");
+
+	as_result_init(&res);
 
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
 			g_config->package_name,"do_return_types", arglist, g_config->timeout_ms, &res);  
@@ -1516,7 +1545,6 @@ int do_udf_return_type_test() {
 	}
 
 	as_val_destroy(arglist);
-	as_val_destroy(res.value);
 	as_result_destroy(&res);
 
 	citrusleaf_object_free(&o_key);		
@@ -1530,8 +1558,6 @@ int do_udf_undefined_global() {
 	char *keyStr = "key_badlua";
 	cl_object o_key;
 	citrusleaf_object_init_str(&o_key,keyStr);		
-	
-
 
 	cl_bin bins[1];
 	strcpy(bins[0].bin_name, "a_bin");
@@ -1546,6 +1572,7 @@ int do_udf_undefined_global() {
 	
 	// (1) Call a lua function that generates a runtime error
 	as_result res;
+	as_result_init(&res);
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
 		g_config->package_name, "do_undefined_global", NULL, 
 		g_config->timeout_ms, &res);  
@@ -1556,7 +1583,8 @@ int do_udf_undefined_global() {
 	char *res_str = as_val_tostring(res.value); 
 	LOG("%s: %s", res.is_success ? "SUCCESS" : "FAILURE", res_str);
 	free(res_str);
-	as_val_destroy(res.value);
+
+	as_result_destroy(&res);
 
 	citrusleaf_object_free(&o_key);
 		
@@ -1786,6 +1814,7 @@ int *game_create_orders()
 int game_execute_udf(cl_object *key, const char *udf_name){
 	cl_rv 		rv;
 	as_result res;
+	as_result_init(&res);
 	rv = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, ORDER_SET, key,
 			GREE_FUNCS,
 			udf_name,
@@ -1800,6 +1829,7 @@ int game_execute_udf(cl_object *key, const char *udf_name){
 		LOG("Executed %s on: %ld Return code %d", udf_name, key->u.i64, rv);
 		LOG("%s: %s", res.is_success ? "SUCCESS" : "FAILURE", as_val_tostring(res.value));
 	}
+	as_result_destroy(&res);
 	return rv;
 }
 

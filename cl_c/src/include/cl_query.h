@@ -29,6 +29,7 @@
 #include "cl_sindex.h"
 #include "as_rec.h"
 #include "as_result.h"
+#include "as_stream.h"
 
 /******************************************************************************
  * TYPES
@@ -46,12 +47,13 @@ typedef struct as_query {
     cf_vector   * filters;
     cf_vector   * orderbys;
 	void        * udf;
+	void        * res_streamq;
 	byte          udf_op;
     int           limit;  
     uint64_t      job_id;
 } as_query;
 
-typedef struct as_query_cb_record_t {
+typedef struct as_query_response_record_t {
 	char        * ns;
 	cf_digest   * keyd;
 	char        * set;
@@ -59,11 +61,9 @@ typedef struct as_query_cb_record_t {
 	uint32_t      record_ttl;
 	cl_bin      * bins;
 	int           n_bins;
-	bool          is_last;
-	void        * udata;
-} as_query_cb_rec;
+} as_query_response_rec;
 
-typedef int (* as_query_cb) (as_query_cb_rec *rec);
+typedef int (* as_query_cb) (as_query_response_rec *rec, void *udata);
 
 
 /******************************************************************************
@@ -82,7 +82,7 @@ int   as_query_filter(as_query *query_obj, const char *binname, as_query_op op, 
 int   as_query_orderby(as_query *query_obj, const char *binname, as_query_orderby_op order);
 cl_rv as_query_aggregate(as_query *query, const char *filename, const char *function, as_list *arglist);
 int   as_query_limit(as_query *query_obj, uint64_t limit);
-cl_rv as_query_foreach(cl_cluster *asc, const as_query *query_obj, as_query_cb cb, void *udata);
+cl_rv as_query_foreach(cl_cluster *asc, const as_query *query_obj, as_query_cb cb, void *udata, as_stream *s);
 
 /*
  * Init and destroy for client query environment. Should be called for once per client

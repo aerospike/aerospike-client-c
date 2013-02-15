@@ -162,14 +162,14 @@ cl_rv citrusleaf_udf_record_apply(cl_cluster * cl, const char * ns, const char *
     cl_write_parameters_set_default(&wp);
     wp.timeout_ms = timeout_ms;
 
-    cl_bin * bins = NULL;
-    int nbins = 0;
+    cl_bin *bins = 0;
+    int n_bins = 0;
 
     // print_buffer(&args);
 
     rv = do_the_full_monte( 
         cl, 0, CL_MSG_INFO2_WRITE, 0, 
-        ns, set, key, 0, &bins, CL_OP_WRITE, 0, &nbins, 
+        ns, set, key, 0, &bins, CL_OP_WRITE, 0, &n_bins, 
         NULL, &wp, &trid, NULL, &call
     );
 
@@ -177,26 +177,29 @@ cl_rv citrusleaf_udf_record_apply(cl_cluster * cl, const char * ns, const char *
 
 	if (! (rv == CITRUSLEAF_OK || rv == CITRUSLEAF_FAIL_UDF_BAD_RESPONSE)) {
     	as_result_setfailure(res, (as_val *) as_string_new("None UDF failure",false));
-    } else if ( nbins == 1 && bins != NULL ) {
-        cl_bin bin = *bins;
+    } else if ( n_bins == 1  ) {
+
+        cl_bin *bin = &bins[0];
 
         as_val * val = NULL;
 
-        switch( bin.object.type ) {
+        switch( bin->object.type ) {
             case CL_INT : {
-                val = (as_val *) as_integer_new(bin.object.u.i64);
+                val = (as_val *) as_integer_new(bin->object.u.i64);
                 break;
             }
             case CL_STR : {
-                val = (as_val *) as_string_new(bin.object.u.str, true /*ismalloc*/);
+                // steal the pointer from the object into the val
+                val = (as_val *) as_string_new(strdup(bin->object.u.str), true /*ismalloc*/);
                 break;
             }
             case CL_LIST :
             case CL_MAP : {
+                // use a temporary buffer, which doesn't need to be destroyed
                 as_buffer buf = {
-                    .capacity = (uint32_t) bin.object.sz,
-                    .size = (uint32_t) bin.object.sz,
-                    .data = (char *) bin.object.u.blob
+                    .capacity = (uint32_t) bin->object.sz,
+                    .size = (uint32_t) bin->object.sz,
+                    .data = (char *) bin->object.u.blob
                 };
                 // print_buffer(&buf);
                 as_serializer_deserialize(&ser, &buf, &val);
@@ -209,10 +212,10 @@ cl_rv citrusleaf_udf_record_apply(cl_cluster * cl, const char * ns, const char *
         }
 
         if ( val ) {
-            if ( strcmp(bin.bin_name,"FAILURE") == 0 ) {
+            if ( strcmp(bin->bin_name,"FAILURE") == 0 ) {
                 as_result_setfailure(res, val);
             }
-            else if ( strcmp(bin.bin_name,"SUCCESS") == 0 ) {
+            else if ( strcmp(bin->bin_name,"SUCCESS") == 0 ) {
                 as_result_setsuccess(res, val);
             }
             else {
@@ -222,9 +225,15 @@ cl_rv citrusleaf_udf_record_apply(cl_cluster * cl, const char * ns, const char *
         else {
             as_result_setfailure(res, (as_val *) as_string_new("Invalid response. (2)",false/*ismalloc*/));
         }
+
     }
     else {
         as_result_setfailure(res, (as_val *) as_string_new("Invalid response. (3)",false/*ismalloc*/));
+    }
+
+    if (bins) {
+        citrusleaf_bins_free(bins, n_bins);
+        free(bins);
     }
 
     as_serializer_destroy(&ser);

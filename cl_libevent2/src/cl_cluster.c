@@ -261,7 +261,7 @@ cluster_partitions_process(ev2citrusleaf_cluster *asc, cl_cluster_node *cn, char
 
 			// It's coming over the wire, so validate it.
 			char *ns = trim(namespace_s);
-			int len = strlen(ns);
+			int len = (int)strlen(ns);
 
 			if (len == 0 || len > 31) {
 				cf_warn("Invalid partition namespace %s", ns);
@@ -636,7 +636,7 @@ node_replicas_fn(int return_value, char *response, size_t response_len, void *ud
 
 	// remove all current values, then add up-to-date values
 	cl_partition_table_remove_node(cn->asc, cn);
-	cf_atomic_int_set(&cn->partition_last_req_ms, cf_getms());
+	cf_atomic_int_set(&cn->partition_last_req_ms, (cf_atomic_int_t)cf_getms());
 
 	// reminder: returned list is name1\tvalue1\nname2\tvalue2\n
 	cf_vector_define(lines_v, sizeof(void *), 0);
@@ -731,7 +731,7 @@ node_timer_infocb_fn(int return_value, char *response, size_t response_len, void
 					if (cf_atomic_int_get(this_cn->partition_last_req_ms) + CL_NODE_PARTITION_MAX_MS < cf_getms() ) {
 						cf_info("making partition request of node %s", this_cn->name);
 
-						cf_atomic_int_set(&this_cn->partition_last_req_ms, now);
+						cf_atomic_int_set(&this_cn->partition_last_req_ms, (cf_atomic_int_t)now);
 					
 						if (cf_vector_size(&this_cn->sockaddr_in_v) > 0) {
 	

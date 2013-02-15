@@ -320,13 +320,13 @@ write_fields(uint8_t *buf, char *ns, int ns_len, char *set, int set_len, ev2citr
 		mf->type = CL_MSG_FIELD_TYPE_KEY;
 		// make a function call here, similar to our prototype code in the server
 		if (key->type == CL_STR) {
-			mf->field_sz = key->size + 2;
+			mf->field_sz = (uint32_t)key->size + 2;
 			uint8_t *fd = (uint8_t *) &mf->data;
 			fd[0] = CL_PARTICLE_TYPE_STRING;
 			memcpy(&fd[1], key->u.str, key->size);
 		}
 		else if (key->type == CL_BLOB) {
-			mf->field_sz = key->size + 2;
+			mf->field_sz = (uint32_t)key->size + 2;
 			uint8_t *fd = (uint8_t *) &mf->data;
 			fd[0] = CL_PARTICLE_TYPE_BLOB;
 			memcpy(&fd[1], key->u.blob, key->size);
@@ -377,17 +377,17 @@ value_to_op_int(int64_t value, uint8_t *data)
 	}
 	
 	if (value <= 0x7F) {
-		*data = value;
+		*data = (uint8_t)value;
 		return(1);
 	}
 	
 	if (value <= 0x7FFF) {
-		*(uint16_t *)data = htons(value);
+		*(uint16_t *)data = htons((uint16_t)value);
 		return(2);
 	}
 
 	// what remains is 4 byte representation	
-	*(uint32_t *)data = htonl(value);
+	*(uint32_t *)data = htonl((uint32_t)value);
 	return(4);
 }
 
@@ -395,7 +395,7 @@ value_to_op_int(int64_t value, uint8_t *data)
 extern int
 ev2citrusleaf_calculate_digest(const char *set, const ev2citrusleaf_object *key, cf_digest *digest)
 {
-	int set_len = set ? strlen(set) : 0;
+	int set_len = set ? (int)strlen(set) : 0;
 	
 	// make the key as it's laid out for digesting
 	// THIS IS A STRIPPED DOWN VERSION OF THE CODE IN write_fields ABOVE
@@ -521,7 +521,7 @@ value_to_op_get_size(ev2citrusleaf_object *v, size_t *sz)
 void
 bin_to_op(int operation, ev2citrusleaf_bin *v, cl_msg_op *op)
 {
-	int	bin_len = strlen(v->bin_name);
+	int	bin_len = (int)strlen(v->bin_name);
 	op->op_sz = sizeof(cl_msg_op) + bin_len - sizeof(uint32_t);
 	op->op = operation;
 	op->version = 0;
@@ -544,12 +544,12 @@ bin_to_op(int operation, ev2citrusleaf_bin *v, cl_msg_op *op)
 				op->op_sz += value_to_op_int(v->object.u.i64, data);
 				break;
 			case CL_STR:
-				op->op_sz += v->object.size;
+				op->op_sz += (uint32_t)v->object.size;
 				op->particle_type = CL_PARTICLE_TYPE_STRING;
 				memcpy(data, v->object.u.str, v->object.size);
 				break;
 			case CL_BLOB:
-				op->op_sz += v->object.size;
+				op->op_sz += (uint32_t)v->object.size;
 				op->particle_type = CL_PARTICLE_TYPE_BLOB;
 				memcpy(data, v->object.u.blob, v->object.size);
 				break;
@@ -564,7 +564,7 @@ bin_to_op(int operation, ev2citrusleaf_bin *v, cl_msg_op *op)
 void
 operation_to_op(ev2citrusleaf_operation *v, cl_msg_op *op)
 {
-	int	bin_len = strlen(v->bin_name);
+	int	bin_len = (int)strlen(v->bin_name);
 	op->op_sz = sizeof(cl_msg_op) + bin_len - sizeof(uint32_t);
 	op->name_sz = bin_len;
 	memcpy(op->name, v->bin_name, bin_len);
@@ -599,12 +599,12 @@ operation_to_op(ev2citrusleaf_operation *v, cl_msg_op *op)
 				op->op_sz += value_to_op_int(v->object.u.i64, data);
 				break;
 			case CL_STR:
-				op->op_sz += v->object.size;
+				op->op_sz += (uint32_t)v->object.size;
 				op->particle_type = CL_PARTICLE_TYPE_STRING;
 				memcpy(data, v->object.u.str, v->object.size);
 				break;
 			case CL_BLOB:
-				op->op_sz += v->object.size;
+				op->op_sz += (uint32_t)v->object.size;
 				op->particle_type = CL_PARTICLE_TYPE_BLOB;
 				memcpy(data, v->object.u.blob, v->object.size);
 				break;
@@ -627,8 +627,8 @@ compile(int info1, int info2, char *ns, char *set, ev2citrusleaf_object *key, cf
 	ev2citrusleaf_bin *values, int n_values,  uint8_t **buf_r, size_t *buf_size_r, cf_digest *digest_r)
 {
 	// I hate strlen
-	int		ns_len = strlen(ns);
-	int		set_len = set ? strlen(set) : 0;
+	int		ns_len = (int)strlen(ns);
+	int		set_len = set ? (int)strlen(set) : 0;
 	int		i;
 	
 	// determine the size
@@ -718,8 +718,8 @@ compile_ops(char *ns, char *set, ev2citrusleaf_object *key, cf_digest *digest,
 	int info2 = 0;
 	
 	// I hate strlen
-	int		ns_len = strlen(ns);
-	int		set_len = strlen(set);
+	int		ns_len = (int)strlen(ns);
+	int		set_len = (int)strlen(set);
 	int		i;
 	
 	// determine the size
@@ -1085,7 +1085,7 @@ int
 ev2citrusleaf_is_connected(int fd)
 {
 	uint8_t buf[8];
-	int rv = recv(fd, (char*)buf, sizeof(buf), MSG_PEEK | MSG_DONTWAIT | MSG_NOSIGNAL);
+	int rv = recv(fd, (cf_socket_data_t*)buf, sizeof(buf), MSG_PEEK | MSG_DONTWAIT | MSG_NOSIGNAL);
 	if (rv == 0) {
 		cf_debug("connected check: found disconnected fd %d", fd);
 		return(CONNECTED_NOT);
@@ -1127,7 +1127,7 @@ ev2citrusleaf_event(evutil_socket_t fd, short event, void *udata)
 
 	if (event & EV_WRITE) {
 		if (req->wr_buf_pos < req->wr_buf_size) {
-			rv = send(fd, (char*)&req->wr_buf[req->wr_buf_pos], req->wr_buf_size - req->wr_buf_pos,MSG_DONTWAIT | MSG_NOSIGNAL);
+			rv = send(fd, (cf_socket_data_t*)&req->wr_buf[req->wr_buf_pos], (cf_socket_size_t)(req->wr_buf_size - req->wr_buf_pos), MSG_DONTWAIT | MSG_NOSIGNAL);
 
 			if (rv > 0) {
 				req->wr_buf_pos += rv;
@@ -1150,7 +1150,7 @@ ev2citrusleaf_event(evutil_socket_t fd, short event, void *udata)
 
 	if (event & EV_READ) {
 		if (req->rd_header_pos < sizeof(cl_proto) ) {
-			rv = recv(fd, (char*)&req->rd_header_buf[req->rd_header_pos], sizeof(cl_proto) - req->rd_header_pos, MSG_DONTWAIT | MSG_NOSIGNAL);
+			rv = recv(fd, (cf_socket_data_t*)&req->rd_header_buf[req->rd_header_pos], (cf_socket_size_t)(sizeof(cl_proto) - req->rd_header_pos), MSG_DONTWAIT | MSG_NOSIGNAL);
 
 			if (rv > 0) {
 				req->rd_header_pos += rv;
@@ -1189,7 +1189,7 @@ ev2citrusleaf_event(evutil_socket_t fd, short event, void *udata)
 				req->rd_buf_size = proto->sz;
 			}
 			if (req->rd_buf_pos < req->rd_buf_size) {
-				rv = recv(fd, (char*)&req->rd_buf[req->rd_buf_pos], req->rd_buf_size - req->rd_buf_pos,MSG_DONTWAIT | MSG_NOSIGNAL);
+				rv = recv(fd, (cf_socket_data_t*)&req->rd_buf[req->rd_buf_pos], (cf_socket_size_t)(req->rd_buf_size - req->rd_buf_pos), MSG_DONTWAIT | MSG_NOSIGNAL);
 
 				if (rv > 0) {
 					req->rd_buf_pos += rv;

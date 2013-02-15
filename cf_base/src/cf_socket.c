@@ -441,7 +441,7 @@ int
 cf_socket_create_nb()
 {
 	// Create the socket.
-	int fd = socket(AF_INET, SOCK_STREAM, 0);
+	SOCKET fd = socket(AF_INET, SOCK_STREAM, 0);
 
 	if (-1 == fd) {
 		cf_warn("could not allocate socket, errno %d", errno);
@@ -451,7 +451,7 @@ cf_socket_create_nb()
     // Make the socket nonblocking.
 	u_long iMode = 1;
 
-	if (ioctlsocket(fd, FIONBIO, &iMode) != NO_ERROR) {
+	if (NO_ERROR != ioctlsocket(fd, FIONBIO, &iMode)) {
 		cf_info("could not connect nonblocking socket %d, errno %d", fd, errno);
 		return -1;
 	}

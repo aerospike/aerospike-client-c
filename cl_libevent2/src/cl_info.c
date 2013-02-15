@@ -91,7 +91,7 @@ info_make_request(cl_info_request *cir, char *names)
 {
 	cir->wr_buf_size = sizeof(cl_proto);
 	if (names) {
-		uint32_t nameslen = strlen(names);
+		uint32_t nameslen = (uint32_t)strlen(names);
 		cir->wr_buf_size += nameslen;
 		if (names[nameslen-1] != '\n')
 			cir->wr_buf_size++;
@@ -141,7 +141,7 @@ info_event_fn(evutil_socket_t fd, short event, void *udata)
 
 	if (event & EV_WRITE) {
 		if (cir->wr_buf_pos < cir->wr_buf_size) {
-			rv = send(fd, (char*)&cir->wr_buf[cir->wr_buf_pos], cir->wr_buf_size - cir->wr_buf_pos, MSG_NOSIGNAL | MSG_DONTWAIT);
+			rv = send(fd, (cf_socket_data_t*)&cir->wr_buf[cir->wr_buf_pos], (cf_socket_size_t)(cir->wr_buf_size - cir->wr_buf_pos), MSG_NOSIGNAL | MSG_DONTWAIT);
 			if (rv > 0) {
 				cir->wr_buf_pos += rv;
 				if (cir->wr_buf_pos == cir->wr_buf_size) {
@@ -162,7 +162,7 @@ info_event_fn(evutil_socket_t fd, short event, void *udata)
 
 	if (event & EV_READ) {
 		if (cir->rd_header_pos < sizeof(cl_proto) ) {
-			rv = recv(fd, (char*)&cir->rd_header_buf[cir->rd_header_pos], sizeof(cl_proto) - cir->rd_header_pos, MSG_NOSIGNAL | MSG_DONTWAIT);
+			rv = recv(fd, (cf_socket_data_t*)&cir->rd_header_buf[cir->rd_header_pos], (cf_socket_size_t)(sizeof(cl_proto) - cir->rd_header_pos), MSG_NOSIGNAL | MSG_DONTWAIT);
 			if (rv > 0) {
 				cir->rd_header_pos += rv;
 			}				
@@ -192,7 +192,7 @@ info_event_fn(evutil_socket_t fd, short event, void *udata)
 				cir->rd_buf_size = proto->sz;
 			}
 			if (cir->rd_buf_pos < cir->rd_buf_size) {
-				rv = recv(fd, (char*)&cir->rd_buf[cir->rd_buf_pos], cir->rd_buf_size - cir->rd_buf_pos, MSG_NOSIGNAL | MSG_DONTWAIT);
+				rv = recv(fd, (cf_socket_data_t*)&cir->rd_buf[cir->rd_buf_pos], (cf_socket_size_t)(cir->rd_buf_size - cir->rd_buf_pos), MSG_NOSIGNAL | MSG_DONTWAIT);
 				if (rv > 0) {
 					cir->rd_buf_pos += rv;
 					if (cir->rd_buf_pos >= cir->rd_buf_size) {

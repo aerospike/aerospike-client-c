@@ -742,7 +742,7 @@ cl_batch_node_req_write_fields(cl_batch_node_req* _this, uint8_t* p_write,
 
 	// Write the namespace field.
 	mf->type = CL_MSG_FIELD_TYPE_NAMESPACE;
-	mf->field_sz = 1 + ns_len;
+	mf->field_sz = 1 + (uint32_t)ns_len;
 
 	memcpy(mf->data, ns, ns_len);
 
@@ -752,7 +752,7 @@ cl_batch_node_req_write_fields(cl_batch_node_req* _this, uint8_t* p_write,
 
 	// Write the digests field.
 	mf->type = CL_MSG_FIELD_TYPE_DIGEST_RIPE_ARRAY;
-	mf->field_sz = 1 + digests_size;
+	mf->field_sz = 1 + (uint32_t)digests_size;
 
 	cf_digest* p_digest = (cf_digest*)mf->data;
 
@@ -867,8 +867,9 @@ cl_batch_node_req_handle_send(cl_batch_node_req* _this)
 			return true;
 		}
 
-		int rv = send(_this->fd, (char*)&_this->wbuf[_this->wbuf_pos],
-				_this->wbuf_size - _this->wbuf_pos,
+		int rv = send(_this->fd,
+				(cf_socket_data_t*)&_this->wbuf[_this->wbuf_pos],
+				(cf_socket_size_t)(_this->wbuf_size - _this->wbuf_pos),
 				MSG_DONTWAIT | MSG_NOSIGNAL);
 
 		if (rv > 0) {
@@ -914,8 +915,9 @@ cl_batch_node_req_handle_recv(cl_batch_node_req* _this)
 		if (_this->hbuf_pos < sizeof(cl_proto)) {
 			// Read proto header.
 
-			int rv = recv(_this->fd, (char*)&_this->hbuf[_this->hbuf_pos],
-					sizeof(cl_proto) - _this->hbuf_pos,
+			int rv = recv(_this->fd,
+					(cf_socket_data_t*)&_this->hbuf[_this->hbuf_pos],
+					(cf_socket_size_t)(sizeof(cl_proto) - _this->hbuf_pos),
 					MSG_DONTWAIT | MSG_NOSIGNAL);
 
 			if (rv > 0) {
@@ -964,8 +966,9 @@ cl_batch_node_req_handle_recv(cl_batch_node_req* _this)
 				return true;
 			}
 
-			int rv = recv(_this->fd, (char*)&_this->rbuf[_this->rbuf_pos],
-					_this->rbuf_size - _this->rbuf_pos,
+			int rv = recv(_this->fd,
+					(cf_socket_data_t*)&_this->rbuf[_this->rbuf_pos],
+					(cf_socket_size_t)(_this->rbuf_size - _this->rbuf_pos),
 					MSG_DONTWAIT | MSG_NOSIGNAL);
 
 			if (rv > 0) {

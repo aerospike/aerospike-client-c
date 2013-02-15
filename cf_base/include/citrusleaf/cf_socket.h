@@ -23,6 +23,10 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 
+// Windows send() and recv() parameter types are different.
+#define cf_socket_data_t void
+#define cf_socket_size_t size_t
+
 #define cf_close(fd) (close(fd))
 
 //------------------------------------------------
@@ -50,6 +54,9 @@ cf_print_sockaddr_in(char *prefix, struct sockaddr_in *sa_in);
 
 #include <WinSock2.h>
 #include <Ws2tcpip.h>
+
+#define cf_socket_data_t char
+#define cf_socket_size_t int
 
 #define cf_close(fd) (closesocket(fd))
 

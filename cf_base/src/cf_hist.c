@@ -38,9 +38,9 @@ cf_bits_find_last_set_64(uint64_t v)
 {
 	uint64_t t;
 	if ((t = v >> 32))
-		return( cf_bits_find_last_set(t) + 32 );
+		return( cf_bits_find_last_set((uint32_t)t) + 32 );
 	else
-		return( cf_bits_find_last_set(v) );
+		return( cf_bits_find_last_set((uint32_t)v) );
 }
 
 

@@ -459,7 +459,7 @@ cf_socket_create_nb()
 	int f = 1;
 	setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char*)&f, sizeof(f));
 
-	return fd;
+	return (int)fd;
 }
 
 

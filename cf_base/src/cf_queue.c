@@ -166,7 +166,7 @@ cf_queue_resize(cf_queue *q, uint32_t new_sz)
 			return(-1);
 		}
 		// endsz is used uint8_ts in the old queue from the insert point to the end
-		uint32_t endsz = (q->allocsz - (q->read_offset % q->allocsz)) * q->elementsz;
+		uint32_t endsz = (uint32_t)((q->allocsz - (q->read_offset % q->allocsz)) * q->elementsz);
 		memcpy(&newq[0], CF_Q_ELEM_PTR(q, q->read_offset), endsz);
 		memcpy(&newq[endsz], &q->queue[0], (q->allocsz * q->elementsz) - endsz); 
 		

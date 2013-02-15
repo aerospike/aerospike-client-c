@@ -64,7 +64,7 @@ cf_client_rc_release_x(void *addr, bool autofree)
 		if (autofree)
 			free((void *)rc);
 
-	return(c);
+	return (cf_atomic_int_t)c;
 }
 
 

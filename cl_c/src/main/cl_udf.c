@@ -209,7 +209,7 @@ cl_rv citrusleaf_udf_record_apply(cl_cluster * cl, const char * ns, const char *
 
 	if (! (rv == CITRUSLEAF_OK || rv == CITRUSLEAF_FAIL_UDF_BAD_RESPONSE)) {
     	as_result_setfailure(res, (as_val *) as_string_new("None UDF failure",false));
-    } else if ( nbins == 1 && bins != NULL ) {
+    } else if ( n_bins == 1 && bins != NULL ) {
         cl_bin bin = *bins;
 		
 		as_val *val = citrusleaf_udf_bin_to_val(&ser, &bin);

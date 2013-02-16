@@ -46,21 +46,21 @@ typedef struct as_query {
     cf_vector   * ranges;    // Where
     cf_vector   * filters;
     cf_vector   * orderbys;
-	void        * udf;
-	void        * res_streamq;
-	byte          udf_op;
+    void        * udf;
+    void        * res_streamq;
+    byte          udf_op;
     int           limit;  
     uint64_t      job_id;
 } as_query;
 
 typedef struct as_query_response_record_t {
-	char        * ns;
-	cf_digest   * keyd;
-	char        * set;
-	uint32_t      generation;
-	uint32_t      record_ttl;
-	cl_bin      * bins;
-	int           n_bins;
+    char        * ns;
+    cf_digest   * keyd;
+    char        * set;
+    uint32_t      generation;
+    uint32_t      record_ttl;
+    cl_bin      * bins;
+    int           n_bins;
 } as_query_response_rec;
 
 typedef int (* as_query_cb) (as_query_response_rec *rec, void *udata);

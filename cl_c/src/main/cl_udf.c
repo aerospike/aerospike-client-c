@@ -163,7 +163,8 @@ as_val *citrusleaf_udf_bin_to_val(as_serializer *ser, cl_bin *bin) {
 	return val;
 }
 
-cl_rv citrusleaf_udf_record_apply(cl_cluster * cl, const char * ns, const char * set, const cl_object * key, const char * filename, const char * function, as_list * arglist, int timeout_ms, as_result * res) {
+cl_rv citrusleaf_udf_record_apply(cl_cluster * cl, const char * ns, const char * set, const cl_object * key, 
+    const char * filename, const char * function, as_list * arglist, int timeout_ms, as_result * res) {
 
     cl_rv rv = CITRUSLEAF_OK;
 
@@ -193,14 +194,14 @@ cl_rv citrusleaf_udf_record_apply(cl_cluster * cl, const char * ns, const char *
     cl_write_parameters_set_default(&wp);
     wp.timeout_ms = timeout_ms;
 
-    cl_bin * bins = NULL;
-    int nbins = 0;
+    cl_bin *bins = 0;
+    int n_bins = 0;
 
     // print_buffer(&args);
 
     rv = do_the_full_monte( 
         cl, 0, CL_MSG_INFO2_WRITE, 0, 
-        ns, set, key, 0, &bins, CL_OP_WRITE, 0, &nbins, 
+        ns, set, key, 0, &bins, CL_OP_WRITE, 0, &n_bins, 
         NULL, &wp, &trid, NULL, &call
     );
 
@@ -227,9 +228,15 @@ cl_rv citrusleaf_udf_record_apply(cl_cluster * cl, const char * ns, const char *
         else {
             as_result_setfailure(res, (as_val *) as_string_new("Invalid response. (2)",false/*ismalloc*/));
         }
+
     }
     else {
         as_result_setfailure(res, (as_val *) as_string_new("Invalid response. (3)",false/*ismalloc*/));
+    }
+
+    if (bins) {
+        citrusleaf_bins_free(bins, n_bins);
+        free(bins);
     }
 
     as_serializer_destroy(&ser);

@@ -256,6 +256,7 @@ worker_fn(void *udata)
 
 		// do the actual work
         as_result res;
+        as_result_init(&res);
 
         uint64_t start_time = cf_getms();
     	cl_rv rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, g_config->package_name, g_config->f_name, arglist, g_config->timeout_ms, &res);
@@ -265,6 +266,7 @@ worker_fn(void *udata)
 #endif
         as_val_destroy(arglist);
         arglist = NULL;
+        as_result_destroy(&res);
 
 		cf_histogram_insert_data_point(isRead ? g_read_histogram : g_write_histogram, start_time);		
 		

@@ -857,31 +857,23 @@ int as_query_init(as_query **query, const char *ns, const char *setname)
         return CITRUSLEAF_FAIL_CLIENT;
     }
     memset(*query, 0, sizeof(as_query));
+	(*query)->job_id = cf_get_rand64();
     if (setname) {
-        (*query)->setname = malloc(strlen(setname));
-        if (!(*query)->setname) goto Cleanup;
-        memcpy((*query)->setname,   setname,   strlen(setname));
+        (*query)->setname = strdup(setname);
     } else {
         (*query)->setname = NULL;
     }
 
     if (ns) {
-        (*query)->ns = malloc(strlen(ns));
-        if (!(*query)->ns) goto Cleanup;
-        memcpy((*query)->ns,   ns,   strlen(ns));
+        (*query)->ns = strdup(ns);
+		return 0;
     } else {
         (*query)->ns = NULL;
-    }
-
-
-    if (setname)   memcpy((*query)->ns,   ns,   strlen(ns));
-    (*query)->job_id = cf_get_rand64();
-    return 0;
-Cleanup:
-    if ((*query)->setname) free((*query)->setname);
-    if ((*query)->ns) free((*query)->ns);
-    free(*query);
-    return -1;
+    	if ((*query)->setname) free((*query)->setname);
+	    if ((*query)->ns) free((*query)->ns);
+    	free(*query);
+    	return -1;
+	}
 }
 
  void cl_range_destroy(query_range *range) {

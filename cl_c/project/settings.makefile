@@ -14,8 +14,8 @@ ROOT = $(CURDIR)
 NAME = $(shell basename $(ROOT))
 OS = $(shell uname)
 ARCH = $(shell arch)
-DISTRO_NAME = $(shell lsb_release -is)
-DISTRO_VERS = $(shell lsb_release -rs)
+#DISTRO_NAME = $(shell lsb_release -is)
+#DISTRO_VERS = $(shell lsb_release -rs)
 
 PROJECT = project
 MODULES = modules

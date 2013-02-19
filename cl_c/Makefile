@@ -117,10 +117,10 @@ modules-clean:
 ## 
 
 modules/common/$(TARGET_LIB)/libcf-shared.a:
-	$(MAKE) -e -C modules/common all MEM_COUNT=1
+	$(MAKE) -e -C modules/common libcf-shared.a MEM_COUNT=1
 
 modules/common/$(TARGET_LIB)/libcf-client.a:
-	$(MAKE) -e -C modules/common all MEM_COUNT=1
+	$(MAKE) -e -C modules/common libcf-client.a MEM_COUNT=1
 
 modules/common/$(TARGET_INCL)/*.h:
 	$(MAKE) -e -C modules/common prepare MEM_COUNT=1

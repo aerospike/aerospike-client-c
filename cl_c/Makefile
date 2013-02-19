@@ -21,10 +21,10 @@ INC_PATH += $(MSGPACK_PATH)/src
 
 INSTALL_LIB = /usr/lib
 
-# ifndef MSGPACK_PATH
+ifndef MSGPACK_PATH
 # $(warning *** env MSGPACK_PATH not set. Using modules/msgpack as default)
 MSGPACK_PATH := modules/msgpack
-# endif
+endif
 
 # ifndef JANSSON_PATH
 # $(error *** env JANSSON_PATH is not set. Please download, build and set JANSSON_PATH)
@@ -149,7 +149,7 @@ modules/msgpack/Makefile:
 	cd $(MSGPACK_PATH) && ./configure
 
 modules/msgpack/src/.libs/libmsgpackc.a: modules/msgpack/Makefile
-	cd $(MSGPACK_PATH) && make
+	cd $(MSGPACK_PATH) && make CFLAGS="-fPIC"
 
 .PHONY: modules/msgpack
 modules/msgpack: modules/msgpack/src/.libs/libmsgpackc.a

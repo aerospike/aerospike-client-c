@@ -133,7 +133,7 @@ modules/common: modules/common/$(TARGET_LIB)/libcf-shared.a modules/common/$(TAR
 ## 
 
 modules/mod-lua/$(TARGET_LIB)/libmod_lua.a:
-	$(MAKE) -e -C modules/mod-lua all MEM_COUNT=1
+	$(MAKE) -e -C modules/mod-lua libas_types.a MEM_COUNT=1
 
 modules/mod-lua/$(TARGET_INCL)/*.h:
 	$(MAKE) -e -C modules/mod-lua prepare MEM_COUNT=1

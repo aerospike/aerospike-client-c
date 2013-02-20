@@ -21,14 +21,20 @@ INC_PATH += $(MSGPACK_PATH)/src
 
 INSTALL_LIB = /usr/lib
 
-# ifndef MSGPACK_PATH
-# $(warning *** env MSGPACK_PATH not set. Using modules/msgpack as default)
+ifndef MSGPACK_PATH
+$(warning *** env MSGPACK_PATH not set. Using modules/msgpack as default)
 MSGPACK_PATH := modules/msgpack
-# endif
+endif
 
-# ifndef JANSSON_PATH
-# $(error *** env JANSSON_PATH is not set. Please download, build and set JANSSON_PATH)
-# endif
+ifndef JANSSON_PATH
+$(error *** env JANSSON_PATH is not set. Please download, build and set JANSSON_PATH)
+endif
+
+SUBMODULES = 
+SUBMODULES += $(MODULES)/common
+SUBMODULES += $(MODULES)/mod-lua
+SUBMODULES += $(MODULES)/msgpack
+
 
 ###############################################################################
 ##  OBJECTS                                                                  ##
@@ -87,7 +93,7 @@ $(TARGET_LIB)/libcitrusleaf.a $(TARGET_LIB)/libcitrusleaf.so: $(CITRUSLEAF:%=$(T
 $(TARGET_INCL): $(SOURCE_INCL)/*.h modules/mod-lua/$(TARGET_INCL)/*.h modules/common/$(TARGET_INCL)/*.h | modules
 	@if [ ! -e "$(TARGET_INCL)/citrusleaf" ]; then mkdir -p $(TARGET_INCL)/citrusleaf; fi
 	cp -pR $(SOURCE_INCL)/*.h $(TARGET_INCL)/citrusleaf/.
-	cp -p modules/mod-lua/src/include/as_*.h $(TARGET_INCL)/citrusleaf/.
+	cp -p modules/mod-lua/src/include/*.h $(TARGET_INCL)/citrusleaf/.
 	cp -p modules/common/$(TARGET_INCL)/*.h $(TARGET_INCL)/.
 	cp -p modules/common/$(TARGET_INCL)/citrusleaf/*.h $(TARGET_INCL)/citrusleaf/.
 
@@ -133,7 +139,7 @@ modules/common: modules/common/$(TARGET_LIB)/libcf-shared.a modules/common/$(TAR
 ## 
 
 modules/mod-lua/$(TARGET_LIB)/libmod_lua.a:
-	$(MAKE) -e -C modules/mod-lua all MEM_COUNT=1
+	$(MAKE) -e -C modules/mod-lua libmod_lua.a MEM_COUNT=1
 
 modules/mod-lua/$(TARGET_INCL)/*.h:
 	$(MAKE) -e -C modules/mod-lua prepare MEM_COUNT=1
@@ -179,15 +185,19 @@ TEST_CLIENT += client_string
 TEST_UDF = udf
 TEST_UDF += udf_basics
 TEST_UDF += udf_lists
+ 
+TEST_AGGR = aggr
+TEST_AGGR += aggr_simple
 
 .PHONY: test
 test: test-build
-	@$(TARGET_BIN)/test/types
-	@$(TARGET_BIN)/test/client
-	@$(TARGET_BIN)/test/udf
+	# @$(TARGET_BIN)/test/types
+	# @$(TARGET_BIN)/test/client
+	# @$(TARGET_BIN)/test/udf
+	@$(TARGET_BIN)/test/aggr
 
 .PHONY: test-build
-test-build: test/types test/client test/udf 
+test-build: test/types test/client test/udf  test/aggr
 
 .PHONY: test-clean
 test-clean: 
@@ -202,6 +212,9 @@ test/client: $(TARGET_BIN)/test/client
 
 .PHONY: test/udf
 test/udf: $(TARGET_BIN)/test/udf
+
+.PHONY: test/aggr
+test/aggr: $(TARGET_BIN)/test/aggr
 
 
 $(TARGET_OBJ)/test/%/%.o: CFLAGS = $(TEST_CFLAGS)
@@ -225,6 +238,10 @@ $(TARGET_BIN)/test/client: $(TEST_CLIENT:%=$(TARGET_OBJ)/test/client/%.o) $(TARG
 $(TARGET_BIN)/test/udf: CFLAGS += $(TEST_CFLAGS)
 $(TARGET_BIN)/test/udf: LDFLAGS += $(TEST_LDFLAGS)
 $(TARGET_BIN)/test/udf: $(TEST_UDF:%=$(TARGET_OBJ)/test/udf/%.o) $(TARGET_OBJ)/test/test.o $(TARGET_LIB)/libcitrusleaf.a | prepare
+
+$(TARGET_BIN)/test/aggr: CFLAGS += $(TEST_CFLAGS)
+$(TARGET_BIN)/test/aggr: LDFLAGS += $(TEST_LDFLAGS)
+$(TARGET_BIN)/test/aggr: $(TEST_AGGR:%=$(TARGET_OBJ)/test/aggr/%.o) $(TARGET_OBJ)/test/test.o $(TARGET_LIB)/libcitrusleaf.a | prepare
 
 ###############################################################################
 include project/rules.makefile

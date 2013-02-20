@@ -22,13 +22,13 @@ INC_PATH += $(MSGPACK_PATH)/src
 INSTALL_LIB = /usr/lib
 
 ifndef MSGPACK_PATH
-# $(warning *** env MSGPACK_PATH not set. Using modules/msgpack as default)
+ $(warning *** env MSGPACK_PATH not set. Using modules/msgpack as default)
 MSGPACK_PATH := modules/msgpack
 endif
 
-# ifndef JANSSON_PATH
-# $(error *** env JANSSON_PATH is not set. Please download, build and set JANSSON_PATH)
-# endif
+ifndef JANSSON_PATH
+$(error *** env JANSSON_PATH is not set. Please download, build and set JANSSON_PATH)
+endif
 
 ###############################################################################
 ##  OBJECTS                                                                  ##
@@ -48,10 +48,10 @@ CITRUSLEAF += cl_scan.o
 CITRUSLEAF += cl_udf.o
 CITRUSLEAF += proto.o
 
-OBJECTS = modules/mod-lua/$(TARGET_OBJ)/*.o 
-OBJECTS += modules/common/$(TARGET_OBJ)/client/*.o 
-OBJECTS += modules/common/$(TARGET_OBJ)/shared/*.o 
-OBJECTS += $(MSGPACK_PATH)/src/.libs/*.o
+OBJECTS = $(wildcard modules/mod-lua/$(TARGET_OBJ)/*.o)
+OBJECTS += $(wildcard modules/common/$(TARGET_OBJ)/client/*.o)
+OBJECTS += $(wildcard modules/common/$(TARGET_OBJ)/shared/*.o)
+OBJECTS += $(wildcard $(MSGPACK_PATH)/src/.libs/*.o)
 
 ###############################################################################
 ##  MAIN TARGETS                                                             ##
@@ -82,7 +82,11 @@ libcitrusleaf.so: $(TARGET_LIB)/libcitrusleaf.so
 ##  BUILD TARGETS                                                            ##
 ###############################################################################
 
-$(TARGET_LIB)/libcitrusleaf.a $(TARGET_LIB)/libcitrusleaf.so: $(CITRUSLEAF:%=$(TARGET_OBJ)/%) $(OBJECTS) | modules
+#$(TARGET_LIB)/libcitrusleaf.a $(TARGET_LIB)/libcitrusleaf.so: $(CITRUSLEAF:%=$(TARGET_OBJ)/%) $(OBJECTS) | modules
+$(TARGET_LIB)/libcitrusleaf.so: $(CITRUSLEAF:%=$(TARGET_OBJ)/%) | modules
+	$(library) $(OBJECTS)
+$(TARGET_LIB)/libcitrusleaf.a: $(CITRUSLEAF:%=$(TARGET_OBJ)/%) | modules
+	$(archive) $(OBJECTS)
 
 $(TARGET_INCL): $(SOURCE_INCL)/*.h modules/mod-lua/$(TARGET_INCL)/*.h modules/common/$(TARGET_INCL)/*.h | modules
 	@if [ ! -e "$(TARGET_INCL)/citrusleaf" ]; then mkdir -p $(TARGET_INCL)/citrusleaf; fi

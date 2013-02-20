@@ -1184,6 +1184,43 @@ static cl_rv as_query_execute_sink(cl_cluster * cluster, const as_query * query,
 }
 
 
+cl_rv citrusleaf_query_execute(cl_cluster * cluster, const as_query * query, as_stream * ostream) {
+
+    cl_rv rc = CITRUSLEAF_OK;
+
+    // stream for results from each node
+    as_stream res_stream;
+    as_stream_init(&res_stream, query->res_streamq, &res_stream_hooks); 
+    
+    // sink the data from multiple sources into the result stream
+    rc = as_query_execute_sink(cluster, query, &res_stream);
+    if ( rc != CITRUSLEAF_OK ) {
+        return rc;
+    }
+
+    if ( query->udf.type == AS_QUERY_UDF_STREAM ) {
+
+        // Setup as_aerospike, so we can get log() function.
+        // TODO: this should occur only once
+        as_aerospike as;
+        as_aerospike_init(&as, NULL, &query_aerospike_hooks);
+
+        // Apply the UDF to the result stream
+        as_module_apply_stream(&mod_lua, &as, query->udf.filename, query->udf.function, &res_stream, query->udf.arglist, ostream);
+
+    }
+    else {
+        // pipe results into the ostream
+        as_val * val = NULL;
+        while ( (val = as_stream_read(&res_stream)) != AS_STREAM_END ) {
+            as_stream_write(ostream, val);
+        }
+        as_stream_write(ostream, AS_STREAM_END);
+    }
+
+    return rc;
+}
+
 
 int citrusleaf_query_init() {
     if (1 == cf_atomic32_incr(&query_initialized)) {

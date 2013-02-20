@@ -128,6 +128,3 @@ cl_rv citrusleaf_query_execute(cl_cluster * cluster, const as_query * query, as_
  */
 int    citrusleaf_query_init();
 void   citrusleaf_query_shutdown();
-
-
-

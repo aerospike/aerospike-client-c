@@ -57,7 +57,7 @@ typedef struct {
     const uint8_t        * query_buf;
     size_t                 query_sz;
     as_query_cb            cb; 
-as_stream            * s;
+    as_stream            * s;
     void                 * udata;
     cf_queue             * node_complete_q;     // Asyncwork item queue
     char                   node_name[NODE_NAME_SIZE];    
@@ -143,37 +143,37 @@ static int do_query_monte(cl_cluster_node *node, const char *ns, const uint8_t *
 static int query_compile_range(cf_vector *range_v, uint8_t *buf, int *sz_p)
 {
     int sz = 0;
-        
+
     // numranges
     sz += 1;
     if (buf) {
         *buf++ = cf_vector_size(range_v);
     }
-    
+
     // iterate through each range    
     for (uint i=0; i<cf_vector_size(range_v); i++) {
         query_range *range = (query_range *)cf_vector_getp(range_v,i);
-        
+
         // binname size
         int binnamesz = strlen(range->bin_name);
         sz += 1;
         if (buf) {
             *buf++ = binnamesz;
         }
-        
+
         // binname
         sz += binnamesz;
         if (buf) {
             memcpy(buf,range->bin_name,binnamesz);
             buf += binnamesz;
         }
-        
+
         // particle type
         sz += 1;
         if (buf) {
             *buf++ = range->start_obj.type;
         }
-        
+
         // start particle len
         // particle len will be in network order 
         sz += 4;
@@ -184,14 +184,14 @@ static int query_compile_range(cf_vector *range_v, uint8_t *buf, int *sz_p)
             *((uint32_t *)buf) = ntohl(ss);
             buf += sizeof(uint32_t);
         } 
-        
+
         // start particle data
         sz += psz;
         if (buf) {
             cl_object_to_buf(&range->start_obj,buf);
             buf += psz;
         }
-        
+
         // end particle len
         // particle len will be in network order 
         sz += 4;
@@ -202,7 +202,7 @@ static int query_compile_range(cf_vector *range_v, uint8_t *buf, int *sz_p)
             *((uint32_t *)buf) = ntohl(ss);
             buf += sizeof(uint32_t);
         } 
-        
+
         // end particle data
         sz += psz;
         if (buf) {
@@ -210,7 +210,7 @@ static int query_compile_range(cf_vector *range_v, uint8_t *buf, int *sz_p)
             buf += psz;
         }
     }        
-    
+
     *sz_p = sz;
 
     // @chris:  mostly because I have no idea what it was supposed to return
@@ -236,24 +236,24 @@ static int query_compile_range(cf_vector *range_v, uint8_t *buf, int *sz_p)
  */
 static int query_compile_select(cf_vector *binnames, uint8_t *buf, int *sz_p) {
     int sz = 0;
-        
+
     // numbins
     sz += 1;
     if (buf) {
         *buf++ = cf_vector_size(binnames);
     }
-    
+
     // iterate through each biname    
     for (uint i=0; i<cf_vector_size(binnames); i++) {
         char *binname = (char *)cf_vector_getp(binnames, i);
-        
+
         // binname size
         int binnamesz = strlen(binname);
         sz += 1;
         if (buf) {
             *buf++ = binnamesz;
         }
-        
+
         // binname
         sz += binnamesz;
         if (buf) {
@@ -270,20 +270,20 @@ static int query_compile_select(cf_vector *binnames, uint8_t *buf, int *sz_p) {
 // If the job is null, just run the query
 
 static int query_compile(const as_query *query, uint8_t **buf_r, size_t *buf_sz_r) {
-        
+
     if (!query || !query->ranges) return CITRUSLEAF_FAIL_CLIENT;
 
     // Calculating buffer size & n_fields
     int     n_fields = 0; 
     size_t  msg_sz  = sizeof(as_msg);
-    
+
     int ns_len = 0;
     int setname_len = 0;
     int iname_len = 0;
     int range_sz = 0;
     int num_bins = 0;
     if (query) {
-        
+
         // namespace field 
         if (!query->ns) return CITRUSLEAF_FAIL_CLIENT;
         ns_len  = strlen(query->ns);
@@ -293,21 +293,21 @@ static int query_compile(const as_query *query, uint8_t **buf_r, size_t *buf_sz_
         }
 
         // indexname field
-    if (query->indexname) {
-        iname_len = strlen(query->indexname);
-        if (iname_len) {
-            n_fields++;
-            msg_sz += strlen(query->indexname) + sizeof(cl_msg_field);
+        if (query->indexname) {
+            iname_len = strlen(query->indexname);
+            if (iname_len) {
+                n_fields++;
+                msg_sz += strlen(query->indexname) + sizeof(cl_msg_field);
+            }
         }
-    }
-        
-    if (query->setname) {
-        setname_len = strlen(query->setname);
-        if (setname_len) {
-            n_fields++;
-            msg_sz += setname_len + sizeof(cl_msg_field);
+
+        if (query->setname) {
+            setname_len = strlen(query->setname);
+            if (setname_len) {
+                n_fields++;
+                msg_sz += setname_len + sizeof(cl_msg_field);
+            }
         }
-    }
 
         if (query->job_id) {
             n_fields++;
@@ -336,17 +336,17 @@ static int query_compile(const as_query *query, uint8_t **buf_r, size_t *buf_sz_
         // TODO orderby field
         // TODO limit field
         if ( query->udf ) {
-        as_call *udf = (as_call *)query->udf;
-        msg_sz += sizeof(cl_msg_field) + as_string_len(udf->file);
-        msg_sz += sizeof(cl_msg_field) + as_string_len(udf->func);
-        msg_sz += sizeof(cl_msg_field) + udf->args->size;
-        msg_sz += sizeof(cl_msg_field) + 1;
-        n_fields += 4;
+            as_call *udf = (as_call *)query->udf;
+            msg_sz += sizeof(cl_msg_field) + as_string_len(udf->file);
+            msg_sz += sizeof(cl_msg_field) + as_string_len(udf->func);
+            msg_sz += sizeof(cl_msg_field) + udf->args->size;
+            msg_sz += sizeof(cl_msg_field) + 1;
+            n_fields += 4;
+        }
+
     }
-    
-    }
-    
-    
+
+
     // get a buffer to write to.
     uint8_t *buf; uint8_t *mbuf = 0;
     if ((*buf_r) && (msg_sz > *buf_sz_r)) { 
@@ -355,14 +355,14 @@ static int query_compile(const as_query *query, uint8_t **buf_r, size_t *buf_sz_
     } else buf = *buf_r;
     *buf_sz_r  = msg_sz;
     memset(buf, 0, msg_sz);  // NOTE: this line is debug - shouldn't be required
-    
+
     // write the headers
     int    info1      = CL_MSG_INFO1_READ;
     int info2      = 0;
     int info3      = 0;
     buf = cl_write_header(buf, msg_sz, info1, info2, info3, 0, 0, 0, 
             n_fields, 0);
-        
+
     // now write the fields
     cl_msg_field *mf = (cl_msg_field *) buf;
     cl_msg_field *mf_tmp = mf;
@@ -374,7 +374,7 @@ static int query_compile(const as_query *query, uint8_t **buf_r, size_t *buf_sz_
         cl_msg_swap_field(mf);
         mf = mf_tmp;
     }
-    
+
     if (iname_len) {
         mf->type = CL_MSG_FIELD_TYPE_INDEX_NAME;
         mf->field_sz = iname_len + 1;
@@ -407,7 +407,7 @@ static int query_compile(const as_query *query, uint8_t **buf_r, size_t *buf_sz_
         cl_msg_swap_field(mf);
         mf = mf_tmp;
     }
-    
+
     if (query->binnames) {
         mf->type = CL_MSG_FIELD_TYPE_QUERY_BINLIST;
         mf->field_sz = num_bins + 1;
@@ -428,10 +428,10 @@ static int query_compile(const as_query *query, uint8_t **buf_r, size_t *buf_sz_
         mf = mf_tmp;
     }
 
-if (query->udf) {
+    if (query->udf) {
 
-    as_call *udf = (as_call *)query->udf;
-    mf->type = CL_MSG_FIELD_TYPE_UDF_OP;
+        as_call *udf = (as_call *)query->udf;
+        mf->type = CL_MSG_FIELD_TYPE_UDF_OP;
         mf->field_sz =  1 + 1;
         memcpy(mf->data, &query->udf_op, 1);
 
@@ -439,9 +439,9 @@ if (query->udf) {
         cl_msg_swap_field(mf);
         mf = mf_tmp;
 
-    // Append filename to message fields
-    int len = 0;
-    len = as_string_len(udf->file) * sizeof(char);
+        // Append filename to message fields
+        int len = 0;
+        len = as_string_len(udf->file) * sizeof(char);
         mf->type = CL_MSG_FIELD_TYPE_UDF_FILENAME;
         mf->field_sz =  len + 1;
         memcpy(mf->data, as_string_tostring(udf->file), len);
@@ -450,8 +450,8 @@ if (query->udf) {
         cl_msg_swap_field(mf);
         mf = mf_tmp;
 
-    // Append function name to message fields
-    len = as_string_len(udf->func) * sizeof(char);
+        // Append function name to message fields
+        len = as_string_len(udf->func) * sizeof(char);
         mf->type = CL_MSG_FIELD_TYPE_UDF_FUNCTION;
         mf->field_sz =  len + 1;
         memcpy(mf->data, as_string_tostring(udf->func), len);
@@ -461,7 +461,7 @@ if (query->udf) {
         mf = mf_tmp;
 
         // Append arglist to message fields
-    len = udf->args->size * sizeof(char);
+        len = udf->args->size * sizeof(char);
         mf->type = CL_MSG_FIELD_TYPE_UDF_ARGLIST;
         mf->field_sz = len + 1;
         memcpy(mf->data, udf->args->data, len);
@@ -469,7 +469,7 @@ if (query->udf) {
         mf_tmp = cl_msg_field_get_next(mf);
         cl_msg_swap_field(mf);
         mf = mf_tmp;
-}
+    }
 
     if (!buf) { 
         if (mbuf) {
@@ -483,19 +483,17 @@ if (query->udf) {
 extern as_val * citrusleaf_udf_bin_to_val(as_serializer *ser, cl_bin *);
 
 void query_ostream_populate(as_stream *s, as_query_response_rec *rec) {
-// Raj(todo) initialize serializer only once
-
-// binname is either success or fail.
-// bin has as_rec
-
-as_serializer ser;
-as_msgpack_init(&ser);
-// msg->n_ops is expected to be only 1.
-for (int i=0;i<rec->n_bins;i++) {
-    as_val *val = citrusleaf_udf_bin_to_val(&ser, &rec->bins[i]);
-    as_stream_write(s, val);    
-}
-as_serializer_destroy(&ser);
+    // Raj(todo) initialize serializer only once
+    // binname is either success or fail.
+    // bin has as_rec
+    as_serializer ser;
+    as_msgpack_init(&ser);
+    // msg->n_ops is expected to be only 1.
+    for (int i=0;i<rec->n_bins;i++) {
+        as_val *val = citrusleaf_udf_bin_to_val(&ser, &rec->bins[i]);
+        as_stream_write(s, val);    
+    }
+    as_serializer_destroy(&ser);
 }
 // 
 // this is an actual instance of a query, running on a query thread
@@ -506,7 +504,7 @@ static int do_query_monte(cl_cluster_node *node, const char *ns, const uint8_t *
     uint8_t        rd_stack_buf[STACK_BUF_SZ];    
     uint8_t        *rd_buf = rd_stack_buf;
     size_t        rd_buf_sz = 0;
-    
+
     // as_msg         msg;    
 
     int fd = cl_cluster_node_fd_get(node, false, isnbconnect);
@@ -514,7 +512,7 @@ static int do_query_monte(cl_cluster_node *node, const char *ns, const uint8_t *
         fprintf(stderr,"do query monte: cannot get fd for node %s ",node->name);
         return(-1); 
     }
-    
+
     // send it to the cluster - non blocking socket, but we're blocking
     if (0 != cf_socket_write_forever(fd, (uint8_t *) query_buf, (size_t) query_sz)) {
         return CITRUSLEAF_FAIL_CLIENT;
@@ -523,14 +521,14 @@ static int do_query_monte(cl_cluster_node *node, const char *ns, const uint8_t *
     cl_proto  proto;
     int       rv   = CITRUSLEAF_OK;
     bool      done = false;
-    
+
     do {
-    
+
         // multiple CL proto per response
         // Now turn around and read a fine cl_proto - that's the first 8 bytes 
         // that has types and lengths
         if ((rv = cf_socket_read_forever(fd, (uint8_t *) &proto,
-                                         sizeof(cl_proto) ) ) ) {
+                        sizeof(cl_proto) ) ) ) {
             fprintf(stderr, "network error: errno %d fd %d\n",rv, fd);
             return CITRUSLEAF_FAIL_CLIENT;
         }
@@ -541,11 +539,11 @@ static int do_query_monte(cl_cluster_node *node, const char *ns, const uint8_t *
             return CITRUSLEAF_FAIL_CLIENT;
         }
         if ((proto.type != CL_PROTO_TYPE_CL_MSG) &&
-            (proto.type != CL_PROTO_TYPE_CL_MSG_COMPRESSED)) {
+                (proto.type != CL_PROTO_TYPE_CL_MSG_COMPRESSED)) {
             fprintf(stderr, "network error: received incorrect message version %d\n",proto.type);
             return CITRUSLEAF_FAIL_CLIENT;
         }
-        
+
         // second read for the remainder of the message - expect this to cover 
         // lots of data, many lines if there's no error
         rd_buf_sz =  proto.sz;
@@ -568,16 +566,16 @@ static int do_query_monte(cl_cluster_node *node, const char *ns, const uint8_t *
         uint pos = 0;
         cl_bin stack_bins[STACK_BINS];
         cl_bin *bins;
-        
+
         while (pos < rd_buf_sz) {
             uint8_t *buf_start = buf;
             cl_msg *msg = (cl_msg *) buf;
             cl_msg_swap_header(msg);
             buf += sizeof(cl_msg);
-            
+
             if (msg->header_sz != sizeof(cl_msg)) {
                 fprintf(stderr, "received cl msg of unexpected size: expecting %zd found %d, internal error\n",
-                    sizeof(cl_msg),msg->header_sz);
+                        sizeof(cl_msg),msg->header_sz);
                 return(-1);
             }
 
@@ -627,7 +625,7 @@ static int do_query_monte(cl_cluster_node *node, const char *ns, const uint8_t *
 
 #ifdef DEBUG_VERBOSE
                 fprintf(stderr, "op receive: %p size %d op %d ptype %d pversion %d namesz %d \n",
-                    op,op->op_sz, op->op, op->particle_type, op->version, op->name_sz);
+                        op,op->op_sz, op->op, op->particle_type, op->version, op->name_sz);
 #endif            
 
 #ifdef DEBUG_VERBOSE
@@ -638,7 +636,7 @@ static int do_query_monte(cl_cluster_node *node, const char *ns, const uint8_t *
                 op = cl_msg_op_get_next(op);
             }
             buf = (uint8_t *) op;
-            
+
             if (msg->result_code != CL_RESULT_OK) {
                 rv = (int)msg->result_code;
                 done = true;
@@ -651,27 +649,27 @@ static int do_query_monte(cl_cluster_node *node, const char *ns, const uint8_t *
             }
 
             else if ((msg->n_ops || (msg->info1 & CL_MSG_INFO1_NOBINDATA))) {
-            as_query_response_rec rec = {
-                .ns         = ns_ret,
-                .keyd       = keyd,
-                .set        = set_ret,
-                .generation = msg->generation,
-                .record_ttl = msg->record_ttl,
-                .bins       = bins,
-                .n_bins     = msg->n_ops,
-            };
-            if (s) {
-                query_ostream_populate(s, &rec);
-            }
-            else if (cb) {
+                as_query_response_rec rec = {
+                    .ns         = ns_ret,
+                    .keyd       = keyd,
+                    .set        = set_ret,
+                    .generation = msg->generation,
+                    .record_ttl = msg->record_ttl,
+                    .bins       = bins,
+                    .n_bins     = msg->n_ops,
+                };
+                if (s) {
+                    query_ostream_populate(s, &rec);
+                }
+                else if (cb) {
                     // got one good value? call it a success!
                     // (Note:  In the key exists case, there is no bin data.)
                     (*cb) (&rec, udata);
                 }
                 rv = 0;
             }
-//            else
-//                fprintf(stderr, "received message with no bins, signal of an error\n");
+            //            else
+            //                fprintf(stderr, "received message with no bins, signal of an error\n");
 
             if (bins != stack_bins) {
                 free(bins);
@@ -689,9 +687,9 @@ static int do_query_monte(cl_cluster_node *node, const char *ns, const uint8_t *
             if (gasq_abort) {
                 break;
             }
-            
+
         }
-        
+
         if (rd_buf && (rd_buf != rd_stack_buf))    {
             free(rd_buf);
             rd_buf = 0;
@@ -705,15 +703,15 @@ static int do_query_monte(cl_cluster_node *node, const char *ns, const uint8_t *
     } while ( done == false );
 
     cl_cluster_node_fd_put(node, fd, false);
-    
+
     goto Final;
-    
+
 Final:    
-    
+
 #ifdef DEBUG_VERBOSE    
     fprintf(stderr, "exited loop: rv %d\n", rv );
 #endif    
-    
+
     return(rv);
 }
 
@@ -723,7 +721,7 @@ static void *query_worker_fn(void *dummy) {
         if (0 != cf_queue_pop(g_query_q, &work, CF_QUEUE_FOREVER)) {
             fprintf(stderr, "queue pop failed\n");
         }
-        
+
         if (cf_debug_enabled()) {
             fprintf(stderr, "query_worker_fn: getting one work item\n");
         }
@@ -738,35 +736,35 @@ static void *query_worker_fn(void *dummy) {
         if (node) {
             an_int = do_query_monte(node, work.ns, work.query_buf, work.query_sz, work.cb, work.udata, work.asc->nbconnect, work.s);
         }
-                                    
+
         cf_queue_push(work.node_complete_q, (void *)&an_int);
     }
 }
 
 as_val *res_stream_read(const as_stream *s) {
-as_val *val;
-if (CF_QUEUE_EMPTY == cf_queue_pop(as_stream_source(s), &val, CF_QUEUE_NOWAIT)) {
-    return NULL;
-}
-return val;
+    as_val *val;
+    if (CF_QUEUE_EMPTY == cf_queue_pop(as_stream_source(s), &val, CF_QUEUE_NOWAIT)) {
+        return NULL;
+    }
+    return val;
 }
 
 
 int res_stream_destroy(as_stream *s) {
-as_val *val;
-while (CF_QUEUE_EMPTY != cf_queue_pop(as_stream_source(s), &val, CF_QUEUE_NOWAIT)) {
-    as_val_destroy(val);
-}
-return 0;
+    as_val *val;
+    while (CF_QUEUE_EMPTY != cf_queue_pop(as_stream_source(s), &val, CF_QUEUE_NOWAIT)) {
+        as_val_destroy(val);
+    }
+    return 0;
 }
 
 as_stream_status res_stream_write(const as_stream *s, const as_val *v) {
-if (CF_QUEUE_OK != cf_queue_push(as_stream_source(s), &v)) {
-    fprintf(stderr, "Write to client side stream failed");
-    as_val_destroy(v);
-    return AS_STREAM_ERR;
-} 
-return AS_STREAM_OK;
+    if (CF_QUEUE_OK != cf_queue_push(as_stream_source(s), &v)) {
+        fprintf(stderr, "Write to client side stream failed");
+        as_val_destroy(v);
+        return AS_STREAM_ERR;
+    } 
+    return AS_STREAM_OK;
 }
 
 const as_stream_hooks res_stream_hooks = {
@@ -776,17 +774,17 @@ const as_stream_hooks res_stream_hooks = {
 };
 
 cl_rv as_query_foreach(cl_cluster *asc, const as_query *query, 
-                       as_query_cb cb, void *udata, as_stream *ostream) 
+        as_query_cb cb, void *udata, as_stream *ostream) 
 {
     query_work work;
-        
+
     work.asc = asc;
     work.ns = query->ns;
 
     uint8_t  wr_stack_buf[STACK_BUF_SZ];
     uint8_t *wr_buf = wr_stack_buf;
     size_t   wr_buf_sz = sizeof(wr_stack_buf);
-    
+
     // compile the query - a good place to fail    
     int rv = query_compile(query, &wr_buf, &wr_buf_sz);
     if (rv) {
@@ -795,7 +793,7 @@ cl_rv as_query_foreach(cl_cluster *asc, const as_query *query,
     }
     work.query_buf = wr_buf;
     work.query_sz = wr_buf_sz;
-    
+
     // shared between threads
     work.cb = cb;
     work.udata = udata;    
@@ -811,14 +809,14 @@ cl_rv as_query_foreach(cl_cluster *asc, const as_query *query,
         return CITRUSLEAF_FAIL_CLIENT;
     }
 
-// setup stream if the user is issueing aggregation
-if (query->res_streamq) {
-    as_stream_init(ostream, query->res_streamq, &res_stream_hooks); 
-    work.s = ostream;
-} else {
-    work.s = NULL;
-}
-    
+    // setup stream if the user is issueing aggregation
+    if (query->res_streamq) {
+        as_stream_init(ostream, query->res_streamq, &res_stream_hooks); 
+        work.s = ostream;
+    } else {
+        work.s = NULL;
+    }
+
     // dispatch work to the worker queue to allow the transactions in parallel
     // note: if a new node is introduced in the middle, it is NOT taken care of
     char *nptr = node_names;
@@ -829,7 +827,7 @@ if (query->res_streamq) {
         nptr += NODE_NAME_SIZE;                    
     }
     free(node_names); node_names = 0;
-    
+
     // wait for the work to complete from all the nodes.
     int retval = 0;
     for (int i=0;i<n_nodes;i++) {
@@ -845,7 +843,7 @@ if (query->res_streamq) {
     gasq_abort = false;
 
     if (wr_buf && (wr_buf != wr_stack_buf)) { free(wr_buf); wr_buf = 0; }
-    
+
     cf_queue_destroy(work.node_complete_q);
     return retval;
 }
@@ -857,7 +855,7 @@ int as_query_init(as_query **query, const char *ns, const char *setname)
         return CITRUSLEAF_FAIL_CLIENT;
     }
     memset(*query, 0, sizeof(as_query));
-	(*query)->job_id = cf_get_rand64();
+    (*query)->job_id = cf_get_rand64();
     if (setname) {
         (*query)->setname = strdup(setname);
     } else {
@@ -866,22 +864,22 @@ int as_query_init(as_query **query, const char *ns, const char *setname)
 
     if (ns) {
         (*query)->ns = strdup(ns);
-		return 0;
+        return 0;
     } else {
         (*query)->ns = NULL;
-    	if ((*query)->setname) free((*query)->setname);
-	    if ((*query)->ns) free((*query)->ns);
-    	free(*query);
-    	return -1;
-	}
+        if ((*query)->setname) free((*query)->setname);
+        if ((*query)->ns)      free((*query)->ns);
+        free(*query);
+        return -1;
+    }
 }
 
- void cl_range_destroy(query_range *range) {
+void cl_range_destroy(query_range *range) {
     citrusleaf_object_free(&range->start_obj);
     citrusleaf_object_free(&range->end_obj);
 }
 
- void cl_filter_destroy(query_filter *filter) {
+void cl_filter_destroy(query_filter *filter) {
     citrusleaf_object_free(&filter->compare_obj);
 }
 
@@ -897,7 +895,7 @@ void as_query_destroy(as_query *query) {
         }
         cf_vector_destroy(query->ranges);
     }
-    
+
     if (query->filters) {
         for (uint i=0; i<cf_vector_size(query->filters); i++) {
             query_filter *filter = (query_filter *)cf_vector_getp(query->filters, i);
@@ -905,22 +903,25 @@ void as_query_destroy(as_query *query) {
         }
         cf_vector_destroy(query->filters);
     }
-    
+
     if (query->orderbys) {
         cf_vector_destroy(query->orderbys);
     }
 
-if (query->udf) {
-    as_call *udf = (as_call*)query->udf;
-    as_string_destroy(udf->file);
-    free(udf->file);
-    as_string_destroy(udf->func);
-    free(udf->func);
-    as_buffer_destroy(udf->args);
-    cf_free(udf->args);
-    cf_free(udf);
-    cf_queue_destroy(query->res_streamq);
-}
+    if (query->udf) {
+        as_call *udf = (as_call*)query->udf;
+        as_string_destroy(udf->file);  
+        free(udf->file);
+        as_string_destroy(udf->func);
+        free(udf->func);
+        as_buffer_destroy(udf->args);
+        cf_free(udf->args);
+        cf_free(udf);
+        if (query->res_streamq) 
+            cf_queue_destroy(query->res_streamq);
+    }
+    if (query->ns)      free(query->ns);
+    if (query->setname) free(query->setname);
     free(query);
     query = NULL;
 }
@@ -939,8 +940,8 @@ cl_rv as_query_select(as_query *query, const char *binname) {
 static cl_rv query_where_generic(bool isfunction, as_query *query, const char *binname, as_query_op op, va_list list) { 
     query_range range;
     range.isfunction = isfunction;
-//    va_list list; 
-//    va_start(list, op);
+    //    va_list list; 
+    //    va_start(list, op);
     int type = va_arg(list, int);
     if (type == CL_INT)
     {
@@ -952,18 +953,18 @@ static cl_rv query_where_generic(bool isfunction, as_query *query, const char *b
                 break;
             case CL_LE: range.closedbound = true;
             case CL_LT:
-                    start = 0;
-                end = va_arg(list, uint64_t);
-                break;
-             case CL_GE: range.closedbound = true;
+                        start = 0;
+                        end = va_arg(list, uint64_t);
+                        break;
+            case CL_GE: range.closedbound = true;
             case CL_GT:
-                start = va_arg(list, uint64_t);
-                end = UINT64_MAX;
-                break;
+                        start = va_arg(list, uint64_t);
+                        end = UINT64_MAX;
+                        break;
             case CL_RANGE:
-                start = va_arg(list, uint64_t);
-                end = va_arg(list, uint64_t);
-            break;
+                        start = va_arg(list, uint64_t);
+                        end = va_arg(list, uint64_t);
+                        break;
             default: goto Cleanup;
         }
         citrusleaf_object_init_int(&range.start_obj, start);
@@ -1031,8 +1032,8 @@ typedef enum as_query_udf_op         { CL_QUERY_UDF, CL_QUERY_AGGREGATE, CL_QUER
 cl_rv generic_query_udf(as_query *query, const char *filename, const char *function, as_list *arglist) {
 
     as_call *udf = (as_call *)query->udf;
-    udf->file = as_string_new((char *) filename, true);
-    udf->func = as_string_new((char *) function, true);
+    udf->file = as_string_new(strdup(filename), true);
+    udf->func = as_string_new(strdup(function), true);
     udf->args = cf_malloc(sizeof(as_buffer));
     as_buffer_init(udf->args);
     as_serializer ser;
@@ -1074,12 +1075,12 @@ int citrusleaf_query_init() {
         if (cf_debug_enabled()) {
             fprintf(stderr, "query_init: creating %d threads\n",N_MAX_QUERY_THREADS);
         }
-                
+
         memset(&g_null_work,0,sizeof(query_work));
 
         // create dispatch queue
         g_query_q = cf_queue_create(sizeof(query_work), true);
-        
+
         // create thread pool
         for (int i = 0; i < N_MAX_QUERY_THREADS; i++) {
             pthread_create(&g_query_th[i], 0, query_worker_fn, 0);

@@ -94,9 +94,12 @@ TEST( aggr_simple_1, "get numeric bin without aggregation" ) {
     while ( as_iterator_has_next(&i) ) {
         as_val * val = as_iterator_next(&i);
         info("result: %s", as_val_tostring(val));
+		// Chris(todo) val is leaking here
     }
 
+	// Chris(todo) results and rstream leaking memory here
     as_iterator_destroy(&i);
+	as_query_destroy(q);
 
 
 }
@@ -110,7 +113,9 @@ TEST( aggr_simple_2, "sum of numeric bins" ) {
     as_stream * rstream = list_stream_new(results);
 
     as_query * q = as_query_new("test","test");
-    as_query_select(q, "b");
+	// Chris (Todo) This is not needed selectivity has
+	// not meaning for aggregation
+    // as_query_select(q, "b");
     as_query_where(q, "a", string_equals("abc"));
     as_query_aggregate(q, "aggr", "sum", NULL);
     
@@ -121,9 +126,12 @@ TEST( aggr_simple_2, "sum of numeric bins" ) {
     while ( as_iterator_has_next(&i) ) {
         as_val * val = as_iterator_next(&i);
         info("result: %s", as_val_tostring(val));
+		// Chris(todo) val is leaking here
     }
 
+	// Chris(todo) results and rstream leaking memory here
     as_iterator_destroy(&i);
+	as_query_destroy(q);
 
 
 }
@@ -144,6 +152,8 @@ static bool before(atf_suite * suite) {
         .config     = mod_lua_config_client(true, "modules/mod-lua/src/lua", "modules/mod-lua/src/test/lua")
     }; 
 
+	// Chris (Todo) it is leaking here, Who cleans it
+	// up ??
     as_module_init(&mod_lua);
     as_module_configure(&mod_lua, &conf_op);
  

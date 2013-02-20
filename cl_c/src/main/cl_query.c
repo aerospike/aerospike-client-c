@@ -893,7 +893,6 @@ as_query * as_query_init(as_query * query, const char * ns, const char * setname
         return query;
     }
 
-	fprintf(stderr, " Alloced Queue");
     query->res_streamq = result_queue;
     query->job_id = cf_get_rand64();
     query->setname = setname == NULL ? NULL : strdup(setname);
@@ -941,12 +940,10 @@ void as_query_destroy(as_query *query) {
 			val = NULL;
 		}
 
-		fprintf(stderr, " Freed Queue");
         cf_queue_destroy(query->res_streamq);
         query->res_streamq = NULL;
     }
 
-	fprintf(stderr, "Free Query");
     free(query);
     query = NULL;
 }

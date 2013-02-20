@@ -220,14 +220,20 @@ void atf_assert_log(atf_test_result * result, const char * exp, const char * fil
  * atf_log
  *****************************************************************************/
 
+#define ATF_LOG_PREFIX "        "
+
+#define debug(fmt, args...) \
+    atf_log_line(stderr, "DEBUG", ATF_LOG_PREFIX, __FILE__, __LINE__, fmt, ## args);
+
 #define info(fmt, args...) \
-    atf_log(stderr, "INFO", "", __FILE__, __LINE__, fmt, ## args);
+    atf_log(stderr, "INFO", ATF_LOG_PREFIX, __FILE__, __LINE__, fmt, ## args);
 
 #define warn(fmt, args...) \
-    atf_log(stderr, "WARN", "", __FILE__, __LINE__, fmt, ## args);
+    atf_log(stderr, "WARN", ATF_LOG_PREFIX, __FILE__, __LINE__, fmt, ## args);
 
 #define error(fmt, args...) \
-    atf_log(stderr, "ERROR", "", __FILE__, __LINE__, fmt, ## args);
+    atf_log(stderr, "ERROR", ATF_LOG_PREFIX, __FILE__, __LINE__, fmt, ## args);
 
 void atf_log(FILE * f, const char * level, const char * prefix, const char * file, int line, const char * fmt, ...);
 
+void atf_log_line(FILE * f, const char * level, const char * prefix, const char * file, int line, const char * fmt, ...);

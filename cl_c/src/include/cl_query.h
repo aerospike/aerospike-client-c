@@ -38,19 +38,34 @@
 typedef enum as_query_op         { CL_EQ, CL_LT, CL_GT, CL_LE, CL_GE, CL_RANGE } as_query_op;
 typedef enum as_query_orderby_op { CL_ORDERBY_ASC, CL_ORDERBY_DESC } as_query_orderby_op;
 
+
+typedef enum as_query_udf_type_s { 
+    AS_QUERY_UDF_NONE,
+    AS_QUERY_UDF_RECORD, 
+    AS_QUERY_UDF_STREAM
+} as_query_udf_type;
+
+
+typedef struct as_query_udf_s {
+    as_query_udf_type   type;
+    char *              filename;
+    char *              function;
+    as_list *           arglist;
+} as_query_udf;
+
 typedef struct as_query {
-    char        * ns;
-    char        * indexname;
-    char        * setname;
-    cf_vector   * binnames;  // Select
-    cf_vector   * ranges;    // Where
-    cf_vector   * filters;
-    cf_vector   * orderbys;
-    void        * udf;
-    void        * res_streamq;
-    byte          udf_op;
-    int           limit;  
-    uint64_t      job_id;
+    char            * ns;
+    char            * indexname;
+    char            * setname;
+    cf_vector       * binnames;  // Select
+    cf_vector       * ranges;    // Where
+    cf_vector       * filters;
+    cf_vector       * orderbys;
+    as_query_udf    udf;
+    void            * res_streamq;
+    // byte          udf_op;
+    int             limit;  
+    uint64_t        job_id;
 } as_query;
 
 typedef struct as_query_response_record_t {
@@ -73,16 +88,39 @@ typedef int (* as_query_cb) (as_query_response_rec *rec, void *udata);
 #define integer_range(start, end) CL_RANGE, CL_INT, start, end
 #define string_equals(val) CL_EQ, CL_STR, val
 
-int   as_query_init(as_query **query_obj, const char *ns, const char *setname);
-void  as_query_destroy(as_query *query_obj);
-int   as_query_select (as_query *query_obj, const char *binname);
-int   as_query_where(as_query *query_obj, const char *binname, as_query_op, ...);
-int   as_query_where_function(as_query *query_obj, const char *finame, as_query_op, ...);
-int   as_query_filter(as_query *query_obj, const char *binname, as_query_op op, ...);
-int   as_query_orderby(as_query *query_obj, const char *binname, as_query_orderby_op order);
-cl_rv as_query_aggregate(as_query *query, const char *filename, const char *function, as_list *arglist);
-int   as_query_limit(as_query *query_obj, uint64_t limit);
-cl_rv as_query_foreach(cl_cluster *asc, const as_query *query_obj, as_query_cb cb, void *udata, as_stream *s);
+
+/**
+ * Allocates and initializes a new as_query
+ */
+as_query * as_query_new(const char * ns, const char * setname);
+
+/**
+ * Initializes an as_query
+ */
+as_query * as_query_init(as_query * query, const char * ns, const char * setname);
+
+/**
+ * Destroy and free an as_query
+ */
+void  as_query_destroy(as_query * query);
+
+/**
+ * Query Builders
+ */
+
+int   as_query_select (as_query * query, const char * binname);
+int   as_query_where(as_query * query, const char * binname, as_query_op, ...);
+int   as_query_where_function(as_query * query, const char * finame, as_query_op, ...);
+int   as_query_filter(as_query * query, const char * binname, as_query_op op, ...);
+int   as_query_orderby(as_query * query, const char * binname, as_query_orderby_op order);
+cl_rv as_query_aggregate(as_query * query, const char * filename, const char * function, as_list * arglist);
+int   as_query_limit(as_query * query, uint64_t limit);
+
+
+// cl_rv as_query_foreach(cl_cluster *asc, const as_query *query_obj, as_query_cb cb, void *udata, as_stream *s);
+
+cl_rv citrusleaf_query_execute(cl_cluster * cluster, const as_query * query, as_stream * stream);
+
 
 /*
  * Init and destroy for client query environment. Should be called for once per client
@@ -90,3 +128,6 @@ cl_rv as_query_foreach(cl_cluster *asc, const as_query *query_obj, as_query_cb c
  */
 int    citrusleaf_query_init();
 void   citrusleaf_query_shutdown();
+
+
+

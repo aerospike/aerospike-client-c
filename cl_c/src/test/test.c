@@ -58,7 +58,7 @@ atf_suite_result * atf_suite_run(atf_suite * suite) {
 
     if ( suite->init ) suite->init(suite);
 
-    printf("%s: %d tests: %s\n", suite->name, suite->size, suite->desc);
+    printf("[+] %s: %d tests: %s\n", suite->name, suite->size, suite->desc);
 
     atf_suite_result * suite_result = atf_suite_result_new(suite);
 
@@ -70,7 +70,7 @@ atf_suite_result * atf_suite_run(atf_suite * suite) {
 
     for ( int i = 0; i < suite->size; i++ ) {
         atf_test * test = suite->tests[i];
-        printf("    %s: (%d/%d) %s\n", suite->name, i+1, suite->size, test->desc);
+        printf("    [+] %s: (%d/%d) %s\n", suite->name, i+1, suite->size, test->desc);
         atf_test_result * test_result = atf_test_run(test);
         atf_suite_result_add(suite_result, test_result);
         if ( ! test_result->success ) {
@@ -253,5 +253,14 @@ void atf_log(FILE * f, const char * level, const char * prefix, const char * fil
     va_start(ap, fmt);
     vsnprintf(msg, LOG_MESSAGE_MAX, fmt, ap);
     va_end(ap);
-    fprintf(f, "%s%s\n",prefix,msg);
+    fprintf(f, "%s%s\n", prefix, msg);
+}
+
+void atf_log_line(FILE * f, const char * level, const char * prefix, const char * file, int line, const char * fmt, ...) {
+    char msg[LOG_MESSAGE_MAX] = {0};
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(msg, LOG_MESSAGE_MAX, fmt, ap);
+    va_end(ap);
+    fprintf(f, "%s[%s:%d] %s\n", prefix, file, line, msg);
 }

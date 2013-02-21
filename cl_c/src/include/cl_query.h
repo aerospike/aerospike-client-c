@@ -119,7 +119,8 @@ int   as_query_limit(as_query * query, uint64_t limit);
 
 // cl_rv as_query_foreach(cl_cluster *asc, const as_query *query_obj, as_query_cb cb, void *udata, as_stream *s);
 
-cl_rv citrusleaf_query_execute(cl_cluster * cluster, const as_query * query, as_stream * stream);
+cl_rv citrusleaf_query_stream(cl_cluster * cluster, const as_query * query, as_stream * stream);
+cl_rv citrusleaf_query_foreach(cl_cluster * cluster, const as_query * query, void * udata, bool (*foreach)(const as_val *, void *));
 
 
 /*

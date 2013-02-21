@@ -16,7 +16,8 @@
 as_aerospike as;
 
 as_stream_status print_stream_write(const as_stream * s, const as_val * v) {
-    if ( v != NULL ) info("%s",as_val_tostring(v));
+	as_val *binval = as_rec_get((as_rec*) v, "SUCCESS");
+    if ( v != NULL ) info("%s", as_val_tostring(binval));
     return AS_STREAM_OK;
 }
 

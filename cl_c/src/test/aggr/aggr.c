@@ -51,8 +51,8 @@ int udf_put(const char * filename) {
     }                        
     fclose(file); 
     as_bytes udf_content = {
-  .data = content,
-  .size = size
+       .data = content,
+       .size = size
     }; 
     char * err = NULL;
 

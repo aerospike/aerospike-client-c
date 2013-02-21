@@ -84,6 +84,7 @@ typedef struct {
     cf_queue *              node_complete_q;     // Asyncwork item queue
     void *                  udata;
     int                     (* callback)(as_query_response_rec *, void *);
+	bool                    isinline;
 } as_query_task;
 
 
@@ -159,7 +160,7 @@ static cl_rv as_query_udf_destroy(as_query_udf * udf);
 
 // static cl_rv as_query_execute_sink(cl_cluster * cluster, const as_query * query, as_stream * stream);
 
-static cl_rv as_query_execute(cl_cluster * cluster, const as_query * query, void * udata, int (* callback)(as_query_response_rec *, void *));
+static cl_rv as_query_execute(cl_cluster * cluster, const as_query * query, void * udata, int (* callback)(as_query_response_rec *, void *), bool istream);
 
 static void cl_range_destroy(query_range *range) {
     citrusleaf_object_free(&range->start_obj);
@@ -560,6 +561,75 @@ static int query_compile(const as_query * query, uint8_t ** buf_r, size_t * buf_
 
 extern as_val * citrusleaf_udf_bin_to_val(as_serializer *ser, cl_bin *);
 
+/**
+ * Get a value for a bin of with the given key.
+ */
+static as_val *
+query_response_get(const as_rec * rec, const char * name) 
+{
+	as_serializer ser;
+	as_msgpack_init(&ser);
+	as_query_response_rec * r = as_rec_source(rec);
+	for (int i = 0; i < r->n_bins; i++) {
+		// Raj (todo) remove this stupid linear search from here
+		if (strcmp(r->bins[i].bin_name, name)) { 
+			as_val *v = citrusleaf_udf_bin_to_val(&ser, &r->bins[i]);
+			as_serializer_destroy(&ser);
+			return v;
+		}
+	}
+	return NULL;
+}
+
+static uint32_t
+query_response_ttl(const as_rec * rec)
+{
+	as_query_response_rec * r = as_rec_source(rec);
+	return r->record_ttl;
+}
+
+static uint16_t
+query_response_gen(const as_rec * rec) {
+	as_query_response_rec * r = as_rec_source(rec);
+	if (!r) return 0;
+	return r->generation;
+}
+
+void
+query_response_destroy(as_rec *rec) {
+	as_query_response_rec * r = as_rec_source(rec);
+	if (!r) return;
+	citrusleaf_bins_free(r->bins, r->n_bins);
+	if (r->bins) free(r->bins);
+	if (r->ns)   free(r->ns);
+	if (r->set)  free(r->set);
+	// Raj(todo) should you free this here as well ???
+	free((void *)rec);
+}
+
+// Chris(todo) needs addition to the as_rec interface
+cf_digest
+query_response_digest(const as_rec *rec) {
+	as_query_response_rec * r = as_rec_source(rec);
+	return r->keyd;
+}
+
+// Chris(todo) needs addition to the as_rec interface
+uint64_t
+query_response_numbins(const as_rec *rec) {
+	as_query_response_rec * r = as_rec_source(rec);
+	if (!r) return 0;
+	return r->n_bins;
+}
+
+const as_rec_hooks query_response_hooks = {
+	.get        = query_response_get,
+	.set        = NULL,
+	.remove     = NULL,
+	.ttl        = query_response_ttl,
+	.gen        = query_response_gen,
+	.destroy    = query_response_destroy
+};
 
 /* 
  * this is an actual instance of a query, running on a query thread
@@ -653,7 +723,7 @@ static int as_query_worker_do(cl_cluster_node * node, as_query_task * task) {
             }
 
             // parse through the fields
-            cf_digest *     keyd        = 0;
+            cf_digest       keyd;
             char            ns_ret[33]  = {0};
             char *          set_ret     = NULL;
             cl_msg_field *  mf          = (cl_msg_field *)buf;
@@ -664,7 +734,7 @@ static int as_query_worker_do(cl_cluster_node * node, as_query_task * task) {
                     fprintf(stderr, "read: found a key - unexpected\n");
                 }
                 else if (mf->type == CL_MSG_FIELD_TYPE_DIGEST_RIPE) {
-                    keyd = (cf_digest *) mf->data;
+					memcpy(&keyd, mf->data, sizeof(cf_digest));
                 }
                 else if (mf->type == CL_MSG_FIELD_TYPE_NAMESPACE) {
                     memcpy(ns_ret, mf->data, cl_msg_field_get_value_sz(mf));
@@ -680,7 +750,8 @@ static int as_query_worker_do(cl_cluster_node * node, as_query_task * task) {
             }
 
             buf = (uint8_t *) mf;
-            if (msg->n_ops > STACK_BINS) {
+            if ((msg->n_ops > STACK_BINS) 
+				|| (!task->isinline)) {
                 bins = malloc(sizeof(cl_bin) * msg->n_ops);
             }
             else {
@@ -729,7 +800,7 @@ static int as_query_worker_do(cl_cluster_node * node, as_query_task * task) {
             else if ((msg->n_ops || (msg->info1 & CL_MSG_INFO1_NOBINDATA))) {
 
 				as_query_response_rec rec = {
-					.ns         = ns_ret,
+					.ns         = strdup(ns_ret),
 					.keyd       = keyd,
 					.set        = set_ret,
 					.generation = msg->generation,
@@ -744,15 +815,17 @@ static int as_query_worker_do(cl_cluster_node * node, as_query_task * task) {
                 rc = CITRUSLEAF_OK;
             }
 
-            if (bins != stack_bins) {
-                free(bins);
-                bins = 0;
-            }
+			if (task->isinline) {
+	            if (bins != stack_bins) {
+        	        free(bins);
+            	    bins = 0;
+            	}
 
-            if (set_ret) {
-                free(set_ret);
-                set_ret = NULL;
-            }
+	            if (set_ret) {
+    	            free(set_ret);
+        	        set_ret = NULL;
+            	}
+			}
 
             // don't have to free object internals. They point into the read buffer, where
             // a pointer is required
@@ -944,7 +1017,7 @@ static const as_aerospike_hooks query_aerospike_hooks = {
 };
 
 
-static cl_rv as_query_execute(cl_cluster * cluster, const as_query * query, void * udata, int (* callback)(as_query_response_rec *, void *)) {
+static cl_rv as_query_execute(cl_cluster * cluster, const as_query * query, void * udata, int (* callback)(as_query_response_rec *, void *), bool isinline) {
     
     cl_rv       rc                          = CITRUSLEAF_OK;
     uint8_t     wr_stack_buf[STACK_BUF_SZ]  = { 0 };
@@ -968,7 +1041,8 @@ static cl_rv as_query_execute(cl_cluster * cluster, const as_query * query, void
         .query_sz           = wr_buf_sz,
         .node_complete_q    = cf_queue_create(sizeof(int),true),
         .udata              = udata,
-        .callback           = callback
+        .callback           = callback,
+		.isinline           = isinline
     };
     
     char *node_names    = NULL;    
@@ -1219,22 +1293,6 @@ cl_rv as_query_limit(as_query *query, uint64_t limit) {
 }
 
 
-static void query_ostream_populate(as_stream *s, as_query_response_rec *rec) {
-    // Raj(todo) initialize serializer only once.
-    // Chris: serializer cannot be shared by threads.
-    // binname is either success or fail.
-    // bin has as_rec
-    as_serializer ser;
-    as_msgpack_init(&ser);
-
-    // msg->n_ops is expected to be only 1.
-    for (int i=0;i<rec->n_bins;i++) {
-        as_val *val = citrusleaf_udf_bin_to_val(&ser, &rec->bins[i]);
-        as_stream_write(s, val);
-    }
-}
-
-
 
 cl_rv citrusleaf_query_stream(cl_cluster * cluster, const as_query * query, as_stream * ostream) {
 
@@ -1257,16 +1315,17 @@ cl_rv citrusleaf_query_stream(cl_cluster * cluster, const as_query * query, as_s
         
         // callback for as_query_execute()
         int callback(as_query_response_rec * rec, void * udata) {
-            // msg->n_ops is expected to be only 1.
-            for (int i=0; i < rec->n_bins; i++) {
-                as_val * val = citrusleaf_udf_bin_to_val(&ser, &rec->bins[i]);
-                as_stream_write(&res_stream, val);
-            }
+			as_rec *r = as_rec_new(rec, &query_response_hooks);
+			if (!r) { 
+				return 0;
+			} 
+			as_stream_write(&res_stream, (as_val *)r);
+			as_rec_destroy(r);
             return 0;
         }
 
         // sink the data from multiple sources into the result stream
-        rc = as_query_execute(cluster, query, NULL, callback);
+        rc = as_query_execute(cluster, query, NULL, callback, false);
 
         if ( rc == CITRUSLEAF_OK ) {
             as_module_apply_stream(&mod_lua, &as, query->udf.filename, query->udf.function, &res_stream, query->udf.arglist, ostream);
@@ -1277,15 +1336,17 @@ cl_rv citrusleaf_query_stream(cl_cluster * cluster, const as_query * query, as_s
         // callback for as_query_execute()
         int callback(as_query_response_rec * rec, void * udata) {
             // msg->n_ops is expected to be only 1.
-            for (int i=0; i< rec->n_bins; i++) {
-                as_val * val = citrusleaf_udf_bin_to_val(&ser, &rec->bins[i]);
-                as_stream_write(ostream, val);
-            }
+            as_rec *r = as_rec_new(rec, &query_response_hooks);
+			if (!r) { 
+				return 0;
+			} 
+			as_stream_write(ostream, (as_val *)r);
+			as_rec_destroy(r);
             return 0;
         }
 
         // sink the data from multiple sources into the result stream
-        rc = as_query_execute(cluster, query, NULL, callback);
+        rc = as_query_execute(cluster, query, NULL, callback, false);
     }
 
     // cleanup deserializer
@@ -1296,7 +1357,7 @@ cl_rv citrusleaf_query_stream(cl_cluster * cluster, const as_query * query, as_s
 
 
 
-cl_rv citrusleaf_query_foreach(cl_cluster * cluster, const as_query * query, void * udata, bool (* foreach)(const as_val *, void *)) {
+cl_rv citrusleaf_query_foreach(cl_cluster * cluster, const as_query * query, void * udata, as_query_cb foreach) {
 
     cl_rv rc = CITRUSLEAF_OK;
 
@@ -1326,16 +1387,17 @@ cl_rv citrusleaf_query_foreach(cl_cluster * cluster, const as_query * query, voi
 
         // This callback will populate an intermediate stream, to be used for the aggregation
         int callback(as_query_response_rec * rec, void * udata) {
-            // msg->n_ops is expected to be only 1.
-            for (int i=0; i< rec->n_bins; i++) {
-                as_val * val = citrusleaf_udf_bin_to_val(&ser, &rec->bins[i]);
-                as_stream_write(&res_stream, val);
-            }
+			as_rec *r = as_rec_new(rec, &query_response_hooks);
+			if (!r) { 
+				return 0;
+			} 
+			as_stream_write(&res_stream, (as_val *)r);
+			as_rec_destroy(r);
             return 0;
         }
 
         // sink the data from multiple sources into the result stream
-        rc = as_query_execute(cluster, query, NULL, callback);
+        rc = as_query_execute(cluster, query, NULL, callback, true);
         
         if ( rc == CITRUSLEAF_OK ) {
             // Apply the UDF to the result stream
@@ -1347,17 +1409,15 @@ cl_rv citrusleaf_query_foreach(cl_cluster * cluster, const as_query * query, voi
 
         // The callback calls the foreach function for each value
         int callback(as_query_response_rec * rec, void * udata) {
-            // msg->n_ops is expected to be only 1.
-            for (int i=0; i< rec->n_bins; i++) {
-                as_val * val = citrusleaf_udf_bin_to_val(&ser, &rec->bins[i]);
-                foreach(val, udata);
-            }
+			as_rec r;
+			as_rec_init(&r, rec, &query_response_hooks);
+            foreach((as_val *)&r, udata);
             return 0;
         }
 
 
         // sink the data from multiple sources into the result stream
-        rc = as_query_execute(cluster, query, NULL, callback);
+        rc = as_query_execute(cluster, query, udata, callback, true);
     }
 
     // cleanup deserializer

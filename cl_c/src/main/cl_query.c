@@ -598,7 +598,7 @@ void query_response_destroy(as_rec *rec) {
 	if (r->bins) free(r->bins);
 	if (r->ns)   free(r->ns);
 	if (r->set)  free(r->set);
-	free(r);
+	if (r->ismalloc) free(r);
     rec->source = NULL;
 	// Raj(todo) should you free this here as well ???
 	// free((void *)rec);
@@ -801,6 +801,10 @@ static int as_query_worker_do(cl_cluster_node * node, as_query_task * task) {
 				recp->record_ttl = msg->record_ttl;
 				recp->bins       = bins;
 				recp->n_bins     = msg->n_ops;
+				if (!task->isinline) 
+					recp->ismalloc   = true;
+				else 
+					recp->ismalloc   = false;
 		
                 as_rec r;
 				as_rec *rp = &r;
@@ -829,7 +833,7 @@ static int as_query_worker_do(cl_cluster_node * node, as_query_task * task) {
                     task->callback(v, task->udata);
                     as_rec_destroy(rp);
 					// Where if fucking as_rec_free interface !!!!
-					free(rp);
+					if (!task->isinline) free(rp);
                 }
                 else {
                     task->callback((as_val *) rp, task->udata);

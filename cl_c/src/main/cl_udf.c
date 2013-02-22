@@ -132,6 +132,57 @@ int print_buffer(as_buffer * buff) {
     return 0;
 }
 
+//
+// TODO: hard to put into udf.h because of the type requirements.
+// FIX
+
+extern as_val * citrusleaf_udf_bin_to_val(as_serializer *ser, cl_bin *);
+
+as_val *citrusleaf_udf_bin_to_val(as_serializer *ser, cl_bin *bin) {     
+
+    as_val * val;
+
+    switch( bin->object.type ) {
+        case CL_INT : {
+            val = (as_val *) as_integer_new(bin->object.u.i64);
+            break;
+        }
+        case CL_STR : {
+            // steal the pointer from the object into the val
+            val = (as_val *) as_string_new(strdup(bin->object.u.str), true /*ismalloc*/);
+            break;
+        }
+        case CL_BLOB:
+        case CL_JAVA_BLOB:
+        case CL_CSHARP_BLOB:
+        case CL_PYTHON_BLOB:
+        case CL_RUBY_BLOB:
+        case CL_ERLANG_BLOB:
+        {
+            uint8_t *b = malloc(sizeof(bin->object.sz));
+            memcpy(b, bin->object.u.blob, bin->object.sz);
+            val = (as_val *)as_bytes_new(b, bin->object.sz, true /*ismalloc*/);
+        }
+        case CL_LIST :
+        case CL_MAP : {
+            // use a temporary buffer, which doesn't need to be destroyed
+            as_buffer buf = {
+                .capacity = (uint32_t) bin->object.sz,
+                .size = (uint32_t) bin->object.sz,
+                .data = (char *) bin->object.u.blob
+            };
+            // print_buffer(&buf);
+            as_serializer_deserialize(&ser, &buf, &val);
+            break;
+        }
+        default : {
+            val = NULL;
+            break;
+        }
+    }
+    return val;
+}
+
 cl_rv citrusleaf_udf_record_apply(cl_cluster * cl, const char * ns, const char * set, const cl_object * key, 
     const char * filename, const char * function, as_list * arglist, int timeout_ms, as_result * res) {
 
@@ -182,46 +233,7 @@ cl_rv citrusleaf_udf_record_apply(cl_cluster * cl, const char * ns, const char *
 
         cl_bin *bin = &bins[0];
 
-        as_val * val = NULL;
-
-        switch( bin->object.type ) {
-            case CL_INT : {
-                val = (as_val *) as_integer_new(bin->object.u.i64);
-                break;
-            }
-            case CL_STR : {
-                // steal the pointer from the object into the val
-                val = (as_val *) as_string_new(strdup(bin->object.u.str), true /*ismalloc*/);
-                break;
-            }
-            case CL_BLOB:
-            case CL_JAVA_BLOB:
-            case CL_CSHARP_BLOB:
-            case CL_PYTHON_BLOB:
-            case CL_RUBY_BLOB:
-            case CL_ERLANG_BLOB:
-            {
-                uint8_t *b = malloc(sizeof(bin->object.sz));
-                memcpy(b, bin->object.u.blob, bin->object.sz);
-                val = (as_val *)as_bytes_new(b, bin->object.sz, true /*ismalloc*/);
-            }
-            case CL_LIST :
-            case CL_MAP : {
-                // use a temporary buffer, which doesn't need to be destroyed
-                as_buffer buf = {
-                    .capacity = (uint32_t) bin->object.sz,
-                    .size = (uint32_t) bin->object.sz,
-                    .data = (char *) bin->object.u.blob
-                };
-                // print_buffer(&buf);
-                as_serializer_deserialize(&ser, &buf, &val);
-                break;
-            }
-            default : {
-                val = NULL;
-                break;
-            }
-        }
+        as_val *val = citrusleaf_udf_bin_to_val(&ser, bin);
 
         if ( val ) {
             if ( strcmp(bin->bin_name,"FAILURE") == 0 ) {

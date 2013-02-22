@@ -102,3 +102,4 @@ cl_rv citrusleaf_udf_put(cl_cluster * cluster, const char * filename, as_bytes *
  * @param error - Contains an error message, if the return value was non-zero. The value must be freed by the user.
  */
 cl_rv citrusleaf_udf_remove(cl_cluster * cluster, const char * filename, char ** error);
+

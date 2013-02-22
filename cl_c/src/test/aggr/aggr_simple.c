@@ -16,7 +16,7 @@
 as_aerospike as;
 
 as_stream_status print_stream_write(const as_stream * s, const as_val * v) {
-	info("%s", as_val_tostring(v));
+	if ( v != AS_STREAM_END ) info("%s", as_val_tostring(v));
     as_val_destroy(v);
     return AS_STREAM_OK;
 }

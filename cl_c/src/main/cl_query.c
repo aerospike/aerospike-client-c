@@ -919,11 +919,11 @@ static int queue_stream_destroy(as_stream *s) {
     while (CF_QUEUE_EMPTY != cf_queue_pop(as_stream_source(s), &val, CF_QUEUE_NOWAIT)) {
         as_val_destroy(val);
     }
+    cf_queue_destroy(as_stream_source(s));
     return 0;
 }
 
 static as_stream_status queue_stream_write(const as_stream * s, const as_val * val) {
-    // LOG("queue_stream_write('%s')",as_val_tostring(val));
     if (CF_QUEUE_OK != cf_queue_push(as_stream_source(s), &val)) {
         fprintf(stderr, "Write to client side stream failed");
         as_val_destroy(val);

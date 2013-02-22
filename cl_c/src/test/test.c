@@ -107,6 +107,7 @@ void atf_suite_result_print(atf_suite_result * suite_result) {
 
 atf_suite_result * atf_suite_result_new(atf_suite * suite) {
     atf_suite_result * res = (atf_suite_result *) malloc(sizeof(atf_suite_result));
+    res->success = 0;
     res->suite = suite;
     res->size = 0;
     return res;
@@ -262,5 +263,5 @@ void atf_log_line(FILE * f, const char * level, const char * prefix, const char 
     va_start(ap, fmt);
     vsnprintf(msg, LOG_MESSAGE_MAX, fmt, ap);
     va_end(ap);
-    fprintf(f, "%s[%s:%d] %s\n", prefix, file, line, msg);
+    fprintf(f, "%s[%s:%d] %s - %s\n", prefix, file, line, level, msg);
 }

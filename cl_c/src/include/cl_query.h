@@ -63,7 +63,6 @@ typedef struct as_query {
     cf_vector       * orderbys;
     as_query_udf    udf;
     void            * res_streamq;
-    // byte          udf_op;
     int             limit;  
     uint64_t        job_id;
 } as_query;
@@ -78,7 +77,7 @@ typedef struct as_query_response_record_t {
     int           n_bins;
 } as_query_response_rec;
 
-typedef bool (* as_query_cb) (const as_val *val, void *udata);
+typedef bool (* as_query_cb) (const as_val * val, void * udata);
 
 
 /******************************************************************************

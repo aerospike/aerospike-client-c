@@ -83,7 +83,7 @@ typedef struct {
     size_t                  query_sz;
     cf_queue *              node_complete_q;     // Asyncwork item queue
     void *                  udata;
-    int                     (* callback)(as_query_response_rec *, void *);
+    int                     (* callback)(as_val *, void *);
 	bool                    isinline;
 } as_query_task;
 
@@ -160,7 +160,7 @@ static cl_rv as_query_udf_destroy(as_query_udf * udf);
 
 // static cl_rv as_query_execute_sink(cl_cluster * cluster, const as_query * query, as_stream * stream);
 
-static cl_rv as_query_execute(cl_cluster * cluster, const as_query * query, void * udata, int (* callback)(as_query_response_rec *, void *), bool istream);
+static cl_rv as_query_execute(cl_cluster * cluster, const as_query * query, void * udata, int (* callback)(as_val *, void *), bool istream);
 
 static void cl_range_destroy(query_range *range) {
     citrusleaf_object_free(&range->start_obj);
@@ -564,59 +564,53 @@ extern as_val * citrusleaf_udf_bin_to_val(as_serializer *ser, cl_bin *);
 /**
  * Get a value for a bin of with the given key.
  */
-static as_val *
-query_response_get(const as_rec * rec, const char * name) 
-{
+static as_val * query_response_get(const as_rec * rec, const char * name)  {
+    as_val * v = NULL;
 	as_serializer ser;
 	as_msgpack_init(&ser);
 	as_query_response_rec * r = as_rec_source(rec);
 	for (int i = 0; i < r->n_bins; i++) {
 		// Raj (todo) remove this stupid linear search from here
 		if (strcmp(r->bins[i].bin_name, name)) { 
-			as_val *v = citrusleaf_udf_bin_to_val(&ser, &r->bins[i]);
-			as_serializer_destroy(&ser);
-			return v;
+			v = citrusleaf_udf_bin_to_val(&ser, &r->bins[i]);
+			break;
 		}
 	}
-	return NULL;
+    as_serializer_destroy(&ser);
+	return v;
 }
 
-static uint32_t
-query_response_ttl(const as_rec * rec)
-{
+static uint32_t query_response_ttl(const as_rec * rec) {
 	as_query_response_rec * r = as_rec_source(rec);
 	return r->record_ttl;
 }
 
-static uint16_t
-query_response_gen(const as_rec * rec) {
+static uint16_t query_response_gen(const as_rec * rec) {
 	as_query_response_rec * r = as_rec_source(rec);
 	if (!r) return 0;
 	return r->generation;
 }
 
-void
-query_response_destroy(as_rec *rec) {
+void query_response_destroy(as_rec *rec) {
 	as_query_response_rec * r = as_rec_source(rec);
 	if (!r) return;
 	citrusleaf_bins_free(r->bins, r->n_bins);
 	if (r->bins) free(r->bins);
 	if (r->ns)   free(r->ns);
 	if (r->set)  free(r->set);
+    // rec->source = NULL;
 	// Raj(todo) should you free this here as well ???
-	free((void *)rec);
+	// free((void *)rec);
 }
 
 // Chris(todo) needs addition to the as_rec interface
-cf_digest
-query_response_digest(const as_rec *rec) {
+cf_digest query_response_digest(const as_rec *rec) {
 	as_query_response_rec * r = as_rec_source(rec);
 	return r->keyd;
 }
 
 // Chris(todo) needs addition to the as_rec interface
-uint64_t
-query_response_numbins(const as_rec *rec) {
+uint64_t query_response_numbins(const as_rec *rec) {
 	as_query_response_rec * r = as_rec_source(rec);
 	if (!r) return 0;
 	return r->n_bins;
@@ -635,12 +629,6 @@ const as_rec_hooks query_response_hooks = {
  * this is an actual instance of a query, running on a query thread
  */
 static int as_query_worker_do(cl_cluster_node * node, as_query_task * task) {
-
-// }
-
-//     const char *ns, const uint8_t *query_buf, size_t query_sz, 
-//      bool isnbconnect, void * udata, int (* callback)(as_query_response_rec *, void *)
-// ) {
 
     uint8_t     rd_stack_buf[STACK_BUF_SZ] = {0};    
     uint8_t *   rd_buf = rd_stack_buf;
@@ -808,10 +796,33 @@ static int as_query_worker_do(cl_cluster_node * node, as_query_task * task) {
 					.bins       = bins,
 					.n_bins     = msg->n_ops,
 				};
+
+                as_rec r;
+                as_rec_init(&r, &rec, &query_response_hooks);
 			
-				// got one good value? call it a success!
+				// TODO:
+                //      Fix the following block of code. It is really lame 
+                //      to check for a bin called "SUCCESS" to determine
+                //      whether you have a single value or not.
+                // TODO:
+                //      Fix how we are to handle errors.... not everything
+                //      will be a "SUCCESS"... or will it?
+                //
+                // got one good value? call it a success!
                 // (Note:  In the key exists case, there is no bin data.)
-                task->callback(&rec, task->udata);
+                as_val * v = as_rec_get(&r, "SUCCESS");
+                if ( v  != NULL ) {
+                    // I only need this value. The rest of the record is useless.
+                    // Need to detach the value from the record (result)
+                    // then release the record back to the wild... or wherever
+                    // it came from.
+                    task->callback(v, task->udata);
+                    as_rec_destroy(&r);
+                }
+                else {
+                    task->callback((as_val *) &r, task->udata);
+                }
+
                 rc = CITRUSLEAF_OK;
             }
 
@@ -895,15 +906,15 @@ static void * as_query_worker(void * dummy) {
 
 
 
-static as_val *res_stream_read(const as_stream *s) {
-    as_val *val;
+static as_val * queue_stream_read(const as_stream *s) {
+    as_val * val = NULL;
     if (CF_QUEUE_EMPTY == cf_queue_pop(as_stream_source(s), &val, CF_QUEUE_NOWAIT)) {
         return NULL;
     }
     return val;
 }
 
-static int res_stream_destroy(as_stream *s) {
+static int queue_stream_destroy(as_stream *s) {
     as_val * val = NULL;
     while (CF_QUEUE_EMPTY != cf_queue_pop(as_stream_source(s), &val, CF_QUEUE_NOWAIT)) {
         as_val_destroy(val);
@@ -911,7 +922,8 @@ static int res_stream_destroy(as_stream *s) {
     return 0;
 }
 
-static as_stream_status res_stream_write(const as_stream * s, const as_val * val) {
+static as_stream_status queue_stream_write(const as_stream * s, const as_val * val) {
+    // LOG("queue_stream_write('%s')",as_val_tostring(val));
     if (CF_QUEUE_OK != cf_queue_push(as_stream_source(s), &val)) {
         fprintf(stderr, "Write to client side stream failed");
         as_val_destroy(val);
@@ -920,10 +932,10 @@ static as_stream_status res_stream_write(const as_stream * s, const as_val * val
     return AS_STREAM_OK;
 }
 
-static const as_stream_hooks res_stream_hooks = {
-    .destroy  = res_stream_destroy,
-    .read     = res_stream_read,
-    .write    = res_stream_write
+static const as_stream_hooks queue_stream_hooks = {
+    .destroy  = queue_stream_destroy,
+    .read     = queue_stream_read,
+    .write    = queue_stream_write
 };
 
 
@@ -1003,7 +1015,7 @@ static int query_aerospike_log(const as_aerospike * as, const char * file, const
             break;
     }
     // TODO: use proper logging functions
-    fprintf(stderr, "[%s:%d] %s - %s", file, line, l, msg);
+    fprintf(stderr, "[%s:%d] %s - %s\n", file, line, l, msg);
     return 0;
 }
 
@@ -1017,7 +1029,7 @@ static const as_aerospike_hooks query_aerospike_hooks = {
 };
 
 
-static cl_rv as_query_execute(cl_cluster * cluster, const as_query * query, void * udata, int (* callback)(as_query_response_rec *, void *), bool isinline) {
+static cl_rv as_query_execute(cl_cluster * cluster, const as_query * query, void * udata, int (* callback)(as_val *, void *), bool isinline) {
     
     cl_rv       rc                          = CITRUSLEAF_OK;
     uint8_t     wr_stack_buf[STACK_BUF_SZ]  = { 0 };
@@ -1091,6 +1103,8 @@ static cl_rv as_query_execute(cl_cluster * cluster, const as_query * query, void
         free(wr_buf); 
         wr_buf = 0;
     }
+
+    callback(NULL,udata);
     
     cf_queue_destroy(task.node_complete_q);
 
@@ -1310,17 +1324,12 @@ cl_rv citrusleaf_query_stream(cl_cluster * cluster, const as_query * query, as_s
         as_aerospike_init(&as, NULL, &query_aerospike_hooks);
 
         // stream for results from each node
-        as_stream res_stream;
-        as_stream_init(&res_stream, query->res_streamq, &res_stream_hooks); 
+        as_stream queue_stream;
+        as_stream_init(&queue_stream, query->res_streamq, &queue_stream_hooks); 
         
         // callback for as_query_execute()
-        int callback(as_query_response_rec * rec, void * udata) {
-			as_rec *r = as_rec_new(rec, &query_response_hooks);
-			if (!r) { 
-				return 0;
-			} 
-			as_stream_write(&res_stream, (as_val *)r);
-			as_rec_destroy(r);
+        int callback(as_val * v, void * udata) {
+            as_stream_write(&queue_stream, v == NULL ? AS_STREAM_END : v );
             return 0;
         }
 
@@ -1328,20 +1337,14 @@ cl_rv citrusleaf_query_stream(cl_cluster * cluster, const as_query * query, as_s
         rc = as_query_execute(cluster, query, NULL, callback, false);
 
         if ( rc == CITRUSLEAF_OK ) {
-            as_module_apply_stream(&mod_lua, &as, query->udf.filename, query->udf.function, &res_stream, query->udf.arglist, ostream);
+            as_module_apply_stream(&mod_lua, &as, query->udf.filename, query->udf.function, &queue_stream, query->udf.arglist, ostream);
         }
     }
     else {
 
         // callback for as_query_execute()
-        int callback(as_query_response_rec * rec, void * udata) {
-            // msg->n_ops is expected to be only 1.
-            as_rec *r = as_rec_new(rec, &query_response_hooks);
-			if (!r) { 
-				return 0;
-			} 
-			as_stream_write(ostream, (as_val *)r);
-			as_rec_destroy(r);
+        int callback(as_val * v, void * udata) {
+            as_stream_write(ostream, v == NULL ? AS_STREAM_END : v );
             return 0;
         }
 
@@ -1367,15 +1370,15 @@ cl_rv citrusleaf_query_foreach(cl_cluster * cluster, const as_query * query, voi
 
     if ( query->udf.type == AS_QUERY_UDF_STREAM ) {
 
-        // stream for results from each node
-        as_stream res_stream;
-        as_stream_init(&res_stream, query->res_streamq, &res_stream_hooks); 
-        
         // Setup as_aerospike, so we can get log() function.
         // TODO: this should occur only once
         as_aerospike as;
         as_aerospike_init(&as, NULL, &query_aerospike_hooks);
 
+        // stream for results from each node
+        as_stream queue_stream;
+        as_stream_init(&queue_stream, query->res_streamq, &queue_stream_hooks); 
+        
         // The callback stream provides the ability to write to a callback function
         // when as_stream_write is called.
         callback_stream_source source = {
@@ -1386,13 +1389,8 @@ cl_rv citrusleaf_query_foreach(cl_cluster * cluster, const as_query * query, voi
         callback_stream_init(&ostream, &source);
 
         // This callback will populate an intermediate stream, to be used for the aggregation
-        int callback(as_query_response_rec * rec, void * udata) {
-			as_rec *r = as_rec_new(rec, &query_response_hooks);
-			if (!r) { 
-				return 0;
-			} 
-			as_stream_write(&res_stream, (as_val *)r);
-			as_rec_destroy(r);
+        int callback(as_val * v, void * udata) {
+            as_stream_write(&queue_stream, v == NULL ? AS_STREAM_END : v );
             return 0;
         }
 
@@ -1401,20 +1399,17 @@ cl_rv citrusleaf_query_foreach(cl_cluster * cluster, const as_query * query, voi
         
         if ( rc == CITRUSLEAF_OK ) {
             // Apply the UDF to the result stream
-            as_module_apply_stream(&mod_lua, &as, query->udf.filename, query->udf.function, &res_stream, query->udf.arglist, &ostream);
+            as_module_apply_stream(&mod_lua, &as, query->udf.filename, query->udf.function, &queue_stream, query->udf.arglist, &ostream);
         }
 
     }
     else {
 
         // The callback calls the foreach function for each value
-        int callback(as_query_response_rec * rec, void * udata) {
-			as_rec r;
-			as_rec_init(&r, rec, &query_response_hooks);
-            foreach((as_val *)&r, udata);
+        int callback(as_val * v, void * udata) {
+            foreach(v, udata);
             return 0;
         }
-
 
         // sink the data from multiple sources into the result stream
         rc = as_query_execute(cluster, query, udata, callback, true);

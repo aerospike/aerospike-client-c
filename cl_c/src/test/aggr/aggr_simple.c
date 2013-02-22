@@ -16,8 +16,8 @@
 as_aerospike as;
 
 as_stream_status print_stream_write(const as_stream * s, const as_val * v) {
-	as_val *binval = as_rec_get((as_rec*) v, "SUCCESS");
-    if ( v != NULL ) info("%s", as_val_tostring(binval));
+	info("%s", as_val_tostring(v));
+    as_val_destroy(v);
     return AS_STREAM_OK;
 }
 
@@ -133,5 +133,7 @@ SUITE( aggr_simple, "aggregate simple" ) {
     suite_after( after );
     
     suite_add( aggr_simple_1 );
-    suite_add( aggr_simple_2 );
+    for ( int i = 0; i < 1; i++ ) {
+        suite_add( aggr_simple_2 );   
+    }
 }

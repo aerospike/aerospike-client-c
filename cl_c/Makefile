@@ -6,7 +6,12 @@ include project/settings.makefile
 ##  FLAGS                                                                    ##
 ###############################################################################
 
-CFLAGS = -O3
+# To Override Optimization Level, run make with the "O" variable set.
+# 	make O=0
+
+O=4
+
+CFLAGS = -O$(O)
 
 CC_FLAGS = -std=gnu99 -g -rdynamic -Wall 
 CC_FLAGS += -fno-common -fno-strict-aliasing -fPIC 
@@ -196,8 +201,16 @@ test: test-build
 	# @$(TARGET_BIN)/test/udf
 	@$(TARGET_BIN)/test/aggr
 
+VALGRIND_OPS = -v --tool=memcheck --leak-check=yes --show-reachable=yes --num-callers=20 --track-fds=yes -v
+
+
+.PHONY: test-valgrind
+test-valgrind: test-build
+	valgrind $(VALGRIND_OPTS) $(TARGET_BIN)/test/aggr 1>&2 2>aggr-valgrind
+
 .PHONY: test-build
-test-build: test/types test/client test/udf  test/aggr
+# test-build: test/types test/client test/udf  test/aggr
+test-build: test/aggr
 
 .PHONY: test-clean
 test-clean: 
@@ -229,19 +242,19 @@ $(TARGET_OBJ)/test/%.o: $(SOURCE_TEST)/%.c
 
 $(TARGET_BIN)/test/types: CFLAGS = $(TEST_CFLAGS)
 $(TARGET_BIN)/test/types: LDFLAGS += $(TEST_LDFLAGS)
-$(TARGET_BIN)/test/types: $(TEST_TYPES:%=$(TARGET_OBJ)/test/types/%.o) $(TARGET_OBJ)/test/test.o $(TARGET_LIB)/libcitrusleaf.a | prepare
+$(TARGET_BIN)/test/types: $(TEST_TYPES:%=$(TARGET_OBJ)/test/types/%.o) $(TARGET_OBJ)/test/test.o $(TARGET_LIB)/libcitrusleaf.a | build prepare
 
 $(TARGET_BIN)/test/client: CFLAGS += $(TEST_CFLAGS)
 $(TARGET_BIN)/test/client: LDFLAGS += $(TEST_LDFLAGS)
-$(TARGET_BIN)/test/client: $(TEST_CLIENT:%=$(TARGET_OBJ)/test/client/%.o) $(TARGET_OBJ)/test/test.o $(TARGET_LIB)/libcitrusleaf.a | prepare
+$(TARGET_BIN)/test/client: $(TEST_CLIENT:%=$(TARGET_OBJ)/test/client/%.o) $(TARGET_OBJ)/test/test.o $(TARGET_LIB)/libcitrusleaf.a | build prepare
 
 $(TARGET_BIN)/test/udf: CFLAGS += $(TEST_CFLAGS)
 $(TARGET_BIN)/test/udf: LDFLAGS += $(TEST_LDFLAGS)
-$(TARGET_BIN)/test/udf: $(TEST_UDF:%=$(TARGET_OBJ)/test/udf/%.o) $(TARGET_OBJ)/test/test.o $(TARGET_LIB)/libcitrusleaf.a | prepare
+$(TARGET_BIN)/test/udf: $(TEST_UDF:%=$(TARGET_OBJ)/test/udf/%.o) $(TARGET_OBJ)/test/test.o $(TARGET_LIB)/libcitrusleaf.a | build prepare
 
 $(TARGET_BIN)/test/aggr: CFLAGS += $(TEST_CFLAGS)
 $(TARGET_BIN)/test/aggr: LDFLAGS += $(TEST_LDFLAGS)
-$(TARGET_BIN)/test/aggr: $(TEST_AGGR:%=$(TARGET_OBJ)/test/aggr/%.o) $(TARGET_OBJ)/test/test.o $(TARGET_LIB)/libcitrusleaf.a | prepare
+$(TARGET_BIN)/test/aggr: $(TEST_AGGR:%=$(TARGET_OBJ)/test/aggr/%.o) $(TARGET_OBJ)/test/test.o $(TARGET_LIB)/libcitrusleaf.a | build prepare
 
 ###############################################################################
 include project/rules.makefile

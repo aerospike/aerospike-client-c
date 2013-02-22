@@ -84,7 +84,7 @@ typedef struct {
     cf_queue *              node_complete_q;     // Asyncwork item queue
     void *                  udata;
     int                     (* callback)(as_val *, void *);
-	bool                    isinline;
+    bool                    isinline;
 } as_query_task;
 
 
@@ -551,11 +551,11 @@ static int query_compile(const as_query * query, uint8_t ** buf_r, size_t * buf_
         if (mbuf) {
             free(mbuf); 
         }
-		as_buffer_destroy(&argbuffer);
+        as_buffer_destroy(&argbuffer);
         return CITRUSLEAF_FAIL_CLIENT;
     }
     
-	as_buffer_destroy(&argbuffer);
+    as_buffer_destroy(&argbuffer);
     return CITRUSLEAF_OK;
 }
 
@@ -566,64 +566,64 @@ extern as_val * citrusleaf_udf_bin_to_val(as_serializer *ser, cl_bin *);
  */
 static as_val * query_response_get(const as_rec * rec, const char * name)  {
     as_val * v = NULL;
-	as_serializer ser;
-	as_msgpack_init(&ser);
-	as_query_response_rec * r = as_rec_source(rec);
-	for (int i = 0; i < r->n_bins; i++) {
-		// Raj (todo) remove this stupid linear search from here
-		if (!strcmp(r->bins[i].bin_name, name)) { 
-			v = citrusleaf_udf_bin_to_val(&ser, &r->bins[i]);
-			break;
-		}
-	}
+    as_serializer ser;
+    as_msgpack_init(&ser);
+    as_query_response_rec * r = as_rec_source(rec);
+    for (int i = 0; i < r->n_bins; i++) {
+        // Raj (todo) remove this stupid linear search from here
+        if (!strcmp(r->bins[i].bin_name, name)) { 
+            v = citrusleaf_udf_bin_to_val(&ser, &r->bins[i]);
+            break;
+        }
+    }
     as_serializer_destroy(&ser);
-	return v;
+    return v;
 }
 
 static uint32_t query_response_ttl(const as_rec * rec) {
-	as_query_response_rec * r = as_rec_source(rec);
-	return r->record_ttl;
+    as_query_response_rec * r = as_rec_source(rec);
+    return r->record_ttl;
 }
 
 static uint16_t query_response_gen(const as_rec * rec) {
-	as_query_response_rec * r = as_rec_source(rec);
-	if (!r) return 0;
-	return r->generation;
+    as_query_response_rec * r = as_rec_source(rec);
+    if (!r) return 0;
+    return r->generation;
 }
 
 void query_response_destroy(as_rec *rec) {
-	as_query_response_rec * r = as_rec_source(rec);
-	if (!r) return;
-	citrusleaf_bins_free(r->bins, r->n_bins);
-	if (r->bins) free(r->bins);
-	if (r->ns)   free(r->ns);
-	if (r->set)  free(r->set);
-	if (r->ismalloc) free(r);
+    as_query_response_rec * r = as_rec_source(rec);
+    if (!r) return;
+    citrusleaf_bins_free(r->bins, r->n_bins);
+    if (r->bins) free(r->bins);
+    if (r->ns)   free(r->ns);
+    if (r->set)  free(r->set);
+    if (r->ismalloc) free(r);
     rec->source = NULL;
-	// Raj(todo) should you free this here as well ???
-	// free((void *)rec);
+    // Raj(todo) should you free this here as well ???
+    // free((void *)rec);
 }
 
 // Chris(todo) needs addition to the as_rec interface
 cf_digest query_response_digest(const as_rec *rec) {
-	as_query_response_rec * r = as_rec_source(rec);
-	return r->keyd;
+    as_query_response_rec * r = as_rec_source(rec);
+    return r->keyd;
 }
 
 // Chris(todo) needs addition to the as_rec interface
 uint64_t query_response_numbins(const as_rec *rec) {
-	as_query_response_rec * r = as_rec_source(rec);
-	if (!r) return 0;
-	return r->n_bins;
+    as_query_response_rec * r = as_rec_source(rec);
+    if (!r) return 0;
+    return r->n_bins;
 }
 
 const as_rec_hooks query_response_hooks = {
-	.get        = query_response_get,
-	.set        = NULL,
-	.remove     = NULL,
-	.ttl        = query_response_ttl,
-	.gen        = query_response_gen,
-	.destroy    = query_response_destroy
+    .get        = query_response_get,
+    .set        = NULL,
+    .remove     = NULL,
+    .ttl        = query_response_ttl,
+    .gen        = query_response_gen,
+    .destroy    = query_response_destroy
 };
 
 /* 
@@ -723,7 +723,7 @@ static int as_query_worker_do(cl_cluster_node * node, as_query_task * task) {
                     fprintf(stderr, "read: found a key - unexpected\n");
                 }
                 else if (mf->type == CL_MSG_FIELD_TYPE_DIGEST_RIPE) {
-					memcpy(&keyd, mf->data, sizeof(cf_digest));
+                    memcpy(&keyd, mf->data, sizeof(cf_digest));
                 }
                 else if (mf->type == CL_MSG_FIELD_TYPE_NAMESPACE) {
                     memcpy(ns_ret, mf->data, cl_msg_field_get_value_sz(mf));
@@ -740,7 +740,7 @@ static int as_query_worker_do(cl_cluster_node * node, as_query_task * task) {
 
             buf = (uint8_t *) mf;
             if ((msg->n_ops > STACK_BINS) 
-				|| (!task->isinline)) {
+                || (!task->isinline)) {
                 bins = malloc(sizeof(cl_bin) * msg->n_ops);
             }
             else {
@@ -788,33 +788,33 @@ static int as_query_worker_do(cl_cluster_node * node, as_query_task * task) {
             }
             else if ((msg->n_ops || (msg->info1 & CL_MSG_INFO1_NOBINDATA))) {
 
-				as_query_response_rec rec;
-				as_query_response_rec *recp = &rec;
-				if (!task->isinline) { 
-					recp = malloc(sizeof(as_query_response_rec));
-				}
-				
-				recp->ns         = strdup(ns_ret);
-				recp->keyd       = keyd;
-				recp->set        = set_ret;
-				recp->generation = msg->generation;
-				recp->record_ttl = msg->record_ttl;
-				recp->bins       = bins;
-				recp->n_bins     = msg->n_ops;
-				if (!task->isinline) 
-					recp->ismalloc   = true;
-				else 
-					recp->ismalloc   = false;
-		
+                as_query_response_rec rec;
+                as_query_response_rec *recp = &rec;
+                if (!task->isinline) { 
+                    recp = malloc(sizeof(as_query_response_rec));
+                }
+                
+                recp->ns         = strdup(ns_ret);
+                recp->keyd       = keyd;
+                recp->set        = set_ret;
+                recp->generation = msg->generation;
+                recp->record_ttl = msg->record_ttl;
+                recp->bins       = bins;
+                recp->n_bins     = msg->n_ops;
+                if (!task->isinline) 
+                    recp->ismalloc   = true;
+                else 
+                    recp->ismalloc   = false;
+        
                 as_rec r;
-				as_rec *rp = &r;
-				if (!task->isinline) {
-					rp = as_rec_new(recp, &query_response_hooks);	
-				} else {
-                	as_rec_init(rp, recp, &query_response_hooks);
-				}	
-			
-				// TODO:
+                as_rec *rp = &r;
+                if (!task->isinline) {
+                    rp = as_rec_new(recp, &query_response_hooks);    
+                } else {
+                    as_rec_init(rp, recp, &query_response_hooks);
+                }    
+            
+                // TODO:
                 //      Fix the following block of code. It is really lame 
                 //      to check for a bin called "SUCCESS" to determine
                 //      whether you have a single value or not.
@@ -832,35 +832,35 @@ static int as_query_worker_do(cl_cluster_node * node, as_query_task * task) {
                     // it came from.
                     task->callback(v, task->udata);
                     as_rec_destroy(rp);
-					// Where if fucking as_rec_free interface !!!!
-					if (!task->isinline) free(rp);
+                    // Where if fucking as_rec_free interface !!!!
+                    if (!task->isinline) free(rp);
                 }
                 else {
                     task->callback((as_val *) rp, task->udata);
                 }
-				
-				if (task->isinline) { 
-					if (recp->ns) { 
-						free(recp->ns);
-						recp->ns = NULL;
-					}
-				}
+                
+                if (task->isinline) { 
+                    if (recp->ns) { 
+                        free(recp->ns);
+                        recp->ns = NULL;
+                    }
+                }
 
                 rc = CITRUSLEAF_OK;
             }
 
-			// if done free it 
-			if (task->isinline || done) {
-	            if (bins != stack_bins) {
-        	        free(bins);
-            	    bins = 0;
-            	}
+            // if done free it 
+            if (task->isinline || done) {
+                if (bins != stack_bins) {
+                    free(bins);
+                    bins = 0;
+                }
 
-	            if (set_ret) {
-    	            free(set_ret);
-        	        set_ret = NULL;
-            	}
-			}
+                if (set_ret) {
+                    free(set_ret);
+                    set_ret = NULL;
+                }
+            }
 
             // don't have to free object internals. They point into the read buffer, where
             // a pointer is required
@@ -1015,9 +1015,9 @@ static cl_rv as_query_udf_destroy(as_query_udf * udf) {
 
     if ( udf->arglist ) {
         as_list_destroy(udf->arglist);
-		// raj (Todo) where is fucking as_list_free interface
+        // raj (Todo) where is fucking as_list_free interface
         free(udf->arglist);
-		udf->arglist = NULL;
+        udf->arglist = NULL;
     }
 
     return CITRUSLEAF_OK;
@@ -1080,7 +1080,7 @@ static cl_rv as_query_execute(cl_cluster * cluster, const as_query * query, void
         .node_complete_q    = cf_queue_create(sizeof(int),true),
         .udata              = udata,
         .callback           = callback,
-		.isinline           = isinline
+        .isinline           = isinline
     };
     
     char *node_names    = NULL;    
@@ -1214,7 +1214,7 @@ Cleanup:
  */
 as_query * as_query_new(const char * ns, const char * setname) {
     as_query * query = malloc(sizeof(as_query));
-	memset(query, 0, sizeof(as_query));
+    memset(query, 0, sizeof(as_query));
     return as_query_init(query, ns, setname);
 }
 
@@ -1226,7 +1226,7 @@ as_query * as_query_init(as_query * query, const char * ns, const char * setname
     
     cf_queue * result_queue = cf_queue_create(sizeof(void *), true);
     if ( !result_queue ) {
-		query->res_streamq = NULL;
+        query->res_streamq = NULL;
         return query;
     }
 
@@ -1270,12 +1270,12 @@ void as_query_destroy(as_query *query) {
     if (query->setname) free(query->setname);
 
     if ( query->res_streamq ) {
-		as_val *val = NULL;
-		while (CF_QUEUE_OK == cf_queue_pop (query->res_streamq, 
-										&val, CF_QUEUE_NOWAIT)) {
-			as_val_destroy(val);
-			val = NULL;
-		}
+        as_val *val = NULL;
+        while (CF_QUEUE_OK == cf_queue_pop (query->res_streamq, 
+                                        &val, CF_QUEUE_NOWAIT)) {
+            as_val_destroy(val);
+            val = NULL;
+        }
 
         cf_queue_destroy(query->res_streamq);
         query->res_streamq = NULL;

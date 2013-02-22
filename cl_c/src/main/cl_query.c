@@ -851,6 +851,7 @@ static int as_query_worker_do(cl_cluster_node * node, as_query_task * task) {
 
             // if done free it 
             if (task->isinline || done) {
+				citrusleaf_bins_free(bins, msg->n_ops);
                 if (bins != stack_bins) {
                     free(bins);
                     bins = 0;

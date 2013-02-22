@@ -132,11 +132,8 @@ int print_buffer(as_buffer * buff) {
     return 0;
 }
 
-//
-// TODO: hard to put into udf.h because of the type requirements.
-// FIX
 
-extern as_val * citrusleaf_udf_bin_to_val(as_serializer *ser, cl_bin *);
+
 
 as_val *citrusleaf_udf_bin_to_val(as_serializer *ser, cl_bin *bin) {     
 
@@ -172,7 +169,7 @@ as_val *citrusleaf_udf_bin_to_val(as_serializer *ser, cl_bin *bin) {
                 .data = (char *) bin->object.u.blob
             };
             // print_buffer(&buf);
-            as_serializer_deserialize(&ser, &buf, &val);
+            as_serializer_deserialize(ser, &buf, &val);
             break;
         }
         default : {

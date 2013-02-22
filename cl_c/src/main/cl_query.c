@@ -560,6 +560,11 @@ static int query_compile(const as_query * query, uint8_t ** buf_r, size_t * buf_
     return CITRUSLEAF_OK;
 }
 
+//
+// TODO: hard to put into udf.h because of the type requirements.
+// FIX
+extern as_val * citrusleaf_udf_bin_to_val(as_serializer *ser, cl_bin *);
+
 /**
  * Get a value for a bin of with the given key.
  */

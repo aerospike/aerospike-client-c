@@ -40,11 +40,7 @@
 /******************************************************************************
  * DATA TYPES
  ******************************************************************************/
-struct as_bytes_s {
-  byte * data;
-  int size;
-};
-typedef struct as_bytes_s as_bytes;
+
 typedef uint8_t as_udf_type;
 
 struct as_udf_file_s {

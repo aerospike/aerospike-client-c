@@ -4,10 +4,10 @@
  * ABOVE DOES NOT EVIDENCE ANY ACTUAL OR INTENDED PUBLICATION.
  ******************************************************************************/
 
-#include "citrusleaf.h"
 #include "citrusleaf-internal.h"
 #include "cl_udf.h"
 #include "cl_write.h"
+#include "as_bytes.h"
 
 #include <as_msgpack.h>
 #include <citrusleaf/cf_b64.h>
@@ -22,8 +22,7 @@ typedef struct citrusleaf_udf_filelist_s citrusleaf_udf_filelist;
 struct citrusleaf_udf_info_s {
     char *      error;
     char       filename[128];
-    byte *      content;
-    uint32_t content_len;
+    as_bytes   content;
     char *      gen;
     char *      files;
     int         count;
@@ -57,12 +56,11 @@ static void citrusleaf_udf_info_destroy(citrusleaf_udf_info * info);
 
 static void citrusleaf_udf_info_destroy(citrusleaf_udf_info * info) {
     if ( info->error ) free(info->error);
-    if ( info->content ) free(info->content);
+    as_val_destroy(&info->content);
     if ( info->gen ) free(info->gen);
     if ( info->files ) free(info->files);
 
     info->error = NULL;
-    info->content = NULL;
     info->gen = NULL;
     info->files = NULL;
     info->count = 0;
@@ -80,9 +78,11 @@ static void * citrusleaf_udf_info_parameters(const char * key, const char * valu
         info->gen = strdup(value);
     }
     else if ( strcmp(key,"content") == 0 ) {
-	info->content = (byte*)calloc(1, sizeof(byte)*(strlen(value)));
-        memcpy(info->content, value, strlen(value));
-	info->content_len = strlen(value);
+    	as_val_destroy(&info->content);
+    	int c_len = strlen(value);
+    	uint8_t *c = (uint8_t *)malloc(c_len);
+        memcpy(c, value, c_len);
+    	as_bytes_init(&info->content, c, c_len, true /*memcpy*/);
     }
     else if ( strcmp(key,"files") == 0 ) {
         info->files = strdup(value);
@@ -132,37 +132,6 @@ int print_buffer(as_buffer * buff) {
     return 0;
 }
 
-as_val *citrusleaf_udf_bin_to_val(as_serializer *ser, cl_bin *bin) {
-	as_val * val = NULL;
-
-	switch( bin->object.type ) {
-		case CL_INT : {
-			  val = (as_val *) as_integer_new(bin->object.u.i64);
-			  break;
-	  	}
-		case CL_STR : {
-			  val = (as_val *) as_string_new(bin->object.u.str, true /*ismalloc*/);
-			  break;
-		}
-		case CL_LIST :
-		case CL_MAP : {
-			  as_buffer buf = {
-				  .capacity = (uint32_t) bin->object.sz,
-				  .size = (uint32_t) bin->object.sz,
-				  .data = (char *) bin->object.u.blob
-			  };
-			  // print_buffer(&buf);
-			  as_serializer_deserialize(ser, &buf, &val);
-			  break;
-		}
-		default : {
-			  val = NULL;
-			  break;
-		}
-	}
-	return val;
-}
-
 cl_rv citrusleaf_udf_record_apply(cl_cluster * cl, const char * ns, const char * set, const cl_object * key, 
     const char * filename, const char * function, as_list * arglist, int timeout_ms, as_result * res) {
 
@@ -209,16 +178,56 @@ cl_rv citrusleaf_udf_record_apply(cl_cluster * cl, const char * ns, const char *
 
 	if (! (rv == CITRUSLEAF_OK || rv == CITRUSLEAF_FAIL_UDF_BAD_RESPONSE)) {
     	as_result_setfailure(res, (as_val *) as_string_new("None UDF failure",false));
-    } else if ( n_bins == 1 && bins != NULL ) {
-        cl_bin bin = *bins;
-		
-		as_val *val = citrusleaf_udf_bin_to_val(&ser, &bin);
+    } else if ( n_bins == 1  ) {
+
+        cl_bin *bin = &bins[0];
+
+        as_val * val = NULL;
+
+        switch( bin->object.type ) {
+            case CL_INT : {
+                val = (as_val *) as_integer_new(bin->object.u.i64);
+                break;
+            }
+            case CL_STR : {
+                // steal the pointer from the object into the val
+                val = (as_val *) as_string_new(strdup(bin->object.u.str), true /*ismalloc*/);
+                break;
+            }
+            case CL_BLOB:
+            case CL_JAVA_BLOB:
+            case CL_CSHARP_BLOB:
+            case CL_PYTHON_BLOB:
+            case CL_RUBY_BLOB:
+            case CL_ERLANG_BLOB:
+            {
+                uint8_t *b = malloc(sizeof(bin->object.sz));
+                memcpy(b, bin->object.u.blob, bin->object.sz);
+                val = (as_val *)as_bytes_new(b, bin->object.sz, true /*ismalloc*/);
+            }
+            case CL_LIST :
+            case CL_MAP : {
+                // use a temporary buffer, which doesn't need to be destroyed
+                as_buffer buf = {
+                    .capacity = (uint32_t) bin->object.sz,
+                    .size = (uint32_t) bin->object.sz,
+                    .data = (char *) bin->object.u.blob
+                };
+                // print_buffer(&buf);
+                as_serializer_deserialize(&ser, &buf, &val);
+                break;
+            }
+            default : {
+                val = NULL;
+                break;
+            }
+        }
 
         if ( val ) {
-            if ( strcmp(bin.bin_name,"FAILURE") == 0 ) {
+            if ( strcmp(bin->bin_name,"FAILURE") == 0 ) {
                 as_result_setfailure(res, val);
             }
-            else if ( strcmp(bin.bin_name,"SUCCESS") == 0 ) {
+            else if ( strcmp(bin->bin_name,"SUCCESS") == 0 ) {
                 as_result_setsuccess(res, val);
             }
             else {
@@ -370,28 +379,22 @@ cl_rv citrusleaf_udf_get_with_gen(cl_cluster *asc, const char * filename, as_udf
         return 1;
     }
 
-    if ( !info.content ) {
+    if ( as_bytes_len(&info.content) == 0 ) {
         *error = strdup("file_not_found");
         citrusleaf_udf_info_destroy(&info);
         return 2;
     }
 
-    int clen = info.content ? info.content_len : 0;
-    cf_base64_decode_inplace(info.content, &clen, true);
+    int clen = as_bytes_len(&info.content);
+    cf_base64_decode_inplace(as_bytes_tobytes(&info.content), &clen, true);
+    info.content.len = clen;
    
-    // Update file name, content
     strcpy(file->name, filename);
-    file->content->data = calloc(1, sizeof(byte)*(info.content_len)); 
-    memcpy((*(file->content)).data, info.content, info.content_len);
-    (*(file->content)).size = clen;
     
     // Update file hash
     unsigned char hash[SHA_DIGEST_LENGTH];
-    SHA1(info.content, info.content_len, hash);
+    SHA1(as_bytes_tobytes(&info.content), as_bytes_len(&info.content), hash);
     cf_convert_sha1_to_hex(hash, file->hash);
-    
-    free(info.content);
-    info.content = NULL;
     
     if ( gen ) {
         *gen = info.gen;
@@ -405,7 +408,7 @@ cl_rv citrusleaf_udf_get_with_gen(cl_cluster *asc, const char * filename, as_udf
 
 cl_rv citrusleaf_udf_put(cl_cluster *asc, const char * filename, as_bytes *content, as_udf_type udf_type, char ** error) {
 
-    if ( !filename || !(content->data && content->size > 0)) {
+    if ( !filename || !(content)) {
         fprintf(stderr, "filename and content required\n");
         return CITRUSLEAF_FAIL_CLIENT;
     }
@@ -415,9 +418,11 @@ cl_rv citrusleaf_udf_put(cl_cluster *asc, const char * filename, as_bytes *conte
     char *  filepath    = strdup(filename);
     char *  filebase    = basename(filepath);
 
-    char * content_base64 = malloc(cf_base64_encode_maxlen(content->size));
-    cf_base64_tostring(content->data, content_base64, &(content->size));
-    if (! asprintf(&query, "udf-put:filename=%s;content=%s;content-len=%d;udf-type=%d;", filebase, content_base64, content->size, udf_type)) {
+    int  clen = as_bytes_len(content);
+    char * content_base64 = malloc(cf_base64_encode_maxlen(clen));
+    cf_base64_tostring(as_bytes_tobytes(content), content_base64, &clen);
+
+    if (! asprintf(&query, "udf-put:filename=%s;content=%s;content-len=%d;udf-type=%d;", filebase, content_base64, clen, udf_type)) {
         fprintf(stderr, "Query allocation failed");
         return CITRUSLEAF_FAIL_CLIENT;
     }
@@ -447,6 +452,7 @@ cl_rv citrusleaf_udf_put(cl_cluster *asc, const char * filename, as_bytes *conte
 
     free(query);
     free(content_base64);
+    content_base64 = 0;
     query = NULL;
     
     /**

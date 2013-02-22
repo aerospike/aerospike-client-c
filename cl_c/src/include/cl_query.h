@@ -113,10 +113,10 @@ int   as_query_where_function(as_query * query, const char * finame, as_query_op
 int   as_query_filter(as_query * query, const char * binname, as_query_op op, ...);
 int   as_query_orderby(as_query * query, const char * binname, as_query_orderby_op order);
 cl_rv as_query_aggregate(as_query * query, const char * filename, const char * function, as_list * arglist);
+cl_rv as_query_foreach(as_query * query, const char * filename, const char * function, as_list * arglist);
 int   as_query_limit(as_query * query, uint64_t limit);
 
 
-// cl_rv as_query_foreach(cl_cluster *asc, const as_query *query_obj, as_query_cb cb, void *udata, as_stream *s);
 
 cl_rv citrusleaf_query_stream(cl_cluster * cluster, const as_query * query, as_stream * stream);
 cl_rv citrusleaf_query_foreach(cl_cluster * cluster, const as_query * query, void * udata, bool (*foreach)(const as_val *, void *));

@@ -571,7 +571,7 @@ static as_val * query_response_get(const as_rec * rec, const char * name)  {
 	as_query_response_rec * r = as_rec_source(rec);
 	for (int i = 0; i < r->n_bins; i++) {
 		// Raj (todo) remove this stupid linear search from here
-		if (strcmp(r->bins[i].bin_name, name)) { 
+		if (!strcmp(r->bins[i].bin_name, name)) { 
 			v = citrusleaf_udf_bin_to_val(&ser, &r->bins[i]);
 			break;
 		}
@@ -598,7 +598,8 @@ void query_response_destroy(as_rec *rec) {
 	if (r->bins) free(r->bins);
 	if (r->ns)   free(r->ns);
 	if (r->set)  free(r->set);
-    // rec->source = NULL;
+	free(r);
+    rec->source = NULL;
 	// Raj(todo) should you free this here as well ???
 	// free((void *)rec);
 }
@@ -787,18 +788,27 @@ static int as_query_worker_do(cl_cluster_node * node, as_query_task * task) {
             }
             else if ((msg->n_ops || (msg->info1 & CL_MSG_INFO1_NOBINDATA))) {
 
-				as_query_response_rec rec = {
-					.ns         = strdup(ns_ret),
-					.keyd       = keyd,
-					.set        = set_ret,
-					.generation = msg->generation,
-					.record_ttl = msg->record_ttl,
-					.bins       = bins,
-					.n_bins     = msg->n_ops,
-				};
-
+				as_query_response_rec rec;
+				as_query_response_rec *recp = &rec;
+				if (!task->isinline) { 
+					recp = malloc(sizeof(as_query_response_rec));
+				}
+				
+				recp->ns         = strdup(ns_ret);
+				recp->keyd       = keyd;
+				recp->set        = set_ret;
+				recp->generation = msg->generation;
+				recp->record_ttl = msg->record_ttl;
+				recp->bins       = bins;
+				recp->n_bins     = msg->n_ops;
+		
                 as_rec r;
-                as_rec_init(&r, &rec, &query_response_hooks);
+				as_rec *rp = &r;
+				if (!task->isinline) {
+					rp = as_rec_new(recp, &query_response_hooks);	
+				} else {
+                	as_rec_init(rp, recp, &query_response_hooks);
+				}	
 			
 				// TODO:
                 //      Fix the following block of code. It is really lame 
@@ -810,23 +820,33 @@ static int as_query_worker_do(cl_cluster_node * node, as_query_task * task) {
                 //
                 // got one good value? call it a success!
                 // (Note:  In the key exists case, there is no bin data.)
-                as_val * v = as_rec_get(&r, "SUCCESS");
+                as_val * v = as_rec_get(rp, "SUCCESS");
                 if ( v  != NULL ) {
                     // I only need this value. The rest of the record is useless.
                     // Need to detach the value from the record (result)
                     // then release the record back to the wild... or wherever
                     // it came from.
                     task->callback(v, task->udata);
-                    as_rec_destroy(&r);
+                    as_rec_destroy(rp);
+					// Where if fucking as_rec_free interface !!!!
+					free(rp);
                 }
                 else {
-                    task->callback((as_val *) &r, task->udata);
+                    task->callback((as_val *) rp, task->udata);
                 }
+				
+				if (task->isinline) { 
+					if (recp->ns) { 
+						free(recp->ns);
+						recp->ns = NULL;
+					}
+				}
 
                 rc = CITRUSLEAF_OK;
             }
 
-			if (task->isinline) {
+			// if done free it 
+			if (task->isinline || done) {
 	            if (bins != stack_bins) {
         	        free(bins);
             	    bins = 0;
@@ -917,7 +937,7 @@ static as_val * queue_stream_read(const as_stream *s) {
 static int queue_stream_destroy(as_stream *s) {
     as_val * val = NULL;
     while (CF_QUEUE_EMPTY != cf_queue_pop(as_stream_source(s), &val, CF_QUEUE_NOWAIT)) {
-        as_val_destroy(val);
+        if (val) as_val_destroy(val);
     }
     cf_queue_destroy(as_stream_source(s));
     return 0;
@@ -991,7 +1011,9 @@ static cl_rv as_query_udf_destroy(as_query_udf * udf) {
 
     if ( udf->arglist ) {
         as_list_destroy(udf->arglist);
-        udf->arglist = NULL;
+		// raj (Todo) where is fucking as_list_free interface
+        free(udf->arglist);
+		udf->arglist = NULL;
     }
 
     return CITRUSLEAF_OK;
@@ -1104,7 +1126,7 @@ static cl_rv as_query_execute(cl_cluster * cluster, const as_query * query, void
         wr_buf = 0;
     }
 
-    callback(NULL,udata);
+    callback(NULL, udata);
     
     cf_queue_destroy(task.node_complete_q);
 

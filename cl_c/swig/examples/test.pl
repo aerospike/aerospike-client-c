@@ -47,6 +47,12 @@ print $arg_host . "\n";
 print $arg_port . "\n";
 print $arg_ns . "\n";
 
+# Init shm before creating cluster (if using shared memory)
+# The first argument should be the maximum number of nodes the cluster 
+# can have. The second argument is the shm key.
+# If both arguments are zero, default number of nodes, i.e 64 and default key is used
+# $shmret = citrusleaf::citrusleaf_use_shm(10,788722985);
+
 #Initialize citrusleaf
 citrusleaf::citrusleaf_init();
 

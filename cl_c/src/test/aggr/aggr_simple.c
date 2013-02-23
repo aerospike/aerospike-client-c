@@ -16,7 +16,11 @@
 as_aerospike as;
 
 as_stream_status print_stream_write(const as_stream * s, const as_val * v) {
-	if ( v != AS_STREAM_END ) info("%s", as_val_tostring(v));
+    typedef void (* callback)(const as_val *);
+    callback c = (callback) as_stream_source(s);
+    if ( c ) {
+        c(v);
+    }
     as_val_destroy(v);
     return AS_STREAM_OK;
 }
@@ -26,8 +30,8 @@ const as_stream_hooks print_stream_hooks = {
     .write      = print_stream_write
 };
 
-as_stream * print_stream_new() {
-    return as_stream_new(NULL, &print_stream_hooks);
+as_stream * print_stream_new(void (* callback)(const as_val *)) {
+    return as_stream_new(callback, &print_stream_hooks);
 }
 
 static int test_log(const as_aerospike * as, const char * file, const int line, const int level, const char * msg) {
@@ -67,7 +71,18 @@ TEST( aggr_simple_1, "get numeric bin without aggregation" ) {
     
     extern cl_cluster * cluster;
 
-    as_stream * pstream = print_stream_new();
+    int count = 0;
+
+    void printer(const as_val * v) {
+        if ( v == AS_STREAM_END ) {
+            info("count: %d",count);
+        }
+        else {
+            count++;
+        }
+    }
+
+    as_stream * pstream = print_stream_new(printer);
 
     as_query * q = as_query_new("test","test");
     as_query_select(q, "b");
@@ -83,16 +98,47 @@ TEST( aggr_simple_2, "sum of numeric bins" ) {
     
     extern cl_cluster * cluster;
 
-    as_stream * pstream = print_stream_new();
+    void printer(const as_val * v) {
+        if ( v != AS_STREAM_END ) info("result: %s", as_val_tostring(v));
+    }
+
+    as_stream * pstream = print_stream_new(printer);
 
     as_query * q = as_query_new("test","test");
-    as_query_select(q, "b");
+    // as_query_select(q, "b");
     as_query_where(q, "a", string_equals("abc"));
     as_query_aggregate(q, "aggr", "sum", NULL);
     
     citrusleaf_query_stream(cluster, q, pstream);
 
-	as_query_destroy(q);
+    as_query_destroy(q);
+    as_stream_destroy(pstream);
+}
+
+
+TEST( aggr_simple_3, "raj" ) {
+    
+    extern cl_cluster * cluster;
+
+    void printer(const as_val * v) {
+        if ( v != AS_STREAM_END ) info("result: %s", as_val_tostring(v));
+    }
+
+    as_stream * pstream = print_stream_new(printer);
+
+    as_list * args = as_arraylist_new(2,0);
+    as_list_add_string(args, "bin2");
+    as_list_add_integer(args, 10);
+
+    as_query * q = as_query_new("test","demo");
+    // as_query_select(q, "b");
+    as_query_where(q, "bin3", integer_equals(100));
+    as_query_aggregate(q, "raj", "sum_on_match", args);
+    
+    citrusleaf_query_stream(cluster, q, pstream);
+
+    as_list_destroy(args);
+    as_query_destroy(q);
     as_stream_destroy(pstream);
 }
 
@@ -133,7 +179,6 @@ SUITE( aggr_simple, "aggregate simple" ) {
     suite_after( after );
     
     suite_add( aggr_simple_1 );
-    for ( int i = 0; i < 1; i++ ) {
-        suite_add( aggr_simple_2 );   
-    }
+    suite_add( aggr_simple_2 );
+    suite_add( aggr_simple_3 );
 }

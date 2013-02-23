@@ -41,6 +41,11 @@
 #define CL_MSG_FIELD_TYPE_UDF_FUNCTION          31
 #define CL_MSG_FIELD_TYPE_UDF_ARGLIST           32
 
+#pragma GCC diagnostic warning "-Wformat"
+
+#define DO_PRAGMA(x) _Pragma (#x)
+#define TODO(x) DO_PRAGMA(message ("TODO - " x))
+
 /******************************************************************************
  * TYPES
  ******************************************************************************/

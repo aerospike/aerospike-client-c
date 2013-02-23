@@ -571,7 +571,7 @@ static as_val * query_response_get(const as_rec * rec, const char * name)  {
     as_query_response_rec * r = as_rec_source(rec);
     for (int i = 0; i < r->n_bins; i++) {
         // Raj (todo) remove this stupid linear search from here
-        if (!strcmp(r->bins[i].bin_name, name)) { 
+        if (!strcmp(r->bins[i].bin_name, name)) {
             v = citrusleaf_udf_bin_to_val(&ser, &r->bins[i]);
             break;
         }
@@ -790,6 +790,7 @@ static int as_query_worker_do(cl_cluster_node * node, as_query_task * task) {
 
                 as_query_response_rec rec;
                 as_query_response_rec *recp = &rec;
+
                 if (!task->isinline) { 
                     recp = malloc(sizeof(as_query_response_rec));
                 }
@@ -801,19 +802,26 @@ static int as_query_worker_do(cl_cluster_node * node, as_query_task * task) {
                 recp->record_ttl = msg->record_ttl;
                 recp->bins       = bins;
                 recp->n_bins     = msg->n_ops;
-                if (!task->isinline) 
+
+                if (!task->isinline) {
                     recp->ismalloc   = true;
-                else 
+                }
+                else {
                     recp->ismalloc   = false;
+                }
         
                 as_rec r;
                 as_rec *rp = &r;
                 if (!task->isinline) {
                     rp = as_rec_new(recp, &query_response_hooks);    
                 } else {
-                    as_rec_init(rp, recp, &query_response_hooks);
+                    rp = as_rec_init(rp, recp, &query_response_hooks);
                 }    
             
+                TODO("Fix the following block of code. ")
+                TODO("It is really lame to check for a bin called \"SUCCESS\" to determine whether you have a single value or not.")
+                TODO("Fix how we are to handle errors. Not everything will be a \"SUCCESS\"... or will it?")
+                
                 // TODO:
                 //      Fix the following block of code. It is really lame 
                 //      to check for a bin called "SUCCESS" to determine
@@ -831,7 +839,9 @@ static int as_query_worker_do(cl_cluster_node * node, as_query_task * task) {
                     // then release the record back to the wild... or wherever
                     // it came from.
                     task->callback(v, task->udata);
+                    
                     as_rec_destroy(rp);
+
                     // Where if fucking as_rec_free interface !!!!
                     if (!task->isinline) free(rp);
                 }

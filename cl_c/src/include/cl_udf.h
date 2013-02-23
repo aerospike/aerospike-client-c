@@ -40,11 +40,7 @@
 /******************************************************************************
  * DATA TYPES
  ******************************************************************************/
-struct as_bytes_s {
-  byte * data;
-  int size;
-};
-typedef struct as_bytes_s as_bytes;
+
 typedef uint8_t as_udf_type;
 
 struct as_udf_file_s {
@@ -106,3 +102,4 @@ cl_rv citrusleaf_udf_put(cl_cluster * cluster, const char * filename, as_bytes *
  * @param error - Contains an error message, if the return value was non-zero. The value must be freed by the user.
  */
 cl_rv citrusleaf_udf_remove(cl_cluster * cluster, const char * filename, char ** error);
+

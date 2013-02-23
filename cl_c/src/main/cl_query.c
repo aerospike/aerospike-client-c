@@ -10,6 +10,7 @@
 #include "citrusleaf-internal.h"
 #include "cl_cluster.h"
 #include "cl_query.h"
+#include "cl_udf.h"
 
 #include <citrusleaf/cf_atomic.h>
 #include <citrusleaf/cf_socket.h>
@@ -559,6 +560,9 @@ static int query_compile(const as_query * query, uint8_t ** buf_r, size_t * buf_
     return CITRUSLEAF_OK;
 }
 
+//
+// TODO: hard to put into udf.h because of the type requirements.
+// FIX
 extern as_val * citrusleaf_udf_bin_to_val(as_serializer *ser, cl_bin *);
 
 /**

@@ -116,36 +116,33 @@ int main(int argc, char **argv) {
 	int rsp = read_file (filename, &content, &content_len); 	   
 	char *err_str = NULL;
 	as_bytes udf_content;
-	udf_content.data = (byte*)calloc(1,sizeof(byte)*(content_len+1));
-	udf_content.size = content_len;
-	memcpy(udf_content.data, content, udf_content.size);
-	udf_content.data[content_len] = 0;
+	as_bytes_init(&udf_content, content, content_len, true /*is_malloc*/);  // want to re-use content
 	if (rsp==0) {
 		int resp = citrusleaf_udf_put(asc, basename(filename), &udf_content, AS_UDF_LUA, &err_str);
 		if (resp!=0) {
 			fprintf(stderr, "unable to register package file %s as %s resp = %d\n", filename, package_name,resp); 
 			fprintf(stderr, "[%s]\n",err_str); free(err_str);
+			as_bytes_destroy(&udf_content);
 			return(-1);
 		}
-		free(content); content = NULL;
 		fprintf(stderr, "*** successfully registered package file %s as %s\n",filename, package_name); 
 	} else {   
 		fprintf(stderr, "unable to read package file %s\n",filename); return(-1);    
 	}
+	as_bytes_destroy(&udf_content);
 	
 	/* get the package */    
 	as_udf_file file;
 	memset(&file,0,sizeof(as_udf_file));
-	file.content = calloc(1,sizeof(as_bytes));
 	int resp = citrusleaf_udf_get(asc, basename(filename), &file, 0, &err_str);
 	if (resp!=0) {
 		fprintf(stderr, "unable to retrieve package %s resp = %d\n", package_name,resp); return(-1);
 	} else {
-		fprintf(stderr, "*** successfully retrieved package content for %s = [%s]\n",package_name, file.content->data);
+		char *s = as_val_tostring(&file.content);
+		fprintf(stderr, "*** successfully retrieved package content for %s = [%s]\n",package_name, s );
+		free(s);
 	}
-	free(udf_content.data);
-	free(file.content->data);
-	free(file.content);
+	as_val_destroy(&file.content);
 	
 	// list the packages
 	as_udf_file ** packages = NULL;
@@ -172,10 +169,7 @@ int main(int argc, char **argv) {
 	char *package_name2 = "test_register2";
 	sprintf(filename2,"%s%s",c.package_path,"register2.lua");
 	rsp = read_file (filename2, &content, &content_len); 	   
-	udf_content.data = (byte*)calloc(1,sizeof(byte)*(content_len+1));
-	udf_content.size = content_len;
-	memcpy(udf_content.data, content, udf_content.size);
-	udf_content.data[content_len] = 0;
+	as_bytes_init(&udf_content, content, content_len, true /*is_malloc*/ );
 	if (rsp==0) {
 		char *err_str = NULL;
 		int resp = citrusleaf_udf_put(asc, basename(filename2), &udf_content, AS_UDF_LUA, &err_str);
@@ -183,11 +177,11 @@ int main(int argc, char **argv) {
 			fprintf(stderr, "unable to register package file %s as %s resp = %d\n", filename2, package_name2,resp); return(-1);
 			fprintf(stderr, "[%s]\n",err_str); free(err_str);
 		}
-		free(content); content = NULL;
 		fprintf(stderr, "*** successfully registered 2nd package file %s as %s\n",filename2, package_name2); 
 	} else {   
 		fprintf(stderr, "unable to read package file %s\n",filename2); return(-1);    
 	}
+	as_bytes_destroy(&udf_content);
 
 	/* get the package */    
 	memset(&file,0,sizeof(as_udf_file));
@@ -196,11 +190,12 @@ int main(int argc, char **argv) {
 	if (resp!=0) {
 		fprintf(stderr, "unable to retrieve package %s resp = %d\n", package_name2,resp); return(-1);
 	} else {
-		fprintf(stderr, "*** successfully retrieved package content for %s = [%s]\n",package_name2, file.content->data);
+		char *s = as_val_tostring(&file.content);
+		fprintf(stderr, "*** successfully retrieved package content for %s = [%s]\n",package_name2, s);
+		free(s);
 	}
-	free(udf_content.data);
-	free(file.content->data);
-	free(file.content);
+	as_val_destroy(&file.content);
+
 	// list the packages
 	num_packages = 0;
 	resp = citrusleaf_udf_list(asc, &packages, &num_packages, &err_str);
@@ -253,11 +248,8 @@ int main(int argc, char **argv) {
 	// register a package with syntax error
 	char *package_name3 = "test_register3";
 	sprintf(filename,"%s%s",c.package_path,"register3.lua");
-	rsp = read_file (filename, &content, &content_len); 	   
-	udf_content.data = (byte*)calloc(1,sizeof(byte)*(content_len+1));
-	udf_content.size = content_len;
-	memcpy(udf_content.data, content, udf_content.size);
-	udf_content.data[content_len] = 0;
+	rsp = read_file (filename, &content, &content_len); 
+	as_bytes_init(&udf_content, content, content_len, true);
 	if (rsp==0) {
 		char *err_str = NULL;
 		int resp = citrusleaf_udf_put(asc, filename, &udf_content, AS_UDF_LUA, &err_str);
@@ -267,9 +259,11 @@ int main(int argc, char **argv) {
 		}
 		else {
 			fprintf(stderr,"FAILED: Registration returned 0, should not have happened\n");
+			as_bytes_destroy(&udf_content);
 			return -1;
 		}
 	}
+	as_bytes_destroy(&udf_content);
 	
 	// List packages again
 	num_packages = 0;

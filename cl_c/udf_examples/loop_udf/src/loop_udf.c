@@ -392,10 +392,8 @@ int register_package()
 		b_read      = fread(script_ptr,1,512,fptr);
 	}			
     fclose(fptr);
-    as_bytes udf_content = {
-	.size = b_tot,
-	.data = script_code
-    };
+    as_bytes udf_content;
+	as_bytes_init(&udf_content, script_code, b_tot, true);
     char *err_str = NULL;
     if (b_tot>0) {
 	    int resp = citrusleaf_udf_put(g_config->asc, basename(g_config->package_file), &udf_content, AS_UDF_LUA, &err_str);

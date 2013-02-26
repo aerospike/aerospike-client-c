@@ -40,7 +40,6 @@ SUBMODULES += $(MODULES)/common
 SUBMODULES += $(MODULES)/mod-lua
 SUBMODULES += $(MODULES)/msgpack
 
-
 ###############################################################################
 ##  OBJECTS                                                                  ##
 ###############################################################################
@@ -59,10 +58,10 @@ CITRUSLEAF += cl_scan.o
 CITRUSLEAF += cl_udf.o
 CITRUSLEAF += proto.o
 
-OBJECTS = modules/mod-lua/$(TARGET_OBJ)/*.o 
-OBJECTS += modules/common/$(TARGET_OBJ)/client/*.o 
-OBJECTS += modules/common/$(TARGET_OBJ)/shared/*.o 
-OBJECTS += $(MSGPACK_PATH)/src/.libs/*.o
+OBJECTS = $(wildcard modules/mod-lua/$(TARGET_OBJ)/*.o)
+OBJECTS += $(wildcard modules/common/$(TARGET_OBJ)/client/*.o)
+OBJECTS += $(wildcard modules/common/$(TARGET_OBJ)/shared/*.o)
+OBJECTS += $(wildcard $(MSGPACK_PATH)/src/.libs/*.o)
 
 ###############################################################################
 ##  MAIN TARGETS                                                             ##
@@ -93,7 +92,11 @@ libcitrusleaf.so: $(TARGET_LIB)/libcitrusleaf.so
 ##  BUILD TARGETS                                                            ##
 ###############################################################################
 
-$(TARGET_LIB)/libcitrusleaf.a $(TARGET_LIB)/libcitrusleaf.so: $(CITRUSLEAF:%=$(TARGET_OBJ)/%) $(OBJECTS) | modules
+#$(TARGET_LIB)/libcitrusleaf.a $(TARGET_LIB)/libcitrusleaf.so: $(CITRUSLEAF:%=$(TARGET_OBJ)/%) $(OBJECTS) | modules
+$(TARGET_LIB)/libcitrusleaf.so: $(CITRUSLEAF:%=$(TARGET_OBJ)/%) | modules
+	$(library) $(OBJECTS)
+$(TARGET_LIB)/libcitrusleaf.a: $(CITRUSLEAF:%=$(TARGET_OBJ)/%) | modules
+	$(archive) $(OBJECTS)
 
 $(TARGET_INCL): $(SOURCE_INCL)/*.h modules/mod-lua/$(TARGET_INCL)/*.h modules/common/$(TARGET_INCL)/*.h | modules
 	@if [ ! -e "$(TARGET_INCL)/citrusleaf" ]; then mkdir -p $(TARGET_INCL)/citrusleaf; fi
@@ -128,10 +131,10 @@ modules-clean:
 ## 
 
 modules/common/$(TARGET_LIB)/libcf-shared.a:
-	$(MAKE) -e -C modules/common all MEM_COUNT=1
+	$(MAKE) -e -C modules/common libcf-shared.a MEM_COUNT=1
 
 modules/common/$(TARGET_LIB)/libcf-client.a:
-	$(MAKE) -e -C modules/common all MEM_COUNT=1
+	$(MAKE) -e -C modules/common libcf-client.a MEM_COUNT=1
 
 modules/common/$(TARGET_INCL)/*.h:
 	$(MAKE) -e -C modules/common prepare MEM_COUNT=1
@@ -145,6 +148,7 @@ modules/common: modules/common/$(TARGET_LIB)/libcf-shared.a modules/common/$(TAR
 
 modules/mod-lua/$(TARGET_LIB)/libmod_lua.a:
 	$(MAKE) -e -C modules/mod-lua libmod_lua.a MEM_COUNT=1
+	$(MAKE) -e -C modules/mod-lua libas_types.a MEM_COUNT=1
 
 modules/mod-lua/$(TARGET_INCL)/*.h:
 	$(MAKE) -e -C modules/mod-lua prepare MEM_COUNT=1
@@ -160,7 +164,7 @@ modules/msgpack/Makefile:
 	cd $(MSGPACK_PATH) && ./configure
 
 modules/msgpack/src/.libs/libmsgpackc.a: modules/msgpack/Makefile
-	cd $(MSGPACK_PATH) && make
+	cd $(MSGPACK_PATH) && make CFLAGS="-fPIC"
 
 .PHONY: modules/msgpack
 modules/msgpack: modules/msgpack/src/.libs/libmsgpackc.a

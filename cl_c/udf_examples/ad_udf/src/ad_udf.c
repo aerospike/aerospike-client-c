@@ -253,10 +253,8 @@ int register_package()
 		b_read      = fread(script_ptr,1,512,fptr); 
 	}                     
 	fclose(fptr);
-	as_bytes udf_content = {
-		.size = b_tot,
-		.data = script_code
-	}; 
+	as_bytes udf_content;
+	as_bytes_init(&udf_content, script_code, b_tot, true /*is_malloc*/ );
 
 	char *err_str = NULL; 
 	if (b_tot>0) { 
@@ -264,14 +262,15 @@ int register_package()
 		if (resp!=0) { 
 			fprintf(stderr, "unable to register package file %s as %s resp = %d\n",g_config->package_file,g_config->package_name,resp); return(-1);
 			fprintf(stderr, "%s\n",err_str); free(err_str);
-			free(script_code);
+			as_bytes_destroy(&udf_content);
 			return(-1);
 		}
 		fprintf(stderr, "successfully registered package file %s as %s\n",g_config->package_file,g_config->package_name); 
 	} else {   
 		fprintf(stderr, "unable to read package file %s as %s b_tot = %d\n",g_config->package_file,g_config->package_name,b_tot); return(-1);    
 	}
-
+	as_bytes_destroy(&udf_content);
+	
 	return 0;
 }
 int main(int argc, char **argv) {

@@ -45,7 +45,6 @@ MANAGE_DEPENDENCIES = $(MANAGE_OBJECTS:%.o=%.d)
 
 .PHONY: all
 all: rec_udf doc_udf manage_udf
-#all: rec_sproc doc_sproc manage_sproc redis_list_sproc
 
 .PHONY: clean
 clean:

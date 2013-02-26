@@ -127,12 +127,12 @@ TEST( stream_simple_3, "raj" ) {
     as_stream * pstream = print_stream_new(printer);
 
     as_list * args = as_arraylist_new(2,0);
-    as_list_add_string(args, "bin2");
-    as_list_add_integer(args, 10);
+    as_list_add_string(args, "bn1");
+    as_list_add_integer(args, 1);
 
-    as_query * q = as_query_new("test","demo");
+    as_query * q = as_query_new("test_I","demo");
     // as_query_select(q, "b");
-    as_query_where(q, "bin3", integer_equals(100));
+    as_query_where(q, "bn3", integer_equals(100));
     as_query_aggregate(q, "raj", "sum_on_match", args);
     
     citrusleaf_query_stream(cluster, q, pstream);

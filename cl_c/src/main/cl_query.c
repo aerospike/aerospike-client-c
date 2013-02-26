@@ -846,8 +846,6 @@ static int as_query_worker_do(cl_cluster_node * node, as_query_task * task) {
                     
                     as_rec_destroy(rp);
 
-                    // Where if fucking as_rec_free interface !!!!
-                    if (!task->isinline) free(rp);
                 }
                 else {
                     task->callback((as_val *) rp, task->udata);

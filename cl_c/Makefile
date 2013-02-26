@@ -169,6 +169,8 @@ modules/msgpack: modules/msgpack/src/.libs/libmsgpackc.a
 ##  TEST TARGETS                                                      		 ##
 ###############################################################################
 
+TEST_VALGRIND = --tool=memcheck --leak-check=yes --show-reachable=yes --num-callers=20 --track-fds=yes -v
+
 TEST_CFLAGS = -I$(TARGET_INCL) -I$(JANSSON_PATH)/src
 
 TEST_LDFLAGS = -lssl -lcrypto -lpthread -lrt -llua  -lm
@@ -176,59 +178,48 @@ TEST_LDFLAGS += -L$(TARGET_LIB) -Wl,-l,:libcitrusleaf.a
 TEST_LDFLAGS += -L$(JANSSON_PATH)/src/.libs -Wl,-l,:libjansson.a 
 TEST_LDFLAGS += -L$(MSGPACK_PATH)/src/.libs -Wl,-l,:libmsgpack.a 
 
+#-----#
 
-TEST_TYPES = types
-TEST_TYPES += types_integer
-TEST_TYPES += types_string
-TEST_TYPES += types_arraylist
-TEST_TYPES += types_linkedlist
-TEST_TYPES += types_hashmap
+TEST_KV = 
+TEST_KV += kv/kv_string
  
-TEST_CLIENT = client
-TEST_CLIENT += client_string
+TEST_RECORD = 
+TEST_RECORD += record/record_basics
+TEST_RECORD += record/record_lists
  
-TEST_UDF = udf
-TEST_UDF += udf_basics
-TEST_UDF += udf_lists
- 
-TEST_AGGR = aggr
-TEST_AGGR += aggr_simple
+TEST_STREAM = 
+TEST_STREAM += stream/stream_simple
+
+TEST_UTIL = 
+TEST_UTIL += util/udf
+TEST_UTIL += util/consumer_stream
+TEST_UTIL += util/producer_stream
+TEST_UTIL += util/map_rec
+TEST_UTIL += util/test_aerospike
+
+TEST_CLIENT = client_test
+TEST_CLIENT += $(TEST_UTIL) 
+TEST_CLIENT += $(TEST_KV) 
+TEST_CLIENT += $(TEST_RECORD) 
+TEST_CLIENT += $(TEST_STREAM)
+
+#-----#
 
 .PHONY: test
 test: test-build
-	# @$(TARGET_BIN)/test/types
-	# @$(TARGET_BIN)/test/client
-	# @$(TARGET_BIN)/test/udf
-	@$(TARGET_BIN)/test/aggr
-
-VALGRIND_OPS = -v --tool=memcheck --leak-check=yes --show-reachable=yes --num-callers=20 --track-fds=yes -v
-
+	@$(TARGET_BIN)/test/client_test
 
 .PHONY: test-valgrind
 test-valgrind: test-build
-	valgrind $(VALGRIND_OPTS) $(TARGET_BIN)/test/aggr 1>&2 2>aggr-valgrind
+	valgrind $(TEST_VALGRIND) $(TARGET_BIN)/test/client_test 1>&2 2>client_test-valgrind
 
 .PHONY: test-build
-# test-build: test/types test/client test/udf  test/aggr
-test-build: test/aggr
+test-build: test/client_test
 
 .PHONY: test-clean
 test-clean: 
 	@rm -rf $(TARGET_BIN)/test
 	@rm -rf $(TARGET_OBJ)/test
-
-.PHONY: test/types
-test/types: $(TARGET_BIN)/test/types
-
-.PHONY: test/client
-test/client: $(TARGET_BIN)/test/client
-
-.PHONY: test/udf
-test/udf: $(TARGET_BIN)/test/udf
-
-.PHONY: test/aggr
-test/aggr: $(TARGET_BIN)/test/aggr
-
 
 $(TARGET_OBJ)/test/%/%.o: CFLAGS = $(TEST_CFLAGS)
 $(TARGET_OBJ)/test/%/%.o: LDFLAGS += $(TEST_LDFLAGS)
@@ -240,21 +231,11 @@ $(TARGET_OBJ)/test/%.o: LDFLAGS += $(TEST_LDFLAGS)
 $(TARGET_OBJ)/test/%.o: $(SOURCE_TEST)/%.c
 	$(object)
 
-$(TARGET_BIN)/test/types: CFLAGS = $(TEST_CFLAGS)
-$(TARGET_BIN)/test/types: LDFLAGS += $(TEST_LDFLAGS)
-$(TARGET_BIN)/test/types: $(TEST_TYPES:%=$(TARGET_OBJ)/test/types/%.o) $(TARGET_OBJ)/test/test.o $(TARGET_LIB)/libcitrusleaf.a | build prepare
-
-$(TARGET_BIN)/test/client: CFLAGS += $(TEST_CFLAGS)
-$(TARGET_BIN)/test/client: LDFLAGS += $(TEST_LDFLAGS)
-$(TARGET_BIN)/test/client: $(TEST_CLIENT:%=$(TARGET_OBJ)/test/client/%.o) $(TARGET_OBJ)/test/test.o $(TARGET_LIB)/libcitrusleaf.a | build prepare
-
-$(TARGET_BIN)/test/udf: CFLAGS += $(TEST_CFLAGS)
-$(TARGET_BIN)/test/udf: LDFLAGS += $(TEST_LDFLAGS)
-$(TARGET_BIN)/test/udf: $(TEST_UDF:%=$(TARGET_OBJ)/test/udf/%.o) $(TARGET_OBJ)/test/test.o $(TARGET_LIB)/libcitrusleaf.a | build prepare
-
-$(TARGET_BIN)/test/aggr: CFLAGS += $(TEST_CFLAGS)
-$(TARGET_BIN)/test/aggr: LDFLAGS += $(TEST_LDFLAGS)
-$(TARGET_BIN)/test/aggr: $(TEST_AGGR:%=$(TARGET_OBJ)/test/aggr/%.o) $(TARGET_OBJ)/test/test.o $(TARGET_LIB)/libcitrusleaf.a | build prepare
+.PHONY: test/client_test
+test/client_test: $(TARGET_BIN)/test/client_test
+$(TARGET_BIN)/test/client_test: CFLAGS += $(TEST_CFLAGS)
+$(TARGET_BIN)/test/client_test: LDFLAGS += $(TEST_LDFLAGS)
+$(TARGET_BIN)/test/client_test: $(TEST_CLIENT:%=$(TARGET_OBJ)/test/%.o) $(TARGET_OBJ)/test/test.o $(TARGET_LIB)/libcitrusleaf.a | prepare
 
 ###############################################################################
 include project/rules.makefile

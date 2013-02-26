@@ -129,7 +129,7 @@ struct atf_plan_result_s {
 };
 
 atf_plan * atf_plan_add(atf_plan * self, atf_suite * suite);
-atf_plan_result * atf_plan_run(atf_plan * self, atf_plan_result * result);
+int atf_plan_run(atf_plan * self, atf_plan_result * result);
 
 atf_plan * atf_plan_after(atf_plan * plan, bool (* after)(atf_plan * plan));
 atf_plan * atf_plan_before(atf_plan * plan, bool (* before)(atf_plan * plan));
@@ -150,8 +150,7 @@ atf_plan_result * atf_plan_result_add(atf_plan_result * plan_result, atf_suite_r
             .size = 0 \
         }; \
         __plan(&plan); \
-        atf_plan_run(&plan, &result); \
-        return 0; \
+        return atf_plan_run(&plan, &result); \
     }\
     void __plan(atf_plan * self) \
 
@@ -221,9 +220,6 @@ void atf_assert_log(atf_test_result * result, const char * exp, const char * fil
  *****************************************************************************/
 
 #define ATF_LOG_PREFIX "        "
-
-#define debug(fmt, args...) \
-    atf_log_line(stderr, "DEBUG", ATF_LOG_PREFIX, __FILE__, __LINE__, fmt, ## args);
 
 #define info(fmt, args...) \
     atf_log(stderr, "INFO", ATF_LOG_PREFIX, __FILE__, __LINE__, fmt, ## args);

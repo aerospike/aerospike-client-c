@@ -67,7 +67,7 @@ static const as_aerospike_hooks test_aerospike_hooks = {
  * TEST CASES
  *****************************************************************************/
  
-TEST( aggr_simple_1, "get numeric bin without aggregation" ) {
+TEST( stream_simple_1, "get numeric bin without aggregation" ) {
     
     extern cl_cluster * cluster;
 
@@ -94,7 +94,7 @@ TEST( aggr_simple_1, "get numeric bin without aggregation" ) {
     as_stream_destroy(pstream);
 }
 
-TEST( aggr_simple_2, "sum of numeric bins" ) {
+TEST( stream_simple_2, "sum of numeric bins" ) {
     
     extern cl_cluster * cluster;
 
@@ -116,7 +116,7 @@ TEST( aggr_simple_2, "sum of numeric bins" ) {
 }
 
 
-TEST( aggr_simple_3, "raj" ) {
+TEST( stream_simple_3, "raj" ) {
     
     extern cl_cluster * cluster;
 
@@ -174,11 +174,11 @@ static bool after(atf_suite * suite) {
     return true;
 }
 
-SUITE( aggr_simple, "aggregate simple" ) {
+SUITE( stream_simple, "simple stream" ) {
     suite_before( before );
     suite_after( after );
     
-    suite_add( aggr_simple_1 );
-    suite_add( aggr_simple_2 );
-    suite_add( aggr_simple_3 );
+    suite_add( stream_simple_1 );
+    suite_add( stream_simple_2 );
+    suite_add( stream_simple_3 );
 }

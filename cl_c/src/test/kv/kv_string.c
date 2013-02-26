@@ -38,7 +38,7 @@ static int put_string(const char * ns, const char * set, const char * key, const
  * TEST CASES
  *****************************************************************************/
 
-TEST( client_string_lengths, "test string lengths" ) {
+TEST( kv_string_lengths, "test string lengths" ) {
 
     char value[STRING_MAX] = { [0 ... STRING_MAX-2] = 'a', [STRING_MAX-1] = '\0' };
 
@@ -52,14 +52,14 @@ TEST( client_string_lengths, "test string lengths" ) {
     }
 }
 
-TEST( client_string_put, "put a string in a bin" ) {
+TEST( kv_string_put, "put a string in a bin" ) {
     char name[16] = "string";
     char value[1024] = {[0 ... 1022] = 'a', [1023] = '\0'};
     int rc = put_string("test", "test", "string_bin", name, value);
     assert_int_eq( rc, 0 );
 }
 
-TEST( client_string_get, "get a string from a bin" ) {
+TEST( kv_string_get, "get a string from a bin" ) {
 
     char name[16] = "string";
     char value[1024] = {[0 ... 1022] = 'a', [1023] = '\0'};
@@ -88,8 +88,8 @@ TEST( client_string_get, "get a string from a bin" ) {
  * TEST SUITE
  *****************************************************************************/
 
-SUITE( client_string, "test client handling of string" ) {
-    suite_add( client_string_put );
-    suite_add( client_string_get );
-    suite_add( client_string_lengths );
+SUITE( kv_string, "test client handling of string" ) {
+    suite_add( kv_string_put );
+    suite_add( kv_string_get );
+    suite_add( kv_string_lengths );
 }

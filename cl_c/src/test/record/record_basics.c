@@ -1,5 +1,6 @@
 
 #include "../test.h"
+#include "../util/udf.h"
 #include <citrusleaf/citrusleaf.h>
 #include <citrusleaf/as_types.h>
 
@@ -7,22 +8,31 @@
  * MACROS
  *****************************************************************************/
 
-#define LUA_FILE "src/test/lua/basics.lua"
+#define LUA_FILE "src/test/lua/client_record_basics.lua"
+#define UDF_FILE "client_record_basics"
 
 /******************************************************************************
- * EXTERNS
+ * STATIC FUNCTIONS
  *****************************************************************************/
 
-extern int udf_put(const char * filename);
-extern int udf_remove(const char * filename);
-extern int udf_exists(const char * filename);
-extern int udf_call(const char * ns, const char * set, const char * key, const char * file, const char * func, as_list * args, as_result * result);
+static void print_result(uint32_t rc, as_result * r) {
+    if ( !r->is_success ) {
+        char * s = as_val_tostring(r->value);
+        info("failure: %s (%d)", s, rc);
+        free(s);
+    }
+    else {
+        char * s = as_val_tostring(r->value);
+        info("success: %s", s);
+        free(s);
+    }
+}
 
 /******************************************************************************
  * TEST CASES
  *****************************************************************************/
 
-TEST( udf_basics_exists, "basics.lua exists" ) {
+TEST( record_basics_exists, LUA_FILE" exists" ) {
     int rc = udf_exists(LUA_FILE);
     assert_int_eq( rc, 0 );
 }
@@ -38,107 +48,149 @@ TEST( udf_basics_exists, "basics.lua exists" ) {
  * have resulted in a failire (!r.is_success), with a type error.
  *
  */
-TEST( udf_basics_getboolean, "getboolean() - get a boolean" ) {
+TEST( record_basics_getboolean, "getboolean() - get a boolean" ) {
 
     int rc = 0;
 
     as_result r;
+    as_success_init(&r,NULL);
 
-    rc = udf_call("test", "test", "test", "basics", "getboolean", NULL, &r);
+    rc = udf_apply_record("test", "test", "test", UDF_FILE, "getboolean", NULL, &r);
+
+    print_result(rc, &r);
+
     assert_int_eq( rc, 0 );
     assert_true( r.is_success );
     assert_not_null( r.value );
     assert( as_val_type(r.value) == AS_BOOLEAN );
     assert_true( as_boolean_tobool((as_boolean *) r.value) );
+
+    as_result_destroy(&r);
 }
 
-TEST( udf_basics_getfloat, "getfloat() - get a float. Will be converted to an integer." ) {
+TEST( record_basics_getfloat, "getfloat() - get a float. Will be converted to an integer." ) {
 
     int rc = 0;
 
     as_result r;
+    as_success_init(&r,NULL);
 
-    rc = udf_call("test", "test", "test", "basics", "getfloat", NULL, &r);
+    rc = udf_apply_record("test", "test", "test", UDF_FILE, "getfloat", NULL, &r);
+
+    print_result(rc, &r);
+
     assert_int_eq( rc, 0 );
     assert_true( r.is_success );
     assert_not_null( r.value );
     assert( as_val_type(r.value) == AS_INTEGER );
     assert_int_eq( as_integer_toint((as_integer *) r.value), 123 );
+
+    as_result_destroy(&r);
 }
 
-TEST( udf_basics_getinteger, "getinteger() - get an integer" ) {
+TEST( record_basics_getinteger, "getinteger() - get an integer" ) {
 
     int rc = 0;
 
     as_result r;
+    as_success_init(&r,NULL);
 
-    rc = udf_call("test", "test", "test", "basics", "getinteger", NULL, &r);
+    rc = udf_apply_record("test", "test", "test", UDF_FILE, "getinteger", NULL, &r);
+
+    print_result(rc, &r);
+
     assert_int_eq( rc, 0 );
     assert_true( r.is_success );
     assert_not_null( r.value );
     assert( as_val_type(r.value) == AS_INTEGER );
     assert_int_eq( as_integer_toint((as_integer *) r.value), 123 );
+
+    as_result_destroy(&r);
 }
 
-TEST( udf_basics_getstring, "getstring() - get a string" ) {
+TEST( record_basics_getstring, "getstring() - get a string" ) {
 
     int rc = 0;
 
     as_result r;
+    as_success_init(&r,NULL);
 
-    rc = udf_call("test", "test", "test", "basics", "getstring", NULL, &r);
+    rc = udf_apply_record("test", "test", "test", UDF_FILE, "getstring", NULL, &r);
+
+    print_result(rc, &r);
+
     assert_int_eq( rc, 0 );
     assert_true( r.is_success );
     assert_not_null( r.value );
     assert( as_val_type(r.value) == AS_STRING );
     assert_string_eq( as_string_tostring((as_string *) r.value), "abc" );
+
+    as_result_destroy(&r);
 }
 
-TEST( udf_basics_gettable, "gettable() - get a table" ) {
+TEST( record_basics_gettable, "gettable() - get a table" ) {
 
     int rc = 0;
 
     as_result r;
+    as_success_init(&r,NULL);
 
-    rc = udf_call("test", "test", "test", "basics", "gettable", NULL, &r);
+    rc = udf_apply_record("test", "test", "test", UDF_FILE, "gettable", NULL, &r);
+
+    print_result(rc, &r);
+
     assert_int_eq( rc, 0 );
     assert_false( r.is_success );
     assert_not_null( r.value );
     assert( as_val_type(r.value) == AS_STRING );
     assert_string_eq( as_string_tostring((as_string *) r.value), "Invalid response. (2)" );
+
+    as_result_destroy(&r);
 }
 
-TEST( udf_basics_getlist, "getlist() - get a list" ) {
+TEST( record_basics_getlist, "getlist() - get a list" ) {
 
     int rc = 0;
 
     as_result r;
+    as_success_init(&r,NULL);
 
-    rc = udf_call("test", "test", "test", "basics", "getlist", NULL, &r);
+    rc = udf_apply_record("test", "test", "test", UDF_FILE, "getlist", NULL, &r);
+
+    print_result(rc, &r);
+
     assert_int_eq( rc, 0 );
     assert_true( r.is_success );
     assert_not_null( r.value );
     assert( as_val_type(r.value) == AS_LIST );
     assert_int_eq( as_list_size((as_list *) r.value), 3 );
+
+    as_result_destroy(&r);
 }
 
-TEST( udf_basics_getmap, "getmap() - get a map" ) {
+TEST( record_basics_getmap, "getmap() - get a map" ) {
 
     int rc = 0;
 
     as_result r;
+    as_success_init(&r,NULL);
 
-    rc = udf_call("test", "test", "test", "basics", "getmap", NULL, &r);
+    rc = udf_apply_record("test", "test", "test", UDF_FILE, "getmap", NULL, &r);
+
+    print_result(rc, &r);
+
     assert_int_eq( rc, 0 );
     assert_true( r.is_success );
     assert_not_null( r.value );
     assert( as_val_type(r.value) == AS_MAP );
     assert_int_eq( as_map_size((as_map *) r.value), 3 );
+
+    as_result_destroy(&r);
 }
 
 
 
-TEST( udf_basics_concat, "concat() - concatenate two strings, return the result" ) {
+TEST( record_basics_concat, "concat() - concatenate two strings, return the result" ) {
 
     int rc = 0;
 
@@ -147,16 +199,23 @@ TEST( udf_basics_concat, "concat() - concatenate two strings, return the result"
     as_list_add_string(arglist, "def");
 
     as_result r;
+    as_success_init(&r,NULL);
 
-    rc = udf_call("test", "test", "test", "basics", "concat", arglist, &r);
+    rc = udf_apply_record("test", "test", "test", UDF_FILE, "concat", arglist, &r);
+
+    print_result(rc, &r);
+
     assert_int_eq( rc, 0 );
     assert_true( r.is_success );
     assert_not_null( r.value );
     assert( as_val_type(r.value) == AS_STRING );
     assert_string_eq( as_string_tostring((as_string *) r.value), "abcdef" );
+
+    as_list_destroy(arglist);
+    as_result_destroy(&r);
 }
 
-TEST( udf_basics_add, "add() - add two integer, return the result" ) {
+TEST( record_basics_add, "add() - add two integer, return the result" ) {
 
     int rc = 0;
 
@@ -165,16 +224,23 @@ TEST( udf_basics_add, "add() - add two integer, return the result" ) {
     as_list_add_integer(arglist, 1);
 
     as_result r;
+    as_success_init(&r,NULL);
 
-    rc = udf_call("test", "test", "test", "basics", "add", arglist, &r);
+    rc = udf_apply_record("test", "test", "test", UDF_FILE, "add", arglist, &r);
+
+    print_result(rc, &r);
+
     assert_int_eq( rc, 0 );
     assert_true( r.is_success );
     assert_not_null( r.value );
     assert( as_val_type(r.value) == AS_INTEGER );
     assert_int_eq( as_integer_toint((as_integer *) r.value), 1001 );
+
+    as_list_destroy(arglist);
+    as_result_destroy(&r);
 }
 
-TEST( udf_basics_sum, "sum() - UDF calling another UDF should fail" ) {
+TEST( record_basics_sum, "sum() - UDF calling another UDF should fail" ) {
 
     int rc = 0;
 
@@ -183,12 +249,19 @@ TEST( udf_basics_sum, "sum() - UDF calling another UDF should fail" ) {
     as_list_add_integer(arglist, 1);
 
     as_result r;
+    as_success_init(&r,NULL);
 
-    rc = udf_call("test", "test", "test", "basics", "sum", arglist, &r);
+    rc = udf_apply_record("test", "test", "test", UDF_FILE, "sum", arglist, &r);
+
+    print_result(rc, &r);
+
     assert_int_eq( rc, 100 );
+
+    as_list_destroy(arglist);
+    as_result_destroy(&r);
 }
 
-TEST( udf_basics_diff, "diff() - UDF calling a local function" ) {
+TEST( record_basics_diff, "diff() - UDF calling a local function" ) {
 
     int rc = 0;
 
@@ -197,16 +270,23 @@ TEST( udf_basics_diff, "diff() - UDF calling a local function" ) {
     as_list_add_integer(arglist, 1);
 
     as_result r;
+    as_success_init(&r,NULL);
 
-    rc = udf_call("test", "test", "test", "basics", "diff", arglist, &r);
+    rc = udf_apply_record("test", "test", "test", UDF_FILE, "diff", arglist, &r);
+
+    print_result(rc, &r);
+
     assert_int_eq( rc, 0 );
     assert_true( r.is_success );
     assert_not_null( r.value );
     assert( as_val_type(r.value) == AS_INTEGER );
     assert_int_eq( as_integer_toint((as_integer *) r.value), 999 );
+
+    as_list_destroy(arglist);
+    as_result_destroy(&r);
 }
 
-TEST( udf_basics_difference, "difference() - calling a local function should fail" ) {
+TEST( record_basics_difference, "difference() - calling a local function should fail" ) {
 
     int rc = 0;
 
@@ -215,16 +295,23 @@ TEST( udf_basics_difference, "difference() - calling a local function should fai
     as_list_add_integer(arglist, 1);
 
     as_result r;
+    as_success_init(&r,NULL);
 
-    rc = udf_call("test", "test", "test", "basics", "difference", arglist, &r);
+    rc = udf_apply_record("test", "test", "test", UDF_FILE, "difference", arglist, &r);
+
+    print_result(rc, &r);
+
     assert_int_eq( rc, 100 );
     assert_false( r.is_success );
     assert_not_null( r.value );
     assert( as_val_type(r.value) == AS_STRING );
     assert_string_eq( as_string_tostring((as_string *) r.value), "function not found" );
+
+    as_list_destroy(arglist);
+    as_result_destroy(&r);
 }
 
-TEST( udf_basics_func_does_not_exist, "calling a non-existent function should fail" ) {
+TEST( record_basics_func_does_not_exist, "calling a non-existent function should fail" ) {
 
     int rc = 0;
 
@@ -233,17 +320,24 @@ TEST( udf_basics_func_does_not_exist, "calling a non-existent function should fa
     as_list_add_integer(arglist, 1);
 
     as_result r;
+    as_success_init(&r,NULL);
 
-    rc = udf_call("test", "test", "test", "basics", "does_not_exist", arglist, &r);
+    rc = udf_apply_record("test", "test", "test", UDF_FILE, "does_not_exist", arglist, &r);
+
+    print_result(rc, &r);
+
     assert_int_eq( rc, 100 );
     assert_false( r.is_success );
     assert_not_null( r.value );
     assert( as_val_type(r.value) == AS_STRING );
     assert_string_eq( as_string_tostring((as_string *) r.value), "function not found" );
+
+    as_list_destroy(arglist);
+    as_result_destroy(&r);
 }
 
 
-TEST( udf_basics_file_does_not_exist, "non-existent UDF file should fail" ) {
+TEST( record_basics_file_does_not_exist, "non-existent UDF file should fail" ) {
 
     int rc = 0;
 
@@ -252,13 +346,20 @@ TEST( udf_basics_file_does_not_exist, "non-existent UDF file should fail" ) {
     as_list_add_integer(arglist, 1);
 
     as_result r;
+    as_success_init(&r,NULL);
 
-    rc = udf_call("test", "test", "test", "does_not_exist", "does_not_exist", arglist, &r);
+    rc = udf_apply_record("test", "test", "test", "does_not_exist", "does_not_exist", arglist, &r);
+
+    print_result(rc, &r);
+
     assert_int_eq( rc, 100 );
     assert_false( r.is_success );
     assert_not_null( r.value );
     assert( as_val_type(r.value) == AS_STRING );
     assert_string_eq( as_string_tostring((as_string *) r.value), "function not found" );
+
+    as_list_destroy(arglist);
+    as_result_destroy(&r);
 }
 
 /******************************************************************************
@@ -270,13 +371,13 @@ static bool before(atf_suite * suite) {
 
     rc = udf_put(LUA_FILE);
     if ( rc != 0 ) {
-        error("failure while uploading %s: %d", LUA_FILE, rc);
+        error("failure while uploading: %s (%d)", LUA_FILE, rc);
         return false;
     }
 
     rc = udf_exists(LUA_FILE);
     if ( rc != 0 ) {
-        error("basics.lua does not exist.");
+        error("lua file does not exist: %s (%d)", LUA_FILE, rc);
         return false;
     }
 
@@ -286,35 +387,35 @@ static bool before(atf_suite * suite) {
 static bool after(atf_suite * suite) {
     int rc = udf_remove(LUA_FILE);
     if ( rc != 0 ) {
-        error("failure while removing %s: %d", LUA_FILE, rc);
+        error("failure while removing: %s (%d)", LUA_FILE, rc);
         return false;
     }
 
     return true;
 }
 
-SUITE( udf_basics, "test basics.lua" ) {
+SUITE( record_basics, "test basics.lua" ) {
 
     suite_before( before );
     suite_after( after );
 
-    suite_add( udf_basics_exists );
+    suite_add( record_basics_exists );
 
-    suite_add( udf_basics_getboolean );
-    suite_add( udf_basics_getfloat );
-    suite_add( udf_basics_getinteger );
-    suite_add( udf_basics_getstring );
-    suite_add( udf_basics_gettable );
-    suite_add( udf_basics_getlist );
-    suite_add( udf_basics_getmap );
+    suite_add( record_basics_getboolean );
+    suite_add( record_basics_getfloat );
+    suite_add( record_basics_getinteger );
+    suite_add( record_basics_getstring );
+    suite_add( record_basics_gettable );
+    suite_add( record_basics_getlist );
+    suite_add( record_basics_getmap );
     
 
-    suite_add( udf_basics_concat );
-    suite_add( udf_basics_add );
-    suite_add( udf_basics_sum );
-    suite_add( udf_basics_diff );
-    suite_add( udf_basics_difference );
+    suite_add( record_basics_concat );
+    suite_add( record_basics_add );
+    suite_add( record_basics_sum );
+    suite_add( record_basics_diff );
+    suite_add( record_basics_difference );
 
-    suite_add( udf_basics_func_does_not_exist );
-    suite_add( udf_basics_file_does_not_exist );
+    suite_add( record_basics_func_does_not_exist );
+    suite_add( record_basics_file_does_not_exist );
 }

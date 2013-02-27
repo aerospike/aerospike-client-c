@@ -1,12 +1,12 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Express 2012 for Windows Desktop
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CitrusleafLibrary", "CitrusleafLibrary\CitrusleafLibrary.vcxproj", "{D3F76A82-2D81-4FAF-ADDD-0FD7AC71C923}"
-EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CitrusleafDemo", "CitrusleafDemo\CitrusleafDemo.vcxproj", "{8CE5C7B6-4F67-4A64-9983-362CEAE082B7}"
 	ProjectSection(ProjectDependencies) = postProject
 		{D3F76A82-2D81-4FAF-ADDD-0FD7AC71C923} = {D3F76A82-2D81-4FAF-ADDD-0FD7AC71C923}
 	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CitrusleafLibrary", "CitrusleafLibrary\CitrusleafLibrary.vcxproj", "{D3F76A82-2D81-4FAF-ADDD-0FD7AC71C923}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -18,19 +18,6 @@ Global
 		Release|x64 = Release|x64
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{D3F76A82-2D81-4FAF-ADDD-0FD7AC71C923}.Debug|Mixed Platforms.ActiveCfg = Release|x64
-		{D3F76A82-2D81-4FAF-ADDD-0FD7AC71C923}.Debug|Mixed Platforms.Build.0 = Release|x64
-		{D3F76A82-2D81-4FAF-ADDD-0FD7AC71C923}.Debug|Mixed Platforms.Deploy.0 = Debug|x64
-		{D3F76A82-2D81-4FAF-ADDD-0FD7AC71C923}.Debug|Win32.ActiveCfg = Debug|Win32
-		{D3F76A82-2D81-4FAF-ADDD-0FD7AC71C923}.Debug|Win32.Build.0 = Debug|Win32
-		{D3F76A82-2D81-4FAF-ADDD-0FD7AC71C923}.Debug|x64.ActiveCfg = Debug|x64
-		{D3F76A82-2D81-4FAF-ADDD-0FD7AC71C923}.Debug|x64.Build.0 = Debug|x64
-		{D3F76A82-2D81-4FAF-ADDD-0FD7AC71C923}.Release|Mixed Platforms.ActiveCfg = Release|x64
-		{D3F76A82-2D81-4FAF-ADDD-0FD7AC71C923}.Release|Mixed Platforms.Build.0 = Release|x64
-		{D3F76A82-2D81-4FAF-ADDD-0FD7AC71C923}.Release|Win32.ActiveCfg = Release|Win32
-		{D3F76A82-2D81-4FAF-ADDD-0FD7AC71C923}.Release|Win32.Build.0 = Release|Win32
-		{D3F76A82-2D81-4FAF-ADDD-0FD7AC71C923}.Release|x64.ActiveCfg = Release|x64
-		{D3F76A82-2D81-4FAF-ADDD-0FD7AC71C923}.Release|x64.Build.0 = Release|x64
 		{8CE5C7B6-4F67-4A64-9983-362CEAE082B7}.Debug|Mixed Platforms.ActiveCfg = Release|x64
 		{8CE5C7B6-4F67-4A64-9983-362CEAE082B7}.Debug|Mixed Platforms.Build.0 = Release|x64
 		{8CE5C7B6-4F67-4A64-9983-362CEAE082B7}.Debug|Mixed Platforms.Deploy.0 = Debug|x64
@@ -44,6 +31,19 @@ Global
 		{8CE5C7B6-4F67-4A64-9983-362CEAE082B7}.Release|Win32.Build.0 = Release|Win32
 		{8CE5C7B6-4F67-4A64-9983-362CEAE082B7}.Release|x64.ActiveCfg = Release|x64
 		{8CE5C7B6-4F67-4A64-9983-362CEAE082B7}.Release|x64.Build.0 = Release|x64
+		{D3F76A82-2D81-4FAF-ADDD-0FD7AC71C923}.Debug|Mixed Platforms.ActiveCfg = Release|x64
+		{D3F76A82-2D81-4FAF-ADDD-0FD7AC71C923}.Debug|Mixed Platforms.Build.0 = Release|x64
+		{D3F76A82-2D81-4FAF-ADDD-0FD7AC71C923}.Debug|Mixed Platforms.Deploy.0 = Debug|x64
+		{D3F76A82-2D81-4FAF-ADDD-0FD7AC71C923}.Debug|Win32.ActiveCfg = Debug|Win32
+		{D3F76A82-2D81-4FAF-ADDD-0FD7AC71C923}.Debug|Win32.Build.0 = Debug|Win32
+		{D3F76A82-2D81-4FAF-ADDD-0FD7AC71C923}.Debug|x64.ActiveCfg = Debug|x64
+		{D3F76A82-2D81-4FAF-ADDD-0FD7AC71C923}.Debug|x64.Build.0 = Debug|x64
+		{D3F76A82-2D81-4FAF-ADDD-0FD7AC71C923}.Release|Mixed Platforms.ActiveCfg = Release|x64
+		{D3F76A82-2D81-4FAF-ADDD-0FD7AC71C923}.Release|Mixed Platforms.Build.0 = Release|x64
+		{D3F76A82-2D81-4FAF-ADDD-0FD7AC71C923}.Release|Win32.ActiveCfg = Release|Win32
+		{D3F76A82-2D81-4FAF-ADDD-0FD7AC71C923}.Release|Win32.Build.0 = Release|Win32
+		{D3F76A82-2D81-4FAF-ADDD-0FD7AC71C923}.Release|x64.ActiveCfg = Release|x64
+		{D3F76A82-2D81-4FAF-ADDD-0FD7AC71C923}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

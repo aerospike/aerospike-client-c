@@ -239,7 +239,7 @@ $(TARGET_OBJ)/test/%.o: $(SOURCE_TEST)/%.c
 test/client_test: $(TARGET_BIN)/test/client_test
 $(TARGET_BIN)/test/client_test: CFLAGS += $(TEST_CFLAGS)
 $(TARGET_BIN)/test/client_test: LDFLAGS += $(TEST_LDFLAGS)
-$(TARGET_BIN)/test/client_test: $(TEST_CLIENT:%=$(TARGET_OBJ)/test/%.o) $(TARGET_OBJ)/test/test.o $(TARGET_LIB)/libcitrusleaf.a | prepare
+$(TARGET_BIN)/test/client_test: $(TEST_CLIENT:%=$(TARGET_OBJ)/test/%.o) $(TARGET_OBJ)/test/test.o $(TARGET_LIB)/libcitrusleaf.a | build prepare
 
 ###############################################################################
 include project/rules.makefile

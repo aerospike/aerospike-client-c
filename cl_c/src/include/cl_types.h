@@ -64,18 +64,7 @@
 
 typedef struct cl_conn_s cl_conn;
 
-typedef enum cl_rv_e cl_rv;
-typedef enum cl_rvclient_e cl_rvclient;
-typedef enum cl_operator_type_e cl_operator;
-
-typedef struct cl_bin_s cl_bin;
-typedef struct cl_rec_s cl_rec;
-typedef struct cl_batchresult_s cl_batchresult;
-typedef struct cl_operation_s cl_operation;
-typedef struct cl_addrmap cl_addrmap;
-
-
-enum cl_rv_e {
+typedef enum cl_rv_e {
     CITRUSLEAF_FAIL_ASYNCQ_FULL             = -3,
     CITRUSLEAF_FAIL_TIMEOUT                 = -2,
     CITRUSLEAF_FAIL_CLIENT                  = -1,   // an out of memory or similar locally
@@ -111,15 +100,15 @@ enum cl_rv_e {
     CITRUSLEAF_FAIL_INDEX_NOTREADABLE       = 209,
     CITRUSLEAF_FAIL_QUERY_ABORTED           = 210,
     CITRUSLEAF_FAIL_QUERY_QUEUEFULL         = 211
-};
+} cl_rv;
 
-enum cl_rvclient_e {
+typedef enum cl_rvclient_e {
     CITRUSLEAF_FAIL_DC_DOWN     = 1,
     CITRUSLEAF_FAIL_DC_UP       = 2
-};
+} cl_rvclient;
 
 
-enum cl_operator_type_e { 
+typedef enum cl_operator_type_e { 
     CL_OP_WRITE, 
     CL_OP_READ, 
     CL_OP_INCR, 
@@ -130,53 +119,53 @@ enum cl_operator_type_e {
     CL_OP_MC_APPEND, 
     CL_OP_TOUCH, 
     CL_OP_MC_TOUCH
-};
+} cl_operator;
 
 /**
  * A bin is the bin name, and the value set or gotten
  */
-struct cl_bin_s {
+typedef struct cl_bin_s {
     char        bin_name[CL_BINNAME_SIZE];
     cl_object   object;
-};
+} cl_bin;
 
 /**
  * A record structure containing the most common fileds of a record
  */
-struct cl_rec_s {
+typedef struct cl_rec_s {
     cf_digest   digest;
     uint32_t    generation;
     uint32_t    record_voidtime;
     cl_bin *    bins;
     int         n_bins;
-};
+} cl_rec;
 
 /**
  * Structure used by functions which want to return a bunch of records
  */
-struct cl_batchresult_s {
+typedef struct cl_batchresult_s {
     pthread_mutex_t     lock;
     int                 numrecs;
     cl_rec *            records;
-};
+} cl_batchresult;
 
 /**
  * An operation is the bin, plus the operator (write, read, add, etc)
  * This structure is used for the more complex 'operate' call,
  * which can specify simultaneous operations on multiple bins
  */
-struct cl_operation_s {
+typedef struct cl_operation_s {
     cl_bin              bin;
     cl_operator         op;
-};
+} cl_operation;
     
 /**
  * Structure to map the internal address to the external address
  */
-struct cl_addrmap {
+typedef struct cl_addrmap {
     char *  orig;
     char *  alt;
-};
+} cl_addrmap;
 
 /**
  * Callback function type used by batch and scan

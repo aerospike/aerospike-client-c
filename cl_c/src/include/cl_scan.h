@@ -32,8 +32,6 @@
  * TYPES
  ******************************************************************************/
 
-typedef enum cl_scan_priority cl_scan_priority;
-
 typedef struct cl_scan_param_field_s cl_scan_param_field;
 typedef struct cl_scan_parameters_s cl_scan_parameters;
 typedef struct cl_node_response_s cl_node_response;
@@ -45,12 +43,12 @@ typedef struct cl_node_response_s cl_node_response;
  * Non-zero return in the callback aborts the call
  */
 
-enum cl_scan_priority { 
+typedef enum cl_scan_priority { 
     CL_SCAN_PRIORITY_AUTO, 
     CL_SCAN_PRIORITY_LOW, 
     CL_SCAN_PRIORITY_MEDIUM, 
     CL_SCAN_PRIORITY_HIGH
-};
+} cl_scan_priority;
 
 /**
  * scan fields

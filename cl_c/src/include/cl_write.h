@@ -29,22 +29,18 @@
  * CONSTANTS
  ******************************************************************************/
 
-typedef enum cl_write_policy_e cl_write_policy;
-typedef struct cl_write_parameters_s cl_write_parameters;
-
-
-enum cl_write_policy_e { 
+typedef enum cl_write_policy_e { 
     CL_WRITE_ASYNC, 
     CL_WRITE_ONESHOT, 
     CL_WRITE_RETRY, 
     CL_WRITE_ASSURED
-};
+} cl_write_policy;
 
 /**
  * write info structure
  * There's a lot of info that can go into a write ---
  */
-struct cl_write_parameters_s {
+typedef struct cl_write_parameters_s {
     bool            unique;                 // write unique - means success if didn't exist before
     bool            unique_bin;             // write unique bin - means success if the bin didn't exist before
     bool            use_generation;         // generation must be exact for write to succeed
@@ -54,7 +50,7 @@ struct cl_write_parameters_s {
     int             timeout_ms;
     uint32_t        record_ttl;             // seconds, from now, when the record would be auto-removed from the DBcd 
     cl_write_policy w_pol;
-};
+} cl_write_parameters;
 
 /******************************************************************************
  * INLINE FUNCTIONS

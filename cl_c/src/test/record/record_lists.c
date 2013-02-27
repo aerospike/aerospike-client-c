@@ -29,15 +29,17 @@ TEST( record_lists_getlist, "getlist() - get a list" ) {
     as_result r;
     as_success_init(&r,NULL);
 
-    // rc = udf_apply_record("test", "test", "test", UDF_FILE, "getlist", arglist, &r);
+    rc = udf_apply_record("test", "test", "test", UDF_FILE, "getlist", arglist, &r);
+    
+    print_result(rc, &r);
 
-    // assert_int_eq( rc, 0 );
-    // assert_true( r.is_success );
-    // assert_not_null( r.value );
-    // assert( as_val_type(r.value) == AS_LIST );
-    // assert_int_eq( as_list_size((as_list *) r.value), 3);
+    assert_int_eq( rc, 0 );
+    assert_true( r.is_success );
+    assert_not_null( r.value );
+    assert( as_val_type(r.value) == AS_LIST );
+    assert_int_eq( as_list_size((as_list *) r.value), 3);
 
-    // as_result_destroy(&r);
+    as_result_destroy(&r);
 }
 
 /******************************************************************************

@@ -1,145 +1,252 @@
 
 #include "../test.h"
+#include "../util/udf.h"
+#include "../util/consumer_stream.h"
 #include <citrusleaf/as_stream.h>
 #include <citrusleaf/as_types.h>
 #include <citrusleaf/as_module.h>
 #include <citrusleaf/mod_lua.h>
 #include <citrusleaf/mod_lua_config.h>
 #include <citrusleaf/cl_query.h>
+#include <citrusleaf/citrusleaf.h>
 #include <limits.h>
 #include <stdlib.h>
 
 /******************************************************************************
- * FUNCTIONS
+ * MACROS
  *****************************************************************************/
 
-as_aerospike as;
+#define LUA_FILE "src/test/lua/client_stream_simple.lua"
+#define UDF_FILE "client_stream_simple"
 
-as_stream_status print_stream_write(const as_stream * s, const as_val * v) {
-    typedef void (* callback)(const as_val *);
-    callback c = (callback) as_stream_source(s);
-    if ( c ) {
-        c(v);
-    }
-    as_val_destroy(v);
-    return AS_STREAM_OK;
-}
-
-const as_stream_hooks print_stream_hooks = {
-    .read       = NULL,
-    .write      = print_stream_write
-};
-
-as_stream * print_stream_new(void (* callback)(const as_val *)) {
-    return as_stream_new(callback, &print_stream_hooks);
-}
-
-static int test_log(const as_aerospike * as, const char * file, const int line, const int level, const char * msg) {
-    char l[10] = {'\0'};
-    switch(level) {
-        case 1:
-            strncpy(l,"WARN",10);
-            break;
-        case 2:
-            strncpy(l,"INFO",10);
-            break;
-        case 3:
-            strncpy(l,"DEBUG",10);
-            break;
-        default:
-            strncpy(l,"TRACE",10);
-            break;
-    }
-    atf_log_line(stderr, l, ATF_LOG_PREFIX, file, line, msg);
-    return 0;
-}
-
-static const as_aerospike_hooks test_aerospike_hooks = {
-    .destroy = NULL,
-    .rec_create = NULL,
-    .rec_update = NULL,
-    .rec_remove = NULL,
-    .rec_exists = NULL,
-    .log = test_log,
-};
+/******************************************************************************
+ * VARAIBLES
+ *****************************************************************************/
+     
+extern cl_cluster * cluster;
 
 /******************************************************************************
  * TEST CASES
  *****************************************************************************/
  
-TEST( stream_simple_1, "get numeric bin without aggregation" ) {
-    
-    extern cl_cluster * cluster;
+TEST( stream_simple_exists, UDF_FILE" exists" ) {
+    int rc = udf_exists(LUA_FILE);
+    assert_int_eq( rc, 0 );
+}
 
+TEST( stream_simple_create, "create records" ) {
+
+    int rc = 0;
+
+    const char * ns = "test";
+    const char * set = "test";
+
+    int n_recs = 100;
+
+    char * sindex_resp[1] = { NULL };
+
+    // create index on "a"
+
+    rc = citrusleaf_secondary_index_create(cluster, "test", "test", "test_a", "a", "STRING", sindex_resp);
+
+    if ( rc == CITRUSLEAF_OK ) {
+        info("index created");
+    }
+    else if ( rc == CITRUSLEAF_FAIL_INDEX_EXISTS ) {
+        info("index exists");
+    }
+    else {
+        info("error: %d", rc);
+    }
+
+
+    // create index on "b"
+
+    rc = citrusleaf_secondary_index_create(cluster, "test", "test", "test_b", "b", "NUMERIC", sindex_resp);
+
+    if ( rc == CITRUSLEAF_OK ) {
+        info("index created");
+    }
+    else if ( rc == CITRUSLEAF_FAIL_INDEX_EXISTS ) {
+        info("index exists");
+    }
+    else {
+        info("error: %d", rc);
+    }
+
+    // create index on "c"
+
+    rc = citrusleaf_secondary_index_create(cluster, "test", "test", "test_c", "c", "NUMERIC", sindex_resp);
+
+    if ( rc == CITRUSLEAF_OK ) {
+        info("index created");
+    }
+    else if ( rc == CITRUSLEAF_FAIL_INDEX_EXISTS ) {
+        info("index exists");
+    }
+    else {
+        info("error(%d): %s", rc, *sindex_resp);
+    }
+
+    // insert records
+
+    cl_write_parameters wp;
+    cl_write_parameters_set_default(&wp);
+    wp.timeout_ms = 1000;
+    wp.record_ttl = 864000;
+
+    cl_object okey;
+    cl_bin bins[4];
+    strcpy(bins[0].bin_name, "a");
+    strcpy(bins[1].bin_name, "b");
+    strcpy(bins[2].bin_name, "c");
+    strcpy(bins[3].bin_name, "d");
+
+    for ( int i = 0; i < n_recs; i++ ) {
+
+        int nbins = 4;
+
+        char        key[64] = { '\0' };
+        
+        const char * a = "abc";
+        int b = n_recs;
+        int c = b % 10;
+        int d = ((i + 1) * b) / 2;
+
+        snprintf(key, 64, "%s-%d-%d-%d", a, b, c, d);
+
+        citrusleaf_object_init_str(&okey, key);
+        citrusleaf_object_init_str(&bins[0].object, a);
+        citrusleaf_object_init_int(&bins[1].object, b);
+        citrusleaf_object_init_int(&bins[2].object, c);
+        citrusleaf_object_init_int(&bins[3].object, d);
+
+        rc = citrusleaf_put(cluster, ns, set, &okey, bins, nbins, &wp);
+
+        assert_int_eq(rc, 0);
+
+        // if ( rc == 0 ) {
+        //     info("created (\"%s\") => {a: \"%s\", b: %d, c: %d, d: %d}", key, a, b, c, d);
+        // }
+        // else {
+        //     error("failed creating (\"%s\") => {a: \"%s\", b: %d, c: %d, d: %d}", key, a, b, c, d);
+        // }
+
+        cl_bin *    rbins = NULL;
+        int         nrbins = 0;
+        uint32_t    rgen = 0;
+
+        rc = citrusleaf_get_all(cluster, "test", "test", &okey, &rbins, &nrbins, 1000, &rgen);
+
+        assert_int_eq(rc, 0);
+
+        // if ( rc == 0 ) {
+        //     info("exists (\"%s\")", key);
+        // }
+        // else {
+        //     error("doesn't exist (\"%s\")", key);
+        // }
+    }
+
+    info("created %d records", n_recs);
+
+}
+
+
+TEST( stream_simple_1, "get numeric bin without aggregation" ) {
+
+    int rc = 0;
     int count = 0;
 
-    void printer(const as_val * v) {
+    bool consume(as_val * v, void * udata) {
         if ( v == AS_STREAM_END ) {
             info("count: %d",count);
         }
         else {
             count++;
+            as_val_destroy(v);
         }
+        return AS_STREAM_OK;
     }
 
-    as_stream * pstream = print_stream_new(printer);
+    as_stream * consumer = consumer_stream_new(consume);
 
-    as_query * q = as_query_new("test","test");
+    as_query * q = as_query_new("test", "test");
     as_query_select(q, "b");
     as_query_where(q, "a", string_equals("abc"));
     
-    citrusleaf_query_stream(cluster, q, pstream);
+    rc = citrusleaf_query_stream(cluster, q, consumer);
 
-	as_query_destroy(q);
-    as_stream_destroy(pstream);
+    assert_int_eq( rc, 0 );
+
+    as_query_destroy(q);
+    as_stream_destroy(consumer);
 }
 
 TEST( stream_simple_2, "sum of numeric bins" ) {
     
-    extern cl_cluster * cluster;
+    int rc = 0;
 
-    void printer(const as_val * v) {
-        if ( v != AS_STREAM_END ) info("result: %s", as_val_tostring(v));
+    as_stream_status consume(as_val * v) {
+        if ( v != AS_STREAM_END ) {
+            info("result: %s", as_val_tostring(v));
+            as_val_destroy(v);
+        }
+        return AS_STREAM_OK;
     }
 
-    as_stream * pstream = print_stream_new(printer);
+    as_stream * consumer = consumer_stream_new(consume);
 
-    as_query * q = as_query_new("test","test");
-    // as_query_select(q, "b");
+    as_query * q = as_query_new("test", "test");
     as_query_where(q, "a", string_equals("abc"));
-    as_query_aggregate(q, "aggr", "sum", NULL);
+    as_query_aggregate(q, UDF_FILE, "sum", NULL);
     
-    citrusleaf_query_stream(cluster, q, pstream);
+    rc = citrusleaf_query_stream(cluster, q, consumer);
+
+    assert_int_eq( rc, 0 );
 
     as_query_destroy(q);
-    as_stream_destroy(pstream);
+    as_stream_destroy(consumer);
 }
 
 
 TEST( stream_simple_3, "raj" ) {
     
-    extern cl_cluster * cluster;
+    int rc = 0;
 
-    void printer(const as_val * v) {
-        if ( v != AS_STREAM_END ) info("result: %s", as_val_tostring(v));
+    as_stream_status consume(as_val * v) {
+        if ( v != AS_STREAM_END ) {
+            info("result: %s", as_val_tostring(v));
+            as_val_destroy(v);
+        }
+        else {
+            info("end");
+        }
+        return AS_STREAM_OK;
     }
 
-    as_stream * pstream = print_stream_new(printer);
+    as_stream * consumer = consumer_stream_new(consume);
 
     as_list * args = as_arraylist_new(2,0);
-    as_list_add_string(args, "bn1");
+    as_list_add_string(args, "b");
     as_list_add_integer(args, 1);
 
-    as_query * q = as_query_new("test_I","demo");
+    as_query * q = as_query_new("test", "test");
     // as_query_select(q, "b");
-    as_query_where(q, "bn3", integer_equals(100));
-    as_query_aggregate(q, "raj", "sum_on_match", args);
+    as_query_where(q, "a", integer_equals(100));
+    as_query_aggregate(q, UDF_FILE, "sum_on_match", args);
     
-    citrusleaf_query_stream(cluster, q, pstream);
+    rc = citrusleaf_query_stream(cluster, q, consumer);
+
+    if ( rc ) {
+        error("Error (%d)", rc);
+    }
+
+    assert_int_eq( rc, 0 );
 
     as_list_destroy(args);
     as_query_destroy(q);
-    as_stream_destroy(pstream);
+    as_stream_destroy(consumer);
 }
 
 /******************************************************************************
@@ -150,7 +257,7 @@ static bool before(atf_suite * suite) {
 
     citrusleaf_query_init();
 
-    as_aerospike_init(&as, NULL, &test_aerospike_hooks);
+    // as_aerospike_init(&as, NULL, &test_aerospike_hooks);
 
     // chris: disabling Lua cache, because it takes too long to prime.
     mod_lua_config_op conf_op = {
@@ -166,11 +273,35 @@ static bool before(atf_suite * suite) {
     as_module_init(&mod_lua);
     as_module_configure(&mod_lua, &conf_op);
  
+
+    int rc = 0;
+
+    rc = udf_put(LUA_FILE);
+    if ( rc != 0 ) {
+        error("failure while uploading: %s (%d)", LUA_FILE, rc);
+        return false;
+    }
+
+    rc = udf_exists(LUA_FILE);
+    if ( rc != 0 ) {
+        error("lua file does not exist: %s (%d)", LUA_FILE, rc);
+        return false;
+    }
+
+
     return true;
 }
 
 static bool after(atf_suite * suite) {
+    
     citrusleaf_query_shutdown();
+
+    int rc = udf_remove(LUA_FILE);
+    if ( rc != 0 ) {
+        error("failure while removing: %s (%d)", LUA_FILE, rc);
+        return false;
+    }
+
     return true;
 }
 
@@ -178,7 +309,8 @@ SUITE( stream_simple, "simple stream" ) {
     suite_before( before );
     suite_after( after );
     
-    suite_add( stream_simple_1 );
+    // suite_add( stream_simple_create );
+    // suite_add( stream_simple_1 );
     suite_add( stream_simple_2 );
-    suite_add( stream_simple_3 );
+    // suite_add( stream_simple_3 );
 }

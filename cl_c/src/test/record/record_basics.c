@@ -12,23 +12,6 @@
 #define UDF_FILE "client_record_basics"
 
 /******************************************************************************
- * STATIC FUNCTIONS
- *****************************************************************************/
-
-static void print_result(uint32_t rc, as_result * r) {
-    if ( !r->is_success ) {
-        char * s = as_val_tostring(r->value);
-        info("failure: %s (%d)", s, rc);
-        free(s);
-    }
-    else {
-        char * s = as_val_tostring(r->value);
-        info("success: %s", s);
-        free(s);
-    }
-}
-
-/******************************************************************************
  * TEST CASES
  *****************************************************************************/
 

@@ -221,6 +221,9 @@ void atf_assert_log(atf_test_result * result, const char * exp, const char * fil
 
 #define ATF_LOG_PREFIX "        "
 
+#define debug(fmt, args...) \
+    atf_log_line(stderr, "DEBUG", ATF_LOG_PREFIX, __FILE__, __LINE__, fmt, ## args);
+
 #define info(fmt, args...) \
     atf_log(stderr, "INFO", ATF_LOG_PREFIX, __FILE__, __LINE__, fmt, ## args);
 

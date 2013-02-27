@@ -24,3 +24,5 @@ int udf_exists(const char *);
  * Apply a UDF to a record
  */
 int udf_apply_record(const char *, const char *, const char *, const char *, const char *, as_list *, as_result *);
+
+void print_result(uint32_t rc, as_result * r);

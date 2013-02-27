@@ -1,6 +1,6 @@
 
 #include "udf.h"
-
+#include "../test.h"
 #include <citrusleaf/citrusleaf.h>
 #include <citrusleaf/as_types.h>
 #include <citrusleaf/cl_udf.h>
@@ -119,4 +119,18 @@ int udf_apply_stream(const char * ns, const char * set, const char * key, const 
     citrusleaf_object_init_str(&okey, key);
 
     return citrusleaf_udf_record_apply(cluster, ns, set, &okey, file, func, arglist, 1000, result);
+}
+
+
+void print_result(uint32_t rc, as_result * r) {
+    if ( !r->is_success ) {
+        char * s = as_val_tostring(r->value);
+        info("failure: %s (%d)", s, rc);
+        free(s);
+    }
+    else {
+        char * s = as_val_tostring(r->value);
+        info("success: %s", s);
+        free(s);
+    }
 }

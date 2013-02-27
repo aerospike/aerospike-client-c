@@ -74,13 +74,9 @@ IF pthread is not installed on the system then -
 		path of pthread\lib\x64\
 		path of openSSL\lib\
 
-2.) Make sure CitrusleafDemo project is the Startup project.
-	If not then CitrusleafDemo -> Set as Startup Project
+2.) Build the solution
 
-
-3.) Build the solution
-
-4.) Copy pthreadVC2.dll in the location same as of CitrusleafDemo.exe file
+3.) Copy pthreadVC2.dll in the location same as of CitrusleafDemo.exe file
 	If you are building in Debug mode : 
 	Copy the pthread_folder\dll\x64\pthreadVC2.dll into client\cl_libevent2\windows\x64\Debug\
 

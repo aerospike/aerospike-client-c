@@ -1028,8 +1028,6 @@ static cl_rv as_query_udf_destroy(as_query_udf * udf) {
 
     if ( udf->arglist ) {
         as_list_destroy(udf->arglist);
-        // raj (Todo) where is fucking as_list_free interface
-        free(udf->arglist);
         udf->arglist = NULL;
     }
 

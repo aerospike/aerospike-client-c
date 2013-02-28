@@ -39,14 +39,14 @@ void atf_test_result_free(atf_test_result * test_result);
 
 
 #define TEST(__test_name, __test_desc) \
-    static void __test_run_##__test_name(atf_test *, atf_test_result *); \
-    static atf_test __test_##__test_name = { \
+    static void test_spec__##__test_name(atf_test *, atf_test_result *); \
+    static atf_test test__##__test_name = { \
         .name = #__test_name, \
         .desc = __test_desc, \
-        .run = __test_run_##__test_name \
+        .run = test_spec__##__test_name \
     }; \
-    atf_test * __test_name = & __test_##__test_name; \
-    static void __test_run_##__test_name(atf_test * self, atf_test_result * __result__)
+    atf_test * __test_name = & test__##__test_name; \
+    static void test_spec__##__test_name(atf_test * self, atf_test_result * __result__)
 
 /******************************************************************************
  * atf_suite
@@ -85,17 +85,17 @@ atf_suite_result * atf_suite_result_add(atf_suite_result * suite_result, atf_tes
 void atf_suite_result_print(atf_suite_result * suite_result);
 
 #define SUITE(__suite_name, __suite_desc) \
-    static void __suite_init_##__suite_name(atf_suite *); \
-    static atf_suite __suite_##__suite_name = { \
+    static void suite_spec__##__suite_name(atf_suite *); \
+    static atf_suite suite__##__suite_name = { \
         .name = #__suite_name, \
         .desc = __suite_desc, \
-        .init = __suite_init_##__suite_name, \
+        .init = suite_spec__##__suite_name, \
         .before = NULL, \
         .after = NULL, \
         .size = 0 \
     }; \
-    atf_suite * __suite_name = & __suite_##__suite_name; \
-    static void __suite_init_##__suite_name(atf_suite * self)
+    atf_suite * __suite_name = & suite__##__suite_name; \
+    static void suite_spec__##__suite_name(atf_suite * self)
 
 #define suite_add(__test) \
     atf_suite_add(self, __test)
@@ -136,23 +136,24 @@ atf_plan * atf_plan_before(atf_plan * plan, bool (* before)(atf_plan * plan));
 
 atf_plan_result * atf_plan_result_add(atf_plan_result * plan_result, atf_suite_result * suite_result);
 
-#define PLAN(__plan)\
-    void __plan(atf_plan * self); \
+#define PLAN(__plan_name)\
+    static void plan_spec__##__plan_name(atf_plan * self); \
+    static atf_plan plan__##__plan_name = { \
+        .name = #__plan_name, \
+        .suites = {NULL}, \
+        .size = 0 \
+    }; \
+    atf_suite * ##__plan_name = & plan__##__plan_name; \
     int main(int argc, char ** args) { \
-        atf_plan plan = { \
-            .name = #__plan, \
-            .suites = {NULL}, \
-            .size = 0 \
-        }; \
         atf_plan_result result = { \
-            .plan = &plan, \
+            .plan = ##__plan_name, \
             .suites = { NULL }, \
             .size = 0 \
         }; \
-        __plan(&plan); \
-        return atf_plan_run(&plan, &result); \
+        plan_spec__##__plan_name(##__plan_name); \
+        return atf_plan_run(##__plan_name, &result); \
     }\
-    void __plan(atf_plan * self) \
+    static void plan_spec__##__plan_name(atf_plan * self) \
 
 
 #define plan_add(__suite) \

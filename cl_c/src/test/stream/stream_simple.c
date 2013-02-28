@@ -48,43 +48,28 @@ TEST( stream_simple_create, "create records" ) {
     // create index on "a"
 
     rc = citrusleaf_secondary_index_create(cluster, "test", "test", "test_a", "a", "STRING", sindex_resp);
-
-    if ( rc == CITRUSLEAF_OK ) {
-        info("index created");
+    if ( rc != CITRUSLEAF_OK && rc != CITRUSLEAF_FAIL_INDEX_EXISTS ) {
+        info("error(%d): %s", rc, *sindex_resp);
     }
-    else if ( rc == CITRUSLEAF_FAIL_INDEX_EXISTS ) {
-        info("index exists");
-    }
-    else {
-        info("error: %d", rc);
-    }
-
 
     // create index on "b"
 
     rc = citrusleaf_secondary_index_create(cluster, "test", "test", "test_b", "b", "NUMERIC", sindex_resp);
-
-    if ( rc == CITRUSLEAF_OK ) {
-        info("index created");
-    }
-    else if ( rc == CITRUSLEAF_FAIL_INDEX_EXISTS ) {
-        info("index exists");
-    }
-    else {
-        info("error: %d", rc);
+    if ( rc != CITRUSLEAF_OK && rc != CITRUSLEAF_FAIL_INDEX_EXISTS ) {
+        info("error(%d): %s", rc, *sindex_resp);
     }
 
     // create index on "c"
 
     rc = citrusleaf_secondary_index_create(cluster, "test", "test", "test_c", "c", "NUMERIC", sindex_resp);
+    if ( rc != CITRUSLEAF_OK && rc != CITRUSLEAF_FAIL_INDEX_EXISTS ) {
+        info("error(%d): %s", rc, *sindex_resp);
+    }
 
-    if ( rc == CITRUSLEAF_OK ) {
-        info("index created");
-    }
-    else if ( rc == CITRUSLEAF_FAIL_INDEX_EXISTS ) {
-        info("index exists");
-    }
-    else {
+    // create index on "d"
+
+    rc = citrusleaf_secondary_index_create(cluster, "test", "test", "test_d", "d", "NUMERIC", sindex_resp);
+    if ( rc != CITRUSLEAF_OK && rc != CITRUSLEAF_FAIL_INDEX_EXISTS ) {
         info("error(%d): %s", rc, *sindex_resp);
     }
 
@@ -96,41 +81,37 @@ TEST( stream_simple_create, "create records" ) {
     wp.record_ttl = 864000;
 
     cl_object okey;
-    cl_bin bins[4];
+    cl_bin bins[5];
     strcpy(bins[0].bin_name, "a");
     strcpy(bins[1].bin_name, "b");
     strcpy(bins[2].bin_name, "c");
     strcpy(bins[3].bin_name, "d");
+    strcpy(bins[4].bin_name, "e");
 
     for ( int i = 0; i < n_recs; i++ ) {
 
-        int nbins = 4;
+        int nbins = 5;
 
         char        key[64] = { '\0' };
         
         const char * a = "abc";
         int b = n_recs;
-        int c = b % 10;
-        int d = ((i + 1) * b) / 2;
+        int c = i;
+        int d = i % 10;
+        int e = ((i + 1) * b) / 2;
 
-        snprintf(key, 64, "%s-%d-%d-%d", a, b, c, d);
+        snprintf(key, 64, "%s-%d-%d-%d-%d", a, b, c, d, e);
 
         citrusleaf_object_init_str(&okey, key);
         citrusleaf_object_init_str(&bins[0].object, a);
         citrusleaf_object_init_int(&bins[1].object, b);
         citrusleaf_object_init_int(&bins[2].object, c);
         citrusleaf_object_init_int(&bins[3].object, d);
+        citrusleaf_object_init_int(&bins[4].object, e);
 
         rc = citrusleaf_put(cluster, ns, set, &okey, bins, nbins, &wp);
 
         assert_int_eq(rc, 0);
-
-        // if ( rc == 0 ) {
-        //     info("created (\"%s\") => {a: \"%s\", b: %d, c: %d, d: %d}", key, a, b, c, d);
-        // }
-        // else {
-        //     error("failed creating (\"%s\") => {a: \"%s\", b: %d, c: %d, d: %d}", key, a, b, c, d);
-        // }
 
         cl_bin *    rbins = NULL;
         int         nrbins = 0;
@@ -139,26 +120,18 @@ TEST( stream_simple_create, "create records" ) {
         rc = citrusleaf_get_all(cluster, "test", "test", &okey, &rbins, &nrbins, 1000, &rgen);
 
         assert_int_eq(rc, 0);
-
-        // if ( rc == 0 ) {
-        //     info("exists (\"%s\")", key);
-        // }
-        // else {
-        //     error("doesn't exist (\"%s\")", key);
-        // }
     }
 
     info("created %d records", n_recs);
 
 }
 
-
 TEST( stream_simple_1, "get numeric bin without aggregation" ) {
 
     int rc = 0;
     int count = 0;
 
-    bool consume(as_val * v, void * udata) {
+    as_stream_status consume(as_val * v) {
         if ( v == AS_STREAM_END ) {
             info("count: %d",count);
         }
@@ -172,12 +145,13 @@ TEST( stream_simple_1, "get numeric bin without aggregation" ) {
     as_stream * consumer = consumer_stream_new(consume);
 
     as_query * q = as_query_new("test", "test");
-    as_query_select(q, "b");
+    as_query_select(q, "c");
     as_query_where(q, "a", string_equals("abc"));
     
     rc = citrusleaf_query_stream(cluster, q, consumer);
 
     assert_int_eq( rc, 0 );
+    assert_int_eq( count, 100 );
 
     as_query_destroy(q);
     as_stream_destroy(consumer);
@@ -187,10 +161,12 @@ TEST( stream_simple_2, "sum of numeric bins" ) {
     
     int rc = 0;
 
+    as_integer * result = NULL;
+
     as_stream_status consume(as_val * v) {
         if ( v != AS_STREAM_END ) {
-            info("result: %s", as_val_tostring(v));
-            as_val_destroy(v);
+            if ( result != NULL ) as_val_destroy(result);
+            result = as_integer_fromval(v);
         }
         return AS_STREAM_OK;
     }
@@ -203,8 +179,18 @@ TEST( stream_simple_2, "sum of numeric bins" ) {
     
     rc = citrusleaf_query_stream(cluster, q, consumer);
 
-    assert_int_eq( rc, 0 );
+    if ( rc ) {
+        error("error: %d", rc);
+    }
+    else {
+        info("result: %d", as_integer_toint(result) );
+    }
 
+    assert_int_eq( rc, 0 );
+    assert_not_null( result );
+    assert_int_eq( as_integer_toint(result), 252500 );
+
+    as_integer_destroy(result);
     as_query_destroy(q);
     as_stream_destroy(consumer);
 }
@@ -214,13 +200,11 @@ TEST( stream_simple_3, "raj" ) {
     
     int rc = 0;
 
+    as_integer * result = NULL;
+
     as_stream_status consume(as_val * v) {
         if ( v != AS_STREAM_END ) {
-            info("result: %s", as_val_tostring(v));
-            as_val_destroy(v);
-        }
-        else {
-            info("end");
+            result = as_integer_fromval(v);
         }
         return AS_STREAM_OK;
     }
@@ -228,23 +212,27 @@ TEST( stream_simple_3, "raj" ) {
     as_stream * consumer = consumer_stream_new(consume);
 
     as_list * args = as_arraylist_new(2,0);
-    as_list_add_string(args, "b");
+    as_list_add_string(args, "d");
     as_list_add_integer(args, 1);
 
     as_query * q = as_query_new("test", "test");
-    // as_query_select(q, "b");
-    as_query_where(q, "a", integer_equals(100));
+    as_query_where(q, "b", integer_equals(100));
     as_query_aggregate(q, UDF_FILE, "sum_on_match", args);
     
     rc = citrusleaf_query_stream(cluster, q, consumer);
 
     if ( rc ) {
-        error("Error (%d)", rc);
+        error("error: %d", rc);
+    }
+    else {
+        info("result: %d", as_integer_toint(result) );
     }
 
     assert_int_eq( rc, 0 );
+    assert_not_null( result );
+    assert_int_eq( as_integer_toint(result), 10 );
 
-    as_list_destroy(args);
+    as_integer_destroy(result);
     as_query_destroy(q);
     as_stream_destroy(consumer);
 }
@@ -307,10 +295,10 @@ static bool after(atf_suite * suite) {
 
 SUITE( stream_simple, "simple stream" ) {
     suite_before( before );
-    suite_after( after );
+    suite_after( after   );
     
-    // suite_add( stream_simple_create );
-    // suite_add( stream_simple_1 );
+    suite_add( stream_simple_create );
+    suite_add( stream_simple_1 );
     suite_add( stream_simple_2 );
-    // suite_add( stream_simple_3 );
+    suite_add( stream_simple_3 );
 }

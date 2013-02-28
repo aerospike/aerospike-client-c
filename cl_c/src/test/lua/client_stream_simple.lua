@@ -1,5 +1,5 @@
 
-local function add(a,b)
+local function add(a, b)
     return a + b;
 end
 
@@ -10,12 +10,7 @@ local function select(bin)
 end
 
 function sum(s)
-
-    local function _map(rec)
-        return rec["b"]
-    end
-
-    return s : map(_map) : reduce(add);
+    return s : map(select("e")) : reduce(add);
 end
 
 function sum_on_match(s, bin, val)

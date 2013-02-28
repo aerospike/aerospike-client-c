@@ -6,6 +6,7 @@
 #include <as_string.h>
 #include <as_rec.h>
 #include <as_map.h>
+#include <as_hashmap.h>
 #include "map_rec.h"
 
 /*****************************************************************************

@@ -54,13 +54,16 @@ cl_rv citrusleaf_secondary_index_create(
 
     int rc = citrusleaf_info_cluster_all(asc, ddl, response, true, 5000);
 
+    if ( rc != 0 ) return rc;
+
     char * fail = strstr(*response,"FAIL:");
     if ( fail != NULL ) {
         fail = fail + 5;
-        char * code = strchr(fail,':');
-        if ( code != NULL ) {
-            *code = '\0';
-            if ( strcmp(fail,"208") == 0 ) {
+        char * end = strchr(fail,':');
+        if ( end != NULL ) {
+            *end = '\0';
+            int code = atoi(fail);
+            if ( code == 208 ) {
                 return CITRUSLEAF_FAIL_INDEX_EXISTS;
             }
         }
@@ -90,6 +93,8 @@ cl_rv citrusleaf_secondary_index_create_functional(
     );
     
     int rc = citrusleaf_info_cluster_all(asc, ddl, response, true, 5000);
+
+    if ( rc != 0 ) return rc;
 
     char * fail = strstr(*response,"FAIL:");
     if ( fail != NULL ) {

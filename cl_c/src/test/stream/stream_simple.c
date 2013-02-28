@@ -251,7 +251,7 @@ static bool before(atf_suite * suite) {
     mod_lua_config_op conf_op = {
         .optype     = MOD_LUA_CONFIG_OP_INIT,
         .arg        = NULL,
-        .config     = mod_lua_config_client(false, "modules/mod-lua/src/lua", "modules/mod-lua/src/test/lua")
+        .config     = mod_lua_config_client(false, "modules/mod-lua/src/lua", "src/test/lua")
     }; 
 
 	// Chris (Todo) it is leaking here, Who cleans it

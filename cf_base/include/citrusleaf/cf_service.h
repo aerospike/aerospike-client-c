@@ -8,5 +8,7 @@
 
 #pragma once
 
+#include <sys/types.h>
+
 void cf_process_privsep(uid_t uid, gid_t gid);
 void cf_process_daemonize(const char* redirect_file, int *fd_ignore_list, int list_size);

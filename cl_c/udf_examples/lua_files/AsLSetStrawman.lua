@@ -1,18 +1,20 @@
--- AS Set Strawman V1 -- (Feb 25, 2013)
+-- AS Large Set Strawman V1 -- (Last Update Feb 27, 2013: tjl)
 -- Aerospike Set Operations
 -- (*) Set Create
 -- (*) Set Insert
--- (*) Set Exists
+-- (*) Set Select (and Exists)
 -- (*) Set Delete
 
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
--- Set Utility Functions
+-- AS Large Set Utility Functions
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 -- ======================================================================
--- Get (create) a unique bin name given the current counter
+-- Get (create) a unique bin name given the current counter.
+-- 'LSetBin_XX' will be the individual bins that hold lists of set data
 -- ======================================================================
 local function getBinName( number )
-  return "AsSetBin_" .. tostring( number );
+  local binPrefix = "LSetBin_";
+  return binPrefix .. tostring( number );
 end
 
 -- ======================================================================
@@ -24,7 +26,7 @@ end
 -- Return: New Bin Name
 -- ======================================================================
 local function setupNewBin( record, binNum )
-  local mod = "AsSetStrawman";
+  local mod = "AsLSetStrawman";
   local meth = "setupNewBin()";
   info("[ENTER]: <%s:%s> Bin(%d) \n", mod, meth, binNum );
 
@@ -60,7 +62,7 @@ end
 --  and returns an unsigned long.
 -- ------------------------------------------------------------
 -- local function intHash ( intValue  )
---   local mod = "AsSetStrawman";
+--   local mod = "AsLSetStrawman";
 --   local meth = "intHash()";
 --   info("[ENTER]: <%s:%s> val(%d) \n", mod, meth, intValue );
 --   local h = 0;
@@ -77,7 +79,7 @@ end
 -- ======================================================================
 -- ======================================================================
 local function computeSetBin( newValue, distrib )
-  local mod = "AsSetStrawman";
+  local mod = "AsLSetStrawman";
   local meth = "computeSetBin()";
   info("[ENTER]: <%s:%s> val(%s) Dist(%d) \n",
     mod, meth, tostring(newValue), distrib );
@@ -103,7 +105,7 @@ end
 -- Return: 0 if not found, Value if found.
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 local function scanList( binList, searchValue, deleteFlag ) 
-  local mod = "AsSetStrawman";
+  local mod = "AsLSetStrawman";
   local meth = "scanList()";
   -- Scan the list for the item, return true if found,
   -- Later, we may return a set of things 
@@ -113,7 +115,7 @@ local function scanList( binList, searchValue, deleteFlag )
     if binList[i] == searchValue then
       info("[EXIT]: <%s:%s> Found(%s)\n", mod, meth, tostring(searchValue));
       if( deleteFlag == 1) then
-        binList[i] = nil; // the value is NO MORE
+        binList[i] = nil; -- the value is NO MORE
       end
       return searchValue
     end
@@ -123,19 +125,19 @@ local function scanList( binList, searchValue, deleteFlag )
 end
 
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
--- AS Set Main Functions
+-- AS Large Set Main Functions
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 -- Requirements/Restrictions (this version).
 -- (1) One Set Per Record
 --
 -- ======================================================================
--- || asSetCreate ||
+-- || asLSetCreate ||
 -- ======================================================================
--- Create/Initialize a AS Set structure in a record, using multiple bins
+-- Create/Initialize a AS LSet structure in a record, using multiple bins
 --
 -- We will use predetermined BIN names for this initial prototype:
--- 'AsSetCtrlBin' will be the name of the bin containing the control info
--- 'AsSetBin_XX' will be the individual bins that hold lists of set data
+-- 'AsLSetCtrlBin' will be the name of the bin containing the control info
+-- 'LSetBin_XX' will be the individual bins that hold lists of set data
 -- There can be ONLY ONE set in a record, as we are using preset fixed names
 -- for the bin.
 -- +========================================================================+
@@ -143,18 +145,24 @@ end
 -- +========================================================================+
 -- Set Ctrl Bin is a Map -- containing control info and the list of
 -- bins (each of which has a list) that we're using.
+-- Parms:
+-- (*) record: The Aerospike Server record on which we operate
+-- (*) namespace: The Namespace of the record
+-- (*) set: The Set of the record
+-- (*) setBinName: The name of the bin for the AS Large Set
+-- (*) distrib: The Distribution Factor (how many separate bins) 
 --
-function asSetCreate( record, namespace, set, setBinName, distrib )
-  local mod = "AsSetStrawman";
-  local meth = "asSetCreate()";
+function asLSetCreate( record, namespace, set, setBinName, distrib )
+  local mod = "AsLSetStrawman";
+  local meth = "asLSetCreate()";
   info("[ENTER]: <%s:%s> NS(%s) Set(%s) Bin(%s) Dis(%d)\n",
     mod, meth, namespace, set, setBinName, distrib );
 
   -- Check to see if Set Structure (or anything) is already there,
   -- and if so, error.
-  if( record.AsSetCtrlBin ~= nil ) then
-    info("[ERROR EXIT]: <%s:%s> AsSetCtrlBin Already Exists\n", mod, meth );
-    return('AsSetCtrlBin already exists');
+  if( record.AsLSetCtrlBin ~= nil ) then
+    info("[ERROR EXIT]: <%s:%s> AsLSetCtrlBin Already Exists\n", mod, meth );
+    return('AsLSetCtrlBin already exists');
   end
 
   info("[DEBUG]: <%s:%s> : Initialize SET CTRL Map\n", mod, meth );
@@ -168,7 +176,7 @@ function asSetCreate( record, namespace, set, setBinName, distrib )
   ctrlMap['Set'] = set;
   ctrlMap['ItemCount'] = 0;
   ctrlMap['Modulo'] = distrib;
-  record.AsSetCtrlBin = ctrlMap; -- store in the record
+  record.AsLSetCtrlBin = ctrlMap; -- store in the record
 
   info("[DEBUG]: <%s:%s> : CTRL Map after Init(%s)\n",
     mod, meth , tostring(ctrlMap));
@@ -190,11 +198,11 @@ function asSetCreate( record, namespace, set, setBinName, distrib )
 
   info("[EXIT]: <%s:%s> : Done.  RC(%d)\n", mod, meth, rc );
   return rc;
-end -- function asSetCreate( record, namespace, set, distrib )
+end -- function asLSetCreate( record, namespace, set, distrib )
 
 -- ======================================================================
 -- |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
--- || AS Set Insert 
+-- || AS Large Set Insert 
 -- |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 -- ======================================================================
 -- Insert a value into the set.
@@ -202,8 +210,8 @@ end -- function asSetCreate( record, namespace, set, distrib )
 -- bin list is used, then add to the list.
 --
 -- We will use predetermined BIN names for this initial prototype
--- 'AsSetCtrlBin' will be the name of the bin containing the control info
--- 'AsSetBin_XX' will be the individual bins that hold lists of data
+-- 'AsLSetCtrlBin' will be the name of the bin containing the control info
+-- 'LSetBin_XX' will be the individual bins that hold lists of data
 -- Notice that this means that THERE CAN BE ONLY ONE AS Set object per record.
 -- In the final version, this will change -- there will be multiple 
 -- AS Set bins per record.  We will switch to a modified bin naming scheme.
@@ -225,20 +233,24 @@ end -- function asSetCreate( record, namespace, set, distrib )
 --        |V List |   |V List |           |V List |
 --        +=======+   +=======+           +=======+
 --
-function asSetInsert( record, setBinName, newValue )
-  local mod = "AsSetStrawman";
-  local meth = "asSetInsert()";
+-- Parms:
+-- (*) record: the Server record that holds the Large Set Instance
+-- (*) setBinName: Bin Name of the Large Set Instance
+-- (*) newValue: Value to be inserted into the Large Set
+function asLSetInsert( record, setBinName, newValue )
+  local mod = "AsLSetStrawman";
+  local meth = "asLSetInsert()";
   info("[ENTER]: <%s:%s> SetBin(%s) NewValue(%s)\n",
     mod, meth, setBinName, tostring( newValue ));
 
   -- Check that the Set Structure is already there, otherwise, error
-  if( record.AsSetCtrlBin == nil ) then
-    info("[ERROR EXIT]: <%s:%s> AsSetCtrlBin does not Exist\n", mod, meth );
-    return('AsSetCtrlBin does not exist');
+  if( record.AsLSetCtrlBin == nil ) then
+    info("[ERROR EXIT]: <%s:%s> AsLSetCtrlBin does not Exist\n", mod, meth );
+    return('AsLSetCtrlBin does not exist');
   end
 
   -- Find the appropriate bin for the new value and then insert it.
-  local ctrlMap = record.AsSetCtrlBin;
+  local ctrlMap = record.AsLSetCtrlBin;
   local modulo = ctrlMap['Modulo'];
   local binNumber = computeSetBin( newValue, modulo );
 
@@ -257,7 +269,7 @@ function asSetInsert( record, setBinName, newValue )
   local itemCount = ctrlMap['ItemCount'];
   itemCount = itemCount + 1;
   ctrlMap['ItemCount'] = itemCount;
-  record.AsSetCtrlBin = ctrlMap;
+  record.AsLSetCtrlBin = ctrlMap;
   info("[DEBUG]: <%s:%s> itemCount(%d)\n", mod, meth, itemCount );
 
   info("[DEBUG]: <%s:%s>Storing Record() with New Value(%s): Map(%s)\n",
@@ -275,29 +287,30 @@ end -- function set Insert()
 
 -- ======================================================================
 -- |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
--- || as Set Exists
+-- || as Large Set Search
 -- |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 -- ======================================================================
+-- 
 -- Return TRUE if the item exists in the set.
 -- So, similar to insert -- take the new value and locate the right bin.
 -- Then, scan the bin's list for that item (linear scan).
 -- We could test this with a Lua Map to see what it does.
 --
 -- ======================================================================
-function asSetExists( record, setBinName, searchValue )
-  local mod = "AsSetStrawman";
-  local meth = "asSetExists()";
+function asLSetSearch( record, setBinName, searchValue, exists )
+  local mod = "AsLSetStrawman";
+  local meth = "asLSetSearch()";
   info("[ENTER]: <%s:%s> Search for Value(%s) \n",
     mod, meth, tostring( searchValue ) );
 
   -- Check that the Set Structure is already there, otherwise, error
-  if( record.AsSetCtrlBin == nil ) then
-    info("[ERROR EXIT]: <%s:%s> AsSetCtrlBin does not Exist\n", mod, meth );
-    return('AsSetCtrlBin does not exist');
+  if( record.AsLSetCtrlBin == nil ) then
+    info("[ERROR EXIT]: <%s:%s> AsLSetCtrlBin does not Exist\n", mod, meth );
+    return('AsLSetCtrlBin does not exist');
   end
 
   -- Find the appropriate bin for the Search value
-  local ctrlMap = record.AsSetCtrlBin;
+  local ctrlMap = record.AsLSetCtrlBin;
   local modulo = ctrlMap.Modulo;
   local binNumber = computeSetBin( searchValue, modulo );
 
@@ -305,9 +318,9 @@ function asSetExists( record, setBinName, searchValue )
   local binList = record[binName];
   local result = scanList( binList, searchValue );
 
-  info("[EXIT]: <%s:%s>: Exists Returns (%s) \n",mod,meth,tostring(result));
+  info("[EXIT]: <%s:%s>: Search Returns (%s) \n",mod,meth,tostring(result));
   return result;
-end -- function asSetExists()
+end -- function asLSetSearch()
 
 
 -- ======================================================================
@@ -317,20 +330,20 @@ end -- function asSetExists()
 -- ======================================================================
 -- Find an element (i.e. search) and then remove it from the list.
 -- ======================================================================
-function asSetDelete( record, setBinName, deleteValue )
-  local mod = "AsSetStrawman";
-  local meth = "asSetDelete()";
+function asLSetDelete( record, setBinName, deleteValue )
+  local mod = "AsLSetStrawman";
+  local meth = "asLSetDelete()";
   info("[ENTER]: <%s:%s> Delete Value(%s) \n",
     mod, meth, tostring( deleteValue ) );
 
   -- Check that the Set Structure is already there, otherwise, error
-  if( record.AsSetCtrlBin == nil ) then
-    info("[ERROR EXIT]: <%s:%s> AsSetCtrlBin does not Exist\n", mod, meth );
-    return('AsSetCtrlBin does not exist');
+  if( record.AsLSetCtrlBin == nil ) then
+    info("[ERROR EXIT]: <%s:%s> AsLSetCtrlBin does not Exist\n", mod, meth );
+    return('AsLSetCtrlBin does not exist');
   end
 
   -- Find the appropriate bin for the Search value
-  local ctrlMap = record.AsSetCtrlBin;
+  local ctrlMap = record.AsLSetCtrlBin;
   local modulo = ctrlMap.Modulo;
   local binNumber = computeSetBin( deleteValue, modulo );
 
@@ -344,11 +357,11 @@ function asSetDelete( record, setBinName, deleteValue )
   info("[DEBUG]: <%s:%s>: Search Result(%s): Now Delete (NOT YET DONE!!!) \n",
     mod, meth, tostring( result ));
 
-  info("[EXIT]: <%s:%s>: Exists Returns (%s) \n",
+  info("[EXIT]: <%s:%s>: Delete Returns (%s) \n",
     mod, meth, tostring( result ));
 
   return result;
 
-end -- function asSetDelete()
+end -- function asLSetDelete()
 
 -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> --

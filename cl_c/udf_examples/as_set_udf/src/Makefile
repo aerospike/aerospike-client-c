@@ -8,9 +8,9 @@ DIR_OBJECT = ../obj
 DIR_TARGET = ../bin
 DIR_LIB = ../../../target/Linux-x86_64/lib
 
-SOURCES       = as_set.c utils.c as_set_main.c
+SOURCES       = as_lset.c utils.c as_lset_main.c
 SOURCE_HEADERS = set_udf.h
-TARGET        = as_set
+TARGET        = as_lset
 
 INCLUDES = -I../include/ -I../../../target/Linux-x86_64/include/ 
 INCLUDES +=  -I../../../target/Linux-x86_64/include/citrusleaf/
@@ -27,7 +27,7 @@ OBJECTS = $(SOURCES:%.c=$(DIR_OBJECT)/%.o)
 DEPENDENCIES = $(OBJECTS:%.o=%.d)
 
 .PHONY: all
-all: as_set 
+all: as_lset 
 
 .PHONY: clean
 clean:

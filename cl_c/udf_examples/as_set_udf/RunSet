@@ -1,12 +1,16 @@
 #!/bin/bash
 echo "<< -----------  Run UDF << AS  Set >> Tests ----------------- >> "
 
-
 export UNS="test"
 export USET="set"
+# This script exercises the Aerospike Large Set Lua Functions.
+#
 export UKEY="Key_ABC"
 export SETBIN="SetBin"
-export UFILE="AsSetStrawman"
+export UFILE="AsLSetStrawman"
+export FUN_CR8="asLSetCreate"
+export FUN_INS="asLSetInsert"
+export FUN_SRCH="asLSetSearch"
 
 # Use this ONLY if we need to register the UDF
 # ascli udf-put $UFILE
@@ -17,36 +21,36 @@ ascli put $UNS $USET $UKEY '{"Test Bin": "Set Test ONE"}'
 echo ">> Check CREATE (key $UKEY) with get"
 ascli get $UNS $USET $UKEY
 
-echo ">> Call UDF Set Create: asSetCreate $UNS $USET $SETBIN 4"
-ascli udf-record-apply $UNS $USET $UKEY $UFILE asSetCreate $UNS $USET $SETBIN 0
+echo ">> Call UDF Set Create: $FUN_CR8 $UNS $USET $SETBIN 4"
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_CR8 $UNS $USET $SETBIN 0
 
 echo ">> Check CREATE (key $UKEY) with get"
 ascli get $UNS $USET $UKEY
 
-echo ">> Call UDF Set Insert: asSetInsert $SETBIN 199000111 - 199000444"
-ascli udf-record-apply $UNS $USET $UKEY $UFILE asSetInsert $SETBIN 199000111
-ascli udf-record-apply $UNS $USET $UKEY $UFILE asSetInsert $SETBIN 199000212
-ascli udf-record-apply $UNS $USET $UKEY $UFILE asSetInsert $SETBIN 199000313
-ascli udf-record-apply $UNS $USET $UKEY $UFILE asSetInsert $SETBIN 199000414
-ascli udf-record-apply $UNS $USET $UKEY $UFILE asSetInsert $SETBIN 199000515
-ascli udf-record-apply $UNS $USET $UKEY $UFILE asSetInsert $SETBIN 199000616
-ascli udf-record-apply $UNS $USET $UKEY $UFILE asSetInsert $SETBIN 199000717
-ascli udf-record-apply $UNS $USET $UKEY $UFILE asSetInsert $SETBIN 199000818
-ascli udf-record-apply $UNS $USET $UKEY $UFILE asSetInsert $SETBIN 199000919
-ascli udf-record-apply $UNS $USET $UKEY $UFILE asSetInsert $SETBIN 199001010
-ascli udf-record-apply $UNS $USET $UKEY $UFILE asSetInsert $SETBIN 199001111
-ascli udf-record-apply $UNS $USET $UKEY $UFILE asSetInsert $SETBIN 199001212
-ascli udf-record-apply $UNS $USET $UKEY $UFILE asSetInsert $SETBIN 199001313
-ascli udf-record-apply $UNS $USET $UKEY $UFILE asSetInsert $SETBIN 199001414
+echo ">> Call UDF Set Insert: $FUN_INS $SETBIN 199000111 - 199000444"
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_INS $SETBIN 199000111
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_INS $SETBIN 199000212
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_INS $SETBIN 199000313
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_INS $SETBIN 199000414
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_INS $SETBIN 199000515
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_INS $SETBIN 199000616
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_INS $SETBIN 199000717
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_INS $SETBIN 199000818
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_INS $SETBIN 199000919
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_INS $SETBIN 199001010
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_INS $SETBIN 199001111
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_INS $SETBIN 199001212
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_INS $SETBIN 199001313
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_INS $SETBIN 199001414
 
-echo ">> Call UDF Set Exists: asSetExists $SETBIN 199000111 - 199000444"
-ascli udf-record-apply $UNS $USET $UKEY $UFILE asSetExists $SETBIN 199000111
-ascli udf-record-apply $UNS $USET $UKEY $UFILE asSetExists $SETBIN 199000110
-ascli udf-record-apply $UNS $USET $UKEY $UFILE asSetExists $SETBIN 199000212
-ascli udf-record-apply $UNS $USET $UKEY $UFILE asSetExists $SETBIN 200000110
-ascli udf-record-apply $UNS $USET $UKEY $UFILE asSetExists $SETBIN 199000313
-ascli udf-record-apply $UNS $USET $UKEY $UFILE asSetExists $SETBIN 200000110
-ascli udf-record-apply $UNS $USET $UKEY $UFILE asSetExists $SETBIN 199000414
+echo ">> Call UDF Set Search: $FUN_SRCH $SETBIN 199000111 - 199000444"
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 199000111
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 199000110
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 199000212
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 200000110
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 199000313
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 200000110
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 199000414
 echo ">> Check CREATE (key $UKEY) with get"
 ascli get $UNS $USET $UKEY
 

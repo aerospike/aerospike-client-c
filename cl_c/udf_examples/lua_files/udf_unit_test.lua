@@ -28,9 +28,9 @@ function do_trim_bin(record, limits)
   end
   local x = aerospike:update(record);
   if (x == 0) then
-	return 'TRIM_BIN: ' .. record.cats;
+	  return 'TRIM_BIN: ' .. record.cats;
   else 
-	return 'Aerospike update failed with '..x; 
+	  return 'Aerospike update failed with '..x; 
   end
 end
 
@@ -39,9 +39,9 @@ function do_update_bin(record, k, v)
   info("Value of bin = %s",record[k]);
   local x;
   if not aerospike:exists(record) then
-	x = aerospike:create(record);
+	  x = aerospike:create(record);
   else
-	x = aerospike:update(record);
+	  x = aerospike:update(record);
   end
   if ( x == 0 ) then
      return 'Bin update/create returned '..x;
@@ -59,9 +59,9 @@ function do_new_bin(record)
   end
   local x = aerospike:update(record);
   if ( x == 0 ) then
-	return 'Successfully added new_bin';
+	  return 'Successfully added new_bin';
   else 
-	return 'Failed to add new_bin %d'..x;
+	  return 'Failed to add new_bin %d'..x;
   end
 end
 
@@ -111,6 +111,52 @@ function do_undefined_global()
   i_dont_exist(x);
   return 'OK';
 end
+
+function fill_blob(blob)
+  for count = 1,#blob do
+    blob[count] = count
+  end
+end
+
+function compare_blob(b1, b2)
+  if #b1 ~= #b2 then
+    return false
+  end
+  for count = 1,#b1 do
+    if b1[count] ~= b2[count] then
+      return false
+    end
+  end
+  return true
+end
+
+function do_udf_blob(r, action, bin, sz)
+
+  info('do_udf_blob being called')
+  local blob = bytes(sz)
+  fill_blob(blob)
+
+  if (action ==  "WRITE") then
+    r[bin] = blob
+
+    if not aerospike:exists(r) then
+      x = aerospike:create(r)
+    else
+      x = aerospike:update(r)
+    end
+  end
+
+  if (action == "READ") then
+    local bin_blob = r[bin]
+    info( 'bin_blob %s blob %s',tostring(bin_blob),tostring(blob) )
+    if not compare_blob(bin_blob, blob) then
+      return "FAIL"
+    end
+  end
+  
+  return "OK"
+end
+
 
 function do_lua_functional_test(record)
   local x = {}

@@ -1,5 +1,5 @@
 # Citrusleaf Tools
-# Makefile:  Stolen from LSO for use with Large AS Set Objects
+# Makefile
 
 DEPTH = ../../../../../..
 include $(DEPTH)/make_in/Makefile.in
@@ -8,13 +8,10 @@ DIR_OBJECT = ../obj
 DIR_TARGET = ../bin
 DIR_LIB = ../../../target/Linux-x86_64/lib
 
-SOURCES       = as_lset.c utils.c as_lset_main.c
-SOURCE_HEADERS = set_udf.h
-TARGET        = as_lset
+SOURCES       = test_udf.cpp 
+TARGET        = test_udf
 
-INCLUDES = -I../include/ -I../../../target/Linux-x86_64/include/ 
-INCLUDES +=  -I../../../target/Linux-x86_64/include/citrusleaf/
-
+INCLUDES = -I../include/ -I../../../target/Linux-x86_64/include/ -I../../../target/Linux-x86_64/include/citrusleaf/
 LIBRARIES = $(DIR_LIB)/libcitrusleaf.a  -lssl -lcrypto -lpthread -lrt
 ifeq (${MR_LANG},LUA)
 LIBRARIES += -llua
@@ -23,11 +20,11 @@ LIBRARIES += -lm
 
 LDFLAGS += -L$(DEPTH)/lib/ -L$(DEPTH)/shared/lib/ 
 
-OBJECTS = $(SOURCES:%.c=$(DIR_OBJECT)/%.o)
+OBJECTS = $(SOURCES:%.cpp=$(DIR_OBJECT)/%.o)
 DEPENDENCIES = $(OBJECTS:%.o=%.d)
 
 .PHONY: all
-all: as_lset 
+all: test_udf
 
 .PHONY: clean
 clean:
@@ -39,9 +36,13 @@ depclean: clean
 
 .PHONY: $(TARGET)
 $(TARGET): $(OBJECTS)
-	$(CC) $(LDFLAGS) -o $(DIR_TARGET)/$(TARGET) $(OBJECTS) $(LIBRARIES)
+	g++ $(LDFLAGS) -o $(DIR_TARGET)/$(TARGET) $(OBJECTS) $(LIBRARIES)
 
 -include $(DEPENDENCIES) 
 
-$(DIR_OBJECT)/%.o: %.c
-	$(CC) $(CFLAGS_NATIVE) -MMD -o $@ -c $(INCLUDES) $<
+$(DIR_OBJECT)/%.o: %.cpp | prepare
+	g++ -MMD -o $@ -c $(INCLUDES) $<
+
+prepare:
+	mkdir -p $(DIR_TARGET)
+	mkdir -p $(DIR_OBJECT)

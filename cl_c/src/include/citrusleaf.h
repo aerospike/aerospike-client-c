@@ -24,6 +24,9 @@
  */
 
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include "cl_types.h"
 #include "cl_async.h"
@@ -95,3 +98,8 @@ cl_rv citrusleaf_operate_digest(cl_cluster *asc, const char *ns, cf_digest *d, c
  * gets the digest for a particular set and key
  */
 int citrusleaf_calculate_digest(const char *set, const cl_object *key, cf_digest *digest);
+
+#ifdef __cplusplus
+} // end extern "C"
+#endif
+

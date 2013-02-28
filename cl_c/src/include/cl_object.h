@@ -31,10 +31,8 @@
  * TYPES
  ******************************************************************************/
 
-typedef enum cl_type_e cl_type;
-typedef struct cl_object_s cl_object;
 
-enum cl_type_e { 
+typedef enum cl_type_e { 
     CL_NULL         = 0,
     CL_INT          = 1,
     CL_FLOAT        = 2,
@@ -57,14 +55,14 @@ enum cl_type_e {
     CL_MAP          = 19,
     CL_LIST         = 20,
     CL_UNKNOWN      = 666666
-};
+} cl_type;
 
 /**
  * An object is the value in a bin, or it is used as a key
  * The object is typed according to the citrusleaf typing system
  * These are often stack allocated, and are assigned using the 'wrap' calls
  */
-struct cl_object_s {
+typedef struct cl_object_s {
     cl_type         type;
     size_t          sz; 
     union {
@@ -73,7 +71,7 @@ struct cl_object_s {
         int64_t     i64;    // easiest to have one large int type
     } u;
     void *          free;   // if this is set, this must be freed on destructuion   
-};
+} cl_object;
 
 /******************************************************************************
  * FUNCTIONS

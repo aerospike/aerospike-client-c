@@ -25,6 +25,10 @@
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "cluster.h"
 #include "as_result.h"
 #include <openssl/sha.h>
@@ -59,7 +63,7 @@ typedef struct as_udf_file_s as_udf_file;
  * Apply a UDF to a record.
  * @param result will be updated with the result of the call. The as_result.value member should be freed by the user.
  */
-cl_rv citrusleaf_udf_record_apply(cl_cluster * cluster, const char * namespace, const char * set, 
+cl_rv citrusleaf_udf_record_apply(cl_cluster * cluster, const char * ns, const char * set, 
 	const cl_object * key, const char * filename, const char * function, as_list * arglist, 
 	int timeout, as_result * result);
 
@@ -102,4 +106,8 @@ cl_rv citrusleaf_udf_put(cl_cluster * cluster, const char * filename, as_bytes *
  * @param error - Contains an error message, if the return value was non-zero. The value must be freed by the user.
  */
 cl_rv citrusleaf_udf_remove(cl_cluster * cluster, const char * filename, char ** error);
+
+#ifdef __cplusplus
+} // end extern "C"
+#endif
 

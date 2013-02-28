@@ -107,9 +107,9 @@ void atf_suite_result_print(atf_suite_result * suite_result) {
 
 atf_suite_result * atf_suite_result_new(atf_suite * suite) {
     atf_suite_result * res = (atf_suite_result *) malloc(sizeof(atf_suite_result));
-    res->success = 0;
     res->suite = suite;
     res->size = 0;
+    res->success = 0;
     return res;
 }
 
@@ -149,7 +149,7 @@ atf_plan * atf_plan_after(atf_plan * plan, bool (* after)(atf_plan * plan)) {
 }
 
 
-atf_plan_result * atf_plan_run(atf_plan * plan, atf_plan_result * result) {
+int atf_plan_run(atf_plan * plan, atf_plan_result * result) {
 
     printf("\n");
     printf("===============================================================================\n");
@@ -157,7 +157,7 @@ atf_plan_result * atf_plan_run(atf_plan * plan, atf_plan_result * result) {
 
     if ( plan->before ) {
         if ( plan->before(plan) == false ) {
-            return result;
+            return -1;
         }
     }
 
@@ -167,7 +167,7 @@ atf_plan_result * atf_plan_run(atf_plan * plan, atf_plan_result * result) {
 
     if ( plan->after ) {
         if ( plan->after(plan) == false ) {
-            return result;
+            return -2;
         }
     }
 
@@ -178,13 +178,20 @@ atf_plan_result * atf_plan_run(atf_plan * plan, atf_plan_result * result) {
     printf("SUMMARY\n");
     printf("\n");
     
+    uint32_t total = 0;
+    uint32_t passed = 0;
+
     for( int i = 0; i < result->size; i++ ) {
         atf_suite_result_print(result->suites[i]);
+        total += result->suites[i]->size;
+        passed += result->suites[i]->success;
     }
 
     printf("\n");
 
-    return result;
+    printf("%d tests: %d passed, %d failed\n", total, passed, total-passed);
+
+    return total-passed;
 }
 
 /******************************************************************************
@@ -263,5 +270,5 @@ void atf_log_line(FILE * f, const char * level, const char * prefix, const char 
     va_start(ap, fmt);
     vsnprintf(msg, LOG_MESSAGE_MAX, fmt, ap);
     va_end(ap);
-    fprintf(f, "%s[%s:%d] %s - %s\n", prefix, file, line, level, msg);
+    fprintf(f, "%s[%s:%d] %s\n", prefix, file, line, msg);
 }

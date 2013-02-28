@@ -35,57 +35,81 @@ static char * citrusleaf_secondary_index_fold_args(as_list * arglist) {
     return "";
 }
 
-cl_rv citrusleaf_secondary_index_create(cl_cluster *asc, 
-                                            const char *ns,
-                                            const char *set,
-                                            const char *iname,
-                                            const char *binname,
-                                            const char *type,
-                                            char **response)
-{
+cl_rv citrusleaf_secondary_index_create(
+    cl_cluster * asc, const char * ns, const char * set,
+    const char * iname, const char * binname, const char * type,
+    char ** response
+){
 
     if (!ns || !iname || !binname || !type) return CITRUSLEAF_FAIL_CLIENT;
 
     char ddl[1024];
-    sprintf(ddl,  "sindex-create:ns=%s%s%s;indexname=%s;" 
-                  "numbins=1;indexdata=%s,%s;priority=normal\n",
-                     ns, set ? ";set=" : "", set ? set : "",
-                    iname, binname, type);
+    
+    sprintf(ddl, 
+        "sindex-create:ns=%s%s%s;indexname=%s;" 
+        "numbins=1;indexdata=%s,%s;priority=normal\n",
+        ns, set ? ";set=" : "", set ? set : "",
+        iname, binname, type
+    );
 
-    if ( citrusleaf_info_cluster_all(asc, ddl, response, true, 5000) ) {
-        fprintf(stderr, "sindex-create: response: %s\n", *response);
+    int rc = citrusleaf_info_cluster_all(asc, ddl, response, true, 5000);
+
+    if ( rc != 0 ) return rc;
+
+    char * fail = strstr(*response,"FAIL:");
+    if ( fail != NULL ) {
+        fail = fail + 5;
+        char * end = strchr(fail,':');
+        if ( end != NULL ) {
+            *end = '\0';
+            int code = atoi(fail);
+            if ( code == 208 ) {
+                return CITRUSLEAF_FAIL_INDEX_EXISTS;
+            }
+        }
         return CITRUSLEAF_FAIL_CLIENT;
     }
-    fprintf(stderr, "sindex-create: response: %s\n", *response);
+
     return CITRUSLEAF_OK;
 }        
 
-cl_rv citrusleaf_secondary_index_create_functional(cl_cluster *asc, 
-                                            const char *ns,
-                                            const char *set,
-                                            const char *finame,
-                                            const char *file,
-                                            const char *func,
-                                            as_list    *args,
-                                            const char *type,
-                                            char **response)
-{
+cl_rv citrusleaf_secondary_index_create_functional(
+    cl_cluster * asc, const char * ns, const char * set, const char * finame,
+    const char * file, const char * func, as_list * args, const char * type,
+    char **response
+){
 
     if (!ns || !finame || !file || !func || !args || !type) {
         return CITRUSLEAF_FAIL_CLIENT;
     }
 
     char ddl[1024];
-    sprintf(ddl,  "sindex-create:ns=%s%s%s;indexname=%s;"
-            "funcdata=%s,%s;funcargs=%s;indextype=%s;priority=normal\n",
-            ns, set ? ";set=" : "", set ? set : "", finame, file, func, 
-            citrusleaf_secondary_index_fold_args(args), type);
 
-    if ( citrusleaf_info_cluster_all(asc, ddl, response, true, 5000) ) {
-        fprintf(stderr, "sindex-create: response: %s\n", *response);
+    sprintf(ddl,  
+        "sindex-create:ns=%s%s%s;indexname=%s;"
+        "funcdata=%s,%s;funcargs=%s;indextype=%s;priority=normal\n",
+        ns, set ? ";set=" : "", set ? set : "", finame, file, func, 
+        citrusleaf_secondary_index_fold_args(args), type
+    );
+    
+    int rc = citrusleaf_info_cluster_all(asc, ddl, response, true, 5000);
+
+    if ( rc != 0 ) return rc;
+
+    char * fail = strstr(*response,"FAIL:");
+    if ( fail != NULL ) {
+        fail = fail + 5;
+        char * end = strchr(fail,':');
+        if ( end != NULL ) {
+            *end = '\0';
+            int code = atoi(fail);
+            if ( code == 208 ) {
+                return CITRUSLEAF_FAIL_INDEX_EXISTS;
+            }
+        }
         return CITRUSLEAF_FAIL_CLIENT;
     }
-    fprintf(stderr, "sindex-create: response: %s\n", *response);
+
     return CITRUSLEAF_OK;
 }        
 

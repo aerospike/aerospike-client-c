@@ -595,17 +595,16 @@ static uint16_t query_response_gen(const as_rec * rec) {
     return r->generation;
 }
 
-void query_response_destroy(as_rec *rec) {
+int query_response_destroy(as_rec *rec) {
     as_query_response_rec * r = as_rec_source(rec);
-    if (!r) return;
+    if (!r) return 0;
     citrusleaf_bins_free(r->bins, r->n_bins);
     if (r->bins) free(r->bins);
     if (r->ns)   free(r->ns);
     if (r->set)  free(r->set);
     if (r->ismalloc) free(r);
     rec->source = NULL;
-    // Raj(todo) should you free this here as well ???
-    // free((void *)rec);
+    return 0;
 }
 
 // Chris(todo) needs addition to the as_rec interface
@@ -943,7 +942,7 @@ static void * as_query_worker(void * dummy) {
 
 
 
-static as_val * queue_stream_read(const as_stream *s) {
+static as_val * queue_stream_read(const as_stream * s) {
     as_val * val = NULL;
     if (CF_QUEUE_EMPTY == cf_queue_pop(as_stream_source(s), &val, CF_QUEUE_NOWAIT)) {
         return NULL;
@@ -960,7 +959,7 @@ static int queue_stream_destroy(as_stream *s) {
     return 0;
 }
 
-static as_stream_status queue_stream_write(const as_stream * s, const as_val * val) {
+static as_stream_status queue_stream_write(const as_stream * s, as_val * val) {
     if (CF_QUEUE_OK != cf_queue_push(as_stream_source(s), &val)) {
         fprintf(stderr, "Write to client side stream failed");
         as_val_destroy(val);
@@ -985,7 +984,7 @@ static int callback_stream_destroy(as_stream *s) {
     return 0;
 }
 
-static as_stream_status callback_stream_write(const as_stream * s, const as_val * val) {
+static as_stream_status callback_stream_write(const as_stream * s, as_val * val) {
     callback_stream_source * source = (callback_stream_source *) as_stream_source(s);
     source->callback(val, source->udata);
     return AS_STREAM_OK;
@@ -1252,6 +1251,9 @@ as_query * as_query_init(as_query * query, const char * ns, const char * setname
 }
 
 void as_query_destroy(as_query *query) {
+
+    if ( query == NULL ) return;
+
     if (query->binnames) {
         cf_vector_destroy(query->binnames);
     }
@@ -1401,10 +1403,6 @@ cl_rv citrusleaf_query_foreach(cl_cluster * cluster, const as_query * query, voi
 
     cl_rv rc = CITRUSLEAF_OK;
 
-    // deserializer
-    as_serializer ser;
-    as_msgpack_init(&ser);
-
     if ( query->udf.type == AS_QUERY_UDF_STREAM ) {
 
         // Setup as_aerospike, so we can get log() function.
@@ -1451,9 +1449,6 @@ cl_rv citrusleaf_query_foreach(cl_cluster * cluster, const as_query * query, voi
         // sink the data from multiple sources into the result stream
         rc = as_query_execute(cluster, query, udata, callback, true);
     }
-
-    // cleanup deserializer
-    as_serializer_destroy(&ser);
 
     return rc;
 }

@@ -2,6 +2,7 @@
 #include "../test.h"
 #include "../util/udf.h"
 #include "../util/consumer_stream.h"
+#include "../util/test_logger.h"
 #include <citrusleaf/as_stream.h>
 #include <citrusleaf/as_types.h>
 #include <citrusleaf/as_module.h>
@@ -248,21 +249,40 @@ static bool before(atf_suite * suite) {
     // as_aerospike_init(&as, NULL, &test_aerospike_hooks);
 
     // chris: disabling Lua cache, because it takes too long to prime.
-    mod_lua_config_op conf_op = {
-        .optype     = MOD_LUA_CONFIG_OP_INIT,
-        .arg        = NULL,
-        .config     = mod_lua_config_client(false, "modules/mod-lua/src/lua", "src/test/lua")
-    }; 
+    // mod_lua_config_op conf_op = {
+    //     .optype     = MOD_LUA_CONFIG_OP_INIT,
+    //     .arg        = NULL,
+    //     .config     = mod_lua_config_client(false, "modules/mod-lua/src/lua", "src/test/lua")
+    // }; 
 
 	// Chris (Todo) it is leaking here, Who cleans it
 	// up ??
     // chris:   we don't have a destroy for modules (yet)
     //          the reason is we didn't need it in asd.
-    as_module_init(&mod_lua);
-    as_module_configure(&mod_lua, &conf_op);
+    // as_module_init(&mod_lua);
+    // as_module_configure(&mod_lua, &conf_op);
  
-
     int rc = 0;
+
+    mod_lua_config config = {
+        .server_mode    = false,
+        .cache_enabled  = false,
+        .system_path    = "modules/mod-lua/src/lua",
+        .user_path      = "src/test/lua"
+    };
+
+    if ( mod_lua.logger == NULL ) {
+        mod_lua.logger = test_logger_new();
+    }
+        
+    rc = as_module_configure(&mod_lua, &config);
+
+    if ( rc != 0 ) {
+        error("as_module_configure failed: %d", rc);
+        return false;
+    }
+
+
 
     rc = udf_put(LUA_FILE);
     if ( rc != 0 ) {

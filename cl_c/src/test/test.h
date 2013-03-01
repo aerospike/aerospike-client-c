@@ -58,11 +58,11 @@ typedef struct atf_suite_result_s atf_suite_result;
 struct atf_suite_s {
     const char *    name;
     const char *    desc;
+    atf_test *      tests[ATF_SUITE_TEST_MAX];
+    uint32_t        size;
     void            (* init)(atf_suite *);
     bool            (* before)(atf_suite *);
     bool            (* after)(atf_suite *);
-    atf_test *      tests[ATF_SUITE_TEST_MAX];
-    uint32_t        size;
 };
 
 struct atf_suite_result_s {
@@ -89,10 +89,11 @@ void atf_suite_result_print(atf_suite_result * suite_result);
     static atf_suite suite__##__suite_name = { \
         .name = #__suite_name, \
         .desc = __suite_desc, \
+        .tests = {NULL}, \
+        .size = 0, \
         .init = suite_spec__##__suite_name, \
         .before = NULL, \
-        .after = NULL, \
-        .size = 0 \
+        .after = NULL \
     }; \
     atf_suite * __suite_name = & suite__##__suite_name; \
     static void suite_spec__##__suite_name(atf_suite * self)
@@ -141,17 +142,19 @@ atf_plan_result * atf_plan_result_add(atf_plan_result * plan_result, atf_suite_r
     static atf_plan plan__##__plan_name = { \
         .name = #__plan_name, \
         .suites = {NULL}, \
-        .size = 0 \
+        .size = 0, \
+        .before = NULL, \
+        .after = NULL \
     }; \
-    atf_suite * ##__plan_name = & plan__##__plan_name; \
+    atf_plan * __plan_name = & plan__##__plan_name; \
     int main(int argc, char ** args) { \
         atf_plan_result result = { \
-            .plan = ##__plan_name, \
+            .plan = #__plan_name, \
             .suites = { NULL }, \
             .size = 0 \
         }; \
-        plan_spec__##__plan_name(##__plan_name); \
-        return atf_plan_run(##__plan_name, &result); \
+        plan_spec__##__plan_name(__plan_name); \
+        return atf_plan_run(__plan_name, &result); \
     }\
     static void plan_spec__##__plan_name(atf_plan * self) \
 

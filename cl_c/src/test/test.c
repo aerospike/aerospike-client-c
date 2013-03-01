@@ -270,5 +270,5 @@ void atf_log_line(FILE * f, const char * level, const char * prefix, const char 
     va_start(ap, fmt);
     vsnprintf(msg, LOG_MESSAGE_MAX, fmt, ap);
     va_end(ap);
-    fprintf(f, "%s[%s:%d] %s\n", prefix, file, line, msg);
+    fprintf(f, "%s[%s:%d] %s - %s\n", prefix, file, line, level, msg);
 }

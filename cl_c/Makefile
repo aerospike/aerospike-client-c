@@ -200,6 +200,7 @@ TEST_UTIL += util/consumer_stream
 TEST_UTIL += util/producer_stream
 TEST_UTIL += util/map_rec
 TEST_UTIL += util/test_aerospike
+TEST_UTIL += util/test_logger
 
 TEST_CLIENT = client_test
 TEST_CLIENT += $(TEST_UTIL) 

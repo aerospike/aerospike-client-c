@@ -6,21 +6,20 @@
  *  THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE.  THE COPYRIGHT NOTICE
  *  ABOVE DOES NOT EVIDENCE ANY ACTUAL OR INTENDED PUBLICATION.
  */
+
 #include <errno.h>
 #include <fcntl.h>
-#include <pthread.h>
-#include <stdarg.h>
+#include <grp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <strings.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <time.h>
 #include <unistd.h>
-#include <grp.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 #include "citrusleaf/cf_log_internal.h"
+
+#include "citrusleaf/cf_service.h"
 
 
 void
@@ -56,7 +55,7 @@ cf_process_privsep(uid_t uid, gid_t gid)
  * Close all the file decsriptors opened except the ones specified in the fd_ignore_list.
  * Redirect console messages to a file. */
 void
-cf_process_daemonize(char *redirect_file, int *fd_ignore_list, int list_size)
+cf_process_daemonize(const char *redirect_file, int *fd_ignore_list, int list_size)
 {
     int FD, j;
     char cfile[128];
@@ -89,7 +88,7 @@ cf_process_daemonize(char *redirect_file, int *fd_ignore_list, int list_size)
 	    close(i);
 	}
     }
-		
+
 
     /* Open a temporary file for console message redirection */
     if (redirect_file == NULL){ 

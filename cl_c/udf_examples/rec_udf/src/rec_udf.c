@@ -1612,6 +1612,7 @@ int do_udf_blob_test() {
 		g_config->timeout_ms, &res);  
 
 	if (rsp != CITRUSLEAF_OK) return -1;
+	if (as_val_type(res.value) != AS_STRING) return(-1);
 	char *res_str = as_string_tostring((as_string *) res.value); 
 	LOG("%s: %s", res.is_success ? "SUCCESS" : "FAILURE", res_str);
 	if (0 != strcmp("OK",res_str)) return(-1);
@@ -1634,7 +1635,8 @@ int do_udf_blob_test() {
 		g_config->timeout_ms, &res);  
 
 	if (rsp != CITRUSLEAF_OK) 	return -1;
-	res_str = as_string_tostring(res.value); 
+	if (as_val_type(res.value) != AS_STRING) return(-1);
+	res_str = as_string_tostring((as_string *)res.value); 
 	LOG("%s: %s", res.is_success ? "SUCCESS" : "FAILURE", res_str);
 	if (0 != strcmp("OK",res_str)) return(-1);
 

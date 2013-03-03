@@ -112,12 +112,6 @@ function do_undefined_global()
   return 'OK';
 end
 
-function fill_blob(blob)
-  for count = 1,#blob do
-    blob[count] = count
-  end
-end
-
 function compare_blob(b1, b2)
   if #b1 ~= #b2 then
     return false
@@ -132,9 +126,12 @@ end
 
 function do_udf_blob(r, action, bin, sz)
 
-  info('do_udf_blob being called')
   local blob = bytes(sz)
-  fill_blob(blob)
+
+  -- fill with 1 through len
+  for count = 1,#blob do
+    blob[count] = count
+  end
 
   if (action ==  "WRITE") then
     r[bin] = blob
@@ -148,12 +145,18 @@ function do_udf_blob(r, action, bin, sz)
 
   if (action == "READ") then
     local bin_blob = r[bin]
-    info( 'bin_blob %s blob %s',tostring(bin_blob),tostring(blob) )
-    if not compare_blob(bin_blob, blob) then
-      return "FAIL"
+    -- info( 'bin_blob %s blob %s',tostring(bin_blob),tostring(blob) )
+
+    if #bin_blob ~= #blob then
+      return "FAIL3"
+    end
+    for count = 1,#blob do
+      if bin_blob[count] ~= blob[count] then
+        return "FAIL4"
+      end
     end
   end
-  
+
   return "OK"
 end
 
@@ -164,8 +167,6 @@ function do_udf_blob_unit(r, action)
 
 
   if (action ==  "WRITE") then
-
-    info(" do_udf_blob_unit being called WRITE")
 
     local b8 = bytes(4)
     b8[1] = 0x8
@@ -191,6 +192,9 @@ function do_udf_blob_unit(r, action)
     bytes.put_bytes(b_str2, 1, b_str)
     bytes.put_bytes(b_str2, 11, b_str)
 
+    --info(" writing using put_bytes: b_str %s",tostring(b_str))
+    --info(" writing using put_bytes: b_str2 %s",tostring(b_str2))
+
     r.bytes8 = b8
     r.bytes16 = b16
     r.bytes32 = b32
@@ -206,8 +210,6 @@ function do_udf_blob_unit(r, action)
   end
 
   if (action == "READ") then
-
-    info(" do_udf_blob_unit being called READ ")
 
     local b8 = r.bytes8
     if #b8 ~= 4 then
@@ -254,7 +256,7 @@ function do_udf_blob_unit(r, action)
   end
   
   return "OK"
-  
+
 end
 
 

@@ -1,0 +1,11 @@
+#!/bin/bash
+ascli udf-record-apply test set 10 LsoBasic stackCreate
+ascli udf-record-apply test set 10 LsoBasic stackPush 1
+ascli udf-record-apply test set 10 LsoBasic stackPush 2
+ascli udf-record-apply test set 10 LsoBasic stackPush 3
+ascli udf-record-apply test set 10 LsoBasic stackPush 4
+ascli udf-record-apply test set 10 LsoBasic stackPush 5
+ascli udf-record-apply test set 10 LsoBasic stackPush 5
+ascli udf-record-apply test set 10 LsoBasic stackPush 6
+ascli udf-record-apply test set 10 LsoBasic stackPeek 10
+

@@ -1,5 +1,12 @@
--- Define the module so it can be used by others.
-module(..., package.UDF_Table);
+-- ======================================================================
+-- |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+-- || UDF FUNCTION TABLE ||
+-- |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+-- ======================================================================
+-- Last Update: (Feb 28, 2013) tjl
+--
+-- Table of Functions: Used for Transformation and Filter Functions in
+-- conjunction with Large Stack Objects (LSO) and Large Sets (LSET).
 --
 -- There is a new family of Aerospike Types and Functions that are
 -- implemented with UDFs: Large Stack Objects (LSO) and Large Sets (LSET).
@@ -8,27 +15,18 @@ module(..., package.UDF_Table);
 -- and those names reference a function that is stored in a table. This
 -- module defines those "inner" UDFs.
 --
--- This table defines
+-- This table (currently) defines
 -- (*) LSO Transform functions: Used for peek() and push()
 -- (*) LSO Filter functions: Used for peek()
 -- (*) LSET Transform functions: Used for insert() and select()
 -- (*) LSET Filter functions: Used for select()
 -- 
--- Last Update: (Feb 27, 2013) tjl
---
--- ======================================================================
--- |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
--- || FUNCTION TABLE ||
--- |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
--- ======================================================================
--- Table of Functions: Used for Transformation and Filter Functions.
---
 -- In order to pass functions as parameters in Lua (from C), we don't have
 -- the ability to officially pass a true Lua function as a parameter to
 -- the top level Lua function, so we instead pass the "inner" Lua function
 -- by name, as a simple string.  That string corresponds to the names of
 -- functions that are stored in this file, and the parameters to be fed
--- to the inner UDFs are passed in a list (arglist).
+-- to the inner UDFs are passed in a list (arglist) to the outer UDF.
 --
 -- NOTE: These functions are not meant to be written by regular users.
 -- It is the job of knowledgeable DB Administrators to write, review and
@@ -43,15 +41,15 @@ module(..., package.UDF_Table);
 -- that is supplied by the user.  For example, in stackPeekWithUDF, we
 -- 
 -- |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
-UdfFunctionTable = {}
+local UdfFunctionTable = {}
 
 -- ======================================================================
 -- Sample Filter function to test user entry 
 -- Parms (encased in arglist)
 -- (1) Entry List
 -- ======================================================================
-local function lsoFunctionTable.transformFilter1( argList )
-  local mod = "LsoFilters";
+function UdfFunctionTable.transformFilter1( argList )
+  local mod = "UdfFunctionTable";
   local meth = "transformFilter1()";
   local resultList = list();
   local entryList = arglist[1]; 
@@ -66,7 +64,8 @@ local function lsoFunctionTable.transformFilter1( argList )
       info("[DEBUG]: <%s:%s> Setting Entry to ZERO \n", mod, meth );
       entry = 0;
     else 
-      info("[DEBUG]: <%s:%s> Setting Entry to entryList(%s) \n", mod, meth, tostring(entryList[i]));
+      info("[DEBUG]: <%s:%s> Setting Entry to entryList(%s) \n",
+        mod, meth, tostring(entryList[i]));
       entry = entryList[i];
     end
     list.append( resultList, entry );
@@ -86,14 +85,17 @@ end
 -- (1) Entry List
 -- (2) Relation List {{op, val}, {op, val} ... }
 -- ======================================================================
-local function functionTable.rangeFilter( arglist )
-  local mod = "LsoFilters";
+function UdfFunctionTable.rangeFilter( arglist )
+  local mod = "UdfFunctionTable";
   local meth = "rangeFilter()";
+  local rc = 0;
   info("[ENTER]: <%s:%s> ArgList(%s) \n", mod, meth, tostring(arglist));
 
-  info("[EXIT]: <%s:%s> Result(%d) \n", mod, meth, 0 );
+  info("[DEBUG]: <%s:%s> >>>>>>>> HELLO!!! <<<<<<< \n", mod, meth );
 
-  return 0
+  info("[EXIT]: <%s:%s> Result(%d) \n", mod, meth, rc );
+
+  return rc;
 end
 
 -- ======================================================================
@@ -105,11 +107,16 @@ end
 -- (1) Entry List
 -- (2) Compression Field Parameters Table Index
 -- ======================================================================
-local function functionTable.compressTransform1( arglist )
-  local mod = "LsoFilters";
+function UdfFunctionTable.compressTransform1( arglist )
+  local mod = "UdfFunctionTable";
   local meth = "compress()";
+  local rc = 0;
+  info("[ENTER]: <%s:%s> ArgList(%s) \n", mod, meth, tostring(arglist));
 
-  return 0
+  info("[DEBUG]: <%s:%s> >>>>>>>> HELLO!!! <<<<<<< \n", mod, meth );
+
+  info("[EXIT]: <%s:%s> Result(%d) \n", mod, meth, rc );
+  return rc;
 end
 
 -- ======================================================================
@@ -119,13 +126,53 @@ end
 -- (1) Entry List
 -- (2) Compression Field Parameters Table Index
 -- ======================================================================
-local function functionTable.unCompressTransform1( arglist )
-  local mod = "LsoFilters";
+function UdfFunctionTable.unCompressTransform1( arglist )
+  local mod = "UdfFunctionTable";
   local meth = "unCompress()";
+  local rc = 0;
+  info("[ENTER]: <%s:%s> ArgList(%s) \n", mod, meth, tostring(arglist));
 
-  return 0
+  info("[DEBUG]: <%s:%s> >>>>>>>> HELLO!!! <<<<<<< \n", mod, meth );
+
+  info("[EXIT]: <%s:%s> Result(%d) \n", mod, meth, rc );
+  return rc;
+end
+-- ======================================================================
+-- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+-- ||                     Add New Functions Here.                      ||
+-- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+-- ======================================================================
+
+-- ======================================================================
+-- Function testFilter1: 
+-- ======================================================================
+-- Test:  Print arguments and HELLO.
+-- Parms (encased in arglist)
+-- (1) Entry List
+-- (2) Compression Field Parameters Table Index
+-- ======================================================================
+function UdfFunctionTable.testFilter1( arglist )
+  local mod = "UdfFunctionTable";
+  local meth = "testFilter1()";
+  info("[ENTER]: <%s:%s> ArgList(%s) \n", mod, meth, tostring(arglist));
+
+  local result = "Test Filter1 Hello";
+  info("[DEBUG]: <%s:%s> Msg (%s) ArgList(%s) \n",
+    mod, meth, result, tostring(arglist));
+
+  info("[EXIT]: <%s:%s> Result(%s) \n", mod, meth, result );
+
+  return result
 end
 
-return UdfFunctionTable;
 
+-- ======================================================================
+-- This is needed to export the function table for this module
+-- Leave this statement at the end of the module.
+-- ==> Define all functions before this end section.
+-- ======================================================================
+return UdfFunctionTable;
+-- ======================================================================
+
+--
 -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> --

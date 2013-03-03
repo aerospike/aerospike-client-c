@@ -138,6 +138,8 @@ function UdfFunctionTable.unCompressTransform1( arglist )
   return rc;
 end
 -- ======================================================================
+
+-- ======================================================================
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 -- ||                     Add New Functions Here.                      ||
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
@@ -164,6 +166,67 @@ function UdfFunctionTable.testFilter1( arglist )
 
   return result
 end
+-- ======================================================================
+
+
+-- ======================================================================
+-- Function stumbleCompress: Compress a 4 part tuple into a single 18 byte
+-- value that we'll pack into storage.
+-- The StumbleUpon application creates a 4 part tuple, each part with
+-- the following sizes: 4 bytes, 4 bytes, 8 bytes and 2 bytes.
+-- (1) stumbleTuple
+-- (2) arglist
+-- Return:
+-- The newly created Byte object, 18 bytes long
+-- ======================================================================
+function UdfFunctionTable.stumbleCompress( stumbleTuple, arglist )
+  local mod = "UdfFunctionTable";
+  local meth = "stumbleCompress()";
+  local rc = 0;
+  info("[ENTER]: <%s:%s> tuple(%s) ArgList(%s) \n",
+    mod, meth, tostring(stumbleTuple), tostring(arglist));
+
+  local b18 = bytes(18);
+  bytes.put_int32(b18, 1,  stumbleTuple[1] ); -- 4 byte int
+  bytes.put_int32(b18, 5,  stumbleTuple[2] ); -- 4 byte int
+  bytes.put_int64(b18, 9,  stumbleTuple[3] ); -- 8 byte int
+  bytes.put_int16(b18, 17, stumbleTuple[4] ); -- 2 byte int
+
+  info("[EXIT]: <%s:%s> Result(%s) \n", mod, meth, tostring(b18));
+  return b18
+end
+
+
+-- ======================================================================
+-- Function stumbleUnCompress: Uncompress a single 18 byte packed binary
+-- object into 4 integer fields.
+-- The StumbleUpon application uses a 4 part tuple, each part with
+-- the following sizes: 4 bytes, 4 bytes, 8 bytes and 2 bytes.
+-- (1) b18: the byteObject
+-- (2) arglist
+-- Return:
+-- the stumbleTuple
+-- ======================================================================
+function UdfFunctionTable.stumbleUnCompress( b18, arglist )
+  local mod = "UdfFunctionTable";
+  local meth = "stumbleUnCompress()";
+  local rc = 0;
+  -- protect against bad prints
+  if arglist == nil then arglist = 0; end
+  info("[ENTER]: <%s:%s> tuple(%s) Tuple Type(%s) ArgList(%s) \n",
+    mod, meth, tostring(b18), type(b18), tostring(arglist));
+
+  local stumbleTuple = list();
+  stumbleTuple[1] = bytes.get_int32(b18, 1 ); -- 4 byte int
+  stumbleTuple[2] = bytes.get_int32(b18, 5 ); -- 4 byte int
+  stumbleTuple[3] = bytes.get_int64(b18, 9 ); -- 8 byte int
+  stumbleTuple[4] = bytes.get_int16(b18, 17); -- 2 byte int
+
+  info("[EXIT]: <%s:%s> Result(%s) type(%s)\n",
+    mod, meth, tostring(stumbleTuple), type(stumbleTuple ));
+  return stumbleTuple;
+end
+-- ======================================================================
 
 
 -- ======================================================================

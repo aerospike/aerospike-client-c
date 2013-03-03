@@ -423,7 +423,7 @@ local function cachePeek( cacheList, count, func, fargs, all)
   for c = cacheListSize, 1, -1 do
     -- Apply the UDF to the item, if present, and if result NOT NULL, then
     if doTheFunk == 1 then -- get down, get Funky
-      peekValue = functionTable.func( cacheList[c], fargs );
+      peekValue = functionTable[func]( cacheList[c], fargs );
     else
       peekValue = cacheList[c];
     end

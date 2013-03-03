@@ -591,7 +591,7 @@ end -- function mapPeek
 -- ======================================================================
 
 -- ======================================================================
--- ValueStorage()
+-- valueStorage()
 -- ======================================================================
 -- This is function is more structure than function -- but we need a way
 -- to create a TRANSFORMED VALUE -- and then mark it with the instructions
@@ -600,9 +600,13 @@ end -- function mapPeek
 -- other control information that will help us figure out how to deal with
 -- it.  Binary Data will LIKELY need to be packed (compressed form, in the
 -- BINARY BIN), but not necessarily.
-local function valueStorage( valueType )
+local function valueStorage( valueType, luaValue )
   local valueMap = map();
   valueMap.ValueType = valueType;
+  valueMap.Value = luaValue; -- this can be nil
+  valueMap.StorageMode = 1; -- 0 is compact, 1 is normal Lua
+  valueMap.size = 0; -- if compact, this is how many bytes to copy
+
   -- Add More things here as we figure out what we want.
 
   return valueMap;
@@ -631,7 +635,7 @@ end -- hasRoomInCacheForNewEntry()
 
 --
 -- ======================================================================
--- topCacheInsert( lsoMap, valueMap  )
+-- topCacheInsert( lsoMap, newStorageValue  )
 -- ======================================================================
 -- Insert a value at the end of the Top Cache List.  The caller has 
 -- already verified that space exists, so we can blindly do the insert.
@@ -647,15 +651,23 @@ end -- hasRoomInCacheForNewEntry()
 --
 -- Parms:
 -- (*) lsoMap: the map for the LSO Bin
--- (*) valueMap: the new value to be pushed on the stack
-local function topCacheInsert( lsoMap, valueMap  )
+-- (*) newStorageValue: the new value to be pushed on the stack
+local function topCacheInsert( lsoMap, newStorageValue  )
   local mod = "LsoStickman";
   local meth = "topCacheInsert()";
   info("[ENTER]: <%s:%s> : Insert Value(%s)\n",
-    mod, meth, tostring(insertValue) );
+    mod, meth, tostring(newStorageValue) );
 
   local topCacheList = lsoMap.TopCache;
-  list.append( topCacheList, insertValue );
+  if newStorageValue.StorageMode == 0 then
+    info("[DEBUG]: <%s:%s> : Perform COMPACT STORAGE\n", mod, meth );
+    -- TODO: Must finish Compact Storage
+    -- Depending on our current state of implementation, we are either
+    -- going to copy our compact storage into a special bin, or we are
+    -- going to assign the BYTES value into the cache list
+  else
+    list.append( topCacheList, newStorageValue );
+  end
   local itemCount = lsoMap.ItemCount;
   lsoMap.ItemCount = (itemCount + 1);
   return 0;  -- all is well
@@ -824,6 +836,7 @@ local function localStackPush( topRec, lsoBinName, newValue, func, fargs )
   local mod = "LsoStickman";
   local meth = "localStackPush()";
   local doTheFunk = 0; -- when == 1, call the func(fargs) on the Push item
+  local functionTable = require('UdfFunctionTable');
 
   if (func ~= nil and fargs ~= nil ) then
     doTheFunk = 1;
@@ -862,22 +875,23 @@ local function localStackPush( topRec, lsoBinName, newValue, func, fargs )
 
   -- Now, it looks like we're ready to insert.  If there is an inner UDF
   -- to apply, do it now.
-  local insertValue = newValue;
-  if( func ~= nil and fargs ~= nil) then
-    info("[DEBUG]: <%s:%s> Applying UDF (%s) \n", mod, meth, func );
-    --
-    -- insertValue = UDF TRANSFORMATION Function call ....
-    --
+  local newStorageValue;
+  if doTheFunk == 1 then 
+    info("[DEBUG]: <%s:%s> Applying UDF (%s) with args(%s)\n",
+      mod, meth, func, tostring( fargs ));
+    newStorageValue = functionTable[func]( newValue, fargs );
+  else
+    newStorageValue = storageValue( newValue );
   end
 
   -- If we have room, do the simple cache insert.  If we don't have
   -- room, then make room -- migrate half the cache out to the hot list.
   -- That may, in turn, have to make room by moving some items to the
   -- cold list.
-  if not hasRoomInCacheForNewEntry( lsoMap, insertValue ) then
+  if not hasRoomInCacheForNewEntry( lsoMap, newStorageValue ) then
     migrateTopCache( topRec, lsoMap );
   end
-  topCacheInsert( lsoMap, insertValue );
+  topCacheInsert( lsoMap, newStorageValue );
 
 --  elseif hasRoomForNewEntry( lsoMap, newValue ) then
 --    -- Case 1:  Just do the insert: Top Chunk, simple append
@@ -895,16 +909,7 @@ local function localStackPush( topRec, lsoBinName, newValue, func, fargs )
 --    end
 --  end
 
-  -- Note that we will (likely) NOT track the exact item count in the
-  -- record in the FINAL VERSION, as that would trigger a new record
-  -- update for EACH Value insert, in addition to the record update for
-  -- the record actually holding the new value.  We want to keep this to
-  -- just one record insert rather than two.
---  local itemCount = lsoMap['ItemCount'];
---  itemCount = itemCount + 1;
---  lsoMap['ItemCount'] = itemCount;
-
-  -- Not sure if this is needed -- but it seems to be.
+  -- Must always assign the object BACK into the record bin.
   topRec[lsoBinName] = lsoMap;
 
   -- All done, store the topRec
@@ -1036,3 +1041,13 @@ function stackPeekWithUDF( topRec, lsoBinName, peekCount, func, fargs )
 end -- StackPushWithUDF()
 
 -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> --
+--
+-- [3/2/13 6:41:36 PM] Red Squirrel: digest = newChunkRec.digest()
+-- info("[RAJ: GOT DIGEST]\n");
+-- chkrec = aerospike:crec_open( record, digest)
+-- info("[RAJ: OPENED]:\n");
+-- status = aerospike:crec_update( record, newChunkRec )
+-- info("[RAJ: UPDATED]:\n");
+-- status = aerospike:crec_close( record, newChunkRec )
+-- info("[RAJ: CLOSED]:\n");
+-- [3/2/13 6:41:41 PM] Red Squirrel: something checked in?

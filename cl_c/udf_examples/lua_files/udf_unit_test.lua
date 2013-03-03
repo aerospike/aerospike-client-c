@@ -112,12 +112,6 @@ function do_undefined_global()
   return 'OK';
 end
 
-function fill_blob(blob)
-  for count = 1,#blob do
-    blob[count] = count
-  end
-end
-
 function compare_blob(b1, b2)
   if #b1 ~= #b2 then
     return false
@@ -132,9 +126,12 @@ end
 
 function do_udf_blob(r, action, bin, sz)
 
-  info('do_udf_blob being called')
   local blob = bytes(sz)
-  fill_blob(blob)
+
+  -- fill with 1 through len
+  for count = 1,#blob do
+    blob[count] = count
+  end
 
   if (action ==  "WRITE") then
     r[bin] = blob
@@ -148,13 +145,140 @@ function do_udf_blob(r, action, bin, sz)
 
   if (action == "READ") then
     local bin_blob = r[bin]
-    info( 'bin_blob %s blob %s',tostring(bin_blob),tostring(blob) )
-    if not compare_blob(bin_blob, blob) then
-      return "FAIL"
+    -- info( 'bin_blob %s blob %s',tostring(bin_blob),tostring(blob) )
+
+    if #bin_blob ~= #blob then
+      return "FAIL3"
     end
+    for count = 1,#blob do
+      if bin_blob[count] ~= blob[count] then
+        return "FAIL4"
+      end
+    end
+  end
+
+  return "OK"
+end
+
+-- This tests all the current methods off the
+-- lua bytes string
+
+function do_udf_blob_unit(r, action)
+
+
+  if (action ==  "WRITE") then
+
+    local b8 = bytes(4)
+    b8[1] = 0x8
+    b8[2] = 0x9
+    b8[3] = 0xA
+    b8[4] = 0xB
+
+    local b16 = bytes(2)
+    bytes.put_int16(b16,1,56)   -- set the integer at offset 1
+
+    local b32 = bytes(8)
+    bytes.put_int32(b32,1,105)
+    bytes.put_int32(b32,5,0x7EDC4321) -- set the integer at offset 5
+
+    local b64 = bytes(16)
+    bytes.put_int64(b64,1,0x3456)
+    bytes.put_int64(b64,9,0x1234)
+
+    local b_str = bytes(10)
+    bytes.put_string(b_str, 1,"ABCDEFGHIJ")
+
+    local b_str2 = bytes(20)
+    bytes.put_bytes(b_str2, 1, b_str)
+    bytes.put_bytes(b_str2, 11, b_str)
+
+    -- append
+    local b32_2 = bytes(8)
+    bytes.put_int32(b32_2, 1, 1)
+    bytes.put_int32(b32_2, 5, 2)
+    bytes.set_len(b32_2, 16)
+    bytes.put_int32(b32_2, 9, 3)
+    bytes.put_int32(b32_2, 13, 4)
+
+    r.bytes8 = b8
+    r.bytes16 = b16
+    r.bytes32 = b32
+    r.bytes64 = b64
+    r.b_str = b_str
+    r.b_str2 = b_str2
+    r.bytes32_2 = b32_2
+
+    if not aerospike:exists(r) then
+      x = aerospike:create(r)
+    else
+      x = aerospike:update(r)
+    end
+  end
+
+  if (action == "READ") then
+
+    local b8 = r.bytes8
+    if (#b8 ~= 4) or (bytes.size(b8) ~= 4) then
+      return "FAIL1"
+    end
+
+    if (b8[1] ~= 0x8) or (b8[2] ~= 0x9) or
+       (b8[3] ~= 0xA) or (b8[4] ~= 0xB) then
+      return "FAIL2"
+    end
+
+    local b16 = r.bytes16
+    if bytes.get_int16(b16,1) ~= 56 then
+      return "FAIL3"
+    end
+
+    local b32 = r.bytes32
+    if #b32 ~= 8 then
+      return "FAIL4.1"
+    end
+    if (bytes.get_int32(b32,1) ~= 105) or (bytes.get_int32(b32,5) ~= 0x7EDC4321) then
+      return "FAIL4"
+    end
+    if ( (b32[5] ~= 0x7E) or (b32[6] ~= 0xDC) ) then
+      return "FAIL4.1"
+    end
+
+    local b64 = r.bytes64
+    if bytes.get_int64(b64,1) ~= 0x3456 or bytes.get_int64(b64,9) ~= 0x1234 then
+      return "FAIL5"
+    end
+
+    local b_str = r.b_str
+    if (bytes.get_string(b_str,1,10) ~= "ABCDEFGHIJ") or (bytes.get_string(b_str,3,2) ~= "CD") then
+      return "FAIL6"
+    end
+
+    -- blob was set to two copies of "ABCDEFGHIJ"
+    local b_str2 = r.b_str2
+    if #b_str2 ~= 20 then
+      return "FAIL7"
+    end
+    if (bytes.get_string(b_str2,5,2) ~= "EF") or (bytes.get_string(b_str2,16,5) ~= "FGHIJ") then
+      return "FAIL8"
+    end
+
+    -- blob was set to 4 int32s
+    local b_32_2 = r.bytes32_2
+    info(" b_32_2 is %s",tostring(b_32_2))
+    if #b_32_2 ~= 16 then
+      return "FAIL9"
+    end
+    if ( (bytes.get_int32(b_32_2,1) ~= 1) or
+         (bytes.get_int32(b_32_2,5) ~= 2) or
+         (bytes.get_int32(b_32_2,9) ~= 3) or
+         (bytes.get_int32(b_32_2,13) ~= 4) ) then
+      return "FAIL10"
+    end
+
   end
   
   return "OK"
+
 end
 
 

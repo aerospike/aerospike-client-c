@@ -264,7 +264,6 @@ function do_udf_blob_unit(r, action)
 
     -- blob was set to 4 int32s
     local b_32_2 = r.bytes32_2
-    info(" b_32_2 is %s",tostring(b_32_2))
     if #b_32_2 ~= 16 then
       return "FAIL9"
     end
@@ -274,6 +273,55 @@ function do_udf_blob_unit(r, action)
          (bytes.get_int32(b_32_2,13) ~= 4) ) then
       return "FAIL10"
     end
+
+  end
+  
+  return "OK"
+
+end
+
+-- This tests all the current methods off the
+-- lua bytes string
+
+function do_udf_blob_list_unit(r, action, list_o_bytes, map_o_bytes)
+
+  if (action ==  "WRITE") then
+
+    info(" blob_list write start")
+
+    local l = list()
+
+    local x = bytes(5)
+    bytes.put_string(x, 1, "theca")
+    list.append(l,x)
+
+    local y = bytes(6)
+    bytes.put_string(y, 1, "second")
+    list.append(l,y)
+
+    r.lob = l
+
+    if not aerospike:exists(r) then
+      x = aerospike:create(r)
+    else
+      x = aerospike:update(r)
+    end
+
+    info(" blob_list WRITE FINISHED")
+
+  end
+
+  if (action == "READ") then
+
+    info ( " list of bytes: starting unmsgpack ")
+
+    local l = r.lob
+
+    info ( " list of bytes: type %s tostring %s",type(l),tostring(l))
+
+    local l1 = l[1]
+
+    info ( " list of bytes: first element %s",tostring(l1))
 
   end
   

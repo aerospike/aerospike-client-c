@@ -1,0 +1,88 @@
+#!/bin/bash
+echo "<< -----------  Run UDF << LSO Stickman V2>> Tests ---------------- >> "
+
+export UNS="test"
+export USET="set"
+export UKEY="abc"
+export UFILE="LsoStickman"
+export UCHUNK=2000
+
+export UNS="test"
+export USET="set"
+# This script exercises the Aerospike LSO Functions
+#
+export UKEY="LSO_ABC"
+export LSOBIN="LsoBin"
+export UFILE="LsoStickman"
+export FUN_CR8="stackCreate"
+export FUN_INS="stackPush"
+export FUN_INSWU="stackPushWithUDF"
+export FUN_SRCH="stackPeek"
+export FUN_SRCHWU="stackPeekWithUDF"
+# export ARGLIST='[$LSOBIN,$UNS,$USET,$UCHUNK,1]'
+export ARGLIST='["LsoBin","test","set",2000,1]'
+
+# Use this ONLY if we need to register the UDF
+# ascli udf-put $UFILE.lua
+
+echo ">> CREATE (Simple Put: key $UKEY) for use with UDF"
+ascli put $UNS $USET $UKEY '{"LSOTestBin": "Stack Test ONE"}'
+
+echo ">> Check CREATE (key $UKEY) with get"
+ascli get $UNS $USET $UKEY
+
+echo ">> Call UDF Stack Create: $ARGLIST << "
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackCreate $ARGLIST
+
+echo ">> Check CREATE (key $UKEY) with get"
+ascli get $UNS $USET $UKEY
+
+echo ">> Call UDF Stack Push: ==> $UFILE stackPush $LSOBIN '[11,12,13,14]'"
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPush $LSOBIN '[11,12,13,14]'
+
+echo ">> Check CREATE (key $UKEY) with get"
+ascli get $UNS $USET $UKEY
+
+echo ">> Check STACK CREATE (key $UKEY) with ascli get (expect full record)"
+ascli get $UNS $USET $UKEY
+
+echo ">> Call UDF Stack Push: ==> $UFILE stackPush $LSOBIN '[11,12,13,14]'"
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPush $LSOBIN '[11,12,13,14]'
+
+echo ">> Call UDF Stack Peek(): Key($UKEY) $UFILE stackPeek $LSOBIN 0"
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPeek $LSOBIN 0
+
+echo ">> Call UDF Stack Push: ==> $UFILE stackPush $LSOBIN '[21,22,23,24]'"
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPush $LSOBIN '[21,22,23,24]' 
+echo ">> Call UDF Stack Push: ==> $UFILE stackPush $LSOBIN '[31,32,33,34]'"
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPush $LSOBIN '[31,32,33,34]'
+
+echo ">> Call UDF Stack Push: ==> $UFILE stackPush $LSOBIN '[41,42,43,44]'"
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPush $LSOBIN '[41,42,43,44]'
+
+echo ">> Call UDF Stack Push: ==> $UFILE stackPush $LSOBIN '[51,52,53,54]'"
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPush $LSOBIN '[51,52,53,54]'
+
+echo ">> Call UDF StackPeek(): Key($UKEY) $UFILE stackPeek $LSOBIN 0"
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPeek  $LSOBIN 0
+
+echo ">> Check PROGRESS with GET!!!"
+ascli get $UNS $USET $UKEY
+
+# echo ">> Call UDF Stack >> Populate()<<: Key($UKEY) $UFILE stackPopulate"
+# ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPopulate 20
+
+# echo ">> Check PROGRESS with GET!!!"
+# ascli get $UNS $USET $UKEY
+
+# echo ">> Call UDF StackPeek(): Key($UKEY) $UFILE stackPeek $LSOBIN 0 "
+# ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPeek $LSOBIN 0
+
+# echo ">> Check PROGRESS with GET!!!"
+# ascli get $UNS $USET $UKEY
+
+
+# ########################################################################
+echo ">>>>  EXIT <<<<<"
+exit 0
+# ########################################################################

@@ -157,6 +157,106 @@ function do_udf_blob(r, action, bin, sz)
   return "OK"
 end
 
+-- This tests all the current methods off the
+-- lua bytes string
+
+function do_udf_blob_unit(r, action)
+
+
+  if (action ==  "WRITE") then
+
+    info(" do_udf_blob_unit being called WRITE")
+
+    local b8 = bytes(4)
+    b8[1] = 0x8
+    b8[2] = 0x9
+    b8[3] = 0xA
+    b8[4] = 0xB
+
+    local b16 = bytes(2)
+    bytes.put_int16(b16,1,56)   -- set the integer at offset 1
+
+    local b32 = bytes(8)
+    bytes.put_int32(b32,1,105)
+    bytes.put_int32(b32,5,56) -- set the integer at offset 5
+
+    local b64 = bytes(16)
+    bytes.put_int64(b64,1,0x3456)
+    bytes.put_int64(b64,9,0x1234)
+
+    local b_str = bytes(10)
+    bytes.put_string(b_str, 1,"ABCDEFGHIJ")
+
+    local b_str2 = bytes(20);
+    bytes.put_bytes(b_str2, 1, b_str)
+    bytes.put_bytes(b_str2, 11, b_str)
+
+    r.bytes8 = b8
+    r.bytes16 = b16
+    r.bytes32 = b32
+    r.bytes64 = b64
+    r.b_str = b_str
+    r.b_str2 = b_str2
+
+    if not aerospike:exists(r) then
+      x = aerospike:create(r)
+    else
+      x = aerospike:update(r)
+    end
+  end
+
+  if (action == "READ") then
+
+    info(" do_udf_blob_unit being called READ ")
+
+    local b8 = r.bytes8
+    if #b8 ~= 4 then
+      return "FAIL1"
+    end
+
+    if (b8[1] ~= 0x8) or (b8[2] ~= 0x9) or
+       (b8[3] ~= 0xA) or (b8[4] ~= 0xB) then
+      return "FAIL2"
+    end
+
+    local b16 = r.bytes16
+    if bytes.get_int16(b16,1) ~= 56 then
+      return "FAIL3"
+    end
+
+    local b32 = r.bytes32
+    if bytes.get_int32(b32,1) ~= 105 or bytes.get_int32(b32,5) ~= 56 then
+      return "FAIL4"
+    end
+
+    local b64 = r.bytes64
+    if bytes.get_int64(b64,1) ~= 0x3456 or bytes.get_int64(b64,9) ~= 0x1234 then
+      return "FAIL5"
+    end
+
+    local b_str = r.b_str
+    if (bytes.get_string(b_str,1,10) ~= "ABCDEFGHIJ") or (bytes.get_string(b_str,3,2) ~= "CD") then
+      info(" string1 is %s",bytes.get_string(b_str,1,10))
+      info(" string2 is %s",bytes.get_string(b_str,3,2))
+      return "FAIL6"
+    end
+
+    -- blob was set to two copies of "ABCDEFGHIJ"
+--
+--    local b_str2 = r.b_str2
+--    if #b_str2 ~= 20 then
+--      return "FAIL7"
+--    end
+--    if (bytes.get_string(b_str2,5,2) ~= "EF") or (bytes.get_string(b_str2,16,5) ~= "FGHIJ") then
+--      return "FAIL8"
+--    end
+
+  end
+  
+  return "OK"
+  
+end
+
 
 function do_lua_functional_test(record)
   local x = {}

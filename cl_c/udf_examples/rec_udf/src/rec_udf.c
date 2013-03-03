@@ -1654,6 +1654,61 @@ int do_udf_blob_test() {
 }
 
 
+int do_udf_blob_unit_test() {
+
+	char *keyStr = "key_blob_unit";
+	cl_object o_key;
+	citrusleaf_object_init_str(&o_key,keyStr);	
+
+	as_list arglist;
+	as_arraylist_init(&arglist, 3, 8);	
+	// arg 1 -> bin name
+	as_list_add_string(&arglist, "WRITE");
+
+	// (1) Call a lua function that writes this blob
+	as_result res;
+	as_result_init(&res);
+	cl_rv rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
+		g_config->package_name, "do_udf_blob_unit", &arglist, 
+		g_config->timeout_ms, &res);  
+
+	if (rsp != CITRUSLEAF_OK) 	return -1;
+	if (as_val_type(res.value) != AS_STRING) return(-1);
+	char *res_str = as_string_tostring((as_string *)res.value); 
+	LOG("%s: %s", res.is_success ? "SUCCESS" : "FAILURE", res_str);
+	if (0 != strcmp("OK",res_str)) return(-1);
+
+	as_result_destroy(&res);
+	as_list_destroy(&arglist);
+
+	// check that it got persisted
+
+	as_arraylist_init(&arglist,3, 8);	
+	// arg 1 -> bin name
+	as_list_add_string(&arglist, "READ");
+
+	// (1) Call a lua function that writes this blob
+	as_result_init(&res);
+	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
+		g_config->package_name, "do_udf_blob_unit", &arglist, 
+		g_config->timeout_ms, &res);  
+
+	if (rsp != CITRUSLEAF_OK) return(-1);
+	if (as_val_type(res.value) != AS_STRING) return(-1);
+	res_str = as_string_tostring((as_string *)res.value); 
+	LOG("%s: %s", res.is_success ? "SUCCESS" : "FAILURE", res_str);
+	if (0 != strcmp("OK",res_str)) return(-1);
+
+
+	as_result_destroy(&res);
+
+	as_list_destroy(&arglist);
+
+	return(0);
+}
+
+
+
 int register_package() 
 { 
 	INFO("Opening package file %s",g_config->package_file);  
@@ -2007,6 +2062,7 @@ const test_def test_defs[] = {
 	test(do_udf_delete_bin_test),
 	test(do_udf_delete_record_test),
 	test(do_udf_blob_test),
+	test(do_udf_blob_unit_test),
 	{ NULL, NULL }
 };
 

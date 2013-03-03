@@ -9,6 +9,7 @@ function stackCreate(topRec)
       info("Update Record()\n");
       rc = aerospike:update( topRec );
    end
+   return rc;
 end
 
 function stackPush ( topRec, newValue ) 
@@ -30,8 +31,9 @@ function stackPush ( topRec, newValue )
    list.prepend (dirlist, tostring( newdigest ));
    info("Put value in Top Record %s", tostring( newdigest ) );
    topRec[binname]  = dirlist;
-   info("Update Top Record ");
-   aerospike:update( topRec );
+   info("Update Top Record |%s|", tostring(dirlist));
+   rc = aerospike:update( topRec );
+   return rc;
 end
 
 function stackPeek ( topRec, count ) 
@@ -44,11 +46,14 @@ function stackPeek ( topRec, count )
    info("Dir list state at peek |%s| ", tostring(dirlist));
    local peeklist = list.take(dirlist, count);
    info("Peek size requested %d, peeked %d", count, list.size(peeklist));	
+   resultlist   = list();
    for index = 1, list.size(peeklist) do
       local valdig = tostring ( dirlist[index] );
       newRec       = aerospike:crec_open( topRec, valdig );
       newValue     = newRec["valbin"];
+      list.append(resultlist, tostring( newValue ));
       info("stackPeek: found %s --> %s", valdig, tostring( newValue ) );
       aerospike:crec_close( topRec, newRec );
    end
+   return resultlist;
 end

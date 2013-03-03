@@ -3,7 +3,7 @@
 --
 -- ======================================================================
 -- Functions Supported
--- (*) stackCreate: Create the LSO structure in the chosen record bin
+-- (*) stackCreate: Create the LSO structure in the chosen topRec bin
 -- (*) stackPush: Push a user value (AS_VAL) onto the stack
 -- (*) stackPeek: Read N values from the stack, in LIFO order
 -- (*) stackTrim: Release all but the top N values.
@@ -213,7 +213,7 @@ end -- lsoSummary()
 --    -- Entry List (Holds entry and, implicitly, Entry Count)
 --
 -- ======================================================================
--- local function createChunk( record, lsoMap, digest, dv, status, entryMax)
+-- local function createChunk( topRec, lsoMap, digest, dv, status, entryMax)
 --   local mod = "LsoStickman";
 --   local meth = "createHotChunk()";
 --   info("[ENTER]: <%s:%s>LSO(%s) Dig(%s) DV(%s) Stat(%s) \n",
@@ -279,7 +279,7 @@ end -- lsoSummary()
 --   info("[ENTER]: <%s:%s>lsoBin(%s) chunk(%s) newValue(%s)\n",
 --     mod, meth, tostring(lsoMap), tostring(chunk), tostring(newValue));
 -- 
---   local lsoMap = record[lsoBinName]; -- The main LSO map
+--   local lsoMap = topRec[lsoBinName]; -- The main LSO map
 --   local hotDir = lsoMap.DirList; -- The HotList Directory
 --   local chunkDigest = hotDir[1]; -- The Top of Stack Chunk
 --   local chunkRecord = aerospike:record_get( chunk_digest );
@@ -497,7 +497,7 @@ end -- hotPeek()
 --    -- Entry List (Holds entry and, implicitly, Entry Count)
 --
 -- ======================================================================
-local function migrateTopCache( lso_head_record, lsoMap )
+local function migrateTopCache( topRec, lsoMap )
   local mod = "LsoStickman";
   local meth = "migrateTopCache()";
   local rc = 0;
@@ -517,7 +517,7 @@ local function migrateTopCache( lso_head_record, lsoMap )
   -- chkrec = aerospike:crec_open( rec )
   -- status = aerospike:crec_close( rec, chkrec )
   -- status = aerospike:crec_update( rec, chkrec )
-  local lsoDataRecord = aerospike:crec_create( lso_head_record );
+  local lsoDataRecord = aerospike:crec_create( topRec );
   ldrCtrl = map();
   ldrCtrl.PageType = "HotData";
   ldrCtrl.PageMode = "List"; -- this will change
@@ -591,6 +591,26 @@ end -- function mapPeek
 -- ======================================================================
 
 -- ======================================================================
+-- ValueStorage()
+-- ======================================================================
+-- This is function is more structure than function -- but we need a way
+-- to create a TRANSFORMED VALUE -- and then mark it with the instructions
+-- for dealing with it.  Therefore, the WRITE TRANSFORM Inner UDFs 
+-- will actually return a VALUE STORAGE Map, which contains the value and
+-- other control information that will help us figure out how to deal with
+-- it.  Binary Data will LIKELY need to be packed (compressed form, in the
+-- BINARY BIN), but not necessarily.
+local function valueStorage( valueType )
+  local valueMap = map();
+  valueMap.ValueType = valueType;
+  -- Add More things here as we figure out what we want.
+
+  return valueMap;
+end -- valueStorage()
+-- ======================================================================
+
+
+-- ======================================================================
 -- hasRoomInCacheForNewEntry( lsoMap, insertValue )
 -- ======================================================================
 -- return 1 if there's room, otherwise return 0
@@ -611,15 +631,24 @@ end -- hasRoomInCacheForNewEntry()
 
 --
 -- ======================================================================
--- topCacheInsert( lsoMap, newValue )
+-- topCacheInsert( lsoMap, valueMap  )
 -- ======================================================================
 -- Insert a value at the end of the Top Cache List.  The caller has 
--- already verified that space exists, so we can blindly do the 
--- insert.
+-- already verified that space exists, so we can blindly do the insert.
+--
+-- The MODE of storage depends on what we see in the valueMap.  If the
+-- valueMap holds a BINARY type, then we are going to store it in a special
+-- binary bin.  Here are the cases:
+-- (1) Cache: Special binary bin in the user record (Details TBD)
+-- (2) Hot List: The Chunk Record employs a List Bin and Binary Bin, where
+--    the individual entries are packed.  In the Chunk Record, there is a
+--    Map (control information) showing the status of the packed Binary bin.
+-- (3) Cold List: Same Chunk format as the Hot List Chunk Record.
+--
 -- Parms:
 -- (*) lsoMap: the map for the LSO Bin
--- (*) newValue: the new value to be pushed on the stack
-local function topCacheInsert( lsoMap, insertValue )
+-- (*) valueMap: the new value to be pushed on the stack
+local function topCacheInsert( lsoMap, valueMap  )
   local mod = "LsoStickman";
   local meth = "topCacheInsert()";
   info("[ENTER]: <%s:%s> : Insert Value(%s)\n",
@@ -675,7 +704,7 @@ end -- topCacheInsert()
 -- (3) Set
 -- (4) ChunkSize
 -- (5) Design Version
-function stackCreate( record, arglist )
+function stackCreate( topRec, arglist )
   local mod = "LsoStickman";
   local meth = "stackCreate()";
   info("[ENTER]: <%s:%s> \n", mod, meth );
@@ -691,7 +720,7 @@ function stackCreate( record, arglist )
 
   -- Check to see if LSO Structure (or anything) is already there,
   -- and if so, error
-  if( record[lsoBinName] ~= nil ) then
+  if( topRec[lsoBinName] ~= nil ) then
     info("[ERROR EXIT]: <%s:%s> LSO BIN(%s) Already Exists\n",
       mod, meth, lsoBinName );
     return('LSO_BIN already exists');
@@ -732,26 +761,26 @@ function stackCreate( record, arglist )
   -- LSO has accumulated some number of entries, and after that we
   -- migrate a block of entries into chunk storage
   -- local newChunk =
-    -- createChunk( record, lsoMap, digest, designVersion, "Hot", entryMax)
+    -- createChunk( topRec, lsoMap, digest, designVersion, "Hot", entryMax)
 
   -- Put our new map in the record, then store the record.
-  record[lsoBinName] = lsoMap;
+  topRec[lsoBinName] = lsoMap;
 
   info("[DEBUG]:<%s:%s>:Dir Map after Init(%s)\n", mod,meth,tostring(dirMap));
 
   -- All done, store the record
   local rc = -99; -- Use Odd starting Num: so that we know it got changed
-  if( not aerospike:exists( record ) ) then
+  if( not aerospike:exists( topRec ) ) then
     info("[DEBUG]:<%s:%s>:Create Record()\n", mod, meth );
-    rc = aerospike:create( record );
+    rc = aerospike:create( topRec );
   else
     info("[DEBUG]:<%s:%s>:Update Record()\n", mod, meth );
-    rc = aerospike:update( record );
+    rc = aerospike:update( topRec );
   end
 
   info("[EXIT]: <%s:%s> : Done.  RC(%d)\n", mod, meth, rc );
   return rc;
-end -- function stackCreate( record, namespace, set )
+end -- function stackCreate( topRec, namespace, set )
 
 -- ======================================================================
 -- |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
@@ -762,7 +791,7 @@ end -- function stackCreate( record, namespace, set )
 --
 -- Push a value onto the stack. There are different cases, with different
 -- levels of complexity:
--- If there's room in the record itself (Top Cache), then do that.
+-- If there's room in the topRec itself (Top Cache), then do that.
 --   Case 0: If room in top cache, then insert there. Done.
 -- If there's room to insert into the top chunk (a Hot Chunk)
 --   Case 1: Call chunkInsertNewValue()
@@ -785,17 +814,19 @@ end -- function stackCreate( record, namespace, set )
 --       Enter new chunk in cold head dir list.
 --
 -- Parms:
--- (*) record:
+-- (*) topRec:
 -- (*) lsoBinName:
 -- (*) newValue:
 -- (*) func:
 -- (*) fargs:
 -- =======================================================================
-local function localStackPush( record, lsoBinName, newValue, func, fargs )
+local function localStackPush( topRec, lsoBinName, newValue, func, fargs )
   local mod = "LsoStickman";
   local meth = "localStackPush()";
+  local doTheFunk = 0; -- when == 1, call the func(fargs) on the Push item
 
   if (func ~= nil and fargs ~= nil ) then
+    doTheFunk = 1;
     info("[ENTER1]: <%s:%s> LSO BIN(%s) NewValue(%s) func(%s) fargs(%s)\n",
       mod, meth, lsoBinName, tostring( newValue ), func, tostring(fargs) );
   else
@@ -803,7 +834,7 @@ local function localStackPush( record, lsoBinName, newValue, func, fargs )
       mod, meth, lsoBinName, tostring( newValue ));
   end
 
-  if( not aerospike:exists( record ) ) then
+  if( not aerospike:exists( topRec ) ) then
     print("ERROR ON RECORD EXISTS\n");
     info("[ERROR EXIT]:<%s:%s>:Missing Record. Exit\n", mod, meth );
     return('Base Record Does NOT exist');
@@ -814,14 +845,14 @@ local function localStackPush( record, lsoBinName, newValue, func, fargs )
     info("[ERROR EXIT]: <%s:%s> Bad LSO BIN Parameter\n", mod, meth );
     return('Bad LSO Bin Parameter');
   end
-  if( record[lsoBinName] == nil ) then
+  if( topRec[lsoBinName] == nil ) then
     info("[ERROR EXIT]: <%s:%s> LSO BIN (%s) DOES NOT Exists\n",
       mod, meth, lsoBinName );
     return('LSO BIN Does NOT exist');
   end
   
   -- check that our bin is (relatively intact
-  local lsoMap = record[lsoBinName]; -- The main LSO map
+  local lsoMap = topRec[lsoBinName]; -- The main LSO map
   if lsoMap.Magic ~= "MAGIC" then
     print("MAGIC ERROR \n");
     info("[ERROR EXIT]: <%s:%s> LSO_BIN (%s) Is Corrupted (no magic)\n",
@@ -844,7 +875,7 @@ local function localStackPush( record, lsoBinName, newValue, func, fargs )
   -- That may, in turn, have to make room by moving some items to the
   -- cold list.
   if not hasRoomInCacheForNewEntry( lsoMap, insertValue ) then
-    migrateTopCache( record, lsoMap );
+    migrateTopCache( topRec, lsoMap );
   end
   topCacheInsert( lsoMap, insertValue );
 
@@ -874,12 +905,12 @@ local function localStackPush( record, lsoBinName, newValue, func, fargs )
 --  lsoMap['ItemCount'] = itemCount;
 
   -- Not sure if this is needed -- but it seems to be.
-  record[lsoBinName] = lsoMap;
+  topRec[lsoBinName] = lsoMap;
 
-  -- All done, store the record
+  -- All done, store the topRec
   local rc = -99; -- Use Odd starting Num: so that we know it got changed
   info("[DEBUG]:<%s:%s>:Update Record\n", mod, meth );
-  rc = aerospike:update( record );
+  rc = aerospike:update( topRec );
 
   info("[EXIT]: <%s:%s> : Done.  RC(%d)\n", mod, meth, rc );
   return rc
@@ -890,20 +921,20 @@ end -- function stackPush()
 -- These are the globally visible calls -- that call the local UDF to do
 -- all of the work.
 -- =======================================================================
-function stackPush( record, lsoBinName, newValue )
+function stackPush( topRec, lsoBinName, newValue )
   local mod = "LsoStickman";
   local meth = "stackPush()";
   info("[ENTER]: <%s:%s> LSO BIN(%s) NewValue(%s)\n",
     mod, meth, lsoBinName, tostring( newValue ));
-  return localStackPush( record, lsoBinName, newValue, nil, nil )
+  return localStackPush( topRec, lsoBinName, newValue, nil, nil )
 end -- end stackPush()
 
-function stackPushWithUDF( record, lsoBinName, newValue, func, fargs )
+function stackPushWithUDF( topRec, lsoBinName, newValue, func, fargs )
   local mod = "LsoStickman";
   local meth = "stackPushWithUDF()";
   info("[ENTER]: <%s:%s> LSO BIN(%s) NewValue(%s) Func(%s) Fargs(%s)\n",
     mod, meth, lsoBinName, tostring( newValue ), func, tostring(fargs));
-  return localStackPush( record, lsoBinName, newValue, func, fargs );
+  return localStackPush( topRec, lsoBinName, newValue, func, fargs );
 end -- stackPushWithUDF()
 
 
@@ -926,14 +957,14 @@ end -- stackPushWithUDF()
 -- order, but the data inside the blocks are in append order.
 --
 -- Parms:
--- (*) record:
+-- (*) topRec:
 -- (*) lsoBinName:
 -- (*) peekCount:
 -- (*) func:
 -- (*) fargs:
 -- =======================================================================
 -- ======================================================================
-local function localStackPeek( record, lsoBinName, peekCount, func, fargs )
+local function localStackPeek( topRec, lsoBinName, peekCount, func, fargs )
   local mod = "LsoStickman";
   local meth = "localStackPeek()";
   info("[ENTER]: <%s:%s> PeekCount(%d) \n", mod, meth, peekCount );
@@ -946,7 +977,7 @@ local function localStackPeek( record, lsoBinName, peekCount, func, fargs )
       mod, meth, lsoBinName, peekCount );
   end
 
-  if( not aerospike:exists( record ) ) then
+  if( not aerospike:exists( topRec ) ) then
     info("[ERROR EXIT]:<%s:%s>:Missing Record. Exit\n", mod, meth );
     return('Base Record Does NOT exist');
   end
@@ -956,14 +987,14 @@ local function localStackPeek( record, lsoBinName, peekCount, func, fargs )
     info("[ERROR EXIT]: <%s:%s> Bad LSO BIN Parameter\n", mod, meth );
     return('Bad LSO Bin Parameter');
   end
-  if( record[lsoBinName] == nil ) then
+  if( topRec[lsoBinName] == nil ) then
     info("[ERROR EXIT]: <%s:%s> LSO_BIN (%s) DOES NOT Exists\n",
       mod, meth, lsoBinName );
     return('LSO_BIN Does NOT exist');
   end
   
   -- check that our bin is (mostly) there
-  local lsoMap = record[lsoBinName]; -- The main LSO map
+  local lsoMap = topRec[lsoBinName]; -- The main LSO map
   if lsoMap.Magic ~= "MAGIC" then
     info("[ERROR EXIT]: <%s:%s> LSO_BIN (%s) Is Corrupted (no magic)\n",
       mod, meth, lsoBinName );
@@ -988,20 +1019,20 @@ end -- function stackPeek()
 -- These are the globally visible calls -- that call the local UDF to do
 -- all of the work.
 -- =======================================================================
-function stackPeek( record, lsoBinName, peekCount )
+function stackPeek( topRec, lsoBinName, peekCount )
   local mod = "LsoStickman";
   local meth = "stackPeek()";
   info("[ENTER]: <%s:%s> LSO BIN(%s) peekCount(%d)\n",
     mod, meth, lsoBinName, peekCount )
-  return localStackPeek( record, lsoBinName, peekCount, nil, nil )
+  return localStackPeek( topRec, lsoBinName, peekCount, nil, nil )
 end -- end StackPush()
 
-function stackPeekWithUDF( record, lsoBinName, peekCount, func, fargs )
+function stackPeekWithUDF( topRec, lsoBinName, peekCount, func, fargs )
   local mod = "LsoStickman";
   local meth = "stackPeekWithUDF()";
   info("[ENTER]: <%s:%s> LSO BIN(%s) peekCount(%d) func(%s) fargs(%s)\n",
     mod, meth, lsoBinName, peekCount, func, tostring(fargs));
-  return localStackPeek( record, lsoBinName, peekCount, func, fargs );
+  return localStackPeek( topRec, lsoBinName, peekCount, func, fargs );
 end -- StackPushWithUDF()
 
 -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> --

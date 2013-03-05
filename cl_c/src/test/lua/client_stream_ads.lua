@@ -1,4 +1,69 @@
-function spend_by_lineitem(s)
+function stream_ads_2(s)
+
+    local function mapper(rec)
+        local key = tostring(rec['advertiser']) .. '/' .. tostring(rec['campaign']) .. '/' .. tostring(rec['line_item'])
+        local val = map {
+            advertiser  = rec['advertiser'],
+            campaign    = rec['campaign'],
+            line_item   = rec['line_item'],
+            spend_sum   = rec['spend'] or 0,
+            spend_max   = rec['spend'] or 0,
+            spend_num   = 1
+        }
+        return map{ [key] = val }
+    end
+
+    local function merger(val1, val2)
+
+        local sum = val1['spend_sum'] + val2['spend_sum']
+        local max = val1['spend_max']
+        local num = val1['spend_num'] + val2['spend_num']
+        
+        if val2['spend_max'] > max then
+            max = val2['spend_max']
+        end
+
+        return map {
+            advertiser  = val1['advertiser'],
+            campaign    = val1['campaign'],
+            line_item   = val1['line_item'],
+            spend_sum   = sum,
+            spend_max   = max,
+            spend_num   = num
+        }
+    end
+
+    local function reducer(map1, map2)
+        return map.merge(map1, map2, merger)
+    end
+
+    return s : map(mapper) : reduce(reducer)
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function stream_ads_3(s)
 
     local function agg(m, rec)
         local key = tostring(rec['advertiser']) .. '/' .. tostring(rec['campaign']) .. '/' .. tostring(rec['line_item'])
@@ -55,7 +120,7 @@ end
 
 
 
-function spend_by_lineitem_2(s)
+function stream_ads_4(s)
 
     local function agg(m, rec)
 

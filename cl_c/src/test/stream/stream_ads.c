@@ -390,7 +390,7 @@ SUITE( stream_ads, "advertising stream" ) {
     suite_before( before );
     suite_after( after   );
     
-    // suite_add( stream_ads_create );
+    suite_add( stream_ads_create );
     suite_add( stream_ads_1 );
     suite_add( stream_ads_2 );
     suite_add( stream_ads_3 );

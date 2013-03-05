@@ -306,7 +306,7 @@ TEST( stream_simple_5, "c where b == 100 group by d" ) {
 
     as_query * q = as_query_new("test", "test");
     as_query_where(q, "b", integer_equals(100));
-    as_query_aggregate(q, UDF_FILE, "groupby_1", NULL);
+    as_query_aggregate(q, UDF_FILE, "grouping", NULL);
     
     rc = citrusleaf_query_stream(cluster, q, consumer);
 
@@ -327,48 +327,6 @@ TEST( stream_simple_5, "c where b == 100 group by d" ) {
     as_query_destroy(q);
     as_stream_destroy(consumer);
 }
-
-
-TEST( stream_simple_6, "c where b == 100 group by d, d % 2" ) {
-    
-    int rc = 0;
-
-    as_val * result = NULL;
-
-    as_stream_status consume(as_val * v) {
-        if ( v != AS_STREAM_END ) {
-            result = v;
-        }
-        return AS_STREAM_OK;
-    }
-
-    as_stream * consumer = consumer_stream_new(consume);
-
-
-    as_query * q = as_query_new("test", "test");
-    as_query_where(q, "b", integer_equals(100));
-    as_query_aggregate(q, UDF_FILE, "groupby_2", NULL);
-    
-    rc = citrusleaf_query_stream(cluster, q, consumer);
-
-    if ( rc ) {
-        error("error: %d", rc);
-    }
-    else {
-        char * s = as_val_tostring(result);
-        info("result: %s", s );
-        free(s);
-    }
-
-    assert_int_eq( rc, 0 );
-    assert_not_null( result );
-    assert_int_eq( as_val_type(result), AS_MAP );
-
-    as_val_destroy(result);
-    as_query_destroy(q);
-    as_stream_destroy(consumer);
-}
-
 
 /******************************************************************************
  * TEST SUITE

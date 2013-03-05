@@ -37,7 +37,7 @@ function sum_on_match(s, bin, val)
     return s : map(_map) : reduce(add);
 end
 
-function groupby_1(s)
+function grouping(s)
 
     local function _groupby(c)
         return c % 10
@@ -46,12 +46,3 @@ function groupby_1(s)
     return s : map(select("c")) : groupby(_groupby)
 end
 
-
-function groupby_2(s)
-
-    local function _groupby(c)
-        return c % 10
-    end
-
-    return s : map(select("c")) : groupby(_groupby)
-end

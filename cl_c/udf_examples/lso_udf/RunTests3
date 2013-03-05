@@ -1,0 +1,13 @@
+#!/bin/bash
+# LSO Unit Tests
+# From Test 1 to Test 3:  Now test complex records holding lists of complex records
+ascli udf-record-apply test set 10 LsoStickman largeStackCreate
+ascli udf-record-apply test set 10 LsoStickman largeStackPush 1
+ascli udf-record-apply test set 10 LsoStickman largeStackPush 2
+ascli udf-record-apply test set 10 LsoStickman largeStackPush 3
+ascli udf-record-apply test set 10 LsoStickman largeStackPush 4
+ascli udf-record-apply test set 10 LsoStickman largeStackPush 5
+ascli udf-record-apply test set 10 LsoStickman largeStackPush 5
+ascli udf-record-apply test set 10 LsoStickman largeStackPush 6
+ascli udf-record-apply test set 10 LsoStickman largeStackPeek 10
+

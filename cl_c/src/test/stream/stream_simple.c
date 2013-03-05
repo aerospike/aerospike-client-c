@@ -35,7 +35,22 @@ TEST( stream_simple_exists, UDF_FILE" exists" ) {
     assert_int_eq( rc, 0 );
 }
 
-TEST( stream_simple_create, "create records" ) {
+/**
+ * Creates 100 records and 4 indices.
+ *
+ * Records are structured as:
+ *      {a: String, b: Integer, c: Integer, d: Integer, e: Integer}
+ *
+ * The key is "a-b-c-d-e"
+ *
+ * The values are:
+ *      a = "abc"
+ *      b = 100
+ *      c = <current index>
+ *      d = c % 10
+ *      e = b + (c + 1) * (d + 1) / 2
+ */
+TEST( stream_simple_create, "create 100 records and 4 indices" ) {
 
     int rc = 0;
 
@@ -99,7 +114,7 @@ TEST( stream_simple_create, "create records" ) {
         int b = n_recs;
         int c = i;
         int d = i % 10;
-        int e = ((i + 1) * b) / 2;
+        int e = b + (c + 1) * (d + 1) / 2;
 
         snprintf(key, 64, "%s-%d-%d-%d-%d", a, b, c, d, e);
 
@@ -122,12 +137,9 @@ TEST( stream_simple_create, "create records" ) {
 
         assert_int_eq(rc, 0);
     }
-
-    info("created %d records", n_recs);
-
 }
 
-TEST( stream_simple_1, "get numeric bin without aggregation" ) {
+TEST( stream_simple_1, "count(*) where a == 'abc' (non-aggregating)" ) {
 
     int rc = 0;
     int count = 0;
@@ -158,7 +170,45 @@ TEST( stream_simple_1, "get numeric bin without aggregation" ) {
     as_stream_destroy(consumer);
 }
 
-TEST( stream_simple_2, "sum of numeric bins" ) {
+TEST( stream_simple_2, "count(*) where a == 'abc' (aggregating)" ) {
+
+    int rc = 0;
+
+    as_integer * result = NULL;
+
+    as_stream_status consume(as_val * v) {
+        if ( v != AS_STREAM_END ) {
+            if ( result != NULL ) as_val_destroy(result);
+            result = as_integer_fromval(v);
+        }
+        return AS_STREAM_OK;
+    }
+
+    as_stream * consumer = consumer_stream_new(consume);
+
+    as_query * q = as_query_new("test", "test");
+    as_query_where(q, "a", string_equals("abc"));
+    as_query_aggregate(q, UDF_FILE, "count", NULL);
+    
+    rc = citrusleaf_query_stream(cluster, q, consumer);
+
+    if ( rc ) {
+        error("error: %d", rc);
+    }
+    else {
+        info("result: %d", as_integer_toint(result) );
+    }
+
+    assert_int_eq( rc, 0 );
+    assert_not_null( result );
+    assert_int_eq( as_integer_toint(result), 100 );
+
+    as_integer_destroy(result);
+    as_query_destroy(q);
+    as_stream_destroy(consumer);
+}
+
+TEST( stream_simple_3, "sum(e) where a == 'abc'" ) {
     
     int rc = 0;
 
@@ -189,7 +239,7 @@ TEST( stream_simple_2, "sum of numeric bins" ) {
 
     assert_int_eq( rc, 0 );
     assert_not_null( result );
-    assert_int_eq( as_integer_toint(result), 252500 );
+    assert_int_eq( as_integer_toint(result), 24275 );
 
     as_integer_destroy(result);
     as_query_destroy(q);
@@ -197,7 +247,7 @@ TEST( stream_simple_2, "sum of numeric bins" ) {
 }
 
 
-TEST( stream_simple_3, "raj" ) {
+TEST( stream_simple_4, "sum(d) where b == 100 and d == 1" ) {
     
     int rc = 0;
 
@@ -238,6 +288,88 @@ TEST( stream_simple_3, "raj" ) {
     as_stream_destroy(consumer);
 }
 
+TEST( stream_simple_5, "c where b == 100 group by d" ) {
+    
+    int rc = 0;
+
+    as_val * result = NULL;
+
+    as_stream_status consume(as_val * v) {
+        if ( v != AS_STREAM_END ) {
+            result = v;
+        }
+        return AS_STREAM_OK;
+    }
+
+    as_stream * consumer = consumer_stream_new(consume);
+
+
+    as_query * q = as_query_new("test", "test");
+    as_query_where(q, "b", integer_equals(100));
+    as_query_aggregate(q, UDF_FILE, "groupby_1", NULL);
+    
+    rc = citrusleaf_query_stream(cluster, q, consumer);
+
+    if ( rc ) {
+        error("error: %d", rc);
+    }
+    else {
+        char * s = as_val_tostring(result);
+        info("result: %s", s );
+        free(s);
+    }
+
+    assert_int_eq( rc, 0 );
+    assert_not_null( result );
+    assert_int_eq( as_val_type(result), AS_MAP );
+
+    as_val_destroy(result);
+    as_query_destroy(q);
+    as_stream_destroy(consumer);
+}
+
+
+TEST( stream_simple_6, "c where b == 100 group by d, d % 2" ) {
+    
+    int rc = 0;
+
+    as_val * result = NULL;
+
+    as_stream_status consume(as_val * v) {
+        if ( v != AS_STREAM_END ) {
+            result = v;
+        }
+        return AS_STREAM_OK;
+    }
+
+    as_stream * consumer = consumer_stream_new(consume);
+
+
+    as_query * q = as_query_new("test", "test");
+    as_query_where(q, "b", integer_equals(100));
+    as_query_aggregate(q, UDF_FILE, "groupby_2", NULL);
+    
+    rc = citrusleaf_query_stream(cluster, q, consumer);
+
+    if ( rc ) {
+        error("error: %d", rc);
+    }
+    else {
+        char * s = as_val_tostring(result);
+        info("result: %s", s );
+        free(s);
+    }
+
+    assert_int_eq( rc, 0 );
+    assert_not_null( result );
+    assert_int_eq( as_val_type(result), AS_MAP );
+
+    as_val_destroy(result);
+    as_query_destroy(q);
+    as_stream_destroy(consumer);
+}
+
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -245,29 +377,13 @@ TEST( stream_simple_3, "raj" ) {
 static bool before(atf_suite * suite) {
 
     citrusleaf_query_init();
-
-    // as_aerospike_init(&as, NULL, &test_aerospike_hooks);
-
-    // chris: disabling Lua cache, because it takes too long to prime.
-    // mod_lua_config_op conf_op = {
-    //     .optype     = MOD_LUA_CONFIG_OP_INIT,
-    //     .arg        = NULL,
-    //     .config     = mod_lua_config_client(false, "modules/mod-lua/src/lua", "src/test/lua")
-    // }; 
-
-	// Chris (Todo) it is leaking here, Who cleans it
-	// up ??
-    // chris:   we don't have a destroy for modules (yet)
-    //          the reason is we didn't need it in asd.
-    // as_module_init(&mod_lua);
-    // as_module_configure(&mod_lua, &conf_op);
  
     int rc = 0;
 
     mod_lua_config config = {
         .server_mode    = false,
         .cache_enabled  = false,
-        .system_path    = "modules/mod-lua/src/lua",
+        .system_path    = "/home/chris/projects/cstivers78/aerospike-mod-lua/src/lua",
         .user_path      = "src/test/lua"
     };
 
@@ -321,4 +437,6 @@ SUITE( stream_simple, "simple stream" ) {
     suite_add( stream_simple_1 );
     suite_add( stream_simple_2 );
     suite_add( stream_simple_3 );
+    suite_add( stream_simple_4 );
+    suite_add( stream_simple_5 );
 }

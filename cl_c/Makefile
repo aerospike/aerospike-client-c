@@ -193,6 +193,7 @@ TEST_RECORD += record/record_lists
  
 TEST_STREAM = 
 TEST_STREAM += stream/stream_simple
+TEST_STREAM += stream/stream_ads
 
 TEST_UTIL = 
 TEST_UTIL += util/udf

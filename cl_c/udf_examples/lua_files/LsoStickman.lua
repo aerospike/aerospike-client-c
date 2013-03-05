@@ -1,7 +1,14 @@
 -- Large Stack Object (LSO) Operations
 -- Stickman V2.1 -- (Feb 28, 2013)
 --
+-- TO DO List:
+-- TODO: Finish transferWarmDirList() method ASAP.
+-- TODO: Make this work for both REGULAR and BINARY Mode
+-- TODO: hotCacheTransfer(): Make this more efficient
+-- TODO: hotCacheInsert(): Must finish Compact Storage
+--
 -- ======================================================================
+--
 -- Functions Supported
 -- (*) stackCreate: Create the LSO structure in the chosen topRec bin
 -- (*) stackPush: Push a user value (AS_VAL) onto the stack
@@ -21,9 +28,9 @@
 -- ======================================================================
 -- Aerospike Calls:
 -- newRec = aerospike:crec_create( topRec )
--- newRec = aerospike:crec_open( record, digest)
--- status = aerospike:crec_update( record, newRec )
--- status = aerospike:crec_close( record, newRec )
+-- newRec = aerospike:crec_open( topRec, digest)
+-- status = aerospike:crec_update( topRec, newRec )
+-- status = aerospike:crec_close( topRec, newRec )
 -- digest = record.digest( newRec )
 -- ======================================================================
 -- ======================================================================
@@ -704,9 +711,14 @@ local function warmDirInsert( topRec, lsoMap, insertList )
 
   -- All done -- Save the info of how much room we have in the top Warm
   -- chunk (entry count or byte count)
+  topRec[lsoMap.BinName] = lsoMap;
   updateWarmCountStatistics( lsoMap, topWarmChunk );
-  aerospike:crec_update( topRec, topWarmChunk );
-  aerospike:crec_close( topRec, topWarmChunk );
+  info("[DEBUG]: <%s:%s> Calling CREC Update \n", mod, meth );
+  local status = aerospike:crec_update( topRec, topWarmChunk );
+  info("[DEBUG]: <%s:%s> CREC Update Status(%s) \n",mod,meth, tostring(status));
+  info("[DEBUG]: <%s:%s> Calling CREC Close \n", mod, meth );
+  status = aerospike:crec_close( topRec, topWarmChunk );
+  info("[DEBUG]: <%s:%s> CREC Close Status(%s) \n",mod,meth, tostring(status));
 
   -- Update the total Item Count in the topRec.  The caller will 
   -- "re-store" the map in the record before updating.
@@ -1257,7 +1269,7 @@ function stackPeek( topRec, lsoBinName, peekCount )
   info("[ENTER]: <%s:%s> LSO BIN(%s) peekCount(%d)\n",
     mod, meth, lsoBinName, peekCount )
   return localStackPeek( topRec, lsoBinName, peekCount, nil, nil )
-end -- end StackPush()
+end -- end stackPeek()
 
 function stackPeekWithUDF( topRec, lsoBinName, peekCount, func, fargs )
   local mod = "LsoStickman";
@@ -1265,12 +1277,163 @@ function stackPeekWithUDF( topRec, lsoBinName, peekCount, func, fargs )
   info("[ENTER]: <%s:%s> LSO BIN(%s) peekCount(%d) func(%s) fargs(%s)\n",
     mod, meth, lsoBinName, peekCount, func, tostring(fargs));
   return localStackPeek( topRec, lsoBinName, peekCount, func, fargs );
-end -- StackPushWithUDF()
+end -- stackPeekWithUDF()
 
--- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> --
 --
--- TO DO List:
--- TODO: Finish transferWarmDirList() method ASAP.
--- TODO: Make this work for both REGULAR and BINARY Mode
--- TODO: hotCacheTransfer(): Make this more efficient
--- TODO: hotCacheInsert(): Must finish Compact Storage
+-- ======================================================================
+-- ||| UNIT TESTS |||||||||||||||||||||||||||||||||||||||||||||||||||||||
+-- ======================================================================
+-- Test Individual pieces to verify functionality
+-- ======================================================================
+-- ======================================================================
+-- ======================================================================
+-- ======================================================================
+
+-- ======================================================================
+-- ======================================================================
+function simpleStackCreate(topRec) 
+   local binname = "dirlist" 
+   local dirlist = list();
+   topRec[binname] = dirlist; 
+   if( not aerospike:exists( topRec ) ) then
+      info("Create Record()\n");
+      rc = aerospike:create( topRec );
+   else
+      info("Update Record()\n");
+      rc = aerospike:update( topRec );
+   end
+   info("SimpleStackCreate Result(%d)\n", rc );
+   return "Create Success";
+end
+
+-- ======================================================================
+-- ======================================================================
+function simpleStackPush ( topRec, newValue ) 
+   if( not aerospike:exists( topRec ) ) then
+      info("stackPush Failed Record not found\n");
+      rc = aerospike:create( topRec );
+   end 
+   local binname    = "dirlist"; 
+   local dirlist    = topRec["dirlist"];
+   info("Create new Record ");
+   newRec           = aerospike:crec_create( topRec );
+   newRec["valbin"] = newValue;
+   info("Put value in new Record ", tostring( newValue ) );
+   info("Update New Record ");
+   aerospike:crec_update( topRec, newRec );
+
+   local newdigest  = record.digest( newRec );
+   info("Prepend to Top Record ");
+   list.prepend (dirlist, tostring( newdigest ));
+   info("Put value in Top Record %s", tostring( newdigest ) );
+   topRec[binname]  = dirlist;
+   info("Update Top Record |%s|", tostring(dirlist));
+   rc = aerospike:update( topRec );
+   info("SimpleStackPush Result(%d)\n", rc );
+   return "Push Result:" .. tostring(newValue) .. " RC: " .. tostring(rc);
+end
+
+-- ======================================================================
+-- ======================================================================
+function simpleStackPeek ( topRec, count ) 
+   if( not aerospike:exists( topRec ) ) then
+      info("stackPeek Failed Record not found\n");
+      rc = aerospike:create( topRec );
+   end 
+   local binname  = "dirlist"; 
+   local dirlist  = topRec[binname];
+   info("Dir list state at peek |%s| ", tostring(dirlist));
+   local peeklist = list.take(dirlist, count);
+   info("Peek size requested %d, peeked %d", count, list.size(peeklist));	
+   resultlist   = list();
+   for index = 1, list.size(peeklist) do
+      local valdig = tostring ( dirlist[index] );
+      newRec       = aerospike:crec_open( topRec, valdig );
+      newValue     = newRec["valbin"];
+      list.append(resultlist, tostring( newValue ));
+      info("stackPeek: found %s --> %s", valdig, tostring( newValue ) );
+      aerospike:crec_close( topRec, newRec );
+   end
+   return resultlist;
+end
+-- ======================================================================
+-- ======================================================================
+
+-- ======================================================================
+-- ======================================================================
+function mediumStackCreate(topRec) 
+   local binname = "MediumDirList" 
+   local lsoMap = map();
+   lsoMap.DirList = list();
+   topRec[binname] = lsoMap;
+   if( not aerospike:exists( topRec ) ) then
+      info("Create Record()\n");
+      rc = aerospike:create( topRec );
+   else
+      info("Update Record()\n");
+      rc = aerospike:update( topRec );
+   end
+   info("SimpleStackCreate Result(%d)\n", rc );
+   return "Create Success";
+end
+
+-- ======================================================================
+-- ======================================================================
+function mediumStackPush ( topRec, newValue ) 
+   if( not aerospike:exists( topRec ) ) then
+      info("stackPush Failed Record not found\n");
+      rc = aerospike:create( topRec );
+   end 
+   local binname    = "MediumDirList"; 
+   local lsoMap     = topRec[binname];
+   local dirlist    = lsoMap.DirList;
+   info("Create new Record ");
+   newRec           = aerospike:crec_create( topRec );
+   newRec["valbin"] = newValue;
+   info("Put value in new Record(%s)", tostring( newValue ) );
+   info("Update New Record ");
+   aerospike:crec_update( topRec, newRec );
+
+   local newdigest  = record.digest( newRec );
+   info("Prepend to Top Record ");
+   list.prepend (dirlist, tostring( newdigest ));
+   lsoMap.DirList = dirlist;
+   info("Put value in Top Record (%s)", tostring( newdigest ) );
+   topRec[binname]  = lsoMap;
+   info("Update Top Record (%s)", tostring( lsoMap ));
+   rc = aerospike:update( topRec );
+   info("SimpleStackPush Result(%s)\n", tostring(rc) );
+   return "Push Result:" .. tostring(newValue) .. " RC: " .. tostring(rc);
+end
+
+-- ======================================================================
+-- ======================================================================
+function mediumStackPeek ( topRec, count ) 
+   if( not aerospike:exists( topRec ) ) then
+      info("stackPeek Failed Record not found:  Creating\n");
+      rc = aerospike:create( topRec );
+      info("stackPeek: Create Result(%s) \n", tostring(rc));
+   end 
+   local binname  = "MediumDirList"; 
+   local lsoMap     = topRec[binname];
+   local dirlist    = lsoMap.DirList;
+   info("Dir list state at peek (%s) ", tostring(dirlist));
+   local peeklist = list.take(dirlist, count);
+   info("Peek size requested %d, peeked %d", count, list.size(peeklist));	
+   resultlist   = list();
+   for index = 1, list.size(peeklist) do
+      local digest = tostring ( dirlist[index] );
+      newRec       = aerospike:crec_open( topRec, digest );
+      newValue     = newRec["valbin"];
+      list.append(resultlist, tostring( newValue ));
+      info("stackPeek: found Digest(%s) --> (%s)",
+        tostring( digest), tostring( newValue ) );
+      rc = aerospike:crec_close( topRec, newRec );
+      info("stackPeek: CREC CLOSE Result(%s) \n", tostring(rc));
+   end
+   return resultlist;
+end
+-- ======================================================================
+
+-- ======================================================================
+-- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> --

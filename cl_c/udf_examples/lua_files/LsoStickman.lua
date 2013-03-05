@@ -206,17 +206,17 @@ end -- lsoSummary()
 -- ======================================================================
 -- Print out interesting stats about this LDR Chunk Record
 -- ======================================================================
-local function  ldrChunkSummary( ldrChunk ) 
+local function  ldrChunkSummary( ldrChunkRecord ) 
   local mod = "LsoStickman";
   local meth = "ldrChunkSummary()";
   info("[ENTER]: <%s:%s>  \n", mod, meth );
 
   local resultMap = map();
-  local lsoMap = ldrChunk.ControlMap;
+  local lsoMap = ldrChunkRecord['LdrControlBin'];
   resultMap.PageType = lsoMap.PageType;
   resultMap.PageMode = lsoMap.PageMode;
   resultMap.Digest   = lsoMap.Digest;
-  resultMap.ListSize = list.size( ldrChunk.LdrListBin );
+  resultMap.ListSize = list.size( ldrChunkRecord['LdrListBin'] );
 
   return tostring( resultMap );
 end -- ldrChunkSummary()
@@ -259,6 +259,14 @@ local function extractTransferList( lsoMap )
 end -- extractTransferList()
 -- ======================================================================
 
+-- ======================================================================
+-- updateWarmCountStatistics( lsoMap, topWarmChunk );
+-- ======================================================================
+-- TODO: FInish this method
+-- ======================================================================
+local function updateWarmCountStatistics( lsoMap, topWarmChunk ) 
+  return 0;
+end
 
 -- ======================================================================
 -- ldrChunkInsert( topWarmChunk, listIndex,  insertList )
@@ -274,19 +282,26 @@ end -- extractTransferList()
 -- (*) insertList
 -- Return: Number of items written
 -- ======================================================================
-local function ldrChunkInsert( topWarmChunk, listIndex, insertList )
+local function ldrChunkInsert( topWarmChunkRecord, listIndex, insertList )
   local mod = "LsoStickman";
   local meth = "ldrChunkInsert()";
-  info("[ENTER]: <%s:%s> \n", mod, meth );
+  info("[ENTER]: <%s:%s> Index(%d) List(%s)\n",
+    mod, meth, listIndex, tostring( insertList ) );
 
   -- TODO: ldrChunkInsert(): Make this work for BINARY mode as well as LIST.
   
-  local ldrCtrlMap = topWarmChunk[ControlBin];
-  local ldrValueList = topWarmChunk[LdrListBin];
-  local totalItemsToWrite = list.size( insertList ) - listIndex;
-  local itemSpaceAvailable = ldrStrlMap.EntryMax - indexStart;
+  local ldrCtrlMap = topWarmChunkRecord['LdrControlBin'];
+  local ldrValueList = topWarmChunkRecord['LdrListBin'];
+  local chunkIndexStart = list.size( ldrValueList ) + 1;
 
-  local indexStart = list.size( ldrValueList );
+  info("[DEBUG]: <%s:%s> Chunk: CTRL(%s) List(%s)\n",
+    mod, meth, tostring( ldrCtrlMap ), tostring( ldrValueList ));
+
+  local totalItemsToWrite = list.size( insertList ) + 1 - listIndex;
+  local itemSpaceAvailable = ldrCtrlMap.EntryMax - chunkIndexStart;
+
+  info("[DEBUG]: <%s:%s> TotalItems(%d) SpaceAvail(%d)\n",
+    mod, meth, totalItemsToWrite, itemSpaceAvailable );
 
   -- Write only as much as we have space for
   local newItemsStored = totalItemsToWrite;
@@ -295,13 +310,16 @@ local function ldrChunkInsert( topWarmChunk, listIndex, insertList )
   end
 
   info("[DEBUG]: <%s:%s>: Copying From(%d) to (%d) Amount(%d)\n",
-    mod, meth, listIndex, indexStart, newItemsStored );
+    mod, meth, listIndex, chunkIndexStart, newItemsStored );
 
-  for i = indexStart, (indexStart + newItemsStored), 1 do
+  for i = chunkIndexStart, (chunkIndexStart + newItemsStored), 1 do
     ldrValueList[i] = insertList[i+listIndex];
   end -- for each remaining entry
 
-  info("[ENTER]: <%s:%s> newItemsStored(%d) \n", mod, meth, newItemsStored );
+  info("[DEBUG]: <%s:%s>: Post Chunk Copy: Ctrl(%s) List(%s)\n",
+    mod, meth, tostring(ldrCtrlMap), tostring(ldrValueList));
+
+  info("[EXIT]: <%s:%s> newItemsStored(%d) \n", mod, meth, newItemsStored );
   return newItemsStored;
 end -- ldrChunkInsert()
 -- ======================================================================
@@ -462,20 +480,21 @@ local function   warmDirListChunkCreate( topRec, lsoMap )
   info("[ENTER]: <%s:%s> \n", mod, meth );
 
   -- Create the Aerospike Record, initialize the bins: Ctrl, List
-  local newLdrChunk = aerospike:crec_create( topRec );
+  local newLdrChunkRecord = aerospike:crec_create( topRec );
   local ctrlMap = map();
   ctrlMap.ParentDigest = record.digest( topRec );
   ctrlMap.PageType = "Warm";
   ctrlMap.PageMode = "List";
-  local newChunkDigest = record.digest( newLdrChunk );
+  local newChunkDigest = record.digest( newLdrChunkRecord );
   ctrlMap.Digest = newChunkDigest;
   ctrlMap.BytesUsed = 0; -- We don't count control info
   ctrlMap.EntryMax = 100; -- Move up to TopRec -- when Stable
   ctrlMap.DesignVersion = 1;
   ctrlMap.LogInfo = 0;
+  ctrlMap.WarmItemCount = 0;
   -- Assign Control info and List info to the LDR bins
-  newLdrChunk['LdrControlBin'] = ctrlMap;
-  newLdrChunk['LsrListBin'] = list();
+  newLdrChunkRecord['LdrControlBin'] = ctrlMap;
+  newLdrChunkRecord['LdrListBin'] = list();
 
   -- Add our new chunk (the digest) to the WarmDirList
   list.append( lsoMap.WarmDirList, newChunkDigest );
@@ -486,8 +505,8 @@ local function   warmDirListChunkCreate( topRec, lsoMap )
   topRec[ lsoMap.BinName ] = lsoMap;
 
   info("[EXIT]: <%s:%s> Return(%s) \n",
-    mod, meth, ldrChunkSummary(newLdrChunk));
-  return newLdrChunk;
+    mod, meth, ldrChunkSummary(newLdrChunkRecord));
+  return newLdrChunkRecord;
 end --  warmDirListChunkCreate()
 -- ======================================================================
 
@@ -676,6 +695,9 @@ local function warmDirInsert( topRec, lsoMap, insertList )
   end
 
   -- Update the Warm Count
+  if lsoMap.WarmItemCount == nil then
+    lsoMap.WarmItemCount = 0;
+  end
   local currentWarmCount = lsoMap.WarmItemCount;
   lsoMap.WarmItemCount = (currentWarmCount + totalCount);
 
@@ -939,7 +961,7 @@ function stackCreate( topRec, lsoBinName, arglist )
 
   if arglist == nil then
     info("[ENTER]: <%s:%s> lsoBinName(%s) NULL argList\n",
-      mod, meth, lsoBinName);
+      mod, meth, tostring(lsoBinName));
   else
     info("[ENTER]: <%s:%s> lsoBinName(%s) argList(%s) \n",
     mod, meth, tostring( lsoBinName), tostring( arglist ));
@@ -962,7 +984,7 @@ function stackCreate( topRec, lsoBinName, arglist )
   -- and if so, error
   if( topRec[lsoBinName] ~= nil ) then
     info("[ERROR EXIT]: <%s:%s> LSO BIN(%s) Already Exists\n",
-      mod, meth, lsoBinName );
+      mod, meth, tostring(lsoBinName) );
     return('LSO_BIN already exists');
   end
 
@@ -1017,7 +1039,7 @@ function stackCreate( topRec, lsoBinName, arglist )
   -- Put our new map in the record, then store the record.
   topRec[lsoBinName] = lsoMap;
 
-  info("[DEBUG]:<%s:%s>:Dir Map after Init(%s)\n", mod,meth,tostring(dirMap));
+  info("[DEBUG]:<%s:%s>:Dir Map after Init(%s)\n", mod,meth,tostring(lsoMap));
 
   -- All done, store the record
   local rc = -99; -- Use Odd starting Num: so that we know it got changed
@@ -1079,7 +1101,7 @@ local function localStackPush( topRec, lsoBinName, newValue, func, fargs )
     return('Bad LSO Bin Parameter');
   end
   if( topRec[lsoBinName] == nil ) then
-    info("[ERROR EXIT]: <%s:%s> LSO BIN (%s) DOES NOT Exists\n",
+    info("[ERROR EXIT]: <%s:%s> LSO BIN (%s) DOES NOT Exist\n",
       mod, meth, lsoBinName );
     return('LSO BIN Does NOT exist');
   end

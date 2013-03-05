@@ -594,13 +594,13 @@ end -- ldrChunkRead()
 
 
 -- ======================================================================
--- warmDirRead( cacheList, peekCount, func, fargs, all);
+-- warmDirRead(topRec, List, lsoMap, Count, func, fargs, all);
 -- ======================================================================
 -- Synopsis:
 -- Parms:
 -- Return: Return the amount read from the Warm Dir List.
 -- ======================================================================
-local function warmDirRead(topRec, resultList, warmDirList, count,
+local function warmDirRead(topRec, resultList, lsoMap, count,
                            func, fargs, all)
   local mod = "LsoStickman";
   local meth = "warmDirRead()";
@@ -610,6 +610,7 @@ local function warmDirRead(topRec, resultList, warmDirList, count,
   -- turn, opening the chunk and reading records (as necessary), until
   -- we've read "count" items.  If the 'all' flag is 1, then read 
   -- everything.
+  local warmDirList = lsoMap.WarmDirList;
   local remaining = count;
   local amountRead = 0;
   local dirCount = list.size( warmDirList );
@@ -798,7 +799,7 @@ local function mapPeek( lsoMap, peekCount, func, fargs )
   -- We need more -- get more out of the Warm List
   local remainingCount = peekCount - cacheCount;
   local warmList =
-        warmDirRead(resultList, lsoMap, remainingCount, func, fargs, all);
+      warmDirRead(topRec, resultList, lsoMap, remainingCount, func, fargs, all);
   local warmCount = list.size( warmList );
   if( warmCount >= peekCount ) then
     return warmList;

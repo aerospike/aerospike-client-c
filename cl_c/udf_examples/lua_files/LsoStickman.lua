@@ -251,7 +251,8 @@ local function extractTransferList( lsoMap )
 
   -- Move the top elements (Max - N) up to the top of the HotCache List.
   for i = 1, transAmount, 1 do 
-    newHotCacheList[i] = oldHotCacheList[i+transAmount];
+    -- newHotCacheList[i] = oldHotCacheList[i+transAmount];
+    list.append( newHotCacheList, oldHotCacheList[i+transAmount] );
   end
 
   info("[DEBUG]: <%s:%s>OldHotCache(%s) NewHotCache(%s)  ResultList(%s) \n",
@@ -1455,34 +1456,34 @@ function largeStackCreate(topRec)
 
   local lsoMap = map();
 
---  local designVersion = 1; -- Not exactly sure how to deal with code versions
---  local entryMax = 100; -- items per chunk (TODO: should be a property)
---  local bytesMax = 2000; -- bytes per chunk (TODO: should be a property)
+  local designVersion = 1; -- Not exactly sure how to deal with code versions
+  local entryMax = 100; -- items per chunk (TODO: should be a property)
+  local bytesMax = 2000; -- bytes per chunk (TODO: should be a property)
 
---  lsoMap.Magic = "MAGIC"; -- we will use this to verify we have a valid map
+  lsoMap.Magic = "MAGIC"; -- we will use this to verify we have a valid map
   lsoMap.BinName = binname;
---  lsoMap.NameSpace = "test"; -- arglist[2];
---  lsoMap.Set = "set"; -- arglist[3];
---  lsoMap.ChunkSize = 2000; -- arglist[4];
+  lsoMap.NameSpace = "test"; -- arglist[2];
+  lsoMap.Set = "set"; -- arglist[3];
+  lsoMap.ChunkSize = 2000; -- arglist[4];
   lsoMap.HotCache = list(); -- List of data entries
   lsoMap.HotItemCount = 0; -- Number of elements in the Top Cache
---  lsoMap.HotCacheMax = 8; -- Max Number for the cache -- when we transfer
---  lsoMap.HotCacheTransfer = 4; -- How much to Transfer at a time.
---  lsoMap.WarmChunkCount = 0; -- Number of Warm Data Record Chunks
---  lsoMap.WarmChunkMax = 100; -- Number of Warm Data Record Chunks
---  lsoMap.WarmChunkTransfer = 10; -- Number of Warm Data Record Chunks
---  lsoMap.WarmTopChunkEntryCount = 0; -- Count of entries in top warm chunk
---  lsoMap.WarmTopChunkByteCount = 0; -- Count of bytes used in top warm Chunk
---  lsoMap.ColdChunkCount = 0; -- Number of Cold Data Record Chunks
---  lsoMap.ColdDirCount = 0; -- Number of Cold Data Record DIRECTORY Chunks
---  lsoMap.ItemCount = 0;     -- A count of all items in the stack
+  lsoMap.HotCacheMax = 8; -- Max Number for the cache -- when we transfer
+  lsoMap.HotCacheTransfer = 4; -- How much to Transfer at a time.
+  lsoMap.WarmChunkCount = 0; -- Number of Warm Data Record Chunks
+  lsoMap.WarmChunkMax = 100; -- Number of Warm Data Record Chunks
+  lsoMap.WarmChunkTransfer = 10; -- Number of Warm Data Record Chunks
+  lsoMap.WarmTopChunkEntryCount = 0; -- Count of entries in top warm chunk
+  lsoMap.WarmTopChunkByteCount = 0; -- Count of bytes used in top warm Chunk
+  lsoMap.ColdChunkCount = 0; -- Number of Cold Data Record Chunks
+  lsoMap.ColdDirCount = 0; -- Number of Cold Data Record DIRECTORY Chunks
+  lsoMap.ItemCount = 0;     -- A count of all items in the stack
   lsoMap.WarmCache = list();   -- List of Page Digests
---  lsoMap.ColdListHead  = 0;   -- Digest of Directory Page of Digests
---  lsoMap.LdrEntryMax = 100;  -- Should be a setable parm
---  lsoMap.LdrEntrySize = 20;  -- Must be a setable parm
---  lsoMap.LdrByteMax = 2000;  -- Should be a setable parm
---  lsoMap.LdirColdDirMax = 100;  -- Should be a setable parm
---  lsoMap.DesignVersion = designVersion;
+  lsoMap.ColdListHead  = 0;   -- Digest of Directory Page of Digests
+  lsoMap.LdrEntryMax = 100;  -- Should be a setable parm
+  lsoMap.LdrEntrySize = 20;  -- Must be a setable parm
+  lsoMap.LdrByteMax = 2000;  -- Should be a setable parm
+  lsoMap.LdirColdDirMax = 100;  -- Should be a setable parm
+  lsoMap.DesignVersion = designVersion;
 
   topRec[binname] = lsoMap;
   if( not aerospike:exists( topRec ) ) then
@@ -1514,16 +1515,16 @@ local function testCreateNewComplexRecord( topRec, lsoMap, newValue )
   info("[DEBUG]: <%s:%s>: Calling CREC Create\n", mod, meth);
   local newLdrChunkRecord = aerospike:crec_create( topRec );
   local ctrlMap = map();
---  ctrlMap.ParentDigest = record.digest( topRec );
---  ctrlMap.PageType = "Warm";
---  ctrlMap.PageMode = "List";
+  ctrlMap.ParentDigest = record.digest( topRec );
+  ctrlMap.PageType = "Warm";
+  ctrlMap.PageMode = "List";
   info("[DEBUG]: <%s:%s>: Calling Rec.Digest\n", mod, meth);
   local newChunkDigest = record.digest( newLdrChunkRecord );
---  ctrlMap.Digest = newChunkDigest;
---  ctrlMap.BytesUsed = 0; -- We don't count control info
---  ctrlMap.EntryMax = 100; -- Move up to TopRec -- when Stable
---  ctrlMap.DesignVersion = 1;
---  ctrlMap.LogInfo = 0;
+  ctrlMap.Digest = newChunkDigest;
+  ctrlMap.BytesUsed = 0; -- We don't count control info
+  ctrlMap.EntryMax = 100; -- Move up to TopRec -- when Stable
+  ctrlMap.DesignVersion = 1;
+  ctrlMap.LogInfo = 0;
   ctrlMap.WarmItemCount = 0;
   -- Assign Control info and List info to the LDR bins
   newLdrChunkRecord['LdrControlBin'] = ctrlMap;
@@ -1569,15 +1570,15 @@ local function testCreateNewSimpleRecord( topRec, lsoMap, newValue )
   -- Create the Aerospike Record, initialize the bins: Ctrl, List
   local newLdrChunkRecord = aerospike:crec_create( topRec );
   local ctrlMap = map();
---  ctrlMap.ParentDigest = record.digest( topRec );
---  ctrlMap.PageType = "Warm";
---  ctrlMap.PageMode = "List";
+  ctrlMap.ParentDigest = record.digest( topRec );
+  ctrlMap.PageType = "Warm";
+  ctrlMap.PageMode = "List";
   local newChunkDigest = record.digest( newLdrChunkRecord );
---  ctrlMap.Digest = newChunkDigest;
---  ctrlMap.BytesUsed = 0; -- We don't count control info
---  ctrlMap.EntryMax = 100; -- Move up to TopRec -- when Stable
---  ctrlMap.DesignVersion = 1;
---  ctrlMap.LogInfo = 0;
+  ctrlMap.Digest = newChunkDigest;
+  ctrlMap.BytesUsed = 0; -- We don't count control info
+  ctrlMap.EntryMax = 100; -- Move up to TopRec -- when Stable
+  ctrlMap.DesignVersion = 1;
+  ctrlMap.LogInfo = 0;
   ctrlMap.WarmItemCount = 0;
   -- Assign Control info and List info to the LDR bins
   newLdrChunkRecord['LdrControlBin'] = ctrlMap;
@@ -1669,6 +1670,7 @@ function largeStackPeek ( topRec, count )
 
       newValue     = dirList[1];
       list.append(resultlist, tostring( newValue ));
+      list.append(resultlist, tostring( digest ));
       info("stackPeek: found Digest(%s) --> (%s)",
         tostring( digest), tostring( newValue ) );
       rc = aerospike:crec_close( topRec, chunkRec );

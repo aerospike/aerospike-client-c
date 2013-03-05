@@ -254,7 +254,7 @@ local function extractTransferList( lsoMap )
   lsoMap.HotCacheList = newHotCacheList;
   oldHotCacheList = nil;
 
-  info("[ENTER]: <%s:%s> ResultList(%s) \n", mod, meth, tostring(resultList));
+  info("[EXIT]: <%s:%s> ResultList(%s) \n", mod, meth, tostring(resultList));
   return resultList;
 end -- extractTransferList()
 -- ======================================================================
@@ -471,8 +471,8 @@ local function   warmDirListChunkCreate( topRec, lsoMap )
   ctrlMap.Digest = newChunkDigest;
   ctrlMap.BytesUsed = 0; -- We don't count control info
   ctrlMap.EntryMax = 100; -- Move up to TopRec -- when Stable
-  CtrlMap.DesignVersion = 1;
-  CtrlMap.LogInfo = 0;
+  ctrlMap.DesignVersion = 1;
+  ctrlMap.LogInfo = 0;
   -- Assign Control info and List info to the LDR bins
   newLdrChunk['LdrControlBin'] = ctrlMap;
   newLdrChunk['LsrListBin'] = list();
@@ -631,32 +631,43 @@ local function warmDirInsert( topRec, lsoMap, insertList )
   local mod = "LsoStickman";
   local meth = "warmDirInsert()";
   local rc = 0;
-  info("[ENTER]: <%s:%s> LSO Summary() \n", mod, meth );
+  info("[ENTER]: <%s:%s> \n", mod, meth );
 --info("[ENTER]: <%s:%s> LSO Summary(%s) \n", mod, meth, lsoSummary(lsoMap) );
+
+  info("[DEBUG 0]:WDL(%s)", tostring( lsoMap.WarmDirList ));
 
   local warmDirList = lsoMap.WarmDirList;
   local topWarmChunk;
   -- Whether we create a new one or open an existing one, we save the current
   -- count and close the record.
+  info("[DEBUG 1]:");
   if list.size( warmDirList ) == 0 then
+    info("[DEBUG]: <%s:%s> Calling Chunk Create \n", mod, meth );
     topWarmChunk = warmDirListChunkCreate( topRec, lsoMap ); -- create new
   else
+    info("[DEBUG]: <%s:%s> Calling Get TOP \n", mod, meth );
     topWarmChunk = warmDirListGetTop( topRec, lsoMap ); -- open existing
   end
+  info("[DEBUG 2]:");
 
   -- We have a warm Chunk -- write as much as we can into it.  If it didn't
   -- all fit -- then we allocate a new chunk and write the rest.
   local totalCount = list.size( insertList );
+  info("[DEBUG]: <%s:%s> Calling Chunk Insert: List(%s)\n",
+    mod, meth, tostring( insertList ));
   local countWritten = ldrChunkInsert( topWarmChunk, 1, insertList );
   local itemsLeft = totalCount - countWritten;
   if itemsLeft > 0 then
     aerospike:crec_update( topRec, topWarmChunk );
     aerospike:crec_close( topRec, topWarmChunk );
+    info("[DEBUG]: <%s:%s> Calling Chunk Create: AGAIN!!\n", mod, meth );
     topWarmChunk = warmDirListChunkCreate( topRec, lsoMap ); -- create new
     -- Unless we've screwed up our parameters -- we should never have to do
     -- this more than once.  This could be a while loop if it had to be, but
     -- that doesn't make sense that we'd need to create multiple new LDRs to
     -- hold just PART of the hot cache.
+  info("[DEBUG]: <%s:%s> Calling Chunk Insert: List(%s) AGAIN(%d)\n",
+    mod, meth, tostring( insertList ), countWritten + 1);
     countWritten = ldrChunkInsert( topWarmChunk, countWritten+1, insertList );
     if countWritten ~= itemsLeft then
       info("[ERROR!!]: <%s:%s> Second Warm Chunk Write: CW(%d) IL(%d) \n",
@@ -714,7 +725,7 @@ local function hotCacheTransfer( topRec, lsoMap )
   -- the items we're moving from the hot cache to the warm dir, then
   -- call insertWarmDir() to find a place for it.
   local transferList = extractTransferList( lsoMap );
-  rc = warmDirInsert( lsoMap, transferList );
+  rc = warmDirInsert( topRec, lsoMap, transferList );
 
   info("[EXIT]: <%s:%s> result(%d) \n", mod, meth, rc );
   return rc;

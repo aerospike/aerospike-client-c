@@ -169,23 +169,22 @@
 --
 --  lsoMap.Magic = "MAGIC"; -- we will use this to verify we have a valid map
 --  lsoMap.ItemCount = 0;       -- A count of ALL items in the stack
---  lsoMap.HotCount = 0;        -- A count of all HOT items in the stack
---  lsoMap.WarmCount = 0;       -- A count of all WARM items in the stack
---  lsoMap.ColdCount = 0;       -- A count of all COLD items in the stack
 --  lsoMap.BinName = arglist[1];
 --  lsoMap.NameSpace = arglist[2];
 --  lsoMap.Set = arglist[3];
 --  lsoMap.ChunkSize = arglist[4];
---  lsoMap.HotCache = list();
---  lsoMap.HotCacheCount = 0; -- Number of elements in the Hot Cache
+--  lsoMap.HotCacheList = list();
+--  lsoMap.HotCacheItems = 0; -- Number of elements in the Hot Cache
 --  lsoMap.HotCacheMax = 10; -- Max Number for the cache -- when we transfer
 --  lsoMap.HotCacheTransfer = 5; -- How much to Transfer at a time.
+--  lsoMap.WarmItemCount = 0; -- Number of Warm Data items
 --  lsoMap.WarmChunkCount = 0; -- Number of Warm Data Record Chunks
 --  lsoMap.WarmChunkMax = 100; -- Number of Warm Data Record Chunks
 --  lsoMap.WarmChunkTransfer = 10; -- Number of Warm Data Record Chunks
---  lsoMap.WarmTopChunkEntryCount = 0; -- Count of entries in top warm chunk
---  lsoMap.WarmTopChunkByteCount = 0; -- Count of bytes used in top warm Chunk
+--  lsoMap.WarmHotChunkEntryCount = 0; -- Count of entries in top warm chunk
+--  lsoMap.WarmHotChunkByteCount = 0; -- Count of bytes used in top warm Chunk
 --  lsoMap.WarmDirList = list(); -- Define a new list for the Warm Stuff
+--  lsoMap.ColdItemCount = 0;  -- Number of Cold Data Items
 --  lsoMap.ColdChunkCount = 0; -- Number of Cold Data Record Chunks
 --  lsoMap.ColdDirCount = 0; -- Number of Cold Data Record DIRECTORY Chunks
 --  lsoMap.ColdListHead  = 0;    -- Digest of the Cold Dir List Head Page
@@ -204,24 +203,23 @@
 --     as bytes values)
 -- (*) Note that ONLY ONE of the two content bins will be used.  We will be
 --     in either LIST MODE (bin 2) or BINARY MODE (bin 3)
--- ==> 'ControlBin' Contents (a Map)
---  -- 'ParentDigest' (to track who we belong to)
---  -- 'Page Type' (Warm Data, Code Data or Dir)
---  -- 'Page Mode' (List data or Binary Data)
---  -- 'Digest' (the digest that we would use to find this chunk)
---  -- 'Entry Max':  Kept in the main control: topRec[lsoBinName]:
+-- ==> 'LdrControlBin' Contents (a Map)
+--    + 'ParentDigest' (to track who we belong to)
+--    + 'Page Type' (Warm Data, Code Data or Dir)
+--    + 'Page Mode' (List data or Binary Data)
+--    + 'Digest' (the digest that we would use to find this chunk)
+--    - 'EntryMax':  Kept in the main control: topRec[lsoBinName]:
 --                   0 means Variable, so use BYTE MAX, not Entry Count
---  -- 'Entry Size': Kept in the main control: topRec[lsoBinName]:
+--    - 'Entry Size': Kept in the main control: topRec[lsoBinName]:
 --                   0 means Variable size, >0 is fixed size
---  -- 'Byte Max':   Kept in the main control: topRec[lsoBinName]:
+--    - 'Byte Max':   Kept in the main control: topRec[lsoBinName]:
 --                   0 means fixed size, use ENTRY MAX, not byte max
---  -- 'Bytes Used': Number of bytes used, but ONLY when in "byte mode"
---  -- 'Design Version': Kept in the main control: topRec[lsoBinName]:
---                       Decided by the code:  DV starts at 1.0
---  -- 'Log Info':(Log Sequence Number, for when we log updates)
+--    + 'Bytes Used': Number of bytes used, but ONLY when in "byte mode"
+--    + 'Design Version': Decided by the code:  DV starts at 1.0
+--    + 'Log Info':(Log Sequence Number, for when we log updates)
 --
---  ==> 'ListBin' Contents
---  ==> 'BinaryBin' Contents
+--  ==> 'LdrListBin' Contents
+--  ==> 'LdrBinaryBin' Contents
 --
 --    -- Entry List (Holds entry and, implicitly, Entry Count)
 --

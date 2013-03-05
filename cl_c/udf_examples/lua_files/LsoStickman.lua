@@ -19,13 +19,21 @@
 --     filter, the filter returns nil, and thus it would not be added
 --     to the result list.
 -- ======================================================================
+-- Aerospike Calls:
+-- newRec = aerospike:crec_create( topRec )
+-- newRec = aerospike:crec_open( record, digest)
+-- status = aerospike:crec_update( record, newRec )
+-- status = aerospike:crec_close( record, newRec )
+-- digest = record.digest( newRec )
+-- ======================================================================
+-- ======================================================================
 -- LSO Design and Type Comments:
 --
 -- The LSO value is a new "particle type" that exists ONLY on the server.
 -- It is a complex type (it includes infrastructure that is used by
 -- server storage), so it can only be viewed or manipulated by Lua and C
 -- functions on the server.  It is represented by a Lua MAP object that
--- comprises control information, a directory of records (for "hot data")
+-- comprises control information, a directory of records (for "warm data")
 -- and a "Cold List Head" ptr to a linked list of directory structures
 -- that each point to the records that hold the actual data values.
 --
@@ -35,19 +43,20 @@
 -- In a user record, the bin holding the Large Stack Object (LSO) is
 -- referred to as an "LSO" bin. The overhead of the LSO value is 
 -- (*) LSO Control Info (~70 bytes)
--- (*) LSO Hot Directory: List of digests: 10 digests(250 bytes)
+-- (*) LSO Hot Cache: List of data entries (on the order of 100)
+-- (*) LSO Warm Directory: List of digests: 10 digests(250 bytes)
 -- (*) LSO Cold Directory Head (digest of Head plus count) (30 bytes)
 -- (*) Total LSO Record overhead is on the order of 350 bytes
 -- NOTES:
 -- (*) Record types used in this design:
 -- (1) There is the main record that contains the LSO bin (LSO Head)
--- (2) There are Data Chunk Records (both Hot and Cold)
---     ==> Hot and Cold Data Chunk Records have the same format:
+-- (2) There are Data Chunk Records (both Warm and Cold)
+--     ==> Warm and Cold Data Chunk Records have the same format:
 --         They both hold User Stack Data.
 -- (3) There are Chunk Directory Records (used in the cold list)
 -- (*) What connects to what
 -- (+) The main record points to:
---     - Hot Data Chunk Records (these records hold stack data)
+--     - Warm Data Chunk Records (these records hold stack data)
 --     - Chunk Directory Records (these records hold ptrs to Cold Chunks)
 -- (*) We may have to add some auxilliary information that will help
 -- pick up the pieces in the event of a network/replica problem, where
@@ -62,9 +71,9 @@
 --     +-------------------+                                 
 --     | LSO Control Info  |
 --     +----------------++++                                 
---     | Top Entry Cache||||   <> Each Chunk dir holds about 100 Chunk Ptrs
+--     | Hot Entry Cache||||   <> Each Chunk dir holds about 100 Chunk Ptrs
 --     +----------------++++   <> Each Chunk holds about 100 entries
---   +-| LSO Hot Dir List  |   <> Each Chunk dir pts to about 10,000 entries
+--   +-| LSO Warm Dir List |   <> Each Chunk dir pts to about 10,000 entries
 --   | +-------------------+   +-----+->+-----+->+-----+ ->+-----+
 --   | | LSO Cold Dir Head |-> |Rec  |  |Rec  |  |Rec  | o |Rec  |
 --   | +-------------------+   |Chunk|  |Chunk|  |Chunk| o |Chunk|
@@ -77,14 +86,14 @@
 --   |                         |V   +--+|V   +--+|V   +--+ |V   +--+
 --   |                         |+--+    |+--+    |+--+     |+--+
 --   |                         ||C2|    ||C2|    ||C2|     ||C2|
---   |   Hot data ages out     V+--+    V+--+    V+--+     V+--+
+--   |   Warm data ages out     V+--+    V+--+    V+--+     V+--+
 --   |   of the "in record"    +--+     +--+     +--+      +--+
---   |   "hot chunks" and      |C1|     |C1|     |C1|      |C1|
+--   |   "warm chunks" and     |C1|     |C1|     |C1|      |C1|
 --   |   into the cold chunks. +--+     +--+     +--+      +--+
 --   |                          A        A        A         A    
 --   +-----+   Cold Data Chunks-+--------+--------+---------+
 --         |                                                
---         V (Top of Stack List)             Hot Data(HD)
+--         V (Top of Stack List)             Warm Data(HD)
 --     +---------+                          Chunk Rec 1
 --     |Digest 1 |+----------------------->+--------+
 --     |---------|              HD Chunk 2 |Entry 1 |
@@ -100,26 +109,33 @@
 --                   |   o    |
 --                   |Entry n |
 --                   +--------+
--- Except for the "Top Entry Cache", which is the true "Top of Stack",
--- the next level of storage is found in the first Hot Data Chunk,
--- Record #1 (top position in the directory).  And, since we process
--- stack operations in LIFO order, but manage them physically as a list
--- (append to the end), we basically always read backwards when we
--- do Peek operations.
+-- The "Hot Entry Cache" is the true "Top of Stack", holding roughly the
+-- top 50 to 100 values.  The next level of storage is found in the first
+-- Warm Data Chunk, Record #1 (top position in the directory).  And, since
+-- we process stack operations in LIFO order, but manage them physically as
+-- a list (append to the end), we basically read the pieces in top down order,
+-- but we read the CONTENTS of those pieces backwards.  It is too expensive
+-- to "prepend" to a list -- and we are smart enough to figure out how to
+-- read an individual page list bottom up (in reverse append order).
 --
--- This is now outdated -- since we're now doing the Top Cache List
--- in place of a "compact mode".
--- NOTE: Design, V2.  We will cache all data in a VALUES LIST until
--- we -- reach a certain number N (e.g. 100), and then at N+1 we will create
--- all of the remaining bins in the record and redistribute the numbers, 
--- then insert the 101th value.  That way we save the initial storage
--- cost of the chunks (and such) for small (or dead) users.
+-- We don't "age" the individual entries out one at a time as the Hot Cache
+-- overflows -- we instead take a group at a time (specified by the
+-- HotCacheTransferAmount), which opens up a block empty spots. Notice that
+-- the transfer amount is a tuneable parameter -- for heavy reads, we would
+-- want MORE data in the cache, and for heavy writes we would want less.
+--
+-- If we generally pick half (100 entries total, and then transfer 50 at
+-- a time when the cache fills up), then half the time the insers will affect
+-- ONLY the Top (LSO) record -- so we'll have only one Read, One Write 
+-- operation for a stack push.  1 out of 50 will have the double read,
+-- double write, and 1 out of a thousand (or so) will have additional
+-- IO's depending on the state of the Warm/Cold lists.
 --
 -- NOTE: Design, V3.  For really cold data -- things out beyond 50,000
 -- elements, it might make sense to just push those out to a real disk
 -- based file.  If we ever need to read the whole stack, we can afford
 -- the time and effort to read the file (it is an unlikely event).  The
--- issue here is that we probably have to teach Aerospike how to migrate
+-- issue here is that we probably have to teach Aerospike how to transfer
 -- (and replicate) files as well as records.
 --
 -- |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
@@ -131,7 +147,7 @@
 -- (*) Map holding
 --    -- Control Info
 --       -- Digest (the digest that we would use to find this chunk)
---       -- Status (Hot or Cold)
+--       -- Status (Warm or Cold)
 --       -- Entry Max
 --       -- Byte Max
 --       -- Bytes Used
@@ -149,7 +165,6 @@
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 -- LSO Utility Functions
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
---
 
 -- ======================================================================
 -- local function lsoSummary( lsoMap ) (DEBUG/Trace Function)
@@ -161,20 +176,24 @@
 local function lsoSummary( lsoMap )
   local mod = "LsoStickman";
   local meth = "lsoSummary()";
-  local resultMap = map();
   info("[ENTER]: <%s:%s>  \n", mod, meth );
 
-  resultMap.BinName = lsoMap.BinName;
-  resultMap.NameSpace = lsoMap.NameSpace;
-  resultMap.Set = lsoMap.Set;
-  resultMap.ChunkSize = lsoMap.ChunkSize;
-  resultMap.TopCacheCount = lsoMap.TopCacheCount;
-  resultMap.TopCacheMax = lsoMap.TopCacheMax;
-  resultMap.TopCacheMigrate = lsoMap.TopCacheMigrate;
-  resultMap.HotChunkCount = lsoMap.HotChunkCount;
-  resultMap.ColdChunkCount = lsoMap.ColdChunkCount;
-  resultMap.ColdDirCount = lsoMap.ColdDirCount;
-  resultMap.ItemCount = lsoMap.ItemCount;
+  local resultMap             = map();
+  resultMap.SUMMARY           = "LSO Summary String";
+  resultMap.BinName           = lsoMap.BinName;
+  resultMap.NameSpace         = lsoMap.NameSpace;
+  resultMap.Set               = lsoMap.Set;
+  resultMap.ChunkSize         = lsoMap.ChunkSize;
+  resultMap.HotItemCount      = lsoMap.HotItemCount;
+  resultMap.HotCacheMax       = lsoMap.HotCacheMax;
+  resultMap.HotCacheTransfer  = lsoMap.HotCacheTransfer;
+  resultMap.WarmItemCount     = lsoMap.WarmItemCount;
+  resultMap.WarmChunkCount    = lsoMap.WarmChunkCount;
+  resultMap.WarmChunkMax      = lsoMap.WarmChunkMax;
+  resultMap.ColdItemCount     = lsoMap.ColdItemCount;
+  resultMap.ColdChunkCount    = lsoMap.ColdChunkCount;
+  resultMap.ColdDirCount      = lsoMap.ColdDirCount;
+  resultMap.ItemCount         = lsoMap.ItemCount;
 
   local resultString = tostring( resultMap );
   info("[EXIT]: <%s:%s> resultMap(%s) \n", mod, meth, resultString );
@@ -183,222 +202,229 @@ end -- lsoSummary()
 -- ======================================================================
 
 -- ======================================================================
--- Get (create) a unique bin name given the current counter
--- Probably not needed in Stickman
+-- ldrChunkSummary( ldrChunk )
 -- ======================================================================
--- local function getBinName( count )
---   return "DirBin_" .. tostring( count );
--- end
+-- Print out interesting stats about this LDR Chunk Record
 -- ======================================================================
--- 
--- ======================================================================
--- createChunk:
--- ======================================================================
--- Create a new "chunk" (the thing that holds a list
--- of user values), add it to the top of the "Hot List" and increment
--- the control map's total Chunk Count. If necessary, we'll age out the
--- oldest chunk from the hot list and move it to the top of the Cold list.
--- Parms:
--- (*) lsoMap
--- Return: New Bin Number
--- Chunk Design
--- (*) Map holding
---    -- Control Info
---       -- Status (Hot or Cold)
---       -- Entry Max
---       -- Byte Max
---       -- Bytes Used
---       -- Design Version
---       -- Log Info (Log Sequence Number, for when we log updates)
---    -- Entry List (Holds entry and, implicitly, Entry Count)
---
--- ======================================================================
--- local function createChunk( topRec, lsoMap, digest, dv, status, entryMax)
---   local mod = "LsoStickman";
---   local meth = "createHotChunk()";
---   info("[ENTER]: <%s:%s>LSO(%s) Dig(%s) DV(%s) Stat(%s) \n",
---     mod, meth, tostring(lsoMap), tostring(digest), tostring(dv), status );
--- 
---   local newChunk = map();
---   newChunk.Status = status;
---   newChunk.EntryMax = entryMax;
---   newChunk.BytesMax = 2000;   -- bytesMax;
---   newChunk.BytesUsed = 0;
---   newChunk.DesignVersion = dv;
---   newChunk.Digest = digest;
---   newChunk.LogInfo = 0;
---   newChunk.EntryList = list();
--- 
---   info("[EXIT]: <%s:%s> New Chunk(%s) \n", mod, meth, tostring(newChunk) );
--- 
---   return newChunk;
--- end -- createChunk()
-
--- ======================================================================
--- chunkSpaceCheck: Check that there's enough space for an insert.
--- ======================================================================
--- Return: True if there's room, otherwise false
--- (*) Map holding
---    -- Control Info
---       -- Status (Hot or Cold)
---       -- Entry Max
---       -- Byte Max
---       -- Bytes Used
---       -- Design Version
---       -- Log Info (Log Sequence Number, for when we log updates)
---    -- Entry List (Holds entry and, implicitly, Entry Count)
---
--- ======================================================================
--- local function chunkSpaceCheck( chunk, newValue )
---   local mod = "LsoStickman";
---   local meth = "createHotChunk()";
---   info("[ENTER]: <%s:%s> chunk(%s) newValue(%s) \n",
---     mod, meth, tostring(chunk), tostring(newValue) );
--- 
---   local result =   list.size( chunk.EntryList ) < chunk.EntryMax;
--- 
---   info("[EXIT]: <%s:%s> result(%s) \n", mod, meth, tostring(result) );
--- 
--- end -- chunkSpaceCheck()
--- ======================================================================
-
--- ======================================================================
--- lsoInsertNewValue( lsoMap, newValue );
--- ======================================================================
--- Insert a new value (i.e. append) into the top Chunk of an LSO Map.
--- The Chunk has already been tested for sufficient space.
--- Parms:
--- (*) lsoMap
--- (*) The Top Chunk
--- (*) New Value
--- Return: The count of entries in the list
--- ======================================================================
--- local function lsoInsertNewValue( lsoMap, newValue )
---   local mod = "LsoStickman";
---   local meth = "lsoInsertNewValue()";
---   info("[ENTER]: <%s:%s>lsoBin(%s) chunk(%s) newValue(%s)\n",
---     mod, meth, tostring(lsoMap), tostring(chunk), tostring(newValue));
--- 
---   local lsoMap = topRec[lsoBinName]; -- The main LSO map
---   local hotDir = lsoMap.DirList; -- The HotList Directory
---   local chunkDigest = hotDir[1]; -- The Top of Stack Chunk
---   local chunkRecord = aerospike:record_get( chunk_digest );
---   chunkInsertNewValue( chunkRecord, newValue )
---   aerospike:record_update( chunkRecord )
--- 
---   info("[EXIT]: <%s:%s> lsoMap(%s) Chunk(%s) \n",
---     mod, meth, tostring(lsoMap), tostring(chunk));
--- 
---   return list.size( chunk.EntryList );
--- end -- lsoInsertNewValue
--- ======================================================================
-  
-
--- ======================================================================
--- chunkInsertNewValue( lsoMap, newValue );
--- ======================================================================
--- Given a Chunk Record (now in memory), insert a new value int it.
--- This is a simple operation of appending a value to the end of the
--- chunk's list.
--- The Chunk has already been tested for sufficient space.
--- Parms:
--- (*) lsoMap
--- (*) The Top Chunk
--- (*) New Value
--- Return: The count of entries in the list
--- ======================================================================
--- local function chunkInsertNewValue( chunkRecord, newValue )
---   local mod = "LsoStickman";
---   local meth = "chunkInsertNewValue()";
---   info("[ENTER]: <%s:%s>lsoBin(%s) chunk(%s) newValue(%s)\n",
---     mod, meth, tostring(lsoMap), tostring(chunk), tostring(newValue));
--- 
---   local chunkLsoMap = chunk_record.lsoBin;
---   local chunkEntryList = chunkLsoMap.
---   list.append( chunk.EntryList, newValue );
--- 
---   info("[EXIT]: <%s:%s> lsoMap(%s) Chunk(%s) \n",
---     mod, meth, tostring(lsoMap), tostring(chunk));
--- 
---   return list.size( chunk.EntryList );
--- end -- chunkInsertNewValue()
-  
--- ======================================================================
--- isRoomForNewEntry:
--- Parms:
--- (*) lsoMap: the map for the LSO Bin
--- (*) newValue: the new value to be pushed on the stack
--- ======================================================================
--- local function isRoomForNewEntry( lsoMap, newValue )
---   return 0
--- end -- isRoomForNewEntry()
--- ======================================================================
-
--- ======================================================================
--- insertNewValue():
--- ======================================================================
--- Parms:
--- (*) lsoMap: the map for the LSO Bin
--- (*) newValue: the new value to be pushed on the stack
--- local function insertNewValue( lsoMap, newValue )
---   return 0
--- end -- insertNewValue()
--- ======================================================================
---
--- ======================================================================
--- createNewChunkInsertValue( lsoMap, newValue );
--- ======================================================================
--- Parms:
--- (*) lsoMap: the map for the LSO Bin
--- (*) newValue: the new value to be pushed on the stack
--- local function createNewChunkInsertValue( lsoMap, newValue )
---   return 0
--- end -- createNewChunkInsertValue()
--- ======================================================================
-
-
--- ======================================================================
--- isRoomForNewHotChunk( lsoMap, newChunk )
--- ======================================================================
--- Parms:
--- (*) lsoMap: the map for the LSO Bin
--- (*) newValue: the new value to be pushed on the stack
--- local function isRoomForNewHotChunk( lsoMap, newChunk )
---   return 0
--- end -- isRoomForNewHotChunk( lsoMap, newChunk )
--- ======================================================================
-
--- ======================================================================
--- hotDirInsert( lsoMap, newChunk );
--- ======================================================================
--- Parms:
--- (*) lsoMap: the map for the LSO Bin
--- (*) newValue: the new value to be pushed on the stack
--- local function hotDirInsert( lsoMap, newChunk )
---   return 0;
--- end -- hotDirInsert( lsoMap, newChunk )
--- ======================================================================
---
--- ======================================================================
--- migrateWarmChunk( lsoMap )
--- ======================================================================
--- Parms:
--- (*) lsoMap: the map for the LSO Bin
--- (*) newValue: the new value to be pushed on the stack
--- local function migrateWarmChunk( lsoMap )
---   return 0;
--- end -- migrateWarmChunk()
--- ======================================================================
-
-
--- ======================================================================
--- cachePeek( cacheList, peekCount, func, fargs );
--- ======================================================================
--- Return 'count' items from the Top Cache
--- ======================================================================
-local function cachePeek( cacheList, count, func, fargs, all)
+local function  ldrChunkSummary( ldrChunkRecord ) 
   local mod = "LsoStickman";
-  local meth = "cachePeek()";
+  local meth = "ldrChunkSummary()";
+  info("[ENTER]: <%s:%s>  \n", mod, meth );
+
+  local resultMap = map();
+  local lsoMap = ldrChunkRecord['LdrControlBin'];
+  resultMap.PageType = lsoMap.PageType;
+  resultMap.PageMode = lsoMap.PageMode;
+  resultMap.Digest   = lsoMap.Digest;
+  resultMap.ListSize = list.size( ldrChunkRecord['LdrListBin'] );
+
+  return tostring( resultMap );
+end -- ldrChunkSummary()
+-- ======================================================================
+
+-- ======================================================================
+-- extractTransferList( lsoMap );
+-- ======================================================================
+-- Extract the oldest N elements (as defined in lsoMap) and create a
+-- list that we return.  Also, reset the HotCache to exclude these elements.
+-- list.drop( mylist, firstN ).
+-- Recall that the oldest element in the list is at index 1, and the
+-- newest element is at index N (max).
+-- ======================================================================
+local function extractTransferList( lsoMap )
+  local mod = "LsoStickman";
+  local meth = "extractTransferList()";
+  info("[ENTER]: <%s:%s> \n", mod, meth );
+
+  -- Get the first N (transfer amount) list elements
+  local transAmount = lsoMap.HotCacheTransfer;
+  local oldHotCacheList = lsoMap.HotCacheList;
+  local newHotCacheList = list();
+  local resultList = list.take( oldHotCacheList, transAmount );
+
+  -- Move the top elements (Max - N) up to the top of the HotCache List.
+  for i = 1, transAmount, 1 do 
+    newHotCacheList[i] = oldHotCacheList[i+transAmount];
+  end
+
+  info("[DEBUG]: <%s:%s>OldHotCache(%s) NewHotCache(%s)  ResultList(%s) \n",
+    mod, meth, tostring(oldHotCacheList), tostring(newHotCacheList),
+    tostring(resultList));
+
+  lsoMap.HotCacheList = newHotCacheList;
+  oldHotCacheList = nil;
+
+  info("[EXIT]: <%s:%s> ResultList(%s) \n", mod, meth, tostring(resultList));
+  return resultList;
+end -- extractTransferList()
+-- ======================================================================
+
+-- ======================================================================
+-- updateWarmCountStatistics( lsoMap, topWarmChunk );
+-- ======================================================================
+-- TODO: FInish this method
+-- ======================================================================
+local function updateWarmCountStatistics( lsoMap, topWarmChunk ) 
+  return 0;
+end
+
+-- ======================================================================
+-- ldrChunkInsert( topWarmChunk, listIndex,  insertList )
+-- ======================================================================
+-- Insert (append) the LIST of values (overflow from the HotCache) 
+-- to this chunk's value list.  We start at the position "listIndex"
+-- in "insertList".  Note that this call may be a second (or Nth) call,
+-- so we are starting our insert in "insertList" from "listIndex", and
+-- not implicitly from "1".
+-- Parms:
+-- (*) topWarmChunk
+-- (*) listIndex
+-- (*) insertList
+-- Return: Number of items written
+-- ======================================================================
+local function ldrChunkInsert( topWarmChunkRecord, listIndex, insertList )
+  local mod = "LsoStickman";
+  local meth = "ldrChunkInsert()";
+  info("[ENTER]: <%s:%s> Index(%d) List(%s)\n",
+    mod, meth, listIndex, tostring( insertList ) );
+
+  -- TODO: ldrChunkInsert(): Make this work for BINARY mode as well as LIST.
+  
+  local ldrCtrlMap = topWarmChunkRecord['LdrControlBin'];
+  local ldrValueList = topWarmChunkRecord['LdrListBin'];
+  local chunkIndexStart = list.size( ldrValueList ) + 1;
+
+  info("[DEBUG]: <%s:%s> Chunk: CTRL(%s) List(%s)\n",
+    mod, meth, tostring( ldrCtrlMap ), tostring( ldrValueList ));
+
+  local totalItemsToWrite = list.size( insertList ) + 1 - listIndex;
+  local itemSpaceAvailable = ldrCtrlMap.EntryMax - chunkIndexStart;
+
+  info("[DEBUG]: <%s:%s> TotalItems(%d) SpaceAvail(%d)\n",
+    mod, meth, totalItemsToWrite, itemSpaceAvailable );
+
+  -- Write only as much as we have space for
+  local newItemsStored = totalItemsToWrite;
+  if totalItemsToWrite > itemSpaceAvailable then
+    newItemsStored = itemSpaceAvailable;
+  end
+
+  info("[DEBUG]: <%s:%s>: Copying From(%d) to (%d) Amount(%d)\n",
+    mod, meth, listIndex, chunkIndexStart, newItemsStored );
+
+  for i = chunkIndexStart, (chunkIndexStart + newItemsStored), 1 do
+    ldrValueList[i] = insertList[i+listIndex];
+  end -- for each remaining entry
+
+  info("[DEBUG]: <%s:%s>: Post Chunk Copy: Ctrl(%s) List(%s)\n",
+    mod, meth, tostring(ldrCtrlMap), tostring(ldrValueList));
+
+  info("[EXIT]: <%s:%s> newItemsStored(%d) \n", mod, meth, newItemsStored );
+  return newItemsStored;
+end -- ldrChunkInsert()
+-- ======================================================================
+
+
+-- ======================================================================
+-- ldrHasRoom: Check that there's enough space for an insert in an
+-- LSO Data Record.
+-- Return: 1=There is room.   0=Not enough room.
+-- ======================================================================
+-- Parms:
+-- (*) ldr: LSO Data Record
+-- (*) newValue
+-- Return: 1 (ONE) if there's room, otherwise 0 (ZERO)
+-- ======================================================================
+local function ldrHasRoom( ldr, newValue )
+  local mod = "LsoStickman";
+  local meth = "ldrHasRoom()";
+  info("[ENTER]: <%s:%s> ldr(%s) newValue(%s) \n",
+    mod, meth, tostring(ldr), tostring(newValue) );
+
+  local result = 1;  -- Be optimistic 
+
+  -- TODO: ldrHashRoom() This needs to look at SIZES in the case of
+  -- BINARY mode.  For LIST MODE, this will work.
+  if list.size( ldr.EntryList ) >= ldr.EntryMax then
+    result = 0;
+  end
+
+  info("[EXIT]: <%s:%s> result(%d) \n", mod, meth, result );
+  return result;
+end -- chunkSpaceCheck()
+-- ======================================================================
+
+-- ======================================================================
+-- transferWarmDirList()
+-- ======================================================================
+-- Transfer some amount of the WarmDirList contents (the list of LSO Data
+-- Record digests) into the Cold List, which is a linked list of Cold List
+-- Directory pages that each point to a list of LDRs.
+--
+-- There is a configuration parameter (kept in the LSO Control Bin) that 
+-- tells us how much of the warm list to migrate to the cold list. That
+-- value is set at LSO Create time.
+--
+-- There is a lot of complexity at this level, as a single Warm List
+-- transfer can trigger several operations in the cold list (see the
+-- function makeRoomInColdList( lso, digestCount )
+-- Parms:
+-- (*) lsoMap
+-- Return: Success (0) or Failure (-1)
+-- ======================================================================
+local function transferWarmDirList( lsoMap )
+  local mod = "LsoStickman";
+  local meth = "transferWarmDirList()";
+  local rc = 0;
+  info("[ENTER]: <%s:%s> lsoMap(%s)\n", mod, meth, tostring(lsoMap) );
+
+  -- We are called ONLY when the Warm Dir List is full -- so we should
+  -- not have to check that in production, but during development, we're
+  -- going to check that the warm list size is >= warm list max, and
+  -- return an error if not.  This test can be removed in production.
+  local transferAmount = lsoMap.WarmChunkTransfer;
+
+
+  info("[DEBUG]: <%s:%s> NOT YET READY TO TRANSFER WARM TO COLD: Map(%s)\n",
+    mod, meth, tostring(lsoMap) );
+
+    -- TODO : Finish transferWarmDirList() ASAP.
+
+  info("[EXIT]: <%s:%s> lsoMap(%s) \n", mod, meth, tostring(lsoMap) );
+  return rc;
+end -- transferWarmDirList()
+-- ======================================================================
+  
+-- ======================================================================
+-- warmDirListHasRoom( lsoMap )
+-- ======================================================================
+-- Look at the Warm list and return 1 if there's room, otherwise return 0.
+-- Parms:
+-- (*) lsoMap: the map for the LSO Bin
+-- Return: Decision: 1=Yes, there is room.   0=No, not enough room.
+local function warmDirListHasRoom( lsoMap )
+  local mod = "LsoStickman";
+  local meth = "warmDirListHasRoom()";
+  local decision = 1; -- Start Optimistic (most times answer will be YES)
+  info("[ENTER]: <%s:%s> LSO BIN(%s) Bin Map(%s)\n", 
+    mod, meth, lsoMap.BinName, tostring( lsoMap ));
+
+  if lsoMap.WarmChunkCount >= lsoMap.WarmChunkMax then
+    decision = 0;
+  end
+
+  info("[EXIT]: <%s:%s> Decision(%d)\n", mod, meth, decision );
+  return decision;
+end -- warmDirListHasRoom()
+-- ======================================================================
+
+-- ======================================================================
+-- hotCacheRead( cacheList, peekCount, func, fargs );
+-- ======================================================================
+-- Return 'count' items from the Hot Cache
+local function hotCacheRead( cacheList, count, func, fargs, all)
+  local mod = "LsoStickman";
+  local meth = "hotCacheRead()";
   local doTheFunk = 0; -- when == 1, call the func(fargs) on the peek item
 
   if (func ~= nil and fargs ~= nil ) then
@@ -440,97 +466,293 @@ local function cachePeek( cacheList, count, func, fargs, all)
 
   info("[EXIT]: <%s:%s> result(%s) \n", mod, meth, tostring(resultList) );
   return resultList;
-end -- cachePeek()
+end -- hotCacheRead()
 -- ======================================================================
 
-
 -- ======================================================================
--- hotPeek( cacheList, peekCount, func, fargs );
+-- warmDirListChunkCreate( topRec, lsoMap )
 -- ======================================================================
--- Return 'count' items from the Hot Dir List -- adding to the result
--- list passed in.
--- ======================================================================
-local function hotPeek(resultList, cacheList, count, func, fargs )
-  return resultList;
-end -- hotPeek()
-
--- ======================================================================
--- local function migrateTopCache( lsoMap, insertValue )
--- ======================================================================
--- The job if migrateTopCache() is to move half of the TopCache to warm
--- storage (i.e. the Hot Directory List).
--- Here are the cases:
--- (1) There is no HotDirList (yet) or there is room for a new data chunk
---     - Make room, if needed
---     - Allocate a data chunk ==> aerospike:create_record()
---     - Copy the data into the new aerospike record
---     - Store the record digest into the HotDirList
--- (2) There is no room in HotDirList, so part of the HotDirList must
---     be migrated to the ColdDirList.  Call migrateHotDirList().
--- ======================================================================
--- Design Notes:
---
---
--- |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
--- || CHUNKS (LSO Data Records)
--- |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
--- Chunks hold the actual entries. Each LSO Data Record (LDR) holds a small
--- amount of control information and a list.  A LDR will have three bins:
--- (1) The Control Bin (a Map with the various control data)
--- (2) The List bin -- where we hold "list entries"
--- (3) The Binary Bin -- where we hold compacted binary entries (just the
---     as bytes values)
--- (*) Note that ONLY ONE of the two content bins will be used.  We will be
---     in either LIST MODE (bin 2) or BINARY MODE (bin 3)
--- ==> Control Bin Contents (a Map)
---  -- Page Type (Hot Data, Code Data or Dir)
---  -- Page Mode (List data or Binary Data)
---  -- Digest (the digest that we would use to find this chunk)
---  -- Entry Max
---  -- Byte Max
---  -- Bytes Used
---  -- Design Version
---  -- Log Info (Log Sequence Number, for when we log updates)
---  ==> List Bin Contents
---  ==> Binary Bin Contents
---
---    -- Entry List (Holds entry and, implicitly, Entry Count)
---
--- ======================================================================
-local function migrateTopCache( topRec, lsoMap )
+-- Create and initialise a new LDR "chunk", load the new digest for that
+-- new chunk into the lsoMap (the warm dir list), and return it.
+local function   warmDirListChunkCreate( topRec, lsoMap )
   local mod = "LsoStickman";
-  local meth = "migrateTopCache()";
-  local rc = 0;
-  info("[ENTER]: <%s:%s> LSO Summary(%s) \n", mod, meth, lsoSummary(lsoMap) );
+  local meth = "warmDirListChunkCreate()";
+  info("[ENTER]: <%s:%s> \n", mod, meth );
 
-  -- if no room in the HotList, then make room
-  if not hotDirListHasRoom( lsoMap ) then
-    migrateHotDirList( lsoMap );
+  -- Create the Aerospike Record, initialize the bins: Ctrl, List
+  local newLdrChunkRecord = aerospike:crec_create( topRec );
+  local ctrlMap = map();
+  ctrlMap.ParentDigest = record.digest( topRec );
+  ctrlMap.PageType = "Warm";
+  ctrlMap.PageMode = "List";
+  local newChunkDigest = record.digest( newLdrChunkRecord );
+  ctrlMap.Digest = newChunkDigest;
+  ctrlMap.BytesUsed = 0; -- We don't count control info
+  ctrlMap.EntryMax = 100; -- Move up to TopRec -- when Stable
+  ctrlMap.DesignVersion = 1;
+  ctrlMap.LogInfo = 0;
+  ctrlMap.WarmItemCount = 0;
+  -- Assign Control info and List info to the LDR bins
+  newLdrChunkRecord['LdrControlBin'] = ctrlMap;
+  newLdrChunkRecord['LdrListBin'] = list();
+
+  -- Add our new chunk (the digest) to the WarmDirList
+  list.append( lsoMap.WarmDirList, newChunkDigest );
+  local warmChunkCount = lsoMap.WarmChunkCount;
+  lsoMap.WarmChunkCount = (warmChunkCount + 1);
+
+  -- Update the top (LSO) record with the newly updated lsoMap.
+  topRec[ lsoMap.BinName ] = lsoMap;
+
+  info("[EXIT]: <%s:%s> Return(%s) \n",
+    mod, meth, ldrChunkSummary(newLdrChunkRecord));
+  return newLdrChunkRecord;
+end --  warmDirListChunkCreate()
+-- ======================================================================
+
+-- ======================================================================
+-- warmDirListGetTop( topRec, lsoMap )
+-- ======================================================================
+-- Find the digest of the top of the Warm Dir List, Open that record and
+-- return that opened record.
+-- ======================================================================
+local function   warmDirListGetTop( topRec, lsoMap )
+  local mod = "LsoStickman";
+  local meth = "warmDirListGetTop()";
+  info("[ENTER]: <%s:%s> \n", mod, meth );
+
+  local warmDirList = lsoMap.WarmDirList;
+  local topDigest = warmDirList[ list.size(warmDirList) ];
+  info("[DEBUG]: <%s:%s> Warm Digest(%s) \n", mod, meth, tostring(topDigest));
+  local topWarmChunk = aerospike:crec_open( topRec, topDigest );
+
+  info("[EXIT]: <%s:%s> result(%s) \n",
+    mod, meth, ldrChunkSummary( topWarmChunk ) );
+  return topWarmChunk;
+end -- warmDirListGetTop()
+-- ======================================================================
+
+
+-- ======================================================================
+-- ldrChunkRead( ldrChunk, resultList, count, func, fargs, all );
+-- ======================================================================
+-- Read up to 'count' items from this chunk, process the inner UDF 
+-- function (if present) and, for those elements that qualify, add them
+-- to the result list.  Read the chunk in FIFO order.
+-- Return the NUMBER of items read from this chunk.
+-- ======================================================================
+local function ldrChunkRead( ldrChunk, resultList, count, func, fargs, all )
+-- local function hotCacheRead( cacheList, count, func, fargs, all)
+  local mod = "LsoStickman";
+  local meth = "ldrChunkRead()";
+  local doTheFunk = 0; -- when == 1, call the func(fargs) on the read item
+
+  if (func ~= nil and fargs ~= nil ) then
+    doTheFunk = 1;
+    info("[ENTER1]: <%s:%s> Count(%d) func(%s) fargs(%s)\n",
+      mod, meth, count, func, tostring(fargs) );
+  else
+    info("[ENTER2]: <%s:%s> PeekCount(%d)\n", 
+      mod, meth, count );
   end
 
-  -- Create a new Data Chunk, copy the older half (or, more specifically copy
-  -- "migrate amount") of the Hot List into it, and then insert it into
-  -- the Hot List Directory.
-  -- Aerospike Calls:
-  -- newChunkRec = aerospike:crec_create( rec )
-  -- digest = newChunkRec.digest
-  -- chkrec = aerospike:crec_open( rec )
-  -- status = aerospike:crec_close( rec, chkrec )
-  -- status = aerospike:crec_update( rec, chkrec )
-  local lsoDataRecord = aerospike:crec_create( topRec );
-  ldrCtrl = map();
-  ldrCtrl.PageType = "HotData";
-  ldrCtrl.PageMode = "List"; -- this will change
-  ldrCtrl.Digest = lsoDataRecord.digest;
-  lsoDataRecord.ControlBin = ldrCtrl;
-  local digest = lsoDataRecord.digest;
+  -- Iterate thru the entry list, gathering up items in the result list.
+  local countDown = count;
+  local chunkMap = ldrChunk['ControlBin'];
+  local chunkList = ldrChunk['ListBin'];
+  -- TODO: Make this work for both REGULAR and BINARY Mode
+  -- NOTE: We are assuming "LIST MODE" at the moment, not Binary Mode
+  local chunkListSize = list.size( chunkList );
+  -- Get addressability to the Function Table
+  local functionTable = require('UdfFunctionTable');
 
-  info("[DEBUG]: <%s:%s> New LSO ldrCtrl (%s) \n", mod, meth, ldrCtrl );
+  -- NOTE: By convention, if the initial count is ZERO, then we get them all.
+  -- The "all" flag says -- get them all
+  local readResult;
+  for c = chunkListSize, 1, -1 do
+    -- Apply the UDF to the item, if present, and if result NOT NULL, then
+    if doTheFunk == 1 then -- get down, get Funky
+      readResult = functionTable[func]( chunkList[c], fargs );
+    else
+      readResult = chunkList[c];
+    end
+    list.append( resultList, peekValue );
+    info("[DEBUG]:<%s:%s>: ResultList Append (%d)[%s]\n",
+        mod, meth, c, tostring( peekValue ) );
+    countDown = countDown - 1;
+    if( countDown <= 0 and all == 0 ) then
+      info("[EARLY EXIT]: <%s:%s> result(%s) \n",
+        mod, meth, tostring(resultList) );
+      return resultList;
+    end
+  end -- for each item in the chunkList
 
+  info("[EXIT]: <%s:%s> result(%s) \n", mod, meth, tostring(resultList) );
+  return resultList;
+end -- ldrChunkRead()
+-- ======================================================================
+
+
+-- ======================================================================
+-- warmDirRead(topRec, List, lsoMap, Count, func, fargs, all);
+-- ======================================================================
+-- Synopsis:
+-- Parms:
+-- Return: Return the amount read from the Warm Dir List.
+-- ======================================================================
+local function warmDirRead(topRec, resultList, lsoMap, count,
+                           func, fargs, all)
+  local mod = "LsoStickman";
+  local meth = "warmDirRead()";
+  info("[ENTER]: <%s:%s> Count(%d) \n", mod, meth, count );
+
+  -- Process the WarmDirList bottom to top, pulling in each digest in
+  -- turn, opening the chunk and reading records (as necessary), until
+  -- we've read "count" items.  If the 'all' flag is 1, then read 
+  -- everything.
+  local warmDirList = lsoMap.WarmDirList;
+  local remaining = count;
+  local amountRead = 0;
+  local dirCount = list.size( warmDirList );
+  local ldrChunk;
+  for dirIndex = dirCount, 1, -1 do
+    ldrChunk = aerospike:crec_open( topRec, warmDirList[dirIndex] );
+    -- I ASSUME that resultList is passed by reference and we can just
+    -- all add to it.
+    itemsRead = ldrChunkRead( ldrChunk, resultList, remaining, func, fargs, all );
+    amountRead = amountRead + itemsRead;
+    if itemsRead >= remaining or amountRead >= count then
+      return amountRead;
+    end
+
+    local status = aerospike:close( topRec, ldrChunk );
+    info("[DEBUG]: <%s:%s> as:close() status(%s) \n",
+      mod, meth, tostring( status ) );
+
+  end -- for each warm Chunk
+
+  info("[EXIT]: <%s:%s> amountRead(%d) \n", mod, meth, amountRead );
+  return amountRead;
+end -- warmDirRead()
+
+-- ======================================================================
+-- warmDirInsert()
+-- ======================================================================
+-- Insert "insertList", which is a list of data entries, into the warm
+-- dir list -- a directory of warm Lso Data Records that will contain 
+-- the data entries.
+-- Parms:
+-- (*) topRec: the top record -- needed if we create a new LDR
+-- (*) lsoMap: the control map of the top record
+-- (*) insertList: the list of entries to be inserted (as_val or binary)
+-- Return: 0 for success, -1 if problems.
+-- ======================================================================
+local function warmDirInsert( topRec, lsoMap, insertList )
+  local mod = "LsoStickman";
+  local meth = "warmDirInsert()";
+  local rc = 0;
+  info("[ENTER]: <%s:%s> \n", mod, meth );
+--info("[ENTER]: <%s:%s> LSO Summary(%s) \n", mod, meth, lsoSummary(lsoMap) );
+
+  info("[DEBUG 0]:WDL(%s)", tostring( lsoMap.WarmDirList ));
+
+  local warmDirList = lsoMap.WarmDirList;
+  local topWarmChunk;
+  -- Whether we create a new one or open an existing one, we save the current
+  -- count and close the record.
+  info("[DEBUG 1]:");
+  if list.size( warmDirList ) == 0 then
+    info("[DEBUG]: <%s:%s> Calling Chunk Create \n", mod, meth );
+    topWarmChunk = warmDirListChunkCreate( topRec, lsoMap ); -- create new
+  else
+    info("[DEBUG]: <%s:%s> Calling Get TOP \n", mod, meth );
+    topWarmChunk = warmDirListGetTop( topRec, lsoMap ); -- open existing
+  end
+  info("[DEBUG 2]:");
+
+  -- We have a warm Chunk -- write as much as we can into it.  If it didn't
+  -- all fit -- then we allocate a new chunk and write the rest.
+  local totalCount = list.size( insertList );
+  info("[DEBUG]: <%s:%s> Calling Chunk Insert: List(%s)\n",
+    mod, meth, tostring( insertList ));
+  local countWritten = ldrChunkInsert( topWarmChunk, 1, insertList );
+  local itemsLeft = totalCount - countWritten;
+  if itemsLeft > 0 then
+    aerospike:crec_update( topRec, topWarmChunk );
+    aerospike:crec_close( topRec, topWarmChunk );
+    info("[DEBUG]: <%s:%s> Calling Chunk Create: AGAIN!!\n", mod, meth );
+    topWarmChunk = warmDirListChunkCreate( topRec, lsoMap ); -- create new
+    -- Unless we've screwed up our parameters -- we should never have to do
+    -- this more than once.  This could be a while loop if it had to be, but
+    -- that doesn't make sense that we'd need to create multiple new LDRs to
+    -- hold just PART of the hot cache.
+  info("[DEBUG]: <%s:%s> Calling Chunk Insert: List(%s) AGAIN(%d)\n",
+    mod, meth, tostring( insertList ), countWritten + 1);
+    countWritten = ldrChunkInsert( topWarmChunk, countWritten+1, insertList );
+    if countWritten ~= itemsLeft then
+      info("[ERROR!!]: <%s:%s> Second Warm Chunk Write: CW(%d) IL(%d) \n",
+        mod, meth, countWritten, itemsLeft );
+    end
+  end
+
+  -- Update the Warm Count
+  if lsoMap.WarmItemCount == nil then
+    lsoMap.WarmItemCount = 0;
+  end
+  local currentWarmCount = lsoMap.WarmItemCount;
+  lsoMap.WarmItemCount = (currentWarmCount + totalCount);
+
+  -- All done -- Save the info of how much room we have in the top Warm
+  -- chunk (entry count or byte count)
+  updateWarmCountStatistics( lsoMap, topWarmChunk );
+  aerospike:crec_update( topRec, topWarmChunk );
+  aerospike:crec_close( topRec, topWarmChunk );
+
+  -- Update the total Item Count in the topRec.  The caller will 
+  -- "re-store" the map in the record before updating.
+  local itemCount = lsoMap.ItemCount + list.size( insertList );
+  lsoMap.ItemCount = itemCount;
+
+  return rc;
+end -- warmDirInsert
+
+-- ======================================================================
+-- local function hotCacheTransfer( lsoMap, insertValue )
+-- ======================================================================
+-- The job of hotCacheTransfer() is to move part of the HotCache, as
+-- specified by HotCacheTransferAmount, to LDRs in the warm Dir List.
+-- Here's the logic:
+-- (1) If there's room in the WarmDirList, then do the transfer there.
+-- (2) If there's insufficient room in the WarmDir List, then make room
+--     by transferring some stuff from Warm to Cold, then insert into warm.
+local function hotCacheTransfer( topRec, lsoMap )
+  local mod = "LsoStickman";
+  local meth = "hotCacheTransfer()";
+  local rc = 0;
+  info("[ENTER]: <%s:%s> LSO Summary() \n", mod, meth );
+--info("[ENTER]: <%s:%s> LSO Summary(%s) \n", mod, meth, lsoSummary(lsoMap) );
+
+  -- if no room in the WarmList, then make room (transfer some of the warm
+  -- list to the cold list)
+  if warmDirListHasRoom( lsoMap ) == 0 then
+    transferWarmDirList( lsoMap );
+  end
+
+  -- TODO: hotCacheTransfer(): Make this more efficient
+  -- Assume "LIST MODE" for now for the Warm Dir digests.
+  -- Later, we can pack the digests into the BinaryBin if that is appropriate.
+  -- Transfer N items from the hotCache 
+  local digestList = list();
+
+  -- Do this the simple (more expensive) way for now:  Build a list of
+  -- the items we're moving from the hot cache to the warm dir, then
+  -- call insertWarmDir() to find a place for it.
+  local transferList = extractTransferList( lsoMap );
+  rc = warmDirInsert( topRec, lsoMap, transferList );
 
   info("[EXIT]: <%s:%s> result(%d) \n", mod, meth, rc );
-  return 0;
-end -- migrateTopCache()
+  return rc;
+end -- hotCacheTransfer()
 -- ======================================================================
 
 -- ======================================================================
@@ -564,26 +786,27 @@ local function mapPeek( lsoMap, peekCount, func, fargs )
   local all;
   if peekCount == 0 then all = 1 else all = 0 end
 
-  -- Fetch from the Cache, then the Hot List, then the Cold List.
+  -- Fetch from the Cache, then the Warm List, then the Cold List.
   -- Each time we decrement the count and add to the resultlist.
-  local cacheList = lsoMap.TopCache;
-  local resultList = cachePeek( cacheList, peekCount, func, fargs, all);
+  local cacheList = lsoMap.HotCacheList;
+  local resultList = hotCacheRead( cacheList, peekCount, func, fargs, all);
   local cacheCount = list.size( resultList );
 
   -- If the cache had all that we need, then done.  Return list.
   if( cacheCount >= peekCount ) then
     return resultList;
   end
-  -- We need more -- get more out of the Hot List
+  -- We need more -- get more out of the Warm List
   local remainingCount = peekCount - cacheCount;
-  local hotList = hotPeek(resultList, lsoMap, remainingCount, func, fargs, all);
-  local hotCount = list.size( hotList );
-  if( hotCount >= peekCount ) then
-    return hotList;
+  local warmList =
+      warmDirRead(topRec, resultList, lsoMap, remainingCount, func, fargs, all);
+  local warmCount = list.size( warmList );
+  if( warmCount >= peekCount ) then
+    return warmList;
   end
 
-  remainingCount = peekCount - hotCount;
-  local coldList = coldPeek(hotList, lsoMap, remainingCount, func, fargs, all);
+  remainingCount = peekCount - warmCount;
+  local coldList = coldPeek(warmList, lsoMap, remainingCount, func, fargs, all);
 
   return coldList;
 
@@ -615,27 +838,33 @@ end -- valueStorage()
 
 
 -- ======================================================================
--- hasRoomInCacheForNewEntry( lsoMap, insertValue )
+-- hotCacheHasRoom( lsoMap, insertValue )
 -- ======================================================================
 -- return 1 if there's room, otherwise return 0
 -- Later on we might consider just doing the insert here when there's room.
 -- Parms:
 -- (*) lsoMap: the map for the LSO Bin
 -- (*) insertValue: the new value to be pushed on the stack
-local function hasRoomInCacheForNewEntry( lsoMap, insertValue )
-  local cacheLimit = lsoMap.TopCacheMax;
-  local cacheList = lsoMap.TopCache;
+local function hotCacheHasRoom( lsoMap, insertValue )
+  local mod = "LsoStickman";
+  local meth = "hotCacheHasRoom()";
+  info("[ENTER]: <%s:%s> : \n", mod, meth );
+  local result = 1;  -- This is the usual case
+
+  local cacheLimit = lsoMap.HotCacheMax;
+  local cacheList = lsoMap.HotCacheList;
   if list.size( cacheList ) >= cacheLimit then
     return 0
-  else
-    return 1
   end
-end -- hasRoomInCacheForNewEntry()
+
+  info("[EXIT]: <%s:%s> Result(%d) : \n", mod, meth, result);
+  return result;
+end -- hotCacheHasRoom()
 -- ======================================================================
 
 --
 -- ======================================================================
--- topCacheInsert( lsoMap, newStorageValue  )
+-- hotCacheInsert( lsoMap, newStorageValue  )
 -- ======================================================================
 -- Insert a value at the end of the Top Cache List.  The caller has 
 -- already verified that space exists, so we can blindly do the insert.
@@ -644,35 +873,38 @@ end -- hasRoomInCacheForNewEntry()
 -- valueMap holds a BINARY type, then we are going to store it in a special
 -- binary bin.  Here are the cases:
 -- (1) Cache: Special binary bin in the user record (Details TBD)
--- (2) Hot List: The Chunk Record employs a List Bin and Binary Bin, where
+-- (2) Warm List: The Chunk Record employs a List Bin and Binary Bin, where
 --    the individual entries are packed.  In the Chunk Record, there is a
 --    Map (control information) showing the status of the packed Binary bin.
--- (3) Cold List: Same Chunk format as the Hot List Chunk Record.
+-- (3) Cold List: Same Chunk format as the Warm List Chunk Record.
 --
 -- Parms:
 -- (*) lsoMap: the map for the LSO Bin
 -- (*) newStorageValue: the new value to be pushed on the stack
-local function topCacheInsert( lsoMap, newStorageValue  )
+local function hotCacheInsert( lsoMap, newStorageValue  )
   local mod = "LsoStickman";
-  local meth = "topCacheInsert()";
+  local meth = "hotCacheInsert()";
   info("[ENTER]: <%s:%s> : Insert Value(%s)\n",
     mod, meth, tostring(newStorageValue) );
 
-  local topCacheList = lsoMap.TopCache;
+  local hotCacheList = lsoMap.HotCacheList;
   if newStorageValue.StorageMode == 0 then
-    info("[DEBUG]: <%s:%s> : Perform COMPACT STORAGE\n", mod, meth );
-    -- TODO: Must finish Compact Storage
+    info("[DEBUG]: <%s:%s> : (NOT READY!!) Perform COMPACT STORAGE\n",
+      mod, meth );
+    -- TODO: hotCacheInsert(): Must finish Compact Storage
     -- Depending on our current state of implementation, we are either
     -- going to copy our compact storage into a special bin, or we are
     -- going to assign the BYTES value into the cache list
   else
-    list.append( topCacheList, newStorageValue );
+    list.append( hotCacheList, newStorageValue.Value );
   end
   local itemCount = lsoMap.ItemCount;
   lsoMap.ItemCount = (itemCount + 1);
+  local hotCount = lsoMap.HotItemCount;
+  lsoMap.HotItemCount = (hotCount + 1);
   return 0;  -- all is well
 
-end -- topCacheInsert()
+end -- hotCacheInsert()
 -- ======================================================================
 
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
@@ -690,51 +922,70 @@ end -- topCacheInsert()
 -- (*) Namespace Name (just one Namespace -- for now)
 -- (*) Set Name
 -- (*) Chunk Size (same for both namespaces)
--- (*) Hot Chunk Count: Number of Hot Chunk Data Records
+-- (*) Warm Chunk Count: Number of Warm Chunk Data Records
 -- (*) Cold Chunk Count: Number of Cold Chunk Data Records
 -- (*) Item Count (will NOT be tracked in Stoneman)
--- (*) The List of Hot Chunks of data (each Chunk is a list)
+-- (*) The List of Warm Chunks of data (each Chunk is a list)
 -- (*) The Head of the Cold Data Directory
 -- (*) Storage Mode (Compact or Regular) (0 for compact, 1 for regular)
 -- (*) Compact Item List
 --
 -- The LSO starts out in "Compact" mode, which allows the first 100 (or so)
--- entries to be held directly in the record (in the compact item list).
--- Once the count exceeds the short list, it overflows into the regular
--- mechanism (shown above).  In fact, we may want to keep the top of stack
--- in the record itself -- and flow the records thru that.  If we 
--- accumulate up to 100 records in the "record cache" and then when the
--- cache is full we flow out 1/2 (50) to the Data Chunk Records, then we
--- save a double read for every 49/50 operations.
---
--- +=====================================================================+
--- | Usr Bin 1 | Usr Bin 2 | o o o | Usr Bin N | LSO Bin 1 | User Bin M  |
--- +=====================================================================+
+-- entries to be held directly in the record -- in the Hot Cache.  Once the
+-- Hot Cache overflows, the entries flow into the warm list, which is a
+-- list of LSO Data Records (each 2k record holds N values, where N is
+-- approximately (2k/rec size) ).
+-- Once the data overflows the warm list, it flows into the cold list,
+-- which is a linked list of directory pages -- where each directory page
+-- points to a list of LSO Data Record pages.  Each directory page holds
+-- roughly 100 page pointers (assuming a 2k page).
 -- Parms (inside arglist)
--- (1) LsoBinName
--- (2) Namespace (just one, for now)
--- (3) Set
--- (4) ChunkSize
--- (5) Design Version
-function stackCreate( topRec, arglist )
+-- (1) topRec: the user-level record holding the LSO Bin
+-- (2) arglist: the list of create parameters
+--  (2.1) LsoBinName
+--  (2.2) Namespace (just one, for now)
+--  (2.3) Set
+--  (2.4) ChunkSize
+--  (2.5) Design Version
+--
+--  !!!! More parms needed here to appropriately configure the LSO
+--  -> Hot Cache Size
+--  -> Hot Cache Transfer amount
+--  -> Warm List Size
+--  -> Warm List Transfer amount
+--
+function stackCreate( topRec, lsoBinName, arglist )
   local mod = "LsoStickman";
   local meth = "stackCreate()";
-  info("[ENTER]: <%s:%s> \n", mod, meth );
 
-  local lsoBinName = arglist[1];
+  info("[ENTER]: <<<<<%s:%s>>>>>> \n", mod, meth );
+
+  if arglist == nil then
+    info("[ENTER]: <%s:%s> lsoBinName(%s) NULL argList\n",
+      mod, meth, tostring(lsoBinName));
+  else
+    info("[ENTER]: <%s:%s> lsoBinName(%s) argList(%s) \n",
+    mod, meth, tostring( lsoBinName), tostring( arglist ));
+  end
+
+  -- Remove this later -- hardcode for now.
+  lsoBinName = "LsoBin";
+
+
+  -- local lsoBinName = arglist[1];
   if( lsoBinName == nil ) then
     info("[ERROR EXIT]: <%s:%s> Bad LSO BIN Parameter\n", mod, meth );
     return('Bad LSO Bin Parameter');
   end
 
-  info("[DEBUG]: <%s:%s> bin(%s) argList(%s)\n",
-    mod, meth, lsoBinName, tostring(arglist) );
+--  info("[DEBUG]: <%s:%s> bin(%s) argList(%s)\n",
+--    mod, meth, lsoBinName, tostring(arglist) );
 
   -- Check to see if LSO Structure (or anything) is already there,
   -- and if so, error
   if( topRec[lsoBinName] ~= nil ) then
     info("[ERROR EXIT]: <%s:%s> LSO BIN(%s) Already Exists\n",
-      mod, meth, lsoBinName );
+      mod, meth, tostring(lsoBinName) );
     return('LSO_BIN already exists');
   end
 
@@ -750,20 +1001,33 @@ function stackCreate( topRec, arglist )
   local bytesMax = 2000; -- bytes per chunk (TODO: should be a property)
 
   lsoMap.Magic = "MAGIC"; -- we will use this to verify we have a valid map
-  lsoMap.BinName = arglist[1];
-  lsoMap.NameSpace = arglist[2];
-  lsoMap.Set = arglist[3];
-  lsoMap.ChunkSize = arglist[4];
-  lsoMap.TopCache = list();
-  lsoMap.TopCacheCount = 0; -- Number of elements in the Top Cache
-  lsoMap.TopCacheMax = 10; -- Max Number for the cache -- when we migrate
-  lsoMap.TopCacheMigrate = 5; -- How much to migrate at a time.
-  lsoMap.HotChunkCount = 0; -- Number of Hot Data Record Chunks
+  lsoMap.BinName = "LsoBin"; -- arglist[1];
+  lsoMap.NameSpace = "test"; -- arglist[2];
+  lsoMap.Set = "set"; -- arglist[3];
+  lsoMap.ChunkSize = 2000; -- arglist[4];
+  lsoMap.HotCacheList = list();
+  lsoMap.HotItemCount = 0; -- Number of elements in the Top Cache
+  -- TODO: FIXME: This is the place to change the WarmCache parameter
+  -- behavior:  To get the HotCache to migrate after just 10 pushes,
+  -- we use HotCacheMax = 10, HotCacheTransfer=5;
+  -- Normal (default numbers would be around 100 and 50)
+  -- So -- we SHOULD see a "transfer" when we try to insert item # 9.
+  lsoMap.HotCacheMax = 8; -- Max Number for the cache -- when we transfer
+  lsoMap.HotCacheTransfer = 4; -- How much to Transfer at a time.
+  lsoMap.WarmChunkCount = 0; -- Number of Warm Data Record Chunks
+  lsoMap.WarmChunkMax = 100; -- Number of Warm Data Record Chunks
+  lsoMap.WarmChunkTransfer = 10; -- Number of Warm Data Record Chunks
+  lsoMap.WarmTopChunkEntryCount = 0; -- Count of entries in top warm chunk
+  lsoMap.WarmTopChunkByteCount = 0; -- Count of bytes used in top warm Chunk
   lsoMap.ColdChunkCount = 0; -- Number of Cold Data Record Chunks
   lsoMap.ColdDirCount = 0; -- Number of Cold Data Record DIRECTORY Chunks
   lsoMap.ItemCount = 0;     -- A count of all items in the stack
-  lsoMap.DirList = list();   -- Define a new list for the Hot Stuff
+  lsoMap.WarmDirList = list();   -- Define a new list for the Warm Stuff
   lsoMap.ColdListHead  = 0;   -- Nothing here yet
+  lsoMap.LdrEntryMax = 100;  -- Should be a setable parm
+  lsoMap.LdrEntrySize = 20;  -- Must be a setable parm
+  lsoMap.LdrByteMax = 2000;  -- Should be a setable parm
+  lsoMap.LdirColdDirMax = 100;  -- Should be a setable parm
   lsoMap.DesignVersion = designVersion;
 
   info("[DEBUG]: <%s:%s> : CTRL Map after Init(%s)\n",
@@ -771,14 +1035,12 @@ function stackCreate( topRec, arglist )
 
   -- Note:  We no longer create chunks initially -- we wait until the
   -- LSO has accumulated some number of entries, and after that we
-  -- migrate a block of entries into chunk storage
-  -- local newChunk =
-    -- createChunk( topRec, lsoMap, digest, designVersion, "Hot", entryMax)
+  -- transfer a block of HotCache entries into WarmCache chunk storage
 
   -- Put our new map in the record, then store the record.
   topRec[lsoBinName] = lsoMap;
 
-  info("[DEBUG]:<%s:%s>:Dir Map after Init(%s)\n", mod,meth,tostring(dirMap));
+  info("[DEBUG]:<%s:%s>:Dir Map after Init(%s)\n", mod,meth,tostring(lsoMap));
 
   -- All done, store the record
   local rc = -99; -- Use Odd starting Num: so that we know it got changed
@@ -803,28 +1065,9 @@ end -- function stackCreate( topRec, namespace, set )
 --
 -- Push a value onto the stack. There are different cases, with different
 -- levels of complexity:
--- If there's room in the topRec itself (Top Cache), then do that.
---   Case 0: If room in top cache, then insert there. Done.
--- If there's room to insert into the top chunk (a Hot Chunk)
---   Case 1: Call chunkInsertNewValue()
--- else
---   Case 2: Allocate a new Chunk
---   If there's room in the hot directory:
---     Case 2.1: Add new chunk to Hot Directory
---     Case 1: Call chunkInsertNewValue()
---   else
---     Case 2.2: Migrate Coldest Hot Chunk to warmest Cold Chunk
---     If There's room in the Cold Stack
---       Case 3.1: Enter Digest in top of Cold Stack
---       Append Warm Chunk digest to end of Cold Stack Directory (new top)
---     else
---       Case 3.2: Make Room at top of Cold Stack
---       Cold stack dir is full, allocate a new Cold Stack Dir
---         --> New Record for Cold Dir, with new digest
---       Point "Next Dir" link to old cold head
---       Point main Record Cold Head (digest) to this new cold stack dir
---       Enter new chunk in cold head dir list.
---
+-- (*) HotCacheInsert: Instant: Easy
+-- (*) WarmCacheInsert: Result of HotCache Overflow:  Medium
+-- (*) ColdCacheInsert: Result of WarmCache Overflow:  Complex
 -- Parms:
 -- (*) topRec:
 -- (*) lsoBinName:
@@ -859,7 +1102,7 @@ local function localStackPush( topRec, lsoBinName, newValue, func, fargs )
     return('Bad LSO Bin Parameter');
   end
   if( topRec[lsoBinName] == nil ) then
-    info("[ERROR EXIT]: <%s:%s> LSO BIN (%s) DOES NOT Exists\n",
+    info("[ERROR EXIT]: <%s:%s> LSO BIN (%s) DOES NOT Exist\n",
       mod, meth, lsoBinName );
     return('LSO BIN Does NOT exist');
   end
@@ -879,36 +1122,20 @@ local function localStackPush( topRec, lsoBinName, newValue, func, fargs )
   if doTheFunk == 1 then 
     info("[DEBUG]: <%s:%s> Applying UDF (%s) with args(%s)\n",
       mod, meth, func, tostring( fargs ));
-    newStorageValue = functionTable[func]( newValue, fargs );
-  else
-    newStorageValue = storageValue( newValue );
+    newValue = functionTable[func]( newValue, fargs );
   end
+
+  newStorageValue = valueStorage( type(newValue), newValue );
 
   -- If we have room, do the simple cache insert.  If we don't have
-  -- room, then make room -- migrate half the cache out to the hot list.
+  -- room, then make room -- transfer half the cache out to the warm list.
   -- That may, in turn, have to make room by moving some items to the
   -- cold list.
-  if not hasRoomInCacheForNewEntry( lsoMap, newStorageValue ) then
-    migrateTopCache( topRec, lsoMap );
+  if hotCacheHasRoom( lsoMap, newStorageValue ) == 0 then
+    info("[DEBUG]:<%s:%s>:>>> CALLING TRANSFER HOT CACHE!!<<<\n", mod, meth );
+    hotCacheTransfer( topRec, lsoMap );
   end
-  topCacheInsert( lsoMap, newStorageValue );
-
---  elseif hasRoomForNewEntry( lsoMap, newValue ) then
---    -- Case 1:  Just do the insert: Top Chunk, simple append
---    hotDirInsertNewValue( lsoMap, newValue );
---  else
---    -- Case 2: Allocate new Chunk, enter value, find a place for new chunk
---    newChunk = newChunkInsert( lsoMap, newValue );
---    if  isRoomForNewHotChunk( lsoMap, newChunk ) then
---      hotDirInsert( lsoMap, newChunk );
---    else
---      -- Case 3: Dealing with the Cold Directory
---      -- Make room in the Hot Dir (Make coldest hot the new hotest cold)
---      migrateWarmChunk( lsoMap )
---      hotDirInsert( lsoMap, newChunk );
---    end
---  end
-
+  hotCacheInsert( lsoMap, newStorageValue );
   -- Must always assign the object BACK into the record bin.
   topRec[lsoBinName] = lsoMap;
 
@@ -952,11 +1179,11 @@ end -- stackPushWithUDF()
 -- For Each Bin (in LIFO Order), read each Bin in reverse append order.
 -- If "peekCount" is zero, then return all.
 -- Depending on "peekcount", we may find the elements in:
--- -> Just the TopCache
--- -> The TopCache and the Hot List
--- -> The TopCache, Hot list and Cold list
+-- -> Just the HotCache
+-- -> The HotCache and the Warm List
+-- -> The HotCache, Warm list and Cold list
 -- Since our pieces are basically in Stack order, we start at the top
--- (the TopCache), then the HotList, then the Cold List.  We just
+-- (the HotCache), then the WarmList, then the Cold List.  We just
 -- keep going until we've seen "PeekCount" entries.  The only trick is that
 -- we have to read our blocks backwards.  Our blocks/lists are in stack 
 -- order, but the data inside the blocks are in append order.
@@ -1042,12 +1269,8 @@ end -- StackPushWithUDF()
 
 -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> --
 --
--- [3/2/13 6:41:36 PM] Red Squirrel: digest = newChunkRec.digest()
--- info("[RAJ: GOT DIGEST]\n");
--- chkrec = aerospike:crec_open( record, digest)
--- info("[RAJ: OPENED]:\n");
--- status = aerospike:crec_update( record, newChunkRec )
--- info("[RAJ: UPDATED]:\n");
--- status = aerospike:crec_close( record, newChunkRec )
--- info("[RAJ: CLOSED]:\n");
--- [3/2/13 6:41:41 PM] Red Squirrel: something checked in?
+-- TO DO List:
+-- TODO: Finish transferWarmDirList() method ASAP.
+-- TODO: Make this work for both REGULAR and BINARY Mode
+-- TODO: hotCacheTransfer(): Make this more efficient
+-- TODO: hotCacheInsert(): Must finish Compact Storage

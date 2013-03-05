@@ -26,13 +26,13 @@ export ARGLIST='["LsoBin","test","set",2000,1]'
 # ascli udf-put $UFILE.lua
 
 echo ">> CREATE (Simple Put: key $UKEY) for use with UDF"
-ascli put $UNS $USET $UKEY '{"LSOTestBin": "Stack Test ONE"}'
+ascli put $UNS $USET $UKEY '{"LSOTestBin": "Stack Test TWO"}'
 
 echo ">> Check CREATE (key $UKEY) with get"
 ascli get $UNS $USET $UKEY
 
-echo ">> Call UDF Stack Create: $ARGLIST << "
-ascli udf-record-apply $UNS $USET $UKEY $UFILE stackCreate $ARGLIST
+echo ">> Call UDF Stack Create: $LSOBIN $ARGLIST << "
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackCreate $LSOBIN $ARGLIST
 
 echo ">> Check CREATE (key $UKEY) with get"
 ascli get $UNS $USET $UKEY
@@ -63,6 +63,13 @@ ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPush $LSOBIN '[41,42,43,44]'
 echo ">> Call UDF Stack Push: ==> $UFILE stackPush $LSOBIN '[51,52,53,54]'"
 ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPush $LSOBIN '[51,52,53,54]'
 
+echo ">>>>>>>>>>> Call UDF Stack Push: 5 more tuples <<<<<<<<<<<<<<<<<<<<"
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPush $LSOBIN '[61,62,63,64]'
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPush $LSOBIN '[71,72,73,74]'
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPush $LSOBIN '[81,82,83,84]'
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPush $LSOBIN '[91,92,93,94]'
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPush $LSOBIN '[101,102,103,104]'
+
 echo ">> Call UDF StackPeek(): Key($UKEY) $UFILE stackPeek $LSOBIN 0"
 ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPeek  $LSOBIN 0
 
@@ -80,6 +87,12 @@ ascli get $UNS $USET $UKEY
 
 # echo ">> Check PROGRESS with GET!!!"
 # ascli get $UNS $USET $UKEY
+
+echo "<< >> << >> REMOVE THE RECORD << >> << >> "
+ascli remove $UNS $USET $UKEY
+
+echo ">> Check PROGRESS with GET!!! <<"
+ascli get $UNS $USET $UKEY
 
 
 # ########################################################################

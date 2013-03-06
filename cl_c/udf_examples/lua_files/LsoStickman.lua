@@ -439,9 +439,12 @@ local function warmDirListHasRoom( lsoMap )
   info("[ENTER]: <%s:%s> LSO BIN(%s) Bin Map(%s)\n", 
     mod, meth, lsoMap.BinName, tostring( lsoMap ));
 
-  if lsoMap.WarmChunkCount >= lsoMap.WarmChunkMax then
-    decision = 0;
-  end
+--  if lsoMap.WarmChunkCount >= lsoMap.WarmChunkMax then
+--    decision = 0;
+--  end
+    -- NOTE:  (TODO: FIXME: Right now we're disabling the Cold Cache,
+    -- so for now we claim that there is ALWAYS room in the Warm Cache).
+    decision = 1;
 
   info("[EXIT]: <%s:%s> Decision(%d)\n", mod, meth, decision );
   return decision;
@@ -1119,10 +1122,10 @@ function stackCreate( topRec, lsoBinName, arglist )
   -- we use HotCacheMax = 10, HotCacheTransfer=5;
   -- Normal (default numbers would be around 100 and 50)
   -- So -- we SHOULD see a "transfer" when we try to insert item # 9.
-  lsoMap.HotCacheMax = 8; -- Max Number for the cache -- when we transfer
-  lsoMap.HotCacheTransfer = 4; -- How much to Transfer at a time.
+  lsoMap.HotCacheMax = 100; -- Max Number for the cache -- when we transfer
+  lsoMap.HotCacheTransfer = 50; -- How much to Transfer at a time.
   lsoMap.WarmChunkCount = 0; -- Number of Warm Data Record Chunks
-  lsoMap.WarmChunkMax = 100; -- Number of Warm Data Record Chunks
+  lsoMap.WarmChunkMax = 1000; -- Number of Warm Data Record Chunks
   lsoMap.WarmChunkTransfer = 10; -- Number of Warm Data Record Chunks
   lsoMap.WarmTopChunkEntryCount = 0; -- Count of entries in top warm chunk
   lsoMap.WarmTopChunkByteCount = 0; -- Count of bytes used in top warm Chunk

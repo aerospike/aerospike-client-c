@@ -107,16 +107,6 @@ TEST( stream_ads_create, "create 25600 records and 1 index" ) {
         uint32_t timestamp = ts + et;
         uint32_t spend = advertiserId + campaignId + lineItemId;
 
-        // char key[64] = { '\0' };
-        // snprintf(key, 64, "%d", bidId);
-
-        // info("advertiserId  = %d", advertiserId);
-        // info("campaignId    = %d", campaignId);
-        // info("lineItemId    = %d", lineItemId);
-        // info("bidId         = %d", bidId);
-        // info("timestamp     = %d", timestamp);
-        // info("i             = %d", i);
-
         citrusleaf_object_init_int(&okey, bidId);
         citrusleaf_object_init_int(&bins[0].object, bidId);
         citrusleaf_object_init_int(&bins[1].object, timestamp);
@@ -172,7 +162,7 @@ TEST( stream_ads_1, "COUNT(*)" ) {
     as_stream_destroy(consumer);
 }
 
-TEST( stream_ads_2, "SELECT advertiser, campaign, line_item, SUM(spend), MAX(spend) WHERE ts BETWEEN (NOW, NOW-100) GROUP BY advertiser, campaign, line_item (w/ Flat Map)" ) {
+TEST( stream_ads_2, "SELECT advertiser, campaign, line_item, SUM(spend), MAX(spend), COUNT(spend) WHERE ts BETWEEN (NOW, NOW-100) GROUP BY advertiser, campaign, line_item (w/ map & reduce)" ) {
 
     int rc = 0;
     int count = 0;
@@ -193,20 +183,13 @@ TEST( stream_ads_2, "SELECT advertiser, campaign, line_item, SUM(spend), MAX(spe
 
     as_query * q = as_query_new("test", "ads");
     as_query_where(q, "timestamp", integer_range(0, UINT32_MAX));
-    as_query_aggregate(q, UDF_FILE, "spend_by_lineitem", NULL);
+    as_query_aggregate(q, UDF_FILE, "stream_ads_2", NULL);
     
     rc = citrusleaf_query_stream(cluster, q, consumer);
 
     assert_int_eq( rc, 0 );
     assert_int_eq( count, 1 );
-
-    // if ( result ) {
-    //     char * s = as_val_tostring(result);
-    //     info("result: %s", s);
-    //     free(s);
-    // }
-
-
+    
     info("+------+--------------+--------------+--------------+--------------+--------------+--------------+");
     info("| %-4s | %-12s | %-12s | %-12s | %-12s | %-12s | %-12s |", "#", "advertiser", "campaign", "line_no", "sum(spend)", "max(spend)", "count(spend)");
     info("+------+--------------+--------------+--------------+--------------+--------------+--------------+");
@@ -214,37 +197,37 @@ TEST( stream_ads_2, "SELECT advertiser, campaign, line_item, SUM(spend), MAX(spe
     int n = 0;
     while ( as_iterator_has_next(i) ) {
         as_pair *   p = (as_pair *) as_iterator_next(i);
-        // as_string * k = (as_string *) as_pair_1(p);
         as_map *    v = (as_map *) as_pair_2(p);
 
         as_string s;
-        as_integer *    a   = (as_integer *) as_map_get(v, (as_val *) as_string_init(&s, "advertiser", false));
-        as_integer *    c   = (as_integer *) as_map_get(v, (as_val *) as_string_init(&s, "campaign", false));
-        as_integer *    l   = (as_integer *) as_map_get(v, (as_val *) as_string_init(&s, "line_item", false));
-        as_integer *    ss  = (as_integer *) as_map_get(v, (as_val *) as_string_init(&s, "spend_sum", false));
-        as_integer *    sm  = (as_integer *) as_map_get(v, (as_val *) as_string_init(&s, "spend_max", false));
-        as_integer *    sc  = (as_integer *) as_map_get(v, (as_val *) as_string_init(&s, "spend_num", false));
+
+        char * aid = as_val_tostring(as_map_get(v, (as_val *) as_string_init(&s, "advertiser", false)));
+        char * cid = as_val_tostring(as_map_get(v, (as_val *) as_string_init(&s, "campaign", false)));
+        char * lid = as_val_tostring(as_map_get(v, (as_val *) as_string_init(&s, "line_item", false)));
+        char * ss  = as_val_tostring(as_map_get(v, (as_val *) as_string_init(&s, "spend_sum", false)));
+        char * sm  = as_val_tostring(as_map_get(v, (as_val *) as_string_init(&s, "spend_max", false)));
+        char * sc  = as_val_tostring(as_map_get(v, (as_val *) as_string_init(&s, "spend_num", false)));
 
         info("| %-4d | %-12s | %-12s | %-12s | %-12s | %-12s | %-12s |", 
-            ++n, 
-            as_val_tostring(a), 
-            as_val_tostring(c), 
-            as_val_tostring(l), 
-            as_val_tostring(ss), 
-            as_val_tostring(sm), 
-            as_val_tostring(sc)
+            ++n, aid, cid, lid, ss, sm, sc
         );
 
+        free(aid);
+        free(cid);
+        free(lid);
+        free(ss);
+        free(sm);
+        free(sc);
     }
+    as_iterator_destroy(i);
     info("+------+--------------+--------------+--------------+--------------+--------------+--------------+");
-    
 
-
+    as_val_destroy(result);
     as_query_destroy(q);
     as_stream_destroy(consumer);
 }
 
-TEST( stream_ads_3, "SELECT advertiser, campaign, line_item, SUM(spend), MAX(spend) WHERE ts BETWEEN (NOW, NOW-100) GROUP BY advertiser, campaign, line_item (w/ Nested Maps)" ) {
+TEST( stream_ads_3, "SELECT advertiser, campaign, line_item, SUM(spend), MAX(spend), COUNT(spend) WHERE ts BETWEEN (NOW, NOW-100) GROUP BY advertiser, campaign, line_item (w/ aggregate & reduce)" ) {
 
     int rc = 0;
     int count = 0;
@@ -257,7 +240,6 @@ TEST( stream_ads_3, "SELECT advertiser, campaign, line_item, SUM(spend), MAX(spe
         else {
             result = (as_map *) v;
             count++;
-            // as_val_destroy(v);
         }
         return AS_STREAM_OK;
     }
@@ -266,19 +248,77 @@ TEST( stream_ads_3, "SELECT advertiser, campaign, line_item, SUM(spend), MAX(spe
 
     as_query * q = as_query_new("test", "ads");
     as_query_where(q, "timestamp", integer_range(0, UINT32_MAX));
-    as_query_aggregate(q, UDF_FILE, "spend_by_lineitem_2", NULL);
+    as_query_aggregate(q, UDF_FILE, "stream_ads_3", NULL);
     
     rc = citrusleaf_query_stream(cluster, q, consumer);
 
     assert_int_eq( rc, 0 );
     assert_int_eq( count, 1 );
 
+    info("+------+--------------+--------------+--------------+--------------+--------------+--------------+");
+    info("| %-4s | %-12s | %-12s | %-12s | %-12s | %-12s | %-12s |", "#", "advertiser", "campaign", "line_no", "sum(spend)", "max(spend)", "count(spend)");
+    info("+------+--------------+--------------+--------------+--------------+--------------+--------------+");
+    int n = 0;
+    as_iterator * i = as_map_iterator_new(result);
+    while ( as_iterator_has_next(i) ) {
+        as_pair *   p = (as_pair *) as_iterator_next(i);
+        // as_string * k = (as_string *) as_pair_1(p);
+        as_map *    v = (as_map *) as_pair_2(p);
 
-    // if ( result ) {
-    //     char * s = as_val_tostring(result);
-    //     info("result: %s", s);
-    //     free(s);
-    // }
+        as_string s;
+        char *  aid = as_val_tostring(as_map_get(v, (as_val *) as_string_init(&s, "advertiser", false)));
+        char *  cid = as_val_tostring(as_map_get(v, (as_val *) as_string_init(&s, "campaign", false)));
+        char *  lid = as_val_tostring(as_map_get(v, (as_val *) as_string_init(&s, "line_item", false)));
+        char *  ss  = as_val_tostring(as_map_get(v, (as_val *) as_string_init(&s, "spend_sum", false)));
+        char *  sm  = as_val_tostring(as_map_get(v, (as_val *) as_string_init(&s, "spend_max", false)));
+        char *  sc  = as_val_tostring(as_map_get(v, (as_val *) as_string_init(&s, "spend_num", false)));
+
+        info("| %-4d | %-12s | %-12s | %-12s | %-12s | %-12s | %-12s |", 
+            ++n, aid, cid, lid, ss, sm, sc
+        );
+
+        free(aid);
+        free(cid);
+        free(lid);
+        free(ss);
+        free(sm);
+        free(sc);
+    }
+    as_iterator_destroy(i);
+    info("+------+--------------+--------------+--------------+--------------+--------------+--------------+");
+    
+    as_val_destroy(result);
+    as_query_destroy(q);
+    as_stream_destroy(consumer);
+}
+
+TEST( stream_ads_4, "SELECT advertiser, campaign, line_item, SUM(spend), MAX(spend), COUNT(spend) WHERE ts BETWEEN (NOW, NOW-100) GROUP BY advertiser, campaign, line_item (w/ aggregate & reduce & nested maps)" ) {
+
+    int rc = 0;
+    int count = 0;
+    as_map * result = NULL;
+
+    as_stream_status consume(as_val * v) {
+        if ( v == AS_STREAM_END ) {
+            info("count: %d",count);
+        }
+        else {
+            result = (as_map *) v;
+            count++;
+        }
+        return AS_STREAM_OK;
+    }
+
+    as_stream * consumer = consumer_stream_new(consume);
+
+    as_query * q = as_query_new("test", "ads");
+    as_query_where(q, "timestamp", integer_range(0, UINT32_MAX));
+    as_query_aggregate(q, UDF_FILE, "stream_ads_4", NULL);
+    
+    rc = citrusleaf_query_stream(cluster, q, consumer);
+
+    assert_int_eq( rc, 0 );
+    assert_int_eq( count, 1 );
 
     info("+------+--------------+--------------+--------------+--------------+--------------+--------------+");
     info("| %-4s | %-12s | %-12s | %-12s | %-12s | %-12s | %-12s |", "#", "advertiser", "campaign", "line_no", "sum(spend)", "max(spend)", "count(spend)");
@@ -303,26 +343,33 @@ TEST( stream_ads_3, "SELECT advertiser, campaign, line_item, SUM(spend), MAX(spe
                 as_integer *    lk = (as_integer *) as_pair_1(lp);
                 as_map *        lv = (as_map *) as_pair_2(lp);
 
-                as_integer *    ss  = (as_integer *) as_map_get(lv, (as_val *) as_string_init(&s, "spend_sum", false));
-                as_integer *    sm  = (as_integer *) as_map_get(lv, (as_val *) as_string_init(&s, "spend_max", false));
-                as_integer *    sc  = (as_integer *) as_map_get(lv, (as_val *) as_string_init(&s, "spend_num", false));
+                char *  aid = as_val_tostring(ak);
+                char *  cid = as_val_tostring(ck);
+                char *  lid = as_val_tostring(lk);
+                char *  ss  = as_val_tostring(as_map_get(lv, (as_val *) as_string_init(&s, "spend_sum", false)));
+                char *  sm  = as_val_tostring(as_map_get(lv, (as_val *) as_string_init(&s, "spend_max", false)));
+                char *  sc  = as_val_tostring(as_map_get(lv, (as_val *) as_string_init(&s, "spend_num", false)));
 
                 info("| %-4d | %-12s | %-12s | %-12s | %-12s | %-12s | %-12s |", 
-                    ++n, 
-                    as_val_tostring(ak), 
-                    as_val_tostring(ck), 
-                    as_val_tostring(lk), 
-                    as_val_tostring(ss), 
-                    as_val_tostring(sm), 
-                    as_val_tostring(sc)
+                    ++n, aid, cid, lid, ss, sm, sc
                 );
+
+                free(aid);
+                free(cid);
+                free(lid);
+                free(ss);
+                free(sm);
+                free(sc);
             }
+            as_iterator_destroy(l);
         }
+        as_iterator_destroy(c);
     }
+    as_iterator_destroy(a);
     info("+------+--------------+--------------+--------------+--------------+--------------+--------------+");
     
 
-
+    as_val_destroy(result);
     as_query_destroy(q);
     as_stream_destroy(consumer);
 }
@@ -354,8 +401,6 @@ static bool before(atf_suite * suite) {
         error("as_module_configure failed: %d", rc);
         return false;
     }
-
-
 
     rc = udf_put(LUA_FILE);
     if ( rc != 0 ) {
@@ -394,4 +439,5 @@ SUITE( stream_ads, "advertising stream" ) {
     suite_add( stream_ads_1 );
     suite_add( stream_ads_2 );
     suite_add( stream_ads_3 );
+    suite_add( stream_ads_4 );
 }

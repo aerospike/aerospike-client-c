@@ -174,6 +174,20 @@
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 
 -- ======================================================================
+-- Validate that the top record looks valid:
+-- Get the LSO bin from the rec and check for magic
+-- Return: "good" or "bad"
+-- ======================================================================
+local function  validateTopRec( topRec, lsoMap )
+  local thisMap = topRec[lsoMap.BinName];
+  if thisMap.Magic == "MAGIC" then
+    return "good"
+  else
+    return "bad"
+  end
+end
+
+-- ======================================================================
 -- local function lsoSummary( lsoMap ) (DEBUG/Trace Function)
 -- ======================================================================
 -- For easier debugging and tracing, we will summarize the lsoMap
@@ -224,6 +238,7 @@ local function  ldrChunkSummary( ldrChunkRecord )
   resultMap.PageMode = lsoMap.PageMode;
   resultMap.Digest   = lsoMap.Digest;
   resultMap.ListSize = list.size( ldrChunkRecord['LdrListBin'] );
+  resultMap.WarmList = ldrChunkRecord['LdrListBin'];
 
   return tostring( resultMap );
 end -- ldrChunkSummary()
@@ -320,15 +335,21 @@ local function ldrChunkInsert( topWarmChunkRecord, listIndex, insertList )
   info("[DEBUG]: <%s:%s>: Copying From(%d) to (%d) Amount(%d)\n",
     mod, meth, listIndex, chunkIndexStart, newItemsStored );
 
-  for i = chunkIndexStart, (chunkIndexStart + newItemsStored), 1 do
-    -- ldrValueList[i] = insertList[i+listIndex];
+  -- Special case of starting at ZERO -- since we're adding, not
+  -- directly indexing the array at zero (Lua arrays start at 1).
+  for i = 0, newItemsStored, 1 do
     list.append( ldrValueList, insertList[i+listIndex] );
   end -- for each remaining entry
 
   info("[DEBUG]: <%s:%s>: Post Chunk Copy: Ctrl(%s) List(%s)\n",
     mod, meth, tostring(ldrCtrlMap), tostring(ldrValueList));
 
-  info("[EXIT]: <%s:%s> newItemsStored(%d) \n", mod, meth, newItemsStored );
+  -- Store our modifications back into the Chunk Record Bins
+  topWarmChunkRecord['LdrControlBin'] = ldrCtrlMap;
+  topWarmChunkRecord['LdrListBin'] = ldrValueList;
+
+  info("[EXIT]: <%s:%s> newItemsStored(%d) List(%s) \n",
+    mod, meth, newItemsStored, tostring( ldrValueList) );
   return newItemsStored;
 end -- ldrChunkInsert()
 -- ======================================================================
@@ -505,8 +526,16 @@ local function   warmDirListChunkCreate( topRec, lsoMap )
   newLdrChunkRecord['LdrControlBin'] = ctrlMap;
   newLdrChunkRecord['LdrListBin'] = list();
 
+  aerospike:crec_update( topRec, newLdrChunkRecord );
+
   -- Add our new chunk (the digest) to the WarmDirList
+  info("[DEBUG]: <%s:%s> Appending NewChunk(%s) to WarmList(%s)\n",
+    mod, meth, tostring(newChunkDigest), tostring(lsoMap.WarmDirList));
   list.append( lsoMap.WarmDirList, newChunkDigest );
+  info("[DEBUG]: <%s:%s> Post CHunkAppend:NewChunk(%s): LsoMap(%s)\n",
+    mod, meth, tostring(newChunkDigest), tostring(lsoMap));
+   
+  -- Increment the Warm Count
   local warmChunkCount = lsoMap.WarmChunkCount;
   lsoMap.WarmChunkCount = (warmChunkCount + 1);
 
@@ -531,9 +560,9 @@ local function   warmDirListGetTop( topRec, lsoMap )
   info("[ENTER]: <%s:%s> \n", mod, meth );
 
   local warmDirList = lsoMap.WarmDirList;
-  local topDigest = warmDirList[ list.size(warmDirList) ];
-  info("[DEBUG]: <%s:%s> Warm Digest(%s) \n", mod, meth, tostring(topDigest));
-  local topWarmChunk = aerospike:crec_open( topRec, topDigest );
+  local stringDigest = tostring( warmDirList[ list.size(warmDirList) ]);
+  info("[DEBUG]: <%s:%s> Warm Digest(%s) \n", mod, meth, stringDigest );
+  local topWarmChunk = aerospike:crec_open( topRec, stringDigest );
 
   info("[EXIT]: <%s:%s> result(%s) \n",
     mod, meth, ldrChunkSummary( topWarmChunk ) );
@@ -545,10 +574,16 @@ end -- warmDirListGetTop()
 -- ======================================================================
 -- ldrChunkRead( ldrChunk, resultList, count, func, fargs, all );
 -- ======================================================================
--- Read up to 'count' items from this chunk, process the inner UDF 
+-- Read ALL, or up to 'count' items from this chunk, process the inner UDF 
 -- function (if present) and, for those elements that qualify, add them
 -- to the result list.  Read the chunk in FIFO order.
--- Return the NUMBER of items read from this chunk.
+-- Parms:
+-- (*) ldrChunk: Record object for the warm or cold LSO Data Record
+-- (*) resultList: What's been accumulated so far -- add to this
+-- (*) count: Only used when "all" flag is 0.  Return this many items
+-- (*) func: Optional Inner UDF function to apply to read items
+-- (*) fargs: Function Argument list for inner UDF
+-- Return: the NUMBER of items read from this chunk.
 -- ======================================================================
 local function ldrChunkRead( ldrChunk, resultList, count, func, fargs, all )
 -- local function hotCacheRead( cacheList, count, func, fargs, all)
@@ -558,17 +593,17 @@ local function ldrChunkRead( ldrChunk, resultList, count, func, fargs, all )
 
   if (func ~= nil and fargs ~= nil ) then
     doTheFunk = 1;
-    info("[ENTER1]: <%s:%s> Count(%d) func(%s) fargs(%s)\n",
+    info("[ENTER1]: <%s:%s> ReadCount(%d) func(%s) fargs(%s)\n",
       mod, meth, count, func, tostring(fargs) );
   else
-    info("[ENTER2]: <%s:%s> PeekCount(%d)\n", 
+    info("[ENTER2]: <%s:%s> ReadCount(%d)\n", 
       mod, meth, count );
   end
 
   -- Iterate thru the entry list, gathering up items in the result list.
   local countDown = count;
-  local chunkMap = ldrChunk['ControlBin'];
-  local chunkList = ldrChunk['ListBin'];
+  local chunkMap = ldrChunk['LdrControlBin'];
+  local chunkList = ldrChunk['LdrListBin'];
   -- TODO: Make this work for both REGULAR and BINARY Mode
   -- NOTE: We are assuming "LIST MODE" at the moment, not Binary Mode
   local chunkListSize = list.size( chunkList );
@@ -577,7 +612,10 @@ local function ldrChunkRead( ldrChunk, resultList, count, func, fargs, all )
 
   -- NOTE: By convention, if the initial count is ZERO, then we get them all.
   -- The "all" flag says -- get them all
-  local readResult;
+  local readResult; -- the item to be read (if it passes the innerUDF)
+  local numberRead = 0;
+  info("[DEBUG]:<%s:%s>:  warmCacheList [%s]\n",
+        mod, meth, tostring( chunkList ) );
   for c = chunkListSize, 1, -1 do
     -- Apply the UDF to the item, if present, and if result NOT NULL, then
     if doTheFunk == 1 then -- get down, get Funky
@@ -585,19 +623,23 @@ local function ldrChunkRead( ldrChunk, resultList, count, func, fargs, all )
     else
       readResult = chunkList[c];
     end
-    list.append( resultList, peekValue );
-    info("[DEBUG]:<%s:%s>: ResultList Append (%d)[%s]\n",
-        mod, meth, c, tostring( peekValue ) );
-    countDown = countDown - 1;
+    if( readResult ~= nil ) then
+      list.append( resultList, readResult );
+      info("[DEBUG]:<%s:%s>: ResultList Append (%d)[%s]\n",
+          mod, meth, c, tostring( readResult ) );
+      countDown = countDown - 1;
+    end
     if( countDown <= 0 and all == 0 ) then
       info("[EARLY EXIT]: <%s:%s> result(%s) \n",
         mod, meth, tostring(resultList) );
-      return resultList;
+      return numberRead;
     end
+    numberRead = numberRead + 1;
   end -- for each item in the chunkList
 
-  info("[EXIT]: <%s:%s> result(%s) \n", mod, meth, tostring(resultList) );
-  return resultList;
+  info("[EXIT]: <%s:%s> NumberRead(%d) ResultList(%s) \n",
+    mod, meth, numberRead, tostring( resultList ));
+  return numberRead;
 end -- ldrChunkRead()
 -- ======================================================================
 
@@ -620,28 +662,43 @@ local function warmDirRead(topRec, resultList, lsoMap, count,
   -- we've read "count" items.  If the 'all' flag is 1, then read 
   -- everything.
   local warmDirList = lsoMap.WarmDirList;
+  -- If we're using the "all" flag, then count just doesn't work.
+  if count < 0 then count = 0; end
   local remaining = count;
   local amountRead = 0;
+  local itemsRead = 0;
   local dirCount = list.size( warmDirList );
   local ldrChunk;
-  for dirIndex = dirCount, 1, -1 do
-    ldrChunk = aerospike:crec_open( topRec, warmDirList[dirIndex] );
+  local stringDigest;
+
+  info("[DEBUG]: <%s:%s>: DirCount(%d),Top(%s) Reading WarmDirList(%s)(%s):\n",
+    mod, meth, dirCount, validateTopRec( topRec, lsoMap ),
+    tostring( warmDirList), tostring(warmDirList[1]));
+
+  for dirIndex = dirCount, 0, -1 do
+    -- Record Digest MUST be in string form
+    stringDigest = tostring(warmDirList[ dirIndex ]);
+    ldrChunk = aerospike:crec_open( topRec, stringDigest );
     -- I ASSUME that resultList is passed by reference and we can just
     -- all add to it.
-    itemsRead = ldrChunkRead( ldrChunk, resultList, remaining, func, fargs, all );
+    itemsRead =
+      ldrChunkRead( ldrChunk, resultList, remaining, func, fargs, all );
     amountRead = amountRead + itemsRead;
     if itemsRead >= remaining or amountRead >= count then
-      return amountRead;
+      info("[Early EXIT]: <%s:%s> amountRead(%d) ResultList(%s) \n",
+        mod, meth, amountRead, tostring(resultList));
+      return resultList;
     end
 
-    local status = aerospike:close( topRec, ldrChunk );
+    local status = aerospike:crec_close( topRec, ldrChunk );
     info("[DEBUG]: <%s:%s> as:close() status(%s) \n",
       mod, meth, tostring( status ) );
 
   end -- for each warm Chunk
 
-  info("[EXIT]: <%s:%s> amountRead(%d) \n", mod, meth, amountRead );
-  return amountRead;
+  info("[EXIT]: <%s:%s> amountRead(%d) ResultList(%s) \n",
+      mod, meth, amountRead, tostring(resultList));
+  return resultList;
 end -- warmDirRead()
 
 -- ======================================================================
@@ -669,7 +726,6 @@ local function warmDirInsert( topRec, lsoMap, insertList )
   local topWarmChunk;
   -- Whether we create a new one or open an existing one, we save the current
   -- count and close the record.
-  info("[DEBUG 1]:");
   if list.size( warmDirList ) == 0 then
     info("[DEBUG]: <%s:%s> Calling Chunk Create \n", mod, meth );
     topWarmChunk = warmDirListChunkCreate( topRec, lsoMap ); -- create new
@@ -677,7 +733,8 @@ local function warmDirInsert( topRec, lsoMap, insertList )
     info("[DEBUG]: <%s:%s> Calling Get TOP \n", mod, meth );
     topWarmChunk = warmDirListGetTop( topRec, lsoMap ); -- open existing
   end
-  info("[DEBUG 2]:");
+  info("[DEBUG]: <%s:%s> Post 'GetTop': LsoMap(%s) \n", 
+    mod, meth, tostring( lsoMap ));
 
   -- We have a warm Chunk -- write as much as we can into it.  If it didn't
   -- all fit -- then we allocate a new chunk and write the rest.
@@ -713,12 +770,19 @@ local function warmDirInsert( topRec, lsoMap, insertList )
 
   -- All done -- Save the info of how much room we have in the top Warm
   -- chunk (entry count or byte count)
+  info("[DEBUG]: <%s:%s> Saving LsoMap (%s) Before Update \n",
+    mod, meth, tostring( lsoMap ));
   topRec[lsoMap.BinName] = lsoMap;
   updateWarmCountStatistics( lsoMap, topWarmChunk );
+
+  info("[DEBUG]: <%s:%s> Chunk Summary before storage(%s)\n",
+    mod, meth, ldrChunkSummary( topWarmChunk ));
+
   info("[DEBUG]: <%s:%s> Calling CREC Update \n", mod, meth );
   local status = aerospike:crec_update( topRec, topWarmChunk );
   info("[DEBUG]: <%s:%s> CREC Update Status(%s) \n",mod,meth, tostring(status));
   info("[DEBUG]: <%s:%s> Calling CREC Close \n", mod, meth );
+
   status = aerospike:crec_close( topRec, topWarmChunk );
   info("[DEBUG]: <%s:%s> CREC Close Status(%s) \n",mod,meth, tostring(status));
 
@@ -775,56 +839,85 @@ end -- hotCacheTransfer()
 -- Return 'count' items from the Cold Dir List -- adding to the result
 -- list passed in.
 -- ======================================================================
-local function coldPeek(resultList, cacheList, count, func, fargs )
+local function coldPeek(topRec, resultList, cacheList, count, func, fargs )
+  local mod = "LsoStickman";
+  local meth = "coldPeek()";
+  info("[ENTER]: <%s:%s> \n", mod, meth );
+
+  info("[DEBUG]: <%s:%s> COLD STORAGE NOT YET IMPLEMENTED!! \n", mod, meth );
+
+  info("[EXIT]: <%s:%s> \n", mod, meth );
   return resultList;
 end -- coldPeek()
 
 -- ======================================================================
--- mapPeek(): Get "peekCount" items from the LSO structure.
--- mapPeek( lsoMap, peekCount, func, fargs );
--- Return resultList -- in LIFO order
+-- lsoMapRead(): Get "peekCount" items from the LSO structure.
+-- Read each part of the LSO Map: Hot Cache, Warm Cache, Cold Cache
+-- Parms:
+-- (*) lsoMap: The main LSO structure (stored in the LSO Bin)
+-- (*) peekCount: The total count to read (0 means all)
+-- (*) Optional inner UDF Function (from the UdfFunctionTable)
+-- (*) fargs: Function arguments (list) fed to the inner UDF
+-- Return: The Peek resultList -- in LIFO order
 -- ======================================================================
-local function mapPeek( lsoMap, peekCount, func, fargs )
+local function lsoMapRead( topRec, lsoMap, peekCount, func, fargs )
   local mod = "LsoStickman";
-  local meth = "mapPeek()";
-  info("[ENTER0]: <%s:%s> \n", mod, meth );
+  local meth = "lsoMapRead()";
+  info("[ENTER]: <%s:%s> ReadCount(%s)\n", tostring(peekCount), mod, meth );
 
   if (func ~= nil and fargs ~= nil ) then
     info("[ENTER1]: <%s:%s> Count(%d) func(%s) fargs(%s)\n",
       mod, meth, peekCount, func, tostring(fargs) );
   else
-    info("[ENTER2]: <%s:%s> PeekCount(%d)\n", 
-      mod, meth, peekCount );
+    info("[ENTER2]: <%s:%s> PeekCount(%d)\n", mod, meth, peekCount );
   end
 
-  local all;
-  if peekCount == 0 then all = 1 else all = 0 end
+  local all = 0;
+  if peekCount == 0 then all = 1; end
 
   -- Fetch from the Cache, then the Warm List, then the Cold List.
   -- Each time we decrement the count and add to the resultlist.
   local cacheList = lsoMap.HotCacheList;
   local resultList = hotCacheRead( cacheList, peekCount, func, fargs, all);
   local cacheCount = list.size( resultList );
+  info("[DEBUG]: <%s:%s> HotListResult(%s)\n", mod, meth,tostring(resultList));
+
+  local warmCount = 0;
+  local warmList;
 
   -- If the cache had all that we need, then done.  Return list.
-  if( cacheCount >= peekCount ) then
+  if( cacheCount >= peekCount and all == 0) then
     return resultList;
   end
   -- We need more -- get more out of the Warm List
   local remainingCount = peekCount - cacheCount;
-  local warmList =
+  info("[DEBUG]: <%s:%s> Calling WarmList Read: Count(%d)\n",
+    mod, meth, remainingCount );
+  if((all == 1 or remainingCount > 0) and list.size(lsoMap.WarmDirList) > 0 )
+    then
+    warmList =
       warmDirRead(topRec, resultList, lsoMap, remainingCount, func, fargs, all);
-  local warmCount = list.size( warmList );
-  if( warmCount >= peekCount ) then
-    return warmList;
-  end
+    info("[DEBUG]: <%s:%s> WarmList Read:Cnt(%d) WarmList(%s) resultList(%s)\n",
+        mod, meth, remainingCount, tostring(warmList), tostring(resultList));
+
+    warmCount = list.size( warmList );
+    if( warmCount >= peekCount and all == 0) then
+      return warmList; -- this includes all read so far
+    end
+  else
+    return warmList; -- this includes all read so far
+  end -- end if/else more to read
 
   remainingCount = peekCount - warmCount;
-  local coldList = coldPeek(warmList, lsoMap, remainingCount, func, fargs, all);
+  if((all == 1 or remainingCount > 0 ) and ( lsoMap.ColdListHead  ~= 0 )) then
+    local coldList =
+      coldPeek(topRecw, armList, lsoMap, remainingCount, func, fargs, all);
+    return coldList; -- this includes all read so far
+  else
+    return warmList; -- something weird happened here.
+  end -- if cold data
 
-  return coldList;
-
-end -- function mapPeek
+end -- function lsoMapRead
 -- ======================================================================
 
 -- ======================================================================
@@ -1252,13 +1345,13 @@ local function localStackPeek( topRec, lsoBinName, peekCount, func, fargs )
   -- Also, Notice that we go in reverse order -- to get the "stack function",
   -- which is Last In, First Out.
   info("[DEBUG]: <%s:%s>: Calling Map Peek\n", mod, meth );
-  local resultList = mapPeek( lsoMap, peekCount, func, fargs );
+  local resultList = lsoMapRead( topRec, lsoMap, peekCount, func, fargs );
 
   info("[EXIT]: <%s:%s>: PeekCount(%d) ResultList(%s)\n",
     mod, meth, peekCount, tostring(resultList));
 
   return resultList;
-end -- function stackPeek() 
+end -- function localStackPeek() 
 
 -- =======================================================================
 -- Stack Peek -- with and without inner UDFs

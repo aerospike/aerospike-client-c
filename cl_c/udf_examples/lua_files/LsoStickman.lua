@@ -892,9 +892,11 @@ local function lsoMapRead( topRec, lsoMap, peekCount, func, fargs )
   if( cacheCount >= peekCount and all == 0) then
     return resultList;
   end
+
   -- We need more -- get more out of the Warm List
+  -- Fix this to return a NUMBER -- and just build on resultList.
   local remainingCount = peekCount - cacheCount;
-  info("[DEBUG]: <%s:%s> Calling WarmList Read: Count(%d)\n",
+  info("[DEBUG]: <%s:%s> Checking WarmList Count(%d)\n",
     mod, meth, remainingCount );
   if((all == 1 or remainingCount > 0) and list.size(lsoMap.WarmDirList) > 0 )
     then
@@ -908,7 +910,7 @@ local function lsoMapRead( topRec, lsoMap, peekCount, func, fargs )
       return warmList; -- this includes all read so far
     end
   else
-    return warmList; -- this includes all read so far
+    return resultList; -- this includes all read so far
   end -- end if/else more to read
 
   remainingCount = peekCount - warmCount;

@@ -1,5 +1,26 @@
 #!/bin/bash
 
+export UNS="test"
+export USET="set"
+export UKEY="abc"
+export UFILE="LsoStickman"
+export UCHUNK=2000
+
+export UNS="test"
+export USET="set"
+# This script exercises the Aerospike LSO Functions
+#
+export UKEY="LSO_ABC"
+export LSOBIN="LsoBin"
+export UFILE="LsoStickman"
+export FUN_CR8="stackCreate"
+export FUN_INS="stackPush"
+export FUN_INSWU="stackPushWithUDF"
+export FUN_SRCH="stackPeek"
+export FUN_SRCHWU="stackPeekWithUDF"
+# export ARGLIST='[$LSOBIN,$UNS,$USET,$UCHUNK,1]'
+export ARGLIST='["LsoBin","test","set",2000,1]'
+
 PARALLEL_POPULATION=1
 
 URLID=1000
@@ -42,4 +63,3 @@ while [ $U -lt $NUM_USERS ]; do
   USERID=$[${USERID}+1];
   U=$[${U}+1];
 done
-

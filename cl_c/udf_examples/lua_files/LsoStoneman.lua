@@ -1,6 +1,6 @@
 -- ======================================================================
 -- Large Stack Object (LSO) Operations
--- LsoStoneman V1.1 -- (March 5, 2013)
+-- LsoStoneman V1.1 -- (March 7, 2013)
 -- ======================================================================
 -- LSO Design and Type Comments:
 --
@@ -59,6 +59,94 @@
 -- utility and assistance functions.
 
 -- ======================================================================
+-- initializeLsoMap:
+-- ======================================================================
+-- Set up the LSO Map with the standard (default) values.
+-- These values may later be overridden by the user.
+-- The structure held in the Record's "LSO BIN" is this map.  This single
+-- structure contains ALL of the settings/parameters that drive the LSO
+-- behavior.
+-- ======================================================================
+local function initializeLsoMap( topRec, lsoBinName )
+  local mod = "LsoStoneman";
+  local meth = "initializeLsoMap()";
+  info("[ENTER]: <%s:%s>:: LsoBinName(%s)\n", mod, meth, tostring(lsoBinName));
+
+  -- Create the map, and fill it in.
+  -- Note: All Field Names start with UPPER CASE.
+  local lsoMap = map();
+  -- General LSO Parms:
+  lsoMap.ItemCount = 0;     -- A count of all items in the stack
+  lsoMap.DesignVersion = 1; -- Current version of the code
+  lsoMap.Magic = "MAGIC"; -- we will use this to verify we have a valid map
+  lsoMap.BinName = lsoBinName; -- Defines the LSO Bin
+  lsoMap.NameSpace = "test"; -- Default NS Name -- to be overridden by user
+  lsoMap.Set = "set";       -- Default Set Name -- to be overridden by user
+  lsoMap.PageMode = "Binary"; -- "List" or "Binary":
+  -- LSO Data Record Chunk Settings: Passed into "Chunk Create"
+--lsoMap.LdrEntryCountMax = 200;  -- Max # of items in a Data Chunk (List Mode)
+  lsoMap.LdrEntryCountMax =   5;  -- Max # of items in a Data Chunk (List Mode)
+  lsoMap.LdrByteEntrySize = 20;  -- Byte size of a fixed size Byte Entry
+--lsoMap.LdrByteCountMax = 2000; -- Max # of BYTES in a Data Chunk (binary mode)
+  lsoMap.LdrByteCountMax =   80; -- Max # of BYTES in a Data Chunk (binary mode)
+  -- Hot Entry List Settings: List of User Entries
+  lsoMap.HotCacheList = list();
+  lsoMap.HotCacheItemCount = 0; -- Number of elements in the Top Cache
+--lsoMap.HotCacheMax = 200; -- Max Number for the cache -- when we transfer
+  lsoMap.HotCacheMax =   6; -- Max Number for the cache -- when we transfer
+--lsoMap.HotCacheTransfer = 100; -- How much to Transfer at a time.
+  lsoMap.HotCacheTransfer =   3; -- How much to Transfer at a time.
+  -- Warm Digest List Settings: List of Digests of LSO Data Records
+  lsoMap.WarmTopFull = 0; -- 1  when the top chunk is full (for the next write)
+  lsoMap.WarmCacheList = list();   -- Define a new list for the Warm Stuff
+  lsoMap.WarmChunkCount = 0; -- Number of Warm Data Record Chunks
+  lsoMap.WarmCacheDirMax = 1000; -- Number of Warm Data Record Chunks
+  lsoMap.WarmChunkTransfer = 10; -- Number of Warm Data Record Chunks
+  lsoMap.WarmTopChunkEntryCount = 0; -- Count of entries in top warm chunk
+  lsoMap.WarmTopChunkByteCount = 0; -- Count of bytes used in top warm Chunk
+  -- Cold Directory List Settings: List of Directory Pages
+  lsoMap.ColdChunkCount = 0; -- Number of Cold Data Record Chunks
+  lsoMap.ColdDirCount = 0; -- Number of Cold Data Record DIRECTORY Chunks
+  lsoMap.ColdListHead  = 0;   -- Nothing here yet
+  lsoMap.ColdCacheDirMax = 100;  -- Should be a setable parm
+
+  info("[DEBUG]: <%s:%s> : CTRL Map after Init(%s)\n",
+    mod, meth , tostring(lsoMap));
+
+  -- Put our new map in the record, then store the record.
+  topRec[lsoBinName] = lsoMap;
+
+  info("[EXIT]:<%s:%s>:Dir Map after Init(%s)\n", mod,meth,tostring(lsoMap));
+  return lsoMap
+end -- initializeLsoMap
+
+
+-- ======================================================================
+-- adjustLsoMap:
+-- ======================================================================
+-- Using the settings supplied by the caller in the stackCreate call,
+-- we adjust the values in the LsoMap.
+-- Parms:
+-- (*) lsoMap: the main LSO Bin value
+-- (*) argListMap: Map of LSO Settings 
+-- ======================================================================
+local function adjustLsoMap( lsoMap, argListMap )
+  local mod = "LsoStoneman";
+  local meth = "adjustLsoMap()";
+  info("[ENTER]: <%s:%s>:: LsoMap(%s) ArgMap(%s)",
+    mod, meth, tostring(lsoMap), tostring( argListMap ));
+
+  -- Iterate thru the map and adjust (override) the map settings 
+  -- based on the settings passed in during the stackCreate() call.
+  
+  info("[DEBUG]: <%s:%s> : CTRL Map after Adjust(%s)\n",
+    mod, meth , tostring(lsoMap));
+
+  info("[EXIT]:<%s:%s>:Dir Map after Init(%s)\n", mod,meth,tostring(lsoMap));
+  return lsoMap
+end -- adjustLsoMap
+
+-- ======================================================================
 -- validateTopRec( topRec, lsoMap )
 -- ======================================================================
 -- Validate that the top record looks valid:
@@ -87,7 +175,7 @@ local function lsoSummary( lsoMap )
   resultMap.BinName           = lsoMap.BinName;
   resultMap.NameSpace         = lsoMap.NameSpace;
   resultMap.Set               = lsoMap.Set;
-  resultMap.LdrByteMax         = lsoMap.LdrByteMax;
+  resultMap.LdrByteCountMax         = lsoMap.LdrByteCountMax;
   resultMap.HotCacheItemCount      = lsoMap.HotCacheItemCount;
   resultMap.HotCacheMax       = lsoMap.HotCacheMax;
   resultMap.HotCacheTransfer  = lsoMap.HotCacheTransfer;
@@ -109,15 +197,68 @@ end -- lsoSummary()
 -- ======================================================================
 local function  ldrChunkSummary( ldrChunkRecord ) 
   local resultMap = map();
-  local lsoMap = ldrChunkRecord['LdrControlBin'];
-  resultMap.PageType = lsoMap.PageType;
-  resultMap.PageMode = lsoMap.PageMode;
-  resultMap.Digest   = lsoMap.Digest;
+  local ldrCtrlMap = ldrChunkRecord['LdrControlBin'];
+  resultMap.PageMode = ldrCtrlMap.PageMode;
+  resultMap.Digest   = ldrCtrlMap.Digest;
   resultMap.ListSize = list.size( ldrChunkRecord['LdrListBin'] );
   resultMap.WarmList = ldrChunkRecord['LdrListBin'];
+  resultMap.ByteCountMax   = ldrCtrlMap.ByteCountMax;
 
   return tostring( resultMap );
 end -- ldrChunkSummary()
+
+-- ======================================================================
+-- warmCacheListChunkCreate( topRec, lsoMap )
+-- ======================================================================
+-- Create and initialise a new LDR "chunk", load the new digest for that
+-- new chunk into the lsoMap (the warm dir list), and return it.
+local function   warmCacheListChunkCreate( topRec, lsoMap )
+  local mod = "LsoStoneman";
+  local meth = "warmCacheListChunkCreate()";
+  info("[ENTER]: <%s:%s> \n", mod, meth );
+
+  -- Create the Aerospike Record, initialize the bins: Ctrl, List
+  -- Note: All Field Names start with UPPER CASE.
+  local newLdrChunkRecord = aerospike:crec_create( topRec );
+  local ctrlMap = map();
+  ctrlMap.ParentDigest = record.digest( topRec );
+  ctrlMap.PageMode = lsoMap.PageMode;
+  local newChunkDigest = record.digest( newLdrChunkRecord );
+  ctrlMap.Digest = newChunkDigest;
+  ctrlMap.ListEntryMax = lsoMap.LdrEntryCountMax; -- Max entries in value list
+  ctrlMap.ByteEntrySize = lsoMap.LdrByteEntrySize; -- ByteSize of Fixed Entries
+  ctrlMap.ByteEntryCount = 0;  -- A count of Byte Entries
+  ctrlMap.ByteCountMax = lsoMap.LdrByteCountMax; -- Max # of bytes in ByteArray
+  ctrlMap.DesignVersion = lsoMap.DesignVersion;
+  ctrlMap.LogInfo = 0;
+  -- Assign Control info and List info to the LDR bins
+  newLdrChunkRecord['LdrControlBin'] = ctrlMap;
+  newLdrChunkRecord['LdrListBin'] = list();
+
+  info("[DEBUG]: <%s:%s> Chunk Create: CTRL Contents(%s)",
+    mod, meth, tostring(ctrlMap) );
+
+  aerospike:crec_update( topRec, newLdrChunkRecord );
+
+  -- Add our new chunk (the digest) to the WarmCacheList
+  info("[DEBUG]: <%s:%s> Appending NewChunk(%s) to WarmList(%s)\n",
+    mod, meth, tostring(newChunkDigest), tostring(lsoMap.WarmCacheList));
+  list.append( lsoMap.WarmCacheList, newChunkDigest );
+  info("[DEBUG]: <%s:%s> Post CHunkAppend:NewChunk(%s): LsoMap(%s)\n",
+    mod, meth, tostring(newChunkDigest), tostring(lsoMap));
+   
+  -- Increment the Warm Count
+  local warmChunkCount = lsoMap.WarmChunkCount;
+  lsoMap.WarmChunkCount = (warmChunkCount + 1);
+
+  -- Update the top (LSO) record with the newly updated lsoMap.
+  topRec[ lsoMap.BinName ] = lsoMap;
+
+  info("[EXIT]: <%s:%s> Return(%s) \n",
+    mod, meth, ldrChunkSummary(newLdrChunkRecord));
+  return newLdrChunkRecord;
+end --  warmCacheListChunkCreate()
+-- ======================================================================
 
 -- ======================================================================
 -- extractHotCacheTransferList( lsoMap );
@@ -161,14 +302,16 @@ end -- extractHotCacheTransferList()
 -- ======================================================================
 -- updateWarmCountStatistics( lsoMap, topWarmChunk );
 -- ======================================================================
--- TODO: FInish this method
+-- After an LDR operation, update page statistics.
 -- ======================================================================
 local function updateWarmCountStatistics( lsoMap, topWarmChunk ) 
+  -- TODO: Not sure if this is needed anymore.  Check and remove.
   return 0;
 end
 
+
 -- ======================================================================
--- ldrChunkInsert( topWarmChunk, lsoMap, listIndex,  insertList )
+-- ldrChunkInsertList( topWarmChunk, lsoMap, listIndex,  insertList )
 -- ======================================================================
 -- Insert (append) the LIST of values (overflow from the HotCache) 
 -- to this chunk's value list.  We start at the position "listIndex"
@@ -176,60 +319,60 @@ end
 -- so we are starting our insert in "insertList" from "listIndex", and
 -- not implicitly from "1".
 -- Parms:
--- (*) topWarmChunkRecord: Hotest of the Warm Chunk Records
+-- (*) ldrChunkRec: Hotest of the Warm Chunk Records
 -- (*) lsoMap: the LSO control information
--- (*) listIndex: Index into <insertList>
--- (*) insertList
+-- (*) listIndex: Index into <insertList> from where we start copying.
+-- (*) insertList: The list of elements to be copied in
 -- Return: Number of items written
 -- ======================================================================
-local function ldrChunkInsert(topWarmChunkRecord,lsoMap,listIndex,insertList )
+local function ldrChunkInsertList(ldrChunkRec,lsoMap,listIndex,insertList )
   local mod = "LsoStoneman";
-  local meth = "ldrChunkInsert()";
+  local meth = "ldrChunkInsertList()";
   info("[ENTER]: <%s:%s> Index(%d) List(%s)\n",
     mod, meth, listIndex, tostring( insertList ) );
 
-  -- TODO: ldrChunkInsert(): Make this work for BINARY mode as well as LIST.
-  
-  local ldrCtrlMap = topWarmChunkRecord['LdrControlBin'];
-  local ldrValueList = topWarmChunkRecord['LdrListBin'];
+  local ldrCtrlMap = ldrChunkRec['LdrControlBin'];
+  local ldrValueList = ldrChunkRec['LdrListBin'];
   local chunkIndexStart = list.size( ldrValueList ) + 1;
+  local ldrByteArray = ldrChunkRec['LdrBinaryBin']; -- might be nil
 
   info("[DEBUG]: <%s:%s> Chunk: CTRL(%s) List(%s)\n",
     mod, meth, tostring( ldrCtrlMap ), tostring( ldrValueList ));
 
--- Note: Since the index of Lua arrays start with 1, that makes our
--- math for lengths and space off by 1. So, we're often adding or
--- subtracting 1 to adjust.
+  -- Note: Since the index of Lua arrays start with 1, that makes our
+  -- math for lengths and space off by 1. So, we're often adding or
+  -- subtracting 1 to adjust.
   local totalItemsToWrite = list.size( insertList ) + 1 - listIndex;
-  local itemSpaceAvailable = (ldrCtrlMap.EntryMax - chunkIndexStart) + 1;
+  local itemSlotsAvailable = (ldrCtrlMap.EntryMax - chunkIndexStart) + 1;
 
-    -- In the unfortunate case where our accounting is bad and we accidently
-    -- opened up this page -- and there's no room -- then just return ZERO
-    -- items written, and hope that the caller can deal with that.
-    if itemSpaceAvailable <= 0 then
-      warn("[DEBUG]: <%s:%s> INTERNAL ERROR: No space available on chunk(%s)",
-      mod, meth, tostring( ldrCtrlMap ));
-      return 0; -- nothing written
-    end
+  -- In the unfortunate case where our accounting is bad and we accidently
+  -- opened up this page -- and there's no room -- then just return ZERO
+  -- items written, and hope that the caller can deal with that.
+  if itemSlotsAvailable <= 0 then
+    warn("[DEBUG]: <%s:%s> INTERNAL ERROR: No space available on chunk(%s)",
+    mod, meth, tostring( ldrCtrlMap ));
+    return 0; -- nothing written
+  end
 
   -- If we EXACTLY fill up the chunk, then we flag that so the next Warm
   -- List Insert will know in advance to create a new chunk.
-  if totalItemsToWrite == itemSpaceAvailable then
+  if totalItemsToWrite == itemSlotsAvailable then
     lsoMap.WarmTopFull = 1; -- Now, remember to reset on next update.
     info("[DEBUG]: <%s:%s> TotalItems(%d) == SpaceAvail(%d): Top FULL!!",
-      mod, meth, totalItemsToWrite, itemSpaceAvailable );
+      mod, meth, totalItemsToWrite, itemSlotsAvailable );
   end
 
   info("[DEBUG]: <%s:%s> TotalItems(%d) SpaceAvail(%d)\n",
-    mod, meth, totalItemsToWrite, itemSpaceAvailable );
+    mod, meth, totalItemsToWrite, itemSlotsAvailable );
 
   -- Write only as much as we have space for
   local newItemsStored = totalItemsToWrite;
-  if totalItemsToWrite > itemSpaceAvailable then
-    newItemsStored = itemSpaceAvailable;
+  if totalItemsToWrite > itemSlotsAvailable then
+    newItemsStored = itemSlotsAvailable;
   end
 
-  info("[DEBUG]: <%s:%s>: Copying From(%d) to (%d) Amount(%d)\n",
+  -- This is List Mode.  Easy.  Just append to the list.
+  info("[DEBUG]: <%s:%s>:ListMode: Copying From(%d) to (%d) Amount(%d)\n",
     mod, meth, listIndex, chunkIndexStart, newItemsStored );
 
   -- Special case of starting at ZERO -- since we're adding, not
@@ -242,12 +385,154 @@ local function ldrChunkInsert(topWarmChunkRecord,lsoMap,listIndex,insertList )
     mod, meth, tostring(ldrCtrlMap), tostring(ldrValueList));
 
   -- Store our modifications back into the Chunk Record Bins
-  topWarmChunkRecord['LdrControlBin'] = ldrCtrlMap;
-  topWarmChunkRecord['LdrListBin'] = ldrValueList;
+  ldrChunkRec['LdrControlBin'] = ldrCtrlMap;
+  ldrChunkRec['LdrListBin'] = ldrValueList;
 
   info("[EXIT]: <%s:%s> newItemsStored(%d) List(%s) \n",
     mod, meth, newItemsStored, tostring( ldrValueList) );
   return newItemsStored;
+end -- ldrChunkInsertList()
+
+
+-- ======================================================================
+-- ldrChunkInsertBytes( topWarmChunk, lsoMap, listIndex,  insertList )
+-- ======================================================================
+-- Insert (append) the LIST of values (overflow from the HotCache) 
+-- to this chunk's Byte Array.  We start at the position "listIndex"
+-- in "insertList".  Note that this call may be a second (or Nth) call,
+-- so we are starting our insert in "insertList" from "listIndex", and
+-- not implicitly from "1".
+-- This method is similar to its sibling "ldrChunkInsertList()", but rather
+-- than add to the entry list in the chunk's 'LdrListBin', it adds to the
+-- byte array in the chunk's 'LdrBinaryBin'.
+-- Parms:
+-- (*) ldrChunkRec: Hotest of the Warm Chunk Records
+-- (*) lsoMap: the LSO control information
+-- (*) listIndex: Index into <insertList> from where we start copying.
+-- (*) insertList: The list of elements to be copied in
+-- Return: Number of items written
+-- ======================================================================
+local function ldrChunkInsertBytes( ldrChunkRec, lsoMap, listIndex, insertList )
+  local mod = "LsoStoneman";
+  local meth = "ldrChunkInsertBytes()";
+  info("[ENTER]: <%s:%s> Index(%d) List(%s)\n",
+    mod, meth, listIndex, tostring( insertList ) );
+
+  local ldrCtrlMap = ldrChunkRec['LdrControlBin'];
+  info("[DEBUG]: <%s:%s> Check LDR CTRL MAP(%s)\n",
+    mod, meth, tostring( ldrCtrlMap ) );
+
+  local entrySize = ldrCtrlMap.ByteEntrySize;
+  if( entrySize <= 0 ) then
+    warn("[ERROR]: <%s:%s>: Internal Error:. Negative Entry Size", mod, meth);
+    return -1; -- General Badness
+  end
+
+  local entryCount = 0;
+  if( ldrCtrlMap.EntryCount ~= nil and ldrCtrlMap.EntryCount ~= 0 ) then
+    entryCount = ldrCtrlMap.EntryCount;
+  end
+  info("[DEBUG]: <%s:%s> Using EntryCount(%d)", mod, meth, entryCount );
+
+  -- Note: Since the index of Lua arrays start with 1, that makes our
+  -- math for lengths and space off by 1. So, we're often adding or
+  -- subtracting 1 to adjust.
+  -- Calculate how much space we have for items.  We could do this in bytes
+  -- or items.  Let's do it in items.
+  local totalItemsToWrite = list.size( insertList ) + 1 - listIndex;
+  local maxEntries = math.floor(ldrCtrlMap.ByteCountMax / entrySize );
+  local itemSlotsAvailable = maxEntries - entryCount;
+  info("[DEBUG]: <%s:%s>:MaxEntries(%d) SlotsAvail(%d) #Total ToWrite(%d)",
+   mod, meth, maxEntries, itemSlotsAvailable, totalItemsToWrite );
+
+  -- In the unfortunate case where our accounting is bad and we accidently
+  -- opened up this page -- and there's no room -- then just return ZERO
+  -- items written, and hope that the caller can deal with that.
+  if itemSlotsAvailable <= 0 then
+    warn("[DEBUG]: <%s:%s> INTERNAL ERROR: No space available on chunk(%s)",
+    mod, meth, tostring( ldrCtrlMap ));
+    return 0; -- nothing written
+  end
+
+  -- If we EXACTLY fill up the chunk, then we flag that so the next Warm
+  -- List Insert will know in advance to create a new chunk.
+  if totalItemsToWrite == itemSlotsAvailable then
+    lsoMap.WarmTopFull = 1; -- Remember to reset on next update.
+    info("[DEBUG]: <%s:%s> TotalItems(%d) == SpaceAvail(%d): Top FULL!!",
+      mod, meth, totalItemsToWrite, itemSlotsAvailable );
+  end
+
+  -- Write only as much as we have space for
+  local newItemsStored = totalItemsToWrite;
+  if totalItemsToWrite > itemSlotsAvailable then
+    newItemsStored = itemSlotsAvailable;
+  end
+
+  -- Compute the new space we need in Bytes and either extend existing or
+  -- allocate it fresh.
+  local totalSpaceNeeded = (entryCount + newItemsStored) * entrySize;
+  if ldrChunkRec['LdrBinaryBin'] == nil then
+    ldrChunkRec['LdrBinaryBin'] = bytes( totalSpaceNeeded );
+  else
+    bytes.set_len(ldrChunkRec['LdrBinaryBin'], totalSpaceNeeded );
+  end
+  local chunkByteArray = ldrChunkRec['LdrBinaryBin'];
+
+  -- We're packing bytes into a byte array. Put each one in at a time,
+  -- incrementing by "entrySize" for each insert value.
+  -- Special case of starting at ZERO -- since we're adding, not
+  -- directly indexing the array at zero (Lua arrays start at 1).
+  -- Compute where we should start inserting in the Byte Array.
+  local chunkByteStart = entryCount * entrySize;
+
+  info("[DEBUG]: <%s:%s> TotalItems(%d) SpaceAvail(%d) ByteStart(%d)\n",
+    mod, meth, totalItemsToWrite, itemSlotsAvailable, chunkByteStart );
+
+  for i = 0, (newItemsStored - 1), 1 do
+    bytes.put_bytes( chunkByteArray, (chunkByteStart + (i * entrySize)),
+      insertList[i+listIndex] );
+  end -- for each remaining entry
+
+  ldrCtrlMap.EntryCount = entryCount + newItemsStored;
+
+  info("[DEBUG]: <%s:%s>: Post Chunk Copy: Ctrl(%s) List(%s)\n",
+    mod, meth, tostring(ldrCtrlMap), tostring( chunkByteArray ));
+
+  -- Store our modifications back into the Chunk Record Bins
+  ldrChunkRec['LdrControlBin'] = ldrCtrlMap;
+  ldrChunkRec['LdrBinaryBin'] = chunkByteArray;
+
+  info("[EXIT]: <%s:%s> newItemsStored(%d) List(%s) \n",
+    mod, meth, newItemsStored, tostring( chunkByteArray ));
+  return newItemsStored;
+end -- ldrChunkInsertBytes()
+
+-- ======================================================================
+-- ldrChunkInsert( topWarmChunk, lsoMap, listIndex,  insertList )
+-- ======================================================================
+-- Insert (append) the LIST of values (overflow from the HotCache) 
+-- Call the appropriate method "InsertList()" or "InsertBinary()" to
+-- do the storage, based on whether this page is in "List" mode or
+-- "Binary" mode.
+--
+-- Parms:
+-- (*) ldrChunkRec: Hotest of the Warm Chunk Records
+-- (*) lsoMap: the LSO control information
+-- (*) listIndex: Index into <insertList> from where we start copying.
+-- (*) insertList: The list of elements to be copied in
+-- Return: Number of items written
+-- ======================================================================
+local function ldrChunkInsert(ldrChunkRec,lsoMap,listIndex,insertList )
+  local mod = "LsoStoneman";
+  local meth = "ldrChunkInsert()";
+  info("[ENTER]: <%s:%s> Index(%d) List(%s)\n",
+    mod, meth, listIndex, tostring( insertList ) );
+
+  if lsoMap.PageMode == "List" then
+    return ldrChunkInsertList(ldrChunkRec,lsoMap,listIndex,insertList );
+  else
+    return ldrChunkInsertBytes(ldrChunkRec,lsoMap,listIndex,insertList );
+  end
 end -- ldrChunkInsert()
 
 -- ======================================================================
@@ -359,6 +644,116 @@ local function readEntryList( resultList, entryList, count, func, fargs, all)
 end -- readEntryList()
 
 -- ======================================================================
+-- readByteArray()
+-- ======================================================================
+-- This method reads the entry list from Warm and Cold List Pages.
+-- In each LSO Data Record (LDR), there are three Bins:  A Control Bin,
+-- a List Bin (a List() of entries), and a Binary Bin (Compacted Bytes).
+-- Similar to its sibling method (readEntryList), readByteArray() pulls a Byte
+-- entry from the compact Byte array, applies the (assumed) UDF, and then
+-- passes the resulting value back to the caller via the resultList.
+--
+-- As always, since we are doing a stack, everything is in LIFO order, 
+-- which means we always read back to front.
+-- Parms:
+--   (*) resultList:
+--   (*) LDR Chunk Page:
+--   (*) count:
+--   (*) func:
+--   (*) fargs:
+--   (*) all:
+-- Return:
+--   Implicit: entries are added to the result list
+--   Explicit: Number of Elements Read.
+-- ======================================================================
+local function readByteArray( resultList, ldrChunk, count, func, fargs, all)
+  local mod = "LsoStoneman";
+  local meth = "readByteArray()";
+  info("[ENTER]: <%s:%s> Count(%d) ResultList(%s) EntryList(%s)\n",
+    mod, meth, count, tostring(resultList), tostring(EntryList));
+
+  local doTheFunk = 0; -- Welcome to Funky Town
+
+  if (func ~= nil and fargs ~= nil ) then
+    doTheFunk = 1;
+    info("[ENTER1]: <%s:%s> Count(%d) func(%s) fargs(%s)\n",
+      mod, meth, count, func, tostring(fargs) );
+  else
+    info("[ENTER2]: <%s:%s> PeekCount(%d)\n", mod, meth, count );
+  end
+
+  -- Get addressability to the Function Table
+  local functionTable = require('UdfFunctionTable');
+
+  -- Iterate thru the BYTE structure, gathering up items in the result list.
+  -- There are two modes:
+  -- (*) ALL Mode: Read the entire list, return all that qualify
+  -- (*) Count Mode: Read <count> or <entryListSize>, whichever is smaller
+  local ldrCtrlMap = ldrChunk['LdrControlBin'];
+  local numRead = 0;
+  local numToRead = 0;
+  local listSize = ldrCtrlMap.EntryCount; -- Number of Entries
+  local entrySize = ldrCtrlMap.ByteEntrySize; -- Entry Size in Bytes
+  -- When in binary mode, we rely on the LDR page control structure to track
+  -- the ENTRY COUNT and the ENTRY SIZE.  Just like walking a list, we
+  -- move thru the BYTE value by "EntrySize" amounts.  We will try as much
+  -- as possible to treat this as a list, even though we access it directly
+  -- as an array.
+  --
+  if all == 1 or count >= listSize then
+    numToRead = listSize;
+  else
+    numToRead = count;
+  end
+
+  -- Read back to front (LIFO order), up to "numToRead" entries
+  -- The BINARY information is held in the page's control info
+  -- Current Item Count
+  -- Current Size (items must be a fixed size)
+  -- Max bytes allowed in the ByteBlock.
+  -- Example: EntrySize = 10
+  -- Address of Entry 1: 0
+  -- Address of Entry 2: 10
+  -- Address of Entry N: (N - 1) * EntrySize
+  -- 012345678901234567890 ...  01234567890
+  -- +---------+---------+------+---------+
+  -- | Entry 1 | Entry 2 | .... | Entry N | 
+  -- +---------+---------+------+---------+
+  --                            A
+  -- To Read:  Start Here ------+
+  --           and move BACK towards the front.
+  local readValue;
+  local byteValue;
+  local byteIndex = 0; -- our direct position in the byte array.
+  for i = (listSize - 1), 0, -1 do
+    byteIndex = i * entrySize;
+    readValue = bytes( entrySize ); -- Must copy each one
+
+    -- Apply the UDF to the item, if present, and if result NOT NULL, then
+    if doTheFunk == 1 then -- get down, get Funky
+      readValue = functionTable[func]( byteValue, fargs );
+    else
+      readValue = byteValue;
+    end
+
+    list.append( resultList, readValue );
+    info("[DEBUG]:<%s:%s>Appended Val(%s) to ResultList(%s)",
+      mod, meth, tostring( readValue ), tostring(resultList) );
+    
+    numRead = numRead + 1;
+    if numRead >= numToRead and all == 0 then
+      info("[Early EXIT]: <%s:%s> NumRead(%d) resultList(%s)",
+        mod, meth, numRead, tostring( resultList ));
+      return numRead;
+    end
+  end -- for each entry in the list (packed byte array)
+
+  info("[EXIT]: <%s:%s> NumRead(%d) resultList(%s) ",
+    mod, meth, numRead, tostring( resultList ));
+  return numRead;
+end -- readByteArray()
+
+-- ======================================================================
 -- transferWarmCacheList()
 -- ======================================================================
 -- Transfer some amount of the WarmCacheList contents (the list of LSO Data
@@ -440,55 +835,6 @@ local function hotCacheRead( cacheList, count, func, fargs, all)
   return resultList;
 end -- hotCacheRead()
 -- ======================================================================
-
--- ======================================================================
--- warmCacheListChunkCreate( topRec, lsoMap )
--- ======================================================================
--- Create and initialise a new LDR "chunk", load the new digest for that
--- new chunk into the lsoMap (the warm dir list), and return it.
-local function   warmCacheListChunkCreate( topRec, lsoMap )
-  local mod = "LsoStoneman";
-  local meth = "warmCacheListChunkCreate()";
-  info("[ENTER]: <%s:%s> \n", mod, meth );
-
-  -- Create the Aerospike Record, initialize the bins: Ctrl, List
-  local newLdrChunkRecord = aerospike:crec_create( topRec );
-  local ctrlMap = map();
-  ctrlMap.ParentDigest = record.digest( topRec );
-  ctrlMap.PageType = "Warm";
-  ctrlMap.PageMode = "List";
-  local newChunkDigest = record.digest( newLdrChunkRecord );
-  ctrlMap.Digest = newChunkDigest;
-  ctrlMap.BytesUsed = 0; -- We don't count control info
-  ctrlMap.EntryMax = 100; -- Move up to TopRec -- when Stable
-  ctrlMap.DesignVersion = 1;
-  ctrlMap.LogInfo = 0;
-  -- Assign Control info and List info to the LDR bins
-  newLdrChunkRecord['LdrControlBin'] = ctrlMap;
-  newLdrChunkRecord['LdrListBin'] = list();
-
-  aerospike:crec_update( topRec, newLdrChunkRecord );
-
-  -- Add our new chunk (the digest) to the WarmCacheList
-  info("[DEBUG]: <%s:%s> Appending NewChunk(%s) to WarmList(%s)\n",
-    mod, meth, tostring(newChunkDigest), tostring(lsoMap.WarmCacheList));
-  list.append( lsoMap.WarmCacheList, newChunkDigest );
-  info("[DEBUG]: <%s:%s> Post CHunkAppend:NewChunk(%s): LsoMap(%s)\n",
-    mod, meth, tostring(newChunkDigest), tostring(lsoMap));
-   
-  -- Increment the Warm Count
-  local warmChunkCount = lsoMap.WarmChunkCount;
-  lsoMap.WarmChunkCount = (warmChunkCount + 1);
-
-  -- Update the top (LSO) record with the newly updated lsoMap.
-  topRec[ lsoMap.BinName ] = lsoMap;
-
-  info("[EXIT]: <%s:%s> Return(%s) \n",
-    mod, meth, ldrChunkSummary(newLdrChunkRecord));
-  return newLdrChunkRecord;
-end --  warmCacheListChunkCreate()
--- ======================================================================
-
 -- ======================================================================
 -- warmCacheListGetTop( topRec, lsoMap )
 -- ======================================================================
@@ -534,8 +880,16 @@ local function ldrChunkRead( ldrChunk, resultList, count, func, fargs, all )
   local mod = "LsoStoneman";
   local meth = "ldrChunkRead()";
 
-  local chunkList = ldrChunk['LdrListBin'];
-  local numRead = readEntryList(resultList,chunkList, count, func, fargs, all);
+  -- If the page is "Binary" mode, then we're using the "Binary" Bin
+  -- 'LdrBinaryBin', otherwise we're using the "List" Bin 'LdrListBin'.
+  local chunkMap = ldrChunk['LdrControlBin'];
+  local numRead = 0;
+  if chunkMap.PageMode == "List" then
+    local chunkList = ldrChunk['LdrListBin'];
+    numRead = readEntryList(resultList,chunkList, count, func, fargs, all);
+  else
+    numRead = readByteArray(resultList, ldrChunk, count, func, fargs, all);
+  end
 
   info("[EXIT]: <%s:%s> NumberRead(%d) ResultList(%s) \n",
     mod, meth, numRead, tostring( resultList ));
@@ -660,6 +1014,10 @@ local function warmCacheInsert( topRec, lsoMap, insertList )
   info("[DEBUG]: <%s:%s> Calling Chunk Insert: List(%s)\n",
     mod, meth, tostring( insertList ));
   local countWritten = ldrChunkInsert( topWarmChunk, lsoMap, 1, insertList );
+  if( countWritten == -1 ) then
+    warn("[ERROR]: <%s:%s>: Internal Error in Chunk Insert", mod, meth);
+    return -1;  -- General badness
+  end
   local itemsLeft = totalCount - countWritten;
   if itemsLeft > 0 then
     aerospike:crec_update( topRec, topWarmChunk );
@@ -673,6 +1031,10 @@ local function warmCacheInsert( topRec, lsoMap, insertList )
   info("[DEBUG]: <%s:%s> Calling Chunk Insert: List(%s) AGAIN(%d)\n",
     mod, meth, tostring( insertList ), countWritten + 1);
     countWritten = ldrChunkInsert( topWarmChunk, lsoMap, countWritten+1, insertList );
+    if( countWritten == -1 ) then
+      warn("[ERROR]: <%s:%s>: Internal Error in Chunk Insert", mod, meth);
+      return -1;  -- General badness
+    end
     if countWritten ~= itemsLeft then
       warn("[ERROR!!]: <%s:%s> Second Warm Chunk Write: CW(%d) IL(%d) \n",
         mod, meth, countWritten, itemsLeft );
@@ -903,6 +1265,12 @@ end -- hotCacheHasRoom()
 --    Map (control information) showing the status of the packed Binary bin.
 -- (3) Cold List: Same Chunk format as the Warm List Chunk Record.
 --
+-- Change in plan -- All items go on the HotList, regardless of type.
+-- Only when we transfer to Warm/Cold do we employ the COMPACT STORAGE
+-- trick of packing bytes contiguously in the Binary Bin.
+--
+-- The Top LSO page (and the individual LDR chunk pages) have the control
+-- data about the byte entries (entry size, entry count).
 -- Parms:
 -- (*) lsoMap: the map for the LSO Bin
 -- (*) newStorageValue: the new value to be pushed on the stack
@@ -913,16 +1281,7 @@ local function hotCacheInsert( lsoMap, newStorageValue  )
     mod, meth, tostring(newStorageValue) );
 
   local hotCacheList = lsoMap.HotCacheList;
-  if newStorageValue.StorageMode == 0 then
-    info("[DEBUG]: <%s:%s> : (NOT READY!!) Perform COMPACT STORAGE\n",
-      mod, meth );
-    -- TODO: hotCacheInsert(): Must finish Compact Storage
-    -- Depending on our current state of implementation, we are either
-    -- going to copy our compact storage into a special bin, or we are
-    -- going to assign the BYTES value into the cache list
-  else
-    list.append( hotCacheList, newStorageValue.Value );
-  end
+  list.append( hotCacheList, newStorageValue.Value );
   local itemCount = lsoMap.ItemCount;
   lsoMap.ItemCount = (itemCount + 1);
   local hotCount = lsoMap.HotCacheItemCount;
@@ -931,64 +1290,6 @@ local function hotCacheInsert( lsoMap, newStorageValue  )
 
 end -- hotCacheInsert()
 -- ======================================================================
-
--- ======================================================================
--- initializeLsoMap:
--- ======================================================================
--- Set up the LSO Map with the standard (default) values.
--- These values may later be overridden by the user.
--- The structure held in the Record's "LSO BIN" is this map.  This single
--- structure contains ALL of the settings/parameters that drive the LSO
--- behavior.
--- ======================================================================
-local function initializeLsoMap( topRec, lsoBinName )
-  local mod = "LsoStoneman";
-  local meth = "initializeLsoMap()";
-  info("[ENTER]: <%s:%s>:: LsoBinName(%s)\n", mod, meth, tostring(lsoBinName));
-
-  -- Create the map, and fill it in.
-  local lsoMap = map();
-  -- General Parms:
-  lsoMap.ItemCount = 0;     -- A count of all items in the stack
-  lsoMap.DesignVersion = 1; -- Current version of the code
-  lsoMap.Magic = "MAGIC"; -- we will use this to verify we have a valid map
-  lsoMap.BinName = lsoBinName; -- Defines the LSO Bin
-  lsoMap.NameSpace = "test"; -- Default NS Name -- to be overridden by user
-  lsoMap.Set = "set";       -- Default Set Name -- to be overridden by user
-  -- LSO Data Record Chunk Settings
-  lsoMap.LdrEntryMax = 200;  -- Max # of items in a Data Chunk (List Mode)
-  lsoMap.LdrEntrySize = 20;  -- Must be a setable parm
-  lsoMap.LdrByteMax = 2000;  -- Max # of BYTES in a Data Chunk (binary mode)
-  -- Hot Cache Settings
-  lsoMap.HotCacheList = list();
-  lsoMap.HotCacheItemCount = 0; -- Number of elements in the Top Cache
-  lsoMap.HotCacheMax = 200; -- Max Number for the cache -- when we transfer
-  lsoMap.HotCacheTransfer = 100; -- How much to Transfer at a time.
-  -- Warm Cache Settings
-  lsoMap.WarmTopFull = 0; -- 1  when the top chunk is full (for the next write)
-  lsoMap.WarmCacheList = list();   -- Define a new list for the Warm Stuff
-  lsoMap.WarmChunkCount = 0; -- Number of Warm Data Record Chunks
-  lsoMap.WarmCacheDirMax = 1000; -- Number of Warm Data Record Chunks
-  lsoMap.WarmChunkTransfer = 10; -- Number of Warm Data Record Chunks
-  lsoMap.WarmTopChunkEntryCount = 0; -- Count of entries in top warm chunk
-  lsoMap.WarmTopChunkByteCount = 0; -- Count of bytes used in top warm Chunk
-  -- Cold Cache Settings
-  lsoMap.ColdChunkCount = 0; -- Number of Cold Data Record Chunks
-  lsoMap.ColdDirCount = 0; -- Number of Cold Data Record DIRECTORY Chunks
-  lsoMap.ColdListHead  = 0;   -- Nothing here yet
-  lsoMap.ColdCacheDirMax = 100;  -- Should be a setable parm
-
-  info("[DEBUG]: <%s:%s> : CTRL Map after Init(%s)\n",
-    mod, meth , tostring(lsoMap));
-
-  -- Put our new map in the record, then store the record.
-  topRec[lsoBinName] = lsoMap;
-
-  info("[EXIT]:<%s:%s>:Dir Map after Init(%s)\n", mod,meth,tostring(lsoMap));
-  return lsoMap
-end -- initializeLsoMap
-
-
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 -- LSO Main Functions
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
@@ -1027,7 +1328,7 @@ end -- initializeLsoMap
 --  (2.1) LsoBinName
 --  (2.2) Namespace (just one, for now)
 --  (2.3) Set
---  (2.4) LdrByteMax
+--  (2.4) LdrByteCountMax
 --  (2.5) Design Version
 --
 --  !!!! More parms needed here to appropriately configure the LSO
@@ -1056,7 +1357,7 @@ function stackCreate( topRec, lsoBinName, arglist )
 
   -- Check to see if LSO Structure (or anything) is already there,
   -- and if so, error
-  if( topRec[lsoBinName] ~= nil ) then
+  if topRec[lsoBinName] ~= nil  then
     warn("[ERROR EXIT]: <%s:%s> LSO BIN(%s) Already Exists\n",
       mod, meth, tostring(lsoBinName) );
     return('LSO_BIN already exists');
@@ -1497,12 +1798,10 @@ local function testCreateNewComplexRecord( topRec, lsoMap, newValue )
   local newLdrChunkRecord = aerospike:crec_create( topRec );
   local ctrlMap = map();
   ctrlMap.ParentDigest = record.digest( topRec );
-  ctrlMap.PageType = "Warm";
-  ctrlMap.PageMode = "List";
+  ctrlMap.PageMode = lsoMap.PageMode;
   info("[DEBUG]: <%s:%s>: Calling Rec.Digest\n", mod, meth);
   local newChunkDigest = record.digest( newLdrChunkRecord );
   ctrlMap.Digest = newChunkDigest;
-  ctrlMap.BytesUsed = 0; -- We don't count control info
   ctrlMap.EntryMax = 100; -- Move up to TopRec -- when Stable
   ctrlMap.DesignVersion = 1;
   ctrlMap.LogInfo = 0;
@@ -1552,11 +1851,9 @@ local function testCreateNewSimpleRecord( topRec, lsoMap, newValue )
   local newLdrChunkRecord = aerospike:crec_create( topRec );
   local ctrlMap = map();
   ctrlMap.ParentDigest = record.digest( topRec );
-  ctrlMap.PageType = "Warm";
-  ctrlMap.PageMode = "List";
+  ctrlMap.PageMode = lsoMap.PageMode;
   local newChunkDigest = record.digest( newLdrChunkRecord );
   ctrlMap.Digest = newChunkDigest;
-  ctrlMap.BytesUsed = 0; -- We don't count control info
   ctrlMap.EntryMax = 100; -- Move up to TopRec -- when Stable
   ctrlMap.DesignVersion = 1;
   ctrlMap.LogInfo = 0;

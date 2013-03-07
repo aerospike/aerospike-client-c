@@ -727,6 +727,10 @@ local function warmDirRead(topRec, resultList, lsoMap, count,
     chunkItemsRead =
       ldrChunkRead( ldrChunk, resultList, remaining, func, fargs, all );
     totalWarmAmountRead = totalWarmAmountRead + chunkItemsRead;
+    remaining = remaining - chunkItemsRead;
+    info("[DEBUG]:<%s:%s>After CH Rd: OrigCnt(%d) Rem(%d) Items(%d) TotRd(%d)",
+      mod, meth, count, remaining, chunkItemsRead, totalWarmAmountRead );
+
     -- Early exit ONLY when ALL flag is not set.
     if( all == 0 and
         ( chunkItemsRead >= remaining or totalWarmAmountRead >= count ) )

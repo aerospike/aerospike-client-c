@@ -277,12 +277,19 @@ function UdfFunctionTable.stumbleUnCompress5( b18, arglist )
   info("[ENTER]: <%s:%s> BinaryTuple(%s) Tuple Type(%s) ArgList(%s) \n",
     mod, meth, tostring(b18), type(b18), tostring(arglist));
 
-  local stumbleTuple = list();
-  stumbleTuple[1] = bytes.get_int32(b18, 1 );  -- 4 byte int
-  stumbleTuple[2] = bytes.get_int32(b18, 5 );  -- 4 byte int
-  stumbleTuple[3] = bytes.get_int32(b18, 9 );  -- 4 byte int
-  stumbleTuple[4] = bytes.get_int32(b18, 13 ); -- 4 byte int
-  stumbleTuple[5] = bytes.get_int16(b18, 17);  -- 2 byte int
+  local stumbleTuple = list(5);
+  -- NOTE: Must append.  Can't index directly into it.
+  list.append( stumbleTuple, bytes.get_int32(b18, 1 ));  -- 4 byte int
+  list.append( stumbleTuple, bytes.get_int32(b18, 5 ));  -- 4 byte int
+  list.append( stumbleTuple, bytes.get_int32(b18, 9 ));  -- 4 byte int
+  list.append( stumbleTuple, bytes.get_int32(b18, 13)); -- 4 byte int
+  list.append( stumbleTuple, bytes.get_int16(b18, 17));  -- 2 byte int
+
+--  stumbleTuple[1] = bytes.get_int32(b18, 1 );  -- 4 byte int
+--  stumbleTuple[2] = bytes.get_int32(b18, 5 );  -- 4 byte int
+--  stumbleTuple[3] = bytes.get_int32(b18, 9 );  -- 4 byte int
+--  stumbleTuple[4] = bytes.get_int32(b18, 13 ); -- 4 byte int
+--  stumbleTuple[5] = bytes.get_int16(b18, 17);  -- 2 byte int
 
   info("[EXIT]: <%s:%s> TupleResult(%s) type(%s)\n",
     mod, meth, tostring(stumbleTuple), type(stumbleTuple ));

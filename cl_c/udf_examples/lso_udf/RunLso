@@ -46,9 +46,6 @@ ascli get $UNS $USET $UKEY
 echo ">> Check STACK CREATE (key $UKEY) with ascli get (expect full record)"
 ascli get $UNS $USET $UKEY
 
-echo ">> Call UDF Stack Push: ==> $UFILE stackPush $LSOBIN '[11,12,13,14]'"
-ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPush $LSOBIN '[11,12,13,14]'
-
 echo ">> Call UDF Stack Peek(): Key($UKEY) $UFILE stackPeek $LSOBIN 0"
 ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPeek $LSOBIN 0
 

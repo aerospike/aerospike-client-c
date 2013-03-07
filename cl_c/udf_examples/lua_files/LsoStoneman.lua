@@ -301,7 +301,9 @@ end -- chunkSpaceCheck()
 local function readEntryList( resultList, entryList, count, func, fargs, all)
   local mod = "LsoStoneman";
   local meth = "readEntryList()";
-  info("[ENTER]: <%s:%s> Count(%d) \n", mod, meth, count );
+  info("[ENTER]: <%s:%s> Count(%d) ResultList(%s) EntryList(%s)\n",
+    mod, meth, count, tostring(resultList), tostring(EntryList));
+
   local doTheFunk = 0; -- Welcome to Funky Town
 
   if (func ~= nil and fargs ~= nil ) then
@@ -309,12 +311,9 @@ local function readEntryList( resultList, entryList, count, func, fargs, all)
     info("[ENTER1]: <%s:%s> Count(%d) func(%s) fargs(%s)\n",
       mod, meth, count, func, tostring(fargs) );
   else
-    info("[ENTER2]: <%s:%s> PeekCount(%d)\n", 
-      mod, meth, count );
+    info("[ENTER2]: <%s:%s> PeekCount(%d)\n", mod, meth, count );
   end
 
-  -- Iterate thru the cache, gathering up items in the result list.
-  local resultList = list();
   -- Get addressability to the Function Table
   local functionTable = require('UdfFunctionTable');
 
@@ -343,15 +342,19 @@ local function readEntryList( resultList, entryList, count, func, fargs, all)
     end
 
     list.append( resultList, readValue );
+--    info("[DEBUG]:<%s:%s>Appended Val(%s) to ResultList(%s)",
+--      mod, meth, tostring( readValue ), tostring(resultList) );
     
     numRead = numRead + 1;
-    if numRead >= numToRead then
-      info("[Early EXIT]: <%s:%s> NumRead(%d) \n", mod, meth, numRead );
+    if numRead >= numToRead and all == 0 then
+      info("[Early EXIT]: <%s:%s> NumRead(%d) resultList(%s)",
+        mod, meth, numRead, tostring( resultList ));
       return numRead;
     end
   end -- for each entry in the list
 
-  info("[EXIT]: <%s:%s> NumRead(%d) \n", mod, meth, numRead );
+  info("[EXIT]: <%s:%s> NumRead(%d) resultList(%s) ",
+    mod, meth, numRead, tostring( resultList ));
   return numRead;
 end -- readEntryList()
 
@@ -571,9 +574,9 @@ local function warmCacheRead(topRec, resultList, lsoMap, count,
   local stringDigest;
   local status = 0;
 
-  info("[DEBUG]: <%s:%s>: DirCount(%d),Top(%s) Reading WarmDirList(%s)(%s):\n",
+  info("[DEBUG]:<%s:%s>:DirCount(%d),Top(%s) Reading warmCacheList(%s)(%s):\n",
   mod, meth, dirCount, validateTopRec( topRec, lsoMap ),
-  tostring( warmDirList), tostring(warmDirList[1]));
+  tostring( warmDirList), tostring(warmCacheList[1]));
 
   -- Read each Warm Chunk, adding to the resultList, until we either bypass
   -- the readCount, or we hit the end (either readCount is large, or the ALL
@@ -589,6 +592,9 @@ local function warmCacheRead(topRec, resultList, lsoMap, count,
     chunkItemsRead =
     ldrChunkRead( ldrChunk, resultList, remaining, func, fargs, all );
     totalWarmAmountRead = totalWarmAmountRead + chunkItemsRead;
+
+    info("[DEBUG]: <%s:%s>:after ChunkRead: Dir(%d) ResList(%s)", 
+      mod, meth, dirIndex, tostring( resultList ));
     -- Early exit ONLY when ALL flag is not set.
     if( all == 0 and
       ( chunkItemsRead >= remaining or totalWarmAmountRead >= count ) )
@@ -792,14 +798,14 @@ local function lsoMapRead( topRec, lsoMap, peekCount, func, fargs )
   -- Each time we decrement the count and add to the resultlist.
   local cacheList = lsoMap.HotCacheList;
   local resultList = hotCacheRead( cacheList, peekCount, func, fargs, all);
-  local cacheCount = list.size( resultList );
+  local numRead = list.size( resultList );
   info("[DEBUG]: <%s:%s> HotListResult(%s)\n", mod, meth,tostring(resultList));
 
   local warmCount = 0;
   local warmList;
 
   -- If the cache had all that we need, then done.  Return list.
-  if( cacheCount >= peekCount and all == 0) then
+  if( numRead >= peekCount and all == 0) then
     return resultList;
   end
 
@@ -813,7 +819,7 @@ local function lsoMapRead( topRec, lsoMap, peekCount, func, fargs )
   info("[DEBUG]: <%s:%s> Checking WarmList Count(%d) All(%d)\n",
     mod, meth, remainingCount, all);
   -- If no Warm List, then we're done (assume no cold list if no warm)
-  if list.size(lsoMap.WarmDirList) > 0 then
+  if list.size(lsoMap.WarmCacheList) > 0 then
     warmCount =
       warmDirRead(topRec, resultList, lsoMap, remainingCount, func, fargs, all);
   end
@@ -1054,13 +1060,11 @@ function stackCreate( topRec, lsoBinName, arglist )
     warn("[ERROR EXIT]: <%s:%s> LSO BIN(%s) Already Exists\n",
       mod, meth, tostring(lsoBinName) );
     return('LSO_BIN already exists');
-  else
-    -- Create and initialize the LSO MAP -- the main LSO structure
-    local lsoMap = initializeLsoMap( topRec, lsoBinName );
   end
 
-  -- Put our new map in the record, then store the record.
-  topRec[lsoBinName] = lsoMap;
+  -- Create and initialize the LSO MAP -- the main LSO structure
+  -- initializeLsoMap() also assigns the map to the record bin.
+  local lsoMap = initializeLsoMap( topRec, lsoBinName );
 
   info("[DEBUG]:<%s:%s>:Dir Map after Init(%s)\n", mod,meth,tostring(lsoMap));
 
@@ -1107,10 +1111,11 @@ local function localStackPush( topRec, lsoBinName, newValue, func, fargs )
   if (func ~= nil and fargs ~= nil ) then
     doTheFunk = 1;
     info("[ENTER1]: <%s:%s> LSO BIN(%s) NewValue(%s) func(%s) fargs(%s)\n",
-      mod, meth, lsoBinName, tostring( newValue ), func, tostring(fargs) );
+      mod, meth, tostring(lsoBinName), tostring( newValue ),
+      tostring(func), tostring(fargs) );
   else
     info("[ENTER2]: <%s:%s> LSO BIN(%s) NewValue(%s)\n",
-      mod, meth, lsoBinName, tostring( newValue ));
+      mod, meth, tostring(lsoBinName), tostring( newValue ));
   end
 
   -- Some simple protection if things are weird
@@ -1124,9 +1129,7 @@ local function localStackPush( topRec, lsoBinName, newValue, func, fargs )
     warn("[WARNING]:<%s:%s>:Record Does Not exist. Creating\n", mod, meth );
     lsoMap = initializeLsoMap( topRec, lsoBinName );
     aerospike:create( topRec );
-  end
-
-  if( topRec[lsoBinName] == nil ) then
+  elseif ( topRec[lsoBinName] == nil ) then
     warn("[WARNING]: <%s:%s> LSO BIN (%s) DOES NOT Exist: Creating\n",
       mod, meth, tostring(lsoBinName) );
     lsoMap = initializeLsoMap( topRec, lsoBinName );
@@ -1146,13 +1149,13 @@ local function localStackPush( topRec, lsoBinName, newValue, func, fargs )
   local newStorageValue;
   if doTheFunk == 1 then 
     info("[DEBUG]: <%s:%s> Applying UDF (%s) with args(%s)\n",
-      mod, meth, func, tostring( fargs ));
+      mod, meth, tostring(func), tostring( fargs ));
     newValue = functionTable[func]( newValue, fargs );
   end
 
   newStorageValue = valueStorage( type(newValue), newValue );
   info("[DEBUG]: <%s:%s> AFTER UDF (%s) with ValueStorage(%s)\n",
-      mod, meth, func, tostring( newStorageValue ));
+      mod, meth, tostring(func), tostring( newStorageValue ));
 
   -- If we have room, do the simple cache insert.  If we don't have
   -- room, then make room -- transfer half the cache out to the warm list.
@@ -1173,7 +1176,7 @@ local function localStackPush( topRec, lsoBinName, newValue, func, fargs )
 
   info("[EXIT]: <%s:%s> : Done.  RC(%d)\n", mod, meth, rc );
   return rc
-end -- function stackPush()
+end -- function localStackPush()
 
 -- =======================================================================
 -- Stack Push -- with and without inner UDFs
@@ -1184,19 +1187,10 @@ end -- function stackPush()
 -- other incorrect value/type
 -- =======================================================================
 function stackPush( topRec, lsoBinName, newValue )
-  local mod = "LsoStoneman";
-  local meth = "stackPush()";
-  info("[ENTER]: <%s:%s> LSO BIN(%s) NewValue(%s)\n",
-    mod, meth, tostring(lsoBinName), tostring( newValue ));
   return localStackPush( topRec, lsoBinName, newValue, nil, nil )
 end -- end stackPush()
 
 function stackPushWithUDF( topRec, lsoBinName, newValue, func, fargs )
-  local mod = "LsoStoneman";
-  local meth = "stackPushWithUDF()";
-  info("[ENTER]: <%s:%s> LSO BIN(%s) NewValue(%s) Func(%s) Fargs(%s)\n",
-    mod, meth, tostring(lsoBinName), tostring( newValue ),
-    tostring(func), tostring(fargs));
   return localStackPush( topRec, lsoBinName, newValue, func, fargs );
 end -- stackPushWithUDF()
 

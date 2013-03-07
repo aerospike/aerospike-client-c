@@ -239,7 +239,8 @@ end
 -- (2) arglist
 -- Return:
 -- The newly created Byte object, 18 bytes long
--- ====================================================================== function UdfFunctionTable.stumbleCompress5( stumbleTuple, arglist )
+-- ====================================================================== 
+function UdfFunctionTable.stumbleCompress5( stumbleTuple, arglist )
   local mod = "UdfFunctionTable";
   local meth = "stumbleCompress5()";
   local rc = 0;

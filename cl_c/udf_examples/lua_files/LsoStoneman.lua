@@ -956,14 +956,14 @@ local function initializeLsoMap( topRec, lsoBinName )
   lsoMap.NameSpace = "test"; -- Default NS Name -- to be overridden by user
   lsoMap.Set = "set";       -- Default Set Name -- to be overridden by user
   -- LSO Data Record Chunk Settings
-  lsoMap.LdrEntryMax = 100;  -- Max # of items in a Data Chunk (List Mode)
+  lsoMap.LdrEntryMax = 200;  -- Max # of items in a Data Chunk (List Mode)
   lsoMap.LdrEntrySize = 20;  -- Must be a setable parm
   lsoMap.LdrByteMax = 2000;  -- Max # of BYTES in a Data Chunk (binary mode)
   -- Hot Cache Settings
   lsoMap.HotCacheList = list();
   lsoMap.HotCacheItemCount = 0; -- Number of elements in the Top Cache
-  lsoMap.HotCacheMax = 100; -- Max Number for the cache -- when we transfer
-  lsoMap.HotCacheTransfer = 50; -- How much to Transfer at a time.
+  lsoMap.HotCacheMax = 200; -- Max Number for the cache -- when we transfer
+  lsoMap.HotCacheTransfer = 100; -- How much to Transfer at a time.
   -- Warm Cache Settings
   lsoMap.WarmTopFull = 0; -- 1  when the top chunk is full (for the next write)
   lsoMap.WarmCacheList = list();   -- Define a new list for the Warm Stuff

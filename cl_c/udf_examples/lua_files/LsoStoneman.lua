@@ -152,7 +152,7 @@ local function extractHotCacheTransferList( lsoMap )
   -- Point to the new Cache List and update the Hot Count.
   lsoMap.HotCacheList = newHotCacheList;
   oldHotCacheList = nil;
-  lsoMap.HotItemCount = lsoMap.HotItemCount - transAmount;
+  lsoMap.HotCacheItemCount = lsoMap.HotCacheItemCount - transAmount;
 
   info("[EXIT]: <%s:%s> ResultList(%s) \n", mod, meth, tostring(resultList));
   return resultList;
@@ -442,13 +442,13 @@ end -- hotCacheRead()
 -- ======================================================================
 
 -- ======================================================================
--- WarmCacheChunkCreate( topRec, lsoMap )
+-- warmCacheListChunkCreate( topRec, lsoMap )
 -- ======================================================================
 -- Create and initialise a new LDR "chunk", load the new digest for that
 -- new chunk into the lsoMap (the warm dir list), and return it.
-local function   WarmCacheChunkCreate( topRec, lsoMap )
+local function   warmCacheListChunkCreate( topRec, lsoMap )
   local mod = "LsoStoneman";
-  local meth = "WarmCacheChunkCreate()";
+  local meth = "warmCacheListChunkCreate()";
   info("[ENTER]: <%s:%s> \n", mod, meth );
 
   -- Create the Aerospike Record, initialize the bins: Ctrl, List
@@ -486,25 +486,25 @@ local function   WarmCacheChunkCreate( topRec, lsoMap )
   info("[EXIT]: <%s:%s> Return(%s) \n",
     mod, meth, ldrChunkSummary(newLdrChunkRecord));
   return newLdrChunkRecord;
-end --  WarmCacheChunkCreate()
+end --  warmCacheListChunkCreate()
 -- ======================================================================
 
 -- ======================================================================
--- WarmCacheGetTop( topRec, lsoMap )
+-- warmCacheListGetTop( topRec, lsoMap )
 -- ======================================================================
 -- Find the digest of the top of the Warm Dir List, Open that record and
 -- return that opened record.
 -- ======================================================================
-local function   WarmCacheGetTop( topRec, lsoMap )
+local function warmCacheListGetTop( topRec, lsoMap )
   local mod = "LsoStoneman";
-  local meth = "WarmCacheGetTop()";
+  local meth = "warmCacheListGetTop()";
   info("[ENTER]: <%s:%s> \n", mod, meth );
 
   local warmCacheList = lsoMap.WarmCacheList;
   local stringDigest = tostring( warmCacheList[ list.size(warmCacheList) ]);
 
-  info("[DEBUG]: <%s:%s> Warm Digest(%s) item#(%d)\n", 
-      mod, meth, stringDigest, list.size( warmDirList ));
+  info("[DEBUG]: <%s:%s> Warm Digest(%s) item#(%d)", 
+      mod, meth, stringDigest, list.size( warmCacheList ));
 
   local topWarmChunk = aerospike:crec_open( topRec, stringDigest );
 
@@ -569,21 +569,21 @@ local function warmCacheRead(topRec, resultList, lsoMap, count,
   local remaining = count;
   local totalWarmAmountRead = 0;
   local chunkItemsRead = 0;
-  local dirCount = list.size( warmDirList );
+  local dirCount = list.size( warmCacheList );
   local ldrChunk;
   local stringDigest;
   local status = 0;
 
   info("[DEBUG]:<%s:%s>:DirCount(%d),Top(%s) Reading warmCacheList(%s)(%s):\n",
   mod, meth, dirCount, validateTopRec( topRec, lsoMap ),
-  tostring( warmDirList), tostring(warmCacheList[1]));
+  tostring( warmCacheList), tostring(warmCacheList[1]));
 
   -- Read each Warm Chunk, adding to the resultList, until we either bypass
   -- the readCount, or we hit the end (either readCount is large, or the ALL
   -- flag is set).
   for dirIndex = dirCount, 1, -1 do
     -- Record Digest MUST be in string form
-    stringDigest = tostring(warmDirList[ dirIndex ]);
+    stringDigest = tostring(warmCacheList[ dirIndex ]);
     info("[DEBUG]: <%s:%s>: Opening Warm Chunk:Index(%d)Digest(%s):\n",
     mod, meth, dirIndex, stringDigest );
     ldrChunk = aerospike:crec_open( topRec, stringDigest );
@@ -821,7 +821,7 @@ local function lsoMapRead( topRec, lsoMap, peekCount, func, fargs )
   -- If no Warm List, then we're done (assume no cold list if no warm)
   if list.size(lsoMap.WarmCacheList) > 0 then
     warmCount =
-      warmDirRead(topRec, resultList, lsoMap, remainingCount, func, fargs, all);
+      warmCacheRead(topRec, resultList, lsoMap, remainingCount, func, fargs, all);
   end
 
   return resultList; -- No Cold List processing for now. This is everything.

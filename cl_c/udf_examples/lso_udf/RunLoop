@@ -1,19 +1,14 @@
 #!/bin/bash
 echo "<< -----------  Run UDF << LSO Stickman V2>> Tests ---------------- >> "
 
-export UNS="test"
-export USET="set"
-export UKEY="abc"
-export UFILE="LsoStickman"
-export UCHUNK=2000
-
-export UNS="test"
-export USET="set"
 # This script exercises the Aerospike LSO Functions
-#
+export UNS="test"
+export USET="set"
+export UFILE="LsoStickman"
+# export UFILE="LsoStoneman"
+export UCHUNK=2000
 export UKEY="LSO_ABC"
 export LSOBIN="LsoBin"
-export UFILE="LsoStickman"
 export FUN_CR8="stackCreate"
 export FUN_INS="stackPush"
 export FUN_INSWU="stackPushWithUDF"
@@ -26,11 +21,11 @@ export ARGLIST='["LsoBin","test","set",2000,1]'
 # ascli udf-put $UFILE.lua
 
 # Should work WITH and WITHOUT having an existing Record.
-# echo ">> CREATE (Simple Put: key $UKEY) for use with UDF"
-# ascli put $UNS $USET $UKEY '{"LSOTestBin": "Stack Test TWO"}'
+echo ">> CREATE (Simple Put: key $UKEY) for use with UDF"
+ascli put $UNS $USET $UKEY '{"LSOTestBin": "Stack Test TWO"}'
 #-----
-# echo ">> Check CREATE (key $UKEY) with get"
-# ascli get $UNS $USET $UKEY
+echo ">> Check CREATE (key $UKEY) with get"
+ascli get $UNS $USET $UKEY
 #-----
 
 URLID=1000
@@ -44,7 +39,7 @@ STATUS=1
 echo "For USERS( count = $NUM_USERS ) Perform ( count = 200 ) Pushes"
 
 USERID=2000
-NUM_USERS=50
+NUM_USERS=5
 U=0;
 while [ $U -lt $NUM_USERS ]; do
   echo ">> Call UDF Stack Create: $USERID $LSOBIN $ARGLIST << "
@@ -53,7 +48,7 @@ while [ $U -lt $NUM_USERS ]; do
   NUM_PUSHES=200;
   I=0;
   while [ $I -lt $NUM_PUSHES ]; do
-    echo URL: $USERID: $URLID CREATED: $CREATED METH_A: $METH_A METH_B: $METH_B STATUS: $STATUS
+#   echo URL: $USERID: $URLID CREATED: $CREATED METH_A: $METH_A METH_B: $METH_B STATUS: $STATUS
     TUPLE="[${URLID},${CREATED},${METH_A},${METH_B},${STATUS}]"
     ascli udf-record-apply $UNS $USET $USERID $UFILE stackPush $LSOBIN $TUPLE
     I=$[${I}+1];

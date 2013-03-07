@@ -1484,4 +1484,5 @@ void citrusleaf_query_shutdown() {
         pthread_join(g_query_th[i],NULL);
     }
     cf_queue_destroy(g_query_q);
+	cf_atomic32_decr(&query_initialized);
 }

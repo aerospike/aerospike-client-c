@@ -1429,7 +1429,7 @@ function stackCreate( topRec, lsoBinName, argList )
   end
 
   -- Some simple protection if things are weird
-  if lsoBinName == nil then
+  if lsoBinName == nil  or type(lsoBinName) ~= "string" then
     warn("[WARNING]: <%s:%s> Bad LSO BIN Name: Using default\n", mod, meth );
     lsoBinName = "LsoBin";
   end
@@ -1505,7 +1505,7 @@ local function localStackPush( topRec, lsoBinName, newValue, func, fargs )
   end
 
   -- Some simple protection if things are weird
-  if lsoBinName == nil then
+  if lsoBinName == nil  or type(lsoBinName) ~= "string" then
     warn("[WARNING]: <%s:%s> Bad LSO BIN Name: Using default\n", mod, meth );
     lsoBinName = "LsoBin";
   end
@@ -1608,14 +1608,15 @@ end -- stackPushWithUDF()
 local function localStackPeek( topRec, lsoBinName, peekCount, func, fargs )
   local mod = "LsoStoneman";
   local meth = "localStackPeek()";
-  info("[ENTER]: <%s:%s> PeekCount(%d) \n", mod, meth, peekCount );
+  info("[ENTER]: <%s:%s> PeekCount(%s) \n", mod, meth,tostring(peekCount) );
 
   if (func ~= nil and fargs ~= nil ) then
-    info("[ENTER1]: <%s:%s> LSO BIN(%s) PeekCount(%d) func(%s) fargs(%s)\n",
-      mod, meth, lsoBinName, peekCount,  func, tostring(fargs) );
+    info("[ENTER1]: <%s:%s> LSO BIN(%s) PeekCount(%s) func(%s) fargs(%s)\n",
+      mod, meth, tostring(lsoBinName), tostring(peekCount),
+      tostring(func), tostring(fargs) );
   else
-    info("[ENTER2]: <%s:%s> LSO BIN(%s) PeekCount(%d)\n", 
-      mod, meth, lsoBinName, peekCount );
+    info("[ENTER2]: <%s:%s> LSO BIN(%s) PeekCount(%s)\n", 
+      mod, meth, tostring(lsoBinName), tostring(peekCount) );
   end
 
   if( not aerospike:exists( topRec ) ) then
@@ -1624,13 +1625,13 @@ local function localStackPeek( topRec, lsoBinName, peekCount, func, fargs )
   end
 
   -- Verify that the LSO Structure is there: otherwise, error.
-  if( lsoBinName == nil ) then
+  if lsoBinName == nil  or type(lsoBinName) ~= "string" then
     warn("[ERROR EXIT]: <%s:%s> Bad LSO BIN Parameter\n", mod, meth );
     return('Bad LSO Bin Parameter');
   end
   if( topRec[lsoBinName] == nil ) then
     warn("[ERROR EXIT]: <%s:%s> LSO_BIN (%s) DOES NOT Exists\n",
-      mod, meth, lsoBinName );
+      mod, meth, tostring(lsoBinName) );
     return('LSO_BIN Does NOT exist');
   end
   

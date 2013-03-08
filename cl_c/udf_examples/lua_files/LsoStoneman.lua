@@ -672,8 +672,8 @@ end -- readEntryList()
 local function readByteArray( resultList, ldrChunk, count, func, fargs, all)
   local mod = "LsoStoneman";
   local meth = "readByteArray()";
-  info("[ENTER]: <%s:%s> Count(%d) ResultList(%s) EntryList(%s)\n",
-    mod, meth, count, tostring(resultList), tostring(EntryList));
+  info("[ENTER]: <%s:%s> Count(%d) ResultList(%s) ",
+    mod, meth, count, tostring(resultList) );
 
   local doTheFunk = 0; -- Welcome to Funky Town
 
@@ -693,6 +693,7 @@ local function readByteArray( resultList, ldrChunk, count, func, fargs, all)
   -- (*) ALL Mode: Read the entire list, return all that qualify
   -- (*) Count Mode: Read <count> or <entryListSize>, whichever is smaller
   local ldrCtrlMap = ldrChunk['LdrControlBin'];
+  local byteArray = ldrChunk['LdrBinaryBin'];
   local numRead = 0;
   local numToRead = 0;
   local listSize = ldrCtrlMap.ByteEntryCount; -- Number of Entries
@@ -728,11 +729,15 @@ local function readByteArray( resultList, ldrChunk, count, func, fargs, all)
   local readValue;
   local byteValue;
   local byteIndex = 0; -- our direct position in the byte array.
-  info("[DEBUG]:<%s:%s>Starting the loop thru the Byte Array: ListSize(%d)",
-      mod, meth, listSize );
+  info("[DEBUG]:<%s:%s>Starting loop Byte Array(%s) ListSize(%d)",
+      mod, meth, tostring(byteArray), listSize );
   for i = (listSize - 1), 0, -1 do
+
     byteIndex = i * entrySize;
-    readValue = bytes( entrySize ); -- Must copy each one
+    byteValue = bytes.get_bytes( byteArray, byteIndex, entrySize );
+
+    info("[DEBUG]:<%s:%s>: In Loop: i(%d) BI(%d) BV(%s)",
+      mod, meth, i, byteIndex, tostring( byteValue ));
 
     -- Apply the UDF to the item, if present, and if result NOT NULL, then
     if doTheFunk == 1 then -- get down, get Funky
@@ -933,9 +938,9 @@ local function warmCacheRead(topRec, resultList, lsoMap, count,
   local stringDigest;
   local status = 0;
 
-  info("[DEBUG]:<%s:%s>:DirCount(%d),Top(%s) Reading warmCacheList(%s)(%s):\n",
-  mod, meth, dirCount, validateTopRec( topRec, lsoMap ),
-  tostring( warmCacheList), tostring(warmCacheList[1]));
+  info("[DEBUG]:<%s:%s>:DirCount(%d),Top(%s) Reading warmCacheList(%s)",
+    mod, meth, dirCount, validateTopRec( topRec, lsoMap ),
+    tostring( warmCacheList) );
 
   -- Read each Warm Chunk, adding to the resultList, until we either bypass
   -- the readCount, or we hit the end (either readCount is large, or the ALL

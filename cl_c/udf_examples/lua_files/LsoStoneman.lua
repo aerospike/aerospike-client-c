@@ -429,8 +429,8 @@ local function ldrChunkInsertBytes( ldrChunkRec, lsoMap, listIndex, insertList )
   end
 
   local entryCount = 0;
-  if( ldrCtrlMap.EntryCount ~= nil and ldrCtrlMap.EntryCount ~= 0 ) then
-    entryCount = ldrCtrlMap.EntryCount;
+  if( ldrCtrlMap.ByteEntryCount ~= nil and ldrCtrlMap.ByteEntryCount ~= 0 ) then
+    entryCount = ldrCtrlMap.ByteEntryCount;
   end
   info("[DEBUG]: <%s:%s> Using EntryCount(%d)", mod, meth, entryCount );
 
@@ -489,11 +489,14 @@ local function ldrChunkInsertBytes( ldrChunkRec, lsoMap, listIndex, insertList )
     mod, meth, totalItemsToWrite, itemSlotsAvailable, chunkByteStart );
 
   for i = 0, (newItemsStored - 1), 1 do
+    info("[DEBUG]: <%s:%s> Appending Bytes: Entry(%d) Val(%s)",
+      mod, meth, i, tostring( insertList[i+listIndex]) );
     bytes.put_bytes( chunkByteArray, (chunkByteStart + (i * entrySize)),
       insertList[i+listIndex] );
   end -- for each remaining entry
 
-  ldrCtrlMap.EntryCount = entryCount + newItemsStored;
+  -- Update the ctrl map with the new count
+  ldrCtrlMap.ByteEntryCount = entryCount + newItemsStored;
 
   info("[DEBUG]: <%s:%s>: Post Chunk Copy: Ctrl(%s) List(%s)\n",
     mod, meth, tostring(ldrCtrlMap), tostring( chunkByteArray ));
@@ -692,7 +695,7 @@ local function readByteArray( resultList, ldrChunk, count, func, fargs, all)
   local ldrCtrlMap = ldrChunk['LdrControlBin'];
   local numRead = 0;
   local numToRead = 0;
-  local listSize = ldrCtrlMap.EntryCount; -- Number of Entries
+  local listSize = ldrCtrlMap.ByteEntryCount; -- Number of Entries
   local entrySize = ldrCtrlMap.ByteEntrySize; -- Entry Size in Bytes
   -- When in binary mode, we rely on the LDR page control structure to track
   -- the ENTRY COUNT and the ENTRY SIZE.  Just like walking a list, we
@@ -725,6 +728,8 @@ local function readByteArray( resultList, ldrChunk, count, func, fargs, all)
   local readValue;
   local byteValue;
   local byteIndex = 0; -- our direct position in the byte array.
+  info("[DEBUG]:<%s:%s>Starting the loop thru the Byte Array: ListSize(%d)",
+      mod, meth, listSize );
   for i = (listSize - 1), 0, -1 do
     byteIndex = i * entrySize;
     readValue = bytes( entrySize ); -- Must copy each one

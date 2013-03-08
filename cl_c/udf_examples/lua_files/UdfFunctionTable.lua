@@ -244,17 +244,22 @@ function UdfFunctionTable.stumbleCompress5( stumbleTuple, arglist )
   local mod = "UdfFunctionTable";
   local meth = "stumbleCompress5()";
   local rc = 0;
-  info("[ENTER]: <%s:%s> tuple(%s) ArgList(%s) \n",
+  info("[ENTER]: <%s:%s> tuple(%s) ArgList(%s) ",
     mod, meth, tostring(stumbleTuple), tostring(arglist));
 
   local b18 = bytes(18);
   bytes.put_int32(b18, 1,  stumbleTuple[1] ); -- 4 byte int
+  info("[D]:<%s:%s>Bytes after 1(%s) ", mod, meth, tostring(b18));
   bytes.put_int32(b18, 5,  stumbleTuple[2] ); -- 4 byte int
+  info("[D]:<%s:%s>Bytes after 2(%s) ", mod, meth, tostring(b18));
   bytes.put_int32(b18, 9,  stumbleTuple[3] ); -- 4 byte int
+  info("[D]:<%s:%s>Bytes after 3(%s) ", mod, meth, tostring(b18));
   bytes.put_int32(b18, 13, stumbleTuple[4] ); -- 4 byte int
+  info("[D]:<%s:%s>Bytes after 4(%s) ", mod, meth, tostring(b18));
   bytes.put_int16(b18, 17, stumbleTuple[5] ); -- 2 byte int
+  info("[D]:<%s:%s>Bytes after 5(%s) ", mod, meth, tostring(b18));
 
-  info("[EXIT]: <%s:%s> BinaryResult(%s) \n", mod, meth, tostring(b18));
+  info("[EXIT]: <%s:%s> BinaryResult(%s)", mod, meth, tostring(b18));
   return b18
 end -- stumbleCompress5( stumbleTuple, arglist )
 
@@ -279,22 +284,105 @@ function UdfFunctionTable.stumbleUnCompress5( b18, arglist )
 
   local stumbleTuple = list(5);
   -- NOTE: Must append.  Can't index directly into it.
---  list.append( stumbleTuple, bytes.get_int32(b18, 1 ));  -- 4 byte int
---  list.append( stumbleTuple, bytes.get_int32(b18, 5 ));  -- 4 byte int
---  list.append( stumbleTuple, bytes.get_int32(b18, 9 ));  -- 4 byte int
---  list.append( stumbleTuple, bytes.get_int32(b18, 13)); -- 4 byte int
---  list.append( stumbleTuple, bytes.get_int16(b18, 17));  -- 2 byte int
+  list.append( stumbleTuple, bytes.get_int32(b18, 1 ));  -- 4 byte int
+  info("[D]:<%s:%s>Tuple(%s) after 1", tostring(stumbleTuple));
+  list.append( stumbleTuple, bytes.get_int32(b18, 5 ));  -- 4 byte int
+  info("[D]:<%s:%s>Tuple(%s) after 2", tostring(stumbleTuple));
+  list.append( stumbleTuple, bytes.get_int32(b18, 9 ));  -- 4 byte int
+  info("[D]:<%s:%s>Tuple(%s) after 3", tostring(stumbleTuple));
+  list.append( stumbleTuple, bytes.get_int32(b18, 13)); -- 4 byte int
+  info("[D]:<%s:%s>Tuple(%s) after 4", tostring(stumbleTuple));
+  list.append( stumbleTuple, bytes.get_int16(b18, 17));  -- 2 byte int
+  info("[D]:<%s:%s>Tuple(%s) after 5", tostring(stumbleTuple));
 
-  stumbleTuple[1] = bytes.get_int32(b18, 1 );  -- 4 byte int
-  stumbleTuple[2] = bytes.get_int32(b18, 5 );  -- 4 byte int
-  stumbleTuple[3] = bytes.get_int32(b18, 9 );  -- 4 byte int
-  stumbleTuple[4] = bytes.get_int32(b18, 13 ); -- 4 byte int
-  stumbleTuple[5] = bytes.get_int16(b18, 17);  -- 2 byte int
+--  stumbleTuple[1] = bytes.get_int32(b18, 1 );  -- 4 byte int
+--  stumbleTuple[2] = bytes.get_int32(b18, 5 );  -- 4 byte int
+--  stumbleTuple[3] = bytes.get_int32(b18, 9 );  -- 4 byte int
+--  stumbleTuple[4] = bytes.get_int32(b18, 13 ); -- 4 byte int
+--  stumbleTuple[5] = bytes.get_int16(b18, 17);  -- 2 byte int
 
   info("[EXIT]: <%s:%s> TupleResult(%s) type(%s)\n",
     mod, meth, tostring(stumbleTuple), type(stumbleTuple ));
   return stumbleTuple;
 end -- stumbleUnCompress5()
+-- ======================================================================
+
+
+-- ======================================================================
+-- Function stumbleCompress20: Compress a 5 part tuple into a single 20 byte
+-- value that we'll pack into storage.
+-- The StumbleUpon application creates a 5 part tuple, each part with
+-- the following sizes: 4 bytes, 4 bytes, 4 bytes, 4 bytes and 4 bytes.
+-- (1) stumbleTuple
+-- (2) arglist
+-- Return:
+-- The newly created Byte object, 20 bytes long
+-- ====================================================================== 
+function UdfFunctionTable.stumbleCompress20( stumbleTuple, arglist )
+  local mod = "UdfFunctionTable";
+  local meth = "stumbleCompress20()";
+  local rc = 0;
+  info("[ENTER]: <%s:%s> tuple(%s) ArgList(%s) ",
+    mod, meth, tostring(stumbleTuple), tostring(arglist));
+
+  local b20 = bytes(20);
+  bytes.put_int32(b20, 1,  stumbleTuple[1] ); -- 4 byte int
+  info("[D]:<%s:%s>Bytes after 1(%s) ", mod, meth, tostring(b20));
+  bytes.put_int32(b20, 5,  stumbleTuple[2] ); -- 4 byte int
+  info("[D]:<%s:%s>Bytes after 2(%s) ", mod, meth, tostring(b20));
+  bytes.put_int32(b20, 9,  stumbleTuple[3] ); -- 4 byte int
+  info("[D]:<%s:%s>Bytes after 3(%s) ", mod, meth, tostring(b20));
+  bytes.put_int32(b20, 13, stumbleTuple[4] ); -- 4 byte int
+  info("[D]:<%s:%s>Bytes after 4(%s) ", mod, meth, tostring(b20));
+  bytes.put_int32(b20, 17, stumbleTuple[5] ); -- 4 byte int
+  info("[D]:<%s:%s>Bytes after 5(%s) ", mod, meth, tostring(b20));
+
+  info("[EXIT]: <%s:%s> BinaryResult(%s)", mod, meth, tostring(b20));
+  return b20
+end -- stumbleCompress20( stumbleTuple, arglist )
+
+-- ======================================================================
+-- Function stumbleUnCompress20: Uncompress a single 20 byte packed binary
+-- object into 5 integer fields.
+-- The StumbleUpon application uses a 4 part tuple, each part with
+-- the following sizes: 4 bytes, 4 bytes, 4 bytes, 4 bytes and 4 bytes.
+-- (1) b20: the byteObject
+-- (2) arglist
+-- Return:
+-- the stumbleTuple
+-- ======================================================================
+function UdfFunctionTable.stumbleUnCompress20( b20, arglist )
+  local mod = "UdfFunctionTable";
+  local meth = "stumbleUnCompress20()";
+  local rc = 0;
+  -- protect against bad prints
+  if arglist == nil then arglist = 0; end
+  info("[ENTER]: <%s:%s> BinaryTuple(%s) Tuple Type(%s) ArgList(%s) \n",
+    mod, meth, tostring(b20), type(b20), tostring(arglist));
+
+  local stumbleTuple = list(5);
+  -- NOTE: Must append.  Can't index directly into it.
+  list.append( stumbleTuple, bytes.get_int32(b20, 1 ));  -- 4 byte int
+  info("[D]:<%s:%s>Tuple(%s) after 1", tostring(stumbleTuple));
+  list.append( stumbleTuple, bytes.get_int32(b20, 5 ));  -- 4 byte int
+  info("[D]:<%s:%s>Tuple(%s) after 2", tostring(stumbleTuple));
+  list.append( stumbleTuple, bytes.get_int32(b20, 9 ));  -- 4 byte int
+  info("[D]:<%s:%s>Tuple(%s) after 3", tostring(stumbleTuple));
+  list.append( stumbleTuple, bytes.get_int32(b20, 13)); -- 4 byte int
+  info("[D]:<%s:%s>Tuple(%s) after 4", tostring(stumbleTuple));
+  list.append( stumbleTuple, bytes.get_int32(b20, 17));  -- 4 byte int
+  info("[D]:<%s:%s>Tuple(%s) after 5", tostring(stumbleTuple));
+
+--  stumbleTuple[1] = bytes.get_int32(b20, 1 );  -- 4 byte int
+--  stumbleTuple[2] = bytes.get_int32(b20, 5 );  -- 4 byte int
+--  stumbleTuple[3] = bytes.get_int32(b20, 9 );  -- 4 byte int
+--  stumbleTuple[4] = bytes.get_int32(b20, 13 ); -- 4 byte int
+--  stumbleTuple[5] = bytes.get_int16(b20, 17);  -- 2 byte int
+
+  info("[EXIT]: <%s:%s> TupleResult(%s) type(%s)\n",
+    mod, meth, tostring(stumbleTuple), type(stumbleTuple ));
+  return stumbleTuple;
+end -- stumbleUnCompress20()
 -- ======================================================================
 
 -- ======================================================================

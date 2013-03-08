@@ -58,6 +58,7 @@ CITRUSLEAF += cl_sindex.o
 CITRUSLEAF += cl_scan.o
 CITRUSLEAF += cl_udf.o
 CITRUSLEAF += proto.o
+CITRUSLEAF += as_lso.o
 
 OBJECTS = $(wildcard modules/mod-lua/$(TARGET_OBJ)/*.o)
 OBJECTS += $(wildcard modules/common/$(TARGET_OBJ)/client/*.o)

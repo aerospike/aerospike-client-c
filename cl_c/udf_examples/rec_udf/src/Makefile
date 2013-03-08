@@ -20,6 +20,9 @@ RLIST_TARGET  = redis_list_sproc
 MANAGE_SOURCES = manage_udf.c
 MANAGE_TARGET  = manage_udf
 
+SCAN_SOURCES = scan_udf.c
+SCAN_TARGET = scan_udf
+
 INCLUDES = -I../include/ -I../../../target/Linux-x86_64/include/
 LIBRARIES = $(DIR_LIB)/libcitrusleaf.a  -lssl -lcrypto -lpthread -lrt
 ifeq (${MR_LANG},LUA)
@@ -34,21 +37,21 @@ DEPENDENCIES = $(OBJECTS:%.o=%.d)
 DOC_OBJECTS = $(DOC_SOURCES:%.c=$(DIR_OBJECT)/%.o)
 DOC_DEPENDENCIES = $(DOC_OBJECTS:%.o=%.d)
 
-
-
 RLIST_OBJECTS = $(RLIST_SOURCES:%.c=$(DIR_OBJECT)/%.o)
 RLIST_DEPENDENCIES = $(RLIST_OBJECTS:%.o=%.d)
 MANAGE_OBJECTS = $(MANAGE_SOURCES:%.c=$(DIR_OBJECT)/%.o)
 MANAGE_DEPENDENCIES = $(MANAGE_OBJECTS:%.o=%.d)
 
+SCAN_OBJECTS = $(SCAN_SOURCES:%.c=$(DIR_OBJECT)/%.o)
+SCAN_DEPENDENCIES = $(SCAN_OBJECTS:%.o=%.d)
 
 
 .PHONY: all
-all: rec_udf doc_udf manage_udf
+all:  rec_udf doc_udf manage_udf scan_udf
 
 .PHONY: clean
 clean:
-	/bin/rm -f $(OBJECTS) $(DIR_TARGET)/$(TARGET) $(DIR_TARGET)/$(DOC_TARGET) $(DIR_TARGET)/$(MANAGE_TARGET) $(DIR_TARGET)/$(RLIST_TARGET) 
+	/bin/rm -f $(OBJECTS) $(DIR_TARGET)/$(TARGET) $(DIR_TARGET)/$(DOC_TARGET) $(DIR_TARGET)/$(MANAGE_TARGET) $(DIR_TARGET)/$(RLIST_TARGET) $(DIR_TARGET)/$(SCAN_TARGET)  
 
 .PHONY: depclean
 depclean: clean
@@ -63,7 +66,8 @@ $(RLIST_TARGET): $(RLIST_OBJECTS)
 	$(CC) $(LDFLAGS) -o $(DIR_TARGET)/$(RLIST_TARGET) $(RLIST_OBJECTS) $(LIBRARIES)
 $(MANAGE_TARGET): $(MANAGE_OBJECTS)
 	$(CC) $(LDFLAGS) -o $(DIR_TARGET)/$(MANAGE_TARGET) $(MANAGE_OBJECTS) $(LIBRARIES)
-
+$(SCAN_TARGET): $(SCAN_OBJECTS)
+	$(CC) $(LDFLAGS) -o $(DIR_TARGET)/$(SCAN_TARGET) $(SCAN_OBJECTS) $(LIBRARIES)
 -include $(DEPENDENCIES) 
 
 $(DIR_OBJECT)/%.o: %.c

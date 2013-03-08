@@ -473,8 +473,16 @@ local function ldrChunkInsertBytes( ldrChunkRec, lsoMap, listIndex, insertList )
   local totalSpaceNeeded = (entryCount + newItemsStored) * entrySize;
   if ldrChunkRec['LdrBinaryBin'] == nil then
     ldrChunkRec['LdrBinaryBin'] = bytes( totalSpaceNeeded );
+    info("[DEBUG]: <%s:%s> Allocated NEW BYTES: Size(%d) ByteArray(%s)",
+      mod, meth, totalSpaceNeeded, tostring(ldrChunkRec['LdrBinaryBin']));
   else
+    info("[DEBUG]:<%s:%s>Before: Extending BYTES: New Size(%d) ByteArray(%s)",
+      mod, meth, totalSpaceNeeded, tostring(ldrChunkRec['LdrBinaryBin']));
+
     bytes.set_len(ldrChunkRec['LdrBinaryBin'], totalSpaceNeeded );
+
+    info("[DEBUG]:<%s:%s>AFTER: Extending BYTES: New Size(%d) ByteArray(%s)",
+      mod, meth, totalSpaceNeeded, tostring(ldrChunkRec['LdrBinaryBin']));
   end
   local chunkByteArray = ldrChunkRec['LdrBinaryBin'];
 
@@ -483,16 +491,28 @@ local function ldrChunkInsertBytes( ldrChunkRec, lsoMap, listIndex, insertList )
   -- Special case of starting at ZERO -- since we're adding, not
   -- directly indexing the array at zero (Lua arrays start at 1).
   -- Compute where we should start inserting in the Byte Array.
-  local chunkByteStart = entryCount * entrySize;
+  -- WARNING!!! Unlike a C Buffer, This BYTE BUFFER starts at address 1,
+  -- not zero.
+  local chunkByteStart = 1 + (entryCount * entrySize);
 
   info("[DEBUG]: <%s:%s> TotalItems(%d) SpaceAvail(%d) ByteStart(%d)\n",
     mod, meth, totalItemsToWrite, itemSlotsAvailable, chunkByteStart );
 
+  local byteIndex;
+  local insertItem;
   for i = 0, (newItemsStored - 1), 1 do
-    info("[DEBUG]: <%s:%s> Appending Bytes: Entry(%d) Val(%s)",
-      mod, meth, i, tostring( insertList[i+listIndex]) );
-    bytes.put_bytes( chunkByteArray, (chunkByteStart + (i * entrySize)),
-      insertList[i+listIndex] );
+    byteIndex = chunkByteStart + (i * entrySize);
+    insertItem = insertList[i+listIndex];
+
+    info("[DEBUG]:<%s:%s>ByteAppend:Array(%s) Entry(%d) Val(%s) Index(%d)",
+      mod, meth, tostring( chunkByteArray), i, tostring( insertItem ),
+      byteIndex );
+
+    bytes.put_bytes( chunkByteArray, byteIndex, insertItem );
+
+    info("[DEBUG]: <%s:%s> Post Append: ByteArray(%s)",
+      mod, meth, tostring(chunkByteArray));
+
   end -- for each remaining entry
 
   -- Update the ctrl map with the new count
@@ -719,7 +739,10 @@ local function readByteArray( resultList, ldrChunk, count, func, fargs, all)
   -- Address of Entry 1: 0
   -- Address of Entry 2: 10
   -- Address of Entry N: (N - 1) * EntrySize
-  -- 012345678901234567890 ...  01234567890
+  -- WARNING!!!  Unlike C Buffers, which start at ZERO, this byte type
+  -- starts at ONE!!!!!!
+  --
+  -- 12345678901234567890 ...  01234567890
   -- +---------+---------+------+---------+
   -- | Entry 1 | Entry 2 | .... | Entry N | 
   -- +---------+---------+------+---------+
@@ -733,7 +756,7 @@ local function readByteArray( resultList, ldrChunk, count, func, fargs, all)
       mod, meth, tostring(byteArray), listSize );
   for i = (listSize - 1), 0, -1 do
 
-    byteIndex = i * entrySize;
+    byteIndex = 1 + (i * entrySize);
     byteValue = bytes.get_bytes( byteArray, byteIndex, entrySize );
 
     info("[DEBUG]:<%s:%s>: In Loop: i(%d) BI(%d) BV(%s)",

@@ -85,7 +85,7 @@ local function initializeLsoMap( topRec, lsoBinName )
   lsoMap.PageMode = "List"; -- "List" or "Binary":
   -- LSO Data Record Chunk Settings: Passed into "Chunk Create"
 --lsoMap.LdrEntryCountMax = 200;  -- Max # of items in a Data Chunk (List Mode)
-  lsoMap.LdrEntryCountMax =   5;  -- Max # of items in a Data Chunk (List Mode)
+  lsoMap.LdrEntryCountMax =  10;  -- Max # of items in a Data Chunk (List Mode)
   lsoMap.LdrByteEntrySize = 20;  -- Byte size of a fixed size Byte Entry
 --lsoMap.LdrByteCountMax = 2000; -- Max # of BYTES in a Data Chunk (binary mode)
   lsoMap.LdrByteCountMax =   80; -- Max # of BYTES in a Data Chunk (binary mode)
@@ -93,14 +93,14 @@ local function initializeLsoMap( topRec, lsoBinName )
   lsoMap.HotCacheList = list();
   lsoMap.HotCacheItemCount = 0; -- Number of elements in the Top Cache
 --lsoMap.HotCacheMax = 200; -- Max Number for the cache -- when we transfer
-  lsoMap.HotCacheMax =   6; -- Max Number for the cache -- when we transfer
+  lsoMap.HotCacheMax =  10; -- Max Number for the cache -- when we transfer
 --lsoMap.HotCacheTransfer = 100; -- How much to Transfer at a time.
-  lsoMap.HotCacheTransfer =   3; -- How much to Transfer at a time.
+  lsoMap.HotCacheTransfer =  4; -- How much to Transfer at a time.
   -- Warm Digest List Settings: List of Digests of LSO Data Records
   lsoMap.WarmTopFull = 0; -- 1  when the top chunk is full (for the next write)
   lsoMap.WarmCacheList = list();   -- Define a new list for the Warm Stuff
   lsoMap.WarmChunkCount = 0; -- Number of Warm Data Record Chunks
-  lsoMap.WarmCacheDirMax = 1000; -- Number of Warm Data Record Chunks
+  lsoMap.WarmCacheDirMax = 10000; -- Number of Warm Data Record Chunks
   lsoMap.WarmChunkTransfer = 10; -- Number of Warm Data Record Chunks
   lsoMap.WarmTopChunkEntryCount = 0; -- Count of entries in top warm chunk
   lsoMap.WarmTopChunkByteCount = 0; -- Count of bytes used in top warm Chunk
@@ -325,9 +325,9 @@ local function extractHotCacheTransferList( lsoMap )
   local newHotCacheList = list();
   local resultList = list.take( oldHotCacheList, transAmount );
 
-  -- Move the top elements (Max - N) up to the top of the HotCache List.
-  for i = 1, transAmount, 1 do 
-    -- newHotCacheList[i] = oldHotCacheList[i+transAmount];
+  -- Now that the front "transAmount" elements are gone, move the remaining
+  -- elements to the front of the array (OldCacheSize - trans).
+  for i = 1, list.size(oldHotCacheList) - transAmount, 1 do 
     list.append( newHotCacheList, oldHotCacheList[i+transAmount] );
   end
 
@@ -654,8 +654,8 @@ end -- chunkSpaceCheck()
 local function readEntryList( resultList, entryList, count, func, fargs, all)
   local mod = "LsoStoneman";
   local meth = "readEntryList()";
-  info("[ENTER]: <%s:%s> Count(%d) ResultList(%s) EntryList(%s)\n",
-    mod, meth, count, tostring(resultList), tostring(EntryList));
+  info("[ENTER]: <%s:%s> count(%d) resultList(%s) entryList(%s)\n",
+    mod, meth, count, tostring(resultList), tostring(entryList));
 
   local doTheFunk = 0; -- Welcome to Funky Town
 
@@ -1223,13 +1223,13 @@ end -- coldCacheRead()
 local function lsoMapRead( topRec, lsoMap, peekCount, func, fargs )
   local mod = "LsoStoneman";
   local meth = "lsoMapRead()";
-  info("[ENTER]: <%s:%s> ReadCount(%s)\n", tostring(peekCount), mod, meth );
+  info("[ENTER]: <%s:%s> ReadCount(%s)", mod, meth, tostring(peekCount));
 
   if (func ~= nil and fargs ~= nil ) then
-    info("[ENTER1]: <%s:%s> Count(%d) func(%s) fargs(%s)\n",
-      mod, meth, peekCount, func, tostring(fargs) );
+    info("[ENTER1]: <%s:%s> Count(%s) func(%s) fargs(%s)\n",
+      mod, meth, tostring(peekCount), tostring(func), tostring(fargs) );
   else
-    info("[ENTER2]: <%s:%s> PeekCount(%d)\n", mod, meth, peekCount );
+    info("[ENTER2]: <%s:%s> PeekCount(%s)", mod, meth, tostring(peekCount));
   end
 
   local all = 0;

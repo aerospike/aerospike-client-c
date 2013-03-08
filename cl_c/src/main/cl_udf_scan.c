@@ -9,7 +9,7 @@
 #include "citrusleaf.h"
 #include "citrusleaf-internal.h"
 #include "cl_cluster.h"
-#include "cl_uscan.h"
+#include "cl_udf_scan.h"
 #include "cl_udf.h"
 
 #include <citrusleaf/cf_atomic.h>
@@ -198,7 +198,7 @@ int scan_response_destroy(as_rec *rec) {
     as_scan_response_rec * r = as_rec_source(rec);
     if (!r) return 0;
     citrusleaf_bins_free(r->bins, r->n_bins);
-    if (r->bins) free(r->bins);
+//    if (r->bins) free(r->bins);
     if (r->ns)   free(r->ns);
     if (r->set)  free(r->set);
     if (r->ismalloc) free(r);
@@ -370,10 +370,7 @@ static int as_scan_worker_do(cl_cluster_node * node, as_scan_task * task) {
                 done = true;
             }
             else if (msg->info3 & CL_MSG_INFO3_LAST)    {
-
-#ifdef DEBUG                
-                fprintf(stderr, "received final message\n");
-#endif                
+                fprintf(stderr, "Received final message -- Scan complete\n");
                 done = true;
             }
             else if ((msg->n_ops || (msg->info1 & CL_MSG_INFO1_NOBINDATA))) {

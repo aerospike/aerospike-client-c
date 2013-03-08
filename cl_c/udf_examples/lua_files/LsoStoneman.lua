@@ -82,7 +82,7 @@ local function initializeLsoMap( topRec, lsoBinName )
   lsoMap.BinName = lsoBinName; -- Defines the LSO Bin
   lsoMap.NameSpace = "test"; -- Default NS Name -- to be overridden by user
   lsoMap.Set = "set";       -- Default Set Name -- to be overridden by user
-  lsoMap.PageMode = "Binary"; -- "List" or "Binary":
+  lsoMap.PageMode = "List"; -- "List" or "Binary":
   -- LSO Data Record Chunk Settings: Passed into "Chunk Create"
 --lsoMap.LdrEntryCountMax = 200;  -- Max # of items in a Data Chunk (List Mode)
   lsoMap.LdrEntryCountMax =   5;  -- Max # of items in a Data Chunk (List Mode)
@@ -133,11 +133,35 @@ end -- initializeLsoMap
 local function adjustLsoMap( lsoMap, argListMap )
   local mod = "LsoStoneman";
   local meth = "adjustLsoMap()";
-  info("[ENTER]: <%s:%s>:: LsoMap(%s) ArgMap(%s)",
+  info("[ENTER]: <%s:%s>:: LsoMap(%s)::\n ArgListMap(%s)",
     mod, meth, tostring(lsoMap), tostring( argListMap ));
 
-  -- Iterate thru the map and adjust (override) the map settings 
+  -- Iterate thru the argListMap and adjust (override) the map settings 
   -- based on the settings passed in during the stackCreate() call.
+  if type( argListMap.PageMode ) == "string" then
+  info("[DEBUG]: <%s:%s> : Processing PageMode", mod, meth );
+    -- Verify it's a valid value
+    if argListMap.PageMode == "List" or argListMap.PageMode == "Binary" then
+      lsoMap.PageMode = argListMap.PageMode;
+    end
+  end
+  if type( argListMap.HotListSize ) == "number" then
+    info("[DEBUG]: <%s:%s> : Processing Hot List", mod, meth );
+    info("<LINE 148> HotListSize(%s)", tostring(argListMap.HotListSize) );
+    if argListMap.HotListSize > 0 then
+      lsoMap.HotCacheMax = argListMap.HotListSize;
+    end
+  end
+  if type( argListMap.HotListTransfer ) == "number" then
+    if argListMap.HotListTransfer > 0 then
+      lsoMap.HotCacheTransfer = argListMap.HotListTransfer;
+    end
+  end
+  if type( argListMap.ByteEntrySize ) == "number" then
+    if argListMap.ByteEntrySize > 0 then
+      lsoMap.LdrByteEntrySize = argListMap.ByteEntrySize;
+    end
+  end
   
   info("[DEBUG]: <%s:%s> : CTRL Map after Adjust(%s)\n",
     mod, meth , tostring(lsoMap));
@@ -343,7 +367,7 @@ local function ldrChunkInsertList(ldrChunkRec,lsoMap,listIndex,insertList )
   -- math for lengths and space off by 1. So, we're often adding or
   -- subtracting 1 to adjust.
   local totalItemsToWrite = list.size( insertList ) + 1 - listIndex;
-  local itemSlotsAvailable = (ldrCtrlMap.EntryMax - chunkIndexStart) + 1;
+  local itemSlotsAvailable = (ldrCtrlMap.ListEntryMax - chunkIndexStart) + 1;
 
   -- In the unfortunate case where our accounting is bad and we accidently
   -- opened up this page -- and there's no room -- then just return ZERO
@@ -578,7 +602,7 @@ local function ldrHasRoom( ldr, newValue )
 
   -- TODO: ldrHashRoom() This needs to look at SIZES in the case of
   -- BINARY mode.  For LIST MODE, this will work.
-  if list.size( ldr.EntryList ) >= ldr.EntryMax then
+  if list.size( ldr.EntryList ) >= ldr.ListEntryMax then
     result = 0;
   end
 
@@ -1328,12 +1352,12 @@ end -- hotCacheInsert()
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 --
 -- ======================================================================
--- || stackCreate (Stickman)    ||
+-- || stackCreate (Stoneman)    ||
 -- ======================================================================
 -- Create/Initialize a Stack structure in a bin, using a single LSO
 -- bin, using User's name, but Aerospike TYPE (AS_LSO)
 --
--- For this version (Stickman), we will be using a SINGLE MAP object,
+-- For this version (Stoneman), we will be using a SINGLE MAP object,
 -- which contains lots of metadata, plus one list:
 -- (*) Namespace Name (just one Namespace -- for now)
 -- (*) Set Name
@@ -1355,9 +1379,9 @@ end -- hotCacheInsert()
 -- which is a linked list of directory pages -- where each directory page
 -- points to a list of LSO Data Record pages.  Each directory page holds
 -- roughly 100 page pointers (assuming a 2k page).
--- Parms (inside arglist)
+-- Parms (inside argList)
 -- (1) topRec: the user-level record holding the LSO Bin
--- (2) arglist: the list of create parameters
+-- (2) argList: the list of create parameters
 --  (2.1) LsoBinName
 --  (2.2) Namespace (just one, for now)
 --  (2.3) Set
@@ -1370,16 +1394,16 @@ end -- hotCacheInsert()
 --  -> Warm List Size
 --  -> Warm List Transfer amount
 --
-function stackCreate( topRec, lsoBinName, arglist )
+function stackCreate( topRec, lsoBinName, argList )
   local mod = "LsoStoneman";
   local meth = "stackCreate()";
 
-  if arglist == nil then
-    info("[ENTER]: <%s:%s> lsoBinName(%s) NULL argList\n",
+  if argList == nil then
+    info("[ENTER1]: <%s:%s> lsoBinName(%s) NULL argList\n",
       mod, meth, tostring(lsoBinName));
   else
-    info("[ENTER]: <%s:%s> lsoBinName(%s) argList(%s) \n",
-    mod, meth, tostring( lsoBinName), tostring( arglist ));
+    info("[ENTER2]: <%s:%s> lsoBinName(%s) argList(%s) \n",
+    mod, meth, tostring( lsoBinName), tostring( argList ));
   end
 
   -- Some simple protection if things are weird
@@ -1400,6 +1424,12 @@ function stackCreate( topRec, lsoBinName, arglist )
   -- initializeLsoMap() also assigns the map to the record bin.
   local lsoMap = initializeLsoMap( topRec, lsoBinName );
 
+  -- If the user has passed in settings that override the defaults
+  -- (the argList), then process that now.
+  if argList ~= nil then
+    adjustLsoMap( lsoMap, argList )
+  end
+
   info("[DEBUG]:<%s:%s>:Dir Map after Init(%s)\n", mod,meth,tostring(lsoMap));
 
   -- All done, store the record
@@ -1418,7 +1448,7 @@ end -- function stackCreate( topRec, namespace, set )
 
 -- ======================================================================
 -- |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
--- || local stackPush (Stickman V2)
+-- || local stackPush (Stoneman V2)
 -- |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 -- ======================================================================
 -- This function does the work of both calls -- with and without inner UDF.
@@ -1530,7 +1560,7 @@ end -- stackPushWithUDF()
 
 -- ======================================================================
 -- |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
--- || Local StackPeek: Stickman V2 (the new and improved structure)
+-- || Local StackPeek: Stoneman V2 (the new and improved structure)
 -- |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 -- ======================================================================
 -- Return "peekCount" values from the stack, in Stack (LIFO) order.
@@ -1835,7 +1865,7 @@ local function testCreateNewComplexRecord( topRec, lsoMap, newValue )
   info("[DEBUG]: <%s:%s>: Calling Rec.Digest\n", mod, meth);
   local newChunkDigest = record.digest( newLdrChunkRecord );
   ctrlMap.Digest = newChunkDigest;
-  ctrlMap.EntryMax = 100; -- Move up to TopRec -- when Stable
+  ctrlMap.ListEntryMax = 100; -- Move up to TopRec -- when Stable
   ctrlMap.DesignVersion = 1;
   ctrlMap.LogInfo = 0;
   -- ctrlMap.WarmCacheItemCount = 0;
@@ -1887,7 +1917,7 @@ local function testCreateNewSimpleRecord( topRec, lsoMap, newValue )
   ctrlMap.PageMode = lsoMap.PageMode;
   local newChunkDigest = record.digest( newLdrChunkRecord );
   ctrlMap.Digest = newChunkDigest;
-  ctrlMap.EntryMax = 100; -- Move up to TopRec -- when Stable
+  ctrlMap.ListEntryMax = 100; -- Move up to TopRec -- when Stable
   ctrlMap.DesignVersion = 1;
   ctrlMap.LogInfo = 0;
   -- ctrlMap.WarmCacheItemCount = 0;

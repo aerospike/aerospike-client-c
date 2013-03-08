@@ -1,5 +1,9 @@
 #!/bin/bash
 
+export UNS="test"
+export USET="set"
+export LSOBIN="LsoBin"
+
 export UFILE="LsoStoneman"
 export PUSHUDF="stumbleCompress5"
 export PEEKUDF="stumbleUnCompress5"

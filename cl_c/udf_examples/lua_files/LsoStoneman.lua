@@ -215,6 +215,27 @@ local function lsoSummary( lsoMap )
 end -- lsoSummary()
 
 -- ======================================================================
+-- Summarize the List (usually ResultList) so that we don't create
+-- huge amounts of crap in the console.
+-- Show Size, First Element, Last Element
+-- ======================================================================
+local function summarizeList( myList )
+  local resultMap = map();
+  resultMap.Summary = "Summary of the List";
+  local listSize  = list.size( myList );
+  resultMap.ListSize = listSize;
+  if resultMap.ListSize == 0 then
+    resultMap.FirstElement = "List Is Empty";
+    resultMap.LastElement = "List Is Empty";
+  else
+    resultMap.FirstElement = tostring( myList[1] );
+    resultMap.LastElement =  tostring( myList[ listSize ] );
+  end
+
+  return tostring( resultMap );
+end -- summarizeList()
+
+-- ======================================================================
 -- ldrChunkSummary( ldrChunk )
 -- ======================================================================
 -- Print out interesting stats about this LDR Chunk Record
@@ -319,7 +340,7 @@ local function extractHotCacheTransferList( lsoMap )
   oldHotCacheList = nil;
   lsoMap.HotCacheItemCount = lsoMap.HotCacheItemCount - transAmount;
 
-  info("[EXIT]: <%s:%s> ResultList(%s) \n", mod, meth, tostring(resultList));
+  info("[EXIT]: <%s:%s> ResultList(%s)", mod, meth, summarizeList(resultList));
   return resultList;
 end -- extractHotCacheTransferList()
 
@@ -679,14 +700,14 @@ local function readEntryList( resultList, entryList, count, func, fargs, all)
     
     numRead = numRead + 1;
     if numRead >= numToRead and all == 0 then
-      info("[Early EXIT]: <%s:%s> NumRead(%d) resultList(%s)",
-        mod, meth, numRead, tostring( resultList ));
+      info("[Early EXIT]: <%s:%s> NumRead(%d) resultListSummary(%s)",
+        mod, meth, numRead, summarizeList( resultList ));
       return numRead;
     end
   end -- for each entry in the list
 
-  info("[EXIT]: <%s:%s> NumRead(%d) resultList(%s) ",
-    mod, meth, numRead, tostring( resultList ));
+  info("[EXIT]: <%s:%s> NumRead(%d) resultListSummary(%s) ",
+    mod, meth, numRead, summarizeList( resultList ));
   return numRead;
 end -- readEntryList()
 
@@ -805,8 +826,8 @@ local function readByteArray( resultList, ldrChunk, count, func, fargs, all)
     end
   end -- for each entry in the list (packed byte array)
 
-  info("[EXIT]: <%s:%s> NumRead(%d) resultList(%s) ",
-    mod, meth, numRead, tostring( resultList ));
+  info("[EXIT]: <%s:%s> NumRead(%d) resultListSummary(%s) ",
+    mod, meth, numRead, summarizeList( resultList ));
   return numRead;
 end -- readByteArray()
 
@@ -888,7 +909,8 @@ local function hotCacheRead( cacheList, count, func, fargs, all)
   local resultList = list();
   local numRead = readEntryList(resultList,cacheList, count, func, fargs, all);
 
-  info("[EXIT]: <%s:%s> result(%s) \n", mod, meth, tostring(resultList) );
+  info("[EXIT]:<%s:%s>resultListSummary(%s)",
+    mod, meth, summarizeList(resultList) );
   return resultList;
 end -- hotCacheRead()
 -- ======================================================================
@@ -948,8 +970,8 @@ local function ldrChunkRead( ldrChunk, resultList, count, func, fargs, all )
     numRead = readByteArray(resultList, ldrChunk, count, func, fargs, all);
   end
 
-  info("[EXIT]: <%s:%s> NumberRead(%d) ResultList(%s) \n",
-    mod, meth, numRead, tostring( resultList ));
+  info("[EXIT]: <%s:%s> NumberRead(%d) ResultListSummary(%s) \n",
+    mod, meth, numRead, summarizeList( resultList ));
   return numRead;
 end -- ldrChunkRead()
 -- ======================================================================
@@ -1021,8 +1043,8 @@ local function warmCacheRead(topRec, resultList, lsoMap, count,
     mod, meth, tostring( status ) );
   end -- for each warm Chunk
 
-  info("[EXIT]: <%s:%s> totalWarmAmountRead(%d) ResultList(%s) \n",
-  mod, meth, totalWarmAmountRead, tostring(resultList));
+  info("[EXIT]: <%s:%s> totalWarmAmountRead(%d) ResultListSummary(%s) \n",
+  mod, meth, totalWarmAmountRead, summarizeList(resultList));
   return totalWarmAmountRead;
 end -- warmCacheRead()
 
@@ -1627,8 +1649,8 @@ local function localStackPeek( topRec, lsoBinName, peekCount, func, fargs )
   info("[DEBUG]: <%s:%s>: Calling Map Peek\n", mod, meth );
   local resultList = lsoMapRead( topRec, lsoMap, peekCount, func, fargs );
 
-  info("[EXIT]: <%s:%s>: PeekCount(%d) ResultList(%s)\n",
-    mod, meth, peekCount, tostring(resultList));
+  info("[EXIT]: <%s:%s>: PeekCount(%d) ResultListSummary(%s)\n",
+    mod, meth, peekCount, summarizeList(resultList));
 
   return resultList;
 end -- function localStackPeek() 

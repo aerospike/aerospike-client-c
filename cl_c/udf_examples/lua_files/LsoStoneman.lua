@@ -474,15 +474,15 @@ local function ldrChunkInsertBytes( ldrChunkRec, lsoMap, listIndex, insertList )
   if ldrChunkRec['LdrBinaryBin'] == nil then
     ldrChunkRec['LdrBinaryBin'] = bytes( totalSpaceNeeded );
     info("[DEBUG]: <%s:%s> Allocated NEW BYTES: Size(%d) ByteArray(%s)",
-      mod, meth, totalSpaceNeeded, tostring(ldrChunkRed['LdrBinaryBin']));
+      mod, meth, totalSpaceNeeded, tostring(ldrChunkRec['LdrBinaryBin']));
   else
     info("[DEBUG]:<%s:%s>Before: Extending BYTES: New Size(%d) ByteArray(%s)",
-      mod, meth, totalSpaceNeeded, tostring(ldrChunkRed['LdrBinaryBin']));
+      mod, meth, totalSpaceNeeded, tostring(ldrChunkRec['LdrBinaryBin']));
 
     bytes.set_len(ldrChunkRec['LdrBinaryBin'], totalSpaceNeeded );
 
     info("[DEBUG]:<%s:%s>AFTER: Extending BYTES: New Size(%d) ByteArray(%s)",
-      mod, meth, totalSpaceNeeded, tostring(ldrChunkRed['LdrBinaryBin']));
+      mod, meth, totalSpaceNeeded, tostring(ldrChunkRec['LdrBinaryBin']));
   end
   local chunkByteArray = ldrChunkRec['LdrBinaryBin'];
 

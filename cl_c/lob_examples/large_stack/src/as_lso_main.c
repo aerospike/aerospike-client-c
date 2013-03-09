@@ -94,16 +94,9 @@ int init_configuration (int argc, char *argv[]) {
 	return 0;
 }
 
-// >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-// >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-// Functions in this module:
-// (00) UTILITY FUNCTIONS
-// (02) main()
-// (21) lso_push_test()
-// (22) lso_peek_test()
-// >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-// >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-// >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+
+
 
 /// ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 
@@ -112,19 +105,18 @@ int init_configuration (int argc, char *argv[]) {
  *  For a single record, perform a series of STACK PUSHES.
  *  Create a new record, then repeatedly call stack push.
  */
-int lso_push_test(char * keystr, char * val, char * lso_bin, int iterations) {
+int lso_push_test(char * keystr, char * lso_bin, int iterations) {
 	static char * meth = "lso_push_test()";
 	int rc = 0;
-	as_list * listp;
 
-	INFO("[ENTER]:[%s]: It(%d) Key(%s) Val(%s) LSOBin(%s)\n",
-			meth, iterations, keystr, val, lso_bin );
+	INFO("[ENTER]:[%s]: It(%d) Key(%s) LSOBin(%s)\n",
+			meth, iterations, keystr, lso_bin );
 
 	// Create the LSO Bin
     // PageMode=List -> Overriding Default PageMode(Bytes)
     as_map *create_args = as_hashmap_new(1);
-    as_map_set(create_args, as_string_new("PageMode", false),
-						    as_string_new("List", false));
+    as_map_set(create_args, (as_val *)as_string_new("PageMode", false),
+						    (as_val *)as_string_new("List", false));
 	rc = as_lso_create( g_config->asc, g_config->ns, g_config->set,
 						keystr, lso_bin, create_args, g_config->package_name,
 						g_config->timeout_ms);
@@ -143,7 +135,7 @@ int lso_push_test(char * keystr, char * val, char * lso_bin, int iterations) {
 	INFO("[DEBUG]:[%s]: Run as_lso_push() iterations(%d)\n", meth, iterations );
 	for ( int i = 0; i < iterations; i++ ) {
         int val = i * 10;
-		listp = as_arraylist_new( 5, 5 );
+		as_list * listp = as_arraylist_new( 5, 5 );
         int64_t urlid   = val + 1;
 		as_list_add_integer( listp, urlid );
         int64_t created = val + 2;
@@ -227,6 +219,71 @@ int lso_peek_test(char * keystr, char * lso_bin, int iterations ) {
 } // end lso_peek_test()
 
 
+/// ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+
+/** ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+ *  LSO PUSH WITH_TRANSFORM TEST
+ *  For a single record, perform a series of STACK PUSHES of BYTE-PACKED data.
+ *  Create a new record, then repeatedly call stack push.
+ */
+int lso_push_with_transform_test(char * keystr, char * lso_bin,
+								 char * compress_func, as_list * compress_args,
+								 int iterations) {
+	static char * meth = "lso_push_with_transform_test()";
+	int rc = 0;
+
+	INFO("[ENTER]:[%s]: It(%d) Key(%s) LSOBin(%s)\n",
+			meth, iterations, keystr, lso_bin );
+
+	// Abbreviate for simplicity.
+	cl_cluster * c  = g_config->asc;
+	char       * ns = g_config->ns;
+	char       * set  = g_config->set;
+	char       * key  = keystr;
+	char       * bname  = lso_bin;
+
+	INFO("[DEBUG]:[%s]: Run as_lso_push() iterations(%d)\n", meth, iterations );
+	for ( int i = 0; i < iterations; i++ ) {
+        int val         = i * 10;
+		as_list * listp = as_arraylist_new( 5, 5 );
+        int64_t urlid   = val + 1;
+		as_list_add_integer( listp, urlid );
+        int64_t created = val + 2;
+		as_list_add_integer( listp, created );
+        int64_t meth_a  = val + 3;
+		as_list_add_integer( listp, meth_a );
+        int64_t meth_b  = val + 4;
+		as_list_add_integer( listp, meth_b );
+        int64_t status  = val + 5;
+		as_list_add_integer( listp, status );
+
+		if( TRA_DEBUG ){
+			char * valstr = as_val_tostring( listp );
+			INFO("[DEBUG]:[%s]: Pushing (%s) \n", meth, valstr );
+			free( valstr );
+		}
+
+		rc = as_lso_push_with_transform( c, ns, set, key, bname,
+										 (as_val *)listp,
+						  				 g_config->package_name,
+										 compress_func, compress_args,
+										 g_config->timeout_ms);
+		if (rc) {
+			INFO("[ERROR]:[%s]: LSO PUSH Error: i(%d) rc(%d)\n", meth, i, rc );
+            return -1;
+		}
+		as_val_destroy( listp ); // must destroy every iteration.
+		listp = NULL;
+	} // end for
+
+	return rc;
+} // end lso_push_with_transform_test()
+
+#if 0
+								 char * uncompress_func, char *uncompress_args,
+#endif
+
+// |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 /** ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
  *  Initialize Test: Do the set up for a test so that the regular
  *  Aerospike functions can run.
@@ -296,7 +353,7 @@ int main(int argc, char **argv) {
     int iterations = 15;
 	// (1) Push Test
 	INFO("[DEBUG]:[%s]: calling lso_push_test()\n", meth );
-	rc = lso_push_test( user_key, "UVal", lso_bin_name, iterations );
+	rc = lso_push_test( user_key, lso_bin_name, iterations );
 	if (rc) {
 		INFO("[ERROR]:[%s]: lso_push_test() RC(%d)\n", meth, rc );
 		return( rc );
@@ -306,14 +363,30 @@ int main(int argc, char **argv) {
 	INFO("[DEBUG]:[%s]: calling lso_peek_test()\n", meth );
 	rc = lso_peek_test( user_key, lso_bin_name, iterations );
     if (rc) {
-		INFO("[ERROR]:[%s]: lso_push_test() RC(%d)\n", meth, rc );
+		INFO("[ERROR]:[%s]: lso_peek_test() RC(%d)\n", meth, rc );
 		return( rc );
 	}
 
+	char * compress_func   = "stumbleCompress5";
+    as_list *compress_args = as_arraylist_new( 1, 1 );
+	as_list_add_integer( compress_args, 1 ); // dummy argument
+	char * uncompress_func = "stumbleUnCompress5";
+    as_list *uncompress_args = as_arraylist_new( 1, 1 );
+	as_list_add_integer( uncompress_args, 1 ); // dummy argument
+
 	user_key = "User_222";
 	// (3) Push Test With Transform
+	INFO("[DEBUG]:[%s]: calling lso_push_with_transform_test()\n", meth );
+	rc = lso_push_with_transform_test( user_key, lso_bin_name,
+									   compress_func, compress_args,
+									   iterations );
+	if (rc) {
+		INFO("[ERROR]:[%s]: lso_push_with_transform_test() RC(%d)\n", meth, rc);
+		return( rc );
+	}
 
 	// (4) Peek Test With Transform
+//									   uncompress_func, uncompress_args,
 
 
 	exit(0);

@@ -1,10 +1,11 @@
-/* *  Citrusleaf Large Object Stack Test Program
- *  as_lso_main.c - Validates LSO stored procedure functionality
+/*  Citrusleaf Large Object Stack Test Program
+ *  as_lso_main.c - Simple LSO example
  *
- *  Copyright 2013 by Citrusleaf, Aerospike In.c  All rights reserved.
+ *  Copyright 2013 by Citrusleaf, Aerospike Inc.  All rights reserved.
  *  THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE.  THE COPYRIGHT NOTICE
  *  ABOVE DOES NOT EVIDENCE ANY ACTUAL OR INTENDED PUBLICATION.
  */
+
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -34,11 +35,7 @@
 // Global Configuration object that holds ALL needed client data.
 config *g_config = NULL;
 
-// NOTE: INFO(), ERROR() and LOG() defined in lso_udf.h
-
-/** ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
- * Define the LOG append call: For tracing/debugging
- */
+// NOTE: INFO(), ERROR() and LOG() defined in as_lso.h
 void __log_append(FILE * f, const char * prefix, const char * fmt, ...) {
 	char msg[128] = {0};
 	va_list ap;
@@ -47,7 +44,6 @@ void __log_append(FILE * f, const char * prefix, const char * fmt, ...) {
 	va_end(ap);
 	fprintf(f, "%s%s\n",prefix,msg);
 }
-
 
 /** ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
  *  Show Usage
@@ -58,14 +54,12 @@ void usage(int argc, char *argv[]) {
 	INFO("   -p port [default 3000]");
 	INFO("   -n namespace [default test]");
 	INFO("   -s set [default *all*]");
-	INFO("   -f udf_file [default lua_files/udf_unit_test.lua]");
 }
 
 /** ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
  *  Set up the configuration for the LSO Routines
  */
-int init_configuration (int argc, char *argv[])
-{
+int init_configuration (int argc, char *argv[]) {
 	static char * meth = "init_configuration()";
 	INFO("[ENTER]:[%s]: Num Args (%d)\n", meth, argc );
 
@@ -74,13 +68,12 @@ int init_configuration (int argc, char *argv[])
 
 	g_config->host         = "127.0.0.1";
 	g_config->port         = 3000;
-	g_config->hot_ns       = "test";
-	g_config->cold_ns      = "test";
+	g_config->ns           = "test";
 	g_config->set          = "demo";
 	g_config->timeout_ms   = 5000;
 	g_config->record_ttl   = 864000;
 	g_config->verbose      = false;
-	g_config->package_name = "LsoStickman";
+	g_config->package_name = "LsoStoneman";
 
 	INFO("[DEBUG]:[%s]: Num Args (%d) g_config(%p)\n", meth, argc, g_config);
 
@@ -89,13 +82,13 @@ int init_configuration (int argc, char *argv[])
 	while ((optcase = getopt(argc, argv, "ckmh:p:n:s:P:f:v:x:r:t:i:j:")) != -1) {
 		INFO("[ENTER]:[%s]: Processings Arg(%d)\n", meth, optcase );
 		switch (optcase) {
-		case 'h': g_config->host         = strdup(optarg);          break;
-		case 'p': g_config->port         = atoi(optarg);            break;
-		case 'n': g_config->hot_ns = g_config->cold_ns = strdup(optarg);
+		case 'h': g_config->host    = strdup(optarg); break;
+		case 'p': g_config->port    = atoi(optarg);   break;
+		case 'n': g_config->ns      = strdup(optarg);
 		break;
-		case 's': g_config->set          = strdup(optarg);          break;
-		case 'v': g_config->verbose      = true;                    break;
-		default:  usage(argc, argv);                      return(-1);
+		case 's': g_config->set     = strdup(optarg); break;
+		case 'v': g_config->verbose = true;           break;
+		default:  usage(argc, argv);                  return(-1);
 		}
 	}
 	return 0;
@@ -106,88 +99,13 @@ int init_configuration (int argc, char *argv[])
 // Functions in this module:
 // (00) UTILITY FUNCTIONS
 // (02) main()
-// (10) RECORD FUNCTIONS
-// (11) record_put()
-// (12) record_delete()
-// (20) LSO FUNCTIONS
 // (21) lso_push_test()
 // (22) lso_peek_test()
 // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
-
-/** ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
- *  Perform a simple record PUT with the supplied key.  Use the default
- *  config parameters for all other values.
- */
-int record_put( char * keystr, char * binname, char * valstr ) {
-	static char * meth = "record_put()";
-	int rc = 0;
-
-	cl_write_parameters cl_wp;
-	cl_write_parameters_set_default(&cl_wp);
-	cl_wp.timeout_ms = g_config->timeout_ms;
-	cl_wp.record_ttl = 864000;
-
-	// Do a regular insert record
-	cl_object o_key;
-	citrusleaf_object_init_str(&o_key,keystr);		
-	cl_bin bins[1];
-	strcpy(bins[0].bin_name, binname );
-	citrusleaf_object_init_str(&bins[0].object, valstr );
-	rc = citrusleaf_put(g_config->asc, g_config->hot_ns, g_config->set,
-			&o_key, bins, 1, &cl_wp);
-	citrusleaf_object_free(&bins[0].object);
-	if( rc != CITRUSLEAF_OK ) {
-		citrusleaf_object_free(&o_key);		
-		INFO("[DEBUG]:[%s]:failed inserting test data rc(%d)",meth, rc);
-		return -1;
-	}
-	return rc;
-} // end record_put()
-
 /// ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
-
-
-/** ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
- *  Perform a simple record DELETE with the supplied key.  Use the default
- *  config parameters for all other values.
- */
-int record_delete( char * keystr, char * binname, char * valstr ) {
-	static char * meth = "record_delete()";
-	int rc = 0;
-	if( TRA_DEBUG )
-		INFO("[ENTER]:[%s]: Key(%s) Bin(%s)",meth, keystr, binname );
-
-	cl_write_parameters cl_wp;
-	cl_write_parameters_set_default(&cl_wp);
-	cl_wp.timeout_ms = g_config->timeout_ms;
-	cl_wp.record_ttl = 864000;
-
-	// Do a regular delete record
-	cl_object o_key;
-	citrusleaf_object_init_str(&o_key,keystr);		
-
-	rc = citrusleaf_delete(g_config->asc, g_config->hot_ns, g_config->set,
-			&o_key, &cl_wp);
-	if ( rc != CITRUSLEAF_OK &&  rc != CITRUSLEAF_FAIL_NOTFOUND ) {
-		citrusleaf_object_free(&o_key);		
-		INFO("[DEBUG]:[%s]:failed deleting test data rsp=%d",meth, rc);
-		return -1;
-	}
-	if( TRA_DEBUG ) INFO("[EXIT]:[%s]: RC(%d)",meth, rc);
-	return rc;
-} // end record_delete()
-
-/// ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
-//  util_make_tuple: Create a list of values to store
-void make_tuple( as_list * listp, int i ){
-	as_list_add_integer( listp, (int64_t) (i + 1) );
-	as_list_add_integer( listp, (int64_t) (i + 2) );
-	as_list_add_integer( listp, (int64_t) (i + 3) );
-	as_list_add_integer( listp, (int64_t) (i + 4) );
-}
 
 /** ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
  *  LSO PUSH TEST
@@ -195,8 +113,7 @@ void make_tuple( as_list * listp, int i ){
  *  Create a new record, then repeatedly call stack push.
  */
 int lso_push_test(int iterations, char * bin_name, char * keystr, char * val,
-		char * lso_bin)
-{
+				  char * lso_bin) {
 	static char * meth = "lso_push_test()";
 	int rc = 0;
 	as_list * listp;
@@ -204,31 +121,26 @@ int lso_push_test(int iterations, char * bin_name, char * keystr, char * val,
 	INFO("[ENTER]:[%s]: It(%d) UsrBin(%s) Key(%s) Val(%s) LSOBin(%s)\n",
 			meth, iterations, bin_name, keystr, val, lso_bin );
 
-	// Create the base record.
-	if(( rc = record_put( keystr, bin_name, val )) < 0 ){
-		INFO("[ERROR]:[%s]: Record Put Error: rc(%d)\n", meth, rc );
-		return rc;
-	}
-
+#if 0
 	// Create the LSO Bin
-	rc = as_lso_create( g_config->asc, g_config->hot_ns, g_config->set,
+	rc = as_lso_create( g_config->asc, g_config->ns, g_config->set,
 			keystr, lso_bin, g_config->package_name, g_config->timeout_ms);
 	if( rc < 0 ){
 		INFO("[ERROR]:[%s]: LSO Create Error: rc(%d)\n", meth, rc );
 		return rc;
 	}
+#endif
 
 	// Abbreviate for simplicity.
-	cl_cluster * c = g_config->asc;
-	char * ns = g_config->hot_ns;
-	char * s = g_config->set;
-	char * k = keystr;
-	char * b = lso_bin;
+	cl_cluster * c  = g_config->asc;
+	char       * ns = g_config->ns;
+	char       * s  = g_config->set;
+	char       * k  = keystr;
+	char       * b  = lso_bin;
 
 	INFO("[DEBUG]:[%s]: Run as_lso_push() iterations(%d)\n", meth, iterations );
-	for( int i = 0; i < (iterations * 10); i += 10 ){
+	for ( int i = 0; i < (iterations * 10); i += 10 ) {
 		listp = as_arraylist_new( 4, 4 );
-		// make_tuple( listp, i);
 		as_list_add_integer( listp, (int64_t) (i + 1) );
 		as_list_add_integer( listp, (int64_t) (i + 2) );
 		as_list_add_integer( listp, (int64_t) (i + 3) );
@@ -240,8 +152,9 @@ int lso_push_test(int iterations, char * bin_name, char * keystr, char * val,
 			free( valstr );
 		}
 
-		rc = as_lso_push( c, ns, s, k, b, (as_val *)listp, g_config->package_name, g_config->timeout_ms);
-		if(rc) {
+		rc = as_lso_push( c, ns, s, k, b, (as_val *)listp,
+						  g_config->package_name, g_config->timeout_ms);
+		if (rc) {
 			INFO("[ERROR]:[%s]: LSO PUSH Error: i(%d) rc(%d)\n", meth, i, rc );
             return -1;
 		}
@@ -263,35 +176,34 @@ int lso_push_test(int iterations, char * bin_name, char * keystr, char * val,
  *  NOTE: We must EXPLICITLY FREE the result, as it is a malloc'd
  *  object that is handed to us.
  */
-int lso_peek_test(char * keystr, char * lso_bin, int iterations )
-{
+int lso_peek_test(char * keystr, char * lso_bin, int iterations ) {
 	static char * meth = "lso_peek_test()";
 	int rc = 0;
-	// as_list stack_tuple;
-	// as_list * listp;
 	as_result * resultp;
 
 	INFO("[ENTER]:[%s]: Iterations(%d) Key(%s) LSOBin(%s)\n",
 			meth, iterations, keystr, lso_bin );
 
 	// Abbreviate for simplicity.
-	cl_cluster * c = g_config->asc;
-	char * ns = g_config->hot_ns;
-	char * s = g_config->set;
-	char * k = keystr;
-	char * b = lso_bin;
+	cl_cluster * c  = g_config->asc;
+	char       * ns = g_config->ns;
+	char       * s  = g_config->set;
+	char       * k  = keystr;
+	char       * b  = lso_bin;
 
 	INFO("[DEBUG]:[%s]: Run as_lso_peek() iterations(%d)\n", meth, iterations );
 
 	// NOTE: Must FREE the result for EACH ITERATION.
-	int peek_count = 5; // Soon -- set by Random Number
+	int peek_count = 2; // Soon -- set by Random Number
 	char * valstr = NULL; // Hold Temp results from as_val_tostring()
-	for( int i = 0; i < iterations ; i ++ ){
-		peek_count += i;
-		resultp = as_lso_peek( c, ns, s, k, b, peek_count, g_config->package_name, g_config->timeout_ms);
-		if( resultp->is_success ) {
+	for ( int i = 0; i < iterations ; i ++ ){
+		peek_count++;
+		resultp = as_lso_peek( c, ns, s, k, b, peek_count,
+							   g_config->package_name, g_config->timeout_ms);
+		if ( resultp->is_success ) {
 			valstr = as_val_tostring( resultp->value );
-			INFO("[DEBUG]:[%s]: LSO PEEK SUCCESS: i(%d) Val(%s)\n", meth, i, valstr);
+			printf("LSO PEEK SUCCESS: peek_count(%d) Val(%s)\n",
+				   peek_count, valstr);
 			free( valstr );
 		} else {
 			INFO("[ERROR]:[%s]: LSO PEEK Error: i(%d) \n", meth, i );
@@ -299,7 +211,6 @@ int lso_peek_test(char * keystr, char * lso_bin, int iterations )
 		}
 		// Clean up -- release the result object
 		as_result_destroy( resultp );
-
 	} // end for each peek iteration
 
 	INFO("[EXIT]:[%s]: RC(%d)\n", meth, rc );
@@ -324,7 +235,7 @@ int setup_test( int argc, char **argv ) {
 
 	// show cluster setup
 	INFO("[DEBUG]:[%s]Startup: host %s port %d ns %s set %s",
-			meth, g_config->host, g_config->port, g_config->hot_ns,
+			meth, g_config->host, g_config->port, g_config->ns,
 			g_config->set == NULL ? "" : g_config->set);
 
 	citrusleaf_init();
@@ -340,7 +251,7 @@ int setup_test( int argc, char **argv ) {
 
 	rc = citrusleaf_cluster_add_host(asc, g_config->host, g_config->port,
 			g_config->timeout_ms);
-	if( rc != 0 ){
+	if (rc) {
 		INFO("[ERROR]:[%s]:could not connect to host %s port %d",
 				meth, g_config->host,g_config->port);
 		return(-1);
@@ -375,14 +286,16 @@ int main(int argc, char **argv) {
 	// Run some tests
 	// (1) Push Test
 	INFO("[DEBUG]:[%s]: calling lso_push_test()\n", meth );
-	if(( rc = lso_push_test( 10, "UserBin","UKey", "UVal", "lso_bin" )) < 0 ){
+	rc = lso_push_test( 10, "UserBin","UKey", "UVal", "lso_bin" );
+	if (rc) {
 		INFO("[ERROR]:[%s]: lso_push_test() RC(%d)\n", meth, rc );
 		return( rc );
 	}
 
 	// (2) Peek Test
 	INFO("[DEBUG]:[%s]: calling lso_peek_test()\n", meth );
-	if(( rc = lso_peek_test( "UKey", "lso_bin", 10 )) < 0 ){
+	rc = lso_peek_test( "UKey", "lso_bin", 10 );
+    if (rc) {
 		INFO("[ERROR]:[%s]: lso_push_test() RC(%d)\n", meth, rc );
 		return( rc );
 	}

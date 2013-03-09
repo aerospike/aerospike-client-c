@@ -35,15 +35,12 @@ extern uint64_t		atomic_int_add(atomic_int *ai, int val);
 extern uint64_t		atomic_int_get(atomic_int *ai);
 
 typedef struct config_s {
-
         char  *host;
         int    port;
-        char  *hot_ns; // Namespace for Hot data
-        char  *cold_ns; // Namespace for Cold data
+        char  *ns;
         char  *set;
         uint32_t timeout_ms;
         uint32_t record_ttl;
-        char *package_file;
         char *package_name;
         char *filter_name;
         cl_cluster      *asc;

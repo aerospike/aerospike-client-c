@@ -51,6 +51,13 @@
 -- Table of Functions: Used for Transformation and Filter Functions.
 -- This is held in UdfFunctionTable.lua.  Look there for details.
 -- ======================================================================
+-- || GLOBAL PRINT ||
+-- ======================================================================
+-- Use this flag to enable/disable global printing (the "detail" level
+-- in the server).
+-- ======================================================================
+local GP=true;
+local F=false; -- Set F (flag) to true to turn ON global print
 
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 -- LSO Utility Functions
@@ -70,7 +77,8 @@
 local function initializeLsoMap( topRec, lsoBinName )
   local mod = "LsoStoneman";
   local meth = "initializeLsoMap()";
-  info("[ENTER]: <%s:%s>:: LsoBinName(%s)\n", mod, meth, tostring(lsoBinName));
+  GP=F and trace("[ENTER]: <%s:%s>:: LsoBinName(%s)",
+    mod, meth, tostring(lsoBinName));
 
   -- Create the map, and fill it in.
   -- Note: All Field Names start with UPPER CASE.
@@ -110,13 +118,15 @@ local function initializeLsoMap( topRec, lsoBinName )
   lsoMap.ColdListHead  = 0;   -- Nothing here yet
   lsoMap.ColdCacheDirMax = 100;  -- Should be a setable parm
 
-  info("[DEBUG]: <%s:%s> : CTRL Map after Init(%s)\n",
-    mod, meth , tostring(lsoMap));
+  if globalPrint then
+    GP=F and trace("[DEBUG]: <%s:%s> : CTRL Map after Init(%s)",
+      mod, meth , tostring(lsoMap));
+  end
 
   -- Put our new map in the record, then store the record.
   topRec[lsoBinName] = lsoMap;
 
-  info("[EXIT]:<%s:%s>:Dir Map after Init(%s)\n", mod,meth,tostring(lsoMap));
+  GP=F and trace("[EXIT]:<%s:%s>:", mod, meth );
   return lsoMap
 end -- initializeLsoMap
 
@@ -133,45 +143,45 @@ end -- initializeLsoMap
 local function adjustLsoMap( lsoMap, argListMap )
   local mod = "LsoStoneman";
   local meth = "adjustLsoMap()";
-  info("[ENTER]: <%s:%s>:: LsoMap(%s)::\n ArgListMap(%s)",
+  GP=F and trace("[ENTER]: <%s:%s>:: LsoMap(%s)::\n ArgListMap(%s)",
     mod, meth, tostring(lsoMap), tostring( argListMap ));
 
   -- Iterate thru the argListMap and adjust (override) the map settings 
   -- based on the settings passed in during the stackCreate() call.
-  info("[DEBUG]: <%s:%s> : Processing Arguments:(%s)",
+  GP=F and trace("[DEBUG]: <%s:%s> : Processing Arguments:(%s)",
     mod, meth, tostring(argListMap));
 
   if type( argListMap.PageMode ) == "string" then
-  info("[DEBUG]: <%s:%s> : Processing PageMode", mod, meth );
+  GP=F and trace("[DEBUG]: <%s:%s> : Processing PageMode", mod, meth );
     -- Verify it's a valid value
     if argListMap.PageMode == "List" or argListMap.PageMode == "Binary" then
       lsoMap.PageMode = argListMap.PageMode;
     end
   end
   if type( argListMap.HotListSize ) == "number" then
-    info("[DEBUG]: <%s:%s> : Processing Hot List", mod, meth );
-    info("<LINE 148> HotListSize(%s)", tostring(argListMap.HotListSize) );
+    GP=F and trace("[DEBUG]: <%s:%s> : Processing Hot List", mod, meth );
+    GP=F and trace("<LINE 148> HotListSize(%s)", tostring(argListMap.HotListSize) );
     if argListMap.HotListSize > 0 then
       lsoMap.HotCacheMax = argListMap.HotListSize;
     end
   end
   if type( argListMap.HotListTransfer ) == "number" then
-    info("[DEBUG]: <%s:%s> : Processing Hot List Transfer", mod, meth );
+    GP=F and trace("[DEBUG]: <%s:%s> : Processing Hot List Transfer", mod, meth );
     if argListMap.HotListTransfer > 0 then
       lsoMap.HotCacheTransfer = argListMap.HotListTransfer;
     end
   end
   if type( argListMap.ByteEntrySize ) == "number" then
-    info("[DEBUG]: <%s:%s> : Processing ByteEntrySize", mod, meth );
+    GP=F and trace("[DEBUG]: <%s:%s> : Processing ByteEntrySize", mod, meth );
     if argListMap.ByteEntrySize > 0 then
       lsoMap.LdrByteEntrySize = argListMap.ByteEntrySize;
     end
   end
   
-  info("[DEBUG]: <%s:%s> : CTRL Map after Adjust(%s)\n",
+  GP=F and trace("[DEBUG]: <%s:%s> : CTRL Map after Adjust(%s)",
     mod, meth , tostring(lsoMap));
 
-  info("[EXIT]:<%s:%s>:Dir Map after Init(%s)\n", mod,meth,tostring(lsoMap));
+  GP=F and trace("[EXIT]:<%s:%s>:Dir Map after Init(%s)", mod,meth,tostring(lsoMap));
   return lsoMap
 end -- adjustLsoMap
 
@@ -265,7 +275,7 @@ end -- ldrChunkSummary()
 local function   warmCacheListChunkCreate( topRec, lsoMap )
   local mod = "LsoStoneman";
   local meth = "warmCacheListChunkCreate()";
-  info("[ENTER]: <%s:%s> \n", mod, meth );
+  GP=F and trace("[ENTER]: <%s:%s> ", mod, meth );
 
   -- Create the Aerospike Record, initialize the bins: Ctrl, List
   -- Note: All Field Names start with UPPER CASE.
@@ -285,16 +295,16 @@ local function   warmCacheListChunkCreate( topRec, lsoMap )
   newLdrChunkRecord['LdrControlBin'] = ctrlMap;
   newLdrChunkRecord['LdrListBin'] = list();
 
-  info("[DEBUG]: <%s:%s> Chunk Create: CTRL Contents(%s)",
+  GP=F and trace("[DEBUG]: <%s:%s> Chunk Create: CTRL Contents(%s)",
     mod, meth, tostring(ctrlMap) );
 
   aerospike:crec_update( topRec, newLdrChunkRecord );
 
   -- Add our new chunk (the digest) to the WarmCacheList
-  info("[DEBUG]: <%s:%s> Appending NewChunk(%s) to WarmList(%s)\n",
+  GP=F and trace("[DEBUG]: <%s:%s> Appending NewChunk(%s) to WarmList(%s)",
     mod, meth, tostring(newChunkDigest), tostring(lsoMap.WarmCacheList));
   list.append( lsoMap.WarmCacheList, newChunkDigest );
-  info("[DEBUG]: <%s:%s> Post CHunkAppend:NewChunk(%s): LsoMap(%s)\n",
+  GP=F and trace("[DEBUG]: <%s:%s> Post CHunkAppend:NewChunk(%s): LsoMap(%s)",
     mod, meth, tostring(newChunkDigest), tostring(lsoMap));
    
   -- Increment the Warm Count
@@ -304,7 +314,7 @@ local function   warmCacheListChunkCreate( topRec, lsoMap )
   -- Update the top (LSO) record with the newly updated lsoMap.
   topRec[ lsoMap.BinName ] = lsoMap;
 
-  info("[EXIT]: <%s:%s> Return(%s) \n",
+  GP=F and trace("[EXIT]: <%s:%s> Return(%s) ",
     mod, meth, ldrChunkSummary(newLdrChunkRecord));
   return newLdrChunkRecord;
 end --  warmCacheListChunkCreate()
@@ -322,7 +332,7 @@ end --  warmCacheListChunkCreate()
 local function extractHotCacheTransferList( lsoMap )
   local mod = "LsoStoneman";
   local meth = "extractHotCacheTransferList()";
-  info("[ENTER]: <%s:%s> \n", mod, meth );
+  GP=F and trace("[ENTER]: <%s:%s> ", mod, meth );
 
   -- Get the first N (transfer amount) list elements
   local transAmount = lsoMap.HotCacheTransfer;
@@ -336,7 +346,7 @@ local function extractHotCacheTransferList( lsoMap )
     list.append( newHotCacheList, oldHotCacheList[i+transAmount] );
   end
 
-  info("[DEBUG]: <%s:%s>OldHotCache(%s) NewHotCache(%s)  ResultList(%s) \n",
+  GP=F and trace("[DEBUG]: <%s:%s>OldHotCache(%s) NewHotCache(%s)  ResultList(%s) ",
     mod, meth, tostring(oldHotCacheList), tostring(newHotCacheList),
     tostring(resultList));
 
@@ -345,7 +355,7 @@ local function extractHotCacheTransferList( lsoMap )
   oldHotCacheList = nil;
   lsoMap.HotCacheItemCount = lsoMap.HotCacheItemCount - transAmount;
 
-  info("[EXIT]: <%s:%s> ResultList(%s)", mod, meth, summarizeList(resultList));
+  GP=F and trace("[EXIT]: <%s:%s> ResultList(%s)", mod, meth, summarizeList(resultList));
   return resultList;
 end -- extractHotCacheTransferList()
 
@@ -378,7 +388,7 @@ end
 local function ldrChunkInsertList(ldrChunkRec,lsoMap,listIndex,insertList )
   local mod = "LsoStoneman";
   local meth = "ldrChunkInsertList()";
-  info("[ENTER]: <%s:%s> Index(%d) List(%s)\n",
+  GP=F and trace("[ENTER]: <%s:%s> Index(%d) List(%s)",
     mod, meth, listIndex, tostring( insertList ) );
 
   local ldrCtrlMap = ldrChunkRec['LdrControlBin'];
@@ -386,7 +396,7 @@ local function ldrChunkInsertList(ldrChunkRec,lsoMap,listIndex,insertList )
   local chunkIndexStart = list.size( ldrValueList ) + 1;
   local ldrByteArray = ldrChunkRec['LdrBinaryBin']; -- might be nil
 
-  info("[DEBUG]: <%s:%s> Chunk: CTRL(%s) List(%s)\n",
+  GP=F and trace("[DEBUG]: <%s:%s> Chunk: CTRL(%s) List(%s)",
     mod, meth, tostring( ldrCtrlMap ), tostring( ldrValueList ));
 
   -- Note: Since the index of Lua arrays start with 1, that makes our
@@ -408,11 +418,11 @@ local function ldrChunkInsertList(ldrChunkRec,lsoMap,listIndex,insertList )
   -- List Insert will know in advance to create a new chunk.
   if totalItemsToWrite == itemSlotsAvailable then
     lsoMap.WarmTopFull = 1; -- Now, remember to reset on next update.
-    info("[DEBUG]: <%s:%s> TotalItems(%d) == SpaceAvail(%d): Top FULL!!",
+    GP=F and trace("[DEBUG]: <%s:%s> TotalItems(%d) == SpaceAvail(%d): Top FULL!!",
       mod, meth, totalItemsToWrite, itemSlotsAvailable );
   end
 
-  info("[DEBUG]: <%s:%s> TotalItems(%d) SpaceAvail(%d)\n",
+  GP=F and trace("[DEBUG]: <%s:%s> TotalItems(%d) SpaceAvail(%d)",
     mod, meth, totalItemsToWrite, itemSlotsAvailable );
 
   -- Write only as much as we have space for
@@ -422,7 +432,7 @@ local function ldrChunkInsertList(ldrChunkRec,lsoMap,listIndex,insertList )
   end
 
   -- This is List Mode.  Easy.  Just append to the list.
-  info("[DEBUG]: <%s:%s>:ListMode: Copying From(%d) to (%d) Amount(%d)\n",
+  GP=F and trace("[DEBUG]: <%s:%s>:ListMode: Copying From(%d) to (%d) Amount(%d)",
     mod, meth, listIndex, chunkIndexStart, newItemsStored );
 
   -- Special case of starting at ZERO -- since we're adding, not
@@ -431,14 +441,14 @@ local function ldrChunkInsertList(ldrChunkRec,lsoMap,listIndex,insertList )
     list.append( ldrValueList, insertList[i+listIndex] );
   end -- for each remaining entry
 
-  info("[DEBUG]: <%s:%s>: Post Chunk Copy: Ctrl(%s) List(%s)\n",
+  GP=F and trace("[DEBUG]: <%s:%s>: Post Chunk Copy: Ctrl(%s) List(%s)",
     mod, meth, tostring(ldrCtrlMap), tostring(ldrValueList));
 
   -- Store our modifications back into the Chunk Record Bins
   ldrChunkRec['LdrControlBin'] = ldrCtrlMap;
   ldrChunkRec['LdrListBin'] = ldrValueList;
 
-  info("[EXIT]: <%s:%s> newItemsStored(%d) List(%s) \n",
+  GP=F and trace("[EXIT]: <%s:%s> newItemsStored(%d) List(%s) ",
     mod, meth, newItemsStored, tostring( ldrValueList) );
   return newItemsStored;
 end -- ldrChunkInsertList()
@@ -465,11 +475,11 @@ end -- ldrChunkInsertList()
 local function ldrChunkInsertBytes( ldrChunkRec, lsoMap, listIndex, insertList )
   local mod = "LsoStoneman";
   local meth = "ldrChunkInsertBytes()";
-  info("[ENTER]: <%s:%s> Index(%d) List(%s)\n",
+  GP=F and trace("[ENTER]: <%s:%s> Index(%d) List(%s)",
     mod, meth, listIndex, tostring( insertList ) );
 
   local ldrCtrlMap = ldrChunkRec['LdrControlBin'];
-  info("[DEBUG]: <%s:%s> Check LDR CTRL MAP(%s)\n",
+  GP=F and trace("[DEBUG]: <%s:%s> Check LDR CTRL MAP(%s)",
     mod, meth, tostring( ldrCtrlMap ) );
 
   local entrySize = ldrCtrlMap.ByteEntrySize;
@@ -482,7 +492,7 @@ local function ldrChunkInsertBytes( ldrChunkRec, lsoMap, listIndex, insertList )
   if( ldrCtrlMap.ByteEntryCount ~= nil and ldrCtrlMap.ByteEntryCount ~= 0 ) then
     entryCount = ldrCtrlMap.ByteEntryCount;
   end
-  info("[DEBUG]: <%s:%s> Using EntryCount(%d)", mod, meth, entryCount );
+  GP=F and trace("[DEBUG]: <%s:%s> Using EntryCount(%d)", mod, meth, entryCount );
 
   -- Note: Since the index of Lua arrays start with 1, that makes our
   -- math for lengths and space off by 1. So, we're often adding or
@@ -492,7 +502,7 @@ local function ldrChunkInsertBytes( ldrChunkRec, lsoMap, listIndex, insertList )
   local totalItemsToWrite = list.size( insertList ) + 1 - listIndex;
   local maxEntries = math.floor(ldrCtrlMap.ByteCountMax / entrySize );
   local itemSlotsAvailable = maxEntries - entryCount;
-  info("[DEBUG]: <%s:%s>:MaxEntries(%d) SlotsAvail(%d) #Total ToWrite(%d)",
+  GP=F and trace("[DEBUG]: <%s:%s>:MaxEntries(%d) SlotsAvail(%d) #Total ToWrite(%d)",
    mod, meth, maxEntries, itemSlotsAvailable, totalItemsToWrite );
 
   -- In the unfortunate case where our accounting is bad and we accidently
@@ -508,7 +518,7 @@ local function ldrChunkInsertBytes( ldrChunkRec, lsoMap, listIndex, insertList )
   -- List Insert will know in advance to create a new chunk.
   if totalItemsToWrite == itemSlotsAvailable then
     lsoMap.WarmTopFull = 1; -- Remember to reset on next update.
-    info("[DEBUG]: <%s:%s> TotalItems(%d) == SpaceAvail(%d): Top FULL!!",
+    GP=F and trace("[DEBUG]: <%s:%s> TotalItems(%d) == SpaceAvail(%d): Top FULL!!",
       mod, meth, totalItemsToWrite, itemSlotsAvailable );
   end
 
@@ -523,15 +533,15 @@ local function ldrChunkInsertBytes( ldrChunkRec, lsoMap, listIndex, insertList )
   local totalSpaceNeeded = (entryCount + newItemsStored) * entrySize;
   if ldrChunkRec['LdrBinaryBin'] == nil then
     ldrChunkRec['LdrBinaryBin'] = bytes( totalSpaceNeeded );
-    info("[DEBUG]: <%s:%s> Allocated NEW BYTES: Size(%d) ByteArray(%s)",
+    GP=F and trace("[DEBUG]: <%s:%s> Allocated NEW BYTES: Size(%d) ByteArray(%s)",
       mod, meth, totalSpaceNeeded, tostring(ldrChunkRec['LdrBinaryBin']));
   else
-    info("[DEBUG]:<%s:%s>Before: Extending BYTES: New Size(%d) ByteArray(%s)",
+    GP=F and trace("[DEBUG]:<%s:%s>Before: Extending BYTES: New Size(%d) ByteArray(%s)",
       mod, meth, totalSpaceNeeded, tostring(ldrChunkRec['LdrBinaryBin']));
 
     bytes.set_len(ldrChunkRec['LdrBinaryBin'], totalSpaceNeeded );
 
-    info("[DEBUG]:<%s:%s>AFTER: Extending BYTES: New Size(%d) ByteArray(%s)",
+    GP=F and trace("[DEBUG]:<%s:%s>AFTER: Extending BYTES: New Size(%d) ByteArray(%s)",
       mod, meth, totalSpaceNeeded, tostring(ldrChunkRec['LdrBinaryBin']));
   end
   local chunkByteArray = ldrChunkRec['LdrBinaryBin'];
@@ -545,7 +555,7 @@ local function ldrChunkInsertBytes( ldrChunkRec, lsoMap, listIndex, insertList )
   -- not zero.
   local chunkByteStart = 1 + (entryCount * entrySize);
 
-  info("[DEBUG]: <%s:%s> TotalItems(%d) SpaceAvail(%d) ByteStart(%d)\n",
+  GP=F and trace("[DEBUG]: <%s:%s> TotalItems(%d) SpaceAvail(%d) ByteStart(%d)",
     mod, meth, totalItemsToWrite, itemSlotsAvailable, chunkByteStart );
 
   local byteIndex;
@@ -554,13 +564,13 @@ local function ldrChunkInsertBytes( ldrChunkRec, lsoMap, listIndex, insertList )
     byteIndex = chunkByteStart + (i * entrySize);
     insertItem = insertList[i+listIndex];
 
-    info("[DEBUG]:<%s:%s>ByteAppend:Array(%s) Entry(%d) Val(%s) Index(%d)",
+    GP=F and trace("[DEBUG]:<%s:%s>ByteAppend:Array(%s) Entry(%d) Val(%s) Index(%d)",
       mod, meth, tostring( chunkByteArray), i, tostring( insertItem ),
       byteIndex );
 
     bytes.put_bytes( chunkByteArray, byteIndex, insertItem );
 
-    info("[DEBUG]: <%s:%s> Post Append: ByteArray(%s)",
+    GP=F and trace("[DEBUG]: <%s:%s> Post Append: ByteArray(%s)",
       mod, meth, tostring(chunkByteArray));
 
   end -- for each remaining entry
@@ -568,14 +578,14 @@ local function ldrChunkInsertBytes( ldrChunkRec, lsoMap, listIndex, insertList )
   -- Update the ctrl map with the new count
   ldrCtrlMap.ByteEntryCount = entryCount + newItemsStored;
 
-  info("[DEBUG]: <%s:%s>: Post Chunk Copy: Ctrl(%s) List(%s)\n",
+  GP=F and trace("[DEBUG]: <%s:%s>: Post Chunk Copy: Ctrl(%s) List(%s)",
     mod, meth, tostring(ldrCtrlMap), tostring( chunkByteArray ));
 
   -- Store our modifications back into the Chunk Record Bins
   ldrChunkRec['LdrControlBin'] = ldrCtrlMap;
   ldrChunkRec['LdrBinaryBin'] = chunkByteArray;
 
-  info("[EXIT]: <%s:%s> newItemsStored(%d) List(%s) \n",
+  GP=F and trace("[EXIT]: <%s:%s> newItemsStored(%d) List(%s) ",
     mod, meth, newItemsStored, tostring( chunkByteArray ));
   return newItemsStored;
 end -- ldrChunkInsertBytes()
@@ -598,7 +608,7 @@ end -- ldrChunkInsertBytes()
 local function ldrChunkInsert(ldrChunkRec,lsoMap,listIndex,insertList )
   local mod = "LsoStoneman";
   local meth = "ldrChunkInsert()";
-  info("[ENTER]: <%s:%s> Index(%d) List(%s)\n",
+  GP=F and trace("[ENTER]: <%s:%s> Index(%d) List(%s)",
     mod, meth, listIndex, tostring( insertList ) );
 
   if lsoMap.PageMode == "List" then
@@ -621,7 +631,7 @@ end -- ldrChunkInsert()
 local function ldrHasRoom( ldr, newValue )
   local mod = "LsoStoneman";
   local meth = "ldrHasRoom()";
-  info("[ENTER]: <%s:%s> ldr(%s) newValue(%s) \n",
+  GP=F and trace("[ENTER]: <%s:%s> ldr(%s) newValue(%s) ",
     mod, meth, tostring(ldr), tostring(newValue) );
 
   local result = 1;  -- Be optimistic 
@@ -632,7 +642,7 @@ local function ldrHasRoom( ldr, newValue )
     result = 0;
   end
 
-  info("[EXIT]: <%s:%s> result(%d) \n", mod, meth, result );
+  GP=F and trace("[EXIT]: <%s:%s> result(%d) ", mod, meth, result );
   return result;
 end -- chunkSpaceCheck()
 
@@ -659,17 +669,17 @@ end -- chunkSpaceCheck()
 local function readEntryList( resultList, entryList, count, func, fargs, all)
   local mod = "LsoStoneman";
   local meth = "readEntryList()";
-  info("[ENTER]: <%s:%s> count(%d) resultList(%s) entryList(%s)\n",
+  GP=F and trace("[ENTER]: <%s:%s> count(%d) resultList(%s) entryList(%s)",
     mod, meth, count, tostring(resultList), tostring(entryList));
 
   local doTheFunk = 0; -- Welcome to Funky Town
 
   if (func ~= nil and fargs ~= nil ) then
     doTheFunk = 1;
-    info("[ENTER1]: <%s:%s> Count(%d) func(%s) fargs(%s)\n",
+    GP=F and trace("[ENTER1]: <%s:%s> Count(%d) func(%s) fargs(%s)",
       mod, meth, count, func, tostring(fargs) );
   else
-    info("[ENTER2]: <%s:%s> PeekCount(%d)\n", mod, meth, count );
+    GP=F and trace("[ENTER2]: <%s:%s> PeekCount(%d)", mod, meth, count );
   end
 
   -- Get addressability to the Function Table
@@ -700,18 +710,18 @@ local function readEntryList( resultList, entryList, count, func, fargs, all)
     end
 
     list.append( resultList, readValue );
---    info("[DEBUG]:<%s:%s>Appended Val(%s) to ResultList(%s)",
+--    GP=F and trace("[DEBUG]:<%s:%s>Appended Val(%s) to ResultList(%s)",
 --      mod, meth, tostring( readValue ), tostring(resultList) );
     
     numRead = numRead + 1;
     if numRead >= numToRead and all == 0 then
-      info("[Early EXIT]: <%s:%s> NumRead(%d) resultListSummary(%s)",
+      GP=F and trace("[Early EXIT]: <%s:%s> NumRead(%d) resultListSummary(%s)",
         mod, meth, numRead, summarizeList( resultList ));
       return numRead;
     end
   end -- for each entry in the list
 
-  info("[EXIT]: <%s:%s> NumRead(%d) resultListSummary(%s) ",
+  GP=F and trace("[EXIT]: <%s:%s> NumRead(%d) resultListSummary(%s) ",
     mod, meth, numRead, summarizeList( resultList ));
   return numRead;
 end -- readEntryList()
@@ -742,17 +752,17 @@ end -- readEntryList()
 local function readByteArray( resultList, ldrChunk, count, func, fargs, all)
   local mod = "LsoStoneman";
   local meth = "readByteArray()";
-  info("[ENTER]: <%s:%s> Count(%d) ResultList(%s) ",
+  GP=F and trace("[ENTER]: <%s:%s> Count(%d) ResultList(%s) ",
     mod, meth, count, tostring(resultList) );
 
   local doTheFunk = 0; -- Welcome to Funky Town
 
   if (func ~= nil and fargs ~= nil ) then
     doTheFunk = 1;
-    info("[ENTER1]: <%s:%s> Count(%d) func(%s) fargs(%s)\n",
+    GP=F and trace("[ENTER1]: <%s:%s> Count(%d) func(%s) fargs(%s)",
       mod, meth, count, func, tostring(fargs) );
   else
-    info("[ENTER2]: <%s:%s> PeekCount(%d)\n", mod, meth, count );
+    GP=F and trace("[ENTER2]: <%s:%s> PeekCount(%d)", mod, meth, count );
   end
 
   -- Get addressability to the Function Table
@@ -802,14 +812,14 @@ local function readByteArray( resultList, ldrChunk, count, func, fargs, all)
   local readValue;
   local byteValue;
   local byteIndex = 0; -- our direct position in the byte array.
-  info("[DEBUG]:<%s:%s>Starting loop Byte Array(%s) ListSize(%d)",
+  GP=F and trace("[DEBUG]:<%s:%s>Starting loop Byte Array(%s) ListSize(%d)",
       mod, meth, tostring(byteArray), listSize );
   for i = (listSize - 1), 0, -1 do
 
     byteIndex = 1 + (i * entrySize);
     byteValue = bytes.get_bytes( byteArray, byteIndex, entrySize );
 
-    info("[DEBUG]:<%s:%s>: In Loop: i(%d) BI(%d) BV(%s)",
+    GP=F and trace("[DEBUG]:<%s:%s>: In Loop: i(%d) BI(%d) BV(%s)",
       mod, meth, i, byteIndex, tostring( byteValue ));
 
     -- Apply the UDF to the item, if present, and if result NOT NULL, then
@@ -820,18 +830,18 @@ local function readByteArray( resultList, ldrChunk, count, func, fargs, all)
     end
 
     list.append( resultList, readValue );
-    info("[DEBUG]:<%s:%s>Appended Val(%s) to ResultList(%s)",
+    GP=F and trace("[DEBUG]:<%s:%s>Appended Val(%s) to ResultList(%s)",
       mod, meth, tostring( readValue ), tostring(resultList) );
     
     numRead = numRead + 1;
     if numRead >= numToRead and all == 0 then
-      info("[Early EXIT]: <%s:%s> NumRead(%d) resultList(%s)",
+      GP=F and trace("[Early EXIT]: <%s:%s> NumRead(%d) resultList(%s)",
         mod, meth, numRead, tostring( resultList ));
       return numRead;
     end
   end -- for each entry in the list (packed byte array)
 
-  info("[EXIT]: <%s:%s> NumRead(%d) resultListSummary(%s) ",
+  GP=F and trace("[EXIT]: <%s:%s> NumRead(%d) resultListSummary(%s) ",
     mod, meth, numRead, summarizeList( resultList ));
   return numRead;
 end -- readByteArray()
@@ -858,7 +868,7 @@ local function transferWarmCacheList( lsoMap )
   local mod = "LsoStoneman";
   local meth = "transferWarmCacheList()";
   local rc = 0;
-  info("[ENTER]: <%s:%s> lsoMap(%s)\n", mod, meth, tostring(lsoMap) );
+  GP=F and trace("[ENTER]: <%s:%s> lsoMap(%s)", mod, meth, tostring(lsoMap) );
 
   -- We are called ONLY when the Warm Dir List is full -- so we should
   -- not have to check that in production, but during development, we're
@@ -867,12 +877,12 @@ local function transferWarmCacheList( lsoMap )
   local transferAmount = lsoMap.WarmChunkTransfer;
 
 
-  info("[DEBUG]: <%s:%s> NOT YET READY TO TRANSFER WARM TO COLD: Map(%s)\n",
+  GP=F and trace("[DEBUG]: <%s:%s> NOT YET READY TO TRANSFER WARM TO COLD: Map(%s)",
     mod, meth, tostring(lsoMap) );
 
     -- TODO : Finish transferWarmCacheList() ASAP.
 
-  info("[EXIT]: <%s:%s> lsoMap(%s) \n", mod, meth, tostring(lsoMap) );
+  GP=F and trace("[EXIT]: <%s:%s> lsoMap(%s) ", mod, meth, tostring(lsoMap) );
   return rc;
 end -- transferWarmCacheList()
   
@@ -887,7 +897,7 @@ local function warmCacheListHasRoom( lsoMap )
   local mod = "LsoStoneman";
   local meth = "warmCacheListHasRoom()";
   local decision = 1; -- Start Optimistic (most times answer will be YES)
-  info("[ENTER]: <%s:%s> LSO BIN(%s) Bin Map(%s)\n", 
+  GP=F and trace("[ENTER]: <%s:%s> LSO BIN(%s) Bin Map(%s)", 
     mod, meth, lsoMap.BinName, tostring( lsoMap ));
 
 --  if lsoMap.WarmChunkCount >= lsoMap.WarmCacheDirMax then
@@ -897,7 +907,7 @@ local function warmCacheListHasRoom( lsoMap )
     -- so for now we claim that there is ALWAYS room in the Warm Cache).
     decision = 1;
 
-  info("[EXIT]: <%s:%s> Decision(%d)\n", mod, meth, decision );
+  GP=F and trace("[EXIT]: <%s:%s> Decision(%d)", mod, meth, decision );
   return decision;
 end -- warmCacheListHasRoom()
 
@@ -909,12 +919,12 @@ end -- warmCacheListHasRoom()
 local function hotCacheRead( cacheList, count, func, fargs, all)
   local mod = "LsoStoneman";
   local meth = "hotCacheRead()";
-  info("[ENTER]: <%s:%s> Count(%d) \n", mod, meth, count );
+  GP=F and trace("[ENTER]: <%s:%s> Count(%d) ", mod, meth, count );
 
   local resultList = list();
   local numRead = readEntryList(resultList,cacheList, count, func, fargs, all);
 
-  info("[EXIT]:<%s:%s>resultListSummary(%s)",
+  GP=F and trace("[EXIT]:<%s:%s>resultListSummary(%s)",
     mod, meth, summarizeList(resultList) );
   return resultList;
 end -- hotCacheRead()
@@ -928,17 +938,17 @@ end -- hotCacheRead()
 local function warmCacheListGetTop( topRec, lsoMap )
   local mod = "LsoStoneman";
   local meth = "warmCacheListGetTop()";
-  info("[ENTER]: <%s:%s> \n", mod, meth );
+  GP=F and trace("[ENTER]: <%s:%s> ", mod, meth );
 
   local warmCacheList = lsoMap.WarmCacheList;
   local stringDigest = tostring( warmCacheList[ list.size(warmCacheList) ]);
 
-  info("[DEBUG]: <%s:%s> Warm Digest(%s) item#(%d)", 
+  GP=F and trace("[DEBUG]: <%s:%s> Warm Digest(%s) item#(%d)", 
       mod, meth, stringDigest, list.size( warmCacheList ));
 
   local topWarmChunk = aerospike:crec_open( topRec, stringDigest );
 
-  info("[EXIT]: <%s:%s> result(%s) \n",
+  GP=F and trace("[EXIT]: <%s:%s> result(%s) ",
     mod, meth, ldrChunkSummary( topWarmChunk ) );
   return topWarmChunk;
 end -- warmCacheListGetTop()
@@ -963,7 +973,7 @@ local function ldrChunkRead( ldrChunk, resultList, count, func, fargs, all )
 -- local function hotCacheRead( cacheList, count, func, fargs, all)
   local mod = "LsoStoneman";
   local meth = "ldrChunkRead()";
-  info("[ENTER]: <%s:%s> Count(%d)", mod, meth, count);
+  GP=F and trace("[ENTER]: <%s:%s> Count(%d)", mod, meth, count);
 
   -- If the page is "Binary" mode, then we're using the "Binary" Bin
   -- 'LdrBinaryBin', otherwise we're using the "List" Bin 'LdrListBin'.
@@ -976,7 +986,7 @@ local function ldrChunkRead( ldrChunk, resultList, count, func, fargs, all )
     numRead = readByteArray(resultList, ldrChunk, count, func, fargs, all);
   end
 
-  info("[EXIT]: <%s:%s> NumberRead(%d) ResultListSummary(%s) \n",
+  GP=F and trace("[EXIT]: <%s:%s> NumberRead(%d) ResultListSummary(%s) ",
     mod, meth, numRead, summarizeList( resultList ));
   return numRead;
 end -- ldrChunkRead()
@@ -994,7 +1004,7 @@ local function warmCacheRead(topRec, resultList, lsoMap, count,
                            func, fargs, all)
   local mod = "LsoStoneman";
   local meth = "warmCacheRead()";
-  info("[ENTER]: <%s:%s> Count(%d) \n", mod, meth, count );
+  GP=F and trace("[ENTER]: <%s:%s> Count(%d) ", mod, meth, count );
 
   -- Process the WarmCacheList bottom to top, pulling in each digest in
   -- turn, opening the chunk and reading records (as necessary), until
@@ -1013,7 +1023,7 @@ local function warmCacheRead(topRec, resultList, lsoMap, count,
   local stringDigest;
   local status = 0;
 
-  info("[DEBUG]:<%s:%s>:DirCount(%d),Top(%s) Reading warmCacheList(%s)",
+  GP=F and trace("[DEBUG]:<%s:%s>:DirCount(%d),Top(%s) Reading warmCacheList(%s)",
     mod, meth, dirCount, validateTopRec( topRec, lsoMap ),
     tostring( warmCacheList) );
 
@@ -1023,7 +1033,7 @@ local function warmCacheRead(topRec, resultList, lsoMap, count,
   for dirIndex = dirCount, 1, -1 do
     -- Record Digest MUST be in string form
     stringDigest = tostring(warmCacheList[ dirIndex ]);
-    info("[DEBUG]: <%s:%s>: Opening Warm Chunk:Index(%d)Digest(%s):\n",
+    GP=F and trace("[DEBUG]: <%s:%s>: Opening Warm Chunk:Index(%d)Digest(%s):",
     mod, meth, dirIndex, stringDigest );
     ldrChunk = aerospike:crec_open( topRec, stringDigest );
     --
@@ -1032,20 +1042,20 @@ local function warmCacheRead(topRec, resultList, lsoMap, count,
     ldrChunkRead( ldrChunk, resultList, remaining, func, fargs, all );
     totalWarmAmountRead = totalWarmAmountRead + chunkItemsRead;
 
-    info("[DEBUG]:<%s:%s>:after ChunkRead:NumRead(%d)DirIndex(%d)ResList(%s)", 
+    GP=F and trace("[DEBUG]:<%s:%s>:after ChunkRead:NumRead(%d)DirIndex(%d)ResList(%s)", 
       mod, meth, chunkItemsRead, dirIndex, tostring( resultList ));
     -- Early exit ONLY when ALL flag is not set.
     if( all == 0 and
       ( chunkItemsRead >= remaining or totalWarmAmountRead >= count ) )
     then
-      info("[Early EXIT]: <%s:%s> totalWarmAmountRead(%d) ResultList(%s) \n",
+      GP=F and trace("[Early EXIT]: <%s:%s> totalWarmAmountRead(%d) ResultList(%s) ",
         mod, meth, totalWarmAmountRead, tostring(resultList));
       status = aerospike:crec_close( topRec, ldrChunk );
       return totalWarmAmountRead;
     end
 
     status = aerospike:crec_close( topRec, ldrChunk );
-    info("[DEBUG]: <%s:%s> as:close() status(%s) \n",
+    GP=F and trace("[DEBUG]: <%s:%s> as:close() status(%s) ",
     mod, meth, tostring( status ) );
 
     -- Get ready for the next iteration.  Adjust our numbers for the
@@ -1053,7 +1063,7 @@ local function warmCacheRead(topRec, resultList, lsoMap, count,
     remaining = remaining - chunkItemsRead;
   end -- for each warm Chunk
 
-  info("[EXIT]: <%s:%s> totalWarmAmountRead(%d) ResultListSummary(%s) \n",
+  GP=F and trace("[EXIT]: <%s:%s> totalWarmAmountRead(%d) ResultListSummary(%s) ",
   mod, meth, totalWarmAmountRead, summarizeList(resultList));
   return totalWarmAmountRead;
 end -- warmCacheRead()
@@ -1074,10 +1084,10 @@ local function warmCacheInsert( topRec, lsoMap, insertList )
   local mod = "LsoStoneman";
   local meth = "warmCacheInsert()";
   local rc = 0;
-  info("[ENTER]: <%s:%s> \n", mod, meth );
---info("[ENTER]: <%s:%s> LSO Summary(%s) \n", mod, meth, lsoSummary(lsoMap) );
+  GP=F and trace("[ENTER]: <%s:%s> ", mod, meth );
+--GP=F and trace("[ENTER]: <%s:%s> LSO Summary(%s) ", mod, meth, lsoSummary(lsoMap) );
 
-  info("[DEBUG 0]:WDL(%s)", tostring( lsoMap.WarmCacheList ));
+  GP=F and trace("[DEBUG 0]:WDL(%s)", tostring( lsoMap.WarmCacheList ));
 
   local warmCacheList = lsoMap.WarmCacheList;
   local topWarmChunk;
@@ -1087,20 +1097,20 @@ local function warmCacheInsert( topRec, lsoMap, insertList )
   -- case it set a flag so that we will go ahead and allocate a new one now,
   -- rather than after we read the old top and see that it's already full.
   if list.size( warmCacheList ) == 0 or lsoMap.WarmTopFull == 1 then
-    info("[DEBUG]: <%s:%s> Calling Chunk Create \n", mod, meth );
+    GP=F and trace("[DEBUG]: <%s:%s> Calling Chunk Create ", mod, meth );
     topWarmChunk = warmCacheListChunkCreate( topRec, lsoMap ); -- create new
     lsoMap.WarmTopFull = 0; -- reset for next time.
   else
-    info("[DEBUG]: <%s:%s> Calling Get TOP \n", mod, meth );
+    GP=F and trace("[DEBUG]: <%s:%s> Calling Get TOP ", mod, meth );
     topWarmChunk = warmCacheListGetTop( topRec, lsoMap ); -- open existing
   end
-  info("[DEBUG]: <%s:%s> Post 'GetTop': LsoMap(%s) \n", 
+  GP=F and trace("[DEBUG]: <%s:%s> Post 'GetTop': LsoMap(%s) ", 
     mod, meth, tostring( lsoMap ));
 
   -- We have a warm Chunk -- write as much as we can into it.  If it didn't
   -- all fit -- then we allocate a new chunk and write the rest.
   local totalCount = list.size( insertList );
-  info("[DEBUG]: <%s:%s> Calling Chunk Insert: List(%s)\n",
+  GP=F and trace("[DEBUG]: <%s:%s> Calling Chunk Insert: List(%s)",
     mod, meth, tostring( insertList ));
   local countWritten = ldrChunkInsert( topWarmChunk, lsoMap, 1, insertList );
   if( countWritten == -1 ) then
@@ -1111,13 +1121,13 @@ local function warmCacheInsert( topRec, lsoMap, insertList )
   if itemsLeft > 0 then
     aerospike:crec_update( topRec, topWarmChunk );
     aerospike:crec_close( topRec, topWarmChunk );
-    info("[DEBUG]: <%s:%s> Calling Chunk Create: AGAIN!!\n", mod, meth );
+    GP=F and trace("[DEBUG]: <%s:%s> Calling Chunk Create: AGAIN!!", mod, meth );
     topWarmChunk = warmCacheListChunkCreate( topRec, lsoMap ); -- create new
     -- Unless we've screwed up our parameters -- we should never have to do
     -- this more than once.  This could be a while loop if it had to be, but
     -- that doesn't make sense that we'd need to create multiple new LDRs to
     -- hold just PART of the hot cache.
-  info("[DEBUG]: <%s:%s> Calling Chunk Insert: List(%s) AGAIN(%d)\n",
+  GP=F and trace("[DEBUG]: <%s:%s> Calling Chunk Insert: List(%s) AGAIN(%d)",
     mod, meth, tostring( insertList ), countWritten + 1);
     countWritten = ldrChunkInsert( topWarmChunk, lsoMap, countWritten+1, insertList );
     if( countWritten == -1 ) then
@@ -1125,7 +1135,7 @@ local function warmCacheInsert( topRec, lsoMap, insertList )
       return -1;  -- General badness
     end
     if countWritten ~= itemsLeft then
-      warn("[ERROR!!]: <%s:%s> Second Warm Chunk Write: CW(%d) IL(%d) \n",
+      warn("[ERROR!!]: <%s:%s> Second Warm Chunk Write: CW(%d) IL(%d) ",
         mod, meth, countWritten, itemsLeft );
     end
   end
@@ -1139,21 +1149,21 @@ local function warmCacheInsert( topRec, lsoMap, insertList )
 
   -- All done -- Save the info of how much room we have in the top Warm
   -- chunk (entry count or byte count)
-  info("[DEBUG]: <%s:%s> Saving LsoMap (%s) Before Update \n",
+  GP=F and trace("[DEBUG]: <%s:%s> Saving LsoMap (%s) Before Update ",
     mod, meth, tostring( lsoMap ));
   topRec[lsoMap.BinName] = lsoMap;
   updateWarmCountStatistics( lsoMap, topWarmChunk );
 
-  info("[DEBUG]: <%s:%s> Chunk Summary before storage(%s)\n",
+  GP=F and trace("[DEBUG]: <%s:%s> Chunk Summary before storage(%s)",
     mod, meth, ldrChunkSummary( topWarmChunk ));
 
-  info("[DEBUG]: <%s:%s> Calling CREC Update \n", mod, meth );
+  GP=F and trace("[DEBUG]: <%s:%s> Calling CREC Update ", mod, meth );
   local status = aerospike:crec_update( topRec, topWarmChunk );
-  info("[DEBUG]: <%s:%s> CREC Update Status(%s) \n",mod,meth, tostring(status));
-  info("[DEBUG]: <%s:%s> Calling CREC Close \n", mod, meth );
+  GP=F and trace("[DEBUG]: <%s:%s> CREC Update Status(%s) ",mod,meth, tostring(status));
+  GP=F and trace("[DEBUG]: <%s:%s> Calling CREC Close ", mod, meth );
 
   status = aerospike:crec_close( topRec, topWarmChunk );
-  info("[DEBUG]: <%s:%s> CREC Close Status(%s) \n",mod,meth, tostring(status));
+  GP=F and trace("[DEBUG]: <%s:%s> CREC Close Status(%s) ",mod,meth, tostring(status));
 
   -- Update the total Item Count in the topRec.  The caller will 
   -- "re-store" the map in the record before updating.
@@ -1176,8 +1186,8 @@ local function hotCacheTransfer( topRec, lsoMap )
   local mod = "LsoStoneman";
   local meth = "hotCacheTransfer()";
   local rc = 0;
-  info("[ENTER]: <%s:%s> LSO Summary() \n", mod, meth );
---info("[ENTER]: <%s:%s> LSO Summary(%s) \n", mod, meth, lsoSummary(lsoMap) );
+  GP=F and trace("[ENTER]: <%s:%s> LSO Summary() ", mod, meth );
+--GP=F and trace("[ENTER]: <%s:%s> LSO Summary(%s) ", mod, meth, lsoSummary(lsoMap) );
 
   -- if no room in the WarmList, then make room (transfer some of the warm
   -- list to the cold list)
@@ -1197,7 +1207,7 @@ local function hotCacheTransfer( topRec, lsoMap )
   local transferList = extractHotCacheTransferList( lsoMap );
   rc = warmCacheInsert( topRec, lsoMap, transferList );
 
-  info("[EXIT]: <%s:%s> result(%d) \n", mod, meth, rc );
+  GP=F and trace("[EXIT]: <%s:%s> result(%d) ", mod, meth, rc );
   return rc;
 end -- hotCacheTransfer()
 -- ======================================================================
@@ -1211,11 +1221,11 @@ end -- hotCacheTransfer()
 local function coldCacheRead(topRec, resultList, cacheList, count, func, fargs )
   local mod = "LsoStoneman";
   local meth = "coldCacheRead()";
-  info("[ENTER]: <%s:%s> \n", mod, meth );
+  GP=F and trace("[ENTER]: <%s:%s> ", mod, meth );
 
-  info("[DEBUG]: <%s:%s> COLD STORAGE NOT YET IMPLEMENTED!! \n", mod, meth );
+  GP=F and trace("[DEBUG]: <%s:%s> COLD STORAGE NOT YET IMPLEMENTED!! ", mod, meth );
 
-  info("[EXIT]: <%s:%s> \n", mod, meth );
+  GP=F and trace("[EXIT]: <%s:%s> ", mod, meth );
   return resultList;
 end -- coldCacheRead()
 
@@ -1233,13 +1243,13 @@ end -- coldCacheRead()
 local function lsoMapRead( topRec, lsoMap, peekCount, func, fargs )
   local mod = "LsoStoneman";
   local meth = "lsoMapRead()";
-  info("[ENTER]: <%s:%s> ReadCount(%s)", mod, meth, tostring(peekCount));
+  GP=F and trace("[ENTER]: <%s:%s> ReadCount(%s)", mod, meth, tostring(peekCount));
 
   if (func ~= nil and fargs ~= nil ) then
-    info("[ENTER1]: <%s:%s> Count(%s) func(%s) fargs(%s)\n",
+    GP=F and trace("[ENTER1]: <%s:%s> Count(%s) func(%s) fargs(%s)",
       mod, meth, tostring(peekCount), tostring(func), tostring(fargs) );
   else
-    info("[ENTER2]: <%s:%s> PeekCount(%s)", mod, meth, tostring(peekCount));
+    GP=F and trace("[ENTER2]: <%s:%s> PeekCount(%s)", mod, meth, tostring(peekCount));
   end
 
   local all = 0;
@@ -1250,7 +1260,7 @@ local function lsoMapRead( topRec, lsoMap, peekCount, func, fargs )
   local cacheList = lsoMap.HotCacheList;
   local resultList = hotCacheRead( cacheList, peekCount, func, fargs, all);
   local numRead = list.size( resultList );
-  info("[DEBUG]: <%s:%s> HotListResult(%s)\n", mod, meth,tostring(resultList));
+  GP=F and trace("[DEBUG]: <%s:%s> HotListResult(%s)", mod, meth,tostring(resultList));
 
   local warmCount = 0;
   local warmList;
@@ -1267,7 +1277,7 @@ local function lsoMapRead( topRec, lsoMap, peekCount, func, fargs )
   if( all == 0 ) then
     remainingCount = peekCount - numRead;
   end
-  info("[DEBUG]: <%s:%s> Checking WarmList Count(%d) All(%d)\n",
+  GP=F and trace("[DEBUG]: <%s:%s> Checking WarmList Count(%d) All(%d)",
     mod, meth, remainingCount, all);
   -- If no Warm List, then we're done (assume no cold list if no warm)
   if list.size(lsoMap.WarmCacheList) > 0 then
@@ -1324,7 +1334,7 @@ end -- valueStorage()
 local function hotCacheHasRoom( lsoMap, insertValue )
   local mod = "LsoStoneman";
   local meth = "hotCacheHasRoom()";
-  info("[ENTER]: <%s:%s> : \n", mod, meth );
+  GP=F and trace("[ENTER]: <%s:%s> : ", mod, meth );
   local result = 1;  -- This is the usual case
 
   local cacheLimit = lsoMap.HotCacheMax;
@@ -1333,7 +1343,7 @@ local function hotCacheHasRoom( lsoMap, insertValue )
     return 0
   end
 
-  info("[EXIT]: <%s:%s> Result(%d) : \n", mod, meth, result);
+  GP=F and trace("[EXIT]: <%s:%s> Result(%d) : ", mod, meth, result);
   return result;
 end -- hotCacheHasRoom()
 -- ======================================================================
@@ -1366,7 +1376,7 @@ end -- hotCacheHasRoom()
 local function hotCacheInsert( lsoMap, newStorageValue  )
   local mod = "LsoStoneman";
   local meth = "hotCacheInsert()";
-  info("[ENTER]: <%s:%s> : Insert Value(%s)\n",
+  GP=F and trace("[ENTER]: <%s:%s> : Insert Value(%s)",
     mod, meth, tostring(newStorageValue) );
 
   local hotCacheList = lsoMap.HotCacheList;
@@ -1431,23 +1441,23 @@ function stackCreate( topRec, lsoBinName, argList )
   local meth = "stackCreate()";
 
   if argList == nil then
-    info("[ENTER1]: <%s:%s> lsoBinName(%s) NULL argList\n",
+    GP=F and trace("[ENTER1]: <%s:%s> lsoBinName(%s) NULL argList",
       mod, meth, tostring(lsoBinName));
   else
-    info("[ENTER2]: <%s:%s> lsoBinName(%s) argList(%s) \n",
+    GP=F and trace("[ENTER2]: <%s:%s> lsoBinName(%s) argList(%s) ",
     mod, meth, tostring( lsoBinName), tostring( argList ));
   end
 
   -- Some simple protection if things are weird
   if lsoBinName == nil  or type(lsoBinName) ~= "string" then
-    warn("[WARNING]: <%s:%s> Bad LSO BIN Name: Using default\n", mod, meth );
+    warn("[WARNING]: <%s:%s> Bad LSO BIN Name: Using default", mod, meth );
     lsoBinName = "LsoBin";
   end
 
   -- Check to see if LSO Structure (or anything) is already there,
   -- and if so, error
   if topRec[lsoBinName] ~= nil  then
-    warn("[ERROR EXIT]: <%s:%s> LSO BIN(%s) Already Exists\n",
+    warn("[ERROR EXIT]: <%s:%s> LSO BIN(%s) Already Exists",
       mod, meth, tostring(lsoBinName) );
     return('LSO_BIN already exists');
   end
@@ -1462,19 +1472,19 @@ function stackCreate( topRec, lsoBinName, argList )
     adjustLsoMap( lsoMap, argList )
   end
 
-  info("[DEBUG]:<%s:%s>:Dir Map after Init(%s)\n", mod,meth,tostring(lsoMap));
+  GP=F and trace("[DEBUG]:<%s:%s>:Dir Map after Init(%s)", mod,meth,tostring(lsoMap));
 
   -- All done, store the record
   local rc = -99; -- Use Odd starting Num: so that we know it got changed
   if( not aerospike:exists( topRec ) ) then
-    info("[DEBUG]:<%s:%s>:Create Record()\n", mod, meth );
+    GP=F and trace("[DEBUG]:<%s:%s>:Create Record()", mod, meth );
     rc = aerospike:create( topRec );
   else
-    info("[DEBUG]:<%s:%s>:Update Record()\n", mod, meth );
+    GP=F and trace("[DEBUG]:<%s:%s>:Update Record()", mod, meth );
     rc = aerospike:update( topRec );
   end
 
-  info("[EXIT]: <%s:%s> : Done.  RC(%d)\n", mod, meth, rc );
+  GP=F and trace("[EXIT]: <%s:%s> : Done.  RC(%d)", mod, meth, rc );
   return rc;
 end -- function stackCreate( topRec, namespace, set )
 
@@ -1506,27 +1516,27 @@ local function localStackPush( topRec, lsoBinName, newValue, func, fargs )
 
   if (func ~= nil and fargs ~= nil ) then
     doTheFunk = 1;
-    info("[ENTER1]: <%s:%s> LSO BIN(%s) NewValue(%s) func(%s) fargs(%s)\n",
+    GP=F and trace("[ENTER1]: <%s:%s> LSO BIN(%s) NewValue(%s) func(%s) fargs(%s)",
       mod, meth, tostring(lsoBinName), tostring( newValue ),
       tostring(func), tostring(fargs) );
   else
-    info("[ENTER2]: <%s:%s> LSO BIN(%s) NewValue(%s)\n",
+    GP=F and trace("[ENTER2]: <%s:%s> LSO BIN(%s) NewValue(%s)",
       mod, meth, tostring(lsoBinName), tostring( newValue ));
   end
 
   -- Some simple protection if things are weird
   if lsoBinName == nil  or type(lsoBinName) ~= "string" then
-    warn("[WARNING]: <%s:%s> Bad LSO BIN Name: Using default\n", mod, meth );
+    warn("[WARNING]: <%s:%s> Bad LSO BIN Name: Using default", mod, meth );
     lsoBinName = "LsoBin";
   end
 
   local lsoMap;
   if( not aerospike:exists( topRec ) ) then
-    warn("[WARNING]:<%s:%s>:Record Does Not exist. Creating\n", mod, meth );
+    warn("[WARNING]:<%s:%s>:Record Does Not exist. Creating", mod, meth );
     lsoMap = initializeLsoMap( topRec, lsoBinName );
     aerospike:create( topRec );
   elseif ( topRec[lsoBinName] == nil ) then
-    warn("[WARNING]: <%s:%s> LSO BIN (%s) DOES NOT Exist: Creating\n",
+    warn("[WARNING]: <%s:%s> LSO BIN (%s) DOES NOT Exist: Creating",
       mod, meth, tostring(lsoBinName) );
     lsoMap = initializeLsoMap( topRec, lsoBinName );
     aerospike:create( topRec );
@@ -1535,7 +1545,7 @@ local function localStackPush( topRec, lsoBinName, newValue, func, fargs )
   -- check that our bin is (relatively intact
   local lsoMap = topRec[lsoBinName]; -- The main LSO map
   if lsoMap.Magic ~= "MAGIC" then
-    warn("[ERROR EXIT]: <%s:%s> LSO_BIN (%s) Is Corrupted (no magic)\n",
+    warn("[ERROR EXIT]: <%s:%s> LSO_BIN (%s) Is Corrupted (no magic)",
       mod, meth, lsoBinName );
     return('LSO_BIN Is Corrupted');
   end
@@ -1544,13 +1554,13 @@ local function localStackPush( topRec, lsoBinName, newValue, func, fargs )
   -- to apply, do it now.
   local newStorageValue;
   if doTheFunk == 1 then 
-    info("[DEBUG]: <%s:%s> Applying UDF (%s) with args(%s)\n",
+    GP=F and trace("[DEBUG]: <%s:%s> Applying UDF (%s) with args(%s)",
       mod, meth, tostring(func), tostring( fargs ));
     newValue = functionTable[func]( newValue, fargs );
   end
 
   newStorageValue = valueStorage( type(newValue), newValue );
-  info("[DEBUG]: <%s:%s> AFTER UDF (%s) with ValueStorage(%s)\n",
+  GP=F and trace("[DEBUG]: <%s:%s> AFTER UDF (%s) with ValueStorage(%s)",
       mod, meth, tostring(func), tostring( newStorageValue ));
 
   -- If we have room, do the simple cache insert.  If we don't have
@@ -1558,7 +1568,7 @@ local function localStackPush( topRec, lsoBinName, newValue, func, fargs )
   -- That may, in turn, have to make room by moving some items to the
   -- cold list.
   if hotCacheHasRoom( lsoMap, newStorageValue ) == 0 then
-    info("[DEBUG]:<%s:%s>:>>> CALLING TRANSFER HOT CACHE!!<<<\n", mod, meth );
+    GP=F and trace("[DEBUG]:<%s:%s>:>>> CALLING TRANSFER HOT CACHE!!<<<", mod, meth );
     hotCacheTransfer( topRec, lsoMap );
   end
   hotCacheInsert( lsoMap, newStorageValue );
@@ -1567,10 +1577,10 @@ local function localStackPush( topRec, lsoBinName, newValue, func, fargs )
 
   -- All done, store the topRec
   local rc = -99; -- Use Odd starting Num: so that we know it got changed
-  info("[DEBUG]:<%s:%s>:Update Record\n", mod, meth );
+  GP=F and trace("[DEBUG]:<%s:%s>:Update Record", mod, meth );
   rc = aerospike:update( topRec );
 
-  info("[EXIT]: <%s:%s> : Done.  RC(%d)\n", mod, meth, rc );
+  GP=F and trace("[EXIT]: <%s:%s> : Done.  RC(%d)", mod, meth, rc );
   return rc
 end -- function localStackPush()
 
@@ -1618,29 +1628,29 @@ end -- stackPushWithUDF()
 local function localStackPeek( topRec, lsoBinName, peekCount, func, fargs )
   local mod = "LsoStoneman";
   local meth = "localStackPeek()";
-  info("[ENTER]: <%s:%s> PeekCount(%s) \n", mod, meth,tostring(peekCount) );
+  GP=F and trace("[ENTER]: <%s:%s> PeekCount(%s) ", mod, meth,tostring(peekCount) );
 
   if (func ~= nil and fargs ~= nil ) then
-    info("[ENTER1]: <%s:%s> LSO BIN(%s) PeekCount(%s) func(%s) fargs(%s)\n",
+    GP=F and trace("[ENTER1]: <%s:%s> LSO BIN(%s) PeekCount(%s) func(%s) fargs(%s)",
       mod, meth, tostring(lsoBinName), tostring(peekCount),
       tostring(func), tostring(fargs) );
   else
-    info("[ENTER2]: <%s:%s> LSO BIN(%s) PeekCount(%s)\n", 
+    GP=F and trace("[ENTER2]: <%s:%s> LSO BIN(%s) PeekCount(%s)", 
       mod, meth, tostring(lsoBinName), tostring(peekCount) );
   end
 
   if( not aerospike:exists( topRec ) ) then
-    warn("[ERROR EXIT]:<%s:%s>:Missing Record. Exit\n", mod, meth );
+    warn("[ERROR EXIT]:<%s:%s>:Missing Record. Exit", mod, meth );
     return('Base Record Does NOT exist');
   end
 
   -- Verify that the LSO Structure is there: otherwise, error.
   if lsoBinName == nil  or type(lsoBinName) ~= "string" then
-    warn("[ERROR EXIT]: <%s:%s> Bad LSO BIN Parameter\n", mod, meth );
+    warn("[ERROR EXIT]: <%s:%s> Bad LSO BIN Parameter", mod, meth );
     return('Bad LSO Bin Parameter');
   end
   if( topRec[lsoBinName] == nil ) then
-    warn("[ERROR EXIT]: <%s:%s> LSO_BIN (%s) DOES NOT Exists\n",
+    warn("[ERROR EXIT]: <%s:%s> LSO_BIN (%s) DOES NOT Exists",
       mod, meth, tostring(lsoBinName) );
     return('LSO_BIN Does NOT exist');
   end
@@ -1648,7 +1658,7 @@ local function localStackPeek( topRec, lsoBinName, peekCount, func, fargs )
   -- check that our bin is (mostly) there
   local lsoMap = topRec[lsoBinName]; -- The main LSO map
   if lsoMap.Magic ~= "MAGIC" then
-    info("[ERROR EXIT]: <%s:%s> LSO_BIN (%s) Is Corrupted (no magic)\n",
+    GP=F and trace("[ERROR EXIT]: <%s:%s> LSO_BIN (%s) Is Corrupted (no magic)",
       mod, meth, lsoBinName );
     return('LSO_BIN Is Corrupted');
   end
@@ -1657,10 +1667,10 @@ local function localStackPeek( topRec, lsoBinName, peekCount, func, fargs )
   -- They must pass the "transformFunction()" filter.
   -- Also, Notice that we go in reverse order -- to get the "stack function",
   -- which is Last In, First Out.
-  info("[DEBUG]: <%s:%s>: Calling Map Peek\n", mod, meth );
+  GP=F and trace("[DEBUG]: <%s:%s>: Calling Map Peek", mod, meth );
   local resultList = lsoMapRead( topRec, lsoMap, peekCount, func, fargs );
 
-  info("[EXIT]: <%s:%s>: PeekCount(%d) ResultListSummary(%s)\n",
+  GP=F and trace("[EXIT]: <%s:%s>: PeekCount(%d) ResultListSummary(%s)",
     mod, meth, peekCount, summarizeList(resultList));
 
   return resultList;
@@ -1677,7 +1687,7 @@ end -- function localStackPeek()
 function stackPeek( topRec, lsoBinName, peekCount )
   local mod = "LsoStoneman";
   local meth = "stackPeek()";
-  info("[ENTER]: <%s:%s> LSO BIN(%s) peekCount(%s)\n",
+  GP=F and trace("[ENTER]: <%s:%s> LSO BIN(%s) peekCount(%s)",
     mod, meth, tostring(lsoBinName), tostring(peekCount) )
   return localStackPeek( topRec, lsoBinName, peekCount, nil, nil )
 end -- end stackPeek()
@@ -1685,373 +1695,11 @@ end -- end stackPeek()
 function stackPeekWithUDF( topRec, lsoBinName, peekCount, func, fargs )
   local mod = "LsoStoneman";
   local meth = "stackPeekWithUDF()";
-  info("[ENTER]: <%s:%s> LSO BIN(%s) peekCount(%s) func(%s) fargs(%s)\n",
+  GP=F and
+  trace("[ENTER]: <%s:%s> LSO BIN(%s) peekCount(%s) func(%s) fargs(%s)",
     mod, meth, tostring(lsoBinName), tostring(peekCount),
     tostring(func), tostring(fargs));
   return localStackPeek( topRec, lsoBinName, peekCount, func, fargs );
 end -- stackPeekWithUDF()
 
---
--- ======================================================================
--- ||| UNIT TESTS |||||||||||||||||||||||||||||||||||||||||||||||||||||||
--- ======================================================================
--- Test Individual pieces to verify functionality
--- ======================================================================
---
--- ======================================================================
--- ===================== <<<<<  S I M P L E  >>>> =======================
--- ======================================================================
-function simpleStackCreate(topRec) 
-   local binname = "dirlist" 
-   local dirlist = list();
-   topRec[binname] = dirlist; 
-   if( not aerospike:exists( topRec ) ) then
-      info("Create Record()\n");
-      rc = aerospike:create( topRec );
-   else
-      info("Update Record()\n");
-      rc = aerospike:update( topRec );
-   end
-   info("SimpleStackCreate Result(%d)\n", rc );
-   return "Create Success";
-end
-
--- ======================================================================
--- ======================================================================
-function simpleStackPush ( topRec, newValue ) 
-   if( not aerospike:exists( topRec ) ) then
-      info("stackPush Failed Record not found\n");
-      rc = aerospike:create( topRec );
-   end 
-   local binname    = "dirlist"; 
-   local dirlist    = topRec["dirlist"];
-   info("Create new Record ");
-   newRec           = aerospike:crec_create( topRec );
-   newRec["valbin"] = newValue;
-   info("Put value in new Record ", tostring( newValue ) );
-   info("Update New Record ");
-   aerospike:crec_update( topRec, newRec );
-
-   local newdigest  = record.digest( newRec );
-   info("Prepend to Top Record ");
-   list.prepend (dirlist, tostring( newdigest ));
-   info("Put value in Top Record %s", tostring( newdigest ) );
-   topRec[binname]  = dirlist;
-   info("Update Top Record |%s|", tostring(dirlist));
-   rc = aerospike:update( topRec );
-   info("SimpleStackPush Result(%d)\n", rc );
-   return "Push Result:" .. tostring(newValue) .. " RC: " .. tostring(rc);
-end
-
--- ======================================================================
--- ======================================================================
-function simpleStackPeek ( topRec, count ) 
-   if( not aerospike:exists( topRec ) ) then
-      info("stackPeek Failed Record not found\n");
-      rc = aerospike:create( topRec );
-   end 
-   local binname  = "dirlist"; 
-   local dirlist  = topRec[binname];
-   info("Dir list state at peek |%s| ", tostring(dirlist));
-   local peeklist = list.take(dirlist, count);
-   info("Peek size requested %d, peeked %d", count, list.size(peeklist));
-   resultlist   = list();
-   for index = 1, list.size(peeklist) do
-      local valdig = tostring ( dirlist[index] );
-      newRec       = aerospike:crec_open( topRec, valdig );
-      newValue     = newRec["valbin"];
-      list.append(resultlist, tostring( newValue ));
-      info("stackPeek: found %s --> %s", valdig, tostring( newValue ) );
-      aerospike:crec_close( topRec, newRec );
-   end
-   return resultlist;
-end
-
--- ======================================================================
--- ===================== <<<<<  M E D I U M  >>>> =======================
--- ======================================================================
-function mediumStackCreate(topRec) 
-   local binname = "MediumDirList" 
-   local lsoMap = map();
-   lsoMap.DirList = list();
-   topRec[binname] = lsoMap;
-   if( not aerospike:exists( topRec ) ) then
-      info("Create Record()\n");
-      rc = aerospike:create( topRec );
-   else
-      info("Update Record()\n");
-      rc = aerospike:update( topRec );
-   end
-   info("SimpleStackCreate Result(%d)\n", rc );
-   return "Create Success";
-end
-
--- ======================================================================
--- ======================================================================
-function mediumStackPush ( topRec, newValue ) 
-   if( not aerospike:exists( topRec ) ) then
-      info("stackPush Failed Record not found\n");
-      rc = aerospike:create( topRec );
-   end 
-   local binname    = "MediumDirList"; 
-   local lsoMap     = topRec[binname];
-   local dirlist    = lsoMap.DirList;
-   info("Create new Record ");
-   newRec           = aerospike:crec_create( topRec );
-   newRec["valbin"] = newValue;
-   info("Put value in new Record(%s)", tostring( newValue ) );
-   info("Update New Record ");
-   aerospike:crec_update( topRec, newRec );
-
-   local newdigest  = record.digest( newRec );
-   info("Prepend to Top Record ");
-   list.prepend (dirlist, tostring( newdigest ));
-   lsoMap.DirList = dirlist;
-   info("Put value in Top Record (%s)", tostring( newdigest ) );
-   topRec[binname]  = lsoMap;
-   info("Update Top Record (%s)", tostring( lsoMap ));
-   rc = aerospike:update( topRec );
-   info("SimpleStackPush Result(%s)\n", tostring(rc) );
-   return "Push Result:" .. tostring(newValue) .. " RC: " .. tostring(rc);
-end
-
--- ======================================================================
--- ======================================================================
-function mediumStackPeek ( topRec, count ) 
-   if( not aerospike:exists( topRec ) ) then
-      info("stackPeek Failed Record not found:  Creating\n");
-      rc = aerospike:create( topRec );
-      info("stackPeek: Create Result(%s) \n", tostring(rc));
-   end 
-   local binname  = "MediumDirList"; 
-   local lsoMap     = topRec[binname];
-   local dirlist    = lsoMap.DirList;
-   info("Dir list state at peek (%s) ", tostring(dirlist));
-   local peeklist = list.take(dirlist, count);
-   info("Peek size requested %d, peeked %d", count, list.size(peeklist));
-   resultlist   = list();
-   for index = 1, list.size(peeklist) do
-      local digest = tostring ( dirlist[index] );
-      newRec       = aerospike:crec_open( topRec, digest );
-      newValue     = newRec["valbin"];
-      list.append(resultlist, tostring( newValue ));
-      info("stackPeek: found Digest(%s) --> (%s)",
-        tostring( digest), tostring( newValue ) );
-      rc = aerospike:crec_close( topRec, newRec );
-      info("stackPeek: CREC CLOSE Result(%s) \n", tostring(rc));
-   end
-   return resultlist;
-end
--- ======================================================================
-
-
--- ======================================================================
--- ===================== <<<<<   L A R G E   >>>> =======================
--- ======================================================================
--- Large Unit Test:
--- Create a large Top Rec, with relatively large chunks whose digests are
--- stored in the WarmCacheList.
--- Store values BOTH in the HotCacheList (direct) and the WarmCacheList,
--- which allocates a record and stores the value there (20 times) in
--- a value list.
---
--- ======================================================================
-function largeStackCreate(topRec) 
-  local binname = "Large LSO BIN" 
-  
-  info("[ENTER]: LargeStackCreate \n");
-
-  local lsoMap = initializeLsoMap( topRec, binName );
-
-  topRec[binname] = lsoMap;
-  if( not aerospike:exists( topRec ) ) then
-     info("Create Record()\n");
-     rc = aerospike:create( topRec );
-  else
-     info("Update Record()\n");
-     rc = aerospike:update( topRec );
-  end
-  info("LargeStackCreate Result(%d) lsoMap(%s)\n", rc, tostring(lsoMap));
-  return "Create Success";
-end
-
--- ======================================================================
--- Fill this Chunk up with stuff.  Put stuff in the map bin, and put 20
--- copies of the value in the EntryListBin.
---
--- Create and initialise a new LDR "chunk", load the new digest for that
--- new chunk into the lsoMap (the warm dir list), and return it.
---
--- Record Structure: Chunk Rec[ ldrControlBin, ldrListBin ]
--- ======================================================================
-local function testCreateNewComplexRecord( topRec, lsoMap, newValue )
-  local mod = "LsoStoneman";
-  local meth = "testCreateNewRecord()";
-  info("[ENTER]: <%s:%s> \n", mod, meth );
-
-  -- Create the Aerospike Record, initialize the bins: Ctrl, List
-  info("[DEBUG]: <%s:%s>: Calling CREC Create\n", mod, meth);
-  local newLdrChunkRecord = aerospike:crec_create( topRec );
-  local ctrlMap = map();
-  ctrlMap.ParentDigest = record.digest( topRec );
-  ctrlMap.PageMode = lsoMap.PageMode;
-  info("[DEBUG]: <%s:%s>: Calling Rec.Digest\n", mod, meth);
-  local newChunkDigest = record.digest( newLdrChunkRecord );
-  ctrlMap.Digest = newChunkDigest;
-  ctrlMap.ListEntryMax = 100; -- Move up to TopRec -- when Stable
-  ctrlMap.DesignVersion = 1;
-  ctrlMap.LogInfo = 0;
-  -- ctrlMap.WarmCacheItemCount = 0;
-  -- Assign Control info and List info to the LDR bins
-  newLdrChunkRecord['LdrControlBin'] = ctrlMap;
-  local valueList = list();
-  for i = 1, 20, 1 do
-    list.append( valueList, newValue );
-  end
-  newLdrChunkRecord['LdrListBin'] = valueList;
-
-  info("Update New Record ");
-  aerospike:crec_update( topRec, newLdrChunkRecord );
-
-  -- Add our new chunk (the digest) to the WarmCacheList
-  list.append( lsoMap.WarmCacheList, newChunkDigest );
-  local warmChunkCount = lsoMap.WarmChunkCount;
-  lsoMap.WarmChunkCount = (warmChunkCount + 1);
-
-  -- Update the top (LSO) record with the newly updated lsoMap.
-  topRec[ lsoMap.BinName ] = lsoMap;
-
-  info("[EXIT]: <%s:%s> ctrlMap(%s) valueList(%s) lsoMap(%s)\n",
-    mod, meth, tostring(ctrlMap), tostring(valueList), tostring(lsoMap));
---  info("[EXIT]: <%s:%s> Return(%s) \n",
---    mod, meth, ldrChunkSummary(newLdrChunkRecord));
-  return newLdrChunkRecord;
-end --  testCreateNewRecord()()
--- ======================================================================
--- ======================================================================
--- SIMPLE VERSION
--- Fill this Chunk up with stuff.  Put stuff in the map bin, and put 20
--- copies of the value in the EntryListBin.
---
--- Create and initialise a new LDR "chunk", load the new digest for that
--- new chunk into the lsoMap (the warm dir list), and return it.
---
--- Record Structure: Chunk Rec[ ldrControlBin, ldrListBin ]
--- ======================================================================
-local function testCreateNewSimpleRecord( topRec, lsoMap, newValue )
-  local mod = "LsoStoneman";
-  local meth = "testCreateNewRecord()";
-  info("[ENTER]: <%s:%s> \n", mod, meth );
-
-  -- Create the Aerospike Record, initialize the bins: Ctrl, List
-  local newLdrChunkRecord = aerospike:crec_create( topRec );
-  local ctrlMap = map();
-  ctrlMap.ParentDigest = record.digest( topRec );
-  ctrlMap.PageMode = lsoMap.PageMode;
-  local newChunkDigest = record.digest( newLdrChunkRecord );
-  ctrlMap.Digest = newChunkDigest;
-  ctrlMap.ListEntryMax = 100; -- Move up to TopRec -- when Stable
-  ctrlMap.DesignVersion = 1;
-  ctrlMap.LogInfo = 0;
-  -- ctrlMap.WarmCacheItemCount = 0;
-  -- Assign Control info and List info to the LDR bins
-  newLdrChunkRecord['LdrControlBin'] = ctrlMap;
-  local valueList = list();
-  for i = 1, 20, 1 do
-    list.append( valueList, newValue );
-  end
-  newLdrChunkRecord['LdrListBin'] = valueList;
-
-  info("Update New Record ");
-  aerospike:crec_update( topRec, newLdrChunkRecord );
-
-  -- Add our new chunk (the digest) to the WarmCacheList
---  list.append( lsoMap.WarmCacheList, newChunkDigest );
---  local warmChunkCount = lsoMap.WarmChunkCount;
---  lsoMap.WarmChunkCount = (warmChunkCount + 1);
-
-  -- Update the top (LSO) record with the newly updated lsoMap.
---  topRec[ lsoMap.BinName ] = lsoMap;
-
-  info("[EXIT]: <%s:%s> ctrlMap(%s) valueList(%s) lsoMap(%s)\n",
-    mod, meth, tostring(ctrlMap), tostring(valueList), tostring(lsoMap));
---  info("[EXIT]: <%s:%s> Return(%s) \n",
---    mod, meth, ldrChunkSummary(newLdrChunkRecord));
-  return newLdrChunkRecord;
-end --  testCreateNewRecord()()
--- ======================================================================
-
--- ======================================================================
--- For this value, stuff it in the HotCache AND create a Chunk page for it
--- and stuff 20 copies of that value in the Chunk Page, along with some
--- other stuff.
--- ======================================================================
-function largeStackPush ( topRec, newValue ) 
-   if( not aerospike:exists( topRec ) ) then
-      info("stackPush Failed Record not found\n");
-      rc = aerospike:create( topRec );
-   end 
-   local binname     = "Large LSO BIN" 
-   local lsoMap      = topRec[binname];
-   local warmCache   = lsoMap.WarmCache;
-   local hotCache    = lsoMap.HotCache;
-   info("Create new Record ");
-   -- newRec = testCreateNewRecord( topRec, lsoMap, newValue )
-   newRec = testCreateNewSimpleRecord( topRec, lsoMap, newValue )
-   
-   local newdigest  = record.digest( newRec );
-   info("Append to Top Record ");
-   list.append(warmCache, tostring( newdigest ));
-   lsoMap.WarmCache = dirlist;
-   list.append( hotCache, newValue );
-   info("Put value in Top Record (%s)", tostring( newdigest ) );
-   topRec[binname]  = lsoMap;
-   info("Update Top Record (%s)", tostring( lsoMap ));
-   rc = aerospike:update( topRec );
-   info("LargeStackPush Result(%s)\n", tostring(rc) );
-   return "Push Result:" .. tostring(newValue) .. " RC: " .. tostring(rc);
-end
-
--- ======================================================================
--- Read values from the Hot List and the Warm List
--- Record Structure: Chunk Rec[ ldrControlBin, ldrListBin ]
--- ======================================================================
-function largeStackPeek ( topRec, count ) 
-   if( not aerospike:exists( topRec ) ) then
-      info("stackPeek Failed Record not found:  Exit\n");
-      return -1;
-   end 
-
-   local binname = "Large LSO BIN" 
-   local lsoMap     = topRec[binname];
-   local warmCache   = lsoMap.WarmCache;
-   local hotCache    = lsoMap.HotCache;
-   local dirlist    = warmCache;
-
-
-   info("Dir list state at peek (%s) ", tostring(dirlist));
-   local peeklist = list.take(dirlist, count);
-   info("Peek size requested %d, peeked %d", count, list.size(peeklist));
-   info("HotPeek:  %s \n", tostring( hotCache ));
-   resultlist   = list();
-   for index = 1, list.size(peeklist) do
-      local digest = tostring ( dirlist[index] );
-      chunkRec       = aerospike:crec_open( topRec, digest );
-      ctrlMap = chunkRec['LdrControlBin'];
-      dirList = chunkRec['LdrListBin'];
-      info("ChunkPeek(%d): Digest(%s) CMap(%s) DList(%s)\n",
-        index, tostring(digest), tostring(ctrlMap), tostring(dirList));
-
-      newValue     = dirList[1];
-      list.append(resultlist, tostring( newValue ));
-      list.append(resultlist, tostring( digest ));
-      info("stackPeek: found Digest(%s) --> (%s)",
-        tostring( digest), tostring( newValue ) );
-      rc = aerospike:crec_close( topRec, chunkRec );
-      info("stackPeek: CREC CLOSE Result(%s) \n", tostring(rc));
-   end
-   return resultlist;
-end
--- ======================================================================
--- ======================================================================
 -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> --

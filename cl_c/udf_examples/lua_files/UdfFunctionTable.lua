@@ -249,15 +249,15 @@ function UdfFunctionTable.stumbleCompress5( stumbleTuple, arglist )
 
   local b18 = bytes(18);
   bytes.put_int32(b18, 1,  stumbleTuple[1] ); -- 4 byte int
-  info("[D]:<%s:%s>Bytes after 1(%s) ", mod, meth, tostring(b18));
+--info("[D]:<%s:%s>Bytes after 1(%s) ", mod, meth, tostring(b18));
   bytes.put_int32(b18, 5,  stumbleTuple[2] ); -- 4 byte int
-  info("[D]:<%s:%s>Bytes after 2(%s) ", mod, meth, tostring(b18));
+--info("[D]:<%s:%s>Bytes after 2(%s) ", mod, meth, tostring(b18));
   bytes.put_int32(b18, 9,  stumbleTuple[3] ); -- 4 byte int
-  info("[D]:<%s:%s>Bytes after 3(%s) ", mod, meth, tostring(b18));
+--info("[D]:<%s:%s>Bytes after 3(%s) ", mod, meth, tostring(b18));
   bytes.put_int32(b18, 13, stumbleTuple[4] ); -- 4 byte int
-  info("[D]:<%s:%s>Bytes after 4(%s) ", mod, meth, tostring(b18));
+--info("[D]:<%s:%s>Bytes after 4(%s) ", mod, meth, tostring(b18));
   bytes.put_int16(b18, 17, stumbleTuple[5] ); -- 2 byte int
-  info("[D]:<%s:%s>Bytes after 5(%s) ", mod, meth, tostring(b18));
+--info("[D]:<%s:%s>Bytes after 5(%s) ", mod, meth, tostring(b18));
 
   info("[EXIT]: <%s:%s> BinaryResult(%s)", mod, meth, tostring(b18));
   return b18
@@ -285,15 +285,15 @@ function UdfFunctionTable.stumbleUnCompress5( b18, arglist )
   local stumbleTuple = list(5);
   -- NOTE: Must append.  Can't index directly into it.
   list.append( stumbleTuple, bytes.get_int32(b18, 1 ));  -- 4 byte int
-  info("[D]:<%s:%s>Tuple(%s) after 1", tostring(stumbleTuple));
+--info("[D]:<%s:%s>Tuple(%s) after 1", mod,meth, tostring(stumbleTuple));
   list.append( stumbleTuple, bytes.get_int32(b18, 5 ));  -- 4 byte int
-  info("[D]:<%s:%s>Tuple(%s) after 2", tostring(stumbleTuple));
+--info("[D]:<%s:%s>Tuple(%s) after 2", mod,meth, tostring(stumbleTuple));
   list.append( stumbleTuple, bytes.get_int32(b18, 9 ));  -- 4 byte int
-  info("[D]:<%s:%s>Tuple(%s) after 3", tostring(stumbleTuple));
+--info("[D]:<%s:%s>Tuple(%s) after 3", mod,meth, tostring(stumbleTuple));
   list.append( stumbleTuple, bytes.get_int32(b18, 13)); -- 4 byte int
-  info("[D]:<%s:%s>Tuple(%s) after 4", tostring(stumbleTuple));
+--info("[D]:<%s:%s>Tuple(%s) after 4", mod,meth, tostring(stumbleTuple));
   list.append( stumbleTuple, bytes.get_int16(b18, 17));  -- 2 byte int
-  info("[D]:<%s:%s>Tuple(%s) after 5", tostring(stumbleTuple));
+--info("[D]:<%s:%s>Tuple(%s) after 5", mod,meth, tostring(stumbleTuple));
 
 --  stumbleTuple[1] = bytes.get_int32(b18, 1 );  -- 4 byte int
 --  stumbleTuple[2] = bytes.get_int32(b18, 5 );  -- 4 byte int
@@ -363,15 +363,15 @@ function UdfFunctionTable.stumbleUnCompress20( b20, arglist )
   local stumbleTuple = list(5);
   -- NOTE: Must append.  Can't index directly into it.
   list.append( stumbleTuple, bytes.get_int32(b20, 1 ));  -- 4 byte int
-  info("[D]:<%s:%s>Tuple(%s) after 1", tostring(stumbleTuple));
+  info("[D]:<%s:%s>Tuple(%s) after 1", mod,meth,tostring(stumbleTuple));
   list.append( stumbleTuple, bytes.get_int32(b20, 5 ));  -- 4 byte int
-  info("[D]:<%s:%s>Tuple(%s) after 2", tostring(stumbleTuple));
+  info("[D]:<%s:%s>Tuple(%s) after 2", mod,meth,tostring(stumbleTuple));
   list.append( stumbleTuple, bytes.get_int32(b20, 9 ));  -- 4 byte int
-  info("[D]:<%s:%s>Tuple(%s) after 3", tostring(stumbleTuple));
+  info("[D]:<%s:%s>Tuple(%s) after 3", mod,meth,tostring(stumbleTuple));
   list.append( stumbleTuple, bytes.get_int32(b20, 13)); -- 4 byte int
-  info("[D]:<%s:%s>Tuple(%s) after 4", tostring(stumbleTuple));
+  info("[D]:<%s:%s>Tuple(%s) after 4", mod,meth,tostring(stumbleTuple));
   list.append( stumbleTuple, bytes.get_int32(b20, 17));  -- 4 byte int
-  info("[D]:<%s:%s>Tuple(%s) after 5", tostring(stumbleTuple));
+  info("[D]:<%s:%s>Tuple(%s) after 5", mod,meth,tostring(stumbleTuple));
 
 --  stumbleTuple[1] = bytes.get_int32(b20, 1 );  -- 4 byte int
 --  stumbleTuple[2] = bytes.get_int32(b20, 5 );  -- 4 byte int

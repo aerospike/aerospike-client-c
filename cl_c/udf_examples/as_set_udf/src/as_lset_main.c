@@ -362,8 +362,8 @@ int lset_search_test(char * keystr, char * lset_bin, int iterations )
 		newSetItem = NULL; // insurance
 	} // end for each iteration
 
-  fprintf(stderr,"[RESULTS]:<%s>Results: Success(%d) NotFound(%d) Other(%d)\n", 
-      meth, successCount, notFound, otherCount );
+  fprintf(stderr,"[RESULTS]:<%s>Results: Success(%d) NotFound(%d)\n", 
+      meth, successCount, notFound );
 
 	INFO("[EXIT]:[%s]: RC(%d)\n", meth, rc );
 	return rc;

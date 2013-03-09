@@ -7,7 +7,7 @@ export LSOBIN="LsoBin"
 export UFILE="LsoStoneman"
 export PUSHUDF="stumbleCompress5"
 export PEEKUDF="stumbleUnCompress5"
-export UDF1_ARGS=""
+export UDF1_ARGS="X"
 export FUN_INSWU="stackPushWithUDF"
 export FUN_SRCHWU="stackPeekWithUDF"
 
@@ -23,7 +23,8 @@ USERID=100
 TUPLE="[${URLID},${CREATED},${METH_A},${METH_B},${STATUS}]"
 
 I=1; while [ $I -le 12 ]; do
-  ascli udf-record-apply $UNS $USET $USERID $UFILE $FUN_INSWU $LSOBIN ${TUPLE} $PUSHUDF;
+  echo ascli udf-record-apply $UNS $USET $USERID $UFILE $FUN_INSWU $LSOBIN ${TUPLE} $PUSHUDF $UDF1_ARGS
+  ascli udf-record-apply $UNS $USET $USERID $UFILE $FUN_INSWU $LSOBIN ${TUPLE} $PUSHUDF $UDF1_ARGS
   I=$[${I}+1];
 done
 

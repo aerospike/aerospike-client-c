@@ -7,7 +7,7 @@ export LSOBIN="LsoBin"
 export UFILE="LsoStoneman"
 export PUSHUDF="stumbleCompress5"
 export PEEKUDF="stumbleUnCompress5"
-export UDF1_ARGS=""
+export UDF1_ARGS="XXX"
 export FUN_INSWU="stackPushWithUDF"
 export FUN_SRCHWU="stackPeekWithUDF"
 
@@ -41,12 +41,12 @@ for NUM_PUSHES in 10 20 50 100 150 200 250 300 400 500 600 700 800 1000 2000 100
     if [ $ASK -eq 0 ]; then EXPECT=$NUM_PUSHES; fi
     DIFF=$[${RES}-${EXPECT}];
     echo "SIZE: $NUM_PUSHES USERID: $USERID [PEEK: $EXPECT GOT: $RES DIFF: $DIFF]"
-    ascli udf-record-apply $UNS $USET $USERID $UFILE $FUN_SRCHWU $LSOBIN $ASK $PEEKUDF | tr \] \\n | grep \\[ | rev | cut -f 1 -d ,  | rev | while read E_STATUS; do 
+    ascli udf-record-apply $UNS $USET $USERID $UFILE $FUN_SRCHWU $LSOBIN $ASK $PEEKUDF $UDF1_ARGS | tr \] \\n | grep \\[ | rev | cut -f 1 -d ,  | rev | while read E_STATUS; do 
       if [ $E_STATUS -ne $START_STATUS ]; then
         echo "ERROR: ESTATUS: $E_STATUS START_STATUS: $START_STATUS"
       fi
       START_STATUS=$[${START_STATUS}-1];
-    done
+    done 
     if [ $SIZE -gt $NUM_PUSHES ]; then break; fi
   done
   USERID=$[${USERID}+1];

@@ -8,7 +8,7 @@ DIR_OBJECT = ../obj
 DIR_TARGET = ../bin
 DIR_LIB = ../../../target/Linux-x86_64/lib
 
-SOURCES       = as_lset.c utils.c as_lset_main.c
+SOURCES       = utils.c as_lset_main.c
 SOURCE_HEADERS = set_udf.h
 TARGET        = as_lset
 

@@ -14,8 +14,12 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-#include "utils.h"
-#include "citrusleaf/citrusleaf.h"
+#include "citrusleaf.h"
+
+typedef struct atomic_int_s {
+    uint64_t        val;
+    pthread_mutex_t lock;
+} atomic_int;
 
 
 extern void *start_counter_thread(atomic_int *records, atomic_int *bytes);
@@ -25,7 +29,6 @@ extern void stop_counter_thread(void *id);
  * Hold the basic (default) information needed to configure and run the tests
  */
 typedef struct config_s {
-
         char  *host;
         int    port;
         char  *ns;      // Namespace

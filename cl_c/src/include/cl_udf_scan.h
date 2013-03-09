@@ -40,9 +40,9 @@ typedef enum as_scan_priority {
 } as_scan_priority;
 
 typedef enum as_scan_udf_type_s { 
-    AS_SCAN_UDF_NONE,             // Background job no response
-    AS_SCAN_UDF_BACKGROUND,             // Background job no response
+    AS_SCAN_UDF_NONE,             // Scan w/o udfs -- noop
     AS_SCAN_UDF_CLIENT_RECORD,          // Job per record
+    AS_SCAN_UDF_BACKGROUND,             // Background job no response
 } as_scan_udf_type;
 
 typedef struct as_scan_udf_s {

@@ -19,13 +19,12 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 
-#include "citrusleaf/citrusleaf.h"
-#include "lso_udf.h"
-#include "citrusleaf/cl_udf.h"
+#include "citrusleaf.h"
+#include "as_lso.h"
+#include "cl_udf.h"
 #include <citrusleaf/cf_random.h>
 #include <citrusleaf/cf_atomic.h>
 #include <citrusleaf/cf_hist.h>
-#include <citrusleaf/citrusleaf.h>
 
 // Use this to turn on extra debugging prints and checks
 #define TRA_DEBUG true

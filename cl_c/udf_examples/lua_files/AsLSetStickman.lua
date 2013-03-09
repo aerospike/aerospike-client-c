@@ -380,6 +380,8 @@ end -- localInsert
 -- (*) lsetCtrlMap
 -- ======================================================================
 local function rehashSet( topRec, lsetBinName, lsetCtrlMap )
+  local mod = "AsLSetStickman";
+  local meth = "rehashSet()";
   -- Get the list, make a copy, then iterate thru it, re-inserting each one.
   local binOneName = getBinName( 0 );
   local binOneList = topRec[lsetBinName];

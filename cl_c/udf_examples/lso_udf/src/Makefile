@@ -8,8 +8,9 @@ DIR_OBJECT = ../obj
 DIR_TARGET = ../bin
 DIR_LIB = ../../../target/Linux-x86_64/lib
 
-SOURCES       = as_lso.c utils.c as_lso_main.c
-SOURCE_HEADERS = lso_udf.h
+#SOURCES       = as_lso.c utils.c as_lso_main.c
+SOURCES       = as_lso_main.c
+SOURCE_HEADERS = 
 TARGET        = as_lso
 
 INCLUDES = -I../include/ -I../../../target/Linux-x86_64/include/ 

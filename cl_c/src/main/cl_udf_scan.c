@@ -156,7 +156,7 @@ static int scan_compile(const as_scan * scan, uint8_t ** buf_r, size_t * buf_sz_
 	}
 
 	// Pass on to the cl_compile to create the msg
-	cl_compile(info /*info1*/, 0, 0, scan->ns /*namespace*/, scan->setname /*setname*/, 0 /*key*/, 0/*digest*/, NULL /*bins*/, 0/*op*/, 0/*operations*/, 0/*n_values*/, buf_r, buf_sz_r, 0 /*w_p*/, NULL /*d_ret*/, scan->job_id, &scan_param_field, &call /*udf call*/);
+	cl_compile(info /*info1*/, 0, 0, scan->ns /*namespace*/, scan->setname /*setname*/, 0 /*key*/, 0/*digest*/, NULL /*bins*/, 0/*op*/, 0/*operations*/, 0/*n_values*/, buf_r, buf_sz_r, 0 /*w_p*/, NULL /*d_ret*/, scan->job_id, &scan_param_field, scan->udf.type != AS_SCAN_UDF_NONE ? &call : NULL/*udf call*/, scan->udf.type);
 
 	if (scan->udf.arglist) {
 		as_serializer_destroy(&ser);

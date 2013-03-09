@@ -50,8 +50,9 @@ typedef struct config_s {
 } config;
 
 extern int as_lso_create( cl_cluster * asc, char * namespace, char * set,
-                  char * keystr, char * lso_bin_name, char * lso_package,
-                  uint32_t timeout_ms );
+                  		  char * keystr, char * lso_bin_name,
+						  as_map * creation_args, char * lso_package,
+						  uint32_t timeout_ms );
 extern int as_lso_push(cl_cluster * asc, char * ns, char * set, char * keystr,
                char * lso_bin_name, as_val * lso_valuep, char * lso_package,
                uint32_t timeout_ms );

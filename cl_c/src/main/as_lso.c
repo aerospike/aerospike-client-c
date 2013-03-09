@@ -68,8 +68,8 @@ void __log_append(FILE * f, const char * prefix, const char * fmt, ...);
  */
 int
 as_lso_create( cl_cluster * asc, char * namespace, char * set,
-		char * keystr, char * lso_bin_name, char * lso_package,
-    uint32_t timeout_ms )
+							 char * keystr, char * lso_bin_name, as_map * creation_args,
+							 char * lso_package, uint32_t timeout_ms )
 {
 	static char * meth = "as_lso_create()";
 	int rc = 0; // ubiquitous return code
@@ -86,11 +86,9 @@ as_lso_create( cl_cluster * asc, char * namespace, char * set,
 	// As is now the case with all UDF resources, we initialize the
 	// arglist, use it then destroy it.
 	as_list * arglist = NULL;
-	arglist = as_arraylist_new(3, 0);	// We have 3 or 4 parms to pass
-	// 2 for strawman, 3 for stickman
-	as_list_add_string(arglist, namespace );
-	as_list_add_string(arglist, set );
+	arglist = as_arraylist_new(2, 0);
 	as_list_add_string(arglist, lso_bin_name );
+	as_list_add_map(arglist, creation_args);
 
 	// NOTE: All strings created by "as_val_tostring()" must be explicitly
 	// freed after use.

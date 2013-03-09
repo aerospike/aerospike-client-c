@@ -112,39 +112,48 @@ int init_configuration (int argc, char *argv[]) {
  *  For a single record, perform a series of STACK PUSHES.
  *  Create a new record, then repeatedly call stack push.
  */
-int lso_push_test(int iterations, char * bin_name, char * keystr, char * val,
-				  char * lso_bin) {
+int lso_push_test(char * keystr, char * val, char * lso_bin, int iterations) {
 	static char * meth = "lso_push_test()";
 	int rc = 0;
 	as_list * listp;
 
-	INFO("[ENTER]:[%s]: It(%d) UsrBin(%s) Key(%s) Val(%s) LSOBin(%s)\n",
-			meth, iterations, bin_name, keystr, val, lso_bin );
+	INFO("[ENTER]:[%s]: It(%d) Key(%s) Val(%s) LSOBin(%s)\n",
+			meth, iterations, keystr, val, lso_bin );
 
-#if 0
 	// Create the LSO Bin
+    // PageMode=List -> Overriding Default PageMode(Bytes)
+    as_map *create_args = as_hashmap_new(1);
+    as_map_set(create_args, as_string_new("PageMode", false),
+						    as_string_new("List", false));
 	rc = as_lso_create( g_config->asc, g_config->ns, g_config->set,
-			keystr, lso_bin, g_config->package_name, g_config->timeout_ms);
+						keystr, lso_bin, create_args, g_config->package_name,
+						g_config->timeout_ms);
 	if( rc < 0 ){
 		INFO("[ERROR]:[%s]: LSO Create Error: rc(%d)\n", meth, rc );
 		return rc;
 	}
-#endif
 
 	// Abbreviate for simplicity.
 	cl_cluster * c  = g_config->asc;
 	char       * ns = g_config->ns;
-	char       * s  = g_config->set;
-	char       * k  = keystr;
-	char       * b  = lso_bin;
+	char       * set  = g_config->set;
+	char       * key  = keystr;
+	char       * bname  = lso_bin;
 
 	INFO("[DEBUG]:[%s]: Run as_lso_push() iterations(%d)\n", meth, iterations );
-	for ( int i = 0; i < (iterations * 10); i += 10 ) {
-		listp = as_arraylist_new( 4, 4 );
-		as_list_add_integer( listp, (int64_t) (i + 1) );
-		as_list_add_integer( listp, (int64_t) (i + 2) );
-		as_list_add_integer( listp, (int64_t) (i + 3) );
-		as_list_add_integer( listp, (int64_t) (i + 4) );
+	for ( int i = 0; i < iterations; i++ ) {
+        int val = i * 10;
+		listp = as_arraylist_new( 5, 5 );
+        int64_t urlid   = val + 1;
+		as_list_add_integer( listp, urlid );
+        int64_t created = val + 2;
+		as_list_add_integer( listp, created );
+        int64_t meth_a  = val + 3;
+		as_list_add_integer( listp, meth_a );
+        int64_t meth_b  = val + 4;
+		as_list_add_integer( listp, meth_b );
+        int64_t status  = val + 5;
+		as_list_add_integer( listp, status );
 
 		if( TRA_DEBUG ){
 			char * valstr = as_val_tostring( listp );
@@ -152,7 +161,7 @@ int lso_push_test(int iterations, char * bin_name, char * keystr, char * val,
 			free( valstr );
 		}
 
-		rc = as_lso_push( c, ns, s, k, b, (as_val *)listp,
+		rc = as_lso_push( c, ns, set, key, bname, (as_val *)listp,
 						  g_config->package_name, g_config->timeout_ms);
 		if (rc) {
 			INFO("[ERROR]:[%s]: LSO PUSH Error: i(%d) rc(%d)\n", meth, i, rc );
@@ -272,8 +281,11 @@ int setup_test( int argc, char **argv ) {
  *  (3) Do some generation from File (read file entry, insert)
  */
 int main(int argc, char **argv) {
-	static char * meth = "main()";
-	int rc = 0;
+	static char * meth         = "main()";
+	int           rc           = 0;
+
+	char        * user_key     = "User_111";
+    char        * lso_bin_name = "urlid_stack";
 
 	INFO("[ENTER]:[%s]: Start in main()\n", meth );
 
@@ -281,12 +293,10 @@ int main(int argc, char **argv) {
 	INFO("[DEBUG]:[%s]: calling setup_test()\n", meth );
 	setup_test( argc, argv );
 
-	INFO("[DEBUG]:[%s]: After setup_test(): g_config(%p)\n", meth, g_config);
-
-	// Run some tests
+    int iterations = 15;
 	// (1) Push Test
 	INFO("[DEBUG]:[%s]: calling lso_push_test()\n", meth );
-	rc = lso_push_test( 10, "UserBin","UKey", "UVal", "lso_bin" );
+	rc = lso_push_test( user_key, "UVal", lso_bin_name, iterations );
 	if (rc) {
 		INFO("[ERROR]:[%s]: lso_push_test() RC(%d)\n", meth, rc );
 		return( rc );
@@ -294,18 +304,17 @@ int main(int argc, char **argv) {
 
 	// (2) Peek Test
 	INFO("[DEBUG]:[%s]: calling lso_peek_test()\n", meth );
-	rc = lso_peek_test( "UKey", "lso_bin", 10 );
+	rc = lso_peek_test( user_key, lso_bin_name, iterations );
     if (rc) {
 		INFO("[ERROR]:[%s]: lso_push_test() RC(%d)\n", meth, rc );
 		return( rc );
 	}
 
+	user_key = "User_222";
 	// (3) Push Test With Transform
-	//
+
 	// (4) Peek Test With Transform
-	//
-	// (5) Trim Test
-	//
+
 
 	exit(0);
 } // end main()

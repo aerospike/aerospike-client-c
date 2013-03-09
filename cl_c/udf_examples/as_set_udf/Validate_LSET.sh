@@ -13,12 +13,12 @@ export SETBIN="SetBin"
 
 # DEFAULTS
 VAL=1
-USERID=300
+USERID=3000
 SIZES="10 20 50 100 150 200 250 300 400 500 600 700 800 1000 2000 10000"
 
 DEBUG=false
 DO_SEARCHES=true
-DO_DELETES=false
+DO_DELETES=true
 
 if [ -n "$1" ]; then # roll your own size
   USERID=$(date +%s) # makes a unique USERID
@@ -66,8 +66,11 @@ for NUM_PUSHES in $SIZES; do
       DRES=$(ascli udf-record-apply $UNS $USET $USERID $UFILE $FUN_DEL $SETBIN $RVAL)
       if $DEBUG; then echo "DELETE: DRES: ${DRES}"; fi
       RES=$(ascli udf-record-apply $UNS $USET $USERID $UFILE $FUN_SRCH $SETBIN $RVAL)
-      if [ $RES -eq $RVAL ]; then
-        echo "ERROR: USERID: $USERID Delete: ($RVAL) Returned: ($RES)"
+      TYPE=$(lua -e "print(type($RES))" 2>&1)
+      if [ $TYPE == "number" ]; then
+        if [ $RES -eq $RVAL ]; then
+          echo "ERROR: USERID: $USERID Delete: ($RVAL) Returned: ($RES)"
+        fi
       fi
       I=$[${I}+1];
       RVAL=$[${RVAL}-${RAN}];

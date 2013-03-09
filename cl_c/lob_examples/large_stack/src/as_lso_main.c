@@ -169,6 +169,10 @@ int lso_push_test(char * keystr, char * lso_bin, int iterations) {
 // |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 
 
+
+
+
+
 /** ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
  *  LSO PEEK TEST
  *  For a single record, perform a series of STACK PEEKS.
@@ -219,6 +223,8 @@ int lso_peek_test(char * keystr, char * lso_bin, int iterations ) {
 } // end lso_peek_test()
 
 
+
+
 /// ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 
 /** ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
@@ -242,7 +248,7 @@ int lso_push_with_transform_test(char * keystr, char * lso_bin,
 	char       * key  = keystr;
 	char       * bname  = lso_bin;
 
-	INFO("[DEBUG]:[%s]: Run as_lso_push() iterations(%d)\n", meth, iterations );
+	INFO("[DEBUG]:[%s]: Run as_lso_push_with_transform() iterations(%d)\n", meth, iterations );
 	for ( int i = 0; i < iterations; i++ ) {
         int val         = i * 10;
 		as_list * listp = as_arraylist_new( 5, 5 );
@@ -269,7 +275,7 @@ int lso_push_with_transform_test(char * keystr, char * lso_bin,
 										 compress_func, compress_args,
 										 g_config->timeout_ms);
 		if (rc) {
-			INFO("[ERROR]:[%s]: LSO PUSH Error: i(%d) rc(%d)\n", meth, i, rc );
+			INFO("[ERROR]:[%s]: LSO PUSH WITH TRANSFROM Error: i(%d) rc(%d)\n", meth, i, rc );
             return -1;
 		}
 		as_val_destroy( listp ); // must destroy every iteration.
@@ -279,9 +285,58 @@ int lso_push_with_transform_test(char * keystr, char * lso_bin,
 	return rc;
 } // end lso_push_with_transform_test()
 
-#if 0
-								 char * uncompress_func, char *uncompress_args,
-#endif
+/** ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+ *  LSO PEEK WITH TRANSFORM TEST
+ *  For a single record, perform a series of STACK PEEKS.
+ *  and do a server side transform of the byte-packed data
+ *  Using the previously created record, repeatedly call stack peek with
+ *  varying numbers of peek counts.
+ */
+int lso_peek_with_transform_test(char * keystr, char * lso_bin,
+								 char * uncompress_func,
+								 as_list * uncompress_args,
+								 int iterations ) {
+	static char * meth = "lso_peek_with_transform_test()";
+	int rc = 0;
+	as_result * resultp;
+
+	INFO("[ENTER]:[%s]: Iterations(%d) Key(%s) LSOBin(%s)\n",
+			meth, iterations, keystr, lso_bin );
+
+	// Abbreviate for simplicity.
+	cl_cluster * c  = g_config->asc;
+	char       * ns = g_config->ns;
+	char       * s  = g_config->set;
+	char       * k  = keystr;
+	char       * b  = lso_bin;
+
+	INFO("[DEBUG]:[%s]: Run as_lso_peek() iterations(%d)\n", meth, iterations );
+
+	// NOTE: Must FREE the result for EACH ITERATION.
+	int peek_count = 2; // Soon -- set by Random Number
+	char * valstr = NULL; // Hold Temp results from as_val_tostring()
+	for ( int i = 0; i < iterations ; i ++ ){
+		peek_count++;
+		resultp = as_lso_peek_with_transform( c, ns, s, k, b, peek_count,
+											  g_config->package_name,
+											  uncompress_func, uncompress_args,
+											  g_config->timeout_ms);
+		if ( resultp->is_success ) {
+			valstr = as_val_tostring( resultp->value );
+			printf("LSO PEEK WITH TRANSFORM SUCCESS: peek_count(%d) Val(%s)\n",
+				   peek_count, valstr);
+			free( valstr );
+		} else {
+			INFO("[ERROR]:[%s]: LSO PEEK WITH TRANSFORM Error: i(%d) \n", meth, i );
+			// Don't break (for now) just keep going.
+		}
+		// Clean up -- release the result object
+		as_result_destroy( resultp );
+	} // end for each peek iteration
+
+	INFO("[EXIT]:[%s]: RC(%d)\n", meth, rc );
+	return rc;
+} // end lso_peek_with_transform_test()
 
 // |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 /** ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
@@ -367,14 +422,13 @@ int main(int argc, char **argv) {
 		return( rc );
 	}
 
+    // Next 2 tests -> new user
+	user_key = "User_222";
+
 	char * compress_func   = "stumbleCompress5";
     as_list *compress_args = as_arraylist_new( 1, 1 );
 	as_list_add_integer( compress_args, 1 ); // dummy argument
-	char * uncompress_func = "stumbleUnCompress5";
-    as_list *uncompress_args = as_arraylist_new( 1, 1 );
-	as_list_add_integer( uncompress_args, 1 ); // dummy argument
 
-	user_key = "User_222";
 	// (3) Push Test With Transform
 	INFO("[DEBUG]:[%s]: calling lso_push_with_transform_test()\n", meth );
 	rc = lso_push_with_transform_test( user_key, lso_bin_name,
@@ -386,8 +440,18 @@ int main(int argc, char **argv) {
 	}
 
 	// (4) Peek Test With Transform
-//									   uncompress_func, uncompress_args,
+	char * uncompress_func = "stumbleUnCompress5";
+    as_list *uncompress_args = as_arraylist_new( 1, 1 );
+	as_list_add_integer( uncompress_args, 1 ); // dummy argument
 
+	INFO("[DEBUG]:[%s]: calling lso_peek_with_transform_test()\n", meth );
+	rc = lso_peek_with_transform_test( user_key, lso_bin_name,
+									   uncompress_func, uncompress_args,
+									   iterations );
+	if (rc) {
+		INFO("[ERROR]:[%s]: lso_peek_with_transform_test() RC(%d)\n", meth, rc);
+		return( rc );
+	}
 
 	exit(0);
 } // end main()

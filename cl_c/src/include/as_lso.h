@@ -66,6 +66,11 @@ extern as_result *as_lso_peek(cl_cluster * asc, char * ns, char * set,
                               char * keystr, char * lso_bin_name,
                               int peek_count, char * lso_package,
                               uint32_t timeout_ms );
+extern as_result * as_lso_peek_with_transform(cl_cluster * asc, char * ns,
+							  char * set, char * keystr, char * lso_bin_name,
+							  int peek_count, char * lso_package,
+							  char * udf_name, as_list * function_args,
+							  uint32_t timeout_ms );
 
 #define INFO(fmt, args...) \
     __log_append(stderr,"", fmt, ## args);

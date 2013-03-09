@@ -82,11 +82,11 @@ local function initializeLsoMap( topRec, lsoBinName )
   lsoMap.BinName = lsoBinName; -- Defines the LSO Bin
   lsoMap.NameSpace = "test"; -- Default NS Name -- to be overridden by user
   lsoMap.Set = "set";       -- Default Set Name -- to be overridden by user
-  lsoMap.PageMode = "List"; -- "List" or "Binary":
+  lsoMap.PageMode = "Binary"; -- "List" or "Binary":
   -- LSO Data Record Chunk Settings: Passed into "Chunk Create"
 --lsoMap.LdrEntryCountMax = 200;  -- Max # of items in a Data Chunk (List Mode)
   lsoMap.LdrEntryCountMax =  10;  -- Max # of items in a Data Chunk (List Mode)
-  lsoMap.LdrByteEntrySize = 20;  -- Byte size of a fixed size Byte Entry
+  lsoMap.LdrByteEntrySize = 18;  -- Byte size of a fixed size Byte Entry
 --lsoMap.LdrByteCountMax = 2000; -- Max # of BYTES in a Data Chunk (binary mode)
   lsoMap.LdrByteCountMax =   80; -- Max # of BYTES in a Data Chunk (binary mode)
   -- Hot Entry List Settings: List of User Entries
@@ -138,6 +138,9 @@ local function adjustLsoMap( lsoMap, argListMap )
 
   -- Iterate thru the argListMap and adjust (override) the map settings 
   -- based on the settings passed in during the stackCreate() call.
+  info("[DEBUG]: <%s:%s> : Processing Arguments:(%s)",
+    mod, meth, tostring(argListMap));
+
   if type( argListMap.PageMode ) == "string" then
   info("[DEBUG]: <%s:%s> : Processing PageMode", mod, meth );
     -- Verify it's a valid value
@@ -153,11 +156,13 @@ local function adjustLsoMap( lsoMap, argListMap )
     end
   end
   if type( argListMap.HotListTransfer ) == "number" then
+    info("[DEBUG]: <%s:%s> : Processing Hot List Transfer", mod, meth );
     if argListMap.HotListTransfer > 0 then
       lsoMap.HotCacheTransfer = argListMap.HotListTransfer;
     end
   end
   if type( argListMap.ByteEntrySize ) == "number" then
+    info("[DEBUG]: <%s:%s> : Processing ByteEntrySize", mod, meth );
     if argListMap.ByteEntrySize > 0 then
       lsoMap.LdrByteEntrySize = argListMap.ByteEntrySize;
     end
@@ -958,6 +963,7 @@ local function ldrChunkRead( ldrChunk, resultList, count, func, fargs, all )
 -- local function hotCacheRead( cacheList, count, func, fargs, all)
   local mod = "LsoStoneman";
   local meth = "ldrChunkRead()";
+  info("[ENTER]: <%s:%s> Count(%d)", mod, meth, count);
 
   -- If the page is "Binary" mode, then we're using the "Binary" Bin
   -- 'LdrBinaryBin', otherwise we're using the "List" Bin 'LdrListBin'.
@@ -1026,8 +1032,8 @@ local function warmCacheRead(topRec, resultList, lsoMap, count,
     ldrChunkRead( ldrChunk, resultList, remaining, func, fargs, all );
     totalWarmAmountRead = totalWarmAmountRead + chunkItemsRead;
 
-    info("[DEBUG]: <%s:%s>:after ChunkRead: Dir(%d) ResList(%s)", 
-      mod, meth, dirIndex, tostring( resultList ));
+    info("[DEBUG]:<%s:%s>:after ChunkRead:NumRead(%d)DirIndex(%d)ResList(%s)", 
+      mod, meth, chunkItemsRead, dirIndex, tostring( resultList ));
     -- Early exit ONLY when ALL flag is not set.
     if( all == 0 and
       ( chunkItemsRead >= remaining or totalWarmAmountRead >= count ) )
@@ -1041,6 +1047,10 @@ local function warmCacheRead(topRec, resultList, lsoMap, count,
     status = aerospike:crec_close( topRec, ldrChunk );
     info("[DEBUG]: <%s:%s> as:close() status(%s) \n",
     mod, meth, tostring( status ) );
+
+    -- Get ready for the next iteration.  Adjust our numbers for the
+    -- next round
+    remaining = remaining - chunkItemsRead;
   end -- for each warm Chunk
 
   info("[EXIT]: <%s:%s> totalWarmAmountRead(%d) ResultListSummary(%s) \n",

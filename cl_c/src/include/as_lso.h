@@ -15,7 +15,7 @@
 #include <stdio.h>
 
 #include "citrusleaf.h"
-
+#include "cl_udf.h"
 
 #include <openssl/rand.h>
 
@@ -52,6 +52,17 @@ typedef struct config_s {
         cf_atomic_int fail;
 } config;
 
+extern int as_lso_create( cl_cluster * asc, char * namespace, char * set,
+                  char * keystr, char * lso_bin_name, char * lso_package,
+                  uint32_t timeout_ms );
+extern int as_lso_push(cl_cluster * asc, char * ns, char * set, char * keystr,
+               char * lso_bin_name, as_val * lso_valuep, char * lso_package,
+               uint32_t timeout_ms );
+
+extern as_result *as_lso_peek(cl_cluster * asc, char * ns, char * set,
+                              char * keystr, char * lso_bin_name,
+                              int peek_count, char * lso_package,
+                              uint32_t timeout_ms );
 
 #define INFO(fmt, args...) \
     __log_append(stderr,"", fmt, ## args);

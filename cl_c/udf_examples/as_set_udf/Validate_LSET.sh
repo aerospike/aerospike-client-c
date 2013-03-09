@@ -17,7 +17,8 @@ USERID=300
 SIZES="10 20 50 100 150 200 250 300 400 500 600 700 800 1000 2000 10000"
 
 DEBUG=false
-DO_DELETES=true
+DO_SEARCHES=true
+DO_DELETES=false
 
 if [ -n "$1" ]; then # roll your own size
   USERID=$(date +%s) # makes a unique USERID
@@ -37,38 +38,40 @@ for NUM_PUSHES in $SIZES; do
   done
   ORVAL=$[${VAL}-${RAN}];
 
-  NUM_SEARCHES=$NUM_PUSHES
-  echo "Searching: NUM_SEARCHES: $NUM_SEARCHES"
-  RVAL=$ORVAL
-  I=1; while [ $I -le $NUM_SEARCHES ]; do
-    RES=$(ascli udf-record-apply $UNS $USET $USERID $UFILE $FUN_SRCH $SETBIN $RVAL)
-    TYPE=$(lua -e "print(type($RES))" 2>&1)
-    if [ $TYPE == "number" ]; then
-      if [ $RES -ne $RVAL ]; then
-        echo "ERROR: USERID: $USERID Search: ($RVAL) Returned: ($RES)"
+  if $DO_SEARCHES; then
+    NUM_SEARCHES=$NUM_PUSHES
+    echo "Searching: NUM_SEARCHES: $NUM_SEARCHES"
+    RVAL=$ORVAL
+    I=1; while [ $I -le $NUM_SEARCHES ]; do
+      RES=$(ascli udf-record-apply $UNS $USET $USERID $UFILE $FUN_SRCH $SETBIN $RVAL)
+      TYPE=$(lua -e "print(type($RES))" 2>&1)
+      if [ $TYPE == "number" ]; then
+        if [ $RES -ne $RVAL ]; then
+          echo "ERROR: USERID: $USERID Search: ($RVAL) Returned: ($RES)"
+        fi
+      else
+        echo "SEARCH: GENERAL ERROR: ${RES}"
       fi
-    else
-      echo "SEARCH: GENERAL ERROR: ${RES}"
-    fi
-    I=$[${I}+1];
-    RVAL=$[${RVAL}-${RAN}];
-  done
+      I=$[${I}+1];
+      RVAL=$[${RVAL}-${RAN}];
+    done
+  fi
 
   if $DO_DELETES; then
-  # Delete one third of what was just added
-  NUM_DELS=$[${NUM_PUSHES}/3]
-  echo "Deleting: NUM_DELS: $NUM_DELS"
-  RVAL=$ORVAL
-  I=1; while [ $I -le $NUM_DELS ]; do
-    DRES=$(ascli udf-record-apply $UNS $USET $USERID $UFILE $FUN_DEL $SETBIN $RVAL)
-    if $DEBUG; then echo "DELETE: DRES: ${DRES}"; fi
-    RES=$(ascli udf-record-apply $UNS $USET $USERID $UFILE $FUN_SRCH $SETBIN $RVAL)
-    if [ $RES -eq $RVAL ]; then
-      echo "ERROR: USERID: $USERID Delete: ($RVAL) Returned: ($RES)"
-    fi
-    I=$[${I}+1];
-    RVAL=$[${RVAL}-${RAN}];
-  done
+    # Delete one third of what was just added
+    NUM_DELS=$[${NUM_PUSHES}/3]
+    echo "Deleting: NUM_DELS: $NUM_DELS"
+    RVAL=$ORVAL
+    I=1; while [ $I -le $NUM_DELS ]; do
+      DRES=$(ascli udf-record-apply $UNS $USET $USERID $UFILE $FUN_DEL $SETBIN $RVAL)
+      if $DEBUG; then echo "DELETE: DRES: ${DRES}"; fi
+      RES=$(ascli udf-record-apply $UNS $USET $USERID $UFILE $FUN_SRCH $SETBIN $RVAL)
+      if [ $RES -eq $RVAL ]; then
+        echo "ERROR: USERID: $USERID Delete: ($RVAL) Returned: ($RES)"
+      fi
+      I=$[${I}+1];
+      RVAL=$[${RVAL}-${RAN}];
+    done
   fi
 
   USERID=$[${USERID}+1];

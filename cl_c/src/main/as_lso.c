@@ -199,7 +199,8 @@ as_lso_push_internal(cl_cluster * asc, char * ns, char * set,
 	// as_val_reserve) so that all of the free()/destroy() calls can match up.
 	as_val_reserve( lso_valuep ); // Increment the reference count
 	as_list * arglist = NULL;
-	arglist = as_arraylist_new(3, 0);	// Value, plus inner UDF stuff
+	arglist = as_arraylist_new(4, 0);	// Value, plus inner UDF stuff
+  as_list_add_string( arglist, lso_bin_name );
 	as_list_append( arglist, lso_valuep );
   if( udf_name != NULL && function_args != NULL ){
     as_list_add_string( arglist, udf_name );
@@ -384,7 +385,8 @@ as_lso_peek_internal(cl_cluster * asc, char * ns, char * set, char * keystr,
   // Note: function_args is an <as_val> type, so if present, it must be
   // protected (with as_reserve()) so that it doesn't get destroyed twice.
 	as_list * arglist = NULL;
-	arglist = as_arraylist_new(3, 4);	// Just one item -- the new as_val
+	arglist = as_arraylist_new(4, 4);	// Just one item -- the new as_val
+  as_list_add_string( arglist, lso_bin_name );
 	as_list_add_integer( arglist, peek_count );
   if( udf_name != NULL && function_args != NULL ){
     as_list_add_string( arglist, udf_name );
@@ -619,4 +621,3 @@ as_lso_trim(cl_cluster * asc, char * ns, char * set, char * keystr,
 	INFO("[EXIT]:[%s]: RC(%d)\n", meth, rc );
 	return rc;
 } // end as_lso_trim()
-

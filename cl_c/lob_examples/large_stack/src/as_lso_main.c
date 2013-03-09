@@ -80,11 +80,7 @@ int init_configuration (int argc, char *argv[])
 	g_config->timeout_ms   = 5000;
 	g_config->record_ttl   = 864000;
 	g_config->verbose      = false;
-	g_config->package_file = "../../lua_files/LsoStrawman.lua";
-	// g_config->package_file = "../../lua_files/LsoStickman.lua";
-	g_config->filter_name  = "../../lua_files/LsoFilter.lua";
-	g_config->package_name = "LsoStrawman";
-	// g_config->package_name = "LsoStickman";
+	g_config->package_name = "LsoStickman";
 
 	INFO("[DEBUG]:[%s]: Num Args (%d) g_config(%p)\n", meth, argc, g_config);
 
@@ -99,34 +95,17 @@ int init_configuration (int argc, char *argv[])
 		break;
 		case 's': g_config->set          = strdup(optarg);          break;
 		case 'v': g_config->verbose      = true;                    break;
-		case 'f': g_config->package_file = strdup(optarg);          break;
-		case 'P': g_config->package_name = strdup(optarg);          break;
 		default:  usage(argc, argv);                      return(-1);
 		}
 	}
 	return 0;
 }
 
-
-// =======================================================================
-// Define the LSO functions (extern)
-// =======================================================================
-
-int as_lso_create(cl_cluster *, char *, char *, char *, char *);
-int as_lso_push(cl_cluster *, char *, char *, char *, char *, as_val *);
-int as_lso_push_with_transform(cl_cluster *, char *, char *, char *,
-		char *, as_val *, char *, char *, as_list *);
-as_result * as_lso_peek(cl_cluster *, char *, char *, char *, char *, int);
-as_result * as_lso_peek_with_transform(cl_cluster *, char *, char *, char *,
-		char *, int, char *, char *, as_list *);
-int as_lso_trim(cl_cluster *, char *, char *, char *, char *, int);
-
 // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 // Functions in this module:
 // (00) UTILITY FUNCTIONS
 // (02) main()
-// (03) register_udf()
 // (10) RECORD FUNCTIONS
 // (11) record_put()
 // (12) record_delete()
@@ -233,7 +212,7 @@ int lso_push_test(int iterations, char * bin_name, char * keystr, char * val,
 
 	// Create the LSO Bin
 	rc = as_lso_create( g_config->asc, g_config->hot_ns, g_config->set,
-			keystr, lso_bin );
+			keystr, lso_bin, g_config->package_name, g_config->timeout_ms);
 	if( rc < 0 ){
 		INFO("[ERROR]:[%s]: LSO Create Error: rc(%d)\n", meth, rc );
 		return rc;
@@ -247,7 +226,6 @@ int lso_push_test(int iterations, char * bin_name, char * keystr, char * val,
 	char * b = lso_bin;
 
 	INFO("[DEBUG]:[%s]: Run as_lso_push() iterations(%d)\n", meth, iterations );
-
 	for( int i = 0; i < (iterations * 10); i += 10 ){
 		listp = as_arraylist_new( 4, 4 );
 		// make_tuple( listp, i);
@@ -262,8 +240,10 @@ int lso_push_test(int iterations, char * bin_name, char * keystr, char * val,
 			free( valstr );
 		}
 
-		if(( rc = as_lso_push( c, ns, s, k, b,  (as_val *) listp )) < 0 ){
+		rc = as_lso_push( c, ns, s, k, b, (as_val *)listp, g_config->package_name, g_config->timeout_ms);
+		if(rc) {
 			INFO("[ERROR]:[%s]: LSO PUSH Error: i(%d) rc(%d)\n", meth, i, rc );
+            return -1;
 		}
 		as_val_destroy( listp ); // must destroy every iteration.
 		listp = NULL;
@@ -308,7 +288,7 @@ int lso_peek_test(char * keystr, char * lso_bin, int iterations )
 	char * valstr = NULL; // Hold Temp results from as_val_tostring()
 	for( int i = 0; i < iterations ; i ++ ){
 		peek_count += i;
-		resultp = as_lso_peek( c, ns, s, k, b, peek_count );
+		resultp = as_lso_peek( c, ns, s, k, b, peek_count, g_config->package_name, g_config->timeout_ms);
 		if( resultp->is_success ) {
 			valstr = as_val_tostring( resultp->value );
 			INFO("[DEBUG]:[%s]: LSO PEEK SUCCESS: i(%d) Val(%s)\n", meth, i, valstr);
@@ -326,65 +306,13 @@ int lso_peek_test(char * keystr, char * lso_bin, int iterations )
 	return rc;
 } // end lso_peek_test()
 
-// |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
-
-/** ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
- *
- */
-int register_package() 
-{ 
-	INFO("Opening package file %s",g_config->package_file);  
-	FILE *fptr = fopen(g_config->package_file,"r"); 
-	if (!fptr) { 
-		INFO("cannot open script file %s : %s",g_config->package_file,strerror(errno));  
-		return(-1); 
-	} 
-	int max_script_len = 1048576; 
-	byte *script_code = (byte *)malloc(max_script_len); 
-	memset(script_code, 0, max_script_len);
-	if (script_code == NULL) { 
-		INFO("malloc failed"); return(-1); 
-	}     
-
-	byte *script_ptr = script_code; 
-	int b_read = fread(script_ptr,1,512,fptr); 
-	int b_tot = 0; 
-	while (b_read) { 
-		b_tot      += b_read; 
-		script_ptr += b_read; 
-		b_read      = fread(script_ptr,1,512,fptr); 
-	}                        
-	fclose(fptr); 
-
-	char *err_str = NULL; 
-	as_bytes udf_content = {
-			.len = b_tot,
-			.value = script_code
-	}; 
-
-	if (b_tot>0) { 
-		int resp = citrusleaf_udf_put(g_config->asc, basename(g_config->package_file), &udf_content, AS_UDF_LUA, &err_str); 
-		if (resp!=0) { 
-			INFO("unable to register package file %s as %s resp = %d",g_config->package_file,g_config->package_name,resp); return(-1);
-			INFO("%s",err_str); free(err_str);
-			free(script_code);
-			return(-1);
-		}
-		INFO("successfully registered package file %s as %s",g_config->package_file,g_config->package_name); 
-	} else {   
-		INFO("unable to read package file %s as %s b_tot = %d",g_config->package_file,g_config->package_name,b_tot); return(-1);    
-	}
-	free(script_code);
-	return 0;
-}
-
 
 /** ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
  *  Initialize Test: Do the set up for a test so that the regular
  *  Aerospike functions can run.
  */
-int test_setup( int argc, char **argv ) {
-	static char * meth = "test_setup()";
+int setup_test( int argc, char **argv ) {
+	static char * meth = "setup_test()";
 	int rc = 0;
 
 	INFO("[ENTER]:[%s]: Args(%d) g_config(%p)\n", meth, argc, g_config );
@@ -395,9 +323,9 @@ int test_setup( int argc, char **argv ) {
 	}
 
 	// show cluster setup
-	INFO("[DEBUG]:[%s]Startup: host %s port %d ns %s set %s file %s",
+	INFO("[DEBUG]:[%s]Startup: host %s port %d ns %s set %s",
 			meth, g_config->host, g_config->port, g_config->hot_ns,
-			g_config->set == NULL ? "" : g_config->set, g_config->package_file);
+			g_config->set == NULL ? "" : g_config->set);
 
 	citrusleaf_init();
 
@@ -420,16 +348,9 @@ int test_setup( int argc, char **argv ) {
 
 	g_config->asc  = asc;
 
-	/****
-	// register our package.  (maybe not needed?  Depends on config setup)
-	INFO("[DEBUG]:[%s]: Do the UDF Package Register");
-	if (register_package() !=0 ) {
-		return -1;
-	}
-	 *****/
 	return 0;
 
-} // end test_setup()
+} // end setup_test()
 
 
 /** ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
@@ -446,10 +367,10 @@ int main(int argc, char **argv) {
 	INFO("[ENTER]:[%s]: Start in main()\n", meth );
 
 	// Initialize everything
-	INFO("[DEBUG]:[%s]: calling test_setup()\n", meth );
-	test_setup( argc, argv );
+	INFO("[DEBUG]:[%s]: calling setup_test()\n", meth );
+	setup_test( argc, argv );
 
-	INFO("[DEBUG]:[%s]: After test_setup(): g_config(%p)\n", meth, g_config);
+	INFO("[DEBUG]:[%s]: After setup_test(): g_config(%p)\n", meth, g_config);
 
 	// Run some tests
 	// (1) Push Test

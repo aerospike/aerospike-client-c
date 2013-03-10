@@ -25,7 +25,7 @@ local SCAN = 0;
 local DELETE = -1; -- flag to show scanList to DELETE the value, if found
 local EMPTY = "__empty__"; -- the value is NO MORE
 
-local DEFAULT_DISTRIB = 1;
+local DEFAULT_DISTRIB = 31;
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 -- AS Large Set Utility Functions
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||

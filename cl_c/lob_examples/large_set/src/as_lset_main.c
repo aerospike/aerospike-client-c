@@ -164,7 +164,7 @@ int lset_insert_test(char * keystr, char * lset_bin, int iterations) {
 		as_val       * newSetItem = (as_val *) as_integer_new( base );
 
 		rc = as_lset_insert( c, ns, set, key, bname, newSetItem,
-							 g_config->timeout_ms );
+							 g_config->package_name, g_config->timeout_ms );
 		if (rc) {
 			INFO("[ERROR]:[%s]: LSET INSERT Error: i(%d) rc(%d)\n",
 				 meth, i, rc );
@@ -214,6 +214,7 @@ int lset_search_test(char * keystr, char * lset_bin, int iterations ) {
 		as_val    * newSetItem = (as_val *) as_integer_new( base ); 
 		as_result * resultp    = as_lset_search( c, ns, set, key, bname,
 												 newSetItem, false,
+												 g_config->package_name,
 												 g_config->timeout_ms );
 		if ( resultp->is_success ) {
 			char * valstr = as_val_tostring( resultp->value );
@@ -250,6 +251,7 @@ int lset_search_test(char * keystr, char * lset_bin, int iterations ) {
 		as_val    * newSetItem = (as_val *) as_integer_new( base ); 
 		as_result * resultp    = as_lset_search( c, ns, set, key, bname,
 												 newSetItem, false,
+												 g_config->package_name,
 												 g_config->timeout_ms );
 		if ( resultp->is_success ) {
 			char * valstr = as_val_tostring( resultp->value );

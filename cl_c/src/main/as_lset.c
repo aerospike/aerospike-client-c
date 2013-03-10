@@ -52,7 +52,7 @@ void __log_append(FILE * f, const char * prefix, const char * fmt, ...);
 int
 as_lset_create( cl_cluster * asc, char * namespace, char * set,
 		char * keystr, char * lset_bin_name, int distribution,
-		uint32_t timeout_ms ) {
+		char * lso_package, uint32_t timeout_ms ) {
 	static char * meth = "as_lset_create()";
 	int rc = 0; // ubiquitous return code
 
@@ -159,8 +159,8 @@ as_lset_create( cl_cluster * asc, char * namespace, char * set,
  */
 int
 as_lset_insert(cl_cluster * asc, char * ns, char * set, char * keystr,
-		char * lset_bin_name, as_val * lset_valuep, uint32_t timeout_ms )
-{
+			   char * lset_bin_name, as_val * lset_valuep, 
+			   char * lso_package, uint32_t timeout_ms ) {
 	static char * meth = "as_lset_insert()";
 	int rc = 0; // ubiquitous return code
 	char * udf_function_name = "asLSetInsert"; // The Lua Function we'll call
@@ -262,9 +262,10 @@ as_lset_insert(cl_cluster * asc, char * ns, char * set, char * keystr,
  */
 int
 as_lset_insert_with_transform(cl_cluster * asc, char * ns, char * set,
-		char * keystr, char * lset_bin_name, as_val * lset_valuep,
-		char * udf_file, char * udf_name, as_list * function_args,
-		uint32_t timeout_ms ) {
+							  char * keystr, char * lset_bin_name,
+							  as_val * lset_valuep, char * lso_package,
+							  char * udf_file, char * udf_name,
+							  as_list * function_args, uint32_t timeout_ms ) {
 	static char * meth = "as_lset_insert_with_transform()";
 	int rc = 0;
 
@@ -308,7 +309,7 @@ as_lset_insert_with_transform(cl_cluster * asc, char * ns, char * set,
 as_result  *
 as_lset_search(cl_cluster * asc, char * ns, char * set, char * keystr,
 		char * lset_bin_name, as_val * search_valuep, bool exists,
-		uint32_t timeout_ms) {
+		char * lso_package, uint32_t timeout_ms) {
 	static char * meth = "as_lset_search()";
 	int rc = 0; // ubiquitous return code
 	char * udf_function_name = "asLSetSearch";
@@ -424,9 +425,11 @@ as_lset_search(cl_cluster * asc, char * ns, char * set, char * keystr,
  */
 as_result  *
 as_lset_search_with_transform(cl_cluster * asc, char * ns, char * set,
-    char * keystr, char * lset_bin_name, as_val * search_valuep, bool exists,
-    char * udf_file, char * udf_name, as_list * function_args,
-	uint32_t timeout_ms ) {
+							  char * keystr, char * lset_bin_name,
+							  as_val * search_valuep, bool exists,
+							  char * lso_package, char * udf_file,
+							  char * udf_name, as_list * function_args,
+							  uint32_t timeout_ms ) {
 	static char * meth = "as_lset_search_with_transform()";
 	int rc = 0;
 	as_result * resultp = NULL;
@@ -461,8 +464,8 @@ as_lset_search_with_transform(cl_cluster * asc, char * ns, char * set,
  */
 int
 as_lset_delete(cl_cluster * asc, char * ns, char * set, char * keystr,
-		char * lset_bin_name, as_val * delete_valuep, uint32_t timeout_ms )
-{
+			   char * lset_bin_name, as_val * delete_valuep,
+			   char * lso_package, uint32_t timeout_ms ) {
 	static char * meth = "as_lset_delete()";
 	int rc = 0; // ubiquitous return code
 	char * udf_function_name = "asLSetDelete";

@@ -1532,12 +1532,12 @@ local function localStackPush( topRec, lsoBinName, newValue, func, fargs )
 
   local lsoMap;
   if( not aerospike:exists( topRec ) ) then
-    warn("[WARNING]:<%s:%s>:Record Does Not exist. Creating", mod, meth );
+    GP=F and trace("[WARNING]:<%s:%s>:Record Does Not exist. Creating", mod, meth );
     lsoMap = initializeLsoMap( topRec, lsoBinName );
     aerospike:create( topRec );
   elseif ( topRec[lsoBinName] == nil ) then
-    warn("[WARNING]: <%s:%s> LSO BIN (%s) DOES NOT Exist: Creating",
-      mod, meth, tostring(lsoBinName) );
+    GP=F and trace("[WARNING]: <%s:%s> LSO BIN (%s) DOES NOT Exist: Creating",
+                   mod, meth, tostring(lsoBinName) );
     lsoMap = initializeLsoMap( topRec, lsoBinName );
     aerospike:create( topRec );
   end

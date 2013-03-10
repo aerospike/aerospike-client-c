@@ -206,11 +206,15 @@ TEST_UTIL += util/map_rec
 TEST_UTIL += util/test_aerospike
 TEST_UTIL += util/test_logger
 
+TEST_LSO = 
+TEST_LSO += lstack/lstack_basics
+
 TEST_CLIENT = client_test
 TEST_CLIENT += $(TEST_UTIL) 
 TEST_CLIENT += $(TEST_KV) 
 TEST_CLIENT += $(TEST_RECORD) 
 TEST_CLIENT += $(TEST_STREAM)
+TEST_CLIENT += $(TEST_LSO)
 
 #-----#
 

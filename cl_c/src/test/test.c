@@ -1,4 +1,11 @@
 #include "test.h"
+#include <sys/wait.h>
+#include <sys/time.h>
+#include <sys/resource.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 /******************************************************************************
  * MACROS
@@ -12,11 +19,77 @@
  * atf_test
  *****************************************************************************/
 
+atf_test_result * atf_test_run_isolated(atf_test * test) {
+
+    int outfd[2];
+    int infd[2];
+
+    int oldstdin, oldstdout;
+
+    pipe(outfd); // Where the parent is going to write to
+    pipe(infd); // From where parent is going to read
+
+    oldstdin = dup(0); // Save current stdin
+    oldstdout = dup(1); // Save stdout
+
+    close(0);
+    close(1);
+
+    dup2(outfd[0], 0); // Make the read end of outfd pipe as stdin
+    dup2(infd[1],1); // Make the write end of infd as stdout
+
+
+    atf_test_result * result = atf_test_result_new(test);
+
+    int pid = fork();
+
+    if ( pid == 0 ) {
+        // CHILD
+        close(outfd[0]); // Not required for the child
+        close(outfd[1]);
+        close(infd[0]);
+        close(infd[1]);
+
+        test->run(test, result);
+
+        exit(result->success ? 0 : 1);
+    }
+    else if ( pid == -1 ) {
+        fprintf(stderr, "failed to fork child for running test.");
+    }
+    else {
+        char input[100];
+        close(0); // Restore the original std fds of parent
+        close(1);
+        dup2(oldstdin, 0);
+        dup2(oldstdout, 1);
+
+        close(outfd[0]); // These are being used by the child
+        close(infd[1]);
+
+        write(outfd[1],"2^32\n",5); // Write to child’s stdin
+
+        input[read(infd[0],input,100)] = 0; // Read from child’s stdout
+
+        int status = 0;
+        int options = 0;
+        struct rusage usage;
+
+        wait4(pid, &status, options, &usage);
+
+        printf("%s",input);
+    }
+
+    return result;
+}
+
+
 atf_test_result * atf_test_run(atf_test * test) {
     atf_test_result * result = atf_test_result_new(test);
     test->run(test, result);
     return result;
 }
+
 
 atf_test_result * atf_test_result_new(atf_test * test) {
     atf_test_result * res = (atf_test_result *) malloc(sizeof(atf_test_result));
@@ -26,8 +99,10 @@ atf_test_result * atf_test_result_new(atf_test * test) {
     return res;
 }
 
-void atf_test_result_free(atf_test_result * test_result) {
-    free(test_result);
+void atf_test_result_destroy(atf_test_result * result) {
+    if ( ! result ) return;
+    result->test = NULL;
+    free(result);
 }
 
 /******************************************************************************
@@ -105,17 +180,30 @@ void atf_suite_result_print(atf_suite_result * suite_result) {
     }
 }
 
+
 atf_suite_result * atf_suite_result_new(atf_suite * suite) {
     atf_suite_result * res = (atf_suite_result *) malloc(sizeof(atf_suite_result));
     res->suite = suite;
+    // res->tests = { NULL };
     res->size = 0;
     res->success = 0;
     return res;
 }
 
-void atf_suite_result_free(atf_suite_result * suite_result) {
-    free(suite_result);
+void atf_suite_result_destroy(atf_suite_result * result) {
+    if ( ! result ) return;
+    result->suite = NULL;
+    if ( result->tests ) {
+        for ( int i = 0; i < result->size; i ++ ) {
+            atf_test_result_destroy(result->tests[i]);
+            result->tests[i] = NULL;
+        }
+        result->size = 0;
+    }
+
+    free(result);
 }
+
 
 atf_suite_result * atf_suite_result_add(atf_suite_result * suite_result, atf_test_result * test_result) {
     suite_result->tests[suite_result->size++] = test_result;
@@ -191,8 +279,33 @@ int atf_plan_run(atf_plan * plan, atf_plan_result * result) {
 
     printf("%d tests: %d passed, %d failed\n", total, passed, total-passed);
 
+    atf_plan_result_destroy(result);
+
     return total-passed;
 }
+
+
+atf_plan_result * atf_plan_result_new(atf_plan * plan) {
+    atf_plan_result * res =  (atf_plan_result *) malloc(sizeof(atf_plan_result));
+    res->plan = plan;
+    // res->suites = { NULL };
+    res->size = 0;
+    return res;
+}
+
+void atf_plan_result_destroy(atf_plan_result * result) {
+    if ( ! result ) return;
+    result->plan = NULL;
+    if ( result->suites ) {
+        for ( int i = 0; i < result->size; i ++ ) {
+            atf_suite_result_destroy(result->suites[i]);
+            result->suites[i] = NULL;
+        }
+        result->size = 0;
+    }
+    free(result);
+}
+
 
 /******************************************************************************
  * atf_assert

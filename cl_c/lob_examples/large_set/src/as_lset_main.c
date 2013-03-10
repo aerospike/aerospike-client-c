@@ -155,6 +155,7 @@ int lset_insert_test(char * keystr, char * lset_bin, int iterations) {
 	INFO("[ENTER]:[%s]: It(%d) Key(%s) LSETBin(%s)\n",
 			meth, iterations, keystr, lset_bin );
 
+#if 0
 	// Create the AS Large Set Bin
 	rc = as_lset_create( g_config->asc, g_config->ns, g_config->set,
 						 keystr, lset_bin, 32, g_config->timeout_ms);
@@ -162,6 +163,7 @@ int lset_insert_test(char * keystr, char * lset_bin, int iterations) {
 		INFO("[ERROR]:[%s]: LSET Create Error: rc(%d)\n", meth, rc );
 		return rc;
 	}
+#endif
 
 	// Abbreviate for simplicity.
 	cl_cluster * c = g_config->asc;

@@ -87,7 +87,7 @@ local function adjustLSetMap( lsetCtrlMap, argListMap )
   local mod = "LSetStickman";
   local meth = "adjustLSetMap()";
   GP=F and trace("[ENTER]: <%s:%s>:: LSetMap(%s)::\n ArgListMap(%s)",
-    mod, meth, tostring(lsetCtrlMap), tostring( argListMap ));
+                 mod, meth, tostring(lsetCtrlMap), tostring( argListMap ));
 
   -- Iterate thru the argListMap and adjust (override) the map settings 
   -- based on the settings passed in during the stackCreate() call.
@@ -120,9 +120,8 @@ local  CRC32 = require('CRC32');
 -- (which would be ONE-based for Lua) but is just used as a name.
 -- ======================================================================
 local function stringHash( value, modulo )
-
   if value ~= nil and type(value) == "string" then
-    return  CRC32.Hash( value ) % modulo;
+    return CRC32.Hash( value ) % modulo;
   else
     return 0;
   end
@@ -138,14 +137,12 @@ local function numberHash( value, modulo )
   local meth = "numberHash()";
   local result = 0;
   if value ~= nil and type(value) == "number" then
-    -- math.randomseed( value );
-    -- return math.random( modulo );
-    result =  CRC32.Hash( value ) % modulo;
+    -- math.randomseed( value ); return math.random( modulo );
+    result = CRC32.Hash( value ) % modulo;
   end
   GP=F and trace("[EXIT]:<%s:%s>HashResult(%s)", mod, meth, tostring(result))
   return result
 end -- numberHash
-
 
 -- ======================================================================
 -- Get (create) a unique bin name given the current counter.
@@ -173,7 +170,7 @@ local function setupNewBin( topRec, binNum )
   topRec[binName] = list(); -- Create a new list for this new bin
 
   GP=F and trace("[EXIT]: <%s:%s> BinNum(%d) BinName(%s)\n",
-    mod, meth, binNum, binName );
+                 mod, meth, binNum, binName );
 
   return binName;
 end
@@ -191,7 +188,7 @@ local function computeSetBin( newValue, lsetCtrlMap )
   local mod = "AsLSetStickman";
   local meth = "computeSetBin()";
   GP=F and trace("[ENTER]: <%s:%s> val(%s) Map(%s) \n",
-    mod, meth, tostring(newValue), tostring(lsetCtrlMap) );
+                 mod, meth, tostring(newValue), tostring(lsetCtrlMap) );
 
   -- Check StoreState
   local binNumber  = 0;
@@ -206,16 +203,14 @@ local function computeSetBin( newValue, lsetCtrlMap )
       binNumber  = stringHash( newValue.KEY, lsetCtrlMap.Modulo );
     else -- error case
       warn("[ERROR]<%s:%s>Unexpected Type (should be number, string or map)",
-        mod, meth );
+           mod, meth );
     end
   end
-  -- TODO: Find a better hash function.
   GP=F and trace("[EXIT]: <%s:%s> Val(%s) BinNumber (%d) \n",
-    mod, meth, tostring(newValue), binNumber );
+                 mod, meth, tostring(newValue), binNumber );
 
   return binNumber;
 end -- computeSetBin()
-
 
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 -- Scan a List for an item.  Return the item if found.
@@ -245,11 +240,12 @@ local function complexScanList(lsetCtrlMap, binList, value, flag )
   -- Later, we may return a set of things 
   for i = 1, list.size( binList ), 1 do
     GP=F and trace("[DEBUG]: <%s:%s> It(%d) Comparing SV(%s) with BinV(%s)\n",
-    mod, meth, i, tostring(value), tostring(binList[i]));
-    if binList[i] ~= nil and binList[i] ~= EMPTY and binList[i].KEY == value.KEY then
+                   mod, meth, i, tostring(value), tostring(binList[i]));
+    if binList[i] ~= nil and binList[i] ~= EMPTY and
+       binList[i].KEY == value.KEY then
       result = binList[i]; -- save the thing we found.
       GP=F and trace("[EARLY EXIT]: <%s:%s> Found(%s)\n",
-        mod, meth, tostring(value));
+                     mod, meth, tostring(value));
       if( flag == DELETE ) then
         binList[i] = EMPTY; -- the value is NO MORE
         -- Decrement ItemCount (valid entries) but TotalCount stays the same
@@ -265,7 +261,7 @@ local function complexScanList(lsetCtrlMap, binList, value, flag )
   -- Didn't find it.  If INSERT, then append the value to the list
   if flag == INSERT then
     GP=F and trace("[DEBUG]: <%s:%s> INSERTING(%s)\n",
-      mod, meth, tostring(value));
+                   mod, meth, tostring(value));
     list.append( binList, value );
     return 1 -- show caller we did an insert
   end
@@ -273,7 +269,6 @@ local function complexScanList(lsetCtrlMap, binList, value, flag )
     mod, meth, tostring(value));
   return nil;
 end
-
 
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 -- Scan a List for an item.  Return the item if found.
@@ -299,14 +294,15 @@ local function simpleScanList(lsetCtrlMap, binList, value, flag )
   local mod = "AsLSetStickman";
   local meth = "simpleScanList()";
   GP=F and trace("[ENTER]: <%s:%s> Looking for V(%s), ListSize(%d) List(%s)",
-    mod, meth, tostring(value), list.size(binList), tostring(binList))
+                 mod, meth, tostring(value), list.size(binList),
+                 tostring(binList))
 
   local result = nil;
   -- Scan the list for the item, return true if found,
   -- Later, we may return a set of things 
   for i = 1, list.size( binList ), 1 do
     GP=F and trace("[DEBUG]: <%s:%s> It(%d) Comparing SV(%s) with BinV(%s)\n",
-    mod, meth, i, tostring(value), tostring(binList[i]));
+                   mod, meth, i, tostring(value), tostring(binList[i]));
     if binList[i] ~= nil and binList[i] == value then
       result = binList[i];
       GP=F and trace("[EARLY EXIT]: <%s:%s> Found(%s)\n",
@@ -326,12 +322,12 @@ local function simpleScanList(lsetCtrlMap, binList, value, flag )
   -- Didn't find it.  If INSERT, then append the value to the list
   if flag == INSERT then
     GP=F and trace("[EXIT]: <%s:%s> INSERTING(%s)\n",
-      mod, meth, tostring(value));
+                   mod, meth, tostring(value));
     list.append( binList, value );
     return 1 -- show caller we did an insert
   end
   GP=F and trace("[LATE EXIT]: <%s:%s> Did NOT Find(%s)\n",
-    mod, meth, tostring(value));
+                 mod, meth, tostring(value));
   return nil;
 end -- simpleScanList
 
@@ -384,16 +380,16 @@ local function localInsert( topRec, lsetCtrlMap, newValue, stats )
   local binNumber = computeSetBin( newValue, lsetCtrlMap );
   local binName = getBinName( binNumber );
   GP=F and trace("[DEBUG]:<%s:%s> Compute:BNum(%s) BName(%s) Val(%s) Map(%s)",
-    mod, meth, tostring(binNumber), tostring(binName),
-    tostring(newValue), tostring(lsetCtrlMap));
+                 mod, meth, tostring(binNumber), tostring(binName),
+                 tostring(newValue), tostring(lsetCtrlMap));
 
   local binList = topRec[binName];
 
   local insertResult = 0;
   if binList == nil then
     GP=F and trace("[INTERNAL ERROR]:<%s:%s> binList is nil: binName(%s)",
-      mod, meth, tostring( binName ) );
-      return('INTERNAL ERROR: Nil Bin');
+                   mod, meth, tostring( binName ) );
+    return('INTERNAL ERROR: Nil Bin');
   else
     -- Look for the value, and insert if it is not there.
     insertResult = scanList( lsetCtrlMap, binList, newValue, INSERT );
@@ -402,7 +398,7 @@ local function localInsert( topRec, lsetCtrlMap, newValue, stats )
   end
 
   GP=F and trace("[DEBUG]: <%s:%s>:Bin(%s) Now has list(%s)",
-    mod, meth, binName, tostring(binList) );
+                 mod, meth, binName, tostring(binList) );
 
   if stats == 1 and insertResult == 1 then -- Update Stats if success
     local itemCount = lsetCtrlMap.ItemCount;
@@ -414,8 +410,7 @@ local function localInsert( topRec, lsetCtrlMap, newValue, stats )
   topRec['AsLSetCtrlBin'] = lsetCtrlMap;
 
   GP=F and trace("[EXIT]: <%s:%s>Storing Record() with New Value(%s): Map(%s)",
-    mod, meth, tostring( newValue ), tostring( lsetCtrlMap ) );
-
+                 mod, meth, tostring( newValue ), tostring( lsetCtrlMap ) );
     -- No need to return anything
 end -- localInsert
 
@@ -445,8 +440,8 @@ local function rehashSet( topRec, setBinName, lsetCtrlMap )
   local singleBinList = topRec[singleBinName];
   if singleBinList == nil then
     warn("[INTERNAL ERROR]:<%s:%s> Rehash can't use Empty Bin (%s) list",
-      mod, meth, tostring(singleBinName));
-      return('BAD BIN 0 LIST for Rehash');
+         mod, meth, tostring(singleBinName));
+    return('BAD BIN 0 LIST for Rehash');
   end
   local listCopy = list.take( singleBinList, list.size( singleBinList ));
   topRec[singleBinName] = nil; -- this will be reset shortly.
@@ -460,51 +455,13 @@ local function rehashSet( topRec, setBinName, lsetCtrlMap )
     setupNewBin( topRec, i );
   end -- for each new bin
 
-  for i = 1, list.size( listCopy), 1 do
+  for i = 1, list.size(listCopy), 1 do
     localInsert( topRec, lsetCtrlMap, listCopy[i], 0 ); -- do NOT update counts.
   end
 
   GP=F and trace("[EXIT]: <%s:%s>", mod, meth );
 end -- rehashSet()
 -- ======================================================================
-
--- ======================================================================
--- The C Version
--- ------------------------------------------------------------
---  The published hash algorithm used in the UNIX ELF format
---  for object files. Accepts a pointer to a string to be hashed
---  and returns an unsigned long.
--- ------------------------------------------------------------
--- unsigned long ElfHash ( const unsigned char *name ) {
---  unsigned long   h = 0, g;
---  while ( *name ) {
---    h = ( h << 4 ) + *name++;
---    if ( g = h & 0xF0000000 )
---      h ^= g >> 24;
---    h &= ~g;
---  }
---  return h;
---}
--- ======================================================================
--- ------------------------------------------------------------
---  The published hash algorithm used in the UNIX ELF format
---  for object files. Accepts a pointer to a string to be hashed
---  and returns an unsigned long.
--- ------------------------------------------------------------
--- local function intHash ( intValue  )
---   local mod = "AsLSetStickman";
---   local meth = "intHash()";
---   GP=F and trace("[ENTER]: <%s:%s> val(%d) \n", mod, meth, intValue );
---   local h = 0;
---   local g = 0;
---    h = ( h << 4 ) + intValue;
---    if ( g = h and 0xF0000000 ) then
---       h  = h ^ (g >> 24);
---    end
---    h = h bit.band  ~g;
---   GP=F and trace("[EXIT]: <%s:%s> Return (%d) \n", mod, meth, h );
---   return h;
--- end
 
 -- ======================================================================
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
@@ -618,16 +575,20 @@ function asLSetInsert( topRec, setBinName, newValue )
   local mod = "AsLSetStickman";
   local meth = "asLSetInsert()";
   GP=F and trace("[ENTER]:<%s:%s> SetBin(%s) NewValue(%s)",
-    mod, meth, tostring(setBinName), tostring( newValue ));
+                 mod, meth, tostring(setBinName), tostring( newValue ));
 
   local lsetCtrlMap, distrib;
 
   -- Check that the Set Structure is already there, otherwise, error
   if( topRec['AsLSetCtrlBin'] == nil ) then
-    warn("[WARNING]: <%s:%s> AsLSetCtrlBin does not Exist:Creating",mod,meth );
+    warn("[WARNING]: <%s:%s> AsLSetCtrlBin does not Exist:Creating",
+         mod, meth );
     lsetCtrlMap, distrib =
       initializeLSetMap( topRec, setBinName, DEFAULT_DISTRIB );
     topRec['AsLSetCtrlBin'] = lsetCtrlMap;
+    -- initializeLSetMap always sets lsetCtrlMap.StoreState to 0
+    -- At this point there is only one bin
+    setupNewBin( topRec, 0 );
   else
     lsetCtrlMap = topRec['AsLSetCtrlBin'];
   end
@@ -673,12 +634,12 @@ function asLSetExists( topRec, setBinName, searchValue )
   local mod = "AsLSetStickman";
   local meth = "asLSetSearch()";
   GP=F and trace("[ENTER]: <%s:%s> Search for Value(%s)",
-    mod, meth, tostring( searchValue ) );
+                 mod, meth, tostring( searchValue ) );
 
   -- Check that the Set Structure is already there, otherwise, error
   if( topRec['AsLSetCtrlBin'] == nil ) then
     GP=F and trace("[ERROR EXIT]: <%s:%s> AsLSetCtrlBin does not Exist",
-    mod, meth );
+                   mod, meth );
     return('AsLSetCtrlBin does not exist');
   end
 
@@ -694,9 +655,7 @@ function asLSetExists( topRec, setBinName, searchValue )
   else
     return 1
   end
-
 end -- function asLSetSearch()
-
 
 
 -- ======================================================================
@@ -714,12 +673,12 @@ function asLSetSearch( topRec, setBinName, searchValue )
   local mod = "AsLSetStickman";
   local meth = "asLSetSearch()";
   GP=F and trace("[ENTER]: <%s:%s> Search for Value(%s)",
-    mod, meth, tostring( searchValue ) );
+                 mod, meth, tostring( searchValue ) );
 
   -- Check that the Set Structure is already there, otherwise, error
   if( topRec['AsLSetCtrlBin'] == nil ) then
     GP=F and trace("[ERROR EXIT]: <%s:%s> AsLSetCtrlBin does not Exist",
-    mod, meth );
+                   mod, meth );
     return('AsLSetCtrlBin does not exist');
   end
 
@@ -732,14 +691,13 @@ function asLSetSearch( topRec, setBinName, searchValue )
   local result = scanList( lsetCtrlMap, binList, searchValue, SCAN );
 
   GP=F and trace("[EXIT]: <%s:%s>: Search Returns (%s)",
-    mod,meth,tostring(result));
+                 mod, meth, tostring(result));
     if result == nil then
       return ('Not Found')
     else
       return result;
     end
 end -- function asLSetSearch()
-
 
 -- ======================================================================
 -- |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
@@ -753,12 +711,12 @@ function asLSetDelete( topRec, setBinName, deleteValue )
   local mod = "AsLSetStickman";
   local meth = "asLSetDelete()";
   GP=F and trace("[ENTER]: <%s:%s> Delete Value(%s)",
-    mod, meth, tostring( deleteValue ) );
+                 mod, meth, tostring( deleteValue ) );
 
   -- Check that the Set Structure is already there, otherwise, error
   if( topRec['AsLSetCtrlBin'] == nil ) then
     GP=F and trace("[ERROR EXIT]: <%s:%s> AsLSetCtrlBin does not Exist",
-      mod, meth );
+                   mod, meth );
     return('AsLSetCtrlBin does not exist');
   end
 
@@ -781,7 +739,7 @@ function asLSetDelete( topRec, setBinName, deleteValue )
   end
 
   GP=F and trace("[EXIT]: <%s:%s>: Delete Returns (%s) \n",
-    mod, meth, tostring( result ));
+                 mod, meth, tostring( result ));
 
   return result;
 end -- function asLSetDelete()

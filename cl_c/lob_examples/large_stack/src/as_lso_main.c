@@ -29,10 +29,7 @@
 #include <citrusleaf/citrusleaf.h>
 #include "as_arraylist.h"
 
-// Use this to turn on extra debugging prints and checks
-#define TRA_DEBUG true
-
-// Global Configuration object that holds ALL needed client data.
+// Global Configuration object: holds client config data.
 config *g_config = NULL;
 
 // NOTE: INFO(), ERROR() and LOG() defined in as_lso.h
@@ -94,9 +91,49 @@ int init_configuration (int argc, char *argv[]) {
 	return 0;
 }
 
+// |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+/** ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+ *  Initialize Test: Do the set up for a test so that the regular
+ *  Aerospike functions can run.
+ */
+int setup_test( int argc, char **argv ) {
+	static char * meth = "setup_test()";
+	int rc = 0;
 
+	INFO("[ENTER]:[%s]: Args(%d) g_config(%p)\n", meth, argc, g_config );
 
+	if (init_configuration(argc,argv) !=0 ) { // reading parameters
+		return -1;
+	}
 
+	// show cluster setup
+	INFO("[DEBUG]:[%s]Startup: host %s port %d ns %s set %s",
+			meth, g_config->host, g_config->port, g_config->ns,
+			g_config->set == NULL ? "" : g_config->set);
+
+	citrusleaf_init();
+
+	citrusleaf_set_debug(true);
+
+	// create the cluster object
+	cl_cluster *asc = citrusleaf_cluster_create();
+	if (!asc) { 
+		INFO("[ERROR]:[%s]: Fail on citrusleaf_cluster_create()");
+		return(-1); 
+	}
+
+	rc = citrusleaf_cluster_add_host(asc, g_config->host, g_config->port,
+									 g_config->timeout_ms);
+	if (rc) {
+		INFO("[ERROR]:[%s]:could not connect to host %s port %d",
+				meth, g_config->host,g_config->port);
+		return(-1);
+	}
+
+	g_config->asc  = asc;
+
+	return 0;
+} // end setup_test()
 
 /// ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 
@@ -125,33 +162,26 @@ int lso_push_test(char * keystr, char * lso_bin, int iterations) {
 		return rc;
 	}
 
-	// Abbreviate for simplicity.
-	cl_cluster * c  = g_config->asc;
-	char       * ns = g_config->ns;
-	char       * set  = g_config->set;
-	char       * key  = keystr;
-	char       * bname  = lso_bin;
+	cl_cluster * c     = g_config->asc;
+	char       * ns    = g_config->ns;
+	char       * set   = g_config->set;
+	char       * key   = keystr;
+	char       * bname = lso_bin;
 
 	INFO("[DEBUG]:[%s]: Run as_lso_push() iterations(%d)\n", meth, iterations );
 	for ( int i = 0; i < iterations; i++ ) {
         int val = i * 10;
 		as_list * listp = as_arraylist_new( 5, 5 );
-        int64_t urlid   = val + 1;
+        int64_t urlid   = val + 1; // Generate URL_ID
 		as_list_add_integer( listp, urlid );
-        int64_t created = val + 2;
+        int64_t created = val + 2; // Generate CREATED
 		as_list_add_integer( listp, created );
-        int64_t meth_a  = val + 3;
+        int64_t meth_a  = val + 3; // Generate first half of method
 		as_list_add_integer( listp, meth_a );
-        int64_t meth_b  = val + 4;
+        int64_t meth_b  = val + 4; // Generate 2nd half of method
 		as_list_add_integer( listp, meth_b );
-        int64_t status  = val + 5;
+        int64_t status  = val + 5; // Generate status
 		as_list_add_integer( listp, status );
-
-		if( TRA_DEBUG ){
-			char * valstr = as_val_tostring( listp );
-			INFO("[DEBUG]:[%s]: Pushing (%s) \n", meth, valstr );
-			free( valstr );
-		}
 
 		rc = as_lso_push( c, ns, set, key, bname, (as_val *)listp,
 						  g_config->package_name, g_config->timeout_ms);
@@ -167,11 +197,6 @@ int lso_push_test(char * keystr, char * lso_bin, int iterations) {
 } // end lso_push_test()
 
 // |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
-
-
-
-
-
 
 /** ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
  *  LSO PEEK TEST
@@ -189,21 +214,20 @@ int lso_peek_test(char * keystr, char * lso_bin, int iterations ) {
 	INFO("[ENTER]:[%s]: Iterations(%d) Key(%s) LSOBin(%s)\n",
 			meth, iterations, keystr, lso_bin );
 
-	// Abbreviate for simplicity.
-	cl_cluster * c  = g_config->asc;
-	char       * ns = g_config->ns;
-	char       * s  = g_config->set;
-	char       * k  = keystr;
-	char       * b  = lso_bin;
+	cl_cluster * c     = g_config->asc;
+	char       * ns    = g_config->ns;
+	char       * set   = g_config->set;
+	char       * key   = keystr;
+	char       * bname = lso_bin;
 
 	INFO("[DEBUG]:[%s]: Run as_lso_peek() iterations(%d)\n", meth, iterations );
 
+	int    peek_count = 1;
+	char * valstr     = NULL; // Hold Temp results from as_val_tostring()
 	// NOTE: Must FREE the result for EACH ITERATION.
-	int peek_count = 2; // Soon -- set by Random Number
-	char * valstr = NULL; // Hold Temp results from as_val_tostring()
 	for ( int i = 0; i < iterations ; i ++ ){
 		peek_count++;
-		resultp = as_lso_peek( c, ns, s, k, b, peek_count,
+		resultp = as_lso_peek( c, ns, set, key, bname, peek_count,
 							   g_config->package_name, g_config->timeout_ms);
 		if ( resultp->is_success ) {
 			valstr = as_val_tostring( resultp->value );
@@ -221,9 +245,6 @@ int lso_peek_test(char * keystr, char * lso_bin, int iterations ) {
 	INFO("[EXIT]:[%s]: RC(%d)\n", meth, rc );
 	return rc;
 } // end lso_peek_test()
-
-
-
 
 /// ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 
@@ -248,7 +269,8 @@ int lso_push_with_transform_test(char * keystr, char * lso_bin,
 	char       * key  = keystr;
 	char       * bname  = lso_bin;
 
-	INFO("[DEBUG]:[%s]: Run as_lso_push_with_transform() iterations(%d)\n", meth, iterations );
+	INFO("[DEBUG]:[%s]: Run as_lso_push_with_transform() iterations(%d)\n",
+		  meth, iterations );
 	for ( int i = 0; i < iterations; i++ ) {
         int val         = i * 10;
 		as_list * listp = as_arraylist_new( 5, 5 );
@@ -263,19 +285,14 @@ int lso_push_with_transform_test(char * keystr, char * lso_bin,
         int64_t status  = val + 5;
 		as_list_add_integer( listp, status );
 
-		if( TRA_DEBUG ){
-			char * valstr = as_val_tostring( listp );
-			INFO("[DEBUG]:[%s]: Pushing (%s) \n", meth, valstr );
-			free( valstr );
-		}
-
 		rc = as_lso_push_with_transform( c, ns, set, key, bname,
 										 (as_val *)listp,
 						  				 g_config->package_name,
 										 compress_func, compress_args,
 										 g_config->timeout_ms);
 		if (rc) {
-			INFO("[ERROR]:[%s]: LSO PUSH WITH TRANSFROM Error: i(%d) rc(%d)\n", meth, i, rc );
+			INFO("[ERROR]:[%s]: LSO PUSH WITH TRANSFROM Error: i(%d) rc(%d)\n",
+				  meth, i, rc );
             return -1;
 		}
 		as_val_destroy( listp ); // must destroy every iteration.
@@ -298,17 +315,15 @@ int lso_peek_with_transform_test(char * keystr, char * lso_bin,
 								 int iterations ) {
 	static char * meth = "lso_peek_with_transform_test()";
 	int rc = 0;
-	as_result * resultp;
 
 	INFO("[ENTER]:[%s]: Iterations(%d) Key(%s) LSOBin(%s)\n",
 			meth, iterations, keystr, lso_bin );
 
-	// Abbreviate for simplicity.
-	cl_cluster * c  = g_config->asc;
-	char       * ns = g_config->ns;
-	char       * s  = g_config->set;
-	char       * k  = keystr;
-	char       * b  = lso_bin;
+	cl_cluster * c     = g_config->asc;
+	char       * ns    = g_config->ns;
+	char       * set   = g_config->set;
+	char       * key   = keystr;
+	char       * bname = lso_bin;
 
 	INFO("[DEBUG]:[%s]: Run as_lso_peek() iterations(%d)\n", meth, iterations );
 
@@ -317,17 +332,19 @@ int lso_peek_with_transform_test(char * keystr, char * lso_bin,
 	char * valstr = NULL; // Hold Temp results from as_val_tostring()
 	for ( int i = 0; i < iterations ; i ++ ){
 		peek_count++;
-		resultp = as_lso_peek_with_transform( c, ns, s, k, b, peek_count,
-											  g_config->package_name,
-											  uncompress_func, uncompress_args,
-											  g_config->timeout_ms);
+		as_result * resultp = as_lso_peek_with_transform( c, ns, set, key,
+											bname, peek_count,
+											g_config->package_name,
+											uncompress_func, uncompress_args,
+											g_config->timeout_ms);
 		if ( resultp->is_success ) {
 			valstr = as_val_tostring( resultp->value );
 			printf("LSO PEEK WITH TRANSFORM SUCCESS: peek_count(%d) Val(%s)\n",
 				   peek_count, valstr);
 			free( valstr );
 		} else {
-			INFO("[ERROR]:[%s]: LSO PEEK WITH TRANSFORM Error: i(%d) \n", meth, i );
+			INFO("[ERROR]:[%s]: LSO PEEK WITH TRANSFORM Error: i(%d) \n",
+				 meth, i );
 			// Don't break (for now) just keep going.
 		}
 		// Clean up -- release the result object
@@ -337,52 +354,6 @@ int lso_peek_with_transform_test(char * keystr, char * lso_bin,
 	INFO("[EXIT]:[%s]: RC(%d)\n", meth, rc );
 	return rc;
 } // end lso_peek_with_transform_test()
-
-// |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
-/** ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
- *  Initialize Test: Do the set up for a test so that the regular
- *  Aerospike functions can run.
- */
-int setup_test( int argc, char **argv ) {
-	static char * meth = "setup_test()";
-	int rc = 0;
-
-	INFO("[ENTER]:[%s]: Args(%d) g_config(%p)\n", meth, argc, g_config );
-
-	// reading parameters
-	if (init_configuration(argc,argv) !=0 ) {
-		return -1;
-	}
-
-	// show cluster setup
-	INFO("[DEBUG]:[%s]Startup: host %s port %d ns %s set %s",
-			meth, g_config->host, g_config->port, g_config->ns,
-			g_config->set == NULL ? "" : g_config->set);
-
-	citrusleaf_init();
-
-	citrusleaf_set_debug(true);
-
-	// create the cluster object
-	cl_cluster *asc = citrusleaf_cluster_create();
-	if (!asc) { 
-		INFO("[ERROR]:[%s]: Fail on citrusleaf_cluster_create()");
-		return(-1); 
-	}
-
-	rc = citrusleaf_cluster_add_host(asc, g_config->host, g_config->port,
-			g_config->timeout_ms);
-	if (rc) {
-		INFO("[ERROR]:[%s]:could not connect to host %s port %d",
-				meth, g_config->host,g_config->port);
-		return(-1);
-	}
-
-	g_config->asc  = asc;
-
-	return 0;
-
-} // end setup_test()
 
 
 /** ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||

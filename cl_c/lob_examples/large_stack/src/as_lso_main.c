@@ -76,7 +76,7 @@ int init_configuration (int argc, char *argv[]) {
 
 	INFO("[DEBUG]:[%s]: About to Process Args (%d)\n", meth, argc );
 	int optcase;
-	while ((optcase = getopt(argc, argv, "ckmh:p:n:s:P:f:v:x:r:t:i:j:")) != -1) {
+	while ((optcase = getopt(argc, argv, "ckmh:p:n:s:P:f:v:x:r:t:i:j:")) != -1){
 		INFO("[ENTER]:[%s]: Processings Arg(%d)\n", meth, optcase );
 		switch (optcase) {
 		case 'h': g_config->host    = strdup(optarg); break;
@@ -112,7 +112,6 @@ int setup_test( int argc, char **argv ) {
 			g_config->set == NULL ? "" : g_config->set);
 
 	citrusleaf_init();
-
 	citrusleaf_set_debug(true);
 
 	// create the cluster object

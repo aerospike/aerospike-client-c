@@ -28,16 +28,10 @@
 #include <citrusleaf/citrusleaf.h>
 #include "as_arraylist.h"
 
-// Use this to turn on extra debugging prints and checks
-#define TRA_DEBUG true
-
-// Global Configuration object that holds ALL needed client data.
+// Global Configuration object: holds client config data.
 config *g_config = NULL;
 
 // NOTE: INFO(), ERROR() and LOG() defined in as_lset.h
-/** ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
- * Define the LOG append call: For tracing/debugging
- */
 void __log_append(FILE * f, const char * prefix, const char * fmt, ...) {
 	char msg[128] = {0};
 	va_list ap;
@@ -116,7 +110,6 @@ int test_setup( int argc, char **argv ) {
 			g_config->set == NULL ? "" : g_config->set);
 
 	citrusleaf_init();
-
 	citrusleaf_set_debug(true);
 
 	// create the cluster object
@@ -155,55 +148,35 @@ int lset_insert_test(char * keystr, char * lset_bin, int iterations) {
 	INFO("[ENTER]:[%s]: It(%d) Key(%s) LSETBin(%s)\n",
 			meth, iterations, keystr, lset_bin );
 
-#if 0
-	// Create the AS Large Set Bin
-	rc = as_lset_create( g_config->asc, g_config->ns, g_config->set,
-						 keystr, lset_bin, 32, g_config->timeout_ms);
-	if (rc) {
-		INFO("[ERROR]:[%s]: LSET Create Error: rc(%d)\n", meth, rc );
-		return rc;
-	}
-#endif
-
-	// Abbreviate for simplicity.
-	cl_cluster * c = g_config->asc;
-	char * ns = g_config->ns;
-	char * s = g_config->set;
-	char * k = keystr;
-	char * b = lset_bin;
-	unsigned int base = 0;
-	as_val * newSetItem; // Must destroy later (after each use)
-	int successCount = 0;
-	int errorCount = 0;
+	cl_cluster * c     = g_config->asc;
+	char       * ns    = g_config->ns;
+	char       * set   = g_config->set;
+	char       * key   = keystr;
+	char       * bname = lset_bin;
 
 	INFO("[DEBUG]:[%s]: as_lset_insert() iterations(%d)\n", meth, iterations );
 	srand( 200 ); // Init our random number generator with a fixed seed.
 
-	for( int i = 0; i < (iterations * 10); i += 10 ){
-		base = rand() % 500;
-		newSetItem = (as_val *) as_integer_new( base );
+	int num_ok   = 0;
+	int num_errs = 0;
+	for ( int i = 0; i < iterations; i++ ) {
+		unsigned int   base       = rand() % 500;
+		as_val       * newSetItem = (as_val *) as_integer_new( base );
 
-		if ( TRA_DEBUG ){
-			char * valstr = as_val_tostring( newSetItem );
-			INFO("[DEBUG]:[%s]: Pushing (%s) \n", meth, valstr );
-			free( valstr );
-		}
-
-		rc = as_lset_insert( c, ns, s, k, b, newSetItem, g_config->timeout_ms );
+		rc = as_lset_insert( c, ns, set, key, bname, newSetItem,
+							 g_config->timeout_ms );
 		if (rc) {
 			INFO("[ERROR]:[%s]: LSET INSERT Error: i(%d) rc(%d)\n",
 				 meth, i, rc );
-			errorCount++;
-			return -1;
+			num_errs++;
 		} else {
-			successCount++;
+			num_ok++;
 		}
 		as_val_destroy( newSetItem ); // must destroy every iteration.
-		newSetItem = NULL; // Just for insurance -- prob not needed
 	} // end for
 
 	fprintf(stderr, "[RESULTS]:<%s>Test Results: Success(%d) Errors(%d)\n", 
-			meth, successCount, errorCount );
+			meth, num_ok, num_errs );
 
 	return rc;
 } // end lset_insert_test()
@@ -224,49 +197,85 @@ int lset_search_test(char * keystr, char * lset_bin, int iterations ) {
 	INFO("[ENTER]:[%s]: Iterations(%d) Key(%s) LSETBin(%s)\n",
 			meth, iterations, keystr, lset_bin );
 
-	// Abbreviate for simplicity.
-	cl_cluster * c = g_config->asc;
-	char * ns = g_config->ns;
-	char * s = g_config->set;
-	char * k = keystr;
-	char * b = lset_bin;
-	int successCount = 0;// Got what we were looking for
-	int errorCount = 0; // Errors
-	int notFound = 0; // Query ok -- but did not find object
+	cl_cluster * c     = g_config->asc;
+	char       * ns    = g_config->ns;
+	char       * set   = g_config->set;
+	char       * key   = keystr;
+	char       * bname = lset_bin;
 
 	INFO("[DEBUG]:[%s]: as_lset_search() iterations(%d)\n", meth, iterations );
 	srand( 200 ); // Init our random number generator with a fixed seed.
 
-	// NOTE: Must FREE the result for EACH ITERATION.
-	char * valstr = NULL; // Hold Temp results from as_val_tostring()
-	for( int i = 0; i < (iterations * 10); i += 10 ){
+	int num_ok   = 0; // Got what we were looking for
+	int num_errs = 0; // Errors
+	int num_miss = 0; // Query ok -- but did not find object
+	for ( int i = 0; i < iterations; i++ ) {
 		unsigned int base = rand() % 500;
-		as_val * newSetItem = (as_val *) as_integer_new( base ); 
-		if ( TRA_DEBUG ){
-			char * valstr = as_val_tostring( newSetItem );
-			INFO("[DEBUG]:[%s]: Searching for (%s) \n", meth, valstr );
-			free( valstr );
-		}
-		as_result * resultp = as_lset_search( c, ns, s, k, b, newSetItem,
-											  false, g_config->timeout_ms );
+		as_val    * newSetItem = (as_val *) as_integer_new( base ); 
+		as_result * resultp    = as_lset_search( c, ns, set, key, bname,
+												 newSetItem, false,
+												 g_config->timeout_ms );
 		if ( resultp->is_success ) {
-			valstr = as_val_tostring( resultp->value );
-			INFO("[DEBUG]:[%s]: LSET SEARCH SUCCESS: i(%d) base(%d) Val(%s)\n",
-				 meth, i, base, valstr);
+			char * valstr = as_val_tostring( resultp->value );
+			if (!strcmp(valstr, "\"Not Found\"")) {
+				INFO("[DEBUG]:[%s]: LSET SEARCH MISS: i(%d) base(%d) Val(%s)\n",
+				 	 meth, i, base, valstr);
+				num_miss++;
+			} else {
+				INFO("[DEBUG]:[%s]: LSET SEARCH HIT: i(%d) base(%d) Val(%s)\n",
+				 	 meth, i, base, valstr);
+				num_ok++;
+			}
 			free( valstr );
-			successCount++;
 		} else {
-			INFO("[ERROR]:[%s]: LSET SEARCH Error: i(%d) base(%d)\n",
-				 meth, i, base, valstr);
 			// Don't break (for now) just keep going.
-			errorCount++;
+			INFO("[ERROR]:[%s]: LSET SEARCH Error: i(%d) base(%d)\n",
+				 meth, i, base);
+			num_errs++;
 		}
 		as_result_destroy( resultp ); // Clean up -- release the result object
 		as_val_destroy( newSetItem ); // must destroy every iteration.
 	} // end for each iteration
 
-	fprintf(stderr,"[RESULTS]:<%s>Results: Success(%d) NotFound(%d)\n", 
-			meth, successCount, notFound );
+	fprintf(stderr, "[RESULTS]:<%s>HIT_TEST: Results: " \
+					"Success(%d) Miss(%d)\n", 
+					meth, num_ok, num_miss );
+
+    int miss = 5; // NEXT TEST: let's miss 5
+	num_ok   = 0;
+	num_errs = 0;
+	num_miss = 0;
+	for ( int i = 0; i < miss; i++ ) {
+		unsigned int base = rand() % 500;
+		as_val    * newSetItem = (as_val *) as_integer_new( base ); 
+		as_result * resultp    = as_lset_search( c, ns, set, key, bname,
+												 newSetItem, false,
+												 g_config->timeout_ms );
+		if ( resultp->is_success ) {
+			char * valstr = as_val_tostring( resultp->value );
+			if (!strcmp(valstr, "\"Not Found\"")) {
+				INFO("[DEBUG]:[%s]: LSET SEARCH MISS: i(%d) base(%d) Val(%s)\n",
+				 	 meth, i, base, valstr);
+				num_miss++;
+			} else {
+				INFO("[DEBUG]:[%s]: LSET SEARCH HIT: i(%d) base(%d) Val(%s)\n",
+				 	 meth, i, base, valstr);
+				num_ok++;
+			}
+			free( valstr );
+		} else {
+			// Don't break (for now) just keep going.
+			INFO("[ERROR]:[%s]: LSET SEARCH Error: i(%d) base(%d)\n",
+				 meth, i, base);
+			num_errs++;
+		}
+		as_result_destroy( resultp ); // Clean up -- release the result object
+		as_val_destroy( newSetItem ); // must destroy every iteration.
+	} // end for each iteration
+
+	fprintf(stderr, "[RESULTS]:<%s>MISS_TEST: Results: " \
+					"Success(%d) Miss(%d)\n", 
+					meth, num_ok, num_miss );
 
 	INFO("[EXIT]:[%s]: RC(%d)\n", meth, rc );
 	return rc;
@@ -291,8 +300,6 @@ int main(int argc, char **argv) {
 	// Initialize everything
 	INFO("[DEBUG]:[%s]: calling test_setup()\n", meth );
 	test_setup( argc, argv );
-
-	INFO("[DEBUG]:[%s]: After test_setup(): g_config(%p)\n", meth, g_config);
 
 	int iterations = 15;
 	// (1) Insert Test

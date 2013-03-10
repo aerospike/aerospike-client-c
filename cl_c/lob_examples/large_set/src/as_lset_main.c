@@ -20,7 +20,7 @@
 #include <sys/stat.h>
 
 #include "citrusleaf/citrusleaf.h"
-#include "citrusleaf/as_lset_udf.h"
+#include "citrusleaf/as_lset.h"
 #include "citrusleaf/cl_udf.h"
 #include <citrusleaf/cf_random.h>
 #include <citrusleaf/cf_atomic.h>

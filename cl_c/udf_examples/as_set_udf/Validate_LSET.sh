@@ -3,7 +3,7 @@
 export UNS="test"
 export USET="set"
 
-export UFILE="AsLSetStoneman"
+export UFILE="LSET"
 export FUN_CR8="asLSetCreate"
 export FUN_INS="asLSetInsert"
 export FUN_SRCH="asLSetSearch"

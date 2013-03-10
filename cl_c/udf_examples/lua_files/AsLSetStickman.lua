@@ -17,7 +17,13 @@
 local GP=true; -- Doesn't matter what this is set to.
 local F=true; -- Set F (flag) to true to turn ON global print
 
---
+-- =========================
+-- || LOCAL GLOBAL VALUES ||
+-- =========================
+local DELETE=-1
+local SCAN=0
+local INSERT=1
+
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 -- AS Large Set Utility Functions
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
@@ -68,7 +74,7 @@ local function initializeLSetMap(topRec, namespace, set, lsetBinName, distrib )
   -- have a KEY field in it (which is what we'll search/hash on).
   -- So, when we do type(value), we expect "number", "string" or
   -- "userdata" (which MUST be a map with a KEY field).
-  lsetCtrlMap.StoreMode = 0; -- assume "atomic" values for now.
+  lsetCtrlMap.KeyType = 0; -- assume "atomic" values for now.
 
   GP=F and trace("[ENTER]: <%s:%s>:: lsetCtrlMap(%s)",
     mod, meth, tostring(lsetCtrlMap));
@@ -95,15 +101,15 @@ local function adjustLSetMap( lsetCtrlMap, argListMap )
   -- based on the settings passed in during the stackCreate() call.
   -- CREATE_ARGLIST='{
   -- "Modulo":67
-  -- "StoreMode":1}'
+  -- "KeyType":1}'
   for name, value in map.pairs( argListMap ) do
     if name  == "Modulo" then
       if type( value ) == "number" and value > 0 and value < 221 then
         lsetCtrlMap.Modulo = value;
       end
-    elseif name == "StoreMode" then
+    elseif name == "KeyType" then
       if type( value ) == "number" and value > 0 then
-        lsetCtrlMap.HotCacheMax = value;
+        lsetCtrlMap.KeyType = value;
       end
     end
   end -- foreach arg
@@ -144,6 +150,166 @@ local function setupNewBin( topRec, binNum )
   return binName;
 end
 
+
+-- ======================================================================
+-- computeSetBin()
+-- Find the right bin for this value.
+-- First -- know if we're in "compact" StoreState or "regular" 
+-- StoreState.  In compact mode, we ALWAYS look in the single bin.
+-- Second -- use the right hash function (depending on the type).
+-- And, know if it's an atomic type or complex type.
+-- ======================================================================
+local function computeSetBin( newValue, lsetCtrlMap )
+  local mod = "AsLSetStickman";
+  local meth = "computeSetBin()";
+  GP=F and trace("[ENTER]: <%s:%s> val(%s) Map(%s) \n",
+    mod, meth, tostring(newValue), tostring(lsetCtrlMap) );
+
+  -- Check StoreState
+  local binNumber  = 0;
+  if lsetCtrlMap.StoreState == 0 then
+    return 1
+  else
+    if type(newValue) == "number" then
+      binNumber  = numberHash( newValue, lsetCtrlMap.Modulo );
+    elseif type(newValue) == "string" then
+      binNumber  = stringHash( newValue, lsetCtrlMap.Modulo );
+    elseif type(newValue) == "userdata" then
+      binNumber  = stringHash( newValue.KEY, lsetCtrlMap.Modulo );
+    else -- error case
+      warn("[ERROR]<%s:%s>Unexpected Type (should be number, string or map)",
+        mod, meth );
+    end
+  end
+  -- TODO: Find a better hash function.
+  GP=F and trace("[EXIT]: <%s:%s> Val(%s) BinNumber (%d) \n",
+    mod, meth, tostring(newValue), binNumber );
+
+  return binNumber;
+end -- computeSetBin()
+
+
+-- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+-- Scan a List for an item.  Return the item if found.
+-- This is COMPLEX SCAN, which means we are comparing the KEY field of the
+-- map object in both the value and in the List.
+-- We've added a delete flag that will allow us to remove the element if
+-- we choose -- but for now, we are not collapsing the list.
+-- Parms:
+-- (*) binList: the list of values from the record
+-- (*) value: the value we're searching for
+-- (*) flag:
+--     ==> if == -1 (DELETE):  then replace the found element with nil
+--     ==> if ==  0 (SCAN): then return element if found, else return nil
+--     ==> if ==  1 (INSERT): insert the element IF NOT FOUND
+-- Return: nil if not found, Value if found.
+-- (NOTE: Can't return 0 -- because that might be a valid value)
+-- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+local function complexScanList( binList, value, flag ) 
+  local mod = "AsLSetStickman";
+  local meth = "complexScanList()";
+  -- Scan the list for the item, return true if found,
+  -- Later, we may return a set of things 
+  for i = 1, list.size( binList ), 1 do
+    GP=F and trace("[DEBUG]: <%s:%s> It(%d) Comparing SV(%s) with BinV(%s)\n",
+    mod, meth, i, tostring(value), tostring(binList[i]));
+    if binList[i].KEY == value.KEY then
+      GP=F and trace("[EARLY EXIT]: <%s:%s> Found(%s)\n",
+        mod, meth, tostring(value));
+      if( flag == DELETE ) then
+        value = binList[i]; -- save the thing we found.
+        binList[i] = nil; -- the value is NO MORE
+      end
+      return value
+    end
+  end
+  -- Didn't find it.  If INSERT, then append the value to the list
+  if flag == INSERT then
+    GP=F and trace("[DEBUG]: <%s:%s> INSERTING(%s)\n",
+      mod, meth, tostring(value));
+    list.append( binList, value );
+  end
+  GP=F and trace("[LATE EXIT]: <%s:%s> Did NOT Find(%s)\n",
+    mod, meth, tostring(value));
+  return nil;
+end
+
+
+-- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+-- Scan a List for an item.  Return the item if found.
+-- This is SIMPLE SCAN, where we are assuming ATOMIC values.
+-- We've added a delete flag that will allow us to remove the element if
+-- we choose -- but for now, we are not collapsing the list.
+-- Parms:
+-- (*) binList: the list of values from the record
+-- (*) value: the value we're searching for
+-- (*) flag:
+--     ==> if == -1 (DELETE):  then replace the found element with nil
+--     ==> if ==  0 (SCAN): then return element if found, else return nil
+--     ==> if ==  1 (INSERT): insert the element IF NOT FOUND
+-- Return: nil if not found, Value if found.
+-- (NOTE: Can't return 0 -- because that might be a valid value)
+-- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+local function simpleScanList( binList, value, flag ) 
+  local mod = "AsLSetStickman";
+  local meth = "simpleScanList()";
+  GP=F and trace("[ENTER]: <%s:%s> Looking for V(%s), ListSize(%d) List(%s)",
+    mod, meth, tostring(value), list.size(binList), tostring(binList))
+
+  -- Scan the list for the item, return true if found,
+  -- Later, we may return a set of things 
+  for i = 1, list.size( binList ), 1 do
+    GP=F and trace("[DEBUG]: <%s:%s> It(%d) Comparing SV(%s) with BinV(%s)\n",
+    mod, meth, i, tostring(value), tostring(binList[i]));
+    if binList[i] == value then
+      GP=F and trace("[EARLY EXIT]: <%s:%s> Found(%s)\n",
+        mod, meth, tostring(value));
+      if( flag == DELETE ) then
+        binList[i] = nil; -- the value is NO MORE
+      end
+      return value
+    end
+  end
+  -- Didn't find it.  If INSERT, then append the value to the list
+  if flag == INSERT then
+    GP=F and trace("[DEBUG]: <%s:%s> INSERTING(%s)\n",
+      mod, meth, tostring(value));
+    list.append( binList, value );
+  end
+  GP=F and trace("[LATE EXIT]: <%s:%s> Did NOT Find(%s)\n",
+    mod, meth, tostring(value));
+  return nil;
+end -- simpleScanList
+
+
+-- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+-- Scan a List for an item.  Return the item if found.
+-- Since there are two types of scans (simple, complex), we do the test
+-- up front and call the appropriate scan type (rather than do the test
+-- of which compare to do -- for EACH value.
+-- Parms:
+-- (*) lsetCtrlMap: the control map -- so we can see the type of key
+-- (*) binList: the list of values from the record
+-- (*) searchValue: the value we're searching for
+-- (*) flag:
+--     ==> if == -1 (DELETE):  then replace the found element with nil
+--     ==> if ==  0 (SCAN): then return element if found, else return nil
+--     ==> if ==  1 (INSERT): insert the element IF NOT FOUND
+-- Return: nil if not found, Value if found.
+-- (NOTE: Can't return 0 -- because that might be a valid value)
+-- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+local function scanList( lsetCtrlMap, binList, searchValue, flag ) 
+  local mod = "AsLSetStickman";
+  local meth = "scanList()";
+
+  if lsetCtrlMap.KeyType == 0 then
+    return simpleScanList( binList, searchValue, flag ) 
+  else
+    return complexScanList( binList, searchValue, flag ) 
+  end
+end
+
+
 -- ======================================================================
 -- localInsert( lsetCtrlMap, newValue, stats )
 -- ======================================================================
@@ -168,12 +334,16 @@ local function localInsert( topRec, lsetCtrlMap, newValue, stats )
     tostring(newValue), tostring(lsetCtrlMap));
 
   local binList = topRec[binName];
+
   if binList == nil then
     GP=F and trace("[INTERNAL ERROR]:<%s:%s> binlist is nil: binname(%s)",
       mod, meth, binName);
+      return('INTERNAL ERROR: Nil Bin');
   else
-    list.append( binList, newValue );
-    topRec[binName] = binList; --  Not sure we have to do this.
+    -- Look for the value, and insert if it is not there.
+    scanList( lsetCtrlMap, binList, newValue, INSERT );
+    -- list.append( binList, newValue );
+    topRec[binName] = binList;
   end
 
   GP=F and trace("[DEBUG]: <%s:%s>:Bin(%s) Now has list(%s)",
@@ -181,6 +351,7 @@ local function localInsert( topRec, lsetCtrlMap, newValue, stats )
 
   if stats == 1 then -- check to see if we update the stats
     local itemCount = lsetCtrlMap.ItemCount;
+    local totalCount = lsetCtrlMap.TotalCount;
     lsetCtrlMap.ItemCount = itemCount + 1; -- number of valid items goes up
     lsetCtrlMap.TotalCount = totalCount + 1; -- Total number of items goes up
     GP=F and trace("[DEBUG]: <%s:%s> itemCount(%d)", mod, meth, itemCount );
@@ -191,7 +362,9 @@ local function localInsert( topRec, lsetCtrlMap, newValue, stats )
     mod, meth, tostring( newValue ), tostring( lsetCtrlMap ) );
 
     -- No need to return anything
-  end
+end -- localInsert
+
+
 -- ======================================================================
 -- rehashSet( topRec, lsetBinName, lsetCtrlMap )
 -- ======================================================================
@@ -288,83 +461,17 @@ end
 -- NOTE: Use a better Hash Function.
 -- ======================================================================
 local function numberHash( value, modulo )
+  local mod = "AsLSetStickman";
+  local meth = "numberHash()";
+  local result = 0;
   if value ~= nil and type(value) == "number" then
     -- math.randomseed( value );
     -- return math.random( modulo );
-    return  CRC32.Hash( value ) % modulo;
-  else
-    return 0;
+    result =  CRC32.Hash( value ) % modulo;
   end
-end
--- ======================================================================
--- computeSetBin()
--- Find the right bin for this value.
--- First -- know if we're in "compact" StoreState or "regular" 
--- StoreState.  In compact mode, we ALWAYS look in the single bin.
--- Second -- use the right hash function (depending on the type).
--- And, know if it's an atomic type or complex type.
--- ======================================================================
-local function computeSetBin( newValue, lsetCtrlMap )
-  local mod = "AsLSetStickman";
-  local meth = "computeSetBin()";
-  GP=F and trace("[ENTER]: <%s:%s> val(%s) Map(%s) \n",
-    mod, meth, tostring(newValue), tostring(lsetCtrlMap) );
-
-  -- Check StoreState
-  local binNumber  = 0;
-  if lsetCtrlMap.StoreState == 0 then
-    return 1
-  else
-    if type(newValue) == "number" then
-      binNumber  = numberHash( newValue, lsetCtrlMap.Modulo );
-    elseif type(newValue) == "string" then
-      binNumber  = stringHash( newValue, lsetCtrlMap.Modulo );
-    elseif type(newValue) == "userdata" then
-      binNumber  = stringHash( newValue.KEY, lsetCtrlMap.Modulo );
-    else -- error case
-      warn("[ERROR]<%s:%s>Unexpected Type (should be number, string or map)",
-        mod, meth );
-    end
-  end
-  -- TODO: Find a better hash function.
-  GP=F and trace("[EXIT]: <%s:%s> Val(%s) BinNumber (%d) \n",
-    mod, meth, tostring(newValue), binNumber );
-
-  return binNumber;
-end
-
--- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
--- Scan a List for an item.  Return the item if found.
--- We've added a delete flag that will allow us to remove the element if
--- we choose -- but for now, we are not collapsing the list.
--- Parms:
--- (*) binList: the list of values from the record
--- (*) searchValue: the value we're searching for
--- (*) deleteFlag: if == 1, then replace the found element with nil
--- Return: nil if not found, Value if found.
--- (NOTE: Can't return 0 -- because that might be a valid value)
--- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
-local function scanList( binList, searchValue, deleteFlag ) 
-  local mod = "AsLSetStickman";
-  local meth = "scanList()";
-  -- Scan the list for the item, return true if found,
-  -- Later, we may return a set of things 
-  for i = 1, list.size( binList ), 1 do
-    GP=F and trace("[DEBUG]: <%s:%s> It(%d) Comparing SV(%s) with BinV(%s)\n",
-    mod, meth, i, tostring(searchValue), tostring(binList[i]));
-    if binList[i] == searchValue then
-      GP=F and trace("[EARLY EXIT]: <%s:%s> Found(%s)\n",
-        mod, meth, tostring(searchValue));
-      if( deleteFlag == 1) then
-        binList[i] = nil; -- the value is NO MORE
-      end
-      return searchValue
-    end
-  end
-  GP=F and trace("[LATE EXIT]: <%s:%s> Did NOT Find(%s)\n",
-    mod, meth, tostring(searchValue));
-  return nil;
-end
+  GP=F and trace("[EXIT]:<%s:%s>HashResult(%s)", mod, meth, tostring(result))
+  return result
+end -- numberHash
 
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 -- AS Large Set Main Functions
@@ -499,6 +606,7 @@ function asLSetInsert( topRec, namespace, set, lsetBinName, distrib, newValue )
     warn("[WARNING]: <%s:%s> AsLSetCtrlBin does not Exist:Creating",mod,meth );
     lsetCtrlMap =
       initializeLSetMap( topRec, namespace, set, lsetBinName, distrib );
+    topRec.AsLSetCtrlBin = lsetCtrlMap;
   else
     lsetCtrlMap = topRec.AsLSetCtrlBin;
   end
@@ -510,35 +618,10 @@ function asLSetInsert( topRec, namespace, set, lsetBinName, distrib, newValue )
     rehashSet( lsetCtrlMap );
   end
 
-  -- Notice that "computeSetBin()" will know which number to return, depending
-  -- on whether we're in "compact" or "regular" storageState.
-  local binNumber = computeSetBin( newValue, lsetCtrlMap );
-  local binName = getBinName( binNumber );
-  GP=F and trace("[DEBUG]:<%s:%s> Compute:BNum(%s) BName(%s) Val(%s) Map(%s)",
-    mod, meth, tostring(binNumber), tostring(binName),
-    tostring(newValue), tostring(lsetCtrlMap));
+  -- Call our local multi-purpose insert() to do the job.(Update Stats)
+  localInsert( topRec, lsetCtrlMap, newValue, 1 );
 
-  local binList = topRec[binName];
-  if binList == nil then
-    GP=F and trace("[INTERNAL ERROR]:<%s:%s> binlist is nil: binname(%s)",
-      mod, meth, binName);
-  else
-    list.append( binList, newValue );
-    topRec[binName] = binList; --  Not sure we have to do this.
-  end
-
-  GP=F and trace("[DEBUG]: <%s:%s>:Bin(%s) Now has list(%s)",
-    mod, meth, binName, tostring(binList) );
-
-  local itemCount = lsetCtrlMap.ItemCount;
-  lsetCtrlMap.ItemCount = itemCount + 1; -- number of valid items goes up
-  lsetCtrlMap.TotalCount = totalCount + 1; -- Total number of items goes up
   topRec.AsLSetCtrlBin = lsetCtrlMap;
-  GP=F and trace("[DEBUG]: <%s:%s> itemCount(%d)", mod, meth, itemCount );
-
-  GP=F and trace("[DEBUG]: <%s:%s>Storing Record() with New Value(%s): Map(%s)",
-    mod, meth, tostring( newValue ), tostring( lsetCtrlMap ) );
-
   -- All done, store the record
   local rc = -99; -- Use Odd starting Num: so that we know it got changed
   if( not aerospike:exists( topRec ) ) then
@@ -583,7 +666,8 @@ function asLSetExists( topRec, setBinName, searchValue )
   local binNumber = computeSetBin( searchValue, lsetCtrlMap );
   local binName = getBinName( binNumber );
   local binList = topRec[binName];
-  local result = scanList( binList, searchValue, 0 ); -- do NOT delete
+  -- local result = scanList( binList, searchValue, 0 ); -- do NOT delete
+  local result = scanList( lsetCtrlMap, binList, searchValue, SCAN );
   if result == nil then
     return 0
   else
@@ -623,11 +707,16 @@ function asLSetSearch( topRec, setBinName, searchValue )
   local binNumber = computeSetBin( searchValue, lsetCtrlMap );
   local binName = getBinName( binNumber );
   local binList = topRec[binName];
-  local result = scanList( binList, searchValue, 0 ); -- do NOT delete
+  -- local result = scanList( binList, searchValue, 0 ); -- do NOT delete
+  local result = scanList( lsetCtrlMap, binList, searchValue, SCAN );
 
   GP=F and trace("[EXIT]: <%s:%s>: Search Returns (%s)",
     mod,meth,tostring(result));
-  return result;
+    if result == nil then
+      return ('Not Found')
+    else
+      return result;
+    end
 end -- function asLSetSearch()
 
 
@@ -658,10 +747,11 @@ function asLSetDelete( topRec, setBinName, deleteValue )
 
   local binName = getBinName( binNumber );
   local binList = topRec[binName];
-  -- TODO: Add a parm to scanList to NULL OUT the chosen element (but do
-  -- not collapse the list).  I assume most users will not want to remove
-  -- elements from the set
-  local result = scanList( binList, deleteValue, 1);
+  -- Fow now, scanList() will only NULL out the element in a list, but will
+  -- not collapse it.  Later, if we see that there are a LOT of nil entries,
+  -- we can RESET the set and remove all of the "gas".
+  -- local result = scanList( binList, deleteValue, 1);
+  local result = scanList( lsetCtrlMap, binList, deleteValue, DELETE );
   -- If we found something, then we need to update the bin and the record.
   if result ~= nil then
     topRec[binName] = binList;

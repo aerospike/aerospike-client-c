@@ -23,6 +23,7 @@ local F=true; -- Set F (flag) to true to turn ON global print
 local INSERT = 1; -- flag to scanList to INSERT the value (if not found)
 local SCAN = 0;
 local DELETE = -1; -- flag to show scanList to DELETE the value, if found
+local EMPTY = "__empty__"; -- the value is NO MORE
 
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 -- AS Large Set Utility Functions
@@ -121,6 +122,41 @@ end -- adjustLSetMap
 
 
 -- ======================================================================
+local  CRC32 = require('CRC32');
+-- ======================================================================
+-- Return the hash of "value", with modulo.
+-- Notice that we can use ZERO, because this is not an array index
+-- (which would be ONE-based for Lua) but is just used as a name.
+-- ======================================================================
+local function stringHash( value, modulo )
+
+  if value ~= nil and type(value) == "string" then
+    return  CRC32.Hash( value ) % modulo;
+  else
+    return 0;
+  end
+end
+-- ======================================================================
+-- Return the hash of "value", with modulo
+-- Notice that we can use ZERO, because this is not an array index
+-- (which would be ONE-based for Lua) but is just used as a name.
+-- NOTE: Use a better Hash Function.
+-- ======================================================================
+local function numberHash( value, modulo )
+  local mod = "AsLSetStickman";
+  local meth = "numberHash()";
+  local result = 0;
+  if value ~= nil and type(value) == "number" then
+    -- math.randomseed( value );
+    -- return math.random( modulo );
+    result =  CRC32.Hash( value ) % modulo;
+  end
+  GP=F and trace("[EXIT]:<%s:%s>HashResult(%s)", mod, meth, tostring(result))
+  return result
+end -- numberHash
+
+
+-- ======================================================================
 -- Get (create) a unique bin name given the current counter.
 -- 'LSetBin_XX' will be the individual bins that hold lists of set data
 -- ======================================================================
@@ -145,7 +181,8 @@ local function setupNewBin( topRec, binNum )
   local binName = getBinName( binNum );
   topRec[binName] = list(); -- Create a new list for this new bin
 
-  GP=F and trace("[EXIT]: <%s:%s> BinNum(%d) BinName(%s)\n",mod, meth, binNum, binName );
+  GP=F and trace("[EXIT]: <%s:%s> BinNum(%d) BinName(%s)\n",
+    mod, meth, binNum, binName );
 
   return binName;
 end
@@ -168,7 +205,7 @@ local function computeSetBin( newValue, lsetCtrlMap )
   -- Check StoreState
   local binNumber  = 0;
   if lsetCtrlMap.StoreState == 0 then
-    return 1
+    return 0
   else
     if type(newValue) == "number" then
       binNumber  = numberHash( newValue, lsetCtrlMap.Modulo );
@@ -202,10 +239,14 @@ end -- computeSetBin()
 --     ==> if ==  1 (INSERT): insert the element IF NOT FOUND
 --     ==> if ==  0 (SCAN): then return element if found, else return nil
 --     ==> if == -1 (DELETE):  then replace the found element with nil
--- Return: nil if not found, Value if found.
--- (NOTE: Can't return 0 -- because that might be a valid value)
+-- Return:
+-- For SCAN and DELETE:
+--    nil if not found, Value if found.
+--   (NOTE: Can't return 0 -- because that might be a valid value)
+-- For INSERT:
+-- Return 0 if found (and not inserted), otherwise 1 if inserted.
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
-local function complexScanList( binList, value, flag ) 
+local function complexScanList(lsetCtrlMap, binList, value, flag ) 
   local mod = "AsLSetStickman";
   local meth = "complexScanList()";
   local result = nil;
@@ -214,12 +255,17 @@ local function complexScanList( binList, value, flag )
   for i = 1, list.size( binList ), 1 do
     GP=F and trace("[DEBUG]: <%s:%s> It(%d) Comparing SV(%s) with BinV(%s)\n",
     mod, meth, i, tostring(value), tostring(binList[i]));
-    if binList[i].KEY == value.KEY then
+    if binList[i] ~= nil and binList[i] ~= EMPTY and binList[i].KEY == value.KEY then
+      result = binList[i]; -- save the thing we found.
       GP=F and trace("[EARLY EXIT]: <%s:%s> Found(%s)\n",
         mod, meth, tostring(value));
       if( flag == DELETE ) then
-        result = binList[i]; -- save the thing we found.
-        binList[i] = nil; -- the value is NO MORE
+        binList[i] = EMPTY; -- the value is NO MORE
+        -- Decrement ItemCount (valid entries) but TotalCount stays the same
+        local itemCount = lsetCtrlMap.ItemCount;
+        lsetCtrlMap.ItemCount = itemCount - 1;
+      elseif flag == INSERT then
+        return 0 -- show caller nothing got inserted (don't count it)
       end
       return result
     end
@@ -230,6 +276,7 @@ local function complexScanList( binList, value, flag )
     GP=F and trace("[DEBUG]: <%s:%s> INSERTING(%s)\n",
       mod, meth, tostring(value));
     list.append( binList, value );
+    return 1 -- show caller we did an insert
   end
   GP=F and trace("[LATE EXIT]: <%s:%s> Did NOT Find(%s)\n",
     mod, meth, tostring(value));
@@ -249,10 +296,15 @@ end
 --     ==> if ==  1 (INSERT): insert the element IF NOT FOUND
 --     ==> if ==  0 (SCAN): then return element if found, else return nil
 --     ==> if == -1 (DELETE):  then replace the found element with nil
--- Return: nil if not found, Value if found.
--- (NOTE: Can't return 0 -- because that might be a valid value)
+-- Return:
+-- For SCAN and DELETE:
+--    nil if not found, Value if found.
+--   (NOTE: Can't return 0 -- because that might be a valid value)
+-- For INSERT:
+-- Return 0 if found (and not inserted), otherwise 1 if inserted.
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
-local function simpleScanList( binList, value, flag ) 
+-- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+local function simpleScanList(lsetCtrlMap, binList, value, flag ) 
   local mod = "AsLSetStickman";
   local meth = "simpleScanList()";
   GP=F and trace("[ENTER]: <%s:%s> Looking for V(%s), ListSize(%d) List(%s)",
@@ -264,12 +316,17 @@ local function simpleScanList( binList, value, flag )
   for i = 1, list.size( binList ), 1 do
     GP=F and trace("[DEBUG]: <%s:%s> It(%d) Comparing SV(%s) with BinV(%s)\n",
     mod, meth, i, tostring(value), tostring(binList[i]));
-    if binList[i] == value then
+    if binList[i] ~= nil and binList[i] == value then
+      result = binList[i];
       GP=F and trace("[EARLY EXIT]: <%s:%s> Found(%s)\n",
         mod, meth, tostring(value));
       if( flag == DELETE ) then
-        result = binList[i];
-        binList[i] = nil; -- the value is NO MORE
+        binList[i] = EMPTY; -- the value is NO MORE
+        -- Decrement ItemCount (valid entries) but TotalCount stays the same
+        local itemCount = lsetCtrlMap.ItemCount;
+        lsetCtrlMap.ItemCount = itemCount - 1;
+      elseif flag == INSERT then
+        return 0 -- show caller nothing got inserted (don't count it)
       end
       return result;
     end
@@ -277,9 +334,10 @@ local function simpleScanList( binList, value, flag )
 
   -- Didn't find it.  If INSERT, then append the value to the list
   if flag == INSERT then
-    GP=F and trace("[DEBUG]: <%s:%s> INSERTING(%s)\n",
+    GP=F and trace("[EXIT]: <%s:%s> INSERTING(%s)\n",
       mod, meth, tostring(value));
     list.append( binList, value );
+    return 1 -- show caller we did an insert
   end
   GP=F and trace("[LATE EXIT]: <%s:%s> Did NOT Find(%s)\n",
     mod, meth, tostring(value));
@@ -308,9 +366,9 @@ local function scanList( lsetCtrlMap, binList, searchValue, flag )
   local meth = "scanList()";
 
   if lsetCtrlMap.KeyType == 0 then
-    return simpleScanList( binList, searchValue, flag ) 
+    return simpleScanList(lsetCtrlMap, binList, searchValue, flag ) 
   else
-    return complexScanList( binList, searchValue, flag ) 
+    return complexScanList(lsetCtrlMap, binList, searchValue, flag ) 
   end
 end
 
@@ -327,7 +385,7 @@ end
 -- ======================================================================
 local function localInsert( topRec, lsetCtrlMap, newValue, stats )
   local mod = "AsLSetStickman";
-  local meth = "setupNewBin()";
+  local meth = "localInsert()";
   GP=F and trace("[ENTER]:<%s:%s>Insert(%s)", mod, meth, tostring(newValue));
 
   -- Notice that "computeSetBin()" will know which number to return, depending
@@ -340,13 +398,14 @@ local function localInsert( topRec, lsetCtrlMap, newValue, stats )
 
   local binList = topRec[binName];
 
+  local insertResult = 0;
   if binList == nil then
-    GP=F and trace("[INTERNAL ERROR]:<%s:%s> binlist is nil: binname(%s)",
-      mod, meth, binName);
+    GP=F and trace("[INTERNAL ERROR]:<%s:%s> binList is nil: binName(%s)",
+      mod, meth, tostring( binName ) );
       return('INTERNAL ERROR: Nil Bin');
   else
     -- Look for the value, and insert if it is not there.
-    scanList( lsetCtrlMap, binList, newValue, INSERT );
+    insertResult = scanList( lsetCtrlMap, binList, newValue, INSERT );
     -- list.append( binList, newValue );
     topRec[binName] = binList;
   end
@@ -354,14 +413,14 @@ local function localInsert( topRec, lsetCtrlMap, newValue, stats )
   GP=F and trace("[DEBUG]: <%s:%s>:Bin(%s) Now has list(%s)",
     mod, meth, binName, tostring(binList) );
 
-  if stats == 1 then -- check to see if we update the stats
+  if stats == 1 and insertResult == 1 then -- Update Stats if success
     local itemCount = lsetCtrlMap.ItemCount;
     local totalCount = lsetCtrlMap.TotalCount;
     lsetCtrlMap.ItemCount = itemCount + 1; -- number of valid items goes up
     lsetCtrlMap.TotalCount = totalCount + 1; -- Total number of items goes up
     GP=F and trace("[DEBUG]: <%s:%s> itemCount(%d)", mod, meth, itemCount );
   end
-  topRec.AsLSetCtrlBin = lsetCtrlMap;
+  topRec['AsLSetCtrlBin'] = lsetCtrlMap;
 
   GP=F and trace("[EXIT]: <%s:%s>Storing Record() with New Value(%s): Map(%s)",
     mod, meth, tostring( newValue ), tostring( lsetCtrlMap ) );
@@ -391,22 +450,30 @@ local function rehashSet( topRec, lsetBinName, lsetCtrlMap )
   GP=F and trace("[ENTER]:<%s:%s> !!!! REHASH !!!! ", mod, meth );
 
   -- Get the list, make a copy, then iterate thru it, re-inserting each one.
-  local binOneName = getBinName( 0 );
-  local binOneList = topRec[lsetBinName];
-  if binOneList == nil then
+  local singleBinName = getBinName( 0 );
+  local singleBinList = topRec[singleBinName];
+  if singleBinList == nil then
     warn("[INTERNAL ERROR]:<%s:%s> Rehash can't use Empty Bin (%s) list",
-      mod, meth, tostring(binOneName));
+      mod, meth, tostring(singleBinName));
       return('BAD BIN 0 LIST for Rehash');
   end
-  local listCopy = list.take( binOneList, list.size( binOneList ));
-  topRec[lsetBinName] = list();
+  local listCopy = list.take( singleBinList, list.size( singleBinList ));
+  topRec[singleBinName] = nil; -- this will be reset shortly.
   lsetCtrlMap.StoreState = 1; -- now in "regular" (modulo) mode
+  
+  -- Rebuild. Allocate new lists for all of the bins, then re-insert.
+  -- Create ALL of the new bins, each with an empty list
+  -- Our "indexing" starts with ZERO, to match the modulo arithmetic.
+  local distrib = lsetCtrlMap.Modulo;
+  for i = 0, (distrib - 1), 1 do
+    setupNewBin( topRec, i );
+  end -- for each new bin
 
-  for i = i, list.size( listCopy), 1 do
-    localInsert( lsetCtrlMap, listCopy[i], 0 ); -- do NOT update counts.
+  for i = 1, list.size( listCopy), 1 do
+    localInsert( topRec, lsetCtrlMap, listCopy[i], 0 ); -- do NOT update counts.
   end
 
-  GP=F and trace("[EXIT]: <%s:%s>")
+  GP=F and trace("[EXIT]: <%s:%s>", mod, meth );
 end -- rehashSet()
 -- ======================================================================
 
@@ -449,40 +516,6 @@ end -- rehashSet()
 -- end
 
 -- ======================================================================
-
-local  CRC32 = require('CRC32');
--- ======================================================================
--- Return the hash of "value", with modulo.
--- Notice that we can use ZERO, because this is not an array index
--- (which would be ONE-based for Lua) but is just used as a name.
--- ======================================================================
-local function stringHash( value, modulo )
-
-  if value ~= nil and type(value) == "string" then
-    return  CRC32.Hash( value ) % modulo;
-  else
-    return 0;
-  end
-end
--- ======================================================================
--- Return the hash of "value", with modulo
--- Notice that we can use ZERO, because this is not an array index
--- (which would be ONE-based for Lua) but is just used as a name.
--- NOTE: Use a better Hash Function.
--- ======================================================================
-local function numberHash( value, modulo )
-  local mod = "AsLSetStickman";
-  local meth = "numberHash()";
-  local result = 0;
-  if value ~= nil and type(value) == "number" then
-    -- math.randomseed( value );
-    -- return math.random( modulo );
-    result =  CRC32.Hash( value ) % modulo;
-  end
-  GP=F and trace("[EXIT]:<%s:%s>HashResult(%s)", mod, meth, tostring(result))
-  return result
-end -- numberHash
-
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 -- AS Large Set Main Functions
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
@@ -518,7 +551,7 @@ function asLSetCreate( topRec, namespace, set, setBinName, distrib )
 
   -- Check to see if Set Structure (or anything) is already there,
   -- and if so, error.
-  if( topRec.AsLSetCtrlBin ~= nil ) then
+  if( topRec['AsLSetCtrlBin'] ~= nil ) then
     GP=F and trace("[ERROR EXIT]: <%s:%s> AsLSetCtrlBin Already Exists",
       mod, meth );
     return('AsLSetCtrlBin already exists');
@@ -531,16 +564,17 @@ function asLSetCreate( topRec, namespace, set, setBinName, distrib )
   GP=F and trace("[DEBUG]: <%s:%s> : CTRL Map after Init(%s)",
     mod, meth , tostring(lsetCtrlMap));
 
-  topRec.AsLSetCtrlBin = lsetCtrlMap; -- store in the record
+  topRec['AsLSetCtrlBin'] = lsetCtrlMap; -- store in the record
 
   -- If ONE BIN state then create just that one.  If Multi-bin, then create all
   -- of them.
   if lsetCtrlMap.StoreState == 0 then
-    -- Create just the FIRST bin, with an empty list.
-    setupNewBin( topRec, 1 );
+    -- Create just the FIRST bin (bin ZERO)  with an empty list.
+    setupNewBin( topRec, 0 );
   else
     -- Create ALL of the new bins, each with an empty list
-    for i = 1, distrib, 1 do
+    -- Our "indexing" starts with ZERO, to match the modulo arithmetic.
+    for i = 0, (distrib - 1), 1 do
       setupNewBin( topRec, i );
     end -- for each new bin
   end
@@ -612,26 +646,26 @@ function asLSetInsert( topRec, namespace, set, lsetBinName, distrib, newValue )
   local lsetCtrlMap;
 
   -- Check that the Set Structure is already there, otherwise, error
-  if( topRec.AsLSetCtrlBin == nil ) then
+  if( topRec['AsLSetCtrlBin'] == nil ) then
     warn("[WARNING]: <%s:%s> AsLSetCtrlBin does not Exist:Creating",mod,meth );
     lsetCtrlMap =
       initializeLSetMap( topRec, namespace, set, lsetBinName, distrib );
-    topRec.AsLSetCtrlBin = lsetCtrlMap;
+    topRec['AsLSetCtrlBin'] = lsetCtrlMap;
   else
-    lsetCtrlMap = topRec.AsLSetCtrlBin;
+    lsetCtrlMap = topRec['AsLSetCtrlBin'];
   end
 
   -- When we're in "Compact" mode, before each insert, look to see if 
   -- it's time to rehash our single bin into all bins.
   local totalCount = lsetCtrlMap.TotalCount;
-  if lsetCtrlMap.StoreState == 0 and totalCount > lsetCtrlMap.ThreshHold then
-    rehashSet( lsetCtrlMap );
+  if lsetCtrlMap.StoreState == 0 and totalCount >= lsetCtrlMap.ThreshHold then
+    rehashSet( topRec, lsetBinName, lsetCtrlMap );
   end
 
   -- Call our local multi-purpose insert() to do the job.(Update Stats)
   localInsert( topRec, lsetCtrlMap, newValue, 1 );
 
-  topRec.AsLSetCtrlBin = lsetCtrlMap;
+  topRec['AsLSetCtrlBin'] = lsetCtrlMap;
   -- All done, store the record
   local rc = -99; -- Use Odd starting Num: so that we know it got changed
   if( not aerospike:exists( topRec ) ) then
@@ -665,14 +699,14 @@ function asLSetExists( topRec, setBinName, searchValue )
     mod, meth, tostring( searchValue ) );
 
   -- Check that the Set Structure is already there, otherwise, error
-  if( topRec.AsLSetCtrlBin == nil ) then
+  if( topRec['AsLSetCtrlBin'] == nil ) then
     GP=F and trace("[ERROR EXIT]: <%s:%s> AsLSetCtrlBin does not Exist",
     mod, meth );
     return('AsLSetCtrlBin does not exist');
   end
 
   -- Find the appropriate bin for the Search value
-  local lsetCtrlMap = topRec.AsLSetCtrlBin;
+  local lsetCtrlMap = topRec['AsLSetCtrlBin'];
   local binNumber = computeSetBin( searchValue, lsetCtrlMap );
   local binName = getBinName( binNumber );
   local binList = topRec[binName];
@@ -706,14 +740,14 @@ function asLSetSearch( topRec, setBinName, searchValue )
     mod, meth, tostring( searchValue ) );
 
   -- Check that the Set Structure is already there, otherwise, error
-  if( topRec.AsLSetCtrlBin == nil ) then
+  if( topRec['AsLSetCtrlBin'] == nil ) then
     GP=F and trace("[ERROR EXIT]: <%s:%s> AsLSetCtrlBin does not Exist",
     mod, meth );
     return('AsLSetCtrlBin does not exist');
   end
 
   -- Find the appropriate bin for the Search value
-  local lsetCtrlMap = topRec.AsLSetCtrlBin;
+  local lsetCtrlMap = topRec['AsLSetCtrlBin'];
   local binNumber = computeSetBin( searchValue, lsetCtrlMap );
   local binName = getBinName( binNumber );
   local binList = topRec[binName];
@@ -745,14 +779,14 @@ function asLSetDelete( topRec, setBinName, deleteValue )
     mod, meth, tostring( deleteValue ) );
 
   -- Check that the Set Structure is already there, otherwise, error
-  if( topRec.AsLSetCtrlBin == nil ) then
+  if( topRec['AsLSetCtrlBin'] == nil ) then
     GP=F and trace("[ERROR EXIT]: <%s:%s> AsLSetCtrlBin does not Exist",
       mod, meth );
     return('AsLSetCtrlBin does not exist');
   end
 
   -- Find the appropriate bin for the Search value
-  local lsetCtrlMap = topRec.AsLSetCtrlBin;
+  local lsetCtrlMap = topRec['AsLSetCtrlBin'];
   local binNumber = computeSetBin( deleteValue, lsetCtrlMap );
 
   local binName = getBinName( binNumber );
@@ -764,6 +798,7 @@ function asLSetDelete( topRec, setBinName, deleteValue )
   local result = scanList( lsetCtrlMap, binList, deleteValue, DELETE );
   -- If we found something, then we need to update the bin and the record.
   if result ~= nil then
+    -- We found something -- and marked it nil -- so update the record
     topRec[binName] = binList;
     rc = aerospike:update( topRec );
   end

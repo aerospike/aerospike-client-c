@@ -20,9 +20,9 @@ local F=true; -- Set F (flag) to true to turn ON global print
 -- =========================
 -- || LOCAL GLOBAL VALUES ||
 -- =========================
-local DELETE=-1
-local SCAN=0
-local INSERT=1
+local INSERT = 1; -- flag to scanList to INSERT the value (if not found)
+local SCAN = 0;
+local DELETE = -1; -- flag to show scanList to DELETE the value, if found
 
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 -- AS Large Set Utility Functions
@@ -66,7 +66,7 @@ local function initializeLSetMap(topRec, namespace, set, lsetBinName, distrib )
   lsetCtrlMap.ItemCount = 0;   -- Count of valid elements
   lsetCtrlMap.TotalCount = 0;  -- Count of both valid and deleted elements
   lsetCtrlMap.Modulo = distrib;
-  lsetCtrlMap.ThreshHold = 200; -- Rehash after this many have been inserted
+  lsetCtrlMap.ThreshHold = 4; -- Rehash after this many have been inserted
 
   -- NOTE: Version 2: We will information here about value complexity and
   -- how to find the key.  If values are atomic (e.g. int or string) then
@@ -199,15 +199,16 @@ end -- computeSetBin()
 -- (*) binList: the list of values from the record
 -- (*) value: the value we're searching for
 -- (*) flag:
---     ==> if == -1 (DELETE):  then replace the found element with nil
---     ==> if ==  0 (SCAN): then return element if found, else return nil
 --     ==> if ==  1 (INSERT): insert the element IF NOT FOUND
+--     ==> if ==  0 (SCAN): then return element if found, else return nil
+--     ==> if == -1 (DELETE):  then replace the found element with nil
 -- Return: nil if not found, Value if found.
 -- (NOTE: Can't return 0 -- because that might be a valid value)
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 local function complexScanList( binList, value, flag ) 
   local mod = "AsLSetStickman";
   local meth = "complexScanList()";
+  local result = nil;
   -- Scan the list for the item, return true if found,
   -- Later, we may return a set of things 
   for i = 1, list.size( binList ), 1 do
@@ -217,12 +218,13 @@ local function complexScanList( binList, value, flag )
       GP=F and trace("[EARLY EXIT]: <%s:%s> Found(%s)\n",
         mod, meth, tostring(value));
       if( flag == DELETE ) then
-        value = binList[i]; -- save the thing we found.
+        result = binList[i]; -- save the thing we found.
         binList[i] = nil; -- the value is NO MORE
       end
-      return value
+      return result
     end
-  end
+  end -- for each list entry in this binList
+
   -- Didn't find it.  If INSERT, then append the value to the list
   if flag == INSERT then
     GP=F and trace("[DEBUG]: <%s:%s> INSERTING(%s)\n",
@@ -244,9 +246,9 @@ end
 -- (*) binList: the list of values from the record
 -- (*) value: the value we're searching for
 -- (*) flag:
---     ==> if == -1 (DELETE):  then replace the found element with nil
---     ==> if ==  0 (SCAN): then return element if found, else return nil
 --     ==> if ==  1 (INSERT): insert the element IF NOT FOUND
+--     ==> if ==  0 (SCAN): then return element if found, else return nil
+--     ==> if == -1 (DELETE):  then replace the found element with nil
 -- Return: nil if not found, Value if found.
 -- (NOTE: Can't return 0 -- because that might be a valid value)
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
@@ -256,6 +258,7 @@ local function simpleScanList( binList, value, flag )
   GP=F and trace("[ENTER]: <%s:%s> Looking for V(%s), ListSize(%d) List(%s)",
     mod, meth, tostring(value), list.size(binList), tostring(binList))
 
+  local result = nil;
   -- Scan the list for the item, return true if found,
   -- Later, we may return a set of things 
   for i = 1, list.size( binList ), 1 do
@@ -265,11 +268,13 @@ local function simpleScanList( binList, value, flag )
       GP=F and trace("[EARLY EXIT]: <%s:%s> Found(%s)\n",
         mod, meth, tostring(value));
       if( flag == DELETE ) then
+        result = binList[i];
         binList[i] = nil; -- the value is NO MORE
       end
-      return value
+      return result;
     end
   end
+
   -- Didn't find it.  If INSERT, then append the value to the list
   if flag == INSERT then
     GP=F and trace("[DEBUG]: <%s:%s> INSERTING(%s)\n",
@@ -382,6 +387,9 @@ end -- localInsert
 local function rehashSet( topRec, lsetBinName, lsetCtrlMap )
   local mod = "AsLSetStickman";
   local meth = "rehashSet()";
+  GP=F and trace("[ENTER]:<%s:%s> !!!! REHASH !!!! ", mod, meth );
+  GP=F and trace("[ENTER]:<%s:%s> !!!! REHASH !!!! ", mod, meth );
+
   -- Get the list, make a copy, then iterate thru it, re-inserting each one.
   local binOneName = getBinName( 0 );
   local binOneList = topRec[lsetBinName];

@@ -20,9 +20,9 @@ void __log_append(FILE * f, const char * prefix, const char * fmt, ...) {
 /******************************************************************************
  * TEST CASES
  *****************************************************************************/
-static int lso_push_number(char * ns, char * set,
-                           char *package_name, char * key,
-                           char * lso_bin_name, int val) {
+static int lso_push_quintuplet(char * ns, char * set,
+                               char *package_name, char * key,
+                               char * lso_bin_name, int val) {
     extern cl_cluster * cluster;
 
     cl_write_parameters wp;
@@ -57,9 +57,43 @@ TEST( as_lso_push_with_transform_1, "as_lso_push_with_transform" ) {
     char * user_key     = "User_111";
     char * lso_bin_name = "number_stack";
 
-    int rc = lso_push_number("test", "unit", package_name,
-                             user_key, lso_bin_name, 5);
+    int rc = lso_push_quintuplet("test", "unit", package_name,
+                                 user_key, lso_bin_name, 5);
     assert_int_eq( rc, 0 );
+}
+
+static int lso_peek_quintuplet(char * ns, char * set,
+                               char *package_name, char * key,
+                               char * lso_bin_name) {
+    extern cl_cluster * cluster;
+
+    cl_write_parameters wp;
+    cl_write_parameters_set_default(&wp);
+    wp.timeout_ms = 1000;
+    wp.record_ttl = 864000;
+
+    char * uncompress_func = "stumbleUnCompress5";
+    as_list *uncompress_args = as_arraylist_new( 1, 1 );
+    as_list_add_integer( uncompress_args, 1 ); // dummy argument
+
+    int peek_count = 1;
+    as_result * resultp = as_lso_peek_with_transform( cluster, ns, set, key,
+                                            lso_bin_name, peek_count,
+                                            package_name,
+                                            uncompress_func, uncompress_args,
+                                            wp.timeout_ms);
+
+  return resultp->is_success;
+}
+
+TEST( as_lso_peek_with_transform_1, "as_lso_peek_with_transform" ) {
+    char * package_name = "LSTACK";
+    char * user_key     = "User_111";
+    char * lso_bin_name = "number_stack";
+
+    int rc = lso_peek_quintuplet("test", "unit", package_name,
+                                 user_key, lso_bin_name);
+    assert_int_eq( rc, 1 );
 }
 
 /******************************************************************************
@@ -79,4 +113,5 @@ SUITE( lstack_basics, "test basics.lua" ) {
     suite_after( after );
 
     suite_add( as_lso_push_with_transform_1 );
+    suite_add( as_lso_peek_with_transform_1 );
 }

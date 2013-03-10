@@ -387,7 +387,7 @@ static bool before(atf_suite * suite) {
     mod_lua_config config = {
         .server_mode    = false,
         .cache_enabled  = false,
-        .system_path    = "/home/user/Desktop/CODE/DEV3.0/client/client/c_clients/cl_c/modules/mod-lua/src/lua",
+        .system_path    = "modules/mod-lua/src/lua",
         .user_path      = "src/test/lua"
     };
 

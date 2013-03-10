@@ -35,7 +35,7 @@ struct atf_test_result_s {
 atf_test_result * atf_test_run(atf_test * test);
 
 atf_test_result * atf_test_result_new(atf_test * test);
-void atf_test_result_free(atf_test_result * test_result);
+void atf_test_result_destroy(atf_test_result * test_result);
 
 
 #define TEST(__test_name, __test_desc) \
@@ -80,9 +80,11 @@ atf_suite * atf_suite_after(atf_suite * suite, bool (* after)(atf_suite * suite)
 atf_suite * atf_suite_before(atf_suite * suite, bool (* before)(atf_suite * suite));
 
 atf_suite_result * atf_suite_result_new(atf_suite * suite);
-void atf_suite_result_free(atf_suite_result * suite_result);
+void atf_suite_result_destroy(atf_suite_result * result);
+
 atf_suite_result * atf_suite_result_add(atf_suite_result * suite_result, atf_test_result * test_result);
 void atf_suite_result_print(atf_suite_result * suite_result);
+
 
 #define SUITE(__suite_name, __suite_desc) \
     static void suite_spec__##__suite_name(atf_suite *); \
@@ -137,6 +139,10 @@ atf_plan * atf_plan_before(atf_plan * plan, bool (* before)(atf_plan * plan));
 
 atf_plan_result * atf_plan_result_add(atf_plan_result * plan_result, atf_suite_result * suite_result);
 
+atf_plan_result * atf_plan_result_new(atf_plan * plan);
+void atf_plan_result_destroy(atf_plan_result * result);
+
+
 #define PLAN(__plan_name)\
     static void plan_spec__##__plan_name(atf_plan * self); \
     static atf_plan plan__##__plan_name = { \
@@ -148,13 +154,10 @@ atf_plan_result * atf_plan_result_add(atf_plan_result * plan_result, atf_suite_r
     }; \
     atf_plan * __plan_name = & plan__##__plan_name; \
     int main(int argc, char ** args) { \
-        atf_plan_result result = { \
-            .plan = #__plan_name, \
-            .suites = { NULL }, \
-            .size = 0 \
-        }; \
+        atf_plan_result * result = atf_plan_result_new(__plan_name); \
         plan_spec__##__plan_name(__plan_name); \
-        return atf_plan_run(__plan_name, &result); \
+        int rc = atf_plan_run(__plan_name, result); \
+        return rc; \
     }\
     static void plan_spec__##__plan_name(atf_plan * self) \
 

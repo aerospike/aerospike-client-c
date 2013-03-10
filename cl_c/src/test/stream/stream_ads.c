@@ -422,6 +422,11 @@ static bool after(atf_suite * suite) {
     
     citrusleaf_query_shutdown();
 
+    if ( mod_lua.logger ) {
+        free(mod_lua.logger);
+        mod_lua.logger = NULL;
+    }
+    
     int rc = udf_remove(LUA_FILE);
     if ( rc != 0 ) {
         error("failure while removing: %s (%d)", LUA_FILE, rc);

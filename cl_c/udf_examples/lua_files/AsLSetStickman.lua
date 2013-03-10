@@ -57,9 +57,10 @@ local function initializeLSetMap(topRec, namespace, set, lsetBinName, distrib )
   lsetCtrlMap.BinName = lsetBinName;
   lsetCtrlMap.NameSpace = namespace;
   lsetCtrlMap.Set = set;
-  lsetCtrlMap.ItemCount = 0;
+  lsetCtrlMap.ItemCount = 0;   -- Count of valid elements
+  lsetCtrlMap.TotalCount = 0;  -- Count of both valid and deleted elements
   lsetCtrlMap.Modulo = distrib;
-  lsetCtrlMap.ThreshHold = 200; -- Rehash after this.
+  lsetCtrlMap.ThreshHold = 200; -- Rehash after this many have been inserted
 
   -- NOTE: Version 2: We will information here about value complexity and
   -- how to find the key.  If values are atomic (e.g. int or string) then
@@ -85,7 +86,7 @@ end -- initializeLSetMap()
 -- (*) argListMap: Map of User Override LSET Settings 
 -- ======================================================================
 local function adjustLSetMap( lsetCtrlMap, argListMap )
-  local mod = "LSetStoneman";
+  local mod = "LSetStickman";
   local meth = "adjustLSetMap()";
   GP=F and trace("[ENTER]: <%s:%s>:: LSetMap(%s)::\n ArgListMap(%s)",
     mod, meth, tostring(lsetCtrlMap), tostring( argListMap ));
@@ -144,14 +145,85 @@ local function setupNewBin( topRec, binNum )
 end
 
 -- ======================================================================
+-- localInsert( lsetCtrlMap, newValue, stats )
+-- ======================================================================
+-- Perform the main work of insert (used by both rehash and insert)
+-- Parms:
+-- (*) topRec: The top DB Record:
+-- (*) lsetCtrlMap: The AsLSet control map
+-- (*) newValue: Value to be inserted
+-- (*) stats: 1=Please update Counts, 0=Do NOT update counts (rehash)
+-- ======================================================================
+local function localInsert( topRec, lsetCtrlMap, newValue, stats )
+  local mod = "AsLSetStickman";
+  local meth = "setupNewBin()";
+  GP=F and trace("[ENTER]:<%s:%s>Insert(%s)", mod, meth, tostring(newValue));
+
+  -- Notice that "computeSetBin()" will know which number to return, depending
+  -- on whether we're in "compact" or "regular" storageState.
+  local binNumber = computeSetBin( newValue, lsetCtrlMap );
+  local binName = getBinName( binNumber );
+  GP=F and trace("[DEBUG]:<%s:%s> Compute:BNum(%s) BName(%s) Val(%s) Map(%s)",
+    mod, meth, tostring(binNumber), tostring(binName),
+    tostring(newValue), tostring(lsetCtrlMap));
+
+  local binList = topRec[binName];
+  if binList == nil then
+    GP=F and trace("[INTERNAL ERROR]:<%s:%s> binlist is nil: binname(%s)",
+      mod, meth, binName);
+  else
+    list.append( binList, newValue );
+    topRec[binName] = binList; --  Not sure we have to do this.
+  end
+
+  GP=F and trace("[DEBUG]: <%s:%s>:Bin(%s) Now has list(%s)",
+    mod, meth, binName, tostring(binList) );
+
+  if stats == 1 then -- check to see if we update the stats
+    local itemCount = lsetCtrlMap.ItemCount;
+    lsetCtrlMap.ItemCount = itemCount + 1; -- number of valid items goes up
+    lsetCtrlMap.TotalCount = totalCount + 1; -- Total number of items goes up
+    GP=F and trace("[DEBUG]: <%s:%s> itemCount(%d)", mod, meth, itemCount );
+  end
+  topRec.AsLSetCtrlBin = lsetCtrlMap;
+
+  GP=F and trace("[EXIT]: <%s:%s>Storing Record() with New Value(%s): Map(%s)",
+    mod, meth, tostring( newValue ), tostring( lsetCtrlMap ) );
+
+    -- No need to return anything
+  end
+-- ======================================================================
 -- rehashSet( topRec, lsetBinName, lsetCtrlMap )
 -- ======================================================================
 -- When we start in "compact" StoreState (value 0), we eventually have
 -- to switch to "regular" state when we get enough values.  So, at some
--- point (StoreThreshhold), we rehash all of the values in the single
+-- point (StoreThreshHold), we rehash all of the values in the single
 -- bin and properly store them in their final resting bins.
+-- So -- copy out all of the items from bin 1, null out the bin, and
+-- then resinsert them using "regular" mode.
+-- Parms:
+-- (*) topRec
+-- (*) lsetBinName
+-- (*) lsetCtrlMap
 -- ======================================================================
 local function rehashSet( topRec, lsetBinName, lsetCtrlMap )
+  -- Get the list, make a copy, then iterate thru it, re-inserting each one.
+  local binOneName = getBinName( 0 );
+  local binOneList = topRec[lsetBinName];
+  if binOneList == nil then
+    warn("[INTERNAL ERROR]:<%s:%s> Rehash can't use Empty Bin (%s) list",
+      mod, meth, tostring(binOneName));
+      return('BAD BIN 0 LIST for Rehash');
+  end
+  local listCopy = list.take( binOneList, list.size( binOneList ));
+  topRec[lsetBinName] = list();
+  lsetCtrlMap.StoreState = 1; -- now in "regular" (modulo) mode
+
+  for i = i, list.size( listCopy), 1 do
+    localInsert( lsetCtrlMap, listCopy[i], 0 ); -- do NOT update counts.
+  end
+
+  GP=F and trace("[EXIT]: <%s:%s>")
 end -- rehashSet()
 -- ======================================================================
 
@@ -431,6 +503,13 @@ function asLSetInsert( topRec, namespace, set, lsetBinName, distrib, newValue )
     lsetCtrlMap = topRec.AsLSetCtrlBin;
   end
 
+  -- When we're in "Compact" mode, before each insert, look to see if 
+  -- it's time to rehash our single bin into all bins.
+  local totalCount = lsetCtrlMap.TotalCount;
+  if lsetCtrlMap.StoreState == 0 and totalCount > lsetCtrlMap.ThreshHold then
+    rehashSet( lsetCtrlMap );
+  end
+
   -- Notice that "computeSetBin()" will know which number to return, depending
   -- on whether we're in "compact" or "regular" storageState.
   local binNumber = computeSetBin( newValue, lsetCtrlMap );
@@ -451,9 +530,9 @@ function asLSetInsert( topRec, namespace, set, lsetBinName, distrib, newValue )
   GP=F and trace("[DEBUG]: <%s:%s>:Bin(%s) Now has list(%s)",
     mod, meth, binName, tostring(binList) );
 
-  local itemCount = lsetCtrlMap['ItemCount'];
-  itemCount = itemCount + 1;
-  lsetCtrlMap['ItemCount'] = itemCount;
+  local itemCount = lsetCtrlMap.ItemCount;
+  lsetCtrlMap.ItemCount = itemCount + 1; -- number of valid items goes up
+  lsetCtrlMap.TotalCount = totalCount + 1; -- Total number of items goes up
   topRec.AsLSetCtrlBin = lsetCtrlMap;
   GP=F and trace("[DEBUG]: <%s:%s> itemCount(%d)", mod, meth, itemCount );
 
@@ -462,12 +541,16 @@ function asLSetInsert( topRec, namespace, set, lsetBinName, distrib, newValue )
 
   -- All done, store the record
   local rc = -99; -- Use Odd starting Num: so that we know it got changed
-  GP=F and trace("[DEBUG]:<%s:%s>:Update Record", mod, meth );
-  rc = aerospike:update( topRec );
+  if( not aerospike:exists( topRec ) ) then
+    GP=F and trace("[DEBUG]:<%s:%s>:Create Record()", mod, meth );
+    rc = aerospike:create( topRec );
+  else
+    GP=F and trace("[DEBUG]:<%s:%s>:Update Record()", mod, meth );
+    rc = aerospike:update( topRec );
+  end
 
   GP=F and trace("[EXIT]: <%s:%s> : Done.  RC(%d)", mod, meth, rc );
   return rc
-
 end -- function set Insert()
 
 -- ======================================================================
@@ -507,9 +590,6 @@ function asLSetExists( topRec, setBinName, searchValue )
     return 1
   end
 
-  GP=F and trace("[EXIT]: <%s:%s>: Search Returns (%s)",
-    mod,meth,tostring(result));
-  return result;
 end -- function asLSetSearch()
 
 

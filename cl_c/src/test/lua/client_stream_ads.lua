@@ -2,15 +2,19 @@ function stream_ads_2(s)
 
     local function mapper(rec)
         local key = tostring(rec['advertiser']) .. '/' .. tostring(rec['campaign']) .. '/' .. tostring(rec['line_item'])
-        local val = map {
-            advertiser  = rec['advertiser'],
-            campaign    = rec['campaign'],
-            line_item   = rec['line_item'],
-            spend_sum   = rec['spend'] or 0,
-            spend_max   = rec['spend'] or 0,
-            spend_num   = 1
-        }
-        return map{ [key] = val }
+
+        m = map{}
+        m['advertiser'] = rec['advertiser']
+        m['campain'] = rec['campaign']
+        m['line_item'] = rec['line_item']
+        m['spend_sum'] = rec['spend'] or 0
+        m['spend_max'] = rec['spend'] or 0
+        m['spend_num'] = 1
+
+        m2 = map{}
+        m2[key] = m
+        return m2
+
     end
 
     local function merger(val1, val2)
@@ -23,14 +27,16 @@ function stream_ads_2(s)
             max = val2['spend_max']
         end
 
-        return map {
-            advertiser  = val1['advertiser'],
-            campaign    = val1['campaign'],
-            line_item   = val1['line_item'],
-            spend_sum   = sum,
-            spend_max   = max,
-            spend_num   = num
-        }
+        m = map{}
+        m['advertiser'] = val1['advertiser']
+        m['campaign']    = val1['campaign']
+        m['line_item'] = val1['line_item']
+        m['spend_sum'] = sum
+        m['spend_max'] = max
+        m['spend_num'] = num
+
+        return m
+
     end
 
     local function reducer(map1, map2)
@@ -39,26 +45,6 @@ function stream_ads_2(s)
 
     return s : map(mapper) : reduce(reducer)
 end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

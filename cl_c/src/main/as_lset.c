@@ -26,12 +26,6 @@
 #include <citrusleaf/cf_atomic.h>
 #include <citrusleaf/cf_hist.h>
 
-// Use this to turn on extra debugging prints and checks
-#define TRA_DEBUG true
-
-// Global Configuration object that holds ALL needed client data.
-extern config * g_config;
-
 void __log_append(FILE * f, const char * prefix, const char * fmt, ...);
 
 /** ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
@@ -52,13 +46,9 @@ void __log_append(FILE * f, const char * prefix, const char * fmt, ...);
 int
 as_lset_create( cl_cluster * asc, char * namespace, char * set,
 		char * keystr, char * lset_bin_name, int distribution,
-		uint32_t timeout_ms ) {
+		char * lso_package, uint32_t timeout_ms ) {
 	static char * meth = "as_lset_create()";
 	int rc = 0; // ubiquitous return code
-
-	if( TRA_DEBUG )
-		INFO("[ENTER]:[%s]:NS(%s) Set(%s) Key(%s) Bin(%s) Config(%p)\n",
-				meth, namespace, set, keystr, lset_bin_name, g_config );
 
 	// Call the "apply udf" function (function "StackCreate") for this record to
 	// create the lset Bin. Here's the Doc for the UDF call
@@ -88,27 +78,13 @@ as_lset_create( cl_cluster * asc, char * namespace, char * set,
 	as_list_add_integer(arglist, distribution );
 	char * udf_function_name = "asLSetCreate";
 
-	// NOTE: All strings created by "as_val_tostring()" must be explicitly
-	// freed after use.
-	char * valstr = as_val_tostring(arglist);
-	if( TRA_DEBUG ) INFO("[DEBUG]:[%s]:Created ArgList(%s)\n", meth, valstr );
-	free(valstr);
-
 	// Load up the key that we'll feed into the call (and we'll remember
 	// to free it after we're done).
 	cl_object o_key;
 	citrusleaf_object_init_str( &o_key, keystr );
 
-	if( TRA_DEBUG )
-		INFO("[DEBUG]:[%s]Calling UDF Apply:NS(%s) Set(%s) Key(%s) Bin(%s) \n",
-				meth, namespace,  set, keystr,  lset_bin_name );
-	valstr = as_val_tostring(arglist);
-	if( TRA_DEBUG ) INFO("[DEBUG]:[%s] Package(%s) Func(%s) Args(%s) \n",
-			meth, g_config->package_name, udf_function_name, valstr );
-	free(valstr);
-
-	rc = citrusleaf_udf_record_apply(g_config->asc, namespace,
-			set, &o_key, g_config->package_name, udf_function_name, arglist,
+	rc = citrusleaf_udf_record_apply(asc, namespace,
+			set, &o_key, lso_package, udf_function_name, arglist,
 			timeout_ms, &result);
 
 	if (rc != CITRUSLEAF_OK) {
@@ -122,7 +98,7 @@ as_lset_create( cl_cluster * asc, char * namespace, char * set,
 			INFO("[ERROR]:[%s] Result type is NIL\n", meth );
 			rc = CITRUSLEAF_FAIL_CLIENT; // not sure which error to use.
 		} else {
-			valstr = as_val_tostring(result.value);
+			char *valstr = as_val_tostring(result.value);
 			INFO("[DEBUG]:[%s]: udf_return_type(%s)", meth, valstr);
 			free(valstr);
 		}
@@ -136,7 +112,6 @@ as_lset_create( cl_cluster * asc, char * namespace, char * set,
 	as_result_destroy(&result);
 	citrusleaf_object_free(&o_key);		
 
-	if( TRA_DEBUG ) INFO("[EXIT]:[%s]: RC(%d)\n", meth, rc );
 	return rc;
 } 	// end as_lset_create()
 
@@ -159,17 +134,13 @@ as_lset_create( cl_cluster * asc, char * namespace, char * set,
  */
 int
 as_lset_insert(cl_cluster * asc, char * ns, char * set, char * keystr,
-		char * lset_bin_name, as_val * lset_valuep, uint32_t timeout_ms )
-{
+			   char * lset_bin_name, as_val * lset_valuep, 
+			   char * lso_package, uint32_t timeout_ms ) {
 	static char * meth = "as_lset_insert()";
 	int rc = 0; // ubiquitous return code
 	char * udf_function_name = "asLSetInsert"; // The Lua Function we'll call
 
 	// Note: results of as_val_tostring() must ALWAYS be explicitly freed
-	char * valstr = as_val_tostring( lset_valuep );
-	if( TRA_DEBUG ) INFO("[ENTER]:[%s]: NS(%s) Set(%s) Key(%s) Bin(%s) Val(%s)",
-			meth, ns, set, keystr, lset_bin_name, valstr );
-	free( valstr );
 
 	// In this function, we are returning an int (not the result), so we
 	// can use the "stack allocated" result (as_result_init).
@@ -212,18 +183,8 @@ as_lset_insert(cl_cluster * asc, char * ns, char * set, char * keystr,
 	// NOTE: Have verified that the as_val (the list) passed to us was
 	// created with "new", so we have a malloc'd value.
 
-	if( TRA_DEBUG ) {
-		INFO("[DEBUG]:[%s]Calling UDF Apply:NS(%s) Set(%s) Key(%s) Bin(%s) \n",
-				meth, ns,  set, keystr,  lset_bin_name );
-
-		valstr = as_val_tostring(arglist);
-		INFO("[DEBUG]:[%s] Package(%s) Func(%s) \n",
-				meth, g_config->package_name, udf_function_name, valstr );
-		free(valstr);
-	}
-
 	rc = citrusleaf_udf_record_apply(asc, ns, set, &o_key,
-			g_config->package_name, udf_function_name, arglist,
+			lso_package, udf_function_name, arglist,
 			timeout_ms, &result);
 
 	if (rc != CITRUSLEAF_OK) {
@@ -237,7 +198,7 @@ as_lset_insert(cl_cluster * asc, char * ns, char * set, char * keystr,
 			INFO("[ERROR]:[%s] Result type is NIL\n", meth );
 			rc = CITRUSLEAF_FAIL_CLIENT; // not sure which error to use.
 		} else {
-			valstr = as_val_tostring(result.value);
+			char *valstr = as_val_tostring(result.value);
 			INFO("[DEBUG]:[%s]: udf_return_type(%s)", meth, valstr);
 			free(valstr);
 		}
@@ -251,8 +212,6 @@ as_lset_insert(cl_cluster * asc, char * ns, char * set, char * keystr,
 	as_result_destroy(&result);
 	citrusleaf_object_free(&o_key);
 
-	if( TRA_DEBUG ) INFO("[EXIT]:[%s]: RC(%d)\n", meth, rc );
-
 	return rc;
 } // end as_lset_insert()
 
@@ -262,22 +221,15 @@ as_lset_insert(cl_cluster * asc, char * ns, char * set, char * keystr,
  */
 int
 as_lset_insert_with_transform(cl_cluster * asc, char * ns, char * set,
-		char * keystr, char * lset_bin_name, as_val * lset_valuep,
-		char * udf_file, char * udf_name, as_list * function_args,
-		uint32_t timeout_ms ) {
-	static char * meth = "as_lset_insert_with_transform()";
+							  char * keystr, char * lset_bin_name,
+							  as_val * lset_valuep, char * lso_package,
+							  char * udf_file, char * udf_name,
+							  as_list * function_args, uint32_t timeout_ms ) {
+	//static char * meth = "as_lset_insert_with_transform()";
 	int rc = 0;
-
-	// Note: results of as_val_tostring() must ALWAYS be explicitly freed
-	char * valstr = as_val_tostring( lset_valuep );
-	if( TRA_DEBUG )
-		INFO("[ENTER]:[%s]: NS(%s) Set(%s) Key(%s) Bin(%s) Val(%d) UDF(%s)",
-				meth, ns, set, keystr, lset_bin_name, valstr, udf_name);
-	free( valstr );
 
 	// <<<<   Fill this in once the regular push works. >>>>>>
 
-	if( TRA_DEBUG ) INFO("[EXIT]:[%s]: RC(%d)\n", meth, rc );
 	return rc;
 } // end as_lset_insert_with_transform()
 
@@ -308,14 +260,10 @@ as_lset_insert_with_transform(cl_cluster * asc, char * ns, char * set,
 as_result  *
 as_lset_search(cl_cluster * asc, char * ns, char * set, char * keystr,
 		char * lset_bin_name, as_val * search_valuep, bool exists,
-		uint32_t timeout_ms) {
+		char * lso_package, uint32_t timeout_ms) {
 	static char * meth = "as_lset_search()";
 	int rc = 0; // ubiquitous return code
 	char * udf_function_name = "asLSetSearch";
-
-	if( TRA_DEBUG )
-		INFO("[ENTER]:[%s]: NS(%s) Set(%s) Key(%s) Bin(%s) Count(%d)",
-				meth, ns, set, keystr, lset_bin_name );
 
 	// For Result, we are going to pass this back to the caller, so we
 	// must FULLY DOCUMENT the fact that they must call "as_result_destroy()"
@@ -359,11 +307,11 @@ as_lset_search(cl_cluster * asc, char * ns, char * set, char * keystr,
 			meth, ns,  set, keystr,  lset_bin_name );
 	char * valstr = as_val_tostring(arglist);
 	INFO("[DEBUG]:[%s] Package(%s) Func(%s) Args(%s) \n",
-			meth, g_config->package_name, udf_function_name, valstr );
+			meth, lso_package, udf_function_name, valstr );
 	free(valstr);
 
 	rc = citrusleaf_udf_record_apply(asc, ns, set, &o_key,
-			g_config->package_name, udf_function_name, arglist,
+			lso_package, udf_function_name, arglist,
 			timeout_ms, resultp);
 
 	if (rc != CITRUSLEAF_OK) {
@@ -391,7 +339,6 @@ as_lset_search(cl_cluster * asc, char * ns, char * set, char * keystr,
 	// NOTE: We do NOT destroy result: The caller has to do that
 	citrusleaf_object_free(&o_key);		
 
-	if( TRA_DEBUG ) INFO("[EXIT]:[%s]: RC(%d)\n", meth, rc );
 	if( rc == CITRUSLEAF_OK ){
 		return resultp;
 	} else {
@@ -424,20 +371,16 @@ as_lset_search(cl_cluster * asc, char * ns, char * set, char * keystr,
  */
 as_result  *
 as_lset_search_with_transform(cl_cluster * asc, char * ns, char * set,
-    char * keystr, char * lset_bin_name, as_val * search_valuep, bool exists,
-    char * udf_file, char * udf_name, as_list * function_args,
-	uint32_t timeout_ms ) {
-	static char * meth = "as_lset_search_with_transform()";
-	int rc = 0;
+							  char * keystr, char * lset_bin_name,
+							  as_val * search_valuep, bool exists,
+							  char * lso_package, char * udf_file,
+							  char * udf_name, as_list * function_args,
+							  uint32_t timeout_ms ) {
+	//static char * meth = "as_lset_search_with_transform()";
+	//int rc = 0;
 	as_result * resultp = NULL;
 
-	if( TRA_DEBUG )
-		INFO("[ENTER]:[%s]: NS(%s) Set(%s) Key(%s) Bin(%s) UDF(%s)",
-				meth, ns, set, keystr, lset_bin_name, udf_name);
-
 	// <<<<   Fill this in once the regular peek works. >>>>>>
-
-	if( TRA_DEBUG ) INFO("[EXIT]:[%s]: RC(%d)\n", meth, rc );
 
 	return resultp;
 } // end as_lset_search_with_transform()
@@ -461,15 +404,11 @@ as_lset_search_with_transform(cl_cluster * asc, char * ns, char * set,
  */
 int
 as_lset_delete(cl_cluster * asc, char * ns, char * set, char * keystr,
-		char * lset_bin_name, as_val * delete_valuep, uint32_t timeout_ms )
-{
+			   char * lset_bin_name, as_val * delete_valuep,
+			   char * lso_package, uint32_t timeout_ms ) {
 	static char * meth = "as_lset_delete()";
 	int rc = 0; // ubiquitous return code
 	char * udf_function_name = "asLSetDelete";
-
-	if( TRA_DEBUG )
-		INFO("[ENTER]:[%s]: NS(%s) Set(%s) Key(%s) Bin(%s) ",
-				meth, ns, set, keystr, lset_bin_name );
 
 	// In this function, we are returning an int (not the result), so we
 	// can use the "stack allocated" result (as_result_init).
@@ -511,11 +450,11 @@ as_lset_delete(cl_cluster * asc, char * ns, char * set, char * keystr,
 			meth, ns,  set, keystr,  lset_bin_name );
 	char * valstr = as_val_tostring(arglist);
 	INFO("[DEBUG]:[%s] Package(%s) Func(%s) Args(%s) \n",
-			meth, g_config->package_name, udf_function_name, valstr );
+			meth, lso_package, udf_function_name, valstr );
 	free(valstr);
 
 	rc = citrusleaf_udf_record_apply(asc, ns, set, &o_key,
-			g_config->package_name, udf_function_name, arglist,
+			lso_package, udf_function_name, arglist,
 			timeout_ms, &result);
 
 	if (rc != CITRUSLEAF_OK) {

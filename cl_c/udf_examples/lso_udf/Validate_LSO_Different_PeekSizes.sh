@@ -4,7 +4,7 @@ export UNS="test"
 export USET="set"
 export LSOBIN="LsoBin"
 
-export UFILE="LsoStoneman"
+export UFILE="LSTACK"
 export PUSHUDF="stumbleCompress5"
 export PEEKUDF="stumbleUnCompress5"
 export UDF1_ARGS="XXX"

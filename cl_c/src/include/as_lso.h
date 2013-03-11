@@ -21,10 +21,13 @@
 
 extern uint64_t rand_64();
 
+#ifndef ATOMIC_INT 
 typedef struct atomic_int_s {
 	uint64_t		val;
 	pthread_mutex_t	lock;
 } atomic_int;
+#define ATOMIC_INT
+#endif
 
 extern void *start_counter_thread(atomic_int *records, atomic_int *bytes);
 extern void stop_counter_thread(void *id);
@@ -34,10 +37,15 @@ extern void			atomic_int_destroy(atomic_int *ai);
 extern uint64_t		atomic_int_add(atomic_int *ai, int val);
 extern uint64_t		atomic_int_get(atomic_int *ai);
 
+
+/**
+ * Hold the basic (default) information needed to configure and run the tests
+ */
+#ifndef LS_STRUCT_CONFIG 
 typedef struct config_s {
         char  *host;
         int    port;
-        char  *ns;
+        char  *ns;      // Namespace
         char  *set;
         uint32_t timeout_ms;
         uint32_t record_ttl;
@@ -48,6 +56,8 @@ typedef struct config_s {
         cf_atomic_int success;
         cf_atomic_int fail;
 } config;
+#define LS_STRUCT_CONFIG
+#endif
 
 extern int as_lso_create( cl_cluster * asc, char * namespace, char * set,
                   		  char * keystr, char * lso_bin_name,

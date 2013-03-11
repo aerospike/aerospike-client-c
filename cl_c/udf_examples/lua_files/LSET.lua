@@ -75,44 +75,6 @@ local function initializeLSetMap(topRec, setBinName, distrib )
 end -- initializeLSetMap()
 
 -- ======================================================================
--- adjustLsetMap:
--- ======================================================================
--- Using the settings supplied by the caller in the Create() call,
--- we adjust the values in the lsetCtrlMap.
--- Parms:
--- (*) lsetCtrlMap: the main LSET Bin value
--- (*) argListMap: Map of User Override LSET Settings 
--- ======================================================================
-local function adjustLSetMap( lsetCtrlMap, argListMap )
-  local mod = "LSetStickman";
-  local meth = "adjustLSetMap()";
-  GP=F and trace("[ENTER]: <%s:%s>:: LSetMap(%s)::\n ArgListMap(%s)",
-                 mod, meth, tostring(lsetCtrlMap), tostring( argListMap ));
-
-  -- Iterate thru the argListMap and adjust (override) the map settings 
-  -- based on the settings passed in during the stackCreate() call.
-  -- CREATE_ARGLIST='{
-  -- "Modulo":67
-  -- "KeyType":1}'
-  for name, value in map.pairs( argListMap ) do
-    if name  == "Modulo" then
-      if type( value ) == "number" and value > 0 and value < 221 then
-        lsetCtrlMap.Modulo = value;
-      end
-    elseif name == "KeyType" then
-      if type( value ) == "number" and value > 0 then
-        lsetCtrlMap.KeyType = value;
-      end
-    end
-  end -- foreach arg
-
-  GP=F and trace("[EXIT]: <%s:%s> : CTRL Map after Adjust(%s)",
-    mod, meth , tostring(lsetCtrlMap));
-  return lsetCtrlMap
-end -- adjustLSetMap
-
-
--- ======================================================================
 local  CRC32 = require('CRC32');
 -- ======================================================================
 -- Return the hash of "value", with modulo.
@@ -581,8 +543,8 @@ function asLSetInsert( topRec, setBinName, newValue )
 
   -- Check that the Set Structure is already there, otherwise, error
   if( topRec['AsLSetCtrlBin'] == nil ) then
-    warn("[WARNING]: <%s:%s> AsLSetCtrlBin does not Exist:Creating",
-         mod, meth );
+    GP=F and trace("[WARNING]: <%s:%s> AsLSetCtrlBin does not Exist:Creating",
+                   mod, meth );
     lsetCtrlMap, distrib =
       initializeLSetMap( topRec, setBinName, DEFAULT_DISTRIB );
     topRec['AsLSetCtrlBin'] = lsetCtrlMap;

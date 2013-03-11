@@ -28,7 +28,7 @@
 
 
 #define NUM_KEYS 110
-static const char BIN_NAME[] = "bin1"; // must match name in sproc_scan_test.lua
+static const char BIN_NAME[] = "bin1"; // must match name in scan_udf.lua
 static const char BIN_NAME_TO_DELETE[] = "bin2"; 
 
 
@@ -188,7 +188,7 @@ void usage(int argc, char *argv[])
 	fprintf(stderr, "-n namespace [test]\n");
 	fprintf(stderr, "-s set [default *all*]\n");
 	fprintf(stderr, "-i insert data [default not on]\n");
-	fprintf(stderr, "-f package_file [lua_packages/sproc_scan_test.lua]\n");
+	fprintf(stderr, "-f package_file [lua_packages/scan_udf.lua]\n");
 	fprintf(stderr, "-P package_name [sproc_scan_test] \n");
 	fprintf(stderr, "-v is verbose\n");
 }
@@ -204,11 +204,11 @@ int main(int argc, char **argv)
 	c.set			= 0;
 	c.timeout_ms	= 1000;
 	c.verbose		= true;
-	c.package_file	= "../lua_packages/sproc_scan_test.lua";
+	c.package_file	= "../lua_packages/scan_udf.lua";
 	c.package_name	= "sproc_scan_test";
 	c.insert_data   = true;
 
-	fprintf(stderr, "Starting stored-procedure Scan Test\n");
+	fprintf(stderr, "Starting UDF Scan Test\n");
 
 	int optcase;
 

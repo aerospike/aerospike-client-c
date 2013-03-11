@@ -104,11 +104,9 @@ static bool            gasq_abort         = false;
 
 static int scan_compile(const as_scan * scan, uint8_t **buf_r, size_t *buf_sz_r);
 
-static cl_rv as_scan_params_init(as_scan_params * oparams, as_scan_params *iparams);
-
 static cl_rv as_scan_udf_destroy(as_scan_udf * udf);
 
-cl_rv as_scan_execute(cl_cluster * cluster, const as_scan * scan, void * udata, int (* callback)(as_val *, void *));
+cf_vector * as_scan_execute(cl_cluster * cluster, const as_scan * scan, char *node_name, cl_rv * res, int (* callback)(as_val *, void *), void *udata);
 
 // Creates a message, internally calling cl_compile to pass to the server
 static int scan_compile(const as_scan * scan, uint8_t ** buf_r, size_t * buf_sz_r) {
@@ -229,7 +227,7 @@ static int as_scan_worker_do(cl_cluster_node * node, as_scan_task * task) {
     
     int fd = cl_cluster_node_fd_get(node, false, task->asc->nbconnect);
     if ( fd == -1 ) { 
-        fprintf(stderr,"do query monte: cannot get fd for node %s ",node->name);
+        fprintf(stderr,"do scan monte: cannot get fd for node %s ",node->name);
         return CITRUSLEAF_FAIL_CLIENT; 
     }
 
@@ -421,9 +419,6 @@ static int as_scan_worker_do(cl_cluster_node * node, as_scan_task * task) {
             // don't have to free object internals. They point into the read buffer, where
             // a pointer is required
             pos += buf - buf_start;
-            if (gasq_abort) {
-                break;
-            }
 
         }
 
@@ -432,11 +427,6 @@ static int as_scan_worker_do(cl_cluster_node * node, as_scan_task * task) {
             rd_buf = 0;
         }
 
-        // abort requested by the user
-        if (gasq_abort) {
-            close(fd);
-            goto Final;
-        }
     } while ( done == false );
 
     cl_cluster_node_fd_put(node, fd, false);
@@ -477,7 +467,9 @@ void * as_scan_worker(void * dummy) {
         if ( node ) {
             rc = as_scan_worker_do(node, &task);
         }
-
+	else {
+		fprintf(stderr, "No node found with the name %s\n", task.node_name);
+	}
         cf_queue_push(task.node_complete_q, (void *)&rc);
     }
 }
@@ -487,15 +479,13 @@ cl_rv as_scan_params_init(as_scan_params * oparams, as_scan_params *iparams) {
 	// If there is an input structure use the values from that else use the default ones
 	oparams->fail_on_cluster_change = iparams ? iparams->fail_on_cluster_change : false;
 	oparams->priority = iparams ? iparams->priority : AS_SCAN_PRIORITY_AUTO;
-	oparams->concurrent_nodes = iparams ? iparams->concurrent_nodes : true;
-	oparams->threads_per_node = iparams ? iparams->threads_per_node : 1;
+//	oparams->threads_per_node = iparams ? iparams->threads_per_node : 1;
 	oparams->nobindata = iparams ? iparams->nobindata : false;
 	oparams->pct = iparams ? iparams->pct : 100;
-	oparams->get_key = iparams ? iparams->get_key : false;
 	return CITRUSLEAF_OK;	
 }
 
-cl_rv as_scan_udf_init(as_scan_udf * udf, as_scan_udf_type type, const char * filename, const char * function, as_list * arglist) {
+cl_rv as_scan_udf_init(as_scan_udf * udf, udf_execution_type type, const char * filename, const char * function, as_list * arglist) {
     udf->type        = type;
     udf->filename    = filename == NULL ? NULL : strdup(filename);
     udf->function    = function == NULL ? NULL : strdup(function);
@@ -525,19 +515,57 @@ cl_rv as_scan_udf_destroy(as_scan_udf * udf) {
     return CITRUSLEAF_OK;
 }
 
-cl_rv as_scan_execute(cl_cluster * cluster, const as_scan * scan, void * udata, int (* callback)(as_val *, void *)) {
+/*
+ * Calls a scan on all the nodes in the cluster. This function initializes a background scan.
+ * The udf return values are not returned back to the client. 
+ */
+cf_vector * citrusleaf_udf_scan_background(cl_cluster * asc, as_scan * scan, int (*callback) (as_val *, void *), void *udata) {
+	scan->udf.type = AS_SCAN_UDF_BACKGROUND;
+	cl_rv res = CITRUSLEAF_OK;
+	// Call as_scan_execute with a NULL node_name.
+	return as_scan_execute(asc, scan, NULL, &res, callback, udata);	
+}
+
+/*
+ *  Calls a scan on a particular node in the cluster with the given parameters and then applies
+ *  the udf on the results. It returns values from the udf. The callback is then applied on those values at the client.
+ */
+cl_rv citrusleaf_udf_scan_node(cl_cluster *asc, as_scan *scan, char *node_name, int( *callback)(as_val *, void *), void * udata) {
+	scan->udf.type = AS_SCAN_UDF_CLIENT_RECORD;
+	cl_rv res = CITRUSLEAF_FAIL_CLIENT;
+
+	// If as_scan_execute returns a non null vector, return the value in the vector, else return a failure
+	cf_vector *v = as_scan_execute(asc, scan, node_name, &res, callback, udata);
+	if (v) {
+		cf_vector_get(v, 0, &res);
+	}
+	cf_vector_destroy(v);
+	return res;
+}
+
+/* Calls a scan of all the nodes in the cluster with the given parameters and then applies the udf on the results.
+ * It returns values from the udf. The callback is then applied on those values at the client. 
+ */
+cf_vector * citrusleaf_udf_scan_all_nodes(cl_cluster *asc, as_scan * scan, int (*callback)(as_val*, void*), void * udata) {
+	scan->udf.type = AS_SCAN_UDF_CLIENT_RECORD;
+	cl_rv rc = CITRUSLEAF_OK;
+	return as_scan_execute(asc, scan, NULL, &rc, callback, udata);
+}
+
+cf_vector * as_scan_execute(cl_cluster * cluster, const as_scan * scan, char * node_name, cl_rv * res, int (* callback)(as_val *, void *), void * udata) {
     
     cl_rv       rc                          = CITRUSLEAF_OK;
     uint8_t     wr_stack_buf[STACK_BUF_SZ]  = { 0 };
     uint8_t *   wr_buf                      = wr_stack_buf;
     size_t      wr_buf_sz                   = sizeof(wr_stack_buf);
-    
+    int 	node_count		    = 0; 
     rc = scan_compile(scan, &wr_buf, &wr_buf_sz);
     
     if ( rc != CITRUSLEAF_OK ) {
         // TODO: use proper logging function
-        fprintf(stderr, "do query monte: query compile failed: \n");
-        return rc;
+        fprintf(stderr, "do scan monte: scan compile failed: \n");
+        *res = rc;
+	return NULL;
     }
 
     // Setup worker
@@ -550,59 +578,61 @@ cl_rv as_scan_execute(cl_cluster * cluster, const as_scan * scan, void * udata, 
         .udata              = udata,
         .callback           = callback,
     };
-    
-    char *node_names    = NULL;    
-    int   node_count    = 0;
 
-    // Get a list of the node names, so we can can send work to each node
-    cl_cluster_get_node_names(cluster, &node_count, &node_names);
-    if ( node_count == 0 ) {
-        // TODO: use proper loggin function
-        fprintf(stderr, "citrusleaf query nodes: don't have any nodes?\n");
-        cf_queue_destroy(task.node_complete_q);
-        if ( wr_buf && (wr_buf != wr_stack_buf) ) {
-            free(wr_buf); 
-            wr_buf = 0;
-        }
-        return CITRUSLEAF_FAIL_CLIENT;
+    // If node_name is not null, we are executing scan on a particular node
+    if (node_name) {
+	    // Copy the node name in the task and push it in the global scan queue. One task for each node
+	    strcpy(task.node_name, node_name);
+	    cf_queue_push(g_scan_q, &task);
+	    node_count = 1;
+    }
+    else {
+	    // Node name is NULL, we have to scan all nodes 
+	    char *node_names    = NULL;    
+
+	    // Get a list of the node names, so we can can send work to each node
+	    cl_cluster_get_node_names(cluster, &node_count, &node_names);
+	    if ( node_count == 0 ) {
+		    // TODO: use proper loggin function
+		    fprintf(stderr, "citrusleaf scan nodes: don't have any nodes?\n");
+		    cf_queue_destroy(task.node_complete_q);
+		    if ( wr_buf && (wr_buf != wr_stack_buf) ) {
+			    free(wr_buf); 
+			    wr_buf = 0;
+		    }
+		    *res = CITRUSLEAF_FAIL_CLIENT;
+		    return NULL;
+	    }
+
+	    // Dispatch work to the worker queue to allow the transactions in parallel
+	    // NOTE: if a new node is introduced in the middle, it is NOT taken care of
+	    node_name = node_names;
+	    for ( int i=0; i < node_count; i++ ) {
+		    // fill in per-request specifics
+		    strcpy(task.node_name, node_name);
+		    cf_queue_push(g_scan_q, &task);
+		    node_name += NODE_NAME_SIZE;                    
+	    }
+	    free(node_names);
+	    node_names = NULL;
     }
 
-    // Dispatch work to the worker queue to allow the transactions in parallel
-    // NOTE: if a new node is introduced in the middle, it is NOT taken care of
-    char * node_name = node_names;
-    for ( int i=0; i < node_count; i++ ) {
-        // fill in per-request specifics
-        strcpy(task.node_name, node_name);
-        cf_queue_push(g_scan_q, &task);
-        node_name += NODE_NAME_SIZE;                    
-    }
-    free(node_names);
-    node_names = NULL;
-    
     // wait for the work to complete from all the nodes.
-    rc = CITRUSLEAF_OK;
+    // For every node, fill in the return value in the result vector
+    cf_vector * result = cf_vector_create(sizeof(cl_rv), node_count, 0);
     for ( int i=0; i < node_count; i++ ) {
-        int node_rc;
-        cf_queue_pop(task.node_complete_q, &node_rc, CF_QUEUE_FOREVER);
-        if ( node_rc != 0 ) {
-            // Got failure from one node. Trigger abort for all 
-            // the ongoing request
-            gasq_abort = true;
-            rc = node_rc;
-        }
+	    int node_rc;
+	    cf_queue_pop(task.node_complete_q, &node_rc, CF_QUEUE_FOREVER);
+	    cf_vector_set(result, i, &node_rc);
     }
-    gasq_abort = false;
 
     if ( wr_buf && (wr_buf != wr_stack_buf) ) { 
-        free(wr_buf); 
-        wr_buf = 0;
+	    free(wr_buf); 
+	    wr_buf = 0;
     }
 
-    callback(NULL, udata);
-    
     cf_queue_destroy(task.node_complete_q);
-
-    return rc;
+    return result;
 }
 
 /**

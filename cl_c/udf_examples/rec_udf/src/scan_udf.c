@@ -51,15 +51,14 @@ typedef struct config_s {
 
 static config *g_config = NULL;
 
-//INFO not working currently, use fprintf for now
 void usage(int argc, char *argv[]) {
-    fprintf(stderr, "Usage %s:\n", argv[0]);
-    fprintf(stderr, "   -h host [default 127.0.0.1] \n");
-    fprintf(stderr, "   -p port [default 3000]\n");
-    fprintf(stderr, "   -n namespace [default test]\n");
-    fprintf(stderr, "   -s set [default *all*]\n");
-    fprintf(stderr, "   -F udf_file [default lua_files/register1.lua]\n");
-    fprintf(stderr, "   -f udf_function [default register_1]\n");
+    INFO("Usage %s:", argv[0]);
+    INFO("   -h host [default 127.0.0.1] ");
+    INFO("   -p port [default 3000]");
+    INFO("   -n namespace [default test]");
+    INFO("   -s set [default *all*]");
+    INFO("   -F udf_file [default lua_files/register1.lua]");
+    INFO("   -f udf_function [default register_1]");
 }
 
 int init_configuration (int argc, char *argv[])
@@ -136,7 +135,10 @@ int register_package()
 
 // Currently the callback only prints the return value, can add more logic here later
 int cb(as_val * v, void * u) {
-	fprintf(stderr,"%s\n", as_val_tostring(v));
+	char * s = as_val_tostring(v);
+	INFO("%s", s);
+	free(s);
+	as_val_destroy(v);
 	return 0;
 }
 int main(int argc, char **argv) {
@@ -150,11 +152,11 @@ int main(int argc, char **argv) {
 	// create the cluster object - attach
 	cl_cluster *asc = citrusleaf_cluster_create();
 	if (!asc) { 
-		fprintf(stderr, "could not create cluster\n");
+		INFO("could not create cluster");
 		return(-1); 
 	}
 	if (0 != citrusleaf_cluster_add_host(asc, g_config->host, g_config->port, g_config->timeout_ms)) {
-		fprintf(stderr, "Failed to add host\n");
+		INFO("Failed to add host");
 		free(asc);
 		return(-1);
 	}
@@ -169,11 +171,66 @@ int main(int argc, char **argv) {
 	citrusleaf_scan_init();
 	as_scan * scan = as_scan_new(g_config->ns, g_config->set);
 	
+	as_scan_params params = { 
+		.fail_on_cluster_change  = false,
+		.priority		= AS_SCAN_PRIORITY_AUTO,
+		.nobindata		= false,
+		.pct			= 100
+	};
+
+	as_scan_params_init(&scan->params, &params);
+
 	// This function takes in the filename (not the absolute path and w/o .lua)
 	as_scan_foreach(scan, "register1", g_config->function_name, NULL);
 
-	// Execute scan -- still need to add a better API over this 
-	as_scan_execute(asc, scan, NULL, cb, true);
+	// Execute scan udfs in background
+	// Inputs : cluster object, scan object, callback function, arguments to the callback function 
+	INFO("\nRunning background scan udf on the entire cluster");
+	cf_vector *v = citrusleaf_udf_scan_background(asc, scan, cb, NULL);
+	
+	// This returns a vector of return values, the size of which is the size of the cluster
+	int sz = cf_vector_size(v);
+	int rc;
+	for(int i=0; i <= sz; i++) {
+		cf_vector_get(v, i, &rc);
+		INFO("Udf scan background for node %d returned %d", i, rc);
+	}
+	// Free the result vector
+	cf_vector_destroy(v);
+
+
+	// Execute normal udfs on a particular node
+	// Inputs: cluster object, scan object, node name -- can be found by doing clinfo -h <host> -p <port> on a particular node
+	// callback and the arguments to the callback function
+	
+	// For the test, we get node_name for every node in the cluster and run citrusleaf_udf_scan_node on each.
+	INFO("\nRunning scan udf on each node of the cluster");
+	int node_count = 0;
+	char * node_names;
+	cl_cluster_get_node_names(asc, &node_count, &node_names);
+	char * node_name = node_names;
+	for ( int i=0; i < node_count; i++ ) {
+		rc = citrusleaf_udf_scan_node(asc, scan, node_name, cb, NULL);
+		INFO("Udf scan for node %s returned %d", node_name, rc);
+		node_name += NODE_NAME_SIZE;
+	}
+	free(node_names);
+	node_names = NULL;
+
+	// Execute normal udf for the entire cluster
+	// Inputs: cluster object, scan object, callback, arguments to callback
+	INFO("\nRunning scan udf on the entire cluster");
+	v = citrusleaf_udf_scan_all_nodes(asc, scan, cb, NULL);
+	
+	// This returns a vector of return values, the size of which is the size of the cluster
+	sz = cf_vector_size(v);
+	for(int i=0; i <= sz; i++) {
+		cf_vector_get(v, i, &rc);
+		INFO("Udf scan node %d returned %d", i, rc);
+	}
+	// Free the result vector
+	cf_vector_destroy(v);
+
 	
 	// Destroy the scan object
 	as_scan_destroy(scan);

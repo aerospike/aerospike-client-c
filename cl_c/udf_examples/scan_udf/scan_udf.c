@@ -1,6 +1,6 @@
 /*
  * Citrusleaf Tools
- * scan_sproc.c
+ * scan_udf.c
  *
  * Copyright 2012 by Citrusleaf. All rights reserved.
  * THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE. THE COPYRIGHT NOTICE
@@ -24,7 +24,7 @@
 
 #include "citrusleaf/citrusleaf.h"
 
-#include "scan_sproc.h"
+#include "scan_udf.h"
 
 
 #define NUM_KEYS 110

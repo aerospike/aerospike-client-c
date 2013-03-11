@@ -310,6 +310,7 @@ cluster_timer_fn(evutil_socket_t fd, short event, void *udata)
 	cluster_tend(asc);
 	
 	if (time(0) % CL_LOG_STATS_INTERVAL == 0) {
+		cl_partition_table_dump(asc);
 		ev2citrusleaf_print_stats();
 		cf_info("requests in progress: %d", cf_atomic_int_get(asc->requests_in_progress));
 	}

@@ -91,7 +91,9 @@ typedef struct cl_partition_table_s {
 	struct cl_partition_table_s *next;
 	
 	char ns[33];  // the namespace name
-	
+
+	bool was_dumped; // only dump table if it changed since last time
+
 	cl_partition partitions[];
 	
 } cl_partition_table;
@@ -200,6 +202,7 @@ extern void cl_partition_table_remove_node( ev2citrusleaf_cluster *asc, cl_clust
 extern void cl_partition_table_destroy_all(ev2citrusleaf_cluster *asc);
 extern void cl_partition_table_set( ev2citrusleaf_cluster *asc, cl_cluster_node *node, const char *ns, cl_partition_id pid, bool write);
 extern cl_cluster_node *cl_partition_table_get( ev2citrusleaf_cluster *asc, const char *ns, cl_partition_id pid, bool write);
+extern void cl_partition_table_dump(ev2citrusleaf_cluster* asc);
 
 #ifdef __cplusplus
 } // end extern "C"

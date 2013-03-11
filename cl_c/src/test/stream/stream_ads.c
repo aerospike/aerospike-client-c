@@ -60,13 +60,18 @@ TEST( stream_ads_create, "create 25600 records and 1 index" ) {
 
     int rc = 0;
 
-    char * sindex_resp[1] = { NULL };
+    char * sindex_resp = NULL;
 
     // create index on "timestamp"
 
     rc = citrusleaf_secondary_index_create(cluster, "test", "ads", "test_ads_timestamp", "timestamp", "NUMERIC", sindex_resp);
     if ( rc != CITRUSLEAF_OK && rc != CITRUSLEAF_FAIL_INDEX_EXISTS ) {
         info("error(%d): %s", rc, *sindex_resp);
+    }
+
+    if ( sindex_resp ) {
+        free(sindex_resp);
+        sindex_resp = NULL;
     }
 
 

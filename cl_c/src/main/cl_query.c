@@ -867,9 +867,6 @@ static int as_query_worker_do(cl_cluster_node * node, as_query_task * task) {
                 // (Note:  In the key exists case, there is no bin data.)
                 as_val * v = as_rec_get(rp, "SUCCESS");
 
-                printf("as_rec_get: %p\n",v);
-
-
                 if ( v  != NULL ) {
                     // I only need this value. The rest of the record is useless.
                     // Need to detach the value from the record (result)

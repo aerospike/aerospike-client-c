@@ -68,14 +68,15 @@ typedef struct as_query {
 } as_query;
 
 typedef struct as_query_response_record_t {
-    char        * ns;
-    cf_digest     keyd;
-    char        * set;
-    uint32_t      generation;
-    uint32_t      record_ttl;
-    cl_bin      * bins;
-    int           n_bins;
-    bool          ismalloc;
+    char *      ns;
+    cf_digest   keyd;
+    char *      set;
+    uint32_t    generation;
+    uint32_t    record_ttl;
+    cl_bin *    bins;
+    int         n_bins;
+    as_map *    values;  
+    bool        ismalloc;
 } as_query_response_rec;
 
 typedef bool (* as_query_cb) (const as_val * val, void * udata);

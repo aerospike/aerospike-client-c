@@ -585,9 +585,7 @@ static as_val * query_response_get(const as_rec * rec, const char * name)  {
             if (!strcmp(r->bins[i].bin_name, name)) {
                 as_serializer ser;
                 as_msgpack_init(&ser);
-                printf("*** new integer creation\n");
                 v = citrusleaf_udf_bin_to_val(&ser, &r->bins[i]);
-                printf("*** new integer created\n");
                 as_serializer_destroy(&ser);
                 break;
             }
@@ -596,7 +594,6 @@ static as_val * query_response_get(const as_rec * rec, const char * name)  {
         if ( v ) {
             if ( r->values == NULL ) {
                 r->values = as_hashmap_new(32);
-                printf("query_response_get: as_map_new: %p\n",r->values);
             }
             as_string * key = as_string_new(strdup(name), true);
             as_map_set(r->values, (as_val *) key, v);
@@ -618,7 +615,6 @@ static uint16_t query_response_gen(const as_rec * rec) {
 }
 
 int query_response_destroy(as_rec *rec) {
-    printf("query_response_destroy: %p\n",rec);
     as_query_response_rec * r = as_rec_source(rec);
     if ( !r ) return 0;
     citrusleaf_bins_free(r->bins, r->n_bins);
@@ -626,7 +622,6 @@ int query_response_destroy(as_rec *rec) {
     if ( r->ns )        free(r->ns);
     if ( r->set )       free(r->set);
     if ( r->values )    {
-        printf("query_response_destroy: as_map_destroy: %p\n",r->values);
         as_map_destroy(r->values);
         r->values = NULL;
     }

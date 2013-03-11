@@ -69,7 +69,7 @@ int init_configuration (int argc, char *argv[]) {
 	g_config->timeout_ms   = 5000;
 	g_config->record_ttl   = 864000;
 	g_config->verbose      = false;
-	g_config->package_name = "AsLSetStoneman";
+	g_config->package_name = "LSET";
 
 	INFO("[DEBUG]:[%s]: Num Args (%d) g_config(%p)\n", meth, argc, g_config);
 

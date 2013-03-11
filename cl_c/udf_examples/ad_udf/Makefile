@@ -1,13 +1,47 @@
 # Citrusleaf Tools
 # Makefile
 
-.PHONY: default
-default: all
-	@echo "done."
+DIR_OBJECT = ./obj
+DIR_TARGET = .
+DIR_LIB = ../../target/Linux-x86_64/lib
 
+HEADERS = ad_udf.h utils.h 
+SOURCES =  ad_udf.c utils.c 
+TARGET = ad_udf
+
+INCLUDES = -I../include/ -I../../target/Linux-x86_64/include
+LIBRARIES = $(DIR_LIB)/libcitrusleaf.a  -lssl -lpthread -lrt  -lcrypto
+
+AS_CFLAGS = -D_FILE_OFFSET_BITS=64 -std=gnu99 -D_REENTRANT -D_GNU_SOURCE
+CFLAGS_NATIVE = -g  -fno-common -fno-strict-aliasing -rdynamic  -Wall -Wredundant-decls $(AS_CFLAGS)
+
+ifeq (${MR_LANG},LUA)
+LIBRARIES += -llua
+endif
+LIBRARIES += -lm
+
+LDFLAGS += -L$(DEPTH)/lib/ -L$(DEPTH)/shared/lib/ 
+
+OBJECTS = $(SOURCES:%.c=$(DIR_OBJECT)/%.o)
+DEPENDENCIES = $(OBJECTS:%.o=%.d)
+
+.PHONY: all
+all: ad_udf 
+
+.PHONY: clean
 clean:
-	rm -f obj/*
-	rm -f bin/*
+	/bin/rm -f $(OBJECTS) $(DIR_TARGET)/$(TARGET) 
 
-%:
-	$(MAKE) -C src $@
+.PHONY: depclean
+depclean: clean
+	/bin/rm -f $(DEPENDENCIES) 
+
+.PHONY: $(TARGET)
+$(TARGET): $(OBJECTS)
+	$(CC) $(LDFLAGS) -o $(DIR_TARGET)/$(TARGET) $(OBJECTS) $(LIBRARIES)
+
+-include $(DEPENDENCIES) 
+
+$(DIR_OBJECT)/%.o: %.c
+	$(CC) $(CFLAGS_NATIVE) -MMD -o $@ -c $(INCLUDES) $<
+

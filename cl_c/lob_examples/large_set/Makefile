@@ -1,8 +1,8 @@
 # Citrusleaf Tools
 # Makefile:  Large AS Set Objects
 
-DIR_OBJECT = obj
-DIR_TARGET = ./bin
+DIR_OBJECT = ./obj
+DIR_TARGET = .
 DIR_LIB = ../../target/Linux-x86_64/lib
 
 SOURCES       = as_lset_main.c

@@ -598,7 +598,6 @@ static as_val * query_response_get(const as_rec * rec, const char * name)  {
                 r->values = as_hashmap_new(32);
                 printf("query_response_get: as_map_new: %p\n",r->values);
             }
-            as_val_reserve(v);
             as_string * key = as_string_new(strdup(name), true);
             as_map_set(r->values, (as_val *) key, v);
         }
@@ -873,12 +872,12 @@ static int as_query_worker_do(cl_cluster_node * node, as_query_task * task) {
                     // then release the record back to the wild... or wherever
                     // it came from.
                     task->callback(v, task->udata);
+
+                    as_rec_destroy(rp);
                 }
                 else {
                     task->callback((as_val *) rp, task->udata);
                 }
-
-                as_rec_destroy(rp);
                 
                 if (task->isinline) { 
                     if (recp->ns) { 

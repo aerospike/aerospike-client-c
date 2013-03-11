@@ -17,11 +17,13 @@
 #include "citrusleaf.h"
 #include "cl_udf.h"
 
+#ifndef ATOMIC_INT 
 typedef struct atomic_int_s {
-    uint64_t        val;
-    pthread_mutex_t lock;
+        uint64_t        val;
+            pthread_mutex_t lock;
 } atomic_int;
-
+#define ATOMIC_INT
+#endif
 
 extern void *start_counter_thread(atomic_int *records, atomic_int *bytes);
 extern void stop_counter_thread(void *id);
@@ -29,6 +31,7 @@ extern void stop_counter_thread(void *id);
 /**
  * Hold the basic (default) information needed to configure and run the tests
  */
+#ifndef LS_STRUCT_CONFIG 
 typedef struct config_s {
         char  *host;
         int    port;
@@ -37,15 +40,18 @@ typedef struct config_s {
         uint32_t timeout_ms;
         uint32_t record_ttl;
         char *package_name;
+        char *filter_name;
         cl_cluster      *asc;
         bool    verbose;
         cf_atomic_int success;
         cf_atomic_int fail;
 } config;
+#define LS_STRUCT_CONFIG
+#endif
 
 extern int as_lset_create( cl_cluster * asc, char * namespace, char * set,
-                    char * keystr, char * lset_bin_name, int distribution,
-                    uint32_t timeout_ms );
+char * keystr, char * lset_bin_name, int distribution,
+uint32_t timeout_ms );
 
 extern int as_lset_insert(cl_cluster * asc, char * ns, char * set,
                           char * keystr, char * lset_bin_name,

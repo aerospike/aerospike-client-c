@@ -51,8 +51,8 @@ void __log_append(FILE * f, const char * prefix, const char * fmt, ...);
  */
 int
 as_lset_create( cl_cluster * asc, char * namespace, char * set,
-		char * keystr, char * lset_bin_name, int distribution )
-{
+		char * keystr, char * lset_bin_name, int distribution,
+		uint32_t timeout_ms ) {
 	static char * meth = "as_lset_create()";
 	int rc = 0; // ubiquitous return code
 
@@ -83,9 +83,7 @@ as_lset_create( cl_cluster * asc, char * namespace, char * set,
 	// arglist, use it then destroy it.
   // Lua:asLSetCreate(record, NS, Set, SBin, Distrib)
 	as_list * arglist = NULL;
-	arglist = as_arraylist_new(4, 0);	// We have 4 parms to pass
-	as_list_add_string(arglist, namespace );
-	as_list_add_string(arglist, set );
+	arglist = as_arraylist_new(2, 0);	// We have 4 parms to pass
 	as_list_add_string(arglist, lset_bin_name );
 	as_list_add_integer(arglist, distribution );
 	char * udf_function_name = "asLSetCreate";
@@ -111,7 +109,7 @@ as_lset_create( cl_cluster * asc, char * namespace, char * set,
 
 	rc = citrusleaf_udf_record_apply(g_config->asc, namespace,
 			set, &o_key, g_config->package_name, udf_function_name, arglist,
-			g_config->timeout_ms, &result);
+			timeout_ms, &result);
 
 	if (rc != CITRUSLEAF_OK) {
 		INFO("[ERROR]:[%s]:citrusleaf_udf_record_apply: Fail: RC(%d)",meth, rc);
@@ -161,7 +159,7 @@ as_lset_create( cl_cluster * asc, char * namespace, char * set,
  */
 int
 as_lset_insert(cl_cluster * asc, char * ns, char * set, char * keystr,
-		char * lset_bin_name, as_val * lset_valuep)
+		char * lset_bin_name, as_val * lset_valuep, uint32_t timeout_ms )
 {
 	static char * meth = "as_lset_insert()";
 	int rc = 0; // ubiquitous return code
@@ -226,7 +224,7 @@ as_lset_insert(cl_cluster * asc, char * ns, char * set, char * keystr,
 
 	rc = citrusleaf_udf_record_apply(asc, ns, set, &o_key,
 			g_config->package_name, udf_function_name, arglist,
-			g_config->timeout_ms, &result);
+			timeout_ms, &result);
 
 	if (rc != CITRUSLEAF_OK) {
 		INFO("[ERROR]:[%s]:citrusleaf_udf_record_apply: Fail: RC(%d)",meth, rc);
@@ -264,9 +262,9 @@ as_lset_insert(cl_cluster * asc, char * ns, char * set, char * keystr,
  */
 int
 as_lset_insert_with_transform(cl_cluster * asc, char * ns, char * set,
-		char * keystr, char * lset_bin_name, as_val * lset_valuep, char * udf_file,
-		char * udf_name, as_list * function_args )
-{
+		char * keystr, char * lset_bin_name, as_val * lset_valuep,
+		char * udf_file, char * udf_name, as_list * function_args,
+		uint32_t timeout_ms ) {
 	static char * meth = "as_lset_insert_with_transform()";
 	int rc = 0;
 
@@ -309,8 +307,8 @@ as_lset_insert_with_transform(cl_cluster * asc, char * ns, char * set,
  */
 as_result  *
 as_lset_search(cl_cluster * asc, char * ns, char * set, char * keystr,
-		char * lset_bin_name, as_val * search_valuep, bool exists)
-{
+		char * lset_bin_name, as_val * search_valuep, bool exists,
+		uint32_t timeout_ms) {
 	static char * meth = "as_lset_search()";
 	int rc = 0; // ubiquitous return code
 	char * udf_function_name = "asLSetSearch";
@@ -366,7 +364,7 @@ as_lset_search(cl_cluster * asc, char * ns, char * set, char * keystr,
 
 	rc = citrusleaf_udf_record_apply(asc, ns, set, &o_key,
 			g_config->package_name, udf_function_name, arglist,
-			g_config->timeout_ms, resultp);
+			timeout_ms, resultp);
 
 	if (rc != CITRUSLEAF_OK) {
 		INFO("[ERROR]:[%s]:citrusleaf_udf_record_apply: Fail: RC(%d)",meth, rc);
@@ -427,8 +425,8 @@ as_lset_search(cl_cluster * asc, char * ns, char * set, char * keystr,
 as_result  *
 as_lset_search_with_transform(cl_cluster * asc, char * ns, char * set,
     char * keystr, char * lset_bin_name, as_val * search_valuep, bool exists,
-    char * udf_file, char * udf_name, as_list * function_args )
-{
+    char * udf_file, char * udf_name, as_list * function_args,
+	uint32_t timeout_ms ) {
 	static char * meth = "as_lset_search_with_transform()";
 	int rc = 0;
 	as_result * resultp = NULL;
@@ -463,7 +461,7 @@ as_lset_search_with_transform(cl_cluster * asc, char * ns, char * set,
  */
 int
 as_lset_delete(cl_cluster * asc, char * ns, char * set, char * keystr,
-		char * lset_bin_name, as_val * delete_valuep )
+		char * lset_bin_name, as_val * delete_valuep, uint32_t timeout_ms )
 {
 	static char * meth = "as_lset_delete()";
 	int rc = 0; // ubiquitous return code
@@ -518,7 +516,7 @@ as_lset_delete(cl_cluster * asc, char * ns, char * set, char * keystr,
 
 	rc = citrusleaf_udf_record_apply(asc, ns, set, &o_key,
 			g_config->package_name, udf_function_name, arglist,
-			g_config->timeout_ms, &result);
+			timeout_ms, &result);
 
 	if (rc != CITRUSLEAF_OK) {
 		INFO("[ERROR]:[%s]:citrusleaf_udf_record_apply: Fail: RC(%d)",meth, rc);

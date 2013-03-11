@@ -3,7 +3,7 @@
 export UNS="test"
 export USET="set"
 
-export UFILE="AsLSetStickman"
+export UFILE="AsLSetStoneman"
 export FUN_CR8="asLSetCreate"
 export FUN_INS="asLSetInsert"
 export FUN_SRCH="asLSetSearch"
@@ -26,12 +26,10 @@ if [ -n "$1" ]; then # roll your own size
 fi
 
 for NUM_PUSHES in $SIZES; do
-  DRES=$(ascli udf-record-apply $UNS $USET $USERID $UFILE $FUN_CR8 $UNS $USET $SETBIN 0)
-  if $DEBUG; then echo "CREATE: DRES: ${DRES}"; fi
   RAN=$(lua -e "math.randomseed(os.time());print(math.random(77))");
   echo "Pushing: USERID: $USERID NUM_PUSHES: $NUM_PUSHES RAN: $RAN"
   I=1; while [ $I -le $NUM_PUSHES ]; do
-    DRES=$(ascli udf-record-apply $UNS $USET $USERID $UFILE $FUN_INS $UNS $USET $SETBIN 0 $VAL)
+    DRES=$(ascli udf-record-apply $UNS $USET $USERID $UFILE $FUN_INS $SETBIN $VAL)
     if $DEBUG; then echo "INSERT: DRES: ${DRES}"; fi
     I=$[${I}+1];
     VAL=$[${VAL}+${RAN}];

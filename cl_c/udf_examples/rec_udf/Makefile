@@ -56,5 +56,8 @@ $(MANAGE_TARGET): $(MANAGE_OBJECTS)
 	$(CC) $(LDFLAGS) -o $(DIR_TARGET)/$(MANAGE_TARGET) $(MANAGE_OBJECTS) $(LIBRARIES)
 -include $(DEPENDENCIES) 
 
-$(DIR_OBJECT)/%.o: %.c
+$(DIR_OBJECT)/%.o: %.c | prepare
 	$(CC) $(CFLAGS_NATIVE) -MMD -o $@ -c $(INCLUDES) $<
+
+prepare:
+	mkdir -p $(DIR_OBJECT)

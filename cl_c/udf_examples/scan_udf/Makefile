@@ -43,6 +43,8 @@ $(TARGET): $(OBJECTS)
 
 -include $(DEPENDENCIES) 
 
-$(DIR_OBJECT)/%.o: %.c
+$(DIR_OBJECT)/%.o: %.c | prepare
 	$(CC) $(CFLAGS_NATIVE) -MMD -o $@ -c $(INCLUDES) $<
 
+prepare:
+	mkdir -p $(DIR_OBJECT)

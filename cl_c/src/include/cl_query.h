@@ -28,6 +28,8 @@
 #include "cl_types.h"
 #include "cl_sindex.h"
 #include "as_rec.h"
+#include "as_map.h"
+#include "as_list.h"
 #include "as_result.h"
 #include "as_stream.h"
 

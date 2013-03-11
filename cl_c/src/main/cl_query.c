@@ -570,17 +570,40 @@ extern as_val * citrusleaf_udf_bin_to_val(as_serializer *ser, cl_bin *);
  */
 static as_val * query_response_get(const as_rec * rec, const char * name)  {
     as_val * v = NULL;
-    as_serializer ser;
-    as_msgpack_init(&ser);
     as_query_response_rec * r = as_rec_source(rec);
-    for (int i = 0; i < r->n_bins; i++) {
-        // Raj (todo) remove this stupid linear search from here
-        if (!strcmp(r->bins[i].bin_name, name)) {
-            v = citrusleaf_udf_bin_to_val(&ser, &r->bins[i]);
-            break;
+
+    if ( r == NULL ) return v;
+
+    if ( r->values != NULL ) {
+        as_string key;
+        v = as_map_get(r->values, (as_val *) as_string_init(&key, name, false));
+    }
+
+    if ( v == NULL ) {
+        for (int i = 0; i < r->n_bins; i++) {
+            // Raj (todo) remove this stupid linear search from here
+            if (!strcmp(r->bins[i].bin_name, name)) {
+                as_serializer ser;
+                as_msgpack_init(&ser);
+                printf("*** new integer creation\n");
+                v = citrusleaf_udf_bin_to_val(&ser, &r->bins[i]);
+                printf("*** new integer created\n");
+                as_serializer_destroy(&ser);
+                break;
+            }
+        }
+
+        if ( v ) {
+            if ( r->values == NULL ) {
+                r->values = as_hashmap_new(32);
+                printf("query_response_get: as_map_new: %p\n",r->values);
+            }
+            as_val_reserve(v);
+            as_string * key = as_string_new(strdup(name), true);
+            as_map_set(r->values, (as_val *) key, v);
         }
     }
-    as_serializer_destroy(&ser);
+
     return v;
 }
 
@@ -596,13 +619,19 @@ static uint16_t query_response_gen(const as_rec * rec) {
 }
 
 int query_response_destroy(as_rec *rec) {
+    printf("query_response_destroy: %p\n",rec);
     as_query_response_rec * r = as_rec_source(rec);
-    if (!r) return 0;
+    if ( !r ) return 0;
     citrusleaf_bins_free(r->bins, r->n_bins);
-    if (r->bins) free(r->bins);
-    if (r->ns)   free(r->ns);
-    if (r->set)  free(r->set);
-    if (r->ismalloc) free(r);
+    if ( r->bins )      free(r->bins);
+    if ( r->ns )        free(r->ns);
+    if ( r->set )       free(r->set);
+    if ( r->values )    {
+        printf("query_response_destroy: as_map_destroy: %p\n",r->values);
+        as_map_destroy(r->values);
+        r->values = NULL;
+    }
+    if ( r->ismalloc )  free(r);
     rec->source = NULL;
     return 0;
 }
@@ -805,6 +834,7 @@ static int as_query_worker_do(cl_cluster_node * node, as_query_task * task) {
                 recp->record_ttl = msg->record_ttl;
                 recp->bins       = bins;
                 recp->n_bins     = msg->n_ops;
+                recp->values     = NULL;
 
                 if (!task->isinline) {
                     recp->ismalloc   = true;
@@ -836,19 +866,22 @@ static int as_query_worker_do(cl_cluster_node * node, as_query_task * task) {
                 // got one good value? call it a success!
                 // (Note:  In the key exists case, there is no bin data.)
                 as_val * v = as_rec_get(rp, "SUCCESS");
+
+                printf("as_rec_get: %p\n",v);
+
+
                 if ( v  != NULL ) {
                     // I only need this value. The rest of the record is useless.
                     // Need to detach the value from the record (result)
                     // then release the record back to the wild... or wherever
                     // it came from.
                     task->callback(v, task->udata);
-                    
-                    as_rec_destroy(rp);
-
                 }
                 else {
                     task->callback((as_val *) rp, task->udata);
                 }
+
+                as_rec_destroy(rp);
                 
                 if (task->isinline) { 
                     if (recp->ns) { 

@@ -543,8 +543,8 @@ function asLSetInsert( topRec, setBinName, newValue )
 
   -- Check that the Set Structure is already there, otherwise, error
   if( topRec['AsLSetCtrlBin'] == nil ) then
-    info("[WARNING]: <%s:%s> AsLSetCtrlBin does not Exist:Creating",
-         mod, meth );
+    GP=F and trace("[WARNING]: <%s:%s> AsLSetCtrlBin does not Exist:Creating",
+                   mod, meth );
     lsetCtrlMap, distrib =
       initializeLSetMap( topRec, setBinName, DEFAULT_DISTRIB );
     topRec['AsLSetCtrlBin'] = lsetCtrlMap;

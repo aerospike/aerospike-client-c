@@ -142,6 +142,9 @@ int cb(as_val * v, void * u) {
 	return 0;
 }
 int main(int argc, char **argv) {
+	int sz;
+	int rc;
+	cf_vector * v;
 	// reading parameters
 	if (init_configuration(argc,argv) !=0 ) {
 		return -1;
@@ -186,11 +189,11 @@ int main(int argc, char **argv) {
 	// Execute scan udfs in background
 	// Inputs : cluster object, scan object, callback function, arguments to the callback function 
 	INFO("\nRunning background scan udf on the entire cluster");
-	cf_vector *v = citrusleaf_udf_scan_background(asc, scan, cb, NULL);
+	v = citrusleaf_udf_scan_background(asc, scan, cb, NULL);
 	
 	// This returns a vector of return values, the size of which is the size of the cluster
-	int sz = cf_vector_size(v);
-	int rc;
+	sz = cf_vector_size(v);
+
 	for(int i=0; i <= sz; i++) {
 		cf_vector_get(v, i, &rc);
 		INFO("Udf scan background for node %d returned %d", i, rc);

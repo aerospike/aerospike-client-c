@@ -59,7 +59,7 @@ void usage(int argc, char *argv[]) {
     INFO("   -K number of keys [default 25000]");
     INFO("   -n namespace [default test]");
     INFO("   -s set [default *all*]");
-    INFO("   -F udf_file [default lua_files/register1.lua]");
+    INFO("   -F udf_file [default ../lua_files/scan_udf.lua]");
     INFO("   -f udf_function [default register_1]");
 }
 
@@ -74,8 +74,8 @@ int init_configuration (int argc, char *argv[])
 	g_config->set          	= NULL;
 	g_config->nkeys	 	= 25000;
 	g_config->timeout_ms   = 1000;
-	g_config->package_file = "../lua_files/register1.lua";
-	g_config->function_name = "register_1";
+	g_config->package_file = "../lua_files/scan_udf.lua";
+	g_config->function_name = "do_scan_test";
 
 	int optcase;
 	while ((optcase = getopt(argc, argv, "ckmh:p:n:s:K:F:f:P:x:r:t:i:j:")) != -1) {
@@ -140,7 +140,7 @@ int register_package()
 // Currently the callback only prints the return value, can add more logic here later
 int cb(as_val * v, void * u) {
 	char * s = as_val_tostring(v);
-//	INFO("%s", s);
+	INFO("Advertiser id = %d", atoi(s));
 	free(s);
 	as_val_destroy(v);
 	return 0;
@@ -236,7 +236,7 @@ int main(int argc, char **argv) {
 	as_scan_params_init(&scan->params, &params);
 
 	// This function takes in the filename (not the absolute path and w/o .lua)
-	as_scan_foreach(scan, "register1", g_config->function_name, NULL);
+	as_scan_foreach(scan, "scan_udf", g_config->function_name, NULL);
 
 	// Execute scan udfs in background
 	// Inputs : cluster object, scan object, callback function, arguments to the callback function 

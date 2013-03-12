@@ -3,15 +3,14 @@
 
 DIR_OBJECT = ./obj
 DIR_TARGET = .
+DIR_LIB = ../../target/Linux-x86_64/lib
 
-HEADERS     = scan_udf.h
 SOURCES     = scan_udf.c
 TARGET      = scan_udf
 
 INCLUDES = -I../include/ -I../../target/Linux-x86_64/include/
-INCLUDES +=  -I../../target/Linux-x86_64/include/citrusleaf/
 
-LIBRARIES = -lcitrusleaf  -lssl -lcrypto -lpthread -lrt
+LIBRARIES = $(DIR_LIB)/libcitrusleaf.a -lssl -lcrypto -lpthread -lrt
 
 AS_CFLAGS = -D_FILE_OFFSET_BITS=64 -std=gnu99 -D_REENTRANT -D_GNU_SOURCE
 CFLAGS_NATIVE = -g  -fno-common -fno-strict-aliasing -rdynamic  -Wall -Wredundant-decls $(AS_CFLAGS)

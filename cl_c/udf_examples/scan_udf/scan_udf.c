@@ -71,7 +71,7 @@ int init_configuration (int argc, char *argv[])
 	g_config->ns           = "test";
 	g_config->set          = NULL;
 	g_config->timeout_ms   = 1000;
-	g_config->package_file = "../../lua_files/register1.lua";
+	g_config->package_file = "../lua_files/register1.lua";
 	g_config->function_name = "register_1";
 
 	int optcase;

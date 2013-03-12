@@ -46,6 +46,7 @@ typedef struct config_s {
         char *package_file;
         char *function_name;
         cl_cluster      *asc;
+	int	nkeys;
 } config;
 
 
@@ -55,9 +56,10 @@ void usage(int argc, char *argv[]) {
     INFO("Usage %s:", argv[0]);
     INFO("   -h host [default 127.0.0.1] ");
     INFO("   -p port [default 3000]");
+    INFO("   -K number of keys [default 25000]");
     INFO("   -n namespace [default test]");
     INFO("   -s set [default *all*]");
-    INFO("   -F udf_file [default lua_files/register1.lua]");
+    INFO("   -F udf_file [default ../lua_files/scan_udf.lua]");
     INFO("   -f udf_function [default register_1]");
 }
 
@@ -66,23 +68,25 @@ int init_configuration (int argc, char *argv[])
 	g_config = (config *)malloc(sizeof(config));
 	memset(g_config, 0, sizeof(g_config));
 
-	g_config->host         = "127.0.0.1";
-	g_config->port         = 3000;
-	g_config->ns           = "test";
-	g_config->set          = NULL;
+	g_config->host         	= "127.0.0.1";
+	g_config->port         	= 3000;
+	g_config->ns           	= "test";
+	g_config->set          	= NULL;
+	g_config->nkeys	 	= 25000;
 	g_config->timeout_ms   = 1000;
-	g_config->package_file = "../lua_files/register1.lua";
-	g_config->function_name = "register_1";
+	g_config->package_file = "../lua_files/scan_udf.lua";
+	g_config->function_name = "do_scan_test";
 
 	int optcase;
-	while ((optcase = getopt(argc, argv, "ckmh:p:n:s:F:f:P:x:r:t:i:j:")) != -1) {
+	while ((optcase = getopt(argc, argv, "ckmh:p:n:s:K:F:f:P:x:r:t:i:j:")) != -1) {
 		switch (optcase) {
-			case 'h': g_config->host         = strdup(optarg);          break;
-			case 'p': g_config->port         = atoi(optarg);            break;
-			case 'n': g_config->ns           = strdup(optarg);          break;
-			case 's': g_config->set          = strdup(optarg);          break;
-			case 'F': g_config->package_file = strdup(optarg);          break;
-			case 'f': g_config->function_name = strdup(optarg);          break;
+			case 'h': g_config->host         	= strdup(optarg);          break;
+			case 'p': g_config->port         	= atoi(optarg);            break;
+			case 'n': g_config->ns           	= strdup(optarg);          break;
+			case 's': g_config->set          	= strdup(optarg);          break;
+			case 'K': g_config->nkeys          	= atoi(optarg);            break;
+			case 'F': g_config->package_file 	= strdup(optarg);          break;
+			case 'f': g_config->function_name 	= strdup(optarg);          break;
 			default:  usage(argc, argv);                      return(-1);
 		}
 	}
@@ -136,7 +140,7 @@ int register_package()
 // Currently the callback only prints the return value, can add more logic here later
 int cb(as_val * v, void * u) {
 	char * s = as_val_tostring(v);
-	INFO("%s", s);
+	INFO("Advertiser id = %d", atoi(s));
 	free(s);
 	as_val_destroy(v);
 	return 0;
@@ -170,6 +174,53 @@ int main(int argc, char **argv) {
 		return -1;
 	}
 
+
+	// insert records
+
+	cl_write_parameters wp;
+	cl_write_parameters_set_default(&wp);
+	wp.timeout_ms = 1000;
+	wp.record_ttl = 864000;
+
+	cl_object okey;
+	cl_bin bins[6];
+	strcpy(bins[0].bin_name, "bid");
+	strcpy(bins[1].bin_name, "timestamp");
+	strcpy(bins[2].bin_name, "advertiser");
+	strcpy(bins[3].bin_name, "campaign");
+	strcpy(bins[4].bin_name, "line_item");
+	strcpy(bins[5].bin_name, "spend");
+
+	uint32_t ts = 275273225;
+	uint32_t et = 0;
+
+	srand(ts);
+	// Inserting "nkeys" rows of 6 bins each
+	for( int i = 0; i < g_config->nkeys; i++ ) {
+		if ( i % 4 == 0 ) {
+			et++;
+		}
+		int nbins = 6;
+
+		uint32_t advertiserId = (rand() % 4) + 1;
+		uint32_t campaignId = advertiserId * 10 + (rand() % 4) + 1;
+		uint32_t lineItemId = campaignId * 10 + (rand() % 4) + 1;
+		uint32_t bidId = lineItemId * 100000 + i;
+		uint32_t timestamp = ts + et;
+		uint32_t spend = advertiserId + campaignId + lineItemId;
+
+		citrusleaf_object_init_int(&okey, bidId);
+		citrusleaf_object_init_int(&bins[0].object, bidId);
+		citrusleaf_object_init_int(&bins[1].object, timestamp);
+		citrusleaf_object_init_int(&bins[2].object, advertiserId);
+		citrusleaf_object_init_int(&bins[3].object, campaignId);
+		citrusleaf_object_init_int(&bins[4].object, lineItemId);
+		citrusleaf_object_init_int(&bins[5].object, spend);
+
+		rc = citrusleaf_put(asc, g_config->ns, g_config->set, &okey, bins, nbins, &wp);
+	}
+
+	INFO("Inserted %d rows", g_config->nkeys);
 	// Initialize scan	
 	citrusleaf_scan_init();
 	as_scan * scan = as_scan_new(g_config->ns, g_config->set);
@@ -181,10 +232,11 @@ int main(int argc, char **argv) {
 		.pct			= 100
 	};
 
+
 	as_scan_params_init(&scan->params, &params);
 
 	// This function takes in the filename (not the absolute path and w/o .lua)
-	as_scan_foreach(scan, "register1", g_config->function_name, NULL);
+	as_scan_foreach(scan, "scan_udf", g_config->function_name, NULL);
 
 	// Execute scan udfs in background
 	// Inputs : cluster object, scan object, callback function, arguments to the callback function 

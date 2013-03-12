@@ -79,6 +79,7 @@ typedef struct as_query_response_record_t {
     int         n_bins;
     as_map *    values;  
     bool        ismalloc;
+	bool        free_bins;
 } as_query_response_rec;
 
 typedef bool (* as_query_cb) (const as_val * val, void * udata);

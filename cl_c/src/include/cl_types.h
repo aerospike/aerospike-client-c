@@ -83,6 +83,7 @@ typedef enum cl_rv_e {
     CITRUSLEAF_FAIL_INCOMPATIBLE_TYPE       = 12,   // specified operation cannot be performed on that data type
     CITRUSLEAF_FAIL_RECORD_TOO_BIG          = 13,
     CITRUSLEAF_FAIL_KEY_BUSY                = 14,
+    CITRUSLEAF_FAIL_SCAN_ABORT		    = 15,
 
     // UDF RANGE 100-110
     CITRUSLEAF_FAIL_UDF_BAD_RESPONSE        = 100,

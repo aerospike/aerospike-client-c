@@ -94,12 +94,12 @@ typedef bool (* as_scan_cb) (const as_val * val, void * udata);
 /**
  * Allocates and initializes a new as_scan
  */
-as_scan * as_scan_new(const char *ns, const char *setname);
+as_scan * as_scan_new(const char *ns, const char *setname, uint64_t *job_id);
 
 /**
  * Initializes an as_scan
  */
-as_scan * as_scan_init(as_scan *scan , const char *ns, const char *setname);
+as_scan * as_scan_init(as_scan *scan , const char *ns, const char *setname, uint64_t *job_id);
 cl_rv as_scan_udf_init(as_scan_udf * udf, udf_execution_type type, const char * filename, const char * function, as_list * arglist);
 cl_rv as_scan_params_init(as_scan_params * oparams, as_scan_params *iparams);
 
@@ -118,7 +118,7 @@ int       as_scan_foreach       (as_scan *scan, const char *filename, const char
  */
 cl_rv citrusleaf_udf_scan_node        (cl_cluster *asc, as_scan *scan, char *node_name, int( *callback)(as_val *, void *), void * udata);
 cf_vector * citrusleaf_udf_scan_all_nodes   (cl_cluster *asc, as_scan *scan, int( *callback)(as_val *, void *), void * udata);
-cf_vector* citrusleaf_udf_scan_background  (cl_cluster *asc, as_scan *scan, int (*callback) (as_val *, void *), void *udata);
+cf_vector* citrusleaf_udf_scan_background  (cl_cluster *asc, as_scan *scan);
 
 /*
  * Init and destroy for client scan environment. Should be called for once per client

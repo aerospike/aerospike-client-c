@@ -366,6 +366,9 @@ static int as_scan_worker_do(cl_cluster_node * node, as_scan_task * task) {
 
                 rc = (int) msg->result_code;
                 done = true;
+		if (rc == CITRUSLEAF_FAIL_SCAN_ABORT) {
+			fprintf(stderr,"Scan successfully aborted\n");
+		}
             }
             else if (msg->info3 & CL_MSG_INFO3_LAST)    {
                 fprintf(stderr, "Received final message -- Scan complete\n");
@@ -390,7 +393,7 @@ static int as_scan_worker_do(cl_cluster_node * node, as_scan_task * task) {
                 rp = as_rec_init(rp, recp, &scan_response_hooks);
             
                 as_val * v = as_rec_get(rp, "SUCCESS");
-                if ( v  != NULL ) {
+                if ( v  != NULL && task->callback) {
                     // Got a non null value for the resposne bin,
                     // call callback on it and destroy the record
                     task->callback(v, task->udata);
@@ -519,11 +522,11 @@ cl_rv as_scan_udf_destroy(as_scan_udf * udf) {
  * Calls a scan on all the nodes in the cluster. This function initializes a background scan.
  * The udf return values are not returned back to the client. 
  */
-cf_vector * citrusleaf_udf_scan_background(cl_cluster * asc, as_scan * scan, int (*callback) (as_val *, void *), void *udata) {
+cf_vector * citrusleaf_udf_scan_background(cl_cluster * asc, as_scan * scan) {
 	scan->udf.type = AS_SCAN_UDF_BACKGROUND;
 	cl_rv res = CITRUSLEAF_OK;
 	// Call as_scan_execute with a NULL node_name.
-	return as_scan_execute(asc, scan, NULL, &res, callback, udata);	
+	return as_scan_execute(asc, scan, NULL, &res, NULL, NULL);	
 }
 
 /*
@@ -638,16 +641,16 @@ cf_vector * as_scan_execute(cl_cluster * cluster, const as_scan * scan, char * n
 /**
  * Allocates and initializes a new as_scan.
  */
-as_scan * as_scan_new(const char * ns, const char * setname) {
+as_scan * as_scan_new(const char * ns, const char * setname, uint64_t *job_id) {
     as_scan * scan = (as_scan*) malloc(sizeof(as_scan));
     memset(scan, 0, sizeof(as_scan));
-    return as_scan_init(scan, ns, setname);
+    return as_scan_init(scan, ns, setname, job_id);
 }
 
 /**
  * Initializes an as_scan
  */
-as_scan * as_scan_init(as_scan * scan, const char * ns, const char * setname) {
+as_scan * as_scan_init(as_scan * scan, const char * ns, const char * setname, uint64_t *job_id) {
     if ( scan == NULL ) return scan;
     
     cf_queue * result_queue = cf_queue_create(sizeof(void *), true);
@@ -657,7 +660,8 @@ as_scan * as_scan_init(as_scan * scan, const char * ns, const char * setname) {
     }
 
     scan->res_streamq = result_queue;
-    scan->job_id = cf_get_rand64();
+    scan->job_id = (cf_get_rand64())/2;
+    *job_id = scan->job_id;
     scan->setname = setname == NULL ? NULL : strdup(setname);
     scan->ns = ns == NULL ? NULL : strdup(ns);
     as_scan_params_init(&scan->params, NULL);

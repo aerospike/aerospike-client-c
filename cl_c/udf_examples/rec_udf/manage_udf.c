@@ -77,7 +77,7 @@ int main(int argc, char **argv) {
 	config c; memset(&c, 0, sizeof(c));
 	c.host         = "127.0.0.1";
 	c.port         = 3000;
-	c.package_path = "../../lua_files/";
+	c.package_path = "../lua_files/";
 
 	fprintf(stderr, "Starting udf management Unit Tests\n");
 	fprintf(stderr, "Before starting these tests, make sure you do not have already registered packages in the system path\n");

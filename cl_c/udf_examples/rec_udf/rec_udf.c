@@ -481,7 +481,6 @@ int do_udf_copy_record_test() {
 	rsp = citrusleaf_get_all(g_config->asc, g_config->ns, g_config->set, &o_key, &rsp_bins, &rsp_n_bins, g_config->timeout_ms, &cl_gen);  
 	if (rsp_n_bins !=2 ) {
 		LOG("num bin returned not 2 %d",rsp_n_bins);
-		citrusleaf_object_free(&o_key);		
 	}
 	for (int i=0; i<rsp_n_bins; i++) {
 		if (strcmp(rsp_bins[i].bin_name,"c_bin")==0) {
@@ -500,12 +499,14 @@ int do_udf_copy_record_test() {
 			LOG("unexpected bin [%s]",rsp_bins[i].bin_name);
 		    isBad = true;
 		}
-		citrusleaf_object_free(&rsp_bins[i].object);		
+	}
+
+	if (rsp_bins) {
+		citrusleaf_bins_free(rsp_bins, rsp_n_bins);
+		free(rsp_bins);	
 	}
 
 	citrusleaf_object_free(&o_key);		
-
-
 	return isBad;
 }
 
@@ -1775,6 +1776,9 @@ int do_udf_blob_list_unit_test() {
 
 	as_list_destroy(&arglist);
 
+	as_map_destroy(mob);
+	as_list_destroy(lob);
+	citrusleaf_object_free(&o_key);		
 	return(0);
 }
 

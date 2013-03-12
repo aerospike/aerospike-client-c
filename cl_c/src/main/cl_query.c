@@ -617,9 +617,9 @@ static uint16_t query_response_gen(const as_rec * rec) {
 int query_response_destroy(as_rec *rec) {
     as_query_response_rec * r = as_rec_source(rec);
     if ( !r ) return 0;
-    if ( r->free_bins ) {
+    if (r->bins) {
         citrusleaf_bins_free(r->bins, r->n_bins);
-        free(r->bins);
+        if ( r->free_bins )  free(r->bins);
     }
     if ( r->ns )        free(r->ns);
     if ( r->set )       free(r->set);
@@ -960,6 +960,8 @@ static as_val * queue_stream_read(const as_stream * s) {
     if (CF_QUEUE_EMPTY == cf_queue_pop(as_stream_source(s), &val, CF_QUEUE_NOWAIT)) {
         return NULL;
     }
+    // push it back so it can be destroyed
+    cf_queue_push(as_stream_source(s), &val);
     return val;
 }
 

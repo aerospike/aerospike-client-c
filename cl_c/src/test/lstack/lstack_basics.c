@@ -50,6 +50,8 @@ static int lso_push_quintuplet(char * ns, char * set,
                                        (as_val *)listp, package_name,
                                        compress_func, compress_args,
                                        wp.timeout_ms);
+    as_list_destroy(listp);
+    as_list_destroy(compress_args);
 }
 
 TEST( as_lso_push_with_transform_1, "as_lso_push_with_transform" ) {
@@ -82,8 +84,13 @@ static int lso_peek_quintuplet(char * ns, char * set,
                                             package_name,
                                             uncompress_func, uncompress_args,
                                             wp.timeout_ms);
-
-  return resultp->is_success;
+    if ( resultp ) {
+        int issuccess = resultp->is_success;
+        return resultp->is_success;
+    }
+    else {
+        return false;
+    }
 }
 
 TEST( as_lso_peek_with_transform_1, "as_lso_peek_with_transform" ) {

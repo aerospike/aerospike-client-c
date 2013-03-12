@@ -480,6 +480,38 @@ int ev2citrusleaf_cluster_requests_in_progress(ev2citrusleaf_cluster *cl) {
 
 
 void
+ev2citrusleaf_cluster_refresh_partition_tables(ev2citrusleaf_cluster *asc)
+{
+	if (! asc) {
+		cf_warn("cluster refresh_partition_tables with null cluster");
+		return;
+	}
+
+	if (asc->MAGIC != CLUSTER_MAGIC) {
+		cf_warn("cluster refresh_partition_tables with non-cluster object %p", asc);
+		return;
+	}
+
+	MUTEX_LOCK(asc->node_v_lock);
+
+	for (uint32_t i = 0; i < cf_vector_size(&asc->node_v); i++) {
+		cl_cluster_node* node = (cl_cluster_node*)cf_vector_pointer_get(&asc->node_v, i);
+
+		if (node->MAGIC != CLUSTER_NODE_MAGIC) {
+			cf_error("node in cluster list has no magic!");
+			continue;
+		}
+
+		cf_info("forcing cluster node %s to get partition info", node->name, i);
+
+		cf_atomic_int_set(&node->partition_generation, (cf_atomic_int_t)-1);
+	}
+
+	MUTEX_UNLOCK(asc->node_v_lock);
+}
+
+
+void
 ev2citrusleaf_cluster_destroy(ev2citrusleaf_cluster *asc)
 {
 	cf_info("cluster destroy: %p", asc);
@@ -659,7 +691,7 @@ node_replicas_fn(int return_value, char *response, size_t response_len, void *ud
 				cluster_partitions_process(cn->asc, cn, value, true);
 			
 			else if (strcmp(name, "partition-generation")==0) {
-				cf_atomic_int_set(&cn->partition_generation, (uint32_t)atoi(value));
+				cf_atomic_int_set(&cn->partition_generation, (cf_atomic_int_t)atoi(value));
 
 				cf_debug("received new partition generation %d node %s",
 						cf_atomic_int_get(cn->partition_generation), cn->name);
@@ -724,16 +756,14 @@ node_timer_infocb_fn(int return_value, char *response, size_t response_len, void
 				}
 			}
 			else if (strcmp(name, "partition-generation") == 0) {
-				
-				
-				if (cf_atomic_int_get(this_cn->partition_generation) != (uint32_t) atoi(value)) {
-						
+				if (cf_atomic_int_get(this_cn->partition_generation) != (cf_atomic_int_t)atoi(value)) {
 					uint64_t now = cf_getms();
-					if (cf_atomic_int_get(this_cn->partition_last_req_ms) + CL_NODE_PARTITION_MAX_MS < cf_getms() ) {
+
+					if (cf_atomic_int_get(this_cn->partition_last_req_ms) + CL_NODE_PARTITION_MAX_MS < now) {
 						cf_info("making partition request of node %s", this_cn->name);
 
 						cf_atomic_int_set(&this_cn->partition_last_req_ms, (cf_atomic_int_t)now);
-					
+
 						if (cf_vector_size(&this_cn->sockaddr_in_v) > 0) {
 	
 							cl_cluster_node_reserve(this_cn, "R+");
@@ -896,7 +926,7 @@ cl_cluster_node_create(char *name, ev2citrusleaf_cluster *asc)
 	}
 	
 	//
-	cn->partition_generation = 0xFFFFFFFF;
+	cn->partition_generation = (cf_atomic_int_t)-1;
 	cn->partition_last_req_ms = 0;
 	
 	// Hand off a copy of the object to the health system

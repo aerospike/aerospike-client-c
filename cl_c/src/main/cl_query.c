@@ -863,6 +863,7 @@ static int as_query_worker_do(cl_cluster_node * node, as_query_task * task) {
                     // Need to detach the value from the record (result)
                     // then release the record back to the wild... or wherever
                     // it came from.
+                    as_val_reserve(v);
                     task->callback(v, task->udata);
 
                     as_rec_destroy(rp);

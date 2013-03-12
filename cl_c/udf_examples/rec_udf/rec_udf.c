@@ -69,7 +69,7 @@ int init_configuration (int argc, char *argv[])
 	g_config->timeout_ms   = 1000;
 	g_config->record_ttl   = 864000;
 	g_config->verbose      = false;
-	g_config->package_file = "../../lua_files/udf_unit_test.lua";
+	g_config->package_file = "../lua_files/udf_unit_test.lua";
 	g_config->package_name = "udf_unit_test";
 
 	INFO("Starting Record stored-procedure Unit Tests");

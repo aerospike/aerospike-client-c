@@ -29,9 +29,6 @@
 // Use this to turn on extra debugging prints and checks
 #define TRA_DEBUG true
 
-// Global Configuration object that holds ALL needed client data.
-extern config * g_config;
-
 void __log_append(FILE * f, const char * prefix, const char * fmt, ...);
 
 // |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
@@ -68,15 +65,14 @@ void __log_append(FILE * f, const char * prefix, const char * fmt, ...);
  */
 int
 as_lso_create( cl_cluster * asc, char * namespace, char * set,
-		char * keystr, char * lso_bin_name, char * lso_package,
-    uint32_t timeout_ms )
-{
+			   char * keystr, char * lso_bin_name, as_map * creation_args,
+			   char * lso_package, uint32_t timeout_ms ) {
 	static char * meth = "as_lso_create()";
 	int rc = 0; // ubiquitous return code
 
 	if( TRA_DEBUG )
-		INFO("[ENTER]:[%s]:NS(%s) Set(%s) Key(%s) Bin(%s) Config(%p)\n",
-				meth, namespace, set, keystr, lso_bin_name, g_config );
+		INFO("[ENTER]:[%s]:NS(%s) Set(%s) Key(%s) Bin(%s)\n",
+				meth, namespace, set, keystr, lso_bin_name);
 	// In this function, we are returning an int (not the result), so we
 	// can use the "stack allocated" result (as_result_init).
 	as_result result;
@@ -86,11 +82,9 @@ as_lso_create( cl_cluster * asc, char * namespace, char * set,
 	// As is now the case with all UDF resources, we initialize the
 	// arglist, use it then destroy it.
 	as_list * arglist = NULL;
-	arglist = as_arraylist_new(3, 0);	// We have 3 or 4 parms to pass
-	// 2 for strawman, 3 for stickman
-	as_list_add_string(arglist, namespace );
-	as_list_add_string(arglist, set );
+	arglist = as_arraylist_new(2, 0);
 	as_list_add_string(arglist, lso_bin_name );
+	as_list_add_map(arglist, creation_args);
 
 	// NOTE: All strings created by "as_val_tostring()" must be explicitly
 	// freed after use.
@@ -110,14 +104,14 @@ as_lso_create( cl_cluster * asc, char * namespace, char * set,
 				meth, namespace,  set, keystr,  lso_bin_name );
 	valstr = as_val_tostring(arglist);
 	if( TRA_DEBUG ) INFO("[DEBUG]:[%s] Package(%s) Func(%s) Args(%s) \n",
-			meth, g_config->package_name, function_name, valstr );
+			meth, lso_package, function_name, valstr );
 	free(valstr);
 
   // Make the Citrusleaf UDF Record Apply call - with all of the stuff we
   // packaged up.
-	rc = citrusleaf_udf_record_apply(g_config->asc, namespace,
-			set, &o_key, g_config->package_name, function_name, arglist,
-			g_config->timeout_ms, &result);
+	rc = citrusleaf_udf_record_apply(asc, namespace,
+			set, &o_key, lso_package, function_name, arglist,
+			timeout_ms, &result);
 
 	if (rc != CITRUSLEAF_OK) {
 		INFO("[ERROR]:[%s]:citrusleaf_udf_record_apply: Fail: RC(%d)",meth, rc);
@@ -168,10 +162,9 @@ as_lso_create( cl_cluster * asc, char * namespace, char * set,
  */
 int
 as_lso_push_internal(cl_cluster * asc, char * ns, char * set,
-		char * keystr, char * lso_bin_name, as_val * lso_valuep,
-    char * lso_package, char * udf_name, as_list * function_args,
-    uint32_t timeout_ms )
-{
+					 char * keystr, char * lso_bin_name, as_val * lso_valuep,
+					 char * lso_package, char * udf_name,
+					 as_list * function_args, uint32_t timeout_ms ) {
 	static char * meth = "as_lso_push_internal()";
 	int rc = 0; // ubiquitous return code
   char * valstr = NULL;
@@ -230,7 +223,7 @@ as_lso_push_internal(cl_cluster * asc, char * ns, char * set,
 				meth, ns,  set, keystr,  lso_bin_name );
 		valstr = as_val_tostring(arglist);
 		INFO("[DEBUG]:[%s] Package(%s) Func(%s) Fargs(%s)\n",
-				meth, g_config->package_name, function_name, valstr );
+				meth, lso_package, function_name, valstr );
 		free(valstr);
 	}
 
@@ -412,7 +405,7 @@ as_lso_peek_internal(cl_cluster * asc, char * ns, char * set, char * keystr,
 			meth, ns,  set, keystr,  lso_bin_name );
     valstr = as_val_tostring(arglist);
     INFO("[DEBUG]:[%s] Package(%s) Func(%s) Args(%s) \n",
-        meth, g_config->package_name, function_name, valstr );
+        meth, lso_package, function_name, valstr );
     free(valstr);
   }
 
@@ -583,15 +576,15 @@ as_lso_trim(cl_cluster * asc, char * ns, char * set, char * keystr,
 			meth, ns,  set, keystr,  lso_bin_name );
     valstr = as_val_tostring(arglist);
     INFO("[DEBUG]:[%s] Package(%s) Func(%s) Args(%s) \n",
-			meth, g_config->package_name, function_name, valstr );
+			meth, lso_package, function_name, valstr );
     free(valstr);
   }
 
   // Call the "apply udf" function (e.g. StackTrim()) for this record to
   // truncate the Stack to "Remainder_Count" items.
 	rc = citrusleaf_udf_record_apply(asc, ns, set, &o_key,
-			g_config->package_name, function_name, arglist,
-			g_config->timeout_ms, &result);
+			lso_package, function_name, arglist,
+			timeout_ms, &result);
 
 	if (rc != CITRUSLEAF_OK) {
 		INFO("[ERROR]:[%s]:citrusleaf_udf_record_apply: Fail: RC(%d)",meth, rc);

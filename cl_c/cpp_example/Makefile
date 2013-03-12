@@ -1,17 +1,15 @@
 # Citrusleaf Tools
 # Makefile
 
-DEPTH = ../../../../../..
-include $(DEPTH)/make_in/Makefile.in
-
-DIR_OBJECT = ../obj
-DIR_TARGET = ../bin
-DIR_LIB = ../../../target/Linux-x86_64/lib
+DIR_INCLUDE = ../target/Linux-x86_64/include
+DIR_OBJECT = obj
+DIR_TARGET = .
+DIR_LIB = ../target/Linux-x86_64/lib
 
 SOURCES       = test_udf.cpp 
 TARGET        = test_udf
 
-INCLUDES = -I../include/ -I../../../target/Linux-x86_64/include/ -I../../../target/Linux-x86_64/include/citrusleaf/
+INCLUDES = -I../include/ -I../target/Linux-x86_64/include/ -I../target/Linux-x86_64/include/citrusleaf/
 LIBRARIES = $(DIR_LIB)/libcitrusleaf.a  -lssl -lcrypto -lpthread -lrt
 ifeq (${MR_LANG},LUA)
 LIBRARIES += -llua
@@ -44,5 +42,4 @@ $(DIR_OBJECT)/%.o: %.cpp | prepare
 	g++ -MMD -o $@ -c $(INCLUDES) $<
 
 prepare:
-	mkdir -p $(DIR_TARGET)
 	mkdir -p $(DIR_OBJECT)

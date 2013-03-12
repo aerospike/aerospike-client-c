@@ -60,13 +60,18 @@ TEST( stream_ads_create, "create 25600 records and 1 index" ) {
 
     int rc = 0;
 
-    char * sindex_resp[1] = { NULL };
+    char * sindex_resp = NULL;
 
     // create index on "timestamp"
 
-    rc = citrusleaf_secondary_index_create(cluster, "test", "ads", "test_ads_timestamp", "timestamp", "NUMERIC", sindex_resp);
+    rc = citrusleaf_secondary_index_create(cluster, "test", "ads", "test_ads_timestamp", "timestamp", "NUMERIC", &sindex_resp);
     if ( rc != CITRUSLEAF_OK && rc != CITRUSLEAF_FAIL_INDEX_EXISTS ) {
-        info("error(%d): %s", rc, *sindex_resp);
+        info("error(%d): %s", rc, sindex_resp);
+    }
+
+    if ( sindex_resp ) {
+        free(sindex_resp);
+        sindex_resp = NULL;
     }
 
 
@@ -387,7 +392,7 @@ static bool before(atf_suite * suite) {
     mod_lua_config config = {
         .server_mode    = false,
         .cache_enabled  = false,
-        .system_path    = "/home/user/Desktop/CODE/DEV3.0/client/client/c_clients/cl_c/modules/mod-lua/src/lua",
+        .system_path    = "modules/mod-lua/src/lua",
         .user_path      = "src/test/lua"
     };
 
@@ -422,6 +427,11 @@ static bool after(atf_suite * suite) {
     
     citrusleaf_query_shutdown();
 
+    if ( mod_lua.logger ) {
+        free(mod_lua.logger);
+        mod_lua.logger = NULL;
+    }
+    
     int rc = udf_remove(LUA_FILE);
     if ( rc != 0 ) {
         error("failure while removing: %s (%d)", LUA_FILE, rc);

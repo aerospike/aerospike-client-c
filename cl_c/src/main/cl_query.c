@@ -570,17 +570,36 @@ extern as_val * citrusleaf_udf_bin_to_val(as_serializer *ser, cl_bin *);
  */
 static as_val * query_response_get(const as_rec * rec, const char * name)  {
     as_val * v = NULL;
-    as_serializer ser;
-    as_msgpack_init(&ser);
     as_query_response_rec * r = as_rec_source(rec);
-    for (int i = 0; i < r->n_bins; i++) {
-        // Raj (todo) remove this stupid linear search from here
-        if (!strcmp(r->bins[i].bin_name, name)) {
-            v = citrusleaf_udf_bin_to_val(&ser, &r->bins[i]);
-            break;
+
+    if ( r == NULL ) return v;
+
+    if ( r->values != NULL ) {
+        as_string key;
+        v = as_map_get(r->values, (as_val *) as_string_init(&key, (char *)name, false));
+    }
+
+    if ( v == NULL ) {
+        for (int i = 0; i < r->n_bins; i++) {
+            // Raj (todo) remove this stupid linear search from here
+            if (!strcmp(r->bins[i].bin_name, name)) {
+                as_serializer ser;
+                as_msgpack_init(&ser);
+                v = citrusleaf_udf_bin_to_val(&ser, &r->bins[i]);
+                as_serializer_destroy(&ser);
+                break;
+            }
+        }
+
+        if ( v ) {
+            if ( r->values == NULL ) {
+                r->values = as_hashmap_new(32);
+            }
+            as_string * key = as_string_new(strdup(name), true);
+            as_map_set(r->values, (as_val *) key, v);
         }
     }
-    as_serializer_destroy(&ser);
+
     return v;
 }
 
@@ -597,12 +616,18 @@ static uint16_t query_response_gen(const as_rec * rec) {
 
 int query_response_destroy(as_rec *rec) {
     as_query_response_rec * r = as_rec_source(rec);
-    if (!r) return 0;
-    citrusleaf_bins_free(r->bins, r->n_bins);
-    if (r->bins) free(r->bins);
-    if (r->ns)   free(r->ns);
-    if (r->set)  free(r->set);
-    if (r->ismalloc) free(r);
+    if ( !r ) return 0;
+    if ( r->free_bins ) {
+        citrusleaf_bins_free(r->bins, r->n_bins);
+        free(r->bins);
+    }
+    if ( r->ns )        free(r->ns);
+    if ( r->set )       free(r->set);
+    if ( r->values )    {
+        as_map_destroy(r->values);
+        r->values = NULL;
+    }
+    if ( r->ismalloc )  free(r);
     rec->source = NULL;
     return 0;
 }
@@ -741,10 +766,12 @@ static int as_query_worker_do(cl_cluster_node * node, as_query_task * task) {
                 mf = cl_msg_field_get_next(mf);
             }
 
+            bool free_bins = false;
             buf = (uint8_t *) mf;
             if ((msg->n_ops > STACK_BINS) 
                 || (!task->isinline)) {
                 bins = malloc(sizeof(cl_bin) * msg->n_ops);
+                free_bins = true;
             }
             else {
                 bins = stack_bins;
@@ -793,9 +820,16 @@ static int as_query_worker_do(cl_cluster_node * node, as_query_task * task) {
 
                 as_query_response_rec rec;
                 as_query_response_rec *recp = &rec;
+                as_rec r;
+                as_rec *rp = &r;
 
                 if (!task->isinline) { 
                     recp = malloc(sizeof(as_query_response_rec));
+                    recp->ismalloc   = true;
+                    rp = as_rec_new(recp, &query_response_hooks);    
+                } else {
+                    recp->ismalloc   = false;
+                    rp = as_rec_init(rp, recp, &query_response_hooks);
                 }
                 
                 recp->ns         = strdup(ns_ret);
@@ -805,22 +839,9 @@ static int as_query_worker_do(cl_cluster_node * node, as_query_task * task) {
                 recp->record_ttl = msg->record_ttl;
                 recp->bins       = bins;
                 recp->n_bins     = msg->n_ops;
+                recp->values     = NULL;
+                recp->free_bins  = free_bins;
 
-                if (!task->isinline) {
-                    recp->ismalloc   = true;
-                }
-                else {
-                    recp->ismalloc   = false;
-                }
-        
-                as_rec r;
-                as_rec *rp = &r;
-                if (!task->isinline) {
-                    rp = as_rec_new(recp, &query_response_hooks);    
-                } else {
-                    rp = as_rec_init(rp, recp, &query_response_hooks);
-                }    
-            
                 TODO("Fix the following block of code. ")
                 TODO("It is really lame to check for a bin called \"SUCCESS\" to determine whether you have a single value or not.")
                 TODO("Fix how we are to handle errors. Not everything will be a \"SUCCESS\"... or will it?")
@@ -836,34 +857,26 @@ static int as_query_worker_do(cl_cluster_node * node, as_query_task * task) {
                 // got one good value? call it a success!
                 // (Note:  In the key exists case, there is no bin data.)
                 as_val * v = as_rec_get(rp, "SUCCESS");
+
                 if ( v  != NULL ) {
                     // I only need this value. The rest of the record is useless.
                     // Need to detach the value from the record (result)
                     // then release the record back to the wild... or wherever
                     // it came from.
+                    as_val_reserve(v);
                     task->callback(v, task->udata);
-                    
-                    as_rec_destroy(rp);
 
+                    as_rec_destroy(rp);
                 }
                 else {
                     task->callback((as_val *) rp, task->udata);
                 }
-                
-                if (task->isinline) { 
-                    if (recp->ns) { 
-                        free(recp->ns);
-                        recp->ns = NULL;
-                    }
-                }
-
                 rc = CITRUSLEAF_OK;
             }
 
-            // if done free it 
-            if (task->isinline || done) {
-				citrusleaf_bins_free(bins, msg->n_ops);
-                if (bins != stack_bins) {
+            // if done free stack allocated stuff
+            if (done) {
+                if (free_bins) {
                     free(bins);
                     bins = 0;
                 }
@@ -1484,5 +1497,5 @@ void citrusleaf_query_shutdown() {
         pthread_join(g_query_th[i],NULL);
     }
     cf_queue_destroy(g_query_q);
-	cf_atomic32_decr(&query_initialized);
+    cf_atomic32_decr(&query_initialized);
 }

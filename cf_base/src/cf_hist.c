@@ -56,38 +56,75 @@ cf_histogram_create(char *name)
 	return(h);
 }
 
-void 
+////////////////////////////////////////////////////////////////////////
+
+/**
+ *  This is now redefined to call "cf_histogram_dump_new()", which allows
+ *  us to pass in a buffer to be filled in.  The supplied buffer version
+ *  is needed by the Erlang Client.
+ */
+void
 cf_histogram_dump( cf_histogram *h )
 {
-	char printbuf[100];
-	int pos = 0; // location to print from
-	printbuf[0] = '\0';
-	
-	cf_debug("histogram dump: %s (%zu total)", h->name, h->n_counts);
-	int i, j;
-	int k = 0;
-	for (j=CF_N_HIST_COUNTS-1 ; j >= 0 ; j-- ) if (h->count[j]) break;
-	for (i=0;i<CF_N_HIST_COUNTS;i++) if (h->count[i]) break;
-	for (; i<=j;i++) {
-		if (h->count[i] > 0) { // print only non zero columns
-			int bytes = sprintf((char *) (printbuf + pos), " (%02d: %010zu) ", i, h->count[i]);
-			if (bytes <= 0) 
-			{
-				cf_debug("histogram printing error. Bailing ...");
-				return;
-			}
-			pos += bytes;
-		    if (k % 4 == 3){
-		    	 cf_debug("%s", (char *) printbuf);
-		    	 pos = 0;
-		    	 printbuf[0] = '\0';
-		    }
-		    k++;
-		}
-	}
-	if (pos > 0) 
-		cf_debug("%s", (char *) printbuf);
-}
+    cf_histogram_dump_new( h, NULL, 0);
+} // end histogram_dump()
+
+/**
+ * This is the new body of "cf_histogram_dump()"
+ * If caller provides the outbuff, output will be place there. If not, output
+ * goes to cf_debug.  If the caller provides the outbuff, it is the callers
+ * responsibility to ensure it is large enough to hold the output
+ */
+void 
+cf_histogram_dump_new( cf_histogram *h, char *outbuff, size_t outbuff_len)
+{
+  char printbuf[256];
+  int pos = 0; // location to print from
+  printbuf[0] = '\0';
+
+  sprintf(printbuf, "histogram dump: %s (%zu total)",h->name, h->n_counts);
+  if (outbuff) {
+    strncat(outbuff, printbuf, outbuff_len - strlen(outbuff) - 1);
+            strncat(outbuff, "  |", outbuff_len - strlen(outbuff) - 1);
+  } else {
+    cf_debug("%s", printbuf);
+  }
+
+  int i, j;
+  int k = 0;
+  for (j=CF_N_HIST_COUNTS-1 ; j >= 0 ; j-- ) if (h->count[j]) break;
+  for (i=0;i<CF_N_HIST_COUNTS;i++) if (h->count[i]) break;
+  for (; i<=j;i++) {
+    if (h->count[i] > 0) { // print only non zero columns
+      int bytes =
+        sprintf((char *) (printbuf + pos), " (%02d: %010zu) ", i, h->count[i]);
+      if (bytes <= 0) {
+        cf_debug("histogram printing error. (bytes < 0 ) Bailing ...");
+        return;
+      }
+      pos += bytes;
+      if (k % 4 == 3){
+        if (outbuff) {
+          strncat(outbuff, printbuf, outbuff_len - strlen(outbuff) - 1);
+          strncat(outbuff, "   ", outbuff_len - strlen(outbuff) - 1);
+        } else {
+          cf_debug("%s", (char *) printbuf);
+        }
+        pos = 0;
+        printbuf[0] = '\0';
+      }
+      k++;
+    }
+  } // end for each
+  if (pos > 0) {
+    if (outbuff) {
+      strncat(outbuff, printbuf, outbuff_len - strlen(outbuff) - 1);
+    } else {
+      cf_debug("%s", (char *) printbuf);
+    }
+  } // end if pos > 0
+} // end cf_histogram_dump_new()
+////////////////////////////////////////////////////////////////////////
 
 void 
 cf_histogram_insert_data_point( cf_histogram *h, uint64_t start)

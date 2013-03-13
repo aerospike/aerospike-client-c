@@ -13,7 +13,7 @@
 
 #include "citrusleaf/citrusleaf.h"
 #include "citrusleaf/cl_udf.h"
-#include "citrusleaf/cl_udf_scan.h"
+#include "citrusleaf/as_udf_scan.h"
 #include <citrusleaf/cf_random.h>
 #include <citrusleaf/cf_atomic.h>
 #include <citrusleaf/cf_hist.h>

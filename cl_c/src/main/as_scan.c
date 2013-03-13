@@ -9,7 +9,7 @@
 #include "citrusleaf.h"
 #include "citrusleaf-internal.h"
 #include "cl_cluster.h"
-#include "cl_udf_scan.h"
+#include "as_scan.h"
 #include "cl_udf.h"
 
 #include <citrusleaf/cf_atomic.h>

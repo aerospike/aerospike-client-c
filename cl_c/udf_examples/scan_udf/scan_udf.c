@@ -221,9 +221,15 @@ int main(int argc, char **argv) {
 	}
 
 	INFO("Inserted %d rows", g_config->nkeys);
+
 	// Initialize scan	
 	citrusleaf_scan_init();
-	as_scan * scan = as_scan_new(g_config->ns, g_config->set);
+
+	// Create job id for scan.
+	// This will be useful to monitor your scan transactions
+	uint64_t job_id;
+	as_scan * scan = as_scan_new(g_config->ns, g_config->set, &job_id );
+	INFO("Job Id for this transaction %"PRIu64"", job_id);
 	
 	as_scan_params params = { 
 		.fail_on_cluster_change  = false,
@@ -235,13 +241,14 @@ int main(int argc, char **argv) {
 
 	as_scan_params_init(&scan->params, &params);
 
+	//Initialize the udf to be run on all records
 	// This function takes in the filename (not the absolute path and w/o .lua)
 	as_scan_foreach(scan, "scan_udf", g_config->function_name, NULL);
 
 	// Execute scan udfs in background
 	// Inputs : cluster object, scan object, callback function, arguments to the callback function 
 	INFO("\nRunning background scan udf on the entire cluster");
-	v = citrusleaf_udf_scan_background(asc, scan, cb, NULL);
+	v = citrusleaf_udf_scan_background(asc, scan);
 	
 	// This returns a vector of return values, the size of which is the size of the cluster
 	sz = cf_vector_size(v);
@@ -252,40 +259,6 @@ int main(int argc, char **argv) {
 	}
 	// Free the result vector
 	cf_vector_destroy(v);
-
-
-	// Execute normal udfs on a particular node
-	// Inputs: cluster object, scan object, node name -- can be found by doing clinfo -h <host> -p <port> on a particular node
-	// callback and the arguments to the callback function
-	
-	// For the test, we get node_name for every node in the cluster and run citrusleaf_udf_scan_node on each.
-	INFO("\nRunning scan udf on each node of the cluster");
-	int node_count = 0;
-	char * node_names;
-	cl_cluster_get_node_names(asc, &node_count, &node_names);
-	char * node_name = node_names;
-	for ( int i=0; i < node_count; i++ ) {
-		rc = citrusleaf_udf_scan_node(asc, scan, node_name, cb, NULL);
-		INFO("Udf scan for node %s returned %d", node_name, rc);
-		node_name += NODE_NAME_SIZE;
-	}
-	free(node_names);
-	node_names = NULL;
-
-	// Execute normal udf for the entire cluster
-	// Inputs: cluster object, scan object, callback, arguments to callback
-	INFO("\nRunning scan udf on the entire cluster");
-	v = citrusleaf_udf_scan_all_nodes(asc, scan, cb, NULL);
-	
-	// This returns a vector of return values, the size of which is the size of the cluster
-	sz = cf_vector_size(v);
-	for(int i=0; i <= sz; i++) {
-		cf_vector_get(v, i, &rc);
-		INFO("Udf scan node %d returned %d", i, rc);
-	}
-	// Free the result vector
-	cf_vector_destroy(v);
-
 	
 	// Destroy the scan object
 	as_scan_destroy(scan);

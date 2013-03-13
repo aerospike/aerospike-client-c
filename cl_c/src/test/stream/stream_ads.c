@@ -130,6 +130,10 @@ TEST( stream_ads_create, "create 25600 records and 1 index" ) {
 
         rc = citrusleaf_get_all(cluster, "test", "ads", &okey, &rbins, &nrbins, 1000, &rgen);
 
+        if (rbins) {
+            citrusleaf_bins_free(rbins, nrbins);
+            free(rbins);
+        }
         assert_int_eq(rc, 0);
     }
 

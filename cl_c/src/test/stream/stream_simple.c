@@ -155,6 +155,11 @@ TEST( stream_simple_create, "create 100 records and 4 indices" ) {
 
         rc = citrusleaf_get_all(cluster, "test", "test", &okey, &rbins, &nrbins, 1000, &rgen);
 
+        if (rbins) {
+            citrusleaf_bins_free(rbins, nrbins);
+            free(rbins);
+        }
+
         assert_int_eq(rc, 0);
     }
 }

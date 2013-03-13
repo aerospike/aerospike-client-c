@@ -109,6 +109,7 @@ int do_udf_user_write(int user_id) {
 	int     rsp_n_bins = 0;
 	uint32_t gen;
 	as_result res;
+	as_result_init(&res);
 	int rv = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
 			g_config->package_name, "put_behavior", arglist, 
 			g_config->timeout_ms, &res); 
@@ -119,9 +120,11 @@ int do_udf_user_write(int user_id) {
 		fprintf(stderr,"failed citrusleaf_run_udf rsp=%d\n",rv);
 		return -1;
 	}
-	fprintf(stderr,"%s: %s\n", res.is_success ? "SUCCESS" : "FAILURE", as_val_tostring(res.value));
+	char *result_str = as_val_tostring(res.value);
+	fprintf(stderr,"%s: %s\n", res.is_success ? "SUCCESS" : "FAILURE", result_str);
+	free(result_str);
 	int rsp = citrusleaf_get_all(g_config->asc, g_config->ns, g_config->set, &o_key, &rsp_bins, &rsp_n_bins, g_config->timeout_ms, &gen);  
-	if (rsp!=CITRUSLEAF_OK) {
+	if (rsp != CITRUSLEAF_OK) {
 		fprintf(stderr,"citrusleaf_get_all failed with %d\n",rsp);
 		as_val_destroy(arglist);
 		citrusleaf_object_free(&o_key);
@@ -144,7 +147,12 @@ int do_udf_user_write(int user_id) {
 			citrusleaf_object_free(&rsp_bins[b].object);		
 		}
 	}
+	if (rsp_bins) {
+		citrusleaf_bins_free(rsp_bins, rsp_n_bins);
+		free(rsp_bins);
+	}
 	as_val_destroy(arglist);
+	as_result_destroy(&res);
 
 	citrusleaf_object_free(&o_key);		
 	return 0;
@@ -204,10 +212,13 @@ int do_udf_user_read(int user_id) {
 
 	// (2) execute the udf, print the result
 	as_result res;
+	as_result_init(&res);
 	rv = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
 			g_config->package_name, "get_campaign",arglist, 
 			g_config->timeout_ms, &res);  
-	fprintf(stderr,"%s: %s\n", res.is_success ? "SUCCESS" : "FAILURE", as_val_tostring(res.value));
+	char *result_str = as_val_tostring(res.value);
+	fprintf(stderr,"%s: %s\n", res.is_success ? "SUCCESS" : "FAILURE", result_str);
+	free(result_str);
 	as_map * m = as_map_fromval(res.value);
 	int map_size = as_map_size(m);
 	if (rv != CITRUSLEAF_OK) {
@@ -222,10 +233,12 @@ int do_udf_user_read(int user_id) {
 	
 	as_val_destroy(arglist);
 	citrusleaf_object_free(&o_key);		
+	as_result_destroy(&res);
 	return 0;
 Fail: 
 	if (arglist) as_val_destroy(arglist);
 	citrusleaf_object_free(&o_key);		
+	as_result_destroy(&res);
 	return(-1);
 
 }
@@ -314,6 +327,7 @@ int main(int argc, char **argv) {
 	}
 
 	citrusleaf_cluster_destroy(asc);
+	citrusleaf_shutdown();
 
 	fprintf(stderr, "\n\nFinished Record UDF Unit Tests\n");
 	return(0);

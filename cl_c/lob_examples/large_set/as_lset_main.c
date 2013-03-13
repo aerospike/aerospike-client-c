@@ -30,6 +30,8 @@
 
 // Global Configuration object: holds client config data.
 config *g_config = NULL;
+int g_threads    = 10;
+int g_iterations = 15;
 
 // NOTE: INFO(), ERROR() and LOG() defined in as_lset.h
 void __log_append(FILE * f, const char * prefix, const char * fmt, ...) {
@@ -80,10 +82,12 @@ int init_configuration (int argc, char *argv[]) {
 		switch (optcase) {
 		case 'h': g_config->host         = strdup(optarg); break;
 		case 'p': g_config->port         = atoi(optarg);   break;
-		case 'n': g_config->ns           = strdup(optarg);  break;
+		case 'n': g_config->ns           = strdup(optarg); break;
 		case 's': g_config->set          = strdup(optarg); break;
 		case 'v': g_config->verbose      = true;           break;
 		case 'P': g_config->package_name = strdup(optarg); break;
+        case 't': g_threads              = atoi(optarg);   break;
+        case 'i': g_iterations           = atoi(optarg);   break;
 		default:  usage(argc, argv);                      return(-1);
 		}
 	}
@@ -94,8 +98,8 @@ int init_configuration (int argc, char *argv[]) {
  *  Initialize Test: Do the set up for a test so that the regular
  *  Aerospike functions can run.
  */
-int test_setup( int argc, char **argv ) {
-	static char * meth = "test_setup()";
+int setup_test( int argc, char **argv ) {
+	static char * meth = "setup_test()";
 	int rc = 0;
 
 	INFO("[ENTER]:[%s]: Args(%d) g_config(%p)\n", meth, argc, g_config );
@@ -131,7 +135,15 @@ int test_setup( int argc, char **argv ) {
 
 	return 0;
 
-} // end test_setup()
+} // end setup_test()
+
+int shutdown_test() {
+    if (g_config->asc) citrusleaf_cluster_destroy(g_config->asc);
+    citrusleaf_shutdown();
+    return 0;
+} // end shutdown_test()
+
+
 
 /// ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 
@@ -283,6 +295,30 @@ int lset_search_test(char * keystr, char * lset_bin, int iterations ) {
 	return rc;
 } // end lset_search_test()
 
+static void *run_test(void *o) {
+
+	static char * meth         = "run_test()";
+	int           rc           = 0;
+    char user_key[30];
+    sprintf(user_key, "User_%d", rand()%100);
+	char        * lso_bin_name = "urlid_stack";
+	// (1) Insert Test
+	INFO("[DEBUG]:[%s]: calling lset_insert_test()\n", meth );
+	rc = lset_insert_test(user_key, lso_bin_name, g_iterations );
+	if (rc) {
+		INFO("[ERROR]:[%s]: lset_insert_test() RC(%d)\n", meth, rc );
+		return( rc );
+	}
+
+	// (2) Search Test
+	INFO("[DEBUG]:[%s]: calling lset_search_test()\n", meth );
+	rc = lset_search_test( user_key, lso_bin_name, g_iterations );
+    if (rc) {
+		INFO("[ERROR]:[%s]: lset_search_test() RC(%d)\n", meth, rc );
+		return( rc );
+	}
+    return NULL;
+}
 /** ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
  *  This file exercises the AS Large Set Interface.
  *  We have the following choice
@@ -294,34 +330,24 @@ int main(int argc, char **argv) {
 	static char * meth         = "main()";
 	int           rc           = 0;
 
-	char        * user_key     = "User_111";
-	char        * lso_bin_name = "urlid_stack";
-
 	INFO("[ENTER]:[%s]: Start in main()\n", meth );
 
 	// Initialize everything
-	INFO("[DEBUG]:[%s]: calling test_setup()\n", meth );
-	test_setup( argc, argv );
+	INFO("[DEBUG]:[%s]: calling setup_test()\n", meth );
+	setup_test( argc, argv );
 
-	int iterations = 15;
-	// (1) Insert Test
-	INFO("[DEBUG]:[%s]: calling lset_insert_test()\n", meth );
-	rc = lset_insert_test(user_key, lso_bin_name, iterations );
-	if (rc) {
-		INFO("[ERROR]:[%s]: lset_insert_test() RC(%d)\n", meth, rc );
-		return( rc );
-	}
-
-	// (2) Search Test
-	INFO("[DEBUG]:[%s]: calling lset_search_test()\n", meth );
-	rc = lset_search_test( user_key, lso_bin_name, iterations );
-    if (rc) {
-		INFO("[ERROR]:[%s]: lset_search_test() RC(%d)\n", meth, rc );
-		return( rc );
-	}
+    pthread_t slaps[g_threads];
+    for (int j = 0; j < g_threads; j++) {
+        if (pthread_create(&slaps[j], 0, run_test, NULL)) {
+            INFO("[WARNING]: Thread Create Failed\n");
+        }
+    }
+    for (int j = 0; j < g_threads; j++) {
+        pthread_join(slaps[j], (void *)&rc);
+    }
 
 	// (3) Delete Test
 	//
-
+	shutdown_test();
 	return 0;
 } // end main()

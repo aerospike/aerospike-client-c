@@ -147,11 +147,7 @@ static int scan_compile(const as_scan * scan, uint8_t ** buf_r, size_t * buf_sz_
 	
 	// Prepare the msg type to be sent
 	uint info;
-	if (params.nobindata == true) {
-		info = (CL_MSG_INFO1_READ | CL_MSG_INFO1_NOBINDATA);
-	} else {
-		info = CL_MSG_INFO1_READ;
-	}
+	info = CL_MSG_INFO1_READ;
 
 	// Pass on to the cl_compile to create the msg
 	cl_compile(info /*info1*/, 0, 0, scan->ns /*namespace*/, scan->setname /*setname*/, 0 /*key*/, 0/*digest*/, NULL /*bins*/, 0/*op*/, 0/*operations*/, 0/*n_values*/, buf_r, buf_sz_r, 0 /*w_p*/, NULL /*d_ret*/, scan->job_id, &scan_param_field, scan->udf.type != AS_SCAN_UDF_NONE ? &call : NULL/*udf call*/, scan->udf.type);
@@ -483,7 +479,6 @@ cl_rv as_scan_params_init(as_scan_params * oparams, as_scan_params *iparams) {
 	oparams->fail_on_cluster_change = iparams ? iparams->fail_on_cluster_change : false;
 	oparams->priority = iparams ? iparams->priority : AS_SCAN_PRIORITY_AUTO;
 //	oparams->threads_per_node = iparams ? iparams->threads_per_node : 1;
-	oparams->nobindata = iparams ? iparams->nobindata : false;
 	oparams->pct = iparams ? iparams->pct : 100;
 	return CITRUSLEAF_OK;	
 }
@@ -557,11 +552,12 @@ cf_vector * citrusleaf_udf_scan_all_nodes(cl_cluster *asc, as_scan * scan, int (
 
 cf_vector * as_scan_execute(cl_cluster * cluster, const as_scan * scan, char * node_name, cl_rv * res, int (* callback)(as_val *, void *), void * udata) {
     
-    cl_rv       rc                          = CITRUSLEAF_OK;
-    uint8_t     wr_stack_buf[STACK_BUF_SZ]  = { 0 };
-    uint8_t *   wr_buf                      = wr_stack_buf;
-    size_t      wr_buf_sz                   = sizeof(wr_stack_buf);
-    int 	node_count		    = 0; 
+    cl_rv       	rc                          = CITRUSLEAF_OK;
+    uint8_t     	wr_stack_buf[STACK_BUF_SZ]  = { 0 };
+    uint8_t *   	wr_buf                      = wr_stack_buf;
+    size_t      	wr_buf_sz                   = sizeof(wr_stack_buf);
+    int 		node_count		    = 0;
+    as_node_response	response;	
     rc = scan_compile(scan, &wr_buf, &wr_buf_sz);
     
     if ( rc != CITRUSLEAF_OK ) {
@@ -622,11 +618,14 @@ cf_vector * as_scan_execute(cl_cluster * cluster, const as_scan * scan, char * n
 
     // wait for the work to complete from all the nodes.
     // For every node, fill in the return value in the result vector
-    cf_vector * result = cf_vector_create(sizeof(cl_rv), node_count, 0);
+    cf_vector * result_v = cf_vector_create(sizeof(as_node_response), node_count, 0);
     for ( int i=0; i < node_count; i++ ) {
-	    int node_rc;
-	    cf_queue_pop(task.node_complete_q, &node_rc, CF_QUEUE_FOREVER);
-	    cf_vector_set(result, i, &node_rc);
+	    // Build the response structure
+	    cf_queue_pop(task.node_complete_q, &response.node_response, CF_QUEUE_FOREVER);
+	    strcpy(response.node_name, task.node_name);
+	    cf_vector_set(result_v, i, &response);
+	    // Reset response for the next node
+	    memset(&response, 0, sizeof(as_node_response));
     }
 
     if ( wr_buf && (wr_buf != wr_stack_buf) ) { 
@@ -635,7 +634,7 @@ cf_vector * as_scan_execute(cl_cluster * cluster, const as_scan * scan, char * n
     }
 
     cf_queue_destroy(task.node_complete_q);
-    return result;
+    return result_v;
 }
 
 /**

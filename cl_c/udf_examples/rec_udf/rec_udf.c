@@ -642,6 +642,10 @@ int do_udf_delete_record_test() {
 			return -1;
 		}
 
+		if ( rsp_bins ) {
+			citrusleaf_bins_free( rsp_bins, rsp_n_bins);
+			free(rsp_bins);
+		}
 	}
 
 	citrusleaf_object_free(&o_key);		

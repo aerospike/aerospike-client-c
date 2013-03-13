@@ -147,7 +147,12 @@ int cb(as_val * v, void * u) {
 }
 int main(int argc, char **argv) {
 	int sz;
-	int rc;
+	int rc = CITRUSLEAF_OK;
+	
+	// Response structure for every node
+	as_node_response resp;
+	memset(&resp, 0, sizeof(as_node_response));
+
 	cf_vector * v;
 	// reading parameters
 	if (init_configuration(argc,argv) !=0 ) {
@@ -234,7 +239,6 @@ int main(int argc, char **argv) {
 	as_scan_params params = { 
 		.fail_on_cluster_change  = false,
 		.priority		= AS_SCAN_PRIORITY_AUTO,
-		.nobindata		= false,
 		.pct			= 100
 	};
 
@@ -254,8 +258,10 @@ int main(int argc, char **argv) {
 	sz = cf_vector_size(v);
 
 	for(int i=0; i <= sz; i++) {
-		cf_vector_get(v, i, &rc);
-		INFO("Udf scan background for node %d returned %d", i, rc);
+		cf_vector_get(v, i, &resp);
+		INFO("Udf scan background for node %s returned %d", resp.node_name, resp.node_response);
+		// Set the resp back to zero
+		memset(&resp, 0, sizeof(as_node_response));
 	}
 	// Free the result vector
 	cf_vector_destroy(v);

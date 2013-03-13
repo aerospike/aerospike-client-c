@@ -56,7 +56,6 @@ typedef struct as_scan_parameters {
     bool                fail_on_cluster_change; // honored by server: terminate scan if cluster in fluctuating state
     as_scan_priority    priority;               // honored by server: priority of scan
 //    uint8_t             threads_per_node;       // honored on client: have multiple threads per node. @TODO
-    bool                nobindata;              // honored by server: No bin data is returned
     as_scan_pct         pct;
 } as_scan_params;
 
@@ -80,10 +79,10 @@ typedef struct as_scan_response_record_t {
     bool          ismalloc;
 } as_scan_response_rec;
 
-struct as_node_response_s {
+typedef struct as_node_response_s {
     char    node_name[NODE_NAME_SIZE];
     cl_rv   node_response;
-};
+} as_node_response;
 
 typedef bool (* as_scan_cb) (const as_val * val, void * udata);
 
@@ -109,7 +108,7 @@ cl_rv as_scan_params_init(as_scan_params * oparams, as_scan_params *iparams);
 void      as_scan_destroy(as_scan * scan);
 
 /**
- * Query Builders
+ * Initializing udfs
  */
 int       as_scan_foreach       (as_scan *scan, const char *filename, const char *function, as_list *arglist);
 
@@ -122,7 +121,7 @@ cf_vector* citrusleaf_udf_scan_background  (cl_cluster *asc, as_scan *scan);
 
 /*
  * Init and destroy for client scan environment. Should be called for once per client
- * instance before performing citrusleaf query
+ * instance before performing citrusleaf scan
  */
 int    citrusleaf_scan_init();
 void   citrusleaf_scan_shutdown();

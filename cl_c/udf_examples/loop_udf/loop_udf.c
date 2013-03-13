@@ -466,6 +466,7 @@ int main(int argc, char **argv) {
 	}
 
 	citrusleaf_cluster_destroy(asc);
+	citrusleaf_shutdown();
 	
 	free(thr_array);
 	free(g_config);

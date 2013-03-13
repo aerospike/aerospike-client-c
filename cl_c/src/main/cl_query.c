@@ -960,6 +960,8 @@ static as_val * queue_stream_read(const as_stream * s) {
     if (CF_QUEUE_EMPTY == cf_queue_pop(as_stream_source(s), &val, CF_QUEUE_NOWAIT)) {
         return NULL;
     }
+    // push it back so it can be destroyed
+    cf_queue_push(as_stream_source(s), &val);
     return val;
 }
 

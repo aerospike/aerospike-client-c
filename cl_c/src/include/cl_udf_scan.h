@@ -39,28 +39,25 @@ typedef enum as_scan_priority {
     AS_SCAN_PRIORITY_HIGH
 } as_scan_priority;
 
-typedef enum as_scan_udf_type_s { 
+typedef enum as_scan_udf_execution_type_s { 
     AS_SCAN_UDF_NONE,             // Scan w/o udfs -- noop
     AS_SCAN_UDF_CLIENT_RECORD,          // Job per record
     AS_SCAN_UDF_BACKGROUND,             // Background job no response
-} as_scan_udf_type;
+} udf_execution_type;
 
 typedef struct as_scan_udf_s {
-    as_scan_udf_type    type;
-    char *              filename;
-    char *              function;
-    as_list *           arglist;
+    udf_execution_type	 	   	type;
+    char *              		filename;
+    char *              		function;
+    as_list *           		arglist;
 } as_scan_udf;
 
 typedef struct as_scan_parameters {
     bool                fail_on_cluster_change; // honored by server: terminate scan if cluster in fluctuating state
     as_scan_priority    priority;               // honored by server: priority of scan
-    bool                concurrent_nodes;       // honored on client: work on nodes in parallel or serially
-    uint8_t             threads_per_node;       // honored on client: have multiple threads per node. @TODO
+//    uint8_t             threads_per_node;       // honored on client: have multiple threads per node. @TODO
     bool                nobindata;              // honored by server: No bin data is returned
-    						// only for non UDF scans
     as_scan_pct         pct;
-    bool                get_key;
 } as_scan_params;
 
 typedef struct as_scan_s {
@@ -97,13 +94,14 @@ typedef bool (* as_scan_cb) (const as_val * val, void * udata);
 /**
  * Allocates and initializes a new as_scan
  */
-as_scan * as_scan_new(const char *ns, const char *setname);
+as_scan * as_scan_new(const char *ns, const char *setname, uint64_t *job_id);
 
 /**
  * Initializes an as_scan
  */
-as_scan * as_scan_init(as_scan *scan , const char *ns, const char *setname);
-cl_rv as_scan_udf_init(as_scan_udf * udf, as_scan_udf_type type, const char * filename, const char * function, as_list * arglist);
+as_scan * as_scan_init(as_scan *scan , const char *ns, const char *setname, uint64_t *job_id);
+cl_rv as_scan_udf_init(as_scan_udf * udf, udf_execution_type type, const char * filename, const char * function, as_list * arglist);
+cl_rv as_scan_params_init(as_scan_params * oparams, as_scan_params *iparams);
 
 /**
  * Destroy and free an as_scan
@@ -118,9 +116,9 @@ int       as_scan_foreach       (as_scan *scan, const char *filename, const char
 /**
  * Return vector of cl_rv for each node
  */
-cl_rv       as_scan_node        (cl_cluster *asc, const as_scan *scan, char *node_name, void *udata, bool( *foreach)(const as_val *, void *));
-cf_vector * as_scan_all_node    (cl_cluster *asc, const as_scan *scan, void *udata, bool( *foreach)(const as_val *, void *));
-cl_rv citrusleaf_scan_background  (cl_cluster *asc, const as_scan *scan, void *udata);
+cl_rv citrusleaf_udf_scan_node        (cl_cluster *asc, as_scan *scan, char *node_name, int( *callback)(as_val *, void *), void * udata);
+cf_vector * citrusleaf_udf_scan_all_nodes   (cl_cluster *asc, as_scan *scan, int( *callback)(as_val *, void *), void * udata);
+cf_vector* citrusleaf_udf_scan_background  (cl_cluster *asc, as_scan *scan);
 
 /*
  * Init and destroy for client scan environment. Should be called for once per client

@@ -1,329 +1,269 @@
-/*
- * Citrusleaf Tools
- * scan_udf.c
- *
- * Copyright 2012 by Citrusleaf. All rights reserved.
- * THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE. THE COPYRIGHT NOTICE
- * ABOVE DOES NOT EVIDENCE ANY ACTUAL OR INTENDED PUBLICATION.
- */
-
-#include <assert.h>
-#include <ctype.h>
 #include <errno.h>
-#include <inttypes.h>
-#include <pthread.h>
-#include <stdbool.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-
+#include <stdint.h>
+#include <stdarg.h>
+#include <stdbool.h>
+#include <assert.h>
+#include <ctype.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 
 #include "citrusleaf/citrusleaf.h"
+#include "citrusleaf/cl_udf.h"
+#include "citrusleaf/cl_udf_scan.h"
+#include <citrusleaf/cf_random.h>
+#include <citrusleaf/cf_atomic.h>
+#include <citrusleaf/cf_hist.h>
 
-#include "scan_udf.h"
+#define INFO(fmt, args...) \
+    __log_append(stderr,"", fmt, ## args);
 
+#define ERROR(fmt, args...) \
+    __log_append(stderr,"    ", fmt, ## args);
 
-#define NUM_KEYS 110
-static const char BIN_NAME[] = "bin1"; // must match name in scan_udf.lua
-static const char BIN_NAME_TO_DELETE[] = "bin2"; 
+#define LOG(fmt, args...) \
+    __log_append(stderr,"    ", fmt, ## args);
 
-
-int do_sproc_scan_test(config *c)
-{
-	cl_write_parameters cl_wp;
-
-	cl_write_parameters_set_default(&cl_wp);
-	cl_wp.timeout_ms = c->timeout_ms;
-	cl_wp.record_ttl = 864000;
-
-	cl_object keys[NUM_KEYS];
-
-	// First pre-populate with a bunch of one-bin records.
-	for (int k = 0; k < NUM_KEYS; k++) {
-		citrusleaf_object_init_int(&keys[k], k);
-
-		cl_bin bins[2];
-
-		strcpy(bins[0].bin_name, BIN_NAME);
-		citrusleaf_object_init_int(&bins[0].object, k);
-		strcpy(bins[1].bin_name, BIN_NAME_TO_DELETE);
-		citrusleaf_object_init_str(&bins[1].object, "deleted if bin1 is divisible by 3");
-
-		int rsp = citrusleaf_put(c->asc, c->ns, c->set, &keys[k], bins, 2,
-				&cl_wp);
-
-		if (rsp != CITRUSLEAF_OK) {
-			fprintf(stderr, "failed inserting test data, rsp = %d\n", rsp);
-			return -1;
-		}
-	}
-
-	// Invoke the client's sproc-scan method to update all the records.
-	uint64_t job_uid = 0;
-	cf_vector* vec_p = citrusleaf_sproc_execute_all_nodes(c->asc, c->ns, c->set,
-			c->package_name, "do_scan_test", NULL, NULL, NULL, NULL, &job_uid);
-
-	if (! vec_p) {
-		fprintf(stderr, "failed to start scan job\n");
-		return -1;
-	}
-
-	fprintf(stderr, "started scan job %lu\n", job_uid);
-	for (unsigned int n = 0; n < cf_vector_size(vec_p); n++) {
-		cl_node_response response;
-
-		if (cf_vector_get(vec_p, n, (void *)&response) != 0) {
-			fprintf(stderr, "failed reading result vector index %d\n", n);
-			continue;
-		}
-
-		fprintf(stderr, "node name %s: response code %d\n",
-				response.node_name, response.node_response);
-	}
-
-	free(vec_p);
-
-	// Wait and see what happened.
-	fprintf(stderr, "\n... allowing scan job %lu to happen ...\n", job_uid);
-	sleep(10);	// @TODO this is to ensure the job has finished 
-
-	for (int k = 0; k < NUM_KEYS; k++) {
-		uint32_t cl_gen;
-		cl_bin *rsp_bins = NULL;
-		int rsp_n_bins = 0;
-
-		for (int repeat = 0; repeat < 4; repeat++) {
-	 		int rsp = citrusleaf_get_all(c->asc, c->ns, c->set, &keys[k], &rsp_bins,
-	 				&rsp_n_bins, c->timeout_ms, &cl_gen);
-
-			if (rsp != CITRUSLEAF_OK) {
-				fprintf(stderr, "%2ld: failed reading modified data, rsp = %d\n",
-						keys[k].u.i64, rsp);
-			}
-			else if (rsp_n_bins == 0 || ! rsp_bins) {
-				fprintf(stderr, "%2ld: no bins\n", keys[k].u.i64);
-			}
-			else {
-				fprintf(stderr, "%2ld:", keys[k].u.i64);
-
-				for (int b = 0; b < rsp_n_bins; b++) {
-					cl_type type = rsp_bins[b].object.type;
-
-					fprintf(stderr, " %s [%d]", rsp_bins[b].bin_name, type);
-
-					switch (type) {
-					case CL_INT:
-						fprintf(stderr, " %ld;", rsp_bins[b].object.u.i64);
-						break;
-					case CL_STR: {
-							size_t val_len = rsp_bins[b].object.sz;
-							char val[val_len + 1];
-
-							strncpy(val, rsp_bins[b].object.u.str, val_len);
-							val[val_len] = 0;
-
-							fprintf(stderr, " %s;", val);
-							break;
-						}
-					default:
-						fprintf(stderr, " (not printing this value type);");
-						break;
-					}
-				}
-
-				fprintf(stderr, "\n");
-			}
-
-			if (rsp_bins) {
-				citrusleaf_bins_free(rsp_bins, rsp_n_bins);
-				free(rsp_bins);
-			}
-		}
-	}
-
-	return 0;
+void __log_append(FILE * f, const char * prefix, const char * fmt, ...) {
+    char msg[128] = {0};
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(msg, 128, fmt, ap);
+    va_end(ap);
+    fprintf(f, "%s%s\n",prefix,msg);
 }
 
-int do_sproc_scan_test_no_data(config *c)
-{
-	// Invoke the client's sproc-scan method to update all the records.
-	uint64_t job_uid = 0;
-	cf_vector* vec_p = citrusleaf_sproc_execute_all_nodes(c->asc, c->ns, c->set,
-			c->package_name, "do_scan_test", NULL, NULL, NULL, NULL, &job_uid);
+typedef struct config_s {
 
-	if (! vec_p) {
-		fprintf(stderr, "failed to start scan job\n");
-		return -1;
-	}
+        char  *host;
+        int    port;
+        char  *ns;
+        char  *set;
+        uint32_t timeout_ms;
+        char *package_file;
+        char *function_name;
+        cl_cluster      *asc;
+	int	nkeys;
+} config;
 
-	fprintf(stderr, "started scan job %lu\n", job_uid);
-	for (unsigned int n = 0; n < cf_vector_size(vec_p); n++) {
-		cl_node_response response;
 
-		if (cf_vector_get(vec_p, n, (void *)&response) != 0) {
-			fprintf(stderr, "failed reading result vector index %d\n", n);
-			continue;
-		}
+static config *g_config = NULL;
 
-		fprintf(stderr, "node name %s: response code %d\n",
-				response.node_name, response.node_response);
-	}
-
-	free(vec_p);
-
-	return 0;
+void usage(int argc, char *argv[]) {
+    INFO("Usage %s:", argv[0]);
+    INFO("   -h host [default 127.0.0.1] ");
+    INFO("   -p port [default 3000]");
+    INFO("   -K number of keys [default 25000]");
+    INFO("   -n namespace [default test]");
+    INFO("   -s set [default *all*]");
+    INFO("   -F udf_file [default ../lua_files/scan_udf.lua]");
+    INFO("   -f udf_function [default register_1]");
 }
 
-
-
-void usage(int argc, char *argv[])
+int init_configuration (int argc, char *argv[])
 {
-	fprintf(stderr, "Usage %s:\n", argv[0]);
-	fprintf(stderr, "-h host [default 127.0.0.1] \n");
-	fprintf(stderr, "-p port [default 3000]\n");
-	fprintf(stderr, "-n namespace [test]\n");
-	fprintf(stderr, "-s set [default *all*]\n");
-	fprintf(stderr, "-i insert data [default not on]\n");
-	fprintf(stderr, "-f package_file [lua_packages/scan_udf.lua]\n");
-	fprintf(stderr, "-P package_name [sproc_scan_test] \n");
-	fprintf(stderr, "-v is verbose\n");
-}
+	g_config = (config *)malloc(sizeof(config));
+	memset(g_config, 0, sizeof(g_config));
 
-int main(int argc, char **argv)
-{
-	config c;
-
-	memset(&c, 0, sizeof(c));
-	c.host			= "127.0.0.1";
-	c.port			= 3000;
-	c.ns			= "test";
-	c.set			= 0;
-	c.timeout_ms	= 1000;
-	c.verbose		= true;
-	c.package_file	= "../lua_packages/scan_udf.lua";
-	c.package_name	= "sproc_scan_test";
-	c.insert_data   = true;
-
-	fprintf(stderr, "Starting UDF Scan Test\n");
+	g_config->host         	= "127.0.0.1";
+	g_config->port         	= 3000;
+	g_config->ns           	= "test";
+	g_config->set          	= NULL;
+	g_config->nkeys	 	= 25000;
+	g_config->timeout_ms   = 1000;
+	g_config->package_file = "../lua_files/scan_udf.lua";
+	g_config->function_name = "do_scan_test";
 
 	int optcase;
-
-	while ((optcase = getopt(argc, argv, "ckmh:p:n:s:P:f:vi")) != -1) {
+	while ((optcase = getopt(argc, argv, "ckmh:p:n:s:K:F:f:P:x:r:t:i:j:")) != -1) {
 		switch (optcase) {
-		case 'h': c.host			= strdup(optarg);	break;
-		case 'p': c.port			= atoi(optarg);		break;
-		case 'n': c.ns				= strdup(optarg);	break;
-		case 's': c.set				= strdup(optarg);	break;
-		case 'v': c.verbose			= true;				break;
-		case 'f': c.package_file	= strdup(optarg);	break;
-		case 'P': c.package_name	= strdup(optarg);	break;
-		case 'i': c.insert_data     = false;			break;
-		default: usage(argc, argv);						return -1;
+			case 'h': g_config->host         	= strdup(optarg);          break;
+			case 'p': g_config->port         	= atoi(optarg);            break;
+			case 'n': g_config->ns           	= strdup(optarg);          break;
+			case 's': g_config->set          	= strdup(optarg);          break;
+			case 'K': g_config->nkeys          	= atoi(optarg);            break;
+			case 'F': g_config->package_file 	= strdup(optarg);          break;
+			case 'f': g_config->function_name 	= strdup(optarg);          break;
+			default:  usage(argc, argv);                      return(-1);
 		}
 	}
+	return 0;
+}
 
-	fprintf(stderr, "Startup: host %s port %d ns %s set %s file %s\n",
-			c.host, c.port, c.ns, c.set, c.package_file);
+int register_package() 
+{ 
+	INFO("Opening package file %s",g_config->package_file);  
+	FILE *fptr = fopen(g_config->package_file,"r"); 
+	if (!fptr) { 
+		LOG("cannot open script file %s : %s",g_config->package_file,strerror(errno));  
+		return(-1); 
+	} 
+	int max_script_len = 1048576; 
+	byte *script_code = (byte *)malloc(max_script_len); 
+	memset(script_code, 0, max_script_len);
+	if (script_code == NULL) { 
+		LOG("malloc failed"); return(-1); 
+	}     
+
+	byte *script_ptr = script_code; 
+	int b_read = fread(script_ptr,1,512,fptr); 
+	int b_tot = 0; 
+	while (b_read) { 
+		b_tot      += b_read; 
+		script_ptr += b_read; 
+		b_read      = fread(script_ptr,1,512,fptr); 
+	}                        
+	fclose(fptr); 
+
+	char *err_str = NULL; 
+	as_bytes udf_content;
+	as_bytes_init(&udf_content, script_code, b_tot, true);
+	if (b_tot>0) { 
+		int resp = citrusleaf_udf_put(g_config->asc, basename(g_config->package_file), &udf_content, AS_UDF_LUA, &err_str); 
+		if (resp!=0) { 
+			INFO("unable to register package file %s resp = %d",g_config->package_file, resp); return(-1);
+			INFO("%s",err_str); free(err_str);
+			free(script_code);
+			return(-1);
+		}
+		INFO("successfully registered package file %s",g_config->package_file); 
+	} else {   
+		INFO("unable to read package file %s b_tot = %d",g_config->package_file, b_tot); return(-1);    
+	}
+	free(script_code);
+	return 0;
+}
+
+// Currently the callback only prints the return value, can add more logic here later
+int cb(as_val * v, void * u) {
+	char * s = as_val_tostring(v);
+	INFO("Advertiser id = %d", atoi(s));
+	free(s);
+	as_val_destroy(v);
+	return 0;
+}
+int main(int argc, char **argv) {
+	int sz;
+	int rc;
+	cf_vector * v;
+	// reading parameters
+	if (init_configuration(argc,argv) !=0 ) {
+		return -1;
+	}
 
 	citrusleaf_init();
-//	citrusleaf_set_debug(true);
 
-	// Create the cluster object - attach.
+	// create the cluster object - attach
 	cl_cluster *asc = citrusleaf_cluster_create();
+	if (!asc) { 
+		INFO("could not create cluster");
+		return(-1); 
+	}
+	if (0 != citrusleaf_cluster_add_host(asc, g_config->host, g_config->port, g_config->timeout_ms)) {
+		INFO("Failed to add host");
+		free(asc);
+		return(-1);
+	}
+	g_config->asc           = asc;
 
-	if (! asc) {
-		fprintf(stderr, "can't create cluster\n");
+	// register our package. 
+	if (register_package() !=0 ) {
 		return -1;
 	}
 
-	if (0 != citrusleaf_cluster_add_host(asc, c.host, c.port, c.timeout_ms)) {
-		fprintf(stderr, "can't connect to host %s port %d\n", c.host, c.port);
-		return -1;
-	}
 
-	c.asc = asc;
+	// insert records
 
-	// Register our package.
-	fprintf(stderr, "Opening package file %s\n", c.package_file);
+	cl_write_parameters wp;
+	cl_write_parameters_set_default(&wp);
+	wp.timeout_ms = 1000;
+	wp.record_ttl = 864000;
 
-	FILE *fptr = fopen(c.package_file, "r");
+	cl_object okey;
+	cl_bin bins[6];
+	strcpy(bins[0].bin_name, "bid");
+	strcpy(bins[1].bin_name, "timestamp");
+	strcpy(bins[2].bin_name, "advertiser");
+	strcpy(bins[3].bin_name, "campaign");
+	strcpy(bins[4].bin_name, "line_item");
+	strcpy(bins[5].bin_name, "spend");
 
-	if (!fptr) {
-		fprintf(stderr, "can't open %s: %s\n", c.package_file, strerror(errno));
-		return -1;
-	}
+	uint32_t ts = 275273225;
+	uint32_t et = 0;
 
-	int max_script_len = 1048576;
-	char *script_code = malloc(max_script_len);
-
-	if (script_code == NULL) {
-		fprintf(stderr, "malloc failed");
-		return -1;
-	}
-
-	char *script_ptr = script_code;
-	int b_read = fread(script_ptr,1,512,fptr);
-	int b_tot = 0;
-
-	while (b_read) {
-		b_tot		+= b_read;
-		script_ptr	+= b_read;
-		b_read		= fread(script_ptr, 1, 512, fptr);
-	}			
-
-	fclose(fptr);
-
-	if (b_tot > 0) {
-		char *err_str = NULL;
-		int resp = citrusleaf_sproc_package_set(asc, c.package_name,
-				script_code, &err_str, CL_SCRIPT_LANG_LUA);
-
-		if (resp != 0) {
-			fprintf(stderr, "can't register package file %s as %s resp = %d\n",
-					c.package_file, c.package_name,resp);
-			fprintf(stderr, "[%s]\n", err_str);
-			free(err_str);
-			return -1;
+	srand(ts);
+	// Inserting "nkeys" rows of 6 bins each
+	for( int i = 0; i < g_config->nkeys; i++ ) {
+		if ( i % 4 == 0 ) {
+			et++;
 		}
+		int nbins = 6;
 
-		fprintf(stderr, "successfully registered package file %s as %s\n",
-				c.package_file, c.package_name);
+		uint32_t advertiserId = (rand() % 4) + 1;
+		uint32_t campaignId = advertiserId * 10 + (rand() % 4) + 1;
+		uint32_t lineItemId = campaignId * 10 + (rand() % 4) + 1;
+		uint32_t bidId = lineItemId * 100000 + i;
+		uint32_t timestamp = ts + et;
+		uint32_t spend = advertiserId + campaignId + lineItemId;
+
+		citrusleaf_object_init_int(&okey, bidId);
+		citrusleaf_object_init_int(&bins[0].object, bidId);
+		citrusleaf_object_init_int(&bins[1].object, timestamp);
+		citrusleaf_object_init_int(&bins[2].object, advertiserId);
+		citrusleaf_object_init_int(&bins[3].object, campaignId);
+		citrusleaf_object_init_int(&bins[4].object, lineItemId);
+		citrusleaf_object_init_int(&bins[5].object, spend);
+
+		rc = citrusleaf_put(asc, g_config->ns, g_config->set, &okey, bins, nbins, &wp);
 	}
-	else {
-		fprintf(stderr, "can't read package file %s as %s b_tot = %d\n",
-				c.package_file, c.package_name, b_tot);
-		return -1;
+
+	INFO("Inserted %d rows", g_config->nkeys);
+
+	// Initialize scan	
+	citrusleaf_scan_init();
+
+	// Create job id for scan.
+	// This will be useful to monitor your scan transactions
+	uint64_t job_id;
+	as_scan * scan = as_scan_new(g_config->ns, g_config->set, &job_id );
+	INFO("Job Id for this transaction %"PRIu64"", job_id);
+	
+	as_scan_params params = { 
+		.fail_on_cluster_change  = false,
+		.priority		= AS_SCAN_PRIORITY_AUTO,
+		.nobindata		= false,
+		.pct			= 100
+	};
+
+
+	as_scan_params_init(&scan->params, &params);
+
+	//Initialize the udf to be run on all records
+	// This function takes in the filename (not the absolute path and w/o .lua)
+	as_scan_foreach(scan, "scan_udf", g_config->function_name, NULL);
+
+	// Execute scan udfs in background
+	// Inputs : cluster object, scan object, callback function, arguments to the callback function 
+	INFO("\nRunning background scan udf on the entire cluster");
+	v = citrusleaf_udf_scan_background(asc, scan);
+	
+	// This returns a vector of return values, the size of which is the size of the cluster
+	sz = cf_vector_size(v);
+
+	for(int i=0; i <= sz; i++) {
+		cf_vector_get(v, i, &rc);
+		INFO("Udf scan background for node %d returned %d", i, rc);
 	}
-
-	// Run the test(s).
-	if (c.insert_data) {
-		fprintf(stderr, "\n*** do_sproc_scan_test started\n");
-
-		if (do_sproc_scan_test(&c)) {
-			fprintf(stderr, "*** do_sproc_scan_test failed\n");
-			return -1;
-		}
-		else {
-			fprintf(stderr, "*** do_sproc_scan_test succeeded\n");
-		}
-	} else {
-		fprintf(stderr, "\n*** do_sproc_scan_test_no_data started\n");
-
-		if (do_sproc_scan_test_no_data(&c)) {
-			fprintf(stderr, "*** do_sproc_scan_test_no_data failed\n");
-			return -1;
-		}
-		else {
-			fprintf(stderr, "*** do_sproc_scan_test_no_data succeeded\n");
-		}
-	}
+	// Free the result vector
+	cf_vector_destroy(v);
+	
+	// Destroy the scan object
+	as_scan_destroy(scan);
+	citrusleaf_scan_shutdown();
 
 	citrusleaf_cluster_destroy(asc);
-
-	fprintf(stderr, "\n\nFinished stored-procedure Scan Test\n");
-	return 0;
+	citrusleaf_shutdown();
 }

@@ -1,15 +1,9 @@
+-- A very basic update bin udf 
 function do_scan_test(record)
-  local bval = record.camp_9;
-  if (bval ~= nil) then
-    record.camp_9= nil;
-  end
-  bval = record.camp_1;
-  if (bval ~= nil) then 
-    record.new_bin = bval;  
-  end
-  bval = record.camp_5;
-  if (bval ~= nil) then
-    record:Delete();
-  end
+--	info("Advertiser id before the update %d", record.advertiser)
+	record.advertiser = 5;
+	aerospike:update(record)
+--	info("Advertiser id after the update %d", record.advertiser)
+	return record.advertiser
 end
 

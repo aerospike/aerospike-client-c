@@ -83,7 +83,6 @@ typedef struct {
     char                    node_name[NODE_NAME_SIZE];    
     const uint8_t *         scan_buf;
     size_t                  scan_sz;
-    cf_queue *              node_complete_q;     // Asyncwork item queue
     void *                  udata;
     int                     (* callback)(as_val *, void *);
 } as_scan_task;
@@ -94,6 +93,7 @@ typedef struct {
 
 cf_atomic32     scan_initialized  = 0;
 cf_queue *      g_scan_q          = 0;
+cf_queue *      g_complete_q      = 0;
 pthread_t       g_scan_th[N_MAX_SCAN_THREADS];
 static as_scan_task    g_null_task;
 static bool            gasq_abort         = false;
@@ -365,11 +365,13 @@ static int as_scan_worker_do(cl_cluster_node * node, as_scan_task * task) {
 		if (rc == CITRUSLEAF_FAIL_SCAN_ABORT) {
 			fprintf(stderr,"Scan successfully aborted\n");
 		}
-            }
-            else if (msg->info3 & CL_MSG_INFO3_LAST)    {
-                fprintf(stderr, "Received final message -- Scan complete\n");
-                done = true;
-            }
+	    }
+	    else if (msg->info3 & CL_MSG_INFO3_LAST)    {
+		    if ( cf_debug_enabled() ) {
+			    fprintf(stderr, "Received final message from node [%s], scan complete\n", node->name);
+		    }
+		    done = true;
+	    }
             else if ((msg->n_ops || (msg->info1 & CL_MSG_INFO1_NOBINDATA))) {
 
                 as_scan_response_rec rec;
@@ -443,7 +445,10 @@ Final:
 
 void * as_scan_worker(void * dummy) {
     while (1) {
-        
+	// Response structure to be pushed in the complete q
+        as_node_response response; 
+	memset(&response, 0, sizeof(as_node_response));
+
         as_scan_task task;
 
         if ( 0 != cf_queue_pop(g_scan_q, &task, CF_QUEUE_FOREVER) ) {
@@ -451,7 +456,7 @@ void * as_scan_worker(void * dummy) {
         }
 
         if ( cf_debug_enabled() ) {
-            fprintf(stderr, "as_query_worker: getting one task item\n");
+            fprintf(stderr, "as_scan_worker: getting one task item\n");
         }
         
         // a NULL structure is the condition that we should exit. See shutdown()
@@ -462,14 +467,16 @@ void * as_scan_worker(void * dummy) {
         // query if the node is still around
         int rc = CITRUSLEAF_FAIL_UNAVAILABLE;
 
-        cl_cluster_node * node = cl_cluster_node_get_byname(task.asc, task.node_name);
-        if ( node ) {
-            rc = as_scan_worker_do(node, &task);
-        }
+	cl_cluster_node * node = cl_cluster_node_get_byname(task.asc, task.node_name);
+	if ( node ) {
+		rc = as_scan_worker_do(node, &task);
+	}
 	else {
 		fprintf(stderr, "No node found with the name %s\n", task.node_name);
 	}
-        cf_queue_push(task.node_complete_q, (void *)&rc);
+	strncpy(response.node_name, task.node_name, strlen(task.node_name));
+	response.node_response = rc;
+	cf_queue_push(g_complete_q, (void *)&response);
     }
 }
 
@@ -573,7 +580,6 @@ cf_vector * as_scan_execute(cl_cluster * cluster, const as_scan * scan, char * n
         .ns                 = scan->ns,
         .scan_buf          = wr_buf,
         .scan_sz           = wr_buf_sz,
-        .node_complete_q    = cf_queue_create(sizeof(int),true),
         .udata              = udata,
         .callback           = callback,
     };
@@ -594,7 +600,6 @@ cf_vector * as_scan_execute(cl_cluster * cluster, const as_scan * scan, char * n
 	    if ( node_count == 0 ) {
 		    // TODO: use proper loggin function
 		    fprintf(stderr, "citrusleaf scan nodes: don't have any nodes?\n");
-		    cf_queue_destroy(task.node_complete_q);
 		    if ( wr_buf && (wr_buf != wr_stack_buf) ) {
 			    free(wr_buf); 
 			    wr_buf = 0;
@@ -620,12 +625,9 @@ cf_vector * as_scan_execute(cl_cluster * cluster, const as_scan * scan, char * n
     // For every node, fill in the return value in the result vector
     cf_vector * result_v = cf_vector_create(sizeof(as_node_response), node_count, 0);
     for ( int i=0; i < node_count; i++ ) {
-	    // Build the response structure
-	    cf_queue_pop(task.node_complete_q, &response.node_response, CF_QUEUE_FOREVER);
-	    strcpy(response.node_name, task.node_name);
+	    // Pop the response structure
+	    cf_queue_pop(g_complete_q, &response, CF_QUEUE_FOREVER);
 	    cf_vector_set(result_v, i, &response);
-	    // Reset response for the next node
-	    memset(&response, 0, sizeof(as_node_response));
     }
 
     if ( wr_buf && (wr_buf != wr_stack_buf) ) { 
@@ -633,7 +635,6 @@ cf_vector * as_scan_execute(cl_cluster * cluster, const as_scan * scan, char * n
 	    wr_buf = 0;
     }
 
-    cf_queue_destroy(task.node_complete_q);
     return result_v;
 }
 
@@ -713,6 +714,9 @@ int citrusleaf_scan_init() {
         // create dispatch queue
         g_scan_q = cf_queue_create(sizeof(as_scan_task), true);
 
+	// create global complete queue
+	g_complete_q = cf_queue_create(sizeof(as_node_response), true);
+	
         // create thread pool
         for (int i = 0; i < N_MAX_SCAN_THREADS; i++) {
             pthread_create(&g_scan_th[i], 0, as_scan_worker, 0);
@@ -731,4 +735,5 @@ void citrusleaf_scan_shutdown() {
         pthread_join(g_scan_th[i],NULL);
     }
     cf_queue_destroy(g_scan_q);
+    cf_queue_destroy(g_complete_q);
 }

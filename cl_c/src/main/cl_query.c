@@ -82,7 +82,6 @@ typedef struct {
     char                    node_name[NODE_NAME_SIZE];    
     const uint8_t *         query_buf;
     size_t                  query_sz;
-    cf_queue *              node_complete_q;     // Asyncwork item queue
     void *                  udata;
     int                     (* callback)(as_val *, void *);
     bool                    isinline;
@@ -133,6 +132,7 @@ typedef struct query_orderby_clause {
 
 cf_atomic32     query_initialized  = 0;
 cf_queue *      g_query_q          = 0;
+cf_queue *      g_task_complete_q  = 0;
 pthread_t       g_query_th[N_MAX_QUERY_THREADS];
 as_query_task   g_null_task;
 bool            gasq_abort         = false;
@@ -948,7 +948,7 @@ static void * as_query_worker(void * dummy) {
             rc = as_query_worker_do(node, &task);
         }
 
-        cf_queue_push(task.node_complete_q, (void *)&rc);
+        cf_queue_push(g_task_complete_q, (void *)&rc);
     }
 }
 
@@ -1102,7 +1102,6 @@ static cl_rv as_query_execute(cl_cluster * cluster, const as_query * query, void
         .ns                 = query->ns,
         .query_buf          = wr_buf,
         .query_sz           = wr_buf_sz,
-        .node_complete_q    = cf_queue_create(sizeof(int),true),
         .udata              = udata,
         .callback           = callback,
         .isinline           = isinline
@@ -1116,7 +1115,6 @@ static cl_rv as_query_execute(cl_cluster * cluster, const as_query * query, void
     if ( node_count == 0 ) {
         // TODO: use proper loggin function
         fprintf(stderr, "citrusleaf query nodes: don't have any nodes?\n");
-        cf_queue_destroy(task.node_complete_q);
         if ( wr_buf && (wr_buf != wr_stack_buf) ) {
             free(wr_buf); 
             wr_buf = 0;
@@ -1140,7 +1138,7 @@ static cl_rv as_query_execute(cl_cluster * cluster, const as_query * query, void
     rc = CITRUSLEAF_OK;
     for ( int i=0; i < node_count; i++ ) {
         int node_rc;
-        cf_queue_pop(task.node_complete_q, &node_rc, CF_QUEUE_FOREVER);
+        cf_queue_pop(g_task_complete_q, &node_rc, CF_QUEUE_FOREVER);
         if ( node_rc != 0 ) {
             // Got failure from one node. Trigger abort for all 
             // the ongoing request
@@ -1157,8 +1155,6 @@ static cl_rv as_query_execute(cl_cluster * cluster, const as_query * query, void
 
     callback(NULL, udata);
     
-    cf_queue_destroy(task.node_complete_q);
-
     return rc;
 }
 
@@ -1481,6 +1477,9 @@ int citrusleaf_query_init() {
         // create dispatch queue
         g_query_q = cf_queue_create(sizeof(as_query_task), true);
 
+	// Create a glboal complete queue
+	g_task_complete_q = cf_queue_create(sizeof(int), true);
+
         // create thread pool
         for (int i = 0; i < N_MAX_QUERY_THREADS; i++) {
             pthread_create(&g_query_th[i], 0, as_query_worker, 0);
@@ -1499,5 +1498,6 @@ void citrusleaf_query_shutdown() {
         pthread_join(g_query_th[i],NULL);
     }
     cf_queue_destroy(g_query_q);
+    cf_queue_destroy(g_task_complete_q);
     cf_atomic32_decr(&query_initialized);
 }

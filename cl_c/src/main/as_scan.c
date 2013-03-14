@@ -241,18 +241,18 @@ static int as_scan_worker_do(cl_cluster_node * node, as_scan_task * task) {
         // Now turn around and read a fine cl_proto - that's the first 8 bytes 
         // that has types and lengths
         if ( (rc = cf_socket_read_forever(fd, (uint8_t *) &proto, sizeof(cl_proto) ) ) ) {
-            fprintf(stderr, "network error: errno %d fd %d\n", rc, fd);
+            fprintf(stderr, "network error: errno %d fd %d node name %s\n", rc, fd, node->name);
             return CITRUSLEAF_FAIL_CLIENT;
         }
         cl_proto_swap(&proto);
 
         if ( proto.version != CL_PROTO_VERSION) {
-            fprintf(stderr, "network error: received protocol message of wrong version %d\n",proto.version);
+            fprintf(stderr, "network error: received protocol message of wrong version %d from node %s\n", proto.version, node->name);
             return CITRUSLEAF_FAIL_CLIENT;
         }
 
         if ( proto.type != CL_PROTO_TYPE_CL_MSG && proto.type != CL_PROTO_TYPE_CL_MSG_COMPRESSED ) {
-            fprintf(stderr, "network error: received incorrect message version %d\n",proto.type);
+            fprintf(stderr, "network error: received incorrect message version %d from node %s \n",proto.type, node->name);
             return CITRUSLEAF_FAIL_CLIENT;
         }
 
@@ -271,7 +271,7 @@ static int as_scan_worker_do(cl_cluster_node * node, as_scan_task * task) {
             if (rd_buf == NULL) return CITRUSLEAF_FAIL_CLIENT;
 
             if ( (rc = cf_socket_read_forever(fd, rd_buf, rd_buf_sz)) ) {
-                fprintf(stderr, "network error: errno %d fd %d\n", rc, fd);
+                fprintf(stderr, "network error: errno %d fd %d node name %s\n", rc, fd, node->name);
                 if ( rd_buf != rd_stack_buf ) free(rd_buf);
                 return CITRUSLEAF_FAIL_CLIENT;
             }
@@ -363,7 +363,7 @@ static int as_scan_worker_do(cl_cluster_node * node, as_scan_task * task) {
                 rc = (int) msg->result_code;
                 done = true;
                 if (rc == CITRUSLEAF_FAIL_SCAN_ABORT) {
-                    fprintf(stderr,"Scan successfully aborted\n");
+                    fprintf(stderr,"Scan successfully aborted at node [%s]\n", node->name);
                 }
             }
             else if (msg->info3 & CL_MSG_INFO3_LAST)    {

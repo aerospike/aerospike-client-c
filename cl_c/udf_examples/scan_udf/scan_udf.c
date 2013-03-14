@@ -51,6 +51,7 @@ typedef struct config_s {
 
 
 static config *g_config = NULL;
+int g_threads    = 1;
 
 void usage(int argc, char *argv[]) {
     INFO("Usage %s:", argv[0]);
@@ -61,6 +62,7 @@ void usage(int argc, char *argv[]) {
     INFO("   -s set [default *all*]");
     INFO("   -F udf_file [default ../lua_files/scan_udf.lua]");
     INFO("   -f udf_function [default register_1]");
+    INFO("   -t number of parallel threads [default 10]");
 }
 
 int init_configuration (int argc, char *argv[])
@@ -72,9 +74,9 @@ int init_configuration (int argc, char *argv[])
 	g_config->port         	= 3000;
 	g_config->ns           	= "test";
 	g_config->set          	= NULL;
-	g_config->nkeys	 	= 25000;
-	g_config->timeout_ms   = 1000;
-	g_config->package_file = "../lua_files/scan_udf.lua";
+	g_config->nkeys	 	    = 25000;
+	g_config->timeout_ms    = 1000;
+	g_config->package_file  = "../lua_files/scan_udf.lua";
 	g_config->function_name = "do_scan_test";
 
 	int optcase;
@@ -87,6 +89,7 @@ int init_configuration (int argc, char *argv[])
 			case 'K': g_config->nkeys          	= atoi(optarg);            break;
 			case 'F': g_config->package_file 	= strdup(optarg);          break;
 			case 'f': g_config->function_name 	= strdup(optarg);          break;
+			case 't': g_threads                 = atoi(optarg);            break;
 			default:  usage(argc, argv);                      return(-1);
 		}
 	}
@@ -145,10 +148,108 @@ int cb(as_val * v, void * u) {
 	as_val_destroy(v);
 	return 0;
 }
-int main(int argc, char **argv) {
-	int sz;
+
+static int run_test1() {
 	int rc;
 	cf_vector * v;
+	// Create job id for scan.
+	// This will be useful to monitor your scan transactions
+	uint64_t job_id;
+	as_scan * scan = as_scan_new(g_config->ns, g_config->set, &job_id );
+	INFO("Job Id for this transaction %"PRIu64"", job_id);
+
+	as_scan_params params = { 
+		.fail_on_cluster_change  = false,
+		.priority		= AS_SCAN_PRIORITY_AUTO,
+		.nobindata		= false,
+		.pct			= 100
+	};
+
+
+	as_scan_params_init(&scan->params, &params);
+
+	//Initialize the udf to be run on all records
+	// This function takes in the filename (not the absolute path and w/o .lua)
+	as_scan_foreach(scan, "scan_udf", g_config->function_name, NULL);
+
+	// Execute scan udfs in background
+	// Inputs : cluster object, scan object, callback function, arguments to the callback function 
+	INFO("\nRunning background scan udf on the entire cluster");
+	int cb(as_val *val , void *udata) {
+		char *a = as_val_tostring(val);
+		INFO("Val = %s", a);
+		free(a);
+		return 0;
+	}
+	v = citrusleaf_udf_scan_all_nodes(g_config->asc, scan, cb, NULL);
+
+	// This returns a vector of return values, the size of which is the size of the cluster
+	int sz = cf_vector_size(v);
+
+	for(int i=0; i <= sz; i++) {
+		cf_vector_get(v, i, &rc);
+		INFO("Udf scan background for node %d returned %d", i, rc);
+	}
+	// Free the result vector
+	cf_vector_destroy(v);
+
+	// Destroy the scan object
+	as_scan_destroy(scan);
+	return 0;
+}
+
+static int run_test2() {
+
+	int rc;
+	cf_vector * v;
+	// Create job id for scan.
+	// This will be useful to monitor your scan transactions
+	uint64_t job_id;
+	as_scan * scan = as_scan_new(g_config->ns, g_config->set, &job_id );
+	INFO("Job Id for this transaction %"PRIu64"", job_id);
+
+	as_scan_params params = { 
+		.fail_on_cluster_change  = false,
+		.priority		= AS_SCAN_PRIORITY_AUTO,
+		.nobindata		= false,
+		.pct			= 100
+	};
+
+
+	as_scan_params_init(&scan->params, &params);
+
+	//Initialize the udf to be run on all records
+	// This function takes in the filename (not the absolute path and w/o .lua)
+	as_scan_foreach(scan, "scan_udf", g_config->function_name, NULL);
+
+	// Execute scan udfs in background
+	// Inputs : cluster object, scan object, callback function, arguments to the callback function 
+	INFO("\nRunning background scan udf on the entire cluster");
+	v = citrusleaf_udf_scan_background(g_config->asc, scan);
+
+	// This returns a vector of return values, the size of which is the size of the cluster
+	int sz = cf_vector_size(v);
+
+	for(int i=0; i <= sz; i++) {
+		cf_vector_get(v, i, &rc);
+		INFO("Udf scan background for node %d returned %d", i, rc);
+	}
+	// Free the result vector
+	cf_vector_destroy(v);
+
+	// Destroy the scan object
+	as_scan_destroy(scan);
+	return 0;
+}
+
+static void *run_test(void *o) {
+	run_test1();
+	run_test2();
+	return NULL;
+}
+
+int main(int argc, char **argv) {
+	int rc;
 	// reading parameters
 	if (init_configuration(argc,argv) !=0 ) {
 		return -1;
@@ -225,43 +326,17 @@ int main(int argc, char **argv) {
 	// Initialize scan	
 	citrusleaf_scan_init();
 
-	// Create job id for scan.
-	// This will be useful to monitor your scan transactions
-	uint64_t job_id;
-	as_scan * scan = as_scan_new(g_config->ns, g_config->set, &job_id );
-	INFO("Job Id for this transaction %"PRIu64"", job_id);
-	
-	as_scan_params params = { 
-		.fail_on_cluster_change  = false,
-		.priority		= AS_SCAN_PRIORITY_AUTO,
-		.nobindata		= false,
-		.pct			= 100
-	};
+    pthread_t slaps[g_threads];
+    for (int j = 0; j < g_threads; j++) {
+        if (pthread_create(&slaps[j], 0, run_test, NULL)) {
+            INFO("[WARNING]: Thread Create Failed\n");
+        }
+    }
+    for (int j = 0; j < g_threads; j++) {
+        pthread_join(slaps[j], (void *)&rc);
+    }
+ 
 
-
-	as_scan_params_init(&scan->params, &params);
-
-	//Initialize the udf to be run on all records
-	// This function takes in the filename (not the absolute path and w/o .lua)
-	as_scan_foreach(scan, "scan_udf", g_config->function_name, NULL);
-
-	// Execute scan udfs in background
-	// Inputs : cluster object, scan object, callback function, arguments to the callback function 
-	INFO("\nRunning background scan udf on the entire cluster");
-	v = citrusleaf_udf_scan_background(asc, scan);
-	
-	// This returns a vector of return values, the size of which is the size of the cluster
-	sz = cf_vector_size(v);
-
-	for(int i=0; i <= sz; i++) {
-		cf_vector_get(v, i, &rc);
-		INFO("Udf scan background for node %d returned %d", i, rc);
-	}
-	// Free the result vector
-	cf_vector_destroy(v);
-	
-	// Destroy the scan object
-	as_scan_destroy(scan);
 	citrusleaf_scan_shutdown();
 
 	citrusleaf_cluster_destroy(asc);

@@ -13,7 +13,7 @@
 
 #include "citrusleaf/citrusleaf.h"
 #include "citrusleaf/cl_udf.h"
-#include "citrusleaf/cl_udf_scan.h"
+#include "citrusleaf/as_scan.h"
 #include <citrusleaf/cf_random.h>
 #include <citrusleaf/cf_atomic.h>
 #include <citrusleaf/cf_hist.h>
@@ -150,7 +150,10 @@ int cb(as_val * v, void * u) {
 }
 
 static int run_test1() {
-	int rc;
+	// Response structure for every node
+	as_node_response resp;
+	memset(&resp, 0, sizeof(as_node_response));
+
 	cf_vector * v;
 	// Create job id for scan.
 	// This will be useful to monitor your scan transactions
@@ -161,7 +164,6 @@ static int run_test1() {
 	as_scan_params params = { 
 		.fail_on_cluster_change  = false,
 		.priority		= AS_SCAN_PRIORITY_AUTO,
-		.nobindata		= false,
 		.pct			= 100
 	};
 
@@ -187,8 +189,10 @@ static int run_test1() {
 	int sz = cf_vector_size(v);
 
 	for(int i=0; i <= sz; i++) {
-		cf_vector_get(v, i, &rc);
-		INFO("Udf scan background for node %d returned %d", i, rc);
+		cf_vector_get(v, i, &resp);
+		INFO("Udf scan background for node %s returned %d", resp.node_name, resp.node_response);
+		// Set the resp back to zero
+		memset(&resp, 0, sizeof(as_node_response));
 	}
 	// Free the result vector
 	cf_vector_destroy(v);
@@ -199,8 +203,10 @@ static int run_test1() {
 }
 
 static int run_test2() {
+	// Response structure for every node
+	as_node_response resp;
+	memset(&resp, 0, sizeof(as_node_response));
 
-	int rc;
 	cf_vector * v;
 	// Create job id for scan.
 	// This will be useful to monitor your scan transactions
@@ -211,7 +217,6 @@ static int run_test2() {
 	as_scan_params params = { 
 		.fail_on_cluster_change  = false,
 		.priority		= AS_SCAN_PRIORITY_AUTO,
-		.nobindata		= false,
 		.pct			= 100
 	};
 
@@ -231,8 +236,10 @@ static int run_test2() {
 	int sz = cf_vector_size(v);
 
 	for(int i=0; i <= sz; i++) {
-		cf_vector_get(v, i, &rc);
-		INFO("Udf scan background for node %d returned %d", i, rc);
+		cf_vector_get(v, i, &resp);
+		INFO("Udf scan background for node %s returned %d", resp.node_name, resp.node_response);
+		// Set the resp back to zero
+		memset(&resp, 0, sizeof(as_node_response));
 	}
 	// Free the result vector
 	cf_vector_destroy(v);
@@ -336,7 +343,6 @@ int main(int argc, char **argv) {
         pthread_join(slaps[j], (void *)&rc);
     }
  
-
 	citrusleaf_scan_shutdown();
 
 	citrusleaf_cluster_destroy(asc);

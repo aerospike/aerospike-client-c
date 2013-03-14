@@ -250,7 +250,8 @@ static int run_test2() {
 }
 
 static void *run_test(void *o) {
-	run_test1();
+	// For each scan is unsupported right now 
+	// run_test1();
 	run_test2();
 	return NULL;
 }

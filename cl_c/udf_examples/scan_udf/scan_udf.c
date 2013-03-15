@@ -303,6 +303,8 @@ int main(int argc, char **argv) {
     uint32_t ts = 275273225;
     uint32_t et = 0;
 
+    INFO("Inserting %d rows....", g_config->nkeys);
+
     srand(ts);
     // Inserting "nkeys" rows of 6 bins each
     for( int i = 0; i < g_config->nkeys; i++ ) {
@@ -329,7 +331,7 @@ int main(int argc, char **argv) {
         rc = citrusleaf_put(asc, g_config->ns, g_config->set, &okey, bins, nbins, &wp);
     }
 
-    INFO("Inserted %d rows", g_config->nkeys);
+    INFO("Complete! Inserted %d rows", g_config->nkeys);
 
     // Initialize scan
     citrusleaf_scan_init();

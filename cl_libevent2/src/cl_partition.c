@@ -60,12 +60,11 @@ cl_partition_table_remove_node( ev2citrusleaf_cluster *asc, cl_cluster_node *nod
 			}
 
 			MUTEX_UNLOCK(p->lock);
-
 		}
-		
+
+		pt->was_dumped = false;
 		pt = pt->next;
 	}
-	return;
 }
 
 cl_partition_table *
@@ -196,6 +195,7 @@ cl_partition_table_set( ev2citrusleaf_cluster *asc, cl_cluster_node *node, const
 		if (p->write)  cl_cluster_node_release(p->write, "PW-");
 		p->write = node;
 		if (node)  cl_cluster_node_reserve(node, "PW+");
+		pt->was_dumped = false;
 	}
 	else {
 		for (int i=0;i < p->n_read ; i++) {
@@ -209,11 +209,13 @@ cl_partition_table_set( ev2citrusleaf_cluster *asc, cl_cluster_node *node, const
 			if (p->read[0]) cl_cluster_node_release(p->read[0], "PR-");
 			p->read[0] = node;
 			if (node)  cl_cluster_node_reserve(node, "PR+");		
+			pt->was_dumped = false;
 		}
 		else {
 			p->read[p->n_read] = node;
 			if (node)  cl_cluster_node_reserve(node, "PR+");		
 			p->n_read++;
+			pt->was_dumped = false;
 		}
 	}
 	MUTEX_UNLOCK(pt->partitions[pid].lock);
@@ -254,3 +256,45 @@ cl_partition_table_get( ev2citrusleaf_cluster *asc, const char *ns, cl_partition
 }
 
 
+static inline const char*
+safe_node_name(cl_cluster_node* node)
+{
+	return node ? (const char*)node->name : "";
+}
+
+void
+cl_partition_table_dump(ev2citrusleaf_cluster* asc)
+{
+	if (! cf_info_enabled()) {
+		return;
+	}
+
+	cl_partition_table* pt = asc->partition_table_head;
+
+	if (pt && pt->was_dumped) {
+		return;
+	}
+
+	while (pt) {
+		cf_info("--- CLUSTER MAP for %s ---", pt->ns);
+
+		for (int pid = 0; pid < asc->n_partitions; pid++) {
+			cl_partition* p = &pt->partitions[pid];
+
+			MUTEX_LOCK(p->lock);
+
+			// This relies on MAX_REPLICA_COUNT of 5!
+			cf_info("%4d: %s, [%d] %s %s %s %s %s", pid, safe_node_name(p->write), p->n_read,
+					safe_node_name(p->read[0]),
+					safe_node_name(p->read[1]),
+					safe_node_name(p->read[2]),
+					safe_node_name(p->read[3]),
+					safe_node_name(p->read[4]));
+
+			MUTEX_UNLOCK(p->lock);
+		}
+
+		pt->was_dumped = true;
+		pt = pt->next;
+	}
+}

@@ -243,6 +243,10 @@ int ev2citrusleaf_cluster_get_active_node_count(ev2citrusleaf_cluster *cl);
 // calling ev2citrusleaf_cluster_destroy().
 int ev2citrusleaf_cluster_requests_in_progress(ev2citrusleaf_cluster *cl);
 
+// For troubleshooting only - force all nodes in the cluster to refresh their
+// partition table information.
+void ev2citrusleaf_cluster_refresh_partition_tables(ev2citrusleaf_cluster *cl);
+
 
 //
 // An extended information structure

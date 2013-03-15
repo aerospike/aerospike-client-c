@@ -12,6 +12,7 @@
 
 #ifdef CF_WINDOWS
 #include <intrin.h>
+#include <WinSock2.h> // LONGLONG
 #endif
 
 /* SYNOPSIS

@@ -134,6 +134,12 @@ citrusleaf_info_host_limit(struct sockaddr_in *sa_in, char *names, char **values
 	cl_proto 	*req;
 	uint8_t		buf[1024];
 	uint		buf_sz;
+
+
+	// Un-initialized buf can lead to junk lastshiptimes values. 
+	// Initialize buf to 0.
+	
+	bzero(buf, 1024);
 	
 	if (names) {
 		uint sz = strlen(names);

@@ -1678,7 +1678,7 @@ ev2citrusleaf_get(ev2citrusleaf_cluster *cl, char *ns, char *set, ev2citrusleaf_
 
 	// kinda sucks, but it's really nice having the 'start' function
 	// taking both 'get' and 'put', which are both bins.
-	ev2citrusleaf_bin* bins = (ev2citrusleaf_bin*)alloca(n_bin_names);
+	ev2citrusleaf_bin* bins = (ev2citrusleaf_bin*)alloca(n_bin_names * sizeof(ev2citrusleaf_bin));
 	for (int i=0;i<n_bin_names;i++) {
 		strcpy(bins[i].bin_name, bin_names[i]);
 		bins[i].object.type = CL_NULL;
@@ -1714,7 +1714,7 @@ ev2citrusleaf_get_digest(ev2citrusleaf_cluster *cl, char *ns, cf_digest *digest,
 
 	// kinda sucks, but it's really nice having the 'start' function
 	// taking both 'get' and 'put', which are both bins.
-	ev2citrusleaf_bin* bins = (ev2citrusleaf_bin*)alloca(n_bin_names);
+	ev2citrusleaf_bin* bins = (ev2citrusleaf_bin*)alloca(n_bin_names * sizeof(ev2citrusleaf_bin));
 	for (int i=0;i<n_bin_names;i++) {
 		strcpy(bins[i].bin_name, bin_names[i]);
 		bins[i].object.type = CL_NULL;

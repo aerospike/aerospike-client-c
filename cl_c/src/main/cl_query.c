@@ -82,7 +82,6 @@ typedef struct {
     char                    node_name[NODE_NAME_SIZE];    
     const uint8_t *         query_buf;
     size_t                  query_sz;
-    cf_queue *              node_complete_q;     // Asyncwork item queue
     void *                  udata;
     int                     (* callback)(as_val *, void *);
     bool                    isinline;
@@ -133,6 +132,7 @@ typedef struct query_orderby_clause {
 
 cf_atomic32     query_initialized  = 0;
 cf_queue *      g_query_q          = 0;
+cf_queue *      g_task_complete_q  = 0;
 pthread_t       g_query_th[N_MAX_QUERY_THREADS];
 as_query_task   g_null_task;
 bool            gasq_abort         = false;
@@ -425,7 +425,7 @@ static int query_compile(const as_query * query, uint8_t ** buf_r, size_t * buf_
     } else buf = *buf_r;
     *buf_sz_r  = msg_sz;
     memset(buf, 0, msg_sz);  // NOTE: this line is debug - shouldn't be required
- 
+
     // write the headers
     int    info1      = CL_MSG_INFO1_READ;
     int info2      = 0;
@@ -555,7 +555,7 @@ static int query_compile(const as_query * query, uint8_t ** buf_r, size_t * buf_
         as_buffer_destroy(&argbuffer);
         return CITRUSLEAF_FAIL_CLIENT;
     }
-    
+
     as_buffer_destroy(&argbuffer);
     return CITRUSLEAF_OK;
 }
@@ -662,7 +662,7 @@ static int as_query_worker_do(cl_cluster_node * node, as_query_task * task) {
     uint8_t     rd_stack_buf[STACK_BUF_SZ] = {0};    
     uint8_t *   rd_buf = rd_stack_buf;
     size_t      rd_buf_sz = 0;
-    
+
     int fd = cl_cluster_node_fd_get(node, false, task->asc->nbconnect);
     if ( fd == -1 ) { 
         fprintf(stderr,"do query monte: cannot get fd for node %s ",node->name);
@@ -769,14 +769,14 @@ static int as_query_worker_do(cl_cluster_node * node, as_query_task * task) {
             bool free_bins = false;
             buf = (uint8_t *) mf;
             if ((msg->n_ops > STACK_BINS) 
-                || (!task->isinline)) {
+                    || (!task->isinline)) {
                 bins = malloc(sizeof(cl_bin) * msg->n_ops);
                 free_bins = true;
             }
             else {
                 bins = stack_bins;
             }
-            
+
             if (bins == NULL) {
                 if (set_ret) {
                     free(set_ret);
@@ -831,7 +831,7 @@ static int as_query_worker_do(cl_cluster_node * node, as_query_task * task) {
                     recp->ismalloc   = false;
                     rp = as_rec_init(rp, recp, &query_response_hooks);
                 }
-                
+
                 recp->ns         = strdup(ns_ret);
                 recp->keyd       = keyd;
                 recp->set        = set_ret;
@@ -842,10 +842,10 @@ static int as_query_worker_do(cl_cluster_node * node, as_query_task * task) {
                 recp->values     = NULL;
                 recp->free_bins  = free_bins;
 
-                TODO("Fix the following block of code. ")
-                TODO("It is really lame to check for a bin called \"SUCCESS\" to determine whether you have a single value or not.")
-                TODO("Fix how we are to handle errors. Not everything will be a \"SUCCESS\"... or will it?")
-                
+                TODO("Fix the following block of code. ");
+                TODO("It is really lame to check for a bin called \"SUCCESS\" to determine whether you have a single value or not.");
+                TODO("Fix how we are to handle errors. Not everything will be a \"SUCCESS\"... or will it?");
+
                 // TODO:
                 //      Fix the following block of code. It is really lame 
                 //      to check for a bin called "SUCCESS" to determine
@@ -923,7 +923,7 @@ Final:
 
 static void * as_query_worker(void * dummy) {
     while (1) {
-        
+
         as_query_task task;
 
         if ( 0 != cf_queue_pop(g_query_q, &task, CF_QUEUE_FOREVER) ) {
@@ -933,7 +933,7 @@ static void * as_query_worker(void * dummy) {
         if ( cf_debug_enabled() ) {
             fprintf(stderr, "as_query_worker: getting one task item\n");
         }
-        
+
         // a NULL structure is the condition that we should exit. See shutdown()
         if( 0 == memcmp(&task, &g_null_task, sizeof(as_query_task)) ) { 
             pthread_exit(NULL); 
@@ -948,7 +948,7 @@ static void * as_query_worker(void * dummy) {
             rc = as_query_worker_do(node, &task);
         }
 
-        cf_queue_push(task.node_complete_q, (void *)&rc);
+        cf_queue_push(g_task_complete_q, (void *)&rc);
     }
 }
 
@@ -1081,15 +1081,15 @@ static const as_aerospike_hooks query_aerospike_hooks = {
 
 
 static cl_rv as_query_execute(cl_cluster * cluster, const as_query * query, void * udata, int (* callback)(as_val *, void *), bool isinline) {
-    
+
     cl_rv       rc                          = CITRUSLEAF_OK;
     uint8_t     wr_stack_buf[STACK_BUF_SZ]  = { 0 };
     uint8_t *   wr_buf                      = wr_stack_buf;
     size_t      wr_buf_sz                   = sizeof(wr_stack_buf);
-    
+
     // compile the query - a good place to fail    
     rc = query_compile(query, &wr_buf, &wr_buf_sz);
-    
+
     if ( rc != CITRUSLEAF_OK ) {
         // TODO: use proper logging function
         fprintf(stderr, "do query monte: query compile failed: \n");
@@ -1102,12 +1102,11 @@ static cl_rv as_query_execute(cl_cluster * cluster, const as_query * query, void
         .ns                 = query->ns,
         .query_buf          = wr_buf,
         .query_sz           = wr_buf_sz,
-        .node_complete_q    = cf_queue_create(sizeof(int),true),
         .udata              = udata,
         .callback           = callback,
         .isinline           = isinline
     };
-    
+
     char *node_names    = NULL;    
     int   node_count    = 0;
 
@@ -1116,7 +1115,6 @@ static cl_rv as_query_execute(cl_cluster * cluster, const as_query * query, void
     if ( node_count == 0 ) {
         // TODO: use proper loggin function
         fprintf(stderr, "citrusleaf query nodes: don't have any nodes?\n");
-        cf_queue_destroy(task.node_complete_q);
         if ( wr_buf && (wr_buf != wr_stack_buf) ) {
             free(wr_buf); 
             wr_buf = 0;
@@ -1135,12 +1133,12 @@ static cl_rv as_query_execute(cl_cluster * cluster, const as_query * query, void
     }
     free(node_names);
     node_names = NULL;
-    
+
     // wait for the work to complete from all the nodes.
     rc = CITRUSLEAF_OK;
     for ( int i=0; i < node_count; i++ ) {
         int node_rc;
-        cf_queue_pop(task.node_complete_q, &node_rc, CF_QUEUE_FOREVER);
+        cf_queue_pop(g_task_complete_q, &node_rc, CF_QUEUE_FOREVER);
         if ( node_rc != 0 ) {
             // Got failure from one node. Trigger abort for all 
             // the ongoing request
@@ -1156,8 +1154,6 @@ static cl_rv as_query_execute(cl_cluster * cluster, const as_query * query, void
     }
 
     callback(NULL, udata);
-    
-    cf_queue_destroy(task.node_complete_q);
 
     return rc;
 }
@@ -1248,7 +1244,7 @@ as_query * as_query_new(const char * ns, const char * setname) {
  */
 as_query * as_query_init(as_query * query, const char * ns, const char * setname) {
     if ( query == NULL ) return query;
-    
+
     cf_queue * result_queue = cf_queue_create(sizeof(void *), true);
     if ( !result_queue ) {
         query->res_streamq = NULL;
@@ -1380,7 +1376,7 @@ cl_rv citrusleaf_query_stream(cl_cluster * cluster, const as_query * query, as_s
         // stream for results from each node
         as_stream queue_stream;
         as_stream_init(&queue_stream, query->res_streamq, &queue_stream_hooks); 
-        
+
         // callback for as_query_execute()
         int callback(as_val * v, void * udata) {
             as_stream_write(&queue_stream, v == NULL ? AS_STREAM_END : v );
@@ -1428,7 +1424,7 @@ cl_rv citrusleaf_query_foreach(cl_cluster * cluster, const as_query * query, voi
         // stream for results from each node
         as_stream queue_stream;
         as_stream_init(&queue_stream, query->res_streamq, &queue_stream_hooks); 
-        
+
         // The callback stream provides the ability to write to a callback function
         // when as_stream_write is called.
         callback_stream_source source = {
@@ -1446,7 +1442,7 @@ cl_rv citrusleaf_query_foreach(cl_cluster * cluster, const as_query * query, voi
 
         // sink the data from multiple sources into the result stream
         rc = as_query_execute(cluster, query, NULL, callback, true);
-        
+
         if ( rc == CITRUSLEAF_OK ) {
             // Apply the UDF to the result stream
             as_module_apply_stream(&mod_lua, &as, query->udf.filename, query->udf.function, &queue_stream, query->udf.arglist, &ostream);
@@ -1481,6 +1477,9 @@ int citrusleaf_query_init() {
         // create dispatch queue
         g_query_q = cf_queue_create(sizeof(as_query_task), true);
 
+        // Create a global complete queue
+        g_task_complete_q = cf_queue_create(sizeof(int), true);
+
         // create thread pool
         for (int i = 0; i < N_MAX_QUERY_THREADS; i++) {
             pthread_create(&g_query_th[i], 0, as_query_worker, 0);
@@ -1499,5 +1498,6 @@ void citrusleaf_query_shutdown() {
         pthread_join(g_query_th[i],NULL);
     }
     cf_queue_destroy(g_query_q);
+    cf_queue_destroy(g_task_complete_q);
     cf_atomic32_decr(&query_initialized);
 }

@@ -28,14 +28,6 @@
 #include "citrusleaf_event2/ev2citrusleaf-internal.h"
 
 
-//
-// Globals to track transaction counts to clean up properly
-//
-
-cf_atomic_int g_cl_info_transactions = 0;
-
-
-
 // debug
 extern  void sockaddr_in_dump(char *prefix, struct sockaddr_in *sa_in);
 
@@ -134,9 +126,7 @@ info_event_fn(evutil_socket_t fd, short event, void *udata)
 {
 	cl_info_request *cir = (cl_info_request *)udata;
 	int rv;
-	
-	cf_atomic_int_incr(&g_cl_stats.info_events);
-	
+
 	uint64_t _s = cf_getms();
 
 	if (event & EV_WRITE) {
@@ -204,8 +194,6 @@ info_event_fn(evutil_socket_t fd, short event, void *udata)
 						cf_close(fd);
 						info_request_destroy(cir);
 						cir = 0;
-						cf_atomic_int_incr(&g_cl_stats.info_complete);
-						cf_atomic_int_decr(&g_cl_info_transactions);
 						
 						uint64_t delta = cf_getms() - _s;
 						if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY cl_info event OK fn: %lu", delta);
@@ -237,8 +225,6 @@ Fail:
 	event_del(info_request_get_network_event(cir)); // WARNING: this is not necessary. BOK says it is safe: maybe he's right, maybe wrong.
 	cf_close(fd);
 	info_request_destroy(cir);
-	cf_atomic_int_incr(&g_cl_stats.info_complete);
-	cf_atomic_int_decr(&g_cl_info_transactions);
 	
 	delta = cf_getms() - _s;
 	if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: cl_info event fail OK took %lu", delta);
@@ -257,8 +243,6 @@ ev2citrusleaf_info_host(struct event_base *base, struct sockaddr_in *sa_in, char
 {
 	
 	uint64_t _s = cf_getms();
-	
-	cf_atomic_int_incr(&g_cl_stats.info_host_requests);
 	
 	cl_info_request *cir = info_request_create();
 	if (!cir)	return(-1);
@@ -295,8 +279,6 @@ ev2citrusleaf_info_host(struct event_base *base, struct sockaddr_in *sa_in, char
 	// setup for event
 	event_assign(info_request_get_network_event(cir),cir->base, fd, EV_WRITE | EV_READ, info_event_fn, (void *) cir);
 	event_add(info_request_get_network_event(cir), 0/*timeout*/);
-	
-	cf_atomic_int_incr(&g_cl_info_transactions);
 	
 	uint64_t delta = cf_getms() - _s;
 	if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: info host standard: %lu", delta);
@@ -341,7 +323,6 @@ info_resolve_cb(int result, cf_vector *sockaddr_in_v, void *udata)
 		}
 	}
 Done:	
-	cf_atomic_int_decr(&g_cl_info_transactions);
 	free(irs->names);
 	free(irs);
 }
@@ -358,11 +339,11 @@ ev2citrusleaf_info(struct event_base *base, struct evdns_base *dns_base,
 	char *host, short port, char *names, int timeout_ms,
 	ev2citrusleaf_info_callback cb, void *udata)
 {
+	cf_atomic_int_incr(&g_cl_stats.app_info_requests);
+
 	int rv = -1;
 	info_resolve_state *irs = 0;
-	
-	cf_atomic_int_incr(&g_cl_stats.info_host_requests);
-	
+
 	struct sockaddr_in sa_in;
 	// if we can resolve immediate, jump directly to resolution
 	if (0 == cl_lookup_immediate(host, port, &sa_in)) {
@@ -386,9 +367,6 @@ ev2citrusleaf_info(struct event_base *base, struct evdns_base *dns_base,
 		if (0 != cl_lookup(dns_base, host, port, info_resolve_cb, irs)) 
 			goto Done;
 		irs = 0;
-		
-		cf_atomic_int_incr(&g_cl_info_transactions);
-		
 	}
 	
 	
@@ -399,21 +377,3 @@ Done:
 	}
 	return(rv);
 }
-
-//
-// When shutting down the entire module, need to make sure that
-// all info requests pending are also shut down
-//
-
-// AKG - no base available for this... no-op for now.
-void
-//ev2citrusleaf_info_shutdown(struct event_base *base)
-ev2citrusleaf_info_shutdown()
-{
-//	while ( ( cf_atomic_int_get(g_cl_info_transactions) > 0 ) &&
-//		    (event_base_loop(base, EVLOOP_ONCE) == 0) )
-//	    ;
-//	return;	
-}
-
-

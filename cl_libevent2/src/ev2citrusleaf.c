@@ -1366,18 +1366,11 @@ ev2citrusleaf_restart(cl_request *req)
 
 		do {
 			fd = cl_cluster_node_fd_get(node);
-			if (fd > 0)	goto GoodFd;
+			if (fd >= 0)	goto GoodFd;
 		} while (fd == -1); // this is the simple stale fd case
-		
-		
-		// -1 means an actual network connect error
-		// -2 means a strange error like no fds left in system
-		if (fd == -2) {
-			// dun node and try another
-			cl_cluster_node_dun(node, DUN_RESTART_FD);
-			cl_cluster_node_put(node);
-		}
-		
+
+		cl_cluster_node_put(node);
+
 		if (tries++ > CL_LOG_RESTARTLOOP_WARN) cf_warn("restart loop: iteration %d", tries);
 
 	} while (tries++ < 5);
@@ -1864,13 +1857,11 @@ int ev2citrusleaf_init(ev2citrusleaf_lock_callbacks *lock_cb)
 	return(0);
 }
 
+// TODO - get rid of unused param at next API change.
 void
 ev2citrusleaf_shutdown(bool fail_requests)
 {
 	citrusleaf_cluster_shutdown();
-	
-	ev2citrusleaf_info_shutdown();
-	
 	g_ev2citrusleaf_initialized = false;
 }
 
@@ -1924,8 +1915,8 @@ void ev2citrusleaf_print_stats(void)
 	double ev_per_req = (g_cl_stats.req_start == 0) ? 0.0 : 
 		(((double)g_cl_stats.event_counter) / ((double)g_cl_stats.req_start));
 
-	cf_info("stats:: info : info_r %lu info_host_r %lu info_fin %lu info events %lu",
-		g_cl_stats.info_requests, g_cl_stats.info_host_requests, g_cl_stats.info_complete, g_cl_stats.info_events);
+	cf_info("stats:: info : app %lu success %lu fail %lu timeout %lu",
+		g_cl_stats.app_info_requests, g_cl_stats.node_info_successes, g_cl_stats.node_info_failures, g_cl_stats.node_info_timeouts);
 	cf_info("     :: part : process %lu create %lu destroy %lu",
 		g_cl_stats.partition_process, g_cl_stats.partition_create, g_cl_stats.partition_destroy);
 	cf_info("     :: conn : created %lu connected %lu destroyed %lu fd in_q %d",

@@ -779,7 +779,6 @@ cl_batch_node_req_get_fd(cl_batch_node_req* _this)
 		// Note - apparently 0 is a legitimate fd value.
 
 		if (_this->fd < -1) {
-			cl_cluster_node_dun(_this->p_node, DUN_RESTART_FD);
 			// This object's destructor will release node.
 			return false;
 		}
@@ -1191,8 +1190,13 @@ cl_batch_node_req_done(cl_batch_node_req* _this, int node_result)
 	else {
 		// The socket may have unprocessed data or otherwise be untrustworthy,
 		// close it and disapprove the node.
+
 		cf_close(_this->fd);
-		cl_cluster_node_dun(_this->p_node, DUN_NETWORK_ERROR);
+
+		if (node_result == EV2CITRUSLEAF_FAIL_UNKNOWN) {
+			cl_cluster_node_dun(_this->p_node, DUN_NETWORK_ERROR);
+		}
+		// EV2CITRUSLEAF_FAIL_CLIENT_ERROR implies a local problem, don't dun.
 	}
 
 	// Reset _this->fd so the destructor doesn't close it.

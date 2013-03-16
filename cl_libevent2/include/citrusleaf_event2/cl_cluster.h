@@ -28,6 +28,7 @@
 #include "citrusleaf/cf_ll.h"
 #include "citrusleaf/cf_queue.h"
 #include "citrusleaf/cf_vector.h"
+#include "citrusleaf/proto.h"
 
 #include "ev2citrusleaf.h"
 
@@ -40,39 +41,67 @@ struct sockaddr_in;
 
 #define CLUSTER_NODE_MAGIC 0x9B00134C
 
-typedef struct cl_cluster_node_s {
-	
-	uint32_t    MAGIC;
-	
-	char		name[20];
-	
-	cf_atomic_int	dunned;		// had a problem. Will get deleted next pass through. 0 - false, 1 - true
-	cf_atomic_int	dun_count;  // number of sequential dunns
-	
-	
-	// A vector of sockaddr_in which the host is currently known by
-	cf_vector		sockaddr_in_v;
-	
-	// pool of current, cached FDs
-	cf_queue	*conn_q;
+typedef enum {
+	INFO_REQ_NONE			= 0,
+	INFO_REQ_CHECK			= 1,
+	INFO_REQ_GET_REPLICAS	= 2
+} node_info_req_type;
 
-	// the cluster we belong to
-	ev2citrusleaf_cluster	*asc;
-	
-	// 
-	cf_atomic_int	partition_generation;
-	// flooding the server with partition requests is bad.
-	cf_atomic_int	partition_last_req_ms;
-	
-	
-	// timer for node maintaince - PERPETUAL - but the timer keeps a refcount,
-	// so have to be careful
-	// AKG - not currently used
-	bool timer_event_registered;
-//	struct event *timer_event;
-	
-	uint8_t	event_space[];
-	
+#define NODE_INFO_REQ_MAX_INTERVALS 5
+
+typedef struct node_info_req_s {
+	// What type of info request is in progress, if any.
+	node_info_req_type		type;
+
+	// How many node timer periods this request has lasted.
+	uint32_t				intervals;
+
+	// Buffer for writing to socket.
+	uint8_t*				wbuf;
+	size_t					wbuf_size;
+	size_t					wbuf_pos;
+
+	// Buffer for reading proto header from socket.
+	uint8_t					hbuf[sizeof(cl_proto)];
+	size_t					hbuf_pos;
+
+	// Buffer for reading proto body from socket.
+	uint8_t*				rbuf;
+	size_t					rbuf_size;
+	size_t					rbuf_pos;
+} node_info_req;
+
+typedef struct cl_cluster_node_s {
+	// Sanity-checking field.
+	uint32_t				MAGIC;
+
+	// This node's name, a null-terminated hex string.
+	char					name[20];
+
+	// A vector of sockaddr_in which the host (node) is currently known by.
+	cf_vector				sockaddr_in_v;
+
+	// The cluster we belong to.
+	ev2citrusleaf_cluster*	asc;
+
+	// This node's health.
+	cf_atomic_int			dunned;
+	cf_atomic_int			dun_count;
+
+	// Socket pool for (non-info) transactions on this node.
+	cf_queue*				conn_q;
+
+	// What version of partition information we have for this node.
+	cf_atomic_int			partition_generation;
+
+	// Socket for info transactions on this node.
+	int						info_fd;
+
+	// The info transaction in progress, if any.
+	node_info_req			info_req;
+
+	// Space for two events: periodic trigger timer, and info request.
+	uint8_t					event_space[];
 } cl_cluster_node;
 
 
@@ -131,23 +160,20 @@ struct ev2citrusleaf_cluster_s {
 	void 			*node_v_lock;
 	cf_atomic_int	last_node;
 	cf_vector		node_v;      // vector is pointer-type, host objects are ref-counted
-	
-	// this timeout does maintance on the cluster
-	// AKG - not currently used
-	bool         timer_set;
-	
-	// There are occasions where we want to stash pending transactions in a queue
-	// for when nodes come available (like, embarrasingly, the first request)
+
+	// There are occasions where we want to queue pending transactions until
+	// nodes come available (like, embarrassingly, the first request).
 	cf_queue	*request_q;
 	void 		*request_q_lock;
 
-	// in progress requests pointing to this asc.
-	// necessary so we can drain out on shutdown.
-	// *includes* requests in the request queue above (everything needing a callback)
+	// Transactions in progress. Includes transactions in the request queue
+	// above (everything needing a callback). No longer used for clean shutdown
+	// other than to issue a warning if there are incomplete transactions.
 	cf_atomic_int	requests_in_progress; 
-	
-	cf_atomic_int	infos_in_progress;
-	
+
+	// Internal non-node info requests in progress, used for clean shutdown.
+	cf_atomic_int	pings_in_progress;
+
 	// information about where all the partitions are
 	// AKG - multi-thread access, but never changes on server
 	cl_partition_id		n_partitions;
@@ -161,10 +187,26 @@ struct ev2citrusleaf_cluster_s {
 };
 
 
-enum cl_cluster_dun_type {
-	DUN_USER_TIMEOUT=0, DUN_INFO_FAIL=1, DUN_REPLICAS_FETCH=2, DUN_NETWORK_ERROR=3, DUN_RESTART_FD=4, DUN_BAD_NAME=5, DUN_NO_SOCKADDR=6
-};
-extern char *cl_cluster_dun_human[];
+typedef enum {
+	DONT_DUN				= -1,
+	// 0 onwards MUST correspond to strings in cl_cluster_dun_human[].
+
+	DUN_BAD_NAME			= 0, // node name changed
+	DUN_NO_SOCKADDR			= 1, // node has no socket addresses
+
+	// Ordinary transactions (and batch transactions for now)
+	DUN_CONNECT_FAIL		= 2, // new pool socket can't start connect
+	DUN_RESTART_FD			= 3, // existing pool socket check gives error
+	DUN_NETWORK_ERROR		= 4, // error during ordinary transaction
+	DUN_USER_TIMEOUT		= 5, // ordinary transaction timed out
+
+	// Node info requests
+	DUN_INFO_CONNECT_FAIL	= 6, // node info socket can't start connect
+	DUN_INFO_RESTART_FD		= 7, // existing node info socket check gives error
+	DUN_INFO_NETWORK_ERROR	= 8, // error during node info request
+	DUN_INFO_TIMEOUT		= 9, // node info request timed out
+} cl_cluster_dun_type;
+
 
 //
 // a global list of all clusters is interesting sometimes
@@ -184,7 +226,7 @@ extern cl_cluster_node *cl_cluster_node_get(ev2citrusleaf_cluster *asc, const ch
 extern void cl_cluster_node_release(cl_cluster_node *cn, char *msg);
 extern void cl_cluster_node_reserve(cl_cluster_node *cn, char *msg);
 extern void cl_cluster_node_put(cl_cluster_node *cn);          // put node back
-extern void cl_cluster_node_dun(cl_cluster_node *cn, enum cl_cluster_dun_type dun);			// node is bad!
+extern void cl_cluster_node_dun(cl_cluster_node *cn, cl_cluster_dun_type dun);			// node is bad!
 extern void cl_cluster_node_ok(cl_cluster_node *cn);			// node is good!
 extern int cl_cluster_node_fd_get(cl_cluster_node *cn);			// get an FD to the node
 extern void cl_cluster_node_fd_put(cl_cluster_node *cn, int fd); // put the FD back

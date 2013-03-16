@@ -140,10 +140,10 @@ typedef struct cl_info_request_s {
 //
 typedef struct cl_statistics_s {
 	// info stats
-	cf_atomic_int	info_requests; // AKG - not used
-	cf_atomic_int	info_host_requests;
-	cf_atomic_int	info_complete;
-	cf_atomic_int	info_events;
+	cf_atomic_int	app_info_requests;		// info requests made by app
+	cf_atomic_int	node_info_successes;	// successful node info requests
+	cf_atomic_int	node_info_failures;		// node info request failures
+	cf_atomic_int	node_info_timeouts;		// node info request timeouts
 	
 	// partition table stats
 	cf_atomic_int	partition_process;
@@ -175,7 +175,6 @@ extern cl_statistics g_cl_stats;
 
 extern int ev2citrusleaf_info_host(struct event_base *base, struct sockaddr_in *sa_in, char *names, int timeout_ms,
 	ev2citrusleaf_info_callback cb, void *udata); 
-extern void ev2citrusleaf_info_shutdown();
 
 extern void ev2citrusleaf_request_complete(cl_request *req, bool timedout);
 

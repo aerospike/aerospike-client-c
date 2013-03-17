@@ -509,15 +509,7 @@ ev2citrusleaf_cluster_refresh_partition_tables(ev2citrusleaf_cluster *asc)
 	MUTEX_UNLOCK(asc->node_v_lock);
 }
 
-static void
-node_info_req_shutdown(cl_cluster_node* cn)
-{
-	// Saves us from "hand-cranking" a node info request at shutdown.
-	if (cn->info_req.type != INFO_REQ_NONE) {
-		event_del(cluster_node_get_info_event(cn));
-		cl_cluster_node_release(cn, "I-");
-	}
-}
+void node_info_req_cancel(cl_cluster_node* cn);
 
 void
 ev2citrusleaf_cluster_destroy(ev2citrusleaf_cluster *asc)
@@ -548,7 +540,7 @@ ev2citrusleaf_cluster_destroy(ev2citrusleaf_cluster *asc)
 	// Clear all node timers and node info requests.
 	for (uint32_t i = 0; i < cf_vector_size(&asc->node_v); i++) {
 		cl_cluster_node *cn = (cl_cluster_node*)cf_vector_pointer_get(&asc->node_v, i);
-		node_info_req_shutdown(cn);
+		node_info_req_cancel(cn);
 		event_del(cluster_node_get_timer_event(cn));
 		// ... so the event_del() in cl_cluster_node_release() will be a no-op.
 	}
@@ -656,11 +648,11 @@ ev2citrusleaf_cluster_follow(ev2citrusleaf_cluster *asc, bool flag)
 const char INFO_STR_CHECK[] = "node\npartition-generation\nservices\n";
 const char INFO_STR_GET_REPLICAS[] = "replicas-read\nreplicas-write\npartition-generation\n";
 
-static void node_info_req_start(cl_cluster_node* cn, node_info_req_type req_type);
+void node_info_req_start(cl_cluster_node* cn, node_info_req_type req_type);
 // The libevent2 event handler for node info socket events:
-static void node_info_req_event(evutil_socket_t fd, short event, void* udata);
+void node_info_req_event(evutil_socket_t fd, short event, void* udata);
 
-static void
+void
 node_info_req_free(node_info_req* ir)
 {
 	if (ir->wbuf) {
@@ -675,18 +667,17 @@ node_info_req_free(node_info_req* ir)
 	memset((void*)ir, 0, sizeof(node_info_req));
 }
 
-static void
+void
 node_info_req_done(cl_cluster_node* cn)
 {
 	// Success - reuse the socket and approve the node.
 	cl_cluster_node_ok(cn);
 
 	node_info_req_free(&cn->info_req);
-	cl_cluster_node_release(cn, "I-");
 	cf_atomic_int_incr(&g_cl_stats.node_info_successes);
 }
 
-static void
+void
 node_info_req_fail(cl_cluster_node* cn, cl_cluster_dun_type dun_type)
 {
 	// The socket may have unprocessed data or otherwise be untrustworthy.
@@ -699,11 +690,19 @@ node_info_req_fail(cl_cluster_node* cn, cl_cluster_dun_type dun_type)
 	}
 
 	node_info_req_free(&cn->info_req);
-	cl_cluster_node_release(cn, "I-");
 	cf_atomic_int_incr(&g_cl_stats.node_info_failures);
 }
 
-static void
+void
+node_info_req_cancel(cl_cluster_node* cn)
+{
+	if (cn->info_req.type != INFO_REQ_NONE) {
+		event_del(cluster_node_get_info_event(cn));
+		node_info_req_fail(cn, DONT_DUN);
+	}
+}
+
+void
 node_info_req_timeout(cl_cluster_node* cn)
 {
 	event_del(cluster_node_get_info_event(cn));
@@ -711,7 +710,7 @@ node_info_req_timeout(cl_cluster_node* cn)
 	cf_atomic_int_incr(&g_cl_stats.node_info_timeouts);
 }
 
-static void
+void
 node_info_req_parse_check(cl_cluster_node* cn)
 {
 	bool get_replicas = false;
@@ -777,7 +776,7 @@ node_info_req_parse_check(cl_cluster_node* cn)
 	}
 }
 
-static void
+void
 node_info_req_parse_replicas(cl_cluster_node* cn)
 {
 	// Remove this node from the partition table.
@@ -785,7 +784,7 @@ node_info_req_parse_replicas(cl_cluster_node* cn)
 
 	// Returned list format is name1\tvalue1\nname2\tvalue2\n...
 	cf_vector_define(lines_v, sizeof(void*), 0);
-	str_split('\n',(char*)cn->info_req.rbuf, &lines_v);
+	str_split('\n', (char*)cn->info_req.rbuf, &lines_v);
 
 	for (uint32_t j = 0; j < cf_vector_size(&lines_v); j++) {
 		char* line = (char*)cf_vector_pointer_get(&lines_v, j);
@@ -830,7 +829,7 @@ node_info_req_parse_replicas(cl_cluster_node* cn)
 	node_info_req_done(cn);
 }
 
-static bool
+bool
 node_info_req_handle_send(cl_cluster_node* cn)
 {
 	node_info_req* ir = &cn->info_req;
@@ -877,7 +876,7 @@ node_info_req_handle_send(cl_cluster_node* cn)
 	return false;
 }
 
-static bool
+bool
 node_info_req_handle_recv(cl_cluster_node* cn)
 {
 	node_info_req* ir = &cn->info_req;
@@ -949,14 +948,6 @@ node_info_req_handle_recv(cl_cluster_node* cn)
 				if (ir->rbuf_pos == ir->rbuf_size) {
 					// Done with proto body - assume no more protos.
 
-					// If we are fully dunned and removed from the partition
-					// tree already, there's no point continuing.
-					// TODO - extra dunned state?
-					if (cf_atomic_int_get(cn->dunned) == 1) {
-						node_info_req_fail(cn, DONT_DUN);
-						return true;
-					}
-
 					switch (ir->type) {
 					case INFO_REQ_CHECK:
 						// May start a INFO_REQ_GET_REPLICAS request!
@@ -1000,7 +991,7 @@ node_info_req_handle_recv(cl_cluster_node* cn)
 }
 
 // The libevent2 event handler for node info socket events:
-static void
+void
 node_info_req_event(evutil_socket_t fd, short event, void* udata)
 {
 	cl_cluster_node* cn = (cl_cluster_node*)udata;
@@ -1037,9 +1028,11 @@ node_info_req_event(evutil_socket_t fd, short event, void* udata)
 	}
 }
 
-static bool
+bool
 node_info_req_prep_fd(cl_cluster_node* cn)
 {
+	// TODO - check if the node is fully dunned? Or just go?
+
 	if (cn->info_fd != -1) {
 		// Socket was left open - check it.
 		int result = ev2citrusleaf_is_connected(cn->info_fd);
@@ -1095,7 +1088,7 @@ node_info_req_prep_fd(cl_cluster_node* cn)
 	return true;
 }
 
-static void
+void
 node_info_req_start(cl_cluster_node* cn, node_info_req_type req_type)
 {
 	if (! node_info_req_prep_fd(cn)) {
@@ -1148,7 +1141,6 @@ node_info_req_start(cl_cluster_node* cn, node_info_req_type req_type)
 	}
 	else {
 		cn->info_req.type = req_type;
-		cl_cluster_node_reserve(cn, "I+");
 	}
 }
 
@@ -1174,6 +1166,9 @@ node_timer_fn(evutil_socket_t fd, short event, void* udata)
 		ev2citrusleaf_cluster* asc = cn->asc;
 
 		cf_info("node %s fully dunned, remove from cluster %p", cn->name, asc);
+
+		// If there's still a node info request in progress, cancel it.
+		node_info_req_cancel(cn);
 
 		// Release references in the partition table.
 		cl_partition_table_remove_node(asc, cn);
@@ -1316,7 +1311,6 @@ cl_cluster_node_release(cl_cluster_node *cn, char *msg)
 	// O:  original alloc
 	// L:  node timer loop
 	// C:  cluster node list
-	// I:  node info request
 	// PR: partition table, read
 	// PW: partition table, write
 	// T:  transaction
@@ -1328,28 +1322,24 @@ cl_cluster_node_release(cl_cluster_node *cn, char *msg)
 
 		cf_atomic_int_incr(&g_cl_stats.nodes_destroyed);
 
-		// Note - if we call event_del() before assigning the event (possible
-		// within a second of startup) the libevent library logs the following:
+		node_info_req_cancel(cn);
+
+		// AKG
+		// If we call event_del() before assigning the event - possible in some
+		// failures of cl_cluster_node_create() - the libevent library logs the
+		// following:
 		//
 		// [warn] event_del: event has no event_base set.
 		//
-		// For now I'm not bothering with flags to avoid this.
+		// For now I'm not bothering with a flag to avoid this.
 
-		event_del(cluster_node_get_info_event(cn));
 		event_del(cluster_node_get_timer_event(cn));
-
-		if (cn->info_fd != -1) {
-			cf_close(cn->info_fd);
-		}
-
-		node_info_req_free(&cn->info_req);
 
 		if (cn->conn_q) {
 			int fd;
 
 			while (cf_queue_pop(cn->conn_q, &fd, CF_QUEUE_NOWAIT) == CF_QUEUE_OK) {
 				cf_atomic_int_incr(&g_cl_stats.conns_destroyed);
-				shutdown(fd, SHUT_RDWR); // be good to remote end - worried this might block though? // TODO - really?
 				cf_close(fd);
 			}
 
@@ -1372,7 +1362,6 @@ cl_cluster_node_reserve(cl_cluster_node *cn, char *msg)
 	// O:  original alloc
 	// L:  node timer loop
 	// C:  cluster node list
-	// I:  node info request
 	// PR: partition table, read
 	// PW: partition table, write
 	// T:  transaction

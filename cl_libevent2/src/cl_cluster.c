@@ -922,13 +922,16 @@ node_info_req_handle_recv(cl_cluster_node* cn)
 				cl_proto_swap(proto);
 
 				ir->rbuf_size = proto->sz;
-				ir->rbuf = (uint8_t*)malloc(ir->rbuf_size);
+				ir->rbuf = (uint8_t*)malloc(ir->rbuf_size + 1);
 
 				if (! ir->rbuf) {
 					cf_error("node info request rbuf allocation failed");
 					node_info_req_fail(cn, DONT_DUN);
 					return true;
 				}
+
+				// Null-terminate this buffer for easier text parsing.
+				ir->rbuf[ir->rbuf_size] = 0;
 			}
 
 			if (ir->rbuf_pos >= ir->rbuf_size) {

@@ -41,30 +41,15 @@
 
 extern void ev2citrusleaf_base_hop(cl_request *req);
 
-// #define CLDEBUG_VERBOSE 1
-// #define CLDEBUG_DUN 1
-
 //
-// Number of requests, in a row, that need to fail before the node
-// is considered bad
+// Cumulative contiguous problem score above which the node is considered bad.
 //
-
 #define CL_NODE_DUN_THRESHOLD 800
 
 //
-// Intervals on which tending happens
+// Intervals on which tending happens.
 //
-
-// BFIX - this should be higher like 1.5 sec to be above the connect timeout
-
-// this one is a little cheaper - looks for locally dunned nodes and ejects them
 struct timeval g_cluster_tend_timeout = {1,200000};
-// struct timeval g_cluster_tend_timeout = {1,000000};
-// struct timeval g_cluster_tend_timeout = {0,500000};
-
-
-// this one can be expensive because it makes a request of the server
-// struct timeval g_node_tend_timeout = {0,400000};
 struct timeval g_node_tend_timeout = {1,1};
 
 
@@ -75,17 +60,13 @@ int ev2citrusleaf_cluster_add_host_internal(ev2citrusleaf_cluster *asc, char *ho
 
 
 //
-// Useful utility function for splitting into a vector
-// fmt is a string of characters to split on
-// the string is the string to split
-// the vector will have pointers into the strings
-// this modifies the input string by inserting nulls
+// Utility for splitting a null-terminated string into a vector of sub-strings.
+// The vector will have pointers to all the (null-terminated) sub-strings.
+// This modifies the input string by inserting nulls.
 //
-
 static void
 str_split(char split_c, char *str, cf_vector *v)
 {
-
 	char *prev = str;
 	while (*str) {
 		if (split_c == *str) {
@@ -1266,8 +1247,10 @@ cl_cluster_node_create(const char* name, ev2citrusleaf_cluster* asc)
 
 	cf_atomic_int_incr(&g_cl_stats.nodes_created);
 
+#ifdef DEBUG_NODE_REF_COUNT
 	// To balance the ref-count logs, we need this:
 	cf_debug("node reserve: %s %s %p : %d", "O+", name, cn, cf_client_rc_count(cn));
+#endif
 
 	cn->MAGIC = CLUSTER_NODE_MAGIC;
 	strcpy(cn->name, name);
@@ -1318,7 +1301,9 @@ cl_cluster_node_release(cl_cluster_node *cn, char *msg)
 	// PW: partition table, write
 	// T:  transaction
 
+#ifdef DEBUG_NODE_REF_COUNT
 	cf_debug("node release: %s %s %p : %d", msg, cn->name, cn, cf_client_rc_count(cn));
+#endif
 
 	if (0 == cf_client_rc_release(cn)) {
 		cf_info("************* cluster node destroy: node %s : %p", cn->name, cn);
@@ -1369,7 +1354,9 @@ cl_cluster_node_reserve(cl_cluster_node *cn, char *msg)
 	// PW: partition table, write
 	// T:  transaction
 
+#ifdef DEBUG_NODE_REF_COUNT
 	cf_debug("node reserve: %s %s %p : %d", msg, cn->name, cn, cf_client_rc_count(cn));
+#endif
 
 	cf_client_rc_reserve(cn);
 }

@@ -81,7 +81,7 @@ cf_client_rc_alloc(size_t sz)
 	if (NULL == addr)
 		return(NULL);
 
-	cf_atomic_int_set((cf_atomic_int *)addr, 1);
+	cf_atomic_int_set((cf_client_rc_counter *)addr, 1);
 	uint8_t *base = addr + sizeof(cf_client_rc_counter);
 
 	return(base);

@@ -923,7 +923,6 @@ parse(uint8_t *buf, size_t buf_len, ev2citrusleaf_bin *values, int n_values,
 	*p_expiration = msg->record_ttl > now ? msg->record_ttl - now : 0;
 
 	if (msg->n_fields) {
-		cf_debug("Got %d fields in the response", msg->n_fields);
 		cl_msg_field *mf = (cl_msg_field *)buf;
 		for (i=0;i<msg->n_fields;i++) {
 
@@ -1093,7 +1092,7 @@ ev2citrusleaf_is_connected(int fd)
 	
 	if (rv < 0) {
 		if (errno == EBADF) {
-			cf_warn("connected check: INTERNAL ERROR fd %d error %d", fd, errno);
+			cf_warn("connected check: EBADF fd %d", fd);
 			return(CONNECTED_BADFD);
 		}
 		else if ((errno == EWOULDBLOCK) || (errno == EAGAIN)) {

@@ -265,7 +265,7 @@ safe_node_name(cl_cluster_node* node)
 void
 cl_partition_table_dump(ev2citrusleaf_cluster* asc)
 {
-	if (! cf_info_enabled()) {
+	if (! cf_debug_enabled()) {
 		return;
 	}
 
@@ -276,7 +276,7 @@ cl_partition_table_dump(ev2citrusleaf_cluster* asc)
 	}
 
 	while (pt) {
-		cf_info("--- CLUSTER MAP for %s ---", pt->ns);
+		cf_debug("--- CLUSTER MAP for %s ---", pt->ns);
 
 		for (int pid = 0; pid < asc->n_partitions; pid++) {
 			cl_partition* p = &pt->partitions[pid];
@@ -284,7 +284,7 @@ cl_partition_table_dump(ev2citrusleaf_cluster* asc)
 			MUTEX_LOCK(p->lock);
 
 			// This relies on MAX_REPLICA_COUNT of 5!
-			cf_info("%4d: %s, [%d] %s %s %s %s %s", pid, safe_node_name(p->write), p->n_read,
+			cf_debug("%4d: %s, [%d] %s %s %s %s %s", pid, safe_node_name(p->write), p->n_read,
 					safe_node_name(p->read[0]),
 					safe_node_name(p->read[1]),
 					safe_node_name(p->read[2]),

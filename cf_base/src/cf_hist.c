@@ -59,17 +59,6 @@ cf_histogram_create(char *name)
 ////////////////////////////////////////////////////////////////////////
 
 /**
- *  This is now redefined to call "cf_histogram_dump_new()", which allows
- *  us to pass in a buffer to be filled in.  The supplied buffer version
- *  is needed by the Erlang Client.
- */
-void
-cf_histogram_dump( cf_histogram *h )
-{
-    cf_histogram_dump_new( h, NULL, 0);
-} // end histogram_dump()
-
-/**
  * This is the new body of "cf_histogram_dump()"
  * If caller provides the outbuff, output will be place there. If not, output
  * goes to cf_debug.  If the caller provides the outbuff, it is the callers
@@ -124,6 +113,18 @@ cf_histogram_dump_new( cf_histogram *h, char *outbuff, size_t outbuff_len)
     }
   } // end if pos > 0
 } // end cf_histogram_dump_new()
+
+/**
+ *  This is now redefined to call "cf_histogram_dump_new()", which allows
+ *  us to pass in a buffer to be filled in.  The supplied buffer version
+ *  is needed by the Erlang Client.
+ */
+void
+cf_histogram_dump( cf_histogram *h )
+{
+    cf_histogram_dump_new( h, NULL, 0);
+} // end histogram_dump()
+
 ////////////////////////////////////////////////////////////////////////
 
 void 

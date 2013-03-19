@@ -626,6 +626,7 @@ ev2citrusleaf_cluster_follow(ev2citrusleaf_cluster *asc, bool flag)
 // Periodic node timer functionality.
 //
 
+// INFO_STR_MAX_LEN must be >= longest of these strings.
 const char INFO_STR_CHECK[] = "node\npartition-generation\nservices\n";
 const char INFO_STR_GET_REPLICAS[] = "replicas-read\nreplicas-write\npartition-generation\n";
 
@@ -636,10 +637,6 @@ void node_info_req_event(evutil_socket_t fd, short event, void* udata);
 void
 node_info_req_free(node_info_req* ir)
 {
-	if (ir->wbuf) {
-		free(ir->wbuf);
-	}
-
 	if (ir->rbuf) {
 		free(ir->rbuf);
 	}
@@ -1080,8 +1077,6 @@ node_info_req_start(cl_cluster_node* cn, node_info_req_type req_type)
 		return;
 	}
 
-	cn->info_req.wbuf_size = sizeof(cl_proto);
-
 	const char* names;
 	size_t names_len;
 
@@ -1100,17 +1095,11 @@ node_info_req_start(cl_cluster_node* cn, node_info_req_type req_type)
 		return;
 	}
 
-	cn->info_req.wbuf_size += names_len;
-	cn->info_req.wbuf = (uint8_t*)malloc(cn->info_req.wbuf_size);
-
-	if (! cn->info_req.wbuf) {
-		cf_error("node %s info request wbuf allocation failed", cn->name);
-		return;
-	}
+	cn->info_req.wbuf_size = sizeof(cl_proto) + names_len;
 
 	cl_proto* proto = (cl_proto*)cn->info_req.wbuf;
 
-	proto->sz = cn->info_req.wbuf_size - sizeof(cl_proto);
+	proto->sz = names_len;
 	proto->version = CL_PROTO_VERSION;
 	proto->type = CL_PROTO_TYPE_INFO;
 	cl_proto_swap(proto);

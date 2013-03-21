@@ -1490,14 +1490,16 @@ int citrusleaf_query_init() {
 
 void citrusleaf_query_shutdown() {
 
-    for( int i=0; i<N_MAX_QUERY_THREADS; i++) {
-        cf_queue_push(g_query_q,&g_null_task);
-    }
+    if (0 != cf_atomic32_get(query_initialized)) {
+	    for( int i=0; i<N_MAX_QUERY_THREADS; i++) {
+   	     	cf_queue_push(g_query_q, &g_null_task);
+   		}
 
-    for( int i=0; i<N_MAX_QUERY_THREADS; i++) {
-        pthread_join(g_query_th[i],NULL);
-    }
-    cf_queue_destroy(g_query_q);
-    cf_queue_destroy(g_task_complete_q);
-    cf_atomic32_decr(&query_initialized);
+	    for( int i=0; i<N_MAX_QUERY_THREADS; i++) {
+    	    pthread_join(g_query_th[i],NULL);
+	    }
+    	cf_queue_destroy(g_query_q);
+	    cf_queue_destroy(g_task_complete_q);
+    	cf_atomic32_decr(&query_initialized);
+	}
 }

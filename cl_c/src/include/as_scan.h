@@ -80,8 +80,9 @@ typedef struct as_scan_response_record_t {
 } as_scan_response_rec;
 
 typedef struct as_node_response_s {
-    char    node_name[NODE_NAME_SIZE];
-    cl_rv   node_response;
+    char     node_name[NODE_NAME_SIZE];
+    cl_rv    node_response;
+	uint64_t job_id;
 } as_node_response;
 
 typedef bool (* as_scan_cb) (const as_val * val, void * udata);

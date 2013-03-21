@@ -85,6 +85,7 @@ typedef struct {
     size_t                  scan_sz;
     void *                  udata;
     int                     (* callback)(as_val *, void *);
+	uint64_t 				job_id;
 } as_scan_task;
 
 /******************************************************************************
@@ -476,6 +477,7 @@ void * as_scan_worker(void * dummy) {
         }
         strncpy(response.node_name, task.node_name, strlen(task.node_name));
         response.node_response = rc;
+		response.job_id = task.job_id;
         cf_queue_push(g_complete_q, (void *)&response);
     }
 }
@@ -582,6 +584,7 @@ cf_vector * as_scan_execute(cl_cluster * cluster, const as_scan * scan, char * n
         .scan_sz           = wr_buf_sz,
         .udata              = udata,
         .callback           = callback,
+		.job_id				= scan->job_id,
     };
 
     // If node_name is not null, we are executing scan on a particular node

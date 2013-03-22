@@ -268,6 +268,10 @@ cl_request_create()
 void
 cl_request_destroy(cl_request *r)
 {
+	if (r->cross_thread_lock) {
+		MUTEX_FREE(r->cross_thread_lock);
+	}
+
 	free(r);
 }
 
@@ -1064,10 +1068,7 @@ ev2citrusleaf_request_complete(cl_request *req, bool timedout)
 	// free the data (queue, at some point)
 	if (req->wr_buf_size && (req->wr_buf != req->wr_tmp))  free(req->wr_buf);
 	if (req->rd_buf_size && (req->rd_buf != req->rd_tmp))  free(req->rd_buf);
-	
-	// DEBUG
-	memset((void*)req, 0, sizeof (cl_request) );
-	
+
 	cl_request_destroy(req);
 }
 
@@ -1077,9 +1078,6 @@ ev2citrusleaf_request_complete(cl_request *req, bool timedout)
 //
 // if the fd is connected, we actually expect an error - ewouldblock or similar
 //
-
-
-
 int
 ev2citrusleaf_is_connected(int fd)
 {
@@ -1108,6 +1106,34 @@ ev2citrusleaf_is_connected(int fd)
 }
 
 
+static inline void
+req_cross_thread_init_and_lock(cl_request* req)
+{
+	if (req->asc->options.cross_threaded) {
+		MUTEX_ALLOC(req->cross_thread_lock);
+		MUTEX_LOCK(req->cross_thread_lock);
+	}
+}
+
+static inline void
+req_cross_thread_unlock(cl_request* req)
+{
+	if (req->cross_thread_lock) {
+		MUTEX_UNLOCK(req->cross_thread_lock);
+	}
+}
+
+static inline void
+event_cross_thread_check(cl_request* req)
+{
+	// In cross-threaded transaction models, events firing in the callback
+	// thread need to be sure the original non-blocking call is complete.
+	if (req->cross_thread_lock) {
+		MUTEX_LOCK(req->cross_thread_lock);
+		MUTEX_UNLOCK(req->cross_thread_lock);
+	}
+}
+
 
 //
 // Got an event on one of our file descriptors. DTRT.
@@ -1119,7 +1145,9 @@ ev2citrusleaf_event(evutil_socket_t fd, short event, void *udata)
 	int rv;
 	
 	uint64_t _s = cf_getms();
-	
+
+	event_cross_thread_check(req);
+
 	cf_atomic_int_incr(&g_cl_stats.event_counter);
 	
 	req->network_set = false;
@@ -1267,7 +1295,9 @@ ev2citrusleaf_timer_expired(evutil_socket_t fd, short event, void *udata)
 	}
 	
 	uint64_t _s = cf_getms();
-	
+
+	event_cross_thread_check(req);
+
 	req->timeout_set = false;
 
 	if (req->node) {
@@ -1290,6 +1320,8 @@ ev2citrusleaf_base_hop_event(evutil_socket_t fd, short event, void *udata)
 		cf_error("base hop event: BAD MAGIC");
 		return;
 	}
+
+	event_cross_thread_check(req);
 
 	req->base_hop_set = false;
 
@@ -1320,10 +1352,6 @@ ev2citrusleaf_base_hop(cl_request *req)
 //
 // Called when we couldn't get a node before, and now we might have a node,
 // so we're going to retry starting the request
-//
-// AKG - there's a problem here if we're in the scope of the start call (i.e.
-// first attempt), the transaction is "cross-threaded", and the timeout event
-// fires. We'll fix this if/when we revise the transaction flow.
 //
 void
 ev2citrusleaf_restart(cl_request *req)
@@ -1390,10 +1418,6 @@ GoodFd:
 
 	req->network_set = true;
 
-	// Make sure no req fields are touched after the event is added. It's
-	// possible req->base does not correspond to the thread we're in here, so
-	// the event callback might happen (immediately) in another thread.
-
 	if (0 != event_add(cl_request_get_network_event(req), 0 /*timeout*/)) {
 		cf_warn("unable to add event for request %p: will time out", req);
 		req->network_set = false;
@@ -1410,15 +1434,13 @@ int
 ev2citrusleaf_start(cl_request *req, int info1, int info2, char *ns, char *set, ev2citrusleaf_object *key, cf_digest *digest,
 	ev2citrusleaf_write_parameters *wparam, ev2citrusleaf_bin *bins, int n_bins)
 {
-//	if (req->asc->requests_in_progress > 10) {
-//		cf_info("too many requests in progress: %d", req->asc->requests_in_progress);
-//		return(-1);
-//	}
+	req_cross_thread_init_and_lock(req);
 
 	// if you can't set up the timer, best to bail early	
 	if (req->timeout_ms) {
 		if (req->timeout_ms < 0) {
 			cf_warn("don't set timeouts in the past");
+			req_cross_thread_unlock(req);
 			return(-1);
 		}
 		if (req->timeout_ms > 1000 * 60) {
@@ -1431,6 +1453,7 @@ ev2citrusleaf_start(cl_request *req, int info1, int info2, char *ns, char *set, 
 		tv.tv_usec = (req->timeout_ms % 1000) * 1000;
 		if (0 != evtimer_add(cl_request_get_timeout_event(req), &tv)) {
 			cf_warn("libevent returned -1 in timer add: surprising");
+			req_cross_thread_unlock(req);
 			return(-1);
 		}
 		req->timeout_set = true;
@@ -1458,6 +1481,7 @@ ev2citrusleaf_start(cl_request *req, int info1, int info2, char *ns, char *set, 
 			cf_info("citrusleaf: compile failed : deleting event");
 			evtimer_del(cl_request_get_timeout_event(req));
 		}
+		req_cross_thread_unlock(req);
 		return(-1);
 	}
 
@@ -1467,7 +1491,9 @@ ev2citrusleaf_start(cl_request *req, int info1, int info2, char *ns, char *set, 
 
 	// initial restart
 	ev2citrusleaf_restart(req);
-	
+
+	req_cross_thread_unlock(req);
+
 	return(0);
 }
 
@@ -1481,10 +1507,13 @@ int
 ev2citrusleaf_start_op(cl_request *req, char *ns, char *set, ev2citrusleaf_object *key, cf_digest *digest,
 	ev2citrusleaf_operation *ops, int n_ops, ev2citrusleaf_write_parameters *wparam)
 {
+	req_cross_thread_init_and_lock(req);
+
 	// if you can't set up the timer, best to bail early	
 	if (req->timeout_ms) {
 		if (req->timeout_ms < 0) {
 			cf_warn("don't set timeouts in the past");
+			req_cross_thread_unlock(req);
 			return(-1);
 		}
 		if (req->timeout_ms > 1000 * 60) {
@@ -1497,6 +1526,7 @@ ev2citrusleaf_start_op(cl_request *req, char *ns, char *set, ev2citrusleaf_objec
 		tv.tv_usec = (req->timeout_ms % 1000) * 1000;
 		if (0 != evtimer_add(cl_request_get_timeout_event(req), &tv)) {
 			cf_warn("libevent returned -1 in timer add: surprising");
+			req_cross_thread_unlock(req);
 			return(-1);
 		}
 		req->timeout_set = true;
@@ -1523,6 +1553,7 @@ ev2citrusleaf_start_op(cl_request *req, char *ns, char *set, ev2citrusleaf_objec
 			cf_info("citrusleaf: compile failed : deleting event");
 			evtimer_del(cl_request_get_timeout_event(req));
 		}
+		req_cross_thread_unlock(req);
 		return(-1);
 	}
 
@@ -1532,7 +1563,9 @@ ev2citrusleaf_start_op(cl_request *req, char *ns, char *set, ev2citrusleaf_objec
 
 	// initial restart
 	ev2citrusleaf_restart(req);
-	
+
+	req_cross_thread_unlock(req);
+
 	return(0);
 }
 

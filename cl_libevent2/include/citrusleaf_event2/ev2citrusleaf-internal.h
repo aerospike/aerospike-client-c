@@ -102,7 +102,10 @@ typedef struct cl_request_s {
 	uint8_t rd_tmp[1024];
 
     uint64_t start_time;
-    
+
+    // Relevant only for "cross-threaded" transactions.
+	void*			cross_thread_lock;
+
     uint8_t   event_space[]; // this will be preallocated
     						 // based on the size of struct event
 	

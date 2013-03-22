@@ -59,9 +59,9 @@ static int get_many(ev2citrusleaf_cluster* cl, const char* ns,
 // Function Declarations
 //
 
-static cl_batch_job* cl_batch_job_create(struct event_base* base,
-		ev2citrusleaf_get_many_cb user_cb, void* user_data, int n_digests,
-		int timeout_ms);
+static cl_batch_job* cl_batch_job_create(bool cross_threaded,
+		struct event_base* base, ev2citrusleaf_get_many_cb user_cb,
+		void* user_data, int n_digests, int timeout_ms);
 static void cl_batch_job_destroy(cl_batch_job* _this);
 static inline struct event_base* cl_batch_job_get_base(cl_batch_job* _this);
 static inline uint32_t cl_batch_job_clepoch_seconds(cl_batch_job* _this);
@@ -71,6 +71,7 @@ static bool cl_batch_job_compile(cl_batch_job* _this, const char* ns,
 		const cf_digest* digests, const char** bins, int n_bins,
 		bool get_bin_data, cl_cluster_node** nodes);
 static bool cl_batch_job_start(cl_batch_job* _this);
+static inline void cl_batch_job_cross_thread_check(cl_batch_job* _this);
 static inline ev2citrusleaf_rec* cl_batch_job_get_rec(cl_batch_job* _this);
 static inline void cl_batch_job_rec_done(cl_batch_job* _this);
 static void cl_batch_job_node_done(cl_batch_job* _this,
@@ -84,6 +85,10 @@ static void cl_batch_job_timeout_event(evutil_socket_t fd, short event,
 //
 
 struct cl_batch_job_s {
+	// Fields used only in cross-threaded transaction model.
+	void*						cross_thread_lock;
+	bool						cross_thread_locked;
+
 	// All events use this base.
 	struct event_base*			p_event_base;
 
@@ -248,8 +253,8 @@ get_many(ev2citrusleaf_cluster* cl, const char* ns, const cf_digest* digests,
 	}
 
 	// Make a cl_batch_job object.
-	cl_batch_job* p_job = cl_batch_job_create(base, cb, udata, n_digests,
-			timeout_ms);
+	cl_batch_job* p_job = cl_batch_job_create(cl->options.cross_threaded, base,
+			cb, udata, n_digests, timeout_ms);
 
 	if (! p_job) {
 		cf_error("can't create batch job");
@@ -310,8 +315,9 @@ get_many(ev2citrusleaf_cluster* cl, const char* ns, const cf_digest* digests,
 // event.
 //
 static cl_batch_job*
-cl_batch_job_create(struct event_base* base, ev2citrusleaf_get_many_cb user_cb,
-		void* user_data, int n_digests, int timeout_ms)
+cl_batch_job_create(bool cross_threaded, struct event_base* base,
+		ev2citrusleaf_get_many_cb user_cb, void* user_data, int n_digests,
+		int timeout_ms)
 {
 	size_t size = sizeof(cl_batch_job) + event_get_struct_event_size();
 	cl_batch_job* _this = (cl_batch_job*)malloc(size);
@@ -323,9 +329,13 @@ cl_batch_job_create(struct event_base* base, ev2citrusleaf_get_many_cb user_cb,
 
 	memset((void*)_this, 0, size);
 
-	// Add the timeout event right away. Note that "cross-threaded" requests are
-	// not safe against this timer firing before the end of this non-blocking
-	// get_many() call - for now we just rely on reasonable timeout values.
+	if (cross_threaded) {
+		MUTEX_ALLOC(_this->cross_thread_lock);
+		MUTEX_LOCK(_this->cross_thread_lock);
+		_this->cross_thread_locked = true;
+	}
+
+	// Add the timeout event right away.
 
 	evtimer_assign((struct event*)_this->timer_event_space, base,
 			cl_batch_job_timeout_event, _this);
@@ -337,7 +347,7 @@ cl_batch_job_create(struct event_base* base, ev2citrusleaf_get_many_cb user_cb,
 
 	if (0 != evtimer_add((struct event*)_this->timer_event_space, &tv)) {
 		cf_error("batch job add timer event failed");
-		free(_this);
+		cl_batch_job_destroy(_this);
 		return NULL;
 	}
 
@@ -354,7 +364,7 @@ cl_batch_job_create(struct event_base* base, ev2citrusleaf_get_many_cb user_cb,
 
 	if (! _this->recs) {
 		cf_error("batch request recs allocation failed");
-		free(_this);
+		cl_batch_job_destroy(_this);
 		return NULL;
 	}
 
@@ -370,10 +380,6 @@ cl_batch_job_create(struct event_base* base, ev2citrusleaf_get_many_cb user_cb,
 static void
 cl_batch_job_destroy(cl_batch_job* _this)
 {
-	if (_this->timer_event_added) {
-		evtimer_del((struct event*)_this->timer_event_space);
-	}
-
 	for (int n = 0; n < _this->n_node_reqs; n++) {
 		if (_this->node_reqs[n]) {
 			cl_batch_node_req_destroy(_this->node_reqs[n]);
@@ -386,7 +392,22 @@ cl_batch_job_destroy(cl_batch_job* _this)
 		}
 	}
 
-	free(_this->recs);
+	if (_this->recs) {
+		free(_this->recs);
+	}
+
+	if (_this->timer_event_added) {
+		evtimer_del((struct event*)_this->timer_event_space);
+	}
+
+	if (_this->cross_thread_lock) {
+		if (_this->cross_thread_locked) {
+			MUTEX_UNLOCK(_this->cross_thread_lock);
+		}
+
+		MUTEX_FREE(_this->cross_thread_lock);
+	}
+
 	free(_this);
 }
 
@@ -495,7 +516,28 @@ cl_batch_job_start(cl_batch_job* _this)
 		cl_batch_node_req_start(_this->node_reqs[n]);
 	}
 
+	// Cross-threaded batch transactions must block the event callback thread
+	// until the original non-blocking call is complete, which is now.
+	if (_this->cross_thread_lock) {
+		_this->cross_thread_locked = false;
+		MUTEX_UNLOCK(_this->cross_thread_lock);
+		// Events are now free to proceed (and may even destroy this object).
+	}
+
 	return true;
+}
+
+//------------------------------------------------
+// Cross-threaded transaction events must be sure
+// original non-blocking call is complete.
+//
+static inline void
+cl_batch_job_cross_thread_check(cl_batch_job* _this)
+{
+	if (_this->cross_thread_lock) {
+		MUTEX_LOCK(_this->cross_thread_lock);
+		MUTEX_UNLOCK(_this->cross_thread_lock);
+	}
 }
 
 //------------------------------------------------
@@ -570,6 +612,8 @@ cl_batch_job_timeout_event(evutil_socket_t fd, short event, void* pv_this)
 {
 	cl_batch_job* _this = (cl_batch_job*)pv_this;
 
+	cl_batch_job_cross_thread_check(_this);
+
 	_this->timer_event_added = false;
 
 	// Make the user callback. This reports partial results from any node
@@ -623,8 +667,10 @@ cl_batch_node_req_destroy(cl_batch_node_req* _this)
 	}
 
 	if (_this->fd > -1) {
-		// We only get here if the batch job timed out and is aborting this node
+		// We get here if the batch job timed out and is aborting this node
 		// request. We can't re-use the socket - it may have unprocessed data.
+		// (We can also get here if cl_batch_job_start() failed on another node,
+		// but for now we're not bothering to distinguish that case.)
 		cf_close(_this->fd);
 		cl_cluster_node_dun(_this->p_node, DUN_USER_TIMEOUT);
 	}
@@ -797,9 +843,6 @@ cl_batch_node_req_start(cl_batch_node_req* _this)
 			cl_batch_job_get_base(_this->p_job), _this->fd, EV_WRITE,
 			cl_batch_node_req_event, _this);
 
-	// In "cross-threaded" requests, don't access member data after adding the
-	// event - the callback may occur and destroy this object immediately.
-
 	_this->event_added = true;
 
 	if (0 != event_add((struct event*)_this->event_space, 0)) {
@@ -818,6 +861,8 @@ static void
 cl_batch_node_req_event(evutil_socket_t fd, short event, void* pv_this)
 {
 	cl_batch_node_req* _this = (cl_batch_node_req*)pv_this;
+
+	cl_batch_job_cross_thread_check(_this->p_job);
 
 	_this->event_added = false;
 

@@ -51,8 +51,15 @@
 static void* mutex_alloc() {
 	pthread_mutex_t* p_lock = (pthread_mutex_t*)malloc(sizeof(pthread_mutex_t));
 
-	return p_lock && pthread_mutex_init(p_lock, NULL) == 0 ?
-		(void*)p_lock : NULL;
+	if (p_lock) {
+		if (pthread_mutex_init(p_lock, NULL) == 0) {
+			return (void*)p_lock;
+		}
+
+		free((void*)p_lock);
+	}
+
+	return NULL;
 }
 
 static void mutex_free(void* pv_lock) {

@@ -1096,7 +1096,7 @@ cluster_partitions_process(cl_cluster *asc, cl_cluster_node *cn, char *partition
 			int partid = atoi(partid_s);
 
 			if (partid < 0 || partid >= (int)asc->n_partitions) {
-				cf_warn("Invalid partition id %s. max=%u", partid, asc->n_partitions);
+				cf_warn("Invalid partition id %s. max=%u", partid_s, asc->n_partitions);
 				goto Next;
 			}
 				

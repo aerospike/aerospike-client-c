@@ -207,7 +207,6 @@ static int run_test2() {
     as_node_response resp;
     memset(&resp, 0, sizeof(as_node_response));
 
-    cf_vector * v;
     // Create job id for scan.
     // This will be useful to monitor your scan transactions
     uint64_t job_id;
@@ -230,19 +229,7 @@ static int run_test2() {
     // Execute scan udfs in background
     // Inputs : cluster object, scan object, callback function, arguments to the callback function 
     INFO("\nRunning background scan udf on the entire cluster");
-    v = citrusleaf_udf_scan_background(g_config->asc, scan);
-
-    // This returns a vector of return values, the size of which is the size of the cluster
-    int sz = cf_vector_size(v);
-
-    for(int i=0; i <= sz; i++) {
-        cf_vector_get(v, i, &resp);
-        INFO("Udf scan background for node %s returned %d", resp.node_name, resp.node_response);
-        // Set the resp back to zero
-        memset(&resp, 0, sizeof(as_node_response));
-    }
-    // Free the result vector
-    cf_vector_destroy(v);
+    citrusleaf_udf_scan_background(g_config->asc, scan);
 
     // Destroy the scan object
     as_scan_destroy(scan);

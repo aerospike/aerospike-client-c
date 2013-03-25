@@ -526,11 +526,11 @@ cl_rv as_scan_udf_destroy(as_scan_udf * udf) {
  * Calls a scan on all the nodes in the cluster. This function initializes a background scan.
  * The udf return values are not returned back to the client. 
  */
-cf_vector * citrusleaf_udf_scan_background(cl_cluster * asc, as_scan * scan) {
+void citrusleaf_udf_scan_background(cl_cluster * asc, as_scan * scan) {
     scan->udf.type = AS_SCAN_UDF_BACKGROUND;
     cl_rv res = CITRUSLEAF_OK;
     // Call as_scan_execute with a NULL node_name.
-    return as_scan_execute(asc, scan, NULL, &res, NULL, NULL);
+    as_scan_execute(asc, scan, NULL, &res, NULL, NULL);
 }
 
 /*

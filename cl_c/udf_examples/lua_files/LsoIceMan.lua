@@ -1,6 +1,6 @@
 -- ======================================================================
 -- Large Stack Object (LSO) Operations
--- LsoIceMan V2.1 -- (March 15, 2013)
+-- LsoIceMan V2.1 -- (March 23, 2013)
 -- ======================================================================
 -- LSO Design and Type Comments:
 --
@@ -17,6 +17,7 @@
 -- (*) stackPush: Push a user value (AS_VAL) onto the stack
 -- (*) stackPeek: Read N values from the stack, in LIFO order
 -- (*) stackTrim: Release all but the top N values.
+-- (*) stack_config: retrieve all current config settings in map format
 -- ==> stackPush and stackPeek() functions each have the option of passing
 -- in a Transformation/Filter UDF that modify values before storage or
 -- modify and filter values during retrieval.
@@ -118,11 +119,11 @@ local function initializeLsoMap( topRec, lsoBinName )
   lsoMap.Set = "set";       -- Default Set Name -- to be overridden by user
   lsoMap.PageMode = "List"; -- "List" or "Binary":
   -- LSO Data Record Chunk Settings: Passed into "Chunk Create"
---lsoMap.LdrEntryCountMax = 200;  -- Max # of items in a Data Chunk (List Mode)
-  lsoMap.LdrEntryCountMax =  4;  -- Max # of items in a Data Chunk (List Mode)
+  lsoMap.LdrEntryCountMax = 200;  -- Max # of items in a Data Chunk (List Mode)
+--lsoMap.LdrEntryCountMax =  4;  -- Max # of items in a Data Chunk (List Mode)
   lsoMap.LdrByteEntrySize = 18;  -- Byte size of a fixed size Byte Entry
---lsoMap.LdrByteCountMax = 2000; -- Max # of BYTES in a Data Chunk (binary mode)
-  lsoMap.LdrByteCountMax =   80; -- Max # of BYTES in a Data Chunk (binary mode)
+  lsoMap.LdrByteCountMax = 2000; -- Max # of BYTES in a Data Chunk (binary mode)
+--lsoMap.LdrByteCountMax =   80; -- Max # of BYTES in a Data Chunk (binary mode)
   -- Hot Entry List Settings: List of User Entries
   lsoMap.HotEntryList = list();
   lsoMap.HotEntryListItemCount = 0; -- Number of elements in the Top List
@@ -223,7 +224,96 @@ end -- initializeColdDirMap()
 -- These are all local functions to this module and serve various
 -- utility and assistance functions.
 -- ======================================================================
+--
+--
+-- Prepackaged Settings
 -- ======================================================================
+-- StumbleUpon uses a compacted
+-- ======================================================================
+local function packageStumbleUpon( lsoMap )
+  -- General LSO Parms:
+  lsoMap.PageMode = "Binary";
+  lsoMap.Transform = "stumbleCompress5";
+  lsoMap.UnTransform = "stumbleUnCompress5";
+  -- LSO Data Record Chunk Settings: Passed into "Chunk Create"
+  lsoMap.LdrEntryCountMax = 200;  -- Max # of items in a Data Chunk (List Mode)
+  lsoMap.LdrByteEntrySize = 18;  -- Byte size of a fixed size Byte Entry
+  lsoMap.LdrByteCountMax = 2000; -- Max # of BYTES in a Data Chunk (binary mode)
+  -- Hot Entry List Settings: List of User Entries
+  lsoMap.HotListMax = 100; -- Max Number for the List -- when we transfer
+  lsoMap.HotListTransfer = 50; -- How much to Transfer at a time.
+  -- Warm Digest List Settings: List of Digests of LSO Data Records
+  lsoMap.WarmListMax = 100; -- Number of Warm Data Record Chunks
+  lsoMap.WarmListTransfer = 50; -- Number of Warm Data Record Chunks
+  -- Cold Directory List Settings: List of Directory Pages
+  lsoMap.ColdListMax = 100;  -- Number of list entries in a Cold list dir node
+
+end
+
+-- ======================================================================
+-- This is the standard configuration
+-- ======================================================================
+local function packageStandardList
+  -- General LSO Parms:
+  lsoMap.PageMode = "List";
+  lsoMap.Transform = nil;
+  lsoMap.UnTransform = nil;
+  -- LSO Data Record Chunk Settings: Passed into "Chunk Create"
+  lsoMap.LdrEntryCountMax = 100;  -- Max # of items in a Data Chunk (List Mode)
+  lsoMap.LdrByteEntrySize = 0;  -- Byte size of a fixed size Byte Entry
+  lsoMap.LdrByteCountMax = 2000; -- Max # of BYTES in a Data Chunk (binary mode)
+  -- Hot Entry List Settings: List of User Entries
+  lsoMap.HotListMax = 100; -- Max Number for the List -- when we transfer
+  lsoMap.HotListTransfer = 50; -- How much to Transfer at a time.
+  -- Warm Digest List Settings: List of Digests of LSO Data Records
+  lsoMap.WarmListMax = 100; -- Number of Warm Data Record Chunks
+  lsoMap.WarmListTransfer = 50; -- Number of Warm Data Record Chunks
+  -- Cold Directory List Settings: List of Directory Pages
+  lsoMap.ColdListMax = 100;  -- Number of list entries in a Cold list dir node
+
+end
+
+-- ======================================================================
+-- ======================================================================
+local function packageTestModeList
+  -- General LSO Parms:
+  lsoMap.PageMode = "List";
+  lsoMap.Transform = nil;
+  lsoMap.UnTransform = nil;
+  -- LSO Data Record Chunk Settings: Passed into "Chunk Create"
+  lsoMap.LdrEntryCountMax = 100;  -- Max # of items in a Data Chunk (List Mode)
+  lsoMap.LdrByteEntrySize = 0;  -- Byte size of a fixed size Byte Entry
+  lsoMap.LdrByteCountMax = 2000; -- Max # of BYTES in a Data Chunk (binary mode)
+  -- Hot Entry List Settings: List of User Entries
+  lsoMap.HotListMax = 100; -- Max Number for the List -- when we transfer
+  lsoMap.HotListTransfer = 50; -- How much to Transfer at a time.
+  -- Warm Digest List Settings: List of Digests of LSO Data Records
+  lsoMap.WarmListMax = 100; -- Number of Warm Data Record Chunks
+  lsoMap.WarmListTransfer = 50; -- Number of Warm Data Record Chunks
+  -- Cold Directory List Settings: List of Directory Pages
+  lsoMap.ColdListMax = 100;  -- Number of list entries in a Cold list dir node
+end
+
+-- ======================================================================
+-- ======================================================================
+local function packageTestModeBinary
+  -- General LSO Parms:
+  lsoMap.PageMode = "Binary";
+  lsoMap.Transform = nil;
+  lsoMap.UnTransform = nil;
+  -- LSO Data Record Chunk Settings: Passed into "Chunk Create"
+  lsoMap.LdrEntryCountMax = 100;  -- Max # of items in a Data Chunk (List Mode)
+  lsoMap.LdrByteEntrySize = 0;  -- Byte size of a fixed size Byte Entry
+  lsoMap.LdrByteCountMax = 2000; -- Max # of BYTES in a Data Chunk (binary mode)
+  -- Hot Entry List Settings: List of User Entries
+  lsoMap.HotListMax = 100; -- Max Number for the List -- when we transfer
+  lsoMap.HotListTransfer = 50; -- How much to Transfer at a time.
+  -- Warm Digest List Settings: List of Digests of LSO Data Records
+  lsoMap.WarmListMax = 100; -- Number of Warm Data Record Chunks
+  lsoMap.WarmListTransfer = 50; -- Number of Warm Data Record Chunks
+  -- Cold Directory List Settings: List of Directory Pages
+  lsoMap.ColdListMax = 100;  -- Number of list entries in a Cold list dir node
+end
 
 -- ======================================================================
 -- adjustLsoMap:
@@ -245,33 +335,48 @@ local function adjustLsoMap( lsoMap, argListMap )
   GP=F and trace("[DEBUG]: <%s:%s> : Processing Arguments:(%s)",
     mod, meth, tostring(argListMap));
 
-  if type( argListMap.PageMode ) == "string" then
-  GP=F and trace("[DEBUG]: <%s:%s> : Processing PageMode", mod, meth );
-    -- Verify it's a valid value
-    if argListMap.PageMode == "List" or argListMap.PageMode == "Binary" then
-      lsoMap.PageMode = argListMap.PageMode;
-    end
-  end
-  if type( argListMap.HotListSize ) == "number" then
-    GP=F and trace("[DEBUG]: <%s:%s> : Processing Hot List", mod, meth );
-    GP=F and trace("<LINE 148> HotListSize(%s)", tostring(argListMap.HotListSize) );
-    if argListMap.HotListSize > 0 then
-      lsoMap.HotListMax = argListMap.HotListSize;
-    end
-  end
-  if type( argListMap.HotListTransfer ) == "number" then
-    GP=F and trace("[DEBUG]: <%s:%s> : Processing Hot List Transfer", mod, meth );
-    if argListMap.HotListTransfer > 0 then
-      lsoMap.HotListTransfer = argListMap.HotListTransfer;
-    end
-  end
-  if type( argListMap.ByteEntrySize ) == "number" then
-    GP=F and trace("[DEBUG]: <%s:%s> : Processing ByteEntrySize", mod, meth );
-    if argListMap.ByteEntrySize > 0 then
-      lsoMap.LdrByteEntrySize = argListMap.ByteEntrySize;
-    end
-  end
-  
+  for name, value in map.pairs( argListMap ) do
+
+      -- Process our "prepackaged" settings first:
+      -- (*) StumbleUpon
+      -- (*) StandardList
+      -- (*) TestMode
+      if type( argListMap.Package ) == "string" then
+      GP=F and trace("[DEBUG]: <%s:%s> : Processing PACKAGE", mod, meth );
+        -- Verify it's a valid value
+        if argListMap.PageMode == "List" or argListMap.PageMode == "Binary" then
+          lsoMap.PageMode = argListMap.PageMode;
+        end
+      end
+
+      if type( argListMap.PageMode ) == "string" then
+      GP=F and trace("[DEBUG]: <%s:%s> : Processing PageMode", mod, meth );
+        -- Verify it's a valid value
+        if argListMap.PageMode == "List" or argListMap.PageMode == "Binary" then
+          lsoMap.PageMode = argListMap.PageMode;
+        end
+      end
+      if type( argListMap.HotListSize ) == "number" then
+        GP=F and trace("[DEBUG]: <%s:%s> : Processing Hot List", mod, meth );
+        GP=F and trace("<LINE 148> HotListSize(%s)", tostring(argListMap.HotListSize) );
+        if argListMap.HotListSize > 0 then
+          lsoMap.HotListMax = argListMap.HotListSize;
+        end
+      end
+      if type( argListMap.HotListTransfer ) == "number" then
+        GP=F and trace("[DEBUG]: <%s:%s> : Processing Hot List Transfer", mod, meth );
+        if argListMap.HotListTransfer > 0 then
+          lsoMap.HotListTransfer = argListMap.HotListTransfer;
+        end
+      end
+      if type( argListMap.ByteEntrySize ) == "number" then
+        GP=F and trace("[DEBUG]: <%s:%s> : Processing ByteEntrySize", mod, meth );
+        if argListMap.ByteEntrySize > 0 then
+          lsoMap.LdrByteEntrySize = argListMap.ByteEntrySize;
+        end
+      end
+  end -- for each argument
+      
   GP=F and trace("[DEBUG]: <%s:%s> : CTRL Map after Adjust(%s)",
     mod, meth , tostring(lsoMap));
 

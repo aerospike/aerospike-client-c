@@ -208,6 +208,23 @@ TEST_UTIL += util/test_logger
 
 TEST_LSO = 
 TEST_LSO += lstack/lstack_basics
+TEST_LSO += lstack/lstack_settings
+TEST_LSO += lstack/lstack_hot
+TEST_LSO += lstack/lstack_warm
+TEST_LSO += lstack/lstack_cold
+
+TEST_LSET =
+TEST_LSET += lset/lset_basics
+TEST_LSET += lset/lset_small
+TEST_LSET += lset/lset_medium
+TEST_LSET += lset/lset_large
+
+TEST_LOLIST =
+TEST_LOLIST += lolist/lol_basics
+TEST_LOLIST += lolist/lol_small
+TEST_LOLIST += lolist/lol_medium
+TEST_LOLIST += lolist/lol_large
+
 
 TEST_CLIENT = client_test
 TEST_CLIENT += $(TEST_UTIL) 

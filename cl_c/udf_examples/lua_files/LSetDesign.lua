@@ -1,0 +1,86 @@
+-- Large Set (LSET) Design
+-- (March 15, 2013)
+--
+-- ======================================================================
+-- Functions Supported
+-- (*) SetCreate: Create the LSET structure.
+-- (*) SetInsert: Insert a (unique) value into the set.
+-- (*) SetSearch: Return the value from the set.
+-- (*) SetExists: Return true if the object is there, else false.
+-- ==> SetInsert, SetExists and SetSearch functions each have the option
+--     of passing in a Transformation/Filter UDF that modify values before
+--     storage or modify and filter values during retrieval.
+-- (*) SetInsertWithUDF: Insert a user value (AS_VAL) into the LSET
+--     calling the supplied UDF on the value FIRST to transform it before
+--     storing it in the set.
+-- (*) SetSearchWithUDF and SetExistsWithUDF: Retrieve a value from the set,
+--     and transform it and/or filter it with the UDF.  If the result of the
+--     filter operation returns nil, then the answer passed back is nil
+--     or "does not exist".
+-- ======================================================================
+-- LSET Design and Type Comments:
+--
+-- The LSET value is a new "particle type" that exists ONLY on the server.
+-- It is a complex type (it includes infrastructure that is used by
+-- server storage), so it can only be viewed or manipulated by Lua and C
+-- functions on the server.  It is represented by a Lua MAP object that
+-- comprises control information and a set of record bins that contain
+-- lists -- in order to split up the search across many lists.
+--
+-- |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+-- Visual Depiction
+-- |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+-- In a user record, the bin holding the Large SET control information
+-- is named "LSetControlBin", and the list bins are prefixed with
+-- "LSetBin_" and numbered from 0 to N, where N is the modulo value
+-- that is set on create (otherwise, default to 31).
+-- (*) LSET Control Info:
+-- (*) LSET Bins.
+--
+--
+-- +-----+-----+-----+-----+----------------------------------------+
+-- |User |User |. . .|LSET |LSET |LSET |. . .|LSET |                |
+-- |Bin 1|Bin 2|     |CTRL |Bin 1|Bin 2|     |Bin N|                |
+-- +-----+-----+-----+-----+----------------------------------------+
+--                      |     |     |           |                   
+--                      V     V     V           V                   
+--                   +=====++===+ +===+       +===+                  
+--                   | Map ||val| |val|       |val|
+--                   +=====+|val| |val|       |val|
+--                          |...| |...|       |...|
+--                          |val| |val|       |val|
+--                          +===+ +===+       +===+ 
+--
+-- The Large Set distributes searches over N lists.  Searches are done
+-- with linear scan in one of the bin lists.  The set values are hashed
+-- and then the specific bin is picked "hash(val) Modulo N".  The N bins
+-- are organized by name using the method:  prefix "LsetBin_" and the
+-- modulo N number.
+--
+-- The modulo number is always a prime number -- to minimize the amount
+-- of "collisions" that are often found in power of two modulo numbers.
+-- Common choices are 31 and 61.
+--
+-- |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+-- || LSET Bin CONTENTS  |||||||||||||||||||||||||||||||||||||||||||||||||
+-- |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+-- ======================================================================
+-- In the LSET bin (LSetControlBin), there is a Map object:
+-- accessed, as follows:
+-- lsetCtrlMap.Magic = "MAGIC"; -- this verifies we have a valid map
+-- lsetCtrlMap.ItemCount = 0;   -- Count of valid entries
+-- lsetCtrlMap.TotalCount = 0;  -- Count of all entry positions, incl deletes
+
+-- ======================================================================
+--
+--
+-- ======================================================================
+-- Aerospike Calls:
+-- newRec = aerospike:crec_create( topRec )
+-- newRec = aerospike:crec_open( record, digest)
+-- status = aerospike:crec_update( record, newRec )
+-- status = aerospike:crec_close( record, newRec )
+-- digest = record.digest( newRec )
+-- ======================================================================
+
+-- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> --

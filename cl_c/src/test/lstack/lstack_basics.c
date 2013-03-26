@@ -54,6 +54,7 @@ static int lso_push_quintuplet(char * ns, char * set,
     as_list_destroy(compress_args);
 }
 
+// ==================================================================
 TEST( as_lso_push_with_transform_1, "as_lso_push_with_transform" ) {
     char * package_name = "LSTACK";
     char * user_key     = "User_111";
@@ -64,6 +65,7 @@ TEST( as_lso_push_with_transform_1, "as_lso_push_with_transform" ) {
     assert_int_eq( rc, 0 );
 }
 
+// ==================================================================
 static int lso_peek_quintuplet(char * ns, char * set,
                                char *package_name, char * key,
                                char * lso_bin_name) {

@@ -15,7 +15,7 @@
 -- the trace() call is NOT executed (regardless of the value of GP)
 -- ======================================================================
 local GP=true; -- Doesn't matter what this is set to.
-local F=true; -- Set F (flag) to true to turn ON global print
+local F=false; -- Set F (flag) to true to turn ON global print
 
 -- =========================
 -- || LOCAL GLOBAL VALUES ||

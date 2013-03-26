@@ -57,7 +57,7 @@
 -- in the server).
 -- ======================================================================
 local GP=true;
-local F=false; -- Set F (flag) to true to turn ON global print
+local F=true; -- Set F (flag) to true to turn ON global print
 
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 -- LSO Utility Functions

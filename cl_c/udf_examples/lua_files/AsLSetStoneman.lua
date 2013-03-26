@@ -1,10 +1,29 @@
--- AS Large Set Stickman V1 -- (Last Update Mar 09, 2013: tjl)
--- Aerospike Set Operations
--- (*) Set Create
--- (*) Set Insert
--- (*) Set Select (and Exists)
--- (*) Set Delete
+-- AS Large Set (LSET) Operations
+-- Stoneman V2 -- (Last Update Mar 25, 2013: tjl)
+--
+-- Please refer to lset_design.lua for architecture and design notes.
+--
+-- Aerospike Large Set (LSET) Operations
+-- (*) lset_create(): Create the LSET object in the bin specified.
+-- (*) lset_insert(): Insert an item into the Large Set
+-- (*) lset_select(): Select an item from the Large Set
+-- (*) lset_exists(): Test Existence on an item in the set
+-- (*) lset_delete(): Delete an item from the set
+-- (*) lset_config(): retrieve all current config settings in map format
+-- (*) lset_size():   Return the size (e.g. item count) of the Set
 
+-- ======================================================================
+-- TO DO List:
+-- ======================================================================
+-- TODO: (1) Verify order of operations so that the upper level record
+--           is NEVER written before all of the lower level ops have
+--           successfully complete.
+-- TODO: (2) Verity that all serious errors call error('msg') rather than
+--           just return.
+-- TODO: (3) Do Parameter validation for all external calls.
+-- ======================================================================
+-- ======================================================================
+--
 -- ======================================================================
 -- || GLOBAL PRINT ||
 -- ======================================================================
@@ -17,9 +36,9 @@
 local GP=true; -- Doesn't matter what this is set to.
 local F=true; -- Set F (flag) to true to turn ON global print
 
--- =========================
--- || LOCAL GLOBAL VALUES ||
--- =========================
+-- ===========================================
+-- || GLOBAL VALUES -- Local to this module ||
+-- ===========================================
 local INSERT = 1; -- flag to scanList to INSERT the value (if not found)
 local SCAN = 0;
 local DELETE = -1; -- flag to show scanList to DELETE the value, if found
@@ -40,21 +59,24 @@ local DEFAULT_DISTRIB = 31;
 -- behavior.
 -- Parms:
 -- (*) topRec: The Aerospike Server record on which we operate
+-- (*) namespace: The Namespace of the record (topRec)
+-- (*) set: The Set of the record (topRec)
 -- (*) setBinName: The name of the bin for the AS Large Set
 -- (*) distrib: The Distribution Factor (how many separate bins) 
 -- Return: The initialized lsetCtrlMap.
 -- It is the job of the caller to store in the rec bin and call update()
 -- ======================================================================
-local function initializeLSetMap(topRec, setBinName, distrib )
-  local mod = "AsLSetStickman";
+local function initializeLSetMap(topRec, namespace, set, lsetBinName, distrib )
+  local mod = "AsLSetStoneman";
   local meth = "initializeLSetMap()";
-  GP=F and trace("[ENTER]: <%s:%s>:: BinName(%s) D(%s)",
-                 mod, meth, tostring(setBinName), tostring( distrib));
+  GP=F and trace("[ENTER]: <%s:%s>:: NS(%s) Set(%s) BinName(%s) D(%s)",
+    mod, meth, tostring(namespace), tostring(set), tostring(lsetBinName),
+    tostring( distrib));
 
   -- If "distrib" is bad (zero, negative or nil)  then use our default (31)
   -- Best to use a prime number.
   if (distrib == nil or distrib <= 0) then
-    distrib = DEFAULT_DISTRIB
+    distrib = DEFAULT_DISTRIB;
   end
 
   -- Create the map, and fill it in.
@@ -66,8 +88,15 @@ local function initializeLSetMap(topRec, setBinName, distrib )
   lsetCtrlMap.TotalCount = 0;  -- Count of both valid and deleted elements
   lsetCtrlMap.Modulo = distrib;
   lsetCtrlMap.ThreshHold = 4; -- Rehash after this many have been inserted
-  lsetCtrlMap.KeyType = 0; -- assume "atomic" values for now.
 
+  -- NOTE: Version 2: We will information here about value complexity and
+  -- how to find the key.  If values are atomic (e.g. int or string) then
+  -- we use the WHOLE value, otherwise we expect a MAP type, which will
+  -- have a KEY field in it (which is what we'll search/hash on).
+  -- So, when we do type(value), we expect "number", "string" or
+  -- "userdata" (which MUST be a map with a KEY field).
+  lsetCtrlMap.KeyType = 0; -- assume "atomic" values for now.
+  
   GP=F and trace("[ENTER]: <%s:%s>:: lsetCtrlMap(%s)",
                  mod, meth, tostring(lsetCtrlMap));
 
@@ -84,7 +113,7 @@ end -- initializeLSetMap()
 -- (*) argListMap: Map of User Override LSET Settings 
 -- ======================================================================
 local function adjustLSetMap( lsetCtrlMap, argListMap )
-  local mod = "LSetStickman";
+  local mod = "LSetStoneman";
   local meth = "adjustLSetMap()";
   GP=F and trace("[ENTER]: <%s:%s>:: LSetMap(%s)::\n ArgListMap(%s)",
                  mod, meth, tostring(lsetCtrlMap), tostring( argListMap ));
@@ -113,6 +142,9 @@ end -- adjustLSetMap
 
 
 -- ======================================================================
+-- We use the "CRC32" package for hashing the value in order to distribute
+-- the value to the appropriate "sub lists".
+-- ======================================================================
 local  CRC32 = require('CRC32');
 -- ======================================================================
 -- Return the hash of "value", with modulo.
@@ -125,7 +157,8 @@ local function stringHash( value, modulo )
   else
     return 0;
   end
-end
+end -- stringHash
+
 -- ======================================================================
 -- Return the hash of "value", with modulo
 -- Notice that we can use ZERO, because this is not an array index
@@ -133,7 +166,7 @@ end
 -- NOTE: Use a better Hash Function.
 -- ======================================================================
 local function numberHash( value, modulo )
-  local mod = "AsLSetStickman";
+  local mod = "AsLSetStoneman";
   local meth = "numberHash()";
   local result = 0;
   if value ~= nil and type(value) == "number" then
@@ -162,7 +195,7 @@ end
 -- Return: New Bin Name
 -- ======================================================================
 local function setupNewBin( topRec, binNum )
-  local mod = "AsLSetStickman";
+  local mod = "AsLSetStoneman";
   local meth = "setupNewBin()";
   GP=F and trace("[ENTER]: <%s:%s> Bin(%d) \n", mod, meth, binNum );
 
@@ -173,8 +206,7 @@ local function setupNewBin( topRec, binNum )
                  mod, meth, binNum, binName );
 
   return binName;
-end
-
+end -- setupNewBin
 
 -- ======================================================================
 -- computeSetBin()
@@ -185,7 +217,7 @@ end
 -- And, know if it's an atomic type or complex type.
 -- ======================================================================
 local function computeSetBin( newValue, lsetCtrlMap )
-  local mod = "AsLSetStickman";
+  local mod = "AsLSetStoneman";
   local meth = "computeSetBin()";
   GP=F and trace("[ENTER]: <%s:%s> val(%s) Map(%s) \n",
                  mod, meth, tostring(newValue), tostring(lsetCtrlMap) );
@@ -204,6 +236,7 @@ local function computeSetBin( newValue, lsetCtrlMap )
     else -- error case
       warn("[ERROR]<%s:%s>Unexpected Type (should be number, string or map)",
            mod, meth );
+      error('ERROR: Incorrect Type for new Large Set value');
     end
   end
   GP=F and trace("[EXIT]: <%s:%s> Val(%s) BinNumber (%d) \n",
@@ -233,7 +266,7 @@ end -- computeSetBin()
 -- Return 0 if found (and not inserted), otherwise 1 if inserted.
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 local function complexScanList(lsetCtrlMap, binList, value, flag ) 
-  local mod = "AsLSetStickman";
+  local mod = "AsLSetStoneman";
   local meth = "complexScanList()";
   local result = nil;
   -- Scan the list for the item, return true if found,
@@ -242,7 +275,8 @@ local function complexScanList(lsetCtrlMap, binList, value, flag )
     GP=F and trace("[DEBUG]: <%s:%s> It(%d) Comparing SV(%s) with BinV(%s)\n",
                    mod, meth, i, tostring(value), tostring(binList[i]));
     if binList[i] ~= nil and binList[i] ~= EMPTY and
-       binList[i].KEY == value.KEY then
+       binList[i].KEY == value.KEY
+    then
       result = binList[i]; -- save the thing we found.
       GP=F and trace("[EARLY EXIT]: <%s:%s> Found(%s)\n",
                      mod, meth, tostring(value));
@@ -268,7 +302,7 @@ local function complexScanList(lsetCtrlMap, binList, value, flag )
   GP=F and trace("[LATE EXIT]: <%s:%s> Did NOT Find(%s)\n",
     mod, meth, tostring(value));
   return nil;
-end
+end -- complexScanList
 
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 -- Scan a List for an item.  Return the item if found.
@@ -291,7 +325,7 @@ end
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 local function simpleScanList(lsetCtrlMap, binList, value, flag ) 
-  local mod = "AsLSetStickman";
+  local mod = "AsLSetStoneman";
   local meth = "simpleScanList()";
   GP=F and trace("[ENTER]: <%s:%s> Looking for V(%s), ListSize(%d) List(%s)",
                  mod, meth, tostring(value), list.size(binList),
@@ -349,7 +383,7 @@ end -- simpleScanList
 -- (NOTE: Can't return 0 -- because that might be a valid value)
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 local function scanList( lsetCtrlMap, binList, searchValue, flag ) 
-  local mod = "AsLSetStickman";
+  local mod = "AsLSetStoneman";
   local meth = "scanList()";
 
   if lsetCtrlMap.KeyType == 0 then
@@ -371,7 +405,7 @@ end
 -- (*) stats: 1=Please update Counts, 0=Do NOT update counts (rehash)
 -- ======================================================================
 local function localInsert( topRec, lsetCtrlMap, newValue, stats )
-  local mod = "AsLSetStickman";
+  local mod = "AsLSetStoneman";
   local meth = "localInsert()";
   GP=F and trace("[ENTER]:<%s:%s>Insert(%s)", mod, meth, tostring(newValue));
 
@@ -387,9 +421,9 @@ local function localInsert( topRec, lsetCtrlMap, newValue, stats )
 
   local insertResult = 0;
   if binList == nil then
-    GP=F and trace("[INTERNAL ERROR]:<%s:%s> binList is nil: binName(%s)",
+    GP=F and warn("[INTERNAL ERROR]:<%s:%s> binList is nil: binName(%s)",
                    mod, meth, tostring( binName ) );
-    return('INTERNAL ERROR: Nil Bin');
+    error('Insert: INTERNAL ERROR: Nil Bin');
   else
     -- Look for the value, and insert if it is not there.
     insertResult = scanList( lsetCtrlMap, binList, newValue, INSERT );
@@ -430,7 +464,7 @@ end -- localInsert
 -- (*) lsetCtrlMap
 -- ======================================================================
 local function rehashSet( topRec, setBinName, lsetCtrlMap )
-  local mod = "AsLSetStickman";
+  local mod = "AsLSetStoneman";
   local meth = "rehashSet()";
   GP=F and trace("[ENTER]:<%s:%s> !!!! REHASH !!!! ", mod, meth );
   GP=F and trace("[ENTER]:<%s:%s> !!!! REHASH !!!! ", mod, meth );
@@ -441,7 +475,7 @@ local function rehashSet( topRec, setBinName, lsetCtrlMap )
   if singleBinList == nil then
     warn("[INTERNAL ERROR]:<%s:%s> Rehash can't use Empty Bin (%s) list",
          mod, meth, tostring(singleBinName));
-    return('BAD BIN 0 LIST for Rehash');
+    error('BAD BIN 0 LIST for Rehash');
   end
   local listCopy = list.take( singleBinList, list.size( singleBinList ));
   topRec[singleBinName] = nil; -- this will be reset shortly.
@@ -461,7 +495,17 @@ local function rehashSet( topRec, setBinName, lsetCtrlMap )
 
   GP=F and trace("[EXIT]: <%s:%s>", mod, meth );
 end -- rehashSet()
+
 -- ======================================================================
+-- validateBinName(): Validate that the user's bin name for this large
+-- object complies with the rules of Aerospike. Currently, a bin name
+-- cannot be larger than 14 characters (a seemingly low limit).
+-- ======================================================================
+local function validateBinName( binName )
+  if string.size( binName ) > 14 then
+    error('Bin Name Validation Error: Exceeds 14 characters');
+  end
+end -- validateBinName()
 
 -- ======================================================================
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
@@ -490,7 +534,7 @@ end -- rehashSet()
 -- (*) setBinName: The name of the bin for the AS Large Set
 -- (*) distrib: The Distribution Factor (how many separate bins) 
 function asLSetCreate( topRec, setBinName, distrib )
-  local mod = "AsLSetStickman";
+  local mod = "AsLSetStoneman";
   local meth = "asLSetCreate()";
   GP=F and trace("[ENTER]: <%s:%s> Bin(%s) Dis(%d)\n",
                  mod, meth, setBinName, distrib );
@@ -498,10 +542,13 @@ function asLSetCreate( topRec, setBinName, distrib )
   -- Check to see if Set Structure (or anything) is already there,
   -- and if so, error.
   if( topRec['AsLSetCtrlBin'] ~= nil ) then
-    GP=F and trace("[ERROR EXIT]: <%s:%s> AsLSetCtrlBin Already Exists",
+    GP=F and warn("[ERROR EXIT]: <%s:%s> AsLSetCtrlBin Already Exists",
                    mod, meth );
-    return('AsLSetCtrlBin already exists');
+    error('AsLSetCtrlBin already exists');
   end
+  
+  -- This will throw and error and jump out of Lua if binName is bad.
+  validateBinName( setBinName );
 
   GP=F and trace("[DEBUG]: <%s:%s> : Initialize SET CTRL Map", mod, meth );
   local lsetCtrlMap;
@@ -572,12 +619,15 @@ end
 -- (*) distrib: The Distribution Factor (how many separate bins) 
 -- (*) newValue: Value to be inserted into the Large Set
 function asLSetInsert( topRec, setBinName, newValue )
-  local mod = "AsLSetStickman";
+  local mod = "AsLSetStoneman";
   local meth = "asLSetInsert()";
   GP=F and trace("[ENTER]:<%s:%s> SetBin(%s) NewValue(%s)",
                  mod, meth, tostring(setBinName), tostring( newValue ));
 
   local lsetCtrlMap, distrib;
+  
+  -- This will throw and error and jump out of Lua if binName is bad.
+  validateBinName( setBinName );
 
   -- Check that the Set Structure is already there, otherwise, error
   if( topRec['AsLSetCtrlBin'] == nil ) then
@@ -631,16 +681,19 @@ end -- function set Insert()
 --
 -- ======================================================================
 function asLSetExists( topRec, setBinName, searchValue )
-  local mod = "AsLSetStickman";
+  local mod = "AsLSetStoneman";
   local meth = "asLSetSearch()";
   GP=F and trace("[ENTER]: <%s:%s> Search for Value(%s)",
                  mod, meth, tostring( searchValue ) );
 
+  -- This will throw and error and jump out of Lua if binName is bad.
+  validateBinName( setBinName );
+
   -- Check that the Set Structure is already there, otherwise, error
   if( topRec['AsLSetCtrlBin'] == nil ) then
-    GP=F and trace("[ERROR EXIT]: <%s:%s> AsLSetCtrlBin does not Exist",
+    GP=F and warn("[ERROR EXIT]: <%s:%s> AsLSetCtrlBin does not Exist",
                    mod, meth );
-    return('AsLSetCtrlBin does not exist');
+    error('AsLSetCtrlBin does not exist');
   end
 
   -- Find the appropriate bin for the Search value
@@ -670,16 +723,20 @@ end -- function asLSetSearch()
 --
 -- ======================================================================
 function asLSetSearch( topRec, setBinName, searchValue )
-  local mod = "AsLSetStickman";
+  local mod = "AsLSetStoneman";
   local meth = "asLSetSearch()";
   GP=F and trace("[ENTER]: <%s:%s> Search for Value(%s)",
                  mod, meth, tostring( searchValue ) );
 
+
+  -- This will throw and error and jump out of Lua if binName is bad.
+  validateBinName( setBinName );
+
   -- Check that the Set Structure is already there, otherwise, error
   if( topRec['AsLSetCtrlBin'] == nil ) then
-    GP=F and trace("[ERROR EXIT]: <%s:%s> AsLSetCtrlBin does not Exist",
+    GP=F and warn("[ERROR EXIT]: <%s:%s> AsLSetCtrlBin does not Exist",
                    mod, meth );
-    return('AsLSetCtrlBin does not exist');
+    error('AsLSetCtrlBin does not exist');
   end
 
   -- Find the appropriate bin for the Search value
@@ -708,10 +765,14 @@ end -- function asLSetSearch()
 -- Return the element if found, return nil if not found.
 -- ======================================================================
 function asLSetDelete( topRec, setBinName, deleteValue )
-  local mod = "AsLSetStickman";
+  local mod = "AsLSetStoneman";
   local meth = "asLSetDelete()";
   GP=F and trace("[ENTER]: <%s:%s> Delete Value(%s)",
                  mod, meth, tostring( deleteValue ) );
+
+
+  -- This will throw and error and jump out of Lua if binName is bad.
+  validateBinName( setBinName );
 
   -- Check that the Set Structure is already there, otherwise, error
   if( topRec['AsLSetCtrlBin'] == nil ) then

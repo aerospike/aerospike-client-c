@@ -12,6 +12,7 @@ export UFILE="AsLSetStickman"
 export FUN_CR8="asLSetCreate"
 export FUN_INS="asLSetInsert"
 export FUN_SRCH="asLSetSearch"
+export FUN_DEL="asLSetDelete"
 
 # Use this ONLY if we need to register the UDF
 # ascli udf-put $UFILE
@@ -55,6 +56,11 @@ ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 200000110
 ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 199000414
 echo ">> Check CREATE (key $UKEY) with get"
 ascli get $UNS $USET $UKEY
+echo ">> DELETE 111 and 212 and then search for them << "
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_DEL $SETBIN 199000111
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_DEL $SETBIN 199000212
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 199000111
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 199000212
 
 # ########################################################################
 echo ">>>>  EXIT <<<<<"

@@ -66,7 +66,7 @@ static bool after(atf_plan * plan) {
 /******************************************************************************
  * TEST PLAN
  *****************************************************************************/
-
+// NOTE: This is a DECLARING a set of methods; this is NOT an execution.
 PLAN( client_test ) {
 
     plan_before( before );

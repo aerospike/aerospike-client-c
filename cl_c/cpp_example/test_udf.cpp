@@ -1,12 +1,74 @@
 #include <iostream>
 using namespace std;
 
-#include<cl_udf.h>
-#include<citrusleaf/citrusleaf.h>
-#include<cf_random.h>
-#include<cf_atomic.h>
-#include<cf_hist.h>
-#include<stdarg.h>
+
+extern "C" {
+	
+	//********************************************************
+	// Citrusleaf Core Foundation Includes
+	//********************************************************
+	#include <cf_random.h>
+	#include <cf_atomic.h>
+	#include <cf_hist.h>
+
+	//********************************************************
+	// Citrusleaf Mod-Lua Includes
+	//********************************************************
+
+	// as_val types (persistable)
+	#include <as_val.h>
+	#include <as_nil.h>
+	#include <as_boolean.h>
+	#include <as_integer.h>
+	#include <as_bytes.h>
+	#include <as_string.h>
+	#include <as_list.h>
+	#include <as_map.h>
+
+	// as_val types (non-persisted)
+	#include <as_pair.h>
+	#include <as_rec.h>
+
+	// implementations
+	#include <as_arraylist.h>
+	#include <as_linkedlist.h>
+	#include <as_hashmap.h>
+
+	// others
+	#include <as_result.h>
+	#include <as_stream.h>
+	#include <as_aerospike.h>
+	#include <as_buffer.h>
+	#include <as_module.h>
+	#include <as_logger.h>
+	#include <as_serializer.h>
+
+	// lua module
+	#include <mod_lua.h>
+	#include <mod_lua_config.h>
+
+	//********************************************************
+	// Citrusleaf Client Includes
+	//********************************************************
+	#include <cl_async.h>
+	#include <cl_object.h>
+	#include <cl_cluster.h>
+	#include <cl_info.h>
+	#include <cl_kv.h>
+	#include <cl_lookup.h>
+	#include <cl_object.h>
+	#include <cl_partition.h>
+	#include <cl_query.h>
+	#include <cl_scan.h>
+	#include <cl_sindex.h>
+	#include <cl_types.h>
+	#include <cl_udf.h>
+	#include <cl_write.h>
+	#include <citrusleaf/citrusleaf.h>
+
+}
+
+#include <stdarg.h>
 
 #define INFO(fmt, args...) \
     __log_append(stderr,"", fmt, ## args);

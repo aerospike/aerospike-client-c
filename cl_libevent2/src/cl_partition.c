@@ -21,238 +21,240 @@
 #include "citrusleaf_event2/ev2citrusleaf-internal.h"
 
 
-#define EXTRA_CHECKS 1
 
-//
-// When a node has been dunned, remove it from all partition tables.
-// Better to have nothing than have a dunned node in the tables.
-//
+cl_partition_table*
+cl_partition_table_create(ev2citrusleaf_cluster* asc, const char* ns)
+{
+	int n_partitions = (int)asc->n_partitions;
+	size_t size = sizeof(cl_partition_table) +
+			(sizeof(cl_partition) * n_partitions);
+	cl_partition_table* pt = (cl_partition_table*)malloc(size);
+
+	if (! pt) {
+		return NULL;
+	}
+
+	memset((void*)pt, 0, size);
+	strcpy(pt->ns, ns);
+
+	pt->next = asc->partition_table_head;
+	asc->partition_table_head = pt;
+
+	for (int pid = 0; pid < n_partitions; pid++) {
+		MUTEX_ALLOC(pt->partitions[pid].lock);
+	}
+
+	cf_atomic_int_incr(&g_cl_stats.partition_create);
+
+	return pt;
+}
 
 
 void
-cl_partition_table_remove_node( ev2citrusleaf_cluster *asc, cl_cluster_node *node )
+cl_partition_table_destroy_all(ev2citrusleaf_cluster* asc)
 {
-	cl_partition_table *pt = asc->partition_table_head;
-	while(pt) {
-		
-		for (int i=0 ; i<asc->n_partitions ; i++) {
-			
-			cl_partition *p = &pt->partitions[i];
-			
+	int n_partitions = (int)asc->n_partitions;
+	cl_partition_table* pt = asc->partition_table_head;
+
+	while (pt) {
+		for (int pid = 0; pid < n_partitions; pid++) {
+			cl_partition* p = &pt->partitions[pid];
+
+			if (p->master) {
+				cl_cluster_node_release(p->master, "PM-");
+				p->master = NULL;
+			}
+
+			if (p->prole) {
+				cl_cluster_node_release(p->prole, "PP-");
+				p->prole = NULL;
+			}
+
+			MUTEX_FREE(p->lock);
+		}
+
+		void* next = pt->next;
+
+		free(pt);
+		cf_atomic_int_incr(&g_cl_stats.partition_destroy);
+
+		pt = (cl_partition_table*)next;
+	}
+}
+
+
+cl_partition_table*
+cl_partition_table_get_by_ns(ev2citrusleaf_cluster* asc, const char* ns)
+{
+	cl_partition_table* pt = asc->partition_table_head;
+
+	while (pt) {
+		if (strcmp(ns, pt->ns) == 0) {
+			return pt;
+		}
+
+		pt = pt->next;
+	}
+
+	return NULL;
+}
+
+
+bool
+cl_partition_table_is_node_present(cl_cluster_node* node)
+{
+	ev2citrusleaf_cluster* asc = node->asc;
+	int n_partitions = (int)asc->n_partitions;
+	cl_partition_table* pt = asc->partition_table_head;
+
+	while (pt) {
+		for (int pid = 0; pid < n_partitions; pid++) {
+			cl_partition* p = &pt->partitions[pid];
+
 			MUTEX_LOCK(p->lock);
 
-			if (p->write == node) {
-				cl_cluster_node_release(node, "PW-");	
-				p->write = 0;
-			}
-			
-			for (int j=0;j<p->n_read;j++) {
-				if (p->read[j] == node) {
-					cl_cluster_node_release(node, "PR-");	
-
-					if (j < MAX_REPLICA_COUNT-1)
-						// overlapping copies must use memmove!
-						memmove(&p->read[j], &p->read[j+1], 
-							((MAX_REPLICA_COUNT - 1) - j) * sizeof(cl_cluster_node *) );
-					p->n_read--;
-					break;
-				}
+			// Assuming a legitimate node must be master of some partitions,
+			// this is all we need to check.
+			if (node == p->master) {
+				MUTEX_UNLOCK(p->lock);
+				return true;
 			}
 
 			MUTEX_UNLOCK(p->lock);
 		}
 
-		pt->was_dumped = false;
 		pt = pt->next;
 	}
-}
 
-cl_partition_table *
-cl_partition_table_create(ev2citrusleaf_cluster *asc, const char *ns)
-{
-	cf_atomic_int_incr(&g_cl_stats.partition_create);
+	// The node is master of no partitions - it's effectively gone from the
+	// cluster. The node shouldn't be present as prole, but it's possible it's
+	// not completely overwritten as prole yet, so just remove it here.
 
-	cl_partition_table *pt = (cl_partition_table*)malloc( sizeof(cl_partition_table) + (sizeof(cl_partition) * asc->n_partitions) );
-	if (!pt)	return(0);
-	memset((void*)pt, 0, sizeof(cl_partition_table) + (sizeof(cl_partition) * asc->n_partitions) );
-	strcpy( pt->ns, ns );
-	
-	pt->next = asc->partition_table_head;
-	asc->partition_table_head = pt;
-	
-	// initialize mutexes, can be used for other element fields that don't init to 0
-	for (int i=0; i < asc->n_partitions ; i++) {
-		MUTEX_ALLOC(pt->partitions[i].lock);
-	}
+	pt = asc->partition_table_head;
 
-	return(pt);
-}
-
-// when can we figure out that a namespace is no longer in a cluster?
-// it would have to be a mark-and-sweep kind of thing, where we look and see
-// there are no nodes anywhere
-
-void
-cl_partition_table_destroy(ev2citrusleaf_cluster *asc, cl_partition_table *pt)
-{
-	cf_atomic_int_incr(&g_cl_stats.partition_destroy);
-	
-	cl_partition_table **prev = &asc->partition_table_head;
-	cl_partition_table *now = asc->partition_table_head;
-	while ( now ) {
-		if (now == pt) {
-			*prev = pt->next;
-			break;
-		}
-	}
-#ifdef EXTRA_CHECKS	
-	if (now == 0) {
-		cf_warn("warning! passed in partition table %p not in list", pt);
-		return;
-	}
-#endif
-
-	// free mutexes, release reference counts
-	// do not have to worry about locking the table mutex
-	for (int i=0; i < asc->n_partitions ; i++) {
-		cl_partition *p = &pt->partitions[i];
-		if (p->write) {
-			cl_cluster_node_release(p->write, "PW-");	
-			p->write = 0;
-		}
-		for (int j=0;j<p->n_read;j++) {
-			if (p->read[j]) {
-				cl_cluster_node_release(p->read[j], "PR-");
-				p->read[j] = 0;
-			}
-		}
-		MUTEX_FREE(pt->partitions[i].lock);
-	}
-
-	free(pt);
-}
-
-void
-cl_partition_table_destroy_all(ev2citrusleaf_cluster *asc)
-{
-	cl_partition_table *now = asc->partition_table_head;
-	while (now ) {
-		cf_atomic_int_incr(&g_cl_stats.partition_destroy);
-		void *t = now->next;
-		for (int i=0; i < asc->n_partitions ; i++) {
-			cl_partition *p = &now->partitions[i];
-			if (p->write) {
-				cl_cluster_node_release(p->write, "PW-");	
-				p->write = 0;
-			}
-			for (int j=0;j<p->n_read;j++) {
-				if (p->read[j]) {
-					cl_cluster_node_release(p->read[j], "PR-");
-					p->read[j] = 0;
-				}
-			}
-			MUTEX_FREE(p->lock);
-		}
-		free( now );
-		now = (cl_partition_table*)t;
-	}
-	return;
-}
-
-cl_partition_table *
-cl_partition_table_get_byns(ev2citrusleaf_cluster *asc, const char *ns)
-{
-	cl_partition_table *pt = asc->partition_table_head;
 	while (pt) {
-		if (strcmp(ns, pt->ns)==0) return(pt);
+		for (int pid = 0; pid < n_partitions; pid++) {
+			cl_partition* p = &pt->partitions[pid];
+
+			MUTEX_LOCK(p->lock);
+
+			if (node == p->prole) {
+				cl_cluster_node_release(node, "PP-");
+				p->prole = NULL;
+				pt->was_dumped = false;
+			}
+
+			MUTEX_UNLOCK(p->lock);
+		}
+
 		pt = pt->next;
 	}
-	return(0);
+
+	return false;
 }
 
 
 void
-cl_partition_table_set( ev2citrusleaf_cluster *asc, cl_cluster_node *node, const char *ns, cl_partition_id pid, bool write)
+cl_partition_table_update(cl_cluster_node* node, const char* ns, bool* masters,
+		bool* proles)
 {
-	cl_partition_table *pt = cl_partition_table_get_byns(asc, ns);
-	if (!pt) {
-		pt = cl_partition_table_create(asc, ns);
-		if (!pt)	return; // could not add, quite the shame
-	}
-	
-#ifdef EXTRA_CHECKS
-	if (pid > asc->n_partitions) {
-		cf_warn("internal error: partition table set got out of range partition id %d", pid);
-		return;
-	}
-#endif	
+	ev2citrusleaf_cluster* asc = node->asc;
+	cl_partition_table* pt = cl_partition_table_get_by_ns(asc, ns);
 
-	cl_partition *p = &pt->partitions[pid];
-	
+	if (! pt) {
+		pt = cl_partition_table_create(asc, ns);
+
+		if (! pt) {
+			return;
+		}
+	}
+
+	int n_partitions = (int)asc->n_partitions;
+
+	for (int pid = 0; pid < n_partitions; pid++) {
+		cl_partition* p = &pt->partitions[pid];
+
+		MUTEX_LOCK(p->lock);
+
+		// Logic is simpler if we remove this node as master and prole first.
+		// (Don't worry, these releases won't cause node destruction.)
+
+		if (node == p->master) {
+			cl_cluster_node_release(node, "PM-");
+			p->master = NULL;
+		}
+
+		if (node == p->prole) {
+			cl_cluster_node_release(node, "PP-");
+			p->prole = NULL;
+		}
+
+		if (masters[pid]) {
+			// This node is the new (or still) master for this partition.
+
+			if (p->master) {
+				cl_cluster_node_release(p->master, "PM-");
+			}
+
+			p->master = node;
+			cl_cluster_node_reserve(node, "PM+");
+		}
+		else if (proles[pid]) {
+			// This node is the new (or still) prole for this partition.
+
+			if (p->prole) {
+				cl_cluster_node_release(p->prole, "PP-");
+			}
+
+			p->prole = node;
+			cl_cluster_node_reserve(node, "PP+");
+		}
+
+		MUTEX_UNLOCK(p->lock);
+	}
+
+	// Just assume something changed...
+	pt->was_dumped = false;
+}
+
+
+static cf_atomic32 g_randomizer = 0;
+
+cl_cluster_node*
+cl_partition_table_get(ev2citrusleaf_cluster* asc, const char* ns,
+		cl_partition_id pid, bool write)
+{
+	cl_partition_table* pt = cl_partition_table_get_by_ns(asc, ns);
+
+	if (! pt) {
+		return NULL;
+	}
+
+	cl_cluster_node* node;
+	cl_partition* p = &pt->partitions[pid];
+
 	MUTEX_LOCK(p->lock);
 
-	if (write) {
-		if (p->write)  cl_cluster_node_release(p->write, "PW-");
-		p->write = node;
-		if (node)  cl_cluster_node_reserve(node, "PW+");
-		pt->was_dumped = false;
+	if (write || asc->options.read_master_only || ! p->prole) {
+		node = p->master;
+	}
+	else if (! p->master) {
+		node = p->prole;
 	}
 	else {
-		for (int i=0;i < p->n_read ; i++) {
-			if (p->read[i] == node) {
-				MUTEX_UNLOCK(pt->partitions[pid].lock);
-				return; // already in!
-			}
-		}
-		if (MAX_REPLICA_COUNT == p->n_read) { // full, replace 0 for fun
-//			cf_warn("read replica set full");
-			if (p->read[0]) cl_cluster_node_release(p->read[0], "PR-");
-			p->read[0] = node;
-			if (node)  cl_cluster_node_reserve(node, "PR+");		
-			pt->was_dumped = false;
-		}
-		else {
-			p->read[p->n_read] = node;
-			if (node)  cl_cluster_node_reserve(node, "PR+");		
-			p->n_read++;
-			pt->was_dumped = false;
-		}
+		// So far, no consideration of relative health.
+		uint32_t r = (uint32_t)cf_atomic32_incr(&g_randomizer);
+
+		node = (r & 1) ? p->master : p->prole;
 	}
-	MUTEX_UNLOCK(pt->partitions[pid].lock);
-		
-	return;
-}
 
-static cf_atomic_int round_robin_counter = 0;
-
-cl_cluster_node *
-cl_partition_table_get( ev2citrusleaf_cluster *asc, const char *ns, cl_partition_id pid, bool write)
-{
-	cl_partition_table *pt = cl_partition_table_get_byns(asc,ns);
-	if (!pt)	return(0);
-	
-	cl_cluster_node *node;
-
-	MUTEX_LOCK(pt->partitions[pid].lock);
-
-	if (write || asc->options.read_master_only) {
-		node = pt->partitions[pid].write;
+	if (node) {
+		cl_cluster_node_reserve(node, "T+");
 	}
-	else {
-		cl_partition *p = &pt->partitions[pid];
-		if (p->n_read) {
-			cf_atomic_int_incr(&round_robin_counter);
-			uint32_t my_rr = cf_atomic_int_get(round_robin_counter);
-			node = p->read[ my_rr % p->n_read ];
-		} else {
-			node = 0;
-		}
-	}
-	if (node) cl_cluster_node_reserve(node, "T+");
 
-	MUTEX_UNLOCK(pt->partitions[pid].lock);
+	MUTEX_UNLOCK(p->lock);
 
-	return(node);
+	return node;
 }
 
 
@@ -283,13 +285,8 @@ cl_partition_table_dump(ev2citrusleaf_cluster* asc)
 
 			MUTEX_LOCK(p->lock);
 
-			// This relies on MAX_REPLICA_COUNT of 5!
-			cf_debug("%4d: %s, [%d] %s %s %s %s %s", pid, safe_node_name(p->write), p->n_read,
-					safe_node_name(p->read[0]),
-					safe_node_name(p->read[1]),
-					safe_node_name(p->read[2]),
-					safe_node_name(p->read[3]),
-					safe_node_name(p->read[4]));
+			cf_debug("%4d: %s %s", pid, safe_node_name(p->master),
+					safe_node_name(p->prole));
 
 			MUTEX_UNLOCK(p->lock);
 		}

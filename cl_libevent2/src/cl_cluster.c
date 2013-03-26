@@ -54,7 +54,7 @@ struct timeval g_node_tend_timeout = {1,1};
 
 
 // Forward references
-void cluster_tend( ev2citrusleaf_cluster *asc); 
+void cluster_tend( ev2citrusleaf_cluster *asc);
 void cluster_new_sockaddr(ev2citrusleaf_cluster *asc, struct sockaddr_in *new_sin);
 int ev2citrusleaf_cluster_add_host_internal(ev2citrusleaf_cluster *asc, char *host_in, short port_in);
 
@@ -156,7 +156,7 @@ cluster_node_get_info_event(cl_cluster_node* cn)
 // hosts immediately for partition data and starting to route traffic
 
 static void
-cluster_services_parse(ev2citrusleaf_cluster *asc, char *services) 
+cluster_services_parse(ev2citrusleaf_cluster *asc, char *services)
 {
 	cf_vector_define(host_str_v, sizeof(void *), 0);
 	str_split(';',services, &host_str_v);
@@ -174,7 +174,6 @@ cluster_services_parse(ev2citrusleaf_cluster *asc, char *services)
 				// add the string representation to our host list
 				ev2citrusleaf_cluster_add_host_internal(asc, host_s, port);
 			}
-			
 		}
 		cf_vector_destroy(&host_port_v);
 	}
@@ -207,76 +206,8 @@ trim(char *str)
 	return begin;
 }
 
-//
-// Process new partitions information
-// namespace:part_id;namespace:part_id
-//
-// Update the cluster with the new information
-//
-// This is a function I'm always worried about taking too long
-//
-
-static void
-cluster_partitions_process(ev2citrusleaf_cluster *asc, cl_cluster_node *cn, char *partitions, bool write) 
-{
-	cf_atomic_int_incr(&g_cl_stats.partition_process);
-	uint64_t _s = cf_getms();
-
-	// Partitions format: <namespace1>:<partition id1>;<namespace2>:<partition id2>; ...
-	// Warning: This method walks on partitions string argument.
-	char *p = partitions;
-
-	while (*p)
-	{
-		char *partition_str = p;
-		// Loop until split and set it to null.
-		while ((*p) && (*p != ';')) {
-			p++;
-		}
-		if (*p == ';') {
-			*p = 0;
-			p++;
-		}
-		cf_vector_define(partition_v, sizeof(void *), 0);
-		str_split(':', partition_str, &partition_v);
-
-		unsigned int vsize = cf_vector_size(&partition_v);
-		if (vsize == 2) {
-			char *namespace_s = (char*)cf_vector_pointer_get(&partition_v,0);
-			char *partid_s = (char*)cf_vector_pointer_get(&partition_v,1);
-
-			// It's coming over the wire, so validate it.
-			char *ns = trim(namespace_s);
-			int len = (int)strlen(ns);
-
-			if (len == 0 || len > 31) {
-				cf_warn("Invalid partition namespace %s", ns);
-				goto Next;
-			}
-
-			int partid = atoi(partid_s);
-
-			if (partid < 0 || partid >= (int)asc->n_partitions) {
-				cf_warn("Invalid partition id %s, max %u", partid_s, asc->n_partitions);
-				goto Next;
-			}
-
-			cl_partition_table_set(asc, cn, ns, partid, write);
-		}
-		else {
-			cf_warn("Invalid partition vector size %u, element %s", vsize, partition_str);
-		}
-Next:
-		cf_vector_destroy(&partition_v);
-	}
-
-	uint64_t delta = cf_getms() - _s;
-	if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: partition process: %lu", delta);
-}
-
 
 // List of all current clusters so the tender can maintain them
-// 
 cf_ll		cluster_ll;
 
 
@@ -285,24 +216,24 @@ cluster_timer_fn(evutil_socket_t fd, short event, void *udata)
 {
 	ev2citrusleaf_cluster *asc = (ev2citrusleaf_cluster *)udata;
 	uint64_t _s = cf_getms();
-	
+
 	if (asc->MAGIC != CLUSTER_MAGIC) {
 		cf_warn("cluster timer on non-cluster object %p", asc);
 		return;
 	}
 
 	cluster_tend(asc);
-	
+
 	if (time(0) % CL_LOG_STATS_INTERVAL == 0) {
 		cl_partition_table_dump(asc);
 		ev2citrusleaf_print_stats();
 		cf_info("requests in progress: %d", cf_atomic_int_get(asc->requests_in_progress));
 	}
-                                                                
+
 	if (0 != event_add(cluster_get_timer_event(asc), &g_cluster_tend_timeout)) {
 		cf_warn("cluster can't reschedule timer, fatal error, no one to report to");
 	}
-	
+
 	uint64_t delta = cf_getms() - _s;
 	if (delta > CL_LOG_DELAY_INFO) cf_info("CL_DELAY: cluster timer: %lu", delta);
 }
@@ -332,7 +263,7 @@ ev2citrusleaf_cluster_create(struct event_base *base,
 
 	ev2citrusleaf_cluster *asc = cluster_create();
 	if (!asc)	return(0);
-	
+
 	asc->MAGIC = CLUSTER_MAGIC;
 	asc->follow = true;
 	asc->last_node = 0;
@@ -366,18 +297,18 @@ ev2citrusleaf_cluster_create(struct event_base *base,
 
 	// all the nodes
 	cf_vector_pointer_init(&asc->node_v, 10, 0 /*flag*/);
-	
+
 	asc->request_q = cf_queue_create(sizeof(void *), true);
 	if (asc->request_q == 0) {
 		cluster_destroy(asc);
 		return(0);
 	}
-	
+
 	cf_ll_append(&cluster_ll, (cf_ll_element *) asc);
 
 	asc->n_partitions = 0;
 	asc->partition_table_head = 0;
-	
+
 	evtimer_assign(cluster_get_timer_event(asc), asc->base, cluster_timer_fn, asc);
 	if (0 != event_add(cluster_get_timer_event(asc), &g_cluster_tend_timeout)) {
 		cf_warn("could not add the cluster timeout");
@@ -406,7 +337,7 @@ ev2citrusleaf_cluster_get_active_node_count(ev2citrusleaf_cluster *asc)
 {
 	// *AN* likes to call with a null pointer. Shame.
 	if (!asc)					return(-1);
-	
+
 	if (asc->MAGIC != CLUSTER_MAGIC) {
 		cf_warn("cluster get_active_node on non-cluster object %p", asc);
 		return(0);
@@ -415,32 +346,32 @@ ev2citrusleaf_cluster_get_active_node_count(ev2citrusleaf_cluster *asc)
 	int count = 0;
 
 	MUTEX_LOCK(asc->node_v_lock);
-	
+
 	for (uint32_t i=0;i<cf_vector_size(&asc->node_v);i++) {
 		cl_cluster_node *node = (cl_cluster_node*)cf_vector_pointer_get(&asc->node_v, i);
-		
+
 		if (node->MAGIC != CLUSTER_NODE_MAGIC) {
 			cf_error("node in cluster list has no magic!");
 			continue;
 		}
-		
+
 		if (node->name[0] == 0) {
 			cf_warn("cluster node %d has no name (this is likely a serious internal confusion)", i);
 			continue; // nodes with no name have never been pinged
 		}
-		
+
 		if (cf_atomic_int_get(node->dunned)) {
 			cf_info("cluster node %s (%d) is dunned", node->name, i);
 			continue; // dunned nodes aren't active
 		}
-		
+
 		if (cf_vector_size(&node->sockaddr_in_v)==0) {
 			cf_warn("cluster node %s (%d) has no address", node->name, i);
 			continue; // nodes with no IP addresses aren't active
 		}
-		
+
 		// maybe there are some other statistics, like the last good transaction...
-		
+
 		count++;
 	}
 
@@ -600,13 +531,13 @@ ev2citrusleaf_cluster_add_host(ev2citrusleaf_cluster *asc, char *host_in, short 
 		cf_warn("cluster destroy on non-cluster object %p", asc);
 		return(-1);
 	}
-	
+
 	int rv = ev2citrusleaf_cluster_add_host_internal(asc, host_in, port_in);
 	if (0 != rv)	return(rv);
 
 	// Fire the normal tender function to speed up resolution
 	cluster_tend(asc);
-	
+
 	return(0);
 }
 
@@ -688,6 +619,197 @@ node_info_req_timeout(cl_cluster_node* cn)
 	cf_atomic_int_incr(&g_cl_stats.node_info_timeouts);
 }
 
+typedef struct ns_partition_map_s {
+	char	ns[32];
+	bool	owns[];
+} ns_partition_map;
+
+ns_partition_map*
+ns_partition_map_get(cf_vector* p_maps_v, const char* ns, int n_partitions)
+{
+	uint32_t n_maps = cf_vector_size(p_maps_v);
+	ns_partition_map* p_map;
+
+	for (uint32_t i = 0; i < n_maps; i++) {
+		p_map = (ns_partition_map*)cf_vector_pointer_get(p_maps_v, i);
+
+		if (strcmp(p_map->ns, ns) == 0) {
+			return p_map;
+		}
+	}
+
+	size_t size = sizeof(ns_partition_map) + (n_partitions * sizeof(bool));
+
+	p_map = (ns_partition_map*)malloc(size);
+
+	if (! p_map) {
+		cf_error("%s partition map allocation failed", ns);
+		return NULL;
+	}
+
+	memset((void*)p_map, 0, size);
+	strcpy(p_map->ns, ns);
+	cf_vector_append(p_maps_v, (void*)&p_map);
+
+	return p_map;
+}
+
+void
+ns_partition_map_destroy(cf_vector* p_maps_v)
+{
+	uint32_t n_maps = cf_vector_size(p_maps_v);
+
+	for (uint32_t i = 0; i < n_maps; i++) {
+		free(cf_vector_pointer_get(p_maps_v, i));
+	}
+}
+
+void
+parse_replicas_list(char* list, int n_partitions, cf_vector* p_maps_v)
+{
+	cf_atomic_int_incr(&g_cl_stats.partition_process);
+	uint64_t _s = cf_getms();
+
+	// Format: <namespace1>:<partition id1>;<namespace2>:<partition id2>; ...
+	// Warning: This method walks on partitions string argument.
+	char* p = list;
+
+	while (*p) {
+		char* list_ns = p;
+
+		// Loop until : and set it to null.
+		while (*p && *p != ':') {
+			p++;
+		}
+
+		if (*p == ':') {
+			*p++ = 0;
+		}
+		else {
+			cf_warn("ns %s has no pid", list_ns);
+			break;
+		}
+
+		char* list_pid = p;
+
+		// Loop until ; and set it to null.
+		while (*p && *p != ';') {
+			p++;
+		}
+
+		if (*p == ';') {
+			*p++ = 0;
+		}
+
+		char* ns = trim(list_ns);
+		size_t len = strlen(ns);
+
+		if (len == 0 || len > 31) {
+			cf_warn("invalid partition namespace %s", ns);
+			continue;
+		}
+
+		int pid = atoi(list_pid);
+
+		if (pid < 0 || pid >= n_partitions) {
+			cf_warn("invalid pid %s", list_pid);
+			continue;
+		}
+
+		ns_partition_map* p_map =
+				ns_partition_map_get(p_maps_v, ns, n_partitions);
+
+		if (p_map) {
+			p_map->owns[pid] = true;
+		}
+	}
+
+	uint64_t delta = cf_getms() - _s;
+
+	if (delta > CL_LOG_DELAY_INFO) {
+		cf_info("CL_DELAY: partition process: %lu", delta);
+	}
+}
+
+void
+node_info_req_parse_replicas(cl_cluster_node* cn)
+{
+	cf_vector_define(read_maps_v, sizeof(ns_partition_map*), 0);
+	cf_vector_define(write_maps_v, sizeof(ns_partition_map*), 0);
+
+	// Returned list format is name1\tvalue1\nname2\tvalue2\n...
+	cf_vector_define(lines_v, sizeof(void*), 0);
+	str_split('\n', (char*)cn->info_req.rbuf, &lines_v);
+
+	for (uint32_t j = 0; j < cf_vector_size(&lines_v); j++) {
+		char* line = (char*)cf_vector_pointer_get(&lines_v, j);
+
+		cf_vector_define(pair_v, sizeof(void*), 0);
+		str_split('\t', line, &pair_v);
+
+		if (cf_vector_size(&pair_v) != 2) {
+			// Will happen if a requested field is returned empty.
+			cf_vector_destroy(&pair_v);
+			continue;
+		}
+
+		char* name = (char*)cf_vector_pointer_get(&pair_v, 0);
+		char* value = (char*)cf_vector_pointer_get(&pair_v, 1);
+
+		if (strcmp(name, "replicas-read") == 0) {
+			// Parse the read replicas.
+			parse_replicas_list(value, cn->asc->n_partitions, &read_maps_v);
+		}
+		else if (strcmp(name, "replicas-write") == 0) {
+			// Parse the write replicas.
+			parse_replicas_list(value, cn->asc->n_partitions, &write_maps_v);
+		}
+		else if (strcmp(name, "partition-generation") == 0) {
+			int gen = atoi(value);
+
+			// Update to the new partition generation.
+			cf_atomic_int_set(&cn->partition_generation, (cf_atomic_int_t)gen);
+
+			cf_debug("node %s got partition generation %d", cn->name, gen);
+		}
+		else {
+			cf_warn("node %s info replicas did not request %s", cn->name, name);
+		}
+
+		cf_vector_destroy(&pair_v);
+	}
+
+	cf_vector_destroy(&lines_v);
+
+	// Apply write and read replica maps as masters and proles. For the existing
+	// protocol, the read replicas will have proles and masters, but the update
+	// function will process write replicas (masters) first and ignore the read
+	// replicas' redundant masters.
+	//
+	// The redundant masters guarantee p_read_map will not be null in the single
+	// node case. We also assume it's impossible for a node to have no masters.
+
+	uint32_t n_write_maps = cf_vector_size(&write_maps_v);
+
+	for (uint32_t i = 0; i < n_write_maps; i++) {
+		ns_partition_map* p_write_map = (ns_partition_map*)
+				cf_vector_pointer_get(&write_maps_v, i);
+		ns_partition_map* p_read_map = ns_partition_map_get(&read_maps_v,
+				p_write_map->ns, cn->asc->n_partitions);
+
+		cl_partition_table_update(cn, p_write_map->ns, p_write_map->owns,
+				p_read_map->owns);
+	}
+
+	ns_partition_map_destroy(&write_maps_v);
+	ns_partition_map_destroy(&read_maps_v);
+
+	cf_vector_destroy(&write_maps_v);
+	cf_vector_destroy(&read_maps_v);
+
+	node_info_req_done(cn);
+}
+
 void
 node_info_req_parse_check(cl_cluster_node* cn)
 {
@@ -752,59 +874,6 @@ node_info_req_parse_check(cl_cluster_node* cn)
 
 		node_info_req_start(cn, INFO_REQ_GET_REPLICAS);
 	}
-}
-
-void
-node_info_req_parse_replicas(cl_cluster_node* cn)
-{
-	// Remove this node from the partition table.
-	cl_partition_table_remove_node(cn->asc, cn);
-
-	// Returned list format is name1\tvalue1\nname2\tvalue2\n...
-	cf_vector_define(lines_v, sizeof(void*), 0);
-	str_split('\n', (char*)cn->info_req.rbuf, &lines_v);
-
-	for (uint32_t j = 0; j < cf_vector_size(&lines_v); j++) {
-		char* line = (char*)cf_vector_pointer_get(&lines_v, j);
-
-		cf_vector_define(pair_v, sizeof(void *), 0);
-		str_split('\t', line, &pair_v);
-
-		if (cf_vector_size(&pair_v) != 2) {
-			// Will happen if a requested field is returned empty.
-			cf_vector_destroy(&pair_v);
-			continue;
-		}
-
-		char* name = (char*)cf_vector_pointer_get(&pair_v, 0);
-		char* value = (char*)cf_vector_pointer_get(&pair_v, 1);
-
-		if (strcmp(name, "replicas-read") == 0) {
-			// Add this node to the partition table's read replicas.
-			cluster_partitions_process(cn->asc, cn, value, false);
-		}
-		else if (strcmp(name, "replicas-write") == 0) {
-			// Add this node to the partition table's write replicas.
-			cluster_partitions_process(cn->asc, cn, value, true);
-		}
-		else if (strcmp(name, "partition-generation") == 0) {
-			int gen = atoi(value);
-
-			// Update to the new partition generation.
-			cf_atomic_int_set(&cn->partition_generation, (cf_atomic_int_t)gen);
-
-			cf_debug("node %s got partition generation %d", cn->name, gen);
-		}
-		else {
-			cf_warn("node %s info replicas did not request %s", cn->name, name);
-		}
-
-		cf_vector_destroy(&pair_v);
-	}
-
-	cf_vector_destroy(&lines_v);
-
-	node_info_req_done(cn);
 }
 
 bool
@@ -1135,16 +1204,20 @@ node_timer_fn(evutil_socket_t fd, short event, void* udata)
 	cf_debug("node %s timer event:%s references %d", cn->name,
 			is_dunned ? " is dunned," : "", cf_client_rc_count(cn));
 
-	if (is_dunned) {
+	if (cn->intervals_absent == 0) {
+		// First time this node's timer is firing - it won't be in the map.
+		cn->intervals_absent++;
+	}
+	else if (! cl_partition_table_is_node_present(cn) &&
+			cn->intervals_absent++ > MAX_INTERVALS_ABSENT) {
+		// This node has been out of the map for MAX_INTERVALS_ABSENT laps.
+
 		ev2citrusleaf_cluster* asc = cn->asc;
 
-		cf_info("node %s fully dunned, remove from cluster %p", cn->name, asc);
+		cf_info("node %s not in map, removing from cluster %p", cn->name, asc);
 
 		// If there's still a node info request in progress, cancel it.
 		node_info_req_cancel(cn);
-
-		// Release references in the partition table.
-		cl_partition_table_remove_node(asc, cn);
 
 		// Remove this node object from the cluster list, if there.
 		bool deleted = false;
@@ -1172,7 +1245,7 @@ node_timer_fn(evutil_socket_t fd, short event, void* udata)
 		uint64_t delta = cf_getms() - _s;
 
 		if (delta > CL_LOG_DELAY_INFO) {
-			cf_info("CL_DELAY: node dunned: %lu", delta);
+			cf_info("CL_DELAY: node removed: %lu", delta);
 		}
 
 		// Stops the periodic timer.
@@ -1353,12 +1426,11 @@ cl_cluster_node_reserve(cl_cluster_node *cn, char *msg)
 
 //
 // Get a likely-healthy node for communication
-// 
+//
 
 cl_cluster_node *
 cl_cluster_node_get_random(ev2citrusleaf_cluster *asc)
 {
-	
 	cl_cluster_node *cn = 0;
 	uint32_t i = 0;
 	uint32_t node_v_sz = 0;
@@ -1369,8 +1441,7 @@ cl_cluster_node_get_random(ev2citrusleaf_cluster *asc)
 
 		node_v_sz = cf_vector_size(&asc->node_v);
 		if (node_v_sz == 0) {
-	
-			MUTEX_UNLOCK(asc->node_v_lock);	
+			MUTEX_UNLOCK(asc->node_v_lock);
 			cf_debug("cluster node get: no nodes in this cluster");
 			return(0);
 		}
@@ -1380,12 +1451,12 @@ cl_cluster_node_get_random(ev2citrusleaf_cluster *asc)
 			node_i = 0;
 			cf_atomic_int_set(&asc->last_node, 0);
 		}
-		
+
 		cn = (cl_cluster_node*)cf_vector_pointer_get(&asc->node_v, node_i);
 		i++;
-		
+
 		if (cn->MAGIC != CLUSTER_NODE_MAGIC) {
-			MUTEX_UNLOCK(asc->node_v_lock);	
+			MUTEX_UNLOCK(asc->node_v_lock);
 			cf_error("cluster node get random: bad magic in node %x", cn->MAGIC);
 			return(0);
 		}
@@ -1410,27 +1481,24 @@ cl_cluster_node *
 cl_cluster_node_get(ev2citrusleaf_cluster *asc, const char *ns, const cf_digest *d, bool write)
 {
 	cl_cluster_node *cn = 0;
-	
+
 	if (asc->n_partitions) {
 		// first, try to get one that matches this digest
 		cn = cl_partition_table_get(asc, ns, cl_partition_getid(asc->n_partitions, d) , write);
 		if (cn) {
 			if (cn->MAGIC != CLUSTER_NODE_MAGIC) {
-				// this is happening. when it happens, clear out this pointer for safety.
-				// more importantly, fix the bug!
+				// TODO - is this really happening any more?
 				cf_error("cluster node get: got node with bad magic %x (%p), abort", cn->MAGIC, cn);
-				cl_cluster_node_release(cn, "bang"); // unclear this is safe
-				cl_partition_table_remove_node(asc,cn);
 				cn = 0;
-				// raise(SIGINT);
 			}
-			else if (cf_atomic_int_get(cn->dunned)) { 
+			// TODO - replace with throttling, etc.
+			else if (cf_atomic_int_get(cn->dunned)) {
 				cl_cluster_node_release(cn, "T-");
 				cn = 0;
 			}
 		}
 	}
-	
+
 	if (!cn) cn = cl_cluster_node_get_random(asc);
 
 	return( cn );
@@ -1449,7 +1517,6 @@ cl_cluster_node_get_byname(ev2citrusleaf_cluster *asc, char *name)
 	}
 	MUTEX_UNLOCK(asc->node_v_lock);
 	return(0);
-	
 }
 
 // Put the node back, whatever that means (release the reference count?)
@@ -1482,7 +1549,7 @@ cl_cluster_node_dun(cl_cluster_node *cn, cl_cluster_dun_type type)
 		cf_error("attempt to dun node without magic. Fail");
 		return;
 	}
-	
+
 	int dun_factor;
 	switch (type) {
 		case DUN_USER_TIMEOUT:
@@ -1651,7 +1718,7 @@ void
 sockaddr_in_dump(char *prefix, struct sockaddr_in *sa_in)
 {
 	char str[INET_ADDRSTRLEN];
-	inet_ntop(AF_INET, &(sa_in->sin_addr), str, INET_ADDRSTRLEN);	
+	inet_ntop(AF_INET, &(sa_in->sin_addr), str, INET_ADDRSTRLEN);
 	cf_info("%s %s:%d", prefix, str, (int)ntohs(sa_in->sin_port));
 }
 
@@ -1663,14 +1730,14 @@ cluster_dump(ev2citrusleaf_cluster *asc)
 	}
 
 	cf_debug("=*=*= cluster %p dump =*=*=", asc);
-	
+
 	cf_debug("registered hosts:");
 	for (uint32_t i=0;i<cf_vector_size(&asc->host_str_v);i++) {
 		char *host_s = (char*)cf_vector_pointer_get(&asc->host_str_v,i);
 		int   port = cf_vector_integer_get(&asc->host_port_v,i);
 		cf_debug(" host %d: %s:%d", i, host_s, port);
 	}
-	
+
 	MUTEX_LOCK(asc->node_v_lock);
 	cf_debug("nodes: %u", cf_vector_size(&asc->node_v));
 	for (uint32_t i=0;i<cf_vector_size(&asc->node_v);i++) {
@@ -1683,7 +1750,7 @@ cluster_dump(ev2citrusleaf_cluster *asc)
 			(int)ntohs(sa_in.sin_port), cf_queue_sz(cn->conn_q));
 	}
 	MUTEX_UNLOCK(asc->node_v_lock);
-	
+
 	cf_debug("=*=*= cluster %p end dump =*=*=", asc);
 }
 
@@ -1697,7 +1764,7 @@ typedef struct ping_node_data_s {
 
 //
 // per-node 'node' request comes back here - we now know the name associated with this sockaddr
-// Check to see whether this node is new or taken, and create new 
+// Check to see whether this node is new or taken, and create new
 //
 // Early on, the request also gets the number of partitions
 //
@@ -1707,13 +1774,13 @@ static void
 cluster_ping_node_fn(int return_value, char *values, size_t values_len, void *udata)
 {
 	ping_nodes_data *pnd = (ping_nodes_data *)udata;
-	
+
 	cf_atomic_int_decr(&pnd->asc->pings_in_progress);
-	
+
 	if (pnd->asc->shutdown)
-	
+
 	cf_info("ping node fn: rv %d node value retrieved: %s", return_value, values);
-	
+
 	if ((return_value != 0) || (pnd->asc->shutdown == true)) {
 		cf_info("ping node function: error on return %d", return_value);
 		if (values) free(values);
@@ -1723,18 +1790,18 @@ cluster_ping_node_fn(int return_value, char *values, size_t values_len, void *ud
 	}
 
 	ev2citrusleaf_cluster *asc = pnd->asc;
-	
+
 	cf_vector_define(lines_v, sizeof(void *), 0);
 	str_split('\n',values,&lines_v);
 	for (uint32_t i=0;i<cf_vector_size(&lines_v);i++) {
 		char *line = (char*)cf_vector_pointer_get(&lines_v, i);
 		cf_vector_define(pair_v, sizeof(void *), 0);
 		str_split('\t',line, &pair_v);
-		
+
 		if (cf_vector_size(&pair_v) == 2) {
 			char *name = (char*)cf_vector_pointer_get(&pair_v, 0);
 			char *value = (char*)cf_vector_pointer_get(&pair_v, 1);
-			
+
 			if (strcmp(name, "node") == 0) {
 
 				// make sure this host already exists, create & add if not
@@ -1755,11 +1822,11 @@ cluster_ping_node_fn(int return_value, char *values, size_t values_len, void *ud
 		cf_vector_destroy(&pair_v);
 	}
 	cf_vector_destroy(&lines_v);
-	
+
 	if (values) free(values);
 	free(pnd);
 	pnd = 0;
-	
+
 	// if the cluster had waiting requests, try to restart
 	MUTEX_LOCK(asc->node_v_lock);
 	int sz = cf_vector_size(&asc->node_v);
@@ -1808,10 +1875,10 @@ void
 cluster_new_sockaddr(ev2citrusleaf_cluster *asc, struct sockaddr_in *new_sin)
 {
 	if (asc->shutdown == true)	return;
-	
+
 	// Lookup the sockaddr in the node list. This is inefficient, but works
 	// Improve later if problem...
-	
+
 	cf_vector *node_v = &asc->node_v;
 	MUTEX_LOCK(asc->node_v_lock);
 	for (uint32_t j=0;j<cf_vector_size(node_v);j++) {
@@ -1828,7 +1895,7 @@ cluster_new_sockaddr(ev2citrusleaf_cluster *asc, struct sockaddr_in *new_sin)
 		}
 	}
 	MUTEX_UNLOCK(asc->node_v_lock);
-	
+
 	// have new never-pinged hosts. Do the info_host call to get its name
 	// The callback will add the node if it's new
 	if (cf_info_enabled()) {
@@ -1840,7 +1907,7 @@ cluster_new_sockaddr(ev2citrusleaf_cluster *asc, struct sockaddr_in *new_sin)
 	pnd->sa_in = *new_sin;
 	pnd->asc = asc;
 
-	if (0 != ev2citrusleaf_info_host(asc->base,new_sin, asc->n_partitions == 0 ? "node\npartitions" : "node", 
+	if (0 != ev2citrusleaf_info_host(asc->base,new_sin, asc->n_partitions == 0 ? "node\npartitions" : "node",
 						0, cluster_ping_node_fn, pnd)) {
 		free(pnd);
 	}
@@ -1851,7 +1918,7 @@ cluster_new_sockaddr(ev2citrusleaf_cluster *asc, struct sockaddr_in *new_sin)
 
 
 void
-cluster_tend( ev2citrusleaf_cluster *asc) 
+cluster_tend( ev2citrusleaf_cluster *asc)
 {
 	cf_debug("cluster tend: cluster %p", asc);
 
@@ -1871,12 +1938,12 @@ cluster_tend( ev2citrusleaf_cluster *asc)
 
 		uint32_t n_hosts = cf_vector_size(&asc->host_str_v);
 		for (uint32_t i=0;i<n_hosts;i++) {
-			
+
 			char *host_s = (char*)cf_vector_pointer_get(&asc->host_str_v, i);
 			int  port = cf_vector_integer_get(&asc->host_port_v, i);
-	
+
 			cf_debug("lookup hosts: %s:%d", host_s, port);
-	
+
 			struct sockaddr_in sin;
 			if (0 == cl_lookup_immediate(host_s, port, &sin)) {
 				cluster_new_sockaddr(asc, &sin);
@@ -1903,11 +1970,11 @@ cluster_tend( ev2citrusleaf_cluster *asc)
 //
 int citrusleaf_cluster_init()
 {
-	
+
 	// I'm going to leave this linked list for the moment; it's good for debugging
 	cf_ll_init(&cluster_ll, 0, false);
-	
-	return(0);	
+
+	return(0);
 }
 
 //
@@ -1919,10 +1986,10 @@ int citrusleaf_cluster_shutdown()
 
 	cf_ll_element *e;
 	while ((e = cf_ll_get_head(&cluster_ll))) {
-		ev2citrusleaf_cluster *asc = (ev2citrusleaf_cluster *)e; 
+		ev2citrusleaf_cluster *asc = (ev2citrusleaf_cluster *)e;
 		ev2citrusleaf_cluster_destroy(asc);
 	}
-	
-	return(0);	
+
+	return(0);
 }
 

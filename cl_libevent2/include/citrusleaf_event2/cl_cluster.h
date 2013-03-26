@@ -40,6 +40,7 @@ extern "C" {
 struct sockaddr_in;
 
 #define CLUSTER_NODE_MAGIC 0x9B00134C
+#define MAX_INTERVALS_ABSENT 1
 
 typedef enum {
 	INFO_REQ_NONE			= 0,
@@ -87,6 +88,9 @@ typedef struct cl_cluster_node_s {
 	// The cluster we belong to.
 	ev2citrusleaf_cluster*	asc;
 
+	// How many node timer periods this node has been out of partitions map.
+	uint32_t				intervals_absent;
+
 	// This node's health.
 	cf_atomic_int			dunned;
 	cf_atomic_int			dun_count;
@@ -108,13 +112,16 @@ typedef struct cl_cluster_node_s {
 } cl_cluster_node;
 
 
-#define MAX_REPLICA_COUNT 5
-
 typedef struct cl_partition_s {
-	void *lock;
-	cl_cluster_node	*write;
-	int n_read;
-	cl_cluster_node *read[MAX_REPLICA_COUNT];
+	// Mutex to cover master/prole transitions for this partition.
+	void* lock;
+
+	// Which node, if any, is the master.
+	cl_cluster_node* master;
+
+	// Which node, if any, is the prole.
+	// TODO - not ideal for replication factor > 2.
+	cl_cluster_node* prole;
 } cl_partition;
 
 
@@ -243,9 +250,9 @@ extern int citrusleaf_cluster_shutdown();
 
 // Partition table calls
 // --- all these assume the partition lock is held
-extern void cl_partition_table_remove_node( ev2citrusleaf_cluster *asc, cl_cluster_node *node );
 extern void cl_partition_table_destroy_all(ev2citrusleaf_cluster *asc);
-extern void cl_partition_table_set( ev2citrusleaf_cluster *asc, cl_cluster_node *node, const char *ns, cl_partition_id pid, bool write);
+extern bool cl_partition_table_is_node_present(cl_cluster_node* node);
+extern void cl_partition_table_update(cl_cluster_node* node, const char* ns, bool* masters, bool* proles);
 extern cl_cluster_node *cl_partition_table_get( ev2citrusleaf_cluster *asc, const char *ns, cl_partition_id pid, bool write);
 extern void cl_partition_table_dump(ev2citrusleaf_cluster* asc);
 

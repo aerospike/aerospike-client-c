@@ -169,10 +169,10 @@ cl_request_replicas(struct sockaddr_in* sa_in, cl_replicas* replicas)
 	char* value;
 
 	while ((p = get_name_value(p, &name, &value)) != 0) {
-		if (strcmp(name, "replicas-read") == 0) {
+		if (strcmp(name, "replicas-write") == 0) {
 			replicas->write_replicas = value;
 		}
-		else if (strcmp(name, "replicas-write") == 0) {
+		else if (strcmp(name, "replicas-read") == 0) {
 			replicas->read_replicas = value;
 		}
 		else {

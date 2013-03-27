@@ -25,7 +25,7 @@ int set_config_defaults ( test_config * config_ptr ){
     config_ptr->timeout_ms   = 5000;
     config_ptr->record_ttl   = 864000;
     config_ptr->verbose      = true;
-    config_ptr->package_name = "LsoIceMan";
+    config_ptr->package_name = "LSTACK";
 
     config_ptr->n_threads    = 5;
     config_ptr->n_iterations = 10;

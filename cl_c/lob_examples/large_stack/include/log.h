@@ -9,18 +9,15 @@
  */
 #pragma once
 
+#include <stdio.h>
 
-#define INFO(fmt, args...) \
-//    __log_append(stderr,"", fmt, ## args);
+#define INFO(fmt, args...)   __log_append(stderr,"", fmt, ## args);
 
-#define ERROR(fmt, args...) \
-    __log_append(stderr,"    ", fmt, ## args);
+#define ERROR(fmt, args...)   __log_append(stderr,"    ", fmt, ## args);
 
-#define LOG(fmt, args...) \
-//    __log_append(stderr,"    ", fmt, ## args);
+#define LOG(fmt, args...)   __log_append(stderr,"    ", fmt, ## args);
 
 
 // Here's the log call that we'll be using
-extern void __log_append(FILE * f, const char * prefix, const char * fmt, ...);
-
+extern void __log_append(FILE * f, const char * prefix, const char * fmt, ... );
 

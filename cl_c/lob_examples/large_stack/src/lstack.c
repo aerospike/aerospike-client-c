@@ -7,7 +7,7 @@
  *  ABOVE DOES NOT EVIDENCE ANY ACTUAL OR INTENDED PUBLICATION.
  */
 
-#include <citrusleaf/as_lso.h>
+#include <citrusleaf/aerospike_lstack.h>
 #include "test.h"
 
 // ==========================================================================
@@ -111,7 +111,7 @@ int lso_push_test(char * keystr, char * lso_bin, int iterations, int seed) {
 //                            (as_val *)as_string_new("List", false));
 //    rc = as_lso_create( g_config->asc, g_config->ns, g_config->set,
 //                        keystr, lso_bin, create_args,
-//                        g_config->package_name, g_config->timeout_ms);
+//                        g_config->timeout_ms);
 
     // All done with the args -- destroy them (regardless of the create call
     // status)
@@ -127,25 +127,15 @@ int lso_push_test(char * keystr, char * lso_bin, int iterations, int seed) {
     char       * key   = keystr;
     char       * bname = lso_bin;
 
-    INFO("[DEBUG]:[%s]: Run as_lso_push() iterations(%d)\n", meth, iterations );
+    INFO("[DEBUG]:[%s]: Run push() iterations(%d)\n", meth, iterations );
     for ( int i = 0; i < iterations; i++ ) {
         int val = i * 10;
         as_list * listp = as_arraylist_new( 5, 5 );
         gen_stumble_insert_value( listp, val );
 
-//        int64_t urlid   = val + 1; // Generate URL_ID
-//        as_list_add_integer( listp, urlid );
-//        int64_t created = val + 2; // Generate CREATED
-//        as_list_add_integer( listp, created );
-//        int64_t meth_a  = val + 3; // Generate first half of method
-//        as_list_add_integer( listp, meth_a );
-//        int64_t meth_b  = val + 4; // Generate 2nd half of method
-//        as_list_add_integer( listp, meth_b );
-//        int64_t status  = val + 5; // Generate status
-//        as_list_add_integer( listp, status );
-
-        rc = as_lso_push( c, ns, set, key, bname, (as_val *)listp,
-                          g_config->package_name, g_config->timeout_ms);
+        rc = aerospike_lstack_push_with_keystring(
+                c, ns, set, key, bname, (as_val *)listp,
+                g_config->timeout_ms);
         if (rc) {
             INFO("[ERROR]:[%s]: LSO PUSH Error: i(%d) rc(%d)\n", meth, i, rc );
             as_val_destroy ( listp );
@@ -185,7 +175,7 @@ int lso_peek_test(char * keystr, char * lso_bin, int iterations ) {
     char       * key   = keystr;
     char       * bname = lso_bin;
 
-    INFO("[DEBUG]:[%s]: Run as_lso_peek() iterations(%d)\n", meth, iterations );
+    INFO("[DEBUG]:[%s]: Run peek() iterations(%d)\n", meth, iterations );
 
     int    peek_count = 1;
     char * valstr     = NULL; // Hold Temp results from as_val_tostring()
@@ -193,8 +183,8 @@ int lso_peek_test(char * keystr, char * lso_bin, int iterations ) {
     // NOTE: Must FREE the result for EACH ITERATION.
     for ( int i = 0; i < iterations ; i ++ ){
         peek_count++;
-        resultp = as_lso_peek( c, ns, set, key, bname, peek_count,
-                       g_config->package_name, g_config->timeout_ms);
+        resultp = aerospike_lstack_peek_with_keystring(
+                c, ns, set, key, bname, peek_count, g_config->timeout_ms);
         if ( resultp && resultp->is_success ) {
 //            valstr = as_val_tostring( resultp->value );
 //            printf("LSO PEEK SUCCESS: peek_count(%d) Val(%s)\n",
@@ -250,7 +240,7 @@ int lso_push_with_transform_test(char * keystr, char * lso_bin,
     char       * key  = keystr;
     char       * bname  = lso_bin;
 
-    INFO("[DEBUG]:[%s]: Run as_lso_push_with_transform() iterations(%d)\n",
+    INFO("[DEBUG]:[%s]: Run push_with_transform() iterations(%d)\n",
           meth, iterations );
     for ( int i = 0; i < iterations; i++ ) {
         int val         = i * 10;
@@ -266,11 +256,9 @@ int lso_push_with_transform_test(char * keystr, char * lso_bin,
         int64_t status  = val + 5;
         as_list_add_integer( listp, status );
 
-        rc = as_lso_push_with_transform( c, ns, set, key, bname,
-                                         (as_val *)listp,
-                                           g_config->package_name,
-                                         compress_func, compress_args,
-                                         g_config->timeout_ms);
+        rc = aerospike_lstack_push_with_transform_with_keystring(
+                c, ns, set, key, bname, (as_val *)listp,
+                compress_func, compress_args, g_config->timeout_ms);
         if (rc) {
             INFO("[ERROR]:[%s]: LSO PUSH WITH TRANSFROM Error: i(%d) rc(%d)\n",
                   meth, i, rc );
@@ -310,19 +298,18 @@ int lso_peek_with_transform_test(char * keystr, char * lso_bin,
     char       * set   = g_config->set;
     char       * key   = keystr;
     char       * bname = lso_bin;
+    as_result * resultp;
 
-    INFO("[DEBUG]:[%s]: Run as_lso_peek() iterations(%d)\n", meth, iterations );
+    INFO("[DEBUG]:[%s]: Run peek() iterations(%d)\n", meth, iterations );
 
     // NOTE: Must FREE the result for EACH ITERATION.
     int peek_count = 2; // Soon -- set by Random Number
     char * valstr = NULL; // Hold Temp results from as_val_tostring()
     for ( int i = 0; i < iterations ; i ++ ){
         peek_count++;
-        as_result * resultp = as_lso_peek_with_transform( c, ns, set, key,
-                                            bname, peek_count,
-                                            g_config->package_name,
-                                            uncompress_func, uncompress_args,
-                                            g_config->timeout_ms);
+        resultp = aerospike_lstack_peek_with_transform_with_keystring(
+                c, ns, set, key, bname, peek_count,
+                uncompress_func, uncompress_args, g_config->timeout_ms);
         if ( resultp && resultp->is_success ) {
             valstr = as_val_tostring( resultp->value );
             printf("LSO PEEK WITH TRANSFORM SUCCESS: peek_count(%d) Val(%s)\n",

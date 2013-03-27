@@ -6,16 +6,18 @@
  *  ABOVE DOES NOT EVIDENCE ANY ACTUAL OR INTENDED PUBLICATION.
  */
 
-#include "test.h"
+#include <stdarg.h>
+#include "log.h"
+
 
 // NOTE: INFO(), ERROR() and LOG() defined in log.h
-void __log_append(FILE * f, const char * prefix, const char * fmt, ...) {
-    /*
+void __log_append(FILE * f, const char * prefix, const char * fmt, ...)
+{
     char msg[128] = {0};
     va_list ap;
     va_start(ap, fmt);
     vsnprintf(msg, 128, fmt, ap);
     va_end(ap);
     fprintf(f, "%s%s\n",prefix,msg);
-    */
 }
+

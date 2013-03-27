@@ -49,6 +49,9 @@ typedef enum {
 
 #define NODE_INFO_REQ_MAX_INTERVALS 5
 
+// Must be >= longest "names" string sent in a node info request.
+#define INFO_STR_MAX_LEN 64
+
 typedef struct node_info_req_s {
 	// What type of info request is in progress, if any.
 	node_info_req_type		type;
@@ -57,7 +60,7 @@ typedef struct node_info_req_s {
 	uint32_t				intervals;
 
 	// Buffer for writing to socket.
-	uint8_t*				wbuf;
+	uint8_t					wbuf[sizeof(cl_proto) + INFO_STR_MAX_LEN];
 	size_t					wbuf_size;
 	size_t					wbuf_pos;
 

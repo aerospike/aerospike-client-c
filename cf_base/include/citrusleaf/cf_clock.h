@@ -60,9 +60,9 @@ static inline int clock_gettime(int clock_type, struct timespec* p_ts)
 {
     LARGE_INTEGER           t;
     FILETIME                f;
-    double                  microseconds;
+    double                  nanoseconds;
     static LARGE_INTEGER    offset;
-    static double           frequencyToMicroseconds;
+    static double           frequencyToNanoseconds;
     static int              initialized = 0;
     static BOOL             usePerformanceCounter = 0;
 
@@ -72,10 +72,10 @@ static inline int clock_gettime(int clock_type, struct timespec* p_ts)
         usePerformanceCounter = QueryPerformanceFrequency(&performanceFrequency);
         if (usePerformanceCounter) {
             QueryPerformanceCounter(&offset);
-            frequencyToMicroseconds = (double)performanceFrequency.QuadPart / 1000000.;
+            frequencyToNanoseconds = (double)performanceFrequency.QuadPart / 1000000000.;
         } else {
             offset = getFILETIMEoffset();
-            frequencyToMicroseconds = 10.;
+            frequencyToNanoseconds = 10000.;
         }
     }
 
@@ -90,10 +90,10 @@ static inline int clock_gettime(int clock_type, struct timespec* p_ts)
     }
 
     t.QuadPart -= offset.QuadPart;
-    microseconds = (double)t.QuadPart / frequencyToMicroseconds;
-    t.QuadPart = (LONGLONG)microseconds;
-    p_ts->tv_sec = t.QuadPart / 1000000;
-    p_ts->tv_nsec = t.QuadPart % 1000000;
+    nanoseconds = (double)t.QuadPart / frequencyToNanoseconds;
+    t.QuadPart = (LONGLONG)nanoseconds;
+    p_ts->tv_sec = t.QuadPart / 1000000000;
+    p_ts->tv_nsec = t.QuadPart % 1000000000;
 
 	return 0;
 }

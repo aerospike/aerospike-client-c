@@ -1005,12 +1005,6 @@ ev2citrusleaf_request_complete(cl_request *req, bool timedout)
 		req->fd = 0;
 	}
 
-	// release the node	
-	if (req->node) {
-		cl_cluster_node_put(req->node);
-		req->node = 0;
-	}
-
 	if (timedout == false) {
 		
 		// node did something good
@@ -1068,8 +1062,12 @@ ev2citrusleaf_request_complete(cl_request *req, bool timedout)
 
 	}
 
+	// Release the node.
+	if (req->node) {
+		cl_cluster_node_put(req->node);
+		req->node = 0;
+	}
 
-	
 	cf_atomic_int_decr(&req->asc->requests_in_progress);
 
 	// free the data (queue, at some point)

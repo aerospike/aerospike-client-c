@@ -1006,10 +1006,7 @@ ev2citrusleaf_request_complete(cl_request *req, bool timedout)
 	}
 
 	if (timedout == false) {
-		
-		// node did something good
-		if (req->node) cl_cluster_node_ok(req->node);
-		
+
 		// Allocate on the stack for the bins
 		int n_bins = parse_get_maxbins(req->rd_buf, req->rd_buf_size);
 		ev2citrusleaf_bin   	*bins = 0;
@@ -1027,6 +1024,17 @@ ev2citrusleaf_request_complete(cl_request *req, bool timedout)
 		if (return_code == EV2CITRUSLEAF_FAIL_SERVERSIDE_TIMEOUT) {
 			return_code = EV2CITRUSLEAF_FAIL_TIMEOUT;
 			cf_debug("server-side timeout");
+
+			// ... and dun the node as if it was a client-side timeout.
+			if (req->node) {
+				cl_cluster_node_dun(req->node, DUN_USER_TIMEOUT);
+			}
+		}
+		else if (req->node) {
+			// For now assume all other server error codes are "application"
+			// errors and treat this as a successful transaction in terms of
+			// node health.
+			cl_cluster_node_ok(req->node);
 		}
 
 		// Call the callback

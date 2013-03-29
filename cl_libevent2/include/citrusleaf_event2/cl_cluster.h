@@ -41,6 +41,7 @@ struct sockaddr_in;
 
 #define CLUSTER_NODE_MAGIC 0x9B00134C
 #define MAX_INTERVALS_ABSENT 1
+#define MAX_HISTORY_INTERVALS 16
 
 typedef enum {
 	INFO_REQ_NONE			= 0,
@@ -91,9 +92,18 @@ typedef struct cl_cluster_node_s {
 	// How many node timer periods this node has been out of partitions map.
 	uint32_t				intervals_absent;
 
-	// This node's health.
-	cf_atomic_int			dunned;
-	cf_atomic_int			dun_count;
+	// Transaction successes & failures since this node's last timer event.
+	cf_atomic32				n_successes;
+	cf_atomic32				n_failures;
+
+	// This node's recent transaction successes & failures.
+	uint32_t				successes[MAX_HISTORY_INTERVALS];
+	uint32_t				failures[MAX_HISTORY_INTERVALS];
+	uint32_t				successes_sum;
+	uint32_t				failures_sum;
+
+	// Rate at which transactions to this node are being throttled.
+	cf_atomic32				throttle_pct;
 
 	// Socket pool for (non-info) transactions on this node.
 	cf_queue*				conn_q;
@@ -197,27 +207,6 @@ struct ev2citrusleaf_cluster_s {
 };
 
 
-typedef enum {
-	DONT_DUN				= -1,
-	// 0 onwards MUST correspond to strings in cl_cluster_dun_human[].
-
-	DUN_BAD_NAME			= 0, // node name changed
-	DUN_NO_SOCKADDR			= 1, // node has no socket addresses
-
-	// Ordinary transactions (and batch transactions for now)
-	DUN_CONNECT_FAIL		= 2, // new pool socket can't start connect
-	DUN_RESTART_FD			= 3, // existing pool socket check gives error
-	DUN_NETWORK_ERROR		= 4, // error during ordinary transaction
-	DUN_USER_TIMEOUT		= 5, // ordinary transaction timed out
-
-	// Node info requests
-	DUN_INFO_CONNECT_FAIL	= 6, // node info socket can't start connect
-	DUN_INFO_RESTART_FD		= 7, // existing node info socket check gives error
-	DUN_INFO_NETWORK_ERROR	= 8, // error during node info request
-	DUN_INFO_TIMEOUT		= 9, // node info request timed out
-} cl_cluster_dun_type;
-
-
 //
 // a global list of all clusters is interesting sometimes
 //
@@ -236,10 +225,23 @@ extern cl_cluster_node *cl_cluster_node_get(ev2citrusleaf_cluster *asc, const ch
 extern void cl_cluster_node_release(cl_cluster_node *cn, char *msg);
 extern void cl_cluster_node_reserve(cl_cluster_node *cn, char *msg);
 extern void cl_cluster_node_put(cl_cluster_node *cn);          // put node back
-extern void cl_cluster_node_dun(cl_cluster_node *cn, cl_cluster_dun_type dun);			// node is bad!
-extern void cl_cluster_node_ok(cl_cluster_node *cn);			// node is good!
 extern int cl_cluster_node_fd_get(cl_cluster_node *cn);			// get an FD to the node
 extern void cl_cluster_node_fd_put(cl_cluster_node *cn, int fd); // put the FD back
+
+// Count a transaction as a success or failure.
+// TODO - add a tag parameter for debugging or detailed stats?
+
+static inline void
+cl_cluster_node_had_success(cl_cluster_node* cn)
+{
+	cf_atomic32_incr(&cn->n_successes);
+}
+
+static inline void
+cl_cluster_node_had_failure(cl_cluster_node* cn)
+{
+	cf_atomic32_incr(&cn->n_failures);
+}
 
 //
 extern int citrusleaf_info_host(struct sockaddr_in *sa_in, char *names, char **values, int timeout_ms);

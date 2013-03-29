@@ -360,11 +360,6 @@ ev2citrusleaf_cluster_get_active_node_count(ev2citrusleaf_cluster *asc)
 			continue; // nodes with no name have never been pinged
 		}
 
-		if (cf_atomic_int_get(node->dunned)) {
-			cf_info("cluster node %s (%d) is dunned", node->name, i);
-			continue; // dunned nodes aren't active
-		}
-
 		if (cf_vector_size(&node->sockaddr_in_v)==0) {
 			cf_warn("cluster node %s (%d) has no address", node->name, i);
 			continue; // nodes with no IP addresses aren't active
@@ -580,22 +575,22 @@ void
 node_info_req_done(cl_cluster_node* cn)
 {
 	// Success - reuse the socket and approve the node.
-	cl_cluster_node_ok(cn);
+	cl_cluster_node_had_success(cn);
 
 	node_info_req_free(&cn->info_req);
 	cf_atomic_int_incr(&g_cl_stats.node_info_successes);
 }
 
 void
-node_info_req_fail(cl_cluster_node* cn, cl_cluster_dun_type dun_type)
+node_info_req_fail(cl_cluster_node* cn, bool remote_failure)
 {
 	// The socket may have unprocessed data or otherwise be untrustworthy.
 	cf_close(cn->info_fd);
 	cn->info_fd = -1;
 
-	// Disapprove the node.
-	if (dun_type != DONT_DUN) {
-		cl_cluster_node_dun(cn, dun_type);
+	// If the failure was possibly the server node's fault, disapprove.
+	if (remote_failure) {
+		cl_cluster_node_had_failure(cn);
 	}
 
 	node_info_req_free(&cn->info_req);
@@ -607,7 +602,7 @@ node_info_req_cancel(cl_cluster_node* cn)
 {
 	if (cn->info_req.type != INFO_REQ_NONE) {
 		event_del(cluster_node_get_info_event(cn));
-		node_info_req_fail(cn, DONT_DUN);
+		node_info_req_fail(cn, false);
 	}
 }
 
@@ -615,7 +610,7 @@ void
 node_info_req_timeout(cl_cluster_node* cn)
 {
 	event_del(cluster_node_get_info_event(cn));
-	node_info_req_fail(cn, DUN_INFO_TIMEOUT);
+	node_info_req_fail(cn, true);
 	cf_atomic_int_incr(&g_cl_stats.node_info_timeouts);
 }
 
@@ -838,7 +833,7 @@ node_info_req_parse_check(cl_cluster_node* cn)
 				cf_warn("node name changed from %s to %s", cn->name, value);
 				cf_vector_destroy(&pair_v);
 				cf_vector_destroy(&lines_v);
-				node_info_req_fail(cn, DUN_BAD_NAME);
+				node_info_req_fail(cn, true);
 				return;
 			}
 		}
@@ -886,7 +881,7 @@ node_info_req_handle_send(cl_cluster_node* cn)
 
 		if (ir->wbuf_pos >= ir->wbuf_size) {
 			cf_error("unexpected write event");
-			node_info_req_fail(cn, DONT_DUN);
+			node_info_req_fail(cn, false);
 			return true;
 		}
 
@@ -910,7 +905,7 @@ node_info_req_handle_send(cl_cluster_node* cn)
 		else if (rv == 0 || (errno != EAGAIN && errno != EWOULDBLOCK)) {
 			// send() supposedly never returns 0.
 			cf_debug("send failed: fd %d rv %d errno %d", cn->info_fd, rv, errno);
-			node_info_req_fail(cn, DUN_INFO_NETWORK_ERROR);
+			node_info_req_fail(cn, true);
 			return true;
 		}
 		else {
@@ -946,12 +941,12 @@ node_info_req_handle_recv(cl_cluster_node* cn)
 			else if (rv == 0) {
 				// Connection has been closed by the server.
 				cf_debug("recv connection closed: fd %d", cn->info_fd);
-				node_info_req_fail(cn, DUN_INFO_NETWORK_ERROR);
+				node_info_req_fail(cn, true);
 				return true;
 			}
 			else if (errno != EAGAIN && errno != EWOULDBLOCK) {
 				cf_debug("recv failed: rv %d errno %d", rv, errno);
-				node_info_req_fail(cn, DUN_INFO_NETWORK_ERROR);
+				node_info_req_fail(cn, true);
 				return true;
 			}
 			else {
@@ -973,7 +968,7 @@ node_info_req_handle_recv(cl_cluster_node* cn)
 
 				if (! ir->rbuf) {
 					cf_error("node info request rbuf allocation failed");
-					node_info_req_fail(cn, DONT_DUN);
+					node_info_req_fail(cn, false);
 					return true;
 				}
 
@@ -983,7 +978,7 @@ node_info_req_handle_recv(cl_cluster_node* cn)
 
 			if (ir->rbuf_pos >= ir->rbuf_size) {
 				cf_error("unexpected read event");
-				node_info_req_fail(cn, DONT_DUN);
+				node_info_req_fail(cn, false);
 				return true;
 			}
 
@@ -1009,7 +1004,7 @@ node_info_req_handle_recv(cl_cluster_node* cn)
 					default:
 						// Since we can't assert:
 						cf_error("node info request invalid type %d", ir->type);
-						node_info_req_fail(cn, DONT_DUN);
+						node_info_req_fail(cn, false);
 						break;
 					}
 
@@ -1021,12 +1016,12 @@ node_info_req_handle_recv(cl_cluster_node* cn)
 			else if (rv == 0) {
 				// Connection has been closed by the server.
 				cf_debug("recv connection closed: fd %d", cn->info_fd);
-				node_info_req_fail(cn, DUN_INFO_NETWORK_ERROR);
+				node_info_req_fail(cn, true);
 				return true;
 			}
 			else if (errno != EAGAIN && errno != EWOULDBLOCK) {
 				cf_debug("recv failed: rv %d errno %d", rv, errno);
-				node_info_req_fail(cn, DUN_INFO_NETWORK_ERROR);
+				node_info_req_fail(cn, true);
 				return true;
 			}
 			else {
@@ -1047,7 +1042,7 @@ node_info_req_event(evutil_socket_t fd, short event, void* udata)
 	cl_cluster_node* cn = (cl_cluster_node*)udata;
 
 	if (cn->MAGIC != CLUSTER_NODE_MAGIC) {
-		// Serious - can't do anything else with cn, including dunning node.
+		// Serious - can't do anything else with cn, including removing node.
 		cf_error("node info socket event found bad node magic");
 		return;
 	}
@@ -1065,7 +1060,7 @@ node_info_req_event(evutil_socket_t fd, short event, void* udata)
 	else {
 		// Should never happen.
 		cf_error("unexpected event flags %d", event);
-		node_info_req_fail(cn, DONT_DUN);
+		node_info_req_fail(cn, false);
 		return;
 	}
 
@@ -1073,7 +1068,7 @@ node_info_req_event(evutil_socket_t fd, short event, void* udata)
 		// There's more to do, re-add event.
 		if (0 != event_add(cluster_node_get_info_event(cn), 0)) {
 			cf_error("node info request add event failed");
-			node_info_req_fail(cn, DONT_DUN);
+			node_info_req_fail(cn, false);
 		}
 	}
 }
@@ -1081,8 +1076,6 @@ node_info_req_event(evutil_socket_t fd, short event, void* udata)
 bool
 node_info_req_prep_fd(cl_cluster_node* cn)
 {
-	// TODO - check if the node is fully dunned? Or just go?
-
 	if (cn->info_fd != -1) {
 		// Socket was left open - check it.
 		int result = ev2citrusleaf_is_connected(cn->info_fd);
@@ -1093,19 +1086,13 @@ node_info_req_prep_fd(cl_cluster_node* cn)
 			return true;
 		case CONNECTED_NOT:
 			// Can't use it - the remote end closed it.
-			// TODO - dun?
-			cf_close(cn->info_fd);
-			cn->info_fd = -1;
-			break;
 		case CONNECTED_ERROR:
 			// Some other problem, could have to do with remote end.
-			cl_cluster_node_dun(cn, DUN_INFO_RESTART_FD);
 			cf_close(cn->info_fd);
 			cn->info_fd = -1;
 			break;
 		case CONNECTED_BADFD:
-			// Local problem, don't dun, don't try closing.
-			cf_warn("node %s info request bad fd %d", cn->name, cn->info_fd);
+			// Local problem, don't try closing.
 			cn->info_fd = -1;
 			break;
 		default:
@@ -1117,22 +1104,24 @@ node_info_req_prep_fd(cl_cluster_node* cn)
 		}
 	}
 
+	// Try to open a new socket. We'll count any failures here as transaction
+	// failures even though we never really start the transaction.
+
+	if (cf_vector_size(&cn->sockaddr_in_v) == 0) {
+		cf_warn("node %s has no sockaddrs", cn->name);
+		cl_cluster_node_had_failure(cn);
+		return false;
+	}
+
+	struct sockaddr_in sa_in;
+
+	cf_vector_get(&cn->sockaddr_in_v, 0, &sa_in);
+	cn->info_fd = cf_socket_create_and_connect_nb(&sa_in);
+
 	if (cn->info_fd == -1) {
-		if (cf_vector_size(&cn->sockaddr_in_v) == 0) {
-			cl_cluster_node_dun(cn, DUN_NO_SOCKADDR);
-			return false;
-		}
-
-		struct sockaddr_in sa_in;
-
-		cf_vector_get(&cn->sockaddr_in_v, 0, &sa_in);
-		cn->info_fd = cf_socket_create_and_connect_nb(&sa_in);
-
-		if (cn->info_fd == -1) {
-			// TODO - loop over all sockaddrs?
-			cl_cluster_node_dun(cn, DUN_INFO_CONNECT_FAIL);
-			return false;
-		}
+		// TODO - loop over all sockaddrs?
+		cl_cluster_node_had_failure(cn);
+		return false;
 	}
 
 	return true;
@@ -1186,6 +1175,63 @@ node_info_req_start(cl_cluster_node* cn, node_info_req_type req_type)
 	}
 }
 
+// TODO - all becomes client config...
+#define OLDEST_HISTORY_INDEX (MAX_HISTORY_INTERVALS - 1)
+#define THRESHOLD_FAILURE_PCT 2
+#define THROTTLE_FACTOR 10
+#define MAX_THROTTLE_PCT 90
+
+void
+node_throttle_control(cl_cluster_node* cn)
+{
+	// Collect and reset the latest counts. TODO - atomic get and clear?
+	uint32_t new_successes = cf_atomic32_get(cn->n_successes);
+	uint32_t new_failures = cf_atomic32_get(cn->n_failures);
+
+	cf_atomic32_set(&cn->n_successes, 0);
+	cf_atomic32_set(&cn->n_failures, 0);
+
+	// Update the sums.
+	cn->successes_sum += new_successes;
+	cn->successes_sum -= cn->successes[OLDEST_HISTORY_INDEX];
+
+	cn->failures_sum += new_failures;
+	cn->failures_sum -= cn->failures[OLDEST_HISTORY_INDEX];
+
+	// Time shift the history.
+	size_t size = OLDEST_HISTORY_INDEX * sizeof(uint32_t);
+
+	memmove((void*)&cn->successes[1], (const void*)&cn->successes[0], size);
+	memmove((void*)&cn->failures[1], (const void*)&cn->failures[0], size);
+
+	cn->successes[0] = new_successes;
+	cn->failures[0] = new_failures;
+
+	// Calculate the failure percentage.
+	uint32_t sum = cn->failures_sum + cn->successes_sum;
+	uint32_t failure_pct = sum == 0 ? 0 : (cn->failures_sum * 100) / sum;
+
+	// TODO - anything special for a 100% failure rate? Several seconds of all
+	// failures with 0 successes might mean we should destroy this node?
+
+	// Calculate and apply the throttle rate.
+	uint32_t throttle_pct = 0;
+
+	if (failure_pct > THRESHOLD_FAILURE_PCT) {
+		throttle_pct = (failure_pct - THRESHOLD_FAILURE_PCT) * THROTTLE_FACTOR;
+
+		if (throttle_pct > MAX_THROTTLE_PCT) {
+			throttle_pct = MAX_THROTTLE_PCT;
+		}
+	}
+
+	cf_debug("node %s recent successes %u, failures %u, failure-pct %u, throttle-pct %u",
+			cn->name, cn->successes_sum, cn->failures_sum,
+			failure_pct, throttle_pct);
+
+	cf_atomic32_set(&cn->throttle_pct, throttle_pct);
+}
+
 // The libevent2 event handler for node periodic timer events:
 void
 node_timer_fn(evutil_socket_t fd, short event, void* udata)
@@ -1193,16 +1239,14 @@ node_timer_fn(evutil_socket_t fd, short event, void* udata)
 	cl_cluster_node* cn = (cl_cluster_node*)udata;
 
 	if (cn->MAGIC != CLUSTER_NODE_MAGIC) {
-		// Serious - can't do anything else with cn, including dunning node.
+		// Serious - can't do anything else with cn, including removing node.
 		cf_error("node timer event found bad node magic");
 		return;
 	}
 
 	uint64_t _s = cf_getms();
-	bool is_dunned = cf_atomic_int_get(cn->dunned) != 0;
 
-	cf_debug("node %s timer event:%s references %d", cn->name,
-			is_dunned ? " is dunned," : "", cf_client_rc_count(cn));
+	cf_debug("node %s timer event", cn->name);
 
 	if (cn->intervals_absent == 0) {
 		// First time this node's timer is firing - it won't be in the map.
@@ -1252,6 +1296,8 @@ node_timer_fn(evutil_socket_t fd, short event, void* udata)
 		return;
 	}
 
+	node_throttle_control(cn);
+
 	if (cn->info_req.type != INFO_REQ_NONE) {
 		// There's still a node info request in progress. If it's taking too
 		// long, cancel it and start over.
@@ -1278,7 +1324,7 @@ node_timer_fn(evutil_socket_t fd, short event, void* udata)
 	}
 
 	if (0 != event_add(cluster_node_get_timer_event(cn), &g_node_tend_timeout)) {
-		// Serious - stops periodic timer! TODO - dun node?
+		// Serious - stops periodic timer! TODO - remove node?
 		cf_error("node %s timer event add failed", cn->name);
 	}
 
@@ -1461,8 +1507,7 @@ cl_cluster_node_get_random(ev2citrusleaf_cluster *asc)
 			return(0);
 		}
 
-		if (cf_atomic_int_get(cn->dunned)) {
-//			cf_debug("dunned node %s in random list!", cn->name);
+		if (cf_atomic32_get(cn->throttle_pct) != 0) {
 			cn = 0;
 		}
 
@@ -1485,17 +1530,11 @@ cl_cluster_node_get(ev2citrusleaf_cluster *asc, const char *ns, const cf_digest 
 	if (asc->n_partitions) {
 		// first, try to get one that matches this digest
 		cn = cl_partition_table_get(asc, ns, cl_partition_getid(asc->n_partitions, d) , write);
-		if (cn) {
-			if (cn->MAGIC != CLUSTER_NODE_MAGIC) {
-				// TODO - is this really happening any more?
-				cf_error("cluster node get: got node with bad magic %x (%p), abort", cn->MAGIC, cn);
-				cn = 0;
-			}
-			// TODO - replace with throttling, etc.
-			else if (cf_atomic_int_get(cn->dunned)) {
-				cl_cluster_node_release(cn, "T-");
-				cn = 0;
-			}
+
+		if (cn && cn->MAGIC != CLUSTER_NODE_MAGIC) {
+			// TODO - is this really happening any more?
+			cf_error("cluster node get: got node with bad magic %x (%p), abort", cn->MAGIC, cn);
+			cn = 0;
 		}
 	}
 
@@ -1528,96 +1567,6 @@ cl_cluster_node_put(cl_cluster_node *cn)
 }
 
 
-// MUST be in sync with cl_cluster_dun_type enum:
-const char* cl_cluster_dun_human[] = {
-		"bad name",
-		"no sockaddr",
-		"connect fail",
-		"restart fd",
-		"network error",
-		"user timeout",
-		"info connect fail",
-		"info restart fd",
-		"info network error",
-		"info timeout",
-};
-
-void
-cl_cluster_node_dun(cl_cluster_node *cn, cl_cluster_dun_type type)
-{
-	if (cn->MAGIC != CLUSTER_NODE_MAGIC) {
-		cf_error("attempt to dun node without magic. Fail");
-		return;
-	}
-
-	int dun_factor;
-	switch (type) {
-		case DUN_USER_TIMEOUT:
-			if (cf_atomic_int_get(cn->dun_count) % 50 == 0) {
-				cf_debug("dun node: %s reason: %s count: %d",
-						cn->name, cl_cluster_dun_human[type], cf_atomic_int_get(cn->dun_count));
-			}
-			dun_factor = 1;
-			break;
-		case DUN_INFO_TIMEOUT:
-			cf_info("dun node: %s reason: %s count: %d",
-					cn->name, cl_cluster_dun_human[type], cf_atomic_int_get(cn->dun_count));
-			dun_factor = 20;
-			break;
-		case DUN_CONNECT_FAIL:
-		case DUN_RESTART_FD:
-		case DUN_NETWORK_ERROR:
-		case DUN_INFO_CONNECT_FAIL:
-		case DUN_INFO_RESTART_FD:
-		case DUN_INFO_NETWORK_ERROR:
-			cf_info("dun node: %s reason: %s count: %d",
-					cn->name, cl_cluster_dun_human[type], cf_atomic_int_get(cn->dun_count));
-			dun_factor = 50;
-			break;
-		case DUN_BAD_NAME:
-		case DUN_NO_SOCKADDR:
-			cf_info("dun node: %s reason: %s count: %d",
-					cn->name, cl_cluster_dun_human[type], cf_atomic_int_get(cn->dun_count));
-			dun_factor = 1000;
-			break;
-		default:
-			cf_error("dun node: %s UNKNOWN REASON count: %d",
-					cn->name, cf_atomic_int_get(cn->dun_count));
-			dun_factor = 1;
-			break;
-	}
-
-	int dun_count = (int)cf_atomic_int_add(&cn->dun_count, dun_factor);
-
-	if (dun_count > CL_NODE_DUN_THRESHOLD) {
-		cf_info("dun node: node %s fully dunned %d", cn->name, dun_count);
-
-		cf_atomic_int_set(&cn->dunned, 1);
-	}
-}
-
-void
-cl_cluster_node_ok(cl_cluster_node *cn)
-{
-	if (cn->MAGIC != CLUSTER_NODE_MAGIC) {
-		cf_error("ok node but no magic, fail");
-		return;
-	}
-
-	int dun_count = cf_atomic_int_get(cn->dun_count);
-
-	// TODO - extra dunned state for removed from cluster?
-	if (cf_atomic_int_get(cn->dunned) == 1) {
-		cf_info("ok node: %s had dun_count %d", cn->name, dun_count);
-	}
-	else if (dun_count > 0) {
-		cf_debug("ok node: %s had dun_count %d", cn->name, dun_count);
-	}
-
-	cf_atomic_int_set(&cn->dun_count, 0);
-	cf_atomic_int_set(&cn->dunned, 0);
-}
-
 // Return values:
 // -1 try again right away
 // -2 don't try again right away
@@ -1637,20 +1586,14 @@ cl_cluster_node_fd_get(cl_cluster_node *cn)
 				return fd;
 			case CONNECTED_NOT:
 				// Can't use it - the remote end closed it.
-				// TODO - dun?
-				cf_atomic_int_incr(&g_cl_stats.conns_destroyed);
-				cf_atomic_int_incr(&g_cl_stats.conns_destroyed_queue);
-				cf_close(fd);
-				return -1;
 			case CONNECTED_ERROR:
 				// Some other problem, could have to do with remote end.
-				cl_cluster_node_dun(cn, DUN_RESTART_FD);
 				cf_atomic_int_incr(&g_cl_stats.conns_destroyed);
 				cf_atomic_int_incr(&g_cl_stats.conns_destroyed_queue);
 				cf_close(fd);
 				return -1;
 			case CONNECTED_BADFD:
-				// Local problem, don't dun, don't try closing.
+				// Local problem, don't try closing.
 				cf_warn("bad file descriptor in queue: fd %d", fd);
 				return -1;
 			default:
@@ -1671,12 +1614,12 @@ cl_cluster_node_fd_get(cl_cluster_node *cn)
 	// Queue was empty, open a new socket and (start) connect.
 
 	if (cf_vector_size(&cn->sockaddr_in_v) == 0) {
-		cl_cluster_node_dun(cn, DUN_NO_SOCKADDR);
+		cf_warn("node %s has no sockaddrs", cn->name);
 		return -2;
 	}
 
 	if (-1 == (fd = cf_socket_create_nb())) {
-		// Local problem, don't dun.
+		// Local problem.
 		return -2;
 	}
 
@@ -1692,10 +1635,9 @@ cl_cluster_node_fd_get(cl_cluster_node *cn)
 			cf_atomic_int_incr(&g_cl_stats.conns_connected);
 			return fd;
 		}
-		// TODO - else remove this sockaddr from the list, or dun the node?
+		// TODO - else remove this sockaddr from the list?
 	}
 
-	cl_cluster_node_dun(cn, DUN_CONNECT_FAIL);
 	cf_close(fd);
 
 	return -2;

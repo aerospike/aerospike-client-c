@@ -672,7 +672,7 @@ cl_batch_node_req_destroy(cl_batch_node_req* _this)
 		// (We can also get here if cl_batch_job_start() failed on another node,
 		// but for now we're not bothering to distinguish that case.)
 		cf_close(_this->fd);
-		cl_cluster_node_dun(_this->p_node, DUN_USER_TIMEOUT);
+		cl_cluster_node_had_failure(_this->p_node);
 	}
 
 	// This balances the ref-counts we incremented in get_many().
@@ -1230,7 +1230,7 @@ cl_batch_node_req_done(cl_batch_node_req* _this, int node_result)
 		// socket and if there's more to read, the next transaction will suffer.
 
 		cl_cluster_node_fd_put(_this->p_node, _this->fd);
-		cl_cluster_node_ok(_this->p_node);
+		cl_cluster_node_had_success(_this->p_node);
 	}
 	else {
 		// The socket may have unprocessed data or otherwise be untrustworthy,
@@ -1239,9 +1239,9 @@ cl_batch_node_req_done(cl_batch_node_req* _this, int node_result)
 		cf_close(_this->fd);
 
 		if (node_result == EV2CITRUSLEAF_FAIL_UNKNOWN) {
-			cl_cluster_node_dun(_this->p_node, DUN_NETWORK_ERROR);
+			cl_cluster_node_had_failure(_this->p_node);
 		}
-		// EV2CITRUSLEAF_FAIL_CLIENT_ERROR implies a local problem, don't dun.
+		// EV2CITRUSLEAF_FAIL_CLIENT_ERROR implies a local problem.
 	}
 
 	// Reset _this->fd so the destructor doesn't close it.

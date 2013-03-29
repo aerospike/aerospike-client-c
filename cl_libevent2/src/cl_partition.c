@@ -242,10 +242,21 @@ cl_partition_table_get(ev2citrusleaf_cluster* asc, const char* ns,
 		node = p->prole;
 	}
 	else {
-		// So far, no consideration of relative health.
-		uint32_t r = (uint32_t)cf_atomic32_incr(&g_randomizer);
+		uint32_t master_throttle = cf_atomic32_get(p->master->throttle_pct);
+		uint32_t prole_throttle = cf_atomic32_get(p->prole->throttle_pct);
 
-		node = (r & 1) ? p->master : p->prole;
+		if (master_throttle == 0 && prole_throttle != 0) {
+			node = p->master;
+		}
+		else if (prole_throttle == 0 && master_throttle != 0) {
+			node = p->prole;
+		}
+		else {
+			// Both throttling or both ok - roll the dice.
+			uint32_t r = (uint32_t)cf_atomic32_incr(&g_randomizer);
+
+			node = (r & 1) ? p->master : p->prole;
+		}
 	}
 
 	if (node) {

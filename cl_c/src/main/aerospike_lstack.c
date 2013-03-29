@@ -28,7 +28,8 @@
 
 // Use this to turn on/off tracing/debugging prints and checks
 // Comment out this next line to quiet the output.
-#define DEBUG
+// #define DEBUG
+#undef DEBUG
 
 #ifdef DEBUG
 #define TRA_ENTER true   // show method ENTER values
@@ -595,17 +596,19 @@ aerospike_lstack_peek_internal(
     }
 
     if ( resultp->is_success ) {
-        printf("[DEBUG]:[%s]:UDF Result SUCCESS\n", meth );
+        if( TRA_DEBUG ) printf("[DEBUG]:[%s]:UDF Result SUCCESS\n", meth );
         if ( as_val_type(resultp->value) == AS_NIL ) {
             if( TRA_ERROR ) printf("[ERROR]:[%s] Result type is NIL\n", meth );
             rc = CITRUSLEAF_FAIL_CLIENT; // general client failure
         } else {
             valstr = as_val_tostring(resultp->value);
-            printf("[DEBUG]:[%s]: udf_return_type(%s)", meth, valstr);
+            if( TRA_DEBUG )
+                printf("[DEBUG]:[%s]: udf_return_type(%s)", meth, valstr);
             free(valstr);
         }
     } else {
-        printf("[DEBUG]:[%s]:UDF Result FAIL\n", meth );
+        if( TRA_ERROR )
+            printf("[ERROR]:[%s]:UDF Result FAIL\n", meth );
         rc = CITRUSLEAF_FAIL_CLIENT; // general client failure
     }
 
@@ -846,11 +849,12 @@ aerospike_lstack_trim(
             rc = CITRUSLEAF_FAIL_CLIENT; // general client failure
         } else {
             valstr = as_val_tostring(result.value);
-            printf("[DEBUG]:[%s]: udf_return_type(%s)", meth, valstr);
+            if( TRA_DEBUG )
+                printf("[DEBUG]:[%s]: udf_return_type(%s)", meth, valstr);
             free(valstr);
         }
     } else {
-        printf("[DEBUG]:[%s]:UDF Result FAIL\n", meth );
+        if( TRA_ERROR ) printf("[ERROR]:[%s]:UDF Result FAIL\n", meth );
         rc = CITRUSLEAF_FAIL_CLIENT; // general client failure
     }
 
@@ -920,20 +924,21 @@ aerospike_lstack_size(
     }
 
     if ( result.is_success ) {
-        printf("[DEBUG]:[%s]:UDF Result SUCCESS\n", meth );
+        if( TRA_DEBUG ) printf("[DEBUG]:[%s]:UDF Result SUCCESS\n", meth );
         if ( as_val_type(result.value) == AS_NIL ) {
             if( TRA_ERROR ) printf("[ERROR]:[%s] Result type is NIL\n", meth );
             rc = CITRUSLEAF_FAIL_CLIENT; // general client failure
         } else {
             valstr = as_val_tostring(result.value);
-            printf("[DEBUG]:[%s]: udf_return_type(%s)", meth, valstr);
+            if( TRA_DEBUG )
+                printf("[DEBUG]:[%s]: udf_return_type(%s)", meth, valstr);
             free(valstr);
             // NOTE: May have to check TYPE first and do a conversion
             // to a real int.
             size_result = result.value; // should be an int.
         }
     } else {
-        printf("[DEBUG]:[%s]:UDF Result FAIL\n", meth );
+        if( TRA_ERROR ) printf("[ERROR]:[%s]:UDF Result FAIL\n", meth );
         rc = CITRUSLEAF_FAIL_CLIENT; // general client failure
     }
 

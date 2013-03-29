@@ -1,6 +1,12 @@
 # Citrusleaf Tools
 # Makefile
 
+# CC = clang
+# LD = clang
+
+CC = g++
+LD = g++
+
 DIR_INCLUDE = ../target/Linux-x86_64/include
 DIR_OBJECT = obj
 DIR_TARGET = .
@@ -11,9 +17,7 @@ TARGET        = test_udf
 
 INCLUDES = -I../include/ -I../target/Linux-x86_64/include/ -I../target/Linux-x86_64/include/citrusleaf/
 LIBRARIES = $(DIR_LIB)/libcitrusleaf.a  -lssl -lcrypto -lpthread -lrt
-ifeq (${MR_LANG},LUA)
 LIBRARIES += -llua
-endif
 LIBRARIES += -lm
 
 LDFLAGS += -L$(DEPTH)/lib/ -L$(DEPTH)/shared/lib/ 
@@ -34,12 +38,12 @@ depclean: clean
 
 .PHONY: $(TARGET)
 $(TARGET): $(OBJECTS)
-	g++ $(LDFLAGS) -o $(DIR_TARGET)/$(TARGET) $(OBJECTS) $(LIBRARIES)
+	$(LD) $(LDFLAGS) -o $(DIR_TARGET)/$(TARGET) $(OBJECTS) $(LIBRARIES)
 
 -include $(DEPENDENCIES) 
 
 $(DIR_OBJECT)/%.o: %.cpp | prepare
-	g++ -MMD -o $@ -c $(INCLUDES) $<
+	$(CC) -MMD -o $@ -c $(INCLUDES) $<
 
 prepare:
 	mkdir -p $(DIR_OBJECT)

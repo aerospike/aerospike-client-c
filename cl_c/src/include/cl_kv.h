@@ -27,6 +27,7 @@
 
 #include "cl_types.h"
 #include "cl_cluster.h"
+#include "cl_write.h"
 
 /******************************************************************************
  * FUNCTIONS

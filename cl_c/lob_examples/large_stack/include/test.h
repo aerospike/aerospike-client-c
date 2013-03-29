@@ -33,7 +33,7 @@
 #include "citrusleaf/cf_hist.h"
 
 #include "log.h"         // Error/Tracing
-#include "config.h"  // Our general Test config file
+#include "test_config.h"  // Our general Test config file
 #include "counter.h" // include the atomic structure and methods
 
 //

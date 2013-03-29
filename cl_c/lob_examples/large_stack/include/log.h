@@ -11,11 +11,17 @@
 
 #include <stdio.h>
 
+#define DEBUG
+
+#ifdef DEBUG
 #define INFO(fmt, args...)   __log_append(stderr,"", fmt, ## args);
-
 #define ERROR(fmt, args...)   __log_append(stderr,"    ", fmt, ## args);
-
 #define LOG(fmt, args...)   __log_append(stderr,"    ", fmt, ## args);
+#else
+#define INFO(fmt, args...)   
+#define ERROR(fmt, args...) 
+#define LOG(fmt, args...)  
+#endif
 
 
 // Here's the log call that we'll be using

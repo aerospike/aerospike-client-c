@@ -25,6 +25,27 @@ void usage(int argc, char *argv[]) {
     INFO("   -s set [default *all*]");
 }
 
+
+/** ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+ *  Setup Cluster (this is manual for now)
+ */
+void setup_cluster( test_config * config ){
+    // Build a set of cluster names that we'll connect to in the
+    // configuration.
+    printf("[ENTER]:Setup Cluster \n");
+
+    config->cluster_count = 4;
+    config->cluster_name[0] = "192.168.120.101";
+    config->cluster_name[1] = "192.168.120.102";
+    config->cluster_name[2] = "192.168.120.103";
+    config->cluster_name[3] = "192.168.120.104";
+
+    config->cluster_port[0] = 3000;
+    config->cluster_port[1] = 3000;
+    config->cluster_port[2] = 3000;
+    config->cluster_port[3] = 3000;
+}
+
 /** ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
  *  Set up the configuration for the Test Run Routines
  */
@@ -54,6 +75,7 @@ int init_configuration (int argc, char *argv[]) {
         case 'v': g_config->verbose = true;           break;
         case 't': g_config->n_threads = atoi(optarg);   break;
         case 'i': g_config->n_iterations = atoi(optarg);   break;
+        case 'c': setup_cluster( g_config );   break;
         default:  usage(argc, argv);                  return(-1);
         }
     }

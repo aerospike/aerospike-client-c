@@ -27,6 +27,9 @@
 int setup_test( int argc, char **argv ) {
     static char * meth = "setup_test()";
     int rc = 0;
+    char * host; // for each iteration of "add host"
+    int port; // for each iteration of "add host"
+    uint32_t timeout_ms;
 
     // show cluster setup
     INFO("[DEBUG]:[%s]Startup: host %s port %d ns %s set %s",
@@ -43,13 +46,28 @@ int setup_test( int argc, char **argv ) {
         return(-1); 
     }
 
-    rc = citrusleaf_cluster_add_host(asc, g_config->host,
-            g_config->port, g_config->timeout_ms);
-    if (rc) {
-        INFO("[ERROR]:[%s]:could not connect to host %s port %d",
-                meth, g_config->host,g_config->port);
-        return(-1);
+    // If we have "cluster" defined, then we'll go with that (manually
+    // set up in main.c: setup_cluster().  Otherwise, we will default
+    // to local host (also defined in g_config).
+    if( g_config->cluster_count <= 0 ) {
+        g_config->cluster_count = 1;
+        g_config->cluster_name[0] = g_config->host; 
+        g_config->cluster_port[0] = g_config->port; 
     }
+    timeout_ms = g_config->timeout_ms;
+    for( int i = 0; i < g_config->cluster_count; i++ ){
+        host = g_config->cluster_name[i];
+        port = g_config->cluster_port[i];
+        INFO("[DEBUG]:[%s]:Adding host(%s) port(%d)", meth, host, port);
+        rc = citrusleaf_cluster_add_host(asc, host, port, timeout_ms);
+        if (rc) {
+            INFO("[ERROR]:[%s]:could not connect to host(%s) port(%d)",
+                    meth, host, port);
+
+            INFO("[ERROR]:[%s]:Trying more nodes", meth );
+            // return(-1);
+        }
+    } // end for each cluster server
 
     g_config->asc  = asc;
 

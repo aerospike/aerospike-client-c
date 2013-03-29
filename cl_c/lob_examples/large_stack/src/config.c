@@ -6,7 +6,7 @@
  *  ABOVE DOES NOT EVIDENCE ANY ACTUAL OR INTENDED PUBLICATION.
  */
 
-#include "test.h"
+#include "test_config.h"
 
 
 /** ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
@@ -16,7 +16,6 @@
  */
 int set_config_defaults ( test_config * config_ptr ){
     static char * meth = "init_configuration()";
-    INFO("[ENTER]:[%s]: \n", meth );
 
     config_ptr->host         = "127.0.0.1";
     config_ptr->port         = 3000;
@@ -37,3 +36,5 @@ int set_config_defaults ( test_config * config_ptr ){
 
     return 0;
 }
+
+

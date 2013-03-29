@@ -10,7 +10,7 @@ DIR_TARGET = ../
 DIR_LIB = ../../../target/Linux-x86_64/lib
 
 SOURCES       = log.c config.c counter.c main.c lstack.c run_tests.c
-SOURCE_HEADERS = log.h config.h counter.h test.h
+SOURCE_HEADERS = log.h test_config.h counter.h test.h
 TARGET        = lstack
 
 INCLUDES = -I../include/ -I../../../target/Linux-x86_64/include/ 

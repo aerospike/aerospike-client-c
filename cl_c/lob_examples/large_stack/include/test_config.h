@@ -9,7 +9,7 @@
 #pragma once
 
 #include <citrusleaf/cf_atomic.h> 
-#include "counter.h"
+#include "test_counter.h"
 #include "test.h"
 
 

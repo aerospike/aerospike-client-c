@@ -522,9 +522,10 @@ aerospike_lstack_push_with_transform_with_keystring(
  *  (*) timeout_ms: Timeout to wait (in MilliSecs). ZERO means forever.
  *
  *  Return: 
- *  "as_result *", which is a mallod'c structure that must be manually
+ *  (*) "as_result *", which is a mallod'c structure that must be manually
  *  freed (as_result_destroy(resultp) by the caller after it is done
  *  using the result.
+ *  (*) NULL if there is an extreme client error
  */
 as_result  *
 aerospike_lstack_peek_internal(
@@ -548,8 +549,12 @@ aerospike_lstack_peek_internal(
     // For Result, we are going to pass this back to the caller, so we
     // must FULLY DOCUMENT the fact that they must call "as_result_destroy()"
     // on the result after they are done with it.
-    as_result * resultp;
+    as_result * resultp = NULL;
     resultp = as_result_new();
+    if( resultp == NULL ){
+        // Big trouble.  Client Failure -- can't allocate a result object.
+        return( NULL );
+    }
 
     // Set up the arglist that we'll use to pass in function parms
     // As is now the case with all UDF resources, we initialize the
@@ -621,8 +626,11 @@ cleanup:
     if( rc == CITRUSLEAF_OK ){
         return resultp;
     } else {
+        // Bad result, so contents of resultp are not reliable.
+        // Note that this function needs to change so that the caller
+        // passes in the resultp and we always return a return code.
         as_result_destroy(resultp);
-        return NULL;
+        return NULL; // error case.
     }
 } // aerospike_lstack_peek_internal()
 
@@ -645,6 +653,7 @@ cleanup:
  *  "as_result *", which is a mallod'c structure that must be manually
  *  freed (as_result_destroy(resultp) by the caller after it is done
  *  using the result.
+ *  (*) NULL if there is an extreme client error
  */
 as_result  *
 aerospike_lstack_peek(
@@ -715,6 +724,7 @@ aerospike_lstack_peek_with_keystring(
  *  "as_result *", which is a mallod'c structure that must be manually
  *  freed (as_result_destroy(resultp) by the caller after it is done
  *  using the result.
+ *  (*) NULL if there is an extreme client error
  */
 as_result *
 aerospike_lstack_peek_with_transform(

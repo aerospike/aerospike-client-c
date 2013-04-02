@@ -32,9 +32,9 @@
 #include "citrusleaf/cl_udf.h"
 #include "citrusleaf/cf_hist.h"
 
-#include "log.h"         // Error/Tracing
-#include "config.h"  // Our general Test config file
-#include "counter.h" // include the atomic structure and methods
+#include "test_log.h"         // Error/Tracing
+#include "test_config.h"  // Our general Test config file
+#include "test_counter.h" // include the atomic structure and methods
 
 //
 // Define the functions in the lstack.c module

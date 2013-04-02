@@ -9,7 +9,7 @@
  */
 
 #include "test.h"
-#include "counter.h"
+#include "test_counter.h"
 
 // Global Configuration object: holds client config data.
 test_config *g_config = NULL;
@@ -18,11 +18,11 @@ test_config *g_config = NULL;
  *  Show Usage
  */
 void usage(int argc, char *argv[]) {
-    INFO("Usage %s:", argv[0]);
-    INFO("   -h host [default 127.0.0.1] ");
-    INFO("   -p port [default 3000]");
-    INFO("   -n namespace [default test]");
-    INFO("   -s set [default *all*]");
+    printf("Usage %s:\n", argv[0]);
+    printf("   -h host [default 127.0.0.1] \n");
+    printf("   -p port [default 3000]\n");
+    printf("   -n namespace [default test]\n");
+    printf("   -s set [default *all*]\n");
 }
 
 
@@ -52,7 +52,6 @@ void setup_cluster( test_config * config ){
 int init_configuration (int argc, char *argv[]) {
     static char * meth = "init_configuration()";
 
-    // NOTE: Can't do INFO() until AFTER g_config is allocated.
     printf("[ENTER]:[%s]: Num Args (%d)\n", meth, argc );
 
     g_config = (test_config *)malloc(sizeof(test_config));

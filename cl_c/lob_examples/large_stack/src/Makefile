@@ -9,8 +9,9 @@ DIR_OBJECT = ../obj
 DIR_TARGET = ../
 DIR_LIB = ../../../target/Linux-x86_64/lib
 
-SOURCES       = log.c config.c counter.c main.c lstack.c run_tests.c
-SOURCE_HEADERS = log.h config.h counter.h test.h
+SOURCES       = test_log.c test_config.c test_counter.c test_main.c
+SOURCES      += lstack.c run_tests.c
+SOURCE_HEADERS = test_log.h test_config.h test_counter.h test.h
 TARGET        = lstack
 
 INCLUDES = -I../include/ -I../../../target/Linux-x86_64/include/ 

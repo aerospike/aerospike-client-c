@@ -7,7 +7,7 @@
  */
 
 #include <stdarg.h>
-#include "log.h"
+#include "test_log.h"
 
 
 // NOTE: INFO(), ERROR() and LOG() defined in log.h

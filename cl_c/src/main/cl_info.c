@@ -117,7 +117,7 @@ citrusleaf_info_host_limit(struct sockaddr_in *sa_in, char *names, char **values
 		if (names[slen-1] == '\n') {
 			slen = 0;
 		} else { 
-			slen++; if (slen > bb_size) { return(-1); } 
+			slen++;
 		}
 	}
 	char names_with_term[slen+1];
@@ -138,13 +138,16 @@ citrusleaf_info_host_limit(struct sockaddr_in *sa_in, char *names, char **values
 	uint8_t		buf[bb_size];
 	uint		buf_sz;
 	
+	bool        rmalloced = false;
 	if (names) {
-		uint sz = strlen(names);
+		uint sz = slen;
 		buf_sz = sz + sizeof(cl_proto);
 		if (buf_sz < bb_size)
 			req = (cl_proto *) buf;
-		else
+		else {
 			req = (cl_proto *) malloc(buf_sz);
+			rmalloced = true;
+		}
 		if (req == NULL)	goto Done;
 
 		req->sz = sz;
@@ -166,7 +169,9 @@ citrusleaf_info_host_limit(struct sockaddr_in *sa_in, char *names, char **values
     else
         io_rv = cf_socket_write_forever(fd, (uint8_t *) req, buf_sz);
     
-	if ((uint8_t *)req != buf)	free(req);
+	if (rmalloced) {
+		free (req); 
+	}
 	if (io_rv != 0) {
 #ifdef DEBUG        
 		cf_debug("info returned error, rv %d errno %d bufsz %d", io_rv, errno, buf_sz);

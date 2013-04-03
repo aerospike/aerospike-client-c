@@ -1098,7 +1098,7 @@ cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 		struct sockaddr_in *sa_in = cf_vector_getp(&cn->sockaddr_in_v, i);
 		
 		char *values = 0;
-		if (0 != citrusleaf_info_host_limit(sa_in, "node\npartition-generation\nservices", &values, INFO_TIMEOUT_MS, false, 10000)) {
+		if (0 != citrusleaf_info_host_limit(sa_in, "node\npartition-generation\nservices", &values, INFO_TIMEOUT_MS, false, 10000, /* check bounds */ true)) {
 			// todo: this address is no longer right for this node, update the node's list
 			// and if there's no addresses left, dun node
 			cf_debug("Info request failed for %s", cn->name);
@@ -1157,7 +1157,7 @@ cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 		for (uint i=0;i<cf_vector_size(&cn->sockaddr_in_v);i++) {
 			struct sockaddr_in *sa_in = cf_vector_getp(&cn->sockaddr_in_v, i);
 			char *values = 0;
-			if (0 != citrusleaf_info_host_limit(sa_in, "replicas-read\nreplicas-write", &values, INFO_TIMEOUT_MS, false, 2000000)) {
+			if (0 != citrusleaf_info_host_limit(sa_in, "replicas-read\nreplicas-write", &values, INFO_TIMEOUT_MS, false, 2000000, /*check bounds */ true)) {
                 // it's a little peculiar to have just talked to the host then have this call
                 // fail, but sometimes strange things happen.
                 goto Updated;
@@ -1212,7 +1212,7 @@ cluster_ping_address(cl_cluster *asc, struct sockaddr_in *sa_in)
 {
 		
 	char *values = 0;
-	if (0 != citrusleaf_info_host(sa_in, "node", &values, INFO_TIMEOUT_MS, false)){
+	if (0 != citrusleaf_info_host(sa_in, "node", &values, INFO_TIMEOUT_MS, false, /* check bounds */ true)){
 	 return;
 	}
 	
@@ -1260,7 +1260,7 @@ cluster_get_n_partitions( cl_cluster *asc, cf_vector *sockaddr_in_v )
 		struct sockaddr_in *sa_in = cf_vector_getp(sockaddr_in_v, i);
 
 		char *values = 0;
-		if (0 != citrusleaf_info_host(sa_in, "partitions", &values, INFO_TIMEOUT_MS, false)) {
+		if (0 != citrusleaf_info_host(sa_in, "partitions", &values, INFO_TIMEOUT_MS, false, /*check bounds*/ true)) {
 			continue;
 		}
 		

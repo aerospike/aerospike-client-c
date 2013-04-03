@@ -78,18 +78,18 @@ citrusleaf_info_parse_single(char *values, char **value)
 // Used internally for host-crawling as well as supporting the external interface.
 // Return 0 on success and -1 on error.
 int
-citrusleaf_info_host(struct sockaddr_in *sa_in, char *names, char **values, int timeout_ms, bool send_asis)
+citrusleaf_info_host(struct sockaddr_in *sa_in, char *names, char **values, int timeout_ms, bool send_asis, bool check_bounds)
 {
-	return citrusleaf_info_host_limit(sa_in, names, values, timeout_ms, send_asis, 0);
+	return citrusleaf_info_host_limit(sa_in, names, values, timeout_ms, send_asis, 0, check_bounds);
 }
 
 // Request the info of a particular sockaddr_in.
 // Reject info request if response length is greater than max_response_length.
 // Return 0 on success and -1 on error.
 int
-citrusleaf_info_host_limit(struct sockaddr_in *sa_in, char *names, char **values, int timeout_ms, bool send_asis, uint64_t max_response_length)
+citrusleaf_info_host_limit(struct sockaddr_in *sa_in, char *names, char **values, int timeout_ms, bool send_asis, uint64_t max_response_length, bool check_bounds)
 {
-	uint bb_size = 16384;
+	uint bb_size = 2048;
 	int rv = -1;
     int io_rv;
 	*values = 0;
@@ -118,6 +118,10 @@ citrusleaf_info_host_limit(struct sockaddr_in *sa_in, char *names, char **values
 			slen = 0;
 		} else { 
 			slen++;
+			// If check bounds is true, do not allow beyond a certain limit
+			if	(check_bounds && (slen > bb_size)) {
+				return(-1); 
+			} 
 		}
 	}
 	char names_with_term[slen+1];
@@ -140,7 +144,7 @@ citrusleaf_info_host_limit(struct sockaddr_in *sa_in, char *names, char **values
 	
 	bool        rmalloced = false;
 	if (names) {
-		uint sz = slen;
+		uint sz = strlen(names);
 		buf_sz = sz + sizeof(cl_proto);
 		if (buf_sz < bb_size)
 			req = (cl_proto *) buf;
@@ -266,7 +270,7 @@ citrusleaf_info(char *hostname, short port, char *names, char **values, int time
 		struct sockaddr_in  sa_in;
 		cf_vector_get(&sockaddr_in_v, i, &sa_in);
 
-		if (0 == citrusleaf_info_host(&sa_in, names, values, timeout_ms, false)) {
+		if (0 == citrusleaf_info_host(&sa_in, names, values, timeout_ms, false, /* check bounds */ true)) {
 			rv = 0;
 			goto Done;
 		}
@@ -288,7 +292,7 @@ Done:
 
 /* gets information back from any of the nodes in the cluster */
 int
-citrusleaf_info_cluster(cl_cluster *asc, char *names, char **values_r, bool send_asis, int timeout_ms)
+citrusleaf_info_cluster(cl_cluster *asc, char *names, char **values_r, bool send_asis, bool check_bounds, int timeout_ms)
 {
 	if (timeout_ms == 0) timeout_ms = 100; // milliseconds
 	uint64_t start = cf_getms();
@@ -313,7 +317,7 @@ citrusleaf_info_cluster(cl_cluster *asc, char *names, char **values_r, bool send
 			
 			values = 0;
 			
-			if (0 == citrusleaf_info_host(sa_in, names, &values, end - cf_getms(), send_asis)) {
+			if (0 == citrusleaf_info_host(sa_in, names, &values, end - cf_getms(), send_asis, check_bounds)) {
 				// success
 				*values_r = values;
 				return(0);
@@ -328,7 +332,7 @@ citrusleaf_info_cluster(cl_cluster *asc, char *names, char **values_r, bool send
 /* gets information back from ALL of the nodes in the cluster */
 /* @TODO error checking in case a node doens't return the same value as another */
 int
-citrusleaf_info_cluster_all(cl_cluster *asc, char *names, char **values_r, bool send_asis, int timeout_ms)
+citrusleaf_info_cluster_all(cl_cluster *asc, char *names, char **values_r, bool send_asis, bool check_bounds, int timeout_ms)
 {
 	if (timeout_ms == 0) timeout_ms = 100; // milliseconds
 	uint64_t start = cf_getms();
@@ -353,7 +357,7 @@ citrusleaf_info_cluster_all(cl_cluster *asc, char *names, char **values_r, bool 
 			
 			values = 0;
 			
-			if (0 == citrusleaf_info_host(sa_in, names, &values, end - cf_getms(), send_asis)) {
+			if (0 == citrusleaf_info_host(sa_in, names, &values, end - cf_getms(), send_asis, check_bounds)) {
 				// success
 				*values_r = values;
 				break;

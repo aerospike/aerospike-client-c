@@ -43,6 +43,6 @@
 //
 
 int citrusleaf_info(char *host, short port, char *names, char **values, int timeout_ms);
-int citrusleaf_info_host(struct sockaddr_in *sa_in, char *names, char **values, int timeout_ms, bool send_asis);
-int citrusleaf_info_cluster(cl_cluster *asc, char *names, char **values, bool send_asis, int timeout_ms);
-int citrusleaf_info_cluster_all(cl_cluster * asc, char * names, char ** values, bool send_asis, int timeout_ms);
+int citrusleaf_info_host(struct sockaddr_in *sa_in, char *names, char **values, int timeout_ms, bool send_asis, bool check_bounds);
+int citrusleaf_info_cluster(cl_cluster *asc, char *names, char **values, bool send_asis, bool check_bounds, int timeout_ms);
+int citrusleaf_info_cluster_all(cl_cluster * asc, char * names, char ** values, bool send_asis, bool check_bounds, int timeout_ms);

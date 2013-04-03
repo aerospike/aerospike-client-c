@@ -272,7 +272,7 @@ cl_rv citrusleaf_udf_list(cl_cluster *asc, as_udf_file *** files, int * count, c
     char *  query   = "udf-list";
     char *  result  = 0;
 
-    if ( citrusleaf_info_cluster(asc, query, &result, true, 100) ) {
+    if ( citrusleaf_info_cluster(asc, query, &result, true, /* check bounds */ true, 100) ) {
         if ( error ) {
             const char * emsg = "failed_request: ";
             int emsg_len = strlen(emsg);
@@ -349,7 +349,7 @@ cl_rv citrusleaf_udf_get_with_gen(cl_cluster *asc, const char * filename, as_udf
 
     snprintf(query, sizeof(query), "udf-get:filename=%s;", filename);
 
-    if ( citrusleaf_info_cluster(asc, query, &result, true, 100) ) {
+    if ( citrusleaf_info_cluster(asc, query, &result, true, /* check bounds */ true, 100) ) {
         if ( error ) {
             const char * emsg = "failed_request: ";
             int emsg_len = strlen(emsg);
@@ -438,7 +438,7 @@ cl_rv citrusleaf_udf_put(cl_cluster *asc, const char * filename, as_bytes *conte
     
     free(filepath);
 
-    if ( citrusleaf_info_cluster_all(asc, query, &result, true, 5000) ) {
+    if ( citrusleaf_info_cluster_all(asc, query, &result, true, /*check bounds*/ false, 5000) ) {
         if ( error ) {
             const char * emsg = "failed_request: ";
             int emsg_len = strlen(emsg);
@@ -497,7 +497,7 @@ cl_rv citrusleaf_udf_remove(cl_cluster *asc, const char * filename, char ** erro
 
     snprintf(query, sizeof(query), "udf-remove:filename=%s;", filename);
 
-    if ( citrusleaf_info_cluster(asc, query, &result, true, 100) ) {
+    if ( citrusleaf_info_cluster(asc, query, &result, true, /* check bounds */ true, 100) ) {
         if ( error ) {
             const char * emsg = "failed_request: ";
             int emsg_len = strlen(emsg);

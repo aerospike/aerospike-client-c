@@ -52,7 +52,7 @@ cl_rv citrusleaf_secondary_index_create(
         iname, binname, type
     );
 
-    int rc = citrusleaf_info_cluster_all(asc, ddl, response, true, 5000);
+    int rc = citrusleaf_info_cluster_all(asc, ddl, response, true, /* check bounds */ true, 5000);
 
     if ( rc != 0 ) return rc;
 
@@ -92,7 +92,7 @@ cl_rv citrusleaf_secondary_index_create_functional(
         citrusleaf_secondary_index_fold_args(args), type
     );
     
-    int rc = citrusleaf_info_cluster_all(asc, ddl, response, true, 5000);
+    int rc = citrusleaf_info_cluster_all(asc, ddl, response, true, /* check bounds */ true, 5000);
 
     if ( rc != 0 ) return rc;
 
@@ -117,7 +117,7 @@ cl_rv citrusleaf_secondary_index_drop(cl_cluster *asc, const char *ns, const cha
 
     char ddl[1024];
     sprintf(ddl, "sindex-drop:ns=%s;indexname=%s", ns, indexname);
-    if ( citrusleaf_info_cluster_all(asc, ddl, response, true, 5000) ) {
+    if ( citrusleaf_info_cluster_all(asc, ddl, response, true, /* check bounds */ true, 5000) ) {
         fprintf(stderr, "sindex-drop: response: %s\n", *response);
         return CITRUSLEAF_FAIL_CLIENT;
     }

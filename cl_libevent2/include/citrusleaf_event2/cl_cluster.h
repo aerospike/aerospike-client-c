@@ -227,6 +227,7 @@ extern void cl_cluster_node_reserve(cl_cluster_node *cn, char *msg);
 extern void cl_cluster_node_put(cl_cluster_node *cn);          // put node back
 extern int cl_cluster_node_fd_get(cl_cluster_node *cn);			// get an FD to the node
 extern void cl_cluster_node_fd_put(cl_cluster_node *cn, int fd); // put the FD back
+extern bool cl_cluster_node_throttle_drop(cl_cluster_node* cn);
 
 // Count a transaction as a success or failure.
 // TODO - add a tag parameter for debugging or detailed stats?

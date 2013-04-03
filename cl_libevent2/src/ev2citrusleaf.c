@@ -229,7 +229,7 @@ dump_buf(char *info, uint8_t *buf, size_t buf_len)
 //
 // Forward reference
 //
-void ev2citrusleaf_restart(cl_request *req);
+bool ev2citrusleaf_restart(cl_request* req, bool may_throttle);
 
 
 //
@@ -994,7 +994,7 @@ ev2citrusleaf_request_complete(cl_request *req, bool timedout)
 	}
 
 	// put the fd back for this node
-	if (req->fd > 0) {
+	if (req->fd > -1) {
 		if ((timedout == false) && (req->node))
 			cl_cluster_node_fd_put(req->node  , req->fd);
 		else {
@@ -1002,7 +1002,7 @@ ev2citrusleaf_request_complete(cl_request *req, bool timedout)
 			cf_atomic_int_incr(&g_cl_stats.conns_destroyed);
 			if (timedout == true) cf_atomic_int_incr(&g_cl_stats.conns_destroyed_timeout);
 		}
-		req->fd = 0;
+		req->fd = -1;
 	}
 
 	if (timedout == false) {
@@ -1275,8 +1275,8 @@ ev2citrusleaf_event(evutil_socket_t fd, short event, void *udata)
 Fail:
 	cf_atomic_int_incr(&g_cl_stats.conns_destroyed);
 
-	cf_close(fd);  // not back in queue,itz bad
-	req->fd = 0;
+	cf_close(fd);
+	req->fd = -1;
 
 	if (req->node) {
 		cl_cluster_node_put(req->node);
@@ -1289,7 +1289,7 @@ Fail:
 	}
 	else {
 		cf_debug("ev2citrusleaf failed a request, calling restart");
-		ev2citrusleaf_restart(req);
+		ev2citrusleaf_restart(req, false);
 	}
 
 	delta =  cf_getms() - _s;
@@ -1339,7 +1339,7 @@ ev2citrusleaf_base_hop_event(evutil_socket_t fd, short event, void *udata)
 
 	cf_debug("have node now, restart request %p", req);
 
-	ev2citrusleaf_restart(req);
+	ev2citrusleaf_restart(req, false);
 }
 
 
@@ -1361,72 +1361,90 @@ ev2citrusleaf_base_hop(cl_request *req)
 }
 
 
-//
-// Called when we couldn't get a node before, and now we might have a node,
-// so we're going to retry starting the request
-//
-void
-ev2citrusleaf_restart(cl_request *req)
+// Return values:
+// true  - success, or will time out, or queued for internal retry
+// false - throttled
+bool
+ev2citrusleaf_restart(cl_request* req, bool may_throttle)
 {
 	cf_atomic_int_incr(&g_cl_stats.req_restart);
 
 	// If we've already timed out, don't bother adding the network event, just
 	// let the timeout event (which no doubt is about to fire) clean up.
 	if (req->timeout_ms > 0 && req->start_time + req->timeout_ms < cf_getms()) {
-		return;
+		return true;
 	}
 
-	// set state to "haven't sent or received"
+	// Set/reset state to beginning of transaction.
 	req->wr_buf_pos = 0;
 	req->rd_buf_pos = 0;
 	req->rd_header_pos = 0;
-	// going to overwrite the node and fd, so better check it's all 0 here
-	if (req->node)
-		cf_debug("restart: should not have node (%s) on entry, going to assign node", req->node->name);
-	if (req->fd > 0)
-		cf_debug("restart: should not have fd (%d) on entry, going to assign node", req->fd);
 
-	// Get an FD from a cluster
-	cl_cluster_node *node;
-	int fd;
-	int tries = 0;
+	// Sanity checks.
+	if (req->node) {
+		cf_error("req has node %s on restart", req->node->name);
+	}
 
-	do {
-		node = cl_cluster_node_get(req->asc, req->ns, &req->d, req->write );
-		if (!node) {
-			// situation where there are currently no nodes known. Could be transent.
-			// enqueue!
+	if (req->fd != -1) {
+		cf_error("req has fd %d on restart", req->fd);
+	}
 
-			req->node = 0;
-			req->fd = 0;
+	req->node = 0;
+	req->fd = -1;
+
+	cl_cluster_node* node;
+	int fd = -1;
+	int i;
+
+	for (i = 0; i < 5; i++) {
+		node = cl_cluster_node_get(req->asc, req->ns, &req->d, req->write);
+
+		if (! node) {
 			cf_queue_push(req->asc->request_q, &req);
-			return;
+			return true;
 		}
 
-		do {
+		// Throttle before bothering to get the socket.
+		if (may_throttle && cl_cluster_node_throttle_drop(node)) {
+			// Randomly dropping this transaction in order to throttle.
+
+			cl_cluster_node_put(node);
+
+			if (req->timeout_set) {
+				evtimer_del(cl_request_get_timeout_event(req));
+			}
+
+			return false;
+		}
+
+		while (fd == -1) {
 			fd = cl_cluster_node_fd_get(node);
-			if (fd >= 0)	goto GoodFd;
-		} while (fd == -1); // this is the simple stale fd case
+		}
 
+		if (fd > -1) {
+			// Got a good socket.
+			break;
+		}
+
+		// Couldn't get a socket, try again from scratch. Probably we'll get the
+		// same node, but for normal reads or if we got a random node we could
+		// get a different node.
 		cl_cluster_node_put(node);
+	}
 
-		if (tries++ > CL_LOG_RESTARTLOOP_WARN) cf_warn("restart loop: iteration %d", tries);
+	// Safety - don't retry from scratch forever.
+	if (i == 5) {
+		cf_warn("request restart loop quit after 5 tries");
+		cf_queue_push(req->asc->request_q, &req);
+		return true;
+	}
 
-	} while (tries++ < 5);
-
-	// Not sure why so delayed. We're going to put this on the cluster queue.
-	cf_queue_push(req->asc->request_q, &req);
-	return;
-
-GoodFd:
-
-	// request has a refcount on the node from the node_get
+	// Go ahead, using the good node and socket.
 	req->node = node;
 	req->fd = fd;
 
-	// signal ready for event ---- write the buffer in the callback
-
-	event_assign(cl_request_get_network_event(req), req->base, fd, EV_WRITE, ev2citrusleaf_event, req);
+	event_assign(cl_request_get_network_event(req), req->base, fd, EV_WRITE,
+			ev2citrusleaf_event, req);
 
 	req->network_set = true;
 
@@ -1434,6 +1452,8 @@ GoodFd:
 		cf_warn("unable to add event for request %p: will time out", req);
 		req->network_set = false;
 	}
+
+	return true;
 }
 
 
@@ -1475,6 +1495,8 @@ ev2citrusleaf_start(cl_request *req, int info1, int info2, char *ns, char *set, 
 		cf_info("citrusleaf request with infinite timeout. Rare, examine caller.");
 	}
 
+	req->fd = -1;
+
     // set start time
     req->start_time = cf_getms();
 
@@ -1502,11 +1524,12 @@ ev2citrusleaf_start(cl_request *req, int info1, int info2, char *ns, char *set, 
 	cf_atomic_int_incr(&g_cl_stats.req_start);
 
 	// initial restart
-	ev2citrusleaf_restart(req);
+	// TODO - more complex permissions to throttle.
+	bool started = ev2citrusleaf_restart(req, true);
 
 	req_cross_thread_unlock(req);
 
-	return(0);
+	return started ? 0 : EV2CITRUSLEAF_FAIL_THROTTLED;
 }
 
 
@@ -1548,6 +1571,8 @@ ev2citrusleaf_start_op(cl_request *req, char *ns, char *set, ev2citrusleaf_objec
 		cf_info("citrusleaf request with infinite timeout. Rare, examine caller.");
 	}
 
+	req->fd = -1;
+
     // set start time
     req->start_time = cf_getms();
 
@@ -1574,11 +1599,11 @@ ev2citrusleaf_start_op(cl_request *req, char *ns, char *set, ev2citrusleaf_objec
 	cf_atomic_int_incr(&g_cl_stats.req_start);
 
 	// initial restart
-	ev2citrusleaf_restart(req);
+	bool started = ev2citrusleaf_restart(req, true);
 
 	req_cross_thread_unlock(req);
 
-	return(0);
+	return started ? 0 : EV2CITRUSLEAF_FAIL_THROTTLED;
 }
 
 
@@ -1897,6 +1922,8 @@ int ev2citrusleaf_init(ev2citrusleaf_lock_callbacks *lock_cb)
 		cf_error("couldn't create histogram for client");
 	}
 #endif
+
+	srand(cf_clepoch_seconds());
 
 	return(0);
 }

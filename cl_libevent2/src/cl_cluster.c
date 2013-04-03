@@ -1652,6 +1652,20 @@ cl_cluster_node_fd_put(cl_cluster_node *cn, int fd)
 	}
 }
 
+
+bool
+cl_cluster_node_throttle_drop(cl_cluster_node* cn)
+{
+	uint32_t throttle_pct = cf_atomic32_get(cn->throttle_pct);
+
+	if (throttle_pct == 0) {
+		return false;
+	}
+
+	return ((uint32_t)rand() % 100) < throttle_pct;
+}
+
+
 //
 // Debug function. Should be elsewhere.
 //

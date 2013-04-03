@@ -6,5 +6,5 @@ default: all
 %:
 	$(MAKE) -C large_set   $@
 	$(MAKE) -C large_stack $@
-	$(MAKE) -C large_list $@
+#	$(MAKE) -C large_list $@
 

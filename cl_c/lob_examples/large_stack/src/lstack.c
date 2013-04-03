@@ -224,7 +224,7 @@ int lso_peek_test(char * keystr, char * lso_bin, int iterations ) {
             // Don't break (for now) just keep going.
         }
         // Clean up -- release the result object
-        as_result_destroy( resultp );
+        if( resultp != NULL ) as_result_destroy( resultp );
 
         // Count up the reads (total)
         atomic_int_add( g_config->read_ops_counter, 1 );
@@ -334,7 +334,7 @@ int lso_peek_with_transform_test(char * keystr, char * lso_bin,
                    peek_count, valstr);
             free( valstr );
             // Clean up -- release the result object
-            as_result_destroy( resultp );
+            if( resultp != NULL ) as_result_destroy( resultp );
         } else {
             INFO("[ERROR]:[%s]: LSO PEEK WITH TRANSFORM Error: i(%d) \n",
                  meth, i );

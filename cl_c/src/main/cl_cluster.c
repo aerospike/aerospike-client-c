@@ -1212,7 +1212,7 @@ cluster_ping_address(cl_cluster *asc, struct sockaddr_in *sa_in)
 {
 		
 	char *values = 0;
-	if (0 != citrusleaf_info_host(sa_in, "node", &values, INFO_TIMEOUT_MS, false, /* check bounds */ true)){
+	if (0 != citrusleaf_info_host(sa_in, "node", &values, INFO_TIMEOUT_MS )){
 	 return;
 	}
 	
@@ -1260,7 +1260,7 @@ cluster_get_n_partitions( cl_cluster *asc, cf_vector *sockaddr_in_v )
 		struct sockaddr_in *sa_in = cf_vector_getp(sockaddr_in_v, i);
 
 		char *values = 0;
-		if (0 != citrusleaf_info_host(sa_in, "partitions", &values, INFO_TIMEOUT_MS, false, /*check bounds*/ true)) {
+		if (0 != citrusleaf_info_host(sa_in, "partitions", &values, INFO_TIMEOUT_MS  )) {
 			continue;
 		}
 		

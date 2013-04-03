@@ -75,19 +75,25 @@ citrusleaf_info_parse_single(char *values, char **value)
 }
 
 // Request the info of a particular sockaddr_in.
-// Used internally for host-crawling as well as supporting the external interface.
+// Used internally for host-crawling as well as supporting the external
+// interface.
 // Return 0 on success and -1 on error.
 int
-citrusleaf_info_host(struct sockaddr_in *sa_in, char *names, char **values, int timeout_ms, bool send_asis, bool check_bounds)
+citrusleaf_info_host(struct sockaddr_in *sa_in, char *names,
+        char **values, int timeout_ms )
 {
-	return citrusleaf_info_host_limit(sa_in, names, values, timeout_ms, send_asis, 0, check_bounds);
+    // Now, with the default, assume "as-is" should be false??
+	return citrusleaf_info_host_limit(
+            sa_in, names, values, timeout_ms, false, 0, true );
 }
 
 // Request the info of a particular sockaddr_in.
 // Reject info request if response length is greater than max_response_length.
 // Return 0 on success and -1 on error.
 int
-citrusleaf_info_host_limit(struct sockaddr_in *sa_in, char *names, char **values, int timeout_ms, bool send_asis, uint64_t max_response_length, bool check_bounds)
+citrusleaf_info_host_limit(
+        struct sockaddr_in *sa_in, char *names, char **values, int timeout_ms,
+        bool send_asis, uint64_t max_response_length, bool check_bounds)
 {
 	uint bb_size = 2048;
 	int rv = -1;
@@ -270,7 +276,7 @@ citrusleaf_info(char *hostname, short port, char *names, char **values, int time
 		struct sockaddr_in  sa_in;
 		cf_vector_get(&sockaddr_in_v, i, &sa_in);
 
-		if (0 == citrusleaf_info_host(&sa_in, names, values, timeout_ms, false, /* check bounds */ true)) {
+		if (0 == citrusleaf_info_host(&sa_in, names, values, timeout_ms  )) {
 			rv = 0;
 			goto Done;
 		}
@@ -317,7 +323,7 @@ citrusleaf_info_cluster(cl_cluster *asc, char *names, char **values_r, bool send
 			
 			values = 0;
 			
-			if (0 == citrusleaf_info_host(sa_in, names, &values, end - cf_getms(), send_asis, check_bounds)) {
+			if (0 == citrusleaf_info_host(sa_in, names, &values, end - cf_getms()  )) {
 				// success
 				*values_r = values;
 				return(0);
@@ -357,7 +363,7 @@ citrusleaf_info_cluster_all(cl_cluster *asc, char *names, char **values_r, bool 
 			
 			values = 0;
 			
-			if (0 == citrusleaf_info_host(sa_in, names, &values, end - cf_getms(), send_asis, check_bounds)) {
+			if (0 == citrusleaf_info_host(sa_in, names, &values, end - cf_getms()  )) {
 				// success
 				*values_r = values;
 				break;

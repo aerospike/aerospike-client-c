@@ -1,10 +1,15 @@
 -- AS Large Set (LSET) Operations
--- Stoneman V2 -- (Last Update Mar 25, 2013: tjl)
+-- Steelman V3.1 -- (Last Update Mar 30, 2013: tjl)
 --
 -- Please refer to lset_design.lua for architecture and design notes.
 --
 -- Aerospike Large Set (LSET) Operations
--- (*) lset_create(): Create the LSET object in the bin specified.
+-- (*) lset_create():
+--          :: Create the LSET object in the bin specified, using the
+--          :: creation arguments passed in (probably a package).
+-- (*) lset_insert_with_create():
+--          :: Insert an item into the Large Set, Create first if needed.
+--          :: Apply the creation package on create.
 -- (*) lset_insert(): Insert an item into the Large Set
 -- (*) lset_select(): Select an item from the Large Set
 -- (*) lset_exists(): Test Existence on an item in the set
@@ -15,13 +20,14 @@
 -- ======================================================================
 -- TO DO List:
 -- ======================================================================
--- TODO: (1) Verify order of operations so that the upper level record
+-- TODO: (*) Verity that all serious errors call error('msg') rather than
+--           just return.
+-- TODO: (*) Do Parameter validation for all external calls.
+-- TODO: (*) Add lset_insert_with_create(), which is insert plus the
+--           creation parms (in case we have to create).
+-- Done: (*) Verify order of operations so that the upper level record
 --           is NEVER written before all of the lower level ops have
 --           successfully complete.
--- TODO: (2) Verity that all serious errors call error('msg') rather than
---           just return.
--- TODO: (3) Do Parameter validation for all external calls.
--- ======================================================================
 -- ======================================================================
 --
 -- ======================================================================
@@ -33,7 +39,7 @@
 -- When "F" is true, the trace() call is executed.  When it is false,
 -- the trace() call is NOT executed (regardless of the value of GP)
 -- ======================================================================
-local GP=true; -- Doesn't matter what this is set to.
+local GP=true; -- Leave this set to true.
 local F=true; -- Set F (flag) to true to turn ON global print
 
 -- ===========================================
@@ -67,7 +73,7 @@ local DEFAULT_DISTRIB = 31;
 -- It is the job of the caller to store in the rec bin and call update()
 -- ======================================================================
 local function initializeLSetMap(topRec, namespace, set, lsetBinName, distrib )
-  local mod = "AsLSetStoneman";
+  local mod = "AsLSetSteelman";
   local meth = "initializeLSetMap()";
   GP=F and trace("[ENTER]: <%s:%s>:: NS(%s) Set(%s) BinName(%s) D(%s)",
     mod, meth, tostring(namespace), tostring(set), tostring(lsetBinName),
@@ -113,7 +119,7 @@ end -- initializeLSetMap()
 -- (*) argListMap: Map of User Override LSET Settings 
 -- ======================================================================
 local function adjustLSetMap( lsetCtrlMap, argListMap )
-  local mod = "LSetStoneman";
+  local mod = "LSetSteelman";
   local meth = "adjustLSetMap()";
   GP=F and trace("[ENTER]: <%s:%s>:: LSetMap(%s)::\n ArgListMap(%s)",
                  mod, meth, tostring(lsetCtrlMap), tostring( argListMap ));
@@ -166,7 +172,7 @@ end -- stringHash
 -- NOTE: Use a better Hash Function.
 -- ======================================================================
 local function numberHash( value, modulo )
-  local mod = "AsLSetStoneman";
+  local mod = "AsLSetSteelman";
   local meth = "numberHash()";
   local result = 0;
   if value ~= nil and type(value) == "number" then
@@ -195,7 +201,7 @@ end
 -- Return: New Bin Name
 -- ======================================================================
 local function setupNewBin( topRec, binNum )
-  local mod = "AsLSetStoneman";
+  local mod = "AsLSetSteelman";
   local meth = "setupNewBin()";
   GP=F and trace("[ENTER]: <%s:%s> Bin(%d) \n", mod, meth, binNum );
 
@@ -217,7 +223,7 @@ end -- setupNewBin
 -- And, know if it's an atomic type or complex type.
 -- ======================================================================
 local function computeSetBin( newValue, lsetCtrlMap )
-  local mod = "AsLSetStoneman";
+  local mod = "AsLSetSteelman";
   local meth = "computeSetBin()";
   GP=F and trace("[ENTER]: <%s:%s> val(%s) Map(%s) \n",
                  mod, meth, tostring(newValue), tostring(lsetCtrlMap) );
@@ -266,7 +272,7 @@ end -- computeSetBin()
 -- Return 0 if found (and not inserted), otherwise 1 if inserted.
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 local function complexScanList(lsetCtrlMap, binList, value, flag ) 
-  local mod = "AsLSetStoneman";
+  local mod = "AsLSetSteelman";
   local meth = "complexScanList()";
   local result = nil;
   -- Scan the list for the item, return true if found,
@@ -325,7 +331,7 @@ end -- complexScanList
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 local function simpleScanList(lsetCtrlMap, binList, value, flag ) 
-  local mod = "AsLSetStoneman";
+  local mod = "AsLSetSteelman";
   local meth = "simpleScanList()";
   GP=F and trace("[ENTER]: <%s:%s> Looking for V(%s), ListSize(%d) List(%s)",
                  mod, meth, tostring(value), list.size(binList),
@@ -383,7 +389,7 @@ end -- simpleScanList
 -- (NOTE: Can't return 0 -- because that might be a valid value)
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 local function scanList( lsetCtrlMap, binList, searchValue, flag ) 
-  local mod = "AsLSetStoneman";
+  local mod = "AsLSetSteelman";
   local meth = "scanList()";
 
   if lsetCtrlMap.KeyType == 0 then
@@ -405,7 +411,7 @@ end
 -- (*) stats: 1=Please update Counts, 0=Do NOT update counts (rehash)
 -- ======================================================================
 local function localInsert( topRec, lsetCtrlMap, newValue, stats )
-  local mod = "AsLSetStoneman";
+  local mod = "AsLSetSteelman";
   local meth = "localInsert()";
   GP=F and trace("[ENTER]:<%s:%s>Insert(%s)", mod, meth, tostring(newValue));
 
@@ -464,7 +470,7 @@ end -- localInsert
 -- (*) lsetCtrlMap
 -- ======================================================================
 local function rehashSet( topRec, setBinName, lsetCtrlMap )
-  local mod = "AsLSetStoneman";
+  local mod = "AsLSetSteelman";
   local meth = "rehashSet()";
   GP=F and trace("[ENTER]:<%s:%s> !!!! REHASH !!!! ", mod, meth );
   GP=F and trace("[ENTER]:<%s:%s> !!!! REHASH !!!! ", mod, meth );
@@ -496,16 +502,85 @@ local function rehashSet( topRec, setBinName, lsetCtrlMap )
   GP=F and trace("[EXIT]: <%s:%s>", mod, meth );
 end -- rehashSet()
 
+
 -- ======================================================================
 -- validateBinName(): Validate that the user's bin name for this large
 -- object complies with the rules of Aerospike. Currently, a bin name
 -- cannot be larger than 14 characters (a seemingly low limit).
 -- ======================================================================
 local function validateBinName( binName )
-  if string.size( binName ) > 14 then
+  local mod = "LSetSteelMan";
+  local meth = "validateBinName()";
+  GP=F and trace("[ENTER]: <%s:%s> validate Bin Name(%s)",
+    mod, meth, tostring(binName));
+
+  if binName == nil  then
+    error('Bin Name Validation Error: Null BinName');
+  elseif type( binName ) ~= "string"  then
+    error('Bin Name Validation Error: BinName must be a string');
+  elseif string.len( binName ) > 14 then
     error('Bin Name Validation Error: Exceeds 14 characters');
   end
-end -- validateBinName()
+end -- validateBinName
+
+-- ======================================================================
+-- validateRecBinAndMap():
+-- Check that the topRec, the lsetBinName and lsetMap are valid, otherwise
+-- jump out with an error() call.
+-- Parms:
+-- (*) topRec:
+-- ======================================================================
+local function validateRecBinAndMap( topRec, binName, mustExist )
+    local mod = "LSetSteelMan";
+    local meth = "validateRecBinAndMap()";
+
+    GP=F and trace("[ENTER]: <%s:%s>  ", mod, meth );
+
+    if( not aerospike:exists( topRec ) and mustExist == true ) then
+        warn("[ERROR EXIT]:<%s:%s>:Missing Record. Exit", mod, meth );
+        error('Base Record Does NOT exist');
+    end
+
+    -- Verify that the LSET Structure is there: otherwise, error.
+    if binName == nil  or type(binName) ~= "string" then
+        warn("[ERROR EXIT]: <%s:%s> Bad LSET BIN Parameter", mod, meth );
+        error('Bad LSET Bin Parameter');
+    end
+
+    -- Validate that binName follows the Aerospike rules
+    validateBinName( binName );
+
+    if( topRec[binName] == nil ) then
+        warn("[ERROR EXIT]: <%s:%s> LSET_BIN (%s) DOES NOT Exists",
+        mod, meth, tostring(binName) );
+        error('LSET_BIN Does NOT exist');
+    end
+
+    -- check that our bin is (mostly) there
+    local lsetMap = topRec[binName]; -- The main lset map
+    if lsetMap.Magic ~= "MAGIC" then
+        GP=F and
+        warn("[ERROR EXIT]: <%s:%s> LSET_BIN (%s) Is Corrupted (no magic)",
+            mod, meth, binName );
+        error('LSET_BIN Is Corrupted');
+    end
+end -- validateRecBinAndMap()
+
+-- ======================================================================
+-- validateTopRec( topRec, lsetMap )
+-- ======================================================================
+-- Validate that the top record looks valid:
+-- Get the LSET bin from the rec and check for magic
+-- Return: "good" or "bad"
+-- ======================================================================
+local function  validateTopRec( topRec, lsetMap )
+  local thisMap = topRec[lsetMap.BinName];
+  if thisMap.Magic == "MAGIC" then
+    return "good"
+  else
+    return "bad"
+  end
+end -- validateTopRec()
 
 -- ======================================================================
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
@@ -515,7 +590,7 @@ end -- validateBinName()
 -- (1) One Set Per Record
 --
 -- ======================================================================
--- || asLSetCreate ||
+-- || aerospike_lset_create ||
 -- ======================================================================
 -- Create/Initialize a AS LSet structure in a record, using multiple bins
 --
@@ -533,9 +608,9 @@ end -- validateBinName()
 -- (*) topRec: The Aerospike Server record on which we operate
 -- (*) setBinName: The name of the bin for the AS Large Set
 -- (*) distrib: The Distribution Factor (how many separate bins) 
-function asLSetCreate( topRec, setBinName, distrib )
-  local mod = "AsLSetStoneman";
-  local meth = "asLSetCreate()";
+function aerospike_lset_create( topRec, setBinName, distrib )
+  local mod = "AsLSetSteelman";
+  local meth = "aerospike_lset_create()";
   GP=F and trace("[ENTER]: <%s:%s> Bin(%s) Dis(%d)\n",
                  mod, meth, setBinName, distrib );
 
@@ -618,9 +693,9 @@ end
 -- (*) setBinName: The name of the bin for the AS Large Set
 -- (*) distrib: The Distribution Factor (how many separate bins) 
 -- (*) newValue: Value to be inserted into the Large Set
-function asLSetInsert( topRec, setBinName, newValue )
-  local mod = "AsLSetStoneman";
-  local meth = "asLSetInsert()";
+function aerospike_lset_insert( topRec, setBinName, newValue )
+  local mod = "AsLSetSteelman";
+  local meth = "aerospike_lset_insert()";
   GP=F and trace("[ENTER]:<%s:%s> SetBin(%s) NewValue(%s)",
                  mod, meth, tostring(setBinName), tostring( newValue ));
 
@@ -680,9 +755,9 @@ end -- function set Insert()
 -- Then, scan the bin's list for that item (linear scan).
 --
 -- ======================================================================
-function asLSetExists( topRec, setBinName, searchValue )
-  local mod = "AsLSetStoneman";
-  local meth = "asLSetSearch()";
+function aerospike_lset_exists( topRec, setBinName, searchValue )
+  local mod = "AsLSetSteelman";
+  local meth = "aerospike_lset_search()";
   GP=F and trace("[ENTER]: <%s:%s> Search for Value(%s)",
                  mod, meth, tostring( searchValue ) );
 
@@ -708,7 +783,7 @@ function asLSetExists( topRec, setBinName, searchValue )
   else
     return 1
   end
-end -- function asLSetSearch()
+end -- function aerospike_lset_search()
 
 
 -- ======================================================================
@@ -722,9 +797,9 @@ end -- function asLSetSearch()
 -- Then, scan the bin's list for that item (linear scan).
 --
 -- ======================================================================
-function asLSetSearch( topRec, setBinName, searchValue )
-  local mod = "AsLSetStoneman";
-  local meth = "asLSetSearch()";
+function aerospike_lset_search( topRec, setBinName, searchValue )
+  local mod = "AsLSetSteelman";
+  local meth = "aerospike_lset_search()";
   GP=F and trace("[ENTER]: <%s:%s> Search for Value(%s)",
                  mod, meth, tostring( searchValue ) );
 
@@ -754,7 +829,7 @@ function asLSetSearch( topRec, setBinName, searchValue )
     else
       return result;
     end
-end -- function asLSetSearch()
+end -- function aerospike_lset_search()
 
 -- ======================================================================
 -- |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
@@ -764,9 +839,9 @@ end -- function asLSetSearch()
 -- Find an element (i.e. search) and then remove it from the list.
 -- Return the element if found, return nil if not found.
 -- ======================================================================
-function asLSetDelete( topRec, setBinName, deleteValue )
-  local mod = "AsLSetStoneman";
-  local meth = "asLSetDelete()";
+function aerospike_lset_delete( topRec, setBinName, deleteValue )
+  local mod = "AsLSetSteelman";
+  local meth = "aerospike_lset_delete()";
   GP=F and trace("[ENTER]: <%s:%s> Delete Value(%s)",
                  mod, meth, tostring( deleteValue ) );
 
@@ -803,6 +878,6 @@ function asLSetDelete( topRec, setBinName, deleteValue )
                  mod, meth, tostring( result ));
 
   return result;
-end -- function asLSetDelete()
+end -- function aerospike_lset_delete()
 
 -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> --

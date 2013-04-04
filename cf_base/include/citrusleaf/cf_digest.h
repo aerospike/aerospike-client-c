@@ -49,7 +49,7 @@ cf_digest_compute(void *data, size_t len, cf_digest *d)
 // the proper typing and swizzling
 
 static inline void
-cf_digest_compute2(void *data1, size_t len1, void *data2, size_t len2, cf_digest *d)
+cf_digest_compute2(const void *data1, size_t len1, const void *data2, size_t len2, cf_digest *d)
 {
 	if (len1 == 0) {
 		RIPEMD160((const unsigned char *) data2, len2, (unsigned char *) d->digest);

@@ -105,6 +105,7 @@ typedef struct cl_request_s {
 
     // Relevant only for "cross-threaded" transactions.
 	void*			cross_thread_lock;
+	bool			cross_thread_locked;
 
     uint8_t   event_space[]; // this will be preallocated
     						 // based on the size of struct event

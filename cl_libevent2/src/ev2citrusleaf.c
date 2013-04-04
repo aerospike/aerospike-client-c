@@ -275,6 +275,7 @@ cl_request_create(ev2citrusleaf_cluster* asc, struct event_base* base,
 	cl_request* r = (cl_request*)malloc(size);
 
 	if (! r) {
+		cf_error("request allocation failed");
 		return NULL;
 	}
 
@@ -305,6 +306,10 @@ cl_request_destroy(cl_request* r)
 	}
 
 	if (r->cross_thread_lock) {
+		if (r->cross_thread_locked) {
+			MUTEX_UNLOCK(r->cross_thread_lock);
+		}
+
 		MUTEX_FREE(r->cross_thread_lock);
 	}
 
@@ -332,8 +337,10 @@ cl_request_get_timeout_event(cl_request *r)
 //
 // FIELDS WILL BE SWAPED INTO NETWORK ORDER
 
-static uint8_t *
-write_fields(uint8_t *buf, char *ns, int ns_len, char *set, int set_len, ev2citrusleaf_object *key, const cf_digest *d, cf_digest *d_ret)
+static uint8_t*
+write_fields(uint8_t* buf, const char* ns, int ns_len, const char* set,
+		int set_len, const ev2citrusleaf_object* key, const cf_digest* d,
+		cf_digest* d_ret)
 {
 
 	// lay out the fields
@@ -488,7 +495,7 @@ value_to_op_int_size(int64_t i)
 
 // convert a wire protocol integer value to a local int64
 int
-op_to_value_int(uint8_t	*buf, int size, int64_t *value)
+op_to_value_int(const uint8_t *buf, int size, int64_t *value)
 {
 	if (size > 8)	return(-1);
 	if (size == 8) {
@@ -530,7 +537,7 @@ op_to_value_int(uint8_t	*buf, int size, int64_t *value)
 }
 
 int
-value_to_op_get_size(ev2citrusleaf_object *v, size_t *sz)
+value_to_op_get_size(const ev2citrusleaf_object *v, size_t *sz)
 {
 
 	switch(v->type) {
@@ -559,7 +566,7 @@ value_to_op_get_size(ev2citrusleaf_object *v, size_t *sz)
 
 
 void
-bin_to_op(int operation, ev2citrusleaf_bin *v, cl_msg_op *op)
+bin_to_op(int operation, const ev2citrusleaf_bin *v, cl_msg_op *op)
 {
 	int	bin_len = (int)strlen(v->bin_name);
 	op->op_sz = sizeof(cl_msg_op) + bin_len - sizeof(uint32_t);
@@ -602,7 +609,7 @@ bin_to_op(int operation, ev2citrusleaf_bin *v, cl_msg_op *op)
 }
 
 void
-operation_to_op(ev2citrusleaf_operation *v, cl_msg_op *op)
+operation_to_op(const ev2citrusleaf_operation *v, cl_msg_op *op)
 {
 	int	bin_len = (int)strlen(v->bin_name);
 	op->op_sz = sizeof(cl_msg_op) + bin_len - sizeof(uint32_t);
@@ -660,11 +667,12 @@ operation_to_op(ev2citrusleaf_operation *v, cl_msg_op *op)
 //
 // n_values can be passed in 0, and then values is undefined / probably 0.
 //
-
-
 static int
-compile(int info1, int info2, char *ns, char *set, ev2citrusleaf_object *key, cf_digest *digest, ev2citrusleaf_write_parameters *wparam, uint32_t timeout,
-	ev2citrusleaf_bin *values, int n_values,  uint8_t **buf_r, size_t *buf_size_r, cf_digest *digest_r)
+compile(int info1, int info2, const char* ns, const char* set,
+		const ev2citrusleaf_object* key, const cf_digest* digest,
+		const ev2citrusleaf_write_parameters* wparam, uint32_t timeout,
+		const ev2citrusleaf_bin* values, int n_values, uint8_t** buf_r,
+		size_t* buf_size_r, cf_digest* digest_r)
 {
 	// I hate strlen
 	int		ns_len = (int)strlen(ns);
@@ -747,12 +755,11 @@ compile(int info1, int info2, char *ns, char *set, ev2citrusleaf_object *key, cf
 // A different version of the compile function which takes operations, not values
 // The operation is compiled by looking at the internal ops
 //
-
-
 static int
-compile_ops(char *ns, char *set, ev2citrusleaf_object *key, cf_digest *digest,
-	ev2citrusleaf_operation *ops, int n_ops,  ev2citrusleaf_write_parameters *wparam,
-	uint8_t **buf_r, size_t *buf_size_r, cf_digest *digest_r, bool *write)
+compile_ops(const char* ns, const char* set, const ev2citrusleaf_object* key,
+		const cf_digest* digest, const ev2citrusleaf_operation* ops, int n_ops,
+		const ev2citrusleaf_write_parameters* wparam, uint8_t** buf_r,
+		size_t* buf_size_r, cf_digest* digest_r, bool* write)
 {
 	int info1 = 0;
 	int info2 = 0;
@@ -1154,6 +1161,7 @@ req_cross_thread_init_and_lock(cl_request* req)
 	if (req->asc->options.cross_threaded) {
 		MUTEX_ALLOC(req->cross_thread_lock);
 		MUTEX_LOCK(req->cross_thread_lock);
+		req->cross_thread_locked = true;
 	}
 }
 
@@ -1161,6 +1169,7 @@ static inline void
 req_cross_thread_unlock(cl_request* req)
 {
 	if (req->cross_thread_lock) {
+		req->cross_thread_locked = false;
 		MUTEX_UNLOCK(req->cross_thread_lock);
 	}
 }
@@ -1339,6 +1348,14 @@ ev2citrusleaf_timer_expired(evutil_socket_t fd, short event, void *udata)
 
 	event_cross_thread_check(req);
 
+	if (req->cross_thread_lock && ! req->timeout_set) {
+		// In the cross-threaded model, if the non-blocking call fails we use
+		// the timeout_set flag (double-purposed!) to tell this event to just
+		// destroy the cl_request and stop.
+		cl_request_destroy(req);
+		return;
+	}
+
 	req->timeout_set = false;
 
 	ev2citrusleaf_request_complete(req, true /*timedout*/); // frees the req
@@ -1432,13 +1449,7 @@ ev2citrusleaf_restart(cl_request* req, bool may_throttle)
 		// Throttle before bothering to get the socket.
 		if (may_throttle && cl_cluster_node_throttle_drop(node)) {
 			// Randomly dropping this transaction in order to throttle.
-
 			cl_cluster_node_put(node);
-
-			if (req->timeout_set) {
-				evtimer_del(cl_request_get_timeout_event(req));
-			}
-
 			return false;
 		}
 
@@ -1482,149 +1493,179 @@ ev2citrusleaf_restart(cl_request* req, bool may_throttle)
 }
 
 
-//
-// Omnibus internal function that the externals can map to
-// If you don't want any values back, pass the values and n_values pointers as null
-//
-
-int
-ev2citrusleaf_start(cl_request *req, int info1, int info2, char *ns, char *set, ev2citrusleaf_object *key, cf_digest *digest,
-	ev2citrusleaf_write_parameters *wparam, ev2citrusleaf_bin *bins, int n_bins)
+void
+start_failed(cl_request* req)
 {
-	req_cross_thread_init_and_lock(req);
+	if (! req->timeout_set) {
+		cl_request_destroy(req);
+		return;
+	}
 
-	// if you can't set up the timer, best to bail early
-	if (req->timeout_ms) {
-		if (req->timeout_ms < 0) {
-			cf_warn("don't set timeouts in the past");
-			req_cross_thread_unlock(req);
-			return(-1);
-		}
-		if (req->timeout_ms > 1000 * 60) {
-			cf_info("unlikely you meant to set a timeout more than 60 seconds in the future, examine your code");
-		}
-		// set up a whole-transaction timer, as we need to signal back in all possible failure causes
-		evtimer_assign(cl_request_get_timeout_event(req), req->base, ev2citrusleaf_timer_expired, req);
-		struct timeval tv;
-		tv.tv_sec = req->timeout_ms / 1000;
-		tv.tv_usec = (req->timeout_ms % 1000) * 1000;
-		if (0 != evtimer_add(cl_request_get_timeout_event(req), &tv)) {
-			cf_warn("libevent returned -1 in timer add: surprising");
-			req_cross_thread_unlock(req);
-			return(-1);
-		}
-		req->timeout_set = true;
+	if (req->cross_thread_lock) {
+		// Unfortunately, in the cross-threaded model we have no idea whether
+		// the timer has fired (and is waiting at the lock) or not, so we can't
+		// just unlock and destroy - the destroy would race the fired timer. The
+		// only way to safely destroy is to let the timer event do it.
+
+		// Tell the timer event that the non-blocking call failed.
+		req->timeout_set = false;
+		req_cross_thread_unlock(req);
+		// ... and don't destroy - the timer event will do it.
 	}
 	else {
-		req->timeout_set = false;
-		cf_info("citrusleaf request with infinite timeout. Rare, examine caller.");
+		event_del(cl_request_get_timeout_event(req));
+		cl_request_destroy(req);
 	}
-
-    // set start time
-    req->start_time = cf_getms();
-
-	// set up buffer pointers
-	req->wr_buf_size = 0; // means uninit
-	req->rd_buf_size = 0; // means uninit
-	req->wr_buf = req->wr_tmp;
-	req->wr_buf_size = sizeof(req->wr_tmp);
-
-	req->write = (info2 & CL_MSG_INFO2_WRITE) ? true : false;
-	strcpy(req->ns, ns);
-
-	// Take all the request parameters and fill out the request buffer
-	if (0 != compile(info1, info2, ns, set, key, digest, wparam, req->timeout_ms, bins, n_bins , &req->wr_buf, &req->wr_buf_size, &req->d)) {
-		if (req->timeout_set) {
-			cf_info("citrusleaf: compile failed : deleting event");
-			evtimer_del(cl_request_get_timeout_event(req));
-		}
-		req_cross_thread_unlock(req);
-		return(-1);
-	}
-
-//	dump_buf("sending request to cluster:", req->wr_buf, req->wr_buf_size);
-
-	cf_atomic_int_incr(&g_cl_stats.req_start);
-
-	// initial restart
-	// TODO - more complex permissions to throttle.
-	bool started = ev2citrusleaf_restart(req, true);
-
-	req_cross_thread_unlock(req);
-
-	return started ? 0 : EV2CITRUSLEAF_FAIL_THROTTLED;
 }
 
 
 //
-// Omnibus internal function that the externals can map to
-// If you don't want any values back, pass the values and n_values pointers as null
+// Omnibus internal function used by public transactions API.
 //
-
 int
-ev2citrusleaf_start_op(cl_request *req, char *ns, char *set, ev2citrusleaf_object *key, cf_digest *digest,
-	ev2citrusleaf_operation *ops, int n_ops, ev2citrusleaf_write_parameters *wparam)
+ev2citrusleaf_start(cl_request* req, int info1, int info2, const char* ns,
+		const char* set, const ev2citrusleaf_object* key,
+		const cf_digest* digest, const ev2citrusleaf_write_parameters* wparam,
+		const ev2citrusleaf_bin* bins, int n_bins)
 {
+	if (! req) {
+		return EV2CITRUSLEAF_FAIL_CLIENT_ERROR;
+	}
+
 	req_cross_thread_init_and_lock(req);
 
-	// if you can't set up the timer, best to bail early
+	// To implement timeout, add timer event in parallel to network event chain.
 	if (req->timeout_ms) {
 		if (req->timeout_ms < 0) {
-			cf_warn("don't set timeouts in the past");
-			req_cross_thread_unlock(req);
-			return(-1);
+			cf_warn("timeout < 0");
+			cl_request_destroy(req);
+			return EV2CITRUSLEAF_FAIL_CLIENT_ERROR;
 		}
+
 		if (req->timeout_ms > 1000 * 60) {
-			cf_info("unlikely you meant to set a timeout more than 60 seconds in the future, examine your code");
+			cf_info("timeout > 60 seconds");
 		}
-		// set up a whole-transaction timer, as we need to signal back in all possible failure causes
-		evtimer_assign(cl_request_get_timeout_event(req), req->base, ev2citrusleaf_timer_expired, req);
+
+		evtimer_assign(cl_request_get_timeout_event(req), req->base,
+				ev2citrusleaf_timer_expired, req);
+
 		struct timeval tv;
 		tv.tv_sec = req->timeout_ms / 1000;
 		tv.tv_usec = (req->timeout_ms % 1000) * 1000;
+
 		if (0 != evtimer_add(cl_request_get_timeout_event(req), &tv)) {
-			cf_warn("libevent returned -1 in timer add: surprising");
-			req_cross_thread_unlock(req);
-			return(-1);
+			cf_warn("request add timer failed");
+			cl_request_destroy(req);
+			return EV2CITRUSLEAF_FAIL_CLIENT_ERROR;
 		}
+
 		req->timeout_set = true;
 	}
-	else {
-		req->timeout_set = false;
-		cf_info("citrusleaf request with infinite timeout. Rare, examine caller.");
-	}
+	// else there's no timeout - supported, but a bit dangerous.
 
-    // set start time
     req->start_time = cf_getms();
-
-	// set up buffer pointers
-	req->wr_buf_size = 0; // means uninit
-	req->rd_buf_size = 0; // means uninit
 	req->wr_buf = req->wr_tmp;
 	req->wr_buf_size = sizeof(req->wr_tmp);
-
+	req->write = (info2 & CL_MSG_INFO2_WRITE) ? true : false;
 	strcpy(req->ns, ns);
 
-	// Take all the request parameters and fill out the request buffer
-	if (0 != compile_ops(ns, set, key, digest, ops, n_ops, wparam , &req->wr_buf, &req->wr_buf_size, &req->d, &req->write)) {
-		if (req->timeout_set) {
-			cf_info("citrusleaf: compile failed : deleting event");
-			evtimer_del(cl_request_get_timeout_event(req));
-		}
-		req_cross_thread_unlock(req);
-		return(-1);
+	// Fill out the request write buffer.
+	if (0 != compile(info1, info2, ns, set, key, digest, wparam,
+			req->timeout_ms, bins, n_bins, &req->wr_buf, &req->wr_buf_size,
+			&req->d)) {
+		start_failed(req);
+		return EV2CITRUSLEAF_FAIL_CLIENT_ERROR;
 	}
 
 //	dump_buf("sending request to cluster:", req->wr_buf, req->wr_buf_size);
 
 	cf_atomic_int_incr(&g_cl_stats.req_start);
 
-	// initial restart
-	bool started = ev2citrusleaf_restart(req, true);
+	// Initial restart - get node and socket and initiate network event chain.
+	// TODO - more complex permissions to throttle.
+	if (! ev2citrusleaf_restart(req, true)) {
+		start_failed(req);
+		return EV2CITRUSLEAF_FAIL_THROTTLED;
+	}
 
+	cf_atomic_int_incr(&req->asc->requests_in_progress);
 	req_cross_thread_unlock(req);
 
-	return started ? 0 : EV2CITRUSLEAF_FAIL_THROTTLED;
+	return EV2CITRUSLEAF_OK;
+}
+
+
+//
+// Internal function used by public operate transaction API.
+//
+int
+ev2citrusleaf_start_op(cl_request* req, const char* ns, const char* set,
+		const ev2citrusleaf_object* key, const cf_digest* digest,
+		const ev2citrusleaf_operation* ops, int n_ops,
+		const ev2citrusleaf_write_parameters* wparam)
+{
+	if (! req) {
+		return EV2CITRUSLEAF_FAIL_CLIENT_ERROR;
+	}
+
+	req_cross_thread_init_and_lock(req);
+
+	// To implement timeout, add timer event in parallel to network event chain.
+	if (req->timeout_ms) {
+		if (req->timeout_ms < 0) {
+			cf_warn("timeout < 0");
+			cl_request_destroy(req);
+			return EV2CITRUSLEAF_FAIL_CLIENT_ERROR;
+		}
+
+		if (req->timeout_ms > 1000 * 60) {
+			cf_info("timeout > 60 seconds");
+		}
+
+		evtimer_assign(cl_request_get_timeout_event(req), req->base,
+				ev2citrusleaf_timer_expired, req);
+
+		struct timeval tv;
+		tv.tv_sec = req->timeout_ms / 1000;
+		tv.tv_usec = (req->timeout_ms % 1000) * 1000;
+
+		if (0 != evtimer_add(cl_request_get_timeout_event(req), &tv)) {
+			cf_warn("request add timer failed");
+			cl_request_destroy(req);
+			return EV2CITRUSLEAF_FAIL_CLIENT_ERROR;
+		}
+
+		req->timeout_set = true;
+	}
+	// else there's no timeout - supported, but a bit dangerous.
+
+    req->start_time = cf_getms();
+	req->wr_buf = req->wr_tmp;
+	req->wr_buf_size = sizeof(req->wr_tmp);
+	strcpy(req->ns, ns);
+
+	// Fill out the request write buffer.
+	if (0 != compile_ops(ns, set, key, digest, ops, n_ops, wparam, &req->wr_buf,
+			&req->wr_buf_size, &req->d, &req->write)) {
+		start_failed(req);
+		return EV2CITRUSLEAF_FAIL_CLIENT_ERROR;
+	}
+
+//	dump_buf("sending request to cluster:", req->wr_buf, req->wr_buf_size);
+
+	cf_atomic_int_incr(&g_cl_stats.req_start);
+
+	// Initial restart - get node and socket and initiate network event chain.
+	// TODO - more complex permissions to throttle.
+	if (! ev2citrusleaf_restart(req, true)) {
+		start_failed(req);
+		return EV2CITRUSLEAF_FAIL_THROTTLED;
+	}
+
+	cf_atomic_int_incr(&req->asc->requests_in_progress);
+	req_cross_thread_unlock(req);
+
+	return EV2CITRUSLEAF_OK;
 }
 
 
@@ -1639,20 +1680,7 @@ ev2citrusleaf_get_all(ev2citrusleaf_cluster *cl, char *ns, char *set, ev2citrusl
 {
 	cl_request* req = cl_request_create(cl, base, timeout_ms, NULL, cb, udata);
 
-	if (! req) {
-		return EV2CITRUSLEAF_FAIL_CLIENT_ERROR;
-	}
-
-	int result = ev2citrusleaf_start(req, CL_MSG_INFO1_READ | CL_MSG_INFO1_GET_ALL, 0, ns, set, key, 0/*digest*/, 0, 0, 0);
-
-	if (result == EV2CITRUSLEAF_OK) {
-		cf_atomic_int_incr(&cl->requests_in_progress);
-	}
-	else {
-		cl_request_destroy(req);
-	}
-
-	return result;
+	return ev2citrusleaf_start(req, CL_MSG_INFO1_READ | CL_MSG_INFO1_GET_ALL, 0, ns, set, key, 0/*digest*/, 0, 0, 0);
 }
 
 int
@@ -1661,20 +1689,7 @@ ev2citrusleaf_get_all_digest(ev2citrusleaf_cluster *cl, char *ns, cf_digest *dig
 {
 	cl_request* req = cl_request_create(cl, base, timeout_ms, NULL, cb, udata);
 
-	if (! req) {
-		return EV2CITRUSLEAF_FAIL_CLIENT_ERROR;
-	}
-
-	int result = ev2citrusleaf_start(req, CL_MSG_INFO1_READ | CL_MSG_INFO1_GET_ALL, 0, ns, 0/*set*/, 0/*key*/, digest, 0, 0, 0);
-
-	if (result == EV2CITRUSLEAF_OK) {
-		cf_atomic_int_incr(&cl->requests_in_progress);
-	}
-	else {
-		cl_request_destroy(req);
-	}
-
-	return result;
+	return ev2citrusleaf_start(req, CL_MSG_INFO1_READ | CL_MSG_INFO1_GET_ALL, 0, ns, 0/*set*/, 0/*key*/, digest, 0, 0, 0);
 }
 
 int
@@ -1684,20 +1699,7 @@ ev2citrusleaf_put(ev2citrusleaf_cluster *cl, char *ns, char *set, ev2citrusleaf_
 {
 	cl_request* req = cl_request_create(cl, base, timeout_ms, wparam, cb, udata);
 
-	if (! req) {
-		return EV2CITRUSLEAF_FAIL_CLIENT_ERROR;
-	}
-
-	int result = ev2citrusleaf_start(req, 0, CL_MSG_INFO2_WRITE, ns, set, key, 0/*digest*/, wparam, bins, n_bins);
-
-	if (result == EV2CITRUSLEAF_OK) {
-		cf_atomic_int_incr(&cl->requests_in_progress);
-	}
-	else {
-		cl_request_destroy(req);
-	}
-
-	return result;
+	return ev2citrusleaf_start(req, 0, CL_MSG_INFO2_WRITE, ns, set, key, 0/*digest*/, wparam, bins, n_bins);
 }
 
 int
@@ -1707,20 +1709,7 @@ ev2citrusleaf_put_digest(ev2citrusleaf_cluster *cl, char *ns, cf_digest *digest,
 {
 	cl_request* req = cl_request_create(cl, base, timeout_ms, wparam, cb, udata);
 
-	if (! req) {
-		return EV2CITRUSLEAF_FAIL_CLIENT_ERROR;
-	}
-
-	int result = ev2citrusleaf_start(req, 0, CL_MSG_INFO2_WRITE, ns, 0/*set*/, 0/*key*/, digest, wparam, bins, n_bins);
-
-	if (result == EV2CITRUSLEAF_OK) {
-		cf_atomic_int_incr(&cl->requests_in_progress);
-	}
-	else {
-		cl_request_destroy(req);
-	}
-
-	return result;
+	return ev2citrusleaf_start(req, 0, CL_MSG_INFO2_WRITE, ns, 0/*set*/, 0/*key*/, digest, wparam, bins, n_bins);
 }
 
 int
@@ -1728,12 +1717,6 @@ ev2citrusleaf_get(ev2citrusleaf_cluster *cl, char *ns, char *set, ev2citrusleaf_
 	const char **bin_names, int n_bin_names, int timeout_ms, ev2citrusleaf_callback cb, void *udata,
 	struct event_base *base)
 {
-	cl_request* req = cl_request_create(cl, base, timeout_ms, NULL, cb, udata);
-
-	if (! req) {
-		return EV2CITRUSLEAF_FAIL_CLIENT_ERROR;
-	}
-
 	ev2citrusleaf_bin* bins = (ev2citrusleaf_bin*)alloca(n_bin_names * sizeof(ev2citrusleaf_bin));
 
 	for (int i = 0; i < n_bin_names; i++) {
@@ -1741,16 +1724,9 @@ ev2citrusleaf_get(ev2citrusleaf_cluster *cl, char *ns, char *set, ev2citrusleaf_
 		bins[i].object.type = CL_NULL;
 	}
 
-	int result = ev2citrusleaf_start(req, CL_MSG_INFO1_READ, 0, ns, set, key, 0/*digest*/, 0, bins, n_bin_names);
+	cl_request* req = cl_request_create(cl, base, timeout_ms, NULL, cb, udata);
 
-	if (result == EV2CITRUSLEAF_OK) {
-		cf_atomic_int_incr(&cl->requests_in_progress);
-	}
-	else {
-		cl_request_destroy(req);
-	}
-
-	return result;
+	return ev2citrusleaf_start(req, CL_MSG_INFO1_READ, 0, ns, set, key, 0/*digest*/, 0, bins, n_bin_names);
 }
 
 int
@@ -1758,12 +1734,6 @@ ev2citrusleaf_get_digest(ev2citrusleaf_cluster *cl, char *ns, cf_digest *digest,
 	const char **bin_names, int n_bin_names, int timeout_ms, ev2citrusleaf_callback cb, void *udata,
 	struct event_base *base)
 {
-	cl_request* req = cl_request_create(cl, base, timeout_ms, NULL, cb, udata);
-
-	if (! req) {
-		return EV2CITRUSLEAF_FAIL_CLIENT_ERROR;
-	}
-
 	ev2citrusleaf_bin* bins = (ev2citrusleaf_bin*)alloca(n_bin_names * sizeof(ev2citrusleaf_bin));
 
 	for (int i = 0; i < n_bin_names; i++) {
@@ -1771,16 +1741,9 @@ ev2citrusleaf_get_digest(ev2citrusleaf_cluster *cl, char *ns, cf_digest *digest,
 		bins[i].object.type = CL_NULL;
 	}
 
-	int result = ev2citrusleaf_start(req, CL_MSG_INFO1_READ, 0, ns, 0/*set*/, 0/*key*/, digest, 0, bins, n_bin_names);
+	cl_request* req = cl_request_create(cl, base, timeout_ms, NULL, cb, udata);
 
-	if (result == EV2CITRUSLEAF_OK) {
-		cf_atomic_int_incr(&cl->requests_in_progress);
-	}
-	else {
-		cl_request_destroy(req);
-	}
-
-	return result;
+	return ev2citrusleaf_start(req, CL_MSG_INFO1_READ, 0, ns, 0/*set*/, 0/*key*/, digest, 0, bins, n_bin_names);
 }
 
 int
@@ -1790,20 +1753,7 @@ ev2citrusleaf_delete(ev2citrusleaf_cluster *cl, char *ns, char *set, ev2citrusle
 {
 	cl_request* req = cl_request_create(cl, base, timeout_ms, wparam, cb, udata);
 
-	if (! req) {
-		return EV2CITRUSLEAF_FAIL_CLIENT_ERROR;
-	}
-
-	int result = ev2citrusleaf_start(req, 0, CL_MSG_INFO2_WRITE | CL_MSG_INFO2_DELETE, ns, set, key, 0/*digest*/, wparam, 0, 0);
-
-	if (result == EV2CITRUSLEAF_OK) {
-		cf_atomic_int_incr(&cl->requests_in_progress);
-	}
-	else {
-		cl_request_destroy(req);
-	}
-
-	return result;
+	return ev2citrusleaf_start(req, 0, CL_MSG_INFO2_WRITE | CL_MSG_INFO2_DELETE, ns, set, key, 0/*digest*/, wparam, 0, 0);
 }
 
 int
@@ -1813,20 +1763,7 @@ ev2citrusleaf_delete_digest(ev2citrusleaf_cluster *cl, char *ns, cf_digest *dige
 {
 	cl_request* req = cl_request_create(cl, base, timeout_ms, wparam, cb, udata);
 
-	if (! req) {
-		return EV2CITRUSLEAF_FAIL_CLIENT_ERROR;
-	}
-
-	int result = ev2citrusleaf_start(req, 0, CL_MSG_INFO2_WRITE | CL_MSG_INFO2_DELETE, ns, 0/*set*/, 0/*key*/, digest, wparam, 0, 0);
-
-	if (result == EV2CITRUSLEAF_OK) {
-		cf_atomic_int_incr(&cl->requests_in_progress);
-	}
-	else {
-		cl_request_destroy(req);
-	}
-
-	return result;
+	return ev2citrusleaf_start(req, 0, CL_MSG_INFO2_WRITE | CL_MSG_INFO2_DELETE, ns, 0/*set*/, 0/*key*/, digest, wparam, 0, 0);
 }
 
 int
@@ -1836,20 +1773,7 @@ ev2citrusleaf_operate(ev2citrusleaf_cluster *cl, char *ns, char *set, ev2citrusl
 {
 	cl_request* req = cl_request_create(cl, base, timeout_ms, wparam, cb, udata);
 
-	if (! req) {
-		return EV2CITRUSLEAF_FAIL_CLIENT_ERROR;
-	}
-
-	int result = ev2citrusleaf_start_op(req, ns, set, key, 0/*digest*/, ops, n_ops, wparam);
-
-	if (result == EV2CITRUSLEAF_OK) {
-		cf_atomic_int_incr(&cl->requests_in_progress);
-	}
-	else {
-		cl_request_destroy(req);
-	}
-
-	return result;
+	return ev2citrusleaf_start_op(req, ns, set, key, 0/*digest*/, ops, n_ops, wparam);
 }
 
 

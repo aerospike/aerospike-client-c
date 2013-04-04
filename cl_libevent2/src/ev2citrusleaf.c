@@ -261,20 +261,49 @@ cl_write_header(uint8_t* buf, size_t msg_size, int info1, int info2,
 	return (buf + sizeof(as_msg));
 }
 
+
 //
-// In Libevent2,
+// cl_request
+//
 
-
-cl_request *
-cl_request_create()
+cl_request*
+cl_request_create(ev2citrusleaf_cluster* asc, struct event_base* base,
+		int timeout_ms, ev2citrusleaf_write_parameters* wparam,
+		ev2citrusleaf_callback cb, void* udata)
 {
-	cl_request *r = (cl_request*)malloc( sizeof(cl_request) + ( event_get_struct_event_size() * 2) );
-	return(r);
+	size_t size = sizeof(cl_request) + (2 * event_get_struct_event_size());
+	cl_request* r = (cl_request*)malloc(size);
+
+	if (! r) {
+		return NULL;
+	}
+
+	memset((void*)r, 0, size);
+
+	r->MAGIC = CL_REQUEST_MAGIC;
+	r->fd = -1;
+
+	r->asc = asc;
+	r->base = base;
+	r->timeout_ms = timeout_ms;
+	r->wpol = wparam ? wparam->wpol : CL_WRITE_RETRY;
+	r->user_cb = cb;
+	r->user_data = udata;
+
+	return r;
 }
 
 void
-cl_request_destroy(cl_request *r)
+cl_request_destroy(cl_request* r)
 {
+	if (r->wr_buf_size && r->wr_buf != r->wr_tmp) {
+		free(r->wr_buf);
+	}
+
+	if (r->rd_buf_size && r->rd_buf != r->rd_tmp) {
+		free(r->rd_buf);
+	}
+
 	if (r->cross_thread_lock) {
 		MUTEX_FREE(r->cross_thread_lock);
 	}
@@ -1082,10 +1111,6 @@ ev2citrusleaf_request_complete(cl_request *req, bool timedout)
 
 	cf_atomic_int_decr(&req->asc->requests_in_progress);
 
-	// free the data (queue, at some point)
-	if (req->wr_buf_size && (req->wr_buf != req->wr_tmp))  free(req->wr_buf);
-	if (req->rd_buf_size && (req->rd_buf != req->rd_tmp))  free(req->rd_buf);
-
 	cl_request_destroy(req);
 }
 
@@ -1495,8 +1520,6 @@ ev2citrusleaf_start(cl_request *req, int info1, int info2, char *ns, char *set, 
 		cf_info("citrusleaf request with infinite timeout. Rare, examine caller.");
 	}
 
-	req->fd = -1;
-
     // set start time
     req->start_time = cf_getms();
 
@@ -1571,8 +1594,6 @@ ev2citrusleaf_start_op(cl_request *req, char *ns, char *set, ev2citrusleaf_objec
 		cf_info("citrusleaf request with infinite timeout. Rare, examine caller.");
 	}
 
-	req->fd = -1;
-
     // set start time
     req->start_time = cf_getms();
 
@@ -1612,84 +1633,71 @@ ev2citrusleaf_start_op(cl_request *req, char *ns, char *set, ev2citrusleaf_objec
 // head functions
 //
 
-
 int
 ev2citrusleaf_get_all(ev2citrusleaf_cluster *cl, char *ns, char *set, ev2citrusleaf_object *key,
 	int timeout_ms, ev2citrusleaf_callback cb, void *udata, struct event_base *base)
 {
-	// Allocate a new request object
-	cl_request *req = cl_request_create();
-	if (!req)	return(-1);
-	memset((void*)req, 0, sizeof(cl_request));
-	req->MAGIC = CL_REQUEST_MAGIC;
-	req->base = base;
-	req->asc = cl;
-	req->timeout_ms = timeout_ms;
-	req->wpol = CL_WRITE_RETRY;
-	req->user_cb = cb;
-	req->user_data = udata;
+	cl_request* req = cl_request_create(cl, base, timeout_ms, NULL, cb, udata);
 
-	if (0 != ev2citrusleaf_start(req, CL_MSG_INFO1_READ | CL_MSG_INFO1_GET_ALL, 0, ns, set, key, 0 /*d*/, 0, 0, 0)) {
-		if (req->wr_buf_size && (req->wr_buf != req->wr_tmp))	free(req->wr_buf);
-		cl_request_destroy(req);
-		return(-1);
+	if (! req) {
+		return EV2CITRUSLEAF_FAIL_CLIENT_ERROR;
 	}
-	cf_atomic_int_incr(&cl->requests_in_progress);
-	return(0);
 
+	int result = ev2citrusleaf_start(req, CL_MSG_INFO1_READ | CL_MSG_INFO1_GET_ALL, 0, ns, set, key, 0/*digest*/, 0, 0, 0);
+
+	if (result == EV2CITRUSLEAF_OK) {
+		cf_atomic_int_incr(&cl->requests_in_progress);
+	}
+	else {
+		cl_request_destroy(req);
+	}
+
+	return result;
 }
 
 int
-ev2citrusleaf_get_all_digest(ev2citrusleaf_cluster *cl, char *ns, cf_digest *d,
+ev2citrusleaf_get_all_digest(ev2citrusleaf_cluster *cl, char *ns, cf_digest *digest,
 	int timeout_ms, ev2citrusleaf_callback cb, void *udata, struct event_base *base)
 {
-	// Allocate a new request object
-	cl_request *req = cl_request_create();
-	if (!req)	return(-1);
-	memset((void*)req, 0, sizeof(cl_request));
-	req->MAGIC = CL_REQUEST_MAGIC;
-	req->base = base;
-	req->asc = cl;
-	req->timeout_ms = timeout_ms;
-	req->wpol = CL_WRITE_RETRY;
-	req->user_cb = cb;
-	req->user_data = udata;
+	cl_request* req = cl_request_create(cl, base, timeout_ms, NULL, cb, udata);
 
-	if (0 != ev2citrusleaf_start(req, CL_MSG_INFO1_READ | CL_MSG_INFO1_GET_ALL, 0, ns, 0/*set*/, 0/*key*/, d, 0, 0, 0)) {
-		if (req->wr_buf_size && (req->wr_buf != req->wr_tmp))	free(req->wr_buf);
-		cl_request_destroy(req);
-		return(-1);
+	if (! req) {
+		return EV2CITRUSLEAF_FAIL_CLIENT_ERROR;
 	}
-	cf_atomic_int_incr(&cl->requests_in_progress);
-	return(0);
 
+	int result = ev2citrusleaf_start(req, CL_MSG_INFO1_READ | CL_MSG_INFO1_GET_ALL, 0, ns, 0/*set*/, 0/*key*/, digest, 0, 0, 0);
+
+	if (result == EV2CITRUSLEAF_OK) {
+		cf_atomic_int_incr(&cl->requests_in_progress);
+	}
+	else {
+		cl_request_destroy(req);
+	}
+
+	return result;
 }
-
 
 int
 ev2citrusleaf_put(ev2citrusleaf_cluster *cl, char *ns, char *set, ev2citrusleaf_object *key,
 	ev2citrusleaf_bin *bins, int n_bins, ev2citrusleaf_write_parameters *wparam, int timeout_ms,
 	ev2citrusleaf_callback cb, void *udata, struct event_base *base)
 {
-	// Allocate a new request object
-	cl_request *req = cl_request_create();
-	if (!req)	return(-1);
-	memset((void*)req, 0, sizeof(cl_request));
-	req->MAGIC = CL_REQUEST_MAGIC;
-	req->base = base;
-	req->asc = cl;
-	req->timeout_ms = timeout_ms;
-	req->wpol = wparam ? wparam->wpol : CL_WRITE_RETRY;
-	req->user_cb = cb;
-	req->user_data = udata;
+	cl_request* req = cl_request_create(cl, base, timeout_ms, wparam, cb, udata);
 
-	if (0 != ev2citrusleaf_start(req, 0, CL_MSG_INFO2_WRITE, ns, set, key, 0/*digest*/, wparam, bins, n_bins)) {
-		if (req->wr_buf_size && (req->wr_buf != req->wr_tmp))	free(req->wr_buf);
-		cl_request_destroy(req);
-		return(-1);
+	if (! req) {
+		return EV2CITRUSLEAF_FAIL_CLIENT_ERROR;
 	}
-	cf_atomic_int_incr(&cl->requests_in_progress);
-	return(0);
+
+	int result = ev2citrusleaf_start(req, 0, CL_MSG_INFO2_WRITE, ns, set, key, 0/*digest*/, wparam, bins, n_bins);
+
+	if (result == EV2CITRUSLEAF_OK) {
+		cf_atomic_int_incr(&cl->requests_in_progress);
+	}
+	else {
+		cl_request_destroy(req);
+	}
+
+	return result;
 }
 
 int
@@ -1697,64 +1705,52 @@ ev2citrusleaf_put_digest(ev2citrusleaf_cluster *cl, char *ns, cf_digest *digest,
 	ev2citrusleaf_bin *bins, int n_bins, ev2citrusleaf_write_parameters *wparam, int timeout_ms,
 	ev2citrusleaf_callback cb, void *udata, struct event_base *base)
 {
-	// Allocate a new request object
-	cl_request *req = cl_request_create();
-	if (!req)	return(-1);
-	memset((void*)req, 0, sizeof(cl_request));
-	req->MAGIC = CL_REQUEST_MAGIC;
-	req->base = base;
-	req->asc = cl;
-	req->timeout_ms = timeout_ms;
-	req->wpol = wparam ? wparam->wpol : CL_WRITE_RETRY;
-	req->user_cb = cb;
-	req->user_data = udata;
+	cl_request* req = cl_request_create(cl, base, timeout_ms, wparam, cb, udata);
 
-	if (0 != ev2citrusleaf_start(req, 0, CL_MSG_INFO2_WRITE, ns, 0 /*set*/, 0/*key*/, digest, wparam, bins, n_bins)) {
-		if (req->wr_buf_size && (req->wr_buf != req->wr_tmp))	free(req->wr_buf);
-		cl_request_destroy(req);
-		return(-1);
+	if (! req) {
+		return EV2CITRUSLEAF_FAIL_CLIENT_ERROR;
 	}
-	cf_atomic_int_incr(&cl->requests_in_progress);
-	return(0);
 
+	int result = ev2citrusleaf_start(req, 0, CL_MSG_INFO2_WRITE, ns, 0/*set*/, 0/*key*/, digest, wparam, bins, n_bins);
+
+	if (result == EV2CITRUSLEAF_OK) {
+		cf_atomic_int_incr(&cl->requests_in_progress);
+	}
+	else {
+		cl_request_destroy(req);
+	}
+
+	return result;
 }
-
-
 
 int
 ev2citrusleaf_get(ev2citrusleaf_cluster *cl, char *ns, char *set, ev2citrusleaf_object *key,
 	const char **bin_names, int n_bin_names, int timeout_ms, ev2citrusleaf_callback cb, void *udata,
 	struct event_base *base)
 {
-	// Allocate a new request object
-	cl_request *req = cl_request_create();
-	if (!req)	return(-1);
-	memset((void*)req, 0, sizeof(cl_request));
-	req->MAGIC = CL_REQUEST_MAGIC;
-	req->base = base;
-	req->asc = cl;
-	req->timeout_ms = timeout_ms;
-	req->wpol = CL_WRITE_RETRY;
-	req->user_cb = cb;
-	req->user_data = udata;
+	cl_request* req = cl_request_create(cl, base, timeout_ms, NULL, cb, udata);
 
-	// kinda sucks, but it's really nice having the 'start' function
-	// taking both 'get' and 'put', which are both bins.
+	if (! req) {
+		return EV2CITRUSLEAF_FAIL_CLIENT_ERROR;
+	}
+
 	ev2citrusleaf_bin* bins = (ev2citrusleaf_bin*)alloca(n_bin_names * sizeof(ev2citrusleaf_bin));
-	for (int i=0;i<n_bin_names;i++) {
+
+	for (int i = 0; i < n_bin_names; i++) {
 		strcpy(bins[i].bin_name, bin_names[i]);
 		bins[i].object.type = CL_NULL;
 	}
 
-	if (0 != ev2citrusleaf_start(req, CL_MSG_INFO1_READ, 0, ns, set, key, 0 /*dig*/, 0, bins, n_bin_names)) {
-		if (req->wr_buf_size && (req->wr_buf != req->wr_tmp))	free(req->wr_buf);
-		cl_request_destroy(req);
-		return(-1);
+	int result = ev2citrusleaf_start(req, CL_MSG_INFO1_READ, 0, ns, set, key, 0/*digest*/, 0, bins, n_bin_names);
+
+	if (result == EV2CITRUSLEAF_OK) {
+		cf_atomic_int_incr(&cl->requests_in_progress);
 	}
-	cf_atomic_int_incr(&cl->requests_in_progress);
-	return(0);
+	else {
+		cl_request_destroy(req);
+	}
 
-
+	return result;
 }
 
 int
@@ -1762,64 +1758,52 @@ ev2citrusleaf_get_digest(ev2citrusleaf_cluster *cl, char *ns, cf_digest *digest,
 	const char **bin_names, int n_bin_names, int timeout_ms, ev2citrusleaf_callback cb, void *udata,
 	struct event_base *base)
 {
-	// Allocate a new request object
-	cl_request *req = cl_request_create();
-	if (!req)	return(-1);
-	memset((void*)req, 0, sizeof(cl_request));
-	req->MAGIC = CL_REQUEST_MAGIC;
-	req->base = base;
-	req->asc = cl;
-	req->timeout_ms = timeout_ms;
-	req->wpol = CL_WRITE_RETRY;
-	req->user_cb = cb;
-	req->user_data = udata;
+	cl_request* req = cl_request_create(cl, base, timeout_ms, NULL, cb, udata);
 
-	// kinda sucks, but it's really nice having the 'start' function
-	// taking both 'get' and 'put', which are both bins.
+	if (! req) {
+		return EV2CITRUSLEAF_FAIL_CLIENT_ERROR;
+	}
+
 	ev2citrusleaf_bin* bins = (ev2citrusleaf_bin*)alloca(n_bin_names * sizeof(ev2citrusleaf_bin));
-	for (int i=0;i<n_bin_names;i++) {
+
+	for (int i = 0; i < n_bin_names; i++) {
 		strcpy(bins[i].bin_name, bin_names[i]);
 		bins[i].object.type = CL_NULL;
 	}
 
-	if (0 != ev2citrusleaf_start(req, CL_MSG_INFO1_READ, 0, ns, 0/*set*/, 0 /*key*/, digest, 0, bins, n_bin_names)) {
-		if (req->wr_buf_size && (req->wr_buf != req->wr_tmp))	free(req->wr_buf);
-		cl_request_destroy(req);
-		return(-1);
+	int result = ev2citrusleaf_start(req, CL_MSG_INFO1_READ, 0, ns, 0/*set*/, 0/*key*/, digest, 0, bins, n_bin_names);
+
+	if (result == EV2CITRUSLEAF_OK) {
+		cf_atomic_int_incr(&cl->requests_in_progress);
 	}
-	cf_atomic_int_incr(&cl->requests_in_progress);
-	return(0);
+	else {
+		cl_request_destroy(req);
+	}
 
-
+	return result;
 }
-
 
 int
 ev2citrusleaf_delete(ev2citrusleaf_cluster *cl, char *ns, char *set, ev2citrusleaf_object *key,
 	ev2citrusleaf_write_parameters *wparam, int timeout_ms, ev2citrusleaf_callback cb, void *udata,
 	struct event_base *base)
 {
-	// Allocate a new request object
-	cl_request *req = cl_request_create();
-	if (!req)	return(-1);
-	memset((void*)req, 0, sizeof(cl_request));
-	req->MAGIC = CL_REQUEST_MAGIC;
-	req->base = base;
-	req->asc = cl;
-	req->timeout_ms = timeout_ms;
-	req->wpol = wparam ? wparam->wpol : CL_WRITE_RETRY;
-	req->user_cb = cb;
-	req->user_data = udata;
+	cl_request* req = cl_request_create(cl, base, timeout_ms, wparam, cb, udata);
 
-	if (0 != ev2citrusleaf_start(req, 0, CL_MSG_INFO2_WRITE | CL_MSG_INFO2_DELETE, ns, set, key,
-		0 /*digest*/, wparam,0, 0)) {
-		if (req->wr_buf_size && (req->wr_buf != req->wr_tmp))	free(req->wr_buf);
-		cl_request_destroy(req);
-		return(-1);
+	if (! req) {
+		return EV2CITRUSLEAF_FAIL_CLIENT_ERROR;
 	}
-	cf_atomic_int_incr(&cl->requests_in_progress);
-	return(0);
 
+	int result = ev2citrusleaf_start(req, 0, CL_MSG_INFO2_WRITE | CL_MSG_INFO2_DELETE, ns, set, key, 0/*digest*/, wparam, 0, 0);
+
+	if (result == EV2CITRUSLEAF_OK) {
+		cf_atomic_int_incr(&cl->requests_in_progress);
+	}
+	else {
+		cl_request_destroy(req);
+	}
+
+	return result;
 }
 
 int
@@ -1827,62 +1811,47 @@ ev2citrusleaf_delete_digest(ev2citrusleaf_cluster *cl, char *ns, cf_digest *dige
 	ev2citrusleaf_write_parameters *wparam, int timeout_ms, ev2citrusleaf_callback cb, void *udata,
 	struct event_base *base)
 {
-	// Allocate a new request object
-	cl_request *req = cl_request_create();
-	if (!req)	return(-1);
-	memset((void*)req, 0, sizeof(cl_request));
-	req->MAGIC = CL_REQUEST_MAGIC;
-	req->base = base;
-	req->asc = cl;
-	req->timeout_ms = timeout_ms;
-	req->wpol = wparam ? wparam->wpol : CL_WRITE_RETRY;
-	req->user_cb = cb;
-	req->user_data = udata;
+	cl_request* req = cl_request_create(cl, base, timeout_ms, wparam, cb, udata);
 
-	if (0 != ev2citrusleaf_start(req, 0, CL_MSG_INFO2_WRITE | CL_MSG_INFO2_DELETE, ns, 0/*set*/, 0/*key*/,digest,
-		wparam,0, 0)) {
-		if (req->wr_buf_size && (req->wr_buf != req->wr_tmp))	free(req->wr_buf);
-		cl_request_destroy(req);
-		return(-1);
+	if (! req) {
+		return EV2CITRUSLEAF_FAIL_CLIENT_ERROR;
 	}
-	cf_atomic_int_incr(&cl->requests_in_progress);
-	return(0);
 
+	int result = ev2citrusleaf_start(req, 0, CL_MSG_INFO2_WRITE | CL_MSG_INFO2_DELETE, ns, 0/*set*/, 0/*key*/, digest, wparam, 0, 0);
+
+	if (result == EV2CITRUSLEAF_OK) {
+		cf_atomic_int_incr(&cl->requests_in_progress);
+	}
+	else {
+		cl_request_destroy(req);
+	}
+
+	return result;
 }
-
-
 
 int
 ev2citrusleaf_operate(ev2citrusleaf_cluster *cl, char *ns, char *set, ev2citrusleaf_object *key,
 	ev2citrusleaf_operation *ops, int n_ops, ev2citrusleaf_write_parameters *wparam,
 	int timeout_ms, ev2citrusleaf_callback cb, void *udata, struct event_base *base)
 {
+	cl_request* req = cl_request_create(cl, base, timeout_ms, wparam, cb, udata);
 
-	// Allocate a new request object
-	cl_request *req = cl_request_create();
-	if (!req)	return(-1);
-	memset((void*)req, 0, sizeof(cl_request));
-	req->MAGIC = CL_REQUEST_MAGIC;
-	req->base = base;
-	req->asc = cl;
-	req->timeout_ms = timeout_ms;
-	req->wpol = wparam ? wparam->wpol : CL_WRITE_RETRY;
-	req->user_cb = cb;
-	req->user_data = udata;
-
-	// Take all the request parameters and fill out the request buffer
-	if (0 != ev2citrusleaf_start_op(req, ns, set, key, 0 /*digest*/,
-		ops, n_ops, wparam )) {
-		return(-1);
+	if (! req) {
+		return EV2CITRUSLEAF_FAIL_CLIENT_ERROR;
 	}
 
-//	dump_buf("sending operate request to cluster:", req->wr_buf, req->wr_buf_size);
+	int result = ev2citrusleaf_start_op(req, ns, set, key, 0/*digest*/, ops, n_ops, wparam);
 
-	cf_atomic_int_incr(&cl->requests_in_progress);
+	if (result == EV2CITRUSLEAF_OK) {
+		cf_atomic_int_incr(&cl->requests_in_progress);
+	}
+	else {
+		cl_request_destroy(req);
+	}
 
-	return(0);
-
+	return result;
 }
+
 
 bool g_ev2citrusleaf_initialized = false;
 

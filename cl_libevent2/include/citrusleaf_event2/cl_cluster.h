@@ -41,7 +41,8 @@ struct sockaddr_in;
 
 #define CLUSTER_NODE_MAGIC 0x9B00134C
 #define MAX_INTERVALS_ABSENT 1
-#define MAX_HISTORY_INTERVALS 16
+#define MAX_THROTTLE_WINDOW 60
+#define MAX_HISTORY_INTERVALS (MAX_THROTTLE_WINDOW - 1)
 
 typedef enum {
 	INFO_REQ_NONE			= 0,
@@ -99,8 +100,6 @@ typedef struct cl_cluster_node_s {
 	// This node's recent transaction successes & failures.
 	uint32_t				successes[MAX_HISTORY_INTERVALS];
 	uint32_t				failures[MAX_HISTORY_INTERVALS];
-	uint32_t				successes_sum;
-	uint32_t				failures_sum;
 
 	// Rate at which transactions to this node are being throttled.
 	cf_atomic32				throttle_pct;
@@ -150,6 +149,22 @@ typedef struct cl_partition_table_s {
 
 #define CLUSTER_MAGIC 0x91916666
 
+// Must be in-sync with ev2citrusleaf_cluster_runtime_options.
+typedef struct threadsafe_runtime_options_s {
+	cf_atomic32	read_master_only;
+
+	cf_atomic32	throttle_reads;
+	cf_atomic32	throttle_writes;
+
+	// These change together under the lock.
+	uint32_t	throttle_threshold_failure_pct;
+	uint32_t	throttle_window_seconds;
+	uint32_t	throttle_factor;
+
+	// For groups of options that need to change together:
+	void*		lock;
+} threadsafe_runtime_options;
+
 struct ev2citrusleaf_cluster_s {
 	
 	cf_ll_element		ll_e; // global list of all clusters - good for debugging
@@ -170,7 +185,8 @@ struct ev2citrusleaf_cluster_s {
 	struct evdns_base	*dns_base;
 
 	// Cluster-specific functionality options.
-	ev2citrusleaf_cluster_options	options;
+	ev2citrusleaf_cluster_static_options	static_options;
+	threadsafe_runtime_options				runtime_options;
 
 	// List of host-strings added by the user.
 	cf_vector		host_str_v;	// vector is pointer-type

@@ -87,6 +87,7 @@ cluster_create()
 	ev2citrusleaf_cluster *asc = (ev2citrusleaf_cluster*)malloc(sizeof(ev2citrusleaf_cluster) + event_get_struct_event_size() );
 	if (!asc) return(0);
 	memset((void*)asc,0,sizeof(ev2citrusleaf_cluster) + event_get_struct_event_size());
+	MUTEX_ALLOC(asc->runtime_options.lock);
 	MUTEX_ALLOC(asc->node_v_lock);
 	MUTEX_ALLOC(asc->request_q_lock);
 	return(asc);
@@ -104,6 +105,7 @@ cluster_destroy(ev2citrusleaf_cluster *asc) {
 
 	MUTEX_FREE(asc->request_q_lock);
 	MUTEX_FREE(asc->node_v_lock);
+	MUTEX_FREE(asc->runtime_options.lock);
 	memset((void*)asc, 0, sizeof(ev2citrusleaf_cluster) + event_get_struct_event_size() );
 	free(asc);
 	return;
@@ -252,9 +254,85 @@ static void* run_cluster_mgr(void* base) {
 }
 
 
+const ev2citrusleaf_cluster_runtime_options DEFAULT_RUNTIME_OPTIONS =
+{
+	false,	// read_master_only
+	false,	// throttle_reads
+	false,	// throttle_writes
+	2,		// throttle_threshold_failure_pct
+	15,		// throttle_window_seconds
+	10		// throttle_factor
+};
+
+int
+ev2citrusleaf_cluster_get_runtime_options(ev2citrusleaf_cluster* asc,
+		ev2citrusleaf_cluster_runtime_options* opts)
+{
+	if (! (asc && opts)) {
+		cf_error("ev2citrusleaf_cluster_get_runtime_options() - null param");
+		return EV2CITRUSLEAF_FAIL_CLIENT_ERROR;
+	}
+
+	opts->read_master_only = cf_atomic32_get(asc->runtime_options.read_master_only) != 0;
+
+	opts->throttle_reads = cf_atomic32_get(asc->runtime_options.throttle_reads) != 0;
+	opts->throttle_writes = cf_atomic32_get(asc->runtime_options.throttle_writes) != 0;
+
+	opts->throttle_threshold_failure_pct = asc->runtime_options.throttle_threshold_failure_pct;
+	opts->throttle_window_seconds = asc->runtime_options.throttle_window_seconds;
+	opts->throttle_factor = asc->runtime_options.throttle_factor;
+
+	return EV2CITRUSLEAF_OK;
+}
+
+int
+ev2citrusleaf_cluster_set_runtime_options(ev2citrusleaf_cluster* asc,
+		const ev2citrusleaf_cluster_runtime_options* opts)
+{
+	if (! (asc && opts)) {
+		cf_error("ev2citrusleaf_cluster_set_runtime_options() - null param");
+		return EV2CITRUSLEAF_FAIL_CLIENT_ERROR;
+	}
+
+	// Really basic sanity checks.
+	if (opts->throttle_threshold_failure_pct > 100 ||
+		opts->throttle_window_seconds == 0 ||
+		opts->throttle_window_seconds > MAX_THROTTLE_WINDOW) {
+		cf_warn("ev2citrusleaf_cluster_set_runtime_options() - illegal option");
+		return EV2CITRUSLEAF_FAIL_CLIENT_ERROR;
+	}
+
+	cf_atomic32_set(&asc->runtime_options.read_master_only, opts->read_master_only ? 1 : 0);
+
+	cf_atomic32_set(&asc->runtime_options.throttle_reads, opts->throttle_reads ? 1 : 0);
+	cf_atomic32_set(&asc->runtime_options.throttle_writes, opts->throttle_writes ? 1 : 0);
+
+	MUTEX_LOCK(asc->runtime_options.lock);
+
+	asc->runtime_options.throttle_threshold_failure_pct = opts->throttle_threshold_failure_pct;
+	asc->runtime_options.throttle_window_seconds = opts->throttle_window_seconds;
+	asc->runtime_options.throttle_factor = opts->throttle_factor;
+
+	MUTEX_UNLOCK(asc->runtime_options.lock);
+
+	cf_info("set runtime options:");
+	cf_info("   read-master-only %s",
+			opts->read_master_only ? "true" : "false");
+	cf_info("   throttle-reads %s, writes %s",
+			opts->throttle_reads ? "true" : "false",
+			opts->throttle_writes ? "true" : "false");
+	cf_info("   throttle-threshold-failure-pct %u, window-seconds %u, factor %u",
+			opts->throttle_threshold_failure_pct,
+			opts->throttle_window_seconds,
+			opts->throttle_factor);
+
+	return EV2CITRUSLEAF_OK;
+}
+
+
 ev2citrusleaf_cluster *
 ev2citrusleaf_cluster_create(struct event_base *base,
-		ev2citrusleaf_cluster_options *opts)
+		const ev2citrusleaf_cluster_static_options *opts)
 {
 	if (! g_ev2citrusleaf_initialized) {
 		cf_warn("must call ev2citrusleaf_init() before ev2citrusleaf_cluster_create()");
@@ -287,7 +365,7 @@ ev2citrusleaf_cluster_create(struct event_base *base,
 
 	// Copy the cluster options if any are passed in.
 	if (opts) {
-		asc->options = *opts;
+		asc->static_options = *opts;
 	}
 	// else defaults are all 0, from memset() in cluster_create()
 
@@ -328,6 +406,8 @@ ev2citrusleaf_cluster_create(struct event_base *base,
 		cluster_destroy(asc);
 		return NULL;
 	}
+
+	ev2citrusleaf_cluster_set_runtime_options(asc, &DEFAULT_RUNTIME_OPTIONS);
 
 	return(asc);
 }
@@ -1175,15 +1255,23 @@ node_info_req_start(cl_cluster_node* cn, node_info_req_type req_type)
 	}
 }
 
-// TODO - all becomes client config...
-#define OLDEST_HISTORY_INDEX (MAX_HISTORY_INTERVALS - 1)
-#define THRESHOLD_FAILURE_PCT 2
-#define THROTTLE_FACTOR 10
+// TODO - add to runtime optios?
 #define MAX_THROTTLE_PCT 90
 
 void
 node_throttle_control(cl_cluster_node* cn)
 {
+	// Get the throttle control parameters.
+	threadsafe_runtime_options* p_opts = &cn->asc->runtime_options;
+
+	MUTEX_LOCK(p_opts->lock);
+
+	uint32_t threshold_failure_pct = p_opts->throttle_threshold_failure_pct;
+	uint32_t history_intervals_to_use = p_opts->throttle_window_seconds - 1;
+	uint32_t throttle_factor = p_opts->throttle_factor;
+
+	MUTEX_UNLOCK(p_opts->lock);
+
 	// Collect and reset the latest counts. TODO - atomic get and clear?
 	uint32_t new_successes = cf_atomic32_get(cn->n_successes);
 	uint32_t new_failures = cf_atomic32_get(cn->n_failures);
@@ -1191,15 +1279,17 @@ node_throttle_control(cl_cluster_node* cn)
 	cf_atomic32_set(&cn->n_successes, 0);
 	cf_atomic32_set(&cn->n_failures, 0);
 
-	// Update the sums.
-	cn->successes_sum += new_successes;
-	cn->successes_sum -= cn->successes[OLDEST_HISTORY_INDEX];
+	// Calculate the sums.
+	uint32_t successes_sum = new_successes;
+	uint32_t failures_sum = new_failures;
 
-	cn->failures_sum += new_failures;
-	cn->failures_sum -= cn->failures[OLDEST_HISTORY_INDEX];
+	for (uint32_t i = 0; i < history_intervals_to_use; i++) {
+		successes_sum += cn->successes[i];
+		failures_sum += cn->failures[i];
+	}
 
-	// Time shift the history.
-	size_t size = OLDEST_HISTORY_INDEX * sizeof(uint32_t);
+	// Time shift the history. Keep max history in case runtime options change.
+	size_t size = (MAX_HISTORY_INTERVALS - 1) * sizeof(uint32_t);
 
 	memmove((void*)&cn->successes[1], (const void*)&cn->successes[0], size);
 	memmove((void*)&cn->failures[1], (const void*)&cn->failures[0], size);
@@ -1208,8 +1298,8 @@ node_throttle_control(cl_cluster_node* cn)
 	cn->failures[0] = new_failures;
 
 	// Calculate the failure percentage.
-	uint32_t sum = cn->failures_sum + cn->successes_sum;
-	uint32_t failure_pct = sum == 0 ? 0 : (cn->failures_sum * 100) / sum;
+	uint32_t sum = failures_sum + successes_sum;
+	uint32_t failure_pct = sum == 0 ? 0 : (failures_sum * 100) / sum;
 
 	// TODO - anything special for a 100% failure rate? Several seconds of all
 	// failures with 0 successes might mean we should destroy this node?
@@ -1217,8 +1307,8 @@ node_throttle_control(cl_cluster_node* cn)
 	// Calculate and apply the throttle rate.
 	uint32_t throttle_pct = 0;
 
-	if (failure_pct > THRESHOLD_FAILURE_PCT) {
-		throttle_pct = (failure_pct - THRESHOLD_FAILURE_PCT) * THROTTLE_FACTOR;
+	if (failure_pct > threshold_failure_pct) {
+		throttle_pct = (failure_pct - threshold_failure_pct) * throttle_factor;
 
 		if (throttle_pct > MAX_THROTTLE_PCT) {
 			throttle_pct = MAX_THROTTLE_PCT;
@@ -1226,8 +1316,7 @@ node_throttle_control(cl_cluster_node* cn)
 	}
 
 	cf_debug("node %s recent successes %u, failures %u, failure-pct %u, throttle-pct %u",
-			cn->name, cn->successes_sum, cn->failures_sum,
-			failure_pct, throttle_pct);
+			cn->name, successes_sum, failures_sum, failure_pct, throttle_pct);
 
 	cf_atomic32_set(&cn->throttle_pct, throttle_pct);
 }

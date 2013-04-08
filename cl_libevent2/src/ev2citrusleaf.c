@@ -1158,7 +1158,7 @@ ev2citrusleaf_is_connected(int fd)
 static inline void
 req_cross_thread_init_and_lock(cl_request* req)
 {
-	if (req->asc->options.cross_threaded) {
+	if (req->asc->static_options.cross_threaded) {
 		MUTEX_ALLOC(req->cross_thread_lock);
 		MUTEX_LOCK(req->cross_thread_lock);
 		req->cross_thread_locked = true;
@@ -1581,9 +1581,13 @@ ev2citrusleaf_start(cl_request* req, int info1, int info2, const char* ns,
 
 	cf_atomic_int_incr(&g_cl_stats.req_start);
 
+	// Determine whether we may throttle.
+	bool may_throttle = req->write ?
+			cf_atomic32_get(req->asc->runtime_options.throttle_writes) != 0 :
+			cf_atomic32_get(req->asc->runtime_options.throttle_reads) != 0;
+
 	// Initial restart - get node and socket and initiate network event chain.
-	// TODO - more complex permissions to throttle.
-	if (! ev2citrusleaf_restart(req, true)) {
+	if (! ev2citrusleaf_restart(req, may_throttle)) {
 		start_failed(req);
 		return EV2CITRUSLEAF_FAIL_THROTTLED;
 	}
@@ -1656,8 +1660,7 @@ ev2citrusleaf_start_op(cl_request* req, const char* ns, const char* set,
 	cf_atomic_int_incr(&g_cl_stats.req_start);
 
 	// Initial restart - get node and socket and initiate network event chain.
-	// TODO - more complex permissions to throttle.
-	if (! ev2citrusleaf_restart(req, true)) {
+	if (! ev2citrusleaf_restart(req, false)) {
 		start_failed(req);
 		return EV2CITRUSLEAF_FAIL_THROTTLED;
 	}

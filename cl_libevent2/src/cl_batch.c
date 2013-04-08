@@ -253,8 +253,8 @@ get_many(ev2citrusleaf_cluster* cl, const char* ns, const cf_digest* digests,
 	}
 
 	// Make a cl_batch_job object.
-	cl_batch_job* p_job = cl_batch_job_create(cl->options.cross_threaded, base,
-			cb, udata, n_digests, timeout_ms);
+	cl_batch_job* p_job = cl_batch_job_create(cl->static_options.cross_threaded,
+			base, cb, udata, n_digests, timeout_ms);
 
 	if (! p_job) {
 		cf_error("can't create batch job");

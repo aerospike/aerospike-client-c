@@ -235,7 +235,8 @@ cl_partition_table_get(ev2citrusleaf_cluster* asc, const char* ns,
 
 	MUTEX_LOCK(p->lock);
 
-	if (write || asc->options.read_master_only || ! p->prole) {
+	if (write || cf_atomic32_get(asc->runtime_options.read_master_only) != 0 ||
+			! p->prole) {
 		node = p->master;
 	}
 	else if (! p->master) {

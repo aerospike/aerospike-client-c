@@ -185,25 +185,56 @@ void ev2citrusleaf_print_stats(void);
 struct ev2citrusleaf_cluster_s;
 typedef struct ev2citrusleaf_cluster_s ev2citrusleaf_cluster;
 
-typedef struct ev2citrusleaf_cluster_options_s {
-	// true		- Force all get transactions to read only the master copy.
-	// false	- Default - Allow get transactions to read master or replica.
-	bool	read_master_only;
-
-	// TBD - not supported yet.
+typedef struct ev2citrusleaf_cluster_static_options_s {
 	// true		- A transaction may specify that its callback be made in a
 	//			  different thread from that of the transaction call.
 	// false	- Default - A transaction always specifies that its callback be
 	//			  made in the same thread as that of the transaction call.
 	bool	cross_threaded;
-} ev2citrusleaf_cluster_options;
+} ev2citrusleaf_cluster_static_options;
+
+typedef struct ev2citrusleaf_cluster_runtime_options_s {
+	// true		- Force all get transactions to read only the master copy.
+	// false	- Default - Allow get transactions to read master or replica.
+	bool		read_master_only;
+
+	// If transactions to a particular database server node are failing too
+	// often, the client can be set to "throttle" transactions to that node by
+	// specifying which transactions may be throttled, the threshold failure
+	// percentage above which to throttle, and how hard to throttle. Throttling
+	// is done by purposefully dropping a certain percentage of transactions
+	// (API calls return EV2CITRUSLEAF_FAIL_THROTTLED for dropped transactions)
+	// in order to lighten the load on the node.
+	//
+	// f: actual failure percentage, measured over several seconds
+	// t: percentage of transactions to drop
+	// t = (f - throttle_threshold_failure_pct) * throttle_factor
+	// ... where t is capped at 90%.
+
+	// true		- Allow reads to be throttled.
+	// false	- Default - Don't throttle reads.
+	bool		throttle_reads;
+
+	// true		- Allow writes to be throttled.
+	// false	- Default - Don't throttle writes.
+	bool		throttle_writes;
+
+	// Throttle when actual failure percentage exceeds this. Default value is 2.
+	uint32_t	throttle_threshold_failure_pct;
+
+	// Measure failure percentage over this interval. Default 15, min 1, max 60.
+	uint32_t	throttle_window_seconds;
+
+	// How hard to throttle. Default value is 10.
+	uint32_t	throttle_factor;
+} ev2citrusleaf_cluster_runtime_options;
 
 // Client uses base for internal cluster management events. If NULL is passed,
 // an event base and thread are created internally for cluster management.
 //
 // If NULL opts is passed, ev2citrusleaf_cluster_options defaults are used.
 ev2citrusleaf_cluster *ev2citrusleaf_cluster_create(struct event_base *base,
-		ev2citrusleaf_cluster_options *opts);
+		const ev2citrusleaf_cluster_static_options *opts);
 
 // Before calling ev2citrusleaf_cluster_destroy(), stop initiating transaction
 // requests to this cluster, and make sure that all in-progress transactions are
@@ -216,6 +247,18 @@ ev2citrusleaf_cluster *ev2citrusleaf_cluster_create(struct event_base *base,
 // During ev2citrusleaf_cluster_destroy() the client will re-run the base's
 // event loop to handle all outstanding internal cluster management events.
 void ev2citrusleaf_cluster_destroy(ev2citrusleaf_cluster *asc);
+
+// Get the current cluster runtime options. This will return the default options
+// if ev2citrusleaf_cluster_set_options() has never been called. It's for
+// convenience - get the current/default values in opts, modify the desired
+// field(s), then pass opts in ev2citrusleaf_cluster_set_options().
+int ev2citrusleaf_cluster_get_runtime_options(ev2citrusleaf_cluster *asc,
+		ev2citrusleaf_cluster_runtime_options *opts);
+
+// Set/change cluster runtime options. The opts fields are copied and only need
+// to last for the scope of this call.
+int ev2citrusleaf_cluster_set_runtime_options(ev2citrusleaf_cluster *asc,
+		const ev2citrusleaf_cluster_runtime_options *opts);
 
 // Adding a host to the cluster list which will always be checked for membership
 // As this entire interface is async, the number of hosts in the cluster must be

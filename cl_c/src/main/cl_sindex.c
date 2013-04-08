@@ -12,6 +12,7 @@
 #include "citrusleaf.h"
 #include "citrusleaf-internal.h"
 #include "cl_sindex.h"
+#include "as_log.h"
 
 #include <citrusleaf/proto.h>
 
@@ -61,11 +62,9 @@ cl_rv citrusleaf_secondary_index_create(
         fail = fail + 5;
         char * end = strchr(fail,':');
         if ( end != NULL ) {
-            *end = '\0';
+            *end     = '\0';
             int code = atoi(fail);
-            if ( code == 208 ) {
-                return CITRUSLEAF_FAIL_INDEX_EXISTS;
-            }
+            return code; 
         }
         return CITRUSLEAF_FAIL_CLIENT;
     }
@@ -101,11 +100,9 @@ cl_rv citrusleaf_secondary_index_create_functional(
         fail = fail + 5;
         char * end = strchr(fail,':');
         if ( end != NULL ) {
-            *end = '\0';
+            *end     = '\0';
             int code = atoi(fail);
-            if ( code == 208 ) {
-                return CITRUSLEAF_FAIL_INDEX_EXISTS;
-            }
+            return code;
         }
         return CITRUSLEAF_FAIL_CLIENT;
     }
@@ -118,10 +115,10 @@ cl_rv citrusleaf_secondary_index_drop(cl_cluster *asc, const char *ns, const cha
     char ddl[1024];
     sprintf(ddl, "sindex-drop:ns=%s;indexname=%s", ns, indexname);
     if ( citrusleaf_info_cluster_all(asc, ddl, response, true, /* check bounds */ true, 5000) ) {
-        fprintf(stderr, "sindex-drop: response: %s\n", *response);
+        INFO("[ERROR] sindex-drop: response: %s\n", *response);
         return CITRUSLEAF_FAIL_CLIENT;
     }
-    fprintf(stderr, "sindex-drop: response: %s\n", *response);
+    INFO("sindex-drop: response: %s\n", *response);
     return CITRUSLEAF_OK;
 }        
 

@@ -39,6 +39,9 @@
 #include "citrusleaf_event2/cl_cluster.h"
 
 
+// Remove to use the new info replicas protocol:
+#define OLD_PROTOCOL
+
 extern void ev2citrusleaf_base_hop(cl_request *req);
 
 //
@@ -634,7 +637,11 @@ ev2citrusleaf_cluster_follow(ev2citrusleaf_cluster *asc, bool flag)
 
 // INFO_STR_MAX_LEN must be >= longest of these strings.
 const char INFO_STR_CHECK[] = "node\npartition-generation\nservices\n";
-const char INFO_STR_GET_REPLICAS[] = "replicas-read\nreplicas-write\npartition-generation\n";
+#ifdef OLD_PROTOCOL
+const char INFO_STR_GET_REPLICAS[] = "partition-generation\nreplicas-read\nreplicas-write\n";
+#else // OLD_PROTOCOL
+const char INFO_STR_GET_REPLICAS[] = "partition-generation\nreplicas-master\nreplicas-prole\n";
+#endif // OLD_PROTOCOL
 
 void node_info_req_start(cl_cluster_node* cn, node_info_req_type req_type);
 // The libevent2 event handler for node info socket events:
@@ -739,6 +746,63 @@ ns_partition_map_destroy(cf_vector* p_maps_v)
 	}
 }
 
+const uint8_t BASE64_DECODE_ARRAY[] = {
+	    /*00*/ /*01*/ /*02*/ /*03*/ /*04*/ /*05*/ /*06*/ /*07*/   /*08*/ /*09*/ /*0A*/ /*0B*/ /*0C*/ /*0D*/ /*0E*/ /*0F*/
+/*00*/	    0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,     0,     0,     0,     0,     0,
+/*10*/      0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,     0,     0,     0,     0,     0,
+/*20*/	    0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,    62,     0,     0,     0,    63,
+/*30*/	   52,    53,    54,    55,    56,    57,    58,    59,      60,    61,     0,     0,     0,     0,     0,     0,
+/*40*/	    0,     0,     1,     2,     3,     4,     5,     6,       7,     8,     9,    10,    11,    12,    13,    14,
+/*50*/	   15,    16,    17,    18,    19,    20,    21,    22,      23,    24,    25,     0,     0,     0,     0,     0,
+/*60*/	    0,    26,    27,    28,    29,    30,    31,    32,      33,    34,    35,    36,    37,    38,    39,    40,
+/*70*/	   41,    42,    43,    44,    45,    46,    47,    48,      49,    50,    51,     0,     0,     0,     0,     0,
+/*80*/	    0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,     0,     0,     0,     0,     0,
+/*90*/	    0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,     0,     0,     0,     0,     0,
+/*A0*/	    0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,     0,     0,     0,     0,     0,
+/*B0*/	    0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,     0,     0,     0,     0,     0,
+/*C0*/	    0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,     0,     0,     0,     0,     0,
+/*D0*/	    0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,     0,     0,     0,     0,     0,
+/*E0*/	    0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,     0,     0,     0,     0,     0,
+/*F0*/	    0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,     0,     0,     0,     0,     0
+};
+
+#define B64DA BASE64_DECODE_ARRAY
+
+void
+base64_decode(const char* in, int len, uint8_t* out)
+{
+	int i = 0;
+	int j = 0;
+
+	while (i < len) {
+		out[j + 0] = (B64DA[in[i + 0]] << 2) | (B64DA[in[i + 1]] >> 4);
+		out[j + 1] = (B64DA[in[i + 1]] << 4) | (B64DA[in[i + 2]] >> 2);
+		out[j + 2] = (B64DA[in[i + 2]] << 6) |  B64DA[in[i + 3]];
+
+		i += 4;
+		j += 3;
+	}
+}
+
+void
+ns_partition_map_set(ns_partition_map* p_map, const char* p_encoded_bitmap,
+		int encoded_bitmap_len, int n_partitions)
+{
+	// First decode the base 64.
+	// Size allows for padding - is actual size rounded up to multiple of 3.
+	uint8_t bitmap[(encoded_bitmap_len / 4) * 3];
+
+	base64_decode(p_encoded_bitmap, encoded_bitmap_len, bitmap);
+
+	// Then expand the bitmap into our bool array.
+	for (int i = 0; i < n_partitions; i++) {
+		if ((bitmap[i >> 3] & (1 << (7 - (i & 7)))) != 0) {
+			p_map->owns[i] = true;
+		}
+	}
+}
+
+// Parse the old protocol (to be deprecated):
 void
 parse_replicas_list(char* list, int n_partitions, cf_vector* p_maps_v)
 {
@@ -806,6 +870,87 @@ parse_replicas_list(char* list, int n_partitions, cf_vector* p_maps_v)
 	}
 }
 
+// Parse the new protocol:
+void
+parse_replicas_map(char* list, int n_partitions, cf_vector* p_maps_v)
+{
+	cf_atomic_int_incr(&g_cl_stats.partition_process);
+	uint64_t _s = cf_getms();
+
+	// Format: <namespace1>:<base 64 encoded bitmap>;<namespace2>:<base 64 encoded bitmap>; ...
+	// Warning: this method walks on partitions string argument.
+	char* p = list;
+
+	while (*p) {
+		// Store pointer to namespace string.
+		char* list_ns = p;
+
+		// Loop until : and set it to null.
+		while (*p && *p != ':') {
+			p++;
+		}
+
+		if (*p == ':') {
+			*p++ = 0;
+		}
+		else {
+			cf_warn("ns %s has no encoded bitmap", list_ns);
+			break;
+		}
+
+		// Store pointer to base 64 encoded bitmap.
+		char* p_encoded_bitmap = p;
+
+		// Loop until ; or null-terminator.
+		while (*p && *p != ';') {
+			p++;
+		}
+
+		// Calculate length of encoded bitmap.
+		int encoded_bitmap_len = (int)(p - p_encoded_bitmap);
+
+		// If we found ; set it to null and advance read pointer.
+		if (*p == ';') {
+			*p++ = 0;
+		}
+
+		// Sanity check namespace.
+		char* ns = trim(list_ns);
+		size_t len = strlen(ns);
+
+		if (len == 0 || len > 31) {
+			cf_warn("invalid partition namespace %s", ns);
+			continue;
+		}
+
+		// Sanity check encoded bitmap.
+		// TODO - annoying to calculate these every time...
+		int bitmap_size = (n_partitions + 7) / 8;
+		int expected_encoded_len = ((bitmap_size + 2) / 3) * 4;
+
+		if (expected_encoded_len != encoded_bitmap_len) {
+			cf_warn("invalid partition bitmap %s", p_encoded_bitmap);
+			continue;
+		}
+
+		// Get or create map for specified maps vector and namespace.
+		ns_partition_map* p_map =
+				ns_partition_map_get(p_maps_v, ns, n_partitions);
+
+		// Fill out the map's partition ownership information.
+		if (p_map) {
+			ns_partition_map_set(p_map, p_encoded_bitmap, encoded_bitmap_len,
+					n_partitions);
+		}
+	}
+
+	uint64_t delta = cf_getms() - _s;
+
+	if (delta > CL_LOG_DELAY_INFO) {
+		cf_info("CL_DELAY: partition process: %lu", delta);
+	}
+}
+
 void
 node_info_req_parse_replicas(cl_cluster_node* cn)
 {
@@ -831,7 +976,16 @@ node_info_req_parse_replicas(cl_cluster_node* cn)
 		char* name = (char*)cf_vector_pointer_get(&pair_v, 0);
 		char* value = (char*)cf_vector_pointer_get(&pair_v, 1);
 
-		if (strcmp(name, "replicas-read") == 0) {
+		if (strcmp(name, "partition-generation") == 0) {
+			int gen = atoi(value);
+
+			// Update to the new partition generation.
+			cf_atomic_int_set(&cn->partition_generation, (cf_atomic_int_t)gen);
+
+			cf_debug("node %s got partition generation %d", cn->name, gen);
+		}
+		// Old protocol (to be deprecated):
+		else if (strcmp(name, "replicas-read") == 0) {
 			// Parse the read replicas.
 			parse_replicas_list(value, cn->asc->n_partitions, &read_maps_v);
 		}
@@ -839,13 +993,14 @@ node_info_req_parse_replicas(cl_cluster_node* cn)
 			// Parse the write replicas.
 			parse_replicas_list(value, cn->asc->n_partitions, &write_maps_v);
 		}
-		else if (strcmp(name, "partition-generation") == 0) {
-			int gen = atoi(value);
-
-			// Update to the new partition generation.
-			cf_atomic_int_set(&cn->partition_generation, (cf_atomic_int_t)gen);
-
-			cf_debug("node %s got partition generation %d", cn->name, gen);
+		// New protocol:
+		else if (strcmp(name, "replicas-master") == 0) {
+			// Parse the new-format master replicas.
+			parse_replicas_map(value, cn->asc->n_partitions, &write_maps_v);
+		}
+		else if (strcmp(name, "replicas-prole") == 0) {
+			// Parse the new-format prole replicas.
+			parse_replicas_map(value, cn->asc->n_partitions, &read_maps_v);
 		}
 		else {
 			cf_warn("node %s info replicas did not request %s", cn->name, name);
@@ -861,7 +1016,7 @@ node_info_req_parse_replicas(cl_cluster_node* cn)
 	// function will process write replicas (masters) first and ignore the read
 	// replicas' redundant masters.
 	//
-	// The redundant masters guarantee p_read_map will not be null in the single
+	// For both old and new protocol, p_read_map will not be null in the single
 	// node case. We also assume it's impossible for a node to have no masters.
 
 	uint32_t n_write_maps = cf_vector_size(&write_maps_v);

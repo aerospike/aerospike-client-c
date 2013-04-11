@@ -4,7 +4,10 @@
  * Multi-event-base usage of the Citrusleaf libevent2 client.
  *
  * This example uses the same transaction event base and thread model as
- * example3, but it runs indefinitely and may be used for load testing.
+ * example3, but it runs indefinitely and may be used for load testing. It also
+ * demonstrates "throttling", a feature in which excessive transaction timeouts
+ * cause the client to start rejecting a fraction of transactions in an attempt
+ * to increase the success rate.
  *
  * The main steps are:
  *	- Initialize database cluster management.
@@ -95,17 +98,23 @@ typedef enum {
 	MIXED
 } base_phase;
 
+typedef struct statistics_s {
+	uint64_t puts;
+	uint64_t puts_throttled;
+	uint64_t put_timeouts;
+	uint64_t gets;
+	uint64_t gets_throttled;
+	uint64_t get_timeouts;
+	uint64_t not_found;
+} statistics;
+
 typedef struct base_s {
 	pthread_t thread;
 	struct event_base* p_event_base;
 	struct event* p_trigger_event;
 	base_phase trigger_phase;
 	int trigger_k;
-	uint64_t num_puts;
-	uint64_t num_put_timeouts;
-	uint64_t num_gets;
-	uint64_t num_get_timeouts;
-	uint64_t num_not_found;
+	statistics stats;
 } base;
 
 
@@ -119,6 +128,7 @@ static base* g_bases = NULL;
 static ev2citrusleaf_object* g_keys = NULL;
 static ev2citrusleaf_write_parameters g_write_parameters;
 static uint32_t g_running;
+static statistics g_totals = { 0, 0, 0, 0, 0, 0, 0 };
 
 
 //==========================================================
@@ -133,7 +143,7 @@ static void stop_cluster_management();
 static void start_transactions();
 static void block_until_transactions_done();
 static void* run_event_loop(void* pv_b);
-static void log_statistics();
+static void log_statistics(bool show_totals);
 static void trigger_cb(int fd, short event, void* pv_udata);
 static bool put(int b, int k);
 static void put_cb(int return_value, ev2citrusleaf_bin* bins, int n_bins,
@@ -352,6 +362,22 @@ start_cluster_management()
 		return false;
 	}
 
+	// Configure the cluster to do throttling.
+	ev2citrusleaf_cluster_runtime_options opts;
+
+	if (0 != ev2citrusleaf_cluster_get_runtime_options(g_p_cluster, &opts)) {
+		LOG("ERROR: getting cluster runtime options");
+		return false;
+	}
+
+	opts.throttle_reads = true;
+	opts.throttle_writes = true;
+
+	if (0 != ev2citrusleaf_cluster_set_runtime_options(g_p_cluster, &opts)) {
+		LOG("ERROR: setting cluster runtime options");
+		return false;
+	}
+
 	// Connect to Citrusleaf database server cluster.
 	result = ev2citrusleaf_cluster_add_host(g_p_cluster, (char*)g_config.p_host,
 			g_config.port);
@@ -439,7 +465,7 @@ block_until_transactions_done()
 	// Use the main thread for reporting.
 	while (g_running) {
 		if (0 == sleep(REPORT_INTERVAL_SEC)) {
-			log_statistics();
+			log_statistics(false);
 		}
 	}
 
@@ -449,7 +475,7 @@ block_until_transactions_done()
 	}
 
 	LOG("example4 transactions done");
-	log_statistics();
+	log_statistics(true);
 }
 
 //------------------------------------------------
@@ -521,13 +547,9 @@ run_event_loop(void* pv_b)
 // Print the interesting totals.
 //
 static void
-log_statistics()
+log_statistics(bool show_totals)
 {
-	uint64_t total_puts = 0;
-	uint64_t total_put_timeouts = 0;
-	uint64_t total_gets = 0;
-	uint64_t total_get_timeouts = 0;
-	uint64_t total_not_found = 0;
+	statistics new_totals = { 0, 0, 0, 0, 0, 0, 0 };
 	bool started_mixed_phase = false;
 
 	// AKG - a base object's statistics members are always modified on the same
@@ -535,28 +557,62 @@ log_statistics()
 	// on the reporting (main) thread, I didn't bother making them atomic.
 
 	for (int b = 0; b < g_config.num_bases; b++) {
-		total_puts += g_bases[b].num_puts;
-		total_put_timeouts += g_bases[b].num_put_timeouts;
+		new_totals.puts += g_bases[b].stats.puts;
+		new_totals.puts_throttled += g_bases[b].stats.puts_throttled;
+		new_totals.put_timeouts += g_bases[b].stats.put_timeouts;
 
 		if (g_bases[b].trigger_phase == MIXED) {
-			total_gets += g_bases[b].num_gets;
-			total_get_timeouts += g_bases[b].num_get_timeouts;
-			total_not_found += g_bases[b].num_not_found;
+			new_totals.gets += g_bases[b].stats.gets;
+			new_totals.gets_throttled += g_bases[b].stats.gets_throttled;
+			new_totals.get_timeouts += g_bases[b].stats.get_timeouts;
+			new_totals.not_found += g_bases[b].stats.not_found;
 
 			// As long as any base is doing gets, count and log them.
 			started_mixed_phase = true;
 		}
 	}
 
-	if (started_mixed_phase) {
-		LOG("total puts: %lu [%lu timeouts]; "
-			"total gets: %lu [%lu timeouts, %lu not found]",
-			total_puts, total_put_timeouts,
-			total_gets, total_get_timeouts, total_not_found);
+	if (show_totals) {
+		if (started_mixed_phase) {
+			LOG("total puts: %lu [%lu throttled, %lu timeouts]; "
+				"total gets: %lu [%lu throttled, %lu timeouts, %lu not found]",
+					new_totals.puts,
+					new_totals.puts_throttled,
+					new_totals.put_timeouts,
+					new_totals.gets,
+					new_totals.gets_throttled,
+					new_totals.get_timeouts,
+					new_totals.not_found);
+		}
+		else {
+			LOG("total puts: %lu [%lu throttled, %lu timeouts]",
+					new_totals.puts,
+					new_totals.puts_throttled,
+					new_totals.put_timeouts);
+		}
 	}
 	else {
-		LOG("total puts: %lu [%lu timeouts]", total_puts, total_put_timeouts);
+		// Show deltas.
+		if (started_mixed_phase) {
+			LOG("puts: %lu [%lu throttled, %lu timeouts]; "
+				"gets: %lu [%lu throttled, %lu timeouts, %lu not found]",
+					new_totals.puts - g_totals.puts,
+					new_totals.puts_throttled - g_totals.puts_throttled,
+					new_totals.put_timeouts - g_totals.put_timeouts,
+					new_totals.gets - g_totals.gets,
+					new_totals.gets_throttled - g_totals.gets_throttled,
+					new_totals.get_timeouts - g_totals.get_timeouts,
+					new_totals.not_found - g_totals.not_found);
+		}
+		else {
+			LOG("puts: %lu [%lu throttled, %lu timeouts]",
+					new_totals.puts - g_totals.puts,
+					new_totals.puts_throttled - g_totals.puts_throttled,
+					new_totals.put_timeouts - g_totals.put_timeouts);
+		}
 	}
+
+	g_totals = new_totals;
 }
 
 
@@ -589,13 +645,15 @@ trigger_cb(int fd, short event, void* pv_udata)
 
 		// Check whether insertion phase is done.
 		if (g_bases[b].trigger_k >= g_config.num_keys) {
-			LOG("base %2d - done insertions [%lu timeouts]", b,
-					g_bases[b].num_put_timeouts);
+			LOG("base %2d - done insertions [%lu throttled, %lu timeouts]", b,
+					g_bases[b].stats.puts_throttled,
+					g_bases[b].stats.put_timeouts);
 
 			// Done with insertion phase on this base, start mixed phase.
 			g_bases[b].trigger_phase = MIXED;
-			g_bases[b].num_puts = 0;
-			g_bases[b].num_put_timeouts = 0;
+			g_bases[b].stats.puts = 0;
+			g_bases[b].stats.puts_throttled = 0;
+			g_bases[b].stats.put_timeouts = 0;
 		}
 	}
 	// Continue mixed (read or write) phase until user stops run.
@@ -651,7 +709,7 @@ put(int b, int k)
 	ev2citrusleaf_object_init_blob(&bin.object, (void*)value,
 			(size_t)g_config.value_size);
 
-	if (0 != ev2citrusleaf_put(
+	int result = ev2citrusleaf_put(
 			g_p_cluster,					// cluster
 			(char*)g_config.p_namespace,	// namespace
 			(char*)g_config.p_set,			// set name
@@ -662,8 +720,20 @@ put(int b, int k)
 			g_config.timeout_msec,			// transaction timeout
 			put_cb,							// callback for this transaction
 			(void*)udata,					// "user data" - here, b and k
-			g_bases[b].p_event_base)) {		// event base for this transaction
-		LOG("ERROR: put(), base %2d, key %d", b, k);
+			g_bases[b].p_event_base);		// event base for this transaction
+
+	switch (result) {
+	case EV2CITRUSLEAF_OK:
+		break;
+
+	case EV2CITRUSLEAF_FAIL_THROTTLED:
+		DETAIL("PUT THROTTLED: base %2d, key %d", b, k);
+		g_bases[b].stats.puts_throttled++;
+		// Otherwise ok, won't exit event loop...
+		break;
+
+	default:
+		LOG("ERROR: put() returned %d, base %2d, key %d", result, b, k);
 		return false;
 	}
 
@@ -680,7 +750,7 @@ put_cb(int return_value, ev2citrusleaf_bin* bins, int n_bins,
 	int k = (int)((uint64_t)pv_udata & 0xFFFF);
 	int b = (int)((uint64_t)pv_udata >> 32);
 
-	g_bases[b].num_puts++;
+	g_bases[b].stats.puts++;
 
 	switch (return_value) {
 	case EV2CITRUSLEAF_OK:
@@ -688,7 +758,7 @@ put_cb(int return_value, ev2citrusleaf_bin* bins, int n_bins,
 
 	case EV2CITRUSLEAF_FAIL_TIMEOUT:
 		DETAIL("PUT TIMEOUT: base %2d, key %d", b, k);
-		g_bases[b].num_put_timeouts++;
+		g_bases[b].stats.put_timeouts++;
 		// Otherwise ok... Likely leads to EV2CITRUSLEAF_FAIL_NOTFOUND on get.
 		break;
 
@@ -708,7 +778,7 @@ get(int b, int k)
 	// Store base index and key index in user-data field.
 	uint64_t udata = ((uint64_t)b << 32) | (uint64_t)k;
 
-	if (0 != ev2citrusleaf_get_all(
+	int result = ev2citrusleaf_get_all(
 			g_p_cluster,					// cluster
 			(char*)g_config.p_namespace,	// namespace
 			(char*)g_config.p_set,			// set name
@@ -716,8 +786,20 @@ get(int b, int k)
 			g_config.timeout_msec,			// transaction timeout
 			get_cb,							// callback for this transaction
 			(void*)udata,					// "user data" - here, b and k
-			g_bases[b].p_event_base)) {		// event base for this transaction
-		LOG("ERROR: get(), base %2d, key %d", b, k);
+			g_bases[b].p_event_base);		// event base for this transaction
+
+	switch (result) {
+	case EV2CITRUSLEAF_OK:
+		break;
+
+	case EV2CITRUSLEAF_FAIL_THROTTLED:
+		DETAIL("GET THROTTLED: base %2d, key %d", b, k);
+		g_bases[b].stats.gets_throttled++;
+		// Otherwise ok, won't exit event loop...
+		break;
+
+	default:
+		LOG("ERROR: get() returned %d, base %2d, key %d", result, b, k);
 		return false;
 	}
 
@@ -734,7 +816,7 @@ get_cb(int return_value, ev2citrusleaf_bin* bins, int n_bins,
 	int k = (int)((uint64_t)pv_udata & 0xFFFF);
 	int b = (int)((uint64_t)pv_udata >> 32);
 
-	g_bases[b].num_gets++;
+	g_bases[b].stats.gets++;
 
 	switch (return_value) {
 	case EV2CITRUSLEAF_OK:
@@ -745,13 +827,13 @@ get_cb(int return_value, ev2citrusleaf_bin* bins, int n_bins,
 
 	case EV2CITRUSLEAF_FAIL_TIMEOUT:
 		DETAIL("GET TIMEOUT: base %2d, key %d", b, k);
-		g_bases[b].num_get_timeouts++;
+		g_bases[b].stats.get_timeouts++;
 		// Otherwise ok...
 		break;
 
 	case EV2CITRUSLEAF_FAIL_NOTFOUND:
 		DETAIL("NOT FOUND: base %2d, key %d", b, k);
-		g_bases[b].num_not_found++;
+		g_bases[b].stats.not_found++;
 		// Otherwise ok...
 		break;
 

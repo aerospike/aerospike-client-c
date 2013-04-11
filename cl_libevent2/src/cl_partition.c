@@ -273,7 +273,7 @@ cl_partition_table_get(ev2citrusleaf_cluster* asc, const char* ns,
 static inline const char*
 safe_node_name(cl_cluster_node* node)
 {
-	return node ? (const char*)node->name : "";
+	return node ? (const char*)node->name : "null";
 }
 
 void

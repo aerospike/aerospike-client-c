@@ -222,7 +222,7 @@ typedef struct ev2citrusleaf_cluster_runtime_options_s {
 	// Throttle when actual failure percentage exceeds this. Default value is 2.
 	uint32_t	throttle_threshold_failure_pct;
 
-	// Measure failure percentage over this interval. Default 15, min 1, max 60.
+	// Measure failure percentage over this interval. Default 15, min 1, max 65.
 	uint32_t	throttle_window_seconds;
 
 	// How hard to throttle. Default value is 10.

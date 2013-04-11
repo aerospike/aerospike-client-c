@@ -41,8 +41,8 @@ struct sockaddr_in;
 
 #define CLUSTER_NODE_MAGIC 0x9B00134C
 #define MAX_INTERVALS_ABSENT 1
-#define MAX_THROTTLE_WINDOW 60
-#define MAX_HISTORY_INTERVALS (MAX_THROTTLE_WINDOW - 1)
+#define MAX_HISTORY_INTERVALS 64 // power of 2 makes mod operation fast
+#define MAX_THROTTLE_WINDOW (MAX_HISTORY_INTERVALS + 1)
 
 typedef enum {
 	INFO_REQ_NONE			= 0,
@@ -100,6 +100,7 @@ typedef struct cl_cluster_node_s {
 	// This node's recent transaction successes & failures.
 	uint32_t				successes[MAX_HISTORY_INTERVALS];
 	uint32_t				failures[MAX_HISTORY_INTERVALS];
+	uint32_t				current_interval;
 
 	// Rate at which transactions to this node are being throttled.
 	cf_atomic32				throttle_pct;

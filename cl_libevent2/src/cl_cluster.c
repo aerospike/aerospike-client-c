@@ -40,7 +40,7 @@
 
 
 // Remove to use the new info replicas protocol:
-#define OLD_PROTOCOL
+#define OLD_REPLICAS_PROTOCOL
 
 extern void ev2citrusleaf_base_hop(cl_request *req);
 
@@ -637,11 +637,11 @@ ev2citrusleaf_cluster_follow(ev2citrusleaf_cluster *asc, bool flag)
 
 // INFO_STR_MAX_LEN must be >= longest of these strings.
 const char INFO_STR_CHECK[] = "node\npartition-generation\nservices\n";
-#ifdef OLD_PROTOCOL
+#ifdef OLD_REPLICAS_PROTOCOL
 const char INFO_STR_GET_REPLICAS[] = "partition-generation\nreplicas-read\nreplicas-write\n";
-#else // OLD_PROTOCOL
+#else // OLD_REPLICAS_PROTOCOL
 const char INFO_STR_GET_REPLICAS[] = "partition-generation\nreplicas-master\nreplicas-prole\n";
-#endif // OLD_PROTOCOL
+#endif // OLD_REPLICAS_PROTOCOL
 
 void node_info_req_start(cl_cluster_node* cn, node_info_req_type req_type);
 // The libevent2 event handler for node info socket events:
@@ -746,7 +746,8 @@ ns_partition_map_destroy(cf_vector* p_maps_v)
 	}
 }
 
-const uint8_t BASE64_DECODE_ARRAY[] = {
+// TODO - should probably move base 64 stuff to cf_base so C client can use it.
+const uint8_t CF_BASE64_DECODE_ARRAY[] = {
 	    /*00*/ /*01*/ /*02*/ /*03*/ /*04*/ /*05*/ /*06*/ /*07*/   /*08*/ /*09*/ /*0A*/ /*0B*/ /*0C*/ /*0D*/ /*0E*/ /*0F*/
 /*00*/	    0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,     0,     0,     0,     0,     0,
 /*10*/      0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,     0,     0,     0,     0,     0,
@@ -766,10 +767,10 @@ const uint8_t BASE64_DECODE_ARRAY[] = {
 /*F0*/	    0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,     0,     0,     0,     0,     0
 };
 
-#define B64DA BASE64_DECODE_ARRAY
+#define B64DA CF_BASE64_DECODE_ARRAY
 
 void
-base64_decode(const char* in, int len, uint8_t* out)
+cf_base64_decode(const char* in, int len, uint8_t* out)
 {
 	int i = 0;
 	int j = 0;
@@ -792,7 +793,7 @@ ns_partition_map_set(ns_partition_map* p_map, const char* p_encoded_bitmap,
 	// Size allows for padding - is actual size rounded up to multiple of 3.
 	uint8_t bitmap[(encoded_bitmap_len / 4) * 3];
 
-	base64_decode(p_encoded_bitmap, encoded_bitmap_len, bitmap);
+	cf_base64_decode(p_encoded_bitmap, encoded_bitmap_len, bitmap);
 
 	// Then expand the bitmap into our bool array.
 	for (int i = 0; i < n_partitions; i++) {
@@ -1410,7 +1411,7 @@ node_info_req_start(cl_cluster_node* cn, node_info_req_type req_type)
 	}
 }
 
-// TODO - add to runtime optios?
+// TODO - add to runtime options?
 #define MAX_THROTTLE_PCT 90
 
 void
@@ -1434,23 +1435,35 @@ node_throttle_control(cl_cluster_node* cn)
 	cf_atomic32_set(&cn->n_successes, 0);
 	cf_atomic32_set(&cn->n_failures, 0);
 
+	// Figure out where to start summing history, and if there's enough history
+	// to base throttling on. (If not, calculate sums anyway for debug logging.)
+	uint32_t start_interval = 0;
+	bool enough_history = false;
+
+	if (cn->current_interval >= history_intervals_to_use) {
+		start_interval = cn->current_interval - history_intervals_to_use;
+		enough_history = true;
+	}
+
 	// Calculate the sums.
 	uint32_t successes_sum = new_successes;
 	uint32_t failures_sum = new_failures;
 
-	for (uint32_t i = 0; i < history_intervals_to_use; i++) {
-		successes_sum += cn->successes[i];
-		failures_sum += cn->failures[i];
+	for (uint32_t i = start_interval; i < cn->current_interval; i++) {
+		uint32_t index = i % MAX_HISTORY_INTERVALS;
+
+		successes_sum += cn->successes[index];
+		failures_sum += cn->failures[index];
 	}
 
-	// Time shift the history. Keep max history in case runtime options change.
-	size_t size = (MAX_HISTORY_INTERVALS - 1) * sizeof(uint32_t);
+	// Update the history. Keep max history in case runtime options change.
+	uint32_t current_index = cn->current_interval % MAX_HISTORY_INTERVALS;
 
-	memmove((void*)&cn->successes[1], (const void*)&cn->successes[0], size);
-	memmove((void*)&cn->failures[1], (const void*)&cn->failures[0], size);
+	cn->successes[current_index] = new_successes;
+	cn->failures[current_index] = new_failures;
 
-	cn->successes[0] = new_successes;
-	cn->failures[0] = new_failures;
+	// So far we only use this for throttle control - increment it here.
+	cn->current_interval++;
 
 	// Calculate the failure percentage.
 	uint32_t sum = failures_sum + successes_sum;
@@ -1462,7 +1475,7 @@ node_throttle_control(cl_cluster_node* cn)
 	// Calculate and apply the throttle rate.
 	uint32_t throttle_pct = 0;
 
-	if (failure_pct > threshold_failure_pct) {
+	if (enough_history && failure_pct > threshold_failure_pct) {
 		throttle_pct = (failure_pct - threshold_failure_pct) * throttle_factor;
 
 		if (throttle_pct > MAX_THROTTLE_PCT) {
@@ -1492,12 +1505,12 @@ node_timer_fn(evutil_socket_t fd, short event, void* udata)
 
 	cf_debug("node %s timer event", cn->name);
 
-	if (cn->intervals_absent == 0) {
-		// First time this node's timer is firing - it won't be in the map.
-		cn->intervals_absent++;
+	// Check if this node is in the partition map. (But skip the first time this
+	// node's timer fires, since the node can't be in the map yet.)
+	if (cn->intervals_absent == 0 || cl_partition_table_is_node_present(cn)) {
+		cn->intervals_absent = 1;
 	}
-	else if (! cl_partition_table_is_node_present(cn) &&
-			cn->intervals_absent++ > MAX_INTERVALS_ABSENT) {
+	else if (cn->intervals_absent++ > MAX_INTERVALS_ABSENT) {
 		// This node has been out of the map for MAX_INTERVALS_ABSENT laps.
 
 		ev2citrusleaf_cluster* asc = cn->asc;

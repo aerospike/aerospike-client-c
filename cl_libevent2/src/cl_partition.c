@@ -154,6 +154,12 @@ cl_partition_table_is_node_present(cl_cluster_node* node)
 }
 
 
+static inline void
+force_replicas_refresh(cl_cluster_node* node)
+{
+	cf_atomic_int_set(&node->partition_generation, (cf_atomic_int_t)-1);
+}
+
 void
 cl_partition_table_update(cl_cluster_node* node, const char* ns, bool* masters,
 		bool* proles)
@@ -193,6 +199,8 @@ cl_partition_table_update(cl_cluster_node* node, const char* ns, bool* masters,
 			// This node is the new (or still) master for this partition.
 
 			if (p->master) {
+				// Replacing another master.
+				force_replicas_refresh(p->master);
 				cl_cluster_node_release(p->master, "PM-");
 			}
 
@@ -203,6 +211,8 @@ cl_partition_table_update(cl_cluster_node* node, const char* ns, bool* masters,
 			// This node is the new (or still) prole for this partition.
 
 			if (p->prole) {
+				// Replacing another prole.
+				force_replicas_refresh(p->prole);
 				cl_cluster_node_release(p->prole, "PP-");
 			}
 

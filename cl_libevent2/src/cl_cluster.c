@@ -797,7 +797,7 @@ ns_partition_map_set(ns_partition_map* p_map, const char* p_encoded_bitmap,
 
 	// Then expand the bitmap into our bool array.
 	for (int i = 0; i < n_partitions; i++) {
-		if ((bitmap[i >> 3] & (1 << (7 - (i & 7)))) != 0) {
+		if ((bitmap[i >> 3] & (8 >> (i & 7))) != 0) {
 			p_map->owns[i] = true;
 		}
 	}

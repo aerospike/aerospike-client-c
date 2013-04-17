@@ -138,7 +138,6 @@ citrusleaf_info_host_limit(struct sockaddr_in *sa_in, char *names, char **values
 
 	// Un-initialized buf can lead to junk lastshiptimes values. 
 	// Initialize buf to 0.
-	
 	bzero(buf, 1024);
 	
 	if (names) {
@@ -192,20 +191,41 @@ citrusleaf_info_host_limit(struct sockaddr_in *sa_in, char *names, char **values
 	cl_proto_swap(rsp);
 	
 	if (rsp->sz) {
-		uint8_t *v_buf = malloc(rsp->sz + 1);
-		if (!v_buf) goto Done;
-        
-        if (timeout_ms)
-            io_rv = cf_socket_read_timeout(fd, v_buf, rsp->sz, 0, timeout_ms);
-        else
-            io_rv = cf_socket_read_forever(fd, v_buf, rsp->sz);
-        
-        if (io_rv != 0) {
-            free(v_buf);
-            goto Done;
+		size_t read_length = rsp->sz;
+		bool limit_reached = false;
+
+		if (max_response_length > 0 && rsp->sz > max_response_length) {
+			// Response buffer is too big.  Read a few bytes just to see what the buffer contains.
+			read_length = 100;
+			limit_reached = true;
 		}
-			
-		v_buf[rsp->sz] = 0;
+
+		uint8_t *v_buf = malloc(read_length + 1);
+		if (!v_buf) {
+			cf_warn("Info request '%s' failed. Failed to malloc %d bytes", names, read_length);
+			goto Done;
+		}
+
+		if (timeout_ms)
+			io_rv = cf_socket_read_timeout(fd, v_buf, read_length, 0, timeout_ms);
+		else
+			io_rv = cf_socket_read_forever(fd, v_buf, read_length);
+
+		if (io_rv != 0) {
+			free(v_buf);
+
+			if (io_rv != ETIMEDOUT) {
+				cf_warn("Info request '%s' failed. Failed to read %d bytes. Return code %d", names, read_length, io_rv);
+			}
+			goto Done;
+		}
+		v_buf[read_length] = 0;
+
+		if (limit_reached) {
+			// Response buffer is too big.  Log warning and reject.
+			cf_warn("Info request '%s' failed. Response buffer length %lu is excessive. Buffer: %s", names, rsp->sz, v_buf);
+			goto Done;
+		}
 		*values = (char *) v_buf;
 		
 	}                                                                                               

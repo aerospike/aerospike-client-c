@@ -1019,10 +1019,9 @@ cl_set_value_particular(cl_msg_op *op, cl_bin *value)
 
 int
 cl_parse(cl_msg *msg, uint8_t *buf, size_t buf_len, cl_bin **values_r, cl_operation **operations_r, 
-	int *n_values_r, uint64_t *trid_r, char **setname_r)
+	int *n_values_r, uint64_t *trid_r, char *setname_r)
 {
 	uint8_t *buf_lim = buf + buf_len;
-	
 	int i;
 	if (msg->n_fields) {
 		cl_msg_field *mf = (cl_msg_field *)buf;
@@ -1049,7 +1048,12 @@ cl_parse(cl_msg *msg, uint8_t *buf, size_t buf_len, cl_bin **values_r, cl_operat
 				// In case of set name, the field size is set to one more than the 
 				// size of set name (to accomodate the byte used for 'type' value)
 				if (setname_r) {
-					*setname_r = strndup(mf->data, (mf->field_sz-1));
+					// This size is assumed to
+					// be sufficient and callers have to take due diligence to
+					// avoid string over-flow issues.
+					uint32_t setname_len = mf->field_sz - 1;
+					memcpy(setname_r, mf->data, setname_len);
+					setname_r[setname_len] = '\0';
 				}
 			}
 
@@ -1143,7 +1147,7 @@ cl_parse(cl_msg *msg, uint8_t *buf, size_t buf_len, cl_bin **values_r, cl_operat
 static int
 do_the_full_monte(cl_cluster *asc, int info1, int info2, int info3, const char *ns, const char *set, const cl_object *key,
 	const cf_digest *digest, cl_bin **values, cl_operator operator, cl_operation **operations, int *n_values, 
-	uint32_t *cl_gen, const cl_write_parameters *cl_w_p, uint64_t *trid, char **setname_r)
+	uint32_t *cl_gen, const cl_write_parameters *cl_w_p, uint64_t *trid, char *setname_r)
 {
 	int rv = -1;
 #ifdef DEBUG_HISTOGRAM	
@@ -1732,7 +1736,7 @@ citrusleaf_get_all(cl_cluster *asc, const char *ns, const char *set, const cl_ob
 
 extern cl_rv
 citrusleaf_get_all_digest_getsetname(cl_cluster *asc, const char *ns, const cf_digest *digest, 
-	cl_bin **values, int *n_values, int timeout_ms, uint32_t *cl_gen, char **setname)
+	cl_bin **values, int *n_values, int timeout_ms, uint32_t *cl_gen, char *setname)
 {
 	if ((values == 0) || (n_values == 0)) {
 		cf_error("citrusleaf_get_all: illegal parameters passed");

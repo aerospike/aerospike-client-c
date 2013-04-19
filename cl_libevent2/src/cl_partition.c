@@ -44,8 +44,6 @@ cl_partition_table_create(ev2citrusleaf_cluster* asc, const char* ns)
 		MUTEX_ALLOC(pt->partitions[pid].lock);
 	}
 
-	cf_atomic_int_incr(&g_cl_stats.partition_create);
-
 	return pt;
 }
 
@@ -73,12 +71,10 @@ cl_partition_table_destroy_all(ev2citrusleaf_cluster* asc)
 			MUTEX_FREE(p->lock);
 		}
 
-		void* next = pt->next;
+		cl_partition_table* next = pt->next;
 
 		free(pt);
-		cf_atomic_int_incr(&g_cl_stats.partition_destroy);
-
-		pt = (cl_partition_table*)next;
+		pt = next;
 	}
 }
 

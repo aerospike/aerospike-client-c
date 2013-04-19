@@ -39,7 +39,8 @@ extern "C" {
 // how much of a delay in any processing loop is considered 'info' material?
 #define CL_LOG_DELAY_INFO 10
 
-#define CL_LOG_STATS_INTERVAL 10 // how often (in seconds) to dump 5 lines of stats
+// How often (cluster tend periods) to dump stats.
+#define CL_LOG_STATS_INTERVAL 10
 
 #define CL_LOG_TRANSACTION 1   // turn this on if you want verbose per-transaction logging
 
@@ -138,41 +139,10 @@ typedef struct cl_info_request_s {
 	
 } cl_info_request;
 
-//
-// having good statistics is crucial to being managable - and they exist outside 
-// cluster contexts
-//
+// Global statistics - these are independent of cluster.
 typedef struct cl_statistics_s {
-	// info stats
-	cf_atomic_int	app_info_requests;		// info requests made by app
-	cf_atomic_int	node_info_successes;	// successful node info requests
-	cf_atomic_int	node_info_failures;		// node info request failures
-	cf_atomic_int	node_info_timeouts;		// node info request timeouts
-	
-	// partition table stats
-	cf_atomic_int	partition_process;
-	cf_atomic_int	partition_create;
-	cf_atomic_int	partition_destroy;
-	
-	// connection stats
-	cf_atomic_int	conns_created;
-	cf_atomic_int	conns_connected;
-	cf_atomic_int	conns_destroyed;
-	cf_atomic_int	conns_destroyed_timeout;
-	cf_atomic_int	conns_destroyed_queue;
-	
-	// node stats
-	cf_atomic_int	nodes_created;
-	cf_atomic_int	nodes_destroyed;
-	
-	// request stats
-	cf_atomic_int	req_start;
-	cf_atomic_int	req_restart;
-	cf_atomic_int	req_success;
-	cf_atomic_int	req_timedout;
-	cf_atomic_int	event_counter; // number of times through the main event loop
-
-	
+	// Info requests made by app via public API.
+	cf_atomic_int	app_info_requests;
 } cl_statistics;
 
 extern cl_statistics g_cl_stats;

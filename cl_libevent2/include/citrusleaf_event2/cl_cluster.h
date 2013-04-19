@@ -108,6 +108,9 @@ typedef struct cl_cluster_node_s {
 	// Socket pool for (non-info) transactions on this node.
 	cf_queue*				conn_q;
 
+	// Number of sockets open on this node - for now just for stats.
+	cf_atomic32				n_fds_open;
+
 	// What version of partition information we have for this node.
 	cf_atomic_int			partition_generation;
 
@@ -117,110 +120,141 @@ typedef struct cl_cluster_node_s {
 	// The info transaction in progress, if any.
 	node_info_req			info_req;
 
-	// Space for two events: periodic trigger timer, and info request.
+	// Space for two events: periodic node timer, and info request.
 	uint8_t					event_space[];
 } cl_cluster_node;
-
-
-typedef struct cl_partition_s {
-	// Mutex to cover master/prole transitions for this partition.
-	void* lock;
-
-	// Which node, if any, is the master.
-	cl_cluster_node* master;
-
-	// Which node, if any, is the prole.
-	// TODO - not ideal for replication factor > 2.
-	cl_cluster_node* prole;
-} cl_partition;
-
-
-typedef struct cl_partition_table_s {
-	
-	struct cl_partition_table_s *next;
-	
-	char ns[33];  // the namespace name
-
-	bool was_dumped; // only dump table if it changed since last time
-
-	cl_partition partitions[];
-	
-} cl_partition_table;
 
 
 #define CLUSTER_MAGIC 0x91916666
 
 // Must be in-sync with ev2citrusleaf_cluster_runtime_options.
 typedef struct threadsafe_runtime_options_s {
-	cf_atomic32	read_master_only;
+	cf_atomic32				read_master_only;
 
-	cf_atomic32	throttle_reads;
-	cf_atomic32	throttle_writes;
+	cf_atomic32				throttle_reads;
+	cf_atomic32				throttle_writes;
 
 	// These change together under the lock.
-	uint32_t	throttle_threshold_failure_pct;
-	uint32_t	throttle_window_seconds;
-	uint32_t	throttle_factor;
+	uint32_t				throttle_threshold_failure_pct;
+	uint32_t				throttle_window_seconds;
+	uint32_t				throttle_factor;
 
 	// For groups of options that need to change together:
-	void*		lock;
+	void*					lock;
 } threadsafe_runtime_options;
 
-struct ev2citrusleaf_cluster_s {
-	
-	cf_ll_element		ll_e; // global list of all clusters - good for debugging
-	
-	uint32_t    MAGIC;
-	
-	bool		follow;   // possible to create a no-follow cluster
-						  // mostly for testing
-						  // that only targets specific nodes
-						  
-	// AKG - multi-thread access, shutdown usage
-	bool		shutdown; // we might be in shutdown phase, don't start more info
-							// requests or similar
+typedef struct cl_partition_s {
+	// Mutex to cover master/prole transitions for this partition.
+	void*					lock;
 
-	pthread_t			mgr_thread;		// (optional) internally created cluster manager thread
-	bool				internal_mgr;	// is there an internally created cluster manager thread and base?
-	struct event_base	*base;			// cluster manager base, specified by app or internally created
-	struct evdns_base	*dns_base;
+	// Which node, if any, is the master.
+	cl_cluster_node*		master;
+
+	// Which node, if any, is the prole.
+	// TODO - not ideal for replication factor > 2.
+	cl_cluster_node*		prole;
+} cl_partition;
+
+typedef struct cl_partition_table_s {
+	// Pointer to next element in this linked list.
+	struct cl_partition_table_s* next;
+
+	// The namespace name.
+	char					ns[33];
+
+	// For logging - only dump table to log if it changed since last time.
+	bool					was_dumped;
+
+	// Space for array of cl_partition objects.
+	cl_partition			partitions[];
+} cl_partition_table;
+
+struct ev2citrusleaf_cluster_s {
+	// Global linked list of all clusters.
+	cf_ll_element			ll_e;
+
+	// Sanity-checking field.
+	uint32_t				MAGIC;
+
+	// Seems this flag isn't used, but is set from public API. TODO - deprecate?
+	bool					follow;
+
+	// Used only with internal cluster management option.
+	pthread_t				mgr_thread;
+	bool					internal_mgr;
+
+	// Cluster management event base, specified by app or internally created.
+	struct event_base*		base;
+
+	// Associated cluster management DNS event base.
+	struct evdns_base*		dns_base;
 
 	// Cluster-specific functionality options.
 	ev2citrusleaf_cluster_static_options	static_options;
 	threadsafe_runtime_options				runtime_options;
 
-	// List of host-strings added by the user.
-	cf_vector		host_str_v;	// vector is pointer-type
-	cf_vector		host_port_v;  // vector is integer-type
-	
-	// actual **node objects** that represent the cluster
-	void 			*node_v_lock;
-	cf_atomic_int	last_node;
-	cf_vector		node_v;      // vector is pointer-type, host objects are ref-counted
+	// List of host-strings and ports added by the user.
+	cf_vector				host_str_v;		// vector is pointer-type
+	cf_vector				host_port_v;	// vector is integer-type
 
-	// There are occasions where we want to queue pending transactions until
-	// nodes come available (like, embarrassingly, the first request).
-	cf_queue	*request_q;
-	void 		*request_q_lock;
+	// List of node objects in this cluster.
+	cf_vector				node_v;			// vector is pointer-type
+	void* 					node_v_lock;
+	cf_atomic_int			last_node;
+
+	// If we can't get a node for transactions we internally queue the
+	// transactions until nodes become available.
+	cf_queue*				request_q;
+	void*					request_q_lock;
 
 	// Transactions in progress. Includes transactions in the request queue
 	// above (everything needing a callback). No longer used for clean shutdown
 	// other than to issue a warning if there are incomplete transactions.
-	cf_atomic_int	requests_in_progress; 
+	cf_atomic_int			requests_in_progress;
 
 	// Internal non-node info requests in progress, used for clean shutdown.
-	cf_atomic_int	pings_in_progress;
+	cf_atomic_int			pings_in_progress;
 
-	// information about where all the partitions are
-	// AKG - multi-thread access, but never changes on server
-	cl_partition_id		n_partitions;
-	// AKG - pointer set/read only in cluster thread
-	cl_partition_table *partition_table_head;
-	
-	// statistics?
-	
-	uint8_t 	event_space[];
-	
+	// Number of partitions. Not atomic since it never changes on the server.
+	cl_partition_id			n_partitions;
+
+	// Head of linked list of partition tables (one table per namespace).
+	cl_partition_table*		partition_table_head;
+
+	// How many tender timer periods this cluster has lasted.
+	uint32_t				tender_intervals;
+
+	// Statistics for this cluster. (Some are atomic only because the public API
+	// can dump the statistics in any thread.)
+
+		// History of nodes in the cluster.
+	cf_atomic_int			n_nodes_created;
+	cf_atomic_int			n_nodes_destroyed;
+
+		// Totals for tender transactions.
+	cf_atomic_int			n_ping_successes;
+	cf_atomic_int			n_ping_failures;
+
+		// Totals for node info transactions.
+	cf_atomic_int			n_node_info_successes;
+	cf_atomic_int			n_node_info_failures;
+	cf_atomic_int			n_node_info_timeouts;
+
+		// Totals for "ordinary" transactions.
+	cf_atomic_int			n_req_successes;
+	cf_atomic_int			n_req_failures;
+	cf_atomic_int			n_req_timeouts;
+	cf_atomic_int			n_req_throttles;
+	cf_atomic_int			n_internal_retries;
+	cf_atomic_int			n_internal_retries_off_q;
+
+		// Totals for batch transactions.
+	cf_atomic_int			n_batch_node_successes;
+	cf_atomic_int			n_batch_node_failures;
+	cf_atomic_int			n_batch_node_timeouts;
+
+	// Space for cluster tender periodic timer event.
+	uint8_t					event_space[];
 };
 
 

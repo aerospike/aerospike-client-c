@@ -15,7 +15,6 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 #include <event2/dns.h>
 #include <event2/event.h>
 
@@ -57,6 +56,7 @@ struct timeval g_node_tend_timeout = {1,1};
 
 
 // Forward references
+void cluster_print_stats(ev2citrusleaf_cluster* asc);
 void cluster_tend( ev2citrusleaf_cluster *asc);
 void cluster_new_sockaddr(ev2citrusleaf_cluster *asc, struct sockaddr_in *new_sin);
 int ev2citrusleaf_cluster_add_host_internal(ev2citrusleaf_cluster *asc, char *host_in, short port_in);
@@ -229,10 +229,9 @@ cluster_timer_fn(evutil_socket_t fd, short event, void *udata)
 
 	cluster_tend(asc);
 
-	if (time(0) % CL_LOG_STATS_INTERVAL == 0) {
+	if (++asc->tender_intervals % CL_LOG_STATS_INTERVAL == 0) {
 		cl_partition_table_dump(asc);
-		ev2citrusleaf_print_stats();
-		cf_info("requests in progress: %d", cf_atomic_int_get(asc->requests_in_progress));
+		cluster_print_stats(asc);
 	}
 
 	if (0 != event_add(cluster_get_timer_event(asc), &g_cluster_tend_timeout)) {
@@ -415,51 +414,51 @@ ev2citrusleaf_cluster_create(struct event_base *base,
 	return(asc);
 }
 
-int
-ev2citrusleaf_cluster_get_active_node_count(ev2citrusleaf_cluster *asc)
-{
-	// *AN* likes to call with a null pointer. Shame.
-	if (!asc)					return(-1);
 
-	if (asc->MAGIC != CLUSTER_MAGIC) {
-		cf_warn("cluster get_active_node on non-cluster object %p", asc);
-		return(0);
+int
+ev2citrusleaf_cluster_get_active_node_count(ev2citrusleaf_cluster* asc)
+{
+	if (! asc) {
+		return EV2CITRUSLEAF_FAIL_CLIENT_ERROR;
 	}
 
-	int count = 0;
+	if (asc->MAGIC != CLUSTER_MAGIC) {
+		cf_error("cluster get_active_node_count on non-cluster object %p", asc);
+		return EV2CITRUSLEAF_FAIL_CLIENT_ERROR;
+	}
 
 	MUTEX_LOCK(asc->node_v_lock);
 
-	for (uint32_t i=0;i<cf_vector_size(&asc->node_v);i++) {
-		cl_cluster_node *node = (cl_cluster_node*)cf_vector_pointer_get(&asc->node_v, i);
+	uint32_t n_nodes = cf_vector_size(&asc->node_v);
+	uint32_t n_active_nodes = 0;
+
+	for (uint32_t i = 0; i < n_nodes; i++) {
+		cl_cluster_node* node = (cl_cluster_node*)
+				cf_vector_pointer_get(&asc->node_v, i);
 
 		if (node->MAGIC != CLUSTER_NODE_MAGIC) {
-			cf_error("node in cluster list has no magic!");
+			cf_error("cluster node %u has bad magic", i);
 			continue;
 		}
 
 		if (node->name[0] == 0) {
-			cf_warn("cluster node %d has no name (this is likely a serious internal confusion)", i);
-			continue; // nodes with no name have never been pinged
+			cf_warn("cluster node %u has no name", i);
+			continue;
 		}
 
-		if (cf_vector_size(&node->sockaddr_in_v)==0) {
-			cf_warn("cluster node %s (%d) has no address", node->name, i);
-			continue; // nodes with no IP addresses aren't active
+		if (cf_vector_size(&node->sockaddr_in_v) == 0) {
+			cf_warn("cluster node %s (%u) has no address", node->name, i);
+			continue;
 		}
 
-		// maybe there are some other statistics, like the last good transaction...
-
-		count++;
+		n_active_nodes++;
 	}
-
-	int rv = cf_vector_size(&asc->node_v);
 
 	MUTEX_UNLOCK(asc->node_v_lock);
 
-	cf_info("cluster has %d nodes, %d ok", rv, count);
+	cf_info("cluster has %u nodes, %u ok", n_nodes, n_active_nodes);
 
-	return(rv);
+	return n_active_nodes;
 }
 
 
@@ -665,7 +664,7 @@ node_info_req_done(cl_cluster_node* cn)
 	cl_cluster_node_had_success(cn);
 
 	node_info_req_free(&cn->info_req);
-	cf_atomic_int_incr(&g_cl_stats.node_info_successes);
+	cf_atomic_int_incr(&cn->asc->n_node_info_successes);
 }
 
 void
@@ -674,6 +673,7 @@ node_info_req_fail(cl_cluster_node* cn, bool remote_failure)
 	// The socket may have unprocessed data or otherwise be untrustworthy.
 	cf_close(cn->info_fd);
 	cn->info_fd = -1;
+	cf_atomic32_decr(&cn->n_fds_open);
 
 	// If the failure was possibly the server node's fault, disapprove.
 	if (remote_failure) {
@@ -681,7 +681,7 @@ node_info_req_fail(cl_cluster_node* cn, bool remote_failure)
 	}
 
 	node_info_req_free(&cn->info_req);
-	cf_atomic_int_incr(&g_cl_stats.node_info_failures);
+	cf_atomic_int_incr(&cn->asc->n_node_info_failures);
 }
 
 void
@@ -698,7 +698,7 @@ node_info_req_timeout(cl_cluster_node* cn)
 {
 	event_del(cluster_node_get_info_event(cn));
 	node_info_req_fail(cn, true);
-	cf_atomic_int_incr(&g_cl_stats.node_info_timeouts);
+	cf_atomic_int_incr(&cn->asc->n_node_info_timeouts);
 }
 
 typedef struct ns_partition_map_s {
@@ -807,7 +807,6 @@ ns_partition_map_set(ns_partition_map* p_map, const char* p_encoded_bitmap,
 void
 parse_replicas_list(char* list, int n_partitions, cf_vector* p_maps_v)
 {
-	cf_atomic_int_incr(&g_cl_stats.partition_process);
 	uint64_t _s = cf_getms();
 
 	// Format: <namespace1>:<partition id1>;<namespace2>:<partition id2>; ...
@@ -875,7 +874,6 @@ parse_replicas_list(char* list, int n_partitions, cf_vector* p_maps_v)
 void
 parse_replicas_map(char* list, int n_partitions, cf_vector* p_maps_v)
 {
-	cf_atomic_int_incr(&g_cl_stats.partition_process);
 	uint64_t _s = cf_getms();
 
 	// Format: <namespace1>:<base 64 encoded bitmap>;<namespace2>:<base 64 encoded bitmap>; ...
@@ -1326,6 +1324,7 @@ node_info_req_prep_fd(cl_cluster_node* cn)
 			// Some other problem, could have to do with remote end.
 			cf_close(cn->info_fd);
 			cn->info_fd = -1;
+			cf_atomic32_decr(&cn->n_fds_open);
 			break;
 		case CONNECTED_BADFD:
 			// Local problem, don't try closing.
@@ -1336,6 +1335,7 @@ node_info_req_prep_fd(cl_cluster_node* cn)
 			cf_error("node %s info request connect state unknown", cn->name);
 			cf_close(cn->info_fd);
 			cn->info_fd = -1;
+			cf_atomic32_decr(&cn->n_fds_open);
 			return false;
 		}
 	}
@@ -1360,6 +1360,8 @@ node_info_req_prep_fd(cl_cluster_node* cn)
 		return false;
 	}
 
+	cf_atomic32_incr(&cn->n_fds_open);
+
 	return true;
 }
 
@@ -1368,6 +1370,7 @@ node_info_req_start(cl_cluster_node* cn, node_info_req_type req_type)
 {
 	if (! node_info_req_prep_fd(cn)) {
 		cf_info("node %s couldn't open fd for info request", cn->name);
+		cf_atomic_int_incr(&cn->asc->n_node_info_failures);
 		return;
 	}
 
@@ -1610,7 +1613,7 @@ cl_cluster_node_create(const char* name, ev2citrusleaf_cluster* asc)
 		return NULL;
 	}
 
-	cf_atomic_int_incr(&g_cl_stats.nodes_created);
+	cf_atomic_int_incr(&asc->n_nodes_created);
 
 #ifdef DEBUG_NODE_REF_COUNT
 	// To balance the ref-count logs, we need this:
@@ -1673,7 +1676,7 @@ cl_cluster_node_release(cl_cluster_node *cn, char *msg)
 	if (0 == cf_client_rc_release(cn)) {
 		cf_info("************* cluster node destroy: node %s : %p", cn->name, cn);
 
-		cf_atomic_int_incr(&g_cl_stats.nodes_destroyed);
+		cf_atomic_int_incr(&cn->asc->n_nodes_destroyed);
 
 		node_info_req_cancel(cn);
 
@@ -1692,8 +1695,8 @@ cl_cluster_node_release(cl_cluster_node *cn, char *msg)
 			int fd;
 
 			while (cf_queue_pop(cn->conn_q, &fd, CF_QUEUE_NOWAIT) == CF_QUEUE_OK) {
-				cf_atomic_int_incr(&g_cl_stats.conns_destroyed);
 				cf_close(fd);
+				cf_atomic32_decr(&cn->n_fds_open);
 			}
 
 			cf_queue_destroy(cn->conn_q);
@@ -1845,9 +1848,8 @@ cl_cluster_node_fd_get(cl_cluster_node *cn)
 				// Can't use it - the remote end closed it.
 			case CONNECTED_ERROR:
 				// Some other problem, could have to do with remote end.
-				cf_atomic_int_incr(&g_cl_stats.conns_destroyed);
-				cf_atomic_int_incr(&g_cl_stats.conns_destroyed_queue);
 				cf_close(fd);
+				cf_atomic32_decr(&cn->n_fds_open);
 				return -1;
 			case CONNECTED_BADFD:
 				// Local problem, don't try closing.
@@ -1856,9 +1858,8 @@ cl_cluster_node_fd_get(cl_cluster_node *cn)
 			default:
 				// Since we can't assert:
 				cf_error("bad return value from ev2citrusleaf_is_connected");
-				cf_atomic_int_incr(&g_cl_stats.conns_destroyed);
-				cf_atomic_int_incr(&g_cl_stats.conns_destroyed_queue);
 				cf_close(fd);
+				cf_atomic32_decr(&cn->n_fds_open);
 				return -2;
 		}
 	}
@@ -1889,7 +1890,7 @@ cl_cluster_node_fd_get(cl_cluster_node *cn)
 		cf_vector_get(&cn->sockaddr_in_v, i, &sa_in);
 
 		if (0 == cf_socket_start_connect_nb(fd, &sa_in)) {
-			cf_atomic_int_incr(&g_cl_stats.conns_connected);
+			cf_atomic32_incr(&cn->n_fds_open);
 			return fd;
 		}
 		// TODO - else remove this sockaddr from the list?
@@ -1904,8 +1905,8 @@ void
 cl_cluster_node_fd_put(cl_cluster_node *cn, int fd)
 {
 	if (! cf_queue_push_limit(cn->conn_q, &fd, 300)) {
-		cf_atomic_int_incr(&g_cl_stats.conns_destroyed);
 		cf_close(fd);
+		cf_atomic32_decr(&cn->n_fds_open);
 	}
 }
 
@@ -1986,23 +1987,21 @@ typedef struct ping_node_data_s {
 static void
 cluster_ping_node_fn(int return_value, char *values, size_t values_len, void *udata)
 {
-	ping_nodes_data *pnd = (ping_nodes_data *)udata;
+	ping_nodes_data* pnd = (ping_nodes_data*)udata;
+	ev2citrusleaf_cluster* asc = pnd->asc;
 
-	cf_atomic_int_decr(&pnd->asc->pings_in_progress);
+	cf_atomic_int_decr(&asc->pings_in_progress);
 
-	if (pnd->asc->shutdown)
-
-	cf_info("ping node fn: rv %d node value retrieved: %s", return_value, values);
-
-	if ((return_value != 0) || (pnd->asc->shutdown == true)) {
+	if (return_value != 0) {
 		cf_info("ping node function: error on return %d", return_value);
 		if (values) free(values);
 		// BFIX - need to free the data here, otherwise LEAK
 		free(udata);
+		cf_atomic_int_incr(&asc->n_ping_failures);
 		return;
 	}
 
-	ev2citrusleaf_cluster *asc = pnd->asc;
+	cf_atomic_int_incr(&asc->n_ping_successes);
 
 	cf_vector_define(lines_v, sizeof(void *), 0);
 	str_split('\n',values,&lines_v);
@@ -2087,8 +2086,6 @@ cluster_tend_hostname_resolve(int result, cf_vector *sockaddr_v, void *udata  )
 void
 cluster_new_sockaddr(ev2citrusleaf_cluster *asc, struct sockaddr_in *new_sin)
 {
-	if (asc->shutdown == true)	return;
-
 	// Lookup the sockaddr in the node list. This is inefficient, but works
 	// Improve later if problem...
 
@@ -2123,6 +2120,7 @@ cluster_new_sockaddr(ev2citrusleaf_cluster *asc, struct sockaddr_in *new_sin)
 	if (0 != ev2citrusleaf_info_host(asc->base,new_sin, asc->n_partitions == 0 ? "node\npartitions" : "node",
 						0, cluster_ping_node_fn, pnd)) {
 		free(pnd);
+		cf_atomic_int_incr(&asc->n_ping_failures);
 	}
 	else {
 		cf_atomic_int_incr(&asc->pings_in_progress);

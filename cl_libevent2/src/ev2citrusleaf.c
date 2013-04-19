@@ -36,14 +36,6 @@
 #include "citrusleaf_event2/ev2citrusleaf-internal.h"
 
 
-// #define CLDEBUG_HISTOGRAM 1
-#define CLDEBUG 1
-#define CLDEBUG_VERBOSE 1
-
-#ifdef CLDEBUG_HISTOGRAM
-    static cf_histogram* cf_hist;
-#endif
-
 //
 // Default mutex lock functions:
 //
@@ -1012,11 +1004,6 @@ parse(uint8_t *buf, size_t buf_len, ev2citrusleaf_bin *values, int n_values,
 void
 ev2citrusleaf_request_complete(cl_request *req, bool timedout)
 {
-	if (req->MAGIC != CL_REQUEST_MAGIC) {
-		cf_warn("passed bad request %p");
-		return;
-	}
-
 //	dump_buf("request complete :", req->rd_buf, req->rd_buf_size);
 
 	if (req->timeout_set) {
@@ -1029,16 +1016,23 @@ ev2citrusleaf_request_complete(cl_request *req, bool timedout)
 		event_del(cl_request_get_network_event(req));
 	}
 
-	// put the fd back for this node
+	// Reuse or close the socket, if it's open.
 	if (req->fd > -1) {
-		if ((timedout == false) && (req->node))
-			cl_cluster_node_fd_put(req->node  , req->fd);
-		else {
-			cf_close(req->fd);
-			cf_atomic_int_incr(&g_cl_stats.conns_destroyed);
-			if (timedout == true) cf_atomic_int_incr(&g_cl_stats.conns_destroyed_timeout);
+		if (req->node) {
+			if (! timedout) {
+				cl_cluster_node_fd_put(req->node, req->fd);
+			}
+			else {
+				cf_close(req->fd);
+				cf_atomic32_decr(&req->node->n_fds_open);
+			}
+
+			req->fd = -1;
 		}
-		req->fd = -1;
+		else {
+			// Since we can't assert:
+			cf_error("request has open fd but null node");
+		}
 	}
 
 	if (timedout == false) {
@@ -1070,19 +1064,19 @@ ev2citrusleaf_request_complete(cl_request *req, bool timedout)
 			// TODO - any other server return codes to consider as failures?
 			case EV2CITRUSLEAF_FAIL_TIMEOUT:
 				cl_cluster_node_had_failure(req->node);
+				cf_atomic_int_incr(&req->asc->n_req_timeouts);
+				cf_atomic_int_incr(&req->asc->n_req_failures);
 				break;
 			default:
 				cl_cluster_node_had_success(req->node);
+				cf_atomic_int_incr(&req->asc->n_req_successes);
 				break;
 			}
 		}
-
-		cf_atomic_int_incr(&g_cl_stats.req_success);
-
-#ifdef CLDEBUG_HISTOGRAM
-        // log the execution time to the histogram
-        cf_histogram_insert_data_point(cf_hist, req->start_time);
-#endif
+		else {
+			// Since we can't assert:
+			cf_error("request succeeded but has null node");
+		}
 	}
 
 	else {
@@ -1107,7 +1101,9 @@ ev2citrusleaf_request_complete(cl_request *req, bool timedout)
 			cl_cluster_node_had_failure(req->node);
 		}
 
-		cf_atomic_int_incr(&g_cl_stats.req_timedout);
+		// The timeout will be counted in the timer callback - we also get here
+		// on transaction failures that don't do an internal retry.
+		cf_atomic_int_incr(&req->asc->n_req_failures);
 	}
 
 	// Release the node.
@@ -1193,13 +1189,17 @@ void
 ev2citrusleaf_event(evutil_socket_t fd, short event, void *udata)
 {
 	cl_request *req = (cl_request*)udata;
+
+	if (req->MAGIC != CL_REQUEST_MAGIC)	{
+		cf_error("network event: BAD MAGIC");
+		return;
+	}
+
 	int rv;
 
 	uint64_t _s = cf_getms();
 
 	event_cross_thread_check(req);
-
-	cf_atomic_int_incr(&g_cl_stats.event_counter);
 
 	req->network_set = false;
 
@@ -1307,22 +1307,34 @@ ev2citrusleaf_event(evutil_socket_t fd, short event, void *udata)
 	return;
 
 Fail:
-	cf_atomic_int_incr(&g_cl_stats.conns_destroyed);
-
 	cf_close(fd);
 	req->fd = -1;
 
 	if (req->node) {
-		cl_cluster_node_put(req->node);
-		req->node = 0;
+		cf_atomic32_decr(&req->node->n_fds_open);
+	}
+	else {
+		// Since we can't assert:
+		cf_error("request network event has null node");
 	}
 
 	if (req->wpol == CL_WRITE_ONESHOT) {
 		cf_info("ev2citrusleaf: write oneshot with network error, terminating now");
+		// So far we're not distinguishing whether the failure was a local or
+		// remote problem. It will be treated as remote and counted against the
+		// node for throttle-control purposes.
 		ev2citrusleaf_request_complete(req, true);
 	}
 	else {
 		cf_debug("ev2citrusleaf failed a request, calling restart");
+
+		if (req->node) {
+			cl_cluster_node_put(req->node);
+			req->node = 0;
+		}
+		// else - already "asserted".
+
+		cf_atomic_int_incr(&req->asc->n_internal_retries);
 		ev2citrusleaf_restart(req, false);
 	}
 
@@ -1358,6 +1370,7 @@ ev2citrusleaf_timer_expired(evutil_socket_t fd, short event, void *udata)
 
 	req->timeout_set = false;
 
+	cf_atomic_int_incr(&req->asc->n_req_timeouts);
 	ev2citrusleaf_request_complete(req, true /*timedout*/); // frees the req
 
 	uint64_t delta = cf_getms() - _s;
@@ -1381,6 +1394,7 @@ ev2citrusleaf_base_hop_event(evutil_socket_t fd, short event, void *udata)
 
 	cf_debug("have node now, restart request %p", req);
 
+	cf_atomic_int_incr(&req->asc->n_internal_retries_off_q);
 	ev2citrusleaf_restart(req, false);
 }
 
@@ -1409,8 +1423,6 @@ ev2citrusleaf_base_hop(cl_request *req)
 bool
 ev2citrusleaf_restart(cl_request* req, bool may_throttle)
 {
-	cf_atomic_int_incr(&g_cl_stats.req_restart);
-
 	// If we've already timed out, don't bother adding the network event, just
 	// let the timeout event (which no doubt is about to fire) clean up.
 	if (req->timeout_ms > 0 && req->start_time + req->timeout_ms < cf_getms()) {
@@ -1449,6 +1461,7 @@ ev2citrusleaf_restart(cl_request* req, bool may_throttle)
 		// Throttle before bothering to get the socket.
 		if (may_throttle && cl_cluster_node_throttle_drop(node)) {
 			// Randomly dropping this transaction in order to throttle.
+			cf_atomic_int_incr(&req->asc->n_req_throttles);
 			cl_cluster_node_put(node);
 			return false;
 		}
@@ -1579,8 +1592,6 @@ ev2citrusleaf_start(cl_request* req, int info1, int info2, const char* ns,
 
 //	dump_buf("sending request to cluster:", req->wr_buf, req->wr_buf_size);
 
-	cf_atomic_int_incr(&g_cl_stats.req_start);
-
 	// Determine whether we may throttle.
 	bool may_throttle = req->write ?
 			cf_atomic32_get(req->asc->runtime_options.throttle_writes) != 0 :
@@ -1656,8 +1667,6 @@ ev2citrusleaf_start_op(cl_request* req, const char* ns, const char* set,
 	}
 
 //	dump_buf("sending request to cluster:", req->wr_buf, req->wr_buf_size);
-
-	cf_atomic_int_incr(&g_cl_stats.req_start);
 
 	// Initial restart - get node and socket and initiate network event chain.
 	if (! ev2citrusleaf_restart(req, false)) {
@@ -1813,12 +1822,6 @@ int ev2citrusleaf_init(ev2citrusleaf_lock_callbacks *lock_cb)
 
 	citrusleaf_cluster_init();
 
-#ifdef CLDEBUG_HISTOGRAM
-	if (NULL == (cf_hist = cf_histogram_create("transaction times"))) {
-		cf_error("couldn't create histogram for client");
-	}
-#endif
-
 	srand(cf_clepoch_seconds());
 
 	return(0);
@@ -1833,65 +1836,64 @@ ev2citrusleaf_shutdown(bool fail_requests)
 }
 
 
-//
-//
+//==========================================================
+// Statistics
 //
 
 cl_statistics g_cl_stats;
 
-
-void ev2citrusleaf_print_stats(void)
+void
+cluster_print_stats(ev2citrusleaf_cluster* asc)
 {
-#ifdef CLDEBUG_HISTOGRAM
-        cf_histogram_dump(cf_hist);
-#endif
-
-	// if you're not logging get out - match with the logs below
+	// Match with the log level below.
 	if (! cf_info_enabled()) {
 		return;
 	}
 
-	// gather summary stats about the cluster
-	int n_clusters = 0;
-	int nodes_active = 0;
-	int conns_in_queue = 0;
-	int reqs_in_queue = 0;
+	// Collect per-node info.
+	MUTEX_LOCK(asc->node_v_lock);
 
-	// run list of all clusters
-	for (cf_ll_element *e = cf_ll_get_head(&cluster_ll); e ; e = cf_ll_get_next(e) ) {
+	uint32_t n_nodes = cf_vector_size(&asc->node_v);
+	uint32_t n_fds_open = 0;
+	uint32_t n_fds_pooled = 0;
 
-		ev2citrusleaf_cluster *asc = (ev2citrusleaf_cluster *) e;
+	for (uint32_t i = 0; i < n_nodes; i++) {
+		cl_cluster_node* cn = (cl_cluster_node*)
+				cf_vector_pointer_get(&asc->node_v, i);
 
-		reqs_in_queue += cf_queue_sz(asc->request_q);
-
-		MUTEX_LOCK(asc->node_v_lock);
-		for (unsigned int i=0 ; i<cf_vector_size(&asc->node_v) ; i++) {
-			cl_cluster_node *cn = (cl_cluster_node*)cf_vector_pointer_get(&asc->node_v, i);
-			conns_in_queue += cf_queue_sz(cn->conn_q);
-			nodes_active++;
-		}
-		MUTEX_UNLOCK(asc->node_v_lock);
-
-		n_clusters++;
+		n_fds_open += cf_atomic32_get(cn->n_fds_open);
+		n_fds_pooled += cf_queue_sz(cn->conn_q);
 	}
 
-	// All of the g_cl_stats members are cf_atomic_int, and should be accessed
-	// with cf_atomic_int_get(), but since I know that's a no-op wrapper I'm
-	// being lazy and leaving the code below as-is -- AKG.
+	MUTEX_UNLOCK(asc->node_v_lock);
 
-	double ev_per_req = (g_cl_stats.req_start == 0) ? 0.0 :
-		(((double)g_cl_stats.event_counter) / ((double)g_cl_stats.req_start));
+	// Most of the stats below are cf_atomic_int, and should be accessed with
+	// cf_atomic_int_get(), but since I know that's a no-op wrapper I'm being
+	// lazy and leaving the code below as-is -- AKG.
 
-	cf_info("stats:: info : app %lu success %lu fail %lu timeout %lu",
-		g_cl_stats.app_info_requests, g_cl_stats.node_info_successes, g_cl_stats.node_info_failures, g_cl_stats.node_info_timeouts);
-	cf_info("     :: part : process %lu create %lu destroy %lu",
-		g_cl_stats.partition_process, g_cl_stats.partition_create, g_cl_stats.partition_destroy);
-	cf_info("     :: conn : created %lu connected %lu destroyed %lu fd in_q %d",
-		g_cl_stats.conns_created, g_cl_stats.conns_connected, g_cl_stats.conns_destroyed, conns_in_queue);
-	cf_info("     :: conn2: destroy timeout %lu destroy queue %lu",
-		g_cl_stats.conns_destroyed_timeout, g_cl_stats.conns_destroyed_queue);
-	cf_info("     :: node : created %lu destroyed %lu active %d",
-		g_cl_stats.nodes_created, g_cl_stats.nodes_destroyed, nodes_active );
-	cf_info("     :: req  : start %lu restart %lu success %lu timeout %lu ev_per_req %0.2f requestq_sz %d",
-		g_cl_stats.req_start, g_cl_stats.req_restart, g_cl_stats.req_success, g_cl_stats.req_timedout, ev_per_req, reqs_in_queue );
+	// Global (non cluster-related) stats first.
+	cf_info("stats :: global ::");
+	cf_info("      :: app-info %lu", g_cl_stats.app_info_requests);
+
+	// Cluster stats.
+	cf_info("stats :: cluster %p ::", asc);
+	cf_info("      :: nodes : created %lu destroyed %lu current %u", asc->n_nodes_created, asc->n_nodes_destroyed, n_nodes);
+	cf_info("      :: tend-pings : success %lu fail %lu", asc->n_ping_successes, asc->n_ping_failures);
+	cf_info("      :: node-info-reqs : success %lu fail %lu timeout %lu", asc->n_node_info_successes, asc->n_node_info_failures, asc->n_node_info_timeouts);
+	cf_info("      :: reqs : success %lu fail %lu timeout %lu throttle %lu in-progress %lu", asc->n_req_successes, asc->n_req_failures, asc->n_req_timeouts, asc->n_req_throttles, asc->requests_in_progress);
+	cf_info("      :: req-retries : direct %lu off-q %lu : on-q %d", asc->n_internal_retries, asc->n_internal_retries_off_q, cf_queue_sz(asc->request_q));
+	cf_info("      :: batch-node-reqs : success %lu fail %lu timeout %lu", asc->n_batch_node_successes, asc->n_batch_node_failures, asc->n_batch_node_timeouts);
+	cf_info("      :: fds : open %u pooled %u", n_fds_open, n_fds_pooled);
+}
+
+// TODO - deprecate cluster list and add cluster param to this API call?
+void
+ev2citrusleaf_print_stats(void)
+{
+	// Loop over all clusters.
+	for (cf_ll_element* e = cf_ll_get_head(&cluster_ll); e; e = cf_ll_get_next(e)) {
+		ev2citrusleaf_cluster* asc = (ev2citrusleaf_cluster*)e;
+
+		cluster_print_stats(asc);
+	}
 }

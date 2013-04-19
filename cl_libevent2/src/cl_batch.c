@@ -18,6 +18,7 @@
 #include <string.h>
 #include <event2/event.h>
 
+#include "citrusleaf/cf_atomic.h"
 #include "citrusleaf/cf_base_types.h"
 #include "citrusleaf/cf_clock.h"
 #include "citrusleaf/cf_digest.h"
@@ -672,7 +673,10 @@ cl_batch_node_req_destroy(cl_batch_node_req* _this)
 		// (We can also get here if cl_batch_job_start() failed on another node,
 		// but for now we're not bothering to distinguish that case.)
 		cf_close(_this->fd);
+		cf_atomic32_decr(&_this->p_node->n_fds_open);
 		cl_cluster_node_had_failure(_this->p_node);
+		cf_atomic_int_incr(&_this->p_node->asc->n_batch_node_timeouts);
+		cf_atomic_int_incr(&_this->p_node->asc->n_batch_node_failures);
 	}
 
 	// This balances the ref-counts we incremented in get_many().
@@ -1231,17 +1235,21 @@ cl_batch_node_req_done(cl_batch_node_req* _this, int node_result)
 
 		cl_cluster_node_fd_put(_this->p_node, _this->fd);
 		cl_cluster_node_had_success(_this->p_node);
+		cf_atomic_int_incr(&_this->p_node->asc->n_batch_node_successes);
 	}
 	else {
 		// The socket may have unprocessed data or otherwise be untrustworthy,
 		// close it and disapprove the node.
 
 		cf_close(_this->fd);
+		cf_atomic32_decr(&_this->p_node->n_fds_open);
 
 		if (node_result == EV2CITRUSLEAF_FAIL_UNKNOWN) {
 			cl_cluster_node_had_failure(_this->p_node);
 		}
 		// EV2CITRUSLEAF_FAIL_CLIENT_ERROR implies a local problem.
+
+		cf_atomic_int_incr(&_this->p_node->asc->n_batch_node_failures);
 	}
 
 	// Reset _this->fd so the destructor doesn't close it.

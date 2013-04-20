@@ -1449,8 +1449,8 @@ node_throttle_control(cl_cluster_node* cn)
 	}
 
 	// Calculate the sums.
-	uint32_t successes_sum = new_successes;
-	uint32_t failures_sum = new_failures;
+	uint64_t successes_sum = new_successes;
+	uint64_t failures_sum = new_failures;
 
 	for (uint32_t i = start_interval; i < cn->current_interval; i++) {
 		uint32_t index = i % MAX_HISTORY_INTERVALS;
@@ -1468,26 +1468,29 @@ node_throttle_control(cl_cluster_node* cn)
 	// So far we only use this for throttle control - increment it here.
 	cn->current_interval++;
 
-	// Calculate the failure percentage.
-	uint32_t sum = failures_sum + successes_sum;
-	uint32_t failure_pct = sum == 0 ? 0 : (failures_sum * 100) / sum;
+	// Calculate the failure percentage. Work in units of tenths-of-a-percent
+	// for finer resolution of the resulting throttle percent.
+	uint64_t sum = failures_sum + successes_sum;
+	uint64_t failure_tenths_pct = sum == 0 ? 0 : (failures_sum * 1000) / sum;
 
 	// TODO - anything special for a 100% failure rate? Several seconds of all
 	// failures with 0 successes might mean we should destroy this node?
 
 	// Calculate and apply the throttle rate.
 	uint32_t throttle_pct = 0;
+	uint64_t threshold_tenths_pct = threshold_failure_pct * 10;
 
-	if (enough_history && failure_pct > threshold_failure_pct) {
-		throttle_pct = (failure_pct - threshold_failure_pct) * throttle_factor;
+	if (enough_history && failure_tenths_pct > threshold_tenths_pct) {
+		throttle_pct = ((failure_tenths_pct - threshold_tenths_pct) *
+				throttle_factor) / 10;
 
 		if (throttle_pct > MAX_THROTTLE_PCT) {
 			throttle_pct = MAX_THROTTLE_PCT;
 		}
 	}
 
-	cf_debug("node %s recent successes %u, failures %u, failure-pct %u, throttle-pct %u",
-			cn->name, successes_sum, failures_sum, failure_pct, throttle_pct);
+	cf_debug("node %s recent successes %u, failures %u, failure-tenths-pct %u, throttle-pct %u",
+			cn->name, successes_sum, failures_sum, failure_tenths_pct, throttle_pct);
 
 	cf_atomic32_set(&cn->throttle_pct, throttle_pct);
 }

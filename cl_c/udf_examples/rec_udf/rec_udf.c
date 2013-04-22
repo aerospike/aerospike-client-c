@@ -953,7 +953,6 @@ int do_udf_long_bindata_test() {
 	int curr_len=0, prev_len=0;
 
 	// (1) set up stored procedure to call multiple times and build up the data
-
 	for (int i=0;i<400;i++) {
 		uint32_t cl_gen;
 		cl_bin *rsp_bins = NULL;
@@ -1045,7 +1044,144 @@ int do_udf_long_biname_test() {
 	rsp = citrusleaf_get_all(g_config->asc, g_config->ns, g_config->set, &o_key, &rsp_bins, &rsp_n_bins, g_config->timeout_ms, &cl_gen);  
 	if (rsp == CITRUSLEAF_OK) {
 		LOG("Number of bins are %d",rsp_n_bins);
-		if (rsp_n_bins!=2) {
+		if (rsp_n_bins != 0) {
+			// debugging
+			for (int b=0; b<rsp_n_bins; b++) {
+				if (rsp_bins[b].object.type == CL_STR) {
+					LOG("udf returned %s=[%ld]",rsp_bins[b].bin_name,strlen(rsp_bins[b].object.u.str));
+				} else if (rsp_bins[b].object.type == CL_INT) {
+					LOG("udf returned %s=[%ld]",rsp_bins[b].bin_name,rsp_bins[b].object.u.i64);
+				} else {
+					LOG("warning: udf returned object type %s=%d",rsp_bins[b].bin_name,rsp_bins[b].object.type);
+				}
+				citrusleaf_object_free(&rsp_bins[b].object);		
+			}  	
+			// end debugging
+			citrusleaf_object_free(&o_key);		
+			LOG("unexpected # of bins returned %d",rsp_n_bins);
+			return -1;
+		}
+		for (int b=0; b<rsp_n_bins; b++) {
+			citrusleaf_object_free(&rsp_bins[b].object);		
+		}
+	}
+	else {
+		LOG("Citrusleaf get all failed with %d",rsp);
+	}
+	free(rsp_bins);	
+
+	citrusleaf_object_free(&o_key);		
+	return 0;
+}
+int do_udf_long_biname1_test() {
+
+	cl_write_parameters cl_wp;
+	cl_write_parameters_set_default(&cl_wp);
+	cl_wp.timeout_ms = g_config->timeout_ms;
+	cl_wp.record_ttl = 864000;
+
+	// (0) delete & reinsert record to start afresh
+	char *keyStr = "key_long_binname";
+	cl_object o_key;
+	citrusleaf_object_init_str(&o_key,keyStr);		
+	int rsp = citrusleaf_delete(g_config->asc, g_config->ns, g_config->set, &o_key, &cl_wp);
+	if (rsp != CITRUSLEAF_OK && rsp != CITRUSLEAF_FAIL_NOTFOUND) {
+		citrusleaf_object_free(&o_key);		
+		LOG("failed deleting test data rsp=%d",rsp);
+		return -1;
+	}
+
+	// (1) set up stored procedure which will insert a long named bin
+	uint32_t cl_gen;
+	cl_bin *rsp_bins = NULL;
+	int     rsp_n_bins = 0;
+	as_result res;
+	as_result_init(&res);
+	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
+			g_config->package_name,"do_long_binname1", NULL, g_config->timeout_ms, &res);  
+
+	char *res_str = as_val_tostring(res.value); 
+	LOG("Citrusleaf udf apply %s: %s", res.is_success ? "SUCCESS" : "FAILURE", res_str);
+	free(res_str);
+	as_result_destroy(&res);
+
+	if (rsp != CITRUSLEAF_OK) {
+		LOG("failed citrusleaf_run_udf rsp=%d",rsp);
+		return -1;
+	}
+	rsp = citrusleaf_get_all(g_config->asc, g_config->ns, g_config->set, &o_key, &rsp_bins, &rsp_n_bins, g_config->timeout_ms, &cl_gen);  
+	if (rsp == CITRUSLEAF_OK) {
+		LOG("Number of bins are %d",rsp_n_bins);
+		if (rsp_n_bins != 1) {
+			// debugging
+			for (int b=0; b<rsp_n_bins; b++) {
+				if (rsp_bins[b].object.type == CL_STR) {
+					LOG("udf returned %s=[%ld]",rsp_bins[b].bin_name,strlen(rsp_bins[b].object.u.str));
+				} else if (rsp_bins[b].object.type == CL_INT) {
+					LOG("udf returned %s=[%ld]",rsp_bins[b].bin_name,rsp_bins[b].object.u.i64);
+				} else {
+					LOG("warning: udf returned object type %s=%d",rsp_bins[b].bin_name,rsp_bins[b].object.type);
+				}
+				citrusleaf_object_free(&rsp_bins[b].object);		
+			}  	
+			// end debugging
+			citrusleaf_object_free(&o_key);		
+			LOG("unexpected # of bins returned %d",rsp_n_bins);
+			return -1;
+		}
+		for (int b=0; b<rsp_n_bins; b++) {
+			citrusleaf_object_free(&rsp_bins[b].object);		
+		}
+	}
+	else {
+		LOG("Citrusleaf get all failed with %d",rsp);
+	}
+	free(rsp_bins);	
+
+	citrusleaf_object_free(&o_key);		
+	return 0;
+}
+
+int do_udf_long_biname2_test() {
+
+	cl_write_parameters cl_wp;
+	cl_write_parameters_set_default(&cl_wp);
+	cl_wp.timeout_ms = g_config->timeout_ms;
+	cl_wp.record_ttl = 864000;
+
+	// (0) delete & reinsert record to start afresh
+	char *keyStr = "key_long_binname";
+	cl_object o_key;
+	citrusleaf_object_init_str(&o_key,keyStr);		
+	int rsp = citrusleaf_delete(g_config->asc, g_config->ns, g_config->set, &o_key, &cl_wp);
+	if (rsp != CITRUSLEAF_OK && rsp != CITRUSLEAF_FAIL_NOTFOUND) {
+		citrusleaf_object_free(&o_key);		
+		LOG("failed deleting test data rsp=%d",rsp);
+		return -1;
+	}
+
+	// (1) set up stored procedure which will insert a long named bin
+	uint32_t cl_gen;
+	cl_bin *rsp_bins = NULL;
+	int     rsp_n_bins = 0;
+	as_result res;
+	as_result_init(&res);
+	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
+			g_config->package_name,"do_long_binname2", NULL, g_config->timeout_ms, &res);  
+
+	char *res_str = as_val_tostring(res.value); 
+	LOG("Citrusleaf udf apply %s: %s", res.is_success ? "SUCCESS" : "FAILURE", res_str);
+	free(res_str);
+	as_result_destroy(&res);
+
+	if (rsp != CITRUSLEAF_OK) {
+		LOG("failed citrusleaf_run_udf rsp=%d",rsp);
+		return -1;
+	}
+	rsp = citrusleaf_get_all(g_config->asc, g_config->ns, g_config->set, &o_key, &rsp_bins, &rsp_n_bins, g_config->timeout_ms, &cl_gen);  
+	if (rsp == CITRUSLEAF_OK) {
+		LOG("Number of bins are %d",rsp_n_bins);
+		if (rsp_n_bins != 2) {
 			// debugging
 			for (int b=0; b<rsp_n_bins; b++) {
 				if (rsp_bins[b].object.type == CL_STR) {
@@ -2132,8 +2268,10 @@ const test_def test_defs[] = {
 	test(do_udf_return_type_test),
 	test(do_udf_bin_type_test),
 	// test(do_udf_long_bindata_test),
-	// test(do_udf_long_biname_test),
-	// test(do_udf_too_many_bins_test),
+	test(do_udf_long_biname_test),
+	test(do_udf_long_biname1_test),
+	test(do_udf_long_biname2_test),
+    test(do_udf_too_many_bins_test),
 	test(do_udf_undefined_global),
 	test(do_udf_lua_functional_test),
 	test(do_udf_delete_bin_test),

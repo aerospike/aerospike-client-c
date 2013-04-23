@@ -443,6 +443,34 @@ function do_long_binname(record)
  	return "Long binname test returned "..x;	
 end	
 
+function do_long_binname1(record)
+	record.short_bin = "bin 1 value";
+	info("short_bin added to record");
+	local x = aerospike:create(record);
+	record.last_bin = "bin 3 value";
+	info("last_bin added to record");
+	record['very_long_name_that_should_fail'] = "bin 2 value";
+	info("very_long_name_that_should_fail added to record");
+	local x = aerospike:update(record);
+ 	return "Long binname test returned "..x;	
+end	
+
+function do_long_binname2(record)
+	record.short_bin = "bin 1 value";
+	info("short_bin added to record");
+	local x = aerospike:create(record);
+	record.last_bin = "bin 3 value";
+	info("last_bin added to record");
+	x = aerospike:update(record);
+	record.secondlast_bin = "bin 3 value";
+	info("secondlast_bin added to record");
+	record['very_long_name_that_should_fail'] = "bin 2 value";
+	info("very_long_name_that_should_fail added to record");
+	local x = aerospike:update(record);
+ 	return "Long binname test returned "..x;	
+end	
+
+
 function do_too_many_bins(record)
    local count = 0, x, y;
    for i = 1,10000 do

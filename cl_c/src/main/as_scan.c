@@ -87,6 +87,7 @@ typedef struct {
     int                     (* callback)(as_val *, void *);
 	uint64_t 				job_id;
 	udf_execution_type		type;
+	cf_queue              * complete_q;
 } as_scan_task;
 
 /******************************************************************************
@@ -95,7 +96,6 @@ typedef struct {
 
 cf_atomic32     scan_initialized  = 0;
 cf_queue *      g_scan_q          = 0;
-cf_queue *      g_complete_q      = 0;
 pthread_t       g_scan_th[N_MAX_SCAN_THREADS];
 static as_scan_task    g_null_task;
 static bool            gasq_abort         = false;
@@ -225,7 +225,7 @@ static int as_scan_worker_do(cl_cluster_node * node, as_scan_task * task) {
 
     int fd = cl_cluster_node_fd_get(node, false, task->asc->nbconnect);
     if ( fd == -1 ) { 
-        fprintf(stderr,"do scan monte: cannot get fd for node %s ",node->name);
+        LOG("[ERROR] as_scan_worker_do: cannot get fd for node %s ",node->name);
         return CITRUSLEAF_FAIL_CLIENT; 
     }
 
@@ -238,209 +238,207 @@ static int as_scan_worker_do(cl_cluster_node * node, as_scan_task * task) {
     int       rc   = CITRUSLEAF_OK;
     bool      done = false;
 
-	if (task->type != AS_SCAN_UDF_BACKGROUND) {
-		do {
-			// multiple CL proto per response
-			// Now turn around and read a fine cl_proto - that's the first 8 bytes 
-			// that has types and lengths
-			if ( (rc = cf_socket_read_forever(fd, (uint8_t *) &proto, sizeof(cl_proto) ) ) ) {
-				fprintf(stderr, "network error: errno %d fd %d node name %s\n", rc, fd, node->name);
-				return CITRUSLEAF_FAIL_CLIENT;
-			}
-			cl_proto_swap(&proto);
+    do {
+        // multiple CL proto per response
+        // Now turn around and read a fine cl_proto - that's the first 8 bytes 
+        // that has types and lengths
+        if ( (rc = cf_socket_read_forever(fd, (uint8_t *) &proto, sizeof(cl_proto) ) ) ) {
+            LOG("[ERROR] as_scan_worker_do: network error: errno %d fd %d node name %s\n", rc, fd, node->name);
+            return CITRUSLEAF_FAIL_CLIENT;
+        }
+        cl_proto_swap(&proto);
 
-			if ( proto.version != CL_PROTO_VERSION) {
-				fprintf(stderr, "network error: received protocol message of wrong version %d from node %s\n", proto.version, node->name);
-				return CITRUSLEAF_FAIL_CLIENT;
-			}
+        if ( proto.version != CL_PROTO_VERSION) {
+            LOG("[ERROR] as_scan_worker_do: network error: received protocol message of wrong version %d from node %s\n", proto.version, node->name);
+            return CITRUSLEAF_FAIL_CLIENT;
+        }
 
-			if ( proto.type != CL_PROTO_TYPE_CL_MSG && proto.type != CL_PROTO_TYPE_CL_MSG_COMPRESSED ) {
-				fprintf(stderr, "network error: received incorrect message version %d from node %s \n",proto.type, node->name);
-				return CITRUSLEAF_FAIL_CLIENT;
-			}
+        if ( proto.type != CL_PROTO_TYPE_CL_MSG && proto.type != CL_PROTO_TYPE_CL_MSG_COMPRESSED ) {
+            LOG("[ERROR] as_scan_worker_do: network error: received incorrect message version %d from node %s \n",proto.type, node->name);
+            return CITRUSLEAF_FAIL_CLIENT;
+        }
 
-			// second read for the remainder of the message - expect this to cover 
-			// lots of data, many lines if there's no error
-			rd_buf_sz =  proto.sz;
-			if (rd_buf_sz > 0) {
+        // second read for the remainder of the message - expect this to cover 
+        // lots of data, many lines if there's no error
+        rd_buf_sz =  proto.sz;
+        if (rd_buf_sz > 0) {
 
-				if (rd_buf_sz > sizeof(rd_stack_buf)){
-					rd_buf = malloc(rd_buf_sz);
-				}
-				else {
-					rd_buf = rd_stack_buf;
-				}
+            if (rd_buf_sz > sizeof(rd_stack_buf)){
+                rd_buf = malloc(rd_buf_sz);
+            }
+            else {
+                rd_buf = rd_stack_buf;
+            }
 
-				if (rd_buf == NULL) return CITRUSLEAF_FAIL_CLIENT;
+            if (rd_buf == NULL) return CITRUSLEAF_FAIL_CLIENT;
 
-				if ( (rc = cf_socket_read_forever(fd, rd_buf, rd_buf_sz)) ) {
-					fprintf(stderr, "network error: errno %d fd %d node name %s\n", rc, fd, node->name);
-					if ( rd_buf != rd_stack_buf ) free(rd_buf);
-						return CITRUSLEAF_FAIL_CLIENT;
-					}
-				}
+            if ( (rc = cf_socket_read_forever(fd, rd_buf, rd_buf_sz)) ) {
+                LOG("[ERROR] as_scan_worker_do: network error: errno %d fd %d node name %s\n", rc, fd, node->name);
+                if ( rd_buf != rd_stack_buf ) free(rd_buf);
+                return CITRUSLEAF_FAIL_CLIENT;
+            }
+        }
 
-				// process all the cl_msg in this proto
-				uint8_t *   buf = rd_buf;
-				uint        pos = 0;
-				cl_bin      stack_bins[STACK_BINS];
-				cl_bin *    bins;
+        // process all the cl_msg in this proto
+        uint8_t *   buf = rd_buf;
+        uint        pos = 0;
+        cl_bin      stack_bins[STACK_BINS];
+        cl_bin *    bins;
 
-				while (pos < rd_buf_sz) {
+        while (pos < rd_buf_sz) {
 
-					uint8_t *   buf_start = buf;
-					cl_msg *    msg = (cl_msg *) buf;
+            uint8_t *   buf_start = buf;
+            cl_msg *    msg = (cl_msg *) buf;
 
-					cl_msg_swap_header(msg);
-					buf += sizeof(cl_msg);
+            cl_msg_swap_header(msg);
+            buf += sizeof(cl_msg);
 
-					if ( msg->header_sz != sizeof(cl_msg) ) {
-						fprintf(stderr, "received cl msg of unexpected size: expecting %zd found %d, internal error\n",
-								sizeof(cl_msg),msg->header_sz);
-						return CITRUSLEAF_FAIL_CLIENT;
-					}
+            if ( msg->header_sz != sizeof(cl_msg) ) {
+                LOG("[ERROR] as_scan_worker_do: received cl msg of unexpected size: expecting %zd found %d, internal error\n",
+                        sizeof(cl_msg),msg->header_sz);
+                return CITRUSLEAF_FAIL_CLIENT;
+            }
 
-					// parse through the fields
-					cf_digest       keyd;
-					char            ns_ret[33]  = {0};
-					char *          set_ret     = NULL;
-					cl_msg_field *  mf          = (cl_msg_field *)buf;
+            // parse through the fields
+            cf_digest       keyd;
+            char            ns_ret[33]  = {0};
+            char *          set_ret     = NULL;
+            cl_msg_field *  mf          = (cl_msg_field *)buf;
 
-					for (int i=0; i < msg->n_fields; i++) {
-						cl_msg_swap_field(mf);
-						if (mf->type == CL_MSG_FIELD_TYPE_KEY) {
-							fprintf(stderr, "read: found a key - unexpected\n");
-						}
-						else if (mf->type == CL_MSG_FIELD_TYPE_DIGEST_RIPE) {
-							memcpy(&keyd, mf->data, sizeof(cf_digest));
-						}
-						else if (mf->type == CL_MSG_FIELD_TYPE_NAMESPACE) {
-							memcpy(ns_ret, mf->data, cl_msg_field_get_value_sz(mf));
-							ns_ret[ cl_msg_field_get_value_sz(mf) ] = 0;
-						}
-						else if (mf->type == CL_MSG_FIELD_TYPE_SET) {
-							uint32_t set_name_len = cl_msg_field_get_value_sz(mf);
-							set_ret = (char *)malloc(set_name_len + 1);
-							memcpy(set_ret, mf->data, set_name_len);
-							set_ret[ set_name_len ] = '\0';
-						}
-						mf = cl_msg_field_get_next(mf);
-					}
+            for (int i=0; i < msg->n_fields; i++) {
+                cl_msg_swap_field(mf);
+                if (mf->type == CL_MSG_FIELD_TYPE_KEY) {
+                    LOG("[ERROR] as_scan_worker_do: read: found a key - unexpected\n");
+                }
+                else if (mf->type == CL_MSG_FIELD_TYPE_DIGEST_RIPE) {
+                    memcpy(&keyd, mf->data, sizeof(cf_digest));
+                }
+                else if (mf->type == CL_MSG_FIELD_TYPE_NAMESPACE) {
+                    memcpy(ns_ret, mf->data, cl_msg_field_get_value_sz(mf));
+                    ns_ret[ cl_msg_field_get_value_sz(mf) ] = 0;
+                }
+                else if (mf->type == CL_MSG_FIELD_TYPE_SET) {
+                    uint32_t set_name_len = cl_msg_field_get_value_sz(mf);
+                    set_ret = (char *)malloc(set_name_len + 1);
+                    memcpy(set_ret, mf->data, set_name_len);
+                    set_ret[ set_name_len ] = '\0';
+                }
+                mf = cl_msg_field_get_next(mf);
+            }
 
-					buf = (uint8_t *) mf;
-					if (msg->n_ops > STACK_BINS) {
-						bins = malloc(sizeof(cl_bin) * msg->n_ops);
-					}
-					else {
-						bins = stack_bins;
-					}
+            buf = (uint8_t *) mf;
+            if (msg->n_ops > STACK_BINS) {
+                bins = malloc(sizeof(cl_bin) * msg->n_ops);
+            }
+            else {
+                bins = stack_bins;
+            }
 
-					if (bins == NULL) {
-						if (set_ret) {
-							free(set_ret);
-						}
-						return CITRUSLEAF_FAIL_CLIENT;
-					}
+            if (bins == NULL) {
+                if (set_ret) {
+                    free(set_ret);
+                }
+                return CITRUSLEAF_FAIL_CLIENT;
+            }
 
-					// parse through the bins/ops
-					cl_msg_op * op = (cl_msg_op *) buf;
-					for (int i=0;i<msg->n_ops;i++) {
-						cl_msg_swap_op(op);
+            // parse through the bins/ops
+            cl_msg_op * op = (cl_msg_op *) buf;
+            for (int i=0;i<msg->n_ops;i++) {
+                cl_msg_swap_op(op);
 
 #ifdef DEBUG_VERBOSE
-					fprintf(stderr, "op receive: %p size %d op %d ptype %d pversion %d namesz %d \n",
-						op,op->op_sz, op->op, op->particle_type, op->version, op->name_sz);
+                LOG("[DEBUG] as_scan_worker_do: op receive: %p size %d op %d ptype %d pversion %d namesz %d \n",
+                        op,op->op_sz, op->op, op->particle_type, op->version, op->name_sz);
 #endif            
 
 #ifdef DEBUG_VERBOSE
-					dump_buf("individual op (host order)", (uint8_t *) op, op->op_sz + sizeof(uint32_t));
+                dump_buf("individual op (host order)", (uint8_t *) op, op->op_sz + sizeof(uint32_t));
 #endif    
 
-					cl_set_value_particular(op, &bins[i]);
-					op = cl_msg_op_get_next(op);
-				}
-				buf = (uint8_t *) op;
+                cl_set_value_particular(op, &bins[i]);
+                op = cl_msg_op_get_next(op);
+            }
+            buf = (uint8_t *) op;
 
-				if (msg->result_code != CL_RESULT_OK) {
+            if (msg->result_code != CL_RESULT_OK) {
 
-					rc = (int) msg->result_code;
-					done = true;
-					if (rc == CITRUSLEAF_FAIL_SCAN_ABORT) {
-						fprintf(stderr,"Scan successfully aborted at node [%s]\n", node->name);
-					}
-				}
-				else if (msg->info3 & CL_MSG_INFO3_LAST)    {
-					if ( cf_debug_enabled() ) {
-						fprintf(stderr, "Received final message from node [%s], scan complete\n", node->name);
-					}
-					done = true;
-				}
-				else if ((msg->n_ops || (msg->info1 & CL_MSG_INFO1_NOBINDATA))) {
+                rc = (int) msg->result_code;
+                done = true;
+                if (rc == CITRUSLEAF_FAIL_SCAN_ABORT) {
+                    LOG("[INFO] as_scan_worker_do: Scan successfully aborted at node [%s]\n", node->name);
+                }
+            }
+            else if (msg->info3 & CL_MSG_INFO3_LAST)    {
+                if ( cf_debug_enabled() ) {
+                    LOG("[INFO] as_scan_worker_do: Received final message from node [%s], scan complete\n", node->name);
+                }
+                done = true;
+            }
+            else if ((msg->n_ops || (msg->info1 & CL_MSG_INFO1_NOBINDATA))) {
 
-					as_scan_response_rec rec;
-					as_scan_response_rec *recp = &rec;
+                as_scan_response_rec rec;
+                as_scan_response_rec *recp = &rec;
 
-					recp->ns         = strdup(ns_ret);
-					recp->keyd       = keyd;
-					recp->set        = set_ret;
-					recp->generation = msg->generation;
-					recp->record_ttl = msg->record_ttl;
-					recp->bins       = bins;
-					recp->n_bins     = msg->n_ops;
-					recp->ismalloc   = false;
+                recp->ns         = strdup(ns_ret);
+                recp->keyd       = keyd;
+                recp->set        = set_ret;
+                recp->generation = msg->generation;
+                recp->record_ttl = msg->record_ttl;
+                recp->bins       = bins;
+                recp->n_bins     = msg->n_ops;
+                recp->ismalloc   = false;
 
-					as_rec r;
-					as_rec *rp = &r;
-					rp = as_rec_init(rp, recp, &scan_response_hooks);
+                as_rec r;
+                as_rec *rp = &r;
+                rp = as_rec_init(rp, recp, &scan_response_hooks);
 
-					as_val * v = as_rec_get(rp, "SUCCESS");
-					if ( v  != NULL && task->callback) {
-						// Got a non null value for the resposne bin,
-						// call callback on it and destroy the record
-						task->callback(v, task->udata);
+                as_val * v = as_rec_get(rp, "SUCCESS");
+                if ( v  != NULL && task->callback) {
+                    // Got a non null value for the resposne bin,
+                    // call callback on it and destroy the record
+                    task->callback(v, task->udata);
 
-						as_rec_destroy(rp);
+                    as_rec_destroy(rp);
 
-					}
+                }
 
-					rc = CITRUSLEAF_OK;
-				}
+                rc = CITRUSLEAF_OK;
+            }
 
-				// if done free it 
-				if (done) {
-					citrusleaf_bins_free(bins, msg->n_ops);
-					if (bins != stack_bins) {
-						free(bins);
-						bins = 0;
-					}
+            // if done free it 
+            if (done) {
+                citrusleaf_bins_free(bins, msg->n_ops);
+                if (bins != stack_bins) {
+                    free(bins);
+                    bins = 0;
+                }
 
-					if (set_ret) {
-						free(set_ret);
-						set_ret = NULL;
-					}
-				}
+                if (set_ret) {
+                    free(set_ret);
+                    set_ret = NULL;
+                }
+            }
 
-				// don't have to free object internals. They point into the read buffer, where
-				// a pointer is required
-				pos += buf - buf_start;
+            // don't have to free object internals. They point into the read buffer, where
+            // a pointer is required
+            pos += buf - buf_start;
 
-			}
+        }
 
-			if (rd_buf && (rd_buf != rd_stack_buf))    {
-				free(rd_buf);
-				rd_buf = 0;
-			}
+        if (rd_buf && (rd_buf != rd_stack_buf))    {
+            free(rd_buf);
+            rd_buf = 0;
+        }
 
-		} while ( done == false );
-	}
-	cl_cluster_node_fd_put(node, fd, false);
+    } while ( done == false );
+    cl_cluster_node_fd_put(node, fd, false);
 
     goto Final;
 
 Final:    
 
 #ifdef DEBUG_VERBOSE    
-    fprintf(stderr, "exited loop: rc %d\n", rc );
+    LOG("[DEBUG] as_scan_worker_do: exited loop: rc %d\n", rc );
 #endif    
 
     return rc;
@@ -455,11 +453,11 @@ void * as_scan_worker(void * dummy) {
         as_scan_task task;
 
         if ( 0 != cf_queue_pop(g_scan_q, &task, CF_QUEUE_FOREVER) ) {
-            fprintf(stderr, "queue pop failed\n");
+            LOG("[WARNING] as_scan_worker: queue pop failed\n");
         }
 
         if ( cf_debug_enabled() ) {
-            fprintf(stderr, "as_scan_worker: getting one task item\n");
+            LOG("[DEBUG] as_scan_worker: getting one task item\n");
         }
 
         // a NULL structure is the condition that we should exit. See shutdown()
@@ -475,12 +473,12 @@ void * as_scan_worker(void * dummy) {
             rc = as_scan_worker_do(node, &task);
         }
         else {
-            fprintf(stderr, "No node found with the name %s\n", task.node_name);
+            LOG("[INFO] as_scan_worker: No node found with the name %s\n", task.node_name);
         }
         strncpy(response.node_name, task.node_name, strlen(task.node_name));
         response.node_response = rc;
-		response.job_id = task.job_id;
-        cf_queue_push(g_complete_q, (void *)&response);
+        response.job_id = task.job_id;
+        cf_queue_push(task.complete_q, (void *)&response);
     }
 }
 
@@ -572,8 +570,7 @@ cf_vector * as_scan_execute(cl_cluster * cluster, const as_scan * scan, char * n
     rc = scan_compile(scan, &wr_buf, &wr_buf_sz);
 
     if ( rc != CITRUSLEAF_OK ) {
-        // TODO: use proper logging function
-        fprintf(stderr, "do scan monte: scan compile failed: \n");
+        LOG("[ERROR] as_scan_execute: scan compile failed: \n");
         *res = rc;
         return NULL;
     }
@@ -586,9 +583,12 @@ cf_vector * as_scan_execute(cl_cluster * cluster, const as_scan * scan, char * n
         .scan_sz           = wr_buf_sz,
         .udata              = udata,
         .callback           = callback,
-		.job_id				= scan->job_id,
-		.type				= scan->udf.type,
+        .job_id                = scan->job_id,
+        .type                = scan->udf.type,
     };
+
+    task.complete_q      = cf_queue_create(sizeof(as_node_response), true);
+    cf_vector * result_v = NULL;
 
     // If node_name is not null, we are executing scan on a particular node
     if (node_name) {
@@ -604,14 +604,9 @@ cf_vector * as_scan_execute(cl_cluster * cluster, const as_scan * scan, char * n
         // Get a list of the node names, so we can can send work to each node
         cl_cluster_get_node_names(cluster, &node_count, &node_names);
         if ( node_count == 0 ) {
-            // TODO: use proper loggin function
-            fprintf(stderr, "citrusleaf scan nodes: don't have any nodes?\n");
-            if ( wr_buf && (wr_buf != wr_stack_buf) ) {
-                free(wr_buf); 
-                wr_buf = 0;
-            }
+            LOG("[ERROR] as_scan_execute: don't have any nodes?\n");
             *res = CITRUSLEAF_FAIL_CLIENT;
-            return NULL;
+            goto Cleanup;
         }
 
         // Dispatch work to the worker queue to allow the transactions in parallel
@@ -627,19 +622,21 @@ cf_vector * as_scan_execute(cl_cluster * cluster, const as_scan * scan, char * n
         node_names = NULL;
     }
 
-    // wait for the work to complete from all the nodes.
+    // Wait for the work to complete from all the nodes.
     // For every node, fill in the return value in the result vector
-    cf_vector * result_v = cf_vector_create(sizeof(as_node_response), node_count, 0);
+    result_v = cf_vector_create(sizeof(as_node_response), node_count, 0);
     for ( int i=0; i < node_count; i++ ) {
         // Pop the response structure
-        cf_queue_pop(g_complete_q, &response, CF_QUEUE_FOREVER);
+        cf_queue_pop(task.complete_q, &response, CF_QUEUE_FOREVER);
         cf_vector_set(result_v, i, &response);
     }
 
+Cleanup:
     if ( wr_buf && (wr_buf != wr_stack_buf) ) { 
         free(wr_buf); 
         wr_buf = 0;
     }
+    cf_queue_destroy(task.complete_q);
 
     return result_v;
 }
@@ -712,16 +709,13 @@ int citrusleaf_scan_init() {
     if (1 == cf_atomic32_incr(&scan_initialized)) {
 
         if (cf_debug_enabled()) {
-            fprintf(stderr, "scan_init: creating %d threads\n",N_MAX_SCAN_THREADS);
+            LOG("[DEBUG] citrusleaf_scan_init: creating %d threads\n",N_MAX_SCAN_THREADS);
         }
 
         memset(&g_null_task,0,sizeof(as_scan_task));
 
         // create dispatch queue
         g_scan_q = cf_queue_create(sizeof(as_scan_task), true);
-
-        // create global complete queue
-        g_complete_q = cf_queue_create(sizeof(as_node_response), true);
 
         // create thread pool
         for (int i = 0; i < N_MAX_SCAN_THREADS; i++) {
@@ -741,5 +735,4 @@ void citrusleaf_scan_shutdown() {
         pthread_join(g_scan_th[i],NULL);
     }
     cf_queue_destroy(g_scan_q);
-    cf_queue_destroy(g_complete_q);
 }

@@ -85,6 +85,8 @@ typedef struct {
     void *                  udata;
     int                     (* callback)(as_val *, void *);
     bool                    isinline;
+	cf_queue              * complete_q;
+	bool                    abort;
 } as_query_task;
 
 
@@ -132,7 +134,6 @@ typedef struct query_orderby_clause {
 
 cf_atomic32     query_initialized  = 0;
 cf_queue *      g_query_q          = 0;
-cf_queue *      g_task_complete_q  = 0;
 pthread_t       g_query_th[N_MAX_QUERY_THREADS];
 as_query_task   g_null_task;
 bool            gasq_abort         = false;
@@ -452,7 +453,7 @@ static int query_compile(const as_query * query, uint8_t ** buf_r, size_t * buf_
         cl_msg_swap_field(mf);
         mf = mf_tmp;
         if (cf_debug_enabled()) {
-            fprintf(stderr,"adding indexname %d %s\n",iname_len+1, query->indexname);
+            LOG("[DEBUG] query_compile: adding indexname %d %s\n",iname_len+1, query->indexname);
         }
     }
 
@@ -464,7 +465,7 @@ static int query_compile(const as_query * query, uint8_t ** buf_r, size_t * buf_
         cl_msg_swap_field(mf);
         mf = mf_tmp;
         if (cf_debug_enabled()) {
-            fprintf(stderr,"adding setname %d %s\n",setname_len+1, query->setname);
+            LOG("[DEBUG] query_compile: adding setname %d %s\n",setname_len+1, query->setname);
         }
     }
 
@@ -665,7 +666,7 @@ static int as_query_worker_do(cl_cluster_node * node, as_query_task * task) {
 
     int fd = cl_cluster_node_fd_get(node, false, task->asc->nbconnect);
     if ( fd == -1 ) { 
-        fprintf(stderr,"do query monte: cannot get fd for node %s ",node->name);
+        LOG("[ERROR] as_query_worker_do: do query monte: cannot get fd for node %s ",node->name);
         return CITRUSLEAF_FAIL_CLIENT; 
     }
 
@@ -683,18 +684,18 @@ static int as_query_worker_do(cl_cluster_node * node, as_query_task * task) {
         // Now turn around and read a fine cl_proto - that's the first 8 bytes 
         // that has types and lengths
         if ( (rc = cf_socket_read_forever(fd, (uint8_t *) &proto, sizeof(cl_proto) ) ) ) {
-            fprintf(stderr, "network error: errno %d fd %d\n", rc, fd);
+            LOG("[ERROR] as_query_worker_do: network error: errno %d fd %d\n", rc, fd);
             return CITRUSLEAF_FAIL_CLIENT;
         }
         cl_proto_swap(&proto);
 
         if ( proto.version != CL_PROTO_VERSION) {
-            fprintf(stderr, "network error: received protocol message of wrong version %d\n",proto.version);
+            LOG("[ERROR] as_query_worker_do: network error: received protocol message of wrong version %d\n",proto.version);
             return CITRUSLEAF_FAIL_CLIENT;
         }
 
         if ( proto.type != CL_PROTO_TYPE_CL_MSG && proto.type != CL_PROTO_TYPE_CL_MSG_COMPRESSED ) {
-            fprintf(stderr, "network error: received incorrect message version %d\n",proto.type);
+            LOG("[ERROR] as_query_worker_do: network error: received incorrect message version %d\n",proto.type);
             return CITRUSLEAF_FAIL_CLIENT;
         }
 
@@ -713,7 +714,7 @@ static int as_query_worker_do(cl_cluster_node * node, as_query_task * task) {
             if (rd_buf == NULL) return CITRUSLEAF_FAIL_CLIENT;
 
             if ( (rc = cf_socket_read_forever(fd, rd_buf, rd_buf_sz)) ) {
-                fprintf(stderr, "network error: errno %d fd %d\n", rc, fd);
+                LOG("[ERROR] as_query_worker_do: network error: errno %d fd %d\n", rc, fd);
                 if ( rd_buf != rd_stack_buf ) free(rd_buf);
                 return CITRUSLEAF_FAIL_CLIENT;
             }
@@ -734,7 +735,7 @@ static int as_query_worker_do(cl_cluster_node * node, as_query_task * task) {
             buf += sizeof(cl_msg);
 
             if ( msg->header_sz != sizeof(cl_msg) ) {
-                fprintf(stderr, "received cl msg of unexpected size: expecting %zd found %d, internal error\n",
+                LOG("[ERROR] as_query_worker_do: received cl msg of unexpected size: expecting %zd found %d, internal error\n",
                         sizeof(cl_msg),msg->header_sz);
                 return CITRUSLEAF_FAIL_CLIENT;
             }
@@ -748,7 +749,7 @@ static int as_query_worker_do(cl_cluster_node * node, as_query_task * task) {
             for (int i=0; i < msg->n_fields; i++) {
                 cl_msg_swap_field(mf);
                 if (mf->type == CL_MSG_FIELD_TYPE_KEY) {
-                    fprintf(stderr, "read: found a key - unexpected\n");
+                    LOG("[INFO] as_query_worker_do: read: found a key - unexpected\n");
                 }
                 else if (mf->type == CL_MSG_FIELD_TYPE_DIGEST_RIPE) {
                     memcpy(&keyd, mf->data, sizeof(cf_digest));
@@ -791,7 +792,7 @@ static int as_query_worker_do(cl_cluster_node * node, as_query_task * task) {
                 cl_msg_swap_op(op);
 
 #ifdef DEBUG_VERBOSE
-                fprintf(stderr, "op receive: %p size %d op %d ptype %d pversion %d namesz %d \n",
+                LOG("[DEBUG] as_query_worker_do: op receive: %p size %d op %d ptype %d pversion %d namesz %d \n",
                         op,op->op_sz, op->op, op->particle_type, op->version, op->name_sz);
 #endif            
 
@@ -812,7 +813,7 @@ static int as_query_worker_do(cl_cluster_node * node, as_query_task * task) {
             else if (msg->info3 & CL_MSG_INFO3_LAST)    {
 
 #ifdef DEBUG                
-                fprintf(stderr, "received final message\n");
+                LOG("[DEBUG] as_query_worker_do: received final message\n");
 #endif                
                 done = true;
             }
@@ -890,7 +891,7 @@ static int as_query_worker_do(cl_cluster_node * node, as_query_task * task) {
             // don't have to free object internals. They point into the read buffer, where
             // a pointer is required
             pos += buf - buf_start;
-            if (gasq_abort) {
+            if (task->abort || gasq_abort) {
                 break;
             }
 
@@ -902,7 +903,7 @@ static int as_query_worker_do(cl_cluster_node * node, as_query_task * task) {
         }
 
         // abort requested by the user
-        if (gasq_abort) {
+        if (task->abort || gasq_abort) {
             close(fd);
             goto Final;
         }
@@ -915,7 +916,7 @@ static int as_query_worker_do(cl_cluster_node * node, as_query_task * task) {
 Final:    
 
 #ifdef DEBUG_VERBOSE    
-    fprintf(stderr, "exited loop: rc %d\n", rc );
+    LOG("[DEBUG] exited loop: rc %d\n", rc );
 #endif    
 
     return rc;
@@ -927,11 +928,11 @@ static void * as_query_worker(void * dummy) {
         as_query_task task;
 
         if ( 0 != cf_queue_pop(g_query_q, &task, CF_QUEUE_FOREVER) ) {
-            fprintf(stderr, "queue pop failed\n");
+            LOG("[WARNING] as_query_worker: queue pop failed\n");
         }
 
         if ( cf_debug_enabled() ) {
-            fprintf(stderr, "as_query_worker: getting one task item\n");
+            LOG("[DEBUG] as_query_worker: getting one task item\n");
         }
 
         // a NULL structure is the condition that we should exit. See shutdown()
@@ -944,11 +945,10 @@ static void * as_query_worker(void * dummy) {
 
         cl_cluster_node * node = cl_cluster_node_get_byname(task.asc, task.node_name);
         if ( node ) {
-            // rc = as_query_worker_do(node, task.ns, task.query_buf, task.query_sz, task.asc->nbconnect, task.callback, task.udata);
             rc = as_query_worker_do(node, &task);
         }
 
-        cf_queue_push(g_task_complete_q, (void *)&rc);
+        cf_queue_push(task.complete_q, (void *)&rc);
     }
 }
 
@@ -976,7 +976,7 @@ static int queue_stream_destroy(as_stream *s) {
 
 static as_stream_status queue_stream_write(const as_stream * s, as_val * val) {
     if (CF_QUEUE_OK != cf_queue_push(as_stream_source(s), &val)) {
-        fprintf(stderr, "Write to client side stream failed");
+        LOG("[ERROR] queue_stream_write: Write to client side stream failed");
         as_val_destroy(val);
         return AS_STREAM_ERR;
     } 
@@ -1065,8 +1065,7 @@ static int query_aerospike_log(const as_aerospike * as, const char * file, const
             strncpy(l,"TRACE",10);
             break;
     }
-    // TODO: use proper logging functions
-    fprintf(stderr, "[%s:%d] %s - %s\n", file, line, l, msg);
+    LOG("[%s:%d] %s - %s\n", file, line, l, msg);
     return 0;
 }
 
@@ -1091,8 +1090,7 @@ static cl_rv as_query_execute(cl_cluster * cluster, const as_query * query, void
     rc = query_compile(query, &wr_buf, &wr_buf_sz);
 
     if ( rc != CITRUSLEAF_OK ) {
-        // TODO: use proper logging function
-        fprintf(stderr, "do query monte: query compile failed: \n");
+        LOG("[ERROR] as_query_execute query compile failed: \n");
         return rc;
     }
 
@@ -1104,7 +1102,8 @@ static cl_rv as_query_execute(cl_cluster * cluster, const as_query * query, void
         .query_sz           = wr_buf_sz,
         .udata              = udata,
         .callback           = callback,
-        .isinline           = isinline
+        .isinline           = isinline,
+		.abort              = false
     };
 
     char *node_names    = NULL;    
@@ -1113,15 +1112,11 @@ static cl_rv as_query_execute(cl_cluster * cluster, const as_query * query, void
     // Get a list of the node names, so we can can send work to each node
     cl_cluster_get_node_names(cluster, &node_count, &node_names);
     if ( node_count == 0 ) {
-        // TODO: use proper loggin function
-        fprintf(stderr, "citrusleaf query nodes: don't have any nodes?\n");
-        if ( wr_buf && (wr_buf != wr_stack_buf) ) {
-            free(wr_buf); 
-            wr_buf = 0;
-        }
+        LOG("[ERROR] as_query_execute: don't have any nodes?\n");
         return CITRUSLEAF_FAIL_CLIENT;
     }
 
+	task.complete_q = cf_queue_create(sizeof(int), true);
     // Dispatch work to the worker queue to allow the transactions in parallel
     // NOTE: if a new node is introduced in the middle, it is NOT taken care of
     char * node_name = node_names;
@@ -1138,15 +1133,14 @@ static cl_rv as_query_execute(cl_cluster * cluster, const as_query * query, void
     rc = CITRUSLEAF_OK;
     for ( int i=0; i < node_count; i++ ) {
         int node_rc;
-        cf_queue_pop(g_task_complete_q, &node_rc, CF_QUEUE_FOREVER);
+        cf_queue_pop(task.complete_q, &node_rc, CF_QUEUE_FOREVER);
         if ( node_rc != 0 ) {
             // Got failure from one node. Trigger abort for all 
             // the ongoing request
-            gasq_abort = true;
+            task.abort = true;
             rc = node_rc;
         }
     }
-    gasq_abort = false;
 
     if ( wr_buf && (wr_buf != wr_stack_buf) ) { 
         free(wr_buf); 
@@ -1155,6 +1149,7 @@ static cl_rv as_query_execute(cl_cluster * cluster, const as_query * query, void
 
     callback(NULL, udata);
 
+	if (task.complete_q) cf_queue_destroy(task.complete_q);
     return rc;
 }
 
@@ -1469,7 +1464,7 @@ int citrusleaf_query_init() {
     if (1 == cf_atomic32_incr(&query_initialized)) {
 
         if (cf_debug_enabled()) {
-            fprintf(stderr, "query_init: creating %d threads\n",N_MAX_QUERY_THREADS);
+            LOG("[DEBUG] citrusleaf_query_init: creating %d threads\n",N_MAX_QUERY_THREADS);
         }
 
         memset(&g_null_task,0,sizeof(as_query_task));
@@ -1477,8 +1472,6 @@ int citrusleaf_query_init() {
         // create dispatch queue
         g_query_q = cf_queue_create(sizeof(as_query_task), true);
 
-        // Create a global complete queue
-        g_task_complete_q = cf_queue_create(sizeof(int), true);
 
         // create thread pool
         for (int i = 0; i < N_MAX_QUERY_THREADS; i++) {
@@ -1499,7 +1492,6 @@ void citrusleaf_query_shutdown() {
     	    pthread_join(g_query_th[i],NULL);
 	    }
     	cf_queue_destroy(g_query_q);
-	    cf_queue_destroy(g_task_complete_q);
     	cf_atomic32_decr(&query_initialized);
 	}
 }

@@ -202,7 +202,7 @@ cf_base64_tostring(uint8_t * in_bytes, char *out_bytes, int *len_r) {
 	  j += 4;
   }
   
-  out_bytes[j++] = 0;
+  out_bytes[j] = 0;
   
   *len_r = j;
 

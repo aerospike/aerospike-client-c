@@ -1,12 +1,15 @@
--- Large Ordered List (LOL) Design
--- (March 21, 2013)(V1.1)
+-- Large Ordered List (LLIST) Design
+-- LListStrawman_4.22.0:  Last Update April 22, 2013: tjl
 --
+-- Keep this MOD value in sync with version above
+local MOD = "LlistStrawman4.22.0"; -- module name used for tracing.
+
 -- ======================================================================
 -- The Large Ordered List is a sorted list, organized according to a Key
 -- value.  It is assumed that the stored object is more complex than just an
 -- atomic key value -- otherwise one of the other Large Object mechanisms
 -- (e.g. Large Stack, Large Set) would be used.  The cannonical form of a
--- LOL element is a map, which includes a KEY field and other data fields.
+-- LLIST element is a map, which includes a KEY field and other data fields.
 --
 -- In this first version, we may choose to use a FUNCTION to derrive the 
 -- key value from the complex object (e.g. Map).
@@ -20,7 +23,7 @@
 -- binary search (order log(N)) rather than scan (order N).
 -- ======================================================================
 -- Functions Supported
--- (*) llist_create: Create the LOL structure in the chosen topRec bin
+-- (*) llist_create: Create the LLIST structure in the chosen topRec bin
 -- (*) llist_insert: Insert a user value (AS_VAL) into the list
 -- (*) llist_search: Search the ordered list, using tree search
 -- (*) llist_delete: Remove an element from the list
@@ -46,9 +49,9 @@
 --     filter, the filter returns nil, and thus it would not be added
 --     to the result list.
 -- ======================================================================
--- LOL Design and Type Comments:
+-- LLIST Design and Type Comments:
 --
--- The LOL value is a new "particle type" that exists ONLY on the server.
+-- The LLIST value is a new "particle type" that exists ONLY on the server.
 -- It is a complex type (it includes infrastructure that is used by
 -- server storage), so it can only be viewed or manipulated by Lua and C
 -- functions on the server.  It is represented by a Lua MAP object that
@@ -76,7 +79,7 @@
 --     /    /    /          /      _/    |          /       |    |       \
 --    /    /    |          /      /      |          |       |    |        \
 --+---+ +-----+ +-----+ +-----++-----++-----+ +-----+ +-----++-----+ +-------+
---|1|3| |6|7|8| |22|26| |32|39||42|48||51|55| |61|64| |71|75||83|86| |91|95|99|
+--|1|3| |6|7|8| |22|26| |30|39||40|46||51|55| |61|64| |70|75||83|86| |90|95|99|
 --+---+ +-----+ +-----+ +-----++-----++-----+ +-----+ +-----++-----+ +-------+
 
 -- B-tree nodes have a variable number of keys and children, subject to some
@@ -152,7 +155,7 @@
 -- ++===========================++
 -- 
 -- To initialize a B+ Tree, we build an empty root node, which means
--- we initialize the LolMap in topRec[LolBinName]
+-- we initialize the LListMap in topRec[LolBinName]
 -- 
 -- B+ Tree-Create (T)
 --     x = allocate-node ();
@@ -211,20 +214,76 @@
 local GP=true;
 local F=true; -- Set F (flag) to true to turn ON global print
 
+-- ===========================================
+-- || GLOBAL VALUES -- Local to this module ||
+-- ===========================================
+-- Flag values
+local FV_INSERT  = 'I'; -- flag to scanList to Insert the value (if not found)
+local FV_SCAN    = 'S'; -- Regular Scan (do nothing else)
+local FV_DELETE  = 'D'; -- flag to show scanList to Delete the value, if found
+
+local FV_EMPTY = "__empty__"; -- the value is NO MORE
+
+-- Switch from a single list to B+ Tree after this amount
+local DEFAULT_THRESHHOLD = 100;
+
+-- Use this to test for CtrlMap Integrity.  Every map should have one.
+local MAGIC="MAGIC";     -- the magic value for Testing LLIST integrity
+
+-- StoreMode (SM) values (which storage Mode are we using?)
+local SM_BINARY  ='B'; -- Using a Transform function to compact values
+local SM_LIST    ='L'; -- Using regular "list" mode for storing values.
+
+-- StoreState (SS) values (which "state" is the set in?)
+local SS_COMPACT ='C'; -- Using "single bin" (compact) mode
+local SS_REGULAR ='R'; -- Using "Regular Storage" (regular) mode
+
+-- KeyType (KT) values
+local KT_ATOMIC  ='A'; -- the set value is just atomic (number or string)
+local KT_COMPLEX ='C'; -- the set value is complex. Use Function to get key.
+
+-- Key Compare Function for Complex Objects
+-- By default, a complex object will have a "KEY" field, which the
+-- key_compare() function will use to compare.  If the user passes in
+-- something else, then we'll use THAT to perform the compare, which
+-- MUST return -1, 0 or 1 for A < B, A == B, A > B.
+-- UNLESS we are using a simple true/false equals compare.
+-- ========================================================================
+-- Actually -- the default will be EQUALS.  The >=< functions will be used
+-- in the Ordered LIST implementation, not in the simple list implementation.
+-- ========================================================================
+local KC_DEFAULT="keyCompareEqual"; -- Key Compare used only in complex mode
+local KH_DEFAULT="keyHash";         -- Key Hash used only in complex mode
+
+-- Package Names
+-- Standard, Test and Debug Packages
+local PackageStandardList    = "StandardList";
+local PackageTestModeList    = "TestModeList";
+local PackageTestModeBinary  = "TestModeBinary";
+local PackageTestModeNumber  = "TestModeNumber";
+local PackageDebugModeList   = "DebugModeList";
+local PackageDebugModeBinary = "DebugModeBinary";
+local PackageDebugModeNumber = "DebugModeNumber";
+local PackageProdListValBinStore = "ProdListValBinStore";
+
+-- set up our "outside" links
+local  CRC32 = require('CRC32');
+local functionTable = require('UdfFunctionTable');
+
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 -- <><><><> <Initialize Control Maps> <Initialize Control Maps> <><><><>
--- There are three main Record Types used in the LOL Package, and their
+-- There are three main Record Types used in the LLIST Package, and their
 -- initialization functions follow.  The initialization functions
 -- define the "type" of the control structure:
 --
--- (*) TopRec: the top level user record that contains the LOL bin,
+-- (*) TopRec: the top level user record that contains the LLIST bin,
 --     including the Root Directory.
 -- (*) InnerNodeRec: Interior B+ Tree nodes
 -- (*) DataNodeRec: The Data Leaves
 --
 -- <+> Naming Conventions:
---   + All Field names (e.g. lolMap.PageMode) begin with Upper Case
---   + All variable names (e.g. lolMap.PageMode) begin with lower Case
+--   + All Field names (e.g. ldtMap.PageMode) begin with Upper Case
+--   + All variable names (e.g. ldtMap.PageMode) begin with lower Case
 --   + All Record Field access is done using brackets, with either a
 --     variable or a constant (in single quotes).
 --     (e.g. topRec[binName] or ldrRec['LdrControlBin']);
@@ -232,74 +291,311 @@ local F=true; -- Set F (flag) to true to turn ON global print
 -- <><><><> <Initialize Control Maps> <Initialize Control Maps> <><><><>
 
 -- ======================================================================
--- initializeLolMap:
+-- initializeLListMap:
 -- ======================================================================
--- Set up the LOL Map with the standard (default) values.
+-- Set up the LLIST Map with the standard (default) values.
 -- These values may later be overridden by the user.
--- The structure held in the Record's "LOL BIN" is this map.  This single
--- structure contains ALL of the settings/parameters that drive the LOL
--- behavior.  Thus this function represents the "type" LOL MAP -- all
--- LOL control fields are defined here.
--- The LolMap is obtained using the user's LOL Bin Name:
--- lolMap = topRec[lolBinName]
+-- The structure held in the Record's "LLIST BIN" is this map.  This single
+-- structure contains ALL of the settings/parameters that drive the LLIST
+-- behavior.  Thus this function represents the "type" LLIST MAP -- all
+-- LLIST control fields are defined here.
+-- The LListMap is obtained using the user's LLIST Bin Name:
+-- ldtMap = topRec[ldtBinName]
 -- ======================================================================
-local function initializeLolRoot( topRec, lolBinName, transFunc, untransFunc,
+local function initializeLolRoot( topRec, ldtBinName, transFunc, untransFunc,
                                   funcArgs )
-  local mod = "LolStrawman";
-  local meth = "initializeLolMap()";
+  local meth = "initializeLListMap()";
   GP=F and trace("[ENTER]: <%s:%s>:: LolBinName(%s)",
-    mod, meth, tostring(lolBinName));
+    MOD, meth, tostring(ldtBinName));
 
-  -- The LOL Map -- with Default Values
+  -- The LLIST Map -- with Default Values
   -- General Tree Settings
-  lolCtrlMap.ItemCount = 0;     -- A count of all items in the LOL
-  lolCtrlMap.DesignVersion = 1; -- Current version of the code
-  lolCtrlMap.Magic = "MAGIC";   -- Used to verify we have a valid map
-  lolCtrlMap.BinName = lolBinName; -- Name of the Bin for this LOL in TopRec
-  lolCtrlMap.NameSpace = "test"; -- Default NS Name -- to be overridden by user
-  lolCtrlMap.Set = "set";       -- Default Set Name -- to be overridden by user
-  lolCtrlMap.PageMode = "List"; -- "List" or "Binary" (applies to all nodes)
-  lolCtrlMap.TreeLevel = 1;     -- Start off Lvl 1: Root plus leaves
-  lolCtrlMap.DataLeafCount = 0;
-  lolCtrlMap.InnerNodeCount = 0;
-  lolCtrlMap.KeyType = 0; -- 0 is atomic, 1 is map (with a KEY field).
-  lolCtrlMap.TransFunc = 0; -- Name of the transform (from user to storage)
-  lolCtrlMap.UnTransFunc = 0; -- Reverse transform (from storage to user)
+  ldtMap.LdtType="LLIST";   -- Mark this as a Large Ordered List
+  ldtMap.ItemCount = 0;     -- A count of all items in the LLIST
+  ldtMap.DesignVersion = 1; -- Current version of the code
+  ldtMap.Magic = "MAGIC";   -- Used to verify we have a valid map
+  ldtMap.ExistSubRecDig = 0; -- Pt to the LDT "Exists" subrecord (digest)
+  ldtMap.BinName = ldtBinName; -- Name of the Bin for this LLIST in TopRec
+  ldtMap.NameSpace = "test"; -- Default NS Name -- to be overridden by user
+  ldtMap.Set = "set";       -- Default Set Name -- to be overridden by user
+  ldtMap.PageMode = "List"; -- "List" or "Binary" (applies to all nodes)
+  ldtMap.TreeLevel = 1;     -- Start off Lvl 1: Root plus leaves
+  ldtMap.DataLeafCount = 0;
+  ldtMap.InnerNodeCount = 0;
+  ldtMap.KeyType = 0; -- 0 is atomic, 1 is map (with a KEY field).
+  ldtMap.TransFunc = 0; -- Name of the transform (from user to storage)
+  ldtMap.UnTransFunc = 0; -- Reverse transform (from storage to user)
   --
   -- Top Node Tree Root Directory
-  lolCtrlMap.RootDirMax = 100;
-  lolCtrlMap.KeyByteArray = 0; -- Byte Array, when in compressed mode
-  lolCtrlMap.DigestByteArray = 0; -- DigestArray, when in compressed mode
-  lolCtrlMap.KeyList = 0; -- Key List, when in List Mode
-  lolCtrlMap.DigestList = 0; -- Digest List, when in List Mode
+  ldtMap.RootDirMax = 100;
+  ldtMap.KeyByteArray = 0; -- Byte Array, when in compressed mode
+  ldtMap.DigestByteArray = 0; -- DigestArray, when in compressed mode
+  ldtMap.KeyList = 0; -- Key List, when in List Mode
+  ldtMap.DigestList = 0; -- Digest List, when in List Mode
+  ldtMap.CompactList = list();
   
-  -- LOL Inner Node Settings
-  lolCtrlMap.InnerNodeEntryCountMax = 50;  -- Max # of items (key+digest)
-  lolCtrlMap.InnerNodeByteEntrySize = 11;  -- Size (in bytes) of Key obj
-  lolCtrlMap.InnerNodeByteCountMax = 2000; -- Max # of BYTES
+  -- LLIST Inner Node Settings
+  ldtMap.InnerNodeEntryCountMax = 50;  -- Max # of items (key+digest)
+  ldtMap.InnerNodeByteEntrySize = 11;  -- Size (in bytes) of Key obj
+  ldtMap.InnerNodeByteCountMax = 2000; -- Max # of BYTES
 
-  -- LOL Tree Leaves (Data Pages)
-  lolCtrlMap.DataPageEntryCountMax = 100;  -- Max # of items
-  lolCtrlMap.DataPageByteEntrySize = 44;  -- Size (in bytes) of data obj
-  lolCtrlMap.DataPageByteCountMax = 2000; -- Max # of BYTES per data page
+  -- LLIST Tree Leaves (Data Pages)
+  ldtMap.DataPageEntryCountMax = 100;  -- Max # of items
+  ldtMap.DataPageByteEntrySize = 44;  -- Size (in bytes) of data obj
+  ldtMap.DataPageByteCountMax = 2000; -- Max # of BYTES per data page
 
   GP=F and trace("[DEBUG]: <%s:%s> : CTRL Map after Init(%s)",
-      mod, meth , tostring(lolCtrlMap));
+      MOD, meth , tostring(ldtMap));
 
   -- Put our new map in the record, then store the record.
-  topRec[lolBinName] = lolMap;
+  topRec[ldtBinName] = ldtMap;
 
-  GP=F and trace("[EXIT]:<%s:%s>:", mod, meth );
-  return lolMap
-end -- initializeLolMap
+  GP=F and trace("[EXIT]:<%s:%s>:", MOD, meth );
+  return ldtMap
+end -- initializeLListMap
+
+-- ++======================++
+-- || Prepackaged Settings ||
+-- ++======================++
+--
+-- ======================================================================
+-- This is the standard (default) configuration
+-- Package = "StandardList"
+-- ======================================================================
+local function packageStandardList( ldtMap )
+  
+  -- General Parameters
+  ldtMap.Transform = nil;
+  ldtMap.UnTransform = nil;
+  ldtMap.StoreState = SS_COMPACT; -- start in "compact mode"
+  ldtMap.StoreMode = SM_LIST; -- Use List Mode
+  ldtMap.BinaryStoreSize = nil; -- Don't waste room if we're not using it
+  ldtMap.KeyType = KT_ATOMIC; -- Atomic Keys
+  ldtMap.BinName = ldtBinName;
+  ldtMap.Modulo = DEFAULT_DISTRIB;
+  ldtMap.ThreshHold = DEFAULT_THRESHHOLD; -- Rehash after this many inserts
+
+end -- packageStandardList()
+
+-- ======================================================================
+-- Package = "TestModeNumber"
+-- ======================================================================
+local function packageTestModeNumber( ldtMap )
+  
+  -- General Parameters
+  ldtMap.Transform = nil;
+  ldtMap.UnTransform = nil;
+  ldtMap.StoreState = SS_COMPACT; -- start in "compact mode"
+  ldtMap.StoreMode = SM_LIST; -- Use List Mode
+  ldtMap.BinaryStoreSize = nil; -- Don't waste room if we're not using it
+  ldtMap.KeyType = KT_ATOMIC; -- Atomic Keys
+  ldtMap.BinName = ldtBinName;
+  ldtMap.Modulo = DEFAULT_DISTRIB;
+  ldtMap.ThreshHold = DEFAULT_THRESHHOLD; -- Rehash after this many have been inserted
+ 
+end -- packageTestModeList()
+
+
+-- ======================================================================
+-- Package = "TestModeList"
+-- ======================================================================
+local function packageTestModeList( ldtMap )
+  
+  -- General Parameters
+  ldtMap.Transform = nil;
+  ldtMap.UnTransform = nil;
+  ldtMap.StoreState = SS_COMPACT; -- start in "compact mode"
+  ldtMap.StoreMode = SM_LIST; -- Use List Mode
+  ldtMap.BinaryStoreSize = nil; -- Don't waste room if we're not using it
+  ldtMap.KeyType = KT_COMPLEX; -- Complex Object (need key function)
+  ldtMap.BinName = ldtBinName;
+  ldtMap.Modulo = DEFAULT_DISTRIB;
+  ldtMap.ThreshHold = DEFAULT_THRESHHOLD; -- Rehash after this many have been inserted
+ 
+end -- packageTestModeList()
+
+-- ======================================================================
+-- Package = "TestModeBinary"
+-- ======================================================================
+local function packageTestModeBinary( ldtMap )
+  
+  -- General Parameters
+  ldtMap.Transform = "compressTest4";
+  ldtMap.UnTransform = "unCompressTest4";
+  ldtMap.StoreState = SS_COMPACT; -- start in "compact mode"
+  ldtMap.StoreMode = SM_LIST; -- Use List Mode
+  ldtMap.BinaryStoreSize = nil; -- Don't waste room if we're not using it
+  ldtMap.KeyType = KT_COMPLEX; -- Complex Object (need key function)
+  ldtMap.BinName = ldtBinName;
+  ldtMap.Modulo = DEFAULT_DISTRIB;
+  ldtMap.ThreshHold = DEFAULT_THRESHHOLD; -- Rehash after this many have been inserted
+
+end -- packageTestModeBinary( ldtMap )
+
+-- ======================================================================
+-- Package = "ProdListValBinStore"
+-- This Production App uses a compacted (transformed) representation.
+-- ======================================================================
+local function packageProdListValBinStore( ldtMap )
+  
+  -- General Parameters
+  ldtMap.Transform = "listCompress_5_18";
+  ldtMap.UnTransform = "listUnCompress_5_18";
+  ldtMap.StoreState = SS_COMPACT; -- start in "compact mode"
+  ldtMap.StoreMode = SM_BINARY; -- Use a Byte Array
+  ldtMap.BinaryStoreSize = 4; -- Storing a single 4 byte integer
+  ldtMap.KeyType = KT_ATOMIC; -- Atomic Keys (a number)
+  ldtMap.BinName = ldtBinName;
+  ldtMap.Modulo = DEFAULT_DISTRIB;
+  ldtMap.ThreshHold = 100; -- Rehash after this many have been inserted
+  
+end -- packageProdListValBinStore()
+
+-- ======================================================================
+-- Package = "DebugModeList"
+-- Test the LLIST with very small numbers to force it to make LOTS of
+-- warm and close objects with very few inserted items.
+-- ======================================================================
+local function packageDebugModeList( ldtMap )
+  
+  -- General Parameters
+  ldtMap.Transform = nil;
+  ldtMap.UnTransform = nil;
+  ldtMap.StoreState = SS_COMPACT; -- start in "compact mode"
+  ldtMap.StoreMode = SM_LIST; -- Use List Mode
+  ldtMap.BinaryStoreSize = nil; -- Don't waste room if we're not using it
+  ldtMap.KeyType = KT_ATOMIC; -- Atomic Keys
+  ldtMap.BinName = ldtBinName;
+  ldtMap.Modulo = DEFAULT_DISTRIB;
+  ldtMap.ThreshHold = 4; -- Rehash after this many have been inserted
+
+end -- packageDebugModeList()
+
+-- ======================================================================
+-- Package = "DebugModeBinary"
+-- Perform the Debugging style test with compression.
+-- ======================================================================
+local function packageDebugModeBinary( ldtMap )
+  
+  -- General Parameters
+  ldtMap.Transform = "compressTest4";
+  ldtMap.UnTransform = "unCompressTest4";
+  ldtMap.KeyCompare = "debugListCompareEqual"; -- "Simple" list comp
+  ldtMap.StoreState = SS_COMPACT; -- start in "compact mode"
+  ldtMap.StoreMode = SM_LIST; -- Use List Mode
+  ldtMap.BinaryStoreSize = 16; -- Don't waste room if we're not using it
+  ldtMap.KeyType = KT_COMPLEX; -- special function for list compare.
+  ldtMap.BinName = ldtBinName;
+  ldtMap.Modulo = DEFAULT_DISTRIB;
+  ldtMap.ThreshHold = 4; -- Rehash after this many have been inserted
+
+end -- packageDebugModeBinary( ldtMap )
+
+-- ======================================================================
+-- Package = "DebugModeNumber"
+-- Perform the Debugging style test with a number
+-- ======================================================================
+local function packageDebugModeNumber( ldtMap )
+  local meth = "packageDebugModeNumber()";
+  GP=F and trace("[ENTER]: <%s:%s>:: CtrlMap(%s)",
+    MOD, meth, tostring(ldtMap) );
+  
+  -- General Parameters
+  ldtMap.Transform = nil;
+  ldtMap.UnTransform = nil;
+  ldtMap.KeyCompare = nil;
+  ldtMap.StoreState = SS_COMPACT; -- start in "compact mode"
+  ldtMap.StoreMode = SM_LIST; -- Use List Mode
+  ldtMap.BinaryStoreSize = 0; -- Don't waste room if we're not using it
+  ldtMap.KeyType = KT_ATOMIC; -- Simple Number (atomic) compare
+  ldtMap.BinName = ldtBinName;
+  ldtMap.Modulo = DEFAULT_DISTRIB;
+  ldtMap.ThreshHold = 4; -- Rehash after this many have been inserted
+
+  GP=F and trace("[EXIT]: <%s:%s>:: CtrlMap(%s)",
+    MOD, meth, tostring(ldtMap) );
+end -- packageDebugModeNumber( ldtMap )
+
+-- ======================================================================
+-- adjustLListMap:
+-- ======================================================================
+-- Using the settings supplied by the caller in the stackCreate call,
+-- we adjust the values in the LListMap.
+-- Parms:
+-- (*) ldtMap: the main LList Bin value
+-- (*) argListMap: Map of LList Settings 
+-- ======================================================================
+local function adjustLListMap( ldtMap, argListMap )
+  local meth = "adjustLListMap()";
+  GP=F and trace("[ENTER]: <%s:%s>:: LListMap(%s)::\n ArgListMap(%s)",
+    MOD, meth, tostring(ldtMap), tostring( argListMap ));
+
+  -- Iterate thru the argListMap and adjust (override) the map settings 
+  -- based on the settings passed in during the create() call.
+  GP=F and trace("[DEBUG]: <%s:%s> : Processing Arguments:(%s)",
+    MOD, meth, tostring(argListMap));
+
+  for name, value in map.pairs( argListMap ) do
+    GP=F and trace("[DEBUG]: <%s:%s> : Processing Arg: Name(%s) Val(%s)",
+        MOD, meth, tostring( name ), tostring( value ));
+
+    -- Process our "prepackaged" settings first:
+    -- NOTE: Eventually, these "packages" will be installed in either
+    -- a separate "package" lua file, or possibly in the UdfFunctionTable.
+    -- Regardless though -- they will move out of this main file, except
+    -- maybe for the "standard" packages.
+    if name == "Package" and type( value ) == "string" then
+      -- Figure out WHICH package we're going to deploy:
+      if value == PackageStandardList then
+          packageStandardList( ldtMap );
+      elseif value == PackageTestModeList then
+          packageTestModeList( ldtMap );
+      elseif value == PackageTestModeBinary then
+          packageTestModeBinary( ldtMap );
+      elseif value == PackageTestModeNumber then
+          packageTestModeNumber( ldtMap );
+      elseif value == PackageProdListValBinStore then
+          packageProdListValBinStore( ldtMap );
+      elseif value == PackageDebugModeList then
+          packageDebugModeList( ldtMap );
+      elseif value == PackageDebugModeBinary then
+          packageDebugModeBinary( ldtMap );
+      elseif value == PackageDebugModeNumber then
+          packageDebugModeNumber( ldtMap );
+      end
+    elseif name == "KeyType" and type( value ) == "string" then
+      -- Use only valid values (default to ATOMIC if not specifically complex)
+      if value == KT_COMPLEX or value == "complex" then
+        ldtMap.KeyType = KT_COMPLEX;
+      else
+        ldtMap.KeyType = KT_ATOMIC;
+      end
+    elseif name == "StoreMode"  and type( value ) == "string" then
+      -- Verify it's a valid value
+      if value == SM_BINARY or value == SM_LIST then
+        ldtMap.StoreMode = value;
+      end
+    elseif name == "Modulo"  and type( value ) == "number" then
+      -- Verify it's a valid value
+      if value > 0 and value < MODULO_MAX then
+        ldtMap.Modulo = value;
+      end
+    end
+  end -- for each argument
+
+  GP=F and trace("[EXIT]: <%s:%s> : CTRL Map after Adjust(%s)",
+    MOD, meth , tostring(ldtMap));
+      
+  return ldtMap
+end -- adjustLListMap
 
 
 -- |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 -- || B+ Tree Data Page Record |||||||||||||||||||||||||||||||||||||||||||
 -- |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 -- ======================================================================
--- Records used for B+ Tree modes have three bins:
--- Chunks hold the actual entries. Each LSO Data Record (LDR) holds a small
+-- Records used for B+ Tree nodes have three bins:
+-- Chunks hold the actual entries. Each LDT Data Record (LDR) holds a small
 -- amount of control information and a list.  A LDR will have three bins:
 -- (1) The Control Bin (a Map with the various control data)
 -- (2) The Data List Bin ('DataListBin') -- where we hold "list entries"
@@ -353,21 +649,20 @@ end -- initializeLolMap
 -- and out of a 16 byte value.
 --
 -- ======================================================================
-local function initializeNodeMap(topRec, parentRec, nodeRec, nodeMap, lolMap)
-  local mod = "LolStrawman";
+local function initializeNodeMap(topRec, parentRec, nodeRec, nodeMap, ldtMap)
   local meth = "initializeNodeMap()";
-  GP=F and trace("[ENTER]: <%s:%s>", mod, meth );
+  GP=F and trace("[ENTER]: <%s:%s>", MOD, meth );
 
   nodeMap.RootDigest = record.digest( topRec );
   nodeMap.ParentDigest = record.digest( parentRec );
-  nodeMap.PageMode = lolMap.PageMode;
+  nodeMap.PageMode = ldtMap.PageMode;
   nodeMap.Digest = record.digest( nodeRec );
   -- Note: Item Count is implicitly the KeyList size
   nodeMap.KeyListMax = 100; -- Digest List is ONE MORE than Key List
-  nodeMap.ByteEntrySize = lolMap.LdrByteEntrySize; -- ByteSize of Fixed Entries
+  nodeMap.ByteEntrySize = ldtMap.LdrByteEntrySize; -- ByteSize of Fixed Entries
   nodeMap.ByteEntryCount = 0;  -- A count of Byte Entries
-  nodeMap.ByteCountMax = lolMap.LdrByteCountMax; -- Max # of bytes in ByteArray
-  nodeMap.Version = lolMap.Version;
+  nodeMap.ByteCountMax = ldtMap.LdrByteCountMax; -- Max # of bytes in ByteArray
+  nodeMap.Version = ldtMap.Version;
   nodeMap.LogInfo = 0;
 end -- initializeNodeMap()
 
@@ -377,7 +672,7 @@ end -- initializeNodeMap()
 -- |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 -- ======================================================================
 -- Records used for B+ Tree modes have three bins:
--- Chunks hold the actual entries. Each LSO Data Record (LDR) holds a small
+-- Chunks hold the actual entries. Each LDT Data Record (LDR) holds a small
 -- amount of control information and a list.  A LDR will have three bins:
 -- (1) The Control Bin (a Map with the various control data)
 -- (2) The Data List Bin ('DataListBin') -- where we hold "list entries"
@@ -416,72 +711,70 @@ end -- initializeNodeMap()
 -- Either Bins 1,2,4 or Bins 1,3,5.
 -- initializeLeafMap(): Data Leaf Nodes
 -- ======================================================================
-local function initializeLeafMap(topRec, parentRec, leafRec, leafMap, lolMap)
-  local mod = "LolStrawman";
+local function initializeLeafMap(topRec, parentRec, leafRec, leafMap, ldtMap)
   local meth = "initializeLeafMap()";
-  GP=F and trace("[ENTER]: <%s:%s>", mod, meth );
+  GP=F and trace("[ENTER]: <%s:%s>", MOD, meth );
 
   leafMap.RootDigest = record.digest( topRec );
   leafMap.ParentDigest = record.digest( parentRec );
-  leafMap.PageMode = lolMap.PageMode;
+  leafMap.PageMode = ldtMap.PageMode;
   leafMap.Digest = record.digest( leafRec );
   -- Note: Item Count is implicitly the KeyList size
   leafMap.DataListMax = 100; -- Max Number of items in List of data items
-  leafMap.ByteEntrySize = lolMap.LdrByteEntrySize; -- ByteSize of Fixed Entries
+  leafMap.ByteEntrySize = ldtMap.LdrByteEntrySize; -- ByteSize of Fixed Entries
   leafMap.ByteEntryCount = 0;  -- A count of Byte Entries
-  leafMap.ByteCountMax = lolMap.LdrByteCountMax; -- Max # of bytes in ByteArray
-  leafMap.Version = lolMap.Version;
+  leafMap.ByteCountMax = ldtMap.LdrByteCountMax; -- Max # of bytes in ByteArray
+  leafMap.Version = ldtMap.Version;
   leafMap.LogInfo = 0;
 end -- initializeLeafMap()
 
 -- ======================================================================
 -- ======================================================================
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
--- Large Ordered List (LOL) Utility Functions
+-- Large Ordered List (LLIST) Utility Functions
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 -- These are all local functions to this module and serve various
 -- utility and assistance functions.
 
 -- ======================================================================
--- adjustLolMap:
+-- adjustLListMap:
 -- ======================================================================
 -- Using the settings supplied by the caller in the listCreate call,
--- we adjust the values in the LolMap.
+-- we adjust the values in the LListMap.
 -- Parms:
--- (*) lolMap: the main List Bin value
+-- (*) ldtMap: the main List Bin value
 -- (*) argListMap: Map of List Settings 
 -- ======================================================================
-local function adjustLolMap( lolMap, argListMap )
-  local mod = "LolStrawman";
-  local meth = "adjustLolMap()";
-  GP=F and trace("[ENTER]: <%s:%s>:: LolMap(%s)::\n ArgListMap(%s)",
-    mod, meth, tostring(lolMap), tostring( argListMap ));
+local function adjustLListMap( ldtMap, argListMap )
+  local meth = "adjustLListMap()";
+  GP=F and trace("[ENTER]: <%s:%s>:: LListMap(%s)::\n ArgListMap(%s)",
+    MOD, meth, tostring(ldtMap), tostring( argListMap ));
 
   -- Iterate thru the argListMap and adjust (override) the map settings 
   -- based on the settings passed in during the listCreate() call.
   GP=F and trace("[DEBUG]: <%s:%s> : Processing Arguments:(%s)",
-    mod, meth, tostring(argListMap));
+    MOD, meth, tostring(argListMap));
 
 -- Fill in when we have a better idea of the settings.
 
   GP=F and trace("[DEBUG]: <%s:%s> : CTRL Map after Adjust(%s)",
-    mod, meth , tostring(lolMap));
+    MOD, meth , tostring(ldtMap));
 
   GP=F and trace("[EXIT]:<%s:%s>:Dir Map after Init(%s)",
-      mod,meth,tostring(lolMap));
+      MOD,meth,tostring(ldtMap));
 
-  return lolMap
-end -- adjustLolMap
+  return ldtMap
+end -- adjustLListMap
 
 -- ======================================================================
--- validateTopRec( topRec, lolMap )
+-- validateTopRec( topRec, ldtMap )
 -- ======================================================================
 -- Validate that the top record looks valid:
--- Get the LSO bin from the rec and check for magic
+-- Get the LDT bin from the rec and check for magic
 -- Return: "good" or "bad"
 -- ======================================================================
-local function  validateTopRec( topRec, lolMap )
-  local thisMap = topRec[lolMap.BinName];
+local function  validateTopRec( topRec, ldtMap )
+  local thisMap = topRec[ldtMap.BinName];
   if thisMap.Magic == "MAGIC" then
     return "good"
   else
@@ -496,10 +789,9 @@ end -- validateTopRec()
 -- cannot be larger than 14 characters (a seemingly low limit).
 -- ======================================================================
 local function validateBinName( binName )
-  local mod = "LsoSuperMan";
   local meth = "validateBinName()";
   GP=F and trace("[ENTER]: <%s:%s> validate Bin Name(%s)",
-    mod, meth, tostring(binName));
+    MOD, meth, tostring(binName));
 
   if binName == nil  then
     error('Bin Name Validation Error: Null BinName');
@@ -509,20 +801,20 @@ local function validateBinName( binName )
     error('Bin Name Validation Error: Exceeds 14 characters');
   end
 end -- validateBinName
---
+
 -- ======================================================================
--- local function Tree Summary( lolMap ) (DEBUG/Trace Function)
+-- local function Tree Summary( ldtMap ) (DEBUG/Trace Function)
 -- ======================================================================
 -- For easier debugging and tracing, we will summarize the Tree Map
 -- contents -- without printing out the entire thing -- and return it
 -- as a string that can be printed.
 -- ======================================================================
-local function lolSummary( lolMap )
+local function ldtSummary( ldtMap )
   local resultMap             = map();
   resultMap.SUMMARY           = "List Summary String";
 
   return tostring( resultMap );
-end -- lolSummary()
+end -- ldtSummary()
 
 -- ======================================================================
 -- Summarize the List (usually ResultList) so that we don't create
@@ -546,12 +838,12 @@ local function summarizeList( myList )
 end -- summarizeList()
 
 -- ======================================================================
--- rootNodeSummary( topRec, lolMap )
+-- rootNodeSummary( topRec, ldtMap )
 -- ======================================================================
 -- Print out interesting stats about this B+ Tree Root
 -- ======================================================================
-local function  rootNodeSummary( topRec, lolMap )
-  local resultMap = lolMap;
+local function  rootNodeSummary( topRec, ldtMap )
+  local resultMap = ldtMap;
 
   -- Add to this -- move selected fields into resultMap and return it.
 
@@ -597,10 +889,9 @@ end -- leafNodeSummary()
 -- Return: 1 (ONE) if there's room, otherwise 0 (ZERO)
 -- ======================================================================
 local function nodeHasRoom( keyList, listMax )
-  local mod = "LolStrawman";
   local meth = "nodeHasRoom()";
   GP=F and trace("[ENTER]: <%s:%s> keyList(%s) ListMax(%s)",
-    mod, meth, tostring(keyList), tostring(listMax) );
+    MOD, meth, tostring(keyList), tostring(listMax) );
 
   local result = 1;  -- Be optimistic 
 
@@ -608,10 +899,9 @@ local function nodeHasRoom( keyList, listMax )
   print("[!!! FINISH THIS METHOD !!! (%s) ", meth );
 
 
-  GP=F and trace("[EXIT]: <%s:%s> result(%d) ", mod, meth, result );
+  GP=F and trace("[EXIT]: <%s:%s> result(%d) ", MOD, meth, result );
   return result;
 end -- nodeHasRoom()
-
 
 
 -- ======================================================================
@@ -622,15 +912,16 @@ end -- nodeHasRoom()
 -- The caller has already verified that there's room in this list for
 -- one more entry (pair).
 --
-local function keyListInsert( keyList, newKey, digestList, newDigest )
-  local mod = "LolStrawman";
+local function keyListInsert( ldtMap, keyList, newKey, digestList, newDigest )
   local meth = "keyListInsert()";
   GP=F and trace("[ENTER]: <%s:%s> : Insert Value(%s), keyList(%s)",
-    mod, meth, tostring(newKey), tostring( keyList ));
+    MOD, meth, tostring(newKey), tostring( keyList ));
 
   local rc = 0;
 
   local position = searchKeyList( keyList, newKey );
+
+  -- Assuming there's room, Move items to the right to make room for
 
   -- TODO: Finish this method
   print("[!!! FINISH THIS METHOD !!! (%s) ", meth );
@@ -733,28 +1024,28 @@ end -- searcKeyhList()
 -- (*) topRec: 
 -- (*) leafNode:
 -- (*) searchPath:
--- (*) lolMap:
+-- (*) ldtMap:
 -- (*) resultList:
 -- (*) searchValue:
 -- (*) func:
 -- (*) fargs:
 -- (*) flag:
 -- ======================================================================
-local function searchLeaf(topRec, leafNode, searchPath, lolMap, resultList,
+local function searchLeaf(topRec, leafNode, searchPath, ldtMap, resultList,
                           searchValue, func, fargs, flag)
   -- Linear scan of the Leaf Node (binary search will come later), for each
   -- match, add to the resultList.
   local compareResult = 0;
-  if lolMap.PageMode == 0 then
+  if ldtMap.PageMode == 0 then
     -- Do the BINARY page mode search here
     GP=F and trace("[WARNING]: <%s:%s> :BINARY MODE NOT IMPLEMENTED",
-        mod, meth, tostring(newStorageValue), tostring( resultList));
+        MOD, meth, tostring(newStorageValue), tostring( resultList));
     return nil; -- TODO: Build this mode.
   else
     -- Do the List page mode search here
     -- Later: Split the loop search into two -- atomic and map objects
     local leafDataList = leafNode['DataListBin'];
-    local keyType = lolMap.KeyType;
+    local keyType = ldtMap.KeyType;
     for i = 1, list.size( leafDataList ), 1 do
       compareResult = compare( keyType, searchValue, leafDataList[i] );
       if compareResult == -2 then
@@ -762,14 +1053,14 @@ local function searchLeaf(topRec, leafNode, searchPath, lolMap, resultList,
       end
       if compareResult == 0 then
         -- Start gathering up values
-        gatherLeafListData( topRec, leafNode, lolMap, resultList, searchValue,
+        gatherLeafListData( topRec, leafNode, ldtMap, resultList, searchValue,
           func, fargs, flag );
         GP=F and trace("[FOUND VALUES]: <%s:%s> : Value(%s) Result(%s)",
-          mod, meth, tostring(newStorageValue), tostring( resultList));
+          MOD, meth, tostring(newStorageValue), tostring( resultList));
           return resultList;
       elseif compareResult  == 1 then
         GP=F and trace("[NotFound]: <%s:%s> : Value(%s)",
-          mod, meth, tostring(newStorageValue) );
+          MOD, meth, tostring(newStorageValue) );
           return resultList;
       end
       -- otherwise, keep looking.  We haven't passed the spot yet.
@@ -797,70 +1088,439 @@ end -- searchLeaf()
 -- + This Rec digest
 -- + 
 -- ======================================================================
-local function locateLeaf( topRec, lolMap, searchValue, func, fargs )
+local function locateLeaf( topRec, ldtMap, searchValue, func, fargs )
     -- Start at the root, find the appropriate record pointer and 
     -- traverse the tree down to the data page.  Then hand off searching
     -- to the searchLeaf() function.
-  local mod = "LolStrawman";
   local meth = "hotListInsert()";
   GP=F and trace("[ENTER]: <%s:%s> : Insert Value(%s)",
-    mod, meth, tostring(newStorageValue) );
+    MOD, meth, tostring(newStorageValue) );
 
-  local rootKeyList = lolMap.
-end
+  local keyList = ldtMap.KeyList;
+  local digestList = ldtMap.DigestList;
+
+
+
+end -- locateLeaf()
 
 -- ======================================================================
--- lolMapSearch(): Read all elements matching SearchValue
+-- ldtMapSearch(): Read all elements matching SearchValue
 -- ======================================================================
 -- Parms:
--- (*) lolMap: The main LSO structure (stored in the LSO Bin)
+-- (*) ldtMap: The main LDT structure (stored in the LDT Bin)
 -- (*) peekCount: The total count to read (0 means all)
 -- (*) Optional inner UDF Function (from the UdfFunctionTable)
 -- (*) fargs: Function arguments (list) fed to the inner UDF
 -- Return: The Peek resultList -- in LIFO order
 -- ======================================================================
-local function lolMapSearch( topRec, lolMap, searchValue, func, fargs )
-  local mod = "LolStrawman";
-  local meth = "lolMapSearch()";
+local function ldtMapSearch( topRec, ldtMap, searchValue, func, fargs )
+  local meth = "ldtMapSearch()";
   GP=F and trace("[ENTER]: <%s:%s> searchValue(%s)",
-      mod, meth, tostring(searchValue));
+      MOD, meth, tostring(searchValue));
 
   if (func ~= nil and fargs ~= nil ) then
     GP=F and trace("[ENTER1]: <%s:%s> SearchValue(%s) func(%s) fargs(%s)",
-      mod, meth, tostring(searchValue), tostring(func), tostring(fargs) );
+      MOD, meth, tostring(searchValue), tostring(func), tostring(fargs) );
   else
     GP=F and trace("[ENTER2]: <%s:%s> SearchValue(%s)",
-    mod, meth, tostring(searchValue));
+    MOD, meth, tostring(searchValue));
   end
 
   -- Set up our resultList list. Add to the resultList from every node that
   -- contains keys that match the searchValue
   local resultList = list();
 
-  local leafNode = locateLeaf( topRec, lolMap, searchValue, func, fargs );
+  local leafNode = locateLeaf( topRec, ldtMap, searchValue, func, fargs );
   -- a tree search returns a STRUCTURE that shows the search path and the
   -- location of the item (or the insert position).
   local flag = 'S'; -- S=Search, I=Insert, D=Delete
   -- leafSearch will scan the linked list of Tree Leaf Pages.
   local searchPath  =
-    searchLeaf(topRec,leafNode,lolMap,resultList,searchValue,func,fargs,flag);
+    searchLeaf(topRec,leafNode,ldtMap,resultList,searchValue,func,fargs,flag);
 
   GP=F and trace("[EXIT]: <%s:%s> searchValue(%s) resultList(%s)",
-      mod, meth, tostring(searchValue), tostring(resultList));
+      MOD, meth, tostring(searchValue), tostring(resultList));
   
   return resultList; 
-end -- function lolMapSearch()
+end -- function ldtMapSearch()
+
+-- =======================================================================
+-- Apply Transform Function
+-- Take the Transform defined in the ldtMap, if present, and apply
+-- it to the value, returning the transformed value.  If no transform
+-- is present, then return the original value (as is).
+-- NOTE: This can be made more efficient.
+-- =======================================================================
+local function applyTransform( transformFunc, newValue )
+  local meth = "applyTransform()";
+  GP=F and trace("[ENTER]: <%s:%s> transform(%s) type(%s) Value(%s)",
+ MOD, meth, tostring(transformFunc), type(transformFunc), tostring(newValue));
+
+  local storeValue = newValue;
+  if transformFunc ~= nil then 
+    storeValue = transformFunc( newValue );
+  end
+  return storeValue;
+end -- applyTransform()
+
+-- =======================================================================
+-- Apply UnTransform Function
+-- Take the UnTransform defined in the ldtMap, if present, and apply
+-- it to the dbValue, returning the unTransformed value.  If no unTransform
+-- is present, then return the original value (as is).
+-- NOTE: This can be made more efficient.
+-- =======================================================================
+local function applyUnTransform( ldtMap, storeValue )
+  local returnValue = storeValue;
+  if ldtMap.UnTransform ~= nil and
+    functionTable[ldtMap.UnTransform] ~= nil then
+    returnValue = functionTable[ldtMap.UnTransform]( storeValue );
+  end
+  return returnValue;
+end -- applyUnTransform( value )
+
+-- =======================================================================
+-- unTransformSimpleCompare()
+-- Apply the unTransform function and compare the values.
+-- Return the unTransformed search value if the values match.
+-- =======================================================================
+local function unTransformSimpleCompare(unTransform, dbValue, searchValue)
+  local modSearchValue = searchValue;
+  local resultValue = nil;
+
+  if unTransform ~= nil then
+    modSearchValue = unTransform( searchValue );
+  end
+
+  if dbValue == modSearchValue then
+    resultValue = modSearchValue;
+  end
+
+  return resultValue;
+end -- unTransformSimpleCompare()
+
+
+-- =======================================================================
+-- unTransformComplexCompare()
+-- Apply the unTransform function and compare the values, using the
+-- compare function (it's a complex compare).
+-- Return the unTransformed search value if the values match.
+-- parms:
+-- (*) trans: The transformation function: Perform if not null
+-- (*) comp: The Compare Function (must not be null)
+-- (*) dbValue: The value pulled from the DB
+-- (*) searchValue: The value we're looking for.
+-- =======================================================================
+local function unTransformComplexCompare(trans, comp, dbValue, searchValue)
+  local modSearchValue = searchValue;
+  local resultValue = nil;
+
+  if unTransform ~= nil then
+    modSearchValue = unTransform( searchValue );
+  end
+
+  if dbValue == modSearchValue then
+    resultValue = modSearchValue;
+  end
+
+  return resultValue;
+end -- unTransformComplexCompare()
+
+-- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+-- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+-- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+
+-- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+-- Scan a List for an item.  Return the item if found.
+-- This is COMPLEX SCAN, which means we are comparing the KEY field of the
+-- map object in both the value and in the List.
+-- We've added a delete flag that will allow us to remove the element if
+-- we choose -- but for now, we are not collapsing the list.
+-- Parms:
+-- (*) binList: the list of values from the record
+-- (*) value: the value we're searching for
+-- (*) flag:
+--     ==> if ==  FV_INSERT: insert the element IF NOT FOUND
+--     ==> if ==  FV_SCAN: then return element if found, else return nil
+--     ==> if ==  FV_DELETE:  then replace the found element with nil
+-- Return:
+-- For FV_SCAN and FV_DELETE:
+--    nil if not found, Value if found.
+--   (NOTE: Can't return 0 -- because that might be a valid value)
+-- For insert (FV_INSERT):
+-- Return 0 if found (and not inserted), otherwise 1 if inserted.
+-- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+local function complexScanList(ldtCtrlMap, binList, value, flag ) 
+  local meth = "complexScanList()";
+  local result = nil;
+
+  local transform = nil;
+  local unTransform = nil;
+  if ldtCtrlMap.Transform ~= nil then
+    transform = functionTable[ldtCtrlMap.Transform];
+  end
+
+  if ldtCtrlMap.UnTransform ~= nil then
+    unTransform = functionTable[ldtCtrlMap.UnTransform];
+  end
+
+  -- Scan the list for the item, return true if found,
+  -- Later, we may return a set of things 
+  local resultValue = nil;
+  for i = 1, list.size( binList ), 1 do
+    GP=F and trace("[DEBUG]: <%s:%s> It(%d) Comparing SV(%s) with BinV(%s)",
+                   MOD, meth, i, tostring(value), tostring(binList[i]));
+    if binList[i] ~= nil and binList[i] ~= FV_EMPTY then
+      resultValue = unTransformComplexCompare(unTransform, binList[i], value);
+      if resultValue ~= nil then
+        GP=F and trace("[EARLY EXIT]: <%s:%s> Found(%s)",
+          MOD, meth, tostring(resultValue));
+        if( flag == FV_DELETE ) then
+          binList[i] = FV_EMPTY; -- the value is NO MORE
+          -- Decrement ItemCount (valid entries) but TotalCount stays the same
+          local itemCount = ldtCtrlMap.ItemCount;
+          ldtCtrlMap.ItemCount = itemCount - 1;
+        elseif flag == FV_INSERT then
+          return 0 -- show caller nothing got inserted (don't count it)
+        end
+        -- Found it -- return result
+        return resultValue;
+      end -- end if found it
+    end -- end if value not nil or empty
+  end -- for each list entry in this binList
+
+  -- Didn't find it.  If FV_INSERT, then append the value to the list
+  if flag == FV_INSERT then
+    GP=F and trace("[DEBUG]: <%s:%s> INSERTING(%s)",
+                   MOD, meth, tostring(value));
+
+    -- apply the transform (if needed)
+    local storeValue = applyTransform( transform, value );
+    list.append( binList, storeValue );
+    return 1 -- show caller we did an insert
+  end
+
+  GP=F and trace("[LATE EXIT]: <%s:%s> Did NOT Find(%s)",
+    MOD, meth, tostring(value));
+  return nil;
+end -- complexScanList
+
+-- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+-- Scan a List for an item.  Return the item if found.
+-- This is SIMPLE SCAN, where we are assuming ATOMIC values.
+-- We've added a delete flag that will allow us to remove the element if
+-- we choose -- but for now, we are not collapsing the list.
+-- Parms:
+-- (*) binList: the list of values from the record
+-- (*) value: the value we're searching for
+-- (*) flag:
+--     ==> if ==  FV_INSERT: insert the element IF NOT FOUND
+--     ==> if ==  FV_SCAN: then return element if found, else return nil
+--     ==> if ==  FV_DELETE:  then replace the found element with nil
+-- Return:
+-- For FV_SCAN and FV_DELETE:
+--    nil if not found, Value if found.
+--   (NOTE: Can't return 0 -- because that might be a valid value)
+-- For FV_INSERT:
+-- Return 0 if found (and not inserted), otherwise 1 if inserted.
+-- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+-- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+local function simpleScanList(resultList, ldtCtrlMap, binList, value, flag,
+  filter, fargs ) 
+  local meth = "simpleScanList()";
+  GP=F and trace("[ENTER]: <%s:%s> Looking for V(%s), ListSize(%d) List(%s)",
+                 MOD, meth, tostring(value), list.size(binList),
+                 tostring(binList))
+
+  local rc = 0;
+  -- Check once for the transform/untransform functions -- so we don't need
+  -- to do it inside the loop.
+  local transform = nil;
+  local unTransform = nil;
+  if ldtCtrlMap.Transform ~= nil then
+    transform = functionTable[ldtCtrlMap.Transform];
+  end
+
+  if ldtCtrlMap.UnTransform ~= nil then
+    unTransform = functionTable[ldtCtrlMap.UnTransform];
+  end
+
+  -- Scan the list for the item, return true if found,
+  -- Later, we may return a set of things 
+  local resultValue = nil;
+  for i = 1, list.size( binList ), 1 do
+    GP=F and trace("[DEBUG]: <%s:%s> It(%d) Comparing SV(%s) with BinV(%s)",
+                   MOD, meth, i, tostring(value), tostring(binList[i]));
+    if binList[i] ~= nil and binList[i] ~= FV_EMPTY then
+      resultValue = unTransformSimpleCompare(unTransform, binList[i], value);
+      if resultValue ~= nil then
+        GP=F and trace("[EARLY EXIT]: <%s:%s> Found(%s)",
+          MOD, meth, tostring(resultValue));
+        if( flag == FV_DELETE ) then
+          binList[i] = FV_EMPTY; -- the value is NO MORE
+          -- Decrement ItemCount (valid entries) but TotalCount stays the same
+          local itemCount = ldtCtrlMap.ItemCount;
+          ldtCtrlMap.ItemCount = itemCount - 1;
+        elseif flag == FV_INSERT then
+          return 0 -- show caller nothing got inserted (don't count it)
+        end
+        -- Found it -- return result (only for scan and delete, not insert)
+        list.append( resultList, resultValue );
+        return 0; -- Found it. Return with success.
+      end -- end if found it
+    end -- end if not null and not empty
+  end -- end for each item in the list
+
+  -- Didn't find it.  If FV_INSERT, then append the value to the list
+  -- Ideally, if we noticed a hole, we should use THAT for insert and not
+  -- make the list longer.
+  -- TODO: Fill in holes if we notice a lot of gas in the lists.
+  if flag == FV_INSERT then
+    GP=F and trace("[EXIT]: <%s:%s> Inserting(%s)",
+                   MOD, meth, tostring(value));
+    local storeValue = applyTransform( transform, value );
+    list.append( binList, storeValue );
+    return 1 -- show caller we did an insert
+  end
+  GP=F and trace("[LATE EXIT]: <%s:%s> Did NOT Find(%s)",
+                 MOD, meth, tostring(value));
+  return 0; -- All is well.
+end -- simpleScanList
+
+
+-- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+-- Scan a List for an item.  Return the item if found.
+-- Since there are two types of scans (simple, complex), we do the test
+-- up front and call the appropriate scan type (rather than do the test
+-- of which compare to do -- for EACH value.
+-- Parms:
+-- (*) ldtCtrlMap: the control map -- so we can see the type of key
+-- (*) binList: the list of values from the record
+-- (*) searchValue: the value we're searching for
+-- (*) flag:
+--     ==> if ==  FV_DELETE:  then replace the found element with nil
+--     ==> if ==  FV_SCAN: then return element if found, else return nil
+--     ==> if ==  FV_INSERT: insert the element IF NOT FOUND
+-- Return: nil if not found, Value if found.
+-- (NOTE: Can't return 0 -- because that might be a valid value)
+-- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+local function scanList( resultList, ldtCtrlMap, binList, searchValue, flag,
+    filter, fargs ) 
+  local meth = "scanList()";
+
+  GP=F and trace("[ENTER]:<%s:%s>Res(%s)Mp(%s)BL(%s)SV(%s)Fg(%s)F(%s)Frgs(%s)",
+      MOD, meth, tostring( resultList), tostring(ldtCtrlMap),
+      tostring(binList), tostring(searchValue), tostring(flag),
+      tostring( filter ), tostring( fargs ));
+
+  GP=F and trace("[DEBUG]:<%s:%s> KeyType(%s) A(%s) C(%s)",
+      MOD, meth, tostring(ldtCtrlMap.KeyType), tostring(KT_ATOMIC),
+      tostring(KT_COMPLEX) );
+
+  -- Choices for KeyType are KT_ATOMIC or KT_COMPLEX
+  if ldtCtrlMap.KeyType == KT_ATOMIC then
+    return simpleScanList(resultList, ldtCtrlMap, binList, searchValue, flag ) 
+  else
+    return complexScanList(resultList, ldtCtrlMap, binList, searchValue, flag ) 
+  end
+end -- scanList()
+
+-- ======================================================================
+-- localInsert( ldtMap, newValue, stats )
+-- ======================================================================
+-- Perform the main work of insert (used by both convertList() and the
+-- regular insert().
+-- Parms:
+-- (*) topRec: The top DB Record:
+-- (*) ldtMap: The LDT control map
+-- (*) newValue: Value to be inserted
+-- (*) stats: 1=Please update Counts, 0=Do NOT update counts (rehash)
+-- ======================================================================
+local function localInsert( topRec, ldtMap, newValue, stats )
+  local meth = "localInsert()";
+  GP=F and trace("[ENTER]:<%s:%s>Insert(%s)", MOD, meth, tostring(newValue));
+
+  -- If our state is "compact", do a simple list insert, otherwise do a
+  -- real tree insert.
+  local insertResult = 0;
+  if( ldtMap.StoreState == SS_COMPACT ) then 
+    insertResult = listInsert( topRec, ldtMap, newValue );
+  else
+    insertResult = treeInsert( topRec, ldtMap, newValue );
+  end
+
+  -- update stats if appropriate.
+  if stats == 1 and insertResult == 1 then -- Update Stats if success
+    local itemCount = ldtMap.ItemCount;
+    local totalCount = ldtMap.TotalCount;
+    ldtMap.ItemCount = itemCount + 1; -- number of valid items goes up
+    ldtMap.TotalCount = totalCount + 1; -- Total number of items goes up
+    GP=F and trace("[DEBUG]: <%s:%s> itemCount(%d)", MOD, meth, itemCount );
+  end
+  topRec[ldtMap] = ldtMap;
+
+  GP=F and trace("[EXIT]: <%s:%s>Storing Record() with New Value(%s): Map(%s)",
+                 MOD, meth, tostring( newValue ), tostring( ldtMap ) );
+    -- No need to return anything
+end -- localInsert
+
+
+-- ======================================================================
+-- convertList( topRec, ldtBinName, ldtMap )
+-- ======================================================================
+-- When we start in "compact" StoreState (SS_COMPACT), we eventually have
+-- to switch to "regular" state when we get enough values.  So, at some
+-- point (StoreThreshHold), we take our simple list and then insert into
+-- the B+ Tree.
+-- So -- copy out all of the items from bin 1, null out the bin, and
+-- then resinsert them using "regular" mode.
+-- Parms:
+-- (*) topRec
+-- (*) ldtBinName
+-- (*) ldtMap
+-- ======================================================================
+local function convertList( topRec, ldtBinName, ldtMap )
+  local meth = "rehashSet()";
+  GP=F and trace("[ENTER]:<%s:%s> !!!! REHASH !!!! ", MOD, meth );
+  GP=F and trace("[ENTER]:<%s:%s> !!!! REHASH !!!! ", MOD, meth );
+
+  -- Get the list, make a copy, then iterate thru it, re-inserting each one.
+  local singleBinName = getBinName( 0 );
+  local singleBinList = topRec[singleBinName];
+  if singleBinList == nil then
+  warn("[INTERNAL ERROR]:<%s:%s> Rehash can't use Empty Bin (%s) list",
+  MOD, meth, tostring(singleBinName));
+  error('BAD BIN 0 LIST for Rehash');
+  end
+  local listCopy = list.take( singleBinList, list.size( singleBinList ));
+  topRec[singleBinName] = nil; -- this will be reset shortly.
+  ldtMap.StoreState = SS_REGULAR; -- now in "regular" (modulo) mode
+
+  -- Rebuild. Allocate new lists for all of the bins, then re-insert.
+  -- Create ALL of the new bins, each with an empty list
+  -- Our "indexing" starts with ZERO, to match the modulo arithmetic.
+  local distrib = ldtMap.Modulo;
+  for i = 0, (distrib - 1), 1 do
+  setupNewBin( topRec, i );
+  end -- for each new bin
+
+  for i = 1, list.size(listCopy), 1 do
+    localInsert( topRec, ldtMap, listCopy[i], 0 ); -- do NOT update counts.
+  end
+
+  GP=F and trace("[EXIT]: <%s:%s>", MOD, meth );
+end -- convertList()
 
 -- ======================================================================
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
--- Large Ordered List (LOL) Main Functions
+-- Large Ordered List (LLIST) Main Functions
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 --
 -- ======================================================================
 -- || listCreate ||
 -- ======================================================================
 -- Create/Initialize a Large Ordered List  structure in a bin, using a
--- single LOL -- bin, using User's name, but Aerospike TYPE (AS_LOL)
+-- single LLIST -- bin, using User's name, but Aerospike TYPE (AS_LOL)
 --
 -- We will use a SINGLE MAP object, which contains control information and
 -- two lists (the root note Key and pointer lists).
@@ -875,7 +1535,7 @@ end -- function lolMapSearch()
 -- (*) Value Storage
 --
 -- Parms (inside argList)
--- (1) topRec: the user-level record holding the LSO Bin
+-- (1) topRec: the user-level record holding the LDT Bin
 -- (2) argList: the list of create parameters
 --  (2.1) LolBinName
 --  (2.2) Namespace (just one, for now)
@@ -883,56 +1543,55 @@ end -- function lolMapSearch()
 --  (2.4) LdrByteCountMax
 --  (2.5) Design Version
 --
-function listCreate( topRec, lolBinName, argList )
-  local mod = "LolStrawman";
+function listCreate( topRec, ldtBinName, argList )
   local meth = "listCreate()";
 
   if argList == nil then
-    GP=F and trace("[ENTER1]: <%s:%s> lolBinName(%s) NULL argList",
-      mod, meth, tostring(lolBinName));
+    GP=F and trace("[ENTER1]: <%s:%s> ldtBinName(%s) NULL argList",
+      MOD, meth, tostring(ldtBinName));
   else
-    GP=F and trace("[ENTER2]: <%s:%s> lolBinName(%s) argList(%s) ",
-    mod, meth, tostring( lolBinName), tostring( argList ));
+    GP=F and trace("[ENTER2]: <%s:%s> ldtBinName(%s) argList(%s) ",
+    MOD, meth, tostring( ldtBinName), tostring( argList ));
   end
 
   -- Some simple protection if things are weird
-  if lolBinName == nil  or type(lolBinName) ~= "string" then
-    warn("[WARNING]: <%s:%s> Bad LSO BIN Name: Using default", mod, meth );
-    lolBinName = "LolBin";
+  if ldtBinName == nil  or type(ldtBinName) ~= "string" then
+    warn("[WARNING]: <%s:%s> Bad LDT BIN Name: Using default", MOD, meth );
+    ldtBinName = "LolBin";
   end
 
-  -- Check to see if LSO Structure (or anything) is already there,
+  -- Check to see if LDT Structure (or anything) is already there,
   -- and if so, error
-  if topRec[lolBinName] ~= nil  then
-    warn("[ERROR EXIT]: <%s:%s> LSO BIN(%s) Already Exists",
-      mod, meth, tostring(lolBinName) );
-    return('LSO_BIN already exists');
+  if topRec[ldtBinName] ~= nil  then
+    warn("[ERROR EXIT]: <%s:%s> LDT BIN(%s) Already Exists",
+      MOD, meth, tostring(ldtBinName) );
+    return('LDT_BIN already exists');
   end
 
-  -- Create and initialize the LSO MAP -- the main LSO structure
-  -- initializeLolMap() also assigns the map to the record bin.
-  local lolMap = initializeLolMap( topRec, lolBinName );
+  -- Create and initialize the LDT MAP -- the main LDT structure
+  -- initializeLListMap() also assigns the map to the record bin.
+  local ldtMap = initializeLListMap( topRec, ldtBinName );
 
   -- If the user has passed in settings that override the defaults
   -- (the argList), then process that now.
   if argList ~= nil then
-    adjustLolMap( lolMap, argList )
+    adjustLListMap( ldtMap, argList )
   end
 
   GP=F and trace("[DEBUG]:<%s:%s>:Dir Map after Init(%s)",
-  mod,meth,tostring(lolMap));
+  MOD,meth,tostring(ldtMap));
 
   -- All done, store the record
   local rc = -99; -- Use Odd starting Num: so that we know it got changed
   if( not aerospike:exists( topRec ) ) then
-    GP=F and trace("[DEBUG]:<%s:%s>:Create Record()", mod, meth );
+    GP=F and trace("[DEBUG]:<%s:%s>:Create Record()", MOD, meth );
     rc = aerospike:create( topRec );
   else
-    GP=F and trace("[DEBUG]:<%s:%s>:Update Record()", mod, meth );
+    GP=F and trace("[DEBUG]:<%s:%s>:Update Record()", MOD, meth );
     rc = aerospike:update( topRec );
   end
 
-  GP=F and trace("[EXIT]: <%s:%s> : Done.  RC(%d)", mod, meth, rc );
+  GP=F and trace("[EXIT]: <%s:%s> : Done.  RC(%d)", MOD, meth, rc );
   return rc;
 end -- function listCreate( topRec, namespace, set )
 
@@ -943,105 +1602,88 @@ end -- function listCreate( topRec, namespace, set )
 -- ======================================================================
 -- This function does the work of both calls -- with and without inner UDF.
 --
--- Insert a value into the list (into the B+ Tree)
+-- Insert a value into the list (into the B+ Tree).  We will have both a
+-- COMPACT storage mode and a TREE storage mode.  When in COMPACT mode,
+-- the root node holds the list directly (linear search and append).
+-- When in Tree mode, the root node holds the top level of the tree.
 -- Parms:
 -- (*) topRec:
--- (*) lolBinName:
+-- (*) ldtBinName:
 -- (*) newValue:
--- (*) func:
--- (*) fargs:
+-- (*) createSpec:
 -- =======================================================================
-local function localStackPush( topRec, lolBinName, newValue, func, fargs )
-  local mod = "LolStrawman";
-  local meth = "localStackPush()";
+local function localLListInsert( topRec, ldtBinName, newValue, createSpec )
+  local meth = "localLListInsert()";
+  GP=F and trace("[ENTER]:<%s:%s>LLIST BIN(%s) NwVal(%s) createSpec(%s)",
+    MOD, meth, tostring(ldtBinName), tostring( newValue ),tostring(createSpec));
 
-  local doTheFunk = 0; -- when == 1, call the func(fargs) on the Push item
-  local functionTable = require('UdfFunctionTable');
+  local ldtMap;
 
-  if (func ~= nil and fargs ~= nil ) then
-    doTheFunk = 1;
-    GP=F and trace("[ENTER1]:<%s:%s>LOL BIN(%s) NewVal(%s) func(%s) fargs(%s)",
-      mod, meth, tostring(lolBinName), tostring( newValue ),
-      tostring(func), tostring(fargs) );
+  -- Validate the topRec, the bin and the map.  If anything is weird, then
+  -- this will kick out with a long jump error() call.
+  -- This function does not build, save or update.  It only checks.
+  -- Check to see if LDT Structure (or anything) is already there.  If there
+  -- is an LDT BIN present, then it MUST be valid.
+  validateRecBinAndMap( topRec, ldtBinName, false );
+
+  -- If the record does not exist, or the BIN does not exist, then we must
+  -- create it and initialize the LDT map. Otherwise, use it.
+  if( topRec[ldtBinName] == nil ) then
+    GP=F and trace("[DEBUG]<%s:%s>LIST CONTROL BIN does not Exist:Creating",
+         MOD, meth );
+    ldtMap =
+      initializeLListMap( topRec, ldtBinName );
+    -- If the user has passed in some settings that override our defaults
+    -- (createSpce) then apply them now.
+    if createSpec ~= nil then 
+      adjustLListMap( ldtMap, createSpec );
+    end
+    topRec[ldtBinName] = ldtMap;
   else
-    GP=F and trace("[ENTER2]: <%s:%s> LOL BIN(%s) NewValue(%s)",
-      mod, meth, tostring(lolBinName), tostring( newValue ));
+    -- all there, just use it
+    ldtMap = topRec[ ldtBinName ];
   end
+  -- Note: We'll do the aerospike:create() at the end of this function,
+  -- if needed.
 
-  -- Some simple protection if things are weird
-  if lolBinName == nil  or type(lolBinName) ~= "string" then
-    warn("[WARNING]: <%s:%s> Bad LSO BIN Name: Using default", mod, meth );
-    lolBinName = "LolBin";
+  -- When we're in "Compact" mode, before each insert, look to see if 
+  -- it's time to turn our single list into a tree.
+  local totalCount = ldtMap.TotalCount;
+  if ldtMap.StoreState == SS_COMPACT and
+    totalCount >= ldtMap.ThreshHold
+  then
+    convertList( topRec, ldtBinName, ldtMap );
   end
+ 
+  -- Call our local multi-purpose insert() to do the job.(Update Stats)
+  localInsert( topRec, ldtMap, newValue, 1 );
 
-  local lolMap;
-  if( not aerospike:exists( topRec ) ) then
-    GP=F and trace("[WARNING]:<%s:%s>:Record Does Not exist. Creating", mod, meth );
-    lolMap = initializeLolMap( topRec, lolBinName );
-    aerospike:create( topRec );
-  elseif ( topRec[lolBinName] == nil ) then
-    GP=F and trace("[WARNING]: <%s:%s> LSO BIN (%s) DOES NOT Exist: Creating",
-                   mod, meth, tostring(lolBinName) );
-    lolMap = initializeLolMap( topRec, lolBinName );
-    aerospike:create( topRec );
-  end
-  
-  -- check that our bin is (relatively intact
-  local lolMap = topRec[lolBinName]; -- The main LSO map
-  if lolMap.Magic ~= "MAGIC" then
-    warn("[ERROR EXIT]: <%s:%s> LSO_BIN (%s) Is Corrupted (no magic)",
-      mod, meth, lolBinName );
-    return('LSO_BIN Is Corrupted');
-  end
-
-  -- Now, it looks like we're ready to insert.  If there is an inner UDF
-  -- to apply, do it now.
-  local newStorageValue;
-  if doTheFunk == 1 then 
-    GP=F and trace("[DEBUG]: <%s:%s> Applying UDF (%s) with args(%s)",
-      mod, meth, tostring(func), tostring( fargs ));
-    newValue = functionTable[func]( newValue, fargs );
-  end
-
-  newStorageValue = valueStorage( type(newValue), newValue );
-  GP=F and trace("[DEBUG]: <%s:%s> AFTER UDF (%s) with ValueStorage(%s)",
-      mod, meth, tostring(func), tostring( newStorageValue ));
-
-  -- If we have room, do the simple cache insert.  If we don't have
-  -- room, then make room -- transfer half the cache out to the warm list.
-  -- That may, in turn, have to make room by moving some items to the
-  -- cold list.
-  if hotListHasRoom( lolMap, newStorageValue ) == 0 then
-    GP=F and trace("[DEBUG]:<%s:%s>: CALLING TRANSFER HOT CACHE!!",mod, meth );
-    hotListTransfer( topRec, lolMap );
-  end
-  hotListInsert( lolMap, newStorageValue );
-  -- Must always assign the object BACK into the record bin.
-  topRec[lolBinName] = lolMap;
-
-  -- All done, store the topRec.  Note that this is the ONLY place where
-  -- we should be updating the TOP RECORD.  If something fails before here,
-  -- we would prefer that the top record remains unchanged.
+  -- All done, store the record (either CREATE or UPDATE)
   local rc = -99; -- Use Odd starting Num: so that we know it got changed
-  GP=F and trace("[DEBUG]:<%s:%s>:Update Record", mod, meth );
-  rc = aerospike:update( topRec );
+  if( not aerospike:exists( topRec ) ) then
+    GP=F and trace("[DEBUG]:<%s:%s>:Create Record()", MOD, meth );
+    rc = aerospike:create( topRec );
+  else
+    GP=F and trace("[DEBUG]:<%s:%s>:Update Record()", MOD, meth );
+    rc = aerospike:update( topRec );
+  end
 
-  GP=F and trace("[EXIT]: <%s:%s> : Done.  RC(%d)", mod, meth, rc );
-  return rc
-end -- function localStackPush()
+  GP=F and trace("[EXIT]: <%s:%s> : Done.  RC(%d)", MOD, meth, rc );
+  return rc;
+end -- function localLListInsert()
 
 -- =======================================================================
 -- List Insert -- with and without inner UDFs
 -- These are the globally visible calls -- that call the local UDF to do
 -- all of the work.
 -- =======================================================================
-function listInsert( topRec, lolBinName, newValue )
-  return localListInsert( topRec, lolBinName, newValue, nil, nil )
-end -- end listInsert()
+function llist_insert( topRec, ldtBinName, newValue )
+  return localLListInsert( topRec, ldtBinName, newValue, nil )
+end -- end llist_insert()
 
-function listInsert( topRec, lolBinName, newValue, func, fargs )
-  return localListInsert( topRec, lolBinName, newValue, func, fargs );
-end -- listInsert()
+function llist_create_then_insert( topRec, ldtBinName, newValue, createSpec )
+  return localLListInsert( topRec, ldtBinName, newValue, createSpec );
+end -- llist_create_then_insert()
 
 -- ======================================================================
 -- |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
@@ -1052,58 +1694,80 @@ end -- listInsert()
 --
 -- Parms:
 -- (*) topRec:
--- (*) lolBinName:
+-- (*) ldtBinName:
 -- (*) searchValue
 -- (*) func:
 -- (*) fargs:
 -- ======================================================================
-local function localListSearch( topRec, lolBinName, searchValue, func, fargs )
-  local mod = "LolStrawman";
+local function localListSearch( topRec, ldtBinName, searchValue, func, fargs )
   local meth = "localListSearch()";
   GP=F and trace("[ENTER]: <%s:%s> searchValue(%s) ",
-      mod, meth,tostring(searchValue) );
+      MOD, meth,tostring(searchValue) );
+
+  -- Define our return list
+  local resultList = list()
+  
+  -- Validate the topRec, the bin and the map.  If anything is weird, then
+  -- this will kick out with a long jump error() call.
+  validateRecBinAndMap( topRec, ldtBinName, true );
+  
+  -- Search the tree -- keeping track of the path from the root to the leaf
+  --
+  --
+  local ldtMap = topRec[ldtBinName];
+  local binNumber = computeSetBin( searchValue, ldtMap );
+  local binName = getBinName( binNumber );
+  local binList = topRec[binName];
+  rc =
+  scanList(resultList,ldtMap,binList,searchValue,FV_SCAN,filter,fargs);
+  
+  GP=F and trace("[EXIT]: <%s:%s>: Search Returns (%s)",
+  MOD, meth, tostring(result));
+  
+  return rc;
+  
 
   if (func ~= nil and fargs ~= nil ) then
-    GP=F and trace("[ENTER1]: <%s:%s> BIN(%s) srchVal(%s) func(%s) fargs(%s)",
-      mod, meth, tostring(lolBinName), tostring(searchValue),
+GP=F and trace("[ENTER1]: <%s:%s> BIN(%s) srchVal(%s) func(%s) fargs(%s)",
+      MOD, meth, tostring(ldtBinName), tostring(searchValue),
       tostring(func), tostring(fargs) );
   else
-    GP=F and trace("[ENTER2]: <%s:%s> LOL BIN(%s) searchValue(%s)", 
-      mod, meth, tostring(lolBinName), tostring(searchValue) );
+    GP=F and trace("[ENTER2]: <%s:%s> LLIST BIN(%s) searchValue(%s)", 
+      MOD, meth, tostring(ldtBinName), tostring(searchValue) );
   end
 
   if( not aerospike:exists( topRec ) ) then
-    warn("[ERROR EXIT]:<%s:%s>:Missing Record. Exit", mod, meth );
+    warn("[ERROR EXIT]:<%s:%s>:Missing Record. Exit", MOD, meth );
     return('Base Record Does NOT exist');
   end
 
-  -- Verify that the LOL Structure is there: otherwise, error.
-  if lolBinName == nil  or type(lolBinName) ~= "string" then
-    warn("[ERROR EXIT]: <%s:%s> Bad LOL BIN Parameter", mod, meth );
-    return('Bad LOL Bin Parameter');
+  -- Verify that the LLIST Structure is there: otherwise, error.
+  if ldtBinName == nil  or type(ldtBinName) ~= "string" then
+    warn("[ERROR EXIT]: <%s:%s> Bad LLIST BIN Parameter", MOD, meth );
+    return('Bad LLIST Bin Parameter');
   end
-  if( topRec[lolBinName] == nil ) then
-    warn("[ERROR EXIT]: <%s:%s> LOL_BIN (%s) DOES NOT Exists",
-      mod, meth, tostring(lolBinName) );
-    return('LOL_BIN Does NOT exist');
+  if( topRec[ldtBinName] == nil ) then
+    warn("[ERROR EXIT]: <%s:%s> LLIST_BIN (%s) DOES NOT Exists",
+      MOD, meth, tostring(ldtBinName) );
+    return('LLIST_BIN Does NOT exist');
   end
   
   -- check that our bin is (mostly) there
-  local lolMap = topRec[lolBinName]; -- The main lol map
-  if lolMap.Magic ~= "MAGIC" then
-    GP=F and trace("[ERROR EXIT]: <%s:%s> LOL_BIN (%s) Is Corrupted (no magic)",
-      mod, meth, lolBinName );
-    return('LOL_BIN Is Corrupted');
+  local ldtMap = topRec[ldtBinName]; -- The main lol map
+  if ldtMap.Magic ~= "MAGIC" then
+    GP=F and trace("[ERROR EXIT]: <%s:%s> LLIST_BIN (%s) Is Corrupted (no magic)",
+      MOD, meth, ldtBinName );
+    return('LLIST_BIN Is Corrupted');
   end
 
   -- Build the user's "resultList" from the items we find that qualify.
   -- They must pass the "transformFunction()" filter.
   -- Call map search to do the real work.
-  GP=F and trace("[DEBUG]: <%s:%s>: Calling Map Peek", mod, meth );
-  local resultList = lolMapSearch( topRec, lolMap, peekCount, func, fargs );
+  GP=F and trace("[DEBUG]: <%s:%s>: Calling Map Peek", MOD, meth );
+  local resultList = ldtMapSearch( topRec, ldtMap, peekCount, func, fargs );
 
   GP=F and trace("[EXIT]: <%s:%s>: SearchValue(%d) ResultListSummary(%s)",
-    mod, meth, tostring(searchValue), summarizeList(resultList));
+    MOD, meth, tostring(searchValue), summarizeList(resultList));
 
   return resultList;
 end -- function localListSearch() 
@@ -1116,74 +1780,121 @@ end -- function localListSearch()
 -- do not encounter a format error if the user passes in nil or any
 -- other incorrect value/type.
 -- =======================================================================
-function listSearch( topRec, lolBinName, searchValue )
-  local mod = "LolStrawman";
+function list_search( topRec, ldtBinName, searchValue )
   local meth = "listSearch()";
-  GP=F and trace("[ENTER]: <%s:%s> LOL BIN(%s) searchValue(%s)",
-    mod, meth, tostring(lolBinName), tostring(searchValue) )
-  return localListSearch( topRec, lolBinName, searchValue, nil, nil )
-end -- end listSearch()
+  GP=F and trace("[ENTER]: <%s:%s> LLIST BIN(%s) searchValue(%s)",
+    MOD, meth, tostring(ldtBinName), tostring(searchValue) )
+  return localListSearch( topRec, ldtBinName, searchValue, nil, nil )
+end -- end list_search()
 
-function listSearch( topRec, lolBinName, searchValue, func, fargs )
-  local mod = "LolStrawman";
+function list_search_with_filter( topRec, ldtBinName, searchValue, func, fargs )
   local meth = "listSearch()";
   GP=F and trace("[ENTER]: <%s:%s> BIN(%s) searchValue(%s) func(%s) fargs(%s)",
-    mod, meth, tostring(lolBinName), tostring(searchValue),
+    MOD, meth, tostring(ldtBinName), tostring(searchValue),
     tostring(func), tostring(fargs));
 
-  return localListSearch( topRec, lolBinName, searchValue, func, fargs )
-end -- end listSearch()
+  return localListSearch( topRec, ldtBinName, searchValue, func, fargs )
+end -- end list_search_with_filter()
 
 
 -- ======================================================================
--- || listDelete ||
+-- || llistDelete ||
 -- ======================================================================
 -- Delete the specified item(s).
 --
 -- Parms 
--- (1) topRec: the user-level record holding the LSO Bin
+-- (1) topRec: the user-level record holding the LDT Bin
 -- (2) LolBinName
 -- (3) deleteValue: Search Structure
 --
-function listDelete( topRec, lolBinName, deleteValue )
-  local mod = "LolStrawman";
+function llist_delete( topRec, ldtBinName, deleteValue )
   local meth = "listDelete()";
 
   if argList == nil then
-    GP=F and trace("[ENTER1]: <%s:%s> lolBinName(%s) NULL argList",
-      mod, meth, tostring(lolBinName));
+    GP=F and trace("[ENTER1]: <%s:%s> ldtBinName(%s) NULL argList",
+      MOD, meth, tostring(ldtBinName));
   else
-    GP=F and trace("[ENTER2]: <%s:%s> lolBinName(%s) argList(%s) ",
-    mod, meth, tostring( lolBinName), tostring( argList ));
+    GP=F and trace("[ENTER2]: <%s:%s> ldtBinName(%s) argList(%s) ",
+    MOD, meth, tostring( ldtBinName), tostring( argList ));
   end
 
   -- Some simple protection if things are weird
-  if lolBinName == nil  or type(lolBinName) ~= "string" then
-    warn("[WARNING]: <%s:%s> Bad LSO BIN Name: Using default", mod, meth );
-    lolBinName = "LolBin";
+  if ldtBinName == nil  or type(ldtBinName) ~= "string" then
+    warn("[WARNING]: <%s:%s> Bad LDT BIN Name: Using default", MOD, meth );
+    ldtBinName = "LolBin";
   end
 
-  -- Check to see if LSO Structure (or anything) is already there,
+  -- Check to see if LDT Structure (or anything) is already there,
   -- and if so, error
-  if topRec[lolBinName] == nil  then
-    warn("[ERROR EXIT]: <%s:%s> LOL BIN(%s) Does Not Exist!",
-      mod, meth, tostring(lolBinName) );
-    return('LOL_BIN does not exist');
+  if topRec[ldtBinName] == nil  then
+    warn("[ERROR EXIT]: <%s:%s> LLIST BIN(%s) Does Not Exist!",
+      MOD, meth, tostring(ldtBinName) );
+    return('LLIST_BIN does not exist');
   end
 
   -- Call map delete to do the real work.
-  local result = lolMapDelete( topRec, lolBinName, deleteValue );
+  local result = ldtMapDelete( topRec, ldtBinName, deleteValue );
 
   GP=F and trace("[DEBUG]:<%s:%s>:Dir Map after Init(%s)",
-  mod,meth,tostring(lolMap));
+  MOD,meth,tostring(ldtMap));
 
   -- All done, store the record
   local rc = -99; -- Use Odd starting Num: so that we know it got changed
-  GP=F and trace("[DEBUG]:<%s:%s>:Update Record()", mod, meth );
+  GP=F and trace("[DEBUG]:<%s:%s>:Update Record()", MOD, meth );
   rc = aerospike:update( topRec );
 
-  GP=F and trace("[EXIT]: <%s:%s> : Done.  RC(%d)", mod, meth, rc );
+  GP=F and trace("[EXIT]: <%s:%s> : Done.  RC(%d)", MOD, meth, rc );
   return rc;
-end -- function listDelete()
+end -- function llist_delete()
 
+
+-- ========================================================================
+-- llist_size() -- return the number of elements (item count) in the set.
+-- ========================================================================
+function llist_size( topRec, ldtBinName )
+  local meth = "llist_size()";
+
+  GP=F and trace("[ENTER1]: <%s:%s> ldtBinName(%s)",
+  MOD, meth, tostring(ldtBinName));
+
+  -- Validate the topRec, the bin and the map.  If anything is weird, then
+  -- this will kick out with a long jump error() call.
+  validateRecBinAndMap( topRec, ldtBinName, true );
+
+  local ldtMap = topRec[ ldtBinName ];
+  local itemCount = ldtMap.ItemCount;
+
+  GP=F and trace("[EXIT]: <%s:%s> : size(%d)", MOD, meth, itemCount );
+
+  return itemCount;
+end -- function llist_size()
+
+-- ========================================================================
+-- llist_config() -- return the config settings
+-- ========================================================================
+function llist_config( topRec, ldtBinName )
+  local meth = "LList_config()";
+
+  GP=F and trace("[ENTER1]: <%s:%s> ldtBinName(%s)",
+  MOD, meth, tostring(ldtBinName));
+
+  -- Validate the topRec, the bin and the map.  If anything is weird, then
+  -- this will kick out with a long jump error() call.
+  validateRecBinAndMap( topRec, ldtBinName, true );
+
+  local config = LListSummary( topRec[ ldtBinName ] );
+
+  GP=F and trace("[EXIT]: <%s:%s> : config(%s)", MOD, meth, config );
+
+  return config;
+end -- function llist_config()
+
+-- ========================================================================
+-- ========================================================================
+-- ========================================================================
+
+-- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> --
+-- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> --
+-- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> --
+-- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> --
 -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> -- <EOF> --

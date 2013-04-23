@@ -5,7 +5,8 @@ echo "<< -----------  <<<<    LSO Test 1            >>>>>> -------------- >> "
 export UNS="test"
 export USET="set"
 export UKEY="abc"
-export UFILE="LsoSuperMan"
+export UFILE="LSTACK"
+# export UFILE="LsoSuperMan"
 # export UFILE="LsoStoneman"
 export UCHUNK=2000
 

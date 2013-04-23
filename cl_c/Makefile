@@ -231,7 +231,12 @@ TEST_CLIENT += $(TEST_UTIL)
 TEST_CLIENT += $(TEST_KV) 
 TEST_CLIENT += $(TEST_RECORD) 
 TEST_CLIENT += $(TEST_STREAM)
+<<<<<<< Updated upstream
 # TEST_CLIENT += $(TEST_LSO)
+=======
+TEST_CLIENT += $(TEST_LSO)
+# NOTE: Add in the LSET and LOLIST when they are ready
+>>>>>>> Stashed changes
 
 #-----#
 

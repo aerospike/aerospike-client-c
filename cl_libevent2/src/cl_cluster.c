@@ -791,7 +791,7 @@ ns_partition_map_set(ns_partition_map* p_map, const char* p_encoded_bitmap,
 {
 	// First decode the base 64.
 	// Size allows for padding - is actual size rounded up to multiple of 3.
-	uint8_t bitmap[(encoded_bitmap_len / 4) * 3];
+	uint8_t* bitmap = (uint8_t*)alloca((encoded_bitmap_len / 4) * 3);
 
 	cf_base64_decode(p_encoded_bitmap, encoded_bitmap_len, bitmap);
 

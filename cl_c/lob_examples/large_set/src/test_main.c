@@ -14,7 +14,7 @@
 // Global Configuration object: holds client config data.
 test_config *g_config = NULL;
 
-static char * MOD = "test_main.c::0422";
+static char * MOD = "test_main.c::04_18_A";
 
 /** ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
  *  Show Usage
@@ -25,12 +25,6 @@ void usage(int argc, char *argv[]) {
     printf("   -p port [default 3000]\n");
     printf("   -n namespace [default test]\n");
     printf("   -s set [default *all*]\n");
-    printf("   -v turn on VERBOSE setting\n");
-    printf("   -t Number of Threads to use.\n");
-    printf("   -i Number of Test Iterations (per thread).\n");
-    printf("   -c Run with the default cluster settings.\n");
-    printf("   -e Set Max number of Peek Counts per op.\n");
-    printf("   -k Set Max Key Range (0::Max). \n");
 }
 
 
@@ -80,12 +74,10 @@ int init_configuration (int argc, char *argv[]) {
         case 'n': g_config->ns      = strdup(optarg); break;
         case 's': g_config->set     = strdup(optarg); break;
         case 'v': g_config->verbose = true;           break;
-        case 't': g_config->n_threads = atoi(optarg); break;
+        case 't': g_config->n_threads = atoi(optarg);   break;
         case 'i': g_config->n_iterations = atoi(optarg);   break;
-        case 'c': setup_cluster( g_config );         break;
-        case 'e': g_config->peek_max = atoi(optarg); break;
-        case 'k': g_config->key_max = atoi(optarg);  break;
-        default:  usage(argc, argv);                 return(-1);
+        case 'c': setup_cluster( g_config );   break;
+        default:  usage(argc, argv);                  return(-1);
         }
     }
     return 0;
@@ -98,36 +90,41 @@ int init_configuration (int argc, char *argv[]) {
 // functions are invoked for a thread.
 static void *run_test(void *o) {
     char user_key[30];
-    unsigned int thread_num;
+    unsigned int thread_num = 666;
     if( o != NULL ) {
         thread_num = *(unsigned int *) o;
     }  
     
-    // Don't need this yet
-    // srand( thread_num );
-    // unsigned int random_num = rand() % 100;
+    srand( thread_num ); // make every thread start differently
+    unsigned int random_num = rand() % 100;
 
-    sprintf(user_key, "User_%d", thread_num );
+    sprintf(user_key, "User_%d", random_num );
     printf(">>>>>>>>>=================<<<<<<<<<<\n");
-    printf(">>>>>>>   RUN TEST 1 ::Thread(%u)<<< User key(%s)\n",
-                        thread_num, user_key);
+    printf(">>>>>>>   RUN TEST 0 ::Thread(%u)<<< (user key[%s])\n",
+            thread_num, user_key);
     printf(">>>>>>>>>=================<<<<<<<<<<\n");
-    run_test1(user_key, thread_num );
+    run_test0(user_key);
 
-    sprintf(user_key, "User_%d", thread_num );
+    sprintf(user_key, "User_%d", random_num );
     printf(">>>>>>>>>=================<<<<<<<<<<\n");
-    printf(">>>>>>>   RUN TEST 2 ::Thread(%u)<<< User key(%s)\n",
-                        thread_num, user_key);
+    printf(">>>>>>>   RUN TEST 1 :: Thread(%u)<<< (user key[%s])\n",
+            thread_num, user_key);
     printf(">>>>>>>>>=================<<<<<<<<<<\n");
-    run_test2(user_key, thread_num );
-/*
-    sprintf(user_key, "User_%d", thread_num );
+    run_test1(user_key);
+
+    sprintf(user_key, "User_%d", rand()%100);
     printf(">>>>>>>>>=================<<<<<<<<<<\n");
-    printf(">>>>>>>   RUN TEST 3 ::Thread(%u)<<< Seed(%u)\n",
-                        thread_num, thread_num);
+    printf(">>>>>>>   RUN TEST 2 :: Thread(%u)<<< (user key[%s])\n",
+            thread_num, user_key);
     printf(">>>>>>>>>=================<<<<<<<<<<\n");
-    run_test3( thread_num );
-*/
+    run_test2(user_key);
+
+    printf(">>>>>>>>>=================<<<<<<<<<<\n");
+    printf(">>>>>>>   RUN TEST 3 :: Thread(%u)<<< (user key[%s])\n",
+            thread_num, user_key);
+    printf(">>>>>>>>>=================<<<<<<<<<<\n");
+    run_test3( random_num );
+
     return NULL;
 }
 
@@ -166,7 +163,7 @@ void print_counters() {
 int main(int argc, char **argv) {
 static char * meth         = "main()";
     int           rc           = 0;
-    char * test_name = "LSO Test Run";
+    char * test_name = "LDT Test Run";
 
     // Run this FIRST THING
     init_configuration( argc, argv );
@@ -219,7 +216,7 @@ static char * meth         = "main()";
 
     printf("<< Test Run >> End (%s) \n", test_name );
 
-    fprintf(stderr,"[LSO Test Run] Stop: Total Ops(%d) Time Elapsed (%lu)ms\n",
+    fprintf(stderr,"[LDT Test Run] Stop: Total Ops(%d) Time Elapsed (%lu)ms\n",
             (g_config->n_threads * g_config->n_iterations),
             (stop_time - start_time) );
 

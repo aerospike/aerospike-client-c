@@ -1,0 +1,239 @@
+#!/bin/bash
+echo "<< -----------  <<<<  NEW LSET Test 1  >>>>>> -------------- >> "
+echo "<< ------  Exercise Simple SET FUNCTIONS AND COMPRESSION --- >> "
+
+
+export UNS="test"
+export USET="set"
+# This script exercises the Aerospike Large Set Lua Functions.
+#
+export UKEY="Key_ABC"
+export SETBIN="SetBin"
+# export UFILE="AsLSetStrawman"
+export UFILE="LSET"
+export FUN_CR8="lset_create"
+export FUN_INS="lset_insert"
+export FUN_SRCH="lset_search"
+export FUN_DEL="lset_delete"
+
+# Use this ONLY if we need to register the UDF
+# ascli udf-put $UFILE
+
+echo ">> CREATE (Simple Put: key $UKEY) for use with UDF"
+ascli put $UNS $USET $UKEY '{"Test Bin": "Set Test ONE"}'
+
+echo ">> Check CREATE (key $UKEY) with get"
+ascli get $UNS $USET $UKEY
+
+echo ">> Call UDF Set Create: $FUN_CR8 $UNS $USET $SETBIN 4"
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_CR8 $UNS $USET $SETBIN 0
+
+echo ">> Check CREATE (key $UKEY) with get"
+ascli get $UNS $USET $UKEY
+
+
+echo ">> Call UDF Set Insert: $FUN_INS $SETBIN 199000111 - 199000444"
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199000111
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199000212
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199000313
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199000414
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199000515
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199000616
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199000717
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199000818
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199000919
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199001010
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199001111
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199001212
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199001313
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199001414
+
+echo ">> Call UDF Set Search: $FUN_SRCH $SETBIN 199000111 - 199000444"
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 199000111
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 199000110
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 199000212
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 200000110
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 199000313
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 200000110
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 199000414
+echo ">> Check CREATE (key $UKEY) with get"
+ascli get $UNS $USET $UKEY
+echo ">> DELETE 111 and 212 and then search for them << "
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_DEL $SETBIN 199000111
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_DEL $SETBIN 199000212
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 199000111
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 199000212
+
+# ########################################################################
+echo ">>>>  EXIT <<<<<"
+exit 0
+# ########################################################################
+
+echo ">> Call UDF Stack Peek(): Key($UKEY) $UFILE stackPeek"
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPeek 0 0
+
+echo ">> Call UDF Stack Push: ==> $UFILE stackPush '[21,22,23,24]'"
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPush '[21,22,23,24]' 
+echo ">> Call UDF Stack Push: ==> $UFILE stackPush '[31,32,33,34]'"
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPush '[31,32,33,34]'
+
+# echo ">> Check PROGRESS with GET!!!"
+# ascli get $UNS $USET $UKEY
+
+# echo ">> Call UDF StackPeek(): Key($UKEY) $UFILE stackPeek"
+# ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPeek 0 0
+
+# echo ">> Check PROGRESS with GET!!!"
+# ascli get $UNS $USET $UKEY
+
+# echo ">> Call UDF Stack Push: ==> $UFILE stackPush '[41,42,43,44]'"
+# ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPush '[41,42,43,44]'
+
+# echo ">> Call UDF Stack Push: ==> $UFILE stackPush '[51,52,53,54]'"
+# ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPush '[51,52,53,54]'
+
+# echo ">> Call UDF StackPeek(): Key($UKEY) $UFILE stackPeek"
+# ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPeek 0 0
+
+# echo ">> Check PROGRESS with GET!!!"
+# ascli get $UNS $USET $UKEY
+
+echo ">> Call UDF Stack >> Populate()<<: Key($UKEY) $UFILE stackPopulate"
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPopulate 20
+
+echo ">> Check PROGRESS with GET!!!"
+ascli get $UNS $USET $UKEY
+
+echo ">> Call UDF StackPeek(): Key($UKEY) $UFILE stackPeek"
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPeek 0 0
+
+# echo ">> Check PROGRESS with GET!!!"
+# ascli get $UNS $USET $UKEY
+
+
+# ########################################################################
+echo ">>>>  EXIT <<<<<"
+exit 0
+# ########################################################################
+#
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+#!/bin/bash
+export UNS="test"
+export USET="set"
+export UKEY="abc"
+export UFILE="LSTACK"
+
+export UNS="test"
+export USET="set"
+# This script exercises the Aerospike LSO Functions
+#
+export UKEY="LSO_ABC"
+export LSLBIN="LsoListBin"
+export LSBBIN="LsoBinaryBin"
+export FUN_CR8="lstack_create"
+export FUN_INS="lstack_push"
+export FUN_INSWU="lstack_push_with_create"
+export FUN_SRCH="lstack_peek"
+export FUN_SRCHWU="lstack_peek_with_filter"
+export FUN_CONFIG="lstack_config"
+export FUN_SIZE="lstack_size"
+export URA="udf-record-apply"
+#############################
+## Stack Create Parameters ##
+#############################
+# Configure the Server to be in "debug mode", which is to use very small sizes
+# and exercise the warm and cold list structures.
+# Create one bin in LIST MODE and one bin in BINARY Mode (with compression)
+export CREATE_SPEC_LIST='{"Package":"DebugModeList"}'
+export CREATE_SPEC_BINARY='{"Package":"DebugModeBinary"}'
+
+echo ">> Call UDF $FUN_CR8 : $LSLBIN $CREATE_SPEC_LIST (LIST MODE) << "
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_CR8  $LSLBIN $CREATE_SPEC_LIST
+
+echo ">> Call UDF $FUN_CR8 : $LSBBIN $CREATE_SPEC_BINARY (BINARY MODE) << "
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_CR8  $LSBBIN $CREATE_SPEC_BINARY
+
+########################################################################
+# LIST MODE
+########################################################################
+echo ">>>>> 20 Stack Push Calls in LIST MODE <<<<"
+echo ">> Call UDF Stack Push: ==> $UFILE $FUN_INS $LSLBIN '[11,12,13,14]'"
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $LSLBIN '[11,12,13,14]'
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $LSLBIN '[21,22,23,24]' 
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $LSLBIN '[31,32,33,34]'
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $LSLBIN '[41,42,43,44]'
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $LSLBIN '[51,52,53,54]'
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $LSLBIN '[61,62,63,64]'
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $LSLBIN '[71,72,73,74]'
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $LSLBIN '[81,82,83,84]'
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $LSLBIN '[91,92,93,94]'
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $LSLBIN '[101,102,103,104]'
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $LSLBIN '[111,112,113,114]'
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $LSLBIN '[121,122,123,124]'
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $LSLBIN '[131,132,133,134]'
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $LSLBIN '[141,142,143,144]'
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $LSLBIN '[151,152,153,154]'
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $LSLBIN '[161,162,163,164]'
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $LSLBIN '[171,172,173,174]'
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $LSLBIN '[181,182,183,184]'
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $LSLBIN '[191,192,193,194]'
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $LSLBIN '[201,202,203,204]'
+
+echo ">> Call UDF StackPeek(): Key($UKEY) $UFILE $FUN_SRCH $LSLBIN 0"
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_SRCH  $LSLBIN 0
+
+echo ">> Get Object Size <<"
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_SIZE $LSLBIN
+
+echo ">> Get the LSO Config <<"
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_CONFIG $LSLBIN
+########################################################################
+
+########################################################################
+# BINARY MODE
+########################################################################
+echo ">>>>> 21 Stack Push Calls in LIST MODE <<<<"
+echo ">>    Stack Push: ==> $UFILE $FUN_INS $LSBBIN '[11,12,13,14]'"
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $LSBBIN '[11,12,13,14]'
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $LSBBIN '[21,22,23,24]' 
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $LSBBIN '[31,32,33,34]'
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $LSBBIN '[41,42,43,44]'
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $LSBBIN '[51,52,53,54]'
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $LSBBIN '[61,62,63,64]'
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $LSBBIN '[71,72,73,74]'
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $LSBBIN '[81,82,83,84]'
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $LSBBIN '[91,92,93,94]'
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $LSBBIN '[101,102,103,104]'
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $LSBBIN '[111,112,113,114]'
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $LSBBIN '[121,122,123,124]'
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $LSBBIN '[131,132,133,134]'
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $LSBBIN '[141,142,143,144]'
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $LSBBIN '[151,152,153,154]'
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $LSBBIN '[161,162,163,164]'
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $LSBBIN '[171,172,173,174]'
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $LSBBIN '[181,182,183,184]'
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $LSBBIN '[191,192,193,194]'
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $LSBBIN '[201,202,203,204]'
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $LSBBIN '[211,212,213,214]'
+
+echo ">> Call UDF StackPeek(): Key($UKEY) $UFILE $FUN_SRCH $LSBBIN 0"
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_SRCH  $LSBBIN 0
+
+echo ">> Get Object Size <<"
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_SIZE $LSBBIN
+
+echo ">> Get the LSO Config <<"
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_CONFIG $LSBBIN
+########################################################################
+
+echo "<< >> << >> REMOVE THE RECORD << >> << >> "
+ascli remove $UNS $USET $UKEY
+
+# ########################################################################
+echo ">>>>  EXIT <<<<<"
+exit 0
+# ########################################################################

@@ -1,0 +1,65 @@
+#!/bin/bash
+echo "<< -----------  <<<<  NEW LSET Test 1  >>>>>> -------------- >> "
+echo "<< ------  Exercise Simple SET FUNCTIONS ------------------ >> "
+
+export UNS="test"
+export USET="set"
+# This script exercises the Aerospike Large Set Lua Functions.
+export UKEY="Key_ABC"
+export SETBIN="SetBin"
+export UFILE="LSET"
+export FUN_CR8="lset_create"
+export FUN_INS="lset_insert"
+export FUN_SRCH="lset_search"
+export FUN_DEL="lset_delete"
+export URA="udf-record-apply"
+
+export CREATE_SPEC='{"Package":"DebugModeNumber"}'
+
+echo ">> Call UDF $FUN_CR8 : $SETBIN $CREATE_SPEC_LIST (LIST MODE) << "
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_CR8 $SETBIN $CREATE_SPEC
+
+echo ">> Call UDF Set Insert: $FUN_INS $SETBIN 199000111 - 199000444"
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $SETBIN 199000111
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $SETBIN 199000212
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $SETBIN 199000313
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $SETBIN 199000414
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $SETBIN 199000515
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $SETBIN 199000616
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $SETBIN 199000717
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $SETBIN 199000818
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $SETBIN 199000919
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $SETBIN 199001010
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $SETBIN 199001111
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $SETBIN 199001212
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $SETBIN 199001313
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $SETBIN 199001414
+
+echo ">> Call UDF Set Search: $FUN_SRCH $SETBIN 199000111 - 199000444"
+echo ">> Find EVERY ODD one, Fail every EVEN one <<"
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 199000111
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 199000110
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 199000212
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 200000110
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 199000313
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 200000110
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 199000414
+
+echo ">> Check CREATE (key $UKEY) with get"
+ascli get $UNS $USET $UKEY
+
+echo ">> DELETE Items 199000111 and 199000212 << "
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_DEL $SETBIN 199000111
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_DEL $SETBIN 199000212
+
+echo ">> Search for 111 and 212: Expect NOT FOUND << "
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 199000111
+ascli $URA $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 199000212
+
+echo "<< >> << >> REMOVE THE RECORD << >> << >> "
+ascli remove $UNS $USET $UKEY
+
+ ########################################################################
+echo ">>>>  EXIT <<<<<"
+exit 0
+# ########################################################################

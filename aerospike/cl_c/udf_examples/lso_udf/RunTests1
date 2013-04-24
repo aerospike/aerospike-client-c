@@ -1,0 +1,13 @@
+#!/bin/bash
+# LSO Unit Tests
+# Test One - Raj's basic CREC Unit Teste
+ascli udf-record-apply test set 10 LsoStickman simpleStackCreate
+ascli udf-record-apply test set 10 LsoStickman simpleStackPush 1
+ascli udf-record-apply test set 10 LsoStickman simpleStackPush 2
+ascli udf-record-apply test set 10 LsoStickman simpleStackPush 3
+ascli udf-record-apply test set 10 LsoStickman simpleStackPush 4
+ascli udf-record-apply test set 10 LsoStickman simpleStackPush 5
+ascli udf-record-apply test set 10 LsoStickman simpleStackPush 5
+ascli udf-record-apply test set 10 LsoStickman simpleStackPush 6
+ascli udf-record-apply test set 10 LsoStickman simpleStackPeek 10
+

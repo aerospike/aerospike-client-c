@@ -1,0 +1,70 @@
+#!/bin/bash
+echo "<< -----------  Run Basic AS Large Stack Object Test -------------- >> "
+echo "<< -----------  <<<<    LSO Test 1            >>>>>> -------------- >> "
+
+export UNS="test"
+export USET="set"
+export UKEY="abc"
+export UFILE="LSTACK"
+# export UFILE="LsoSuperMan"
+# export UFILE="LsoStoneman"
+export UCHUNK=2000
+
+export UNS="test"
+export USET="set"
+# This script exercises the Aerospike LSO Functions
+#
+export UKEY="LSO_ABC"
+export LSOBIN="LsoBin"
+export FUN_CR8="stackCreate"
+export FUN_INS="stackPush"
+export FUN_INSWU="stackPushWithUDF"
+export FUN_SRCH="stackPeek"
+export FUN_SRCHWU="stackPeekWithUDF"
+#############################
+## Stack Create Parameters ##
+#############################
+# Configure the Server to be in "debug mode", which is to use very small sizes
+# and exercise the warm and cold list structures.
+export CREATE_ARGLIST='{"Package":"DebugModeList"}'
+
+echo ">> Call UDF Stack Create: $LSOBIN $CREATE_ARGLIST << "
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackCreate $LSOBIN $CREATE_ARGLIST
+
+echo ">>>>> Multiple Stack Push Calls <<<<"
+echo ">> Call UDF Stack Push: ==> $UFILE stackPush $LSOBIN '[11,12,13,14]'"
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPush $LSOBIN '[11,12,13,14]'
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPush $LSOBIN '[21,22,23,24]' 
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPush $LSOBIN '[31,32,33,34]'
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPush $LSOBIN '[41,42,43,44]'
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPush $LSOBIN '[51,52,53,54]'
+echo ">>>>>>>>>>> Call UDF Stack Push: 15 more tuples <<<<<<<<<<<<<<<<<<<<"
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPush $LSOBIN '[61,62,63,64]'
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPush $LSOBIN '[71,72,73,74]'
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPush $LSOBIN '[81,82,83,84]'
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPush $LSOBIN '[91,92,93,94]'
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPush $LSOBIN '[101,102,103,104]'
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPush $LSOBIN '[111,112,113,114]'
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPush $LSOBIN '[121,122,123,124]'
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPush $LSOBIN '[131,132,133,134]'
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPush $LSOBIN '[141,142,143,144]'
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPush $LSOBIN '[151,152,153,154]'
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPush $LSOBIN '[161,162,163,164]'
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPush $LSOBIN '[171,172,173,174]'
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPush $LSOBIN '[181,182,183,184]'
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPush $LSOBIN '[191,192,193,194]'
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPush $LSOBIN '[201,202,203,204]'
+
+echo ">> Call UDF StackPeek(): Key($UKEY) $UFILE stackPeek $LSOBIN 0"
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPeek  $LSOBIN 0
+
+echo ">> Verify Object with GET <<"
+ascli get $UNS $USET $UKEY
+
+echo "<< >> << >> REMOVE THE RECORD << >> << >> "
+ascli remove $UNS $USET $UKEY
+
+# ########################################################################
+echo ">>>>  EXIT <<<<<"
+exit 0
+# ########################################################################

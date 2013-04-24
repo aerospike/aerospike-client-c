@@ -1,0 +1,86 @@
+#!/bin/bash
+echo "<< -----------  Run UDF << LSO Stickman V2>> Tests ---------------- >> "
+
+# This script exercises the Aerospike LSO Functions
+export UNS="test"
+export USET="set"
+export UFILE="LsoStickman"
+# export UFILE="LsoStoneman"
+export UCHUNK=2000
+export UKEY="LSO_ABC"
+export LSOBIN="LsoBin"
+export FUN_CR8="stackCreate"
+export FUN_INS="stackPush"
+export FUN_INSWU="stackPushWithUDF"
+export FUN_SRCH="stackPeek"
+export FUN_SRCHWU="stackPeekWithUDF"
+# export ARGLIST='[$LSOBIN,$UNS,$USET,$UCHUNK,1]'
+export ARGLIST='["LsoBin","test","set",2000,1]'
+
+# Use this ONLY if we need to register the UDF
+# ascli udf-put $UFILE.lua
+
+# Should work WITH and WITHOUT having an existing Record.
+echo ">> CREATE (Simple Put: key $UKEY) for use with UDF"
+ascli put $UNS $USET $UKEY '{"LSOTestBin": "Stack Test TWO"}'
+#-----
+echo ">> Check CREATE (key $UKEY) with get"
+ascli get $UNS $USET $UKEY
+#-----
+
+URLID=1000
+URLID_MOD=10
+CREATED=1400000000
+METH_A=50000
+METH_B=7000000
+STATUS=1
+
+
+echo "For USERS( count = $NUM_USERS ) Perform ( count = 200 ) Pushes"
+
+USERID=2000
+NUM_USERS=5
+U=0;
+while [ $U -lt $NUM_USERS ]; do
+  echo ">> Call UDF Stack Create: $USERID $LSOBIN $ARGLIST << "
+  ascli udf-record-apply $UNS $USET $USERID $UFILE stackCreate $LSOBIN $ARGLIST
+
+  NUM_PUSHES=200;
+  I=0;
+  while [ $I -lt $NUM_PUSHES ]; do
+#   echo URL: $USERID: $URLID CREATED: $CREATED METH_A: $METH_A METH_B: $METH_B STATUS: $STATUS
+    TUPLE="[${URLID},${CREATED},${METH_A},${METH_B},${STATUS}]"
+    ascli udf-record-apply $UNS $USET $USERID $UFILE stackPush $LSOBIN $TUPLE
+    I=$[${I}+1];
+    if [ $[${I}%${URLID_MOD}] -eq 0 ]; then
+      URLID=$[${URLID}+1];
+    fi
+    CREATED=$[${CREATED}+1];
+    METH_A=$[${METH_A}+1];
+    METH_B=$[${METH_B}+1];
+    STATUS=$[${STATUS}+1];
+  done
+  echo ">> Call UDF StackPeek(): Key($USERID) $UFILE stackPeek $LSOBIN 0"
+  ascli udf-record-apply $UNS $USET $USERID $UFILE stackPeek  $LSOBIN 0
+
+  USERID=$[${USERID}+1];
+  U=$[${U}+1];
+done
+echo "Sleep for 5 seconds"
+sleep 5;
+# =========================
+USERID=2000
+echo "<< >> << >> REMOVE ALL RECORDs << >> << >> "
+U=0;
+while [ $U -lt $NUM_USERS ]; do
+  echo "ascli remove $UNS $USET $USERID"
+  ascli remove $UNS $USET $USERID
+  USERID=$[${USERID}+1];
+  U=$[${U}+1];
+done
+# =========================
+
+# ########################################################################
+echo ">>>>  EXIT <<<<<"
+exit 0
+# ########################################################################

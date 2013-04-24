@@ -1,0 +1,9 @@
+[submodule "aerospike/modules/common"]
+	path = aerospike/modules/common
+	url = https://github.com/aerospike/aerospike-common
+[submodule "aerospike/modules/mod-lua"]
+	path = aerospike/modules/mod-lua
+	url = https://github.com/aerospike/aerospike-mod-lua
+[submodule "aerospike/modules/msgpack"]
+	path = aerospike/modules/msgpack
+	url = https://github.com/aerospike/msgpack

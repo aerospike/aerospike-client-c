@@ -1,0 +1,61 @@
+# Citrusleaf C Client Library
+
+`citrusleaf-client` is a client library (API) for interfacing with Aerospike Database.
+
+## Prerequisites
+
+libc and openssl packages must be installed to compile the client library.
+
+For Debian-based distributions (Debian, Ubuntu, etc.):
+
+    $ sudo apt-get install libc6-dev libssl-dev
+
+For Redhat-based distributions (RHEL, CentOS, etc.):
+
+    $ sudo yum install openssl-devel glibc-devel
+
+Installation of these packages will also install gcc. gcc -version must show a version of 4.1 or better. g++ is also supported with the same version restriction.
+
+
+## Usage
+
+### Build
+
+Before building, please ensure you have the prerequisites installed.
+
+To build:
+
+	$ make
+
+This will generate the following files:
+
+- `target/{target}/lib/libcitrusleaf.so` – dynamic shared library 
+- `target/{target}/lib/libcitrusleaf.a` – static archive
+- `target/{target}/include` – header files
+
+Static linking with the `.a` prevents you from having to install the libraries on your target platform. Dynamic linking with the `.so` avoids a client rebuild if you upgrade the client.  Choose the option that is right for you.
+
+### Clean
+
+To clean:
+
+	$ make clean
+
+This will remove all generated files.
+
+
+## Project Layout
+
+The module is structured as follows:
+
+- `examples` - example applications using the generated libraries.
+- `src` – developer maintained code for the project
+- `src/include` – public header files
+- `src/main` – source code for the library
+- `src/test` - unit tests
+- `target` – generated files
+- `target/{target}` – platform specific targets
+- `target/{target}/include` – public headers (API) for end users
+- `target/{target}/lib` – libraries for end users
+- `target/{target}/obj` – generated objects files
+- `target/{target}/deps` – generated dependency files

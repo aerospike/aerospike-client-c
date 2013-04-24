@@ -1,2 +1,0 @@
-#!/bin/bash
-../../pkg/readme_script ../../../website/web/apis/c_libeventapi.php > README

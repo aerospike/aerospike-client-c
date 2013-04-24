@@ -1,0 +1,65 @@
+Points to remember about basic data types while writing SWIG interface:
+ (Source: http://www.swig.org/Doc1.3/SWIG.html -> 5.2.1 Basic Type Handling)
+	1. If datatype 'bool' is not available in target language, int of {0,1} will behave as 'bool'.
+	2. For datatypes 'unsigned int' and 'long', you will need to carefully check the correct operation of your program after it has been wrapped with SWIG.
+	3. 'Perl': 'long long' integers are encoded as strings, as 'long long' exceeds the integer precision.
+	4. 'long double' is not supported by SWIG.
+	5. 'char' datatype is mapped into a NULL terminated ASCII string with a single character.
+	6. 'char*' datatype is handled as a NULL-terminated ASCII string.
+		Problem: 'char*' datatype is not generally suitable for passing binary data.
+				 ex: char *getCharP() { char* c = "hello"; c[3] = 0; return c;}
+				 This example will get compiled successfully, but you will get only 'hel' in target language.
+			Sol: Define SWIG 'typemap' to change this behavior.
+				 or, use 'cdata.i' in interface file.
+		Problem: Don't rely on char * for anything other than read-only input values.
+				 A function may change value pointed by char*, which points to memory(string) in the taret language.
+				 Interpreter of target language may crash, while doing so.
+				 ex: C: void func(char* c) { c[0] = 'a';}
+				     PERL: example::func("hello");
+					It will generate run time error.
+			Sol: Define SWIG 'typemap'
+	7. arrays: implemented as pointers and read-only
+			write own functions inside %{%} for making it reda-write. For more info have a look at '5.4.5 Arrays'
+	
+Points to cross check for SWIG and PERL:
+	1. What about "int64_t" ? works fine untill or unless value is in the range of int64_t
+	2. What about "uint64_t" ? won't work as expected if value crosses the range of int64_t
+	3. Will "unsigned int" work ? works fine untill or unless value is in the range of 'unsigned int'
+	4. How to handele "bool" ? false=>'0', true=>'1' (0 means false in perl)
+
+	Problems while handling integers in PERL:
+		1. Overflow Error
+		2. Type mismatch error
+		PYTHON does not have issue-2, but issue-1
+		
+		PERL supports integers upto min,max value of signed-64-bit.
+		All integers in C gets converted into PERL real number but if C int in "long long" then it gets converted into perl string.
+		
+		You will get overflow error while passing perl integer to C function, if and only if value of perl int does not fall within the range of C int.
+		ex: C:
+				unsigned int a = 4294967295;					// global variable
+				void func(unsigned int a) {printf("%u", a);}
+			PERL:
+				print $example::a, "\n";		// 4294967295
+				$a = $example::a + 1;
+				print $a, "\n";					// 4294967296
+				example::func($a)				// over-flow error, which says argument 1 of type 'unsigned int'
+		
+		You will get type-mismatch error while passing perl real number to C function, if perl real number is not an integer, but the argument is.
+		ex: C:
+				uint64_t a = 18446744073709551615ULL;					// global variable
+				void func(uint64_t a) {printf("%ul", a);}
+			PERL:
+				print $example::a, "\n";		// 18446744073709551615
+				$a = $example::a + 1;
+				print $a, "\n";					// 1.84467440737096e+19
+				example::func($a)				// type-mismatch error, which says argument 1 of type 'unsigned int'
+		
+		So, precision is lost due to arithmetic operation on value falling behind the range of int64_t.
+		To solve this problem, you can use Math::BigInt
+		ex:	use Math::BigInt;
+			$a = Math::BigInt->new($example::a);
+			print $a;						// 18446744073709551615
+			print $a + 1;					// 18446744073709551616
+			example::func($a+1);			// over-flow error
+

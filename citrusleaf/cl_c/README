@@ -1,0 +1,30 @@
+C Client Installation for Linux
+
+libc and openssl packages must be installed to compile the client library.
+
+For Debian-based distributions, execute:
+
+    sudo apt-get install libc6-dev libssl-dev
+
+For redhat derived distributions such as Fedora Core and Centos, excute:
+
+    sudo yum install openssl-devel glibc-devel
+
+Installation of these packages will also install gcc. 
+gcc -version must show a version of 4.1 or better. 
+g++ is also supported with the same version restriction.
+
+The C client can be built with the default Makefile:
+
+    make
+
+A static (libcitrusleaf.a) and dynamic (libcitrusleaf-<version>.so.1) library 
+will be created in the lib directory.  Static linking prevents you from having 
+to install the libraries on your target platform. Dynamic linking avoids a 
+client rebuild if you upgrade the client.  Choose the option that is right for 
+you.
+
+The root level 'Makefile' automatically executed make -f src/Makefile.native , which uses
+that GCC -march=noarch as a compilation target. Other examples, such as src/Makefile.32 and 
+src/Makefile.64, build explicitly for 32 and 64 bit environments.
+

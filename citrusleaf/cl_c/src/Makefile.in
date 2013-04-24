@@ -1,0 +1,49 @@
+# Citrusleaf Aerospike
+# Makefile
+# This make include file contains global settings for which compiler settings to use and similar
+# stuff.
+#
+# TODO: support some kind of 'DEBUG' build flag that will choose the cflags
+
+# DEPTH must be defined by include-er
+#
+
+SYSTEM = $(shell uname -s)
+
+CC = $(shell perl gcc.pl c)
+CC_V = $(shell perl gcc.pl v)
+
+AS_CFLAGS = -D_FILE_OFFSET_BITS=64 -std=gnu99 -D_REENTRANT
+
+# Popular values:
+# x86_64 for 64-bit intel
+# i686 for 32-bit intel
+MARCH_NATIVE = $(shell uname -m)
+#CFLAGS_NATIVE = -g  -march=native -fno-common -rdynamic  -Wextra -Wredundant-decls $(AS_CFLAGS) -D MARCH_$(MARCH_NATIVE)
+CFLAGS_NATIVE = -g -O3  -fno-common -fno-strict-aliasing -rdynamic  -Wextra $(AS_CFLAGS) -D MARCH_$(MARCH_NATIVE)
+
+#CFLAGS_64 = -g -m64 -march=nocona -fno-common -rdynamic  -Wextra -Wredundant-decls $(AS_CFLAGS) -D MARCH_x86_64
+CFLAGS_64 = -g -O3 -m64 -march=nocona -fno-strict-aliasing -fno-common -rdynamic -Wextra $(AS_CFLAGS) -D MARCH_x86_64
+
+#CFLAGS_32 = -g -m32 -march=nocona -fno-common -rdynamic -Wextra -Wredundant-decls $(AS_CFLAGS) -D MARCH_i686
+CFLAGS_32 = -g -O3 -m32 -march=nocona -fno-strict-aliasing -fno-common -rdynamic -Wextra $(AS_CFLAGS) -D MARCH_i686
+
+CPP = g++
+CPPFLAGS = -g 
+
+SONAME = libcitrusleaf-2.0.so.1
+LD = $(CC)
+LDFLAGS = -shared -Wl,-soname=$(SONAME)
+# Linux auto-sets to 64, MacOS doesn't
+ifeq ($(SYSTEM),Darwin)
+	CFLAGS_64 += -m64 -v -D OSX
+	CFLAGS_NATIVE += -v -D OSX
+endif
+
+# if our version is 4.1, can't use the native flag
+#ifeq (${CC_V},4.1)
+#    CFLAGS_NATIVE += -march=nocona
+#else
+#    CFLAGS_NATIVE += -march=nocona -msse4
+    CFLAGS_NATIVE += -march=nocona
+#endif

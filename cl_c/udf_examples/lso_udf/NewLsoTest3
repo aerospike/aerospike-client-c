@@ -1,74 +1,7 @@
 #!/bin/bash
-echo "<< -----------  <<<<  NEW LSET Test 1  >>>>>> -------------- >> "
-echo "<< ------  Exercise Simple SET FUNCTIONS ------------------ >> "
+echo "<< -----------  <<<<  NEW LSO Test 3  >>>>>> -------------- >> "
+echo "<< ------  Exercise ALL LSTACK FUNCTIONS AND COMPRESSION --- >> "
 
-export UNS="test"
-export USET="set"
-# This script exercises the Aerospike Large Set Lua Functions.
-export UKEY="Key_ABC"
-export SETBIN="SetBin"
-export UFILE="LSET"
-export FUN_CR8="lset_create"
-export FUN_INS="lset_insert"
-export FUN_SRCH="lset_search"
-export FUN_DEL="lset_delete"
-export URA="udf-record-apply"
-
-export CREATE_SPEC_LIST='{"Package":"DebugModeList"}'
-export CREATE_SPEC_BINARY='{"Package":"DebugModeBinary"}'
-
-echo ">> Call UDF $FUN_CR8 : $SETBIN $CREATE_SPEC_LIST (LIST MODE) << "
-ascli $URA $UNS $USET $UKEY $UFILE $FUN_CR8 $SETBIN $CREATE_SPEC_LIST
-
-echo ">> Call UDF Set Insert: $FUN_INS $SETBIN 199000111 - 199000444"
-ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199000111
-
-# ########################################################################
-echo ">>>>  EXIT <<<<<"
-exit 0
-# ########################################################################
-
-scli $URA $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199000212
-scli $URA $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199000313
-scli $URA $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199000414
-scli $URA $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199000515
-scli $URA $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199000616
-scli $URA $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199000717
-scli $URA $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199000818
-scli $URA $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199000919
-scli $URA $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199001010
-scli $URA $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199001111
-scli $URA $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199001212
-scli $URA $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199001313
-scli $URA $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199001414
-
-cho ">> Call UDF Set Search: $FUN_SRCH $SETBIN 199000111 - 199000444"
-scli $URA $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 199000111
-scli $URA $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 199000110
-scli $URA $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 199000212
-scli $URA $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 200000110
-scli $URA $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 199000313
-scli $URA $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 200000110
-scli $URA $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 199000414
-cho ">> Check CREATE (key $UKEY) with get"
-scli get $UNS $USET $UKEY
-cho ">> DELETE 111 and 212 and then search for them << "
-scli $URA $UNS $USET $UKEY $UFILE $FUN_DEL $SETBIN 199000111
-scli $URA $UNS $USET $UKEY $UFILE $FUN_DEL $SETBIN 199000212
-scli $URA $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 199000111
-scli $URA $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 199000212
-
- ########################################################################
-echo ">>>>  EXIT <<<<<"
-exit 0
-# ########################################################################
-
-# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-#!/bin/bash
 export UNS="test"
 export USET="set"
 export UKEY="abc"

@@ -35,23 +35,47 @@
 #include "test_log.h"         // Error/Tracing
 #include "test_config.h"  // Our general Test config file
 #include "test_counter.h" // include the atomic structure and methods
+
 //
 // Define the functions in the lstack.c module
-extern int setup_test( int argc, char **argv );
-extern int shutdown_test();
-extern int lso_push_test(char * keystr, char * lso_bin, int iterations,
+extern int
+setup_test( int argc, char **argv );
+
+extern int
+shutdown_test();
+
+extern cl_rv
+ldt_write_test( char * keystr, char * ldt_bin, int iterations,
         int seed, int format );
 
-extern int lso_peek_test(char * keystr, char * lso_bin, int iterations,
-        int seed, int format );
+extern cl_rv
+ldt_read_test( char * keystr, char * ldt_bin, int iterations,
+        int seed, int format);
 
-extern int lso_push_with_transform_test(char * keystr, char * lso_bin,
-             int iterations);
+extern cl_rv
+ldt_write_number_with_transform_test(char * keystr, char * ldt_bin,
+         char * create_package, int iterations );
+
+extern cl_rv
+ldt_write_list_with_transform_test(char * keystr, char * ldt_bin,
+         char * create_package, int iterations );
     
-extern int lso_peek_with_transform_test(char * keystr, char * lso_bin,
-             char * filter_function, as_list * fargs, int iterations );
+extern cl_rv
+ldt_read_number_with_filter_test(char * keystr, char * ldt_bin,
+        char * filter, as_list * fargs, int iterations );
+
+extern cl_rv
+ldt_read_list_with_filter_test(char * keystr, char * ldt_bin,
+        char * filter, as_list * fargs, int iterations );
     
+extern cl_rv
+ldt_simple_insert_test(char * keystr, char * lset_bin, int iterations);
+
+extern cl_rv
+ldt_simple_search_test(char * keystr, char * lset_bin, int iterations );
+
 // Functions in the run_tests.c module
-extern int run_test1(char *user_key, int seed );
-extern int run_test2(char *user_key, int seed );
-extern int run_test3( int seed );
+extern int run_test0(char *user_key);
+extern int run_test1(char *user_key);
+extern int run_test2(char *user_key);
+extern int run_test3(int seed );

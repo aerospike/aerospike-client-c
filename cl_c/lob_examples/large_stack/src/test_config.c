@@ -31,6 +31,8 @@ int set_config_defaults ( test_config * config_ptr ){
     config_ptr->n_keys       = 100;
     config_ptr->key_max      = 20; // make it smaller than num keys so that
                                    // we get record reuse.
+    config_ptr->peek_max     = 100; // Want semi-small default max value for
+                                    // the max size peek we can generate.
 
     config_ptr->strict       = false;
 

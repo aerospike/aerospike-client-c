@@ -1,68 +1,121 @@
 #!/bin/bash
 echo "<< -----------  <<<<  NEW LSET Test 1  >>>>>> -------------- >> "
-echo "<< ------  Exercise Simple SET FUNCTIONS ------------------ >> "
+echo "<< ------  Exercise Simple SET FUNCTIONS AND COMPRESSION --- >> "
+
 
 export UNS="test"
 export USET="set"
 # This script exercises the Aerospike Large Set Lua Functions.
+#
 export UKEY="Key_ABC"
 export SETBIN="SetBin"
+# export UFILE="AsLSetStrawman"
 export UFILE="LSET"
 export FUN_CR8="lset_create"
 export FUN_INS="lset_insert"
 export FUN_SRCH="lset_search"
 export FUN_DEL="lset_delete"
-export URA="udf-record-apply"
 
-export CREATE_SPEC_LIST='{"Package":"DebugModeList"}'
-export CREATE_SPEC_BINARY='{"Package":"DebugModeBinary"}'
+# Use this ONLY if we need to register the UDF
+# ascli udf-put $UFILE
 
-echo ">> Call UDF $FUN_CR8 : $SETBIN $CREATE_SPEC_LIST (LIST MODE) << "
-ascli $URA $UNS $USET $UKEY $UFILE $FUN_CR8 $SETBIN $CREATE_SPEC_LIST
+echo ">> CREATE (Simple Put: key $UKEY) for use with UDF"
+ascli put $UNS $USET $UKEY '{"Test Bin": "Set Test ONE"}'
+
+echo ">> Check CREATE (key $UKEY) with get"
+ascli get $UNS $USET $UKEY
+
+echo ">> Call UDF Set Create: $FUN_CR8 $UNS $USET $SETBIN 4"
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_CR8 $UNS $USET $SETBIN 0
+
+echo ">> Check CREATE (key $UKEY) with get"
+ascli get $UNS $USET $UKEY
+
 
 echo ">> Call UDF Set Insert: $FUN_INS $SETBIN 199000111 - 199000444"
-ascli $URA $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199000111
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199000111
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199000212
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199000313
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199000414
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199000515
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199000616
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199000717
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199000818
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199000919
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199001010
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199001111
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199001212
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199001313
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199001414
+
+echo ">> Call UDF Set Search: $FUN_SRCH $SETBIN 199000111 - 199000444"
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 199000111
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 199000110
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 199000212
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 200000110
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 199000313
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 200000110
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 199000414
+echo ">> Check CREATE (key $UKEY) with get"
+ascli get $UNS $USET $UKEY
+echo ">> DELETE 111 and 212 and then search for them << "
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_DEL $SETBIN 199000111
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_DEL $SETBIN 199000212
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 199000111
+ascli udf-record-apply $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 199000212
 
 # ########################################################################
 echo ">>>>  EXIT <<<<<"
 exit 0
 # ########################################################################
 
-scli $URA $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199000212
-scli $URA $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199000313
-scli $URA $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199000414
-scli $URA $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199000515
-scli $URA $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199000616
-scli $URA $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199000717
-scli $URA $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199000818
-scli $URA $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199000919
-scli $URA $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199001010
-scli $URA $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199001111
-scli $URA $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199001212
-scli $URA $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199001313
-scli $URA $UNS $USET $UKEY $UFILE $FUN_INS $UNS $USET $SETBIN 0 199001414
+echo ">> Call UDF Stack Peek(): Key($UKEY) $UFILE stackPeek"
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPeek 0 0
 
-cho ">> Call UDF Set Search: $FUN_SRCH $SETBIN 199000111 - 199000444"
-scli $URA $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 199000111
-scli $URA $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 199000110
-scli $URA $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 199000212
-scli $URA $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 200000110
-scli $URA $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 199000313
-scli $URA $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 200000110
-scli $URA $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 199000414
-cho ">> Check CREATE (key $UKEY) with get"
-scli get $UNS $USET $UKEY
-cho ">> DELETE 111 and 212 and then search for them << "
-scli $URA $UNS $USET $UKEY $UFILE $FUN_DEL $SETBIN 199000111
-scli $URA $UNS $USET $UKEY $UFILE $FUN_DEL $SETBIN 199000212
-scli $URA $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 199000111
-scli $URA $UNS $USET $UKEY $UFILE $FUN_SRCH $SETBIN 199000212
+echo ">> Call UDF Stack Push: ==> $UFILE stackPush '[21,22,23,24]'"
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPush '[21,22,23,24]' 
+echo ">> Call UDF Stack Push: ==> $UFILE stackPush '[31,32,33,34]'"
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPush '[31,32,33,34]'
 
- ########################################################################
+# echo ">> Check PROGRESS with GET!!!"
+# ascli get $UNS $USET $UKEY
+
+# echo ">> Call UDF StackPeek(): Key($UKEY) $UFILE stackPeek"
+# ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPeek 0 0
+
+# echo ">> Check PROGRESS with GET!!!"
+# ascli get $UNS $USET $UKEY
+
+# echo ">> Call UDF Stack Push: ==> $UFILE stackPush '[41,42,43,44]'"
+# ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPush '[41,42,43,44]'
+
+# echo ">> Call UDF Stack Push: ==> $UFILE stackPush '[51,52,53,54]'"
+# ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPush '[51,52,53,54]'
+
+# echo ">> Call UDF StackPeek(): Key($UKEY) $UFILE stackPeek"
+# ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPeek 0 0
+
+# echo ">> Check PROGRESS with GET!!!"
+# ascli get $UNS $USET $UKEY
+
+echo ">> Call UDF Stack >> Populate()<<: Key($UKEY) $UFILE stackPopulate"
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPopulate 20
+
+echo ">> Check PROGRESS with GET!!!"
+ascli get $UNS $USET $UKEY
+
+echo ">> Call UDF StackPeek(): Key($UKEY) $UFILE stackPeek"
+ascli udf-record-apply $UNS $USET $UKEY $UFILE stackPeek 0 0
+
+# echo ">> Check PROGRESS with GET!!!"
+# ascli get $UNS $USET $UKEY
+
+
+# ########################################################################
 echo ">>>>  EXIT <<<<<"
 exit 0
 # ########################################################################
-
+#
 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!

@@ -9,20 +9,22 @@
  */
 
 #include "test.h"
-#include "counter.h"
+#include "test_counter.h"
 
 // Global Configuration object: holds client config data.
 test_config *g_config = NULL;
+
+static char * MOD = "test_main.c::04_18_A";
 
 /** ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
  *  Show Usage
  */
 void usage(int argc, char *argv[]) {
-    INFO("Usage %s:", argv[0]);
-    INFO("   -h host [default 127.0.0.1] ");
-    INFO("   -p port [default 3000]");
-    INFO("   -n namespace [default test]");
-    INFO("   -s set [default *all*]");
+    printf("Usage %s:\n", argv[0]);
+    printf("   -h host [default 127.0.0.1] \n");
+    printf("   -p port [default 3000]\n");
+    printf("   -n namespace [default test]\n");
+    printf("   -s set [default *all*]\n");
 }
 
 
@@ -52,21 +54,20 @@ void setup_cluster( test_config * config ){
 int init_configuration (int argc, char *argv[]) {
     static char * meth = "init_configuration()";
 
-    // NOTE: Can't do INFO() until AFTER g_config is allocated.
-    printf("[ENTER]:[%s]: Num Args (%d)\n", meth, argc );
+    printf("[ENTER]:<%s:%s>: Num Args (%d)\n", MOD, meth, argc );
 
     g_config = (test_config *)malloc(sizeof(test_config));
     memset(g_config, 0, sizeof(test_config));
 
     set_config_defaults( g_config );
 
-    INFO("[DEBUG]:[%s]: Num Args (%d) g_config(%p)\n",
-            meth, argc, g_config);
+    INFO("[DEBUG]:<%s:%s>: Num Args (%d) g_config(%p)\n",
+            MOD, meth, argc, g_config);
 
-    INFO("[DEBUG]:[%s]: About to Process Args (%d)\n", meth, argc );
+    INFO("[DEBUG]:<%s:%s>: About to Process Args (%d)\n", MOD, meth, argc );
     int optcase;
     while ((optcase = getopt(argc, argv, "ckmh:p:n:s:P:f:v:x:r:t:i:j:")) != -1){
-        INFO("[ENTER]:[%s]: Processings Arg(%d)\n", meth, optcase );
+        INFO("[ENTER]:<%s:%s>: Processings Arg(%d)\n", MOD, meth, optcase );
         switch (optcase) {
         case 'h': g_config->host    = strdup(optarg); break;
         case 'p': g_config->port    = atoi(optarg);   break;
@@ -89,7 +90,7 @@ int init_configuration (int argc, char *argv[]) {
 // functions are invoked for a thread.
 static void *run_test(void *o) {
     char user_key[30];
-    unsigned int thread_num;
+    unsigned int thread_num = 666;
     if( o != NULL ) {
         thread_num = *(unsigned int *) o;
     }  
@@ -98,15 +99,30 @@ static void *run_test(void *o) {
     unsigned int random_num = rand() % 100;
 
     sprintf(user_key, "User_%d", random_num );
-    printf(">>>>>>>>> RUN TEST 1 <<<<<<<<<<<< (user key[%s])\n", user_key);
-    printf(">>>>>>>>> RUN TEST 1 <<<<<<<<<<<<\n");
+    printf(">>>>>>>>>=================<<<<<<<<<<\n");
+    printf(">>>>>>>   RUN TEST 0 ::Thread(%u)<<< (user key[%s])\n",
+            thread_num, user_key);
+    printf(">>>>>>>>>=================<<<<<<<<<<\n");
+    run_test0(user_key);
+
+    sprintf(user_key, "User_%d", random_num );
+    printf(">>>>>>>>>=================<<<<<<<<<<\n");
+    printf(">>>>>>>   RUN TEST 1 :: Thread(%u)<<< (user key[%s])\n",
+            thread_num, user_key);
+    printf(">>>>>>>>>=================<<<<<<<<<<\n");
     run_test1(user_key);
 
-//    sprintf(user_key, "User_%d", rand()%100);
-//    run_test2(user_key);
+    sprintf(user_key, "User_%d", rand()%100);
+    printf(">>>>>>>>>=================<<<<<<<<<<\n");
+    printf(">>>>>>>   RUN TEST 2 :: Thread(%u)<<< (user key[%s])\n",
+            thread_num, user_key);
+    printf(">>>>>>>>>=================<<<<<<<<<<\n");
+    run_test2(user_key);
 
-    printf(">>>>>>>>> RUN TEST 3 <<<<<<<<<<<<\n");
-    printf(">>>>>>>>> RUN TEST 3 <<<<<<<<<<<<\n");
+    printf(">>>>>>>>>=================<<<<<<<<<<\n");
+    printf(">>>>>>>   RUN TEST 3 :: Thread(%u)<<< (user key[%s])\n",
+            thread_num, user_key);
+    printf(">>>>>>>>>=================<<<<<<<<<<\n");
     run_test3( random_num );
 
     return NULL;
@@ -147,14 +163,14 @@ void print_counters() {
 int main(int argc, char **argv) {
 static char * meth         = "main()";
     int           rc           = 0;
-    char * test_name = "LSO Test Run";
+    char * test_name = "LDT Test Run";
 
     // Run this FIRST THING
     init_configuration( argc, argv );
 
-    INFO("[ENTER]:[%s]: Start in main()\n", meth );
+    INFO("[ENTER]:<%s:%s>: Start in main()\n", MOD, meth );
 
-    INFO("[DEBUG]:[%s]: calling setup_test()\n", meth );
+    INFO("[DEBUG]:<%s:%s>: calling setup_test()\n", MOD, meth );
     if (setup_test( argc, argv )) {
         return 0;
     }
@@ -200,7 +216,7 @@ static char * meth         = "main()";
 
     printf("<< Test Run >> End (%s) \n", test_name );
 
-    fprintf(stderr,"[LSO Test Run] Stop: Total Ops(%d) Time Elapsed (%lu)ms\n",
+    fprintf(stderr,"[LDT Test Run] Stop: Total Ops(%d) Time Elapsed (%lu)ms\n",
             (g_config->n_threads * g_config->n_iterations),
             (stop_time - start_time) );
 

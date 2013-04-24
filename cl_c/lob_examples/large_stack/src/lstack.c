@@ -10,6 +10,9 @@
 #include <citrusleaf/aerospike_lstack.h>
 #include "test.h"
 
+static char * MOD = "lstack.c::0418.A";
+static char * LDT = "LSTACK";
+
 // ==========================================================================
 // This module contains the main test code for the Large Stack Feature
 // in Aespike 3.0.  It does the Setup (sets parameters, attaches to the
@@ -32,8 +35,8 @@ int setup_test( int argc, char **argv ) {
     uint32_t timeout_ms;
 
     // show cluster setup
-    INFO("[DEBUG]:[%s]Startup: host %s port %d ns %s set %s",
-            meth, g_config->host, g_config->port, g_config->ns,
+    INFO("[DEBUG]:<%s:%s>Startup: host %s port %d ns %s set %s",
+            MOD, meth, g_config->host, g_config->port, g_config->ns,
             g_config->set == NULL ? "" : g_config->set);
 
     citrusleaf_init();
@@ -42,7 +45,7 @@ int setup_test( int argc, char **argv ) {
     // create the cluster object
     cl_cluster *asc = citrusleaf_cluster_create();
     if (!asc) { 
-        INFO("[ERROR]:[%s]: Fail on citrusleaf_cluster_create()");
+        INFO("[ERROR]:<%s:%s>: Fail on citrusleaf_cluster_create()",MOD,meth);
         return(-1); 
     }
 
@@ -58,13 +61,13 @@ int setup_test( int argc, char **argv ) {
     for( int i = 0; i < g_config->cluster_count; i++ ){
         host = g_config->cluster_name[i];
         port = g_config->cluster_port[i];
-        INFO("[DEBUG]:[%s]:Adding host(%s) port(%d)", meth, host, port);
+        INFO("[DEBUG]:<%s:%s>:Adding host(%s) port(%d)", MOD, meth, host, port);
         rc = citrusleaf_cluster_add_host(asc, host, port, timeout_ms);
-        if (rc) {
-            INFO("[ERROR]:[%s]:could not connect to host(%s) port(%d)",
-                    meth, host, port);
+        if ( rc != CITRUSLEAF_OK ) {
+            INFO("[ERROR]:<%s:%s>:could not connect to host(%s) port(%d)",
+                    MOD, meth, host, port);
 
-            INFO("[ERROR]:[%s]:Trying more nodes", meth );
+            INFO("[ERROR]:<%s:%s>:Trying more nodes", MOD, meth );
             // return(-1);
         }
     } // end for each cluster server
@@ -84,15 +87,79 @@ int shutdown_test() {
     return 0;
 } // end shutdown_test()
 
+/**
+ * Process all read results the same way.
+ * TODO: Check the SIZE of the returned list against the asked for
+ * "peek count".  Notice that when filters are applied, then we may get LESS
+ * than what we asked for.
+ */
+void process_read_results( char * meth, cl_rv rc, as_result * resultp,
+        int i, int * valsp, int * missesp, int * errsp, int count )
+{
+    static char * tm = "process_read_results()";
+    INFO("[ENTER]:<%s:%s>: From(%s) i(%d) Count(%d)", MOD, tm, meth, i, count );
+
+    char * valstr;
+    int success_count = 0;
+    int fail_count= 0;
+    as_val *result_valp;
+
+    if( rc == CITRUSLEAF_OK ){
+        if ( resultp && resultp->is_success ) {
+            if( TRA_DEBUG ){
+                valstr = as_val_tostring( resultp->value );
+                printf("[DEBUG]<%s:%s>(%s) READ SUCCESS: Val(%s)\n",
+                        MOD, meth, LDT, valstr);
+                free( valstr );
+                (*valsp)++;
+            }
+            result_valp = resultp->value;
+            // Check result type.  Notice that we can NOT check the count
+            // because we will often get back a different amount than what
+            // we asked for (e.g. peek_count == 0, peek_count > stack size).
+            if( as_val_type( result_valp ) == AS_LIST ) {
+            	valstr = as_val_tostring( resultp->value );
+            	INFO("[SUCCESS]:<%s:%s>:Peek results:PK(%d) Count(%d) LIST[%s]",
+                        MOD, meth, count, result_valp->count, valstr );
+            	free( valstr );
+            	success_count = 1;
+            } else {
+            	INFO("[UNSURE]:<%s:%s>:Peek results: Wanted List: TYPE[%s]",
+                        MOD, meth, as_val_type(resultp->value) );
+                fail_count = 1;
+            }
+        } else {
+            (*missesp)++;
+            INFO("[ERROR]<%s:%s>(%s) Read OK: Result Error: i(%d) rc(%d)",
+                 MOD, meth, LDT, i, rc);
+            // Don't break (for now) just keep going.
+            fail_count = 1;
+        }
+    } else if( rc == CITRUSLEAF_FAIL_NOTFOUND ){
+        (*errsp)++;
+        INFO("[ERROR]<%s:%s>(%s) Read Record NOT FOUND: i(%d) rc(%d)",
+             MOD, meth, LDT, i, rc);
+        fail_count = 1;
+    } else {
+        (*errsp)++;
+        fail_count = 1;
+        INFO("[ERROR]<%s:%s>(%s) OTHER ERROR: i(%d) rc(%d)",
+             MOD, meth, LDT, i, rc);
+    }
+
+    // Update success/fail stats
+    atomic_int_add( g_config->success_counter, success_count);
+    atomic_int_add( g_config->fail_counter, fail_count);
+
+} // end process_read_results()
+
 
 /**
- * Generate Insert Value. Use the Stumble format.
- * Use the seed to generate random numbers.
- * User has already passed in the appropriate array list (size 5),
- * so we just fill it in using random numbers (in the appropriate ranges)
+ * Create a list tuple for inserting/reading LIST values.
  */
-int gen_stumble_insert_value( as_list * listp, int seed ){
+as_val * gen_list_val(int seed ) {
 
+    as_list * listp = as_arraylist_new( 5, 0 ); // must destroy later.
     srand( seed );
     int64_t urlid   = seed; // Generate URL_ID
     as_list_add_integer( listp, urlid );
@@ -105,7 +172,69 @@ int gen_stumble_insert_value( as_list * listp, int seed ){
     int64_t status  = rand() % 8000; // Generate status
     as_list_add_integer( listp, status );
 
-}
+    return( as_val * ) listp;
+} // end gen_list_val()
+
+
+/**
+* Generate Insert Value.  Pick the format based on the setting in the
+ * config structure:
+ * 0: List value (of numbers)
+ * 1: Simple Number
+ * 2: Simple String (with a length)
+ * 3: Complex  Object (type 1)
+ * 4: Complex  Object (type 2)
+ * 5: Complex  Object (type 3)
+ * Use the seed to generate random numbers.
+ * User has already passed in the appropriate array list (size 5),
+ * so we just fill it in using random numbers (in the appropriate ranges)
+ */
+int generate_value( as_val ** return_valpp, int seed, int val_type ){
+    static char * meth = "generate_value()";
+    int rc = 0;
+    *return_valpp = NULL;  // Start with nothing.
+    char * mallocd_buf = NULL;
+
+    switch( val_type ){
+        case LIST_FORMAT:
+            *return_valpp = gen_list_val( seed );
+            break;
+        case NUMBER_FORMAT:
+            // We have to malloc an int here because someone else will have
+            // to reclaim (destroy) it.
+            srand( seed );
+            as_integer * intp = as_integer_new( rand() % g_config->key_max);
+            *return_valpp = (as_val *) intp;
+            break;
+        case STRING_FORMAT:
+            // Malloc a string buffer, write in it, and then create a 
+            // as_string object for it.
+            // NOTE: RIght now, this is just a simple, fixed size string.
+            // We should add in the ability to create a variable size string
+            // based on the KEY_LENGTH parameter in the config structure.
+            // TODO: Make general for key length;
+            mallocd_buf = (char *) malloc( 32 );
+            srand( seed );
+            int new_val = rand() % g_config->key_max;
+            sprintf( mallocd_buf, "%10d", new_val );
+            as_string * str_val = as_string_new( mallocd_buf, true );
+            *return_valpp = (as_val *) str_val;
+            break;
+//        case COMPLEX_1_FORMAT:
+//        case COMPLEX_2_FORMAT:
+//        case COMPLEX_3_FORMAT:
+//            printf("[ERROR]<%s:%s>WE ARE NOT YET HANDLING COMPLEX FORMATS\n",
+//                    MOD, meth );
+//            break;
+        case NO_FORMAT:
+        default:
+            printf("[ERROR]<%s:%s>UNKNOWN FORMAT: %d \n",
+                    MOD, meth, val_type );
+    } // end switch object type
+
+    return rc;
+} // end generate_value()
+
 
 
 // ======================================================================
@@ -113,58 +242,67 @@ int gen_stumble_insert_value( as_list * listp, int seed ){
  *  LSO PUSH TEST
  *  For a single record, perform a series of STACK PUSHES.
  *  Create a new record, then repeatedly call stack push.
+ *  This should work for data that is a NUMBER, a STRING or a LIST.
+ *  Parms:
+ *  + keystr: String Key to find the record
+ *  + lso_bin: Bin Name of the LDT
+ *  + iterations: Number of iterations to run this test
+ *  + seed:  Seed value for the random number pattern
+ *  + data_format: Type of value (number, string, list)
  */
-int lso_push_test(char * keystr, char * lso_bin, int iterations, int seed) {
+int lso_push_test(char * keystr, char * lso_bin, int iterations, int seed,
+        int data_format ) {
     static char * meth = "lso_push_test()";
     int rc = 0;
 
-    INFO("[ENTER]:[%s]: It(%d) Key(%s) LSOBin(%s)\n",
-            meth, iterations, keystr, lso_bin );
+    INFO("[ENTER]:<%s:%s>: It(%d) Key(%s) LSOBin(%s) Seed(%d)",
+            MOD, meth, iterations, keystr, lso_bin, seed);
 
-    // Create the LSO Bin
-    // PageMode=List -> Overriding Default PageMode(Bytes)
-//    as_map *create_args = as_hashmap_new(2);
-    // Set the "PageMode" property to "List".
-//    as_map_set(create_args, (as_val *)as_string_new("PageMode", false),
-//                            (as_val *)as_string_new("List", false));
-//    rc = as_lso_create( g_config->asc, g_config->ns, g_config->set,
-//                        keystr, lso_bin, create_args,
-//                        g_config->timeout_ms);
+    // We have two choices:  We can create the LSO bin here, and then
+    // do a bunch of inserts into it -- or we can just do the combined
+    // "create_and_push" insert, which upon reflection, is really the
+    // most likely mode we'll be in. We'll choose the later.
 
-    // All done with the args -- destroy them (regardless of the create call
-    // status)
-//    // as_val_destroy( create_args );
-    if( rc < 0 ){
-        INFO("[ERROR]:[%s]: LSO Create Error: rc(%d)\n", meth, rc );
-        return rc;
-    }
+    // Set up the Creation Spec parameter -- mostly setting the Package
+    // (which is the name for a canned set of settings).
+    char * create_package = "StandardList";
+    as_map *create_spec = as_hashmap_new(2);
+    as_map_set(create_spec, (as_val *) as_string_new("Package", false),
+    (as_val *) as_string_new( create_package, false));
 
     cl_cluster * c     = g_config->asc;
+    cl_object  o_key;
+    as_val     * valp;
     char       * ns    = g_config->ns;
     char       * set   = g_config->set;
-    char       * key   = keystr;
     char       * bname = lso_bin;
+    int          iseed;
 
-    INFO("[DEBUG]:[%s]: Run push() iterations(%d)\n", meth, iterations );
+    INFO("[DEBUG]:<%s:%s>: Run push() iterations(%d)", MOD, meth, iterations );
+    citrusleaf_object_init_str( &o_key, keystr );
     for ( int i = 0; i < iterations; i++ ) {
-        int val = i * 10;
-        as_list * listp = as_arraylist_new( 5, 5 );
-        gen_stumble_insert_value( listp, val );
+        iseed = i * 10;
+        generate_value( &valp, iseed, data_format );
 
-        rc = aerospike_lstack_push_with_keystring(
-                c, ns, set, key, bname, (as_val *)listp,
+        rc = aerospike_lstack_create_and_push(
+                c, ns, set, &o_key, bname, valp, create_spec,
                 g_config->timeout_ms);
-        if (rc) {
-            INFO("[ERROR]:[%s]: LSO PUSH Error: i(%d) rc(%d)\n", meth, i, rc );
-            as_val_destroy ( listp );
-            return -1;
+
+        if ( rc != CITRUSLEAF_OK ) {
+            INFO("[ERROR]:<%s:%s>:PUSH Error: i(%d) rc(%d)", MOD, meth,i,rc );
+            as_val_destroy ( valp );
+            goto cleanup;
         }
         // Count the write operation for stats gathering
         atomic_int_add( g_config->write_ops_counter, 1 );
         atomic_int_add( g_config->write_vals_counter, 1 );
-        as_val_destroy( listp ); // must destroy every iteration.
-        listp = NULL;
+        as_val_destroy( valp ); // must destroy every iteration.
+        valp = NULL; // unnecessary insurance
     } // end for
+
+cleanup:
+    citrusleaf_object_free( &o_key );
+    as_val_destroy( create_spec );
 
     return rc;
 } // end lso_push_test()
@@ -178,51 +316,45 @@ int lso_push_test(char * keystr, char * lso_bin, int iterations, int seed) {
  *  varying numbers of peek counts.
  *  NOTE: We must EXPLICITLY FREE the result, as it is a malloc'd
  *  object that is handed to us.
+ *  + keystr: String Key to find the record
+ *  + lso_bin: Bin Name of the LDT
+ *  + iterations: Number of iterations to run this test
+ *  + seed:  Seed value for the random number pattern
+ *  + data_format: Type of value (number, string, list)
  */
-int lso_peek_test(char * keystr, char * lso_bin, int iterations ) {
+int lso_peek_test(char * keystr, char * lso_bin, int iterations,
+        int seed, int data_format ) {
     static char * meth = "lso_peek_test()";
-    int rc = 0;
+    cl_rv rc = 0;
     as_result * resultp;
 
-    INFO("[ENTER]:[%s]: Iterations(%d) Key(%s) LSOBin(%s)\n",
-            meth, iterations, keystr, lso_bin );
+    INFO("[ENTER]:<%s:%s>: Iterations(%d) Key(%s) LSOBin(%s) Sd(%d) DF(%d)",
+            MOD, meth, iterations, keystr, lso_bin, seed, data_format);
 
     cl_cluster * c     = g_config->asc;
+    cl_object  o_key;
     char       * ns    = g_config->ns;
     char       * set   = g_config->set;
-    char       * key   = keystr;
     char       * bname = lso_bin;
+    int        vals_read;
+    int        misses;
+    int        errs;
 
-    INFO("[DEBUG]:[%s]: Run peek() iterations(%d)\n", meth, iterations );
+    INFO("[DEBUG]:<%s:%s>: Run peek() iterations(%d)", MOD, meth, iterations );
 
-    int    peek_count = 1;
-    char * valstr     = NULL; // Hold Temp results from as_val_tostring()
-    as_val * result_valp;
+    int    peek_count;
+    srand( seed );
     // NOTE: Must FREE the result for EACH ITERATION.
+    citrusleaf_object_init_str( &o_key, keystr );
     for ( int i = 0; i < iterations ; i ++ ){
-        peek_count++;
-        resultp = aerospike_lstack_peek_with_keystring(
-                c, ns, set, key, bname, peek_count, g_config->timeout_ms);
-        if ( resultp && resultp->is_success ) {
-//            valstr = as_val_tostring( resultp->value );
-//            printf("LSO PEEK SUCCESS: peek_count(%d) Val(%s)\n",
-//                   peek_count, valstr);
-//            free( valstr );
-            // Check that the result is a LIST and has "peek_count" elements
-            result_valp = resultp->value;
-            if( as_val_type( result_valp ) == AS_LIST && result_valp->count == peek_count){
-            	atomic_int_add( g_config->success_counter, 1);
-            } else {
-            	valstr = as_val_tostring( resultp->value );
-            	ERROR("[PEEK ERROR]:<%s>: Peek results NOT what we wanted:[[%s]]\n",
-                        meth, valstr );
-            	free( valstr );
-            }
+        peek_count = rand() % g_config->peek_max;
+        INFO("[DEBUG]:<%s:%s>: Peek(%d)", MOD, meth, iterations );
+        rc = aerospike_lstack_peek( &resultp,
+                c, ns, set, &o_key, bname, peek_count, g_config->timeout_ms);
 
-        } else {
-            ERROR("[PEEK ERROR]:[%s]: LSO PEEK Error: i(%d) \n", meth, i );
-            // Don't break (for now) just keep going.
-        }
+        process_read_results( meth, rc, resultp, i, &vals_read, &misses,
+                &errs, peek_count );
+
         // Clean up -- release the result object
         if( resultp != NULL ) as_result_destroy( resultp );
 
@@ -230,8 +362,9 @@ int lso_peek_test(char * keystr, char * lso_bin, int iterations ) {
         atomic_int_add( g_config->read_ops_counter, 1 );
         atomic_int_add( g_config->read_vals_counter, peek_count );
     } // end for each peek iteration
+    citrusleaf_object_free( &o_key );
 
-    INFO("[EXIT]:[%s]: RC(%d)\n", meth, rc );
+    INFO("[EXIT]:<%s:%s>: RC(%d)", MOD, meth, rc );
     return rc;
 } // end lso_peek_test()
 
@@ -241,25 +374,35 @@ int lso_peek_test(char * keystr, char * lso_bin, int iterations ) {
  *  LSO PUSH WITH_TRANSFORM TEST
  *  For a single record, perform a series of STACK PUSHES of BYTE-PACKED data.
  *  Create a new record, then repeatedly call stack push.
+ *  We are going to use a five piece list as the new stack value, so we'll 
+ *  use the "StumbleUpon" creation package (which just happens to have
+ *  in it the things we need.
  */
-int lso_push_with_transform_test(char * keystr, char * lso_bin,
-                                 char * compress_func, as_list * compress_args,
-                                 int iterations) {
+int lso_push_with_transform_test(char * keystr, char * lso_bin, int iterations) {
     static char * meth = "lso_push_with_transform_test()";
     int rc = 0;
 
-    INFO("[ENTER]:[%s]: It(%d) Key(%s) LSOBin(%s)\n",
-            meth, iterations, keystr, lso_bin );
+    INFO("[ENTER]:<%s:%s>: It(%d) Key(%s) LSOBin(%s)",
+            MOD, meth, iterations, keystr, lso_bin );
 
     // Abbreviate for simplicity.
     cl_cluster * c  = g_config->asc;
     char       * ns = g_config->ns;
     char       * set  = g_config->set;
-    char       * key  = keystr;
     char       * bname  = lso_bin;
+    cl_object o_key;
 
-    INFO("[DEBUG]:[%s]: Run push_with_transform() iterations(%d)\n",
-          meth, iterations );
+    // Set up the Creation Spec parameter -- mostly setting the Package
+    // (which is the name for a canned set of settings).
+    char * create_package = "ProdListValBinStore";
+    as_map *create_spec = as_hashmap_new(2);
+    as_map_set(create_spec,
+            (as_val *) as_string_new("Package", false),
+            (as_val *) as_string_new( create_package, false));
+
+    INFO("[DEBUG]:<%s:%s>: Run push_with_transform() iterations(%d)",
+          MOD, meth, iterations );
+    citrusleaf_object_init_str( &o_key, keystr );
     for ( int i = 0; i < iterations; i++ ) {
         int val         = i * 10;
         as_list * listp = as_arraylist_new( 5, 5 );
@@ -274,14 +417,13 @@ int lso_push_with_transform_test(char * keystr, char * lso_bin,
         int64_t status  = val + 5;
         as_list_add_integer( listp, status );
 
-        rc = aerospike_lstack_push_with_transform_with_keystring(
-                c, ns, set, key, bname, (as_val *)listp,
-                compress_func, compress_args, g_config->timeout_ms);
-        if (rc) {
-            INFO("[ERROR]:[%s]: LSO PUSH WITH TRANSFROM Error: i(%d) rc(%d)\n",
-                  meth, i, rc );
+        rc = aerospike_lstack_create_and_push( c, ns, set, &o_key, bname,
+                (as_val *)listp, create_spec, g_config->timeout_ms);
+        if ( rc != CITRUSLEAF_OK ) {
+            INFO("[ERROR]:<%s:%s>:LSO PUSH WITH TRANSFROM Error: i(%d) rc(%d)",
+                  MOD, meth, i, rc );
             as_val_destroy ( listp );
-            return -1;
+            goto cleanup;
         }
         // Count the write operation for stats gathering
         atomic_int_add( g_config->write_ops_counter, 1 );
@@ -289,6 +431,10 @@ int lso_push_with_transform_test(char * keystr, char * lso_bin,
         as_val_destroy( listp ); // must destroy every iteration.
         listp = NULL;
     } // end for
+
+cleanup:
+    citrusleaf_object_free( &o_key );
+    as_val_destroy( create_spec );
 
     return rc;
 } // end lso_push_with_transform_test()
@@ -302,49 +448,45 @@ int lso_push_with_transform_test(char * keystr, char * lso_bin,
  *  varying numbers of peek counts.
  */
 int lso_peek_with_transform_test(char * keystr, char * lso_bin,
-                                 char * uncompress_func,
-                                 as_list * uncompress_args,
+                                 char * filter_function,
+                                 as_list * fargs,
                                  int iterations ) {
     static char * meth = "lso_peek_with_transform_test()";
-    int rc = 0;
+    cl_rv rc = 0;
 
-    INFO("[ENTER]:[%s]: Iterations(%d) Key(%s) LSOBin(%s)\n",
-            meth, iterations, keystr, lso_bin );
+    INFO("[ENTER]:<%s:%s>: Iterations(%d) Key(%s) LSOBin(%s)",
+            MOD, meth, iterations, keystr, lso_bin );
 
     cl_cluster * c     = g_config->asc;
+    cl_object  o_key;
     char       * ns    = g_config->ns;
     char       * set   = g_config->set;
-    char       * key   = keystr;
     char       * bname = lso_bin;
+    int        vals_read;
+    int        misses;
+    int        errs;
     as_result * resultp;
 
-    INFO("[DEBUG]:[%s]: Run peek() iterations(%d)\n", meth, iterations );
+    INFO("[DEBUG]:<%s:%s>: Run peek() iterations(%d)", MOD, meth, iterations );
 
-    // NOTE: Must FREE the result for EACH ITERATION.
+    // NOTE: Must FREE the result (resultp) for EACH ITERATION.
     int peek_count = 2; // Soon -- set by Random Number
-    char * valstr = NULL; // Hold Temp results from as_val_tostring()
+    citrusleaf_object_init_str( &o_key, keystr );
     for ( int i = 0; i < iterations ; i ++ ){
         peek_count++;
-        resultp = aerospike_lstack_peek_with_transform_with_keystring(
-                c, ns, set, key, bname, peek_count,
-                uncompress_func, uncompress_args, g_config->timeout_ms);
-        if ( resultp && resultp->is_success ) {
-            valstr = as_val_tostring( resultp->value );
-            printf("LSO PEEK WITH TRANSFORM SUCCESS: peek_count(%d) Val(%s)\n",
-                   peek_count, valstr);
-            free( valstr );
-            // Clean up -- release the result object
-            if( resultp != NULL ) as_result_destroy( resultp );
-        } else {
-            INFO("[ERROR]:[%s]: LSO PEEK WITH TRANSFORM Error: i(%d) \n",
-                 meth, i );
-            // Don't break (for now) just keep going.
-        }
+        rc = aerospike_lstack_peek_then_filter(
+                &resultp, c, ns, set, &o_key, bname, peek_count,
+                filter_function, fargs, g_config->timeout_ms);
+
+        process_read_results( meth, rc, resultp, i, &vals_read, &misses,
+                &errs, peek_count );
+
         // Count up the reads (total)
         atomic_int_add( g_config->read_vals_counter, peek_count );
         atomic_int_add( g_config->read_ops_counter, 1 );
     } // end for each peek iteration
+    citrusleaf_object_free( &o_key );
 
-    INFO("[EXIT]:[%s]: RC(%d)\n", meth, rc );
+    INFO("[EXIT]:<%s:%s>: RC(%d)", MOD, meth, rc );
     return rc;
 } // end lso_peek_with_transform_test()

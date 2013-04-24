@@ -12,7 +12,6 @@
 #include "test_counter.h"
 #include "test.h"
 
-
 // Object Formats -- for both Key/Object generation and search values.
 #define NO_FORMAT        0
 #define NUMBER_FORMAT    1
@@ -21,6 +20,7 @@
 #define COMPLEX_1_FORMAT 4
 #define COMPLEX_2_FORMAT 5
 #define COMPLEX_3_FORMAT 6
+
 
 /**
  * Hold the basic (default) information needed to configure and run
@@ -50,15 +50,14 @@ typedef struct test_config_s {
 
     unsigned int n_threads;     // Number of threads in this test
     unsigned int n_iterations;  // Number of iterations per thread
+
     unsigned int n_keys;        // Number of keys used
     unsigned int key_max;       // Integer Key range: 0 to key_max
-    unsigned int peek_max;      // Max number of peeks to perform per op
-
-    unsigned int key_len;
-    unsigned int value_len;
     int          key_type;     // Type of key for storage (and compare)
+    unsigned int key_len;
     char *       key_compare;  // Name of Key Compare (Lua) function
 
+    unsigned int value_len;
     int          obj_type;     // Type of object for storage (and compare)
     char *       obj_compare;  // Name of object compare Lua function
 
@@ -86,8 +85,3 @@ extern test_config * g_config;
 
 // Forward declare the functions in the config module
 extern int set_config_defaults ( test_config * config_ptr );
-
-
-// <EOF> <EOF> <EOF> <EOF> <EOF> <EOF> <EOF> <EOF> <EOF> <EOF> <EOF> <EOF> 
-// <EOF> <EOF> <EOF> <EOF> <EOF> <EOF> <EOF> <EOF> <EOF> <EOF> <EOF> <EOF> 
-// <EOF> <EOF> <EOF> <EOF> <EOF> <EOF> <EOF> <EOF> <EOF> <EOF> <EOF> <EOF> 

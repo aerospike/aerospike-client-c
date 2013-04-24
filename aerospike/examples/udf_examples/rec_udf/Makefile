@@ -1,9 +1,11 @@
 # Citrusleaf Tools
 # Makefile
 
+CLIENT_PATH = ../../../target/Linux-x86_64
+
 DIR_OBJECT = ./obj
 DIR_TARGET = .
-DIR_LIB = ../../target/Linux-x86_64/lib
+DIR_LIB = $(CLIENT_PATH)/lib
 
 SOURCES       = rec_udf.c utils.c 
 TARGET        = rec_udf
@@ -11,7 +13,7 @@ TARGET        = rec_udf
 MANAGE_SOURCES = manage_udf.c
 MANAGE_TARGET  = manage_udf
 
-INCLUDES = -I../include/ -I../../target/Linux-x86_64/include/
+INCLUDES = -I$(CLIENT_PATH)/include/
 LIBRARIES = $(DIR_LIB)/libcitrusleaf.a  -lssl -lcrypto -lpthread -lrt
 
 AS_CFLAGS = -D_FILE_OFFSET_BITS=64 -std=gnu99 -D_REENTRANT -D_GNU_SOURCE

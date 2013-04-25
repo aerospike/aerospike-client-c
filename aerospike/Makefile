@@ -8,16 +8,34 @@ COMMON 	= $(MODULES)/common
 MOD_LUA = $(MODULES)/mod-lua
 MSGPACK = $(MODULES)/msgpack
 
-ifeq ($(wildcard $(COMMON)/Makefile),) 
-$(error $(COMMON)/Makefile does not exist. Please set 'COMMON' to a valid path.)
+ifeq ($(wildcard $(COMMON)/Makefile) ,) 
+$(warning ***************************************************************)
+$(warning *  COMMON ($(COMMON)) doesn't contain a Makefile. )
+$(warning *  COMMON must reference a valid path.)
+ERROR=1
 endif
 
 ifeq ($(wildcard $(MOD_LUA)/Makefile),) 
-$(error $(MOD_LUA)/Makefile does not exist. Please set 'MOD_LUA' to a valid path.)
+$(warning ***************************************************************)
+$(warning *  MOD_LUA ($(MOD_LUA)) doesn't contain a Makefile. )
+$(warning *  MOD_LUA must reference a valid path.)
+ERROR=1
 endif
 
 ifeq ($(wildcard $(MSGPACK)/Makefile),) 
-$(error $(MSGPACK)/Makefile does not exist. Please set 'MSGPACK' to a valid path.)
+$(warning ***************************************************************)
+$(warning *  MSGPACK ($(MSGPACK)) doesn't contain a Makefile. )
+$(warning *  MSGPACK must reference a valid path.)
+ERROR=1
+endif
+
+ifdef ERROR
+$(warning ***************************************************************)
+$(warning *  If using Git submodules, try:)
+$(warning *     cd $(REPO))
+$(warning *     git submodule update --init --recursive)
+$(warning ***************************************************************)
+$(error )
 endif
 
 ###############################################################################

@@ -22,9 +22,9 @@ $(warning *  MOD_LUA must reference a valid path.)
 ERROR=1
 endif
 
-ifeq ($(wildcard $(MSGPACK)/Makefile),) 
+ifeq ($(wildcard $(MSGPACK)/configure),) 
 $(warning ***************************************************************)
-$(warning *  MSGPACK ($(MSGPACK)) doesn't contain a Makefile. )
+$(warning *  MSGPACK ($(MSGPACK)) doesn't contain a configure. )
 $(warning *  MSGPACK must reference a valid path.)
 ERROR=1
 endif

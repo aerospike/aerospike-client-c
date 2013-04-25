@@ -45,7 +45,7 @@ BASE += cf_vector.o
 all: build prepare
 
 .PHONY: prepare
-prepare: $(TARGET_INCL)
+prepare: $(TARGET_INCL)/citrusleaf/*.h
 
 .PHONY: build
 build: libcf-client libcf-hooked
@@ -71,7 +71,7 @@ libcf-hooked.so: $(TARGET_LIB)/libcf-hooked.so
 
 # CLIENT (STANDARD) BASE
 
-$(TARGET_OBJ)/client/%.o: $(SOURCE_MAIN)/%.c
+$(TARGET_OBJ)/client/%.o: $(SOURCE_MAIN)/%.c $(SOURCE_INCL)/citrusleaf/*.h
 	$(object)
 
 $(TARGET_LIB)/libcf-client.so: $(BASE:%=$(TARGET_OBJ)/client/%)
@@ -81,7 +81,7 @@ $(TARGET_LIB)/libcf-client.a: $(BASE:%=$(TARGET_OBJ)/client/%)
 # HOOKED BASE
 
 $(TARGET_OBJ)/hooked/%.o: CC_FLAGS += -DEXTERNAL_LOCKS
-$(TARGET_OBJ)/hooked/%.o: $(SOURCE_MAIN)/%.c
+$(TARGET_OBJ)/hooked/%.o: $(SOURCE_MAIN)/%.c $(SOURCE_INCL)/citrusleaf/*.h
 	$(object)
 
 $(TARGET_LIB)/libcf-hooked.so: $(BASE:%=$(TARGET_OBJ)/hooked/%)
@@ -90,10 +90,12 @@ $(TARGET_LIB)/libcf-hooked.a: $(BASE:%=$(TARGET_OBJ)/hooked/%)
 
 # BASE HEADERS
 
-$(TARGET_INCL): 
-	@if [ ! -e "$(TARGET_INCL)/citrusleaf" ]; then mkdir -p $(TARGET_INCL)/citrusleaf; fi
-	cp -pR $(SOURCE_INCL)/citrusleaf/*.h $(TARGET_INCL)/citrusleaf/.
+$(TARGET_INCL)/citrusleaf: | $(TARGET_INCL)
+	mkdir -p $@
+
+$(TARGET_INCL)/citrusleaf/%.h:: $(SOURCE_INCL)/citrusleaf/%.h | $(TARGET_INCL)/citrusleaf
+	cp -p $^ $(TARGET_INCL)/citrusleaf
 
 ###############################################################################
-include ../project/rules.makefile
+include $(RULES)
 ###############################################################################

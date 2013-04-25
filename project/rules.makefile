@@ -20,6 +20,9 @@ $(TARGET_LIB): | $(TARGET_BASE)
 $(TARGET_OBJ): | $(TARGET_BASE)
 	mkdir $@
 
+$(TARGET_INCL): | $(TARGET_BASE)
+	mkdir $@
+
 .PHONY: info
 info:
 	@echo

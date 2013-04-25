@@ -6,7 +6,7 @@ include ../project/settings.makefile
 ##  FLAGS                                                                    ##
 ###############################################################################
 
-CITRUSLEAF_BASE = ../citrusleaf-base
+CITRUSLEAF_BASE = $(REPO)/citrusleaf-base
 
 # To Override Optimization Level, run make with the "O" variable set.
 # 	make O=0
@@ -58,7 +58,7 @@ BASE += cf_vector.o
 all: build prepare
 
 .PHONY: prepare
-prepare: $(TARGET_INCL)
+prepare: $(CITRUSLEAF_BASE)/$(TARGET_INCL)/citrusleaf/*.h $(TARGET_INCL)/citrusleaf_event2/*.h $(TARGET_INCL)/citrusleaf/*.h
 
 .PHONY: build
 build: libev2citrusleaf
@@ -79,26 +79,38 @@ libev2citrusleaf.so: $(TARGET_LIB)/libev2citrusleaf.so
 ##  BUILD TARGETS                                                            ##
 ###############################################################################
 
-$(TARGET_LIB)/libev2citrusleaf.so: $(CITRUSLEAF:%=$(TARGET_OBJ)/%) | $(CITRUSLEAF_BASE)/$(TARGET_LIB)/libcf-hooked.a
+$(TARGET_OBJ)/%.o: $(CITRUSLEAF_BASE)/$(TARGET_LIB)/libcf-hooked.a $(SOURCE_MAIN)/%.c $(SOURCE_INCL)/citrusleaf_event2/*.h
+	$(object)
+
+$(TARGET_LIB)/libev2citrusleaf.so: $(CITRUSLEAF:%=$(TARGET_OBJ)/%)
 	$(library) $(BASE:%=$(CITRUSLEAF_BASE)/$(TARGET_OBJ)/hooked/%)
 
-$(TARGET_LIB)/libev2citrusleaf.a: $(CITRUSLEAF:%=$(TARGET_OBJ)/%) | $(CITRUSLEAF_BASE)/$(TARGET_LIB)/libcf-hooked.a
+$(TARGET_LIB)/libev2citrusleaf.a: $(CITRUSLEAF:%=$(TARGET_OBJ)/%)
 	$(archive) $(BASE:%=$(CITRUSLEAF_BASE)/$(TARGET_OBJ)/hooked/%)
 
-$(TARGET_INCL): $(wildcard $(SOURCE_INCL)/citrusleaf_event2/*.h) $(CITRUSLEAF_BASE)/$(TARGET_INCL)/citrusleaf/*.h
-	@if [ ! -e "$(TARGET_INCL)" ]; then mkdir -p $(TARGET_INCL); fi
-	@if [ ! -e "$(TARGET_INCL)/citrusleaf_event2" ]; then mkdir -p $(TARGET_INCL)/citrusleaf_event2; fi
-	@if [ ! -e "$(TARGET_INCL)/citrusleaf" ]; then mkdir -p $(TARGET_INCL)/citrusleaf; fi
-	cp -pR $(SOURCE_INCL)/citrusleaf_event2/*.h $(TARGET_INCL)/citrusleaf_event2/.
-	cp -pR $(CITRUSLEAF_BASE)/$(TARGET_INCL)/citrusleaf/*.h $(TARGET_INCL)/citrusleaf/.
+$(TARGET_INCL)/citrusleaf: | $(TARGET_INCL)
+	mkdir -p $@
+
+$(TARGET_INCL)/citrusleaf_event2: | $(TARGET_INCL)
+	mkdir -p $@
+
+$(TARGET_INCL)/citrusleaf_event2/%.h: $(SOURCE_INCL)/citrusleaf_event2/%.h | $(TARGET_INCL)/citrusleaf_event2
+	cp -p $^ $(TARGET_INCL)/citrusleaf_event2
+
+$(TARGET_INCL)/citrusleaf/%.h:: $(CITRUSLEAF_BASE)/$(TARGET_INCL)/citrusleaf/%.h | $(TARGET_INCL)/citrusleaf
+	$(noop)
 
 ###############################################################################
 ##  DEPENDENCIES                                                             ##
 ###############################################################################
 
-$(CITRUSLEAF_BASE)/$(TARGET_LIB)/libcf-hooked.a:
-	$(MAKE) -c $(CITRUSLEAF_BASE) libcf-hooked.a
+$(CITRUSLEAF_BASE)/$(TARGET_LIB)/libcf-hooked.a: $(CITRUSLEAF_BASE)/$(SOURCE_INCL)/citrusleaf/*.h  $(CITRUSLEAF_BASE)/$(SOURCE_MAIN)/*.c
+	$(MAKE) -C $(CITRUSLEAF_BASE) libcf-hooked.a prepare
+
+$(CITRUSLEAF_BASE)/$(TARGET_INCL)/citrusleaf/%.h: $(CITRUSLEAF_BASE)/$(SOURCE_INCL)/citrusleaf/%.h | $(TARGET_INCL)/citrusleaf
+	$(MAKE) -C $(CITRUSLEAF_BASE) prepare
+	cp -p $^ $(TARGET_INCL)/citrusleaf
 
 ###############################################################################
-include ../project/rules.makefile
+include $(RULES)
 ###############################################################################

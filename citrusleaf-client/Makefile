@@ -100,7 +100,7 @@ $(TARGET_INCL): $(SOURCE_INCL)/citrusleaf/*.h $(CITRUSLEAF_BASE)/$(TARGET_INCL)/
 ###############################################################################
 
 $(CITRUSLEAF_BASE)/$(TARGET_LIB)/libcf-client.a:
-	$(MAKE) -c $(CITRUSLEAF_BASE) libcf-client.a
+	$(MAKE) -c $(CITRUSLEAF_BASE)
 
 ###############################################################################
 include ../project/rules.makefile

@@ -2,6 +2,42 @@
 include ../project/settings.makefile
 ###############################################################################
 
+# Not using embedded modules? Then override these paths via command line.
+
+COMMON 	= $(MODULES)/common
+MOD_LUA = $(MODULES)/mod-lua
+MSGPACK = $(MODULES)/msgpack
+
+ifeq ($(wildcard $(COMMON)/Makefile) ,) 
+$(warning ***************************************************************)
+$(warning *  COMMON ($(COMMON)) doesn't contain a Makefile. )
+$(warning *  COMMON must reference a valid path.)
+ERROR=1
+endif
+
+ifeq ($(wildcard $(MOD_LUA)/Makefile),) 
+$(warning ***************************************************************)
+$(warning *  MOD_LUA ($(MOD_LUA)) doesn't contain a Makefile. )
+$(warning *  MOD_LUA must reference a valid path.)
+ERROR=1
+endif
+
+ifeq ($(wildcard $(MSGPACK)/configure),) 
+$(warning ***************************************************************)
+$(warning *  MSGPACK ($(MSGPACK)) doesn't contain a configure. )
+$(warning *  MSGPACK must reference a valid path.)
+ERROR=1
+endif
+
+ifdef ERROR
+$(warning ***************************************************************)
+$(warning *  If using Git submodules, try:)
+$(warning *     cd $(REPO))
+$(warning *     git submodule update --init --recursive)
+$(warning ***************************************************************)
+$(error )
+endif
+
 ###############################################################################
 ##  FLAGS                                                                    ##
 ###############################################################################
@@ -10,8 +46,9 @@ include ../project/settings.makefile
 # 	make O=0
 
 O=4
+MEM_COUNT=1
 
-CFLAGS = -O$(O)
+CFLAGS = -O$(O) -DMEM_COUNT=$(MEM_COUNT)
 
 CC_FLAGS = -std=gnu99 -g -rdynamic -Wall 
 CC_FLAGS += -fno-common -fno-strict-aliasing -fPIC 
@@ -20,21 +57,14 @@ CC_FLAGS += -D_REENTRANT -D_GNU_SOURCE -DMEM_COUNT
 
 LD_FLAGS = -lm
 
-INC_PATH += modules/common/$(TARGET_INCL)
-INC_PATH += modules/mod-lua/$(TARGET_INCL)
-INC_PATH += $(MSGPACK_PATH)/src
-
-INSTALL_LIB = /usr/lib
-
-ifndef MSGPACK_PATH
-$(warning *** env MSGPACK_PATH not set. Using modules/msgpack as default)
-MSGPACK_PATH := modules/msgpack
-endif
+INC_PATH += $(COMMON)/$(TARGET_INCL)
+INC_PATH += $(MOD_LUA)/$(TARGET_INCL)
+INC_PATH += $(MSGPACK)/src
 
 SUBMODULES = 
-SUBMODULES += $(MODULES)/common
-SUBMODULES += $(MODULES)/mod-lua
-SUBMODULES += $(MODULES)/msgpack
+SUBMODULES += $(COMMON)
+SUBMODULES += $(MOD_LUA)
+SUBMODULES += $(MSGPACK)
 
 ###############################################################################
 ##  OBJECTS                                                                  ##
@@ -58,10 +88,10 @@ CITRUSLEAF += aerospike_lstack.o
 CITRUSLEAF += aerospike_lset.o
 
 OBJECTS =
-OBJECTS += $(wildcard modules/mod-lua/$(TARGET_OBJ)/*.o)
-OBJECTS += $(wildcard modules/common/$(TARGET_OBJ)/client/*.o)
-OBJECTS += $(wildcard modules/common/$(TARGET_OBJ)/shared/*.o)
-OBJECTS += $(wildcard $(MSGPACK_PATH)/src/.libs/*.o)
+OBJECTS += $(wildcard $(MOD_LUA)/$(TARGET_OBJ)/*.o)
+OBJECTS += $(wildcard $(COMMON)/$(TARGET_OBJ)/client/*.o)
+OBJECTS += $(wildcard $(COMMON)/$(TARGET_OBJ)/shared/*.o)
+OBJECTS += $(wildcard $(MSGPACK)/src/.libs/*.o)
 
 ###############################################################################
 ##  MAIN TARGETS                                                             ##
@@ -70,7 +100,7 @@ OBJECTS += $(wildcard $(MSGPACK_PATH)/src/.libs/*.o)
 all: modules build prepare
 
 .PHONY: prepare
-prepare: $(TARGET_INCL)
+prepare: $(MOD_LUA)/$(TARGET_INCL)/*.h $(COMMON)/$(TARGET_INCL)/citrusleaf/*.h $(COMMON)/$(TARGET_INCL)/*.h $(TARGET_INCL)/citrusleaf/*.h 
 
 .PHONY: build
 build: libcitrusleaf
@@ -91,6 +121,8 @@ libcitrusleaf.so: $(TARGET_LIB)/libcitrusleaf.so
 ##  BUILD TARGETS                                                            ##
 ###############################################################################
 
+$(TARGET_OBJ)/%.o: $(COMMON)/$(TARGET_LIB)/libcf-client.a $(COMMON)/$(TARGET_LIB)/libcf-shared.a $(MOD_LUA)/$(TARGET_LIB)/libmod_lua.a $(SOURCE_MAIN)/%.c $(SOURCE_INCL)/citrusleaf/*.h
+	$(object)
 
 $(TARGET_LIB)/libcitrusleaf.so: $(CITRUSLEAF:%=$(TARGET_OBJ)/%) | modules
 	$(library) $(OBJECTS)
@@ -98,70 +130,87 @@ $(TARGET_LIB)/libcitrusleaf.so: $(CITRUSLEAF:%=$(TARGET_OBJ)/%) | modules
 $(TARGET_LIB)/libcitrusleaf.a: $(CITRUSLEAF:%=$(TARGET_OBJ)/%) | modules
 	$(archive) $(OBJECTS)
 
-$(TARGET_INCL): $(SOURCE_INCL)/*.h modules/mod-lua/$(TARGET_INCL)/*.h modules/common/$(TARGET_INCL)/*.h | modules
-	@if [ ! -e "$(TARGET_INCL)/citrusleaf" ]; then mkdir -p $(TARGET_INCL)/citrusleaf; fi
-	cp -pR $(SOURCE_INCL)/*.h $(TARGET_INCL)/citrusleaf/.
-	cp -p modules/mod-lua/src/include/*.h $(TARGET_INCL)/citrusleaf/.
-	cp -p modules/common/$(TARGET_INCL)/*.h $(TARGET_INCL)/.
-	cp -p modules/common/$(TARGET_INCL)/citrusleaf/*.h $(TARGET_INCL)/citrusleaf/.
+$(TARGET_INCL)/citrusleaf: | $(TARGET_INCL)
+	mkdir -p $@
+
+$(TARGET_INCL)/citrusleaf/%.h:: $(SOURCE_INCL)/%.h | $(TARGET_INCL)/citrusleaf
+	cp -p $^ $(TARGET_INCL)/citrusleaf
+
+$(TARGET_INCL)/%.h:: $(COMMON)/%.h | $(TARGET_INCL)
+	$(noop)
+
+$(TARGET_INCL)/citrusleaf/%.h:: $(COMMON)/$(TARGET_INCL)/%.h | $(TARGET_INCL)/citrusleaf
+	$(noop)
+
+$(TARGET_INCL)/citrusleaf/%.h:: $(MOD_LUA)/$(TARGET_INCL)/%.h | $(TARGET_INCL)/citrusleaf
+	$(noop)
 
 ###############################################################################
 ##  MODULE TARGETS                                                           ##
 ###############################################################################
 
 .PHONY: modules
-modules: modules/common modules/mod-lua modules/msgpack
+modules: $(COMMON) $(MOD_LUA) $(MSGPACK)
 
 .PHONY: modules-prepare
-modules-prepare: modules/common/$(TARGET_INCL)/*.h
+modules-prepare: $(COMMON)/$(TARGET_INCL)/*.h $(COMMON)/$(TARGET_INCL)/citrusleaf/*.h $(MOD_LUA)/$(TARGET_INCL)/*.h
 
 .PHONY: modules-clean
 modules-clean: 
-	$(MAKE) -e -C modules/common clean
-	$(MAKE) -e -C modules/mod-lua clean
+	$(MAKE) -e -C $(COMMON) clean
+	$(MAKE) -e -C $(MOD_LUA) clean
 
 ##
 ## SUBMODULE: common
 ## 
 
-modules/common/$(TARGET_LIB)/libcf-shared.a:
-	$(MAKE) -e -C modules/common libcf-shared.a MEM_COUNT=1
+$(COMMON)/$(TARGET_LIB)/libcf-shared.a:
+	$(MAKE) -e -C $(COMMON) libcf-shared.a
 
-modules/common/$(TARGET_LIB)/libcf-client.a:
-	$(MAKE) -e -C modules/common libcf-client.a MEM_COUNT=1
+$(COMMON)/$(TARGET_LIB)/libcf-client.a:
+	$(MAKE) -e -C $(COMMON) libcf-client.a
 
-modules/common/$(TARGET_INCL)/*.h:
-	$(MAKE) -e -C modules/common prepare MEM_COUNT=1
+$(COMMON)/$(TARGET_INCL)/%.h: $(COMMON)/$(SOURCE_INCL)/%.h | $(TARGET_INCL)/citrusleaf
+	$(MAKE) -e -C $(COMMON) prepare
+	cp -p $^ $(TARGET_INCL)
 
-.PHONY: modules/common
-modules/common: modules/common/$(TARGET_LIB)/libcf-shared.a modules/common/$(TARGET_LIB)/libcf-client.a modules/common/$(TARGET_INCL)/*.h
+$(COMMON)/$(TARGET_INCL)/citrusleaf/%.h: $(COMMON)/$(SOURCE_INCL)/client/%.h | $(TARGET_INCL)/citrusleaf
+	$(MAKE) -e -C $(COMMON) prepare
+	cp -p $^ $(TARGET_INCL)/citrusleaf
+
+.PHONY: common $(COMMON)
+$(COMMON): $(COMMON)/$(TARGET_LIB)/libcf-shared.a $(COMMON)/$(TARGET_LIB)/libcf-client.a $(COMMON)/$(TARGET_INCL)/*.h
+common: $(COMMON)
 
 ##
 ## SUBMODULE: mod-lua
 ## 
 
-modules/mod-lua/$(TARGET_LIB)/libmod_lua.a:
-	$(MAKE) -e -C modules/mod-lua libmod_lua.a MEM_COUNT=1
-	$(MAKE) -e -C modules/mod-lua libas_types.a MEM_COUNT=1
+$(MOD_LUA)/$(TARGET_LIB)/libmod_lua.a:
+	$(MAKE) -e -C $(MOD_LUA) libmod_lua.a
+	$(MAKE) -e -C $(MOD_LUA) libas_types.a
 
-modules/mod-lua/$(TARGET_INCL)/*.h:
-	$(MAKE) -e -C modules/mod-lua prepare MEM_COUNT=1
+$(MOD_LUA)/$(TARGET_INCL)/%.h: $(MOD_LUA)/$(SOURCE_INCL)/%.h | $(TARGET_INCL)/citrusleaf
+	$(MAKE) -e -C $(MOD_LUA) prepare
+	cp -p $^ $(TARGET_INCL)/citrusleaf
 
-.PHONY: modules/mod-lua
-modules/mod-lua: modules/mod-lua/$(TARGET_LIB)/libmod_lua.a modules/mod-lua/$(TARGET_INCL)/*.h
+.PHONY: mod_lua $(MOD_LUA)
+$(MOD_LUA): $(MOD_LUA)/$(TARGET_LIB)/libmod_lua.a $(MOD_LUA)/$(TARGET_INCL)/*.h
+mod_lua: $(MOD_LUA)
 
 ##
 ## SUBMODULE: msgpack
 ## 
 
-modules/msgpack/Makefile: 
-	cd $(MSGPACK_PATH) && ./configure
+$(MSGPACK)/Makefile: 
+	cd $(MSGPACK) && ./configure
 
-modules/msgpack/src/.libs/libmsgpackc.a: modules/msgpack/Makefile
-	cd $(MSGPACK_PATH) && make CFLAGS="-fPIC"
+$(MSGPACK)/src/.libs/libmsgpackc.a: $(MSGPACK)/Makefile
+	cd $(MSGPACK) && $(MAKE) CFLAGS="-fPIC"
 
-.PHONY: modules/msgpack
-modules/msgpack: modules/msgpack/src/.libs/libmsgpackc.a
+.PHONY: msgpack $(MSGPACK)
+$(MSGPACK): $(MSGPACK)/src/.libs/libmsgpackc.a
+msgpack: $(MSGPACK)
 
 ###############################################################################
 ##  TEST TARGETS                                                      		 ##
@@ -221,7 +270,7 @@ TEST_CFLAGS = -I$(TARGET_INCL) -I$(JANSSON_PATH)/src
 
 TEST_LDFLAGS = -lssl -lcrypto -lpthread -lrt -llua  -lm
 TEST_LDFLAGS += -L$(TARGET_LIB) -Wl,-l,:libcitrusleaf.a
-TEST_LDFLAGS += -L$(MSGPACK_PATH)/src/.libs -Wl,-l,:libmsgpack.a 
+TEST_LDFLAGS += -L$(MSGPACK)/src/.libs -Wl,-l,:libmsgpack.a 
 
 #-----#
 
@@ -258,5 +307,5 @@ $(TARGET_BIN)/test/client_test: LDFLAGS += $(TEST_LDFLAGS)
 $(TARGET_BIN)/test/client_test: $(TEST_CLIENT:%=$(TARGET_OBJ)/test/%.o) $(TARGET_OBJ)/test/test.o $(TARGET_LIB)/libcitrusleaf.a | build prepare
 
 ###############################################################################
-include ../project/rules.makefile
+include $(RULES)
 ###############################################################################

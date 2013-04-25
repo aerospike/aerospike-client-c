@@ -24,9 +24,15 @@ Aerospike utilizes msgpack for serializing some data. You can download it here:
 
 	http://msgpack.org/releases/cpp/msgpack-0.5.7.tar.gz 
 
-Just extract the archive, then set the variable MSGPACK_PATH to point to the path of the extracted archive:
+Just extract the archive, then set the variable MSGPACK to point to the path of the extracted archive.
 
-	$ export MSGPACK_PATH=~/msgpack-0.5.7
+The variable can be set in your environment:
+
+	$ export MSGPACK=~/msgpack-0.5.7
+
+Or it can be set when running make:
+
+	$ make MSGPACK=~/msgpack-0.5.7
  
 
 ## Usage

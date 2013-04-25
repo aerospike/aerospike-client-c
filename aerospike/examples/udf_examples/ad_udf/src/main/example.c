@@ -23,11 +23,16 @@
 
 #include "citrusleaf/citrusleaf.h"
 
-#include "ad_udf.h"
+#include "example.h"
 #include "citrusleaf/cl_udf.h"
 #include <citrusleaf/cf_random.h>
 #include <citrusleaf/cf_atomic.h>
 #include <citrusleaf/cf_hist.h>
+
+
+#ifndef LUA_MODULE_PATH
+#define LUA_MODULE_PATH "src/lua"
+#endif
 
 static config *g_config = NULL;
 void usage(int argc, char *argv[]) {
@@ -36,7 +41,7 @@ void usage(int argc, char *argv[]) {
     fprintf(stderr, "-p port [default 3000]\n");
     fprintf(stderr, "-n namespace [default test]\n");
     fprintf(stderr, "-s set [default *all*]\n");
-    fprintf(stderr, "-f udf_file [default ../lua_files/ad_udf.lua]\n");
+    fprintf(stderr, "-f udf_file [default src/lua/ad_udf.lua]\n");
 }
 
 
@@ -52,7 +57,7 @@ int init_configuration (int argc, char *argv[])
 	g_config->timeout_ms   = 1000;
 	g_config->record_ttl   = 864000;
 	g_config->verbose      = false;
-	g_config->package_file = "../lua_files/ad_udf.lua";
+	g_config->package_file = LUA_MODULE_PATH"/ad_udf.lua";
 	g_config->package_name = "ad_udf";
 	g_config->n_behaviors = 1000;
 	g_config->n_users = 100;

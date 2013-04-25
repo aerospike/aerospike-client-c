@@ -6,7 +6,9 @@ include ../project/settings.makefile
 ##  FLAGS                                                                    ##
 ###############################################################################
 
-COMMON = $(MODULES)/common
+# Not using embedded modules? Then override these paths via command line.
+
+COMMON 	= $(MODULES)/common
 MOD_LUA = $(MODULES)/mod-lua
 MSGPACK = $(MODULES)/msgpack
 
@@ -27,13 +29,6 @@ LD_FLAGS = -lm
 INC_PATH += $(COMMON)/$(TARGET_INCL)
 INC_PATH += $(MOD_LUA)/$(TARGET_INCL)
 INC_PATH += $(MSGPACK)/src
-
-# INSTALL_LIB = /usr/lib
-
-# ifndef MSGPACK_PATH
-# $(warning *** env MSGPACK_PATH not set. Using modules/msgpack as default)
-# MSGPACK_PATH := modules/msgpack
-# endif
 
 SUBMODULES = 
 SUBMODULES += $(COMMON)
@@ -160,8 +155,9 @@ $(COMMON)/$(TARGET_INCL)/citrusleaf/%.h: $(COMMON)/$(SOURCE_INCL)/client/%.h | $
 	$(MAKE) -e -C $(COMMON) prepare MEM_COUNT=1
 	cp -p $^ $(TARGET_INCL)/citrusleaf
 
-.PHONY: $(COMMON)
+.PHONY: common $(COMMON)
 $(COMMON): $(COMMON)/$(TARGET_LIB)/libcf-shared.a $(COMMON)/$(TARGET_LIB)/libcf-client.a $(COMMON)/$(TARGET_INCL)/*.h
+common: $(COMMON)
 
 ##
 ## SUBMODULE: mod-lua
@@ -175,8 +171,9 @@ $(MOD_LUA)/$(TARGET_INCL)/%.h: $(MOD_LUA)/$(SOURCE_INCL)/%.h | $(TARGET_INCL)/ci
 	$(MAKE) -e -C $(MOD_LUA) prepare MEM_COUNT=1
 	cp -p $^ $(TARGET_INCL)/citrusleaf
 
-.PHONY: $(MOD_LUA)
+.PHONY: mod_lua $(MOD_LUA)
 $(MOD_LUA): $(MOD_LUA)/$(TARGET_LIB)/libmod_lua.a $(MOD_LUA)/$(TARGET_INCL)/*.h
+mod_lua: $(MOD_LUA)
 
 ##
 ## SUBMODULE: msgpack
@@ -188,8 +185,9 @@ $(MSGPACK)/Makefile:
 $(MSGPACK)/src/.libs/libmsgpackc.a: $(MSGPACK)/Makefile
 	cd $(MSGPACK) && make CFLAGS="-fPIC"
 
-.PHONY: $(MSGPACK)
+.PHONY: msgpack $(MSGPACK)
 $(MSGPACK): $(MSGPACK)/src/.libs/libmsgpackc.a
+msgpack: $(MSGPACK)
 
 ###############################################################################
 ##  TEST TARGETS                                                      		 ##

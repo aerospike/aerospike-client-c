@@ -1,69 +1,72 @@
 #include <iostream>
 using namespace std;
 
+#ifndef LUA_MODULE_PATH
+#define LUA_MODULE_PATH "../udf_examples/lua_files"
+#endif
 
 extern "C" {
 	
 	//********************************************************
 	// Citrusleaf Core Foundation Includes
 	//********************************************************
-	#include <cf_random.h>
-	#include <cf_atomic.h>
-	#include <cf_hist.h>
+	#include <citrusleaf/cf_random.h>
+	#include <citrusleaf/cf_atomic.h>
+	#include <citrusleaf/cf_hist.h>
 
 	//********************************************************
 	// Citrusleaf Mod-Lua Includes
 	//********************************************************
 
 	// as_val types (persistable)
-	#include <as_val.h>
-	#include <as_nil.h>
-	#include <as_boolean.h>
-	#include <as_integer.h>
-	#include <as_bytes.h>
-	#include <as_string.h>
-	#include <as_list.h>
-	#include <as_map.h>
+	#include <citrusleaf/as_val.h>
+	#include <citrusleaf/as_nil.h>
+	#include <citrusleaf/as_boolean.h>
+	#include <citrusleaf/as_integer.h>
+	#include <citrusleaf/as_bytes.h>
+	#include <citrusleaf/as_string.h>
+	#include <citrusleaf/as_list.h>
+	#include <citrusleaf/as_map.h>
 
 	// as_val types (non-persisted)
-	#include <as_pair.h>
-	#include <as_rec.h>
+	#include <citrusleaf/as_pair.h>
+	#include <citrusleaf/as_rec.h>
 
 	// implementations
-	#include <as_arraylist.h>
-	#include <as_linkedlist.h>
-	#include <as_hashmap.h>
+	#include <citrusleaf/as_arraylist.h>
+	#include <citrusleaf/as_linkedlist.h>
+	#include <citrusleaf/as_hashmap.h>
 
 	// others
-	#include <as_result.h>
-	#include <as_stream.h>
-	#include <as_aerospike.h>
-	#include <as_buffer.h>
-	#include <as_module.h>
-	#include <as_logger.h>
-	#include <as_serializer.h>
+	#include <citrusleaf/as_result.h>
+	#include <citrusleaf/as_stream.h>
+	#include <citrusleaf/as_aerospike.h>
+	#include <citrusleaf/as_buffer.h>
+	#include <citrusleaf/as_module.h>
+	#include <citrusleaf/as_logger.h>
+	#include <citrusleaf/as_serializer.h>
 
 	// lua module
-	#include <mod_lua.h>
-	#include <mod_lua_config.h>
+	#include <citrusleaf/mod_lua.h>
+	#include <citrusleaf/mod_lua_config.h>
 
 	//********************************************************
 	// Citrusleaf Client Includes
 	//********************************************************
-	#include <cl_async.h>
-	#include <cl_object.h>
-	#include <cl_cluster.h>
-	#include <cl_info.h>
-	#include <cl_kv.h>
-	#include <cl_lookup.h>
-	#include <cl_object.h>
-	#include <cl_partition.h>
-	#include <cl_query.h>
-	#include <cl_scan.h>
-	#include <cl_sindex.h>
-	#include <cl_types.h>
-	#include <cl_udf.h>
-	#include <cl_write.h>
+	#include <citrusleaf/cl_async.h>
+	#include <citrusleaf/cl_object.h>
+	#include <citrusleaf/cl_cluster.h>
+	#include <citrusleaf/cl_info.h>
+	#include <citrusleaf/cl_kv.h>
+	#include <citrusleaf/cl_lookup.h>
+	#include <citrusleaf/cl_object.h>
+	#include <citrusleaf/cl_partition.h>
+	#include <citrusleaf/cl_query.h>
+	#include <citrusleaf/cl_scan.h>
+	#include <citrusleaf/cl_sindex.h>
+	#include <citrusleaf/cl_types.h>
+	#include <citrusleaf/cl_udf.h>
+	#include <citrusleaf/cl_write.h>
 	#include <citrusleaf/citrusleaf.h>
 
 }
@@ -314,7 +317,7 @@ int main(int argc, char **argv) {
 	c.timeout_ms   = 1000;
 	c.record_ttl   = 864000;
 	c.verbose      = false;
-	c.package_file = "../../lua_files/udf_unit_test.lua";
+	c.package_file = LUA_MODULE_PATH"/udf_unit_test.lua";
 	c.package_name = "udf_unit_test";
 
 	INFO("Starting Record stored-procedure Unit Tests");

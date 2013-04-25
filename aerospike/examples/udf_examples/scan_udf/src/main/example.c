@@ -18,6 +18,12 @@
 #include <citrusleaf/cf_atomic.h>
 #include <citrusleaf/cf_hist.h>
 
+
+
+#ifndef LUA_MODULE_PATH
+#define LUA_MODULE_PATH "src/lua"
+#endif
+
 #define INFO(fmt, args...) \
     __log_append(stderr,"", fmt, ## args);
 
@@ -76,7 +82,7 @@ int init_configuration (int argc, char *argv[])
     g_config->set           = NULL;
     g_config->nkeys         = 25000;
     g_config->timeout_ms    = 1000;
-    g_config->package_file  = "../lua_files/scan_udf.lua";
+    g_config->package_file  = LUA_MODULE_PATH"/scan_udf.lua";
     g_config->function_name = "do_scan_test";
 
     int optcase;

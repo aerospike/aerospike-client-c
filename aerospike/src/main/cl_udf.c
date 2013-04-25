@@ -78,11 +78,12 @@ static void * citrusleaf_udf_info_parameters(const char * key, const char * valu
         info->gen = strdup(value);
     }
     else if ( strcmp(key,"content") == 0 ) {
-    	as_val_destroy(&info->content);
+    	as_bytes_destroy(&info->content);
     	int c_len = strlen(value);
-    	uint8_t *c = (uint8_t *)malloc(c_len);
+    	uint8_t * c = (uint8_t *) malloc(c_len + 1);
         memcpy(c, value, c_len);
-    	as_bytes_init(&info->content, c, c_len, true /*memcpy*/);
+        c[c_len] = 0;
+    	as_bytes_init(&info->content, c, c_len + 1, true /*memcpy*/);
     }
     else if ( strcmp(key,"files") == 0 ) {
         info->files = strdup(value);
@@ -342,14 +343,18 @@ cl_rv citrusleaf_udf_get(cl_cluster *asc, const char * filename, as_udf_file * f
 
 cl_rv citrusleaf_udf_get_with_gen(cl_cluster *asc, const char * filename, as_udf_file * file, as_udf_type udf_type, char **gen, char ** error) {
 
-    if ( !(file->content) ) return -1;
+    if ( file->content ) return -1;
 
     char    query[512]  = {0};
     char *  result      = NULL;
 
     snprintf(query, sizeof(query), "udf-get:filename=%s;", filename);
 
-    if ( citrusleaf_info_cluster(asc, query, &result, true, /* check bounds */ true, 100) ) {
+
+    // fprintf(stderr, "QUERY: |%s|\n", query);
+
+
+    if ( citrusleaf_info_cluster_all(asc, query, &result, true, /* check bounds */ true, 100) ) {
         if ( error ) {
             const char * emsg = "failed_request: ";
             int emsg_len = strlen(emsg);
@@ -394,12 +399,21 @@ cl_rv citrusleaf_udf_get_with_gen(cl_cluster *asc, const char * filename, as_udf
         return 2;
     }
 
-    int clen = as_bytes_len(&info.content);
-    cf_base64_decode_inplace(as_bytes_tobytes(&info.content), &clen, true);
-    info.content.len = clen;
+    uint8_t *   content = as_bytes_tobytes(&info.content);
+    int         clen    = as_bytes_len(&info.content) - 1; // this is a byte array, not string. last char is NULL.
+
+    cf_base64_decode_inplace(content, &clen, true);
+    
+    file->content = as_bytes_new(content, clen, true);
+
+    info.content.value = NULL;
+    info.content.value_is_malloc = false;
+    info.content.len = 0;
+    info.content.capacity = 0;
+    as_bytes_destroy(&info.content);
    
     strcpy(file->name, filename);
-    
+
     // Update file hash
     unsigned char hash[SHA_DIGEST_LENGTH];
     SHA1(as_bytes_tobytes(&info.content), as_bytes_len(&info.content), hash);
@@ -436,6 +450,8 @@ cl_rv citrusleaf_udf_put(cl_cluster *asc, const char * filename, as_bytes *conte
         return CITRUSLEAF_FAIL_CLIENT;
     }
     
+    // fprintf(stderr, "QUERY: |%s|\n",query);
+
     free(filepath);
 
     if ( citrusleaf_info_cluster_all(asc, query, &result, true, /*check bounds*/ false, 5000) ) {

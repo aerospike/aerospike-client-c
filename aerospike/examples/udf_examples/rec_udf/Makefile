@@ -1,65 +1,77 @@
-# Citrusleaf Tools
-# Makefile
+REPO = $(shell git rev-parse --show-toplevel)
 
-CLIENT_PATH = ../../../target/Linux-x86_64
+###############################################################################
+include $(REPO)/project/settings.makefile
+###############################################################################
 
-DIR_OBJECT = ./obj
-DIR_TARGET = .
-DIR_LIB = $(CLIENT_PATH)/lib
+###############################################################################
+##  FLAGS                                                                    ##
+###############################################################################
 
-SOURCES       = rec_udf.c utils.c 
-TARGET        = rec_udf
+CLIENT = $(REPO)/aerospike/
+CLIENT_INC = $(CLIENT)/$(TARGET_INCL)
+CLIENT_LIB = $(CLIENT)/$(TARGET_LIB)/libcitrusleaf.a
 
-MANAGE_SOURCES = manage_udf.c
-MANAGE_TARGET  = manage_udf
+# To Override Optimization Level, run make with the "O" variable set.
+# 	make O=0
 
-INCLUDES = -I$(CLIENT_PATH)/include/
-LIBRARIES = $(DIR_LIB)/libcitrusleaf.a  -lssl -lcrypto -lpthread -lrt
+O=4
 
-AS_CFLAGS = -D_FILE_OFFSET_BITS=64 -std=gnu99 -D_REENTRANT -D_GNU_SOURCE
-CFLAGS_NATIVE = -g  -fno-common -fno-strict-aliasing -rdynamic  -Wall -Wredundant-decls $(AS_CFLAGS)
+CFLAGS = -O$(O)
 
-ifeq (${MR_LANG},LUA)
-LIBRARIES += -llua
-endif
-LIBRARIES += -lm
+CC_FLAGS = -std=gnu99 -g -rdynamic -Wall 
+CC_FLAGS += -fno-common -fno-strict-aliasing -fPIC 
+CC_FLAGS += -DMARCH_$(ARCH) -D_FILE_OFFSET_BITS=64 
+CC_FLAGS += -D_REENTRANT -D_GNU_SOURCE -DMEM_COUNT
 
-LDFLAGS += -L$(DEPTH)/lib/ -L$(DEPTH)/shared/lib/ 
+LD_FLAGS = -llua -lm -lssl -lcrypto -lpthread -lrt
 
-OBJECTS = $(SOURCES:%.c=$(DIR_OBJECT)/%.o)
-DEPENDENCIES = $(OBJECTS:%.o=%.d)
-DOC_OBJECTS = $(DOC_SOURCES:%.c=$(DIR_OBJECT)/%.o)
-DOC_DEPENDENCIES = $(DOC_OBJECTS:%.o=%.d)
-
-RLIST_OBJECTS = $(RLIST_SOURCES:%.c=$(DIR_OBJECT)/%.o)
-RLIST_DEPENDENCIES = $(RLIST_OBJECTS:%.o=%.d)
-MANAGE_OBJECTS = $(MANAGE_SOURCES:%.c=$(DIR_OBJECT)/%.o)
-MANAGE_DEPENDENCIES = $(MANAGE_OBJECTS:%.o=%.d)
-
-SCAN_OBJECTS = $(SCAN_SOURCES:%.c=$(DIR_OBJECT)/%.o)
-SCAN_DEPENDENCIES = $(SCAN_OBJECTS:%.o=%.d)
+INC_PATH += $(CLIENT_INC)
 
 
-.PHONY: all
-all:  rec_udf manage_udf
+###############################################################################
+##  OBJECTS                                                                  ##
+###############################################################################
 
-.PHONY: clean
-clean:
-	/bin/rm -f $(OBJECTS) $(DIR_TARGET)/$(TARGET) $(DIR_TARGET)/$(MANAGE_TARGET) 
+MANAGE_UDF 	= manage_udf.o
+REC_UDF 	= rec_udf.o utils.o
 
-.PHONY: depclean
-depclean: clean
-	/bin/rm -f $(DEPENDENCIES) 
+###############################################################################
+##  MAIN TARGETS                                                             ##
+###############################################################################
 
-.PHONY: $(TARGET)
-$(TARGET): $(OBJECTS)
-	$(CC) $(LDFLAGS) -o $(DIR_TARGET)/$(TARGET) $(OBJECTS) $(LIBRARIES)
-$(MANAGE_TARGET): $(MANAGE_OBJECTS)
-	$(CC) $(LDFLAGS) -o $(DIR_TARGET)/$(MANAGE_TARGET) $(MANAGE_OBJECTS) $(LIBRARIES)
--include $(DEPENDENCIES) 
+all: build run
 
-$(DIR_OBJECT)/%.o: %.c | prepare
-	$(CC) $(CFLAGS_NATIVE) -MMD -o $@ -c $(INCLUDES) $<
+.PHONY: build
+build: manage_udf rec_udf
 
-prepare:
-	mkdir -p $(DIR_OBJECT)
+.PHONY: build-clean
+build-clean:
+	@rm -rf $(TARGET_BIN)
+	@rm -rf $(TARGET_LIB)
+
+.PHONY: manage_udf rec_udf
+manage_udf: $(TARGET_BIN)/manage_udf
+rec_udf: 	$(TARGET_BIN)/rec_udf
+
+.PHONY: run
+run: 
+	# ./$(TARGET_BIN)/rec_udf
+	./$(TARGET_BIN)/manage_udf
+
+###############################################################################
+##  BUILD TARGETS                                                            ##
+###############################################################################
+
+$(TARGET_BIN)/manage_udf: $(MANAGE_UDF:%=$(TARGET_OBJ)/%) $(CLIENT_LIB)
+	$(executable) 
+
+$(TARGET_BIN)/rec_udf: $(REC_UDF:%=$(TARGET_OBJ)/%) $(CLIENT_LIB)
+	$(executable) 
+
+$(CLIENT_LIB):
+	$(MAKE) -C $(REPO)/aerospike
+
+###############################################################################
+include $(REPO)/project/rules.makefile
+###############################################################################

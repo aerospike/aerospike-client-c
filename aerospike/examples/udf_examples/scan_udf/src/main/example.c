@@ -21,7 +21,7 @@
 
 
 #ifndef LUA_MODULE_PATH
-#define LUA_MODULE_PATH "../lua_files"
+#define LUA_MODULE_PATH "src/lua"
 #endif
 
 #define INFO(fmt, args...) \

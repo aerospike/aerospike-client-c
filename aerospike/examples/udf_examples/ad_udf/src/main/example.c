@@ -31,7 +31,7 @@
 
 
 #ifndef LUA_MODULE_PATH
-#define LUA_MODULE_PATH "../lua_files"
+#define LUA_MODULE_PATH "src/lua"
 #endif
 
 static config *g_config = NULL;
@@ -41,7 +41,7 @@ void usage(int argc, char *argv[]) {
     fprintf(stderr, "-p port [default 3000]\n");
     fprintf(stderr, "-n namespace [default test]\n");
     fprintf(stderr, "-s set [default *all*]\n");
-    fprintf(stderr, "-f udf_file [default ../lua_files/ad_udf.lua]\n");
+    fprintf(stderr, "-f udf_file [default src/lua/ad_udf.lua]\n");
 }
 
 

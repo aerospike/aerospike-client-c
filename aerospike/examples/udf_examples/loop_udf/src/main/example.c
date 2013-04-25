@@ -40,6 +40,10 @@
 #include <citrusleaf/cl_udf.h>
 #include <citrusleaf/cf_log_internal.h>
 
+#ifndef LUA_MODULE_PATH
+#define LUA_MODULE_PATH "src/lua"
+#endif
+
 //#define DEBUG_VERBOSE 1
 // #define PRINT_KEY 1
 
@@ -327,7 +331,7 @@ int init_configuration (int argc, char *argv[])
 	g_config->record_ttl   = 864000;
 	g_config->verbose      = false;
 	g_config->debug		   = false;
-	g_config->package_file = "../lua_files/udf_loop_test.lua";
+	g_config->package_file = LUA_MODULE_PATH"/udf_loop_test.lua";
 	g_config->package_name = "udf_loop_test";
 	g_config->n_threads    = 8;
 	g_config->f_name       = "do_loop_test";

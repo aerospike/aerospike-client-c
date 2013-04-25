@@ -27,6 +27,10 @@
 #include <citrusleaf/cf_hist.h>
 #include <citrusleaf/citrusleaf.h>
 
+#ifndef LUA_MODULE_PATH
+#define LUA_MODULE_PATH "src/lua"
+#endif
+
 static config *g_config = NULL;
 
 #define INFO(fmt, args...) \
@@ -53,7 +57,7 @@ void usage(int argc, char *argv[]) {
     INFO("   -p port [default 3000]");
     INFO("   -n namespace [default test]");
     INFO("   -s set [default *all*]");
-    INFO("   -f udf_file [default lua_files/udf_unit_test.lua]");
+    INFO("   -f udf_file [default "LUA_MODULE_PATH"/udf_unit_test.lua]");
 }
 
 
@@ -69,7 +73,7 @@ int init_configuration (int argc, char *argv[])
 	g_config->timeout_ms   = 1000;
 	g_config->record_ttl   = 864000;
 	g_config->verbose      = false;
-	g_config->package_file = "../lua_files/udf_unit_test.lua";
+	g_config->package_file = LUA_MODULE_PATH"/udf_unit_test.lua";
 	g_config->package_name = "udf_unit_test";
 
 	INFO("Starting Record stored-procedure Unit Tests");

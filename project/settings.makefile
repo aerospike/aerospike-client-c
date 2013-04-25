@@ -189,7 +189,7 @@ define object
 		$(CC_FLAGS) \
 		$(CFLAGS) \
 		-o $@ \
-		-c $(filter %.c, $^)  \
+		-c $(filter %.c %.cpp, $^)  \
 	)
 endef
 

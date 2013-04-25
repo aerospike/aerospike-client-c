@@ -1,50 +1,62 @@
-# Citrusleaf Foundation
-# Makefile for an example program
+###############################################################################
+include $(shell git rev-parse --show-toplevel)/project/settings.makefile
+###############################################################################
 
-# interesting directories
-DIR_INCLUDE = ../../target/Linux-x86_64/include
-DIR_LIB = ../../target/Linux-x86_64/lib
-DIR_OBJECT = ./obj
-DIR_TARGET = .
+AEROSPIKE = $(REPO)/aerospike
 
-# common variables. Note that march=native first supported in GCC 4.2; 
-# users of older version should pick a more appropriate value
-CC = gcc
-ARCH_NATIVE = $(shell uname -m)
-CFLAGS_NATIVE = -std=gnu99 -g -O3 -fno-common -fno-strict-aliasing -rdynamic -fPIC -Wall -DMARCH_$(ARCH) -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_GNU_SOURCE
-LDFLAGS = 
+###############################################################################
+##  FLAGS                                                                    ##
+###############################################################################
 
-LD = gcc
-LDFLAGS = $(CFLAGS_NATIVE) -L$(DIR_LIB) 
-LIBRARIES = $(DIR_LIB)/libcitrusleaf.a -lssl -lpthread -lrt -lcrypto -lz
+CC_FLAGS = -std=gnu99  -Wall
 
-HEADERS = loop_udf.h 
-SOURCES = loop_udf.c 
-TARGET = loop_udf
+LD_FLAGS = 
+LD_FLAGS += -lssl -lcrypto -lpthread -lrt
+LD_FLAGS += -llua
+LD_FLAGS += -lm
 
-OBJECTS = $(SOURCES:%.c=$(DIR_OBJECT)/%.o)
-DEPENDENCIES = $(OBJECTS:%.o=%.d)
+INC_PATH = $(AEROSPIKE)/$(TARGET_INCL)
 
-.PHONY: all
-all: $(TARGET)
+###############################################################################
+##  OBJECTS                                                                  ##
+###############################################################################
 
-.PHONY: clean
-clean:
-	/bin/rm -f $(DIR_TARGET)/$(TARGET) $(DIR_OBJECT)/*.d $(DIR_OBJECT)/*.o
+OBJECTS = example.o
 
-.PHONY: depclean
-depclean: clean
-	/bin/rm -f $(DEPENDENCIES)
+###############################################################################
+##  MAIN TARGETS                                                             ##
+###############################################################################
 
-.PHONY: $(TARGET)
-$(TARGET): $(OBJECTS)
-	$(LD) $(LDFLAGS) -o $(DIR_TARGET)/$(TARGET) $(OBJECTS) $(LIBRARIES)
-	chmod +x $(DIR_TARGET)/$(TARGET)
+all: build
 
--include $(DEPENDENCIES)
+.PHONY: build
+build: example
 
-$(DIR_OBJECT)/%.o: %.c | prepare
-	$(CC) $(CFLAGS_NATIVE) -MMD -o $@ -c -I$(DIR_INCLUDE) $<
+.PHONY: build-clean
+build-clean:
+	@rm -rf $(TARGET_BIN)
+	@rm -rf $(TARGET_LIB)
 
-prepare: 
-	mkdir -p $(DIR_OBJECT)
+.PHONY: example
+example: $(TARGET_BIN)/example
+
+###############################################################################
+##  BUILD TARGETS                                                            ##
+###############################################################################
+
+$(TARGET_OBJ)/%.o: %.c $(AEROSPIKE)/$(TARGET_LIB)/libcitrusleaf.a 
+	$(object)
+
+$(TARGET_BIN)/example: $(OBJECTS:%=$(TARGET_OBJ)/%) 
+	$(executable) $(AEROSPIKE)/$(TARGET_LIB)/libcitrusleaf.a
+
+###############################################################################
+##  BUILD DEPENDENCIES                                                       ##
+###############################################################################
+
+$(AEROSPIKE)/$(TARGET_LIB)/libcitrusleaf.a: $(AEROSPIKE)/$(SOURCE_INCL)/*.h  $(AEROSPIKE)/$(SOURCE_MAIN)/*.c
+	$(MAKE) -C $(AEROSPIKE) libcitrusleaf.a prepare
+
+###############################################################################
+include $(RULES)
+###############################################################################

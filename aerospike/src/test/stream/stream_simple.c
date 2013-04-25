@@ -422,9 +422,9 @@ SUITE( stream_simple, "simple stream" ) {
     suite_after( after   );
     
     suite_add( stream_simple_create );
-    // suite_add( stream_simple_1 );
-    // suite_add( stream_simple_2 );
-    // suite_add( stream_simple_3 );
-    // suite_add( stream_simple_4 );
-    // suite_add( stream_simple_5 );
+    suite_add( stream_simple_1 );
+    suite_add( stream_simple_2 );
+    suite_add( stream_simple_3 );
+    suite_add( stream_simple_4 );
+    suite_add( stream_simple_5 );
 }

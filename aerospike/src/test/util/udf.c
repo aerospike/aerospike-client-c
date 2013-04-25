@@ -81,14 +81,19 @@ int udf_exists(const char * filename) {
 
     int rc = citrusleaf_udf_get(cluster, basename(filename), &file, 0, &err);
 
-    if ( rc != 0 && err ) {
-        error("error caused by citrusleaf_udf_get(): %s", err);
-        free(err);
+    if ( rc != 0 ) {
+        if ( err ) {
+            error("error caused by citrusleaf_udf_get(): (%d) %s", rc, err);
+            free(err);
+        }
+        else {
+            error("error caused by citrusleaf_udf_get(): %d", rc);
+        }
     }
 
     as_val_destroy(&file.content);
 
-    return rc == 0;
+    return rc;
 }
 
 int udf_apply_record(const char * ns, const char * set, const char * key, const char * file, const char * func, as_list * arglist, as_result * result) {

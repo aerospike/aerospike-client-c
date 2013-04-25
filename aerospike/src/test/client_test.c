@@ -72,7 +72,7 @@ PLAN( client_test ) {
     plan_before( before );
     plan_after( after );
     
-    //plan_add( lstack_basics );
+    // plan_add( lstack_basics );
     /**
      * kv - kv tests
      */

@@ -10,6 +10,7 @@ export ARFLAGS =
 ##  BUILD ENVIRONMENT                                                        ##
 ###############################################################################
 
+REPO = $(shell git rev-parse --show-toplevel)
 ROOT = $(CURDIR)
 NAME = $(shell basename $(ROOT))
 OS = $(shell uname)
@@ -23,6 +24,8 @@ SOURCE  = src
 TARGET  = target
 
 SUBMODULES = $(filter-out .%, $(wildcard $(MODULES)/*))
+
+RULES = $(REPO)/project/rules.makefile
 
 ###############################################################################
 ##  BUILD TOOLS                                                              ##
@@ -146,7 +149,7 @@ define executable
 		$(CC_FLAGS) \
 		$(CFLAGS) \
 		-o $@ \
-		$^ \
+		$(filter %.o %.a %.so, $^) \
 	)
 endef
 
@@ -157,7 +160,7 @@ define archive
 		$(AR_FLAGS) \
 		$(ARFLAGS) \
 		$@ \
-		$^ \
+		$(filter %.o, $^) \
 	)
 endef
 
@@ -172,7 +175,7 @@ define library
 		$(LD_FLAGS) \
 		$(LDFLAGS) \
 		-o $@ \
-		$^ \
+		$(filter %.o, $^) \
 	)
 endef
 
@@ -186,7 +189,7 @@ define object
 		$(CC_FLAGS) \
 		$(CFLAGS) \
 		-o $@ \
-		-c $^ \
+		-c $(filter %.c, $^)  \
 	)
 endef
 

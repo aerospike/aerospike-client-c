@@ -43,6 +43,10 @@ build-clean:
 	@rm -rf $(TARGET_BIN)
 	@rm -rf $(TARGET_LIB)
 
+.PHONY: run
+run: $(TARGET_BIN)/example
+	$(TARGET_BIN)/example
+
 .PHONY: example
 example: $(TARGET_BIN)/example
 

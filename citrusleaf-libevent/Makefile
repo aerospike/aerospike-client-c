@@ -79,13 +79,19 @@ libev2citrusleaf.so: $(TARGET_LIB)/libev2citrusleaf.so
 ##  BUILD TARGETS                                                            ##
 ###############################################################################
 
+$(TARGET_SRC)/version.c: | $(TARGET_SRC)
+	bash ./src/shell/version.sh > $@
+
+$(TARGET_OBJ)/%.o: $(TARGET_SRC)/%.c
+	$(object)
+
 $(TARGET_OBJ)/%.o: $(CITRUSLEAF_BASE)/$(TARGET_LIB)/libcf-hooked.a $(SOURCE_MAIN)/%.c $(SOURCE_INCL)/citrusleaf_event2/*.h
 	$(object)
 
-$(TARGET_LIB)/libev2citrusleaf.so: $(CITRUSLEAF:%=$(TARGET_OBJ)/%)
+$(TARGET_LIB)/libev2citrusleaf.so: $(CITRUSLEAF:%=$(TARGET_OBJ)/%) $(TARGET_OBJ)/version.o
 	$(library) $(BASE:%=$(CITRUSLEAF_BASE)/$(TARGET_OBJ)/hooked/%)
 
-$(TARGET_LIB)/libev2citrusleaf.a: $(CITRUSLEAF:%=$(TARGET_OBJ)/%)
+$(TARGET_LIB)/libev2citrusleaf.a: $(CITRUSLEAF:%=$(TARGET_OBJ)/%) $(TARGET_OBJ)/version.o
 	$(archive) $(BASE:%=$(CITRUSLEAF_BASE)/$(TARGET_OBJ)/hooked/%)
 
 $(TARGET_INCL)/citrusleaf: | $(TARGET_INCL)

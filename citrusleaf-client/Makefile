@@ -84,13 +84,19 @@ libcitrusleaf.so: $(TARGET_LIB)/libcitrusleaf.so
 ##  BUILD TARGETS                                                            ##
 ###############################################################################
 
+$(TARGET_SRC)/version.c: | $(TARGET_SRC)
+	bash ./src/shell/version.sh > $@
+
+$(TARGET_OBJ)/%.o: $(TARGET_SRC)/%.c
+	$(object)
+
 $(TARGET_OBJ)/%.o: $(CITRUSLEAF_BASE)/$(TARGET_LIB)/libcf-client.a $(SOURCE_MAIN)/%.c $(SOURCE_INCL)/citrusleaf/*.h
 	$(object)
 
-$(TARGET_LIB)/libcitrusleaf.so: $(CITRUSLEAF:%=$(TARGET_OBJ)/%) 
+$(TARGET_LIB)/libcitrusleaf.so: $(CITRUSLEAF:%=$(TARGET_OBJ)/%) $(TARGET_OBJ)/version.o
 	$(library) $(BASE:%=$(CITRUSLEAF_BASE)/$(TARGET_OBJ)/client/%)
 
-$(TARGET_LIB)/libcitrusleaf.a: $(CITRUSLEAF:%=$(TARGET_OBJ)/%)
+$(TARGET_LIB)/libcitrusleaf.a: $(CITRUSLEAF:%=$(TARGET_OBJ)/%) $(TARGET_OBJ)/version.o
 	$(archive) $(BASE:%=$(CITRUSLEAF_BASE)/$(TARGET_OBJ)/client/%)
 
 $(TARGET_INCL)/citrusleaf: | $(TARGET_INCL)

@@ -2,11 +2,11 @@
 include ../project/settings.makefile
 ###############################################################################
 
+CITRUSLEAF_BASE = $(REPO)/citrusleaf-base
+
 ###############################################################################
 ##  FLAGS                                                                    ##
 ###############################################################################
-
-CITRUSLEAF_BASE = $(REPO)/citrusleaf-base
 
 # To Override Optimization Level, run make with the "O" variable set.
 # 	make O=0
@@ -97,19 +97,25 @@ $(TARGET_INCL)/citrusleaf_event2: | $(TARGET_INCL)
 $(TARGET_INCL)/citrusleaf_event2/%.h: $(SOURCE_INCL)/citrusleaf_event2/%.h | $(TARGET_INCL)/citrusleaf_event2
 	cp -p $^ $(TARGET_INCL)/citrusleaf_event2
 
-$(TARGET_INCL)/citrusleaf/%.h:: $(CITRUSLEAF_BASE)/$(TARGET_INCL)/citrusleaf/%.h | $(TARGET_INCL)/citrusleaf
-	$(noop)
+$(TARGET_INCL)/citrusleaf/%.h::  $(CITRUSLEAF_BASE)/$(TARGET_INCL)/citrusleaf/%.h | $(TARGET_INCL)/citrusleaf $(CITRUSLEAF_BASE)/$(TARGET_INCL)
+	cp -p $(filter %.h, $^) $(TARGET_INCL)/citrusleaf
 
 ###############################################################################
 ##  DEPENDENCIES                                                             ##
 ###############################################################################
 
-$(CITRUSLEAF_BASE)/$(TARGET_LIB)/libcf-hooked.a: $(CITRUSLEAF_BASE)/$(SOURCE_INCL)/citrusleaf/*.h  $(CITRUSLEAF_BASE)/$(SOURCE_MAIN)/*.c
+$(CITRUSLEAF_BASE)/$(TARGET_LIB)/libcf-hooked.a: $(CITRUSLEAF_BASE)/$(SOURCE_INCL)/citrusleaf/*.h $(CITRUSLEAF_BASE)/$(SOURCE_MAIN)/*.c
 	$(MAKE) -C $(CITRUSLEAF_BASE) libcf-hooked.a prepare
 
-$(CITRUSLEAF_BASE)/$(TARGET_INCL)/citrusleaf/%.h: $(CITRUSLEAF_BASE)/$(SOURCE_INCL)/citrusleaf/%.h | $(TARGET_INCL)/citrusleaf
+.PHONY: $(CITRUSLEAF_BASE)/$(TARGET_INCL)
+$(CITRUSLEAF_BASE)/$(TARGET_INCL): $(CITRUSLEAF_BASE)/$(TARGET_INCL)/citrusleaf/*.h | $(TARGET_INCL)/citrusleaf
+
+.PHONY: $(CITRUSLEAF_BASE)/$(TARGET_INCL)/citrusleaf
+$(CITRUSLEAF_BASE)/$(TARGET_INCL)/citrusleaf: $(CITRUSLEAF_BASE)/$(SOURCE_INCL)/citrusleaf/*.h
 	$(MAKE) -C $(CITRUSLEAF_BASE) prepare
-	cp -p $^ $(TARGET_INCL)/citrusleaf
+
+$(CITRUSLEAF_BASE)/$(TARGET_INCL)/citrusleaf/%.h:  $(CITRUSLEAF_BASE)/$(TARGET_INCL)/citrusleaf | $(TARGET_INCL)/citrusleaf
+	$(noop)
 
 ###############################################################################
 include $(RULES)

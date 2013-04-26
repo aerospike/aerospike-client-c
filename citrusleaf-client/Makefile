@@ -2,11 +2,11 @@
 include ../project/settings.makefile
 ###############################################################################
 
+CITRUSLEAF_BASE = $(REPO)/citrusleaf-base
+
 ###############################################################################
 ##  FLAGS                                                                    ##
 ###############################################################################
-
-CITRUSLEAF_BASE = $(REPO)/citrusleaf-base
 
 # To Override Optimization Level, run make with the "O" variable set.
 # 	make O=0
@@ -63,7 +63,7 @@ BASE += cf_vector.o
 all: build prepare
 
 .PHONY: prepare
-prepare: $(CITRUSLEAF_BASE)/$(TARGET_INCL)/citrusleaf/*.h $(TARGET_INCL)/citrusleaf/*.h
+prepare: $(CITRUSLEAF_BASE)/$(TARGET_INCL) $(TARGET_INCL)/citrusleaf/*.h
 
 .PHONY: build
 build: libcitrusleaf
@@ -94,24 +94,30 @@ $(TARGET_LIB)/libcitrusleaf.a: $(CITRUSLEAF:%=$(TARGET_OBJ)/%)
 	$(archive) $(BASE:%=$(CITRUSLEAF_BASE)/$(TARGET_OBJ)/client/%)
 
 $(TARGET_INCL)/citrusleaf: | $(TARGET_INCL)
-	mkdir -p $@
+	mkdir $@
 
-$(TARGET_INCL)/citrusleaf/%.h:: $(SOURCE_INCL)/citrusleaf/%.h | $(TARGET_INCL)/citrusleaf
-	cp -p $^ $(TARGET_INCL)/citrusleaf
+$(TARGET_INCL)/citrusleaf/%.h:: $(SOURCE_INCL)/citrusleaf/%.h $(CITRUSLEAF_BASE)/$(TARGET_INCL)/citrusleaf/%.h | $(TARGET_INCL)/citrusleaf
+	cp -p $(filter %.h, $^) $(TARGET_INCL)/citrusleaf
 
-$(TARGET_INCL)/citrusleaf/%.h:: $(CITRUSLEAF_BASE)/$(TARGET_INCL)/citrusleaf/%.h | $(TARGET_INCL)/citrusleaf
-	$(noop)
+$(TARGET_INCL)/citrusleaf/%.h::  $(CITRUSLEAF_BASE)/$(TARGET_INCL)/citrusleaf/%.h | $(TARGET_INCL)/citrusleaf $(CITRUSLEAF_BASE)/$(TARGET_INCL)
+	cp -p $(filter %.h, $^) $(TARGET_INCL)/citrusleaf
 
 ###############################################################################
 ##  BUILD DEPENDENCIES                                                       ##
 ###############################################################################
 
-$(CITRUSLEAF_BASE)/$(TARGET_LIB)/libcf-client.a: $(CITRUSLEAF_BASE)/$(SOURCE_INCL)/citrusleaf/*.h  $(CITRUSLEAF_BASE)/$(SOURCE_MAIN)/*.c
+$(CITRUSLEAF_BASE)/$(TARGET_LIB)/libcf-client.a: $(CITRUSLEAF_BASE)/$(SOURCE_INCL)/citrusleaf/*.h $(CITRUSLEAF_BASE)/$(SOURCE_MAIN)/*.c
 	$(MAKE) -C $(CITRUSLEAF_BASE) libcf-client.a prepare
 
-$(CITRUSLEAF_BASE)/$(TARGET_INCL)/citrusleaf/%.h: $(CITRUSLEAF_BASE)/$(SOURCE_INCL)/citrusleaf/%.h | $(TARGET_INCL)/citrusleaf
+.PHONY: $(CITRUSLEAF_BASE)/$(TARGET_INCL)
+$(CITRUSLEAF_BASE)/$(TARGET_INCL): $(CITRUSLEAF_BASE)/$(TARGET_INCL)/citrusleaf/*.h | $(TARGET_INCL)/citrusleaf
+
+.PHONY: $(CITRUSLEAF_BASE)/$(TARGET_INCL)/citrusleaf
+$(CITRUSLEAF_BASE)/$(TARGET_INCL)/citrusleaf: $(CITRUSLEAF_BASE)/$(SOURCE_INCL)/citrusleaf/*.h
 	$(MAKE) -C $(CITRUSLEAF_BASE) prepare
-	cp -p $^ $(TARGET_INCL)/citrusleaf
+
+$(CITRUSLEAF_BASE)/$(TARGET_INCL)/citrusleaf/%.h:  $(CITRUSLEAF_BASE)/$(TARGET_INCL)/citrusleaf | $(TARGET_INCL)/citrusleaf
+	$(noop)
 
 ###############################################################################
 include $(RULES)

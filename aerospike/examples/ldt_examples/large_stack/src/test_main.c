@@ -166,6 +166,7 @@ void print_counters() {
 int main(int argc, char **argv) {
 static char * meth         = "main()";
     int           rc           = 0;
+    int j = 0;
     char * test_name = "LSO Test Run";
 
     // Run this FIRST THING
@@ -199,15 +200,14 @@ static char * meth         = "main()";
             g_config->write_ops_counter, g_config->write_vals_counter,
             g_config->delete_ops_counter, g_config->delete_vals_counter,
             g_config->key_counter);
-    
     pthread_t slaps[g_config->n_threads];
     // Invoke the "run_test()" method for g_config->n_threads many threads
-    for (int j = 0; j < g_config->n_threads; j++) {
+    for ( j = 0; j < g_config->n_threads; j++) {
         if (pthread_create(&slaps[j], 0, run_test, &j )) {
             INFO("[WARNING]: Thread Create Failed\n");
         }
     }
-    for (int j = 0; j < g_config->n_threads; j++) {
+    for ( j = 0; j < g_config->n_threads; j++) {
         pthread_join(slaps[j], (void *)&rc);
     }
 

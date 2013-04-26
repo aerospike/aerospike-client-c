@@ -45,8 +45,8 @@
 #endif
 
 // Define the current version of the C API file for LSET
-// April 18, 2013
-#define MOD "Lset C_API:4.18"
+// April 25, 2013
+#define MOD "Lset C_API:4.25.1"
 
 // ATTENTION!!!  :::   VERSION CHANGES (April 11, 2013)
 // NOTE: We have changed the API for Large SET Objects (LSET) to be
@@ -235,6 +235,7 @@ cl_rv aerospike_lset_insert_internal(cl_cluster * asc, const char * namespace,
 {
 	static char * meth = "aerospike_lset_insert_internal()";
 	cl_rv rc = 0; // ubiquitous return code
+    char * valstr; // Capture strings for debug printing.
 
 	// Call the "apply udf" function (e.g. lset_insert()) for this record to
 	// insert a new value into the LDT Bin.  Call the appropriate Lua function.
@@ -289,19 +290,12 @@ cl_rv aerospike_lset_insert_internal(cl_cluster * asc, const char * namespace,
 	}
 
 	if (result.is_success) {
-		if (TRA_DEBUG)
-			printf("[DEBUG]:<%s:%s>:UDF Result SUCCESS\n", MOD, meth);
-//		if (as_val_type(result.value) == AS_NIL) {
-//			if (TRA_DEBUG)
-//				printf("[ERROR]:<%s:%s> Result type NIL\n", MOD, meth);
-//			rc = CITRUSLEAF_FAIL_CLIENT; // General Fail
-//		} else {
-//			char *valstr = as_val_tostring(result.value);
-//			if (TRA_DEBUG)
-//				printf("[DEBUG]:<%s:%s>: udf_return_type(%s)", MOD, meth,
-//						valstr);
-//			free(valstr);
-//		}
+		if (TRA_DEBUG) {
+            valstr = as_val_tostring( lset_valuep );
+			printf("[DEBUG]:<%s:%s>:UDF Result SUCCESS: Insert Val(%s)\n",
+                    MOD, meth, valstr);
+            free( valstr );
+        }
 	} else {
 		if (TRA_DEBUG)
 			printf("[DEBUG]:<%s:%s>:UDF Result FAIL\n", MOD, meth);
@@ -376,11 +370,11 @@ cl_rv aerospike_lset_create_and_insert(cl_cluster * asc, const char * namespace,
 } // end aerospike_lset_create_and_insert()
 
 /** ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
- *  Large Set Search/Exists
+ *  Large Set Search
  *  For the given record (associated with 'keyp'), locate the element
- *  associated with "searchValue".  In some cases, users may want to know
- *  only if the element exists.  In other cases, users may want to know
- *  the additional information that is associated with the SearchValue.
+ *  associated with "searchValue". When users don't want the element back
+ *  but only want to know if it is in the set, then they should call
+ *  aerospike_lset_exists().
  *  The Large Set is named by NameSpace, Set, Key, LdtBinName)
  *
  *  Parms:
@@ -392,8 +386,6 @@ cl_rv aerospike_lset_create_and_insert(cl_cluster * asc, const char * namespace,
  *  (*) search_valuep: Ptr to the as_val that we're looking for
  *  (*) filter: Name of the inner UDF (null ok)
  *  (*) function_args: (as_list *) of the args to pass to the inner UDF(null ok)
- *  (*) exists: When true, just return (true=exists, false=not found)
- *              otherwise, return the value in as_result.
  *  (*) timeout_ms: Timeout to wait (in MilliSecs). ZERO means forever.
  *
  *  Return: 
@@ -408,7 +400,7 @@ cl_rv aerospike_lset_create_and_insert(cl_cluster * asc, const char * namespace,
 cl_rv aerospike_lset_search_internal(as_result ** resultpp, cl_cluster * asc,
 		const char * namespace, const char * set, const cl_object * o_keyp,
 		const char * bin_name, as_val * search_valuep, const char * filter,
-		as_list * function_args, bool exists, uint32_t timeout_ms)
+		as_list * function_args, uint32_t timeout_ms)
 {
 	static char * meth = "aerospike_lset_search_INT()";
 	cl_rv rc = 0; // ubiquitous return code
@@ -448,7 +440,6 @@ cl_rv aerospike_lset_search_internal(as_result ** resultpp, cl_cluster * asc,
 	as_val_reserve( search_valuep);
 	// Increment the reference count for valuep
 	as_list_append(arglist, search_valuep);
-	as_list_add_integer(arglist, exists);
 	if (filter != NULL && function_args != NULL) {
 		as_list_add_string(arglist, filter);
 		as_val_reserve( function_args);
@@ -470,6 +461,9 @@ cl_rv aerospike_lset_search_internal(as_result ** resultpp, cl_cluster * asc,
 
 	// TODO: Need to distinquish between RECORD NOT FOUND and
 	// LDT element not found.
+    // So -- rc == 0 means the record was there and the LDT op returned
+    // successfully.  If the SEARCH result is an empty list, then the item
+    // was NOT FOUND.
 	//
 	//
 	if (rc != CITRUSLEAF_OK) {
@@ -479,28 +473,43 @@ cl_rv aerospike_lset_search_internal(as_result ** resultpp, cl_cluster * asc,
 		goto cleanup;
 	}
 
+    // So -- at this point -- everything is good -- we found the record and
+    // did the UDF execution.  Now it's just a matter of what the LDT UDF
+    // did -- found or not found.
+    // Error cases:
+    // result value is NULL or type is NOT AS_LIST (general badness)
+    // result value type is AS_LIST
+    //   (1) size of list is > 0:  Ok -- good, we found something
+    //   (2) size of list ==   0:  We didn't find anything
 	if (resultp->is_success) {
 		if (TRA_DEBUG)
 			printf("[DEBUG]:<%s:%s>:UDF Result SUCCESS\n", MOD, meth);
 
-// TODO: Remember to check on how we return NOT FOUND!!
-// TODO: Remember to check on how we return NOT FOUND!!
-// TODO: Remember to check on how we return NOT FOUND!!
-//
 		if (as_val_type(resultp->value) == AS_NIL) {
 			if (TRA_ERROR)
 				printf("[ERROR]:<%s:%s> Result type NIL\n", MOD, meth);
 			rc = CITRUSLEAF_FAIL_NOTFOUND; // Not a bad error.
-		} else {
+        } else if (as_val_type( resultp->value ) == AS_LIST ) {
+            // Ok -- good.  Pass back the list.  If size > 0, we found
+            // something, and if size == 0, we did NOT.  But, it's up to
+            // the caller to decide what to do with the list.
 			if (TRA_DEBUG) {
+                as_list * listp = (as_list *) resultp->value;
+                valstr = as_val_tostring( listp );
+				printf("[SUCCESS]<%s:%s>Result Lst(%s)\n", MOD, meth, valstr);
+                free( valstr );
+            }
+		} else {
+			if (TRA_ERROR) {
 				valstr = as_val_tostring(resultp->value);
-				printf("[DEBUG]:<%s:%s>:udf_return_val(%s)", MOD, meth, valstr);
+				printf("[ERROR]:<%s:%s>Result Val(%s) Type(%d)\n",
+                        MOD, meth, valstr, as_val_type( resultp->value ));
 				free(valstr);
 			}
 		}
 	} else {
 		if (TRA_DEBUG)
-			printf("[DEBUG]:<%s:%s>:UDF Result FAIL\n", MOD, meth);
+			printf("[ERROR]:<%s:%s>:UDF Result FAIL: rc(%d)\n", MOD, meth, rc);
 		rc = CITRUSLEAF_FAIL_CLIENT; // General Fail
 	}
 
@@ -554,7 +563,7 @@ cl_rv aerospike_lset_search(as_result ** resultpp, cl_cluster * asc,
 {
 	// Call the internal function that does the real work.
 	cl_rv rc = aerospike_lset_search_internal(resultpp, asc, namespace, set,
-			o_keyp, bin_name, search_valuep, NULL, NULL, false, timeout_ms);
+			o_keyp, bin_name, search_valuep, NULL, NULL, timeout_ms);
 
 	return rc;
 } // end aerospike_lset_search()
@@ -594,11 +603,106 @@ cl_rv aerospike_lset_search_then_filter(as_result ** resultpp, cl_cluster * asc,
 		as_list * function_args, uint32_t timeout_ms) {
 	// Call the internal function that does the real work.
 	cl_rv rc = aerospike_lset_search_internal(resultpp, asc, namespace, set,
-			o_keyp, bin_name, search_valuep, filter, function_args, false,
-			timeout_ms);
+			o_keyp, bin_name, search_valuep, filter, function_args, timeout_ms);
 
 	return rc;
 } // end aerospike_lset_search_then_filter()
+
+
+/** ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+ *  Large Set Exists:
+ *  For the given record (associated with 'keyp'), return true if the
+ *  item exists, otherwise return false (in the bool_result parameter).
+ *
+ *  Parms:
+ *  (*) bool_result: 
+ *  (*) asc: The Aerospike Cluster
+ *  (*) namespace: The Namespace for record holding the LDT bin
+ *  (*) set: The Set for the record holding the LDT bin
+ *  (*) o_keyp: Ptr to the Key Object (cl_object) that identifies this record
+ *  (*) bin_name: Name of the new bin of type LDT.
+ *  (*) search_valuep: ptr to the as_val that we search for
+ *  (*) timeout_ms: Timeout to wait (in MilliSecs). ZERO means forever.
+ *
+ *  Success: 
+ *  rc = 0; The result of large set exists() is returned in "bool_result".
+ *  rc < 0: Error Condition
+ */
+cl_rv aerospike_lset_exists(bool * bool_result, cl_cluster * asc,
+		const char * namespace, const char * set, const cl_object * o_keyp,
+		const char * bin_name, as_val * search_valuep, uint32_t timeout_ms) {
+	static char * meth = "aerospike_lset_exists()";
+	cl_rv rc; // ubiquitous return code
+	int int_value = 0;
+	char * valstr = NULL;
+
+    *bool_result = false; // start out pessimistic
+
+	if (TRA_ENTER)
+		printf("[ENTER]<%s:%s>: NS(%s) Set(%s) Bin(%s)\n", MOD, meth, namespace,
+				set, bin_name);
+
+	// In this function, we are returning an int (not the result), so we
+	// can use the "stack allocated" result (as_result_init).
+	as_result result;
+	as_result_init(&result);
+    
+	// Lua Call: lset_exists( record, binName, Value )
+	as_list * arglist = NULL;
+	arglist = as_arraylist_new(2, 0); // two items to push
+	as_list_add_string(arglist, bin_name);
+	as_val_reserve( search_valuep);
+	// Increment the reference count for valuep
+	as_list_append(arglist, search_valuep);
+
+	// Call the "apply udf" function (e.g. lset_exists()) for this record to
+	// return 1 for exists, 0 for NOT.
+	rc = citrusleaf_udf_record_apply(asc, namespace, set, o_keyp, s_ldt_package,
+			s_exists, arglist, timeout_ms, &result);
+
+	if (rc != CITRUSLEAF_OK) {
+		if (TRA_ERROR)
+			printf("[ERROR]<%s:%s>:citrusleaf_udf_record_apply: Fail: RC(%d)",
+					MOD, meth, rc);
+		goto cleanup;
+	}
+
+	if (result.is_success) {
+		if (TRA_DEBUG)
+			printf("[DEBUG]<%s:%s>:UDF Result SUCCESS\n", MOD, meth);
+		if (as_val_type(result.value) == AS_NIL) {
+			if (TRA_ERROR)
+				printf("[ERROR]<%s:%s> Result type is NIL\n", MOD, meth);
+			rc = CITRUSLEAF_FAIL_CLIENT; // general client failure
+		} else {
+			if (TRA_DEBUG) {
+				valstr = as_val_tostring(result.value);
+				printf("[DEBUG]<%s:%s>udf_return_type(%s)", MOD, meth, valstr);
+				free(valstr);
+			}
+			// NOTE: May have to check TYPE first and do a conversion
+			// to a real int.
+			as_val * val_sizep = as_result_value(&result);
+			as_integer * int_sizep = as_integer_fromval(val_sizep);
+			int_value = as_integer_toint(int_sizep); // should be an int.
+			if( int_value != 0 ){
+                *bool_result = true;
+            } // otherwise, it is already set to false.
+		}
+	} else {
+		if (TRA_ERROR)
+			printf("[ERROR]<%s:%s>:UDF Result FAIL\n", MOD, meth);
+		rc = CITRUSLEAF_FAIL_CLIENT; // general client failure
+	}
+
+	cleanup:
+	as_val_destroy(arglist);
+	as_result_destroy(&result);
+
+	if (TRA_EXIT)
+		printf("[EXIT]<%s:%s>: RC(%d)\n", MOD, meth, rc);
+	return rc;
+} // end aerospike_lset_exists()()
 
 /** ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
  *  Large Set Delete
@@ -735,8 +839,8 @@ cl_rv aerospike_lset_size(uint32_t * size, cl_cluster * asc,
 
 	// Call the "apply udf" function (e.g. lset_size()) for this record to
 	// return the size of the set.
-	rc = citrusleaf_udf_record_apply(asc, namespace, set, o_keyp, s_ldt_package,
-			s_size, NULL, timeout_ms, &result);
+	rc = citrusleaf_udf_record_apply(asc, namespace, set, o_keyp,
+            s_ldt_package, s_size, arglist, timeout_ms, &result);
 
 	if (rc != CITRUSLEAF_OK) {
 		if (TRA_ERROR)
@@ -828,8 +932,8 @@ cl_rv aerospike_lset_config(as_result ** resultpp, cl_cluster * asc,
 
 	// Call the "apply udf" function (e.g. lset_config()) for this record to
 	// return the size of the set.
-	rc = citrusleaf_udf_record_apply(asc, namespace, set, o_keyp, s_ldt_package,
-			s_config, NULL, timeout_ms, resultp);
+	rc = citrusleaf_udf_record_apply(asc, namespace, set, o_keyp,
+            s_ldt_package, s_config, arglist, timeout_ms, resultp);
 
 	if (rc != CITRUSLEAF_OK) {
 		if (TRA_ERROR)
@@ -842,9 +946,9 @@ cl_rv aerospike_lset_config(as_result ** resultpp, cl_cluster * asc,
 	// We do NOT destroy result (in resultp): The caller has to do that.
 	// However, if there were errors, then the contents of resultp are
 	// undetermined, so we null it out when there are errors.
+    as_val_destroy( arglist );
 
-	if (TRA_EXIT)
-		printf("[EXIT]<%s:%s>: RC(%d)\n", MOD, meth, rc);
+	if (TRA_EXIT) printf("[EXIT]<%s:%s>: RC(%d)\n", MOD, meth, rc);
 	if (rc != CITRUSLEAF_OK) {
 		// Bad result, so contents of resultp are not reliable.
 		// Note that this function needs to change so that the caller
@@ -854,9 +958,8 @@ cl_rv aerospike_lset_config(as_result ** resultpp, cl_cluster * asc,
 		}
 		*resultpp = NULL; // client gets NULL in her resultp var.
 	}
-	if (TRA_EXIT)
-		printf("[EXIT]<%s:%s>: RC(%d)\n", MOD, meth, rc);
+	if (TRA_EXIT) printf("[EXIT]<%s:%s>: RC(%d)\n", MOD, meth, rc);
 	return rc;
-} // end aerospike_lset_size()()
+} // end aerospike_lset_config()()
 
 // <EOF> <EOF> <EOF> <EOF> <EOF> <EOF> <EOF> <EOF> <EOF> <EOF> <EOF> <EOF>

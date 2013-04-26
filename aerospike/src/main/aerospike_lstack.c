@@ -44,8 +44,8 @@
 #endif
 
 // Define the current version of the C API file for Lstack
-// April 15, 2013
-#define MOD "Lstack C:4.15"
+// April 25, 2013
+#define MOD "Lstack C:4.25.1"
 
 // |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 // Global Comment on the "apply udf" function call.
@@ -111,7 +111,7 @@ static char * s_peek             = "lstack_peek";
 static char * s_peek_w_filter    = "lstack_peek_then_filter";
 static char * s_trim             = "lstack_trim"; // not yet implemented
 static char * s_size             = "lstack_size";
-static char * s_get_config       = "lstack_config";
+static char * s_config           = "lstack_config";
 
 /** ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 *  Large Stack Object Create:
@@ -938,10 +938,16 @@ aerospike_lstack_size(
     as_result result;
     as_result_init(&result);
 
+    // Lua Call: lstack_size( record, bin_name )
+    as_list * arglist = NULL;
+    arglist = as_arraylist_new(1, 0); // One item in the arglist
+    as_list_add_string(arglist, bin_name);
+    
+
     // Call the "apply udf" function (e.g. lstack_size()) for this record to
     // return the size of the stack.
     rc = citrusleaf_udf_record_apply(asc, namespace, set, o_keyp,
-            s_ldt_package, s_size, NULL, timeout_ms, &result);
+            s_ldt_package, s_size, arglist, timeout_ms, &result);
 
     if (rc != CITRUSLEAF_OK) {
         if( TRA_ERROR )
@@ -975,6 +981,7 @@ aerospike_lstack_size(
 
 cleanup:
     as_result_destroy( &result );
+    as_val_destroy( arglist );
 
     if( TRA_EXIT ) printf("[EXIT]<%s:%s>: RC(%d)\n",MOD, meth, rc );
     return rc;
@@ -1030,11 +1037,15 @@ aerospike_lstack_config(
     *resultpp = resultp; // This is the user's return value.
     rc = CITRUSLEAF_OK; // This is the user's return code.
 
-
+    // Lua Call: lstack_config( record, bin_name )
+    as_list * arglist = NULL;
+    arglist = as_arraylist_new(1, 0); // One item in the arglist
+    as_list_add_string(arglist, bin_name);
+    
     // Call the "apply udf" function (e.g. lstack_size()) for this record to
     // return the size of the stack.
     rc = citrusleaf_udf_record_apply(asc, namespace, set, o_keyp,
-            s_ldt_package, s_size, NULL, timeout_ms, resultp);
+            s_ldt_package, s_config, arglist, timeout_ms, resultp);
 
     if (rc != CITRUSLEAF_OK) {
         if( TRA_ERROR )
@@ -1047,6 +1058,7 @@ cleanup:
     // We do NOT destroy result (in resultp): The caller has to do that.
     // However, if there were errors, then the contents of resultp are
     // undetermined, so we null it out when there are errors.
+    as_val_destroy( arglist );
 
     if( TRA_EXIT ) printf("[EXIT]<%s:%s>: RC(%d)\n",MOD, meth, rc );
     if( rc != CITRUSLEAF_OK ){
@@ -1060,6 +1072,6 @@ cleanup:
     }
     if( TRA_EXIT ) printf("[EXIT]<%s:%s>: RC(%d)\n", MOD, meth, rc );
     return rc;
-} // end aerospike_lstack_size()()
+} // end aerospike_lstack_config()()
 
 // <EOF> <EOF> <EOF> <EOF> <EOF> <EOF> <EOF> <EOF> <EOF> <EOF> <EOF> <EOF>

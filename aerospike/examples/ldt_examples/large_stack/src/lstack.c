@@ -33,6 +33,7 @@ int setup_test( int argc, char **argv ) {
     char * host; // for each iteration of "add host"
     int port; // for each iteration of "add host"
     uint32_t timeout_ms;
+    int i = 0;
 
     // show cluster setup
     INFO("[DEBUG]:<%s:%s>Startup: host %s port %d ns %s set %s",
@@ -58,7 +59,7 @@ int setup_test( int argc, char **argv ) {
         g_config->cluster_port[0] = g_config->port; 
     }
     timeout_ms = g_config->timeout_ms;
-    for( int i = 0; i < g_config->cluster_count; i++ ){
+    for( i = 0; i < g_config->cluster_count; i++ ){
         host = g_config->cluster_name[i];
         port = g_config->cluster_port[i];
         INFO("[DEBUG]:<%s:%s>:Adding host(%s) port(%d)", MOD, meth, host, port);
@@ -254,6 +255,7 @@ int lso_push_test(char * keystr, char * lso_bin, int iterations, int seed,
         int data_format ) {
     static char * meth = "lso_push_test()";
     int rc = 0;
+    int i;
 
     INFO("[ENTER]:<%s:%s>: It(%d) Key(%s) LSOBin(%s) Seed(%d)",
             MOD, meth, iterations, keystr, lso_bin, seed);
@@ -280,7 +282,7 @@ int lso_push_test(char * keystr, char * lso_bin, int iterations, int seed,
 
     INFO("[DEBUG]:<%s:%s>: Run push() iterations(%d)", MOD, meth, iterations );
     citrusleaf_object_init_str( &o_key, keystr );
-    for ( int i = 0; i < iterations; i++ ) {
+    for ( i = 0; i < iterations; i++ ) {
         iseed = i * 10;
         generate_value( &valp, iseed, data_format );
 
@@ -326,6 +328,7 @@ int lso_peek_test(char * keystr, char * lso_bin, int iterations,
         int seed, int data_format ) {
     static char * meth = "lso_peek_test()";
     cl_rv rc = 0;
+    int i;
     as_result * resultp;
 
     INFO("[ENTER]:<%s:%s>: Iterations(%d) Key(%s) LSOBin(%s) Sd(%d) DF(%d)",
@@ -346,7 +349,7 @@ int lso_peek_test(char * keystr, char * lso_bin, int iterations,
     srand( seed );
     // NOTE: Must FREE the result for EACH ITERATION.
     citrusleaf_object_init_str( &o_key, keystr );
-    for ( int i = 0; i < iterations ; i ++ ){
+    for ( i = 0; i < iterations ; i ++ ){
         peek_count = rand() % g_config->peek_max;
         INFO("[DEBUG]:<%s:%s>: Peek(%d)", MOD, meth, iterations );
         rc = aerospike_lstack_peek( &resultp,
@@ -381,6 +384,7 @@ int lso_peek_test(char * keystr, char * lso_bin, int iterations,
 int lso_push_with_transform_test(char * keystr, char * lso_bin, int iterations) {
     static char * meth = "lso_push_with_transform_test()";
     int rc = 0;
+    int i;
 
     INFO("[ENTER]:<%s:%s>: It(%d) Key(%s) LSOBin(%s)",
             MOD, meth, iterations, keystr, lso_bin );
@@ -403,7 +407,7 @@ int lso_push_with_transform_test(char * keystr, char * lso_bin, int iterations) 
     INFO("[DEBUG]:<%s:%s>: Run push_with_transform() iterations(%d)",
           MOD, meth, iterations );
     citrusleaf_object_init_str( &o_key, keystr );
-    for ( int i = 0; i < iterations; i++ ) {
+    for ( i = 0; i < iterations; i++ ) {
         int val         = i * 10;
         as_list * listp = as_arraylist_new( 5, 5 );
         int64_t urlid   = val + 1;
@@ -465,6 +469,7 @@ int lso_peek_with_transform_test(char * keystr, char * lso_bin,
     int        vals_read;
     int        misses;
     int        errs;
+    int        i;
     as_result * resultp;
 
     INFO("[DEBUG]:<%s:%s>: Run peek() iterations(%d)", MOD, meth, iterations );
@@ -472,7 +477,7 @@ int lso_peek_with_transform_test(char * keystr, char * lso_bin,
     // NOTE: Must FREE the result (resultp) for EACH ITERATION.
     int peek_count = 2; // Soon -- set by Random Number
     citrusleaf_object_init_str( &o_key, keystr );
-    for ( int i = 0; i < iterations ; i ++ ){
+    for ( i = 0; i < iterations ; i ++ ){
         peek_count++;
         rc = aerospike_lstack_peek_then_filter(
                 &resultp, c, ns, set, &o_key, bname, peek_count,

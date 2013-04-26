@@ -1,52 +1,69 @@
-# Citrusleaf Foundation
-# Makefile for an example program
+###############################################################################
+include $(shell git rev-parse --show-toplevel)/project/settings.makefile
+###############################################################################
 
-# interesting directories
-DIR_INCLUDE = ../include
-DIR_CF_INCLUDE = ../../cf_base/include
-DIR_LIB = ../lib
-DIR_CF_LIB = ../../cf_base/lib
-DIR_OBJECT = obj
-DIR_TARGET = .
+CITRUSLEAF = $(REPO)/citrusleaf-libevent
 
-# common variables. Note that march=native first supported in GCC 4.2; 
-# users of older version should pick a more appropriate value
-CC = gcc
-ARCH_NATIVE = $(shell uname -m)
-CFLAGS_NATIVE = -g -fno-common -fomit-frame-pointer 
-CFLAGS_NATIVE += -fno-strict-aliasing -rdynamic -std=gnu99 -Wall 
-CFLAGS_NATIVE += -D_REENTRANT -D MARCH_$(ARCH_NATIVE)
-# CFLAGS_NATIVE += -O3
+###############################################################################
+##  FLAGS                                                                    ##
+###############################################################################
 
-# this code wants libevent-1.4, which I have installed locally. Change this to suit.
-LD = gcc
-LDFLAGS = $(CFLAGS_NATIVE) -L$(DIR_LIB) -L$(DIR_CF_LIB)
-LIBRARIES = -lev2citrusleaf -levent -lssl -lcrypto -lpthread -lrt
+CC_FLAGS = -std=gnu99  -Wall
+CC_FLAGS += -g -fno-common -fomit-frame-pointer
+CC_FLAGS += -fno-strict-aliasing -rdynamic
+CC_FLAGS += -D_REENTRANT -D MARCH_$(ARCH)
 
-HEADERS = 
-SOURCES = main.c
-TARGET = example5
+# LD_FLAGS = -levent
+# LD_FLAGS += -lssl -lcrypto -lpthread -lrt
+# LD_FLAGS += -lm
 
-OBJECTS = $(SOURCES:%.c=$(DIR_OBJECT)/%.o)
-DEPENDENCIES = $(OBJECTS:%.o=%.d)
+LIB_PATH = $(CITRUSLEAF)/$(TARGET_LIB)
+INC_PATH = $(CITRUSLEAF)/$(TARGET_INCL)
 
-.PHONY: all
-all: example5
+###############################################################################
+##  OBJECTS                                                                  ##
+###############################################################################
 
-.PHONY: clean
-clean:
-	/bin/rm -f $(DIR_OBJECT)/* $(DIR_TARGET)/$(TARGET)
+OBJECTS = example.o
 
-.PHONY: depclean
-depclean: clean
-	/bin/rm -f $(DEPENDENCIES)
+###############################################################################
+##  MAIN TARGETS                                                             ##
+###############################################################################
 
-.PHONY: example5
-example5: $(OBJECTS)
-	$(LD) $(LDFLAGS) -o $(DIR_TARGET)/$(TARGET) $(OBJECTS) $(LIBRARIES)
-	chmod +x example5
+all: build
 
--include $(DEPENDENCIES)
+.PHONY: build
+build: example
 
-$(DIR_OBJECT)/%.o: %.c
-	$(CC) $(CFLAGS_NATIVE) -MMD -o $@ -c -I$(DIR_INCLUDE) -I$(DIR_CF_INCLUDE) $<
+.PHONY: build-clean
+build-clean:
+	@rm -rf $(TARGET_BIN)
+	@rm -rf $(TARGET_LIB)
+
+.PHONY: run
+run: $(TARGET_BIN)/example
+	$(TARGET_BIN)/example
+
+.PHONY: example
+example: $(TARGET_BIN)/example
+
+###############################################################################
+##  BUILD TARGETS                                                            ##
+###############################################################################
+
+$(TARGET_OBJ)/%.o: %.c $(CITRUSLEAF)/$(TARGET_LIB)/libev2citrusleaf.a 
+	$(object)
+
+$(TARGET_BIN)/example: $(OBJECTS:%=$(TARGET_OBJ)/%) 
+	$(executable) $(CITRUSLEAF)/$(TARGET_LIB)/libev2citrusleaf.a -levent -lssl -lcrypto -lpthread -lrt -lm
+
+###############################################################################
+##  BUILD DEPENDENCIES                                                       ##
+###############################################################################
+
+$(CITRUSLEAF)/$(TARGET_LIB)/libev2citrusleaf.a: $(CITRUSLEAF)/$(SOURCE_INCL)/citrusleaf_event2/*.h $(CITRUSLEAF)/$(SOURCE_MAIN)/*.c
+	$(MAKE) -C $(CITRUSLEAF) libcitrusleaf.a prepare
+
+###############################################################################
+include $(RULES)
+###############################################################################

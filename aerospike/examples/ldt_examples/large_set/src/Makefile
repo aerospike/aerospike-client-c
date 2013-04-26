@@ -1,5 +1,5 @@
 # Citrusleaf Tools
-# Makefile:  Stolen from rec_udf for use with Large Stack Objects (LSTACK)
+# Makefile:  Stolen from rec_udf for use with Large SET Objects (LSET)
 
 # DEPTH = ../../../../../..
 # include $(DEPTH)/make_in/Makefile.in
@@ -20,9 +20,9 @@ DIR_TARGET = ../
 DIR_LIB = ../../../../target/Linux-x86_64/lib
 
 SOURCES       = test_log.c test_config.c test_counter.c test_main.c
-SOURCES      += lstack.c run_tests.c
+SOURCES      += lset.c run_tests.c
 SOURCE_HEADERS = test_log.h test_config.h test_counter.h test.h
-TARGET        = lstack
+TARGET        = lset
 
 INCLUDES = -I../include/ -I../../../../target/Linux-x86_64/include/ 
 INCLUDES +=  -I../../../../target/Linux-x86_64/include/citrusleaf/

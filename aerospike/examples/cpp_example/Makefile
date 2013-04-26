@@ -36,7 +36,7 @@ OBJECTS = example.o
 all: build
 
 .PHONY: build
-build: test_udf
+build: example
 
 .PHONY: build-clean
 build-clean:

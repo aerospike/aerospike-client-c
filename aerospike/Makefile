@@ -56,7 +56,7 @@ $(warning *  Try running the following:)
 $(warning *)
 $(warning *     $$ cd .. && git submodule update --init --recursive)
 $(warning *)
-$(warning *  If that doesn't work, remove the modules directory, )
+$(warning *  If that does not work, remove the modules directory, )
 $(warning *  then retry the steps above:)
 $(warning *)
 $(warning *     $$ rm -rf modules)
@@ -270,11 +270,13 @@ TEST_UTIL += util/test_aerospike
 TEST_UTIL += util/test_logger
 
 TEST_LSO = 
+TEST_LSO += lstack/lstack_advanced
 TEST_LSO += lstack/lstack_basics
-TEST_LSO += lstack/lstack_settings
-TEST_LSO += lstack/lstack_hot
-TEST_LSO += lstack/lstack_warm
-TEST_LSO += lstack/lstack_cold
+TEST_LSO += lstack/lstack_operations
+TEST_LSO += lstack/lstack_test
+TEST_LSO += lstack/lstack_util
+TEST_LSO += lstack/test_config
+TEST_LSO += lstack/test_log
 
 TEST_LSET =
 TEST_LSET += lset/lset_basics
@@ -294,7 +296,7 @@ TEST_CLIENT += $(TEST_UTIL)
 TEST_CLIENT += $(TEST_KV) 
 TEST_CLIENT += $(TEST_RECORD) 
 TEST_CLIENT += $(TEST_STREAM)
-# TEST_CLIENT += $(TEST_LSO)
+TEST_CLIENT += $(TEST_LSO)
 
 #-----#
 

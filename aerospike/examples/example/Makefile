@@ -1,8 +1,9 @@
+ROOT = ../../..
 ###############################################################################
-include $(shell git rev-parse --show-toplevel)/project/settings.makefile
+include $(ROOT)/project/settings.makefile
 ###############################################################################
 
-AEROSPIKE = $(REPO)/aerospike
+AEROSPIKE = $(ROOT)/aerospike
 
 ###############################################################################
 ##  FLAGS                                                                    ##

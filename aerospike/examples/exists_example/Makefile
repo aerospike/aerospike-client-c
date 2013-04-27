@@ -1,8 +1,9 @@
+ROOT = ../../..
 ###############################################################################
-include $(shell git rev-parse --show-toplevel)/project/settings.makefile
+include $(ROOT)/project/settings.makefile
 ###############################################################################
 
-AEROSPIKE = $(REPO)/aerospike
+AEROSPIKE = $(ROOT)/aerospike
 
 ###############################################################################
 ##  FLAGS                                                                    ##
@@ -48,7 +49,7 @@ example: $(TARGET_BIN)/example
 ##  BUILD TARGETS                                                            ##
 ###############################################################################
 
-$(TARGET_OBJ)/%.o: %.cpp $(AEROSPIKE)/$(TARGET_LIB)/libcitrusleaf.a 
+$(TARGET_OBJ)/%.o: %.c $(AEROSPIKE)/$(TARGET_LIB)/libcitrusleaf.a 
 	$(object)
 
 $(TARGET_BIN)/example: $(OBJECTS:%=$(TARGET_OBJ)/%) 

@@ -1,5 +1,6 @@
+ROOT = ..
 ###############################################################################
-include ../project/settings.makefile
+include $(ROOT)/project/settings.makefile
 ###############################################################################
 
 # Not using embedded modules? Then override these paths via command line.
@@ -8,63 +9,7 @@ COMMON 	= $(MODULES)/common
 MOD_LUA = $(MODULES)/mod-lua
 MSGPACK = $(MODULES)/msgpack
 
-ifeq ($(wildcard $(COMMON)/Makefile),) 
-$(warning ***************************************************************)
-$(warning *)
-$(warning *  COMMON ($(COMMON)) doesn't contain a Makefile. )
-$(warning *  COMMON must reference a valid path.)
-$(warning *)
-ERROR=1
-endif
-
-ifeq ($(wildcard $(MOD_LUA)/Makefile),) 
-$(warning ***************************************************************)
-$(warning *)
-$(warning *  MOD_LUA ($(MOD_LUA)) doesn't contain a Makefile. )
-$(warning *  MOD_LUA must reference a valid path.)
-$(warning *)
-ERROR=1
-endif
-
-ifeq ($(wildcard $(MSGPACK)/configure),) 
-$(warning ***************************************************************)
-$(warning *)
-$(warning *  MSGPACK ($(MSGPACK)) doesn't contain a configure. )
-$(warning *  MSGPACK must reference a valid path.)
-$(warning *)
-ERROR=1
-endif
-
-ifdef ERROR
-$(warning ***************************************************************)
-ifeq ($(COMMON), $(MODULES)/common)
-ERROR=2
-else
-ifeq ($(MOD_LUA), $(MODULES)/mod-lua)
-ERROR=2
-else
-ifeq ($(MSGPACK), $(MODULES)/msgpack)
-ERROR=2
-endif
-endif
-endif
-ifeq ($(ERROR),2)
-$(warning *)
-$(warning *  Looks like you are using Git submodules.)
-$(warning *)
-$(warning *  Try running the following:)
-$(warning *)
-$(warning *     $$ cd .. && git submodule update --init --recursive)
-$(warning *)
-$(warning *  If that doesn't work, remove the modules directory, )
-$(warning *  then retry the steps above:)
-$(warning *)
-$(warning *     $$ rm -rf modules)
-$(warning *)
-$(warning ***************************************************************)
-$(error )
-endif
-endif
+include modules.makefile
 
 ###############################################################################
 ##  FLAGS                                                                    ##
@@ -88,11 +33,6 @@ LD_FLAGS = -lm
 INC_PATH += $(COMMON)/$(TARGET_INCL)
 INC_PATH += $(MOD_LUA)/$(TARGET_INCL)
 INC_PATH += $(MSGPACK)/src
-
-SUBMODULES = 
-SUBMODULES += $(COMMON)
-SUBMODULES += $(MOD_LUA)
-SUBMODULES += $(MSGPACK)
 
 ###############################################################################
 ##  OBJECTS                                                                  ##

@@ -1,8 +1,9 @@
+ROOT = ../../../..
 ###############################################################################
-include $(shell git rev-parse --show-toplevel)/project/settings.makefile
+include $(ROOT)/project/settings.makefile
 ###############################################################################
 
-AEROSPIKE = $(REPO)/aerospike
+AEROSPIKE = $(ROOT)/aerospike
 
 ###############################################################################
 ##  FLAGS                                                                    ##
@@ -31,7 +32,7 @@ REC_UDF 	= rec_udf.o utils.o
 ##  MAIN TARGETS                                                             ##
 ###############################################################################
 
-all: build run
+all: build
 
 .PHONY: build
 build: manage_udf rec_udf

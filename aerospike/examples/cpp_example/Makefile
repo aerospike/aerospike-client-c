@@ -1,15 +1,13 @@
+ROOT = ../../..
 ###############################################################################
-include $(shell git rev-parse --show-toplevel)/project/settings.makefile
+include $(ROOT)/project/settings.makefile
 ###############################################################################
 
-AEROSPIKE = $(REPO)/aerospike
+AEROSPIKE = $(ROOT)/aerospike
 
 ###############################################################################
 ##  FLAGS                                                                    ##
 ###############################################################################
-
-# To Override Optimization Level, run make with the "O" variable set.
-# 	make O=0
 
 CC = g++
 LD = g++

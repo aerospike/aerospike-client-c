@@ -1,4 +1,10 @@
 
+COMMON 	= $(MODULES)/common
+MOD_LUA = $(MODULES)/mod-lua
+MSGPACK = $(MODULES)/msgpack
+
+SUBMODULES = $(COMMON) $(MOD_LUA) $(MSGPACK)
+
 ifeq ($(wildcard $(COMMON)/Makefile),) 
 $(warning ***************************************************************)
 $(warning *)

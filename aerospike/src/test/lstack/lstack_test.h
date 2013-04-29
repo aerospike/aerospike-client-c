@@ -17,7 +17,6 @@
 #include <stdint.h>
 #include <stdarg.h>
 #include <stdbool.h>
-#include <assert.h>
 #include <ctype.h>
 #include <getopt.h>
 #include <fcntl.h>  // open the random file

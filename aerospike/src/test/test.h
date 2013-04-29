@@ -5,7 +5,8 @@
 #include <stdio.h>
 #include <stdarg.h>
 
-
+#ifndef TEST_H
+#define TEST_H
 /******************************************************************************
  * MACROS
  *****************************************************************************/
@@ -243,3 +244,5 @@ void atf_assert_log(atf_test_result * result, const char * exp, const char * fil
 void atf_log(FILE * f, const char * level, const char * prefix, const char * file, int line, const char * fmt, ...);
 
 void atf_log_line(FILE * f, const char * level, const char * prefix, const char * file, int line, const char * fmt, ...);
+
+#endif

@@ -141,11 +141,12 @@ int run_test3( int seed ) {
     char        * lso_bin_name2 = "LSO_TEST1_STR";
     char        * lso_bin_name3 = "LSO_TEST1_LST";
     int         it = g_config->n_iterations;
+    int         k;
 
     INFO("[DEBUG]:<%s:%s>: Running Test3:: NumKeys(%d) Iterations(%d) Seed(%d)",
             MOD, meth, g_config->n_keys, g_config->n_iterations, seed );
 
-    for( int k = 0; k < g_config->n_keys; k++ ){
+    for( k = 0; k < g_config->n_keys; k++ ){
         // ------------------------------------------------------------
         // Do a series of PUSHES, for this KEY, for each of the types
         // ------------------------------------------------------------

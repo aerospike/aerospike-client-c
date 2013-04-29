@@ -7,15 +7,9 @@ Version.java
 .project
 .classpath
 .DS_Store
-client/c_clients/cl_c/doc/build
 *.pyc
 modules/.*
 target/
-
-/client/c_clients/cl_c/client_test-valgrind
-=======
-
-tools/AerospikeMonitor/histogram.PNG
 
 # Compiled source #
 ###################

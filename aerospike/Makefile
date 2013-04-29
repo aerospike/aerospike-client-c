@@ -202,14 +202,14 @@ TEST_UTIL += util/map_rec
 TEST_UTIL += util/test_aerospike
 TEST_UTIL += util/test_logger
 
-TEST_LSO = 
-TEST_LSO += lstack/lstack_advanced
-TEST_LSO += lstack/lstack_basics
-TEST_LSO += lstack/lstack_operations
-TEST_LSO += lstack/lstack_test
-TEST_LSO += lstack/lstack_util
-TEST_LSO += lstack/test_config
-TEST_LSO += lstack/test_log
+TEST_LSTACK = 
+# TEST_LSTACK += lstack/lstack_advanced
+# TEST_LSTACK += lstack/lstack_basics
+# TEST_LSTACK += lstack/lstack_operations
+TEST_LSTACK += lstack/lstack_test
+TEST_LSTACK += lstack/lstack_util
+TEST_LSTACK += lstack/test_config
+# TEST_LSTACK += lstack/test_log
 
 # TEST_LSET =
 # TEST_LSET += lset/lset_basics
@@ -224,8 +224,9 @@ TEST_LSO += lstack/test_log
 # TEST_LOLIST += lolist/lol_large
 
 
-# TEST_CLIENT = client_test
-# TEST_CLIENT += $(TEST_UTIL) 
+TEST_CLIENT = client_test
+TEST_CLIENT += $(TEST_UTIL) 
+TEST_CLIENT += $(TEST_LSTACK) 
 # TEST_CLIENT += $(TEST_KV) 
 # TEST_CLIENT += $(TEST_RECORD) 
 # TEST_CLIENT += $(TEST_STREAM)
@@ -274,6 +275,7 @@ test/client_test: $(TARGET_BIN)/test/client_test
 $(TARGET_BIN)/test/client_test: CFLAGS += $(TEST_CFLAGS)
 $(TARGET_BIN)/test/client_test: LDFLAGS += $(TEST_LDFLAGS)
 $(TARGET_BIN)/test/client_test: $(TEST_CLIENT:%=$(TARGET_OBJ)/test/%.o) $(TARGET_OBJ)/test/test.o $(TARGET_LIB)/libcitrusleaf.a | build prepare
+	$(executable)
 
 ###############################################################################
 include $(RULES)

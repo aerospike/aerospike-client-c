@@ -88,5 +88,5 @@ $(TARGET_SRC)/version.c: | $(TARGET_SRC)
 	@echo " */" >>  $@
 	@echo "char * citrusleaf_build_string = \"$(shell git describe)\";" >> $@
 
-$(TARGET_OBJ)/%.o: $(TARGET_SRC)/%.c
+$(TARGET_OBJ)/version.o: $(TARGET_SRC)/version.c
 	$(object)

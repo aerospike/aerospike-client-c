@@ -9,14 +9,14 @@ export ARFLAGS =
 ###############################################################################
 ##  BUILD ENVIRONMENT                                                        ##
 ###############################################################################
-
+ifeq ($(shell git rev-parse --is-inside-work-tree),true)
+GIT = 1
 REPO = $(shell git rev-parse --show-toplevel)
-ROOT = $(CURDIR)
-NAME = $(shell basename $(ROOT))
+endif
+
+NAME = $(shell basename $(CURDIR))
 OS = $(shell uname)
 ARCH = $(shell arch)
-#DISTRO_NAME = $(shell lsb_release -is)
-#DISTRO_VERS = $(shell lsb_release -rs)
 
 PROJECT = project
 MODULES = modules

@@ -36,54 +36,59 @@ void __log_append(FILE * f, const char * prefix, const char * fmt, ...) {
 /** 
  *  Initialize Test: Do the set up for a test so that the regular
  *  Aerospike functions can run.
+ *
+ *  @TODO: FIX REFERENCES TO UNDEFINED g_config
+ *
  */
 int setup_test() {
-    static char * meth = "setup_test()";
-    int rc = 0;
-    char * host; // for each iteration of "add host"
-    int port; // for each iteration of "add host"
-    uint32_t timeout_ms;
-    int i = 0;
+    // static char * meth = "setup_test()";
+    // int rc = 0;
+    // char * host; // for each iteration of "add host"
+    // int port; // for each iteration of "add host"
+    // uint32_t timeout_ms;
+    // int i = 0;
 
-    // show cluster setup
-    INFO("[DEBUG]:<%s:%s>Startup: host %s port %d ns %s set %s",
-            MOD, meth, g_config->host, g_config->port, g_config->ns,
-            g_config->set == NULL ? "" : g_config->set);
+    
 
-    citrusleaf_init();
-    citrusleaf_set_debug(true);
+    // // show cluster setup
+    // INFO("[DEBUG]:<%s:%s>Startup: host %s port %d ns %s set %s",
+    //         MOD, meth, g_config->host, g_config->port, g_config->ns,
+    //         g_config->set == NULL ? "" : g_config->set);
 
-    // create the cluster object
-    cl_cluster *asc = citrusleaf_cluster_create();
-    if (!asc) { 
-        INFO("[ERROR]:<%s:%s>: Fail on citrusleaf_cluster_create()",MOD,meth);
-        return(-1); 
-    }
+    // citrusleaf_init();
+    // citrusleaf_set_debug(true);
 
-    // If we have "cluster" defined, then we'll go with that (manually
-    // set up in main.c: setup_cluster().  Otherwise, we will default
-    // to local host (also defined in g_config).
-    if( g_config->cluster_count <= 0 ) {
-        g_config->cluster_count = 1;
-        g_config->cluster_name[0] = g_config->host; 
-        g_config->cluster_port[0] = g_config->port; 
-    }
-    timeout_ms = g_config->timeout_ms;
-    for( i = 0; i < g_config->cluster_count; i++ ){
-        host = g_config->cluster_name[i];
-        port = g_config->cluster_port[i];
-        INFO("[DEBUG]:<%s:%s>:Adding host(%s) port(%d)", MOD, meth, host, port);
-        rc = citrusleaf_cluster_add_host(asc, host, port, timeout_ms);
-        if ( rc != CITRUSLEAF_OK ) {
-            INFO("[ERROR]:<%s:%s>:could not connect to host(%s) port(%d)",
-                    MOD, meth, host, port);
+    // // create the cluster object
+    // cl_cluster *asc = citrusleaf_cluster_create();
+    // if (!asc) { 
+    //     INFO("[ERROR]:<%s:%s>: Fail on citrusleaf_cluster_create()",MOD,meth);
+    //     return(-1); 
+    // }
 
-            INFO("[ERROR]:<%s:%s>:Trying more nodes", MOD, meth );
-            // return(-1);
-        }
-    } // end for each cluster server
+    // // If we have "cluster" defined, then we'll go with that (manually
+    // // set up in main.c: setup_cluster().  Otherwise, we will default
+    // // to local host (also defined in g_config).
+    // if( g_config->cluster_count <= 0 ) {
+    //     g_config->cluster_count = 1;
+    //     g_config->cluster_name[0] = g_config->host; 
+    //     g_config->cluster_port[0] = g_config->port; 
+    // }
+    // timeout_ms = g_config->timeout_ms;
+    // for( i = 0; i < g_config->cluster_count; i++ ){
+    //     host = g_config->cluster_name[i];
+    //     port = g_config->cluster_port[i];
+    //     INFO("[DEBUG]:<%s:%s>:Adding host(%s) port(%d)", MOD, meth, host, port);
+    //     rc = citrusleaf_cluster_add_host(asc, host, port, timeout_ms);
+    //     if ( rc != CITRUSLEAF_OK ) {
+    //         INFO("[ERROR]:<%s:%s>:could not connect to host(%s) port(%d)",
+    //                 MOD, meth, host, port);
 
-    g_config->asc  = asc;
+    //         INFO("[ERROR]:<%s:%s>:Trying more nodes", MOD, meth );
+    //         // return(-1);
+    //     }
+    // } // end for each cluster server
+
+    // g_config->asc  = asc;
 
     return 0;
 } // end setup_test()
@@ -91,9 +96,12 @@ int setup_test() {
 
 /**
  * Close up the shop.
+ *
+ *  @TODO: FIX REFERENCES TO UNDEFINED g_config
+ *
  */
 int shutdown_test() {
-    if (g_config->asc) citrusleaf_cluster_destroy(g_config->asc);
+    // if (g_config->asc) citrusleaf_cluster_destroy(g_config->asc);
     citrusleaf_shutdown();
     return 0;
 } // end shutdown_test()

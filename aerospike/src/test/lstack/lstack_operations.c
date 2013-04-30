@@ -4,7 +4,11 @@
 // #include <citrusleaf/citrusleaf.h>
 // #include <citrusleaf/as_types.h>
 // #include <citrusleaf/aerospike_lstack.h>
+
 #include "lstack_test.h"
+
+
+// Foward delare our config structure for all test files.
 
 // LSTACK OPERATIONS
 // Hold the main OPERATION functions for LSTACK.  This function is what
@@ -444,58 +448,67 @@ int lstack_peek_with_transform_test(char * keystr, char * ldt_bin,
  * TEST CASES
  *****************************************************************************/
 
+// ++====================++
+// || REGULAR OPERATIONS ||
+// ++====================++
+
 TEST( lstack_operations_small_push, "lstack push small" ) {
     static char * meth = "lstack_operations_small_push()";
+    int rc = 0;
     printf("Test(%s) called\n", meth );
 
     // TODO: Fill in Function
     
-    return true;
+    assert_int_eq( rc, 0 );
 } // end lstack_operations_small_push()
 
 TEST( lstack_operations_medium_push, "lstack push medium" ) {
     static char * meth = "lstack_operations_medium_push()";
+    int rc = 0;
     printf("Test(%s) called\n", meth );
 
     // TODO: Fill in Function
     
-    return true;
+    assert_int_eq( rc, 0 );
 } // end   lstack_operations_medium_push()
 
 TEST( lstack_operations_large_push, "lstack push large" ) {
     static char * meth = "lstack_operations_large_push()";
+    int rc = 0;
     printf("Test(%s) called\n", meth );
 
     // TODO: Fill in Function
     
-    return true;
+    assert_int_eq( rc, 0 );
 } // end   lstack_operations_large_push()
 
 
 TEST( lstack_operations_small_peek, "lstack peek small" ) {
     static char * meth = "lstack_operations_small_peek()";
+    int rc = 0;
     printf("Test(%s) called\n", meth );
 
     // TODO: Fill in Function
     
-    return true;
+    assert_int_eq( rc, 0 );
 } // end   lstack_operations_small_peek()
 
 TEST( lstack_operations_medium_peek, "lstack peek medium" ) {
     static char * meth = "lstack_operations_medium_peek()";
+    int rc = 0;
     printf("Test(%s) called\n", meth );
 
     // TODO: Fill in Function
     
-    return true;
+    assert_int_eq( rc, 0 );
 } // end   lstack_operations_medium_peek()
 
 TEST( lstack_operations_large_peek, "lstack peek large" ) {
     static char * meth = "lstack_operations_large_peek()";
+    int rc = 0;
     printf("Test(%s) called\n", meth );
 
     // TODO: Fill in Function
     
-    return true;
+    assert_int_eq( rc, 0 );
 } // end   lstack_operations_large_peek()
-

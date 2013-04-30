@@ -197,9 +197,9 @@ TEST_UTIL += util/test_aerospike
 TEST_UTIL += util/test_logger
 
 TEST_LSTACK = 
-# TEST_LSTACK += lstack/lstack_advanced
-# TEST_LSTACK += lstack/lstack_basics
-# TEST_LSTACK += lstack/lstack_operations
+TEST_LSTACK += lstack/lstack_advanced
+TEST_LSTACK += lstack/lstack_basics
+TEST_LSTACK += lstack/lstack_operations
 TEST_LSTACK += lstack/lstack_test
 TEST_LSTACK += lstack/lstack_util
 TEST_LSTACK += lstack/test_config

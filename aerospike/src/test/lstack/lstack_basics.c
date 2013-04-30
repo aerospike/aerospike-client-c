@@ -30,6 +30,8 @@ TEST( lstack_basics_push, "Push N items on the stack" ) {
     int    seed       = 111;
     int    format     = NUMBER_FORMAT;
 
+    printf("lstack_basics_push:: Calling push test\n");
+
     int rc = lstack_push_test( user_key, ldt_bin, iterations, seed, format );
     assert_int_eq( rc, 0 );
 } // end TEST
@@ -41,6 +43,8 @@ TEST( lstack_basics_peek, "Read N elements from the stack" ) {
     int    iterations = 10;
     int    seed       = 111;
     int    format     = NUMBER_FORMAT;
+
+    printf("lstack_basics_peek:: Calling peek test\n");
 
     int rc = lstack_peek_test( user_key, ldt_bin, iterations, seed, format );
     assert_int_eq( rc, 1 );

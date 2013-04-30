@@ -2,7 +2,7 @@
 using namespace std;
 
 #ifndef LUA_MODULE_PATH
-#define LUA_MODULE_PATH "../udf_examples/lua_files"
+#define LUA_MODULE_PATH "../udf_examples/rec_udf/src/lua"
 #endif
 
 extern "C" {

@@ -220,11 +220,13 @@ TEST( lstack_advanced_peek_objects_compact_and_filter,
  *****************************************************************************/
 
 static bool lstack_before(atf_suite * suite) {
+    extern int setup_test();
     lstack_setup();
     return true;
 }
 
 static bool lstack_after(atf_suite * suite) {
+    extern int shutdown_test();
     shutdown_test();
     return true;
 }

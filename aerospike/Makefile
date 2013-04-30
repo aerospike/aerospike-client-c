@@ -1,70 +1,8 @@
+ROOT = ..
 ###############################################################################
-include ../project/settings.makefile
+include $(ROOT)/project/settings.makefile
+include modules.makefile
 ###############################################################################
-
-# Not using embedded modules? Then override these paths via command line.
-
-COMMON 	= $(MODULES)/common
-MOD_LUA = $(MODULES)/mod-lua
-MSGPACK = $(MODULES)/msgpack
-
-ifeq ($(wildcard $(COMMON)/Makefile),) 
-$(warning ***************************************************************)
-$(warning *)
-$(warning *  COMMON ($(COMMON)) doesn't contain a Makefile. )
-$(warning *  COMMON must reference a valid path.)
-$(warning *)
-ERROR=1
-endif
-
-ifeq ($(wildcard $(MOD_LUA)/Makefile),) 
-$(warning ***************************************************************)
-$(warning *)
-$(warning *  MOD_LUA ($(MOD_LUA)) doesn't contain a Makefile. )
-$(warning *  MOD_LUA must reference a valid path.)
-$(warning *)
-ERROR=1
-endif
-
-ifeq ($(wildcard $(MSGPACK)/configure),) 
-$(warning ***************************************************************)
-$(warning *)
-$(warning *  MSGPACK ($(MSGPACK)) doesn't contain a configure. )
-$(warning *  MSGPACK must reference a valid path.)
-$(warning *)
-ERROR=1
-endif
-
-ifdef ERROR
-$(warning ***************************************************************)
-ifeq ($(COMMON), $(MODULES)/common)
-ERROR=2
-else
-ifeq ($(MOD_LUA), $(MODULES)/mod-lua)
-ERROR=2
-else
-ifeq ($(MSGPACK), $(MODULES)/msgpack)
-ERROR=2
-endif
-endif
-endif
-ifeq ($(ERROR),2)
-$(warning *)
-$(warning *  Looks like you are using Git submodules.)
-$(warning *)
-$(warning *  Try running the following:)
-$(warning *)
-$(warning *     $$ cd .. && git submodule update --init --recursive)
-$(warning *)
-$(warning *  If that does not work, remove the modules directory, )
-$(warning *  then retry the steps above:)
-$(warning *)
-$(warning *     $$ rm -rf modules)
-$(warning *)
-$(warning ***************************************************************)
-$(error )
-endif
-endif
 
 ###############################################################################
 ##  FLAGS                                                                    ##
@@ -88,11 +26,6 @@ LD_FLAGS = -lm
 INC_PATH += $(COMMON)/$(TARGET_INCL)
 INC_PATH += $(MOD_LUA)/$(TARGET_INCL)
 INC_PATH += $(MSGPACK)/src
-
-SUBMODULES = 
-SUBMODULES += $(COMMON)
-SUBMODULES += $(MOD_LUA)
-SUBMODULES += $(MSGPACK)
 
 ###############################################################################
 ##  OBJECTS                                                                  ##
@@ -148,12 +81,6 @@ libcitrusleaf.so: $(TARGET_LIB)/libcitrusleaf.so
 ###############################################################################
 ##  BUILD TARGETS                                                            ##
 ###############################################################################
-
-$(TARGET_SRC)/version.c: | $(TARGET_SRC)
-	bash ./src/shell/version.sh > $@
-
-$(TARGET_OBJ)/%.o: $(TARGET_SRC)/%.c
-	$(object)
 
 $(TARGET_OBJ)/%.o: $(COMMON)/$(TARGET_LIB)/libcf-client.a $(COMMON)/$(TARGET_LIB)/libcf-shared.a $(MOD_LUA)/$(TARGET_LIB)/libmod_lua.a $(SOURCE_MAIN)/%.c $(SOURCE_INCL)/citrusleaf/*.h
 	$(object)
@@ -253,13 +180,13 @@ msgpack: $(MSGPACK)
 TEST_KV = 
 TEST_KV += kv/kv_string
  
-TEST_RECORD = 
-TEST_RECORD += record/record_basics
-TEST_RECORD += record/record_lists
+# TEST_RECORD = 
+# TEST_RECORD += record/record_basics
+# TEST_RECORD += record/record_lists
  
-TEST_STREAM = 
-TEST_STREAM += stream/stream_simple
-TEST_STREAM += stream/stream_ads
+# TEST_STREAM = 
+# TEST_STREAM += stream/stream_simple
+# TEST_STREAM += stream/stream_ads
 
 TEST_UTIL = 
 TEST_UTIL += util/udf
@@ -269,40 +196,41 @@ TEST_UTIL += util/map_rec
 TEST_UTIL += util/test_aerospike
 TEST_UTIL += util/test_logger
 
-TEST_LSO = 
-TEST_LSO += lstack/lstack_advanced
-TEST_LSO += lstack/lstack_basics
-TEST_LSO += lstack/lstack_operations
-TEST_LSO += lstack/lstack_test
-TEST_LSO += lstack/lstack_util
-TEST_LSO += lstack/test_config
-TEST_LSO += lstack/test_log
+TEST_LSTACK = 
+# TEST_LSTACK += lstack/lstack_advanced
+# TEST_LSTACK += lstack/lstack_basics
+# TEST_LSTACK += lstack/lstack_operations
+TEST_LSTACK += lstack/lstack_test
+TEST_LSTACK += lstack/lstack_util
+TEST_LSTACK += lstack/test_config
+# TEST_LSTACK += lstack/test_log
 
-TEST_LSET =
-TEST_LSET += lset/lset_basics
-TEST_LSET += lset/lset_small
-TEST_LSET += lset/lset_medium
-TEST_LSET += lset/lset_large
+# TEST_LSET =
+# TEST_LSET += lset/lset_basics
+# TEST_LSET += lset/lset_small
+# TEST_LSET += lset/lset_medium
+# TEST_LSET += lset/lset_large
 
-TEST_LOLIST =
-TEST_LOLIST += lolist/lol_basics
-TEST_LOLIST += lolist/lol_small
-TEST_LOLIST += lolist/lol_medium
-TEST_LOLIST += lolist/lol_large
+# TEST_LOLIST =
+# TEST_LOLIST += lolist/lol_basics
+# TEST_LOLIST += lolist/lol_small
+# TEST_LOLIST += lolist/lol_medium
+# TEST_LOLIST += lolist/lol_large
 
 
 TEST_CLIENT = client_test
 TEST_CLIENT += $(TEST_UTIL) 
-TEST_CLIENT += $(TEST_KV) 
-TEST_CLIENT += $(TEST_RECORD) 
-TEST_CLIENT += $(TEST_STREAM)
-TEST_CLIENT += $(TEST_LSO)
+TEST_CLIENT += $(TEST_LSTACK) 
+# TEST_CLIENT += $(TEST_KV) 
+# TEST_CLIENT += $(TEST_RECORD) 
+# TEST_CLIENT += $(TEST_STREAM)
+# TEST_CLIENT += $(TEST_LSO)
 
 #-----#
 
 TEST_VALGRIND = --tool=memcheck --leak-check=yes --show-reachable=yes --num-callers=20 --track-fds=yes -v
 
-TEST_CFLAGS = -I$(TARGET_INCL) -I$(JANSSON_PATH)/src
+TEST_CFLAGS = -I$(TARGET_INCL)
 
 TEST_LDFLAGS = -lssl -lcrypto -lpthread -lrt -llua  -lm
 TEST_LDFLAGS += -L$(TARGET_LIB) -Wl,-l,:libcitrusleaf.a
@@ -341,6 +269,7 @@ test/client_test: $(TARGET_BIN)/test/client_test
 $(TARGET_BIN)/test/client_test: CFLAGS += $(TEST_CFLAGS)
 $(TARGET_BIN)/test/client_test: LDFLAGS += $(TEST_LDFLAGS)
 $(TARGET_BIN)/test/client_test: $(TEST_CLIENT:%=$(TARGET_OBJ)/test/%.o) $(TARGET_OBJ)/test/test.o $(TARGET_LIB)/libcitrusleaf.a | build prepare
+	$(executable)
 
 ###############################################################################
 include $(RULES)

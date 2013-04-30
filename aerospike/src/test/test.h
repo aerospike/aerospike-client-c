@@ -100,6 +100,7 @@ void atf_suite_result_print(atf_suite_result * suite_result);
     static void suite_spec__##__suite_name(atf_suite * self)
 
 #define suite_add(__test) \
+    extern atf_test * __test; \
     atf_suite_add(self, __test)
 
 #define suite_before(__func) \

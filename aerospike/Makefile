@@ -180,13 +180,13 @@ msgpack: $(MSGPACK)
 TEST_KV = 
 TEST_KV += kv/kv_string
  
-# TEST_RECORD = 
-# TEST_RECORD += record/record_basics
-# TEST_RECORD += record/record_lists
+TEST_RECORD = 
+TEST_RECORD += record/record_basics
+TEST_RECORD += record/record_lists
  
-# TEST_STREAM = 
-# TEST_STREAM += stream/stream_simple
-# TEST_STREAM += stream/stream_ads
+TEST_STREAM = 
+TEST_STREAM += stream/stream_simple
+TEST_STREAM += stream/stream_ads
 
 TEST_UTIL = 
 TEST_UTIL += util/udf
@@ -203,28 +203,14 @@ TEST_LSTACK += lstack/lstack_operations
 TEST_LSTACK += lstack/lstack_test
 TEST_LSTACK += lstack/lstack_util
 TEST_LSTACK += lstack/test_config
-# TEST_LSTACK += lstack/test_log
-
-# TEST_LSET =
-# TEST_LSET += lset/lset_basics
-# TEST_LSET += lset/lset_small
-# TEST_LSET += lset/lset_medium
-# TEST_LSET += lset/lset_large
-
-# TEST_LOLIST =
-# TEST_LOLIST += lolist/lol_basics
-# TEST_LOLIST += lolist/lol_small
-# TEST_LOLIST += lolist/lol_medium
-# TEST_LOLIST += lolist/lol_large
 
 
 TEST_CLIENT = client_test
 TEST_CLIENT += $(TEST_UTIL) 
 TEST_CLIENT += $(TEST_LSTACK) 
-# TEST_CLIENT += $(TEST_KV) 
-# TEST_CLIENT += $(TEST_RECORD) 
-# TEST_CLIENT += $(TEST_STREAM)
-# TEST_CLIENT += $(TEST_LSO)
+TEST_CLIENT += $(TEST_KV) 
+TEST_CLIENT += $(TEST_RECORD) 
+TEST_CLIENT += $(TEST_STREAM)
 
 #-----#
 

@@ -135,21 +135,33 @@ static void *run_test(void *o) {
 /**
  * Print out our counters (maybe this belongs in Config?)
  */
-void print_counters() {
+void print_counters( uint64_t seconds ) {
     fprintf(stderr, "TEST(FN): Total Keys(%"PRIu64") \n",
         cf_atomic_int_get(g_config->key_counter->val) );
 
-    fprintf(stderr, ">> Read Ops(%"PRIu64") Read Vals(%"PRIu64") \n",
+    fprintf(stderr,":: Read Ops(%"PRIu64") Read Vals(%"PRIu64") S(%"PRIu64")\n",
         cf_atomic_int_get(g_config->read_ops_counter->val),
-        cf_atomic_int_get(g_config->read_vals_counter->val) );
+        cf_atomic_int_get(g_config->read_vals_counter->val), seconds );
 
-    fprintf(stderr, ">> Write Ops(%"PRIu64") Write Vals(%"PRIu64") \n",
+    fprintf(stderr,":: Read Ops/Sec(%"PRIu64") Read Vals/Sec(%"PRIu64")\n",
+        cf_atomic_int_get(g_config->read_ops_counter->val) / seconds,
+        cf_atomic_int_get(g_config->read_vals_counter->val)/ seconds );
+
+    fprintf(stderr,":: Write Ops(%"PRIu64") Write Vals(%"PRIu64")S(%"PRIu64")\n",
         cf_atomic_int_get(g_config->write_ops_counter->val),
-        cf_atomic_int_get(g_config->write_vals_counter->val) );
+        cf_atomic_int_get(g_config->write_vals_counter->val), seconds );
 
-    fprintf(stderr, ">> Delete Ops(%"PRIu64") Delete Vals(%"PRIu64") \n",
+    fprintf(stderr,":: Write Ops/Sec(%"PRIu64") Write Vals/Sec(%"PRIu64")\n",
+        cf_atomic_int_get(g_config->write_ops_counter->val)/seconds,
+        cf_atomic_int_get(g_config->write_vals_counter->val)/ seconds );
+
+    fprintf(stderr,":: Delete Ops(%"PRIu64") Delete Vals(%"PRIu64")S(%"PRIu64")\n",
         cf_atomic_int_get(g_config->delete_ops_counter->val),
-        cf_atomic_int_get(g_config->delete_vals_counter->val) );
+        cf_atomic_int_get(g_config->delete_vals_counter->val), seconds );
+
+    fprintf(stderr,":: Delete Ops/Sec(%"PRIu64") Delete Vals/Sec(%"PRIu64")\n",
+        cf_atomic_int_get(g_config->delete_ops_counter->val) / seconds,
+        cf_atomic_int_get(g_config->delete_vals_counter->val) / seconds );
 
 } // end print_stats()
 
@@ -167,7 +179,7 @@ int main(int argc, char **argv) {
 static char * meth         = "main()";
     int           rc           = 0;
     int j = 0;
-    char * test_name = "LSO Test Run";
+    char * test_name = "LSTACK Test Run::April 29";
 
     // Run this FIRST THING
     init_configuration( argc, argv );
@@ -215,6 +227,8 @@ static char * meth         = "main()";
     stop_test_counter_thread(counter_control);
 
     uint64_t stop_time = cf_getms();
+    uint64_t elapsed_time_ms = stop_time - start_time;
+    uint64_t elapsed_time_s = elapsed_time_ms / 1000;
 
 
     printf("<< Test Run >> End (%s) \n", test_name );
@@ -223,7 +237,7 @@ static char * meth         = "main()";
             (g_config->n_threads * g_config->n_iterations),
             (stop_time - start_time) );
 
-    print_counters();
+    print_counters( elapsed_time_s );
 
     printf("CITRUSLEAF STATS Follows ... \n");
     citrusleaf_print_stats();

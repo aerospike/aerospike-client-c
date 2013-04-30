@@ -75,22 +75,23 @@ PLAN( client_test ) {
     /**
      * kv - kv tests
      */
-    // plan_add( kv_string );
+    plan_add( kv_string );
 
     /**
      * ldt tests
      */
+    plan_add( lstack_basics );
      
 
     /**
      * record - record tests
      */
-    // plan_add( record_basics );
-    // plan_add( record_lists );
+    plan_add( record_basics );
+    plan_add( record_lists );
 
     /**
      * stream - stream tests
      */
-    // plan_add( stream_simple );
-    // plan_add( stream_ads );
+    plan_add( stream_simple );
+    plan_add( stream_ads );
 }

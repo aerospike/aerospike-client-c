@@ -26,7 +26,8 @@
 static char * MOD = "lstack_test.c::13_04_26";
 
 // delare our config structure for all test files.
-test_config * g_config;
+test_config   global_config;
+test_config * g_config = &global_config;
 
 /******************************************************************************
  * TEST SUITE

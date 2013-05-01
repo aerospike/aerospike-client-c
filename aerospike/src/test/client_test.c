@@ -93,5 +93,5 @@ PLAN( client_test ) {
      * stream - stream tests
      */
     plan_add( stream_simple );
-    plan_add( stream_ads );
+    // plan_add( stream_ads );
 }

@@ -6,7 +6,7 @@ This repository is a collection of C client libraries for interfacing with Aeros
 
 The repository is composed of the following submodules:
 
-- **aerospike** – Aerospike (3.x) C API 
+- **[aerospike](./aerospike)** – Aerospike (3.x) C API 
 - **citrusleaf-base** – Shared files for citrusleaf submodules.
 - **citrusleaf-client** – Citrusleaf (2.x) C API (*deprecated*)
 - **citrusleaf-libevent** – libevent-based API

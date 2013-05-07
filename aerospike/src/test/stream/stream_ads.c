@@ -143,14 +143,14 @@ TEST( stream_ads_create, "create 25600 records and 1 index" ) {
 TEST( stream_ads_1, "COUNT(*)" ) {
 
     int rc = 0;
-    int count = 0;
+    cf_atomic32 count = 0;
 
     as_stream_status consume(as_val * v) {
         if ( v == AS_STREAM_END ) {
             info("count: %d",count);
         }
         else {
-            count++;
+            cf_atomic32_incr(&count); 
             as_val_destroy(v);
         }
         return AS_STREAM_OK;

@@ -569,5 +569,19 @@ function game_double_str(record)
 --   return 'Record updated with '..record.type;
 end
 
+function do_gen_test(rec)
+  -- Add a new bin
+  rec.bin2 = 100;
+  aerospike:update(rec);
+  local g = record.gen(rec);
+  info("Generation after update is %d",g);
+  return g;
+end
+ 
+function do_ttl_test(rec)
+  local t = record.ttl(rec);
+  return t;
+end 
+
 
 

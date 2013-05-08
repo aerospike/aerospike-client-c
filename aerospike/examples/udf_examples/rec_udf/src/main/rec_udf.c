@@ -2354,8 +2354,7 @@ typedef struct test_def_s {
 #define test(func) {#func, func}
 
 const test_def test_defs[] = {
-	//test(do_udf_ttl_gen_test), 
-	
+	test(do_udf_ttl_gen_test), 
 	test(do_udf_read_bins_test),
 	test(do_udf_bin_update_test),
 	test(do_udf_trim_bin_test),

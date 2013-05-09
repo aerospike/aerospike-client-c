@@ -16,7 +16,7 @@
 #include <stdio.h>
 
 #include "utils.h"
-#include "citrusleaf/citrusleaf.h"
+#include <citrusleaf/citrusleaf.h>
 
 
 extern void *start_counter_thread(atomic_int *records, atomic_int *bytes);

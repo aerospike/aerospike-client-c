@@ -1,13 +1,10 @@
 ROOT = ../../../..
+include $(ROOT)/project/settings.mk
 ###############################################################################
-include $(ROOT)/project/settings.makefile
+##  SETTINGS                                                                 ##
 ###############################################################################
 
 AEROSPIKE = $(ROOT)/aerospike
-
-###############################################################################
-##  FLAGS                                                                    ##
-###############################################################################
 
 CC_FLAGS = -std=gnu99 -g -rdynamic -Wall 
 CC_FLAGS += -fno-common -fno-strict-aliasing -fPIC 
@@ -68,9 +65,8 @@ $(TARGET_BIN)/rec_udf: $(REC_UDF:%=$(TARGET_OBJ)/%)
 ##  BUILD DEPENDENCIES                                                       ##
 ###############################################################################
 
-$(AEROSPIKE)/$(TARGET_LIB)/libcitrusleaf.a: $(AEROSPIKE)/$(SOURCE_INCL)/*.h  $(AEROSPIKE)/$(SOURCE_MAIN)/*.c
+$(AEROSPIKE)/$(TARGET_LIB)/libcitrusleaf.a: $(AEROSPIKE)/$(SOURCE_INCL)/citrusleaf/*.h  $(AEROSPIKE)/$(SOURCE_MAIN)/*.c
 	$(MAKE) -C $(AEROSPIKE) libcitrusleaf.a prepare
 
 ###############################################################################
-include $(REPO)/project/rules.makefile
-###############################################################################
+include $(ROOT)/project/rules.mk

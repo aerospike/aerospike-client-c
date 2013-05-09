@@ -18,11 +18,12 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 
-#include "citrusleaf/citrusleaf.h"
-#include "citrusleaf/cl_udf.h"
+#include <citrusleaf/citrusleaf.h>
+#include <citrusleaf/cl_udf.h>
 #include <citrusleaf/cf_random.h>
 #include <citrusleaf/cf_atomic.h>
 #include <citrusleaf/cf_hist.h>
+ 
 #include "doc_udf.h"
 
 

@@ -19,11 +19,11 @@
 #include <event2/dns.h>
 #include <event2/event.h>
 
-#include "citrusleaf/cf_atomic.h"
-#include "citrusleaf/cf_base_types.h"
-#include "citrusleaf/cf_digest.h"
-#include "citrusleaf/cf_hooks.h"
-#include "citrusleaf/proto.h"
+#include <citrusleaf/cf_atomic.h>
+#include <citrusleaf/cf_digest.h>
+#include <citrusleaf/cf_hooks.h>
+#include <citrusleaf/cf_proto.h>
+#include <citrusleaf/cf_types.h>
 
 #include "ev2citrusleaf.h"
 

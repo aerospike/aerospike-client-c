@@ -3,13 +3,17 @@
 #include "../util/udf.h"
 #include "../util/consumer_stream.h"
 #include "../util/test_logger.h"
-#include <citrusleaf/as_stream.h>
-#include <citrusleaf/as_types.h>
-#include <citrusleaf/as_module.h>
-#include <citrusleaf/mod_lua.h>
-#include <citrusleaf/mod_lua_config.h>
+
+#include <aerospike/as_stream.h>
+#include <aerospike/as_types.h>
+#include <aerospike/as_module.h>
+
+#include <aerospike/mod_lua.h>
+#include <aerospike/mod_lua_config.h>
+
 #include <citrusleaf/cl_query.h>
 #include <citrusleaf/citrusleaf.h>
+
 #include <limits.h>
 #include <stdlib.h>
 
@@ -366,7 +370,7 @@ static bool before(atf_suite * suite) {
     mod_lua_config config = {
         .server_mode    = false,
         .cache_enabled  = false,
-        .system_path    = "modules/mod-lua/src/lua",
+        .system_path    = "../aerospike-mod-lua/src/lua",
         .user_path      = "src/test/lua"
     };
 

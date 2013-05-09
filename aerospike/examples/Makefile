@@ -7,4 +7,4 @@ default: all
 	$(MAKE) -C exists_example $@
 	# $(MAKE) -C ldt_examples $@
 	$(MAKE) -C udf_examples $@
-	$(MAKE) -C web_example $@
+	# $(MAKE) -C web_example $@

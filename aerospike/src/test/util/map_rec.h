@@ -4,8 +4,8 @@
  * An as_rec backed by a map.
  */
 
-#include <as_rec.h>
-#include <as_map.h>
+#include <aerospike/as_rec.h>
+#include <aerospike/as_map.h>
 
 /*****************************************************************************
  * FUNCTIONS

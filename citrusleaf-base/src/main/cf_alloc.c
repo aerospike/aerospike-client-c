@@ -1,103 +1,130 @@
-/*
- *  Citrusleaf Foundation
- *  include/alloc.h - memory allocation framework
+/******************************************************************************
+ * Copyright 2008-2013 by Aerospike.
  *
- *  Copyright 2008 by Citrusleaf.  All rights reserved.
- *  THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE.  THE COPYRIGHT NOTICE
- *  ABOVE DOES NOT EVIDENCE ANY ACTUAL OR INTENDED PUBLICATION.
- */
+ * Permission is hereby granted, free of charge, to any person obtaining a copy 
+ * of this software and associated documentation files (the "Software"), to 
+ * deal in the Software without restriction, including without limitation the 
+ * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or 
+ * sell copies of the Software, and to permit persons to whom the Software is 
+ * furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included in 
+ * all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING 
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+ * IN THE SOFTWARE.
+ *****************************************************************************/
 
-#include <stddef.h>
-#include <stdint.h>
+#include <errno.h>
+#include <pthread.h>
+#include <stdarg.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <strings.h>
+#include <time.h>
+#include <unistd.h>
+#include <stdbool.h>
 
-#include "citrusleaf/cf_atomic.h"
-#include "citrusleaf/cf_base_types.h"
+#include <citrusleaf/cf_alloc.h>
+#include <citrusleaf/cf_atomic.h>
 
-#include "citrusleaf/cf_alloc.h"
+typedef cf_atomic32 cf_rc_counter;
 
 
-/* cf_client_rc_count
+void * cf_malloc_at(size_t sz, char *file, int line) {
+    return malloc(sz);
+}
+
+void * cf_calloc_at(size_t nmemb, size_t sz, char *file, int line) {
+    return calloc(nmemb, sz);
+}
+
+void * cf_realloc_at(void *ptr, size_t sz, char *file, int line) {
+    return realloc(ptr,sz);
+}
+
+void * cf_strdup_at(const char *s, char *file, int line) {
+    return strdup(s);
+}
+
+void * cf_strndup_at(const char *s, size_t n, char *file, int line) {
+    return strndup(s, n);
+}
+
+void * cf_valloc_at(size_t sz, char *file, int line) {
+    return valloc(sz);
+}
+
+void cf_free_at(void *p, char *file, int line) {
+    free(p);
+}
+
+
+
+/* cf_rc_count
  * Get the reservation count for a memory region */
-cf_atomic_int_t
-cf_client_rc_count(void *addr)
-{
-	cf_client_rc_counter *rc;
-
-	rc = (cf_client_rc_counter *) (((uint8_t *)addr) - sizeof(cf_client_rc_counter));
-
-	return(*rc);
+cf_atomic_int_t cf_rc_count(void *addr) {
+    cf_rc_counter * rc = (cf_rc_counter *) (((uint8_t *)addr) - sizeof(cf_rc_counter));
+    return *rc;
 }
 
 
-/* cf_client_rc_reserve
+/* cf_rc_reserve
  * Get a reservation on a memory region */
-int
-cf_client_rc_reserve(void *addr)
-{
-	cf_client_rc_counter *rc;
-
-	/* Extract the address of the reference counter, then increment it */
-	rc = (cf_client_rc_counter *) (((uint8_t *)addr) - sizeof(cf_client_rc_counter));
-
-	int i = (int) cf_atomic32_add(rc, 1);
-	smb_mb();
-	return(i);
-
+int cf_rc_reserve(void *addr) {
+    cf_rc_counter * rc = (cf_rc_counter *) (((uint8_t *)addr) - sizeof(cf_rc_counter));
+    int i = (int) cf_atomic32_add(rc, 1);
+    smb_mb();
+    return i;
 }
 
 
-/* cf_client_rc_release
+/* cf_rc_release
  * Release a reservation on a memory region */
-cf_atomic_int_t
-cf_client_rc_release_x(void *addr, bool autofree)
-{
-	cf_client_rc_counter *rc;
-	uint64_t c;
-	
-	/* Release the reservation; if this reduced the reference count to zero,
-	 * then free the block if autofree is set, and return 1.  Otherwise,
-	 * return 0 */
-	rc = (cf_client_rc_counter *) (((uint8_t *)addr) - sizeof(cf_client_rc_counter));
-	smb_mb();
-	if (0 == (c = cf_atomic32_decr(rc)))
-		if (autofree)
-			free((void *)rc);
-
-	return (cf_atomic_int_t)c;
+static inline cf_atomic_int_t cf_rc_release_x(void *addr, bool autofree) {
+    uint64_t c = 0;
+    cf_rc_counter * rc = (cf_rc_counter *) (((uint8_t *)addr) - sizeof(cf_rc_counter));
+    // Release the reservation; if this reduced the reference count to zero,
+    // then free the block if autofree is set, and return 1.  Otherwise,
+    // return 0 
+    smb_mb();
+    if ( 0 == (c = cf_atomic32_decr(rc)) && autofree ){
+        free((void *)rc);
+    }
+    return c;
 }
 
+int cf_rc_release(void *addr) {
+    return cf_rc_release_x(addr,false);
+}
 
-/* cf_client_rc_alloc
+int cf_rc_releaseandfree(void *addr) {
+    return cf_rc_release_x(addr,true);
+}
+
+/* cf_rc_alloc
  * Allocate a reference-counted memory region.  This region will be filled
  * with uint8_ts of value zero */
-void *
-cf_client_rc_alloc(size_t sz)
+void * cf_rc_alloc_at(size_t sz, char *file, int line)
 {
-	uint8_t *addr;
-	size_t asz = sizeof(cf_client_rc_counter) + sz;
-
-	addr = (uint8_t*)malloc(asz);
-	if (NULL == addr)
-		return(NULL);
-
-	cf_atomic_int_set((cf_client_rc_counter *)addr, 1);
-	uint8_t *base = addr + sizeof(cf_client_rc_counter);
-
-	return(base);
+    size_t asz = sizeof(cf_rc_counter) + sz;
+    uint8_t * addr = malloc(asz);
+    if (NULL == addr) return NULL;
+    cf_atomic_int_set((cf_atomic_int *)addr, 1);
+    return addr + sizeof(cf_rc_counter);
 }
 
 
-/* cf_client_rc_free
+/* cf_rc_free
  * Deallocate a reference-counted memory region */
-void
-cf_client_rc_free(void *addr)
-{
-	cf_client_rc_counter *rc;
-
-	rc = (cf_client_rc_counter *) (((uint8_t *)addr) - sizeof(cf_client_rc_counter));
-
-	free((void *)rc);
-
-	return;
+void cf_rc_free_at(void *addr, char *file, int line) {
+    cf_rc_counter * rc = (cf_rc_counter *) (((uint8_t *)addr) - sizeof(cf_rc_counter));
+    free((void *)rc);
+    return;
 }

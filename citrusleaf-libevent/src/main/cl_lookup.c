@@ -14,11 +14,11 @@
 #include <event2/dns.h>
 #include <event2/event.h>
 
-#include "citrusleaf/cf_byte_order.h"
-#include "citrusleaf/cf_clock.h"
-#include "citrusleaf/cf_log_internal.h"
-#include "citrusleaf/cf_socket.h"
-#include "citrusleaf/cf_vector.h"
+#include <citrusleaf/cf_byte_order.h>
+#include <citrusleaf/cf_clock.h>
+#include <citrusleaf/cf_log_internal.h>
+#include <citrusleaf/cf_socket.h>
+#include <citrusleaf/cf_vector.h>
 
 #include "citrusleaf_event2/cl_cluster.h"
 #include "citrusleaf_event2/ev2citrusleaf-internal.h"

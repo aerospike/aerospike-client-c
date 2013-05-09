@@ -2,11 +2,11 @@
  * An as_rec backed by a map.
  */
 
-#include <as_integer.h>
-#include <as_string.h>
-#include <as_rec.h>
-#include <as_map.h>
-#include <as_hashmap.h>
+#include <aerospike/as_integer.h>
+#include <aerospike/as_string.h>
+#include <aerospike/as_rec.h>
+#include <aerospike/as_map.h>
+#include <aerospike/as_hashmap.h>
 #include "map_rec.h"
 
 /*****************************************************************************

@@ -2,7 +2,7 @@
 #include "../test.h"
 #include "../util/udf.h"
 #include <citrusleaf/citrusleaf.h>
-#include <citrusleaf/as_types.h>
+#include <aerospike/as_types.h>
 
 /******************************************************************************
  * MACROS

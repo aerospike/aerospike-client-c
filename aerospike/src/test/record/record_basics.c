@@ -2,7 +2,7 @@
 #include "../test.h"
 #include "../util/udf.h"
 #include <citrusleaf/citrusleaf.h>
-#include <citrusleaf/as_types.h>
+#include <aerospike/as_types.h>
 
 /******************************************************************************
  * MACROS
@@ -380,7 +380,6 @@ static bool after(atf_suite * suite) {
 SUITE( record_basics, "test basics.lua" ) {
 
     suite_before( before );
-    suite_after( after );
 
     suite_add( record_basics_exists );
 
@@ -401,4 +400,7 @@ SUITE( record_basics, "test basics.lua" ) {
 
     suite_add( record_basics_func_does_not_exist );
     suite_add( record_basics_file_does_not_exist );
+
+
+    suite_after( after );
 }

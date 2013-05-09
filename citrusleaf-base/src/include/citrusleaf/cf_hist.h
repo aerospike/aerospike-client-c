@@ -1,16 +1,29 @@
-/*
- *  Citrusleaf Foundation
- *  include/hist.h - timer functionality
+/******************************************************************************
+ * Copyright 2008-2013 by Aerospike.
  *
- *  Copyright 2009 by Citrusleaf.  All rights reserved.
- *  THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE.  THE COPYRIGHT NOTICE
- *  ABOVE DOES NOT EVIDENCE ANY ACTUAL OR INTENDED PUBLICATION.
- */
+ * Permission is hereby granted, free of charge, to any person obtaining a copy 
+ * of this software and associated documentation files (the "Software"), to 
+ * deal in the Software without restriction, including without limitation the 
+ * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or 
+ * sell copies of the Software, and to permit persons to whom the Software is 
+ * furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included in 
+ * all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING 
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+ * IN THE SOFTWARE.
+ *****************************************************************************/
 #pragma once
 
 #include <stdint.h>
 
-#include "cf_atomic.h"
+#include <citrusleaf/cf_atomic.h>
 
 /* SYNOPSIS
  * For timing things, you want to know this histogram of what took how much time.
@@ -42,37 +55,3 @@ extern cf_histogram * cf_histogram_create(char *name);
 extern void cf_histogram_dump( cf_histogram *h );  // for debugging
 extern void cf_histogram_get_counts(cf_histogram *h, cf_histogram_counts *hc);
 extern void cf_histogram_insert_data_point(cf_histogram *h, uint64_t start);
-
-/* SYNOPSIS
- * Some bithacks are eternal and handy
- * http://graphics.stanford.edu/~seander/bithacks.html
- */
-
-#define cf_bits_find_first_set(__x) ffs(__x)
-#define cf_bits_find_first_set_64(__x) ffsll(__x)
- 
-extern int cf_bits_find_last_set(uint32_t c);
-extern int cf_bits_find_last_set_64(uint64_t c);
-
-static const char cf_LogTable256[] =
-{
-#define CF_LT(n) n, n, n, n, n, n, n, n, n, n, n, n, n, n, n, n
-	-1, 0, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3,
-	CF_LT(4), CF_LT(5), CF_LT(5), CF_LT(6), CF_LT(6), CF_LT(6), CF_LT(6),
-	CF_LT(7), CF_LT(7), CF_LT(7), CF_LT(7), CF_LT(7), CF_LT(7), CF_LT(7), CF_LT(7)
-};
-
-// round a value up to the nearest MODULUS
-
-static inline uint32_t cf_roundup( uint32_t i, uint32_t modulus) {
-	uint32_t t = i % modulus;
-	if (t == 0)	return(i);
-	return(  i + (modulus - t ) );
-}
-
-static inline uint64_t cf_roundup_64( uint64_t i, uint32_t modulus) {
-	uint64_t t = i % modulus;
-	if (t == 0)	return(i);
-	return(  i + (modulus - t ) );
-}
-

@@ -22,10 +22,10 @@
 #include <event2/event.h>
 #include <event2/dns.h>
 
-#include "citrusleaf/cf_base_types.h"
-#include "citrusleaf/cf_digest.h"
-#include "citrusleaf/cf_hooks.h"
-#include "citrusleaf/cf_log.h"
+#include <citrusleaf/cf_digest.h>
+#include <citrusleaf/cf_hooks.h>
+#include <citrusleaf/cf_log.h>
+#include <citrusleaf/cf_types.h>
 
 #ifdef __cplusplus
 extern "C" {

@@ -15,7 +15,7 @@
 #include <stdbool.h>
 #include <getopt.h>
 
-#include "citrusleaf/citrusleaf.h"
+#include <citrusleaf/citrusleaf.h>
 
 typedef struct config_s {
 	

@@ -1,29 +1,46 @@
+ROOT = ..
+include $(ROOT)/project/settings.mk
 ###############################################################################
-include ../project/settings.makefile
-###############################################################################
-
-CITRUSLEAF_BASE = $(REPO)/citrusleaf-base
-
-###############################################################################
-##  FLAGS                                                                    ##
+##  SETTINGS                                                                 ##
 ###############################################################################
 
-# To Override Optimization Level, run make with the "O" variable set.
-# 	make O=0
+# Modules
+BASE 		:= $(realpath ../citrusleaf-base)
+COMMON 		:= $(realpath ../aerospike-common)
+MODULES 	:= BASE COMMON
 
+# Overrride optimizations via: make O=n
 O=3
 
-CFLAGS = -O$(O)
-
+# Make-local Compiler Flags
 CC_FLAGS = -std=gnu99 -g -rdynamic -Wextra
 CC_FLAGS += -fno-common -fno-strict-aliasing -fPIC 
-CC_FLAGS += -DMARCH_$(ARCH) 
-CC_FLAGS += -D_FILE_OFFSET_BITS=64 
-CC_FLAGS += -D_REENTRANT
+CC_FLAGS += -DMARCH_$(ARCH) -D_FILE_OFFSET_BITS=64 
+CC_FLAGS += -D_REENTRANT -D_GNU_SOURCE 
 CC_FLAGS += -march=nocona
 
-INC_PATH += $(CITRUSLEAF_BASE)/$(TARGET_INCL)
+# Make-local Linker Flags
+# LD_FLAGS =
 
+# DEBUG Settings
+ifdef DEBUG
+O=0
+CC_FLAGS += -pg -fprofile-arcs -ftest-coverage -g2
+LD_FLAGS += -pg -fprofile-arcs -lgcov
+endif
+
+# Make-tree Compler Flags
+CFLAGS = -O$(O)
+
+# Make-tree Linker Flags
+# LDFLAGS = 
+
+# Include Paths
+INC_PATH += $(BASE)/$(TARGET_INCL)
+INC_PATH += $(COMMON)/$(TARGET_INCL)
+
+# Library Paths
+# LIB_PATH +=
 
 ###############################################################################
 ##  OBJECTS                                                                  ##
@@ -41,20 +58,24 @@ CITRUSLEAF += cl_async.o
 CITRUSLEAF += cl_shm.o
 CITRUSLEAF += cl_request.o
 
-BASE =
-BASE += cf_alloc.o
-BASE += cf_average.o
-BASE += cf_digest.o
-BASE += cf_hist.o
-BASE += cf_hooks.o
-BASE += cf_ll.o
-BASE += cf_log.o
-BASE += cf_proto.o
-BASE += cf_queue.o
-BASE += cf_service.o
-BASE += cf_shash.o
-BASE += cf_socket.o
-BASE += cf_vector.o
+# BASE_OBJECTS =
+# BASE_OBJECTS += cf_alloc.o
+# BASE_OBJECTS += cf_average.o
+# BASE_OBJECTS += cf_digest.o
+# BASE_OBJECTS += cf_hist.o
+# BASE_OBJECTS += cf_hooks.o
+# BASE_OBJECTS += cf_ll.o
+# BASE_OBJECTS += cf_log.o
+# BASE_OBJECTS += cf_proto.o
+# BASE_OBJECTS += cf_queue.o
+# BASE_OBJECTS += cf_service.o
+# BASE_OBJECTS += cf_shash.o
+# BASE_OBJECTS += cf_socket.o
+# BASE_OBJECTS += cf_vector.o
+
+OBJECTS = 
+OBJECTS += $(wildcard $(COMMON)/$(TARGET_OBJ)/citrusleaf/*.o)
+OBJECTS += $(wildcard $(BASE)/$(TARGET_OBJ)/client/*.o)
 
 ###############################################################################
 ##  MAIN TARGETS                                                             ##
@@ -63,10 +84,11 @@ BASE += cf_vector.o
 all: build prepare
 
 .PHONY: prepare
-prepare: $(CITRUSLEAF_BASE)/$(TARGET_INCL) $(TARGET_INCL)/citrusleaf/*.h
+prepare: modules-prepare $(TARGET_INCL)/citrusleaf/*.h
+	$(noop)
 
 .PHONY: build
-build: libcitrusleaf
+build: modules libcitrusleaf
 
 .PHONY: build-clean
 build-clean:
@@ -84,41 +106,20 @@ libcitrusleaf.so: $(TARGET_LIB)/libcitrusleaf.so
 ##  BUILD TARGETS                                                            ##
 ###############################################################################
 
-$(TARGET_OBJ)/%.o: $(CITRUSLEAF_BASE)/$(TARGET_LIB)/libcf-client.a $(SOURCE_MAIN)/%.c $(SOURCE_INCL)/citrusleaf/*.h
+$(TARGET_OBJ)/%.o: $(CITRUSLEAF_BASE)/$(TARGET_LIB)/libcf-client.a $(COMMON)/$(TARGET_LIB)/libcf-common.a $(SOURCE_MAIN)/%.c $(SOURCE_INCL)/citrusleaf/*.h
 	$(object)
 
 $(TARGET_LIB)/libcitrusleaf.so: $(CITRUSLEAF:%=$(TARGET_OBJ)/%) $(TARGET_OBJ)/version.o
-	$(library) $(BASE:%=$(CITRUSLEAF_BASE)/$(TARGET_OBJ)/client/%)
+	$(library) $(OBJECTS)
 
 $(TARGET_LIB)/libcitrusleaf.a: $(CITRUSLEAF:%=$(TARGET_OBJ)/%) $(TARGET_OBJ)/version.o
-	$(archive) $(BASE:%=$(CITRUSLEAF_BASE)/$(TARGET_OBJ)/client/%)
+	$(archive) $(OBJECTS)
 
 $(TARGET_INCL)/citrusleaf: | $(TARGET_INCL)
 	mkdir $@
 
-$(TARGET_INCL)/citrusleaf/%.h:: $(SOURCE_INCL)/citrusleaf/%.h $(CITRUSLEAF_BASE)/$(TARGET_INCL)/citrusleaf/%.h | $(TARGET_INCL)/citrusleaf
-	cp -p $(filter %.h, $^) $(TARGET_INCL)/citrusleaf
-
-$(TARGET_INCL)/citrusleaf/%.h::  $(CITRUSLEAF_BASE)/$(TARGET_INCL)/citrusleaf/%.h | $(TARGET_INCL)/citrusleaf $(CITRUSLEAF_BASE)/$(TARGET_INCL)
+$(TARGET_INCL)/citrusleaf/%.h:: $(SOURCE_INCL)/citrusleaf/%.h | $(TARGET_INCL)/citrusleaf
 	cp -p $(filter %.h, $^) $(TARGET_INCL)/citrusleaf
 
 ###############################################################################
-##  BUILD DEPENDENCIES                                                       ##
-###############################################################################
-
-$(CITRUSLEAF_BASE)/$(TARGET_LIB)/libcf-client.a: $(CITRUSLEAF_BASE)/$(SOURCE_INCL)/citrusleaf/*.h $(CITRUSLEAF_BASE)/$(SOURCE_MAIN)/*.c
-	$(MAKE) -C $(CITRUSLEAF_BASE) libcf-client.a prepare
-
-.PHONY: $(CITRUSLEAF_BASE)/$(TARGET_INCL)
-$(CITRUSLEAF_BASE)/$(TARGET_INCL): $(CITRUSLEAF_BASE)/$(TARGET_INCL)/citrusleaf/*.h | $(TARGET_INCL)/citrusleaf
-
-.PHONY: $(CITRUSLEAF_BASE)/$(TARGET_INCL)/citrusleaf
-$(CITRUSLEAF_BASE)/$(TARGET_INCL)/citrusleaf: $(CITRUSLEAF_BASE)/$(SOURCE_INCL)/citrusleaf/*.h
-	$(MAKE) -C $(CITRUSLEAF_BASE) prepare
-
-$(CITRUSLEAF_BASE)/$(TARGET_INCL)/citrusleaf/%.h:  $(CITRUSLEAF_BASE)/$(TARGET_INCL)/citrusleaf | $(TARGET_INCL)/citrusleaf
-	$(noop)
-
-###############################################################################
-include $(RULES)
-###############################################################################
+include project/modules.mk $(ROOT)/project/rules.mk

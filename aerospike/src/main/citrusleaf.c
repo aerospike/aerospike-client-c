@@ -1,24 +1,27 @@
-/*
- * A good, basic C client for the Aerospike protocol
- * Creates a library which is linkable into a variety of systems
+/******************************************************************************
+ * Copyright 2008-2013 by Aerospike.
  *
- * First attempt is a very simple non-threaded blocking interface
- * currently coded to C99 - in our tree, GCC 4.2 and 4.3 are used
- *
- * Brian Bulkowski, 2009, 2010, 2011
- * All rights reserved
- */
+ * Permission is hereby granted, free of charge, to any person obtaining a copy 
+ * of this software and associated documentation files (the "Software"), to 
+ * deal in the Software without restriction, including without limitation the 
+ * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or 
+ * sell copies of the Software, and to permit persons to whom the Software is 
+ * furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included in 
+ * all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING 
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+ * IN THE SOFTWARE.
+ *****************************************************************************/
 
 // This define is needed to use strndup().
 // #define _GNU_SOURCE
-
-#include "citrusleaf.h"
-#include "cl_cluster.h"
-#include "citrusleaf-internal.h"
-
-#include <citrusleaf/cf_atomic.h>
-#include <citrusleaf/cf_hist.h>
-#include <citrusleaf/cf_socket.h>
 
 #include <sys/types.h>
 #include <sys/socket.h> // socket calls
@@ -32,6 +35,17 @@
 #include <arpa/inet.h>  // ntonl
 #include <inttypes.h> // PRIu64
 #include <signal.h>
+
+#include <citrusleaf/cf_atomic.h>
+#include <citrusleaf/cf_hist.h>
+#include <citrusleaf/cf_proto.h>
+#include <citrusleaf/cf_socket.h>
+
+#include <citrusleaf/citrusleaf.h>
+#include <citrusleaf/cl_cluster.h>
+
+#include "internal.h"
+
 
 #ifdef OSX
 #include <libkern/OSByteOrder.h> // for the 64-bit swap macro.

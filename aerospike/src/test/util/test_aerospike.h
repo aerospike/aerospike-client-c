@@ -4,7 +4,7 @@
  * An as_aerospike for tests.
  */
 
-#include <as_aerospike.h>
+#include <aerospike/as_aerospike.h>
 
 /*****************************************************************************
  * FUNCTIONS

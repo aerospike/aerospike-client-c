@@ -1,56 +1,60 @@
-/*
- *  Citrusleaf Foundation
- *  src/queue.c - queue framework
+/******************************************************************************
+ * Copyright 2008-2013 by Aerospike.
  *
- *  Copyright 2008 by Citrusleaf.  All rights reserved.
- *  THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE.  THE COPYRIGHT NOTICE
- *  ABOVE DOES NOT EVIDENCE ANY ACTUAL OR INTENDED PUBLICATION.
- */
+ * Permission is hereby granted, free of charge, to any person obtaining a copy 
+ * of this software and associated documentation files (the "Software"), to 
+ * deal in the Software without restriction, including without limitation the 
+ * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or 
+ * sell copies of the Software, and to permit persons to whom the Software is 
+ * furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included in 
+ * all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING 
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+ * IN THE SOFTWARE.
+ *****************************************************************************/
 
 #include <pthread.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "citrusleaf/cf_base_types.h"
-#include "citrusleaf/cf_clock.h"
-#include "citrusleaf/cf_errno.h"
+#include <citrusleaf/cf_clock.h>
+#include <citrusleaf/cf_errno.h>
+#include <citrusleaf/cf_types.h>
+
+#include <citrusleaf/cf_log_internal.h>
+#include <citrusleaf/cf_queue.h>
+#include <citrusleaf/cf_queue_priority.h>
+
+/******************************************************************************
+ * MACROS
+ *****************************************************************************/
+
 #ifdef EXTERNAL_LOCKS
-#include "citrusleaf/cf_hooks.h"
+#include <citrusleaf/cf_hooks.h>
+#define QUEUE_LOCK(_q) 			if ( _q->threadsafe ) { cf_hooked_mutex_lock(_q->LOCK); }
+#define QUEUE_UNLOCK(_q) 		if ( _q->threadsafe ) { cf_hooked_mutex_unlock(_q->LOCK); }
+#define QUEUE_LOCK_FREE(_q) 	if ( _q->threadsafe ) { cf_hooked_mutex_free(_q->LOCK); }
+#else
+#define QUEUE_LOCK(_q) 			if ( _q->threadsafe ) { pthread_mutex_lock(&_q->LOCK); }
+#define QUEUE_UNLOCK(_q) 		if ( _q->threadsafe ) { pthread_mutex_unlock(&_q->LOCK); }
+#define QUEUE_LOCK_FREE(_q) 	if ( _q->threadsafe ) { pthread_cond_destroy(&_q->CV); pthread_mutex_destroy(&_q->LOCK); }
 #endif
-#include "citrusleaf/cf_log_internal.h"
 
-#include "citrusleaf/cf_queue.h"
-
-
-// #define DEBUG 1
-
-#ifdef EXTERNAL_LOCKS
-#define QUEUE_LOCK(_q) if (_q->threadsafe) \
-		cf_hooked_mutex_lock(_q->LOCK);
-#else
-#define QUEUE_LOCK(_q) if (_q->threadsafe) \
-		pthread_mutex_lock(&_q->LOCK);
-#endif 
-
-#ifdef EXTERNAL_LOCKS
-#define QUEUE_UNLOCK(_q) if (_q->threadsafe) \
-		cf_hooked_mutex_unlock(_q->LOCK);
-#else
-#define QUEUE_UNLOCK(_q) if (_q->threadsafe) \
-		pthread_mutex_unlock(&_q->LOCK);
-#endif 
-
-/* SYNOPSIS
- * Queue
- */
-
+/******************************************************************************
+ * FUNCTIONS
+ *****************************************************************************/
 
 /* cf_queue_create
  * Initialize a queue */
-cf_queue *
-cf_queue_create(size_t elementsz, bool threadsafe)
-{
+cf_queue * cf_queue_create(size_t elementsz, bool threadsafe) {
 	cf_queue *q = NULL;
 
 	q = (cf_queue*)malloc( sizeof(cf_queue));
@@ -104,26 +108,15 @@ cf_queue_create(size_t elementsz, bool threadsafe)
 // Sort of. Anyone in a race with the destructor, who has a pointer to the queue,
 // is in jepardy anyway.
 
-void
-cf_queue_destroy(cf_queue *q)
-{
-	if (q->threadsafe) {
-#ifdef EXTERNAL_LOCKS
-		cf_hooked_mutex_free(q->LOCK);
-#else
-		pthread_cond_destroy(&q->CV);
-		pthread_mutex_destroy(&q->LOCK);
-#endif // EXTERNAL_LOCKS
-	}
+void cf_queue_destroy(cf_queue *q) {
+	QUEUE_LOCK_FREE(q);
 	memset((void*)q->queue, 0, q->allocsz * q->elementsz);
 	free(q->queue);
 	memset((void*)q, 0, sizeof(cf_queue) );
 	free(q);
 }
 
-int
-cf_queue_sz(cf_queue *q)
-{
+int cf_queue_sz(cf_queue *q) {
 	int rv;
 
 	QUEUE_LOCK(q);
@@ -138,9 +131,7 @@ cf_queue_sz(cf_queue *q)
 // Internal function. Call with new size with lock held.
 // *** THIS ONLY WORKS ON FULL QUEUES ***
 //
-int
-cf_queue_resize(cf_queue *q, uint32_t new_sz)
-{
+int cf_queue_resize(cf_queue *q, uint32_t new_sz) {
 	// check - a lot of the code explodes badly if queue is not full
 	if (CF_Q_SZ(q) != q->allocsz) {
 //		cf_debug(CF_QUEUE,"cf_queue: internal error: resize on non-full queue");
@@ -185,9 +176,7 @@ cf_queue_resize(cf_queue *q, uint32_t new_sz)
 // I really expect this will never get called....
 // HOWEVER it can be a symptom of a queue getting really, really deep
 //
-void
-cf_queue_unwrap(cf_queue *q)
-{
+void cf_queue_unwrap(cf_queue *q) {
 	int sz = CF_Q_SZ(q);
 	q->read_offset %= q->allocsz;
 	q->write_offset = q->read_offset + sz;
@@ -197,9 +186,7 @@ cf_queue_unwrap(cf_queue *q)
 /* cf_queue_push
  * Push goes to the front, which currently means memcpying the entire queue contents
  * */
-int
-cf_queue_push(cf_queue *q, void *ptr)
-{
+int cf_queue_push(cf_queue *q, void *ptr) {
 	/* FIXME arg check - and how do you do that, boyo? Magic numbers? */
 
 	/* FIXME error */
@@ -234,9 +221,7 @@ cf_queue_push(cf_queue *q, void *ptr)
 /* cf_queue_push_limit
  * Push element on the queue only if size < limit.
  * */
-bool
-cf_queue_push_limit(cf_queue *q, void *ptr, uint32_t limit)
-{
+bool cf_queue_push_limit(cf_queue *q, void *ptr, uint32_t limit) {
 	QUEUE_LOCK(q);
 	uint32_t size = CF_Q_SZ(q);
 
@@ -273,9 +258,7 @@ cf_queue_push_limit(cf_queue *q, void *ptr, uint32_t limit)
  * if ms_wait = 0, don't wait at all
  * if ms_wait > 0, wait that number of ms
  * */
-int
-cf_queue_pop(cf_queue *q, void *buf, int ms_wait)
-{
+int cf_queue_pop(cf_queue *q, void *buf, int ms_wait) {
 	if (NULL == q) {
 		cf_error("cf_queue_pop: try passing in a queue");
 		return(-1);
@@ -353,9 +336,7 @@ cf_queue_pop(cf_queue *q, void *buf, int ms_wait)
 }
 
 
-void
-cf_queue_delete_offset(cf_queue *q, uint32_t index)
-{
+void cf_queue_delete_offset(cf_queue *q, uint32_t index) {
 	index %= q->allocsz;
 	uint32_t r_index = q->read_offset % q->allocsz;
 	uint32_t w_index = q->write_offset % q->allocsz;
@@ -397,9 +378,7 @@ cf_queue_delete_offset(cf_queue *q, uint32_t index)
 
 // Iterate over all queue members calling the callback
 
-int 
-cf_queue_reduce(cf_queue *q,  cf_queue_reduce_fn cb, void *udata)
-{
+int cf_queue_reduce(cf_queue *q,  cf_queue_reduce_fn cb, void *udata) {
 	if (NULL == q)
 		return(-1);
 
@@ -441,9 +420,7 @@ Found:
 // pass 'true' as the 'only_one' parameter if you know there can be only one element
 // with this value on the queue
 
-int
-cf_queue_delete(cf_queue *q, void *buf, bool only_one)
-{
+int cf_queue_delete(cf_queue *q, void *buf, bool only_one) {
 	if (NULL == q)
 		return(CF_QUEUE_ERR);
 
@@ -482,9 +459,7 @@ Done:
 // Priority queue implementation
 //
 
-cf_queue_priority *
-cf_queue_priority_create(size_t elementsz, bool threadsafe)
-{
+cf_queue_priority * cf_queue_priority_create(size_t elementsz, bool threadsafe) {
 	cf_queue_priority *q = (cf_queue_priority*)malloc(sizeof(cf_queue_priority));
 	if (!q)	return(0);
 	
@@ -516,7 +491,7 @@ Fail5:
 	cf_hooked_mutex_free(q->LOCK);
 #else
 	pthread_mutex_destroy(&q->LOCK);
-Fail4:	
+Fail4:
 #endif // EXTERNAL_LOCKS
 	cf_queue_destroy(q->high_q);
 Fail3:	
@@ -528,9 +503,7 @@ Fail1:
 	return(0);
 }
 
-void 
-cf_queue_priority_destroy(cf_queue_priority *q)
-{
+void cf_queue_priority_destroy(cf_queue_priority *q) {
 	cf_queue_destroy(q->high_q);
 	cf_queue_destroy(q->medium_q);
 	cf_queue_destroy(q->low_q);
@@ -545,9 +518,7 @@ cf_queue_priority_destroy(cf_queue_priority *q)
 	free(q);
 }
 
-int 
-cf_queue_priority_push(cf_queue_priority *q, void *ptr, int pri)
-{
+int cf_queue_priority_push(cf_queue_priority *q, void *ptr, int pri) {
 	
 	QUEUE_LOCK(q);
 	
@@ -572,18 +543,11 @@ cf_queue_priority_push(cf_queue_priority *q, void *ptr, int pri)
 	return(rv);	
 }
 
-int 
-cf_queue_priority_pop(cf_queue_priority *q, void *buf, int ms_wait)
-{
+int cf_queue_priority_pop(cf_queue_priority *q, void *buf, int ms_wait) {
 	QUEUE_LOCK(q);
 
 	struct timespec tp;
 	if (ms_wait > 0) {
-#ifdef OSX
-		uint64_t curms = cf_getms(); // using the cl generic functions defined in cf_clock.h. It is going to have slightly less resolution than the pure linux version
-		tp.tv_sec = (curms + ms_wait)/1000;
-		tp.tv_nsec = (ms_wait %1000) * 1000000;
-#else // linux
 		clock_gettime( CLOCK_REALTIME, &tp); 
 		tp.tv_sec += ms_wait / 1000;
 		tp.tv_nsec += (ms_wait % 1000) * 1000000;
@@ -591,7 +555,6 @@ cf_queue_priority_pop(cf_queue_priority *q, void *buf, int ms_wait)
 			tp.tv_nsec -= 1000000000;
 			tp.tv_sec++;
 		}
-#endif
 	}
 
 	if (q->threadsafe) {
@@ -635,9 +598,7 @@ cf_queue_priority_pop(cf_queue_priority *q, void *buf, int ms_wait)
 	return(rv);
 }
 
-int
-cf_queue_priority_sz(cf_queue_priority *q)
-{
+int cf_queue_priority_sz(cf_queue_priority *q) {
 	int rv = 0;
 	QUEUE_LOCK(q);
 	rv += cf_queue_sz(q->high_q);
@@ -646,115 +607,3 @@ cf_queue_priority_sz(cf_queue_priority *q)
 	QUEUE_UNLOCK(q);
 	return(rv);
 }
-
-
-
-//
-// Test code
-// it's always really annoying to have a queue that malfunctions in some small way
-// so best to have a pretty serious torture test suite
-//
-#if 0
-
-#define TEST1_SZ 400
-#define TEST1_INTERVAL 10
-
-void *
-cf_queue_test_1_write(void *arg)
-{
-	cf_queue *q = (cf_queue *) arg;
-	
-	for (int i=0; i<TEST1_SZ;i++) {
-		
-		usleep(TEST1_INTERVAL * 1000);
-		
-		int rv;
-		rv = cf_queue_push(q, &i);
-		if (0 != rv) {
-			cf_error("queue push failed: error %d",rv);
-			return((void *)-1);
-		}
-	}
-	
-	return((void *)0);
-	
-}	
-
-void *
-cf_queue_test_1_read(void *arg)
-{
-	cf_queue *q = (cf_queue *) arg;
-	
-	for (int i=0;i<TEST1_SZ;i++) {
-		
-		// sleep twice as long as the inserter, to test overflow
-		usleep(TEST1_INTERVAL * 1000 * 2);
-		
-		int  v = -1;
-		int rv = cf_queue_pop(q, &v, CF_QUEUE_FOREVER);
-		if (rv != CF_QUEUE_OK) {
-			cf_error("cf_queue_test1: pop error %d",rv);
-			return((void *) -1);
-		}
-		if (v != i) {
-			cf_error("cf_queue_test1: pop value error: %d should be %d",v,i);
-			return((void *) -1);
-		}
-		
-	}
-	return((void *) 0);	
-}
-
-
-int
-cf_queue_test_1()
-{
-	pthread_t 	write_th;
-	pthread_t     read_th;
-	cf_queue    *q;
-	
-	q = cf_queue_create(sizeof(int), true);
-	
-	pthread_create( & write_th, 0, cf_queue_test_1_write, q);
-	
-	pthread_create( & read_th, 0, cf_queue_test_1_read, q);
-	
-	void *th_return;
-	
-	if (0 != pthread_join(write_th, &th_return)) {
-		cf_error("queue test 1: could not join1 %d",errno);
-		return(-1);
-	}
-	
-	if (0 != th_return) {
-		cf_error("queue test 1: returned error %p",th_return);
-		return(-1);
-	}
-	
-	if (0 != pthread_join(read_th, &th_return)) {
-		cf_error("queue test 1: could not join2 %d",errno);
-		return(-1);
-	}
-	
-	if (0 != th_return) {
-		cf_error("queue test 1: returned error 2 %p",th_return);
-		return(-1);
-	}
-	
-	cf_queue_destroy(q);
-	
-	return(0);
-}
-
-int
-cf_queue_test()
-{
-	if (0 != cf_queue_test_1()) {
-		cf_error("CF QUEUE TEST ONE FAILED");
-		return(-1);
-	}
-	
-	return(0);
-}
-
-#endif // 0

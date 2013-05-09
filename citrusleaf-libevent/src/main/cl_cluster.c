@@ -18,19 +18,20 @@
 #include <event2/dns.h>
 #include <event2/event.h>
 
-#include "citrusleaf/cf_alloc.h"
-#include "citrusleaf/cf_atomic.h"
-#include "citrusleaf/cf_base_types.h"
-#include "citrusleaf/cf_byte_order.h"
-#include "citrusleaf/cf_clock.h"
-#include "citrusleaf/cf_digest.h"
-#include "citrusleaf/cf_errno.h"
-#include "citrusleaf/cf_ll.h"
-#include "citrusleaf/cf_log_internal.h"
-#include "citrusleaf/cf_queue.h"
-#include "citrusleaf/cf_socket.h"
-#include "citrusleaf/cf_vector.h"
-#include "citrusleaf/proto.h"
+#include <citrusleaf/cf_alloc.h>
+#include <citrusleaf/cf_atomic.h>
+#include <citrusleaf/cf_byte_order.h>
+#include <citrusleaf/cf_client_rc.h>
+#include <citrusleaf/cf_clock.h>
+#include <citrusleaf/cf_digest.h>
+#include <citrusleaf/cf_errno.h>
+#include <citrusleaf/cf_ll.h>
+#include <citrusleaf/cf_log_internal.h>
+#include <citrusleaf/cf_queue.h>
+#include <citrusleaf/cf_socket.h>
+#include <citrusleaf/cf_vector.h>
+#include <citrusleaf/cf_proto.h>
+#include <citrusleaf/cf_types.h>
 
 #include "citrusleaf_event2/ev2citrusleaf.h"
 #include "citrusleaf_event2/ev2citrusleaf-internal.h"
@@ -746,44 +747,6 @@ ns_partition_map_destroy(cf_vector* p_maps_v)
 	}
 }
 
-// TODO - should probably move base 64 stuff to cf_base so C client can use it.
-const uint8_t CF_BASE64_DECODE_ARRAY[] = {
-	    /*00*/ /*01*/ /*02*/ /*03*/ /*04*/ /*05*/ /*06*/ /*07*/   /*08*/ /*09*/ /*0A*/ /*0B*/ /*0C*/ /*0D*/ /*0E*/ /*0F*/
-/*00*/	    0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,     0,     0,     0,     0,     0,
-/*10*/      0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,     0,     0,     0,     0,     0,
-/*20*/	    0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,    62,     0,     0,     0,    63,
-/*30*/	   52,    53,    54,    55,    56,    57,    58,    59,      60,    61,     0,     0,     0,     0,     0,     0,
-/*40*/	    0,     0,     1,     2,     3,     4,     5,     6,       7,     8,     9,    10,    11,    12,    13,    14,
-/*50*/	   15,    16,    17,    18,    19,    20,    21,    22,      23,    24,    25,     0,     0,     0,     0,     0,
-/*60*/	    0,    26,    27,    28,    29,    30,    31,    32,      33,    34,    35,    36,    37,    38,    39,    40,
-/*70*/	   41,    42,    43,    44,    45,    46,    47,    48,      49,    50,    51,     0,     0,     0,     0,     0,
-/*80*/	    0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,     0,     0,     0,     0,     0,
-/*90*/	    0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,     0,     0,     0,     0,     0,
-/*A0*/	    0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,     0,     0,     0,     0,     0,
-/*B0*/	    0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,     0,     0,     0,     0,     0,
-/*C0*/	    0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,     0,     0,     0,     0,     0,
-/*D0*/	    0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,     0,     0,     0,     0,     0,
-/*E0*/	    0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,     0,     0,     0,     0,     0,
-/*F0*/	    0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,     0,     0,     0,     0,     0
-};
-
-#define B64DA CF_BASE64_DECODE_ARRAY
-
-void
-cf_base64_decode(const char* in, int len, uint8_t* out)
-{
-	int i = 0;
-	int j = 0;
-
-	while (i < len) {
-		out[j + 0] = (B64DA[in[i + 0]] << 2) | (B64DA[in[i + 1]] >> 4);
-		out[j + 1] = (B64DA[in[i + 1]] << 4) | (B64DA[in[i + 2]] >> 2);
-		out[j + 2] = (B64DA[in[i + 2]] << 6) |  B64DA[in[i + 3]];
-
-		i += 4;
-		j += 3;
-	}
-}
 
 void
 ns_partition_map_set(ns_partition_map* p_map, const char* p_encoded_bitmap,

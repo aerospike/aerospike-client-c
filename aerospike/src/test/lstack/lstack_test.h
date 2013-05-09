@@ -27,8 +27,8 @@
 #include "../test.h"
 #include "../util/udf.h"
 #include <citrusleaf/citrusleaf.h>
-#include <citrusleaf/as_types.h>
 #include <citrusleaf/aerospike_lstack.h>
+#include <aerospike/as_types.h>
 
 // #include "citrusleaf/as_map.h"
 // #include "citrusleaf/as_list.h"

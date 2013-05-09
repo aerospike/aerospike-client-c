@@ -1,23 +1,48 @@
+ROOT = ..
+include $(ROOT)/project/settings.mk
 ###############################################################################
-include ../project/settings.makefile
-###############################################################################
-
-###############################################################################
-##  FLAGS                                                                    ##
+##  SETTINGS                                                                 ##
 ###############################################################################
 
-# To Override Optimization Level, run make with the "O" variable set.
-# 	make O=0
+# Modules
+COMMON 	:= $(realpath ../aerospike-common)
+MODULES := COMMON
 
-O=3
+# Overrride optimizations via: make O=n
+O = 3
 
-CFLAGS = -O$(O)
 
+# Make-local Compiler Flags
 CC_FLAGS = -std=gnu99 -g -rdynamic -Wextra
 CC_FLAGS += -fno-common -fno-strict-aliasing -fPIC 
 CC_FLAGS += -D_FILE_OFFSET_BITS=64 
 CC_FLAGS += -D_REENTRANT 
 CC_FLAGS += -D_GNU_SOURCE
+
+# Make-local Linker Flags
+LD_FLAGS = -Wall -Winline -rdynamic
+
+# DEBUG Settings
+ifdef DEBUG
+O=0
+CC_FLAGS += -pg -fprofile-arcs -ftest-coverage -g2
+LD_FLAGS += -pg -fprofile-arcs -lgcov
+endif
+
+# Make-tree Compiler Flags
+CFLAGS = -O$(O) 
+
+# Make-tree Linker Flags
+# LDFLAGS = 
+
+# Make-tree Linker Flags
+# LDFLAGS = 
+
+# Include Paths
+INC_PATH += $(COMMON)/$(TARGET_INCL)
+
+# Library Paths
+# LIB_PATH +=
 
 ###############################################################################
 ##  OBJECTS                                                                  ##
@@ -26,17 +51,19 @@ CC_FLAGS += -D_GNU_SOURCE
 BASE =
 BASE += cf_alloc.o
 BASE += cf_average.o
-BASE += cf_digest.o
+BASE += cf_client_rc.o
+# BASE += cf_digest.o
 BASE += cf_hist.o
-BASE += cf_hooks.o
-BASE += cf_ll.o
+# BASE += cf_hooks.o
+# BASE += cf_ll.o
 BASE += cf_log.o
 BASE += cf_proto.o
 BASE += cf_queue.o
+BASE += cf_random.o
 BASE += cf_service.o
-BASE += cf_shash.o
+# BASE += cf_shash.o
 BASE += cf_socket.o
-BASE += cf_vector.o
+# BASE += cf_vector.o
 
 ###############################################################################
 ##  MAIN TARGETS                                                             ##
@@ -45,57 +72,60 @@ BASE += cf_vector.o
 all: build prepare
 
 .PHONY: prepare
-prepare: $(TARGET_INCL)/citrusleaf/*.h
+prepare: modules-prepare $(TARGET_INCL)/citrusleaf/*.h
 
 .PHONY: build
-build: libcf-client libcf-hooked
+build: libaerospike-base libaerospike-base-hooked
 
 .PHONY: build-clean
 build-clean:
 	@rm -rf $(TARGET_BIN)
 	@rm -rf $(TARGET_LIB)
 
-.PHONY: libcf-client libcf-client.a libcf-client.so
-libcf-client: libcf-client.a libcf-client.so
-libcf-client.a: $(TARGET_LIB)/libcf-client.a
-libcf-client.so: $(TARGET_LIB)/libcf-client.so
+.PHONY: libaerospike-base libaerospike-base.a libaerospike-base.so
+libaerospike-base: libaerospike-base.a libaerospike-base.so
+libaerospike-base.a: $(TARGET_LIB)/libaerospike-base.a
+libaerospike-base.so: $(TARGET_LIB)/libaerospike-base.so
 
-.PHONY: libcf-hooked libcf-hooked.a libcf-hooked.so
-libcf-hooked: libcf-hooked.a libcf-hooked.so
-libcf-hooked.a: $(TARGET_LIB)/libcf-hooked.a
-libcf-hooked.so: $(TARGET_LIB)/libcf-hooked.so
+.PHONY: libaerospike-base-hooked libaerospike-base-hooked.a libaerospike-base-hooked.so
+libaerospike-base-hooked: libaerospike-base-hooked.a libaerospike-base-hooked.so
+libaerospike-base-hooked.a: $(TARGET_LIB)/libaerospike-base-hooked.a
+libaerospike-base-hooked.so: $(TARGET_LIB)/libaerospike-base-hooked.so
 
 ###############################################################################
 ##  BUILD TARGETS                                                            ##
 ###############################################################################
 
-# CLIENT (STANDARD) BASE
+# BASE
 
-$(TARGET_OBJ)/client/%.o: $(SOURCE_MAIN)/%.c $(SOURCE_INCL)/citrusleaf/*.h
+$(TARGET_OBJ)/base/%.o: $(SOURCE_MAIN)/%.c $(SOURCE_INCL)/citrusleaf/*.h | modules-prepare 
 	$(object)
 
-$(TARGET_LIB)/libcf-client.so: $(BASE:%=$(TARGET_OBJ)/client/%)
+$(TARGET_LIB)/libaerospike-base.so: modules-prepare $(BASE:%=$(TARGET_OBJ)/base/%) | $(COMMON)/$(TARGET_INCL)/aerospike/*.h
+	$(library)
 
-$(TARGET_LIB)/libcf-client.a: $(BASE:%=$(TARGET_OBJ)/client/%)
+$(TARGET_LIB)/libaerospike-base.a: modules-prepare $(BASE:%=$(TARGET_OBJ)/base/%) | $(COMMON)/$(TARGET_INCL)/aerospike/*.h
+	$(archive)
 
 # HOOKED BASE
 
-$(TARGET_OBJ)/hooked/%.o: CC_FLAGS += -DEXTERNAL_LOCKS
-$(TARGET_OBJ)/hooked/%.o: $(SOURCE_MAIN)/%.c $(SOURCE_INCL)/citrusleaf/*.h
+$(TARGET_OBJ)/base-hooked/%.o: CC_FLAGS += -DEXTERNAL_LOCKS
+$(TARGET_OBJ)/base-hooked/%.o: $(SOURCE_MAIN)/%.c $(SOURCE_INCL)/citrusleaf/*.h
 	$(object)
 
-$(TARGET_LIB)/libcf-hooked.so: $(BASE:%=$(TARGET_OBJ)/hooked/%)
+$(TARGET_LIB)/libaerospike-base-hooked.so: modules-prepare $(BASE:%=$(TARGET_OBJ)/base-hooked/%) | $(COMMON)/$(TARGET_INCL)/aerospike/*.h
+	$(library)
 
-$(TARGET_LIB)/libcf-hooked.a: $(BASE:%=$(TARGET_OBJ)/hooked/%)
+$(TARGET_LIB)/libaerospike-base-hooked.a: modules-prepare $(BASE:%=$(TARGET_OBJ)/base-hooked/%) | $(COMMON)/$(TARGET_INCL)/aerospike/*.h
+	$(archive)
 
 # BASE HEADERS
 
 $(TARGET_INCL)/citrusleaf: | $(TARGET_INCL)
-	mkdir -p $@
+	mkdir $@
 
 $(TARGET_INCL)/citrusleaf/%.h:: $(SOURCE_INCL)/citrusleaf/%.h | $(TARGET_INCL)/citrusleaf
 	cp -p $^ $(TARGET_INCL)/citrusleaf
 
 ###############################################################################
-include $(RULES)
-###############################################################################
+include project/modules.mk $(ROOT)/project/rules.mk

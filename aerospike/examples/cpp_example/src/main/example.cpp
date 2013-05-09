@@ -19,36 +19,36 @@ extern "C" {
 	//********************************************************
 
 	// as_val types (persistable)
-	#include <citrusleaf/as_val.h>
-	#include <citrusleaf/as_nil.h>
-	#include <citrusleaf/as_boolean.h>
-	#include <citrusleaf/as_integer.h>
-	#include <citrusleaf/as_bytes.h>
-	#include <citrusleaf/as_string.h>
-	#include <citrusleaf/as_list.h>
-	#include <citrusleaf/as_map.h>
+	#include <aerospike/as_val.h>
+	#include <aerospike/as_nil.h>
+	#include <aerospike/as_boolean.h>
+	#include <aerospike/as_integer.h>
+	#include <aerospike/as_bytes.h>
+	#include <aerospike/as_string.h>
+	#include <aerospike/as_list.h>
+	#include <aerospike/as_map.h>
 
 	// as_val types (non-persisted)
-	#include <citrusleaf/as_pair.h>
-	#include <citrusleaf/as_rec.h>
+	#include <aerospike/as_pair.h>
+	#include <aerospike/as_rec.h>
 
 	// implementations
-	#include <citrusleaf/as_arraylist.h>
-	#include <citrusleaf/as_linkedlist.h>
-	#include <citrusleaf/as_hashmap.h>
+	#include <aerospike/as_arraylist.h>
+	#include <aerospike/as_linkedlist.h>
+	#include <aerospike/as_hashmap.h>
 
 	// others
-	#include <citrusleaf/as_result.h>
-	#include <citrusleaf/as_stream.h>
-	#include <citrusleaf/as_aerospike.h>
-	#include <citrusleaf/as_buffer.h>
-	#include <citrusleaf/as_module.h>
-	#include <citrusleaf/as_logger.h>
-	#include <citrusleaf/as_serializer.h>
+	#include <aerospike/as_result.h>
+	#include <aerospike/as_stream.h>
+	#include <aerospike/as_aerospike.h>
+	#include <aerospike/as_buffer.h>
+	#include <aerospike/as_module.h>
+	#include <aerospike/as_logger.h>
+	#include <aerospike/as_serializer.h>
 
 	// lua module
-	#include <citrusleaf/mod_lua.h>
-	#include <citrusleaf/mod_lua_config.h>
+	#include <aerospike/mod_lua.h>
+	#include <aerospike/mod_lua_config.h>
 
 	//********************************************************
 	// Citrusleaf Client Includes

@@ -19,13 +19,14 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 
-#include "citrusleaf/citrusleaf.h"
-#include "rec_udf.h"
-#include "citrusleaf/cl_udf.h"
+#include <citrusleaf/citrusleaf.h>
+#include <citrusleaf/cl_udf.h>
 #include <citrusleaf/cf_random.h>
 #include <citrusleaf/cf_atomic.h>
 #include <citrusleaf/cf_hist.h>
 #include <citrusleaf/citrusleaf.h>
+ 
+#include "rec_udf.h"
 
 #ifndef LUA_MODULE_PATH
 #define LUA_MODULE_PATH "src/lua"

@@ -1,11 +1,25 @@
-/*  Citrusleaf Aerospike Large Set (LSET) API
- *  aerospike_lset.c - Validates AS SET stored procedure functionality
- *  and provides a C Language interface for the as_lset server type.
+/******************************************************************************
+ * Copyright 2008-2013 by Aerospike.
  *
- *  Copyright 2013 by Citrusleaf, Aerospike In.c  All rights reserved.
- *  THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE.  THE COPYRIGHT NOTICE
- *  ABOVE DOES NOT EVIDENCE ANY ACTUAL OR INTENDED PUBLICATION.
- */
+ * Permission is hereby granted, free of charge, to any person obtaining a copy 
+ * of this software and associated documentation files (the "Software"), to 
+ * deal in the Software without restriction, including without limitation the 
+ * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or 
+ * sell copies of the Software, and to permit persons to whom the Software is 
+ * furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included in 
+ * all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING 
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+ * IN THE SOFTWARE.
+ *****************************************************************************/
+
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,12 +34,14 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 
-#include "citrusleaf.h"
-#include "aerospike_lset.h"
-#include "cl_udf.h"
 #include <citrusleaf/cf_random.h>
 #include <citrusleaf/cf_atomic.h>
 #include <citrusleaf/cf_hist.h>
+
+#include <citrusleaf/citrusleaf.h>
+#include <citrusleaf/aerospike_lset.h>
+#include <citrusleaf/cl_udf.h>
+ 
 
 // Use this to turn on/off tracing/debugging prints and checks
 // Comment out this next line to quiet the output.

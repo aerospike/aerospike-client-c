@@ -1,7 +1,9 @@
-#include "test.h"
+#include <errno.h>
+
 #include <citrusleaf/citrusleaf.h>
 #include <citrusleaf/cl_udf.h>
-#include <errno.h>
+
+#include "test.h"
 
 /******************************************************************************
  * MACROS

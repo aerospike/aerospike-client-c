@@ -2,8 +2,8 @@
 #include "udf.h"
 #include "../test.h"
 #include <citrusleaf/citrusleaf.h>
-#include <citrusleaf/as_types.h>
 #include <citrusleaf/cl_udf.h>
+#include <aerospike/as_types.h>
 #include <stdlib.h>
 #include <errno.h>
 

@@ -1,22 +1,24 @@
-/*
- * The query interface 
+/******************************************************************************
+ * Copyright 2008-2013 by Aerospike.
  *
- *
- * Citrusleaf, 2012
- * All rights reserved
- */
-
-#include "citrusleaf.h"
-#include "citrusleaf-internal.h"
-#include "cl_cluster.h"
-#include "cl_query.h"
-#include "cl_udf.h"
-
-#include <citrusleaf/cf_atomic.h>
-#include <citrusleaf/cf_socket.h>
-#include <citrusleaf/cf_vector.h>
-#include <citrusleaf/cf_random.h>
-#include <citrusleaf/proto.h>
+ * Permission is hereby granted, free of charge, to any person obtaining a copy 
+ * of this software and associated documentation files (the "Software"), to 
+ * deal in the Software without restriction, including without limitation the 
+ * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or 
+ * sell copies of the Software, and to permit persons to whom the Software is 
+ * furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included in 
+ * all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING 
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+ * IN THE SOFTWARE.
+ *****************************************************************************/
 
 #include <sys/types.h>
 #include <stdio.h>
@@ -28,21 +30,28 @@
 #include <fcntl.h>
 #include <assert.h>
 #include <asm/byteorder.h> // 64-bit swap macro
-#include "citrusleaf/cf_atomic.h"
-#include "citrusleaf/proto.h"
-#include "citrusleaf/cf_socket.h"
-#include "citrusleaf/cf_vector.h"
-#include "as_msgpack.h"
-#include "as_serializer.h"
-#include "as_list.h"
-#include "as_string.h"
 
+#include <citrusleaf/cf_atomic.h>
+#include <citrusleaf/cf_socket.h>
+#include <citrusleaf/cf_vector.h>
+#include <citrusleaf/cf_random.h>
+#include <citrusleaf/cf_proto.h>
 
-#include <as_aerospike.h>
-#include <as_module.h>
-#include <mod_lua.h>
-#include <mod_lua_config.h>
+#include <aerospike/as_aerospike.h>
+#include <aerospike/as_module.h>
+#include <aerospike/as_msgpack.h>
+#include <aerospike/as_list.h>
+#include <aerospike/as_serializer.h>
+#include <aerospike/as_string.h>
+#include <aerospike/mod_lua.h>
+#include <aerospike/mod_lua_config.h>
 
+#include <citrusleaf/citrusleaf.h>
+#include <citrusleaf/cl_cluster.h>
+#include <citrusleaf/cl_query.h>
+#include <citrusleaf/cl_udf.h>
+
+#include "internal.h"
 
 /******************************************************************************
  * MACROS

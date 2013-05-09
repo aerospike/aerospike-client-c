@@ -4,7 +4,7 @@
  * An as_logger for tests.
  */
 
-#include <as_logger.h>
+#include <aerospike/as_logger.h>
 
 /*****************************************************************************
  * FUNCTIONS

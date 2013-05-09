@@ -4,8 +4,8 @@
  * A stream which consumes values via a callback.
  */
 
-#include <as_stream.h>
-#include <as_val.h>
+#include <aerospike/as_stream.h>
+#include <aerospike/as_val.h>
 
 /*****************************************************************************
  * TYPES

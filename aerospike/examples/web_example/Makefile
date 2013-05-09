@@ -1,13 +1,10 @@
 ROOT = ../../..
+include $(ROOT)/project/settings.mk
 ###############################################################################
-include $(ROOT)/project/settings.makefile
+##  SETTINGS                                                                 ##
 ###############################################################################
 
 AEROSPIKE = $(ROOT)/aerospike
-
-###############################################################################
-##  FLAGS                                                                    ##
-###############################################################################
 
 CC_FLAGS = -std=gnu99  -Wall
 
@@ -38,6 +35,10 @@ build-clean:
 	@rm -rf $(TARGET_BIN)
 	@rm -rf $(TARGET_LIB)
 
+.PHONY: run
+run: $(TARGET_BIN)/example
+	$(TARGET_BIN)/example
+
 .PHONY: example
 example: $(TARGET_BIN)/example
 
@@ -55,9 +56,8 @@ $(TARGET_BIN)/example: $(OBJECTS:%=$(TARGET_OBJ)/%)
 ##  BUILD DEPENDENCIES                                                       ##
 ###############################################################################
 
-$(AEROSPIKE)/$(TARGET_LIB)/libcitrusleaf.a: $(AEROSPIKE)/$(SOURCE_INCL)/*.h  $(AEROSPIKE)/$(SOURCE_MAIN)/*.c
+$(AEROSPIKE)/$(TARGET_LIB)/libcitrusleaf.a: $(AEROSPIKE)/$(SOURCE_INCL)/citrusleaf/*.h  $(AEROSPIKE)/$(SOURCE_MAIN)/*.c
 	$(MAKE) -C $(AEROSPIKE) libcitrusleaf.a prepare
 
 ###############################################################################
-include $(RULES)
-###############################################################################
+include $(ROOT)/project/rules.mk

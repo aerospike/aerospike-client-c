@@ -18,14 +18,14 @@
 #include <string.h>
 #include <event2/event.h>
 
-#include "citrusleaf/cf_atomic.h"
-#include "citrusleaf/cf_base_types.h"
-#include "citrusleaf/cf_clock.h"
-#include "citrusleaf/cf_digest.h"
-#include "citrusleaf/cf_errno.h"
-#include "citrusleaf/cf_log_internal.h"
-#include "citrusleaf/cf_socket.h"
-#include "citrusleaf/proto.h"
+#include <citrusleaf/cf_atomic.h>
+#include <citrusleaf/cf_clock.h>
+#include <citrusleaf/cf_digest.h>
+#include <citrusleaf/cf_errno.h>
+#include <citrusleaf/cf_log_internal.h>
+#include <citrusleaf/cf_socket.h>
+#include <citrusleaf/cf_proto.h>
+#include <citrusleaf/cf_types.h>
 
 #include "citrusleaf_event2/cl_cluster.h"
 #include "citrusleaf_event2/ev2citrusleaf.h"

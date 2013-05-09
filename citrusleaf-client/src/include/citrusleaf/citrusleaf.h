@@ -1,39 +1,39 @@
-/*
- * The Citrusleaf C interface. A good, basic library that many clients can be based on.
+/******************************************************************************
+ * Copyright 2008-2013 by Aerospike.
  *
- * This is the external, public header file
- *
- * this code currently assumes that the server is running in an ASCII-7 based
- * (ie, utf8 or ISO-LATIN-1)
- * character set, as values coming back from the server are UTF-8. We currently
- * don't bother to convert to the character set of the machine we're running on
- * but we advertise these values as 'strings'
- *
- * All rights reserved
- * Brian Bulkowski, 2009
- * CitrusLeaf
- */
+ * Permission is hereby granted, free of charge, to any person obtaining a copy 
+ * of this software and associated documentation files (the "Software"), to 
+ * deal in the Software without restriction, including without limitation the 
+ * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or 
+ * sell copies of the Software, and to permit persons to whom the Software is 
+ * furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included in 
+ * all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING 
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+ * IN THE SOFTWARE.
+ *****************************************************************************/
+#pragma once
 
 #include <inttypes.h>
 #include <stdbool.h>
 #include <netinet/in.h>
  
-// do this both the new skool and old skool way which gives the highest correctness,
-// speed, and compatibility
-#pragma once
-
-#ifndef XDS	// Hack for the sake of XDS. XDS includes the main CF libs. 
-		// We do not want to include them again from client API
-#include "citrusleaf/cf_atomic.h"
-#include "citrusleaf/cf_log.h"
-#include "citrusleaf/cf_ll.h"
-#include "citrusleaf/cf_clock.h"
-#include "citrusleaf/cf_vector.h"
-#include "citrusleaf/cf_queue.h"
-#include "citrusleaf/cf_alloc.h"
-#include "citrusleaf/cf_digest.h"
-#include "citrusleaf/cf_shash.h"
-#endif
+#include <citrusleaf/cf_atomic.h>
+#include <citrusleaf/cf_log.h>
+#include <citrusleaf/cf_ll.h>
+#include <citrusleaf/cf_clock.h>
+#include <citrusleaf/cf_vector.h>
+#include <citrusleaf/cf_queue.h>
+#include <citrusleaf/cf_alloc.h>
+#include <citrusleaf/cf_digest.h>
+#include <citrusleaf/cf_shash.h>
 
 #define STACK_BUF_SZ (1024 * 16) // provide a safe number for your system - linux tends to have 8M stacks these days
 #define DEFAULT_PROGRESS_TIMEOUT 50

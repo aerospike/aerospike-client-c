@@ -15,9 +15,9 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-#include "utils.h"
-#include "citrusleaf/citrusleaf.h"
+#include <citrusleaf/citrusleaf.h>
 
+#include "utils.h"
 
 extern void *start_counter_thread(atomic_int *records, atomic_int *bytes);
 extern void stop_counter_thread(void *id);

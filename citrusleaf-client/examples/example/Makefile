@@ -1,12 +1,10 @@
+ROOT = ../../..
+include $(ROOT)/project/settings.mk
 ###############################################################################
-include $(shell git rev-parse --show-toplevel)/project/settings.makefile
+##  SETTINGS                                                                 ##
 ###############################################################################
 
-CITRUSLEAF = $(REPO)/citrusleaf-client
-
-###############################################################################
-##  FLAGS                                                                    ##
-###############################################################################
+CITRUSLEAF = $(ROOT)/citrusleaf-client
 
 CC_FLAGS = -std=gnu99  -Wall
 CC_FLAGS += -g -fno-common -fomit-frame-pointer
@@ -65,5 +63,4 @@ $(CITRUSLEAF)/$(TARGET_LIB)/libcitrusleaf.a: $(CITRUSLEAF)/$(SOURCE_INCL)/citrus
 	$(MAKE) -C $(CITRUSLEAF) libcitrusleaf.a prepare
 
 ###############################################################################
-include $(RULES)
-###############################################################################
+include $(ROOT)/project/rules.mk

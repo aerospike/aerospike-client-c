@@ -43,11 +43,11 @@ TEST( lstack_basics_peek, "Read N elements from the stack" ) {
     int    iterations = 10;
     int    seed       = 111;
     int    format     = NUMBER_FORMAT;
-
+    g_config->peek_max = 5;
     printf("lstack_basics_peek:: Calling peek test\n");
 
     int rc = lstack_peek_test( user_key, ldt_bin, iterations, seed, format );
-    assert_int_eq( rc, 1 );
+    assert_int_eq( rc, 0);
 }
 
 // ==================================================================

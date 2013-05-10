@@ -29,6 +29,8 @@
 
 #include <citrusleaf/citrusleaf.h>
 #include <citrusleaf/cl_udf.h>
+#include <aerospike/as_types.h>
+#include <aerospike/as_val.h>
 
 // NOTE: These lines should be deleted -- check on this:  TODO: 
 // From here:::::

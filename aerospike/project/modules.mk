@@ -24,7 +24,7 @@ $(error )
 endif
 
 .PHONY: BASE-build
-BASE-build: $(BASE)/$(TARGET_LIB)/libcf-client.a
+BASE-build: $(BASE)/$(TARGET_LIB)/libaerospike-base.a
 
 .PHONY: BASE-prepare
 BASE-prepare: $(BASE)/$(TARGET_INCL)/citrusleaf/*.h | BASE-make-prepare
@@ -38,8 +38,8 @@ BASE-clean:
 BASE-make-prepare: $(wildcard $(BASE)/$(SOURCE_INCL)/citrusleaf/*.h)
 	$(MAKE) -e -C $(BASE) prepare
 
-$(BASE)/$(TARGET_LIB)/libcf-client.a:
-	$(MAKE) -e -C $(BASE) libcf-client.a
+$(BASE)/$(TARGET_LIB)/libaerospike-base.a:
+	$(MAKE) -e -C $(BASE) libaerospike-base.a
 
 $(BASE)/$(TARGET_INCL)/citrusleaf/%.h: $(BASE)/$(SOURCE_INCL)/citrusleaf/%.h | BASE-make-prepare $(TARGET_INCL)/citrusleaf
 	cp -p $^ $(TARGET_INCL)/citrusleaf
@@ -70,7 +70,7 @@ $(error )
 endif
 
 .PHONY: COMMON-build
-COMMON-build: $(COMMON)/$(TARGET_LIB)/libcf-common.a
+COMMON-build: $(COMMON)/$(TARGET_LIB)/libaerospike-common.a
 
 .PHONY: COMMON-prepare
 COMMON-prepare:: $(COMMON)/$(TARGET_INCL)/citrusleaf/*.h | COMMON-make-prepare
@@ -87,8 +87,8 @@ COMMON-clean:
 COMMON-make-prepare: 
 	$(MAKE) -e -C $(COMMON) prepare
 
-$(COMMON)/$(TARGET_LIB)/libcf-common.a:
-	$(MAKE) -e -C $(COMMON) libcf-common.a
+$(COMMON)/$(TARGET_LIB)/libaerospike-common.a:
+	$(MAKE) -e -C $(COMMON) libaerospike-common.a
 
 $(COMMON)/$(TARGET_INCL)/aerospike/%.h: $(COMMON)/$(SOURCE_INCL)/aerospike/%.h | COMMON-make-prepare  $(TARGET_INCL)/aerospike
 	cp -p $^ $(TARGET_INCL)/aerospike

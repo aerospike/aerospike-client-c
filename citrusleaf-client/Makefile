@@ -63,6 +63,8 @@ OBJECTS =
 OBJECTS += $(wildcard $(COMMON)/$(TARGET_OBJ)/common/citrusleaf/*.o)
 OBJECTS += $(wildcard $(BASE)/$(TARGET_OBJ)/base/*.o)
 
+HEADERS := $(wildcard $(SOURCE_INCL)/citrusleaf/*.h)
+
 ###############################################################################
 ##  MAIN TARGETS                                                             ##
 ###############################################################################
@@ -70,7 +72,7 @@ OBJECTS += $(wildcard $(BASE)/$(TARGET_OBJ)/base/*.o)
 all: build prepare
 
 .PHONY: prepare
-prepare: modules-prepare $(TARGET_INCL)/citrusleaf/*.h
+prepare: modules-prepare $(subst $(SOURCE_INCL),$(TARGET_INCL),$(HEADERS)) 
 	$(noop)
 
 .PHONY: build
@@ -105,7 +107,7 @@ $(TARGET_INCL)/citrusleaf: | $(TARGET_INCL)
 	mkdir $@
 
 $(TARGET_INCL)/citrusleaf/%.h:: $(SOURCE_INCL)/citrusleaf/%.h | $(TARGET_INCL)/citrusleaf
-	cp -p $(filter %.h, $^) $(TARGET_INCL)/citrusleaf
+	cp $^ $@
 
 ###############################################################################
 include project/modules.mk $(ROOT)/project/rules.mk

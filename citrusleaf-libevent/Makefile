@@ -60,6 +60,8 @@ OBJECTS =
 OBJECTS += $(COMMON)/$(TARGET_OBJ)/common-hooked/citrusleaf/*.o
 OBJECTS += $(BASE)/$(TARGET_OBJ)/base-hooked/*.o
 
+HEADERS := $(wildcard $(SOURCE_INCL)/citrusleaf_event2/*.h)
+
 ###############################################################################
 ##  MAIN TARGETS                                                             ##
 ###############################################################################
@@ -67,7 +69,7 @@ OBJECTS += $(BASE)/$(TARGET_OBJ)/base-hooked/*.o
 all: build prepare
 
 .PHONY: prepare
-prepare: modules-prepare $(TARGET_INCL)/citrusleaf_event2/*.h
+prepare: modules-prepare $(subst $(SOURCE_INCL),$(TARGET_INCL),$(HEADERS)) 
 
 .PHONY: build
 build: modules libev2citrusleaf
@@ -104,7 +106,7 @@ $(TARGET_INCL)/citrusleaf_event2: | $(TARGET_INCL)
 	mkdir $@
 
 $(TARGET_INCL)/citrusleaf_event2/%.h:: $(SOURCE_INCL)/citrusleaf_event2/%.h | $(TARGET_INCL)/citrusleaf_event2
-	cp -p $^ $(TARGET_INCL)/citrusleaf_event2
+	cp $^ $@
 
 ###############################################################################
 include project/modules.mk $(ROOT)/project/rules.mk

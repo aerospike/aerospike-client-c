@@ -66,6 +66,8 @@ BASE += cf_service.o
 BASE += cf_socket.o
 # BASE += cf_vector.o
 
+HEADERS := $(wildcard $(SOURCE_INCL)/citrusleaf/*.h)
+
 ###############################################################################
 ##  MAIN TARGETS                                                             ##
 ###############################################################################
@@ -73,7 +75,7 @@ BASE += cf_socket.o
 all: build prepare
 
 .PHONY: prepare
-prepare: modules-prepare $(TARGET_INCL)/citrusleaf/*.h
+prepare: modules-prepare $(subst $(SOURCE_INCL),$(TARGET_INCL),$(HEADERS)) 
 
 .PHONY: build
 build: libaerospike-base libaerospike-base-hooked
@@ -126,7 +128,7 @@ $(TARGET_INCL)/citrusleaf: | $(TARGET_INCL)
 	mkdir $@
 
 $(TARGET_INCL)/citrusleaf/%.h:: $(SOURCE_INCL)/citrusleaf/%.h | $(TARGET_INCL)/citrusleaf
-	cp -p $^ $(TARGET_INCL)/citrusleaf
+	cp $^ $@
 
 ###############################################################################
 include project/modules.mk $(ROOT)/project/rules.mk

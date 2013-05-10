@@ -5,6 +5,7 @@ include $(ROOT)/project/settings.mk
 ###############################################################################
 
 # Modules
+MSGPACK 	:= $(realpath ../msgpack)
 BASE 		:= $(realpath ../citrusleaf-base)
 COMMON 		:= $(realpath ../aerospike-common)
 MODULES 	:= BASE COMMON

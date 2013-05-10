@@ -5,8 +5,9 @@ include $(ROOT)/project/settings.mk
 ###############################################################################
 
 # Modules
-COMMON 	:= $(realpath ../aerospike-common)
-MODULES := COMMON
+MSGPACK 	:= $(realpath ../msgpack)
+COMMON 		:= $(realpath ../aerospike-common)
+MODULES 	:= COMMON
 
 # Overrride optimizations via: make O=n
 O = 3

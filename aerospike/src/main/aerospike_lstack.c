@@ -41,6 +41,7 @@
 #include <citrusleaf/citrusleaf.h>
 #include <citrusleaf/aerospike_lstack.h>
 #include <citrusleaf/cl_udf.h>
+#include <aerospike/as_types.h>
 
 // Use this to turn on/off tracing/debugging prints and checks
 // Comment out this next line to quiet the output.

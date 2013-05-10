@@ -46,8 +46,8 @@ TEST_VALGRIND = --tool=memcheck --leak-check=yes --show-reachable=yes --num-call
 TEST_CFLAGS = -I$(TARGET_INCL)
 
 TEST_LDFLAGS = -lssl -lcrypto -lpthread -lrt -llua  -lm
-TEST_LDFLAGS += -L$(TARGET_LIB) -Wl,-l,:libcitrusleaf.a
 TEST_LDFLAGS += -L$(MSGPACK)/src/.libs -Wl,-l,:libmsgpack.a 
+TEST_LDFLAGS += -L$(TARGET_LIB) -Wl,-l,:libcitrusleaf.a
 
 ###############################################################################
 ##  TARGETS                                                      		     ##
@@ -83,5 +83,5 @@ $(TARGET_OBJ)/test/%.o: $(SOURCE_TEST)/%.c
 test/client_test: $(TARGET_BIN)/test/client_test
 $(TARGET_BIN)/test/client_test: CFLAGS += $(TEST_CFLAGS)
 $(TARGET_BIN)/test/client_test: LDFLAGS += $(TEST_LDFLAGS)
-$(TARGET_BIN)/test/client_test: $(TEST_CLIENT:%=$(TARGET_OBJ)/test/%.o) $(TARGET_OBJ)/test/test.o $(TARGET_LIB)/libcitrusleaf.a | build prepare
-	$(executable)
+$(TARGET_BIN)/test/client_test: $(TEST_CLIENT:%=$(TARGET_OBJ)/test/%.o) $(TARGET_OBJ)/test/test.o  | build prepare
+	$(executable) $(TARGET_LIB)/libcitrusleaf.a

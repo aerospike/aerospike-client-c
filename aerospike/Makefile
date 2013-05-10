@@ -68,11 +68,11 @@ CITRUSLEAF += cl_udf.o
 CITRUSLEAF += aerospike_lstack.o
 CITRUSLEAF += aerospike_lset.o
 
-OBJECTS =
-OBJECTS += $(wildcard $(COMMON)/$(TARGET_OBJ)/aerospike/*.o)
-OBJECTS += $(wildcard $(COMMON)/$(TARGET_OBJ)/citrusleaf/*.o)
-OBJECTS += $(wildcard $(BASE)/$(TARGET_OBJ)/client/*.o)
-OBJECTS += $(wildcard $(MOD_LUA)/$(TARGET_OBJ)/aerospike/*.o)
+OBJECTS :=
+OBJECTS += $(wildcard $(COMMON)/$(TARGET_OBJ)/common/aerospike/*.o)
+OBJECTS += $(wildcard $(COMMON)/$(TARGET_OBJ)/common/citrusleaf/*.o)
+OBJECTS += $(wildcard $(BASE)/$(TARGET_OBJ)/base/*.o)
+OBJECTS += $(wildcard $(MOD_LUA)/$(TARGET_OBJ)/*.o)
 OBJECTS += $(wildcard $(MSGPACK)/src/.libs/*.o)
 
 ###############################################################################
@@ -104,13 +104,14 @@ libcitrusleaf.so: $(TARGET_LIB)/libcitrusleaf.so
 ##  BUILD TARGETS                                                            ##
 ###############################################################################
 
-$(TARGET_OBJ)/%.o: $(BASE)/$(TARGET_LIB)/libcf-client.a $(COMMON)/$(TARGET_LIB)/libcf-common.a $(MOD_LUA)/$(TARGET_LIB)/libmod_lua.a $(SOURCE_MAIN)/%.c $(SOURCE_INCL)/citrusleaf/*.h
+$(TARGET_OBJ)/%.o: $(BASE)/$(TARGET_LIB)/libaerospike-base.a $(COMMON)/$(TARGET_LIB)/libaerospike-common.a $(MOD_LUA)/$(TARGET_LIB)/libmod_lua.a $(SOURCE_MAIN)/%.c $(SOURCE_INCL)/citrusleaf/*.h
 	$(object)
 
 $(TARGET_LIB)/libcitrusleaf.so: $(CITRUSLEAF:%=$(TARGET_OBJ)/%) $(TARGET_OBJ)/version.o | modules
 	$(library) $(OBJECTS)
 
 $(TARGET_LIB)/libcitrusleaf.a: $(CITRUSLEAF:%=$(TARGET_OBJ)/%) $(TARGET_OBJ)/version.o | modules
+	@echo $(COMMON)/$(TARGET_OBJ)/aerospike/
 	$(archive) $(OBJECTS)
 
 $(TARGET_INCL)/aerospike: | $(TARGET_INCL)

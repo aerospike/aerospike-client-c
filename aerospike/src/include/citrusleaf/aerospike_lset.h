@@ -29,6 +29,7 @@
 
 #include <citrusleaf/citrusleaf.h>
 #include <citrusleaf/cl_udf.h>
+#include <aerospike/as_types.h>
 
 extern cl_rv aerospike_lset_create(
         cl_cluster * asc,

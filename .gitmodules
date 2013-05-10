@@ -3,7 +3,7 @@
 	url = git@github.com:aerospike/msgpack
 [submodule "aerospike-common"]
 	path = aerospike-common
-	url = git@github.com:cstivers78/aerospike-common.git
+	url = git@github.com:aerospike/aerospike-common.git
 [submodule "aerospike-mod-lua"]
 	path = aerospike-mod-lua
-	url = git@github.com:cstivers78/aerospike-mod-lua.git
+	url = git@github.com:aerospike/aerospike-mod-lua.git

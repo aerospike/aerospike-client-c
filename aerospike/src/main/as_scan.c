@@ -541,7 +541,9 @@ void citrusleaf_udf_scan_background(cl_cluster * asc, as_scan * scan) {
     scan->udf.type = AS_SCAN_UDF_BACKGROUND;
     cl_rv res = CITRUSLEAF_OK;
     // Call as_scan_execute with a NULL node_name.
-    as_scan_execute(asc, scan, NULL, &res, NULL, NULL);
+    cf_vector * v = as_scan_execute(asc, scan, NULL, &res, NULL, NULL);
+	cf_vector_destroy(v);
+	return;
 }
 
 /*

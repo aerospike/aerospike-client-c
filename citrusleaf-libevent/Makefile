@@ -55,23 +55,9 @@ CITRUSLEAF += cl_lookup.o
 CITRUSLEAF += cl_partition.o
 CITRUSLEAF += cl_batch.o
 
-# BASE_OBJECTS = 
-# BASE_OBJECTS += cf_alloc.o
-# BASE_OBJECTS += cf_average.o
-# BASE_OBJECTS += cf_digest.o
-# BASE_OBJECTS += cf_hist.o
-# BASE_OBJECTS += cf_hooks.o
-# BASE_OBJECTS += cf_ll.o
-# BASE_OBJECTS += cf_log.o
-# BASE_OBJECTS += cf_proto.o
-# BASE_OBJECTS += cf_queue.o
-# BASE_OBJECTS += cf_shash.o
-# BASE_OBJECTS += cf_socket.o
-# BASE_OBJECTS += cf_vector.o
-
 OBJECTS = 
-OBJECTS += $(wildcard $(COMMON)/$(TARGET_OBJ)/common-hooked/citrusleaf/*.o)
-OBJECTS += $(wildcard $(BASE)/$(TARGET_OBJ)/base-hooked/*.o)
+OBJECTS += $(COMMON)/$(TARGET_OBJ)/common-hooked/citrusleaf/*.o
+OBJECTS += $(BASE)/$(TARGET_OBJ)/base-hooked/*.o
 
 ###############################################################################
 ##  MAIN TARGETS                                                             ##
@@ -105,10 +91,10 @@ $(TARGET_OBJ)/%.o: $(BASE)/$(TARGET_LIB)/libaerospike-base-hooked.a $(COMMON)/$(
 	$(object)
 
 $(TARGET_LIB)/libev2citrusleaf.so: $(CITRUSLEAF:%=$(TARGET_OBJ)/%) $(TARGET_OBJ)/version.o | modules
-	$(library) $(OBJECTS)
+	$(library) $(wildcard $(OBJECTS))
 
 $(TARGET_LIB)/libev2citrusleaf.a: $(CITRUSLEAF:%=$(TARGET_OBJ)/%) $(TARGET_OBJ)/version.o | modules
-	$(archive) $(OBJECTS)
+	$(archive) $(wildcard $(OBJECTS))
 
 $(TARGET_INCL)/citrusleaf: | $(TARGET_INCL)
 	mkdir $@

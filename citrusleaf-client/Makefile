@@ -58,24 +58,9 @@ CITRUSLEAF += cl_async.o
 CITRUSLEAF += cl_shm.o
 CITRUSLEAF += cl_request.o
 
-# BASE_OBJECTS =
-# BASE_OBJECTS += cf_alloc.o
-# BASE_OBJECTS += cf_average.o
-# BASE_OBJECTS += cf_digest.o
-# BASE_OBJECTS += cf_hist.o
-# BASE_OBJECTS += cf_hooks.o
-# BASE_OBJECTS += cf_ll.o
-# BASE_OBJECTS += cf_log.o
-# BASE_OBJECTS += cf_proto.o
-# BASE_OBJECTS += cf_queue.o
-# BASE_OBJECTS += cf_service.o
-# BASE_OBJECTS += cf_shash.o
-# BASE_OBJECTS += cf_socket.o
-# BASE_OBJECTS += cf_vector.o
-
 OBJECTS = 
-OBJECTS += $(wildcard $(COMMON)/$(TARGET_OBJ)/citrusleaf/*.o)
-OBJECTS += $(wildcard $(BASE)/$(TARGET_OBJ)/client/*.o)
+OBJECTS += $(wildcard $(COMMON)/$(TARGET_OBJ)/common/citrusleaf/*.o)
+OBJECTS += $(wildcard $(BASE)/$(TARGET_OBJ)/base/*.o)
 
 ###############################################################################
 ##  MAIN TARGETS                                                             ##
@@ -106,14 +91,14 @@ libcitrusleaf.so: $(TARGET_LIB)/libcitrusleaf.so
 ##  BUILD TARGETS                                                            ##
 ###############################################################################
 
-$(TARGET_OBJ)/%.o: $(CITRUSLEAF_BASE)/$(TARGET_LIB)/libcf-client.a $(COMMON)/$(TARGET_LIB)/libcf-common.a $(SOURCE_MAIN)/%.c $(SOURCE_INCL)/citrusleaf/*.h
+$(TARGET_OBJ)/%.o: $(BASE)/$(TARGET_LIB)/libaerospike-base.a $(COMMON)/$(TARGET_LIB)/libaerospike-common.a $(SOURCE_MAIN)/%.c $(SOURCE_INCL)/citrusleaf/*.h
 	$(object)
 
 $(TARGET_LIB)/libcitrusleaf.so: $(CITRUSLEAF:%=$(TARGET_OBJ)/%) $(TARGET_OBJ)/version.o
-	$(library) $(OBJECTS)
+	$(library) $(wildcard $(OBJECTS))
 
 $(TARGET_LIB)/libcitrusleaf.a: $(CITRUSLEAF:%=$(TARGET_OBJ)/%) $(TARGET_OBJ)/version.o
-	$(archive) $(OBJECTS)
+	$(archive) $(wildcard $(OBJECTS))
 
 $(TARGET_INCL)/citrusleaf: | $(TARGET_INCL)
 	mkdir $@

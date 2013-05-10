@@ -69,11 +69,11 @@ CITRUSLEAF += aerospike_lstack.o
 CITRUSLEAF += aerospike_lset.o
 
 OBJECTS :=
-OBJECTS += $(wildcard $(COMMON)/$(TARGET_OBJ)/common/aerospike/*.o)
-OBJECTS += $(wildcard $(COMMON)/$(TARGET_OBJ)/common/citrusleaf/*.o)
-OBJECTS += $(wildcard $(BASE)/$(TARGET_OBJ)/base/*.o)
-OBJECTS += $(wildcard $(MOD_LUA)/$(TARGET_OBJ)/*.o)
-OBJECTS += $(wildcard $(MSGPACK)/src/.libs/*.o)
+OBJECTS += $(COMMON)/$(TARGET_OBJ)/common/aerospike/*.o
+OBJECTS += $(COMMON)/$(TARGET_OBJ)/common/citrusleaf/*.o
+OBJECTS += $(BASE)/$(TARGET_OBJ)/base/*.o
+OBJECTS += $(MOD_LUA)/$(TARGET_OBJ)/*.o
+OBJECTS += $(MSGPACK)/src/.libs/*.o
 
 ###############################################################################
 ##  MAIN TARGETS                                                             ##
@@ -108,11 +108,10 @@ $(TARGET_OBJ)/%.o: $(BASE)/$(TARGET_LIB)/libaerospike-base.a $(COMMON)/$(TARGET_
 	$(object)
 
 $(TARGET_LIB)/libcitrusleaf.so: $(CITRUSLEAF:%=$(TARGET_OBJ)/%) $(TARGET_OBJ)/version.o | modules
-	$(library) $(OBJECTS)
+	$(library) $(wildcard $(OBJECTS))
 
 $(TARGET_LIB)/libcitrusleaf.a: $(CITRUSLEAF:%=$(TARGET_OBJ)/%) $(TARGET_OBJ)/version.o | modules
-	@echo $(COMMON)/$(TARGET_OBJ)/aerospike/
-	$(archive) $(OBJECTS)
+	$(archive) $(wildcard $(OBJECTS))
 
 $(TARGET_INCL)/aerospike: | $(TARGET_INCL)
 	mkdir $@

@@ -15,7 +15,7 @@ endif
 ifeq ($(wildcard $(BASE)/Makefile),) 
 $(warning ***************************************************************)
 $(warning *)
-$(warning *  BASE is '$(BASE))')
+$(warning *  BASE is '$(BASE)')
 $(warning *  BASE doesn't contain 'BASE'. )
 $(warning *  BASE should be set to a valid path. )
 $(warning *)
@@ -61,7 +61,7 @@ endif
 ifeq ($(wildcard $(COMMON)/Makefile),) 
 $(warning ***************************************************************)
 $(warning *)
-$(warning *  COMMON is '$(COMMON))')
+$(warning *  COMMON is '$(COMMON)')
 $(warning *  COMMON doesn't contain 'Makefile'. )
 $(warning *  COMMON should be set to a valid path. )
 $(warning *)
@@ -114,7 +114,7 @@ endif
 ifeq ($(wildcard $(MOD_LUA)/Makefile),) 
 $(warning ***************************************************************)
 $(warning *)
-$(warning *  MOD_LUA is '$(MOD_LUA))')
+$(warning *  MOD_LUA is '$(MOD_LUA)')
 $(warning *  MOD_LUA doesn't contain 'Makefile'. )
 $(warning *  MOD_LUA should be set to a valid path. )
 $(warning *)
@@ -183,7 +183,7 @@ MSGPACK-clean:
 	fi
 
 $(MSGPACK)/Makefile: $(MSGPACK)/configure
-	cd $(MSGPACK) && ./configure -s
+	cd $(MSGPACK) && ./configure 
 
 $(MSGPACK)/src/.libs/libmsgpackc.a: $(MSGPACK)/Makefile
 	cd $(MSGPACK) && $(MAKE) -s CFLAGS="-fPIC"

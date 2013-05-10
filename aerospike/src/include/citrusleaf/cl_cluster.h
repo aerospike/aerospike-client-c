@@ -24,6 +24,7 @@
 #include <citrusleaf/cf_atomic.h>
 #include <citrusleaf/cf_queue.h>
 #include <citrusleaf/cf_vector.h>
+#include <citrusleaf/cf_ll.h>
 
 #include <citrusleaf/cl_types.h>
 

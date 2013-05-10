@@ -75,6 +75,8 @@ OBJECTS += $(BASE)/$(TARGET_OBJ)/base/*.o
 OBJECTS += $(MOD_LUA)/$(TARGET_OBJ)/*.o
 OBJECTS += $(MSGPACK)/src/.libs/*.o
 
+HEADERS := $(wildcard $(SOURCE_INCL)/citrusleaf/*.h)
+
 ###############################################################################
 ##  MAIN TARGETS                                                             ##
 ###############################################################################
@@ -82,7 +84,7 @@ OBJECTS += $(MSGPACK)/src/.libs/*.o
 all: modules build prepare
 
 .PHONY: prepare
-prepare: modules-prepare  $(TARGET_INCL)/citrusleaf/*.h
+prepare: modules-prepare $(subst $(SOURCE_INCL),$(TARGET_INCL),$(HEADERS)) 
 	$(noop)
 
 .PHONY: build
@@ -120,7 +122,7 @@ $(TARGET_INCL)/citrusleaf: | $(TARGET_INCL)
 	mkdir $@
 
 $(TARGET_INCL)/citrusleaf/%.h:: $(SOURCE_INCL)/citrusleaf/%.h | $(TARGET_INCL)/citrusleaf
-	cp -p $^ $(TARGET_INCL)/citrusleaf
+	cp $^ $@
 
 ###############################################################################
 include project/modules.mk project/test.mk $(ROOT)/project/rules.mk

@@ -4,6 +4,11 @@ include $(ROOT)/project/settings.mk
 ##  SETTINGS                                                                 ##
 ###############################################################################
 
+HOST    := 127.0.0.1
+PORT    := 3000
+THREADS := 2
+TIMEOUT := 50
+
 CITRUSLEAF = $(ROOT)/citrusleaf-libevent
 
 CC_FLAGS = -std=gnu99  -Wall
@@ -40,7 +45,7 @@ build-clean:
 
 .PHONY: run
 run: $(TARGET_BIN)/example
-	$(TARGET_BIN)/example
+	$(TARGET_BIN)/example -h $(HOST) -p $(PORT) -b $(THREADS) -m $(TIMEOUT)
 
 .PHONY: example
 example: $(TARGET_BIN)/example

@@ -2255,6 +2255,98 @@ int test_game_funcs()
 	return 0;
 }
 
+int do_udf_ttl_gen_test() {
+
+	cl_write_parameters cl_wp;
+	cl_write_parameters_set_default(&cl_wp);
+	cl_wp.timeout_ms = g_config->timeout_ms;
+	cl_wp.record_ttl = 864000;
+
+	// (0) delete & reinsert record to start afresh
+	char *keyStr = "key_ttl_gen_test";
+	cl_object o_key;
+	citrusleaf_object_init_str(&o_key,keyStr);    
+	int rsp = citrusleaf_delete(g_config->asc, g_config->ns, g_config->set, &o_key, &cl_wp);
+	if (rsp != CITRUSLEAF_OK && rsp != CITRUSLEAF_FAIL_NOTFOUND) {
+		citrusleaf_object_free(&o_key);    
+		LOG("failed deleting test data rsp=%d",rsp);
+		return -1;
+	}
+	// (1) put in values
+	cl_bin bins[1];
+	strcpy(bins[0].bin_name, "bin1");
+	citrusleaf_object_init_int(&bins[0].object, 30);
+	rsp = citrusleaf_put(g_config->asc, g_config->ns, g_config->set, &o_key, bins, 1, &cl_wp);
+	citrusleaf_object_free(&bins[0].object);
+	if (rsp != CITRUSLEAF_OK) {
+		citrusleaf_object_free(&o_key);    
+		LOG("failed inserting test data rsp=%d",rsp);
+		return -1;
+	}
+
+	// (2) set up udf call for ttl
+	cl_bin * rsp_bins = NULL;
+	int rsp_n_bins = 0;
+	as_result res;
+	as_result_init(&res);
+	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
+			g_config->package_name,"do_ttl_test", NULL, g_config->timeout_ms, &res);  
+
+	if (rsp != CITRUSLEAF_OK) {
+		citrusleaf_object_free(&o_key);    
+		LOG("failed citrusleaf_run_udf rsp=%d",rsp);
+		return -1;
+	}
+	char * res_str = as_val_tostring(res.value);
+	LOG("Result from ttl test UDF call %s: %s", res.is_success ? "SUCCESS" : "FAILURE", res_str);
+
+	// If the difference b/w the ttl received from the record and pushed into the record is less than 10 secs, we got the right value.
+	uint32_t recvd_ttl = atoi(res_str);
+	if (recvd_ttl - cl_wp.record_ttl > 10) {
+		LOG("Failed ttl test, value received = %d",recvd_ttl);
+		free(res_str);
+		as_result_destroy(&res); 
+		return -1;
+	}
+	else {
+		LOG("TTL test successful");
+	}
+	free(res_str);
+	as_result_destroy(&res); 
+
+	// (2) set up udf apply call for generation test
+	//uint32_t cl_gen;
+	rsp_bins = NULL;
+	rsp_n_bins = 0;
+	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
+			g_config->package_name,"do_gen_test", NULL, g_config->timeout_ms, &res);  
+
+	if (rsp != CITRUSLEAF_OK) {
+		citrusleaf_object_free(&o_key);    
+		LOG("failed citrusleaf_run_udf rsp=%d",rsp);
+		free(res_str);
+		as_result_destroy(&res); 
+		return -1;
+	}
+	res_str = as_val_tostring(res.value);
+	LOG("Result from generation test UDF call %s: %s", res.is_success ? "SUCCESS" : "FAILURE", res_str);
+	uint32_t gen = atoi(res_str);
+	// Generation should get updated twice. Once when we do a citrusleaf_put and once when we 
+	// update the record through UDF.
+	if(gen != 2) {
+		LOG("Failed generation test, gen recvd = %d, expected = 2", gen);
+		free(res_str);
+		as_val_destroy(res.value);
+		return -1;
+	}
+	else {
+		LOG("Generation test successful");
+	}
+	free(res_str);
+	as_val_destroy(res.value); 
+	return 0;
+}
+  
 typedef struct test_def_s {
 	const char * name;
 	int (*run)();
@@ -2263,6 +2355,7 @@ typedef struct test_def_s {
 #define test(func) {#func, func}
 
 const test_def test_defs[] = {
+	test(do_udf_ttl_gen_test), 
 	test(do_udf_read_bins_test),
 	test(do_udf_bin_update_test),
 	test(do_udf_trim_bin_test),

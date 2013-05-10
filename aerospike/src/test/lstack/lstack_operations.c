@@ -456,10 +456,17 @@ int lstack_peek_with_transform_test(char * keystr, char * ldt_bin,
 TEST( lstack_operations_small_push, "lstack push small" ) {
     static char * meth = "lstack_operations_small_push()";
     int rc = 0;
+
+	char * user_key   = "User_111";
+	char * ldt_bin    = "number_small";
+	int    iterations = 100 ;
+	int    seed       = 111;
+	int    format     = NUMBER_FORMAT;
+
     printf("Test(%s) called\n", meth );
 
-    // TODO: Fill in Function
     
+	rc = lstack_push_test( user_key, ldt_bin, iterations, seed, format );
     assert_int_eq( rc, 0 );
 } // end lstack_operations_small_push()
 
@@ -468,8 +475,14 @@ TEST( lstack_operations_medium_push, "lstack push medium" ) {
     int rc = 0;
     printf("Test(%s) called\n", meth );
 
-    // TODO: Fill in Function
+	char * user_key   = "User_111";
+	char * ldt_bin    = "number_medium";
+	int    iterations = 1000 ;
+	int    seed       = 111;
+	int    format     = NUMBER_FORMAT;
+
     
+	rc = lstack_push_test( user_key, ldt_bin, iterations, seed, format );
     assert_int_eq( rc, 0 );
 } // end   lstack_operations_medium_push()
 
@@ -478,8 +491,13 @@ TEST( lstack_operations_large_push, "lstack push large" ) {
     int rc = 0;
     printf("Test(%s) called\n", meth );
 
-    // TODO: Fill in Function
-    
+	char * user_key   = "User_111";
+	char * ldt_bin    = "number_large";
+	int    iterations = 10000 ;
+	int    seed       = 111;
+	int    format     = NUMBER_FORMAT;
+
+	rc = lstack_push_test( user_key, ldt_bin, iterations, seed, format );    
     assert_int_eq( rc, 0 );
 } // end   lstack_operations_large_push()
 
@@ -489,8 +507,14 @@ TEST( lstack_operations_small_peek, "lstack peek small" ) {
     int rc = 0;
     printf("Test(%s) called\n", meth );
 
-    // TODO: Fill in Function
-    
+	char * user_key   = "User_111";
+	char * ldt_bin    = "number_small";
+	int    iterations = 10;
+	int    seed       = 111;
+	int    format     = NUMBER_FORMAT;
+	g_config->peek_max = 50;
+
+	rc = lstack_peek_test( user_key, ldt_bin, iterations, seed, format );
     assert_int_eq( rc, 0 );
 } // end   lstack_operations_small_peek()
 
@@ -499,8 +523,14 @@ TEST( lstack_operations_medium_peek, "lstack peek medium" ) {
     int rc = 0;
     printf("Test(%s) called\n", meth );
 
-    // TODO: Fill in Function
+	char * user_key   = "User_111";
+	char * ldt_bin    = "number_medium";
+	int    iterations = 10;
+	int    seed       = 111;
+	int    format     = NUMBER_FORMAT;
+	g_config->peek_max = 500;
     
+	rc = lstack_peek_test( user_key, ldt_bin, iterations, seed, format );
     assert_int_eq( rc, 0 );
 } // end   lstack_operations_medium_peek()
 
@@ -509,7 +539,13 @@ TEST( lstack_operations_large_peek, "lstack peek large" ) {
     int rc = 0;
     printf("Test(%s) called\n", meth );
 
-    // TODO: Fill in Function
-    
+	char * user_key   = "User_111";
+	char * ldt_bin    = "number_large";
+	int    iterations = 10;
+	int    seed       = 111;
+	int    format     = NUMBER_FORMAT;
+	g_config->peek_max = 5000;
+
+	rc = lstack_peek_test( user_key, ldt_bin, iterations, seed, format );
     assert_int_eq( rc, 0 );
 } // end   lstack_operations_large_peek()

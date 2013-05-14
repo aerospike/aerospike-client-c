@@ -46,3 +46,10 @@ end
 function diff(record, a, b)
     return difference(record, a, b)
 end
+
+function update(record)
+	record.bin = "first string"
+	aerospike:create(record)
+	record.bin1 = "second string"
+	aerospike:update(record)
+end

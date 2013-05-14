@@ -20,6 +20,7 @@ TEST_UTIL += util/producer_stream
 TEST_UTIL += util/map_rec
 TEST_UTIL += util/test_aerospike
 TEST_UTIL += util/test_logger
+TEST_UTIL += util/info_util
 
 TEST_LSTACK = 
 TEST_LSTACK += lstack/lstack_advanced

@@ -34,35 +34,13 @@
  * TYPES
  ******************************************************************************/
 
-typedef struct citrusleaf_udf_info_s citrusleaf_udf_info;
 typedef struct citrusleaf_udf_filelist_s citrusleaf_udf_filelist;
-
-struct citrusleaf_udf_info_s {
-    char *      error;
-    char       filename[128];
-    as_bytes   content;
-    char *      gen;
-    char *      files;
-    int         count;
-    unsigned char hash[CF_SHA_HEX_BUFF_LEN];
-};
 struct citrusleaf_udf_filelist_s {
     int         capacity;
     int         size;
     as_udf_file **     files;
 };
 
-typedef void * (* citrusleaf_parameters_fold_callback)(const char * key, const char * value, void * context);
-typedef void * (* citrusleaf_split_fold_callback)(char * value, void * context);
-
-/******************************************************************************
- * STATIC FUNCTIONS
- ******************************************************************************/
-
-static int citrusleaf_parameters_fold(char * parameters, void * context, citrusleaf_parameters_fold_callback callback);
-static int citrusleaf_sub_parameters_fold(char * parameters, void * context, citrusleaf_parameters_fold_callback callback);
-static int citrusleaf_split_fold(char * str, const char delim, void * context, citrusleaf_split_fold_callback callback);
-static void citrusleaf_udf_info_destroy(citrusleaf_udf_info * info);
 
 /******************************************************************************
  * FUNCTIONS
@@ -72,7 +50,7 @@ static void citrusleaf_udf_info_destroy(citrusleaf_udf_info * info);
     { printf("%s:%d - ", __FILE__, __LINE__); printf(msg, ##__VA_ARGS__ ); printf("\n"); }
 
 
-static void citrusleaf_udf_info_destroy(citrusleaf_udf_info * info) {
+void citrusleaf_udf_info_destroy(citrusleaf_udf_info * info) {
     if ( info->error ) free(info->error);
     as_val_destroy(&info->content);
     if ( info->gen ) free(info->gen);
@@ -84,7 +62,7 @@ static void citrusleaf_udf_info_destroy(citrusleaf_udf_info * info) {
     info->count = 0;
 }
 
-static void * citrusleaf_udf_info_parameters(const char * key, const char * value, void * context) {
+void * citrusleaf_udf_info_parameters(const char * key, const char * value, void * context) {
     citrusleaf_udf_info * info = (citrusleaf_udf_info *) context;
     if ( strcmp(key,"error") == 0 ) {
         info->error = strdup(value);
@@ -576,7 +554,7 @@ cl_rv citrusleaf_udf_remove(cl_cluster *asc, const char * filename, char ** erro
 }
 // Parameters are key-value pairs separated by ;
 // Sub parameters are key-value pairs contained under a parameter set and are separated by commas
-static int citrusleaf_sub_parameters_fold(char * parameters, void * context, citrusleaf_parameters_fold_callback callback) {
+int citrusleaf_sub_parameters_fold(char * parameters, void * context, citrusleaf_parameters_fold_callback callback) {
     if ( !parameters || !(*parameters) ) return 0;
     char *  ks = NULL;
     int     ke = 0;
@@ -605,7 +583,7 @@ static int citrusleaf_sub_parameters_fold(char * parameters, void * context, cit
     return rc;
 }
 
-static int citrusleaf_parameters_fold(char * parameters, void * context, citrusleaf_parameters_fold_callback callback) {
+int citrusleaf_parameters_fold(char * parameters, void * context, citrusleaf_parameters_fold_callback callback) {
     if ( !parameters || !(*parameters) ) return 0;
 
     char *  ks = NULL;
@@ -637,7 +615,7 @@ static int citrusleaf_parameters_fold(char * parameters, void * context, citrusl
 }
 
 
-static int citrusleaf_split_fold(char * str, const char delim, void * context, citrusleaf_split_fold_callback callback) {
+int citrusleaf_split_fold(char * str, const char delim, void * context, citrusleaf_split_fold_callback callback) {
     if ( !str || !(*str) ) return 0;
 
     char *  vs = NULL;

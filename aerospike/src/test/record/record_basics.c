@@ -10,6 +10,7 @@
 
 #define LUA_FILE "src/test/lua/client_record_basics.lua"
 #define UDF_FILE "client_record_basics"
+extern cl_cluster * cluster;
 
 /******************************************************************************
  * TEST CASES
@@ -345,6 +346,66 @@ TEST( record_basics_file_does_not_exist, "non-existent UDF file should fail" ) {
     as_result_destroy(&r);
 }
 
+TEST( record_basics_update_memory, "Memory accounting on updating record through UDFs" ) {
+
+	// delete record, start afresh
+	cl_object okey;
+    citrusleaf_object_init_str(&okey, "test");
+	int rc = citrusleaf_delete(cluster, "test", "test", &okey, 0);
+
+	char * query = "namespace/test";
+	as_result r;
+	as_result_init(&r);
+
+	// Get used memory before applying udf	
+	char ** v_b = get_stats( query, "used-bytes-memory", cluster);
+	int i = 0;
+	while(v_b[i]) {
+		debug("Used memory before - node %d = %ld\n",i,atol(v_b[i]));
+		i++;
+	}
+
+	// Apply udf
+	rc = udf_apply_record("test", "test", "test", UDF_FILE, "update", NULL, &r);
+	
+	// Get namespace used bytes after record update
+	char ** v_a = get_stats( query, "used-bytes-memory", cluster);
+	i = 0;
+	while(v_a[i]) {
+		debug("Used memory after - node %d = %ld\n",i,atol(v_a[i]));
+		i++;
+	}
+
+	// Get replication factor
+	char ** v_c = get_stats( query, "repl-factor", cluster);
+	int repl_factor = atoi(v_c[0]);
+	debug("Replication factor %d\n", repl_factor);
+	
+	// The difference between the memory usage after and before update should be the record memory
+	// for only 'replication factor' number of nodes
+	int cluster_size = i;
+	int diff = 0, count = 0;
+	uint64_t rec_memory = 123;	
+	
+	for(int i = 0; i < cluster_size; i++) {
+		diff = atol(v_a[i]) - atol(v_b[i]);
+		if ( diff == rec_memory ) {
+			count ++ ;
+		}
+	}
+	assert_int_eq(count, repl_factor);
+
+	// Free memory
+	for ( i = 0;i < cluster_size; i++) {
+		free(v_a[i]);
+		free(v_b[i]);
+		free(v_c[i]);
+	}
+	free(v_a);
+	free(v_b);
+	free(v_c); 
+	as_result_destroy(&r);
+}
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -400,7 +461,7 @@ SUITE( record_basics, "test basics.lua" ) {
 
     suite_add( record_basics_func_does_not_exist );
     suite_add( record_basics_file_does_not_exist );
-
+	suite_add( record_basics_update_memory );
 
     suite_after( after );
 }

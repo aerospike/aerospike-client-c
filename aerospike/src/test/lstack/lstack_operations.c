@@ -6,7 +6,7 @@
 // #include <citrusleaf/aerospike_lstack.h>
 
 #include "lstack_test.h"
-
+#include "stdlib.h"
 
 // Foward delare our config structure for all test files.
 
@@ -143,7 +143,7 @@ int generate_value( as_val ** return_valpp, int seed, int val_type ){
     int rc = 0;
     *return_valpp = NULL;  // Start with nothing.
     char * mallocd_buf = NULL;
-
+    char sourceChars[26] = "abcdefghijklmnopqrstuvwxyz";
     switch( val_type ){
         case LIST_FORMAT:
             *return_valpp = gen_list_val( seed );
@@ -158,14 +158,19 @@ int generate_value( as_val ** return_valpp, int seed, int val_type ){
         case STRING_FORMAT:
             // Malloc a string buffer, write in it, and then create a 
             // as_string object for it.
-            // NOTE: RIght now, this is just a simple, fixed size string.
-            // We should add in the ability to create a variable size string
-            // based on the KEY_LENGTH parameter in the config structure.
-            // TODO: Make general for key length;
-            mallocd_buf = (char *) malloc( 32 );
+            // NOTE: RIght now, this is just a simple, variable size string
+            // based on the value_len parameter in the config structure.
+            mallocd_buf = (char *) malloc( g_config->value_len+1);
             srand( seed );
-            int new_val = rand() % g_config->key_max;
-            sprintf( mallocd_buf, "%10d", new_val );
+
+            //generate random string length from the given value_len
+            int new_val = rand() % g_config->value_len;
+            int i;
+            for (i=0; i<new_val; ++i) {
+                mallocd_buf[i] = sourceChars[rand()%26];
+            }
+            mallocd_buf[new_val] = '\0';
+
             as_string * str_val = as_string_new( mallocd_buf, true );
             *return_valpp = (as_val *) str_val;
             break;
@@ -205,8 +210,8 @@ int lstack_push_test(char * keystr, char * ldt_bin, int iterations, int seed,
     int rc = 0;
     int i;
 
-    INFO("[ENTER]:<%s:%s>: It(%d) Key(%s) LSOBin(%s) Seed(%d)",
-            MOD, meth, iterations, keystr, ldt_bin, seed);
+//    INFO("[ENTER]:<%s:%s>: It(%d) Key(%s) LSOBin(%s) Seed(%d)",
+//            MOD, meth, iterations, keystr, ldt_bin, seed);
 
     // We have two choices:  We can create the LSO bin here, and then
     // do a bunch of inserts into it -- or we can just do the combined
@@ -228,7 +233,7 @@ int lstack_push_test(char * keystr, char * ldt_bin, int iterations, int seed,
     char       * bname = ldt_bin;
     int          iseed;
 
-    INFO("[DEBUG]:<%s:%s>: Run push() iterations(%d)", MOD, meth, iterations );
+//    INFO("[DEBUG]:<%s:%s>: Run push() iterations(%d)", MOD, meth, iterations );
     citrusleaf_object_init_str( &o_key, keystr );
     for ( i = 0; i < iterations; i++ ) {
         iseed = i * 10;
@@ -239,7 +244,7 @@ int lstack_push_test(char * keystr, char * ldt_bin, int iterations, int seed,
                 g_config->timeout_ms);
 
         if ( rc != CITRUSLEAF_OK ) {
-            INFO("[ERROR]:<%s:%s>:PUSH Error: i(%d) rc(%d)", MOD, meth,i,rc );
+//            INFO("[ERROR]:<%s:%s>:PUSH Error: i(%d) rc(%d)", MOD, meth,i,rc );
             as_val_destroy ( valp );
             goto cleanup;
         }
@@ -277,10 +282,31 @@ int lstack_peek_test(char * keystr, char * ldt_bin, int iterations,
     static char * meth = "lstack_peek_test()";
     cl_rv rc = 0;
     int i;
+    bool expected_file_exist = false;
     as_result * resultp;
 
-    INFO("[ENTER]:<%s:%s>: Iterations(%d) Key(%s) LSOBin(%s) Sd(%d) DF(%d)",
-            MOD, meth, iterations, keystr, ldt_bin, seed, data_format);
+    FILE *fp_peek, *fp_peek_exp, *log;
+    char filename[512], filename_exp[512], log_file[512];
+
+    sprintf(filename, "src/test/lstack/results/lstack_peek_%s.lst",ldt_bin);
+    sprintf(filename_exp, "src/test/lstack/results/expected/lstack_peek_%s.lst",ldt_bin);
+    sprintf(log_file, "src/test/lstack/results/log.lst");
+
+    // Check for existing expected results, if exists try to compare with resulting output or else create expected results
+    fp_peek_exp = fopen(filename_exp, "r");
+    if (fp_peek_exp == NULL) {   
+        fp_peek_exp = fopen(filename_exp, "w");
+    } else {
+        expected_file_exist = true;
+        fp_peek = fopen(filename, "w");
+    }
+
+    log = fopen(log_file, "a");
+
+    char * valstr;
+
+//    INFO("[ENTER]:<%s:%s>: Iterations(%d) Key(%s) LSOBin(%s) Sd(%d) DF(%d)",
+//            MOD, meth, iterations, keystr, ldt_bin, seed, data_format);
 
     cl_cluster * c     = g_config->asc;
     cl_object  o_key;
@@ -291,7 +317,7 @@ int lstack_peek_test(char * keystr, char * ldt_bin, int iterations,
     int        misses;
     int        errs;
 
-    INFO("[DEBUG]:<%s:%s>: Run peek() iterations(%d)", MOD, meth, iterations );
+//    INFO("[DEBUG]:<%s:%s>: Run peek() iterations(%d)", MOD, meth, iterations );
 
     int    peek_count;
     srand( seed );
@@ -299,12 +325,19 @@ int lstack_peek_test(char * keystr, char * ldt_bin, int iterations,
     citrusleaf_object_init_str( &o_key, keystr );
     for ( i = 0; i < iterations ; i ++ ){
         peek_count = rand() % g_config->peek_max;
-        INFO("[DEBUG]:<%s:%s>: Peek(%d)", MOD, meth, iterations );
+    //     INFO("[DEBUG]:<%s:%s>: Peek(%d)", MOD, meth, iterations );
         rc = aerospike_lstack_peek( &resultp,
                 c, ns, set, &o_key, bname, peek_count, g_config->timeout_ms);
-
-        process_read_results( meth, rc, resultp, i, &vals_read, &misses,
-                &errs, peek_count );
+    if(rc == CITRUSLEAF_OK) {
+        valstr = as_val_tostring( resultp->value );
+        if(expected_file_exist) {
+            fprintf(fp_peek,"%s,\n",valstr);
+                } else {
+                    fprintf(fp_peek_exp,"%s,\n",valstr);
+                }
+    }
+        // process_read_results( meth, rc, resultp, i, &vals_read, &misses,
+        //        &errs, peek_count );
 
         // Clean up -- release the result object
         if( resultp != NULL ) as_result_destroy( resultp );
@@ -315,7 +348,26 @@ int lstack_peek_test(char * keystr, char * ldt_bin, int iterations,
     } // end for each peek iteration
     citrusleaf_object_free( &o_key );
 
-    INFO("[EXIT]:<%s:%s>: RC(%d)", MOD, meth, rc );
+    if(expected_file_exist) {
+        fflush(fp_peek);
+        fclose(fp_peek);
+        char temp[1034];
+
+        time_t cur_t;
+        cur_t = time(NULL);
+        sprintf(temp, "diff -q %s %s", filename,filename_exp);
+        if(system(temp) == 0){
+            fprintf(log,"%s:[+]Test passed for lstack_peek_%s\n",ctime(&cur_t),ldt_bin);
+        } else {
+            fprintf(log,"%s:	[-]Test failed for lstack_peek_%s\n",ctime(&cur_t),ldt_bin);
+        }
+    } else {
+        fflush(fp_peek_exp);
+        fclose(fp_peek_exp);
+    }
+    fflush(log);
+    fclose(log);
+//    INFO("[EXIT]:<%s:%s>: RC(%d)", MOD, meth, rc );
     return rc;
 } // end lstack_peek_test()
 
@@ -458,46 +510,75 @@ TEST( lstack_operations_small_push, "lstack push small" ) {
     int rc = 0;
 
 	char * user_key   = "User_111";
-	char * ldt_bin    = "number_small";
+    char * ldt_bin_num    = "num_small";
+    char * ldt_bin_str    = "str_small";
+    char * ldt_bin_list   = "list_small";
+
 	int    iterations = 100 ;
 	int    seed       = 111;
 	int    format     = NUMBER_FORMAT;
 
-    printf("Test(%s) called\n", meth );
+    printf("\tTest(%s) called\n", meth );
 
     
-	rc = lstack_push_test( user_key, ldt_bin, iterations, seed, format );
+    rc = lstack_push_test( user_key, ldt_bin_num, iterations, seed, NUMBER_FORMAT );
+    assert_int_eq( rc, 0 );
+
+    g_config->value_len = 10;
+    rc = lstack_push_test( user_key, ldt_bin_str, iterations, seed, STRING_FORMAT );
+    assert_int_eq( rc, 0 );
+
+    rc = lstack_push_test( user_key, ldt_bin_list, iterations, seed, LIST_FORMAT );
     assert_int_eq( rc, 0 );
 } // end lstack_operations_small_push()
 
 TEST( lstack_operations_medium_push, "lstack push medium" ) {
     static char * meth = "lstack_operations_medium_push()";
     int rc = 0;
-    printf("Test(%s) called\n", meth );
+    printf("\tTest(%s) called\n", meth );
 
 	char * user_key   = "User_111";
-	char * ldt_bin    = "number_medium";
+    char * ldt_bin_num    = "num_medium";
+    char * ldt_bin_str    = "str_medium";
+    char * ldt_bin_list   = "list_medium";
+
 	int    iterations = 1000 ;
 	int    seed       = 111;
 	int    format     = NUMBER_FORMAT;
 
     
-	rc = lstack_push_test( user_key, ldt_bin, iterations, seed, format );
+    rc = lstack_push_test( user_key, ldt_bin_num, iterations, seed, NUMBER_FORMAT );
+    assert_int_eq( rc, 0 );
+
+    g_config->value_len = 100;
+    rc = lstack_push_test( user_key, ldt_bin_str, iterations, seed, STRING_FORMAT );
+    assert_int_eq( rc, 0 );
+
+    rc = lstack_push_test( user_key, ldt_bin_list, iterations, seed, LIST_FORMAT );
     assert_int_eq( rc, 0 );
 } // end   lstack_operations_medium_push()
 
 TEST( lstack_operations_large_push, "lstack push large" ) {
     static char * meth = "lstack_operations_large_push()";
     int rc = 0;
-    printf("Test(%s) called\n", meth );
+    printf("\tTest(%s) called\n", meth );
 
 	char * user_key   = "User_111";
-	char * ldt_bin    = "number_large";
-	int    iterations = 10000 ;
+    char * ldt_bin_num    = "num_large";
+    char * ldt_bin_str    = "str_large";
+    char * ldt_bin_list   = "list_large";
+   	int    iterations = 10000 ;
 	int    seed       = 111;
 	int    format     = NUMBER_FORMAT;
 
-	rc = lstack_push_test( user_key, ldt_bin, iterations, seed, format );    
+    rc = lstack_push_test( user_key, ldt_bin_num, iterations, seed, format );    
+    assert_int_eq( rc, 0 );
+
+    g_config->value_len = 1000;
+    rc = lstack_push_test( user_key, ldt_bin_str, iterations, seed, STRING_FORMAT );
+    assert_int_eq( rc, 0 );
+
+    rc = lstack_push_test( user_key, ldt_bin_list, iterations, seed, LIST_FORMAT );
     assert_int_eq( rc, 0 );
 } // end   lstack_operations_large_push()
 
@@ -505,47 +586,73 @@ TEST( lstack_operations_large_push, "lstack push large" ) {
 TEST( lstack_operations_small_peek, "lstack peek small" ) {
     static char * meth = "lstack_operations_small_peek()";
     int rc = 0;
-    printf("Test(%s) called\n", meth );
+    printf("\tTest(%s) called\n", meth );
 
 	char * user_key   = "User_111";
-	char * ldt_bin    = "number_small";
+    char * ldt_bin_num    = "num_small";
+    char * ldt_bin_str    = "str_small";
+    char * ldt_bin_list   = "list_small";
 	int    iterations = 10;
 	int    seed       = 111;
 	int    format     = NUMBER_FORMAT;
 	g_config->peek_max = 50;
 
-	rc = lstack_peek_test( user_key, ldt_bin, iterations, seed, format );
+    rc = lstack_peek_test( user_key, ldt_bin_num, iterations, seed, NUMBER_FORMAT );
+    assert_int_eq( rc, 0 );
+
+    rc = lstack_peek_test( user_key, ldt_bin_str, iterations, seed, STRING_FORMAT );
+    assert_int_eq( rc, 0 );
+
+    rc = lstack_peek_test( user_key, ldt_bin_list, iterations, seed, LIST_FORMAT );
     assert_int_eq( rc, 0 );
 } // end   lstack_operations_small_peek()
 
 TEST( lstack_operations_medium_peek, "lstack peek medium" ) {
     static char * meth = "lstack_operations_medium_peek()";
     int rc = 0;
-    printf("Test(%s) called\n", meth );
+    printf("\tTest(%s) called\n", meth );
 
 	char * user_key   = "User_111";
-	char * ldt_bin    = "number_medium";
+    char * ldt_bin_num    = "num_medium";
+    char * ldt_bin_str    = "str_medium";
+    char * ldt_bin_list   = "list_medium";
+
 	int    iterations = 10;
 	int    seed       = 111;
 	int    format     = NUMBER_FORMAT;
 	g_config->peek_max = 500;
     
-	rc = lstack_peek_test( user_key, ldt_bin, iterations, seed, format );
+    rc = lstack_peek_test( user_key, ldt_bin_num, iterations, seed, format );
+    assert_int_eq( rc, 0 );
+
+    rc = lstack_peek_test( user_key, ldt_bin_str, iterations, seed, STRING_FORMAT );
+    assert_int_eq( rc, 0 );
+
+    rc = lstack_peek_test( user_key, ldt_bin_list, iterations, seed, LIST_FORMAT );
     assert_int_eq( rc, 0 );
 } // end   lstack_operations_medium_peek()
 
 TEST( lstack_operations_large_peek, "lstack peek large" ) {
     static char * meth = "lstack_operations_large_peek()";
     int rc = 0;
-    printf("Test(%s) called\n", meth );
+    printf("\tTest(%s) called\n", meth );
 
 	char * user_key   = "User_111";
-	char * ldt_bin    = "number_large";
+	char * ldt_bin_num    = "num_large";
+    char * ldt_bin_str    = "str_large";
+    char * ldt_bin_list   = "list_large";
+
 	int    iterations = 10;
 	int    seed       = 111;
 	int    format     = NUMBER_FORMAT;
 	g_config->peek_max = 5000;
 
-	rc = lstack_peek_test( user_key, ldt_bin, iterations, seed, format );
+    rc = lstack_peek_test( user_key, ldt_bin_num, iterations, seed, format );
     assert_int_eq( rc, 0 );
-} // end   lstack_operations_large_peek()
+
+    rc = lstack_peek_test( user_key, ldt_bin_str, iterations, seed, STRING_FORMAT );
+    assert_int_eq( rc, 0 );
+        
+    rc = lstack_peek_test( user_key, ldt_bin_list, iterations, seed, LIST_FORMAT );
+    assert_int_eq( rc, 0 );
+ } // end   lstack_operations_large_peek()

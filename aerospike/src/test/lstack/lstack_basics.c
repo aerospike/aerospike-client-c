@@ -25,28 +25,28 @@ static char * MOD = "lstack_basics.c::13_04_26";
 // ==================================================================
 TEST( lstack_basics_push, "Push N items on the stack" ) {
     char * user_key   = "User_111";
-    char * ldt_bin    = "number_stack";
+    char * ldt_bin_num    = "num_basics";
     int    iterations = 10;
     int    seed       = 111;
     int    format     = NUMBER_FORMAT;
+    g_config->value_len = 10;
+    printf("\tlstack_basics_push:: Calling push test\n");
 
-    printf("lstack_basics_push:: Calling push test\n");
-
-    int rc = lstack_push_test( user_key, ldt_bin, iterations, seed, format );
+    int rc = lstack_push_test( user_key, ldt_bin_num, iterations, seed, format );
     assert_int_eq( rc, 0 );
 } // end TEST
 
 // ==================================================================
 TEST( lstack_basics_peek, "Read N elements from the stack" ) {
     char * user_key   = "User_111";
-    char * ldt_bin    = "number_stack";
+    char * ldt_bin_num    = "num_basics";
     int    iterations = 10;
     int    seed       = 111;
     int    format     = NUMBER_FORMAT;
     g_config->peek_max = 5;
-    printf("lstack_basics_peek:: Calling peek test\n");
+    printf("\tlstack_basics_peek:: Calling peek test\n");
 
-    int rc = lstack_peek_test( user_key, ldt_bin, iterations, seed, format );
+    int rc = lstack_peek_test( user_key, ldt_bin_num, iterations, seed, format );
     assert_int_eq( rc, 0);
 }
 

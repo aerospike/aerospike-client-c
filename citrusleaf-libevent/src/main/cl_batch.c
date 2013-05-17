@@ -23,8 +23,8 @@
 #include <citrusleaf/cf_digest.h>
 #include <citrusleaf/cf_errno.h>
 #include <citrusleaf/cf_log_internal.h>
-#include <citrusleaf/cf_socket.h>
 #include <citrusleaf/cf_proto.h>
+#include <citrusleaf/cf_socket.h>
 #include <citrusleaf/cf_types.h>
 
 #include "citrusleaf_event2/cl_cluster.h"

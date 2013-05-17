@@ -27,11 +27,11 @@
 #include <citrusleaf/cf_errno.h>
 #include <citrusleaf/cf_ll.h>
 #include <citrusleaf/cf_log_internal.h>
+#include <citrusleaf/cf_proto.h>
 #include <citrusleaf/cf_queue.h>
 #include <citrusleaf/cf_socket.h>
-#include <citrusleaf/cf_vector.h>
-#include <citrusleaf/cf_proto.h>
 #include <citrusleaf/cf_types.h>
+#include <citrusleaf/cf_vector.h>
 
 #include "citrusleaf_event2/ev2citrusleaf.h"
 #include "citrusleaf_event2/ev2citrusleaf-internal.h"
@@ -39,8 +39,8 @@
 #include "citrusleaf_event2/cl_cluster.h"
 
 
-// Remove to use the new info replicas protocol:
-#define OLD_REPLICAS_PROTOCOL
+// Define to use the old info replicas protocol:
+//#define OLD_REPLICAS_PROTOCOL
 
 extern void ev2citrusleaf_base_hop(cl_request *req);
 
@@ -259,6 +259,7 @@ static void* run_cluster_mgr(void* base) {
 
 const ev2citrusleaf_cluster_runtime_options DEFAULT_RUNTIME_OPTIONS =
 {
+	300,	// socket_pool_max
 	false,	// read_master_only
 	false,	// throttle_reads
 	false,	// throttle_writes
@@ -275,6 +276,8 @@ ev2citrusleaf_cluster_get_runtime_options(ev2citrusleaf_cluster* asc,
 		cf_error("ev2citrusleaf_cluster_get_runtime_options() - null param");
 		return EV2CITRUSLEAF_FAIL_CLIENT_ERROR;
 	}
+
+	opts->socket_pool_max = cf_atomic32_get(asc->runtime_options.socket_pool_max);
 
 	opts->read_master_only = cf_atomic32_get(asc->runtime_options.read_master_only) != 0;
 
@@ -305,6 +308,8 @@ ev2citrusleaf_cluster_set_runtime_options(ev2citrusleaf_cluster* asc,
 		return EV2CITRUSLEAF_FAIL_CLIENT_ERROR;
 	}
 
+	cf_atomic32_set(&asc->runtime_options.socket_pool_max, opts->socket_pool_max);
+
 	cf_atomic32_set(&asc->runtime_options.read_master_only, opts->read_master_only ? 1 : 0);
 
 	cf_atomic32_set(&asc->runtime_options.throttle_reads, opts->throttle_reads ? 1 : 0);
@@ -319,6 +324,7 @@ ev2citrusleaf_cluster_set_runtime_options(ev2citrusleaf_cluster* asc,
 	MUTEX_UNLOCK(asc->runtime_options.lock);
 
 	cf_info("set runtime options:");
+	cf_info("   socket-pool-max %u", opts->socket_pool_max);
 	cf_info("   read-master-only %s",
 			opts->read_master_only ? "true" : "false");
 	cf_info("   throttle-reads %s, writes %s",
@@ -747,6 +753,44 @@ ns_partition_map_destroy(cf_vector* p_maps_v)
 	}
 }
 
+// TODO - should probably move base 64 stuff to cf_base so C client can use it.
+const uint8_t EV2_CF_BASE64_DECODE_ARRAY[] = {
+	    /*00*/ /*01*/ /*02*/ /*03*/ /*04*/ /*05*/ /*06*/ /*07*/   /*08*/ /*09*/ /*0A*/ /*0B*/ /*0C*/ /*0D*/ /*0E*/ /*0F*/
+/*00*/	    0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,     0,     0,     0,     0,     0,
+/*10*/      0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,     0,     0,     0,     0,     0,
+/*20*/	    0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,    62,     0,     0,     0,    63,
+/*30*/	   52,    53,    54,    55,    56,    57,    58,    59,      60,    61,     0,     0,     0,     0,     0,     0,
+/*40*/	    0,     0,     1,     2,     3,     4,     5,     6,       7,     8,     9,    10,    11,    12,    13,    14,
+/*50*/	   15,    16,    17,    18,    19,    20,    21,    22,      23,    24,    25,     0,     0,     0,     0,     0,
+/*60*/	    0,    26,    27,    28,    29,    30,    31,    32,      33,    34,    35,    36,    37,    38,    39,    40,
+/*70*/	   41,    42,    43,    44,    45,    46,    47,    48,      49,    50,    51,     0,     0,     0,     0,     0,
+/*80*/	    0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,     0,     0,     0,     0,     0,
+/*90*/	    0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,     0,     0,     0,     0,     0,
+/*A0*/	    0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,     0,     0,     0,     0,     0,
+/*B0*/	    0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,     0,     0,     0,     0,     0,
+/*C0*/	    0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,     0,     0,     0,     0,     0,
+/*D0*/	    0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,     0,     0,     0,     0,     0,
+/*E0*/	    0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,     0,     0,     0,     0,     0,
+/*F0*/	    0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,     0,     0,     0,     0,     0
+};
+
+#define B64DA EV2_CF_BASE64_DECODE_ARRAY
+
+void
+ev2_cf_base64_decode(const char* in, int len, uint8_t* out)
+{
+	int i = 0;
+	int j = 0;
+
+	while (i < len) {
+		out[j + 0] = (B64DA[in[i + 0]] << 2) | (B64DA[in[i + 1]] >> 4);
+		out[j + 1] = (B64DA[in[i + 1]] << 4) | (B64DA[in[i + 2]] >> 2);
+		out[j + 2] = (B64DA[in[i + 2]] << 6) |  B64DA[in[i + 3]];
+
+		i += 4;
+		j += 3;
+	}
+}
 
 void
 ns_partition_map_set(ns_partition_map* p_map, const char* p_encoded_bitmap,
@@ -756,7 +800,7 @@ ns_partition_map_set(ns_partition_map* p_map, const char* p_encoded_bitmap,
 	// Size allows for padding - is actual size rounded up to multiple of 3.
 	uint8_t* bitmap = (uint8_t*)alloca((encoded_bitmap_len / 4) * 3);
 
-	cf_base64_decode(p_encoded_bitmap, encoded_bitmap_len, bitmap);
+	ev2_cf_base64_decode(p_encoded_bitmap, encoded_bitmap_len, bitmap);
 
 	// Then expand the bitmap into our bool array.
 	for (int i = 0; i < n_partitions; i++) {
@@ -944,7 +988,7 @@ node_info_req_parse_replicas(cl_cluster_node* cn)
 			// Update to the new partition generation.
 			cf_atomic_int_set(&cn->partition_generation, (cf_atomic_int_t)gen);
 
-			cf_debug("node %s got partition generation %d", cn->name, gen);
+			cf_info("node %s got partition generation %d", cn->name, gen);
 		}
 		// Old protocol (to be deprecated):
 		else if (strcmp(name, "replicas-read") == 0) {
@@ -1042,7 +1086,7 @@ node_info_req_parse_check(cl_cluster_node* cn)
 			if (client_gen != server_gen) {
 				get_replicas = true;
 
-				cf_debug("node %s partition generation %d needs update to %d",
+				cf_info("node %s partition generation %d needs update to %d",
 						cn->name, client_gen, server_gen);
 			}
 		}
@@ -1062,8 +1106,6 @@ node_info_req_parse_check(cl_cluster_node* cn)
 	node_info_req_done(cn);
 
 	if (get_replicas) {
-		cf_info("making partition request of node %s", cn->name);
-
 		node_info_req_start(cn, INFO_REQ_GET_REPLICAS);
 	}
 }
@@ -1871,7 +1913,8 @@ cl_cluster_node_fd_get(cl_cluster_node *cn)
 void
 cl_cluster_node_fd_put(cl_cluster_node *cn, int fd)
 {
-	if (! cf_queue_push_limit(cn->conn_q, &fd, 300)) {
+	if (! cf_queue_push_limit(cn->conn_q, &fd,
+			cf_atomic32_get(cn->asc->runtime_options.socket_pool_max))) {
 		cf_close(fd);
 		cf_atomic32_decr(&cn->n_fds_open);
 	}

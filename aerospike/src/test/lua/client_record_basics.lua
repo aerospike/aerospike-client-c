@@ -51,5 +51,12 @@ function update(record)
 	record.bin = "first string"
 	aerospike:create(record)
 	record.bin1 = "second string"
-	aerospike:update(record)
+	return aerospike:update(record)
+end
+
+function delete(record)
+	record.bin1 = nil
+	record.bin2 = nil
+	record.bin3 = nil
+	return aerospike:update(record)
 end

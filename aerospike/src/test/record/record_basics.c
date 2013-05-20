@@ -346,6 +346,52 @@ TEST( record_basics_file_does_not_exist, "non-existent UDF file should fail" ) {
     as_result_destroy(&r);
 }
 
+TEST( record_delete_replication, "Check to see if the record is getting replicated on a delete from UDF") {
+	// Delete record
+	cl_object okey;
+	citrusleaf_object_init_str(&okey, "test");
+	int rc = citrusleaf_delete(cluster, "test", "test", &okey, 0);
+	info("Delete returned %d", rc);
+
+	// Insert 3 bins
+	cl_bin bins[3];
+	strcpy(bins[0].bin_name, "bin1");
+	citrusleaf_object_init_str(&bins[0].object, "first string");
+	strcpy(bins[1].bin_name, "bin2");
+	citrusleaf_object_init_str(&bins[1].object, "second string");
+	strcpy(bins[2].bin_name, "bin3");
+	citrusleaf_object_init_str(&bins[2].object, "third string");
+	rc = citrusleaf_put(cluster, "test", "test", &okey, bins, 3, NULL);
+	if (rc) {
+		info("Put failed");
+		return ;
+	}
+	info("Put succeeded");
+
+	as_result r;
+	as_result_init(&r);
+	
+	// Apply udf which deletes all the three bins
+	rc = udf_apply_record("test", "test", "test", UDF_FILE, "delete", NULL, &r);
+	print_result(rc, &r);
+
+	// Get bins.
+	// In C client, you get the record from master and replica in alternate calls.
+	cl_bin * rsp_bins[2];
+	int rsp_n_bins[2], prev;
+	int cl_gen, i = 0, j = 0;
+
+	for (j = 0; j<2; j++) {
+		int rsp = citrusleaf_get_all(cluster, "test", "test", &okey, &rsp_bins[j], &rsp_n_bins[j], 1000, &cl_gen);  
+		info("Bins = %d", rsp_n_bins[j]);
+		free(rsp_bins[j]);	
+	}
+	int master_bins = rsp_n_bins[0];
+	int replica_bins = rsp_n_bins[1];
+	assert_int_eq ( master_bins, 0 );
+	assert_int_eq ( replica_bins, 0 );
+}
+
 TEST( record_basics_update_memory, "Memory accounting on updating record through UDFs" ) {
 
 	// delete record, start afresh
@@ -367,6 +413,11 @@ TEST( record_basics_update_memory, "Memory accounting on updating record through
 
 	// Apply udf
 	rc = udf_apply_record("test", "test", "test", UDF_FILE, "update", NULL, &r);
+    print_result(rc, &r);
+	if(atoi(as_val_tostring(r.value)) == -1) {
+		info("update failed");
+		return;
+	}
 	
 	// Get namespace used bytes after record update
 	char ** v_a = get_stats( query, "used-bytes-memory", cluster);
@@ -462,6 +513,7 @@ SUITE( record_basics, "test basics.lua" ) {
     suite_add( record_basics_func_does_not_exist );
     suite_add( record_basics_file_does_not_exist );
 	suite_add( record_basics_update_memory );
+	suite_add( record_delete_replication );
 
     suite_after( after );
 }

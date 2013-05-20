@@ -15,7 +15,7 @@ endif
 ifeq ($(wildcard $(MSGPACK)/configure),) 
 $(warning ***************************************************************)
 $(warning *)
-$(warning *  MSGPACK is '$(MSGPACK))')
+$(warning *  MSGPACK is '$(MSGPACK)')
 $(warning *  MSGPACK doesn't contain 'configure'. )
 $(warning *  MSGPACK should be set to a valid path. )
 $(warning *)

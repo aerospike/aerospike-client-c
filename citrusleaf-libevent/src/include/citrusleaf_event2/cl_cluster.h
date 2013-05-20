@@ -25,9 +25,9 @@
 #include <citrusleaf/cf_atomic.h>
 #include <citrusleaf/cf_digest.h>
 #include <citrusleaf/cf_ll.h>
+#include <citrusleaf/cf_proto.h>
 #include <citrusleaf/cf_queue.h>
 #include <citrusleaf/cf_vector.h>
-#include <citrusleaf/cf_proto.h>
 #include <citrusleaf/cf_types.h>
 
 #include "ev2citrusleaf.h"
@@ -129,6 +129,8 @@ typedef struct cl_cluster_node_s {
 
 // Must be in-sync with ev2citrusleaf_cluster_runtime_options.
 typedef struct threadsafe_runtime_options_s {
+	cf_atomic32				socket_pool_max;
+
 	cf_atomic32				read_master_only;
 
 	cf_atomic32				throttle_reads;

@@ -1339,7 +1339,7 @@ Fail:
 	}
 
 	delta =  cf_getms() - _s;
-	if (delta > CL_LOG_DELAY_INFO) cf_info(" *** event_ok took %lu", delta);
+	if (delta > CL_LOG_DELAY_INFO) cf_info(" *** event fail took %lu", delta);
 }
 
 //
@@ -1447,7 +1447,7 @@ ev2citrusleaf_restart(cl_request* req, bool may_throttle)
 	req->fd = -1;
 
 	cl_cluster_node* node;
-	int fd = -1;
+	int fd;
 	int i;
 
 	for (i = 0; i < 5; i++) {
@@ -1466,6 +1466,8 @@ ev2citrusleaf_restart(cl_request* req, bool may_throttle)
 			return false;
 		}
 
+		fd = -1;
+
 		while (fd == -1) {
 			fd = cl_cluster_node_fd_get(node);
 		}
@@ -1483,7 +1485,7 @@ ev2citrusleaf_restart(cl_request* req, bool may_throttle)
 
 	// Safety - don't retry from scratch forever.
 	if (i == 5) {
-		cf_warn("request restart loop quit after 5 tries");
+		cf_info("request restart loop quit after 5 tries");
 		cf_queue_push(req->asc->request_q, &req);
 		return true;
 	}

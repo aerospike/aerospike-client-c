@@ -458,7 +458,7 @@ TEST( record_basics_update_memory, "Memory accounting on updating record through
 	as_result_destroy(&r);
 }
 
-TEST( record_basics_return_types_test, "Test for validating return types (including nested)") {
+TEST( record_basics_return_types, "Test for validating return types (including nested)") {
 	// delete record, start afresh
 	cl_object okey;
     citrusleaf_object_init_str(&okey, "test");
@@ -700,6 +700,70 @@ TEST( record_basics_return_types_test, "Test for validating return types (includ
 	as_result_destroy(&res);
 }
 
+TEST( record_basics_gen_ttl, "Test generation and ttl" ) {
+	
+	cl_write_parameters cl_wp;
+	cl_write_parameters_set_default(&cl_wp);
+	cl_wp.timeout_ms = 1000;
+	cl_wp.record_ttl = 864000;
+	
+	// (0) delete & reinsert record to start afresh
+	char *keyStr = "test";
+	cl_object o_key;
+	citrusleaf_object_init_str(&o_key,keyStr);    
+	int rsp = citrusleaf_delete(cluster, "test", "test", &o_key, NULL);
+	
+	// (1) put in values
+	cl_bin bins[1];
+	strcpy(bins[0].bin_name, "bin1");
+	citrusleaf_object_init_int(&bins[0].object, 30);
+	rsp = citrusleaf_put(cluster, "test", "test", &o_key, bins, 1, &cl_wp);
+	citrusleaf_object_free(&bins[0].object);
+	assert_int_eq( rsp, 0 );
+
+	// (2) set up udf call for ttl
+	cl_bin * rsp_bins = NULL;
+	int rsp_n_bins = 0;
+	as_result res;
+	as_result_init(&res);
+	rsp = udf_apply_record("test", "test", "test", UDF_FILE, "ttl", NULL, &res); 
+
+	assert_int_eq( rsp, 0 );
+	
+	char * res_str = as_val_tostring(res.value);
+	info( "Result from ttl test UDF call %s: %s", res.is_success ? "SUCCESS" : "FAILURE", res_str );
+
+	// If the difference b/w the ttl received from the record and pushed into the record is less than 10 secs, we got the right value.
+	uint32_t recvd_ttl = atoi(res_str);
+	info("received = %d", recvd_ttl);
+	info("record ttl = %d", cl_wp.record_ttl);
+	assert( recvd_ttl - cl_wp.record_ttl <= 10 );
+	info ("TTL test successful");
+	
+	free(res_str);
+	as_result_destroy(&res); 
+
+	// (2) set up udf apply call for generation test
+	//uint32_t cl_gen;
+	rsp_bins = NULL;
+	rsp_n_bins = 0;
+	rsp = udf_apply_record("test", "test", "test", UDF_FILE, "gen", NULL, &res); 
+	
+	assert_int_eq( rsp, 0 );
+	
+	res_str = as_val_tostring(res.value);
+	
+	uint32_t gen = atoi(res_str);
+	// Generation should get updated twice. Once when we do a citrusleaf_put and once when we 
+	// update the record through UDF.
+	assert_int_eq( gen, 2 );
+	info("Generation test successful");
+	
+	free(res_str);
+	as_val_destroy(res.value); 
+	return 0;
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -746,7 +810,6 @@ SUITE( record_basics, "test basics.lua" ) {
     suite_add( record_basics_getlist );
     suite_add( record_basics_getmap );
     
-
     suite_add( record_basics_concat );
     suite_add( record_basics_add );
     suite_add( record_basics_sum );
@@ -757,7 +820,7 @@ SUITE( record_basics, "test basics.lua" ) {
     suite_add( record_basics_file_does_not_exist );
 	suite_add( record_basics_update_memory );
 	suite_add( record_delete_replication );
-	suite_add( record_basics_return_types_test );
-
+	suite_add( record_basics_return_types );
+	suite_add( record_basics_gen_ttl );
     suite_after( after );
 }

@@ -117,4 +117,18 @@ function return_types(record, desired_type)
   end
 end
 
+function gen(rec)
+  -- Add a new bin
+  rec.bin2 = 100;
+  aerospike:update(rec);
+  local g = record.gen(rec);
+  info("Generation after update is %d",g);
+  return g;
+end
+ 
+function ttl(rec)
+  local t = record.ttl(rec);
+  return t;
+end 
+
 

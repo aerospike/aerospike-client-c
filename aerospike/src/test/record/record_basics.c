@@ -457,6 +457,249 @@ TEST( record_basics_update_memory, "Memory accounting on updating record through
 	free(v_c); 
 	as_result_destroy(&r);
 }
+
+TEST( record_basics_return_types_test, "Test for validating return types (including nested)") {
+	// delete record, start afresh
+	cl_object okey;
+    citrusleaf_object_init_str(&okey, "test");
+	int rc = citrusleaf_delete(cluster, "test", "test", &okey, 0);
+	
+	int errors = 0;
+
+	// set arglist
+	as_list * arglist = NULL;
+
+	as_result res;
+	as_result_init(&res);
+
+	/**
+	 * NONE
+	 */
+
+	arglist = as_arraylist_new(1, 8);	
+	as_list_add_string(arglist, "none");
+
+	int rsp = udf_apply_record("test", "test", "test", UDF_FILE, "return_types", arglist, &res); 
+	print_result(rsp, &res);
+    assert_int_eq( rsp, 0 );
+
+	if ( res.is_success ) {
+		assert( as_val_type(res.value) != AS_NIL );
+		char *str = as_val_tostring(res.value);
+		info("return type test: first return is %s",str);
+		free(str);
+	}
+
+	as_val_destroy(arglist);
+
+	as_result_destroy(&res);
+
+	/**
+	 * STRING
+	 */
+
+	arglist = as_arraylist_new(1, 8);	
+	as_list_add_string(arglist, "string_primitive");
+
+	as_result_init(&res);
+
+	rsp = udf_apply_record("test", "test", "test", UDF_FILE, "return_types", arglist, &res);
+	
+    assert_int_eq( rsp, 0 );
+
+	info("string: %s", res.is_success ? "SUCCESS" : "FAILURE");
+	if ( res.is_success ) {
+		assert( as_val_type(res.value) == AS_STRING );
+		assert_string_eq( as_string_tostring((as_string *) res.value), "good" );
+	}
+
+	as_val_destroy(arglist);
+
+	as_result_destroy(&res);
+	
+	/**
+	 * POSITIVE INTEGER
+	 */
+	
+	arglist = as_arraylist_new(1, 8);	
+	as_list_add_string(arglist, "p_int_primitive");
+
+	rsp = udf_apply_record("test", "test", "test", UDF_FILE, "return_types", arglist, &res);
+	
+	assert_int_eq( rsp, 0 );
+
+	info("postive integer: %s", res.is_success ? "SUCCESS" : "FAILURE");
+	if ( res.is_success ) {
+		assert( as_val_type(res.value) == AS_INTEGER );
+		assert_int_eq( as_integer_toint((as_integer *) res.value), 5 );
+	}
+
+	as_val_destroy(arglist);
+	as_val_destroy(res.value);
+	as_result_destroy(&res);
+
+	/**
+	 * NAGATIVE INTEGER
+	 */
+
+	arglist = as_arraylist_new(1, 8);	
+	as_list_add_string(arglist, "n_int_primitive");
+
+	as_result_init(&res);
+
+	rsp = udf_apply_record("test", "test", "test", UDF_FILE, "return_types", arglist, &res);
+	
+	assert_int_eq( rsp, 0 );
+	
+	info("negative integer: %s", res.is_success ? "SUCCESS" : "FAILURE");
+	if ( res.is_success ) {
+		assert( as_val_type(res.value) == AS_INTEGER );
+		assert_int_eq( as_integer_toint((as_integer *) res.value), -5 );
+	}
+
+	as_val_destroy(arglist);
+
+	as_result_destroy(&res);
+	
+	/**
+	 * LIST
+	 */
+
+	arglist = as_arraylist_new(1, 8);	
+	as_list_add_string(arglist, "bin_array");
+
+	as_result_init(&res);
+
+	rsp = udf_apply_record("test", "test", "test", UDF_FILE, "return_types", arglist, &res);
+	
+	assert_int_eq( rsp, 0 );
+
+	info("list: %s", res.is_success ? "SUCCESS" : "FAILURE");
+	if ( res.is_success ) {
+		assert( as_val_type(res.value) == AS_LIST );
+		assert_int_eq( as_list_size((as_list *) res.value), 2);
+	}
+
+	as_val_destroy(arglist);
+
+	as_result_destroy(&res);
+
+	/**
+	 * NESTED LIST
+	 */
+
+	arglist = as_arraylist_new(1, 8);	
+	as_list_add_string(arglist, "bin_nested_list");
+	as_result_init(&res);
+
+	rsp = udf_apply_record("test", "test", "test", UDF_FILE, "return_types", arglist, &res);
+	
+	assert_int_eq( rsp, 0 );
+
+	info("list: %s", res.is_success ? "SUCCESS" : "FAILURE");
+	if ( res.is_success ) {
+		assert( as_val_type(res.value) == AS_LIST );
+		assert_int_eq( as_list_size((as_list *) res.value), 2);
+		as_iterator l1_i;
+		as_list_iterator_init(&l1_i, (as_list *)res.value);
+		bool l1_string = false;
+		bool l1_list = false;
+		while ( as_iterator_has_next(&l1_i) ) {
+			as_val * l1_v = (as_val *) as_iterator_next(&l1_i);
+			if ( as_val_type(l1_v) == AS_STRING ) {
+				assert_string_eq( as_string_tostring((as_string *) l1_v), "string_resp");
+				l1_string = false;
+			}
+			else if ( as_val_type(l1_v) == AS_LIST ) {
+				assert_int_eq( as_list_size((as_list *) l1_v), 2);
+				as_iterator l2_i; 
+				as_list_iterator_init(&l2_i, (as_list*) l1_v);
+				bool l2_string = false;
+				bool l2_integer = false;
+				while ( as_iterator_has_next(&l2_i) ) {
+					as_val * l2_v = (as_val *) as_iterator_next(&l2_i);
+					if ( as_val_type(l2_v) == AS_STRING ) {
+						assert_string_eq( as_string_tostring((as_string *) l2_v), "yup");
+						l2_string = true;
+					}
+					else if ( as_val_type(l2_v) == AS_INTEGER ) {
+						assert_int_eq( as_integer_toint((as_integer *) l2_v), 1);
+						l2_integer = true;
+					}
+
+					if ( l2_integer && l2_string ) {
+						l1_list = true;
+					}
+					as_iterator_destroy(&l2_i);
+				}
+			}
+			as_iterator_destroy(&l1_i);
+		}
+	}
+	as_val_destroy(arglist);
+
+	as_result_destroy(&res);
+
+	/**
+	 * MAP
+	 */
+
+	arglist = as_arraylist_new(1, 8);	
+	as_list_add_string(arglist, "bin_map");
+
+	as_result_init(&res);
+
+	rsp = udf_apply_record("test", "test", "test", UDF_FILE, "return_types", arglist, &res);
+	
+	assert_int_eq( rsp, 0 );
+
+	info("map: %s", res.is_success ? "SUCCESS" : "FAILURE");
+	if ( res.is_success ) {
+		assert( as_val_type(res.value) == AS_MAP );
+		as_map * m1 = (as_map *) res.value;
+		assert_int_eq( as_map_size(m1), 4 );
+		as_string s;
+		as_val * m1_s = as_map_get(m1,(as_val *) as_string_init(&s,"s",false));
+		if ( as_val_type(m1_s) == AS_STRING ) {
+			assert_string_eq( as_string_tostring((as_string*) m1_s), "abc");
+		}
+
+		as_val * m1_i = as_map_get(m1,(as_val *) as_string_init(&s,"i", false));
+		if ( as_val_type(m1_i) == AS_INTEGER ) {
+			assert_int_eq( as_integer_toint((as_integer *) m1_i), 123 );
+		}
+
+		as_val * m1_l = as_map_get(m1,(as_val *) as_string_init(&s,"l",false));
+		if ( as_val_type(m1_l) == AS_LIST ) {
+			assert_int_eq( as_list_size((as_list *) m1_l), 2 );
+		}
+
+		as_val * m1_m = as_map_get(m1,(as_val *) as_string_init(&s,"m",false));
+		if ( as_val_type(m1_m) == AS_MAP ) {
+			assert_int_eq( as_map_size((as_map *) m1_m), 3 );
+			as_map * m2 = (as_map *) m1_m;
+
+			as_val * m2_i = as_map_get(m2,(as_val *) as_string_init(&s,"i",false));
+			if ( as_val_type(m2_i) == AS_INTEGER ) {
+				assert_int_eq( as_integer_toint((as_integer *) m2_i), 456 );
+			}
+
+			as_val * m2_s = as_map_get(m2,(as_val *) as_string_init(&s,"s",false));
+			if ( as_val_type(m2_s) == AS_STRING ) {
+				assert_string_eq( as_string_tostring((as_string*) m2_s), "def");
+			}
+
+			as_val * m2_l = as_map_get(m2,(as_val *) as_string_init(&s,"l",false));
+			if ( as_val_type(m2_l) == AS_LIST ) {
+				assert_int_eq( as_list_size((as_list *) m2_l), 3 );
+			}
+		}
+	}
+
+	as_val_destroy(arglist);
+	as_result_destroy(&res);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -514,6 +757,7 @@ SUITE( record_basics, "test basics.lua" ) {
     suite_add( record_basics_file_does_not_exist );
 	suite_add( record_basics_update_memory );
 	suite_add( record_delete_replication );
+	suite_add( record_basics_return_types_test );
 
     suite_after( after );
 }

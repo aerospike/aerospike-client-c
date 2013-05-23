@@ -350,7 +350,7 @@ cl_rv citrusleaf_udf_get_with_gen(cl_cluster *asc, const char * filename, as_udf
     // fprintf(stderr, "QUERY: |%s|\n", query);
 
 
-    if ( citrusleaf_info_cluster_all(asc, query, &result, true, /* check bounds */ true, 100) ) {
+    if ( citrusleaf_info_cluster(asc, query, &result, true, /* check bounds */ true, 100) ) {
         if ( error ) {
             const char * emsg = "failed_request: ";
             int emsg_len = strlen(emsg);
@@ -402,17 +402,19 @@ cl_rv citrusleaf_udf_get_with_gen(cl_cluster *asc, const char * filename, as_udf
     
     file->content = as_bytes_new(content, clen, true);
 
-    info.content.value = NULL;
-    info.content.value_is_malloc = false;
-    info.content.len = 0;
-    info.content.capacity = 0;
-    as_bytes_destroy(&info.content);
+	info.content.value = NULL;
+	info.content.value_is_malloc = false;
+	info.content.len = 0;
+	info.content.capacity = 0;
+
+	as_bytes_destroy(&info.content);
    
     strcpy(file->name, filename);
 
     // Update file hash
     unsigned char hash[SHA_DIGEST_LENGTH];
     SHA1(as_bytes_tobytes(&info.content), as_bytes_len(&info.content), hash);
+
     cf_convert_sha1_to_hex(hash, file->hash);
     
     if ( gen ) {
@@ -421,8 +423,35 @@ cl_rv citrusleaf_udf_get_with_gen(cl_cluster *asc, const char * filename, as_udf
     }
 
     citrusleaf_udf_info_destroy(&info);
-    
+
     return 0;
+}
+
+static bool clusterinfo_cb(cl_cluster_node *cn, char *command, char *value, void *udata)
+{
+	char** error = (char**)udata;
+	if(value != NULL){
+		//fprintf(stdout, "Node %s: %s\n", cn->name,value);
+		char * response = strchr(value, '\t') + 1; // skip request, parse response
+        citrusleaf_udf_info info = { NULL };
+		citrusleaf_parameters_fold(response, &info, citrusleaf_udf_info_parameters);
+		free(value);
+		value = NULL;
+
+		if ( info.error ) {
+			if (error ) {
+				*error = info.error;
+				info.error = NULL;
+			}
+			citrusleaf_udf_info_destroy(&info);
+			return 1;
+		}
+		citrusleaf_udf_info_destroy(&info);
+	}
+	else{
+			fprintf(stdout, "Node %s: No response from server.\n",cn->name);
+	}
+    return true;
 }
 
 cl_rv citrusleaf_udf_put(cl_cluster *asc, const char * filename, as_bytes *content, as_udf_type udf_type, char ** error) {
@@ -432,8 +461,7 @@ cl_rv citrusleaf_udf_put(cl_cluster *asc, const char * filename, as_bytes *conte
         return CITRUSLEAF_FAIL_CLIENT;
     }
 
-    char * query = NULL;    
-    char *  result      = NULL;
+    char * query = NULL;
     char *  filepath    = strdup(filename);
     char *  filebase    = basename(filepath);
 
@@ -450,8 +478,10 @@ cl_rv citrusleaf_udf_put(cl_cluster *asc, const char * filename, as_bytes *conte
 
     free(filepath);
 
-    if ( citrusleaf_info_cluster_all(asc, query, &result, true, /*check bounds*/ false, 5000) ) {
-        if ( error ) {
+    int rc = 0;
+    rc = citrusleaf_info_cluster_foreach(asc, query, true, false, 0, (void *)(error), clusterinfo_cb );
+    if (  rc ) {
+    	if ( error ) {
             const char * emsg = "failed_request: ";
             int emsg_len = strlen(emsg);
             int query_len = strlen(query);
@@ -459,47 +489,16 @@ cl_rv citrusleaf_udf_put(cl_cluster *asc, const char * filename, as_bytes *conte
             strncpy(*error, emsg, emsg_len);
             strncpy(*error+emsg_len, query, query_len);
         }
-        free(query);
+    	free(query);
         free(content_base64);
         return -1;
-    }
-
-    if ( !result ) {
-        if ( error ) *error = strdup("invalid_response");
-        free(query);
-        free(content_base64);
-    	return -2;
     }
 
     free(query);
     free(content_base64);
     content_base64 = 0;
     query = NULL;
-    
-    /**
-     * result   := {request}\t{response}
-     * response := gen=<string> | error=<string>
-     */
-    char * response = strchr(result, '\t') + 1; // skip request, parse response 
-    
-    citrusleaf_udf_info info = { NULL };
-    citrusleaf_parameters_fold(response, &info, citrusleaf_udf_info_parameters);
-
-    free(result);
-    result = NULL;
-    
-    if ( info.error ) {
-        if ( error ) {
-            *error = info.error;
-            info.error = NULL;
-        }
-        citrusleaf_udf_info_destroy(&info);
-        return 1;
-    }
-
-    citrusleaf_udf_info_destroy(&info);
     return 0;
-    
 }
 
 cl_rv citrusleaf_udf_remove(cl_cluster *asc, const char * filename, char ** error) {

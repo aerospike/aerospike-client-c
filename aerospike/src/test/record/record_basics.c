@@ -368,6 +368,16 @@ TEST( record_delete_replication, "Check to see if the record is getting replicat
 	}
 	info("Put succeeded");
 
+	char * query = "namespace/test";
+	// Get used memory before applying udf	
+	char ** v_b = get_stats( query, "used-bytes-memory", cluster);
+	int i = 0;
+	while(v_b[i]) {
+		debug("Used memory before - node %d = %ld\n",i,atol(v_b[i]));
+		i++;
+	}
+
+
 	as_result r;
 	as_result_init(&r);
 	
@@ -379,17 +389,202 @@ TEST( record_delete_replication, "Check to see if the record is getting replicat
 	// In C client, you get the record from master and replica in alternate calls.
 	cl_bin * rsp_bins[2];
 	int rsp_n_bins[2], prev;
-	int cl_gen, i = 0, j = 0;
-
+	int cl_gen, j = 0;
+	i = 0;
 	for (j = 0; j<2; j++) {
 		int rsp = citrusleaf_get_all(cluster, "test", "test", &okey, &rsp_bins[j], &rsp_n_bins[j], 1000, &cl_gen);  
 		info("Bins = %d", rsp_n_bins[j]);
 		free(rsp_bins[j]);	
 	}
+
+	// Get used memory before applying udf	
+	char ** v_a = get_stats( query, "used-bytes-memory", cluster);
+	i = 0;
+	while(v_a[i]) {
+		debug("Used memory before - node %d = %ld\n",i,atol(v_a[i]));
+		i++;
+	}
+
+
 	int master_bins = rsp_n_bins[0];
 	int replica_bins = rsp_n_bins[1];
 	assert_int_eq ( master_bins, 0 );
 	assert_int_eq ( replica_bins, 0 );
+}
+
+TEST( record_basics_complex_update_memory_check, "Memory accounting on updating a record through UDFs" ) {
+
+	// delete record, start afresh
+	cl_object okey;
+    citrusleaf_object_init_str(&okey, "test");
+	int rc = citrusleaf_delete(cluster, "test", "test", &okey, 0);
+
+	char * query = "namespace/test";
+	as_result r;
+	as_result_init(&r);
+
+	// Get used memory before applying udf	
+	char ** v_b = get_stats( query, "used-bytes-memory", cluster);
+	int i = 0;
+	while(v_b[i]) {
+		debug("Used memory before - node %d = %ld\n",i,atol(v_b[i]));
+		i++;
+	}
+
+	// Apply udf
+	rc = udf_apply_record("test", "test", "test", UDF_FILE, "update2", NULL, &r);
+    print_result(rc, &r);
+	
+	// Get namespace used bytes after record update
+	char ** v_a = get_stats( query, "used-bytes-memory", cluster);
+	i = 0;
+	while(v_a[i]) {
+		debug("Used memory after - node %d = %ld\n",i,atol(v_a[i]));
+		i++;
+	}
+
+	// Get replication factor
+	char ** v_c = get_stats( query, "repl-factor", cluster);
+	int repl_factor = atoi(v_c[0]);
+	debug("Replication factor %d\n", repl_factor);
+	
+	// The difference between the memory usage after and before update should be the record memory
+	// for only 'replication factor' number of nodes
+	int cluster_size = i;
+	int diff = 0, count = 0;
+	uint64_t rec_memory = 144;	
+	
+	for(int i = 0; i < cluster_size; i++) {
+		diff = atol(v_a[i]) - atol(v_b[i]);
+		if ( diff == rec_memory ) {
+			count ++ ;
+		}
+	}
+	assert_int_eq(count, repl_factor);
+
+	// Free memory
+	for ( i = 0;i < cluster_size; i++) {
+		free(v_a[i]);
+		free(v_b[i]);
+		free(v_c[i]);
+	}
+	free(v_a);
+	free(v_b);
+	free(v_c); 
+	as_result_destroy(&r);
+}
+
+TEST( record_basics_bad_update_memory, "Memory accounting on failure when updating a record through UDFs" ) {
+
+	// delete record, start afresh
+	cl_object okey;
+    citrusleaf_object_init_str(&okey, "test");
+	int rc = citrusleaf_delete(cluster, "test", "test", &okey, 0);
+
+	char * query = "namespace/test";
+	as_result r;
+	as_result_init(&r);
+
+	// Get used memory before applying udf	
+	char ** v_b = get_stats( query, "used-bytes-memory", cluster);
+	int i = 0;
+	while(v_b[i]) {
+		debug("Used memory before - node %d = %ld\n",i,atol(v_b[i]));
+		i++;
+	}
+
+	// Apply udf
+	rc = udf_apply_record("test", "test", "test", UDF_FILE, "bad_update", NULL, &r);
+    print_result(rc, &r);
+	
+	// Get namespace used bytes after record update
+	char ** v_a = get_stats( query, "used-bytes-memory", cluster);
+	i = 0;
+	while(v_a[i]) {
+		debug("Used memory after - node %d = %ld\n",i,atol(v_a[i]));
+		i++;
+	}
+
+	// Get replication factor
+	char ** v_c = get_stats( query, "repl-factor", cluster);
+	int repl_factor = atoi(v_c[0]);
+	debug("Replication factor %d\n", repl_factor);
+	
+	// The difference between the memory usage after and before update should be the record memory
+	// for only 'replication factor' number of nodes
+	int cluster_size = i;
+	int diff = 0, count = 0;
+	uint64_t rec_memory = 89;	
+	
+	for(int i = 0; i < cluster_size; i++) {
+		diff = atol(v_a[i]) - atol(v_b[i]);
+		if ( diff == rec_memory ) {
+			count ++ ;
+		}
+	}
+	assert_int_eq(count, repl_factor);
+
+	// Free memory
+	for ( i = 0;i < cluster_size; i++) {
+		free(v_a[i]);
+		free(v_b[i]);
+		free(v_c[i]);
+	}
+	free(v_a);
+	free(v_b);
+	free(v_c); 
+	as_result_destroy(&r);
+}
+
+TEST( record_basics_failed_create_memory_check, "Memory accounting on updating a record when create failed" ) {
+
+	// delete record, start afresh
+	cl_object okey;
+    citrusleaf_object_init_str(&okey, "test");
+	int rc = citrusleaf_delete(cluster, "test", "test", &okey, 0);
+
+	char * query = "namespace/test";
+	as_result r;
+	as_result_init(&r);
+
+	// Get used memory before applying udf	
+	char ** v_b = get_stats( query, "used-bytes-memory", cluster);
+	int i = 0;
+	while(v_b[i]) {
+		debug("Used memory before - node %d = %ld\n",i,atol(v_b[i]));
+		i++;
+	}
+
+	// Apply udf
+	rc = udf_apply_record("test", "test", "test", UDF_FILE, "create_fail", NULL, &r);
+    print_result(rc, &r);
+	
+	// Get namespace used bytes after record update
+	char ** v_a = get_stats( query, "used-bytes-memory", cluster);
+	i = 0;
+	while(v_a[i]) {
+		debug("Used memory after - node %d = %ld\n",i,atol(v_a[i]));
+		i++;
+	}
+
+	// The difference between the memory usage after and before update should be the record memory
+	// for only 'replication factor' number of nodes
+	int cluster_size = i;
+	int diff = 0, count = 0;
+	
+	for(int i = 0; i < cluster_size; i++) {
+		diff = atol(v_a[i]) - atol(v_b[i]);
+		assert_int_eq(diff, 0);
+	}
+
+	// Free memory
+	for ( i = 0;i < cluster_size; i++) {
+		free(v_a[i]);
+		free(v_b[i]);
+	}
+	free(v_a);
+	free(v_b);
+	as_result_destroy(&r);
 }
 
 TEST( record_basics_update_memory, "Memory accounting on updating record through UDFs" ) {
@@ -414,10 +609,10 @@ TEST( record_basics_update_memory, "Memory accounting on updating record through
 	// Apply udf
 	rc = udf_apply_record("test", "test", "test", UDF_FILE, "update", NULL, &r);
     print_result(rc, &r);
-	if(atoi(as_val_tostring(r.value)) == -1) {
-		info("update failed");
-		return;
-	}
+//	if(atoi(as_val_tostring(r.value)) == -1) {
+//		info("update failed");
+//		return;
+//	}
 	
 	// Get namespace used bytes after record update
 	char ** v_a = get_stats( query, "used-bytes-memory", cluster);
@@ -818,7 +1013,10 @@ SUITE( record_basics, "test basics.lua" ) {
 
     suite_add( record_basics_func_does_not_exist );
     suite_add( record_basics_file_does_not_exist );
+	suite_add( record_basics_bad_update_memory );
+	suite_add( record_basics_failed_create_memory_check );
 	suite_add( record_basics_update_memory );
+	suite_add( record_basics_complex_update_memory_check );
 	suite_add( record_delete_replication );
 	suite_add( record_basics_return_types );
 	suite_add( record_basics_gen_ttl );

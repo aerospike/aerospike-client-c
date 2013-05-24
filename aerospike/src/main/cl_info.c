@@ -394,6 +394,11 @@ int citrusleaf_info_cluster_foreach(cl_cluster *cluster, const char *command, bo
 	//command = command string, memory allocated by caller, caller must free it, passed to server for execution
 	//value = memory allocated by c-client for caller, caller must free it after using it.
 
+	if (!callback) {
+		fprintf(stderr, "citrusleaf_info_cluster_foreach(): callback function is null.");
+		return(-1);
+	}
+
 	if (timeout_ms == 0) timeout_ms = 100; // milliseconds
 	uint64_t start = cf_getms();
 	uint64_t end = start + timeout_ms;

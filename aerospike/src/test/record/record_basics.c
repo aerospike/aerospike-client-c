@@ -401,7 +401,7 @@ TEST( record_delete_replication, "Check to see if the record is getting replicat
 	char ** v_a = get_stats( query, "used-bytes-memory", cluster);
 	i = 0;
 	while(v_a[i]) {
-		debug("Used memory before - node %d = %ld\n",i,atol(v_a[i]));
+		debug("Used memory after - node %d = %ld\n",i,atol(v_a[i]));
 		i++;
 	}
 
@@ -412,7 +412,7 @@ TEST( record_delete_replication, "Check to see if the record is getting replicat
 	assert_int_eq ( replica_bins, 0 );
 }
 
-TEST( record_basics_complex_update_memory_check, "Memory accounting on updating a record through UDFs" ) {
+TEST( record_basics_complex_update_memory_check_I, "Memory accounting on updating a record through UDFs" ) {
 
 	// delete record, start afresh
 	cl_object okey;
@@ -584,6 +584,77 @@ TEST( record_basics_failed_create_memory_check, "Memory accounting on updating a
 	}
 	free(v_a);
 	free(v_b);
+	as_result_destroy(&r);
+}
+
+TEST( record_basics_complex_update_memory_check_II, "Memory accounting on deleting a record and then creating it through UDFs" ) {
+
+	// delete record, start afresh
+	cl_object okey;
+    citrusleaf_object_init_str(&okey, "test");
+	int rc = citrusleaf_delete(cluster, "test", "test", &okey, 0);
+
+	// (1) put in values
+	cl_bin bins[1];
+	strcpy(bins[0].bin_name, "bina");
+	citrusleaf_object_init_str(&bins[0].object, "string a");
+	rc = citrusleaf_put(cluster, "test", "test", &okey, bins, 1, NULL);
+	citrusleaf_object_free(&bins[0].object);
+	assert_int_eq( rc, 0 );
+
+	char * query = "namespace/test";
+	as_result r;
+	as_result_init(&r);
+
+	// Get used memory before applying udf	
+	char ** v_b = get_stats( query, "used-bytes-memory", cluster);
+	int i = 0;
+	while(v_b[i]) {
+		debug("Used memory before - node %d = %ld\n",i,atol(v_b[i]));
+		i++;
+	}
+
+	// Apply udf
+	rc = udf_apply_record("test", "test", "test", UDF_FILE, "delete_create", NULL, &r);
+    print_result(rc, &r);
+	
+	// Get namespace used bytes after record update
+	char ** v_a = get_stats( query, "used-bytes-memory", cluster);
+	i = 0;
+	while(v_a[i]) {
+		debug("Used memory after - node %d = %ld\n",i,atol(v_a[i]));
+		i++;
+	}
+
+	// Get replication factor
+	char ** v_c = get_stats( query, "repl-factor", cluster);
+	int repl_factor = atoi(v_c[0]);
+	debug("Replication factor %d\n", repl_factor);
+	
+	// The difference between the memory usage after and before update should be the record memory
+	// for only 'replication factor' number of nodes
+	int cluster_size = i;
+	int diff = 0, count = 0;
+	uint64_t rec_memory = 25;	
+	
+	for(int i = 0; i < cluster_size; i++) {
+		diff = atol(v_a[i]) - atol(v_b[i]);
+		info("Diff %d", diff);
+		if ( diff == rec_memory ) {
+			count ++ ;
+		}
+	}
+	assert_int_eq(count, repl_factor);
+
+	// Free memory
+	for ( i = 0;i < cluster_size; i++) {
+		free(v_a[i]);
+		free(v_b[i]);
+		free(v_c[i]);
+	}
+	free(v_a);
+	free(v_b);
+	free(v_c); 
 	as_result_destroy(&r);
 }
 
@@ -1016,7 +1087,8 @@ SUITE( record_basics, "test basics.lua" ) {
 	suite_add( record_basics_bad_update_memory );
 	suite_add( record_basics_failed_create_memory_check );
 	suite_add( record_basics_update_memory );
-	suite_add( record_basics_complex_update_memory_check );
+	suite_add( record_basics_complex_update_memory_check_I );
+	suite_add( record_basics_complex_update_memory_check_II );
 	suite_add( record_delete_replication );
 	suite_add( record_basics_return_types );
 	suite_add( record_basics_gen_ttl );

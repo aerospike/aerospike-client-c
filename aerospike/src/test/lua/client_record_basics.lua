@@ -93,6 +93,13 @@ function delete(record)
 	return aerospike:update(record)
 end
 
+function delete_create(record)
+	aerospike:remove(record)
+	record.bina = "string a"
+	record.binb = "string b"
+	return aerospike:create(record)
+end
+
 function return_types(record, desired_type)
 
   if (desired_type == "none") then

@@ -83,7 +83,7 @@ PLAN( client_test ) {
      * ldt tests
      */
     plan_add( lstack_basics );
-     
+    plan_add( lset_basics ) ;
 
     /**
      * record - record tests

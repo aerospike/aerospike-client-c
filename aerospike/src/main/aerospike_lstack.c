@@ -1008,10 +1008,10 @@ cleanup:
 /** ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
  *  Large Stack Object config:
  *  For the given record (associated with 'keyp' and bin_name, return
- *  the size of the lstack object.
+ *  the config information.
  *
  *  Parms:
- *  (*) size: The variable in which we return the size
+ *  (*) resultpp: The address of the user's (as_result *) variable.
  *  (*) asc: The Aerospike Cluster
  *  (*) namespace: The Namespace for record holding the LSO bin
  *  (*) set: The Set for the record holding the LSO bin
@@ -1033,7 +1033,7 @@ aerospike_lstack_config(
         const char * bin_name,
         uint32_t timeout_ms )
 {
-    static char * meth = "aerospike_lstack_size()";
+    static char * meth = "aerospike_lstack_config()";
     cl_rv rc;     // ubiquitous return code
     int size_result = 0;
     char * valstr = NULL;

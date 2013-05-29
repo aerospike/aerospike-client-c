@@ -51,21 +51,35 @@ TEST( lstack_basics_peek, "Read N elements from the stack" ) {
 }
 
 // ==================================================================
-TEST( lstack_basics_size, "validate the stack size" ) {
+TEST( lstack_basics_size, "Validate the stack size" ) {
     char * user_key     = "User_111";
-    char * ldt_bin_name = "number_stack";
+    char * ldt_bin = "num_basics";
+    int    iterations = 10;
     int rc = 1;
+    int    seed       = 111;
+    int    format     = NUMBER_FORMAT;
+    uint32_t   size_before, size_after;
 
-    assert_int_eq( rc, 1 );
+    g_config->value_len = 5;
+
+    rc = lstack_size_test( user_key, ldt_bin, &size_before);
+    assert_int_eq( rc, 0 );
+    rc = lstack_push_test( user_key, ldt_bin, iterations, seed, format );
+    assert_int_eq( rc, 0 );
+    rc = lstack_size_test( user_key, ldt_bin, &size_after);
+    assert_int_eq( rc, 0 );
+
+    printf("\tlstack_basics_size:: Size of Lstack before push is %d, after %d push is %d\n", size_before, iterations, size_after);
 }
 
 // ==================================================================
 TEST( lstack_basics_config, "Validate Config Settings" ) {
     char * user_key     = "User_111";
-    char * ldt_bin_name = "number_stack";
+    char * ldt_bin = "num_basics";
     int rc = 1;
 
-    assert_int_eq( rc, 1 );
+    rc = lstack_config_test( user_key, ldt_bin);
+    assert_int_eq( rc, 0 );
 }
 
 // ==================================================================

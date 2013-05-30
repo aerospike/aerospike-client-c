@@ -479,7 +479,7 @@ cl_rv citrusleaf_udf_put(cl_cluster *asc, const char * filename, as_bytes *conte
     free(filepath);
 
     int rc = 0;
-    rc = citrusleaf_info_cluster_foreach(asc, query, true, false, 0, (void *)(error), clusterinfo_cb );
+    rc = citrusleaf_info_cluster_foreach(asc, query, true, false, 1000, (void *)(error), clusterinfo_cb );
     if (  rc ) {
     	if ( error ) {
             const char * emsg = "failed_request: ";

@@ -580,7 +580,7 @@ extern as_val * citrusleaf_udf_bin_to_val(as_serializer *ser, cl_bin *);
  */
 static as_val * query_response_get(const as_rec * rec, const char * name)  {
     as_val * v = NULL;
-    as_query_response_rec * r = as_rec_source(rec);
+    as_query_response_rec * r = (as_query_response_rec *) rec->data;
 
     if ( r == NULL ) return v;
 
@@ -614,18 +614,18 @@ static as_val * query_response_get(const as_rec * rec, const char * name)  {
 }
 
 static uint32_t query_response_ttl(const as_rec * rec) {
-    as_query_response_rec * r = as_rec_source(rec);
+    as_query_response_rec * r = (as_query_response_rec *) rec->data;
     return r->record_ttl;
 }
 
 static uint16_t query_response_gen(const as_rec * rec) {
-    as_query_response_rec * r = as_rec_source(rec);
+    as_query_response_rec * r = (as_query_response_rec *) rec->data;
     if (!r) return 0;
     return r->generation;
 }
 
 int query_response_destroy(as_rec *rec) {
-    as_query_response_rec * r = as_rec_source(rec);
+    as_query_response_rec * r = (as_query_response_rec *) rec->data;
     if ( !r ) return 0;
     if ( r->bins ) {
         citrusleaf_bins_free(r->bins, r->n_bins);
@@ -638,19 +638,19 @@ int query_response_destroy(as_rec *rec) {
         r->values = NULL;
     }
     if ( r->ismalloc )  free(r);
-    rec->source = NULL;
+    rec->data = NULL;
     return 0;
 }
 
 // Chris(todo) needs addition to the as_rec interface
 cf_digest query_response_digest(const as_rec *rec) {
-    as_query_response_rec * r = as_rec_source(rec);
+    as_query_response_rec * r = (as_query_response_rec *) rec->data;
     return r->keyd;
 }
 
 // Chris(todo) needs addition to the as_rec interface
 uint64_t query_response_numbins(const as_rec *rec) {
-    as_query_response_rec * r = as_rec_source(rec);
+    as_query_response_rec * r = (as_query_response_rec *) rec->data;
     if (!r) return 0;
     return r->n_bins;
 }

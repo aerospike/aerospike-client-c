@@ -73,7 +73,7 @@ OBJECTS += $(COMMON)/$(TARGET_OBJ)/common/aerospike/*.o
 OBJECTS += $(COMMON)/$(TARGET_OBJ)/common/citrusleaf/*.o
 OBJECTS += $(BASE)/$(TARGET_OBJ)/base/*.o
 OBJECTS += $(MOD_LUA)/$(TARGET_OBJ)/*.o
-OBJECTS += $(MSGPACK)/src/.libs/*.o
+OBJECTS += $(addprefix $(MSGPACK)/src/.libs/, unpack.o objectc.o version.o vrefbuffer.o zone.o)
 
 HEADERS := $(wildcard $(SOURCE_INCL)/citrusleaf/*.h)
 
@@ -106,7 +106,7 @@ libcitrusleaf.so: $(TARGET_LIB)/libcitrusleaf.so
 ##  BUILD TARGETS                                                            ##
 ###############################################################################
 
-$(TARGET_OBJ)/%.o: $(BASE)/$(TARGET_LIB)/libaerospike-base.a $(COMMON)/$(TARGET_LIB)/libaerospike-common.a $(MOD_LUA)/$(TARGET_LIB)/libmod_lua.a $(SOURCE_MAIN)/%.c $(SOURCE_INCL)/citrusleaf/*.h
+$(TARGET_OBJ)/%.o: $(BASE)/$(TARGET_LIB)/libaerospike-base.a $(COMMON)/$(TARGET_LIB)/libaerospike-common.a $(MOD_LUA)/$(TARGET_LIB)/libmod_lua.a $(SOURCE_MAIN)/%.c $(SOURCE_INCL)/citrusleaf/*.h | modules
 	$(object)
 
 $(TARGET_LIB)/libcitrusleaf.so: $(CITRUSLEAF:%=$(TARGET_OBJ)/%) $(TARGET_OBJ)/version.o | modules

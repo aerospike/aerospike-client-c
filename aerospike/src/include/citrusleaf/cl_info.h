@@ -27,6 +27,7 @@
 #include <sys/socket.h> // socket calls
 #include <arpa/inet.h> // inet_ntop
 #include <netinet/in.h>
+#include <stdbool.h>
 
 /******************************************************************************
  * FUNCTIONS

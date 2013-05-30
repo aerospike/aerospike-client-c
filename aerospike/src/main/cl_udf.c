@@ -403,7 +403,7 @@ cl_rv citrusleaf_udf_get_with_gen(cl_cluster *asc, const char * filename, as_udf
     file->content = as_bytes_new(content, clen, true);
 
 	info.content.value = NULL;
-	info.content.value_is_malloc = false;
+	info.content.freeable = false;
 	info.content.len = 0;
 	info.content.capacity = 0;
 
@@ -427,7 +427,7 @@ cl_rv citrusleaf_udf_get_with_gen(cl_cluster *asc, const char * filename, as_udf
     return 0;
 }
 
-static bool clusterinfo_cb(cl_cluster_node *cn, char *command, char *value, void *udata)
+static bool clusterinfo_cb(const cl_cluster_node *cn, const char *command, char *value, void *udata)
 {
 	char** error = (char**)udata;
 	if(value != NULL){

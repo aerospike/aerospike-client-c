@@ -13,13 +13,13 @@
  * STATIC FUNCTIONS
  *****************************************************************************/
 
-static int          map_rec_destroy(as_rec *);
+static bool         map_rec_destroy(as_rec *);
 static as_val *     map_rec_get(const as_rec *, const char *);
 static int          map_rec_set(const as_rec *, const char *, const as_val *);
 static int          map_rec_remove(const as_rec *, const char *);
 static uint32_t     map_rec_ttl(const as_rec *);
 static uint16_t     map_rec_gen(const as_rec *);
-static uint32_t     map_rec_hash(as_rec *);
+static uint32_t     map_rec_hashcode(as_rec *);
 
 /*****************************************************************************
  * CONSTANTS
@@ -31,8 +31,7 @@ const as_rec_hooks map_rec_hooks = {
     .destroy    = map_rec_destroy,
     .remove     = map_rec_remove,
     .ttl        = map_rec_ttl,
-    .gen        = map_rec_gen,
-    .hash       = map_rec_hash
+    .gen        = map_rec_gen
 };
 
 /*****************************************************************************
@@ -49,15 +48,15 @@ as_rec * map_rec_init(as_rec * r) {
     return as_rec_init(r, m, &map_rec_hooks);
 }
 
-static int map_rec_destroy(as_rec * r) {
-    as_map * m = (as_map *) r->source;
+static bool map_rec_destroy(as_rec * r) {
+    as_map * m = (as_map *) r->data;
     as_map_destroy(m);
-    r->source = NULL;
+    r->data = NULL;
     return 0;
 }
 
 static as_val * map_rec_get(const as_rec * r, const char * name) {
-    as_map * m = (as_map *) as_rec_source(r);
+    as_map * m = (as_map *) r->data;
     as_string s;
     as_string_init(&s, (char *) name, false);
     as_val * v = as_map_get(m, (as_val *) &s);
@@ -82,6 +81,6 @@ static uint16_t map_rec_gen(const as_rec * r) {
     return 0;
 }
 
-static uint32_t map_rec_hash(as_rec * r) {
+static uint32_t map_rec_hashcode(as_rec * r) {
     return 0;
 }

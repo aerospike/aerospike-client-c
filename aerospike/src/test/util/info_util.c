@@ -5,25 +5,12 @@
  *  THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE.  THE COPYRIGHT NOTICE
  *  ABOVE DOES NOT EVIDENCE ANY ACTUAL OR INTENDED PUBLICATION.
  */
-#include <errno.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <stdint.h>
-#include <stdarg.h>
-#include <stdbool.h>
-#include <assert.h>
-#include <ctype.h>
-
-#include <fcntl.h>
-#include <sys/stat.h>
-
-#include "citrusleaf/citrusleaf.h"
 #include "citrusleaf/cl_udf.h"
 #include <citrusleaf/cf_random.h>
 #include <citrusleaf/cf_atomic.h>
 #include <citrusleaf/cf_hist.h>
+#include "info_util.h"
 
 typedef struct key_value_s {
 	char key[128];
@@ -57,7 +44,7 @@ void * split_and_set_cb(char * data, void * context) {
 
 // Parses the response received for the command at each node and splits the resulting string
 // into 'key=value' strings and calls split_and_set_cb on them
-static bool parse_response( cl_cluster_node * cn, char * query, char * value, void * udata) {
+static bool parse_response( const cl_cluster_node * cn, const char * query, char * value, void * udata) {
 
 	key_value * kv = (key_value *)udata;
 

@@ -179,7 +179,7 @@ static as_val * scan_response_get(const as_rec * rec, const char * name)  {
     as_val * v = NULL;
     as_serializer ser;
     as_msgpack_init(&ser);
-    as_scan_response_rec * r = as_rec_source(rec);
+    as_scan_response_rec * r = (as_scan_response_rec *) rec;
     for (int i = 0; i < r->n_bins; i++) {
         if (!strcmp(r->bins[i].bin_name, name)) {
             v = citrusleaf_udf_bin_to_val(&ser, &r->bins[i]);
@@ -191,25 +191,25 @@ static as_val * scan_response_get(const as_rec * rec, const char * name)  {
 }
 
 static uint32_t scan_response_ttl(const as_rec * rec) {
-    as_scan_response_rec * r = as_rec_source(rec);
+    as_scan_response_rec * r = (as_scan_response_rec *) rec;
     return r->record_ttl;
 }
 
 static uint16_t scan_response_gen(const as_rec * rec) {
-    as_scan_response_rec * r = as_rec_source(rec);
+    as_scan_response_rec * r = (as_scan_response_rec *) rec;
     if (!r) return 0;
     return r->generation;
 }
 
 int scan_response_destroy(as_rec *rec) {
-    as_scan_response_rec * r = as_rec_source(rec);
+    as_scan_response_rec * r = (as_scan_response_rec *) rec;
     if (!r) return 0;
     citrusleaf_bins_free(r->bins, r->n_bins);
     //    if (r->bins) free(r->bins);
     if (r->ns)   free(r->ns);
     if (r->set)  free(r->set);
     if (r->ismalloc) free(r);
-    rec->source = NULL;
+    rec->data = NULL;
     return 0;
 }
 

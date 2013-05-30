@@ -30,9 +30,13 @@ TEST( lstack_advanced_push_compact, "lstack Adv push compact" ) {
     static char * meth = "lstack_advanced_push_compact";
     int rc = 0;
     printf("Test(%s) called\n", meth );
+    char * user_key   = "User_111";
+    char * ldt_bin   = "num_adv";
+
+        int    iterations = 100;
 
     // TODO: Fill in Function
-    
+    rc =  lstack_push_with_transform_test(user_key, ldt_bin, iterations); 
     assert_int_eq( rc, 0 );
 } // end lstack_advanced_push_compact
 
@@ -61,9 +65,11 @@ TEST( lstack_advanced_peek_compact, "lstack Adv peek compact" ) {
     static char * meth = "lstack_advanced_peek_compact()";
     int rc = 0;
     printf("Test(%s) called\n", meth );
+    char * user_key   = "User_111";
+    char * ldt_bin   = "num_adv";
 
     // TODO: Fill in Function
-    
+    rc = lstack_peek_with_transform_test(user_key, ldt_bin, NULL, NULL, 10 );    
     assert_int_eq( rc, 0 );
 } // end   lstack_advanced_peek_compact()
 

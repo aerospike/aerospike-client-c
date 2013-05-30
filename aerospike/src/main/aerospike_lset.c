@@ -45,8 +45,8 @@
 
 // Use this to turn on/off tracing/debugging prints and checks
 // Comment out this next line to quiet the output.
-#define DEBUG
-// #undef DEBUG
+//#define DEBUG
+#undef DEBUG
 
 #ifdef DEBUG
 #define TRA_ENTER true   // show method ENTER values

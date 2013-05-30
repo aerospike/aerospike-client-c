@@ -58,13 +58,13 @@ SUITE( lstack_basics, "LSTACK.lua" ) {
     suite_add( lstack_operations_small_peek );
     suite_add( lstack_operations_medium_push );
     suite_add( lstack_operations_medium_peek );
-    suite_add( lstack_operations_large_push );
-    suite_add( lstack_operations_large_peek );
+//    suite_add( lstack_operations_large_push );
+//    suite_add( lstack_operations_large_peek );
 
-    suite_add( lstack_advanced_push_compact );
-    suite_add( lstack_advanced_peek_compact );
-    suite_add( lstack_advanced_push_objects );
-    suite_add( lstack_advanced_peek_objects );
-    suite_add( lstack_advanced_peek_objects_and_filter );
+//    suite_add( lstack_advanced_push_compact );
+//    suite_add( lstack_advanced_peek_compact );
+//    suite_add( lstack_advanced_push_objects );
+//    suite_add( lstack_advanced_peek_objects );
+//    suite_add( lstack_advanced_peek_objects_and_filter );
 }
 

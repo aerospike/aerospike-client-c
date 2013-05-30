@@ -194,6 +194,11 @@ typedef struct ev2citrusleaf_cluster_static_options_s {
 } ev2citrusleaf_cluster_static_options;
 
 typedef struct ev2citrusleaf_cluster_runtime_options_s {
+	// Per node, the maximum number of open sockets that will be pooled for
+	// re-use. Default value is 300. (Note that this does not limit how many
+	// sockets can be open at once, just how many are kept for re-use.)
+	uint32_t	socket_pool_max;
+
 	// true		- Force all get transactions to read only the master copy.
 	// false	- Default - Allow get transactions to read master or replica.
 	bool		read_master_only;
@@ -232,7 +237,9 @@ typedef struct ev2citrusleaf_cluster_runtime_options_s {
 // Client uses base for internal cluster management events. If NULL is passed,
 // an event base and thread are created internally for cluster management.
 //
-// If NULL opts is passed, ev2citrusleaf_cluster_options defaults are used.
+// If NULL opts is passed, ev2citrusleaf_cluster_static_options defaults are
+// used. The opts fields are copied and opts only needs to last for the scope of
+// this call.
 ev2citrusleaf_cluster *ev2citrusleaf_cluster_create(struct event_base *base,
 		const ev2citrusleaf_cluster_static_options *opts);
 
@@ -255,8 +262,8 @@ void ev2citrusleaf_cluster_destroy(ev2citrusleaf_cluster *asc);
 int ev2citrusleaf_cluster_get_runtime_options(ev2citrusleaf_cluster *asc,
 		ev2citrusleaf_cluster_runtime_options *opts);
 
-// Set/change cluster runtime options. The opts fields are copied and only need
-// to last for the scope of this call.
+// Set/change cluster runtime options. The opts fields are copied and opts only
+// needs to last for the scope of this call.
 int ev2citrusleaf_cluster_set_runtime_options(ev2citrusleaf_cluster *asc,
 		const ev2citrusleaf_cluster_runtime_options *opts);
 

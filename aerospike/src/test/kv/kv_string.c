@@ -12,6 +12,11 @@
 #define STRING_MAX 1024 * 1024
 
 /******************************************************************************
+ * VARIABLES
+ *****************************************************************************/
+extern bool run_memory_tests;
+
+/******************************************************************************
  * STATIC FUNCTIONS
  *****************************************************************************/
 
@@ -91,5 +96,8 @@ TEST( kv_string_get, "get a string from a bin" ) {
 SUITE( kv_string, "test client handling of string" ) {
     suite_add( kv_string_put );
     suite_add( kv_string_get );
-    suite_add( kv_string_lengths );
+    // Run this test only if data in memory
+    if (run_memory_tests) {
+		suite_add( kv_string_lengths );
+	}
 }

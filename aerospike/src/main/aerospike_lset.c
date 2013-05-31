@@ -923,7 +923,6 @@ cl_rv aerospike_lset_config(as_result ** resultpp, cl_cluster * asc,
 		const char * bin_name, uint32_t timeout_ms) {
 	static char * meth = "aerospike_lset_size()";
 	cl_rv rc; // ubiquitous return code
-	int size_result = 0;
 
 	if (TRA_ENTER)
 		printf("[ENTER]<%s:%s>: NS(%s) Set(%s) Bin(%s)\n", MOD, meth, namespace,

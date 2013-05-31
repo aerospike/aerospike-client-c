@@ -155,11 +155,11 @@ static int query_compile_select(cf_vector *binnames, uint8_t *buf, int *sz_p);
 
 static int query_compile_range(cf_vector *range_v, uint8_t *buf, int *sz_p);
 
+#if 0
 static int query_compile_filter(cf_vector *filter_v, uint8_t *buf, int *sz_p)  { return 0; }
-
 static int query_compile_orderby(cf_vector *filter_v, uint8_t *buf, int *sz_p) { return 0; }
-
 static int query_compile_function(cf_vector *range_v, uint8_t *buf, int *sz_p) { return 0; }
+#endif
 
 static int query_compile(const as_query * query, uint8_t **buf_r, size_t *buf_sz_r);
 
@@ -624,9 +624,9 @@ static uint16_t query_response_gen(const as_rec * rec) {
     return r->generation;
 }
 
-int query_response_destroy(as_rec *rec) {
+bool query_response_destroy(as_rec *rec) {
     as_query_response_rec * r = (as_query_response_rec *) rec->data;
-    if ( !r ) return 0;
+    if ( !r ) return false;
     if ( r->bins ) {
         citrusleaf_bins_free(r->bins, r->n_bins);
         if (r->free_bins) free(r->bins);
@@ -639,7 +639,7 @@ int query_response_destroy(as_rec *rec) {
     }
     if ( r->ismalloc )  free(r);
     rec->data = NULL;
-    return 0;
+    return true;
 }
 
 // Chris(todo) needs addition to the as_rec interface
@@ -851,10 +851,6 @@ static int as_query_worker_do(cl_cluster_node * node, as_query_task * task) {
                 recp->n_bins     = msg->n_ops;
                 recp->values     = NULL;
                 recp->free_bins  = free_bins;
-
-                TODO("Fix the following block of code. ");
-                TODO("It is really lame to check for a bin called \"SUCCESS\" to determine whether you have a single value or not.");
-                TODO("Fix how we are to handle errors. Not everything will be a \"SUCCESS\"... or will it?");
 
                 // TODO:
                 //      Fix the following block of code. It is really lame 

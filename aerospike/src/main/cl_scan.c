@@ -36,6 +36,7 @@
 #include <citrusleaf/cf_log.h>
 #include <citrusleaf/cf_socket.h>
 #include <citrusleaf/cf_proto.h>
+#include <citrusleaf/cf_client_rc.h>
 
 #include <citrusleaf/citrusleaf.h>
 #include <citrusleaf/cl_cluster.h>

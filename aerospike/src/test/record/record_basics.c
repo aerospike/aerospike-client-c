@@ -1,6 +1,7 @@
 
 #include "../test.h"
 #include "../util/udf.h"
+#include "../util/info_util.h"
 #include <citrusleaf/citrusleaf.h>
 #include <aerospike/as_types.h>
 
@@ -10,7 +11,13 @@
 
 #define LUA_FILE "src/test/lua/client_record_basics.lua"
 #define UDF_FILE "client_record_basics"
+
+/******************************************************************************
+ * EXTERN VARIABLES
+ *****************************************************************************/
 extern cl_cluster * cluster;
+extern int cluster_size;
+extern bool run_memory_tests;
 
 /******************************************************************************
  * TEST CASES
@@ -388,12 +395,15 @@ TEST( record_delete_replication, "Check to see if the record is getting replicat
 	// Get bins.
 	// In C client, you get the record from master and replica in alternate calls.
 	cl_bin * rsp_bins[2];
-	int rsp_n_bins[2], prev;
-	int cl_gen, j = 0;
+	int rsp_n_bins[2], j=0;
+	uint32_t cl_gen;
 	i = 0;
 	for (j = 0; j<2; j++) {
-		int rsp = citrusleaf_get_all(cluster, "test", "test", &okey, &rsp_bins[j], &rsp_n_bins[j], 1000, &cl_gen);  
+		citrusleaf_get_all(cluster, "test", "test", &okey, &rsp_bins[j], &rsp_n_bins[j], 1000, &cl_gen);  
 		info("Bins = %d", rsp_n_bins[j]);
+		for( int k = 0; k < rsp_n_bins[j]; k++) {
+			citrusleaf_object_free(&rsp_bins[j][k].object);
+		}
 		free(rsp_bins[j]);	
 	}
 
@@ -408,6 +418,16 @@ TEST( record_delete_replication, "Check to see if the record is getting replicat
 
 	int master_bins = rsp_n_bins[0];
 	int replica_bins = rsp_n_bins[1];
+
+	// Free memory
+	for ( i = 0; i < cluster_size; i++) {
+		free(v_a[i]);
+		free(v_b[i]);
+	}
+	free(v_a);
+	free(v_b);
+	as_result_destroy(&r);
+
 	assert_int_eq ( master_bins, 0 );
 	assert_int_eq ( replica_bins, 0 );
 }
@@ -450,7 +470,6 @@ TEST( record_basics_complex_update_memory_check_I, "Memory accounting on updatin
 	
 	// The difference between the memory usage after and before update should be the record memory
 	// for only 'replication factor' number of nodes
-	int cluster_size = i;
 	int diff = 0, count = 0;
 	uint64_t rec_memory = 144;	
 	
@@ -512,7 +531,6 @@ TEST( record_basics_bad_update_memory, "Memory accounting on failure when updati
 	
 	// The difference between the memory usage after and before update should be the record memory
 	// for only 'replication factor' number of nodes
-	int cluster_size = i;
 	int diff = 0, count = 0;
 	uint64_t rec_memory = 89;	
 	
@@ -569,8 +587,7 @@ TEST( record_basics_failed_create_memory_check, "Memory accounting on updating a
 
 	// The difference between the memory usage after and before update should be the record memory
 	// for only 'replication factor' number of nodes
-	int cluster_size = i;
-	int diff = 0, count = 0;
+	int diff = 0;
 	
 	for(int i = 0; i < cluster_size; i++) {
 		diff = atol(v_a[i]) - atol(v_b[i]);
@@ -633,7 +650,6 @@ TEST( record_basics_complex_update_memory_check_II, "Memory accounting on deleti
 	
 	// The difference between the memory usage after and before update should be the record memory
 	// for only 'replication factor' number of nodes
-	int cluster_size = i;
 	int diff = 0, count = 0;
 	uint64_t rec_memory = 25;	
 	
@@ -700,7 +716,6 @@ TEST( record_basics_update_memory, "Memory accounting on updating record through
 	
 	// The difference between the memory usage after and before update should be the record memory
 	// for only 'replication factor' number of nodes
-	int cluster_size = i;
 	int diff = 0, count = 0;
 	uint64_t rec_memory = 123;	
 	
@@ -728,10 +743,8 @@ TEST( record_basics_return_types, "Test for validating return types (including n
 	// delete record, start afresh
 	cl_object okey;
     citrusleaf_object_init_str(&okey, "test");
-	int rc = citrusleaf_delete(cluster, "test", "test", &okey, 0);
+	citrusleaf_delete(cluster, "test", "test", &okey, 0);
 	
-	int errors = 0;
-
 	// set arglist
 	as_list * arglist = NULL;
 
@@ -1027,7 +1040,6 @@ TEST( record_basics_gen_ttl, "Test generation and ttl" ) {
 	
 	free(res_str);
 	as_val_destroy(res.value); 
-	return 0;
 }
 
 /******************************************************************************
@@ -1084,13 +1096,18 @@ SUITE( record_basics, "test basics.lua" ) {
 
     suite_add( record_basics_func_does_not_exist );
     suite_add( record_basics_file_does_not_exist );
-	suite_add( record_basics_bad_update_memory );
-	suite_add( record_basics_failed_create_memory_check );
-	suite_add( record_basics_update_memory );
-	suite_add( record_basics_complex_update_memory_check_I );
-	suite_add( record_basics_complex_update_memory_check_II );
 	suite_add( record_delete_replication );
 	suite_add( record_basics_return_types );
 	suite_add( record_basics_gen_ttl );
+	
+	// Run these tests only if data is in memory
+	if (run_memory_tests) {
+		suite_add( record_basics_bad_update_memory );
+		suite_add( record_basics_failed_create_memory_check );
+		suite_add( record_basics_update_memory );
+		suite_add( record_basics_complex_update_memory_check_I );
+		suite_add( record_basics_complex_update_memory_check_II );
+	}
+
     suite_after( after );
 }

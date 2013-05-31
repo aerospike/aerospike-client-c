@@ -71,7 +71,7 @@ int init_configuration (int argc, char *argv[])
 	g_config->port         = 3000;
 	g_config->ns           = "test";
 	g_config->set          = "demo";
-	g_config->timeout_ms   = 1000;
+	g_config->timeout_ms   = 10000;
 	g_config->record_ttl   = 864000;
 	g_config->verbose      = false;
 	g_config->package_file = LUA_MODULE_PATH"/udf_unit_test.lua";
@@ -2456,5 +2456,5 @@ int main(int argc, char **argv) {
 		INFO("");
 	}
 
-	return(0);
+	return (nfailures);
 }

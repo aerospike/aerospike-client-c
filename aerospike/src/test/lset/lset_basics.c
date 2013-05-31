@@ -26,7 +26,7 @@ static char * MOD = "lset_basics.c::13_04_26";
 // ==================================================================
 TEST( lset_basics_insert, "Insert N items on the set" ) {
     char * user_key   = "User_111";
-    char * ldt_bin_num    = "num_basics";
+    char * ldt_bin_num    = "lset_basics";
     int    iterations = 10;
     int    seed       = 111;
     int    format     = NUMBER_FORMAT;
@@ -39,7 +39,7 @@ TEST( lset_basics_insert, "Insert N items on the set" ) {
 // ==================================================================
 TEST( lset_basics_search, "Search N items on the set" ) {
     char * user_key   = "User_111";
-    char * ldt_bin_num    = "num_basics";
+    char * ldt_bin_num    = "lset_basics";
     int    iterations = 5;
     int    seed       = 111;
     int    format     = NUMBER_FORMAT;
@@ -52,7 +52,7 @@ TEST( lset_basics_search, "Search N items on the set" ) {
 // ==================================================================
 TEST( lset_basics_create, "Validate creating new bin" ) {
     char * user_key     = "User_1111";
-    char * ldt_bin_num = "num_new";
+    char * ldt_bin_num = "lset_new";
     int rc = 1;
 
     rc = lset_create_test( user_key, ldt_bin_num);
@@ -62,13 +62,13 @@ TEST( lset_basics_create, "Validate creating new bin" ) {
 // ==================================================================
 TEST( lset_basics_size, "Validate the set size" ) {
     char * user_key     = "User_111";
-    char * ldt_bin_num = "num_basics_new";
+    char * ldt_bin_num = "lset_basics";
     int    iterations = 10;
     int rc = 1;
     int    seed       = 111;
-    int    format     = NUMBER_FORMAT;
+    int    format     = STRING_FORMAT;
     uint32_t   size_before,size_after;
-
+    lset_g_config->value_len = 20;
     rc = lset_size_test( user_key, ldt_bin_num, &size_before);
     rc = lset_insert_test( user_key, ldt_bin_num, iterations, seed, format );
     rc = lset_size_test( user_key, ldt_bin_num, &size_after);
@@ -81,7 +81,7 @@ TEST( lset_basics_size, "Validate the set size" ) {
 // ==================================================================
 TEST( lset_basics_config, "Validate Config Settings" ) {
     char * user_key     = "User_111";
-    char * ldt_bin_num = "num_basics";
+    char * ldt_bin_num = "lset_basics";
     int rc = 1;
 
     rc = lset_config_test( user_key, ldt_bin_num);

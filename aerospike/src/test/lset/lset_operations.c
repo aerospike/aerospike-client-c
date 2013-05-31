@@ -189,7 +189,9 @@ int lset_create_test (char * keystr, char * ldt_bin ){
 
     cl_rv rv = 1;
     rv = aerospike_lset_create( c, ns, set, &o_key, bname, create_spec, lset_g_config->timeout_ms);
-    
+
+    citrusleaf_object_free( &o_key );
+    as_val_destroy( create_spec );
     return rv;
 
 }
@@ -221,8 +223,8 @@ int lset_size_test(char * keystr, char * ldt_bin, uint32_t   * size) {
     //check size of lset
     rc = aerospike_lset_size( size,
                 c, ns, set, &o_key, bname, lset_g_config->timeout_ms);
-    citrusleaf_object_free( &o_key );
 
+    citrusleaf_object_free( &o_key );
     return rc;
 } 
 
@@ -251,8 +253,8 @@ int lset_config_test(char * keystr, char * ldt_bin) {
         valstr = as_val_tostring( resultp->value );
         printf("	Config parameters:\n	%s \n", valstr);
     }
-    citrusleaf_object_free( &o_key );
 
+    citrusleaf_object_free( &o_key );
     return rc;
 }
 // ======================================================================
@@ -528,9 +530,9 @@ TEST( lset_operations_small_insert, "lset insert small" ) {
     int rc = 0;
 
 	char * user_key   = "User_111";
-    char * ldt_bin_num    = "num_small";
-    char * ldt_bin_str    = "str_small";
-    char * ldt_bin_list   = "list_small";
+    char * ldt_bin_num    = "lset_num_s";
+    char * ldt_bin_str    = "lset_str_s";
+    char * ldt_bin_list   = "lset_list_s";
 
 	int    iterations = 100 ;
 	int    seed       = 111;
@@ -556,9 +558,9 @@ TEST( lset_operations_medium_insert, "lset insert medium" ) {
     printf("\tTest(%s) called\n", meth );
 
 	char * user_key   = "User_111";
-    char * ldt_bin_num    = "num_medium";
-    char * ldt_bin_str    = "str_medium";
-    char * ldt_bin_list   = "list_medium";
+    char * ldt_bin_num    = "lset_num_m";
+    char * ldt_bin_str    = "lset_str_m";
+    char * ldt_bin_list   = "lset_list_m";
 
 	int    iterations = 1000 ;
 	int    seed       = 111;
@@ -582,9 +584,9 @@ TEST( lset_operations_large_insert, "lset insert large" ) {
     printf("\tTest(%s) called\n", meth );
 
 	char * user_key   = "User_111";
-    char * ldt_bin_num    = "num_large";
-    char * ldt_bin_str    = "str_large";
-    char * ldt_bin_list   = "list_large";
+    char * ldt_bin_num    = "lset_num_l";
+    char * ldt_bin_str    = "lset_str_l";
+    char * ldt_bin_list   = "lset_list_l";
    	int    iterations = 10000 ;
 	int    seed       = 111;
 	int    format     = NUMBER_FORMAT;
@@ -607,9 +609,9 @@ TEST( lset_operations_small_search, "lset search small" ) {
     printf("\tTest(%s) called\n", meth );
 
 	char * user_key   = "User_111";
-    char * ldt_bin_num    = "num_small";
-    char * ldt_bin_str    = "str_small";
-    char * ldt_bin_list   = "list_small";
+    char * ldt_bin_num    = "lset_num_s";
+    char * ldt_bin_str    = "lset_str_s";
+    char * ldt_bin_list   = "lset_list_s";
 	int    iterations = 10;
 	int    seed       = 111;
 	int    format     = NUMBER_FORMAT;
@@ -631,9 +633,9 @@ TEST( lset_operations_medium_search, "lset search medium" ) {
     printf("\tTest(%s) called\n", meth );
 
 	char * user_key   = "User_111";
-    char * ldt_bin_num    = "num_medium";
-    char * ldt_bin_str    = "str_medium";
-    char * ldt_bin_list   = "list_medium";
+    char * ldt_bin_num    = "lset_num_m";
+    char * ldt_bin_str    = "lset_str_m";
+    char * ldt_bin_list   = "lset_list_m";
 
 	int    iterations = 10;
 	int    seed       = 111;
@@ -656,9 +658,9 @@ TEST( lset_operations_large_search, "lset search large" ) {
     printf("\tTest(%s) called\n", meth );
 
 	char * user_key   = "User_111";
-	char * ldt_bin_num    = "num_large";
-    char * ldt_bin_str    = "str_large";
-    char * ldt_bin_list   = "list_large";
+	char * ldt_bin_num    = "lset_num_l";
+    char * ldt_bin_str    = "lset_str_l";
+    char * ldt_bin_list   = "lset_list_l";
 
 	int    iterations = 10;
 	int    seed       = 111;

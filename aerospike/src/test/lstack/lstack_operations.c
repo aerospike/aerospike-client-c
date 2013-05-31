@@ -379,8 +379,8 @@ int lstack_peek_test(char * keystr, char * ldt_bin, int iterations,
         rc = aerospike_lstack_peek( &resultp,
                 c, ns, set, &o_key, bname, peek_count, g_config->timeout_ms);
 
-        // process_read_results( meth, rc, resultp, i, &vals_read, &misses,
-        //        &errs, peek_count );
+    //     process_read_results( meth, rc, resultp, i, &vals_read, &misses,
+      //          &errs, peek_count );
 
         // Clean up -- release the result object
         if( resultp != NULL ) as_result_destroy( resultp );
@@ -533,7 +533,7 @@ TEST( lstack_operations_small_push, "lstack push small" ) {
     static char * meth = "lstack_operations_small_push()";
     int rc = 0;
 
-	char * user_key   = "User_111";
+    char * user_key   = "User_111";
     char * ldt_bin_num    = "num_small";
     char * ldt_bin_str    = "str_small";
     char * ldt_bin_list   = "list_small";
@@ -561,16 +561,15 @@ TEST( lstack_operations_medium_push, "lstack push medium" ) {
     int rc = 0;
     printf("\tTest(%s) called\n", meth );
 
-	char * user_key   = "User_111";
+    char * user_key   = "User_111";
     char * ldt_bin_num    = "num_medium";
     char * ldt_bin_str    = "str_medium";
     char * ldt_bin_list   = "list_medium";
 
-	int    iterations = 1000 ;
-	int    seed       = 111;
-	int    format     = NUMBER_FORMAT;
+    int    iterations = 1000 ;
+    int    seed       = 111;
+    int    format     = NUMBER_FORMAT;
 
-    
     rc = lstack_push_test( user_key, ldt_bin_num, iterations, seed, NUMBER_FORMAT );
     assert_int_eq( rc, 0 );
 
@@ -587,13 +586,14 @@ TEST( lstack_operations_large_push, "lstack push large" ) {
     int rc = 0;
     printf("\tTest(%s) called\n", meth );
 
-	char * user_key   = "User_111";
+    char * user_key   = "User_111";
     char * ldt_bin_num    = "num_large";
     char * ldt_bin_str    = "str_large";
     char * ldt_bin_list   = "list_large";
-   	int    iterations = 10000 ;
-	int    seed       = 111;
-	int    format     = NUMBER_FORMAT;
+
+    int    iterations = 10000 ;
+    int    seed       = 111;
+    int    format     = NUMBER_FORMAT;
 
     rc = lstack_push_test( user_key, ldt_bin_num, iterations, seed, format );    
     assert_int_eq( rc, 0 );
@@ -612,14 +612,15 @@ TEST( lstack_operations_small_peek, "lstack peek small" ) {
     int rc = 0;
     printf("\tTest(%s) called\n", meth );
 
-	char * user_key   = "User_111";
+    char * user_key   = "User_111";
     char * ldt_bin_num    = "num_small";
     char * ldt_bin_str    = "str_small";
     char * ldt_bin_list   = "list_small";
-	int    iterations = 10;
-	int    seed       = 111;
-	int    format     = NUMBER_FORMAT;
-	g_config->peek_max = 50;
+
+    int    iterations = 10;
+    int    seed       = 111;
+    int    format     = NUMBER_FORMAT;
+    g_config->peek_max = 50;
 
     rc = lstack_peek_test( user_key, ldt_bin_num, iterations, seed, NUMBER_FORMAT );
     assert_int_eq( rc, 0 );
@@ -636,15 +637,15 @@ TEST( lstack_operations_medium_peek, "lstack peek medium" ) {
     int rc = 0;
     printf("\tTest(%s) called\n", meth );
 
-	char * user_key   = "User_111";
+    char * user_key   = "User_111";
     char * ldt_bin_num    = "num_medium";
     char * ldt_bin_str    = "str_medium";
     char * ldt_bin_list   = "list_medium";
 
-	int    iterations = 10;
-	int    seed       = 111;
-	int    format     = NUMBER_FORMAT;
-	g_config->peek_max = 500;
+    int    iterations = 10;
+    int    seed       = 111;
+    int    format     = NUMBER_FORMAT;
+    g_config->peek_max = 500;
     
     rc = lstack_peek_test( user_key, ldt_bin_num, iterations, seed, format );
     assert_int_eq( rc, 0 );
@@ -661,15 +662,15 @@ TEST( lstack_operations_large_peek, "lstack peek large" ) {
     int rc = 0;
     printf("\tTest(%s) called\n", meth );
 
-	char * user_key   = "User_111";
-	char * ldt_bin_num    = "num_large";
+    char * user_key   = "User_111";
+    char * ldt_bin_num    = "num_large";
     char * ldt_bin_str    = "str_large";
     char * ldt_bin_list   = "list_large";
 
-	int    iterations = 10;
-	int    seed       = 111;
-	int    format     = NUMBER_FORMAT;
-	g_config->peek_max = 5000;
+    int    iterations = 10;
+    int    seed       = 111;
+    int    format     = NUMBER_FORMAT;
+    g_config->peek_max = 5000;
 
     rc = lstack_peek_test( user_key, ldt_bin_num, iterations, seed, format );
     assert_int_eq( rc, 0 );

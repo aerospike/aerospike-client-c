@@ -49,19 +49,18 @@ SUITE( lset_basics, "LSET.lua" ) {
     suite_before( lset_before );
     suite_after( lset_after );
 
+    suite_add( lset_basics_create );
     suite_add( lset_basics_insert );
     suite_add( lset_basics_search);
     suite_add( lset_basics_size );
     suite_add( lset_basics_config );
 
-//    suite_add( lset_basics_create );
-
     suite_add( lset_operations_small_insert );
     suite_add( lset_operations_small_search );
     suite_add( lset_operations_medium_insert );
     suite_add( lset_operations_medium_search );
-    suite_add( lset_operations_large_insert );
-    suite_add( lset_operations_large_search );
+//    suite_add( lset_operations_large_insert );
+//    suite_add( lset_operations_large_search );
 
 //    suite_add( lset_advanced_push_compact );
 //    suite_add( lset_advanced_peek_compact );

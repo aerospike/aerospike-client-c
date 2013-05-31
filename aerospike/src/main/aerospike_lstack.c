@@ -1035,8 +1035,6 @@ aerospike_lstack_config(
 {
     static char * meth = "aerospike_lstack_config()";
     cl_rv rc;     // ubiquitous return code
-    int size_result = 0;
-    char * valstr = NULL;
 
     if( TRA_ENTER )
         printf("[ENTER]<%s:%s>: NS(%s) Set(%s) Bin(%s)\n", 

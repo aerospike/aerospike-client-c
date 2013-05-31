@@ -109,7 +109,6 @@ cf_atomic32     scan_initialized  = 0;
 cf_queue *      g_scan_q          = 0;
 pthread_t       g_scan_th[N_MAX_SCAN_THREADS];
 static as_scan_task    g_null_task;
-static bool            gasq_abort         = false;
 
 /******************************************************************************
  * STATIC FUNCTIONS
@@ -201,16 +200,16 @@ static uint16_t scan_response_gen(const as_rec * rec) {
     return r->generation;
 }
 
-int scan_response_destroy(as_rec *rec) {
+bool scan_response_destroy(as_rec *rec) {
     as_scan_response_rec * r = (as_scan_response_rec *) rec;
-    if (!r) return 0;
+    if (!r) return false;
     citrusleaf_bins_free(r->bins, r->n_bins);
     //    if (r->bins) free(r->bins);
     if (r->ns)   free(r->ns);
     if (r->set)  free(r->set);
     if (r->ismalloc) free(r);
     rec->data = NULL;
-    return 0;
+    return true;
 }
 
 const as_rec_hooks scan_response_hooks = {

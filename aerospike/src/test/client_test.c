@@ -4,6 +4,7 @@
 #include <citrusleaf/cl_udf.h>
 
 #include "test.h"
+#include "util/info_util.h"
 
 /******************************************************************************
  * MACROS
@@ -20,6 +21,8 @@
  *****************************************************************************/
 
 cl_cluster * cluster = NULL;
+int cluster_size;
+bool run_memory_tests;
 
 /******************************************************************************
  * STATIC FUNCTIONS
@@ -46,6 +49,37 @@ static bool before(atf_plan * plan) {
     }
 
     info("connected to %s:%d",HOST,PORT);
+
+	// Find cluster size
+	char ** cluster_size_str = get_stats( "statistics", "cluster_size", cluster);
+	cluster_size = atol(cluster_size_str[0]);
+
+	// Find if we need to run in memory specific tests or not
+	// These tests work only when the namespace is in-memory or 
+	// the storage is device based but data is in memory
+	run_memory_tests 		= false;
+	char * query 			= "namespace/test";
+	char ** ns_type 		= get_stats( query, "type", cluster);
+	char ** data_in_memory 	= NULL;
+	if (strcmp(ns_type[0], "device") == 0) {
+		data_in_memory = get_stats(query, "data-in-memory", cluster);
+		if(strcmp(data_in_memory[0], "true") == 0) {
+			run_memory_tests = true;
+		}
+	}
+	else if(strcmp(ns_type[0], "memory") == 0) {
+		run_memory_tests = true;
+	}
+	
+	// Free stuff
+	for (int i = 0; i < cluster_size; i++) {
+		if (ns_type) free(ns_type[i]);
+		if (data_in_memory) free(data_in_memory[i]);
+		if (cluster_size_str) free(cluster_size_str[i]);
+	}
+	free(ns_type);
+	free(data_in_memory);
+	free(cluster_size_str);
 
     return true;
 }

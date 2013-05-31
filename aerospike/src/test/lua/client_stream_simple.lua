@@ -45,4 +45,3 @@ function grouping(s)
 
     return s : map(select("c")) : groupby(_groupby)
 end
-

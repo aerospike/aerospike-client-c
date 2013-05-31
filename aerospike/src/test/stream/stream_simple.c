@@ -225,14 +225,17 @@ TEST( stream_simple_2, "count(*) where a == 'abc' (aggregating)" ) {
         error("error: %d", rc);
     }
     else {
-        info("result: %d", as_integer_toint(result) );
+		if (result) {
+	        info("result: %d", as_integer_toint(result) );
+		}
     }
 
     assert_int_eq( rc, 0 );
     assert_not_null( result );
-    assert_int_eq( as_integer_toint(result), 100 );
-
-    as_integer_destroy(result);
+	if (result) {
+	    assert_int_eq( as_integer_toint(result), 100 );
+    	as_integer_destroy(result);
+	}
     as_query_destroy(q);
     as_stream_destroy(consumer);
 }
@@ -263,14 +266,17 @@ TEST( stream_simple_3, "sum(e) where a == 'abc'" ) {
         error("error: %d", rc);
     }
     else {
-        info("result: %d", as_integer_toint(result) );
+		if (result) {
+	        info("result: %d", as_integer_toint(result) );
+		}
     }
 
     assert_int_eq( rc, 0 );
     assert_not_null( result );
-    assert_int_eq( as_integer_toint(result), 24275 );
-
-    as_integer_destroy(result);
+	if (result) {
+	    assert_int_eq( as_integer_toint(result), 24275 );
+    	as_integer_destroy(result);
+	}
     as_query_destroy(q);
     as_stream_destroy(consumer);
 }
@@ -305,14 +311,17 @@ TEST( stream_simple_4, "sum(d) where b == 100 and d == 1" ) {
         error("error: %d", rc);
     }
     else {
-        info("result: %d", as_integer_toint(result) );
+		if (result) { 
+	        info("result: %d", as_integer_toint(result) );
+		}
     }
 
     assert_int_eq( rc, 0 );
     assert_not_null( result );
-    assert_int_eq( as_integer_toint(result), 10 );
-
-    as_integer_destroy(result);
+	if (result) {
+    	assert_int_eq( as_integer_toint(result), 10 );
+    	as_integer_destroy(result);
+	}
     as_query_destroy(q);
     as_stream_destroy(consumer);
 }
@@ -343,16 +352,19 @@ TEST( stream_simple_5, "c where b == 100 group by d" ) {
         error("error: %d", rc);
     }
     else {
-        char * s = as_val_tostring(result);
-        info("result: %s", s );
-        free(s);
+		if (result) {
+	        char * s = as_val_tostring(result);
+    	    info("result: %s", s );
+        	free(s);
+		}
     }
 
     assert_int_eq( rc, 0 );
     assert_not_null( result );
-    assert_int_eq( as_val_type(result), AS_MAP );
-
-    as_val_destroy(result);
+	if (result) {
+	    assert_int_eq( as_val_type(result), AS_MAP );
+    	as_val_destroy(result);
+	}
     as_query_destroy(q);
     as_stream_destroy(consumer);
 }

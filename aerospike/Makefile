@@ -68,6 +68,15 @@ CITRUSLEAF += cl_udf.o
 CITRUSLEAF += aerospike_lstack.o
 CITRUSLEAF += aerospike_lset.o
 
+AEROSPIKE = 
+AEROSPIKE += aerospike.o
+AEROSPIKE += aerospike_key.o
+AEROSPIKE += aerospike_info.o
+AEROSPIKE += as_digest.o
+AEROSPIKE += as_error.o
+AEROSPIKE += as_record.o
+AEROSPIKE += shim.o
+
 OBJECTS :=
 OBJECTS += $(COMMON)/$(TARGET_OBJ)/common/aerospike/*.o
 OBJECTS += $(COMMON)/$(TARGET_OBJ)/common/citrusleaf/*.o
@@ -75,7 +84,7 @@ OBJECTS += $(BASE)/$(TARGET_OBJ)/base/*.o
 OBJECTS += $(MOD_LUA)/$(TARGET_OBJ)/*.o
 OBJECTS += $(addprefix $(MSGPACK)/src/.libs/, unpack.o objectc.o version.o vrefbuffer.o zone.o)
 
-HEADERS := $(wildcard $(SOURCE_INCL)/citrusleaf/*.h)
+HEADERS := $(wildcard $(SOURCE_INCL)/citrusleaf/*.h) $(wildcard $(SOURCE_INCL)/aerospike/*.h)
 
 ###############################################################################
 ##  MAIN TARGETS                                                             ##
@@ -109,10 +118,13 @@ libcitrusleaf.so: $(TARGET_LIB)/libcitrusleaf.so
 $(TARGET_OBJ)/%.o: $(BASE)/$(TARGET_LIB)/libaerospike-base.a $(COMMON)/$(TARGET_LIB)/libaerospike-common.a $(MOD_LUA)/$(TARGET_LIB)/libmod_lua.a $(SOURCE_MAIN)/%.c $(SOURCE_INCL)/citrusleaf/*.h | modules
 	$(object)
 
-$(TARGET_LIB)/libcitrusleaf.so: $(CITRUSLEAF:%=$(TARGET_OBJ)/%) $(TARGET_OBJ)/version.o | modules
+$(TARGET_OBJ)/aerospike/%.o: $(BASE)/$(TARGET_LIB)/libaerospike-base.a $(COMMON)/$(TARGET_LIB)/libaerospike-common.a $(MOD_LUA)/$(TARGET_LIB)/libmod_lua.a $(SOURCE_MAIN)/aerospike/%.c $(SOURCE_INCL)/citrusleaf/*.h $(SOURCE_INCL)/aerospike/*.h | modules
+	$(object)
+
+$(TARGET_LIB)/libcitrusleaf.so: $(CITRUSLEAF:%=$(TARGET_OBJ)/%) $(AEROSPIKE:%=$(TARGET_OBJ)/aerospike/%) $(TARGET_OBJ)/version.o | modules
 	$(library) $(wildcard $(OBJECTS))
 
-$(TARGET_LIB)/libcitrusleaf.a: $(CITRUSLEAF:%=$(TARGET_OBJ)/%) $(TARGET_OBJ)/version.o | modules
+$(TARGET_LIB)/libcitrusleaf.a: $(CITRUSLEAF:%=$(TARGET_OBJ)/%) $(AEROSPIKE:%=$(TARGET_OBJ)/aerospike/%) $(TARGET_OBJ)/version.o | modules
 	$(archive) $(wildcard $(OBJECTS))
 
 $(TARGET_INCL)/aerospike: | $(TARGET_INCL)
@@ -120,6 +132,9 @@ $(TARGET_INCL)/aerospike: | $(TARGET_INCL)
 
 $(TARGET_INCL)/citrusleaf: | $(TARGET_INCL)
 	mkdir $@
+
+$(TARGET_INCL)/aerospike/%.h:: $(SOURCE_INCL)/aerospike/%.h | $(TARGET_INCL)/aerospike
+	cp $^ $@
 
 $(TARGET_INCL)/citrusleaf/%.h:: $(SOURCE_INCL)/citrusleaf/%.h | $(TARGET_INCL)/citrusleaf
 	cp $^ $@

@@ -40,6 +40,17 @@
 #include "test_config.h"  // Our general Test config file
 //
 // Define the functions in the lstack_operations.c module
+
+extern int lstack_data_validation(char * keystr, char * ldt_bin, int iterations,
+        int seed, int data_format );
+
+extern int lstack_alldata_validation(char * user_key, char * ldt_bin, int iterations,
+        int seed, int format, int peek_count);
+
+extern int lstack_size_test(char * keystr, char * ldt_bin, uint32_t   * size);
+
+extern int lstack_config_test(char * keystr, char * ldt_bin);
+
 extern int lstack_push_test(char * keystr, char * lso_bin, int iterations,
         int seed, int format );
 

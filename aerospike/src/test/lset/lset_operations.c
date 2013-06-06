@@ -32,6 +32,8 @@
 
 static char * MOD = "lset_operations.c::13_04_26";
 static char * LDT = "LSET";
+
+#define LSET_DEBUG false
 /******************************************************************************
  * OPERATION FUNCTIONS
  *****************************************************************************/
@@ -43,12 +45,17 @@ static char * LDT = "LSET";
  * than what we asked for.
  */
 
-void lset_process_read_results( char * meth, cl_rv rc, as_result * resultp,
+int lset_process_read_results( char * meth, cl_rv rc, as_result * resultp,
         int i, int * hitsp, int * missesp, int * errsp, as_val * valp)
 {
+    static char * tm = "process_read_results()";
+    if( LSET_DEBUG ) {
+        INFO("  [ENTER]:<%s:%s>:%s From (%s) i(%d)", MOD, LDT, meth, tm, i );
+    }
+
     char * valstr;
 
-    if( TRA_DEBUG ){
+    if( LSET_DEBUG ){
         char * valstr = as_val_tostring( valp );
         printf("<%s:%s> Result(%d) Search(%s)\n", MOD, meth, rc, valstr);
         free( valstr );
@@ -56,7 +63,7 @@ void lset_process_read_results( char * meth, cl_rv rc, as_result * resultp,
 
     if( rc == CITRUSLEAF_OK ){
         if ( resultp && resultp->is_success ) {
-            if( TRA_DEBUG ){
+            if( LSET_DEBUG ){
                 valstr = as_val_tostring( resultp->value );
                 printf("[DEBUG]<%s:%s>LSET READ SUCCESS: Val(%s)\n",
                         MOD, meth, valstr);
@@ -67,7 +74,7 @@ void lset_process_read_results( char * meth, cl_rv rc, as_result * resultp,
             (*missesp)++;
             INFO("[ERROR]<%s:%s>LSET Read OK: Result Error: i(%d) rc(%d)",
                  MOD, meth, i, rc);
-            // Don't break (for now) just keep going.
+            return CITRUSLEAF_FAIL_INVALID_DATA;
         }
     } else if( rc == CITRUSLEAF_FAIL_NOTFOUND ){
         (*errsp)++;
@@ -78,6 +85,7 @@ void lset_process_read_results( char * meth, cl_rv rc, as_result * resultp,
         INFO("[ERROR]<%s:%s>OTHER ERROR: i(%d) rc(%d)",
              MOD, meth, i, rc);
     }
+    return rc;
 } // end process_read_results()
 
 
@@ -122,6 +130,7 @@ as_val * lset_gen_list_val(int seed ) {
 
 int lset_generate_value( as_val ** return_valpp, int seed, int val_type ){
     static char * meth = "generate_value()";
+
     int rc = 0;
     *return_valpp = NULL;  // Start with nothing.
     char * mallocd_buf = NULL;
@@ -171,14 +180,28 @@ int lset_generate_value( as_val ** return_valpp, int seed, int val_type ){
     return rc;
 } // end generate_value()
 
+/**
+ *  LSET CREATE TEST
+ *  For the given record (associated with 'keystr'), create a bin in the set.
+ *
+ *  Parms:
+ *  + keystr: String Key to find the record
+ *  + ldt_bin: Bin Name of the LDT
+ *
+ */
+
+
 int lset_create_test (char * keystr, char * ldt_bin ){
+    static char * meth = "lset_create_test()";
+    if( LSET_DEBUG ) {
+        INFO("      [ENTER]:<%s:%s>:From %s", MOD, LDT, meth );
+    }
 
     cl_cluster * c     = lset_g_config->asc;
     cl_object  o_key;
     char       * ns    = lset_g_config->ns;
     char       * set   = lset_g_config->set;
     char       * bname = ldt_bin;
-
 
     char * create_package = "StandardList";
     as_map *create_spec = as_hashmap_new(2);
@@ -187,7 +210,7 @@ int lset_create_test (char * keystr, char * ldt_bin ){
 
     citrusleaf_object_init_str( &o_key, keystr );
 
-    cl_rv rv = 1;
+    cl_rv rv = 0;
     rv = aerospike_lset_create( c, ns, set, &o_key, bname, create_spec, lset_g_config->timeout_ms);
 
     citrusleaf_object_free( &o_key );
@@ -210,7 +233,11 @@ int lset_create_test (char * keystr, char * ldt_bin ){
 
 int lset_size_test(char * keystr, char * ldt_bin, uint32_t   * size) {
     static char * meth = "lset_size_test()";
-    int rc = 1;
+    if( LSET_DEBUG ) {
+        INFO("      [ENTER]:<%s:%s>:From %s", MOD, LDT, meth );
+    }
+
+    int rc = 0;
 
     cl_cluster * c     = lset_g_config->asc;
     cl_object  o_key;
@@ -228,8 +255,21 @@ int lset_size_test(char * keystr, char * ldt_bin, uint32_t   * size) {
     return rc;
 } 
 
+/**
+ *  LSET SIZE TEST
+ *  For the given record (associated with 'keystr'), return the config parameters.
+ *
+ *  Parms:
+ *  + keystr: String Key to find the record
+ *  + ldt_bin: Bin Name of the LDT
+ */
+
 int lset_config_test(char * keystr, char * ldt_bin) {
     static char * meth = "lset_config_test()";
+    if( LSET_DEBUG ) {
+        INFO("      [ENTER]:<%s:%s>:From %s", MOD, LDT, meth );
+    }
+
     int rc = 1;
 
     char * valstr;
@@ -273,6 +313,10 @@ int lset_config_test(char * keystr, char * ldt_bin) {
 int lset_insert_test(char * keystr, char * ldt_bin, int iterations, int seed,
         int data_format ) {
     static char * meth = "lset_insert_test()";
+    if( LSET_DEBUG ) {
+        INFO("      [ENTER]:<%s:%s>:From %s", MOD, LDT, meth );
+    }
+
     int rc = CITRUSLEAF_OK;
     int i;
     as_val *valp;
@@ -346,6 +390,7 @@ cleanup:
 int lset_search_test(char * keystr, char * ldt_bin, int iterations,
         int seed, int data_format ) {
     static char * meth = "lset_search_test()";
+
     cl_rv rc = CITRUSLEAF_OK;
     as_result * resultp;
 
@@ -371,24 +416,34 @@ int lset_search_test(char * keystr, char * ldt_bin, int iterations,
     citrusleaf_object_init_str( &o_key, keystr );
 
     int          iseed;
-    for ( int i = 0; i < iterations ; i ++ ){
-        iseed = i * 10;
-        lset_generate_value( &valp, iseed, data_format );
+    if(iterations == 0) {
+            rc = aerospike_lset_search( &resultp,
+                c, ns, set, &o_key, bname, NULL, lset_g_config->timeout_ms);
+            //printf("search result is %s\n", as_val_tostring(resultp->value));
+            if( resultp != NULL ) as_result_destroy( resultp );
+    } else { 
+        for ( int i = 0; i < iterations ; i ++ ){
+            iseed = i * 10;
+            lset_generate_value( &valp, iseed, data_format );
 
-        //     INFO("[DEBUG]:<%s:%s>: Peek(%d)", MOD, meth, iterations );
-        rc = aerospike_lset_search( &resultp,
+            //     INFO("[DEBUG]:<%s:%s>: Peek(%d)", MOD, meth, iterations );
+            rc = aerospike_lset_search( &resultp,
                 c, ns, set, &o_key, bname, valp, lset_g_config->timeout_ms);
+            if(rc == CITRUSLEAF_OK) {
+                rc = lset_process_read_results( meth, rc, resultp, i, &vals_read, &misses,
+                          &errs, valp);
+            }
+	    //printf("compared result: exp-%s act-%s ",as_val_tostring(valp),as_val_tostring(resultp->value));
+            // Clean up -- release the result object
+            if( resultp != NULL ) as_result_destroy( resultp );
 
-        //        lset_process_read_results( meth, rc, resultp, i, &vals_read, &misses,
-          //          &errs, valp);
-
-        // Clean up -- release the result object
-        if( resultp != NULL ) as_result_destroy( resultp );
-
-        // Count up the reads (total)
-         lset_g_config->read_ops_counter += 1;
-         lset_g_config->read_vals_counter += 1;
-    } // end for each search iteration
+            // Count up the reads (total)
+            if(rc == 0) {
+                lset_g_config->read_vals_counter += 1;
+            }
+            lset_g_config->read_ops_counter += 1;
+        } // end for each search iteration
+    }
     citrusleaf_object_free( &o_key );
 
 //    INFO("[EXIT]:<%s:%s>: RC(%d)", MOD, meth, rc );
@@ -403,6 +458,10 @@ int lset_search_test(char * keystr, char * ldt_bin, int iterations,
  */
 int lset_insert_with_transform_test(char * keystr, char * ldt_bin, int iterations) {
     static char * meth = "lset_insert_with_transform_test()";
+    if( LSET_DEBUG ) {
+        INFO("      [ENTER]:<%s:%s>:From %s", MOD, LDT, meth );
+    }
+
     int rc = 0;
     int i;
 
@@ -476,6 +535,10 @@ int lset_search_with_transform_test(char * keystr, char * ldt_bin,
                                  as_list * fargs,
                                  int iterations ) {
     static char * meth = "lset_search_with_transform_test()";
+    if( LSET_DEBUG ) {
+        INFO("      [ENTER]:<%s:%s>:From %s", MOD, LDT, meth );
+    }
+
     cl_rv rc = 0;
 
     INFO("[ENTER]:<%s:%s>: Iterations(%d) Key(%s) LSOBin(%s)",
@@ -529,24 +592,25 @@ TEST( lset_operations_small_insert, "lset insert small" ) {
     static char * meth = "lset_operations_small_insert()";
     int rc = 0;
 
-	char * user_key   = "User_111";
+    char * user_key   = "User_111";
     char * ldt_bin_num    = "lset_num_s";
     char * ldt_bin_str    = "lset_str_s";
-    char * ldt_bin_list   = "lset_list_s";
+    //char * ldt_bin_list   = "lset_list_s";
 
-	int    iterations = 100 ;
-	int    seed       = 111;
-	int    format     = NUMBER_FORMAT;
+    int    iterations = 100 ;
+    int    seed       = 111;
 
     printf("\tTest(%s) called\n", meth );
 
     
     rc = lset_insert_test( user_key, ldt_bin_num, iterations, seed, NUMBER_FORMAT );
     assert_int_eq( rc, 0 );
+    printf("\tTest(%s) Passed for %s\n", meth, ldt_bin_num );
 
     lset_g_config->value_len = 10;
     rc = lset_insert_test( user_key, ldt_bin_str, iterations, seed, STRING_FORMAT );
     assert_int_eq( rc, 0 );
+    printf("\tTest(%s) Passed for %s\n", meth, ldt_bin_str );
 
 //    rc = lset_insert_test( user_key, ldt_bin_list, iterations, seed, LIST_FORMAT );
 //    assert_int_eq( rc, 0 );
@@ -557,22 +621,23 @@ TEST( lset_operations_medium_insert, "lset insert medium" ) {
     int rc = 0;
     printf("\tTest(%s) called\n", meth );
 
-	char * user_key   = "User_111";
+    char * user_key   = "User_111";
     char * ldt_bin_num    = "lset_num_m";
     char * ldt_bin_str    = "lset_str_m";
-    char * ldt_bin_list   = "lset_list_m";
+    //char * ldt_bin_list   = "lset_list_m";
 
-	int    iterations = 1000 ;
-	int    seed       = 111;
-	int    format     = NUMBER_FORMAT;
+    int    iterations = 1000 ;
+    int    seed       = 111;
 
     
     rc = lset_insert_test( user_key, ldt_bin_num, iterations, seed, NUMBER_FORMAT );
     assert_int_eq( rc, 0 );
+    printf("\tTest(%s) Passed for %s\n", meth, ldt_bin_num );
 
     lset_g_config->value_len = 100;
     rc = lset_insert_test( user_key, ldt_bin_str, iterations, seed, STRING_FORMAT );
     assert_int_eq( rc, 0 );
+    printf("\tTest(%s) Passed for %s\n", meth, ldt_bin_str );
 
 //    rc = lset_insert_test( user_key, ldt_bin_list, iterations, seed, LIST_FORMAT );
 //    assert_int_eq( rc, 0 );
@@ -583,20 +648,22 @@ TEST( lset_operations_large_insert, "lset insert large" ) {
     int rc = 0;
     printf("\tTest(%s) called\n", meth );
 
-	char * user_key   = "User_111";
+    char * user_key   = "User_111";
     char * ldt_bin_num    = "lset_num_l";
     char * ldt_bin_str    = "lset_str_l";
-    char * ldt_bin_list   = "lset_list_l";
-   	int    iterations = 10000 ;
-	int    seed       = 111;
-	int    format     = NUMBER_FORMAT;
+    //char * ldt_bin_list   = "lset_list_l";
 
-    rc = lset_insert_test( user_key, ldt_bin_num, iterations, seed, format );    
+    int    iterations = 10000 ;
+    int    seed       = 111;
+
+    rc = lset_insert_test( user_key, ldt_bin_num, iterations, seed, NUMBER_FORMAT );    
     assert_int_eq( rc, 0 );
+    printf("\tTest(%s) Passed for %s\n", meth, ldt_bin_num );
 
     lset_g_config->value_len = 1000;
     rc = lset_insert_test( user_key, ldt_bin_str, iterations, seed, STRING_FORMAT );
     assert_int_eq( rc, 0 );
+    printf("\tTest(%s) Passed for %s\n", meth, ldt_bin_str );
 
 //    rc = lset_insert_test( user_key, ldt_bin_list, iterations, seed, LIST_FORMAT );
 //    assert_int_eq( rc, 0 );
@@ -608,20 +675,21 @@ TEST( lset_operations_small_search, "lset search small" ) {
     int rc = 0;
     printf("\tTest(%s) called\n", meth );
 
-	char * user_key   = "User_111";
+    char * user_key   = "User_111";
     char * ldt_bin_num    = "lset_num_s";
     char * ldt_bin_str    = "lset_str_s";
-    char * ldt_bin_list   = "lset_list_s";
-	int    iterations = 10;
-	int    seed       = 111;
-	int    format     = NUMBER_FORMAT;
-	lset_g_config->peek_max = 50;
+    //char * ldt_bin_list   = "lset_list_s";
+
+    int    iterations = 100;
+    int    seed       = 111;
 
     rc = lset_search_test( user_key, ldt_bin_num, iterations, seed, NUMBER_FORMAT );
     assert_int_eq( rc, 0 );
+    printf("\tTest(%s) Passed for %s\n", meth, ldt_bin_num );
 
     rc = lset_search_test( user_key, ldt_bin_str, iterations, seed, STRING_FORMAT );
     assert_int_eq( rc, 0 );
+    printf("\tTest(%s) Passed for %s\n", meth, ldt_bin_str );
 
 //    rc = lset_search_test( user_key, ldt_bin_list, iterations, seed, LIST_FORMAT );
 //    assert_int_eq( rc, 0 );
@@ -632,21 +700,21 @@ TEST( lset_operations_medium_search, "lset search medium" ) {
     int rc = 0;
     printf("\tTest(%s) called\n", meth );
 
-	char * user_key   = "User_111";
+    char * user_key   = "User_111";
     char * ldt_bin_num    = "lset_num_m";
     char * ldt_bin_str    = "lset_str_m";
-    char * ldt_bin_list   = "lset_list_m";
+    //char * ldt_bin_list   = "lset_list_m";
 
-	int    iterations = 10;
-	int    seed       = 111;
-	int    format     = NUMBER_FORMAT;
-	lset_g_config->peek_max = 500;
+    int    iterations = 1000;
+    int    seed       = 111;
     
-    rc = lset_search_test( user_key, ldt_bin_num, iterations, seed, format );
+    rc = lset_search_test( user_key, ldt_bin_num, iterations, seed, NUMBER_FORMAT );
     assert_int_eq( rc, 0 );
+    printf("\tTest(%s) Passed for %s\n", meth, ldt_bin_num );
 
     rc = lset_search_test( user_key, ldt_bin_str, iterations, seed, STRING_FORMAT );
     assert_int_eq( rc, 0 );
+    printf("\tTest(%s) Passed for %s\n", meth, ldt_bin_str );
 
 //    rc = lset_search_test( user_key, ldt_bin_list, iterations, seed, LIST_FORMAT );
 //    assert_int_eq( rc, 0 );
@@ -657,21 +725,21 @@ TEST( lset_operations_large_search, "lset search large" ) {
     int rc = 0;
     printf("\tTest(%s) called\n", meth );
 
-	char * user_key   = "User_111";
-	char * ldt_bin_num    = "lset_num_l";
+    char * user_key   = "User_111";
+    char * ldt_bin_num    = "lset_num_l";
     char * ldt_bin_str    = "lset_str_l";
-    char * ldt_bin_list   = "lset_list_l";
+    //char * ldt_bin_list   = "lset_list_l";
 
-	int    iterations = 10;
-	int    seed       = 111;
-	int    format     = NUMBER_FORMAT;
-	lset_g_config->peek_max = 5000;
+    int    iterations = 10000;
+    int    seed       = 111;
 
-    rc = lset_search_test( user_key, ldt_bin_num, iterations, seed, format );
+    rc = lset_search_test( user_key, ldt_bin_num, iterations, seed, NUMBER_FORMAT );
     assert_int_eq( rc, 0 );
+    printf("\tTest(%s) Passed for %s\n", meth, ldt_bin_num );
 
     rc = lset_search_test( user_key, ldt_bin_str, iterations, seed, STRING_FORMAT );
     assert_int_eq( rc, 0 );
+    printf("\tTest(%s) Passed for %s\n", meth, ldt_bin_str );
         
 //    rc = lset_search_test( user_key, ldt_bin_list, iterations, seed, LIST_FORMAT );
 //    assert_int_eq( rc, 0 );

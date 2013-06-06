@@ -32,6 +32,8 @@
 
 static char * MOD = "lstack_operations.c::13_04_26";
 static char * LDT = "LSTACK";
+
+#define LSTACK_DEBUG false
 /******************************************************************************
  * OPERATION FUNCTIONS
  *****************************************************************************/
@@ -42,12 +44,13 @@ static char * LDT = "LSTACK";
  * "peek count".  Notice that when filters are applied, then we may get LESS
  * than what we asked for.
  */
-void process_read_results( char * meth, cl_rv rc, as_result * resultp,
+int process_read_results( char * meth, cl_rv rc, as_result * resultp,
         int i, int * valsp, int * missesp, int * errsp, int count )
 {
     static char * tm = "process_read_results()";
-    INFO("[ENTER]:<%s:%s>: From(%s) i(%d) Count(%d)", MOD, tm, meth, i, count );
-
+    if( LSTACK_DEBUG ) {
+        INFO("	[ENTER]:<%s:%s>:%s From (%s) i(%d) Count(%d)", MOD, LDT, meth, tm, i, count );
+    }
     char * valstr;
     int success_count = 0;
     int fail_count= 0;
@@ -55,10 +58,10 @@ void process_read_results( char * meth, cl_rv rc, as_result * resultp,
 
     if( rc == CITRUSLEAF_OK ){
         if ( resultp && resultp->is_success ) {
-            if( TRA_DEBUG ){
+            if( LSTACK_DEBUG ){
                 valstr = as_val_tostring( resultp->value );
-                printf("[DEBUG]<%s:%s>(%s) READ SUCCESS: Val(%s)\n",
-                        MOD, meth, LDT, valstr);
+                    printf("	[DEBUG]<%s:%s>(%s) READ SUCCESS: Val(%s)\n",
+                      MOD, meth, LDT, valstr);
                 free( valstr );
                 (*valsp)++;
             }
@@ -68,14 +71,17 @@ void process_read_results( char * meth, cl_rv rc, as_result * resultp,
             // we asked for (e.g. peek_count == 0, peek_count > stack size).
             if( as_val_type( result_valp ) == AS_LIST ) {
             	valstr = as_val_tostring( resultp->value );
-            	INFO("[SUCCESS]:<%s:%s>:Peek results:PK(%d) Count(%d) LIST[%s]",
+                if( LSTACK_DEBUG ) {
+                	INFO("[SUCCESS]:<%s:%s>:Peek results:PK(%d) Count(%d) LIST[%s]",
                         MOD, meth, count, result_valp->count, valstr );
+                }
             	free( valstr );
-            	success_count = 1;
+            	
             } else {
             	INFO("[UNSURE]:<%s:%s>:Peek results: Wanted List: TYPE[%s]",
                         MOD, meth, as_val_type(resultp->value) );
                 fail_count = 1;
+                return CITRUSLEAF_FAIL_INVALID_DATA;
             }
         } else {
             (*missesp)++;
@@ -83,6 +89,7 @@ void process_read_results( char * meth, cl_rv rc, as_result * resultp,
                  MOD, meth, LDT, i, rc);
             // Don't break (for now) just keep going.
             fail_count = 1;
+            return CITRUSLEAF_FAIL_INVALID_DATA;
         }
     } else if( rc == CITRUSLEAF_FAIL_NOTFOUND ){
         (*errsp)++;
@@ -99,7 +106,7 @@ void process_read_results( char * meth, cl_rv rc, as_result * resultp,
     // Update success/fail stats
     g_config->success_counter +=  success_count;
     g_config->fail_counter += fail_count;
-
+    return rc;
 } // end process_read_results()
 
 
@@ -203,6 +210,9 @@ int generate_value( as_val ** return_valpp, int seed, int val_type ){
 
 int lstack_size_test(char * keystr, char * ldt_bin, uint32_t   * size) {
     static char * meth = "lstack_size_test()";
+    if( LSTACK_DEBUG ) {
+        INFO("      [ENTER]:<%s:%s>:From %s", MOD, LDT, meth );
+    }
     int rc = 1;
 
     cl_cluster * c     = g_config->asc;
@@ -233,7 +243,10 @@ int lstack_size_test(char * keystr, char * ldt_bin, uint32_t   * size) {
 
 int lstack_config_test(char * keystr, char * ldt_bin) {
     static char * meth = "lstack_config_test()";
-    int rc = 1;
+    if( LSTACK_DEBUG ) {
+        INFO("      [ENTER]:<%s:%s>:From %s", MOD, LDT, meth );
+    }
+    int rc = 0;
 
     char * valstr;
     as_result * resultp;
@@ -259,6 +272,158 @@ int lstack_config_test(char * keystr, char * ldt_bin) {
 
     return rc;
 }
+
+// ======================================================================
+/**
+ *  LSO ALL DATA VALIDATION TEST
+ *  For a single record, perform a series of STACK VALIDATION.
+ *  NOTE: We must EXPLICITLY FREE the result, as it is a malloc'd
+ *  object that is handed to us.
+ *  + keystr: String Key to find the record
+ *  + ldt_bin: Bin Name of the LDT
+ *  + iterations: Number of iterations to run this test
+ *  + seed:  Seed value for the random number pattern
+ *  + data_format: Type of value (number, string, list)
+ *  + peek_count: Number of peek from stack
+ */
+
+int lstack_alldata_validation(char * user_key, char * ldt_bin, int iterations, 
+        int seed, int format, int peek_count){
+    static char * meth = "lstack_random_validation()";
+
+    char * valstr;
+    int iseed;
+    as_val * valp ;
+
+    as_result * resultp;
+    cl_object  o_key;
+
+    int rc = lstack_push_test( user_key, ldt_bin, iterations, seed, format );
+
+    if( rc == 0) {
+        citrusleaf_object_init_str( &o_key, user_key );
+        rc = aerospike_lstack_peek( &resultp,
+                g_config->asc, g_config->ns, g_config->set, &o_key, ldt_bin, peek_count, g_config->timeout_ms);
+    }
+
+    srand(seed);
+    //skip random numbers upto (iterations-peek_count)
+    for(int j = 0; j<(iterations-peek_count);j++){
+         iseed = j * 10;
+         generate_value( &valp, iseed, format );
+    }
+    //validate the stack elements
+    for ( int i = 0; i < peek_count; i++ ) {
+        iseed = (iterations-peek_count + i) * 10;
+
+        generate_value( &valp, iseed, format );
+
+        as_list * l = (as_list *) resultp->value;
+        valstr = as_val_tostring(as_list_get(l,peek_count-i-1));
+
+        if(strcmp(as_val_tostring(valp), valstr))
+             return CITRUSLEAF_FAIL_INVALID_DATA;
+        //printf("push value=%s..... peek_value=%s\n",as_val_tostring(valp), valstr);
+
+    }
+    return rc;
+}
+
+// ======================================================================
+/**
+ *  LSO DATA VALIDATION TEST
+ *  For a single record, perform a series of push and peek to validate top of stack.
+ *  NOTE: We must EXPLICITLY FREE the result, as it is a malloc'd
+ *  object that is handed to us.
+ *  + keystr: String Key to find the record
+ *  + ldt_bin: Bin Name of the LDT
+ *  + iterations: Number of iterations to run this test
+ *  + seed:  Seed value for the random number pattern
+ *  + data_format: Type of value (number, string, list)
+ */
+
+int lstack_data_validation(char * keystr, char * ldt_bin, int iterations,
+        int seed, int data_format ) {
+    static char * meth = "lstack_data_validation()";
+    if( LSTACK_DEBUG ) {
+        INFO("      [ENTER]:<%s:%s>:From %s", MOD, LDT, meth );
+    }
+    cl_rv rc = 0;
+    int i;
+    as_result * resultp;
+
+    as_val * valp ;
+    //    INFO("[ENTER]:<%s:%s>: Iterations(%d) Key(%s) LSOBin(%s) Sd(%d) DF(%d)",
+    //            MOD, meth, iterations, keystr, ldt_bin, seed, data_format);
+
+    cl_cluster * c     = g_config->asc;
+    cl_object  o_key;
+    char       * ns    = g_config->ns;
+    char       * set   = g_config->set;
+    char       * bname = ldt_bin;
+    int        vals_read;
+    int        misses;
+    int        errs;
+    int        read_success = 0;
+    char * create_package = "StandardList";
+    as_map *create_spec = as_hashmap_new(2);
+    as_map_set(create_spec, (as_val *) as_string_new("Package", false),
+    (as_val *) as_string_new( create_package, false));
+
+
+
+    //    INFO("[DEBUG]:<%s:%s>: Run peek() iterations(%d)", MOD, meth, iterations );
+    int    peek_count = 1;
+    srand( seed );
+    int iseed;
+    // NOTE: Must FREE the result for EACH ITERATION.
+    citrusleaf_object_init_str( &o_key, keystr );
+
+    for ( i = 0; i < iterations ; i ++ ){
+        //     INFO("[DEBUG]:<%s:%s>: Peek(%d)", MOD, meth, iterations );
+
+        iseed = i * 10 ;
+        generate_value( &valp, iseed, data_format );
+
+        rc = aerospike_lstack_create_and_push(
+                c, ns, set, &o_key, bname, valp, create_spec,
+                g_config->timeout_ms);
+        //after each push validate top element
+        if(rc == CITRUSLEAF_OK) {
+            rc = aerospike_lstack_peek( &resultp,
+                    c, ns, set, &o_key, bname, peek_count, g_config->timeout_ms);
+
+            if(rc == CITRUSLEAF_OK) {
+                char comp[6+strlen(as_val_tostring(valp))];
+                sprintf(comp,"List(%s)",as_val_tostring(valp));
+                if(strcmp(comp, as_val_tostring(resultp->value)) == 0) {
+                    //printf("result: act-%s exp-%s\n ",comp, as_val_tostring(resultp->value));
+                    rc = process_read_results( meth, rc, resultp, i, &vals_read, &misses,
+                        &errs, peek_count );
+                    read_success++;
+                }
+            } 
+        }
+        // Count up the reads (total)
+        g_config->write_ops_counter += 1;
+        g_config->write_vals_counter += 1;
+        // Count up the write (total)
+        g_config->read_ops_counter += 1;
+        g_config->read_vals_counter += peek_count;
+    } // end for each push iteration
+
+    if( resultp != NULL ) {
+        as_result_destroy( resultp );
+    }
+
+    if(iterations != read_success)
+            rc =  CITRUSLEAF_FAIL_INVALID_DATA; 
+    citrusleaf_object_free( &o_key );
+
+    //INFO("[EXIT]:<%s:%s>: RC(%d)", MOD, meth, rc );
+    return rc;
+} // end lstack_peek_test()
+
 // ======================================================================
 /**
  *  LSO PUSH TEST
@@ -277,10 +442,10 @@ int lstack_push_test(char * keystr, char * ldt_bin, int iterations, int seed,
     static char * meth = "lstack_push_test()";
     int rc = 0;
     int i;
-
-//    INFO("[ENTER]:<%s:%s>: It(%d) Key(%s) LSOBin(%s) Seed(%d)",
-//            MOD, meth, iterations, keystr, ldt_bin, seed);
-
+    if( LSTACK_DEBUG ) {
+    INFO("[ENTER]:<%s:%s>: It(%d) Key(%s) LSOBin(%s) Seed(%d)",
+            MOD, meth, iterations, keystr, ldt_bin, seed);
+    }
     // We have two choices:  We can create the LSO bin here, and then
     // do a bunch of inserts into it -- or we can just do the combined
     // "create_and_push" insert, which upon reflection, is really the
@@ -350,10 +515,7 @@ int lstack_peek_test(char * keystr, char * ldt_bin, int iterations,
     static char * meth = "lstack_peek_test()";
     cl_rv rc = 0;
     int i;
-    bool expected_file_exist = false;
     as_result * resultp;
-
-    char * valstr;
 
 //    INFO("[ENTER]:<%s:%s>: Iterations(%d) Key(%s) LSOBin(%s) Sd(%d) DF(%d)",
 //            MOD, meth, iterations, keystr, ldt_bin, seed, data_format);
@@ -378,10 +540,11 @@ int lstack_peek_test(char * keystr, char * ldt_bin, int iterations,
         //     INFO("[DEBUG]:<%s:%s>: Peek(%d)", MOD, meth, iterations );
         rc = aerospike_lstack_peek( &resultp,
                 c, ns, set, &o_key, bname, peek_count, g_config->timeout_ms);
+        if(rc == CITRUSLEAF_OK) {
 
-    //     process_read_results( meth, rc, resultp, i, &vals_read, &misses,
-      //          &errs, peek_count );
-
+            rc = process_read_results( meth, rc, resultp, i, &vals_read, &misses,
+                    &errs, peek_count );
+        }
         // Clean up -- release the result object
         if( resultp != NULL ) as_result_destroy( resultp );
 
@@ -538,22 +701,25 @@ TEST( lstack_operations_small_push, "lstack push small" ) {
     char * ldt_bin_str    = "str_small";
     char * ldt_bin_list   = "list_small";
 
-	int    iterations = 100 ;
-	int    seed       = 111;
-	int    format     = NUMBER_FORMAT;
+    int    iterations = 100 ;
+    int    seed       = 111;
 
     printf("\tTest(%s) called\n", meth );
 
     
     rc = lstack_push_test( user_key, ldt_bin_num, iterations, seed, NUMBER_FORMAT );
     assert_int_eq( rc, 0 );
+    printf("\tTest(%s) Passed for %s\n", meth, ldt_bin_num );
 
     g_config->value_len = 10;
     rc = lstack_push_test( user_key, ldt_bin_str, iterations, seed, STRING_FORMAT );
     assert_int_eq( rc, 0 );
+    printf("\tTest(%s) Passed for %s\n", meth, ldt_bin_str );
+
 
     rc = lstack_push_test( user_key, ldt_bin_list, iterations, seed, LIST_FORMAT );
     assert_int_eq( rc, 0 );
+    printf("\tTest(%s) Passed for %s\n", meth, ldt_bin_list );
 } // end lstack_operations_small_push()
 
 TEST( lstack_operations_medium_push, "lstack push medium" ) {
@@ -568,17 +734,19 @@ TEST( lstack_operations_medium_push, "lstack push medium" ) {
 
     int    iterations = 1000 ;
     int    seed       = 111;
-    int    format     = NUMBER_FORMAT;
 
     rc = lstack_push_test( user_key, ldt_bin_num, iterations, seed, NUMBER_FORMAT );
     assert_int_eq( rc, 0 );
+    printf("\tTest(%s) Passed for %s\n", meth, ldt_bin_num );
 
     g_config->value_len = 100;
     rc = lstack_push_test( user_key, ldt_bin_str, iterations, seed, STRING_FORMAT );
     assert_int_eq( rc, 0 );
+    printf("\tTest(%s) Passed for %s\n", meth, ldt_bin_str );
 
     rc = lstack_push_test( user_key, ldt_bin_list, iterations, seed, LIST_FORMAT );
     assert_int_eq( rc, 0 );
+    printf("\tTest(%s) Passed for %s\n", meth, ldt_bin_list );
 } // end   lstack_operations_medium_push()
 
 TEST( lstack_operations_large_push, "lstack push large" ) {
@@ -593,17 +761,19 @@ TEST( lstack_operations_large_push, "lstack push large" ) {
 
     int    iterations = 10000 ;
     int    seed       = 111;
-    int    format     = NUMBER_FORMAT;
 
-    rc = lstack_push_test( user_key, ldt_bin_num, iterations, seed, format );    
+    rc = lstack_push_test( user_key, ldt_bin_num, iterations, seed, NUMBER_FORMAT );    
     assert_int_eq( rc, 0 );
+    printf("\tTest(%s) Passed for %s\n", meth, ldt_bin_num );
 
     g_config->value_len = 1000;
     rc = lstack_push_test( user_key, ldt_bin_str, iterations, seed, STRING_FORMAT );
     assert_int_eq( rc, 0 );
+    printf("\tTest(%s) Passed for %s\n", meth, ldt_bin_str );
 
     rc = lstack_push_test( user_key, ldt_bin_list, iterations, seed, LIST_FORMAT );
     assert_int_eq( rc, 0 );
+    printf("\tTest(%s) Passed for %s\n", meth, ldt_bin_list );
 } // end   lstack_operations_large_push()
 
 
@@ -617,19 +787,21 @@ TEST( lstack_operations_small_peek, "lstack peek small" ) {
     char * ldt_bin_str    = "str_small";
     char * ldt_bin_list   = "list_small";
 
-    int    iterations = 10;
+    int    iterations = 1;
     int    seed       = 111;
-    int    format     = NUMBER_FORMAT;
     g_config->peek_max = 50;
 
     rc = lstack_peek_test( user_key, ldt_bin_num, iterations, seed, NUMBER_FORMAT );
     assert_int_eq( rc, 0 );
+    printf("\tTest(%s) Passed for %s\n", meth, ldt_bin_num );
 
     rc = lstack_peek_test( user_key, ldt_bin_str, iterations, seed, STRING_FORMAT );
     assert_int_eq( rc, 0 );
+    printf("\tTest(%s) Passed for %s\n", meth, ldt_bin_str );
 
     rc = lstack_peek_test( user_key, ldt_bin_list, iterations, seed, LIST_FORMAT );
     assert_int_eq( rc, 0 );
+    printf("\tTest(%s) Passed for %s\n", meth, ldt_bin_list );
 } // end   lstack_operations_small_peek()
 
 TEST( lstack_operations_medium_peek, "lstack peek medium" ) {
@@ -642,19 +814,21 @@ TEST( lstack_operations_medium_peek, "lstack peek medium" ) {
     char * ldt_bin_str    = "str_medium";
     char * ldt_bin_list   = "list_medium";
 
-    int    iterations = 10;
+    int    iterations = 1;
     int    seed       = 111;
-    int    format     = NUMBER_FORMAT;
     g_config->peek_max = 500;
     
-    rc = lstack_peek_test( user_key, ldt_bin_num, iterations, seed, format );
+    rc = lstack_peek_test( user_key, ldt_bin_num, iterations, seed, NUMBER_FORMAT );
     assert_int_eq( rc, 0 );
+    printf("\tTest(%s) Passed for %s\n", meth, ldt_bin_num );
 
     rc = lstack_peek_test( user_key, ldt_bin_str, iterations, seed, STRING_FORMAT );
     assert_int_eq( rc, 0 );
+    printf("\tTest(%s) Passed for %s\n", meth, ldt_bin_str );
 
     rc = lstack_peek_test( user_key, ldt_bin_list, iterations, seed, LIST_FORMAT );
     assert_int_eq( rc, 0 );
+    printf("\tTest(%s) Passed for %s\n", meth, ldt_bin_list );
 } // end   lstack_operations_medium_peek()
 
 TEST( lstack_operations_large_peek, "lstack peek large" ) {
@@ -667,17 +841,19 @@ TEST( lstack_operations_large_peek, "lstack peek large" ) {
     char * ldt_bin_str    = "str_large";
     char * ldt_bin_list   = "list_large";
 
-    int    iterations = 10;
+    int    iterations = 1;
     int    seed       = 111;
-    int    format     = NUMBER_FORMAT;
     g_config->peek_max = 5000;
 
-    rc = lstack_peek_test( user_key, ldt_bin_num, iterations, seed, format );
+    rc = lstack_peek_test( user_key, ldt_bin_num, iterations, seed, NUMBER_FORMAT );
     assert_int_eq( rc, 0 );
+    printf("\tTest(%s) Passed for %s\n", meth, ldt_bin_num );
 
     rc = lstack_peek_test( user_key, ldt_bin_str, iterations, seed, STRING_FORMAT );
     assert_int_eq( rc, 0 );
+    printf("\tTest(%s) Passed for %s\n", meth, ldt_bin_str );
         
     rc = lstack_peek_test( user_key, ldt_bin_list, iterations, seed, LIST_FORMAT );
     assert_int_eq( rc, 0 );
+    printf("\tTest(%s) Passed for %s\n", meth, ldt_bin_list );
  } // end   lstack_operations_large_peek()

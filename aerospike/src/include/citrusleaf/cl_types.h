@@ -81,6 +81,8 @@ typedef enum cl_rv_e {
     CITRUSLEAF_FAIL_KEY_BUSY                = 14,
     CITRUSLEAF_FAIL_SCAN_ABORT		    = 15,
 
+    CITRUSLEAF_FAIL_INVALID_DATA              = 99,
+
     // UDF RANGE 100-110
     CITRUSLEAF_FAIL_UDF_BAD_RESPONSE        = 100,
 

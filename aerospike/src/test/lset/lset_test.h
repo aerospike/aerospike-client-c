@@ -43,6 +43,12 @@
 
 extern int lset_create_test(char * keystr, char * lso_bin);
 
+extern int lset_size_test(char * keystr, char * ldt_bin, uint32_t   * size);
+
+extern int lset_config_test(char * keystr, char * ldt_bin);
+
+extern int lset_create_test (char * keystr, char * ldt_bin );
+
 extern int lset_insert_test(char * keystr, char * lso_bin, int iterations,
         int seed, int format );
 

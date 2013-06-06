@@ -53,6 +53,8 @@ SUITE( lstack_basics, "LSTACK.lua" ) {
     suite_add( lstack_basics_peek );
     suite_add( lstack_basics_size );
     suite_add( lstack_basics_config );
+    suite_add( lstack_basics_validation );
+    suite_add( lstack_all_validation);
 
     suite_add( lstack_operations_small_push );
     suite_add( lstack_operations_small_peek );

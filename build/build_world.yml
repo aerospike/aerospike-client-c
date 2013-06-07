@@ -1,0 +1,24 @@
+#
+# Usage: ansible-playbook build_world.yml -i hosts -u citrusleaf -e "hosts=bunny clientTag=master" -t "buildclient" 
+#
+
+- name: Build client 
+  hosts: $hosts
+  sudo: False
+  gather_facts: False
+  vars:
+    clientTag: "master"
+
+  tasks:
+    - name: Client checkout $clientTag
+      git: repo=git@github.com:citrusleaf/aerospike-client-c.git dest=~/aerospike-client-c version=$clientTag
+
+    - name: Client reset modules
+      command: modules reset chdir=~/aerospike-client-c
+
+    - name: Client make
+      shell: build/build_all chdir=~/aerospike-client-c
+
+  tags:
+    - buildclient
+

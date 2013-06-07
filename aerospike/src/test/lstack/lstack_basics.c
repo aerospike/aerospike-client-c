@@ -113,6 +113,7 @@ TEST( lstack_all_validation, "Random Data Validation" ) {
     assert_int_eq( rc, 0);
     printf("\tTest(lstack_alldata_validation) Passed for NUMBER\n");
 
+    g_config->value_len = 1000;
     rc = lstack_alldata_validation(user_key, ldt_bin, iterations, seed, STRING_FORMAT, peek_count);
     assert_int_eq( rc, 0);
     printf("\tTest(lstack_alldata_validation) Passed for STRING\n");

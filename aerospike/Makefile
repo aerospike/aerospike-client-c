@@ -72,6 +72,7 @@ AEROSPIKE =
 AEROSPIKE += aerospike.o
 AEROSPIKE += aerospike_key.o
 AEROSPIKE += aerospike_info.o
+AEROSPIKE += aerospike_udf.o
 AEROSPIKE += as_digest.o
 AEROSPIKE += as_error.o
 AEROSPIKE += as_record.o

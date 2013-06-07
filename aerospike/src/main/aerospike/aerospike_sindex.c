@@ -21,6 +21,7 @@
  *****************************************************************************/
 
 #include <aerospike/aerospike_scan.h>
+#include <aerospike/aerospike_sindex.h>
 
 /******************************************************************************
  * STATIC FUNCTIONS
@@ -51,9 +52,13 @@ static void aerospike_scan_init(aerospike * as);
  */
 as_status aerospike_index_sparse_create(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
-	const char * ns, const char * set, const char * bin, as_val_t type, const char * name)
+	const char * ns, const char * set, const char * bin, as_val_t type, const char * name,
+	char **response)
 {
-	return AEROSPIKE_OK;
+	int rc = citrusleaf_secondary_index_create(as->cluster,
+	    ns, set, name, bin, (const char *)type, response);
+
+	return as_error_fromrc(err, rc);
 }
 
 /**
@@ -69,9 +74,11 @@ as_status aerospike_index_sparse_create(
  */
 as_status aerospike_index_remove(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
-	const char * ns, const char * name)
+	const char * ns, const char * name, char **response)
 {
-	return AEROSPIKE_OK;
+	int rc = citrusleaf_secondary_index_drop(as->cluster, ns, name, response);
+
+	return as_error_fromrc(err, rc);
 }
 
 /******************************************************************************

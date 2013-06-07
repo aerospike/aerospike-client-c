@@ -26,6 +26,7 @@
 #include <aerospike/as_error.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_status.h>
+#include <aerospike/as_udf.h>
 
 /******************************************************************************
  * FUNCTIONS

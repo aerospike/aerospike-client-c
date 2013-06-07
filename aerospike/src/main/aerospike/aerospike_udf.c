@@ -20,13 +20,14 @@
  * IN THE SOFTWARE.
  *****************************************************************************/
 
-#pragma once 
+
 
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_udf.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_status.h>
+#include "shim.h"
 
 /******************************************************************************
  * FUNCTIONS
@@ -39,7 +40,8 @@ as_status aerospike_udf_list(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
 	as_udf_file *** files, uint32_t * count)
 {
-	return AEROSPIKE_OK;
+	int rc =  citrusleaf_udf_list(as->cluster, files, count, &(err->message));
+	return as_error_fromrc(err, rc);
 }
 
 /**
@@ -49,7 +51,8 @@ as_status aerospike_udf_get(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
 	const char * filename, as_udf_type type, as_udf_file * file)
 {
-	return AEROSPIKE_OK;
+	int rc = citrusleaf_udf_get(as->cluster, filename, file, type, &(err->message));
+	return as_error_fromrc(err, rc);
 }
 
 /**
@@ -59,7 +62,8 @@ as_status aerospike_udf_put(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
 	const char * filename, as_udf_type type, as_bytes * content)
 {
-	return AEROSPIKE_OK;
+	int rc = citrusleaf_udf_put(as->cluster, filename, content, type, &(err->message));
+	return as_error_fromrc(err, rc);
 }
 
 /**
@@ -69,5 +73,6 @@ as_status aerospike_udf_remove(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
 	const char * filename)
 {
-	return AEROSPIKE_OK;
+	int rc = citrusleaf_udf_remove(as->cluster, filename, &(err->message));
+	return as_error_fromrc(err, rc);
 }

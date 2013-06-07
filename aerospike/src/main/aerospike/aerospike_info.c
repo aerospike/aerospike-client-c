@@ -122,7 +122,7 @@ bool citrusleaf_info_cluster_foreach_cb(const cl_cluster_node *node, const char 
 as_status aerospike_info_foreach(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
 	const char * req, 
-	citrusleaf_info_foreach_callback callback, void * udata) 
+	aerospike_info_foreach_callback callback, void * udata)
 {
 
 	int rc = 0;
@@ -151,8 +151,8 @@ as_status aerospike_info_foreach(
 	 */
 
 	rc = citrusleaf_info_cluster_foreach(as->cluster, req, true, false, timeout,
-									(void *) ptr,
-									citrusleaf_info_cluster_foreach_cb);
+									citrusleaf_info_cluster_foreach_cb,
+									(void *) &ptr);
 
 	return as_error_fromrc(err, rc);
 }

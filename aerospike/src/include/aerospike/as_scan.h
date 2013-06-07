@@ -36,7 +36,7 @@ struct as_scan_s {
 	/**
 	 * Object can be free()'d
 	 */
-	bool __free;
+	bool _free;
 
 	/**
 	 * The namespace to scan.

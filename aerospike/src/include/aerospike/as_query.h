@@ -26,10 +26,24 @@
 #include <aerospike/as_udf.h>
 
 /******************************************************************************
+ * MACROS
+ *****************************************************************************/
+
+#define string_eq(__val) AS_PREDICATE_STRING_EQ, __val
+
+#define integer_eq(__val) AS_PREDICATE_INTEGER_EQ, __val
+
+#define string_eq(__min, __max) AS_PREDICATE_INTEGER_RANGE, __min, __max
+
+/******************************************************************************
  * TYPES
  *****************************************************************************/
 
-struct as_query_orderby_s {
+/**
+ * Describes the bin to be ordered by and 
+ * whether it is ascending order.
+ */
+struct as_orderby_s {
 	/**
 	 * name of the bin to orderby
 	 */
@@ -41,14 +55,17 @@ struct as_query_orderby_s {
 	bool ascending;
 };
 
-typedef struct as_query_orderby_s as_query_orderby;
+typedef struct as_orderby_s as_orderby;
 
+/**
+ * Describes the query.
+ */
 struct as_query_s {
 
 	/**
 	 * Object can be free()'d
 	 */
-	bool __free;
+	bool _free;
 
 	/**
 	 * namespace to be queried.
@@ -61,37 +78,51 @@ struct as_query_s {
 	char * set;
 
 	/**
-	 * name of bins to select
+	 * Name of bins to select.
+	 *
 	 * A NULL terminated sequence of strings.
+	 *
+	 *		char * select[3] = { "bin1", "bin2", NULL }
+	 *
 	 */
 	char ** select;
 
 	/**
-	 * predicates for filtering.
-	 * vector of as_predicate
+	 * Predicates for filtering.
+	 *
+	 * A {0} terminated sequence of as_predicate.
+	 *
+	 *		as_predicate predicates[2] = {
+	 *			{ .bin = "bin1", .type = AS_PREDICATE_STRING_EQ, .data.string_eq.value = "abc" }
+	 *			{ 0 }
+	 *		}
 	 */
-	char ** predicates;
+	as_predicate * predicates;
 
 	/**
-	 * bins to order by
-	 * vector of as_query_orderby
+	 * Bins to order by.
+	 *
+	 * A {0} terminated sequence of as_orderby.
+	 *
+	 *		as_orderby * orderby[3] = { 
+	 *			{ .bin = "bin1", .ascending = true },
+	 *			{ .bin = "bin1", .ascending = true },
+	 *			{ 0 }
+	 *		}
+	 *
 	 */
-	char ** ordering;
+	as_orderby * orderby;
 
 	/**
-	 * Limit the result set
+	 * Limit the result set.
+	 * To get all results, then set to -1.
 	 */
 	int32_t limit;
 
 	/**
 	 * UDF to apply to results of the query
 	 */
-	as_udf_call then;
-
-	/**
-	 * Queue for streamed results
-	 */
-	void * streamq;
+	as_udf_call apply;
 
 };
 
@@ -105,14 +136,38 @@ as_query * as_query_init(as_query * query, const char * ns, const char * set);
 
 as_query * as_query_new(const char * ns, const char * set);
 
+/**
+ * Destroy the query and associated resources.
+ */
 void as_query_destroy(as_query * query);
 
-
-
+/**
+ * Select bins to be projected from matching records.
+ *
+ *		as_query_select(&q, "bin1");
+ *		as_query_select(&q, "bin2");
+ *		as_query_select(&q, "bin3");
+ *
+ */
 int as_query_select(as_query * query, const char * bin);
 
-int as_query_where(as_query * query, as_predicate_type type, ...);
+/**
+ * Add a predicate to the query.
+ *
+ *		as_query_where(&q, "bin1", string_eq("abc"));
+ *		as_query_where(&q, "bin1", integer_eq(123));
+ *		as_query_where(&q, "bin1", integer_range(0,123));
+ *
+ */
+int as_query_where(as_query * query, const char * bin, as_predicate_type type, ...);
 
+/**
+ * Add a predicate to the query.
+ *
+ *		as_predicate p = { .bin = "bin1", .type = AS_PREDICATE_STRING_EQ, .data.string_eq.value = "abc" };
+ *		as_query_filter(&q, &p);
+ *
+ */
 int as_query_filter(as_query * query, as_predicate * predicate);
 
 int as_query_orderby(as_query * query, const char * bin, bool ascending);

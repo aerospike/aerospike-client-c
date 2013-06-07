@@ -83,6 +83,11 @@ typedef enum as_predicate_type_e as_predicate_type;
 struct as_predicate_s {
 
 	/**
+	 * Bin to apply the predicate to
+	 */
+	char * bin;
+
+	/**
 	 * The predicate type, dictates which value to use from the union
 	 */
 	as_predicate_type type;

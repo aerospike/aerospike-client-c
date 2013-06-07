@@ -35,10 +35,11 @@
  ******************************************************************************/
 
 typedef struct citrusleaf_udf_filelist_s citrusleaf_udf_filelist;
+
 struct citrusleaf_udf_filelist_s {
     int         capacity;
     int         size;
-    as_udf_file **     files;
+    cl_udf_file **     files;
 };
 
 
@@ -99,7 +100,7 @@ void * citrusleaf_udf_list_files(char * filedata, void * context) {
     // Got a list of key-value pairs separated with commas
     citrusleaf_sub_parameters_fold(filedata, &file_info, citrusleaf_udf_info_parameters);
     if ( filelist->size < filelist->capacity ) {
-   	filelist->files[filelist->size] = (as_udf_file*)calloc(1,sizeof(as_udf_file));
+   	filelist->files[filelist->size] = (cl_udf_file*)calloc(1,sizeof(cl_udf_file));
 	strncpy(filelist->files[filelist->size]->name, file_info.filename, strlen(file_info.filename));
 	memcpy(filelist->files[filelist->size]->hash, file_info.hash, CF_SHA_HEX_BUFF_LEN);
 	filelist->size++;
@@ -261,7 +262,7 @@ cl_rv citrusleaf_udf_record_apply(cl_cluster * cl, const char * ns, const char *
 
 
 
-cl_rv citrusleaf_udf_list(cl_cluster *asc, as_udf_file *** files, int * count, char ** error) {
+cl_rv citrusleaf_udf_list(cl_cluster *asc, cl_udf_file *** files, int * count, char ** error) {
     
     *files = NULL;
     *count = 0;
@@ -319,7 +320,7 @@ cl_rv citrusleaf_udf_list(cl_cluster *asc, as_udf_file *** files, int * count, c
     citrusleaf_udf_filelist filelist = { 
         .capacity   = info.count,
         .size       = 0,
-        .files      = (as_udf_file **) malloc(info.count * sizeof(as_udf_file *))
+        .files      = (cl_udf_file **) malloc(info.count * sizeof(cl_udf_file *))
     };
     // Different files' data are separated by ':'. Parse each file dataset and feed them into the callback 
     citrusleaf_split_fold(info.files, ':', &filelist, citrusleaf_udf_list_files);
@@ -333,11 +334,11 @@ cl_rv citrusleaf_udf_list(cl_cluster *asc, as_udf_file *** files, int * count, c
     
 }
 
-cl_rv citrusleaf_udf_get(cl_cluster *asc, const char * filename, as_udf_file * file, as_udf_type udf_type, char ** error) {
+cl_rv citrusleaf_udf_get(cl_cluster *asc, const char * filename, cl_udf_file * file, cl_udf_type udf_type, char ** error) {
     return citrusleaf_udf_get_with_gen(asc, filename, file, 0, NULL, error);
 }
 
-cl_rv citrusleaf_udf_get_with_gen(cl_cluster *asc, const char * filename, as_udf_file * file, as_udf_type udf_type, char **gen, char ** error) {
+cl_rv citrusleaf_udf_get_with_gen(cl_cluster *asc, const char * filename, cl_udf_file * file, cl_udf_type udf_type, char **gen, char ** error) {
 
     if ( file->content ) return -1;
 
@@ -454,7 +455,7 @@ static bool clusterinfo_cb(const cl_cluster_node *cn, const char *command, char 
     return true;
 }
 
-cl_rv citrusleaf_udf_put(cl_cluster *asc, const char * filename, as_bytes *content, as_udf_type udf_type, char ** error) {
+cl_rv citrusleaf_udf_put(cl_cluster *asc, const char * filename, as_bytes *content, cl_udf_type udf_type, char ** error) {
 
     if ( !filename || !(content)) {
         fprintf(stderr, "filename and content required\n");

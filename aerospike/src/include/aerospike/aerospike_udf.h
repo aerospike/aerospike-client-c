@@ -37,7 +37,7 @@
  */
 as_status aerospike_udf_list(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
-	as_udf_file *** files, uint32_t * count
+	as_udf_list * list
 	);
 
 /**

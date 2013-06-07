@@ -50,7 +50,8 @@
  */
 as_status aerospike_index_sparse_create(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
-	const char * ns, const char * set, const char * bin, as_val_t type, const char * name
+	const char * ns, const char * set, const char * bin, as_val_t type, const char * name,
+	char **response
 	);
 
 /**
@@ -66,6 +67,6 @@ as_status aerospike_index_sparse_create(
  */
 as_status aerospike_index_remove(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
-	const char * ns, const char * name
+	const char * ns, const char * name, char ** response
 	); 
 

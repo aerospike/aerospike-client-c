@@ -1,0 +1,45 @@
+#!/bin/sh
+# Package a specified version.
+
+cd `dirname $0`
+source ./run_command
+
+platform=`./parse_platform`
+
+if [ $? -ne 0 ]
+then
+  echo "Invalid platform."
+  exit 1
+fi
+
+if [ $platform = "el5" ] || [ $platform = "el6" ]
+then 
+  rpm=true
+else
+  rpm=false
+fi
+
+rev=`git describe | sed 's/-/_/g'`
+dist=/tmp/client-c
+build=$dist/BUILD
+spec=/tmp/client_v.spec
+
+rm -rf $dist
+
+mkdir -p $build/usr/include
+mkdir -p $build/usr/lib
+
+cp -r ../aerospike/target/Linux-x86_64/include $build/usr
+cp ../aerospike/target/Linux-x86_64/lib/* $build/usr/lib
+
+sed 's/@VERSION@/'$rev'/g' < client.spec > $spec
+
+if $rpm
+then
+  rpmbuild -bb -vv --buildroot $build $spec
+else
+  mkdir -p $build/DEBIAN
+fi
+
+rm $spec
+

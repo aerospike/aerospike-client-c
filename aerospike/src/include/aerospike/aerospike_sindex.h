@@ -23,6 +23,7 @@
 #pragma once 
 
 #include <aerospike/aerospike.h>
+#include <aerospike/as_bin.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_status.h>
@@ -50,9 +51,7 @@
  */
 as_status aerospike_index_sparse_create(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
-	const char * ns, const char * set, const char * bin, as_val_t type, const char * name,
-	char **response
-	);
+	const char * ns, const char * set, const char * bin, as_type type, const char * name);
 
 /**
  * Removes (drops) a secondary index.
@@ -67,6 +66,5 @@ as_status aerospike_index_sparse_create(
  */
 as_status aerospike_index_remove(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
-	const char * ns, const char * name, char ** response
-	); 
+	const char * ns, const char * name); 
 

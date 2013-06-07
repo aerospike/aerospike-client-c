@@ -25,8 +25,12 @@
 #include <aerospike/as_bytes.h>
 #include <aerospike/as_list.h>
 
-#define CF_SHA_HEX_BUFF_LEN 20
+/******************************************************************************
+ * MACROS
+ *****************************************************************************/
 
+#define AS_UDF_FILE_NAME_LEN 128
+#define AS_UDF_FILE_HASH_LEN 20
 
 /******************************************************************************
  * TYPES
@@ -40,7 +44,7 @@ struct as_udf_call_s {
 	/**
 	 * Object can be free()'d
 	 */
-	bool __free;
+	bool _free;
 
 	/**
 	 * UDF Module containing the function to be called.
@@ -60,17 +64,41 @@ struct as_udf_call_s {
 
 typedef struct as_udf_call_s as_udf_call;
 
+/**
+ * Enumeration of UDF types
+ */
+enum as_udf_type_e {
+	AS_UDF_TYPE_LUA
+};
 
-typedef uint8_t as_udf_type;
+typedef enum as_udf_type_e as_udf_type;
 
 struct as_udf_file_s {
-	char 			name[128];
-	unsigned char 	hash[CF_SHA_HEX_BUFF_LEN];
+	bool			_free;
+	char 			name[AS_UDF_FILE_NAME_LEN];
+	unsigned char 	hash[AS_UDF_FILE_HASH_LEN];
 	as_udf_type 	type;
-	as_bytes * 		content;
+	struct {
+		bool		_free;
+		uint32_t 	capacity;
+		uint32_t 	size;
+		uint8_t * 	bytes;
+	} content;
 };
 
 typedef struct as_udf_file_s as_udf_file;
+
+/**
+ * List of UDF Files
+ */
+struct as_udf_list_s {
+	bool			_free;
+	uint32_t 		capacity;
+	uint32_t 		size;
+	as_udf_file * 	files;
+};
+
+typedef struct as_udf_list_s as_udf_list;
 
 /******************************************************************************
  * FUNCTIONS
@@ -81,3 +109,5 @@ as_udf_call * as_udf_call_init(as_udf_call * call, const char * module, const ch
 as_udf_call * as_udf_call_new(const char * module, const char * function, as_list * arglist);
 
 void as_udf_call_destroy(as_udf_call * call);
+
+

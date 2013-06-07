@@ -20,14 +20,11 @@
  * IN THE SOFTWARE.
  *****************************************************************************/
 
-#include <aerospike/aerospike_scan.h>
 #include <aerospike/aerospike_sindex.h>
 
-/******************************************************************************
- * STATIC FUNCTIONS
- *****************************************************************************/
+#include <citrusleaf/cl_sindex.h>
 
-static void aerospike_scan_init(aerospike * as);
+#include "shim.h"
 
 /******************************************************************************
  * FUNCTIONS
@@ -52,11 +49,32 @@ static void aerospike_scan_init(aerospike * as);
  */
 as_status aerospike_index_sparse_create(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
-	const char * ns, const char * set, const char * bin, as_val_t type, const char * name,
-	char **response)
+	const char * ns, const char * set, const char * bin, as_type type, const char * name)
 {
-	int rc = citrusleaf_secondary_index_create(as->cluster,
-	    ns, set, name, bin, (const char *)type, response);
+	char * 	response 		= NULL;
+	char 	typename[20] 	= {0};
+
+	switch(type) {
+		case AS_TYPE_INT:
+			strcpy(typename, "NUMERIC");
+			break;
+		case AS_TYPE_STR:
+			strcpy(typename, "STRING");
+			break;
+		default:
+			as_error_update(err, AEROSPIKE_ERR, "Invalid type: %d", type);
+			break;
+	}
+	
+	if ( typename[0] == 0 ) {
+		return err->code;
+	}
+
+	int rc = citrusleaf_secondary_index_create(as->cluster, ns, set, name, bin, typename, &response);
+	
+	if ( response != NULL ) {
+		free(response);
+	}
 
 	return as_error_fromrc(err, rc);
 }
@@ -74,17 +92,15 @@ as_status aerospike_index_sparse_create(
  */
 as_status aerospike_index_remove(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
-	const char * ns, const char * name, char **response)
+	const char * ns, const char * name)
 {
-	int rc = citrusleaf_secondary_index_drop(as->cluster, ns, name, response);
+	char * response = NULL;
+
+	int rc = citrusleaf_secondary_index_drop(as->cluster, ns, name, &response);
+
+	if ( response != NULL ) {
+		free(response);
+	}
 
 	return as_error_fromrc(err, rc);
-}
-
-/******************************************************************************
- * STATIC FUNCTIONS
- *****************************************************************************/
-
-static void aerospike_scan_init(aerospike * as) 
-{
 }

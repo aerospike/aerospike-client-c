@@ -42,7 +42,7 @@
  *
  * @return TRUE to continue to the next info response. FALSE to stop processing.
  */
-typedef bool (* aerospike_info_foreach_callback)(const as_error * err, const char * node, char * res, void * udata);
+typedef bool (* aerospike_info_foreach_callback)(const as_error * err, const char * node, const char * res, void * udata);
 
 /******************************************************************************
  * FUNCTIONS

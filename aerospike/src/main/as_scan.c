@@ -546,6 +546,19 @@ void citrusleaf_udf_scan_background(cl_cluster * asc, as_scan * scan) {
 }
 
 /*
+ * Calls a scan on a specified node in the cluster. This function initializes a background scan.
+ * The udf return values are not returned back to the client. 
+ */
+void citrusleaf_udf_scan_node_background(cl_cluster * asc, as_scan * scan, char *node_name) {
+    scan->udf.type = AS_SCAN_UDF_BACKGROUND;
+    cl_rv res = CITRUSLEAF_OK;
+    // Call as_scan_execute with a NULL node_name.
+    cf_vector * v = as_scan_execute(asc, scan, node_name, &res, NULL, NULL);
+	cf_vector_destroy(v);
+	return;
+}
+
+/*
  *  Calls a scan on a particular node in the cluster with the given parameters and then applies
  *  the udf on the results. It returns values from the udf. The callback is then applied on those values at the client.
  */

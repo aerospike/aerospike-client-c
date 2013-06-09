@@ -4,6 +4,7 @@
 #include <citrusleaf/citrusleaf.h>
 #include <citrusleaf/cl_udf.h>
 #include <aerospike/as_types.h>
+#include <aerospike/as_udf.h>
 #include <stdlib.h>
 #include <errno.h>
 

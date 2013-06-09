@@ -25,18 +25,23 @@
 #include <aerospike/aerospike.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_policy.h>
-#include <aerospike/as_scan.h>
 #include <aerospike/as_status.h>
 #include <aerospike/as_val.h>
+
+// The current state of this file is not usable as it is missing many definitions
+// If we include both they will cause conflicts as they have the same name
+// For now we should be using all the definitions from citrusleaf/as_scan.h
+// #include <aerospike/as_scan.h>
+#include <citrusleaf/as_scan.h>
 
 /******************************************************************************
  * TYPES
  *****************************************************************************/
 
 /**
- * Callback for the `aerospike_scan_foreach()` function.
+ * Callback for the `aerospike_scan_*` function.
  */
-typedef bool (* aerospike_scan_foreach_callback)(const as_error * err, const as_val *, void *);
+typedef int (* aerospike_scan_foreach_callback)(const as_val *, void *);
 
 /******************************************************************************
  * FUNCTIONS
@@ -44,8 +49,8 @@ typedef bool (* aerospike_scan_foreach_callback)(const as_error * err, const as_
 
 /**
  * Scan the records in the specified namespace and set in the cluster.
- * Call the callback function for each record scanned. When all records have 
- * been scanned, then callback will be called with a NULL value for the record.
+ * Scan will be run in the background by a thread on client side.
+ * No callback will be called in this case
  * 
  * @param as        - the aerospike cluster to connect to.
  * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
@@ -55,9 +60,28 @@ typedef bool (* aerospike_scan_foreach_callback)(const as_error * err, const as_
  *
  * @return AEROSPIKE_OK on success. Otherwise an error occurred.
  */
-as_status aerospike_scan_background(
+as_status aerospike_scan_all_nodes_background(
 	aerospike * as, as_error * err, const as_policy_scan * policy, 
 	const as_scan * scan
+	);
+
+/**
+ * Scan the records in the specified namespace and set in a specified node.
+ * Scan will be run in the background by a thread on client side.
+ * No callback will be called in this case
+ * 
+ * @param as        - the aerospike cluster to connect to.
+ * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
+ * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
+ * @param node      - the name of the node to perform the scan on.
+ * @param scan      - the scan to perform
+ * @param scan_id   - the id for the scan job, which can be used for querying the status of the scan.
+ *
+ * @return AEROSPIKE_OK on success. Otherwise an error occurred.
+ */
+as_status aerospike_scan_node_background(
+	aerospike * as, as_error * err, const as_policy_scan * policy, 
+	const char *node, const as_scan * scan
 	);
 
 /**
@@ -74,7 +98,7 @@ as_status aerospike_scan_background(
  *
  * @return AEROSPIKE_OK on success. Otherwise an error occurred.
  */
-as_status aerospike_scan_foreach(
+as_status aerospike_scan_all_nodes(
 	aerospike * as, as_error * err, const as_policy_scan * policy, 
 	const as_scan * scan, 
 	aerospike_scan_foreach_callback callback, void * udata

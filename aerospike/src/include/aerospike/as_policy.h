@@ -110,6 +110,10 @@ typedef struct as_policy_query_s as_policy_query;
 /**
  * Priority levels for a scan operation.
  */
+
+/*
+ * For now, we are using the definitions from citrusleaf/as_scan.h
+ * If we uncomment this, this will cause definition conflicts as the name is the same.
 enum as_scan_priority_e { 
 	AS_SCAN_PRIORITY_AUTO, 
 	AS_SCAN_PRIORITY_LOW, 
@@ -118,6 +122,7 @@ enum as_scan_priority_e {
 };
 
 typedef enum as_scan_priority_e as_scan_priority;
+*/
 
 /**
  * Scan Policy

@@ -38,6 +38,19 @@
  * A sparse secondary indexes omits references to records which do not include
  * the indexed bin.
  *
+ *		if ( aerospike_index_sparse_create(&as, &err, NULL, 
+ *				"test", "demo", "bin1", AS_TYPE_INTEGER, "idx_test_demo_bin1") != AEROSPIKE_OK ) {
+ *          fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *      }
+ *
+ * @param as        - the aerospike cluster to connect to.
+ * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
+ * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
+ * @param filename	- the name of the UDF file.
+ * @param type 		- the type of UDF file.
+ * @param content 	- the file of the UDF file.
+ *
+ *
  * @param as        - the aerospike cluster to connect to.
  * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
  * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
@@ -55,6 +68,10 @@ as_status aerospike_index_sparse_create(
 
 /**
  * Removes (drops) a secondary index.
+ *
+ *		if ( aerospike_index_remove(&as, &err, NULL, "idx_test_demo_bin1") != AEROSPIKE_OK ) {
+ *          fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *      }
  *
  * @param as        - the aerospike cluster to connect to.
  * @param err       - the error is populated if the return value is not AEROSPIKE_OK.

@@ -34,25 +34,25 @@
  * TYPES
  *******************************************************************************/
 
-typedef enum as_query_op         { CL_EQ, CL_LT, CL_GT, CL_LE, CL_GE, CL_RANGE } as_query_op;
-typedef enum as_query_orderby_op { CL_ORDERBY_ASC, CL_ORDERBY_DESC } as_query_orderby_op;
+typedef enum cl_query_op         { CL_EQ, CL_LT, CL_GT, CL_LE, CL_GE, CL_RANGE } cl_query_op;
+typedef enum cl_query_orderby_op { CL_ORDERBY_ASC, CL_ORDERBY_DESC } cl_query_orderby_op;
 
 
-typedef enum as_query_udf_type_s { 
+typedef enum cl_query_udf_type_s { 
     AS_QUERY_UDF_NONE,
     AS_QUERY_UDF_RECORD, 
     AS_QUERY_UDF_STREAM
-} as_query_udf_type;
+} cl_query_udf_type;
 
 
-typedef struct as_query_udf_s {
-    as_query_udf_type   type;
+typedef struct cl_query_udf_s {
+    cl_query_udf_type   type;
     char *              filename;
     char *              function;
     as_list *           arglist;
-} as_query_udf;
+} cl_query_udf;
 
-typedef struct as_query {
+typedef struct cl_query {
     char            * ns;
     char            * indexname;
     char            * setname;
@@ -60,13 +60,13 @@ typedef struct as_query {
     cf_vector       * ranges;    // Where
     cf_vector       * filters;
     cf_vector       * orderbys;
-    as_query_udf    udf;
+    cl_query_udf    udf;
     void            * res_streamq;
     int             limit;  
     uint64_t        job_id;
-} as_query;
+} cl_query;
 
-typedef struct as_query_response_record_t {
+typedef struct cl_query_response_record_t {
     char *      ns;
     cf_digest   keyd;
     char *      set;
@@ -77,51 +77,51 @@ typedef struct as_query_response_record_t {
     as_map *    values;  
     bool        ismalloc;
 	bool        free_bins;
-} as_query_response_rec;
+} cl_query_response_rec;
 
-typedef bool (* as_query_cb) (const as_val * val, void * udata);
+typedef bool (* cl_query_cb) (const as_val * val, void * udata);
 
 
 /******************************************************************************
  * FUNCTIONS
  ******************************************************************************/
-#define integer_equals(val) CL_EQ, CL_INT, val 
-#define integer_range(start, end) CL_RANGE, CL_INT, start, end
-#define string_equals(val) CL_EQ, CL_STR, val
+#define cl_integer_equals(val) CL_EQ, CL_INT, val 
+#define cl_integer_range(start, end) CL_RANGE, CL_INT, start, end
+#define cl_string_equals(val) CL_EQ, CL_STR, val
 
 
 /**
- * Allocates and initializes a new as_query
+ * Allocates and initializes a new cl_query
  */
-as_query * as_query_new(const char * ns, const char * setname);
+cl_query * cl_query_new(const char * ns, const char * setname);
 
 /**
- * Initializes an as_query
+ * Initializes an cl_query
  */
-as_query * as_query_init(as_query * query, const char * ns, const char * setname);
+cl_query * cl_query_init(cl_query * query, const char * ns, const char * setname);
 
 /**
- * Destroy and free an as_query
+ * Destroy and free an cl_query
  */
-void  as_query_destroy(as_query * query);
+void  cl_query_destroy(cl_query * query);
 
 /**
  * Query Builders
  */
 
-int   as_query_select (as_query * query, const char * binname);
-int   as_query_where(as_query * query, const char * binname, as_query_op, ...);
-int   as_query_where_function(as_query * query, const char * finame, as_query_op, ...);
-int   as_query_filter(as_query * query, const char * binname, as_query_op op, ...);
-int   as_query_orderby(as_query * query, const char * binname, as_query_orderby_op order);
-cl_rv as_query_aggregate(as_query * query, const char * filename, const char * function, as_list * arglist);
-cl_rv as_query_foreach(as_query * query, const char * filename, const char * function, as_list * arglist);
-int   as_query_limit(as_query * query, uint64_t limit);
+int   cl_query_select (cl_query * query, const char * binname);
+int   cl_query_where(cl_query * query, const char * binname, cl_query_op, ...);
+int   cl_query_where_function(cl_query * query, const char * finame, cl_query_op, ...);
+int   cl_query_filter(cl_query * query, const char * binname, cl_query_op op, ...);
+int   cl_query_orderby(cl_query * query, const char * binname, cl_query_orderby_op order);
+cl_rv cl_query_aggregate(cl_query * query, const char * filename, const char * function, as_list * arglist);
+cl_rv cl_query_foreach(cl_query * query, const char * filename, const char * function, as_list * arglist);
+int   cl_query_limit(cl_query * query, uint64_t limit);
 
 
 
-cl_rv citrusleaf_query_stream(cl_cluster * cluster, const as_query * query, as_stream * stream);
-cl_rv citrusleaf_query_foreach(cl_cluster * cluster, const as_query * query, void * udata, bool (*foreach)(const as_val *, void *));
+cl_rv citrusleaf_query_stream(cl_cluster * cluster, const cl_query * query, as_stream * stream);
+cl_rv citrusleaf_query_foreach(cl_cluster * cluster, const cl_query * query, void * udata, bool (*foreach)(const as_val *, void *));
 
 
 /*

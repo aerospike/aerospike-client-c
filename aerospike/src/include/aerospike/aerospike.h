@@ -82,12 +82,12 @@ void aerospike_destroy(aerospike * as);
 /**
  * Connect to the cluster
  */
-as_status aerospike_connect(aerospike * as);
+as_status aerospike_connect(aerospike * as, as_error * err);
 
 /**
  * Close connections to the cluster
  */
-as_status aerospike_close(aerospike * as);
+as_status aerospike_close(aerospike * as, as_error * err);
 
 
 

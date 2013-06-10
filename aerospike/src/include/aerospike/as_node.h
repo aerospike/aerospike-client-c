@@ -22,80 +22,24 @@
 
 #pragma once 
 
+#include <netinet/in.h>
+#include <sys/socket.h>
+
+/******************************************************************************
+ * MACROS
+ *****************************************************************************/
+
+#define AS_NODE_NAME_LEN 20
+
 /******************************************************************************
  * TYPES
  *****************************************************************************/
 
 /**
- * String Equality
- */ 
-struct as_predicate_string_eq_s {
-	char * value;
+ * Represents the specific socket of a given node.
+ */
+struct as_node_s {
+	char * name[AS_NODE_NAME_LEN];
 };
 
-typedef struct as_predicate_string_eq_s as_predicate_string_eq;
-
-/**
- * Integer Equality
- */
-struct as_predicate_integer_eq {
-	int64_t value;
-};
-
-typedef struct as_predicate_integer_eq_s as_predicate_integer_eq;
-
-/**
- * Integer Range
- */
-struct as_predicate_integer_in {
-	int64_t min;
-	int64_t max;
-};
-
-typedef struct as_predicate_integer_in_s as_predicate_integer_in;
-
-/**
- * Union of supported predicates
- */
-union as_predicate_data_u {
-	as_predicate_string_eq  string_eq;
-	as_predicate_integer_eq integer_eq;
-	as_predicate_integer_in integer_in;
-};
-
-typedef union as_predicate_data_u as_predicate_data;
-
-/**
- * Predicate Identifiers
- */
-enum as_predicate_type_e {
-	AS_PREDICATE_UNDEF,
-	AS_PREDICATE_STRING_EQ,
-	AS_PREDICATE_INTEGER_EQ,
-	AS_PREDICATE_INTEGER_IN
-}
-
-typedef enum as_predicate_type_e as_predicate_type;
-
-/**
- * Predicate
- */
-struct as_predicate_s {
-
-	/**
-	 * Bin to apply the predicate to
-	 */
-	char * bin;
-
-	/**
-	 * The predicate type, dictates which value to use from the union
-	 */
-	as_predicate_type type;
-
-	/**
-	 * The data for the predicate.
-	 */
-	as_predicate_data data;
-};
-
-typedef struct as_predicate_s as_predicate;
+typedef struct as_node_s as_node;

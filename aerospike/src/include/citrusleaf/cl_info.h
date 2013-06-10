@@ -47,4 +47,4 @@ int citrusleaf_info_cluster(cl_cluster *asc, char *names, char **values, bool se
 int citrusleaf_info_cluster_all(cl_cluster *asc, char *names, char **values, bool send_asis, bool check_bounds, int timeout_ms);
 int citrusleaf_info_cluster_foreach(cl_cluster *cluster, const char *command, bool send_asis, bool check_bounds, int timeout_ms,
 									void *udata,
-									bool (*callback)(const cl_cluster_node *node, const char *command, char *values, void *udata));
+									bool (*callback)(const cl_cluster_node *node, const struct sockaddr_in * sa_in, const char *command, char *values, void *udata));

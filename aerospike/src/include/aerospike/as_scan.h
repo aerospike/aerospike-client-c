@@ -41,12 +41,12 @@ struct as_scan_s {
 	/**
 	 * The namespace to scan.
 	 */
-	const char * namespace;
+	char * namespace;
 
 	/**
 	 * The keyset to scan.
 	 */
-	const char * set;
+	char * set;
 
 	/**
 	 * Priority of scan.

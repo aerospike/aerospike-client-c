@@ -27,6 +27,8 @@
 #include <citrusleaf/cl_cluster.h>
 #include <citrusleaf/cf_log_internal.h>
 
+#include "log.h"
+
 /******************************************************************************
  * FUNCTIONS
  *****************************************************************************/
@@ -70,7 +72,8 @@ aerospike * aerospike_new(as_config * config)
  * Destroy the aerospike obect
  */
 void aerospike_destroy(aerospike * as) {
-	aerospike_close(as);
+	as_error err;
+	aerospike_close(as, &err);
 	if ( as->_free ) {
 		free(as);
 		as->_free = false;
@@ -80,44 +83,82 @@ void aerospike_destroy(aerospike * as) {
 /**
  * Connect to the cluster
  */
-as_status aerospike_connect(aerospike * as) 
+as_status aerospike_connect(aerospike * as, as_error * err) 
 {
 	extern cf_atomic32 g_initialized;
 	extern int g_init_pid;
-	if ( ! g_initialized ) {
 
+	if ( ! g_initialized ) {
+		_log_debug("connecting...");
+		
 		// remember the process id which is spawning the background threads.
 		// only this process can call a pthread_join() on the threads that it spawned.
 		g_init_pid = getpid();
 
 		// initialize the cluster
 		citrusleaf_cluster_init();
+		_log_debug("citrusleaf_cluster_init() OK");
+
+		// create the cluster object
+    	as->cluster = citrusleaf_cluster_create();
+		_log_debug("citrusleaf_cluster_create() OK");
 
 #ifdef DEBUG_HISTOGRAM  
-		if (NULL == (cf_hist = cf_histogram_create("transaction times")))
-			cf_error("couldn't create histogram for client");
+		if ( NULL == (cf_hist = cf_histogram_create("transaction times"))) {
+			cf_error("couldn't create histogram for client");	
+		}
 #endif  
 
 		g_initialized = true;
 		
-		cf_debug("aerospike_connect: as=%p as->cluster=%p",as,as->cluster);
-		as->cluster = citrusleaf_cluster_create();
-		cf_debug("aerospike_connect: as=%p as->cluster=%p",as,as->cluster);
+		if ( as->cluster == NULL ) {
+			as_error_update(err, AEROSPIKE_ERR_CLIENT, "Can't create client");
+			return err->code;
+		}
+
 		as->cluster->nbconnect = as->config.nonblocking;
+
 		uint32_t nhosts = sizeof(as->config.hosts) / sizeof(as_config_host);
+		
 		for ( int i = 0; as->config.hosts[i].addr != NULL && i < nhosts; i ++ ) {
-			citrusleaf_cluster_add_host(as->cluster, as->config.hosts[i].addr, as->config.hosts[i].port, as->config.policies.timeout);
+			_log_debug("connecting to %s:%d", as->config.hosts[i].addr, as->config.hosts[i].port);
+			int rc = citrusleaf_cluster_add_host(as->cluster, as->config.hosts[i].addr, as->config.hosts[i].port, as->config.policies.timeout);
+			if ( rc != 0 ) {
+				as_error_update(err, AEROSPIKE_ERR_CLIENT, "Can't connect to %s:%d", as->config.hosts[i].addr, as->config.hosts[i].port);
+			}
+			else {
+				_log_debug("citrusleaf_cluster_add_host() OK");
+			}
+		}
+
+		if ( err->code == AEROSPIKE_OK ) {
+			_log_debug("connected.");
 		}
 	}
 	
-	return AEROSPIKE_OK;
+	return err->code;
 }
 
 /**
  * Close connections to the cluster
  */
-as_status aerospike_close(aerospike * as) 
+as_status aerospike_close(aerospike * as, as_error * err) 
 {
-	// TODO: shutdown: cluster, batch, async, query and scan
-	return AEROSPIKE_OK;
+	as_error_reset(err);
+	
+	as_status rc = AEROSPIKE_OK;
+	
+	// extern as_status aerospike_async_destroy(aerospike * as, as_error * err);
+	// rc = rc || aerospike_async_destroy(as, err);
+
+	// extern as_status aerospike_batch_destroy(aerospike * as, as_error * err);
+	// rc = rc || aerospike_batch_destroy(as, err);
+
+	extern as_status aerospike_query_destroy(aerospike * as, as_error * err);
+	rc = rc || aerospike_query_destroy(as, err);
+
+	extern as_status aerospike_scan_destroy(aerospike * as, as_error * err);
+	rc = rc || aerospike_scan_destroy(as, err);
+
+	return rc;
 }

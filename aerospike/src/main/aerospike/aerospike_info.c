@@ -22,21 +22,65 @@
 
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_info.h>
+#include <aerospike/as_error.h>
+#include <aerospike/as_node.h>
 #include <aerospike/as_policy.h>
+#include <aerospike/as_status.h>
 
+
+#include <citrusleaf/citrusleaf.h>
 #include <citrusleaf/cl_cluster.h>
 #include <citrusleaf/cl_info.h>
+
+#include <netinet/in.h>
+#include <sys/socket.h>
+
 #include "shim.h"
+#include "log.h"
+
+/******************************************************************************
+ * TYPES
+ *****************************************************************************/
+
+struct citrusleaf_info_cluster_foreach_data_s {
+	aerospike_info_foreach_callback callback;
+	void * udata;
+};
+
+typedef struct citrusleaf_info_cluster_foreach_data_s citrusleaf_info_cluster_foreach_data;
+
+/******************************************************************************
+ * STATIC FUNCTIONS
+ *****************************************************************************/
+
+bool citrusleaf_info_cluster_foreach_callback(const cl_cluster_node * clnode, const struct sockaddr_in * sa_in, const char * req, char * res, void * udata)
+{
+	if ( ! clnode ) {
+		return FALSE;
+	}
+
+	as_error err;
+    as_error_reset(&err);
+
+    citrusleaf_info_cluster_foreach_data * data = (citrusleaf_info_cluster_foreach_data *) udata;
+
+    as_node node;
+    memcpy(node.name, clnode->name, AS_NODE_NAME_LEN);
+
+	bool result = (data->callback)(&err, &node, req, res, data->udata);
+
+	return result;
+}
 
 /******************************************************************************
  * FUNCTIONS
  *****************************************************************************/
 
 /**
- * Send an info request to a single node. The response must be freed by the caller.
+ * Send an info request to a specific host. The response must be freed by the caller.
  * 
  *      char * res = NULL;
- *      if ( aerospike_info_node(&as, &err, NULL, "node1", "info", &res) != AEROSPIKE_OK ) {
+ *      if ( aerospike_info_host(&as, &err, NULL, "127.0.0.1", 3000, "info", &res) != AEROSPIKE_OK ) {
  *          // handle error
  *      }
  *      else {
@@ -48,53 +92,28 @@
  * @param as        - the cluster to send the request to.
  * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
  * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
- * @param node      - the specific node to send the request to.
+ * @param addr      - the IP address or hostname to send the request to.
+ * @param port      - the port to send the request to.
  * @param req       - the info request to send.
  * @param res       - the response from the node. The response will be a NULL terminated string, allocated by the function, and must be freed by the caller.
  *
  * @return AEROSPIKE_OK on success. Otherwise an error.
  */
-as_status aerospike_info_node(
+as_status aerospike_info_host(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
-	const char * node, const char * req, 
+	const char * addr, uint16_t port, const char * req, 
 	char ** res) 
 {
+	// if policy is NULL, then get default policy
+	as_policy_info * p = policy ? (as_policy_info *) policy : &as->config.policies.info;
+	
 	if (! as) {
 		return AEROSPIKE_ERR;
 	}
 
-	int timeout = 0;
-
-    if (policy) {
-    	timeout = (int)policy->timeout;
-    }
-
-	int rc = citrusleaf_info_cluster(as->cluster, (char*)node, res, true, true, timeout);
+	cl_rv rc = citrusleaf_info((char *) addr, port, (char *) req, res, p->timeout);
 
 	return as_error_fromrc(err, rc);
-}
-
-
-typedef struct citrusleaf_info_cluster_foreach_data_s {
-    	aerospike_info_foreach_callback cb;
-    	void * udata;
-} citrusleaf_info_cluster_foreach_data;
-
-
-bool citrusleaf_info_cluster_foreach_cb(const cl_cluster_node *node, const char *command, char *value, void *udata)
-{
-	if (! node) {
-		return FALSE; // bool
-	}
-
-	as_error err;
-    as_error_reset(&err);
-    citrusleaf_info_cluster_foreach_data *ptr = (citrusleaf_info_cluster_foreach_data *)udata;
-	bool result = (ptr->cb)(&err, node->name, value, ptr->udata);
-
-	free(ptr);
-
-	return result;
 }
 
 /**
@@ -124,35 +143,21 @@ as_status aerospike_info_foreach(
 	const char * req, 
 	aerospike_info_foreach_callback callback, void * udata)
 {
-
-	int rc = 0;
-
-	if (! as) {
+	// if policy is NULL, then get default policy
+	as_policy_info * p = policy ? (as_policy_info *) policy : &as->config.policies.info;
+	
+	if ( !as ) {
 		return AEROSPIKE_ERR;
 	}
 
-	int timeout = 0;
-
-	if (policy) {
-		timeout = (int)policy->timeout;
-	}
-
-	citrusleaf_info_cluster_foreach_data ptr = {
-			.cb = callback,
-			.udata = udata
+	citrusleaf_info_cluster_foreach_data data = {
+		.callback = callback,
+		.udata = udata
 	};
 
-	/*typedef bool (* aerospike_info_foreach_callback)(const as_error * err, const char * node, char * res, void * udata);
-		//    bool (*callback)                        (const cl_cluster_node *node, const char *command, char *value, void *udata); *
-	 *
-	 * citrusleaf_info_cluster_foreach(cl_cluster *cluster, const char *command, bool send_asis, bool check_bounds, int timeout_ms,
-									void *udata,
-									bool (*callback)(const cl_cluster_node *node, const char *command, char *value, void *udata))
-	 */
-
-	rc = citrusleaf_info_cluster_foreach(as->cluster, req, true, false, timeout,
-									citrusleaf_info_cluster_foreach_cb,
-									(void *) &ptr);
+	cl_rv rc = citrusleaf_info_cluster_foreach(
+		as->cluster, req, p->send_as_is, p->check_bounds, p->timeout,
+		(void *) &data, citrusleaf_info_cluster_foreach_callback);
 
 	return as_error_fromrc(err, rc);
 }

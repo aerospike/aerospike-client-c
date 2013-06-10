@@ -16,7 +16,7 @@ as_status as_error_fromrc(as_error * err, cl_rv rc);
 
 void as_record_tobins(as_record * rec, cl_bin * bins, uint32_t nbins);
 
-as_record * as_record_frombins(cl_bin * bins, uint32_t nbins);
+as_record * as_record_frombins(as_record * rec, cl_bin * bins, uint32_t nbins);
 
 as_val * as_val_frombin(as_serializer * ser, cl_bin * bin);
 

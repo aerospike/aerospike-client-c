@@ -22,7 +22,7 @@
 
 #pragma once 
 
-#include <aerospike/as_predicate.h>
+#include <aerospike/as_list.h>
 #include <aerospike/as_udf.h>
 
 /******************************************************************************
@@ -33,11 +33,59 @@
 
 #define integer_eq(__val) AS_PREDICATE_INTEGER_EQ, __val
 
-#define string_eq(__min, __max) AS_PREDICATE_INTEGER_RANGE, __min, __max
+#define integer_range(__min, __max) AS_PREDICATE_INTEGER_RANGE, __min, __max
 
 /******************************************************************************
  * TYPES
  *****************************************************************************/
+
+/**
+ * Union of supported predicates
+ */
+union as_predicate_value_u {
+	char * string;
+	int64_t integer;
+	struct {
+		int64_t min;
+		int64_t max;
+	} integer_range;
+};
+
+typedef union as_predicate_value_u as_predicate_value;
+
+/**
+ * Predicate Identifiers
+ */
+enum as_predicate_type_e {
+	AS_PREDICATE_STRING_EQUAL,
+	AS_PREDICATE_INTEGER_EQUAL,
+	AS_PREDICATE_INTEGER_RANGE
+};
+
+typedef enum as_predicate_type_e as_predicate_type;
+
+/**
+ * Predicate
+ */
+struct as_predicate_s {
+
+	/**
+	 * Bin to apply the predicate to
+	 */
+	char * bin;
+
+	/**
+	 * The predicate type, dictates which value to use from the union
+	 */
+	as_predicate_type type;
+
+	/**
+	 * The value for the predicate.
+	 */
+	as_predicate_value value;
+};
+
+typedef struct as_predicate_s as_predicate;
 
 /**
  * Describes the bin to be ordered by and 
@@ -115,9 +163,10 @@ struct as_query_s {
 
 	/**
 	 * Limit the result set.
-	 * To get all results, then set to -1.
+	 * If set to UINT64_MAX (default), then the query will 
+	 * return all matching results.
 	 */
-	int32_t limit;
+	uint64_t limit;
 
 	/**
 	 * UDF to apply to results of the query
@@ -132,12 +181,31 @@ typedef struct as_query_s as_query;
  * FUNCTIONS
  *****************************************************************************/
 
+/**
+ * Initialize a stack allocated as_query.
+ *
+ * @param query 	- the query to initialize
+ * @param ns 		- the namespace to query
+ * @param set 		- the set to query
+ *
+ * @return the initialized query on success. Otherwise NULL.
+ */
 as_query * as_query_init(as_query * query, const char * ns, const char * set);
 
+/**
+ * Creates a new heap allocated as_query.
+ *
+ * @param ns 		- the namespace to query
+ * @param set 		- the set to query
+ *
+ * @return the new query on success. Otherwise NULL.
+ */
 as_query * as_query_new(const char * ns, const char * set);
 
 /**
  * Destroy the query and associated resources.
+ *
+ * @param query 	- the query to destroy
  */
 void as_query_destroy(as_query * query);
 
@@ -148,6 +216,10 @@ void as_query_destroy(as_query * query);
  *		as_query_select(&q, "bin2");
  *		as_query_select(&q, "bin3");
  *
+ * @param query 	- the query to modify
+ * @param bin 		- the name of the bin to select
+ *
+ * @return 0 on success. Otherwise an error occurred.
  */
 int as_query_select(as_query * query, const char * bin);
 
@@ -158,20 +230,50 @@ int as_query_select(as_query * query, const char * bin);
  *		as_query_where(&q, "bin1", integer_eq(123));
  *		as_query_where(&q, "bin1", integer_range(0,123));
  *
+ *
+ * @param query 	- the query to modify
+ * @param bin 		- the name of the bin to apply a predicate to
+ * @param type 		- the name of the bin to apply a predicate to
+ *
+ * @return 0 on success. Otherwise an error occurred.
  */
-int as_query_where(as_query * query, const char * bin, as_predicate_type type, ...);
+int as_query_where(as_query * query, const char * bin, as_predicate_type type, as_predicate_value value);
 
 /**
- * Add a predicate to the query.
+ * Add a bin to sort by to the query.
  *
- *		as_predicate p = { .bin = "bin1", .type = AS_PREDICATE_STRING_EQ, .data.string_eq.value = "abc" };
- *		as_query_filter(&q, &p);
+ *		as_query_orderby(&q, "bin1", true);
  *
+ * @param query 	- the query to modify
+ * @param bin 		- the name of the bin to sort by
+ * @param ascending	- if true, will sort the bin in ascending order. Otherwise, descending order it used.
+ *
+ * @param 0 on success. Otherwise an error occurred.
  */
-int as_query_filter(as_query * query, as_predicate * predicate);
-
 int as_query_orderby(as_query * query, const char * bin, bool ascending);
 
-int as_query_limit(as_query * query, int32_t limit);
+/**
+ * Limit the number of results by `limit`. If limit is UINT64_MAX, then all matching results are returned.
+ *
+ *		as_query_orderby(&q, "bin1", true);
+ *
+ * @param query 	- the query to modify
+ * @param limit 	- the number of records to limit by
+ *
+ * @param 0 on success. Otherwise an error occurred.
+ */
+int as_query_limit(as_query * query, uint64_t limit);
 
-int as_query_then(as_query * query, const char * module, const char * function const as_list * arglist);
+/**
+ * Apply a function to the results of the querty.
+ *
+ *		as_query_apply(&q, "my_module", "my_function", NULL);
+ *
+ * @param query 	- the query to apply the function to
+ * @param module 	- the module containing the function to invoke
+ * @param function 	- the function in the module to invoke
+ * @param arglist 	- the arguments to use when calling the function
+ *
+ * @param 0 on success. Otherwise an error occurred.
+ */
+int as_query_apply(as_query * query, const char * module, const char * function, const as_list * arglist);

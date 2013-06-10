@@ -114,7 +114,7 @@ int print_buffer(as_buffer * buff) {
     msgpack_sbuffer sbuf;
     msgpack_sbuffer_init(&sbuf);
 
-    sbuf.data = buff->data;
+    sbuf.data = (char *) buff->data;
     sbuf.size = buff->size;
     sbuf.alloc = buff->capacity;
 
@@ -164,7 +164,7 @@ as_val *citrusleaf_udf_bin_to_val(as_serializer *ser, cl_bin *bin) {
             as_buffer buf = {
                 .capacity = (uint32_t) bin->object.sz,
                 .size = (uint32_t) bin->object.sz,
-                .data = (char *) bin->object.u.blob
+                .data = (uint8_t *) bin->object.u.blob
             };
             // print_buffer(&buf);
             as_serializer_deserialize(ser, &buf, &val);
@@ -428,7 +428,7 @@ cl_rv citrusleaf_udf_get_with_gen(cl_cluster *asc, const char * filename, cl_udf
     return 0;
 }
 
-static bool clusterinfo_cb(const cl_cluster_node *cn, const char *command, char *value, void *udata)
+static bool clusterinfo_cb(const cl_cluster_node *cn, const struct sockaddr_in * sa_in, const char *command, char *value, void *udata)
 {
 	char** error = (char**)udata;
 	if(value != NULL){

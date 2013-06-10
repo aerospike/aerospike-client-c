@@ -59,7 +59,7 @@
 
 // 
 
-static bool g_initialized = false;
+bool g_initialized = false;
 int g_init_pid;
 extern cf_atomic32 batch_initialized;
 extern int g_clust_initialized;

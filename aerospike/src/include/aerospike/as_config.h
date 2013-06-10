@@ -50,9 +50,6 @@ typedef struct as_config_host_s as_config_host;
  */
 struct as_config_s {
 
-	// global timeout (ms). Used if policies do not specify a timeout.
-	uint32_t timeout;
-
 	// use non-blocking sockets
 	bool nonblocking;
 
@@ -69,7 +66,11 @@ struct as_config_s {
 	as_config_host hosts[16];
 
 	// lua module config
-	mod_lua_config mod_lua;
+	struct {
+		bool	cache_enabled;
+		char	system_path[256];
+		char	user_path[256];
+	} mod_lua;
 
 };
 
@@ -79,9 +80,7 @@ typedef struct as_config_s as_config;
  * FUNCTIONS
  *****************************************************************************/
 
-// as_config * as_config_new();
-
-// as_config * as_config_init(as_config * c);
+as_config * as_config_init(as_config * c);
 
 // as_config * as_config_set_timeout(as_config * c, uint32_t timeout);
 

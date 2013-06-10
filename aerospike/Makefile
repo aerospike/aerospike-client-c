@@ -70,13 +70,17 @@ CITRUSLEAF += aerospike_lset.o
 
 AEROSPIKE = 
 AEROSPIKE += aerospike.o
-AEROSPIKE += aerospike_key.o
+AEROSPIKE += aerospike_digest.o
 AEROSPIKE += aerospike_info.o
-AEROSPIKE += aerospike_udf.o
-AEROSPIKE += aerospike_sindex.o
+AEROSPIKE += aerospike_key.o
+AEROSPIKE += aerospike_query.o
 AEROSPIKE += aerospike_scan.o
+AEROSPIKE += aerospike_sindex.o
+AEROSPIKE += aerospike_udf.o
+AEROSPIKE += as_config.o
 AEROSPIKE += as_digest.o
 AEROSPIKE += as_error.o
+AEROSPIKE += as_policy.o
 AEROSPIKE += as_record.o
 AEROSPIKE += shim.o
 

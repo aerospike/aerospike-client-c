@@ -29,7 +29,7 @@
  * MACROS
  *****************************************************************************/
 
-#define AS_DIGEST_VALUE_MAX 20
+#define AS_DIGEST_VALUE_LEN 20
 
 /******************************************************************************
  * TYPES
@@ -42,7 +42,7 @@ struct as_digest_s {
 	bool            _free;
 	const char *    set;
 	const char *    key;
-	uint8_t         value[AS_DIGEST_VALUE_MAX];
+	uint8_t         value[AS_DIGEST_VALUE_LEN];
 };
 
 typedef struct as_digest_s as_digest;

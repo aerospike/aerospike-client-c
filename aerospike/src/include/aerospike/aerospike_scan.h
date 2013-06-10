@@ -25,14 +25,9 @@
 #include <aerospike/aerospike.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_policy.h>
+#include <aerospike/as_scan.h>
 #include <aerospike/as_status.h>
 #include <aerospike/as_val.h>
-
-// The current state of this file is not usable as it is missing many definitions
-// If we include both they will cause conflicts as they have the same name
-// For now we should be using all the definitions from citrusleaf/as_scan.h
-// #include <aerospike/as_scan.h>
-#include <citrusleaf/as_scan.h>
 
 /******************************************************************************
  * TYPES
@@ -49,8 +44,16 @@ typedef int (* aerospike_scan_foreach_callback)(const as_val *, void *);
 
 /**
  * Scan the records in the specified namespace and set in the cluster.
+ *
  * Scan will be run in the background by a thread on client side.
- * No callback will be called in this case
+ * No callback will be called in this case.
+ * 
+ *		as_scan scan;
+ *		as_scan_init(&scan, "test", "demo");
+ *		
+ *		if ( aerospike_scan_node_background(&as, &err, NULL, &scan) != AEROSPIKE_OK ) {
+ *          fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *		}
  * 
  * @param as        - the aerospike cluster to connect to.
  * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
@@ -60,15 +63,23 @@ typedef int (* aerospike_scan_foreach_callback)(const as_val *, void *);
  *
  * @return AEROSPIKE_OK on success. Otherwise an error occurred.
  */
-as_status aerospike_scan_all_nodes_background(
+as_status aerospike_scan_background(
 	aerospike * as, as_error * err, const as_policy_scan * policy, 
 	const as_scan * scan
 	);
 
 /**
  * Scan the records in the specified namespace and set in a specified node.
+ *
  * Scan will be run in the background by a thread on client side.
- * No callback will be called in this case
+ * No callback will be called in this case.
+ * 
+ *		as_scan scan;
+ *		as_scan_init(&scan, "test", "demo");
+ *		
+ *		if ( aerospike_scan_node_background(&as, &err, NULL, &scan) != AEROSPIKE_OK ) {
+ *          fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *		}
  * 
  * @param as        - the aerospike cluster to connect to.
  * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
@@ -86,8 +97,16 @@ as_status aerospike_scan_node_background(
 
 /**
  * Scan the records in the specified namespace and set in the cluster.
+ *
  * Call the callback function for each record scanned. When all records have 
  * been scanned, then callback will be called with a NULL value for the record.
+ *
+ *		as_scan scan;
+ *		as_scan_init(&scan, "test", "demo");
+ *		
+ *		if ( aerospike_scan_foreach(&as, &err, NULL, &scan, callback, NULL) != AEROSPIKE_OK ) {
+ *          fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *		}
  * 
  * @param as        - the aerospike cluster to connect to.
  * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
@@ -98,7 +117,7 @@ as_status aerospike_scan_node_background(
  *
  * @return AEROSPIKE_OK on success. Otherwise an error occurred.
  */
-as_status aerospike_scan_all_nodes(
+as_status aerospike_scan_foreach(
 	aerospike * as, as_error * err, const as_policy_scan * policy, 
 	const as_scan * scan, 
 	aerospike_scan_foreach_callback callback, void * udata
@@ -106,9 +125,17 @@ as_status aerospike_scan_all_nodes(
 
 /**
  * Scan the records in the specified namespace and set on a single node in the cluster.
+ *
  * Call the callback function for each record scanned. When all records have 
  * been scanned, then callback will be called with a NULL value for the record.
  * 
+ *		as_scan scan;
+ *		as_scan_init(&scan, "test", "demo");
+ *		
+ *		if ( aerospike_scan_node_foreach(&as, &err, NULL, "node1", &scan, callback, NULL) != AEROSPIKE_OK ) {
+ *          fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *		}
+ *
  * @param as        - the aerospike cluster to connect to.
  * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
  * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
@@ -119,7 +146,7 @@ as_status aerospike_scan_all_nodes(
  *
  * @return AEROSPIKE_OK on success. Otherwise an error occurred.
  */
-as_status aerospike_scan_node(
+as_status aerospike_scan_node_foreach(
 	aerospike * as, as_error * err, const as_policy_scan * policy, 
 	const char * node, const as_scan * scan, 
 	aerospike_scan_foreach_callback callback, void * udata

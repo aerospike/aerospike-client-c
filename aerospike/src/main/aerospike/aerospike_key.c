@@ -41,6 +41,7 @@
 #include <citrusleaf/cl_write.h>
 #include <citrusleaf/cf_log_internal.h>
 
+#include "log.h"
 #include "shim.h"
 #include "../internal.h"
 
@@ -84,7 +85,19 @@ as_status aerospike_key_get(
 
 	cl_rv rc = citrusleaf_get_all(as->cluster, ns, set, &okey, &values, &nvalues, timeout, &gen);
 
-	*rec = as_record_frombins(values, nvalues);
+	if ( rec != NULL ) {
+		as_record * r = *rec;
+		if ( r == NULL ) {
+			r = as_record_new(0);
+		}
+		if ( r->bins.data == NULL ) {
+			r->bins.capacity = nvalues;
+			r->bins.size = 0;
+			r->bins.data = malloc(sizeof(as_bin) * nvalues);
+		}
+		as_record_frombins(r, values, nvalues);
+		*rec = r;
+	}
 
 	return as_error_fromrc(err,rc);
 }
@@ -135,7 +148,19 @@ as_status aerospike_key_select(
 
 	cl_rv rc = citrusleaf_get(as->cluster, ns, set, &okey, values, nvalues, timeout, &gen);
 
-	*rec = as_record_frombins(values, nvalues);
+	if ( rec != NULL ) {
+		as_record * r = *rec;
+		if ( r == NULL ) {
+			r = as_record_new(0);
+		}
+		if ( r->bins.data == NULL ) {
+			r->bins.capacity = nvalues;
+			r->bins.size = 0;
+			r->bins.data = malloc(sizeof(as_bin) * nvalues);
+		}
+		as_record_frombins(r, values, nvalues);
+		*rec = r;
+	}
 
 	return as_error_fromrc(err,rc);
 }
@@ -167,7 +192,7 @@ as_status aerospike_key_exists(
 	bool * exists) 
 {
 	// if policy is NULL, then get default policy
-	as_policy_read * p = (as_policy_read *) (policy ? policy : &as->config.policies.read);
+	as_policy_read * p = policy ? (as_policy_read *) policy : &(as->config.policies.read);
 
 	uint32_t    timeout = p->timeout;
 	uint32_t    gen = 0;
@@ -181,12 +206,19 @@ as_status aerospike_key_exists(
 	
 	switch(rc) {
 		case CITRUSLEAF_OK:
-			*exists = true;
+			if ( exists ) {
+				*exists = true;
+			}
 			return as_error_reset(err);
 		case CITRUSLEAF_FAIL_NOTFOUND:
-			*exists = false;
+			if ( exists ) {
+				*exists = false;
+			}
 			return as_error_reset(err);
 		default:
+			if ( exists ) {
+				*exists = false;
+			}
 			return as_error_fromrc(err,rc);
 	}
 }
@@ -217,15 +249,15 @@ as_status aerospike_key_put(
 	as_record * rec) 
 {
 	// if policy is NULL, then get default policy
-	as_policy_write * p = (as_policy_write *) (policy ? policy : &as->config.policies.write);
+	as_policy_write * p = policy ? (as_policy_write *) policy : &(as->config.policies.write);
 
 	int         nvalues = rec->bins.size;
 	cl_bin *    values = (cl_bin *) alloca(sizeof(cl_bin) * nvalues);
-	cl_object   okey;
 
 	cl_write_parameters wp;
 	as_policy_write_towp(p, &wp);
 
+	cl_object okey;
 	citrusleaf_object_init_str(&okey, key);
 
 	as_record_tobins(rec, values, nvalues);
@@ -411,7 +443,7 @@ as_status aerospike_key_apply(
 as_status aerospike_key_operate(
 	aerospike * as, as_error * err, const as_policy_write * policy, 
 	const char * ns, const char * set, const char * key, 
-	as_binop * ops, uint32_t nops) 
+	const as_binop * ops, uint32_t nops) 
 {
 	return AEROSPIKE_OK;
 }

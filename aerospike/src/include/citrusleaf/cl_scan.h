@@ -70,8 +70,9 @@ struct cl_scan_parameters_s {
 };
 
 struct cl_node_response_s {
-    char    node_name[NODE_NAME_SIZE];
-    cl_rv   node_response;
+    char     node_name[NODE_NAME_SIZE];
+    cl_rv    node_response;
+	uint64_t job_id;
 };
 
 /******************************************************************************

@@ -242,4 +242,8 @@ void atf_assert_log(atf_test_result * result, const char * exp, const char * fil
 
 void atf_log(FILE * f, const char * level, const char * prefix, const char * file, int line, const char * fmt, ...);
 
+void atf_logv(FILE * f, const char * level, const char * prefix, const char * file, int line, const char * fmt, va_list ap);
+
+void atf_log_line(FILE * f, const char * level, const char * prefix, const char * file, int line, const char * fmt, ...);
+
 void atf_log_line(FILE * f, const char * level, const char * prefix, const char * file, int line, const char * fmt, ...);

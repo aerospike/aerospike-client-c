@@ -21,22 +21,40 @@
  *****************************************************************************/
 
 #include <aerospike/aerospike_scan.h>
+#include <citrusleaf/as_scan.h>
+#include <citrusleaf/cl_scan.h>
 #include "shim.h"
+
+/******************************************************************************
+ * TYPES
+ *****************************************************************************/
+
+typedef int (* citrusleaf_udf_scan_callback)(as_val *, void *);
 
 /******************************************************************************
  * FUNCTION DECLS
  *****************************************************************************/
 
 as_status aerospike_scan_init(aerospike * as, as_error * err);
+
 as_status aerospike_scan_destroy(aerospike * as, as_error * err);
-as_status aerospike_scan_generic(
-	aerospike * as, as_error * err, const as_policy_scan * policy,
-	const char * node, const as_scan * scan,
-	aerospike_scan_foreach_callback callback, void * udata);
 
 /******************************************************************************
- * FUNCTIONS
+ * STATIC FUNCTIONS
  *****************************************************************************/
+
+static void as_scan_toclscan(const as_scan * scan, const as_policy_scan * policy, cl_scan * clscan) 
+{
+	clscan->ns = scan->namespace;
+	clscan->setname = scan->set;
+	clscan->params.fail_on_cluster_change = policy->fail_on_cluster_change;
+	clscan->params.priority = scan->priority;
+	clscan->params.pct = scan->percent;
+	clscan->udf.type = scan->foreach.module && scan->foreach.function ? AS_SCAN_UDF_CLIENT_RECORD : AS_SCAN_UDF_NONE;
+	clscan->udf.filename = scan->foreach.module;
+	clscan->udf.function = scan->foreach.function;
+	clscan->udf.arglist = scan->foreach.arglist;
+}
 
 /**
  * This is the main driver function which can cater to different types of
@@ -54,46 +72,53 @@ as_status aerospike_scan_generic(
  *
  * @return AEROSPIKE_OK on success. Otherwise an error occurred.
  */
-as_status aerospike_scan_generic(
+static as_status aerospike_scan_generic(
 	aerospike * as, as_error * err, const as_policy_scan * policy,
 	const char * node, const as_scan * scan,
 	aerospike_scan_foreach_callback callback, void * udata)
 {
-	as_status retstat;
+	as_status rc = AEROSPIKE_OK;
 	
-	retstat = AEROSPIKE_OK;
+	as_policy_scan * p = policy ? (as_policy_scan *) policy : &as->config.policies.scan;
+
+	cl_scan clscan;
+	as_scan_toclscan(scan, p, &clscan);
 
 	// If the user want to execute only on a single node...
 	if (node) {
+		cl_rv rv = citrusleaf_udf_scan_node(as->cluster, &clscan, (char *)node, (citrusleaf_udf_scan_callback) callback, udata);
+		rc = as_error_fromrc(err, rv);
+	} 
+	else {
 
-		cl_rv rv = citrusleaf_udf_scan_node(as->cluster, (as_scan *)scan, (char *)node, callback, udata);
-		retstat = as_error_fromrc(err, rv);
-
-	} else {
-
-		cf_vector *v = citrusleaf_udf_scan_all_nodes(as->cluster, (as_scan *)scan, callback, udata);
+		cf_vector *v = citrusleaf_udf_scan_all_nodes(as->cluster, &clscan, (citrusleaf_udf_scan_callback) callback, udata);
 
 		// This returns a vector of return values, the size of which is the size of the cluster
 		int sz = cf_vector_size(v);
-		as_node_response resp;
+		cl_node_response resp;
 		for(int i=0; i <= sz; i++) {
 
 			cf_vector_get(v, i, &resp);
 			// Even if one of the node responded with an error, set the overall status as error
 			if (resp.node_response != CITRUSLEAF_OK) {
-				retstat = as_error_fromrc(err, resp.node_response);
+				rc = as_error_fromrc(err, resp.node_response);
 			}
 
 			// Set the resp back to zero
-			memset(&resp, 0, sizeof(as_node_response));
+			memset(&resp, 0, sizeof(cl_node_response));
 		}
 
 		// Free the result vector
 		cf_vector_destroy(v);
 	}
 
-	return AEROSPIKE_OK;
+	return rc;
 }
+
+
+/******************************************************************************
+ * FUNCTIONS
+ *****************************************************************************/
 
 /**
  * Scan the records in the specified namespace and set in the cluster.
@@ -108,7 +133,7 @@ as_status aerospike_scan_generic(
  *
  * @return AEROSPIKE_OK on success. Otherwise an error occurred.
  */
-as_status aerospike_scan_all_nodes_background(
+as_status aerospike_scan_background(
 	aerospike * as, as_error * err, const as_policy_scan * policy, 
 	const as_scan * scan
 	)
@@ -117,7 +142,12 @@ as_status aerospike_scan_all_nodes_background(
 		return err->code;
 	}
 
-	citrusleaf_udf_scan_background(as->cluster, (as_scan *)scan);
+	as_policy_scan * p = policy ? (as_policy_scan *) policy : &as->config.policies.scan;
+
+	cl_scan clscan;
+	as_scan_toclscan(scan, p, &clscan);
+
+	citrusleaf_udf_scan_background(as->cluster, &clscan);
 
 	return AEROSPIKE_OK;
 
@@ -144,7 +174,12 @@ as_status aerospike_scan_node_background(
 		return err->code;
 	}
 
-	citrusleaf_udf_scan_node_background(as->cluster, (as_scan *)scan, (char *)node);
+	as_policy_scan * p = policy ? (as_policy_scan *) policy : &as->config.policies.scan;
+
+	cl_scan clscan;
+	as_scan_toclscan(scan, p, &clscan);
+
+	citrusleaf_udf_scan_node_background(as->cluster, &clscan, (char *) node);
 
 	return AEROSPIKE_OK;
 }
@@ -163,7 +198,7 @@ as_status aerospike_scan_node_background(
  *
  * @return AEROSPIKE_OK on success. Otherwise an error occurred.
  */
-as_status aerospike_scan_all_nodes(
+as_status aerospike_scan_foreach(
 	aerospike * as, as_error * err, const as_policy_scan * policy, 
 	const as_scan * scan, 
 	aerospike_scan_foreach_callback callback, void * udata) 
@@ -190,7 +225,7 @@ as_status aerospike_scan_all_nodes(
  *
  * @return AEROSPIKE_OK on success. Otherwise an error occurred.
  */
-as_status aerospike_scan_node(
+as_status aerospike_scan_node_foreach(
 	aerospike * as, as_error * err, const as_policy_scan * policy, 
 	const char * node, const as_scan * scan, 
 	aerospike_scan_foreach_callback callback, void * udata) 

@@ -87,6 +87,7 @@ TARGET_LIB 	= $(TARGET_BASE)/lib
 TARGET_OBJ 	= $(TARGET_BASE)/obj
 TARGET_SRC 	= $(TARGET_BASE)/src
 TARGET_INCL = $(TARGET_BASE)/include
+TARGET_TEST = $(TARGET_BASE)/test
 
 ###############################################################################
 ##  FUNCTIONS                                                                ##

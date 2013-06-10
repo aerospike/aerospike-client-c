@@ -206,9 +206,9 @@ as_status aerospike_digest_apply(
  *
  * @return AEROSPIKE_OK if successful. Otherwise an error.
  */
-as_digest aerospike_digest_operate(
+as_status aerospike_digest_operate(
 	aerospike * as, as_error * err, const as_policy_write * policy, 
 	const char * ns, const as_digest * digest, 
-	const as_bin_op * ops, uint32_t nops
+	const as_binop * ops, uint32_t nops
 	);
 

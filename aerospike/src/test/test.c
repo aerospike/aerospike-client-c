@@ -377,6 +377,12 @@ void atf_log(FILE * f, const char * level, const char * prefix, const char * fil
     fprintf(f, "%s%s\n", prefix, msg);
 }
 
+void atf_logv(FILE * f, const char * level, const char * prefix, const char * file, int line, const char * fmt, va_list ap) {
+	char msg[LOG_MESSAGE_MAX] = {0};
+    vsnprintf(msg, LOG_MESSAGE_MAX, fmt, ap);
+    fprintf(f, "%s[%s] %s\n", prefix, level, msg);
+}
+
 void atf_log_line(FILE * f, const char * level, const char * prefix, const char * file, int line, const char * fmt, ...) {
     char msg[LOG_MESSAGE_MAX] = {0};
     va_list ap;

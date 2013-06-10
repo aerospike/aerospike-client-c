@@ -21,6 +21,17 @@
  *****************************************************************************/
 
 #include <aerospike/aerospike_query.h>
+#include <aerospike/as_error.h>
+#include <aerospike/as_policy.h>
+#include <aerospike/as_query.h>
+#include <aerospike/as_status.h>
+#include <aerospike/as_stream.h>
+
+#include <citrusleaf/citrusleaf.h>
+#include <citrusleaf/cl_cluster.h>
+#include <citrusleaf/cl_query.h>
+
+#include <stdint.h>
 
 /******************************************************************************
  * FUNCTION DECLS
@@ -28,6 +39,51 @@
 
 as_status aerospike_query_init(aerospike * as, as_error * err);
 as_status aerospike_query_destroy(aerospike * as, as_error * err);
+
+/******************************************************************************
+ * STATIC FUNCTIONS
+ *****************************************************************************/
+
+static void as_query_toclquery(as_query * query, cl_query * clquery)
+{
+	cl_query_init(clquery, query->namespace, query->set);
+
+	if ( query->limit != UINT64_MAX ) {
+		cl_query_limit(clquery, query->limit);
+	}
+
+	char ** s = query->select; 
+	while( *s != NULL ) {
+		cl_query_select(clquery, *s);
+		s++;
+	}
+
+	as_predicate * p = query->predicates;
+	while( p->bin ) {
+		switch(p->type) {
+			case AS_PREDICATE_STRING_EQUAL:
+				cl_query_where(clquery, p->bin, CL_EQ, CL_STR, p->value.string);
+				break;
+			case AS_PREDICATE_INTEGER_EQUAL:
+				cl_query_where(clquery, p->bin, CL_EQ, CL_INT, p->value.integer);
+				break;
+			case AS_PREDICATE_INTEGER_RANGE:
+				cl_query_where(clquery, p->bin, CL_RANGE, CL_INT, p->value.integer_range.min, p->value.integer_range.max);
+				break;
+		}
+		p++;
+	}
+
+	as_orderby * o = query->orderby;
+	while( o->bin ) {
+		cl_query_orderby(clquery, o->bin, o->ascending ? CL_ORDERBY_ASC : CL_ORDERBY_DESC);
+		o++;
+	}
+
+	if ( query->apply.module && query->apply.function ) {
+		cl_query_aggregate(clquery, query->apply.module, query->apply.function, query->apply.arglist);
+	}
+}
 
 /******************************************************************************
  * FUNCTIONS
@@ -53,6 +109,12 @@ as_status aerospike_query_foreach(
 	if ( aerospike_query_init(as, err) != AEROSPIKE_OK ) {
 		return err->code;
 	}
+
+	cl_query clquery;
+	as_query_toclquery(query, &clquery);
+
+	cl_rv rc = citrusleaf_query_foreach(as->cluster, &clquery, udata, callback);
+
 	return AEROSPIKE_OK;
 }
 
@@ -75,6 +137,12 @@ as_status aerospike_query_stream(
 	if ( aerospike_query_init(as, err) != AEROSPIKE_OK ) {
 		return err->code;
 	}
+
+	cl_query clquery;
+	as_query_toclquery(query, &clquery);
+
+	cl_rv rc = citrusleaf_query_stream(as->cluster, &clquery, stream);
+
 	return AEROSPIKE_OK;
 }
 

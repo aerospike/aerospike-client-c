@@ -32,6 +32,19 @@
 #include <aerospike/as_record.h>
 #include <aerospike/as_status.h>
 
+#include <aerospike/as_msgpack.h>
+#include <aerospike/as_serializer.h>
+
+#include <citrusleaf/citrusleaf.h>
+#include <citrusleaf/cl_object.h>
+#include <citrusleaf/cl_write.h>
+#include <citrusleaf/cf_log_internal.h>
+#include <citrusleaf/cf_digest.h>
+
+#include "shim.h"
+#include "../internal.h"
+
+
 /******************************************************************************
  * FUNCTIONS
  *****************************************************************************/
@@ -67,9 +80,15 @@ as_status aerospike_digest_get(
 	cl_bin *    values = NULL;
 	char *      set = NULL;
 
-	cl_rc rc = citrusleaf_get_all_digest_getsetname(as->cluster, ns, (cf_digest *) digest->value, &values, &nvalues, timeout, &gen, &set)
-
-	*rec = as_record_frombins(values, nvalues);
+	cl_rv rc = citrusleaf_get_all_digest_getsetname(as->cluster, ns, (cf_digest *) digest->value, &values, &nvalues, timeout, &gen, &set);
+	
+	as_record * r = *rec;
+	if ( r->bins.data == NULL ) {
+		r->bins.capacity = nvalues;
+		r->bins.size = 0;
+		r->bins.data = malloc(sizeof(as_bin) * nvalues);
+	}
+	as_record_frombins(r, values, nvalues);
 
 	return as_error_fromrc(err,rc);   
 }
@@ -117,7 +136,13 @@ as_status aerospike_digest_select(
 
 	cl_rv rc = citrusleaf_get_digest(as->cluster, ns, (cf_digest *) digest->value, values, nvalues, timeout, &gen);
 
-	*rec = as_record_frombins(values, nvalues);
+	as_record * r = *rec;
+	if ( r->bins.data == NULL ) {
+		r->bins.capacity = nvalues;
+		r->bins.size = 0;
+		r->bins.data = malloc(sizeof(as_bin) * nvalues);
+	}
+	as_record_frombins(r, values, nvalues);
 
 	return as_error_fromrc(err,rc);
 }
@@ -279,9 +304,6 @@ as_status aerospike_digest_apply(
 
 	cl_rv rv = CITRUSLEAF_OK;
 
-	cl_object okey;
-	citrusleaf_object_init_str(&okey, key);
-
 	as_serializer ser;
 	as_msgpack_init(&ser);
 
@@ -313,7 +335,7 @@ as_status aerospike_digest_apply(
 
 	rv = do_the_full_monte( 
 		as->cluster, 0, CL_MSG_INFO2_WRITE, 0, 
-		ns, set, 0, (cf_digest *) digest->value, &bins, CL_OP_WRITE, 0, &n_bins, 
+		ns, digest->set, 0, (cf_digest *) digest->value, &bins, CL_OP_WRITE, 0, &n_bins, 
 		NULL, &wp, &trid, NULL, &call
 	);
 
@@ -378,10 +400,10 @@ as_status aerospike_digest_apply(
  *
  * @return AEROSPIKE_OK if successful. Otherwise an error.
  */
-as_digest aerospike_digest_operate(
+as_status aerospike_digest_operate(
 	aerospike * as, as_error * err, const as_policy_write * policy, 
 	const char * ns, const as_digest * digest, 
-	const as_bin_op * ops, uint32_t nops) 
+	const as_binop * ops, uint32_t nops) 
 {
 	return AEROSPIKE_OK;
 }

@@ -25,6 +25,7 @@
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_scan.h>
 #include <aerospike/as_error.h>
+#include <aerospike/as_node.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_status.h>
 
@@ -42,17 +43,17 @@
  *
  * @return TRUE to continue to the next info response. FALSE to stop processing.
  */
-typedef bool (* aerospike_info_foreach_callback)(const as_error * err, const char * node, const char * res, void * udata);
+typedef bool (* aerospike_info_foreach_callback)(const as_error * err, const as_node * node, const char * req, const char * res, void * udata);
 
 /******************************************************************************
  * FUNCTIONS
  *****************************************************************************/
 
 /**
- * Send an info request to a single node. The response must be freed by the caller.
+ * Send an info request to a specific host. The response must be freed by the caller.
  * 
  *      char * res = NULL;
- *      if ( aerospike_info_node(&as, &err, NULL, "node1", "info", &res) != AEROSPIKE_OK ) {
+ *      if ( aerospike_info_host(&as, &err, NULL, "127.0.0.1", 3000, "info", &res) != AEROSPIKE_OK ) {
  *          // handle error
  *      }
  *      else {
@@ -64,15 +65,44 @@ typedef bool (* aerospike_info_foreach_callback)(const as_error * err, const cha
  * @param as        - the cluster to send the request to.
  * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
  * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
- * @param node      - the specific node to send the request to.
+ * @param addr      - the IP address or hostname to send the request to.
+ * @param port      - the port to send the request to.
  * @param req       - the info request to send.
  * @param res       - the response from the node. The response will be a NULL terminated string, allocated by the function, and must be freed by the caller.
  *
  * @return AEROSPIKE_OK on success. Otherwise an error.
  */
-as_status aerospike_info_node(
+as_status aerospike_info_host(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
-	const char * node, const char * req, 
+	const char * addr, uint16_t port, const char * req, 
+	char ** res
+	);
+
+/**
+ * Send an info request to a specific address. The response must be freed by the caller.
+ * 
+ *      char * res = NULL;
+ *      if ( aerospike_info_node(&as, &err, NULL, &addr, "info", &res) != AEROSPIKE_OK ) {
+ *          // handle error
+ *      }
+ *      else {
+ *          // handle response
+ *          free(res);
+ *          res = NULL;
+ *      }
+ *
+ * @param as        - the cluster to send the request to.
+ * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
+ * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
+ * @param socket    - the socket address of the host.
+ * @param req       - the info request to send.
+ * @param res       - the response from the node. The response will be a NULL terminated string, allocated by the function, and must be freed by the caller.
+ *
+ * @return AEROSPIKE_OK on success. Otherwise an error.
+ */
+as_status aerospike_info_addr(
+	aerospike * as, as_error * err, const as_policy_info * policy, 
+	const struct sockaddr_in * addr, const char * req, 
 	char ** res
 	);
 

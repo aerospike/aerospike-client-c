@@ -386,7 +386,7 @@ citrusleaf_info_cluster_all(cl_cluster *asc, char *names, char **values_r, bool 
 
 int citrusleaf_info_cluster_foreach(cl_cluster *cluster, const char *command, bool send_asis, bool check_bounds, int timeout_ms,
 									void *udata,
-									bool (*callback)(const cl_cluster_node *node, const char *command, char *value, void *udata))
+									bool (*callback)(const cl_cluster_node * node, const struct sockaddr_in * sa_in, const char *command, char *value, void *udata))
 {
 	//Author: Piyush Gupta 5/7/13
 	//Usage Notes:
@@ -415,7 +415,7 @@ int citrusleaf_info_cluster_foreach(cl_cluster *cluster, const char *command, bo
 
 		if (node == 0) continue;
 
-		for (uint j=0;j<cf_vector_size(&node->sockaddr_in_v);j++) {
+		for (uint j=0; j < cf_vector_size(&node->sockaddr_in_v); j++) {
 
 			struct sockaddr_in *sa_in = cf_vector_getp(&node->sockaddr_in_v, j);
 			if (sa_in == 0) continue;
@@ -425,7 +425,7 @@ int citrusleaf_info_cluster_foreach(cl_cluster *cluster, const char *command, bo
 			value = 0;
 
 			if (0 == citrusleaf_info_host(sa_in, (char *)command, &value, end - cf_getms(), send_asis, check_bounds)) {
-				bSuccess = callback(node, command, value, udata);
+				bSuccess = callback(node, sa_in, command, value, udata);
 				if(!bSuccess){
 							if(value){free(value);}
 							return (-1);

@@ -82,22 +82,21 @@ void as_record_tobins(as_record * rec, cl_bin * bins, uint32_t nbins)
 }
 
 
-as_record * as_record_frombins(cl_bin * bins, uint32_t nbins) 
+as_record * as_record_frombins(as_record * r, cl_bin * bins, uint32_t nbins) 
 {
-	as_record * r = as_record_new(nbins);
-	
-	for ( int i = 0; i < nbins; i++ ) {
+	uint32_t n = nbins < r->bins.capacity ? nbins : r->bins.capacity;
+	for ( int i = 0; i < n; i++ ) {
 		switch(bins[i].object.type) {
 			case CL_NULL: {
 				as_record_set_nil(r, bins[i].bin_name);
 				break;
 			}
 			case CL_INT: {
-				as_record_set_integer(r, bins[i].bin_name, bins[i].object.u.i64);
+				as_record_set_int64(r, bins[i].bin_name, bins[i].object.u.i64);
 				break;
 			}
 			case CL_STR: {
-				as_record_set_string(r, bins[i].bin_name, bins[i].object.u.str);
+				as_record_set_str(r, bins[i].bin_name, bins[i].object.u.str);
 				break;
 			}
 			case CL_LIST:
@@ -154,7 +153,7 @@ as_val * as_val_frombin(as_serializer * ser, cl_bin * bin)
 			as_buffer buf = {
 				.capacity = (uint32_t) bin->object.sz,
 				.size = (uint32_t) bin->object.sz,
-				.data = (char *) bin->object.u.blob
+				.data = (uint8_t *) bin->object.u.blob
 			};
 			// print_buffer(&buf);
 			as_serializer_deserialize(ser, &buf, &val);
@@ -182,6 +181,9 @@ as_val * as_val_frombin(as_serializer * ser, cl_bin * bin)
 
 void as_policy_write_towp(as_policy_write * policy, cl_write_parameters * wp) 
 {
+	if ( !policy || !wp ) {
+		return;
+	}
 
 	wp->unique = policy->unique;
 	wp->unique_bin = false;
@@ -225,6 +227,10 @@ void as_policy_write_towp(as_policy_write * policy, cl_write_parameters * wp)
 
 void as_policy_remove_towp(as_policy_remove * policy, cl_write_parameters * wp) 
 {
+	if ( !policy || !wp ) {
+		return;
+	}
+	
 	wp->unique = false;
 	wp->unique_bin = false;
 

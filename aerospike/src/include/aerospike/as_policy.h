@@ -23,6 +23,7 @@
 #pragma once 
 
 #include <stdbool.h>
+#include <stdint.h>
 
 /******************************************************************************
  * TYPES
@@ -110,10 +111,6 @@ typedef struct as_policy_query_s as_policy_query;
 /**
  * Priority levels for a scan operation.
  */
-
-/*
- * For now, we are using the definitions from citrusleaf/as_scan.h
- * If we uncomment this, this will cause definition conflicts as the name is the same.
 enum as_scan_priority_e { 
 	AS_SCAN_PRIORITY_AUTO, 
 	AS_SCAN_PRIORITY_LOW, 
@@ -122,7 +119,6 @@ enum as_scan_priority_e {
 };
 
 typedef enum as_scan_priority_e as_scan_priority;
-*/
 
 /**
  * Scan Policy
@@ -146,15 +142,6 @@ struct as_policy_info_s {
 typedef struct as_policy_info_s as_policy_info;
 
 /**
- * LDT Policy
- */
-struct as_policy_ldt_s {
-	uint32_t timeout;       // timeout(ms)
-};
-
-typedef struct as_policy_ldt_s as_policy_ldt;
-
-/**
  * struct of all the policies.
  * This is utilizes for defining defaults within an aerospike 
  * client or configuration.
@@ -167,7 +154,47 @@ struct as_policies_s {
 	as_policy_query     query;
 	as_policy_scan      scan;
 	as_policy_info      info;
-	as_policy_ldt       ldt;
 };
 
 typedef struct as_policies_s as_policies;
+
+
+/******************************************************************************
+ * FUNCTIONS
+ *****************************************************************************/
+
+/**
+ * Initialize as_policy_write to default values.
+ */
+as_policy_write * as_policy_write_init(as_policy_write * p) ;
+
+/**
+ * Initialize as_policy_read to default values.
+ */
+as_policy_read * as_policy_read_init(as_policy_read * p);
+
+/**
+ * Initialize as_policy_remote to default values.
+ */
+as_policy_remove * as_policy_remove_init(as_policy_remove * p);
+
+/**
+ * Initialize as_policy_scan to default values.
+ */
+as_policy_scan * as_policy_scan_init(as_policy_scan * p);
+
+/**
+ * Initialize as_policy_query to default values.
+ */
+as_policy_query * as_policy_query_init(as_policy_query * p);
+
+/**
+ * Initialize as_policy_info to default values.
+ */
+as_policy_info * as_policy_info_init(as_policy_info * p);
+
+/**
+ * Initialize as_policies to default values.
+ */
+as_policies * as_policies_init(as_policies * p);
+

@@ -26,6 +26,9 @@ $(TARGET_SRC): | $(TARGET_BASE)
 $(TARGET_INCL): | $(TARGET_BASE)
 	mkdir $@
 
+$(TARGET_TEST): | $(TARGET_BASE)
+	mkdir $@
+
 .PHONY: info
 info:
 	@echo

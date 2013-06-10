@@ -36,7 +36,7 @@ extern aerospike * as;
  * TEST CASES
  *****************************************************************************/
 
-TEST( key_apply_1 , "apply 1" ) {
+TEST( key_operate_1 , "apply 1" ) {
 	assert_not_null(NULL);
 }
 
@@ -44,6 +44,6 @@ TEST( key_apply_1 , "apply 1" ) {
  * TEST SUITE
  *****************************************************************************/
 
-SUITE( key_apply, "aerospike_key_apply tests" ) {
-	suite_add( key_apply_1 );
+SUITE( key_operate, "aerospike_key_operate tests" ) {
+	suite_add( key_operate_1 );
 }

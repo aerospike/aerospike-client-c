@@ -117,6 +117,41 @@ as_status aerospike_info_host(
 }
 
 /**
+ * Send an info request to a specific node. The response must be freed by the caller.
+ * 
+ *      char * res = NULL;
+ *      if ( aerospike_info_host(&as, &err, NULL, "127.0.0.1", 3000, "info", &res) != AEROSPIKE_OK ) {
+ *          // handle error
+ *      }
+ *      else {
+ *          // handle response
+ *          free(res);
+ *          res = NULL;
+ *      }
+ *
+ * @param as        - the cluster to send the request to.
+ * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
+ * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
+ * @param node      - the name of the node to send the request to.
+ * @param req       - the info request to send.
+ * @param res       - the response from the node. The response will be a NULL terminated string, allocated by the function, and must be freed by the caller.
+ *
+ * @return AEROSPIKE_OK on success. Otherwise an error.
+ */
+as_status aerospike_info_node(
+	aerospike * as, as_error * err, const as_policy_info * policy, 
+	const char * node, const char * req, 
+	char ** res
+	)
+{
+	/**
+	 * NOTE: We do not have the equivalent in the OLD API. 
+	 * TODO: Evaluate whether we need this.
+	 */
+	return AEROSPIKE_ERR;
+}
+
+/**
  * Send an info request to the entire cluster.
  *
  *      bool callback(const as_error * err, const char * node, char * res, void * udata) {

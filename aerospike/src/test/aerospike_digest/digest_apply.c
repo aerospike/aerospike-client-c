@@ -1,6 +1,6 @@
 
 #include <aerospike/aerospike.h>
-#include <aerospike/aerospike_scan.h>
+#include <aerospike/aerospike_digest.h>
 
 #include <aerospike/as_error.h>
 #include <aerospike/as_status.h>
@@ -44,6 +44,6 @@ TEST( digest_apply_1 , "apply 1" ) {
  * TEST SUITE
  *****************************************************************************/
 
-SUITE( digest_apply, "aerospike_digest apply tests" ) {
+SUITE( digest_apply, "aerospike_digest_apply tests" ) {
   suite_add( digest_apply_1 );
 }

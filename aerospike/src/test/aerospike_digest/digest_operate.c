@@ -1,6 +1,6 @@
 
 #include <aerospike/aerospike.h>
-#include <aerospike/aerospike_key.h>
+#include <aerospike/aerospike_digest.h>
 
 #include <aerospike/as_error.h>
 #include <aerospike/as_status.h>
@@ -36,7 +36,7 @@ extern aerospike * as;
  * TEST CASES
  *****************************************************************************/
 
-TEST( key_apply_1 , "apply 1" ) {
+TEST( digest_operate_1 , "apply 1" ) {
 	assert_not_null(NULL);
 }
 
@@ -44,6 +44,6 @@ TEST( key_apply_1 , "apply 1" ) {
  * TEST SUITE
  *****************************************************************************/
 
-SUITE( key_apply, "aerospike_key_apply tests" ) {
-	suite_add( key_apply_1 );
+SUITE( digest_operate, "aerospike_digest_operate tests" ) {
+	suite_add( digest_operate_1 );
 }

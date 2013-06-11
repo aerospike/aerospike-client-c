@@ -73,6 +73,9 @@ enum as_udf_type_e {
 
 typedef enum as_udf_type_e as_udf_type;
 
+/**
+ * UDF File
+ */
 struct as_udf_file_s {
 	bool			_free;
 	char 			name[AS_UDF_FILE_NAME_LEN];

@@ -130,6 +130,9 @@ PLAN( aerospike_test ) {
     // aerospike_info module
     plan_add( info_basics );
 
+    // aerospike_info module
+    plan_add( udf_basics );
+
     // aerospike_query module
     // plan_add( query_basics );
     // plan_add( query_apply );

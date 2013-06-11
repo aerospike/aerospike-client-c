@@ -134,8 +134,8 @@ PLAN( aerospike_test ) {
     plan_add( udf_basics );
 
     // aerospike_query module
-    // plan_add( query_basics );
-    // plan_add( query_apply );
+    plan_add( query_stream );
+    // plan_add( query_foreach );
 
 }
 

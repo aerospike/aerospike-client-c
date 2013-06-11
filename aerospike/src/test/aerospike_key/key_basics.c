@@ -12,6 +12,7 @@
 #include <aerospike/as_arraylist.h>
 #include <aerospike/as_map.h>
 #include <aerospike/as_hashmap.h>
+#include <aerospike/as_stringmap.h>
 #include <aerospike/as_val.h>
 
 #include "../test.h"
@@ -33,15 +34,15 @@ TEST( key_basics_put , "put: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 'de
 	
 	as_list list;
 	as_arraylist_init(&list, 3, 0);
-	as_list_add_integer(&list, 1);
-	as_list_add_integer(&list, 2);
-	as_list_add_integer(&list, 3);
-
+	as_list_append_int64(&list, 1);
+	as_list_append_int64(&list, 2);
+	as_list_append_int64(&list, 3);
+	
 	as_map map;
 	as_hashmap_init(&map, 32);
-	as_map_set(&map, (as_val *) as_string_new("x",true), (as_val *) as_integer_new(7));
-	as_map_set(&map, (as_val *) as_string_new("y",true), (as_val *) as_integer_new(8));
-	as_map_set(&map, (as_val *) as_string_new("z",true), (as_val *) as_integer_new(9));
+	as_stringmap_set_int64(&map, "x", 7);
+	as_stringmap_set_int64(&map, "y", 8);
+	as_stringmap_set_int64(&map, "z", 9);
 
 	as_record r;
 	as_record_init(&r, 10);

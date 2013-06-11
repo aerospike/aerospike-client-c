@@ -182,6 +182,7 @@ cl_rv citrusleaf_udf_record_apply(cl_cluster * cl, const char * ns, const char *
     const char * filename, const char * function, as_list * arglist, int timeout_ms, as_result * res) {
 
     cl_rv rv = CITRUSLEAF_OK;
+    char err_str[256];
 
     as_serializer ser;
     as_msgpack_init(&ser);
@@ -223,7 +224,10 @@ cl_rv citrusleaf_udf_record_apply(cl_cluster * cl, const char * ns, const char *
     as_buffer_destroy(&args);
 
 	if (! (rv == CITRUSLEAF_OK || rv == CITRUSLEAF_FAIL_UDF_BAD_RESPONSE)) {
-    	as_result_setfailure(res, (as_val *) as_string_new("None UDF failure",false));
+		// Add the exact error-code to return value
+		//snprintf(err_str, 256, "None UDF failure Error-code: %d", rv);
+		snprintf(err_str, 256, "Error in parsing udf params Error-code: %d", rv);
+    	as_result_setfailure(res, (as_val *) as_string_new(err_str,false));
     } else if ( n_bins == 1  ) {
 
         cl_bin *bin = &bins[0];
@@ -232,22 +236,30 @@ cl_rv citrusleaf_udf_record_apply(cl_cluster * cl, const char * ns, const char *
 
         if ( val ) {
             if ( strcmp(bin->bin_name,"FAILURE") == 0 ) {
-                as_result_setfailure(res, val);
+        		snprintf(err_str, 256, "Failure in converting udf-bin to value for type :%d", val->type);
+        		as_result_setfailure(res, (as_val *) as_string_new(err_str,false));
+            //	as_result_setfailure(res, val);
             }
             else if ( strcmp(bin->bin_name,"SUCCESS") == 0 ) {
                 as_result_setsuccess(res, val);
             }
             else {
-                as_result_setfailure(res, (as_val *) as_string_new("Invalid response. (1)",false/*ismalloc*/));
+            	snprintf(err_str, 256, "Invalid response in converting udf-bin to value for type :%d", val->type);
+            	as_result_setfailure(res, (as_val *) as_string_new(err_str,false));
+                //as_result_setfailure(res, (as_val *) as_string_new("Invalid response. (1)",false/*ismalloc*/));
             }
         }
         else {
-            as_result_setfailure(res, (as_val *) as_string_new("Invalid response. (2)",false/*ismalloc*/));
+        	snprintf(err_str, 256, "Null value returned in converting udf-bin to value for type :%d", val->type);
+        	as_result_setfailure(res, (as_val *) as_string_new(err_str,false));
+           // as_result_setfailure(res, (as_val *) as_string_new("Invalid response. (2)",false/*ismalloc*/));
         }
 
     }
     else {
-        as_result_setfailure(res, (as_val *) as_string_new("Invalid response. (3)",false/*ismalloc*/));
+    	snprintf(err_str, 256, " Generic parser error for udf-apply, Error-code: %d", rv);
+        as_result_setfailure(res, (as_val *) as_string_new(err_str,false));
+       // as_result_setfailure(res, (as_val *) as_string_new("Invalid response. (3)",false/*ismalloc*/));
     }
 
     if (bins) {

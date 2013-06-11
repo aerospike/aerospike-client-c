@@ -1322,7 +1322,7 @@ do_the_full_monte(cl_cluster *asc, int info1, int info2, int info3, const char *
     uint        progress_timeout_ms;
 	uint64_t deadline_ms;
 	cl_cluster_node *node = 0;
-
+	
 	int fd = -1;
 
 //	if( *values ){

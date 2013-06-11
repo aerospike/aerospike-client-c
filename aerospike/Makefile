@@ -82,6 +82,7 @@ AEROSPIKE += as_digest.o
 AEROSPIKE += as_error.o
 AEROSPIKE += as_policy.o
 AEROSPIKE += as_record.o
+AEROSPIKE += as_udf.o
 AEROSPIKE += shim.o
 
 OBJECTS :=

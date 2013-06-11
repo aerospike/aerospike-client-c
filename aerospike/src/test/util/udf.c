@@ -1,21 +1,26 @@
+// #include <citrusleaf/citrusleaf.h>
+// #include <citrusleaf/cl_udf.h>
+
+#include <aerospike/aerospike.h>
+#include <aerospike/aerospike_udf.h>
+#include <aerospike/as_error.h>
+#include <aerospike/as_status.h>
+#include <aerospike/as_udf.h>
+
+#include <stdlib.h>
+#include <stdbool.h>
+#include <errno.h>
 
 #include "udf.h"
 #include "../test.h"
-#include <citrusleaf/citrusleaf.h>
-#include <citrusleaf/cl_udf.h>
-#include <aerospike/as_types.h>
-#include <aerospike/as_udf.h>
-#include <stdlib.h>
-#include <errno.h>
 
 
 #define SCRIPT_LEN_MAX 1048576
 
+extern aerospike * as;
 
-int udf_put(const char * filename) {
+bool udf_put(const char * filename) {
     
-    extern cl_cluster * cluster;
-
     FILE * file = fopen(filename,"r"); 
 
     if ( !file ) { 
@@ -23,7 +28,7 @@ int udf_put(const char * filename) {
         return -1; 
     } 
 
-    byte * content = malloc(SCRIPT_LEN_MAX); 
+    uint8_t * content = (uint8_t *) malloc(SCRIPT_LEN_MAX); 
     if ( content == NULL ) { 
         error("malloc failed"); 
         return -1;
@@ -31,7 +36,7 @@ int udf_put(const char * filename) {
 
     int size = 0; 
 
-    byte * buff = content; 
+    uint8_t * buff = content; 
     int read = fread(buff, 1, 512, file); 
     while ( read ) { 
         size += read; 
@@ -39,104 +44,53 @@ int udf_put(const char * filename) {
         read = fread(buff, 1, 512, file); 
     }                        
     fclose(file); 
+
     as_bytes udf_content;
-    as_bytes_init(&udf_content, content, size, true /*ismalloc*/);
+    as_bytes_init(&udf_content, content, size, true);
 
-    char * err = NULL;
+	as_error err;
+	as_error_reset(&err);
 
-    int rc = citrusleaf_udf_put(cluster, basename(filename), &udf_content, AS_UDF_LUA, &err); 
+    char * base = basename(filename);
 
-    if ( rc != 0 && err ) {
-        error("error caused by citrusleaf_udf_put(): %s", err);
-        free(err);
+    if ( aerospike_udf_put(as, &err, NULL, base, AS_UDF_TYPE_LUA, &udf_content) != AEROSPIKE_OK ) {
+        error("error caused by aerospike_udf_put(): (%d) %s @ %s[%s:%d]", err.code, err.message, err.func, err.file, err.line);
     }
 
     as_val_destroy(&udf_content);
 
-    return rc;
+    return err.code == AEROSPIKE_OK;
 }
 
-int udf_remove(const char * filename) {
+bool udf_remove(const char * filename) {
     
-    extern cl_cluster * cluster;
+	as_error err;
+	as_error_reset(&err);
 
-    char * err = NULL;
+    char * base = basename(filename);
 
-    int rc = citrusleaf_udf_remove(cluster, basename(filename), &err); 
-
-    if ( rc != 0 && err ) {
-        error("error caused by citrusleaf_udf_remove(): %s", err);
-        free(err);
+    if ( aerospike_udf_remove(as, &err, NULL, base) != AEROSPIKE_OK ) {
+        error("error caused by aerospike_udf_remove(): (%d) %s @ %s[%s:%d]", err.code, err.message, err.func, err.file, err.line);
     }
 
-    return rc;
+    return err.code == AEROSPIKE_OK;
 }
 
-int udf_exists(const char * filename) {
+bool udf_exists(const char * filename) {
     
-    extern cl_cluster * cluster;
+	as_error err;
+	as_error_reset(&err);
 
-    char * err = NULL;
     as_udf_file file;
-    memset(&file,0,sizeof(as_udf_file));
+    as_udf_file_init(&file);
 
-    int rc = citrusleaf_udf_get(cluster, basename(filename), &file, 0, &err);
+    char * base = basename(filename);
 
-    if ( rc != 0 ) {
-        if ( err ) {
-            error("error caused by citrusleaf_udf_get(): (%d) %s", rc, err);
-            free(err);
-        }
-        else {
-            error("error caused by citrusleaf_udf_get(): %d", rc);
-        }
+    if ( aerospike_udf_get(as, &err, NULL, base, AS_UDF_TYPE_LUA, &file) != AEROSPIKE_OK ) {
+        error("error caused by aerospike_udf_get(%s): (%d) %s @ %s[%s:%d]", err.code, err.message, err.func, err.file, err.line);
     }
 
-    as_val_destroy(&file.content);
+    as_udf_file_destroy(&file);
 
-    return rc;
-}
-
-int udf_apply_record(const char * ns, const char * set, const char * key, const char * file, const char * func, as_list * arglist, as_result * result) {
-
-    extern cl_cluster * cluster;
-
-    cl_write_parameters wp;
-    cl_write_parameters_set_default(&wp);
-    wp.timeout_ms = 1000;
-    wp.record_ttl = 864000;
-
-    cl_object okey;
-    citrusleaf_object_init_str(&okey, key);
-
-    return citrusleaf_udf_record_apply(cluster, ns, set, &okey, file, func, arglist, 1000, result);
-}
-
-int udf_apply_stream(const char * ns, const char * set, const char * key, const char * file, const char * func, as_list * arglist, as_result * result) {
-
-    extern cl_cluster * cluster;
-
-    cl_write_parameters wp;
-    cl_write_parameters_set_default(&wp);
-    wp.timeout_ms = 1000;
-    wp.record_ttl = 864000;
-
-    cl_object okey;
-    citrusleaf_object_init_str(&okey, key);
-
-    return citrusleaf_udf_record_apply(cluster, ns, set, &okey, file, func, arglist, 1000, result);
-}
-
-
-void print_result(uint32_t rc, as_result * r) {
-    if ( !r->is_success ) {
-        char * s = as_val_tostring(r->value);
-        info("failure: %s (%d)", s, rc);
-        free(s);
-    }
-    else {
-        char * s = as_val_tostring(r->value);
-        info("success: %s", s);
-        free(s);
-    }
+    return err.code == AEROSPIKE_OK;
 }

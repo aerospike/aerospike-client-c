@@ -3,6 +3,11 @@
 #include <stdbool.h>
 
 /**
+ * Read a file's content into the as_bytes.
+ */
+bool udf_readfile(const char * filename, as_bytes * content);
+
+/**
  * Upload a UDF file to the server.
  * @param the path to the file to upload
  */

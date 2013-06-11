@@ -147,6 +147,9 @@ void as_udf_list_destroy(as_udf_list * list)
 		if ( list->_free ) {
 			free(list->files);
 		}
+		for ( int i = 0; i < list->size; i++ ) {
+			as_udf_file_destroy(&list->files[i]);
+		}
 		list->_free = false;
 		list->capacity = 0;
 		list->size = 0;

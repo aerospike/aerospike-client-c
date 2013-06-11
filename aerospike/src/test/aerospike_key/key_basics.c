@@ -166,6 +166,21 @@ TEST( key_basics_remove , "remove: (test,test,foo)" ) {
     assert_int_eq( rc, AEROSPIKE_OK );
 }
 
+TEST( key_basics_apply , "apply: (test,test,foo) = {a: [1,2,3]}" ) {
+
+	as_error err;
+	as_error_reset(&err);
+	as_val *res = NULL;
+	as_list list;
+	as_arraylist_init(&list, 3, 0);
+	as_list_add_integer(&list, 1);
+	as_list_add_integer(&list, 2);
+	as_list_add_integer(&list, 3);
+
+	as_status rc = aerospike_key_apply(as, &err, NULL, "test", "test", "foo", "/usr/include/bits/mathcalls.h", "cos", &list, &res);
+
+    assert_int_eq( rc, AEROSPIKE_OK );
+}
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -177,4 +192,5 @@ SUITE( key_basics, "aerospike_key basic tests" ) {
     suite_add( key_basics_select );
     suite_add( key_basics_remove );
     suite_add( key_basics_notexists );
+    suite_add( key_basics_apply );
 }

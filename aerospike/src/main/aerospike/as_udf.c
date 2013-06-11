@@ -20,85 +20,9 @@
  * IN THE SOFTWARE.
  *****************************************************************************/
 
-#pragma once 
-
 #include <aerospike/as_bytes.h>
 #include <aerospike/as_list.h>
-
-/******************************************************************************
- * MACROS
- *****************************************************************************/
-
-#define AS_UDF_FILE_NAME_LEN 128
-#define AS_UDF_FILE_HASH_LEN 20
-
-/******************************************************************************
- * TYPES
- *****************************************************************************/
-
-/**
- * Defines a call to a UDF
- */
-struct as_udf_call_s {
-
-	/**
-	 * Object can be free()'d
-	 */
-	bool _free;
-
-	/**
-	 * UDF Module containing the function to be called.
-	 */
-	char * module;
-
-	/**
-	 * UDF Function to be called
-	 */
-	char * function;
-
-	/**
-	 * Argument List
-	 */
-	as_list * arglist;
-};
-
-typedef struct as_udf_call_s as_udf_call;
-
-/**
- * Enumeration of UDF types
- */
-enum as_udf_type_e {
-	AS_UDF_TYPE_LUA
-};
-
-typedef enum as_udf_type_e as_udf_type;
-
-struct as_udf_file_s {
-	bool			_free;
-	char 			name[AS_UDF_FILE_NAME_LEN];
-	unsigned char 	hash[AS_UDF_FILE_HASH_LEN];
-	as_udf_type 	type;
-	struct {
-		bool		_free;
-		uint32_t 	capacity;
-		uint32_t 	size;
-		uint8_t * 	bytes;
-	} content;
-};
-
-typedef struct as_udf_file_s as_udf_file;
-
-/**
- * List of UDF Files
- */
-struct as_udf_list_s {
-	bool			_free;
-	uint32_t 		capacity;
-	uint32_t 		size;
-	as_udf_file * 	files;
-};
-
-typedef struct as_udf_list_s as_udf_list;
+#include <aerospike/as_udf.h>
 
 /******************************************************************************
  * UDF CALL FUNCTIONS
@@ -107,17 +31,39 @@ typedef struct as_udf_list_s as_udf_list;
 /**
  * Initialize a stack allocated as_udf_call.
  */
-as_udf_call * as_udf_call_init(as_udf_call * call, const char * module, const char * function, as_list * arglist);
+as_udf_call * as_udf_call_init(as_udf_call * call, const char * module, const char * function, as_list * arglist)
+{
+	call->_free = false;
+	call->module = module;
+	call->function = function;
+	call->arglist = arglist;
+	return call;
+}
 
 /**
  * Creates a new heap allocated as_udf_call.
  */
-as_udf_call * as_udf_call_new(const char * module, const char * function, as_list * arglist);
+as_udf_call * as_udf_call_new(const char * module, const char * function, as_list * arglist)
+{
+	as_udf_call * call = (as_udf_call *) malloc(sizeof(as_udf_call));
+	call->_free = true;
+	call->module = module;
+	call->function = function;
+	call->arglist = arglist;
+	return call;
+}
 
 /**
  * Destroy an as_udf_call.
  */
-void as_udf_call_destroy(as_udf_call * call);
+void as_udf_call_destroy(as_udf_call * call)
+{
+	if ( call ) {
+		if ( call->_free ) {
+			free(call);
+		}
+	}
+}
 
 /******************************************************************************
  * UDF FILE FUNCTIONS
@@ -126,17 +72,52 @@ void as_udf_call_destroy(as_udf_call * call);
 /**
  * Initialize a stack allocated as_udf_file.
  */
-as_udf_file * as_udf_file_init(as_udf_file * file);
+as_udf_file * as_udf_file_init(as_udf_file * file)
+{
+	file->_free = false;
+	memset(file->name, 0, AS_UDF_FILE_NAME_LEN);
+	memset(file->hash, 0, AS_UDF_FILE_HASH_LEN);
+	file->content._free = false;
+	file->content.capacity = 0;
+	file->content.size = 0;
+	file->content.bytes = 0;
+	return file;
+}
 
 /**
  * Creates a new heap allocated as_udf_file.
  */
-as_udf_file * as_udf_file_new();
+as_udf_file * as_udf_file_new()
+{
+	as_udf_file * file = (as_udf_file *) malloc(sizeof(as_udf_file));
+	file->_free = true;
+	memset(file->name, 0, AS_UDF_FILE_NAME_LEN);
+	memset(file->hash, 0, AS_UDF_FILE_HASH_LEN);
+	file->content._free = false;
+	file->content.capacity = 0;
+	file->content.size = 0;
+	file->content.bytes = 0;
+	return file;
+}
 
 /**
  * Destroy an as_udf_file.
  */
-void as_udf_file_destroy(as_udf_file * file);
+void as_udf_file_destroy(as_udf_file * file)
+{
+	if ( file ) {
+		if ( file->content.bytes && file->content._free ) {
+			free(file->content.bytes);
+		}
+		file->content._free = false;
+		file->content.capacity = 0;
+		file->content.size = 0;
+		file->content.bytes = NULL;
+		if ( file->_free ) {
+			free(file);
+		}
+	}
+}
 
 /******************************************************************************
  * UDF LIST FUNCTIONS
@@ -145,18 +126,33 @@ void as_udf_file_destroy(as_udf_file * file);
 
 /**
  * Initialize a stack allocated as_udf_list.
+ * If size > 0, then malloc the files.entries to the size, also setting 
+ * files.capacity=size.
  */
-as_udf_list * as_udf_list_init(as_udf_list * list);
-
-/**
- * Creates a new heap allocated as_udf_list.
- */
-as_udf_list * as_udf_list_new();
+as_udf_list * as_udf_list_init(as_udf_list * list)
+{
+	list->_free = false;
+	list->capacity = 0;
+	list->size = 0;
+	list->files = NULL;
+	return list;
+}
 
 /**
  * Destroy an as_udf_list.
  */
-void as_udf_list_destroy(as_udf_list * list);
+void as_udf_list_destroy(as_udf_list * list)
+{
+	if ( list ) {
+		if ( list->_free ) {
+			free(list->files);
+		}
+		list->_free = false;
+		list->capacity = 0;
+		list->size = 0;
+		list->files = NULL;
+	}
+}
 
 
 

@@ -100,6 +100,7 @@ as_status aerospike_udf_get(
 {
 	char * error = NULL;
 	cl_udf_file clfile;
+    memset(&clfile,0,sizeof(cl_udf_file));
 
 	int rc = citrusleaf_udf_get(as->cluster, filename, &clfile, type, &error);
 	

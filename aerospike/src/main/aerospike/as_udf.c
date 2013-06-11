@@ -33,9 +33,10 @@
  */
 as_udf_call * as_udf_call_init(as_udf_call * call, const char * module, const char * function, as_list * arglist)
 {
-	call->_free = false;
-	call->module = module;
-	call->function = function;
+	// We have to use strdup as the passed in string may be a static string
+	call->module = strdup(module);
+	call->function = strdup(function);
+	// In case of arglist, we expect the user to alloc and pass it. So, no duplication
 	call->arglist = arglist;
 	return call;
 }
@@ -47,9 +48,8 @@ as_udf_call * as_udf_call_new(const char * module, const char * function, as_lis
 {
 	as_udf_call * call = (as_udf_call *) malloc(sizeof(as_udf_call));
 	call->_free = true;
-	call->module = module;
-	call->function = function;
-	call->arglist = arglist;
+
+	as_udf_call_init(call, module, function, arglist);
 	return call;
 }
 
@@ -59,6 +59,22 @@ as_udf_call * as_udf_call_new(const char * module, const char * function, as_lis
 void as_udf_call_destroy(as_udf_call * call)
 {
 	if ( call ) {
+
+		if (call->module) {
+			free(call->module);
+			call->module = NULL;
+		}
+
+		if (call->function) {
+			free(call->function);
+			call->function = NULL;
+		}
+
+		if (call->arglist) {
+			as_list_destroy(call->arglist);
+			call->arglist = NULL;
+		}
+
 		if ( call->_free ) {
 			free(call);
 		}

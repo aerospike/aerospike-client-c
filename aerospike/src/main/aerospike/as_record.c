@@ -209,6 +209,16 @@ as_record * as_record_init(as_record * rec, uint16_t nbins)
 void as_record_destroy(as_record * rec) 
 {
 	if ( rec ) {
+
+		if (rec->digest.key) {
+			free(rec->digest.key);
+			rec->digest.key = NULL;
+		}
+		if (rec->digest.set) {
+			free(rec->digest.set);
+			rec->digest.set = NULL;
+		}
+
 		if ( rec->bins.data && rec->bins._free ) {
 			free(rec->bins.data);
 		}

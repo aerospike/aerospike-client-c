@@ -404,7 +404,7 @@ cl_rv citrusleaf_udf_get_with_gen(cl_cluster *asc, const char * filename, cl_udf
     file->content = as_bytes_new(content, clen, true);
 
 	info.content.value = NULL;
-	info.content.freeable = false;
+	info.content.free = false;
 	info.content.len = 0;
 	info.content.capacity = 0;
 

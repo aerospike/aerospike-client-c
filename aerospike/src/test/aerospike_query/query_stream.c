@@ -193,7 +193,7 @@ TEST( query_stream_1, "count(*) where a == 'abc' (non-aggregating)" ) {
     as_stream * consumer = consumer_stream_new(consume);
 
     as_query q;
-    as_query_init(&q, "test", "test");
+    as_query_init(&q, NAMESPACE, SET);
     as_query_select(&q, "c");
     as_query_where(&q, "a", string_equals("abc"));
     
@@ -225,7 +225,7 @@ TEST( query_stream_2, "count(*) where a == 'abc' (aggregating)" ) {
     as_stream * consumer = consumer_stream_new(consume);
 
     as_query q;
-    as_query_init(&q, "test", "test");
+    as_query_init(&q, NAMESPACE, SET);
     as_query_where(&q, "a", string_equals("abc"));
     as_query_apply(&q, UDF_FILE, "count", NULL);
     
@@ -382,7 +382,7 @@ SUITE( query_stream, "aerospike_query_stream tests" ) {
     
     suite_add( query_stream_create );
     suite_add( query_stream_1 );
-    // suite_add( query_stream_2 );
+    suite_add( query_stream_2 );
     // suite_add( query_stream_3 );
     // suite_add( query_stream_4 );
     // suite_add( query_stream_5 );

@@ -3,6 +3,7 @@
 
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_udf.h>
+#include <aerospike/as_bytes.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_status.h>
 #include <aerospike/as_udf.h>
@@ -18,6 +19,41 @@
 #define SCRIPT_LEN_MAX 1048576
 
 extern aerospike * as;
+
+
+
+
+bool udf_readfile(const char * filename, as_bytes * content) {
+    
+    FILE * file = fopen(filename,"r"); 
+
+    if ( !file ) { 
+        error("cannot open script file %s : %s", filename, strerror(errno));  
+        return -1; 
+    } 
+
+    uint8_t * bytes = (uint8_t *) malloc(SCRIPT_LEN_MAX); 
+    if ( bytes == NULL ) { 
+        error("malloc failed"); 
+        return -1;
+    }     
+
+    int size = 0; 
+
+    uint8_t * buff = bytes; 
+    int read = fread(buff, 1, 512, file); 
+    while ( read ) { 
+        size += read; 
+        buff += read; 
+        read = fread(buff, 1, 512, file); 
+    }                        
+    fclose(file); 
+
+    as_bytes_init(content, bytes, size, true);
+
+    return true;
+}
+
 
 bool udf_put(const char * filename) {
     

@@ -22,6 +22,8 @@
 
 #include <aerospike/aerospike.h>
 #include <aerospike/as_config.h>
+#include <aerospike/as_module.h>
+#include <aerospike/mod_lua.h>
 
 #include <citrusleaf/citrusleaf.h>
 #include <citrusleaf/cl_cluster.h>
@@ -94,6 +96,23 @@ as_status aerospike_connect(aerospike * as, as_error * err)
 		// remember the process id which is spawning the background threads.
 		// only this process can call a pthread_join() on the threads that it spawned.
 		g_init_pid = getpid();
+
+	    mod_lua_config config = {
+	        .server_mode    = false,
+	        .cache_enabled  = as->config.mod_lua.cache_enabled,
+	        .system_path    = {0},
+	        .user_path      = {0}
+	    };
+	    memcpy(config.system_path, as->config.mod_lua.system_path, sizeof(config.system_path));
+	    memcpy(config.user_path, as->config.mod_lua.user_path, sizeof(config.user_path));
+
+	    if ( mod_lua.logger == NULL ) {
+	        mod_lua.logger = test_logger_new();
+	    }
+	    
+	    as_module_configure(&mod_lua, &config);
+		_log_debug("as_module_configure(mod_lua) OK");
+
 
 		// initialize the cluster
 		citrusleaf_cluster_init();

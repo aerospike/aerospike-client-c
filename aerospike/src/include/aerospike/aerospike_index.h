@@ -46,14 +46,6 @@
  * @param as        - the aerospike cluster to connect to.
  * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
  * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
- * @param filename	- the name of the UDF file.
- * @param type 		- the type of UDF file.
- * @param content 	- the file of the UDF file.
- *
- *
- * @param as        - the aerospike cluster to connect to.
- * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
- * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
  * @param ns        - the namespace to be indexed
  * @param set       - the set to be indexed
  * @param bin       - the bin to be indexed

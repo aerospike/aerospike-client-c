@@ -36,7 +36,7 @@ extern aerospike * as;
  * TEST CASES
  *****************************************************************************/
 
-TEST( query_apply_1 , "apply 1" ) {
+TEST( query_foreach_1 , "apply 1" ) {
 	assert_not_null(NULL);
 }
 
@@ -44,6 +44,6 @@ TEST( query_apply_1 , "apply 1" ) {
  * TEST SUITE
  *****************************************************************************/
 
-SUITE( query_apply, "aerospike_query basic tests" ) {
-	suite_add( query_apply_1 );
+SUITE( query_foreach, "aerospike_query_foreach tests" ) {
+	suite_add( query_foreach_1 );
 }

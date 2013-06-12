@@ -44,22 +44,22 @@ as_status aerospike_query_destroy(aerospike * as, as_error * err);
  * STATIC FUNCTIONS
  *****************************************************************************/
 
-static void as_query_toclquery(as_query * query, cl_query * clquery)
+static cl_query * as_query_toclquery(as_query * query)
 {
-	cl_query_init(clquery, query->namespace, query->set);
+	cl_query * clquery = cl_query_new(query->namespace, query->set);
 
 	if ( query->limit != UINT64_MAX ) {
 		cl_query_limit(clquery, query->limit);
 	}
 
-	char ** s = query->select; 
-	while( *s != NULL ) {
-		cl_query_select(clquery, *s);
-		s++;
+	for ( int i = 0; i < query->select.size; i++ ) {
+		as_bin_name * bin = &query->select.entries[i];
+		char * b = *bin;
+		cl_query_select(clquery,b);
 	}
 
-	as_predicate * p = query->predicates;
-	while( p->bin ) {
+	for ( int i = 0; i < query->predicates.size; i++ ) {
+		as_predicate * p = &query->predicates.entries[i];
 		switch(p->type) {
 			case AS_PREDICATE_STRING_EQUAL:
 				cl_query_where(clquery, p->bin, CL_EQ, CL_STR, p->value.string);
@@ -71,18 +71,18 @@ static void as_query_toclquery(as_query * query, cl_query * clquery)
 				cl_query_where(clquery, p->bin, CL_RANGE, CL_INT, p->value.integer_range.min, p->value.integer_range.max);
 				break;
 		}
-		p++;
 	}
 
-	as_orderby * o = query->orderby;
-	while( o->bin ) {
+	for ( int i = 0; i < query->orderby.size; i++ ) {
+		as_orderby * o = &query->orderby.entries[i];
 		cl_query_orderby(clquery, o->bin, o->ascending ? CL_ORDERBY_ASC : CL_ORDERBY_DESC);
-		o++;
 	}
 
 	if ( query->apply.module && query->apply.function ) {
 		cl_query_aggregate(clquery, query->apply.module, query->apply.function, query->apply.arglist);
 	}
+
+	return clquery;
 }
 
 /******************************************************************************
@@ -110,10 +110,11 @@ as_status aerospike_query_foreach(
 		return err->code;
 	}
 
-	cl_query clquery;
-	as_query_toclquery(query, &clquery);
+	cl_query * clquery = as_query_toclquery(query);
 
-	cl_rv rc = citrusleaf_query_foreach(as->cluster, &clquery, udata, callback);
+	cl_rv rc = citrusleaf_query_foreach(as->cluster, clquery, udata, callback);
+
+    cl_query_destroy(clquery);
 
 	return AEROSPIKE_OK;
 }
@@ -138,10 +139,11 @@ as_status aerospike_query_stream(
 		return err->code;
 	}
 
-	cl_query clquery;
-	as_query_toclquery(query, &clquery);
+	cl_query * clquery = as_query_toclquery(query);
 
-	cl_rv rc = citrusleaf_query_stream(as->cluster, &clquery, stream);
+	cl_rv rc = citrusleaf_query_stream(as->cluster, clquery, stream);
+
+    cl_query_destroy(clquery);
 
 	return AEROSPIKE_OK;
 }

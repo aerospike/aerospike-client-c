@@ -75,7 +75,7 @@ static void __log(const char * file, const int line, const char * fmt, ...) {
 }
 
 #define LOG(__fmt, args...) \
-    __log(__FILE__,__LINE__,__fmt, ## args)
+    // __log(__FILE__,__LINE__,__fmt, ## args)
 
 
 /******************************************************************************
@@ -681,6 +681,7 @@ static int cl_query_worker_do(cl_cluster_node * node, cl_query_task * task) {
 
     // send it to the cluster - non blocking socket, but we're blocking
     if (0 != cf_socket_write_forever(fd, (uint8_t *) task->query_buf, (size_t) task->query_sz)) {
+        LOG("[ERROR] cl_query_worker_do: unable to write to %s ",node->name);
         return CITRUSLEAF_FAIL_CLIENT;
     }
 
@@ -942,6 +943,7 @@ static void * cl_query_worker(void * dummy) {
 
         // a NULL structure is the condition that we should exit. See shutdown()
         if( 0 == memcmp(&task, &g_null_task, sizeof(cl_query_task)) ) { 
+            LOG("[DEBUG] cl_query_worker: exiting\n");
             pthread_exit(NULL); 
         }
 
@@ -950,6 +952,7 @@ static void * cl_query_worker(void * dummy) {
 
         cl_cluster_node * node = cl_cluster_node_get_byname(task.asc, task.node_name);
         if ( node ) {
+            LOG("[DEBUG] cl_query_worker: working\n");
             rc = cl_query_worker_do(node, &task);
         }
 

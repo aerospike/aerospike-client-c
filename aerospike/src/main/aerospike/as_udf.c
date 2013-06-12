@@ -144,11 +144,12 @@ as_udf_list * as_udf_list_init(as_udf_list * list)
 void as_udf_list_destroy(as_udf_list * list)
 {
 	if ( list ) {
+		for ( int i = 0; i < list->size; i++ ) {
+			list->files[i]._free = false;
+			as_udf_file_destroy(&list->files[i]);
+		}
 		if ( list->_free ) {
 			free(list->files);
-		}
-		for ( int i = 0; i < list->size; i++ ) {
-			as_udf_file_destroy(&list->files[i]);
 		}
 		list->_free = false;
 		list->capacity = 0;

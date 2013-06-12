@@ -20,7 +20,7 @@
  * IN THE SOFTWARE.
  *****************************************************************************/
 
-#include <aerospike/aerospike_sindex.h>
+#include <aerospike/aerospike_index.h>
 
 #include <citrusleaf/cl_sindex.h>
 
@@ -45,7 +45,7 @@
  * @param type      - the type of the bin to be indexed
  * @param name      - the name of the index
  *
- * @return AEROSPIKE_OK if successful. AEROSPIKE_EXISTS if the index already exists. Otherwise an error.
+ * @return AEROSPIKE_OK if successful. AEROSPIKE_ERR_INDEX_EXISTS if the index already exists. Otherwise an error.
  */
 as_status aerospike_index_sparse_create(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
@@ -72,11 +72,25 @@ as_status aerospike_index_sparse_create(
 
 	int rc = citrusleaf_secondary_index_create(as->cluster, ns, set, name, bin, typename, &response);
 	
-	if ( response != NULL ) {
-		free(response);
+	switch ( rc ) {
+		case CITRUSLEAF_OK: 
+			as_error_reset(err);
+			break;
+		case CITRUSLEAF_FAIL_INDEX_FOUND:
+		case CITRUSLEAF_FAIL_INDEX_EXISTS:
+			as_error_update(err, AEROSPIKE_ERR_INDEX_EXISTS, "Index exists");
+			break;
+		default:
+			as_error_update(err, AEROSPIKE_ERR_INDEX, "Failure creating index: %s", response);
+			break;
 	}
 
-	return as_error_fromrc(err, rc);
+	if ( response != NULL ) {
+		free(response);
+		response = NULL;
+	}
+
+	return err->code;
 }
 
 /**

@@ -64,7 +64,10 @@ static bool before(atf_plan * plan) {
         .hosts = { 
         	{ .addr = HOST, .port = PORT },
         	{ 0 }
-        }
+        },
+        .mod_lua.cache_enabled = false,
+        .mod_lua.system_path = "../aerospike-mod-lua/src/lua",
+        .mod_lua.user_path = "src/test/lua",
     };
 
     as_policies_init(&config.policies);
@@ -79,7 +82,7 @@ static bool before(atf_plan * plan) {
     	return true;
 	}
 	else {
-		error("can't connect to %s:%d - %s @ %s[%s:%d]", HOST, PORT, err.message, err.func, err.file, err.line);
+		error("%s @ %s[%s:%d]", err.message, err.func, err.file, err.line);
 		return false;
 	}
 }
@@ -99,7 +102,7 @@ static bool after(atf_plan * plan) {
     	return true;
 	}
 	else {
-		error("error while disconnecting from %s:%d - %s @ %s[%s:%d]", HOST, PORT, err.message, err.func, err.file, err.line);
+		error("%s @ %s[%s:%d]", HOST, PORT, err.message, err.func, err.file, err.line);
 		return false;
 	}
 	
@@ -130,9 +133,12 @@ PLAN( aerospike_test ) {
     // aerospike_info module
     plan_add( info_basics );
 
+    // aerospike_info module
+    plan_add( udf_basics );
+
     // aerospike_query module
-    plan_add( query_basics );
-    plan_add( query_apply );
+    plan_add( query_stream );
+    // plan_add( query_foreach );
 
 }
 

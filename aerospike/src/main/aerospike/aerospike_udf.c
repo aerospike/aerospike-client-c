@@ -29,18 +29,28 @@
 #include <citrusleaf/cl_udf.h>
 
 #include "shim.h"
+#include "log.h"
 
 /******************************************************************************
  * FUNCTIONS
  *****************************************************************************/
 
 static void clfile_to_asfile(cl_udf_file * clfile, as_udf_file * asfile) {
-	strncpy(asfile->name, clfile->name, AS_UDF_FILE_NAME_LEN);
+	memcpy(asfile->name, clfile->name, AS_UDF_FILE_NAME_LEN);
 	memcpy(asfile->hash, clfile->hash, AS_UDF_FILE_HASH_LEN);
 	asfile->type = clfile->type;
-	asfile->content.size = clfile->content->len;
-	asfile->content.capacity = clfile->content->capacity;
-	asfile->content.bytes = clfile->content->value;
+	if ( clfile->content ) {
+		asfile->content._free = clfile->content->free;
+		asfile->content.size = clfile->content->len;
+		asfile->content.capacity = clfile->content->capacity;
+		asfile->content.bytes = clfile->content->value;
+	}
+	else {
+		asfile->content._free = false;
+		asfile->content.size = 0;
+		asfile->content.capacity = 0;
+		asfile->content.bytes = NULL;
+	}
 }
 
 /**
@@ -55,13 +65,14 @@ as_status aerospike_udf_list(
 	int 			count = 0;
 	
 	int rc =  citrusleaf_udf_list(as->cluster, &files, &count, &error);
-	
+
 	if ( error != NULL ) {
 		as_error_update(err, AEROSPIKE_ERR, error);
 		free(error);
 		error = NULL;
 	}
-	else if ( files != NULL ) {
+	else if ( files != NULL && *files != NULL ) {
+	
 		if ( list->capacity == 0 && list->files == NULL ) {
 			list->_free = true;
 			list->capacity = count;
@@ -70,16 +81,13 @@ as_status aerospike_udf_list(
 		}
 
 		uint32_t limit = count < list->capacity ? count : list->capacity;
-
+	
 		for ( int i = 0; i < limit; i++ ) {
+
 			as_udf_file * asfile = &list->files[i];
 			cl_udf_file * clfile = files[i];
 			clfile_to_asfile(clfile, asfile);
 
-			clfile->content->value = NULL;
-			clfile->content->capacity = 0;
-			clfile->content->len = 0;
-			as_bytes_destroy(clfile->content);
 			free(clfile);
 			files[i] = NULL;
 

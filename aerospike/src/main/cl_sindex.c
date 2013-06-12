@@ -126,7 +126,7 @@ cl_rv citrusleaf_secondary_index_create_functional(
 cl_rv citrusleaf_secondary_index_drop(cl_cluster *asc, const char *ns, const char *indexname, char **response) {
 
     char ddl[1024];
-    sprintf(ddl, "sindex-drop:ns=%s;indexname=%s", ns, indexname);
+    sprintf(ddl, "sindex-delete:ns=%s;indexname=%s", ns, indexname);
     if ( citrusleaf_info_cluster_all(asc, ddl, response, true, /* check bounds */ true, 5000) ) {
         INFO("[ERROR] sindex-drop: response: %s\n", *response);
         return CITRUSLEAF_FAIL_CLIENT;

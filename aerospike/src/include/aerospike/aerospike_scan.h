@@ -36,7 +36,7 @@
 /**
  * Callback for the `aerospike_scan_*` function.
  */
-typedef int (* aerospike_scan_foreach_callback)(const as_val *, void *);
+typedef int (* aerospike_scan_foreach_callback)(as_val *, void *);
 
 /******************************************************************************
  * FUNCTIONS

@@ -21,6 +21,7 @@
 extern aerospike * as;
 
 
+#define WAIT_MS(__ms) nanosleep((struct timespec[]){{0, __ms##000000}}, NULL)
 
 
 bool udf_readfile(const char * filename, as_bytes * content) {
@@ -95,6 +96,8 @@ bool udf_put(const char * filename) {
 
     as_val_destroy(&udf_content);
 
+	WAIT_MS(100);
+
     return err.code == AEROSPIKE_OK;
 }
 
@@ -109,6 +112,8 @@ bool udf_remove(const char * filename) {
         error("error caused by aerospike_udf_remove(): (%d) %s @ %s[%s:%d]", err.code, err.message, err.func, err.file, err.line);
     }
 
+	WAIT_MS(100);
+	
     return err.code == AEROSPIKE_OK;
 }
 

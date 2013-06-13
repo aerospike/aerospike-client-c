@@ -29,6 +29,11 @@
 #include <aerospike/as_status.h>
 #include <aerospike/as_stream.h>
 
+/** 
+ * @defgroup Query Query API
+ * @{
+ */
+
 /******************************************************************************
  * TYPES
  *****************************************************************************/
@@ -75,3 +80,7 @@ as_status aerospike_query_stream(
 	aerospike * as, as_error * err, const as_policy_query * policy, 
 	const as_query * query, as_stream * stream
 );
+
+/**
+ * @}
+ */

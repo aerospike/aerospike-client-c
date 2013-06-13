@@ -125,6 +125,7 @@ PLAN( aerospike_test ) {
     // aerospike_key module
     plan_add( key_basics );
     plan_add( key_apply );
+    plan_add( key_apply2 );
 
     // aerospike_digest module
     plan_add( digest_basics );

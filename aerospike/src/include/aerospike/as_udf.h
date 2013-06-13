@@ -42,6 +42,7 @@
 typedef struct as_udf_call_s {
 
 	/**
+	 * @private
 	 * If true, then as_udf_call_destroy() will free this instance.
 	 */
 	bool _free;
@@ -76,6 +77,7 @@ typedef enum as_udf_type_e {
 typedef struct as_udf_file_s {
 
 	/**
+	 * @private
 	 * If true, then as_udf_file_destroy() will free this instance.
 	 */
 	bool _free;
@@ -101,6 +103,7 @@ typedef struct as_udf_file_s {
 	struct {
 
 		/**
+	 	 * @private
 		 * If true, then as_udf_file_destroy() will free bytes()
 		 */
 		bool _free;
@@ -129,6 +132,7 @@ typedef struct as_udf_file_s {
 typedef struct as_udf_list_s {
 
 	/**
+	 * @private
 	 * If true, then as_udf_list_destroy() will free this instance.
 	 */
 	bool _free;

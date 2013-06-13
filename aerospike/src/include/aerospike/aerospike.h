@@ -28,12 +28,17 @@
 #include <aerospike/as_status.h>
 #include <stdbool.h>
 
+/** 
+ * @addtogroup aerospike
+ * @{
+ */
+
 /******************************************************************************
  * TYPES
  *****************************************************************************/
 
 /**
- * PRIVATE:
+ * @private
  * Forward declaration of a cluster object.
  */
 struct cl_cluster_s;
@@ -44,7 +49,8 @@ struct cl_cluster_s;
 typedef struct aerospike_s {
 
 	/**
-	 * Specifies whether the object can be free()'d
+	 * @private
+	 * If true, then as_query_destroy() will free this instance.
 	 */
 	bool _free;
 
@@ -68,6 +74,7 @@ typedef struct aerospike_s {
 /******************************************************************************
  * FUNCTIONS
  *****************************************************************************/
+
 
 /**
  * Initialize the aerospike object on the stack
@@ -96,5 +103,6 @@ as_status aerospike_connect(aerospike * as, as_error * err);
  */
 as_status aerospike_close(aerospike * as, as_error * err);
 
-
-
+/** 
+ * @}
+ */

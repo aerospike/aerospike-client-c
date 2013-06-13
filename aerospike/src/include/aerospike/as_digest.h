@@ -41,6 +41,7 @@
 typedef struct as_digest_s {
 
 	/**
+	 * @private
 	 * If true, then as_digest_destroy() will free this instance.
 	 */
 	bool _free;

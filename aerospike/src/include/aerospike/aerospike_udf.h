@@ -28,6 +28,11 @@
 #include <aerospike/as_status.h>
 #include <aerospike/as_udf.h>
 
+/** 
+ * @addtogroup UDF UDF Management API
+ * @{
+ */
+
 /******************************************************************************
  * TYPES
  *****************************************************************************/
@@ -174,3 +179,7 @@ as_status aerospike_udf_remove(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
 	const char * filename
 	);
+
+/** 
+ * @}
+ */

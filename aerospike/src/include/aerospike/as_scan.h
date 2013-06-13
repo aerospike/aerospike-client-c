@@ -24,6 +24,11 @@
 
 #include <aerospike/as_udf.h>
 
+/** 
+ * @defgroup Scan Scan API
+ * @{
+ */
+
 /******************************************************************************
  * TYPES
  *****************************************************************************/
@@ -44,6 +49,7 @@ typedef enum as_scan_priority_e {
 typedef struct as_scan_s {
 
 	/**
+	 * @private
 	 * If true, then as_scan_destroy() will free this instance.
 	 */
 	bool _free;

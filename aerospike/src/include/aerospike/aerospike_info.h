@@ -29,6 +29,11 @@
 #include <aerospike/as_policy.h>
 #include <aerospike/as_status.h>
 
+/** 
+ * @defgroup Info Info API
+ * @{
+ */
+
 /******************************************************************************
  * TYPES
  *****************************************************************************/
@@ -133,3 +138,8 @@ as_status aerospike_info_foreach(
 	const char * req, 
     aerospike_info_foreach_callback callback, void * udata
 	);
+
+
+/** 
+ * @}
+ */

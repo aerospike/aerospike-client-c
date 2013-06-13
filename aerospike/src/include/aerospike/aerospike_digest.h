@@ -20,6 +20,7 @@
  * IN THE SOFTWARE.
  *****************************************************************************/
 
+
 #pragma once 
 
 #include <aerospike/aerospike.h>
@@ -32,6 +33,11 @@
 #include <aerospike/as_policy.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_status.h>
+
+/** 
+ * @addtogroup Digest Digest API
+ * @{
+ */
 
 /******************************************************************************
  * FUNCTIONS
@@ -212,3 +218,7 @@ as_status aerospike_digest_operate(
 	const as_binop * ops, uint32_t nops
 	);
 
+
+/** 
+ * @}
+ */

@@ -94,8 +94,6 @@ static bool after(atf_plan * plan) {
         return false;
     }
 
-    as_info(&as->log, "hello world! %s", "fuck");
-
 	as_error err;
 	as_error_reset(&err);
 	

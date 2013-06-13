@@ -42,9 +42,10 @@ static aerospike * aerospike_defaults(aerospike * as, bool free, as_config * con
 	if ( config != NULL ) {
 		memcpy(&as->config, config, sizeof(as_config));
 	}
-	// else {
-	//     as_config_init(&as->config);
-	// }
+	else {
+		as_config_init(&as->config);
+	}
+	as_log_init(&as->log);
 	return as;
 }
 

@@ -20,81 +20,87 @@
  * IN THE SOFTWARE.
  *****************************************************************************/
 
-#pragma once 
-
-#include <aerospike/as_error.h>
-#include <aerospike/as_config.h>
 #include <aerospike/as_log.h>
-#include <aerospike/as_status.h>
+
+#include <inttypes.h>
+#include <stdarg.h>
 #include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 /******************************************************************************
- * TYPES
+ * MACROS
  *****************************************************************************/
 
-/**
- * PRIVATE:
- * Forward declaration of a cluster object.
- */
-struct cl_cluster_s;
+#define AS_LOG_MSG_LEN 1024
 
-/**
- * Client handle used for all calls to a cluster.
- */
-typedef struct aerospike_s {
+/******************************************************************************
+ * STATIC VARIABLES
+ *****************************************************************************/
 
-	/**
-	 * Specifies whether the object can be free()'d
-	 */
-	bool _free;
+static const char * as_log_level_strings[5] = {
+	[AS_LOG_LEVEL_ERROR]	= "ERROR",
+	[AS_LOG_LEVEL_WARN]		= "WARN",
+	[AS_LOG_LEVEL_INFO]		= "INFO",
+	[AS_LOG_LEVEL_DEBUG]	= "DEBUG",
+	[AS_LOG_LEVEL_TRACE] 	= "TRACE"
+};
 
-	/**
-	 * cluster state
-	 */
-	struct cl_cluster_s * cluster;
+/******************************************************************************
+ * STATIC FUNCTIONS
+ *****************************************************************************/
 
-	/**
-	 * client configuration
-	 */
-	as_config config;
+ static bool as_log_stderr(
+	as_log_level level, const char * func, const char * file, uint32_t line,
+	const char * fmt, ...)
+{
+	char msg[AS_LOG_MSG_LEN] = {0};
 
-	/**
-	 * client logging
-	 */
-	as_log log;
+	va_list ap;
+	va_start(ap, fmt);
+	vsnprintf(msg, AS_LOG_MSG_LEN, fmt, ap);
+	va_end(ap);
 
-} aerospike;
+	fprintf(stderr, "[%s:%d][%s] %s - %s\n", 
+		file, line, func, as_log_level_strings[level], msg);
+}
 
 /******************************************************************************
  * FUNCTIONS
  *****************************************************************************/
 
 /**
- * Initialize the aerospike object on the stack
- * @returns the initialized aerospike object
+ * Initialize Log Context 
  */
-aerospike * aerospike_init(aerospike * as, as_config * config);
+as_log * as_log_init(as_log * log) 
+{
+	if ( !log ) return NULL;
+
+	log->level = AS_LOG_LEVEL_INFO;
+	log->callback = as_log_stderr;
+	return log;
+}
 
 /**
- * Creates a new aerospike object on the heap
- * @returns a new aerospike object
+ * Set the level for the given log
  */
-aerospike * aerospike_new(as_config * config);
+int as_log_set_level(as_log * log, as_log_level level) 
+{
+	if ( !log ) return 1;
+	log->level = level;
+	return 0;
+}
 
 /**
- * Destroy the aerospike obect
+ * Set the callback for the given log
  */
-void aerospike_destroy(aerospike * as);
-
-/**
- * Connect to the cluster
- */
-as_status aerospike_connect(aerospike * as, as_error * err);
-
-/**
- * Close connections to the cluster
- */
-as_status aerospike_close(aerospike * as, as_error * err);
+int as_log_set_callback(as_log * log, as_log_callback callback)
+{
+	if ( !log ) return 1;
+	log->callback = callback;
+	return 0;
+}
 
 
 

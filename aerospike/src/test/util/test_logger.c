@@ -9,31 +9,31 @@
  * STATIC FUNCTIONS
  *****************************************************************************/
 
-static int test_logger_enabled(const as_logger *, const as_log_level);
-static as_log_level test_logger_level(const as_logger *);
-static int test_logger_log(const as_logger *, const as_log_level, const char *, const int, const char *, va_list);
+static int test_logger_is_enabled(const as_logger *, const as_logger_level);
+static as_logger_level test_logger_get_level(const as_logger *);
+static int test_logger_log(const as_logger *, const as_logger_level, const char *, const int, const char *, va_list);
 
 /*****************************************************************************
  * CONSTANTS
  *****************************************************************************/
 
 test_logger_context test_logger = {
-    .level = AS_LOG_INFO
+    .level = AS_LOGGER_LEVEL_INFO
 };
 
 static const as_logger_hooks test_logger_hooks = {
     .destroy    = NULL,
-    .enabled    = test_logger_enabled,
-    .level      = test_logger_level,
+    .enabled    = test_logger_is_enabled,
+    .level      = test_logger_get_level,
     .log        = test_logger_log
 };
 
 static const char * log_level_string[5] = {
-    [AS_LOG_ERROR]  = "ERROR",
-    [AS_LOG_WARN]   = "WARN",
-    [AS_LOG_INFO]   = "INFO",
-    [AS_LOG_DEBUG]  = "DEBUG",
-    [AS_LOG_TRACE]  = "TRACE",
+    [AS_LOGGER_LEVEL_ERROR]  = "ERROR",
+    [AS_LOGGER_LEVEL_WARN]   = "WARN",
+    [AS_LOGGER_LEVEL_INFO]   = "INFO",
+    [AS_LOGGER_LEVEL_DEBUG]  = "DEBUG",
+    [AS_LOGGER_LEVEL_TRACE]  = "TRACE",
 };
 
 /*****************************************************************************
@@ -48,15 +48,15 @@ as_logger * test_logger_init(as_logger * l) {
     return as_logger_init(l, &test_logger, &test_logger_hooks);
 }
 
-static int test_logger_enabled(const as_logger * logger, const as_log_level level) {
+static int test_logger_is_enabled(const as_logger * logger, const as_logger_level level) {
     return test_logger.level <= level;
 }
 
-static as_log_level test_logger_level(const as_logger * logger) {
+static as_logger_level test_logger_get_level(const as_logger * logger) {
     return test_logger.level;
 }
 
-static int test_logger_log(const as_logger * logger, const as_log_level level, const char * file, const int line, const char * format, va_list args) {
+static int test_logger_log(const as_logger * logger, const as_logger_level level, const char * file, const int line, const char * format, va_list args) {
     if ( test_logger.level > level ) return 0;
     
     char message[1024] = { '\0' };

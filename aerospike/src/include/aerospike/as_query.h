@@ -146,7 +146,7 @@ typedef struct as_query_select_s {
 	 */
 	as_bin_name * entries;
 
-} as_query_select;
+} as_query_select_params;
 
 /**
  * Sequence of predicates to be applied to a query.
@@ -174,7 +174,7 @@ typedef struct as_query_predicates_s {
 	 */
 	as_predicate * 	entries;
 
-} as_query_predicates;
+} as_query_predicates_params;
 
 /**
  * Sequence of ordering to be applied to a query results.
@@ -201,7 +201,7 @@ typedef struct as_query_orderby_s {
 	 * Sequence of entries
 	 */
 	as_orderby * entries;
-} as_query_orderby;
+} as_query_orderby_params;
 
 /**
  * Describes the query.
@@ -255,7 +255,7 @@ typedef struct as_query_s {
 	 *
 	 * The as_query_select() function will automatically malloc() entries, if entries is NULL.
 	 */
-	as_query_select select;
+	as_query_select_params select;
 
 	/**
 	 * Predicates for filtering.
@@ -288,7 +288,7 @@ typedef struct as_query_s {
 	 *
 	 * The as_query_where() function will automatically malloc() entries, if entries is NULL.
 	 */
-	as_query_predicates predicates;
+	as_query_predicates_params predicates;
 
 	/**
 	 * Bins to order by.
@@ -321,7 +321,7 @@ typedef struct as_query_s {
 	 *
 	 * The as_query_orderby() function will automatically malloc() entries, if entries is NULL.
 	 */
-	as_query_orderby orderby;
+	as_query_orderby_params orderby;
 
 	/**
 	 * Limit the result set.

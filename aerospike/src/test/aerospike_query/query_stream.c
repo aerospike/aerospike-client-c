@@ -250,7 +250,6 @@ TEST( query_stream_3, "sum(e) where a == 'abc'" ) {
 
     as_stream_status consume(as_val * v) {
         if ( v != AS_STREAM_END ) {
-        	as_error(&as->log, "hello ");
             as_integer * result = as_integer_fromval(v);
             if ( result != NULL ) {
             	value = as_integer_toint(result);
@@ -307,7 +306,7 @@ TEST( query_stream_4, "sum(d) where b == 100 and d == 1" ) {
     as_query q;
     as_query_init(&q, NAMESPACE, SET);
     as_query_where(&q, "b", integer_equals(100));
-    as_query_apply(&q, UDF_FILE, "sum_on_match", NULL);
+    as_query_apply(&q, UDF_FILE, "sum_on_match", &args);
 
     aerospike_query_stream(as, &err, NULL, &q, consumer);
 
@@ -357,6 +356,44 @@ TEST( query_stream_5, "c where b == 100 group by d" ) {
     as_stream_destroy(consumer);
 }
 
+TEST( query_stream_6, "c where d in range(4,6) groupby d") {
+
+        as_error err;
+        as_error_reset(&err);
+
+    as_val * result = NULL;
+
+    as_stream_status consume(as_val * v) {
+        if ( v != AS_STREAM_END ) {
+            result = v;
+        }
+        return AS_STREAM_OK;
+    }
+
+    as_stream * consumer = consumer_stream_new(consume);
+
+    as_query q;
+    as_query_init(&q, "test", "test");
+    as_query_where(&q, "d", integer_range(4, 6));
+    as_query_apply(&q, UDF_FILE, "grouping", NULL);
+
+    aerospike_query_stream(as, &err, NULL, &q, consumer);
+
+        if (result) {
+        char * s = as_val_tostring(result);
+            info("value: %s", s );
+        free(s);
+        }
+
+    assert_int_eq( err.code, 0 );
+        assert_int_eq( as_val_type(result), AS_MAP );
+
+        as_val_destroy(result);
+    as_query_destroy(&q);
+    as_stream_destroy(consumer);
+}
+
+
 
 /******************************************************************************
  * TEST SUITE
@@ -370,7 +407,8 @@ SUITE( query_stream, "aerospike_query_stream tests" ) {
     suite_add( query_stream_create );
     suite_add( query_stream_1 );
     suite_add( query_stream_2 );
-    // suite_add( query_stream_3 );
-    // suite_add( query_stream_4 );
-    // suite_add( query_stream_5 );
+    suite_add( query_stream_3 );
+    suite_add( query_stream_4 );
+    suite_add( query_stream_5 );
+    suite_add( query_stream_6 );
 }

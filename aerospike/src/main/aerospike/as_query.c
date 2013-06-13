@@ -342,7 +342,7 @@ int as_query_limit(as_query * query, uint64_t limit)
 }
 
 /**
- * Apply a function to the results of the querty.
+ * Apply a function to the results of the query.
  *
  *		as_query_apply(&q, "my_module", "my_function", NULL);
  *

@@ -1,6 +1,7 @@
 
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
+#include <aerospike/aerospike_udf.h>
 
 #include <aerospike/as_error.h>
 #include <aerospike/as_status.h>
@@ -13,6 +14,7 @@
 #include <aerospike/as_map.h>
 #include <aerospike/as_hashmap.h>
 #include <aerospike/as_val.h>
+#include <aerospike/as_udf.h>
 
 #include "../test.h"
 #include "../util/udf.h"
@@ -63,6 +65,7 @@ static bool after(atf_suite * suite) {
 /******************************************************************************
  * TEST CASES
  *****************************************************************************/
+
 TEST( key_apply2_file_exists , "apply2: (test,test,foo) <!> key_apply2.record_exists() => 1" ) {
 
 	as_error err;
@@ -81,69 +84,26 @@ TEST( key_apply2_file_exists , "apply2: (test,test,foo) <!> key_apply2.record_ex
 
     as_udf_file_destroy(&file);
 
-    return err.code == AEROSPIKE_OK;
-
-#if 0
-	as_error err;
-	as_error_reset(&err);
-
-	as_val * res = NULL;
-	as_list arglist;
-	as_arraylist_init(&arglist, 1, 0);
-	as_list_append_str(&arglist, "src/test/lua/client_record_basics.lua");
-
-	as_status rc = aerospike_key_apply(as, &err, NULL, "test", "test", "foo", UDF_FILE, "file_exists", &arglist, &res);
-
-    assert_int_eq( rc, AEROSPIKE_OK );
-	assert_not_null( res );
-
-    as_integer * i = as_integer_fromval(res);
-    assert_not_null( i );
-    assert_int_eq(  as_integer_toint(i), 1 );
-#endif
 }
 
-TEST( key_apply2_getboolean, "getboolean() - get a boolean" ) {
+// TEST( key_apply2_getboolean , "apply2: (test,test,foo) <!> key_apply2.getboolean() => 1" ) {
 
-    int rc = 0;
+// 	as_error err;
+// 	as_error_reset(&err);
 
-    as_result r;
-    as_success_init(&r,NULL);
+// 	as_val * res = NULL;
 
-    rc = udf_apply_record("test", "test", "test", UDF_FILE, "getboolean", NULL, &r);
+// 	as_list arglist;
+// 	as_arraylist_init(&arglist, 1, 0);
+// 	as_list_append_str(&arglist, "a");
 
-    print_result(rc, &r);
+// 	as_status rc = aerospike_key_apply(as, &err, NULL, "test", "test", "foo", UDF_FILE, "getboolean", &arglist, &res);
 
-    assert_int_eq( rc, 0 );
-    assert_true( r.is_success );
-    assert_not_null( r.value );
-    assert( as_val_type(r.value) == AS_BOOLEAN );
-    assert_true( as_boolean_tobool((as_boolean *) r.value) );
+// 	assert_int_eq( rc, AEROSPIKE_OK );
+// 	assert_not_null( res );
+// 	assert( res->type == AS_BOOLEAN );
 
-    as_result_destroy(&r);
-}
-
-/* TODO : This must be preceded by a put_boolean of a, un-supported API as of now
- * along with float api's.
- */
-TEST( key_apply2_getboolean , "apply2: (test,test,foo) <!> key_apply2.getboolean() => 1" ) {
-
-	as_error err;
-	as_error_reset(&err);
-
-	as_val * res = NULL;
-
-	as_list arglist;
-	as_arraylist_init(&arglist, 1, 0);
-	as_list_append_str(&arglist, "a");
-
-	as_status rc = aerospike_key_apply(as, &err, NULL, "test", "test", "foo", UDF_FILE, "getboolean", &arglist, &res);
-
-	assert_int_eq( rc, AEROSPIKE_OK );
-	assert_not_null( res );
-	assert( res->type == AS_BOOLEAN );
-
-}
+// }
 
 TEST( key_apply2_getinteger , "apply2: (test,test,foo) <!> key_apply2.getinteger() => 123" ) {
 	as_error err;

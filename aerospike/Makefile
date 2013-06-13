@@ -150,4 +150,4 @@ $(TARGET_INCL)/citrusleaf/%.h:: $(SOURCE_INCL)/citrusleaf/%.h | $(TARGET_INCL)/c
 	cp $^ $@
 
 ###############################################################################
-include project/modules.mk project/test.mk $(ROOT)/project/rules.mk
+include project/modules.mk project/test.mk project/docs.mk $(ROOT)/project/rules.mk

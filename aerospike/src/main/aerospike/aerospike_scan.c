@@ -103,7 +103,7 @@ static as_status process_node_response(cf_vector *v, as_error *err)
 	// This returns a vector of return values, the size of which is the size of the cluster
 	int sz = cf_vector_size(v);
 	cl_node_response resp;
-	for(int i=0; i <= sz; i++) {
+	for(int i=0; i < sz; i++) {
 
 		cf_vector_get(v, i, &resp);
 		// Even if one of the node responded with an error, set the overall status as error
@@ -116,7 +116,8 @@ static as_status process_node_response(cf_vector *v, as_error *err)
 	}
 
 	// Free the result vector
-	cf_vector_destroy(v);
+	// TODO: Deferred this till the vector issue is solved
+	// cf_vector_destroy(v);
 
 	return rc;
 }
@@ -179,7 +180,6 @@ static as_status aerospike_scan_generic(
 	cl_scan clscan;
 	as_scan_toclscan(scan, p, &clscan, false, NULL);
 
-	// If the user want to execute only on a single node...
 	if ( clscan.udf.type == CL_SCAN_UDF_NONE ) {
 
 		scan_bridge bridge_udata = {
@@ -190,21 +190,27 @@ static as_status aerospike_scan_generic(
 		struct cl_scan_parameters_s params = {
 			.fail_on_cluster_change = clscan.params.fail_on_cluster_change,
 			.priority = clscan.params.priority,
-			.concurrent_nodes = true,
+			.concurrent_nodes = false,
 			.threads_per_node = 0
 		};
 
+		// If the user want to execute only on a single node...
 		if (node) {
 			clrv = citrusleaf_scan_node(as->cluster, (char *) node, scan->namespace, scan->set, NULL, 0, 
 						scan->no_bins, scan->percent, simplescan_cb, &bridge_udata, &params);
 			rc = as_error_fromrc(err, clrv);
 		} else {
+
+			// We are not using the very old citrusleaf_scan() call here. First of all, its
+			// very inefficient. It makes a single node on the cluster coordinate the job
+			// of scan. Moreover, it does not accept params like priority etc.
 			cf_vector *v = citrusleaf_scan_all_nodes(as->cluster, scan->namespace, scan->set, NULL, 0, 
 						scan->no_bins, scan->percent, simplescan_cb, &bridge_udata, &params);
 			rc = process_node_response(v, err);
 		}
 
 	} else {
+		// If the user want to execute only on a single node...
 		if (node) {
 			clrv = citrusleaf_udf_scan_node(as->cluster, &clscan, (char *)node, (aerospike_scan_foreach_callback) callback, udata);
 			rc = as_error_fromrc(err, clrv);

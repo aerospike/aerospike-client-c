@@ -175,9 +175,6 @@ as_status aerospike_close(aerospike * as, as_error * err)
 	extern as_status aerospike_scan_destroy(aerospike * as, as_error * err);
 	rc = rc || aerospike_scan_destroy(as, err);
 
-	extern as_status aerospike_scan_destroy(aerospike * as, as_error * err);
-	rc = rc || aerospike_scan_destroy(as, err);
-
 	citrusleaf_cluster_destroy(as->cluster);
 	as->cluster = NULL;
 

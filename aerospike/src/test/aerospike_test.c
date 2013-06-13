@@ -143,5 +143,8 @@ PLAN( aerospike_test ) {
     plan_add( query_stream );
     plan_add( query_foreach );
 
+    // aerospike_scan module
+    plan_add( scan_basics );
+
 }
 

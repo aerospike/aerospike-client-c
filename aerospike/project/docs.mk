@@ -1,7 +1,7 @@
 
 .PHONY: html
-html: doc
+html: docs
 
-.PHONY: doc
-doc:
+.PHONY: docs
+docs:
 	doxygen project/doxyfile

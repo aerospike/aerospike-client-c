@@ -231,7 +231,7 @@ as_status aerospike_digest_put(
 
 	as_record_tobins(rec, values, nvalues);
 
-	cl_rv rc = citrusleaf_put_digest(as->cluster, ns, (cf_digest *) digest->value, values, nvalues, &wp);
+	cl_rv rc = citrusleaf_put_digest_with_setname(as->cluster, ns, digest->set, (cf_digest *) digest->value, values, nvalues, &wp);
 
 	return as_error_fromrc(err,rc);  
 }

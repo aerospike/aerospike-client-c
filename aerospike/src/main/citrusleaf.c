@@ -1690,6 +1690,18 @@ citrusleaf_put_digest(cl_cluster *asc, const char *ns, const cf_digest *digest, 
 			&trid, NULL, NULL) );
 }
 
+extern cl_rv
+citrusleaf_put_digest_with_setname(cl_cluster *asc, const char *ns, const char *set, const cf_digest *digest, const cl_bin *values, int n_values, const cl_write_parameters *cl_w_p)
+{
+    if (!g_initialized) return(-1);
+
+    
+    	uint64_t trid=0;
+	return( do_the_full_monte( asc, 0, CL_MSG_INFO2_WRITE, 0, ns, set, 0, digest, 
+			(cl_bin **) &values, CL_OP_WRITE, 0, &n_values, NULL, cl_w_p, 
+			&trid, NULL, NULL) );
+}
+
 cl_rv
 citrusleaf_put_replace(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, const cl_bin *values, int n_values, const cl_write_parameters *cl_w_p)
 {

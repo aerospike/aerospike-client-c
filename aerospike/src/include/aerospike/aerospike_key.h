@@ -20,6 +20,14 @@
  * IN THE SOFTWARE.
  *****************************************************************************/
 
+/**
+ * Aerospike provides a key based API to read and write data into the cluster.
+ * When using the key API, you need to provide both a key and a set.
+ *
+ * @addtogroup Key Key API
+ * @{
+ */
+
 #pragma once 
 
 #include <aerospike/aerospike.h>
@@ -212,3 +220,7 @@ as_status aerospike_key_operate(
 	const char * ns, const char * set, const char * key, 
 	const as_binop * ops, uint32_t nops
 	);
+
+/** 
+ * @}
+ */

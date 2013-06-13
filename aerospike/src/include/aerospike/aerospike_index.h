@@ -28,6 +28,11 @@
 #include <aerospike/as_policy.h>
 #include <aerospike/as_status.h>
 
+/** 
+ * @addtogroup Index Index Management API
+ * @{
+ */
+
 /******************************************************************************
  * FUNCTIONS
  *****************************************************************************/
@@ -77,3 +82,7 @@ as_status aerospike_index_remove(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
 	const char * ns, const char * name); 
 
+
+/** 
+ * @}
+ */

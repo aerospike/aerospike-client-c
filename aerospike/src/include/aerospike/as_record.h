@@ -53,9 +53,9 @@
 typedef struct as_record_s {
 
 	/**
+	 * @private
 	 * as_record is "derived" from as_rec.
-	 * So you can actually type cast as_record to
-	 * as_rec.
+	 * So you can actually type cast as_record to as_rec.
 	 */
 	as_rec _;
 
@@ -80,6 +80,7 @@ typedef struct as_record_s {
 	struct {
 
 		/**
+		 * @private
 		 * If true, then as_record_destroy() will free data
 		 */
 		bool _free;

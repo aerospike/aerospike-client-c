@@ -27,6 +27,11 @@
 #include <aerospike/as_udf.h>
 #include <stdarg.h>
 
+/** 
+ * @defgroup Query Query API
+ * @{
+ */
+
 /******************************************************************************
  * MACROS
  *****************************************************************************/
@@ -45,12 +50,25 @@
  * Union of supported predicates
  */
 typedef union as_predicate_value_u {
+	
+	/**
+	 * String Value
+	 */
 	char * string;
+
+	/**
+	 * Integer Value
+	 */
 	int64_t integer;
+
+	/**
+	 * Integer Range Value
+	 */
 	struct {
 		int64_t min;
 		int64_t max;
 	} integer_range;
+
 } as_predicate_value;
 
 /**
@@ -103,11 +121,95 @@ typedef struct as_orderby_s {
 } as_orderby;
 
 /**
+ * Sequence of bins which should be selected during a query.
+ */
+typedef struct as_query_select_s {
+
+	/**
+	 * @private
+	 * If true, then as_query_destroy() will free this instance.
+	 */
+	bool _free;
+
+	/**
+	 * Number of entries allocated
+	 */
+	uint16_t capacity;
+
+	/**
+	 * Number of entries used
+	 */
+	uint16_t size;
+
+	/**
+	 * Sequence of entries
+	 */
+	as_bin_name * entries;
+
+} as_query_select;
+
+/**
+ * Sequence of predicates to be applied to a query.
+ */
+typedef struct as_query_predicates_s {
+
+	/**
+	 * @private
+	 * If true, then as_query_destroy() will free this instance.
+	 */
+	bool _free;
+
+	/**
+	 * Number of entries allocated
+	 */
+	uint16_t capacity;
+
+	/**
+	 * Number of entries used
+	 */
+	uint16_t size;
+
+	/**
+	 * Sequence of entries
+	 */
+	as_predicate * 	entries;
+
+} as_query_predicates;
+
+/**
+ * Sequence of ordering to be applied to a query results.
+ */
+typedef struct as_query_orderby_s {
+
+	/**
+	 * @private
+	 * If true, then as_query_destroy() will free this instance.
+	 */
+	bool _free;
+
+	/**
+	 * Number of entries allocated
+	 */
+	uint16_t capacity;
+
+	/**
+	 * Number of entries used
+	 */
+	uint16_t size;
+
+	/**
+	 * Sequence of entries
+	 */
+	as_orderby * entries;
+} as_query_orderby;
+
+/**
  * Describes the query.
  */
 typedef struct as_query_s {
 
 	/**
+	 * @private
 	 * If true, then as_query_destroy() will free this instance.
 	 */
 	bool _free;
@@ -153,12 +255,7 @@ typedef struct as_query_s {
 	 *
 	 * The as_query_select() function will automatically malloc() entries, if entries is NULL.
 	 */
-	struct {
-		bool 			_free;
-		uint16_t 		capacity;
-		uint16_t 		size;
-		as_bin_name * 	entries;
-	} select;
+	as_query_select select;
 
 	/**
 	 * Predicates for filtering.
@@ -191,12 +288,7 @@ typedef struct as_query_s {
 	 *
 	 * The as_query_where() function will automatically malloc() entries, if entries is NULL.
 	 */
-	struct {
-		bool 			_free;
-		uint16_t 		capacity;
-		uint16_t 		size;
-		as_predicate * 	entries;
-	} predicates;
+	as_query_predicates predicates;
 
 	/**
 	 * Bins to order by.
@@ -229,12 +321,7 @@ typedef struct as_query_s {
 	 *
 	 * The as_query_orderby() function will automatically malloc() entries, if entries is NULL.
 	 */
-	struct {
-		bool 			_free;
-		uint16_t 		capacity;
-		uint16_t 		size;
-		as_orderby * 	entries;
-	} orderby;
+	as_query_orderby orderby;
 
 	/**
 	 * Limit the result set.
@@ -365,3 +452,7 @@ int as_query_limit(as_query * query, uint64_t limit);
  * @param 0 on success. Otherwise an error occurred.
  */
 int as_query_apply(as_query * query, const char * module, const char * function, const as_list * arglist);
+
+/**
+ * @}
+ */

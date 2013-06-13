@@ -36,7 +36,7 @@
 /**
  * Callback for aerospike_query_foreach().
  */
-typedef bool (* aerospike_query_foreach_callback)(const as_val *, void *);
+typedef bool (* aerospike_query_foreach_callback)(as_val *, void *);
 
 /******************************************************************************
  * FUNCTIONS

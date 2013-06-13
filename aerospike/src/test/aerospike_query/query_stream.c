@@ -241,134 +241,121 @@ TEST( query_stream_2, "count(*) where a == 'abc' (aggregating)" ) {
     as_stream_destroy(consumer);
 }
 
-// TEST( query_stream_3, "sum(e) where a == 'abc'" ) {
+TEST( query_stream_3, "sum(e) where a == 'abc'" ) {
     
-//     int rc = 0;
+	as_error err;
+	as_error_reset(&err);
 
-//     as_integer * result = NULL;
+    int64_t value = 0;
 
-//     as_stream_status consume(as_val * v) {
-//         if ( v != AS_STREAM_END ) {
-//             if ( result != NULL ) as_val_destroy(result);
-//             result = as_integer_fromval(v);
-//         }
-//         return AS_STREAM_OK;
-//     }
+    as_stream_status consume(as_val * v) {
+        if ( v != AS_STREAM_END ) {
+        	as_error(&as->log, "hello ");
+            as_integer * result = as_integer_fromval(v);
+            if ( result != NULL ) {
+            	value = as_integer_toint(result);
+            }
+            as_val_destroy(result);
+        }
+        return AS_STREAM_OK;
+    }
 
-//     as_stream * consumer = consumer_stream_new(consume);
-
-//     as_query * q = as_query_new("test", "test");
-//     as_query_where(q, "a", string_equals("abc"));
-//     as_query_aggregate(q, UDF_FILE, "sum", NULL);
+    as_stream * consumer = consumer_stream_new(consume);
     
-//     rc = citrusleaf_query_stream(cluster, q, consumer);
+    as_query q;
+    as_query_init(&q, NAMESPACE, SET);
+    as_query_where(&q, "a", string_equals("abc"));
+    as_query_apply(&q, UDF_FILE, "sum", NULL);
 
-//     if ( rc ) {
-//         error("error: %d", rc);
-//     }
-//     else {
-// 		if (result) {
-// 	        info("result: %d", as_integer_toint(result) );
-// 		}
-//     }
+    aerospike_query_stream(as, &err, NULL, &q, consumer);
 
-//     assert_int_eq( rc, 0 );
-//     assert_not_null( result );
-// 	if (result) {
-// 	    assert_int_eq( as_integer_toint(result), 24275 );
-//     	as_integer_destroy(result);
-// 	}
-//     as_query_destroy(q);
-//     as_stream_destroy(consumer);
-// }
+    info("value: %d", value);
+
+    assert_int_eq( err.code, 0 );
+    assert_int_eq( value, 24275 );
+
+    as_query_destroy(&q);
+    as_stream_destroy(consumer);
+}
 
 
-// TEST( query_stream_4, "sum(d) where b == 100 and d == 1" ) {
+TEST( query_stream_4, "sum(d) where b == 100 and d == 1" ) {
     
-//     int rc = 0;
+	as_error err;
+	as_error_reset(&err);
 
-//     as_integer * result = NULL;
+    int64_t value = 0;
 
-//     as_stream_status consume(as_val * v) {
-//         if ( v != AS_STREAM_END ) {
-//             result = as_integer_fromval(v);
-//         }
-//         return AS_STREAM_OK;
-//     }
+    as_stream_status consume(as_val * v) {
+        if ( v != AS_STREAM_END ) {
+            as_integer * result = as_integer_fromval(v);
+            if ( result != NULL ) {
+            	value = as_integer_toint(result);
+            }
+            as_val_destroy(result);
+        }
+        return AS_STREAM_OK;
+    }
 
-//     as_stream * consumer = consumer_stream_new(consume);
+    as_stream * consumer = consumer_stream_new(consume);
 
-//     as_list * args = as_arraylist_new(2,0);
-//     as_list_add_string(args, "d");
-//     as_list_add_integer(args, 1);
+    as_list args;
+    as_arraylist_init(&args, 2,0);
+    as_list_append_str(&args, "d");
+    as_list_append_int64(&args, 1);
 
-//     as_query * q = as_query_new("test", "test");
-//     as_query_where(q, "b", integer_equals(100));
-//     as_query_aggregate(q, UDF_FILE, "sum_on_match", args);
+    as_query q;
+    as_query_init(&q, NAMESPACE, SET);
+    as_query_where(&q, "b", integer_equals(100));
+    as_query_apply(&q, UDF_FILE, "sum_on_match", NULL);
+
+    aerospike_query_stream(as, &err, NULL, &q, consumer);
+
+    info("value: %d", value);
+
+    assert_int_eq( err.code, 0 );
+    assert_int_eq( value, 10 );
+
+    as_query_destroy(&q);
+    as_stream_destroy(consumer);
+}
+
+TEST( query_stream_5, "c where b == 100 group by d" ) {
     
-//     rc = citrusleaf_query_stream(cluster, q, consumer);
+	as_error err;
+	as_error_reset(&err);
 
-//     if ( rc ) {
-//         error("error: %d", rc);
-//     }
-//     else {
-// 		if (result) { 
-// 	        info("result: %d", as_integer_toint(result) );
-// 		}
-//     }
+    as_val * result = NULL;
 
-//     assert_int_eq( rc, 0 );
-//     assert_not_null( result );
-// 	if (result) {
-//     	assert_int_eq( as_integer_toint(result), 10 );
-//     	as_integer_destroy(result);
-// 	}
-//     as_query_destroy(q);
-//     as_stream_destroy(consumer);
-// }
+    as_stream_status consume(as_val * v) {
+        if ( v != AS_STREAM_END ) {
+            result = v;
+        }
+        return AS_STREAM_OK;
+    }
 
-// TEST( query_stream_5, "c where b == 100 group by d" ) {
+    as_stream * consumer = consumer_stream_new(consume);
+
+    as_query q;
+    as_query_init(&q, "test", "test");
+    as_query_where(&q, "b", integer_equals(100));
+    as_query_apply(&q, UDF_FILE, "grouping", NULL);
     
-//     int rc = 0;
+    aerospike_query_stream(as, &err, NULL, &q, consumer);
 
-//     as_val * result = NULL;
+	if (result) {
+        char * s = as_val_tostring(result);
+	    info("value: %s", s );
+    	free(s);
+	}
 
-//     as_stream_status consume(as_val * v) {
-//         if ( v != AS_STREAM_END ) {
-//             result = v;
-//         }
-//         return AS_STREAM_OK;
-//     }
+    assert_int_eq( err.code, 0 );
+	assert_int_eq( as_val_type(result), AS_MAP );
 
-//     as_stream * consumer = consumer_stream_new(consume);
-
-
-//     as_query * q = as_query_new("test", "test");
-//     as_query_where(q, "b", integer_equals(100));
-//     as_query_aggregate(q, UDF_FILE, "grouping", NULL);
-    
-//     rc = citrusleaf_query_stream(cluster, q, consumer);
-
-//     if ( rc ) {
-//         error("error: %d", rc);
-//     }
-//     else {
-// 		if (result) {
-// 	        char * s = as_val_tostring(result);
-//     	    info("result: %s", s );
-//         	free(s);
-// 		}
-//     }
-
-//     assert_int_eq( rc, 0 );
-//     assert_not_null( result );
-// 	if (result) {
-// 	    assert_int_eq( as_val_type(result), AS_MAP );
-//     	as_val_destroy(result);
-// 	}
-//     as_query_destroy(q);
-//     as_stream_destroy(consumer);
-// }
+	as_val_destroy(result);
+    as_query_destroy(&q);
+    as_stream_destroy(consumer);
+}
 
 
 /******************************************************************************

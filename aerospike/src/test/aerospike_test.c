@@ -141,7 +141,7 @@ PLAN( aerospike_test ) {
 
     // aerospike_query module
     plan_add( query_stream );
-    // plan_add( query_foreach );
+    plan_add( query_foreach );
 
 }
 

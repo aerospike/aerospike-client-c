@@ -137,7 +137,7 @@ static int simplescan_cb(char *ns, cf_digest *keyd, char *set, uint32_t generati
 		as_record_frombins(r, bins, n_bins);
 
 		// Fill the metadata
-		r->digest.set = strdup(set);
+		r->digest.set = set ? strdup(set) : NULL;
 		memcpy(r->digest.value, keyd, sizeof(cf_digest));
 		r->gen = generation;
 		r->ttl = record_void_time;
@@ -317,7 +317,7 @@ as_status aerospike_scan_foreach(
 		return err->code;
 	}
 
-	return aerospike_scan_generic(as, err, policy, NULL, scan, callback, NULL);
+	return aerospike_scan_generic(as, err, policy, NULL, scan, callback, udata);
 }
 
 /**
@@ -344,7 +344,7 @@ as_status aerospike_scan_node_foreach(
 		return err->code;
 	}
 
-	return aerospike_scan_generic(as, err, policy, node, scan, callback, NULL);
+	return aerospike_scan_generic(as, err, policy, node, scan, callback, udata);
 }
 
 /**

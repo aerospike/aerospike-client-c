@@ -121,7 +121,8 @@ PLAN( aerospike_test ) {
 
     plan_before( before );
     plan_after( after );
-    
+
+	/*
     // aerospike_key module
     plan_add( key_basics );
     plan_add( key_apply );
@@ -143,6 +144,7 @@ PLAN( aerospike_test ) {
     // aerospike_query module
     plan_add( query_stream );
     plan_add( query_foreach );
+	*/
 
     // aerospike_scan module
     plan_add( scan_basics );

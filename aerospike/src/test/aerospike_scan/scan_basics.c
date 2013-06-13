@@ -44,7 +44,6 @@ typedef struct scan_struct_s {
 	scan_struct *scan_data = (scan_struct *)udata;
 	as_record *rec = (as_record *)val;
 
-	printf("-----------------------------------------------------------\n");
 	scan_data->rec_count++;
 
 	// Check that we got the right number of bins

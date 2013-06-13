@@ -83,7 +83,8 @@ void as_digest_destroy(as_digest * digest)
  */
 void as_digest_compute(as_digest * digest)
 {
-	if ( digest->set && digest->key ) {
+	// Null setname is valid. Only check if key is set.
+	if ( digest->key ) {
 		cf_digest_compute2(digest->set, strlen(digest->set), digest->key, strlen(digest->key), (cf_digest *) digest->value);
 	}
 }

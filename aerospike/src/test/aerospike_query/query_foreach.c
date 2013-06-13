@@ -300,7 +300,7 @@ TEST( query_foreach_4, "sum(d) where b == 100 and d == 1" ) {
     as_query q;
     as_query_init(&q, NAMESPACE, SET);
     as_query_where(&q, "b", integer_equals(100));
-    as_query_apply(&q, UDF_FILE, "sum_on_match", NULL);
+    as_query_apply(&q, UDF_FILE, "sum_on_match", &args);
 
     aerospike_query_foreach(as, &err, NULL, &q, query_foreach_4_callback, &value);
 
@@ -321,9 +321,9 @@ static bool query_foreach_5_callback(as_val * v, void * udata) {
 }
 
 TEST( query_foreach_5, "c where b == 100 group by d" ) {
-    
-	as_error err;
-	as_error_reset(&err);
+
+        as_error err;
+        as_error_reset(&err);
 
     as_val * result = NULL;
 
@@ -333,29 +333,27 @@ TEST( query_foreach_5, "c where b == 100 group by d" ) {
         }
         return AS_STREAM_OK;
     }
-
     as_stream * consumer = consumer_stream_new(consume);
 
     as_query q;
     as_query_init(&q, "test", "test");
     as_query_where(&q, "b", integer_equals(100));
     as_query_apply(&q, UDF_FILE, "grouping", NULL);
-    
+
     aerospike_query_foreach(as, &err, NULL, &q, query_foreach_5_callback, &result);
 
-	if (result) {
+        if (result) {
         char * s = as_val_tostring(result);
-	    info("value: %s", s );
-    	free(s);
-	}
+            info("value: %s", s );
+        free(s);
+        }
 
     assert_int_eq( err.code, 0 );
-	assert_int_eq( as_val_type(result), AS_MAP );
+        assert_int_eq( as_val_type(result), AS_MAP );
 
-	as_val_destroy(result);
+        as_val_destroy(result);
     as_query_destroy(&q);
 }
-
 
 /******************************************************************************
  * TEST SUITE
@@ -369,7 +367,7 @@ SUITE( query_foreach, "aerospike_query_foreach tests" ) {
     suite_add( query_foreach_create );
     suite_add( query_foreach_1 );
     suite_add( query_foreach_2 );
-    // suite_add( query_foreach_3 );
-    // suite_add( query_foreach_4 );
-    // suite_add( query_foreach_5 );
+    suite_add( query_foreach_3 );
+    suite_add( query_foreach_4 );
+    suite_add( query_foreach_5 );
 }

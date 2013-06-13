@@ -122,6 +122,40 @@ TEST( key_apply2_getinteger , "apply2: (test,test,foo) <!> key_apply2.getinteger
 	assert( res->type == AS_INTEGER );
 }
 
+TEST( key_apply2_getstring , "apply2: (test,test,foo) <!> key_apply2.getstring() => abc" ) {
+	as_error err;
+	as_error_reset(&err);
+
+	as_val * res = NULL;
+
+	as_list arglist;
+	as_arraylist_init(&arglist, 1, 0);
+	as_list_append_str(&arglist, "b");
+
+	as_status rc = aerospike_key_apply(as, &err, NULL, "test", "test", "foo", UDF_FILE, "getstring", &arglist, &res);
+
+	assert_int_eq( rc, AEROSPIKE_OK );
+	assert_not_null( res );
+	assert( res->type == AS_STRING );
+}
+
+TEST( key_apply2_getlist , "apply2: (test,test,foo) <!> key_apply2.getlist() => [1,2,3]" ) {
+	as_error err;
+	as_error_reset(&err);
+
+	as_val * res = NULL;
+
+	as_list arglist;
+	as_arraylist_init(&arglist, 1, 0);
+	as_list_append_str(&arglist, "e");
+
+	as_status rc = aerospike_key_apply(as, &err, NULL, "test", "test", "foo", UDF_FILE, "getlist", &arglist, &res);
+
+	assert_int_eq( rc, AEROSPIKE_OK );
+	assert_not_null( res );
+	assert( res->type == AS_LIST );
+
+}
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -132,5 +166,8 @@ SUITE( key_apply2, "aerospike_key_apply2 tests" ) {
     suite_after( after );
     suite_add( key_apply2_file_exists );
     suite_add ( key_apply2_getinteger );
+    suite_add ( key_apply2_getstring );
+    suite_add ( key_apply2_getlist );
+
 
 }

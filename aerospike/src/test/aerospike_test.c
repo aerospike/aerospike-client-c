@@ -60,7 +60,7 @@ static bool before(atf_plan * plan) {
     }
 
     as_config config = {
-        .nonblocking = false,
+        .non_blocking = false,
         .hosts = { 
         	{ .addr = HOST, .port = PORT },
         	{ 0 }
@@ -137,7 +137,7 @@ PLAN( aerospike_test ) {
     plan_add( udf_basics );
 
     //aerospike_sindex module
-    plan_add( sindex_basics );
+    plan_add( index_basics );
 
     // aerospike_query module
     plan_add( query_stream );

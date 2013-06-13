@@ -87,6 +87,7 @@ as_status aerospike_udf_list(
 			as_udf_file * asfile = &list->files[i];
 			cl_udf_file * clfile = files[i];
 			clfile_to_asfile(clfile, asfile);
+			asfile->_free = false;
 
 			free(clfile);
 			files[i] = NULL;

@@ -20,86 +20,82 @@
  * IN THE SOFTWARE.
  *****************************************************************************/
 
-#pragma once 
-
-#include <aerospike/as_udf.h>
+#include <citrusleaf/as_scan.h>
+#include <citrusleaf/cl_scan.h>
+#include <citrusleaf/cf_random.h>
 
 /******************************************************************************
  * TYPES
  *****************************************************************************/
 
-/**
- * Priority levels for a scan operation.
- */
-typedef enum as_scan_priority_e { 
-	AS_SCAN_PRIORITY_AUTO, 
-	AS_SCAN_PRIORITY_LOW, 
-	AS_SCAN_PRIORITY_MEDIUM, 
-	AS_SCAN_PRIORITY_HIGH
-} as_scan_priority;
+static as_scan * as_scan_defaults(as_scan * scan, bool free, const char * ns, const char * set)
+{
+	if (scan == NULL) return scan;
 
-/**
- * Defines the scan operation.
- */
-typedef struct as_scan_s {
+	scan->_free = true;
 
-	/**
-	 * If true, then as_scan_destroy() will free this instance.
-	 */
-	bool _free;
-
-	/**
-	 * Priority of scan.
-	 */
-	as_scan_priority priority;
-
-	/**
-	 * Percentage of the data to scan.
-	 */
-	uint8_t percent;
-
-	/**
-	 * Set to true if the scan should return only the metadata of the record.
-	 */
-	bool no_bins;
-
-	/**
-	 * The namespace to scan.
-	 */
-	char * namespace;
-
-	/**
-	 * The set to scan
-	 */
-	char * set;
+	scan->namespace = ns ? strdup(ns) : NULL;
+	scan->set = set ? strdup(set) : NULL;
 	
-	/**
-	 * Apply the function for each record scanned.
-	 */
-	as_udf_call foreach;
+	scan->type = AS_SCAN_TYPE_NORMAL;
+	scan->priority = AS_SCAN_PRIORITY_LOW;
+	scan->percent = 100;
+	scan->no_bins = false;
+	
+	as_udf_call_init(&scan->foreach, NULL, NULL, NULL);
 
-} as_scan;
-
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
-
-/**
- * Initializes a scan.
- */
-as_scan * as_scan_init(as_scan * scan, const char * ns, const char * set);
+	return scan;
+}
+}
 
 /**
  * Create and initializes a new scan on the heap.
  */
-as_scan * as_scan_new(const char * ns, const char * set);
+as_scan * as_scan_new(const char * ns, const char * set)
+{
+	as_scan * scan = (as_scan *) malloc(sizeof(as_scan));
+	if ( ! scan ) return NULL;
+	return as_scan_defaults(scan, true, ns, set);
+}
+
+/**
+ * Initializes a scan.
+ */
+as_scan * as_scan_init(as_scan * scan, const char * ns, const char * set)
+{
+	if ( !scan ) return scan;
+	return as_scan_defaults(scan, false, ns, set);
+}
 
 /**
  * Releases all resources allocated to the scan.
  */
-void as_scan_destroy(as_scan * scan);
+void as_scan_destroy(as_scan * scan)
+{
+	if ( scan ) return;
+
+	if ( scan->namespace ) {
+		free(scan->namespace);
+		scan->namespace = NULL;
+	}
+
+	if ( scan->set ) {
+		free(scan->set);
+		scan->set = NULL;
+	}
+
+	as_udf_call_destroy(&scan->foreach);
+
+	// If the whole structure should be freed
+	if ( scan->_free ) {
+		free(scan);
+	}
+}
 
 /**
  * Apply a UDF to each record scanned on the server.
  */
-void as_scan_foreach(as_scan * scan, const char * module, const char * function, as_list * arglist);
+void as_scan_foreach(as_scan * scan, const char * module, const char * function, as_list * arglist)
+{
+	as_udf_call_init(&scan->foreach, module, function, arglist);
+}

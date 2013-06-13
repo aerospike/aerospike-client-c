@@ -123,7 +123,7 @@ bool udf_exists(const char * filename) {
     char * base = basename(filename);
 
     if ( aerospike_udf_get(as, &err, NULL, base, AS_UDF_TYPE_LUA, &file) != AEROSPIKE_OK ) {
-        error("error caused by aerospike_udf_get(%s): (%d) %s @ %s[%s:%d]", err.code, err.message, err.func, err.file, err.line);
+        error("error caused by aerospike_udf_get: (%d) %s @ %s[%s:%d]", err.code, err.message, err.func, err.file, err.line);
     }
 
     as_udf_file_destroy(&file);

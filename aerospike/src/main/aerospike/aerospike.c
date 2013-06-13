@@ -35,11 +35,7 @@
  * FUNCTIONS
  *****************************************************************************/
 
-/**
- * Initialize the aerospike object on the stack
- * @returns the initialized aerospike object
- */
-aerospike * aerospike_init(aerospike * as, as_config * config) 
+static aerospike * aerospike_defaults(aerospike * as, bool free, as_config * config)
 {
 	as->_free = false;
 	as->cluster = NULL;
@@ -53,32 +49,32 @@ aerospike * aerospike_init(aerospike * as, as_config * config)
 }
 
 /**
+ * Initialize the aerospike object on the stack
+ * @returns the initialized aerospike object
+ */
+aerospike * aerospike_init(aerospike * as, as_config * config) 
+{
+	if ( !as ) return as;
+	return aerospike_defaults(as, false, config);
+}
+
+/**
  * Creates a new aerospike object on the heap
  * @returns a new aerospike object
  */
 aerospike * aerospike_new(as_config * config) 
 {
 	aerospike * as = (aerospike *) malloc(sizeof(aerospike));
-	as->_free = true;
-	as->cluster = NULL;
-	if ( config != NULL ) {
-		memcpy(&as->config, config, sizeof(as_config));
-	}
-	// else {
-	//     as_config_init(&as->config);
-	// }
-	return as;
+	if ( !as ) return as;
+	return aerospike_defaults(as, false, config);
 }
 
 /**
- * Destroy the aerospike obect
+ * Destroy the aerospike instance
  */
 void aerospike_destroy(aerospike * as) {
-	as_error err;
-	aerospike_close(as, &err);
 	if ( as->_free ) {
 		free(as);
-		as->_free = false;
 	}
 }
 
@@ -90,69 +86,68 @@ as_status aerospike_connect(aerospike * as, as_error * err)
 	extern cf_atomic32 g_initialized;
 	extern int g_init_pid;
 
-	if ( ! g_initialized ) {
-		_log_debug("connecting...");
-		
-		// remember the process id which is spawning the background threads.
-		// only this process can call a pthread_join() on the threads that it spawned.
-		g_init_pid = getpid();
+	if ( g_initialized ) {
+		_log_debug("already connected.");
+		return as_error_reset(err);
+	}
 
-	    mod_lua_config config = {
-	        .server_mode    = false,
-	        .cache_enabled  = as->config.mod_lua.cache_enabled,
-	        .system_path    = {0},
-	        .user_path      = {0}
-	    };
-	    memcpy(config.system_path, as->config.mod_lua.system_path, sizeof(config.system_path));
-	    memcpy(config.user_path, as->config.mod_lua.user_path, sizeof(config.user_path));
+	_log_debug("connecting...");
+	
+	// remember the process id which is spawning the background threads.
+	// only this process can call a pthread_join() on the threads that it spawned.
+	g_init_pid = getpid();
 
-	    if ( mod_lua.logger == NULL ) {
-	        mod_lua.logger = test_logger_new();
-	    }
-	    
-	    as_module_configure(&mod_lua, &config);
-		_log_debug("as_module_configure(mod_lua) OK");
+    mod_lua_config config = {
+        .server_mode    = false,
+        .cache_enabled  = as->config.mod_lua.cache_enabled,
+        .system_path    = {0},
+        .user_path      = {0}
+    };
+    memcpy(config.system_path, as->config.mod_lua.system_path, sizeof(config.system_path));
+    memcpy(config.user_path, as->config.mod_lua.user_path, sizeof(config.user_path));
+    
+    as_module_configure(&mod_lua, &config);
+	_log_debug("as_module_configure(mod_lua) OK");
 
 
-		// initialize the cluster
-		citrusleaf_cluster_init();
-		_log_debug("citrusleaf_cluster_init() OK");
+	// initialize the cluster
+	citrusleaf_cluster_init();
+	_log_debug("citrusleaf_cluster_init() OK");
 
-		// create the cluster object
-    	as->cluster = citrusleaf_cluster_create();
-		_log_debug("citrusleaf_cluster_create() OK");
+	// create the cluster object
+	as->cluster = citrusleaf_cluster_create();
+	_log_debug("citrusleaf_cluster_create() OK");
 
 #ifdef DEBUG_HISTOGRAM  
-		if ( NULL == (cf_hist = cf_histogram_create("transaction times"))) {
-			cf_error("couldn't create histogram for client");	
-		}
+	if ( NULL == (cf_hist = cf_histogram_create("transaction times"))) {
+		cf_error("couldn't create histogram for client");	
+	}
 #endif  
 
-		g_initialized = true;
-		
-		if ( as->cluster == NULL ) {
-			as_error_update(err, AEROSPIKE_ERR_CLIENT, "Can't create client");
-			return err->code;
-		}
+	g_initialized = true;
+	
+	if ( as->cluster == NULL ) {
+		as_error_update(err, AEROSPIKE_ERR_CLIENT, "Can't create client");
+		return err->code;
+	}
 
-		as->cluster->nbconnect = as->config.nonblocking;
+	as->cluster->nbconnect = as->config.non_blocking;
 
-		uint32_t nhosts = sizeof(as->config.hosts) / sizeof(as_config_host);
-		
-		for ( int i = 0; as->config.hosts[i].addr != NULL && i < nhosts; i ++ ) {
-			_log_debug("connecting to %s:%d", as->config.hosts[i].addr, as->config.hosts[i].port);
-			int rc = citrusleaf_cluster_add_host(as->cluster, as->config.hosts[i].addr, as->config.hosts[i].port, as->config.policies.timeout);
-			if ( rc != 0 ) {
-				as_error_update(err, AEROSPIKE_ERR_CLIENT, "Can't connect to %s:%d", as->config.hosts[i].addr, as->config.hosts[i].port);
-			}
-			else {
-				_log_debug("citrusleaf_cluster_add_host() OK");
-			}
+	uint32_t nhosts = sizeof(as->config.hosts) / sizeof(as_config_host);
+	
+	for ( int i = 0; as->config.hosts[i].addr != NULL && i < nhosts; i ++ ) {
+		_log_debug("connecting to %s:%d", as->config.hosts[i].addr, as->config.hosts[i].port);
+		int rc = citrusleaf_cluster_add_host(as->cluster, as->config.hosts[i].addr, as->config.hosts[i].port, as->config.policies.timeout);
+		if ( rc != 0 ) {
+			as_error_update(err, AEROSPIKE_ERR_CLIENT, "Can't connect to %s:%d", as->config.hosts[i].addr, as->config.hosts[i].port);
 		}
+		else {
+			_log_debug("citrusleaf_cluster_add_host() OK");
+		}
+	}
 
-		if ( err->code == AEROSPIKE_OK ) {
-			_log_debug("connected.");
-		}
+	if ( err->code == AEROSPIKE_OK ) {
+		_log_debug("connected.");
 	}
 	
 	return err->code;
@@ -178,6 +173,12 @@ as_status aerospike_close(aerospike * as, as_error * err)
 
 	extern as_status aerospike_scan_destroy(aerospike * as, as_error * err);
 	rc = rc || aerospike_scan_destroy(as, err);
+
+	extern as_status aerospike_scan_destroy(aerospike * as, as_error * err);
+	rc = rc || aerospike_scan_destroy(as, err);
+
+	citrusleaf_cluster_destroy(as->cluster);
+	as->cluster = NULL;
 
 	return rc;
 }

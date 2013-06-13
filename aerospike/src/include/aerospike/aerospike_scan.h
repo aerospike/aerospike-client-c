@@ -50,9 +50,14 @@ typedef int (* aerospike_scan_foreach_callback)(as_val *, void *);
  * 
  *		as_scan scan;
  *		as_scan_init(&scan, "test", "demo");
+ *
+ *		uint64_t scanid = 0;
  *		
- *		if ( aerospike_scan_node_background(&as, &err, NULL, &scan) != AEROSPIKE_OK ) {
+ *		if ( aerospike_scan_node_background(&as, &err, NULL, &scan, &scanid) != AEROSPIKE_OK ) {
  *          fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *		}
+ *		else {
+ *			printf("Running background scan job: %ll", scanid);
  *		}
  * 
  * @param as        - the aerospike cluster to connect to.
@@ -65,20 +70,24 @@ typedef int (* aerospike_scan_foreach_callback)(as_val *, void *);
  */
 as_status aerospike_scan_background(
 	aerospike * as, as_error * err, const as_policy_scan * policy, 
-	const as_scan * scan
+	const as_scan * scan, uint64_t * scan_id
 	);
 
 /**
  * Scan the records in the specified namespace and set in a specified node.
- *
+ * 
  * Scan will be run in the background by a thread on client side.
- * No callback will be called in this case.
  * 
  *		as_scan scan;
  *		as_scan_init(&scan, "test", "demo");
+ *
+ *		uint64_t scanid = 0;
  *		
  *		if ( aerospike_scan_node_background(&as, &err, NULL, &scan) != AEROSPIKE_OK ) {
  *          fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *		}
+ *		else {
+ *			printf("Running background scan job: %ll", scanid);
  *		}
  * 
  * @param as        - the aerospike cluster to connect to.
@@ -92,7 +101,7 @@ as_status aerospike_scan_background(
  */
 as_status aerospike_scan_node_background(
 	aerospike * as, as_error * err, const as_policy_scan * policy, 
-	const char *node, const as_scan * scan
+	const char *node, const as_scan * scan, uint64_t * scan_id
 	);
 
 /**

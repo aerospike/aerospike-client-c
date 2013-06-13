@@ -37,7 +37,7 @@
 /**
  * Contains information about an error
  */
-struct as_error_s {
+typedef struct as_error_s {
 
 	/**
 	 * Numeric error code
@@ -63,9 +63,8 @@ struct as_error_s {
 	 * Line in the file where the error occurred.
 	 */
 	uint32_t line;
-};
 
-typedef struct as_error_s as_error;
+} as_error;
 
 /******************************************************************************
  * MACROS

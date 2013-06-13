@@ -32,22 +32,20 @@
 /**
  * Operation Identifiers
  */
-enum as_binop_op_e { 
+typedef enum as_binop_op_e { 
 	AS_BINOP_READ       = 1,
 	AS_BINOP_WRITE      = 2, 
 	AS_BINOP_INCR       = 5, 
 	AS_BINOP_APPEND     = 9, 
 	AS_BINOP_PREPEND    = 10, 
 	AS_BINOP_TOUCH      = 11
-};
-
-typedef enum as_binop_op_e as_binop_op;
+} as_binop_op;
 
 /**
  * Operation on a bin.
  * The value for the bin will be applied according to the operation.
  */
-struct as_binop_s {
+typedef struct as_binop_s {
 	/**
 	 * Operation to be performed on a bin.
 	 */
@@ -57,6 +55,5 @@ struct as_binop_s {
 	 * Bin to perform operation on.
 	 */
 	as_bin bin;
-};
-
-typedef struct as_binop_s as_binop;
+	
+} as_binop;

@@ -32,8 +32,12 @@
  * FUNCTIONS
  *****************************************************************************/
 
-static as_query * as_query_empty(as_query * query) 
+static as_query * as_query_defaults(as_query * query, bool free, const char * ns, const char * set) 
 {
+	query->_free = free;
+	query->namespace = ns ? strdup(ns) : NULL;
+	query->set = set ? strdup(set) : NULL;
+
 	query->select._free = false;
 	query->select.capacity = 0;
 	query->select.size = 0;
@@ -69,15 +73,8 @@ static as_query * as_query_empty(as_query * query)
  */
 as_query * as_query_init(as_query * query, const char * ns, const char * set)
 {
-	if ( !query ) {
-		return query;
-	}
-
-	query->_free = false;
-	query->namespace = (char *) ns;
-	query->set = (char *) set;
-
-	return as_query_empty(query);
+	if ( !query ) return query;
+	return as_query_defaults(query, false, ns, set);
 }
 
 /**
@@ -91,12 +88,8 @@ as_query * as_query_init(as_query * query, const char * ns, const char * set)
 as_query * as_query_new(const char * ns, const char * set)
 {
 	as_query * query = (as_query *) malloc(sizeof(as_query));
-
-	query->_free = true;
-	query->namespace = (char *) ns;
-	query->set = (char *) set;
-	
-	return as_query_empty(query);
+	if ( !query ) return query;
+	return as_query_defaults(query, true, ns, set);
 }
 
 /**
@@ -107,6 +100,17 @@ as_query * as_query_new(const char * ns, const char * set)
 void as_query_destroy(as_query * query) 
 {
 	if ( query ) {
+
+		if ( query->namespace ) {
+			free(query->namespace);
+			query->namespace = NULL;
+		}
+
+		if ( query->set ) {
+			free(query->set);
+			query->set = NULL;
+		}
+
 		if ( query->select.entries && query->select._free ) {
 			free(query->select.entries);
 		}

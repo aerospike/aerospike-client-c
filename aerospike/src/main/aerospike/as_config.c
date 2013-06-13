@@ -20,10 +20,9 @@
 
 as_config * as_config_init(as_config * c) 
 {
-	c->nonblocking = true;
-	c->tend_frequency = 1000;
+	c->non_blocking = true;
+	c->tender_interval = 1000;
 	as_policies_init(&c->policies);
-	c->logger = NULL;
 	memset(c->hosts, 0, sizeof(c->hosts));
 	c->mod_lua.cache_enabled = MOD_LUA_CACHE_ENABLED;
 	strcpy(c->mod_lua.system_path, MOD_LUA_SYSTEM_PATH);

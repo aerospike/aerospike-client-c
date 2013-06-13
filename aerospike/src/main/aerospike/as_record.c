@@ -33,8 +33,7 @@
  * STATIC FUNCTIONS
  *****************************************************************************/
 
-static void 		as_record_bins_init(as_record * rec, uint16_t nbins);
-static void 		as_record_rec_init(as_record * rec, bool _free);
+static as_record * as_record_defaults(as_record * rec, bool free, uint16_t nbins);
 
 static bool			as_record_rec_destroy(as_rec * r);
 static uint32_t		as_record_rec_hashcode(const as_rec * r);
@@ -68,8 +67,21 @@ const as_rec_hooks as_record_rec_hooks = {
  * STATIC FUNCTIONS
  *****************************************************************************/
 
-static void as_record_bins_init(as_record * rec, uint16_t nbins) 
+static as_record * as_record_defaults(as_record * rec, bool free, uint16_t nbins) 
 {
+	as_rec * r = &rec->_;
+	as_val_init(&r->_, AS_REC, free);
+	r->data = rec;
+	r->hooks = &as_record_rec_hooks;
+
+	rec->digest._free = false;
+	rec->digest.set = NULL;
+	rec->digest.key = NULL;
+	memset(rec->digest.value, 0, AS_DIGEST_VALUE_LEN);
+
+	rec->gen = 0;
+	rec->ttl = 0;
+
 	if ( nbins > 0 ) {
 		rec->bins._free = true;
 		rec->bins.capacity = nbins;
@@ -82,20 +94,8 @@ static void as_record_bins_init(as_record * rec, uint16_t nbins)
 		rec->bins.size = 0;
 		rec->bins.data = NULL;
 	}
-}
 
-static void as_record_rec_init(as_record * rec, bool _free) 
-{
-	as_rec * r = (as_rec *) &rec->_;
-	as_val_init(&r->_, AS_REC, _free);
-	r->data = rec;
-	r->hooks = &as_record_rec_hooks;
-	rec->digest._free = false;
-	rec->digest.set = NULL;
-	rec->digest.key = NULL;
-	memset(rec->digest.value, 0, AS_DIGEST_VALUE_LEN);
-	rec->gen = 0;
-	rec->ttl = 0;
+	return rec;
 }
 
 static bool as_record_rec_destroy(as_rec * r) 
@@ -178,9 +178,8 @@ static uint16_t as_record_rec_numbins(const as_rec * r)
 as_record * as_record_new(uint16_t nbins) 
 {
 	as_record * rec = (as_record *) malloc(sizeof(as_record));
-	as_record_rec_init(rec, true);
-	as_record_bins_init(rec, nbins);
-	return rec;
+	if ( !rec ) return rec;
+	return as_record_defaults(rec, true, nbins);
 }
 
 /**
@@ -198,9 +197,8 @@ as_record * as_record_new(uint16_t nbins)
  */
 as_record * as_record_init(as_record * rec, uint16_t nbins) 
 {
-	as_record_rec_init(rec, false);
-	as_record_bins_init(rec, nbins);
-	return rec;
+	if ( !rec ) return rec;
+	return as_record_defaults(rec, false, nbins);
 }
 
 /**
@@ -214,6 +212,7 @@ void as_record_destroy(as_record * rec)
 			free(rec->digest.key);
 			rec->digest.key = NULL;
 		}
+		
 		if (rec->digest.set) {
 			free(rec->digest.set);
 			rec->digest.set = NULL;

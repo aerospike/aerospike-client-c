@@ -131,7 +131,7 @@ static int scan_compile(const cl_scan * scan, uint8_t ** buf_r, size_t * buf_sz_
     as_buffer argbuffer;
     as_buffer_init(&argbuffer);
 
-    if ( scan->udf.type != AS_SCAN_UDF_NONE) {
+    if ( scan->udf.type != CL_SCAN_UDF_NONE) {
         as_string file;
         as_string_init(&file, (char *) scan->udf.filename, true /*ismalloc*/);
 
@@ -162,7 +162,7 @@ static int scan_compile(const cl_scan * scan, uint8_t ** buf_r, size_t * buf_sz_
     info = CL_MSG_INFO1_READ;
 
     // Pass on to the cl_compile to create the msg
-    cl_compile(info /*info1*/, 0, 0, scan->ns /*namespace*/, scan->setname /*setname*/, 0 /*key*/, 0/*digest*/, NULL /*bins*/, 0/*op*/, 0/*operations*/, 0/*n_values*/, buf_r, buf_sz_r, 0 /*w_p*/, NULL /*d_ret*/, scan->job_id, &scan_param_field, scan->udf.type != AS_SCAN_UDF_NONE ? &call : NULL/*udf call*/, scan->udf.type);
+    cl_compile(info /*info1*/, 0, 0, scan->ns /*namespace*/, scan->setname /*setname*/, 0 /*key*/, 0/*digest*/, NULL /*bins*/, 0/*op*/, 0/*operations*/, 0/*n_values*/, buf_r, buf_sz_r, 0 /*w_p*/, NULL /*d_ret*/, scan->job_id, &scan_param_field, scan->udf.type != CL_SCAN_UDF_NONE ? &call : NULL/*udf call*/, scan->udf.type);
 
     if (scan->udf.arglist) {
         as_serializer_destroy(&ser);
@@ -512,7 +512,7 @@ cl_rv cl_scan_udf_init(cl_scan_udf * udf, udf_execution_type type, const char * 
 
 cl_rv cl_scan_udf_destroy(cl_scan_udf * udf) {
 
-    udf->type = AS_SCAN_UDF_NONE;
+    udf->type = CL_SCAN_UDF_NONE;
 
     if ( udf->filename ) {
         free(udf->filename);
@@ -537,7 +537,7 @@ cl_rv cl_scan_udf_destroy(cl_scan_udf * udf) {
  * The udf return values are not returned back to the client. 
  */
 void citrusleaf_udf_scan_background(cl_cluster * asc, cl_scan * scan) {
-    scan->udf.type = AS_SCAN_UDF_BACKGROUND;
+    scan->udf.type = CL_SCAN_UDF_BACKGROUND;
     cl_rv res = CITRUSLEAF_OK;
     // Call cl_scan_execute with a NULL node_name.
     cf_vector * v = cl_scan_execute(asc, scan, NULL, &res, NULL, NULL);
@@ -550,7 +550,7 @@ void citrusleaf_udf_scan_background(cl_cluster * asc, cl_scan * scan) {
  * The udf return values are not returned back to the client. 
  */
 void citrusleaf_udf_scan_node_background(cl_cluster * asc, cl_scan * scan, char *node_name) {
-    scan->udf.type = AS_SCAN_UDF_BACKGROUND;
+    scan->udf.type = CL_SCAN_UDF_BACKGROUND;
     cl_rv res = CITRUSLEAF_OK;
     // Call cl_scan_execute with a NULL node_name.
     cf_vector * v = cl_scan_execute(asc, scan, node_name, &res, NULL, NULL);
@@ -563,7 +563,7 @@ void citrusleaf_udf_scan_node_background(cl_cluster * asc, cl_scan * scan, char 
  *  the udf on the results. It returns values from the udf. The callback is then applied on those values at the client.
  */
 cl_rv citrusleaf_udf_scan_node(cl_cluster *asc, cl_scan *scan, char *node_name, int( *callback)(as_val *, void *), void * udata) {
-    scan->udf.type = AS_SCAN_UDF_CLIENT_RECORD;
+    scan->udf.type = CL_SCAN_UDF_CLIENT_RECORD;
     cl_rv res = CITRUSLEAF_FAIL_CLIENT;
 
     // If cl_scan_execute returns a non null vector, return the value in the vector, else return a failure
@@ -579,7 +579,7 @@ cl_rv citrusleaf_udf_scan_node(cl_cluster *asc, cl_scan *scan, char *node_name, 
  * It returns values from the udf. The callback is then applied on those values at the client. 
  */
 cf_vector * citrusleaf_udf_scan_all_nodes(cl_cluster *asc, cl_scan * scan, int (*callback)(as_val*, void*), void * udata) {
-    scan->udf.type = AS_SCAN_UDF_CLIENT_RECORD;
+    scan->udf.type = CL_SCAN_UDF_CLIENT_RECORD;
     cl_rv rc = CITRUSLEAF_OK;
     return cl_scan_execute(asc, scan, NULL, &rc, callback, udata);
 }
@@ -693,7 +693,7 @@ cl_scan * cl_scan_init(cl_scan * scan, const char * ns, const char * setname, ui
     scan->setname = setname == NULL ? NULL : strdup(setname);
     scan->ns = ns == NULL ? NULL : strdup(ns);
     cl_scan_params_init(&scan->params, NULL);
-    cl_scan_udf_init(&scan->udf, AS_SCAN_UDF_NONE, NULL, NULL, NULL);
+    cl_scan_udf_init(&scan->udf, CL_SCAN_UDF_NONE, NULL, NULL, NULL);
 
     return scan;
 }
@@ -723,7 +723,7 @@ void cl_scan_destroy(cl_scan *scan) {
 }
 
 cl_rv cl_scan_foreach(cl_scan * scan, const char * filename, const char * function, as_list * arglist) {
-    return cl_scan_udf_init(&scan->udf, AS_SCAN_UDF_CLIENT_RECORD, filename, function, arglist);
+    return cl_scan_udf_init(&scan->udf, CL_SCAN_UDF_CLIENT_RECORD, filename, function, arglist);
 }
 
 cl_rv cl_scan_limit(cl_scan *scan, uint64_t limit) {

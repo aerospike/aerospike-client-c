@@ -29,16 +29,23 @@
  *****************************************************************************/
 
 /**
+ * Initialize default values for given as_udf_call.
+ */
+static as_udf_call * as_udf_call_defaults(as_udf_call * call, bool free, const char * module, const char * function, as_list * arglist) {
+	call->_free = free;
+	call->module = module ? strdup(module) : NULL;
+	call->function = function ? strdup(function) : NULL;
+	call->arglist = arglist;
+	return call;
+}
+
+/**
  * Initialize a stack allocated as_udf_call.
  */
 as_udf_call * as_udf_call_init(as_udf_call * call, const char * module, const char * function, as_list * arglist)
 {
-	// We have to use strdup as the passed in string may be a static string
-	call->module = strdup(module);
-	call->function = strdup(function);
-	// In case of arglist, we expect the user to alloc and pass it. So, no duplication
-	call->arglist = arglist;
-	return call;
+	if ( !call ) return call;
+	return as_udf_call_defaults(call, false, module, function, arglist);
 }
 
 /**
@@ -47,10 +54,8 @@ as_udf_call * as_udf_call_init(as_udf_call * call, const char * module, const ch
 as_udf_call * as_udf_call_new(const char * module, const char * function, as_list * arglist)
 {
 	as_udf_call * call = (as_udf_call *) malloc(sizeof(as_udf_call));
-	call->_free = true;
-
-	as_udf_call_init(call, module, function, arglist);
-	return call;
+	if ( !call ) return call;
+	return as_udf_call_defaults(call, true, module, function, arglist);
 }
 
 /**
@@ -86,11 +91,10 @@ void as_udf_call_destroy(as_udf_call * call)
  *****************************************************************************/
 
 /**
- * Initialize a stack allocated as_udf_file.
+ * Initialize default values for given as_udf_call.
  */
-as_udf_file * as_udf_file_init(as_udf_file * file)
-{
-	file->_free = false;
+static as_udf_file * as_udf_file_defaults(as_udf_file * file, bool free) {
+	file->_free = free;
 	memset(file->name, 0, AS_UDF_FILE_NAME_LEN);
 	memset(file->hash, 0, AS_UDF_FILE_HASH_LEN);
 	file->content._free = false;
@@ -99,6 +103,14 @@ as_udf_file * as_udf_file_init(as_udf_file * file)
 	file->content.bytes = 0;
 	return file;
 }
+/**
+ * Initialize a stack allocated as_udf_file.
+ */
+as_udf_file * as_udf_file_init(as_udf_file * file)
+{
+	if ( !file ) return file;
+	return as_udf_file_defaults(file, false);
+}
 
 /**
  * Creates a new heap allocated as_udf_file.
@@ -106,14 +118,8 @@ as_udf_file * as_udf_file_init(as_udf_file * file)
 as_udf_file * as_udf_file_new()
 {
 	as_udf_file * file = (as_udf_file *) malloc(sizeof(as_udf_file));
-	file->_free = true;
-	memset(file->name, 0, AS_UDF_FILE_NAME_LEN);
-	memset(file->hash, 0, AS_UDF_FILE_HASH_LEN);
-	file->content._free = false;
-	file->content.capacity = 0;
-	file->content.size = 0;
-	file->content.bytes = 0;
-	return file;
+	if ( !file ) return file;
+	return as_udf_file_defaults(file, true);
 }
 
 /**
@@ -139,7 +145,6 @@ void as_udf_file_destroy(as_udf_file * file)
  * UDF LIST FUNCTIONS
  *****************************************************************************/
 
-
 /**
  * Initialize a stack allocated as_udf_list.
  * If size > 0, then malloc the files.entries to the size, also setting 
@@ -147,6 +152,8 @@ void as_udf_file_destroy(as_udf_file * file)
  */
 as_udf_list * as_udf_list_init(as_udf_list * list)
 {
+	if ( !list ) return list;
+	
 	list->_free = false;
 	list->capacity = 0;
 	list->size = 0;

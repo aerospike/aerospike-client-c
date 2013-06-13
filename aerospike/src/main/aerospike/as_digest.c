@@ -30,16 +30,22 @@
  * FUNCTIONS
  *****************************************************************************/
 
+static as_digest * as_digest_defaults(as_digest * digest, bool free, const char * set, const char * key) 
+{
+	digest->_free = free;
+	digest->set = set ? strdup(set) : NULL;
+	digest->key = key ? strdup(key) : NULL;
+	as_digest_compute(digest);
+	return digest;
+}
+
 /**
  * Initializes a digest.
  */
 as_digest * as_digest_init(as_digest * digest, const char * set, const char * key) 
 {
-	digest->_free = false;
-	digest->set = set;
-	digest->key = key;
-	cf_digest_compute2(set, strlen(set), key, strlen(key), (cf_digest *) digest->value);
-	return digest;
+	if ( !digest ) return digest;
+	return as_digest_defaults(digest, false, set, key);
 }
 
 /**
@@ -48,11 +54,8 @@ as_digest * as_digest_init(as_digest * digest, const char * set, const char * ke
 as_digest * as_digest_new(const char * set, const char * key) 
 {
 	as_digest * digest = (as_digest *) malloc(sizeof(as_digest));
-	digest->_free = true;
-	digest->set = set;
-	digest->key = key;
-	cf_digest_compute2(set, strlen(set), key, strlen(key), (cf_digest *) digest->value);
-	return digest;
+	if ( !digest ) return digest;
+	return as_digest_defaults(digest, true, set, key);
 }
 
 /**
@@ -60,7 +63,28 @@ as_digest * as_digest_new(const char * set, const char * key)
  */
 void as_digest_destroy(as_digest * digest) 
 {
-	if ( digest->_free ) {
-		free(digest);
+	if ( digest ) {
+		if ( digest->set ) {
+			free(digest->set);
+			digest->set = NULL;
+		}
+		if ( digest->key ) {
+			free(digest->key);
+			digest->key = NULL;
+		}
+		if ( digest->_free ) {
+			free(digest);
+		}
 	}
 }
+
+/**
+ * Compute the digest value
+ */
+void as_digest_compute(as_digest * digest)
+{
+	if ( digest->set && digest->key ) {
+		cf_digest_compute2(digest->set, strlen(digest->set), digest->key, strlen(digest->key), (cf_digest *) digest->value);
+	}
+}
+

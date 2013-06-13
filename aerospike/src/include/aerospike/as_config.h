@@ -34,76 +34,63 @@
 /**
  * Host Information
  */
-struct as_config_host_s {
+typedef struct as_config_host_s {
 	
-	// host address
+	/**
+	 * Host address
+	 */
 	const char * addr;
 	
-	// host port
+	/**
+	 * Host port
+	 */
 	uint16_t port;
-};
 
-typedef struct as_config_host_s as_config_host;
+} as_config_host;
 
 /**
  * Client Configuration 
  */
-struct as_config_s {
+typedef struct as_config_s {
 
-	// use non-blocking sockets
-	bool nonblocking;
+	/**
+	 * Use non-blocking sockets
+	 */
+	bool non_blocking;
 
-	// frequency (seconds) for updating cluster state information
-	uint32_t tend_frequency;
+	/**
+	 * Polling interval in milliseconds for cluster tender
+	 */
+	uint32_t tender_interval;
 
-	// client policies
+	/**
+	 * Client policies
+	 */
 	as_policies policies;
 
-	// client logger
-	as_logger * logger;
-
-	// (seed) hosts
+	/**
+	 * (seed) hosts
+	 * Populate with one or more hosts in the cluster
+	 * that you intend to connect with.
+	 */
 	as_config_host hosts[16];
 
-	// lua module config
+	/**
+	 * lua module config
+	 */
 	struct {
 		bool	cache_enabled;
 		char	system_path[256];
 		char	user_path[256];
 	} mod_lua;
 
-};
-
-typedef struct as_config_s as_config;
+} as_config;
 
 /******************************************************************************
  * FUNCTIONS
  *****************************************************************************/
 
 as_config * as_config_init(as_config * c);
-
-// as_config * as_config_set_timeout(as_config * c, uint32_t timeout);
-
-// as_config * as_config_set_nonblocking(as_config * c, bool enable);
-
-// as_config * as_config_set_tend_frequency(as_config * c, uint32_t ms);
-
-// as_config * as_config_set_policies(as_config * c, as_policies * p);
-
-// as_config * as_config_set_policy_read(as_config * c, as_policy_read * p);
-
-// as_config * as_config_set_policy_write(as_config * c, as_policy_write * p);
-
-// as_config * as_config_set_policy_remove(as_config * c, as_policy_remove * p);
-
-// as_config * as_config_set_policy_scan(as_config * c, as_policy_scan * p);
-
-// as_config * as_config_set_policy_query(as_config * c, as_policy_query * p);
-
-// as_config * as_config_set_policy_ldt(as_config * c, as_policy_ldt * read);
-
-// as_config * as_config_add_host(as_config * c, const char * addr, uint32_t port);
-
 
 
 

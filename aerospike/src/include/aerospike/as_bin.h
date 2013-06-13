@@ -38,7 +38,7 @@
 /**
  * Bin Types
  */
-enum as_type_e { 
+typedef enum as_type_e { 
 	AS_TYPE_NULL            = 0,
 	AS_TYPE_INT             = 1,
 	AS_TYPE_FLOAT           = 2,
@@ -61,9 +61,7 @@ enum as_type_e {
 	AS_TYPE_MAP             = 19,
 	AS_TYPE_LIST            = 20,
 	AS_TYPE_UNKNOWN         = 666666
-};
-
-typedef enum as_type_e as_type;
+} as_type;
 
 /**
  * Bin Name
@@ -73,7 +71,7 @@ typedef char as_bin_name[AS_BIN_NAME_MAX];
 /**
  * Bin Structure
  */
-struct as_bin_s {
+typedef struct as_bin_s {
 
 	/**
 	 * Bin name.
@@ -84,7 +82,6 @@ struct as_bin_s {
 	 * Bin value.
 	 */
 	as_val * value;
-};
-
-typedef struct as_bin_s as_bin;
+	
+} as_bin;
 

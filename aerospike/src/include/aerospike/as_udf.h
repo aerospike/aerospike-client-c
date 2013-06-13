@@ -39,10 +39,10 @@
 /**
  * Defines a call to a UDF
  */
-struct as_udf_call_s {
+typedef struct as_udf_call_s {
 
 	/**
-	 * Object can be free()'d
+	 * If true, then as_udf_call_destroy() will free this instance.
 	 */
 	bool _free;
 
@@ -60,48 +60,95 @@ struct as_udf_call_s {
 	 * Argument List
 	 */
 	as_list * arglist;
-};
-
-typedef struct as_udf_call_s as_udf_call;
+	
+} as_udf_call;
 
 /**
  * Enumeration of UDF types
  */
-enum as_udf_type_e {
+typedef enum as_udf_type_e {
 	AS_UDF_TYPE_LUA
-};
-
-typedef enum as_udf_type_e as_udf_type;
+} as_udf_type;
 
 /**
  * UDF File
  */
-struct as_udf_file_s {
-	bool			_free;
-	char 			name[AS_UDF_FILE_NAME_LEN];
-	unsigned char 	hash[AS_UDF_FILE_HASH_LEN];
-	as_udf_type 	type;
-	struct {
-		bool		_free;
-		uint32_t 	capacity;
-		uint32_t 	size;
-		uint8_t * 	bytes;
-	} content;
-};
+typedef struct as_udf_file_s {
 
-typedef struct as_udf_file_s as_udf_file;
+	/**
+	 * If true, then as_udf_file_destroy() will free this instance.
+	 */
+	bool _free;
+
+	/**
+	 * Name of the UDF file
+	 */
+	char name[AS_UDF_FILE_NAME_LEN];
+
+	/** 
+	 * Hash value of the file contents
+	 */
+	uint8_t hash[AS_UDF_FILE_HASH_LEN];
+
+	/**
+	 * The type of UDF
+	 */
+	as_udf_type type;
+
+	/**
+	 * UDF File contents
+	 */
+	struct {
+
+		/**
+		 * If true, then as_udf_file_destroy() will free bytes()
+		 */
+		bool _free;
+
+		/**
+		 * Number of bytes allocated to bytes.
+		 */
+		uint32_t capacity;
+
+		/**
+		 * Number of bytes used in bytes.
+		 */
+		uint32_t size;
+
+		/**
+		 * Sequence of bytes
+		 */
+		uint8_t * bytes;
+
+	} content;
+} as_udf_file;
 
 /**
  * List of UDF Files
  */
-struct as_udf_list_s {
-	bool			_free;
-	uint32_t 		capacity;
-	uint32_t 		size;
-	as_udf_file * 	files;
-};
+typedef struct as_udf_list_s {
 
-typedef struct as_udf_list_s as_udf_list;
+	/**
+	 * If true, then as_udf_list_destroy() will free this instance.
+	 */
+	bool _free;
+
+	/**
+	 * Number of file entries allocated to files.
+	 */
+	uint32_t capacity;
+
+	/**
+	 * Number of used file entries in files.
+	 */
+	uint32_t size;
+
+	/**
+	 * Sequence of files.
+	 */
+	as_udf_file * files;
+
+} as_udf_list;
 
 /******************************************************************************
  * UDF CALL FUNCTIONS
@@ -145,7 +192,6 @@ void as_udf_file_destroy(as_udf_file * file);
  * UDF LIST FUNCTIONS
  *****************************************************************************/
 
-
 /**
  * Initialize a stack allocated as_udf_list.
  */
@@ -160,6 +206,4 @@ as_udf_list * as_udf_list_new();
  * Destroy an as_udf_list.
  */
 void as_udf_list_destroy(as_udf_list * list);
-
-
 

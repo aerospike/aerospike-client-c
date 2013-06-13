@@ -36,10 +36,8 @@
  *****************************************************************************/
 
 /**
- * Represents the specific socket of a given node.
+ * Represents a node in the cluster.
  */
-struct as_node_s {
+typedef struct as_node_s {
 	char * name[AS_NODE_NAME_LEN];
-};
-
-typedef struct as_node_s as_node;
+} as_node;

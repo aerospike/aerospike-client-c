@@ -38,14 +38,29 @@
 /**
  * Contains information about an error
  */
-struct as_digest_s {
-	bool            _free;
-	const char *    set;
-	const char *    key;
-	uint8_t         value[AS_DIGEST_VALUE_LEN];
-};
+typedef struct as_digest_s {
 
-typedef struct as_digest_s as_digest;
+	/**
+	 * If true, then as_digest_destroy() will free this instance.
+	 */
+	bool _free;
+
+	/**
+	 * The set used to generate the digest.
+	 */
+	char * set;
+
+	/**
+	 * The key used to generate the digest.
+	 */
+	char * key;
+
+	/**
+	 * The digest value
+	 */
+	uint8_t value[AS_DIGEST_VALUE_LEN];
+
+} as_digest;
 
 /******************************************************************************
  * FUNCTIONS
@@ -65,3 +80,9 @@ as_digest * as_digest_new(const char * set, const char * key);
  * Destory the digest, releasing resources.
  */
 void as_digest_destroy(as_digest * digest);
+
+/**
+ * Compute the digest value
+ */
+void as_digest_compute(as_digest * digest);
+

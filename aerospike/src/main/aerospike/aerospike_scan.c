@@ -29,15 +29,17 @@
 /******************************************************************************
  * LOCAL STRUCTURES
  *****************************************************************************/
-typedef struct scan_bridge_s
-{
-	void							*user_udata; // udata actually passed by the user
-	aerospike_scan_foreach_callback	*user_cb;	// The callback the user wanted to call
-} scan_bridge;
 
 /******************************************************************************
  * TYPES
  *****************************************************************************/
+
+typedef struct scan_bridge_s
+{
+	void							* user_udata; 	// udata actually passed by the user
+	aerospike_scan_foreach_callback	user_cb;		// The callback the user wanted to call
+} scan_bridge;
+
 // TODO: not sure what this is needed for
 //typedef int (* citrusleaf_udf_scan_callback)(as_val *, void *);
 
@@ -53,29 +55,44 @@ as_status aerospike_scan_destroy(aerospike * as, as_error * err);
  * STATIC FUNCTIONS
  *****************************************************************************/
 
-static void as_scan_toclscan(const as_scan * scan, const as_policy_scan * policy, cl_scan * clscan) 
+static void as_scan_toclscan(const as_scan * scan, const as_policy_scan * policy, cl_scan * clscan, bool background, uint64_t * job_id) 
 {
+	clscan->job_id = 0;
 	clscan->ns = scan->namespace;
 	clscan->setname = scan->set;
 	clscan->params.fail_on_cluster_change = policy->fail_on_cluster_change;
 	clscan->params.priority = scan->priority;
 	clscan->params.pct = scan->percent;
-	clscan->udf.filename = scan->foreach.module;
-	clscan->udf.function = scan->foreach.function;
-	clscan->udf.arglist = scan->foreach.arglist;
 
-	switch (scan->type) {
-		case AS_SCAN_TYPE_NORMAL:
-			clscan->udf.type = AS_SCAN_UDF_NONE;
-			break;
-		case AS_SCAN_TYPE_UDF_RECORD:
-			clscan->udf.type = AS_SCAN_UDF_CLIENT_RECORD;
-			break;
-		case AS_SCAN_TYPE_UDF_BACKGROUND:
-			clscan->udf.type = AS_SCAN_UDF_BACKGROUND;
-			break;
-		default:
-			fprintf(stderr, "Encountered an unknown type of scan\n");
+	if ( background ) {
+		if ( job_id != NULL ) {
+			clscan->job_id = *job_id;
+		}
+
+		if ( clscan->job_id == 0 ) {
+			clscan->job_id = (cf_get_rand64())/2;
+			if ( job_id != NULL ) {
+				*job_id = clscan->job_id;
+			}
+		}
+	}
+
+	if ( scan->foreach.module && scan->foreach.function ) {
+		if ( background ) {
+			clscan->udf.type = CL_SCAN_UDF_BACKGROUND;
+		}
+		else {
+			clscan->udf.type = CL_SCAN_UDF_CLIENT_RECORD;
+		}
+		clscan->udf.filename = scan->foreach.module;
+		clscan->udf.function = scan->foreach.function;
+		clscan->udf.arglist = scan->foreach.arglist;
+	}
+	else {
+		clscan->udf.type = CL_SCAN_UDF_NONE;
+		clscan->udf.filename = NULL;
+		clscan->udf.function = NULL;
+		clscan->udf.arglist = NULL;
 	}
 }
 
@@ -159,36 +176,35 @@ static as_status aerospike_scan_generic(
 	
 	as_policy_scan * p = policy ? (as_policy_scan *) policy : &as->config.policies.scan;
 
+	cl_scan clscan;
+	as_scan_toclscan(scan, p, &clscan, false, NULL);
 
 	// If the user want to execute only on a single node...
-	if (scan->type == AS_SCAN_TYPE_NORMAL) {
+	if ( clscan.udf.type == CL_SCAN_UDF_NONE ) {
 
-		// Transform into form understandeable by the old simple scan mechanism
-		cl_scan_parameters scan_params;
-		scan_params.fail_on_cluster_change = policy->fail_on_cluster_change;
-		scan_params.priority = scan->priority;
+		scan_bridge bridge_udata = {
+			.user_udata = udata,
+			.user_cb = callback
+		};
 
-		scan_bridge bridge_udata;
-		bridge_udata.user_udata = udata;
-		bridge_udata.user_cb = callback;
+		struct cl_scan_parameters_s params = {
+			.fail_on_cluster_change = clscan.params.fail_on_cluster_change,
+			.priority = clscan.params.priority,
+			.concurrent_nodes = true,
+			.threads_per_node = 0
+		};
 
 		if (node) {
-			clrv = citrusleaf_scan_node(as->cluster, node, scan->namespace, scan->set, NULL, 0, 
-						scan->nobindata, scan->percent, simplescan_cb, &bridge_udata, &scan_params);
+			clrv = citrusleaf_scan_node(as->cluster, (char *) node, scan->namespace, scan->set, NULL, 0, 
+						scan->no_bins, scan->percent, simplescan_cb, &bridge_udata, &params);
 			rc = as_error_fromrc(err, clrv);
 		} else {
-
 			cf_vector *v = citrusleaf_scan_all_nodes(as->cluster, scan->namespace, scan->set, NULL, 0, 
-						scan->nobindata, scan->percent, simplescan_cb, &bridge_udata, &scan_params);
+						scan->no_bins, scan->percent, simplescan_cb, &bridge_udata, &params);
 			rc = process_node_response(v, err);
 		}
 
 	} else {
-
-		// Transform into form understandeable by the old scan-udf mechanism
-		cl_scan clscan;
-		as_scan_toclscan(scan, p, &clscan);
-
 		if (node) {
 			clrv = citrusleaf_udf_scan_node(as->cluster, &clscan, (char *)node, (aerospike_scan_foreach_callback) callback, udata);
 			rc = as_error_fromrc(err, clrv);
@@ -210,8 +226,8 @@ static as_status aerospike_scan_generic(
 
 /**
  * Scan the records in the specified namespace and set in the cluster.
+ *
  * Scan will be run in the background by a thread on client side.
- * No callback will be called in this case
  * 
  * @param as        - the aerospike cluster to connect to.
  * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
@@ -223,7 +239,7 @@ static as_status aerospike_scan_generic(
  */
 as_status aerospike_scan_background(
 	aerospike * as, as_error * err, const as_policy_scan * policy, 
-	const as_scan * scan
+	const as_scan * scan, uint64_t * scan_id
 	)
 {
 	if ( aerospike_scan_init(as, err) != AEROSPIKE_OK ) {
@@ -233,7 +249,7 @@ as_status aerospike_scan_background(
 	as_policy_scan * p = policy ? (as_policy_scan *) policy : &as->config.policies.scan;
 
 	cl_scan clscan;
-	as_scan_toclscan(scan, p, &clscan);
+	as_scan_toclscan(scan, p, &clscan, true, scan_id);
 
 	citrusleaf_udf_scan_background(as->cluster, &clscan);
 
@@ -243,9 +259,9 @@ as_status aerospike_scan_background(
 
 /**
  * Scan the records in the specified namespace and set in a specified node.
+ *
  * Scan will be run in the background by a thread on client side.
- * No callback will be called in this case
- * 
+ *
  * @param as        - the aerospike cluster to connect to.
  * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
  * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
@@ -256,7 +272,7 @@ as_status aerospike_scan_background(
  */
 as_status aerospike_scan_node_background(
 	aerospike * as, as_error * err, const as_policy_scan * policy, 
-	const char *node, const as_scan * scan) 
+	const char * node, const as_scan * scan, uint64_t * scan_id) 
 {
 	if ( aerospike_scan_init(as, err) != AEROSPIKE_OK ) {
 		return err->code;
@@ -265,7 +281,7 @@ as_status aerospike_scan_node_background(
 	as_policy_scan * p = policy ? (as_policy_scan *) policy : &as->config.policies.scan;
 
 	cl_scan clscan;
-	as_scan_toclscan(scan, p, &clscan);
+	as_scan_toclscan(scan, p, &clscan, true, scan_id);
 
 	citrusleaf_udf_scan_node_background(as->cluster, &clscan, (char *) node);
 
@@ -349,79 +365,4 @@ as_status aerospike_scan_destroy(aerospike * as, as_error * err)
 	}
 	citrusleaf_scan_shutdown();
 	return AEROSPIKE_OK;
-}
-
-
-
-/******************************************************************************
- * FUNCTIONS defined in as_scan.h
- *****************************************************************************/
-// Defining them here because there is no as_scan.c file in aerospike folder
-// Need to check if it is ok to create a new file as_scan.c. Need to double 
-// check that it will not cause conflict with as_scan.c in main folder
-// If it is ok, we need to move them in a file named as_scan.c in this folder
-// TODO: Check
-
-/**
- * Create and initializes a new scan on the heap.
- */
-as_scan * as_scan_new(const char * ns, const char * set, uint64_t *job_id)
-{
-	as_scan *scan = (as_scan *) malloc(sizeof(as_scan));
-	if (scan == NULL) return NULL;
-
-	memset(scan, 0, sizeof(as_scan));
-	return as_scan_init(scan, ns, set, job_id);
-}
-
-/**
- * Initializes a scan.
- */
-as_scan * as_scan_init(as_scan * scan, const char * ns, const char * set, uint64_t *job_id)
-{
-	if (scan == NULL) return scan;
-
-	scan->type = AS_SCAN_TYPE_NORMAL;
-	scan->priority = AS_SCAN_PRIORITY_LOW;
-	scan->job_id = (cf_get_rand64())/2;
-	*job_id = scan->job_id;
-	scan->percent = 100;
-	scan->nobindata = false;
-	scan->set = set == NULL ? NULL : strdup(set);
-	scan->namespace = ns == NULL ? NULL : strdup(ns);
-	as_udf_call_init(&scan->foreach, NULL, NULL, NULL);
-
-	return scan;
-}
-
-/**
- * Releases all resources allocated to the scan.
- */
-void as_scan_destroy(as_scan * scan)
-{
-	if ( scan == NULL ) return;
-
-	if (scan->namespace) {
-		free(scan->namespace);
-		scan->namespace = NULL;
-	}
-	if (scan->set) {
-		free(scan->set);
-		scan->set = NULL;
-	}
-	as_udf_call_destroy(&scan->foreach);
-
-	// If the whole structure should be freed
-	if (scan->_free) {
-		free(scan);
-	}
-}
-
-/**
- * Apply a UDF to each record scanned on the server.
- */
-void as_scan_foreach(as_scan * scan, as_scan_type type, const char * module, const char * function, as_list * arglist)
-{
-	scan->type = type;
-	as_udf_call_init(&scan->foreach, module, function, arglist);
 }

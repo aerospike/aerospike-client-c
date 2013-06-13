@@ -50,20 +50,57 @@
  * - as_record_init()
  *
  */
-struct as_record_s {
-	as_rec 		_;
-	as_digest   digest;
-	uint16_t    gen;
-	uint32_t    ttl;
+typedef struct as_record_s {
+
+	/**
+	 * as_record is "derived" from as_rec.
+	 * So you can actually type cast as_record to
+	 * as_rec.
+	 */
+	as_rec _;
+
+	/**
+	 * The digest of the record.
+	 */
+	as_digest digest;
+
+	/**
+	 * The generation of the record.
+	 */
+	uint16_t gen;
+
+	/**
+	 * The time-to-live (expiry) of the record
+	 */
+	uint32_t ttl;
+
+	/**
+	 * The bins of the record.
+	 */
 	struct {
-		bool     _free;
+
+		/**
+		 * If true, then as_record_destroy() will free data
+		 */
+		bool _free;
+
+		/**
+		 * Number of entries allocated to data.
+		 */
 		uint16_t capacity;
+
+		/**
+		 * Number of entries allocated to data.
+		 */
 		uint16_t size;
+
+		/**
+		 * Storage for bins
+		 */
 		as_bin * data;
 	} bins;
-};
 
-typedef struct as_record_s as_record;
+} as_record;
 
 /******************************************************************************
  * FUNCTIONS

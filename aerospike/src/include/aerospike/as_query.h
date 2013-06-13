@@ -44,32 +44,28 @@
 /**
  * Union of supported predicates
  */
-union as_predicate_value_u {
+typedef union as_predicate_value_u {
 	char * string;
 	int64_t integer;
 	struct {
 		int64_t min;
 		int64_t max;
 	} integer_range;
-};
-
-typedef union as_predicate_value_u as_predicate_value;
+} as_predicate_value;
 
 /**
  * Predicate Identifiers
  */
-enum as_predicate_type_e {
+typedef enum as_predicate_type_e {
 	AS_PREDICATE_STRING_EQUAL,
 	AS_PREDICATE_INTEGER_EQUAL,
 	AS_PREDICATE_INTEGER_RANGE
-};
-
-typedef enum as_predicate_type_e as_predicate_type;
+} as_predicate_type;
 
 /**
  * Predicate
  */
-struct as_predicate_s {
+typedef struct as_predicate_s {
 
 	/**
 	 * Bin to apply the predicate to
@@ -85,15 +81,15 @@ struct as_predicate_s {
 	 * The value for the predicate.
 	 */
 	as_predicate_value value;
-};
 
-typedef struct as_predicate_s as_predicate;
+} as_predicate;
 
 /**
  * Describes the bin to be ordered by and 
  * whether it is ascending order.
  */
-struct as_orderby_s {
+typedef struct as_orderby_s {
+
 	/**
 	 * name of the bin to orderby
 	 */
@@ -103,17 +99,16 @@ struct as_orderby_s {
 	 * bin should be in ascending order
 	 */
 	bool ascending;
-};
 
-typedef struct as_orderby_s as_orderby;
+} as_orderby;
 
 /**
  * Describes the query.
  */
-struct as_query_s {
+typedef struct as_query_s {
 
 	/**
-	 * Object can be free()'d
+	 * If true, then as_query_destroy() will free this instance.
 	 */
 	bool _free;
 
@@ -253,9 +248,7 @@ struct as_query_s {
 	 */
 	as_udf_call apply;
 
-};
-
-typedef struct as_query_s as_query;
+} as_query;
 
 /******************************************************************************
  * FUNCTIONS

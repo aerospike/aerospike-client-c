@@ -34,9 +34,9 @@
 typedef uint8_t cl_scan_pct;
 
 typedef enum cl_scan_udf_execution_type_s { 
-    AS_SCAN_UDF_NONE,             // Scan w/o udfs -- noop
-    AS_SCAN_UDF_CLIENT_RECORD,          // Job per record
-    AS_SCAN_UDF_BACKGROUND,             // Background job no response
+    CL_SCAN_UDF_NONE,             // Scan w/o udfs -- noop
+    CL_SCAN_UDF_CLIENT_RECORD,          // Job per record
+    CL_SCAN_UDF_BACKGROUND,             // Background job no response
 } udf_execution_type;
 
 typedef struct cl_scan_udf_s {

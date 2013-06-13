@@ -31,13 +31,16 @@
  * TYPES
  *****************************************************************************/
 
+/**
+ * PRIVATE:
+ * Forward declaration of a cluster object.
+ */
 struct cl_cluster_s;
 
 /**
  * Client handle used for all calls to a cluster.
  */
-
-struct aerospike_s {
+typedef struct aerospike_s {
 
 	/**
 	 * Specifies whether the object can be free()'d
@@ -54,9 +57,7 @@ struct aerospike_s {
 	 */
 	as_config config;
 
-};
-
-typedef struct aerospike_s aerospike;
+} aerospike;
 
 /******************************************************************************
  * FUNCTIONS

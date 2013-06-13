@@ -15,6 +15,8 @@
 #include <aerospike/as_val.h>
 #include <aerospike/as_udf.h>
 
+#include <time.h>
+
 #include "../test.h"
 #include "../util/udf.h"
 #include "../util/info_util.h"
@@ -32,6 +34,8 @@ extern aerospike * as;
 #define LUA_FILE "src/test/lua/udf_basics.lua"
 #define UDF_FILE "udf_basics"
 
+#define WAIT_MS(__ms) nanosleep((struct timespec[]){{0, __ms##000000}}, NULL)
+
 /******************************************************************************
  * TEST CASES
  *****************************************************************************/
@@ -48,7 +52,9 @@ TEST( udf_basics_1 , "manage udf_basics.lua" ) {
 	
 	aerospike_udf_remove(as, &err, NULL, filename);
 
-    assert_int_eq( err.code, AEROSPIKE_OK );
+	assert_int_eq( err.code, AEROSPIKE_OK );
+
+	WAIT_MS(100);
 
 	// list the files on the server
 
@@ -70,7 +76,7 @@ TEST( udf_basics_1 , "manage udf_basics.lua" ) {
 
 	as_udf_list_destroy(&list);
 
-	// assert_false( exists );
+	assert_false( exists );
 
 	// upload the file
 
@@ -80,9 +86,11 @@ TEST( udf_basics_1 , "manage udf_basics.lua" ) {
 	udf_readfile(LUA_FILE, &content);
 
 	info("uploading: %s",filename);
-    aerospike_udf_put(as, &err, NULL, filename, AS_UDF_TYPE_LUA, &content);
+	aerospike_udf_put(as, &err, NULL, filename, AS_UDF_TYPE_LUA, &content);
 
-    assert_int_eq( err.code, AEROSPIKE_OK );
+	assert_int_eq( err.code, AEROSPIKE_OK );
+
+	WAIT_MS(100);
 
 	// list the files on the server
 
@@ -90,7 +98,7 @@ TEST( udf_basics_1 , "manage udf_basics.lua" ) {
 
 	aerospike_udf_list(as, &err, NULL, &list);
 
-    assert_int_eq( err.code, AEROSPIKE_OK );
+	assert_int_eq( err.code, AEROSPIKE_OK );
 
 	info("files: ")
 	for(int i=0; i<list.size; i++) {
@@ -111,20 +119,22 @@ TEST( udf_basics_1 , "manage udf_basics.lua" ) {
 	as_udf_file_init(&file);
 
 	info("downloading: %s", filename);
-    aerospike_udf_get(as, &err, NULL, filename, AS_UDF_TYPE_LUA, &file);
+	aerospike_udf_get(as, &err, NULL, filename, AS_UDF_TYPE_LUA, &file);
 
-    assert_int_eq( err.code, AEROSPIKE_OK );
+	assert_int_eq( err.code, AEROSPIKE_OK );
 
 	info("downaloded: %s size=%d", filename, file.content.size);
-    assert_int_eq( file.content.size, content.len );
+	assert_int_eq( file.content.size, content.len );
 
-    as_udf_file_destroy(&file);
+	as_udf_file_destroy(&file);
 
-    // remove the file
+	// remove the file
 
 	aerospike_udf_remove(as, &err, NULL, filename);
 
-    assert_int_eq( err.code, AEROSPIKE_OK );
+	assert_int_eq( err.code, AEROSPIKE_OK );
+
+	WAIT_MS(100);
 
 	as_bytes_destroy(&content);
 }

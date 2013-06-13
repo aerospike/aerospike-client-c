@@ -48,11 +48,11 @@
 
 TEST_AEROSPIKE = aerospike_test.c
 TEST_AEROSPIKE += aerospike_digest/*.c
+TEST_AEROSPIKE += aerospike_index/*.c
 TEST_AEROSPIKE += aerospike_info/*.c
 TEST_AEROSPIKE += aerospike_key/*.c
 TEST_AEROSPIKE += aerospike_query/*.c
 TEST_AEROSPIKE += aerospike_scan/*.c
-TEST_AEROSPIKE += aerospike_sindex/*.c
 TEST_AEROSPIKE += aerospike_udf/*.c
 TEST_AEROSPIKE += util/*.c
 

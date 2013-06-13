@@ -20,7 +20,7 @@
  * IN THE SOFTWARE.
  *****************************************************************************/
 
-#include <citrusleaf/as_scan.h>
+#include <aerospike/as_scan.h>
 #include <citrusleaf/cl_scan.h>
 #include <citrusleaf/cf_random.h>
 
@@ -32,12 +32,11 @@ static as_scan * as_scan_defaults(as_scan * scan, bool free, const char * ns, co
 {
 	if (scan == NULL) return scan;
 
-	scan->_free = true;
+	scan->_free = free;
 
 	scan->namespace = ns ? strdup(ns) : NULL;
 	scan->set = set ? strdup(set) : NULL;
 	
-	scan->type = AS_SCAN_TYPE_NORMAL;
 	scan->priority = AS_SCAN_PRIORITY_LOW;
 	scan->percent = 100;
 	scan->no_bins = false;
@@ -45,7 +44,6 @@ static as_scan * as_scan_defaults(as_scan * scan, bool free, const char * ns, co
 	as_udf_call_init(&scan->foreach, NULL, NULL, NULL);
 
 	return scan;
-}
 }
 
 /**

@@ -57,15 +57,15 @@ typedef bool (* aerospike_info_foreach_callback)(const as_error * err, const as_
 /**
  * Send an info request to a specific host. The response must be freed by the caller.
  * 
- *      char * res = NULL;
- *      if ( aerospike_info_host(&as, &err, NULL, "127.0.0.1", 3000, "info", &res) != AEROSPIKE_OK ) {
- *          // handle error
- *      }
- *      else {
- *          // handle response
- *          free(res);
- *          res = NULL;
- *      }
+ *     char * res = NULL;
+ *     if ( aerospike_info_host(&as, &err, NULL, "127.0.0.1", 3000, "info", &res) != AEROSPIKE_OK ) {
+ *         // handle error
+ *     }
+ *     else {
+ *         // handle response
+ *         free(res);
+ *         res = NULL;
+ *     }
  *
  * @param as			The aerospike instance to use for this operation.
  * @param err			The as_error to be populated if an error occurs.

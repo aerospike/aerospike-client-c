@@ -43,10 +43,10 @@
  * A sparse secondary indexes omits references to records which do not include
  * the indexed bin.
  *
- *		if ( aerospike_index_sparse_create(&as, &err, NULL, 
- *				"test", "demo", "bin1", AS_TYPE_INTEGER, "idx_test_demo_bin1") != AEROSPIKE_OK ) {
- *          fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *      }
+ *     if ( aerospike_index_sparse_create(&as, &err, NULL, 
+ *             "test", "demo", "bin1", AS_TYPE_INTEGER, "idx_test_demo_bin1") != AEROSPIKE_OK ) {
+ *         fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *     }
  *
  * @param as			The aerospike instance to use for this operation.
  * @param err			The as_error to be populated if an error occurs.
@@ -66,9 +66,9 @@ as_status aerospike_index_sparse_create(
 /**
  * Removes (drops) a secondary index.
  *
- *		if ( aerospike_index_remove(&as, &err, NULL, "idx_test_demo_bin1") != AEROSPIKE_OK ) {
- *          fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *      }
+ *     if ( aerospike_index_remove(&as, &err, NULL, "idx_test_demo_bin1") != AEROSPIKE_OK ) {
+ *         fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *     }
  *
  * @param as			The aerospike instance to use for this operation.
  * @param err			The as_error to be populated if an error occurs.

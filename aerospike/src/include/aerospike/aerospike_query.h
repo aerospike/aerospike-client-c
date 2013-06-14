@@ -60,16 +60,16 @@ typedef bool (* aerospike_query_foreach_callback)(as_val * val, void * udata);
 /**
  * Execute a query and call the callback function for each result item.
  *
- *		as_query query;
- *		as_query_init(&query, "test", "demo");
- *		as_query_select(&query, "bin1");
- *		as_query_where(&query, "bin2", integer_equals(100));
- *
- *      if ( aerospike_query_foreach(&as, &err, NULL, &query, callback, NULL) != AEROSPIKE_OK ) {
- *          fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *      }
- *
- *		as_query_destroy(&query);
+ *     as_query query;
+ *     as_query_init(&query, "test", "demo");
+ *     as_query_select(&query, "bin1");
+ *     as_query_where(&query, "bin2", integer_equals(100));
+ *     
+ *     if ( aerospike_query_foreach(&as, &err, NULL, &query, callback, NULL) != AEROSPIKE_OK ) {
+ *         fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *     }
+ *     
+ *     as_query_destroy(&query);
  *
  *
  * @param as			The aerospike instance to use for this operation.
@@ -90,16 +90,16 @@ as_status aerospike_query_foreach(
 /**
  * Execute a query and send the results to a writable stream.
  *
- *		as_query query;
- *		as_query_init(&query, "test", "demo");
- *		as_query_select(&query, "bin1");
- *		as_query_where(&query, "bin2", integer_equals(100));
+ *     as_query query;
+ *     as_query_init(&query, "test", "demo");
+ *     as_query_select(&query, "bin1");
+ *     as_query_where(&query, "bin2", integer_equals(100));
  *
- *      if ( aerospike_query_stream(&as, &err, NULL, &query, &stream) != AEROSPIKE_OK ) {
- *          fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *      }
+ *     if ( aerospike_query_stream(&as, &err, NULL, &query, &stream) != AEROSPIKE_OK ) {
+ *         fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *     }
  *
- *		as_query_destroy(&query);
+ *     as_query_destroy(&query);
  *
  *
  * @param as			The aerospike instance to use for this operation.

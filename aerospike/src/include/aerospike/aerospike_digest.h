@@ -45,15 +45,15 @@
 /**
  * Get a record using a digest.
  *
- *		as_digest digest;
- *		as_digest_init(&digest, "demo", "foo");
+ *     as_digest digest;
+ *     as_digest_init(&digest, "demo", "foo");
  *
- *      as_record * rec = NULL;
- *      if ( aerospike_key_get(&as, &err, NULL, "test", &digest, &rec) != AEROSPIKE_OK ) {
- *          fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *      }
+ *     as_record * rec = NULL;
+ *     if ( aerospike_key_get(&as, &err, NULL, "test", &digest, &rec) != AEROSPIKE_OK ) {
+ *         fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *     }
  *
- *		as_digest_destroy(&digest);
+ *     as_digest_destroy(&digest);
  *
  *
  * @param as			The aerospike instance to use for this operation.
@@ -75,20 +75,20 @@ as_status aerospike_digest_get(
 /**
  * Lookup a record by digest, then select specific bins.
  *
- *		as_digest digest;
- *		as_digest_init(&digest, "demo", "foo");
- *
- *      char * select[] = {"bin1", "bin2", "bin3", NULL};
- *
- *      as_record * rec = NULL;
- *      if ( aerospike_key_select(&as, &err, NULL, "test", &digest, select, &rec) != AEROSPIKE_OK ) {
- *          fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *      }
- *		else {
- *			as_record_destroy(rec);
- *		}
- *
- *		as_digest_destroy(&digest);
+ *     as_digest digest;
+ *     as_digest_init(&digest, "demo", "foo");
+ *     
+ *     char * select[] = {"bin1", "bin2", "bin3", NULL};
+ *     
+ *     as_record * rec = NULL;
+ *     if ( aerospike_key_select(&as, &err, NULL, "test", &digest, select, &rec) != AEROSPIKE_OK ) {
+ *         fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *     }
+ *     else {
+ *         as_record_destroy(rec);
+ *     }
+ *     
+ *     as_digest_destroy(&digest);
  *
  *
  * @param as			The aerospike instance to use for this operation.
@@ -111,18 +111,18 @@ as_status aerospike_digest_select(
 /**
  * Check if a record exists in the cluster using its digest.
  *
- *		as_digest digest;
- *		as_digest_init(&digest, "demo", "foo");
- *
- *      bool exists = true;
- *      if ( aerospike_digest_exists(&as, &err, NULL, "test", &digest, &exists) != AEROSPIKE_OK ) {
- *          fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *      }
- *      else {
- *          fprintf(stdout, "Record %s", exists ? "exists." : "doesn't exist.");
- *      }
- *
- *		as_digest_destroy(&digest);
+ *     as_digest digest;
+ *     as_digest_init(&digest, "demo", "foo");
+ *     
+ *     bool exists = true;
+ *     if ( aerospike_digest_exists(&as, &err, NULL, "test", &digest, &exists) != AEROSPIKE_OK ) {
+ *         fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *     }
+ *     else {
+ *         fprintf(stdout, "Record %s", exists ? "exists." : "doesn't exist.");
+ *     }
+ *     
+ *     as_digest_destroy(&digest);
  *
  *
  * @param as			The aerospike instance to use for this operation.
@@ -143,22 +143,22 @@ as_status aerospike_digest_exists(
 /**
  * Put a record in the cluster using a digest.
  *
- *		as_digest digest;
- *		as_digest_init(&digest, "demo", "foo");
- *
- *      as_record rec;
- *		as_record_init(&rec, 2);
- *      as_record_set_string(&rec, "bin1", "abc");
- *      as_record_set_integer(&rec, "bin2", 123);
- *
- *      if ( aerospike_key_put(&as, &err, NULL, "test", &digest, &rec) != AEROSPIKE_OK ) {
- *          fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *      }
- * 		else {
- *			as_record_destroy(&rec);
- *		}
- *
- *		as_digest_destroy(&digest);
+ *     as_digest digest;
+ *     as_digest_init(&digest, "demo", "foo");
+ *     
+ *     as_record rec;
+ *     as_record_init(&rec, 2);
+ *     as_record_set_string(&rec, "bin1", "abc");
+ *     as_record_set_integer(&rec, "bin2", 123);
+ *     
+ *     if ( aerospike_key_put(&as, &err, NULL, "test", &digest, &rec) != AEROSPIKE_OK ) {
+ *         fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *     }
+ *     else {
+ *         as_record_destroy(&rec);
+ *     }
+ *     
+ *     as_digest_destroy(&digest);
  *
  *
  * @param as			The aerospike instance to use for this operation.
@@ -179,14 +179,14 @@ as_status aerospike_digest_put(
 /**
  * Remove a record from the cluster using a digest.
  *
- *		as_digest digest;
- *		as_digest_init(&digest, "demo", "foo");
- *
- *      if ( aerospike_key_remove(&as, &err, NULL, "test", &digest) != AEROSPIKE_OK ) {
- *          fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *      }
- *
- *		as_digest_destroy(&digest);
+ *     as_digest digest;
+ *     as_digest_init(&digest, "demo", "foo");
+ *     
+ *     if ( aerospike_key_remove(&as, &err, NULL, "test", &digest) != AEROSPIKE_OK ) {
+ *         fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *     }
+ *     
+ *     as_digest_destroy(&digest);
  *
  * @param as			The aerospike instance to use for this operation.
  * @param err			The as_error to be populated if an error occurs.
@@ -204,25 +204,25 @@ as_status aerospike_digest_remove(
 /**
  * Lookup a record by digest, then apply the UDF
  *
- *		as_digest digest;
- *		as_digest_init(&digest, "demo", "foo");
- *
- *      as_list args;
- *      as_arraylist_init(&args, 2, 0);
- *      as_list_add_integer(&args, 1);
- *      as_list_add_integer(&args, 2);
- *
- *      as_val * res = NULL;
- *
- *      if ( aerospike_digest_apply(&as, &err, NULL, "test", &digest, "math", "add", &args, &res) != AEROSPIKE_OK ) {
- *          fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *      }
- *		else {
- *			as_val_destroy(res);
- *		}
- *
- *		as_list_destroy(&args);
- *		as_digest_destroy(&digest);
+ *     as_digest digest;
+ *     as_digest_init(&digest, "demo", "foo");
+ *     
+ *     as_list args;
+ *     as_arraylist_init(&args, 2, 0);
+ *     as_list_add_integer(&args, 1);
+ *     as_list_add_integer(&args, 2);
+ *     
+ *     as_val * res = NULL;
+ *     
+ *     if ( aerospike_digest_apply(&as, &err, NULL, "test", &digest, "math", "add", &args, &res) != AEROSPIKE_OK ) {
+ *         fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *     }
+ *     else {
+ *         as_val_destroy(res);
+ *     }
+ *     
+ *     as_list_destroy(&args);
+ *     as_digest_destroy(&digest);
  *
  *
  * @param as			The aerospike instance to use for this operation.

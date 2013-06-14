@@ -47,4 +47,5 @@ typedef struct as_node_s {
 	 * The name of the node.
 	 */
 	char * name[AS_NODE_NAME_LEN];
+	
 } as_node;

@@ -20,6 +20,11 @@
  * IN THE SOFTWARE.
  *****************************************************************************/
 
+/** 
+ * @defgroup digest Digest API
+ * @{
+ */
+
 #pragma once 
 
 #include <aerospike/as_bin.h>
@@ -69,7 +74,27 @@ typedef struct as_key_s {
 } as_key;
 
 /**
- * Contains information about an error
+ * The digest is the value used to locate a record based on the
+ * set and key of the record. The digest is calculated using RIPEMD-160.
+ * Keys for digests can be either a string or integer.
+ *
+ * To initialize a stack allocated instance as an string key:
+ * 
+ *     as_digest digest;
+ *     as_digest_init(&digest, "set", "key");
+ *
+ * Alternatively, you can use an integer key:
+ *
+ *     as_digest_init2(&digest, "set", 123);
+ *
+ * You can also heap allocate and initialize an instance:
+ *
+ *     as_digest * digest = as_digest_new("set", "key");
+ * 
+ * When you are finished using the digest, you should always destroy it:
+ *
+ *     as_digest_destroy(digest);
+ * 
  */
 typedef struct as_digest_s {
 
@@ -156,3 +181,6 @@ void as_digest_destroy(as_digest * digest);
  */
 void as_digest_compute(as_digest * digest);
 
+/**
+ * @}
+ */

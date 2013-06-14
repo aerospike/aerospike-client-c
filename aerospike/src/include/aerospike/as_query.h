@@ -46,7 +46,7 @@
 /**
  * Macro for setting setting the STRING_EQUAL predicate.
  *
- *		as_query_where(query, "bin1", string_equals("abc"));
+ *    as_query_where(query, "bin1", string_equals("abc"));
  *
  */
 #define string_equals(__val) AS_PREDICATE_STRING_EQUAL, __val
@@ -54,7 +54,7 @@
 /**
  * Macro for setting setting the INTEGER_EQUAL predicate.
  *
- *		as_query_where(query, "bin1", integer_equals(123));
+ *    as_query_where(query, "bin1", integer_equals(123));
  *
  */
 #define integer_equals(__val) AS_PREDICATE_INTEGER_EQUAL, __val
@@ -62,7 +62,7 @@
 /**
  * Macro for setting setting the INTEGER_RANGE predicate.
  *
- *		as_query_where(query, "bin1", integer_range(1,100));
+ *     as_query_where(query, "bin1", integer_range(1,100));
  *
  */
 #define integer_range(__min, __max) AS_PREDICATE_INTEGER_RANGE, __min, __max
@@ -291,29 +291,29 @@ typedef struct as_query_predicates_s {
  *
  * For Stack, use alloca() or similar:
  *
- *		as_query_ordering ordering;
- *		ordering._free = false;
- *		ordering.capacity = SZ;
- *		ordering.size = 0;
- *		ordering.entries = (as_orderby *) alloca(sizeof(as_orderby) * SZ);
+ *     as_query_ordering ordering;
+ *     ordering._free = false;
+ *     ordering.capacity = SZ;
+ *     ordering.size = 0;
+ *     ordering.entries = (as_orderby *) alloca(sizeof(as_orderby) * SZ);
  *
  * Alternatively, on the stack you can use an array:
  *
- *		as_orderby orderby[3] = { ... };
- *
- *		as_query_ordering orderby;
- *		ordering._free = false;
- *		ordering.capacity = 0;
- *		ordering.size = sizeof(orderby) / sizeof(as_orderby);
- *		ordering.entries = predicates;
+ *     as_orderby orderby[3] = { ... };
+ *     
+ *     as_query_ordering orderby;
+ *     ordering._free = false;
+ *     ordering.capacity = 0;
+ *     ordering.size = sizeof(orderby) / sizeof(as_orderby);
+ *     ordering.entries = predicates;
  *
  * For Heap, use malloc() or similar:
  *
- *		as_query_ordering orderby;
- *		ordering._free = false;
- *		ordering.capacity = SZ;
- *		ordering.size = 0;
- *		ordering.entries = (as_orderby *) malloc(sizeof(as_orderby) * SZ);
+ *     as_query_ordering orderby;
+ *     ordering._free = false;
+ *     ordering.capacity = SZ;
+ *     ordering.size = 0;
+ *     ordering.entries = (as_orderby *) malloc(sizeof(as_orderby) * SZ);
  *
  */
 typedef struct as_query_ordering_s {
@@ -343,6 +343,31 @@ typedef struct as_query_ordering_s {
 
 /**
  * Describes the query.
+ *
+ * To create a new query, you must either use `as_query_init()` or `as_query_new()`.
+ * Both functions require a namespace and set to query.
+ *
+ * `as_query_init()` will initialize a stack allocated `as_query`:
+ *
+ *     as_query query;
+ *     as_query_init(&query, "namespace", "set");
+ *
+ * `as_query_new()` will create a new heap allocated `as_query`:
+ *
+ *     as_query * query = as_query_new("namespace", "set");
+ *
+ * You can then populate the `as_query` instance using the functions provided:
+ *
+ * - `as_query_select()` - to add bins to select from each record
+ * - `as_query_where()` - to add predicates to filter the results on
+ * - `as_query_orderby()` - to sort the results
+ * - `as_query_limit()` - to limit the number of results returned.
+ *
+ * When you are finished with the query, you can destroy it and associated
+ * resources:
+ *
+ *     as_query_destroy(query);
+ *
  */
 typedef struct as_query_s {
 

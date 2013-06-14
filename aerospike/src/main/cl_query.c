@@ -1000,7 +1000,7 @@ static const as_stream_hooks queue_stream_hooks = {
 
 typedef struct {
     void *  udata;
-    bool    (* callback)(const as_val *, void *);
+    bool    (* callback)(as_val *, void *);
 } callback_stream_source;
 
 static int callback_stream_destroy(as_stream *s) {
@@ -1360,6 +1360,12 @@ cl_rv cl_query_limit(cl_query *query, uint64_t limit) {
 }
 
 
+// callback for cl_query_execute()
+static int _citrusleaf_query_stream_callback(as_val * v, void * udata) {
+	as_stream * queue_stream = (as_stream *) udata;
+    as_stream_write(queue_stream, v == NULL ? AS_STREAM_END : v );
+    return 0;
+}
 
 cl_rv citrusleaf_query_stream(cl_cluster * cluster, const cl_query * query, as_stream * ostream) {
 
@@ -1380,14 +1386,8 @@ cl_rv citrusleaf_query_stream(cl_cluster * cluster, const cl_query * query, as_s
         as_stream queue_stream;
         as_stream_init(&queue_stream, query->res_streamq, &queue_stream_hooks); 
 
-        // callback for cl_query_execute()
-        int callback(as_val * v, void * udata) {
-            as_stream_write(&queue_stream, v == NULL ? AS_STREAM_END : v );
-            return 0;
-        }
-
         // sink the data from multiple sources into the result stream
-        rc = cl_query_execute(cluster, query, NULL, callback, false);
+        rc = cl_query_execute(cluster, query, &queue_stream, _citrusleaf_query_stream_callback, false);
 
         if ( rc == CITRUSLEAF_OK ) {
             as_module_apply_stream(&mod_lua, &as, query->udf.filename, query->udf.function, &queue_stream, query->udf.arglist, ostream);
@@ -1413,6 +1413,13 @@ cl_rv citrusleaf_query_stream(cl_cluster * cluster, const cl_query * query, as_s
 
 
 
+// This callback will populate an intermediate stream, to be used for the aggregation
+static int _citrusleaf_query_foreach_callback(as_val * v, void * udata) {
+	as_stream * queue_stream = (as_stream *) udata;
+    as_stream_write(queue_stream, v == NULL ? AS_STREAM_END : v );
+    return 0;
+}
+
 cl_rv citrusleaf_query_foreach(cl_cluster * cluster, const cl_query * query, void * udata, cl_query_cb foreach) {
 
     cl_rv rc = CITRUSLEAF_OK;
@@ -1437,14 +1444,8 @@ cl_rv citrusleaf_query_foreach(cl_cluster * cluster, const cl_query * query, voi
         as_stream ostream;
         callback_stream_init(&ostream, &source);
 
-        // This callback will populate an intermediate stream, to be used for the aggregation
-        int callback(as_val * v, void * udata) {
-            as_stream_write(&queue_stream, v == NULL ? AS_STREAM_END : v );
-            return 0;
-        }
-
         // sink the data from multiple sources into the result stream
-        rc = cl_query_execute(cluster, query, NULL, callback, true);
+        rc = cl_query_execute(cluster, query, &queue_stream, _citrusleaf_query_foreach_callback, true);
 
         if ( rc == CITRUSLEAF_OK ) {
             // Apply the UDF to the result stream

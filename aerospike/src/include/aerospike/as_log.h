@@ -24,6 +24,8 @@
 
 #include <aerospike/as_status.h>
 
+#include <citrusleaf/cf_atomic.h>
+
 #include <inttypes.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -49,6 +51,15 @@ typedef enum as_log_level_e {
 
 /**
  * Callback function for as_log related logging calls.
+ *
+ * @param level 		The log level of the message.
+ * @param func 			The function where the message was logged.
+ * @param file 			The file where the message was logged.
+ * @param line 			The line where the message was logged.
+ * @param fmt 			The format string used.
+ * @param ... 			The format argument.
+ *
+ * @return true if the message was logged. Otherwise false.
  */
 typedef bool (* as_log_callback)(
 	as_log_level level, const char * func, const char * file, uint32_t line,
@@ -62,43 +73,14 @@ typedef struct as_log_s {
 	/**
 	 * Log Level
 	 */
-	as_log_level level;
+	cf_atomic32 level;
 
 	/**
 	 * Logging Callback
 	 */
-	as_log_callback callback;
+	cf_atomic_p callback;
 
 } as_log;
-
-/******************************************************************************
- * MACROS
- *****************************************************************************/
-
-#define as_error(__ctx, __fmt, ... ) \
-	if ( (__ctx) && (__ctx)->callback && AS_LOG_LEVEL_ERROR <= (__ctx)->level ) {\
-		(__ctx)->callback(AS_LOG_LEVEL_ERROR, __func__, __FILE__, __LINE__, __fmt, ##__VA_ARGS__);\
-	}
-
-#define as_warn(__ctx, __fmt, ... ) \
-	if ( (__ctx) && (__ctx)->callback && AS_LOG_LEVEL_WARN <= (__ctx)->level ) {\
-		(__ctx)->callback(AS_LOG_LEVEL_WARN, __func__, __FILE__, __LINE__, __fmt, ##__VA_ARGS__);\
-	}
-
-#define as_info(__ctx, __fmt, ... ) \
-	if ( (__ctx) && (__ctx)->callback && AS_LOG_LEVEL_INFO <= (__ctx)->level ) {\
-		(__ctx)->callback(AS_LOG_LEVEL_INFO, __func__, __FILE__, __LINE__, __fmt, ##__VA_ARGS__);\
-	}
-
-#define as_debug(__ctx, __fmt, ... ) \
-	if ( (__ctx) && (__ctx)->callback && AS_LOG_LEVEL_DEBUG <= (__ctx)->level ) {\
-		(__ctx)->callback(AS_LOG_LEVEL_DEBUG, __func__, __FILE__, __LINE__, __fmt, ##__VA_ARGS__);\
-	}
-
-#define as_trace(__ctx, __fmt, ... ) \
-	if ( (__ctx) && (__ctx)->callback && AS_LOG_LEVEL_TRACE <= (__ctx)->level ) {\
-		(__ctx)->callback(AS_LOG_LEVEL_TRACE, __func__, __FILE__, __LINE__, __fmt, ##__VA_ARGS__);\
-	}
 
 /******************************************************************************
  * FUNCTIONS
@@ -110,11 +92,21 @@ typedef struct as_log_s {
 as_log * as_log_init(as_log * log);
 
 /**
- * Set the level for the given log
+ * Set the level for the given log.
+ *
+ * @param log 		The log context.
+ * @param level 	The log level.
+ *
+ * @return true on success. Otherwise false.
  */
-int as_log_set_level(as_log * log, as_log_level level);
+bool as_log_set_level(as_log * log, as_log_level level);
 
 /**
  * Set the callback for the given log
+ *
+ * @param log 		The log context.
+ * @param callback 	The log callback.
+ *
+ * @return true on success. Otherwise false.
  */
-int as_log_set_callback(as_log * log, as_log_callback callback);
+bool as_log_set_callback(as_log * log, as_log_callback callback);

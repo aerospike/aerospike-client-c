@@ -44,7 +44,7 @@ as_status aerospike_query_destroy(aerospike * as, as_error * err);
  * STATIC FUNCTIONS
  *****************************************************************************/
 
-static cl_query * as_query_toclquery(as_query * query)
+static cl_query * as_query_toclquery(const as_query * query)
 {
 	cl_query * clquery = cl_query_new(query->namespace, query->set);
 
@@ -116,7 +116,7 @@ as_status aerospike_query_foreach(
 
     cl_query_destroy(clquery);
 
-	return AEROSPIKE_OK;
+	return rc ? AEROSPIKE_ERR_QUERY : AEROSPIKE_OK;
 }
 
 /**
@@ -145,7 +145,7 @@ as_status aerospike_query_stream(
 
     cl_query_destroy(clquery);
 
-	return AEROSPIKE_OK;
+	return rc ? AEROSPIKE_ERR_QUERY : AEROSPIKE_OK;
 }
 
 /**

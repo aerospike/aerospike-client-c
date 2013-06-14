@@ -255,7 +255,7 @@ as_status aerospike_key_put(
 	cl_bin *    values = (cl_bin *) alloca(sizeof(cl_bin) * nvalues);
 
 	cl_write_parameters wp;
-	as_policy_write_towp(p, &wp);
+	as_policy_write_towp(p, rec, &wp);
 
 	cl_object okey;
 	citrusleaf_object_init_str(&okey, key);

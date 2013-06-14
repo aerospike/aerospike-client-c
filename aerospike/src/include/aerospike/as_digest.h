@@ -22,6 +22,7 @@
 
 #pragma once 
 
+#include <aerospike/as_bin.h>
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -29,11 +30,43 @@
  * MACROS
  *****************************************************************************/
 
+/**
+ * The length of as_digest.value[]. 
+ */
 #define AS_DIGEST_VALUE_LEN 20
 
 /******************************************************************************
  * TYPES
  *****************************************************************************/
+
+/**
+ * Key value
+ */
+typedef struct as_key_s {
+
+	/**
+	 * The type of key.
+	 */
+	as_type type;
+
+	/**
+	 * The key used to generate the digest.
+	 */
+	union {
+
+		/**
+		 * The int64_t value of the key.
+		 */
+		int64_t int64;
+
+		/**
+		 * The NULL terminated string value of the key.
+		 */
+		char * str;
+
+	} value;
+
+} as_key;
 
 /**
  * Contains information about an error
@@ -54,10 +87,10 @@ typedef struct as_digest_s {
 	/**
 	 * The key used to generate the digest.
 	 */
-	char * key;
+	as_key key;
 
 	/**
-	 * The digest value
+	 * The digest value.
 	 */
 	uint8_t value[AS_DIGEST_VALUE_LEN];
 
@@ -68,22 +101,58 @@ typedef struct as_digest_s {
  *****************************************************************************/
 
 /**
- * Initializes a digest.
+ * Initializes a stack allocated digest.
+ *
+ * @param digest 		The digest to initialize.
+ * @param set 			The set for the digest.
+ * @param key 			The key for the digest. A NULL-terminated string.
+ *
+ * @return The initialized digest on success. Otherwise NULL;
  */
 as_digest * as_digest_init(as_digest * digest, const char * set, const char * key);
 
 /**
- * Creates a new digest on the heap.
+ * Initializes a stack allocated digest containing an int64_t key.
+ *
+ * @param digest 		The digest to initialize.
+ * @param set 			The set for the digest.
+ * @param key 			The key for the digest.
+ *
+ * @return The initialized digest on success. Otherwise NULL;
+ */
+as_digest * as_digest_init2(as_digest * digest, const char * set, int64_t key);
+
+/**
+ * Creates a new heap allocated digest.
+ *
+ * @param set 			The set for the digest.
+ * @param key 			The key for the digest.
+ *
+ * @return The new digest on success. Otherwise NULL;
  */
 as_digest * as_digest_new(const char * set, const char * key);
 
 /**
+ * Creates a new heap allocated digest containing an int64_t key.
+ *
+ * @param set 			The set for the digest.
+ * @param key 			The key for the digest.
+ *
+ * @return The new digest on success. Otherwise NULL;
+ */
+as_digest * as_digest_new2(const char * set, int64_t key);
+
+/**
  * Destory the digest, releasing resources.
+ *
+ * @param digest The digest to destroy.
  */
 void as_digest_destroy(as_digest * digest);
 
 /**
- * Compute the digest value
+ * Compute the digest value.
+ *
+ * @param digest The digest to recompute.
  */
 void as_digest_compute(as_digest * digest);
 

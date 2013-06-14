@@ -20,6 +20,11 @@
  * IN THE SOFTWARE.
  *****************************************************************************/
 
+/** 
+ * @defgroup index Index Management API
+ * @{
+ */
+
 #pragma once 
 
 #include <aerospike/aerospike.h>
@@ -27,11 +32,6 @@
 #include <aerospike/as_error.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_status.h>
-
-/** 
- * @addtogroup Index Index Management API
- * @{
- */
 
 /******************************************************************************
  * FUNCTIONS
@@ -48,14 +48,14 @@
  *          fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *      }
  *
- * @param as        - the aerospike cluster to connect to.
- * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
- * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
- * @param ns        - the namespace to be indexed
- * @param set       - the set to be indexed
- * @param bin       - the bin to be indexed
- * @param type      - the type of the bin to be indexed
- * @param name      - the name of the index
+ * @param as			The aerospike instance to use for this operation.
+ * @param err			The as_error to be populated if an error occurs.
+ * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ * @param ns			The namespace to be indexed.
+ * @param set			The set to be indexed.
+ * @param bin			The bin to be indexed.
+ * @param type			The type of the bin to be indexed.
+ * @param name			The name of the index.
  *
  * @return AEROSPIKE_OK if successful. AEROSPIKE_EXISTS if the index already exists. Otherwise an error.
  */
@@ -70,11 +70,11 @@ as_status aerospike_index_sparse_create(
  *          fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *      }
  *
- * @param as        - the aerospike cluster to connect to.
- * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
- * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
- * @param ns        - the namespace of the index to be removed
- * @param name      - the name of the index to be removed
+ * @param as			The aerospike instance to use for this operation.
+ * @param err			The as_error to be populated if an error occurs.
+ * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ * @param ns			The namespace containing the index to be removed.
+ * @param name			The name of the index to be removed.
  *
  * @return AEROSPIKE_OK if successful. Otherwise an error.
  */

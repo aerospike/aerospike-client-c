@@ -22,6 +22,7 @@
 
 #include <aerospike/aerospike.h>
 #include <aerospike/as_config.h>
+#include <aerospike/as_log.h>
 #include <aerospike/as_module.h>
 #include <aerospike/mod_lua.h>
 
@@ -30,6 +31,12 @@
 #include <citrusleaf/cf_log_internal.h>
 
 #include "log.h"
+
+/******************************************************************************
+ * MACROS
+ *****************************************************************************/
+
+#define LOGGER (&as->log)
 
 /******************************************************************************
  * FUNCTIONS
@@ -48,6 +55,10 @@ static aerospike * aerospike_defaults(aerospike * as, bool free, as_config * con
 	as_log_init(&as->log);
 	return as;
 }
+
+/******************************************************************************
+ * FUNCTIONS
+ *****************************************************************************/
 
 /**
  * Initialize the aerospike object on the stack
@@ -88,11 +99,11 @@ as_status aerospike_connect(aerospike * as, as_error * err)
 	extern int g_init_pid;
 
 	if ( g_initialized ) {
-		_log_debug("already connected.");
+		as_debug(LOGGER, "already connected.");
 		return as_error_reset(err);
 	}
 
-	_log_debug("connecting...");
+	as_debug(LOGGER, "connecting...");
 	
 	// remember the process id which is spawning the background threads.
 	// only this process can call a pthread_join() on the threads that it spawned.
@@ -107,27 +118,33 @@ as_status aerospike_connect(aerospike * as, as_error * err)
     memcpy(config.system_path, as->config.mod_lua.system_path, sizeof(config.system_path));
     memcpy(config.user_path, as->config.mod_lua.user_path, sizeof(config.user_path));
     
+	as_trace(LOGGER, "as_module_configure: ...");
     as_module_configure(&mod_lua, &config);
-	_log_debug("as_module_configure(mod_lua) OK");
+	as_debug(LOGGER, "as_module_configure: OK");
+
+	g_initialized = true;
 
 	// start the cluster tend thread (for all clusters)
+	as_trace(LOGGER, "citrusleaf_cluster_init: ...");
 	citrusleaf_cluster_init();
-	_log_debug("citrusleaf_cluster_init() OK");
+	as_debug(LOGGER, "citrusleaf_cluster_init: OK");
 
 	// set the cluster tend speed
 	citrusleaf_change_tend_speed(as->config.tender_interval > 1000 ? as->config.tender_interval / 1000 : 1);
 
 	// create the cluster object
+	as_trace(LOGGER, "citrusleaf_cluster_create: ...");
 	as->cluster = citrusleaf_cluster_create();
-	_log_debug("citrusleaf_cluster_create() OK");
+	as_debug(LOGGER, "citrusleaf_cluster_create: OK");
 
 #ifdef DEBUG_HISTOGRAM  
 	if ( NULL == (cf_hist = cf_histogram_create("transaction times"))) {
-		cf_error("couldn't create histogram for client");	
+		as_error(LOGGER, "couldn't create histogram for client");	
 	}
 #endif  
 	
 	if ( as->cluster == NULL ) {
+		as_error(LOGGER, "Can't create client");	
 		as_error_update(err, AEROSPIKE_ERR_CLIENT, "Can't create client");
 		citrusleaf_cluster_destroy(as->cluster);
 		as->cluster = NULL;
@@ -138,22 +155,23 @@ as_status aerospike_connect(aerospike * as, as_error * err)
 
 	uint32_t nhosts = sizeof(as->config.hosts) / sizeof(as_config_host);
 	
+	as_trace(LOGGER, "citrusleaf_cluster_add_host: ...");
 	for ( int i = 0; as->config.hosts[i].addr != NULL && i < nhosts; i ++ ) {
-		_log_debug("connecting to %s:%d", as->config.hosts[i].addr, as->config.hosts[i].port);
+		as_trace(LOGGER, "connecting to %s:%d", as->config.hosts[i].addr, as->config.hosts[i].port);
 		int rc = citrusleaf_cluster_add_host(as->cluster, as->config.hosts[i].addr, as->config.hosts[i].port, as->config.policies.timeout);
 		if ( rc != 0 ) {
+			as_error(LOGGER, "Can't connect to %s:%d", as->config.hosts[i].addr, as->config.hosts[i].port);
 			as_error_update(err, AEROSPIKE_ERR_CLIENT, "Can't connect to %s:%d", as->config.hosts[i].addr, as->config.hosts[i].port);
 		}
 		else {
-			_log_debug("citrusleaf_cluster_add_host() OK");
+			as_debug(LOGGER, "citrusleaf_cluster_add_host: OK");
 		}
 	}
 
 	// TODO - wait for stability.
 
 	if ( err->code == AEROSPIKE_OK ) {
-		_log_debug("connected.");
-		g_initialized = true;
+		as_debug(LOGGER, "connected.");
 	}
 	else {
 		citrusleaf_cluster_destroy(as->cluster);

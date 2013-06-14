@@ -30,37 +30,78 @@
  * Status codes used as return values as as_error.code values.
  */
 typedef enum as_status_e {
-	AEROSPIKE_OK						= 0,	// SUCCESS
-	
-	AEROSPIKE_ERR						= 100,	// ERROR
 
-	AEROSPIKE_ERR_CLIENT				= 200,	// CLIENT ERROR
-	
-	AEROSPIKE_ERR_CLUSTER				= 300,	// CLUSTER ERROR
-	
-	AEROSPIKE_ERR_WRITE					= 400,	// WRITE ERROR
-	
-	AEROSPIKE_ERR_READ					= 400,	// READ ERROR
-	
-	AEROSPIKE_ERR_SCAN					= 500,	// SCAN ERROR
+	/**
+	 * Success
+	 */
+	AEROSPIKE_OK							= 0,
 
-	AEROSPIKE_ERR_QUERY					= 600,	// QUERY ERROR
-    AEROSPIKE_ERR_QUERY_ABORTED 		= 601,	//
-    AEROSPIKE_ERR_QUERY_QUEUEFULL 		= 602,	//
-	
-	AEROSPIKE_ERR_INDEX     			= 700,	// INDEX ERROR
-    AEROSPIKE_ERR_INDEX_KEY_NOTFOUND 	= 701,	//
-    AEROSPIKE_ERR_INDEX_TYPE_MISMATCH 	= 703,	//
-    AEROSPIKE_ERR_INDEX_NOTFOUND 		= 704,	//
-    AEROSPIKE_ERR_INDEX_OOM 			= 705,	//
-    AEROSPIKE_ERR_INDEX_GENERIC 		= 706,	//
-    AEROSPIKE_ERR_INDEX_EXISTS 			= 707,	//
-    AEROSPIKE_ERR_INDEX_SINGLEBIN_NS 	= 708,	//
-    AEROSPIKE_ERR_INDEX_UNKNOWN_TYPE 	= 709,	//
-    AEROSPIKE_ERR_INDEX_FOUND 			= 710,	//
-    AEROSPIKE_ERR_INDEX_NOTREADABLE 	= 711,	//
+	/**
+	 * Generic Error
+	 */
+	AEROSPIKE_ERR							= 100,
 
-	AEROSPIKE_ERR_UDF       			= 800,	// UDF ERROR
+	/**
+	 * Client usage error.
+	 * Includes error is configuring or using
+	 * the client, such as bad arguments.
+	 */
+	AEROSPIKE_ERR_CLIENT					= 200,
+
+	/**
+	 * Cluster state or connection error.
+	 */
+	AEROSPIKE_ERR_CLUSTER					= 300,
+
+	/**
+	 * Write operation error.
+	 */
+	AEROSPIKE_ERR_WRITE						= 400,
+
+	/**
+	 * Read operation error.
+	 */
+	AEROSPIKE_ERR_READ						= 400,
+
+	/**
+	 * Scan operation error.
+	 */
+	AEROSPIKE_ERR_SCAN						= 500,
+
+	/**
+	 * Query operation error.
+	 */
+	AEROSPIKE_ERR_QUERY						= 600,
+
+		/**
+		 * The query was aborted.
+		 */
+	    AEROSPIKE_ERR_QUERY_ABORTED 		= 601,
+
+	    /**
+	     * The result queue is full.
+	     */
+	    AEROSPIKE_ERR_QUERY_QUEUEFULL 		= 602,
+
+    /**
+     * Index operation error.
+     */
+	AEROSPIKE_ERR_INDEX     				= 700,
+	    AEROSPIKE_ERR_INDEX_KEY_NOTFOUND 	= 701,
+	    AEROSPIKE_ERR_INDEX_TYPE_MISMATCH 	= 703,
+	    AEROSPIKE_ERR_INDEX_NOTFOUND 		= 704,
+	    AEROSPIKE_ERR_INDEX_OOM 			= 705,
+	    AEROSPIKE_ERR_INDEX_GENERIC 		= 706,
+	    AEROSPIKE_ERR_INDEX_EXISTS 			= 707,
+	    AEROSPIKE_ERR_INDEX_SINGLEBIN_NS 	= 708,
+	    AEROSPIKE_ERR_INDEX_UNKNOWN_TYPE 	= 709,
+	    AEROSPIKE_ERR_INDEX_FOUND 			= 710,
+	    AEROSPIKE_ERR_INDEX_NOTREADABLE 	= 711,
+
+    /**
+     * UDF operation error.
+     */
+	AEROSPIKE_ERR_UDF       				= 800,
 
 } as_status;
 

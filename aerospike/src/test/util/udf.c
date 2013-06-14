@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <errno.h>
+#include <time.h>
 
 #include "udf.h"
 #include "../test.h"
@@ -20,8 +21,6 @@
 
 extern aerospike * as;
 
-
-#define WAIT_MS(__ms) nanosleep((struct timespec[]){{0, __ms##000000}}, NULL)
 
 
 bool udf_readfile(const char * filename, as_bytes * content) {

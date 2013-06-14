@@ -61,9 +61,9 @@ CITRUSLEAF += cl_info.o
 CITRUSLEAF += cl_lookup.o
 CITRUSLEAF += cl_partition.o
 CITRUSLEAF += cl_query.o
-CITRUSLEAF += as_scan.o
 CITRUSLEAF += cl_sindex.o
 CITRUSLEAF += cl_scan.o
+CITRUSLEAF += cl_scan2.o
 CITRUSLEAF += cl_udf.o
 CITRUSLEAF += aerospike_lstack.o
 CITRUSLEAF += aerospike_lset.o
@@ -112,6 +112,7 @@ build: libcitrusleaf
 
 .PHONY: build-clean
 build-clean:
+	@rm -rf $(TARGET_OBJ)
 	@rm -rf $(TARGET_BIN)
 	@rm -rf $(TARGET_LIB)
 

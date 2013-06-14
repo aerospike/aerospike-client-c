@@ -64,6 +64,8 @@ static const char * as_log_level_strings[5] = {
 
 	fprintf(stderr, "[%s:%d][%s] %s - %s\n", 
 		file, line, func, as_log_level_strings[level], msg);
+
+	return true;
 }
 
 /******************************************************************************
@@ -76,30 +78,29 @@ static const char * as_log_level_strings[5] = {
 as_log * as_log_init(as_log * log) 
 {
 	if ( !log ) return NULL;
-
-	log->level = AS_LOG_LEVEL_INFO;
-	log->callback = as_log_stderr;
+	cf_atomic32_set(&log->level, (cf_atomic32) AS_LOG_LEVEL_INFO);
+	cf_atomic_p_set(&log->callback, (cf_atomic_p) as_log_stderr);
 	return log;
 }
 
 /**
  * Set the level for the given log
  */
-int as_log_set_level(as_log * log, as_log_level level) 
+bool as_log_set_level(as_log * log, as_log_level level) 
 {
-	if ( !log ) return 1;
-	log->level = level;
-	return 0;
+	if ( !log ) return false;
+	cf_atomic32_set(&log->level, (cf_atomic32) level);
+	return true;
 }
 
 /**
  * Set the callback for the given log
  */
-int as_log_set_callback(as_log * log, as_log_callback callback)
+bool as_log_set_callback(as_log * log, as_log_callback callback)
 {
-	if ( !log ) return 1;
-	log->callback = callback;
-	return 0;
+	if ( !log ) return false;
+	cf_atomic_p_set(&log->callback, (cf_atomic_p) callback);
+	return true;
 }
 
 

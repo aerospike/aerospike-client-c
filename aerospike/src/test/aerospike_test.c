@@ -51,8 +51,6 @@ static void citrusleaf_log_callback(cf_log_level level, const char* fmt, ...) {
 
 static bool before(atf_plan * plan) {
 
-	// cf_set_log_level(CF_DEBUG);
-	cf_set_log_callback(citrusleaf_log_callback);
 
     if ( as ) {
         error("aerospike was already initialized");
@@ -76,6 +74,11 @@ static bool before(atf_plan * plan) {
 	as_error_reset(&err);
 
 	as = aerospike_new(&config);
+
+	cf_set_log_level(CF_INFO);
+	cf_set_log_callback(citrusleaf_log_callback);
+	as_log_set_level(&as->log, AS_LOG_LEVEL_TRACE);
+
 	
 	if ( aerospike_connect(as, &err) == AEROSPIKE_OK ) {
 		info("connected to %s:%d", HOST, PORT);
@@ -125,7 +128,7 @@ PLAN( aerospike_test ) {
     // aerospike_key module
     plan_add( key_basics );
     plan_add( key_apply );
-    plan_add( key_apply2 );
+    // plan_add( key_apply2 );
 
     // aerospike_digest module
     plan_add( digest_basics );

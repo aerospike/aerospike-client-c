@@ -2,6 +2,8 @@
 
 #include <stdbool.h>
 
+#define WAIT_MS(__ms) nanosleep((struct timespec[]){{0, __ms##000000}}, NULL)
+
 /**
  * Read a file's content into the as_bytes.
  */

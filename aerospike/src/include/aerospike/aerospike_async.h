@@ -20,6 +20,11 @@
  * IN THE SOFTWARE.
  *****************************************************************************/
 
+/** 
+ * @defgroup async Asynchronous API
+ * @{
+ */
+
 #pragma once 
 
 #include <aerospike/aerospike.h>
@@ -37,22 +42,16 @@
 /**
  * Callback for `aerospike_async_x_put()` functions.
  *
- * On success, error->code will equal AEROSPIKE_OK. Otherwise an error
- * occurred and the other error fields will be populated.
- *
- * @param error     - contains the status of the call.
- * @param udata     - user-data provided to the invoking function.
+ * @param error		Contains the status of the call.
+ * @param udata		User-data provided to the invoking function.
  */
 typedef bool (* aerospike_async_put_callback)(const as_error * error, void * udata);
 
 /**
  * Callback for the `aerospike_async_x_remove()` functions.
  *
- * On success, error->code will equal AEROSPIKE_OK. Otherwise an error
- * occurred and the other error fields will be populated.
- *
- * @param error     - contains the status of the call.
- * @param udata     - user-data provided to the invoking function.
+ * @param error 	Contains the status of the call.
+ * @param udata 	User-data provided to the invoking function.
  */
 typedef bool (* aerospike_async_remove_callback)(const as_error * error, void * udata);
 
@@ -63,14 +62,15 @@ typedef bool (* aerospike_async_remove_callback)(const as_error * error, void * 
 /**
  * Asynchronous put via key.
  *
- * @param as        - the aerospike cluster to connect to.
- * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
- * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
- * @param ns        - the namespace of the record.
- * @param set       - the set of the record.
- * @param key       - the key of the record. Can be either as_integer or as_string.
- * @param udata     - user-data to be passed to the callback.
- * @param callback  - callback to be invoked when a response is received.
+ * @param as			The aerospike instance to use for this operation.
+ * @param err			The as_error to be populated if an error occurs.
+ * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ * @param ns			The namespace of the record.
+ * @param set			The set of the record.
+ * @param key			The key of the record. 
+ * @param rec 			The record to put in to the cluster.
+ * @param callback		The callback to be invoked when a response is received.
+ * @param udata			User-data to be passed to the callback.
  *
  * @return AEROSPIKE_OK if successful. Otherwise an error.
  */
@@ -84,15 +84,14 @@ as_status aerospike_async_key_put(
 /**
  * Asynchronous put via digest.
  *
- * @param as        - the aerospike cluster to connect to.
- * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
- * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
- * @param policy    - dictates the behavior of a write.
- * @param ns        - the namespace of the record.
- * @param digest    - the digest of the record.
- * @param rec       - the record to be stored.
- * @param udata     - user-data to be passed to the callback.
- * @param callback  - callback to be invoked when a response is received.
+ * @param as			The aerospike instance to use for this operation.
+ * @param err			The as_error to be populated if an error occurs.
+ * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ * @param ns			The namespace of the record.
+ * @param digest		The digest of the record.
+ * @param rec 			The record to put in to the cluster.
+ * @param callback		The callback to be invoked when a response is received.
+ * @param udata			User-data to be passed to the callback.
  *
  * @return AEROSPIKE_OK if successful. Otherwise an error.
  */
@@ -106,14 +105,14 @@ as_status aerospike_async_digest_put(
 /**
  * Asynchronous remove via key.
  *
- * @param as        - the aerospike cluster to connect to
- * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
- * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
- * @param ns        - the namespace of the record.
- * @param set       - the set of the record.
- * @param key       - the key of the record. Can be either as_integer or as_string.
- * @param udata     - user-data to be passed to the callback.
- * @param callback  - callback to be invoked when a response is received.
+ * @param as			The aerospike instance to use for this operation.
+ * @param err			The as_error to be populated if an error occurs.
+ * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ * @param ns			The namespace of the record.
+ * @param set			The set of the record.
+ * @param key			The key of the record. 
+ * @param callback		The callback to be invoked when a response is received.
+ * @param udata			User-data to be passed to the callback.
  *
  * @return AEROSPIKE_OK if successful. Otherwise an error.
  */
@@ -126,14 +125,13 @@ as_status aerospike_async_key_remove(
 /**
  * Asynchronous remove via digest.
  *
- * @param as        - the aerospike cluster to connect to.
- * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
- * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
- * @param policy    - dictates the behavior of a delete.
- * @param ns        - the namespace of the record.
- * @param digest    - the digest of the record.
- * @param udata     - user-data to be passed to the callback.
- * @param callback  - callback to be invoked when a response is received.
+ * @param as			The aerospike instance to use for this operation.
+ * @param err			The as_error to be populated if an error occurs.
+ * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ * @param ns			The namespace of the record.
+ * @param digest		The digest of the record.
+ * @param callback		The callback to be invoked when a response is received.
+ * @param udata			User-data to be passed to the callback.
  *
  * @return AEROSPIKE_OK if successful. Otherwise an error.
  */
@@ -142,3 +140,7 @@ as_status aerospike_async_digest_remove(
 	const char * ns, const as_digest * digest, 
 	aerospike_async_remove_callback callback, void * udata
 	);
+
+/**
+ * @}
+ */

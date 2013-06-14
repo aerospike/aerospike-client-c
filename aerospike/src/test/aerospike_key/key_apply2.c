@@ -44,6 +44,8 @@ static bool before(atf_suite * suite) {
         return false;
     }
 
+	WAIT_MS(100);
+
     if ( ! udf_exists(LUA_FILE) ) {
         error("lua file does not exist: %s", LUA_FILE);
         return false;
@@ -66,12 +68,12 @@ static bool after(atf_suite * suite) {
  * TEST CASES
  *****************************************************************************/
 
-TEST( key_apply2_file_exists , "apply2: (test,test,foo) <!> key_apply2.record_exists() => 1" ) {
+TEST( key_apply2_file_exists , "apply2: key_apply2 exists" ) {
 
 	as_error err;
 	as_error_reset(&err);
 
-	const char *filename = LUA_FILE;
+	const char * filename = LUA_FILE;
 
     as_udf_file file;
     as_udf_file_init(&file);
@@ -117,6 +119,10 @@ TEST( key_apply2_getinteger , "apply2: (test,test,foo) <!> key_apply2.getinteger
 
 	as_status rc = aerospike_key_apply(as, &err, NULL, "test", "test", "foo", UDF_FILE, "getinteger", &arglist, &res);
 
+	if ( rc != AEROSPIKE_OK ) {
+		error("[%s:%d][%s][%d] %s", err.file, err.line, err.func, err.code, err.message);
+	}
+
 	assert_int_eq( rc, AEROSPIKE_OK );
 	assert_not_null( res );
 	assert( res->type == AS_INTEGER );
@@ -134,6 +140,10 @@ TEST( key_apply2_getstring , "apply2: (test,test,foo) <!> key_apply2.getstring()
 
 	as_status rc = aerospike_key_apply(as, &err, NULL, "test", "test", "foo", UDF_FILE, "getstring", &arglist, &res);
 
+	if ( rc != AEROSPIKE_OK ) {
+		error("[%s:%d][%s][%d] %s", err.file, err.line, err.func, err.code, err.message);
+	}
+
 	assert_int_eq( rc, AEROSPIKE_OK );
 	assert_not_null( res );
 	assert( res->type == AS_STRING );
@@ -150,6 +160,10 @@ TEST( key_apply2_getlist , "apply2: (test,test,foo) <!> key_apply2.getlist() => 
 	as_list_append_str(&arglist, "e");
 
 	as_status rc = aerospike_key_apply(as, &err, NULL, "test", "test", "foo", UDF_FILE, "getlist", &arglist, &res);
+
+	if ( rc != AEROSPIKE_OK ) {
+		error("[%s:%d][%s][%d] %s", err.file, err.line, err.func, err.code, err.message);
+	}
 
 	assert_int_eq( rc, AEROSPIKE_OK );
 	assert_not_null( res );

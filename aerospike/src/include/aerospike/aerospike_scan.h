@@ -20,6 +20,11 @@
  * IN THE SOFTWARE.
  *****************************************************************************/
 
+/** 
+ * @defgroup Scan Scan API
+ * @{
+ */
+
 #pragma once
 
 #include <aerospike/aerospike.h>
@@ -28,11 +33,6 @@
 #include <aerospike/as_scan.h>
 #include <aerospike/as_status.h>
 #include <aerospike/as_val.h>
-
-/** 
- * @defgroup Scan Scan API
- * @{
- */
 
 /******************************************************************************
  * TYPES
@@ -65,11 +65,12 @@ typedef int (* aerospike_scan_foreach_callback)(as_val *, void *);
  *			printf("Running background scan job: %ll", scanid);
  *		}
  * 
- * @param as        - the aerospike cluster to connect to.
- * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
- * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
- * @param scan      - the scan to perform
- * @param scan_id   - the id for the scan job, which can be used for querying the status of the scan.
+ *
+ * @param as			The aerospike instance to use for this operation.
+ * @param err			The as_error to be populated if an error occurs.
+ * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ * @param scan 			The scan to execute against the cluster.
+ * @param scan_id		The id for the scan job, which can be used for querying the status of the scan.
  *
  * @return AEROSPIKE_OK on success. Otherwise an error occurred.
  */
@@ -95,18 +96,19 @@ as_status aerospike_scan_background(
  *			printf("Running background scan job: %ll", scanid);
  *		}
  * 
- * @param as        - the aerospike cluster to connect to.
- * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
- * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
- * @param node      - the name of the node to perform the scan on.
- * @param scan      - the scan to perform
- * @param scan_id   - the id for the scan job, which can be used for querying the status of the scan.
+ *
+ * @param as			The aerospike instance to use for this operation.
+ * @param err			The as_error to be populated if an error occurs.
+ * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ * @param node 			The name of the node to perform the scan on.
+ * @param scan 			The scan to execute against the cluster.
+ * @param scan_id		The id for the scan job, which can be used for querying the status of the scan.
  *
  * @return AEROSPIKE_OK on success. Otherwise an error occurred.
  */
 as_status aerospike_scan_node_background(
 	aerospike * as, as_error * err, const as_policy_scan * policy, 
-	const char *node, const as_scan * scan, uint64_t * scan_id
+	const char * node, const as_scan * scan, uint64_t * scan_id
 	);
 
 /**
@@ -122,12 +124,13 @@ as_status aerospike_scan_node_background(
  *          fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *		}
  * 
- * @param as        - the aerospike cluster to connect to.
- * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
- * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
- * @param scan      - the scan to perform
- * @param udata     - user-data to be passed to the callback
- * @param callback  - the function to be called for each record scanned.
+ *
+ * @param as			The aerospike instance to use for this operation.
+ * @param err			The as_error to be populated if an error occurs.
+ * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ * @param scan			The scan to execute against the cluster.
+ * @param callback		The function to be called for each record scanned.
+ * @param udata			User-data to be passed to the callback.
  *
  * @return AEROSPIKE_OK on success. Otherwise an error occurred.
  */
@@ -150,13 +153,14 @@ as_status aerospike_scan_foreach(
  *          fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *		}
  *
- * @param as        - the aerospike cluster to connect to.
- * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
- * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
- * @param node      - the name of the node to perform the scan on.
- * @param scan      - the scan to perform
- * @param udata     - user-data to be passed to the callback
- * @param callback  - the function to be called for each record scanned.
+ *
+ * @param as			The aerospike instance to use for this operation.
+ * @param err			The as_error to be populated if an error occurs.
+ * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ * @param node 			The name of the node to perform the scan on.
+ * @param scan			The scan to execute against the cluster.
+ * @param callback		The function to be called for each record scanned.
+ * @param udata			User-data to be passed to the callback.
  *
  * @return AEROSPIKE_OK on success. Otherwise an error occurred.
  */

@@ -81,6 +81,18 @@ typedef struct as_error_s {
  *****************************************************************************/
 
 /**
+ * Initialize the error to default (empty) values.
+ */
+inline as_error * as_error_init(as_error * err) {
+	err->code = AEROSPIKE_OK;
+	err->message[0] = '\0';
+	err->func = NULL;
+	err->file = NULL;
+	err->line = 0;
+	return err;
+}
+
+/**
  * Resets the error to default (empty) values.
  */
 inline as_status as_error_reset(as_error * err) {

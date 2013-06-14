@@ -445,5 +445,24 @@ as_status aerospike_key_operate(
 	const char * ns, const char * set, const char * key, 
 	const as_binop * ops, uint32_t nops) 
 {
-	return AEROSPIKE_OK;
+	// if policy is NULL, then get default policy
+	as_policy_write * p = policy ? (as_policy_write *) policy : &(as->config.policies.write);
+
+	// int         nvalues = rec->bins.size;
+	// cl_bin *    values = (cl_bin *) alloca(sizeof(cl_bin) * nvalues);
+
+	cl_write_parameters wp;
+	// as_policy_write_towp(p, rec, &wp);
+
+	cl_object okey;
+	citrusleaf_object_init_str(&okey, key);
+
+	cl_operation * operations = NULL;
+	int n_operations = 0;
+	int replace = 0;
+	uint32_t generation = 0;
+
+	cl_rv rc = citrusleaf_operate(as->cluster, ns, set, &okey, operations, n_operations, &wp, replace, &generation);
+
+	return rc ? AEROSPIKE_ERR : AEROSPIKE_OK;
 }

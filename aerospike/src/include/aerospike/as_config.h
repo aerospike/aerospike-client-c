@@ -55,6 +55,31 @@ typedef struct as_config_host_s {
 
 /**
  * Client Configuration 
+ *
+ * The configuration is usually created on the stack. Once you have a config instance,
+ * you will want to initialize it to default values.
+ *
+ *     as_config config;
+ *     as_config_init(&config);
+ *
+ * You will want to then add hosts to seed the cluster discovery:
+ *
+ *     config.hosts[0] = { .addr = "127.0.0.1", .port = 3000 };
+ *
+ * You can add up to 16 hosts for the seed.
+ *
+ * The configuration also defines default policies for the application. The `as_config_init()`
+ * function already presets default values for the policies. You can feel free to change the 
+ * default policies to match your needs. However, you should note that each call that utilizes
+ * a policy, will allow you to override the default policy.
+ *
+ * If you are using using user-defined functions (UDF) for processing query results 
+ * (i.e aggregations), then you will find it useful to set the `mod_lua` settings. Of particular
+ * importance is the `mod_lua.user_path`, which allows you to define a path to where the client
+ * library will look for Lua files for processing.
+ *
+ *     strcpy(config.mod_lua.user_path, "/home/me/lua");
+ *
  */
 typedef struct as_config_s {
 

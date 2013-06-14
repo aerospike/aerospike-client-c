@@ -44,7 +44,11 @@
 struct cl_cluster_s;
 
 /**
- * Client handle used for all calls to a cluster.
+ * Aerospike client instance.
+ *
+ * Each instance of `aerospike` represents a connection to an Aerospike cluster.
+ * 
+ *
  */
 typedef struct aerospike_s {
 

@@ -76,27 +76,27 @@ typedef struct as_log_s {
  *****************************************************************************/
 
 #define as_error(__ctx, __fmt, ... ) \
-	if ( (__ctx) && (__ctx)->level && (__ctx)->callback && AS_LOG_LEVEL_ERROR <= (__ctx)->level ) {\
+	if ( (__ctx) && (__ctx)->callback && AS_LOG_LEVEL_ERROR <= (__ctx)->level ) {\
 		(__ctx)->callback(AS_LOG_LEVEL_ERROR, __func__, __FILE__, __LINE__, __fmt, ##__VA_ARGS__);\
 	}
 
 #define as_warn(__ctx, __fmt, ... ) \
-	if ( (__ctx) && (__ctx)->level && (__ctx)->callback && AS_LOG_LEVEL_WARN <= (__ctx)->level ) {\
+	if ( (__ctx) && (__ctx)->callback && AS_LOG_LEVEL_WARN <= (__ctx)->level ) {\
 		(__ctx)->callback(AS_LOG_LEVEL_WARN, __func__, __FILE__, __LINE__, __fmt, ##__VA_ARGS__);\
 	}
 
 #define as_info(__ctx, __fmt, ... ) \
-	if ( (__ctx) && (__ctx)->level && (__ctx)->callback && AS_LOG_LEVEL_INFO <= (__ctx)->level ) {\
+	if ( (__ctx) && (__ctx)->callback && AS_LOG_LEVEL_INFO <= (__ctx)->level ) {\
 		(__ctx)->callback(AS_LOG_LEVEL_INFO, __func__, __FILE__, __LINE__, __fmt, ##__VA_ARGS__);\
 	}
 
 #define as_debug(__ctx, __fmt, ... ) \
-	if ( (__ctx) && (__ctx)->level && (__ctx)->callback && AS_LOG_LEVEL_DEBUG <= (__ctx)->level ) {\
+	if ( (__ctx) && (__ctx)->callback && AS_LOG_LEVEL_DEBUG <= (__ctx)->level ) {\
 		(__ctx)->callback(AS_LOG_LEVEL_DEBUG, __func__, __FILE__, __LINE__, __fmt, ##__VA_ARGS__);\
 	}
 
 #define as_trace(__ctx, __fmt, ... ) \
-	if ( (__ctx) && (__ctx)->level && (__ctx)->callback && AS_LOG_LEVEL_TRACE <= (__ctx)->level ) {\
+	if ( (__ctx) && (__ctx)->callback && AS_LOG_LEVEL_TRACE <= (__ctx)->level ) {\
 		(__ctx)->callback(AS_LOG_LEVEL_TRACE, __func__, __FILE__, __LINE__, __fmt, ##__VA_ARGS__);\
 	}
 

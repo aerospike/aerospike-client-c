@@ -67,7 +67,7 @@ aerospike * aerospike_new(as_config * config)
 {
 	aerospike * as = (aerospike *) malloc(sizeof(aerospike));
 	if ( !as ) return as;
-	return aerospike_defaults(as, false, config);
+	return aerospike_defaults(as, true, config);
 }
 
 /**
@@ -110,10 +110,12 @@ as_status aerospike_connect(aerospike * as, as_error * err)
     as_module_configure(&mod_lua, &config);
 	_log_debug("as_module_configure(mod_lua) OK");
 
-
-	// initialize the cluster
+	// start the cluster tend thread (for all clusters)
 	citrusleaf_cluster_init();
 	_log_debug("citrusleaf_cluster_init() OK");
+
+	// set the cluster tend speed
+	citrusleaf_change_tend_speed(as->config.tender_interval > 1000 ? as->config.tender_interval / 1000 : 1);
 
 	// create the cluster object
 	as->cluster = citrusleaf_cluster_create();
@@ -124,11 +126,11 @@ as_status aerospike_connect(aerospike * as, as_error * err)
 		cf_error("couldn't create histogram for client");	
 	}
 #endif  
-
-	g_initialized = true;
 	
 	if ( as->cluster == NULL ) {
 		as_error_update(err, AEROSPIKE_ERR_CLIENT, "Can't create client");
+		citrusleaf_cluster_destroy(as->cluster);
+		as->cluster = NULL;
 		return err->code;
 	}
 
@@ -147,8 +149,15 @@ as_status aerospike_connect(aerospike * as, as_error * err)
 		}
 	}
 
+	// TODO - wait for stability.
+
 	if ( err->code == AEROSPIKE_OK ) {
 		_log_debug("connected.");
+		g_initialized = true;
+	}
+	else {
+		citrusleaf_cluster_destroy(as->cluster);
+		as->cluster = NULL;
 	}
 	
 	return err->code;
@@ -175,8 +184,10 @@ as_status aerospike_close(aerospike * as, as_error * err)
 	extern as_status aerospike_scan_destroy(aerospike * as, as_error * err);
 	rc = rc || aerospike_scan_destroy(as, err);
 
-	citrusleaf_cluster_destroy(as->cluster);
-	as->cluster = NULL;
+	if (as->cluster) {
+		citrusleaf_cluster_destroy(as->cluster);
+		as->cluster = NULL;
+	}
 
-	return rc;
+	return err->code;
 }

@@ -50,14 +50,17 @@
  *      if ( aerospike_key_get(&as, &err, NULL, "test", "demo", "foo", &rec) != AEROSPIKE_OK ) {
  *          fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *      }
+ * 		else {
+ *			as_record_destroy(rec);
+ *		}
  *
- * @param as        - the aerospike cluster to connect to
- * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
- * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
- * @param ns        - the namespace of the record.
- * @param set       - the set-name of the record.p
- * @param key       - the key of the record. Can be either as_integer or as_string.
- * @param rec       - the record to be populated with the data from request.
+ * @param as			The aerospike instance to use for this operation.
+ * @param err			The as_error to be populated if an error occurs.
+ * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ * @param ns			The namespace of the record.
+ * @param set			The set of the record. 
+ * @param key			The key of the record.
+ * @param rec 			The record to be populated with the data from request.
  *
  * @return AEROSPIKE_OK if successful. Otherwise an error.
  */
@@ -70,19 +73,24 @@ as_status aerospike_key_get(
 /**
  * Lookup a record by key, then return specified bins.
  *
- *      as_record * rec = NULL;
  *      char * select[] = {"bin1", "bin2", "bin3", NULL};
+ *
+ *      as_record * rec = NULL;
  *      if ( aerospike_key_select(&as, &err, NULL, "test", "demo", "foo", select, &rec) != AEROSPIKE_OK ) {
  *          fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *      }
+ * 		else {
+ *			as_record_destroy(rec);
+ *		}
  *
- * @param as        - the aerospike cluster to connect to
- * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
- * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
- * @param ns        - the namespace of the record.
- * @param set       - the set of the record.
- * @param key       - the key of the record. Can be either as_integer or as_string.
- * @param bins      - the bins to select. A NULL terminated array of NULL terminated strings.
+ * @param as			The aerospike instance to use for this operation.
+ * @param err			The as_error to be populated if an error occurs.
+ * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ * @param ns			The namespace of the record.
+ * @param set			The set of the record. 
+ * @param key			The key of the record.
+ * @param bins 			The bins to select. A NULL terminated array of NULL terminated strings.
+ * @param rec 			The record to be populated with the data from request.
  *
  * @return AEROSPIKE_OK if successful. Otherwise an error.
  */
@@ -104,15 +112,15 @@ as_status aerospike_key_select(
  *          fprintf(stdout, "Record %s", exists ? "exists." : "doesn't exist.");
  *      }
  *
- * @param as        - the aerospike cluster to connect to
- * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
- * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
- * @param ns        - the namespace of the record.
- * @param set       - the set of the record.
- * @param key       - the key of the record. Can be either as_integer or as_string.
- * @param exists    - will be `true` if the record exists, otherwise `false`.
+ * @param as			The aerospike instance to use for this operation.
+ * @param err			The as_error to be populated if an error occurs.
+ * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ * @param ns			The namespace of the record.
+ * @param set			The set of the record. 
+ * @param key			The key of the record.
+ * @param exists    	The variable to populate with `true` if the record exists, otherwise `false`.
  *
- * @return AEROSPIKE_OK if successful. Otherwise an error occurred. Check the `err` for details on the error.
+ * @return AEROSPIKE_OK if successful. Otherwise an error.
  */
 as_status aerospike_key_exists(
 	aerospike * as, as_error * err, const as_policy_read * policy, 
@@ -123,22 +131,26 @@ as_status aerospike_key_exists(
 /**
  * Store a record in the cluster.
  *
- *      as_record * rec = as_record_new(2);
- *      as_record_set_string(rec, "bin1", "abc");
- *      as_record_set_integer(rec, "bin2", 123);
+ *      as_record rec;
+ *		as_record_init(&rec, 2);
+ *      as_record_set_string(&rec, "bin1", "abc");
+ *      as_record_set_integer(&rec, "bin2", 123);
  *
- *      if ( aerospike_key_put(&as, &err, NULL, "test", "demo", "foo", rec) != AEROSPIKE_OK ) {
+ *      if ( aerospike_key_put(&as, &err, NULL, "test", "demo", "foo", &rec) != AEROSPIKE_OK ) {
  *          fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *      }
  *
- * @param as        - the aerospike cluster to connect to
- * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
- * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
- * @param ns        - the namespace of the record.
- * @param set       - the set of the record.
- * @param key       - the key of the record. Can be either as_integer or as_string.
+ *		as_record_destroy(&rec);
  *
- * @return AEROSPIKE_OK if successful. Otherwise an error occurred. Check the `err` for details on the error.
+ * @param as			The aerospike instance to use for this operation.
+ * @param err			The as_error to be populated if an error occurs.
+ * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ * @param ns			The namespace of the record.
+ * @param set			The set of the record. 
+ * @param key			The key of the record.
+ * @param rec 			The record containing the data to be written.
+ *
+ * @return AEROSPIKE_OK if successful. Otherwise an error.
  */
 as_status aerospike_key_put(
 	aerospike * as, as_error * err, const as_policy_write * policy, 
@@ -153,14 +165,14 @@ as_status aerospike_key_put(
  *          fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *      }
  *
- * @param as        - the aerospike cluster to connect to
- * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
- * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
- * @param ns        - the namespace of the record.
- * @param set       - the set of the record.
- * @param key       - the key of the record. Can be either as_integer or as_string.
+ * @param as			The aerospike instance to use for this operation.
+ * @param err			The as_error to be populated if an error occurs.
+ * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ * @param ns			The namespace of the record.
+ * @param set			The set of the record. 
+ * @param key			The key of the record.
  *
- * @return AEROSPIKE_OK if successful. Otherwise an error occurred. Check the `err` for details on the error.
+ * @return AEROSPIKE_OK if successful. Otherwise an error.
  */
 as_status aerospike_key_remove(
 	aerospike * as, as_error * err, const as_policy_remove * policy, 
@@ -180,19 +192,24 @@ as_status aerospike_key_remove(
  *      if ( aerospike_key_apply(&as, &err, NULL, "test", "demo", "foo", "math", "add", &args, &res) != AEROSPIKE_OK ) {
  *          fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *      }
+ *		else {
+ *			as_val_destroy(res);
+ *		}
  *
- * @param as        - the aerospike cluster to connect to
- * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
- * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
- * @param ns        - the namespace of the record.
- * @param set       - the set of the record.
- * @param key       - the key of the record. Can be either as_integer or as_string.
- * @param module    - the module containing the function to execute
- * @param function  - the function to execute
- * @param arglist   - arguments for the function
- * @param result    - the return value from the function
+ *		as_list_destroy(&args);
  *
- * @return AEROSPIKE_OK if successful. Otherwise an error occurred. Check the `err` for details on the error.
+ * @param as			The aerospike instance to use for this operation.
+ * @param err			The as_error to be populated if an error occurs.
+ * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ * @param ns			The namespace of the record.
+ * @param set			The set of the record. 
+ * @param key			The key of the record.
+ * @param module		The module containing the function to execute.
+ * @param function 		The function to execute.
+ * @param arglist 		The arguments for the function.
+ * @param result 		The return value from the function.
+ *
+ * @return AEROSPIKE_OK if successful. Otherwise an error.
  */
 as_status aerospike_key_apply(
 	aerospike * as, as_error * err, const as_policy_read * policy, 
@@ -204,16 +221,16 @@ as_status aerospike_key_apply(
 /**
  * Lookup a record by key, then perform specified operations.
  * 
- * @param as        - the aerospike cluster to connect to.
- * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
- * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
- * @param ns        - the namespace of the record.
- * @param set       - the set of the record.
- * @param key       - the key of the record. Can be either as_integer or as_string.
- * @param ops       - an array of as_bin_operation, which specify the operation to perform on bins of the record.
- * @param nops      - the number of operations.
+ * @param as			The aerospike instance to use for this operation.
+ * @param err			The as_error to be populated if an error occurs.
+ * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ * @param ns			The namespace of the record.
+ * @param set			The set of the record. 
+ * @param key			The key of the record.
+ * @param ops 			An array of as_bin_operation, which specify the operation to perform on bins of the record.
+ * @param nops 			The number of operations.
  *
- * @return AEROSPIKE_OK if successful. Otherwise an error occurred. Check the `err` for details on the error.
+ * @return AEROSPIKE_OK if successful. Otherwise an error.
  */
 as_status aerospike_key_operate(
 	aerospike * as, as_error * err, const as_policy_write * policy, 

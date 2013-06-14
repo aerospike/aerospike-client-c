@@ -79,7 +79,7 @@ typedef struct cl_query_response_record_t {
 	bool        free_bins;
 } cl_query_response_rec;
 
-typedef bool (* cl_query_cb) (const as_val * val, void * udata);
+typedef bool (* cl_query_cb) (as_val * val, void * udata);
 
 
 /******************************************************************************
@@ -121,7 +121,7 @@ int   cl_query_limit(cl_query * query, uint64_t limit);
 
 
 cl_rv citrusleaf_query_stream(cl_cluster * cluster, const cl_query * query, as_stream * stream);
-cl_rv citrusleaf_query_foreach(cl_cluster * cluster, const cl_query * query, void * udata, bool (*foreach)(const as_val *, void *));
+cl_rv citrusleaf_query_foreach(cl_cluster * cluster, const cl_query * query, void * udata, bool (*foreach)(as_val *, void *));
 
 
 /*

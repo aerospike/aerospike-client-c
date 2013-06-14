@@ -81,7 +81,11 @@ typedef struct as_error_s {
  *****************************************************************************/
 
 /**
- * Initialize the error to default (empty) values.
+ * Initialize the error to default (empty) values, returning the error.
+ *
+ * @param err The error to initialize.
+ *
+ * @returns The initialized err.
  */
 inline as_error * as_error_init(as_error * err) {
 	err->code = AEROSPIKE_OK;
@@ -93,7 +97,11 @@ inline as_error * as_error_init(as_error * err) {
 }
 
 /**
- * Resets the error to default (empty) values.
+ * Resets the error to default (empty) values, returning the status code.
+ *
+ * @param err The error to reset.
+ *
+ * @returns AEROSPIKE_OK.
  */
 inline as_status as_error_reset(as_error * err) {
 	err->code = AEROSPIKE_OK;
@@ -106,6 +114,8 @@ inline as_status as_error_reset(as_error * err) {
 
 /**
  * Sets the error.
+ *
+ * @return The status code set for the error.
  */
 inline as_status as_error_setall(as_error * err, int32_t code, const char * message, const char * func, const char * file, uint32_t line) {
 	err->code = code;
@@ -118,6 +128,8 @@ inline as_status as_error_setall(as_error * err, int32_t code, const char * mess
 
 /**
  * Sets the error.
+ *
+ * @return The status code set for the error.
  */
 inline as_status as_error_setallv(as_error * err, int32_t code, const char * func, const char * file, uint32_t line, const char * fmt, ...) {
 	if ( fmt != NULL ) {

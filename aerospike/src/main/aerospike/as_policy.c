@@ -14,10 +14,8 @@
 as_policy_write * as_policy_write_init(as_policy_write * p) 
 {
 	p->timeout = 1000;
-	p->unique = false;
-	p->generation = 0;
 	p->digest = AS_POLICY_DIGEST_DEFAULT;
-	p->repl = AS_POLICY_REPL_ASYNC;
+	p->mode = AS_POLICY_WRITEMODE_ASYNC;
 	p->gen = AS_POLICY_GEN_DEFAULT;
 	return p;
 }
@@ -36,8 +34,7 @@ as_policy_read * as_policy_read_init(as_policy_read * p) {
 as_policy_remove * as_policy_remove_init(as_policy_remove * p)
 {
 	p->timeout = 1000;
-	p->generation = 0;
-	p->repl = AS_POLICY_REPL_ASYNC;
+	p->mode = AS_POLICY_WRITEMODE_ASYNC;
 	p->gen = AS_POLICY_GEN_DEFAULT;
 	return p;
 }

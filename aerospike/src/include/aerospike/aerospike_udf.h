@@ -20,6 +20,11 @@
  * IN THE SOFTWARE.
  *****************************************************************************/
 
+/** 
+ * @addtogroup UDF UDF Management API
+ * @{
+ */
+
 #pragma once 
 
 #include <aerospike/aerospike.h>
@@ -27,11 +32,6 @@
 #include <aerospike/as_policy.h>
 #include <aerospike/as_status.h>
 #include <aerospike/as_udf.h>
-
-/** 
- * @addtogroup UDF UDF Management API
- * @{
- */
 
 /******************************************************************************
  * TYPES
@@ -65,10 +65,11 @@ typedef int (* aerospike_udf_foreach_callback)(const as_udf_file *, void *);
  *
  *		as_udf_list_destroy(&list);
  *
- * @param as        - the aerospike cluster to connect to
- * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
- * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
- * @param list 		- list to populate with the results from the cluster.
+ *
+ * @param as			The aerospike instance to use for this operation.
+ * @param err			The as_error to be populated if an error occurs.
+ * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ * @param list 			The list to populate with the results from the cluster.
  *
  * @return AEROSPIKE_OK if successful. Otherwise an error occurred.
  */
@@ -90,10 +91,11 @@ as_status aerospike_udf_list(
  *          fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *      }
  *
- * @param as        - the aerospike cluster to connect to
- * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
- * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
- * @param list 		- list to populate with the results from the cluster.
+ *
+ * @param as			The aerospike instance to use for this operation.
+ * @param err			The as_error to be populated if an error occurs.
+ * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ * @param list 			The list to populate with the results from the cluster.
  *
  * @return AEROSPIKE_OK if successful. Otherwise an error occurred.
  */
@@ -120,12 +122,13 @@ as_status aerospike_udf_foreach(
  *
  *		as_udf_file_destroy(&file);
  *
- * @param as        - the aerospike cluster to connect to.
- * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
- * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
- * @param filename	- the name of the UDF file.
- * @param type 		- the type of UDF file.
- * @param file 		- the file from the cluster.
+ *
+ * @param as			The aerospike instance to use for this operation.
+ * @param err			The as_error to be populated if an error occurs.
+ * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ * @param filename		The name of the UDF file.
+ * @param type			The type of UDF file.
+ * @param file			The file from the cluster.
  *
  * @return AEROSPIKE_OK if successful. Otherwise an error occurred.
  */
@@ -139,20 +142,21 @@ as_status aerospike_udf_get(
  *
  *		as_bytes content;
  *		as_bytes_init(&content);
- *		...
+ * 		...
  *
  *      if ( aerospike_udf_put(&as, &err, NULL, "my.lua", AS_UDF_TYPE_LUA, &content) != AEROSPIKE_OK ) {
  *          fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *      }
- *		...
+ *
  *		as_bytes_destroy(&content);
  *
- * @param as        - the aerospike cluster to connect to.
- * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
- * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
- * @param filename	- the name of the UDF file.
- * @param type 		- the type of UDF file.
- * @param content 	- the file of the UDF file.
+ *
+ * @param as			The aerospike instance to use for this operation.
+ * @param err			The as_error to be populated if an error occurs.
+ * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ * @param filename		The name of the UDF file.
+ * @param type			The type of UDF file.
+ * @param content		The file of the UDF file.
  *
  * @return AEROSPIKE_OK if successful. Otherwise an error occurred.
  */
@@ -168,10 +172,11 @@ as_status aerospike_udf_put(
  *          fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *      }
  *
- * @param as        - the aerospike cluster to connect to.
- * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
- * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
- * @param filename	- the name of the UDF file.
+ *
+ * @param as			The aerospike instance to use for this operation.
+ * @param err			The as_error to be populated if an error occurs.
+ * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ * @param filename 		The name of the UDF file.
  *
  * @return AEROSPIKE_OK if successful. Otherwise an error occurred.
  */

@@ -76,7 +76,8 @@ static as_record * as_record_defaults(as_record * rec, bool free, uint16_t nbins
 
 	rec->digest._free = false;
 	rec->digest.set = NULL;
-	rec->digest.key = NULL;
+	rec->digest.key.type = AS_TYPE_NULL;
+	rec->digest.key.value.str = NULL;
 	memset(rec->digest.value, 0, AS_DIGEST_VALUE_LEN);
 
 	rec->gen = 0;
@@ -98,9 +99,24 @@ static as_record * as_record_defaults(as_record * rec, bool free, uint16_t nbins
 	return rec;
 }
 
+static void as_record_release(as_record * rec) 
+{
+	if ( rec ) {
+		
+		as_digest_destroy(&rec->digest);
+
+		if ( rec->bins.data && rec->bins._free ) {
+			free(rec->bins.data);
+		}
+		rec->bins.data = NULL;
+		rec->bins.capacity = 0;
+		rec->bins.size = 0;
+	}
+}
+
 static bool as_record_rec_destroy(as_rec * r) 
 {
-	as_record_destroy((as_record *) r);
+	as_record_release((as_record *) r);
 	return true;
 }
 
@@ -142,17 +158,17 @@ static int as_record_rec_remove(const as_rec * r, const char * name)
 
 static uint32_t as_record_rec_ttl(const as_rec * r) 
 {
-	return r ? as_record_get_ttl((as_record *) r) : 0;
+	return r ? ((as_record *) r)->ttl : 0;
 }
 
 static uint16_t  as_record_rec_gen(const as_rec * r) 
 {
-	return r ? as_record_get_gen((as_record *) r) : 0;
+	return r ? ((as_record *) r)->gen : 0;
 }
 
 static as_bytes * as_record_rec_digest(const as_rec * r) 
 {
-	return NULL;
+	return r ? as_bytes_new(((as_record *) r)->digest.value, AS_DIGEST_VALUE_LEN, false) : NULL;
 }
 
 static uint16_t as_record_rec_numbins(const as_rec * r) 
@@ -206,62 +222,7 @@ as_record * as_record_init(as_record * rec, uint16_t nbins)
  */
 void as_record_destroy(as_record * rec) 
 {
-	if ( rec ) {
-
-		if (rec->digest.key) {
-			free(rec->digest.key);
-			rec->digest.key = NULL;
-		}
-		
-		if (rec->digest.set) {
-			free(rec->digest.set);
-			rec->digest.set = NULL;
-		}
-
-		if ( rec->bins.data && rec->bins._free ) {
-			free(rec->bins.data);
-		}
-		rec->bins.data = NULL;
-		rec->bins.capacity = 0;
-		rec->bins.size = 0;
-	}
-}
-
-
-/**
- * Get the digest for the record.
- *
- * @param rec - the record containing the digest.
- *
- * @return the digest if exists, otherwise NULL.
- */
-as_digest * as_record_get_digest(as_record * rec)
-{
-	return rec ? &rec->digest : NULL;
-}
-
-/**
- * Get the ttl for the record.
- *
- * @param rec - the record containing the ttl.
- *
- * @return the ttl value
- */
-uint32_t as_record_get_ttl(as_record * rec)
-{
-	return rec ? rec->ttl : 0;
-}
-
-/**
- * Get the generation value for the record.
- *
- * @param rec - the record containing the digest.
- *
- * @return the generation value
- */
-uint16_t as_record_get_gen(as_record * rec)
-{
-	return rec ? rec->gen : 0;
+	as_rec_destroy((as_rec *) rec);
 }
 
 /**
@@ -271,7 +232,8 @@ uint16_t as_record_get_gen(as_record * rec)
  *
  * @return the number of bins in the record.
  */
-uint16_t as_record_numbins(as_record * rec) {
+uint16_t as_record_numbins(as_record * rec) 
+{
 	return rec ? rec->bins.size : 0;
 }
 

@@ -20,6 +20,11 @@
  * IN THE SOFTWARE.
  *****************************************************************************/
 
+/** 
+ * @defgroup info Info API
+ * @{
+ */
+
 #pragma once 
 
 #include <aerospike/aerospike.h>
@@ -29,11 +34,6 @@
 #include <aerospike/as_policy.h>
 #include <aerospike/as_status.h>
 
-/** 
- * @defgroup Info Info API
- * @{
- */
-
 /******************************************************************************
  * TYPES
  *****************************************************************************/
@@ -41,10 +41,10 @@
 /**
  * Callback for aerospike_info_foreach()
  * 
- * @param err       - The status and possible error information for the info request.
- * @param node      - The node which provided the response.
- * @param res       - The response to the info request. The response must be freed by the caller.
- * @param udata     - The udata provided to the aerospike_info_foreach()
+ * @param err			The status and possible error information for the info request.
+ * @param node			The node which provided the response.
+ * @param res			The response to the info request. The response must be freed by the caller.
+ * @param udata			The udata provided to the aerospike_info_foreach()
  *
  * @return TRUE to continue to the next info response. FALSE to stop processing.
  */
@@ -67,13 +67,13 @@ typedef bool (* aerospike_info_foreach_callback)(const as_error * err, const as_
  *          res = NULL;
  *      }
  *
- * @param as        - the cluster to send the request to.
- * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
- * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
- * @param addr      - the IP address or hostname to send the request to.
- * @param port      - the port to send the request to.
- * @param req       - the info request to send.
- * @param res       - the response from the node. The response will be a NULL terminated string, allocated by the function, and must be freed by the caller.
+ * @param as			The aerospike instance to use for this operation.
+ * @param err			The as_error to be populated if an error occurs.
+ * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ * @param addr			The IP address or hostname to send the request to.
+ * @param port			The port to send the request to.
+ * @param req			The info request to send.
+ * @param res			The response from the node. The response will be a NULL terminated string, allocated by the function, and must be freed by the caller.
  *
  * @return AEROSPIKE_OK on success. Otherwise an error.
  */
@@ -96,12 +96,12 @@ as_status aerospike_info_host(
  *          res = NULL;
  *      }
  *
- * @param as        - the cluster to send the request to.
- * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
- * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
- * @param node      - the name of the node to send the request to.
- * @param req       - the info request to send.
- * @param res       - the response from the node. The response will be a NULL terminated string, allocated by the function, and must be freed by the caller.
+ * @param as			The aerospike instance to use for this operation.
+ * @param err			The as_error to be populated if an error occurs.
+ * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ * @param node 			The name of the node to send the request to.
+ * @param req			The info request to send.
+ * @param res			The response from the node. The response will be a NULL terminated string, allocated by the function, and must be freed by the caller.
  *
  * @return AEROSPIKE_OK on success. Otherwise an error.
  */
@@ -124,12 +124,12 @@ as_status aerospike_info_node(
  *          // handle error
  *      }
  *
- * @param as        - the cluster to send the request to.
- * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
- * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
- * @param req       - the info request to send.
- * @param udata     - user-data to send to the callback.
- * @param callback  - the function to call when a response is received.
+ * @param as			The aerospike instance to use for this operation.
+ * @param err			The as_error to be populated if an error occurs.
+ * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ * @param req			The info request to send.
+ * @param callback		The function to call when a response is received.
+ * @param udata			User-data to send to the callback.
  *
  * @return AEROSPIKE_OK on success. Otherwise an error.
  */
@@ -138,7 +138,6 @@ as_status aerospike_info_foreach(
 	const char * req, 
     aerospike_info_foreach_callback callback, void * udata
 	);
-
 
 /** 
  * @}

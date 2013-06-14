@@ -32,41 +32,90 @@
 /**
  * Replication Policy
  */
-typedef enum as_policy_repl_e {
-	AS_POLICY_REPL_ASYNC, 
-	AS_POLICY_REPL_ONESHOT, 
-	AS_POLICY_REPL_RETRY
-} as_policy_repl;
+typedef enum as_policy_writemode_e {
+	AS_POLICY_WRITEMODE_ASYNC, 
+	AS_POLICY_WRITEMODE_ONESHOT, 
+	AS_POLICY_WRITEMODE_RETRY
+} as_policy_writemode;
 
 /**
  * Generation Policy
  */
 typedef enum as_policy_gen_e {
-	AS_POLICY_GEN_DEFAULT,      // write a record, regardless of generation
-	AS_POLICY_GEN_EQ,           // write a record, iff generations are equal
-	AS_POLICY_GEN_GT,           // write a record, iff local generation is greater-than remote generation
-	AS_POLICY_GEN_DUP           // write a record creating a duplicate, iff the generation collides (?)
+
+	/**
+	 * Write a record, regardless of generation
+	 */
+	AS_POLICY_GEN_DEFAULT,
+
+	/**
+	 * Write a record, iff generations are equal
+	 */
+	AS_POLICY_GEN_EQ,
+
+	/**
+	 * Write a record, iff local generation is greater-than remote generation
+	 */
+	AS_POLICY_GEN_GT,
+
+	/**
+	 * Write a record creating a duplicate, iff the generation collides (?)
+	 */
+	AS_POLICY_GEN_DUP
+
 } as_policy_gen;
 
 /**
  * Digest (Key) Policy
  */
 typedef enum as_policy_digest_e {
-	AS_POLICY_DIGEST_DEFAULT,   // write a record - regardless if digest exists
-	AS_POLICY_DIGEST_CREATE,    // create a record - digest SHOULD NOT exist
-	AS_POLICY_DIGEST_UPDATE     // update a record - digest SHOULD exist
+
+	/**
+	 * Create or update a record, regarldess of 
+	 * its existence.
+	 */
+	AS_POLICY_DIGEST_DEFAULT,
+
+	/**
+	 * Create a record, if it doesn't exist.
+	 */
+	AS_POLICY_DIGEST_CREATE,
+
+	/**
+	 * Update a record, if it exists.
+	 */
+	AS_POLICY_DIGEST_UPDATE
+
 } as_policy_digest;
 
 /**
  * Write Policy
  */
 typedef struct as_policy_write_s {
+
+	/**
+	 * Maximum time in milliseconds to wait for 
+	 * the operation to complete.
+	 */
 	uint32_t            timeout;
-	bool                unique;
-	uint32_t            generation;
+
+	/**
+	 * The write mode defines the behavior 
+	 * for writing data to the cluster.
+	 */
+	as_policy_writemode mode;
+
+	/**
+	 * Specifies the behavior for the digest value
+	 */
 	as_policy_digest    digest;
-	as_policy_repl      repl;
+
+	/**
+	 * Specifies the behavior for the generation
+	 * value.
+	 */
 	as_policy_gen       gen;
+
 } as_policy_write;
 
 
@@ -74,41 +123,98 @@ typedef struct as_policy_write_s {
  * Removal Policy
  */
 typedef struct as_policy_remove_s {
-	uint32_t        timeout;
-	uint32_t        generation;
-	as_policy_repl  repl;
-	as_policy_gen   gen;
+
+	/**
+	 * Maximum time in milliseconds to wait for 
+	 * the operation to complete.
+	 */
+	uint32_t timeout;
+
+	/**
+	 * The generation of the record.
+	 */
+	uint16_t generation;
+
+	/**
+	 * The write mode defines the behavior 
+	 * for writing data to the cluster.
+	 */
+	as_policy_writemode mode;
+
+	/**
+	 * Specifies the behavior for the generation
+	 * value.
+	 */
+	as_policy_gen gen;
+
 } as_policy_remove;
 
 /**
  * Read Policy
  */
 typedef struct as_policy_read_s {
+
+	/**
+	 * Maximum time in milliseconds to wait for 
+	 * the operation to complete.
+	 */
 	uint32_t timeout;
+
 } as_policy_read;
 
 /**
  * Query Policy
  */
 typedef struct as_policy_query_s {
+
+	/**
+	 * Maximum time in milliseconds to wait for 
+	 * the operation to complete.
+	 */
 	uint32_t timeout;
+
 } as_policy_query;
 
 /**
  * Scan Policy
  */
 typedef struct as_policy_scan_s {
-	uint32_t    timeout;
-	bool        fail_on_cluster_change;
+
+	/**
+	 * Maximum time in milliseconds to wait for 
+	 * the operation to complete.
+	 */
+	uint32_t timeout;
+
+	/**
+	 * Abort the scan if the cluster is not in a 
+	 * stable state.
+	 */
+	bool fail_on_cluster_change;
+
 } as_policy_scan;
 
 /**
  * Info Policy
  */
 typedef struct as_policy_info_s {
-	uint32_t timeout;       // timeout(ms)
-	bool send_as_is;        // send ... as is ... ?
-	bool check_bounds;      // check bounds of ... ?
+
+	/**
+	 * Maximum time in milliseconds to wait for 
+	 * the operation to complete.
+	 */
+	uint32_t timeout;
+
+	/**
+	 * @todo Provide a description
+	 */
+	bool send_as_is;
+
+	/**
+	 * @todo Provide a description
+	 */
+	bool check_bounds;
+
 } as_policy_info;
 
 /**
@@ -117,13 +223,43 @@ typedef struct as_policy_info_s {
  * client or configuration.
  */
 typedef struct as_policies_s {
-	uint32_t            timeout;        // default timeout(ms), used when policy timeout is 0 (zero)
-	as_policy_write     write;
-	as_policy_read      read;
-	as_policy_remove    remove;
-	as_policy_query     query;
-	as_policy_scan      scan;
-	as_policy_info      info;
+
+	/**
+	 * Default timeout in milliseconds.
+	 * Will be used if specific policies have a timeout of 0 (zero).
+	 */
+	uint32_t timeout;
+
+	/**
+	 * The default write policy.
+	 */
+	as_policy_write write;
+
+	/**
+	 * The default read policy.
+	 */
+	as_policy_read read;
+
+	/**
+	 * The default remove policy.
+	 */
+	as_policy_remove remove;
+
+	/**
+	 * The default query policy.
+	 */
+	as_policy_query query;
+
+	/**
+	 * The default scan policy.
+	 */
+	as_policy_scan scan;
+
+	/**
+	 * The default info policy.
+	 */
+	as_policy_info info;
+
 } as_policies;
 
 /******************************************************************************

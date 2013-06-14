@@ -179,13 +179,13 @@ as_val * as_val_frombin(as_serializer * ser, cl_bin * bin)
 	return val;
 }
 
-void as_policy_write_towp(as_policy_write * policy, cl_write_parameters * wp) 
+void as_policy_write_towp(as_policy_write * policy, as_record * rec, cl_write_parameters * wp) 
 {
-	if ( !policy || !wp ) {
+	if ( !policy || !rec || !wp ) {
 		return;
 	}
 
-	wp->unique = policy->unique;
+	wp->unique = policy->digest == AS_POLICY_DIGEST_CREATE;
 	wp->unique_bin = false;
 
 	wp->use_generation = false;
@@ -193,30 +193,30 @@ void as_policy_write_towp(as_policy_write * policy, cl_write_parameters * wp)
 	wp->use_generation_dup = false;
 	
 	wp->timeout_ms = policy->timeout;
-	wp->record_ttl = 0;
+	wp->record_ttl = rec->ttl;
 
 	switch(policy->gen) {
 		case AS_POLICY_GEN_EQ:
-			wp->generation = policy->generation;
+			wp->generation = rec->gen;
 			wp->use_generation = true;
 			break;
 		case AS_POLICY_GEN_GT:
-			wp->generation = policy->generation;
+			wp->generation = rec->gen;
 			wp->use_generation_gt = true;
 			break;
 		case AS_POLICY_GEN_DUP:
-			wp->generation = policy->generation;
+			wp->generation = rec->gen;
 			wp->use_generation_dup = true;
 			break;
 		default:
 			break;
 	}
 
-	switch(policy->repl) {
-		case AS_POLICY_REPL_ASYNC:
+	switch(policy->mode) {
+		case AS_POLICY_WRITEMODE_ASYNC:
 			wp->w_pol = CL_WRITE_ASYNC;
 			break;
-		case AS_POLICY_REPL_ONESHOT:
+		case AS_POLICY_WRITEMODE_ONESHOT:
 			wp->w_pol = CL_WRITE_ONESHOT;
 			break;
 		default:
@@ -258,11 +258,11 @@ void as_policy_remove_towp(as_policy_remove * policy, cl_write_parameters * wp)
 			break;
 	}
 
-	switch(policy->repl) {
-		case AS_POLICY_REPL_ASYNC:
+	switch(policy->mode) {
+		case AS_POLICY_WRITEMODE_ASYNC:
 			wp->w_pol = CL_WRITE_ASYNC;
 			break;
-		case AS_POLICY_REPL_ONESHOT:
+		case AS_POLICY_WRITEMODE_ONESHOT:
 			wp->w_pol = CL_WRITE_ONESHOT;
 			break;
 		default:

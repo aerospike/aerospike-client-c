@@ -159,14 +159,13 @@ void as_query_destroy(as_query * query)
  * @param query 	- the query to modify
  * @param bin 		- the name of the bin to select
  *
- * @return 0 on success. Otherwise an error occurred.
+ * @return true on success. Otherwise an error occurred.
  */
-int as_query_select(as_query * query, const char * bin)
+bool as_query_select(as_query * query, const char * bin)
 {
-	if ( !query ) {
-		return 1;
-	}
-	else if ( query->select.entries == NULL ) {
+	if ( !query ) return false;
+
+	if ( query->select.entries == NULL ) {
 		// entries is NULL, so we will malloc() it.
 		if ( query->select.capacity == 0 ) {
 			// capacity can be preset, but if not, we default to 10.
@@ -192,7 +191,7 @@ int as_query_select(as_query * query, const char * bin)
 	memcpy(query->select.entries[query->select.size], bin, AS_BIN_NAME_MAX);
 	query->select.size++;
 
-	return 0;
+	return true;
 }
 
 /**
@@ -213,12 +212,11 @@ int as_query_select(as_query * query, const char * bin)
  *
  * @return 0 on success. Otherwise an error occurred.
  */
-int as_query_where(as_query * query, const char * bin, as_predicate_type type, ... )
+bool as_query_where(as_query * query, const char * bin, as_predicate_type type, ... )
 {
-	if ( !query ) {
-		return 1;
-	}
-	else if ( query->predicates.entries == NULL ) {
+	if ( !query ) return false;
+
+	if ( query->predicates.entries == NULL ) {
 		// entries is NULL, so we will malloc() it.
 		if ( query->predicates.capacity == 0 ) {
 			// capacity can be preset, but if not, we default to 10.
@@ -237,7 +235,7 @@ int as_query_where(as_query * query, const char * bin, as_predicate_type type, .
 		else {
 			// we will not touch stack allocated entries.
 			// so we bail
-			return 2;
+			return false;
 		}
 	}
 
@@ -266,7 +264,7 @@ int as_query_where(as_query * query, const char * bin, as_predicate_type type, .
 	
 	query->predicates.size++;
 
-	return 0;
+	return true;
 }
 
 /**
@@ -285,12 +283,11 @@ int as_query_where(as_query * query, const char * bin, as_predicate_type type, .
  *
  * @param 0 on success. Otherwise an error occurred.
  */
-int as_query_orderby(as_query * query, const char * bin, bool ascending)
+bool as_query_orderby(as_query * query, const char * bin, bool ascending)
 {
-	if ( !query ) {
-		return 1;
-	}
-	else if ( query->orderby.entries == NULL ) {
+	if ( !query ) return false;
+
+	if ( query->orderby.entries == NULL ) {
 		// entries is NULL, so we will malloc() it.
 		if ( query->orderby.capacity == 0 ) {
 			// capacity can be preset, but if not, we default to 10.
@@ -309,7 +306,7 @@ int as_query_orderby(as_query * query, const char * bin, bool ascending)
 		else {
 			// we will not touch stack allocated entries.
 			// so we bail
-			return 2;
+			return false;
 		}
 	}
 
@@ -319,7 +316,7 @@ int as_query_orderby(as_query * query, const char * bin, bool ascending)
 
 	query->orderby.size++;
 
-	return 0;
+	return true;
 }
 
 /**
@@ -332,13 +329,11 @@ int as_query_orderby(as_query * query, const char * bin, bool ascending)
  *
  * @param 0 on success. Otherwise an error occurred.
  */
-int as_query_limit(as_query * query, uint64_t limit)
+bool as_query_limit(as_query * query, uint64_t limit)
 {
-	if ( !query ) {
-		return 1;
-	}
-
+	if ( !query ) return false;
 	query->limit = limit;
+	return true;
 }
 
 /**
@@ -353,13 +348,9 @@ int as_query_limit(as_query * query, uint64_t limit)
  *
  * @param 0 on success. Otherwise an error occurred.
  */
-int as_query_apply(as_query * query, const char * module, const char * function, const as_list * arglist)
+bool as_query_apply(as_query * query, const char * module, const char * function, const as_list * arglist)
 {
-	if ( !query ) {
-		return 1;
-	}
-
-	query->apply.module = module;
-	query->apply.function = function;
-	query->apply.arglist = arglist;
+	if ( !query ) return false;
+	as_udf_call_init(&query->apply, module, function, (as_list *) arglist);
+	return true;
 }

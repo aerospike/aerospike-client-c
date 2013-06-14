@@ -29,6 +29,9 @@
  * MACROS
  *****************************************************************************/
 
+/**
+ * The length for as_node.name
+ */
 #define AS_NODE_NAME_LEN 20
 
 /******************************************************************************
@@ -39,5 +42,9 @@
  * Represents a node in the cluster.
  */
 typedef struct as_node_s {
+
+	/**
+	 * The name of the node.
+	 */
 	char * name[AS_NODE_NAME_LEN];
 } as_node;

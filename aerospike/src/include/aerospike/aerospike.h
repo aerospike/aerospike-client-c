@@ -20,6 +20,11 @@
  * IN THE SOFTWARE.
  *****************************************************************************/
 
+/** 
+ * @defgroup aerospike Aerospike Instance
+ * @{
+ */
+
 #pragma once 
 
 #include <aerospike/as_error.h>
@@ -27,11 +32,6 @@
 #include <aerospike/as_log.h>
 #include <aerospike/as_status.h>
 #include <stdbool.h>
-
-/** 
- * @addtogroup aerospike
- * @{
- */
 
 /******************************************************************************
  * TYPES
@@ -77,29 +77,48 @@ typedef struct aerospike_s {
 
 
 /**
- * Initialize the aerospike object on the stack
- * @returns the initialized aerospike object
+ * Initialize a stack allocated aerospike instance.
+ *
+ * @param as 		The aerospike instance to initialize.
+ * @param config 	The configuration to use for the instance.
+ *
+ * @returns the initialized aerospike instance
  */
 aerospike * aerospike_init(aerospike * as, as_config * config);
 
 /**
- * Creates a new aerospike object on the heap
- * @returns a new aerospike object
+ * Creates a new heap allocated aerospike instance.
+ *
+ * @param config	The configuration to use for the instance.
+ *
+ * @returns a new aerospike instance
  */
 aerospike * aerospike_new(as_config * config);
 
 /**
- * Destroy the aerospike obect
+ * Destroy the aerospike instance and associated resources.
+ *
+ * @param as 		The aerospike instance to destroy
  */
 void aerospike_destroy(aerospike * as);
 
 /**
- * Connect to the cluster
+ * Connect an aerospike instance to the cluster.
+ *
+ * @param as 		The aerospike instance to connect to a cluster.
+ * @param err 		If an error occurs, the err will be populated.
+ *
+ * @return AEROSPIKE_OK on success. Otherwise an error occurred.
  */
 as_status aerospike_connect(aerospike * as, as_error * err);
 
 /**
  * Close connections to the cluster
+ *
+ * @param as 		The aerospike instance to disconnect from a cluster.
+ * @param err 		If an error occurs, the err will be populated.
+ *
+ * @return AEROSPIKE_OK on success. Otherwise an error occurred. 
  */
 as_status aerospike_close(aerospike * as, as_error * err);
 

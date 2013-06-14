@@ -37,9 +37,25 @@
  * Priority levels for a scan operation.
  */
 typedef enum as_scan_priority_e { 
+
+	/**
+	 * The cluster will auto adjust the scan priroty.
+	 */
 	AS_SCAN_PRIORITY_AUTO, 
-	AS_SCAN_PRIORITY_LOW, 
-	AS_SCAN_PRIORITY_MEDIUM, 
+
+	/**
+	 * Low priority scan.
+	 */
+	AS_SCAN_PRIORITY_LOW,
+
+	/**
+	 * Medium priority scan.
+	 */ 
+	AS_SCAN_PRIORITY_MEDIUM,
+
+	/**
+	 * High priority scan.
+	 */ 
 	AS_SCAN_PRIORITY_HIGH
 } as_scan_priority;
 
@@ -92,11 +108,21 @@ typedef struct as_scan_s {
 
 /**
  * Initializes a scan.
+ *
+ * @param ns 		The namespace to scan.
+ * @param set 		The set to scan.
+ *
+ * @returns the initialized scan on success. Otherwise NULL.
  */
 as_scan * as_scan_init(as_scan * scan, const char * ns, const char * set);
 
 /**
  * Create and initializes a new scan on the heap.
+ *
+ * @param ns 		The namespace to scan.
+ * @param set 		The set to scan.
+ *
+ * @returns the initialized scan on success. Otherwise NULL.
  */
 as_scan * as_scan_new(const char * ns, const char * set);
 
@@ -107,5 +133,10 @@ void as_scan_destroy(as_scan * scan);
 
 /**
  * Apply a UDF to each record scanned on the server.
+ *
+ * @param scan 		The scan to apply the UDF to.
+ * @param module 	The module containing the function to execute.
+ * @param function 	The function to execute.
+ * @param arglist 	The arguments for the function.
  */
 void as_scan_foreach(as_scan * scan, const char * module, const char * function, as_list * arglist);

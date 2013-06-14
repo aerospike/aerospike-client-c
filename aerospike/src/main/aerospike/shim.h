@@ -20,5 +20,6 @@ as_record * as_record_frombins(as_record * rec, cl_bin * bins, uint32_t nbins);
 
 as_val * as_val_frombin(as_serializer * ser, cl_bin * bin);
 
-void as_policy_write_towp(as_policy_write * policy, cl_write_parameters * wp);
+void as_policy_write_towp(as_policy_write * policy, as_record * rec, cl_write_parameters * wp);
+
 void as_policy_remove_towp(as_policy_remove * policy, cl_write_parameters * wp);

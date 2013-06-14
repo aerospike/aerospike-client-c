@@ -20,6 +20,11 @@
  * IN THE SOFTWARE.
  *****************************************************************************/
 
+/** 
+ * @defgroup aerospike Aerospike Instance
+ * @{
+ */
+
 #pragma once 
 
 #include <aerospike/as_error.h>
@@ -79,9 +84,26 @@ typedef struct as_config_s {
 	 * lua module config
 	 */
 	struct {
-		bool	cache_enabled;
-		char	system_path[256];
-		char	user_path[256];
+
+		/**
+		 * Enable caching of UDF files in the client
+		 * application.
+		 */
+		bool cache_enabled;
+
+		/**
+		 * The path to the system UDF files. These UDF files 
+		 * are installed with the aerospike client library.
+		 * Default location is: /opt/citrusleaf/sys/udf/lua
+		 */
+		char system_path[256];
+
+		/**
+		 * The path to user's UDF files.
+		 * Default location is: /opt/citrusleaf/usr/udf/lua
+		 */
+		char user_path[256];
+
 	} mod_lua;
 
 } as_config;
@@ -90,8 +112,16 @@ typedef struct as_config_s {
  * FUNCTIONS
  *****************************************************************************/
 
+/**
+ * Initialize the configuration to default values.
+ *
+ * @param c The configuration to initialize.
+ * 
+ * @return The initialized configuration on success. Otherwise NULL.
+ */
 as_config * as_config_init(as_config * c);
 
 
-
-
+/**
+ * @}
+ */

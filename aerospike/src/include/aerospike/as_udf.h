@@ -29,7 +29,14 @@
  * MACROS
  *****************************************************************************/
 
+/**
+ * The length of a UDF file name
+ */
 #define AS_UDF_FILE_NAME_LEN 128
+
+/**
+ * The length of a UDF hash value
+ */
 #define AS_UDF_FILE_HASH_LEN 20
 
 /******************************************************************************
@@ -68,7 +75,12 @@ typedef struct as_udf_call_s {
  * Enumeration of UDF types
  */
 typedef enum as_udf_type_e {
+
+	/**
+	 * Lua
+	 */
 	AS_UDF_TYPE_LUA
+
 } as_udf_type;
 
 /**
@@ -124,6 +136,7 @@ typedef struct as_udf_file_s {
 		uint8_t * bytes;
 
 	} content;
+
 } as_udf_file;
 
 /**
@@ -160,11 +173,23 @@ typedef struct as_udf_list_s {
 
 /**
  * Initialize a stack allocated as_udf_call.
+ *
+ * @param call 		The call to initialize.
+ * @param module 	The UDF module.
+ * @param function 	The UDF function.
+ * @param arglist 	The UDF argument list.
+ *
+ * @return The initialized call on success. Otherwise NULL.
  */
 as_udf_call * as_udf_call_init(as_udf_call * call, const char * module, const char * function, as_list * arglist);
 
 /**
  * Creates a new heap allocated as_udf_call.
+ * @param module 	The UDF module.
+ * @param function 	The UDF function.
+ * @param arglist 	The UDF argument list.
+ *
+ * @return The newly allocated call on success. Otherwise NULL.
  */
 as_udf_call * as_udf_call_new(const char * module, const char * function, as_list * arglist);
 
@@ -179,11 +204,15 @@ void as_udf_call_destroy(as_udf_call * call);
 
 /**
  * Initialize a stack allocated as_udf_file.
+ *
+ * @returns The initialized udf file on success. Otherwise NULL.
  */
 as_udf_file * as_udf_file_init(as_udf_file * file);
 
 /**
  * Creates a new heap allocated as_udf_file.
+ *
+ * @returns The newly allocated udf file on success. Otherwise NULL.
  */
 as_udf_file * as_udf_file_new();
 
@@ -198,11 +227,15 @@ void as_udf_file_destroy(as_udf_file * file);
 
 /**
  * Initialize a stack allocated as_udf_list.
+ *
+ * @returns The initialized udf list on success. Otherwise NULL.
  */
 as_udf_list * as_udf_list_init(as_udf_list * list);
 
 /**
  * Creates a new heap allocated as_udf_list.
+ *
+ * @returns The newly allocated udf list on success. Otherwise NULL.
  */
 as_udf_list * as_udf_list_new();
 

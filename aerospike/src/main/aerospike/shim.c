@@ -28,7 +28,7 @@ void as_record_tobins(as_record * rec, cl_bin * bins, uint32_t nbins)
 {
 	as_bin * rbin = rec->bins.data;
 	for ( int i = 0; i < nbins; i++ ) {
-		memcpy(bins[i].bin_name, rbin[i].name, AS_BIN_NAME_MAX);
+		memcpy(bins[i].bin_name, rbin[i].name, AS_BIN_NAME_LEN);
 		switch(rbin[i].value->type) {
 			case AS_NIL: {
 				citrusleaf_object_init_null(&bins[i].object);

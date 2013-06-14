@@ -29,7 +29,10 @@
  * MACROS
  *****************************************************************************/
 
-#define AS_BIN_NAME_MAX 16
+/**
+ * The length for the bin name.
+ */
+#define AS_BIN_NAME_LEN 16
 
 /******************************************************************************
  * TYPES
@@ -66,7 +69,7 @@ typedef enum as_type_e {
 /**
  * Bin Name
  */
-typedef char as_bin_name[AS_BIN_NAME_MAX];
+typedef char as_bin_name[AS_BIN_NAME_LEN];
 
 /**
  * Bin Structure

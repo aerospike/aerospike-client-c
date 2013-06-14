@@ -259,7 +259,7 @@ int as_record_set(as_record * rec, const char * name, const as_val * value)
 	}
 	// not found, then append
 	if ( rec->bins.size < rec->bins.capacity ) {
-		strncpy(rec->bins.data[rec->bins.size].name,name,AS_BIN_NAME_MAX);
+		strncpy(rec->bins.data[rec->bins.size].name,name,AS_BIN_NAME_LEN);
 		rec->bins.data[rec->bins.size].value = (as_val *) value;
 		rec->bins.size++;
 		return 0;

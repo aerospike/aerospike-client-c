@@ -177,29 +177,29 @@ typedef struct as_orderby_s {
  *
  * For Stack, use alloca() or similar:
  *
- *		as_query_select select;
- *		select._free = false;
- *		select.capacity = SZ;
- *		select.size = 0;
- *		select.entries = (as_bin_name *) alloca(sizeof(as_bin_name) * SZ);
+ *		as_query_bins bins;
+ *		bins._free = false;
+ *		bins.capacity = SZ;
+ *		bins.size = 0;
+ *		bins.entries = (as_bin_name *) alloca(sizeof(as_bin_name) * SZ);
  *
  * Alternatively, on the Stack you can use an array:
  *
- *		as_bin_name bins[3] = { "a", "b", "c" };
+ *		as_bin_name select[3] = { "a", "b", "c" };
  *
- *		as_query_select select;
- *		select._free = false;
- *		select.capacity = 0;
- *		select.size = sizeof(bins) / sizeof(as_bin_name);
- *		select.entries = bins;
+ *		as_query_bins bins;
+ *		bins._free = false;
+ *		bins.capacity = 0;
+ *		bins.size = sizeof(select) / sizeof(as_bin_name);
+ *		bins.entries = select;
  *
  * For Heap, use malloc() or similar:
  *
- *		as_query_select select;
- *		select._free = false;
- *		select.capacity = SZ;
- *		select.size = 0;
- *		select.entries = (as_bin_name *) malloc(sizeof(as_bin_name) * SZ);
+ *		as_query_bins bins;
+ *		bins._free = false;
+ *		bins.capacity = SZ;
+ *		bins.size = 0;
+ *		bins.entries = (as_bin_name *) malloc(sizeof(as_bin_name) * SZ);
  *
  */
 typedef struct as_query_bins_s {
@@ -291,29 +291,29 @@ typedef struct as_query_predicates_s {
  *
  * For Stack, use alloca() or similar:
  *
- *		as_query_orderby orderby;
- *		orderby._free = false;
- *		orderby.capacity = SZ;
- *		orderby.size = 0;
- *		orderby.entries = (as_orderby *) alloca(sizeof(as_orderby) * SZ);
+ *		as_query_ordering ordering;
+ *		ordering._free = false;
+ *		ordering.capacity = SZ;
+ *		ordering.size = 0;
+ *		ordering.entries = (as_orderby *) alloca(sizeof(as_orderby) * SZ);
  *
  * Alternatively, on the stack you can use an array:
  *
  *		as_orderby orderby[3] = { ... };
  *
- *		as_query_orderby orderby;
- *		orderby._free = false;
- *		orderby.capacity = 0;
- *		orderby.size = sizeof(orderby) / sizeof(as_orderby);
- *		orderby.entries = predicates;
+ *		as_query_ordering orderby;
+ *		ordering._free = false;
+ *		ordering.capacity = 0;
+ *		ordering.size = sizeof(orderby) / sizeof(as_orderby);
+ *		ordering.entries = predicates;
  *
  * For Heap, use malloc() or similar:
  *
- *		as_query_orderby orderby;
- *		orderby._free = false;
- *		orderby.capacity = SZ;
- *		orderby.size = 0;
- *		orderby.entries = (as_orderby *) malloc(sizeof(as_orderby) * SZ);
+ *		as_query_ordering orderby;
+ *		ordering._free = false;
+ *		ordering.capacity = SZ;
+ *		ordering.size = 0;
+ *		ordering.entries = (as_orderby *) malloc(sizeof(as_orderby) * SZ);
  *
  */
 typedef struct as_query_ordering_s {

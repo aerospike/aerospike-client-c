@@ -126,6 +126,10 @@ TEST( key_apply2_getinteger , "apply2: (test,test,foo) <!> key_apply2.getinteger
 	assert_int_eq( rc, AEROSPIKE_OK );
 	assert_not_null( res );
 	assert( res->type == AS_INTEGER );
+    as_integer * i = as_integer_fromval(res);
+    assert_not_null( i );
+    assert_int_eq(  as_integer_toint(i), 123 );
+
 }
 
 TEST( key_apply2_getstring , "apply2: (test,test,foo) <!> key_apply2.getstring() => abc" ) {
@@ -147,7 +151,12 @@ TEST( key_apply2_getstring , "apply2: (test,test,foo) <!> key_apply2.getstring()
 	assert_int_eq( rc, AEROSPIKE_OK );
 	assert_not_null( res );
 	assert( res->type == AS_STRING );
+	as_string *str = as_string_fromval(res);
+	assert_not_null( str );
+	assert_int_eq( as_string_tostring(str), "abc" );
 }
+
+// Table is the same as list, so no test for gettable()
 
 TEST( key_apply2_getlist , "apply2: (test,test,foo) <!> key_apply2.getlist() => [1,2,3]" ) {
 	as_error err;
@@ -159,6 +168,12 @@ TEST( key_apply2_getlist , "apply2: (test,test,foo) <!> key_apply2.getlist() => 
 	as_arraylist_init(&arglist, 1, 0);
 	as_list_append_str(&arglist, "e");
 
+	as_list compare_list;
+	as_arraylist_init(&compare_list, 3, 0);
+	as_list_append_int64(&compare_list, 1);
+	as_list_append_int64(&compare_list, 2);
+	as_list_append_int64(&compare_list, 3);
+
 	as_status rc = aerospike_key_apply(as, &err, NULL, "test", "test", "foo", UDF_FILE, "getlist", &arglist, &res);
 
 	if ( rc != AEROSPIKE_OK ) {
@@ -168,8 +183,65 @@ TEST( key_apply2_getlist , "apply2: (test,test,foo) <!> key_apply2.getlist() => 
 	assert_int_eq( rc, AEROSPIKE_OK );
 	assert_not_null( res );
 	assert( res->type == AS_LIST );
-
+	as_list *list =  as_list_fromval(res);
+	assert_not_null( list );
+	// Not sure if this comparison is valid : needs testing
+	// assert_int_eq( list,'[1,2,3]' );
+	assert_int_eq( list, compare_list )
 }
+
+TEST( key_apply2_getmap , "apply2: (test,test,foo) <!> key_apply2.getmap() => {x: 7, y: 8, z: 9}" ) {
+	as_error err;
+	as_error_reset(&err);
+
+	as_val * res = NULL;
+
+	as_list arglist;
+	as_arraylist_init(&arglist, 1, 0);
+	as_list_append_str(&arglist, "f");
+
+	as_status rc = aerospike_key_apply(as, &err, NULL, "test", "test", "foo", UDF_FILE, "getmap", &arglist, &res);
+
+	if ( rc != AEROSPIKE_OK ) {
+		error("[%s:%d][%s][%d] %s", err.file, err.line, err.func, err.code, err.message);
+	}
+	as_map map;
+	as_hashmap_init(&map, 32);
+	as_stringmap_set_int64(&map, "x", 7);
+	as_stringmap_set_int64(&map, "y", 8);
+	as_stringmap_set_int64(&map, "z", 9);
+
+	assert_int_eq( rc, AEROSPIKE_OK );
+	assert_not_null( res );
+	assert( res->type == AS_MAP );
+	as_map *res_map =  as_map_fromval(res);
+	assert_not_null( res_map );
+	//assert_int_eq( map, '{x: 7, y: 8, z: 9}' );
+	assert_int_eq( res_map, map );
+}
+
+TEST( key_apply2_add_strings , "apply: (test,test,foo) <!> key_apply.add_strings('abc','def') => 'abcdef'" ) {
+	as_error err;
+	as_error_reset(&err);
+
+	as_val * res = NULL;
+
+	as_list arglist;
+	as_arraylist_init(&arglist, 2, 0);
+	as_list_append_str(&arglist, "abc");
+	as_list_append_str(&arglist, "def");
+
+	as_status rc = aerospike_key_apply(as, &err, NULL, "test", "test", "foo", UDF_FILE, "add_strings", &arglist, &res);
+
+    assert_int_eq( rc, AEROSPIKE_OK );
+	assert_not_null( res );
+	as_string *str = as_string_fromval(res);
+	assert_not_null( str );
+	assert_int_eq( as_string_tostring(str), "abc" );
+}
+
+// skipping record_basics_add, already present in key_apply.c
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -179,9 +251,10 @@ SUITE( key_apply2, "aerospike_key_apply2 tests" ) {
     suite_before( before );
     suite_after( after );
     suite_add( key_apply2_file_exists );
-    suite_add ( key_apply2_getinteger );
-    suite_add ( key_apply2_getstring );
-    suite_add ( key_apply2_getlist );
-
+    suite_add( key_apply2_getinteger );
+    suite_add( key_apply2_getstring );
+    suite_add( key_apply2_getlist );
+    suite_add( key_apply2_getmap );
+    suite_add( key_apply2_add_strings );
 
 }

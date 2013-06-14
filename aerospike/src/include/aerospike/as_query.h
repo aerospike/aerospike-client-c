@@ -202,7 +202,7 @@ typedef struct as_orderby_s {
  *		select.entries = (as_bin_name *) malloc(sizeof(as_bin_name) * SZ);
  *
  */
-typedef struct as_query_select_s {
+typedef struct as_query_bins_s {
 
 	/**
 	 * @private
@@ -225,7 +225,7 @@ typedef struct as_query_select_s {
 	 */
 	as_bin_name * entries;
 
-} as_query_select;
+} as_query_bins;
 
 /**
  * Sequence of predicates to be applied to a query.
@@ -316,7 +316,7 @@ typedef struct as_query_predicates_s {
  *		orderby.entries = (as_orderby *) malloc(sizeof(as_orderby) * SZ);
  *
  */
-typedef struct as_query_orderby_s {
+typedef struct as_query_ordering_s {
 
 	/**
 	 * @private
@@ -339,7 +339,7 @@ typedef struct as_query_orderby_s {
 	 */
 	as_orderby * entries;
 
-} as_query_orderby;
+} as_query_ordering;
 
 /**
  * Describes the query.
@@ -365,7 +365,7 @@ typedef struct as_query_s {
 	/**
 	 * Name of bins to select.
 	 */
-	as_query_select select;
+	as_query_bins select;
 
 	/**
 	 * Predicates for filtering.
@@ -375,7 +375,7 @@ typedef struct as_query_s {
 	/**
 	 * Bins to order by.
 	 */
-	as_query_orderby orderby;
+	as_query_ordering orderby;
 
 	/**
 	 * Limit the result set.

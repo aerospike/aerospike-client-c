@@ -1,28 +1,28 @@
 /******************************************************************************
- * Copyright 2008-2013 by Aerospike.
+ *	Copyright 2008-2013 by Aerospike.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy 
- * of this software and associated documentation files (the "Software"), to 
- * deal in the Software without restriction, including without limitation the 
- * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or 
- * sell copies of the Software, and to permit persons to whom the Software is 
- * furnished to do so, subject to the following conditions:
- * 
- * The above copyright notice and this permission notice shall be included in 
- * all copies or substantial portions of the Software.
- * 
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING 
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
+ *	Permission is hereby granted, free of charge, to any person obtaining a copy 
+ *	of this software and associated documentation files (the "Software"), to 
+ *	deal in the Software without restriction, including without limitation the 
+ *	rights to use, copy, modify, merge, publish, distribute, sublicense, and/or 
+ *	sell copies of the Software, and to permit persons to whom the Software is 
+ *	furnished to do so, subject to the following conditions:
+ *	
+ *	The above copyright notice and this permission notice shall be included in 
+ *	all copies or substantial portions of the Software.
+ *	
+ *	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ *	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ *	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ *	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ *	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING 
+ *	FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+ *	IN THE SOFTWARE.
  *****************************************************************************/
 
 /** 
- * @defgroup scan Scan API
- * @{
+ *	@defgroup scan Scan API
+ *	@{
  */
 
 #pragma once
@@ -35,44 +35,46 @@
 #include <aerospike/as_val.h>
 
 /******************************************************************************
- * TYPES
+ *	TYPES
  *****************************************************************************/
 
 /**
- * Callback for the `aerospike_scan_*` function.
+ *	Callback for the `aerospike_scan_*` function.
  */
 typedef int (* aerospike_scan_foreach_callback)(as_val *, void *);
 
 /******************************************************************************
- * FUNCTIONS
+ *	FUNCTIONS
  *****************************************************************************/
 
 /**
- * Scan the records in the specified namespace and set in the cluster.
+ *	Scan the records in the specified namespace and set in the cluster.
  *
- * Scan will be run in the background by a thread on client side.
- * No callback will be called in this case.
- * 
- *     as_scan scan;
- *     as_scan_init(&scan, "test", "demo");
- *     
- *     uint64_t scanid = 0;
- *     
- *     if ( aerospike_scan_node_background(&as, &err, NULL, &scan, &scanid) != AEROSPIKE_OK ) {
- *         fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *     }
- *     else {
- *         printf("Running background scan job: %ll", scanid);
- *     }
- * 
+ *	Scan will be run in the background by a thread on client side.
+ *	No callback will be called in this case.
+ *	
+ *	~~~~~~~~~~{.c}
+ *		as_scan scan;
+ *		as_scan_init(&scan, "test", "demo");
+ *		
+ *		uint64_t scanid = 0;
+ *		
+ *		if ( aerospike_scan_node_background(&as, &err, NULL, &scan, &scanid) != AEROSPIKE_OK ) {
+ *			fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *		}
+ *		else {
+ *			printf("Running background scan job: %ll", scanid);
+ *		}
+ *	~~~~~~~~~~
+ *	
  *
- * @param as			The aerospike instance to use for this operation.
- * @param err			The as_error to be populated if an error occurs.
- * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- * @param scan 			The scan to execute against the cluster.
- * @param scan_id		The id for the scan job, which can be used for querying the status of the scan.
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param scan 			The scan to execute against the cluster.
+ *	@param scan_id		The id for the scan job, which can be used for querying the status of the scan.
  *
- * @return AEROSPIKE_OK on success. Otherwise an error occurred.
+ *	@return AEROSPIKE_OK on success. Otherwise an error occurred.
  */
 as_status aerospike_scan_background(
 	aerospike * as, as_error * err, const as_policy_scan * policy, 
@@ -80,31 +82,33 @@ as_status aerospike_scan_background(
 	);
 
 /**
- * Scan the records in the specified namespace and set in a specified node.
- * 
- * Scan will be run in the background by a thread on client side.
- * 
- *     as_scan scan;
- *     as_scan_init(&scan, "test", "demo");
- *     
- *     uint64_t scanid = 0;
- *     
- *     if ( aerospike_scan_node_background(&as, &err, NULL, &scan) != AEROSPIKE_OK ) {
- *         fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *     }
- *     else {
- *         printf("Running background scan job: %ll", scanid);
- *     }
- * 
+ *	Scan the records in the specified namespace and set in a specified node.
+ *	
+ *	Scan will be run in the background by a thread on client side.
+ *	
+ *	~~~~~~~~~~{.c}
+ *		as_scan scan;
+ *		as_scan_init(&scan, "test", "demo");
+ *		
+ *		uint64_t scanid = 0;
+ *		
+ *		if ( aerospike_scan_node_background(&as, &err, NULL, &scan) != AEROSPIKE_OK ) {
+ *			fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *		}
+ *		else {
+ *			printf("Running background scan job: %ll", scanid);
+ *		}
+ *	~~~~~~~~~~
+ *	
  *
- * @param as			The aerospike instance to use for this operation.
- * @param err			The as_error to be populated if an error occurs.
- * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- * @param node 			The name of the node to perform the scan on.
- * @param scan 			The scan to execute against the cluster.
- * @param scan_id		The id for the scan job, which can be used for querying the status of the scan.
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param node 			The name of the node to perform the scan on.
+ *	@param scan 			The scan to execute against the cluster.
+ *	@param scan_id		The id for the scan job, which can be used for querying the status of the scan.
  *
- * @return AEROSPIKE_OK on success. Otherwise an error occurred.
+ *	@return AEROSPIKE_OK on success. Otherwise an error occurred.
  */
 as_status aerospike_scan_node_background(
 	aerospike * as, as_error * err, const as_policy_scan * policy, 
@@ -112,27 +116,29 @@ as_status aerospike_scan_node_background(
 	);
 
 /**
- * Scan the records in the specified namespace and set in the cluster.
+ *	Scan the records in the specified namespace and set in the cluster.
  *
- * Call the callback function for each record scanned. When all records have 
- * been scanned, then callback will be called with a NULL value for the record.
+ *	Call the callback function for each record scanned. When all records have 
+ *	been scanned, then callback will be called with a NULL value for the record.
  *
- *     as_scan scan;
- *     as_scan_init(&scan, "test", "demo");
- *     
- *     if ( aerospike_scan_foreach(&as, &err, NULL, &scan, callback, NULL) != AEROSPIKE_OK ) {
- *         fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *     }
- * 
+ *	~~~~~~~~~~{.c}
+ *		as_scan scan;
+ *		as_scan_init(&scan, "test", "demo");
+ *		
+ *		if ( aerospike_scan_foreach(&as, &err, NULL, &scan, callback, NULL) != AEROSPIKE_OK ) {
+ *			fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *		}
+ *	~~~~~~~~~~
+ *	
  *
- * @param as			The aerospike instance to use for this operation.
- * @param err			The as_error to be populated if an error occurs.
- * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- * @param scan			The scan to execute against the cluster.
- * @param callback		The function to be called for each record scanned.
- * @param udata			User-data to be passed to the callback.
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param scan			The scan to execute against the cluster.
+ *	@param callback		The function to be called for each record scanned.
+ *	@param udata			User-data to be passed to the callback.
  *
- * @return AEROSPIKE_OK on success. Otherwise an error occurred.
+ *	@return AEROSPIKE_OK on success. Otherwise an error occurred.
  */
 as_status aerospike_scan_foreach(
 	aerospike * as, as_error * err, const as_policy_scan * policy, 
@@ -141,28 +147,30 @@ as_status aerospike_scan_foreach(
 	);
 
 /**
- * Scan the records in the specified namespace and set on a single node in the cluster.
+ *	Scan the records in the specified namespace and set on a single node in the cluster.
  *
- * Call the callback function for each record scanned. When all records have 
- * been scanned, then callback will be called with a NULL value for the record.
- * 
- *     as_scan scan;
- *     as_scan_init(&scan, "test", "demo");
- *     
- *     if ( aerospike_scan_node_foreach(&as, &err, NULL, "node1", &scan, callback, NULL) != AEROSPIKE_OK ) {
- *         fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *     }
+ *	Call the callback function for each record scanned. When all records have 
+ *	been scanned, then callback will be called with a NULL value for the record.
+ *	
+ *	~~~~~~~~~~{.c}
+ *		as_scan scan;
+ *		as_scan_init(&scan, "test", "demo");
+ *		
+ *		if ( aerospike_scan_node_foreach(&as, &err, NULL, "node1", &scan, callback, NULL) != AEROSPIKE_OK ) {
+ *			fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *		}
+ *	~~~~~~~~~~
  *
  *
- * @param as			The aerospike instance to use for this operation.
- * @param err			The as_error to be populated if an error occurs.
- * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- * @param node 			The name of the node to perform the scan on.
- * @param scan			The scan to execute against the cluster.
- * @param callback		The function to be called for each record scanned.
- * @param udata			User-data to be passed to the callback.
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param node 			The name of the node to perform the scan on.
+ *	@param scan			The scan to execute against the cluster.
+ *	@param callback		The function to be called for each record scanned.
+ *	@param udata			User-data to be passed to the callback.
  *
- * @return AEROSPIKE_OK on success. Otherwise an error occurred.
+ *	@return AEROSPIKE_OK on success. Otherwise an error occurred.
  */
 as_status aerospike_scan_node_foreach(
 	aerospike * as, as_error * err, const as_policy_scan * policy, 

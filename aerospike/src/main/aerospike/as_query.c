@@ -188,7 +188,7 @@ bool as_query_select(as_query * query, const char * bin)
 		}
 	}
 	
-	memcpy(query->select.entries[query->select.size], bin, AS_BIN_NAME_MAX);
+	memcpy(query->select.entries[query->select.size], bin, AS_BIN_NAME_LEN);
 	query->select.size++;
 
 	return true;
@@ -241,7 +241,7 @@ bool as_query_where(as_query * query, const char * bin, as_predicate_type type, 
 
 	as_predicate * p = &query->predicates.entries[query->predicates.size];
 
-	memcpy(p->bin, bin, AS_BIN_NAME_MAX);
+	memcpy(p->bin, bin, AS_BIN_NAME_LEN);
 	p->type = type;
 
     va_list ap;
@@ -311,7 +311,7 @@ bool as_query_orderby(as_query * query, const char * bin, bool ascending)
 	}
 
 	as_orderby * o = &query->orderby.entries[query->orderby.size];
-	memcpy(o->bin, bin, AS_BIN_NAME_MAX);
+	memcpy(o->bin, bin, AS_BIN_NAME_LEN);
 	o->ascending = ascending;
 
 	query->orderby.size++;

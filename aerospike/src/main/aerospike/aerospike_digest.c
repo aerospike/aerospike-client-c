@@ -130,7 +130,7 @@ as_status aerospike_digest_select(
 
 	values = (cl_bin *) alloca(sizeof(cl_bin) * nvalues);
 	for ( int i = 0; i < nvalues; i++ ) {
-		memcpy(values[i].bin_name,bins[i],AS_BIN_NAME_MAX);
+		memcpy(values[i].bin_name,bins[i],AS_BIN_NAME_LEN);
 		citrusleaf_object_init(&values[i].object);
 	}
 

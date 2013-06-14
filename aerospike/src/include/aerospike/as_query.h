@@ -506,8 +506,8 @@ bool as_query_select(as_query * query, const char * bin);
  *	Add a predicate to the query.
  *
  *	~~~~~~~~~~{.c}
- *		as_query_where(&q, "bin1", string_eq("abc"));
- *		as_query_where(&q, "bin1", integer_eq(123));
+ *		as_query_where(&q, "bin1", string_equals("abc"));
+ *		as_query_where(&q, "bin1", integer_equals(123));
  *		as_query_where(&q, "bin1", integer_range(0,123));
  *	~~~~~~~~~~
  *

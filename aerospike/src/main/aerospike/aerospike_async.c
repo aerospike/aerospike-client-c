@@ -53,10 +53,10 @@ as_status aerospike_async_key_put(
 	as_record * rec, 
 	aerospike_async_put_callback callback, void * udata)
 {
-	if ( aerospike_async_init(as, err) != AEROSPIKE_OK ) {
-		return err->code;
-	}
-	return AEROSPIKE_OK;
+	// if ( aerospike_async_init(as, err) != AEROSPIKE_OK ) {
+	// 	return err->code;
+	// }
+	return AEROSPIKE_ERR;
 }
 
 /**
@@ -80,10 +80,10 @@ as_status aerospike_async_digest_put(
 	as_record * rec, 
 	aerospike_async_put_callback callback, void * udata) 
 {
-	if ( aerospike_async_init(as, err) != AEROSPIKE_OK ) {
-		return err->code;
-	}
-	return AEROSPIKE_OK;
+	// if ( aerospike_async_init(as, err) != AEROSPIKE_OK ) {
+	// 	return err->code;
+	// }
+	return AEROSPIKE_ERR;
 }
 
 /**
@@ -105,10 +105,10 @@ as_status aerospike_async_key_remove(
 	const char * ns, const char * set, const char * key, 
 	aerospike_async_remove_callback callback, void * udata) 
 {
-	if ( aerospike_async_init(as, err) != AEROSPIKE_OK ) {
-		return err->code;
-	}
-	return AEROSPIKE_OK;
+	// if ( aerospike_async_init(as, err) != AEROSPIKE_OK ) {
+	// 	return err->code;
+	// }
+	return AEROSPIKE_ERR;
 }
 
 /**
@@ -130,10 +130,10 @@ as_status aerospike_async_digest_remove(
 	const char * ns, const as_digest * digest, 
 	aerospike_async_remove_callback callback, void * udata) 
 {
-	if ( aerospike_async_init(as, err) != AEROSPIKE_OK ) {
-		return err->code;
-	}
-	return AEROSPIKE_OK;
+	// if ( aerospike_async_init(as, err) != AEROSPIKE_OK ) {
+	// 	return err->code;
+	// }
+	return AEROSPIKE_ERR;
 }
 
 /**
@@ -146,7 +146,7 @@ as_status aerospike_async_init(aerospike * as, as_error * err)
 		return AEROSPIKE_OK;
 	}
 	citrusleaf_async_init();
-	return AEROSPIKE_OK;
+	return AEROSPIKE_ERR;
 }
 
 /**
@@ -154,5 +154,5 @@ as_status aerospike_async_init(aerospike * as, as_error * err)
  */
 as_status aerospike_async_destroy(aerospike * as, as_error * err) 
 {
-	return AEROSPIKE_OK;
+	return AEROSPIKE_ERR;
 }

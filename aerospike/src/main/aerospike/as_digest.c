@@ -34,7 +34,7 @@ static as_digest * as_digest_defaults(as_digest * digest, bool free, const char 
 {
 	digest->_free = free;
 	digest->set = set ? strdup(set) : NULL;
-	memcpy(&digest->key, key, sizeof(as_key));
+	digest->key = key;
 	as_digest_compute(digest);
 	return digest;
 }
@@ -42,55 +42,20 @@ static as_digest * as_digest_defaults(as_digest * digest, bool free, const char 
 /**
  * Initializes a digest.
  */
-as_digest * as_digest_init(as_digest * digest, const char * set, const char * key) 
+as_digest * as_digest_init(as_digest * digest, const char * set, as_key * key) 
 {
 	if ( !digest ) return digest;
-	as_key k = {
-		.type = key ? AS_TYPE_STR : AS_TYPE_NULL,
-		.value.str = key ? strdup(key) : NULL
-	};
-	return as_digest_defaults(digest, false, set, &k);
-}
-
-/**
- * Initializes a digest.
- */
-as_digest * as_digest_init2(as_digest * digest, const char * set, int64_t key) 
-{
-	if ( !digest ) return digest;
-	as_key k = {
-		.type = AS_TYPE_INT,
-		.value.int64 = key
-	};
-	return as_digest_defaults(digest, false, set, &k);
+	return as_digest_defaults(digest, false, set, key);
 }
 
 /**
  * Creates a new digest on the heap.
  */
-as_digest * as_digest_new(const char * set, const char * key) 
+as_digest * as_digest_new(const char * set,  as_key * key) 
 {
 	as_digest * digest = (as_digest *) malloc(sizeof(as_digest));
 	if ( !digest ) return digest;
-	as_key k = {
-		.type = key ? AS_TYPE_STR : AS_TYPE_NULL,
-		.value.str = key ? strdup(key) : NULL
-	};
-	return as_digest_defaults(digest, false, set, &k);
-}
-
-/**
- * Creates a new digest on the heap.
- */
-as_digest * as_digest_new2(const char * set, int64_t key) 
-{
-	as_digest * digest = (as_digest *) malloc(sizeof(as_digest));
-	if ( !digest ) return digest;
-	as_key k = {
-		.type = AS_TYPE_INT,
-		.value.int64 = key
-	};
-	return as_digest_defaults(digest, false, set, &k);
+	return as_digest_defaults(digest, false, set, key);
 }
 
 /**
@@ -103,9 +68,9 @@ void as_digest_destroy(as_digest * digest)
 			free(digest->set);
 			digest->set = NULL;
 		}
-		if ( digest->key.type == AS_TYPE_STR ) {
-			free(digest->key.value.str);
-			digest->key.value.str = NULL;
+		if ( digest->key != NULL ) {
+			as_val_destroy((as_val *) digest->key);
+			digest->key = NULL;
 		}
 		if ( digest->_free ) {
 			free(digest);
@@ -118,17 +83,31 @@ void as_digest_destroy(as_digest * digest)
  */
 void as_digest_compute(as_digest * digest)
 {
-	switch ( digest->key.type ) {
-		case AS_TYPE_INT:
-			cf_digest_compute2(digest->set, digest->set ? strlen(digest->set) : 0, &digest->key.value.int64, sizeof(int64_t), (cf_digest *) digest->value);
-			break;
-		case AS_TYPE_STR:
-			cf_digest_compute2(digest->set, digest->set ? strlen(digest->set) : 0, digest->key.value.str, strlen(digest->key.value.str), (cf_digest *) digest->value);
-			break;
-		default:
-			cf_digest_compute2(digest->set, digest->set ? strlen(digest->set) : 0, NULL, 0, (cf_digest *) digest->value);
-			break;
+	as_val * val = (as_val *) digest->key;
+	if ( val ) {
+		switch ( val->type ) {
+			case AS_INTEGER: {
+				as_integer * v = (as_integer *) val;
+				cf_digest_compute2(digest->set, digest->set ? strlen(digest->set) : 0, (uint8_t *) &v->value, sizeof(int64_t), (cf_digest *) digest->value);
+				break;
+			}
+			case AS_STRING: {
+				as_string * v = (as_string *) val;
+				cf_digest_compute2(digest->set, digest->set ? strlen(digest->set) : 0, v->value, as_string_len(v), (cf_digest *) digest->value);
+				break;
+			}
+			case AS_BYTES: {
+				as_bytes * v = (as_bytes *) val;
+				cf_digest_compute2(digest->set, digest->set ? strlen(digest->set) : 0, v->value, v->len, (cf_digest *) digest->value);
+				break;
+			}
+			default:
+				cf_digest_compute2(digest->set, digest->set ? strlen(digest->set) : 0, NULL, 0, (cf_digest *) digest->value);
+				break;
+		}
 	}
-
+	else {
+		cf_digest_compute2(digest->set, digest->set ? strlen(digest->set) : 0, NULL, 0, (cf_digest *) digest->value);
+	}
 }
 

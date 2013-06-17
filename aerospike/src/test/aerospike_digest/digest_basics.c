@@ -33,7 +33,7 @@ TEST( digest_basics_put , "put: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 
 	as_error_reset(&err);
 
 	as_digest digest;
-	as_digest_init(&digest, "test", "foo");
+	as_digest_init(&digest, "test", (as_key *) as_string_new("foo",false));
 
 	as_list list;
 	as_arraylist_init(&list, 3, 0);
@@ -67,7 +67,7 @@ TEST( digest_basics_get , "get: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 
 	as_error_reset(&err);
 
 	as_digest digest;
-	as_digest_init(&digest, "test", "foo");
+	as_digest_init(&digest, "test", (as_key *) as_string_new("foo",false));
 
 	as_record r, *rec = &r;
 	as_record_init(&r, 0);
@@ -110,7 +110,7 @@ TEST( digest_basics_select , "select: (test,test,foo) = {a: 123, b: 'abc'}" ) {
 	as_error_reset(&err);
 
 	as_digest digest;
-	as_digest_init(&digest, "test", "foo");
+	as_digest_init(&digest, "test", (as_key *) as_string_new("foo",false));
 
 	as_record r, *rec = &r;
 	as_record_init(&r, 0);
@@ -146,7 +146,7 @@ TEST( digest_basics_exists , "exists: (test,test,foo)" ) {
 	as_error_reset(&err);
 
 	as_digest digest;
-	as_digest_init(&digest, "test", "foo");
+	as_digest_init(&digest, "test", (as_key *) as_string_new("foo",false));
 
 	bool exists = false;
 
@@ -162,7 +162,7 @@ TEST( digest_basics_notexists , "not exists: (test,test,foo)" ) {
 	as_error_reset(&err);
 
 	as_digest digest;
-	as_digest_init(&digest, "test", "foo");
+	as_digest_init(&digest, "test", (as_key *) as_string_new("foo",false));
 
 	bool exists = false;
 
@@ -178,7 +178,7 @@ TEST( digest_basics_remove , "remove: (test,test,foo)" ) {
 	as_error_reset(&err);
 
 	as_digest digest;
-	as_digest_init(&digest, "test", "foo");
+	as_digest_init(&digest, "test", (as_key *) as_string_new("foo",false));
 
 	as_status rc = aerospike_digest_remove(as, &err, NULL, "test", &digest);
 

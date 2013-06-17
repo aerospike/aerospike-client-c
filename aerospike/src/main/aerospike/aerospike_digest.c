@@ -83,10 +83,10 @@ as_status aerospike_digest_get(
 	cl_rv rc = citrusleaf_get_all_digest_getsetname(as->cluster, ns, (cf_digest *) digest->value, &values, &nvalues, timeout, &gen, &set);
 	
 	as_record * r = *rec;
-	if ( r->bins.data == NULL ) {
+	if ( r->bins.entries == NULL ) {
 		r->bins.capacity = nvalues;
 		r->bins.size = 0;
-		r->bins.data = malloc(sizeof(as_bin) * nvalues);
+		r->bins.entries = malloc(sizeof(as_bin) * nvalues);
 	}
 	as_record_frombins(r, values, nvalues);
 
@@ -130,17 +130,18 @@ as_status aerospike_digest_select(
 
 	values = (cl_bin *) alloca(sizeof(cl_bin) * nvalues);
 	for ( int i = 0; i < nvalues; i++ ) {
-		memcpy(values[i].bin_name,bins[i],AS_BIN_NAME_LEN);
+		strncpy(values[i].bin_name, bins[i], AS_BIN_NAME_LEN);
+		values[i].bin_name[AS_BIN_NAME_LEN - 1] = '\0';
 		citrusleaf_object_init(&values[i].object);
 	}
 
 	cl_rv rc = citrusleaf_get_digest(as->cluster, ns, (cf_digest *) digest->value, values, nvalues, timeout, &gen);
 
 	as_record * r = *rec;
-	if ( r->bins.data == NULL ) {
+	if ( r->bins.entries == NULL ) {
 		r->bins.capacity = nvalues;
 		r->bins.size = 0;
-		r->bins.data = malloc(sizeof(as_bin) * nvalues);
+		r->bins.entries = malloc(sizeof(as_bin) * nvalues);
 	}
 	as_record_frombins(r, values, nvalues);
 
@@ -403,7 +404,7 @@ as_status aerospike_digest_apply(
 as_status aerospike_digest_operate(
 	aerospike * as, as_error * err, const as_policy_write * policy, 
 	const char * ns, const as_digest * digest, 
-	const as_binop * ops, uint32_t nops) 
+	as_binops * binops) 
 {
 	return AEROSPIKE_OK;
 }

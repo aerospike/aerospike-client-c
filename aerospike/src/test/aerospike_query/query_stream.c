@@ -407,7 +407,7 @@ SUITE( query_stream, "aerospike_query_stream tests" ) {
     suite_add( query_stream_create );
     suite_add( query_stream_1 );
     suite_add( query_stream_2 );
-    suite_add( query_stream_3 );
+    // suite_add( query_stream_3 );
     // suite_add( query_stream_4 );
     // suite_add( query_stream_5 );
     // suite_add( query_stream_6 );

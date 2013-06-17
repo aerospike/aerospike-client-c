@@ -43,8 +43,8 @@ typedef enum as_status_e {
 
 	/**
 	 *	Client usage error.
-	 *	Includes error is configuring or using
-	 *	the client, such as bad arguments.
+	 *	This includes errors in configuring or using 
+	 *	the client.
 	 */
 	AEROSPIKE_ERR_CLIENT					= 200,
 
@@ -76,32 +76,32 @@ typedef enum as_status_e {
 		/**
 		 *	The query was aborted.
 		 */
-	    AEROSPIKE_ERR_QUERY_ABORTED 		= 601,
+		AEROSPIKE_ERR_QUERY_ABORTED 		= 601,
 
-	    /**
-	     *	The result queue is full.
-	     */
-	    AEROSPIKE_ERR_QUERY_QUEUEFULL 		= 602,
+		/**
+		 *	The result queue is full.
+		 */
+		AEROSPIKE_ERR_QUERY_QUEUEFULL 		= 602,
 
-    /**
-     *	Index operation error.
-     */
-	AEROSPIKE_ERR_INDEX     				= 700,
-	    AEROSPIKE_ERR_INDEX_KEY_NOTFOUND 	= 701,
-	    AEROSPIKE_ERR_INDEX_TYPE_MISMATCH 	= 703,
-	    AEROSPIKE_ERR_INDEX_NOTFOUND 		= 704,
-	    AEROSPIKE_ERR_INDEX_OOM 			= 705,
-	    AEROSPIKE_ERR_INDEX_GENERIC 		= 706,
-	    AEROSPIKE_ERR_INDEX_EXISTS 			= 707,
-	    AEROSPIKE_ERR_INDEX_SINGLEBIN_NS 	= 708,
-	    AEROSPIKE_ERR_INDEX_UNKNOWN_TYPE 	= 709,
-	    AEROSPIKE_ERR_INDEX_FOUND 			= 710,
-	    AEROSPIKE_ERR_INDEX_NOTREADABLE 	= 711,
+	/**
+	 *	Index operation error.
+	 */
+	AEROSPIKE_ERR_INDEX 					= 700,
+		AEROSPIKE_ERR_INDEX_KEY_NOTFOUND 	= 701,
+		AEROSPIKE_ERR_INDEX_TYPE_MISMATCH 	= 703,
+		AEROSPIKE_ERR_INDEX_NOTFOUND 		= 704,
+		AEROSPIKE_ERR_INDEX_OOM 			= 705,
+		AEROSPIKE_ERR_INDEX_GENERIC 		= 706,
+		AEROSPIKE_ERR_INDEX_EXISTS 			= 707,
+		AEROSPIKE_ERR_INDEX_SINGLEBIN_NS 	= 708,
+		AEROSPIKE_ERR_INDEX_UNKNOWN_TYPE 	= 709,
+		AEROSPIKE_ERR_INDEX_FOUND 			= 710,
+		AEROSPIKE_ERR_INDEX_NOTREADABLE 	= 711,
 
-    /**
-     *	UDF operation error.
-     */
-	AEROSPIKE_ERR_UDF       				= 800,
+	/**
+	 *	UDF operation error.
+	 */
+	AEROSPIKE_ERR_UDF						= 800,
 
 } as_status;
 

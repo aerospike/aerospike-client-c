@@ -65,7 +65,8 @@ bool citrusleaf_info_cluster_foreach_callback(const cl_cluster_node * clnode, co
     citrusleaf_info_cluster_foreach_data * data = (citrusleaf_info_cluster_foreach_data *) udata;
 
     as_node node;
-    memcpy(node.name, clnode->name, AS_NODE_NAME_LEN);
+    strncpy(node.name, clnode->name, AS_NODE_NAME_LEN);
+    node.name[AS_NODE_NAME_LEN - 1] = '\0';
 
 	bool result = (data->callback)(&err, &node, req, res, data->udata);
 

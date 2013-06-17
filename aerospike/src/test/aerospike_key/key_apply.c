@@ -12,6 +12,7 @@
 #include <aerospike/as_arraylist.h>
 #include <aerospike/as_map.h>
 #include <aerospike/as_hashmap.h>
+#include <aerospike/as_stringmap.h>
 #include <aerospike/as_val.h>
 
 #include "../test.h"

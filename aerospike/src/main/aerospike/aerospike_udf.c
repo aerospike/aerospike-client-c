@@ -36,7 +36,10 @@
  *****************************************************************************/
 
 static void clfile_to_asfile(cl_udf_file * clfile, as_udf_file * asfile) {
-	memcpy(asfile->name, clfile->name, AS_UDF_FILE_NAME_LEN);
+
+	strncpy(asfile->name, clfile->name, AS_UDF_FILE_NAME_LEN);
+	asfile->name[AS_UDF_FILE_NAME_LEN - 1] = '\0';
+
 	memcpy(asfile->hash, clfile->hash, AS_UDF_FILE_HASH_LEN);
 	asfile->type = clfile->type;
 	if ( clfile->content ) {

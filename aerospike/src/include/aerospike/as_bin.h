@@ -23,6 +23,11 @@
 #pragma once 
 
 #include <aerospike/as_buffer.h>
+#include <aerospike/as_integer.h>
+#include <aerospike/as_string.h>
+#include <aerospike/as_bytes.h>
+#include <aerospike/as_list.h>
+#include <aerospike/as_map.h>
 #include <aerospike/as_val.h>
 
 /******************************************************************************
@@ -56,10 +61,10 @@ typedef enum as_type_e {
 	AS_TYPE_PHP_BLOB        = 11,
 	AS_TYPE_ERLANG_BLOB     = 12,
 	AS_TYPE_APPEND          = 13,
-	AS_TYPE_RTA_LIST        = 14,
-	AS_TYPE_RTA_DICT        = 15,
-	AS_TYPE_RTA_APPEND_DICT = 16,
-	AS_TYPE_RTA_APPEND_LIST = 17,
+	AS_TYPE_RTA_LIST        = 14,	//!< @deprecated
+	AS_TYPE_RTA_DICT        = 15,	//!< @deprecated
+	AS_TYPE_RTA_APPEND_DICT = 16,	//!< @deprecated
+	AS_TYPE_RTA_APPEND_LIST = 17,	//!< @deprecated
 	AS_TYPE_LUA_BLOB        = 18,
 	AS_TYPE_MAP             = 19,
 	AS_TYPE_LIST            = 20,
@@ -70,6 +75,18 @@ typedef enum as_type_e {
  *	Bin Name
  */
 typedef char as_bin_name[AS_BIN_NAME_LEN];
+
+/**
+ *	Bin Value
+ */
+typedef union as_bin_value_s {
+	as_val 		nil;
+	as_integer 	integer;
+	as_string 	string;
+	as_bytes 	bytes;
+	as_list 	list;
+	as_map 		map;
+} as_bin_value;
 
 /**
  *	Bin Structure
@@ -84,7 +101,6 @@ typedef struct as_bin_s {
 	/**
 	 *	Bin value.
 	 */
-	as_val * value;
+	as_bin_value * value;
 	
 } as_bin;
-

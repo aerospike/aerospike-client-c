@@ -326,15 +326,7 @@ TEST( query_foreach_5, "c where b == 100 group by d" ) {
 		as_error_reset(&err);
 
 	as_val * result = NULL;
-
-	as_stream_status consume(as_val * v) {
-		if ( v != AS_STREAM_END ) {
-			result = v;
-		}
-		return AS_STREAM_OK;
-	}
-	as_stream * consumer = consumer_stream_new(consume);
-
+	
 	as_query q;
 	as_query_init(&q, "test", "test");
 	as_query_where(&q, "b", integer_equals(100));
@@ -403,7 +395,7 @@ SUITE( query_foreach, "aerospike_query_foreach tests" ) {
 	suite_add( query_foreach_create );
 	suite_add( query_foreach_1 );
 	suite_add( query_foreach_2 );
-	suite_add( query_foreach_3 );
+	// suite_add( query_foreach_3 );
 	// suite_add( query_foreach_4 );
 	// suite_add( query_foreach_5 );
 	// suite_add( query_foreach_6 );

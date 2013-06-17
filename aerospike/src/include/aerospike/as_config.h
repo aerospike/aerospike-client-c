@@ -146,6 +146,16 @@ typedef struct as_config_s {
 /**
  *	Initialize the configuration to default values.
  *
+ *	You should do this to ensure the configuration has valid values, before 
+ *	populating it with custom options.
+ *
+ *	~~~~~~~~~~{.c}
+ *		as_config config;
+ *		as_config_init(&config);
+ *
+ *		config.hosts[0] = {.addr = "127.0.0.1", .port = 3000};
+ *	~~~~~~~~~~
+ *	
  *	@param c The configuration to initialize.
  *	
  *	@return The initialized configuration on success. Otherwise NULL.

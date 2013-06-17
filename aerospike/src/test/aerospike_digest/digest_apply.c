@@ -12,6 +12,7 @@
 #include <aerospike/as_arraylist.h>
 #include <aerospike/as_map.h>
 #include <aerospike/as_hashmap.h>
+#include <aerospike/as_stringmap.h>
 #include <aerospike/as_val.h>
 
 #include "../test.h"
@@ -90,7 +91,7 @@ TEST( digest_apply_put , "put: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: '
 	as_record_set_map(&r, "f", &map);
 
 	as_digest digest;
-	as_digest_init(&digest, "test", "foo");
+	as_digest_init(&digest, "test", (as_key *) as_string_new("foo",false));
 
 	as_status rc = aerospike_digest_put(as, &err, NULL, "test", &digest, &r);
 
@@ -103,7 +104,7 @@ TEST( digest_apply_one , "apply: (test,test,foo) <!> digest_apply.one() => 1" ) 
 	as_error_reset(&err);
 
 	as_digest digest;
-	as_digest_init(&digest, "test", "foo");
+	as_digest_init(&digest, "test", (as_key *) as_string_new("foo",false));
 
 	as_val * res = NULL;
 
@@ -124,7 +125,7 @@ TEST( digest_apply_ten , "apply: (test,test,foo) <!> digest_apply.one() => 10" )
 	as_error_reset(&err);
 
 	as_digest digest;
-	as_digest_init(&digest, "test", "foo");
+	as_digest_init(&digest, "test", (as_key *) as_string_new("foo",false));
 
 	as_val * res = NULL;
 
@@ -144,7 +145,7 @@ TEST( digest_apply_add_1_2 , "apply: (test,test,foo) <!> digest_apply.add(1,2) =
 	as_error_reset(&err);
 
 	as_digest digest;
-	as_digest_init(&digest, "test", "foo");
+	as_digest_init(&digest, "test", (as_key *) as_string_new("foo",false));
 
 	as_val * res = NULL;
 
@@ -169,7 +170,7 @@ TEST( digest_apply_record_exists , "apply: (test,test,foo) <!> digest_apply.reco
 	as_error_reset(&err);
 
 	as_digest digest;
-	as_digest_init(&digest, "test", "foo");
+	as_digest_init(&digest, "test", (as_key *) as_string_new("foo",false));
 
 	as_val * res = NULL;
 
@@ -190,7 +191,7 @@ TEST( digest_apply_get_bin_a , "apply: (test,test,foo) <!> digest_apply.get_bin_
 	as_error_reset(&err);
 
 	as_digest digest;
-	as_digest_init(&digest, "test", "foo");
+	as_digest_init(&digest, "test", (as_key *) as_string_new("foo",false));
 
 	as_val * res = NULL;
 

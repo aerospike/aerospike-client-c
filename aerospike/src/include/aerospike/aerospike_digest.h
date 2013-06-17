@@ -21,6 +21,17 @@
  *****************************************************************************/
 
 /** 
+ *	The Digest API provides functions which use an `as_digest` as the primary
+ *	means to locate a record in the cluster. 
+ *
+ *	Digests are 160 bit hash values, which are generated from the set and
+ *	key of a record. The digest is then used to locate where the record should
+ *	be stored in the cluster. 
+ *
+ *	Unlike the Key API, the Digest API allows you to utilize a String or Integer
+ *	value as the key, for the digest. The Key API, is basically a digest using
+ *	only a string for key value of the digest.
+ *
  *	@defgroup digest Digest API
  *	@{
  */
@@ -76,6 +87,8 @@ as_status aerospike_digest_get(
 
 /**
  *	Lookup a record by digest, then select specific bins.
+ *
+ *	The bins arguments must be a sequence of strings, terminated by a NULL:
  *
  *	~~~~~~~~~~{.c}
  *		as_digest digest;
@@ -272,7 +285,7 @@ as_status aerospike_digest_apply(
 as_status aerospike_digest_operate(
 	aerospike * as, as_error * err, const as_policy_write * policy, 
 	const char * ns, const as_digest * digest, 
-	const as_binop * ops, uint32_t nops
+	as_binops * binops
 	);
 
 

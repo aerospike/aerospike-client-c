@@ -116,8 +116,7 @@ static as_status process_node_response(cf_vector *v, as_error *err)
 	}
 
 	// Free the result vector
-	// TODO: Deferred this till the vector issue is solved
-	// cf_vector_destroy(v);
+	cf_vector_destroy(v);
 
 	return rc;
 }
@@ -257,10 +256,9 @@ as_status aerospike_scan_background(
 	cl_scan clscan;
 	as_scan_toclscan(scan, p, &clscan, true, scan_id);
 
-	citrusleaf_udf_scan_background(as->cluster, &clscan);
-
-	return AEROSPIKE_OK;
-
+	cf_vector *v = citrusleaf_udf_scan_background(as->cluster, &clscan);
+	as_status rc = process_node_response(v, err);
+	return rc;
 }
 
 /**
@@ -289,9 +287,9 @@ as_status aerospike_scan_node_background(
 	cl_scan clscan;
 	as_scan_toclscan(scan, p, &clscan, true, scan_id);
 
-	citrusleaf_udf_scan_node_background(as->cluster, &clscan, (char *) node);
-
-	return AEROSPIKE_OK;
+	cl_rv clrv = citrusleaf_udf_scan_node_background(as->cluster, &clscan, (char *) node);
+	as_status rc = as_error_fromrc(err, clrv);
+	return rc;
 }
 
 /**

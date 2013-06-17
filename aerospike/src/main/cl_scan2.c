@@ -550,17 +550,18 @@ cf_vector * citrusleaf_udf_scan_background(cl_cluster * asc, cl_scan * scan) {
  */
 cl_rv citrusleaf_udf_scan_node_background(cl_cluster * asc, cl_scan * scan, char *node_name) {
     scan->udf.type = CL_SCAN_UDF_BACKGROUND;
-    cl_rv res = CITRUSLEAF_OK;
+	cl_node_response resp;
+    cl_rv rv = CITRUSLEAF_OK;
 
     // Call cl_scan_execute with a NULL node_name.
-    cf_vector * v = cl_scan_execute(asc, scan, node_name, &res, NULL, NULL);
+    cf_vector * v = cl_scan_execute(asc, scan, node_name, &rv, NULL, NULL);
 
     if (v) {
-		// TODO: This is causing a crash
-        // cf_vector_get(v, 0, &res);
+        cf_vector_get(v, 0, &resp);
+		rv = resp.node_response;
 		cf_vector_destroy(v);
     }
-	return res;
+	return rv;
 }
 
 /*
@@ -569,15 +570,17 @@ cl_rv citrusleaf_udf_scan_node_background(cl_cluster * asc, cl_scan * scan, char
  */
 cl_rv citrusleaf_udf_scan_node(cl_cluster *asc, cl_scan *scan, char *node_name, int( *callback)(as_val *, void *), void * udata) {
     scan->udf.type = CL_SCAN_UDF_CLIENT_RECORD;
-    cl_rv res = CITRUSLEAF_FAIL_CLIENT;
+	cl_node_response resp;
+    cl_rv rv = CITRUSLEAF_FAIL_CLIENT;
 
     // If cl_scan_execute returns a non null vector, return the value in the vector, else return a failure
-    cf_vector *v = cl_scan_execute(asc, scan, node_name, &res, callback, udata);
+    cf_vector *v = cl_scan_execute(asc, scan, node_name, &rv, callback, udata);
     if (v) {
-        cf_vector_get(v, 0, &res);
+        cf_vector_get(v, 0, &resp);
+		rv = resp.node_response;
 		cf_vector_destroy(v);
     }
-    return res;
+    return rv;
 }
 
 /* Calls a scan of all the nodes in the cluster with the given parameters and then applies the udf on the results.

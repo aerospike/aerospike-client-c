@@ -444,7 +444,7 @@ as_status aerospike_key_apply(
 as_status aerospike_key_operate(
 	aerospike * as, as_error * err, const as_policy_write * policy, 
 	const char * ns, const char * set, const char * key, 
-	const as_binop * ops, uint32_t nops) 
+	as_binops * ops) 
 {
 	return AEROSPIKE_ERR;
 	// if policy is NULL, then get default policy

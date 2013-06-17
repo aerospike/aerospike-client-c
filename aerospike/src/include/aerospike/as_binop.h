@@ -32,42 +32,42 @@
 /**
  *	Operation Identifiers
  */
-typedef enum as_binop_op_e { 
+typedef enum as_operator_e { 
 
 	/**
 	 *	Return the bin from the cluster.
 	 */
-	AS_BINOP_READ       = 1,
+	AS_OPERATOR_READ       = 1,
 
 	/**
 	 *	Update the bin.
 	 */
-	AS_BINOP_WRITE      = 2, 
+	AS_OPERATOR_WRITE      = 2, 
 
 	/**
 	 *	Increment a bin containing an
 	 *	integer value.
 	 */
-	AS_BINOP_INCR       = 5, 
+	AS_OPERATOR_INCR       = 5, 
 
 	/**
 	 *	Append bytes to the bin containing
 	 *	either a string or blob.
 	 */
-	AS_BINOP_APPEND     = 9, 
+	AS_OPERATOR_APPEND     = 9, 
 
 	/**
 	 *	Prepend bytes to the bin containing
 	 *	either a string or blob.
 	 */
-	AS_BINOP_PREPEND    = 10, 
+	AS_OPERATOR_PREPEND    = 10, 
 
 	/**
 	 *	Touch the record's ttl.
 	 */
-	AS_BINOP_TOUCH      = 11
+	AS_OPERATOR_TOUCH      = 11
 	
-} as_binop_op;
+} as_operator;
 
 /**
  *	Operation on a bin.
@@ -76,13 +76,48 @@ typedef enum as_binop_op_e {
 typedef struct as_binop_s {
 	
 	/**
-	 *	Operation to be performed on a bin.
+	 *	The operation to be performed on the bin.
 	 */
-	as_binop_op operation;
+	as_operator operator;
 
 	/**
-	 *	Bin to perform operation on.
+	 *	The bin the operation will be performed on.
 	 */
 	as_bin bin;
 	
 } as_binop;
+
+/**
+ *	Sequence of as_binop.
+ *
+ *	as_binops binops;
+ *	as_binops_inita(&binops, 2);
+ *	as_binops_append(&binops, "bin1", integer_incr(123));
+ *	as_binops_append(&binops, "bin2", string_append(123));
+ */
+typedef struct as_binops_s {
+
+	/**
+	 *	@private
+	 *	If true, then as_ops_destroy() will free this instance.
+	 */
+	bool _free;
+
+	/**
+	 *	Number of entries allocated
+	 */
+	uint16_t capacity;
+
+	/**
+	 *	Number of entries used
+	 */
+	uint16_t size;
+
+	/**
+	 *	Sequence of entries
+	 */
+	as_binop * entries;
+
+} as_binops;
+
+

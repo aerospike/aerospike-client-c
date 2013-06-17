@@ -285,7 +285,7 @@ as_status aerospike_digest_apply(
 as_status aerospike_digest_operate(
 	aerospike * as, as_error * err, const as_policy_write * policy, 
 	const char * ns, const as_digest * digest, 
-	const as_binop * ops, uint32_t nops
+	as_binops * binops
 	);
 
 

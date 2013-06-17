@@ -90,10 +90,10 @@ as_status aerospike_key_get(
 		if ( r == NULL ) {
 			r = as_record_new(0);
 		}
-		if ( r->bins.data == NULL ) {
+		if ( r->bins.entries == NULL ) {
 			r->bins.capacity = nvalues;
 			r->bins.size = 0;
-			r->bins.data = malloc(sizeof(as_bin) * nvalues);
+			r->bins.entries = malloc(sizeof(as_bin) * nvalues);
 		}
 		as_record_frombins(r, values, nvalues);
 		*rec = r;
@@ -140,7 +140,8 @@ as_status aerospike_key_select(
 
 	values = (cl_bin *) alloca(sizeof(cl_bin) * nvalues);
 	for ( int i = 0; i < nvalues; i++ ) {
-		memcpy(values[i].bin_name,bins[i],AS_BIN_NAME_LEN);
+		strncpy(values[i].bin_name, bins[i], AS_BIN_NAME_LEN);
+		values[i].bin_name[AS_BIN_NAME_LEN - 1] = '\0';
 		citrusleaf_object_init(&values[i].object);
 	}
 
@@ -153,10 +154,10 @@ as_status aerospike_key_select(
 		if ( r == NULL ) {
 			r = as_record_new(0);
 		}
-		if ( r->bins.data == NULL ) {
+		if ( r->bins.entries == NULL ) {
 			r->bins.capacity = nvalues;
 			r->bins.size = 0;
-			r->bins.data = malloc(sizeof(as_bin) * nvalues);
+			r->bins.entries = malloc(sizeof(as_bin) * nvalues);
 		}
 		as_record_frombins(r, values, nvalues);
 		*rec = r;
@@ -443,26 +444,27 @@ as_status aerospike_key_apply(
 as_status aerospike_key_operate(
 	aerospike * as, as_error * err, const as_policy_write * policy, 
 	const char * ns, const char * set, const char * key, 
-	const as_binop * ops, uint32_t nops) 
+	as_binops * ops) 
 {
+	return AEROSPIKE_ERR;
 	// if policy is NULL, then get default policy
-	as_policy_write * p = policy ? (as_policy_write *) policy : &(as->config.policies.write);
+	// // as_policy_write * p = policy ? (as_policy_write *) policy : &(as->config.policies.write);
 
-	// int         nvalues = rec->bins.size;
-	// cl_bin *    values = (cl_bin *) alloca(sizeof(cl_bin) * nvalues);
+	// // int         nvalues = rec->bins.size;
+	// // cl_bin *    values = (cl_bin *) alloca(sizeof(cl_bin) * nvalues);
 
-	cl_write_parameters wp;
-	// as_policy_write_towp(p, rec, &wp);
+	// cl_write_parameters wp;
+	// // as_policy_write_towp(p, rec, &wp);
 
-	cl_object okey;
-	citrusleaf_object_init_str(&okey, key);
+	// cl_object okey;
+	// citrusleaf_object_init_str(&okey, key);
 
-	cl_operation * operations = NULL;
-	int n_operations = 0;
-	int replace = 0;
-	uint32_t generation = 0;
+	// cl_operation * operations = NULL;
+	// int n_operations = 0;
+	// int replace = 0;
+	// uint32_t generation = 0;
 
-	cl_rv rc = citrusleaf_operate(as->cluster, ns, set, &okey, operations, n_operations, &wp, replace, &generation);
+	// cl_rv rc = citrusleaf_operate(as->cluster, ns, set, &okey, operations, n_operations, &wp, replace, &generation);
 
-	return rc ? AEROSPIKE_ERR : AEROSPIKE_OK;
+	// return rc ? AEROSPIKE_ERR : AEROSPIKE_OK;
 }

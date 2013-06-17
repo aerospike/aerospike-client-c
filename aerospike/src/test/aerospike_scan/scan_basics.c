@@ -320,6 +320,8 @@ TEST( scan_basics_3 , "scan of a specific set on a specific node" ) {
 		assert_int_eq( rc, AEROSPIKE_OK );
 		assert_int_eq( scan_data.ret_failed, false );
 		total_rec_count += scan_data.ret_rec_count;
+		debug("Got %d records from %s node", scan_data.ret_rec_count, node_name);
+		scan_data.ret_rec_count = 0;
 	}
 
 	// When we scan all the nodes, we should have got all the recs of this set and no more
@@ -424,7 +426,8 @@ TEST( scan_basics_6 , "udf scan in background per node to insert a new bin" ) {
 		assert_int_eq( rc, AEROSPIKE_OK );
 		assert_int_eq( scan_data.ret_failed, false );
 		total_rec_count += scan_data.ret_rec_count;
-		info("Got %d records from %s node", scan_data.ret_rec_count, node_name);
+		debug("Got %d records from %s node", scan_data.ret_rec_count, node_name);
+		scan_data.ret_rec_count = 0;
 	}
 	// When we scan all the nodes, we should have got all the recs of this set and no more
 	assert_int_eq( total_rec_count, NUM_RECS_SET2 );

@@ -104,7 +104,14 @@ as_status aerospike_connect(aerospike * as, as_error * err)
 	}
 
 	as_debug(LOGGER, "connecting...");
-	
+
+	// configuration checks
+	if ( as->config.hosts[0].addr == NULL ) {
+		as_error(LOGGER, "no hosts provided");
+		as_error_update(err, AEROSPIKE_ERR_CLIENT, "no hosts provided");
+		return err->code;
+	}
+
 	// remember the process id which is spawning the background threads.
 	// only this process can call a pthread_join() on the threads that it spawned.
 	g_init_pid = getpid();
@@ -122,15 +129,14 @@ as_status aerospike_connect(aerospike * as, as_error * err)
     as_module_configure(&mod_lua, &config);
 	as_debug(LOGGER, "as_module_configure: OK");
 
-	g_initialized = true;
-
 	// start the cluster tend thread (for all clusters)
 	as_trace(LOGGER, "citrusleaf_cluster_init: ...");
 	citrusleaf_cluster_init();
 	as_debug(LOGGER, "citrusleaf_cluster_init: OK");
 
-	// set the cluster tend speed
-	citrusleaf_change_tend_speed(as->config.tender_interval > 1000 ? as->config.tender_interval / 1000 : 1);
+	// Hack to stop tender thread interfering with add_host loop ... cluster's
+	// tend interval set after loop will govern tending anyway.
+	citrusleaf_change_tend_speed(100);
 
 	// create the cluster object
 	as_trace(LOGGER, "citrusleaf_cluster_create: ...");
@@ -154,30 +160,40 @@ as_status aerospike_connect(aerospike * as, as_error * err)
 	as->cluster->nbconnect = as->config.non_blocking;
 
 	uint32_t nhosts = sizeof(as->config.hosts) / sizeof(as_config_host);
-	
+
 	as_trace(LOGGER, "citrusleaf_cluster_add_host: ...");
+
 	for ( int i = 0; as->config.hosts[i].addr != NULL && i < nhosts; i ++ ) {
 		as_trace(LOGGER, "connecting to %s:%d", as->config.hosts[i].addr, as->config.hosts[i].port);
-		int rc = citrusleaf_cluster_add_host(as->cluster, as->config.hosts[i].addr, as->config.hosts[i].port, as->config.policies.timeout);
-		if ( rc != 0 ) {
-			as_error(LOGGER, "Can't connect to %s:%d", as->config.hosts[i].addr, as->config.hosts[i].port);
-			as_error_update(err, AEROSPIKE_ERR_CLIENT, "Can't connect to %s:%d", as->config.hosts[i].addr, as->config.hosts[i].port);
-		}
-		else {
+
+		int rc = citrusleaf_cluster_add_host(as->cluster, as->config.hosts[i].addr, as->config.hosts[i].port, 1000);
+
+		// as long as we succeed with one host, we've found the cluster
+		if ( rc == 0 ) {
 			as_debug(LOGGER, "citrusleaf_cluster_add_host: OK");
+			as_error_reset(err);
+			break;
 		}
+
+		as_warn(LOGGER, "can't connect to %s:%d", as->config.hosts[i].addr, as->config.hosts[i].port);
+		as_error_update(err, AEROSPIKE_ERR_CLIENT, NULL);
 	}
 
-	// TODO - wait for stability.
-
-	if ( err->code == AEROSPIKE_OK ) {
-		as_debug(LOGGER, "connected.");
-	}
-	else {
+	if ( err->code != AEROSPIKE_OK ) {
+		as_error(LOGGER, "can't connect to any host");
+		as_error_update(err, AEROSPIKE_ERR_CLIENT, "can't connect to any host");
 		citrusleaf_cluster_destroy(as->cluster);
 		as->cluster = NULL;
+		return err->code;
 	}
-	
+
+	// Set cluster tend interval, now that tend thread can't mess up add_host.
+	citrusleaf_cluster_change_tend_speed(as->cluster,
+			as->config.tender_interval == 0 ? 1 : (as->config.tender_interval + 999) / 1000);
+
+	as_debug(LOGGER, "connected.");
+	g_initialized = true;
+
 	return err->code;
 }
 

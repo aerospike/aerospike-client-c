@@ -26,22 +26,26 @@ as_status as_error_fromrc(as_error * err, cl_rv rc)
 
 void as_record_tobins(as_record * rec, cl_bin * bins, uint32_t nbins) 
 {
-	as_bin * rbin = rec->bins.data;
+	as_bin * rbin = rec->bins.entries;
 	for ( int i = 0; i < nbins; i++ ) {
-		memcpy(bins[i].bin_name, rbin[i].name, AS_BIN_NAME_LEN);
-		switch(rbin[i].value->type) {
+
+		strncpy(bins[i].bin_name, rbin[i].name, AS_BIN_NAME_LEN);
+		bins[i].bin_name[AS_BIN_NAME_LEN - 1] = '\0';
+
+		as_val * val = (as_val *) rbin[i].value;
+		switch(val->type) {
 			case AS_NIL: {
 				citrusleaf_object_init_null(&bins[i].object);
 				break;
 			}
 			case AS_INTEGER: {
-				as_integer * val = as_integer_fromval(rbin[i].value);
-				citrusleaf_object_init_int(&bins[i].object, as_integer_toint(val));
+				as_integer * v = as_integer_fromval(val);
+				citrusleaf_object_init_int(&bins[i].object, as_integer_toint(v));
 				break;
 			}
 			case AS_STRING: {
-				as_string * val = as_string_fromval(rbin[i].value);
-				citrusleaf_object_init_str(&bins[i].object, as_string_tostring(val));
+				as_string * v = as_string_fromval(val);
+				citrusleaf_object_init_str(&bins[i].object, as_string_tostring(v));
 				break;
 			}
 			case AS_LIST:{
@@ -50,7 +54,7 @@ void as_record_tobins(as_record * rec, cl_bin * bins, uint32_t nbins)
 
 				as_serializer ser;
 				as_msgpack_init(&ser);
-				as_serializer_serialize(&ser, rbin[i].value, &buffer);
+				as_serializer_serialize(&ser, val, &buffer);
 				as_serializer_destroy(&ser);
 				
 				citrusleaf_object_init_blob2(&bins[i].object, buffer.data, buffer.size, CL_LIST);
@@ -62,15 +66,15 @@ void as_record_tobins(as_record * rec, cl_bin * bins, uint32_t nbins)
 
 				as_serializer ser;
 				as_msgpack_init(&ser);
-				as_serializer_serialize(&ser, rbin[i].value, &buffer);
+				as_serializer_serialize(&ser, val, &buffer);
 				as_serializer_destroy(&ser);
 
 				citrusleaf_object_init_blob2(&bins[i].object, buffer.data, buffer.size, CL_MAP);
 				break;
 			}
 			case AS_BYTES: {
-				as_bytes * b = as_bytes_fromval(rbin[i].value);
-				citrusleaf_object_init_blob2(&bins[i].object, b->value, b->len, b->type);
+				as_bytes * v = as_bytes_fromval(val);
+				citrusleaf_object_init_blob2(&bins[i].object, v->value, v->len, v->type);
 				break;
 			}
 			default: {
@@ -113,7 +117,7 @@ as_record * as_record_frombins(as_record * r, cl_bin * bins, uint32_t nbins)
 				as_serializer_deserialize(&ser, &buffer, &val);
 				as_serializer_destroy(&ser);
 
-				as_record_set(r, bins[i].bin_name, val);
+				as_record_set(r, bins[i].bin_name, (as_bin_value *) val);
 				break;
 			}
 			default: {

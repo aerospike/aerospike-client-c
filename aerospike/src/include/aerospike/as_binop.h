@@ -66,6 +66,7 @@ typedef enum as_binop_op_e {
 	 *	Touch the record's ttl.
 	 */
 	AS_BINOP_TOUCH      = 11
+	
 } as_binop_op;
 
 /**

@@ -58,7 +58,9 @@ typedef struct aerospike_s {
 	bool _free;
 
 	/**
-	 *	cluster state
+	 *	@private
+	 *	Cluster state.
+	 *	This is for internal use only. Do not use this in the application.
 	 */
 	struct cl_cluster_s * cluster;
 
@@ -79,7 +81,18 @@ typedef struct aerospike_s {
  *****************************************************************************/
 
 /**
- *	Initialize a stack allocated aerospike instance.
+ *	Initialize a stack allocated aerospike instance. 
+ *
+ *	The config parameter can be an instance of `as_config` or `NULL`. If `NULL`,
+ *	then the default configuration will be used.
+ *
+ *	~~~~~~~~~~{.c}
+ *		aerospike as;
+ *		aerospike_init(&as, &config);
+ *	~~~~~~~~~~
+ *
+ *	Once you are finished using the instance, then you should destroy it via the 
+ *	`aerospike_destroy()` function.
  *
  *	@param as 		The aerospike instance to initialize.
  *	@param config 	The configuration to use for the instance.
@@ -91,6 +104,13 @@ aerospike * aerospike_init(aerospike * as, as_config * config);
 /**
  *	Creates a new heap allocated aerospike instance.
  *
+ *	~~~~~~~~~~{.c}
+ *		aerospike * as = aerospike_new(&config);
+ *	~~~~~~~~~~
+ *
+ *	Once you are finished using the instance, then you should destroy it via the 
+ *	`aerospike_destroy()` function.
+ *
  *	@param config	The configuration to use for the instance.
  *
  *	@returns a new aerospike instance
@@ -100,6 +120,10 @@ aerospike * aerospike_new(as_config * config);
 /**
  *	Destroy the aerospike instance and associated resources.
  *
+ *	~~~~~~~~~~{.c}
+ *		aerospike_destroy(&config);
+ *	~~~~~~~~~~
+ *
  *	@param as 		The aerospike instance to destroy
  */
 void aerospike_destroy(aerospike * as);
@@ -107,20 +131,33 @@ void aerospike_destroy(aerospike * as);
 /**
  *	Connect an aerospike instance to the cluster.
  *
+ *	~~~~~~~~~~{.c}
+ *		aerospike_connect(&as, &err);
+ *	~~~~~~~~~~
+ *
+ *	Once you are finished using the connection, then you must close it via
+ *	the `aerospike_close()` function.
+ *
+ *	If connect fails, then you do not need to call `aerospike_close()`.
+ *
  *	@param as 		The aerospike instance to connect to a cluster.
  *	@param err 		If an error occurs, the err will be populated.
  *
- *	@return AEROSPIKE_OK on success. Otherwise an error occurred.
+ *	@returns AEROSPIKE_OK on success. Otherwise an error occurred.
  */
 as_status aerospike_connect(aerospike * as, as_error * err);
 
 /**
- *	Close connections to the cluster
+ *	Close connections to the cluster.
+ *
+ *	~~~~~~~~~~{.c}
+ *		aerospike_close(&as, &err);
+ *	~~~~~~~~~~
  *
  *	@param as 		The aerospike instance to disconnect from a cluster.
  *	@param err 		If an error occurs, the err will be populated.
  *
- *	@return AEROSPIKE_OK on success. Otherwise an error occurred. 
+ *	@returns AEROSPIKE_OK on success. Otherwise an error occurred. 
  */
 as_status aerospike_close(aerospike * as, as_error * err);
 

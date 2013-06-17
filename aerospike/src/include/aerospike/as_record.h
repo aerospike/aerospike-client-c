@@ -98,7 +98,7 @@ typedef struct as_record_s {
 		/**
 		 *	Storage for bins
 		 */
-		as_bin * data;
+		as_bin * entries;
 
 	} bins;
 
@@ -163,7 +163,7 @@ uint16_t as_record_numbins(as_record * rec);
  *
  *	@return 0 on success. 1 on failure.
  */
-int as_record_set(as_record * rec, const char * name, const as_val * value);
+int as_record_set(as_record * rec, const char * name, as_bin_value * value);
 
 /**
  *	Set specified bin's value to an int64_t.

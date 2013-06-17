@@ -25,18 +25,12 @@
 #include <inttypes.h>
 #include <stdarg.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 /******************************************************************************
- * MACROS
- *****************************************************************************/
-
-#define AS_LOG_MSG_LEN 1024
-
-/******************************************************************************
- * STATIC VARIABLES
+ * CONSTANTS
  *****************************************************************************/
 
 static const char * as_log_level_strings[5] = {
@@ -47,23 +41,36 @@ static const char * as_log_level_strings[5] = {
 	[AS_LOG_LEVEL_TRACE] 	= "TRACE"
 };
 
+#define MAX_LOG_MSG_SIZE 2048
+const size_t MAX_LOG_MSG_LEN = MAX_LOG_MSG_SIZE - 1;
+
 /******************************************************************************
  * STATIC FUNCTIONS
  *****************************************************************************/
 
- static bool as_log_stderr(
+static bool as_log_stderr(
 	as_log_level level, const char * func, const char * file, uint32_t line,
 	const char * fmt, ...)
 {
-	char msg[AS_LOG_MSG_LEN] = {0};
+	char msg[MAX_LOG_MSG_SIZE] = {0};
 
 	va_list ap;
 	va_start(ap, fmt);
-	vsnprintf(msg, AS_LOG_MSG_LEN, fmt, ap);
+	vsnprintf(msg, MAX_LOG_MSG_LEN, fmt, ap);
+	msg[MAX_LOG_MSG_LEN] = '\0';
 	va_end(ap);
 
-	fprintf(stderr, "[%s:%d][%s] %s - %s\n", 
-		file, line, func, as_log_level_strings[level], msg);
+	const char* base_name = strrchr(file, '/');
+
+	if (base_name) {
+		base_name++;
+	}
+	else {
+		base_name = file;
+	}
+
+	fprintf(stderr, "[%s:%d][%s] %s - %s\n",
+			base_name, line, func, as_log_level_strings[level], msg);
 
 	return true;
 }

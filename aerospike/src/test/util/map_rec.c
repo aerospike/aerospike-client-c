@@ -14,21 +14,23 @@
  *****************************************************************************/
 
 static bool         map_rec_destroy(as_rec *);
+static uint32_t     map_rec_hashcode(const as_rec *);
+
 static as_val *     map_rec_get(const as_rec *, const char *);
 static int          map_rec_set(const as_rec *, const char *, const as_val *);
 static int          map_rec_remove(const as_rec *, const char *);
 static uint32_t     map_rec_ttl(const as_rec *);
 static uint16_t     map_rec_gen(const as_rec *);
-static uint32_t     map_rec_hashcode(as_rec *);
 
 /*****************************************************************************
  * CONSTANTS
  *****************************************************************************/
 
 const as_rec_hooks map_rec_hooks = {
+    .destroy    = map_rec_destroy,
+    .hashcode   = map_rec_hashcode,
     .get        = map_rec_get,
     .set        = map_rec_set,
-    .destroy    = map_rec_destroy,
     .remove     = map_rec_remove,
     .ttl        = map_rec_ttl,
     .gen        = map_rec_gen
@@ -81,6 +83,6 @@ static uint16_t map_rec_gen(const as_rec * r) {
     return 0;
 }
 
-static uint32_t map_rec_hashcode(as_rec * r) {
+static uint32_t map_rec_hashcode(const as_rec * r) {
     return 0;
 }

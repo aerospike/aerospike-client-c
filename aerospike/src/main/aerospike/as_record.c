@@ -76,8 +76,7 @@ static as_record * as_record_defaults(as_record * rec, bool free, uint16_t nbins
 
 	rec->digest._free = false;
 	rec->digest.set = NULL;
-	rec->digest.key.type = AS_TYPE_NULL;
-	rec->digest.key.value.str = NULL;
+	rec->digest.key = NULL;
 	memset(rec->digest.value, 0, AS_DIGEST_VALUE_LEN);
 
 	rec->gen = 0;
@@ -87,13 +86,13 @@ static as_record * as_record_defaults(as_record * rec, bool free, uint16_t nbins
 		rec->bins._free = true;
 		rec->bins.capacity = nbins;
 		rec->bins.size = 0;
-		rec->bins.data = (as_bin *) malloc(sizeof(as_bin) * nbins);
+		rec->bins.entries = (as_bin *) malloc(sizeof(as_bin) * nbins);
 	}
 	else {
 		rec->bins._free = false;
 		rec->bins.capacity = 0;
 		rec->bins.size = 0;
-		rec->bins.data = NULL;
+		rec->bins.entries = NULL;
 	}
 
 	return rec;
@@ -105,10 +104,10 @@ static void as_record_release(as_record * rec)
 		
 		as_digest_destroy(&rec->digest);
 
-		if ( rec->bins.data && rec->bins._free ) {
-			free(rec->bins.data);
+		if ( rec->bins.entries && rec->bins._free ) {
+			free(rec->bins.entries);
 		}
-		rec->bins.data = NULL;
+		rec->bins.entries = NULL;
 		rec->bins.capacity = 0;
 		rec->bins.size = 0;
 	}
@@ -128,12 +127,12 @@ static uint32_t as_record_rec_hashcode(const as_rec * r)
 
 	for(int i = 0; i < rec->bins.size; i++) {
 		int c;
-		char * str = rec->bins.data[i].name;
+		char * str = rec->bins.entries[i].name;
 		while ( (c = *str++) ) {
 			hash += c + (hash << 6) + (hash << 16) - hash;
 		}
-		if ( rec->bins.data[i].value != NULL ) {
-			hash += as_val_hashcode(rec->bins.data[i].value);
+		if ( rec->bins.entries[i].value != NULL ) {
+			hash += as_val_hashcode(rec->bins.entries[i].value);
 		}
 	}
 
@@ -148,7 +147,7 @@ static as_val * as_record_rec_get(const as_rec * r, const char * name)
 
 static int as_record_rec_set(const as_rec * r, const char * name, const as_val * value) 
 {
-	return r && name ? as_record_set((as_record *) r, name, value) : 1;
+	return r && name ? as_record_set((as_record *) r, name, (as_bin_value *)value) : 1;
 }
 
 static int as_record_rec_remove(const as_rec * r, const char * name) 
@@ -247,20 +246,20 @@ uint16_t as_record_numbins(as_record * rec)
  *
  * @return 0 on success. 1 on failure.
  */
-int as_record_set(as_record * rec, const char * name, const as_val * value) 
+int as_record_set(as_record * rec, const char * name, as_bin_value * value) 
 {
 	// replace
 	for(int i = 0; i < rec->bins.size; i++) {
-		if ( strcmp(rec->bins.data[i].name, name) == 0 ) {
-			as_val_destroy(rec->bins.data[i].value);
-			rec->bins.data[i].value = (as_val *) value;
+		if ( strcmp(rec->bins.entries[i].name, name) == 0 ) {
+			as_val_destroy(rec->bins.entries[i].value);
+			rec->bins.entries[i].value = value;
 			return 0;
 		}
 	}
 	// not found, then append
 	if ( rec->bins.size < rec->bins.capacity ) {
-		strncpy(rec->bins.data[rec->bins.size].name,name,AS_BIN_NAME_LEN);
-		rec->bins.data[rec->bins.size].value = (as_val *) value;
+		strncpy(rec->bins.entries[rec->bins.size].name,name,AS_BIN_NAME_LEN);
+		rec->bins.entries[rec->bins.size].value = value;
 		rec->bins.size++;
 		return 0;
 	}
@@ -283,7 +282,7 @@ int as_record_set(as_record * rec, const char * name, const as_val * value)
 int as_record_set_int64(as_record * rec, const char * name, int64_t value) 
 {
 	as_integer * val = as_integer_new(value);
-	return as_record_set(rec, name, (as_val *) val);
+	return as_record_set(rec, name, (as_bin_value *) val);
 }
 
 /**
@@ -300,7 +299,7 @@ int as_record_set_int64(as_record * rec, const char * name, int64_t value)
 int as_record_set_str(as_record * rec, const char * name, const char * value) 
 {
 	as_string * val = as_string_new(strdup(value), true);
-	return as_record_set(rec, name, (as_val *) val);
+	return as_record_set(rec, name, (as_bin_value *) val);
 }
 
 /**
@@ -316,7 +315,7 @@ int as_record_set_str(as_record * rec, const char * name, const char * value)
  */
 int as_record_set_integer(as_record * rec, const char * name, as_integer * value) 
 {
-	return as_record_set(rec, name, (as_val *) value);
+	return as_record_set(rec, name, (as_bin_value *) value);
 }
 
 /**
@@ -332,7 +331,7 @@ int as_record_set_integer(as_record * rec, const char * name, as_integer * value
  */
 int as_record_set_string(as_record * rec, const char * name, as_string * value) 
 {
-	return as_record_set(rec, name, (as_val *) value);
+	return as_record_set(rec, name, (as_bin_value *) value);
 }
 
 /**
@@ -348,7 +347,7 @@ int as_record_set_string(as_record * rec, const char * name, as_string * value)
  */
 int as_record_set_bytes(as_record * rec, const char * name, as_bytes * value) 
 {
-	return as_record_set(rec, name, (as_val *) value);
+	return as_record_set(rec, name, (as_bin_value *) value);
 }
 
 /**
@@ -370,7 +369,7 @@ int as_record_set_bytes(as_record * rec, const char * name, as_bytes * value)
  */
 int as_record_set_list(as_record * rec, const char * name, as_list * value) 
 {
-	return as_record_set(rec, name, (as_val *) value);
+	return as_record_set(rec, name, (as_bin_value *) value);
 }
 
 /**
@@ -390,7 +389,7 @@ int as_record_set_list(as_record * rec, const char * name, as_list * value)
  */
 int as_record_set_map(as_record * rec, const char * name, as_map * value) 
 {
-	return as_record_set(rec, name, (as_val *) value);
+	return as_record_set(rec, name, (as_bin_value *) value);
 }
 
 /**
@@ -404,7 +403,7 @@ int as_record_set_map(as_record * rec, const char * name, as_map * value)
  * @return 0 on success. 1 on failure.
  */
 int as_record_set_nil(as_record * rec, const char * name) {
-	return as_record_set(rec, name, (as_val *) &as_nil);
+	return as_record_set(rec, name, (as_bin_value *) &as_nil);
 }
 
 /**
@@ -420,8 +419,8 @@ int as_record_set_nil(as_record * rec, const char * name) {
 as_val * as_record_get(as_record * rec, const char * name) 
 {
 	for(int i=0; i<rec->bins.size; i++) {
-		if ( strcmp(rec->bins.data[i].name, name) == 0 ) {
-			return rec->bins.data[i].value;
+		if ( strcmp(rec->bins.entries[i].name, name) == 0 ) {
+			return rec->bins.entries[i].value;
 		}
 	}
 	return (as_val *) &as_nil;

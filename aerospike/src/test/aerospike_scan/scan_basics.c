@@ -237,7 +237,10 @@ static void insert_data(int numrecs, const char *setname)
 		as_record_set_map(&r, "bin3", &m);
 
 		sprintf(strkey, "key-%s-%d", setname, i);
-		as_digest_init(&d, setname, strkey);
+		as_string key;
+		as_string_init(&key, strkey, false);
+		as_digest_init(&d, setname, (as_key *) &key);
+
 		rc = aerospike_digest_put(as, &err, NULL, NS, &d, &r);
 		if (rc != AEROSPIKE_OK) {
 			error("digest put failed with error %d", rc);

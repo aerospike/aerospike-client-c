@@ -27,7 +27,6 @@
 #include <inttypes.h>
 #include <stdarg.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 /******************************************************************************
@@ -119,7 +118,8 @@ inline as_status as_error_reset(as_error * err) {
  */
 inline as_status as_error_setall(as_error * err, int32_t code, const char * message, const char * func, const char * file, uint32_t line) {
 	err->code = code;
-	strncpy(err->message, message, 1023);
+	strncpy(err->message, message, sizeof(err->message) - 1);
+	err->message[sizeof(err->message) - 1] = '\0';
 	err->func = func;
 	err->file = file;
 	err->line = line;
@@ -135,7 +135,8 @@ inline as_status as_error_setallv(as_error * err, int32_t code, const char * fun
 	if ( fmt != NULL ) {
 		va_list ap;
 		va_start(ap, fmt);
-		vsnprintf(err->message, 1023, fmt, ap);
+		vsnprintf(err->message, sizeof(err->message) - 1, fmt, ap);
+		err->message[sizeof(err->message) - 1] = '\0';
 		va_end(ap);   
 	}
 	err->code = code;
@@ -152,7 +153,8 @@ inline as_status as_error_set(as_error * err, int32_t code, const char * fmt, ..
 	if ( fmt != NULL ) {
 		va_list ap;
 		va_start(ap, fmt);
-		vsnprintf(err->message, 1023, fmt, ap);
+		vsnprintf(err->message, sizeof(err->message) - 1, fmt, ap);
+		err->message[sizeof(err->message) - 1] = '\0';
 		va_end(ap);   
 	}
 	err->code = code;

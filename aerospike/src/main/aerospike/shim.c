@@ -18,9 +18,28 @@
 
 #include <stdint.h>
 
+
+#define ERR_ASSIGN(__enum) \
+		err->code = __enum; \
+		if (err->message[0] == '\0') strcpy(err->message, #__enum);
+
 as_status as_error_fromrc(as_error * err, cl_rv rc) 
 {
-	err->code = rc ? AEROSPIKE_ERR : AEROSPIKE_OK;
+	switch (rc) {
+	case CITRUSLEAF_OK:
+		ERR_ASSIGN(AEROSPIKE_OK);
+		break;
+	case CITRUSLEAF_FAIL_GENERATION:
+		ERR_ASSIGN(AEROSPIKE_ERR_WRITE_GENERATION);
+		break;
+		// TODO - fill in other error conversions as new as_status labels are
+		// defined. Note we'll have to distinguish transaction type to do this
+		// properly, i.e. add a parameter to this shim function.
+	default:
+		ERR_ASSIGN(AEROSPIKE_ERR);
+		break;
+	}
+
 	return err->code;
 }
 

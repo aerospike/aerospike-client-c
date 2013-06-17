@@ -95,12 +95,14 @@ void aerospike_destroy(aerospike * as) {
  */
 as_status aerospike_connect(aerospike * as, as_error * err) 
 {
+	as_error_reset(err);
+
 	extern cf_atomic32 g_initialized;
 	extern int g_init_pid;
 
 	if ( g_initialized ) {
 		as_debug(LOGGER, "already connected.");
-		return as_error_reset(err);
+		return AEROSPIKE_OK;
 	}
 
 	as_debug(LOGGER, "connecting...");

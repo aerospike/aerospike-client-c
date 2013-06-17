@@ -106,8 +106,8 @@ int       cl_scan_foreach       (cl_scan *scan, const char *filename, const char
  */
 cl_rv citrusleaf_udf_scan_node        (cl_cluster *asc, cl_scan *scan, char *node_name, int( *callback)(as_val *, void *), void * udata);
 cf_vector * citrusleaf_udf_scan_all_nodes   (cl_cluster *asc, cl_scan *scan, int( *callback)(as_val *, void *), void * udata);
-void citrusleaf_udf_scan_background  (cl_cluster *asc, cl_scan *scan);
-void citrusleaf_udf_scan_node_background  (cl_cluster *asc, cl_scan *scan, char *node_name);
+cf_vector * citrusleaf_udf_scan_background  (cl_cluster *asc, cl_scan *scan);
+cl_rv citrusleaf_udf_scan_node_background  (cl_cluster *asc, cl_scan *scan, char *node_name);
 
 /*
  * Init and destroy for client scan environment. Should be called for once per client

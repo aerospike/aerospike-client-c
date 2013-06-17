@@ -536,26 +536,31 @@ cl_rv cl_scan_udf_destroy(cl_scan_udf * udf) {
  * Calls a scan on all the nodes in the cluster. This function initializes a background scan.
  * The udf return values are not returned back to the client. 
  */
-void citrusleaf_udf_scan_background(cl_cluster * asc, cl_scan * scan) {
+cf_vector * citrusleaf_udf_scan_background(cl_cluster * asc, cl_scan * scan) {
     scan->udf.type = CL_SCAN_UDF_BACKGROUND;
     cl_rv res = CITRUSLEAF_OK;
+
     // Call cl_scan_execute with a NULL node_name.
-    cf_vector * v = cl_scan_execute(asc, scan, NULL, &res, NULL, NULL);
-	cf_vector_destroy(v);
-	return;
+	return cl_scan_execute(asc, scan, NULL, &res, NULL, NULL);
 }
 
 /*
  * Calls a scan on a specified node in the cluster. This function initializes a background scan.
  * The udf return values are not returned back to the client. 
  */
-void citrusleaf_udf_scan_node_background(cl_cluster * asc, cl_scan * scan, char *node_name) {
+cl_rv citrusleaf_udf_scan_node_background(cl_cluster * asc, cl_scan * scan, char *node_name) {
     scan->udf.type = CL_SCAN_UDF_BACKGROUND;
     cl_rv res = CITRUSLEAF_OK;
+
     // Call cl_scan_execute with a NULL node_name.
     cf_vector * v = cl_scan_execute(asc, scan, node_name, &res, NULL, NULL);
-	cf_vector_destroy(v);
-	return;
+
+    if (v) {
+		// TODO: This is causing a crash
+        // cf_vector_get(v, 0, &res);
+		cf_vector_destroy(v);
+    }
+	return res;
 }
 
 /*
@@ -570,8 +575,8 @@ cl_rv citrusleaf_udf_scan_node(cl_cluster *asc, cl_scan *scan, char *node_name, 
     cf_vector *v = cl_scan_execute(asc, scan, node_name, &res, callback, udata);
     if (v) {
         cf_vector_get(v, 0, &res);
+		cf_vector_destroy(v);
     }
-    cf_vector_destroy(v);
     return res;
 }
 

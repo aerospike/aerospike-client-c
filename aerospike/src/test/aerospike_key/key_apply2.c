@@ -220,7 +220,7 @@ TEST( key_apply2_getmap , "apply2: (test,test,foo) <!> key_apply2.getmap() => {x
 	// assert_int_eq( res_map, map );
 }
 
-TEST( key_apply2_add_strings , "apply: (test,test,foo) <!> key_apply.add_strings('abc','def') => 'abcdef'" ) {
+TEST( key_apply2_add_strings , "apply: (test,test,foo) <!> key_apply2.add_strings('abc','def') => 'abcdef'" ) {
 	as_error err;
 	as_error_reset(&err);
 
@@ -242,6 +242,75 @@ TEST( key_apply2_add_strings , "apply: (test,test,foo) <!> key_apply.add_strings
 
 // skipping record_basics_add, already present in key_apply.c
 
+TEST( key_apply2_call_nonlocal_sum, "apply: (test,test,foo) <!> key_apply2.call_nonlocal_sum(1,2) => 'FAIL'") {
+	as_error err;
+	as_error_reset(&err);
+
+	as_val * res = NULL;
+
+	as_list arglist;
+	as_arraylist_init(&arglist, 3, 0);
+	as_list_append_int64(&arglist, 1);
+	as_list_append_int64(&arglist, 2);
+
+	as_status rc = aerospike_key_apply(as, &err, NULL, "test", "test", "foo", UDF_FILE, "sum", &arglist, &res);
+
+    assert_int_ne( rc, AEROSPIKE_OK );
+	assert_not_null( res );
+
+    as_integer * i = as_integer_fromval(res);
+    assert_not_null( i );
+    assert_int_ne(  as_integer_toint(i), 3 );
+}
+
+TEST( key_apply2_call_local_sum, "apply: (test,test,foo) <!> key_apply2.call_local_sum(1,2) => 3") {
+
+	as_error err;
+	as_error_reset(&err);
+
+	as_val * res = NULL;
+
+	as_list arglist;
+	as_arraylist_init(&arglist, 3, 0);
+	as_list_append_int64(&arglist, 1);
+	as_list_append_int64(&arglist, 2);
+
+	as_status rc = aerospike_key_apply(as, &err, NULL, "test", "test", "foo", UDF_FILE, "sum_local", &arglist, &res);
+
+    assert_int_eq( rc, AEROSPIKE_OK );
+	assert_not_null( res );
+
+    as_integer * i = as_integer_fromval(res);
+    assert_not_null( i );
+    assert_int_eq(  as_integer_toint(i), 3 );
+}
+
+TEST( key_apply2_udf_func_does_not_exist, "apply: (test,test,foo) <!> key_apply2.udf_func_does_not_exist() => 1" ) {
+
+	as_error err;
+	as_error_reset(&err);
+
+	as_val * res = NULL;
+
+	as_status rc = aerospike_key_apply(as, &err, NULL, "test", "test", "foo", UDF_FILE, "udf_does_not_exist", NULL, &res);
+
+    assert_int_ne( rc, AEROSPIKE_OK );
+
+}
+
+TEST( key_apply2_udf_file_does_not_exist, "apply: (test,test,foo) <!> key_apply2.udf_file_does_not_exist() => 1" ) {
+
+	as_error err;
+	as_error_reset(&err);
+
+	as_val * res = NULL;
+
+	as_status rc = aerospike_key_apply(as, &err, NULL, "test", "test", "foo", "udf_does_not_exist", "udf_does_not_exist", NULL, &res);
+
+    assert_int_ne( rc, AEROSPIKE_OK );
+
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -256,5 +325,9 @@ SUITE( key_apply2, "aerospike_key_apply2 tests" ) {
     suite_add( key_apply2_getlist );
     suite_add( key_apply2_getmap );
     suite_add( key_apply2_add_strings );
+    suite_add( key_apply2_call_nonlocal_sum );
+    suite_add( key_apply2_call_local_sum );
+    suite_add( key_apply2_udf_func_does_not_exist );
+    suite_add( key_apply2_udf_file_does_not_exist );
 
 }

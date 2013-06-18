@@ -61,26 +61,63 @@
 typedef struct cl_conn_s cl_conn;
 
 typedef enum cl_rv_e {
+
+	// negative = client
+	// positivie = server
+
     CITRUSLEAF_FAIL_ASYNCQ_FULL             = -3,
     CITRUSLEAF_FAIL_TIMEOUT                 = -2,
     CITRUSLEAF_FAIL_CLIENT                  = -1,   // an out of memory or similar locally
+
     CITRUSLEAF_OK                           = 0,
     CITRUSLEAF_FAIL_UNKNOWN                 = 1,    // unknown failure on the server side
+
+    // record not found
+    // currently only used for reads, but with REPLACE ONLY op will be pertinent.
     CITRUSLEAF_FAIL_NOTFOUND                = 2,
+
+    // can be a read or write error
     CITRUSLEAF_FAIL_GENERATION              = 3,    // likely a CAS write, and the write failed
+
+    // bad parameter response from server
     CITRUSLEAF_FAIL_PARAMETER               = 4,    // you passed in bad parameters
+
+    // digest/record exists when attempting to CREATE ONLY
+    // SCOPE: WRITE ONLY
     CITRUSLEAF_FAIL_KEY_EXISTS              = 5,
+
+    // @todo ??
     CITRUSLEAF_FAIL_BIN_EXISTS              = 6,
+
+    // cluster errors
     CITRUSLEAF_FAIL_CLUSTER_KEY_MISMATCH    = 7,
     CITRUSLEAF_FAIL_PARTITION_OUT_OF_SPACE  = 8,
+
+    // collapsible timeout, server timeout is based on client-sent value
+    // for the most part
     CITRUSLEAF_FAIL_SERVERSIDE_TIMEOUT      = 9,
+
+    // xdr errors
     CITRUSLEAF_FAIL_NOXDS                   = 10,
+
+    // server (node) not avaialble (??)
     CITRUSLEAF_FAIL_UNAVAILABLE             = 11,
+
+    // bin operation cannot be performed on bin b/c of its type
+    // SCOPE: WRITE ONLY
     CITRUSLEAF_FAIL_INCOMPATIBLE_TYPE       = 12,   // specified operation cannot be performed on that data type
+
+    // record is larger than the write block (1MB)
+    // SCOPE: WRITE ONLY
     CITRUSLEAF_FAIL_RECORD_TOO_BIG          = 13,
+
+    // hot key - essentially the record's transaction proc queue is full
     CITRUSLEAF_FAIL_KEY_BUSY                = 14,
+
+    // scan was aborted ... but why?
     CITRUSLEAF_FAIL_SCAN_ABORT		    = 15,
 
+    // ???
     CITRUSLEAF_FAIL_INVALID_DATA              = 99,
 
     // UDF RANGE 100-110

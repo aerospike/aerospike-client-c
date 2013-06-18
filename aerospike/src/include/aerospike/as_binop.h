@@ -94,6 +94,8 @@ typedef struct as_binop_s {
  *	as_binops_inita(&binops, 2);
  *	as_binops_append(&binops, "bin1", integer_incr(123));
  *	as_binops_append(&binops, "bin2", string_append(123));
+ *	...
+ *	as_binops_destroy(&binops);
  */
 typedef struct as_binops_s {
 
@@ -120,4 +122,125 @@ typedef struct as_binops_s {
 
 } as_binops;
 
+
+
+/******************************************************************************
+ *	MACROS
+ *****************************************************************************/
+
+/**
+ *	Initializes a stack allocated `as_binops` (__binops) and allocates `__capacity`
+ *	number of entries on the stack.
+ *
+ *	~~~~~~~~~~{.c}
+ *		as_binops binops;
+ * 		as_binops_inita(&binops, 2);
+ *		as_binops_append(&binops, AS_OPERATOR_INCR, "bin1", as_integer_new(123));
+ *		as_binops_append(&binops, AS_OPERATOR_APPEND, "bin2", as_string_new("abc",false));
+ *	~~~~~~~~~~
+ *
+ *	@param __binops		The `as_binops *` to initialize.
+ *	@param __capacity	The number of `as_binops.entries` to allocate on the 
+ *						stack.
+ */
+#define as_binops_inita(__bins, __capacity) \
+	(__bins)->_free = false;\
+	(__bins)->capacity = __capacity;\
+	(__bins)->size = 0;\
+	(__bins)->entries = (as_binop *) alloca(sizeof(as_binop) * __capacity);
+
+/******************************************************************************
+ *	FUNCTIONS
+ *****************************************************************************/
+
+/**
+ *	Intializes an `as_binop` with the given name and value.
+ *
+ *	~~~~~~~~~~{.c}
+ *		as_bin bin;
+ * 		as_bin_init(&bin, "bin1", as_integer_new(123));
+ *	~~~~~~~~~~
+ *
+ *	Use `as_binop_destroy()` to free the resources allocated by this function.
+ *
+ *	@param binop 		The `as_binop` to initialize.
+ *	@param operator 	The `as_operator` for this operation.
+ *	@param name			The name of the bin to operate on.
+ *	@param value		The value for the operation.
+ *	
+ *	@return The initialized `as_bin` on success. Otherwsie NULL.
+ */
+as_bin * as_binop_init(as_binop * binop, as_operator operator, as_bin_name name, as_bin_value * value);
+
+/**
+ *	Destroy the given `as_binop` and associated resources.
+ *
+ *	~~~~~~~~~~{.c}
+ * 		as_bin_destroy(bin);
+ *	~~~~~~~~~~
+ *
+ *	@param binop The `as_binop` to destroy.
+ */
+void as_binop_destroy(as_binop * binop);
+
+/**
+ *	Intializes a stack allocated `as_binops`. The capacity specifies the number 
+ *	of `as_binops.entries` to allocate on the heap. 
+ *
+ *	~~~~~~~~~~{.c}
+ *		as_binops binops;
+ * 		as_binops_init(&binops, 2);
+ *		as_binops_append(&binops, AS_OPERATOR_INCR, "bin1", as_integer_new(123));
+ *		as_binops_append(&binops, AS_OPERATOR_APPEND, "bin2", as_string_new("abc",false));
+ *	~~~~~~~~~~
+ *
+ *	Use `as_binops_destroy()` to free the resources allocated by this function.
+ *
+ *	@param binops 		The `as_binops` to initialize.
+ *	@param capacity		The number of `as_binops.entries` to allocate on the heap.
+ *
+ *	@return The initialized `as_binops` on success. Otherwsie NULL.
+ */
+as_bins * as_binops_init(as_binops * binops, uint16_t capacity);
+
+/**
+ *	Creates and initialized a new heap allocated `as_binops`. The capacity specifies 
+ *	the number of `as_binops.entries` to allocate on the heap. 
+ *
+ *	~~~~~~~~~~{.c}
+ *		as_binops * binops = as_binops_new(2);
+ *		as_binops_append(binops, AS_OPERATOR_INCR, "bin1", as_integer_new(123));
+ *		as_binops_append(binops, AS_OPERATOR_APPEND, "bin2", as_string_new("abc",false));
+ *	~~~~~~~~~~
+ *
+ *	Use `as_binops_destroy()` to free the resources allocated by this function.
+ *
+ *	@param capacity	The number of `as_binops.entries` to allocate on the heap.
+ *
+ *	@return The new `as_binops` on success. Otherwsie NULL.
+ */
+as_bins * as_binops_new(uint16_t capacity);
+
+/**
+ *	Destroy the `as_binops` and associated resources.
+ *
+ *	~~~~~~~~~~{.c}
+ * 		as_binops_destroy(binops);
+ *	~~~~~~~~~~
+ *
+ *	@param bins 	The `as_bins` to destroy.
+ */
+void as_binops_destroy(as_binops * binops);
+
+/**
+ *	Append a bin to the sequence of bins.
+ *
+ *	@param binops 		The `as_binops` to append the operation to.
+ *	@param operator 	The operator to be used on the bin.
+ *	@param name 		The name of the bin to perform the operation on.
+ *	@param value 		The value to be used in the operation.
+ *
+ *	@return true on success. Otherswise an error occurred.
+ */
+bool as_binops_append(as_binops * bins, as_operator operator, as_bin_name name, as_bin_value * value);
 

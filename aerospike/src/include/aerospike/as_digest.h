@@ -41,9 +41,9 @@
  *****************************************************************************/
 
 /**
- *	The length of as_digest.value[]. 
+ *	The size of as_digest.value
  */
-#define AS_DIGEST_VALUE_LEN 20
+#define AS_DIGEST_VALUE_SIZE 20
 
 /******************************************************************************
  *	TYPES
@@ -110,7 +110,7 @@ typedef struct as_digest_s {
 	/**
 	 *	The digest value.
 	 */
-	uint8_t value[AS_DIGEST_VALUE_LEN];
+	uint8_t value[AS_DIGEST_VALUE_SIZE];
 
 } as_digest;
 

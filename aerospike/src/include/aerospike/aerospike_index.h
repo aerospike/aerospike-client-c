@@ -38,14 +38,14 @@
  *****************************************************************************/
 
 /**
- *	Create a new sparse secondary index.
+ *	Create a new sparse secondary index on an integer bin.
  *
  *	A sparse secondary indexes omits references to records which do not include
  *	the indexed bin.
  *
  *	~~~~~~~~~~{.c}
- *		if ( aerospike_index_sparse_create(&as, &err, NULL, 
- *				"test", "demo", "bin1", AS_TYPE_INTEGER, "idx_test_demo_bin1") != AEROSPIKE_OK ) {
+ *		if ( aerospike_index_sparse_integer_create(&as, &err, NULL, 
+ *				"test", "demo", "bin1", "idx_test_demo_bin1") != AEROSPIKE_OK ) {
  *			fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *		}
  *	~~~~~~~~~~
@@ -56,14 +56,40 @@
  *	@param ns			The namespace to be indexed.
  *	@param set			The set to be indexed.
  *	@param bin			The bin to be indexed.
- *	@param type			The type of the bin to be indexed.
  *	@param name			The name of the index.
  *
  *	@return AEROSPIKE_OK if successful. AEROSPIKE_EXISTS if the index already exists. Otherwise an error.
  */
-as_status aerospike_index_sparse_create(
+as_status aerospike_index_sparse_integer_create(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
-	const char * ns, const char * set, const char * bin, as_type type, const char * name);
+	const char * ns, const char * set, const char * bin, const char * name);
+
+/**
+ *	Create a new sparse secondary index on a string bin.
+ *
+ *	A sparse secondary indexes omits references to records which do not include
+ *	the indexed bin.
+ *
+ *	~~~~~~~~~~{.c}
+ *		if ( aerospike_index_sparse_string_create(&as, &err, NULL, 
+ *				"test", "demo", "bin1", "idx_test_demo_bin1") != AEROSPIKE_OK ) {
+ *			fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *		}
+ *	~~~~~~~~~~
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param ns			The namespace to be indexed.
+ *	@param set			The set to be indexed.
+ *	@param bin			The bin to be indexed.
+ *	@param name			The name of the index.
+ *
+ *	@return AEROSPIKE_OK if successful. AEROSPIKE_EXISTS if the index already exists. Otherwise an error.
+ */
+as_status aerospike_index_sparse_string_create(
+	aerospike * as, as_error * err, const as_policy_info * policy, 
+	const char * ns, const char * set, const char * bin, const char * name);
 
 /**
  *	Removes (drops) a secondary index.

@@ -38,9 +38,9 @@
 static void clfile_to_asfile(cl_udf_file * clfile, as_udf_file * asfile) {
 
 	strncpy(asfile->name, clfile->name, AS_UDF_FILE_NAME_LEN);
-	asfile->name[AS_UDF_FILE_NAME_LEN - 1] = '\0';
+	asfile->name[AS_UDF_FILE_NAME_LEN] = '\0';
 
-	memcpy(asfile->hash, clfile->hash, AS_UDF_FILE_HASH_LEN);
+	memcpy(asfile->hash, clfile->hash, AS_UDF_FILE_HASH_SIZE);
 	asfile->type = clfile->type;
 	if ( clfile->content ) {
 		asfile->content._free = clfile->content->free;
@@ -61,44 +61,43 @@ static void clfile_to_asfile(cl_udf_file * clfile, as_udf_file * asfile) {
  */
 as_status aerospike_udf_list(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
-	as_udf_list * list)
+	as_udf_files * files)
 {
+	as_error_reset(err);
+
 	char * 			error = NULL;
-	cl_udf_file ** 	files = NULL;
+	cl_udf_file ** 	clfiles = NULL;
 	int 			count = 0;
 	
-	int rc =  citrusleaf_udf_list(as->cluster, &files, &count, &error);
+	int rc =  citrusleaf_udf_list(as->cluster, &clfiles, &count, &error);
 
 	if ( error != NULL ) {
 		as_error_update(err, AEROSPIKE_ERR, error);
 		free(error);
 		error = NULL;
 	}
-	else if ( files != NULL && *files != NULL ) {
+	else if ( clfiles != NULL && *clfiles != NULL ) {
 	
-		if ( list->capacity == 0 && list->files == NULL ) {
-			list->_free = true;
-			list->capacity = count;
-			list->size = 0;
-			list->files = (as_udf_file *) malloc(sizeof(as_udf_file) * list->capacity);
+		if ( files->capacity == 0 && files->entries == NULL ) {
+			as_udf_files_init(files, count);
 		}
 
-		uint32_t limit = count < list->capacity ? count : list->capacity;
+		uint32_t limit = count < files->capacity ? count : files->capacity;
 	
 		for ( int i = 0; i < limit; i++ ) {
 
-			as_udf_file * asfile = &list->files[i];
-			cl_udf_file * clfile = files[i];
+			as_udf_file * asfile = &files->entries[i];
+			cl_udf_file * clfile = clfiles[i];
 			clfile_to_asfile(clfile, asfile);
 			asfile->_free = false;
 
 			free(clfile);
-			files[i] = NULL;
+			clfiles[i] = NULL;
 
-			list->size++;
+			files->size++;
 		}
 
-		free(files);
+		free(clfiles);
 	}
 	return as_error_fromrc(err, rc);
 }
@@ -110,6 +109,8 @@ as_status aerospike_udf_get(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
 	const char * filename, as_udf_type type, as_udf_file * file)
 {
+	as_error_reset(err);
+	
 	char * error = NULL;
 	cl_udf_file clfile;
     memset(&clfile,0,sizeof(cl_udf_file));
@@ -140,6 +141,8 @@ as_status aerospike_udf_put(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
 	const char * filename, as_udf_type type, as_bytes * content)
 {
+	as_error_reset(err);
+	
 	char * error = NULL;
 
 	int rc = citrusleaf_udf_put(as->cluster, filename, content, type, &error);
@@ -159,6 +162,8 @@ as_status aerospike_udf_remove(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
 	const char * filename)
 {
+	as_error_reset(err);
+	
 	char * error = NULL;
 	
 	int rc = citrusleaf_udf_remove(as->cluster, filename, &error);

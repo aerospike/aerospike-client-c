@@ -71,13 +71,13 @@ typedef int (* aerospike_udf_foreach_callback)(const as_udf_file *, void *);
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param list 			The list to populate with the results from the cluster.
+ *	@param files 		The list to populate with the results from the request.
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error occurred.
  */
 as_status aerospike_udf_list(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
-	as_udf_list * list
+	as_udf_files * files
 	);
 
 /**

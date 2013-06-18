@@ -72,6 +72,8 @@ as_status aerospike_key_get(
 	const char * ns, const char * set, const char * key, 
 	as_record ** rec) 
 {
+	as_error_reset(err);
+
 	// if policy is NULL, then get default policy
 	as_policy_read * p = (as_policy_read *) (policy ? policy : &as->config.policies.read);
 
@@ -96,6 +98,7 @@ as_status aerospike_key_get(
 			r->bins.entries = malloc(sizeof(as_bin) * nvalues);
 		}
 		as_record_frombins(r, values, nvalues);
+		r->gen = (uint16_t) gen;
 		*rec = r;
 	}
 
@@ -127,6 +130,8 @@ as_status aerospike_key_select(
 	const char * bins[], 
 	as_record ** rec) 
 {
+	as_error_reset(err);
+
 	// if policy is NULL, then get default policy
 	as_policy_read * p = (as_policy_read *) (policy ? policy : &as->config.policies.read);
 
@@ -160,6 +165,7 @@ as_status aerospike_key_select(
 			r->bins.entries = malloc(sizeof(as_bin) * nvalues);
 		}
 		as_record_frombins(r, values, nvalues);
+		r->gen = (uint16_t) gen;
 		*rec = r;
 	}
 
@@ -192,6 +198,8 @@ as_status aerospike_key_exists(
 	const char * ns, const char * set, const char * key,
 	bool * exists) 
 {
+	as_error_reset(err);
+
 	// if policy is NULL, then get default policy
 	as_policy_read * p = policy ? (as_policy_read *) policy : &(as->config.policies.read);
 
@@ -210,12 +218,12 @@ as_status aerospike_key_exists(
 			if ( exists ) {
 				*exists = true;
 			}
-			return as_error_reset(err);
+			return AEROSPIKE_OK;
 		case CITRUSLEAF_FAIL_NOTFOUND:
 			if ( exists ) {
 				*exists = false;
 			}
-			return as_error_reset(err);
+			return AEROSPIKE_OK;
 		default:
 			if ( exists ) {
 				*exists = false;
@@ -249,6 +257,8 @@ as_status aerospike_key_put(
 	const char * ns, const char * set, const char * key, 
 	as_record * rec) 
 {
+	as_error_reset(err);
+
 	// if policy is NULL, then get default policy
 	as_policy_write * p = policy ? (as_policy_write *) policy : &(as->config.policies.write);
 
@@ -288,6 +298,8 @@ as_status aerospike_key_remove(
 	aerospike * as, as_error * err, const as_policy_remove * policy, 
 	const char * ns, const char * set, const char * key) 
 {
+	as_error_reset(err);
+
 	// if policy is NULL, then get default policy
 	as_policy_remove * p = (as_policy_remove *) (policy ? policy : &as->config.policies.remove);
 
@@ -336,6 +348,8 @@ as_status aerospike_key_apply(
 	const char * module, const char * function, as_list * arglist, 
 	as_val ** result) 
 {
+	as_error_reset(err);
+
 	// if policy is NULL, then get default policy
 	as_policy_read * p = (as_policy_read *) (policy ? policy : &as->config.policies.read);
 
@@ -446,6 +460,8 @@ as_status aerospike_key_operate(
 	const char * ns, const char * set, const char * key, 
 	as_binops * ops) 
 {
+	as_error_reset(err);
+
 	return AEROSPIKE_ERR;
 	// if policy is NULL, then get default policy
 	// // as_policy_write * p = policy ? (as_policy_write *) policy : &(as->config.policies.write);

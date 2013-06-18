@@ -30,14 +30,19 @@
  *****************************************************************************/
 
 /**
- *	The length of a UDF file name
+ *	The size of a UDF file name
  */
-#define AS_UDF_FILE_NAME_LEN 128
+#define AS_UDF_FILE_NAME_SIZE 128
 
 /**
- *	The length of a UDF hash value
+ * The maxium string length of the UDF file name
  */
-#define AS_UDF_FILE_HASH_LEN 20
+#define AS_UDF_FILE_NAME_LEN AS_UDF_FILE_NAME_SIZE - 1
+
+/**
+ *	The size of a UDF hash value
+ */
+#define AS_UDF_FILE_HASH_SIZE 20
 
 /******************************************************************************
  *	TYPES
@@ -97,12 +102,12 @@ typedef struct as_udf_file_s {
 	/**
 	 *	Name of the UDF file
 	 */
-	char name[AS_UDF_FILE_NAME_LEN];
+	char name[AS_UDF_FILE_NAME_SIZE];
 
 	/** 
 	 *	Hash value of the file contents
 	 */
-	uint8_t hash[AS_UDF_FILE_HASH_LEN];
+	uint8_t hash[AS_UDF_FILE_HASH_SIZE];
 
 	/**
 	 *	The type of UDF
@@ -140,9 +145,9 @@ typedef struct as_udf_file_s {
 } as_udf_file;
 
 /**
- *	List of UDF Files
+ *	Sequence of UDF Files
  */
-typedef struct as_udf_list_s {
+typedef struct as_udf_files_s {
 
 	/**
 	 *	@private
@@ -163,9 +168,9 @@ typedef struct as_udf_list_s {
 	/**
 	 *	Sequence of files.
 	 */
-	as_udf_file * files;
+	as_udf_file * entries;
 
-} as_udf_list;
+} as_udf_files;
 
 /******************************************************************************
  *	UDF CALL FUNCTIONS
@@ -226,21 +231,21 @@ void as_udf_file_destroy(as_udf_file * file);
  *****************************************************************************/
 
 /**
- *	Initialize a stack allocated as_udf_list.
+ *	Initialize a stack allocated as_udf_files.
  *
  *	@returns The initialized udf list on success. Otherwise NULL.
  */
-as_udf_list * as_udf_list_init(as_udf_list * list);
+as_udf_files * as_udf_files_init(as_udf_files * files, uint32_t capacity);
 
 /**
- *	Creates a new heap allocated as_udf_list.
+ *	Creates a new heap allocated as_udf_files.
  *
  *	@returns The newly allocated udf list on success. Otherwise NULL.
  */
-as_udf_list * as_udf_list_new();
+as_udf_files * as_udf_files_new(uint32_t capacity);
 
 /**
- *	Destroy an as_udf_list.
+ *	Destroy an as_udf_files.
  */
-void as_udf_list_destroy(as_udf_list * list);
+void as_udf_files_destroy(as_udf_files * files);
 

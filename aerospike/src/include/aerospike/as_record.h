@@ -77,32 +77,28 @@ typedef struct as_record_s {
 	/**
 	 *	The bins of the record.
 	 */
-	struct {
-
-		/**
-		 *	@private
-		 *	If true, then as_record_destroy() will free data
-		 */
-		bool _free;
-
-		/**
-		 *	Number of entries allocated to data.
-		 */
-		uint16_t capacity;
-
-		/**
-		 *	Number of entries allocated to data.
-		 */
-		uint16_t size;
-
-		/**
-		 *	Storage for bins
-		 */
-		as_bin * entries;
-
-	} bins;
+	as_bins bins;
 
 } as_record;
+
+/******************************************************************************
+ *	MACROS
+ *****************************************************************************/
+
+/**
+ * Initialize a stack allocated `as_record` then allocate `__nbins` capacity 
+ * for as_record.bins on the stack.
+ *
+ *	@param __rec		The `as_record *` to initialize.
+ *	@param __nbins		The number of `as_record.bins.entries` to allocate on the 
+ *						stack.
+ */
+#define as_record_inita(__rec, __nbins) \
+	as_record_init(__rec, 0);\
+	(__rec)->bins._free = false;\
+	(__rec)->bins.capacity = __nbins;\
+	(__rec)->bins.size = 0;\
+	(__rec)->bins.entries = alloca(sizeof(as_bin) * __nbins);
 
 /******************************************************************************
  *	FUNCTIONS
@@ -116,6 +112,9 @@ typedef struct as_record_s {
  *		as_record_set_int64(r, "bin1", 123);
  *		as_record_set_str(r, "bin1", "abc");
  *	~~~~~~~~~~
+ *
+ *	When you are finished using the `as_record` instance, you should release the 
+ *	resources allocated to it by calling `as_record_destroy()`.
  *
  *	@param nbins 	The number of bins to initialize. Set to 0, if unknown.
  *
@@ -132,6 +131,9 @@ as_record * as_record_new(uint16_t nbins);
  *		as_record_set_int64(&r, "bin1", 123);
  *		as_record_set_str(&r, "bin1", "abc");
  *	~~~~~~~~~~
+ *
+ *	When you are finished using the `as_record` instance, you should release the 
+ *	resources allocated to it by calling `as_record_destroy()`.
  *
  *	@param rec		The record to initialize
  *	@param nbins		The number of bins to initialize. Set to 0, if unknown.
@@ -314,15 +316,16 @@ as_val * as_record_get(as_record * rec, const char * name);
  *	Get specified bin's value as an int64_t.
  *
  *	~~~~~~~~~~{.c}
- *		int64_t value = as_record_get_int64(rec, "bin");
+ *		int64_t value = as_record_get_int64(rec, "bin", INT64_MAX);
  *	~~~~~~~~~~
  *
  *	@param rec		The record containing the bin.
  *	@param name		The name of the bin.
+ *	@param fallback	The default value to use, if the bin doesn't exist or is not an integer.
  *
  *	@return the value if it exists, otherwise 0.
  */
-int64_t as_record_get_int64(as_record * rec, const char * name);
+int64_t as_record_get_int64(as_record * rec, const char * name, int64_t fallback);
 
 /**
  *	Get specified bin's value as an NULL terminated string.

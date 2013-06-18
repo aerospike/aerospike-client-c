@@ -30,9 +30,14 @@
  *****************************************************************************/
 
 /**
- *	The length for as_node.name
+ *	The size of as_node.name
  */
-#define AS_NODE_NAME_LEN 20
+#define AS_NODE_NAME_SIZE 20
+
+/**
+ *	The maximum string length of as_node.name
+ */
+#define AS_NODE_NAME_LEN AS_NODE_NAME_SIZE - 1
 
 /******************************************************************************
  *	TYPES
@@ -46,6 +51,6 @@ typedef struct as_node_s {
 	/**
 	 *	The name of the node.
 	 */
-	char * name[AS_NODE_NAME_LEN];
+	char * name[AS_NODE_NAME_SIZE];
 	
 } as_node;

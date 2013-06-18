@@ -77,7 +77,7 @@ static as_record * as_record_defaults(as_record * rec, bool free, uint16_t nbins
 	rec->digest._free = false;
 	rec->digest.set = NULL;
 	rec->digest.key = NULL;
-	memset(rec->digest.value, 0, AS_DIGEST_VALUE_LEN);
+	memset(rec->digest.value, 0, AS_DIGEST_VALUE_SIZE);
 
 	rec->gen = 0;
 	rec->ttl = 0;
@@ -167,7 +167,7 @@ static uint16_t  as_record_rec_gen(const as_rec * r)
 
 static as_bytes * as_record_rec_digest(const as_rec * r) 
 {
-	return r ? as_bytes_new(((as_record *) r)->digest.value, AS_DIGEST_VALUE_LEN, false) : NULL;
+	return r ? as_bytes_new(((as_record *) r)->digest.value, AS_DIGEST_VALUE_SIZE, false) : NULL;
 }
 
 static uint16_t as_record_rec_numbins(const as_rec * r) 
@@ -420,26 +420,29 @@ as_val * as_record_get(as_record * rec, const char * name)
 {
 	for(int i=0; i<rec->bins.size; i++) {
 		if ( strcmp(rec->bins.entries[i].name, name) == 0 ) {
-			return rec->bins.entries[i].value;
+			return (as_val *) rec->bins.entries[i].value;
 		}
 	}
 	return (as_val *) &as_nil;
 }
 
 /**
- * Get specified bin's value as an int64_t.
+ *	Get specified bin's value as an int64_t.
  *
- *		int64_t value = as_record_get_int64(rec, "bin");
+ *	~~~~~~~~~~{.c}
+ *		int64_t value = as_record_get_int64(rec, "bin", INT64_MAX);
+ *	~~~~~~~~~~
  *
- * @param rec 	- the record containing the bin
- * @param name 	- the name of the bin
+ *	@param rec		The record containing the bin.
+ *	@param name		The name of the bin.
+ *	@param fallback	The default value to use, if the bin doesn't exist or is not an integer.
  *
- * @return the value if it exists, otherwise 0.
+ *	@return the value if it exists, otherwise 0.
  */
-int64_t as_record_get_int64(as_record * rec, const char * name) 
+int64_t as_record_get_int64(as_record * rec, const char * name, int64_t fallback) 
 {
 	as_integer * val = as_integer_fromval(as_record_get(rec, name));
-	return val ? as_integer_toint(val) : 0;
+	return val ? as_integer_toint(val) : fallback;
 }
 
 /**

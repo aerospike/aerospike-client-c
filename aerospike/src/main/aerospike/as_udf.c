@@ -95,8 +95,8 @@ void as_udf_call_destroy(as_udf_call * call)
  */
 static as_udf_file * as_udf_file_defaults(as_udf_file * file, bool free) {
 	file->_free = free;
-	memset(file->name, 0, AS_UDF_FILE_NAME_LEN);
-	memset(file->hash, 0, AS_UDF_FILE_HASH_LEN);
+	file->name[0] = '\0';
+	memset(file->hash, 0, AS_UDF_FILE_HASH_SIZE);
 	file->content._free = false;
 	file->content.capacity = 0;
 	file->content.size = 0;
@@ -145,39 +145,69 @@ void as_udf_file_destroy(as_udf_file * file)
  * UDF LIST FUNCTIONS
  *****************************************************************************/
 
-/**
- * Initialize a stack allocated as_udf_list.
- * If size > 0, then malloc the files.entries to the size, also setting 
- * files.capacity=size.
- */
-as_udf_list * as_udf_list_init(as_udf_list * list)
+as_udf_files * as_udf_files_defaults(as_udf_files * files, bool free, uint32_t capacity)
 {
-	if ( !list ) return list;
+	if ( !files ) return files;
 	
-	list->_free = false;
-	list->capacity = 0;
-	list->size = 0;
-	list->files = NULL;
-	return list;
+	files->_free = free;
+	files->capacity = capacity;
+	files->size = 0;
+
+	if ( capacity > 0 ) {
+		files->entries = (as_udf_file *) malloc(sizeof(as_udf_file) * files->capacity);
+	}
+	else {
+		files->entries = NULL;
+	}
+
+	return files;
+}
+
+/**
+ *	Initialize a stack allocated as_udf_files.
+ *
+ *	@param files
+ *	@param capacity The number of entries to allocate.
+ *
+ *	@returns The initialized udf list on success. Otherwise NULL.
+ */
+as_udf_files * as_udf_files_init(as_udf_files * files, uint32_t capacity)
+{
+	if ( !files ) return files;
+	return as_udf_files_defaults(files, false, capacity);
+}
+
+/**
+ *	Create and initialize a new heap allocated `as_udf_files`.
+ *	
+ *	@param capacity The number of entries to allocate.
+ *
+ *	@returns The newly allocated udf list on success. Otherwise NULL.
+ */
+as_udf_files * as_udf_files_new(uint32_t capacity)
+{
+	as_udf_files * files = (as_udf_files *) malloc(sizeof(as_udf_files));
+	if ( !files ) return files;
+	return as_udf_files_defaults(files, true, capacity);
 }
 
 /**
  * Destroy an as_udf_list.
  */
-void as_udf_list_destroy(as_udf_list * list)
+void as_udf_files_destroy(as_udf_files * files)
 {
-	if ( list ) {
-		for ( int i = 0; i < list->size; i++ ) {
-			list->files[i]._free = false;
-			as_udf_file_destroy(&list->files[i]);
+	if ( files ) {
+		for ( int i = 0; i < files->size; i++ ) {
+			files->entries[i]._free = false;
+			as_udf_file_destroy(&files->entries[i]);
 		}
-		if ( list->_free ) {
-			free(list->files);
+		if ( files->_free ) {
+			free(files->entries);
 		}
-		list->_free = false;
-		list->capacity = 0;
-		list->size = 0;
-		list->files = NULL;
+		files->_free = false;
+		files->capacity = 0;
+		files->size = 0;
+		files->entries = NULL;
 	}
 }
 

@@ -30,6 +30,20 @@
 #include <string.h>
 
 /******************************************************************************
+ *	MACROS
+ *****************************************************************************/
+
+/**
+ * The size of as_error.message
+ */
+#define AS_ERROR_MESSAGE_SIZE 	1024
+
+/**
+ * The maximum string length of as_error.message
+ */
+#define AS_ERROR_MESSAGE_LEN 	AS_ERROR_MESSAGE_SIZE - 1
+
+/******************************************************************************
  *	TYPES
  *****************************************************************************/
 
@@ -46,7 +60,7 @@ typedef struct as_error_s {
 	/**
 	 *	NULL-terminated error message
 	 */
-	char message[1024];
+	char message[AS_ERROR_MESSAGE_SIZE];
 
 	/**
 	 *	Name of the function where the error occurred.
@@ -118,8 +132,8 @@ inline as_status as_error_reset(as_error * err) {
  */
 inline as_status as_error_setall(as_error * err, int32_t code, const char * message, const char * func, const char * file, uint32_t line) {
 	err->code = code;
-	strncpy(err->message, message, sizeof(err->message) - 1);
-	err->message[sizeof(err->message) - 1] = '\0';
+	strncpy(err->message, message, AS_ERROR_MESSAGE_LEN);
+	err->message[AS_ERROR_MESSAGE_LEN] = '\0';
 	err->func = func;
 	err->file = file;
 	err->line = line;
@@ -135,8 +149,8 @@ inline as_status as_error_setallv(as_error * err, int32_t code, const char * fun
 	if ( fmt != NULL ) {
 		va_list ap;
 		va_start(ap, fmt);
-		vsnprintf(err->message, sizeof(err->message) - 1, fmt, ap);
-		err->message[sizeof(err->message) - 1] = '\0';
+		vsnprintf(err->message, AS_ERROR_MESSAGE_LEN, fmt, ap);
+		err->message[AS_ERROR_MESSAGE_LEN] = '\0';
 		va_end(ap);   
 	}
 	err->code = code;
@@ -153,8 +167,8 @@ inline as_status as_error_set(as_error * err, int32_t code, const char * fmt, ..
 	if ( fmt != NULL ) {
 		va_list ap;
 		va_start(ap, fmt);
-		vsnprintf(err->message, sizeof(err->message) - 1, fmt, ap);
-		err->message[sizeof(err->message) - 1] = '\0';
+		vsnprintf(err->message, AS_ERROR_MESSAGE_LEN, fmt, ap);
+		err->message[AS_ERROR_MESSAGE_LEN] = '\0';
 		va_end(ap);   
 	}
 	err->code = code;

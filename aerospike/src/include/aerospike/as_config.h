@@ -33,6 +33,25 @@
 #include <aerospike/mod_lua_config.h>
 
 /******************************************************************************
+ *	MACROS
+ *****************************************************************************/
+
+/**
+ * The size of path strings
+ */
+#define AS_CONFIG_PATH_SIZE 256
+
+/**
+ * The maximum string length of path strings
+ */
+#define AS_CONFIG_PATH_LEN 	AS_CONFIG_PATH_SIZE - 256
+
+/**
+ * The size of as_config.hosts
+ */
+#define AS_CONFIG_HOSTS_SIZE 256
+
+/******************************************************************************
  *	TYPES
  *****************************************************************************/
 
@@ -109,7 +128,7 @@ typedef struct as_config_s {
 	 *	Populate with one or more hosts in the cluster
 	 *	that you intend to connect with.
 	 */
-	as_config_host hosts[16];
+	as_config_host hosts[AS_CONFIG_HOSTS_SIZE];
 
 	/**
 	 *	lua module config
@@ -127,13 +146,13 @@ typedef struct as_config_s {
 		 *	are installed with the aerospike client library.
 		 *	Default location is: /opt/citrusleaf/sys/udf/lua
 		 */
-		char system_path[256];
+		char system_path[AS_CONFIG_PATH_SIZE];
 
 		/**
 		 *	The path to user's UDF files.
 		 *	Default location is: /opt/citrusleaf/usr/udf/lua
 		 */
-		char user_path[256];
+		char user_path[AS_CONFIG_PATH_SIZE];
 
 	} mod_lua;
 

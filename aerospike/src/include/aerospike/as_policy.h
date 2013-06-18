@@ -33,9 +33,22 @@
  *	Replication Policy
  */
 typedef enum as_policy_writemode_e {
+
+	/**
+	 * Asynchronous write mode.
+	 */
 	AS_POLICY_WRITEMODE_ASYNC, 
+
+	/**
+	 * Attempt write once or fail.
+	 */
 	AS_POLICY_WRITEMODE_ONESHOT, 
+
+	/**
+	 * Attempt write until success.
+	 */
 	AS_POLICY_WRITEMODE_RETRY
+
 } as_policy_writemode;
 
 /**
@@ -83,6 +96,7 @@ typedef enum as_policy_digest_e {
 
 	/**
 	 *	Update a record, if it exists.
+	 *	@future 
 	 */
 	AS_POLICY_DIGEST_UPDATE
 
@@ -97,7 +111,7 @@ typedef struct as_policy_write_s {
 	 *	Maximum time in milliseconds to wait for 
 	 *	the operation to complete.
 	 */
-	uint32_t            timeout;
+	uint32_t timeout;
 
 	/**
 	 *	The write mode defines the behavior 
@@ -108,13 +122,13 @@ typedef struct as_policy_write_s {
 	/**
 	 *	Specifies the behavior for the digest value
 	 */
-	as_policy_digest    digest;
+	as_policy_digest digest;
 
 	/**
 	 *	Specifies the behavior for the generation
 	 *	value.
 	 */
-	as_policy_gen       gen;
+	as_policy_gen gen;
 
 } as_policy_write;
 
@@ -206,12 +220,12 @@ typedef struct as_policy_info_s {
 	uint32_t timeout;
 
 	/**
-	 *	@todo Provide a description
+	 *	Send request without any further processing.
 	 */
 	bool send_as_is;
 
 	/**
-	 *	@todo Provide a description
+	 *	Ensure the request is within allowable size limits.
 	 */
 	bool check_bounds;
 

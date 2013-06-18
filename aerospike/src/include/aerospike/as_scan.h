@@ -57,6 +57,7 @@ typedef enum as_scan_priority_e {
 	 *	High priority scan.
 	 */ 
 	AS_SCAN_PRIORITY_HIGH
+	
 } as_scan_priority;
 
 /**

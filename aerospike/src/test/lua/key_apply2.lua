@@ -34,3 +34,10 @@ end
 function sum_local(record, a, b)
     return add_local(record, a, b)
 end
+
+function delete(record)
+	record.bin1 = nil
+	record.bin2 = nil
+	record.bin3 = nil
+	return aerospike:update(record)
+end

@@ -15,6 +15,7 @@
 #include <aerospike/as_hashmap.h>
 #include <aerospike/as_val.h>
 #include <aerospike/as_udf.h>
+#include <aerospike/as_stringmap.h>
 
 #include "../test.h"
 #include "../util/udf.h"
@@ -311,6 +312,65 @@ TEST( key_apply2_udf_file_does_not_exist, "apply: (test,test,foo) <!> key_apply2
 
 }
 
+// Check to see if the record is getting replicated on a delete from UDF
+TEST( key_apply2_delete_record_test_replication, "apply: (test,test,foo) <!> key_apply2.delete_record_test_replicatio() => 1" ) {
+
+	// Delete the record
+	as_error err;
+	as_error_reset(&err);
+
+	as_status rc = aerospike_key_remove(as, &err, NULL, "test", "test", "foo");
+
+    assert_int_eq( rc, AEROSPIKE_OK );
+
+    // Insert 3 bins
+    as_record r;
+    as_record_init(&r, 3);
+	as_record_set_string(&r, "a", as_string_new("String 1",true));
+	as_record_set_string(&r, "b", as_string_new("String 2",true));
+	as_record_set_string(&r, "c", as_string_new("String 3",true));
+	as_error_reset(&err);
+
+	rc = aerospike_key_put(as, &err, NULL, "test", "test", "foo", &r);
+
+    assert_int_eq( rc, AEROSPIKE_OK );
+
+    // get stats
+    char * query = "namespace/test";
+    char ** v_b = get_stats( query, "used-bytes-memory", as->cluster);
+    int i = 0;
+    while(v_b[i]) {
+    		debug("Used memory before - node %d = %ld\n",i,atol(v_b[i]));
+    		i++;
+    }
+
+    // Apply udf to delete bins
+    as_error_reset(&err);
+    as_val * res = NULL;
+	rc = aerospike_key_apply(as, &err, NULL, "test", "test", "foo", UDF_FILE, "delete", NULL, &res);
+
+	assert_int_eq( rc, AEROSPIKE_OK );
+
+    //Get bins
+	as_error_reset(&err);
+	as_record_init(&r, 0);
+	as_record *rec = &r;
+
+	rc = aerospike_key_get(as, &err, NULL, "test", "test", "foo", &rec);
+	assert_int_eq( rc, AEROSPIKE_OK );
+
+    //Get stats
+	// Get used memory before applying udf
+	char ** v_a = get_stats( query, "used-bytes-memory", as->cluster);
+	i = 0;
+	while(v_a[i]) {
+		debug("Used memory after - node %d = %ld\n",i,atol(v_a[i]));
+		i++;
+	}
+
+}
+
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -329,5 +389,6 @@ SUITE( key_apply2, "aerospike_key_apply2 tests" ) {
     suite_add( key_apply2_call_local_sum );
     suite_add( key_apply2_udf_func_does_not_exist );
     suite_add( key_apply2_udf_file_does_not_exist );
+    suite_add( key_apply2_delete_record_test_replication );
 
 }

@@ -79,11 +79,11 @@ as_policy_info * as_policy_info_init(as_policy_info * p)
 as_policies * as_policies_init(as_policies * p)
 {
 	// defaults
-	p->timeout	= 1000;
-	p->mode		= AS_POLICY_WRITEMODE_RETRY;
-	p->key		= AS_POLICY_KEY_DIGEST;
-	p->gen		= AS_POLICY_GEN_IGNORE;
-	p->exists	= AS_POLICY_EXISTS_IGNORE;
+	p->timeout	= AS_POLICY_TIMEOUT_DEFAULT;
+	p->mode		= AS_POLICY_WRITEMODE_DEFAULT;
+	p->key		= AS_POLICY_KEY_DEFAULT;
+	p->gen		= AS_POLICY_GEN_DEFAULT;
+	p->exists	= AS_POLICY_EXISTS_DEFAULT;
 	
 	as_policy_write_init(&p->write);
 	as_policy_read_init(&p->read);

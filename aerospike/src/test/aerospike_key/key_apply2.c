@@ -16,6 +16,7 @@
 #include <aerospike/as_stringmap.h>
 #include <aerospike/as_val.h>
 #include <aerospike/as_udf.h>
+#include <aerospike/as_stringmap.h>
 
 #include "../test.h"
 #include "../util/udf.h"
@@ -244,7 +245,7 @@ TEST( key_apply2_getmap , "apply2: (test,test,foo) <!> key_apply2.getmap() => {x
 	// assert_int_eq( res_map, map );
 }
 
-TEST( key_apply2_add_strings , "apply: (test,test,foo) <!> key_apply.add_strings('abc','def') => 'abcdef'" ) {
+TEST( key_apply2_add_strings , "apply: (test,test,foo) <!> key_apply2.add_strings('abc','def') => 'abcdef'" ) {
 	as_error err;
 	as_error_reset(&err);
 
@@ -271,6 +272,134 @@ TEST( key_apply2_add_strings , "apply: (test,test,foo) <!> key_apply.add_strings
 
 // skipping record_basics_add, already present in key_apply.c
 
+TEST( key_apply2_call_nonlocal_sum, "apply: (test,test,foo) <!> key_apply2.call_nonlocal_sum(1,2) => 'FAIL'") {
+	as_error err;
+	as_error_reset(&err);
+
+	as_val * res = NULL;
+
+	as_list arglist;
+	as_arraylist_init(&arglist, 3, 0);
+	as_list_append_int64(&arglist, 1);
+	as_list_append_int64(&arglist, 2);
+
+	as_status rc = aerospike_key_apply(as, &err, NULL, "test", "test", "foo", UDF_FILE, "sum", &arglist, &res);
+
+    assert_int_ne( rc, AEROSPIKE_OK );
+	assert_not_null( res );
+
+    as_integer * i = as_integer_fromval(res);
+    assert_not_null( i );
+    assert_int_ne(  as_integer_toint(i), 3 );
+}
+
+TEST( key_apply2_call_local_sum, "apply: (test,test,foo) <!> key_apply2.call_local_sum(1,2) => 3") {
+
+	as_error err;
+	as_error_reset(&err);
+
+	as_val * res = NULL;
+
+	as_list arglist;
+	as_arraylist_init(&arglist, 3, 0);
+	as_list_append_int64(&arglist, 1);
+	as_list_append_int64(&arglist, 2);
+
+	as_status rc = aerospike_key_apply(as, &err, NULL, "test", "test", "foo", UDF_FILE, "sum_local", &arglist, &res);
+
+    assert_int_eq( rc, AEROSPIKE_OK );
+	assert_not_null( res );
+
+    as_integer * i = as_integer_fromval(res);
+    assert_not_null( i );
+    assert_int_eq(  as_integer_toint(i), 3 );
+}
+
+TEST( key_apply2_udf_func_does_not_exist, "apply: (test,test,foo) <!> key_apply2.udf_func_does_not_exist() => 1" ) {
+
+	as_error err;
+	as_error_reset(&err);
+
+	as_val * res = NULL;
+
+	as_status rc = aerospike_key_apply(as, &err, NULL, "test", "test", "foo", UDF_FILE, "udf_does_not_exist", NULL, &res);
+
+    assert_int_ne( rc, AEROSPIKE_OK );
+
+}
+
+TEST( key_apply2_udf_file_does_not_exist, "apply: (test,test,foo) <!> key_apply2.udf_file_does_not_exist() => 1" ) {
+
+	as_error err;
+	as_error_reset(&err);
+
+	as_val * res = NULL;
+
+	as_status rc = aerospike_key_apply(as, &err, NULL, "test", "test", "foo", "udf_does_not_exist", "udf_does_not_exist", NULL, &res);
+
+    assert_int_ne( rc, AEROSPIKE_OK );
+
+}
+
+// Check to see if the record is getting replicated on a delete from UDF
+TEST( key_apply2_delete_record_test_replication, "apply: (test,test,foo) <!> key_apply2.delete_record_test_replicatio() => 1" ) {
+
+	// Delete the record
+	as_error err;
+	as_error_reset(&err);
+
+	as_status rc = aerospike_key_remove(as, &err, NULL, "test", "test", "foo");
+
+    assert_int_eq( rc, AEROSPIKE_OK );
+
+    // Insert 3 bins
+    as_record r;
+    as_record_init(&r, 3);
+	as_record_set_string(&r, "a", as_string_new("String 1",true));
+	as_record_set_string(&r, "b", as_string_new("String 2",true));
+	as_record_set_string(&r, "c", as_string_new("String 3",true));
+	as_error_reset(&err);
+
+	rc = aerospike_key_put(as, &err, NULL, "test", "test", "foo", &r);
+
+    assert_int_eq( rc, AEROSPIKE_OK );
+
+    // get stats
+    char * query = "namespace/test";
+    char ** v_b = get_stats( query, "used-bytes-memory", as->cluster);
+    int i = 0;
+    while(v_b[i]) {
+    		debug("Used memory before - node %d = %ld\n",i,atol(v_b[i]));
+    		i++;
+    }
+
+    // Apply udf to delete bins
+    as_error_reset(&err);
+    as_val * res = NULL;
+	rc = aerospike_key_apply(as, &err, NULL, "test", "test", "foo", UDF_FILE, "delete", NULL, &res);
+
+	assert_int_eq( rc, AEROSPIKE_OK );
+
+    //Get bins
+	as_error_reset(&err);
+	as_record_init(&r, 0);
+	as_record *rec = &r;
+
+	rc = aerospike_key_get(as, &err, NULL, "test", "test", "foo", &rec);
+	assert_int_eq( rc, AEROSPIKE_OK );
+
+    //Get stats
+	// Get used memory before applying udf
+	char ** v_a = get_stats( query, "used-bytes-memory", as->cluster);
+	i = 0;
+	while(v_a[i]) {
+		debug("Used memory after - node %d = %ld\n",i,atol(v_a[i]));
+		i++;
+	}
+
+}
+
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -285,5 +414,10 @@ SUITE( key_apply2, "aerospike_key_apply2 tests" ) {
     suite_add( key_apply2_getlist );
     suite_add( key_apply2_getmap );
     suite_add( key_apply2_add_strings );
+    suite_add( key_apply2_call_nonlocal_sum );
+    suite_add( key_apply2_call_local_sum );
+    suite_add( key_apply2_udf_func_does_not_exist );
+    suite_add( key_apply2_udf_file_does_not_exist );
+    suite_add( key_apply2_delete_record_test_replication );
 
 }

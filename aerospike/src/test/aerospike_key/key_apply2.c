@@ -283,7 +283,10 @@ TEST( key_apply2_call_nonlocal_sum, "apply: (test,test,foo) <!> key_apply2.call_
 	as_list_append_int64(&arglist, 1);
 	as_list_append_int64(&arglist, 2);
 
-	as_status rc = aerospike_key_apply(as, &err, NULL, "test", "test", "foo", UDF_FILE, "sum", &arglist, &res);
+	as_key key;
+	as_key_init(&key, "test", "test", "foo");
+
+	as_status rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "sum", &arglist, &res);
 
     assert_int_ne( rc, AEROSPIKE_OK );
 	assert_not_null( res );
@@ -305,7 +308,10 @@ TEST( key_apply2_call_local_sum, "apply: (test,test,foo) <!> key_apply2.call_loc
 	as_list_append_int64(&arglist, 1);
 	as_list_append_int64(&arglist, 2);
 
-	as_status rc = aerospike_key_apply(as, &err, NULL, "test", "test", "foo", UDF_FILE, "sum_local", &arglist, &res);
+	as_key key;
+	as_key_init(&key, "test", "test", "foo");
+
+	as_status rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "sum_local", &arglist, &res);
 
     assert_int_eq( rc, AEROSPIKE_OK );
 	assert_not_null( res );
@@ -322,7 +328,10 @@ TEST( key_apply2_udf_func_does_not_exist, "apply: (test,test,foo) <!> key_apply2
 
 	as_val * res = NULL;
 
-	as_status rc = aerospike_key_apply(as, &err, NULL, "test", "test", "foo", UDF_FILE, "udf_does_not_exist", NULL, &res);
+	as_key key;
+	as_key_init(&key, "test", "test", "foo");
+
+	as_status rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "udf_does_not_exist", NULL, &res);
 
     assert_int_ne( rc, AEROSPIKE_OK );
 
@@ -335,7 +344,10 @@ TEST( key_apply2_udf_file_does_not_exist, "apply: (test,test,foo) <!> key_apply2
 
 	as_val * res = NULL;
 
-	as_status rc = aerospike_key_apply(as, &err, NULL, "test", "test", "foo", "udf_does_not_exist", "udf_does_not_exist", NULL, &res);
+	as_key key;
+	as_key_init(&key, "test", "test", "foo");
+
+	as_status rc = aerospike_key_apply(as, &err, NULL, &key, "udf_does_not_exist", "udf_does_not_exist", NULL, &res);
 
     assert_int_ne( rc, AEROSPIKE_OK );
 
@@ -348,7 +360,10 @@ TEST( key_apply2_delete_record_test_replication, "apply: (test,test,foo) <!> key
 	as_error err;
 	as_error_reset(&err);
 
-	as_status rc = aerospike_key_remove(as, &err, NULL, "test", "test", "foo");
+	as_key key;
+	as_key_init(&key, "test", "test", "foo");
+
+	as_status rc = aerospike_key_remove(as, &err, NULL, &key);
 
     assert_int_eq( rc, AEROSPIKE_OK );
 
@@ -360,7 +375,7 @@ TEST( key_apply2_delete_record_test_replication, "apply: (test,test,foo) <!> key
 	as_record_set_string(&r, "c", as_string_new("String 3",true));
 	as_error_reset(&err);
 
-	rc = aerospike_key_put(as, &err, NULL, "test", "test", "foo", &r);
+	rc = aerospike_key_put(as, &err, NULL, &key, &r);
 
     assert_int_eq( rc, AEROSPIKE_OK );
 
@@ -376,7 +391,7 @@ TEST( key_apply2_delete_record_test_replication, "apply: (test,test,foo) <!> key
     // Apply udf to delete bins
     as_error_reset(&err);
     as_val * res = NULL;
-	rc = aerospike_key_apply(as, &err, NULL, "test", "test", "foo", UDF_FILE, "delete", NULL, &res);
+	rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "delete", NULL, &res);
 
 	assert_int_eq( rc, AEROSPIKE_OK );
 
@@ -385,7 +400,7 @@ TEST( key_apply2_delete_record_test_replication, "apply: (test,test,foo) <!> key
 	as_record_init(&r, 0);
 	as_record *rec = &r;
 
-	rc = aerospike_key_get(as, &err, NULL, "test", "test", "foo", &rec);
+	rc = aerospike_key_get(as, &err, NULL, &key, &rec);
 	assert_int_eq( rc, AEROSPIKE_OK );
 
     //Get stats
@@ -418,6 +433,6 @@ SUITE( key_apply2, "aerospike_key_apply2 tests" ) {
     suite_add( key_apply2_call_local_sum );
     suite_add( key_apply2_udf_func_does_not_exist );
     suite_add( key_apply2_udf_file_does_not_exist );
-    suite_add( key_apply2_delete_record_test_replication );
+    // suite_add( key_apply2_delete_record_test_replication );
 
 }

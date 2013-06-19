@@ -37,6 +37,7 @@
 #include <aerospike/as_bin.h>
 #include <aerospike/as_list.h>
 #include <aerospike/as_udf.h>
+
 #include <stdarg.h>
 
 /******************************************************************************

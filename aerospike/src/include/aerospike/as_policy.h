@@ -30,7 +30,7 @@
  *****************************************************************************/
 
 /**
- *	Replication Policy
+ *	Write Mode Policy
  */
 typedef enum as_policy_writemode_e {
 
@@ -53,6 +53,9 @@ typedef enum as_policy_writemode_e {
 
 /**
  *	Generation Policy
+ *
+ *	Specifies the behavior of record modifications
+ *	with regard to the generation value.
  */
 typedef enum as_policy_gen_e {
 
@@ -62,45 +65,75 @@ typedef enum as_policy_gen_e {
 	AS_POLICY_GEN_DEFAULT,
 
 	/**
-	 *	Write a record, iff generations are equal
+	 *	Write a record, ONLY if generations are equal
 	 */
 	AS_POLICY_GEN_EQ,
 
 	/**
-	 *	Write a record, iff local generation is greater-than remote generation
+	 *	Write a record, ONLY if local generation is 
+	 *	greater-than remote generation
 	 */
 	AS_POLICY_GEN_GT,
 
 	/**
-	 *	Write a record creating a duplicate, iff the generation collides (?)
+	 *	Write a record creating a duplicate, ONLY if
+	 *	the generation collides (?)
 	 */
 	AS_POLICY_GEN_DUP
 
 } as_policy_gen;
 
 /**
- *	Digest (Key) Policy
+ *	Key Policy
+ *
+ *	Specifies the behavior for whether keys or digests
+ *	should be sent to the cluster.
  */
-typedef enum as_policy_digest_e {
+typedef enum as_policy_key_e {
 
 	/**
-	 *	Create or update a record, regarldess of 
-	 *	its existence.
+	 *	Send the digest value of the key.
 	 */
-	AS_POLICY_DIGEST_DEFAULT,
+	AS_POLICY_KEY_DIGEST,
 
 	/**
-	 *	Create a record, if it doesn't exist.
+	 *	Send the key, but do not store it.
 	 */
-	AS_POLICY_DIGEST_CREATE,
+	AS_POLICY_KEY_SEND,
 
 	/**
-	 *	Update a record, if it exists.
-	 *	@future 
+	 *	Store the key.
+	 *	@warning Not yet implemented
 	 */
-	AS_POLICY_DIGEST_UPDATE
+	AS_POLICY_KEY_STORE
 
-} as_policy_digest;
+} as_policy_key;
+
+/**
+ *	Existence Policy.
+ *	
+ *	Specifies the behavior for writing the record
+ *	depending whether or not it exists.
+ */
+typedef enum as_policy_exists_e {
+
+	/**
+	 *	Create or update a record.
+	 */
+	AS_POLICY_EXISTS_DEFAULT,
+
+	/**
+	 *	Create a record, ONLY if it doesn't exist.
+	 */
+	AS_POLICY_EXISTS_CREATE,
+
+	/**
+	 *	Update a record, ONLY if it exists.
+	 *	@warning Not yet implemented
+	 */
+	AS_POLICY_EXISTS_UPDATE
+
+} as_policy_exists;
 
 /**
  *	Write Policy
@@ -120,9 +153,9 @@ typedef struct as_policy_write_s {
 	as_policy_writemode mode;
 
 	/**
-	 *	Specifies the behavior for the digest value
+	 *	Specifies the behavior for the key.
 	 */
-	as_policy_digest digest;
+	as_policy_key key;
 
 	/**
 	 *	Specifies the behavior for the generation
@@ -130,13 +163,36 @@ typedef struct as_policy_write_s {
 	 */
 	as_policy_gen gen;
 
+	/**
+	 *	Specifies the behavior for the existence 
+	 *	of the record.
+	 */
+	as_policy_exists exists;
+
 } as_policy_write;
 
+/**
+ *	Read Policy
+ */
+typedef struct as_policy_read_s {
+
+	/**
+	 *	Maximum time in milliseconds to wait for 
+	 *	the operation to complete.
+	 */
+	uint32_t timeout;
+
+	/**
+	 *	Specifies the behavior for the key.
+	 */
+	as_policy_key key;
+
+} as_policy_read;
 
 /**
- *	Removal Policy
+ *	Operate Policy
  */
-typedef struct as_policy_remove_s {
+typedef struct as_policy_operate_s {
 
 	/**
 	 *	Maximum time in milliseconds to wait for 
@@ -154,6 +210,11 @@ typedef struct as_policy_remove_s {
 	 *	for writing data to the cluster.
 	 */
 	as_policy_writemode mode;
+	
+	/**
+	 *	Specifies the behavior for the key.
+	 */
+	as_policy_key key;
 
 	/**
 	 *	Specifies the behavior for the generation
@@ -161,20 +222,7 @@ typedef struct as_policy_remove_s {
 	 */
 	as_policy_gen gen;
 
-} as_policy_remove;
-
-/**
- *	Read Policy
- */
-typedef struct as_policy_read_s {
-
-	/**
-	 *	Maximum time in milliseconds to wait for 
-	 *	the operation to complete.
-	 */
-	uint32_t timeout;
-
-} as_policy_read;
+} as_policy_operate;
 
 /**
  *	Query Policy
@@ -245,19 +293,19 @@ typedef struct as_policies_s {
 	uint32_t timeout;
 
 	/**
-	 *	The default write policy.
-	 */
-	as_policy_write write;
-
-	/**
 	 *	The default read policy.
 	 */
 	as_policy_read read;
 
 	/**
-	 *	The default remove policy.
+	 *	The default write policy.
 	 */
-	as_policy_remove remove;
+	as_policy_write write;
+
+	/**
+	 *	The default operate policy.
+	 */
+	as_policy_operate operate;
 
 	/**
 	 *	The default query policy.
@@ -281,19 +329,19 @@ typedef struct as_policies_s {
  *****************************************************************************/
 
 /**
- *	Initialize as_policy_write to default values.
- */
-as_policy_write * as_policy_write_init(as_policy_write * p) ;
-
-/**
  *	Initialize as_policy_read to default values.
  */
 as_policy_read * as_policy_read_init(as_policy_read * p);
 
 /**
- *	Initialize as_policy_remote to default values.
+ *	Initialize as_policy_write to default values.
  */
-as_policy_remove * as_policy_remove_init(as_policy_remove * p);
+as_policy_write * as_policy_write_init(as_policy_write * p) ;
+
+/**
+ *	Initialize as_policy_operate to default values.
+ */
+as_policy_operate * as_policy_operate_init(as_policy_operate * p);
 
 /**
  *	Initialize as_policy_scan to default values.

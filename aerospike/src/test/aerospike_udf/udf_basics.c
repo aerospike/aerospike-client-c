@@ -58,23 +58,22 @@ TEST( udf_basics_1 , "manage udf_basics.lua" ) {
 
 	// list the files on the server
 
-	as_udf_list list;
-
-	as_udf_list_init(&list);
+	as_udf_files files;
+	as_udf_files_init(&files, 0);
 	
-	aerospike_udf_list(as, &err, NULL, &list);
+	aerospike_udf_list(as, &err, NULL, &files);
 	assert_int_eq( err.code, AEROSPIKE_OK );
 
 	info("files: ")
-	for(int i=0; i<list.size; i++) {
-		as_udf_file * file = &list.files[i];
+	for(int i=0; i<files.size; i++) {
+		as_udf_file * file = &files.entries[i];
 		info("- %s", file->name);
 		if ( strcmp(file->name, filename) == 0 ) {
 			exists = true;
 		}
 	}
 
-	as_udf_list_destroy(&list);
+	as_udf_files_destroy(&files);
 
 	assert_false( exists );
 
@@ -94,22 +93,22 @@ TEST( udf_basics_1 , "manage udf_basics.lua" ) {
 
 	// list the files on the server
 
-	as_udf_list_init(&list);
+	as_udf_files_init(&files, 0);
 
-	aerospike_udf_list(as, &err, NULL, &list);
+	aerospike_udf_list(as, &err, NULL, &files);
 
 	assert_int_eq( err.code, AEROSPIKE_OK );
 
 	info("files: ")
-	for(int i=0; i<list.size; i++) {
-		as_udf_file * file = &list.files[i];
+	for(int i=0; i<files.size; i++) {
+		as_udf_file * file = &files.entries[i];
 		info("- %s", file->name);
 		if ( strcmp(file->name, filename) == 0 ) {
 			exists = true;
 		}
 	}
 
-	as_udf_list_destroy(&list);
+	as_udf_files_destroy(&files);
 
 	assert_true( exists );
 

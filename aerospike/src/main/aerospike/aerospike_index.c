@@ -51,6 +51,8 @@ static as_status aerospike_index_sparse_create(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
 	const char * ns, const char * set, const char * bin, const char * type, const char * name)
 {
+	as_error_reset(err);
+
 	char * response = NULL;
 
 	int rc = citrusleaf_secondary_index_create(as->cluster, ns, set, name, bin, type, &response);
@@ -151,6 +153,8 @@ as_status aerospike_index_remove(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
 	const char * ns, const char * name)
 {
+	as_error_reset(err);
+
 	char * response = NULL;
 
 	int rc = citrusleaf_secondary_index_drop(as->cluster, ns, name, &response);

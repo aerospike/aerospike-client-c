@@ -24,11 +24,11 @@
 #include <aerospike/aerospike_key.h>
 
 #include <aerospike/as_bin.h>
-#include <aerospike/as_binop.h>
 #include <aerospike/as_buffer.h>
-#include <aerospike/as_digest.h>
 #include <aerospike/as_error.h>
+#include <aerospike/as_key.h>
 #include <aerospike/as_list.h>
+#include <aerospike/as_operations.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_status.h>
@@ -43,33 +43,36 @@
 
 #include "log.h"
 #include "shim.h"
-#include "../internal.h"
+#include "../citrusleaf/internal.h"
 
 /******************************************************************************
  * FUNCTIONS
  *****************************************************************************/
 
 /**
- * Look up a record by key, then return all bins.
+ *	Look up a record by key, then return all bins.
  *
- *      as_record * rec = NULL;
- *      if ( aerospike_key_get(&as, &err, NULL, "test", "demo", "foo", &rec) != AEROSPIKE_OK ) {
- *          fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *      }
+ *	~~~~~~~~~~{.c}
+ *		as_record * rec = NULL;
+ *		if ( aerospike_key_get(&as, &err, NULL, "test", "demo", "foo", &rec) != AEROSPIKE_OK ) {
+ *			fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *		}
+ *		else {
+ *			as_record_destroy(rec);
+ *		}
+ *	~~~~~~~~~~
  *
- * @param as        - the aerospike cluster to connect to
- * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
- * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
- * @param ns        - the namespace of the record.
- * @param set       - the set-name of the record.p
- * @param key       - the key of the record. Can be either as_integer or as_string.
- * @param rec       - the record to be populated with the data from request.
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param key			The key of the record.
+ *	@param rec 			The record to be populated with the data from request.
  *
- * @return AEROSPIKE_OK if successful. Otherwise an error.
+ *	@return AEROSPIKE_OK if successful. Otherwise an error.
  */
 as_status aerospike_key_get(
 	aerospike * as, as_error * err, const as_policy_read * policy, 
-	const char * ns, const char * set, const char * key, 
+	const as_key * key, 
 	as_record ** rec) 
 {
 	as_error_reset(err);
@@ -79,14 +82,30 @@ as_status aerospike_key_get(
 
 	uint32_t    timeout = p->timeout;          
 	uint32_t    gen = 0;
+	char *      set = NULL;
 	int         nvalues = 0;
 	cl_bin *    values = NULL;
-	cl_object   okey;
 
-	citrusleaf_object_init_str(&okey, key);
+	cl_rv rc = CITRUSLEAF_OK;
 
-	cl_rv rc = citrusleaf_get_all(as->cluster, ns, set, &okey, &values, &nvalues, timeout, &gen);
-
+	switch ( p->key ) {
+		case AS_POLICY_KEY_DIGEST: {
+			as_digest * digest = as_key_digest((as_key *) key);
+			rc = citrusleaf_get_all_digest_getsetname(as->cluster, key->namespace, (cf_digest *) digest->value, &values, &nvalues, timeout, &gen, &set);
+			break;
+		}
+		case AS_POLICY_KEY_SEND: {
+			cl_object okey;
+			asval_to_clobject((as_val *) key->valuep, &okey);
+			rc = citrusleaf_get_all(as->cluster, key->namespace, key->set, &okey, &values, &nvalues, timeout, &gen);
+			break;
+		}
+		default: {
+			// ERROR CASE
+			break;
+		}
+	}
+	
 	if ( rec != NULL ) {
 		as_record * r = *rec;
 		if ( r == NULL ) {
@@ -97,7 +116,7 @@ as_status aerospike_key_get(
 			r->bins.size = 0;
 			r->bins.entries = malloc(sizeof(as_bin) * nvalues);
 		}
-		as_record_frombins(r, values, nvalues);
+		clbins_to_asrecord(values, nvalues, r);
 		r->gen = (uint16_t) gen;
 		*rec = r;
 	}
@@ -106,28 +125,35 @@ as_status aerospike_key_get(
 }
 
 /**
- * Lookup a record by key, then return specified bins.
+ *	Lookup a record by key, then return specified bins.
  *
- *      as_record * rec = NULL;
- *      char * select[] = {"bin1", "bin2", "bin3", NULL};
- *      if ( aerospike_key_select(&as, &err, NULL, "test", "demo", "foo", select, &rec) != AEROSPIKE_OK ) {
- *          fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *      }
+ *	~~~~~~~~~~{.c}
+ *		char * select[] = {"bin1", "bin2", "bin3", NULL};
+ *		
+ *		as_key key;
+ *		as_key_init(&key, "ns", "set", "key");
  *
- * @param as        - the aerospike cluster to connect to
- * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
- * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
- * @param ns        - the namespace of the record.
- * @param set       - the set of the record.
- * @param key       - the key of the record. Can be either as_integer or as_string.
- * @param bins      - the bins to select. A NULL terminated array of NULL terminated strings.
+ *		as_record * rec = NULL;
+ *		if ( aerospike_key_select(&as, &err, NULL, &key, select, &rec) != AEROSPIKE_OK ) {
+ *			fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *		}
+ *		else {
+ *			as_record_destroy(rec);
+ *		}
+ *	~~~~~~~~~~
  *
- * @return AEROSPIKE_OK if successful. Otherwise an error.
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param key			The key of the record.
+ *	@param bins			The bins to select. A NULL terminated array of NULL terminated strings.
+ *	@param rec 			The record to be populated with the data from request.
+ *
+ *	@return AEROSPIKE_OK if successful. Otherwise an error.
  */
 as_status aerospike_key_select(
 	aerospike * as, as_error * err, const as_policy_read * policy, 
-	const char * ns, const char * set, const char * key, 
-	const char * bins[], 
+	const as_key * key, const char * bins[], 
 	as_record ** rec) 
 {
 	as_error_reset(err);
@@ -137,9 +163,9 @@ as_status aerospike_key_select(
 
 	uint32_t    timeout = p->timeout;
 	uint32_t    gen = 0;
+	// char *      set = NULL;
 	int         nvalues = 0;
 	cl_bin *    values = NULL;
-	cl_object   okey;
 
 	for (nvalues = 0; bins[nvalues] != NULL; nvalues++);
 
@@ -150,9 +176,25 @@ as_status aerospike_key_select(
 		citrusleaf_object_init(&values[i].object);
 	}
 
-	citrusleaf_object_init_str(&okey, key);
+	cl_rv rc = CITRUSLEAF_OK;
 
-	cl_rv rc = citrusleaf_get(as->cluster, ns, set, &okey, values, nvalues, timeout, &gen);
+	switch ( p->key ) {
+		case AS_POLICY_KEY_DIGEST: {
+			as_digest * digest = as_key_digest((as_key *) key);
+			rc = citrusleaf_get_digest(as->cluster, key->namespace, (cf_digest *) digest->value, values, nvalues, timeout, &gen);
+			break;
+		}
+		case AS_POLICY_KEY_SEND: {
+			cl_object okey;
+			asval_to_clobject((as_val *) key->valuep, &okey);
+			rc = citrusleaf_get(as->cluster, key->namespace, key->set, &okey, values, nvalues, timeout, &gen);
+			break;
+		}
+		default: {
+			// ERROR CASE
+			break;
+		}
+	}
 
 	if ( rec != NULL ) {
 		as_record * r = *rec;
@@ -164,7 +206,7 @@ as_status aerospike_key_select(
 			r->bins.size = 0;
 			r->bins.entries = malloc(sizeof(as_bin) * nvalues);
 		}
-		as_record_frombins(r, values, nvalues);
+		clbins_to_asrecord(values, nvalues, r);
 		r->gen = (uint16_t) gen;
 		*rec = r;
 	}
@@ -173,29 +215,32 @@ as_status aerospike_key_select(
 }
 
 /**
- * Check if a record exists in the cluster via its key.
+ *	Check if a record exists in the cluster via its key.
  *
- *      bool exists = true;
- *      if ( aerospike_key_exists(&as, &err, NULL, "test", "demo", "foo", &exists) != AEROSPIKE_OK ) {
- *          fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *      }
- *      else {
- *          fprintf(stdout, "Record %s", exists ? "exists." : "doesn't exist.");
- *      }
+ *	~~~~~~~~~~{.c}
+ *		as_key key;
+ *		as_key_init(&key, "ns", "set", "key");
  *
- * @param as        - the aerospike cluster to connect to
- * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
- * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
- * @param ns        - the namespace of the record.
- * @param set       - the set of the record.
- * @param key       - the key of the record. Can be either as_integer or as_string.
- * @param exists    - will be `true` if the record exists, otherwise `false`.
+ *		bool exists = true;
+ *		if ( aerospike_key_exists(&as, &err, NULL, &key, &exists) != AEROSPIKE_OK ) {
+ *			fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *		}
+ *		else {
+ *			fprintf(stdout, "Record %s", exists ? "exists." : "doesn't exist.");
+ *		}
+ *	~~~~~~~~~~
  *
- * @return AEROSPIKE_OK if successful. Otherwise an error occurred. Check the `err` for details on the error.
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param key			The key of the record.
+ *	@param exists    	The variable to populate with `true` if the record exists, otherwise `false`.
+ *
+ *	@return AEROSPIKE_OK if successful. Otherwise an error.
  */
 as_status aerospike_key_exists(
 	aerospike * as, as_error * err, const as_policy_read * policy, 
-	const char * ns, const char * set, const char * key,
+	const as_key * key, 
 	bool * exists) 
 {
 	as_error_reset(err);
@@ -203,16 +248,31 @@ as_status aerospike_key_exists(
 	// if policy is NULL, then get default policy
 	as_policy_read * p = policy ? (as_policy_read *) policy : &(as->config.policies.read);
 
-	uint32_t    timeout = p->timeout;
-	uint32_t    gen = 0;
-	int         nvalues = 0;
-	cl_bin *    values = NULL;
-	cl_object   okey;
-
-	citrusleaf_object_init_str(&okey, key);
-
-	cl_rv rc = citrusleaf_exists_key(as->cluster, ns, set, &okey, values, nvalues, timeout, &gen);
+	uint32_t	timeout = p->timeout;
+	uint32_t	gen = 0;
+	int     	nvalues = 0;
+	cl_bin *	values = NULL;
 	
+	cl_rv rc = CITRUSLEAF_OK;
+
+	switch ( p->key ) {
+		case AS_POLICY_KEY_DIGEST: {
+			as_digest * digest = as_key_digest((as_key *) key);
+			rc = citrusleaf_exists_digest(as->cluster, key->namespace, (cf_digest *) digest->value, values, nvalues, timeout, &gen);
+			break;
+		}
+		case AS_POLICY_KEY_SEND: {
+			cl_object okey;
+			asval_to_clobject((as_val *) key->valuep, &okey);
+			rc = citrusleaf_exists_key(as->cluster, key->namespace, key->set, &okey, values, nvalues, timeout, &gen);
+			break;
+		}
+		default: {
+			// ERROR CASE
+			break;
+		}
+	}
+
 	switch(rc) {
 		case CITRUSLEAF_OK:
 			if ( exists ) {
@@ -233,118 +293,241 @@ as_status aerospike_key_exists(
 }
 
 /**
- * Store a record in the cluster.
+ *	Store a record in the cluster.
  *
- *      as_record * rec = as_record_new(2);
- *      as_record_set_string(rec, "bin1", "abc");
- *      as_record_set_integer(rec, "bin2", 123);
+ *	~~~~~~~~~~{.c}
+ *		as_key key;
+ *		as_key_init(&key, "ns", "set", "key");
  *
- *      if ( aerospike_key_put(&as, &err, NULL, "test", "demo", "foo", rec) != AEROSPIKE_OK ) {
- *          fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *      }
+ *		as_record rec;
+ *		as_record_init(&rec, 2);
+ *		as_record_set_string(&rec, "bin1", "abc");
+ *		as_record_set_integer(&rec, "bin2", 123);
+ *		
+ *		if ( aerospike_key_put(&as, &err, NULL, &key, &rec) != AEROSPIKE_OK ) {
+ *			fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *		}
+ *		
+ *		as_record_destroy(&rec);
+ *	~~~~~~~~~~
  *
- * @param as        - the aerospike cluster to connect to
- * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
- * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
- * @param ns        - the namespace of the record.
- * @param set       - the set of the record.
- * @param key       - the key of the record. Can be either as_integer or as_string.
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param key			The key of the record.
+ *	@param rec 			The record containing the data to be written.
  *
- * @return AEROSPIKE_OK if successful. Otherwise an error occurred. Check the `err` for details on the error.
+ *	@return AEROSPIKE_OK if successful. Otherwise an error.
  */
 as_status aerospike_key_put(
 	aerospike * as, as_error * err, const as_policy_write * policy, 
-	const char * ns, const char * set, const char * key, 
-	as_record * rec) 
+	const as_key * key, as_record * rec) 
 {
 	as_error_reset(err);
 
 	// if policy is NULL, then get default policy
 	as_policy_write * p = policy ? (as_policy_write *) policy : &(as->config.policies.write);
 
-	int         nvalues = rec->bins.size;
-	cl_bin *    values = (cl_bin *) alloca(sizeof(cl_bin) * nvalues);
+	int			nvalues	= rec->bins.size;
+	cl_bin *	values	= (cl_bin *) alloca(sizeof(cl_bin) * nvalues);
 
 	cl_write_parameters wp;
-	as_policy_write_towp(p, rec, &wp);
+	aspolicywrite_to_clwriteparameters(p, rec, &wp);
 
-	cl_object okey;
-	citrusleaf_object_init_str(&okey, key);
+	asrecord_to_clbins(rec, values, nvalues);
 
-	as_record_tobins(rec, values, nvalues);
+	cl_rv rc = CITRUSLEAF_OK;
 
-	cl_rv rc = citrusleaf_put(as->cluster, ns, set, &okey, values, nvalues, &wp);
+	switch ( p->key ) {
+		case AS_POLICY_KEY_DIGEST: {
+			as_digest * digest = as_key_digest((as_key *) key);
+			rc = citrusleaf_put_digest_with_setname(as->cluster, key->namespace, key->set, (cf_digest *) digest->value, values, nvalues, &wp);
+			break;
+		}
+		case AS_POLICY_KEY_SEND: {
+			cl_object okey;
+			asval_to_clobject((as_val *) key->valuep, &okey);
+			rc = citrusleaf_put(as->cluster, key->namespace, key->set, &okey, values, nvalues, &wp);
+			break;
+		}
+		default: {
+			// ERROR CASE
+			break;
+		}
+	}
 
 	return as_error_fromrc(err,rc); 
 }
 
 /**
- * Remove a record from the cluster.
+ *	Remove a record from the cluster.
  *
- *      if ( aerospike_key_remove(&as, &err, NULL, "test", "demo", "foo") != AEROSPIKE_OK ) {
- *          fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *      }
+ *	~~~~~~~~~~{.c}
+ *		as_key key;
+ *		as_key_init(&key, "ns", "set", "key");
  *
- * @param as        - the aerospike cluster to connect to
- * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
- * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
- * @param ns        - the namespace of the record.
- * @param set       - the set of the record.
- * @param key       - the key of the record. Can be either as_integer or as_string.
+ *		if ( aerospike_key_remove(&as, &err, NULL, &key) != AEROSPIKE_OK ) {
+ *			fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *		}
+ *	~~~~~~~~~~
  *
- * @return AEROSPIKE_OK if successful. Otherwise an error occurred. Check the `err` for details on the error.
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param key			The key of the record.
+ *
+ *	@return AEROSPIKE_OK if successful. Otherwise an error.
  */
 as_status aerospike_key_remove(
-	aerospike * as, as_error * err, const as_policy_remove * policy, 
-	const char * ns, const char * set, const char * key) 
+	aerospike * as, as_error * err, const as_policy_operate * policy, 
+	const as_key * key) 
 {
 	as_error_reset(err);
 
 	// if policy is NULL, then get default policy
-	as_policy_remove * p = (as_policy_remove *) (policy ? policy : &as->config.policies.remove);
-
-	cl_object okey;
+	as_policy_operate * p = (as_policy_operate *) (policy ? policy : &as->config.policies.operate);
 
 	cl_write_parameters wp;
-	as_policy_remove_towp(p, &wp);
+	aspolicyoperate_to_clwriteparameters(p, &wp);
 
-	citrusleaf_object_init_str(&okey, key);
+	cl_rv rc = CITRUSLEAF_OK;
 
-	cl_rv rc = citrusleaf_delete(as->cluster, ns, set, &okey, &wp);
+	switch ( p->key ) {
+		case AS_POLICY_KEY_DIGEST: {
+			as_digest * digest = as_key_digest((as_key *) key);
+			rc = citrusleaf_delete_digest(as->cluster, key->namespace, (cf_digest *) digest->value, &wp);
+			break;
+		}
+		case AS_POLICY_KEY_SEND: {
+			cl_object okey;
+			asval_to_clobject((as_val *) key->valuep, &okey);
+			rc = citrusleaf_delete(as->cluster, key->namespace, key->set, &okey, &wp);
+			break;
+		}
+		default: {
+			// ERROR CASE
+			break;
+		}
+	}
 
 	return as_error_fromrc(err,rc);
 }
 
 /**
- * Lookup a record by key, then apply the UDF.
+ *	Lookup a record by key, then perform specified operations.
  *
- *      as_list args;
- *      as_arraylist_init(&args, 2, 0);
- *      as_list_add_integer(&args, 1);
- *      as_list_add_integer(&args, 2);
+ *	~~~~~~~~~~{.c}
+ *		as_key key;
+ *		as_key_init(&key, "ns", "set", "key");
  *
- *      as_val * res = NULL;
+ *		as_operations ops;
+ *		as_operations_inita(&ops,2);
+ *		as_operations_append_int64(&ops, AS_OPERATOR_INCR, "bin1", 456);
+ *		as_operations_append_str(&ops, AS_OPERATOR_APPEND, "bin1", "def");
  *
- *      if ( aerospike_key_apply(&as, &err, NULL, "test", "demo", "foo", "math", "add", &args, &res) != AEROSPIKE_OK ) {
- *          fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *      }
+ *		if ( aerospike_key_remove(&as, &err, NULL, &key, &ops) != AEROSPIKE_OK ) {
+ *			fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *		}
+ *	~~~~~~~~~~
+ *	
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param key			The key of the record.
+ *	@param ops			The operations to perform on the record.
  *
- * @param as        - the aerospike cluster to connect to
- * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
- * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
- * @param ns        - the namespace of the record.
- * @param set       - the set of the record.
- * @param key       - the key of the record. Can be either as_integer or as_string.
- * @param module    - the module containing the function to execute
- * @param function  - the function to execute
- * @param arglist   - arguments for the function
- * @param result    - the return value from the function
+ *	@return AEROSPIKE_OK if successful. Otherwise an error.
+ */
+as_status aerospike_key_operate(
+	aerospike * as, as_error * err, const as_policy_operate * policy, 
+	const as_key * key, const as_operations * ops) 
+{
+	as_error_reset(err);
+	
+	// if policy is NULL, then get default policy
+	as_policy_operate * p = (as_policy_operate *) (policy ? policy : &as->config.policies.operate);
+
+	cl_write_parameters wp;
+	aspolicyoperate_to_clwriteparameters(p, &wp);
+
+	int 			replace = 0;
+	uint32_t 		gen = 0;
+	int 			n_operations = ops->binops.size;
+	cl_operation * 	operations = (cl_operation *) alloca(sizeof(cl_operation) * n_operations);
+
+	for(int i=0; i<n_operations; i++) {
+		cl_operation * clop = &operations[i];
+		as_binop * op = &ops->binops.entries[i];
+		strncpy(clop->bin.bin_name, op->bin.name, CL_BINNAME_SIZE < AS_BIN_NAME_SIZE ? CL_BINNAME_SIZE : AS_BIN_NAME_SIZE);
+		clop->bin.bin_name[CL_BINNAME_SIZE-1] = '\0';
+		clop->op = op->operator;
+		asbinvalue_to_clobject(op->bin.valuep, &clop->bin.object);
+	}
+
+	cl_rv rc = CITRUSLEAF_OK;
+
+	switch ( p->key ) {
+		case AS_POLICY_KEY_DIGEST: {
+			as_digest * digest = as_key_digest((as_key *) key);
+			rc = citrusleaf_operate_digest(as->cluster, key->namespace, (cf_digest *) digest->value, operations, n_operations, &wp, replace, &gen);
+			break;
+		}
+		case AS_POLICY_KEY_SEND: {
+			cl_object okey;
+			asval_to_clobject((as_val *) key->valuep, &okey);
+			rc = citrusleaf_operate(as->cluster, key->namespace, key->set, &okey, operations, n_operations, &wp, replace, &gen);
+			break;
+		}
+		default: {
+			// ERROR CASE
+			break;
+		}
+	}
+
+	as_error(&as->log, "ERROR: %d", rc);
+
+	return as_error_fromrc(err,rc);
+}
+
+/**
+ *	Lookup a record by key, then apply the UDF.
  *
- * @return AEROSPIKE_OK if successful. Otherwise an error occurred. Check the `err` for details on the error.
+ *	~~~~~~~~~~{.c}
+ *		as_key key;
+ *		as_key_init(&key, "ns", "set", "key");
+ *
+ *		as_list args;
+ *		as_arraylist_init(&args, 2, 0);
+ *		as_list_append_int64(&args, 1);
+ *		as_list_append_int64(&args, 2);
+ *		
+ *		as_val * res = NULL;
+ *		
+ *		if ( aerospike_key_apply(&as, &err, NULL, &key, "math", "add", &args, &res) != AEROSPIKE_OK ) {
+ *			fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *		}
+ *		else {
+ *			as_val_destroy(res);
+ *		}
+ *		
+ *		as_list_destroy(&args);
+ *	~~~~~~~~~~
+ *
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param key			The key of the record.
+ *	@param module		The module containing the function to execute.
+ *	@param function 	The function to execute.
+ *	@param arglist 		The arguments for the function.
+ *	@param result 		The return value from the function.
+ *
+ *	@return AEROSPIKE_OK if successful. Otherwise an error.
  */
 as_status aerospike_key_apply(
 	aerospike * as, as_error * err, const as_policy_read * policy, 
-	const char * ns, const char * set, const char * key, 
+	const as_key * key, 
 	const char * module, const char * function, as_list * arglist, 
 	as_val ** result) 
 {
@@ -353,10 +536,9 @@ as_status aerospike_key_apply(
 	// if policy is NULL, then get default policy
 	as_policy_read * p = (as_policy_read *) (policy ? policy : &as->config.policies.read);
 
-	cl_rv rv = CITRUSLEAF_OK;
 
 	cl_object okey;
-	citrusleaf_object_init_str(&okey, key);
+	asval_to_clobject((as_val *) key->valuep, &okey);
 
 	as_serializer ser;
 	as_msgpack_init(&ser);
@@ -384,24 +566,47 @@ as_status aerospike_key_apply(
 	cl_write_parameters_set_default(&wp);
 	wp.timeout_ms = p->timeout;
 
-	cl_bin *bins = 0;
+	cl_bin * bins = 0;
 	int n_bins = 0;
 
-	rv = do_the_full_monte( 
-		as->cluster, 0, CL_MSG_INFO2_WRITE, 0, 
-		ns, set, &okey, 0, &bins, CL_OP_WRITE, 0, &n_bins, 
-		NULL, &wp, &trid, NULL, &call
-	);
+	cl_rv rc = CITRUSLEAF_OK;
+
+	switch ( p->key ) {
+		case AS_POLICY_KEY_DIGEST: {
+			as_digest * digest = as_key_digest((as_key *) key);
+			rc = do_the_full_monte( 
+				as->cluster, 0, CL_MSG_INFO2_WRITE, 0, 
+				key->namespace, key->set, 0, (cf_digest *) digest->value, &bins, CL_OP_WRITE, 0, &n_bins, 
+				NULL, &wp, &trid, NULL, &call
+			);
+			break;
+		}
+		case AS_POLICY_KEY_SEND: {
+			cl_object okey;
+			asval_to_clobject((as_val *) key->valuep, &okey);
+			rc = do_the_full_monte( 
+				as->cluster, 0, CL_MSG_INFO2_WRITE, 0, 
+				key->namespace, key->set, &okey, 0, &bins, CL_OP_WRITE, 0, &n_bins, 
+				NULL, &wp, &trid, NULL, &call
+			);
+			break;
+		}
+		default: {
+			// ERROR CASE
+			break;
+		}
+	}
 
 	as_buffer_destroy(&args);
 
-	if (! (rv == CITRUSLEAF_OK || rv == CITRUSLEAF_FAIL_UDF_BAD_RESPONSE)) {
+	if (! (rc == CITRUSLEAF_OK || rc == CITRUSLEAF_FAIL_UDF_BAD_RESPONSE)) {
 		as_error_update(err, AEROSPIKE_ERR, "Invalid Response (0)");
 	} 
 	else if ( n_bins == 1  ) {
 
 		cl_bin * bin = &bins[0];
-		as_val * val = as_val_frombin(&ser, bin);
+		as_val * val = NULL;
+		clbin_to_asval(bin, &ser, &val);
 
 		if ( val ) {
 			if ( strcmp(bin->bin_name,"SUCCESS") == 0 ) {
@@ -439,48 +644,4 @@ as_status aerospike_key_apply(
 	as_serializer_destroy(&ser);
 	
 	return err->code;
-}
-
-/**
- * Lookup a record by key, then perform specified operations.
- * 
- * @param as        - the aerospike cluster to connect to.
- * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
- * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
- * @param ns        - the namespace of the record.
- * @param set       - the set of the record.
- * @param key       - the key of the record. Can be either as_integer or as_string.
- * @param ops       - an array of as_bin_operation, which specify the operation to perform on bins of the record.
- * @param nops      - the number of operations.
- *
- * @return AEROSPIKE_OK if successful. Otherwise an error occurred. Check the `err` for details on the error.
- */
-as_status aerospike_key_operate(
-	aerospike * as, as_error * err, const as_policy_write * policy, 
-	const char * ns, const char * set, const char * key, 
-	as_binops * ops) 
-{
-	as_error_reset(err);
-
-	return AEROSPIKE_ERR;
-	// if policy is NULL, then get default policy
-	// // as_policy_write * p = policy ? (as_policy_write *) policy : &(as->config.policies.write);
-
-	// // int         nvalues = rec->bins.size;
-	// // cl_bin *    values = (cl_bin *) alloca(sizeof(cl_bin) * nvalues);
-
-	// cl_write_parameters wp;
-	// // as_policy_write_towp(p, rec, &wp);
-
-	// cl_object okey;
-	// citrusleaf_object_init_str(&okey, key);
-
-	// cl_operation * operations = NULL;
-	// int n_operations = 0;
-	// int replace = 0;
-	// uint32_t generation = 0;
-
-	// cl_rv rc = citrusleaf_operate(as->cluster, ns, set, &okey, operations, n_operations, &wp, replace, &generation);
-
-	// return rc ? AEROSPIKE_ERR : AEROSPIKE_OK;
 }

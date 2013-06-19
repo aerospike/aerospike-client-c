@@ -53,7 +53,12 @@ TEST( key_basics_put , "put: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 'de
 	as_record_set_list(&r, "e", &list);
 	as_record_set_map(&r, "f", &map);
 
-	as_status rc = aerospike_key_put(as, &err, NULL, "test", "test", "foo", &r);
+	as_key key;
+	as_key_init(&key, "test", "test", "foo");
+
+	as_status rc = aerospike_key_put(as, &err, NULL, &key, &r);
+
+	as_key_destroy(&key);
 
 	assert_int_eq( rc, AEROSPIKE_OK );
 }
@@ -66,12 +71,17 @@ TEST( key_basics_get , "get: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 'de
 	as_record r, *rec = &r;
 	as_record_init(&r, 0);
 
-	as_status rc = aerospike_key_get(as, &err, NULL, "test", "test", "foo", &rec);
+	as_key key;
+	as_key_init(&key, "test", "test", "foo");
+
+	as_status rc = aerospike_key_get(as, &err, NULL, &key, &rec);
+
+	as_key_destroy(&key);
     
     assert_int_eq( rc, AEROSPIKE_OK );
     assert_int_eq( as_record_numbins(rec), 6 );
     
-    assert_int_eq( as_record_get_int64(rec, "a"), 123 );
+    assert_int_eq( as_record_get_int64(rec, "a", 0), 123 );
     assert_not_null( as_record_get_integer(rec, "a") );
 	assert_int_eq( as_integer_toint(as_record_get_integer(rec, "a")), 123 );
 
@@ -79,7 +89,7 @@ TEST( key_basics_get , "get: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 'de
 	assert_not_null( as_record_get_string(rec, "b") );
 	assert_string_eq( as_string_tostring(as_record_get_string(rec, "b")), "abc" );
     
-    assert_int_eq( as_record_get_int64(rec, "c"), 456 );
+    assert_int_eq( as_record_get_int64(rec, "c", 0), 456 );
     assert_not_null( as_record_get_integer(rec, "c") );
 	assert_int_eq( as_integer_toint(as_record_get_integer(rec, "c")), 456 );
 
@@ -106,14 +116,19 @@ TEST( key_basics_select , "select: (test,test,foo) = {a: 123, b: 'abc'}" ) {
 	as_record r, *rec = &r;
 	as_record_init(&r, 0);
 
+	as_key key;
+	as_key_init(&key, "test", "test", "foo");
+
 	const char * bins[3] = { "a", "b", NULL };
 
-	as_status rc = aerospike_key_select(as, &err, NULL, "test", "test", "foo", bins, &rec);
+	as_status rc = aerospike_key_select(as, &err, NULL, &key, bins, &rec);
+
+	as_key_destroy(&key);
     
     assert_int_eq( rc, AEROSPIKE_OK );
     assert_int_eq( as_record_numbins(rec), 2 );
     
-    assert_int_eq( as_record_get_int64(rec, "a"), 123 );
+    assert_int_eq( as_record_get_int64(rec, "a", 0), 123 );
     assert_not_null( as_record_get_integer(rec, "a") );
 	assert_int_eq( as_integer_toint(as_record_get_integer(rec, "a")), 123 );
 
@@ -121,7 +136,7 @@ TEST( key_basics_select , "select: (test,test,foo) = {a: 123, b: 'abc'}" ) {
 	assert_not_null( as_record_get_string(rec, "b") );
 	assert_string_eq( as_string_tostring(as_record_get_string(rec, "b")), "abc" );
     
-    assert_int_eq( as_record_get_int64(rec, "c"), 0 );
+    assert_int_eq( as_record_get_int64(rec, "c", 0), 0 );
     assert_null( as_record_get_integer(rec, "c") );
 	assert_null( as_record_get_str(rec, "d") );
 	assert_null( as_record_get_string(rec, "d") );
@@ -136,9 +151,14 @@ TEST( key_basics_exists , "exists: (test,test,foo)" ) {
 	as_error err;
 	as_error_reset(&err);
 
+	as_key key;
+	as_key_init(&key, "test", "test", "foo");
+
 	bool exists = false;
 
-	as_status rc = aerospike_key_exists(as, &err, NULL, "test", "test", "foo", &exists);
+	as_status rc = aerospike_key_exists(as, &err, NULL, &key, &exists);
+
+	as_key_destroy(&key);
 
     assert_int_eq( rc, AEROSPIKE_OK );
 	assert_true( exists );
@@ -149,9 +169,14 @@ TEST( key_basics_notexists , "not exists: (test,test,foo)" ) {
 	as_error err;
 	as_error_reset(&err);
 
+	as_key key;
+	as_key_init(&key, "test", "test", "foo");
+
 	bool exists = false;
 
-	as_status rc = aerospike_key_exists(as, &err, NULL, "test", "test", "foo", &exists);
+	as_status rc = aerospike_key_exists(as, &err, NULL, &key, &exists);
+
+	as_key_destroy(&key);
 
     assert_int_eq( rc, AEROSPIKE_OK );
 	assert_false( exists );
@@ -162,11 +187,81 @@ TEST( key_basics_remove , "remove: (test,test,foo)" ) {
 	as_error err;
 	as_error_reset(&err);
 
-	as_status rc = aerospike_key_remove(as, &err, NULL, "test", "test", "foo");
+	as_key key;
+	as_key_init(&key, "test", "test", "foo");
+
+	as_status rc = aerospike_key_remove(as, &err, NULL, &key);
+
+	as_key_destroy(&key);
 
     assert_int_eq( rc, AEROSPIKE_OK );
 }
 
+
+TEST( key_basics_operate , "operate: (test,test,foo) => {a: incr(321), b: append(def)}" ) {
+
+	as_error err;
+	as_error_reset(&err);
+
+	as_operations ops;
+	as_operations_inita(&ops, 2);
+	as_operations_append_int64(&ops, AS_OPERATOR_INCR, "a", 321);
+	as_operations_append_str(&ops, AS_OPERATOR_APPEND, "b", "def");
+
+	as_key key;
+	as_key_init(&key, "test", "test", "foo");
+
+	as_status rc = aerospike_key_operate(as, &err, NULL, &key, &ops);
+
+	as_key_destroy(&key);
+
+    assert_int_eq( rc, AEROSPIKE_OK );
+}
+
+TEST( key_basics_get2 , "get: (test,test,foo) = {a: 444, b: 'abcdef'}" ) {
+
+	as_error err;
+	as_error_reset(&err);
+
+	as_key key;
+	as_key_init(&key, "test", "test", "foo");
+
+	as_record r, *rec = &r;
+	as_record_init(&r, 0);
+
+	as_status rc = aerospike_key_get(as, &err, NULL, &key, &rec);
+
+	as_key_destroy(&key);
+    
+    assert_int_eq( rc, AEROSPIKE_OK );
+    assert_int_eq( as_record_numbins(rec), 6 );
+    
+    assert_int_eq( as_record_get_int64(rec, "a", 0), 444 );
+    assert_not_null( as_record_get_integer(rec, "a") );
+	assert_int_eq( as_integer_toint(as_record_get_integer(rec, "a")), 444 );
+
+    assert_string_eq( as_record_get_str(rec, "b"), "abcdef" );
+	assert_not_null( as_record_get_string(rec, "b") );
+	assert_string_eq( as_string_tostring(as_record_get_string(rec, "b")), "abcdef" );
+    
+    assert_int_eq( as_record_get_int64(rec, "c", 0), 456 );
+    assert_not_null( as_record_get_integer(rec, "c") );
+	assert_int_eq( as_integer_toint(as_record_get_integer(rec, "c")), 456 );
+
+	assert_string_eq( as_record_get_str(rec, "d"), "def" );
+	assert_not_null( as_record_get_string(rec, "d") );
+	assert_string_eq( as_string_tostring(as_record_get_string(rec, "d")), "def" );
+
+    as_list * list = as_record_get_list(rec, "e");
+    assert_not_null( list );
+    assert_int_eq( as_list_size(list), 3 );
+
+    as_map * map = as_record_get_map(rec, "f");
+    assert_not_null( map );
+    assert_int_eq( as_map_size(map), 3 );
+
+    as_record_destroy(rec);
+}
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -176,6 +271,8 @@ SUITE( key_basics, "aerospike_key basic tests" ) {
     suite_add( key_basics_exists );
     suite_add( key_basics_get );
     suite_add( key_basics_select );
+    suite_add( key_basics_operate );
+    // suite_add( key_basics_get2 );
     suite_add( key_basics_remove );
     suite_add( key_basics_notexists );
 }

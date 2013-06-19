@@ -111,28 +111,28 @@ TEST( query_foreach_create, "create 100 records and 4 indices" ) {
 
 	// create index on "a"
 
-	aerospike_index_sparse_create(as, &err, NULL, NAMESPACE, SET, "a", AS_TYPE_STR, "idx_test_a");
+	aerospike_index_sparse_string_create(as, &err, NULL, NAMESPACE, SET, "a", "idx_test_a");
 	if ( err.code != AEROSPIKE_OK && err.code != AEROSPIKE_ERR_INDEX_EXISTS ) {
 		info("error(%d): %s", err.code, err.message);
 	}
 
 	// create index on "b"
 
-	aerospike_index_sparse_create(as, &err, NULL, NAMESPACE, SET, "b", AS_TYPE_INT, "idx_test_b");
+	aerospike_index_sparse_integer_create(as, &err, NULL, NAMESPACE, SET, "b", "idx_test_b");
 	if ( err.code != AEROSPIKE_OK && err.code != AEROSPIKE_ERR_INDEX_EXISTS ) {
 		info("error(%d): %s", err.code, err.message);
 	}
 
 	// create index on "c"
 
-	aerospike_index_sparse_create(as, &err, NULL, NAMESPACE, SET, "c", AS_TYPE_INT, "idx_test_c");
+	aerospike_index_sparse_integer_create(as, &err, NULL, NAMESPACE, SET, "c", "idx_test_c");
 	if ( err.code != AEROSPIKE_OK && err.code != AEROSPIKE_ERR_INDEX_EXISTS ) {
 		info("error(%d): %s", err.code, err.message);
 	}
 
 	// create index on "d"
 
-	aerospike_index_sparse_create(as, &err, NULL, NAMESPACE, SET, "d", AS_TYPE_INT, "idx_test_d");
+	aerospike_index_sparse_integer_create(as, &err, NULL, NAMESPACE, SET, "d", "idx_test_d");
 	if ( err.code != AEROSPIKE_OK && err.code != AEROSPIKE_ERR_INDEX_EXISTS ) {
 		info("error(%d): %s", err.code, err.message);
 	}
@@ -146,8 +146,8 @@ TEST( query_foreach_create, "create 100 records and 4 indices" ) {
 		int 	d = i % 10;
 		int 	e = b + (c + 1) * (d + 1) / 2;
 
-		char key[64] = { '\0' };
-		snprintf(key, 64, "%s-%d-%d-%d-%d", a, b, c, d, e);
+		char keystr[64] = { '\0' };
+		snprintf(keystr, 64, "%s-%d-%d-%d-%d", a, b, c, d, e);
 
 		as_record r;
 		as_record_init(&r, 5);
@@ -157,7 +157,10 @@ TEST( query_foreach_create, "create 100 records and 4 indices" ) {
 		as_record_set_int64(&r, "d", d);
 		as_record_set_int64(&r, "e", e);
 
-		aerospike_key_put(as, &err, NULL, NAMESPACE, SET, key, &r);
+		as_key key;
+		as_key_init(&key, NAMESPACE, SET, keystr);
+
+		aerospike_key_put(as, &err, NULL, &key, &r);
 
 		assert_int_eq( err.code, AEROSPIKE_OK);
 
@@ -165,7 +168,9 @@ TEST( query_foreach_create, "create 100 records and 4 indices" ) {
 
 		bool exists = false;
 
-		aerospike_key_exists(as, &err, NULL, NAMESPACE, SET, key, &exists);
+		aerospike_key_exists(as, &err, NULL, &key, &exists);
+
+		as_key_destroy(&key);
 		
 		assert_int_eq( err.code, AEROSPIKE_OK );
 		assert_true( exists );

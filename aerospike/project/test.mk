@@ -47,7 +47,7 @@
 # TEST_CLIENT += $(TEST_STREAM)
 
 TEST_AEROSPIKE = aerospike_test.c
-TEST_AEROSPIKE += aerospike_digest/*.c
+# TEST_AEROSPIKE += aerospike_digest/*.c
 TEST_AEROSPIKE += aerospike_index/*.c
 TEST_AEROSPIKE += aerospike_info/*.c
 TEST_AEROSPIKE += aerospike_key/*.c

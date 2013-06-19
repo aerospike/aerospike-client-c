@@ -13,6 +13,7 @@
 #include <aerospike/as_arraylist.h>
 #include <aerospike/as_map.h>
 #include <aerospike/as_hashmap.h>
+#include <aerospike/as_stringmap.h>
 #include <aerospike/as_val.h>
 #include <aerospike/as_udf.h>
 
@@ -80,6 +81,9 @@ TEST( key_apply2_file_exists , "apply2: key_apply2 exists" ) {
 
     char * base = basename(filename);
 
+	as_key key;
+	as_key_init(&key, "test", "test", "foo");
+
     if ( aerospike_udf_get(as, &err, NULL, base, AS_UDF_TYPE_LUA, &file) != AEROSPIKE_OK ) {
         error("error caused by aerospike_udf_get(%s): (%d) %s @ %s[%s:%d]", err.code, err.message, err.func, err.file, err.line);
     }
@@ -117,7 +121,12 @@ TEST( key_apply2_getinteger , "apply2: (test,test,foo) <!> key_apply2.getinteger
 	as_arraylist_init(&arglist, 1, 0);
 	as_list_append_str(&arglist, "a");
 
-	as_status rc = aerospike_key_apply(as, &err, NULL, "test", "test", "foo", UDF_FILE, "getinteger", &arglist, &res);
+	as_key key;
+	as_key_init(&key, "test", "test", "foo");
+
+	as_status rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "getinteger", &arglist, &res);
+
+	as_key_destroy(&key);
 
 	if ( rc != AEROSPIKE_OK ) {
 		error("[%s:%d][%s][%d] %s", err.file, err.line, err.func, err.code, err.message);
@@ -142,7 +151,12 @@ TEST( key_apply2_getstring , "apply2: (test,test,foo) <!> key_apply2.getstring()
 	as_arraylist_init(&arglist, 1, 0);
 	as_list_append_str(&arglist, "b");
 
-	as_status rc = aerospike_key_apply(as, &err, NULL, "test", "test", "foo", UDF_FILE, "getstring", &arglist, &res);
+	as_key key;
+	as_key_init(&key, "test", "test", "foo");
+
+	as_status rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "getstring", &arglist, &res);
+
+	as_key_destroy(&key);
 
 	if ( rc != AEROSPIKE_OK ) {
 		error("[%s:%d][%s][%d] %s", err.file, err.line, err.func, err.code, err.message);
@@ -174,7 +188,12 @@ TEST( key_apply2_getlist , "apply2: (test,test,foo) <!> key_apply2.getlist() => 
 	as_list_append_int64(&compare_list, 2);
 	as_list_append_int64(&compare_list, 3);
 
-	as_status rc = aerospike_key_apply(as, &err, NULL, "test", "test", "foo", UDF_FILE, "getlist", &arglist, &res);
+	as_key key;
+	as_key_init(&key, "test", "test", "foo");
+
+	as_status rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "getlist", &arglist, &res);
+
+	as_key_destroy(&key);
 
 	if ( rc != AEROSPIKE_OK ) {
 		error("[%s:%d][%s][%d] %s", err.file, err.line, err.func, err.code, err.message);
@@ -200,7 +219,12 @@ TEST( key_apply2_getmap , "apply2: (test,test,foo) <!> key_apply2.getmap() => {x
 	as_arraylist_init(&arglist, 1, 0);
 	as_list_append_str(&arglist, "f");
 
-	as_status rc = aerospike_key_apply(as, &err, NULL, "test", "test", "foo", UDF_FILE, "getmap", &arglist, &res);
+	as_key key;
+	as_key_init(&key, "test", "test", "foo");
+
+	as_status rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "getmap", &arglist, &res);
+
+	as_key_destroy(&key);
 
 	if ( rc != AEROSPIKE_OK ) {
 		error("[%s:%d][%s][%d] %s", err.file, err.line, err.func, err.code, err.message);
@@ -231,7 +255,12 @@ TEST( key_apply2_add_strings , "apply: (test,test,foo) <!> key_apply.add_strings
 	as_list_append_str(&arglist, "abc");
 	as_list_append_str(&arglist, "def");
 
-	as_status rc = aerospike_key_apply(as, &err, NULL, "test", "test", "foo", UDF_FILE, "add_strings", &arglist, &res);
+	as_key key;
+	as_key_init(&key, "test", "test", "foo");
+
+	as_status rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "add_strings", &arglist, &res);
+
+	as_key_destroy(&key);
 
     assert_int_eq( rc, AEROSPIKE_OK );
 	assert_not_null( res );

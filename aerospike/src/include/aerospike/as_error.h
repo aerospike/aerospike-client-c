@@ -24,8 +24,8 @@
 
 #include <aerospike/as_status.h>
 
-#include <inttypes.h>
 #include <stdarg.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 

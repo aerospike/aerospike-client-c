@@ -145,16 +145,16 @@ typedef enum cl_rvclient_e {
 
 
 typedef enum cl_operator_type_e { 
-    CL_OP_WRITE, 
-    CL_OP_READ, 
-    CL_OP_INCR, 
-    CL_OP_MC_INCR, 
-    CL_OP_PREPEND, 
-    CL_OP_APPEND, 
-    CL_OP_MC_PREPEND, 
-    CL_OP_MC_APPEND, 
-    CL_OP_TOUCH, 
-    CL_OP_MC_TOUCH
+    CL_OP_WRITE, 		// 0
+    CL_OP_READ, 		// 1
+    CL_OP_INCR, 		// 2
+    CL_OP_MC_INCR, 		// 3
+    CL_OP_PREPEND, 		// 4
+    CL_OP_APPEND, 		// 5
+    CL_OP_MC_PREPEND, 	// 6
+    CL_OP_MC_APPEND, 	// 7
+    CL_OP_TOUCH, 		// 8
+    CL_OP_MC_TOUCH		// 9
 } cl_operator;
 
 /**

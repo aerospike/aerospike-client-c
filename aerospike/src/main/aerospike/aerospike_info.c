@@ -65,8 +65,8 @@ bool citrusleaf_info_cluster_foreach_callback(const cl_cluster_node * clnode, co
     citrusleaf_info_cluster_foreach_data * data = (citrusleaf_info_cluster_foreach_data *) udata;
 
     as_node node;
-    strncpy(node.name, clnode->name, AS_NODE_NAME_LEN);
-    node.name[AS_NODE_NAME_LEN - 1] = '\0';
+    memcpy(node.name, clnode->name, AS_NODE_NAME_LEN);
+    node.name[AS_NODE_NAME_LEN] = '\0';
 
 	bool result = (data->callback)(&err, &node, req, res, data->udata);
 
@@ -105,6 +105,8 @@ as_status aerospike_info_host(
 	const char * addr, uint16_t port, const char * req, 
 	char ** res) 
 {
+	as_error_reset(err);
+
 	// if policy is NULL, then get default policy
 	as_policy_info * p = policy ? (as_policy_info *) policy : &as->config.policies.info;
 	
@@ -145,6 +147,8 @@ as_status aerospike_info_node(
 	char ** res
 	)
 {
+	as_error_reset(err);
+
 	/**
 	 * NOTE: We do not have the equivalent in the OLD API. 
 	 * TODO: Evaluate whether we need this.
@@ -179,6 +183,8 @@ as_status aerospike_info_foreach(
 	const char * req, 
 	aerospike_info_foreach_callback callback, void * udata)
 {
+	as_error_reset(err);
+
 	// if policy is NULL, then get default policy
 	as_policy_info * p = policy ? (as_policy_info *) policy : &as->config.policies.info;
 	

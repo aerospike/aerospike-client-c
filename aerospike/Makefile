@@ -70,22 +70,23 @@ CITRUSLEAF += aerospike_lset.o
 
 AEROSPIKE = 
 AEROSPIKE += aerospike.o
-AEROSPIKE += aerospike_digest.o
 AEROSPIKE += aerospike_info.o
 AEROSPIKE += aerospike_key.o
 AEROSPIKE += aerospike_query.o
 AEROSPIKE += aerospike_scan.o
 AEROSPIKE += aerospike_index.o
 AEROSPIKE += aerospike_udf.o
+AEROSPIKE += as_bin.o
 AEROSPIKE += as_config.o
-AEROSPIKE += as_digest.o
 AEROSPIKE += as_error.o
+AEROSPIKE += as_key.o
+AEROSPIKE += as_log.o
+AEROSPIKE += as_operations.o
 AEROSPIKE += as_policy.o
 AEROSPIKE += as_query.o
-AEROSPIKE += as_scan.o
 AEROSPIKE += as_record.o
+AEROSPIKE += as_scan.o
 AEROSPIKE += as_udf.o
-AEROSPIKE += as_log.o
 AEROSPIKE += shim.o
 
 OBJECTS :=
@@ -112,9 +113,7 @@ build: libcitrusleaf
 
 .PHONY: build-clean
 build-clean:
-	@rm -rf $(TARGET_OBJ)
-	@rm -rf $(TARGET_BIN)
-	@rm -rf $(TARGET_LIB)
+	@rm -rf $(TARGET)
 
 .PHONY: libcitrusleaf
 libcitrusleaf: libcitrusleaf.a libcitrusleaf.so
@@ -133,10 +132,10 @@ $(TARGET_OBJ)/%.o: $(BASE)/$(TARGET_LIB)/libaerospike-base.a $(COMMON)/$(TARGET_
 $(TARGET_OBJ)/aerospike/%.o: $(BASE)/$(TARGET_LIB)/libaerospike-base.a $(COMMON)/$(TARGET_LIB)/libaerospike-common.a $(MOD_LUA)/$(TARGET_LIB)/libmod_lua.a $(SOURCE_MAIN)/aerospike/%.c $(SOURCE_INCL)/citrusleaf/*.h $(SOURCE_INCL)/aerospike/*.h | modules
 	$(object)
 
-$(TARGET_LIB)/libcitrusleaf.so: $(CITRUSLEAF:%=$(TARGET_OBJ)/%) $(AEROSPIKE:%=$(TARGET_OBJ)/aerospike/%) $(TARGET_OBJ)/version.o | modules
+$(TARGET_LIB)/libcitrusleaf.so: $(CITRUSLEAF:%=$(TARGET_OBJ)/citrusleaf/%) $(AEROSPIKE:%=$(TARGET_OBJ)/aerospike/%) $(TARGET_OBJ)/version.o | modules
 	$(library) $(wildcard $(OBJECTS))
 
-$(TARGET_LIB)/libcitrusleaf.a: $(CITRUSLEAF:%=$(TARGET_OBJ)/%) $(AEROSPIKE:%=$(TARGET_OBJ)/aerospike/%) $(TARGET_OBJ)/version.o | modules
+$(TARGET_LIB)/libcitrusleaf.a: $(CITRUSLEAF:%=$(TARGET_OBJ)/citrusleaf/%) $(AEROSPIKE:%=$(TARGET_OBJ)/aerospike/%) $(TARGET_OBJ)/version.o | modules
 	$(archive) $(wildcard $(OBJECTS))
 
 $(TARGET_INCL)/aerospike: | $(TARGET_INCL)

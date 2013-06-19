@@ -14,12 +14,18 @@
 
 as_status as_error_fromrc(as_error * err, cl_rv rc);
 
-void as_record_tobins(as_record * rec, cl_bin * bins, uint32_t nbins);
+void clbin_to_asval(cl_bin * bin, as_serializer * ser, as_val ** val);
 
-as_record * as_record_frombins(as_record * rec, cl_bin * bins, uint32_t nbins);
+void clbins_to_asrecord(cl_bin * bins, uint32_t nbins, as_record * rec);
 
-as_val * as_val_frombin(as_serializer * ser, cl_bin * bin);
+void aspolicywrite_to_clwriteparameters(as_policy_write * policy, as_record * rec, cl_write_parameters * wp);
 
-void as_policy_write_towp(as_policy_write * policy, as_record * rec, cl_write_parameters * wp);
+void aspolicyoperate_to_clwriteparameters(as_policy_operate * policy, cl_write_parameters * wp);
 
-void as_policy_remove_towp(as_policy_remove * policy, cl_write_parameters * wp);
+void asval_to_clobject(as_val * val, cl_object * obj);
+
+void asbinvalue_to_clobject(as_bin_value * val, cl_object * obj);
+
+void asbin_to_clbin(as_bin * as, cl_bin * cl);
+
+void asrecord_to_clbins(as_record * rec, cl_bin * bins, uint32_t nbins);

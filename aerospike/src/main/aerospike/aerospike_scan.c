@@ -21,9 +21,12 @@
  *****************************************************************************/
 
 #include <aerospike/aerospike_scan.h>
+#include <aerospike/as_key.h>
+
 #include <citrusleaf/as_scan.h>
 #include <citrusleaf/cl_scan.h>
 #include <citrusleaf/cf_random.h>
+
 #include "shim.h"
 
 /******************************************************************************
@@ -133,20 +136,22 @@ static int simplescan_cb(char *ns, cf_digest *keyd, char *set, uint32_t generati
 
 		// Fill the bin data
 		as_record *r = as_record_new(n_bins);
-		as_record_frombins(r, bins, n_bins);
+		clbins_to_asrecord(bins, n_bins, r);
 
 		// Fill the metadata
-		r->digest.set = set ? strdup(set) : NULL;
-		memcpy(r->digest.value, keyd, sizeof(cf_digest));
+		r->key.namespace = ns ? strdup(ns) : NULL;
+		r->key.set = set ? strdup(set) : NULL;
+		r->key.valuep = NULL;
+		memcpy(r->key.digest.value, keyd, sizeof(cf_digest));
 		r->gen = generation;
 		r->ttl = record_void_time;
-
+		
 		// Call the callback that user wanted to callback
 		(*bridge_udata->user_cb)((as_val *)r, bridge_udata->user_udata);
 
 		// It is our job to destroy the record
 		as_record_destroy(r);
-
+		
 		return 0;
 }
 
@@ -247,6 +252,8 @@ as_status aerospike_scan_background(
 	const as_scan * scan, uint64_t * scan_id
 	)
 {
+	as_error_reset(err);
+	
 	if ( aerospike_scan_init(as, err) != AEROSPIKE_OK ) {
 		return err->code;
 	}
@@ -278,6 +285,8 @@ as_status aerospike_scan_node_background(
 	aerospike * as, as_error * err, const as_policy_scan * policy, 
 	const char * node, const as_scan * scan, uint64_t * scan_id) 
 {
+	as_error_reset(err);
+	
 	if ( aerospike_scan_init(as, err) != AEROSPIKE_OK ) {
 		return err->code;
 	}
@@ -311,6 +320,8 @@ as_status aerospike_scan_foreach(
 	const as_scan * scan, 
 	aerospike_scan_foreach_callback callback, void * udata) 
 {
+	as_error_reset(err);
+	
 	if ( aerospike_scan_init(as, err) != AEROSPIKE_OK ) {
 		return err->code;
 	}
@@ -338,6 +349,8 @@ as_status aerospike_scan_node_foreach(
 	const char * node, const as_scan * scan, 
 	aerospike_scan_foreach_callback callback, void * udata) 
 {
+	as_error_reset(err);
+	
 	if ( aerospike_scan_init(as, err) != AEROSPIKE_OK ) {
 		return err->code;
 	}

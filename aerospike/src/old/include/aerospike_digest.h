@@ -39,12 +39,11 @@
 #pragma once 
 
 #include <aerospike/aerospike.h>
-
 #include <aerospike/as_bin.h>
-#include <aerospike/as_binop.h>
 #include <aerospike/as_digest.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_list.h>
+#include <aerospike/as_operations.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_status.h>
@@ -67,13 +66,10 @@
  *		
  *		as_digest_destroy(&digest);
  *	~~~~~~~~~~
- *
- *
+ *	
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param ns			The namespace of the record.
- *	@param set			The set of the record.
  *	@param digest		The digest of the record. 
  *	@param rec 			The record to be created and populated with the data.
  *
@@ -81,7 +77,7 @@
  */
 as_status aerospike_digest_get(
 	aerospike * as, as_error * err, const as_policy_read * policy, 
-	const char * ns, const as_digest * digest, 
+	const as_digest * digest, 
 	as_record ** rec
 	);
 
@@ -111,7 +107,6 @@ as_status aerospike_digest_get(
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param ns			The namespace of the record.
  *	@param digest		The digest of the record. 
  *	@param bins			The bins to select. 
  *	@param rec 			The record to be created and populated with the data.
@@ -120,8 +115,7 @@ as_status aerospike_digest_get(
  */
 as_status aerospike_digest_select(
 	aerospike * as, as_error * err, const as_policy_read * policy, 
-	const char * ns, const as_digest * digest, 
-	const char * bins[], 
+	const as_digest * digest, const char * bins[], 
 	as_record ** rec
 	);
 
@@ -147,7 +141,6 @@ as_status aerospike_digest_select(
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param ns			The namespace of the record.
  *	@param digest		The digest of the record. 
  *	@param exists    	The variable to populate with `true` if the record exists, otherwise `false`.
  *
@@ -155,7 +148,7 @@ as_status aerospike_digest_select(
  */
 as_status aerospike_digest_exists(
 	aerospike * as, as_error * err, const as_policy_read * policy, 
-	const char * ns, const as_digest * digest,
+	const as_digest * digest, 
 	bool * exists
 	);
 
@@ -185,7 +178,6 @@ as_status aerospike_digest_exists(
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param ns			The namespace of the record.
  *	@param digest		The digest of the record. 
  *	@param rec 			The record containing the data to be written.
  *
@@ -193,8 +185,7 @@ as_status aerospike_digest_exists(
  */
 as_status aerospike_digest_put(
 	aerospike * as, as_error * err, const as_policy_write * policy, 
-	const char * ns, const as_digest * digest, 
-	as_record * rec
+	const as_digest * digest, as_record * rec
 	);
 
 /**
@@ -214,14 +205,29 @@ as_status aerospike_digest_put(
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param ns			The namespace of the record.
- *	@param digest		The digest of the record.
+ *	@param digest		The digest of the record. 
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error.
  */
 as_status aerospike_digest_remove(
-	aerospike * as, as_error * err, const as_policy_remove * policy, 
-	const char * ns, const as_digest * digest
+	aerospike * as, as_error * err, const as_policy_operate * policy, 
+	const as_digest * digest, 
+	);
+
+/**
+ *	Lookup a record by key, then perform specified operations.
+ *	
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param digest		The digest of the record. 
+ *	@param ops			The operations to perform on the record.
+ *
+ *	@return AEROSPIKE_OK if successful. Otherwise an error.
+ */
+as_status aerospike_digest_operate(
+	aerospike * as, as_error * err, const as_policy_operate * policy, 
+	const as_digest * digest, const as_operations * ops
 	);
 
 /**
@@ -253,10 +259,9 @@ as_status aerospike_digest_remove(
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param ns			The namespace of the record.
- *	@param digest		The digest of the record.
+ *	@param digest		The digest of the record. 
  *	@param module		The module containing the function to execute.
- *	@param function 		The function to execute.
+ *	@param function		The function to execute.
  *	@param arglist 		The arguments for the function.
  *	@param result 		The return value from the function.
  *
@@ -264,28 +269,9 @@ as_status aerospike_digest_remove(
  */
 as_status aerospike_digest_apply(
 	aerospike * as, as_error * err, const as_policy_read * policy, 
-	const char * ns, const as_digest * digest, 
+	const as_digest * digest, 
 	const char * module, const char * function, const as_list * arglist, 
 	as_val ** result
-	);
-
-/**
- *	Lookup a record by key, then perform specified operations.
- *	
- *	@param as			The aerospike instance to use for this operation.
- *	@param err			The as_error to be populated if an error occurs.
- *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param ns			The namespace of the record.
- *	@param digest		The digest of the record.
- *	@param ops 			An array of as_bin_operation, which specify the operation to perform on bins of the record.
- *	@param nops 			The number of operations.
- *
- *	@return AEROSPIKE_OK if successful. Otherwise an error.
- */
-as_status aerospike_digest_operate(
-	aerospike * as, as_error * err, const as_policy_write * policy, 
-	const char * ns, const as_digest * digest, 
-	as_binops * binops
 	);
 
 

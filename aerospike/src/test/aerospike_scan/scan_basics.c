@@ -1,7 +1,7 @@
 
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_scan.h>
-#include <aerospike/aerospike_digest.h>
+#include <aerospike/aerospike_key.h>
 
 #include <aerospike/as_error.h>
 #include <aerospike/as_status.h>
@@ -109,7 +109,7 @@ static int scan_cb_counter(as_val *val, void *udata)
 	const char *scan_setname = scan_data->setname;
 
 	as_record *rec = (as_record *)val;
-	const char *rec_setname = rec->digest.set;
+	const char *rec_setname = rec->key.set;
 
 	scan_data->ret_rec_count++;
 
@@ -154,7 +154,7 @@ static int scan_cb_counter(as_val *val, void *udata)
 	}
 
 	// We use the value of bin1 to check the values of the rest of the bins
-	int intval = as_record_get_int64(rec, "bin1");
+	int intval = as_record_get_int64(rec, "bin1", INT64_MAX);
 
 	// Check the string bin
 	char exp_strval[SET_STRSZ];
@@ -215,8 +215,7 @@ static void insert_data(int numrecs, const char *setname)
 	as_map m;
 	as_hashmap_init(&m, 8);
 
-	as_digest d;
-	as_digest_init(&d, NULL, NULL);
+	as_key k;
 
 	for (int i=0; i<numrecs; i++) {
 		// Simple integer bin
@@ -237,14 +236,15 @@ static void insert_data(int numrecs, const char *setname)
 		as_record_set_map(&r, "bin3", &m);
 
 		sprintf(strkey, "key-%s-%d", setname, i);
-		as_string key;
-		as_string_init(&key, strkey, false);
-		as_digest_init(&d, setname, (as_key *) &key);
 
-		rc = aerospike_digest_put(as, &err, NULL, NS, &d, &r);
+		as_key_init(&k, NS, setname, strkey);
+
+		rc = aerospike_key_put(as, &err, NULL, &k, &r);
 		if (rc != AEROSPIKE_OK) {
 			error("digest put failed with error %d", rc);
 		}
+
+		as_key_destroy(&k);
 	}
 }
 

@@ -43,69 +43,129 @@ as_status as_error_fromrc(as_error * err, cl_rv rc)
 	return err->code;
 }
 
-void as_record_tobins(as_record * rec, cl_bin * bins, uint32_t nbins) 
+void asval_to_clobject(as_val * val, cl_object * obj)
+{
+	switch(val->type) {
+		case AS_NIL: {
+			citrusleaf_object_init_null(obj);
+			break;
+		}
+		case AS_INTEGER: {
+			as_integer * v = as_integer_fromval(val);
+			citrusleaf_object_init_int(obj, as_integer_toint(v));
+			break;
+		}
+		case AS_STRING: {
+			as_string * v = as_string_fromval(val);
+			citrusleaf_object_init_str(obj, as_string_tostring(v));
+			break;
+		}
+		case AS_BYTES: {
+			as_bytes * v = as_bytes_fromval(val);
+			citrusleaf_object_init_blob2(obj, v->value, v->len, v->type);
+			break;
+		}
+		case AS_LIST:{
+			as_buffer buffer;
+			as_buffer_init(&buffer);
+
+			as_serializer ser;
+			as_msgpack_init(&ser);
+			as_serializer_serialize(&ser, val, &buffer);
+			as_serializer_destroy(&ser);
+			
+			citrusleaf_object_init_blob2(obj, buffer.data, buffer.size, CL_LIST);
+			break;
+		}
+		case AS_MAP: {
+			as_buffer buffer;
+			as_buffer_init(&buffer);
+
+			as_serializer ser;
+			as_msgpack_init(&ser);
+			as_serializer_serialize(&ser, val, &buffer);
+			as_serializer_destroy(&ser);
+
+			citrusleaf_object_init_blob2(obj, buffer.data, buffer.size, CL_MAP);
+			break;
+		}
+		default: {
+			// raise an error
+			break;
+		}
+	}
+}
+
+void asbinvalue_to_clobject(as_bin_value * binval, cl_object * obj)
+{
+	asval_to_clobject((as_val *) binval, obj);
+}
+
+void asbin_to_clbin(as_bin * as, cl_bin * cl) 
+{
+	strncpy(cl->bin_name, as->name, AS_BIN_NAME_LEN);
+	cl->bin_name[CL_BINNAME_SIZE-1] = '\0';
+	asbinvalue_to_clobject(as->valuep, &cl->object);
+}
+
+void asrecord_to_clbins(as_record * rec, cl_bin * bins, uint32_t nbins) 
 {
 	as_bin * rbin = rec->bins.entries;
 	for ( int i = 0; i < nbins; i++ ) {
+		asbin_to_clbin(&rbin[i], &bins[i]);
+	}
+}
 
-		strncpy(bins[i].bin_name, rbin[i].name, AS_BIN_NAME_LEN);
-		bins[i].bin_name[AS_BIN_NAME_LEN - 1] = '\0';
+void clbin_to_asval(cl_bin * bin, as_serializer * ser, as_val ** val) 
+{
+	if ( val == NULL ) return;
 
-		as_val * val = (as_val *) rbin[i].value;
-		switch(val->type) {
-			case AS_NIL: {
-				citrusleaf_object_init_null(&bins[i].object);
-				break;
-			}
-			case AS_INTEGER: {
-				as_integer * v = as_integer_fromval(val);
-				citrusleaf_object_init_int(&bins[i].object, as_integer_toint(v));
-				break;
-			}
-			case AS_STRING: {
-				as_string * v = as_string_fromval(val);
-				citrusleaf_object_init_str(&bins[i].object, as_string_tostring(v));
-				break;
-			}
-			case AS_LIST:{
-				as_buffer buffer;
-				as_buffer_init(&buffer);
-
-				as_serializer ser;
-				as_msgpack_init(&ser);
-				as_serializer_serialize(&ser, val, &buffer);
-				as_serializer_destroy(&ser);
-				
-				citrusleaf_object_init_blob2(&bins[i].object, buffer.data, buffer.size, CL_LIST);
-				break;
-			}
-			case AS_MAP: {
-				as_buffer buffer;
-				as_buffer_init(&buffer);
-
-				as_serializer ser;
-				as_msgpack_init(&ser);
-				as_serializer_serialize(&ser, val, &buffer);
-				as_serializer_destroy(&ser);
-
-				citrusleaf_object_init_blob2(&bins[i].object, buffer.data, buffer.size, CL_MAP);
-				break;
-			}
-			case AS_BYTES: {
-				as_bytes * v = as_bytes_fromval(val);
-				citrusleaf_object_init_blob2(&bins[i].object, v->value, v->len, v->type);
-				break;
-			}
-			default: {
-				// raise an error
-				break;
-			}
+	switch( bin->object.type ) {
+		case CL_NULL :{
+			*val = NULL;
+			break;
+		}
+		case CL_INT : {
+			*val = (as_val *) as_integer_new(bin->object.u.i64);
+			break;
+		}
+		case CL_STR : {
+			// steal the pointer from the object into the val
+			*val = (as_val *) as_string_new(strdup(bin->object.u.str), true /*ismalloc*/);
+			break;
+		}
+		case CL_LIST :
+		case CL_MAP : {
+			// use a temporary buffer, which doesn't need to be destroyed
+			as_buffer buf = {
+				.capacity = (uint32_t) bin->object.sz,
+				.size = (uint32_t) bin->object.sz,
+				.data = (uint8_t *) bin->object.u.blob
+			};
+			// print_buffer(&buf);
+			as_serializer_deserialize(ser, &buf, val);
+			break;
+		}
+		case CL_BLOB:
+		case CL_JAVA_BLOB:
+		case CL_CSHARP_BLOB:
+		case CL_PYTHON_BLOB:
+		case CL_RUBY_BLOB:
+		case CL_ERLANG_BLOB:
+		default : {
+			*val = NULL;
+			uint8_t * raw = malloc(sizeof(bin->object.sz));
+			memcpy(raw, bin->object.u.blob, bin->object.sz);
+			as_bytes * b = as_bytes_new(raw, bin->object.sz, true /*ismalloc*/);
+			b->type = bin->object.type;
+			*val = (as_val *) b;
+			break;
 		}
 	}
 }
 
 
-as_record * as_record_frombins(as_record * r, cl_bin * bins, uint32_t nbins) 
+void clbins_to_asrecord(cl_bin * bins, uint32_t nbins, as_record * r) 
 {
 	uint32_t n = nbins < r->bins.capacity ? nbins : r->bins.capacity;
 	for ( int i = 0; i < n; i++ ) {
@@ -147,68 +207,16 @@ as_record * as_record_frombins(as_record * r, cl_bin * bins, uint32_t nbins)
 			}
 		}
 	}
-
-	return r;
 }
 
 
-as_val * as_val_frombin(as_serializer * ser, cl_bin * bin) 
-{
-	as_val * val;
-	
-	switch( bin->object.type ) {
-		case CL_NULL :{
-			val = NULL;
-			break;
-		}
-		case CL_INT : {
-			val = (as_val *) as_integer_new(bin->object.u.i64);
-			break;
-		}
-		case CL_STR : {
-			// steal the pointer from the object into the val
-			val = (as_val *) as_string_new(strdup(bin->object.u.str), true /*ismalloc*/);
-			break;
-		}
-		case CL_LIST :
-		case CL_MAP : {
-			// use a temporary buffer, which doesn't need to be destroyed
-			as_buffer buf = {
-				.capacity = (uint32_t) bin->object.sz,
-				.size = (uint32_t) bin->object.sz,
-				.data = (uint8_t *) bin->object.u.blob
-			};
-			// print_buffer(&buf);
-			as_serializer_deserialize(ser, &buf, &val);
-			break;
-		}
-		case CL_BLOB:
-		case CL_JAVA_BLOB:
-		case CL_CSHARP_BLOB:
-		case CL_PYTHON_BLOB:
-		case CL_RUBY_BLOB:
-		case CL_ERLANG_BLOB:
-		default : {
-			val = NULL;
-			uint8_t * raw = malloc(sizeof(bin->object.sz));
-			memcpy(raw, bin->object.u.blob, bin->object.sz);
-			as_bytes * b = as_bytes_new(raw, bin->object.sz, true /*ismalloc*/);
-			b->type = bin->object.type;
-			val = (as_val *) b;
-			break;
-		}
-	}
-
-	return val;
-}
-
-void as_policy_write_towp(as_policy_write * policy, as_record * rec, cl_write_parameters * wp) 
+void aspolicywrite_to_clwriteparameters(as_policy_write * policy, as_record * rec, cl_write_parameters * wp) 
 {
 	if ( !policy || !rec || !wp ) {
 		return;
 	}
 
-	wp->unique = policy->digest == AS_POLICY_DIGEST_CREATE;
+	wp->unique = policy->exists == AS_POLICY_EXISTS_CREATE;
 	wp->unique_bin = false;
 
 	wp->use_generation = false;
@@ -248,7 +256,7 @@ void as_policy_write_towp(as_policy_write * policy, as_record * rec, cl_write_pa
 	}
 }
 
-void as_policy_remove_towp(as_policy_remove * policy, cl_write_parameters * wp) 
+void aspolicyoperate_to_clwriteparameters(as_policy_operate * policy, cl_write_parameters * wp) 
 {
 	if ( !policy || !wp ) {
 		return;

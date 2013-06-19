@@ -24,8 +24,8 @@
 
 #include <aerospike/as_bin.h>
 #include <aerospike/as_bytes.h>
-#include <aerospike/as_digest.h>
 #include <aerospike/as_integer.h>
+#include <aerospike/as_key.h>
 #include <aerospike/as_list.h>
 #include <aerospike/as_map.h>
 #include <aerospike/as_rec.h>
@@ -62,7 +62,7 @@ typedef struct as_record_s {
 	/**
 	 *	The digest of the record.
 	 */
-	as_digest digest;
+	as_key key;
 
 	/**
 	 *	The generation of the record.
@@ -70,7 +70,7 @@ typedef struct as_record_s {
 	uint16_t gen;
 
 	/**
-	 *	The time-to-live (expiry) of the record in seconds.
+	 *	The time-to-live (expiration) of the record in seconds.
 	 */
 	uint32_t ttl;
 
@@ -88,6 +88,16 @@ typedef struct as_record_s {
 /**
  * Initialize a stack allocated `as_record` then allocate `__nbins` capacity 
  * for as_record.bins on the stack.
+ *
+ *	~~~~~~~~~~{.c}
+ *		as_record record;
+ *		as_record_inita(&record, 2);
+ *		as_record_set_int64(&record, "bin1", 123);
+ *		as_record_set_int64(&record, "bin2", 456);
+ *	~~~~~~~~~~
+ *
+ *	When you are finished using the `as_record` instance, you should release the 
+ *	resources allocated to it by calling `as_record_destroy()`.
  *
  *	@param __rec		The `as_record *` to initialize.
  *	@param __nbins		The number of `as_record.bins.entries` to allocate on the 
@@ -424,3 +434,4 @@ as_map * as_record_get_map(as_record * rec, const char * name);
  *	@return true if bin was removed, otherwise false.
  */
 int as_record_remove(as_record * rec, const char * name);
+

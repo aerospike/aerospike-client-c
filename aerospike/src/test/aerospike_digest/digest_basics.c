@@ -77,7 +77,7 @@ TEST( digest_basics_get , "get: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 
     assert_int_eq( rc, AEROSPIKE_OK );
     assert_int_eq( as_record_numbins(rec), 6 );
     
-    assert_int_eq( as_record_get_int64(rec, "a"), 123 );
+    assert_int_eq( as_record_get_int64(rec, "a", 0), 123 );
     assert_not_null( as_record_get_integer(rec, "a") );
 	assert_int_eq( as_integer_toint(as_record_get_integer(rec, "a")), 123 );
 
@@ -85,7 +85,7 @@ TEST( digest_basics_get , "get: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 
 	assert_not_null( as_record_get_string(rec, "b") );
 	assert_string_eq( as_string_tostring(as_record_get_string(rec, "b")), "abc" );
     
-    assert_int_eq( as_record_get_int64(rec, "c"), 456 );
+    assert_int_eq( as_record_get_int64(rec, "c", 0), 456 );
     assert_not_null( as_record_get_integer(rec, "c") );
 	assert_int_eq( as_integer_toint(as_record_get_integer(rec, "c")), 456 );
 
@@ -122,7 +122,7 @@ TEST( digest_basics_select , "select: (test,test,foo) = {a: 123, b: 'abc'}" ) {
     assert_int_eq( rc, AEROSPIKE_OK );
     assert_int_eq( as_record_numbins(rec), 2 );
     
-    assert_int_eq( as_record_get_int64(rec, "a"), 123 );
+    assert_int_eq( as_record_get_int64(rec, "a", 0), 123 );
     assert_not_null( as_record_get_integer(rec, "a") );
 	assert_int_eq( as_integer_toint(as_record_get_integer(rec, "a")), 123 );
 
@@ -130,7 +130,7 @@ TEST( digest_basics_select , "select: (test,test,foo) = {a: 123, b: 'abc'}" ) {
 	assert_not_null( as_record_get_string(rec, "b") );
 	assert_string_eq( as_string_tostring(as_record_get_string(rec, "b")), "abc" );
     
-    assert_int_eq( as_record_get_int64(rec, "c"), 0 );
+    assert_int_eq( as_record_get_int64(rec, "c", 0), 0 );
     assert_null( as_record_get_integer(rec, "c") );
 	assert_null( as_record_get_str(rec, "d") );
 	assert_null( as_record_get_string(rec, "d") );

@@ -106,6 +106,8 @@ as_status aerospike_query_foreach(
 	const as_query * query, 
 	aerospike_query_foreach_callback callback, void * udata) 
 {
+	as_error_reset(err);
+	
 	if ( aerospike_query_init(as, err) != AEROSPIKE_OK ) {
 		return err->code;
 	}
@@ -135,6 +137,8 @@ as_status aerospike_query_stream(
 	const as_query * query, 
 	as_stream * stream)
 {
+	as_error_reset(err);
+	
 	if ( aerospike_query_init(as, err) != AEROSPIKE_OK ) {
 		return err->code;
 	}

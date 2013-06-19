@@ -20,14 +20,15 @@
  * IN THE SOFTWARE.
  *****************************************************************************/
 
-#include <aerospike/as_record.h>
 #include <aerospike/as_bin.h>
-#include <aerospike/as_integer.h>
-#include <aerospike/as_string.h>
 #include <aerospike/as_bytes.h>
+#include <aerospike/as_integer.h>
+#include <aerospike/as_key.h>
 #include <aerospike/as_list.h>
 #include <aerospike/as_map.h>
 #include <aerospike/as_nil.h>
+#include <aerospike/as_record.h>
+#include <aerospike/as_string.h>
 
 /******************************************************************************
  * STATIC FUNCTIONS
@@ -74,10 +75,13 @@ static as_record * as_record_defaults(as_record * rec, bool free, uint16_t nbins
 	r->data = rec;
 	r->hooks = &as_record_rec_hooks;
 
-	rec->digest._free = false;
-	rec->digest.set = NULL;
-	rec->digest.key = NULL;
-	memset(rec->digest.value, 0, AS_DIGEST_VALUE_SIZE);
+	rec->key._free = false;
+	rec->key.namespace = NULL;
+	rec->key.set = NULL;
+	rec->key.valuep = NULL;
+
+	rec->key.digest.init = false;
+	memset(rec->key.digest.value, 0, AS_DIGEST_VALUE_SIZE);
 
 	rec->gen = 0;
 	rec->ttl = 0;
@@ -101,8 +105,6 @@ static as_record * as_record_defaults(as_record * rec, bool free, uint16_t nbins
 static void as_record_release(as_record * rec) 
 {
 	if ( rec ) {
-		
-		as_digest_destroy(&rec->digest);
 
 		if ( rec->bins.entries && rec->bins._free ) {
 			free(rec->bins.entries);
@@ -110,6 +112,14 @@ static void as_record_release(as_record * rec)
 		rec->bins.entries = NULL;
 		rec->bins.capacity = 0;
 		rec->bins.size = 0;
+
+		rec->key.namespace = NULL;
+		rec->key.set = NULL;
+
+		as_val_destroy((as_val *) rec->key.valuep);
+		rec->key.valuep = NULL;
+
+		rec->key.digest.init = false;
 	}
 }
 
@@ -131,8 +141,8 @@ static uint32_t as_record_rec_hashcode(const as_rec * r)
 		while ( (c = *str++) ) {
 			hash += c + (hash << 6) + (hash << 16) - hash;
 		}
-		if ( rec->bins.entries[i].value != NULL ) {
-			hash += as_val_hashcode(rec->bins.entries[i].value);
+		if ( rec->bins.entries[i].valuep != NULL ) {
+			hash += as_val_hashcode(rec->bins.entries[i].valuep);
 		}
 	}
 
@@ -167,7 +177,7 @@ static uint16_t  as_record_rec_gen(const as_rec * r)
 
 static as_bytes * as_record_rec_digest(const as_rec * r) 
 {
-	return r ? as_bytes_new(((as_record *) r)->digest.value, AS_DIGEST_VALUE_SIZE, false) : NULL;
+	return r ? as_bytes_new(((as_record *) r)->key.digest.value, AS_DIGEST_VALUE_SIZE, false) : NULL;
 }
 
 static uint16_t as_record_rec_numbins(const as_rec * r) 
@@ -251,15 +261,15 @@ int as_record_set(as_record * rec, const char * name, as_bin_value * value)
 	// replace
 	for(int i = 0; i < rec->bins.size; i++) {
 		if ( strcmp(rec->bins.entries[i].name, name) == 0 ) {
-			as_val_destroy(rec->bins.entries[i].value);
-			rec->bins.entries[i].value = value;
+			as_val_destroy(rec->bins.entries[i].valuep);
+			rec->bins.entries[i].valuep = value;
 			return 0;
 		}
 	}
 	// not found, then append
 	if ( rec->bins.size < rec->bins.capacity ) {
 		strncpy(rec->bins.entries[rec->bins.size].name,name,AS_BIN_NAME_LEN);
-		rec->bins.entries[rec->bins.size].value = value;
+		rec->bins.entries[rec->bins.size].valuep = value;
 		rec->bins.size++;
 		return 0;
 	}
@@ -420,7 +430,7 @@ as_val * as_record_get(as_record * rec, const char * name)
 {
 	for(int i=0; i<rec->bins.size; i++) {
 		if ( strcmp(rec->bins.entries[i].name, name) == 0 ) {
-			return (as_val *) rec->bins.entries[i].value;
+			return (as_val *) rec->bins.entries[i].valuep;
 		}
 	}
 	return (as_val *) &as_nil;

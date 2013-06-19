@@ -91,7 +91,12 @@ TEST( key_apply_put , "put: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 'def
 	as_record_set_list(&r, "e", &list);
 	as_record_set_map(&r, "f", &map);
 
-	as_status rc = aerospike_key_put(as, &err, NULL, "test", "test", "foo", &r);
+	as_key key;
+	as_key_init(&key, "test", "test", "foo");
+
+	as_status rc = aerospike_key_put(as, &err, NULL, &key, &r);
+
+	as_key_destroy(&key);
 
 	assert_int_eq( rc, AEROSPIKE_OK );
 }
@@ -103,7 +108,12 @@ TEST( key_apply_one , "apply: (test,test,foo) <!> key_apply.one() => 1" ) {
 
 	as_val * res = NULL;
 
-	as_status rc = aerospike_key_apply(as, &err, NULL, "test", "test", "foo", UDF_FILE, "one", NULL, &res);
+	as_key key;
+	as_key_init(&key, "test", "test", "foo");
+
+	as_status rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "one", NULL, &res);
+
+	as_key_destroy(&key);
 	
     assert_int_eq( rc, AEROSPIKE_OK );
 	assert_not_null( res );
@@ -121,7 +131,12 @@ TEST( key_apply_ten , "apply: (test,test,foo) <!> key_apply.one() => 10" ) {
 
 	as_val * res = NULL;
 
-	as_status rc = aerospike_key_apply(as, &err, NULL, "test", "test", "foo", UDF_FILE, "ten", NULL, &res);
+	as_key key;
+	as_key_init(&key, "test", "test", "foo");
+
+	as_status rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "ten", NULL, &res);
+
+	as_key_destroy(&key);
 	
     assert_int_eq( rc, AEROSPIKE_OK );
 	assert_not_null( res );
@@ -138,12 +153,17 @@ TEST( key_apply_add_1_2 , "apply: (test,test,foo) <!> key_apply.add(1,2) => 3" )
 
 	as_val * res = NULL;
 
+	as_key key;
+	as_key_init(&key, "test", "test", "foo");
+
 	as_list arglist;
 	as_arraylist_init(&arglist, 3, 0);
 	as_list_append_int64(&arglist, 1);
 	as_list_append_int64(&arglist, 2);
 
-	as_status rc = aerospike_key_apply(as, &err, NULL, "test", "test", "foo", UDF_FILE, "add", &arglist, &res);
+	as_status rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "add", &arglist, &res);
+
+	as_key_destroy(&key);
 	
     assert_int_eq( rc, AEROSPIKE_OK );
 	assert_not_null( res );
@@ -160,7 +180,12 @@ TEST( key_apply_record_exists , "apply: (test,test,foo) <!> key_apply.record_exi
 
 	as_val * res = NULL;
 
-	as_status rc = aerospike_key_apply(as, &err, NULL, "test", "test", "foo", UDF_FILE, "record_exists", NULL, &res);
+	as_key key;
+	as_key_init(&key, "test", "test", "foo");
+
+	as_status rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "record_exists", NULL, &res);
+
+	as_key_destroy(&key);
 	
     assert_int_eq( rc, AEROSPIKE_OK );
 	assert_not_null( res );
@@ -178,11 +203,16 @@ TEST( key_apply_get_bin_a , "apply: (test,test,foo) <!> key_apply.get_bin_a() =>
 
 	as_val * res = NULL;
 
+	as_key key;
+	as_key_init(&key, "test", "test", "foo");
+
 	as_list arglist;
 	as_arraylist_init(&arglist, 1, 0);
 	as_list_append_str(&arglist, "a");
 
-	as_status rc = aerospike_key_apply(as, &err, NULL, "test", "test", "foo", UDF_FILE, "get_bin_a", &arglist, &res);
+	as_status rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "get_bin_a", &arglist, &res);
+
+	as_key_destroy(&key);
 	
     assert_int_eq( rc, AEROSPIKE_OK );
 	assert_not_null( res );

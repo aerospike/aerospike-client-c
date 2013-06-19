@@ -26,6 +26,16 @@
 #include <stdint.h>
 
 /******************************************************************************
+ *	MACROS
+ *****************************************************************************/
+
+#define AS_POLICY_TIMEOUT_DEFAULT 1000
+#define AS_POLICY_WRITEMODE_DEFAULT AS_POLICY_WRITEMODE_RETRY
+#define AS_POLICY_GEN_DEFAULT AS_POLICY_GEN_IGNORE
+#define AS_POLICY_KEY_DEFAULT AS_POLICY_KEY_DIGEST
+#define AS_POLICY_EXISTS_DEFAULT AS_POLICY_EXISTS_IGNORE
+
+/******************************************************************************
  *	TYPES
  *****************************************************************************/
 
@@ -33,6 +43,14 @@
  *	Write Mode Policy
  */
 typedef enum as_policy_writemode_e {
+
+	/**
+	 *	The policy is undefined.
+	 *	This will mean the value will be defaulted to
+	 *	value either defined in the as_config.policies
+	 *	or Aerospike's recommended default.
+	 */
+	AS_POLICY_WRITEMODE_UNDEF, 
 
 	/**
 	 * Asynchronous write mode.
@@ -60,9 +78,19 @@ typedef enum as_policy_writemode_e {
 typedef enum as_policy_gen_e {
 
 	/**
-	 *	Write a record, regardless of generation
+	 *	The policy is undefined.
+	 *
+	 *	If set, then the value will default to
+	 *	either as_config.policies.gen
+	 *	or Aerospike's recommended default: 
+	 *	AS_POLICY_KEY_DIGEST
 	 */
-	AS_POLICY_GEN_DEFAULT,
+	AS_POLICY_GEN_UNDEF,
+
+	/**
+	 *	Write a record, regardless of generation.
+	 */
+	AS_POLICY_GEN_IGNORE,
 
 	/**
 	 *	Write a record, ONLY if generations are equal
@@ -92,6 +120,16 @@ typedef enum as_policy_gen_e {
 typedef enum as_policy_key_e {
 
 	/**
+	 *	The policy is undefined.
+	 *
+	 *	If set, then the value will default to
+	 *	either as_config.policies.key
+	 *	or Aerospike's recommended default: 
+	 *	AS_POLICY_KEY_DIGEST
+	 */
+	AS_POLICY_KEY_UNDEF,
+
+	/**
 	 *	Send the digest value of the key.
 	 */
 	AS_POLICY_KEY_DIGEST,
@@ -118,9 +156,19 @@ typedef enum as_policy_key_e {
 typedef enum as_policy_exists_e {
 
 	/**
-	 *	Create or update a record.
+	 *	The policy is undefined.
+	 *
+	 *	If set, then the value will default to
+	 *	either as_config.policies.exists
+	 *	or Aerospike's recommended default: 
+	 *	AS_POLICY_KEY_DIGEST
 	 */
-	AS_POLICY_EXISTS_DEFAULT,
+	AS_POLICY_EXISTS_UNDEF,
+
+	/**
+	 *	Write the record, regardless of existence.
+	 */
+	AS_POLICY_EXISTS_IGNORE,
 
 	/**
 	 *	Create a record, ONLY if it doesn't exist.
@@ -143,6 +191,10 @@ typedef struct as_policy_write_s {
 	/**
 	 *	Maximum time in milliseconds to wait for 
 	 *	the operation to complete.
+	 *
+	 *	If 0 (zero), then the value will default to
+	 *	either as_config.policies.timeout
+	 *	or Aerospike's recommended default.
 	 */
 	uint32_t timeout;
 
@@ -179,6 +231,10 @@ typedef struct as_policy_read_s {
 	/**
 	 *	Maximum time in milliseconds to wait for 
 	 *	the operation to complete.
+	 *
+	 *	If 0 (zero), then the value will default to
+	 *	either as_config.policies.timeout
+	 *	or Aerospike's recommended default.
 	 */
 	uint32_t timeout;
 
@@ -197,6 +253,10 @@ typedef struct as_policy_operate_s {
 	/**
 	 *	Maximum time in milliseconds to wait for 
 	 *	the operation to complete.
+	 *
+	 *	If 0 (zero), then the value will default to
+	 *	either as_config.policies.timeout
+	 *	or Aerospike's recommended default.
 	 */
 	uint32_t timeout;
 
@@ -232,6 +292,10 @@ typedef struct as_policy_query_s {
 	/**
 	 *	Maximum time in milliseconds to wait for 
 	 *	the operation to complete.
+	 *
+	 *	If 0 (zero), then the value will default to
+	 *	either as_config.policies.timeout
+	 *	or Aerospike's recommended default.
 	 */
 	uint32_t timeout;
 
@@ -245,6 +309,10 @@ typedef struct as_policy_scan_s {
 	/**
 	 *	Maximum time in milliseconds to wait for 
 	 *	the operation to complete.
+	 *
+	 *	If 0 (zero), then the value will default to
+	 *	either as_config.policies.timeout
+	 *	or Aerospike's recommended default.
 	 */
 	uint32_t timeout;
 
@@ -264,6 +332,10 @@ typedef struct as_policy_info_s {
 	/**
 	 *	Maximum time in milliseconds to wait for 
 	 *	the operation to complete.
+	 *
+	 *	If 0 (zero), then the value will default to
+	 *	either as_config.policies.timeout
+	 *	or Aerospike's recommended default.
 	 */
 	uint32_t timeout;
 
@@ -286,11 +358,57 @@ typedef struct as_policy_info_s {
  */
 typedef struct as_policies_s {
 
+	/***************************************************************************
+	 *	DEFAULT VALUES, IF SPECIFIC POLICY IS UNDEFINED
+	 **************************************************************************/
+
 	/**
 	 *	Default timeout in milliseconds.
+	 *
 	 *	Will be used if specific policies have a timeout of 0 (zero).
+	 *	
+	 *	If 0 (zero), then the value will default to
+	 *	or Aerospike's recommended default: 1000 ms
 	 */
 	uint32_t timeout;
+
+	/**
+	 *	The write mode defines the behavior for writing data to the cluster.
+	 *	
+	 *	If AS_POLICY_WRITEMODE_UNDEF, then the value will default to
+	 *	or Aerospike's recommended default: AS_POLICY_WRITEMODE_RETRY.
+	 */
+	as_policy_writemode mode;
+	
+	/**
+	 *	Specifies the behavior for the key.
+	 *	
+	 *	If AS_POLICY_KEY_UNDEF, then the value will default to
+	 *	or Aerospike's recommended default: AS_POLICY_KEY_DIGEST.
+	 */
+	as_policy_key key;
+
+	/**
+	 *	Specifies the behavior for the generation
+	 *	value.
+	 *	
+	 *	If AS_POLICY_GEN_UNDEF, then the value will default to
+	 *	or Aerospike's recommended default: AS_POLICY_GEN_IGNORE.
+	 */
+	as_policy_gen gen;
+
+	/**
+	 *	Specifies the behavior for the existence 
+	 *	of the record.
+	 *	
+	 *	If AS_POLICY_EXISTS_UNDEF, then the value will default to
+	 *	or Aerospike's recommended default: AS_POLICY_EXISTS_IGNORE.
+	 */
+	as_policy_exists exists;
+
+	/***************************************************************************
+	 *	SPECIFIC POLICIES
+	 **************************************************************************/
 
 	/**
 	 *	The default read policy.
@@ -330,36 +448,58 @@ typedef struct as_policies_s {
 
 /**
  *	Initialize as_policy_read to default values.
+ *
+ *	@param p	The policy to initialize
+ *	@return The initialized policy.
  */
 as_policy_read * as_policy_read_init(as_policy_read * p);
 
 /**
  *	Initialize as_policy_write to default values.
+ *
+ *	@param p	The policy to initialize
+ *	@return The initialized policy.
  */
-as_policy_write * as_policy_write_init(as_policy_write * p) ;
+as_policy_write * as_policy_write_init(as_policy_write * p);
 
 /**
  *	Initialize as_policy_operate to default values.
+ *
+ *	@param p	The policy to initialize
+ *	@return The initialized policy.
  */
 as_policy_operate * as_policy_operate_init(as_policy_operate * p);
 
 /**
  *	Initialize as_policy_scan to default values.
+ *
+ *	@param p	The policy to initialize
+ *	@return The initialized policy.
  */
 as_policy_scan * as_policy_scan_init(as_policy_scan * p);
 
 /**
  *	Initialize as_policy_query to default values.
+ *
+ *	@param p	The policy to initialize
+ *	@return The initialized policy.
  */
 as_policy_query * as_policy_query_init(as_policy_query * p);
 
 /**
  *	Initialize as_policy_info to default values.
+ *
+ *	@param p	The policy to initialize
+ *	@return The initialized policy.
  */
 as_policy_info * as_policy_info_init(as_policy_info * p);
 
 /**
  *	Initialize as_policies to default values.
+ *
+ *	@param p	The policies to initialize
+ *	@return The initialized policies.
  */
 as_policies * as_policies_init(as_policies * p);
+
 

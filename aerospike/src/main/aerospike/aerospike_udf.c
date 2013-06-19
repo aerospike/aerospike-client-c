@@ -28,8 +28,9 @@
 
 #include <citrusleaf/cl_udf.h>
 
-#include "shim.h"
-#include "log.h"
+#include "_log.h"
+#include "_policy.h"
+#include "_shim.h"
 
 /******************************************************************************
  * FUNCTIONS
@@ -63,7 +64,12 @@ as_status aerospike_udf_list(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
 	as_udf_files * files)
 {
+	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
+	
+	// resolve policies
+	// as_policy_info p;
+	// as_policy_info_resolve(&p, &as->config.policies, policy);
 
 	char * 			error = NULL;
 	cl_udf_file ** 	clfiles = NULL;
@@ -109,7 +115,12 @@ as_status aerospike_udf_get(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
 	const char * filename, as_udf_type type, as_udf_file * file)
 {
+	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
+	
+	// resolve policies
+	// as_policy_info p;
+	// as_policy_info_resolve(&p, &as->config.policies, policy);
 	
 	char * error = NULL;
 	cl_udf_file clfile;
@@ -141,7 +152,12 @@ as_status aerospike_udf_put(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
 	const char * filename, as_udf_type type, as_bytes * content)
 {
+	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
+	
+	// resolve policies
+	// as_policy_info p;
+	// as_policy_info_resolve(&p, &as->config.policies, policy);
 	
 	char * error = NULL;
 
@@ -162,7 +178,12 @@ as_status aerospike_udf_remove(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
 	const char * filename)
 {
+	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
+	
+	// resolve policies
+	// as_policy_info p;
+	// as_policy_info_resolve(&p, &as->config.policies, policy);
 	
 	char * error = NULL;
 	

@@ -1,4 +1,3 @@
-#include "shim.h"
 
 #include <aerospike/as_bytes.h>
 #include <aerospike/as_integer.h>
@@ -17,6 +16,12 @@
 #include <citrusleaf/cf_log_internal.h>
 
 #include <stdint.h>
+
+#include "_shim.h"
+
+/******************************************************************************
+ *	FUNCTIONS
+ *****************************************************************************/
 
 
 #define ERR_ASSIGN(__enum) \

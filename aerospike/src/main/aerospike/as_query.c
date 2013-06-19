@@ -26,7 +26,7 @@
 #include <aerospike/as_udf.h>
 #include <stdarg.h>
 
-#include "log.h"
+#include "_log.h"
 
 /******************************************************************************
  * FUNCTIONS

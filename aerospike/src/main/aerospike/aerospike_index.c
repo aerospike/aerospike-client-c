@@ -24,7 +24,9 @@
 
 #include <citrusleaf/cl_sindex.h>
 
-#include "shim.h"
+#include "_log.h"
+#include "_policy.h"
+#include "_shim.h"
 
 /******************************************************************************
  * FUNCTIONS

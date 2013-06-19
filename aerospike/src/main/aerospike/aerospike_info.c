@@ -35,8 +35,9 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 
-#include "shim.h"
-#include "log.h"
+#include "_log.h"
+#include "_policy.h"
+#include "_shim.h"
 
 /******************************************************************************
  * TYPES
@@ -105,16 +106,18 @@ as_status aerospike_info_host(
 	const char * addr, uint16_t port, const char * req, 
 	char ** res) 
 {
+	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
-
-	// if policy is NULL, then get default policy
-	as_policy_info * p = policy ? (as_policy_info *) policy : &as->config.policies.info;
 	
+	// resolve policies
+	as_policy_info p;
+	as_policy_info_resolve(&p, &as->config.policies, policy);
+
 	if (! as) {
 		return AEROSPIKE_ERR;
 	}
 
-	cl_rv rc = citrusleaf_info((char *) addr, port, (char *) req, res, p->timeout);
+	cl_rv rc = citrusleaf_info((char *) addr, port, (char *) req, res, p.timeout);
 
 	return as_error_fromrc(err, rc);
 }
@@ -147,7 +150,12 @@ as_status aerospike_info_node(
 	char ** res
 	)
 {
+	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
+	
+	// resolve policies
+	as_policy_info p;
+	as_policy_info_resolve(&p, &as->config.policies, policy);
 
 	/**
 	 * NOTE: We do not have the equivalent in the OLD API. 
@@ -183,10 +191,12 @@ as_status aerospike_info_foreach(
 	const char * req, 
 	aerospike_info_foreach_callback callback, void * udata)
 {
+	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
-
-	// if policy is NULL, then get default policy
-	as_policy_info * p = policy ? (as_policy_info *) policy : &as->config.policies.info;
+	
+	// resolve policies
+	as_policy_info p;
+	as_policy_info_resolve(&p, &as->config.policies, policy);
 	
 	if ( !as ) {
 		return AEROSPIKE_ERR;
@@ -198,7 +208,7 @@ as_status aerospike_info_foreach(
 	};
 
 	cl_rv rc = citrusleaf_info_cluster_foreach(
-		as->cluster, req, p->send_as_is, p->check_bounds, p->timeout,
+		as->cluster, req, p.send_as_is, p.check_bounds, p.timeout,
 		(void *) &data, citrusleaf_info_cluster_foreach_callback);
 
 	return as_error_fromrc(err, rc);

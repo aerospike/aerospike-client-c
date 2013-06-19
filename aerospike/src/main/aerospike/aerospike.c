@@ -30,7 +30,7 @@
 #include <citrusleaf/cl_cluster.h>
 #include <citrusleaf/cf_log_internal.h>
 
-#include "log.h"
+#include "_log.h"
 
 /******************************************************************************
  * MACROS

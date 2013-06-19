@@ -3,7 +3,7 @@
 #include <aerospike/aerospike.h>
 #include <citrusleaf/cf_log.h>
 
-#include "../main/aerospike/log.h"
+#include "../main/aerospike/_log.h"
 #include "test.h"
 #include "util/info_util.h"
 

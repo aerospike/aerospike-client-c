@@ -27,7 +27,9 @@
 #include <citrusleaf/cl_scan.h>
 #include <citrusleaf/cf_random.h>
 
-#include "shim.h"
+#include "_log.h"
+#include "_policy.h"
+#include "_shim.h"
 
 /******************************************************************************
  * LOCAL STRUCTURES
@@ -176,13 +178,12 @@ static as_status aerospike_scan_generic(
 	const char * node, const as_scan * scan,
 	aerospike_scan_foreach_callback callback, void * udata)
 {
+
 	cl_rv clrv;
 	as_status rc = AEROSPIKE_OK;
-	
-	as_policy_scan * p = policy ? (as_policy_scan *) policy : &as->config.policies.scan;
 
 	cl_scan clscan;
-	as_scan_toclscan(scan, p, &clscan, false, NULL);
+	as_scan_toclscan(scan, policy, &clscan, false, NULL);
 
 	if ( clscan.udf.type == CL_SCAN_UDF_NONE ) {
 
@@ -252,16 +253,19 @@ as_status aerospike_scan_background(
 	const as_scan * scan, uint64_t * scan_id
 	)
 {
+	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
+	
+	// resolve policies
+	as_policy_scan p;
+	as_policy_scan_resolve(&p, &as->config.policies, policy);
 	
 	if ( aerospike_scan_init(as, err) != AEROSPIKE_OK ) {
 		return err->code;
 	}
 
-	as_policy_scan * p = policy ? (as_policy_scan *) policy : &as->config.policies.scan;
-
 	cl_scan clscan;
-	as_scan_toclscan(scan, p, &clscan, true, scan_id);
+	as_scan_toclscan(scan, &p, &clscan, true, scan_id);
 
 	cf_vector *v = citrusleaf_udf_scan_background(as->cluster, &clscan);
 	as_status rc = process_node_response(v, err);
@@ -285,16 +289,19 @@ as_status aerospike_scan_node_background(
 	aerospike * as, as_error * err, const as_policy_scan * policy, 
 	const char * node, const as_scan * scan, uint64_t * scan_id) 
 {
+	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
+	
+	// resolve policies
+	as_policy_scan p;
+	as_policy_scan_resolve(&p, &as->config.policies, policy);
 	
 	if ( aerospike_scan_init(as, err) != AEROSPIKE_OK ) {
 		return err->code;
 	}
 
-	as_policy_scan * p = policy ? (as_policy_scan *) policy : &as->config.policies.scan;
-
 	cl_scan clscan;
-	as_scan_toclscan(scan, p, &clscan, true, scan_id);
+	as_scan_toclscan(scan, &p, &clscan, true, scan_id);
 
 	cl_rv clrv = citrusleaf_udf_scan_node_background(as->cluster, &clscan, (char *) node);
 	as_status rc = as_error_fromrc(err, clrv);
@@ -320,13 +327,18 @@ as_status aerospike_scan_foreach(
 	const as_scan * scan, 
 	aerospike_scan_foreach_callback callback, void * udata) 
 {
+	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
+	
+	// resolve policies
+	as_policy_scan p;
+	as_policy_scan_resolve(&p, &as->config.policies, policy);
 	
 	if ( aerospike_scan_init(as, err) != AEROSPIKE_OK ) {
 		return err->code;
 	}
 
-	return aerospike_scan_generic(as, err, policy, NULL, scan, callback, udata);
+	return aerospike_scan_generic(as, err, &p, NULL, scan, callback, udata);
 }
 
 /**
@@ -349,13 +361,18 @@ as_status aerospike_scan_node_foreach(
 	const char * node, const as_scan * scan, 
 	aerospike_scan_foreach_callback callback, void * udata) 
 {
+	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
+	
+	// resolve policies
+	as_policy_scan p;
+	as_policy_scan_resolve(&p, &as->config.policies, policy);
 	
 	if ( aerospike_scan_init(as, err) != AEROSPIKE_OK ) {
 		return err->code;
 	}
 
-	return aerospike_scan_generic(as, err, policy, node, scan, callback, udata);
+	return aerospike_scan_generic(as, err, &p, node, scan, callback, udata);
 }
 
 /**

@@ -69,6 +69,8 @@ CITRUSLEAF += aerospike_lstack.o
 CITRUSLEAF += aerospike_lset.o
 
 AEROSPIKE = 
+AEROSPIKE += _policy.o
+AEROSPIKE += _shim.o
 AEROSPIKE += aerospike.o
 AEROSPIKE += aerospike_info.o
 AEROSPIKE += aerospike_key.o
@@ -87,7 +89,6 @@ AEROSPIKE += as_query.o
 AEROSPIKE += as_record.o
 AEROSPIKE += as_scan.o
 AEROSPIKE += as_udf.o
-AEROSPIKE += shim.o
 
 OBJECTS :=
 OBJECTS += $(COMMON)/$(TARGET_OBJ)/common/aerospike/*.o

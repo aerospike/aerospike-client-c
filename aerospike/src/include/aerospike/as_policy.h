@@ -29,10 +29,29 @@
  *	MACROS
  *****************************************************************************/
 
+/**
+ *	Default timeout value
+ */
 #define AS_POLICY_TIMEOUT_DEFAULT 1000
+
+/**
+ *	Default as_policy_writemode value
+ */
 #define AS_POLICY_WRITEMODE_DEFAULT AS_POLICY_WRITEMODE_RETRY
+
+/**
+ *	Default as_policy_gen value
+ */
 #define AS_POLICY_GEN_DEFAULT AS_POLICY_GEN_IGNORE
+
+/**
+ *	Default as_policy_key value
+ */
 #define AS_POLICY_KEY_DEFAULT AS_POLICY_KEY_DIGEST
+
+/**
+ *	Default as_policy_exists value
+ */
 #define AS_POLICY_EXISTS_DEFAULT AS_POLICY_EXISTS_IGNORE
 
 /******************************************************************************

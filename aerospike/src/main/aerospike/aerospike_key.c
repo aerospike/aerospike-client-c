@@ -110,7 +110,7 @@ as_status aerospike_key_get(
 		}
 	}
 	
-	if ( rec != NULL ) {
+	if ( rc == CITRUSLEAF_OK && rec != NULL ) {
 		as_record * r = *rec;
 		if ( r == NULL ) {
 			r = as_record_new(0);
@@ -202,7 +202,7 @@ as_status aerospike_key_select(
 		}
 	}
 
-	if ( rec != NULL ) {
+	if ( rc == CITRUSLEAF_OK && rec != NULL ) {
 		as_record * r = *rec;
 		if ( r == NULL ) {
 			r = as_record_new(0);

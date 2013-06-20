@@ -20,19 +20,27 @@ function getmap(rec)
 end
 
 function add_strings(rec, a, b)
-    return a + b
+    return a .. b
 end
 
 function sum(record, a, b)
     return add(record, a, b)
 end
 
-function add_local(rec, a, b)
+local function add_local(rec, a, b)
     return a + b
 end
 
 function sum_local(record, a, b)
     return add_local(record, a, b)
+end
+
+local function difference(record, a, b)
+    return a - b
+end
+
+function diff(record, a, b)
+    return difference(record, a, b)
 end
 
 function delete(record)

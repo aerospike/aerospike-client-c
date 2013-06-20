@@ -41,3 +41,26 @@ function delete(record)
 	record.bin3 = nil
 	return aerospike:update(record)
 end
+
+function update_record(record)
+	record.bina = "string a"
+	record.binb = "string b"
+	aerospike:create(record);
+	record.bina = nil
+	aerospike:update(record)
+	record.bina = "ah new string"
+	record.binc = "string c"
+	return aerospike:update(record)
+end
+
+function bad_update(record)
+	record.bina = "string a"
+	record.binb = "string b"
+	aerospike:create(record);
+	record.bina = nil
+	aerospike:update(record)
+	record.bina = "string a"
+	record.iamabinwithlengthgreaterthan16 = "I will fail"
+	record.bin3 = "string c"
+	return aerospike:update(record)
+end

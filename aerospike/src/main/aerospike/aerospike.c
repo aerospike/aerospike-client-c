@@ -114,12 +114,12 @@ as_status aerospike_connect(aerospike * as, as_error * err)
 
     mod_lua_config config = {
         .server_mode    = false,
-        .cache_enabled  = as->config.mod_lua.cache_enabled,
+        .cache_enabled  = as->config.lua.cache_enabled,
         .system_path    = {0},
         .user_path      = {0}
     };
-    memcpy(config.system_path, as->config.mod_lua.system_path, sizeof(config.system_path));
-    memcpy(config.user_path, as->config.mod_lua.user_path, sizeof(config.user_path));
+    memcpy(config.system_path, as->config.lua.system_path, sizeof(config.system_path));
+    memcpy(config.user_path, as->config.lua.user_path, sizeof(config.user_path));
     
 	as_trace(LOGGER, "as_module_configure: ...");
     as_module_configure(&mod_lua, &config);

@@ -72,3 +72,12 @@ function bad_update(record)
 	record.bin3 = "string c"
 	return aerospike:update(record)
 end
+
+function bad_create(record)
+	record.bina = "string a"
+	record.iamabinwithlengthgreaterthan16 = "I will fail"
+	aerospike:create(record)
+	record.binb = "string b"
+	record.binc = "string c"
+	return aerospike:update(record)
+end

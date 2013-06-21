@@ -85,12 +85,16 @@ $(COMMON)/$(TARGET_LIB)/libaerospike-common.a:
 	$(MAKE) -e -C $(COMMON) libaerospike-common.a MSGPACK=$(MSGPACK)
 
 
-
-COMMON-HEADERS := $(wildcard $(COMMON)/$(SOURCE_INCL)/aerospike/*.h) $(wildcard $(COMMON)/$(SOURCE_INCL)/citrusleaf/*.h)
-
 .PHONY: COMMON-prepare
 COMMON-prepare: COMMON-make-prepare $(subst $(COMMON)/$(SOURCE_INCL),$(TARGET_INCL),$(COMMON-HEADERS)) 
 	$(noop)
+
+
+# COMMON-HEADERS := $(wildcard $(COMMON)/$(SOURCE_INCL)/aerospike/*.h) $(wildcard $(COMMON)/$(SOURCE_INCL)/citrusleaf/*.h)
+
+# .PHONY: COMMON-prepare
+# COMMON-prepare: COMMON-make-prepare $(subst $(COMMON)/$(SOURCE_INCL),$(TARGET_INCL),$(COMMON-HEADERS)) 
+# 	$(noop)
 
 .PHONY: COMMON-make-prepare
 COMMON-make-prepare:
@@ -138,19 +142,22 @@ $(BASE)/$(TARGET_LIB)/libaerospike-base.a:
 	$(MAKE) -e -C $(BASE) libaerospike-base.a MSGPACK=$(MSGPACK) COMMON=$(COMMON)
 
 
-
-BASE-HEADERS := $(wildcard $(BASE)/$(SOURCE_INCL)/citrusleaf/*.h)
-
 .PHONY: BASE-prepare
-BASE-prepare: BASE-make-prepare $(subst $(BASE)/$(SOURCE_INCL),$(TARGET_INCL),$(BASE-HEADERS)) 
+BASE-prepare:
 	$(noop)
 
-.PHONY: BASE-make-prepare
-BASE-make-prepare:
-	$(MAKE) -e -C $(BASE) prepare MSGPACK=$(MSGPACK) COMMON=$(COMMON)
+# BASE-HEADERS := $(wildcard $(BASE)/$(SOURCE_INCL)/citrusleaf/*.h)
 
-$(TARGET_INCL)/citrusleaf/%.h: $(BASE)/$(TARGET_INCL)/citrusleaf/%.h | $(TARGET_INCL)/citrusleaf
-	cp $^ $@
+# .PHONY: BASE-prepare
+# BASE-prepare: BASE-make-prepare $(subst $(BASE)/$(SOURCE_INCL),$(TARGET_INCL),$(BASE-HEADERS)) 
+# 	$(noop)
+
+# .PHONY: BASE-make-prepare
+# BASE-make-prepare:
+# 	$(MAKE) -e -C $(BASE) prepare MSGPACK=$(MSGPACK) COMMON=$(COMMON)
+
+# $(TARGET_INCL)/citrusleaf/%.h: $(BASE)/$(TARGET_INCL)/citrusleaf/%.h | $(TARGET_INCL)/citrusleaf
+# 	cp $^ $@
 
 
 ###############################################################################
@@ -188,16 +195,19 @@ MOD_LUA-clean:
 $(MOD_LUA)/$(TARGET_LIB)/libmod_lua.a:
 	$(MAKE) -e -C $(MOD_LUA) libmod_lua.a COMMON=$(COMMON) MSGPACK=$(MSGPACK)
 
-
-MOD_LUA-HEADERS := $(wildcard $(MOD_LUA)/$(SOURCE_INCL)/aerospike/*.h)
-
 .PHONY: MOD_LUA-prepare
-MOD_LUA-prepare: MOD_LUA-make-prepare $(subst $(MOD_LUA)/$(SOURCE_INCL),$(TARGET_INCL),$(MOD_LUA-HEADERS))
+MOD_LUA-prepare:
 	$(noop)
 
-.PHONY: MOD_LUA-make-prepare
-MOD_LUA-make-prepare:
-	$(MAKE) -e -C $(MOD_LUA) prepare MSGPACK=$(MSGPACK) COMMON=$(COMMON)
+# MOD_LUA-HEADERS := $(wildcard $(MOD_LUA)/$(SOURCE_INCL)/aerospike/*.h)
 
-$(TARGET_INCL)/aerospike/%.h: $(MOD_LUA)/$(TARGET_INCL)/aerospike/%.h | $(TARGET_INCL)/aerospike
-	cp $^ $@
+# .PHONY: MOD_LUA-prepare
+# MOD_LUA-prepare: MOD_LUA-make-prepare $(subst $(MOD_LUA)/$(SOURCE_INCL),$(TARGET_INCL),$(MOD_LUA-HEADERS))
+# 	$(noop)
+
+# .PHONY: MOD_LUA-make-prepare
+# MOD_LUA-make-prepare:
+# 	$(MAKE) -e -C $(MOD_LUA) prepare MSGPACK=$(MSGPACK) COMMON=$(COMMON)
+
+# $(TARGET_INCL)/aerospike/%.h: $(MOD_LUA)/$(TARGET_INCL)/aerospike/%.h | $(TARGET_INCL)/aerospike
+# 	cp $^ $@

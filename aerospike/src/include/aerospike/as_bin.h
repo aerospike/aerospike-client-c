@@ -35,10 +35,10 @@
  *****************************************************************************/
 
 /**
- *	The length for the bin name.
+ *	Maximum bin name size/length - based on server's storage format.
  */
-#define AS_BIN_NAME_SIZE 16
-#define AS_BIN_NAME_LEN AS_BIN_NAME_SIZE - 1
+#define AS_BIN_NAME_MAX_SIZE 15
+#define AS_BIN_NAME_MAX_LEN (AS_BIN_NAME_MAX_SIZE - 1)
 
 /******************************************************************************
  *	TYPES
@@ -47,7 +47,7 @@
 /**
  *	Bin Name
  */
-typedef char as_bin_name[AS_BIN_NAME_SIZE];
+typedef char as_bin_name[AS_BIN_NAME_MAX_SIZE];
 
 /**
  *	Bin Value

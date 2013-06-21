@@ -23,8 +23,10 @@
 #include <aerospike/aerospike.h>
 #include <aerospike/as_config.h>
 #include <aerospike/as_log.h>
+#include <aerospike/as_logger.h>
 #include <aerospike/as_module.h>
 #include <aerospike/mod_lua.h>
+#include <aerospike/mod_lua_config.h>
 
 #include <citrusleaf/citrusleaf.h>
 #include <citrusleaf/cl_cluster.h>

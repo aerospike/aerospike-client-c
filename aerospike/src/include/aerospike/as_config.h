@@ -29,8 +29,6 @@
 
 #include <aerospike/as_error.h>
 #include <aerospike/as_policy.h>
-#include <aerospike/as_logger.h>
-#include <aerospike/mod_lua_config.h>
 
 /******************************************************************************
  *	MACROS

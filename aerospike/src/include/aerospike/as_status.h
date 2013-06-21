@@ -218,12 +218,7 @@ typedef enum as_status_e {
 	/**
 	 * @todo
 	 */
-	AEROSPIKE_ERR_INDEX_KEY_NOT_FOUND,
-
-	/**
-	 * @todo
-	 */
-	AEROSPIKE_ERR_INDEX_TYPE_MISMATCH,
+	AEROSPIKE_ERR_INDEX_FOUND,
 
 	/**
 	 * @todo
@@ -234,26 +229,6 @@ typedef enum as_status_e {
 	 * @todo
 	 */
 	AEROSPIKE_ERR_INDEX_OOM,
-
-	/**
-	 * @todo
-	 */
-	AEROSPIKE_ERR_INDEX_EXISTS,
-
-	/**
-	 * @todo
-	 */
-	AEROSPIKE_ERR_INDEX_SINGLE_BIN_NS,
-
-	/**
-	 * @todo
-	 */
-	AEROSPIKE_ERR_INDEX_UNKNOWN_TYPE,
-
-	/**
-	 * @todo
-	 */
-	AEROSPIKE_ERR_INDEX_FOUND,
 
 	/**
 	 * @todo

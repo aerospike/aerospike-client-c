@@ -112,28 +112,28 @@ TEST( query_stream_create, "create 100 records and 4 indices" ) {
     // create index on "a"
 
     aerospike_index_sparse_string_create(as, &err, NULL, NAMESPACE, SET, "a", "idx_test_a");
-    if ( err.code != AEROSPIKE_OK && err.code != AEROSPIKE_ERR_INDEX_EXISTS ) {
+    if ( err.code != AEROSPIKE_OK && err.code != AEROSPIKE_ERR_INDEX_FOUND ) {
         info("error(%d): %s", err.code, err.message);
     }
 
     // create index on "b"
 
     aerospike_index_sparse_integer_create(as, &err, NULL, NAMESPACE, SET, "b", "idx_test_b");
-    if ( err.code != AEROSPIKE_OK && err.code != AEROSPIKE_ERR_INDEX_EXISTS ) {
+    if ( err.code != AEROSPIKE_OK && err.code != AEROSPIKE_ERR_INDEX_FOUND ) {
         info("error(%d): %s", err.code, err.message);
     }
 
     // create index on "c"
 
     aerospike_index_sparse_integer_create(as, &err, NULL, NAMESPACE, SET, "c", "idx_test_c");
-    if ( err.code != AEROSPIKE_OK && err.code != AEROSPIKE_ERR_INDEX_EXISTS ) {
+    if ( err.code != AEROSPIKE_OK && err.code != AEROSPIKE_ERR_INDEX_FOUND ) {
         info("error(%d): %s", err.code, err.message);
     }
 
     // create index on "d"
 
     aerospike_index_sparse_integer_create(as, &err, NULL, NAMESPACE, SET, "d", "idx_test_d");
-    if ( err.code != AEROSPIKE_OK && err.code != AEROSPIKE_ERR_INDEX_EXISTS ) {
+    if ( err.code != AEROSPIKE_OK && err.code != AEROSPIKE_ERR_INDEX_FOUND ) {
         info("error(%d): %s", err.code, err.message);
     }
 

@@ -47,7 +47,7 @@
  * @param type      - the type of the bin to be indexed
  * @param name      - the name of the index
  *
- * @return AEROSPIKE_OK if successful. AEROSPIKE_ERR_INDEX_EXISTS if the index already exists. Otherwise an error.
+ * @return AEROSPIKE_OK if successful. AEROSPIKE_ERR_INDEX_FOUND if the index already exists. Otherwise an error.
  */
 static as_status aerospike_index_sparse_create(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
@@ -64,8 +64,7 @@ static as_status aerospike_index_sparse_create(
 			as_error_reset(err);
 			break;
 		case CITRUSLEAF_FAIL_INDEX_FOUND:
-		case CITRUSLEAF_FAIL_INDEX_EXISTS:
-			as_error_update(err, AEROSPIKE_ERR_INDEX_EXISTS, "Index exists");
+			as_error_update(err, AEROSPIKE_ERR_INDEX_FOUND, "Index already exists");
 			break;
 		default:
 			as_error_update(err, AEROSPIKE_ERR_INDEX, "Failure creating index: %s", response);

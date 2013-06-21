@@ -188,7 +188,8 @@ bool as_query_select(as_query * query, const char * bin)
 		}
 	}
 	
-	memcpy(query->select.entries[query->select.size], bin, AS_BIN_NAME_LEN);
+	strncpy(query->select.entries[query->select.size], bin, AS_BIN_NAME_MAX_LEN);
+	query->select.entries[query->select.size][AS_BIN_NAME_MAX_LEN] = '\0';
 	query->select.size++;
 
 	return true;
@@ -241,8 +242,8 @@ bool as_query_where(as_query * query, const char * bin, as_predicate_type type, 
 
 	as_predicate * p = &query->predicates.entries[query->predicates.size];
 
-	strncpy(p->bin, bin, AS_BIN_NAME_LEN);
-	p->bin[AS_BIN_NAME_LEN - 1] = '\0';
+	strncpy(p->bin, bin, AS_BIN_NAME_MAX_LEN);
+	p->bin[AS_BIN_NAME_MAX_LEN] = '\0';
 
 	p->type = type;
 
@@ -314,8 +315,8 @@ bool as_query_orderby(as_query * query, const char * bin, bool ascending)
 
 	as_orderby * o = &query->orderby.entries[query->orderby.size];
 
-	strncpy(o->bin, bin, AS_BIN_NAME_LEN);
-	o->bin[AS_BIN_NAME_LEN - 1] = '\0';
+	strncpy(o->bin, bin, AS_BIN_NAME_MAX_LEN);
+	o->bin[AS_BIN_NAME_MAX_LEN] = '\0';
 
 	o->ascending = ascending;
 

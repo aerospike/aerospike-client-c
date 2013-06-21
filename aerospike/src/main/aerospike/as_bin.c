@@ -35,8 +35,8 @@
 
 static as_bin * as_bin_defaults(as_bin * bin, const as_bin_name name, as_bin_value * valuep)
 {
-	strncpy(bin->name, name, AS_BIN_NAME_LEN);
-	bin->name[AS_BIN_NAME_LEN] = '\0';
+	strncpy(bin->name, name, AS_BIN_NAME_MAX_LEN);
+	bin->name[AS_BIN_NAME_MAX_LEN] = '\0';
 	bin->valuep = valuep;
 	return bin;
 }

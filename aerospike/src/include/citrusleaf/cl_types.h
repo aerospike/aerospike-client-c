@@ -51,7 +51,7 @@
 #define STACK_BUF_SZ (1024 * 16) // provide a safe number for your system - linux tends to have 8M stacks these days
 #define DEFAULT_PROGRESS_TIMEOUT 50
 #define NODE_NAME_SIZE 20
-#define CL_BINNAME_SIZE 16
+#define CL_BINNAME_SIZE 15
 #define CL_MAX_NUM_FUNC_ARGC    10 
 
 /******************************************************************************

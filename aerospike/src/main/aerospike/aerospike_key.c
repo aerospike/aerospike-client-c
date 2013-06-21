@@ -177,8 +177,8 @@ as_status aerospike_key_select(
 
 	values = (cl_bin *) alloca(sizeof(cl_bin) * nvalues);
 	for ( int i = 0; i < nvalues; i++ ) {
-		strncpy(values[i].bin_name, bins[i], AS_BIN_NAME_LEN);
-		values[i].bin_name[AS_BIN_NAME_LEN - 1] = '\0';
+		strncpy(values[i].bin_name, bins[i], AS_BIN_NAME_MAX_LEN);
+		values[i].bin_name[AS_BIN_NAME_MAX_LEN] = '\0';
 		citrusleaf_object_init(&values[i].object);
 	}
 
@@ -472,8 +472,8 @@ as_status aerospike_key_operate(
 	for(int i=0; i<n_operations; i++) {
 		cl_operation * clop = &operations[i];
 		as_binop * op = &ops->binops.entries[i];
-		strncpy(clop->bin.bin_name, op->bin.name, CL_BINNAME_SIZE < AS_BIN_NAME_SIZE ? CL_BINNAME_SIZE : AS_BIN_NAME_SIZE);
-		clop->bin.bin_name[CL_BINNAME_SIZE-1] = '\0';
+		strncpy(clop->bin.bin_name, op->bin.name, CL_BINNAME_SIZE - 1);
+		clop->bin.bin_name[CL_BINNAME_SIZE - 1] = '\0';
 		clop->op = op->operator;
 		asbinvalue_to_clobject(op->bin.valuep, &clop->bin.object);
 	}

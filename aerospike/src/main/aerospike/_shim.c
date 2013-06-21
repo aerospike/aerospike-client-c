@@ -34,14 +34,103 @@ as_status as_error_fromrc(as_error * err, cl_rv rc)
 	case CITRUSLEAF_OK:
 		ERR_ASSIGN(AEROSPIKE_OK);
 		break;
-	case CITRUSLEAF_FAIL_GENERATION:
-		ERR_ASSIGN(AEROSPIKE_ERR_WRITE_GENERATION);
+	case CITRUSLEAF_FAIL_UNKNOWN:
+		ERR_ASSIGN(AEROSPIKE_ERR_SERVER);
 		break;
-		// TODO - fill in other error conversions as new as_status labels are
-		// defined. Note we'll have to distinguish transaction type to do this
-		// properly, i.e. add a parameter to this shim function.
+	case CITRUSLEAF_FAIL_NOTFOUND:
+		ERR_ASSIGN(AEROSPIKE_ERR_RECORD_NOT_FOUND);
+		break;
+	case CITRUSLEAF_FAIL_GENERATION:
+		ERR_ASSIGN(AEROSPIKE_ERR_RECORD_GENERATION);
+		break;
+	case CITRUSLEAF_FAIL_PARAMETER:
+		ERR_ASSIGN(AEROSPIKE_ERR_REQUEST_INVALID);
+		break;
+	case CITRUSLEAF_FAIL_KEY_EXISTS:
+		ERR_ASSIGN(AEROSPIKE_ERR_RECORD_EXISTS);
+		break;
+	case CITRUSLEAF_FAIL_BIN_EXISTS:
+		strcpy(err->message, "got bin-exists error - not supported");
+		ERR_ASSIGN(AEROSPIKE_ERR_SERVER);
+		break;
+	case CITRUSLEAF_FAIL_CLUSTER_KEY_MISMATCH:
+		// For now, both ordinary request and scan can return this.
+		ERR_ASSIGN(AEROSPIKE_ERR_CLUSTER_CHANGE);
+		break;
+	case CITRUSLEAF_FAIL_PARTITION_OUT_OF_SPACE:
+		ERR_ASSIGN(AEROSPIKE_ERR_SERVER_FULL);
+		break;
+	case CITRUSLEAF_FAIL_SERVERSIDE_TIMEOUT:
+		// Conflate with client timeout - apps won't care which was first.
+		ERR_ASSIGN(AEROSPIKE_ERR_TIMEOUT);
+		break;
+	case CITRUSLEAF_FAIL_NOXDS:
+		ERR_ASSIGN(AEROSPIKE_ERR_NO_XDR);
+		break;
+	case CITRUSLEAF_FAIL_UNAVAILABLE:
+		// Yes, "unavailable" means a scan with cluster-change flag set won't
+		// start, because migrations are happening.
+		ERR_ASSIGN(AEROSPIKE_ERR_CLUSTER_CHANGE);
+		break;
+	case CITRUSLEAF_FAIL_INCOMPATIBLE_TYPE:
+		ERR_ASSIGN(AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE);
+		break;
+	case CITRUSLEAF_FAIL_RECORD_TOO_BIG:
+		ERR_ASSIGN(AEROSPIKE_ERR_RECORD_TOO_BIG);
+		break;
+	case CITRUSLEAF_FAIL_KEY_BUSY:
+		ERR_ASSIGN(AEROSPIKE_ERR_RECORD_BUSY);
+		break;
+
+	// TODO - just guessing from here on down ... fill out correctly.
+
+	case CITRUSLEAF_FAIL_SCAN_ABORT:
+		ERR_ASSIGN(AEROSPIKE_ERR_SCAN_ABORTED);
+		break;
+	case CITRUSLEAF_FAIL_INVALID_DATA:
+		ERR_ASSIGN(AEROSPIKE_ERR_SERVER);
+		break;
+	case CITRUSLEAF_FAIL_UDF_BAD_RESPONSE:
+		ERR_ASSIGN(AEROSPIKE_ERR_UDF);
+		break;
+	case CITRUSLEAF_FAIL_INDEX_KEY_NOTFOUND:
+		ERR_ASSIGN(AEROSPIKE_ERR_INDEX_KEY_NOT_FOUND);
+		break;
+	case CITRUSLEAF_FAIL_INDEX_TYPE_MISMATCH:
+		ERR_ASSIGN(AEROSPIKE_ERR_INDEX_TYPE_MISMATCH);
+		break;
+	case CITRUSLEAF_FAIL_INDEX_NOTFOUND:
+		ERR_ASSIGN(AEROSPIKE_ERR_INDEX_NOT_FOUND);
+		break;
+	case CITRUSLEAF_FAIL_INDEX_OOM:
+		ERR_ASSIGN(AEROSPIKE_ERR_INDEX_OOM);
+		break;
+	case CITRUSLEAF_FAIL_INDEX_GENERIC:
+		ERR_ASSIGN(AEROSPIKE_ERR_INDEX);
+		break;
+	case CITRUSLEAF_FAIL_INDEX_EXISTS:
+		ERR_ASSIGN(AEROSPIKE_ERR_INDEX_EXISTS);
+		break;
+	case CITRUSLEAF_FAIL_INDEX_SINGLEBIN_NS:
+		ERR_ASSIGN(AEROSPIKE_ERR_INDEX_SINGLE_BIN_NS);
+		break;
+	case CITRUSLEAF_FAIL_INDEX_UNKNOWN_TYPE:
+		ERR_ASSIGN(AEROSPIKE_ERR_INDEX_UNKNOWN_TYPE);
+		break;
+	case CITRUSLEAF_FAIL_INDEX_FOUND:
+		ERR_ASSIGN(AEROSPIKE_ERR_INDEX_FOUND);
+		break;
+	case CITRUSLEAF_FAIL_INDEX_NOTREADABLE:
+		ERR_ASSIGN(AEROSPIKE_ERR_INDEX_NOT_READABLE);
+		break;
+	case CITRUSLEAF_FAIL_QUERY_ABORTED:
+		ERR_ASSIGN(AEROSPIKE_ERR_QUERY_ABORTED);
+		break;
+	case CITRUSLEAF_FAIL_QUERY_QUEUEFULL:
+		ERR_ASSIGN(AEROSPIKE_ERR_QUERY_QUEUE_FULL);
+		break;
 	default:
-		ERR_ASSIGN(AEROSPIKE_ERR);
+		ERR_ASSIGN(rc < 0 ? AEROSPIKE_ERR_CLIENT : AEROSPIKE_ERR_SERVER);
 		break;
 	}
 
@@ -108,8 +197,8 @@ void asbinvalue_to_clobject(as_bin_value * binval, cl_object * obj)
 
 void asbin_to_clbin(as_bin * as, cl_bin * cl) 
 {
-	strncpy(cl->bin_name, as->name, AS_BIN_NAME_LEN);
-	cl->bin_name[CL_BINNAME_SIZE-1] = '\0';
+	strncpy(cl->bin_name, as->name, CL_BINNAME_SIZE - 1);
+	cl->bin_name[CL_BINNAME_SIZE - 1] = '\0';
 	asbinvalue_to_clobject(as->valuep, &cl->object);
 }
 

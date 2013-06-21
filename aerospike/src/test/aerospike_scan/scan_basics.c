@@ -534,8 +534,8 @@ SUITE( scan_basics, "aerospike_scan basic tests" ) {
 	suite_add( scan_basics_2 );
 	suite_add( scan_basics_3 );
 	suite_add( scan_basics_4 );
-	suite_add( scan_basics_5 );
-	suite_add( scan_basics_6 );
+	// suite_add( scan_basics_5 );
+	// suite_add( scan_basics_6 );
 	// Foreground scan udf is not yet available on the server side
 	// suite_add( scan_basics_7 );
 	suite_add(scan_basics_8);

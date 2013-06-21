@@ -498,8 +498,6 @@ as_status aerospike_key_operate(
 		}
 	}
 
-	as_error(&as->log, "ERROR: %d", rc);
-
 	return as_error_fromrc(err,rc);
 }
 

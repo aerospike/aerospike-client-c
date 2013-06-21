@@ -63,9 +63,11 @@ static bool before(atf_plan * plan) {
         	{ .addr = HOST, .port = PORT },
         	{ 0 }
         },
-        .mod_lua.cache_enabled = false,
-        .mod_lua.system_path = "../aerospike-mod-lua/src/lua",
-        .mod_lua.user_path = "src/test/lua",
+        .lua = {
+        	.cache_enabled = false,
+        	.system_path = "../aerospike-mod-lua/src/lua",
+        	.user_path = "src/test/lua"
+        }
     };
 
     as_policies_init(&config.policies);

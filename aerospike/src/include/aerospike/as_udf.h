@@ -20,6 +20,11 @@
  *	IN THE SOFTWARE.
  *****************************************************************************/
 
+/** 
+ *	@defgroup key Key API
+ *	@{
+ */
+
 #pragma once 
 
 #include <aerospike/as_bytes.h>
@@ -249,3 +254,6 @@ as_udf_files * as_udf_files_new(uint32_t capacity);
  */
 void as_udf_files_destroy(as_udf_files * files);
 
+/**
+ *	@}
+ */

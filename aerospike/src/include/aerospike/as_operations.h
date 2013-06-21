@@ -20,6 +20,17 @@
  *	IN THE SOFTWARE.
  *****************************************************************************/
 
+/** 
+ *	The `aerospike_key_operate()` function performs multiple operations on a 
+ *	record in the database. The `as_operations` object is used to define the 
+ *	operations to be performed on the record.
+ *	
+ *	
+ *	
+ *	@addtogroup operate Operate API
+ *	@{
+ */
+
 #pragma once 
 
 #include <aerospike/as_bin.h>
@@ -267,3 +278,7 @@ bool as_operations_append_str(as_operations * ops, as_operator operator, const a
  *	@return true on success. Otherwise an error occurred.
  */
 bool as_operations_append_raw(as_operations * ops, as_operator operator, const as_bin_name name, uint8_t * value, uint32_t size);
+
+/**
+ *	@}
+ */

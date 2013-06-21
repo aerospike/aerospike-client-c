@@ -261,7 +261,7 @@ as_status aerospike_key_operate(
  */
 as_status aerospike_key_apply(
 	aerospike * as, as_error * err, const as_policy_read * policy, 
-	const as_key * key, 
+	const as_key * key,
 	const char * module, const char * function, as_list * arglist, 
 	as_val ** result
 	);

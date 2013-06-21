@@ -20,6 +20,86 @@
  *	IN THE SOFTWARE.
  *****************************************************************************/
 
+/** 
+ *	[TOC]
+ *
+ *	Records in Aerospike are collections of named bins. 
+ *
+ *	The bins in a record are analogous to columns in relational databases. 
+ *	However, unlike columns, the bins themselves are not typed. Instead, bins 
+ *	contain values which are typed. So, it is possible to have multiple records 
+ *	with bins of the same name but different types for values.
+ *
+ *	The bin's value can only be of the types defined in `as_bin_value`.
+ *	
+ *	## Creating and Initializing
+ *	
+ *	There are several ways to use an `as_record`. 
+ *
+ *	You can create the `as_record` on the stack:
+ *	
+ *	~~~~~~~~~~{.c}
+ *		as_record rec;
+ *	~~~~~~~~~~
+ *	
+ *	Then initialize it using either the `as_record_init()` function or 
+ *	`as_record_inita()` macro.
+ *
+ *	The `as_record_init()` function will initialize the variable, then 
+ *	allocate the specified number of bins using `malloc()`. The following
+ *	initializes `rec` with 2 bins.
+ *
+ *	~~~~~~~~~~{.c}
+ *		as_record_init(&rec, 2);
+ *	~~~~~~~~~~
+ *
+ *	The `as_record_inita()` macro will initialize the variable, then allocate
+ *	the specified number of bins using `alloca()`. The following initializes 
+ *	`rec` with 2 bins.
+ *
+ *	~~~~~~~~~~{.c}
+ *		as_record_inita(&rec, 2);
+ *	~~~~~~~~~~
+ *	
+ *	The `as_record_new()` function will allocate an `as_record` on the heap
+ *	using `malloc()` then allocate the specified number of bins using 
+ *	`malloc()`. The following creates a new `as_record` with 2 bins.
+ *
+ *	~~~~~~~~~~{.c}
+ *		as_record * rec = as_record_new(2);
+ *	~~~~~~~~~~
+ *	
+ *	## Setting Bin Values
+ *
+ *   Function                    |  Description
+ *	---------------------------- | ----------------------------------------------
+ *	 `as_record_set_int64()`     | Set the bin value to a 64-bit integer.
+ *	 `as_record_set_str()`       | Set the bin value to a NULL-terminated string.
+ *	 `as_record_set_integer()`   | Set the bin value to an `as_integer`.
+ *	 `as_record_set_string()`    | Set the bin value to an `as_string`.
+ *	 `as_record_set_bytes()`     | Set the bin value to an `as_bytes`.
+ *	 `as_record_set_list()`      | Set the bin value to an `as_list`.                    
+ *	 `as_record_set_map()`       | Set the bin value to an `as_map`.
+ *	 `as_record_set_nil()`       | Set the bin value to an `as_nil`.
+ *
+ *	## Getting Bin Values
+ *
+ *   Function                    |  Description
+ *	---------------------------- | ----------------------------------------------
+ *	 `as_record_get_int64()`     | Get the bin as a 64-bit integer.
+ *	 `as_record_get_str()`       | Get the bin as a NULL-terminated string.
+ *	 `as_record_get_integer()`   | Get the bin as an `as_integer`.
+ *	 `as_record_get_string()`    | Get the bin as an `as_string`.
+ *	 `as_record_get_bytes()`     | Get the bin as an `as_bytes`.
+ *	 `as_record_get_list()`      | Get the bin as an `as_list`.                    
+ *	 `as_record_get_map()`       | Get the bin as an `as_map`.
+ *
+ *	
+ *
+ *	@addtogroup record Record API
+ *	@{
+ */
+
 #pragma once 
 
 #include <aerospike/as_bin.h>
@@ -60,7 +140,9 @@ typedef struct as_record_s {
 	as_rec _;
 
 	/**
-	 *	The digest of the record.
+	 *	The key of the record.
+	 *	This is populated when a record is read from the database.
+	 *	This should not be set by the user.
 	 */
 	as_key key;
 
@@ -435,3 +517,6 @@ as_map * as_record_get_map(as_record * rec, const char * name);
  */
 int as_record_remove(as_record * rec, const char * name);
 
+/**
+ *	@}
+ */

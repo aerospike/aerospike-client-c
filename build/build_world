@@ -3,7 +3,6 @@
 # Only the build master should be using this script.
 
 cd `dirname $0`
-source run_command
 
 ansible-playbook build_world.yml -i hosts -u citrusleaf -e "hosts=bunny" $*
 

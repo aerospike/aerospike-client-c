@@ -59,7 +59,7 @@ then
     if [ "$ver" != "" ]
     then
       ver2=`echo $ver | awk -F'.' '{printf("%s.%s\n",$1,$2)}'`
-      setPlatform ubuntu$ver ubuntu$ver2
+      setPlatform ubuntu$ver2 ubuntu$ver2
     else
       echo "Unknown ubuntu version $ver"
       exit 1
@@ -74,4 +74,4 @@ else
 fi
 
 echo $platform
-exit 0
+

@@ -1,0 +1,8 @@
+#!/bin/bash
+# Build api docs
+
+cd `dirname $0`
+source run_command
+
+cd ../aerospike
+runCommand make docs

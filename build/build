@@ -7,4 +7,4 @@ source run_command
 cd ..
 runCommand make clean
 runCommand make
-exit 0
+

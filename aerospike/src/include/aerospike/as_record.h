@@ -128,7 +128,6 @@
  *	Should only be created or initialized using either: 
  *	- as_record_new() or
  *	- as_record_init()
- *
  */
 typedef struct as_record_s {
 
@@ -227,8 +226,8 @@ as_record * as_record_new(uint16_t nbins);
  *	When you are finished using the `as_record` instance, you should release the 
  *	resources allocated to it by calling `as_record_destroy()`.
  *
- *	@param rec		The record to initialize
- *	@param nbins		The number of bins to initialize. Set to 0, if unknown.
+ *	@param rec		The record to initialize.
+ *	@param nbins	The number of bins to initialize. Set to 0, if unknown.
  *
  *	@return a pointer to the initialized as_record if successful, otherwise NULL.
  */
@@ -253,9 +252,9 @@ uint16_t as_record_numbins(as_record * rec);
  *
  *	@param rec		The record containing the bin.
  *	@param name		The name of the bin.
- *	@param value		The value of the bin.
+ *	@param value	The value of the bin.
  *
- *	@return 0 on success. 1 on failure.
+ *	@return true on success, false on failure.
  */
 bool as_record_set(as_record * rec, const as_bin_name name, as_bin_value * value);
 
@@ -268,9 +267,9 @@ bool as_record_set(as_record * rec, const as_bin_name name, as_bin_value * value
  *
  *	@param rec		The record containing the bin.
  *	@param name		The name of the bin.
- *	@param value		The value of the bin.
+ *	@param value	The value of the bin.
  *
- *	@return 0 on success. 1 on failure.
+ *	@return true on success, false on failure.
  */
 bool as_record_set_int64(as_record * rec, const as_bin_name name, int64_t value);
 
@@ -283,9 +282,9 @@ bool as_record_set_int64(as_record * rec, const as_bin_name name, int64_t value)
  *
  *	@param rec		The record containing the bin.
  *	@param name		The name of the bin.
- *	@param value		The value of the bin.
+ *	@param value	The value of the bin.
  *
- *	@return 0 on success. 1 on failure.
+ *	@return true on success, false on failure.
  */
 bool as_record_set_str(as_record * rec, const as_bin_name name, const char * value);
 
@@ -298,9 +297,9 @@ bool as_record_set_str(as_record * rec, const as_bin_name name, const char * val
  *
  *	@param rec		The record containing the bin.
  *	@param name		The name of the bin.
- *	@param value		The value of the bin.
+ *	@param value	The value of the bin.
  *
- *	@return 0 on success. 1 on failure.
+ *	@return true on success, false on failure.
  */
 bool as_record_set_integer(as_record * rec, const as_bin_name name, as_integer * value);
 
@@ -313,9 +312,9 @@ bool as_record_set_integer(as_record * rec, const as_bin_name name, as_integer *
  *
  *	@param rec		The record containing the bin.
  *	@param name		The name of the bin.
- *	@param value		The value of the bin.
+ *	@param value	The value of the bin.
  *
- *	@return 0 on success. 1 on failure.
+ *	@return true on success, false on failure.
  */
 bool as_record_set_string(as_record * rec, const as_bin_name name, as_string * value);
 
@@ -328,9 +327,9 @@ bool as_record_set_string(as_record * rec, const as_bin_name name, as_string * v
  *
  *	@param rec		The record containing the bin.
  *	@param name		The name of the bin.
- *	@param value		The value of the bin.
+ *	@param value	The value of the bin.
  *
- *	@return 0 on success. 1 on failure.
+ *	@return true on success, false on failure.
  */
 bool as_record_set_bytes(as_record * rec, const as_bin_name name, as_bytes * value);
 
@@ -349,9 +348,9 @@ bool as_record_set_bytes(as_record * rec, const as_bin_name name, as_bytes * val
  *
  *	@param rec		The record containing the bin.
  *	@param name		The name of the bin.
- *	@param value		The value of the bin.
+ *	@param value	The value of the bin.
  *
- *	@return 0 on success. 1 on failure.
+ *	@return true on success, false on failure.
  */
 bool as_record_set_list(as_record * rec, const as_bin_name name, as_list * value);
 
@@ -372,7 +371,7 @@ bool as_record_set_list(as_record * rec, const as_bin_name name, as_list * value
  *	@param name		The name of the bin.
  *	@param value	The value of the bin.
  *
- *	@return 0 on success. 1 on failure.
+ *	@return true on success, false on failure.
  */
 bool as_record_set_map(as_record * rec, const as_bin_name name, as_map * value);
 
@@ -386,7 +385,7 @@ bool as_record_set_map(as_record * rec, const as_bin_name name, as_map * value);
  *	@param rec		The record containing the bin.
  *	@param name		The name of the bin.
  *
- *	@return 0 on success. 1 on failure.
+ *	@return true on success, false on failure.
  */
 bool as_record_set_nil(as_record * rec, const as_bin_name name);
 
@@ -502,20 +501,6 @@ as_list * as_record_get_list(as_record * rec, const as_bin_name name);
  *	@return the value if it exists, otherwise NULL.
  */
 as_map * as_record_get_map(as_record * rec, const as_bin_name name);
-
-/**
- *	Remove a bin from the record
- *
- *	~~~~~~~~~~{.c}
- *		as_record_remove(rec, "bin");
- *	~~~~~~~~~~
- *
- *	@param rec		The record containing the bin.
- *	@param name		The name of the bin.
- *
- *	@return true if bin was removed, otherwise false.
- */
-int as_record_remove(as_record * rec, const as_bin_name name);
 
 /**
  *	@}

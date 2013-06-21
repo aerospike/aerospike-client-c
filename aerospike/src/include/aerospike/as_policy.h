@@ -216,7 +216,7 @@ typedef struct as_policy_write_s {
 	 *
 	 *	If 0 (zero), then the value will default to
 	 *	either as_config.policies.timeout
-	 *	or Aerospike's recommended default.
+	 *	or `AS_POLICY_TIMEOUT_DEFAULT`.
 	 */
 	uint32_t timeout;
 
@@ -256,7 +256,7 @@ typedef struct as_policy_read_s {
 	 *
 	 *	If 0 (zero), then the value will default to
 	 *	either as_config.policies.timeout
-	 *	or Aerospike's recommended default.
+	 *	or `AS_POLICY_TIMEOUT_DEFAULT`.
 	 */
 	uint32_t timeout;
 
@@ -278,7 +278,7 @@ typedef struct as_policy_operate_s {
 	 *
 	 *	If 0 (zero), then the value will default to
 	 *	either as_config.policies.timeout
-	 *	or Aerospike's recommended default.
+	 *	or `AS_POLICY_TIMEOUT_DEFAULT`.
 	 */
 	uint32_t timeout;
 
@@ -334,7 +334,7 @@ typedef struct as_policy_scan_s {
 	 *
 	 *	If 0 (zero), then the value will default to
 	 *	either as_config.policies.timeout
-	 *	or Aerospike's recommended default.
+	 *	or `AS_POLICY_TIMEOUT_DEFAULT`.
 	 */
 	uint32_t timeout;
 
@@ -357,7 +357,7 @@ typedef struct as_policy_info_s {
 	 *
 	 *	If 0 (zero), then the value will default to
 	 *	either as_config.policies.timeout
-	 *	or Aerospike's recommended default.
+	 *	or `AS_POLICY_TIMEOUT_DEFAULT`.
 	 */
 	uint32_t timeout;
 
@@ -388,25 +388,22 @@ typedef struct as_policies_s {
 	 *	Default timeout in milliseconds.
 	 *
 	 *	Will be used if specific policies have a timeout of 0 (zero).
-	 *	
-	 *	If 0 (zero), then the value will default to
-	 *	or Aerospike's recommended default: 1000 ms
+	 *
+	 *	The default value is `AS_POLICY_TIMEOUT_DEFAULT`.
 	 */
 	uint32_t timeout;
 
 	/**
 	 *	The write mode defines the behavior for writing data to the cluster.
 	 *	
-	 *	If AS_POLICY_WRITEMODE_UNDEF, then the value will default to
-	 *	or Aerospike's recommended default: AS_POLICY_WRITEMODE_RETRY.
+	 *	The default value is `AS_POLICY_WRITEMODE_DEFAULT`.
 	 */
 	as_policy_writemode mode;
 	
 	/**
 	 *	Specifies the behavior for the key.
 	 *	
-	 *	If AS_POLICY_KEY_UNDEF, then the value will default to
-	 *	or Aerospike's recommended default: AS_POLICY_KEY_DIGEST.
+	 *	The default value is `AS_POLICY_KEY_DEFAULT`.
 	 */
 	as_policy_key key;
 
@@ -414,8 +411,7 @@ typedef struct as_policies_s {
 	 *	Specifies the behavior for the generation
 	 *	value.
 	 *	
-	 *	If AS_POLICY_GEN_UNDEF, then the value will default to
-	 *	or Aerospike's recommended default: AS_POLICY_GEN_IGNORE.
+	 *	The default value is `AS_POLICY_GEN_DEFAULT`.
 	 */
 	as_policy_gen gen;
 
@@ -423,8 +419,7 @@ typedef struct as_policies_s {
 	 *	Specifies the behavior for the existence 
 	 *	of the record.
 	 *	
-	 *	If AS_POLICY_EXISTS_UNDEF, then the value will default to
-	 *	or Aerospike's recommended default: AS_POLICY_EXISTS_IGNORE.
+	 *	The default value is `AS_POLICY_EXISTS_DEFAULT`.
 	 */
 	as_policy_exists exists;
 

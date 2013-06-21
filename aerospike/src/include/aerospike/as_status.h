@@ -167,7 +167,7 @@ typedef enum as_status_e {
 	 **************************************************************************/
 
 	/**
-	 * @TODO
+	 * @todo
 	 */
 	AEROSPIKE_ERR_NO_XDR					= 900,
 
@@ -195,12 +195,12 @@ typedef enum as_status_e {
 	AEROSPIKE_ERR_QUERY						= 1100,
 
 	/**
-	 * @TODO
+	 * @todo
 	 */
 	AEROSPIKE_ERR_QUERY_ABORTED 			= 1101,
 
 	/**
-	 * @TODO
+	 * @todo
 	 */
 	AEROSPIKE_ERR_QUERY_QUEUE_FULL 			= 1102,
 
@@ -213,50 +213,50 @@ typedef enum as_status_e {
 	 */
 	AEROSPIKE_ERR_INDEX 					= 1200,
 
-	// @TODO - finalize the order of errors in the rest of this section.
+	// @todo - finalize the order of errors in the rest of this section.
 
 	/**
-	 * @TODO
+	 * @todo
 	 */
 	AEROSPIKE_ERR_INDEX_KEY_NOT_FOUND,
 
 	/**
-	 * @TODO
+	 * @todo
 	 */
 	AEROSPIKE_ERR_INDEX_TYPE_MISMATCH,
 
 	/**
-	 * @TODO
+	 * @todo
 	 */
 	AEROSPIKE_ERR_INDEX_NOT_FOUND,
 
 	/**
-	 * @TODO
+	 * @todo
 	 */
 	AEROSPIKE_ERR_INDEX_OOM,
 
 	/**
-	 * @TODO
+	 * @todo
 	 */
 	AEROSPIKE_ERR_INDEX_EXISTS,
 
 	/**
-	 * @TODO
+	 * @todo
 	 */
 	AEROSPIKE_ERR_INDEX_SINGLE_BIN_NS,
 
 	/**
-	 * @TODO
+	 * @todo
 	 */
 	AEROSPIKE_ERR_INDEX_UNKNOWN_TYPE,
 
 	/**
-	 * @TODO
+	 * @todo
 	 */
 	AEROSPIKE_ERR_INDEX_FOUND,
 
 	/**
-	 * @TODO
+	 * @todo
 	 */
 	AEROSPIKE_ERR_INDEX_NOT_READABLE,
 
@@ -270,7 +270,7 @@ typedef enum as_status_e {
 	AEROSPIKE_ERR_UDF						= 1300,
 
 	/**
-	 * @TODO
+	 * @todo
 	 */
 	AEROSPIKE_ERR_UDF_NOT_FOUND				= 1301
 

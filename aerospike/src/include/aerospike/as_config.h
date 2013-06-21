@@ -21,7 +21,7 @@
  *****************************************************************************/
 
 /** 
- *	@defgroup aerospike Aerospike Instance
+ *	@defgroup config Configuration
  *	@{
  */
 
@@ -44,7 +44,7 @@
 /**
  * The maximum string length of path strings
  */
-#define AS_CONFIG_PATH_LEN 	AS_CONFIG_PATH_SIZE - 256
+#define AS_CONFIG_PATH_LEN 	AS_CONFIG_PATH_SIZE - 1
 
 /**
  * The size of as_config.hosts
@@ -71,6 +71,33 @@ typedef struct as_config_host_s {
 	uint16_t port;
 
 } as_config_host;
+
+
+/**
+ *	lua module config
+ */
+typedef struct as_config_lua_s {
+
+	/**
+	 *	Enable caching of UDF files in the client
+	 *	application.
+	 */
+	bool cache_enabled;
+
+	/**
+	 *	The path to the system UDF files. These UDF files 
+	 *	are installed with the aerospike client library.
+	 *	Default location is: /opt/citrusleaf/sys/udf/lua
+	 */
+	char system_path[AS_CONFIG_PATH_SIZE];
+
+	/**
+	 *	The path to user's UDF files.
+	 *	Default location is: /opt/citrusleaf/usr/udf/lua
+	 */
+	char user_path[AS_CONFIG_PATH_SIZE];
+
+} as_config_lua;
 
 /**
  *	Client Configuration 
@@ -131,30 +158,9 @@ typedef struct as_config_s {
 	as_config_host hosts[AS_CONFIG_HOSTS_SIZE];
 
 	/**
-	 *	lua module config
+	 *	lua config
 	 */
-	struct {
-
-		/**
-		 *	Enable caching of UDF files in the client
-		 *	application.
-		 */
-		bool cache_enabled;
-
-		/**
-		 *	The path to the system UDF files. These UDF files 
-		 *	are installed with the aerospike client library.
-		 *	Default location is: /opt/citrusleaf/sys/udf/lua
-		 */
-		char system_path[AS_CONFIG_PATH_SIZE];
-
-		/**
-		 *	The path to user's UDF files.
-		 *	Default location is: /opt/citrusleaf/usr/udf/lua
-		 */
-		char user_path[AS_CONFIG_PATH_SIZE];
-
-	} mod_lua;
+	as_config_lua lua;
 
 } as_config;
 

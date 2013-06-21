@@ -20,6 +20,11 @@
  *	IN THE SOFTWARE.
  *****************************************************************************/
 
+/** 
+ *	@defgroup config Configuration
+ *	@{
+ */
+
 #pragma once 
 
 #include <stdbool.h>
@@ -65,9 +70,10 @@ typedef enum as_policy_writemode_e {
 
 	/**
 	 *	The policy is undefined.
-	 *	This will mean the value will be defaulted to
-	 *	value either defined in the as_config.policies
-	 *	or Aerospike's recommended default.
+	 *
+	 *	If set, then the value will default to
+	 *	either as_config.policies.writemode
+	 *	or `AS_POLICY_WRITEMODE_DEFAULT`.
 	 */
 	AS_POLICY_WRITEMODE_UNDEF, 
 
@@ -101,8 +107,7 @@ typedef enum as_policy_gen_e {
 	 *
 	 *	If set, then the value will default to
 	 *	either as_config.policies.gen
-	 *	or Aerospike's recommended default: 
-	 *	AS_POLICY_KEY_DIGEST
+	 *	or `AS_POLICY_GEN_DEFAULT`.
 	 */
 	AS_POLICY_GEN_UNDEF,
 
@@ -143,8 +148,7 @@ typedef enum as_policy_key_e {
 	 *
 	 *	If set, then the value will default to
 	 *	either as_config.policies.key
-	 *	or Aerospike's recommended default: 
-	 *	AS_POLICY_KEY_DIGEST
+	 *	or `AS_POLICY_KEY_DEFAULT`.
 	 */
 	AS_POLICY_KEY_UNDEF,
 
@@ -179,8 +183,7 @@ typedef enum as_policy_exists_e {
 	 *
 	 *	If set, then the value will default to
 	 *	either as_config.policies.exists
-	 *	or Aerospike's recommended default: 
-	 *	AS_POLICY_KEY_DIGEST
+	 *	or `AS_POLICY_KEY_DDEFAULT`.
 	 */
 	AS_POLICY_EXISTS_UNDEF,
 
@@ -521,4 +524,6 @@ as_policy_info * as_policy_info_init(as_policy_info * p);
  */
 as_policies * as_policies_init(as_policies * p);
 
-
+/**
+ *	@}
+ */

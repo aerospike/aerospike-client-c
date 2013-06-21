@@ -198,15 +198,16 @@ TEST( key_basics_remove , "remove: (test,test,foo)" ) {
 }
 
 
-TEST( key_basics_operate , "operate: (test,test,foo) => {a: incr(321), b: append(def)}" ) {
+TEST( key_basics_operate , "operate: (test,test,foo) => {a: incr(321), b: append('def'), d: prepend('abc')}" ) {
 
 	as_error err;
 	as_error_reset(&err);
 
 	as_operations ops;
-	as_operations_inita(&ops, 2);
+	as_operations_inita(&ops, 3);
 	as_operations_append_int64(&ops, AS_OPERATOR_INCR, "a", 321);
 	as_operations_append_str(&ops, AS_OPERATOR_APPEND, "b", "def");
+	as_operations_append_str(&ops, AS_OPERATOR_PREPEND, "d", "abc");
 
 	as_key key;
 	as_key_init(&key, "test", "test", "foo");
@@ -218,7 +219,7 @@ TEST( key_basics_operate , "operate: (test,test,foo) => {a: incr(321), b: append
     assert_int_eq( rc, AEROSPIKE_OK );
 }
 
-TEST( key_basics_get2 , "get: (test,test,foo) = {a: 444, b: 'abcdef'}" ) {
+TEST( key_basics_get2 , "get: (test,test,foo) = {a: 444, b: 'abcdef', d: 'abcdef'}" ) {
 
 	as_error err;
 	as_error_reset(&err);
@@ -248,9 +249,9 @@ TEST( key_basics_get2 , "get: (test,test,foo) = {a: 444, b: 'abcdef'}" ) {
     assert_not_null( as_record_get_integer(rec, "c") );
 	assert_int_eq( as_integer_toint(as_record_get_integer(rec, "c")), 456 );
 
-	assert_string_eq( as_record_get_str(rec, "d"), "def" );
+	assert_string_eq( as_record_get_str(rec, "d"), "abcdef" );
 	assert_not_null( as_record_get_string(rec, "d") );
-	assert_string_eq( as_string_tostring(as_record_get_string(rec, "d")), "def" );
+	assert_string_eq( as_string_tostring(as_record_get_string(rec, "d")), "abcdef" );
 
     as_list * list = as_record_get_list(rec, "e");
     assert_not_null( list );
@@ -272,7 +273,7 @@ SUITE( key_basics, "aerospike_key basic tests" ) {
     suite_add( key_basics_get );
     suite_add( key_basics_select );
     suite_add( key_basics_operate );
-    // suite_add( key_basics_get2 );
+    suite_add( key_basics_get2 );
     suite_add( key_basics_remove );
     suite_add( key_basics_notexists );
 }

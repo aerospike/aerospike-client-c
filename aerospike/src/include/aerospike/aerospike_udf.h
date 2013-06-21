@@ -21,7 +21,7 @@
  *****************************************************************************/
 
 /** 
- *	@addtogroup UDF UDF Management API
+ *	@addtogroup udf UDF Management API
  *	@{
  */
 

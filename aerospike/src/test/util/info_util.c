@@ -101,7 +101,7 @@ char **get_stats(char * query, char * key, cl_cluster * asc) {
 	key_value kv;
 	memset(&kv, 0, sizeof(key_value));
 	memcpy(kv.key, key, strlen(key));
-	
+		
 	// Allocate space assuming 64 nodes
 	kv.value = (char**)calloc(1, 64 * sizeof(char*));
 

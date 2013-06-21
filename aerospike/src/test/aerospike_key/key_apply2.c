@@ -387,7 +387,7 @@ TEST( key_apply2_delete_record_test_replication, "apply: (test,test,foo) <!> key
     char ** v_b = get_stats( query, "used-bytes-memory", as->cluster);
     int i = 0;
     while(v_b[i]) {
-    		debug("Used memory before - node %d = %ld\n",i,atol(v_b[i]));
+    		debug("delete_record_test: Used memory before - node %d = %ld\n",i,atol(v_b[i]));
     		free(v_b[i]);
     		i++;
     }
@@ -412,7 +412,7 @@ TEST( key_apply2_delete_record_test_replication, "apply: (test,test,foo) <!> key
 	char ** v_a = get_stats( query, "used-bytes-memory", as->cluster);
 	i = 0;
 	while(v_a[i]) {
-		debug("Used memory after - node %d = %ld\n",i,atol(v_a[i]));
+		debug("delete_record_test: Used memory after - node %d = %ld\n",i,atol(v_a[i]));
 		free(v_a[i]);
 		i++;
 	}
@@ -440,7 +440,7 @@ TEST( key_apply2_update_record_test_memory, "apply: (test,test,foo) <!> key_appl
     char ** v_b = get_stats( query, "used-bytes-memory", as->cluster);
     int i = 0;
     while(v_b[i]) {
-    		debug("Used memory before - node %d = %ld\n",i,atol(v_b[i]));
+    		debug("update_record_test: Used memory before - node %d = %ld\n",i,atol(v_b[i]));
     		//free(v_b[i]);
     		i++;
     }
@@ -450,6 +450,94 @@ TEST( key_apply2_update_record_test_memory, "apply: (test,test,foo) <!> key_appl
     as_val * res = NULL;
 
 	rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "update_record", NULL, &res);
+
+	assert_int_eq( rc, AEROSPIKE_OK );
+
+	//get-stats : memory after applying udf
+
+	char ** v_a = get_stats( query, "used-bytes-memory", as->cluster);
+	i = 0;
+	while(v_a[i]) {
+		debug("update_record_test: Used memory after - node %d = %ld\n",i,atol(v_a[i]));
+		// free(v_a[i]);
+		i++;
+	}
+
+	//get-stats : replication-factor after applying udf
+	char ** v_c = get_stats( query, "repl-factor", as->cluster);
+	int repl_factor = atoi(v_c[0]);
+	// debug("Replication factor %d\n", repl_factor);
+
+	/* verify stats : after-memory = record-memeory * repl-factor
+	 The difference between the memory usage after and before update should be the record memory
+	 for only 'replication factor' number of nodes */
+
+	int diff = 0, count = 0;
+	uint64_t rec_memory = 64;
+
+	int cluster_size = 2;
+
+	char ** cluster_size_str = get_stats( "statistics", "cluster_size", as->cluster);
+	cluster_size = atol(cluster_size_str[0]);
+	// info("Cluster Size %d", cluster_size);
+
+	// For loop that counts the number of
+	for(int i = 0; i < cluster_size; i++) {
+			if(!(v_a[i]) || !(v_b[i])){
+		    	continue;
+		    }
+			diff = atol(v_a[i]) - atol(v_b[i]);
+			info("Diff %d", diff);
+			if ( diff == rec_memory ) {
+				count ++ ;
+			}
+	}
+
+   	   assert_int_eq(count, repl_factor);
+      //  assert_int_eq(count, 1);
+
+	// Free memory
+	for ( i = 0;i < cluster_size; i++) {
+		if (v_a[i]) free(v_a[i]);
+		if (v_b[i]) free(v_b[i]);
+		if (v_c[i]) free(v_c[i]);
+		if (cluster_size_str[i]) free(cluster_size_str[i]);
+	}
+
+	free(v_a);
+	free(v_b);
+	free(v_c);
+	free(cluster_size_str);
+}
+
+TEST( key_apply2_bad_update_test_memory, "apply: (test,test,foo) <!> key_apply2.bad_update_test_memory() => 1" ) {
+// Delete and start clean-slate
+
+	as_error err;
+	as_error_reset(&err);
+
+	as_key key;
+	as_key_init(&key, "test", "test", "foo");
+
+	as_status rc = aerospike_key_remove(as, &err, NULL, &key);
+
+	assert_int_eq( rc, AEROSPIKE_OK );
+
+	//get-stats before applying udf
+	char * query = "namespace/test";
+	char ** v_b = get_stats( query, "used-bytes-memory", as->cluster);
+	int i = 0;
+	while(v_b[i]) {
+			debug("Used memory before - node %d = %ld\n",i,atol(v_b[i]));
+			//free(v_b[i]);
+			i++;
+	}
+
+	// Create & Update record
+	as_error_reset(&err);
+	as_val * res = NULL;
+
+	rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "bad_update", NULL, &res);
 
 	assert_int_eq( rc, AEROSPIKE_OK );
 
@@ -471,7 +559,7 @@ TEST( key_apply2_update_record_test_memory, "apply: (test,test,foo) <!> key_appl
 	// The difference between the memory usage after and before update should be the record memory
 	// for only 'replication factor' number of nodes
 	int diff = 0, count = 0;
-	uint64_t rec_memory = 89;
+	uint64_t rec_memory = 64;
 	char ** cluster_size_str = get_stats( "statistics", "cluster_size", as->cluster);
 	int cluster_size = atol(cluster_size_str[0]);
 
@@ -497,81 +585,6 @@ TEST( key_apply2_update_record_test_memory, "apply: (test,test,foo) <!> key_appl
 	free(cluster_size_str);
 }
 
-TEST( key_apply2_bad_update_test_memory, "apply: (test,test,foo) <!> key_apply2.bad_update_test_memory() => 1" ) {
-	// Delete and start clean-slate
-
-		as_error err;
-		as_error_reset(&err);
-
-		as_key key;
-		as_key_init(&key, "test", "test", "foo");
-
-		as_status rc = aerospike_key_remove(as, &err, NULL, &key);
-
-	    assert_int_eq( rc, AEROSPIKE_OK );
-
-		//get-stats before applying udf
-	    char * query = "namespace/test";
-	    char ** v_b = get_stats( query, "used-bytes-memory", as->cluster);
-	    int i = 0;
-	    while(v_b[i]) {
-	    		debug("Used memory before - node %d = %ld\n",i,atol(v_b[i]));
-	    		//free(v_b[i]);
-	    		i++;
-	    }
-
-		// Create & Update record
-	    as_error_reset(&err);
-	    as_val * res = NULL;
-
-		rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "bad_update", NULL, &res);
-
-		assert_int_eq( rc, AEROSPIKE_OK );
-
-		//get-stats : memory after applying udf
-		char ** v_a = get_stats( query, "used-bytes-memory", as->cluster);
-		i = 0;
-		while(v_a[i]) {
-			debug("Used memory after - node %d = %ld\n",i,atol(v_a[i]));
-			// free(v_a[i]);
-			i++;
-		}
-
-		//get-stats : replication-factor after applying udf
-		char ** v_c = get_stats( query, "repl-factor", as->cluster);
-		int repl_factor = atoi(v_c[0]);
-		debug("Replication factor %d\n", repl_factor);
-
-		// verify stats : after-memory = record-memeory * repl-factor
-		// The difference between the memory usage after and before update should be the record memory
-		// for only 'replication factor' number of nodes
-		int diff = 0, count = 0;
-		uint64_t rec_memory = 89;
-		char ** cluster_size_str = get_stats( "statistics", "cluster_size", as->cluster);
-		int cluster_size = atol(cluster_size_str[0]);
-
-		for(int i = 0; i < cluster_size; i++) {
-			diff = atol(v_a[i]) - atol(v_b[i]);
-			if ( diff == rec_memory ) {
-				count ++ ;
-			}
-		}
-		assert_int_eq(count, repl_factor);
-
-		// Free memory
-		for ( i = 0;i < cluster_size; i++) {
-			free(v_a[i]);
-			free(v_b[i]);
-			free(v_c[i]);
-			if (cluster_size_str[i]) free(cluster_size_str[i]);
-		}
-
-		free(v_a);
-		free(v_b);
-		free(v_c);
-		free(cluster_size_str);
-}
-
 
 /******************************************************************************
  * TEST SUITE
@@ -591,9 +604,9 @@ SUITE( key_apply2, "aerospike_key_apply2 tests" ) {
     suite_add( key_apply2_call_local_sum );
     suite_add( key_apply2_udf_func_does_not_exist );
     suite_add( key_apply2_udf_file_does_not_exist );
-    //suite_add( key_apply2_delete_record_test_replication );
-    //suite_add( key_apply2_update_record_test_memory );
-    //suite_add( key_apply2_bad_update_test_memory );
+    suite_add( key_apply2_delete_record_test_replication );
+    suite_add( key_apply2_update_record_test_memory );
+    suite_add( key_apply2_bad_update_test_memory );
 
 
 }

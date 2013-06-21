@@ -90,12 +90,16 @@ AEROSPIKE += as_record.o
 AEROSPIKE += as_scan.o
 AEROSPIKE += as_udf.o
 
-OBJECTS :=
-OBJECTS += $(COMMON)/$(TARGET_OBJ)/common/aerospike/*.o
-OBJECTS += $(COMMON)/$(TARGET_OBJ)/common/citrusleaf/*.o
-OBJECTS += $(BASE)/$(TARGET_OBJ)/base/*.o
-OBJECTS += $(MOD_LUA)/$(TARGET_OBJ)/*.o
-OBJECTS += $(addprefix $(MSGPACK)/src/.libs/, unpack.o objectc.o version.o vrefbuffer.o zone.o)
+OBJECTS := 
+OBJECTS += $(CITRUSLEAF:%=$(TARGET_OBJ)/citrusleaf/%) 
+OBJECTS += $(AEROSPIKE:%=$(TARGET_OBJ)/aerospike/%)
+
+DEPS :=
+DEPS += $(COMMON)/$(TARGET_OBJ)/common/aerospike/*.o
+DEPS += $(COMMON)/$(TARGET_OBJ)/common/citrusleaf/*.o
+DEPS += $(BASE)/$(TARGET_OBJ)/base/*.o
+DEPS += $(MOD_LUA)/$(TARGET_OBJ)/*.o
+DEPS += $(addprefix $(MSGPACK)/src/.libs/, unpack.o objectc.o version.o vrefbuffer.o zone.o)
 
 ###############################################################################
 ##  HEADERS                                                                  ##
@@ -164,11 +168,11 @@ $(TARGET_OBJ)/%.o: $(BASE)/$(TARGET_LIB)/libaerospike-base.a $(COMMON)/$(TARGET_
 $(TARGET_OBJ)/aerospike/%.o: $(BASE)/$(TARGET_LIB)/libaerospike-base.a $(COMMON)/$(TARGET_LIB)/libaerospike-common.a $(MOD_LUA)/$(TARGET_LIB)/libmod_lua.a $(SOURCE_MAIN)/aerospike/%.c $(SOURCE_INCL)/citrusleaf/*.h $(SOURCE_INCL)/aerospike/*.h | modules
 	$(object)
 
-$(TARGET_LIB)/libcitrusleaf.so: $(CITRUSLEAF:%=$(TARGET_OBJ)/citrusleaf/%) $(AEROSPIKE:%=$(TARGET_OBJ)/aerospike/%) $(TARGET_OBJ)/version.o | modules
-	$(library) $(wildcard $(OBJECTS))
+$(TARGET_LIB)/libcitrusleaf.so: $(OBJECTS) $(TARGET_OBJ)/version.o | modules
+	$(library) $(wildcard $(DEPS))
 
-$(TARGET_LIB)/libcitrusleaf.a: $(CITRUSLEAF:%=$(TARGET_OBJ)/citrusleaf/%) $(AEROSPIKE:%=$(TARGET_OBJ)/aerospike/%) $(TARGET_OBJ)/version.o | modules
-	$(archive) $(wildcard $(OBJECTS))
+$(TARGET_LIB)/libcitrusleaf.a: $(OBJECTS) $(TARGET_OBJ)/version.o | modules
+	$(archive) $(wildcard $(DEPS))
 
 $(TARGET_INCL)/aerospike: | $(TARGET_INCL)
 	mkdir $@

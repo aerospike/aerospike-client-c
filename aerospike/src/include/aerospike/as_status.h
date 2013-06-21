@@ -213,27 +213,25 @@ typedef enum as_status_e {
 	 */
 	AEROSPIKE_ERR_INDEX 					= 1200,
 
-	// @todo - finalize the order of errors in the rest of this section.
+	/**
+	 * @todo
+	 */
+	AEROSPIKE_ERR_INDEX_OOM 				= 1201,
 
 	/**
 	 * @todo
 	 */
-	AEROSPIKE_ERR_INDEX_FOUND,
+	AEROSPIKE_ERR_INDEX_NOT_FOUND 			= 1202,
 
 	/**
 	 * @todo
 	 */
-	AEROSPIKE_ERR_INDEX_NOT_FOUND,
+	AEROSPIKE_ERR_INDEX_FOUND 				= 1203,
 
 	/**
 	 * @todo
 	 */
-	AEROSPIKE_ERR_INDEX_OOM,
-
-	/**
-	 * @todo
-	 */
-	AEROSPIKE_ERR_INDEX_NOT_READABLE,
+	AEROSPIKE_ERR_INDEX_NOT_READABLE 		= 1204,
 
 	/***************************************************************************
 	 *	UDF OPERATIONS

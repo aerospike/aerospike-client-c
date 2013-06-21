@@ -16,6 +16,10 @@ packageName=aerospike-client-c-$rev.$platform.x86_64
 dist=/tmp/$packageName
 build=$dist/BUILD
 
+# Cleanup previous packages.
+rm -f *.tgz
+rm -rf $dist
+
 if [ $platform = "el5" ] || [ $platform = "el6" ]
 then 
   rpm=true
@@ -26,10 +30,6 @@ else
   mkdir -p $build/DEBIAN
   install -m 755 deb/postinst.client $build/DEBIAN/postinst
 fi
-
-# Cleanup previous packages.
-rm -f *.tgz
-rm -rf $dist
 
 # Create library package.
 mkdir -p $build/usr/lib

@@ -493,7 +493,7 @@ TEST( scan_basics_8 , "starting two udf scan in background with same scan-id" ) 
 	as_scan_foreach(scan2, "aerospike_scan_test", "scan_noop", NULL);
 	uint64_t scanid2 = 564;
 	as_status udf_rc2 = aerospike_scan_background(as, &err, NULL, scan2, &scanid2);
-	assert_int_eq( udf_rc2, AEROSPIKE_ERR );
+	assert_int_eq( udf_rc2, AEROSPIKE_ERR_SERVER );
 
 	as_scan_destroy(scan);
 	as_scan_destroy(scan2);

@@ -173,12 +173,16 @@ as_status aerospike_key_select(
 	int         nvalues = 0;
 	cl_bin *    values = NULL;
 
-	for (nvalues = 0; bins[nvalues] != NULL; nvalues++);
+	for (nvalues = 0; bins[nvalues] != NULL; nvalues++)
+		;
 
 	values = (cl_bin *) alloca(sizeof(cl_bin) * nvalues);
 	for ( int i = 0; i < nvalues; i++ ) {
-		strncpy(values[i].bin_name, bins[i], AS_BIN_NAME_MAX_LEN);
-		values[i].bin_name[AS_BIN_NAME_MAX_LEN] = '\0';
+		if ( strlen(bins[i]) > AS_BIN_NAME_MAX_LEN ) {
+			return as_error_update(err, AEROSPIKE_ERR_PARAM, "bin name too long: %s", bins[i]);
+		}
+
+		strcpy(values[i].bin_name, bins[i]);
 		citrusleaf_object_init(&values[i].object);
 	}
 
@@ -472,8 +476,15 @@ as_status aerospike_key_operate(
 	for(int i=0; i<n_operations; i++) {
 		cl_operation * clop = &operations[i];
 		as_binop * op = &ops->binops.entries[i];
-		strncpy(clop->bin.bin_name, op->bin.name, CL_BINNAME_SIZE - 1);
-		clop->bin.bin_name[CL_BINNAME_SIZE - 1] = '\0';
+
+		// Length check already done on as_bin name length. For performance we
+		// we'll leave out this down-size check since this is a temporary shim
+		// and we know the CL and AS limits are the same...
+//		if ( strlen(op->bin.name) > CL_BINNAME_SIZE - 1 ) {
+//			return as_error_update(err, AEROSPIKE_ERR_PARAM, "bin name too long: %s", op->bin.name);
+//		}
+
+		strcpy(clop->bin.bin_name, op->bin.name);
 		clop->op = op->operator;
 		asbinvalue_to_clobject(op->bin.valuep, &clop->bin.object);
 	}

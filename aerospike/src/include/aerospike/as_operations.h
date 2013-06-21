@@ -34,7 +34,6 @@
 #pragma once 
 
 #include <aerospike/as_bin.h>
-#include <aerospike/as_buffer.h>
 
 /******************************************************************************
  *	TYPES

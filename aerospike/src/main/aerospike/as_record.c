@@ -135,7 +135,9 @@ static void as_record_release(as_record * rec)
  */ 
 static as_bin * as_record_bin_forupdate(as_record * rec, const as_bin_name name) 
 {
-	if ( strlen(name) > 14 ) return NULL;
+	if ( ! (rec && name && strlen(name) < AS_BIN_NAME_MAX_SIZE) ) {
+		return NULL;
+	}
 
 	// look for bin of same name
 	for(int i = 0; i < rec->bins.size; i++) {
@@ -145,10 +147,10 @@ static as_bin * as_record_bin_forupdate(as_record * rec, const as_bin_name name)
 		}
 	}
 
-	// nbin ot found, then append
+	// bin not found, then append
 	if ( rec->bins.size < rec->bins.capacity ) {
-		rec->bins.size++;
-		return &rec->bins.entries[rec->bins.size-1];
+		// Note - caller must successfully populate bin once we increment size.
+		return &rec->bins.entries[rec->bins.size++];
 	}
 
 	return NULL;
@@ -193,7 +195,7 @@ static int as_record_rec_set(const as_rec * r, const char * name, const as_val *
 
 static int as_record_rec_remove(const as_rec * r, const char * name) 
 {
-	return r && name ? as_record_remove((as_record *) r, name) : 1;
+	return r && name ? as_record_set_nil((as_record *) r, name) : 1;
 }
 
 static uint32_t as_record_rec_ttl(const as_rec * r) 
@@ -285,7 +287,7 @@ uint16_t as_record_numbins(as_record * rec)
  * @param name 	- the name of the bin
  * @param value - the value of the bin
  *
- * @return 0 on success. 1 on failure.
+ * @return true on success, false on failure.
  */
 bool as_record_set(as_record * rec, const as_bin_name name, as_bin_value * value) 
 {
@@ -305,7 +307,7 @@ bool as_record_set(as_record * rec, const as_bin_name name, as_bin_value * value
  * @param name 	- the name of the bin
  * @param value - the value of the bin
  *
- * @return 0 on success. 1 on failure.
+ * @return true on success, false on failure.
  */
 bool as_record_set_int64(as_record * rec, const as_bin_name name, int64_t value) 
 {
@@ -324,7 +326,7 @@ bool as_record_set_int64(as_record * rec, const as_bin_name name, int64_t value)
  * @param name 	- the name of the bin
  * @param value - the value of the bin
  *
- * @return 0 on success. 1 on failure.
+ * @return true on success, false on failure.
  */
 bool as_record_set_str(as_record * rec, const as_bin_name name, const char * value) 
 {
@@ -343,7 +345,7 @@ bool as_record_set_str(as_record * rec, const as_bin_name name, const char * val
  * @param name 	- the name of the bin
  * @param value - the value of the bin
  *
- * @return 0 on success. 1 on failure.
+ * @return true on success, false on failure.
  */
 bool as_record_set_integer(as_record * rec, const as_bin_name name, as_integer * value) 
 {
@@ -362,7 +364,7 @@ bool as_record_set_integer(as_record * rec, const as_bin_name name, as_integer *
  * @param name 	- the name of the bin
  * @param value - the value of the bin
  *
- * @return 0 on success. 1 on failure.
+ * @return true on success, false on failure.
  */
 bool as_record_set_string(as_record * rec, const as_bin_name name, as_string * value) 
 {
@@ -381,7 +383,7 @@ bool as_record_set_string(as_record * rec, const as_bin_name name, as_string * v
  * @param name 	- the name of the bin
  * @param value - the value of the bin
  *
- * @return 0 on success. 1 on failure.
+ * @return true on success, false on failure.
  */
 bool as_record_set_bytes(as_record * rec, const as_bin_name name, as_bytes * value) 
 {
@@ -406,7 +408,7 @@ bool as_record_set_bytes(as_record * rec, const as_bin_name name, as_bytes * val
  * @param name 	- the name of the bin
  * @param value - the value of the bin
  *
- * @return 0 on success. 1 on failure.
+ * @return true on success, false on failure.
  */
 bool as_record_set_list(as_record * rec, const as_bin_name name, as_list * value) 
 {
@@ -430,6 +432,8 @@ bool as_record_set_list(as_record * rec, const as_bin_name name, as_list * value
  * @param rec 	- the record containing the bin
  * @param name 	- the name of the bin
  * @param value - the value of the bin
+ *
+ * @return true on success, false on failure.
  */
 bool as_record_set_map(as_record * rec, const as_bin_name name, as_map * value) 
 {
@@ -447,7 +451,7 @@ bool as_record_set_map(as_record * rec, const as_bin_name name, as_map * value)
  * @param rec 	- the record containing the bin
  * @param name 	- the name of the bin
  *
- * @return 0 on success. 1 on failure.
+ * @return true on success, false on failure.
  */
 bool as_record_set_nil(as_record * rec, const as_bin_name name) {
 	return as_record_set(rec, name, (as_bin_value *) &as_nil);
@@ -581,19 +585,4 @@ as_list * as_record_get_list(as_record * rec, const as_bin_name name)
 as_map * as_record_get_map(as_record * rec, const as_bin_name name) 
 {
 	return as_map_fromval(as_record_get(rec, name));
-}
-
-/**
- * Remove a bin from the record
- *
- *		as_record_remove(rec, "bin");
- *
- * @param rec 	- the record containing the bin
- * @param name 	- the name of the bin
- *
- * @return 0 on success. Otherwise a failure.
- */
-int as_record_remove(as_record * rec, const as_bin_name name)
-{
-	return as_record_set_nil(rec, name);
 }

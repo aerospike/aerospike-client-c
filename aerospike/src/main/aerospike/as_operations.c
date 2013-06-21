@@ -21,7 +21,6 @@
  *****************************************************************************/
 
 #include <aerospike/as_bin.h>
-#include <aerospike/as_buffer.h>
 #include <aerospike/as_operations.h>
 
 #include <stdbool.h>
@@ -57,6 +56,25 @@ static as_operations * as_operations_default(as_operations * ops, bool free, uin
 	}
 
 	return ops;
+}
+
+/**
+ *	Find the as_binop to update when appending.
+ *	Returns an as_binop ready for bin initialization.
+ *	If no more entries available or precondition failed, then returns NULL.
+ */
+static as_binop * as_binop_forappend(as_operations * ops, as_operator operator, const as_bin_name name)
+{
+	if ( ! (ops && ops->binops.size < ops->binops.capacity &&
+			name && strlen(name) < AS_BIN_NAME_MAX_SIZE) ) {
+		return NULL;
+	}
+
+	// Note - caller must successfully populate bin once we increment size.
+	as_binop * binop = &ops->binops.entries[ops->binops.size++];
+	binop->operator = operator;
+
+	return binop;
 }
 
 /**
@@ -154,13 +172,9 @@ void as_operations_destroy(as_operations * ops)
  */
 bool as_operations_append(as_operations * ops, as_operator operator, const as_bin_name name, as_bin_value * value)
 {
-	if ( !ops ) return false;
-	if ( ops->binops.size >= ops->binops.capacity ) return false;
-
-	as_binop * binop = &ops->binops.entries[ops->binops.size];
-	binop->operator = operator;
+	as_binop * binop = as_binop_forappend(ops, operator, name);
+	if ( !binop ) return false;
 	as_bin_init(&binop->bin, name, value);
-	ops->binops.size++;
 	return true;
 }
 
@@ -176,13 +190,9 @@ bool as_operations_append(as_operations * ops, as_operator operator, const as_bi
  */
 bool as_operations_append_int64(as_operations * ops, as_operator operator, const as_bin_name name, int64_t value)
 {
-	if ( !ops ) return false;
-	if ( ops->binops.size >= ops->binops.capacity ) return false;
-
-	as_binop * binop = &ops->binops.entries[ops->binops.size];
-	binop->operator = operator;
+	as_binop * binop = as_binop_forappend(ops, operator, name);
+	if ( !binop ) return false;
 	as_bin_init_int64(&binop->bin, name, value);
-	ops->binops.size++;
 	return true;
 }
 
@@ -198,13 +208,9 @@ bool as_operations_append_int64(as_operations * ops, as_operator operator, const
  */
 bool as_operations_append_str(as_operations * ops, as_operator operator, const as_bin_name name, const char * value)
 {
-	if ( !ops ) return false;
-	if ( ops->binops.size >= ops->binops.capacity ) return false;
-
-	as_binop * binop = &ops->binops.entries[ops->binops.size];
-	binop->operator = operator;
+	as_binop * binop = as_binop_forappend(ops, operator, name);
+	if ( !binop ) return false;
 	as_bin_init_str(&binop->bin, name, value);
-	ops->binops.size++;
 	return true;
 }
 
@@ -221,12 +227,8 @@ bool as_operations_append_str(as_operations * ops, as_operator operator, const a
  */
 bool as_operations_append_raw(as_operations * ops, as_operator operator, const as_bin_name name, uint8_t * value, uint32_t size)
 {
-	if ( !ops ) return false;
-	if ( ops->binops.size >= ops->binops.capacity ) return false;
-
-	as_binop * binop = &ops->binops.entries[ops->binops.size];
-	binop->operator = operator;
+	as_binop * binop = as_binop_forappend(ops, operator, name);
+	if ( !binop ) return false;
 	as_bin_init_raw(&binop->bin, name, value, size);
-	ops->binops.size++;
 	return true;
 }

@@ -163,7 +163,9 @@ void as_query_destroy(as_query * query)
  */
 bool as_query_select(as_query * query, const char * bin)
 {
-	if ( !query ) return false;
+	if ( ! (query && bin && strlen(bin) < AS_BIN_NAME_MAX_SIZE) ) {
+		return false;
+	}
 
 	if ( query->select.entries == NULL ) {
 		// entries is NULL, so we will malloc() it.
@@ -187,9 +189,8 @@ bool as_query_select(as_query * query, const char * bin)
 			return 2;
 		}
 	}
-	
-	strncpy(query->select.entries[query->select.size], bin, AS_BIN_NAME_MAX_LEN);
-	query->select.entries[query->select.size][AS_BIN_NAME_MAX_LEN] = '\0';
+
+	strcpy(query->select.entries[query->select.size], bin);
 	query->select.size++;
 
 	return true;
@@ -215,7 +216,9 @@ bool as_query_select(as_query * query, const char * bin)
  */
 bool as_query_where(as_query * query, const char * bin, as_predicate_type type, ... )
 {
-	if ( !query ) return false;
+	if ( ! (query && bin && strlen(bin) < AS_BIN_NAME_MAX_SIZE) ) {
+		return false;
+	}
 
 	if ( query->predicates.entries == NULL ) {
 		// entries is NULL, so we will malloc() it.
@@ -242,8 +245,7 @@ bool as_query_where(as_query * query, const char * bin, as_predicate_type type, 
 
 	as_predicate * p = &query->predicates.entries[query->predicates.size];
 
-	strncpy(p->bin, bin, AS_BIN_NAME_MAX_LEN);
-	p->bin[AS_BIN_NAME_MAX_LEN] = '\0';
+	strcpy(p->bin, bin);
 
 	p->type = type;
 
@@ -288,7 +290,9 @@ bool as_query_where(as_query * query, const char * bin, as_predicate_type type, 
  */
 bool as_query_orderby(as_query * query, const char * bin, bool ascending)
 {
-	if ( !query ) return false;
+	if ( ! (query && bin && strlen(bin) < AS_BIN_NAME_MAX_SIZE) ) {
+		return false;
+	}
 
 	if ( query->orderby.entries == NULL ) {
 		// entries is NULL, so we will malloc() it.
@@ -315,8 +319,7 @@ bool as_query_orderby(as_query * query, const char * bin, bool ascending)
 
 	as_orderby * o = &query->orderby.entries[query->orderby.size];
 
-	strncpy(o->bin, bin, AS_BIN_NAME_MAX_LEN);
-	o->bin[AS_BIN_NAME_MAX_LEN] = '\0';
+	strcpy(o->bin, bin);
 
 	o->ascending = ascending;
 

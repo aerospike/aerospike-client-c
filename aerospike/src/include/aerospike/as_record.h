@@ -257,7 +257,7 @@ uint16_t as_record_numbins(as_record * rec);
  *
  *	@return 0 on success. 1 on failure.
  */
-int as_record_set(as_record * rec, const char * name, as_bin_value * value);
+bool as_record_set(as_record * rec, const as_bin_name name, as_bin_value * value);
 
 /**
  *	Set specified bin's value to an int64_t.
@@ -272,7 +272,7 @@ int as_record_set(as_record * rec, const char * name, as_bin_value * value);
  *
  *	@return 0 on success. 1 on failure.
  */
-int as_record_set_int64(as_record * rec, const char * name, int64_t value);
+bool as_record_set_int64(as_record * rec, const as_bin_name name, int64_t value);
 
 /**
  *	Set specified bin's value to an NULL terminates string.
@@ -287,7 +287,7 @@ int as_record_set_int64(as_record * rec, const char * name, int64_t value);
  *
  *	@return 0 on success. 1 on failure.
  */
-int as_record_set_str(as_record * rec, const char * name, const char * value);
+bool as_record_set_str(as_record * rec, const as_bin_name name, const char * value);
 
 /**
  *	Set specified bin's value to an as_integer.
@@ -302,7 +302,7 @@ int as_record_set_str(as_record * rec, const char * name, const char * value);
  *
  *	@return 0 on success. 1 on failure.
  */
-int as_record_set_integer(as_record * rec, const char * name, as_integer * value);
+bool as_record_set_integer(as_record * rec, const as_bin_name name, as_integer * value);
 
 /**
  *	Set specified bin's value to an as_string.
@@ -317,7 +317,7 @@ int as_record_set_integer(as_record * rec, const char * name, as_integer * value
  *
  *	@return 0 on success. 1 on failure.
  */
-int as_record_set_string(as_record * rec, const char * name, as_string * value);
+bool as_record_set_string(as_record * rec, const as_bin_name name, as_string * value);
 
 /**
  *	Set specified bin's value to an as_bytes.
@@ -332,7 +332,7 @@ int as_record_set_string(as_record * rec, const char * name, as_string * value);
  *
  *	@return 0 on success. 1 on failure.
  */
-int as_record_set_bytes(as_record * rec, const char * name, as_bytes * value);
+bool as_record_set_bytes(as_record * rec, const as_bin_name name, as_bytes * value);
 
 /**
  *	Set specified bin's value to an as_list.
@@ -353,7 +353,7 @@ int as_record_set_bytes(as_record * rec, const char * name, as_bytes * value);
  *
  *	@return 0 on success. 1 on failure.
  */
-int as_record_set_list(as_record * rec, const char * name, as_list * value);
+bool as_record_set_list(as_record * rec, const as_bin_name name, as_list * value);
 
 /**
  *	Set specified bin's value to an as_map.
@@ -374,7 +374,7 @@ int as_record_set_list(as_record * rec, const char * name, as_list * value);
  *
  *	@return 0 on success. 1 on failure.
  */
-int as_record_set_map(as_record * rec, const char * name, as_map * value);
+bool as_record_set_map(as_record * rec, const as_bin_name name, as_map * value);
 
 /**
  *	Set specified bin's value to as_nil.
@@ -388,7 +388,7 @@ int as_record_set_map(as_record * rec, const char * name, as_map * value);
  *
  *	@return 0 on success. 1 on failure.
  */
-int as_record_set_nil(as_record * rec, const char * name);
+bool as_record_set_nil(as_record * rec, const as_bin_name name);
 
 /**
  *	Get specified bin's value as an as_val (as_integer, as_string, as_bytes, as_list, as_map).
@@ -402,7 +402,7 @@ int as_record_set_nil(as_record * rec, const char * name);
  *
  *	@return the value if it exists, otherwise NULL.
  */
-as_val * as_record_get(as_record * rec, const char * name);
+as_val * as_record_get(as_record * rec, const as_bin_name name);
 
 /**
  *	Get specified bin's value as an int64_t.
@@ -417,7 +417,7 @@ as_val * as_record_get(as_record * rec, const char * name);
  *
  *	@return the value if it exists, otherwise 0.
  */
-int64_t as_record_get_int64(as_record * rec, const char * name, int64_t fallback);
+int64_t as_record_get_int64(as_record * rec, const as_bin_name name, int64_t fallback);
 
 /**
  *	Get specified bin's value as an NULL terminated string.
@@ -431,7 +431,7 @@ int64_t as_record_get_int64(as_record * rec, const char * name, int64_t fallback
  *
  *	@return the value if it exists, otherwise NULL.
  */
-char * as_record_get_str(as_record * rec, const char * name);
+char * as_record_get_str(as_record * rec, const as_bin_name name);
 
 /**
  *	Get specified bin's value as an as_integer.
@@ -445,7 +445,7 @@ char * as_record_get_str(as_record * rec, const char * name);
  *
  *	@return the value if it exists, otherwise NULL.
  */
-as_integer * as_record_get_integer(as_record * rec, const char * name);
+as_integer * as_record_get_integer(as_record * rec, const as_bin_name name);
 
 /**
  *	Get specified bin's value as an as_string.
@@ -459,7 +459,7 @@ as_integer * as_record_get_integer(as_record * rec, const char * name);
  *
  *	@return the value if it exists, otherwise NULL.
  */
-as_string * as_record_get_string(as_record * rec, const char * name);
+as_string * as_record_get_string(as_record * rec, const as_bin_name name);
 
 /**
  *	Get specified bin's value as an as_bytes.
@@ -473,7 +473,7 @@ as_string * as_record_get_string(as_record * rec, const char * name);
  *
  *	@return the value if it exists, otherwise NULL.
  */
-as_bytes * as_record_get_bytes(as_record * rec, const char * name);
+as_bytes * as_record_get_bytes(as_record * rec, const as_bin_name name);
 
 /**
  *	Get specified bin's value as an as_list.
@@ -487,7 +487,7 @@ as_bytes * as_record_get_bytes(as_record * rec, const char * name);
  *
  *	@return the value if it exists, otherwise NULL.
  */
-as_list * as_record_get_list(as_record * rec, const char * name);
+as_list * as_record_get_list(as_record * rec, const as_bin_name name);
 
 /**
  *	Get specified bin's value as an as_map.
@@ -501,7 +501,7 @@ as_list * as_record_get_list(as_record * rec, const char * name);
  *
  *	@return the value if it exists, otherwise NULL.
  */
-as_map * as_record_get_map(as_record * rec, const char * name);
+as_map * as_record_get_map(as_record * rec, const as_bin_name name);
 
 /**
  *	Remove a bin from the record
@@ -515,7 +515,7 @@ as_map * as_record_get_map(as_record * rec, const char * name);
  *
  *	@return true if bin was removed, otherwise false.
  */
-int as_record_remove(as_record * rec, const char * name);
+int as_record_remove(as_record * rec, const as_bin_name name);
 
 /**
  *	@}

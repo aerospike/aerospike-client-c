@@ -26,9 +26,12 @@
 #include <aerospike/as_bytes.h>
 
 #include <citrusleaf/cf_digest.h>
+#include <citrusleaf/cl_object.h>
 
 #include <stdbool.h>
 #include <stdint.h>
+
+#include "_shim.h"
 
 /******************************************************************************
  *	STATIC FUNCTIONS
@@ -91,8 +94,7 @@ as_key * as_key_init_int64(as_key * key, const char * ns, const char * set, int6
 {
 	if ( !key ) return key;
 
-	as_integer * val = (as_integer *) &key->value;
-	as_integer_init(val, value);
+	as_integer_init((as_integer *) &key->value, value);
 	return as_key_defaults(key, false, ns, set, &key->value);
 }
 
@@ -116,8 +118,7 @@ as_key * as_key_init_str(as_key * key, const char * ns, const char * set, const 
 {
 	if ( !key ) return key;
 	
-	as_string * val = (as_string *) &key->value;
-	as_string_init(val, (char *) value, false);
+	as_string_init((as_string *) &key->value, (char *) value, false);
 	return as_key_defaults(key, false, ns, set, &key->value);
 }
 
@@ -141,8 +142,7 @@ as_key * as_key_init_raw(as_key * key, const char * ns, const char * set, const 
 {
 	if ( !key ) return key;
 	
-	as_bytes * val = (as_bytes *) &key->value;
-	as_bytes_init(val, (uint8_t *) value, size, false);
+	as_bytes_init((as_bytes *) &key->value, (uint8_t *) value, size, false);
 	return as_key_defaults(key, false, ns, set, &key->value);
 }
 
@@ -214,8 +214,7 @@ as_key * as_key_new_int64(const char * ns, const char * set, int64_t value)
 	as_key * key = (as_key *) malloc(sizeof(as_key));
 	if ( !key ) return key;
 
-	as_integer * val = (as_integer *) &key->value;
-	as_integer_init(val, value);
+	as_integer_init((as_integer *) &key->value, value);
 	return as_key_defaults(key, true, ns, set, &key->value);
 }
 
@@ -241,8 +240,7 @@ as_key * as_key_new_str(const char * ns, const char * set, const char * value)
 	as_key * key = (as_key *) malloc(sizeof(as_key));
 	if ( !key ) return key;
 	
-	as_string * val = (as_string *) &key->value;
-	as_string_init(val, (char *) value, false);
+	as_string_init((as_string *) &key->value, (char *) value, false);
 	return as_key_defaults(key, true, ns, set, &key->value);
 }
 
@@ -269,8 +267,7 @@ as_key * as_key_new_raw(const char * ns, const char * set, const uint8_t * value
 	as_key * key = (as_key *) malloc(sizeof(as_key));
 	if ( !key ) return key;
 	
-	as_bytes * val = (as_bytes *) &key->value;
-	as_bytes_init(val, (uint8_t *) value, size, false);
+	as_bytes_init((as_bytes *) &key->value, (uint8_t *) value, size, false);
 	return as_key_defaults(key, true, ns, set, &key->value);
 }
 
@@ -327,35 +324,12 @@ as_digest * as_key_digest(as_key * key)
 	as_digest * digest = &key->digest;
 	
 	if ( val ) {
-		switch ( val->type ) {
-			case AS_INTEGER: {
-				as_integer * v = (as_integer *) val;
-				digest->init = true;
-				cf_digest_compute2(set, set ? strlen(set) : 0, (uint8_t *) &v->value, sizeof(int64_t), (cf_digest *) digest->value);
-				break;
-			}
-			case AS_STRING: {
-				as_string * v = (as_string *) val;
-				digest->init = true;
-				cf_digest_compute2(set, set ? strlen(set) : 0, v->value, as_string_len(v), (cf_digest *) digest->value);
-				break;
-			}
-			case AS_BYTES: {
-				as_bytes * v = (as_bytes *) val;
-				digest->init = true;
-				cf_digest_compute2(set, set ? strlen(set) : 0, v->value, v->len, (cf_digest *) digest->value);
-				break;
-			}
-			default:
-				digest->init = true;
-				cf_digest_compute2(set, set ? strlen(set) : 0, NULL, 0, (cf_digest *) digest->value);
-				break;
-		}
-	}
-	else {
-		digest->init = true;
-		cf_digest_compute2(set, set ? strlen(set) : 0, NULL, 0, (cf_digest *) digest->value);
+		cl_object obj;
+		asval_to_clobject(val, &obj);
+		citrusleaf_calculate_digest(set, &obj, (cf_digest *) digest->value);
+		key->digest.init = true;
+		return &key->digest;
 	}
 
-	return &key->digest;
+	return NULL;
 }

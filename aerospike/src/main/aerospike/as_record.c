@@ -30,11 +30,15 @@
 #include <aerospike/as_record.h>
 #include <aerospike/as_string.h>
 
+#include "_bin.h"
+
 /******************************************************************************
  * STATIC FUNCTIONS
  *****************************************************************************/
 
-static as_record * as_record_defaults(as_record * rec, bool free, uint16_t nbins);
+static as_record * 	as_record_defaults(as_record * rec, bool free, uint16_t nbins);
+static void 		as_record_release(as_record * rec);
+static as_bin * 	as_record_bin_forupdate(as_record * rec, const as_bin_name name);
 
 static bool			as_record_rec_destroy(as_rec * r);
 static uint32_t		as_record_rec_hashcode(const as_rec * r);
@@ -121,6 +125,33 @@ static void as_record_release(as_record * rec)
 
 		rec->key.digest.init = false;
 	}
+}
+
+
+/**
+ *	Find a bin for updating.
+ *	Either return an existing bin of given name, or return an empty entry.
+ *	If no more entries available or precondition failed, then returns NULL.
+ */ 
+static as_bin * as_record_bin_forupdate(as_record * rec, const as_bin_name name) 
+{
+	if ( strlen(name) > 14 ) return NULL;
+
+	// look for bin of same name
+	for(int i = 0; i < rec->bins.size; i++) {
+		if ( strcmp(rec->bins.entries[i].name, name) == 0 ) {
+			as_val_destroy(rec->bins.entries[i].valuep);
+			return &rec->bins.entries[i];
+		}
+	}
+
+	// nbin ot found, then append
+	if ( rec->bins.size < rec->bins.capacity ) {
+		rec->bins.size++;
+		return &rec->bins.entries[rec->bins.size-1];
+	}
+
+	return NULL;
 }
 
 static bool as_record_rec_destroy(as_rec * r) 
@@ -256,29 +287,14 @@ uint16_t as_record_numbins(as_record * rec)
  *
  * @return 0 on success. 1 on failure.
  */
-int as_record_set(as_record * rec, const char * name, as_bin_value * value) 
+bool as_record_set(as_record * rec, const as_bin_name name, as_bin_value * value) 
 {
-	// TODO - perhaps check bin name length in here, so deeper copies don't
-	// strncpy and truncate... this can work if we can hide the whole as_bin API
-
-	// replace
-	for(int i = 0; i < rec->bins.size; i++) {
-		if ( strcmp(rec->bins.entries[i].name, name) == 0 ) {
-			as_val_destroy(rec->bins.entries[i].valuep);
-			rec->bins.entries[i].valuep = value;
-			return 0;
-		}
-	}
-	// not found, then append
-	if ( rec->bins.size < rec->bins.capacity ) {
-		as_bin_init(&rec->bins.entries[rec->bins.size], name, value);
-		rec->bins.size++;
-		return 0;
-	}
-	// capacity exceeded
-	// raise an error
-	return 1;
+	as_bin * bin = as_record_bin_forupdate(rec, name);
+	if ( !bin ) return false;
+	as_bin_init(bin, name, value);
+	return true;
 }
+
 
 /**
  * Set specified bin's value to an int64_t.
@@ -291,10 +307,12 @@ int as_record_set(as_record * rec, const char * name, as_bin_value * value)
  *
  * @return 0 on success. 1 on failure.
  */
-int as_record_set_int64(as_record * rec, const char * name, int64_t value) 
+bool as_record_set_int64(as_record * rec, const as_bin_name name, int64_t value) 
 {
-	as_integer * val = as_integer_new(value);
-	return as_record_set(rec, name, (as_bin_value *) val);
+	as_bin * bin = as_record_bin_forupdate(rec, name);
+	if ( !bin ) return false;
+	as_bin_init_int64(bin, name, value);
+	return true;
 }
 
 /**
@@ -308,10 +326,12 @@ int as_record_set_int64(as_record * rec, const char * name, int64_t value)
  *
  * @return 0 on success. 1 on failure.
  */
-int as_record_set_str(as_record * rec, const char * name, const char * value) 
+bool as_record_set_str(as_record * rec, const as_bin_name name, const char * value) 
 {
-	as_string * val = as_string_new(strdup(value), true);
-	return as_record_set(rec, name, (as_bin_value *) val);
+	as_bin * bin = as_record_bin_forupdate(rec, name);
+	if ( !bin ) return false;
+	as_bin_init_str(bin, name, value);
+	return true;
 }
 
 /**
@@ -325,9 +345,12 @@ int as_record_set_str(as_record * rec, const char * name, const char * value)
  *
  * @return 0 on success. 1 on failure.
  */
-int as_record_set_integer(as_record * rec, const char * name, as_integer * value) 
+bool as_record_set_integer(as_record * rec, const as_bin_name name, as_integer * value) 
 {
-	return as_record_set(rec, name, (as_bin_value *) value);
+	as_bin * bin = as_record_bin_forupdate(rec, name);
+	if ( !bin ) return false;
+	as_bin_init(bin, name, (as_bin_value *) value);
+	return true;
 }
 
 /**
@@ -341,9 +364,12 @@ int as_record_set_integer(as_record * rec, const char * name, as_integer * value
  *
  * @return 0 on success. 1 on failure.
  */
-int as_record_set_string(as_record * rec, const char * name, as_string * value) 
+bool as_record_set_string(as_record * rec, const as_bin_name name, as_string * value) 
 {
-	return as_record_set(rec, name, (as_bin_value *) value);
+	as_bin * bin = as_record_bin_forupdate(rec, name);
+	if ( !bin ) return false;
+	as_bin_init(bin, name, (as_bin_value *) value);
+	return true;
 }
 
 /**
@@ -357,9 +383,12 @@ int as_record_set_string(as_record * rec, const char * name, as_string * value)
  *
  * @return 0 on success. 1 on failure.
  */
-int as_record_set_bytes(as_record * rec, const char * name, as_bytes * value) 
+bool as_record_set_bytes(as_record * rec, const as_bin_name name, as_bytes * value) 
 {
-	return as_record_set(rec, name, (as_bin_value *) value);
+	as_bin * bin = as_record_bin_forupdate(rec, name);
+	if ( !bin ) return false;
+	as_bin_init(bin, name, (as_bin_value *) value);
+	return true;
 }
 
 /**
@@ -379,9 +408,12 @@ int as_record_set_bytes(as_record * rec, const char * name, as_bytes * value)
  *
  * @return 0 on success. 1 on failure.
  */
-int as_record_set_list(as_record * rec, const char * name, as_list * value) 
+bool as_record_set_list(as_record * rec, const as_bin_name name, as_list * value) 
 {
-	return as_record_set(rec, name, (as_bin_value *) value);
+	as_bin * bin = as_record_bin_forupdate(rec, name);
+	if ( !bin ) return false;
+	as_bin_init(bin, name, (as_bin_value *) value);
+	return true;
 }
 
 /**
@@ -399,9 +431,12 @@ int as_record_set_list(as_record * rec, const char * name, as_list * value)
  * @param name 	- the name of the bin
  * @param value - the value of the bin
  */
-int as_record_set_map(as_record * rec, const char * name, as_map * value) 
+bool as_record_set_map(as_record * rec, const as_bin_name name, as_map * value) 
 {
-	return as_record_set(rec, name, (as_bin_value *) value);
+	as_bin * bin = as_record_bin_forupdate(rec, name);
+	if ( !bin ) return false;
+	as_bin_init(bin, name, (as_bin_value *) value);
+	return true;
 }
 
 /**
@@ -414,7 +449,7 @@ int as_record_set_map(as_record * rec, const char * name, as_map * value)
  *
  * @return 0 on success. 1 on failure.
  */
-int as_record_set_nil(as_record * rec, const char * name) {
+bool as_record_set_nil(as_record * rec, const as_bin_name name) {
 	return as_record_set(rec, name, (as_bin_value *) &as_nil);
 }
 
@@ -428,7 +463,7 @@ int as_record_set_nil(as_record * rec, const char * name) {
  *
  * @return the value if it exists, otherwise NULL.
  */
-as_val * as_record_get(as_record * rec, const char * name) 
+as_val * as_record_get(as_record * rec, const as_bin_name name) 
 {
 	for(int i=0; i<rec->bins.size; i++) {
 		if ( strcmp(rec->bins.entries[i].name, name) == 0 ) {
@@ -451,7 +486,7 @@ as_val * as_record_get(as_record * rec, const char * name)
  *
  *	@return the value if it exists, otherwise 0.
  */
-int64_t as_record_get_int64(as_record * rec, const char * name, int64_t fallback) 
+int64_t as_record_get_int64(as_record * rec, const as_bin_name name, int64_t fallback) 
 {
 	as_integer * val = as_integer_fromval(as_record_get(rec, name));
 	return val ? as_integer_toint(val) : fallback;
@@ -467,7 +502,7 @@ int64_t as_record_get_int64(as_record * rec, const char * name, int64_t fallback
  *
  * @return the value if it exists, otherwise NULL.
  */
-char * as_record_get_str(as_record * rec, const char * name) 
+char * as_record_get_str(as_record * rec, const as_bin_name name) 
 {
 	as_string * val = as_string_fromval(as_record_get(rec, name));
 	return val ? as_string_tostring(val) : NULL;
@@ -483,7 +518,7 @@ char * as_record_get_str(as_record * rec, const char * name)
  *
  * @return the value if it exists, otherwise NULL.
  */
-as_integer * as_record_get_integer(as_record * rec, const char * name)
+as_integer * as_record_get_integer(as_record * rec, const as_bin_name name)
 {
 	return as_integer_fromval(as_record_get(rec, name));
 }
@@ -498,7 +533,7 @@ as_integer * as_record_get_integer(as_record * rec, const char * name)
  *
  * @return the value if it exists, otherwise NULL.
  */
-as_string * as_record_get_string(as_record * rec, const char * name)
+as_string * as_record_get_string(as_record * rec, const as_bin_name name)
 {
 	return as_string_fromval(as_record_get(rec, name));
 }
@@ -513,7 +548,7 @@ as_string * as_record_get_string(as_record * rec, const char * name)
  *
  * @return the value if it exists, otherwise NULL.
  */
-as_bytes * as_record_get_bytes(as_record * rec, const char * name) 
+as_bytes * as_record_get_bytes(as_record * rec, const as_bin_name name) 
 {
 	return as_bytes_fromval(as_record_get(rec, name));
 }
@@ -528,7 +563,7 @@ as_bytes * as_record_get_bytes(as_record * rec, const char * name)
  *
  * @return the value if it exists, otherwise NULL.
  */
-as_list * as_record_get_list(as_record * rec, const char * name) 
+as_list * as_record_get_list(as_record * rec, const as_bin_name name) 
 {
 	return as_list_fromval(as_record_get(rec, name));
 }
@@ -543,7 +578,7 @@ as_list * as_record_get_list(as_record * rec, const char * name)
  *
  * @return the value if it exists, otherwise NULL.
  */
-as_map * as_record_get_map(as_record * rec, const char * name) 
+as_map * as_record_get_map(as_record * rec, const as_bin_name name) 
 {
 	return as_map_fromval(as_record_get(rec, name));
 }
@@ -558,7 +593,7 @@ as_map * as_record_get_map(as_record * rec, const char * name)
  *
  * @return 0 on success. Otherwise a failure.
  */
-int as_record_remove(as_record * rec, const char * name)
+int as_record_remove(as_record * rec, const as_bin_name name)
 {
 	return as_record_set_nil(rec, name);
 }

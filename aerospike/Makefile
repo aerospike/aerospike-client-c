@@ -97,7 +97,34 @@ OBJECTS += $(BASE)/$(TARGET_OBJ)/base/*.o
 OBJECTS += $(MOD_LUA)/$(TARGET_OBJ)/*.o
 OBJECTS += $(addprefix $(MSGPACK)/src/.libs/, unpack.o objectc.o version.o vrefbuffer.o zone.o)
 
-HEADERS := $(wildcard $(SOURCE_INCL)/citrusleaf/*.h) $(wildcard $(SOURCE_INCL)/aerospike/*.h)
+###############################################################################
+##  HEADERS                                                                  ##
+###############################################################################
+
+COMMON-HEADERS :=
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_arraylist.h
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_arraylist_iterator.h
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_bytes.h
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_hashmap.h
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_hashmap_iterator.h
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_integer.h
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_iterator.h
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_linkedlist.h
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_list.h
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_map.h
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_nil.h
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_pair.h
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_rec.h
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_stream.h
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_string.h
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_stringmap.h
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_util.h
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_val.h
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_atomic.h
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_shash.h
+
+HEADERS := 
+HEADERS += $(wildcard $(SOURCE_INCL)/aerospike/*.h)
 
 ###############################################################################
 ##  MAIN TARGETS                                                             ##
@@ -108,6 +135,10 @@ all: modules build prepare
 .PHONY: prepare
 prepare: modules-prepare $(subst $(SOURCE_INCL),$(TARGET_INCL),$(HEADERS)) 
 	$(noop)
+
+.PHONY: prepare-clean
+prepare-clean: 
+	@rm -rf $(TARGET_INCL)
 
 .PHONY: build
 build: libcitrusleaf
@@ -148,7 +179,7 @@ $(TARGET_INCL)/citrusleaf: | $(TARGET_INCL)
 $(TARGET_INCL)/aerospike/%.h:: $(SOURCE_INCL)/aerospike/%.h | $(TARGET_INCL)/aerospike
 	cp $^ $@
 
-$(TARGET_INCL)/citrusleaf/%.h:: $(SOURCE_INCL)/citrusleaf/%.h | $(TARGET_INCL)/citrusleaf
+$(TARGET)/old-include/citrusleaf/%.h:: $(SOURCE_INCL)/citrusleaf/%.h | $(TARGET_INCL)/citrusleaf
 	cp $^ $@
 
 ###############################################################################

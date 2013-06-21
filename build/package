@@ -2,7 +2,6 @@
 # Package a specified version.
 
 cd `dirname $0`
-source ./run_command
 
 platform=`./parse_platform`
 
@@ -19,11 +18,13 @@ else
   rpm=false
 fi
 
-rev=`git describe | sed 's/-/_/g'`
-dist=/tmp/client-c
+# Build package for header and library installation.
+rev=`./version`
+packageName=aerospike-client-c-$rev.$platform.x86_64
+dist=/tmp/$packageName
 build=$dist/BUILD
-spec=/tmp/client_v.spec
 
+rm -f *.tgz
 rm -rf $dist
 
 mkdir -p $build/usr/include
@@ -32,14 +33,26 @@ mkdir -p $build/usr/lib
 cp -r ../aerospike/target/Linux-x86_64/include $build/usr
 cp ../aerospike/target/Linux-x86_64/lib/* $build/usr/lib
 
-sed 's/@VERSION@/'$rev'/g' < client.spec > $spec
-
 if $rpm
 then
+  rev=`echo $rev | sed 's/-/_/g'`
+  spec=/tmp/client_v.spec
+  sed 's/@VERSION@/'$rev'/g' < rpm/client.spec > $spec
   rpmbuild -bb -vv --buildroot $build $spec
+  rm $spec
+  pkg=~/rpmbuild/RPMS/x86_64/aerospike-client-c-$rev*.rpm
 else
   mkdir -p $build/DEBIAN
+  sed 's/@VERSION@/'$rev'/g' < deb/client.spec > $build/DEBIAN/control
+  install -m 755 deb/postinst.client $build/DEBIAN/postinst
+  pkg=deb/$packageName.deb
+  fakeroot dpkg-deb --build $build $pkg
 fi
 
-rm $spec
+# Build examples source code package.
+./prepare_examples $dist
+mv $pkg $dist
+
+tar cf - -C /tmp $packageName | gzip -c > $packageName.tgz
+rm -rf $dist
 

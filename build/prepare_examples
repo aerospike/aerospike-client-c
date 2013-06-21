@@ -1,0 +1,97 @@
+#!/bin/sh
+# Build examples source code package.
+
+if [ $# -ne 1 ]
+then
+  echo "Usage $0 <target dir>"
+  exit 1
+fi
+
+cd `dirname $0`
+dir=$1
+
+rm -rf $dir
+mkdir -p $dir
+
+# Create examples.
+srcExamplesDir=../aerospike/examples
+trgExamplesDir=$dir/examples
+
+mkdir -p $trgExamplesDir
+mkdir -p $trgExamplesDir/udf_examples
+cp $srcExamplesDir/Makefile $trgExamplesDir
+cp $srcExamplesDir/README.md $trgExamplesDir
+cp $srcExamplesDir/udf_examples/Makefile $trgExamplesDir/udf_examples
+
+for i in cpp_example example exists_example udf_examples/ad_udf udf_examples/rec_udf udf_examples/scan_udf
+do
+	mkdir -p $trgExamplesDir/$i
+	cp -r $srcExamplesDir/$i/* $trgExamplesDir/$i
+	rm -rf $trgExamplesDir/$i/target
+
+	# Modify Makefile for external use.
+	awk 'BEGIN{OFS=""}
+	{
+		if (found == 1)
+		{
+		    if (index($0,"include") > 0) 
+		    {
+		        found = 0
+				print $0
+		    }
+			next
+		}
+
+		if (index($0,"ROOT = ../../") > 0)
+		{
+			print "ROOT = ",substr($3,7)
+		}
+		else if (index($0,"-lssl") > 0)
+		{
+			sub(/-lssl/, "-lcitrusleaf -lssl"); print
+		}
+		else
+		{
+			idx = index($0,"$(AEROSPIKE)/$(TARGET_LIB)/libcitrusleaf.a")
+
+			if (idx > 0)
+			{
+				print substr($0, 0, idx-1)
+			}
+			else if (index($0,"BUILD DEPENDENCIES") > 0)
+			{
+				found = 1
+			}
+			else
+			{
+				print $0
+			}
+		}
+	}' $srcExamplesDir/$i/Makefile > $trgExamplesDir/$i/Makefile
+done
+
+# Create project files.
+mkdir -p $trgExamplesDir/project
+cp ../project/rules.mk $trgExamplesDir/project
+
+# Remove git references. 
+awk 'BEGIN{OFS=""}
+{
+    if (index($0,"git") > 0)
+    {
+        found = 1
+    }
+
+	if (found == 1)
+    {
+        if ($0 == "endif") 
+        {
+            found = 0
+        } 
+    }
+    else
+    {
+        print $0
+    }
+}' ../project/settings.mk > $trgExamplesDir/project/settings.mk
+

@@ -258,6 +258,9 @@ uint16_t as_record_numbins(as_record * rec)
  */
 int as_record_set(as_record * rec, const char * name, as_bin_value * value) 
 {
+	// TODO - perhaps check bin name length in here, so deeper copies don't
+	// strncpy and truncate... this can work if we can hide the whole as_bin API
+
 	// replace
 	for(int i = 0; i < rec->bins.size; i++) {
 		if ( strcmp(rec->bins.entries[i].name, name) == 0 ) {
@@ -268,8 +271,7 @@ int as_record_set(as_record * rec, const char * name, as_bin_value * value)
 	}
 	// not found, then append
 	if ( rec->bins.size < rec->bins.capacity ) {
-		strncpy(rec->bins.entries[rec->bins.size].name,name,AS_BIN_NAME_LEN);
-		rec->bins.entries[rec->bins.size].valuep = value;
+		as_bin_init(&rec->bins.entries[rec->bins.size], name, value);
 		rec->bins.size++;
 		return 0;
 	}

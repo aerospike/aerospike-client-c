@@ -114,6 +114,7 @@ COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_hashmap_iterator.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_integer.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_iterator.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_linkedlist.h
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_linkedlist_iterator.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_list.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_map.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_nil.h
@@ -124,8 +125,10 @@ COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_string.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_stringmap.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_util.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_val.h
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_arch.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_atomic.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_shash.h
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_types.h
 
 HEADERS := 
 HEADERS += $(wildcard $(SOURCE_INCL)/aerospike/*.h)
@@ -145,18 +148,18 @@ prepare-clean:
 	@rm -rf $(TARGET_INCL)
 
 .PHONY: build
-build: libcitrusleaf
+build: libaerospike
 
 .PHONY: build-clean
 build-clean:
 	@rm -rf $(TARGET)
 
-.PHONY: libcitrusleaf
-libcitrusleaf: libcitrusleaf.a libcitrusleaf.so
+.PHONY: libaerospike
+libaerospike: libaerospike.a libaerospike.so
 
-.PHONY: libcitrusleaf.a libcitrusleaf.so
-libcitrusleaf.a: $(TARGET_LIB)/libcitrusleaf.a
-libcitrusleaf.so: $(TARGET_LIB)/libcitrusleaf.so
+.PHONY: libaerospike.a libaerospike.so
+libaerospike.a: $(TARGET_LIB)/libaerospike.a
+libaerospike.so: $(TARGET_LIB)/libaerospike.so
 
 ###############################################################################
 ##  BUILD TARGETS                                                            ##
@@ -168,10 +171,10 @@ $(TARGET_OBJ)/%.o: $(BASE)/$(TARGET_LIB)/libaerospike-base.a $(COMMON)/$(TARGET_
 $(TARGET_OBJ)/aerospike/%.o: $(BASE)/$(TARGET_LIB)/libaerospike-base.a $(COMMON)/$(TARGET_LIB)/libaerospike-common.a $(MOD_LUA)/$(TARGET_LIB)/libmod_lua.a $(SOURCE_MAIN)/aerospike/%.c $(SOURCE_INCL)/citrusleaf/*.h $(SOURCE_INCL)/aerospike/*.h | modules
 	$(object)
 
-$(TARGET_LIB)/libcitrusleaf.so: $(OBJECTS) $(TARGET_OBJ)/version.o | modules
+$(TARGET_LIB)/libaerospike.so: $(OBJECTS) $(TARGET_OBJ)/version.o | modules
 	$(library) $(wildcard $(DEPS))
 
-$(TARGET_LIB)/libcitrusleaf.a: $(OBJECTS) $(TARGET_OBJ)/version.o | modules
+$(TARGET_LIB)/libaerospike.a: $(OBJECTS) $(TARGET_OBJ)/version.o | modules
 	$(archive) $(wildcard $(DEPS))
 
 $(TARGET_INCL)/aerospike: | $(TARGET_INCL)

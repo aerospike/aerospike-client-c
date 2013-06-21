@@ -40,7 +40,6 @@
 
 static as_bin * as_bin_defaults(as_bin * bin, const as_bin_name name, as_bin_value * valuep)
 {
-	printf("as_bin_defaults @ bin := %p\n",bin);
 	strncpy(bin->name, name, AS_BIN_NAME_MAX_LEN);
 	bin->name[AS_BIN_NAME_MAX_LEN] = '\0';
 	bin->valuep = valuep;
@@ -91,8 +90,8 @@ as_bin * as_bin_init(as_bin * bin, const as_bin_name name, as_bin_value * value)
 as_bin * as_bin_init_int64(as_bin * bin, const as_bin_name name, int64_t value)
 {
 	if ( !bin ) return bin;
-	as_integer * val = as_integer_init((as_integer *) &bin->value, value);
-	return as_bin_defaults(bin, name, (as_bin_value *) val);
+	as_integer_init((as_integer *) &bin->value, value);
+	return as_bin_defaults(bin, name, &bin->value);
 }
 
 /**
@@ -113,8 +112,8 @@ as_bin * as_bin_init_int64(as_bin * bin, const as_bin_name name, int64_t value)
 as_bin * as_bin_init_str(as_bin * bin, const as_bin_name name, const char * value)
 {
 	if ( !bin ) return bin;
-	as_string * val = as_string_init((as_string *) &bin->value, (char *) value, false);
-	return as_bin_defaults(bin, name, (as_bin_value *) val);
+	as_string_init((as_string *) &bin->value, (char *) value, false);
+	return as_bin_defaults(bin, name, &bin->value);
 }
 
 /**
@@ -137,8 +136,8 @@ as_bin * as_bin_init_str(as_bin * bin, const as_bin_name name, const char * valu
 as_bin * as_bin_init_raw(as_bin * bin, const as_bin_name name, const uint8_t * value, uint32_t size)
 {
 	if ( !bin ) return bin;
-	as_bytes * val = as_bytes_init((as_bytes *) &bin->value, (uint8_t *) value, size, false);
-	return as_bin_defaults(bin, name, (as_bin_value *) val);
+	as_bytes_init((as_bytes *) &bin->value, (uint8_t *) value, size, false);
+	return as_bin_defaults(bin, name, &bin->value);
 }
 
 /**

@@ -7,5 +7,5 @@ source run_command
 
 runCommand ./build
 runCommand ./package
-runCommand ./release
-exit 0
+runCommand ./release_fileserver
+

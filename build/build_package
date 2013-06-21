@@ -6,4 +6,4 @@ source run_command
 
 runCommand ./build
 runCommand ./package
-exit 0
+

@@ -2,17 +2,10 @@
 # Release package to shared directory.
 
 cd `dirname $0`
-source run_command
 
-platform=`./parse_platform -long`
+version=`./version`
+trgdir=/mnt/release/client/c/$version
 
-if [ $? -ne 0 ]
-then
-  echo "Invalid platform."
-  exit 1
-fi
-
-rev=`getRevision`
-runCommand mkdir -p /mnt/release/client/c/$platform
-runCommand cp ../pkg/*.tgz /mnt/release/client/c/$platform
+mkdir -p $trgdir
+cp aerospike-client-c-$version.*.tgz $trgdir
 

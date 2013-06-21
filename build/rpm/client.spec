@@ -14,3 +14,6 @@ The Aerospike client is used to connect with an Aerospike server and perform dat
 /usr/lib/libcitrusleaf.a
 /usr/lib/libcitrusleaf.so
 
+%post
+/sbin/ldconfig
+

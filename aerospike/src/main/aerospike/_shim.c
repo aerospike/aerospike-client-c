@@ -197,8 +197,8 @@ void asbinvalue_to_clobject(as_bin_value * binval, cl_object * obj)
 
 void asbin_to_clbin(as_bin * as, cl_bin * cl) 
 {
-	strncpy(cl->bin_name, as->name, AS_BIN_NAME_LEN);
-	cl->bin_name[CL_BINNAME_SIZE-1] = '\0';
+	strncpy(cl->bin_name, as->name, CL_BINNAME_SIZE - 1);
+	cl->bin_name[CL_BINNAME_SIZE - 1] = '\0';
 	asbinvalue_to_clobject(as->valuep, &cl->object);
 }
 

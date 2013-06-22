@@ -11,79 +11,30 @@ trgExamplesDir=$target/examples
 mkdir -p $trgExamplesDir
 cp $srcExamplesDir/Makefile $trgExamplesDir
 cp $srcExamplesDir/README.md $trgExamplesDir
-cp $srcExamplesDir/udf_examples/Makefile $trgExamplesDir/udf_examples
+cp -r $srcExamplesDir/utils $trgExamplesDir
+cp -r $srcExamplesDir/basic_examples $trgExamplesDir
 
 for i in $srcExamplesDir/basic_examples/*
 do
-	dir=`dirname $i`
 	fn=`basename $i`
-	mkdir -p $trgExamplesDir/$fn
-	cp -r $i/* $trgExamplesDir/$fn
-	rm -rf $trgExamplesDir/$fn/target
+	rm -rf $trgExamplesDir/basic_examples/$fn/target
 
 	# Modify Makefile for external use.
 	awk 'BEGIN{OFS=""}
 	{
-		if (found == 1)
+		if (index($0,"AEROSPIKE") > 0)
 		{
-		    if (index($0,"include") > 0) 
-		    {
-		        found = 0
-				print $0
-		    }
-			next
-		}
-
-		if (index($0,"ROOT = ../../") > 0)
-		{
-			print "ROOT = ",substr($3,7)
-		}
-		else if (index($0,"-lssl") > 0)
-		{
-			sub(/-lssl/, "-lcitrusleaf -lssl"); print
-		}
-		else
-		{
-			idx = index($0,"$(AEROSPIKE)/$(TARGET_LIB)/libcitrusleaf.a")
+			idx = index($0,"$(AEROSPIKE)/target/Linux-x86_64/lib/libaerospike.a")
 
 			if (idx > 0)
 			{
-				print substr($0, 0, idx-1)
-			}
-			else if (index($0,"BUILD DEPENDENCIES") > 0)
-			{
-				found = 1
-			}
-			else
-			{
-				print $0
+				print substr($0, 0, idx-1),"/usr/lib/libaerospike.a"
 			}
 		}
-	}' $i/Makefile > $trgExamplesDir/$fn/Makefile
+		else
+		{
+			print $0
+		}
+	}' $i/Makefile > $trgExamplesDir/basic_examples/$fn/Makefile
 done
-
-# Create project files.
-mkdir -p $trgExamplesDir/project
-cp ../project/rules.mk $trgExamplesDir/project
-
-# Remove git references. 
-awk 'BEGIN{OFS=""}
-{
-    if (index($0,"git") > 0)
-    {
-        found = 1
-    }
-
-	if (found == 1)
-    {
-        if ($0 == "endif") 
-        {
-            found = 0
-        } 
-    }
-    else
-    {
-        print $0
-    }
-}' ../project/settings.mk > $trgExamplesDir/project/settings.mk
 

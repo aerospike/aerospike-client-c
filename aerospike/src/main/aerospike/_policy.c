@@ -38,6 +38,7 @@ as_policy_write * as_policy_write_resolve(as_policy_write * p, const as_policies
 	p->mode		= as_policy_resolve(mode, global->write, local, global->mode);
 	p->key		= as_policy_resolve(key, global->write, local, global->key);
 	p->gen		= as_policy_resolve(gen, global->write, local, global->gen);
+	p->exists	= as_policy_resolve(exists, global->write, local, global->exists);
 	return p;
 }
 

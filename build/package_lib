@@ -1,0 +1,45 @@
+#!/bin/sh
+# Package libraries.
+
+cd `dirname $0`
+
+target=${1-.}
+platform=`./parse_platform`
+rev=`./version`
+
+if [ $platform = "el5" ] || [ $platform = "el6" ]
+then 
+  rpm=true
+else
+  rpm=false
+fi
+
+# Create library package.
+packageName=aerospike-client-c-$rev.$platform.x86_64
+dist=/tmp/$packageName
+build=$dist/BUILD
+
+rm -rf $dist
+mkdir -p $build/usr/lib
+cp ../aerospike/target/Linux-x86_64/lib/* $build/usr/lib
+
+if $rpm
+then
+  spec=/tmp/client_v.spec
+  rpmrev=`echo $rev | sed 's/-/_/g'`
+  sed 's/@VERSION@/'$rpmrev'/g' < rpm/client.spec > $spec
+  rpmbuild -bb --buildroot $build $spec
+  rm $spec
+  pkg=~/rpmbuild/RPMS/x86_64/aerospike-client-c-$rpmrev*.rpm
+else
+  mkdir -p $build/DEBIAN
+  install -m 755 deb/postinst.client $build/DEBIAN/postinst
+  sed 's/@VERSION@/'$rev'/g' < deb/client.spec > $build/DEBIAN/control
+  pkg=deb/$packageName.deb
+  fakeroot dpkg-deb --build $build $pkg
+fi
+
+mv $pkg $target
+rm -rf $dist
+
+

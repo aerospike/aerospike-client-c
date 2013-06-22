@@ -1,5 +1,5 @@
 #!/bin/sh
-# Package a specified version.
+# Package client.
 
 cd `dirname $0`
 
@@ -12,67 +12,24 @@ then
 fi
 
 rev=`./version`
+baseDir=/tmp/combined
 packageName=aerospike-client-c-$rev.$platform.x86_64
-dist=/tmp/$packageName
-build=$dist/BUILD
+packageDir=$baseDir/$packageName
 
-# Cleanup previous packages.
+# Build combined package with api docs and examples.
 rm -f *.tgz
-rm -rf $dist
+rm -rf $baseDir
+mkdir -p $baseDir
+mkdir -p $packageDir
 
-if [ $platform = "el5" ] || [ $platform = "el6" ]
-then 
-  rpm=true
-  rev=`echo $rev | sed 's/-/_/g'`
-  spec=/tmp/client_v.spec
-else
-  rpm=false
-  mkdir -p $build/DEBIAN
-  install -m 755 deb/postinst.client $build/DEBIAN/postinst
-fi
+./prepare_examples $packageDir
 
-# Create library package.
-mkdir -p $build/usr/lib
-cp ../aerospike/target/Linux-x86_64/lib/* $build/usr/lib
+mkdir -p $packageDir/docs
+cp -r ../aerospike/target/apidocs/html/* $packageDir/docs
 
-if $rpm
-then
-  sed 's/@VERSION@/'$rev'/g' < rpm/client.spec > $spec
-  rpmbuild -bb --buildroot $build $spec
-  rm $spec
-  pkg=~/rpmbuild/RPMS/x86_64/aerospike-client-c-$rev*.rpm
-else
-  sed 's/@VERSION@/'$rev'/g' < deb/client.spec > $build/DEBIAN/control
-  pkg=deb/$packageName.deb
-  fakeroot dpkg-deb --build $build $pkg
-fi
+./package_lib $packageDir
+./package_devel $packageDir
 
-# Create development package.
-mkdir -p $build/usr/lib
-cp ../aerospike/target/Linux-x86_64/lib/* $build/usr/lib
-mkdir -p $build/usr/include
-cp -r ../aerospike/target/Linux-x86_64/include $build/usr
-
-if $rpm
-then
-  sed 's/@VERSION@/'$rev'/g' < rpm/client_devel.spec > $spec
-  rpmbuild -bb --buildroot $build $spec
-  rm $spec
-  pkgDevel=~/rpmbuild/RPMS/x86_64/aerospike-client-c-devel-$rev*.rpm
-else
-  sed 's/@VERSION@/'$rev'/g' < deb/client_devel.spec > $build/DEBIAN/control
-  pkgDevel=deb/aerospike-client-c-devel-$rev.$platform.x86_64.deb
-  fakeroot dpkg-deb --build $build $pkg
-fi
-
-# Build api docs and examples source code package.
-./prepare_examples $dist
-mv $pkg $dist
-mv $pkgDevel $dist
-mkdir $dist/docs
-cp -r ../aerospike/target/apidocs/html/* $dist/docs
-
-echo $packageName
-tar cf - -C /tmp $packageName | gzip -c > $packageName.tgz
-rm -rf $dist
+tar cf - -C $baseDir $packageName | gzip -c > $packageName.tgz
+rm -rf $baseDir
 

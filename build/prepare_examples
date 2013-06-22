@@ -1,33 +1,25 @@
 #!/bin/sh
 # Build examples source code package.
 
-if [ $# -ne 1 ]
-then
-  echo "Usage $0 <target dir>"
-  exit 1
-fi
-
 cd `dirname $0`
-dir=$1
-
-rm -rf $dir
-mkdir -p $dir
+target=${1-.}
 
 # Create examples.
 srcExamplesDir=../aerospike/examples
-trgExamplesDir=$dir/examples
+trgExamplesDir=$target/examples
 
 mkdir -p $trgExamplesDir
-mkdir -p $trgExamplesDir/udf_examples
 cp $srcExamplesDir/Makefile $trgExamplesDir
 cp $srcExamplesDir/README.md $trgExamplesDir
 cp $srcExamplesDir/udf_examples/Makefile $trgExamplesDir/udf_examples
 
-for i in cpp_example example exists_example udf_examples/ad_udf udf_examples/rec_udf udf_examples/scan_udf
+for i in $srcExamplesDir/basic_examples/*
 do
-	mkdir -p $trgExamplesDir/$i
-	cp -r $srcExamplesDir/$i/* $trgExamplesDir/$i
-	rm -rf $trgExamplesDir/$i/target
+	dir=`dirname $i`
+	fn=`basename $i`
+	mkdir -p $trgExamplesDir/$fn
+	cp -r $i/* $trgExamplesDir/$fn
+	rm -rf $trgExamplesDir/$fn/target
 
 	# Modify Makefile for external use.
 	awk 'BEGIN{OFS=""}
@@ -67,7 +59,7 @@ do
 				print $0
 			}
 		}
-	}' $srcExamplesDir/$i/Makefile > $trgExamplesDir/$i/Makefile
+	}' $i/Makefile > $trgExamplesDir/$fn/Makefile
 done
 
 # Create project files.

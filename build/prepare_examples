@@ -14,10 +14,9 @@ cp $srcExamplesDir/README.md $trgExamplesDir
 cp -r $srcExamplesDir/utils $trgExamplesDir
 cp -r $srcExamplesDir/basic_examples $trgExamplesDir
 
-for i in $srcExamplesDir/basic_examples/*
+for i in expire generation get put
 do
-	fn=`basename $i`
-	rm -rf $trgExamplesDir/basic_examples/$fn/target
+	rm -rf $trgExamplesDir/basic_examples/$i/target
 
 	# Modify Makefile for external use.
 	awk 'BEGIN{OFS=""}
@@ -35,6 +34,6 @@ do
 		{
 			print $0
 		}
-	}' $i/Makefile > $trgExamplesDir/basic_examples/$fn/Makefile
+	}' $srcExamplesDir/basic_examples/$i/Makefile > $trgExamplesDir/basic_examples/$i/Makefile
 done
 

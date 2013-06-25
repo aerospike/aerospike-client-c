@@ -125,23 +125,10 @@ COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_string.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_stringmap.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_util.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_val.h
-
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/citrusleaf.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cl_cluster.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cl_batch.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cl_info.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cl_lookup.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cl_partition.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cl_scan.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/as_scan.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cl_types.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cl_write.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cl_async.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cl_kv.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cl_object.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cl_query.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cl_sindex.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cl_udf.h
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_arch.h
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_atomic.h
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_shash.h
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_types.h
 
 HEADERS := 
 HEADERS += $(wildcard $(SOURCE_INCL)/aerospike/*.h)
@@ -199,7 +186,7 @@ $(TARGET_INCL)/citrusleaf: | $(TARGET_INCL)
 $(TARGET_INCL)/aerospike/%.h:: $(SOURCE_INCL)/aerospike/%.h | $(TARGET_INCL)/aerospike
 	cp $^ $@
 
-$(TARGET_INCL)/citrusleaf/%.h:: $(SOURCE_INCL)/citrusleaf/%.h | $(TARGET_INCL)/citrusleaf
+$(TARGET)/old-include/citrusleaf/%.h:: $(SOURCE_INCL)/citrusleaf/%.h | $(TARGET_INCL)/citrusleaf
 	cp $^ $@
 
 ###############################################################################

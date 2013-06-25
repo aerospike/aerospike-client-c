@@ -170,6 +170,7 @@ typedef struct as_key_s {
  *	Use `as_key_destroy()` to release resources allocated to `as_key` via
  *	this function.
  *	
+ *	@param key		The key to initialize.
  *	@param ns 		The namespace for the key.
  *	@param set		The set for the key.
  *	@param value	The key's value.
@@ -188,6 +189,7 @@ as_key * as_key_init(as_key * key, const char * ns, const char * set, const char
  *
  *	Use `as_key_destroy()` to release resources allocated to `as_key`.
  *
+ *	@param key		The key to initialize.
  *	@param ns 		The namespace for the key.
  *	@param set		The set for the key.
  *	@param value	The key's value.
@@ -206,6 +208,7 @@ as_key * as_key_init_int64(as_key * key, const char * ns, const char * set, int6
  *
  *	Use `as_key_destroy()` to release resources allocated to `as_key`.
  *
+ *	@param key		The key to initialize.
  *	@param ns 		The namespace for the key.
  *	@param set		The set for the key.
  *	@param value	The key's value.
@@ -215,7 +218,7 @@ as_key * as_key_init_int64(as_key * key, const char * ns, const char * set, int6
 as_key * as_key_init_str(as_key * key, const char * ns, const char * set, const char * value);
 
 /**
- *	Initialize a stack allocated `as_key` to a raw bytes value.
+ *	Initialize a stack allocated `as_key` to bytes array.
  *
  *	~~~~~~~~~~{.c}
  *		uint8_t rgb[3] = {254,254,120};
@@ -226,16 +229,18 @@ as_key * as_key_init_str(as_key * key, const char * ns, const char * set, const 
  *
  *	Use `as_key_destroy()` to release resources allocated to `as_key`.
  *
+ *	@param key		The key to initialize.
  *	@param ns 		The namespace for the key.
  *	@param set		The set for the key.
  *	@param value	The key's value.
+ *	@param size		The number of bytes in value.
  *
  *	@return The initialized `as_key` on success. Otherwise NULL.
  */
 as_key * as_key_init_raw(as_key * key, const char * ns, const char * set, const uint8_t * value, uint32_t size);
 
 /**
- *	Initialize a stack allocated `as_key` to a an `as_key_value`.
+ *	Initialize a stack allocated `as_key` to an `as_key_value`.
  *
  *	~~~~~~~~~~{.c}
  *		as_string str;
@@ -247,6 +252,7 @@ as_key * as_key_init_raw(as_key * key, const char * ns, const char * set, const 
  *
  *	Use `as_key_destroy()` to release resources allocated to `as_key`.
  *
+ *	@param key 		The key to initialize.
  *	@param ns 		The namespace for the key.
  *	@param set		The set for the key.
  *	@param value	The key's value.
@@ -270,7 +276,7 @@ as_key * as_key_init_value(as_key * key, const char * ns, const char * set, cons
  *	@param set		The set for the key.
  *	@param value	The key's value.
  *
- *	@return The initialized `as_key` on success. Otherwise NULL.
+ *	@return A new `as_key` on success. Otherwise NULL.
  */
 as_key * as_key_new(const char * ns, const char * set, const char * value);
 
@@ -288,7 +294,7 @@ as_key * as_key_new(const char * ns, const char * set, const char * value);
  *	@param set		The set for the key.
  *	@param value	The key's value.
  *
- *	@return The initialized `as_key` on success. Otherwise NULL.
+ *	@return A new `as_key` on success. Otherwise NULL.
  */
 as_key * as_key_new_int64(const char * ns, const char * set, int64_t value);
 
@@ -306,12 +312,12 @@ as_key * as_key_new_int64(const char * ns, const char * set, int64_t value);
  *	@param set		The set for the key.
  *	@param value	The key's value.
  *
- *	@return The initialized `as_key` on success. Otherwise NULL.
+ *	@return A new `as_key` on success. Otherwise NULL.
  */
 as_key * as_key_new_str(const char * ns, const char * set, const char * value);
 
 /**
- *	Initialize a stack allocated `as_key` to a raw bytes value.
+ *	Initialize a stack allocated `as_key` to a byte array.
  *
  *	~~~~~~~~~~{.c}
  *		uint8_t rgb[3] = {254,254,120};
@@ -325,8 +331,9 @@ as_key * as_key_new_str(const char * ns, const char * set, const char * value);
  *	@param ns 		The namespace for the key.
  *	@param set		The set for the key.
  *	@param value	The key's value.
+ *	@param size		The number of bytes in the value.
  *
- *	@return The initialized `as_key` on success. Otherwise NULL.
+ *	@return A new `as_key` on success. Otherwise NULL.
  */
 as_key * as_key_new_raw(const char * ns, const char * set, const uint8_t * value, uint32_t size);
 
@@ -347,7 +354,7 @@ as_key * as_key_new_raw(const char * ns, const char * set, const uint8_t * value
  *	@param set		The set for the key.
  *	@param value	The key's value.
  *
- *	@return The initialized `as_key` on success. Otherwise NULL.
+ *	@return A new `as_key` on success. Otherwise NULL.
  */
 as_key * as_key_new_value(const char * ns, const char * set, const as_key_value * value);
 
@@ -359,9 +366,13 @@ as_key * as_key_new_value(const char * ns, const char * set, const as_key_value 
 void as_key_destroy(as_key * key);
 
 /**
- *	Compute the digest for the given key.
+ *	Get the digest for the given key. The digest is computed the first time
+ *	function is called. Subsequent calls will return the previously calculated
+ *	value.
  *
- *	@param digest The digest to compute the as_digest.value for.
+ *	@param key The key to get the digest for.
+ *
+ *	@return The digest for the key.
  */
 as_digest * as_key_digest(as_key * key);
 

@@ -499,7 +499,7 @@ void as_query_destroy(as_query * query);
  *	@param query 		The query to modify.
  *	@param bin 			The name of the bin to select.
  *
- *	@return 0 on success. Otherwise an error occurred.
+ *	@return On success, true. Otherwise an error occurred.
  */
 bool as_query_select(as_query * query, const char * bin);
 
@@ -524,7 +524,7 @@ bool as_query_select(as_query * query, const char * bin);
  *	@param type			The type of predicate.
  *	@param ... 			The values for the predicate.
  *
- *	@return 0 on success. Otherwise an error occurred.
+ *	@return On success, true. Otherwise an error occurred.
  */
 bool as_query_where(as_query * query, const char * bin, as_predicate_type type, ... );
 
@@ -542,11 +542,11 @@ bool as_query_where(as_query * query, const char * bin, as_predicate_type type, 
  *	allocate `query.orderby.capacity` entries. 
  *	Otherwise, `query.orderby.capacity` will default to 10.
  *
- *	@param query			The query to modify.
+ *	@param query		The query to modify.
  *	@param bin			The name of the bin to sort by.
- *	@param ascending		If true, will sort the bin in ascending order. Otherwise, descending order it used.
+ *	@param ascending	If true, will sort the bin in ascending order. Otherwise, descending order it used.
  *
- *	@param 0 on success. Otherwise an error occurred.
+ *	@return On success, true. Otherwise an error occurred.
  */
 bool as_query_orderby(as_query * query, const char * bin, bool ascending);
 
@@ -560,23 +560,23 @@ bool as_query_orderby(as_query * query, const char * bin, bool ascending);
  *	@param query 		The query to modify.
  *	@param limit 		The number of records to limit by.
  *
- *	@param 0 on success. Otherwise an error occurred.
+ *	@return On success, true. Otherwise an error occurred.
  */
 bool as_query_limit(as_query * query, uint64_t limit);
 
 /**
- *	Apply a function to the results of the querty.
+ *	Apply a function to the results of the query.
  *
  *	~~~~~~~~~~{.c}
  *		as_query_apply(&q, "my_module", "my_function", NULL);
  *	~~~~~~~~~~
  *
- *	@param query			The query to apply the function to.
+ *	@param query		The query to apply the function to.
  *	@param module		The module containing the function to invoke.
  *	@param function		The function in the module to invoke.
  *	@param arglist		The arguments to use when calling the function.
  *
- *	@param 0 on success. Otherwise an error occurred.
+ *	@return On success, true. Otherwise an error occurred.
  */
 bool as_query_apply(as_query * query, const char * module, const char * function, const as_list * arglist);
 

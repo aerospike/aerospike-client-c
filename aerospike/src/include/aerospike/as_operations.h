@@ -1,37 +1,37 @@
 /******************************************************************************
  *	Copyright 2008-2013 by Aerospike.
  *
- *	Permission is hereby granted, free of charge, to any person obtaining a copy 
- *	of this software and associated documentation files (the "Software"), to 
- *	deal in the Software without restriction, including without limitation the 
- *	rights to use, copy, modify, merge, publish, distribute, sublicense, and/or 
- *	sell copies of the Software, and to permit persons to whom the Software is 
+ *	Permission is hereby granted, free of charge, to any person obtaining a copy
+ *	of this software and associated documentation files (the "Software"), to
+ *	deal in the Software without restriction, including without limitation the
+ *	rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+ *	sell copies of the Software, and to permit persons to whom the Software is
  *	furnished to do so, subject to the following conditions:
- *	
- *	The above copyright notice and this permission notice shall be included in 
+ *
+ *	The above copyright notice and this permission notice shall be included in
  *	all copies or substantial portions of the Software.
- *	
+ *
  *	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  *	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  *	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
  *	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- *	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING 
+ *	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
  *	FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
  *	IN THE SOFTWARE.
  *****************************************************************************/
 
-/** 
- *	The `aerospike_key_operate()` function performs multiple operations on a 
- *	record in the database. The `as_operations` object is used to define the 
+/**
+ *	The `aerospike_key_operate()` function performs multiple operations on a
+ *	record in the database. The `as_operations` object is used to define the
  *	operations to be performed on the record.
- *	
- *	
- *	
+ *
+ *
+ *
  *	@addtogroup operate Operate API
  *	@{
  */
 
-#pragma once 
+#pragma once
 
 #include <aerospike/as_bin.h>
 
@@ -42,12 +42,12 @@
 /**
  *	Operation Identifiers
  */
-typedef enum as_operator_e { 
+typedef enum as_operator_e {
 
 	/**
 	 *	Update the bin.
 	 */
-	AS_OPERATOR_WRITE      = 0, 
+	AS_OPERATOR_WRITE      = 0,
 
 	/**
 	 *	Return the bin from the cluster.
@@ -58,25 +58,25 @@ typedef enum as_operator_e {
 	 *	Increment a bin containing an
 	 *	integer value.
 	 */
-	AS_OPERATOR_INCR       = 3, 
+	AS_OPERATOR_INCR       = 2,
 
 	/**
 	 *	Prepend bytes to the bin containing
 	 *	either a string or blob.
 	 */
-	AS_OPERATOR_PREPEND    = 4, 
+	AS_OPERATOR_PREPEND    = 4,
 
 	/**
 	 *	Append bytes to the bin containing
 	 *	either a string or blob.
 	 */
-	AS_OPERATOR_APPEND     = 5, 
+	AS_OPERATOR_APPEND     = 5,
 
 	/**
 	 *	Touch the record's ttl.
 	 */
 	AS_OPERATOR_TOUCH      = 8
-	
+
 } as_operator;
 
 /**
@@ -84,7 +84,7 @@ typedef enum as_operator_e {
  *	The value for the bin will be applied according to the operation.
  */
 typedef struct as_binop_s {
-	
+
 	/**
 	 *	The operation to be performed on the bin.
 	 */
@@ -94,7 +94,7 @@ typedef struct as_binop_s {
 	 *	The bin the operation will be performed on.
 	 */
 	as_bin bin;
-	
+
 } as_binop;
 
 /**
@@ -153,7 +153,7 @@ typedef struct as_operations_s {
  *****************************************************************************/
 
 /**
- *	Initializes a stack allocated `as_operations` (as_operations) and allocates 
+ *	Initializes a stack allocated `as_operations` (as_operations) and allocates
  *	`__nops` number of entries on the stack.
  *
  *	~~~~~~~~~~{.c}
@@ -164,7 +164,7 @@ typedef struct as_operations_s {
  *	~~~~~~~~~~
  *
  *	@param __ops		The `as_operations *` to initialize.
- *	@param __nops		The number of `as_binops.entries` to allocate on the 
+ *	@param __nops		The number of `as_binops.entries` to allocate on the
  *						stack.
  */
 #define as_operations_inita(__ops, __nops) \
@@ -179,7 +179,7 @@ typedef struct as_operations_s {
  *****************************************************************************/
 
 /**
- *	Intializes a stack allocated `as_operations`. 
+ *	Intializes a stack allocated `as_operations`.
  *
  *	~~~~~~~~~~{.c}
  *		as_operations ops;

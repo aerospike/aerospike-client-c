@@ -99,7 +99,8 @@ as_status aerospike_udf_list(
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param list 			The list to populate with the results from the cluster.
+ *	@param callback 	The function to call for each udf file returned.
+ *	@param udata		User-data to be sent to the callback.
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error occurred.
  */

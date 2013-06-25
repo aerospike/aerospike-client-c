@@ -177,3 +177,7 @@ as_status aerospike_scan_node_foreach(
 	const char * node, const as_scan * scan, 
 	aerospike_scan_foreach_callback callback, void * udata
 	);
+
+/**
+ *	@}
+ */

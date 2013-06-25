@@ -21,7 +21,7 @@
  *****************************************************************************/
 
 /** 
- *	@defgroup config Configuration
+ *	@defgroup policy Policies
  *	@{
  */
 

@@ -24,9 +24,7 @@
  *	The `aerospike_key_operate()` function performs multiple operations on a
  *	record in the database. The `as_operations` object is used to define the
  *	operations to be performed on the record.
- *
- *
- *
+ *	
  *	@addtogroup operate Operate API
  *	@{
  */
@@ -199,19 +197,17 @@ typedef struct as_operations_s {
 as_operations * as_operations_init(as_operations * ops, uint16_t nops);
 
 /**
- *	Creates and initializes a heap allocated `as_operations`.
+ *	Create and initialize a heap allocated `as_operations`.
  *
  *	~~~~~~~~~~{.c}
- *		as_operations ops;
- * 		as_operations_init(&ops, 2);
- *		as_operations_append_int64(&ops, AS_OPERATOR_INCR, "bin1", 123);
- *		as_operations_append_str(&ops, AS_OPERATOR_APPEND, "bin2", "abc");
+ *	as_operations ops = as_operations_new(2);
+ *	as_operations_append_int64(ops, AS_OPERATOR_INCR, "bin1", 123);
+ *	as_operations_append_str(ops, AS_OPERATOR_APPEND, "bin2", "abc");
  *	~~~~~~~~~~
  *
  *	Use `as_operations_destroy()` to free the resources allocated to the
  *	`as_operations`.
  *
- *	@param ops 		The `as_operations` to initialize.
  *	@param nops		The number of `as_operations.binops.entries` to allocate on the heap.
  *
  *	@return The new `as_operations` on success. Otherwise NULL.
@@ -219,13 +215,13 @@ as_operations * as_operations_init(as_operations * ops, uint16_t nops);
 as_operations * as_operations_new(uint16_t nops);
 
 /**
- *	Releases the `as_operations` and associated resources.
+ *	Destroy an `as_operations` and release associated resources.
  *
  *	~~~~~~~~~~{.c}
  * 		as_operations_destroy(binops);
  *	~~~~~~~~~~
  *
- *	@param bins 	The `as_binops` to destroy.
+ *	@param ops 	The `as_operations` to destroy.
  */
 void as_operations_destroy(as_operations * ops);
 

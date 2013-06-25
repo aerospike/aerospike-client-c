@@ -110,10 +110,11 @@ typedef struct as_scan_s {
 /**
  *	Initializes a scan.
  *
+ *	@param scan		The scan to initialize.
  *	@param ns 		The namespace to scan.
  *	@param set 		The set to scan.
  *
- *	@returns the initialized scan on success. Otherwise NULL.
+ *	@returns On succes, the initialized scan. Otherwise NULL.
  */
 as_scan * as_scan_init(as_scan * scan, const char * ns, const char * set);
 
@@ -123,7 +124,7 @@ as_scan * as_scan_init(as_scan * scan, const char * ns, const char * set);
  *	@param ns 		The namespace to scan.
  *	@param set 		The set to scan.
  *
- *	@returns the initialized scan on success. Otherwise NULL.
+ *	@returns On success, a new scan. Otherwise NULL.
  */
 as_scan * as_scan_new(const char * ns, const char * set);
 
@@ -141,3 +142,7 @@ void as_scan_destroy(as_scan * scan);
  *	@param arglist 	The arguments for the function.
  */
 void as_scan_foreach(as_scan * scan, const char * module, const char * function, as_list * arglist);
+
+/**
+ *	@}
+ */

@@ -167,7 +167,7 @@ typedef enum as_status_e {
 	 **************************************************************************/
 
 	/**
-	 * @todo
+	 *	XDR is not available for the cluster.
 	 */
 	AEROSPIKE_ERR_NO_XDR					= 900,
 
@@ -195,12 +195,12 @@ typedef enum as_status_e {
 	AEROSPIKE_ERR_QUERY						= 1100,
 
 	/**
-	 * @todo
+	 *	Query was aborted.
 	 */
 	AEROSPIKE_ERR_QUERY_ABORTED 			= 1101,
 
 	/**
-	 * @todo
+	 *	Query processing queue is full.
 	 */
 	AEROSPIKE_ERR_QUERY_QUEUE_FULL 			= 1102,
 
@@ -214,22 +214,22 @@ typedef enum as_status_e {
 	AEROSPIKE_ERR_INDEX 					= 1200,
 
 	/**
-	 * @todo
+	 *	Index is out of memory
 	 */
 	AEROSPIKE_ERR_INDEX_OOM 				= 1201,
 
 	/**
-	 * @todo
+	 *	Index not found
 	 */
 	AEROSPIKE_ERR_INDEX_NOT_FOUND 			= 1202,
 
 	/**
-	 * @todo
+	 *	Index found.
 	 */
 	AEROSPIKE_ERR_INDEX_FOUND 				= 1203,
 
 	/**
-	 * @todo
+	 *	Unable to read the index.
 	 */
 	AEROSPIKE_ERR_INDEX_NOT_READABLE 		= 1204,
 
@@ -243,7 +243,7 @@ typedef enum as_status_e {
 	AEROSPIKE_ERR_UDF						= 1300,
 
 	/**
-	 * @todo
+	 *	UDF does not exist.
 	 */
 	AEROSPIKE_ERR_UDF_NOT_FOUND				= 1301
 

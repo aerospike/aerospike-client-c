@@ -1,3 +1,4 @@
+/** @file **/
 /******************************************************************************
  *	Copyright 2008-2013 by Aerospike.
  *
@@ -98,6 +99,8 @@ typedef struct aerospike_s {
  *	@param config 	The configuration to use for the instance.
  *
  *	@returns the initialized aerospike instance
+ *
+ *	@see config for information on configuring the client.
  */
 aerospike * aerospike_init(aerospike * as, as_config * config);
 
@@ -114,6 +117,8 @@ aerospike * aerospike_init(aerospike * as, as_config * config);
  *	@param config	The configuration to use for the instance.
  *
  *	@returns a new aerospike instance
+ *
+ *	@see config for information on configuring the client.
  */
 aerospike * aerospike_new(as_config * config);
 

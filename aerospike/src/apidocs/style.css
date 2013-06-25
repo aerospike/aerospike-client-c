@@ -1,7 +1,7 @@
 /* The standard CSS for doxygen */
 
 body, table, div, p, dl {
-	font: 400 10pt Helvetica, sans-serif;
+	font: 400 11pt Helvetica, sans-serif;
 }
 
 /* @group Heading Levels */
@@ -11,7 +11,7 @@ h1 {
 }
 
 .title {
-	font-size: 150%;
+	font-size: 1.4em;
 	font-weight: bold;
 	margin: 10px 2px;
 }
@@ -19,7 +19,7 @@ h1 {
 h2 {
 	border-bottom: 1px solid #879ECB;
 	color: #354C7B;
-	font-size: 150%;
+	font-size: 1.2em;
 	font-weight: normal;
 	margin-top: 1.75em;
 	padding-top: 8px;

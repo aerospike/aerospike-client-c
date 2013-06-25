@@ -22,6 +22,18 @@
  *****************************************************************************/
 
 /** 
+ *	@mainpage 
+ *	
+ *	# Introduction
+ *	
+ *	This is the introduction.
+ *	
+ *	# Installation
+ *	
+ *	etc...
+ */	
+
+/** 
  *	@defgroup aerospike Aerospike Instance
  *	@{
  */

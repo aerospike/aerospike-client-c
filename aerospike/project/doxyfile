@@ -884,7 +884,7 @@ HTML_FILE_EXTENSION    = .html
 # have to redo this when upgrading to a newer version of doxygen or when
 # changing the value of configuration settings such as GENERATE_TREEVIEW!
 
-#HTML_HEADER            = src/apidocs/header.html
+HTML_HEADER            = src/apidocs/header.html
 
 # The HTML_FOOTER tag can be used to specify a personal HTML footer for
 # each generated HTML page. If it is left blank doxygen will generate a
@@ -899,7 +899,7 @@ HTML_FOOTER            = src/apidocs/footer.html
 # the style sheet file to the HTML output directory, so don't put your own
 # style sheet in the HTML output directory as well, or it will be erased!
 
-#HTML_STYLESHEET        = src/apidocs/style.css
+HTML_STYLESHEET        = src/apidocs/style.css
 
 # The HTML_EXTRA_FILES tag can be used to specify one or more extra images or
 # other source files which should be copied to the HTML output directory. Note

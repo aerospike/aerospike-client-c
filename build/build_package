@@ -5,5 +5,5 @@ cd `dirname $0`
 source run_command
 
 runCommand ./build
+runCommand ./build_docs
 runCommand ./package
-

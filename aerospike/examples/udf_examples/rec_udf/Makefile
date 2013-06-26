@@ -16,7 +16,10 @@ LD_FLAGS += -lssl -lcrypto -lpthread -lrt
 LD_FLAGS += -llua
 LD_FLAGS += -lm
 
-INC_PATH += $(AEROSPIKE)/$(TARGET_INCL)
+#INC_PATH += $(AEROSPIKE)/$(TARGET_INCL)
+INC_PATH = $(AEROSPIKE)/$(SOURCE_INCL)
+INC_PATH += $(ROOT)/aerospike-common/$(TARGET_INCL)/
+INC_PATH += $(ROOT)/citrusleaf-base/$(TARGET_INCL)/
 
 ###############################################################################
 ##  OBJECTS                                                                  ##
@@ -52,21 +55,21 @@ run:
 ##  BUILD TARGETS                                                            ##
 ###############################################################################
 
-$(TARGET_OBJ)/%.o: %.c $(AEROSPIKE)/$(TARGET_LIB)/libcitrusleaf.a 
+$(TARGET_OBJ)/%.o: %.c $(AEROSPIKE)/$(TARGET_LIB)/libaerospike.a 
 	$(object)
 
 $(TARGET_BIN)/manage_udf: $(MANAGE_UDF:%=$(TARGET_OBJ)/%)
-	$(executable) $(AEROSPIKE)/$(TARGET_LIB)/libcitrusleaf.a
+	$(executable) $(AEROSPIKE)/$(TARGET_LIB)/libaerospike.a
 
 $(TARGET_BIN)/rec_udf: $(REC_UDF:%=$(TARGET_OBJ)/%)
-	$(executable) $(AEROSPIKE)/$(TARGET_LIB)/libcitrusleaf.a
+	$(executable) $(AEROSPIKE)/$(TARGET_LIB)/libaerospike.a
 
 ###############################################################################
 ##  BUILD DEPENDENCIES                                                       ##
 ###############################################################################
 
-$(AEROSPIKE)/$(TARGET_LIB)/libcitrusleaf.a: $(AEROSPIKE)/$(SOURCE_INCL)/citrusleaf/*.h  $(AEROSPIKE)/$(SOURCE_MAIN)/*.c
-	$(MAKE) -C $(AEROSPIKE) libcitrusleaf.a prepare
+$(AEROSPIKE)/$(TARGET_LIB)/libaerospike.a: $(AEROSPIKE)/$(SOURCE_INCL)/citrusleaf/*.h  $(AEROSPIKE)/$(SOURCE_MAIN)/citrusleaf/*.c
+	$(MAKE) -C $(AEROSPIKE) libaerospike.a prepare
 
 ###############################################################################
 include $(ROOT)/project/rules.mk

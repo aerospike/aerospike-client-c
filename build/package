@@ -24,6 +24,8 @@ mkdir -p $packageDir
 
 ./prepare_examples $packageDir
 
+cp README.md $packageDir
+
 mkdir -p $packageDir/docs
 cp -r ../aerospike/target/apidocs/html/* $packageDir/docs
 

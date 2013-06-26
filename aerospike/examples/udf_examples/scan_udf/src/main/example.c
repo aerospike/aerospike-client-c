@@ -14,9 +14,9 @@
 #include <citrusleaf/citrusleaf.h>
 #include <citrusleaf/cl_udf.h>
 #include <citrusleaf/as_scan.h>
-#include <citrusleaf/cf_random.h>
+//#include <citrusleaf/cf_random.h>
 #include <citrusleaf/cf_atomic.h>
-#include <citrusleaf/cf_hist.h>
+//#include <citrusleaf/cf_hist.h>
 
 
 
@@ -157,24 +157,24 @@ int cb(as_val * v, void * u) {
 
 static int run_test1() {
     // Response structure for every node
-    as_node_response resp;
-    memset(&resp, 0, sizeof(as_node_response));
+    cl_node_response resp;
+    memset(&resp, 0, sizeof(cl_node_response));
 
     cf_vector * v;
     // Create job id for scan.
     // This will be useful to monitor your scan transactions
     uint64_t job_id;
-    as_scan * scan = as_scan_new(g_config->ns, g_config->set, &job_id );
+    cl_scan * scan = cl_scan_new(g_config->ns, g_config->set, &job_id );
     INFO("Job Id for this transaction %"PRIu64"", job_id);
 
-    as_scan_params params = { 
+    cl_scan_params params = { 
         .fail_on_cluster_change  = false,
-        .priority     = AS_SCAN_PRIORITY_AUTO,
+        .priority     = CL_SCAN_PRIORITY_AUTO,
         .pct          = 100
     };
 
 
-    as_scan_params_init(&scan->params, &params);
+    cl_scan_params_init(&scan->params, &params);
 
     //Initialize the udf to be run on all records
     // This function takes in the filename (not the absolute path and w/o .lua)
@@ -198,7 +198,7 @@ static int run_test1() {
         cf_vector_get(v, i, &resp);
         INFO("Udf scan background for node %s returned %d", resp.node_name, resp.node_response);
         // Set the resp back to zero
-        memset(&resp, 0, sizeof(as_node_response));
+        memset(&resp, 0, sizeof(cl_node_response));
     }
     // Free the result vector
     cf_vector_destroy(v);
@@ -210,23 +210,23 @@ static int run_test1() {
 
 static int run_test2() {
     // Response structure for every node
-    as_node_response resp;
-    memset(&resp, 0, sizeof(as_node_response));
+    cl_node_response resp;
+    memset(&resp, 0, sizeof(cl_node_response));
 
     // Create job id for scan.
     // This will be useful to monitor your scan transactions
     uint64_t job_id;
-    as_scan * scan = as_scan_new(g_config->ns, g_config->set, &job_id );
+    cl_scan * scan = as_scan_new(g_config->ns, g_config->set, &job_id );
     INFO("Job Id for this transaction %"PRIu64"", job_id);
 
-    as_scan_params params = { 
+    cl_scan_params params = { 
         .fail_on_cluster_change  = false,
-        .priority   = AS_SCAN_PRIORITY_AUTO,
+        .priority   = CL_SCAN_PRIORITY_AUTO,
         .pct        = 100
     };
 
 
-    as_scan_params_init(&scan->params, &params);
+    cl_scan_params_init(&scan->params, &params);
 
     //Initialize the udf to be run on all records
     // This function takes in the filename (not the absolute path and w/o .lua)

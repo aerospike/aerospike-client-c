@@ -337,11 +337,11 @@ bool as_record_set_bytes(as_record * rec, const as_bin_name name, as_bytes * val
  *	Set specified bin's value to an as_list.
  *
  *	~~~~~~~~~~{.c}
- *		as_list list;
+ *		as_arraylist list;
  *		as_arraylist_init(&list);
- *		as_list_add_int64(&list, 1);
- *		as_list_add_int64(&list, 2);
- *		as_list_add_int64(&list, 3);
+ *		as_arraylist_add_int64(&list, 1);
+ *		as_arraylist_add_int64(&list, 2);
+ *		as_arraylist_add_int64(&list, 3);
  *
  *		as_record_set_list(rec, "bin", &list);
  *	~~~~~~~~~~

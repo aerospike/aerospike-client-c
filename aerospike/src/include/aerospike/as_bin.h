@@ -27,7 +27,6 @@
 
 #pragma once 
 
-#include <aerospike/as_bin.h>
 #include <aerospike/as_integer.h>
 #include <aerospike/as_string.h>
 #include <aerospike/as_bytes.h>

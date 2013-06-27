@@ -297,10 +297,10 @@ TEST( query_foreach_4, "sum(d) where b == 100 and d == 1" ) {
 
 	int64_t value = 0;
 
-	as_list args;
+	as_arraylist args;
 	as_arraylist_init(&args, 2,0);
-	as_list_append_str(&args, "d");
-	as_list_append_int64(&args, 1);
+	as_arraylist_append_str(&args, "d");
+	as_arraylist_append_int64(&args, 1);
 
 	as_query q;
 	as_query_init(&q, NAMESPACE, SET);

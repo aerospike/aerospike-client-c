@@ -69,13 +69,13 @@ TEST( digest_apply_put , "put: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: '
 	as_error err;
 	as_error_reset(&err);
 	
-	as_list list;
+	as_arraylist list;
 	as_arraylist_init(&list, 3, 0);
-	as_list_append_int64(&list, 1);
-	as_list_append_int64(&list, 2);
-	as_list_append_int64(&list, 3);
+	as_arraylist_append_int64(&list, 1);
+	as_arraylist_append_int64(&list, 2);
+	as_arraylist_append_int64(&list, 3);
 	
-	as_map map;
+	as_hashmap map;
 	as_hashmap_init(&map, 32);
 	as_stringmap_set_int64(&map, "x", 7);
 	as_stringmap_set_int64(&map, "y", 8);
@@ -149,10 +149,10 @@ TEST( digest_apply_add_1_2 , "apply: (test,test,foo) <!> digest_apply.add(1,2) =
 
 	as_val * res = NULL;
 
-	as_list arglist;
+	as_arraylist arglist;
 	as_arraylist_init(&arglist, 3, 0);
-	as_list_append_int64(&arglist, 1);
-	as_list_append_int64(&arglist, 2);
+	as_arraylist_append_int64(&arglist, 1);
+	as_arraylist_append_int64(&arglist, 2);
 
 	as_status rc = aerospike_digest_apply(as, &err, NULL, "test", &digest, UDF_FILE, "add", &arglist, &res);
 	
@@ -195,9 +195,9 @@ TEST( digest_apply_get_bin_a , "apply: (test,test,foo) <!> digest_apply.get_bin_
 
 	as_val * res = NULL;
 
-	as_list arglist;
+	as_arraylist arglist;
 	as_arraylist_init(&arglist, 1, 0);
-	as_list_append_str(&arglist, "a");
+	as_arraylist_append_str(&arglist, "a");
 
 	as_status rc = aerospike_digest_apply(as, &err, NULL, "test", &digest, UDF_FILE, "get_bin_a", &arglist, &res);
 	

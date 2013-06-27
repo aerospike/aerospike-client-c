@@ -158,16 +158,16 @@ cl_rv aerospike_lset_create(cl_cluster * asc, const char * namespace,
 	// As is now the case with all UDF resources, we initialize the
 	// arglist, use it then destroy it.
 	// LSET:lset_create(record, bin_name, create_spec)
-	as_list * arglist = NULL;
+	as_arraylist * arglist = NULL;
 	arglist = as_arraylist_new(2, 0); // We have 2 parms to pass
-	as_list_add_string(arglist, bin_name);
+	as_arraylist_append_str(arglist, bin_name);
 	if (create_spec != NULL) {
 		as_val_reserve( create_spec);
-		as_list_append(arglist, (as_val *) create_spec);
+		as_arraylist_append(arglist, (as_val *) create_spec);
 	}
 
 	rc = citrusleaf_udf_record_apply(asc, namespace, set, o_keyp, s_ldt_package,
-			s_create, arglist, timeout_ms, &result);
+			s_create, (as_list *) arglist, timeout_ms, &result);
 
 	if (rc != CITRUSLEAF_OK) {
 		if (TRA_DEBUG)
@@ -280,23 +280,23 @@ cl_rv aerospike_lset_insert_internal(cl_cluster * asc, const char * namespace,
 	// as_val type, so we must increment the reference count (with
 	// as_val_reserve) so that all of the free()/destroy() calls can match up.
 
-	as_list * arglist = NULL;
+	as_arraylist * arglist = NULL;
 	arglist = as_arraylist_new(4, 0); // Two items
-	as_list_add_string(arglist, bin_name);
+	as_arraylist_append_str(arglist, bin_name);
 	as_val_reserve( lset_valuep);
 	// Increment the reference count for valuep
-	as_list_append(arglist, lset_valuep);
+	as_arraylist_append(arglist, lset_valuep);
 
 	if (creation_spec != NULL) {
 		as_val_reserve( creation_spec);
 		// bump the ref count
-		as_list_append(arglist, (as_val *) creation_spec);
+		as_arraylist_append(arglist, (as_val *) creation_spec);
 	}
 
 	// NOTE: Have verified that the as_val (the list) passed to us was
 	// created with "new", so we have a malloc'd value.
 	rc = citrusleaf_udf_record_apply(asc, namespace, set, o_keyp, s_ldt_package,
-			function_name, arglist, timeout_ms, &result);
+			function_name, (as_list *) arglist, timeout_ms, &result);
 
 	if (rc != CITRUSLEAF_OK) {
 		if (TRA_DEBUG)
@@ -450,17 +450,17 @@ cl_rv aerospike_lset_search_internal(as_result ** resultpp, cl_cluster * asc,
 	// and the list destroy work properly.
 	//
 	// Lua Call: lset_search( record, binName, Value, filter, fargs )
-	as_list * arglist = NULL;
+	as_arraylist * arglist = NULL;
 	arglist = as_arraylist_new(4, 0); // two or four items to push
-	as_list_add_string(arglist, bin_name);
+	as_arraylist_append_str(arglist, bin_name);
 	as_val_reserve( search_valuep);
 	// Increment the reference count for valuep
-	as_list_append(arglist, search_valuep);
+	as_arraylist_append(arglist, search_valuep);
 	if (filter != NULL && function_args != NULL) {
-		as_list_add_string(arglist, filter);
+		as_arraylist_append_str(arglist, filter);
 		as_val_reserve( function_args);
 		// protect: Bump ref count
-		as_list_append(arglist, (as_val *) function_args);
+		as_arraylist_append(arglist, (as_val *) function_args);
 	}
 
 	if (TRA_DEBUG) {
@@ -473,7 +473,7 @@ cl_rv aerospike_lset_search_internal(as_result ** resultpp, cl_cluster * asc,
 	}
 
 	rc = citrusleaf_udf_record_apply(asc, namespace, set, o_keyp, s_ldt_package,
-			function_name, arglist, timeout_ms, resultp);
+			function_name, (as_list *) arglist, timeout_ms, resultp);
 
 	// TODO: Need to distinquish between RECORD NOT FOUND and
 	// LDT element not found.
@@ -664,17 +664,17 @@ cl_rv aerospike_lset_exists(bool * bool_result, cl_cluster * asc,
 	as_result_init(&result);
     
 	// Lua Call: lset_exists( record, binName, Value )
-	as_list * arglist = NULL;
+	as_arraylist * arglist = NULL;
 	arglist = as_arraylist_new(2, 0); // two items to push
-	as_list_add_string(arglist, bin_name);
+	as_arraylist_append_str(arglist, bin_name);
 	as_val_reserve( search_valuep);
 	// Increment the reference count for valuep
-	as_list_append(arglist, search_valuep);
+	as_arraylist_append(arglist, search_valuep);
 
 	// Call the "apply udf" function (e.g. lset_exists()) for this record to
 	// return 1 for exists, 0 for NOT.
 	rc = citrusleaf_udf_record_apply(asc, namespace, set, o_keyp, s_ldt_package,
-			s_exists, arglist, timeout_ms, &result);
+			s_exists, (as_list *) arglist, timeout_ms, &result);
 
 	if (rc != CITRUSLEAF_OK) {
 		if (TRA_ERROR)
@@ -756,12 +756,12 @@ cl_rv aerospike_lset_delete(cl_cluster * asc, const char * namespace,
 	// and the list destroy work properly.
 	//
 	// Lua Call: lset_delete( record, bin_name, value )
-	as_list * arglist = NULL;
+	as_arraylist * arglist = NULL;
 	arglist = as_arraylist_new(2, 0); // Two items to push
-	as_list_add_string(arglist, bin_name);
+	as_arraylist_append_str(arglist, bin_name);
 	as_val_reserve( delete_valuep);
 	// Increment the reference count for valuep
-	as_list_append(arglist, delete_valuep);
+	as_arraylist_append(arglist, delete_valuep);
 
 	if (TRA_DEBUG) {
 		printf("[DEBUG]:<%s:%s>Calling UDF:NS(%s) Set(%s) Bin(%s) \n", MOD,
@@ -774,7 +774,7 @@ cl_rv aerospike_lset_delete(cl_cluster * asc, const char * namespace,
 	}
 
 	rc = citrusleaf_udf_record_apply(asc, namespace, set, o_keyp, s_ldt_package,
-			s_delete, arglist, timeout_ms, &result);
+			s_delete, (as_list *) arglist, timeout_ms, &result);
 
 	if (rc != CITRUSLEAF_OK) {
 		if (TRA_ERROR)
@@ -849,14 +849,14 @@ cl_rv aerospike_lset_size(uint32_t * size, cl_cluster * asc,
 	as_result_init(&result);
 
 	// Lua Call: lset_size( record, bin_name )
-	as_list * arglist = NULL;
+	as_arraylist * arglist = NULL;
 	arglist = as_arraylist_new(1, 0); // One item in the arglist
-	as_list_add_string(arglist, bin_name);
+	as_arraylist_append_str(arglist, bin_name);
 
 	// Call the "apply udf" function (e.g. lset_size()) for this record to
 	// return the size of the set.
 	rc = citrusleaf_udf_record_apply(asc, namespace, set, o_keyp,
-            s_ldt_package, s_size, arglist, timeout_ms, &result);
+            s_ldt_package, s_size, (as_list *) arglist, timeout_ms, &result);
 
 	if (rc != CITRUSLEAF_OK) {
 		if (TRA_ERROR)
@@ -941,14 +941,14 @@ cl_rv aerospike_lset_config(as_result ** resultpp, cl_cluster * asc,
 	rc = CITRUSLEAF_OK; // This is the user's return code.
 
 	// Lua Call: lset_config( record, bin_name )
-	as_list * arglist = NULL;
+	as_arraylist * arglist = NULL;
 	arglist = as_arraylist_new(1, 0); // One item in the arglist
-	as_list_add_string(arglist, bin_name);
+	as_arraylist_append_str(arglist, bin_name);
 
 	// Call the "apply udf" function (e.g. lset_config()) for this record to
 	// return the size of the set.
 	rc = citrusleaf_udf_record_apply(asc, namespace, set, o_keyp,
-            s_ldt_package, s_config, arglist, timeout_ms, resultp);
+            s_ldt_package, s_config, (as_list *) arglist, timeout_ms, resultp);
 
 	if (rc != CITRUSLEAF_OK) {
 		if (TRA_ERROR)

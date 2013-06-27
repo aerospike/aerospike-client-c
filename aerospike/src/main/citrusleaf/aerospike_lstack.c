@@ -174,10 +174,10 @@ aerospike_lstack_create(
     // Set up the arglist that we'll use to pass in function parms
     // As is now the case with all UDF resources, we initialize the
     // arglist, use it then destroy it.
-    as_list * arglist = NULL;
+    as_arraylist * arglist = NULL;
     arglist = as_arraylist_new(2, 0);
-    as_list_add_string(arglist, bin_name );
-    as_list_add_map(arglist, creation_args);
+    as_arraylist_append_str(arglist, bin_name );
+    as_arraylist_append_map(arglist, creation_args);
 
     // NOTE: All strings created by "as_val_tostring()" must be explicitly
     // freed after use.
@@ -194,7 +194,7 @@ aerospike_lstack_create(
     // Make the Citrusleaf UDF Record Apply call - with all of the stuff we
     // packaged up.
     rc = citrusleaf_udf_record_apply(asc, namespace,
-            set, o_keyp, s_ldt_package, s_create, arglist,
+            set, o_keyp, s_ldt_package, s_create, (as_list *) arglist,
             timeout_ms, &result);
 
     if (rc != CITRUSLEAF_OK) {
@@ -315,13 +315,13 @@ aerospike_lstack_push_internal(
     // as_val type, so we must increment the reference count (with
     // as_val_reserve) so that all of the free()/destroy() calls can match up.
     as_val_reserve( lso_valuep ); // Increment the reference count
-    as_list * arglist = NULL;
+    as_arraylist * arglist = NULL;
     arglist = as_arraylist_new(4, 0);    // Value, plus inner UDF stuff
-    as_list_add_string( arglist, bin_name );
-    as_list_append( arglist, lso_valuep );
+    as_arraylist_append_str( arglist, bin_name );
+    as_arraylist_append( arglist, lso_valuep );
     if( creation_spec != NULL ){
         as_val_reserve( creation_spec ); // Just as before, bump the ref count
-        as_list_append( arglist, (as_val *) creation_spec );
+        as_arraylist_append( arglist, (as_val *) creation_spec );
     }
 
     // NOTE: Have verified that the as_val (the list) passed to us was
@@ -348,7 +348,7 @@ aerospike_lstack_push_internal(
     }
 
     rc = citrusleaf_udf_record_apply(asc, namespace, set, o_keyp,
-            s_ldt_package, function_name, arglist, timeout_ms, &result);
+            s_ldt_package, function_name, (as_list *) arglist, timeout_ms, &result);
 
     if (rc != CITRUSLEAF_OK) {
         if( TRA_ERROR )
@@ -587,14 +587,14 @@ aerospike_lstack_peek_internal(
     //
     // Note: function_args is an <as_val> type, so if present, it must be
     // protected (with as_reserve()) so that it doesn't get destroyed twice.
-    as_list * arglist = NULL;
+    as_arraylist * arglist = NULL;
     arglist = as_arraylist_new(4, 4);    // Just one item -- the new as_val
-    as_list_add_string( arglist, bin_name );
-    as_list_add_integer( arglist, peek_count );
+    as_arraylist_append_str( arglist, bin_name );
+    as_arraylist_append_int64( arglist, peek_count );
     if( filter != NULL && function_args != NULL ){
-        as_list_add_string( arglist, filter );
+        as_arraylist_append_str( arglist, filter );
         as_val_reserve( function_args ); // Just as before, bump the ref count
-        as_list_append( arglist, (as_val *) function_args );
+        as_arraylist_append( arglist, (as_val *) function_args );
     }
 
     // Call the "apply udf" function (function "StackPeek") for this record to
@@ -616,7 +616,7 @@ aerospike_lstack_peek_internal(
     }
 
     rc = citrusleaf_udf_record_apply(asc, namespace, set, o_keyp,
-            s_ldt_package, function_name, arglist, timeout_ms, resultp);
+            s_ldt_package, function_name, (as_list *) arglist, timeout_ms, resultp);
 
     if (rc != CITRUSLEAF_OK) {
         if( TRA_ERROR )
@@ -858,9 +858,9 @@ aerospike_lstack_trim(
     // Set up the arglist that we'll use to pass in function parms
     // As is now the case with all UDF resources, we initialize the
     // arglist, use it then destroy it.
-    as_list * arglist = NULL;
+    as_arraylist * arglist = NULL;
     arglist = as_arraylist_new(1, 0); // Just one item -- the trim count
-    as_list_add_integer( arglist, remainder_count );
+    as_arraylist_append_int64( arglist, remainder_count );
 
     if( TRA_DEBUG ) {
         printf("[DEBUG]<%s:%s> UDF Apply:NS(%s) Set(%s) Bin(%s) \n",
@@ -874,7 +874,7 @@ aerospike_lstack_trim(
     // Call the "apply udf" function (e.g. StackTrim()) for this record to
     // truncate the Stack to "Remainder_Count" items.
     cl_rv rc = citrusleaf_udf_record_apply(asc, namespace, set, o_keyp,
-            s_ldt_package, s_trim, arglist, timeout_ms, &result);
+            s_ldt_package, s_trim, (as_list *) arglist, timeout_ms, &result);
 
     if (rc != CITRUSLEAF_OK) {
         if( TRA_ERROR )
@@ -956,15 +956,15 @@ aerospike_lstack_size(
     as_result_init(&result);
 
     // Lua Call: lstack_size( record, bin_name )
-    as_list * arglist = NULL;
+    as_arraylist * arglist = NULL;
     arglist = as_arraylist_new(1, 0); // One item in the arglist
-    as_list_add_string(arglist, bin_name);
+    as_arraylist_append_str(arglist, bin_name);
     
 
     // Call the "apply udf" function (e.g. lstack_size()) for this record to
     // return the size of the stack.
     rc = citrusleaf_udf_record_apply(asc, namespace, set, o_keyp,
-            s_ldt_package, s_size, arglist, timeout_ms, &result);
+            s_ldt_package, s_size, (as_list *) arglist, timeout_ms, &result);
 
     if (rc != CITRUSLEAF_OK) {
         if( TRA_ERROR )
@@ -1053,14 +1053,14 @@ aerospike_lstack_config(
     rc = CITRUSLEAF_OK; // This is the user's return code.
 
     // Lua Call: lstack_config( record, bin_name )
-    as_list * arglist = NULL;
+    as_arraylist * arglist = NULL;
     arglist = as_arraylist_new(1, 0); // One item in the arglist
-    as_list_add_string(arglist, bin_name);
+    as_arraylist_append_str(arglist, bin_name);
     
     // Call the "apply udf" function (e.g. lstack_size()) for this record to
     // return the size of the stack.
     rc = citrusleaf_udf_record_apply(asc, namespace, set, o_keyp,
-            s_ldt_package, s_config, arglist, timeout_ms, resultp);
+            s_ldt_package, s_config, (as_list *) arglist, timeout_ms, resultp);
 
     if (rc != CITRUSLEAF_OK) {
         if( TRA_ERROR )

@@ -87,6 +87,7 @@ AEROSPIKE += as_operations.o
 AEROSPIKE += as_policy.o
 AEROSPIKE += as_query.o
 AEROSPIKE += as_record.o
+AEROSPIKE += as_record_hooks.o
 AEROSPIKE += as_scan.o
 AEROSPIKE += as_udf.o
 

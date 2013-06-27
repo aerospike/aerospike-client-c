@@ -65,6 +65,10 @@
 #define STACK_BINS           100
 #define N_MAX_QUERY_THREADS  5
 
+#define LOG_ENABLED 0
+
+#if LOG_ENABLED == 1
+
 static void __log(const char * file, const int line, const char * fmt, ...) {
     char msg[256] = {0};
     va_list ap;
@@ -77,6 +81,9 @@ static void __log(const char * file, const int line, const char * fmt, ...) {
 #define LOG(__fmt, args...) \
     // __log(__FILE__,__LINE__,__fmt, ## args)
 
+#else
+#define LOG(__fmt, args...)
+#endif
 
 /******************************************************************************
  * TYPES
@@ -603,7 +610,7 @@ static as_val * query_response_get(const as_rec * rec, const char * name)  {
 
         if ( v ) {
             if ( r->values == NULL ) {
-                r->values = as_hashmap_new(32);
+                r->values = (as_map *) as_hashmap_new(32);
             }
             as_string * key = as_string_new(strdup(name), true);
             as_map_set(r->values, (as_val *) key, v);

@@ -70,6 +70,17 @@ as_policy_operate * as_policy_operate_resolve(as_policy_operate * p, const as_po
  *
  *	@return The resolved policy (p).
  */
+as_policy_remove * as_policy_remove_resolve(as_policy_remove * p, const as_policies * global, const as_policy_remove * local);
+
+/** 
+ *	Resolve policy values from global and local policy.
+ *
+ *	@param p 		The policy to populate with resolved values
+ *	@param global	An `as_policies` providing default (global) values.
+ *	@param local	A policy providing local overrides of globals.
+ *
+ *	@return The resolved policy (p).
+ */
 as_policy_scan * as_policy_scan_resolve(as_policy_scan * p, const as_policies * global, const as_policy_scan * local);
 
 /** 

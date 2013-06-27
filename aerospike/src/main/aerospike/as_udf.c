@@ -24,6 +24,11 @@
 #include <aerospike/as_list.h>
 #include <aerospike/as_udf.h>
 
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+
 /******************************************************************************
  * UDF CALL FUNCTIONS
  *****************************************************************************/

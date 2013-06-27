@@ -283,6 +283,40 @@ typedef struct as_policy_operate_s {
 	uint32_t timeout;
 
 	/**
+	 *	The write mode defines the behavior 
+	 *	for writing data to the cluster.
+	 */
+	as_policy_writemode mode;
+	
+	/**
+	 *	Specifies the behavior for the key.
+	 */
+	as_policy_key key;
+
+	/**
+	 *	Specifies the behavior for the generation
+	 *	value.
+	 */
+	as_policy_gen gen;
+
+} as_policy_operate;
+
+/**
+ *	Remove Policy
+ */
+typedef struct as_policy_remove_s {
+
+	/**
+	 *	Maximum time in milliseconds to wait for 
+	 *	the operation to complete.
+	 *
+	 *	If 0 (zero), then the value will default to
+	 *	either as_config.policies.timeout
+	 *	or `AS_POLICY_TIMEOUT_DEFAULT`.
+	 */
+	uint32_t timeout;
+
+	/**
 	 *	The generation of the record.
 	 */
 	uint16_t generation;
@@ -304,7 +338,7 @@ typedef struct as_policy_operate_s {
 	 */
 	as_policy_gen gen;
 
-} as_policy_operate;
+} as_policy_remove;
 
 /**
  *	Query Policy
@@ -441,6 +475,11 @@ typedef struct as_policies_s {
 	 *	The default operate policy.
 	 */
 	as_policy_operate operate;
+
+	/**
+	 *	The default remove policy.
+	 */
+	as_policy_remove remove;
 
 	/**
 	 *	The default query policy.

@@ -30,6 +30,11 @@
 #include <aerospike/as_record.h>
 #include <aerospike/as_string.h>
 
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+
 #include "_bin.h"
 
 /******************************************************************************

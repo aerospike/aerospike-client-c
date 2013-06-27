@@ -31,9 +31,66 @@
  *	# Installation
  *	
  *	etc...
+ *
+ *
+ *
  */	
 
 /** 
+ * 	In order to connect to an Aerospike Database cluster, you will need an
+ *	instance of `aerospike`. The `aerospike` object is a client for a 
+ *	single cluster. 
+ *
+ *	You have the option of stack or heap allocating a client. 
+ *
+ *	To use a stack allocated client, you will need to initialize the 
+ *	client via `aerospike_init()`:
+ *
+ *	~~~~~~~~~~{.c}
+ *	aerospike as;
+ *	aerospike_init(&as, &config);
+ *	~~~~~~~~~~
+ *	
+ *	If you prefer to use a heap allocated client, then you should use
+ *	`aerospike_new()`:
+ *
+ *	~~~~~~~~~~{.c}
+ *	aerospike * as = aerospike_new(&config);
+ *	~~~~~~~~~~
+ *
+ *	The `config` parameter for both calls is an instance of `as_config`.
+ *	The `as_config` provides configuration options for the client, including
+ *	default policies, set of seed hosts to connect to and other options.
+ *
+ *	The client is not connected at this point. To connect the client to
+ *	the cluster, you must calls `aerospike_connect()`:
+ *
+ *	~~~~~~~~~~{.c}
+ *	aerospike_connect(as, &err);
+ *	~~~~~~~~~~
+ *
+ *	The `err` parameter is an `as_error`, which get populated with error
+ *	information such as error code, message, the function where the error
+ *	had occurred, the filename and the line number.
+ *
+ *	When you are finished using the client, you should first close the 
+ *	connections to the cluster via `aerospike_close()`:
+ *
+ *	~~~~~~~~~~{.c}
+ *	aerospike_close(as, &err);
+ *	~~~~~~~~~~
+ *
+ *	Once the connection is close, you should clean up the resources 
+ *	utilized by the client via `aerospike_destroy()`:
+ *
+ *	~~~~~~~~~~{.c}
+ *	aerospike_destroy(as);
+ *	~~~~~~~~~~
+ *
+ *	@note 	Currently, only a single client instance can be created in an
+ *			application. In the next release, you will be able to have 
+ *			multiple clients in a single application.
+ *
  *	@defgroup aerospike Aerospike Instance
  *	@{
  */

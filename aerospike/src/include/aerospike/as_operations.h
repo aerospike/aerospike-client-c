@@ -96,14 +96,17 @@ typedef struct as_binop_s {
 } as_binop;
 
 /**
- *	Sequence of as_binop.
+ *	Sequence of operations.
  *
- *	as_binops binops;
- *	as_binops_inita(&binops, 2);
- *	as_binops_append(&binops, "bin1", integer_incr(123));
- *	as_binops_append(&binops, "bin2", string_append(123));
+ *	~~~~~~~~~~{.c}
+ *	as_operations ops;
+ *	as_operations_inita(&ops, 2);
+ *	as_operations_add_incr(&ops, "bin1", 123);
+ *	as_operations_add_append_str(&ops, "bin2", "abc");
  *	...
- *	as_binops_destroy(&binops);
+ *	as_operations_destroy(&ops);
+ *	~~~~~~~~~~
+ *
  */
 typedef struct as_binops_s {
 
@@ -155,10 +158,10 @@ typedef struct as_operations_s {
  *	`__nops` number of entries on the stack.
  *
  *	~~~~~~~~~~{.c}
- *		as_operations ops;
- * 		as_operations_inita(&ops, 2);
- *		as_operations_append_int64(&ops, AS_OPERATOR_INCR, "bin1", 123);
- *		as_operations_append_str(&ops, AS_OPERATOR_APPEND, "bin2", "abc");
+ *	as_operations ops;
+ * 	as_operations_inita(&ops, 2);
+ *	as_operations_add_incr(&ops, "bin1", 123);
+ *	as_operations_add_append_str(&ops, "bin2", "abc");
  *	~~~~~~~~~~
  *
  *	@param __ops		The `as_operations *` to initialize.
@@ -180,10 +183,10 @@ typedef struct as_operations_s {
  *	Intializes a stack allocated `as_operations`.
  *
  *	~~~~~~~~~~{.c}
- *		as_operations ops;
- * 		as_operations_init(&ops, 2);
- *		as_operations_append_int64(&ops, AS_OPERATOR_INCR, "bin1", 123);
- *		as_operations_append_str(&ops, AS_OPERATOR_APPEND, "bin2", "abc");
+ *	as_operations ops;
+ * 	as_operations_init(&ops, 2);
+ *	as_operations_add_incr(&ops, "bin1", 123);
+ *	as_operations_add_append_str(&ops, "bin2", "abc");
  *	~~~~~~~~~~
  *
  *	Use `as_operations_destroy()` to free the resources allocated to the
@@ -201,8 +204,8 @@ as_operations * as_operations_init(as_operations * ops, uint16_t nops);
  *
  *	~~~~~~~~~~{.c}
  *	as_operations ops = as_operations_new(2);
- *	as_operations_append_int64(ops, AS_OPERATOR_INCR, "bin1", 123);
- *	as_operations_append_str(ops, AS_OPERATOR_APPEND, "bin2", "abc");
+ *	as_operations_add_incr(ops, "bin1", 123);
+ *	as_operations_add_append_str(ops, "bin2", "abc");
  *	~~~~~~~~~~
  *
  *	Use `as_operations_destroy()` to free the resources allocated to the
@@ -218,7 +221,7 @@ as_operations * as_operations_new(uint16_t nops);
  *	Destroy an `as_operations` and release associated resources.
  *
  *	~~~~~~~~~~{.c}
- * 		as_operations_destroy(binops);
+ * 	as_operations_destroy(binops);
  *	~~~~~~~~~~
  *
  *	@param ops 	The `as_operations` to destroy.
@@ -226,7 +229,7 @@ as_operations * as_operations_new(uint16_t nops);
 void as_operations_destroy(as_operations * ops);
 
 /**
- *	Add a AS_OPERATOR_WRITE bin operation.
+ *	Add a `AS_OPERATOR_WRITE` bin operation.
  *
  *	@param ops			The `as_operations` to append the operation to.
  *	@param name 		The name of the bin to perform the operation on.
@@ -237,7 +240,7 @@ void as_operations_destroy(as_operations * ops);
 bool as_operations_add_write(as_operations * ops, const as_bin_name name, as_bin_value * value);
 
 /**
- *	Add a AS_OPERATOR_WRITE bin operation with an int64_t value.
+ *	Add a `AS_OPERATOR_WRITE` bin operation with an int64_t value.
  *
  *	@param ops			The `as_operations` to append the operation to.
  *	@param name 		The name of the bin to perform the operation on.
@@ -248,7 +251,7 @@ bool as_operations_add_write(as_operations * ops, const as_bin_name name, as_bin
 bool as_operations_add_write_int64(as_operations * ops, const as_bin_name name, int64_t value);
 
 /**
- *	Add a AS_OPERATOR_WRITE bin operation with a NULL-terminated string value.
+ *	Add a `AS_OPERATOR_WRITE` bin operation with a NULL-terminated string value.
  *
  *	@param ops			The `as_operations` to append the operation to.
  *	@param name 		The name of the bin to perform the operation on.
@@ -259,7 +262,7 @@ bool as_operations_add_write_int64(as_operations * ops, const as_bin_name name, 
 bool as_operations_add_write_str(as_operations * ops, const as_bin_name name, const char * value);
 
 /**
- *	Add a AS_OPERATOR_WRITE bin operation with a raw bytes value.
+ *	Add a `AS_OPERATOR_WRITE` bin operation with a raw bytes value.
  *
  *	@param ops			The `as_operations` to append the operation to.
  *	@param name 		The name of the bin to perform the operation on.
@@ -270,7 +273,7 @@ bool as_operations_add_write_str(as_operations * ops, const as_bin_name name, co
 bool as_operations_add_write_raw(as_operations * ops, const as_bin_name name, uint8_t * value, uint32_t size);
 
 /**
- *	Add a AS_OPERATOR_READ bin operation.
+ *	Add a `AS_OPERATOR_READ` bin operation.
  *
  *	@param ops			The `as_operations` to append the operation to.
  *	@param name 		The name of the bin to perform the operation on.
@@ -280,7 +283,7 @@ bool as_operations_add_write_raw(as_operations * ops, const as_bin_name name, ui
 bool as_operations_add_read(as_operations * ops, const as_bin_name name);
 
 /**
- *	Add a AS_OPERATOR_INCR bin operation with (required) int64_t value.
+ *	Add a `AS_OPERATOR_INCR` bin operation with (required) int64_t value.
  *
  *	@param ops			The `as_operations` to append the operation to.
  *	@param name 		The name of the bin to perform the operation on.
@@ -291,7 +294,7 @@ bool as_operations_add_read(as_operations * ops, const as_bin_name name);
 bool as_operations_add_incr(as_operations * ops, const as_bin_name name, int64_t value);
 
 /**
- *	Add a AS_OPERATOR_PREPEND bin operation with a NULL-terminated string value.
+ *	Add a `AS_OPERATOR_PREPEND` bin operation with a NULL-terminated string value.
  *
  *	@param ops			The `as_operations` to append the operation to.
  *	@param name 		The name of the bin to perform the operation on.
@@ -302,7 +305,7 @@ bool as_operations_add_incr(as_operations * ops, const as_bin_name name, int64_t
 bool as_operations_add_prepend_str(as_operations * ops, const as_bin_name name, const char * value);
 
 /**
- *	Add a AS_OPERATOR_PREPEND bin operation with a raw bytes value.
+ *	Add a `AS_OPERATOR_PREPEND` bin operation with a raw bytes value.
  *
  *	@param ops			The `as_operations` to append the operation to.
  *	@param name 		The name of the bin to perform the operation on.
@@ -313,7 +316,7 @@ bool as_operations_add_prepend_str(as_operations * ops, const as_bin_name name, 
 bool as_operations_add_prepend_raw(as_operations * ops, const as_bin_name name, uint8_t * value, uint32_t size);
 
 /**
- *	Add a AS_OPERATOR_APPEND bin operation with a NULL-terminated string value.
+ *	Add a `AS_OPERATOR_APPEND` bin operation with a NULL-terminated string value.
  *
  *	@param ops			The `as_operations` to append the operation to.
  *	@param name 		The name of the bin to perform the operation on.
@@ -324,7 +327,7 @@ bool as_operations_add_prepend_raw(as_operations * ops, const as_bin_name name, 
 bool as_operations_add_append_str(as_operations * ops, const as_bin_name name, const char * value);
 
 /**
- *	Add a AS_OPERATOR_APPEND bin operation with a raw bytes value.
+ *	Add a `AS_OPERATOR_APPEND` bin operation with a raw bytes value.
  *
  *	@param ops			The `as_operations` to append the operation to.
  *	@param name 		The name of the bin to perform the operation on.
@@ -335,7 +338,7 @@ bool as_operations_add_append_str(as_operations * ops, const as_bin_name name, c
 bool as_operations_add_append_raw(as_operations * ops, const as_bin_name name, uint8_t * value, uint32_t size);
 
 /**
- *	Add a AS_OPERATOR_TOUCH record operation.
+ *	Add a `AS_OPERATOR_TOUCH` record operation.
  *
  *	@param ops			The `as_operations` to append the operation to.
  *

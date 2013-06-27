@@ -128,6 +128,8 @@
  *	Should only be created or initialized using either: 
  *	- as_record_new() or
  *	- as_record_init()
+ *
+ *	@extends as_rec
  */
 typedef struct as_record_s {
 

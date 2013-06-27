@@ -238,7 +238,8 @@ cl_rv citrusleaf_udf_record_apply(cl_cluster * cl, const char * ns, const char *
             if ( strcmp(bin->bin_name,"FAILURE") == 0 ) {
         		snprintf(err_str, 256, "Failure in converting udf-bin to value for type :%d", val->type);
         		as_result_setfailure(res, (as_val *) as_string_new(err_str,false));
-            //	as_result_setfailure(res, val);
+        		as_val_destroy(val);
+        		//	as_result_setfailure(res, val);
             }
             else if ( strcmp(bin->bin_name,"SUCCESS") == 0 ) {
                 as_result_setsuccess(res, val);
@@ -246,6 +247,7 @@ cl_rv citrusleaf_udf_record_apply(cl_cluster * cl, const char * ns, const char *
             else {
             	snprintf(err_str, 256, "Invalid response in converting udf-bin to value for type :%d", val->type);
             	as_result_setfailure(res, (as_val *) as_string_new(err_str,false));
+            	as_val_destroy(val);
                 //as_result_setfailure(res, (as_val *) as_string_new("Invalid response. (1)",false/*ismalloc*/));
             }
         }
@@ -492,7 +494,7 @@ cl_rv citrusleaf_udf_put(cl_cluster *asc, const char * filename, as_bytes *conte
     free(filepath);
 
     int rc = 0;
-    rc = citrusleaf_info_cluster_foreach(asc, query, true, false, 1000, (void *)(error), clusterinfo_cb );
+    rc = citrusleaf_info_cluster(asc, query, (void *)(error), true, false, 1000);
     if (  rc ) {
     	if ( error ) {
             const char * emsg = "failed_request: ";

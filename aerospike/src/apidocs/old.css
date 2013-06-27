@@ -2,15 +2,18 @@
 
 body {
   font-family: Helvetica, Segoe UI, Arial, sans-serif;
-  font-size: 14px;
+  font-size: 10pt;
   font-weight: normal;
 }
 
 body, table, div, p, dl {
   font-family: Helvetica, Segoe UI, Arial, sans-serif;
-  font-size: 14px;
+  font-size: 10pt;
   font-weight: normal;
-}
+/*  font-family: Helvetica, Segoe UI, Arial, sans-serif;
+  font-size: 8pt;
+  font-weight: normal;
+*/}
 
 /* @group Heading Levels */
 
@@ -46,8 +49,9 @@ h2 {
 }
 
 code {
-  font-family: Courier New, monospace, fixed;
-  font-size: 1em;
+  font-size: 0.85em;
+  font-family: Consolas, Monaco, Courier New;
+  font-weight: bold;
 }
 
 h3 {
@@ -179,18 +183,18 @@ dl.el {
 
 
 .fragment {
-  font-family: Courier New, monospace, fixed;
-  font-size: 1em;
+  font-family: Consolas, Monaco, Courier New, monospace, fixed;
+  font-size: 10pt;
 }
 
 a.code {
-  font-family: Courier New, monospace, fixed;
-  font-size: 1em;
+  font-family: Consolas, Monaco, Courier New, monospace, fixed;
+  font-size: 10pt;
 }
 
 pre.fragment {
-  font-family: Courier New, monospace, fixed;
-  font-size: 1em;
+  font-family: Consolas, Monaco, Courier New, monospace, fixed;
+  font-size: 10pt;
   border: 1px solid #C4CFE5;
   background-color: #FBFCFD;
   padding: 4px 6px;
@@ -202,7 +206,7 @@ pre.fragment {
 
 div.fragment {
   font-family: Courier New, monospace, fixed;
-  font-size: 1em;
+  font-size: 10pt;
   padding: 16px;
   margin: 4px;
   background-color: #FBFCFD;
@@ -211,7 +215,7 @@ div.fragment {
 
 div.line {
   font-family: Courier New, monospace, fixed;
-  font-size: 1em;
+  font-size: 10pt;
   min-height: 13px;
   line-height: 1.0;
   text-wrap: unrestricted;

@@ -146,8 +146,8 @@ as_status aerospike_key_exists(
  *
  *		as_record rec;
  *		as_record_init(&rec, 2);
- *		as_record_set_string(&rec, "bin1", "abc");
- *		as_record_set_integer(&rec, "bin2", 123);
+ *		as_record_set_str(&rec, "bin1", "abc");
+ *		as_record_set_int64(&rec, "bin2", 123);
  *		
  *		if ( aerospike_key_put(&as, &err, NULL, &key, &rec) != AEROSPIKE_OK ) {
  *			fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
@@ -202,8 +202,8 @@ as_status aerospike_key_remove(
  *
  *		as_operations ops;
  *		as_operations_inita(&ops,2);
- *		as_operations_append_int64(&ops, AS_OPERATOR_INCR, "bin1", 456);
- *		as_operations_append_str(&ops, AS_OPERATOR_APPEND, "bin1", "def");
+ *		as_operations_add_incr(&ops,"bin1", 456);
+ *		as_operations_add_append_str(&ops, "bin1", "def");
  *
  *		if ( aerospike_key_remove(&as, &err, NULL, &key, &ops) != AEROSPIKE_OK ) {
  *			fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
@@ -233,7 +233,7 @@ as_status aerospike_key_operate(
  *		as_key_init(&key, "ns", "set", "key");
  *
  *		as_arraylist args;
- *		as_arraylist_init(&args, 2, 0);
+ *		as_arraylist_inita(&args, 2);
  *		as_arraylist_append_int64(&args, 1);
  *		as_arraylist_append_int64(&args, 2);
  *		

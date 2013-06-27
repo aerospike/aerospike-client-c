@@ -226,53 +226,122 @@ as_operations * as_operations_new(uint16_t nops);
 void as_operations_destroy(as_operations * ops);
 
 /**
- *	Append a bin to the sequence of bins.
+ *	Add a AS_OPERATOR_WRITE bin operation.
  *
  *	@param ops			The `as_operations` to append the operation to.
- *	@param operator 	The operator to be used on the bin.
  *	@param name 		The name of the bin to perform the operation on.
  *	@param value 		The value to be used in the operation.
  *
  *	@return true on success. Otherwise an error occurred.
  */
-bool as_operations_append(as_operations * ops, as_operator operator, const as_bin_name name, as_bin_value * value);
+bool as_operations_add_write(as_operations * ops, const as_bin_name name, as_bin_value * value);
 
 /**
- *	Append a as_binop with an int64_t value to the as_binops.
+ *	Add a AS_OPERATOR_WRITE bin operation with an int64_t value.
  *
  *	@param ops			The `as_operations` to append the operation to.
- *	@param operator 	The operator to be used on the bin.
  *	@param name 		The name of the bin to perform the operation on.
  *	@param value 		The value to be used in the operation.
  *
  *	@return true on success. Otherwise an error occurred.
  */
-bool as_operations_append_int64(as_operations * ops, as_operator operator, const as_bin_name name, int64_t value);
+bool as_operations_add_write_int64(as_operations * ops, const as_bin_name name, int64_t value);
 
 /**
- *	Append a as_binop with a NULL-terminated string value to the as_binops.
+ *	Add a AS_OPERATOR_WRITE bin operation with a NULL-terminated string value.
  *
  *	@param ops			The `as_operations` to append the operation to.
- *	@param operator 	The operator to be used on the bin.
  *	@param name 		The name of the bin to perform the operation on.
  *	@param value 		The value to be used in the operation.
  *
  *	@return true on success. Otherwise an error occurred.
  */
-bool as_operations_append_str(as_operations * ops, as_operator operator, const as_bin_name name, const char * value);
+bool as_operations_add_write_str(as_operations * ops, const as_bin_name name, const char * value);
 
 /**
- *	Append a as_binop with raw bytes value to the as_binops.
+ *	Add a AS_OPERATOR_WRITE bin operation with a raw bytes value.
  *
  *	@param ops			The `as_operations` to append the operation to.
- *	@param operator 	The operator to be used on the bin.
  *	@param name 		The name of the bin to perform the operation on.
- *	@param value 		The bytes to be used in the operation.
- *	@param size 		The number of bytes in value.
+ *	@param value 		The value to be used in the operation.
  *
  *	@return true on success. Otherwise an error occurred.
  */
-bool as_operations_append_raw(as_operations * ops, as_operator operator, const as_bin_name name, uint8_t * value, uint32_t size);
+bool as_operations_add_write_raw(as_operations * ops, const as_bin_name name, uint8_t * value, uint32_t size);
+
+/**
+ *	Add a AS_OPERATOR_READ bin operation.
+ *
+ *	@param ops			The `as_operations` to append the operation to.
+ *	@param name 		The name of the bin to perform the operation on.
+ *
+ *	@return true on success. Otherwise an error occurred.
+ */
+bool as_operations_add_read(as_operations * ops, const as_bin_name name);
+
+/**
+ *	Add a AS_OPERATOR_INCR bin operation with (required) int64_t value.
+ *
+ *	@param ops			The `as_operations` to append the operation to.
+ *	@param name 		The name of the bin to perform the operation on.
+ *	@param value 		The value to be used in the operation.
+ *
+ *	@return true on success. Otherwise an error occurred.
+ */
+bool as_operations_add_incr(as_operations * ops, const as_bin_name name, int64_t value);
+
+/**
+ *	Add a AS_OPERATOR_PREPEND bin operation with a NULL-terminated string value.
+ *
+ *	@param ops			The `as_operations` to append the operation to.
+ *	@param name 		The name of the bin to perform the operation on.
+ *	@param value 		The value to be used in the operation.
+ *
+ *	@return true on success. Otherwise an error occurred.
+ */
+bool as_operations_add_prepend_str(as_operations * ops, const as_bin_name name, const char * value);
+
+/**
+ *	Add a AS_OPERATOR_PREPEND bin operation with a raw bytes value.
+ *
+ *	@param ops			The `as_operations` to append the operation to.
+ *	@param name 		The name of the bin to perform the operation on.
+ *	@param value 		The value to be used in the operation.
+ *
+ *	@return true on success. Otherwise an error occurred.
+ */
+bool as_operations_add_prepend_raw(as_operations * ops, const as_bin_name name, uint8_t * value, uint32_t size);
+
+/**
+ *	Add a AS_OPERATOR_APPEND bin operation with a NULL-terminated string value.
+ *
+ *	@param ops			The `as_operations` to append the operation to.
+ *	@param name 		The name of the bin to perform the operation on.
+ *	@param value 		The value to be used in the operation.
+ *
+ *	@return true on success. Otherwise an error occurred.
+ */
+bool as_operations_add_append_str(as_operations * ops, const as_bin_name name, const char * value);
+
+/**
+ *	Add a AS_OPERATOR_APPEND bin operation with a raw bytes value.
+ *
+ *	@param ops			The `as_operations` to append the operation to.
+ *	@param name 		The name of the bin to perform the operation on.
+ *	@param value 		The value to be used in the operation.
+ *
+ *	@return true on success. Otherwise an error occurred.
+ */
+bool as_operations_add_append_raw(as_operations * ops, const as_bin_name name, uint8_t * value, uint32_t size);
+
+/**
+ *	Add a AS_OPERATOR_TOUCH record operation.
+ *
+ *	@param ops			The `as_operations` to append the operation to.
+ *
+ *	@return true on success. Otherwise an error occurred.
+ */
+bool as_operations_add_touch(as_operations * ops);
 
 /**
  *	@}

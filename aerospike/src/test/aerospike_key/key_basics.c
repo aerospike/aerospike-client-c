@@ -40,9 +40,9 @@ TEST( key_basics_put , "put: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 'de
 	
 	as_hashmap map;
 	as_hashmap_init(&map, 32);
-	as_stringmap_set_int64(&map, "x", 7);
-	as_stringmap_set_int64(&map, "y", 8);
-	as_stringmap_set_int64(&map, "z", 9);
+	as_stringmap_set_int64((as_map *) &map, "x", 7);
+	as_stringmap_set_int64((as_map *) &map, "y", 8);
+	as_stringmap_set_int64((as_map *) &map, "z", 9);
 
 	as_record r;
 	as_record_init(&r, 10);
@@ -50,8 +50,8 @@ TEST( key_basics_put , "put: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 'de
 	as_record_set_str(&r, "b", "abc");
 	as_record_set_integer(&r, "c", as_integer_new(456));
 	as_record_set_string(&r, "d", as_string_new("def",true));
-	as_record_set_list(&r, "e", &list);
-	as_record_set_map(&r, "f", &map);
+	as_record_set_list(&r, "e", (as_list *) &list);
+	as_record_set_map(&r, "f", (as_map *) &map);
 
 	as_key key;
 	as_key_init(&key, "test", "test", "foo");
@@ -205,14 +205,14 @@ TEST( key_basics_operate , "operate: (test,test,foo) => {a: incr(321), b: append
 
 	as_operations ops;
 	as_operations_inita(&ops, 3);
-	as_operations_append_int64(&ops, AS_OPERATOR_INCR, "a", 321);
-	as_operations_append_str(&ops, AS_OPERATOR_APPEND, "b", "def");
-	as_operations_append_str(&ops, AS_OPERATOR_PREPEND, "d", "abc");
+	as_operations_add_incr(&ops, "a", 321);
+	as_operations_add_append_str(&ops, "b", "def");
+	as_operations_add_prepend_str(&ops, "d", "abc");
 
 	as_key key;
 	as_key_init(&key, "test", "test", "foo");
 
-	as_status rc = aerospike_key_operate(as, &err, NULL, &key, &ops);
+	as_status rc = aerospike_key_operate(as, &err, NULL, &key, &ops, NULL);
 
 	as_key_destroy(&key);
 

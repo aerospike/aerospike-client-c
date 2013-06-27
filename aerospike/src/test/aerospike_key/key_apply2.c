@@ -694,19 +694,19 @@ SUITE( key_apply2, "aerospike_key_apply2 tests" ) {
 
     suite_before( before );
     suite_after( after );
-    // suite_add( key_apply2_file_exists );
-    // suite_add( key_apply2_getinteger );
-    // suite_add( key_apply2_getstring );
+    suite_add( key_apply2_file_exists );
+    suite_add( key_apply2_getinteger );
+    suite_add( key_apply2_getstring );
     suite_add( key_apply2_getlist );
     suite_add( key_apply2_getmap );
-    // suite_add( key_apply2_add_strings );
-    // suite_add( key_apply2_call_nonlocal_sum );
-    // suite_add( key_apply2_call_local_sum );
-    // suite_add( key_apply2_udf_func_does_not_exist );
-    // suite_add( key_apply2_udf_file_does_not_exist );
-    // suite_add( key_apply2_delete_record_test_replication );
-    // suite_add( key_apply2_update_record_test_memory );
-    // suite_add( key_apply2_bad_update_test_memory );
-    // suite_add( key_apply2_bad_create_test_memory );
+    suite_add( key_apply2_add_strings );
+    suite_add( key_apply2_call_nonlocal_sum );
+    suite_add( key_apply2_call_local_sum );
+    suite_add( key_apply2_udf_func_does_not_exist );
+    suite_add( key_apply2_udf_file_does_not_exist );
+    suite_add( key_apply2_delete_record_test_replication );
+    suite_add( key_apply2_update_record_test_memory );
+    suite_add( key_apply2_bad_update_test_memory );
+    suite_add( key_apply2_bad_create_test_memory );
 
 }

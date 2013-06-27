@@ -189,7 +189,7 @@ as_status aerospike_key_put(
  *	@return AEROSPIKE_OK if successful. Otherwise an error.
  */
 as_status aerospike_key_remove(
-	aerospike * as, as_error * err, const as_policy_operate * policy, 
+	aerospike * as, as_error * err, const as_policy_remove * policy, 
 	const as_key * key
 	);
 

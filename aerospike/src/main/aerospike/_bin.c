@@ -20,9 +20,6 @@
  *	IN THE SOFTWARE.
  *****************************************************************************/
 
-#include <stdio.h>
-#include <string.h>
-
 #include <aerospike/as_bin.h>
 #include <aerospike/as_integer.h>
 #include <aerospike/as_string.h>
@@ -31,6 +28,10 @@
 #include <aerospike/as_map.h>
 #include <aerospike/as_nil.h>
 #include <aerospike/as_val.h>
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include "_bin.h"
 

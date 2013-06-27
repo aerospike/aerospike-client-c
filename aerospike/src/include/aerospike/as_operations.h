@@ -143,6 +143,16 @@ typedef struct as_operations_s {
 	bool _free;
 
 	/**
+	 *	The generation of the record.
+	 */
+	uint16_t gen;
+
+	/**
+	 *	The time-to-live (expiration) of the record in seconds.
+	 */
+	uint32_t ttl;
+
+	/**
 	 * Operations to be performed on the bins of a record.
 	 */
 	as_binops binops;

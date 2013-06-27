@@ -396,13 +396,13 @@ bool as_record_set_bytes(as_record * rec, const as_bin_name name, as_bytes * val
 /**
  * Set specified bin's value to an as_list.
  *
- *		as_list list;
+ *		as_arraylist list;
  *		as_arraylist_init(&list);
- *		as_list_add_int64(&list, 1);
- *		as_list_add_int64(&list, 2);
- *		as_list_add_int64(&list, 3);
+ *		as_arraylist_add_int64(&list, 1);
+ *		as_arraylist_add_int64(&list, 2);
+ *		as_arraylist_add_int64(&list, 3);
  *
- *		as_record_set_list(rec, "bin", &list);
+ *		as_record_set_list(rec, "bin", (as_list *) &list);
  *
  * @param rec 	- the record containing the bin
  * @param name 	- the name of the bin
@@ -421,7 +421,7 @@ bool as_record_set_list(as_record * rec, const as_bin_name name, as_list * value
 /**
  * Set specified bin's value to an as_map.
  *
- *		as_map map;
+ *		as_stringmap map;
  *		as_stringmap_init(&map);
  *		as_stringmap_set_int64(&map, "a", 1);
  *		as_stringmap_set_int64(&map, "b", 2);

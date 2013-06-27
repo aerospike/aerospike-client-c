@@ -230,10 +230,10 @@ as_status aerospike_key_operate(
  *		as_key key;
  *		as_key_init(&key, "ns", "set", "key");
  *
- *		as_list args;
+ *		as_arraylist args;
  *		as_arraylist_init(&args, 2, 0);
- *		as_list_append_int64(&args, 1);
- *		as_list_append_int64(&args, 2);
+ *		as_arraylist_append_int64(&args, 1);
+ *		as_arraylist_append_int64(&args, 2);
  *		
  *		as_val * res = NULL;
  *		
@@ -244,7 +244,7 @@ as_status aerospike_key_operate(
  *			as_val_destroy(res);
  *		}
  *		
- *		as_list_destroy(&args);
+ *		as_arraylist_destroy(&args);
  *	~~~~~~~~~~
  *
  *

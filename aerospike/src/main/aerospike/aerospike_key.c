@@ -519,10 +519,10 @@ as_status aerospike_key_operate(
  *		as_key key;
  *		as_key_init(&key, "ns", "set", "key");
  *
- *		as_list args;
+ *		as_arraylist args;
  *		as_arraylist_init(&args, 2, 0);
- *		as_list_append_int64(&args, 1);
- *		as_list_append_int64(&args, 2);
+ *		as_arraylist_append_int64(&args, 1);
+ *		as_arraylist_append_int64(&args, 2);
  *		
  *		as_val * res = NULL;
  *		
@@ -533,7 +533,7 @@ as_status aerospike_key_operate(
  *			as_val_destroy(res);
  *		}
  *		
- *		as_list_destroy(&args);
+ *		as_arraylist_destroy(&args);
  *	~~~~~~~~~~
  *
  *
@@ -628,31 +628,26 @@ as_status aerospike_key_apply(
 	else if ( n_bins == 1  ) {
 
 		cl_bin * bin = &bins[0];
-		as_val * val = NULL;
-		clbin_to_asval(bin, &ser, &val);
 
-		if ( val ) {
-			if ( strcmp(bin->bin_name,"SUCCESS") == 0 ) {
-				*result = val;
-				val = NULL;
-			}
-			else if ( strcmp(bin->bin_name,"FAILURE") == 0 ) {
-				if ( val->type == AS_STRING ) {
-					as_string * s = as_string_fromval(val);
-					as_error_update(err, AEROSPIKE_ERR, as_string_tostring(s));
-				}
-				else {
-					as_error_update(err, AEROSPIKE_ERR, "Invalid Response (1)");
-				}
-				as_val_destroy(val);
+		if ( strcmp(bin->bin_name,"SUCCESS") == 0 ) {
+			as_val * val = NULL;
+			clbin_to_asval(bin, &ser, &val);
+			*result = val;
+		}
+		else if ( strcmp(bin->bin_name,"FAILURE") == 0 ) {
+			as_val * val = NULL;
+			clbin_to_asval(bin, &ser, &val);
+			if ( val->type == AS_STRING ) {
+				as_string * s = as_string_fromval(val);
+				as_error_update(err, AEROSPIKE_ERR, as_string_tostring(s));
 			}
 			else {
-				as_error_update(err, AEROSPIKE_ERR, "Invalid Response (2)");
-				as_val_destroy(val);
+				as_error_update(err, AEROSPIKE_ERR, "Invalid Response (1)");
 			}
+			as_val_destroy(val);
 		}
 		else {
-			as_error_update(err, AEROSPIKE_ERR, "Invalid Response (3)");
+			as_error_update(err, AEROSPIKE_ERR, "Invalid Response (2)");
 		}
 	}
 	else {

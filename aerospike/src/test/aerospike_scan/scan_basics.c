@@ -212,7 +212,7 @@ static void insert_data(int numrecs, const char *setname)
 	as_record r;
 	as_record_init(&r, 3);
 
-	as_map m;
+	as_hashmap m;
 	as_hashmap_init(&m, 8);
 
 	as_key k;

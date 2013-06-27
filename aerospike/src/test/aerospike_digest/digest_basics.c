@@ -35,13 +35,13 @@ TEST( digest_basics_put , "put: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 
 	as_digest digest;
 	as_digest_init(&digest, "test", (as_key *) as_string_new("foo",false));
 
-	as_list list;
+	as_arraylist list;
 	as_arraylist_init(&list, 3, 0);
-	as_list_append_int64(&list, 1);
-	as_list_append_int64(&list, 2);
-	as_list_append_int64(&list, 3);
+	as_arraylist_append_int64(&list, 1);
+	as_arraylist_append_int64(&list, 2);
+	as_arraylist_append_int64(&list, 3);
 	
-	as_map map;
+	as_hashmap map;
 	as_hashmap_init(&map, 32);
 	as_stringmap_set_int64(&map, "x", 7);
 	as_stringmap_set_int64(&map, "y", 8);

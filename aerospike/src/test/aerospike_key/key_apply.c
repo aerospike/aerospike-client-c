@@ -70,17 +70,17 @@ TEST( key_apply_put , "put: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 'def
 	as_error err;
 	as_error_reset(&err);
 	
-	as_list list;
+	as_arraylist list;
 	as_arraylist_init(&list, 3, 0);
-	as_list_append_int64(&list, 1);
-	as_list_append_int64(&list, 2);
-	as_list_append_int64(&list, 3);
+	as_arraylist_append_int64(&list, 1);
+	as_arraylist_append_int64(&list, 2);
+	as_arraylist_append_int64(&list, 3);
 	
-	as_map map;
+	as_hashmap map;
 	as_hashmap_init(&map, 32);
-	as_stringmap_set_int64(&map, "x", 7);
-	as_stringmap_set_int64(&map, "y", 8);
-	as_stringmap_set_int64(&map, "z", 9);
+	as_stringmap_set_int64((as_map *) &map, "x", 7);
+	as_stringmap_set_int64((as_map *) &map, "y", 8);
+	as_stringmap_set_int64((as_map *) &map, "z", 9);
 
 	as_record r;
 	as_record_init(&r, 10);
@@ -88,8 +88,8 @@ TEST( key_apply_put , "put: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 'def
 	as_record_set_str(&r, "b", "abc");
 	as_record_set_integer(&r, "c", as_integer_new(456));
 	as_record_set_string(&r, "d", as_string_new("def",true));
-	as_record_set_list(&r, "e", &list);
-	as_record_set_map(&r, "f", &map);
+	as_record_set_list(&r, "e", (as_list *) &list);
+	as_record_set_map(&r, "f", (as_map *) &map);
 
 	as_key key;
 	as_key_init(&key, "test", "test", "foo");
@@ -156,12 +156,12 @@ TEST( key_apply_add_1_2 , "apply: (test,test,foo) <!> key_apply.add(1,2) => 3" )
 	as_key key;
 	as_key_init(&key, "test", "test", "foo");
 
-	as_list arglist;
+	as_arraylist arglist;
 	as_arraylist_init(&arglist, 3, 0);
-	as_list_append_int64(&arglist, 1);
-	as_list_append_int64(&arglist, 2);
+	as_arraylist_append_int64(&arglist, 1);
+	as_arraylist_append_int64(&arglist, 2);
 
-	as_status rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "add", &arglist, &res);
+	as_status rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "add", (as_list *) &arglist, &res);
 
 	as_key_destroy(&key);
 	
@@ -206,11 +206,11 @@ TEST( key_apply_get_bin_a , "apply: (test,test,foo) <!> key_apply.get_bin_a() =>
 	as_key key;
 	as_key_init(&key, "test", "test", "foo");
 
-	as_list arglist;
+	as_arraylist arglist;
 	as_arraylist_init(&arglist, 1, 0);
-	as_list_append_str(&arglist, "a");
+	as_arraylist_append_str(&arglist, "a");
 
-	as_status rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "get_bin_a", &arglist, &res);
+	as_status rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "get_bin_a", (as_list *) &arglist, &res);
 
 	as_key_destroy(&key);
 	

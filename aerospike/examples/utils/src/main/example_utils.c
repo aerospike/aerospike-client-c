@@ -36,6 +36,7 @@
 #include <aerospike/as_error.h>
 #include <aerospike/as_config.h>
 #include <aerospike/as_key.h>
+#include <aerospike/as_operations.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_status.h>
 #include <aerospike/as_val.h>
@@ -321,5 +322,50 @@ example_dump_record(as_record* p_rec)
 
 	for (uint16_t b = 0; b < num_bins; b++) {
 		example_dump_bin(&p_rec->bins.entries[b]);
+	}
+}
+
+const char* AS_OPERATORS[] = {
+		"AS_OPERATOR_WRITE",
+		"AS_OPERATOR_READ",
+		"AS_OPERATOR_INCR",
+		"NOT DEFINED",
+		"AS_OPERATOR_PREPEND",
+		"AS_OPERATOR_APPEND",
+		"NOT DEFINED",
+		"NOT DEFINED",
+		"AS_OPERATOR_TOUCH"
+};
+
+static void
+example_dump_op(as_binop* p_binop)
+{
+	if (! p_binop) {
+		LOG("  null as_binop object");
+		return;
+	}
+
+	char* val_as_str = as_val_tostring(p_binop->bin.valuep);
+
+	LOG("  %s : %s : %s", AS_OPERATORS[p_binop->operator], p_binop->bin.name,
+			val_as_str);
+
+	free(val_as_str);
+}
+
+void
+example_dump_operations(as_operations* p_ops)
+{
+	if (! p_ops) {
+		LOG("  null as_operations object");
+		return;
+	}
+
+	uint16_t num_ops = p_ops->binops.size;
+
+	LOG("  %u op%s:", num_ops, num_ops == 1 ? "" : "s");
+
+	for (uint16_t n = 0; n < num_ops; n++) {
+		example_dump_op(&p_ops->binops.entries[n]);
 	}
 }

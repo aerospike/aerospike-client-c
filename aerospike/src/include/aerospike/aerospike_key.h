@@ -215,12 +215,14 @@ as_status aerospike_key_remove(
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param key			The key of the record.
  *	@param ops			The operations to perform on the record.
+ *	@param rec			The record to be populated with the data from AS_OPERATOR_READ operations.
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error.
  */
 as_status aerospike_key_operate(
 	aerospike * as, as_error * err, const as_policy_operate * policy, 
-	const as_key * key, const as_operations * ops
+	const as_key * key, const as_operations * ops,
+	as_record ** rec
 	);
 
 /**

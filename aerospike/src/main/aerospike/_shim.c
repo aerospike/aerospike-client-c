@@ -3,6 +3,7 @@
 #include <aerospike/as_integer.h>
 #include <aerospike/as_list.h>
 #include <aerospike/as_map.h>
+#include <aerospike/as_operations.h>
 #include <aerospike/as_string.h>
 #include <aerospike/as_val.h>
 #include <aerospike/as_record.h>
@@ -339,7 +340,7 @@ void clbins_to_asrecord(cl_bin * bins, uint32_t nbins, as_record * r)
 }
 
 
-void aspolicywrite_to_clwriteparameters(as_policy_write * policy, as_record * rec, cl_write_parameters * wp) 
+void aspolicywrite_to_clwriteparameters(const as_policy_write * policy, const as_record * rec, cl_write_parameters * wp) 
 {
 	if ( !policy || !rec || !wp ) {
 		return;
@@ -385,7 +386,53 @@ void aspolicywrite_to_clwriteparameters(as_policy_write * policy, as_record * re
 	}
 }
 
-void aspolicyoperate_to_clwriteparameters(as_policy_operate * policy, cl_write_parameters * wp) 
+void aspolicyoperate_to_clwriteparameters(const as_policy_operate * policy, const as_operations * ops, cl_write_parameters * wp) 
+{
+	if ( !policy || !wp ) {
+		return;
+	}
+	
+	wp->unique = false;
+	wp->unique_bin = false;
+
+	wp->use_generation = false;
+	wp->use_generation_gt = false;
+	wp->use_generation_dup = false;
+	
+	wp->timeout_ms = policy->timeout;
+	wp->record_ttl = ops->ttl;
+
+	switch(policy->gen) {
+		case AS_POLICY_GEN_EQ:
+			wp->generation = ops->gen;
+			wp->use_generation = true;
+			break;
+		case AS_POLICY_GEN_GT:
+			wp->generation = ops->gen;
+			wp->use_generation_gt = true;
+			break;
+		case AS_POLICY_GEN_DUP:
+			wp->generation = ops->gen;
+			wp->use_generation_dup = true;
+			break;
+		default:
+			break;
+	}
+
+	switch(policy->mode) {
+		case AS_POLICY_WRITEMODE_ASYNC:
+			wp->w_pol = CL_WRITE_ASYNC;
+			break;
+		case AS_POLICY_WRITEMODE_ONESHOT:
+			wp->w_pol = CL_WRITE_ONESHOT;
+			break;
+		default:
+			wp->w_pol = CL_WRITE_RETRY;
+			break;
+	}
+}
+
+void aspolicyremove_to_clwriteparameters(const as_policy_remove * policy, cl_write_parameters * wp) 
 {
 	if ( !policy || !wp ) {
 		return;

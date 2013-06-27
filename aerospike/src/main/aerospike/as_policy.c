@@ -31,9 +31,21 @@ as_policy_write * as_policy_write_init(as_policy_write * p)
 }
 
 /**
- *	Initialize as_policy_remote to default values.
+ *	Initialize as_policy_operate to default values.
  */
 as_policy_operate * as_policy_operate_init(as_policy_operate * p)
+{
+	p->timeout		= 0;
+	p->mode			= AS_POLICY_WRITEMODE_UNDEF;
+	p->key			= AS_POLICY_KEY_UNDEF;
+	p->gen			= AS_POLICY_GEN_UNDEF;
+	return p;
+}
+
+/**
+ *	Initialize as_policy_remove to default values.
+ */
+as_policy_remove * as_policy_remove_init(as_policy_remove * p)
 {
 	p->timeout		= 0;
 	p->generation	= 0;
@@ -88,6 +100,7 @@ as_policies * as_policies_init(as_policies * p)
 	as_policy_write_init(&p->write);
 	as_policy_read_init(&p->read);
 	as_policy_operate_init(&p->operate);
+	as_policy_remove_init(&p->remove);
 	as_policy_scan_init(&p->scan);
 	as_policy_query_init(&p->query);
 	as_policy_info_init(&p->info);

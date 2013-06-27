@@ -298,43 +298,7 @@ void clbins_to_asrecord(cl_bin * bins, uint32_t nbins, as_record * r)
 {
 	uint32_t n = nbins < r->bins.capacity ? nbins : r->bins.capacity;
 	for ( int i = 0; i < n; i++ ) {
-		switch(bins[i].object.type) {
-			case CL_NULL: {
-				as_record_set_nil(r, bins[i].bin_name);
-				break;
-			}
-			case CL_INT: {
-				as_record_set_int64(r, bins[i].bin_name, bins[i].object.u.i64);
-				break;
-			}
-			case CL_STR: {
-				as_record_set_str(r, bins[i].bin_name, bins[i].object.u.str);
-				break;
-			}
-			case CL_LIST:
-			case CL_MAP: {
-
-				as_val * val = NULL;
-
-				as_buffer buffer;
-				buffer.data = (uint8_t *) bins[i].object.u.blob;
-				buffer.size = bins[i].object.sz;
-
-				as_serializer ser;
-				as_msgpack_init(&ser);
-				as_serializer_deserialize(&ser, &buffer, &val);
-				as_serializer_destroy(&ser);
-
-				as_record_set(r, bins[i].bin_name, (as_bin_value *) val);
-				break;
-			}
-			default: {
-				as_bytes * b = as_bytes_empty_new(bins[i].object.sz);
-				as_bytes_append(b, (uint8_t *) bins[i].object.u.blob, bins[i].object.sz);
-				as_record_set_bytes(r, bins[i].bin_name, b);
-				break;
-			}
-		}
+		clbin_to_asrecord(&bins[i], r);
 	}
 }
 

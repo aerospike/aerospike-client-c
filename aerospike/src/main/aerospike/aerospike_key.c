@@ -451,12 +451,14 @@ as_status aerospike_key_remove(
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param key			The key of the record.
  *	@param ops			The operations to perform on the record.
+ *	@param rec			The record to be populated with the data from AS_OPERATOR_READ operations.
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error.
  */
 as_status aerospike_key_operate(
 	aerospike * as, as_error * err, const as_policy_operate * policy, 
-	const as_key * key, const as_operations * ops) 
+	const as_key * key, const as_operations * ops,
+	as_record ** rec)
 {
 	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
@@ -472,6 +474,8 @@ as_status aerospike_key_operate(
 	uint32_t 		gen = 0;
 	int 			n_operations = ops->binops.size;
 	cl_operation * 	operations = (cl_operation *) alloca(sizeof(cl_operation) * n_operations);
+	as_bin_name *	read_op_bins = alloca(sizeof(as_bin_name) * n_operations);
+	int				n_read_ops = 0;
 
 	for(int i=0; i<n_operations; i++) {
 		cl_operation * clop = &operations[i];
@@ -486,6 +490,12 @@ as_status aerospike_key_operate(
 
 		strcpy(clop->bin.bin_name, op->bin.name);
 		clop->op = op->operator;
+
+		// Collect bin names that are read.
+		if (op->operator == AS_OPERATOR_READ) {
+			strcpy(read_op_bins[n_read_ops++], op->bin.name);
+		}
+
 		asbinvalue_to_clobject(op->bin.valuep, &clop->bin.object);
 	}
 
@@ -507,6 +517,33 @@ as_status aerospike_key_operate(
 			// ERROR CASE
 			break;
 		}
+	}
+
+	if ( n_read_ops != 0 && rc == CITRUSLEAF_OK && rec != NULL ) {
+		as_record * r = *rec;
+		if ( r == NULL ) {
+			r = as_record_new(0);
+		}
+		if ( r->bins.entries == NULL ) {
+			r->bins.capacity = n_read_ops;
+			r->bins.size = 0;
+			r->bins.entries = malloc(sizeof(as_bin) * n_read_ops);
+		}
+		r->gen = (uint16_t) gen;
+
+		// This works around an existing client bug where the data returned for
+		// a read operation is stored in the first bin struct with that bin
+		// name, not necessarily the bin struct corresponding to the read.
+		for (int i = 0; i < n_read_ops; i++) {
+			for (int j = 0; j < n_operations; j++) {
+				if (strcmp(read_op_bins[i], operations[j].bin.bin_name) == 0) {
+					clbin_to_asrecord(&operations[j].bin, r);
+					break;
+				}
+			}
+		}
+
+		*rec = r;
 	}
 
 	return as_error_fromrc(err,rc);

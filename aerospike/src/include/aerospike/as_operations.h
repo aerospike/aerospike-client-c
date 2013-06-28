@@ -143,6 +143,16 @@ typedef struct as_operations_s {
 	bool _free;
 
 	/**
+	 *	The generation of the record.
+	 */
+	uint16_t gen;
+
+	/**
+	 *	The time-to-live (expiration) of the record in seconds.
+	 */
+	uint32_t ttl;
+
+	/**
 	 * Operations to be performed on the bins of a record.
 	 */
 	as_binops binops;
@@ -267,10 +277,11 @@ bool as_operations_add_write_str(as_operations * ops, const as_bin_name name, co
  *	@param ops			The `as_operations` to append the operation to.
  *	@param name 		The name of the bin to perform the operation on.
  *	@param value 		The value to be used in the operation.
+ *	@param size 		The size of the value.
  *
  *	@return true on success. Otherwise an error occurred.
  */
-bool as_operations_add_write_raw(as_operations * ops, const as_bin_name name, uint8_t * value, uint32_t size);
+bool as_operations_add_write_raw(as_operations * ops, const as_bin_name name, const uint8_t * value, uint32_t size);
 
 /**
  *	Add a `AS_OPERATOR_READ` bin operation.
@@ -310,10 +321,11 @@ bool as_operations_add_prepend_str(as_operations * ops, const as_bin_name name, 
  *	@param ops			The `as_operations` to append the operation to.
  *	@param name 		The name of the bin to perform the operation on.
  *	@param value 		The value to be used in the operation.
+ *	@param size 		The size of the value.
  *
  *	@return true on success. Otherwise an error occurred.
  */
-bool as_operations_add_prepend_raw(as_operations * ops, const as_bin_name name, uint8_t * value, uint32_t size);
+bool as_operations_add_prepend_raw(as_operations * ops, const as_bin_name name, const uint8_t * value, uint32_t size);
 
 /**
  *	Add a `AS_OPERATOR_APPEND` bin operation with a NULL-terminated string value.
@@ -332,10 +344,11 @@ bool as_operations_add_append_str(as_operations * ops, const as_bin_name name, c
  *	@param ops			The `as_operations` to append the operation to.
  *	@param name 		The name of the bin to perform the operation on.
  *	@param value 		The value to be used in the operation.
+ *	@param size 		The size of the value.
  *
  *	@return true on success. Otherwise an error occurred.
  */
-bool as_operations_add_append_raw(as_operations * ops, const as_bin_name name, uint8_t * value, uint32_t size);
+bool as_operations_add_append_raw(as_operations * ops, const as_bin_name name, const uint8_t * value, uint32_t size);
 
 /**
  *	Add a `AS_OPERATOR_TOUCH` record operation.

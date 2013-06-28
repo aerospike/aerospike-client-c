@@ -132,10 +132,10 @@ int do_udf_bin_update_test() {
 
 	as_list * arglist = as_arraylist_new(3, 8);	
 	// arg 1 -> bin name
-	as_list_add_string(arglist, "bin_to_change");
+	as_list_append_str(arglist, "bin_to_change");
 
 	// arg #2 -> bin value
-	as_list_add_string(arglist,"changed by lua");
+	as_list_append_str(arglist,"changed by lua");
 	LOG("Bin value intially : original_bin_val");
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
 			g_config->package_name,"do_update_bin", arglist, g_config->timeout_ms, &res);  
@@ -251,7 +251,7 @@ int do_udf_trim_bin_test() {
 			return(-1);
 		}
 		// Send information about limit on the string len
-		as_list_add_string(arglist, "20");
+		as_list_append_str(arglist, "20");
 
 		as_result res;
 		as_result_init(&res);
@@ -1303,7 +1303,7 @@ int do_udf_return_type_test() {
 	 */
 
 	arglist = as_arraylist_new(1, 8);	
-	as_list_add_string(arglist, "none");
+	as_list_append_str(arglist, "none");
 
 
 	int rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
@@ -1336,7 +1336,7 @@ int do_udf_return_type_test() {
 	 */
 
 	arglist = as_arraylist_new(1, 8);	
-	as_list_add_string(arglist, "string_primitive");
+	as_list_append_str(arglist, "string_primitive");
 
 	as_result_init(&res);
 
@@ -1379,7 +1379,7 @@ int do_udf_return_type_test() {
 	 */
 	
 	arglist = as_arraylist_new(1, 8);	
-	as_list_add_string(arglist, "p_int_primitive");
+	as_list_append_str(arglist, "p_int_primitive");
 
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
 			g_config->package_name,"do_return_types", arglist, g_config->timeout_ms, &res);  
@@ -1414,7 +1414,7 @@ int do_udf_return_type_test() {
 	 */
 
 	arglist = as_arraylist_new(1, 8);	
-	as_list_add_string(arglist, "n_int_primitive");
+	as_list_append_str(arglist, "n_int_primitive");
 
 	as_result_init(&res);
 
@@ -1450,7 +1450,7 @@ int do_udf_return_type_test() {
 	 */
 
 	arglist = as_arraylist_new(1, 8);	
-	as_list_add_string(arglist, "bin_array");
+	as_list_append_str(arglist, "bin_array");
 
 	as_result_init(&res);
 
@@ -1488,7 +1488,7 @@ int do_udf_return_type_test() {
 	 */
 
 	arglist = as_arraylist_new(1, 8);	
-	as_list_add_string(arglist, "bin_nested_list");
+	as_list_append_str(arglist, "bin_nested_list");
 	as_result_init(&res);
 
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
@@ -1599,7 +1599,7 @@ int do_udf_return_type_test() {
 	 */
 
 	arglist = as_arraylist_new(1, 8);	
-	as_list_add_string(arglist, "bin_map");
+	as_list_append_str(arglist, "bin_map");
 
 	as_result_init(&res);
 
@@ -1746,9 +1746,9 @@ int do_udf_blob_test() {
 	as_list arglist;
 	as_arraylist_init(&arglist, 3, 8);	
 	// arg 1 -> bin name
-	as_list_add_string(&arglist, "WRITE");
-	as_list_add_string(&arglist, "bin1"); // bin to write
-	as_list_add_integer(&arglist, 5); // len
+	as_list_append_str(&arglist, "WRITE");
+	as_list_append_str(&arglist, "bin1"); // bin to write
+	as_list_append_int64(&arglist, 5); // len
 
 	// (1) Call a lua function that writes this blob
 	as_result res;
@@ -1770,9 +1770,9 @@ int do_udf_blob_test() {
 
 	as_arraylist_init(&arglist,3, 8);	
 	// arg 1 -> bin name
-	as_list_add_string(&arglist, "READ");
-	as_list_add_string(&arglist, "bin1"); // bin to write
-	as_list_add_integer(&arglist, 5); // len
+	as_list_append_str(&arglist, "READ");
+	as_list_append_str(&arglist, "bin1"); // bin to write
+	as_list_append_int64(&arglist, 5); // len
 
 	// (1) Call a lua function that writes this blob
 	as_result_init(&res);
@@ -1803,7 +1803,7 @@ int do_udf_blob_unit_test() {
 	as_list arglist;
 	as_arraylist_init(&arglist, 3, 8);	
 	// arg 1 -> bin name
-	as_list_add_string(&arglist, "WRITE");
+	as_list_append_str(&arglist, "WRITE");
 
 	// (1) Call a lua function that writes this blob
 	as_result res;
@@ -1825,7 +1825,7 @@ int do_udf_blob_unit_test() {
 
 	as_arraylist_init(&arglist,3, 8);	
 	// arg 1 -> bin name
-	as_list_add_string(&arglist, "READ");
+	as_list_append_str(&arglist, "READ");
 
 	// (1) Call a lua function that writes this blob
 	as_result_init(&res);
@@ -1860,7 +1860,7 @@ int do_udf_blob_list_unit_test() {
 	as_list arglist;
 	as_arraylist_init(&arglist, 3, 8);	
 	// arg 1 -> action
-	as_list_add_string(&arglist, "WRITE");
+	as_list_append_str(&arglist, "WRITE");
 
 	// arg 2 -> fancy list of bytes
     as_list * lob = as_arraylist_new(2, 0);

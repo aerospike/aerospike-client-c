@@ -74,7 +74,8 @@ main(int argc, char* argv[])
 			AEROSPIKE_ERR_RECORD_NOT_FOUND) {
 		LOG("aerospike_key_get() returned %d - %s, expected "
 				"AEROSPIKE_ERR_RECORD_NOT_FOUND", err.code, err.message);
-		example_cleanup(&as, p_rec);
+		as_record_destroy(p_rec);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
@@ -82,14 +83,14 @@ main(int argc, char* argv[])
 
 	// Write a record to the database so we can demonstrate read success.
 	if (! write_record(&as)) {
-		example_cleanup(&as, NULL);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
 	// Read the (whole) test record from the database.
 	if (aerospike_key_get(&as, &err, NULL, &g_key, &p_rec) != AEROSPIKE_OK) {
 		LOG("aerospike_key_get() returned %d - %s", err.code, err.message);
-		example_cleanup(&as, NULL);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
@@ -106,7 +107,7 @@ main(int argc, char* argv[])
 	if (aerospike_key_select(&as, &err, NULL, &g_key, bins_1_3, &p_rec) !=
 			AEROSPIKE_OK) {
 		LOG("aerospike_key_select() returned %d - %s", err.code, err.message);
-		example_cleanup(&as, NULL);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
@@ -124,16 +125,17 @@ main(int argc, char* argv[])
 	if (aerospike_key_select(&as, &err, NULL, &g_key, bins_4, &p_rec) !=
 			AEROSPIKE_OK) {
 		LOG("aerospike_key_select() returned %d - %s", err.code, err.message);
-		example_cleanup(&as, NULL);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
-	// Log the result.
+	// Log the result and destroy the as_record object.
 	LOG("non-existent bin 4 was read from database:");
 	example_dump_record(p_rec);
+	as_record_destroy(p_rec);
 
 	// Cleanup and disconnect from the database cluster.
-	example_cleanup(&as, p_rec);
+	example_cleanup(&as);
 
 	LOG("get example successfully completed");
 
@@ -152,7 +154,7 @@ write_record(aerospike* p_as)
 	as_record rec;
 
 	// Create an as_record object with three bins with different value types.
-	as_record_init(&rec, 3);
+	as_record_inita(&rec, 3);
 	as_record_set_int64(&rec, "test-bin-1", 1111);
 	as_record_set_int64(&rec, "test-bin-2", 2222);
 	as_record_set_str(&rec, "test-bin-3", "test-bin-3-data");
@@ -164,14 +166,10 @@ write_record(aerospike* p_as)
 	// Write the record to the database.
 	if (aerospike_key_put(p_as, &err, NULL, &g_key, &rec) != AEROSPIKE_OK) {
 		LOG("aerospike_key_put() returned %d - %s", err.code, err.message);
-		as_record_destroy(&rec);
 		return false;
 	}
 
 	LOG("write succeeded");
-
-	// Destroy the as_record object.
-	as_record_destroy(&rec);
 
 	return true;
 }

@@ -189,7 +189,7 @@ as_status aerospike_key_put(
  *	@return AEROSPIKE_OK if successful. Otherwise an error.
  */
 as_status aerospike_key_remove(
-	aerospike * as, as_error * err, const as_policy_operate * policy, 
+	aerospike * as, as_error * err, const as_policy_remove * policy, 
 	const as_key * key
 	);
 
@@ -201,13 +201,21 @@ as_status aerospike_key_remove(
  *		as_key_init(&key, "ns", "set", "key");
  *
  *		as_operations ops;
- *		as_operations_inita(&ops,2);
- *		as_operations_add_incr(&ops,"bin1", 456);
- *		as_operations_add_append_str(&ops, "bin1", "def");
+ *		as_operations_inita(&ops,3);
+ *		as_operations_add_incr(&ops, "bin1", 456);
+ *		as_operations_add_append_str(&ops, "bin2", "def");
+ *		as_operations_add_read(&ops, "bin1")
  *
- *		if ( aerospike_key_remove(&as, &err, NULL, &key, &ops) != AEROSPIKE_OK ) {
+ *		as_record * rec = NULL;
+ *
+ *		if ( aerospike_key_operate(&as, &err, NULL, &key, &ops, &rec) != AEROSPIKE_OK ) {
  *			fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *		}
+ *		else {
+ *			as_record_destroy(rec);
+ *		}
+ *
+ *		as_operations_destroy(&ops);
  *	~~~~~~~~~~
  *	
  *	@param as			The aerospike instance to use for this operation.

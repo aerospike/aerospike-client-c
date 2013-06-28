@@ -25,17 +25,21 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 #include "_bin.h"
 
 /******************************************************************************
- *	FUNCTIONS
+ *	STATIC FUNCTIONS
  *****************************************************************************/
 
 static as_operations * as_operations_default(as_operations * ops, bool free, uint16_t nops)
 {
 	if ( !ops ) return ops;
+
 	ops->_free = free;
+	ops->gen = 0;
+	ops->ttl = 0;
 
 	as_binop * entries = NULL;
 	if ( nops > 0 ) {
@@ -76,6 +80,10 @@ static as_binop * as_binop_forappend(as_operations * ops, as_operator operator, 
 
 	return binop;
 }
+
+/******************************************************************************
+ *	FUNCTIONS
+ *****************************************************************************/
 
 /**
  *	Intializes a stack allocated `as_operations`. 
@@ -220,7 +228,7 @@ bool as_operations_add_write_str(as_operations * ops, const as_bin_name name, co
  *
  *	@return true on success. Otherwise an error occurred.
  */
-bool as_operations_add_write_raw(as_operations * ops, const as_bin_name name, uint8_t * value, uint32_t size)
+bool as_operations_add_write_raw(as_operations * ops, const as_bin_name name, const uint8_t * value, uint32_t size)
 {
 	as_binop * binop = as_binop_forappend(ops, AS_OPERATOR_WRITE, name);
 	if ( !binop ) return false;
@@ -287,7 +295,7 @@ bool as_operations_add_prepend_str(as_operations * ops, const as_bin_name name, 
  *
  *	@return true on success. Otherwise an error occurred.
  */
-bool as_operations_add_prepend_raw(as_operations * ops, const as_bin_name name, uint8_t * value, uint32_t size)
+bool as_operations_add_prepend_raw(as_operations * ops, const as_bin_name name, const uint8_t * value, uint32_t size)
 {
 	as_binop * binop = as_binop_forappend(ops, AS_OPERATOR_PREPEND, name);
 	if ( !binop ) return false;
@@ -321,7 +329,7 @@ bool as_operations_add_append_str(as_operations * ops, const as_bin_name name, c
  *
  *	@return true on success. Otherwise an error occurred.
  */
-bool as_operations_add_append_raw(as_operations * ops, const as_bin_name name, uint8_t * value, uint32_t size)
+bool as_operations_add_append_raw(as_operations * ops, const as_bin_name name, const uint8_t * value, uint32_t size)
 {
 	as_binop * binop = as_binop_forappend(ops, AS_OPERATOR_APPEND, name);
 	if ( !binop ) return false;

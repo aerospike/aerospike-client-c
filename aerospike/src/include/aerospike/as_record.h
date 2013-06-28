@@ -291,6 +291,23 @@ bool as_record_set_int64(as_record * rec, const as_bin_name name, int64_t value)
 bool as_record_set_str(as_record * rec, const as_bin_name name, const char * value);
 
 /**
+ *	Set specified bin's value to an NULL terminates string.
+ *
+ *	~~~~~~~~~~{.c}
+ *		uint8_t bytes[3] = {1,2,3};
+ *		as_record_set_raw(rec, "bin", bytes, 3);
+ *	~~~~~~~~~~
+ *
+ *	@param rec		The record containing the bin.
+ *	@param name		The name of the bin.
+ *	@param value	The value of the bin.
+ *	@param size		The size of the value.
+ *
+ *	@return true on success, false on failure.
+ */
+bool as_record_set_raw(as_record * rec, const as_bin_name name, const uint8_t * value, uint32_t size);
+
+/**
  *	Set specified bin's value to an as_integer.
  *
  *	~~~~~~~~~~{.c}

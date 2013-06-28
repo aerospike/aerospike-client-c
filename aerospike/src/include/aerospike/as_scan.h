@@ -141,7 +141,7 @@ void as_scan_destroy(as_scan * scan);
  *	@param function 	The function to execute.
  *	@param arglist 	The arguments for the function.
  */
-void as_scan_foreach(as_scan * scan, const char * module, const char * function, as_list * arglist);
+void as_scan_apply(as_scan * scan, const char * module, const char * function, as_list * arglist);
 
 /**
  *	@}

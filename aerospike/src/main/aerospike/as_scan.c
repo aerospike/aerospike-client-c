@@ -93,7 +93,7 @@ void as_scan_destroy(as_scan * scan)
 /**
  * Apply a UDF to each record scanned on the server.
  */
-void as_scan_foreach(as_scan * scan, const char * module, const char * function, as_list * arglist)
+void as_scan_apply(as_scan * scan, const char * module, const char * function, as_list * arglist)
 {
 	as_udf_call_init(&scan->foreach, module, function, arglist);
 }

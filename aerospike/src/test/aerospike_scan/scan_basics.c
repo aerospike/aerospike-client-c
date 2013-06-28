@@ -367,7 +367,7 @@ TEST( scan_basics_5 , "udf scan in background to insert a new bin" ) {
 
 	// insert a new bin using udf
 	as_scan *scan = as_scan_new(NS, SET2);
-	as_scan_foreach(scan, "aerospike_scan_test", "scan_insert_bin4", NULL);
+	as_scan_apply(scan, "aerospike_scan_test", "scan_insert_bin4", NULL);
 	uint64_t scanid = 123;
 	as_status udf_rc = aerospike_scan_background(as, &err, NULL, scan, &scanid);
 	assert_int_eq( udf_rc, AEROSPIKE_OK );
@@ -406,7 +406,7 @@ TEST( scan_basics_6 , "udf scan in background per node to insert a new bin" ) {
 
 	// insert a new bin using udf
 	as_scan *scan = as_scan_new(NS, SET2);
-	as_scan_foreach(scan, "aerospike_scan_test", "scan_insert_bin4", NULL);
+	as_scan_apply(scan, "aerospike_scan_test", "scan_insert_bin4", NULL);
 	uint64_t scanid = 456;
 	for (int i=0; i<num_nodes; i++) {
 		memcpy(node_name, node_names+(NODE_NAME_SIZE*i), NODE_NAME_SIZE);
@@ -449,7 +449,7 @@ TEST( scan_basics_7 , "udf scan in foreground to insert a new bin" ) {
 
 	// insert a new bin using udf
 	as_scan *scan = as_scan_new(NS, SET2);
-	as_scan_foreach(scan, "aerospike_scan_test", "scan_update_bin4", NULL);
+	as_scan_apply(scan, "aerospike_scan_test", "scan_update_bin4", NULL);
 	uint64_t scanid = 789;
 	as_status udf_rc = aerospike_scan_background(as, &err, NULL, scan, &scanid);
 	assert_int_eq( udf_rc, AEROSPIKE_OK );
@@ -459,7 +459,7 @@ TEST( scan_basics_7 , "udf scan in foreground to insert a new bin" ) {
 
 	// See if the above udf ran fine
 	as_scan *scan2 = as_scan_new(NS, SET2);
-	as_scan_foreach(scan2, "aerospike_scan_test", "scan_getrec", NULL);
+	as_scan_apply(scan2, "aerospike_scan_test", "scan_getrec", NULL);
 	scan_data.bin4_startval = 4;
 	as_status rc = aerospike_scan_foreach(as, &err, NULL, scan2, scan_cb_counter, &scan_data);
 	assert_int_eq( rc, AEROSPIKE_OK );
@@ -484,13 +484,13 @@ TEST( scan_basics_8 , "starting two udf scan in background with same scan-id" ) 
 
 	// insert a new bin using udf
 	as_scan *scan = as_scan_new(NS, SET2);
-	as_scan_foreach(scan, "aerospike_scan_test", "scan_noop", NULL);
+	as_scan_apply(scan, "aerospike_scan_test", "scan_noop", NULL);
 	uint64_t scanid = 564;
 	as_status udf_rc = aerospike_scan_background(as, &err, NULL, scan, &scanid);
 	assert_int_eq( udf_rc, AEROSPIKE_OK );
 
 	as_scan *scan2 = as_scan_new(NS, SET2);
-	as_scan_foreach(scan2, "aerospike_scan_test", "scan_noop", NULL);
+	as_scan_apply(scan2, "aerospike_scan_test", "scan_noop", NULL);
 	uint64_t scanid2 = 564;
 	as_status udf_rc2 = aerospike_scan_background(as, &err, NULL, scan2, &scanid2);
 	assert_int_eq( udf_rc2, AEROSPIKE_ERR_SERVER );
@@ -534,8 +534,8 @@ SUITE( scan_basics, "aerospike_scan basic tests" ) {
 	suite_add( scan_basics_2 );
 	suite_add( scan_basics_3 );
 	suite_add( scan_basics_4 );
-	// suite_add( scan_basics_5 );
-	// suite_add( scan_basics_6 );
+	suite_add( scan_basics_5 );
+	suite_add( scan_basics_6 );
 	// Foreground scan udf is not yet available on the server side
 	// suite_add( scan_basics_7 );
 	suite_add(scan_basics_8);

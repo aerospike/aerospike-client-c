@@ -277,6 +277,7 @@ bool as_operations_add_write_str(as_operations * ops, const as_bin_name name, co
  *	@param ops			The `as_operations` to append the operation to.
  *	@param name 		The name of the bin to perform the operation on.
  *	@param value 		The value to be used in the operation.
+ *	@param size 		The size of the value.
  *
  *	@return true on success. Otherwise an error occurred.
  */
@@ -320,6 +321,7 @@ bool as_operations_add_prepend_str(as_operations * ops, const as_bin_name name, 
  *	@param ops			The `as_operations` to append the operation to.
  *	@param name 		The name of the bin to perform the operation on.
  *	@param value 		The value to be used in the operation.
+ *	@param size 		The size of the value.
  *
  *	@return true on success. Otherwise an error occurred.
  */
@@ -342,6 +344,7 @@ bool as_operations_add_append_str(as_operations * ops, const as_bin_name name, c
  *	@param ops			The `as_operations` to append the operation to.
  *	@param name 		The name of the bin to perform the operation on.
  *	@param value 		The value to be used in the operation.
+ *	@param size 		The size of the value.
  *
  *	@return true on success. Otherwise an error occurred.
  */

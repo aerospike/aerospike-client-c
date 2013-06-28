@@ -38,7 +38,7 @@
  *	EXTERN FUNCTIONS
  *****************************************************************************/
 
-extern void as_record_release(as_record * rec) ;
+extern void as_record_release(as_record * rec);
 
 /******************************************************************************
  *	HOOK FUNCTIONS

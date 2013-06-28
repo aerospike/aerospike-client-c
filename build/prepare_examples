@@ -27,7 +27,9 @@ do
 
 			if (idx > 0)
 			{
-				print substr($0, 0, idx-1),"/usr/lib/libaerospike.a"
+				# Use extra space in lib to compensate for incompatibility
+				# between centos gawk and debian mawk.
+				print substr($0, 0, idx-1)," /usr/lib/libaerospike.a"
 			}
 		}
 		else

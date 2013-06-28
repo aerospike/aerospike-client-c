@@ -69,7 +69,7 @@ main(int argc, char* argv[])
 
 	// Create an as_record object with two bins with different value types.
 	as_record rec;
-	as_record_init(&rec, 2);
+	as_record_inita(&rec, 2);
 	as_record_set_int64(&rec, "test-bin-1", 1234);
 	as_record_set_str(&rec, "test-bin-2", "test-bin-2-data");
 
@@ -80,20 +80,19 @@ main(int argc, char* argv[])
 	// Write the record to the database.
 	if (aerospike_key_put(&as, &err, NULL, &g_key, &rec) != AEROSPIKE_OK) {
 		LOG("aerospike_key_put() returned %d - %s", err.code, err.message);
-		example_cleanup(&as, &rec);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
 	LOG("write succeeded");
 
 	if (! read_record(&as)) {
-		example_cleanup(&as, &rec);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
 	// Generate a different as_record object to write.
-	as_record_destroy(&rec);
-	as_record_init(&rec, 2);
+	as_record_inita(&rec, 2);
 	as_record_set_int64(&rec, "test-bin-2", 2222);
 	as_record_set_str(&rec, "test-bin-3", "test-bin-3-data");
 
@@ -105,20 +104,19 @@ main(int argc, char* argv[])
 	// test-bin-2, will add test-bin-3, and will leave test-bin-one unchanged.
 	if (aerospike_key_put(&as, &err, NULL, &g_key, &rec) != AEROSPIKE_OK) {
 		LOG("aerospike_key_put() returned %d - %s", err.code, err.message);
-		example_cleanup(&as, &rec);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
 	LOG("write succeeded");
 
 	if (! read_record(&as)) {
-		example_cleanup(&as, &rec);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
 	// Generate another as_record object to write.
-	as_record_destroy(&rec);
-	as_record_init(&rec, 1);
+	as_record_inita(&rec, 1);
 	as_record_set_int64(&rec, "test-bin-1", 1111);
 
 	// Require that the write succeeds only if the record doesn't exist.
@@ -136,7 +134,7 @@ main(int argc, char* argv[])
 			AEROSPIKE_ERR_RECORD_EXISTS) {
 		LOG("aerospike_key_put() returned %d - %s, expected "
 				"AEROSPIKE_ERR_RECORD_EXISTS", err.code, err.message);
-		example_cleanup(&as, &rec);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
@@ -145,7 +143,7 @@ main(int argc, char* argv[])
 	// Remove the record from the database so we can demonstrate create success.
 	if (aerospike_key_remove(&as, &err, NULL, &g_key) != AEROSPIKE_OK) {
 		LOG("aerospike_key_remove() returned %d - %s", err.code, err.message);
-		example_cleanup(&as, &rec);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
@@ -156,19 +154,19 @@ main(int argc, char* argv[])
 	if (aerospike_key_put(&as, &err, &wpol, &g_key, &rec) !=
 			AEROSPIKE_OK) {
 		LOG("aerospike_key_put() returned %d - %s", err.code, err.message);
-		example_cleanup(&as, &rec);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
 	LOG("create succeeded");
 
 	if (! read_record(&as)) {
-		example_cleanup(&as, &rec);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
 	// Cleanup and disconnect from the database cluster.
-	example_cleanup(&as, &rec);
+	example_cleanup(&as);
 
 	LOG("put example successfully completed");
 

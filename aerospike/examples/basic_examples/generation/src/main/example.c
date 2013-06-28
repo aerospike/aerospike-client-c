@@ -76,7 +76,7 @@ main(int argc, char* argv[])
 
 	// Create a record object with one (integer value) bin.
 	as_record rec;
-	as_record_init(&rec, 1);
+	as_record_inita(&rec, 1);
 	as_record_set_int64(&rec, TEST_BIN, 1001);
 
 	// Log its contents.
@@ -87,7 +87,7 @@ main(int argc, char* argv[])
 	// database, it will be created with generation = 1.
 	if (aerospike_key_put(&as, &err, NULL, &g_key, &rec) != AEROSPIKE_OK) {
 		LOG("aerospike_key_put() returned %d - %s", err.code, err.message);
-		example_cleanup(&as, &rec);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
@@ -97,7 +97,7 @@ main(int argc, char* argv[])
 
 	// Read the record back, and get its generation.
 	if (! read_generation(&as, &gen)) {
-		example_cleanup(&as, &rec);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
@@ -120,7 +120,7 @@ main(int argc, char* argv[])
 	// increment the generation.
 	if (aerospike_key_put(&as, &err, &wpol, &g_key, &rec) != AEROSPIKE_OK) {
 		LOG("aerospike_key_put() returned %d - %s", err.code, err.message);
-		example_cleanup(&as, &rec);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
@@ -128,7 +128,7 @@ main(int argc, char* argv[])
 
 	// Read the record back, and get its generation.
 	if (! read_generation(&as, &gen)) {
-		example_cleanup(&as, &rec);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
@@ -148,7 +148,7 @@ main(int argc, char* argv[])
 			AEROSPIKE_ERR_RECORD_GENERATION) {
 		LOG("aerospike_key_put() returned %d - %s, expected "
 				"AEROSPIKE_ERR_RECORD_GENERATION", err.code, err.message);
-		example_cleanup(&as, &rec);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
@@ -166,7 +166,7 @@ main(int argc, char* argv[])
 	// that it does not write the record with the local generation!)
 	if (aerospike_key_put(&as, &err, &wpol, &g_key, &rec) != AEROSPIKE_OK) {
 		LOG("aerospike_key_put() returned %d - %s", err.code, err.message);
-		example_cleanup(&as, &rec);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
@@ -174,12 +174,12 @@ main(int argc, char* argv[])
 
 	// Read the record back, and get its generation.
 	if (! read_generation(&as, &gen)) {
-		example_cleanup(&as, &rec);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
 	// Cleanup and disconnect from the database cluster.
-	example_cleanup(&as, &rec);
+	example_cleanup(&as);
 
 	LOG("generation example successfully completed");
 

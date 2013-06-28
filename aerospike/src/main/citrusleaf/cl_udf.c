@@ -442,6 +442,8 @@ cl_rv citrusleaf_udf_get_with_gen(cl_cluster *asc, const char * filename, cl_udf
     return 0;
 }
 
+/**
+ commented out b/c not used
 static bool clusterinfo_cb(const cl_cluster_node *cn, const struct sockaddr_in * sa_in, const char *command, char *value, void *udata)
 {
 	char** error = (char**)udata;
@@ -468,6 +470,7 @@ static bool clusterinfo_cb(const cl_cluster_node *cn, const struct sockaddr_in *
 	}
     return true;
 }
+**/
 
 cl_rv citrusleaf_udf_put(cl_cluster *asc, const char * filename, as_bytes *content, cl_udf_type udf_type, char ** error) {
 

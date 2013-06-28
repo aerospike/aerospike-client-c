@@ -33,6 +33,7 @@
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
 #include <aerospike/as_error.h>
+#include <aerospike/as_operations.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_status.h>
 
@@ -47,7 +48,7 @@ bool read_record(aerospike* p_as);
 
 
 //==========================================================
-// PUT Example
+// INCR Example
 //
 
 int
@@ -67,98 +68,129 @@ main(int argc, char* argv[])
 
 	as_error err;
 
-	// Create an as_record object with two bins with different value types.
-	as_record rec;
-	as_record_inita(&rec, 2);
-	as_record_set_int64(&rec, "test-bin-1", 1234);
-	as_record_set_str(&rec, "test-bin-2", "test-bin-2-data");
+	// Create an as_operations object with a pair of bin arithmetic operations.
+	as_operations ops;
+	as_operations_inita(&ops, 2);
+	as_operations_add_incr(&ops, "test-bin-1", 1001);
+	as_operations_add_incr(&ops, "test-bin-2", 1002);
 
-	// Log its contents.
-	LOG("as_record object to write to database:");
-	example_dump_record(&rec);
+	// Log the operations.
+	LOG("as_operations object to apply to database:");
+	example_dump_operations(&ops);
 
-	// Write the record to the database.
-	if (aerospike_key_put(&as, &err, NULL, &g_key, &rec) != AEROSPIKE_OK) {
-		LOG("aerospike_key_put() returned %d - %s", err.code, err.message);
-		example_cleanup(&as);
-		exit(-1);
-	}
-
-	LOG("write succeeded");
-
-	if (! read_record(&as)) {
-		example_cleanup(&as);
-		exit(-1);
-	}
-
-	// Generate a different as_record object to write.
-	as_record_inita(&rec, 2);
-	as_record_set_int64(&rec, "test-bin-2", 2222);
-	as_record_set_str(&rec, "test-bin-3", "test-bin-3-data");
-
-	// Log its contents.
-	LOG("as_record object to write to database:");
-	example_dump_record(&rec);
-
-	// Write the record to the database. This will change the type and value of
-	// test-bin-2, will add test-bin-3, and will leave test-bin-one unchanged.
-	if (aerospike_key_put(&as, &err, NULL, &g_key, &rec) != AEROSPIKE_OK) {
-		LOG("aerospike_key_put() returned %d - %s", err.code, err.message);
-		example_cleanup(&as);
-		exit(-1);
-	}
-
-	LOG("write succeeded");
-
-	if (! read_record(&as)) {
-		example_cleanup(&as);
-		exit(-1);
-	}
-
-	// Generate another as_record object to write.
-	as_record_inita(&rec, 1);
-	as_record_set_int64(&rec, "test-bin-1", 1111);
-
-	// Require that the write succeeds only if the record doesn't exist.
-	as_policy_write wpol;
-	as_policy_write_init(&wpol);
-	wpol.exists = AS_POLICY_EXISTS_CREATE;
-
-	// Log its contents.
-	LOG("as_record object to create in database:");
-	example_dump_record(&rec);
-
-	// Try to create the record. This should fail since the record already
-	// exists in the database.
-	if (aerospike_key_put(&as, &err, &wpol, &g_key, &rec) !=
-			AEROSPIKE_ERR_RECORD_EXISTS) {
-		LOG("aerospike_key_put() returned %d - %s, expected "
-				"AEROSPIKE_ERR_RECORD_EXISTS", err.code, err.message);
-		example_cleanup(&as);
-		exit(-1);
-	}
-
-	LOG("create failed as expected");
-
-	// Remove the record from the database so we can demonstrate create success.
-	if (aerospike_key_remove(&as, &err, NULL, &g_key) != AEROSPIKE_OK) {
-		LOG("aerospike_key_remove() returned %d - %s", err.code, err.message);
-		example_cleanup(&as);
-		exit(-1);
-	}
-
-	LOG("record removed from database, trying create again");
-
-	// Try to create the record again. This should succeed since the record is
-	// not currently in the database.
-	if (aerospike_key_put(&as, &err, &wpol, &g_key, &rec) !=
+	// Apply the operations. Since the record does not exist, it will be created
+	// and the bins initialized with the ops' integer values.
+	if (aerospike_key_operate(&as, &err, NULL, &g_key, &ops, NULL) !=
 			AEROSPIKE_OK) {
+		LOG("aerospike_key_operate() returned %d - %s", err.code, err.message);
+		example_cleanup(&as);
+		exit(-1);
+	}
+
+	LOG("operations succeeded");
+
+	if (! read_record(&as)) {
+		example_cleanup(&as);
+		exit(-1);
+	}
+
+	// Generate a different set of arithmetic operations.
+	as_operations_inita(&ops, 3);
+	as_operations_add_incr(&ops, "test-bin-1", 1);
+	as_operations_add_incr(&ops, "test-bin-2", -2);
+	as_operations_add_incr(&ops, "test-bin-3", 3);
+
+	// Log the operations.
+	LOG("as_operations object to apply to database:");
+	example_dump_operations(&ops);
+
+	// Apply the operations. The first two bins exist, so those ops' values will
+	// be added to the existing values. The third (non-existent) bin will be
+	// created and initialized with the op's integer value.
+	if (aerospike_key_operate(&as, &err, NULL, &g_key, &ops, NULL) !=
+			AEROSPIKE_OK) {
+		LOG("aerospike_key_operate() returned %d - %s", err.code, err.message);
+		example_cleanup(&as);
+		exit(-1);
+	}
+
+	LOG("operations succeeded");
+
+	if (! read_record(&as)) {
+		example_cleanup(&as);
+		exit(-1);
+	}
+
+	// Create an as_record object with one string value bin.
+	as_record rec;
+	as_record_inita(&rec, 1);
+	as_record_set_str(&rec, "test-bin-1", "test-bin-1-data");
+
+	// Log its contents.
+	LOG("as_record object to write to database:");
+	example_dump_record(&rec);
+
+	// Write the record to the database, to change the value type of the bin.
+	if (aerospike_key_put(&as, &err, NULL, &g_key, &rec) != AEROSPIKE_OK) {
 		LOG("aerospike_key_put() returned %d - %s", err.code, err.message);
 		example_cleanup(&as);
 		exit(-1);
 	}
 
-	LOG("create succeeded");
+	LOG("write succeeded");
+
+	if (! read_record(&as)) {
+		example_cleanup(&as);
+		exit(-1);
+	}
+
+	// Log the operations. (Same operations as last time.)
+	LOG("as_operations object to apply to database:");
+	example_dump_operations(&ops);
+
+	// Try to apply the three arithmetic operations again. This will fail, since
+	// we can't increment the string value. Note that if any operation in the
+	// transaction is rejected, none will be applied.
+	if (aerospike_key_operate(&as, &err, NULL, &g_key, &ops, NULL) !=
+			AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE) {
+		LOG("aerospike_key_operate() returned %d - %s, expected "
+				"AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE", err.code, err.message);
+		example_cleanup(&as);
+		exit(-1);
+	}
+
+	LOG("operations failed as expected");
+
+	if (! read_record(&as)) {
+		example_cleanup(&as);
+		exit(-1);
+	}
+
+	// Generate a pair of operations to do an atomic increment and read.
+	as_operations_inita(&ops, 2);
+	as_operations_add_incr(&ops, "test-bin-3", 1);
+	as_operations_add_read(&ops, "test-bin-3");
+
+	// Log the operations.
+	LOG("as_operations object to apply to database:");
+	example_dump_operations(&ops);
+
+	as_record* p_rec = NULL;
+
+	// Apply the operations. The first will add the op's value to the existing
+	// value, and the second will return the result. The pair of operations will
+	// be atomic on the server.
+	if (aerospike_key_operate(&as, &err, NULL, &g_key, &ops, &p_rec) !=
+			AEROSPIKE_OK) {
+		LOG("aerospike_key_operate() returned %d - %s", err.code, err.message);
+		example_cleanup(&as);
+		exit(-1);
+	}
+
+	LOG("operations succeeded");
+
+	example_dump_record(p_rec);
+	as_record_destroy(p_rec);
 
 	if (! read_record(&as)) {
 		example_cleanup(&as);
@@ -168,7 +200,7 @@ main(int argc, char* argv[])
 	// Cleanup and disconnect from the database cluster.
 	example_cleanup(&as);
 
-	LOG("put example successfully completed");
+	LOG("incr example successfully completed");
 
 	return 0;
 }

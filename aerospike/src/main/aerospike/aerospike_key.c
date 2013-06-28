@@ -393,18 +393,18 @@ as_status aerospike_key_put(
  *	@return AEROSPIKE_OK if successful. Otherwise an error.
  */
 as_status aerospike_key_remove(
-	aerospike * as, as_error * err, const as_policy_operate * policy, 
+	aerospike * as, as_error * err, const as_policy_remove * policy, 
 	const as_key * key) 
 {
 	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
 	
 	// resolve policies
-	as_policy_operate p;
-	as_policy_operate_resolve(&p, &as->config.policies, policy);
+	as_policy_remove p;
+	as_policy_remove_resolve(&p, &as->config.policies, policy);
 
 	cl_write_parameters wp;
-	aspolicyoperate_to_clwriteparameters(&p, &wp);
+	aspolicyremove_to_clwriteparameters(&p, &wp);
 
 	cl_rv rc = CITRUSLEAF_OK;
 
@@ -468,7 +468,7 @@ as_status aerospike_key_operate(
 	as_policy_operate_resolve(&p, &as->config.policies, policy);
 
 	cl_write_parameters wp;
-	aspolicyoperate_to_clwriteparameters(&p, &wp);
+	aspolicyoperate_to_clwriteparameters(&p, ops, &wp);
 
 	int 			replace = 0;
 	uint32_t 		gen = 0;

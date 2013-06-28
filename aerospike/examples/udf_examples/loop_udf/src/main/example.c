@@ -251,11 +251,11 @@ worker_fn(void *udata)
         as_list * arglist = as_arraylist_new(3, 8);
 
         // arg 1 -> bin name
-        as_list_add_string(arglist, "bin1");
+        as_list_append_str(arglist, "bin1");
 
         if ( !isRead ) {
             // arg #2 -> bin value
-            as_list_add_string(arglist, kv->value_str);
+            as_list_append_str(arglist, kv->value_str);
         }
 
 		// do the actual work

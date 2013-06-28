@@ -33,6 +33,7 @@
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
 #include <aerospike/as_error.h>
+#include <aerospike/as_operations.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_status.h>
 
@@ -47,7 +48,7 @@ bool read_record(aerospike* p_as);
 
 
 //==========================================================
-// PUT Example
+// APPEND Example
 //
 
 int
@@ -67,98 +68,80 @@ main(int argc, char* argv[])
 
 	as_error err;
 
-	// Create an as_record object with two bins with different value types.
-	as_record rec;
-	as_record_inita(&rec, 2);
-	as_record_set_int64(&rec, "test-bin-1", 1234);
-	as_record_set_str(&rec, "test-bin-2", "test-bin-2-data");
+	// Create an as_operations object with three concatenation operations.
+	as_operations ops;
+	as_operations_inita(&ops, 3);
+	as_operations_add_append_str(&ops, "test-bin-1", "John");
+	as_operations_add_prepend_str(&ops, "test-bin-2", "Washington");
+	as_operations_add_append_raw(&ops, "test-bin-3", (const uint8_t*)"123", 3);
 
-	// Log its contents.
-	LOG("as_record object to write to database:");
-	example_dump_record(&rec);
+	// Log the operations.
+	LOG("as_operations object to apply to database:");
+	example_dump_operations(&ops);
 
-	// Write the record to the database.
-	if (aerospike_key_put(&as, &err, NULL, &g_key, &rec) != AEROSPIKE_OK) {
-		LOG("aerospike_key_put() returned %d - %s", err.code, err.message);
-		example_cleanup(&as);
-		exit(-1);
-	}
-
-	LOG("write succeeded");
-
-	if (! read_record(&as)) {
-		example_cleanup(&as);
-		exit(-1);
-	}
-
-	// Generate a different as_record object to write.
-	as_record_inita(&rec, 2);
-	as_record_set_int64(&rec, "test-bin-2", 2222);
-	as_record_set_str(&rec, "test-bin-3", "test-bin-3-data");
-
-	// Log its contents.
-	LOG("as_record object to write to database:");
-	example_dump_record(&rec);
-
-	// Write the record to the database. This will change the type and value of
-	// test-bin-2, will add test-bin-3, and will leave test-bin-one unchanged.
-	if (aerospike_key_put(&as, &err, NULL, &g_key, &rec) != AEROSPIKE_OK) {
-		LOG("aerospike_key_put() returned %d - %s", err.code, err.message);
-		example_cleanup(&as);
-		exit(-1);
-	}
-
-	LOG("write succeeded");
-
-	if (! read_record(&as)) {
-		example_cleanup(&as);
-		exit(-1);
-	}
-
-	// Generate another as_record object to write.
-	as_record_inita(&rec, 1);
-	as_record_set_int64(&rec, "test-bin-1", 1111);
-
-	// Require that the write succeeds only if the record doesn't exist.
-	as_policy_write wpol;
-	as_policy_write_init(&wpol);
-	wpol.exists = AS_POLICY_EXISTS_CREATE;
-
-	// Log its contents.
-	LOG("as_record object to create in database:");
-	example_dump_record(&rec);
-
-	// Try to create the record. This should fail since the record already
-	// exists in the database.
-	if (aerospike_key_put(&as, &err, &wpol, &g_key, &rec) !=
-			AEROSPIKE_ERR_RECORD_EXISTS) {
-		LOG("aerospike_key_put() returned %d - %s, expected "
-				"AEROSPIKE_ERR_RECORD_EXISTS", err.code, err.message);
-		example_cleanup(&as);
-		exit(-1);
-	}
-
-	LOG("create failed as expected");
-
-	// Remove the record from the database so we can demonstrate create success.
-	if (aerospike_key_remove(&as, &err, NULL, &g_key) != AEROSPIKE_OK) {
-		LOG("aerospike_key_remove() returned %d - %s", err.code, err.message);
-		example_cleanup(&as);
-		exit(-1);
-	}
-
-	LOG("record removed from database, trying create again");
-
-	// Try to create the record again. This should succeed since the record is
-	// not currently in the database.
-	if (aerospike_key_put(&as, &err, &wpol, &g_key, &rec) !=
+	// Apply the operations. Since the record does not exist, it will be created
+	// and the bins initialized with the ops' string values.
+	if (aerospike_key_operate(&as, &err, NULL, &g_key, &ops, NULL) !=
 			AEROSPIKE_OK) {
-		LOG("aerospike_key_put() returned %d - %s", err.code, err.message);
+		LOG("aerospike_key_operate() returned %d - %s", err.code, err.message);
 		example_cleanup(&as);
 		exit(-1);
 	}
 
-	LOG("create succeeded");
+	LOG("operations succeeded");
+
+	if (! read_record(&as)) {
+		example_cleanup(&as);
+		exit(-1);
+	}
+
+	// Generate a different set of concatenation operations.
+	as_operations_inita(&ops, 3);
+	as_operations_add_append_str(&ops, "test-bin-1", " Hancock");
+	as_operations_add_prepend_str(&ops, "test-bin-2", "George ");
+	as_operations_add_append_raw(&ops, "test-bin-3", (const uint8_t*)"456", 3);
+
+	// Log the operations.
+	LOG("as_operations object to apply to database:");
+	example_dump_operations(&ops);
+
+	// Apply the operations. The bins exist, so the ops' values will be applied
+	// to the existing values.
+	if (aerospike_key_operate(&as, &err, NULL, &g_key, &ops, NULL) !=
+			AEROSPIKE_OK) {
+		LOG("aerospike_key_operate() returned %d - %s", err.code, err.message);
+		example_cleanup(&as);
+		exit(-1);
+	}
+
+	LOG("operations succeeded");
+
+	if (! read_record(&as)) {
+		example_cleanup(&as);
+		exit(-1);
+	}
+
+	// Generate a different set of concatenation operations.
+	as_operations_inita(&ops, 2);
+	as_operations_add_prepend_str(&ops, "test-bin-2", "President ");
+	as_operations_add_append_str(&ops, "test-bin-3", "789");
+
+	// Log the operations.
+	LOG("as_operations object to apply to database:");
+	example_dump_operations(&ops);
+
+	// Try to apply the operations. This will fail, since we can't append a
+	// string value to an existing bin with "raw" value. Note that if any
+	// operation in the transaction is rejected, none will be applied.
+	if (aerospike_key_operate(&as, &err, NULL, &g_key, &ops, NULL) !=
+			AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE) {
+		LOG("aerospike_key_operate() returned %d - %s, expected "
+				"AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE", err.code, err.message);
+		example_cleanup(&as);
+		exit(-1);
+	}
+
+	LOG("operations failed as expected");
 
 	if (! read_record(&as)) {
 		example_cleanup(&as);
@@ -168,7 +151,7 @@ main(int argc, char* argv[])
 	// Cleanup and disconnect from the database cluster.
 	example_cleanup(&as);
 
-	LOG("put example successfully completed");
+	LOG("append example successfully completed");
 
 	return 0;
 }

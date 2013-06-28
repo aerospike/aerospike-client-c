@@ -180,6 +180,8 @@ typedef struct as_operations_s {
  */
 #define as_operations_inita(__ops, __nops) \
 	(__ops)->_free = false;\
+	(__ops)->gen = 0;\
+	(__ops)->ttl = 0;\
 	(__ops)->binops._free = false;\
 	(__ops)->binops.capacity = __nops;\
 	(__ops)->binops.size = 0;\

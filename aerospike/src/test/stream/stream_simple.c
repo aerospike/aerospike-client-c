@@ -157,7 +157,7 @@ TEST( stream_simple_create, "create 100 records and 4 indices" ) {
         int         nrbins = 0;
         uint32_t    rgen = 0;
 
-        rc = citrusleaf_get_all(cluster, "test", "test", &okey, &rbins, &nrbins, 1000, &rgen);
+        rc = citrusleaf_get_all(cluster, "test", "test", &okey, &rbins, &nrbins, 1000, &rgen, NULL);
 
         if (rbins) {
             citrusleaf_bins_free(rbins, nrbins);

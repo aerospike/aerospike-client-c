@@ -399,7 +399,7 @@ TEST( record_delete_replication, "Check to see if the record is getting replicat
 	uint32_t cl_gen;
 	i = 0;
 	for (j = 0; j<2; j++) {
-		citrusleaf_get_all(cluster, "test", "test", &okey, &rsp_bins[j], &rsp_n_bins[j], 1000, &cl_gen);  
+		citrusleaf_get_all(cluster, "test", "test", &okey, &rsp_bins[j], &rsp_n_bins[j], 1000, &cl_gen, NULL);
 		info("Bins = %d", rsp_n_bins[j]);
 		for( int k = 0; k < rsp_n_bins[j]; k++) {
 			citrusleaf_object_free(&rsp_bins[j][k].object);

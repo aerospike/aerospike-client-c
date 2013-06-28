@@ -315,8 +315,8 @@ example_dump_record(as_record* p_rec)
 
 	uint16_t num_bins = as_record_numbins(p_rec);
 
-	LOG("  generation %u, ttl %u, %u bin%s:", p_rec->gen, p_rec->ttl,
-			num_bins, num_bins == 1 ? "" : "s");
+	LOG("  generation %u, ttl %u, %u bin%s:", p_rec->gen, p_rec->ttl, num_bins,
+			num_bins == 1 ? "" : "s");
 
 	for (uint16_t b = 0; b < num_bins; b++) {
 		example_dump_bin(&p_rec->bins.entries[b]);
@@ -371,7 +371,8 @@ example_dump_operations(as_operations* p_ops)
 
 	uint16_t num_ops = p_ops->binops.size;
 
-	LOG("  %u op%s:", num_ops, num_ops == 1 ? "" : "s");
+	LOG("  generation %u, ttl %u, %u op%s:", p_ops->gen, p_ops->ttl, num_ops,
+			num_ops == 1 ? "" : "s");
 
 	for (uint16_t n = 0; n < num_ops; n++) {
 		example_dump_op(&p_ops->binops.entries[n]);

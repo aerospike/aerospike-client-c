@@ -78,7 +78,7 @@ TEST( kv_string_get, "get a string from a bin" ) {
     int         nbins = 0;
     uint32_t    gen = 0;
 
-    int rc = citrusleaf_get_all(cluster, "test", "test", &key, &bins, &nbins, 1000, &gen);
+    int rc = citrusleaf_get_all(cluster, "test", "test", &key, &bins, &nbins, 1000, &gen, NULL);
 
     assert_int_eq(rc, 0);
     assert_int_eq(nbins, 1);

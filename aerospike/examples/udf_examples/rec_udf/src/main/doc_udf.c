@@ -116,7 +116,7 @@ int do_doc_udf_test(config *c) {
         char     *keyStr     = "key1";
         cl_object o_key; citrusleaf_object_init_str(&o_key,keyStr);        
         int rsp = citrusleaf_get_all(c->asc, c->ns, c->set, &o_key, &rsp_bins,
-                                     &rsp_n_bins, c->timeout_ms, &cl_gen);  
+                                     &rsp_n_bins, c->timeout_ms, &cl_gen, NULL);
         if (rsp != CITRUSLEAF_OK) {
             printf("failed record_udf test data %d rsp=%d\n", i, rsp);
             citrusleaf_object_free(&o_key); return -1;

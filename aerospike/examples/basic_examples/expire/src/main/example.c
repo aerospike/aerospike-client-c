@@ -70,7 +70,7 @@ main(int argc, char* argv[])
 
 	// Create a record with one (integer value) bin.
 	as_record rec;
-	as_record_init(&rec, 1);
+	as_record_inita(&rec, 1);
 	as_record_set_int64(&rec, "test-bin", 1234);
 
 	// Set the TTL of the record so that it won't last very long.
@@ -83,14 +83,11 @@ main(int argc, char* argv[])
 	// Write the record to the database.
 	if (aerospike_key_put(&as, &err, NULL, &g_key, &rec) != AEROSPIKE_OK) {
 		LOG("aerospike_key_put() returned %d - %s", err.code, err.message);
-		example_cleanup(&as, &rec);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
 	LOG("write succeeded");
-
-	// The record object is no longer needed.
-	as_record_destroy(&rec);
 
 	bool exists;
 
@@ -98,13 +95,13 @@ main(int argc, char* argv[])
 	if (aerospike_key_exists(&as, &err, NULL, &g_key, &exists) !=
 			AEROSPIKE_OK) {
 		LOG("aerospike_key_exists() returned %d - %s", err.code, err.message);
-		example_cleanup(&as, NULL);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
 	if (! exists) {
 		LOG("verified record is NOT in database");
-		example_cleanup(&as, NULL);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
@@ -118,20 +115,20 @@ main(int argc, char* argv[])
 	if (aerospike_key_exists(&as, &err, NULL, &g_key, &exists) !=
 			AEROSPIKE_OK) {
 		LOG("aerospike_key_exists() returned %d - %s", err.code, err.message);
-		example_cleanup(&as, NULL);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
 	if (exists) {
 		LOG("verified record did NOT successfully expire");
-		example_cleanup(&as, NULL);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
 	LOG("verified record successfully expired");
 
 	// Cleanup and disconnect from the database cluster.
-	example_cleanup(&as, NULL);
+	example_cleanup(&as);
 
 	LOG("expire example successfully completed");
 

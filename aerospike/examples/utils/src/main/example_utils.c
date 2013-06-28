@@ -247,10 +247,8 @@ example_connect_to_aerospike(aerospike* p_as)
 // from database, and disconnect from cluster.
 //
 void
-example_cleanup(aerospike* p_as, as_record* p_rec)
+example_cleanup(aerospike* p_as)
 {
-	as_record_destroy(p_rec); // internally handles null p_rec
-
 	// Destroy the test as_key object.
 	as_key_destroy(&g_key);
 
@@ -342,6 +340,16 @@ example_dump_op(as_binop* p_binop)
 {
 	if (! p_binop) {
 		LOG("  null as_binop object");
+		return;
+	}
+
+	if (p_binop->operator == AS_OPERATOR_TOUCH) {
+		LOG("  %s", AS_OPERATORS[p_binop->operator]);
+		return;
+	}
+
+	if (p_binop->operator == AS_OPERATOR_READ) {
+		LOG("  %s : %s", AS_OPERATORS[p_binop->operator], p_binop->bin.name);
 		return;
 	}
 

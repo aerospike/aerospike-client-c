@@ -280,7 +280,7 @@ bool as_operations_add_write_str(as_operations * ops, const as_bin_name name, co
  *
  *	@return true on success. Otherwise an error occurred.
  */
-bool as_operations_add_write_raw(as_operations * ops, const as_bin_name name, uint8_t * value, uint32_t size);
+bool as_operations_add_write_raw(as_operations * ops, const as_bin_name name, const uint8_t * value, uint32_t size);
 
 /**
  *	Add a `AS_OPERATOR_READ` bin operation.
@@ -323,7 +323,7 @@ bool as_operations_add_prepend_str(as_operations * ops, const as_bin_name name, 
  *
  *	@return true on success. Otherwise an error occurred.
  */
-bool as_operations_add_prepend_raw(as_operations * ops, const as_bin_name name, uint8_t * value, uint32_t size);
+bool as_operations_add_prepend_raw(as_operations * ops, const as_bin_name name, const uint8_t * value, uint32_t size);
 
 /**
  *	Add a `AS_OPERATOR_APPEND` bin operation with a NULL-terminated string value.
@@ -345,7 +345,7 @@ bool as_operations_add_append_str(as_operations * ops, const as_bin_name name, c
  *
  *	@return true on success. Otherwise an error occurred.
  */
-bool as_operations_add_append_raw(as_operations * ops, const as_bin_name name, uint8_t * value, uint32_t size);
+bool as_operations_add_append_raw(as_operations * ops, const as_bin_name name, const uint8_t * value, uint32_t size);
 
 /**
  *	Add a `AS_OPERATOR_TOUCH` record operation.

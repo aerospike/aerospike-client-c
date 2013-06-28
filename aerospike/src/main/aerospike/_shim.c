@@ -286,9 +286,7 @@ void clbin_to_asrecord(cl_bin * bin, as_record * r)
 			break;
 		}
 		default: {
-			as_bytes * b = as_bytes_empty_new(bin->object.sz);
-			as_bytes_append(b, (uint8_t *) bin->object.u.blob, bin->object.sz);
-			as_record_set_bytes(r, bin->bin_name, b);
+			as_record_set_raw(r, bin->bin_name, bin->object.u.blob, bin->object.sz);
 			break;
 		}
 	}

@@ -137,22 +137,19 @@ static int simplescan_cb(char *ns, cf_digest *keyd, char *set, uint32_t generati
 		scan_bridge *bridge_udata = (scan_bridge *)udata;
 
 		// Fill the bin data
-		as_record *r = as_record_new(n_bins);
-		clbins_to_asrecord(bins, n_bins, r);
+		as_record r;
+		as_record_inita(&r, n_bins);
+		clbins_to_asrecord(bins, n_bins, &r);
 
 		// Fill the metadata
-		r->key.namespace = ns ? strdup(ns) : NULL;
-		r->key.set = set ? strdup(set) : NULL;
-		r->key.valuep = NULL;
-		memcpy(r->key.digest.value, keyd, sizeof(cf_digest));
-		r->gen = generation;
-		r->ttl = record_void_time;
-		
-		// Call the callback that user wanted to callback
-		(*bridge_udata->user_cb)((as_val *)r, bridge_udata->user_udata);
+		as_key_init_value(&r.key, ns, set, NULL);
+		memcpy(r.key.digest.value, keyd, sizeof(cf_digest));
+		r.key.digest.init = true;
+		r.gen = generation;
+		r.ttl = record_void_time;
 
-		// It is our job to destroy the record
-		as_record_destroy(r);
+		// Call the callback that user wanted to callback
+		(*bridge_udata->user_cb)((as_val *)&r, bridge_udata->user_udata);
 		
 		return 0;
 }

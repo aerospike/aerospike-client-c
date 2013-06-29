@@ -39,9 +39,13 @@
 
 static as_key * as_key_defaults(as_key * key, bool free, const char * ns, const char * set, const as_key_value * valuep)
 {
+	if ( ! set ) set = "";
+	if ( ! (ns && *ns != '\0' && strlen(ns) < AS_KEY_NAMESPACE_MAX_SIZE && strlen(set) < AS_KEY_SET_MAX_SIZE) ) {
+		return NULL;
+	}
 	key->_free = free;
-	key->namespace = ns ? strdup(ns) : NULL;
-	key->set = set ? strdup(set) : NULL;
+	strcpy(key->namespace, ns);
+	strcpy(key->set, set);
 	key->valuep = (as_key_value *) valuep;
 	key->digest.init = false;
 	memset(key->digest.value,0,AS_DIGEST_VALUE_SIZE);

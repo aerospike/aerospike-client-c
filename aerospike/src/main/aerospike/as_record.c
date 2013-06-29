@@ -59,8 +59,8 @@ static as_record * as_record_defaults(as_record * rec, bool free, uint16_t nbins
 	r->hooks = &as_record_rec_hooks;
 
 	rec->key._free = false;
-	rec->key.namespace = NULL;
-	rec->key.set = NULL;
+	*rec->key.namespace = '\0';
+	*rec->key.set = '\0';
 	rec->key.valuep = NULL;
 
 	rec->key.digest.init = false;
@@ -128,8 +128,8 @@ void as_record_release(as_record * rec)
 		rec->bins.capacity = 0;
 		rec->bins.size = 0;
 
-		rec->key.namespace = NULL;
-		rec->key.set = NULL;
+		*rec->key.namespace = '\0';
+		*rec->key.set = '\0';
 
 		as_val_destroy((as_val *) rec->key.valuep);
 		rec->key.valuep = NULL;

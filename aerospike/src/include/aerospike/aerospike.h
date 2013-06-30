@@ -1,4 +1,3 @@
-/** @file **/
 /******************************************************************************
  *	Copyright 2008-2013 by Aerospike.
  *
@@ -91,7 +90,21 @@
  *			application. In the next release, you will be able to have 
  *			multiple clients in a single application.
  *
- *	@defgroup aerospike Aerospike Instance
+ *	@defgroup aerospike Aerospike Client
+ *	@{
+ *		@addtogroup client Client API
+ *		@addtogroup index Index API
+ *		@addtogroup info Info API
+ *		@addtogroup key Key API
+ *		@addtogroup query Query API
+ *		@addtogroup scan Scan API
+ *		@addtogroup udf UDF API
+ *		@addtogroup config Configurations
+ *		@addtogroup policy Policies
+ *		@addtogroup operations Operations
+ *	@}
+ *
+ *	@addtogroup client
  *	@{
  */
 
@@ -235,6 +248,6 @@ as_status aerospike_connect(aerospike * as, as_error * err);
  */
 as_status aerospike_close(aerospike * as, as_error * err);
 
-/** 
+/**
  *	@}
  */

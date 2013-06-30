@@ -25,7 +25,7 @@
  *
  *	Vivamus nec porta lacus, ut laoreet augue. Phasellus eleifend ultricies tempus. Fusce auctor nisl at lacinia rhoncus. Curabitur vel adipiscing libero. Morbi vel mi ac lorem vulputate condimentum ac a odio. Praesent hendrerit ligula leo, sit amet laoreet odio condimentum quis. Pellentesque gravida volutpat interdum. Nam tristique enim sagittis est sagittis condimentum. Aenean et tellus a lacus fringilla volutpat sit amet dapibus ligula. Nullam consectetur velit ac felis sagittis molestie. Nunc a ante ac ipsum volutpat lobortis vel ut nibh.
  *
- *	@defgroup query Query API
+ *	@addtogroup query
  *	@{
  */
 

@@ -28,7 +28,7 @@
  *
  *	Maecenas et lacus massa. Nam sagittis odio eget lobortis tempor. Vivamus hendrerit diam in nisl fermentum elementum. Vestibulum gravida mollis faucibus. Nulla facilisi. Vivamus molestie at odio sit amet tincidunt. Interdum et malesuada fames ac ante ipsum primis in faucibus.
  *
- *	@defgroup query Query API
+ *	@addtogroup query
  *	@{
  */
 

@@ -21,8 +21,6 @@
  *****************************************************************************/
 
 /** 
- *	[TOC]
- *
  *	Records in Aerospike are collections of named bins. 
  *
  *	The bins in a record are analogous to columns in relational databases. 
@@ -96,7 +94,7 @@
  *
  *	
  *
- *	@addtogroup record Record API
+ *	@addtogroup record
  *	@{
  */
 

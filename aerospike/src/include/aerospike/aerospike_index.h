@@ -21,7 +21,7 @@
  *****************************************************************************/
 
 /** 
- *	@defgroup index Index Management API
+ *	@addtogroup index
  *	@{
  */
 

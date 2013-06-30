@@ -21,7 +21,7 @@
  *****************************************************************************/
 
 /** 
- *	@defgroup config Configuration
+ *	@addtogroup config
  *
  *	The `as_config` object defines the settings for the `aerospike` client.
  *

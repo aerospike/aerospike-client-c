@@ -24,7 +24,7 @@
  *	Aerospike provides a key based API to read and write data into the cluster.
  *	When using the key API, you need to provide both a key and a set.
  *
- *	@addtogroup key Key API
+ *	@addtogroup key
  *	@{
  */
 

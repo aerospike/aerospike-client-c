@@ -1,0 +1,540 @@
+
+body {
+  font-family: Helvetica, Arial, Sans-Serif;
+  font-size: 14px;
+  font-style: normal;
+  font-weight: 400;
+}
+
+/*******************************************************************************
+ * Headings
+ ******************************************************************************/
+
+h1, h2, h3, h4, h5, h6 {
+  border: none;
+  color: #444;
+  font-family: inherit;
+  font-size: inherit;
+  font-style: normal;
+  font-weight: 400;
+  margin: 1em 0 1em 0;
+  padding: 0;
+}
+
+h1 {
+  font-size: 1.6em;
+}
+
+h2 {
+  font-size: 1.2em;
+}
+
+h2.groupheader {
+  border-radius: 4px;
+  color: #eee;
+background: #7d7e7d; /* Old browsers */
+background: -moz-linear-gradient(top,  #7d7e7d 0%, #0e0e0e 100%); /* FF3.6+ */
+background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,#7d7e7d), color-stop(100%,#0e0e0e)); /* Chrome,Safari4+ */
+background: -webkit-linear-gradient(top,  #7d7e7d 0%,#0e0e0e 100%); /* Chrome10+,Safari5.1+ */
+background: -o-linear-gradient(top,  #7d7e7d 0%,#0e0e0e 100%); /* Opera 11.10+ */
+background: -ms-linear-gradient(top,  #7d7e7d 0%,#0e0e0e 100%); /* IE10+ */
+background: linear-gradient(to bottom,  #7d7e7d 0%,#0e0e0e 100%); /* W3C */
+filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#7d7e7d', endColorstr='#0e0e0e',GradientType=0 ); /* IE6-9 */
+
+  padding: 8px;
+  text-shadow: -1px -1px 1px #444;
+}
+
+/*******************************************************************************
+ * Header
+ ******************************************************************************/
+
+.header {
+  /*background: #eee;*/
+  /*border-bottom: 1px solid #ddd;*/
+  margin: 16px;
+}
+
+.header > .summary {
+  padding: 16px 0;
+  font-size: inherit;
+}
+
+.header > .summary > a {
+  font-size: inherit;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.header > .headertitle {
+
+}
+
+.header > .headertitle > .title {
+  font-size: 2em;
+}
+
+.header > .headertitle > .title > .ingroups {
+  font-size: 14px;
+}
+
+.header > .headertitle > .title > .ingroups > a {
+  margin-right: 16px;
+  font-size: inherit;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+
+/*******************************************************************************
+ * Content
+ ******************************************************************************/
+
+.contents {
+  margin: 16px;
+  padding: 0px;
+}
+
+.contents > .groupheader {
+  margin-top: 0px !important;
+}
+
+.contents > p {
+  margin: 1em 0;
+}
+
+.contents > h1, .contents > h2, .contents > h3, .contents > h4 {
+  margin: 1em 0;
+}
+
+./*contents > .fragment {
+  margin: 1em 0;
+}*/
+
+/*.contents > .doxtable {
+  margin: 1em 0;
+}
+*/
+
+.contents > .textblock {
+  border-bottom: 1px solid #ddd;
+}
+
+.dynheader {
+  border-top: 1px solid #ddd;
+  padding: 16px 0;
+}
+
+.section {
+  /*margin: 8px;*/
+  padding: 16px;
+}
+
+/*******************************************************************************
+ * Fragment
+ ******************************************************************************/
+
+.fragment {
+  font-family: "Consolas", Courier New, monospace, fixed;
+  background: #f5f5f5;
+  border: 1px solid #dddddd;
+  border-radius: 4px;
+  font-size: 1em;
+  padding: 16px;
+}
+
+.fragment > .line {
+  background: none;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: 1.2em;
+  /*padding: 8px;*/
+  min-height: 1.2em;
+  text-wrap: unrestricted;
+  white-space: -moz-pre-wrap; /* Moz */
+  white-space: -pre-wrap;     /* Opera 4-6 */
+  white-space: -o-pre-wrap;   /* Opera 7 */
+  white-space: pre-wrap;      /* CSS3  */
+  word-wrap: break-word;      /* IE 5.5+ */
+}
+
+/*******************************************************************************
+ * Member Decls
+ ******************************************************************************/
+
+table.memberdecls {
+  margin: 16px 0;
+}
+
+table.memberdecls > tbody > tr > td {
+  border-bottom: 1px solid #dddddd;
+  padding: 8px;
+}
+
+table.memberdecls > tbody > tr.heading > td {
+  border: none;
+  padding: 0;
+}
+
+table.memberdecls > tbody > tr.heading > td * {
+}
+
+table.memberdecls > tbody > tr > td.memSeparator {
+  display: none;
+}
+
+table.memberdecls > tbody > tr > td.memItemLeft {
+  white-space: nowrap;
+  width: auto;
+}
+
+table.memberdecls > tbody > tr > td.memItemRight {
+  width: 100%;
+}
+
+/*******************************************************************************
+ * Member Item
+ ******************************************************************************/
+
+div.memitem {
+  border: 1px solid #dddddd;
+  border-radius: 4px;
+  margin: 16px 0;
+}
+
+div.memitem > div.memproto {
+  color: #444;
+  text-shadow: 1px 1px 1px #e5e5e5;
+
+  background: #dfdfdf; /* Old browsers */
+  background: -moz-linear-gradient(top,  #dfdfdf 0%, #c3c3c3 100%); /* FF3.6+ */
+  background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,#dfdfdf), color-stop(100%,#c3c3c3)); /* Chrome,Safari4+ */
+  background: -webkit-linear-gradient(top,  #dfdfdf 0%,#c3c3c3 100%); /* Chrome10+,Safari5.1+ */
+  background: -o-linear-gradient(top,  #dfdfdf 0%,#c3c3c3 100%); /* Opera 11.10+ */
+  background: -ms-linear-gradient(top,  #dfdfdf 0%,#c3c3c3 100%); /* IE10+ */
+  background: linear-gradient(to bottom,  #dfdfdf 0%,#c3c3c3 100%); /* W3C */
+  filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#dfdfdf', endColorstr='#c3c3c3',GradientType=0 ); /* IE6-9 */
+
+  border-bottom: 1px solid #aaa;
+  padding: 8px;
+}
+
+div.memitem > div.memdoc {
+  padding: 16px;
+}
+
+div.memitem > div.memdoc > *:first-child {
+  margin-top: 0;
+}
+
+div.memitem > div.memdoc > *:last-child {
+  margin-bottom: 0;
+}
+
+.memname {
+  font-weight: bold;
+  margin-left: 6px;
+}
+
+.memname td {
+  vertical-align: bottom;
+}
+
+.paramkey {
+  text-align: right;
+}
+
+.paramtype {
+  white-space: nowrap;
+}
+
+.paramname {
+  white-space: nowrap;
+}
+.paramname em {
+  font-style: normal;
+}
+
+.paramname code {
+  line-height: 14px;
+}
+
+.params, .retval, .exception, .tparams {
+  margin-left: 0px;
+  padding-left: 0px;
+}       
+
+.params .paramname, .retval .paramname {
+  /*font-weight: bold;*/
+  vertical-align: top;
+}
+
+.params .paramtype {
+  font-style: italic;
+  vertical-align: top;
+}       
+
+.params .paramdir {
+  vertical-align: top;
+}
+
+a.el {
+  font-weight: bold;
+}
+
+/*******************************************************************************
+ * Field Table
+ ******************************************************************************/
+
+table.fieldtable {
+  border: 1px solid #EEE;
+}
+
+table.fieldtable > tbody > tr > th {
+  background: #e5e5e5;
+  padding: 8px;
+  text-align: left;
+}
+
+table.fieldtable > tbody > tr > td {
+  border: 1px solid #EEE;
+  padding: 8px;
+  vertical-align: top !important;
+}
+
+table.fieldtable > tbody > tr > td.fieldname {
+  font-family: Courier New, monospace;
+  font-style: normal !important;
+}
+
+table.fieldtable > tbody > tr > td.fieldname * {
+  font-style: normal !important;
+}
+
+table.fieldtable > tbody > tr > td.fielddoc {
+  padding: 8px;
+}
+
+table.fieldtable > tbody > tr > td.fielddoc p:first-child {
+  margin: 0;
+}
+
+/*******************************************************************************
+ * Doxtable
+ ******************************************************************************/
+
+.doxtable {
+  border: 1px solid #ddd;
+}
+
+.doxtable > tbody > tr > th {
+  background: #e5e5e5;
+  font-weight: 400;
+  padding: 8px;
+}
+
+.doxtable > tbody > tr > td {
+  border: 1px solid #eee;
+  font-weight: 400;
+  padding: 8px;
+}
+
+/*******************************************************************************
+ * Top
+ ******************************************************************************/
+
+#top {
+}
+
+#top > #titlearea {
+  border-bottom: 1px solid #888;
+}
+
+/*******************************************************************************
+ * Navbar
+ ******************************************************************************/
+
+.tabs, .tabs2, .tabs3 {
+  width: 100%;
+  z-index: 101;
+}
+
+div.tabs {
+  background: #ccc;
+  border-bottom: 1px solid #bbb;
+}
+
+div.tabs2 {
+  background: #ddd;
+  border-bottom: 1px solid #ccc;
+}
+
+div.tabs3 {
+  background: #eee;
+  border-bottom: 1px solid #ddd;
+}
+
+ul.tablist {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: block;
+}
+
+ul.tablist > li {
+  margin: 0;
+  padding: 0;
+  display: table-cell;
+  line-height: 2.5em;
+}
+
+ul.tablist > li > a {
+  color: #333;
+  display: block;
+  font-weight: bold;
+  margin: 0;
+  outline: none;
+  padding: 0 20px;
+  text-shadow: 1px 1px 1px #eee;
+}
+
+
+.tabs > ul.tablist > li {
+  border-right: 1px solid #ddd;
+}
+
+.tabs > ul.tablist > li.current {
+  background: #ddd;
+}
+
+.tabs2 > ul.tablist > li {
+  border-right: 1px solid #eee;
+}
+
+.tabs2 > ul.tablist > li.current {
+  background: #eee;
+}
+
+.tabs3 > ul.tablist > li {
+  border-right: 1px solid #fff;
+}
+
+.tabs3 > ul.tablist > li.current {
+  background: #fff;
+}
+
+ul.tablist > li > a:hover {
+  /*background: #ffffff;*/
+}
+
+/*******************************************************************************
+ * Directory
+ ******************************************************************************/
+
+div.directory {
+  margin: 10px 0px;
+  /*border-top: 1px solid #A8B8D9;*/
+  /*border-bottom: 1px solid #A8B8D9;*/
+  width: 100%;
+}
+
+div.directory > div.levels {
+  white-space: nowrap;
+  width: 100%;
+  text-align: right;
+  font-size: 9pt;
+}
+
+div.directory > div.levels span {
+  cursor: pointer;
+  padding-left: 2px;
+  padding-right: 2px;
+  color: #3D578C;
+}
+
+div.directory > table.directory {
+  border-collapse:collapse;
+}
+
+table.directory > tbody > tr > td {
+  margin: 0px;
+  padding: 4px;
+  vertical-align: top;
+}
+
+table.directory > tbody > tr > td.entry {
+  white-space: nowrap;
+  padding-right: 6px;
+}
+
+table.directory > tbody > tr > td.entry a {
+  outline:none;
+}
+
+table.directory > tbody > tr > td.entry a img {
+  border: none;
+}
+
+table.directory > tbody > tr > td.desc {
+  width: 100%;
+  padding-left: 6px;
+  padding-right: 6px;
+  padding-top: 3px;
+  /*border-left: 1px solid rgba(0,0,0,0.05);*/
+}
+
+table.directory > tbody > tr.even {
+  background-color: #f5f5f5;
+}
+
+.directory img {
+vertical-align: -30%;
+}
+
+/*******************************************************************************
+ * Sections / Messages
+ ******************************************************************************/
+
+dl.section {
+  margin-left: 0px;
+  padding-left: 0px;
+}
+
+dl.section dd {
+  margin-bottom: 8px;
+}
+
+dl.note {
+  padding: 16px;
+  border-left: 4px solid #D0C000;
+}
+
+dl.warning, dl.attention {
+  padding: 16px;
+  border-left: 4px solid #FF0000;
+}
+
+dl.pre, dl.post, dl.invariant {
+  padding: 16px;
+  border-left: 4px solid #00D000;
+}
+
+dl.deprecated {
+  padding: 16px;
+  border-left: 4px solid #505050;
+}
+
+dl.todo {
+  padding: 16px;
+  border-left: 4px solid #00C0E0;
+}
+
+dl.test {
+  padding: 16px;
+  border-left: 4px solid #3030E0;
+}
+
+dl.bug {
+  padding: 16px;
+  border-left: 4px solid #C08050;
+}

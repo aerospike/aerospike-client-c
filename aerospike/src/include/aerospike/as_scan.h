@@ -25,7 +25,7 @@
 #include <aerospike/as_udf.h>
 
 /** 
- *	@defgroup scan Scan API
+ *	@addtogroup scan
  *	@{
  */
 

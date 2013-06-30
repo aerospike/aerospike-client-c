@@ -21,13 +21,16 @@
  *****************************************************************************/
 
 /**
+ *	@addtogroup operations
+ *
  *	The `aerospike_key_operate()` function performs multiple operations on a
  *	record in the database. The `as_operations` object is used to define the
  *	operations to be performed on the record.
  *	
- *	@addtogroup operate Operate API
  *	@{
  */
+
+
 
 #pragma once
 

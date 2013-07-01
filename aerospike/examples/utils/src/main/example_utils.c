@@ -74,6 +74,13 @@ const char DEFAULT_KEY_STR[] = "test-key";
 as_key g_key;
 
 //------------------------------------------------
+// For examples that use many keys.
+// Obtained using command line option:
+// -K <number of keys>
+//
+uint32_t g_n_keys;
+
+//------------------------------------------------
 // The host info used by all basic examples.
 // Obtained using command line options:
 // -h <host name>
@@ -177,7 +184,8 @@ example_get_opts(int argc, char* argv[], const char* which_opts)
 		LOG("key (string):  %s", key_str);
 	}
 
-	// Initialize the test as_key object.
+	// Initialize the test as_key object. We won't need to destroy it since it
+	// isn't being created on the heap or with an external as_key_value.
 	as_key_init_str(&g_key, namespace, set, key_str);
 
 	return true;
@@ -243,15 +251,12 @@ example_connect_to_aerospike(aerospike* p_as)
 }
 
 //------------------------------------------------
-// Cleanup local record object, remove test record
-// from database, and disconnect from cluster.
+// Remove the test record from database, and
+// disconnect from cluster.
 //
 void
 example_cleanup(aerospike* p_as)
 {
-	// Destroy the test as_key object.
-	as_key_destroy(&g_key);
-
 	// Clean up the database. Note that with database "storage-engine device"
 	// configurations, this record may come back to life if the server is re-
 	// started. That's why examples that want to start clean remove the test
@@ -271,6 +276,37 @@ example_cleanup(aerospike* p_as)
 //
 
 //------------------------------------------------
+// Read the whole test record from the database.
+//
+bool
+example_read_test_record(aerospike* p_as)
+{
+	as_error err;
+	as_record* p_rec = NULL;
+
+	// Read the test record from the database.
+	if (aerospike_key_get(p_as, &err, NULL, &g_key, &p_rec) != AEROSPIKE_OK) {
+		LOG("aerospike_key_get() returned %d - %s", err.code, err.message);
+		return false;
+	}
+
+	// If we didn't get an as_record object back, something's wrong.
+	if (! p_rec) {
+		LOG("aerospike_key_get() retrieved null as_record object");
+		return false;
+	}
+
+	// Log the result.
+	LOG("record was successfully read from database:");
+	example_dump_record(p_rec);
+
+	// Destroy the as_record object.
+	as_record_destroy(p_rec);
+
+	return true;
+}
+
+//------------------------------------------------
 // Remove the test record from the database.
 //
 void
@@ -280,7 +316,7 @@ example_remove_test_record(aerospike* p_as)
 
 	// Try to remove the test record from the database. If the example has not
 	// inserted the record, or it has already been removed, this call will
-	// return as_status NOT_FOUND - which we'll just ignore.
+	// return as_status AEROSPIKE_ERR_RECORD_NOT_FOUND - which we just ignore.
 	aerospike_key_remove(p_as, &err, NULL, &g_key);
 }
 

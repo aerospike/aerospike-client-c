@@ -41,13 +41,6 @@
 
 
 //==========================================================
-// Forward Declarations
-//
-
-bool read_record(aerospike* p_as);
-
-
-//==========================================================
 // APPEND Example
 //
 
@@ -55,7 +48,7 @@ int
 main(int argc, char* argv[])
 {
 	// Parse command line arguments.
-	if (! example_get_opts(argc, argv, EXAMPLE_ALL_OPTS)) {
+	if (! example_get_opts(argc, argv, EXAMPLE_BASIC_OPTS)) {
 		exit(-1);
 	}
 
@@ -90,7 +83,7 @@ main(int argc, char* argv[])
 
 	LOG("operations succeeded");
 
-	if (! read_record(&as)) {
+	if (! example_read_test_record(&as)) {
 		example_cleanup(&as);
 		exit(-1);
 	}
@@ -116,7 +109,7 @@ main(int argc, char* argv[])
 
 	LOG("operations succeeded");
 
-	if (! read_record(&as)) {
+	if (! example_read_test_record(&as)) {
 		example_cleanup(&as);
 		exit(-1);
 	}
@@ -143,7 +136,7 @@ main(int argc, char* argv[])
 
 	LOG("operations failed as expected");
 
-	if (! read_record(&as)) {
+	if (! example_read_test_record(&as)) {
 		example_cleanup(&as);
 		exit(-1);
 	}
@@ -154,37 +147,4 @@ main(int argc, char* argv[])
 	LOG("append example successfully completed");
 
 	return 0;
-}
-
-
-//==========================================================
-// Helpers
-//
-
-bool
-read_record(aerospike* p_as)
-{
-	as_error err;
-	as_record* p_rec = NULL;
-
-	// Read the test record from the database.
-	if (aerospike_key_get(p_as, &err, NULL, &g_key, &p_rec) != AEROSPIKE_OK) {
-		LOG("aerospike_key_get() returned %d - %s", err.code, err.message);
-		return false;
-	}
-
-	// If we didn't get an as_record object back, something's wrong.
-	if (! p_rec) {
-		LOG("aerospike_key_get() retrieved null as_record object");
-		return false;
-	}
-
-	// Log the result.
-	LOG("record was successfully read from database:");
-	example_dump_record(p_rec);
-
-	// Destroy the as_record object.
-	as_record_destroy(p_rec);
-
-	return true;
 }

@@ -57,10 +57,18 @@ extern as_key g_key;
 
 
 //==========================================================
+// Example Test Key Count
+//
+
+extern uint32_t g_n_keys;
+
+
+//==========================================================
 // Example Command Line Options
 //
 
-#define EXAMPLE_ALL_OPTS "h:p:n:s:k:"
+#define EXAMPLE_BASIC_OPTS "h:p:n:s:k:"
+#define EXAMPLE_MULTI_KEY_OPTS "h:p:n:s:K:"
 
 // Must be called first!
 bool example_get_opts(int argc, char* argv[], const char* which_opts);
@@ -72,6 +80,7 @@ bool example_get_opts(int argc, char* argv[], const char* which_opts);
 
 void example_connect_to_aerospike(aerospike* p_as);
 void example_cleanup(aerospike* p_as);
+bool example_read_test_record(aerospike* p_as);
 void example_remove_test_record(aerospike* p_as);
 void example_dump_record(as_record* p_rec);
 void example_dump_operations(as_operations* p_ops);

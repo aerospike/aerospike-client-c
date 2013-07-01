@@ -44,7 +44,7 @@ static as_key * as_key_defaults(as_key * key, bool free, const char * ns, const 
 		return NULL;
 	}
 	key->_free = free;
-	strcpy(key->namespace, ns);
+	strcpy(key->ns, ns);
 	strcpy(key->set, set);
 	key->valuep = (as_key_value *) valuep;
 	key->digest.init = false;
@@ -172,6 +172,7 @@ as_key * as_key_init_raw(as_key * key, const char * ns, const char * set, const 
 as_key * as_key_init_value(as_key * key, const char * ns, const char * set, const as_key_value * value)
 {
 	if ( !key ) return key;
+
 	return as_key_defaults(key, false, ns, set, value);
 }
 
@@ -298,6 +299,7 @@ as_key * as_key_new_value(const char * ns, const char * set, const as_key_value 
 {
 	as_key * key = (as_key *) malloc(sizeof(as_key));
 	if ( !key ) return key;
+
 	return as_key_defaults(key, true, ns, set, value);
 }
 
@@ -310,7 +312,12 @@ void as_key_destroy(as_key * key)
 {
 	if ( !key ) return;
 	if ( !key->valuep ) return;
+
 	as_val_destroy((as_val *) key->valuep);
+
+	if ( key->_free ) {
+		free(key);
+	}
 }
 
 /**

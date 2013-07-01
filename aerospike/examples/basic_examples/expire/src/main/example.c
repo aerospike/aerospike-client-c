@@ -55,7 +55,7 @@ int
 main(int argc, char* argv[])
 {
 	// Parse command line arguments.
-	if (! example_get_opts(argc, argv, EXAMPLE_ALL_OPTS)) {
+	if (! example_get_opts(argc, argv, EXAMPLE_BASIC_OPTS)) {
 		exit(-1);
 	}
 

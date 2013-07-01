@@ -76,7 +76,7 @@ static as_binop * as_binop_forappend(as_operations * ops, as_operator operator, 
 
 	// Note - caller must successfully populate bin once we increment size.
 	as_binop * binop = &ops->binops.entries[ops->binops.size++];
-	binop->operator = operator;
+	binop->op = operator;
 
 	return binop;
 }

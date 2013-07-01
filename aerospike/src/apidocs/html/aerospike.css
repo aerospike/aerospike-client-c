@@ -525,23 +525,24 @@ table.directory > tbody > tr.even {
  ******************************************************************************/
 
 dl.section {
-  margin-left: 0px;
-  padding-left: 0px;
-  padding: 8px 16px;
+  margin: 0px;
+
 }
 
 dl.section dd {
-  margin-bottom: 8px;
+  /*margin-bottom: 8px;*/
 }
 
 dl.note {
   background: #FAF9E6;
   border-left: 8px solid #D0C000;
+  padding: 8px 16px;
 }
 
 dl.warning, dl.attention {
   background: #FFE6E6;
   border-left: 4px solid #FF0000;
+  padding: 8px 16px;
 }
 
 dl.pre, dl.post, dl.invariant {
@@ -549,7 +550,9 @@ dl.pre, dl.post, dl.invariant {
 }
 
 dl.deprecated {
+  background: #FFE6E6;
   border-left: 4px solid #505050;
+  padding: 8px 16px;
 }
 
 dl.todo {
@@ -563,6 +566,13 @@ dl.test {
 dl.bug {
   border-left: 4px solid #C08050;
 }
+
+
+dl.section.return {
+  margin: 16px 0;
+  padding: 0;
+}
+
 
 /*******************************************************************************
  * Nav Path

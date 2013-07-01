@@ -21,9 +21,35 @@
  *****************************************************************************/
 
 /**
+ *	Aerospike Client exposed the ability to control the verbosity of logs
+ *	emitted from the client, and where the log messages are sent to.
+ *
+ *	Logging is controlled at a per client (cluster) level. 
+ *
+ *	## Setting Log Level
+ *
+ *	To set the log level for the aerospike client, simply use 
+ *	as_log_set_level() and pass in the client log to set.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_log_set_level(&as->log, AS_LOG_LEVEL_INFO);
+ *	~~~~~~~~~~
+ *
+ *	## Redirecting Log Output
+ *
+ *	By default, the logger sends log messages to STDERR. 
+ *
+ *	To change where log messages are sent, simply define a new as_log_callback,
+ *	and set it for the client using as_log_set_callback():
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_log_set_callback(&as->log, my_callback);
+ *	~~~~~~~~~~
+ *
  *	@addtogroup log_t Logging
  *	@{
  */
+
 #pragma once 
 
 #include <aerospike/as_status.h>

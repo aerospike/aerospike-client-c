@@ -109,6 +109,7 @@
  *			multiple clients in a single application.
  *
  *	@addtogroup aerospike_client_api
+ *	@{
  */
 
 #pragma once 

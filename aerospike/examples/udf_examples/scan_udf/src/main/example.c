@@ -13,34 +13,15 @@
 
 #include <citrusleaf/citrusleaf.h>
 #include <citrusleaf/cl_udf.h>
-#include <citrusleaf/as_scan.h>
-//#include <citrusleaf/cf_random.h>
+#include <libgen.h>
+#include <citrusleaf/cf_random.h>
 #include <citrusleaf/cf_atomic.h>
-//#include <citrusleaf/cf_hist.h>
-
-
+#include <aerospike/aerospike_scan.h>
+#include "example_utils.h"
 
 #ifndef LUA_MODULE_PATH
 #define LUA_MODULE_PATH "src/lua"
 #endif
-
-#define INFO(fmt, args...) \
-    __log_append(stderr,"", fmt, ## args);
-
-#define ERROR(fmt, args...) \
-    __log_append(stderr,"    ", fmt, ## args);
-
-#define LOG(fmt, args...) \
-    __log_append(stderr,"    ", fmt, ## args);
-
-void __log_append(FILE * f, const char * prefix, const char * fmt, ...) {
-    char msg[128] = {0};
-    va_list ap;
-    va_start(ap, fmt);
-    vsnprintf(msg, 128, fmt, ap);
-    va_end(ap);
-    fprintf(f, "%s%s\n",prefix,msg);
-}
 
 typedef struct config_s {
 
@@ -51,8 +32,8 @@ typedef struct config_s {
     uint32_t timeout_ms;
     char *package_file;
     char *function_name;
-    cl_cluster      *asc;
     int    nkeys;
+	aerospike as;
 } config;
 
 
@@ -60,15 +41,15 @@ static config *g_config = NULL;
 int g_threads    = 1;
 
 void usage(int argc, char *argv[]) {
-    INFO("Usage %s:", argv[0]);
-    INFO("   -h host [default 127.0.0.1] ");
-    INFO("   -p port [default 3000]");
-    INFO("   -K number of keys [default 25000]");
-    INFO("   -n namespace [default test]");
-    INFO("   -s set [default *all*]");
-    INFO("   -F udf_file [default ../lua_files/scan_udf.lua]");
-    INFO("   -f udf_function [default register_1]");
-    INFO("   -t number of parallel threads [default 10]");
+    LOG("Usage %s:", argv[0]);
+    LOG("   -h host [default 127.0.0.1] ");
+    LOG("   -p port [default 3000]");
+    LOG("   -K number of keys [default 25000]");
+    LOG("   -n namespace [default test]");
+    LOG("   -s set [default *all*]");
+    LOG("   -F udf_file [default ../lua_files/scan_udf.lua]");
+    LOG("   -f udf_function [default register_1]");
+    LOG("   -t number of parallel threads [default 10]");
 }
 
 int init_configuration (int argc, char *argv[])
@@ -104,7 +85,7 @@ int init_configuration (int argc, char *argv[])
 
 int register_package() 
 { 
-    INFO("Opening package file %s",g_config->package_file);  
+    LOG("Opening package file %s",g_config->package_file);  
     FILE *fptr = fopen(g_config->package_file,"r"); 
     if (!fptr) { 
         LOG("cannot open script file %s : %s",g_config->package_file,strerror(errno));  
@@ -131,16 +112,16 @@ int register_package()
     as_bytes udf_content;
     as_bytes_init(&udf_content, script_code, b_tot, true);
     if (b_tot>0) { 
-        int resp = citrusleaf_udf_put(g_config->asc, basename(g_config->package_file), &udf_content, AS_UDF_LUA, &err_str); 
+        int resp = citrusleaf_udf_put(g_config->as.cluster, basename(g_config->package_file), &udf_content, AS_UDF_LUA, &err_str); 
         if (resp!=0) { 
-            INFO("unable to register package file %s resp = %d",g_config->package_file, resp); return(-1);
-            INFO("%s",err_str); free(err_str);
+            LOG("unable to register package file %s resp = %d",g_config->package_file, resp); return(-1);
+            LOG("%s",err_str); free(err_str);
             free(script_code);
             return(-1);
         }
-        INFO("successfully registered package file %s",g_config->package_file); 
+        LOG("successfully registered package file %s",g_config->package_file); 
     } else {   
-        INFO("unable to read package file %s b_tot = %d",g_config->package_file, b_tot); return(-1);    
+        LOG("unable to read package file %s b_tot = %d",g_config->package_file, b_tot); return(-1);    
     }
     free(script_code);
     return 0;
@@ -149,97 +130,29 @@ int register_package()
 // Currently the callback only prints the return value, can add more logic here later
 int cb(as_val * v, void * u) {
     char * s = as_val_tostring(v);
-    INFO("Advertiser id = %d", atoi(s));
+    LOG("Advertiser id = %d", atoi(s));
     free(s);
     as_val_destroy(v);
     return 0;
 }
 
-static int run_test1() {
-    // Response structure for every node
-    cl_node_response resp;
-    memset(&resp, 0, sizeof(cl_node_response));
-
-    cf_vector * v;
-    // Create job id for scan.
-    // This will be useful to monitor your scan transactions
-    uint64_t job_id;
-    cl_scan * scan = cl_scan_new(g_config->ns, g_config->set, &job_id );
-    INFO("Job Id for this transaction %"PRIu64"", job_id);
-
-    cl_scan_params params = { 
-        .fail_on_cluster_change  = false,
-        .priority     = CL_SCAN_PRIORITY_AUTO,
-        .pct          = 100
-    };
-
-
-    cl_scan_params_init(&scan->params, &params);
-
-    //Initialize the udf to be run on all records
-    // This function takes in the filename (not the absolute path and w/o .lua)
-    as_scan_foreach(scan, "scan_udf", g_config->function_name, NULL);
-
-    // Execute scan udfs in background
-    // Inputs : cluster object, scan object, callback function, arguments to the callback function 
-    INFO("\nRunning background scan udf on the entire cluster");
-    int cb(as_val *val , void *udata) {
-        char *a = as_val_tostring(val);
-        INFO("Val = %s", a);
-        free(a);
-        return 0;
-    }
-    v = citrusleaf_udf_scan_all_nodes(g_config->asc, scan, cb, NULL);
-
-    // This returns a vector of return values, the size of which is the size of the cluster
-    int sz = cf_vector_size(v);
-
-    for(int i=0; i <= sz; i++) {
-        cf_vector_get(v, i, &resp);
-        INFO("Udf scan background for node %s returned %d", resp.node_name, resp.node_response);
-        // Set the resp back to zero
-        memset(&resp, 0, sizeof(cl_node_response));
-    }
-    // Free the result vector
-    cf_vector_destroy(v);
-
-    // Destroy the scan object
-    as_scan_destroy(scan);
-    return 0;
-}
-
 static int run_test2() {
-    // Response structure for every node
-    cl_node_response resp;
-    memset(&resp, 0, sizeof(cl_node_response));
+    
+	as_error err;
+	as_error_reset(&err);
 
-    // Create job id for scan.
-    // This will be useful to monitor your scan transactions
-    uint64_t job_id;
-    cl_scan * scan = as_scan_new(g_config->ns, g_config->set, &job_id );
-    INFO("Job Id for this transaction %"PRIu64"", job_id);
+	as_scan * scan = as_scan_new(g_config->ns, g_config->set);
+	as_scan_apply(scan, "scan_udf", g_config->function_name, NULL);
 
-    cl_scan_params params = { 
-        .fail_on_cluster_change  = false,
-        .priority   = CL_SCAN_PRIORITY_AUTO,
-        .pct        = 100
-    };
+	uint64_t scan_id = cf_get_rand64();
+	extern cf_atomic32 g_initialized;
+	g_initialized = false;
 
-
-    cl_scan_params_init(&scan->params, &params);
-
-    //Initialize the udf to be run on all records
-    // This function takes in the filename (not the absolute path and w/o .lua)
-    as_scan_foreach(scan, "scan_udf", g_config->function_name, NULL);
-
-    // Execute scan udfs in background
-    // Inputs : cluster object, scan object, callback function, arguments to the callback function 
-    INFO("\nRunning background scan udf on the entire cluster");
-    citrusleaf_udf_scan_background(g_config->asc, scan);
-
+	as_status udf_rc = aerospike_scan_background(&g_config->as, &err, NULL, scan, &scan_id);
+	
     // Destroy the scan object
     as_scan_destroy(scan);
-    return 0;
+    return udf_rc;
 }
 
 static void *run_test(void *o) {
@@ -250,26 +163,26 @@ static void *run_test(void *o) {
 }
 
 int main(int argc, char **argv) {
-    int rc;
-    // reading parameters
-    if (init_configuration(argc,argv) !=0 ) {
-        return -1;
-    }
+	init_configuration(argc, argv);	
+	
+	// Start with default configuration.
+	as_config cfg;
+	as_config_init(&cfg);
 
-    citrusleaf_init();
+	// Must provide host and port. Example must have called example_get_opts()!
+	cfg.hosts[0].addr = g_config->host;
+	cfg.hosts[0].port = g_config->port;
 
-    // create the cluster object - attach
-    cl_cluster *asc = citrusleaf_cluster_create();
-    if (!asc) { 
-        INFO("could not create cluster");
-        return(-1); 
-    }
-    if (0 != citrusleaf_cluster_add_host(asc, g_config->host, g_config->port, g_config->timeout_ms)) {
-        INFO("Failed to add host");
-        free(asc);
-        return(-1);
-    }
-    g_config->asc           = asc;
+	as_error err;
+
+	// Connect to the Aerospike database cluster. Assume this is the first thing
+	// done after calling example_get_opts(), so it's ok to exit on failure.
+	if (aerospike_connect(aerospike_init(&g_config->as, &cfg), &err) != AEROSPIKE_OK) {
+		LOG("aerospike_connect() returned %d - %s", err.code, err.message);
+		aerospike_destroy(&g_config->as);
+		exit(-1);
+	}
+	int rc;
 
     // register our package. 
     if (register_package() !=0 ) {
@@ -296,7 +209,7 @@ int main(int argc, char **argv) {
     uint32_t ts = 275273225;
     uint32_t et = 0;
 
-    INFO("Inserting %d rows....", g_config->nkeys);
+    LOG("Inserting %d rows....", g_config->nkeys);
 
     srand(ts);
     // Inserting "nkeys" rows of 6 bins each
@@ -321,26 +234,19 @@ int main(int argc, char **argv) {
         citrusleaf_object_init_int(&bins[4].object, lineItemId);
         citrusleaf_object_init_int(&bins[5].object, spend);
 
-        rc = citrusleaf_put(asc, g_config->ns, g_config->set, &okey, bins, nbins, &wp);
+        rc = citrusleaf_put(g_config->as.cluster, g_config->ns, g_config->set, &okey, bins, nbins, &wp);
     }
 
-    INFO("Complete! Inserted %d rows", g_config->nkeys);
-
-    // Initialize scan
-    citrusleaf_scan_init();
+    LOG("Complete! Inserted %d rows", g_config->nkeys);
 
     pthread_t slaps[g_threads];
     for (int j = 0; j < g_threads; j++) {
         if (pthread_create(&slaps[j], 0, run_test, NULL)) {
-            INFO("[WARNING]: Thread Create Failed\n");
+            LOG("[WARNING]: Thread Create Failed\n");
         }
     }
     for (int j = 0; j < g_threads; j++) {
         pthread_join(slaps[j], (void *)&rc);
     }
-
-    citrusleaf_scan_shutdown();
-
-    citrusleaf_cluster_destroy(asc);
-    citrusleaf_shutdown();
+	example_cleanup(&g_config->as);
 }

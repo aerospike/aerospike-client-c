@@ -132,10 +132,10 @@ int do_udf_bin_update_test() {
 
 	as_list * arglist = as_arraylist_new(3, 8);	
 	// arg 1 -> bin name
-	as_list_add_string(arglist, "bin_to_change");
+	as_list_append_str(arglist, "bin_to_change");
 
 	// arg #2 -> bin value
-	as_list_add_string(arglist,"changed by lua");
+	as_list_append_str(arglist,"changed by lua");
 	LOG("Bin value intially : original_bin_val");
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
 			g_config->package_name,"do_update_bin", arglist, g_config->timeout_ms, &res);  
@@ -159,7 +159,7 @@ int do_udf_bin_update_test() {
 		rsp_bins = NULL;
 		rsp_n_bins = 0;
 
-		int rsp = citrusleaf_get_all(g_config->asc, g_config->ns, g_config->set, &o_key, &rsp_bins, &rsp_n_bins, g_config->timeout_ms, &cl_gen);  
+		int rsp = citrusleaf_get_all(g_config->asc, g_config->ns, g_config->set, &o_key, &rsp_bins, &rsp_n_bins, g_config->timeout_ms, &cl_gen, NULL);
 
 		if (rsp != CITRUSLEAF_OK) {
 			LOG("failed citrusleaf_get_all %d rsp=%d",i,rsp);
@@ -251,7 +251,7 @@ int do_udf_trim_bin_test() {
 			return(-1);
 		}
 		// Send information about limit on the string len
-		as_list_add_string(arglist, "20");
+		as_list_append_str(arglist, "20");
 
 		as_result res;
 		as_result_init(&res);
@@ -295,7 +295,7 @@ int do_udf_trim_bin_test() {
 		cl_object o_key;
 		citrusleaf_object_init_str(&o_key,keyStr);		
 
-		int rsp = citrusleaf_get_all(g_config->asc, g_config->ns, g_config->set, &o_key, &rsp_bins, &rsp_n_bins, g_config->timeout_ms, &cl_gen);  
+		int rsp = citrusleaf_get_all(g_config->asc, g_config->ns, g_config->set, &o_key, &rsp_bins, &rsp_n_bins, g_config->timeout_ms, &cl_gen, NULL);
 
 		if (rsp != CITRUSLEAF_OK) {
 			LOG("failed record_udf test data %d rsp=%d",i,rsp);
@@ -382,7 +382,7 @@ int do_udf_add_bin_test() {
 	}
 
 	// (3) verify bin is added 
-	rsp = citrusleaf_get_all(g_config->asc, g_config->ns, g_config->set, &o_key, &rsp_bins, &rsp_n_bins, g_config->timeout_ms, &cl_gen);  
+	rsp = citrusleaf_get_all(g_config->asc, g_config->ns, g_config->set, &o_key, &rsp_bins, &rsp_n_bins, g_config->timeout_ms, &cl_gen, NULL);
 	if (rsp != CITRUSLEAF_OK) {
 		LOG("failed getting record_udf test data rsp=%d",rsp);
 		ret = -1;
@@ -483,7 +483,7 @@ int do_udf_copy_record_test() {
 		return -1;
 	}
 	bool isBad = false;
-	rsp = citrusleaf_get_all(g_config->asc, g_config->ns, g_config->set, &o_key, &rsp_bins, &rsp_n_bins, g_config->timeout_ms, &cl_gen);  
+	rsp = citrusleaf_get_all(g_config->asc, g_config->ns, g_config->set, &o_key, &rsp_bins, &rsp_n_bins, g_config->timeout_ms, &cl_gen, NULL);
 	if (rsp_n_bins !=2 ) {
 		LOG("num bin returned not 2 %d",rsp_n_bins);
 	}
@@ -554,7 +554,7 @@ int do_udf_create_record_test() {
 	}
 
 	// (3) verify record and bin added 
-	rsp = citrusleaf_get_all(g_config->asc, g_config->ns, g_config->set, &o_key, &rsp_bins, &rsp_n_bins, g_config->timeout_ms, &cl_gen);  
+	rsp = citrusleaf_get_all(g_config->asc, g_config->ns, g_config->set, &o_key, &rsp_bins, &rsp_n_bins, g_config->timeout_ms, &cl_gen, NULL);
 	if (rsp != CITRUSLEAF_OK) {
 		LOG("failed adding record udf test data rsp=%d",rsp);
 		ret = -1;
@@ -639,7 +639,7 @@ int do_udf_delete_record_test() {
 		rsp_bins = NULL;
 		rsp_n_bins = 0;
 
-		int rsp = citrusleaf_get_all(g_config->asc, g_config->ns, g_config->set, &o_key, &rsp_bins, &rsp_n_bins, g_config->timeout_ms, &cl_gen);  
+		int rsp = citrusleaf_get_all(g_config->asc, g_config->ns, g_config->set, &o_key, &rsp_bins, &rsp_n_bins, g_config->timeout_ms, &cl_gen, NULL);
 
 		if (rsp != CITRUSLEAF_FAIL_NOTFOUND) {
 			LOG("failed citrusleaf_get_all %d rsp=%d",i,rsp);
@@ -738,7 +738,7 @@ int do_udf_noop_test() {
 	} 
 
 	// (3) verify key is still not found 
-	rsp = citrusleaf_get_all(g_config->asc, g_config->ns, g_config->set, &o_key, &rsp_bins, &rsp_n_bins, g_config->timeout_ms, &cl_gen);  
+	rsp = citrusleaf_get_all(g_config->asc, g_config->ns, g_config->set, &o_key, &rsp_bins, &rsp_n_bins, g_config->timeout_ms, &cl_gen, NULL);
 	if (rsp != CITRUSLEAF_FAIL_NOTFOUND) {
 		citrusleaf_object_free(&o_key);		
 		LOG("failed getting record_udf test data rsp=%d",rsp);
@@ -801,7 +801,7 @@ int do_udf_delete_bin_test() {
 	as_result_destroy(&res);
 
 	// (3) verify bin is deleted
-	rsp = citrusleaf_get_all(g_config->asc, g_config->ns, g_config->set, &o_key, &rsp_bins, &rsp_n_bins, g_config->timeout_ms, &cl_gen);  
+	rsp = citrusleaf_get_all(g_config->asc, g_config->ns, g_config->set, &o_key, &rsp_bins, &rsp_n_bins, g_config->timeout_ms, &cl_gen, NULL);
 	if (rsp != CITRUSLEAF_OK) {
 		LOG("failed getting record_udf test data rsp=%d",rsp);
 		ret = -1;
@@ -874,7 +874,7 @@ int do_udf_bin_type_test() {
 	as_result_destroy(&res);
 
 	// (2) verify each bin type 
-	rsp = citrusleaf_get_all(g_config->asc, g_config->ns, g_config->set, &o_key, &rsp_bins, &rsp_n_bins, g_config->timeout_ms, &cl_gen);  
+	rsp = citrusleaf_get_all(g_config->asc, g_config->ns, g_config->set, &o_key, &rsp_bins, &rsp_n_bins, g_config->timeout_ms, &cl_gen, NULL);
 	if (rsp != CITRUSLEAF_OK) {
 		LOG("failed getting record_udf test data rsp=%d",rsp);
 		ret = -1;
@@ -976,7 +976,7 @@ int do_udf_long_bindata_test() {
 			LOG("failed running udf rsp=%d",rsp);
 			return -1;
 		}
-		rsp = citrusleaf_get_all(g_config->asc, g_config->ns, g_config->set, &o_key, &rsp_bins, &rsp_n_bins, g_config->timeout_ms, &cl_gen);  
+		rsp = citrusleaf_get_all(g_config->asc, g_config->ns, g_config->set, &o_key, &rsp_bins, &rsp_n_bins, g_config->timeout_ms, &cl_gen, NULL);
 		if (rsp == CITRUSLEAF_OK) {
 			for (int b=0; b<rsp_n_bins; b++) {
 				if (rsp_bins[b].object.type == CL_STR) {
@@ -1046,7 +1046,7 @@ int do_udf_long_biname_test() {
 		LOG("failed citrusleaf_run_udf rsp=%d",rsp);
 		return -1;
 	}
-	rsp = citrusleaf_get_all(g_config->asc, g_config->ns, g_config->set, &o_key, &rsp_bins, &rsp_n_bins, g_config->timeout_ms, &cl_gen);  
+	rsp = citrusleaf_get_all(g_config->asc, g_config->ns, g_config->set, &o_key, &rsp_bins, &rsp_n_bins, g_config->timeout_ms, &cl_gen, NULL);
 	if (rsp == CITRUSLEAF_OK) {
 		LOG("Number of bins are %d",rsp_n_bins);
 		if (rsp_n_bins != 0) {
@@ -1114,7 +1114,7 @@ int do_udf_long_biname1_test() {
 		LOG("failed citrusleaf_run_udf rsp=%d",rsp);
 		return -1;
 	}
-	rsp = citrusleaf_get_all(g_config->asc, g_config->ns, g_config->set, &o_key, &rsp_bins, &rsp_n_bins, g_config->timeout_ms, &cl_gen);  
+	rsp = citrusleaf_get_all(g_config->asc, g_config->ns, g_config->set, &o_key, &rsp_bins, &rsp_n_bins, g_config->timeout_ms, &cl_gen, NULL);
 	if (rsp == CITRUSLEAF_OK) {
 		LOG("Number of bins are %d",rsp_n_bins);
 		if (rsp_n_bins != 1) {
@@ -1183,7 +1183,7 @@ int do_udf_long_biname2_test() {
 		LOG("failed citrusleaf_run_udf rsp=%d",rsp);
 		return -1;
 	}
-	rsp = citrusleaf_get_all(g_config->asc, g_config->ns, g_config->set, &o_key, &rsp_bins, &rsp_n_bins, g_config->timeout_ms, &cl_gen);  
+	rsp = citrusleaf_get_all(g_config->asc, g_config->ns, g_config->set, &o_key, &rsp_bins, &rsp_n_bins, g_config->timeout_ms, &cl_gen, NULL);
 	if (rsp == CITRUSLEAF_OK) {
 		LOG("Number of bins are %d",rsp_n_bins);
 		if (rsp_n_bins != 2) {
@@ -1303,7 +1303,7 @@ int do_udf_return_type_test() {
 	 */
 
 	arglist = as_arraylist_new(1, 8);	
-	as_list_add_string(arglist, "none");
+	as_list_append_str(arglist, "none");
 
 
 	int rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
@@ -1336,7 +1336,7 @@ int do_udf_return_type_test() {
 	 */
 
 	arglist = as_arraylist_new(1, 8);	
-	as_list_add_string(arglist, "string_primitive");
+	as_list_append_str(arglist, "string_primitive");
 
 	as_result_init(&res);
 
@@ -1379,7 +1379,7 @@ int do_udf_return_type_test() {
 	 */
 	
 	arglist = as_arraylist_new(1, 8);	
-	as_list_add_string(arglist, "p_int_primitive");
+	as_list_append_str(arglist, "p_int_primitive");
 
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
 			g_config->package_name,"do_return_types", arglist, g_config->timeout_ms, &res);  
@@ -1414,7 +1414,7 @@ int do_udf_return_type_test() {
 	 */
 
 	arglist = as_arraylist_new(1, 8);	
-	as_list_add_string(arglist, "n_int_primitive");
+	as_list_append_str(arglist, "n_int_primitive");
 
 	as_result_init(&res);
 
@@ -1450,7 +1450,7 @@ int do_udf_return_type_test() {
 	 */
 
 	arglist = as_arraylist_new(1, 8);	
-	as_list_add_string(arglist, "bin_array");
+	as_list_append_str(arglist, "bin_array");
 
 	as_result_init(&res);
 
@@ -1488,7 +1488,7 @@ int do_udf_return_type_test() {
 	 */
 
 	arglist = as_arraylist_new(1, 8);	
-	as_list_add_string(arglist, "bin_nested_list");
+	as_list_append_str(arglist, "bin_nested_list");
 	as_result_init(&res);
 
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
@@ -1599,7 +1599,7 @@ int do_udf_return_type_test() {
 	 */
 
 	arglist = as_arraylist_new(1, 8);	
-	as_list_add_string(arglist, "bin_map");
+	as_list_append_str(arglist, "bin_map");
 
 	as_result_init(&res);
 
@@ -1746,9 +1746,9 @@ int do_udf_blob_test() {
 	as_list arglist;
 	as_arraylist_init(&arglist, 3, 8);	
 	// arg 1 -> bin name
-	as_list_add_string(&arglist, "WRITE");
-	as_list_add_string(&arglist, "bin1"); // bin to write
-	as_list_add_integer(&arglist, 5); // len
+	as_list_append_str(&arglist, "WRITE");
+	as_list_append_str(&arglist, "bin1"); // bin to write
+	as_list_append_int64(&arglist, 5); // len
 
 	// (1) Call a lua function that writes this blob
 	as_result res;
@@ -1770,9 +1770,9 @@ int do_udf_blob_test() {
 
 	as_arraylist_init(&arglist,3, 8);	
 	// arg 1 -> bin name
-	as_list_add_string(&arglist, "READ");
-	as_list_add_string(&arglist, "bin1"); // bin to write
-	as_list_add_integer(&arglist, 5); // len
+	as_list_append_str(&arglist, "READ");
+	as_list_append_str(&arglist, "bin1"); // bin to write
+	as_list_append_int64(&arglist, 5); // len
 
 	// (1) Call a lua function that writes this blob
 	as_result_init(&res);
@@ -1803,7 +1803,7 @@ int do_udf_blob_unit_test() {
 	as_list arglist;
 	as_arraylist_init(&arglist, 3, 8);	
 	// arg 1 -> bin name
-	as_list_add_string(&arglist, "WRITE");
+	as_list_append_str(&arglist, "WRITE");
 
 	// (1) Call a lua function that writes this blob
 	as_result res;
@@ -1825,7 +1825,7 @@ int do_udf_blob_unit_test() {
 
 	as_arraylist_init(&arglist,3, 8);	
 	// arg 1 -> bin name
-	as_list_add_string(&arglist, "READ");
+	as_list_append_str(&arglist, "READ");
 
 	// (1) Call a lua function that writes this blob
 	as_result_init(&res);
@@ -1860,7 +1860,7 @@ int do_udf_blob_list_unit_test() {
 	as_list arglist;
 	as_arraylist_init(&arglist, 3, 8);	
 	// arg 1 -> action
-	as_list_add_string(&arglist, "WRITE");
+	as_list_append_str(&arglist, "WRITE");
 
 	// arg 2 -> fancy list of bytes
     as_list * lob = as_arraylist_new(2, 0);
@@ -1998,7 +1998,7 @@ int game_next_order_id(){
 	ops[0].op = CL_OP_INCR;
 	strcpy(ops[0].bin.bin_name, "nextID");
 	citrusleaf_object_init_int(&ops[0].bin.object, 1);
-	if (0 != (rv = citrusleaf_operate(g_config->asc, g_config->ns, "IDtable", &key, ops, 1, 0, 0, &generation))) {
+	if (0 != (rv = citrusleaf_operate(g_config->asc, g_config->ns, "IDtable", &key, ops, 1, 0, 0, &generation, 0))) {
 		LOG("get nextID failed: %d",rv);
 		return(-1);
 	}
@@ -2009,7 +2009,7 @@ int game_next_order_id(){
 	cl_write_parameters	cl_wp;
 	cl_write_parameters_set_default(&cl_wp);
 	cl_write_parameters_set_generation_gt(&cl_wp, generation);
-	rv = citrusleaf_get(g_config->asc, g_config->ns, "IDtable", &key, &bin, 1, 0, &generation);
+	rv = citrusleaf_get(g_config->asc, g_config->ns, "IDtable", &key, &bin, 1, 0, &generation, NULL);
 	nextID = bin.object.u.i64;
 	LOG("got nextID of %d:", nextID);
 	lastOrderID = nextID;
@@ -2181,7 +2181,7 @@ int test_game_funcs()
 
 		// get the order
 		buy_order_key = game_make_order_key(orderID);
-		rv = citrusleaf_get_all(g_config->asc, g_config->ns, ORDER_SET, &buy_order_key, &buy_bins, &buy_bins_len, g_config->timeout_ms, &generation);
+		rv = citrusleaf_get_all(g_config->asc, g_config->ns, ORDER_SET, &buy_order_key, &buy_bins, &buy_bins_len, g_config->timeout_ms, &generation, NULL);
 		if (rv != CITRUSLEAF_OK){
 			LOG("Could not retrieve order: %d Return code %d", orderID, rv);
 			continue;

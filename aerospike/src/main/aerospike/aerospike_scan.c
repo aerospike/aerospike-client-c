@@ -63,7 +63,7 @@ as_status aerospike_scan_destroy(aerospike * as, as_error * err);
 static void as_scan_toclscan(const as_scan * scan, const as_policy_scan * policy, cl_scan * clscan, bool background, uint64_t * job_id) 
 {
 	clscan->job_id = 0;
-	clscan->ns = scan->namespace;
+	clscan->ns = scan->ns;
 	clscan->setname = scan->set;
 	clscan->params.fail_on_cluster_change = policy->fail_on_cluster_change;
 	clscan->params.priority = scan->priority;

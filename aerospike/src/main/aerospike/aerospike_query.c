@@ -50,7 +50,7 @@ as_status aerospike_query_destroy(aerospike * as, as_error * err);
 
 static cl_query * as_query_toclquery(const as_query * query)
 {
-	cl_query * clquery = cl_query_new(query->namespace, query->set);
+	cl_query * clquery = cl_query_new(query->ns, query->set);
 
 	if ( query->limit != UINT64_MAX ) {
 		cl_query_limit(clquery, query->limit);
@@ -62,8 +62,8 @@ static cl_query * as_query_toclquery(const as_query * query)
 		cl_query_select(clquery,b);
 	}
 
-	for ( int i = 0; i < query->predicates.size; i++ ) {
-		as_predicate * p = &query->predicates.entries[i];
+	for ( int i = 0; i < query->where.size; i++ ) {
+		as_predicate * p = &query->where.entries[i];
 		switch(p->type) {
 			case AS_PREDICATE_STRING_EQUAL:
 				cl_query_where(clquery, p->bin, CL_EQ, CL_STR, p->value.string);

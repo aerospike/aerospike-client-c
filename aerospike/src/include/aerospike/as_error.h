@@ -20,6 +20,51 @@
  *	IN THE SOFTWARE.
  *****************************************************************************/
 
+/** 
+ *	All operations that interact with the Aerospike cluster accept an as_error
+ *	argument and return an as_status value. The as_error argument is populated
+ *	with information about the error that occured. The as_status return value
+ *	is the as_error.code value.
+ *
+ *	When an operation succeeds, the as_error.code value is usually set to 
+ *	AEROSPIKE_OK. There are some operations which may have other success 
+ *	status codes, so please review each operation for information on status 
+ *	codes.
+ *
+ *	When as_error.code is not a success value (AEROSPIKE_OK), then you can 
+ *	expect the other fields of as_error.code to be populated.
+ *
+ *	Example usage:
+ *	~~~~~~~~~~{.c}
+ *	as_error err;
+ *	if ( aerospike_key_get(&as, &err, &key, &rec) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "(%d) %s at %s[%s:%d]\n", error.code, err.message, err.func, err.file. err.line);
+ *	}
+ *	~~~~~~~~~~
+ *
+ *	You can reuse an as_error with multiple operations. Each operation 
+ *	internally resets the error. So, if an error occurred in one operation,
+ *	and you did not check it, then the error will be lost with subsequent 
+ *	operations.
+ *
+ *	Example usage:
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_error err;
+ *
+ *	if ( aerospike_key_put(&as, &err, NULL, &key, rec) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "(%d) %s at %s[%s:%d]\n", error.code, err.message, err.func, err.file. err.line);
+ *	}
+ *
+ *	if ( aerospike_key_get(&as, &err, NULL, &key, &rec) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "(%d) %s at %s[%s:%d]\n", error.code, err.message, err.func, err.file. err.line);
+ *	}
+ *	~~~~~~~~~~
+ *
+ *	@addtogroup error_t
+ *	@{
+ */
+
 #pragma once 
 
 #include <aerospike/as_status.h>
@@ -174,3 +219,7 @@ inline as_status as_error_set(as_error * err, int32_t code, const char * fmt, ..
 	err->code = code;
 	return err->code;
 }
+
+/**
+ * @}
+ */

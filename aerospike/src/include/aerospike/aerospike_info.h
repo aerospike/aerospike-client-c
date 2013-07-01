@@ -20,8 +20,15 @@
  *	IN THE SOFTWARE.
  *****************************************************************************/
 
-/** 
- *	@addtogroup info
+/**
+ *	The Info API provides the ability to query an Aerospike cluster for 
+ *	information. 
+ *
+ *	The following API are provided:
+ *	- aerospike_info_host() - Query a single host in the cluster.
+ *	- aerospike_info_foreach() - Query every host in the cluster.
+ *
+ *	@addtogroup info_api
  *	@{
  */
 
@@ -58,15 +65,15 @@ typedef bool (* aerospike_info_foreach_callback)(const as_error * err, const as_
  *	Send an info request to a specific host. The response must be freed by the caller.
  *	
  *	~~~~~~~~~~{.c}
- *		char * res = NULL;
- *		if ( aerospike_info_host(&as, &err, NULL, "127.0.0.1", 3000, "info", &res) != AEROSPIKE_OK ) {
- *			// handle error
- *		}
- *		else {
- *			// handle response
- *			free(res);
- *			res = NULL;
- *		}
+ *	char * res = NULL;
+ *	if ( aerospike_info_host(&as, &err, NULL, "127.0.0.1", 3000, "info", &res) != AEROSPIKE_OK ) {
+ *		// handle error
+ *	}
+ *	else {
+ *		// handle response
+ *		free(res);
+ *		res = NULL;
+ *	}
  *	~~~~~~~~~~
  *
  *	@param as			The aerospike instance to use for this operation.
@@ -86,52 +93,22 @@ as_status aerospike_info_host(
 	);
 
 /**
- *	Send an info request to a specific node. The response must be freed by the caller.
- *	
- *	~~~~~~~~~~{.c}
- *		char * res = NULL;
- *		if ( aerospike_info_node(&as, &err, NULL, "node1", "info", &res) != AEROSPIKE_OK ) {
- *			// handle error
- *		}
- *		else {
- *			// handle response
- *			free(res);
- *			res = NULL;
- *		}
- *	~~~~~~~~~~
- *
- *	@param as			The aerospike instance to use for this operation.
- *	@param err			The as_error to be populated if an error occurs.
- *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param node 			The name of the node to send the request to.
- *	@param req			The info request to send.
- *	@param res			The response from the node. The response will be a NULL terminated string, allocated by the function, and must be freed by the caller.
- *
- *	@return AEROSPIKE_OK on success. Otherwise an error.
- */
-as_status aerospike_info_node(
-	aerospike * as, as_error * err, const as_policy_info * policy, 
-	const char * node, const char * req, 
-	char ** res
-	);
-
-/**
  *	Send an info request to the entire cluster.
  *
  *	~~~~~~~~~~{.c}
- *		if ( aerospike_info_foreach(&as, &err, NULL, "info", callback, NULL) != AEROSPIKE_OK ) {
- *			// handle error
- *		}
+ *	if ( aerospike_info_foreach(&as, &err, NULL, "info", callback, NULL) != AEROSPIKE_OK ) {
+ *		// handle error
+ *	}
  *	~~~~~~~~~~
  *
  *	The callback takes a response string, which the caller is reponsible for freeing.
  *
  *	~~~~~~~~~~{.c}
- *		bool callback(const as_error * err, const char * node, char * res, void * udata) {
- *			// handle response
- *			free(res);
- *			res = NULL;
- *		}
+ *	bool callback(const as_error * err, const char * node, char * res, void * udata) {
+ *		// handle response
+ *		free(res);
+ *		res = NULL;
+ *	}
  *	~~~~~~~~~~
  *	     
  *

@@ -21,20 +21,14 @@
  *****************************************************************************/
 
 /** 
- *	Etiam molestie, mi eget pellentesque condimentum, odio magna rutrum mauris, vel blandit nisi purus ut leo. Maecenas non arcu vitae nulla cursus venenatis vel vel nisl. Curabitur egestas lorem diam, ac porttitor augue accumsan quis. Sed ultrices in nisi ut lobortis. Etiam non venenatis tellus. Morbi luctus imperdiet arcu, non porta urna. Nam sed ullamcorper erat. Phasellus vel erat sapien. Nullam erat nisi, ornare vitae mattis nec, lobortis sed eros. Curabitur congue ut orci et suscipit. Fusce accumsan, mi et adipiscing venenatis, velit eros dignissim tortor, eu sagittis lectus lorem et purus. Ut augue ligula, accumsan nec mollis a, varius nec lectus. Nam commodo et nibh id placerat.
- *
- *		foo
- *		bar
- *
- *	Maecenas et lacus massa. Nam sagittis odio eget lobortis tempor. Vivamus hendrerit diam in nisl fermentum elementum. Vestibulum gravida mollis faucibus. Nulla facilisi. Vivamus molestie at odio sit amet tincidunt. Interdum et malesuada fames ac ante ipsum primis in faucibus.
- *
- *	@addtogroup query
+ *	@addtogroup query_t
  *	@{
  */
 
 #pragma once 
 
 #include <aerospike/as_bin.h>
+#include <aerospike/as_key.h>
 #include <aerospike/as_list.h>
 #include <aerospike/as_udf.h>
 
@@ -48,7 +42,7 @@
  *	Macro for setting setting the STRING_EQUAL predicate.
  *
  *	~~~~~~~~~~{.c}
- *		as_query_where(query, "bin1", string_equals("abc"));
+ *	as_query_where(query, "bin1", string_equals("abc"));
  *	~~~~~~~~~~
  *
  */
@@ -58,7 +52,7 @@
  *	Macro for setting setting the INTEGER_EQUAL predicate.
  *
  *	~~~~~~~~~~{.c}
- *		as_query_where(query, "bin1", integer_equals(123));
+ *	as_query_where(query, "bin1", integer_equals(123));
  *	~~~~~~~~~~
  *
  */
@@ -68,7 +62,7 @@
  *	Macro for setting setting the INTEGER_RANGE predicate.
  *
  *	~~~~~~~~~~{.c}
- *		as_query_where(query, "bin1", integer_range(1,100));
+ *	as_query_where(query, "bin1", integer_range(1,100));
  *	~~~~~~~~~~
  *
  */
@@ -113,7 +107,7 @@ typedef union as_predicate_value_u {
 } as_predicate_value;
 
 /**
- *	Predicate Identifiers
+ *	The types of predicates supported.
  */
 typedef enum as_predicate_type_e {
 
@@ -138,7 +132,8 @@ typedef enum as_predicate_type_e {
 } as_predicate_type;
 
 /**
- *	Predicate
+ *	Defines a predicate, including the bin, type of predcate and the value
+ *	for the predicate.
  */
 typedef struct as_predicate_s {
 
@@ -160,60 +155,48 @@ typedef struct as_predicate_s {
 } as_predicate;
 
 /**
- *	Describes the bin to be ordered by and 
- *	whether it is ascending order.
+ *	Enumerations defining the direction of an ordering.
  */
-typedef struct as_orderby_s {
+typedef enum as_order_e {
 
 	/**
-	 *	name of the bin to orderby
+	 *	Ascending order
 	 */
-	as_bin_name bin;
+	AS_ORDER_ASCENDING = 0,
 
 	/**
 	 *	bin should be in ascending order
 	 */
-	bool ascending;
+	AS_ORDER_DESCENDING = 1;
 
-} as_orderby;
+} as_order;
+
+
+/**
+ *	Defines the direction a bin should be ordered by.
+ */
+typedef struct as_ordering_s {
+
+	/**
+	 *	Name of the bin to sort by
+	 */
+	as_bin_name bin;
+
+	/**
+	 *	Direction of the sort
+	 */
+	as_order order;
+
+} as_ordering;
 
 /**
  *	Sequence of bins which should be selected during a query.
  *
  *	Entries can either be initialized on the stack or on the heap.
  *
- *	For Stack, use alloca() or similar:
- *
- *	~~~~~~~~~~{.c}
- *		as_query_bins bins;
- *		bins._free = false;
- *		bins.capacity = SZ;
- *		bins.size = 0;
- *		bins.entries = (as_bin_name *) alloca(sizeof(as_bin_name) * SZ);
- *	~~~~~~~~~~
- *
- *	Alternatively, on the Stack you can use an array:
- *
- *	~~~~~~~~~~{.c}
- *		as_bin_name select[3] = { "a", "b", "c" };
- *
- *		as_query_bins bins;
- *		bins._free = false;
- *		bins.capacity = 0;
- *		bins.size = sizeof(select) / sizeof(as_bin_name);
- *		bins.entries = select;
- *	~~~~~~~~~~
- *
- *	For Heap, use malloc() or similar:
- *
- *	~~~~~~~~~~{.c}
- *		as_query_bins bins;
- *		bins._free = false;
- *		bins.capacity = SZ;
- *		bins.size = 0;
- *		bins.entries = (as_bin_name *) malloc(sizeof(as_bin_name) * SZ);
- *	~~~~~~~~~~
- *
+ *	Initialization should be performed via a query object, using:
+ *	-	as_query_select_init()
+ *	-	as_query_select_inita()
  */
 typedef struct as_query_bins_s {
 
@@ -245,38 +228,9 @@ typedef struct as_query_bins_s {
  *
  *	Entries can either be initialized on the stack or on the heap.
  *
- *	For Stack, use alloca() or similar:
- *
- *	~~~~~~~~~~{.c}
- *		as_query_predicates predicates;
- *		predicates._free = false;
- *		predicates.capacity = SZ;
- *		predicates.size = 0;
- *		predicates.entries = (as_predicate *) alloca(sizeof(as_predicate) * SZ);
- *	~~~~~~~~~~
- *
- *	Alternatively, on the stack you can use an array:
- *
- *	~~~~~~~~~~{.c}
- *		as_predicate p[3] = { ... };
- *
- *		as_query_predicates predicates;
- *		predicates._free = false;
- *		predicates.capacity = 0;
- *		predicates.size = sizeof(p) / sizeof(as_predicate);
- *		predicates.entries = p;
- *	~~~~~~~~~~
- *
- *	For Heap, use malloc() or similar:
- *
- *	~~~~~~~~~~{.c}
- *		as_query_predicates predicates;
- *		predicates._free = false;
- *		predicates.capacity = SZ;
- *		predicates.size = 0;
- *		predicates.entries = (as_predicate *) malloc(sizeof(as_predicate) * SZ);
- *	~~~~~~~~~~
- *
+ *	Initialization should be performed via a query object, using:
+ *	-	as_query_where_init()
+ *	-	as_query_where_inita()
  */
 typedef struct as_query_predicates_s {
 
@@ -307,41 +261,12 @@ typedef struct as_query_predicates_s {
  *	Sequence of ordering to be applied to a query results.
  *
  *	Entries can either be initialized on the stack or on the heap.
- *
- *	For Stack, use alloca() or similar:
- *
- *	~~~~~~~~~~{.c}
- *	    as_query_ordering ordering;
- *	    ordering._free = false;
- *	    ordering.capacity = SZ;
- *	    ordering.size = 0;
- *	    ordering.entries = (as_orderby *) alloca(sizeof(as_orderby) * SZ);
- *	~~~~~~~~~~
- *
- *	Alternatively, on the stack you can use an array:
- *
- *	~~~~~~~~~~{.c}
- *	    as_orderby orderby[3] = { ... };
- *	    
- *	    as_query_ordering orderby;
- *	    ordering._free = false;
- *	    ordering.capacity = 0;
- *	    ordering.size = sizeof(orderby) / sizeof(as_orderby);
- *	    ordering.entries = predicates;
- *	~~~~~~~~~~
- *
- *	For Heap, use malloc() or similar:
- *
- *	~~~~~~~~~~{.c}
- *	    as_query_ordering orderby;
- *	    ordering._free = false;
- *	    ordering.capacity = SZ;
- *	    ordering.size = 0;
- *	    ordering.entries = (as_orderby *) malloc(sizeof(as_orderby) * SZ);
- *	~~~~~~~~~~
- *
+ *	
+ *	Initialization should be performed via a query object, using:
+ *	-	as_query_orderby_init()
+ *	-	as_query_orderby_inita()
  */
-typedef struct as_query_ordering_s {
+typedef struct as_query_sort_s {
 
 	/**
 	 *	@private
@@ -362,27 +287,27 @@ typedef struct as_query_ordering_s {
 	/**
 	 *	Sequence of entries
 	 */
-	as_orderby * entries;
+	as_ordering * entries;
 
 } as_query_ordering;
 
 /**
- *	Describes the query.
+ *	Defines a query to be exeucted against an Aerospike cluster.
  *
- *	To create a new query, you must either use `as_query_init()` or `as_query_new()`.
+ *	A query must be initialized via either `as_query_init()` or `as_query_new()`.
  *	Both functions require a namespace and set to query.
  *
  *	`as_query_init()` will initialize a stack allocated `as_query`:
  *
  *	~~~~~~~~~~{.c}
- *		as_query query;
- *		as_query_init(&query, "namespace", "set");
+ *	as_query query;
+ *	as_query_init(&query, "namespace", "set");
  *	~~~~~~~~~~
  *
- *	`as_query_new()` will create a new heap allocated `as_query`:
+ *	`as_query_new()` will create and initialize a new heap allocated `as_query`:
  *
  *	~~~~~~~~~~{.c}
- *		as_query * query = as_query_new("namespace", "set");
+ *	as_query * query = as_query_new("namespace", "set");
  *	~~~~~~~~~~
  *
  *	You can then populate the `as_query` instance using the functions provided:
@@ -396,9 +321,8 @@ typedef struct as_query_ordering_s {
  *	resources:
  *
  *	~~~~~~~~~~{.c}
- *	    as_query_destroy(query);
+ *	as_query_destroy(query);
  *	~~~~~~~~~~
- *
  */
 typedef struct as_query_s {
 
@@ -409,32 +333,61 @@ typedef struct as_query_s {
 	bool _free;
 
 	/**
-	 *	namespace to be queried.
+	 *	Namespace to be queried.
+	 *
+	 *	Should be initialized via either:
+	 *	-	as_query_init() -	To initialize a stack allocated query.
+	 *	-	as_query_new() -	To heap allocate and initialize a query.
 	 */
-	char * namespace;
+	as_namespace ns;
 
 	/**
-	 *	set to be queried
+	 *	Set to be queried.
+	 *
+	 *	Should be initialized via either:
+	 *	-	as_query_init() -	To initialize a stack allocated query.
+	 *	-	as_query_new() -	To heap allocate and initialize a query.
 	 */
-	char * set;
+	as_set set;
 
 	/**
 	 *	Name of bins to select.
+	 *	
+	 *	Use either of the following function to initialize:
+	 *	-	as_query_select_init() -	To initialize on the heap.
+	 *	-	as_query_select_inita() -	To initialize on the stack.
+	 *
+	 *	Use as_query_select() to populate.
 	 */
 	as_query_bins select;
 
 	/**
 	 *	Predicates for filtering.
+	 *	
+	 *	Use either of the following function to initialize:
+	 *	-	as_query_where_init() -		To initialize on the heap.
+	 *	-	as_query_where_inita() -	To initialize on the stack.
+	 *
+	 *	Use as_query_where() to populate.
 	 */
-	as_query_predicates predicates;
+	as_query_predicates where;
 
 	/**
 	 *	Bins to order by.
+	 *	
+	 *	Use either of the following function to initialize:
+	 *	-	as_query_orderby_init() -	To initialize on the heap.
+	 *	-	as_query_orderby_inita() -	To initialize on the stack.
+	 *
+	 *	Use as_query_orderby() to populate.
 	 */
-	as_query_ordering orderby;
+	as_query_orders orderby;
 
 	/**
 	 *	Limit the result set.
+	 *
+	 *	Should be set via `as_query_limit()`.
+	 *
 	 *	If set to UINT64_MAX (default), then the query will 
 	 *	return all matching results.
 	 */
@@ -442,35 +395,45 @@ typedef struct as_query_s {
 
 	/**
 	 *	UDF to apply to results of the query
+	 *
+	 *	Should be set via `as_query_limit()`.
 	 */
 	as_udf_call apply;
 
 } as_query;
 
 /******************************************************************************
- *	FUNCTIONS
+ *	INSTANCE FUNCTIONS
  *****************************************************************************/
 
 /**
  *	Initialize a stack allocated as_query.
  *
+ *	~~~~~~~~~~{.c}
+ *	as_query_init(&q, "test", "demo");
+ *	~~~~~~~~~~
+ *
  *	@param query 	The query to initialize.
  *	@param ns 		The namespace to query.
  *	@param set 		The set to query.
  *
- *	@return the initialized query on success. Otherwise NULL.
+ *	@return On success, the initialized query. Otherwise NULL.
  */
-as_query * as_query_init(as_query * query, const char * ns, const char * set);
+as_query * as_query_init(as_query * query, const as_namespace ns, const as_set set);
 
 /**
- *	Creates a new heap allocated as_query.
+ *	Create and initialize a new heap allocated as_query.
  *
+ *	~~~~~~~~~~{.c}
+ *	as_query_init(&q, "test", "demo");
+ *	~~~~~~~~~~
+ *	
  *	@param ns 		The namespace to query.
  *	@param set 		The set to query.
  *
- *	@return the new query on success. Otherwise NULL.
+ *	@return On success, the new query. Otherwise NULL.
  */
-as_query * as_query_new(const char * ns, const char * set);
+as_query * as_query_new(const as_namespace ns, const as_set set);
 
 /**
  *	Destroy the query and associated resources.
@@ -479,22 +442,66 @@ as_query * as_query_new(const char * ns, const char * set);
  */
 void as_query_destroy(as_query * query);
 
+/******************************************************************************
+ *	SELECT FUNCTIONS
+ *****************************************************************************/
+
+/** 
+ *	Initializes `as_query.select` with a capacity of `n` using `alloca`
+ *
+ *	For heap allocation, use `as_query_select_init()`.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_query_select_inita(&q, 2);
+ *	as_query_select(&q, "bin1");
+ *	as_query_select(&q, "bin2");
+ *	as_query_select(&q, "bin3");
+ *	~~~~~~~~~~
+ *	
+ *	@param __query	The query to initialize.
+ *	@param __n		The number of bins to allocate.
+ */
+#define as_query_select_inita(__query, __n) \
+	if ( (__query) && !(__query)->select.entries ) {\
+		query->select.entries = (as_bin_name *) alloca(n * sizeof(as_bin_name));\
+		if ( query->select.entries ) { \
+			query->select._free = false;\
+			query->select.capacity = n;\
+			query->select.size = 0;\
+		}\
+ 	}
+
+/** 
+ *	Initializes `as_query.select` with a capacity of `n` using `malloc()`.
+ *	
+ *	For stack allocation, use `as_query_select_inita()`.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_query_select_init(&q, 2);
+ *	as_query_select(&q, "bin1");
+ *	as_query_select(&q, "bin2");
+ *	as_query_select(&q, "bin3");
+ *	~~~~~~~~~~
+ *
+ *	@param query	The query to initialize.
+ *	@param n		The number of bins to allocate.
+ *
+ *	@return On success, the initialized. Otherwise an error occurred.
+ */
+bool as_query_select_init(as_query * query, uint16_t n);
 
 /**
  *	Select bins to be projected from matching records.
  *
+ *	You have to ensure as_query.select has sufficient capacity, prior to 
+ *	adding a bin. If capacity is sufficient then false is returned.
+ *
  *	~~~~~~~~~~{.c}
- *		as_query_select(&q, "bin1");
- *		as_query_select(&q, "bin2");
- *		as_query_select(&q, "bin3");
+ *	as_query_select_init(&q, 2);
+ *	as_query_select(&q, "bin1");
+ *	as_query_select(&q, "bin2");
+ *	as_query_select(&q, "bin3");
  *	~~~~~~~~~~
- *
- *
- *	The `as_query_select()` function will attempt to automatically `malloc()` 
- *	entries if `query.select.entries` is `NULL`. 
- *	If `query.select.capacity > 0`, then the first `malloc()` will 
- *	allocate `query.select.capacity` entries. 
- *	Otherwise, `query.select.capacity` will default to 10.
  *
  *	@param query 		The query to modify.
  *	@param bin 			The name of the bin to select.
@@ -503,58 +510,152 @@ void as_query_destroy(as_query * query);
  */
 bool as_query_select(as_query * query, const char * bin);
 
+/******************************************************************************
+ *	WHERE FUNCTIONS
+ *****************************************************************************/
+
+/** 
+ *	Initializes `as_query.where` with a capacity of `n` using `alloca()`.
+ *
+ *	For heap allocation, use `as_query_where_init()`.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_query_where_inita(&q, 3);
+ *	as_query_where(&q, "bin1", string_equals("abc"));
+ *	as_query_where(&q, "bin1", integer_equals(123));
+ *	as_query_where(&q, "bin1", integer_range(0,123));
+ *	~~~~~~~~~~
+ *
+ *	@param __query	The query to initialize.
+ *	@param __n		The number of as_predicate to allocate.
+ *
+ *	@return On success, true. Otherwise an error occurred.
+ */
+#define as_query_where_inita(__query, __n) \
+	if ( (__query) && !(__query)->where.entries ) {\
+		query->where.entries = (as_predicate *) alloca(n * sizeof(as_predicate));\
+		if ( query->where.entries ) { \
+			query->where._free = false;\
+			query->where.capacity = n;\
+			query->where.size = 0;\
+		}\
+ 	}
+
+/** 
+ *	Initializes `as_query.where` with a capacity of `n` using `malloc()`.
+ *
+ *	For stack allocation, use `as_query_where_inita()`.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_query_where_init(&q, 3);
+ *	as_query_where(&q, "bin1", string_equals("abc"));
+ *	as_query_where(&q, "bin1", integer_equals(123));
+ *	as_query_where(&q, "bin1", integer_range(0,123));
+ *	~~~~~~~~~~
+ *
+ *	@param query	The query to initialize.
+ *	@param n		The number of as_predicate to allocate.
+ *
+ *	@return On success, true. Otherwise an error occurred.
+ */
+bool as_query_where_init(as_query * query, uint16_t n);
+
 /**
  *	Add a predicate to the query.
  *
+ *	You have to ensure as_query.where has sufficient capacity, prior to 
+ *	adding a predicate. If capacity is sufficient then false is returned.
+ *	
  *	~~~~~~~~~~{.c}
- *		as_query_where(&q, "bin1", string_equals("abc"));
- *		as_query_where(&q, "bin1", integer_equals(123));
- *		as_query_where(&q, "bin1", integer_range(0,123));
+ *	as_query_where_init(&q, 3);
+ *	as_query_where(&q, "bin1", string_equals("abc"));
+ *	as_query_where(&q, "bin1", integer_equals(123));
+ *	as_query_where(&q, "bin1", integer_range(0,123));
  *	~~~~~~~~~~
  *
- *
- *	The `as_query_where()` function will attempt to automatically `malloc()` 
- *	entries if `query.predicates.entries` is `NULL`. 
- *	If `query.predicates.capacity > 0`, then the first `malloc()` will 
- *	allocate `query.predicates.capacity` entries. 
- *	Otherwise, `query.predicates.capacity` will default to 10.
- *
- *	@param query			The query to modify.
+ *	@param query		The query add the predicate to.
  *	@param bin			The name of the bin the predicate will apply to.
  *	@param type			The type of predicate.
  *	@param ... 			The values for the predicate.
- *
+ *	
  *	@return On success, true. Otherwise an error occurred.
  */
 bool as_query_where(as_query * query, const char * bin, as_predicate_type type, ... );
 
-/**
- *	Add a bin to sort by to the query.
+/******************************************************************************
+ *	ORDERBY FUNCTIONS
+ *****************************************************************************/
+
+/** 
+ *	Initializes `as_query.where` with a capacity of `n` using `alloca()`.
+ *
+ *	For heap allocation, use `as_query_where_init()`.
  *
  *	~~~~~~~~~~{.c}
- *		as_query_orderby(&q, "bin1", true);
+ *	as_query_orderby_inita(&q, 1);
+ *	as_query_orderby(&q, "bin1", AS_ORDER_ASCENDING);
  *	~~~~~~~~~~
  *
- *
- *	The `as_query_orderby()` function will attempt to automatically `malloc()` 
- *	entries if `query.orderby.entries` is `NULL`. 
- *	If `query.orderby.capacity > 0`, then the first `malloc()` will 
- *	allocate `query.orderby.capacity` entries. 
- *	Otherwise, `query.orderby.capacity` will default to 10.
- *
- *	@param query		The query to modify.
- *	@param bin			The name of the bin to sort by.
- *	@param ascending	If true, will sort the bin in ascending order. Otherwise, descending order it used.
+ *	@param __query	The query to initialize.
+ *	@param __n		The number of as_orders to allocate.
  *
  *	@return On success, true. Otherwise an error occurred.
  */
-bool as_query_orderby(as_query * query, const char * bin, bool ascending);
+#define as_query_orderby_inita(__query, __n) \
+	if ( (__query) && !(__query)->orderby.entries ) {\
+		query->orderby.entries = (as_order *) alloca(n * sizeof(as_order));\
+		if ( query->orderby.entries ) { \
+			query->orderby._free = false;\
+			query->orderby.capacity = n;\
+			query->orderby.size = 0;\
+		}\
+ 	}
+
+/** 
+ *	Initializes `as_query.orderby` with a capacity of `n` using `malloc()`.
+ *	
+ *	For stack allocation, use `as_query_orderby_inita()`.
+ *	
+ *	~~~~~~~~~~{.c}
+ *	as_query_orderby_init(&q, 1);
+ *	as_query_orderby(&q, "bin1", AS_ORDER_ASCENDING);
+ *	~~~~~~~~~~
+ *
+ *	@param query	The query to initialize.
+ *	@param n		The number of as_orders to allocate.
+ *
+ *	@return On success, true. Otherwise an error occurred.
+ */
+bool as_query_orderby_init(as_query * query, uint16_t n);
+
+/**
+ *	Add a bin to sort by to the query.
+ *	
+ *	You have to ensure as_query.orderby has sufficient capacity, prior to 
+ *	adding an ordering. If capacity is sufficient then false is returned.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_query_orderby_init(&q, 1);
+ *	as_query_orderby(&q, "bin1", AS_ORDER_ASCENDING);
+ *	~~~~~~~~~~
+ *
+ *	@param query		The query to modify.
+ *	@param bin			The name of the bin to sort by.
+ *	@param direction	The direction to order by: `AS_ORDER_ASCENDING` or `AS_ORDER_DESCENDING`.
+ *
+ *	@return On success, true. Otherwise an error occurred.
+ */
+bool as_query_orderby(as_query * query, const char * bin, as_order_direction direction);
+
+/******************************************************************************
+ *	QUERY MODIFIER FUNCTIONS
+ *****************************************************************************/
 
 /**
  *	Limit the number of results by `limit`. If limit is `UINT64_MAX`, then all matching results are returned.
  *
  *	~~~~~~~~~~{.c}
- *		as_query_limit(&q, 100);
+ *	as_query_limit(&q, 100);
  *	~~~~~~~~~~
  *
  *	@param query 		The query to modify.
@@ -568,7 +669,7 @@ bool as_query_limit(as_query * query, uint64_t limit);
  *	Apply a function to the results of the query.
  *
  *	~~~~~~~~~~{.c}
- *		as_query_apply(&q, "my_module", "my_function", NULL);
+ *	as_query_apply(&q, "my_module", "my_function", NULL);
  *	~~~~~~~~~~
  *
  *	@param query		The query to apply the function to.

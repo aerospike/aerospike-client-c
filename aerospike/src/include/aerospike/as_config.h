@@ -20,12 +20,11 @@
  *	IN THE SOFTWARE.
  *****************************************************************************/
 
-/** 
- *	@addtogroup config
+/**
+ *	The `as_config` contains the settings for the `aerospike` client. Including
+ *	default policies, seed hosts in the cluster and other settings.
  *
- *	The `as_config` object defines the settings for the `aerospike` client.
- *
- *	Before populating the object, you will want to initialize it with 
+ *	Before using as_config, you must first initialize it. This will setup the 
  *	default values.
  *
  *	~~~~~~~~~~{.c}
@@ -33,7 +32,12 @@
  *	as_config_init(&config);
  *	~~~~~~~~~~
  *
- *	The client will require at least one seed host to connect to:
+ *	Once initialized, you can populate the values.
+ *
+ *	## Seed Hosts
+ *	
+ *	The client will require at least one seed host defined in the 
+ *	configuration. The seed host is defined in `as_config.hosts`. 
  *
  *	~~~~~~~~~~{.c}
  *	    config.hosts[0] = { .addr = "127.0.0.1", .port = 3000 };
@@ -42,15 +46,69 @@
  *	You can define up to 16 hosts for the seed. The client will iterate over 
  *	the list until it connects with one of the hosts. 
  *
+ *	## Policies
+ *
  *	The configuration also defines default policies for the application. The 
  *	`as_config_init()` function already presets default values for the policies.
+ *	
+ *	Policies define the behaviour of the client, which can be global across 
+ *	operations, global to a single operation, or local to a single use of an
+ *	operation.
+ *	
+ *	Each database operation accepts a policy for that operation as an a argument.
+ *	This is considered a local policy, and is a single use policy. This policy
+ *	supercedes any global policy defined.
+ *	
+ *	If a value of the policy is not defined, then the rule is to fallback to the
+ *	global policy for that operation. If the global policy for that operation is
+ *	undefined, then the global default value will be used.
  *
- *	Depending on your application, you may want to set your own default values
- *	for the policies to use for the client. 
+ *	If you find that you have behaviour that you want every use of an operation
+ *	to utilize, then you can specify the default policy in as_config.policies.
  *
- *	However, you should note that each client call accepts a policy, allowing 
- *	you to override the default policy.
+ *	For example, the `aerospike_key_put()` operation takes an `as_policy_write`
+ *	policy. If you find yourself setting the `key` policy value for every call 
+ *	to `aerospike_key_put()`, then you may find it beneficial to set the global
+ *	`as_policy_write` in `as_policies.write`, which all write operations will use.
  *
+ *	~~~~~~~~~~{.c}
+ *	config.policies.write.key = AS_POLICY_KEY_SEND;
+ *	~~~~~~~~~~
+ *
+ *	If you find that you want to use a policy value across all operations, then 
+ *	you may find it beneficial to set the default policy value for that policy 
+ *	value.
+ *
+ *	For example, if you keep setting the key policy value to 
+ *	`AS_POLICY_KEY_SEND`, then you may want to just set `as_policies.key`. This
+ *	will set the global default value for the policy value. So, if an global
+ *  operation policy or a local operation policy does not define a value, then
+ *	this value will be used.
+ *
+ *	~~~~~~~~~~{.c}
+ *	config.policies.key = AS_POLICY_KEY_SEND;
+ *	~~~~~~~~~~
+ *
+ *	Global default policy values:
+ *	-	as_policies.timeout
+ *	-	as_policies.mode
+ *	-	as_policies.key
+ *	-	as_policies.gen
+ *	-	as_policies.exists
+ *
+ *	Global operation policies:
+ *	-	as_policies.read
+ *	-	as_policies.write
+ *	-	as_policies.operate
+ *	-	as_policies.remove
+ *	-	as_policies.query
+ *	-	as_policies.scan
+ *	-	as_policies.info
+ *
+ *
+ *
+ *	## User-Defined Function Settings
+ *	
  *	If you are using using user-defined functions (UDF) for processing query 
  *	results (i.e aggregations), then you will find it useful to set the 
  *	`mod_lua` settings. Of particular importance is the `mod_lua.user_path`, 
@@ -58,10 +116,10 @@
  *	Lua files for processing.
  *
  *	~~~~~~~~~~{.c}
- *	    strcpy(config.mod_lua.user_path, "/home/me/lua");
+ *	strcpy(config.mod_lua.user_path, "/home/me/lua");
  *	~~~~~~~~~~
  *
- *
+ *	@addtogroup config_t
  *	@{
  */
 
@@ -138,9 +196,18 @@ typedef struct as_config_lua_s {
 } as_config_lua;
 
 /**
- *	Client Configuration 
+ *	Client Configuration.
  *
- *	@see config for information on using as_config.
+ *	Contains all the fields necessary for initializing the aerospike client.
+ *
+ *	The configuration must be initialized prior to use via `as_config_init()`:
+ *
+ *	~~~~~~~~~~{.c}
+ *		as_config config;
+ *		as_config_init(&config);
+ *	~~~~~~~~~~
+ *	
+ *	@see config_t for information on using as_config.
  */
 typedef struct as_config_s {
 

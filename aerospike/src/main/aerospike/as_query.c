@@ -22,6 +22,7 @@
 
 
 #include <aerospike/as_bin.h>
+#include <aerospike/as_key.h>
 #include <aerospike/as_query.h>
 #include <aerospike/as_udf.h>
 #include <stdarg.h>
@@ -29,14 +30,26 @@
 #include "_log.h"
 
 /******************************************************************************
- * FUNCTIONS
+ *	INSTANCE FUNCTIONS
  *****************************************************************************/
 
-static as_query * as_query_defaults(as_query * query, bool free, const char * ns, const char * set) 
+static as_query * as_query_defaults(as_query * query, bool free, const as_namespace ns, const as_set set) 
 {
 	query->_free = free;
-	query->namespace = ns ? strdup(ns) : NULL;
-	query->set = set ? strdup(set) : NULL;
+
+	if ( strlen(ns) < AS_KEY_NAMESPACE_MAX_SIZE ) {
+		strcpy(query->ns, ns);
+	}
+	else {
+		query->ns[0] = '\0';
+	}
+	
+	if ( strlen(set) < AS_KEY_SET_MAX_SIZE ) {
+		strcpy(query->set, set);
+	}
+	else {
+		query->set[0] = '\0';
+	}
 
 	query->select._free = false;
 	query->select.capacity = 0;
@@ -54,10 +67,8 @@ static as_query * as_query_defaults(as_query * query, bool free, const char * ns
 	query->orderby.entries = NULL;
 	
 	query->limit = UINT64_MAX;
-
-	query->apply.module = NULL;
-	query->apply.function = NULL;
-	query->apply.arglist = NULL;
+	
+	as_udf_call_init(&query->apply, NULL, NULL, NULL);
 
 	return query;
 }
@@ -71,7 +82,7 @@ static as_query * as_query_defaults(as_query * query, bool free, const char * ns
  *
  * @return the initialized query on success. Otherwise NULL.
  */
-as_query * as_query_init(as_query * query, const char * ns, const char * set)
+as_query * as_query_init(as_query * query, const as_namespace ns, const as_set set)
 {
 	if ( !query ) return query;
 	return as_query_defaults(query, false, ns, set);
@@ -85,7 +96,7 @@ as_query * as_query_init(as_query * query, const char * ns, const char * set)
  *
  * @return the new query on success. Otherwise NULL.
  */
-as_query * as_query_new(const char * ns, const char * set)
+as_query * as_query_new(const as_namespace ns, const as_set set)
 {
 	as_query * query = (as_query *) malloc(sizeof(as_query));
 	if ( !query ) return query;
@@ -99,96 +110,108 @@ as_query * as_query_new(const char * ns, const char * set)
  */
 void as_query_destroy(as_query * query) 
 {
-	if ( query ) {
+	if ( !query ) return;
 
-		if ( query->namespace ) {
-			free(query->namespace);
-			query->namespace = NULL;
-		}
+	query->ns[0] = '\0';
+	query->set[0] = '\0';
 
-		if ( query->set ) {
-			free(query->set);
-			query->set = NULL;
-		}
+	if ( query->select.entries && query->select._free ) {
+		free(query->select.entries);
+	}
 
-		if ( query->select.entries && query->select._free ) {
-			free(query->select.entries);
-		}
+	query->select._free = false;
+	query->select.capacity = 0;
+	query->select.size = 0;
+	query->select.entries = NULL;
+	
+	if ( query->where.entries && query->where._free ) {
+		free(query->where.entries);
+	}
 
-		query->select._free = false;
-		query->select.capacity = 0;
-		query->select.size = 0;
-		query->select.entries = NULL;
-		
-		if ( query->predicates.entries && query->predicates._free ) {
-			free(query->select.entries);
-		}
+	query->where._free = false;
+	query->where.capacity = 0;
+	query->where.size = 0;
+	query->where.entries = NULL;
+	
+	if ( query->orderby.entries && query->orderby._free ) {
+		free(query->orderby.entries);
+	}
 
-		query->predicates._free = false;
-		query->predicates.capacity = 0;
-		query->predicates.size = 0;
-		query->predicates.entries = NULL;
-		
-		if ( query->orderby.entries && query->orderby._free ) {
-			free(query->select.entries);
-		}
+	query->orderby._free = false;
+	query->orderby.capacity = 0;
+	query->orderby.size = 0;
+	query->orderby.entries = NULL;
+	
+	as_udf_call_destroy(&query->apply);
 
-		query->orderby._free = false;
-		query->orderby.capacity = 0;
-		query->orderby.size = 0;
-		query->orderby.entries = NULL;
-
-		if ( query->_free ) {
-			free(query);
-		}
+	if ( query->_free ) {
+		free(query);
 	}
 }
 
+/******************************************************************************
+ *	SELECT FUNCTIONS
+ *****************************************************************************/
+
+/** 
+ *	Initializes `as_query.select` with a capacity of `n` using `malloc()`.
+ *	
+ *	For stack allocation, use `as_query_select_inita()`.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_query_select_init(&q, 2);
+ *	as_query_select(&q, "bin1");
+ *	as_query_select(&q, "bin2");
+ *	as_query_select(&q, "bin3");
+ *	~~~~~~~~~~
+ *
+ *	@param query	The query to initialize.
+ *	@param n		The number of bins to allocate.
+ *
+ *	@return On success, the initialized. Otherwise an error occurred.
+ */
+bool as_query_select_init(as_query * query, uint16_t n)
+{
+	if ( !query ) return false;
+	if ( query->select.entries ) return false;
+
+	query->select.entries = (as_bin_name *) calloc(n, sizeof(as_bin_name));
+	if ( !query->select.entries ) return false;
+
+	query->select._free = true;
+	query->select.capacity = n;
+	query->select.size = 0;
+
+	return true;
+}
+
 /**
- * Select bins to be projected from matching records.
+ *	Select bins to be projected from matching records.
+ *	
+ *	You have to ensure as_query.select has sufficient capacity, prior to 
+ *	adding a bin. If capacity is sufficient then false is returned.
  *
- *		as_query_select(&q, "bin1");
- *		as_query_select(&q, "bin2");
- *		as_query_select(&q, "bin3");
+ *	~~~~~~~~~~{.c}
+ *	as_query_select_init(&q, 3);
+ *	as_query_select(&q, "bin1");
+ *	as_query_select(&q, "bin2");
+ *	as_query_select(&q, "bin3");
+ *	~~~~~~~~~~
+ *	
+ *	@param query 		The query to modify.
+ *	@param bin 			The name of the bin to select.
  *
- * as_query_where() will attempt to automatically malloc() entries if
- * query.select.entries is NULL. If query.select.capacity is >0, then 
- * the first malloc() will allocate query.select.capacity entries. 
- * Otherwise, query.select.capacity will default to 10.
- *
- * @param query 	- the query to modify
- * @param bin 		- the name of the bin to select
- *
- * @return true on success. Otherwise an error occurred.
+ *	@return On success, true. Otherwise an error occurred.
  */
 bool as_query_select(as_query * query, const char * bin)
 {
-	if ( ! (query && bin && strlen(bin) < AS_BIN_NAME_MAX_SIZE) ) {
+	// test preconditions
+	if ( !query || !bin || strlen(bin) >= AS_BIN_NAME_MAX_SIZE ) {
 		return false;
 	}
 
-	if ( query->select.entries == NULL ) {
-		// entries is NULL, so we will malloc() it.
-		if ( query->select.capacity == 0 ) {
-			// capacity can be preset, but if not, we default to 10.
-			query->select.capacity = 10;
-		}
-		query->select.entries = (as_bin_name *) malloc(sizeof(as_bin_name) * query->select.capacity);
-		query->select._free = true;
-		query->select.size = 0;
-	}
-	else if ( query->select.size > 0 && query->select.size == query->select.capacity ) {
-		if ( query->select._free ) {
-			// if previously malloc'd, we will grow by 10 entries.
-			query->select.capacity += 10;
-			query->select.entries = (as_bin_name *) realloc(query->select.entries, sizeof(as_bin_name) * query->select.capacity);
-		}
-		else {
-			// we will not touch stack allocated entries.
-			// so we bail
-			return 2;
-		}
-	}
+	// insufficient capacity
+	if ( query->select.size >= query->select.capacity ) return false;
 
 	strcpy(query->select.entries[query->select.size], bin);
 	query->select.size++;
@@ -196,57 +219,75 @@ bool as_query_select(as_query * query, const char * bin)
 	return true;
 }
 
+/******************************************************************************
+ *	WHERE FUNCTIONS
+ *****************************************************************************/
+
+/** 
+ *	Initializes `as_query.where` with a capacity of `n` using `malloc()`.
+ *
+ *	For stack allocation, use `as_query_where_inita()`.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_query_where_init(&q, 3);
+ *	as_query_where(&q, "bin1", string_equals("abc"));
+ *	as_query_where(&q, "bin1", integer_equals(123));
+ *	as_query_where(&q, "bin1", integer_range(0,123));
+ *	~~~~~~~~~~
+ *
+ *	@param query	The query to initialize.
+ *	@param n		The number of as_query_predicate to allocate.
+ *
+ *	@return On success, true. Otherwise an error occurred.
+ */
+bool as_query_where_init(as_query * query, uint16_t n)
+{
+	if ( !query ) return false;
+	if ( query->where.entries ) return false;
+
+	query->where.entries = (as_predicate *) calloc(n, sizeof(as_predicate));
+	if ( !query->where.entries ) return false;
+
+	query->where._free = true;
+	query->where.capacity = n;
+	query->where.size = 0;
+
+	return true;
+}
+
 /**
- * Add a predicate to the query.
+ *	Add a predicate to the query.
  *
- *		as_query_where(&q, "bin1", string_eq("abc"));
- *		as_query_where(&q, "bin1", integer_eq(123));
- *		as_query_where(&q, "bin1", integer_range(0,123));
+ *	You have to ensure as_query.where has sufficient capacity, prior to 
+ *	adding a predicate. If capacity is sufficient then false is returned.
+ *	
+ *	~~~~~~~~~~{.c}
+ *	as_query_where_init(&q, 3);
+ *	as_query_where(&q, "bin1", string_equals("abc"));
+ *	as_query_where(&q, "bin1", integer_equals(123));
+ *	as_query_where(&q, "bin1", integer_range(0,123));
+ *	~~~~~~~~~~
  *
- * as_query_where() will attempt to automatically malloc() entries if
- * query.predicates.entries is NULL. If query.predicates.capacity is >0, then 
- * the first malloc() will allocate query.predicates.capacity entries. 
- * Otherwise, query.predicates.capacity will default to 10.
- *
- * @param query 	- the query to modify
- * @param bin 		- the name of the bin to apply a predicate to
- * @param type 		- the name of the bin to apply a predicate to
- *
- * @return 0 on success. Otherwise an error occurred.
+ *	@param query		The query add the predicate to.
+ *	@param bin			The name of the bin the predicate will apply to.
+ *	@param type			The type of predicate.
+ *	@param ... 			The values for the predicate.
+ *	
+ *	@return On success, true. Otherwise an error occurred.
  */
 bool as_query_where(as_query * query, const char * bin, as_predicate_type type, ... )
 {
-	if ( ! (query && bin && strlen(bin) < AS_BIN_NAME_MAX_SIZE) ) {
+	// test preconditions
+	if ( !query || !bin || strlen(bin) >= AS_BIN_NAME_MAX_SIZE ) {
 		return false;
 	}
 
-	if ( query->predicates.entries == NULL ) {
-		// entries is NULL, so we will malloc() it.
-		if ( query->predicates.capacity == 0 ) {
-			// capacity can be preset, but if not, we default to 10.
-			query->predicates.capacity = 10;
-		}
-		query->predicates.entries = (as_predicate *) malloc(sizeof(as_predicate) * query->predicates.capacity);
-		query->predicates._free = true;
-		query->predicates.size = 0;
-	}
-	else if ( query->predicates.size > 0 && query->predicates.size == query->predicates.capacity ) {
-		if ( query->predicates._free ) {
-			// if previously malloc'd, we will grow by 10 entries.
-			query->predicates.capacity += 10;
-			query->predicates.entries = (as_predicate *) realloc(query->predicates.entries, sizeof(as_predicate) * query->predicates.capacity);
-		}
-		else {
-			// we will not touch stack allocated entries.
-			// so we bail
-			return false;
-		}
-	}
+	// insufficient capacity
+	if ( query->where.size >= query->where.capacity ) return false;
 
-	as_predicate * p = &query->predicates.entries[query->predicates.size];
+	as_predicate * p = &query->where.entries[query->where.size++];
 
 	strcpy(p->bin, bin);
-
 	p->type = type;
 
     va_list ap;
@@ -266,67 +307,82 @@ bool as_query_where(as_query * query, const char * bin, as_predicate_type type, 
     }
 
     va_end(ap);
-	
-	query->predicates.size++;
 
+	return true;
+}
+
+/******************************************************************************
+ *	WHERE FUNCTIONS
+ *****************************************************************************/
+
+/** 
+ *	Initializes `as_query.orderby` with a capacity of `n` using `malloc()`.
+ *
+ *	For stack allocation, use `as_query_orderby_inita()`.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_query_orderby_init(&q, 1);
+ *	as_query_orderby(&q, "bin1", AS_ORDER_ASCENDING);
+ *	~~~~~~~~~~
+ *
+ *	@param query	The query to initialize.
+ *	@param n		The number of as_query_ordering to allocate.
+ *
+ *	@return On success, true. Otherwise an error occurred.
+ */
+bool as_query_orderby_init(as_query * query, uint16_t n)
+{
+	if ( !query ) return false;
+	if ( query->where.entries ) return false;
+
+	query->where.entries = (as_query_predicates *) calloc(n, sizeof(as_query_predicates));
+	if ( !query->where.entries ) return false;
+
+	query->where._free = true;
+	query->where.capacity = n;
+	query->where.size = 0;
+	
 	return true;
 }
 
 /**
- * Add a bin to sort by to the query.
+ *	Add a bin to sort by to the query.
+ *	
+ *	You have to ensure as_query.orderby has sufficient capacity, prior to 
+ *	adding an ordering. If capacity is sufficient then false is returned.
  *
- *		as_query_orderby(&q, "bin1", true);
+ *	~~~~~~~~~~{.c}
+ *	as_query_orderby_init(&q, 1);
+ *	as_query_orderby(&q, "bin1", AS_ORDER_ASCENDING);
+ *	~~~~~~~~~~
  *
- * as_query_orderby() will attempt to automatically malloc() entries if
- * query.orderby.entries is NULL. If query.orderby.capacity is >0, then 
- * the first malloc() will allocate query.orderby.capacity entries. 
- * Otherwise, query.orderby.capacity will default to 10.
- *
- * @param query 	- the query to modify
- * @param bin 		- the name of the bin to sort by
- * @param ascending	- if true, will sort the bin in ascending order. Otherwise, descending order it used.
- *
- * @param 0 on success. Otherwise an error occurred.
+ *	@param query		The query to modify.
+ *	@param bin			The name of the bin to sort by.
+ *	@param ascending	The direction to order by: `AS_ORDER_ASCENDING` or `AS_ORDER_DESCENDING`.
+ *	
+ *	@return On success, true. Otherwise an error occurred.
  */
-bool as_query_orderby(as_query * query, const char * bin, bool ascending)
+bool as_query_orderby(as_query * query, const char * bin, as_order_direction direction)
 {
-	if ( ! (query && bin && strlen(bin) < AS_BIN_NAME_MAX_SIZE) ) {
+	// test preconditions
+	if ( !query || !bin || strlen(bin) >= AS_BIN_NAME_MAX_SIZE ) {
 		return false;
 	}
 
-	if ( query->orderby.entries == NULL ) {
-		// entries is NULL, so we will malloc() it.
-		if ( query->orderby.capacity == 0 ) {
-			// capacity can be preset, but if not, we default to 10.
-			query->orderby.capacity = 10;
-		}
-		query->orderby.entries = (as_orderby *) malloc(sizeof(as_orderby) * query->orderby.capacity);
-		query->orderby._free = true;
-		query->orderby.size = 0;
-	}
-	else if ( query->orderby.size > 0 && query->orderby.size == query->orderby.capacity ) {
-		if ( query->orderby._free ) {
-			// if previously malloc'd, we will grow by 10 entries.
-			query->orderby.capacity += 10;
-			query->orderby.entries = (as_orderby *) realloc(query->orderby.entries, sizeof(as_orderby) * query->orderby.capacity);
-		}
-		else {
-			// we will not touch stack allocated entries.
-			// so we bail
-			return false;
-		}
-	}
+	// insufficient capacity
+	if ( query->orderby.size >= query->orderby.capacity ) return false;
 
-	as_orderby * o = &query->orderby.entries[query->orderby.size];
+	as_order * o = &query->orderby.entries[query->orderby.size++];
 
 	strcpy(o->bin, bin);
-
-	o->ascending = ascending;
-
-	query->orderby.size++;
+	o->direction = direction;
 
 	return true;
 }
+
+/******************************************************************************
+ *	QUERY MODIFIER FUNCTIONS
+ *****************************************************************************/
 
 /**
  * Limit the number of results by `limit`. If limit is UINT64_MAX, then all matching results are returned.

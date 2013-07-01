@@ -218,7 +218,7 @@ cl_rv citrusleaf_udf_record_apply(cl_cluster * cl, const char * ns, const char *
     rv = do_the_full_monte( 
         cl, 0, CL_MSG_INFO2_WRITE, 0, 
         ns, set, key, 0, &bins, CL_OP_WRITE, 0, &n_bins, 
-        NULL, &wp, &trid, NULL, &call
+        NULL, &wp, &trid, NULL, &call, NULL
     );
 
     as_buffer_destroy(&args);

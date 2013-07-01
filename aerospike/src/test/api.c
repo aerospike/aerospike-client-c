@@ -91,7 +91,7 @@ int main(int argc, char **argv){
 	citrusleaf_object_init(&values[2].object);
 
 	return_value = citrusleaf_get(clc, ns, myset, &key_obj, 
-		values, 3, 0, NULL); 
+		values, 3, 0, NULL, NULL);
 
 	switch (return_value) {
     	case CITRUSLEAF_OK:
@@ -186,7 +186,7 @@ int test_getall(cl_cluster *clc){
 
 	// do the get
 	citrusleaf_get_all(clc, ns, myset, &key_obj, 
-		&bins, &n_bins, 0, NULL);
+		&bins, &n_bins, 0, NULL, NULL);
 
 	// check the contained values
 	int haveStr = 0;
@@ -260,7 +260,7 @@ int read_mod_write(cl_cluster *clc)
 	citrusleaf_object_init_str(&key, myKey);
 	strcpy(&bin.bin_name[0],bin1);
 	citrusleaf_object_init(&bin.object);
-	rv = citrusleaf_get(clc, ns, myset, &key, &bin, 1, 0, &gen_count);
+	rv = citrusleaf_get(clc, ns, myset, &key, &bin, 1, 0, &gen_count, NULL);
 
 	if( rv != CITRUSLEAF_OK ){
 		printf(" TEST FAILED - Get returns value %d\n", rv);
@@ -298,7 +298,7 @@ int read_mod_write(cl_cluster *clc)
 	// check that value has not changed
 	citrusleaf_object_init(&bin.object);
 	uint32_t new_gen;
-	rv = citrusleaf_get(clc, ns, myset, &key, &bin, 1,0, &new_gen);
+	rv = citrusleaf_get(clc, ns, myset, &key, &bin, 1,0, &new_gen, NULL);
 	if( rv != CITRUSLEAF_OK ){
 		printf(" TEST FAILED - get in rmw is failing\n");
 		return -1;
@@ -325,7 +325,7 @@ int read_mod_write(cl_cluster *clc)
 
 	// check that value is correct - and get the new gen_count
 	citrusleaf_object_init(&bin.object);
-	rv = citrusleaf_get(clc, ns, myset, &key, &bin, 1, 0, &gen_count);
+	rv = citrusleaf_get(clc, ns, myset, &key, &bin, 1, 0, &gen_count, NULL);
 	if( rv != CITRUSLEAF_OK ){
 		printf(" TEST FAILED - get in rmw is failing\n");
 		return -1;
@@ -349,7 +349,7 @@ int read_mod_write(cl_cluster *clc)
 
 	// check that value has not changed
 	citrusleaf_object_init(&bin.object);
-	rv = citrusleaf_get(clc, ns, myset, &key, &bin, 1, 0, NULL);
+	rv = citrusleaf_get(clc, ns, myset, &key, &bin, 1, 0, NULL, NULL);
 	if( rv != CITRUSLEAF_OK ){
 		printf(" TEST FAILED - get in rmw is failing\n");
 		return -1;
@@ -413,7 +413,7 @@ int test_operate(cl_cluster *clc)
 	ops[1].op = CL_OP_INCR;
 	ops[2].op = CL_OP_WRITE;
 	
-	rv = citrusleaf_operate(clc, ns, myset, &key, &ops[0], 3, NULL);
+	rv = citrusleaf_operate(clc, ns, myset, &key, &ops[0], 3, NULL, NULL);
 	if( rv != CITRUSLEAF_OK ){
 		printf(" TEST FAILED - go-right case of Operate is failing with %d\n", rv);
 		return -1;
@@ -436,7 +436,7 @@ int test_operate(cl_cluster *clc)
 	citrusleaf_object_init(&ops[1].bin.object);
 	citrusleaf_object_init(&ops[2].bin.object);
 
-	rv = citrusleaf_operate(clc, ns, myset, &key, &ops[0], 3, NULL );
+	rv = citrusleaf_operate(clc, ns, myset, &key, &ops[0], 3, NULL, NULL);
 	if( rv != CITRUSLEAF_OK ){
 		printf(" TEST FAILED - go-right case of Operate is failing with %d\n", rv);
 		return -1;

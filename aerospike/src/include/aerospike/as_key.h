@@ -114,6 +114,18 @@ typedef union as_key_value_u {
 
 } as_key_value;
 
+#define AS_KEY_NAMESPACE_MAX_SIZE 32	// based on current server limit
+#define AS_KEY_SET_MAX_SIZE 64			// based on current server limit
+
+/**
+ *	Namespace Name
+ */
+typedef char as_key_namespace[AS_KEY_NAMESPACE_MAX_SIZE];
+
+/**
+ *	Set Name
+ */
+typedef char as_key_set[AS_KEY_SET_MAX_SIZE];
 
 /**
  *	Key used for accessing and modifying records in a cluster.
@@ -129,12 +141,12 @@ typedef struct as_key_s {
 	/**
 	 *	The namespace the key belongs to.
 	 */
-	char * namespace;
+	as_key_namespace namespace;
 
 	/**
 	 *	The set the key belongs to.
 	 */
-	char * set;
+	as_key_set set;
 
 	/**
 	 *	The key value.

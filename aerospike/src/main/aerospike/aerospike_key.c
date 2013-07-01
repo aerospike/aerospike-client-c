@@ -86,6 +86,7 @@ as_status aerospike_key_get(
 
 	uint32_t    timeout = p.timeout;          
 	uint32_t    gen = 0;
+	uint32_t 	ttl = 0;
 	char *      set = NULL;
 	int         nvalues = 0;
 	cl_bin *    values = NULL;
@@ -95,13 +96,15 @@ as_status aerospike_key_get(
 	switch ( p.key ) {
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
-			rc = citrusleaf_get_all_digest_getsetname(as->cluster, key->namespace, (cf_digest *) digest->value, &values, &nvalues, timeout, &gen, &set);
+			rc = citrusleaf_get_all_digest_getsetname(as->cluster, key->namespace, (cf_digest *) digest->value,
+					&values, &nvalues, timeout, &gen, &set, &ttl);
 			break;
 		}
 		case AS_POLICY_KEY_SEND: {
 			cl_object okey;
 			asval_to_clobject((as_val *) key->valuep, &okey);
-			rc = citrusleaf_get_all(as->cluster, key->namespace, key->set, &okey, &values, &nvalues, timeout, &gen);
+			rc = citrusleaf_get_all(as->cluster, key->namespace, key->set, &okey,
+					&values, &nvalues, timeout, &gen, &ttl);
 			break;
 		}
 		default: {
@@ -122,6 +125,7 @@ as_status aerospike_key_get(
 		}
 		clbins_to_asrecord(values, nvalues, r);
 		r->gen = (uint16_t) gen;
+		r->ttl = ttl;
 		*rec = r;
 	}
 
@@ -169,6 +173,7 @@ as_status aerospike_key_select(
 
 	uint32_t    timeout = p.timeout;
 	uint32_t    gen = 0;
+	uint32_t 	ttl = 0;
 	// char *      set = NULL;
 	int         nvalues = 0;
 	cl_bin *    values = NULL;
@@ -191,13 +196,15 @@ as_status aerospike_key_select(
 	switch ( p.key ) {
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
-			rc = citrusleaf_get_digest(as->cluster, key->namespace, (cf_digest *) digest->value, values, nvalues, timeout, &gen);
+			rc = citrusleaf_get_digest(as->cluster, key->namespace, (cf_digest *) digest->value,
+					values, nvalues, timeout, &gen, &ttl);
 			break;
 		}
 		case AS_POLICY_KEY_SEND: {
 			cl_object okey;
 			asval_to_clobject((as_val *) key->valuep, &okey);
-			rc = citrusleaf_get(as->cluster, key->namespace, key->set, &okey, values, nvalues, timeout, &gen);
+			rc = citrusleaf_get(as->cluster, key->namespace, key->set, &okey,
+					values, nvalues, timeout, &gen, &ttl);
 			break;
 		}
 		default: {
@@ -218,6 +225,7 @@ as_status aerospike_key_select(
 		}
 		clbins_to_asrecord(values, nvalues, r);
 		r->gen = (uint16_t) gen;
+		r->ttl = ttl;
 		*rec = r;
 	}
 
@@ -262,6 +270,7 @@ as_status aerospike_key_exists(
 
 	uint32_t	timeout = p.timeout;
 	uint32_t	gen = 0;
+	uint32_t	ttl = 0; // TODO - a version of 'exists' that returns all metadata
 	int     	nvalues = 0;
 	cl_bin *	values = NULL;
 	
@@ -270,13 +279,15 @@ as_status aerospike_key_exists(
 	switch ( p.key ) {
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
-			rc = citrusleaf_exists_digest(as->cluster, key->namespace, (cf_digest *) digest->value, values, nvalues, timeout, &gen);
+			rc = citrusleaf_exists_digest(as->cluster, key->namespace, (cf_digest *) digest->value,
+					values, nvalues, timeout, &gen, &ttl);
 			break;
 		}
 		case AS_POLICY_KEY_SEND: {
 			cl_object okey;
 			asval_to_clobject((as_val *) key->valuep, &okey);
-			rc = citrusleaf_exists_key(as->cluster, key->namespace, key->set, &okey, values, nvalues, timeout, &gen);
+			rc = citrusleaf_exists_key(as->cluster, key->namespace, key->set, &okey,
+					values, nvalues, timeout, &gen, &ttl);
 			break;
 		}
 		default: {
@@ -472,10 +483,11 @@ as_status aerospike_key_operate(
 
 	int 			replace = 0;
 	uint32_t 		gen = 0;
+	uint32_t 		ttl = 0;
 	int 			n_operations = ops->binops.size;
 	cl_operation * 	operations = (cl_operation *) alloca(sizeof(cl_operation) * n_operations);
-	as_bin_name *	read_op_bins = alloca(sizeof(as_bin_name) * n_operations);
 	int				n_read_ops = 0;
+	as_bin_name *	read_op_bins = alloca(sizeof(as_bin_name) * n_operations);
 
 	for(int i=0; i<n_operations; i++) {
 		cl_operation * clop = &operations[i];
@@ -504,13 +516,15 @@ as_status aerospike_key_operate(
 	switch ( p.key ) {
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
-			rc = citrusleaf_operate_digest(as->cluster, key->namespace, (cf_digest *) digest->value, operations, n_operations, &wp, replace, &gen);
+			rc = citrusleaf_operate_digest(as->cluster, key->namespace, (cf_digest *) digest->value,
+					operations, n_operations, &wp, replace, &gen, &ttl);
 			break;
 		}
 		case AS_POLICY_KEY_SEND: {
 			cl_object okey;
 			asval_to_clobject((as_val *) key->valuep, &okey);
-			rc = citrusleaf_operate(as->cluster, key->namespace, key->set, &okey, operations, n_operations, &wp, replace, &gen);
+			rc = citrusleaf_operate(as->cluster, key->namespace, key->set, &okey,
+					operations, n_operations, &wp, replace, &gen, &ttl);
 			break;
 		}
 		default: {
@@ -530,6 +544,7 @@ as_status aerospike_key_operate(
 			r->bins.entries = malloc(sizeof(as_bin) * n_read_ops);
 		}
 		r->gen = (uint16_t) gen;
+		r->ttl = ttl;
 
 		// This works around an existing client bug where the data returned for
 		// a read operation is stored in the first bin struct with that bin
@@ -637,7 +652,7 @@ as_status aerospike_key_apply(
 			rc = do_the_full_monte( 
 				as->cluster, 0, CL_MSG_INFO2_WRITE, 0, 
 				key->namespace, key->set, 0, (cf_digest *) digest->value, &bins, CL_OP_WRITE, 0, &n_bins, 
-				NULL, &wp, &trid, NULL, &call
+				NULL, &wp, &trid, NULL, &call, NULL
 			);
 			break;
 		}
@@ -647,7 +662,7 @@ as_status aerospike_key_apply(
 			rc = do_the_full_monte( 
 				as->cluster, 0, CL_MSG_INFO2_WRITE, 0, 
 				key->namespace, key->set, &okey, 0, &bins, CL_OP_WRITE, 0, &n_bins, 
-				NULL, &wp, &trid, NULL, &call
+				NULL, &wp, &trid, NULL, &call, NULL
 			);
 			break;
 		}

@@ -105,7 +105,7 @@ int udf_get(cl_cluster * asc, const char * module, bool print) {
 	
 	sprintf(filename,"%s.lua", module);
 
-	as_udf_file file = {
+	cl_udf_file file = {
 		.name = {0},
 		.hash = {0},
 		.type = 0,
@@ -155,7 +155,7 @@ int udf_list(cl_cluster * asc, bool print) {
 
 	int 			rc 			= 0;
 	char * 			error 		= NULL;
-	as_udf_file ** 	modules 	= NULL;
+	cl_udf_file ** 	modules 	= NULL;
 	int 			nmodules 	= 0;
 
 	rc = citrusleaf_udf_list(asc, &modules, &nmodules, &error);

@@ -21,10 +21,13 @@
  *****************************************************************************/
 
 /**
- *	Aerospike provides a key based API to read and write data into the cluster.
- *	When using the key API, you need to provide both a key and a set.
+ *	Aerospike provides a key based API to access and modify data into the 
+ *	cluster. 
  *
- *	@addtogroup key
+ *	The Key API is a collection of APIs that use as_key as for looking up
+ *	records for accessing and modifying in the cluster. 
+ *	
+ *	@addtogroup key_api
  *	@{
  */
 

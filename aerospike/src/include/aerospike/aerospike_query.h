@@ -21,11 +21,70 @@
  *****************************************************************************/
 
 /** 
- *	Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer commodo tincidunt magna vitae vulputate. Nullam mattis tortor tortor, at pretium massa viverra ut. Pellentesque vitae eros et mi aliquam rhoncus. Quisque varius at lorem ut faucibus. Duis scelerisque, dui eu elementum aliquet, purus lectus tempor purus, nec dapibus quam felis id sapien. Fusce non pulvinar nulla. Curabitur in mauris lobortis, congue nisl vitae, pharetra felis. Cum sociis natoque penatibus et magnis dis parturient montes, nascetur ridiculus mus. Integer tincidunt gravida consectetur. Ut nisi ipsum, sagittis nec urna nec, gravida consequat lectus. Fusce sed neque pulvinar, bibendum metus in, lobortis dui. Proin a justo luctus, feugiat libero sed, tincidunt nisi. Aenean pulvinar, justo non rutrum vehicula, odio tellus blandit lorem, in faucibus dolor tellus ut mi.
+ *	The Aerospike Query API provides the ability to query data in the 
+ *	Aerospike cluster. The queries can only be performed on secondary indexes, 
+ *	which have been created in the cluster. 
  *
- *	Vivamus nec porta lacus, ut laoreet augue. Phasellus eleifend ultricies tempus. Fusce auctor nisl at lacinia rhoncus. Curabitur vel adipiscing libero. Morbi vel mi ac lorem vulputate condimentum ac a odio. Praesent hendrerit ligula leo, sit amet laoreet odio condimentum quis. Pellentesque gravida volutpat interdum. Nam tristique enim sagittis est sagittis condimentum. Aenean et tellus a lacus fringilla volutpat sit amet dapibus ligula. Nullam consectetur velit ac felis sagittis molestie. Nunc a ante ac ipsum volutpat lobortis vel ut nibh.
+ *	The API provides two functions for execution queries:
+ *	-	aerospike_query_foreach() -	Executes a query and invokes a callback
+ *		function for each result returned.
+ *	-	aerospike_query_stream() - 	Executes a query and writes the results
+ *		to the stream provided. 
  *
- *	@addtogroup query
+ *	In order to execute a query, you first need to create and populate an
+ *	as_query object. The as_query documentation provides instructions on 
+ *	populating an as_query object.
+ *
+ *	## Walk-through
+ *	
+ *	To begin, you should first create an as_query object. We want to query data
+ *	in the "test" namespace and "demo" set. So, we will use a stack allocated
+ *	query and initialize it with the namespace and set:
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_query query;
+ *	as_query_init(&query, "test", "demo");
+ *	~~~~~~~~~~
+ *
+ *	You could have used a heap allocated as_query via the as_query_new() 
+ *	function.
+ *
+ *	Queries require a secondary index lookup, which is defined as a predicate.
+ *	To add predicates, you should use the as_query_where() function. 
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_query_where_init(&query, 1);
+ *	as_query_where(&query, "bin2", integer_equals(100));
+ *	~~~~~~~~~~
+ *
+ *	The above specifies that we want to find all records that contain "bin2",
+ *	with an integer value of `100`.
+ *	
+ *	There are other optional query modifiers, such as:
+ *	-	as_query_select() -		Select specified bins. Functions like an SQL 
+ *								select.
+ *	-	as_query_limit() -		Limit the number results.
+ *	-	as_query_orderby() -	Order the results by a bin and the direction.
+ *
+ *	Once you have built your query, you will want to execute it. For this we
+ *	will use the aerospike_query_foreach() function:
+ *
+ *	~~~~~~~~~~{.c}
+ *	if ( aerospike_query_foreach(&as, &err, NULL, &query, callback, NULL) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *	~~~~~~~~~~
+ *	
+ *	When you are finished with the query, you should destroy the resources 
+ *	allocated to it:
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_query_destroy(&query);
+ *	~~~~~~~~~~
+ *
+ *	You can reuse an as_query for multiple query executions.
+ *	
+ *	@addtogroup query_api
  *	@{
  */
 
@@ -43,8 +102,16 @@
  *****************************************************************************/
 
 /**
- *	Callback for aerospike_query_foreach(). This call back will be called for 
- *	each value or record returned from the query.
+ *	This callback will be called for each value or record returned from 
+ *	a query.
+ *
+ *	The aerospike_query_foreach() function accepts this callback.
+ *
+ *	~~~~~~~~~~{.c}
+ *	bool my_callback(as_val * val, void * udata) {
+ *		return true;
+ *	}
+ *	~~~~~~~~~~
  *
  *	@param val 			The value received from the query.
  *	@param udata 		User-data provided to the calling function.
@@ -61,16 +128,16 @@ typedef bool (* aerospike_query_foreach_callback)(as_val * val, void * udata);
  *	Execute a query and call the callback function for each result item.
  *
  *	~~~~~~~~~~{.c}
- *		as_query query;
- *		as_query_init(&query, "test", "demo");
- *		as_query_select(&query, "bin1");
- *		as_query_where(&query, "bin2", integer_equals(100));
- *		
- *		if ( aerospike_query_foreach(&as, &err, NULL, &query, callback, NULL) != AEROSPIKE_OK ) {
- *			fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *		}
- *		
- *		as_query_destroy(&query);
+ *	as_query query;
+ *	as_query_init(&query, "test", "demo");
+ *	as_query_select(&query, "bin1");
+ *	as_query_where(&query, "bin2", integer_equals(100));
+ *	
+ *	if ( aerospike_query_foreach(&as, &err, NULL, &query, callback, NULL) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *	
+ *	as_query_destroy(&query);
  *	~~~~~~~~~~
  *
  *	@param as			The aerospike instance to use for this operation.

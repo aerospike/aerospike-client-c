@@ -94,7 +94,7 @@
  *
  *	
  *
- *	@addtogroup record
+ *	@addtogroup record_t
  *	@{
  */
 

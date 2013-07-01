@@ -23,21 +23,39 @@
 /** 
  *	@mainpage 
  *	
- *	# Introduction
- *	
- *	This is the introduction.
- *	
- *	# Installation
- *	
- *	etc...
- *
- *	getting_started.html
+ *	@copydoc aerospike_client_api
  *
  */	
 
-/** 
+/**
+ *	@defgroup aerospike_client_api Aerospike Client API
+ *	@{
+ *		@defgroup index_api Index API
+ *		@defgroup info_api Info API
+ *		@defgroup key_api Key API
+ *		@defgroup query_api Query API
+ *		@defgroup scan_api Scan API
+ *		@defgroup udf_api UDF API
+ *	@}
+ *	@defgroup aerospike_client_types Aerospike Client Types
+ *	@{
+ *		@defgroup record_t Record
+ *		@defgroup config_t Configuration
+ *		@defgroup key_t Key
+ *		@defgroup error_t Error Handling
+ *		@defgroup log_t	Logging
+ *		@defgroup operations_t Operations
+ *		@defgroup policy_t Policies
+ *		@defgroup scan_t Scan
+ *		@defgroup query_t Query
+ *		@defgroup udf_t User-defined Functions
+ *	@}
+ */
+
+/**
+ *
  * 	In order to connect to an Aerospike Database cluster, you will need an
- *	instance of `aerospike`. The `aerospike` object is a client for a 
+ *	instance of `aerospike`. Each `aerospike` instance is a client for a 
  *	single cluster. 
  *
  *	You have the option of stack or heap allocating a client. 
@@ -90,22 +108,7 @@
  *			application. In the next release, you will be able to have 
  *			multiple clients in a single application.
  *
- *	@defgroup aerospike Aerospike Client
- *	@{
- *		@addtogroup client Client API
- *		@addtogroup index Index API
- *		@addtogroup info Info API
- *		@addtogroup key Key API
- *		@addtogroup query Query API
- *		@addtogroup scan Scan API
- *		@addtogroup udf UDF API
- *		@addtogroup config Configurations
- *		@addtogroup policy Policies
- *		@addtogroup operations Operations
- *	@}
- *
- *	@addtogroup client
- *	@{
+ *	@addtogroup aerospike_client_api
  */
 
 #pragma once 
@@ -130,6 +133,11 @@ struct cl_cluster_s;
  *	Aerospike client instance.
  *
  *	An `aerospike` instance manages a connections to an Aerospike cluster.	
+ *
+ *	An aerospike instance should be initialized via aerospike_init().
+ *
+ *	When no longer using the instance, then it should be released via 
+ *	aerospike_destroy().
  *
  */
 typedef struct aerospike_s {

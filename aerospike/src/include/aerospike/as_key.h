@@ -21,7 +21,56 @@
  *****************************************************************************/
 
 /** 
- *	@addtogroup key
+ *	Key used for accessing and modifying records in a cluster.
+ *
+ *	The key can either be stack or heap allocated. 
+ *	
+ *	For stack allocated as_key, you should you the following functions to
+ *	initialize the value:
+ *	- as_key_init()
+ *	- as_key_init_int64()
+ *	- as_key_init_str()
+ *	- as_key_init_raw()
+ *	- as_key_init_value()
+ *
+ *	For heap allocated as_key, you should use the following functions
+ *	to allocate and initialize the value:
+ *	- as_key_new()
+ *	- as_key_new_int64()
+ *	- as_key_new_str()
+ *	- as_key_new_raw()
+ *	- as_key_new_value()
+ *
+ *	An example of using a stack allocated as_key:
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_key key;
+ *	as_key_init(&key, "ns", "set", "key");
+ *	~~~~~~~~~~
+ *	
+ *	An example of using a heap allocated as_key:
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_key * key = as_key_new("ns", "set", "key");
+ *	~~~~~~~~~~
+ *
+ *	With a key, you can use the following APIs to access or modify records:
+ *	- aerospike_key_get()
+ *	- aerospike_key_select()
+ *	- aerospike_key_exists()
+ *	- aerospike_key_put()
+ *	- aerospike_key_operate()
+ *	- aerospike_key_remove()
+ *	- aerospike_key_apply()
+ *
+ *	Each of the operations internally use an as_digest to calculate the location
+ *	for the given key. The digest is a hash value of the key and set. It is 
+ *	calculated once, and is reused as often as the key is reused. To get the digest
+ *	value of a key, use:
+ *	- as_key_digest()
+ *
+ *
+ *	@addtogroup key_t
  *	@{
  */
 
@@ -43,9 +92,29 @@
  */
 #define AS_DIGEST_VALUE_SIZE 20
 
+/**
+ *	The maxium size of as_namespace.
+ */
+#define AS_NAMESPACE_MAX_SIZE 32
+
+/**
+ *	The maxium size of as_set.
+ */
+#define AS_SET_MAX_SIZE 64
+
 /******************************************************************************
  *	TYPES
  *****************************************************************************/
+
+/**
+ *	Namespace Name
+ */
+typedef char as_namespace[AS_NAMESPACE_MAX_SIZE];
+
+/**
+ *	Set Name
+ */
+typedef char as_set[AS_SET_MAX_SIZE];
 
 /**
  *	The digest is the value used to locate a record based on the
@@ -55,26 +124,26 @@
  *	To initialize a stack allocated instance as an string digest:
  *	
  *	~~~~~~~~~~{.c}
- *	    as_digest digest;
- *	    as_digest_init(&digest, "set", as_string_new("abc",false));
+ *	as_digest digest;
+ *	as_digest_init(&digest, "set", as_string_new("abc",false));
  *	~~~~~~~~~~
  *
  *	Alternatively, you can use an integer digest:
  *
  *	~~~~~~~~~~{.c}
- *	    as_digest_init2(&digest, "set", 123);
+ *	as_digest_init2(&digest, "set", 123);
  *	~~~~~~~~~~
  *
  *	You can also heap allocate and initialize an instance:
  *
  *	~~~~~~~~~~{.c}
- *	    as_digest * digest = as_digest_new("set", "digest");
+ *	as_digest * digest = as_digest_new("set", "digest");
  *	~~~~~~~~~~
  *	
  *	When you are finished using the digest, you should always destroy it:
  *
  *	~~~~~~~~~~{.c}
- *	    as_digest_destroy(digest);
+ *	as_digest_destroy(digest);
  *	~~~~~~~~~~
  *	
  */
@@ -114,21 +183,27 @@ typedef union as_key_value_u {
 
 } as_key_value;
 
-#define AS_KEY_NAMESPACE_MAX_SIZE 32	// based on current server limit
-#define AS_KEY_SET_MAX_SIZE 64			// based on current server limit
 
-/**
- *	Namespace Name
- */
-typedef char as_key_namespace[AS_KEY_NAMESPACE_MAX_SIZE];
-
-/**
- *	Set Name
- */
-typedef char as_key_set[AS_KEY_SET_MAX_SIZE];
-
-/**
+/** 
  *	Key used for accessing and modifying records in a cluster.
+ *
+ *	The key can either be stack or heap allocated. 
+ *	
+ *	For stack allocated as_key, you should you the following functions to
+ *	initialize the value:
+ *	- as_key_init()
+ *	- as_key_init_int64()
+ *	- as_key_init_str()
+ *	- as_key_init_raw()
+ *	- as_key_init_value()
+ *
+ *	For heap allocated as_key, you should use the following functions
+ *	to allocate and initialize the value:
+ *	- as_key_new()
+ *	- as_key_new_int64()
+ *	- as_key_new_str()
+ *	- as_key_new_raw()
+ *	- as_key_new_value()
  */
 typedef struct as_key_s {
 
@@ -141,12 +216,12 @@ typedef struct as_key_s {
 	/**
 	 *	The namespace the key belongs to.
 	 */
-	as_key_namespace namespace;
+	as_namespace namespace;
 
 	/**
 	 *	The set the key belongs to.
 	 */
-	as_key_set set;
+	as_set set;
 
 	/**
 	 *	The key value.
@@ -175,8 +250,8 @@ typedef struct as_key_s {
  *	Initialize a stack allocated `as_key` to a NULL-terminated string value.
  *
  *	~~~~~~~~~~{.c}
- *		as_key key;
- *	    as_key_init("ns", "set", "key");
+ *	as_key key;
+ *	as_key_init(&key, "ns", "set", "key");
  *	~~~~~~~~~~
  *
  *	Use `as_key_destroy()` to release resources allocated to `as_key` via
@@ -189,14 +264,14 @@ typedef struct as_key_s {
  *
  *	@return The initialized `as_key` on success. Otherwise NULL.
  */
-as_key * as_key_init(as_key * key, const char * ns, const char * set, const char * value);
+as_key * as_key_init(as_key * key, const as_namespace ns, const as_set set, const char * value);
 
 /**
  *	Initialize a stack allocated `as_key` to a int64_t value.
  *
  *	~~~~~~~~~~{.c}
- *		as_key key;
- *	    as_key_init_int64(&key, "ns", "set", 123);
+ *	as_key key;
+ *	as_key_init_int64(&key, "ns", "set", 123);
  *	~~~~~~~~~~
  *
  *	Use `as_key_destroy()` to release resources allocated to `as_key`.
@@ -208,14 +283,14 @@ as_key * as_key_init(as_key * key, const char * ns, const char * set, const char
  *
  *	@return The initialized `as_key` on success. Otherwise NULL.
  */
-as_key * as_key_init_int64(as_key * key, const char * ns, const char * set, int64_t value);
+as_key * as_key_init_int64(as_key * key, const as_namespace ns, const as_set set, int64_t value);
 
 /**
  *	Initialize a stack allocated `as_key` to a NULL-terminated string value.
  *
  *	~~~~~~~~~~{.c}
- *		as_key key;
- *	    as_key_init_str(&key, "ns", "set", "key");
+ *	as_key key;
+ *	as_key_init_str(&key, "ns", "set", "key");
  *	~~~~~~~~~~
  *
  *	Use `as_key_destroy()` to release resources allocated to `as_key`.
@@ -227,16 +302,16 @@ as_key * as_key_init_int64(as_key * key, const char * ns, const char * set, int6
  *
  *	@return The initialized `as_key` on success. Otherwise NULL.
  */
-as_key * as_key_init_str(as_key * key, const char * ns, const char * set, const char * value);
+as_key * as_key_init_str(as_key * key, const as_namespace ns, const as_set set, const char * value);
 
 /**
  *	Initialize a stack allocated `as_key` to bytes array.
  *
  *	~~~~~~~~~~{.c}
- *		uint8_t rgb[3] = {254,254,120};
- *
- *		as_key key;
- *	    as_key_init_raw(&key, "ns", "set", rgb, 3);
+ *	uint8_t rgb[3] = {254,254,120};
+ *	
+ *	as_key key;
+ *	as_key_init_raw(&key, "ns", "set", rgb, 3);
  *	~~~~~~~~~~
  *
  *	Use `as_key_destroy()` to release resources allocated to `as_key`.
@@ -249,17 +324,17 @@ as_key * as_key_init_str(as_key * key, const char * ns, const char * set, const 
  *
  *	@return The initialized `as_key` on success. Otherwise NULL.
  */
-as_key * as_key_init_raw(as_key * key, const char * ns, const char * set, const uint8_t * value, uint32_t size);
+as_key * as_key_init_raw(as_key * key, const as_namespace ns, const as_set set, const uint8_t * value, uint32_t size);
 
 /**
  *	Initialize a stack allocated `as_key` to an `as_key_value`.
  *
  *	~~~~~~~~~~{.c}
- *		as_string str;
- *		as_string_init(&str, "abc", false);
- *
- *		as_key key;
- *	    as_key_init_value(&key, "ns", "set", (as_key_value *) str);
+ *	as_string str;
+ *	as_string_init(&str, "abc", false);
+ *	
+ *	as_key key;
+ *	as_key_init_value(&key, "ns", "set", (as_key_value *) str);
  *	~~~~~~~~~~
  *
  *	Use `as_key_destroy()` to release resources allocated to `as_key`.
@@ -271,14 +346,14 @@ as_key * as_key_init_raw(as_key * key, const char * ns, const char * set, const 
  *
  *	@return The initialized `as_key` on success. Otherwise NULL.
  */
-as_key * as_key_init_value(as_key * key, const char * ns, const char * set, const as_key_value * value);
+as_key * as_key_init_value(as_key * key, const as_namespace ns, const as_set set, const as_key_value * value);
 
 
 /**
  *	Creates and initializes a heap allocated `as_key` to a NULL-terminated string value.
  *
  *	~~~~~~~~~~{.c}
- *	    as_key * key = as_key_new("ns", "set", "key");
+ *	as_key * key = as_key_new("ns", "set", "key");
  *	~~~~~~~~~~
  *
  *	Use `as_key_destroy()` to release resources allocated to `as_key` via
@@ -290,13 +365,13 @@ as_key * as_key_init_value(as_key * key, const char * ns, const char * set, cons
  *
  *	@return A new `as_key` on success. Otherwise NULL.
  */
-as_key * as_key_new(const char * ns, const char * set, const char * value);
+as_key * as_key_new(const as_namespace ns, const as_set set, const char * value);
 
 /**
  *	Initialize a stack allocated `as_key` to a int64_t value.
  *
  *	~~~~~~~~~~{.c}
- *	    as_key * key = as_key_new_int64("ns", "set", 123);
+ *	as_key * key = as_key_new_int64("ns", "set", 123);
  *	~~~~~~~~~~
  *
  *	Use `as_key_destroy()` to release resources allocated to `as_key` via
@@ -308,13 +383,13 @@ as_key * as_key_new(const char * ns, const char * set, const char * value);
  *
  *	@return A new `as_key` on success. Otherwise NULL.
  */
-as_key * as_key_new_int64(const char * ns, const char * set, int64_t value);
+as_key * as_key_new_int64(const as_namespace ns, const as_set set, int64_t value);
 
 /**
  *	Creates and initializes a heap allocated `as_key` to a NULL-terminated string value.
  *
  *	~~~~~~~~~~{.c}
- *	    as_key * key = as_key_new_str("ns", "set", "key");
+ *	as_key * key = as_key_new_str("ns", "set", "key");
  *	~~~~~~~~~~
  *
  *	Use `as_key_destroy()` to release resources allocated to `as_key` via
@@ -326,15 +401,15 @@ as_key * as_key_new_int64(const char * ns, const char * set, int64_t value);
  *
  *	@return A new `as_key` on success. Otherwise NULL.
  */
-as_key * as_key_new_str(const char * ns, const char * set, const char * value);
+as_key * as_key_new_str(const as_namespace ns, const as_set set, const char * value);
 
 /**
  *	Initialize a stack allocated `as_key` to a byte array.
  *
  *	~~~~~~~~~~{.c}
- *		uint8_t rgb[3] = {254,254,120};
- *
- *	    as_key * key = as_key_new_raw("ns", "set", rgb, 3);
+ *	uint8_t rgb[3] = {254,254,120};
+ *	
+ *	as_key * key = as_key_new_raw("ns", "set", rgb, 3);
  *	~~~~~~~~~~
  *
  *	Use `as_key_destroy()` to release resources allocated to `as_key` via
@@ -347,16 +422,16 @@ as_key * as_key_new_str(const char * ns, const char * set, const char * value);
  *
  *	@return A new `as_key` on success. Otherwise NULL.
  */
-as_key * as_key_new_raw(const char * ns, const char * set, const uint8_t * value, uint32_t size);
+as_key * as_key_new_raw(const as_namespace ns, const as_set set, const uint8_t * value, uint32_t size);
 
 /**
  *	Initialize a stack allocated `as_key` to a an `as_key_value`.
  *
  *	~~~~~~~~~~{.c}
- *		as_string str;
- *		as_string_init(&str, "abc", false);
- *
- *		as_key * key = as_key_new_value("ns", "set", (as_key_value *) str);
+ *	as_string str;
+ *	as_string_init(&str, "abc", false);
+ *	
+ *	as_key * key = as_key_new_value("ns", "set", (as_key_value *) str);
  *	~~~~~~~~~~
  *
  *	Use `as_key_destroy()` to release resources allocated to `as_key` via
@@ -368,19 +443,28 @@ as_key * as_key_new_raw(const char * ns, const char * set, const uint8_t * value
  *
  *	@return A new `as_key` on success. Otherwise NULL.
  */
-as_key * as_key_new_value(const char * ns, const char * set, const as_key_value * value);
+as_key * as_key_new_value(const as_namespace ns, const as_set set, const as_key_value * value);
 
 /**
  *	Destory the `as_key`, releasing resources.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_key_destroy(key);
+ *	~~~~~~~~~~
  *
  *	@param key The `as_key` to destroy.
  */
 void as_key_destroy(as_key * key);
 
 /**
- *	Get the digest for the given key. The digest is computed the first time
- *	function is called. Subsequent calls will return the previously calculated
- *	value.
+ *	Get the digest for the given key. 
+ *
+ *	The digest is computed the first time function is called. Subsequent calls
+ *	will return the previously calculated value.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_digest * digest = as_key_digest(key);
+ *	~~~~~~~~~~
  *
  *	@param key The key to get the digest for.
  *

@@ -33,10 +33,7 @@
  *****************************************************************************/
 
 /**
- * Create a new sparse secondary index.
- *
- * A sparse secondary indexes omits references to records which do not include
- * the indexed bin.
+ * Create a new secondary index.
  *
  * @param as        - the aerospike cluster to connect to.
  * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
@@ -49,7 +46,7 @@
  *
  * @return AEROSPIKE_OK if successful. AEROSPIKE_ERR_INDEX_FOUND if the index already exists. Otherwise an error.
  */
-static as_status aerospike_index_sparse_create(
+static as_status aerospike_index_create(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
 	const char * ns, const char * set, const char * bin, const char * type, const char * name)
 {
@@ -80,16 +77,13 @@ static as_status aerospike_index_sparse_create(
 }
 
 /**
- *	Create a new sparse secondary index on an integer bin.
- *
- *	A sparse secondary indexes omits references to records which do not include
- *	the indexed bin.
+ *	Create a new secondary index on an integer bin.
  *
  *	~~~~~~~~~~{.c}
- *		if ( aerospike_index_sparse_integer_create(&as, &err, NULL, 
- *				"test", "demo", "bin1", "idx_test_demo_bin1") != AEROSPIKE_OK ) {
- *			fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *		}
+ *	if ( aerospike_index_integer_create(&as, &err, NULL, 
+ *			"test", "demo", "bin1", "idx_test_demo_bin1") != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
  *	~~~~~~~~~~
  *
  *	@param as			The aerospike instance to use for this operation.
@@ -102,7 +96,7 @@ static as_status aerospike_index_sparse_create(
  *
  *	@return AEROSPIKE_OK if successful. AEROSPIKE_EXISTS if the index already exists. Otherwise an error.
  */
-as_status aerospike_index_sparse_integer_create(
+as_status aerospike_index_integer_create(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
 	const char * ns, const char * set, const char * bin, const char * name)
 {
@@ -112,14 +106,11 @@ as_status aerospike_index_sparse_integer_create(
 /**
  *	Create a new sparse secondary index on a string bin.
  *
- *	A sparse secondary indexes omits references to records which do not include
- *	the indexed bin.
- *
  *	~~~~~~~~~~{.c}
- *		if ( aerospike_index_sparse_string_create(&as, &err, NULL, 
- *				"test", "demo", "bin1", "idx_test_demo_bin1") != AEROSPIKE_OK ) {
- *			fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *		}
+ *	if ( aerospike_index_sparse_string_create(&as, &err, NULL, 
+ *			"test", "demo", "bin1", "idx_test_demo_bin1") != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
  *	~~~~~~~~~~
  *
  *	@param as			The aerospike instance to use for this operation.
@@ -142,11 +133,11 @@ as_status aerospike_index_sparse_string_create(
 /**
  * Removes (drops) a secondary index.
  *
- * @param as        - the aerospike cluster to connect to.
- * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
- * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
- * @param ns        - the namespace of the index to be removed
- * @param name      - the name of the index to be removed
+ * @param as        The aerospike cluster to connect to.
+ * @param err       The error is populated if the return value is not AEROSPIKE_OK.
+ * @param policy    The policy to use for this operation. If NULL, then the default policy will be used.
+ * @param ns        The namespace of the index to be removed
+ * @param name      The name of the index to be removed
  *
  * @return AEROSPIKE_OK if successful. Otherwise an error.
  */

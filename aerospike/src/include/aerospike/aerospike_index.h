@@ -20,8 +20,31 @@
  *	IN THE SOFTWARE.
  *****************************************************************************/
 
-/** 
- *	@addtogroup index
+/**
+ *	The Index API provides the ability to create and remove secondary indexes.
+ *	
+ *	Aerospike currently supports indexing of strings and integers.
+ *	
+ *	## String Indexes
+ *	
+ *	A string index allows for equality lookups. An equality lookup means that 
+ *	if you query for an indexed bin with value "abc", then only the records 
+ *	containing bins with "abc" will be returned.
+ *
+ *	To create a string index, see aerospike_index_string_create().
+ *	
+ *	## Integer Indexes
+ *
+ *	An integer index allows for either equality or range lookups. An equality
+ *	lookup means that if you query for an indexed bin with value 123, then only 
+ *	the records containing bins with 123 will be returned. A range lookup
+ *	means that you can query bins within a range. So, if your range is 
+ *	(1...100), then all records containing the a value in that range will
+ *	be returned. 
+ *	
+ *	To create a integer index, see aerospike_index_integer_create().
+ *	
+ *	@addtogroup index_api
  *	@{
  */
 
@@ -38,16 +61,13 @@
  *****************************************************************************/
 
 /**
- *	Create a new sparse secondary index on an integer bin.
- *
- *	A sparse secondary indexes omits references to records which do not include
- *	the indexed bin.
+ *	Create a new secondary index on an integer bin.
  *
  *	~~~~~~~~~~{.c}
- *		if ( aerospike_index_sparse_integer_create(&as, &err, NULL, 
- *				"test", "demo", "bin1", "idx_test_demo_bin1") != AEROSPIKE_OK ) {
- *			fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *		}
+ *	if ( aerospike_index_integer_create(&as, &err, NULL, 
+ *			"test", "demo", "bin1", "idx_test_demo_bin1") != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
  *	~~~~~~~~~~
  *
  *	@param as			The aerospike instance to use for this operation.
@@ -57,24 +77,21 @@
  *	@param set			The set to be indexed.
  *	@param bin			The bin to be indexed.
  *	@param name			The name of the index.
- *
+ *	
  *	@return AEROSPIKE_OK if successful. AEROSPIKE_EXISTS if the index already exists. Otherwise an error.
  */
-as_status aerospike_index_sparse_integer_create(
+as_status aerospike_index_integer_create(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
 	const char * ns, const char * set, const char * bin, const char * name);
 
 /**
- *	Create a new sparse secondary index on a string bin.
- *
- *	A sparse secondary indexes omits references to records which do not include
- *	the indexed bin.
+ *	Create a new secondary index on a string bin.
  *
  *	~~~~~~~~~~{.c}
- *		if ( aerospike_index_sparse_string_create(&as, &err, NULL, 
- *				"test", "demo", "bin1", "idx_test_demo_bin1") != AEROSPIKE_OK ) {
- *			fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *		}
+ *	if ( aerospike_index_sparse_string_create(&as, &err, NULL, 
+ *			"test", "demo", "bin1", "idx_test_demo_bin1") != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
  *	~~~~~~~~~~
  *
  *	@param as			The aerospike instance to use for this operation.
@@ -87,7 +104,7 @@ as_status aerospike_index_sparse_integer_create(
  *
  *	@return AEROSPIKE_OK if successful. AEROSPIKE_EXISTS if the index already exists. Otherwise an error.
  */
-as_status aerospike_index_sparse_string_create(
+as_status aerospike_index_string_create(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
 	const char * ns, const char * set, const char * bin, const char * name);
 

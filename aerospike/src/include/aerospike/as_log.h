@@ -20,6 +20,10 @@
  *	IN THE SOFTWARE.
  *****************************************************************************/
 
+/**
+ *	@addtogroup log_t Logging
+ *	@{
+ */
 #pragma once 
 
 #include <aerospike/as_status.h>
@@ -110,3 +114,7 @@ bool as_log_set_level(as_log * log, as_log_level level);
  *	@return true on success. Otherwise false.
  */
 bool as_log_set_callback(as_log * log, as_log_callback callback);
+
+/**
+ *	@}
+ */

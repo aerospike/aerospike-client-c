@@ -21,7 +21,22 @@
  *****************************************************************************/
 
 /** 
- *	@addtogroup scan
+ *	Aerospike provides several modes of scanning data in a cluster.
+ *
+ *	A scan can be performed on the entire cluster or a single node. When a scan
+ *	is executed, a scan job is sent from the client to the cluster (or node). 
+ *	The client can their wait for results to return or let the scan run 
+ *	independently.
+ * 
+ *	Cluster scans:
+ *	- aerospike_scan_background()
+ *	- aerospike_scan_foreach()
+ *
+ *	Single node scans:
+ *	- aerospike_scan_node_background()
+ *	- aerospike_scan_node_foreach()
+ *
+ *	@addtogroup scan_api
  *	@{
  */
 
@@ -39,9 +54,25 @@
  *****************************************************************************/
 
 /**
- *	Callback for the `aerospike_scan_*` function.
+ *	This callback will be called for each value or record returned from 
+ *	a scan.
+ *
+ *	The following functions accept the callback:
+ *	-	aerospike_scan_foreach()
+ *	-	aerospike_scan_node_foreach()
+ *	
+ *	~~~~~~~~~~{.c}
+ *	bool my_callback(as_val * val, void * udata) {
+ *		return true;
+ *	}
+ *	~~~~~~~~~~
+ *
+ *	@param val 			The value received from the query.
+ *	@param udata 		User-data provided to the calling function.
+ *
+ *	@return `true` to continue to the next value. Otherwise, iteration will end.
  */
-typedef int (* aerospike_scan_foreach_callback)(as_val *, void *);
+typedef bool (* aerospike_scan_foreach_callback)(as_val * val, void * udata);
 
 /******************************************************************************
  *	FUNCTIONS
@@ -54,17 +85,19 @@ typedef int (* aerospike_scan_foreach_callback)(as_val *, void *);
  *	No callback will be called in this case.
  *	
  *	~~~~~~~~~~{.c}
- *		as_scan scan;
- *		as_scan_init(&scan, "test", "demo");
- *		
- *		uint64_t scanid = 0;
- *		
- *		if ( aerospike_scan_node_background(&as, &err, NULL, &scan, &scanid) != AEROSPIKE_OK ) {
- *			fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *		}
- *		else {
- *			printf("Running background scan job: %ll", scanid);
- *		}
+ *	as_scan scan;
+ *	as_scan_init(&scan, "test", "demo");
+ *	
+ *	uint64_t scanid = 0;
+ *	
+ *	if ( aerospike_scan_background(&as, &err, NULL, &scan, &scanid) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *	else {
+ *		printf("Running background scan job: %ll", scanid);
+ *	}
+ *
+ *	as_scan_destroy(&scan);
  *	~~~~~~~~~~
  *	
  *
@@ -87,17 +120,19 @@ as_status aerospike_scan_background(
  *	Scan will be run in the background by a thread on client side.
  *	
  *	~~~~~~~~~~{.c}
- *		as_scan scan;
- *		as_scan_init(&scan, "test", "demo");
- *		
- *		uint64_t scanid = 0;
- *		
- *		if ( aerospike_scan_node_background(&as, &err, NULL, &scan) != AEROSPIKE_OK ) {
- *			fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *		}
- *		else {
- *			printf("Running background scan job: %ll", scanid);
- *		}
+ *	as_scan scan;
+ *	as_scan_init(&scan, "test", "demo");
+ *	
+ *	uint64_t scanid = 0;
+ *	
+ *	if ( aerospike_scan_node_background(&as, &err, NULL, &scan) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *	else {
+ *		printf("Running background scan job: %ll", scanid);
+ *	}
+ *
+ *	as_scan_destroy(&scan);
  *	~~~~~~~~~~
  *	
  *
@@ -122,12 +157,14 @@ as_status aerospike_scan_node_background(
  *	been scanned, then callback will be called with a NULL value for the record.
  *
  *	~~~~~~~~~~{.c}
- *		as_scan scan;
- *		as_scan_init(&scan, "test", "demo");
- *		
- *		if ( aerospike_scan_foreach(&as, &err, NULL, &scan, callback, NULL) != AEROSPIKE_OK ) {
- *			fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *		}
+ *	as_scan scan;
+ *	as_scan_init(&scan, "test", "demo");
+ *	
+ *	if ( aerospike_scan_foreach(&as, &err, NULL, &scan, callback, NULL) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *
+ *	as_scan_destroy(&scan);
  *	~~~~~~~~~~
  *	
  *
@@ -153,12 +190,14 @@ as_status aerospike_scan_foreach(
  *	been scanned, then callback will be called with a NULL value for the record.
  *	
  *	~~~~~~~~~~{.c}
- *		as_scan scan;
- *		as_scan_init(&scan, "test", "demo");
- *		
- *		if ( aerospike_scan_node_foreach(&as, &err, NULL, "node1", &scan, callback, NULL) != AEROSPIKE_OK ) {
- *			fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *		}
+ *	as_scan scan;
+ *	as_scan_init(&scan, "test", "demo");
+ *	
+ *	if ( aerospike_scan_node_foreach(&as, &err, NULL, "node1", &scan, callback, NULL) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *	
+ *	as_scan_destroy(&scan);
  *	~~~~~~~~~~
  *
  *

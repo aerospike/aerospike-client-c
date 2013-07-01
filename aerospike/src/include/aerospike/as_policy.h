@@ -21,7 +21,37 @@
  *****************************************************************************/
 
 /** 
- *	@addtogroup policy
+ *	Policies define the behavior of database operations. 
+ *
+ *	Policies fall into two groups: policy values and operation policies.
+ *	A policy value is a single value which defines how the client behaves. An
+ *	operation policy is a group of policy values which affect an operation.
+ *
+ *	## Policy Values
+ *
+ *	The following are the policy values. For details, please see the documentation
+ *	for each policy value
+ *
+ *	- as_policy_key
+ *	- as_policy_gen
+ *	- as_policy_writemode
+ *	- as_policy_exists
+ *	
+ *	## Operation Policies
+ *
+ *	The following are the operation policies. Operation policies are groups of
+ *	policy values for a type of operation.
+ *
+ *	- as_policy_read
+ *	- as_policy_write
+ *	- as_policy_operate
+ *	- as_policy_remove
+ *	- as_policy_scan
+ *	- as_policy_query
+ *	- as_policy_read
+ *	
+ *
+ *	@addtogroup policy_t
  *	@{
  */
 
@@ -97,8 +127,8 @@ typedef enum as_policy_writemode_e {
 /**
  *	Generation Policy
  *
- *	Specifies the behavior of record modifications
- *	with regard to the generation value.
+ *	Specifies the behavior of record modifications with regard to the 
+ *	generation value.
  */
 typedef enum as_policy_gen_e {
 
@@ -146,19 +176,32 @@ typedef enum as_policy_key_e {
 	/**
 	 *	The policy is undefined.
 	 *
-	 *	If set, then the value will default to
-	 *	either as_config.policies.key
+	 *	If set, then the value will default to either as_config.policies.key
 	 *	or `AS_POLICY_KEY_DEFAULT`.
 	 */
 	AS_POLICY_KEY_UNDEF,
 
 	/**
 	 *	Send the digest value of the key.
+	 *
+	 *	This is the recommended mode of operation. This calculates the digest
+	 *	and send the digest to the server. The digest is only calculated on
+	 *	the client, and not on the server.
 	 */
 	AS_POLICY_KEY_DIGEST,
 
 	/**
 	 *	Send the key, but do not store it.
+	 *	
+	 *	This policy is ideal if you want to reduce the number of bytes sent
+	 *	over the network. This will only work if the combination the set and
+	 *	key value are less than 20 bytes, which is the size of the digest.
+	 *
+	 *	This will also cause the digest to be computer once on the client
+	 * 	and once on the server. 
+	 *	
+	 *	If your values are not less than 20 bytes, then you should just 
+	 *	use AS_POLICY_KEY_DIGEST.
 	 */
 	AS_POLICY_KEY_SEND,
 
@@ -363,8 +406,7 @@ typedef struct as_policy_query_s {
 typedef struct as_policy_scan_s {
 
 	/**
-	 *	Maximum time in milliseconds to wait for 
-	 *	the operation to complete.
+	 *	Maximum time in milliseconds to wait for the operation to complete.
 	 *
 	 *	If 0 (zero), then the value will default to
 	 *	either as_config.policies.timeout

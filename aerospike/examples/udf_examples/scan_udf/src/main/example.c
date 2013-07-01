@@ -10,9 +10,11 @@
 #include <ctype.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <pthread.h>
 
-#include <citrusleaf/citrusleaf.h>
-#include <citrusleaf/cl_udf.h>
+#include <aerospike/aerospike.h>
+#include <aerospike/aerospike_key.h>
+#include <aerospike/aerospike_udf.h>
 #include <libgen.h>
 #include <citrusleaf/cf_random.h>
 #include <citrusleaf/cf_atomic.h>
@@ -92,13 +94,13 @@ int register_package()
         return(-1); 
     } 
     int max_script_len = 1048576; 
-    byte *script_code = (byte *)malloc(max_script_len); 
+    unsigned char *script_code = (unsigned char *)malloc(max_script_len); 
     memset(script_code, 0, max_script_len);
     if (script_code == NULL) { 
         LOG("malloc failed"); return(-1); 
     }     
 
-    byte *script_ptr = script_code; 
+    unsigned char *script_ptr = script_code; 
     int b_read = fread(script_ptr,1,512,fptr); 
     int b_tot = 0; 
     while (b_read) { 
@@ -108,14 +110,13 @@ int register_package()
     }                        
     fclose(fptr); 
 
-    char *err_str = NULL; 
+	as_error err;
     as_bytes udf_content;
     as_bytes_init(&udf_content, script_code, b_tot, true);
     if (b_tot>0) { 
-        int resp = citrusleaf_udf_put(g_config->as.cluster, basename(g_config->package_file), &udf_content, AS_UDF_LUA, &err_str); 
+        int resp = aerospike_udf_put(&g_config->as, &err, NULL, basename(g_config->package_file), AS_UDF_TYPE_LUA, &udf_content); 
         if (resp!=0) { 
             LOG("unable to register package file %s resp = %d",g_config->package_file, resp); return(-1);
-            LOG("%s",err_str); free(err_str);
             free(script_code);
             return(-1);
         }
@@ -191,20 +192,13 @@ int main(int argc, char **argv) {
 
 
     // insert records
+    as_policy_write wpol;
+	as_policy_write_init(&wpol);
+	wpol.timeout = 1000;
 
-    cl_write_parameters wp;
-    cl_write_parameters_set_default(&wp);
-    wp.timeout_ms = 1000;
-    wp.record_ttl = 864000;
-
-    cl_object okey;
-    cl_bin bins[6];
-    strcpy(bins[0].bin_name, "bid");
-    strcpy(bins[1].bin_name, "timestamp");
-    strcpy(bins[2].bin_name, "advertiser");
-    strcpy(bins[3].bin_name, "campaign");
-    strcpy(bins[4].bin_name, "line_item");
-    strcpy(bins[5].bin_name, "spend");
+	as_record rec;
+    as_key okey;
+    as_record_init(&rec, 6);
 
     uint32_t ts = 275273225;
     uint32_t et = 0;
@@ -217,7 +211,6 @@ int main(int argc, char **argv) {
         if ( i % 4 == 0 ) {
             et++;
         }
-        int nbins = 6;
 
         uint32_t advertiserId = (rand() % 4) + 1;
         uint32_t campaignId = advertiserId * 10 + (rand() % 4) + 1;
@@ -226,15 +219,14 @@ int main(int argc, char **argv) {
         uint32_t timestamp = ts + et;
         uint32_t spend = advertiserId + campaignId + lineItemId;
 
-        citrusleaf_object_init_int(&okey, bidId);
-        citrusleaf_object_init_int(&bins[0].object, bidId);
-        citrusleaf_object_init_int(&bins[1].object, timestamp);
-        citrusleaf_object_init_int(&bins[2].object, advertiserId);
-        citrusleaf_object_init_int(&bins[3].object, campaignId);
-        citrusleaf_object_init_int(&bins[4].object, lineItemId);
-        citrusleaf_object_init_int(&bins[5].object, spend);
-
-        rc = citrusleaf_put(g_config->as.cluster, g_config->ns, g_config->set, &okey, bins, nbins, &wp);
+		as_key_init_int64(&okey, g_config->ns, g_config->set, bidId);
+        as_record_set_int64(&rec, "bid", bidId);
+        as_record_set_int64(&rec, "timestamp", timestamp);
+        as_record_set_int64(&rec, "advertiser", advertiserId);
+        as_record_set_int64(&rec, "campaign", campaignId);
+        as_record_set_int64(&rec, "line_item", lineItemId);
+        as_record_set_int64(&rec, "spend", spend);
+		rc = aerospike_key_put(&g_config->as, &err, NULL, &okey, &rec);
     }
 
     LOG("Complete! Inserted %d rows", g_config->nkeys);

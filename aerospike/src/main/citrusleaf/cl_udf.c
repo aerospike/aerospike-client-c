@@ -252,7 +252,7 @@ cl_rv citrusleaf_udf_record_apply(cl_cluster * cl, const char * ns, const char *
             }
         }
         else {
-        	snprintf(err_str, 256, "Null value returned in converting udf-bin to value for type :%d", val->type);
+		snprintf(err_str, 256, "Null value returned in converting udf-bin to value ");
         	as_result_setfailure(res, (as_val *) as_string_new(err_str,false));
            // as_result_setfailure(res, (as_val *) as_string_new("Invalid response. (2)",false/*ismalloc*/));
         }

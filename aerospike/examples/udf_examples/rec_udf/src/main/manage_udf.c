@@ -311,7 +311,7 @@ int main(int argc, char **argv) {
 	citrusleaf_cluster_destroy(asc);
 
 
-	fprintf(stderr, "~ fin ~\n", m);
+	fprintf(stderr, "~ fin ~%d\n", m);
 
 	return 0;
 }

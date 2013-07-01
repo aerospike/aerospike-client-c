@@ -195,7 +195,7 @@ aerospike * aerospike_new(as_config * config);
  *	Destroy the aerospike instance and associated resources.
  *
  *	~~~~~~~~~~{.c}
- *		aerospike_destroy(&config);
+ *		aerospike_destroy(&as);
  *	~~~~~~~~~~
  *
  *	@param as 		The aerospike instance to destroy

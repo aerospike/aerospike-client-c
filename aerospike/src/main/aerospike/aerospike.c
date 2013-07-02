@@ -106,8 +106,7 @@ as_status aerospike_connect(aerospike * as, as_error * err)
 	// configuration checks
 	if ( as->config.hosts[0].addr == NULL ) {
 		as_error(LOGGER, "no hosts provided");
-		as_error_update(err, AEROSPIKE_ERR_CLIENT, "no hosts provided");
-		return err->code;
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "no hosts provided");
 	}
 
 	// remember the process id which is spawning the background threads.
@@ -149,10 +148,9 @@ as_status aerospike_connect(aerospike * as, as_error * err)
 	
 	if ( as->cluster == NULL ) {
 		as_error(LOGGER, "Can't create client");	
-		as_error_update(err, AEROSPIKE_ERR_CLIENT, "Can't create client");
 		citrusleaf_cluster_destroy(as->cluster);
 		as->cluster = NULL;
-		return err->code;
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Can't create client");
 	}
 
 	as->cluster->nbconnect = as->config.non_blocking;
@@ -179,10 +177,9 @@ as_status aerospike_connect(aerospike * as, as_error * err)
 
 	if ( err->code != AEROSPIKE_OK ) {
 		as_error(LOGGER, "can't connect to any host");
-		as_error_update(err, AEROSPIKE_ERR_CLIENT, "can't connect to any host");
 		citrusleaf_cluster_destroy(as->cluster);
 		as->cluster = NULL;
-		return err->code;
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "can't connect to any host");
 	}
 
 	// Set cluster tend interval, now that tend thread can't mess up add_host.

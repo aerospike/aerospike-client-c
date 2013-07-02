@@ -24,7 +24,6 @@
 #include <citrusleaf/cf_random.h>
 #include <citrusleaf/cf_atomic.h>
 #include <citrusleaf/cf_hist.h>
-#include <citrusleaf/citrusleaf.h>
  
 #include "rec_udf.h"
 
@@ -130,15 +129,15 @@ int do_udf_bin_update_test() {
 	as_result res;
 	as_result_init(&res);
 
-	as_list * arglist = as_arraylist_new(3, 8);	
+	as_arraylist * arglist = as_arraylist_new(3, 8);	
 	// arg 1 -> bin name
-	as_list_append_str(arglist, "bin_to_change");
+	as_arraylist_append_str(arglist, "bin_to_change");
 
 	// arg #2 -> bin value
-	as_list_append_str(arglist,"changed by lua");
+	as_arraylist_append_str(arglist,"changed by lua");
 	LOG("Bin value intially : original_bin_val");
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
-			g_config->package_name,"do_update_bin", arglist, g_config->timeout_ms, &res);  
+			g_config->package_name,"do_update_bin", (as_list *)arglist, g_config->timeout_ms, &res);  
 	
 	if (rsp != CITRUSLEAF_OK) {
 		citrusleaf_object_free(&o_key);		
@@ -244,19 +243,19 @@ int do_udf_trim_bin_test() {
 		cl_object o_key;
 		citrusleaf_object_init_str(&o_key,keyStr);	
 		// (2) set up stored procedure to call
-		as_list * arglist = as_arraylist_new(2, 8);
+		as_arraylist * arglist = as_arraylist_new(2, 8);
 
 		if (!arglist) {
 			LOG("can't create udf_params");
 			return(-1);
 		}
 		// Send information about limit on the string len
-		as_list_append_str(arglist, "20");
+		as_arraylist_append_str(arglist, "20");
 
 		as_result res;
 		as_result_init(&res);
 		int rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
-				g_config->package_name, "do_trim_bin", arglist, g_config->timeout_ms, &res);  
+				g_config->package_name, "do_trim_bin", (as_list *)arglist, g_config->timeout_ms, &res);  
 
 		char *res_str = as_val_tostring(res.value); 
 		LOG("%s: %s", res.is_success ? "SUCCESS" : "FAILURE", res_str);
@@ -1293,7 +1292,7 @@ int do_udf_return_type_test() {
 	cl_object o_key;
 	citrusleaf_object_init_str(&o_key,keyStr);		
 
-	as_list * arglist = NULL;
+	as_arraylist * arglist;
 
 	as_result res;
 	as_result_init(&res);
@@ -1303,11 +1302,11 @@ int do_udf_return_type_test() {
 	 */
 
 	arglist = as_arraylist_new(1, 8);	
-	as_list_append_str(arglist, "none");
+	as_arraylist_append_str(arglist, "none");
 
 
 	int rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
-			g_config->package_name,"do_return_types", arglist, g_config->timeout_ms, &res); 
+			g_config->package_name,"do_return_types", (as_list *)arglist, g_config->timeout_ms, &res); 
 
 	if (rsp != CITRUSLEAF_OK) {
 		LOG("citrusleaf_run_udf failed as rsp=%d",rsp);
@@ -1336,12 +1335,12 @@ int do_udf_return_type_test() {
 	 */
 
 	arglist = as_arraylist_new(1, 8);	
-	as_list_append_str(arglist, "string_primitive");
+	as_arraylist_append_str(arglist, "string_primitive");
 
 	as_result_init(&res);
 
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
-			g_config->package_name,"do_return_types", arglist, g_config->timeout_ms, &res);  
+			g_config->package_name,"do_return_types", (as_list *)arglist, g_config->timeout_ms, &res);  
 	
 	if (rsp != CITRUSLEAF_OK) {
 		LOG("citrusleaf_run_udf failed as rsp=%d",rsp);
@@ -1379,10 +1378,10 @@ int do_udf_return_type_test() {
 	 */
 	
 	arglist = as_arraylist_new(1, 8);	
-	as_list_append_str(arglist, "p_int_primitive");
+	as_arraylist_append_str(arglist, "p_int_primitive");
 
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
-			g_config->package_name,"do_return_types", arglist, g_config->timeout_ms, &res);  
+			g_config->package_name,"do_return_types", (as_list *)arglist, g_config->timeout_ms, &res);  
 	
 	if (rsp != CITRUSLEAF_OK) {
 		LOG("citrusleaf_run_udf failed as rsp=%d",rsp);
@@ -1414,12 +1413,12 @@ int do_udf_return_type_test() {
 	 */
 
 	arglist = as_arraylist_new(1, 8);	
-	as_list_append_str(arglist, "n_int_primitive");
+	as_arraylist_append_str(arglist, "n_int_primitive");
 
 	as_result_init(&res);
 
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
-			g_config->package_name,"do_return_types", arglist, g_config->timeout_ms, &res);  
+			g_config->package_name,"do_return_types", (as_list *)arglist, g_config->timeout_ms, &res);  
 	
 	if (rsp != CITRUSLEAF_OK) {
 		LOG("citrusleaf_run_udf failed as rsp=%d",rsp);
@@ -1450,12 +1449,12 @@ int do_udf_return_type_test() {
 	 */
 
 	arglist = as_arraylist_new(1, 8);	
-	as_list_append_str(arglist, "bin_array");
+	as_arraylist_append_str(arglist, "bin_array");
 
 	as_result_init(&res);
 
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
-			g_config->package_name,"do_return_types", arglist, g_config->timeout_ms, &res);  
+			g_config->package_name,"do_return_types", (as_list *) arglist, g_config->timeout_ms, &res);  
 	
 	if (rsp != CITRUSLEAF_OK) {
 		LOG("citrusleaf_run_udf failed as rsp=%d",rsp);
@@ -1488,11 +1487,11 @@ int do_udf_return_type_test() {
 	 */
 
 	arglist = as_arraylist_new(1, 8);	
-	as_list_append_str(arglist, "bin_nested_list");
+	as_arraylist_append_str(arglist, "bin_nested_list");
 	as_result_init(&res);
 
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
-			g_config->package_name,"do_return_types", arglist, g_config->timeout_ms, &res);  
+			g_config->package_name,"do_return_types", (as_list *)arglist, g_config->timeout_ms, &res);  
 	
 	if (rsp != CITRUSLEAF_OK) {
 		LOG("citrusleaf_run_udf failed as rsp=%d",rsp);
@@ -1502,19 +1501,19 @@ int do_udf_return_type_test() {
 	LOG("list: %s", res.is_success ? "SUCCESS" : "FAILURE");
 	if ( res.is_success ) {
 		if ( as_val_type(res.value) == AS_LIST ) {
-			as_list * l1 = (as_list *) res.value;
-			uint32_t l1_sz = as_list_size(l1);
+			as_arraylist * l1 = (as_arraylist *)res.value;
+			uint32_t l1_sz = as_arraylist_size(l1);
 			if ( l1_sz != 2 ) {
 				LOG("list: expected=2 elements, actual=%d elements", l1_sz);
 				errors++;
 			}
 			else {
-				as_iterator l1_i;
-				as_list_iterator_init(&l1_i, l1);
+				as_arraylist_iterator l1_i;
+				as_arraylist_iterator_init(&l1_i, l1);
 				bool l1_string = false;
 				bool l1_list = false;
-				while ( as_iterator_has_next(&l1_i) ) {
-					as_val * l1_v = (as_val *) as_iterator_next(&l1_i);
+				while ( as_arraylist_iterator_has_next(&l1_i) ) {
+					as_val * l1_v = (as_val *) as_arraylist_iterator_next(&l1_i);
 					if ( as_val_type(l1_v) == AS_STRING ) {
 						char * str = as_string_tostring((as_string *) l1_v);
 						if ( strcmp(str,"string_resp") != 0 ) {
@@ -1526,20 +1525,20 @@ int do_udf_return_type_test() {
 						}
 					}
 					else if ( as_val_type(l1_v) == AS_LIST ) {
-						as_list * l2 = (as_list *) l1_v;
-						uint32_t l2_sz = as_list_size(l2);
+						as_arraylist * l2 = (as_arraylist *) l1_v;
+						uint32_t l2_sz = as_arraylist_size(l2);
 						if ( l2_sz != 2 ) {
 							LOG("list: expected=2 elements, actual=%d elements", l2_sz);
 							errors++;
 						}
 						else {
 
-							as_iterator l2_i; 
-							as_list_iterator_init(&l2_i, l2);
+							as_arraylist_iterator l2_i; 
+							as_arraylist_iterator_init(&l2_i, l2);
 							bool l2_string = false;
 							bool l2_integer = false;
-							while ( as_iterator_has_next(&l2_i) ) {
-								as_val * l2_v = (as_val *) as_iterator_next(&l2_i);
+							while ( as_arraylist_iterator_has_next(&l2_i) ) {
+								as_val * l2_v = (as_val *) as_arraylist_iterator_next(&l2_i);
 								if ( as_val_type(l2_v) == AS_STRING ) {
 									char * str = as_string_tostring((as_string *) l2_v);
 									if ( strcmp(str,"yup") != 0 ) {
@@ -1570,7 +1569,7 @@ int do_udf_return_type_test() {
 								l1_list = true;
 							}
 
-							as_iterator_destroy(&l2_i);
+							as_arraylist_iterator_destroy(&l2_i);
 						}
 					}
 					else {
@@ -1578,7 +1577,7 @@ int do_udf_return_type_test() {
 						errors++;
 					}
 				}
-				as_iterator_destroy(&l1_i);
+				as_arraylist_iterator_destroy(&l1_i);
 			}
 
 			// do something with l1_string and l1_list
@@ -1599,12 +1598,12 @@ int do_udf_return_type_test() {
 	 */
 
 	arglist = as_arraylist_new(1, 8);	
-	as_list_append_str(arglist, "bin_map");
+	as_arraylist_append_str(arglist, "bin_map");
 
 	as_result_init(&res);
 
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
-			g_config->package_name,"do_return_types", arglist, g_config->timeout_ms, &res);  
+			g_config->package_name,"do_return_types", (as_list *)arglist, g_config->timeout_ms, &res);  
 	
 	if (rsp != CITRUSLEAF_OK) {
 		LOG("citrusleaf_run_udf failed as rsp=%d",rsp);
@@ -1743,18 +1742,18 @@ int do_udf_blob_test() {
 	cl_object o_key;
 	citrusleaf_object_init_str(&o_key,keyStr);	
 
-	as_list arglist;
+	as_arraylist arglist;
 	as_arraylist_init(&arglist, 3, 8);	
 	// arg 1 -> bin name
-	as_list_append_str(&arglist, "WRITE");
-	as_list_append_str(&arglist, "bin1"); // bin to write
-	as_list_append_int64(&arglist, 5); // len
+	as_arraylist_append_str(&arglist, "WRITE");
+	as_arraylist_append_str(&arglist, "bin1"); // bin to write
+	as_arraylist_append_int64(&arglist, 5); // len
 
 	// (1) Call a lua function that writes this blob
 	as_result res;
 	as_result_init(&res);
 	cl_rv rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
-		g_config->package_name, "do_udf_blob", &arglist, 
+		g_config->package_name, "do_udf_blob", (as_list *)&arglist, 
 		g_config->timeout_ms, &res);  
 
 	if (rsp != CITRUSLEAF_OK) return -1;
@@ -1764,20 +1763,20 @@ int do_udf_blob_test() {
 	if (0 != strcmp("OK",res_str)) return(-1);
 
 	as_result_destroy(&res);
-	as_list_destroy(&arglist);
+	as_arraylist_destroy(&arglist);
 
 	// check that it got persisted
 
 	as_arraylist_init(&arglist,3, 8);	
 	// arg 1 -> bin name
-	as_list_append_str(&arglist, "READ");
-	as_list_append_str(&arglist, "bin1"); // bin to write
-	as_list_append_int64(&arglist, 5); // len
+	as_arraylist_append_str(&arglist, "READ");
+	as_arraylist_append_str(&arglist, "bin1"); // bin to write
+	as_arraylist_append_int64(&arglist, 5); // len
 
 	// (1) Call a lua function that writes this blob
 	as_result_init(&res);
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
-		g_config->package_name, "do_udf_blob", &arglist, 
+		g_config->package_name, "do_udf_blob", (as_list *)&arglist, 
 		g_config->timeout_ms, &res);  
 
 	if (rsp != CITRUSLEAF_OK) 	return -1;
@@ -1788,7 +1787,7 @@ int do_udf_blob_test() {
 
 	as_result_destroy(&res);
 
-	as_list_destroy(&arglist);
+	as_arraylist_destroy(&arglist);
 
 	return(0);
 }
@@ -1800,16 +1799,16 @@ int do_udf_blob_unit_test() {
 	cl_object o_key;
 	citrusleaf_object_init_str(&o_key,keyStr);	
 
-	as_list arglist;
+	as_arraylist arglist;
 	as_arraylist_init(&arglist, 3, 8);	
 	// arg 1 -> bin name
-	as_list_append_str(&arglist, "WRITE");
+	as_arraylist_append_str(&arglist, "WRITE");
 
 	// (1) Call a lua function that writes this blob
 	as_result res;
 	as_result_init(&res);
 	cl_rv rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
-		g_config->package_name, "do_udf_blob_unit", &arglist, 
+		g_config->package_name, "do_udf_blob_unit", (as_list *)&arglist, 
 		g_config->timeout_ms, &res);  
 
 	if (rsp != CITRUSLEAF_OK) 	return -1;
@@ -1819,18 +1818,18 @@ int do_udf_blob_unit_test() {
 	if (0 != strcmp("OK",res_str)) return(-1);
 
 	as_result_destroy(&res);
-	as_list_destroy(&arglist);
+	as_arraylist_destroy(&arglist);
 
 	// check that it got persisted
 
 	as_arraylist_init(&arglist,3, 8);	
 	// arg 1 -> bin name
-	as_list_append_str(&arglist, "READ");
+	as_arraylist_append_str(&arglist, "READ");
 
 	// (1) Call a lua function that writes this blob
 	as_result_init(&res);
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
-		g_config->package_name, "do_udf_blob_unit", &arglist, 
+		g_config->package_name, "do_udf_blob_unit", (as_list *)&arglist, 
 		g_config->timeout_ms, &res);  
 
 	if (rsp != CITRUSLEAF_OK) return(-1);
@@ -1842,7 +1841,7 @@ int do_udf_blob_unit_test() {
 
 	as_result_destroy(&res);
 
-	as_list_destroy(&arglist);
+	as_arraylist_destroy(&arglist);
 
 	return(0);
 }
@@ -1857,36 +1856,36 @@ int do_udf_blob_list_unit_test() {
 	cl_object o_key;
 	citrusleaf_object_init_str(&o_key,keyStr);	
 
-	as_list arglist;
+	as_arraylist arglist;
 	as_arraylist_init(&arglist, 3, 8);	
 	// arg 1 -> action
-	as_list_append_str(&arglist, "WRITE");
+	as_arraylist_append_str(&arglist, "WRITE");
 
 	// arg 2 -> fancy list of bytes
-    as_list * lob = as_arraylist_new(2, 0);
+    as_arraylist * lob = as_arraylist_new(2, 0);
     as_bytes * b1 = as_bytes_new(test_bytes1,sizeof(test_bytes1),false/*ismalloc*/);
     as_bytes * b2 = as_bytes_new(test_bytes2,sizeof(test_bytes2),false/*ismalloc*/);
-    as_list_set(lob,0,(as_val *)b1);
-    as_list_set(lob,1,(as_val *)b2);
+    as_arraylist_set(lob,0,(as_val *)b1);
+    as_arraylist_set(lob,1,(as_val *)b2);
 
-    as_list_set(&arglist, 1, (as_val *) lob);
+    as_arraylist_set(&arglist, 1, (as_val *) lob);
 
     // arg 3 -> fancy map of bytes
-    as_map * mob = as_hashmap_new(5);
+    as_hashmap * mob = as_hashmap_new(5);
     as_string * k1 = as_string_new("key1",false /*ismalloc*/);
     as_string * k2 = as_string_new("key2",false /*ismalloc*/);
     as_val_reserve(b1);
-    as_map_set(mob,(as_val *)k1,(as_val *)b1);
+    as_hashmap_set(mob,(as_val *)k1,(as_val *)b1);
     as_val_reserve(b2);
-    as_map_set(mob,(as_val *)k2,(as_val *)b2);
+    as_hashmap_set(mob,(as_val *)k2,(as_val *)b2);
 
-    as_list_set(&arglist, 2, (as_val *) mob);
+    as_arraylist_set(&arglist, 2, (as_val *) mob);
 
 	// (1) Call a lua function that writes this blob
 	as_result res;
 	as_result_init(&res);
 	cl_rv rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
-		g_config->package_name, "do_udf_blob_list_unit", &arglist, 
+		g_config->package_name, "do_udf_blob_list_unit", (as_list *) &arglist, 
 		g_config->timeout_ms, &res);  
 
 	if (rsp != CITRUSLEAF_OK) 	return -1;
@@ -1902,12 +1901,12 @@ int do_udf_blob_list_unit_test() {
 
 	as_arraylist_init(&arglist,3, 8);	
 	// arg 1 -> bin name
-	as_list_set(&arglist, 0, (as_val *) as_string_new( "READ", false /*ismalloc*/ ) );
+	as_arraylist_set(&arglist, 0, (as_val *) as_string_new( "READ", false /*ismalloc*/ ) );
 
 	// (1) Call a lua function that writes this blob
 	as_result_init(&res);
 	rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, 
-		g_config->package_name, "do_udf_blob_list_unit", &arglist, 
+		g_config->package_name, "do_udf_blob_list_unit", (as_list *)&arglist, 
 		g_config->timeout_ms, &res);  
 
 	if (rsp != CITRUSLEAF_OK) return(-1);
@@ -1919,10 +1918,10 @@ int do_udf_blob_list_unit_test() {
 
 	as_result_destroy(&res);
 
-	as_list_destroy(&arglist);
+	as_arraylist_destroy(&arglist);
 
-	as_map_destroy(mob);
-	as_list_destroy(lob);
+	as_hashmap_destroy(mob);
+	as_arraylist_destroy(lob);
 	citrusleaf_object_free(&o_key);		
 	return(0);
 }
@@ -2365,11 +2364,11 @@ const test_def test_defs[] = {
 	test(do_udf_copy_record_test),
 	test(do_udf_return_type_test),
 	test(do_udf_bin_type_test),
-	// test(do_udf_long_bindata_test),
+//	test(do_udf_long_bindata_test),
 	test(do_udf_long_biname_test),
 	test(do_udf_long_biname1_test),
 	test(do_udf_long_biname2_test),
-    test(do_udf_too_many_bins_test),
+	test(do_udf_too_many_bins_test),
 	test(do_udf_undefined_global),
 	test(do_udf_lua_functional_test),
 	test(do_udf_delete_bin_test),

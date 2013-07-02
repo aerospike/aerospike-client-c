@@ -1,17 +1,16 @@
-ROOT = ../../../..
-AEROSPIKE = $(ROOT)/aerospike
 ###############################################################################
 ##  SETTINGS                                                                 ##
 ###############################################################################
+
+# make AEROSPIKE=<PATH>
+AEROSPIKE := ../../../../aerospike
 
 CFLAGS = -std=gnu99 -g -rdynamic -Wall 
 CFLAGS += -fno-common -fno-strict-aliasing -fPIC 
 CFLAGS += -DMARCH_$(ARCH) -D_FILE_OFFSET_BITS=64 
 CFLAGS += -D_REENTRANT -D_GNU_SOURCE -DMEM_COUNT
-CFLAGS += -I$(AEROSPIKE)/src/include
-CFLAGS += -I$(ROOT)/aerospike-common/src/include
+CFLAGS += -I$(AEROSPIKE)/target/Linux-x86_64/include
 CFLAGS += -I../../utils/src/include
-CFLAGS += -I$(ROOT)/citrusleaf-base/src/include
 
 LDFLAGS = 
 LDFLAGS += -lssl -lcrypto -lpthread -lrt
@@ -27,6 +26,7 @@ OBJECTS = example.o example_utils.o
 ###############################################################################
 ##  MAIN TARGETS                                                             ##
 ###############################################################################
+
 all: build
 
 .PHONY: build
@@ -57,19 +57,3 @@ target/example: $(addprefix target/obj/,$(OBJECTS)) | target/bin
 .PHONY: run
 run: build
 	./target/example
-all: build
-
-.PHONY: build
-build: target/example
-
-.PHONY: build-clean
-build-clean:
-	@rm -rf $(TARGET_BIN)
-	@rm -rf $(TARGET_LIB)
-
-.PHONY: run
-run: $(TARGET_BIN)/example
-
-.PHONY: example
-example: $(TARGET_BIN)/example
-

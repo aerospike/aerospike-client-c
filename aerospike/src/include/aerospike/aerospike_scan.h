@@ -62,7 +62,7 @@
  *	-	aerospike_scan_node_foreach()
  *	
  *	~~~~~~~~~~{.c}
- *	bool my_callback(as_val * val, void * udata) {
+ *	bool my_callback(const as_val * val, void * udata) {
  *		return true;
  *	}
  *	~~~~~~~~~~
@@ -72,7 +72,7 @@
  *
  *	@return `true` to continue to the next value. Otherwise, iteration will end.
  */
-typedef bool (* aerospike_scan_foreach_callback)(as_val * val, void * udata);
+typedef bool (* aerospike_scan_foreach_callback)(const as_val * val, void * udata);
 
 /******************************************************************************
  *	FUNCTIONS

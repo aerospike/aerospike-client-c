@@ -123,7 +123,7 @@ TEST( udf_basics_1 , "manage udf_basics.lua" ) {
 	assert_int_eq( err.code, AEROSPIKE_OK );
 
 	info("downaloded: %s size=%d", filename, file.content.size);
-	assert_int_eq( file.content.size, content.len );
+	assert_int_eq( file.content.size, content.size );
 
 	as_udf_file_destroy(&file);
 

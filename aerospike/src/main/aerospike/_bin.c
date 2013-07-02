@@ -137,7 +137,7 @@ as_bin * as_bin_init_str(as_bin * bin, const as_bin_name name, const char * valu
 as_bin * as_bin_init_raw(as_bin * bin, const as_bin_name name, const uint8_t * value, uint32_t size)
 {
 	if ( !bin ) return bin;
-	as_bytes_init((as_bytes *) &bin->value, (uint8_t *) value, size, false);
+	as_bytes_init_wrap((as_bytes *) &bin->value, (uint8_t *) value, size, false);
 	return as_bin_defaults(bin, name, &bin->value);
 }
 

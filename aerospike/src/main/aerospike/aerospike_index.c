@@ -100,14 +100,14 @@ as_status aerospike_index_integer_create(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
 	const char * ns, const char * set, const char * bin, const char * name)
 {
-	return aerospike_index_sparse_create(as, err, policy, ns, set, bin, "NUMERIC", name);
+	return aerospike_index_create(as, err, policy, ns, set, bin, "NUMERIC", name);
 }
 
 /**
- *	Create a new sparse secondary index on a string bin.
+ *	Create a new secondary index on a string bin.
  *
  *	~~~~~~~~~~{.c}
- *	if ( aerospike_index_sparse_string_create(&as, &err, NULL, 
+ *	if ( aerospike_index_string_create(&as, &err, NULL, 
  *			"test", "demo", "bin1", "idx_test_demo_bin1") != AEROSPIKE_OK ) {
  *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *	}
@@ -123,11 +123,11 @@ as_status aerospike_index_integer_create(
  *
  *	@return AEROSPIKE_OK if successful. AEROSPIKE_EXISTS if the index already exists. Otherwise an error.
  */
-as_status aerospike_index_sparse_string_create(
+as_status aerospike_index_string_create(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
 	const char * ns, const char * set, const char * bin, const char * name)
 {
-	return aerospike_index_sparse_create(as, err, policy, ns, set, bin, "STRING", name);
+	return aerospike_index_create(as, err, policy, ns, set, bin, "STRING", name);
 }
 
 /**

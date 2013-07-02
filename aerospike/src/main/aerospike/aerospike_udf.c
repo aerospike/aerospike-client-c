@@ -45,7 +45,7 @@ static void clfile_to_asfile(cl_udf_file * clfile, as_udf_file * asfile) {
 	asfile->type = clfile->type;
 	if ( clfile->content ) {
 		asfile->content._free = clfile->content->free;
-		asfile->content.size = clfile->content->len;
+		asfile->content.size = clfile->content->size;
 		asfile->content.capacity = clfile->content->capacity;
 		asfile->content.bytes = clfile->content->value;
 	}
@@ -138,7 +138,7 @@ as_status aerospike_udf_get(
 
 		clfile.content->value = NULL;
 		clfile.content->capacity = 0;
-		clfile.content->len = 0;
+		clfile.content->size = 0;
 		as_bytes_destroy(clfile.content);
 		clfile.content = NULL;
 	}

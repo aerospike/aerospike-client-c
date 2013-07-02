@@ -4,9 +4,10 @@ local function add(a, b)
 end
 
 local function select(bin) 
-    return function (rec)
+    local function f(rec)
         return rec[bin]
     end
+    return f
 end
 
 local function one(r)
@@ -17,7 +18,7 @@ end
 
 
 function count(s)
-    return s : map(one) : reduce(add);
+    return s : map(one) : reduce(add)
 end
 
 function sum(s)

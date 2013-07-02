@@ -103,7 +103,7 @@ static int check_bin4(as_record *rec, scan_struct *scan_data)
 	return 0;
 }
 
-static int scan_cb_counter(as_val *val, void *udata) 
+static bool scan_cb_counter(const as_val *val, void *udata) 
 {
 	scan_struct *scan_data = (scan_struct *)udata;
 	const char *scan_setname = scan_data->setname;
@@ -226,14 +226,14 @@ static void insert_data(int numrecs, const char *setname)
 		as_record_set_str(&r, "bin2", strval);
 
 		// Map bin
-		as_stringmap_set_int64(&m, "x", i);
-		as_stringmap_set_int64(&m, "y", i+1);
-		as_stringmap_set_int64(&m, "z", i+2);
+		as_stringmap_set_int64((as_map *) &m, "x", i);
+		as_stringmap_set_int64((as_map *) &m, "y", i+1);
+		as_stringmap_set_int64((as_map *) &m, "z", i+2);
 		// as_record_set() will try to destroy the bin value (hashmap) if it already exists
 		// To reuse the same hashmap again and again in the loop we should protect it from
 		// getting destroyed. The trick is to bump up the ref count.
 		as_val_reserve(&m);
-		as_record_set_map(&r, "bin3", &m);
+		as_record_set_map(&r, "bin3", (as_map *) &m);
 
 		sprintf(strkey, "key-%s-%d", setname, i);
 
@@ -262,10 +262,11 @@ TEST( scan_basics_1 , "full scan (using NULL setname)" ) {
 	scan_data.justcount = true;
 
 	as_error err;
-	as_error_reset(&err);
 
-	as_scan *scan = as_scan_new(NS, NULL);
-	as_status rc = aerospike_scan_foreach(as, &err, NULL, scan, scan_cb_counter, &scan_data);
+	as_scan scan;
+	as_scan_init(&scan, NS, "");
+
+	as_status rc = aerospike_scan_foreach(as, &err, NULL, &scan, scan_cb_counter, &scan_data);
 	assert_int_eq( rc, AEROSPIKE_OK );
 
 	assert_int_eq( scan_data.ret_failed, false );
@@ -274,7 +275,7 @@ TEST( scan_basics_1 , "full scan (using NULL setname)" ) {
 	assert_true( scan_data.ret_rec_count >= exp_rec_count );
 	info("Got %d records in the scan. Expected atleast %d", scan_data.ret_rec_count, exp_rec_count);
 
-	as_scan_destroy(scan);
+	as_scan_destroy(&scan);
 }
 
 TEST( scan_basics_2 , "simple scan of a specific set" ) {
@@ -284,17 +285,18 @@ TEST( scan_basics_2 , "simple scan of a specific set" ) {
 	scan_data.setname = SET1;
 
 	as_error err;
-	as_error_reset(&err);
 
-	as_scan *scan = as_scan_new(NS, SET1);
-	as_status rc = aerospike_scan_foreach(as, &err, NULL, scan, scan_cb_counter, &scan_data);
+	as_scan scan;
+	as_scan_init(&scan, NS, SET1);
+
+	as_status rc = aerospike_scan_foreach(as, &err, NULL, &scan, scan_cb_counter, &scan_data);
 	assert_int_eq( rc, AEROSPIKE_OK );
 
 	assert_int_eq( scan_data.ret_failed, false );
 	assert_int_eq( scan_data.ret_rec_count, NUM_RECS_SET1 );
 	info("Got %d records in the scan. Expected %d", scan_data.ret_rec_count, NUM_RECS_SET1);
 
-	as_scan_destroy(scan);
+	as_scan_destroy(&scan);
 }
 
 TEST( scan_basics_3 , "scan of a specific set on a specific node" ) {
@@ -305,18 +307,18 @@ TEST( scan_basics_3 , "scan of a specific set on a specific node" ) {
 	scan_data.setname = SET2;
 
 	as_error err;
-	as_error_reset(&err);
 
 	char node_name[NODE_NAME_SIZE];
 	char *node_names = NULL;
 	int num_nodes;
 	cl_cluster_get_node_names(as->cluster, &num_nodes, &node_names);
 
-	as_scan *scan = as_scan_new(NS, SET2);
+	as_scan scan;
+	as_scan_init(&scan, NS, SET2);
 
 	for (int i=0; i<num_nodes; i++) {
 		memcpy(node_name, node_names+(NODE_NAME_SIZE*i), NODE_NAME_SIZE);
-		as_status rc = aerospike_scan_node_foreach(as, &err, NULL, node_name, scan, scan_cb_counter, &scan_data);
+		as_status rc = aerospike_scan_node_foreach(as, &err, NULL, node_name, &scan, scan_cb_counter, &scan_data);
 		assert_int_eq( rc, AEROSPIKE_OK );
 		assert_int_eq( scan_data.ret_failed, false );
 		total_rec_count += scan_data.ret_rec_count;
@@ -329,7 +331,7 @@ TEST( scan_basics_3 , "scan of a specific set on a specific node" ) {
 	info("Got %d records in the scan. Expected %d", total_rec_count, NUM_RECS_SET2);
 
 	free(node_names);
-	as_scan_destroy(scan);
+	as_scan_destroy(&scan);
 }
 
 TEST( scan_basics_4 , "simple scan of a specific set with no-bin-data" ) {
@@ -340,18 +342,19 @@ TEST( scan_basics_4 , "simple scan of a specific set with no-bin-data" ) {
 	scan_data.setname = SET1;
 
 	as_error err;
-	as_error_reset(&err);
 
-	as_scan *scan = as_scan_new(NS, SET1);
-	scan->no_bins = true;
-	as_status rc = aerospike_scan_foreach(as, &err, NULL, scan, scan_cb_counter, &scan_data);
+	as_scan scan;
+	as_scan_init(&scan, NS, SET1);
+	as_scan_set_nobins(&scan, true);
+
+	as_status rc = aerospike_scan_foreach(as, &err, NULL, &scan, scan_cb_counter, &scan_data);
 	assert_int_eq( rc, AEROSPIKE_OK );
 
 	assert_int_eq( scan_data.ret_failed, false );
 	assert_int_eq( scan_data.ret_rec_count, NUM_RECS_SET1 );
 	info("Got %d records in the scan. Expected %d", scan_data.ret_rec_count, NUM_RECS_SET1);
 
-	as_scan_destroy(scan);
+	as_scan_destroy(&scan);
 }
 
 TEST( scan_basics_5 , "udf scan in background to insert a new bin" ) {
@@ -363,28 +366,31 @@ TEST( scan_basics_5 , "udf scan in background to insert a new bin" ) {
 	scan_data.bin4_startval = 1;
 
 	as_error err;
-	as_error_reset(&err);
 
-	// insert a new bin using udf
-	as_scan *scan = as_scan_new(NS, SET2);
-	as_scan_apply(scan, "aerospike_scan_test", "scan_insert_bin4", NULL);
+	as_scan scan;
+	as_scan_init(&scan, NS, SET1);
+	as_scan_foreach(&scan, "aerospike_scan_test", "scan_insert_bin4", NULL);
+
 	uint64_t scanid = 123;
-	as_status udf_rc = aerospike_scan_background(as, &err, NULL, scan, &scanid);
+	as_status udf_rc = aerospike_scan_background(as, &err, NULL, &scan, &scanid);
 	assert_int_eq( udf_rc, AEROSPIKE_OK );
 
 	// We should let the background scan to finish
 	sleep(2);
 
 	// See if the above udf ran fine
-	as_scan *scan2 = as_scan_new(NS, SET2);
-	as_status rc = aerospike_scan_foreach(as, &err, NULL, scan2, scan_cb_counter, &scan_data);
+	as_scan scan2;
+	as_scan_init(&scan2, NS, SET2);
+
+	as_status rc = aerospike_scan_foreach(as, &err, NULL, &scan2, scan_cb_counter, &scan_data);
+
 	assert_int_eq( rc, AEROSPIKE_OK );
 	assert_int_eq( scan_data.ret_failed, false );
 	assert_int_eq( scan_data.ret_rec_count, NUM_RECS_SET2 );
 	info("Got %d records in the scan. Expected %d", scan_data.ret_rec_count, NUM_RECS_SET2);
 
-	as_scan_destroy(scan);
-	as_scan_destroy(scan2);
+	as_scan_destroy(&scan);
+	as_scan_destroy(&scan2);
 }
 
 TEST( scan_basics_6 , "udf scan in background per node to insert a new bin" ) {
@@ -397,7 +403,6 @@ TEST( scan_basics_6 , "udf scan in background per node to insert a new bin" ) {
 	scan_data.bin4_startval = 1;
 
 	as_error err;
-	as_error_reset(&err);
 
 	char node_name[NODE_NAME_SIZE];
 	char *node_names = NULL;
@@ -405,12 +410,14 @@ TEST( scan_basics_6 , "udf scan in background per node to insert a new bin" ) {
 	cl_cluster_get_node_names(as->cluster, &num_nodes, &node_names);
 
 	// insert a new bin using udf
-	as_scan *scan = as_scan_new(NS, SET2);
-	as_scan_apply(scan, "aerospike_scan_test", "scan_insert_bin4", NULL);
+	as_scan scan;
+	as_scan_init(&scan, NS, SET2);
+	as_scan_foreach(&scan, "aerospike_scan_test", "scan_insert_bin4", NULL);
+
 	uint64_t scanid = 456;
 	for (int i=0; i<num_nodes; i++) {
 		memcpy(node_name, node_names+(NODE_NAME_SIZE*i), NODE_NAME_SIZE);
-		as_status udf_rc = aerospike_scan_node_background(as, &err, NULL, node_name, scan, &scanid);
+		as_status udf_rc = aerospike_scan_node_background(as, &err, NULL, node_name, &scan, &scanid);
 		assert_int_eq( udf_rc, AEROSPIKE_OK );
 		assert_int_eq( scan_data.ret_failed, false );
 	}
@@ -419,10 +426,12 @@ TEST( scan_basics_6 , "udf scan in background per node to insert a new bin" ) {
 	sleep(2);
 
 	// See if the above udf ran fine
-	as_scan *scan2 = as_scan_new(NS, SET2);
+	as_scan scan2;
+	as_scan_init(&scan2, NS, SET2);
+
 	for (int i=0; i<num_nodes; i++) {
 		memcpy(node_name, node_names+(NODE_NAME_SIZE*i), NODE_NAME_SIZE);
-		as_status rc = aerospike_scan_node_foreach(as, &err, NULL, node_name, scan2, scan_cb_counter, &scan_data);
+		as_status rc = aerospike_scan_node_foreach(as, &err, NULL, node_name, &scan2, scan_cb_counter, &scan_data);
 		assert_int_eq( rc, AEROSPIKE_OK );
 		assert_int_eq( scan_data.ret_failed, false );
 		total_rec_count += scan_data.ret_rec_count;
@@ -433,8 +442,8 @@ TEST( scan_basics_6 , "udf scan in background per node to insert a new bin" ) {
 	assert_int_eq( total_rec_count, NUM_RECS_SET2 );
 	info("Got %d records in the scan. Expected %d", total_rec_count, NUM_RECS_SET2);
 
-	as_scan_destroy(scan);
-	as_scan_destroy(scan2);
+	as_scan_destroy(&scan);
+	as_scan_destroy(&scan2);
 }
 
 TEST( scan_basics_7 , "udf scan in foreground to insert a new bin" ) {
@@ -445,30 +454,33 @@ TEST( scan_basics_7 , "udf scan in foreground to insert a new bin" ) {
 	scan_data.bin4_present = true;
 
 	as_error err;
-	as_error_reset(&err);
 
 	// insert a new bin using udf
-	as_scan *scan = as_scan_new(NS, SET2);
-	as_scan_apply(scan, "aerospike_scan_test", "scan_update_bin4", NULL);
+	as_scan scan;
+	as_scan_init(&scan, NS, SET2);
+	as_scan_foreach(&scan, "aerospike_scan_test", "scan_update_bin4", NULL);
+
 	uint64_t scanid = 789;
-	as_status udf_rc = aerospike_scan_background(as, &err, NULL, scan, &scanid);
+	as_status udf_rc = aerospike_scan_background(as, &err, NULL, &scan, &scanid);
 	assert_int_eq( udf_rc, AEROSPIKE_OK );
 
 	// We should let the background scan to finish
 	sleep(2);
 
 	// See if the above udf ran fine
-	as_scan *scan2 = as_scan_new(NS, SET2);
-	as_scan_apply(scan2, "aerospike_scan_test", "scan_getrec", NULL);
+	as_scan scan2;
+	as_scan_init(&scan2, NS, SET2);
+	as_scan_foreach(&scan2, "aerospike_scan_test", "scan_getrec", NULL);
+
 	scan_data.bin4_startval = 4;
-	as_status rc = aerospike_scan_foreach(as, &err, NULL, scan2, scan_cb_counter, &scan_data);
+	as_status rc = aerospike_scan_foreach(as, &err, NULL, &scan2, scan_cb_counter, &scan_data);
 	assert_int_eq( rc, AEROSPIKE_OK );
 	assert_int_eq( scan_data.ret_failed, false );
 	assert_int_eq( scan_data.ret_rec_count, NUM_RECS_SET2 );
 	info("Got %d records in the scan. Expected %d", scan_data.ret_rec_count, NUM_RECS_SET2);
 
-	as_scan_destroy(scan);
-	as_scan_destroy(scan2);
+	as_scan_destroy(&scan);
+	as_scan_destroy(&scan2);
 }
 
 TEST( scan_basics_8 , "starting two udf scan in background with same scan-id" ) {
@@ -480,23 +492,26 @@ TEST( scan_basics_8 , "starting two udf scan in background with same scan-id" ) 
 	scan_data.bin4_startval = 1;
 
 	as_error err;
-	as_error_reset(&err);
 
 	// insert a new bin using udf
-	as_scan *scan = as_scan_new(NS, SET2);
-	as_scan_apply(scan, "aerospike_scan_test", "scan_noop", NULL);
+	as_scan scan;
+	as_scan_init(&scan, NS, SET2);
+	as_scan_foreach(&scan, "aerospike_scan_test", "scan_noop", NULL);
+
 	uint64_t scanid = 564;
-	as_status udf_rc = aerospike_scan_background(as, &err, NULL, scan, &scanid);
+	as_status udf_rc = aerospike_scan_background(as, &err, NULL, &scan, &scanid);
 	assert_int_eq( udf_rc, AEROSPIKE_OK );
 
-	as_scan *scan2 = as_scan_new(NS, SET2);
-	as_scan_apply(scan2, "aerospike_scan_test", "scan_noop", NULL);
+	as_scan scan2;
+	as_scan_init(&scan2, NS, SET2);
+	as_scan_foreach(&scan2, "aerospike_scan_test", "scan_noop", NULL);
+
 	uint64_t scanid2 = 564;
-	as_status udf_rc2 = aerospike_scan_background(as, &err, NULL, scan2, &scanid2);
+	as_status udf_rc2 = aerospike_scan_background(as, &err, NULL, &scan2, &scanid2);
 	assert_int_eq( udf_rc2, AEROSPIKE_ERR_SERVER );
 
-	as_scan_destroy(scan);
-	as_scan_destroy(scan2);
+	as_scan_destroy(&scan);
+	as_scan_destroy(&scan2);
 }
 
 /******************************************************************************

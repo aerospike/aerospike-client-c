@@ -222,7 +222,7 @@ void as_scan_destroy(as_scan * scan);
  *	The percentage of data to scan.
  *	
  *	~~~~~~~~~~{.c}
- *	as_scan_percent(&q, 100);
+ *	as_scan_set_percent(&q, 100);
  *	~~~~~~~~~~
  *
  *	@param scan 		The scan to set the priority on.
@@ -230,13 +230,13 @@ void as_scan_destroy(as_scan * scan);
  *
  *	@return On success, true. Otherwise an error occurred.
  */
-bool as_scan_percent(as_scan * scan, uint8_t percent);
+bool as_scan_set_percent(as_scan * scan, uint8_t percent);
 
 /**
  *	Set the priority for the scan.
  *	
  *	~~~~~~~~~~{.c}
- *	as_scan_priority(&q, AS_SCAN_PRIORITY_LOW);
+ *	as_scan_set_priority(&q, AS_SCAN_PRIORITY_LOW);
  *	~~~~~~~~~~
  *
  *	@param scan 		The scan to set the priority on.
@@ -244,13 +244,13 @@ bool as_scan_percent(as_scan * scan, uint8_t percent);
  *
  *	@return On success, true. Otherwise an error occurred.
  */
-bool as_scan_priority(as_scan * scan, as_scan_priority priority);
+bool as_scan_set_priority(as_scan * scan, as_scan_priority priority);
 
 /**
  *	Do not return bins. This will only return the metadata for the records.
  *	
  *	~~~~~~~~~~{.c}
- *	as_scan_nobins(&q, true);
+ *	as_scan_set_nobins(&q, true);
  *	~~~~~~~~~~
  *
  *	@param scan 		The scan to set the priority on.
@@ -258,7 +258,7 @@ bool as_scan_priority(as_scan * scan, as_scan_priority priority);
  *
  *	@return On success, true. Otherwise an error occurred.
  */
-bool as_scan_nobins(as_scan * scan, bool nobins);
+bool as_scan_set_nobins(as_scan * scan, bool nobins);
 
 /**
  *	Apply a UDF to each record scanned on the server.

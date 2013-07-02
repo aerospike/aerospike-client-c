@@ -98,7 +98,7 @@ static uint16_t  as_record_rec_gen(const as_rec * r)
 
 static as_bytes * as_record_rec_digest(const as_rec * r) 
 {
-	return r ? as_bytes_new(((as_record *) r)->key.digest.value, AS_DIGEST_VALUE_SIZE, false) : NULL;
+	return r ? as_bytes_new_wrap(((as_record *) r)->key.digest.value, AS_DIGEST_VALUE_SIZE, false) : NULL;
 }
 
 static uint16_t as_record_rec_numbins(const as_rec * r) 

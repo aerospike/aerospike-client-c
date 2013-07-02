@@ -216,7 +216,7 @@ typedef struct as_key_s {
 	/**
 	 *	The namespace the key belongs to.
 	 */
-	as_namespace namespace;
+	as_namespace ns;
 
 	/**
 	 *	The set the key belongs to.

@@ -96,14 +96,14 @@ as_status aerospike_key_get(
 	switch ( p.key ) {
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
-			rc = citrusleaf_get_all_digest_getsetname(as->cluster, key->namespace, (cf_digest *) digest->value,
+			rc = citrusleaf_get_all_digest_getsetname(as->cluster, key->ns, (cf_digest *) digest->value,
 					&values, &nvalues, timeout, &gen, &set, &ttl);
 			break;
 		}
 		case AS_POLICY_KEY_SEND: {
 			cl_object okey;
 			asval_to_clobject((as_val *) key->valuep, &okey);
-			rc = citrusleaf_get_all(as->cluster, key->namespace, key->set, &okey,
+			rc = citrusleaf_get_all(as->cluster, key->ns, key->set, &okey,
 					&values, &nvalues, timeout, &gen, &ttl);
 			break;
 		}
@@ -196,14 +196,14 @@ as_status aerospike_key_select(
 	switch ( p.key ) {
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
-			rc = citrusleaf_get_digest(as->cluster, key->namespace, (cf_digest *) digest->value,
+			rc = citrusleaf_get_digest(as->cluster, key->ns, (cf_digest *) digest->value,
 					values, nvalues, timeout, &gen, &ttl);
 			break;
 		}
 		case AS_POLICY_KEY_SEND: {
 			cl_object okey;
 			asval_to_clobject((as_val *) key->valuep, &okey);
-			rc = citrusleaf_get(as->cluster, key->namespace, key->set, &okey,
+			rc = citrusleaf_get(as->cluster, key->ns, key->set, &okey,
 					values, nvalues, timeout, &gen, &ttl);
 			break;
 		}
@@ -279,14 +279,14 @@ as_status aerospike_key_exists(
 	switch ( p.key ) {
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
-			rc = citrusleaf_exists_digest(as->cluster, key->namespace, (cf_digest *) digest->value,
+			rc = citrusleaf_exists_digest(as->cluster, key->ns, (cf_digest *) digest->value,
 					values, nvalues, timeout, &gen, &ttl);
 			break;
 		}
 		case AS_POLICY_KEY_SEND: {
 			cl_object okey;
 			asval_to_clobject((as_val *) key->valuep, &okey);
-			rc = citrusleaf_exists_key(as->cluster, key->namespace, key->set, &okey,
+			rc = citrusleaf_exists_key(as->cluster, key->ns, key->set, &okey,
 					values, nvalues, timeout, &gen, &ttl);
 			break;
 		}
@@ -366,13 +366,13 @@ as_status aerospike_key_put(
 	switch ( p.key ) {
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
-			rc = citrusleaf_put_digest_with_setname(as->cluster, key->namespace, key->set, (cf_digest *) digest->value, values, nvalues, &wp);
+			rc = citrusleaf_put_digest_with_setname(as->cluster, key->ns, key->set, (cf_digest *) digest->value, values, nvalues, &wp);
 			break;
 		}
 		case AS_POLICY_KEY_SEND: {
 			cl_object okey;
 			asval_to_clobject((as_val *) key->valuep, &okey);
-			rc = citrusleaf_put(as->cluster, key->namespace, key->set, &okey, values, nvalues, &wp);
+			rc = citrusleaf_put(as->cluster, key->ns, key->set, &okey, values, nvalues, &wp);
 			break;
 		}
 		default: {
@@ -422,13 +422,13 @@ as_status aerospike_key_remove(
 	switch ( p.key ) {
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
-			rc = citrusleaf_delete_digest(as->cluster, key->namespace, (cf_digest *) digest->value, &wp);
+			rc = citrusleaf_delete_digest(as->cluster, key->ns, (cf_digest *) digest->value, &wp);
 			break;
 		}
 		case AS_POLICY_KEY_SEND: {
 			cl_object okey;
 			asval_to_clobject((as_val *) key->valuep, &okey);
-			rc = citrusleaf_delete(as->cluster, key->namespace, key->set, &okey, &wp);
+			rc = citrusleaf_delete(as->cluster, key->ns, key->set, &okey, &wp);
 			break;
 		}
 		default: {
@@ -516,14 +516,14 @@ as_status aerospike_key_operate(
 	switch ( p.key ) {
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
-			rc = citrusleaf_operate_digest(as->cluster, key->namespace, (cf_digest *) digest->value,
+			rc = citrusleaf_operate_digest(as->cluster, key->ns, (cf_digest *) digest->value,
 					operations, n_operations, &wp, replace, &gen, &ttl);
 			break;
 		}
 		case AS_POLICY_KEY_SEND: {
 			cl_object okey;
 			asval_to_clobject((as_val *) key->valuep, &okey);
-			rc = citrusleaf_operate(as->cluster, key->namespace, key->set, &okey,
+			rc = citrusleaf_operate(as->cluster, key->ns, key->set, &okey,
 					operations, n_operations, &wp, replace, &gen, &ttl);
 			break;
 		}
@@ -651,7 +651,7 @@ as_status aerospike_key_apply(
 			as_digest * digest = as_key_digest((as_key *) key);
 			rc = do_the_full_monte( 
 				as->cluster, 0, CL_MSG_INFO2_WRITE, 0, 
-				key->namespace, key->set, 0, (cf_digest *) digest->value, &bins, CL_OP_WRITE, 0, &n_bins, 
+				key->ns, key->set, 0, (cf_digest *) digest->value, &bins, CL_OP_WRITE, 0, &n_bins, 
 				NULL, &wp, &trid, NULL, &call, NULL
 			);
 			break;
@@ -661,7 +661,7 @@ as_status aerospike_key_apply(
 			asval_to_clobject((as_val *) key->valuep, &okey);
 			rc = do_the_full_monte( 
 				as->cluster, 0, CL_MSG_INFO2_WRITE, 0, 
-				key->namespace, key->set, &okey, 0, &bins, CL_OP_WRITE, 0, &n_bins, 
+				key->ns, key->set, &okey, 0, &bins, CL_OP_WRITE, 0, &n_bins, 
 				NULL, &wp, &trid, NULL, &call, NULL
 			);
 			break;

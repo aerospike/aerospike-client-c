@@ -34,18 +34,18 @@ static as_scan * as_scan_defaults(as_scan * scan, bool free, const as_namespace 
 
 	scan->_free = free;
 
-	if ( strlen(ns) < AS_KEY_NAMESPACE_MAX_SIZE ) {
-		strcpy(query->ns, ns);
+	if ( strlen(ns) < AS_NAMESPACE_MAX_SIZE ) {
+		strcpy(scan->ns, ns);
 	}
 	else {
-		query->ns[0] = '\0';
+		scan->ns[0] = '\0';
 	}
 	
-	if ( strlen(set) < AS_KEY_SET_MAX_SIZE ) {
-		strcpy(query->set, set);
+	if ( strlen(set) < AS_SET_MAX_SIZE ) {
+		strcpy(scan->set, set);
 	}
 	else {
-		query->set[0] = '\0';
+		scan->set[0] = '\0';
 	}
 	
 	scan->priority = AS_SCAN_PRIORITY_DEFAULT;
@@ -102,7 +102,7 @@ void as_scan_destroy(as_scan * scan)
  *	The percentage of data to scan.
  *	
  *	~~~~~~~~~~{.c}
- *	as_scan_percent(&q, 100);
+ *	as_scan_set_percent(&q, 100);
  *	~~~~~~~~~~
  *
  *	@param scan 		The scan to set the priority on.
@@ -110,7 +110,7 @@ void as_scan_destroy(as_scan * scan)
  *
  *	@return On success, true. Otherwise an error occurred.
  */
-bool as_scan_percent(as_scan * scan, uint8_t percent)
+bool as_scan_set_percent(as_scan * scan, uint8_t percent)
 {
 	if ( !scan ) return false;
 	scan->percent = percent;
@@ -121,7 +121,7 @@ bool as_scan_percent(as_scan * scan, uint8_t percent)
  *	Set the priority for the scan.
  *	
  *	~~~~~~~~~~{.c}
- *	as_scan_priority(&q, AS_SCAN_PRIORITY_LOW);
+ *	as_scan_set_priority(&q, AS_SCAN_PRIORITY_LOW);
  *	~~~~~~~~~~
  *
  *	@param scan 		The scan to set the priority on.
@@ -129,7 +129,7 @@ bool as_scan_percent(as_scan * scan, uint8_t percent)
  *
  *	@return On success, true. Otherwise an error occurred.
  */
-bool as_scan_priority(as_scan * scan, as_scan_priority priority)
+bool as_scan_set_priority(as_scan * scan, as_scan_priority priority)
 {
 	if ( !scan ) return false;
 	scan->priority = priority;
@@ -140,7 +140,7 @@ bool as_scan_priority(as_scan * scan, as_scan_priority priority)
  *	Do not return bins. This will only return the metadata for the records.
  *	
  *	~~~~~~~~~~{.c}
- *	as_scan_nobins(&q, true);
+ *	as_scan_set_nobins(&q, true);
  *	~~~~~~~~~~
  *
  *	@param scan 		The scan to set the priority on.
@@ -148,7 +148,7 @@ bool as_scan_priority(as_scan * scan, as_scan_priority priority)
  *
  *	@return On success, true. Otherwise an error occurred.
  */
-bool as_scan_nobins(as_scan * scan, bool nobins)
+bool as_scan_set_nobins(as_scan * scan, bool nobins)
 {
 	if ( !scan ) return false;
 	scan->no_bins = nobins;
@@ -176,7 +176,9 @@ bool as_scan_nobins(as_scan * scan, bool nobins)
  *
  *	@return On success, true. Otherwise an error occurred.
  */
-void as_scan_foreach(as_scan * scan, const char * module, const char * function, as_list * arglist)
+bool as_scan_foreach(as_scan * scan, const char * module, const char * function, as_list * arglist)
 {
+	if ( !module || !function ) return false;
 	as_udf_call_init(&scan->foreach, module, function, arglist);
+	return true;
 }

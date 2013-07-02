@@ -78,8 +78,8 @@ static cl_query * as_query_toclquery(const as_query * query)
 	}
 
 	for ( int i = 0; i < query->orderby.size; i++ ) {
-		as_orderby * o = &query->orderby.entries[i];
-		cl_query_orderby(clquery, o->bin, o->ascending ? CL_ORDERBY_ASC : CL_ORDERBY_DESC);
+		as_ordering * o = &query->orderby.entries[i];
+		cl_query_orderby(clquery, o->bin, o->order == AS_ORDER_ASCENDING ? CL_ORDERBY_ASC : CL_ORDERBY_DESC);
 	}
 
 	if ( query->apply.module && query->apply.function ) {

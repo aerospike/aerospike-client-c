@@ -80,7 +80,7 @@ void * citrusleaf_udf_info_parameters(const char * key, const char * value, void
     	uint8_t * c = (uint8_t *) malloc(c_len + 1);
         memcpy(c, value, c_len);
         c[c_len] = 0;
-    	as_bytes_init(&info->content, c, c_len + 1, true /*memcpy*/);
+    	as_bytes_init_wrap(&info->content, c, c_len + 1, true /*memcpy*/);
     }
     else if ( strcmp(key,"files") == 0 ) {
         info->files = strdup(value);
@@ -156,7 +156,7 @@ as_val *citrusleaf_udf_bin_to_val(as_serializer *ser, cl_bin *bin) {
         {
             uint8_t *b = malloc(sizeof(bin->object.sz));
             memcpy(b, bin->object.u.blob, bin->object.sz);
-            val = (as_val *)as_bytes_new(b, bin->object.sz, true /*ismalloc*/);
+            val = (as_val *)as_bytes_new_wrap(b, bin->object.sz, true /*ismalloc*/);
         }
         case CL_LIST :
         case CL_MAP : {
@@ -404,22 +404,22 @@ cl_rv citrusleaf_udf_get_with_gen(cl_cluster *asc, const char * filename, cl_udf
         return 1;
     }
 
-    if ( as_bytes_len(&info.content) == 0 ) {
+    if ( info.content.size == 0 ) {
         *error = strdup("file_not_found");
         citrusleaf_udf_info_destroy(&info);
         return 2;
     }
 
-    uint8_t *   content = as_bytes_tobytes(&info.content);
-    int         clen    = as_bytes_len(&info.content) - 1; // this is a byte array, not string. last char is NULL.
+    uint8_t *   content = info.content.value;
+    int         clen    = info.content.size - 1; // this is a byte array, not string. last char is NULL.
 
     cf_base64_decode_inplace(content, &clen, true);
     
-    file->content = as_bytes_new(content, clen, true);
+    file->content = as_bytes_new_wrap(content, clen, true);
 
 	info.content.value = NULL;
 	info.content.free = false;
-	info.content.len = 0;
+	info.content.size = 0;
 	info.content.capacity = 0;
 
 	as_bytes_destroy(&info.content);
@@ -428,7 +428,7 @@ cl_rv citrusleaf_udf_get_with_gen(cl_cluster *asc, const char * filename, cl_udf
 
     // Update file hash
     unsigned char hash[SHA_DIGEST_LENGTH];
-    SHA1(as_bytes_tobytes(&info.content), as_bytes_len(&info.content), hash);
+    SHA1(info.content.value, info.content.size, hash);
 
     cf_convert_sha1_to_hex(hash, file->hash);
     
@@ -483,9 +483,9 @@ cl_rv citrusleaf_udf_put(cl_cluster *asc, const char * filename, as_bytes *conte
     char *  filepath    = strdup(filename);
     char *  filebase    = basename(filepath);
 
-    int  clen = as_bytes_len(content);
+    int  clen = content->size;
     char * content_base64 = malloc(cf_base64_encode_maxlen(clen));
-    cf_base64_tostring(as_bytes_tobytes(content), content_base64, &clen);
+    cf_base64_tostring(content->value, content_base64, &clen);
 
     if (! asprintf(&query, "udf-put:filename=%s;content=%s;content-len=%d;udf-type=%d;", filebase, content_base64, clen, udf_type)) {
         fprintf(stderr, "Query allocation failed");

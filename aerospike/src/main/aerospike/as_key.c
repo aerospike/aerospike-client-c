@@ -37,14 +37,14 @@
  *	STATIC FUNCTIONS
  *****************************************************************************/
 
-static as_key * as_key_defaults(as_key * key, bool free, const char * ns, const char * set, const as_key_value * valuep)
+static as_key * as_key_defaults(as_key * key, bool free, const as_namespace ns, const char * set, const as_key_value * valuep)
 {
 	if ( ! set ) set = "";
-	if ( ! (ns && *ns != '\0' && strlen(ns) < AS_KEY_NAMESPACE_MAX_SIZE && strlen(set) < AS_KEY_SET_MAX_SIZE) ) {
+	if ( ! (ns && *ns != '\0' && strlen(ns) < AS_NAMESPACE_MAX_SIZE && strlen(set) < AS_SET_MAX_SIZE) ) {
 		return NULL;
 	}
 	key->_free = free;
-	strcpy(key->namespace, ns);
+	strcpy(key->ns, ns);
 	strcpy(key->set, set);
 	key->valuep = (as_key_value *) valuep;
 	key->digest.init = false;
@@ -73,7 +73,7 @@ static as_key * as_key_defaults(as_key * key, bool free, const char * ns, const 
  *
  *	@return The initialized `as_key` on success. Otherwise NULL.
  */
-as_key * as_key_init(as_key * key, const char * ns, const char * set, const char * value)
+as_key * as_key_init(as_key * key, const as_namespace ns, const as_set set, const char * value)
 {
 	return as_key_init_str(key, ns, set, value);
 }
@@ -94,7 +94,7 @@ as_key * as_key_init(as_key * key, const char * ns, const char * set, const char
  *
  *	@return The initialized `as_key` on success. Otherwise NULL.
  */
-as_key * as_key_init_int64(as_key * key, const char * ns, const char * set, int64_t value)
+as_key * as_key_init_int64(as_key * key, const as_namespace ns, const as_set set, int64_t value)
 {
 	if ( !key ) return key;
 
@@ -118,7 +118,7 @@ as_key * as_key_init_int64(as_key * key, const char * ns, const char * set, int6
  *
  *	@return The initialized `as_key` on success. Otherwise NULL.
  */
-as_key * as_key_init_str(as_key * key, const char * ns, const char * set, const char * value)
+as_key * as_key_init_str(as_key * key, const as_namespace ns, const as_set set, const char * value)
 {
 	if ( !key ) return key;
 	
@@ -142,11 +142,11 @@ as_key * as_key_init_str(as_key * key, const char * ns, const char * set, const 
  *
  *	@return The initialized `as_key` on success. Otherwise NULL.
  */
-as_key * as_key_init_raw(as_key * key, const char * ns, const char * set, const uint8_t * value, uint32_t size)
+as_key * as_key_init_raw(as_key * key, const as_namespace ns, const as_set set, const uint8_t * value, uint32_t size)
 {
 	if ( !key ) return key;
 	
-	as_bytes_init((as_bytes *) &key->value, (uint8_t *) value, size, false);
+	as_bytes_init_wrap((as_bytes *) &key->value, (uint8_t *) value, size, false);
 	return as_key_defaults(key, false, ns, set, &key->value);
 }
 
@@ -169,7 +169,7 @@ as_key * as_key_init_raw(as_key * key, const char * ns, const char * set, const 
  *
  *	@return The initialized `as_key` on success. Otherwise NULL.
  */
-as_key * as_key_init_value(as_key * key, const char * ns, const char * set, const as_key_value * value)
+as_key * as_key_init_value(as_key * key, const as_namespace ns, const as_set set, const as_key_value * value)
 {
 	if ( !key ) return key;
 	return as_key_defaults(key, false, ns, set, value);
@@ -192,7 +192,7 @@ as_key * as_key_init_value(as_key * key, const char * ns, const char * set, cons
  *
  *	@return The initialized `as_key` on success. Otherwise NULL.
  */
-as_key * as_key_new(const char * ns, const char * set, const char * value)
+as_key * as_key_new(const as_namespace ns, const as_set set, const char * value)
 {
 	return as_key_new_str(ns, set, value);
 }
@@ -213,7 +213,7 @@ as_key * as_key_new(const char * ns, const char * set, const char * value)
  *
  *	@return The initialized `as_key` on success. Otherwise NULL.
  */
-as_key * as_key_new_int64(const char * ns, const char * set, int64_t value)
+as_key * as_key_new_int64(const as_namespace ns, const as_set set, int64_t value)
 {
 	as_key * key = (as_key *) malloc(sizeof(as_key));
 	if ( !key ) return key;
@@ -239,7 +239,7 @@ as_key * as_key_new_int64(const char * ns, const char * set, int64_t value)
  *
  *	@return The initialized `as_key` on success. Otherwise NULL.
  */
-as_key * as_key_new_str(const char * ns, const char * set, const char * value)
+as_key * as_key_new_str(const as_namespace ns, const as_set set, const char * value)
 {
 	as_key * key = (as_key *) malloc(sizeof(as_key));
 	if ( !key ) return key;
@@ -266,12 +266,12 @@ as_key * as_key_new_str(const char * ns, const char * set, const char * value)
  *
  *	@return The initialized `as_key` on success. Otherwise NULL.
  */
-as_key * as_key_new_raw(const char * ns, const char * set, const uint8_t * value, uint32_t size)
+as_key * as_key_new_raw(const as_namespace ns, const as_set set, const uint8_t * value, uint32_t size)
 {
 	as_key * key = (as_key *) malloc(sizeof(as_key));
 	if ( !key ) return key;
 	
-	as_bytes_init((as_bytes *) &key->value, (uint8_t *) value, size, false);
+	as_bytes_init_wrap((as_bytes *) &key->value, (uint8_t *) value, size, false);
 	return as_key_defaults(key, true, ns, set, &key->value);
 }
 
@@ -294,7 +294,7 @@ as_key * as_key_new_raw(const char * ns, const char * set, const uint8_t * value
  *
  *	@return The initialized `as_key` on success. Otherwise NULL.
  */
-as_key * as_key_new_value(const char * ns, const char * set, const as_key_value * value)
+as_key * as_key_new_value(const as_namespace ns, const as_set set, const as_key_value * value)
 {
 	as_key * key = (as_key *) malloc(sizeof(as_key));
 	if ( !key ) return key;

@@ -20,13 +20,6 @@
  *	IN THE SOFTWARE.
  *****************************************************************************/
 
-/** 
- *	@mainpage 
- *	
- *	@copydoc aerospike_client_api
- *
- */	
-
 /**
  *	@defgroup aerospike_client_api Aerospike Client API
  *	@{

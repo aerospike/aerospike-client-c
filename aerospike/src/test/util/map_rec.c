@@ -41,12 +41,12 @@ const as_rec_hooks map_rec_hooks = {
  *****************************************************************************/
 
 as_rec * map_rec_new() {
-    as_map * m = as_hashmap_new(32);
+    as_map * m = (as_map *) as_hashmap_new(32);
     return as_rec_new(m, &map_rec_hooks);
 }
 
 as_rec * map_rec_init(as_rec * r) {
-    as_map * m = as_hashmap_new(32);
+    as_map * m = (as_map *) as_hashmap_new(32);
     return as_rec_init(r, m, &map_rec_hooks);
 }
 

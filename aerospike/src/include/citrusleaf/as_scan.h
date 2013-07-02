@@ -26,6 +26,7 @@
 #include <citrusleaf/cl_scan.h>
 
 #include <aerospike/as_list.h>
+#include <stdbool.h>
 
 /******************************************************************************
  * TYPES

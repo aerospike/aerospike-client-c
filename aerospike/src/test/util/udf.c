@@ -49,7 +49,7 @@ bool udf_readfile(const char * filename, as_bytes * content) {
     }                        
     fclose(file); 
 
-    as_bytes_init(content, bytes, size, true);
+    as_bytes_init_wrap(content, bytes, size, true);
 
     return true;
 }
@@ -82,7 +82,7 @@ bool udf_put(const char * filename) {
     fclose(file); 
 
     as_bytes udf_content;
-    as_bytes_init(&udf_content, content, size, true);
+    as_bytes_init_wrap(&udf_content, content, size, true);
 
 	as_error err;
 	as_error_reset(&err);

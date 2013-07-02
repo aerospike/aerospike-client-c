@@ -41,7 +41,7 @@ TEST( index_basics_create , "Create index on bin" ) {
     as_error err;
     as_error_reset(&err);
 
-    aerospike_index_sparse_string_create(as, &err, NULL, "test", "test", "new_bin", "idx_test_new_bin");
+    aerospike_index_string_create(as, &err, NULL, "test", "test", "new_bin", "idx_test_new_bin");
     if ( err.code != AEROSPIKE_OK && err.code != AEROSPIKE_ERR_INDEX_FOUND ) {
         info("error(%d): %s", err.code, err.message);
     }

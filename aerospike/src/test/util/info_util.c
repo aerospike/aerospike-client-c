@@ -49,7 +49,7 @@ static bool parse_response( const cl_cluster_node * cn, const struct sockaddr_in
 	key_value * kv = (key_value *)udata;
 
 	// Define a map to store the key, value pairs thus parsed
-	as_map *map = as_hashmap_new(1024);
+	as_map *map = (as_map *) as_hashmap_new(1024);
 
 	// Skip the query and only take the response
 	char * response = strchr(value, '\t') + 1;
@@ -90,7 +90,7 @@ static bool parse_response( const cl_cluster_node * cn, const struct sockaddr_in
 	free(v);
 	free(d);
 	as_val_destroy(k);
-	as_hashmap_destroy(map);
+	as_map_destroy(map);
 	return true;	
 }
 

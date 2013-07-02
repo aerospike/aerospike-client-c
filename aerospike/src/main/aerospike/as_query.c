@@ -37,14 +37,14 @@ static as_query * as_query_defaults(as_query * query, bool free, const as_namesp
 {
 	query->_free = free;
 
-	if ( strlen(ns) < AS_KEY_NAMESPACE_MAX_SIZE ) {
+	if ( strlen(ns) < AS_NAMESPACE_MAX_SIZE ) {
 		strcpy(query->ns, ns);
 	}
 	else {
 		query->ns[0] = '\0';
 	}
 	
-	if ( strlen(set) < AS_KEY_SET_MAX_SIZE ) {
+	if ( strlen(set) < AS_SET_MAX_SIZE ) {
 		strcpy(query->set, set);
 	}
 	else {
@@ -56,10 +56,10 @@ static as_query * as_query_defaults(as_query * query, bool free, const as_namesp
 	query->select.size = 0;
 	query->select.entries = NULL;
 	
-	query->predicates._free = false;
-	query->predicates.capacity = 0;
-	query->predicates.size = 0;
-	query->predicates.entries = NULL;
+	query->where._free = false;
+	query->where.capacity = 0;
+	query->where.size = 0;
+	query->where.entries = NULL;
 	
 	query->orderby._free = false;
 	query->orderby.capacity = 0;
@@ -312,7 +312,7 @@ bool as_query_where(as_query * query, const char * bin, as_predicate_type type, 
 }
 
 /******************************************************************************
- *	WHERE FUNCTIONS
+ *	ORDERBY FUNCTIONS
  *****************************************************************************/
 
 /** 
@@ -333,14 +333,14 @@ bool as_query_where(as_query * query, const char * bin, as_predicate_type type, 
 bool as_query_orderby_init(as_query * query, uint16_t n)
 {
 	if ( !query ) return false;
-	if ( query->where.entries ) return false;
+	if ( query->orderby.entries ) return false;
 
-	query->where.entries = (as_query_predicates *) calloc(n, sizeof(as_query_predicates));
-	if ( !query->where.entries ) return false;
+	query->orderby.entries = (as_ordering *) calloc(n, sizeof(as_ordering));
+	if ( !query->orderby.entries ) return false;
 
-	query->where._free = true;
-	query->where.capacity = n;
-	query->where.size = 0;
+	query->orderby._free = true;
+	query->orderby.capacity = n;
+	query->orderby.size = 0;
 	
 	return true;
 }
@@ -356,13 +356,13 @@ bool as_query_orderby_init(as_query * query, uint16_t n)
  *	as_query_orderby(&q, "bin1", AS_ORDER_ASCENDING);
  *	~~~~~~~~~~
  *
- *	@param query		The query to modify.
- *	@param bin			The name of the bin to sort by.
- *	@param ascending	The direction to order by: `AS_ORDER_ASCENDING` or `AS_ORDER_DESCENDING`.
+ *	@param query	The query to modify.
+ *	@param bin		The name of the bin to sort by.
+ *	@param order	The direction to order by: `AS_ORDER_ASCENDING` or `AS_ORDER_DESCENDING`.
  *	
  *	@return On success, true. Otherwise an error occurred.
  */
-bool as_query_orderby(as_query * query, const char * bin, as_order_direction direction)
+bool as_query_orderby(as_query * query, const as_bin_name bin, as_order order)
 {
 	// test preconditions
 	if ( !query || !bin || strlen(bin) >= AS_BIN_NAME_MAX_SIZE ) {
@@ -372,10 +372,10 @@ bool as_query_orderby(as_query * query, const char * bin, as_order_direction dir
 	// insufficient capacity
 	if ( query->orderby.size >= query->orderby.capacity ) return false;
 
-	as_order * o = &query->orderby.entries[query->orderby.size++];
+	as_ordering * o = &query->orderby.entries[query->orderby.size++];
 
 	strcpy(o->bin, bin);
-	o->direction = direction;
+	o->order = order;
 
 	return true;
 }

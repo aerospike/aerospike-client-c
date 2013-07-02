@@ -63,8 +63,8 @@ as_status aerospike_scan_destroy(aerospike * as, as_error * err);
 static void as_scan_toclscan(const as_scan * scan, const as_policy_scan * policy, cl_scan * clscan, bool background, uint64_t * job_id) 
 {
 	clscan->job_id = 0;
-	clscan->ns = scan->ns;
-	clscan->setname = scan->set;
+	clscan->ns = (char *) scan->ns;
+	clscan->setname = (char *) scan->set;
 	clscan->params.fail_on_cluster_change = policy->fail_on_cluster_change;
 	clscan->params.priority = scan->priority;
 	clscan->params.pct = scan->percent;
@@ -131,27 +131,43 @@ static as_status process_node_response(cf_vector *v, as_error *err)
  * mechanism. When this gets called, it will create an as_val structure out of the
  * record and will call the callback that user supplied (folded into the udata structure)
  */
-static int simplescan_cb(char *ns, cf_digest *keyd, char *set, uint32_t generation,
-		uint32_t record_void_time, cl_bin *bins, int n_bins, bool is_last, void *udata)
+static int simplescan_cb(
+	char *ns, cf_digest *keyd, char *set, uint32_t generation,
+	uint32_t record_void_time, cl_bin *bins, int n_bins, bool is_last, void *udata)
 {
-		scan_bridge *bridge_udata = (scan_bridge *)udata;
+	scan_bridge *bridge_udata = (scan_bridge *)udata;
 
-		// Fill the bin data
-		as_record r;
-		as_record_inita(&r, n_bins);
-		clbins_to_asrecord(bins, n_bins, &r);
+	// Fill the bin data
+	as_record r;
+	as_record_inita(&r, n_bins);
+	clbins_to_asrecord(bins, n_bins, &r);
 
-		// Fill the metadata
-		as_key_init_value(&r.key, ns, set, NULL);
-		memcpy(r.key.digest.value, keyd, sizeof(cf_digest));
-		r.key.digest.init = true;
-		r.gen = generation;
-		r.ttl = record_void_time;
+	// Fill the metadata
+	as_key_init_value(&r.key, ns, set, NULL);
+	memcpy(r.key.digest.value, keyd, sizeof(cf_digest));
+	r.key.digest.init = true;
+	r.gen = generation;
+	r.ttl = record_void_time;
 
-		// Call the callback that user wanted to callback
-		(*bridge_udata->user_cb)((as_val *)&r, bridge_udata->user_udata);
-		
-		return 0;
+	// Call the callback that user wanted to callback
+	(*bridge_udata->user_cb)((as_val *)&r, bridge_udata->user_udata);
+	
+	return 0;
+}
+
+/**
+ * The is the proxy callback function. This will be passed to the old simple-scan
+ * mechanism. When this gets called, it will create an as_val structure out of the
+ * record and will call the callback that user supplied (folded into the udata structure)
+ */
+static int generic_cb(as_val * val, void * udata)
+{
+	scan_bridge *bridge_udata = (scan_bridge *)udata;
+	
+	// Call the callback that user wanted to callback
+	(*bridge_udata->user_cb)(val, bridge_udata->user_udata);
+	
+	return 0;
 }
 
 /**
@@ -198,7 +214,7 @@ static as_status aerospike_scan_generic(
 
 		// If the user want to execute only on a single node...
 		if (node) {
-			clrv = citrusleaf_scan_node(as->cluster, (char *) node, scan->namespace, scan->set, NULL, 0, 
+			clrv = citrusleaf_scan_node(as->cluster, (char *) node, (char *) scan->ns, (char *) scan->set, NULL, 0, 
 						scan->no_bins, scan->percent, simplescan_cb, &bridge_udata, &params);
 			rc = as_error_fromrc(err, clrv);
 		} else {
@@ -206,7 +222,7 @@ static as_status aerospike_scan_generic(
 			// We are not using the very old citrusleaf_scan() call here. First of all, its
 			// very inefficient. It makes a single node on the cluster coordinate the job
 			// of scan. Moreover, it does not accept params like priority etc.
-			cf_vector *v = citrusleaf_scan_all_nodes(as->cluster, scan->namespace, scan->set, NULL, 0, 
+			cf_vector *v = citrusleaf_scan_all_nodes(as->cluster, (char *) scan->ns, (char *) scan->set, NULL, 0, 
 						scan->no_bins, scan->percent, simplescan_cb, &bridge_udata, &params);
 			rc = process_node_response(v, err);
 		}
@@ -214,12 +230,12 @@ static as_status aerospike_scan_generic(
 	} else {
 		// If the user want to execute only on a single node...
 		if (node) {
-			clrv = citrusleaf_udf_scan_node(as->cluster, &clscan, (char *)node, (aerospike_scan_foreach_callback) callback, udata);
+			clrv = citrusleaf_udf_scan_node(as->cluster, &clscan, (char *)node, generic_cb, udata);
 			rc = as_error_fromrc(err, clrv);
 		} 
 		else {
 
-			cf_vector *v = citrusleaf_udf_scan_all_nodes(as->cluster, &clscan, (aerospike_scan_foreach_callback) callback, udata);
+			cf_vector *v = citrusleaf_udf_scan_all_nodes(as->cluster, &clscan, generic_cb, udata);
 			rc = process_node_response(v, err);
 		}
 	}

@@ -167,7 +167,7 @@ typedef enum as_order_e {
 	/**
 	 *	bin should be in ascending order
 	 */
-	AS_ORDER_DESCENDING = 1;
+	AS_ORDER_DESCENDING = 1
 
 } as_order;
 
@@ -381,7 +381,7 @@ typedef struct as_query_s {
 	 *
 	 *	Use as_query_orderby() to populate.
 	 */
-	as_query_orders orderby;
+	as_query_ordering orderby;
 
 	/**
 	 *	Limit the result set.
@@ -462,12 +462,12 @@ void as_query_destroy(as_query * query);
  *	@param __n		The number of bins to allocate.
  */
 #define as_query_select_inita(__query, __n) \
-	if ( (__query) && !(__query)->select.entries ) {\
-		query->select.entries = (as_bin_name *) alloca(n * sizeof(as_bin_name));\
-		if ( query->select.entries ) { \
-			query->select._free = false;\
-			query->select.capacity = n;\
-			query->select.size = 0;\
+	if ( (__query) != NULL && (__query)->select.entries == NULL ) {\
+		(__query)->select.entries = (as_bin_name *) alloca(__n * sizeof(as_bin_name));\
+		if ( (__query)->select.entries ) { \
+			(__query)->select._free = false;\
+			(__query)->select.capacity = __n;\
+			(__query)->select.size = 0;\
 		}\
  	}
 
@@ -532,12 +532,12 @@ bool as_query_select(as_query * query, const char * bin);
  *	@return On success, true. Otherwise an error occurred.
  */
 #define as_query_where_inita(__query, __n) \
-	if ( (__query) && !(__query)->where.entries ) {\
-		query->where.entries = (as_predicate *) alloca(n * sizeof(as_predicate));\
-		if ( query->where.entries ) { \
-			query->where._free = false;\
-			query->where.capacity = n;\
-			query->where.size = 0;\
+	if ( (__query)  != NULL && (__query)->where.entries == NULL ) {\
+		(__query)->where.entries = (as_predicate *) alloca(__n * sizeof(as_predicate));\
+		if ( (__query)->where.entries ) { \
+			(__query)->where._free = false;\
+			(__query)->where.capacity = __n;\
+			(__query)->where.size = 0;\
 		}\
  	}
 
@@ -602,12 +602,12 @@ bool as_query_where(as_query * query, const char * bin, as_predicate_type type, 
  *	@return On success, true. Otherwise an error occurred.
  */
 #define as_query_orderby_inita(__query, __n) \
-	if ( (__query) && !(__query)->orderby.entries ) {\
-		query->orderby.entries = (as_order *) alloca(n * sizeof(as_order));\
-		if ( query->orderby.entries ) { \
-			query->orderby._free = false;\
-			query->orderby.capacity = n;\
-			query->orderby.size = 0;\
+	if ( (__query) != NULL && (__query)->orderby.entries == NULL  ) {\
+		(__query)->orderby.entries = (as_ordering *) alloca(__n * sizeof(as_ordering));\
+		if ( (__query)->orderby.entries ) { \
+			(__query)->orderby._free = false;\
+			(__query)->orderby.capacity = __n;\
+			(__query)->orderby.size = 0;\
 		}\
  	}
 
@@ -639,13 +639,13 @@ bool as_query_orderby_init(as_query * query, uint16_t n);
  *	as_query_orderby(&q, "bin1", AS_ORDER_ASCENDING);
  *	~~~~~~~~~~
  *
- *	@param query		The query to modify.
- *	@param bin			The name of the bin to sort by.
- *	@param direction	The direction to order by: `AS_ORDER_ASCENDING` or `AS_ORDER_DESCENDING`.
+ *	@param query	The query to modify.
+ *	@param bin		The name of the bin to sort by.
+ *	@param order	The sort order: `AS_ORDER_ASCENDING` or `AS_ORDER_DESCENDING`.
  *
  *	@return On success, true. Otherwise an error occurred.
  */
-bool as_query_orderby(as_query * query, const char * bin, as_order_direction direction);
+bool as_query_orderby(as_query * query, const char * bin, as_order order);
 
 /******************************************************************************
  *	QUERY MODIFIER FUNCTIONS

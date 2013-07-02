@@ -111,28 +111,28 @@ TEST( query_foreach_create, "create 100 records and 4 indices" ) {
 
 	// create index on "a"
 
-	aerospike_index_sparse_string_create(as, &err, NULL, NAMESPACE, SET, "a", "idx_test_a");
+	aerospike_index_string_create(as, &err, NULL, NAMESPACE, SET, "a", "idx_test_a");
 	if ( err.code != AEROSPIKE_OK && err.code != AEROSPIKE_ERR_INDEX_FOUND ) {
 		info("error(%d): %s", err.code, err.message);
 	}
 
 	// create index on "b"
 
-	aerospike_index_sparse_integer_create(as, &err, NULL, NAMESPACE, SET, "b", "idx_test_b");
+	aerospike_index_integer_create(as, &err, NULL, NAMESPACE, SET, "b", "idx_test_b");
 	if ( err.code != AEROSPIKE_OK && err.code != AEROSPIKE_ERR_INDEX_FOUND ) {
 		info("error(%d): %s", err.code, err.message);
 	}
 
 	// create index on "c"
 
-	aerospike_index_sparse_integer_create(as, &err, NULL, NAMESPACE, SET, "c", "idx_test_c");
+	aerospike_index_integer_create(as, &err, NULL, NAMESPACE, SET, "c", "idx_test_c");
 	if ( err.code != AEROSPIKE_OK && err.code != AEROSPIKE_ERR_INDEX_FOUND ) {
 		info("error(%d): %s", err.code, err.message);
 	}
 
 	// create index on "d"
 
-	aerospike_index_sparse_integer_create(as, &err, NULL, NAMESPACE, SET, "d", "idx_test_d");
+	aerospike_index_integer_create(as, &err, NULL, NAMESPACE, SET, "d", "idx_test_d");
 	if ( err.code != AEROSPIKE_OK && err.code != AEROSPIKE_ERR_INDEX_FOUND ) {
 		info("error(%d): %s", err.code, err.message);
 	}
@@ -198,7 +198,11 @@ TEST( query_foreach_1, "count(*) where a == 'abc' (non-aggregating)" ) {
 
 	as_query q;
 	as_query_init(&q, NAMESPACE, SET);
+
+	as_query_select_inita(&q, 1);
 	as_query_select(&q, "c");
+	
+	as_query_where_inita(&q, 1);
 	as_query_where(&q, "a", string_equals("abc"));
 	
 	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_1_callback, &count);
@@ -230,10 +234,15 @@ TEST( query_foreach_2, "count(*) where a == 'abc' (aggregating)" ) {
 
 	as_query q;
 	as_query_init(&q, NAMESPACE, SET);
+
+	as_query_where_inita(&q, 1);
 	as_query_where(&q, "a", string_equals("abc"));
+
 	as_query_apply(&q, UDF_FILE, "count", NULL);
 	
-	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_2_callback, &count);
+	if ( aerospike_query_foreach(as, &err, NULL, &q, query_foreach_2_callback, &count) != AEROSPIKE_OK ) {
+		error("%s (%s) [%s:%d]", err.message, err.code, err.file, err.line);
+	}
 
 	info("count: %d",count);
 	
@@ -305,7 +314,7 @@ TEST( query_foreach_4, "sum(d) where b == 100 and d == 1" ) {
 	as_query q;
 	as_query_init(&q, NAMESPACE, SET);
 	as_query_where(&q, "b", integer_equals(100));
-	as_query_apply(&q, UDF_FILE, "sum_on_match", &args);
+	as_query_apply(&q, UDF_FILE, "sum_on_match", (as_list *) &args);
 
 	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_4_callback, &value);
 

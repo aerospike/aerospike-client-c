@@ -21,6 +21,7 @@
  *****************************************************************************/
 
 #include <citrusleaf/cf_b64.h>
+#include <citrusleaf/cf_proto.h>
 
 #include <aerospike/as_bytes.h>
 #include <aerospike/as_msgpack.h>

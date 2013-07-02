@@ -95,7 +95,7 @@ main(int argc, char* argv[])
 	// Specify the namespace, set, and the UDF to apply during the scan.
 	as_scan scan;
 	as_scan_init(&scan, g_namespace, g_set);
-	as_scan_apply(&scan, UDF_MODULE, UDF_FUNCTION_NAME, NULL);
+	as_scan_foreach(&scan, UDF_MODULE, UDF_FUNCTION_NAME, NULL);
 
 	as_error err;
 

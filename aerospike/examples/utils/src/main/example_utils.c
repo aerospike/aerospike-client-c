@@ -384,7 +384,7 @@ example_register_udf(aerospike* p_as, const char* udf_file_path)
 	fclose(file);
 
 	as_bytes udf_content;
-	as_bytes_init(&udf_content, content, size, true);
+	as_bytes_init_wrap(&udf_content, content, size, true);
 
 	as_error err;
 	char* base = basename(udf_file_path);

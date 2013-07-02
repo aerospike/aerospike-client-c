@@ -25,14 +25,19 @@
 // Includes
 //
 
+#include <errno.h>
 #include <getopt.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
+#include <aerospike/aerospike_udf.h>
 #include <aerospike/as_bin.h>
+#include <aerospike/as_bytes.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_config.h>
 #include <aerospike/as_key.h>
@@ -49,8 +54,6 @@
 //
 
 #define MAX_HOST_SIZE 1024
-#define MAX_NAMESPACE_SIZE 32	// based on current server limit
-#define MAX_SET_SIZE 64			// based on current server limit
 #define MAX_KEY_STR_SIZE 1024
 
 const char DEFAULT_HOST[] = "127.0.0.1";
@@ -59,10 +62,20 @@ const char DEFAULT_NAMESPACE[] = "test";
 const char DEFAULT_SET[] = "test-set";
 const char DEFAULT_KEY_STR[] = "test-key";
 
+const uint32_t DEFAULT_NUM_KEYS = 20;
+
 
 //==========================================================
 // Globals
 //
+
+//------------------------------------------------
+// The namespace and set used by all examples.
+// Created using command line options:
+// -n <namespace>
+// -s <set name>
+char g_namespace[MAX_NAMESPACE_SIZE];
+char g_set[MAX_SET_SIZE];
 
 //------------------------------------------------
 // The test key used by all basic examples.
@@ -109,14 +122,14 @@ example_get_opts(int argc, char* argv[], const char* which_opts)
 {
 	strcpy(g_host, DEFAULT_HOST);
 	g_port = DEFAULT_PORT;
+	strcpy(g_namespace, DEFAULT_NAMESPACE);
+	strcpy(g_set, DEFAULT_SET);
 
-	char namespace[MAX_NAMESPACE_SIZE];
-	char set[MAX_SET_SIZE];
 	char key_str[MAX_KEY_STR_SIZE];
 
-	strcpy(namespace, DEFAULT_NAMESPACE);
-	strcpy(set, DEFAULT_SET);
 	strcpy(key_str, DEFAULT_KEY_STR);
+
+	g_n_keys = DEFAULT_NUM_KEYS;
 
 	int c;
 
@@ -135,19 +148,19 @@ example_get_opts(int argc, char* argv[], const char* which_opts)
 			break;
 
 		case 'n':
-			if (strlen(optarg) >= sizeof(namespace)) {
+			if (strlen(optarg) >= sizeof(g_namespace)) {
 				LOG("ERROR: namespace exceeds max length");
 				return false;
 			}
-			strcpy(namespace, optarg);
+			strcpy(g_namespace, optarg);
 			break;
 
 		case 's':
-			if (strlen(optarg) >= sizeof(set)) {
+			if (strlen(optarg) >= sizeof(g_set)) {
 				LOG("ERROR: set name exceeds max length");
 				return false;
 			}
-			strcpy(set, optarg);
+			strcpy(g_set, optarg);
 			break;
 
 		case 'k':
@@ -158,6 +171,10 @@ example_get_opts(int argc, char* argv[], const char* which_opts)
 			strcpy(key_str, optarg);
 			break;
 
+		case 'K':
+			g_n_keys = atoi(optarg);
+			break;
+
 		default:
 			usage(which_opts);
 			return false;
@@ -165,28 +182,32 @@ example_get_opts(int argc, char* argv[], const char* which_opts)
 	}
 
 	if (strchr(which_opts, 'h')) {
-		LOG("host:          %s", g_host);
+		LOG("host:           %s", g_host);
 	}
 
 	if (strchr(which_opts, 'p')) {
-		LOG("port:          %d", g_port);
+		LOG("port:           %d", g_port);
 	}
 
 	if (strchr(which_opts, 'n')) {
-		LOG("namespace:     %s", namespace);
+		LOG("namespace:      %s", g_namespace);
 	}
 
 	if (strchr(which_opts, 's')) {
-		LOG("set name:      %s", set);
+		LOG("set name:       %s", g_set);
 	}
 
 	if (strchr(which_opts, 'k')) {
-		LOG("key (string):  %s", key_str);
+		LOG("key (string):   %s", key_str);
+	}
+
+	if (strchr(which_opts, 'K')) {
+		LOG("number of keys: %u", g_n_keys);
 	}
 
 	// Initialize the test as_key object. We won't need to destroy it since it
 	// isn't being created on the heap or with an external as_key_value.
-	as_key_init_str(&g_key, namespace, set, key_str);
+	as_key_init_str(&g_key, g_namespace, g_set, key_str);
 
 	return true;
 }
@@ -217,6 +238,10 @@ usage(const char* which_opts)
 
 	if (strchr(which_opts, 'k')) {
 		LOG("-k key string [default: %s]", DEFAULT_KEY_STR);
+	}
+
+	if (strchr(which_opts, 'K')) {
+		LOG("-K number of keys [default: %u]", DEFAULT_NUM_KEYS);
 	}
 }
 
@@ -322,6 +347,82 @@ example_remove_test_record(aerospike* p_as)
 
 
 //==========================================================
+// UDF Function (Script) Registration
+//
+
+//------------------------------------------------
+// Register a UDF function in the database.
+//
+bool
+example_register_udf(aerospike* p_as, const char* udf_file_path)
+{
+	FILE* file = fopen(udf_file_path, "r");
+
+	if (! file) {
+		LOG("cannot open script file %s : %s", udf_file_path, strerror(errno));
+		return false;
+	}
+
+	uint8_t* content = (uint8_t*)malloc(1024 * 1024);
+
+	if (! content) {
+		LOG("script content allocation failed");
+		return false;
+	}
+
+
+	uint8_t* buff = content;
+	int read = fread(buff, 1, 512, file);
+	int size = 0;
+
+	while (read) {
+		size += read;
+		buff += read;
+		read = fread(buff, 1, 512, file);
+	}
+
+	fclose(file);
+
+	as_bytes udf_content;
+	as_bytes_init(&udf_content, content, size, true);
+
+	as_error err;
+	char* base = basename(udf_file_path);
+
+	if (aerospike_udf_put(p_as, &err, NULL, base, AS_UDF_TYPE_LUA,
+			&udf_content) != AEROSPIKE_OK) {
+		LOG("aerospike_udf_put() returned %d - %s", err.code, err.message);
+	}
+
+	as_bytes_destroy(&udf_content);
+
+	// Wait for the system metadata to spread to all nodes.
+	usleep(100 * 1000);
+
+	return err.code == AEROSPIKE_OK;
+}
+
+//------------------------------------------------
+// Remove a UDF function from the database.
+//
+bool
+example_remove_udf(aerospike* p_as, const char* udf_file_path)
+{
+	as_error err;
+	char* base = basename(udf_file_path);
+
+	if (aerospike_udf_remove(p_as, &err, NULL, base) != AEROSPIKE_OK) {
+		LOG("aerospike_udf_remove() returned %d - %s", err.code, err.message);
+	}
+
+	// Wait for the system metadata to spread to all nodes.
+	usleep(100 * 1000);
+
+	return err.code == AEROSPIKE_OK;
+}
+
+
+//==========================================================
 // Logging Helpers
 // TODO - put (something like) these in aerospike library?
 //
@@ -379,19 +480,19 @@ example_dump_op(as_binop* p_binop)
 		return;
 	}
 
-	if (p_binop->operator == AS_OPERATOR_TOUCH) {
-		LOG("  %s", AS_OPERATORS[p_binop->operator]);
+	if (p_binop->op == AS_OPERATOR_TOUCH) {
+		LOG("  %s", AS_OPERATORS[p_binop->op]);
 		return;
 	}
 
-	if (p_binop->operator == AS_OPERATOR_READ) {
-		LOG("  %s : %s", AS_OPERATORS[p_binop->operator], p_binop->bin.name);
+	if (p_binop->op == AS_OPERATOR_READ) {
+		LOG("  %s : %s", AS_OPERATORS[p_binop->op], p_binop->bin.name);
 		return;
 	}
 
 	char* val_as_str = as_val_tostring(p_binop->bin.valuep);
 
-	LOG("  %s : %s : %s", AS_OPERATORS[p_binop->operator], p_binop->bin.name,
+	LOG("  %s : %s : %s", AS_OPERATORS[p_binop->op], p_binop->bin.name,
 			val_as_str);
 
 	free(val_as_str);

@@ -50,6 +50,17 @@
 
 
 //==========================================================
+// Example Namespace and Set
+//
+
+#define MAX_NAMESPACE_SIZE 32	// based on current server limit
+#define MAX_SET_SIZE 64			// based on current server limit
+
+extern char g_namespace[MAX_NAMESPACE_SIZE];
+extern char g_set[MAX_SET_SIZE];
+
+
+//==========================================================
 // Example Test Key
 //
 
@@ -82,5 +93,7 @@ void example_connect_to_aerospike(aerospike* p_as);
 void example_cleanup(aerospike* p_as);
 bool example_read_test_record(aerospike* p_as);
 void example_remove_test_record(aerospike* p_as);
+bool example_register_udf(aerospike* p_as, const char* filename);
+bool example_remove_udf(aerospike* p_as, const char* filename);
 void example_dump_record(as_record* p_rec);
 void example_dump_operations(as_operations* p_ops);

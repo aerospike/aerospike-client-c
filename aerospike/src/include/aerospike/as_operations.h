@@ -89,7 +89,7 @@ typedef struct as_binop_s {
 	/**
 	 *	The operation to be performed on the bin.
 	 */
-	as_operator operator;
+	as_operator op;
 
 	/**
 	 *	The bin the operation will be performed on.

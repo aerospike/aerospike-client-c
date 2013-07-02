@@ -10,11 +10,6 @@ export ARFLAGS =
 ##  BUILD ENVIRONMENT                                                        ##
 ###############################################################################
 
-ifeq ($(shell git rev-parse --is-inside-work-tree),true)
-GIT = 1
-REPO = $(shell git rev-parse --show-toplevel)
-endif
-
 NAME = $(shell basename $(CURDIR))
 OS = $(shell uname)
 ARCH = $(shell arch)

@@ -32,6 +32,7 @@
 #include <asm/byteorder.h> // 64-bit swap macro
 
 #include <citrusleaf/cf_atomic.h>
+#include <citrusleaf/cf_queue.h>
 #include <citrusleaf/cf_socket.h>
 #include <citrusleaf/cf_vector.h>
 #include <citrusleaf/cf_random.h>

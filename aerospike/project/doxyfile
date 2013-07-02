@@ -26,7 +26,7 @@ DOXYFILE_ENCODING      = UTF-8
 # identify the project. Note that if you do not use Doxywizard you need
 # to put quotes around the project name if it contains spaces.
 
-PROJECT_NAME           = "Aerospike C Client API"
+PROJECT_NAME           = "C Client API"
 
 # The PROJECT_NUMBER tag can be used to enter a project or revision number.
 # This could be handy for archiving the generated documentation or
@@ -908,7 +908,7 @@ HTML_STYLESHEET        = src/apidocs/html/style.css
 # files. In the HTML_STYLESHEET file, use the file name only. Also note that
 # the files will be copied as-is; there are no commands or markers available.
 
-HTML_EXTRA_FILES       = src/apidocs/html/aerospike.css
+HTML_EXTRA_FILES       = src/apidocs/html/aerospike.css src/apidocs/html/aerospike_logo.png
 
 # The HTML_COLORSTYLE_HUE tag controls the color of the HTML output.
 # Doxygen will adjust the colors in the style sheet and background images

@@ -44,7 +44,7 @@ static as_key * as_key_defaults(as_key * key, bool free, const char * ns, const 
 		return NULL;
 	}
 	key->_free = free;
-	strcpy(key->namespace, ns);
+	strcpy(key->ns, ns);
 	strcpy(key->set, set);
 	key->valuep = (as_key_value *) valuep;
 	key->digest.init = false;

@@ -37,6 +37,8 @@
 
 #include <citrusleaf/cf_client_rc.h>
 #include <citrusleaf/cf_proto.h>
+#include <citrusleaf/cf_queue.h>
+#include <citrusleaf/cf_vector.h>
 
 #include <citrusleaf/citrusleaf.h>
 #include <citrusleaf/cl_cluster.h>

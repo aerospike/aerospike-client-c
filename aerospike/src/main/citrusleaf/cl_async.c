@@ -25,6 +25,7 @@
 #include <errno.h>
 
 #include <citrusleaf/cf_atomic.h>
+#include <citrusleaf/cf_queue.h>
 #include <citrusleaf/cf_socket.h>
 #include <citrusleaf/cf_shash.h>
 #include <citrusleaf/cf_proto.h>

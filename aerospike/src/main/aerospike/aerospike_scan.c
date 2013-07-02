@@ -108,7 +108,7 @@ static as_status process_node_response(cf_vector *v, as_error *err)
 	// This returns a vector of return values, the size of which is the size of the cluster
 	int sz = cf_vector_size(v);
 	cl_node_response resp;
-	for(int i=0; i <= sz; i++) {
+	for(int i=0; i < sz; i++) {
 
 		cf_vector_get(v, i, &resp);
 		// Even if one of the node responded with an error, set the overall status as error

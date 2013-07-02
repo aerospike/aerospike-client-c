@@ -128,13 +128,8 @@ void as_record_release(as_record * rec)
 		rec->bins.capacity = 0;
 		rec->bins.size = 0;
 
-<<<<<<< HEAD
 		rec->key.ns[0] = '\0';
 		rec->key.set[0] = '\0';
-=======
-		*rec->key.ns = '\0';
-		*rec->key.set = '\0';
->>>>>>> 885fe729e5eeef5739e46f1462d8e5714140e1cd
 
 		as_val_destroy((as_val *) rec->key.valuep);
 		rec->key.valuep = NULL;

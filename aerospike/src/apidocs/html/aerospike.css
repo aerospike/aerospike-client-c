@@ -6,6 +6,44 @@ body {
   font-weight: 400;
 }
 
+.footer {
+  border-top: 1px solid #ddd;
+  color: #BBB;
+  padding: 16px;
+  text-align: center;
+}
+
+/*******************************************************************************
+ * Top
+ ******************************************************************************/
+
+#top {
+}
+
+#top > #titlearea {
+  background: #C31618;
+  border-bottom: 1px solid #888;
+}
+
+#projectlogo {
+  border-right: 1px solid #B20000;
+}
+
+#projectlogo > img {
+  height: 48px;
+}
+
+#projectname {
+  border-left: 1px solid #FF6666;
+  color: #fff;
+  font-size: 1.5em;
+  font-weight: normal;
+  padding-left: 24px;
+  text-shadow: 1px 1px 1px #4E090A;
+}
+
+
+
 /*******************************************************************************
  * Headings
  ******************************************************************************/
@@ -85,7 +123,6 @@ h2.groupheader {
   font-weight: 400;
   white-space: nowrap;
 }
-
 
 /*******************************************************************************
  * Content
@@ -389,16 +426,6 @@ table.fieldtable > tbody > tr > td.fielddoc p:first-child {
   padding: 8px;
 }
 
-/*******************************************************************************
- * Top
- ******************************************************************************/
-
-#top {
-}
-
-#top > #titlearea {
-  border-bottom: 1px solid #888;
-}
 
 /*******************************************************************************
  * Navbar

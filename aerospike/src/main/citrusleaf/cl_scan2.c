@@ -661,7 +661,7 @@ cf_vector * cl_scan_execute(cl_cluster * cluster, const cl_scan * scan, char * n
     for ( int i=0; i < node_count; i++ ) {
         // Pop the response structure
         cf_queue_pop(task.complete_q, &response, CF_QUEUE_FOREVER);
-        cf_vector_set(result_v, i, &response);
+        cf_vector_append(result_v, &response);
     }
 
 Cleanup:

@@ -150,6 +150,7 @@ static int run_test2() {
 	g_initialized = false;
 
 	as_status udf_rc = aerospike_scan_background(&g_config->as, &err, NULL, scan, &scan_id);
+	LOG( "Aerospike scan background returned %d", udf_rc);
 	
     // Destroy the scan object
     as_scan_destroy(scan);

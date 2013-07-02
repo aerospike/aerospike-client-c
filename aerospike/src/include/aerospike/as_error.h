@@ -130,7 +130,7 @@ inline as_status as_error_reset(as_error * err) {
  *
  *	@return The status code set for the error.
  */
-inline as_status as_error_setall(as_error * err, int32_t code, const char * message, const char * func, const char * file, uint32_t line) {
+inline as_status as_error_setall(as_error * err, as_status code, const char * message, const char * func, const char * file, uint32_t line) {
 	err->code = code;
 	strncpy(err->message, message, AS_ERROR_MESSAGE_LEN);
 	err->message[AS_ERROR_MESSAGE_LEN] = '\0';
@@ -145,7 +145,7 @@ inline as_status as_error_setall(as_error * err, int32_t code, const char * mess
  *
  *	@return The status code set for the error.
  */
-inline as_status as_error_setallv(as_error * err, int32_t code, const char * func, const char * file, uint32_t line, const char * fmt, ...) {
+inline as_status as_error_setallv(as_error * err, as_status code, const char * func, const char * file, uint32_t line, const char * fmt, ...) {
 	if ( fmt != NULL ) {
 		va_list ap;
 		va_start(ap, fmt);
@@ -163,7 +163,7 @@ inline as_status as_error_setallv(as_error * err, int32_t code, const char * fun
 /**
  *	Sets the error message
  */
-inline as_status as_error_set(as_error * err, int32_t code, const char * fmt, ...) {
+inline as_status as_error_set(as_error * err, as_status code, const char * fmt, ...) {
 	if ( fmt != NULL ) {
 		va_list ap;
 		va_start(ap, fmt);

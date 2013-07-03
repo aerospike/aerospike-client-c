@@ -36,10 +36,12 @@
 /**
  * Initialize default values for given as_udf_call.
  */
-static as_udf_call * as_udf_call_defaults(as_udf_call * call, bool free, const char * module, const char * function, as_list * arglist) {
+static as_udf_call * as_udf_call_defaults(as_udf_call * call, bool free, const as_udf_module_name module, const as_udf_function_name function, as_list * arglist) 
+{
+	if ( !call ) return call;
 	call->_free = free;
-	call->module = module ? strdup(module) : NULL;
-	call->function = function ? strdup(function) : NULL;
+	strcpy(call->module, module);
+	strcpy(call->function, function);
 	call->arglist = arglist;
 	return call;
 }
@@ -47,19 +49,27 @@ static as_udf_call * as_udf_call_defaults(as_udf_call * call, bool free, const c
 /**
  * Initialize a stack allocated as_udf_call.
  */
-as_udf_call * as_udf_call_init(as_udf_call * call, const char * module, const char * function, as_list * arglist)
+as_udf_call * as_udf_call_init(as_udf_call * call, const as_udf_module_name module, const as_udf_function_name function, as_list * arglist)
 {
-	if ( !call ) return call;
+	if ( !module || !function ||
+		strlen(module) > AS_UDF_MODULE_MAX_LEN || 
+		strlen(function) > AS_UDF_FUNCTION_MAX_LEN ) {
+		return NULL;
+	}
 	return as_udf_call_defaults(call, false, module, function, arglist);
 }
 
 /**
  * Creates a new heap allocated as_udf_call.
  */
-as_udf_call * as_udf_call_new(const char * module, const char * function, as_list * arglist)
+as_udf_call * as_udf_call_new(const as_udf_module_name module, const as_udf_function_name function, as_list * arglist)
 {
+	if ( !module || !function ||
+		strlen(module) > AS_UDF_MODULE_MAX_LEN || 
+		strlen(function) > AS_UDF_FUNCTION_MAX_LEN ) {
+		return NULL;
+	}
 	as_udf_call * call = (as_udf_call *) malloc(sizeof(as_udf_call));
-	if ( !call ) return call;
 	return as_udf_call_defaults(call, true, module, function, arglist);
 }
 
@@ -70,15 +80,8 @@ void as_udf_call_destroy(as_udf_call * call)
 {
 	if ( call ) {
 
-		if (call->module) {
-			free(call->module);
-			call->module = NULL;
-		}
-
-		if (call->function) {
-			free(call->function);
-			call->function = NULL;
-		}
+		call->module[0] = '\0';
+		call->function[0] = '\0';
 
 		if (call->arglist) {
 			as_list_destroy(call->arglist);

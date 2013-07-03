@@ -35,6 +35,9 @@ as_status as_error_fromrc(as_error * err, cl_rv rc)
 	case CITRUSLEAF_OK:
 		ERR_ASSIGN(AEROSPIKE_OK);
 		break;
+	case CITRUSLEAF_FAIL_TIMEOUT:
+		ERR_ASSIGN(AEROSPIKE_ERR_TIMEOUT);
+		break;
 	case CITRUSLEAF_FAIL_UNKNOWN:
 		ERR_ASSIGN(AEROSPIKE_ERR_SERVER);
 		break;
@@ -124,7 +127,13 @@ as_status as_error_fromrc(as_error * err, cl_rv rc)
 		ERR_ASSIGN(AEROSPIKE_ERR_QUERY);
 		break;
 	default:
-		ERR_ASSIGN(rc < 0 ? AEROSPIKE_ERR_CLIENT : AEROSPIKE_ERR_SERVER);
+		if (rc < 0) {
+			// TODO - what about CITRUSLEAF_FAIL_ASYNCQ_FULL?
+			ERR_ASSIGN(AEROSPIKE_ERR_CLIENT);
+		}
+		else {
+			ERR_ASSIGN(AEROSPIKE_ERR_SERVER);
+		}
 		break;
 	}
 

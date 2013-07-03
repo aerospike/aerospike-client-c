@@ -114,8 +114,6 @@ COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_hashmap.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_hashmap_iterator.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_integer.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_iterator.h
-# COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_linkedlist.h
-# COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_linkedlist_iterator.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_list.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_map.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_nil.h
@@ -128,7 +126,6 @@ COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_util.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_val.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_arch.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_atomic.h
-# COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_shash.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_types.h
 
 HEADERS := 

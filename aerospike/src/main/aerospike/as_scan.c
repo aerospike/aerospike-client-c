@@ -164,7 +164,7 @@ bool as_scan_set_nobins(as_scan * scan, bool nobins)
  *	as_arraylist_append_int64(&arglist, 1);
  *	as_arraylist_append_int64(&arglist, 2);
  *	
- *	as_scan_foreach(&q, "module", "func", (as_list *) &arglist);
+ *	as_scan_apply_each(&q, "module", "func", (as_list *) &arglist);
  *
  *	as_arraylist_destroy(&arglist);
  *	~~~~~~~~~~

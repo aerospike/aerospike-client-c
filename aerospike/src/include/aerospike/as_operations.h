@@ -25,8 +25,6 @@
  *	@copydoc as_operations
  */
 
-
-
 #pragma once
 
 #include <aerospike/as_bin.h>

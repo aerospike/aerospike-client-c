@@ -21,6 +21,9 @@
  *****************************************************************************/
 
 /** 
+ *	@defgroup query_api Query API
+ *	@ingroup client_api
+ *
  *	The Aerospike Query API provides the ability to query data in the 
  *	Aerospike cluster. The queries can only be performed on secondary indexes, 
  *	which have been created in the cluster. 
@@ -84,7 +87,7 @@
  *
  *	You can reuse an as_query for multiple query executions.
  *	
- *	@addtogroup query_api
+ *
  *	@{
  */
 

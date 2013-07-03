@@ -21,6 +21,9 @@
  *****************************************************************************/
 
 /** 
+ *	@defgroup scan_api Scan API
+ *	@ingroup client_api
+ *
  *	Aerospike provides several modes of scanning data in a cluster.
  *
  *	A scan can be performed on the entire cluster or a single node. When a scan
@@ -36,7 +39,6 @@
  *	- aerospike_scan_node_background()
  *	- aerospike_scan_node_foreach()
  *
- *	@addtogroup scan_api
  *	@{
  */
 

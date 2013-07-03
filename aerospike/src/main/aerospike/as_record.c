@@ -1,14 +1,14 @@
 /******************************************************************************
  *	Copyright 2008-2013 by Aerospike.
- *	* Permission is hereby granted, free of charge, to any person obtaining a copy 
+ *	Permission is hereby granted, free of charge, to any person obtaining a copy 
  *	of this software and associated documentation files (the "Software"), to 
  *	deal in the Software without restriction, including without limitation the 
  *	rights to use, copy, modify, merge, publish, distribute, sublicense, and/or 
  *	sell copies of the Software, and to permit persons to whom the Software is 
  *	furnished to do so, subject to the following conditions:
- *	* The above copyright notice and this permission notice shall be included in 
+ *	The above copyright notice and this permission notice shall be included in 
  *	all copies or substantial portions of the Software.
- *	* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ *	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  *	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  *	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
  *	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -141,11 +141,11 @@ void as_record_release(as_record * rec)
 
 /**
  *	Create a new as_record on the heap.
- *	*		as_record * r = as_record_new(2);
+ *	as_record * r = as_record_new(2);
  *	as_record_set_int64(r, "bin1", 123);
  *	as_record_set_str(r, "bin1", "abc");
- *	* @param nbins - the number of bins to initialize. Set to 0, if unknown.
- *	* @return a pointer to the new as_record if successful, otherwise NULL.
+ *	@param nbins - the number of bins to initialize. Set to 0, if unknown.
+ *	@return a pointer to the new as_record if successful, otherwise NULL.
  */
 as_record * as_record_new(uint16_t nbins) 
 {
@@ -156,13 +156,13 @@ as_record * as_record_new(uint16_t nbins)
 
 /**
  *	Initializes an as_record created on the stack.
- *	*		as_record r;
+ *	as_record r;
  *	as_record_init(&r, 2);
  *	as_record_set_int64(&r, "bin1", 123);
  *	as_record_set_str(&r, "bin1", "abc");
- *	* @param rec 	- the record to initialize
+ *	@param rec 	- the record to initialize
  *	@param nbins - the number of bins to initialize. Set to 0, if unknown.
- *	* @return a pointer to the initialized as_record if successful, otherwise NULL.
+ *	@return a pointer to the initialized as_record if successful, otherwise NULL.
  */
 as_record * as_record_init(as_record * rec, uint16_t nbins) 
 {
@@ -180,10 +180,10 @@ void as_record_destroy(as_record * rec)
 
 /**
  *	Get the number of bins in the record.
- *	* @param rec - the record
- *	* @return the number of bins in the record.
+ *	@param rec - the record
+ *	@return the number of bins in the record.
  */
-uint16_t as_record_numbins(as_record * rec) 
+uint16_t as_record_numbins(const as_record * rec) 
 {
 	return rec ? rec->bins.size : 0;
 }
@@ -191,10 +191,10 @@ uint16_t as_record_numbins(as_record * rec)
 
 /**
  *	Set specified bin's value to an as_val (as_integer, as_string, as_bytes, as_list, as_map).
- *	* @param rec 	- the record containing the bin
+ *	@param rec 	- the record containing the bin
  *	@param name 	- the name of the bin
  *	@param value - the value of the bin
- *	* @return true on success, false on failure.
+ *	@return true on success, false on failure.
  */
 bool as_record_set(as_record * rec, const as_bin_name name, as_bin_value * value) 
 {
@@ -207,11 +207,11 @@ bool as_record_set(as_record * rec, const as_bin_name name, as_bin_value * value
 
 /**
  *	Set specified bin's value to an int64_t.
- *	*		as_record_set_int64(rec, "bin", 123);
- *	* @param rec 	- the record containing the bin
+ *	as_record_set_int64(rec, "bin", 123);
+ *	@param rec 	- the record containing the bin
  *	@param name 	- the name of the bin
  *	@param value - the value of the bin
- *	* @return true on success, false on failure.
+ *	@return true on success, false on failure.
  */
 bool as_record_set_int64(as_record * rec, const as_bin_name name, int64_t value) 
 {
@@ -223,11 +223,11 @@ bool as_record_set_int64(as_record * rec, const as_bin_name name, int64_t value)
 
 /**
  *	Set specified bin's value to an NULL terminates string.
- *	*		as_record_set_str(rec, "bin", "abc");
- *	* @param rec 	- the record containing the bin
+ *	as_record_set_str(rec, "bin", "abc");
+ *	@param rec 	- the record containing the bin
  *	@param name 	- the name of the bin
  *	@param value - the value of the bin
- *	* @return true on success, false on failure.
+ *	@return true on success, false on failure.
  */
 bool as_record_set_str(as_record * rec, const as_bin_name name, const char * value) 
 {
@@ -239,13 +239,13 @@ bool as_record_set_str(as_record * rec, const as_bin_name name, const char * val
 
 /**
  *	Set specified bin's value to raw bytes of given length.
- *	*		uint8_t bytes[3] = {1,2,3}
+ *	uint8_t bytes[3] = {1,2,3}
  *	as_record_set_raw(rec, "bin", bytes, 3);
- *	* @param rec 	- the record containing the bin
+ *	@param rec 	- the record containing the bin
  *	@param name 	- the name of the bin
  *	@param value - the value of the bin
  *	@param size 	- the size of the value
- *	* @return true on success, false on failure.
+ *	@return true on success, false on failure.
  */
 bool as_record_set_raw(as_record * rec, const as_bin_name name, const uint8_t * value, uint32_t size) 
 {
@@ -257,11 +257,11 @@ bool as_record_set_raw(as_record * rec, const as_bin_name name, const uint8_t * 
 
 /**
  *	Set specified bin's value to an as_integer.
- *	*		as_record_set_integer(rec, "bin", as_integer_new(123));
- *	* @param rec 	- the record containing the bin
+ *	as_record_set_integer(rec, "bin", as_integer_new(123));
+ *	@param rec 	- the record containing the bin
  *	@param name 	- the name of the bin
  *	@param value - the value of the bin
- *	* @return true on success, false on failure.
+ *	@return true on success, false on failure.
  */
 bool as_record_set_integer(as_record * rec, const as_bin_name name, as_integer * value) 
 {
@@ -273,11 +273,11 @@ bool as_record_set_integer(as_record * rec, const as_bin_name name, as_integer *
 
 /**
  *	Set specified bin's value to an as_string.
- *	*		as_record_set_string(rec, "bin", as_string_new("abc", false));
- *	* @param rec 	- the record containing the bin
+ *	as_record_set_string(rec, "bin", as_string_new("abc", false));
+ *	@param rec 	- the record containing the bin
  *	@param name 	- the name of the bin
  *	@param value - the value of the bin
- *	* @return true on success, false on failure.
+ *	@return true on success, false on failure.
  */
 bool as_record_set_string(as_record * rec, const as_bin_name name, as_string * value) 
 {
@@ -289,11 +289,11 @@ bool as_record_set_string(as_record * rec, const as_bin_name name, as_string * v
 
 /**
  *	Set specified bin's value to an as_bytes.
- *	*		as_record_set_integer(rec, "bin", bytes);
- *	* @param rec 	- the record containing the bin
+ *	as_record_set_integer(rec, "bin", bytes);
+ *	@param rec 	- the record containing the bin
  *	@param name 	- the name of the bin
  *	@param value - the value of the bin
- *	* @return true on success, false on failure.
+ *	@return true on success, false on failure.
  */
 bool as_record_set_bytes(as_record * rec, const as_bin_name name, as_bytes * value) 
 {
@@ -305,16 +305,16 @@ bool as_record_set_bytes(as_record * rec, const as_bin_name name, as_bytes * val
 
 /**
  *	Set specified bin's value to an as_list.
- *	*		as_arraylist list;
+ *	as_arraylist list;
  *	as_arraylist_init(&list);
  *	as_arraylist_add_int64(&list, 1);
  *	as_arraylist_add_int64(&list, 2);
  *	as_arraylist_add_int64(&list, 3);
- *	*		as_record_set_list(rec, "bin", (as_list *) &list);
- *	* @param rec 	- the record containing the bin
+ *	as_record_set_list(rec, "bin", (as_list *) &list);
+ *	@param rec 	- the record containing the bin
  *	@param name 	- the name of the bin
  *	@param value - the value of the bin
- *	* @return true on success, false on failure.
+ *	@return true on success, false on failure.
  */
 bool as_record_set_list(as_record * rec, const as_bin_name name, as_list * value) 
 {
@@ -326,16 +326,16 @@ bool as_record_set_list(as_record * rec, const as_bin_name name, as_list * value
 
 /**
  *	Set specified bin's value to an as_map.
- *	*		as_stringmap map;
+ *	as_stringmap map;
  *	as_stringmap_init(&map);
  *	as_stringmap_set_int64(&map, "a", 1);
  *	as_stringmap_set_int64(&map, "b", 2);
  *	as_stringmap_set_int64(&map, "c", 3);
- *	*		as_record_set_map(rec, "bin", &map);
- *	* @param rec 	- the record containing the bin
+ *	as_record_set_map(rec, "bin", &map);
+ *	@param rec 	- the record containing the bin
  *	@param name 	- the name of the bin
  *	@param value - the value of the bin
- *	* @return true on success, false on failure.
+ *	@return true on success, false on failure.
  */
 bool as_record_set_map(as_record * rec, const as_bin_name name, as_map * value) 
 {
@@ -347,10 +347,10 @@ bool as_record_set_map(as_record * rec, const as_bin_name name, as_map * value)
 
 /**
  *	Set specified bin's value to as_nil.
- *	*		as_record_set_nil(rec, "bin");
- *	* @param rec 	- the record containing the bin
+ *	as_record_set_nil(rec, "bin");
+ *	@param rec 	- the record containing the bin
  *	@param name 	- the name of the bin
- *	* @return true on success, false on failure.
+ *	@return true on success, false on failure.
  */
 bool as_record_set_nil(as_record * rec, const as_bin_name name) {
 	return as_record_set(rec, name, (as_bin_value *) &as_nil);
@@ -358,12 +358,12 @@ bool as_record_set_nil(as_record * rec, const as_bin_name name) {
 
 /**
  *	Get specified bin's value as an as_val (as_integer, as_string, as_bytes, as_list, as_map).
- *	*		as_val * value = as_record_get(rec, "bin");
- *	* @param rec 	- the record containing the bin
+ *	as_val * value = as_record_get(rec, "bin");
+ *	@param rec 	- the record containing the bin
  *	@param name 	- the name of the bin
- *	* @return the value if it exists, otherwise NULL.
+ *	@return the value if it exists, otherwise NULL.
  */
-as_val * as_record_get(as_record * rec, const as_bin_name name) 
+as_val * as_record_get(const as_record * rec, const as_bin_name name) 
 {
 	for(int i=0; i<rec->bins.size; i++) {
 		if ( strcmp(rec->bins.entries[i].name, name) == 0 ) {
@@ -375,15 +375,15 @@ as_val * as_record_get(as_record * rec, const as_bin_name name)
 
 /**
  *	Get specified bin's value as an int64_t.
- *	*	~~~~~~~~~~{.c}
+ *	~~~~~~~~~~{.c}
  *	int64_t value = as_record_get_int64(rec, "bin", INT64_MAX);
  *	~~~~~~~~~~
- *	*	@param rec		The record containing the bin.
+ *	@param rec		The record containing the bin.
  *	@param name		The name of the bin.
  *	@param fallback	The default value to use, if the bin doesn't exist or is not an integer.
- *	*	@return the value if it exists, otherwise 0.
+ *	@return the value if it exists, otherwise 0.
  */
-int64_t as_record_get_int64(as_record * rec, const as_bin_name name, int64_t fallback) 
+int64_t as_record_get_int64(const as_record * rec, const as_bin_name name, int64_t fallback) 
 {
 	as_integer * val = as_integer_fromval(as_record_get(rec, name));
 	return val ? as_integer_toint(val) : fallback;
@@ -391,12 +391,12 @@ int64_t as_record_get_int64(as_record * rec, const as_bin_name name, int64_t fal
 
 /**
  *	Get specified bin's value as an NULL terminated string.
- *	*		char * value = as_record_get_str(rec, "bin");
- *	* @param rec 	- the record containing the bin
+ *	char * value = as_record_get_str(rec, "bin");
+ *	@param rec 	- the record containing the bin
  *	@param name 	- the name of the bin
- *	* @return the value if it exists, otherwise NULL.
+ *	@return the value if it exists, otherwise NULL.
  */
-char * as_record_get_str(as_record * rec, const as_bin_name name) 
+char * as_record_get_str(const as_record * rec, const as_bin_name name) 
 {
 	as_string * val = as_string_fromval(as_record_get(rec, name));
 	return val ? as_string_tostring(val) : NULL;
@@ -404,60 +404,60 @@ char * as_record_get_str(as_record * rec, const as_bin_name name)
 
 /**
  *	Get specified bin's value as an as_integer.
- *	*		as_integer * value = as_record_get_integer(rec, "bin");
- *	* @param rec 	- the record containing the bin
+ *	as_integer * value = as_record_get_integer(rec, "bin");
+ *	@param rec 	- the record containing the bin
  *	@param name 	- the name of the bin
- *	* @return the value if it exists, otherwise NULL.
+ *	@return the value if it exists, otherwise NULL.
  */
-as_integer * as_record_get_integer(as_record * rec, const as_bin_name name)
+as_integer * as_record_get_integer(const as_record * rec, const as_bin_name name)
 {
 	return as_integer_fromval(as_record_get(rec, name));
 }
 
 /**
  *	Get specified bin's value as an as_string.
- *	*		as_string * value = as_record_get_string(rec, "bin");
- *	* @param rec 	- the record containing the bin
+ *	as_string * value = as_record_get_string(rec, "bin");
+ *	@param rec 	- the record containing the bin
  *	@param name 	- the name of the bin
- *	* @return the value if it exists, otherwise NULL.
+ *	@return the value if it exists, otherwise NULL.
  */
-as_string * as_record_get_string(as_record * rec, const as_bin_name name)
+as_string * as_record_get_string(const as_record * rec, const as_bin_name name)
 {
 	return as_string_fromval(as_record_get(rec, name));
 }
 
 /**
  *	Get specified bin's value as an as_bytes.
- *	*		as_bytes * value = as_record_get_bytes(rec, "bin");
- *	* @param rec 	- the record containing the bin
+ *	as_bytes * value = as_record_get_bytes(rec, "bin");
+ *	@param rec 	- the record containing the bin
  *	@param name 	- the name of the bin
- *	* @return the value if it exists, otherwise NULL.
+ *	@return the value if it exists, otherwise NULL.
  */
-as_bytes * as_record_get_bytes(as_record * rec, const as_bin_name name) 
+as_bytes * as_record_get_bytes(const as_record * rec, const as_bin_name name) 
 {
 	return as_bytes_fromval(as_record_get(rec, name));
 }
 
 /**
  *	Get specified bin's value as an as_list.
- *	*		as_list * value = as_record_get_list(rec, "bin");
- *	* @param rec 	- the record containing the bin
+ *	as_list * value = as_record_get_list(rec, "bin");
+ *	@param rec 	- the record containing the bin
  *	@param name 	- the name of the bin
- *	* @return the value if it exists, otherwise NULL.
+ *	@return the value if it exists, otherwise NULL.
  */
-as_list * as_record_get_list(as_record * rec, const as_bin_name name) 
+as_list * as_record_get_list(const as_record * rec, const as_bin_name name) 
 {
 	return as_list_fromval(as_record_get(rec, name));
 }
 
 /**
  *	Get specified bin's value as an as_map.
- *	*		as_map * value = as_record_get_map(rec, "bin");
- *	* @param rec 	- the record containing the bin
+ *	as_map * value = as_record_get_map(rec, "bin");
+ *	@param rec 	- the record containing the bin
  *	@param name 	- the name of the bin
- *	* @return the value if it exists, otherwise NULL.
+ *	@return the value if it exists, otherwise NULL.
  */
-as_map * as_record_get_map(as_record * rec, const as_bin_name name) 
+as_map * as_record_get_map(const as_record * rec, const as_bin_name name) 
 {
 	return as_map_fromval(as_record_get(rec, name));
 }

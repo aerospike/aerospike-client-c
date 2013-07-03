@@ -245,7 +245,7 @@ void as_record_destroy(as_record * rec);
  *
  *	@return the number of bins in the record.
  */
-uint16_t as_record_numbins(as_record * rec);
+uint16_t as_record_numbins(const as_record * rec);
 
 /**
  *	Set specified bin's value to an as_val (as_integer, as_string, as_bytes, as_list, as_map).
@@ -418,7 +418,7 @@ bool as_record_set_nil(as_record * rec, const as_bin_name name);
  *
  *	@return the value if it exists, otherwise NULL.
  */
-as_val * as_record_get(as_record * rec, const as_bin_name name);
+as_val * as_record_get(const as_record * rec, const as_bin_name name);
 
 /**
  *	Get specified bin's value as an int64_t.
@@ -433,7 +433,7 @@ as_val * as_record_get(as_record * rec, const as_bin_name name);
  *
  *	@return the value if it exists, otherwise 0.
  */
-int64_t as_record_get_int64(as_record * rec, const as_bin_name name, int64_t fallback);
+int64_t as_record_get_int64(const as_record * rec, const as_bin_name name, int64_t fallback);
 
 /**
  *	Get specified bin's value as an NULL terminated string.
@@ -447,7 +447,7 @@ int64_t as_record_get_int64(as_record * rec, const as_bin_name name, int64_t fal
  *
  *	@return the value if it exists, otherwise NULL.
  */
-char * as_record_get_str(as_record * rec, const as_bin_name name);
+char * as_record_get_str(const as_record * rec, const as_bin_name name);
 
 /**
  *	Get specified bin's value as an as_integer.
@@ -461,7 +461,7 @@ char * as_record_get_str(as_record * rec, const as_bin_name name);
  *
  *	@return the value if it exists, otherwise NULL.
  */
-as_integer * as_record_get_integer(as_record * rec, const as_bin_name name);
+as_integer * as_record_get_integer(const as_record * rec, const as_bin_name name);
 
 /**
  *	Get specified bin's value as an as_string.
@@ -475,7 +475,7 @@ as_integer * as_record_get_integer(as_record * rec, const as_bin_name name);
  *
  *	@return the value if it exists, otherwise NULL.
  */
-as_string * as_record_get_string(as_record * rec, const as_bin_name name);
+as_string * as_record_get_string(const as_record * rec, const as_bin_name name);
 
 /**
  *	Get specified bin's value as an as_bytes.
@@ -489,7 +489,7 @@ as_string * as_record_get_string(as_record * rec, const as_bin_name name);
  *
  *	@return the value if it exists, otherwise NULL.
  */
-as_bytes * as_record_get_bytes(as_record * rec, const as_bin_name name);
+as_bytes * as_record_get_bytes(const as_record * rec, const as_bin_name name);
 
 /**
  *	Get specified bin's value as an as_list.
@@ -503,7 +503,7 @@ as_bytes * as_record_get_bytes(as_record * rec, const as_bin_name name);
  *
  *	@return the value if it exists, otherwise NULL.
  */
-as_list * as_record_get_list(as_record * rec, const as_bin_name name);
+as_list * as_record_get_list(const as_record * rec, const as_bin_name name);
 
 /**
  *	Get specified bin's value as an as_map.
@@ -517,8 +517,27 @@ as_list * as_record_get_list(as_record * rec, const as_bin_name name);
  *
  *	@return the value if it exists, otherwise NULL.
  */
-as_map * as_record_get_map(as_record * rec, const as_bin_name name);
+as_map * as_record_get_map(const as_record * rec, const as_bin_name name);
 
+/******************************************************************************
+ *	CONVERSION FUNCTIONS
+ ******************************************************************************/
+
+/**
+ *	Convert to an as_val.
+ */
+inline as_val * as_record_toval(const as_record * rec) 
+{
+	return (as_val *) rec;
+}
+
+/**
+ *	Convert from an as_val.
+ */
+inline as_record * as_record_fromval(const as_val * v) 
+{
+	return (as_record *) as_util_fromval(v, AS_REC, as_rec);
+}
 /**
  *	@}
  */

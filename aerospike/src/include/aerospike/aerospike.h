@@ -21,32 +21,33 @@
  *****************************************************************************/
 
 /**
- *	@defgroup aerospike_client_api Aerospike Client API
- *	@{
- *		@defgroup index_api Index API
- *		@defgroup info_api Info API
- *		@defgroup key_api Key API
- *		@defgroup query_api Query API
- *		@defgroup scan_api Scan API
- *		@defgroup udf_api UDF API
- *	@}
- *	@defgroup aerospike_client_types Aerospike Client Types
- *	@{
- *		@defgroup record_t Record
- *		@defgroup config_t Configuration
- *		@defgroup key_t Key
- *		@defgroup error_t Error Handling
- *		@defgroup log_t	Logging
- *		@defgroup operations_t Operations
- *		@defgroup policy_t Policies
- *		@defgroup scan_t Scan
- *		@defgroup query_t Query
- *		@defgroup udf_t User-defined Functions
- *	@}
+ *	@defgroup client_api Aerospike Client API
+ *	@copydoc aerospike
  */
 
 /**
- *
+ *	@defgroup aerospike_t Aerospike Data Types
+ */
+
+#pragma once 
+
+#include <aerospike/as_error.h>
+#include <aerospike/as_config.h>
+#include <aerospike/as_log.h>
+#include <aerospike/as_status.h>
+#include <stdbool.h>
+
+/******************************************************************************
+ *	TYPES
+ *****************************************************************************/
+
+/**
+ *	@private
+ *	Forward declaration of a cluster object.
+ */
+struct cl_cluster_s;
+
+/**
  * 	In order to connect to an Aerospike Database cluster, you will need an
  *	instance of `aerospike`. Each `aerospike` instance is a client for a 
  *	single cluster. 
@@ -101,38 +102,7 @@
  *			application. In the next release, you will be able to have 
  *			multiple clients in a single application.
  *
- *	@addtogroup aerospike_client_api
- *	@{
- */
-
-#pragma once 
-
-#include <aerospike/as_error.h>
-#include <aerospike/as_config.h>
-#include <aerospike/as_log.h>
-#include <aerospike/as_status.h>
-#include <stdbool.h>
-
-/******************************************************************************
- *	TYPES
- *****************************************************************************/
-
-/**
- *	@private
- *	Forward declaration of a cluster object.
- */
-struct cl_cluster_s;
-
-/**
- *	Aerospike client instance.
- *
- *	An `aerospike` instance manages a connections to an Aerospike cluster.	
- *
- *	An aerospike instance should be initialized via aerospike_init().
- *
- *	When no longer using the instance, then it should be released via 
- *	aerospike_destroy().
- *
+ *	@ingroup client_api
  */
 typedef struct aerospike_s {
 
@@ -185,6 +155,8 @@ typedef struct aerospike_s {
  *	@returns the initialized aerospike instance
  *
  *	@see config for information on configuring the client.
+ *	@relates aerospike
+ *	@ingroup client_api
  */
 aerospike * aerospike_init(aerospike * as, as_config * config);
 
@@ -203,6 +175,8 @@ aerospike * aerospike_init(aerospike * as, as_config * config);
  *	@returns a new aerospike instance
  *
  *	@see config for information on configuring the client.
+ *	@relates aerospike
+ *	@ingroup client_api
  */
 aerospike * aerospike_new(as_config * config);
 
@@ -214,6 +188,9 @@ aerospike * aerospike_new(as_config * config);
  *	~~~~~~~~~~
  *
  *	@param as 		The aerospike instance to destroy
+ *
+ *	@relates aerospike
+ *	@ingroup client_api
  */
 void aerospike_destroy(aerospike * as);
 
@@ -233,6 +210,9 @@ void aerospike_destroy(aerospike * as);
  *	@param err 		If an error occurs, the err will be populated.
  *
  *	@returns AEROSPIKE_OK on success. Otherwise an error occurred.
+ *
+ *	@relates aerospike
+ *	@ingroup client_api
  */
 as_status aerospike_connect(aerospike * as, as_error * err);
 
@@ -247,9 +227,9 @@ as_status aerospike_connect(aerospike * as, as_error * err);
  *	@param err 		If an error occurs, the err will be populated.
  *
  *	@returns AEROSPIKE_OK on success. Otherwise an error occurred. 
+ *
+ *	@relates aerospike
+ *	@ingroup client_api
  */
 as_status aerospike_close(aerospike * as, as_error * err);
 
-/**
- *	@}
- */

@@ -369,7 +369,7 @@ TEST( scan_basics_5 , "udf scan in background to insert a new bin" ) {
 
 	as_scan scan;
 	as_scan_init(&scan, NS, SET1);
-	as_scan_foreach(&scan, "aerospike_scan_test", "scan_insert_bin4", NULL);
+	as_scan_apply_each(&scan, "aerospike_scan_test", "scan_insert_bin4", NULL);
 
 	uint64_t scanid = 123;
 	as_status udf_rc = aerospike_scan_background(as, &err, NULL, &scan, &scanid);
@@ -412,7 +412,7 @@ TEST( scan_basics_6 , "udf scan in background per node to insert a new bin" ) {
 	// insert a new bin using udf
 	as_scan scan;
 	as_scan_init(&scan, NS, SET2);
-	as_scan_foreach(&scan, "aerospike_scan_test", "scan_insert_bin4", NULL);
+	as_scan_apply_each(&scan, "aerospike_scan_test", "scan_insert_bin4", NULL);
 
 	uint64_t scanid = 456;
 	for (int i=0; i<num_nodes; i++) {
@@ -458,7 +458,7 @@ TEST( scan_basics_7 , "udf scan in foreground to insert a new bin" ) {
 	// insert a new bin using udf
 	as_scan scan;
 	as_scan_init(&scan, NS, SET2);
-	as_scan_foreach(&scan, "aerospike_scan_test", "scan_update_bin4", NULL);
+	as_scan_apply_each(&scan, "aerospike_scan_test", "scan_update_bin4", NULL);
 
 	uint64_t scanid = 789;
 	as_status udf_rc = aerospike_scan_background(as, &err, NULL, &scan, &scanid);
@@ -470,7 +470,7 @@ TEST( scan_basics_7 , "udf scan in foreground to insert a new bin" ) {
 	// See if the above udf ran fine
 	as_scan scan2;
 	as_scan_init(&scan2, NS, SET2);
-	as_scan_foreach(&scan2, "aerospike_scan_test", "scan_getrec", NULL);
+	as_scan_apply_each(&scan2, "aerospike_scan_test", "scan_getrec", NULL);
 
 	scan_data.bin4_startval = 4;
 	as_status rc = aerospike_scan_foreach(as, &err, NULL, &scan2, scan_cb_counter, &scan_data);
@@ -496,7 +496,7 @@ TEST( scan_basics_8 , "starting two udf scan in background with same scan-id" ) 
 	// insert a new bin using udf
 	as_scan scan;
 	as_scan_init(&scan, NS, SET2);
-	as_scan_foreach(&scan, "aerospike_scan_test", "scan_noop", NULL);
+	as_scan_apply_each(&scan, "aerospike_scan_test", "scan_noop", NULL);
 
 	uint64_t scanid = 564;
 	as_status udf_rc = aerospike_scan_background(as, &err, NULL, &scan, &scanid);
@@ -504,7 +504,7 @@ TEST( scan_basics_8 , "starting two udf scan in background with same scan-id" ) 
 
 	as_scan scan2;
 	as_scan_init(&scan2, NS, SET2);
-	as_scan_foreach(&scan2, "aerospike_scan_test", "scan_noop", NULL);
+	as_scan_apply_each(&scan2, "aerospike_scan_test", "scan_noop", NULL);
 
 	uint64_t scanid2 = 564;
 	as_status udf_rc2 = aerospike_scan_background(as, &err, NULL, &scan2, &scanid2);

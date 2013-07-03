@@ -26,7 +26,8 @@
 #include <aerospike/as_udf.h>
 
 /** 
- *	@addtogroup scan_t
+ *	@defgroup as_scan_t Scans
+ *	@copydoc as_scan
  *	@{
  */
 
@@ -105,6 +106,8 @@ typedef enum as_scan_priority_e {
  *	~~~~~~~~~~{.c}
  *	as_scan_destroy(scan);
  *	~~~~~~~~~~
+ *
+ *	@ingroup as_scan_t
  */
 typedef struct as_scan_s {
 
@@ -159,9 +162,9 @@ typedef struct as_scan_s {
 	/**
 	 *	Apply the UDF for each record scanned on the server.
 	 *
-	 *	Should be set via `as_scan_foreach()`.
+	 *	Should be set via `as_scan_apply_each()`.
 	 */
-	as_udf_call foreach;
+	as_udf_call apply_each;
 
 } as_scan;
 
@@ -185,6 +188,8 @@ typedef struct as_scan_s {
  *	@param set 		The set to scan.
  *
  *	@returns On succes, the initialized scan. Otherwise NULL.
+ *
+ *	@relatesalso as_scan
  */
 as_scan * as_scan_init(as_scan * scan, const as_namespace ns, const as_set set);
 
@@ -202,6 +207,8 @@ as_scan * as_scan_init(as_scan * scan, const as_namespace ns, const as_set set);
  *	@param set 		The set to scan.
  *
  *	@returns On success, a new scan. Otherwise NULL.
+ *
+ *	@relatesalso as_scan
  */
 as_scan * as_scan_new(const as_namespace ns, const as_set set);
 
@@ -211,6 +218,8 @@ as_scan * as_scan_new(const as_namespace ns, const as_set set);
  *	~~~~~~~~~~{.c}
  *	as_scan_destroy(scan);
  *	~~~~~~~~~~
+ *
+ *	@relatesalso as_scan
  */
 void as_scan_destroy(as_scan * scan);
 
@@ -229,6 +238,8 @@ void as_scan_destroy(as_scan * scan);
  *	@param percent		The percent to scan.
  *
  *	@return On success, true. Otherwise an error occurred.
+ *
+ *	@relatesalso as_scan
  */
 bool as_scan_set_percent(as_scan * scan, uint8_t percent);
 
@@ -243,6 +254,8 @@ bool as_scan_set_percent(as_scan * scan, uint8_t percent);
  *	@param priority		The priority for the scan.
  *
  *	@return On success, true. Otherwise an error occurred.
+ *
+ *	@relatesalso as_scan
  */
 bool as_scan_set_priority(as_scan * scan, as_scan_priority priority);
 
@@ -257,6 +270,8 @@ bool as_scan_set_priority(as_scan * scan, as_scan_priority priority);
  *	@param nobins		If true, then do not return bins.
  *
  *	@return On success, true. Otherwise an error occurred.
+ *
+ *	@relatesalso as_scan
  */
 bool as_scan_set_nobins(as_scan * scan, bool nobins);
 
@@ -269,7 +284,7 @@ bool as_scan_set_nobins(as_scan * scan, bool nobins);
  *	as_arraylist_append_int64(&arglist, 1);
  *	as_arraylist_append_int64(&arglist, 2);
  *	
- *	as_scan_foreach(&q, "module", "func", (as_list *) &arglist);
+ *	as_scan_apply_each(&q, "module", "func", (as_list *) &arglist);
  *
  *	as_arraylist_destroy(&arglist);
  *	~~~~~~~~~~
@@ -280,8 +295,10 @@ bool as_scan_set_nobins(as_scan * scan, bool nobins);
  *	@param arglist 		The arguments for the function.
  *
  *	@return On success, true. Otherwise an error occurred.
+ *
+ *	@relatesalso as_scan
  */
-bool as_scan_foreach(as_scan * scan, const char * module, const char * function, as_list * arglist);
+bool as_scan_apply_each(as_scan * scan, const char * module, const char * function, as_list * arglist);
 
 /**
  *	@}

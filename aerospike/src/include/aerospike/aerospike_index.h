@@ -21,6 +21,9 @@
  *****************************************************************************/
 
 /**
+ *	@defgroup index_api Index API
+ *	@ingroup client_api
+ *
  *	The Index API provides the ability to create and remove secondary indexes.
  *	
  *	Aerospike currently supports indexing of strings and integers.
@@ -44,7 +47,6 @@
  *	
  *	To create a integer index, see aerospike_index_integer_create().
  *	
- *	@addtogroup index_api
  *	@{
  */
 

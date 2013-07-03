@@ -21,8 +21,8 @@
  *****************************************************************************/
 
 /** 
- *	@addtogroup query_t
- *	@{
+ *	@defgroup as_query_t Queries
+ *	@copydoc as_query
  */
 
 #pragma once 
@@ -45,6 +45,8 @@
  *	as_query_where(query, "bin1", string_equals("abc"));
  *	~~~~~~~~~~
  *
+ *	@relates as_query
+ *	@ingroup as_query_t
  */
 #define string_equals(__val) AS_PREDICATE_STRING_EQUAL, __val
 
@@ -55,6 +57,8 @@
  *	as_query_where(query, "bin1", integer_equals(123));
  *	~~~~~~~~~~
  *
+ *	@relates as_query
+ *	@ingroup as_query_t
  */
 #define integer_equals(__val) AS_PREDICATE_INTEGER_EQUAL, __val
 
@@ -64,7 +68,9 @@
  *	~~~~~~~~~~{.c}
  *	as_query_where(query, "bin1", integer_range(1,100));
  *	~~~~~~~~~~
- *
+ *	
+ *	@relates as_query
+ *	@ingroup as_query_t
  */
 #define integer_range(__min, __max) AS_PREDICATE_INTEGER_RANGE, __min, __max
 
@@ -291,7 +297,8 @@ typedef struct as_query_sort_s {
 
 } as_query_ordering;
 
-/**
+
+/** 
  *	Defines a query to be exeucted against an Aerospike cluster.
  *
  *	A query must be initialized via either `as_query_init()` or `as_query_new()`.
@@ -323,6 +330,8 @@ typedef struct as_query_sort_s {
  *	~~~~~~~~~~{.c}
  *	as_query_destroy(query);
  *	~~~~~~~~~~
+ *
+ *	@ingroup as_query_t
  */
 typedef struct as_query_s {
 
@@ -418,6 +427,9 @@ typedef struct as_query_s {
  *	@param set 		The set to query.
  *
  *	@return On success, the initialized query. Otherwise NULL.
+ *
+ *	@relates as_query
+ *	@ingroup as_query_t
  */
 as_query * as_query_init(as_query * query, const as_namespace ns, const as_set set);
 
@@ -432,6 +444,9 @@ as_query * as_query_init(as_query * query, const as_namespace ns, const as_set s
  *	@param set 		The set to query.
  *
  *	@return On success, the new query. Otherwise NULL.
+ *
+ *	@relates as_query
+ *	@ingroup as_query_t
  */
 as_query * as_query_new(const as_namespace ns, const as_set set);
 
@@ -439,6 +454,9 @@ as_query * as_query_new(const as_namespace ns, const as_set set);
  *	Destroy the query and associated resources.
  *
  *	@param query 	The query to destroy.
+ *
+ *	@relates as_query
+ *	@ingroup as_query_t
  */
 void as_query_destroy(as_query * query);
 
@@ -460,6 +478,8 @@ void as_query_destroy(as_query * query);
  *	
  *	@param __query	The query to initialize.
  *	@param __n		The number of bins to allocate.
+ *
+ *	@ingroup as_query_t
  */
 #define as_query_select_inita(__query, __n) \
 	if ( (__query) != NULL && (__query)->select.entries == NULL ) {\
@@ -487,6 +507,9 @@ void as_query_destroy(as_query * query);
  *	@param n		The number of bins to allocate.
  *
  *	@return On success, the initialized. Otherwise an error occurred.
+ *
+ *	@relates as_query
+ *	@ingroup as_query_t
  */
 bool as_query_select_init(as_query * query, uint16_t n);
 
@@ -507,6 +530,9 @@ bool as_query_select_init(as_query * query, uint16_t n);
  *	@param bin 			The name of the bin to select.
  *
  *	@return On success, true. Otherwise an error occurred.
+ *
+ *	@relates as_query
+ *	@ingroup as_query_t
  */
 bool as_query_select(as_query * query, const char * bin);
 
@@ -530,6 +556,8 @@ bool as_query_select(as_query * query, const char * bin);
  *	@param __n		The number of as_predicate to allocate.
  *
  *	@return On success, true. Otherwise an error occurred.
+ *
+ *	@ingroup as_query_t
  */
 #define as_query_where_inita(__query, __n) \
 	if ( (__query)  != NULL && (__query)->where.entries == NULL ) {\
@@ -557,6 +585,9 @@ bool as_query_select(as_query * query, const char * bin);
  *	@param n		The number of as_predicate to allocate.
  *
  *	@return On success, true. Otherwise an error occurred.
+ *
+ *	@relates as_query
+ *	@ingroup as_query_t
  */
 bool as_query_where_init(as_query * query, uint16_t n);
 
@@ -579,6 +610,9 @@ bool as_query_where_init(as_query * query, uint16_t n);
  *	@param ... 			The values for the predicate.
  *	
  *	@return On success, true. Otherwise an error occurred.
+ *
+ *	@relates as_query
+ *	@ingroup as_query_t
  */
 bool as_query_where(as_query * query, const char * bin, as_predicate_type type, ... );
 
@@ -600,6 +634,8 @@ bool as_query_where(as_query * query, const char * bin, as_predicate_type type, 
  *	@param __n		The number of as_orders to allocate.
  *
  *	@return On success, true. Otherwise an error occurred.
+ *
+ *	@ingroup as_query_t
  */
 #define as_query_orderby_inita(__query, __n) \
 	if ( (__query) != NULL && (__query)->orderby.entries == NULL  ) {\
@@ -625,6 +661,9 @@ bool as_query_where(as_query * query, const char * bin, as_predicate_type type, 
  *	@param n		The number of as_orders to allocate.
  *
  *	@return On success, true. Otherwise an error occurred.
+ *
+ *	@relates as_query
+ *	@ingroup as_query_t
  */
 bool as_query_orderby_init(as_query * query, uint16_t n);
 
@@ -644,6 +683,9 @@ bool as_query_orderby_init(as_query * query, uint16_t n);
  *	@param order	The sort order: `AS_ORDER_ASCENDING` or `AS_ORDER_DESCENDING`.
  *
  *	@return On success, true. Otherwise an error occurred.
+ *
+ *	@relates as_query
+ *	@ingroup as_query_t
  */
 bool as_query_orderby(as_query * query, const char * bin, as_order order);
 
@@ -662,6 +704,9 @@ bool as_query_orderby(as_query * query, const char * bin, as_order order);
  *	@param limit 		The number of records to limit by.
  *
  *	@return On success, true. Otherwise an error occurred.
+ *
+ *	@relates as_query
+ *	@ingroup as_query_t
  */
 bool as_query_limit(as_query * query, uint64_t limit);
 
@@ -678,9 +723,8 @@ bool as_query_limit(as_query * query, uint64_t limit);
  *	@param arglist		The arguments to use when calling the function.
  *
  *	@return On success, true. Otherwise an error occurred.
+ *
+ *	@relates as_query
+ *	@ingroup as_query_t
  */
 bool as_query_apply(as_query * query, const char * module, const char * function, const as_list * arglist);
-
-/**
- *	@}
- */

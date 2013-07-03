@@ -35,6 +35,9 @@ as_status as_error_fromrc(as_error * err, cl_rv rc)
 	case CITRUSLEAF_OK:
 		ERR_ASSIGN(AEROSPIKE_OK);
 		break;
+	case CITRUSLEAF_FAIL_TIMEOUT:
+		ERR_ASSIGN(AEROSPIKE_ERR_TIMEOUT);
+		break;
 	case CITRUSLEAF_FAIL_UNKNOWN:
 		ERR_ASSIGN(AEROSPIKE_ERR_SERVER);
 		break;
@@ -124,7 +127,13 @@ as_status as_error_fromrc(as_error * err, cl_rv rc)
 		ERR_ASSIGN(AEROSPIKE_ERR_QUERY);
 		break;
 	default:
-		ERR_ASSIGN(rc < 0 ? AEROSPIKE_ERR_CLIENT : AEROSPIKE_ERR_SERVER);
+		if (rc < 0) {
+			// TODO - what about CITRUSLEAF_FAIL_ASYNCQ_FULL?
+			ERR_ASSIGN(AEROSPIKE_ERR_CLIENT);
+		}
+		else {
+			ERR_ASSIGN(AEROSPIKE_ERR_SERVER);
+		}
 		break;
 	}
 
@@ -315,7 +324,7 @@ void aspolicywrite_to_clwriteparameters(const as_policy_write * policy, const as
 	wp->use_generation_gt = false;
 	wp->use_generation_dup = false;
 	
-	wp->timeout_ms = policy->timeout;
+	wp->timeout_ms = policy->timeout == UINT32_MAX ? 0 : policy->timeout;
 	wp->record_ttl = rec->ttl;
 
 	switch(policy->gen) {
@@ -361,7 +370,7 @@ void aspolicyoperate_to_clwriteparameters(const as_policy_operate * policy, cons
 	wp->use_generation_gt = false;
 	wp->use_generation_dup = false;
 	
-	wp->timeout_ms = policy->timeout;
+	wp->timeout_ms = policy->timeout == UINT32_MAX ? 0 : policy->timeout;
 	wp->record_ttl = ops->ttl;
 
 	switch(policy->gen) {
@@ -407,7 +416,7 @@ void aspolicyremove_to_clwriteparameters(const as_policy_remove * policy, cl_wri
 	wp->use_generation_gt = false;
 	wp->use_generation_dup = false;
 	
-	wp->timeout_ms = policy->timeout;
+	wp->timeout_ms = policy->timeout == UINT32_MAX ? 0 : policy->timeout;
 	wp->record_ttl = 0;
 
 	switch(policy->gen) {

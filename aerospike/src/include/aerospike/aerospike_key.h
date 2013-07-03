@@ -21,13 +21,15 @@
  *****************************************************************************/
 
 /**
+ *	@defgroup key_api Key API
+ *	@ingroup client_api
+ *
  *	Aerospike provides a key based API to access and modify data into the 
  *	cluster. 
  *
  *	The Key API is a collection of APIs that use as_key as for looking up
  *	records for accessing and modifying in the cluster. 
  *	
- *	@addtogroup key_api
  *	@{
  */
 

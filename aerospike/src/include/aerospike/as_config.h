@@ -21,6 +21,85 @@
  *****************************************************************************/
 
 /**
+ *	@defgroup as_config_t Configuration
+ *	@copydoc as_config
+ */
+
+#pragma once 
+
+#include <aerospike/as_error.h>
+#include <aerospike/as_policy.h>
+
+/******************************************************************************
+ *	MACROS
+ *****************************************************************************/
+
+/**
+ * The size of path strings
+ */
+#define AS_CONFIG_PATH_MAX_SIZE 256
+
+/**
+ * The maximum string length of path strings
+ */
+#define AS_CONFIG_PATH_MAX_LEN 	(AS_CONFIG_PATH_MAX_SIZE - 1)
+
+/**
+ * The size of as_config.hosts
+ */
+#define AS_CONFIG_HOSTS_SIZE 256
+
+/******************************************************************************
+ *	TYPES
+ *****************************************************************************/
+
+/**
+ *	Host Information
+ *	@ingroup as_config_t
+ */
+typedef struct as_config_host_s {
+	
+	/**
+	 *	Host address
+	 */
+	const char * addr;
+	
+	/**
+	 *	Host port
+	 */
+	uint16_t port;
+
+} as_config_host;
+
+
+/**
+ *	lua module config
+ *	@ingroup as_config_t
+ */
+typedef struct as_config_lua_s {
+
+	/**
+	 *	Enable caching of UDF files in the client
+	 *	application.
+	 */
+	bool cache_enabled;
+
+	/**
+	 *	The path to the system UDF files. These UDF files 
+	 *	are installed with the aerospike client library.
+	 *	Default location is: /opt/citrusleaf/sys/udf/lua
+	 */
+	char system_path[AS_CONFIG_PATH_MAX_SIZE];
+
+	/**
+	 *	The path to user's UDF files.
+	 *	Default location is: /opt/citrusleaf/usr/udf/lua
+	 */
+	char user_path[AS_CONFIG_PATH_MAX_SIZE];
+
+} as_config_lua;
+
+/**
  *	The `as_config` contains the settings for the `aerospike` client. Including
  *	default policies, seed hosts in the cluster and other settings.
  *
@@ -40,7 +119,7 @@
  *	configuration. The seed host is defined in `as_config.hosts`. 
  *
  *	~~~~~~~~~~{.c}
- *	    config.hosts[0] = { .addr = "127.0.0.1", .port = 3000 };
+ *	config.hosts[0] = { .addr = "127.0.0.1", .port = 3000 };
  *	~~~~~~~~~~
  *
  *	You can define up to 16 hosts for the seed. The client will iterate over 
@@ -106,7 +185,6 @@
  *	-	as_policies.info
  *
  *
- *
  *	## User-Defined Function Settings
  *	
  *	If you are using using user-defined functions (UDF) for processing query 
@@ -114,100 +192,13 @@
  *	`mod_lua` settings. Of particular importance is the `mod_lua.user_path`, 
  *	which allows you to define a path to where the client library will look for
  *	Lua files for processing.
- *
+ *	
  *	~~~~~~~~~~{.c}
  *	strcpy(config.mod_lua.user_path, "/home/me/lua");
  *	~~~~~~~~~~
  *
- *	@addtogroup config_t
- *	@{
- */
-
-#pragma once 
-
-#include <aerospike/as_error.h>
-#include <aerospike/as_policy.h>
-
-/******************************************************************************
- *	MACROS
- *****************************************************************************/
-
-/**
- * The size of path strings
- */
-#define AS_CONFIG_PATH_SIZE 256
-
-/**
- * The maximum string length of path strings
- */
-#define AS_CONFIG_PATH_LEN 	AS_CONFIG_PATH_SIZE - 1
-
-/**
- * The size of as_config.hosts
- */
-#define AS_CONFIG_HOSTS_SIZE 256
-
-/******************************************************************************
- *	TYPES
- *****************************************************************************/
-
-/**
- *	Host Information
- */
-typedef struct as_config_host_s {
-	
-	/**
-	 *	Host address
-	 */
-	const char * addr;
-	
-	/**
-	 *	Host port
-	 */
-	uint16_t port;
-
-} as_config_host;
-
-
-/**
- *	lua module config
- */
-typedef struct as_config_lua_s {
-
-	/**
-	 *	Enable caching of UDF files in the client
-	 *	application.
-	 */
-	bool cache_enabled;
-
-	/**
-	 *	The path to the system UDF files. These UDF files 
-	 *	are installed with the aerospike client library.
-	 *	Default location is: /opt/citrusleaf/sys/udf/lua
-	 */
-	char system_path[AS_CONFIG_PATH_SIZE];
-
-	/**
-	 *	The path to user's UDF files.
-	 *	Default location is: /opt/citrusleaf/usr/udf/lua
-	 */
-	char user_path[AS_CONFIG_PATH_SIZE];
-
-} as_config_lua;
-
-/**
- *	Client Configuration.
  *
- *	Contains all the fields necessary for initializing the aerospike client.
- *
- *	The configuration must be initialized prior to use via `as_config_init()`:
- *
- *	~~~~~~~~~~{.c}
- *		as_config config;
- *		as_config_init(&config);
- *	~~~~~~~~~~
- *	
- *	@see config_t for information on using as_config.
+ *	@ingroup as_config_t
  */
 typedef struct as_config_s {
 
@@ -260,10 +251,9 @@ typedef struct as_config_s {
  *	@param c The configuration to initialize.
  *	
  *	@return The initialized configuration on success. Otherwise NULL.
+ *
+ *	@relates as_config
+ *	@ingroup as_config_t
  */
 as_config * as_config_init(as_config * c);
 
-
-/**
- *	@}
- */

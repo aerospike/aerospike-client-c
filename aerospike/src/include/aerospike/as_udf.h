@@ -20,11 +20,6 @@
  *	IN THE SOFTWARE.
  *****************************************************************************/
 
-/** 
- *	@addtogroup udf_t
- *	@{
- */
-
 #pragma once 
 
 #include <aerospike/as_bytes.h>
@@ -33,6 +28,31 @@
 /******************************************************************************
  *	MACROS
  *****************************************************************************/
+
+/**
+ *	Maximum number of bytes in UDF module name.
+ */
+#define AS_UDF_MODULE_MAX_SIZE 64
+
+/**
+ *	Maximum number of chars allows in UDF module name.	
+ */
+#define AS_UDF_MODULE_MAX_LEN (AS_UDF_MODULE_MAX_SIZE - 1)
+
+/**
+ *	Maximum number of bytes in UDF module name.
+ */
+#define AS_UDF_FUNCTION_MAX_SIZE 64
+
+/**
+ *	Maximum number of chars allows in UDF function name.	
+ */
+#define AS_UDF_FUNCTION_MAX_LEN (AS_UDF_FUNCTION_MAX_SIZE - 1)
+
+/**
+ *	The size of a UDF file name
+ */
+#define AS_UDF_FILE_NAME_SIZE 128
 
 /**
  *	The size of a UDF file name
@@ -54,6 +74,16 @@
  *****************************************************************************/
 
 /**
+ *	UDF Module Name
+ */
+typedef char as_udf_module_name[AS_UDF_MODULE_MAX_SIZE];
+
+/**
+ *	UDF Function Name
+ */
+typedef char as_udf_function_name[AS_UDF_FUNCTION_MAX_SIZE];
+
+/**
  *	Defines a call to a UDF
  */
 typedef struct as_udf_call_s {
@@ -67,12 +97,12 @@ typedef struct as_udf_call_s {
 	/**
 	 *	UDF Module containing the function to be called.
 	 */
-	char * module;
+	as_udf_module_name module;
 
 	/**
 	 *	UDF Function to be called
 	 */
-	char * function;
+	as_udf_function_name function;
 
 	/**
 	 *	Argument List
@@ -185,23 +215,23 @@ typedef struct as_udf_files_s {
  *	Initialize a stack allocated as_udf_call.
  *
  *	@param call 		The call to initialize.
- *	@param module 	The UDF module.
+ *	@param module 		The UDF module.
  *	@param function 	The UDF function.
- *	@param arglist 	The UDF argument list.
+ *	@param arglist 		The UDF argument list.
  *
  *	@return The initialized call on success. Otherwise NULL.
  */
-as_udf_call * as_udf_call_init(as_udf_call * call, const char * module, const char * function, as_list * arglist);
+as_udf_call * as_udf_call_init(as_udf_call * call, const as_udf_module_name module, const as_udf_function_name function, as_list * arglist);
 
 /**
  *	Creates a new heap allocated as_udf_call.
- *	@param module 	The UDF module.
+ *	@param module 		The UDF module.
  *	@param function 	The UDF function.
- *	@param arglist 	The UDF argument list.
+ *	@param arglist 		The UDF argument list.
  *
  *	@return The newly allocated call on success. Otherwise NULL.
  */
-as_udf_call * as_udf_call_new(const char * module, const char * function, as_list * arglist);
+as_udf_call * as_udf_call_new(const as_udf_module_name module, const as_udf_function_name function, as_list * arglist);
 
 /**
  *	Destroy an as_udf_call.
@@ -253,7 +283,3 @@ as_udf_files * as_udf_files_new(uint32_t capacity);
  *	Destroy an as_udf_files.
  */
 void as_udf_files_destroy(as_udf_files * files);
-
-/**
- *	@}
- */

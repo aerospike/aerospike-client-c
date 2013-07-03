@@ -52,7 +52,7 @@ static as_scan * as_scan_defaults(as_scan * scan, bool free, const as_namespace 
 	scan->percent = AS_SCAN_PERCENT_DEFAULT;
 	scan->no_bins = AS_SCAN_NOBINS_DEFAULT;
 	
-	as_udf_call_init(&scan->foreach, NULL, NULL, NULL);
+	as_udf_call_init(&scan->apply_each, NULL, NULL, NULL);
 
 	return scan;
 }
@@ -86,7 +86,7 @@ void as_scan_destroy(as_scan * scan)
 	scan->ns[0] = '\0';
 	scan->set[0] = '\0';
 
-	as_udf_call_destroy(&scan->foreach);
+	as_udf_call_destroy(&scan->apply_each);
 
 	// If the whole structure should be freed
 	if ( scan->_free ) {
@@ -164,7 +164,7 @@ bool as_scan_set_nobins(as_scan * scan, bool nobins)
  *	as_arraylist_append_int64(&arglist, 1);
  *	as_arraylist_append_int64(&arglist, 2);
  *	
- *	as_scan_foreach(&q, "module", "func", (as_list *) &arglist);
+ *	as_scan_apply_each(&q, "module", "func", (as_list *) &arglist);
  *
  *	as_arraylist_destroy(&arglist);
  *	~~~~~~~~~~
@@ -176,9 +176,9 @@ bool as_scan_set_nobins(as_scan * scan, bool nobins)
  *
  *	@return On success, true. Otherwise an error occurred.
  */
-bool as_scan_foreach(as_scan * scan, const char * module, const char * function, as_list * arglist)
+bool as_scan_apply_each(as_scan * scan, const char * module, const char * function, as_list * arglist)
 {
 	if ( !module || !function ) return false;
-	as_udf_call_init(&scan->foreach, module, function, arglist);
+	as_udf_call_init(&scan->apply_each, module, function, arglist);
 	return true;
 }

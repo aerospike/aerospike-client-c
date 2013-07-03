@@ -173,6 +173,24 @@ h2.groupheader {
   border-bottom: 1px solid #ddd;
 }
 
+
+.contents > .textblock > h1, .contents > h2, .contents > h3, .contents > h4 {
+  margin: 1em 0;
+}
+
+.contents > .textblock > h1 {
+}
+
+.contents > .textblock > h2 {
+  font-size: 1.4em;
+  font-weight: bold;
+}
+
+.contents > .textblock > h3 {
+  font-size: 1.2em;
+  font-weight: bold;
+}
+
 .dynheader {
   border-top: 1px solid #ddd;
   padding: 16px 0;
@@ -225,6 +243,14 @@ table.memberdecls > tbody > tr.heading > td {
 }
 
 table.memberdecls > tbody > tr.heading > td * {
+}
+
+table.memberdecls > tbody > tr > td.ititle {
+  background: #eee;
+}
+
+table.memberdecls > tbody > tr > td.ititle p:first-child{
+  margin: 0;
 }
 
 table.memberdecls > tbody > tr > td.memSeparator {

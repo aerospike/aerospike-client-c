@@ -20,58 +20,9 @@
  *	IN THE SOFTWARE.
  *****************************************************************************/
 
-/** 
- *	Key used for accessing and modifying records in a cluster.
- *
- *	The key can either be stack or heap allocated. 
- *	
- *	For stack allocated as_key, you should you the following functions to
- *	initialize the value:
- *	- as_key_init()
- *	- as_key_init_int64()
- *	- as_key_init_str()
- *	- as_key_init_raw()
- *	- as_key_init_value()
- *
- *	For heap allocated as_key, you should use the following functions
- *	to allocate and initialize the value:
- *	- as_key_new()
- *	- as_key_new_int64()
- *	- as_key_new_str()
- *	- as_key_new_raw()
- *	- as_key_new_value()
- *
- *	An example of using a stack allocated as_key:
- *
- *	~~~~~~~~~~{.c}
- *	as_key key;
- *	as_key_init(&key, "ns", "set", "key");
- *	~~~~~~~~~~
- *	
- *	An example of using a heap allocated as_key:
- *
- *	~~~~~~~~~~{.c}
- *	as_key * key = as_key_new("ns", "set", "key");
- *	~~~~~~~~~~
- *
- *	With a key, you can use the following APIs to access or modify records:
- *	- aerospike_key_get()
- *	- aerospike_key_select()
- *	- aerospike_key_exists()
- *	- aerospike_key_put()
- *	- aerospike_key_operate()
- *	- aerospike_key_remove()
- *	- aerospike_key_apply()
- *
- *	Each of the operations internally use an as_digest to calculate the location
- *	for the given key. The digest is a hash value of the key and set. It is 
- *	calculated once, and is reused as often as the key is reused. To get the digest
- *	value of a key, use:
- *	- as_key_digest()
- *
- *
- *	@addtogroup key_t
- *	@{
+/**
+ *	@defgroup as_key_t Keys
+ *	@copydoc as_key
  */
 
 #pragma once 
@@ -204,6 +155,36 @@ typedef union as_key_value_u {
  *	- as_key_new_str()
  *	- as_key_new_raw()
  *	- as_key_new_value()
+ *
+ *	An example of using a stack allocated as_key:
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_key key;
+ *	as_key_init(&key, "ns", "set", "key");
+ *	~~~~~~~~~~
+ *	
+ *	An example of using a heap allocated as_key:
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_key * key = as_key_new("ns", "set", "key");
+ *	~~~~~~~~~~
+ *
+ *	With a key, you can use the following APIs to access or modify records:
+ *	- aerospike_key_get()
+ *	- aerospike_key_select()
+ *	- aerospike_key_exists()
+ *	- aerospike_key_put()
+ *	- aerospike_key_operate()
+ *	- aerospike_key_remove()
+ *	- aerospike_key_apply()
+ *
+ *	Each of the operations internally use an as_digest to calculate the location
+ *	for the given key. The digest is a hash value of the key and set. It is 
+ *	calculated once, and is reused as often as the key is reused. To get the digest
+ *	value of a key, use:
+ *	- as_key_digest()
+ *
+ *	@ingroup as_key_t
  */
 typedef struct as_key_s {
 
@@ -263,6 +244,9 @@ typedef struct as_key_s {
  *	@param value	The key's value.
  *
  *	@return The initialized `as_key` on success. Otherwise NULL.
+ *
+ *	@relates as_key
+ *	@ingroup as_key_t
  */
 as_key * as_key_init(as_key * key, const as_namespace ns, const as_set set, const char * value);
 
@@ -282,6 +266,9 @@ as_key * as_key_init(as_key * key, const as_namespace ns, const as_set set, cons
  *	@param value	The key's value.
  *
  *	@return The initialized `as_key` on success. Otherwise NULL.
+ *
+ *	@relates as_key
+ *	@ingroup as_key_t
  */
 as_key * as_key_init_int64(as_key * key, const as_namespace ns, const as_set set, int64_t value);
 
@@ -301,6 +288,9 @@ as_key * as_key_init_int64(as_key * key, const as_namespace ns, const as_set set
  *	@param value	The key's value.
  *
  *	@return The initialized `as_key` on success. Otherwise NULL.
+ *
+ *	@relates as_key
+ *	@ingroup as_key_t
  */
 as_key * as_key_init_str(as_key * key, const as_namespace ns, const as_set set, const char * value);
 
@@ -323,6 +313,9 @@ as_key * as_key_init_str(as_key * key, const as_namespace ns, const as_set set, 
  *	@param size		The number of bytes in value.
  *
  *	@return The initialized `as_key` on success. Otherwise NULL.
+ *
+ *	@relates as_key
+ *	@ingroup as_key_t
  */
 as_key * as_key_init_raw(as_key * key, const as_namespace ns, const as_set set, const uint8_t * value, uint32_t size);
 
@@ -345,6 +338,9 @@ as_key * as_key_init_raw(as_key * key, const as_namespace ns, const as_set set, 
  *	@param value	The key's value.
  *
  *	@return The initialized `as_key` on success. Otherwise NULL.
+ *
+ *	@relates as_key
+ *	@ingroup as_key_t
  */
 as_key * as_key_init_value(as_key * key, const as_namespace ns, const as_set set, const as_key_value * value);
 
@@ -364,6 +360,9 @@ as_key * as_key_init_value(as_key * key, const as_namespace ns, const as_set set
  *	@param value	The key's value.
  *
  *	@return A new `as_key` on success. Otherwise NULL.
+ *
+ *	@relates as_key
+ *	@ingroup as_key_t
  */
 as_key * as_key_new(const as_namespace ns, const as_set set, const char * value);
 
@@ -382,6 +381,9 @@ as_key * as_key_new(const as_namespace ns, const as_set set, const char * value)
  *	@param value	The key's value.
  *
  *	@return A new `as_key` on success. Otherwise NULL.
+ *
+ *	@relates as_key
+ *	@ingroup as_key_t
  */
 as_key * as_key_new_int64(const as_namespace ns, const as_set set, int64_t value);
 
@@ -400,6 +402,9 @@ as_key * as_key_new_int64(const as_namespace ns, const as_set set, int64_t value
  *	@param value	The key's value.
  *
  *	@return A new `as_key` on success. Otherwise NULL.
+ *
+ *	@relates as_key
+ *	@ingroup as_key_t
  */
 as_key * as_key_new_str(const as_namespace ns, const as_set set, const char * value);
 
@@ -421,6 +426,9 @@ as_key * as_key_new_str(const as_namespace ns, const as_set set, const char * va
  *	@param size		The number of bytes in the value.
  *
  *	@return A new `as_key` on success. Otherwise NULL.
+ *
+ *	@relates as_key
+ *	@ingroup as_key_t
  */
 as_key * as_key_new_raw(const as_namespace ns, const as_set set, const uint8_t * value, uint32_t size);
 
@@ -442,6 +450,9 @@ as_key * as_key_new_raw(const as_namespace ns, const as_set set, const uint8_t *
  *	@param value	The key's value.
  *
  *	@return A new `as_key` on success. Otherwise NULL.
+ *
+ *	@relates as_key
+ *	@ingroup as_key_t
  */
 as_key * as_key_new_value(const as_namespace ns, const as_set set, const as_key_value * value);
 
@@ -453,6 +464,9 @@ as_key * as_key_new_value(const as_namespace ns, const as_set set, const as_key_
  *	~~~~~~~~~~
  *
  *	@param key The `as_key` to destroy.
+ *
+ *	@relates as_key
+ *	@ingroup as_key_t
  */
 void as_key_destroy(as_key * key);
 
@@ -469,9 +483,8 @@ void as_key_destroy(as_key * key);
  *	@param key The key to get the digest for.
  *
  *	@return The digest for the key.
+ *
+ *	@relates as_key
+ *	@ingroup as_key_t
  */
 as_digest * as_key_digest(as_key * key);
-
-/**
- *	@}
- */

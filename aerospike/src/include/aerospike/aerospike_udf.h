@@ -21,6 +21,9 @@
  *****************************************************************************/
 
 /** 
+ *	@defgroup udf_api UDF API
+ *	@ingroup client_api
+ *
  *	The UDF API provides the ability to manade UDFs in the cluster.
  *
  *	Management capacilities include:
@@ -30,7 +33,6 @@
  *	- aerospike_udf_put() -		Upload a UDF module.
  *	- aerospike_udf_remove() -	Remove a UDF module.
  *
- *	@addtogroup udf_api
  *	@{
  */
 

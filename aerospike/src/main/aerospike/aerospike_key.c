@@ -678,33 +678,40 @@ as_status aerospike_key_apply(
 	if (! (rc == CITRUSLEAF_OK || rc == CITRUSLEAF_FAIL_UDF_BAD_RESPONSE)) {
 		as_error_update(err, AEROSPIKE_ERR, "Invalid Response (0)");
 	} 
-	else if ( n_bins == 1  ) {
+	else if ( result ) {
 
-		cl_bin * bin = &bins[0];
+		// Begin processing the data returned from the server,
+		// IFF `result` argument is not NULL.
+		// The reason is if `result` is NULL, then it implies the end user
+		// does not care about the data returned from the server.
 
-		if ( strcmp(bin->bin_name,"SUCCESS") == 0 ) {
-			as_val * val = NULL;
-			clbin_to_asval(bin, &ser, &val);
-			*result = val;
-		}
-		else if ( strcmp(bin->bin_name,"FAILURE") == 0 ) {
-			as_val * val = NULL;
-			clbin_to_asval(bin, &ser, &val);
-			if ( val->type == AS_STRING ) {
-				as_string * s = as_string_fromval(val);
-				as_error_update(err, AEROSPIKE_ERR, as_string_tostring(s));
+		if ( n_bins == 1  ) {
+			cl_bin * bin = &bins[0];
+
+			if ( strcmp(bin->bin_name,"SUCCESS") == 0 ) {
+				as_val * val = NULL;
+				clbin_to_asval(bin, &ser, &val);
+				*result = val;
+			}
+			else if ( strcmp(bin->bin_name,"FAILURE") == 0 ) {
+				as_val * val = NULL;
+				clbin_to_asval(bin, &ser, &val);
+				if ( val->type == AS_STRING ) {
+					as_string * s = as_string_fromval(val);
+					as_error_update(err, AEROSPIKE_ERR, as_string_tostring(s));
+				}
+				else {
+					as_error_update(err, AEROSPIKE_ERR, "Invalid Response (1)");
+				}
+				as_val_destroy(val);
 			}
 			else {
-				as_error_update(err, AEROSPIKE_ERR, "Invalid Response (1)");
+				as_error_update(err, AEROSPIKE_ERR, "Invalid Response (2)");
 			}
-			as_val_destroy(val);
 		}
 		else {
-			as_error_update(err, AEROSPIKE_ERR, "Invalid Response (2)");
+			as_error_update(err, AEROSPIKE_ERR, "Invalid Response (4)");
 		}
-	}
-	else {
-		as_error_update(err, AEROSPIKE_ERR, "Invalid Response (4)");
 	}
 
 	if ( bins ) {

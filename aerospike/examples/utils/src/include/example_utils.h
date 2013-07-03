@@ -95,5 +95,5 @@ bool example_read_test_record(aerospike* p_as);
 void example_remove_test_record(aerospike* p_as);
 bool example_register_udf(aerospike* p_as, const char* filename);
 bool example_remove_udf(aerospike* p_as, const char* filename);
-void example_dump_record(as_record* p_rec);
-void example_dump_operations(as_operations* p_ops);
+void example_dump_record(const as_record* p_rec);
+void example_dump_operations(const as_operations* p_ops);

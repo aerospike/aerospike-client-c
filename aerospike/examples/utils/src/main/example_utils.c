@@ -428,7 +428,7 @@ example_remove_udf(aerospike* p_as, const char* udf_file_path)
 //
 
 static void
-example_dump_bin(as_bin* p_bin)
+example_dump_bin(const as_bin* p_bin)
 {
 	if (! p_bin) {
 		LOG("  null as_bin object");
@@ -443,7 +443,7 @@ example_dump_bin(as_bin* p_bin)
 }
 
 void
-example_dump_record(as_record* p_rec)
+example_dump_record(const as_record* p_rec)
 {
 	if (! p_rec) {
 		LOG("  null as_record object");
@@ -473,7 +473,7 @@ const char* AS_OPERATORS[] = {
 };
 
 static void
-example_dump_op(as_binop* p_binop)
+example_dump_op(const as_binop* p_binop)
 {
 	if (! p_binop) {
 		LOG("  null as_binop object");
@@ -499,7 +499,7 @@ example_dump_op(as_binop* p_binop)
 }
 
 void
-example_dump_operations(as_operations* p_ops)
+example_dump_operations(const as_operations* p_ops)
 {
 	if (! p_ops) {
 		LOG("  null as_operations object");

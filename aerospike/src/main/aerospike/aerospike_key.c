@@ -676,8 +676,8 @@ as_status aerospike_key_apply(
 	as_buffer_destroy(&args);
 
 	if (! (rc == CITRUSLEAF_OK || rc == CITRUSLEAF_FAIL_UDF_BAD_RESPONSE)) {
-		as_error_update(err, AEROSPIKE_ERR, "Invalid Response (0)");
-	} 
+		as_error_fromrc(err, rc);
+	}
 	else if ( result ) {
 
 		// Begin processing the data returned from the server,

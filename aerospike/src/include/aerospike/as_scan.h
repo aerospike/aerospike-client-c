@@ -162,7 +162,7 @@ typedef struct as_scan_s {
 	/**
 	 *	Apply the UDF for each record scanned on the server.
 	 *
-	 *	Should be set via `as_scan_foreach()`.
+	 *	Should be set via `as_scan_apply_each()`.
 	 */
 	as_udf_call apply_each;
 
@@ -284,7 +284,7 @@ bool as_scan_set_nobins(as_scan * scan, bool nobins);
  *	as_arraylist_append_int64(&arglist, 1);
  *	as_arraylist_append_int64(&arglist, 2);
  *	
- *	as_scan_foreach(&q, "module", "func", (as_list *) &arglist);
+ *	as_scan_apply_each(&q, "module", "func", (as_list *) &arglist);
  *
  *	as_arraylist_destroy(&arglist);
  *	~~~~~~~~~~

@@ -85,7 +85,7 @@ as_status aerospike_key_get(
 	as_policy_read p;
 	as_policy_read_resolve(&p, &as->config.policies, policy);
 
-	uint32_t    timeout = p.timeout;          
+	uint32_t    timeout = p.timeout == UINT32_MAX ? 0 : p.timeout;          
 	uint32_t    gen = 0;
 	uint32_t 	ttl = 0;
 	char *      set = NULL;
@@ -172,7 +172,7 @@ as_status aerospike_key_select(
 	as_policy_read p;
 	as_policy_read_resolve(&p, &as->config.policies, policy);
 
-	uint32_t    timeout = p.timeout;
+	uint32_t    timeout = p.timeout == UINT32_MAX ? 0 : p.timeout;
 	uint32_t    gen = 0;
 	uint32_t 	ttl = 0;
 	// char *      set = NULL;
@@ -269,7 +269,7 @@ as_status aerospike_key_exists(
 	as_policy_read p;
 	as_policy_read_resolve(&p, &as->config.policies, policy);
 
-	uint32_t	timeout = p.timeout;
+	uint32_t	timeout = p.timeout == UINT32_MAX ? 0 : p.timeout;
 	uint32_t	gen = 0;
 	uint32_t	ttl = 0; // TODO - a version of 'exists' that returns all metadata
 	int     	nvalues = 0;
@@ -616,7 +616,7 @@ as_status aerospike_key_apply(
 
 	cl_write_parameters wp;
 	cl_write_parameters_set_default(&wp);
-	wp.timeout_ms = p.timeout;
+	wp.timeout_ms = p.timeout == UINT32_MAX ? 0 : p.timeout;
 
 	cl_object okey;
 	asval_to_clobject((as_val *) key->valuep, &okey);
@@ -676,8 +676,8 @@ as_status aerospike_key_apply(
 	as_buffer_destroy(&args);
 
 	if (! (rc == CITRUSLEAF_OK || rc == CITRUSLEAF_FAIL_UDF_BAD_RESPONSE)) {
-		as_error_update(err, AEROSPIKE_ERR, "Invalid Response (0)");
-	} 
+		as_error_fromrc(err, rc);
+	}
 	else if ( result ) {
 
 		// Begin processing the data returned from the server,

@@ -48,7 +48,6 @@
 
 #define UDF_MODULE "bg_scan_udf"
 const char UDF_FILE_PATH[] = "src/lua/" UDF_MODULE ".lua";
-const char UDF_FUNCTION_NAME[] = "test_bin_add_1000";
 
 
 //==========================================================
@@ -95,7 +94,7 @@ main(int argc, char* argv[])
 	// Specify the namespace, set, and the UDF to apply during the scan.
 	as_scan scan;
 	as_scan_init(&scan, g_namespace, g_set);
-	as_scan_foreach(&scan, UDF_MODULE, UDF_FUNCTION_NAME, NULL);
+	as_scan_apply_each(&scan, UDF_MODULE, "test_bin_add_1000", NULL);
 
 	as_error err;
 

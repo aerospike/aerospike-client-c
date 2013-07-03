@@ -9,3 +9,5 @@ default: all
 	$(MAKE) -C incr $@
 	$(MAKE) -C put $@
 	$(MAKE) -C touch $@
+	$(MAKE) -C udf $@
+	

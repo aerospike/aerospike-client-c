@@ -20,11 +20,6 @@
  *	IN THE SOFTWARE.
  *****************************************************************************/
 
-/** 
- *	@addtogroup udf_t
- *	@{
- */
-
 #pragma once 
 
 #include <aerospike/as_bytes.h>
@@ -253,7 +248,3 @@ as_udf_files * as_udf_files_new(uint32_t capacity);
  *	Destroy an as_udf_files.
  */
 void as_udf_files_destroy(as_udf_files * files);
-
-/**
- *	@}
- */

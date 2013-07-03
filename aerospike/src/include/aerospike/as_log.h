@@ -21,6 +21,8 @@
  *****************************************************************************/
 
 /**
+ *	@defgroup as_log_t Logging
+ *
  *	Aerospike Client exposed the ability to control the verbosity of logs
  *	emitted from the client, and where the log messages are sent to.
  *
@@ -46,8 +48,6 @@
  *	as_log_set_callback(&as->log, my_callback);
  *	~~~~~~~~~~
  *
- *	@addtogroup log_t Logging
- *	@{
  */
 
 #pragma once 
@@ -82,21 +82,46 @@ typedef enum as_log_level_e {
 /**
  *	Callback function for as_log related logging calls.
  *
+ *	The following is a simple log callback:
+ *	~~~~~~~~~~{.c}
+ *	bool my_log_callback(
+ *		as_log_level level, const char * func, const char * file, uint32_t line,
+ *		const char * fmt, ...)
+ *	{
+ *		char msg[1024] = {0};
+ *	
+ *		va_list ap;
+ *		va_start(ap, fmt);
+ *		vsnprintf(msg, 1024, fmt, ap);
+ *		msg[1023] = '\0';
+ *		va_end(ap);
+ *		
+ *		fprintf(stderr, "[%s:%d][%s] %d - %s\n", file, line, func, level, msg);
+ *	
+ *		return true;
+ *	}
+ *	~~~~~~~~~~
+ *
+ *	The function should return true on success.
+ *
+ *
  *	@param level 		The log level of the message.
- *	@param func 			The function where the message was logged.
- *	@param file 			The file where the message was logged.
- *	@param line 			The line where the message was logged.
+ *	@param func 		The function where the message was logged.
+ *	@param file 		The file where the message was logged.
+ *	@param line 		The line where the message was logged.
  *	@param fmt 			The format string used.
  *	@param ... 			The format argument.
  *
  *	@return true if the message was logged. Otherwise false.
+ *
+ *	@ingroup as_log_t
  */
 typedef bool (* as_log_callback)(
 	as_log_level level, const char * func, const char * file, uint32_t line,
 	const char * fmt, ...);
 
 /**
- *	Logging Context
+ *	@copydoc as_log_t
  */
 typedef struct as_log_s {
 
@@ -118,6 +143,9 @@ typedef struct as_log_s {
 
 /**
  *	Initialize Log Context 
+ *
+ *	@relates as_log
+ *	@ingroup as_log_t
  */
 as_log * as_log_init(as_log * log);
 
@@ -128,6 +156,9 @@ as_log * as_log_init(as_log * log);
  *	@param level 	The log level.
  *
  *	@return true on success. Otherwise false.
+ *
+ *	@relatesalso as_log
+ *	@ingroup as_log_t
  */
 bool as_log_set_level(as_log * log, as_log_level level);
 
@@ -138,6 +169,9 @@ bool as_log_set_level(as_log * log, as_log_level level);
  *	@param callback 	The log callback.
  *
  *	@return true on success. Otherwise false.
+ *
+ *	@relates as_log
+ *	@ingroup as_log_t
  */
 bool as_log_set_callback(as_log * log, as_log_callback callback);
 

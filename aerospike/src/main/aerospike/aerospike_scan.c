@@ -82,16 +82,16 @@ static void as_scan_toclscan(const as_scan * scan, const as_policy_scan * policy
 		}
 	}
 
-	if ( scan->foreach.module && scan->foreach.function ) {
+	if ( scan->apply_each.module && scan->apply_each.function ) {
 		if ( background ) {
 			clscan->udf.type = CL_SCAN_UDF_BACKGROUND;
 		}
 		else {
 			clscan->udf.type = CL_SCAN_UDF_CLIENT_RECORD;
 		}
-		clscan->udf.filename = scan->foreach.module;
-		clscan->udf.function = scan->foreach.function;
-		clscan->udf.arglist = scan->foreach.arglist;
+		clscan->udf.filename = scan->apply_each.module;
+		clscan->udf.function = scan->apply_each.function;
+		clscan->udf.arglist = scan->apply_each.arglist;
 	}
 	else {
 		clscan->udf.type = CL_SCAN_UDF_NONE;

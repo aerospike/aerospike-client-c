@@ -21,6 +21,8 @@
  *****************************************************************************/
 
 /** 
+ *	@defgroup as_policy_t Policies
+ *
  *	Policies define the behavior of database operations. 
  *
  *	Policies fall into two groups: policy values and operation policies.
@@ -49,10 +51,7 @@
  *	- as_policy_scan
  *	- as_policy_query
  *	- as_policy_read
- *	
  *
- *	@addtogroup policy_t
- *	@{
  */
 
 #pragma once 
@@ -95,6 +94,8 @@
 
 /**
  *	Write Mode Policy
+ *
+ *	@ingroup as_policy_t
  */
 typedef enum as_policy_writemode_e {
 
@@ -129,6 +130,8 @@ typedef enum as_policy_writemode_e {
  *
  *	Specifies the behavior of record modifications with regard to the 
  *	generation value.
+ *
+ *	@ingroup as_policy_t
  */
 typedef enum as_policy_gen_e {
 
@@ -170,6 +173,8 @@ typedef enum as_policy_gen_e {
  *
  *	Specifies the behavior for whether keys or digests
  *	should be sent to the cluster.
+ *
+ *	@ingroup as_policy_t
  */
 typedef enum as_policy_key_e {
 
@@ -218,6 +223,8 @@ typedef enum as_policy_key_e {
  *	
  *	Specifies the behavior for writing the record
  *	depending whether or not it exists.
+ *
+ *	@ingroup as_policy_t
  */
 typedef enum as_policy_exists_e {
 
@@ -250,6 +257,8 @@ typedef enum as_policy_exists_e {
 
 /**
  *	Write Policy
+ *
+ *	@ingroup as_policy_t
  */
 typedef struct as_policy_write_s {
 
@@ -290,6 +299,8 @@ typedef struct as_policy_write_s {
 
 /**
  *	Read Policy
+ *
+ *	@ingroup as_policy_t
  */
 typedef struct as_policy_read_s {
 
@@ -312,6 +323,8 @@ typedef struct as_policy_read_s {
 
 /**
  *	Operate Policy
+ *
+ *	@ingroup as_policy_t
  */
 typedef struct as_policy_operate_s {
 
@@ -346,6 +359,8 @@ typedef struct as_policy_operate_s {
 
 /**
  *	Remove Policy
+ *
+ *	@ingroup as_policy_t
  */
 typedef struct as_policy_remove_s {
 
@@ -385,6 +400,8 @@ typedef struct as_policy_remove_s {
 
 /**
  *	Query Policy
+ *
+ *	@ingroup as_policy_t
  */
 typedef struct as_policy_query_s {
 
@@ -402,6 +419,8 @@ typedef struct as_policy_query_s {
 
 /**
  *	Scan Policy
+ *
+ *	@ingroup as_policy_t
  */
 typedef struct as_policy_scan_s {
 
@@ -424,6 +443,8 @@ typedef struct as_policy_scan_s {
 
 /**
  *	Info Policy
+ *
+ *	@ingroup as_policy_t
  */
 typedef struct as_policy_info_s {
 
@@ -450,9 +471,12 @@ typedef struct as_policy_info_s {
 } as_policy_info;
 
 /**
- *	struct of all the policies.
- *	This is utilizes for defining defaults within an aerospike 
- *	client or configuration.
+ *	Struct of all policy values and operation policies. 
+ *	
+ *	This is utilizes by as_config, to define global and default values
+ *	for policies.
+ *
+ *	@ingroup as_config_t
  */
 typedef struct as_policies_s {
 
@@ -549,6 +573,8 @@ typedef struct as_policies_s {
  *
  *	@param p	The policy to initialize
  *	@return The initialized policy.
+ *
+ *	@relates as_policy_read
  */
 as_policy_read * as_policy_read_init(as_policy_read * p);
 
@@ -557,6 +583,8 @@ as_policy_read * as_policy_read_init(as_policy_read * p);
  *
  *	@param p	The policy to initialize
  *	@return The initialized policy.
+ *
+ *	@relates as_policy_write
  */
 as_policy_write * as_policy_write_init(as_policy_write * p);
 
@@ -565,6 +593,8 @@ as_policy_write * as_policy_write_init(as_policy_write * p);
  *
  *	@param p	The policy to initialize
  *	@return The initialized policy.
+ *
+ *	@relates as_policy_operate
  */
 as_policy_operate * as_policy_operate_init(as_policy_operate * p);
 
@@ -573,6 +603,8 @@ as_policy_operate * as_policy_operate_init(as_policy_operate * p);
  *
  *	@param p	The policy to initialize
  *	@return The initialized policy.
+ *
+ *	@relates as_policy_scan
  */
 as_policy_scan * as_policy_scan_init(as_policy_scan * p);
 
@@ -581,6 +613,8 @@ as_policy_scan * as_policy_scan_init(as_policy_scan * p);
  *
  *	@param p	The policy to initialize
  *	@return The initialized policy.
+ *
+ *	@relates as_policy_query
  */
 as_policy_query * as_policy_query_init(as_policy_query * p);
 
@@ -589,6 +623,8 @@ as_policy_query * as_policy_query_init(as_policy_query * p);
  *
  *	@param p	The policy to initialize
  *	@return The initialized policy.
+ *
+ *	@relates as_policy_info
  */
 as_policy_info * as_policy_info_init(as_policy_info * p);
 
@@ -597,9 +633,7 @@ as_policy_info * as_policy_info_init(as_policy_info * p);
  *
  *	@param p	The policies to initialize
  *	@return The initialized policies.
+ *
+ *	@relates as_policies
  */
 as_policies * as_policies_init(as_policies * p);
-
-/**
- *	@}
- */

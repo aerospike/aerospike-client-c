@@ -21,13 +21,8 @@
  *****************************************************************************/
 
 /**
- *	@addtogroup operations_t
- *
- *	The `aerospike_key_operate()` function performs multiple operations on a
- *	record in the database. The `as_operations` object is used to define the
- *	operations to be performed on the record.
- *	
- *	@{
+ *	@defgroup as_operations_t Operations
+ *	@copydoc as_operations
  */
 
 
@@ -136,7 +131,13 @@ typedef struct as_binops_s {
 
 } as_binops;
 
-
+/**
+ *	The `aerospike_key_operate()` function performs multiple operations on a
+ *	record in the database. The `as_operations` object is used to define the
+ *	operations to be performed on the record.
+ *
+ *	@ingroup as_operations_t	
+ */
 typedef struct as_operations_s {
 
 	/**
@@ -211,6 +212,8 @@ typedef struct as_operations_s {
  *	@param nops		The number of `as_operations.binops.entries` to allocate on the heap.
  *
  *	@return The initialized `as_operations` on success. Otherwise NULL.
+ *
+ *	@relatesalso as_operations
  */
 as_operations * as_operations_init(as_operations * ops, uint16_t nops);
 
@@ -229,6 +232,8 @@ as_operations * as_operations_init(as_operations * ops, uint16_t nops);
  *	@param nops		The number of `as_operations.binops.entries` to allocate on the heap.
  *
  *	@return The new `as_operations` on success. Otherwise NULL.
+ *
+ *	@relatesalso as_operations
  */
 as_operations * as_operations_new(uint16_t nops);
 
@@ -240,6 +245,8 @@ as_operations * as_operations_new(uint16_t nops);
  *	~~~~~~~~~~
  *
  *	@param ops 	The `as_operations` to destroy.
+ *
+ *	@relatesalso as_operations
  */
 void as_operations_destroy(as_operations * ops);
 
@@ -251,6 +258,8 @@ void as_operations_destroy(as_operations * ops);
  *	@param value 		The value to be used in the operation.
  *
  *	@return true on success. Otherwise an error occurred.
+ *
+ *	@relatesalso as_operations
  */
 bool as_operations_add_write(as_operations * ops, const as_bin_name name, as_bin_value * value);
 
@@ -262,6 +271,8 @@ bool as_operations_add_write(as_operations * ops, const as_bin_name name, as_bin
  *	@param value 		The value to be used in the operation.
  *
  *	@return true on success. Otherwise an error occurred.
+ *
+ *	@relatesalso as_operations
  */
 bool as_operations_add_write_int64(as_operations * ops, const as_bin_name name, int64_t value);
 
@@ -273,6 +284,8 @@ bool as_operations_add_write_int64(as_operations * ops, const as_bin_name name, 
  *	@param value 		The value to be used in the operation.
  *
  *	@return true on success. Otherwise an error occurred.
+ *
+ *	@relatesalso as_operations
  */
 bool as_operations_add_write_str(as_operations * ops, const as_bin_name name, const char * value);
 
@@ -285,6 +298,8 @@ bool as_operations_add_write_str(as_operations * ops, const as_bin_name name, co
  *	@param size 		The size of the value.
  *
  *	@return true on success. Otherwise an error occurred.
+ *
+ *	@relatesalso as_operations
  */
 bool as_operations_add_write_raw(as_operations * ops, const as_bin_name name, const uint8_t * value, uint32_t size);
 
@@ -295,6 +310,8 @@ bool as_operations_add_write_raw(as_operations * ops, const as_bin_name name, co
  *	@param name 		The name of the bin to perform the operation on.
  *
  *	@return true on success. Otherwise an error occurred.
+ *
+ *	@relatesalso as_operations
  */
 bool as_operations_add_read(as_operations * ops, const as_bin_name name);
 
@@ -306,6 +323,8 @@ bool as_operations_add_read(as_operations * ops, const as_bin_name name);
  *	@param value 		The value to be used in the operation.
  *
  *	@return true on success. Otherwise an error occurred.
+ *
+ *	@relatesalso as_operations
  */
 bool as_operations_add_incr(as_operations * ops, const as_bin_name name, int64_t value);
 
@@ -317,6 +336,8 @@ bool as_operations_add_incr(as_operations * ops, const as_bin_name name, int64_t
  *	@param value 		The value to be used in the operation.
  *
  *	@return true on success. Otherwise an error occurred.
+ *
+ *	@relatesalso as_operations
  */
 bool as_operations_add_prepend_str(as_operations * ops, const as_bin_name name, const char * value);
 
@@ -329,6 +350,8 @@ bool as_operations_add_prepend_str(as_operations * ops, const as_bin_name name, 
  *	@param size 		The size of the value.
  *
  *	@return true on success. Otherwise an error occurred.
+ *
+ *	@relatesalso as_operations
  */
 bool as_operations_add_prepend_raw(as_operations * ops, const as_bin_name name, const uint8_t * value, uint32_t size);
 
@@ -340,6 +363,8 @@ bool as_operations_add_prepend_raw(as_operations * ops, const as_bin_name name, 
  *	@param value 		The value to be used in the operation.
  *
  *	@return true on success. Otherwise an error occurred.
+ *
+ *	@relatesalso as_operations
  */
 bool as_operations_add_append_str(as_operations * ops, const as_bin_name name, const char * value);
 
@@ -352,6 +377,8 @@ bool as_operations_add_append_str(as_operations * ops, const as_bin_name name, c
  *	@param size 		The size of the value.
  *
  *	@return true on success. Otherwise an error occurred.
+ *
+ *	@relatesalso as_operations
  */
 bool as_operations_add_append_raw(as_operations * ops, const as_bin_name name, const uint8_t * value, uint32_t size);
 
@@ -361,6 +388,8 @@ bool as_operations_add_append_raw(as_operations * ops, const as_bin_name name, c
  *	@param ops			The `as_operations` to append the operation to.
  *
  *	@return true on success. Otherwise an error occurred.
+ *
+ *	@relatesalso as_operations
  */
 bool as_operations_add_touch(as_operations * ops);
 

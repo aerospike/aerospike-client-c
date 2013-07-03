@@ -21,6 +21,38 @@
  *****************************************************************************/
 
 /** 
+ *	@defgroup as_error_t Error Handling
+ *	@copydoc as_error
+ */
+
+#pragma once 
+
+#include <aerospike/as_status.h>
+
+#include <stdarg.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+
+/******************************************************************************
+ *	MACROS
+ *****************************************************************************/
+
+/**
+ * The size of as_error.message
+ */
+#define AS_ERROR_MESSAGE_MAX_SIZE 	1024
+
+/**
+ * The maximum string length of as_error.message
+ */
+#define AS_ERROR_MESSAGE_MAX_LEN 	(AS_ERROR_MESSAGE_MAX_SIZE - 1)
+
+/******************************************************************************
+ *	TYPES
+ *****************************************************************************/
+
+/**
  *	All operations that interact with the Aerospike cluster accept an as_error
  *	argument and return an as_status value. The as_error argument is populated
  *	with information about the error that occured. The as_status return value
@@ -37,7 +69,8 @@
  *	Example usage:
  *	~~~~~~~~~~{.c}
  *	as_error err;
- *	if ( aerospike_key_get(&as, &err, &key, &rec) != AEROSPIKE_OK ) {
+ *
+ *	if ( aerospike_key_get(&as, &err, NULL, &key, &rec) != AEROSPIKE_OK ) {
  *		fprintf(stderr, "(%d) %s at %s[%s:%d]\n", error.code, err.message, err.func, err.file. err.line);
  *	}
  *	~~~~~~~~~~
@@ -61,39 +94,7 @@
  *	}
  *	~~~~~~~~~~
  *
- *	@addtogroup error_t
- *	@{
- */
-
-#pragma once 
-
-#include <aerospike/as_status.h>
-
-#include <stdarg.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <string.h>
-
-/******************************************************************************
- *	MACROS
- *****************************************************************************/
-
-/**
- * The size of as_error.message
- */
-#define AS_ERROR_MESSAGE_SIZE 	1024
-
-/**
- * The maximum string length of as_error.message
- */
-#define AS_ERROR_MESSAGE_LEN 	AS_ERROR_MESSAGE_SIZE - 1
-
-/******************************************************************************
- *	TYPES
- *****************************************************************************/
-
-/**
- *	Contains information about an error
+ *	@ingroup as_error_t
  */
 typedef struct as_error_s {
 
@@ -105,7 +106,7 @@ typedef struct as_error_s {
 	/**
 	 *	NULL-terminated error message
 	 */
-	char message[AS_ERROR_MESSAGE_SIZE];
+	char message[AS_ERROR_MESSAGE_MAX_SIZE];
 
 	/**
 	 *	Name of the function where the error occurred.
@@ -130,6 +131,7 @@ typedef struct as_error_s {
 
 /**
  *	as_error_update(&as->error, AEROSPIKE_OK, "%s %d", "a", 1);
+ *	@ingroup as_error_t
  */
 #define as_error_update(__err, __code, __fmt, ...) \
 	as_error_setallv( __err, __code, __func__, __FILE__, __LINE__, __fmt, ##__VA_ARGS__ );
@@ -144,6 +146,9 @@ typedef struct as_error_s {
  *	@param err The error to initialize.
  *
  *	@returns The initialized err.
+ *
+ *	@relates as_error
+ *	@ingroup as_error_t
  */
 inline as_error * as_error_init(as_error * err) {
 	err->code = AEROSPIKE_OK;
@@ -160,6 +165,9 @@ inline as_error * as_error_init(as_error * err) {
  *	@param err The error to reset.
  *
  *	@returns AEROSPIKE_OK.
+ *
+ *	@relates as_error
+ *	@ingroup as_error_t
  */
 inline as_status as_error_reset(as_error * err) {
 	err->code = AEROSPIKE_OK;
@@ -174,11 +182,13 @@ inline as_status as_error_reset(as_error * err) {
  *	Sets the error.
  *
  *	@return The status code set for the error.
+ *
+ *	@relates as_error
  */
 inline as_status as_error_setall(as_error * err, as_status code, const char * message, const char * func, const char * file, uint32_t line) {
 	err->code = code;
-	strncpy(err->message, message, AS_ERROR_MESSAGE_LEN);
-	err->message[AS_ERROR_MESSAGE_LEN] = '\0';
+	strncpy(err->message, message, AS_ERROR_MESSAGE_MAX_LEN);
+	err->message[AS_ERROR_MESSAGE_MAX_LEN] = '\0';
 	err->func = func;
 	err->file = file;
 	err->line = line;
@@ -189,13 +199,15 @@ inline as_status as_error_setall(as_error * err, as_status code, const char * me
  *	Sets the error.
  *
  *	@return The status code set for the error.
+ *
+ *	@relates as_error
  */
 inline as_status as_error_setallv(as_error * err, as_status code, const char * func, const char * file, uint32_t line, const char * fmt, ...) {
 	if ( fmt != NULL ) {
 		va_list ap;
 		va_start(ap, fmt);
-		vsnprintf(err->message, AS_ERROR_MESSAGE_LEN, fmt, ap);
-		err->message[AS_ERROR_MESSAGE_LEN] = '\0';
+		vsnprintf(err->message, AS_ERROR_MESSAGE_MAX_LEN, fmt, ap);
+		err->message[AS_ERROR_MESSAGE_MAX_LEN] = '\0';
 		va_end(ap);   
 	}
 	err->code = code;
@@ -207,19 +219,17 @@ inline as_status as_error_setallv(as_error * err, as_status code, const char * f
 
 /**
  *	Sets the error message
+ *
+ *	@relates as_error
  */
 inline as_status as_error_set(as_error * err, as_status code, const char * fmt, ...) {
 	if ( fmt != NULL ) {
 		va_list ap;
 		va_start(ap, fmt);
-		vsnprintf(err->message, AS_ERROR_MESSAGE_LEN, fmt, ap);
-		err->message[AS_ERROR_MESSAGE_LEN] = '\0';
+		vsnprintf(err->message, AS_ERROR_MESSAGE_MAX_LEN, fmt, ap);
+		err->message[AS_ERROR_MESSAGE_MAX_LEN] = '\0';
 		va_end(ap);   
 	}
 	err->code = code;
 	return err->code;
 }
-
-/**
- * @}
- */

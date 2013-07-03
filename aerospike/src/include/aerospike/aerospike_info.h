@@ -21,6 +21,9 @@
  *****************************************************************************/
 
 /**
+ *	@defgroup info_api Info API
+ *	@ingroup client_api
+ *
  *	The Info API provides the ability to query an Aerospike cluster for 
  *	information. 
  *
@@ -28,7 +31,6 @@
  *	- aerospike_info_host() - Query a single host in the cluster.
  *	- aerospike_info_foreach() - Query every host in the cluster.
  *
- *	@addtogroup info_api
  *	@{
  */
 
@@ -128,5 +130,6 @@ as_status aerospike_info_foreach(
 	);
 
 /** 
+ *	@}
  *	@}
  */

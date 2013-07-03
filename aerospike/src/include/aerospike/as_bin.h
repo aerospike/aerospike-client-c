@@ -20,11 +20,6 @@
  *	IN THE SOFTWARE.
  *****************************************************************************/
 
-/** 
- *	@addtogroup record_t
- *	@{
- */
-
 #pragma once 
 
 #include <aerospike/as_integer.h>
@@ -39,9 +34,13 @@
  *****************************************************************************/
 
 /**
- *	Maximum bin name size/length - based on server's storage format.
+ *	Maximum bin name size
  */
 #define AS_BIN_NAME_MAX_SIZE 15
+
+/**
+ *	Maximum bin name length
+ */
 #define AS_BIN_NAME_MAX_LEN (AS_BIN_NAME_MAX_SIZE - 1)
 
 /******************************************************************************
@@ -116,8 +115,3 @@ typedef struct as_bins_s {
 	as_bin * entries;
 
 } as_bins;
-
-
-/**
- *	@}
- */

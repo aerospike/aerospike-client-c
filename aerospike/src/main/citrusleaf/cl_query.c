@@ -42,7 +42,6 @@
 #include <aerospike/as_module.h>
 #include <aerospike/as_msgpack.h>
 #include <aerospike/as_list.h>
-#include <aerospike/as_record.h>
 #include <aerospike/as_serializer.h>
 #include <aerospike/as_string.h>
 #include <aerospike/mod_lua.h>
@@ -53,7 +52,6 @@
 #include <citrusleaf/cl_query.h>
 #include <citrusleaf/cl_udf.h>
 
-#include "../aerospike/_shim.h"
 #include "internal.h"
 
 /******************************************************************************
@@ -839,32 +837,29 @@ static int cl_query_worker_do(cl_cluster_node * node, cl_query_task * task) {
             }
             else if ((msg->n_ops || (msg->info1 & CL_MSG_INFO1_NOBINDATA))) {
 
-                as_record r;
-                as_record * record = &r;
+                cl_query_response_rec rec;
+                cl_query_response_rec *recp = &rec;
+                as_rec r;
+                as_rec *rp = &r;
 
-                if ( task->isinline ) {
-                	as_record_inita(record, msg->n_ops);
+                if (!task->isinline) { 
+                    recp = malloc(sizeof(cl_query_response_rec));
+                    recp->ismalloc   = true;
+                    rp = as_rec_new(recp, &query_response_hooks);    
+                } else {
+                    recp->ismalloc   = false;
+                    rp = as_rec_init(rp, recp, &query_response_hooks);
                 }
-                else {
-                	record = as_record_new(msg->n_ops);
-                }
-                LOG("fuck");
 
-                strcpy(record->key.set, set_ret ? set_ret : "");
-                record->key.digest.init = true;
-                memcpy(record->key.digest.value, &keyd, 20);
-
-                record->ttl = 0;
-    			if (msg->record_ttl != 0) {
-    				// Note that the server actually returns void-time, so we have
-    				// to convert to TTL here.
-    				uint32_t now = cf_clepoch_seconds();
-    				record->ttl = msg->record_ttl > now ? msg->record_ttl - now : 0;
-    			}
-
-    			record->gen = msg->generation;
-
-                clbins_to_asrecord(bins, msg->n_ops, record);
+                recp->ns         = strdup(ns_ret);
+                recp->keyd       = keyd;
+                recp->set        = set_ret;
+                recp->generation = msg->generation;
+                recp->record_ttl = msg->record_ttl;
+                recp->bins       = bins;
+                recp->n_bins     = msg->n_ops;
+                recp->values     = NULL;
+                recp->free_bins  = free_bins;
 
                 // TODO:
                 //      Fix the following block of code. It is really lame 
@@ -876,7 +871,7 @@ static int cl_query_worker_do(cl_cluster_node * node, cl_query_task * task) {
                 //
                 // got one good value? call it a success!
                 // (Note:  In the key exists case, there is no bin data.)
-                as_val * v = as_record_get(record, "SUCCESS");
+                as_val * v = as_rec_get(rp, "SUCCESS");
 
                 if ( v  != NULL ) {
                     // I only need this value. The rest of the record is useless.
@@ -886,12 +881,12 @@ static int cl_query_worker_do(cl_cluster_node * node, cl_query_task * task) {
                     as_val_reserve(v);
                     task->callback(v, task->udata);
 
-                    as_record_destroy(record);
+                    as_rec_destroy(rp);
                 }
                 else {
-                    task->callback((as_val *) record, task->udata);
+                    task->callback((as_val *) rp, task->udata);
                 }
-              rc = CITRUSLEAF_OK;
+                rc = CITRUSLEAF_OK;
             }
 
             // if done free stack allocated stuff

@@ -548,8 +548,8 @@ bool as_query_select(as_query * query, const char * bin);
  *	~~~~~~~~~~{.c}
  *	as_query_where_inita(&q, 3);
  *	as_query_where(&q, "bin1", string_equals("abc"));
- *	as_query_where(&q, "bin1", integer_equals(123));
- *	as_query_where(&q, "bin1", integer_range(0,123));
+ *	as_query_where(&q, "bin2", integer_equals(123));
+ *	as_query_where(&q, "bin3", integer_range(0,123));
  *	~~~~~~~~~~
  *
  *	@param __query	The query to initialize.

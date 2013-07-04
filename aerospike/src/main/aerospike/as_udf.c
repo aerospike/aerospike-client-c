@@ -39,10 +39,22 @@
 static as_udf_call * as_udf_call_defaults(as_udf_call * call, bool free, const as_udf_module_name module, const as_udf_function_name function, as_list * arglist) 
 {
 	if ( !call ) return call;
+
 	call->_free = free;
-	strcpy(call->module, module);
-	strcpy(call->function, function);
 	call->arglist = arglist;
+
+	if ( module ) {
+		strcpy(call->module, module);
+	}
+	else {
+		call->module[0] = '\0';
+	}
+	if ( function ) {
+		strcpy(call->function, function);
+	}
+	else {
+		call->function[0] = '\0';
+	}
 	return call;
 }
 
@@ -51,9 +63,8 @@ static as_udf_call * as_udf_call_defaults(as_udf_call * call, bool free, const a
  */
 as_udf_call * as_udf_call_init(as_udf_call * call, const as_udf_module_name module, const as_udf_function_name function, as_list * arglist)
 {
-	if ( !module || !function ||
-		strlen(module) > AS_UDF_MODULE_MAX_LEN || 
-		strlen(function) > AS_UDF_FUNCTION_MAX_LEN ) {
+	if ( ( module && strlen(module) > AS_UDF_MODULE_MAX_LEN ) ||
+		 ( function && strlen(function) > AS_UDF_FUNCTION_MAX_LEN ) ) {
 		return NULL;
 	}
 	return as_udf_call_defaults(call, false, module, function, arglist);
@@ -64,9 +75,8 @@ as_udf_call * as_udf_call_init(as_udf_call * call, const as_udf_module_name modu
  */
 as_udf_call * as_udf_call_new(const as_udf_module_name module, const as_udf_function_name function, as_list * arglist)
 {
-	if ( !module || !function ||
-		strlen(module) > AS_UDF_MODULE_MAX_LEN || 
-		strlen(function) > AS_UDF_FUNCTION_MAX_LEN ) {
+	if ( ( module && strlen(module) > AS_UDF_MODULE_MAX_LEN ) ||
+		 ( function && strlen(function) > AS_UDF_FUNCTION_MAX_LEN ) ) {
 		return NULL;
 	}
 	as_udf_call * call = (as_udf_call *) malloc(sizeof(as_udf_call));

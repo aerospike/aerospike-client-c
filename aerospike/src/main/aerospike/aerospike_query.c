@@ -82,7 +82,7 @@ static cl_query * as_query_toclquery(const as_query * query)
 		cl_query_orderby(clquery, o->bin, o->order == AS_ORDER_ASCENDING ? CL_ORDERBY_ASC : CL_ORDERBY_DESC);
 	}
 
-	if ( query->apply.module && query->apply.function ) {
+	if ( query->apply.module[0] != '\0' && query->apply.function[0] != '\0' ) {
 		cl_query_aggregate(clquery, query->apply.module, query->apply.function, query->apply.arglist);
 	}
 
@@ -125,7 +125,7 @@ as_status aerospike_query_foreach(
 
 	cl_rv rc = citrusleaf_query_foreach(as->cluster, clquery, udata, callback);
 
-    cl_query_destroy(clquery);
+	cl_query_destroy(clquery);
 
 	return rc ? AEROSPIKE_ERR_QUERY : AEROSPIKE_OK;
 }

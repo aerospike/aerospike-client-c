@@ -35,6 +35,7 @@
 #include <aerospike/as_map.h>
 #include <aerospike/as_rec.h>
 #include <aerospike/as_string.h>
+#include <aerospike/as_util.h>
 #include <aerospike/as_val.h>
 
 #include <stdint.h>

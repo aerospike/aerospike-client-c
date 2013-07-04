@@ -41,6 +41,13 @@
 extern const as_rec_hooks as_record_rec_hooks;
 
 /******************************************************************************
+ *	INLINE FUNCTIONS
+ *****************************************************************************/
+
+extern inline as_val * as_record_toval(const as_record * rec);
+extern inline as_record * as_record_fromval(const as_val * v);
+
+/******************************************************************************
  *	STATIC FUNCTIONS
  *****************************************************************************/
 
@@ -121,8 +128,14 @@ void as_record_release(as_record * rec)
 {
 	if ( rec ) {
 
-		if ( rec->bins.entries && rec->bins._free ) {
-			free(rec->bins.entries);
+		if ( rec->bins.entries ) {
+			for ( int i = 0; i < rec->bins.size; i++ ) {
+				as_val_destroy((as_val *) rec->bins.entries[i].valuep);
+				rec->bins.entries[i].valuep = NULL;
+			}
+			if ( rec->bins._free ) {
+				free(rec->bins.entries);
+			}
 		}
 		rec->bins.entries = NULL;
 		rec->bins.capacity = 0;
@@ -370,7 +383,7 @@ as_val * as_record_get(const as_record * rec, const as_bin_name name)
 			return (as_val *) rec->bins.entries[i].valuep;
 		}
 	}
-	return (as_val *) &as_nil;
+	return NULL;
 }
 
 /**

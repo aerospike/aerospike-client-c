@@ -107,6 +107,7 @@ static as_bin * as_record_bin_forupdate(as_record * rec, const as_bin_name name)
 	for(int i = 0; i < rec->bins.size; i++) {
 		if ( strcmp(rec->bins.entries[i].name, name) == 0 ) {
 			as_val_destroy(rec->bins.entries[i].valuep);
+			rec->bins.entries[i].valuep = NULL;
 			return &rec->bins.entries[i];
 		}
 	}
@@ -121,7 +122,7 @@ static as_bin * as_record_bin_forupdate(as_record * rec, const as_bin_name name)
 }
 
 /******************************************************************************
- *	FUNCTIONS
+ *	INSTANCE FUNCTIONS
  *****************************************************************************/
 
 void as_record_release(as_record * rec) 
@@ -191,6 +192,10 @@ void as_record_destroy(as_record * rec)
 	as_rec_destroy((as_rec *) rec);
 }
 
+/******************************************************************************
+ *	VALUE FUNCTIONS
+ *****************************************************************************/
+
 /**
  *	Get the number of bins in the record.
  *	@param rec - the record
@@ -201,6 +206,9 @@ uint16_t as_record_numbins(const as_record * rec)
 	return rec ? rec->bins.size : 0;
 }
 
+/******************************************************************************
+ *	SETTER FUNCTIONS
+ *****************************************************************************/
 
 /**
  *	Set specified bin's value to an as_val (as_integer, as_string, as_bytes, as_list, as_map).
@@ -369,6 +377,10 @@ bool as_record_set_nil(as_record * rec, const as_bin_name name) {
 	return as_record_set(rec, name, (as_bin_value *) &as_nil);
 }
 
+/******************************************************************************
+ *	GETTER FUNCTIONS
+ *****************************************************************************/
+
 /**
  *	Get specified bin's value as an as_val (as_integer, as_string, as_bytes, as_list, as_map).
  *	as_val * value = as_record_get(rec, "bin");
@@ -474,3 +486,20 @@ as_map * as_record_get_map(const as_record * rec, const as_bin_name name)
 {
 	return as_map_fromval(as_record_get(rec, name));
 }
+
+/******************************************************************************
+ *	ITERATION FUNCTIONS
+ *****************************************************************************/
+
+bool as_record_foreach(const as_record * rec, as_rec_foreach_callback callback, void * udata)
+{
+	if ( rec->bins.entries ) {
+		for ( int i = 0; i < rec->bins.size; i++ ) {
+			if ( callback(rec->bins.entries[i].name, (as_val *) rec->bins.entries[i].valuep, udata) == false ) {
+				return false;
+			}
+		}
+	}
+	return true;
+}
+

@@ -106,6 +106,11 @@ static uint16_t as_record_rec_numbins(const as_rec * r)
 	return r ? as_record_numbins((as_record *) r) : 0;
 }
 
+static uint16_t as_record_rec_foreach(const as_rec * r, as_rec_foreach_callback callback, void * udata) 
+{
+	return r ? as_record_foreach((as_record *) r, callback, udata) : 0;
+}
+
 /******************************************************************************
  *	HOOKS
  ******************************************************************************/
@@ -134,5 +139,6 @@ const as_rec_hooks as_record_rec_hooks = {
 	.ttl		= as_record_rec_ttl,
 	.gen		= as_record_rec_gen,
 	.numbins	= as_record_rec_numbins,
-	.digest		= as_record_rec_digest
+	.digest		= as_record_rec_digest,
+	.foreach 	= as_record_rec_foreach
 };

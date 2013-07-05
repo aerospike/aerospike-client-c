@@ -237,5 +237,5 @@ SUITE( key_apply, "aerospike_key_apply tests" ) {
 	suite_add( key_apply_ten );
 	suite_add( key_apply_add_1_2 );
 	suite_add( key_apply_record_exists );
-	// suite_add( key_apply_get_bin_a );
+	suite_add( key_apply_get_bin_a );
 }

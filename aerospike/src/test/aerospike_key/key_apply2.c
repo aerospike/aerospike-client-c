@@ -704,9 +704,9 @@ SUITE( key_apply2, "aerospike_key_apply2 tests" ) {
     suite_add( key_apply2_call_local_sum );
     suite_add( key_apply2_udf_func_does_not_exist );
     suite_add( key_apply2_udf_file_does_not_exist );
-    // suite_add( key_apply2_delete_record_test_replication );
-    // suite_add( key_apply2_update_record_test_memory );
-    // suite_add( key_apply2_bad_update_test_memory );
-    // suite_add( key_apply2_bad_create_test_memory );
+    suite_add( key_apply2_delete_record_test_replication );
+    suite_add( key_apply2_update_record_test_memory );
+    suite_add( key_apply2_bad_update_test_memory );
+    suite_add( key_apply2_bad_create_test_memory );
 
 }

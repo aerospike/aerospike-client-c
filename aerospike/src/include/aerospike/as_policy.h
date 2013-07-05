@@ -36,7 +36,7 @@
  *
  *	- as_policy_key
  *	- as_policy_gen
- *	- as_policy_writemode
+ *	- as_policy_retry
  *	- as_policy_exists
  *	
  *	## Operation Policies
@@ -69,9 +69,9 @@
 #define AS_POLICY_TIMEOUT_DEFAULT 1000
 
 /**
- *	Default as_policy_writemode value
+ *	Default as_policy_retry value
  */
-#define AS_POLICY_WRITEMODE_DEFAULT AS_POLICY_WRITEMODE_RETRY
+#define AS_POLICY_RETRY_DEFAULT AS_POLICY_RETRY_NONE
 
 /**
  *	Default as_policy_gen value
@@ -97,33 +97,29 @@
  *
  *	@ingroup as_policy_t
  */
-typedef enum as_policy_writemode_e {
+typedef enum as_policy_retry_e {
 
 	/**
 	 *	The policy is undefined.
 	 *
 	 *	If set, then the value will default to
-	 *	either as_config.policies.writemode
-	 *	or `AS_POLICY_WRITEMODE_DEFAULT`.
+	 *	either as_config.policies.retry
+	 *	or `AS_POLICY_RETRY_DEFAULT`.
 	 */
-	AS_POLICY_WRITEMODE_UNDEF, 
+	AS_POLICY_RETRY_UNDEF, 
 
 	/**
-	 * Asynchronous write mode.
+	 *	Only attempt an operation once.
 	 */
-	AS_POLICY_WRITEMODE_ASYNC, 
+	AS_POLICY_RETRY_NONE, 
 
 	/**
-	 * Attempt write once or fail.
+	 *	If an operation fails, attempt the operation
+	 *	one more time.
 	 */
-	AS_POLICY_WRITEMODE_ONESHOT, 
+	AS_POLICY_RETRY_ONCE, 
 
-	/**
-	 * Attempt write until success.
-	 */
-	AS_POLICY_WRITEMODE_RETRY
-
-} as_policy_writemode;
+} as_policy_retry;
 
 /**
  *	Generation Policy
@@ -273,10 +269,9 @@ typedef struct as_policy_write_s {
 	uint32_t timeout;
 
 	/**
-	 *	The write mode defines the behavior 
-	 *	for writing data to the cluster.
+	 *	Specifies the behavior for failed operations.
 	 */
-	as_policy_writemode mode;
+	as_policy_retry retry;
 
 	/**
 	 *	Specifies the behavior for the key.
@@ -339,10 +334,9 @@ typedef struct as_policy_operate_s {
 	uint32_t timeout;
 
 	/**
-	 *	The write mode defines the behavior 
-	 *	for writing data to the cluster.
+	 *	Specifies the behavior for failed operations.
 	 */
-	as_policy_writemode mode;
+	as_policy_retry retry;
 	
 	/**
 	 *	Specifies the behavior for the key.
@@ -380,10 +374,9 @@ typedef struct as_policy_remove_s {
 	uint16_t generation;
 
 	/**
-	 *	The write mode defines the behavior 
-	 *	for writing data to the cluster.
+	 *	Specifies the behavior of failed operations.
 	 */
-	as_policy_writemode mode;
+	as_policy_retry retry;
 	
 	/**
 	 *	Specifies the behavior for the key.
@@ -494,11 +487,11 @@ typedef struct as_policies_s {
 	uint32_t timeout;
 
 	/**
-	 *	The write mode defines the behavior for writing data to the cluster.
+	 *	Specifies the behavior for failed operations.
 	 *	
-	 *	The default value is `AS_POLICY_WRITEMODE_DEFAULT`.
+	 *	The default value is `AS_POLICY_RETRY_DEFAULT`.
 	 */
-	as_policy_writemode mode;
+	as_policy_retry retry;
 	
 	/**
 	 *	Specifies the behavior for the key.

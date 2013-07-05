@@ -23,7 +23,7 @@ as_policy_read * as_policy_read_init(as_policy_read * p) {
 as_policy_write * as_policy_write_init(as_policy_write * p) 
 {
 	p->timeout	= 0;
-	p->mode		= AS_POLICY_WRITEMODE_UNDEF;
+	p->retry	= AS_POLICY_RETRY_UNDEF;
 	p->key		= AS_POLICY_KEY_UNDEF;
 	p->gen		= AS_POLICY_GEN_UNDEF;
 	p->exists	= AS_POLICY_EXISTS_UNDEF;
@@ -36,7 +36,7 @@ as_policy_write * as_policy_write_init(as_policy_write * p)
 as_policy_operate * as_policy_operate_init(as_policy_operate * p)
 {
 	p->timeout		= 0;
-	p->mode			= AS_POLICY_WRITEMODE_UNDEF;
+	p->retry		= AS_POLICY_RETRY_UNDEF;
 	p->key			= AS_POLICY_KEY_UNDEF;
 	p->gen			= AS_POLICY_GEN_UNDEF;
 	return p;
@@ -49,7 +49,7 @@ as_policy_remove * as_policy_remove_init(as_policy_remove * p)
 {
 	p->timeout		= 0;
 	p->generation	= 0;
-	p->mode			= AS_POLICY_WRITEMODE_UNDEF;
+	p->retry		= AS_POLICY_RETRY_UNDEF;
 	p->key			= AS_POLICY_KEY_UNDEF;
 	p->gen			= AS_POLICY_GEN_UNDEF;
 	return p;
@@ -92,7 +92,7 @@ as_policies * as_policies_init(as_policies * p)
 {
 	// defaults
 	p->timeout	= AS_POLICY_TIMEOUT_DEFAULT;
-	p->mode		= AS_POLICY_WRITEMODE_DEFAULT;
+	p->retry	= AS_POLICY_RETRY_DEFAULT;
 	p->key		= AS_POLICY_KEY_DEFAULT;
 	p->gen		= AS_POLICY_GEN_DEFAULT;
 	p->exists	= AS_POLICY_EXISTS_DEFAULT;

@@ -580,6 +580,35 @@ as_list * as_record_get_list(const as_record * rec, const as_bin_name name);
 as_map * as_record_get_map(const as_record * rec, const as_bin_name name);
 
 /******************************************************************************
+ *	ITERATION FUNCTIONS
+ ******************************************************************************/
+
+/**
+ *	Iterate over each bin in the record and invoke the callback function
+ *	
+ *	~~~~~~~~~~{.c}
+ *	bool print_bin(const char * name, const as_val * value, void * udata) {
+ *		char * sval = as_val_tostring(value);
+ *		printf("bin: name=%s, value=%s\n", name, sval);
+ *		free(sval);
+ *		return true;
+ *	}
+ *
+ *	as_record_foreach(rec, print_bin, NULL);
+ *	~~~~~~~~~~
+ *
+ *	@param rec		The record containing the bins to iterate over.
+ *	@param callback	The callback to invoke for each bin.
+ *	@param udata	User-data provided for the callback.
+ *
+ *	@return true if iteration completes fully. false if iteration was aborted.
+ *
+ *	@relates as_record
+ *	@ingroup as_record_t
+ */
+bool as_record_foreach(const as_record * rec, as_rec_foreach_callback callback, void * udata);
+
+/******************************************************************************
  *	CONVERSION FUNCTIONS
  ******************************************************************************/
 

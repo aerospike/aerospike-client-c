@@ -24,6 +24,19 @@
 extern aerospike * as;
 
 /******************************************************************************
+ * STATIC FUNCTIONS
+ *****************************************************************************/
+
+
+static bool key_basics_print_bins(const char * name, const as_val * value, void * udata)
+{
+	char * sval = as_val_tostring(value);
+	info("bin: name=%s, value=%s", name, sval);
+	free(sval);
+	return true;
+}
+
+/******************************************************************************
  * TEST CASES
  *****************************************************************************/
 
@@ -44,24 +57,30 @@ TEST( key_basics_put , "put: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 'de
 	as_stringmap_set_int64((as_map *) &map, "y", 8);
 	as_stringmap_set_int64((as_map *) &map, "z", 9);
 
-	as_record r;
-	as_record_init(&r, 10);
-	as_record_set_int64(&r, "a", 123);
-	as_record_set_str(&r, "b", "abc");
-	as_record_set_integer(&r, "c", as_integer_new(456));
-	as_record_set_string(&r, "d", as_string_new("def",true));
-	as_record_set_list(&r, "e", (as_list *) &list);
-	as_record_set_map(&r, "f", (as_map *) &map);
+	as_record r, * rec = &r;
+	as_record_init(rec, 10);
+	as_record_set_int64(rec, "a", 123);
+	as_record_set_str(rec, "b", "abc");
+	as_record_set_integer(rec, "c", as_integer_new(456));
+	as_record_set_string(rec, "d", as_string_new("def",false));
+	as_record_set_list(rec, "e", (as_list *) &list);
+	as_record_set_map(rec, "f", (as_map *) &map);
 
 	as_key key;
 	as_key_init(&key, "test", "test", "foo");
 
-	as_status rc = aerospike_key_put(as, &err, NULL, &key, &r);
+	as_status rc = aerospike_key_put(as, &err, NULL, &key, rec);
 
 	as_key_destroy(&key);
 
+    info("bins: ");
+    as_record_foreach(&r, key_basics_print_bins, NULL);
+
+	as_record_destroy(rec);
+
 	assert_int_eq( rc, AEROSPIKE_OK );
 }
+
 
 TEST( key_basics_get , "get: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 'def', e: [1,2,3], f: {x: 7, y: 8, z: 9}}" ) {
 
@@ -105,6 +124,9 @@ TEST( key_basics_get , "get: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 'de
     assert_not_null( map );
     assert_int_eq( as_map_size(map), 3 );
 
+    info("bins: ");
+    as_record_foreach(rec, key_basics_print_bins, NULL);
+
     as_record_destroy(rec);
 }
 
@@ -142,6 +164,10 @@ TEST( key_basics_select , "select: (test,test,foo) = {a: 123, b: 'abc'}" ) {
 	assert_null( as_record_get_string(rec, "d") );
     assert_null( as_record_get_list(rec, "e") );
     assert_null( as_record_get_map(rec, "f") );
+
+
+    info("bins: ");
+    as_record_foreach(rec, key_basics_print_bins, NULL);
 
     as_record_destroy(rec);
 }
@@ -260,6 +286,9 @@ TEST( key_basics_get2 , "get: (test,test,foo) = {a: 444, b: 'abcdef', d: 'abcdef
     as_map * map = as_record_get_map(rec, "f");
     assert_not_null( map );
     assert_int_eq( as_map_size(map), 3 );
+
+    info("bins: ");
+    as_record_foreach(rec, key_basics_print_bins, NULL);
 
     as_record_destroy(rec);
 }

@@ -35,7 +35,7 @@ as_policy_read * as_policy_read_resolve(as_policy_read * p, const as_policies * 
 as_policy_write * as_policy_write_resolve(as_policy_write * p, const as_policies * global, const as_policy_write * local)
 {
 	p->timeout	= as_policy_resolve(timeout, global->write, local, global->timeout);
-	p->mode		= as_policy_resolve(mode, global->write, local, global->mode);
+	p->retry	= as_policy_resolve(retry, global->write, local, global->retry);
 	p->key		= as_policy_resolve(key, global->write, local, global->key);
 	p->gen		= as_policy_resolve(gen, global->write, local, global->gen);
 	p->exists	= as_policy_resolve(exists, global->write, local, global->exists);
@@ -48,7 +48,7 @@ as_policy_write * as_policy_write_resolve(as_policy_write * p, const as_policies
 as_policy_operate * as_policy_operate_resolve(as_policy_operate * p, const as_policies * global, const as_policy_operate * local)
 {
 	p->timeout		= as_policy_resolve(timeout, global->operate, local, global->timeout);
-	p->mode			= as_policy_resolve(mode, global->operate, local, global->mode);
+	p->retry		= as_policy_resolve(retry, global->operate, local, global->retry);
 	p->key			= as_policy_resolve(key, global->operate, local, global->key);
 	p->gen			= as_policy_resolve(gen, global->operate, local, global->gen);
 	return p;
@@ -61,7 +61,7 @@ as_policy_remove * as_policy_remove_resolve(as_policy_remove * p, const as_polic
 {
 	p->timeout		= as_policy_resolve(timeout, global->operate, local, global->timeout);
 	p->generation	= local ? local->generation : 0;
-	p->mode			= as_policy_resolve(mode, global->operate, local, global->mode);
+	p->retry		= as_policy_resolve(retry, global->operate, local, global->retry);
 	p->key			= as_policy_resolve(key, global->operate, local, global->key);
 	p->gen			= as_policy_resolve(gen, global->operate, local, global->gen);
 	return p;

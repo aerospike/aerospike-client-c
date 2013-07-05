@@ -344,15 +344,14 @@ void aspolicywrite_to_clwriteparameters(const as_policy_write * policy, const as
 			break;
 	}
 
-	switch(policy->mode) {
-		case AS_POLICY_WRITEMODE_ASYNC:
-			wp->w_pol = CL_WRITE_ASYNC;
-			break;
-		case AS_POLICY_WRITEMODE_ONESHOT:
-			wp->w_pol = CL_WRITE_ONESHOT;
-			break;
-		default:
+	switch(policy->retry) {
+		case AS_POLICY_RETRY_ONCE:
 			wp->w_pol = CL_WRITE_RETRY;
+			break;
+		case AS_POLICY_RETRY_NONE:
+		default:
+			// default is to no retry
+			wp->w_pol = CL_WRITE_ONESHOT;
 			break;
 	}
 }
@@ -390,15 +389,14 @@ void aspolicyoperate_to_clwriteparameters(const as_policy_operate * policy, cons
 			break;
 	}
 
-	switch(policy->mode) {
-		case AS_POLICY_WRITEMODE_ASYNC:
-			wp->w_pol = CL_WRITE_ASYNC;
-			break;
-		case AS_POLICY_WRITEMODE_ONESHOT:
-			wp->w_pol = CL_WRITE_ONESHOT;
-			break;
-		default:
+	switch(policy->retry) {
+		case AS_POLICY_RETRY_ONCE:
 			wp->w_pol = CL_WRITE_RETRY;
+			break;
+		case AS_POLICY_RETRY_NONE:
+		default:
+			// default is to no retry
+			wp->w_pol = CL_WRITE_ONESHOT;
 			break;
 	}
 }
@@ -436,15 +434,14 @@ void aspolicyremove_to_clwriteparameters(const as_policy_remove * policy, cl_wri
 			break;
 	}
 
-	switch(policy->mode) {
-		case AS_POLICY_WRITEMODE_ASYNC:
-			wp->w_pol = CL_WRITE_ASYNC;
-			break;
-		case AS_POLICY_WRITEMODE_ONESHOT:
-			wp->w_pol = CL_WRITE_ONESHOT;
-			break;
-		default:
+	switch(policy->retry) {
+		case AS_POLICY_RETRY_ONCE:
 			wp->w_pol = CL_WRITE_RETRY;
+			break;
+		case AS_POLICY_RETRY_NONE:
+		default:
+			// default is to no retry
+			wp->w_pol = CL_WRITE_ONESHOT;
 			break;
 	}
 }

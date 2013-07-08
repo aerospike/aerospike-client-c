@@ -264,6 +264,9 @@ example_connect_to_aerospike(aerospike* p_as)
 	cfg.hosts[0].addr = g_host;
 	cfg.hosts[0].port = g_port;
 
+	// Aerospike developers only - uncomment with appropriate lua path:
+//	strcpy(cfg.lua.system_path, "/home/citrusleaf/aerospike/modules/mod-lua/src/lua");
+
 	as_error err;
 
 	// Connect to the Aerospike database cluster. Assume this is the first thing
@@ -287,6 +290,9 @@ example_cleanup(aerospike* p_as)
 	// started. That's why examples that want to start clean remove the test
 	// record at the beginning.
 	example_remove_test_record(p_as);
+
+	// Note also example_remove_test_records() is not called here - examples
+	// using multiple records call that from their own cleanup utilities.
 
 	as_error err;
 
@@ -343,6 +349,67 @@ example_remove_test_record(aerospike* p_as)
 	// inserted the record, or it has already been removed, this call will
 	// return as_status AEROSPIKE_ERR_RECORD_NOT_FOUND - which we just ignore.
 	aerospike_key_remove(p_as, &err, NULL, &g_key);
+}
+
+//------------------------------------------------
+// Read multiple-record examples' test records
+// from the database.
+//
+bool
+example_read_test_records(aerospike* p_as)
+{
+	as_key key;
+
+	// Multiple-record examples insert g_n_keys records, using integer keys from
+	// 0 to (g_n_keys - 1).
+	for (uint32_t i = 0; i < g_n_keys; i++) {
+		as_key_init_int64(&key, g_namespace, g_set, (int64_t)i);
+
+		as_error err;
+		as_record* p_rec = NULL;
+
+		// Read a test record from the database.
+		if (aerospike_key_get(p_as, &err, NULL, &key, &p_rec) != AEROSPIKE_OK) {
+			LOG("aerospike_key_get() returned %d - %s", err.code, err.message);
+			return false;
+		}
+
+		// If we didn't get an as_record object back, something's wrong.
+		if (! p_rec) {
+			LOG("aerospike_key_get() retrieved null as_record object");
+			return false;
+		}
+
+		// Log the result.
+		LOG("read record with key %u from database:", i);
+		example_dump_record(p_rec);
+
+		// Destroy the as_record object.
+		as_record_destroy(p_rec);
+	}
+
+	return true;
+}
+
+//------------------------------------------------
+// Remove multiple-record examples' test records
+// from the database.
+//
+void
+example_remove_test_records(aerospike* p_as)
+{
+	as_key key;
+
+	// Multiple-record examples insert g_n_keys records, using integer keys from
+	// 0 to (g_n_keys - 1).
+	for (uint32_t i = 0; i < g_n_keys; i++) {
+		as_key_init_int64(&key, g_namespace, g_set, (int64_t)i);
+
+		as_error err;
+
+		// Ignore errors - just trying to leave the database as we found it.
+		aerospike_key_remove(p_as, &err, NULL, &key);
+	}
 }
 
 

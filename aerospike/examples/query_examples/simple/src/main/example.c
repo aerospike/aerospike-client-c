@@ -29,16 +29,17 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
-#include <unistd.h> // temp, for sleep
 
 #include <aerospike/aerospike.h>
+#include <aerospike/aerospike_index.h>
 #include <aerospike/aerospike_key.h>
-#include <aerospike/aerospike_scan.h>
+#include <aerospike/aerospike_query.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_key.h>
+#include <aerospike/as_query.h>
 #include <aerospike/as_record.h>
-#include <aerospike/as_scan.h>
 #include <aerospike/as_status.h>
+#include <aerospike/as_val.h>
 
 #include "example_utils.h"
 
@@ -47,20 +48,21 @@
 // Constants
 //
 
-#define UDF_MODULE "bg_scan_udf"
-const char UDF_FILE_PATH[] = "src/lua/" UDF_MODULE ".lua";
+const char TEST_INDEX_NAME[] = "test-bin-index";
 
 
 //==========================================================
 // Forward Declarations
 //
 
+bool query_cb(const as_val* p_val, void* udata);
 void cleanup(aerospike* p_as);
 bool insert_records(aerospike* p_as);
+void remove_test_index(aerospike* p_as);
 
 
 //==========================================================
-// BACKGROUND SCAN Example
+// SIMPLE QUERY Example
 //
 
 int
@@ -77,10 +79,16 @@ main(int argc, char* argv[])
 
 	// Start clean.
 	example_remove_test_records(&as);
+	remove_test_index(&as);
 
-	// Register the UDF in the database cluster.
-	if (! example_register_udf(&as, UDF_FILE_PATH)) {
-		example_cleanup(&as);
+	as_error err;
+
+	// Create a numeric secondary index on test-bin.
+	if (aerospike_index_integer_create(&as, &err, NULL, g_namespace, g_set,
+			"test-bin", TEST_INDEX_NAME) != AEROSPIKE_OK) {
+		LOG("aerospike_index_integer_create() returned %d - %s", err.code,
+				err.message);
+		cleanup(&as);
 		exit(-1);
 	}
 
@@ -94,48 +102,59 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
-	as_error err;
+	// Create an as_query object.
+	as_query query;
+	as_query_init(&query, g_namespace, g_set);
 
-	// Specify the namespace, set, and the UDF to apply during the scan.
-	as_scan scan;
-	as_scan_init(&scan, g_namespace, g_set);
-	as_scan_apply_each(&scan, UDF_MODULE, "test_bin_add_1000", NULL);
+	// Generate an as_query.where condition.
+	as_query_where_inita(&query, 1);
+	as_query_where(&query, "test-bin", integer_equals(7));
 
-	// Using a scan ID of 0 tells the client to generate one.
-	uint64_t scan_id = 0;
+	LOG("executing query: where test-bin = 7");
 
-	// Start the scan. This call does NOT block while the scan is running.
-	if (aerospike_scan_background(&as, &err, NULL, &scan, &scan_id) !=
+	// Execute the query. This call blocks - callbacks are made in the scope of
+	// this call.
+	if (aerospike_query_foreach(&as, &err, NULL, &query, query_cb, NULL) !=
 			AEROSPIKE_OK) {
-		LOG("aerospike_scan_background() returned %d - %s", err.code,
+		LOG("aerospike_query_foreach() returned %d - %s", err.code,
 				err.message);
-		as_scan_destroy(&scan);
+		as_query_destroy(&query);
 		cleanup(&as);
-		exit(-1);
 	}
 
-	// Destroy the as_scan object.
-	as_scan_destroy(&scan);
+	LOG("query executed");
 
-	LOG("started background scan %lu ...", scan_id);
-
-	// TODO - poll to see when it's actually done.
-	sleep(3);
-
-	LOG("... finished background scan");
-
-	// Read everything back and show the changes done by the scan.
-	if (! example_read_test_records(&as)) {
-		cleanup(&as);
-		exit(-1);
-	}
+	as_query_destroy(&query);
 
 	// Cleanup and disconnect from the database cluster.
 	cleanup(&as);
 
-	LOG("background scan example successfully completed");
+	LOG("simple query example successfully completed");
 
 	return 0;
+}
+
+
+//==========================================================
+// Query Callback
+//
+
+bool
+query_cb(const as_val* p_val, void* udata)
+{
+	if (! p_val) {
+		LOG("query callback returned null - query is complete");
+		return true;
+	}
+
+	// The query didn't use a UDF, so the as_val object should be an as_record.
+	LOG("query callback returned record:");
+	example_dump_record(as_record_fromval(p_val));
+
+	// Caller's responsibility to destroy as_val returned.
+	as_val_destroy(p_val);
+
+	return true;
 }
 
 
@@ -147,7 +166,7 @@ void
 cleanup(aerospike* p_as)
 {
 	example_remove_test_records(p_as);
-	example_remove_udf(p_as, UDF_FILE_PATH);
+	remove_test_index(p_as);
 	example_cleanup(p_as);
 }
 
@@ -178,4 +197,13 @@ insert_records(aerospike* p_as)
 	LOG("insert succeeded");
 
 	return true;
+}
+
+void
+remove_test_index(aerospike* p_as)
+{
+	as_error err;
+
+	// Ignore errors - just trying to leave the database as we found it.
+	aerospike_index_remove(p_as, &err, NULL, g_namespace, TEST_INDEX_NAME);
 }

@@ -12,13 +12,18 @@ mkdir -p $trgExamplesDir
 cp $srcExamplesDir/Makefile $trgExamplesDir
 cp $srcExamplesDir/README.md $trgExamplesDir
 cp -r $srcExamplesDir/utils $trgExamplesDir
-cp -r $srcExamplesDir/basic_examples $trgExamplesDir
 
-for i in $srcExamplesDir/basic_examples/*/Makefile
+for i in $srcExamplesDir/basic_examples/*/Makefile $srcExamplesDir/query_examples/*/Makefile $srcExamplesDir/scan_examples/{background,standard}/Makefile
 do
 	dir=`dirname $i`
 	example=`basename $dir`
-	rm -rf $trgExamplesDir/basic_examples/$example/target
+	dir=`dirname $dir`
+	exampleType=`basename $dir`
+	
+	mkdir -p $trgExamplesDir/$exampleType
+	cp $srcExamplesDir/$exampleType/Makefile $trgExamplesDir/$exampleType
+	cp -r $srcExamplesDir/$exampleType/$example $trgExamplesDir/$exampleType
+	rm -rf $trgExamplesDir/$exampleType/$example/target
 
 	# Modify Makefile for external use.
 	awk 'BEGIN{OFS=""}
@@ -38,6 +43,6 @@ do
 		{
 			print $0
 		}
-	}' $i > $trgExamplesDir/basic_examples/$example/Makefile
+	}' $i > $trgExamplesDir/$exampleType/$example/Makefile
 done
 

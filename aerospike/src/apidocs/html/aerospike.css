@@ -148,6 +148,8 @@ h2.groupheader {
 }
 
 .contents > h1 {
+  font-size: 1.6em;
+  font-weight: bold;
 }
 
 .contents > h2 {

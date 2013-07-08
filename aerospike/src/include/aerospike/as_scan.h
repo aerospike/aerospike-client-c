@@ -29,7 +29,6 @@
 /** 
  *	@defgroup as_scan_t Scans
  *	@copydoc as_scan
- *	@{
  */
 
 /******************************************************************************
@@ -117,29 +116,112 @@ typedef struct as_scan_bins_s {
 } as_scan_bins;
 
 /**
- *	Defines the scan to be executed against an Aerospike cluster.
+ *	In order to execute a scan using the Scan API, an as_scan object
+ *	must be initialized and populated.
  *
- *	A query must be initialized via either `as_scan_init()` or `as_scan_new()`.
- *	Both functions require a namespace and set to query.
- *
- *	`as_scan_init()` will initialize a stack allocated `as_scan`:
+ *	## Initialization
+ *	
+ *	Before using an as_scan, it must be initialized via either: 
+ *	- as_scan_init()
+ *	- as_scan_new()
+ *	
+ *	as_scan_init() should be used on a stack allocated as_scan. It will
+ *	initialize the as_scan with the given namespace and set. On success,
+ *	it will return a pointer to the initialized as_scan. Otherwise, NULL 
+ *	is returned.
  *
  *	~~~~~~~~~~{.c}
  *	as_scan scan;
  *	as_scan_init(&scan, "namespace", "set");
  *	~~~~~~~~~~
  *
- *	`as_scan_new()` will create and initialize a new heap allocated `as_scan`:
+ *	as_scan_new() should be used to allocate and initialize a heap allocated
+ *	as_scan. It will allocate the as_scan, then initialized it with the 
+ *	given namespace and set. On success, it will return a pointer to the 
+ *	initialized as_scan. Otherwise, NULL is returned.
  *
  *	~~~~~~~~~~{.c}
  *	as_scan * scan = as_scan_new("namespace", "set");
  *	~~~~~~~~~~
  *
- *	When you are finished with the scan, you can destroy it and associated
+ *	## Destruction
+ *
+ *	When you are finished with the as_scan, you can destroy it and associated
  *	resources:
  *
  *	~~~~~~~~~~{.c}
  *	as_scan_destroy(scan);
+ *	~~~~~~~~~~
+ *
+ *	## Usage
+ *
+ *	An initialized as_query can be populated with additional fields.
+ *
+ *	### Selecting Bins
+ *
+ *	as_scan_select() is used to specify the bins to be selected by the scan.
+ *	If a scan specifies bins to be selected, then only those bins will be 
+ *	returned. If no bins are selected, then all bins will be returned.
+ *	
+ *	~~~~~~~~~~{.c}
+ *	as_scan_select(query, "bin1");
+ *	as_scan_select(query, "bin2");
+ *	~~~~~~~~~~
+ *
+ *	Before adding bins to select, the select structure must be initialized via
+ *	either:
+ *	- as_scan_select_inita() - Initializes the structure on the stack.
+ *	- as_scan_select_init() - Initializes the structure on the heap.
+ *
+ *	Both functions are given the number of bins to be selected.
+ *
+ *	A complete example using as_scan_select_inita()
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_scan_select_inita(query, 2);
+ *	as_scan_select(query, "bin1");
+ *	as_scan_select(query, "bin2");
+ *	~~~~~~~~~~
+ *
+ *	### Returning only meta data
+ *
+ *	To omit bins from the scan, and to only return meta data, then set 
+ *	as_scan.no_data.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_scan_set_nodata(scan, true);
+ *	~~~~~~~~~~
+ *
+ *	### Scan a Percentage of Records
+ *
+ *	A scan can define the percentage of record in the cluster to be scaned.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_scan_set_percent(scan, 100);
+ *	~~~~~~~~~~
+ *
+ *	### Scan a Priority
+ *
+ *	To set the priority of the scan, the set as_scan.priority.
+ *
+ *	The priority of a scan can be defined as either:
+ *	- `AS_SCAN_PRIORITY_AUTO`
+ *	- `AS_SCAN_PRIORITY_LOW`
+ *	- `AS_SCAN_PRIORITY_MEDIUM`
+ * 	- `AS_SCAN_PRIORITY_HIGH`
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_scan_set_priority(scan, AS_SCAN_PRIORITY_LOW);
+ *	~~~~~~~~~~
+ *
+ *	### Applying a UDF to each Record Scanned
+ *
+ *	A UDF can be applied to each record scanned.
+ *
+ *	To define the UDF for the scan, use as_scan_apply_each().
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_scan_apply_each(scan, "udf_module", "udf_function", arglist);
  *	~~~~~~~~~~
  *
  *	@ingroup as_scan_t
@@ -236,6 +318,7 @@ typedef struct as_scan_s {
  *	@returns On succes, the initialized scan. Otherwise NULL.
  *
  *	@relatesalso as_scan
+ *	@ingroup as_scan_t
  */
 as_scan * as_scan_init(as_scan * scan, const as_namespace ns, const as_set set);
 
@@ -255,6 +338,7 @@ as_scan * as_scan_init(as_scan * scan, const as_namespace ns, const as_set set);
  *	@returns On success, a new scan. Otherwise NULL.
  *
  *	@relatesalso as_scan
+ *	@ingroup as_scan_t
  */
 as_scan * as_scan_new(const as_namespace ns, const as_set set);
 
@@ -266,6 +350,7 @@ as_scan * as_scan_new(const as_namespace ns, const as_set set);
  *	~~~~~~~~~~
  *
  *	@relatesalso as_scan
+ *	@ingroup as_scan_t
  */
 void as_scan_destroy(as_scan * scan);
 
@@ -358,7 +443,8 @@ bool as_scan_select(as_scan * scan, const char * bin);
  *
  *	@return On success, true. Otherwise an error occurred.
  *
- *	@relatesalso as_scan
+ *	@relates as_scan
+ *	@ingroup as_scan_t
  */
 bool as_scan_set_percent(as_scan * scan, uint8_t percent);
 
@@ -374,7 +460,8 @@ bool as_scan_set_percent(as_scan * scan, uint8_t percent);
  *
  *	@return On success, true. Otherwise an error occurred.
  *
- *	@relatesalso as_scan
+ *	@relates as_scan
+ *	@ingroup as_scan_t
  */
 bool as_scan_set_priority(as_scan * scan, as_scan_priority priority);
 
@@ -390,7 +477,8 @@ bool as_scan_set_priority(as_scan * scan, as_scan_priority priority);
  *
  *	@return On success, true. Otherwise an error occurred.
  *
- *	@relatesalso as_scan
+ *	@relates as_scan
+ *	@ingroup as_scan_t
  */
 bool as_scan_set_nobins(as_scan * scan, bool nobins);
 
@@ -415,10 +503,7 @@ bool as_scan_set_nobins(as_scan * scan, bool nobins);
  *
  *	@return On success, true. Otherwise an error occurred.
  *
- *	@relatesalso as_scan
+ *	@relates as_scan
+ *	@ingroup as_scan_t
  */
 bool as_scan_apply_each(as_scan * scan, const char * module, const char * function, as_list * arglist);
-
-/**
- *	@}
- */

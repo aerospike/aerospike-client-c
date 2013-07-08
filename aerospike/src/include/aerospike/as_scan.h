@@ -22,6 +22,7 @@
 
 #pragma once 
 
+#include <aerospike/as_bin.h>
 #include <aerospike/as_key.h>
 #include <aerospike/as_udf.h>
 
@@ -80,6 +81,40 @@ typedef enum as_scan_priority_e {
 	AS_SCAN_PRIORITY_HIGH
 	
 } as_scan_priority;
+
+/**
+ *	Sequence of bins which should be selected during a scan.
+ *
+ *	Entries can either be initialized on the stack or on the heap.
+ *
+ *	Initialization should be performed via a query object, using:
+ *	- as_scan_select_init()
+ *	- as_scan_select_inita()
+ */
+typedef struct as_scan_bins_s {
+
+	/**
+	 *	@private
+	 *	If true, then as_scan_destroy() will free this instance.
+	 */
+	bool _free;
+
+	/**
+	 *	Number of entries allocated
+	 */
+	uint16_t capacity;
+
+	/**
+	 *	Number of entries used
+	 */
+	uint16_t size;
+
+	/**
+	 *	Sequence of entries
+	 */
+	as_bin_name * entries;
+
+} as_scan_bins;
 
 /**
  *	Defines the scan to be executed against an Aerospike cluster.
@@ -158,6 +193,17 @@ typedef struct as_scan_s {
 	 *
 	 */
 	as_set set;
+
+	/**
+	 *	Name of bins to select.
+	 *	
+	 *	Use either of the following function to initialize:
+	 *	- as_scan_select_init() -	To initialize on the heap.
+	 *	- as_scan_select_inita() -	To initialize on the stack.
+	 *
+	 *	Use as_scan_select() to populate.
+	 */
+	as_scan_bins select;
 	
 	/**
 	 *	Apply the UDF for each record scanned on the server.
@@ -222,6 +268,79 @@ as_scan * as_scan_new(const as_namespace ns, const as_set set);
  *	@relatesalso as_scan
  */
 void as_scan_destroy(as_scan * scan);
+
+/******************************************************************************
+ *	SELECT FUNCTIONS
+ *****************************************************************************/
+
+/** 
+ *	Initializes `as_scan.select` with a capacity of `n` using `alloca`
+ *
+ *	For heap allocation, use `as_scan_select_init()`.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_scan_select_inita(&scan, 2);
+ *	as_scan_select(&scan, "bin1");
+ *	as_scan_select(&scan, "bin2");
+ *	~~~~~~~~~~
+ *	
+ *	@param __scan	The scan to initialize.
+ *	@param __n		The number of bins to allocate.
+ *
+ *	@ingroup as_scan_t
+ */
+#define as_scan_select_inita(__scan, __n) \
+	if ( (__scan) != NULL && (__scan)->select.entries == NULL ) {\
+		(__scan)->select.entries = (as_bin_name *) alloca(__n * sizeof(as_bin_name));\
+		if ( (__scan)->select.entries ) { \
+			(__scan)->select._free = false;\
+			(__scan)->select.capacity = __n;\
+			(__scan)->select.size = 0;\
+		}\
+ 	}
+
+/** 
+ *	Initializes `as_scan.select` with a capacity of `n` using `malloc()`.
+ *	
+ *	For stack allocation, use `as_scan_select_inita()`.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_scan_select_init(&scan, 2);
+ *	as_scan_select(&scan, "bin1");
+ *	as_scan_select(&scan, "bin2");
+ *	~~~~~~~~~~
+ *
+ *	@param scan		The scan to initialize.
+ *	@param n		The number of bins to allocate.
+ *
+ *	@return On success, the initialized. Otherwise an error occurred.
+ *
+ *	@relates as_scan
+ *	@ingroup as_scan_t
+ */
+bool as_scan_select_init(as_scan * scan, uint16_t n);
+
+/**
+ *	Select bins to be projected from matching records.
+ *
+ *	You have to ensure as_scan.select has sufficient capacity, prior to 
+ *	adding a bin. If capacity is insufficient then false is returned.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_scan_select_init(&scan, 2);
+ *	as_scan_select(&scan, "bin1");
+ *	as_scan_select(&scan, "bin2");
+ *	~~~~~~~~~~
+ *
+ *	@param scan 		The scan to modify.
+ *	@param bin 			The name of the bin to select.
+ *
+ *	@return On success, true. Otherwise an error occurred.
+ *
+ *	@relates as_scan
+ *	@ingroup as_scany_t
+ */
+bool as_scan_select(as_scan * scan, const char * bin);
 
 /******************************************************************************
  *	MODIFIER FUNCTIONS

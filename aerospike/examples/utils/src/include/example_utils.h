@@ -61,14 +61,14 @@ extern char g_set[MAX_SET_SIZE];
 
 
 //==========================================================
-// Example Test Key
+// Example Test Key (for basic single-key examples)
 //
 
 extern as_key g_key;
 
 
 //==========================================================
-// Example Test Key Count
+// Example Test Key Count (for multiple-key examples)
 //
 
 extern uint32_t g_n_keys;
@@ -86,13 +86,15 @@ bool example_get_opts(int argc, char* argv[], const char* which_opts);
 
 
 //==========================================================
-// Example Command Line Options
+// Example Utilities
 //
 
 void example_connect_to_aerospike(aerospike* p_as);
 void example_cleanup(aerospike* p_as);
 bool example_read_test_record(aerospike* p_as);
 void example_remove_test_record(aerospike* p_as);
+bool example_read_test_records(aerospike* p_as);
+void example_remove_test_records(aerospike* p_as);
 bool example_register_udf(aerospike* p_as, const char* filename);
 bool example_remove_udf(aerospike* p_as, const char* filename);
 void example_dump_record(const as_record* p_rec);

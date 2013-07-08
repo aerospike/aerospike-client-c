@@ -35,10 +35,6 @@
  *	- aerospike_scan_background()
  *	- aerospike_scan_foreach()
  *
- *	Single node scans:
- *	- aerospike_scan_node_background()
- *	- aerospike_scan_node_foreach()
- *
  *	@{
  */
 

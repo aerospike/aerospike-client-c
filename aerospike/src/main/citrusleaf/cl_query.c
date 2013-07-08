@@ -1374,9 +1374,16 @@ cl_rv cl_query_limit(cl_query *query, uint64_t limit) {
 
 
 // callback for cl_query_execute()
-static int _citrusleaf_query_stream_callback(as_val * v, void * udata) {
+static int citrusleaf_query_stream_callback_stream(as_val * v, void * udata) {
 	as_stream * queue_stream = (as_stream *) udata;
     as_stream_write(queue_stream, v == NULL ? AS_STREAM_END : v );
+    return 0;
+}
+
+// callback for cl_query_execute()
+static int citrusleaf_query_stream_callback(as_val * v, void * udata) {
+	as_stream * ostream = (as_stream *) udata;
+    as_stream_write(ostream, v == NULL ? AS_STREAM_END : v );
     return 0;
 }
 
@@ -1400,22 +1407,15 @@ cl_rv citrusleaf_query_stream(cl_cluster * cluster, const cl_query * query, as_s
         as_stream_init(&queue_stream, query->res_streamq, &queue_stream_hooks); 
 
         // sink the data from multiple sources into the result stream
-        rc = cl_query_execute(cluster, query, &queue_stream, _citrusleaf_query_stream_callback, false);
+        rc = cl_query_execute(cluster, query, &queue_stream, citrusleaf_query_stream_callback_stream, false);
 
         if ( rc == CITRUSLEAF_OK ) {
             as_module_apply_stream(&mod_lua, &as, query->udf.filename, query->udf.function, &queue_stream, query->udf.arglist, ostream);
         }
     }
     else {
-
-        // callback for cl_query_execute()
-        int callback(as_val * v, void * udata) {
-            as_stream_write(ostream, v == NULL ? AS_STREAM_END : v );
-            return 0;
-        }
-
         // sink the data from multiple sources into the result stream
-        rc = cl_query_execute(cluster, query, NULL, callback, false);
+        rc = cl_query_execute(cluster, query, ostream, citrusleaf_query_stream_callback, false);
     }
 
     // cleanup deserializer
@@ -1427,15 +1427,28 @@ cl_rv citrusleaf_query_stream(cl_cluster * cluster, const cl_query * query, as_s
 
 
 // This callback will populate an intermediate stream, to be used for the aggregation
-static int _citrusleaf_query_foreach_callback(as_val * v, void * udata) {
+static int citrusleaf_query_foreach_callback_stream(as_val * v, void * udata) {
 	as_stream * queue_stream = (as_stream *) udata;
     as_stream_write(queue_stream, v == NULL ? AS_STREAM_END : v );
     return 0;
 }
 
+// The callback calls the foreach function for each value
+static int citrusleaf_query_foreach_callback(as_val * v, void * udata) {
+	callback_stream_source * source = (callback_stream_source *) udata;
+    source->callback(v, source->udata);
+    return 0;
+}
+
+
 cl_rv citrusleaf_query_foreach(cl_cluster * cluster, const cl_query * query, void * udata, cl_query_cb foreach) {
 
     cl_rv rc = CITRUSLEAF_OK;
+
+    callback_stream_source source = {
+        .udata      = udata,
+        .callback   = foreach
+    };
 
     if ( query->udf.type == AS_QUERY_UDF_STREAM ) {
 
@@ -1450,15 +1463,11 @@ cl_rv citrusleaf_query_foreach(cl_cluster * cluster, const cl_query * query, voi
 
         // The callback stream provides the ability to write to a callback function
         // when as_stream_write is called.
-        callback_stream_source source = {
-            .udata      = udata,
-            .callback   = foreach
-        };
         as_stream ostream;
         callback_stream_init(&ostream, &source);
 
         // sink the data from multiple sources into the result stream
-        rc = cl_query_execute(cluster, query, &queue_stream, _citrusleaf_query_foreach_callback, true);
+        rc = cl_query_execute(cluster, query, &queue_stream, citrusleaf_query_foreach_callback_stream, true);
 
         if ( rc == CITRUSLEAF_OK ) {
             // Apply the UDF to the result stream
@@ -1467,15 +1476,8 @@ cl_rv citrusleaf_query_foreach(cl_cluster * cluster, const cl_query * query, voi
 
     }
     else {
-
-        // The callback calls the foreach function for each value
-        int callback(as_val * v, void * udata) {
-            foreach(v, udata);
-            return 0;
-        }
-
         // sink the data from multiple sources into the result stream
-        rc = cl_query_execute(cluster, query, udata, callback, true);
+        rc = cl_query_execute(cluster, query, &source, citrusleaf_query_foreach_callback, true);
     }
 
     return rc;

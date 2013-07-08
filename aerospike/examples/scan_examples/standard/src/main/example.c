@@ -35,29 +35,22 @@
 #include <aerospike/aerospike_key.h>
 #include <aerospike/aerospike_scan.h>
 #include <aerospike/as_error.h>
+#include <aerospike/as_key.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_scan.h>
 #include <aerospike/as_status.h>
+#include <aerospike/as_val.h>
 
 #include "example_utils.h"
-
-
-//==========================================================
-// Globals
-//
-
-int total_rec = 0;
 
 
 //==========================================================
 // Forward Declarations
 //
 
+bool scan_cb(const as_val* p_val, void* udata);
 void cleanup(aerospike* p_as);
 bool insert_records(aerospike* p_as);
-bool read_records(aerospike* p_as);
-void remove_records(aerospike* p_as);
-bool scan_cb_count_rec(const as_val* p_val, void* udata);
 
 
 //==========================================================
@@ -76,40 +69,39 @@ main(int argc, char* argv[])
 	aerospike as;
 	example_connect_to_aerospike(&as);
 
+	// Start clean.
+	example_remove_test_records(&as);
+
 	if (! insert_records(&as)) {
 		cleanup(&as);
 		exit(-1);
 	}
 
 	// Read back all the records that have been inserted
-	if (! read_records(&as)) {
+	if (! example_read_test_records(&as)) {
 		cleanup(&as);
 		exit(-1);
 	}
 
+	as_error err;
+
 	// Specify the namespace and set to use during the scan.
 	as_scan scan;
 	as_scan_init(&scan, g_namespace, g_set);
-	as_policy_scan policy;
-	policy.timeout = 3000;
-
-	as_error err;
 
 	LOG("starting scan ...");
 
-	if (aerospike_scan_foreach(&as, &err, &policy, &scan, scan_cb_count_rec,
-			NULL) != AEROSPIKE_OK ){
+	// Do the scan. This call blocks while the scan is running - callbacks are
+	// made in the scope of this call.
+	if (aerospike_scan_foreach(&as, &err, NULL, &scan, scan_cb, NULL) !=
+			AEROSPIKE_OK ){
 		LOG("aerospike_scan_foreach() returned %d - %s", err.code,
 				err.message);
 		cleanup(&as);
 		exit(-1);
 	}
 
-	/* We cannot destroy this scan-object, till every record is scanned
-	 * and the callback function called for each one. So we'll use a counting
-	 * callback function and then call as_scan_destroy.
-	 */
-	while(total_rec < g_n_keys);
+	LOG("... scan completed");
 
 	// Destroy the as_scan object.
 	as_scan_destroy(&scan);
@@ -117,11 +109,33 @@ main(int argc, char* argv[])
 	// Cleanup and disconnect from the database cluster.
 	cleanup(&as);
 
-	LOG("aerospike_scan_foreach returned a total of %d records. \n", total_rec);
-
 	LOG("standard scan example successfully completed");
 
 	return 0;
+}
+
+
+//==========================================================
+// Scan Callback
+//
+
+bool
+scan_cb(const as_val* p_val, void* udata)
+{
+	// TODO - not seeing this happen, what's up?
+	if (! p_val) {
+		LOG("scan callback returned null - scan is complete");
+		return true;
+	}
+
+	// The scan didn't use a UDF, so the as_val object should be an as_record.
+	LOG("scan callback returned record:");
+	example_dump_record(as_record_fromval(p_val));
+
+	// Caller's responsibility to destroy as_val returned.
+	as_val_destroy(p_val);
+
+	return true;
 }
 
 
@@ -132,7 +146,7 @@ main(int argc, char* argv[])
 void
 cleanup(aerospike* p_as)
 {
-	remove_records(p_as);
+	example_remove_test_records(p_as);
 	example_cleanup(p_as);
 }
 
@@ -162,66 +176,5 @@ insert_records(aerospike* p_as)
 
 	LOG("insert succeeded");
 
-	return true;
-}
-
-bool
-read_records(aerospike* p_as)
-{
-	as_key key;
-
-	for (uint32_t i = 0; i < g_n_keys; i++) {
-		as_key_init_int64(&key, g_namespace, g_set, (int64_t)i);
-
-		as_error err;
-		as_record* p_rec = NULL;
-
-		// Read a test record from the database.
-		if (aerospike_key_get(p_as, &err, NULL, &key, &p_rec) != AEROSPIKE_OK) {
-			LOG("aerospike_key_get() returned %d - %s", err.code, err.message);
-			return false;
-		}
-
-		// If we didn't get an as_record object back, something's wrong.
-		if (! p_rec) {
-			LOG("aerospike_key_get() retrieved null as_record object");
-			return false;
-		}
-
-		// Log the result.
-		LOG("read key %u from database:", i);
-		example_dump_record(p_rec);
-
-		// Destroy the as_record object.
-		as_record_destroy(p_rec);
-	}
-
-	return true;
-}
-
-void
-remove_records(aerospike* p_as)
-{
-	as_key key;
-
-	for (uint32_t i = 0; i < g_n_keys; i++) {
-		as_key_init_int64(&key, g_namespace, g_set, (int64_t)i);
-
-		as_error err;
-
-		// Ignore errors - just trying to leave the database as we found it.
-		aerospike_key_remove(p_as, &err, NULL, &key);
-	}
-}
-
-// This call-back counts the number of records in a name-space
-bool
-scan_cb_count_rec(const as_val* p_val, void* udata)
-{
-	as_record *rec = (as_record *)p_val;
-
-	if(rec){
-		total_rec++;
-	}
 	return true;
 }

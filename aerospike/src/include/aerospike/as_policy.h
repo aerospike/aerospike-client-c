@@ -93,7 +93,9 @@
  *****************************************************************************/
 
 /**
- *	Write Mode Policy
+ *	Retry Policy
+ *
+ *	Specifies the behavior of failed operations. 
  *
  *	@ingroup as_policy_t
  */

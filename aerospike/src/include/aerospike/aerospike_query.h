@@ -59,44 +59,44 @@
  *
  *	## Walk-through
  *	
- *	To begin, you should first create an as_query object. We want to query data
- *	in the "test" namespace and "demo" set. So, we will use a stack allocated
- *	query and initialize it with the namespace and set:
- *
+ *	First, we build a query using as_query. The query will be for the "test"
+ *	namespace and "demo" set. We will add a where predicate on "bin2", on which
+ *	we have already created a secondary index. For this example, we will limit
+ *	the results to 100 records.
+ *	
  *	~~~~~~~~~~{.c}
  *	as_query query;
  *	as_query_init(&query, "test", "demo");
- *	~~~~~~~~~~
+ *	as_query_limit(&query, 100);
  *
- *	You could have used a heap allocated as_query via the as_query_new() 
- *	function.
- *
- *	Queries require a secondary index lookup, which is defined as a predicate.
- *	To add predicates, you should use the as_query_where() function. 
- *
- *	~~~~~~~~~~{.c}
  *	as_query_where_init(&query, 1);
  *	as_query_where(&query, "bin2", integer_equals(100));
  *	~~~~~~~~~~
  *
- *	The above specifies that we want to find all records that contain "bin2",
- *	with an integer value of `100`.
+ *	For details on building a query, please read as_query.
+ *
+ *	Now that we have a query, we want to execute it using one of the query API
+ *	calls. We will use aerospike_query_foreach() because it is more efficient
+ *	due to it using stack allocated records.
  *	
- *	There are other optional query modifiers, such as:
- *	-	as_query_select() -		Select specified bins. Functions like an SQL 
- *								select.
- *	-	as_query_limit() -		Limit the number results.
- *	-	as_query_orderby() -	Order the results by a bin and the direction.
- *
- *	Once you have built your query, you will want to execute it. For this we
- *	will use the aerospike_query_foreach() function:
- *
  *	~~~~~~~~~~{.c}
  *	if ( aerospike_query_foreach(&as, &err, NULL, &query, callback, NULL) != AEROSPIKE_OK ) {
  *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *	}
  *	~~~~~~~~~~
+ *
+ *	The callback provided to the function above is implemented as:
  *	
+ *	~~~~~~~~~~{.c}
+ *	bool callback(const as_val * val, void * udata) {
+ *		as_record * rec = as_record_fromval(val);
+ *		if ( !rec ) return false;
+ *		fprintf("")
+ *		return true;
+ *	}
+ *	~~~~~~~~~~
+ *
+ *
  *	When you are finished with the query, you should destroy the resources 
  *	allocated to it:
  *
@@ -140,7 +140,7 @@
  *
  *	@return `true` to continue to the next value. Otherwise, iteration will end.
  */
-typedef bool (* aerospike_query_foreach_callback)(as_val * val, void * udata);
+typedef bool (* aerospike_query_foreach_callback)(const as_val * val, void * udata);
 
 /******************************************************************************
  *	FUNCTIONS

@@ -53,11 +53,11 @@ int total_rec = 0;
 // Forward Declarations
 //
 
+bool scan_cb(const as_val* p_val, void* udata);
 void cleanup(aerospike* p_as);
 bool insert_records(aerospike* p_as);
 bool read_records(aerospike* p_as);
 void remove_records(aerospike* p_as);
-bool scan_cb_count_rec(const as_val* p_val, void* udata);
 
 
 //==========================================================
@@ -76,6 +76,9 @@ main(int argc, char* argv[])
 	aerospike as;
 	example_connect_to_aerospike(&as);
 
+	// Start clean.
+	remove_records(&as);
+
 	if (! insert_records(&as)) {
 		cleanup(&as);
 		exit(-1);
@@ -87,29 +90,25 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
+	as_error err;
+
 	// Specify the namespace and set to use during the scan.
 	as_scan scan;
 	as_scan_init(&scan, g_namespace, g_set);
-	as_policy_scan policy;
-	policy.timeout = 3000;
-
-	as_error err;
 
 	LOG("starting scan ...");
 
-	if (aerospike_scan_foreach(&as, &err, &policy, &scan, scan_cb_count_rec,
-			NULL) != AEROSPIKE_OK ){
+	// Do the scan. This call blocks while the scan is running - callbacks are
+	// made in the scope of this call.
+	if (aerospike_scan_foreach(&as, &err, NULL, &scan, scan_cb, NULL) !=
+			AEROSPIKE_OK ){
 		LOG("aerospike_scan_foreach() returned %d - %s", err.code,
 				err.message);
 		cleanup(&as);
 		exit(-1);
 	}
 
-	/* We cannot destroy this scan-object, till every record is scanned
-	 * and the callback function called for each one. So we'll use a counting
-	 * callback function and then call as_scan_destroy.
-	 */
-	while(total_rec < g_n_keys);
+	LOG("... scan completed");
 
 	// Destroy the as_scan object.
 	as_scan_destroy(&scan);
@@ -117,11 +116,33 @@ main(int argc, char* argv[])
 	// Cleanup and disconnect from the database cluster.
 	cleanup(&as);
 
-	LOG("aerospike_scan_foreach returned a total of %d records. \n", total_rec);
-
 	LOG("standard scan example successfully completed");
 
 	return 0;
+}
+
+
+//==========================================================
+// Scan Callback
+//
+
+bool
+scan_cb(const as_val* p_val, void* udata)
+{
+	// TODO - not seeing this happen, what's up?
+	if (! p_val) {
+		LOG("scan callback returned null - scan is complete");
+		return true;
+	}
+
+	// The scan didn't use a UDF, so the as_val object should be an as_record.
+	LOG("scan callback returned record:");
+	example_dump_record(as_record_fromval(p_val));
+
+	// Caller's responsibility to destroy as_val returned.
+	as_val_destroy(p_val);
+
+	return true;
 }
 
 
@@ -212,16 +233,4 @@ remove_records(aerospike* p_as)
 		// Ignore errors - just trying to leave the database as we found it.
 		aerospike_key_remove(p_as, &err, NULL, &key);
 	}
-}
-
-// This call-back counts the number of records in a name-space
-bool
-scan_cb_count_rec(const as_val* p_val, void* udata)
-{
-	as_record *rec = (as_record *)p_val;
-
-	if(rec){
-		total_rec++;
-	}
-	return true;
 }

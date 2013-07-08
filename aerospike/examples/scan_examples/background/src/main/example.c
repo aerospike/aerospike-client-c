@@ -35,6 +35,7 @@
 #include <aerospike/aerospike_key.h>
 #include <aerospike/aerospike_scan.h>
 #include <aerospike/as_error.h>
+#include <aerospike/as_key.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_scan.h>
 #include <aerospike/as_status.h>
@@ -56,8 +57,6 @@ const char UDF_FILE_PATH[] = "src/lua/" UDF_MODULE ".lua";
 
 void cleanup(aerospike* p_as);
 bool insert_records(aerospike* p_as);
-bool read_records(aerospike* p_as);
-void remove_records(aerospike* p_as);
 
 
 //==========================================================
@@ -77,7 +76,7 @@ main(int argc, char* argv[])
 	example_connect_to_aerospike(&as);
 
 	// Start clean.
-	remove_records(&as);
+	example_remove_test_records(&as);
 
 	// Register the UDF in the database cluster.
 	if (! example_register_udf(&as, UDF_FILE_PATH)) {
@@ -90,7 +89,7 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
-	if (! read_records(&as)) {
+	if (! example_read_test_records(&as)) {
 		cleanup(&as);
 		exit(-1);
 	}
@@ -126,7 +125,7 @@ main(int argc, char* argv[])
 	LOG("... finished background scan");
 
 	// Read everything back and show the changes done by the scan.
-	if (! read_records(&as)) {
+	if (! example_read_test_records(&as)) {
 		cleanup(&as);
 		exit(-1);
 	}
@@ -147,7 +146,7 @@ main(int argc, char* argv[])
 void
 cleanup(aerospike* p_as)
 {
-	remove_records(p_as);
+	example_remove_test_records(p_as);
 	example_remove_udf(p_as, UDF_FILE_PATH);
 	example_cleanup(p_as);
 }
@@ -179,53 +178,4 @@ insert_records(aerospike* p_as)
 	LOG("insert succeeded");
 
 	return true;
-}
-
-bool
-read_records(aerospike* p_as)
-{
-	as_key key;
-
-	for (uint32_t i = 0; i < g_n_keys; i++) {
-		as_key_init_int64(&key, g_namespace, g_set, (int64_t)i);
-
-		as_error err;
-		as_record* p_rec = NULL;
-
-		// Read a test record from the database.
-		if (aerospike_key_get(p_as, &err, NULL, &key, &p_rec) != AEROSPIKE_OK) {
-			LOG("aerospike_key_get() returned %d - %s", err.code, err.message);
-			return false;
-		}
-
-		// If we didn't get an as_record object back, something's wrong.
-		if (! p_rec) {
-			LOG("aerospike_key_get() retrieved null as_record object");
-			return false;
-		}
-
-		// Log the result.
-		LOG("read key %u from database:", i);
-		example_dump_record(p_rec);
-
-		// Destroy the as_record object.
-		as_record_destroy(p_rec);
-	}
-
-	return true;
-}
-
-void
-remove_records(aerospike* p_as)
-{
-	as_key key;
-
-	for (uint32_t i = 0; i < g_n_keys; i++) {
-		as_key_init_int64(&key, g_namespace, g_set, (int64_t)i);
-
-		as_error err;
-
-		// Ignore errors - just trying to leave the database as we found it.
-		aerospike_key_remove(p_as, &err, NULL, &key);
-	}
 }

@@ -55,9 +55,9 @@
  *
  *	The bin's value can only be of the types defined in `as_bin_value`.
  *	
- *	## Creating and Initializing
+ *	## Initialization
  *	
- *	There are several ways to use an `as_record`. 
+ *	There are several ways to initialize an `as_record`. 
  *
  *	You can create the `as_record` on the stack:
  *	
@@ -92,7 +92,22 @@
  *	as_record * rec = as_record_new(2);
  *	~~~~~~~~~~
  *	
+ *	## Destruction
+ *
+ *	When you no longer require an as_record, you should call `as_record_destroy()`
+ *	to release the record and associated resources.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_record_destroy(rec);
+ *	~~~~~~~~~~
+ *
+ *	If the record has been ref-counted, then the ref-count will be decremented, 
+ *	until it reaches 0 (zero), at which point, the record will be released.
+ *
  *	## Setting Bin Values
+ *
+ *	The following are functions for setting values in bins of a record. Utilize 
+ *	the appropriate setter for the data you want to store in a bin.
  *
  *   Function                    |  Description
  *	---------------------------- | ----------------------------------------------
@@ -104,8 +119,13 @@
  *	 `as_record_set_list()`      | Set the bin value to an `as_list`.                    
  *	 `as_record_set_map()`       | Set the bin value to an `as_map`.
  *	 `as_record_set_nil()`       | Set the bin value to an `as_nil`.
+ *	 `as_record_set()`           | Set the bin value to an `as_val`.
  *
  *	## Getting Bin Values
+ *
+ *	The following are functions for getting values from bins of a record. 
+ *	Utilize the appropriate getter for the data you want to read from a bin.
+ *	
  *
  *   Function                    |  Description
  *	---------------------------- | ----------------------------------------------
@@ -114,9 +134,47 @@
  *	 `as_record_get_integer()`   | Get the bin as an `as_integer`.
  *	 `as_record_get_string()`    | Get the bin as an `as_string`.
  *	 `as_record_get_bytes()`     | Get the bin as an `as_bytes`.
- *	 `as_record_get_list()`      | Get the bin as an `as_list`.                    
+ *	 `as_record_get_list()`      | Get the bin as an `as_list`. 
  *	 `as_record_get_map()`       | Get the bin as an `as_map`.
+ *	 `as_record_get()`           | Get the bin as an `as_val`.
  *
+ *	If you are unsure of the type of data stored in the bin, then you should 
+ *	use `as_record_get()`. You can then check the type of the value using
+ *	`as_val_type()`.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_val * value = as_record_get(rec, "bin1");
+ *	switch ( as_val_type(value) ) {
+ *		case AS_NIL: break;
+ *		case AS_INTEGER: break;
+ *		case AS_STRING: break;
+ *		case AS_BYTES: break;
+ *		case AS_LIST: break;
+ *		case AS_MAP: break;
+ *		case AS_REC: break;
+ *		case AS_UNDEF: break;
+ *	}
+ *	~~~~~~~~~~
+ *
+ *
+ *	## Iterating Over Bins
+ *
+ *	If you want to iterate over the bins, then you should use `as_record_foreach()`.
+ *
+ *	~~~~~~~~~~{.c}
+ *	bool print_bin(const char * name, const as_val * value, void * udata) {
+ *		char * sval = as_val_tostring(value);
+ *		printf("bin: name=%s, value=%s\n", name, sval);
+ *		free(sval);
+ *		return true;
+ *	}
+ *
+ *	as_record_foreach(rec, print_bin, NULL);
+ *	~~~~~~~~~~
+ *
+ *	If the callback returns true, then iteration will continue to the next bin.
+ *	Otherwise, the iteration will halt and `as_record_foreach()` will return
+ *	false.
  *
  *	@extends as_rec
  *	@ingroup as_record_t
@@ -584,7 +642,7 @@ as_map * as_record_get_map(const as_record * rec, const as_bin_name name);
  ******************************************************************************/
 
 /**
- *	Iterate over each bin in the record and invoke the callback function
+ *	Iterate over each bin in the record and invoke the callback function.
  *	
  *	~~~~~~~~~~{.c}
  *	bool print_bin(const char * name, const as_val * value, void * udata) {
@@ -596,6 +654,10 @@ as_map * as_record_get_map(const as_record * rec, const as_bin_name name);
  *
  *	as_record_foreach(rec, print_bin, NULL);
  *	~~~~~~~~~~
+ *
+ *	If the callback returns true, then iteration will continue to the next bin.
+ *	Otherwise, the iteration will halt and `as_record_foreach()` will return
+ *	false.
  *
  *	@param rec		The record containing the bins to iterate over.
  *	@param callback	The callback to invoke for each bin.

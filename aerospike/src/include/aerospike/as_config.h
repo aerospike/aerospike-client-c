@@ -103,6 +103,8 @@ typedef struct as_config_lua_s {
  *	The `as_config` contains the settings for the `aerospike` client. Including
  *	default policies, seed hosts in the cluster and other settings.
  *
+ *	## Initialization
+ *
  *	Before using as_config, you must first initialize it. This will setup the 
  *	default values.
  *
@@ -170,7 +172,7 @@ typedef struct as_config_lua_s {
  *
  *	Global default policy values:
  *	-	as_policies.timeout
- *	-	as_policies.mode
+ *	-	as_policies.retry
  *	-	as_policies.key
  *	-	as_policies.gen
  *	-	as_policies.exists

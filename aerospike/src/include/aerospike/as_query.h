@@ -419,7 +419,8 @@ typedef struct as_query_s {
  *	Initialize a stack allocated as_query.
  *
  *	~~~~~~~~~~{.c}
- *	as_query_init(&q, "test", "demo");
+ *	as_query query;
+ *	as_query_init(&query, "test", "demo");
  *	~~~~~~~~~~
  *
  *	@param query 	The query to initialize.
@@ -437,7 +438,7 @@ as_query * as_query_init(as_query * query, const as_namespace ns, const as_set s
  *	Create and initialize a new heap allocated as_query.
  *
  *	~~~~~~~~~~{.c}
- *	as_query_init(&q, "test", "demo");
+ *	as_query * query = as_query_new("test", "demo");
  *	~~~~~~~~~~
  *	
  *	@param ns 		The namespace to query.
@@ -452,6 +453,10 @@ as_query * as_query_new(const as_namespace ns, const as_set set);
 
 /**
  *	Destroy the query and associated resources.
+ *	
+ *	~~~~~~~~~~{.c}
+ *	as_query_destroy(scan);
+ *	~~~~~~~~~~
  *
  *	@param query 	The query to destroy.
  *
@@ -470,10 +475,9 @@ void as_query_destroy(as_query * query);
  *	For heap allocation, use `as_query_select_init()`.
  *
  *	~~~~~~~~~~{.c}
- *	as_query_select_inita(&q, 2);
- *	as_query_select(&q, "bin1");
- *	as_query_select(&q, "bin2");
- *	as_query_select(&q, "bin3");
+ *	as_query_select_inita(&query, 2);
+ *	as_query_select(&query, "bin1");
+ *	as_query_select(&query, "bin2");
  *	~~~~~~~~~~
  *	
  *	@param __query	The query to initialize.
@@ -497,10 +501,9 @@ void as_query_destroy(as_query * query);
  *	For stack allocation, use `as_query_select_inita()`.
  *
  *	~~~~~~~~~~{.c}
- *	as_query_select_init(&q, 2);
- *	as_query_select(&q, "bin1");
- *	as_query_select(&q, "bin2");
- *	as_query_select(&q, "bin3");
+ *	as_query_select_init(&query, 2);
+ *	as_query_select(&query, "bin1");
+ *	as_query_select(&query, "bin2");
  *	~~~~~~~~~~
  *
  *	@param query	The query to initialize.
@@ -520,10 +523,9 @@ bool as_query_select_init(as_query * query, uint16_t n);
  *	adding a bin. If capacity is sufficient then false is returned.
  *
  *	~~~~~~~~~~{.c}
- *	as_query_select_init(&q, 2);
- *	as_query_select(&q, "bin1");
- *	as_query_select(&q, "bin2");
- *	as_query_select(&q, "bin3");
+ *	as_query_select_init(&query, 2);
+ *	as_query_select(&query, "bin1");
+ *	as_query_select(&query, "bin2");
  *	~~~~~~~~~~
  *
  *	@param query 		The query to modify.
@@ -546,10 +548,10 @@ bool as_query_select(as_query * query, const char * bin);
  *	For heap allocation, use `as_query_where_init()`.
  *
  *	~~~~~~~~~~{.c}
- *	as_query_where_inita(&q, 3);
- *	as_query_where(&q, "bin1", string_equals("abc"));
- *	as_query_where(&q, "bin2", integer_equals(123));
- *	as_query_where(&q, "bin3", integer_range(0,123));
+ *	as_query_where_inita(&query, 3);
+ *	as_query_where(&query, "bin1", string_equals("abc"));
+ *	as_query_where(&query, "bin2", integer_equals(123));
+ *	as_query_where(&query, "bin3", integer_range(0,123));
  *	~~~~~~~~~~
  *
  *	@param __query	The query to initialize.
@@ -575,10 +577,10 @@ bool as_query_select(as_query * query, const char * bin);
  *	For stack allocation, use `as_query_where_inita()`.
  *
  *	~~~~~~~~~~{.c}
- *	as_query_where_init(&q, 3);
- *	as_query_where(&q, "bin1", string_equals("abc"));
- *	as_query_where(&q, "bin1", integer_equals(123));
- *	as_query_where(&q, "bin1", integer_range(0,123));
+ *	as_query_where_init(&query, 3);
+ *	as_query_where(&query, "bin1", string_equals("abc"));
+ *	as_query_where(&query, "bin1", integer_equals(123));
+ *	as_query_where(&query, "bin1", integer_range(0,123));
  *	~~~~~~~~~~
  *
  *	@param query	The query to initialize.
@@ -595,13 +597,13 @@ bool as_query_where_init(as_query * query, uint16_t n);
  *	Add a predicate to the query.
  *
  *	You have to ensure as_query.where has sufficient capacity, prior to 
- *	adding a predicate. If capacity is sufficient then false is returned.
+ *	adding a predicate. If capacity is insufficient then false is returned.
  *	
  *	~~~~~~~~~~{.c}
- *	as_query_where_init(&q, 3);
- *	as_query_where(&q, "bin1", string_equals("abc"));
- *	as_query_where(&q, "bin1", integer_equals(123));
- *	as_query_where(&q, "bin1", integer_range(0,123));
+ *	as_query_where_init(&query, 3);
+ *	as_query_where(&query, "bin1", string_equals("abc"));
+ *	as_query_where(&query, "bin1", integer_equals(123));
+ *	as_query_where(&query, "bin1", integer_range(0,123));
  *	~~~~~~~~~~
  *
  *	@param query		The query add the predicate to.
@@ -626,8 +628,8 @@ bool as_query_where(as_query * query, const char * bin, as_predicate_type type, 
  *	For heap allocation, use `as_query_where_init()`.
  *
  *	~~~~~~~~~~{.c}
- *	as_query_orderby_inita(&q, 1);
- *	as_query_orderby(&q, "bin1", AS_ORDER_ASCENDING);
+ *	as_query_orderby_inita(&query, 1);
+ *	as_query_orderby(&query, "bin1", AS_ORDER_ASCENDING);
  *	~~~~~~~~~~
  *
  *	@param __query	The query to initialize.
@@ -653,8 +655,8 @@ bool as_query_where(as_query * query, const char * bin, as_predicate_type type, 
  *	For stack allocation, use `as_query_orderby_inita()`.
  *	
  *	~~~~~~~~~~{.c}
- *	as_query_orderby_init(&q, 1);
- *	as_query_orderby(&q, "bin1", AS_ORDER_ASCENDING);
+ *	as_query_orderby_init(&query, 1);
+ *	as_query_orderby(&query, "bin1", AS_ORDER_ASCENDING);
  *	~~~~~~~~~~
  *
  *	@param query	The query to initialize.
@@ -671,11 +673,11 @@ bool as_query_orderby_init(as_query * query, uint16_t n);
  *	Add a bin to sort by to the query.
  *	
  *	You have to ensure as_query.orderby has sufficient capacity, prior to 
- *	adding an ordering. If capacity is sufficient then false is returned.
+ *	adding an ordering. If capacity is insufficient then false is returned.
  *
  *	~~~~~~~~~~{.c}
- *	as_query_orderby_init(&q, 1);
- *	as_query_orderby(&q, "bin1", AS_ORDER_ASCENDING);
+ *	as_query_orderby_init(&query, 1);
+ *	as_query_orderby(&query, "bin1", AS_ORDER_ASCENDING);
  *	~~~~~~~~~~
  *
  *	@param query	The query to modify.
@@ -697,7 +699,7 @@ bool as_query_orderby(as_query * query, const char * bin, as_order order);
  *	Limit the number of results by `limit`. If limit is `UINT64_MAX`, then all matching results are returned.
  *
  *	~~~~~~~~~~{.c}
- *	as_query_limit(&q, 100);
+ *	as_query_limit(&query, 100);
  *	~~~~~~~~~~
  *
  *	@param query 		The query to modify.
@@ -714,7 +716,7 @@ bool as_query_limit(as_query * query, uint64_t limit);
  *	Apply a function to the results of the query.
  *
  *	~~~~~~~~~~{.c}
- *	as_query_apply(&q, "my_module", "my_function", NULL);
+ *	as_query_apply(&query, "my_module", "my_function", NULL);
  *	~~~~~~~~~~
  *
  *	@param query		The query to apply the function to.

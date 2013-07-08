@@ -138,38 +138,57 @@ typedef union as_key_value_u {
 /** 
  *	Key used for accessing and modifying records in a cluster.
  *
- *	The key can either be stack or heap allocated. 
+ *
+ *	## Initialization
+ *
+ *	A key can either be stack or heap allocated. Use one of the following 
+ *	functions to properly initialize an as_key.
+ * 
+ * 	Each function requires a namespace, set and key value. The set can be 
+ *	and empty string.
  *	
  *	For stack allocated as_key, you should you the following functions to
  *	initialize the value:
- *	- as_key_init()
- *	- as_key_init_int64()
- *	- as_key_init_str()
- *	- as_key_init_raw()
- *	- as_key_init_value()
  *
- *	For heap allocated as_key, you should use the following functions
- *	to allocate and initialize the value:
- *	- as_key_new()
- *	- as_key_new_int64()
- *	- as_key_new_str()
- *	- as_key_new_raw()
- *	- as_key_new_value()
- *
- *	An example of using a stack allocated as_key:
+ *	- as_key_init()	- Initialize the key with a string value.
+ *	- as_key_init_int64() - Initialize the key with an int64_t value.
+ *	- as_key_init_str() - Same as `as_key_init()`. 
+ *	- as_key_init_raw() - Initialize the key with byte array.
+ *	- as_key_init_value() - Initialize the key with an as_key_value.
  *
  *	~~~~~~~~~~{.c}
  *	as_key key;
  *	as_key_init(&key, "ns", "set", "key");
  *	~~~~~~~~~~
  *	
- *	An example of using a heap allocated as_key:
+ *	For heap allocated as_key, you should use the following functions
+ *	to allocate and initialize the value on the heap.
+ *
+ *	- as_key_new() 	- Initialize the key with a string value.
+ *	- as_key_new_int64() - Initialize the key with an int64_t value.
+ *	- as_key_new_str() - Same as `as_key_new()`. 
+ *	- as_key_new_raw() - Initialize the key with byte array.
+ *	- as_key_new_value() - Initialize the key with an as_key_value.
  *
  *	~~~~~~~~~~{.c}
  *	as_key * key = as_key_new("ns", "set", "key");
  *	~~~~~~~~~~
  *
- *	With a key, you can use the following APIs to access or modify records:
+ *	## Destruction
+ *
+ *	When you no longer require an instance of as_key, you should release the
+ *	key and associated resources via `as_key_destroy()`.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_key_destroy(key);
+ *	~~~~~~~~~~
+ *
+ *	This function should be used on both stack and heap allocated keys.
+ *
+ *	## Operations
+ *
+ *	The following are operations which require a key.
+ *
  *	- aerospike_key_get()
  *	- aerospike_key_select()
  *	- aerospike_key_exists()
@@ -178,11 +197,13 @@ typedef union as_key_value_u {
  *	- aerospike_key_remove()
  *	- aerospike_key_apply()
  *
- *	Each of the operations internally use an as_digest to calculate the location
- *	for the given key. The digest is a hash value of the key and set. It is 
- *	calculated once, and is reused as often as the key is reused. To get the digest
- *	value of a key, use:
- *	- as_key_digest()
+ *	## Digest
+ *
+ *	Each operation that requires a key,  internally generates a digest for the 
+ *	key. The digest is a hash value used to locate a record in the cluster. Once
+ *	calculated, the digest will be reused.
+ *
+ *	To get the digest value of a key, use `as_key_digest()`.
  *
  *	@ingroup as_key_t
  */

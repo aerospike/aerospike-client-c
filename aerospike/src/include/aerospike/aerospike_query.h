@@ -26,17 +26,36 @@
  *
  *	The Aerospike Query API provides the ability to query data in the 
  *	Aerospike cluster. The queries can only be performed on secondary indexes, 
- *	which have been created in the cluster. 
+ *	which have been created in the cluster. To scan all the records in the
+ *	database, then you must use the Scan API.
  *
- *	The API provides two functions for execution queries:
+ *	## Usage
+ *
+ *	Before you can execute a query, you first need to build a query using 
+ *	as_query. Once you have a query defined, then you can execute the query 
+ *	using either:
+ *
  *	-	aerospike_query_foreach() -	Executes a query and invokes a callback
  *		function for each result returned.
  *	-	aerospike_query_stream() - 	Executes a query and writes the results
  *		to the stream provided. 
  *
- *	In order to execute a query, you first need to create and populate an
- *	as_query object. The as_query documentation provides instructions on 
- *	populating an as_query object.
+ *	The two APIs are very similar in that they provide the ability to read 
+ *	the records returned from a query. However, they differ in how they
+ *	manage resources.
+ *
+ *	When aerospike_query_foreach() is executed, it will process the results
+ *	and create records on the stack. Because the records are on the stack, 
+ *	they will only be available within the context of the callback function.
+ *	If you want the record available outside the callback, then you must use
+ *	aerospike_query_stream().
+ *
+ *	When aerospike_query_stream() is executed, it will process the results
+ *	and create records on the heap. These records are sent to the stream's 
+ *	write callback. Because the records are on the heap, the stream is able 
+ *	to pass the record outside the scope of the write callback. This form of
+ *	processing is more expensive in terms CPU, but provides added flexibility.
+ *	
  *
  *	## Walk-through
  *	

@@ -185,11 +185,10 @@ typedef struct as_scan_bins_s {
  *
  *	### Returning only meta data
  *
- *	To omit bins from the scan, and to only return meta data, then set 
- *	as_scan.no_data.
+ *	A scan can return only record meta data, and exclude bins.
  *
  *	~~~~~~~~~~{.c}
- *	as_scan_set_nodata(scan, true);
+ *	as_scan_set_nobins(scan, true);
  *	~~~~~~~~~~
  *
  *	### Scan a Percentage of Records

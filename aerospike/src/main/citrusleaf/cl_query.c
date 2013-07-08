@@ -848,7 +848,6 @@ static int cl_query_worker_do(cl_cluster_node * node, cl_query_task * task) {
                 else {
                 	record = as_record_new(msg->n_ops);
                 }
-                LOG("fuck");
 
                 strcpy(record->key.set, set_ret ? set_ret : "");
                 record->key.digest.init = true;

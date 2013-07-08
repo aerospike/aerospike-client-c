@@ -344,7 +344,7 @@ bool as_record_set(as_record * rec, const as_bin_name name, as_bin_value * value
 bool as_record_set_int64(as_record * rec, const as_bin_name name, int64_t value);
 
 /**
- *	Set specified bin's value to an NULL terminates string.
+ *	Set specified bin's value to an NULL terminated string.
  *
  *	~~~~~~~~~~{.c}
  *	as_record_set_str(rec, "bin", "abc");
@@ -362,7 +362,7 @@ bool as_record_set_int64(as_record * rec, const as_bin_name name, int64_t value)
 bool as_record_set_str(as_record * rec, const as_bin_name name, const char * value);
 
 /**
- *	Set specified bin's value to an NULL terminates string.
+ *	Set specified bin's value to an NULL terminated string.
  *
  *	~~~~~~~~~~{.c}
  *	uint8_t bytes[3] = {1,2,3};

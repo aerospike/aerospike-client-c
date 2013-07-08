@@ -79,8 +79,7 @@ static bool before(atf_plan * plan) {
 
 	cf_set_log_level(CF_INFO);
 	cf_set_log_callback(citrusleaf_log_callback);
-	as_log_set_level(&as->log, AS_LOG_LEVEL_TRACE);
-
+	as_log_set_level(&as->log, AS_LOG_LEVEL_INFO);
 	
 	if ( aerospike_connect(as, &err) == AEROSPIKE_OK ) {
 		info("connected to %s:%d", HOST, PORT);

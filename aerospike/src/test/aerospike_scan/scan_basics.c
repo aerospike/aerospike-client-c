@@ -346,7 +346,7 @@ TEST( scan_basics_null_set , "full scan (using NULL setname)" ) {
 	as_scan_destroy(&scan);
 }
 
-TEST( scan_basics_set1 , "simple scan of a specific set" ) {
+TEST( scan_basics_set1 , "scan "SET1"" ) {
 
 	scan_check check = {
 		.failed = false,
@@ -373,7 +373,7 @@ TEST( scan_basics_set1 , "simple scan of a specific set" ) {
 	as_scan_destroy(&scan);
 }
 
-TEST( scan_basics_set1_select , "scan w/ select 'bin1'" ) {
+TEST( scan_basics_set1_select , "scan "SET1" and select 'bin1'" ) {
 
 	scan_check check = {
 		.failed = false,
@@ -403,7 +403,7 @@ TEST( scan_basics_set1_select , "scan w/ select 'bin1'" ) {
 	as_scan_destroy(&scan);
 }
 
-TEST( scan_basics_set1_nodata , "simple scan of a specific set with no-bin-data" ) {
+TEST( scan_basics_set1_nodata , "scan "SET1" with no-bin-data" ) {
 
 	scan_check check = {
 		.failed = false,
@@ -431,11 +431,11 @@ TEST( scan_basics_set1_nodata , "simple scan of a specific set with no-bin-data"
 	as_scan_destroy(&scan);
 }
 
-TEST( scan_basics_background , "udf scan in background to insert a new bin" ) {
+TEST( scan_basics_background , "scan "SET2" in background to insert a new bin" ) {
 
 	scan_check check = {
 		.failed = false,
-		.set = SET2,
+		.set = SET1,
 		.count = 0,
 		.nobindata = false,
 		.bins = { "bin1", "bin2", "bin3", "bin4", NULL }
@@ -457,21 +457,18 @@ TEST( scan_basics_background , "udf scan in background to insert a new bin" ) {
 
 	// See if the above udf ran fine
 	as_scan scan2;
-	as_scan_init(&scan2, NS, SET2);
+	as_scan_init(&scan2, NS, SET1);
 
 	as_status rc = aerospike_scan_foreach(as, &err, NULL, &scan2, scan_check_callback, &check);
 
 	assert_int_eq( rc, AEROSPIKE_OK );
 	assert_false( check.failed );
 
-	// assert_int_eq( scan_data.ret_rec_count, NUM_RECS_SET2 );
-	// info("Got %d records in the scan. Expected %d", scan_data.ret_rec_count, NUM_RECS_SET2);
-
 	as_scan_destroy(&scan);
 	as_scan_destroy(&scan2);
 }
 
-TEST( scan_basics_background_sameid , "starting two udf scan in background with same scan-id" ) {
+TEST( scan_basics_background_sameid , "starting two udf scan of "SET2" in background with same scan-id" ) {
 
 	as_error err;
 

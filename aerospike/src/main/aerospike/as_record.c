@@ -243,7 +243,7 @@ bool as_record_set_int64(as_record * rec, const as_bin_name name, int64_t value)
 }
 
 /**
- *	Set specified bin's value to an NULL terminates string.
+ *	Set specified bin's value to an NULL terminated string.
  *	as_record_set_str(rec, "bin", "abc");
  *	@param rec 	- the record containing the bin
  *	@param name 	- the name of the bin

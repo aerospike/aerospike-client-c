@@ -7,7 +7,7 @@ local function select(bin)
     local function f(rec)
         return rec[bin]
     end
-    return f
+    return f;
 end
 
 local function one(r)
@@ -36,13 +36,4 @@ function sum_on_match(s, bin, val)
     end
 
     return s : map(_map) : reduce(add);
-end
-
-function grouping(s)
-
-    local function _groupby(c)
-        return c % 10
-    end
-
-    return s : map(select("c")) : groupby(_groupby)
 end

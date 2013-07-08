@@ -46,9 +46,9 @@ extern aerospike * as;
 
 static bool before(atf_suite * suite) {
 
-	if ( mod_lua.logger == NULL ) {
-		mod_lua.logger = test_logger_new();
-	}
+	// if ( mod_lua.logger == NULL ) {
+	mod_lua.logger = test_logger_new();
+	// }
 
 	if ( ! udf_put(LUA_FILE) ) {
 		error("failure while uploading: %s", LUA_FILE);
@@ -177,7 +177,7 @@ TEST( query_foreach_create, "create 100 records and 4 indices" ) {
 	}
 }
 
-static bool query_foreach_1_callback(as_val * v, void * udata) {
+static bool query_foreach_1_callback(const as_val * v, void * udata) {
 	int * count = (int *) udata;
 	if ( v == NULL ) {
 		info("count: %d", (*count));
@@ -213,7 +213,7 @@ TEST( query_foreach_1, "count(*) where a == 'abc' (non-aggregating)" ) {
 	as_query_destroy(&q);
 }
 
-static bool query_foreach_2_callback(as_val * v, void * udata) {
+static bool query_foreach_2_callback(const as_val * v, void * udata) {
 	if ( v != NULL ) {
 		as_integer * i = as_integer_fromval(v);
 		if ( i ) {
@@ -253,14 +253,13 @@ TEST( query_foreach_2, "count(*) where a == 'abc' (aggregating)" ) {
 }
 
 
-static bool query_foreach_3_callback(as_val * v, void * udata) {
+static bool query_foreach_3_callback(const as_val * v, void * udata) {
 	if ( v != NULL ) {
 		as_integer * result = as_integer_fromval(v);
 		if ( result != NULL ) {
 			int64_t * value = (int64_t *) udata;
-			*value = as_integer_toint(result);
+			*value = as_integer_get(result);
 		}
-		as_val_destroy(result);
 	}
 	return true;
 }
@@ -274,27 +273,34 @@ TEST( query_foreach_3, "sum(e) where a == 'abc'" ) {
 
 	as_query q;
 	as_query_init(&q, NAMESPACE, SET);
+
+	as_query_where_inita(&q, 1);
 	as_query_where(&q, "a", string_equals("abc"));
+
 	as_query_apply(&q, UDF_FILE, "sum", NULL);
 
 	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_3_callback, &value);
 
-	info("value: %d", value);
+	if ( err.code != AEROSPIKE_OK ) {
+		 fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+	}
 
-	assert_int_eq( err.code, 0 );
+	info("value: %ld", value);
+
+
+	assert_int_eq( err.code, AEROSPIKE_OK );
 	assert_int_eq( value, 24275 );
 
 	as_query_destroy(&q);
 }
 
-static bool query_foreach_4_callback(as_val * v, void * udata) {
+static bool query_foreach_4_callback(const as_val * v, void * udata) {
 	if ( v != NULL ) {
 		as_integer * result = as_integer_fromval(v);
 		if ( result != NULL ) {
 			int64_t * value = (int64_t *) udata;
-			*value = as_integer_toint(result);
+			*value = as_integer_get(result);
 		}
-		as_val_destroy(result);
 	}
 	return true;
 }
@@ -313,89 +319,25 @@ TEST( query_foreach_4, "sum(d) where b == 100 and d == 1" ) {
 
 	as_query q;
 	as_query_init(&q, NAMESPACE, SET);
+
+	as_query_where_inita(&q, 1);
 	as_query_where(&q, "b", integer_equals(100));
+
 	as_query_apply(&q, UDF_FILE, "sum_on_match", (as_list *) &args);
 
 	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_4_callback, &value);
 
-	info("value: %d", value);
+	if ( err.code != AEROSPIKE_OK ) {
+		 fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+	}
 
-	assert_int_eq( err.code, 0 );
+	info("value: %ld", value);
+
+	assert_int_eq( err.code, AEROSPIKE_OK );
 	assert_int_eq( value, 10 );
 
 	as_query_destroy(&q);
 }
-
-static bool query_foreach_5_callback(as_val * v, void * udata) {
-	if ( v != NULL ) {
-		as_val ** result = (as_val **) udata;
-		*result = v;
-	}
-	return true;
-}
-
-TEST( query_foreach_5, "c where b == 100 group by d" ) {
-
-		as_error err;
-		as_error_reset(&err);
-
-	as_val * result = NULL;
-	
-	as_query q;
-	as_query_init(&q, "test", "test");
-	as_query_where(&q, "b", integer_equals(100));
-	as_query_apply(&q, UDF_FILE, "grouping", NULL);
-
-	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_5_callback, &result);
-
-	if (result) {
-		char * s = as_val_tostring(result);
-		info("value: %s", s );
-		free(s);
-	}
-
-	assert_int_eq( err.code, 0 );
-	assert_int_eq( as_val_type(result), AS_MAP );
-
-	as_val_destroy(result);
-	as_query_destroy(&q);
-}
-
-static bool query_foreach_6_callback(as_val * v, void * udata) {
-	if ( v != NULL ) {
-		as_val ** result = (as_val **) udata;
-		*result = v;
-	}
-	return true;
-}
-
-TEST( query_foreach_6, "c where d in range(4,6) groupby d") {
-
-	as_error err;
-	as_error_reset(&err);
-
-	as_val * result = NULL;
-
-	as_query q;
-	as_query_init(&q, "test", "test");
-	as_query_where(&q, "d", integer_range(4, 6));
-	as_query_apply(&q, UDF_FILE, "grouping", NULL);
-
-	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_6_callback, &result);
-
-	if (result) {
-		char * s = as_val_tostring(result);
-		info("value: %s", s );
-		free(s);
-	}
-
-	assert_int_eq( err.code, 0 );
-	assert_int_eq( as_val_type(result), AS_MAP );
-
-	as_val_destroy(result);
-	as_query_destroy(&q);
-}
-
 
 /******************************************************************************
  * TEST SUITE
@@ -409,8 +351,6 @@ SUITE( query_foreach, "aerospike_query_foreach tests" ) {
 	suite_add( query_foreach_create );
 	suite_add( query_foreach_1 );
 	suite_add( query_foreach_2 );
-	// suite_add( query_foreach_3 );
-	// suite_add( query_foreach_4 );
-	// suite_add( query_foreach_5 );
-	// suite_add( query_foreach_6 );
+	suite_add( query_foreach_3 );
+	suite_add( query_foreach_4 );
 }

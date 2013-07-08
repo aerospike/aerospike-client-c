@@ -39,14 +39,15 @@
  * TYPES
  *****************************************************************************/
 
-typedef struct scan_bridge_s
-{
-	void							* user_udata; 	// udata actually passed by the user
-	aerospike_scan_foreach_callback	user_cb;		// The callback the user wanted to call
-} scan_bridge;
+typedef struct scan_bridge_s {
 
-// TODO: not sure what this is needed for
-//typedef int (* citrusleaf_udf_scan_callback)(as_val *, void *);
+	// user-provided data
+	void * udata;
+
+	// user-provided callback
+	aerospike_scan_foreach_callback	callback;
+
+} scan_bridge;
 
 /******************************************************************************
  * FUNCTION DECLS
@@ -69,6 +70,11 @@ static void as_scan_toclscan(const as_scan * scan, const as_policy_scan * policy
 	clscan->params.priority = scan->priority;
 	clscan->params.pct = scan->percent;
 
+	clscan->udf.type = CL_SCAN_UDF_NONE;
+	clscan->udf.filename = NULL;
+	clscan->udf.function = NULL;
+	clscan->udf.arglist = NULL;
+
 	if ( background ) {
 		if ( job_id != NULL ) {
 			clscan->job_id = *job_id;
@@ -80,24 +86,13 @@ static void as_scan_toclscan(const as_scan * scan, const as_policy_scan * policy
 				*job_id = clscan->job_id;
 			}
 		}
-	}
 
-	if ( scan->apply_each.module && scan->apply_each.function ) {
-		if ( background ) {
+		if ( scan->apply_each.module[0] != '\0' && scan->apply_each.function[0] != '\0' ) {
 			clscan->udf.type = CL_SCAN_UDF_BACKGROUND;
+			clscan->udf.filename = (char *) scan->apply_each.module;
+			clscan->udf.function = (char *) scan->apply_each.function;
+			clscan->udf.arglist = scan->apply_each.arglist;
 		}
-		else {
-			clscan->udf.type = CL_SCAN_UDF_CLIENT_RECORD;
-		}
-		clscan->udf.filename = scan->apply_each.module;
-		clscan->udf.function = scan->apply_each.function;
-		clscan->udf.arglist = scan->apply_each.arglist;
-	}
-	else {
-		clscan->udf.type = CL_SCAN_UDF_NONE;
-		clscan->udf.filename = NULL;
-		clscan->udf.function = NULL;
-		clscan->udf.arglist = NULL;
 	}
 }
 
@@ -135,23 +130,26 @@ static int simplescan_cb(
 	char *ns, cf_digest *keyd, char *set, uint32_t generation,
 	uint32_t record_void_time, cl_bin *bins, int n_bins, bool is_last, void *udata)
 {
-	scan_bridge *bridge_udata = (scan_bridge *)udata;
+	scan_bridge * bridge = (scan_bridge *) udata;
 
 	// Fill the bin data
-	as_record r;
-	as_record_inita(&r, n_bins);
-	clbins_to_asrecord(bins, n_bins, &r);
+	as_record _rec, * rec = &_rec;
+	as_record_inita(rec, n_bins);
+	clbins_to_asrecord(bins, n_bins, rec);
 
 	// Fill the metadata
-	as_key_init_value(&r.key, ns, set, NULL);
-	memcpy(r.key.digest.value, keyd, sizeof(cf_digest));
-	r.key.digest.init = true;
-	r.gen = generation;
-	r.ttl = record_void_time;
+	as_key_init_value(&rec->key, ns, set, NULL);
+	memcpy(rec->key.digest.value, keyd, sizeof(cf_digest));
+	rec->key.digest.init = true;
+	rec->gen = generation;
+	rec->ttl = record_void_time;
 
 	// Call the callback that user wanted to callback
-	(*bridge_udata->user_cb)((as_val *)&r, bridge_udata->user_udata);
+	bridge->callback((as_val *) rec, bridge->udata);
 	
+	// release the record
+	as_record_destroy(rec);
+
 	return 0;
 }
 
@@ -162,10 +160,10 @@ static int simplescan_cb(
  */
 static int generic_cb(as_val * val, void * udata)
 {
-	scan_bridge *bridge_udata = (scan_bridge *)udata;
+	scan_bridge * bridge = (scan_bridge *) udata;
 	
 	// Call the callback that user wanted to callback
-	(*bridge_udata->user_cb)(val, bridge_udata->user_udata);
+	bridge->callback(val, bridge->udata);
 	
 	return 0;
 }
@@ -201,8 +199,8 @@ static as_status aerospike_scan_generic(
 	if ( clscan.udf.type == CL_SCAN_UDF_NONE ) {
 
 		scan_bridge bridge_udata = {
-			.user_udata = udata,
-			.user_cb = callback
+			.udata = udata,
+			.callback = callback
 		};
 
 		struct cl_scan_parameters_s params = {
@@ -212,22 +210,35 @@ static as_status aerospike_scan_generic(
 			.threads_per_node = 0
 		};
 
+		int n_bins = scan->select.size;
+		cl_bin * bins = NULL;
+		if ( n_bins > 0 ) {
+			bins = (cl_bin *) alloca(sizeof(cl_bin) * n_bins);
+			for( int i = 0; i < n_bins; i++ ) {
+				strcpy(bins[i].bin_name, scan->select.entries[i]);
+				citrusleaf_object_init_null(&bins[i].object);
+			}
+		}
+
+
 		// If the user want to execute only on a single node...
 		if (node) {
-			clrv = citrusleaf_scan_node(as->cluster, (char *) node, (char *) scan->ns, (char *) scan->set, NULL, 0, 
+			clrv = citrusleaf_scan_node(as->cluster, (char *) node, (char *) scan->ns, (char *) scan->set, bins, n_bins, 
 						scan->no_bins, scan->percent, simplescan_cb, &bridge_udata, &params);
 			rc = as_error_fromrc(err, clrv);
-		} else {
+		} 
+		else {
 
 			// We are not using the very old citrusleaf_scan() call here. First of all, its
 			// very inefficient. It makes a single node on the cluster coordinate the job
 			// of scan. Moreover, it does not accept params like priority etc.
-			cf_vector *v = citrusleaf_scan_all_nodes(as->cluster, (char *) scan->ns, (char *) scan->set, NULL, 0, 
+			cf_vector *v = citrusleaf_scan_all_nodes(as->cluster, (char *) scan->ns, (char *) scan->set, bins, n_bins, 
 						scan->no_bins, scan->percent, simplescan_cb, &bridge_udata, &params);
 			rc = process_node_response(v, err);
 		}
 
-	} else {
+	}
+	else {
 		// If the user want to execute only on a single node...
 		if (node) {
 			clrv = citrusleaf_udf_scan_node(as->cluster, &clscan, (char *)node, generic_cb, udata);
@@ -249,17 +260,35 @@ static as_status aerospike_scan_generic(
  *****************************************************************************/
 
 /**
- * Scan the records in the specified namespace and set in the cluster.
+ *	Scan the records in the specified namespace and set in the cluster.
  *
- * Scan will be run in the background by a thread on client side.
- * 
- * @param as        - the aerospike cluster to connect to.
- * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
- * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
- * @param scan      - the scan to perform
- * @param scan_id   - the id for the scan job, which can be used for querying the status of the scan.
+ *	Scan will be run in the background by a thread on client side.
+ *	No callback will be called in this case.
+ *	
+ *	~~~~~~~~~~{.c}
+ *	as_scan scan;
+ *	as_scan_init(&scan, "test", "demo");
+ *	as_scan_apply_each(&scan, "udf_module", "udf_function", NULL);
+ *	
+ *	uint64_t scanid = 0;
+ *	
+ *	if ( aerospike_scan_background(&as, &err, NULL, &scan, &scanid) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *	else {
+ *		printf("Running background scan job: %ll", scanid);
+ *	}
  *
- * @return AEROSPIKE_OK on success. Otherwise an error occurred.
+ *	as_scan_destroy(&scan);
+ *	~~~~~~~~~~
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param scan 			The scan to execute against the cluster.
+ *	@param scan_id		The id for the scan job, which can be used for querying the status of the scan.
+ *
+ *	@return AEROSPIKE_OK on success. Otherwise an error occurred.
  */
 as_status aerospike_scan_background(
 	aerospike * as, as_error * err, const as_policy_scan * policy, 
@@ -286,54 +315,30 @@ as_status aerospike_scan_background(
 }
 
 /**
- * Scan the records in the specified namespace and set in a specified node.
+ *	Scan the records in the specified namespace and set in the cluster.
  *
- * Scan will be run in the background by a thread on client side.
+ *	Call the callback function for each record scanned. When all records have 
+ *	been scanned, then callback will be called with a NULL value for the record.
  *
- * @param as        - the aerospike cluster to connect to.
- * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
- * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
- * @param scan      - the scan to perform
- * @param scan_id   - the id for the scan job, which can be used for querying the status of the scan.
+ *	~~~~~~~~~~{.c}
+ *	as_scan scan;
+ *	as_scan_init(&scan, "test", "demo");
+ *	
+ *	if ( aerospike_scan_foreach(&as, &err, NULL, &scan, callback, NULL) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
  *
- * @return AEROSPIKE_OK on success. Otherwise an error occurred.
- */
-as_status aerospike_scan_node_background(
-	aerospike * as, as_error * err, const as_policy_scan * policy, 
-	const char * node, const as_scan * scan, uint64_t * scan_id) 
-{
-	// we want to reset the error so, we have a clean state
-	as_error_reset(err);
-	
-	// resolve policies
-	as_policy_scan p;
-	as_policy_scan_resolve(&p, &as->config.policies, policy);
-	
-	if ( aerospike_scan_init(as, err) != AEROSPIKE_OK ) {
-		return err->code;
-	}
-
-	cl_scan clscan;
-	as_scan_toclscan(scan, &p, &clscan, true, scan_id);
-
-	cl_rv clrv = citrusleaf_udf_scan_node_background(as->cluster, &clscan, (char *) node);
-	as_status rc = as_error_fromrc(err, clrv);
-	return rc;
-}
-
-/**
- * Scan the records in the specified namespace and set in the cluster.
- * Call the callback function for each record scanned. When all records have 
- * been scanned, then callback will be called with a NULL value for the record.
- * 
- * @param as        - the aerospike cluster to connect to.
- * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
- * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
- * @param scan      - the scan to perform
- * @param udata     - user-data to be passed to the callback
- * @param callback  - the function to be called for each record scanned.
+ *	as_scan_destroy(&scan);
+ *	~~~~~~~~~~
+ *	
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param scan			The scan to execute against the cluster.
+ *	@param callback		The function to be called for each record scanned.
+ *	@param udata			User-data to be passed to the callback.
  *
- * @return AEROSPIKE_OK on success. Otherwise an error occurred.
+ *	@return AEROSPIKE_OK on success. Otherwise an error occurred.
  */
 as_status aerospike_scan_foreach(
 	aerospike * as, as_error * err, const as_policy_scan * policy, 
@@ -352,40 +357,6 @@ as_status aerospike_scan_foreach(
 	}
 
 	return aerospike_scan_generic(as, err, &p, NULL, scan, callback, udata);
-}
-
-/**
- * Scan the records in the specified namespace and set on a single node in the cluster.
- * Call the callback function for each record scanned. When all records have 
- * been scanned, then callback will be called with a NULL value for the record.
- * 
- * @param as        - the aerospike cluster to connect to.
- * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
- * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
- * @param node      - the name of the node to perform the scan on.
- * @param scan      - the scan to perform
- * @param udata     - user-data to be passed to the callback
- * @param callback  - the function to be called for each record scanned.
- *
- * @return AEROSPIKE_OK on success. Otherwise an error occurred.
- */
-as_status aerospike_scan_node_foreach(
-	aerospike * as, as_error * err, const as_policy_scan * policy, 
-	const char * node, const as_scan * scan, 
-	aerospike_scan_foreach_callback callback, void * udata) 
-{
-	// we want to reset the error so, we have a clean state
-	as_error_reset(err);
-	
-	// resolve policies
-	as_policy_scan p;
-	as_policy_scan_resolve(&p, &as->config.policies, policy);
-	
-	if ( aerospike_scan_init(as, err) != AEROSPIKE_OK ) {
-		return err->code;
-	}
-
-	return aerospike_scan_generic(as, err, &p, node, scan, callback, udata);
 }
 
 /**

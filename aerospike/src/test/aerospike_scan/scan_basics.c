@@ -38,167 +38,231 @@ extern aerospike * as;
 /******************************************************************************
  * TYPES
  *****************************************************************************/
-typedef struct scan_struct_s {
-	// Variable used to determine how the scan callback will behave
-	char *setname;
-	bool justcount;
+typedef struct scan_check_s {
+	bool failed;
+	char * set;
 	bool nobindata;
-	bool bin4_present;
-	int bin4_startval;
-	// Variable used to return info to the caller
-	bool ret_failed;
-	int ret_rec_count;
-} scan_struct;
+	int count;
+	char * bins[10];
+} scan_check;
 
 /******************************************************************************
  * STATIC FUNCTIONS
  *****************************************************************************/
-static void scan_data_init(scan_struct *s)
+
+static int check_bin1(as_record * rec, scan_check * check)
 {
-	s->ret_failed = false;
-	s->ret_rec_count = 0;
-	s->justcount = false;
-	s->nobindata = false;
-	s->bin4_present = false;
-	s->bin4_startval = 0;
+	as_val * bin = as_record_get(rec, "bin1");
+	if ( !bin ) {
+		error("Expected a value in bin('%s'), but got null", "bin1");
+		return !(check->failed = true);
+	}
+	
+	as_integer * integer = as_integer_fromval(bin);
+	if ( !integer ) {
+		error("Expected a integer in bin('%s'), but got type %d", "bin1", as_val_type(bin));
+		return !(check->failed = true);
+	}
+
+	return !(check->failed = false);
 }
 
-static int check_bin4(as_record *rec, scan_struct *scan_data)
+
+static int check_bin2(as_record * rec, scan_check * check)
 {
-	as_val *v = as_record_get(rec, "bin4");
-	if (as_val_type(v) != AS_LIST) {
-		error("Expecting list type in bin4. But got type %d", as_val_type(v));
-		scan_data->ret_failed = true;
-		return 0;
+	as_val * bin = as_record_get(rec, "bin2");
+	if ( !bin ) {
+		error("Expected a value in bin('%s'), but got null", "bin2");
+		return !(check->failed = true);
 	}
-	as_list *list = as_list_fromval(v);
-	if (list == NULL) {
-		error("Did not get list in bin4");
-		scan_data->ret_failed = true;
-	} else {
-		int lsz = as_list_size(list);
-		if (lsz < 3) {
-			error("Expected atleast %d elements, but the list has only %d elements", 3, lsz);
-			scan_data->ret_failed = true;
-		}
-
-		for (int i=0; i<lsz; i++) {
-			as_val *v = as_list_get(list, i);
-			if (as_val_type(v) != AS_INTEGER) {
-				error("Expecting integer type in the arraylist. But got type %d", as_val_type(v));
-				scan_data->ret_failed = true;
-				return 0;
-			}
-			as_integer *asint = as_integer_fromval(v);
-			uint64_t intval = as_integer_toint(asint);
-
-			if (intval != (scan_data->bin4_startval + i)) {
-				error("In bin4 list, Expecting %d but got %d", (scan_data->bin4_startval + i), intval);
-				scan_data->ret_failed = true;
-				return 0;
-			}
-		}
+	
+	as_string * string = as_string_fromval(bin);
+	if ( !string ) {
+		error("Expected a string in bin('%s'), but got type %d", "bin2", as_val_type(bin));
+		return !(check->failed = true);
+	}
+	
+	char * str = as_string_get(string);
+	if ( !str ) {
+		error("Expected a string value but it is NULL");
+		return !(check->failed = true);
 	}
 
-	return 0;
+	// Check the string bin
+	char expected[SET_STRSZ];
+	int64_t bin1 = as_record_get_int64(rec, "bin1", INT64_MIN);
+	sprintf(expected, "str-%s-%ld", rec->key.set[0] == '\0' ? "noset" : rec->key.set, bin1);
+
+	if (strcmp(expected, str) != 0) {
+		error("Expected '%s' in bin('%s'), but got '%s'", expected, "bin2", str);
+		return !(check->failed = true);
+	}
+
+	return !(check->failed = false);
 }
 
-static bool scan_cb_counter(const as_val *val, void *udata) 
+
+static bool check_bin3(as_record * rec, scan_check * check)
 {
-	scan_struct *scan_data = (scan_struct *)udata;
-	const char *scan_setname = scan_data->setname;
-
-	as_record *rec = (as_record *)val;
-	const char *rec_setname = rec->key.set;
-
-	scan_data->ret_rec_count++;
-
-	if (scan_data->justcount == true) {
-		return 0;
+	as_val * bin = as_record_get(rec, "bin3");
+	if ( !bin ) {
+		error("Expected a value in bin('%s'), but got null", "bin3");
+		return !(check->failed = true);
 	}
+
+	as_map * map = as_map_fromval(bin);
+	if ( !map ) {
+		error("Expected a map in bin('%s'), but got type %d", "bin3", as_val_type(bin));
+		return !(check->failed = true);
+	}
+
+	int sz = as_map_size(map);
+	if ( sz != 3 ) {
+		error("Expected map size of %d, but got %d", 3, sz);
+		return !(check->failed = true);
+	} 
+
+	int64_t bin1 = as_record_get_int64(rec, "bin1", INT64_MIN);
+	int64_t ival = 0;
+
+	ival = as_stringmap_get_int64(map, "x");
+	if ( ival != bin1 ) {
+		error("Expected map value '%s'=%ld, but got %ld", "x", bin1, ival);
+		return !(check->failed = true);
+	}
+	
+	ival = as_stringmap_get_int64(map, "y");
+	if ( ival != bin1+1 ) {
+		error("Expected map value '%s'=%ld, but got %ld", "y", bin1+1, ival);
+		return !(check->failed = true);
+	}
+
+	ival = as_stringmap_get_int64(map, "z");
+	if ( ival != bin1+2 ) {
+		error("Expected map value '%s'=%ld, but got %ld", "z", bin1+2, ival);
+		return !(check->failed = true);
+	}
+
+	return !(check->failed = false);
+}
+
+
+static int check_bin4(as_record * rec, scan_check * check)
+{
+	as_val * bin = as_record_get(rec, "bin4");
+	if ( !bin ) {
+		error("Expected a value in bin('%s'), but got null", "bin4");
+		return !(check->failed = true);
+	}
+
+	as_list * list = as_list_fromval(bin);
+	if ( !list ) {
+		error("Expected a list in bin('%s'), but got type %d", "bin4", as_val_type(bin));
+		return !(check->failed = true);
+	}
+
+	int sz = as_list_size(list);
+	if ( sz < 3 ) {
+		error("Expected list size of %d, but got %d", 3, sz);
+		return !(check->failed = true);
+	}
+
+	for ( int i = 0; i < sz; i++ ) {
+		as_val * val = as_list_get(list, i);
+		if ( !val ) {
+			error("Expecting value at %d, but got null", i);
+			return !(check->failed = true);
+		}
+
+		as_integer * ival = as_integer_fromval(val);
+		if ( !ival ) {
+			error("Expecting integer at %d, but got type %d", i, as_val_type(val));
+			return !(check->failed = true);
+		}
+	}
+
+	return !(check->failed = false);
+}
+
+static bool scan_check_callback(const as_val * val, void * udata) 
+{
+	scan_check * check = (scan_check *) udata;
+
+	as_record * rec = as_record_fromval(val);
+	if ( !rec ) {
+		error("Expected a record, but got type %d", as_val_type(val));
+		return !(check->failed = true);
+	}
+
+	const char * set = rec->key.set[0] == '\0' ? NULL : rec->key.set;
+
+	check->count++;
 
 	// Check if we are getting the results only from the set the scan is triggered for
 	// If scan is called with NULL set, all the recs will come. So, no checks in this case.
-	if (scan_setname) {
+	if ( check->set ) {
 		// Do the check only if the rec also have a setname
-		if (rec_setname && strcmp(scan_setname, rec_setname) != 0) {
-			error("Scanned for %s set, but got records of set %s", scan_setname, rec_setname);
-			scan_data->ret_failed = false;
+		if ( !set ) {
+			error("Expected set '%s', but got set NULL", check->set);
+			return !(check->failed = true);
+		}
+		else if ( strcmp(check->set, set) != 0) {
+			error("Expected set '%s', but got set '%s'", check->set, set);
+			return !(check->failed = true);
 		}
 	}
 
 	// Check that we got the right number of bins
 	int numbins = as_record_numbins(rec);
 
-	if (scan_data->nobindata) {
-		if (numbins != 0) {
-			error("Got %d bins when not expecting any. Scan done with nobindata.", numbins);
-			scan_data->ret_failed = true;
+	if ( check->nobindata ) {
+		if ( numbins != 0 ) {
+			error("Expected 0 bins, but got %d", numbins);
+			return !(check->failed = true);
 		}
-		// As there are no bins, no need to progress further
-		return 0;
+		return !(check->failed = false);
 	} 
 
-	if (scan_data->bin4_present) {
-		if (numbins != 4) {
-			error("Number of bins in record got from scan: Expected %d got %d", 4, numbins);
-			scan_data->ret_failed = true;
-			return 0;
-		}
-	} else {
-		// We may get 4 bins if the test is run again and again
-		if ((numbins != 3) && (numbins != 4)) {
-			error("Number of bins in record got from scan: Expected %d got %d", 3, numbins);
-			scan_data->ret_failed = true;
-		}
+	// only validate data if in sb_set1 or sb_set2
+	if ( check->set && strcmp(set, SET1) != 0 && strcmp(set, SET2) != 0 ) {
+		return !(check->failed = false);
 	}
 
-	// We use the value of bin1 to check the values of the rest of the bins
-	int intval = as_record_get_int64(rec, "bin1", INT64_MAX);
-
-	// Check the string bin
-	char exp_strval[SET_STRSZ];
-	sprintf(exp_strval, "str-%s-%d", scan_setname ? scan_setname : "noset", intval);
-	char *actual_strval = as_record_get_str(rec, "bin2");
-	if (strcmp(exp_strval, actual_strval) != 0) {
-		error("String value: Expected %s but got %s", exp_strval, actual_strval);
-		scan_data->ret_failed = true;
-	}
-
-	// Check the map bin
-	as_map * map = as_record_get_map(rec, "bin3");
-	if (map == NULL) {
-		error("Did not get the map which I expected");
-		scan_data->ret_failed = true;
-	} else {
-		int sz = as_map_size(map);
-		if (sz != 3) {
-			error("Hashmap size: Expected %d but got %d", 3, sz);
-			scan_data->ret_failed = true;
-		} else {
-			int val1 = as_stringmap_get_int64(map, "x");
-			int val2 = as_stringmap_get_int64(map, "y");
-			int val3 = as_stringmap_get_int64(map, "z");
-			if (val1 != intval) {
-				error("Hashmap value for key %s: Expected %d but got %d", "x", intval, val1);
-				scan_data->ret_failed = true;
+	// validate bins
+	int nbins = sizeof(check->bins) / sizeof(char *);
+	for( int i = 0; check->bins[i] && i < nbins; i++ ) {
+		char * bin = check->bins[i];
+		if ( strcmp(bin, "bin1") == 0 ) {
+			if ( !check_bin1(rec, check) ) {
+				error("Failed check of bin1");
+				return !(check->failed = true);
 			}
-			if (val2 != intval+1) {
-				error("Hashmap value for key %s: Expected %d but got %d", "y", intval+1, val2);
-				scan_data->ret_failed = true;
+		}
+		else if ( strcmp(bin, "bin2") == 0 ) {
+			if ( !check_bin2(rec, check) ) {
+				error("Failed check of bin2");
+				return !(check->failed = true);
 			}
-			if (val3 != intval+2) {
-				error("Hashmap value for key %s: Expected %d but got %d", "z", intval+2, val3);
-				scan_data->ret_failed = true;
+		}
+		else if ( strcmp(bin, "bin3") == 0 ) {
+			if ( !check_bin3(rec, check) ) {
+				error("Failed check of bin3");
+				return !(check->failed = true);
 			}
+		}
+		else if ( strcmp(bin, "bin4") == 0 ) {
+			if ( !check_bin4(rec, check) ) {
+				error("Failed check of bin4");
+				return !(check->failed = true);
+			}
+		}
+		else {
+			error("Unknown bin %s", bin);
+			return !(check->failed = true);
 		}
 	}
 
-	if (scan_data->bin4_present) {
-		return check_bin4(rec, scan_data);
-	}
-
-	return 0;
+	return !(check->failed = false);
 }
 
 static void insert_data(int numrecs, const char *setname)
@@ -253,93 +317,101 @@ static void insert_data(int numrecs, const char *setname)
  * TEST CASES
  *****************************************************************************/
 
-TEST( scan_basics_1 , "full scan (using NULL setname)" ) {
+TEST( scan_basics_null_set , "full scan (using NULL setname)" ) {
 
-	scan_struct scan_data;
-	scan_data_init(&scan_data);
-	// The scan is no sure what all records may come for the scan. So, just count.
-	// When running under ATF all data in the NS may be returned to this scan
-	scan_data.justcount = true;
+	scan_check check = {
+		.failed = false,
+		.set = NULL,
+		.count = 0,
+		.nobindata = false,
+		.bins = { NULL }
+	};
 
 	as_error err;
 
 	as_scan scan;
 	as_scan_init(&scan, NS, "");
 
-	as_status rc = aerospike_scan_foreach(as, &err, NULL, &scan, scan_cb_counter, &scan_data);
+	as_status rc = aerospike_scan_foreach(as, &err, NULL, &scan, scan_check_callback, &check);
+	
 	assert_int_eq( rc, AEROSPIKE_OK );
+	assert_false( check.failed );
 
-	assert_int_eq( scan_data.ret_failed, false );
-	// We should get all the data that we inserted
-	int exp_rec_count = (NUM_RECS_SET1 + NUM_RECS_SET2 + NUM_RECS_NULLSET);
-	assert_true( scan_data.ret_rec_count >= exp_rec_count );
-	info("Got %d records in the scan. Expected atleast %d", scan_data.ret_rec_count, exp_rec_count);
+	// assert_int_eq( scan_data.ret_failed, false );
+	// // We should get all the data that we inserted
+	// int exp_rec_count = (NUM_RECS_SET1 + NUM_RECS_SET2 + NUM_RECS_NULLSET);
+	// assert_true( scan_data.ret_rec_count >= exp_rec_count );
+	// info("Got %d records in the scan. Expected atleast %d", scan_data.ret_rec_count, exp_rec_count);
 
 	as_scan_destroy(&scan);
 }
 
-TEST( scan_basics_2 , "simple scan of a specific set" ) {
+TEST( scan_basics_set1 , "simple scan of a specific set" ) {
 
-	scan_struct scan_data;
-	scan_data_init(&scan_data);
-	scan_data.setname = SET1;
+	scan_check check = {
+		.failed = false,
+		.set = SET1,
+		.count = 0,
+		.nobindata = false,
+		.bins = { "bin1", "bin2", "bin3", "bin4", NULL }
+	};
 
 	as_error err;
 
 	as_scan scan;
 	as_scan_init(&scan, NS, SET1);
 
-	as_status rc = aerospike_scan_foreach(as, &err, NULL, &scan, scan_cb_counter, &scan_data);
+	as_status rc = aerospike_scan_foreach(as, &err, NULL, &scan, scan_check_callback, &check);
+	
 	assert_int_eq( rc, AEROSPIKE_OK );
+	assert_false( check.failed );
 
-	assert_int_eq( scan_data.ret_failed, false );
-	assert_int_eq( scan_data.ret_rec_count, NUM_RECS_SET1 );
-	info("Got %d records in the scan. Expected %d", scan_data.ret_rec_count, NUM_RECS_SET1);
+	// assert_int_eq( scan_data.ret_failed, false );
+	// assert_int_eq( scan_data.ret_rec_count, NUM_RECS_SET1 );
+	// info("Got %d records in the scan. Expected %d", scan_data.ret_rec_count, NUM_RECS_SET1);
 
 	as_scan_destroy(&scan);
 }
 
-TEST( scan_basics_3 , "scan of a specific set on a specific node" ) {
+TEST( scan_basics_set1_select , "scan w/ select 'bin1'" ) {
 
-	int total_rec_count = 0;
-	scan_struct scan_data;
-	scan_data_init(&scan_data);
-	scan_data.setname = SET2;
+	scan_check check = {
+		.failed = false,
+		.set = SET1,
+		.count = 0,
+		.nobindata = false,
+		.bins = { "bin1", NULL }
+	};
 
 	as_error err;
 
-	char node_name[NODE_NAME_SIZE];
-	char *node_names = NULL;
-	int num_nodes;
-	cl_cluster_get_node_names(as->cluster, &num_nodes, &node_names);
-
 	as_scan scan;
-	as_scan_init(&scan, NS, SET2);
+	as_scan_init(&scan, NS, SET1);
 
-	for (int i=0; i<num_nodes; i++) {
-		memcpy(node_name, node_names+(NODE_NAME_SIZE*i), NODE_NAME_SIZE);
-		as_status rc = aerospike_scan_node_foreach(as, &err, NULL, node_name, &scan, scan_cb_counter, &scan_data);
-		assert_int_eq( rc, AEROSPIKE_OK );
-		assert_int_eq( scan_data.ret_failed, false );
-		total_rec_count += scan_data.ret_rec_count;
-		debug("Got %d records from %s node", scan_data.ret_rec_count, node_name);
-		scan_data.ret_rec_count = 0;
-	}
+	as_scan_select_inita(&scan, 1);
+	as_scan_select(&scan, "bin1");
 
-	// When we scan all the nodes, we should have got all the recs of this set and no more
-	assert_int_eq( total_rec_count, NUM_RECS_SET2 );
-	info("Got %d records in the scan. Expected %d", total_rec_count, NUM_RECS_SET2);
+	as_status rc = aerospike_scan_foreach(as, &err, NULL, &scan, scan_check_callback, &check);
+	
+	assert_int_eq( rc, AEROSPIKE_OK );
+	assert_false( check.failed );
 
-	free(node_names);
+	// assert_int_eq( scan_data.ret_failed, false );
+	// assert_int_eq( scan_data.ret_rec_count, NUM_RECS_SET1 );
+	// info("Got %d records in the scan. Expected %d", scan_data.ret_rec_count, NUM_RECS_SET1);
+
 	as_scan_destroy(&scan);
 }
 
-TEST( scan_basics_4 , "simple scan of a specific set with no-bin-data" ) {
+TEST( scan_basics_set1_nodata , "simple scan of a specific set with no-bin-data" ) {
 
-	scan_struct scan_data;
-	scan_data_init(&scan_data);
-	scan_data.nobindata = true;
-	scan_data.setname = SET1;
+	scan_check check = {
+		.failed = false,
+		.set = SET1,
+		.count = 0,
+		.nobindata = true,
+		.bins = { NULL }
+	};
 
 	as_error err;
 
@@ -347,23 +419,27 @@ TEST( scan_basics_4 , "simple scan of a specific set with no-bin-data" ) {
 	as_scan_init(&scan, NS, SET1);
 	as_scan_set_nobins(&scan, true);
 
-	as_status rc = aerospike_scan_foreach(as, &err, NULL, &scan, scan_cb_counter, &scan_data);
+	as_status rc = aerospike_scan_foreach(as, &err, NULL, &scan, scan_check_callback, &check);
+	
 	assert_int_eq( rc, AEROSPIKE_OK );
+	assert_false( check.failed );
 
-	assert_int_eq( scan_data.ret_failed, false );
-	assert_int_eq( scan_data.ret_rec_count, NUM_RECS_SET1 );
-	info("Got %d records in the scan. Expected %d", scan_data.ret_rec_count, NUM_RECS_SET1);
+	// assert_int_eq( scan_data.ret_failed, false );
+	// assert_int_eq( scan_data.ret_rec_count, NUM_RECS_SET1 );
+	// info("Got %d records in the scan. Expected %d", scan_data.ret_rec_count, NUM_RECS_SET1);
 
 	as_scan_destroy(&scan);
 }
 
-TEST( scan_basics_5 , "udf scan in background to insert a new bin" ) {
+TEST( scan_basics_background , "udf scan in background to insert a new bin" ) {
 
-	scan_struct scan_data;
-	scan_data_init(&scan_data);
-	scan_data.setname = SET2;
-	scan_data.bin4_present = true;
-	scan_data.bin4_startval = 1;
+	scan_check check = {
+		.failed = false,
+		.set = SET2,
+		.count = 0,
+		.nobindata = false,
+		.bins = { "bin1", "bin2", "bin3", "bin4", NULL }
+	};
 
 	as_error err;
 
@@ -371,8 +447,9 @@ TEST( scan_basics_5 , "udf scan in background to insert a new bin" ) {
 	as_scan_init(&scan, NS, SET1);
 	as_scan_apply_each(&scan, "aerospike_scan_test", "scan_insert_bin4", NULL);
 
-	uint64_t scanid = 123;
+	uint64_t scanid = 0;
 	as_status udf_rc = aerospike_scan_background(as, &err, NULL, &scan, &scanid);
+	
 	assert_int_eq( udf_rc, AEROSPIKE_OK );
 
 	// We should let the background scan to finish
@@ -382,114 +459,19 @@ TEST( scan_basics_5 , "udf scan in background to insert a new bin" ) {
 	as_scan scan2;
 	as_scan_init(&scan2, NS, SET2);
 
-	as_status rc = aerospike_scan_foreach(as, &err, NULL, &scan2, scan_cb_counter, &scan_data);
+	as_status rc = aerospike_scan_foreach(as, &err, NULL, &scan2, scan_check_callback, &check);
 
 	assert_int_eq( rc, AEROSPIKE_OK );
-	assert_int_eq( scan_data.ret_failed, false );
-	assert_int_eq( scan_data.ret_rec_count, NUM_RECS_SET2 );
-	info("Got %d records in the scan. Expected %d", scan_data.ret_rec_count, NUM_RECS_SET2);
+	assert_false( check.failed );
+
+	// assert_int_eq( scan_data.ret_rec_count, NUM_RECS_SET2 );
+	// info("Got %d records in the scan. Expected %d", scan_data.ret_rec_count, NUM_RECS_SET2);
 
 	as_scan_destroy(&scan);
 	as_scan_destroy(&scan2);
 }
 
-TEST( scan_basics_6 , "udf scan in background per node to insert a new bin" ) {
-
-	int total_rec_count = 0;
-	scan_struct scan_data;
-	scan_data_init(&scan_data);
-	scan_data.setname = SET2;
-	scan_data.bin4_present = true;
-	scan_data.bin4_startval = 1;
-
-	as_error err;
-
-	char node_name[NODE_NAME_SIZE];
-	char *node_names = NULL;
-	int num_nodes;
-	cl_cluster_get_node_names(as->cluster, &num_nodes, &node_names);
-
-	// insert a new bin using udf
-	as_scan scan;
-	as_scan_init(&scan, NS, SET2);
-	as_scan_apply_each(&scan, "aerospike_scan_test", "scan_insert_bin4", NULL);
-
-	uint64_t scanid = 456;
-	for (int i=0; i<num_nodes; i++) {
-		memcpy(node_name, node_names+(NODE_NAME_SIZE*i), NODE_NAME_SIZE);
-		as_status udf_rc = aerospike_scan_node_background(as, &err, NULL, node_name, &scan, &scanid);
-		assert_int_eq( udf_rc, AEROSPIKE_OK );
-		assert_int_eq( scan_data.ret_failed, false );
-	}
-
-	// We should let the background scan to finish
-	sleep(2);
-
-	// See if the above udf ran fine
-	as_scan scan2;
-	as_scan_init(&scan2, NS, SET2);
-
-	for (int i=0; i<num_nodes; i++) {
-		memcpy(node_name, node_names+(NODE_NAME_SIZE*i), NODE_NAME_SIZE);
-		as_status rc = aerospike_scan_node_foreach(as, &err, NULL, node_name, &scan2, scan_cb_counter, &scan_data);
-		assert_int_eq( rc, AEROSPIKE_OK );
-		assert_int_eq( scan_data.ret_failed, false );
-		total_rec_count += scan_data.ret_rec_count;
-		debug("Got %d records from %s node", scan_data.ret_rec_count, node_name);
-		scan_data.ret_rec_count = 0;
-	}
-	// When we scan all the nodes, we should have got all the recs of this set and no more
-	assert_int_eq( total_rec_count, NUM_RECS_SET2 );
-	info("Got %d records in the scan. Expected %d", total_rec_count, NUM_RECS_SET2);
-
-	as_scan_destroy(&scan);
-	as_scan_destroy(&scan2);
-}
-
-TEST( scan_basics_7 , "udf scan in foreground to insert a new bin" ) {
-
-	scan_struct scan_data;
-	scan_data_init(&scan_data);
-	scan_data.setname = SET1;
-	scan_data.bin4_present = true;
-
-	as_error err;
-
-	// insert a new bin using udf
-	as_scan scan;
-	as_scan_init(&scan, NS, SET2);
-	as_scan_apply_each(&scan, "aerospike_scan_test", "scan_update_bin4", NULL);
-
-	uint64_t scanid = 789;
-	as_status udf_rc = aerospike_scan_background(as, &err, NULL, &scan, &scanid);
-	assert_int_eq( udf_rc, AEROSPIKE_OK );
-
-	// We should let the background scan to finish
-	sleep(2);
-
-	// See if the above udf ran fine
-	as_scan scan2;
-	as_scan_init(&scan2, NS, SET2);
-	as_scan_apply_each(&scan2, "aerospike_scan_test", "scan_getrec", NULL);
-
-	scan_data.bin4_startval = 4;
-	as_status rc = aerospike_scan_foreach(as, &err, NULL, &scan2, scan_cb_counter, &scan_data);
-	assert_int_eq( rc, AEROSPIKE_OK );
-	assert_int_eq( scan_data.ret_failed, false );
-	assert_int_eq( scan_data.ret_rec_count, NUM_RECS_SET2 );
-	info("Got %d records in the scan. Expected %d", scan_data.ret_rec_count, NUM_RECS_SET2);
-
-	as_scan_destroy(&scan);
-	as_scan_destroy(&scan2);
-}
-
-TEST( scan_basics_8 , "starting two udf scan in background with same scan-id" ) {
-
-	scan_struct scan_data;
-	scan_data_init(&scan_data);
-	scan_data.setname = SET2;
-	scan_data.bin4_present = true;
-	scan_data.bin4_startval = 1;
+TEST( scan_basics_background_sameid , "starting two udf scan in background with same scan-id" ) {
 
 	as_error err;
 
@@ -498,16 +480,18 @@ TEST( scan_basics_8 , "starting two udf scan in background with same scan-id" ) 
 	as_scan_init(&scan, NS, SET2);
 	as_scan_apply_each(&scan, "aerospike_scan_test", "scan_noop", NULL);
 
-	uint64_t scanid = 564;
+	uint64_t scanid = 0;
 	as_status udf_rc = aerospike_scan_background(as, &err, NULL, &scan, &scanid);
+	
 	assert_int_eq( udf_rc, AEROSPIKE_OK );
 
 	as_scan scan2;
 	as_scan_init(&scan2, NS, SET2);
 	as_scan_apply_each(&scan2, "aerospike_scan_test", "scan_noop", NULL);
 
-	uint64_t scanid2 = 564;
+	uint64_t scanid2 = scanid;
 	as_status udf_rc2 = aerospike_scan_background(as, &err, NULL, &scan2, &scanid2);
+	
 	assert_int_eq( udf_rc2, AEROSPIKE_ERR_SERVER );
 
 	as_scan_destroy(&scan);
@@ -545,13 +529,10 @@ SUITE( scan_basics, "aerospike_scan basic tests" ) {
     suite_before( before );
     suite_after( after );
 
-	suite_add( scan_basics_1 );
-	suite_add( scan_basics_2 );
-	suite_add( scan_basics_3 );
-	suite_add( scan_basics_4 );
-	suite_add( scan_basics_5 );
-	suite_add( scan_basics_6 );
-	// Foreground scan udf is not yet available on the server side
-	// suite_add( scan_basics_7 );
-	suite_add(scan_basics_8);
+	suite_add( scan_basics_null_set );
+	suite_add( scan_basics_set1 );
+	suite_add( scan_basics_set1_select );
+	suite_add( scan_basics_set1_nodata );
+	suite_add( scan_basics_background );
+	suite_add( scan_basics_background_sameid );
 }

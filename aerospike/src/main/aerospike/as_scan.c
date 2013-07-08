@@ -48,6 +48,11 @@ static as_scan * as_scan_defaults(as_scan * scan, bool free, const as_namespace 
 		scan->set[0] = '\0';
 	}
 	
+	scan->select._free = false;
+	scan->select.capacity = 0;
+	scan->select.size = 0;
+	scan->select.entries = NULL;
+
 	scan->priority = AS_SCAN_PRIORITY_DEFAULT;
 	scan->percent = AS_SCAN_PERCENT_DEFAULT;
 	scan->no_bins = AS_SCAN_NOBINS_DEFAULT;
@@ -92,6 +97,80 @@ void as_scan_destroy(as_scan * scan)
 	if ( scan->_free ) {
 		free(scan);
 	}
+}
+
+/******************************************************************************
+ *	SELECT FUNCTIONS
+ *****************************************************************************/
+
+/** 
+ *	Initializes `as_scan.select` with a capacity of `n` using `malloc()`.
+ *	
+ *	For stack allocation, use `as_scan_select_inita()`.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_scan_select_init(&scan, 2);
+ *	as_scan_select(&scan, "bin1");
+ *	as_scan_select(&scan, "bin2");
+ *	~~~~~~~~~~
+ *
+ *	@param scan		The scan to initialize.
+ *	@param n		The number of bins to allocate.
+ *
+ *	@return On success, the initialized. Otherwise an error occurred.
+ *
+ *	@relates as_scan
+ *	@ingroup as_scan_t
+ */
+bool as_scan_select_init(as_scan * scan, uint16_t n) 
+{
+	if ( !scan ) return false;
+	if ( scan->select.entries ) return false;
+
+	scan->select.entries = (as_bin_name *) calloc(n, sizeof(as_bin_name));
+	if ( !scan->select.entries ) return false;
+
+	scan->select._free = true;
+	scan->select.capacity = n;
+	scan->select.size = 0;
+
+	return true;
+}
+
+/**
+ *	Select bins to be projected from matching records.
+ *
+ *	You have to ensure as_scan.select has sufficient capacity, prior to 
+ *	adding a bin. If capacity is insufficient then false is returned.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_scan_select_init(&scan, 2);
+ *	as_scan_select(&scan, "bin1");
+ *	as_scan_select(&scan, "bin2");
+ *	~~~~~~~~~~
+ *
+ *	@param scan 		The scan to modify.
+ *	@param bin 			The name of the bin to select.
+ *
+ *	@return On success, true. Otherwise an error occurred.
+ *
+ *	@relates as_scan
+ *	@ingroup as_scany_t
+ */
+bool as_scan_select(as_scan * scan, const char * bin)
+{
+	// test preconditions
+	if ( !scan || !bin || strlen(bin) >= AS_BIN_NAME_MAX_SIZE ) {
+		return false;
+	}
+
+	// insufficient capacity
+	if ( scan->select.size >= scan->select.capacity ) return false;
+
+	strcpy(scan->select.entries[scan->select.size], bin);
+	scan->select.size++;
+
+	return true;
 }
 
 /******************************************************************************

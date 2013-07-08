@@ -299,37 +299,157 @@ typedef struct as_query_sort_s {
 
 
 /** 
- *	Defines a query to be exeucted against an Aerospike cluster.
+ *	In order to execute a query using the Query API, an as_query object
+ *	must be initialized and populated.
  *
- *	A query must be initialized via either `as_query_init()` or `as_query_new()`.
- *	Both functions require a namespace and set to query.
- *
- *	`as_query_init()` will initialize a stack allocated `as_query`:
+ *	## Initialization
+ *	
+ *	Before using an as_query, it must be initialized via either: 
+ *	- as_query_init()
+ *	- as_query_new()
+ *	
+ *	as_query_init() should be used on a stack allocated as_query. It will
+ *	initialize the as_query with the given namespace and set. On success,
+ *	it will return a pointer to the initialized as_query. Otherwise, NULL 
+ *	is returned.
  *
  *	~~~~~~~~~~{.c}
  *	as_query query;
  *	as_query_init(&query, "namespace", "set");
  *	~~~~~~~~~~
  *
- *	`as_query_new()` will create and initialize a new heap allocated `as_query`:
+ *	as_query_new() should be used to allocate and initialize a heap allocated
+ *	as_query. It will allocate the as_query, then initialized it with the 
+ *	given namespace and set. On success, it will return a pointer to the 
+ *	initialized as_query. Otherwise, NULL is returned.
  *
  *	~~~~~~~~~~{.c}
  *	as_query * query = as_query_new("namespace", "set");
  *	~~~~~~~~~~
  *
- *	You can then populate the `as_query` instance using the functions provided:
+ *	## Destruction
+ *
+ *	When you are finished with the as_query, you can destroy it and associated
+ *	resources:
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_query_destroy(query);
+ *	~~~~~~~~~~
+ *
+ *	## Usage
+ *
+ *	An initialized as_query can be populated with additional fields.
  *
  *	- `as_query_select()` - to add bins to select from each record
  *	- `as_query_where()` - to add predicates to filter the results on
  *	- `as_query_orderby()` - to sort the results
  *	- `as_query_limit()` - to limit the number of results returned.
  *
- *	When you are finished with the query, you can destroy it and associated
- *	resources:
+ *	### Selecting Bins
+ *
+ *	as_query_select() is used to specify the bins to be selected by the query.
+ *	
+ *	~~~~~~~~~~{.c}
+ *	as_query_select(query, "bin1");
+ *	as_query_select(query, "bin2");
+ *	~~~~~~~~~~
+ *
+ *	Before adding bins to select, the select structure must be initialized via
+ *	either:
+ *	- as_query_select_inita() - Initializes the structure on the stack.
+ *	- as_query_select_init() - Initializes the structure on the heap.
+ *
+ *	Both functions are given the number of bins to be selected.
+ *
+ *	A complete example using as_query_select_inita()
  *
  *	~~~~~~~~~~{.c}
- *	as_query_destroy(query);
+ *	as_query_select_inita(query, 2);
+ *	as_query_select(query, "bin1");
+ *	as_query_select(query, "bin2");
  *	~~~~~~~~~~
+ *
+ *
+ *	### Predicates on Bins
+ *
+ *	as_query_where() is used to specify predicates to be added to the the query.
+ *
+ *	**Note:** Currently, a single where predicate is supported. To do more advanced filtering,
+ *	you will want to use a UDF to process the result set on the server.
+ *	
+ *	~~~~~~~~~~{.c}
+ *	as_query_where(query, "bin1", string_equals("abc"));
+ *	~~~~~~~~~~
+ *
+ *	The predicates that you can apply to a bin include:
+ *	- string_equals() - Test for string equality.
+ *	- integer_equals() - Test for integer equality.
+ *	- integer_range() - Test for integer within a range.
+ *
+ *	Before adding predicates, the where structure must be initialized. To
+ *	initialize the where structure, you can choose to use one of the following:
+ *	- as_query_where_inita() - Initializes the structure on the stack.
+ *	- as_query_where_init() - Initializes the structure on the heap.
+ *	
+ *	Both functions are given the number of predicates to be added.
+ *
+ *	A complete example using as_query_where_inita():
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_query_where_inita(query, 1);
+ *	as_query_where(query, "bin1", string_equals("abc"));
+ *	~~~~~~~~~~
+ *
+ *
+ *	### Sorting Results
+ *
+ *	as_query_orderby() is used to specify ordering of results of a query.
+ *	
+ *	~~~~~~~~~~{.c}
+ *	as_query_orderby(query, "bin1", AS_ORDER_ASCENDING);
+ *	~~~~~~~~~~
+ *
+ *	The sort order can be:
+ *	- `AS_ORDER_ASCENDING`
+ *	- `AS_ORDER_DESCENDING`
+ *
+ *	Before adding ordering, the orderby structure must be initialized via 
+ *	either:
+ *	- as_query_orderby_inita() - Initializes the structure on the stack.
+ *	- as_query_orderby_init() - Initializes the structure on the heap.
+ *	
+ *	Both functions are given the number of orderings to be added.
+ *
+ *	A complete example using as_query_orderby_inita():
+ *	
+ *	~~~~~~~~~~{.c}
+ *	as_query_orderby_inita(query, 2);
+ *	as_query_orderby(query, "bin1", AS_ORDER_ASCENDING);
+ *	as_query_orderby(query, "bin2", AS_ORDER_ASCENDING);
+ *	~~~~~~~~~~
+ *
+ *	### Limiting Results
+ *
+ *	as_query_limt() is used to specify the number of results to return for 
+ *	a query.
+ *	
+ *	~~~~~~~~~~{.c}
+ *	as_query_limit(query, 100);
+ *	~~~~~~~~~~
+ *	
+ *	Using `UINT64_MAX` for the value will result in all results for the
+ *	query being returned.
+ *
+ *	### Applying a UDF to Query Results
+ *
+ *	A UDF can be applied to the results of a query.
+ *
+ *	To define the UDF for the query, use as_query_apply().
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_query_apply(query, "udf_module", "udf_function", arglist);
+ *	~~~~~~~~~~
+ *
  *
  *	@ingroup as_query_t
  */
@@ -559,6 +679,7 @@ bool as_query_select(as_query * query, const char * bin);
  *
  *	@return On success, true. Otherwise an error occurred.
  *
+ *	@relates as_query
  *	@ingroup as_query_t
  */
 #define as_query_where_inita(__query, __n) \

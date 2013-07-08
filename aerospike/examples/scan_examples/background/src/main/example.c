@@ -76,6 +76,10 @@ main(int argc, char* argv[])
 	aerospike as;
 	example_connect_to_aerospike(&as);
 
+	// Start clean.
+	remove_records(&as);
+
+	// Register the UDF in the database cluster.
 	if (! example_register_udf(&as, UDF_FILE_PATH)) {
 		example_cleanup(&as);
 		exit(-1);
@@ -91,16 +95,17 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
+	as_error err;
+
 	// Specify the namespace, set, and the UDF to apply during the scan.
 	as_scan scan;
 	as_scan_init(&scan, g_namespace, g_set);
 	as_scan_apply_each(&scan, UDF_MODULE, "test_bin_add_1000", NULL);
 
-	as_error err;
-
 	// Using a scan ID of 0 tells the client to generate one.
 	uint64_t scan_id = 0;
 
+	// Start the scan. This call does NOT block while the scan is running.
 	if (aerospike_scan_background(&as, &err, NULL, &scan, &scan_id) !=
 			AEROSPIKE_OK) {
 		LOG("aerospike_scan_background() returned %d - %s", err.code,

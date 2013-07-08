@@ -70,6 +70,7 @@ CITRUSLEAF += aerospike_lset.o
 
 AEROSPIKE = 
 AEROSPIKE += _bin.o
+AEROSPIKE += _logger.o
 AEROSPIKE += _policy.o
 AEROSPIKE += _shim.o
 AEROSPIKE += aerospike.o

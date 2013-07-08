@@ -32,10 +32,12 @@
 #include <citrusleaf/cl_cluster.h>
 #include <citrusleaf/cf_log_internal.h>
 
+#include "_logger.h"
 #include "_log.h"
 
+
 /******************************************************************************
- * FUNCTIONS
+ * STATIC FUNCTIONS
  *****************************************************************************/
 
 static aerospike * aerospike_defaults(aerospike * as, bool free, as_config * config)
@@ -124,6 +126,7 @@ as_status aerospike_connect(aerospike * as, as_error * err)
     
 	as_trace(LOGGER, "as_module_configure: ...");
     as_module_configure(&mod_lua, &config);
+    mod_lua.logger = aerospike_logger(as);
 	as_debug(LOGGER, "as_module_configure: OK");
 
 	// start the cluster tend thread (for all clusters)

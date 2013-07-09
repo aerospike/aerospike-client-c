@@ -122,7 +122,6 @@ main(int argc, char* argv[])
 bool
 scan_cb(const as_val* p_val, void* udata)
 {
-	// TODO - not seeing this happen, what's up?
 	if (! p_val) {
 		LOG("scan callback returned null - scan is complete");
 		return true;

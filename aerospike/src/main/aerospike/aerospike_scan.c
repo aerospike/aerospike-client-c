@@ -251,6 +251,11 @@ static as_status aerospike_scan_generic(
 		}
 	}
 
+    // If completely successful, make the callback that signals completion.
+	if (rc == AEROSPIKE_OK) {
+		callback(NULL, udata);
+	}
+
 	return rc;
 }
 

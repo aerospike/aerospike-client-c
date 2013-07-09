@@ -1167,7 +1167,10 @@ static cl_rv cl_query_execute(cl_cluster * cluster, const cl_query * query, void
         wr_buf = 0;
     }
 
-    callback(NULL, udata);
+    // If completely successful, make the callback that signals completion.
+    if (rc == CITRUSLEAF_OK) {
+    	callback(NULL, udata);
+    }
 
 	if (task.complete_q) cf_queue_destroy(task.complete_q);
     return rc;

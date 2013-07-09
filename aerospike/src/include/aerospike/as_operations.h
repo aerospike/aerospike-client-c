@@ -130,9 +130,152 @@ typedef struct as_binops_s {
 } as_binops;
 
 /**
- *	The `aerospike_key_operate()` function performs multiple operations on a
- *	record in the database. The `as_operations` object is used to define the
- *	operations to be performed on the record.
+ *	The `aerospike_key_operate()` function provides the ability to execute
+ *	multiple operations on a record in the database as a single atomic 
+ *	transcation. 
+ *
+ *	The `as_operations` object is used to define the operations to be performed
+ *	on the record.
+ *
+ *	## Initialization
+ *
+ *	Before using as_operations, you must first initialize it via either:
+ *	- as_operations_inita()
+ *	- as_operations_init()
+ *	- as_operations_new()
+ *
+ *	as_operations_inita() is a macro that initializes a stack allocated 
+ *	as_operations and allocates an internal array of operations. The macro
+ *	accepts a pointer to the stack allocated as_operations and the number of
+ *	operations to be added.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_operations ops;
+ *	as_operations_inita(&ops, 2);
+ *	~~~~~~~~~~
+ *
+ *	as_operations_init() is a function that initializes a stack allocated 
+ *	as_operations. It differes from as_operations_inita() in that it allocates
+ *	the internal array of operations on the heap. It accepts a pointer to the 
+ *	stack allocated as_operations and the number of operations to be added.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_operations ops;
+ *	as_operations_init(&ops, 2);
+ *	~~~~~~~~~~
+ *	
+ *	as_operations_new() is a function that will allocate a new as_operations
+ *	on the heap. It will also allocate the internal array of operation on the 
+ *	heap.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_operations * ops = as_operations_new(2);
+ *	~~~~~~~~~~
+ *
+ *	When you no longer needthe as_operations, you can release the resources 
+ *	allocated to it via as_operations_destroy().
+ *
+ *	## Destruction
+ *	
+ *	When you no longer require an as_operations, you should call 
+ *	`as_operations_destroy()` to release it and associated resources.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_operations_destroy(ops);
+ *	~~~~~~~~~~
+ *
+ *	## Usage
+ *
+ *	as_operations is a sequence of operations to be applied to a record.
+ *	
+ *	Each of the following operations is added to the end of the sequence
+ *	of operations.
+ *
+ *	When you have compiled the sequence of operations you want to execute,
+ *	then you will send it to aerospike_key_operate().
+ *
+ *
+ *	### Modifying a String
+ *
+ *	Aerospike allows you to append a string to a bin containing
+ *	a string.
+ *
+ *	The following appends a "abc" to bin "bin1".
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_operations_add_append_str(ops, "bin1", "abc");
+ *	~~~~~~~~~~
+ *	
+ *	There is also a prepend operation, which will add the string
+ *	to the beginning of the bin's current value.
+ *	
+ *	~~~~~~~~~~{.c}
+ *	as_operations_add_prepend_str(ops, "bin1", "abc");
+ *	~~~~~~~~~~
+ *
+ *	### Modifying a Byte Array
+ *
+ *	Aerospike allows you to append a byte array to a bin containing
+ *	a byte array.
+ *
+ *	The following appends a 4 byte sequence to bin "bin1".
+ *
+ *	~~~~~~~~~~{.c}
+ *	uint8_t raw[4] = { 1, 2, 3, 4 };
+ *	as_operations_add_append_raw(ops, "bin1", raw, 4);
+ *	~~~~~~~~~~
+ *	
+ *	There is also a prepend operation, which will add the bytes
+ *	to the beginning of the bin's current value.
+ *
+ *	~~~~~~~~~~{.c}
+ *	uint8_t raw[4] = { 1, 2, 3, 4 };
+ *	as_operations_add_prepend_raw(ops, "bin1", raw, 4);
+ *	~~~~~~~~~~
+ *
+ *	### Increment an Integer
+ *
+ *	Aerospike allows you to increment the value of a bin 
+ *
+ *	The following increments the value in bin "bin1" by 4.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_operations_add_incr(ops, "bin1", 4);
+ *	~~~~~~~~~~
+ *	
+ *	### Write a Value
+ *
+ *	Write a value into a bin. Overwriting previous value.
+ *
+ *	The following writes a string "xyz" to "bin1".
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_operations_add_write_str(ops, "bin1", "xyz");
+ *	~~~~~~~~~~
+ *	
+ *	### Read a Value
+ *
+ *	Read a value from a bin. This is ideal, if you performed an 
+ *	operation on a bin, and want to read the new value.
+ *
+ *	The following reads the value of "bin1"
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_operations_add_read(ops, "bin1", "xyz");
+ *	~~~~~~~~~~
+ *
+ *	### Touch a Record
+ *
+ *	Touching a record will refresh its ttl and increment the generation
+ *	of the record.
+ *
+ *	The following touches a record.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_operations_add_touch(ops);
+ *	~~~~~~~~~~
+ *	
+ *	
  *
  *	@ingroup as_operations_t	
  */
@@ -179,6 +322,9 @@ typedef struct as_operations_s {
  *	@param __ops		The `as_operations *` to initialize.
  *	@param __nops		The number of `as_binops.entries` to allocate on the
  *						stack.
+ *
+ *	@relates as_operations
+ *	@ingroup as_operations_t
  */
 #define as_operations_inita(__ops, __nops) \
 	(__ops)->_free = false;\
@@ -211,7 +357,8 @@ typedef struct as_operations_s {
  *
  *	@return The initialized `as_operations` on success. Otherwise NULL.
  *
- *	@relatesalso as_operations
+ *	@relates as_operations
+ *	@ingroup as_operations_t
  */
 as_operations * as_operations_init(as_operations * ops, uint16_t nops);
 
@@ -231,7 +378,8 @@ as_operations * as_operations_init(as_operations * ops, uint16_t nops);
  *
  *	@return The new `as_operations` on success. Otherwise NULL.
  *
- *	@relatesalso as_operations
+ *	@relates as_operations
+ *	@ingroup as_operations_t
  */
 as_operations * as_operations_new(uint16_t nops);
 
@@ -244,7 +392,8 @@ as_operations * as_operations_new(uint16_t nops);
  *
  *	@param ops 	The `as_operations` to destroy.
  *
- *	@relatesalso as_operations
+ *	@relates as_operations
+ *	@ingroup as_operations_t
  */
 void as_operations_destroy(as_operations * ops);
 
@@ -257,7 +406,8 @@ void as_operations_destroy(as_operations * ops);
  *
  *	@return true on success. Otherwise an error occurred.
  *
- *	@relatesalso as_operations
+ *	@relates as_operations
+ *	@ingroup as_operations_t
  */
 bool as_operations_add_write(as_operations * ops, const as_bin_name name, as_bin_value * value);
 
@@ -270,7 +420,8 @@ bool as_operations_add_write(as_operations * ops, const as_bin_name name, as_bin
  *
  *	@return true on success. Otherwise an error occurred.
  *
- *	@relatesalso as_operations
+ *	@relates as_operations
+ *	@ingroup as_operations_t
  */
 bool as_operations_add_write_int64(as_operations * ops, const as_bin_name name, int64_t value);
 
@@ -283,7 +434,8 @@ bool as_operations_add_write_int64(as_operations * ops, const as_bin_name name, 
  *
  *	@return true on success. Otherwise an error occurred.
  *
- *	@relatesalso as_operations
+ *	@relates as_operations
+ *	@ingroup as_operations_t
  */
 bool as_operations_add_write_str(as_operations * ops, const as_bin_name name, const char * value);
 
@@ -297,7 +449,8 @@ bool as_operations_add_write_str(as_operations * ops, const as_bin_name name, co
  *
  *	@return true on success. Otherwise an error occurred.
  *
- *	@relatesalso as_operations
+ *	@relates as_operations
+ *	@ingroup as_operations_t
  */
 bool as_operations_add_write_raw(as_operations * ops, const as_bin_name name, const uint8_t * value, uint32_t size);
 
@@ -309,7 +462,8 @@ bool as_operations_add_write_raw(as_operations * ops, const as_bin_name name, co
  *
  *	@return true on success. Otherwise an error occurred.
  *
- *	@relatesalso as_operations
+ *	@relates as_operations
+ *	@ingroup as_operations_t
  */
 bool as_operations_add_read(as_operations * ops, const as_bin_name name);
 
@@ -322,7 +476,8 @@ bool as_operations_add_read(as_operations * ops, const as_bin_name name);
  *
  *	@return true on success. Otherwise an error occurred.
  *
- *	@relatesalso as_operations
+ *	@relates as_operations
+ *	@ingroup as_operations_t
  */
 bool as_operations_add_incr(as_operations * ops, const as_bin_name name, int64_t value);
 
@@ -335,7 +490,8 @@ bool as_operations_add_incr(as_operations * ops, const as_bin_name name, int64_t
  *
  *	@return true on success. Otherwise an error occurred.
  *
- *	@relatesalso as_operations
+ *	@relates as_operations
+ *	@ingroup as_operations_t
  */
 bool as_operations_add_prepend_str(as_operations * ops, const as_bin_name name, const char * value);
 
@@ -349,7 +505,8 @@ bool as_operations_add_prepend_str(as_operations * ops, const as_bin_name name, 
  *
  *	@return true on success. Otherwise an error occurred.
  *
- *	@relatesalso as_operations
+ *	@relates as_operations
+ *	@ingroup as_operations_t
  */
 bool as_operations_add_prepend_raw(as_operations * ops, const as_bin_name name, const uint8_t * value, uint32_t size);
 
@@ -362,7 +519,8 @@ bool as_operations_add_prepend_raw(as_operations * ops, const as_bin_name name, 
  *
  *	@return true on success. Otherwise an error occurred.
  *
- *	@relatesalso as_operations
+ *	@relates as_operations
+ *	@ingroup as_operations_t
  */
 bool as_operations_add_append_str(as_operations * ops, const as_bin_name name, const char * value);
 
@@ -376,7 +534,8 @@ bool as_operations_add_append_str(as_operations * ops, const as_bin_name name, c
  *
  *	@return true on success. Otherwise an error occurred.
  *
- *	@relatesalso as_operations
+ *	@relates as_operations
+ *	@ingroup as_operations_t
  */
 bool as_operations_add_append_raw(as_operations * ops, const as_bin_name name, const uint8_t * value, uint32_t size);
 
@@ -387,10 +546,7 @@ bool as_operations_add_append_raw(as_operations * ops, const as_bin_name name, c
  *
  *	@return true on success. Otherwise an error occurred.
  *
- *	@relatesalso as_operations
+ *	@relates as_operations
+ *	@ingroup as_operations_t
  */
 bool as_operations_add_touch(as_operations * ops);
-
-/**
- *	@}
- */

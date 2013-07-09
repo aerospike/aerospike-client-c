@@ -91,21 +91,20 @@
  *	bool callback(const as_val * val, void * udata) {
  *		as_record * rec = as_record_fromval(val);
  *		if ( !rec ) return false;
- *		fprintf("")
+ *		fprintf("record contains %d bins", as_record_numbins(rec));
  *		return true;
  *	}
  *	~~~~~~~~~~
  *
- *
+ *	You can reuse the same query multiple times. So, if your application 
+ *	executes the exact same query each time, then just create it once.
+ *	
  *	When you are finished with the query, you should destroy the resources 
  *	allocated to it:
  *
  *	~~~~~~~~~~{.c}
  *	as_query_destroy(&query);
  *	~~~~~~~~~~
- *
- *	You can reuse an as_query for multiple query executions.
- *	
  *
  *	@{
  */

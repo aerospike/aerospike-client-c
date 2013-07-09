@@ -338,12 +338,7 @@ typedef struct as_query_sort_s {
  *
  *	## Usage
  *
- *	An initialized as_query can be populated with additional fields.
- *
- *	- `as_query_select()` - to add bins to select from each record
- *	- `as_query_where()` - to add predicates to filter the results on
- *	- `as_query_orderby()` - to sort the results
- *	- `as_query_limit()` - to limit the number of results returned.
+ *	The following explains how to use an as_query to build a query.
  *
  *	### Selecting Bins
  *

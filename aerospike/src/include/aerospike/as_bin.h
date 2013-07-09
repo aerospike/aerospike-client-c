@@ -105,7 +105,7 @@ typedef struct as_bins_s {
 	uint16_t capacity;
 
 	/**
-	 *	Number of entries allocated to data.
+	 *	Number of entries currently holding data.
 	 */
 	uint16_t size;
 

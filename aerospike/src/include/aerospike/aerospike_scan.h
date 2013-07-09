@@ -31,7 +31,7 @@
  *	The client can their wait for results to return or let the scan run 
  *	independently.
  * 
- *	Cluster scans:
+ *	Scans operations:
  *	- aerospike_scan_background()
  *	- aerospike_scan_foreach()
  *
@@ -110,6 +110,35 @@ typedef bool (* aerospike_scan_foreach_callback)(const as_val * val, void * udat
 as_status aerospike_scan_background(
 	aerospike * as, as_error * err, const as_policy_scan * policy, 
 	const as_scan * scan, uint64_t * scan_id
+	);
+
+/**
+ *	Check the status of a scan running on the server.
+ *	
+ *	~~~~~~~~~~{.c}
+ *	uint64_t scan_id = 1234;
+ *	as_scan_status scan_status = AS_SCAN_STATUS_UNDEF;
+ *	
+ *	if ( aerospike_scan_status(&as, &err, NULL, &scan, scan_id, &scan_status) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *	else {
+ *		printf("Scan id=%ll, status=%s", scan_id, scan_status);
+ *	}
+ *	~~~~~~~~~~
+ *	
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param scan_id		The id for the scan job to check the status of.
+ *	@param status		The status of the scan, to be populated by this operation.
+ *
+ *	@return AEROSPIKE_OK on success. Otherwise an error occurred.
+ */
+as_status aerospike_scan_status(
+	aerospike * as, as_error * err, const as_policy_scan * policy, 
+	uint64_t scan_id, as_scan_status * status
 	);
 
 /**

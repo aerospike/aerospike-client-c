@@ -82,6 +82,35 @@ typedef enum as_scan_priority_e {
 } as_scan_priority;
 
 /**
+ *	The status of a particular scan
+ */
+typedef enum as_scan_status_e {
+
+	/**
+	 *	The scan status is undefined.
+	 *	This is likely do to the status not being properly checked.
+	 */
+	AS_SCAN_STATUS_UNDEF,
+
+	/**
+	 *	The scan is currently running.
+	 */
+	AS_SCAN_STATUS_INPROGRESS,
+
+	/**
+	 *	The scan was aborted. Due to failure or the user.
+	 */
+	AS_SCAN_STATUS_ABORTED,
+
+	/**
+	 *	The scan completed successfully.
+	 */
+	AS_SCAN_STATUS_COMPLETED,
+
+} as_scan_status;
+
+
+/**
  *	Sequence of bins which should be selected during a scan.
  *
  *	Entries can either be initialized on the stack or on the heap.

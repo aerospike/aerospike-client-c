@@ -388,11 +388,11 @@ bool as_record_set_nil(as_record * rec, const as_bin_name name) {
  *	@param name 	- the name of the bin
  *	@return the value if it exists, otherwise NULL.
  */
-as_val * as_record_get(const as_record * rec, const as_bin_name name) 
+as_bin_value * as_record_get(const as_record * rec, const as_bin_name name) 
 {
 	for(int i=0; i<rec->bins.size; i++) {
 		if ( strcmp(rec->bins.entries[i].name, name) == 0 ) {
-			return (as_val *) rec->bins.entries[i].valuep;
+			return (as_bin_value *) rec->bins.entries[i].valuep;
 		}
 	}
 	return NULL;
@@ -410,7 +410,7 @@ as_val * as_record_get(const as_record * rec, const as_bin_name name)
  */
 int64_t as_record_get_int64(const as_record * rec, const as_bin_name name, int64_t fallback) 
 {
-	as_integer * val = as_integer_fromval(as_record_get(rec, name));
+	as_integer * val = as_integer_fromval((as_val *) as_record_get(rec, name));
 	return val ? as_integer_toint(val) : fallback;
 }
 
@@ -423,7 +423,7 @@ int64_t as_record_get_int64(const as_record * rec, const as_bin_name name, int64
  */
 char * as_record_get_str(const as_record * rec, const as_bin_name name) 
 {
-	as_string * val = as_string_fromval(as_record_get(rec, name));
+	as_string * val = as_string_fromval((as_val *) as_record_get(rec, name));
 	return val ? as_string_tostring(val) : NULL;
 }
 
@@ -436,7 +436,7 @@ char * as_record_get_str(const as_record * rec, const as_bin_name name)
  */
 as_integer * as_record_get_integer(const as_record * rec, const as_bin_name name)
 {
-	return as_integer_fromval(as_record_get(rec, name));
+	return as_integer_fromval((as_val *) as_record_get(rec, name));
 }
 
 /**
@@ -448,7 +448,7 @@ as_integer * as_record_get_integer(const as_record * rec, const as_bin_name name
  */
 as_string * as_record_get_string(const as_record * rec, const as_bin_name name)
 {
-	return as_string_fromval(as_record_get(rec, name));
+	return as_string_fromval((as_val *) as_record_get(rec, name));
 }
 
 /**
@@ -460,7 +460,7 @@ as_string * as_record_get_string(const as_record * rec, const as_bin_name name)
  */
 as_bytes * as_record_get_bytes(const as_record * rec, const as_bin_name name) 
 {
-	return as_bytes_fromval(as_record_get(rec, name));
+	return as_bytes_fromval((as_val *) as_record_get(rec, name));
 }
 
 /**
@@ -472,7 +472,7 @@ as_bytes * as_record_get_bytes(const as_record * rec, const as_bin_name name)
  */
 as_list * as_record_get_list(const as_record * rec, const as_bin_name name) 
 {
-	return as_list_fromval(as_record_get(rec, name));
+	return as_list_fromval((as_val *) as_record_get(rec, name));
 }
 
 /**
@@ -484,7 +484,7 @@ as_list * as_record_get_list(const as_record * rec, const as_bin_name name)
  */
 as_map * as_record_get_map(const as_record * rec, const as_bin_name name) 
 {
-	return as_map_fromval(as_record_get(rec, name));
+	return as_map_fromval((as_val *) as_record_get(rec, name));
 }
 
 /******************************************************************************

@@ -52,7 +52,7 @@ typedef struct scan_check_s {
 
 static int check_bin1(as_record * rec, scan_check * check)
 {
-	as_val * bin = as_record_get(rec, "bin1");
+	as_val * bin = (as_val *) as_record_get(rec, "bin1");
 	if ( !bin ) {
 		error("Expected a value in bin('%s'), but got null", "bin1");
 		return !(check->failed = true);
@@ -70,7 +70,7 @@ static int check_bin1(as_record * rec, scan_check * check)
 
 static int check_bin2(as_record * rec, scan_check * check)
 {
-	as_val * bin = as_record_get(rec, "bin2");
+	as_val * bin = (as_val *) as_record_get(rec, "bin2");
 	if ( !bin ) {
 		error("Expected a value in bin('%s'), but got null", "bin2");
 		return !(check->failed = true);
@@ -104,7 +104,7 @@ static int check_bin2(as_record * rec, scan_check * check)
 
 static bool check_bin3(as_record * rec, scan_check * check)
 {
-	as_val * bin = as_record_get(rec, "bin3");
+	as_val * bin = (as_val *) as_record_get(rec, "bin3");
 	if ( !bin ) {
 		error("Expected a value in bin('%s'), but got null", "bin3");
 		return !(check->failed = true);
@@ -149,7 +149,7 @@ static bool check_bin3(as_record * rec, scan_check * check)
 
 static int check_bin4(as_record * rec, scan_check * check)
 {
-	as_val * bin = as_record_get(rec, "bin4");
+	as_val * bin = (as_val *) as_record_get(rec, "bin4");
 	if ( !bin ) {
 		error("Expected a value in bin('%s'), but got null", "bin4");
 		return !(check->failed = true);
@@ -186,6 +186,11 @@ static int check_bin4(as_record * rec, scan_check * check)
 
 static bool scan_check_callback(const as_val * val, void * udata) 
 {
+	// NULL is END OF SCAN
+	if ( !val ) {
+		return false;
+	}
+	
 	scan_check * check = (scan_check *) udata;
 
 	as_record * rec = as_record_fromval(val);

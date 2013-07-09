@@ -501,7 +501,7 @@ bool as_record_set_map(as_record * rec, const as_bin_name name, as_map * value);
 bool as_record_set_nil(as_record * rec, const as_bin_name name);
 
 /**
- *	Get specified bin's value as an as_val (as_integer, as_string, as_bytes, as_list, as_map).
+ *	Get specified bin's value.
  *
  *	~~~~~~~~~~{.c}
  *	as_val * value = as_record_get(rec, "bin");
@@ -515,7 +515,7 @@ bool as_record_set_nil(as_record * rec, const as_bin_name name);
  *	@relates as_record
  *	@ingroup as_record_t
  */
-as_val * as_record_get(const as_record * rec, const as_bin_name name);
+as_bin_value * as_record_get(const as_record * rec, const as_bin_name name);
 
 /**
  *	Get specified bin's value as an int64_t.

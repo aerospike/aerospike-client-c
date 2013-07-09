@@ -59,11 +59,11 @@
  *	is the as_error.code value.
  *
  *	When an operation succeeds, the as_error.code value is usually set to 
- *	AEROSPIKE_OK. There are some operations which may have other success 
+ *	`AEROSPIKE_OK`. There are some operations which may have other success 
  *	status codes, so please review each operation for information on status 
  *	codes.
  *
- *	When as_error.code is not a success value (AEROSPIKE_OK), then you can 
+ *	When as_error.code is not a success value (`AEROSPIKE_OK`), then you can 
  *	expect the other fields of as_error.code to be populated.
  *
  *	Example usage:

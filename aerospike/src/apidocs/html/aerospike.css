@@ -8,9 +8,29 @@ body {
 
 .footer {
   border-top: 1px solid #ddd;
-  color: #BBB;
+  color: #8F8F8F;
+  font-size: 0.9em;
   padding: 16px;
   text-align: center;
+}
+
+.footer > .copy {
+  font-weight: 700;
+}
+
+.footer > .legal {
+}
+
+.footer > .legal > a {
+  color: inherit;
+}
+
+.footer > .legal > span {
+}
+
+.footer > .gen {
+  color: #BBB;
+  margin-top: 24px;
 }
 
 /*******************************************************************************
@@ -21,7 +41,8 @@ body {
 }
 
 #top > #titlearea {
-  background: #C31618;
+  /*background: #C31618;*/
+  margin-top: 16px;
   border-bottom: 1px solid #888;
 }
 

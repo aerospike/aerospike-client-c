@@ -38,6 +38,15 @@
 #include "_shim.h"
  
 /******************************************************************************
+ * TYPES
+ *****************************************************************************/
+
+typedef struct clquery_bridge_s {
+	void * udata;
+	aerospike_query_foreach_callback callback;
+} clquery_bridge;
+
+/******************************************************************************
  * FUNCTION DECLS
  *****************************************************************************/
 
@@ -89,6 +98,17 @@ static cl_query * as_query_toclquery(const as_query * query)
 	return clquery;
 }
 
+static bool clquery_callback(as_val * val, void * udata)
+{
+	clquery_bridge * bridge = (clquery_bridge *) udata;
+	if ( bridge->callback(val, bridge->udata) == true ) {
+		return true;
+	}
+	else {
+		return false;
+	}
+}
+
 /******************************************************************************
  * FUNCTIONS
  *****************************************************************************/
@@ -123,7 +143,12 @@ as_status aerospike_query_foreach(
 
 	cl_query * clquery = as_query_toclquery(query);
 
-	cl_rv rc = citrusleaf_query_foreach(as->cluster, clquery, udata, callback);
+	clquery_bridge bridge = {
+		.udata = udata,
+		.callback = callback
+	};
+
+	cl_rv rc = citrusleaf_query_foreach(as->cluster, clquery, &bridge, clquery_callback);
 
 	cl_query_destroy(clquery);
 

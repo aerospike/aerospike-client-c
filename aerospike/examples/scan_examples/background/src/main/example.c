@@ -29,7 +29,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
-#include <unistd.h> // temp, for sleep
+#include <unistd.h>
 
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
@@ -119,8 +119,24 @@ main(int argc, char* argv[])
 
 	LOG("started background scan %lu ...", scan_id);
 
-	// TODO - poll to see when it's actually done.
-	sleep(3);
+	as_scan_info info;
+
+	// Poll to see when scan is done.
+	do {
+		usleep(1000 * 500);
+
+		if (aerospike_scan_info(&as, &err, NULL, scan_id, &info) !=
+				AEROSPIKE_OK) {
+			LOG("aerospike_scan_info() returned %d - %s", err.code,
+					err.message);
+			cleanup(&as);
+			exit(-1);
+		}
+
+		LOG("scan status: %d, progress pct: %u, records scanned: %u",
+				info.status, info.progress_pct, info.records_scanned);
+
+	} while (info.status == AS_SCAN_STATUS_INPROGRESS);
 
 	LOG("... finished background scan");
 

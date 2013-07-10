@@ -21,6 +21,7 @@
  *****************************************************************************/
 
 #include <aerospike/aerospike_scan.h>
+#include <aerospike/aerospike_info.h>
 #include <aerospike/as_key.h>
 
 #include <citrusleaf/as_scan.h>
@@ -259,6 +260,87 @@ static as_status aerospike_scan_generic(
 	return rc;
 }
 
+// Wrapper for background scan info.
+typedef struct bg_scan_info_s {
+	char job_id[32];
+	int job_id_len;
+	as_scan_info * info;
+} bg_scan_info;
+
+const char JOB_STATUS_TAG[] = "job-status=";
+const int JOB_STATUS_TAG_LEN = sizeof(JOB_STATUS_TAG) - 1;
+
+const char JOB_PROGRESS_TAG[] = "job-progress(%)=";
+const int JOB_PROGRESS_TAG_LEN = sizeof(JOB_PROGRESS_TAG) - 1;
+
+const char SCANNED_RECORDS_TAG[] = "scanned-records=";
+const int SCANNED_RECORDS_TAG_LEN = sizeof(SCANNED_RECORDS_TAG) - 1;
+
+/**
+ * The info callback made for each node when doing aerospike_scan_info().
+ */
+static bool
+scan_info_cb(const as_error * err, const as_node * node, const char * req, const char * res, void * udata)
+{
+	bg_scan_info* p_bsi = (bg_scan_info*)udata;
+
+	// For now, fast and dirty parsing for exactly what we're looking for...
+	// If we can't find the expected tag on this node, something's wrong, but
+	// try the others. (OK? Or should we ever return false and wipe the info?)
+
+	char* p_read = strstr(res, p_bsi->job_id);
+	if (! p_read) {
+		return true;
+	}
+	p_read += p_bsi->job_id_len;
+
+	// If any node is aborted, we're aborted overall, don't bother parse status.
+	if (p_bsi->info->status != AS_SCAN_STATUS_ABORTED) {
+		p_read = strstr(p_read, JOB_STATUS_TAG);
+		if (! p_read) {
+			return true;
+		}
+		p_read += JOB_STATUS_TAG_LEN;
+
+		if (strncmp(p_read, "ABORTED", 7) == 0) {
+			p_bsi->info->status = AS_SCAN_STATUS_ABORTED;
+		}
+		else if (strncmp(p_read, "IN PROGRESS", 11) == 0) {
+			// Otherwise if any node is in progress, we're in progress overall.
+			p_bsi->info->status = AS_SCAN_STATUS_INPROGRESS;
+		}
+		else if (p_bsi->info->status == AS_SCAN_STATUS_UNDEF &&
+				strncmp(p_read, "DONE", 4) == 0) {
+			// Only if we haven't modified the status - if a prior node was in
+			// progress, overall we're in progress.
+			p_bsi->info->status = AS_SCAN_STATUS_COMPLETED;
+		}
+	}
+
+	p_read = strstr(p_read, JOB_PROGRESS_TAG);
+	if (! p_read) {
+		return true;
+	}
+	p_read += JOB_PROGRESS_TAG_LEN;
+
+	// Be pessimistic - use the slowest node's progress.
+	uint32_t pct = atoi(p_read);
+	if (p_bsi->info->progress_pct == 0 || pct < p_bsi->info->progress_pct) {
+		p_bsi->info->progress_pct = pct;
+	}
+
+	p_read = strstr(p_read, SCANNED_RECORDS_TAG);
+	if (! p_read) {
+		return true;
+	}
+	p_read += SCANNED_RECORDS_TAG_LEN;
+
+	// Accumulate total.
+	p_bsi->info->records_scanned += atoi(p_read);
+
+	return true;
+}
+
 
 /******************************************************************************
  * FUNCTIONS
@@ -290,7 +372,7 @@ static as_status aerospike_scan_generic(
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param scan 			The scan to execute against the cluster.
+ *	@param scan 		The scan to execute against the cluster.
  *	@param scan_id		The id for the scan job, which can be used for querying the status of the scan.
  *
  *	@return AEROSPIKE_OK on success. Otherwise an error occurred.
@@ -320,6 +402,47 @@ as_status aerospike_scan_background(
 }
 
 /**
+ *	Check on a background scan running on the server.
+ *
+ *	~~~~~~~~~~{.c}
+ *	uint64_t scan_id = 1234;
+ *	as_scan_info scan_info;
+ *
+ *	if ( aerospike_scan_info(&as, &err, NULL, &scan, scan_id, &scan_info) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *	else {
+ *		printf("Scan id=%ll, status=%s", scan_id, scan_info.status);
+ *	}
+ *	~~~~~~~~~~
+ *
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param scan_id		The id for the scan job to check the status of.
+ *	@param info			Information about this scan, to be populated by this operation.
+ *
+ *	@return AEROSPIKE_OK on success. Otherwise an error occurred.
+ */
+as_status aerospike_scan_info(
+	aerospike * as, as_error * err, const as_policy_info * policy,
+	uint64_t scan_id, as_scan_info * info
+	)
+{
+	// Initialize the info...
+	info->status = AS_SCAN_STATUS_UNDEF;
+	info->progress_pct = 0;
+	info->records_scanned = 0;
+
+	bg_scan_info bsi;
+	bsi.job_id_len = sprintf(bsi.job_id, "job_id=%lu:", scan_id);
+	bsi.info = info;
+
+	return aerospike_info_foreach(as, err, policy, "scan-list\n", scan_info_cb, (void *) &bsi);
+}
+
+/**
  *	Scan the records in the specified namespace and set in the cluster.
  *
  *	Call the callback function for each record scanned. When all records have 
@@ -341,7 +464,7 @@ as_status aerospike_scan_background(
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param scan			The scan to execute against the cluster.
  *	@param callback		The function to be called for each record scanned.
- *	@param udata			User-data to be passed to the callback.
+ *	@param udata		User-data to be passed to the callback.
  *
  *	@return AEROSPIKE_OK on success. Otherwise an error occurred.
  */

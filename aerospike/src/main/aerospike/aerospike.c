@@ -42,7 +42,7 @@
 
 static aerospike * aerospike_defaults(aerospike * as, bool free, as_config * config)
 {
-	as->_free = false;
+	as->_free = free;
 	as->cluster = NULL;
 	if ( config != NULL ) {
 		memcpy(&as->config, config, sizeof(as_config));

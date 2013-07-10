@@ -275,7 +275,7 @@ as_status aerospike_key_operate(
  *	@return AEROSPIKE_OK if successful. Otherwise an error.
  */
 as_status aerospike_key_apply(
-	aerospike * as, as_error * err, const as_policy_read * policy, 
+	aerospike * as, as_error * err, const as_policy_apply * policy, 
 	const as_key * key,
 	const char * module, const char * function, as_list * arglist, 
 	as_val ** result

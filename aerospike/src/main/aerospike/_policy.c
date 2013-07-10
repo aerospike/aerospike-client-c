@@ -32,6 +32,16 @@ as_policy_read * as_policy_read_resolve(as_policy_read * p, const as_policies * 
 /** 
  *	Resolve policy values from global and local policy.
  */
+as_policy_apply * as_policy_apply_resolve(as_policy_apply * p, const as_policies * global, const as_policy_apply * local)
+{
+	p->timeout		= as_policy_resolve(timeout, global->apply, local, global->timeout);
+	p->key			= as_policy_resolve(key, global->apply, local, global->key);
+	return p;
+}
+
+/** 
+ *	Resolve policy values from global and local policy.
+ */
 as_policy_write * as_policy_write_resolve(as_policy_write * p, const as_policies * global, const as_policy_write * local)
 {
 	p->timeout	= as_policy_resolve(timeout, global->write, local, global->timeout);

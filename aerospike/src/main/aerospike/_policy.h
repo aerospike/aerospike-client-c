@@ -48,6 +48,17 @@ as_policy_read * as_policy_read_resolve(as_policy_read * p, const as_policies * 
  *
  *	@return The resolved policy (p).
  */
+as_policy_apply * as_policy_apply_resolve(as_policy_apply * p, const as_policies * global, const as_policy_apply * local);
+
+/** 
+ *	Resolve policy values from global and local policy.
+ *
+ *	@param p 		The policy to populate with resolved values
+ *	@param global	An `as_policies` providing default (global) values.
+ *	@param local	A policy providing local overrides of globals.
+ *
+ *	@return The resolved policy (p).
+ */
 as_policy_write * as_policy_write_resolve(as_policy_write * p, const as_policies * global, const as_policy_write * local);
 
 /** 

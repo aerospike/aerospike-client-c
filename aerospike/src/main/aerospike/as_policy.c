@@ -18,6 +18,15 @@ as_policy_read * as_policy_read_init(as_policy_read * p) {
 }
 
 /**
+ *	Initialize as_policy_apply to default values.
+ */
+as_policy_apply * as_policy_apply_init(as_policy_apply * p) {
+	p->timeout	= 0;
+	p->key		= AS_POLICY_KEY_UNDEF;
+	return p;
+}
+
+/**
  *	Initialize as_policy_write to default values.
  */
 as_policy_write * as_policy_write_init(as_policy_write * p) 
@@ -101,6 +110,7 @@ as_policies * as_policies_init(as_policies * p)
 	as_policy_read_init(&p->read);
 	as_policy_operate_init(&p->operate);
 	as_policy_remove_init(&p->remove);
+	as_policy_apply_init(&p->apply);
 	as_policy_scan_init(&p->scan);
 	as_policy_query_init(&p->query);
 	as_policy_info_init(&p->info);

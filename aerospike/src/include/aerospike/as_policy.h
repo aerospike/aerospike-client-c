@@ -603,6 +603,16 @@ typedef struct as_policies_s {
 as_policy_read * as_policy_read_init(as_policy_read * p);
 
 /**
+ *	Initialize as_policy_apply to default values.
+ *
+ *	@param p	The policy to initialize
+ *	@return The initialized policy.
+ *
+ *	@relates as_policy_apply
+ */
+as_policy_apply * as_policy_apply_init(as_policy_apply * p);
+
+/**
  *	Initialize as_policy_write to default values.
  *
  *	@param p	The policy to initialize

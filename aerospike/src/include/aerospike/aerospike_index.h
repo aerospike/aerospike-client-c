@@ -80,7 +80,7 @@
  *	@param bin			The bin to be indexed.
  *	@param name			The name of the index.
  *	
- *	@return AEROSPIKE_OK if successful. AEROSPIKE_EXISTS if the index already exists. Otherwise an error.
+ *	@return AEROSPIKE_OK if successful. AEROSPIKE_ERR_INDEX_FOUND if the index already exists. Otherwise an error.
  */
 as_status aerospike_index_integer_create(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
@@ -104,7 +104,7 @@ as_status aerospike_index_integer_create(
  *	@param bin			The bin to be indexed.
  *	@param name			The name of the index.
  *
- *	@return AEROSPIKE_OK if successful. AEROSPIKE_EXISTS if the index already exists. Otherwise an error.
+ *	@return AEROSPIKE_OK if successful. AEROSPIKE_ERR_INDEX_FOUND if the index already exists. Otherwise an error.
  */
 as_status aerospike_index_string_create(
 	aerospike * as, as_error * err, const as_policy_info * policy, 

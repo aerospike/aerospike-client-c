@@ -319,6 +319,30 @@ typedef struct as_policy_read_s {
 } as_policy_read;
 
 /**
+ *	Key Apply Policy
+ *
+ *	@ingroup as_policy_t
+ */
+typedef struct as_policy_apply_s {
+
+	/**
+	 *	Maximum time in milliseconds to wait for 
+	 *	the operation to complete.
+	 *
+	 *	If 0 (zero), then the value will default to
+	 *	either as_config.policies.timeout
+	 *	or `AS_POLICY_TIMEOUT_DEFAULT`.
+	 */
+	uint32_t timeout;
+
+	/**
+	 *	Specifies the behavior for the key.
+	 */
+	as_policy_key key;
+
+} as_policy_apply;
+
+/**
  *	Operate Policy
  *
  *	@ingroup as_policy_t
@@ -541,6 +565,11 @@ typedef struct as_policies_s {
 	 *	The default remove policy.
 	 */
 	as_policy_remove remove;
+
+	/**
+	 *	The default apply policy.
+	 */
+	as_policy_apply apply;
 
 	/**
 	 *	The default query policy.

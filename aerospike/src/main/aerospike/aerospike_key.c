@@ -602,7 +602,7 @@ as_status aerospike_key_operate(
  *	@return AEROSPIKE_OK if successful. Otherwise an error.
  */
 as_status aerospike_key_apply(
-	aerospike * as, as_error * err, const as_policy_read * policy, 
+	aerospike * as, as_error * err, const as_policy_apply * policy, 
 	const as_key * key, 
 	const char * module, const char * function, as_list * arglist, 
 	as_val ** result) 
@@ -611,8 +611,8 @@ as_status aerospike_key_apply(
 	as_error_reset(err);
 	
 	// resolve policies
-	as_policy_read p;
-	as_policy_read_resolve(&p, &as->config.policies, policy);
+	as_policy_apply p;
+	as_policy_apply_resolve(&p, &as->config.policies, policy);
 
 	cl_write_parameters wp;
 	cl_write_parameters_set_default(&wp);

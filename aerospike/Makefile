@@ -80,6 +80,7 @@ AEROSPIKE += aerospike_query.o
 AEROSPIKE += aerospike_scan.o
 AEROSPIKE += aerospike_index.o
 AEROSPIKE += aerospike_udf.o
+AEROSPIKE += as_bin.o
 AEROSPIKE += as_config.o
 AEROSPIKE += as_error.o
 AEROSPIKE += as_key.o

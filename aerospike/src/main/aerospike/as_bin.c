@@ -20,101 +20,14 @@
  *	IN THE SOFTWARE.
  *****************************************************************************/
 
-#pragma once 
 
+#include <aerospike/as_bin.h>
 #include <aerospike/as_integer.h>
 #include <aerospike/as_string.h>
 #include <aerospike/as_bytes.h>
 #include <aerospike/as_list.h>
 #include <aerospike/as_map.h>
 #include <aerospike/as_val.h>
-
-/******************************************************************************
- *	MACROS
- *****************************************************************************/
-
-/**
- *	Maximum bin name size
- */
-#define AS_BIN_NAME_MAX_SIZE 15
-
-/**
- *	Maximum bin name length
- */
-#define AS_BIN_NAME_MAX_LEN (AS_BIN_NAME_MAX_SIZE - 1)
-
-/******************************************************************************
- *	TYPES
- *****************************************************************************/
-
-/**
- *	Bin Name
- */
-typedef char as_bin_name[AS_BIN_NAME_MAX_SIZE];
-
-/**
- *	Bin Value
- */
-typedef union as_bin_value_s {
-	as_val 		nil;
-	as_integer 	integer;
-	as_string 	string;
-	as_bytes 	bytes;
-	as_list 	list;
-	as_map 		map;
-} as_bin_value;
-
-/**
- *	Bin Structure
- */
-typedef struct as_bin_s {
-
-	/**
-	 *	Bin name.
-	 */
-	as_bin_name name;
-
-	/**
-	 *	Bin value.
-	 */
-	as_bin_value value;
-
-	/**
-	 *	Bin value pointer.
-	 *	If NULL, then there is no value.
-	 *	It can point to as_bin.value or a different value.
-	 */
-	as_bin_value * valuep;
-	
-} as_bin;
-
-/**
- * Sequence of bins.
- */
-typedef struct as_bins_s {
-
-	/**
-	 *	@private
-	 *	If true, then as_record_destroy() will free data
-	 */
-	bool _free;
-
-	/**
-	 *	Number of entries allocated to data.
-	 */
-	uint16_t capacity;
-
-	/**
-	 *	Number of entries currently holding data.
-	 */
-	uint16_t size;
-
-	/**
-	 *	Storage for bins
-	 */
-	as_bin * entries;
-
-} as_bins;
 
 /******************************************************************************
  *	INLINE FUNCTIONS
@@ -135,30 +48,24 @@ typedef struct as_bins_s {
  *	@relates as_bin
  *	@ingroup as_record_t
  */
-inline char * as_bin_get_name(as_bin * bin) {
-	return bin->name;
-}
-
+extern inline char * as_bin_get_name(as_bin * bin);
 
 /**
  *	Get the value of the bin.
  *
  *	~~~~~~~~~~{.c}
- *	as_bin_value val = as_bin_get_value(bin);
+ *	as_bin_value * val = as_bin_get_value(bin);
  *	~~~~~~~~~~
  *
  *
  *	@parameter bin 	The bin to get the value of.
  *
- *	@return The value of the bin.
+ *	@return The value of the bin. If NULL is returned, then the bin did not contain a value.
  *
  *	@relates as_bin
  *	@ingroup as_record_t
  */
-inline as_bin_value * as_bin_get_value(as_bin * bin) {
-	return bin->valuep;
-}
-
+extern inline as_bin_value * as_bin_get_value(as_bin * bin);
 
 /**
  *	Get the type for the value of the bin.
@@ -168,14 +75,12 @@ inline as_bin_value * as_bin_get_value(as_bin * bin) {
  *	~~~~~~~~~~
  *
  *
- *	@parameter bin 	The bin to get value's type.
+ *	@parameter bin 	The bin inquire.
  *
- *	@return The type of the bin's value
+ *	@return The type of the bin's value. If AS_VAL_UNDEF is returned, then the bin did not contain a value.
  *
  *	@relates as_bin
  *	@ingroup as_record_t
  */
-inline as_val_t as_bin_get_type(as_bin * bin) {
-	return as_val_type(bin->valuep);
-}
+extern inline as_val_t as_bin_get_type(as_bin * bin);
 

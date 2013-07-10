@@ -82,13 +82,13 @@ typedef enum as_scan_priority_e {
 } as_scan_priority;
 
 /**
- *	The status of a particular scan
+ *	The status of a particular background scan.
  */
 typedef enum as_scan_status_e {
 
 	/**
 	 *	The scan status is undefined.
-	 *	This is likely do to the status not being properly checked.
+	 *	This is likely due to the status not being properly checked.
 	 */
 	AS_SCAN_STATUS_UNDEF,
 
@@ -109,6 +109,27 @@ typedef enum as_scan_status_e {
 
 } as_scan_status;
 
+/**
+ * Information about a particular background scan.
+ */
+typedef struct as_scan_info_s {
+
+	/**
+	 *	Status of the scan.
+	 */
+	as_scan_status status;
+
+	/**
+	 *	Progress estimate for the scan, as percentage.
+	 */
+	uint32_t progress_pct;
+
+	/**
+	 *	How many records have been scanned.
+	 */
+	uint32_t records_scanned;
+
+} as_scan_info;
 
 /**
  *	Sequence of bins which should be selected during a scan.

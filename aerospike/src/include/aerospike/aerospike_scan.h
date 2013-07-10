@@ -102,7 +102,7 @@ typedef bool (* aerospike_scan_foreach_callback)(const as_val * val, void * udat
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param scan 			The scan to execute against the cluster.
+ *	@param scan 		The scan to execute against the cluster.
  *	@param scan_id		The id for the scan job, which can be used for querying the status of the scan.
  *
  *	@return AEROSPIKE_OK on success. Otherwise an error occurred.
@@ -113,17 +113,17 @@ as_status aerospike_scan_background(
 	);
 
 /**
- *	Check the status of a scan running on the server.
+ *	Check the progress of a background scan running on the server.
  *	
  *	~~~~~~~~~~{.c}
  *	uint64_t scan_id = 1234;
- *	as_scan_status scan_status = AS_SCAN_STATUS_UNDEF;
+ *	as_scan_info scan_info;
  *	
- *	if ( aerospike_scan_status(&as, &err, NULL, &scan, scan_id, &scan_status) != AEROSPIKE_OK ) {
+ *	if ( aerospike_scan_info(&as, &err, NULL, &scan, scan_id, &scan_info) != AEROSPIKE_OK ) {
  *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *	}
  *	else {
- *		printf("Scan id=%ll, status=%s", scan_id, scan_status);
+ *		printf("Scan id=%ll, status=%s", scan_id, scan_info.status);
  *	}
  *	~~~~~~~~~~
  *	
@@ -132,13 +132,13 @@ as_status aerospike_scan_background(
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param scan_id		The id for the scan job to check the status of.
- *	@param status		The status of the scan, to be populated by this operation.
+ *	@param info			Information about this scan, to be populated by this operation.
  *
  *	@return AEROSPIKE_OK on success. Otherwise an error occurred.
  */
-as_status aerospike_scan_status(
-	aerospike * as, as_error * err, const as_policy_scan * policy, 
-	uint64_t scan_id, as_scan_status * status
+as_status aerospike_scan_info(
+	aerospike * as, as_error * err, const as_policy_info * policy,
+	uint64_t scan_id, as_scan_info * info
 	);
 
 /**
@@ -164,7 +164,7 @@ as_status aerospike_scan_status(
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param scan			The scan to execute against the cluster.
  *	@param callback		The function to be called for each record scanned.
- *	@param udata			User-data to be passed to the callback.
+ *	@param udata		User-data to be passed to the callback.
  *
  *	@return AEROSPIKE_OK on success. Otherwise an error occurred.
  */

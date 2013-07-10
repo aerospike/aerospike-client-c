@@ -875,7 +875,7 @@ static int cl_query_worker_do(cl_cluster_node * node, cl_query_task * task) {
                 //
                 // got one good value? call it a success!
                 // (Note:  In the key exists case, there is no bin data.)
-                as_val * v = as_record_get(record, "SUCCESS");
+                as_val * v = (as_val *) as_record_get(record, "SUCCESS");
 
                 if ( v  != NULL ) {
                     // I only need this value. The rest of the record is useless.

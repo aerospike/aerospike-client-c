@@ -119,7 +119,7 @@
  *	 `as_record_set_list()`      | Set the bin value to an `as_list`.                    
  *	 `as_record_set_map()`       | Set the bin value to an `as_map`.
  *	 `as_record_set_nil()`       | Set the bin value to an `as_nil`.
- *	 `as_record_set()`           | Set the bin value to an `as_val`.
+ *	 `as_record_set()`           | Set the bin value to an `as_bin_value`.
  *
  *	## Getting Bin Values
  *
@@ -136,7 +136,7 @@
  *	 `as_record_get_bytes()`     | Get the bin as an `as_bytes`.
  *	 `as_record_get_list()`      | Get the bin as an `as_list`. 
  *	 `as_record_get_map()`       | Get the bin as an `as_map`.
- *	 `as_record_get()`           | Get the bin as an `as_val`.
+ *	 `as_record_get()`           | Get the bin as an `as_bin_value`.
  *
  *	If you are unsure of the type of data stored in the bin, then you should 
  *	use `as_record_get()`. You can then check the type of the value using
@@ -312,7 +312,7 @@ void as_record_destroy(as_record * rec);
 uint16_t as_record_numbins(const as_record * rec);
 
 /**
- *	Set specified bin's value to an as_val (as_integer, as_string, as_bytes, as_list, as_map).
+ *	Set specified bin's value to an as_bin_value.
  *
  *	@param rec		The record containing the bin.
  *	@param name		The name of the bin.

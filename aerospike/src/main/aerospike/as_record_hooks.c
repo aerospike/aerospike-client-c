@@ -73,7 +73,7 @@ static uint32_t as_record_rec_hashcode(const as_rec * r)
 
 static as_val * as_record_rec_get(const as_rec * r, const char * name) 
 {
-	return r && name ? as_record_get((as_record *) r, name) : NULL;
+	return r && name ? (as_val *) as_record_get((as_record *) r, name) : NULL;
 }
 
 static int as_record_rec_set(const as_rec * r, const char * name, const as_val * value) 
@@ -106,7 +106,7 @@ static uint16_t as_record_rec_numbins(const as_rec * r)
 	return r ? as_record_numbins((as_record *) r) : 0;
 }
 
-static uint16_t as_record_rec_foreach(const as_rec * r, as_rec_foreach_callback callback, void * udata) 
+static bool as_record_rec_foreach(const as_rec * r, as_rec_foreach_callback callback, void * udata) 
 {
 	return r ? as_record_foreach((as_record *) r, callback, udata) : 0;
 }

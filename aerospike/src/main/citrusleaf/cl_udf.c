@@ -31,6 +31,12 @@
 
 #include "internal.h"
 
+/*
+ * Mapping between string udf type and integer type
+ */
+#define MAX_UDF_TYPE 1
+char *cl_udf_type_str[] = {"LUA", 0};
+
 /******************************************************************************
  * TYPES
  ******************************************************************************/
@@ -485,10 +491,15 @@ cl_rv citrusleaf_udf_put(cl_cluster *asc, const char * filename, as_bytes *conte
     char *  filebase    = basename(filepath);
 
     int  clen = content->size;
+    if (udf_type < 0 || udf_type > (MAX_UDF_TYPE - 1))
+    {
+        fprintf(stderr, "Invalid UDF type");
+        return CITRUSLEAF_FAIL_PARAMETER;
+    }
     char * content_base64 = malloc(cf_base64_encode_maxlen(clen));
     cf_base64_tostring(content->value, content_base64, &clen);
 
-    if (! asprintf(&query, "udf-put:filename=%s;content=%s;content-len=%d;udf-type=%d;", filebase, content_base64, clen, udf_type)) {
+    if (! asprintf(&query, "udf-put:filename=%s;content=%s;content-len=%d;udf-type=%s;", filebase, content_base64, clen, cl_udf_type_str[udf_type])) {
         fprintf(stderr, "Query allocation failed");
         return CITRUSLEAF_FAIL_CLIENT;
     }

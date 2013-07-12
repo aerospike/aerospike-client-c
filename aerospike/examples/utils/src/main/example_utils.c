@@ -43,6 +43,7 @@
 #include <aerospike/as_key.h>
 #include <aerospike/as_operations.h>
 #include <aerospike/as_record.h>
+#include <aerospike/as_record_iterator.h>
 #include <aerospike/as_status.h>
 #include <aerospike/as_val.h>
 
@@ -502,9 +503,9 @@ example_dump_bin(const as_bin* p_bin)
 		return;
 	}
 
-	char* val_as_str = as_val_tostring(p_bin->valuep);
+	char* val_as_str = as_val_tostring(as_bin_get_value(p_bin));
 
-	LOG("  %s : %s", p_bin->name, val_as_str);
+	LOG("  %s : %s", as_bin_get_name(p_bin), val_as_str);
 
 	free(val_as_str);
 }
@@ -522,9 +523,14 @@ example_dump_record(const as_record* p_rec)
 	LOG("  generation %u, ttl %u, %u bin%s:", p_rec->gen, p_rec->ttl, num_bins,
 			num_bins == 1 ? "" : "s");
 
-	for (uint16_t b = 0; b < num_bins; b++) {
-		example_dump_bin(&p_rec->bins.entries[b]);
+	as_record_iterator it;
+	as_record_iterator_init(&it, p_rec);
+
+	while (as_record_iterator_has_next(&it)) {
+		example_dump_bin(as_record_iterator_next(&it));
 	}
+
+	as_record_iterator_destroy(&it);
 }
 
 const char* AS_OPERATORS[] = {

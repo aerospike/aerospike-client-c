@@ -135,8 +135,8 @@ typedef struct as_bins_s {
  *	@relates as_bin
  *	@ingroup as_record_t
  */
-inline char * as_bin_get_name(as_bin * bin) {
-	return bin->name;
+inline char * as_bin_get_name(const as_bin * bin) {
+	return (char *) bin->name;
 }
 
 
@@ -155,7 +155,7 @@ inline char * as_bin_get_name(as_bin * bin) {
  *	@relates as_bin
  *	@ingroup as_record_t
  */
-inline as_bin_value * as_bin_get_value(as_bin * bin) {
+inline as_bin_value * as_bin_get_value(const as_bin * bin) {
 	return bin->valuep;
 }
 
@@ -175,7 +175,7 @@ inline as_bin_value * as_bin_get_value(as_bin * bin) {
  *	@relates as_bin
  *	@ingroup as_record_t
  */
-inline as_val_t as_bin_get_type(as_bin * bin) {
+inline as_val_t as_bin_get_type(const as_bin * bin) {
 	return as_val_type(bin->valuep);
 }
 

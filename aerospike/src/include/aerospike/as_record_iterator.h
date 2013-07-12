@@ -34,6 +34,7 @@
 #include <aerospike/as_util.h>
 #include <aerospike/as_val.h>
 
+#include <stdbool.h>
 #include <stdint.h>
 
 /******************************************************************************
@@ -57,9 +58,15 @@
 typedef struct as_record_iterator_s {
 
 	/**
+	 *	@private
+	 *	If true, then as_record_iterator_destroy() will free this object.
+	 */
+	bool _free;
+
+	/**
 	 *	The record being iterated over.
 	 */
-	as_record * record;
+	const as_record * record;
 
 	/**
 	 *	Current position of the iterator
@@ -92,7 +99,7 @@ typedef struct as_record_iterator_s {
  *
  *	@relates as_record_iterator
  */
-as_record_iterator * as_record_iterator_new(as_record * record);
+as_record_iterator * as_record_iterator_new(const as_record * record);
 
 /**
  *	Initializes a stack allocated as_record_iterator for the specified record.
@@ -118,7 +125,7 @@ as_record_iterator * as_record_iterator_new(as_record * record);
  *
  *	@relates as_record_iterator
  */
-as_record_iterator * as_record_iterator_init(as_record_iterator * iterator, as_record * record);
+as_record_iterator * as_record_iterator_init(as_record_iterator * iterator, const as_record * record);
 
 /**
  *	Destroy the as_record_iterator and associated resources.

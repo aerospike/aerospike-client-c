@@ -33,15 +33,18 @@
 #include <aerospike/as_util.h>
 #include <aerospike/as_val.h>
 
+#include <stdbool.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 /******************************************************************************
  *	STATIC FUNCTIONS
  *****************************************************************************/
 
-static inline as_record_iterator * as_record_iterator_cons(as_record_iterator * iterator, as_record * record)
+static inline as_record_iterator * as_record_iterator_cons(as_record_iterator * iterator, const as_record * record, bool free)
 {
-	if ( !iterator && !record ) return NULL;
+	if ( ! ( iterator && record ) ) return NULL;
+	iterator->_free = free;
 	iterator->record = record;
 	iterator->pos = 0;
 	return iterator;
@@ -71,10 +74,10 @@ static inline as_record_iterator * as_record_iterator_cons(as_record_iterator * 
  *
  *	@relates as_record_iterator
  */
-as_record_iterator * as_record_iterator_new(as_record * record)
+as_record_iterator * as_record_iterator_new(const as_record * record)
 {
 	as_record_iterator * iterator = (as_record_iterator *) malloc(sizeof(as_record_iterator));
-	return as_record_iterator_cons(iterator, record);
+	return as_record_iterator_cons(iterator, record, true);
 }
 
 /**
@@ -101,9 +104,9 @@ as_record_iterator * as_record_iterator_new(as_record * record)
  *
  *	@relates as_record_iterator
  */
-as_record_iterator * as_record_iterator_init(as_record_iterator * iterator, as_record * record)
+as_record_iterator * as_record_iterator_init(as_record_iterator * iterator, const as_record * record)
 {
-	return as_record_iterator_cons(iterator, record);
+	return as_record_iterator_cons(iterator, record, false);
 }
 
 /**
@@ -117,6 +120,10 @@ void as_record_iterator_destroy(as_record_iterator * iterator)
 {
 	iterator->record = NULL;
 	iterator->pos = 0;
+
+	if ( iterator->_free ) {
+		free(iterator);
+	}
 }
 
 /**

@@ -48,7 +48,7 @@
  *	@relates as_bin
  *	@ingroup as_record_t
  */
-extern inline char * as_bin_get_name(as_bin * bin);
+extern inline char * as_bin_get_name(const as_bin * bin);
 
 /**
  *	Get the value of the bin.
@@ -65,7 +65,7 @@ extern inline char * as_bin_get_name(as_bin * bin);
  *	@relates as_bin
  *	@ingroup as_record_t
  */
-extern inline as_bin_value * as_bin_get_value(as_bin * bin);
+extern inline as_bin_value * as_bin_get_value(const as_bin * bin);
 
 /**
  *	Get the type for the value of the bin.
@@ -82,5 +82,4 @@ extern inline as_bin_value * as_bin_get_value(as_bin * bin);
  *	@relates as_bin
  *	@ingroup as_record_t
  */
-extern inline as_val_t as_bin_get_type(as_bin * bin);
-
+extern inline as_val_t as_bin_get_type(const as_bin * bin);

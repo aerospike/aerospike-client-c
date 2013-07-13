@@ -61,7 +61,9 @@ main(int argc, char* argv[])
 
 	as_error err;
 
-	// Create a record with one (integer value) bin.
+	// Create an as_record object with one (integer value) bin. By using
+	// as_record_inita(), we won't need to destroy the record if we only set
+	// bins using as_record_set_int64().
 	as_record rec;
 	as_record_inita(&rec, 1);
 	as_record_set_int64(&rec, "test-bin", 1234);
@@ -87,7 +89,10 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
-	// Create an as_operations object with a touch operation.
+	// Create an as_operations object with a touch operation. Generally, if
+	// using as_operations_inita(), we won't need to destroy the object unless
+	// we call as_operations_add_write() with an externally allocated
+	// as_bin_value.
 	as_operations ops;
 	as_operations_inita(&ops, 1);
 	as_operations_add_touch(&ops);

@@ -79,6 +79,7 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
+	// Note that p_rec will still be NULL here.
 	LOG("get (non-existent record) failed as expected");
 
 	// Write a record to the database so we can demonstrate read success.
@@ -151,9 +152,11 @@ bool
 write_record(aerospike* p_as)
 {
 	as_error err;
-	as_record rec;
 
-	// Create an as_record object with three bins with different value types.
+	// Create an as_record object with three bins with different value types. By
+	// using as_record_inita(), we won't need to destroy the record if we only
+	// set bins using as_record_set_int64() and as_record_set_str().
+	as_record rec;
 	as_record_inita(&rec, 3);
 	as_record_set_int64(&rec, "test-bin-1", 1111);
 	as_record_set_int64(&rec, "test-bin-2", 2222);

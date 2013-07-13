@@ -62,6 +62,9 @@ main(int argc, char* argv[])
 	as_error err;
 
 	// Create an as_operations object with a pair of bin arithmetic operations.
+	// Generally, if using as_operations_inita(), we won't need to destroy the
+	// object unless we call as_operations_add_write() with an externally
+	// allocated as_bin_value.
 	as_operations ops;
 	as_operations_inita(&ops, 2);
 	as_operations_add_incr(&ops, "test-bin-1", 1001);

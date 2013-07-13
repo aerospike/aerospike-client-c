@@ -74,7 +74,9 @@ main(int argc, char* argv[])
 
 	as_error err;
 
-	// Create a record object with one (integer value) bin.
+	// Create an as_record object with one (integer value) bin. By using
+	// as_record_inita(), we won't need to destroy the record if we only set
+	// bins using as_record_set_int64().
 	as_record rec;
 	as_record_inita(&rec, 1);
 	as_record_set_int64(&rec, TEST_BIN, 1001);
@@ -101,7 +103,8 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
-	// Update the record object with a different bin value.
+	// Update the as_record object with a different bin value. In general it's
+	// ok to do this - all as_record_set_... calls destroy any previous value.
 	as_record_set_int64(&rec, TEST_BIN, 1002);
 
 	// Set its generation equal to that of the record in the database.

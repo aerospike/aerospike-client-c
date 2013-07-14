@@ -107,7 +107,9 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
-	// Create an argument list for a (different) UDF.
+	// Create an argument list for a (different) UDF. By using
+	// as_arraylist_inita(), we won't need to destroy the list if we only use
+	// as_arraylist_append_int64() and as_arraylist_append_str().
 	as_arraylist args;
 	as_arraylist_inita(&args, 3);
 	as_arraylist_append_str(&args, "test-bin-2");
@@ -174,9 +176,11 @@ bool
 write_record(aerospike* p_as)
 {
 	as_error err;
-	as_record rec;
 
-	// Create an as_record object with two (integer type) bins.
+	// Create an as_record object with two (integer type) bins. By using
+	// as_record_inita(), we won't need to destroy the record if we only set
+	// bins using as_record_set_int64().
+	as_record rec;
 	as_record_inita(&rec, 2);
 	as_record_set_int64(&rec, "test-bin-1", 1000);
 	as_record_set_int64(&rec, "test-bin-2", 1000);

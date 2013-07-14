@@ -359,14 +359,16 @@ example_remove_test_record(aerospike* p_as)
 bool
 example_read_test_records(aerospike* p_as)
 {
-	as_key key;
-
 	// Multiple-record examples insert g_n_keys records, using integer keys from
 	// 0 to (g_n_keys - 1).
 	for (uint32_t i = 0; i < g_n_keys; i++) {
+		as_error err;
+
+		// No need to destroy a stack as_key object, if we only use
+		// as_key_init_int64().
+		as_key key;
 		as_key_init_int64(&key, g_namespace, g_set, (int64_t)i);
 
-		as_error err;
 		as_record* p_rec = NULL;
 
 		// Read a test record from the database.
@@ -399,14 +401,15 @@ example_read_test_records(aerospike* p_as)
 void
 example_remove_test_records(aerospike* p_as)
 {
-	as_key key;
-
 	// Multiple-record examples insert g_n_keys records, using integer keys from
 	// 0 to (g_n_keys - 1).
 	for (uint32_t i = 0; i < g_n_keys; i++) {
-		as_key_init_int64(&key, g_namespace, g_set, (int64_t)i);
-
 		as_error err;
+
+		// No need to destroy a stack as_key object, if we only use
+		// as_key_init_int64().
+		as_key key;
+		as_key_init_int64(&key, g_namespace, g_set, (int64_t)i);
 
 		// Ignore errors - just trying to leave the database as we found it.
 		aerospike_key_remove(p_as, &err, NULL, &key);
@@ -427,9 +430,13 @@ example_register_udf(aerospike* p_as, const char* udf_file_path)
 	FILE* file = fopen(udf_file_path, "r");
 
 	if (! file) {
+		// If we get here it's likely that we're not running the example from
+		// the right directory - the specific example directory.
 		LOG("cannot open script file %s : %s", udf_file_path, strerror(errno));
 		return false;
 	}
+
+	// Read the file's content into a local buffer.
 
 	uint8_t* content = (uint8_t*)malloc(1024 * 1024);
 
@@ -438,30 +445,32 @@ example_register_udf(aerospike* p_as, const char* udf_file_path)
 		return false;
 	}
 
-
-	uint8_t* buff = content;
-	int read = fread(buff, 1, 512, file);
+	uint8_t* p_write = content;
+	int read = fread(p_write, 1, 512, file);
 	int size = 0;
 
 	while (read) {
 		size += read;
-		buff += read;
-		read = fread(buff, 1, 512, file);
+		p_write += read;
+		read = fread(p_write, 1, 512, file);
 	}
 
 	fclose(file);
 
+	// Wrap the local buffer as an as_bytes object.
 	as_bytes udf_content;
 	as_bytes_init_wrap(&udf_content, content, size, true);
 
 	as_error err;
 	char* base = basename(udf_file_path);
 
+	// Register the UDF file in the database cluster.
 	if (aerospike_udf_put(p_as, &err, NULL, base, AS_UDF_TYPE_LUA,
 			&udf_content) != AEROSPIKE_OK) {
 		LOG("aerospike_udf_put() returned %d - %s", err.code, err.message);
 	}
 
+	// This frees the local buffer.
 	as_bytes_destroy(&udf_content);
 
 	// Wait for the system metadata to spread to all nodes.

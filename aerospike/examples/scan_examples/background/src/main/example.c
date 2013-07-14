@@ -170,19 +170,25 @@ cleanup(aerospike* p_as)
 bool
 insert_records(aerospike* p_as)
 {
-	as_key key;
+	// Create an as_record object with one (integer value) bin. By using
+	// as_record_inita(), we won't need to destroy the record if we only set
+	// bins using as_record_set_int64().
 	as_record rec;
-
-	// Create an as_record object with one (integer value) bin.
 	as_record_inita(&rec, 1);
 
-	// Re-using key and rec, write records into the database such that each
-	// record's key and (test-bin) value is based on the loop index.
+	// Re-using rec, write records into the database such that each record's key
+	// and (test-bin) value is based on the loop index.
 	for (uint32_t i = 0; i < g_n_keys; i++) {
-		as_key_init_int64(&key, g_namespace, g_set, (int64_t)i);
-		as_record_set_int64(&rec, "test-bin", (int64_t)i);
-
 		as_error err;
+
+		// No need to destroy a stack as_key object, if we only use
+		// as_key_init_int64().
+		as_key key;
+		as_key_init_int64(&key, g_namespace, g_set, (int64_t)i);
+
+		// In general it's ok to reset a bin value - all as_record_set_... calls
+		// destroy any previous value.
+		as_record_set_int64(&rec, "test-bin", (int64_t)i);
 
 		// Write a record to the database.
 		if (aerospike_key_put(p_as, &err, NULL, &key, &rec) != AEROSPIKE_OK) {

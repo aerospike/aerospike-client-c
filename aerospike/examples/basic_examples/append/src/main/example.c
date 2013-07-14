@@ -62,6 +62,9 @@ main(int argc, char* argv[])
 	as_error err;
 
 	// Create an as_operations object with three concatenation operations.
+	// Generally, if using as_operations_inita(), we won't need to destroy the
+	// object unless we call as_operations_add_write() with an externally
+	// allocated as_bin_value.
 	as_operations ops;
 	as_operations_inita(&ops, 3);
 	as_operations_add_append_str(&ops, "test-bin-1", "John");

@@ -157,24 +157,13 @@
  *	~~~~~~~~~~
  *
  *
- *	## Iterating Over Bins
+ *	## Traversing Bins
  *
- *	If you want to iterate over the bins, then you should use `as_record_foreach()`.
+ *	If you want to traverse the bins of a record, then you have two options:
+ *	
+ *	- as_record_foreach() — Calls a function for each bin traversed.
+ *	- as_record_iterator — Uses an iterator pattern to traverse bins.
  *
- *	~~~~~~~~~~{.c}
- *	bool print_bin(const char * name, const as_val * value, void * udata) {
- *		char * sval = as_val_tostring(value);
- *		printf("bin: name=%s, value=%s\n", name, sval);
- *		free(sval);
- *		return true;
- *	}
- *
- *	as_record_foreach(rec, print_bin, NULL);
- *	~~~~~~~~~~
- *
- *	If the callback returns true, then iteration will continue to the next bin.
- *	Otherwise, the iteration will halt and `as_record_foreach()` will return
- *	false.
  *
  *	@extends as_rec
  *	@ingroup as_record_t

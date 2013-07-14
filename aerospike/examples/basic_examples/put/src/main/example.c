@@ -60,7 +60,9 @@ main(int argc, char* argv[])
 
 	as_error err;
 
-	// Create an as_record object with two bins with different value types.
+	// Create an as_record object with two bins with different value types. By
+	// using as_record_inita(), we won't need to destroy the record if we only
+	// set bins using as_record_set_int64() and as_record_set_str().
 	as_record rec;
 	as_record_inita(&rec, 2);
 	as_record_set_int64(&rec, "test-bin-1", 1234);
@@ -84,7 +86,9 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
-	// Generate a different as_record object to write.
+	// Generate a different as_record object to write. In general it's ok to
+	// reuse the stack object by calling as_record_inita() again, as long as the
+	// previous contents are destroyed if necessary.
 	as_record_inita(&rec, 2);
 	as_record_set_int64(&rec, "test-bin-2", 2222);
 	as_record_set_str(&rec, "test-bin-3", "test-bin-3-data");

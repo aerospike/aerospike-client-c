@@ -40,8 +40,8 @@
  *
  *	An integer index allows for either equality or range lookups. An equality
  *	lookup means that if you query for an indexed bin with value 123, then only 
- *	the records containing bins with 123 will be returned. A range lookup
- *	means that you can query bins within a range. So, if your range is 
+ *	the records containing bins with the value 123 will be returned. A range 
+ *	lookup means that you can query bins within a range. So, if your range is 
  *	(1...100), then all records containing the a value in that range will
  *	be returned. 
  *	

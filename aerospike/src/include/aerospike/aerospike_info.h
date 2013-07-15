@@ -21,8 +21,8 @@
  *****************************************************************************/
 
 /**
- *	@defgroup info_api Info API
- *	@ingroup client_api
+ *	@defgroup info_operations Info Operations
+ *	@ingroup client_operations
  *
  *	The Info API provides the ability to query an Aerospike cluster for 
  *	information. 
@@ -31,7 +31,6 @@
  *	- aerospike_info_host() - Query a single host in the cluster.
  *	- aerospike_info_foreach() - Query every host in the cluster.
  *
- *	@{
  */
 
 #pragma once 
@@ -56,6 +55,8 @@
  *	@param udata			The udata provided to the aerospike_info_foreach()
  *
  *	@return TRUE to continue to the next info response. FALSE to stop processing.
+ *
+ *	@ingroup info_operations
  */
 typedef bool (* aerospike_info_foreach_callback)(const as_error * err, const as_node * node, const char * req, const char * res, void * udata);
 
@@ -87,6 +88,8 @@ typedef bool (* aerospike_info_foreach_callback)(const as_error * err, const as_
  *	@param res			The response from the node. The response will be a NULL terminated string, allocated by the function, and must be freed by the caller.
  *
  *	@return AEROSPIKE_OK on success. Otherwise an error.
+ *
+ *	@ingroup info_operations
  */
 as_status aerospike_info_host(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
@@ -122,14 +125,11 @@ as_status aerospike_info_host(
  *	@param udata			User-data to send to the callback.
  *
  *	@return AEROSPIKE_OK on success. Otherwise an error.
+ *
+ *	@ingroup info_operations
  */
 as_status aerospike_info_foreach(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
 	const char * req, 
     aerospike_info_foreach_callback callback, void * udata
 	);
-
-/** 
- *	@}
- *	@}
- */

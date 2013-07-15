@@ -21,8 +21,8 @@
  *****************************************************************************/
 
 /**
- *	@defgroup key_api Key API
- *	@ingroup client_api
+ *	@defgroup key_operations Key Operations
+ *	@ingroup client_operations
  *
  *	Aerospike provides a key based API to access and modify data into the 
  *	cluster. 
@@ -30,7 +30,6 @@
  *	The Key API is a collection of APIs that use as_key as for looking up
  *	records for accessing and modifying in the cluster. 
  *	
- *	@{
  */
 
 #pragma once 
@@ -72,6 +71,8 @@
  *	@param rec 			The record to be populated with the data from request.
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error.
+ *
+ *	@ingroup key_operations
  */
 as_status aerospike_key_get(
 	aerospike * as, as_error * err, const as_policy_read * policy, 
@@ -105,6 +106,8 @@ as_status aerospike_key_get(
  *	@param rec 			The record to be populated with the data from request.
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error.
+ *
+ *	@ingroup key_operations
  */
 as_status aerospike_key_select(
 	aerospike * as, as_error * err, const as_policy_read * policy, 
@@ -135,6 +138,8 @@ as_status aerospike_key_select(
  *	@param exists    	The variable to populate with `true` if the record exists, otherwise `false`.
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error.
+ *
+ *	@ingroup key_operations
  */
 as_status aerospike_key_exists(
 	aerospike * as, as_error * err, const as_policy_read * policy, 
@@ -168,6 +173,8 @@ as_status aerospike_key_exists(
  *	@param rec 			The record containing the data to be written.
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error.
+ *
+ *	@ingroup key_operations
  */
 as_status aerospike_key_put(
 	aerospike * as, as_error * err, const as_policy_write * policy, 
@@ -192,6 +199,8 @@ as_status aerospike_key_put(
  *	@param key			The key of the record.
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error.
+ *
+ *	@ingroup key_operations
  */
 as_status aerospike_key_remove(
 	aerospike * as, as_error * err, const as_policy_remove * policy, 
@@ -231,6 +240,8 @@ as_status aerospike_key_remove(
  *	@param rec			The record to be populated with the data from AS_OPERATOR_READ operations.
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error.
+ *
+ *	@ingroup key_operations
  */
 as_status aerospike_key_operate(
 	aerospike * as, as_error * err, const as_policy_operate * policy, 
@@ -273,6 +284,8 @@ as_status aerospike_key_operate(
  *	@param result 		The return value from the function.
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error.
+ *
+ *	@ingroup key_operations
  */
 as_status aerospike_key_apply(
 	aerospike * as, as_error * err, const as_policy_apply * policy, 
@@ -280,7 +293,3 @@ as_status aerospike_key_apply(
 	const char * module, const char * function, as_list * arglist, 
 	as_val ** result
 	);
-
-/** 
- *	@}
- */

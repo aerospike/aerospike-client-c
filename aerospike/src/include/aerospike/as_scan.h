@@ -26,11 +26,6 @@
 #include <aerospike/as_key.h>
 #include <aerospike/as_udf.h>
 
-/** 
- *	@defgroup as_scan_t Scans
- *	@copydoc as_scan
- */
-
 /******************************************************************************
  *	MACROS
  *****************************************************************************/
@@ -110,7 +105,9 @@ typedef enum as_scan_status_e {
 } as_scan_status;
 
 /**
- * Information about a particular background scan.
+ *	Information about a particular background scan.
+ *
+ *	@ingroup as_scan_object 
  */
 typedef struct as_scan_info_s {
 
@@ -273,7 +270,7 @@ typedef struct as_scan_bins_s {
  *	as_scan_apply_each(scan, "udf_module", "udf_function", arglist);
  *	~~~~~~~~~~
  *
- *	@ingroup as_scan_t
+ *	@ingroup client_objects
  */
 typedef struct as_scan_s {
 
@@ -366,8 +363,8 @@ typedef struct as_scan_s {
  *
  *	@returns On succes, the initialized scan. Otherwise NULL.
  *
- *	@relatesalso as_scan
- *	@ingroup as_scan_t
+ *	@relates as_scan
+ *	@ingroup as_scan_object
  */
 as_scan * as_scan_init(as_scan * scan, const as_namespace ns, const as_set set);
 
@@ -386,8 +383,8 @@ as_scan * as_scan_init(as_scan * scan, const as_namespace ns, const as_set set);
  *
  *	@returns On success, a new scan. Otherwise NULL.
  *
- *	@relatesalso as_scan
- *	@ingroup as_scan_t
+ *	@relates as_scan
+ *	@ingroup as_scan_object
  */
 as_scan * as_scan_new(const as_namespace ns, const as_set set);
 
@@ -398,8 +395,8 @@ as_scan * as_scan_new(const as_namespace ns, const as_set set);
  *	as_scan_destroy(scan);
  *	~~~~~~~~~~
  *
- *	@relatesalso as_scan
- *	@ingroup as_scan_t
+ *	@relates as_scan
+ *	@ingroup as_scan_object
  */
 void as_scan_destroy(as_scan * scan);
 
@@ -421,7 +418,7 @@ void as_scan_destroy(as_scan * scan);
  *	@param __scan	The scan to initialize.
  *	@param __n		The number of bins to allocate.
  *
- *	@ingroup as_scan_t
+ *	@ingroup as_scan_object
  */
 #define as_scan_select_inita(__scan, __n) \
 	if ( (__scan) != NULL && (__scan)->select.entries == NULL ) {\
@@ -450,7 +447,7 @@ void as_scan_destroy(as_scan * scan);
  *	@return On success, the initialized. Otherwise an error occurred.
  *
  *	@relates as_scan
- *	@ingroup as_scan_t
+ *	@ingroup as_scan_object
  */
 bool as_scan_select_init(as_scan * scan, uint16_t n);
 
@@ -472,7 +469,7 @@ bool as_scan_select_init(as_scan * scan, uint16_t n);
  *	@return On success, true. Otherwise an error occurred.
  *
  *	@relates as_scan
- *	@ingroup as_scany_t
+ *	@ingroup as_scan_object
  */
 bool as_scan_select(as_scan * scan, const char * bin);
 
@@ -493,7 +490,7 @@ bool as_scan_select(as_scan * scan, const char * bin);
  *	@return On success, true. Otherwise an error occurred.
  *
  *	@relates as_scan
- *	@ingroup as_scan_t
+ *	@ingroup as_scan_object
  */
 bool as_scan_set_percent(as_scan * scan, uint8_t percent);
 
@@ -510,7 +507,7 @@ bool as_scan_set_percent(as_scan * scan, uint8_t percent);
  *	@return On success, true. Otherwise an error occurred.
  *
  *	@relates as_scan
- *	@ingroup as_scan_t
+ *	@ingroup as_scan_object
  */
 bool as_scan_set_priority(as_scan * scan, as_scan_priority priority);
 
@@ -527,7 +524,7 @@ bool as_scan_set_priority(as_scan * scan, as_scan_priority priority);
  *	@return On success, true. Otherwise an error occurred.
  *
  *	@relates as_scan
- *	@ingroup as_scan_t
+ *	@ingroup as_scan_object
  */
 bool as_scan_set_nobins(as_scan * scan, bool nobins);
 
@@ -553,6 +550,6 @@ bool as_scan_set_nobins(as_scan * scan, bool nobins);
  *	@return On success, true. Otherwise an error occurred.
  *
  *	@relates as_scan
- *	@ingroup as_scan_t
+ *	@ingroup as_scan_object
  */
 bool as_scan_apply_each(as_scan * scan, const char * module, const char * function, as_list * arglist);

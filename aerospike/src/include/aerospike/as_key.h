@@ -20,11 +20,6 @@
  *	IN THE SOFTWARE.
  *****************************************************************************/
 
-/**
- *	@defgroup as_key_t Keys
- *	@copydoc as_key
- */
-
 #pragma once 
 
 #include <aerospike/as_integer.h>
@@ -40,16 +35,22 @@
 
 /**
  *	The size of as_digest.value
+ *
+ *	@ingroup as_key_object
  */
 #define AS_DIGEST_VALUE_SIZE 20
 
 /**
  *	The maxium size of as_namespace.
+ *
+ *	@ingroup as_key_object
  */
 #define AS_NAMESPACE_MAX_SIZE 32
 
 /**
  *	The maxium size of as_set.
+ *
+ *	@ingroup as_key_object
  */
 #define AS_SET_MAX_SIZE 64
 
@@ -59,11 +60,15 @@
 
 /**
  *	Namespace Name
+ *
+ *	@ingroup as_key_object
  */
 typedef char as_namespace[AS_NAMESPACE_MAX_SIZE];
 
 /**
  *	Set Name
+ *
+ *	@ingroup as_key_object
  */
 typedef char as_set[AS_SET_MAX_SIZE];
 
@@ -96,7 +101,8 @@ typedef char as_set[AS_SET_MAX_SIZE];
  *	~~~~~~~~~~{.c}
  *	as_digest_destroy(digest);
  *	~~~~~~~~~~
- *	
+ *
+ *	@ingroup as_key_object
  */
 typedef struct as_digest_s {
 
@@ -114,6 +120,8 @@ typedef struct as_digest_s {
 
 /**
  *	Key value
+ *
+ *	@ingroup as_key_object
  */
 typedef union as_key_value_u {
 
@@ -136,8 +144,7 @@ typedef union as_key_value_u {
 
 
 /** 
- *	Key used for accessing and modifying records in a cluster.
- *
+ *	A key is used for locating records in the database.
  *
  *	## Initialization
  *
@@ -152,7 +159,7 @@ typedef union as_key_value_u {
  *
  *	- as_key_init()	- Initialize the key with a string value.
  *	- as_key_init_int64() - Initialize the key with an int64_t value.
- *	- as_key_init_str() - Same as `as_key_init()`. 
+ *	- as_key_init_str() - Same as as_key_init(). 
  *	- as_key_init_raw() - Initialize the key with byte array.
  *	- as_key_init_value() - Initialize the key with an as_key_value.
  *
@@ -166,7 +173,7 @@ typedef union as_key_value_u {
  *
  *	- as_key_new() 	- Initialize the key with a string value.
  *	- as_key_new_int64() - Initialize the key with an int64_t value.
- *	- as_key_new_str() - Same as `as_key_new()`. 
+ *	- as_key_new_str() - Same as as_key_new(). 
  *	- as_key_new_raw() - Initialize the key with byte array.
  *	- as_key_new_value() - Initialize the key with an as_key_value.
  *
@@ -177,7 +184,7 @@ typedef union as_key_value_u {
  *	## Destruction
  *
  *	When you no longer require an instance of as_key, you should release the
- *	key and associated resources via `as_key_destroy()`.
+ *	key and associated resources via as_key_destroy().
  *
  *	~~~~~~~~~~{.c}
  *	as_key_destroy(key);
@@ -203,15 +210,15 @@ typedef union as_key_value_u {
  *	key. The digest is a hash value used to locate a record in the cluster. Once
  *	calculated, the digest will be reused.
  *
- *	To get the digest value of a key, use `as_key_digest()`.
+ *	To get the digest value of a key, use as_key_digest().
  *
- *	@ingroup as_key_t
+ *	@ingroup client_objects
  */
 typedef struct as_key_s {
 
 	/**
 	 *	@private
-	 *	If true, then `as_key_destroy()` will free this instance.
+	 *	If true, then as_key_destroy() will free this instance.
 	 */
 	bool _free;
 
@@ -249,14 +256,14 @@ typedef struct as_key_s {
  *****************************************************************************/
 
 /**
- *	Initialize a stack allocated `as_key` to a NULL-terminated string value.
+ *	Initialize a stack allocated as_key to a NULL-terminated string value.
  *
  *	~~~~~~~~~~{.c}
  *	as_key key;
  *	as_key_init(&key, "ns", "set", "key");
  *	~~~~~~~~~~
  *
- *	Use `as_key_destroy()` to release resources allocated to `as_key` via
+ *	Use as_key_destroy() to release resources allocated to as_key via
  *	this function.
  *	
  *	@param key		The key to initialize.
@@ -264,59 +271,59 @@ typedef struct as_key_s {
  *	@param set		The set for the key.
  *	@param value	The key's value.
  *
- *	@return The initialized `as_key` on success. Otherwise NULL.
+ *	@return The initialized as_key on success. Otherwise NULL.
  *
  *	@relates as_key
- *	@ingroup as_key_t
+ *	@ingroup as_key_object
  */
 as_key * as_key_init(as_key * key, const as_namespace ns, const as_set set, const char * value);
 
 /**
- *	Initialize a stack allocated `as_key` to a int64_t value.
+ *	Initialize a stack allocated as_key to a int64_t value.
  *
  *	~~~~~~~~~~{.c}
  *	as_key key;
  *	as_key_init_int64(&key, "ns", "set", 123);
  *	~~~~~~~~~~
  *
- *	Use `as_key_destroy()` to release resources allocated to `as_key`.
+ *	Use as_key_destroy() to release resources allocated to as_key.
  *
  *	@param key		The key to initialize.
  *	@param ns 		The namespace for the key.
  *	@param set		The set for the key.
  *	@param value	The key's value.
  *
- *	@return The initialized `as_key` on success. Otherwise NULL.
+ *	@return The initialized as_key on success. Otherwise NULL.
  *
  *	@relates as_key
- *	@ingroup as_key_t
+ *	@ingroup as_key_object
  */
 as_key * as_key_init_int64(as_key * key, const as_namespace ns, const as_set set, int64_t value);
 
 /**
- *	Initialize a stack allocated `as_key` to a NULL-terminated string value.
+ *	Initialize a stack allocated as_key to a NULL-terminated string value.
  *
  *	~~~~~~~~~~{.c}
  *	as_key key;
  *	as_key_init_str(&key, "ns", "set", "key");
  *	~~~~~~~~~~
  *
- *	Use `as_key_destroy()` to release resources allocated to `as_key`.
+ *	Use as_key_destroy() to release resources allocated to as_key.
  *
  *	@param key		The key to initialize.
  *	@param ns 		The namespace for the key.
  *	@param set		The set for the key.
  *	@param value	The key's value.
  *
- *	@return The initialized `as_key` on success. Otherwise NULL.
+ *	@return The initialized as_key on success. Otherwise NULL.
  *
  *	@relates as_key
- *	@ingroup as_key_t
+ *	@ingroup as_key_object
  */
 as_key * as_key_init_str(as_key * key, const as_namespace ns, const as_set set, const char * value);
 
 /**
- *	Initialize a stack allocated `as_key` to bytes array.
+ *	Initialize a stack allocated as_key to bytes array.
  *
  *	~~~~~~~~~~{.c}
  *	uint8_t rgb[3] = {254,254,120};
@@ -325,7 +332,7 @@ as_key * as_key_init_str(as_key * key, const as_namespace ns, const as_set set, 
  *	as_key_init_raw(&key, "ns", "set", rgb, 3);
  *	~~~~~~~~~~
  *
- *	Use `as_key_destroy()` to release resources allocated to `as_key`.
+ *	Use as_key_destroy() to release resources allocated to as_key.
  *
  *	@param key		The key to initialize.
  *	@param ns 		The namespace for the key.
@@ -333,15 +340,15 @@ as_key * as_key_init_str(as_key * key, const as_namespace ns, const as_set set, 
  *	@param value	The key's value.
  *	@param size		The number of bytes in value.
  *
- *	@return The initialized `as_key` on success. Otherwise NULL.
+ *	@return The initialized as_key on success. Otherwise NULL.
  *
  *	@relates as_key
- *	@ingroup as_key_t
+ *	@ingroup as_key_object
  */
 as_key * as_key_init_raw(as_key * key, const as_namespace ns, const as_set set, const uint8_t * value, uint32_t size);
 
 /**
- *	Initialize a stack allocated `as_key` to an `as_key_value`.
+ *	Initialize a stack allocated as_key to an as_key_value.
  *
  *	~~~~~~~~~~{.c}
  *	as_string str;
@@ -351,86 +358,86 @@ as_key * as_key_init_raw(as_key * key, const as_namespace ns, const as_set set, 
  *	as_key_init_value(&key, "ns", "set", (as_key_value *) str);
  *	~~~~~~~~~~
  *
- *	Use `as_key_destroy()` to release resources allocated to `as_key`.
+ *	Use as_key_destroy() to release resources allocated to as_key.
  *
  *	@param key 		The key to initialize.
  *	@param ns 		The namespace for the key.
  *	@param set		The set for the key.
  *	@param value	The key's value.
  *
- *	@return The initialized `as_key` on success. Otherwise NULL.
+ *	@return The initialized as_key on success. Otherwise NULL.
  *
  *	@relates as_key
- *	@ingroup as_key_t
+ *	@ingroup as_key_object
  */
 as_key * as_key_init_value(as_key * key, const as_namespace ns, const as_set set, const as_key_value * value);
 
 
 /**
- *	Creates and initializes a heap allocated `as_key` to a NULL-terminated string value.
+ *	Creates and initializes a heap allocated as_key to a NULL-terminated string value.
  *
  *	~~~~~~~~~~{.c}
  *	as_key * key = as_key_new("ns", "set", "key");
  *	~~~~~~~~~~
  *
- *	Use `as_key_destroy()` to release resources allocated to `as_key` via
+ *	Use as_key_destroy() to release resources allocated to as_key via
  *	this function.
  *
  *	@param ns 		The namespace for the key.
  *	@param set		The set for the key.
  *	@param value	The key's value.
  *
- *	@return A new `as_key` on success. Otherwise NULL.
+ *	@return A new as_key on success. Otherwise NULL.
  *
  *	@relates as_key
- *	@ingroup as_key_t
+ *	@ingroup as_key_object
  */
 as_key * as_key_new(const as_namespace ns, const as_set set, const char * value);
 
 /**
- *	Initialize a stack allocated `as_key` to a int64_t value.
+ *	Initialize a stack allocated as_key to a int64_t value.
  *
  *	~~~~~~~~~~{.c}
  *	as_key * key = as_key_new_int64("ns", "set", 123);
  *	~~~~~~~~~~
  *
- *	Use `as_key_destroy()` to release resources allocated to `as_key` via
+ *	Use as_key_destroy() to release resources allocated to as_key via
  *	this function.
  *
  *	@param ns 		The namespace for the key.
  *	@param set		The set for the key.
  *	@param value	The key's value.
  *
- *	@return A new `as_key` on success. Otherwise NULL.
+ *	@return A new as_key on success. Otherwise NULL.
  *
  *	@relates as_key
- *	@ingroup as_key_t
+ *	@ingroup as_key_object
  */
 as_key * as_key_new_int64(const as_namespace ns, const as_set set, int64_t value);
 
 /**
- *	Creates and initializes a heap allocated `as_key` to a NULL-terminated string value.
+ *	Creates and initializes a heap allocated as_key to a NULL-terminated string value.
  *
  *	~~~~~~~~~~{.c}
  *	as_key * key = as_key_new_str("ns", "set", "key");
  *	~~~~~~~~~~
  *
- *	Use `as_key_destroy()` to release resources allocated to `as_key` via
+ *	Use as_key_destroy() to release resources allocated to as_key via
  *	this function.
  *
  *	@param ns 		The namespace for the key.
  *	@param set		The set for the key.
  *	@param value	The key's value.
  *
- *	@return A new `as_key` on success. Otherwise NULL.
+ *	@return A new as_key on success. Otherwise NULL.
  *
  *	@relates as_key
- *	@ingroup as_key_t
+ *	@ingroup as_key_object
  */
 as_key * as_key_new_str(const as_namespace ns, const as_set set, const char * value);
 
 /**
- *	Initialize a stack allocated `as_key` to a byte array.
+ *	Initialize a stack allocated as_key to a byte array.
  *
  *	~~~~~~~~~~{.c}
  *	uint8_t rgb[3] = {254,254,120};
@@ -438,7 +445,7 @@ as_key * as_key_new_str(const as_namespace ns, const as_set set, const char * va
  *	as_key * key = as_key_new_raw("ns", "set", rgb, 3);
  *	~~~~~~~~~~
  *
- *	Use `as_key_destroy()` to release resources allocated to `as_key` via
+ *	Use as_key_destroy() to release resources allocated to as_key via
  *	this function.
  *
  *	@param ns 		The namespace for the key.
@@ -446,15 +453,15 @@ as_key * as_key_new_str(const as_namespace ns, const as_set set, const char * va
  *	@param value	The key's value.
  *	@param size		The number of bytes in the value.
  *
- *	@return A new `as_key` on success. Otherwise NULL.
+ *	@return A new as_key on success. Otherwise NULL.
  *
  *	@relates as_key
- *	@ingroup as_key_t
+ *	@ingroup as_key_object
  */
 as_key * as_key_new_raw(const as_namespace ns, const as_set set, const uint8_t * value, uint32_t size);
 
 /**
- *	Initialize a stack allocated `as_key` to a an `as_key_value`.
+ *	Initialize a stack allocated as_key to a an as_key_value.
  *
  *	~~~~~~~~~~{.c}
  *	as_string str;
@@ -463,31 +470,31 @@ as_key * as_key_new_raw(const as_namespace ns, const as_set set, const uint8_t *
  *	as_key * key = as_key_new_value("ns", "set", (as_key_value *) str);
  *	~~~~~~~~~~
  *
- *	Use `as_key_destroy()` to release resources allocated to `as_key` via
+ *	Use as_key_destroy() to release resources allocated to as_key via
  *	this function.
  *
  *	@param ns 		The namespace for the key.
  *	@param set		The set for the key.
  *	@param value	The key's value.
  *
- *	@return A new `as_key` on success. Otherwise NULL.
+ *	@return A new as_key on success. Otherwise NULL.
  *
  *	@relates as_key
- *	@ingroup as_key_t
+ *	@ingroup as_key_object
  */
 as_key * as_key_new_value(const as_namespace ns, const as_set set, const as_key_value * value);
 
 /**
- *	Destory the `as_key`, releasing resources.
+ *	Destory the as_key, releasing resources.
  *
  *	~~~~~~~~~~{.c}
  *	as_key_destroy(key);
  *	~~~~~~~~~~
  *
- *	@param key The `as_key` to destroy.
+ *	@param key The as_key to destroy.
  *
  *	@relates as_key
- *	@ingroup as_key_t
+ *	@ingroup as_key_object
  */
 void as_key_destroy(as_key * key);
 
@@ -506,6 +513,6 @@ void as_key_destroy(as_key * key);
  *	@return The digest for the key.
  *
  *	@relates as_key
- *	@ingroup as_key_t
+ *	@ingroup as_key_object
  */
 as_digest * as_key_digest(as_key * key);

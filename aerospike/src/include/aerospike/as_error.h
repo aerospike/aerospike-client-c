@@ -20,11 +20,6 @@
  *	IN THE SOFTWARE.
  *****************************************************************************/
 
-/** 
- *	@defgroup as_error_t Error Handling
- *	@copydoc as_error
- */
-
 #pragma once 
 
 #include <aerospike/as_status.h>
@@ -40,11 +35,15 @@
 
 /**
  * The size of as_error.message
+ *
+ *	@ingroup as_error_object
  */
 #define AS_ERROR_MESSAGE_MAX_SIZE 	1024
 
 /**
  * The maximum string length of as_error.message
+ *
+ *	@ingroup as_error_object
  */
 #define AS_ERROR_MESSAGE_MAX_LEN 	(AS_ERROR_MESSAGE_MAX_SIZE - 1)
 
@@ -94,7 +93,7 @@
  *	}
  *	~~~~~~~~~~
  *
- *	@ingroup as_error_t
+ *	@ingroup client_objects
  */
 typedef struct as_error_s {
 
@@ -131,7 +130,8 @@ typedef struct as_error_s {
 
 /**
  *	as_error_update(&as->error, AEROSPIKE_OK, "%s %d", "a", 1);
- *	@ingroup as_error_t
+ *
+ *	@ingroup as_error_object
  */
 #define as_error_update(__err, __code, __fmt, ...) \
 	as_error_setallv( __err, __code, __func__, __FILE__, __LINE__, __fmt, ##__VA_ARGS__ );
@@ -148,7 +148,7 @@ typedef struct as_error_s {
  *	@returns The initialized err.
  *
  *	@relates as_error
- *	@ingroup as_error_t
+ *	@ingroup as_error_object
  */
 inline as_error * as_error_init(as_error * err) {
 	err->code = AEROSPIKE_OK;
@@ -167,7 +167,7 @@ inline as_error * as_error_init(as_error * err) {
  *	@returns AEROSPIKE_OK.
  *
  *	@relates as_error
- *	@ingroup as_error_t
+ *	@ingroup as_error_object
  */
 inline as_status as_error_reset(as_error * err) {
 	err->code = AEROSPIKE_OK;

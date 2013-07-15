@@ -1,13 +1,5 @@
-3.0.0
------
+### Release 3.0.15: (July 17, 2013) ###
 
-First release.
-
-#### Notes
-
-- Application can only connect to a single cluster at a time.
-- The `AS_OPERATE_TOUCH` operation does not return the updated ttl for the record.
-
-
-
- 
+* The 3.0 C client only supports the 3.0 server. Do not use this client with 2.x server releases.
+* Applications that use this client can only connect to a single cluster at a time. This will be fixed in a future release.
+* To get familiar with the system, please run one or more of the many examples that are included with the release.

@@ -21,8 +21,8 @@
  *****************************************************************************/
 
 /**
- *	@defgroup index_api Index API
- *	@ingroup client_api
+ *	@defgroup index_operations Index Operations
+ *	@ingroup client_operations
  *
  *	The Index API provides the ability to create and remove secondary indexes.
  *	
@@ -46,8 +46,7 @@
  *	be returned. 
  *	
  *	To create a integer index, see aerospike_index_integer_create().
- *	
- *	@{
+ *
  */
 
 #pragma once 
@@ -81,6 +80,8 @@
  *	@param name			The name of the index.
  *	
  *	@return AEROSPIKE_OK if successful. AEROSPIKE_ERR_INDEX_FOUND if the index already exists. Otherwise an error.
+ *
+ *	@ingroup index_operations
  */
 as_status aerospike_index_integer_create(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
@@ -105,6 +106,8 @@ as_status aerospike_index_integer_create(
  *	@param name			The name of the index.
  *
  *	@return AEROSPIKE_OK if successful. AEROSPIKE_ERR_INDEX_FOUND if the index already exists. Otherwise an error.
+ *
+ *	@ingroup index_operations
  */
 as_status aerospike_index_string_create(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
@@ -126,6 +129,8 @@ as_status aerospike_index_string_create(
  *	@param name			The name of the index to be removed.
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error.
+ *
+ *	@ingroup index_operations
  */
 as_status aerospike_index_remove(
 	aerospike * as, as_error * err, const as_policy_info * policy, 

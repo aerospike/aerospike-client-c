@@ -117,7 +117,7 @@
  *	}
  *	~~~~~~~~~~
  *
- *	@ingroup as_record_t
+ *	@ingroup as_record_object
  */
 typedef struct as_record_iterator_s {
 
@@ -162,7 +162,7 @@ typedef struct as_record_iterator_s {
  *	@return On success, a new as_record_iterator. Otherwsie an error occurred.
  *
  *	@relates as_record_iterator
- *	@ingroup as_record_t
+ *	@ingroup as_record_object
  */
 as_record_iterator * as_record_iterator_new(const as_record * record);
 
@@ -189,7 +189,7 @@ as_record_iterator * as_record_iterator_new(const as_record * record);
  *	@return On success, a new as_record_iterator. Otherwsie an error occurred.
  *
  *	@relates as_record_iterator
- *	@ingroup as_record_t
+ *	@ingroup as_record_object
  */
 as_record_iterator * as_record_iterator_init(as_record_iterator * iterator, const as_record * record);
 
@@ -199,7 +199,7 @@ as_record_iterator * as_record_iterator_init(as_record_iterator * iterator, cons
  *	@param iterator The iterator to destroy.
  *
  *	@relates as_record_iterator
- *	@ingroup as_record_t
+ *	@ingroup as_record_object
  */
 void as_record_iterator_destroy(as_record_iterator * iterator);
 
@@ -211,7 +211,7 @@ void as_record_iterator_destroy(as_record_iterator * iterator);
  *	@return the number of bins in the record.
  *
  *	@relates as_record_iterator
- *	@ingroup as_record_t
+ *	@ingroup as_record_object
  */
 bool as_record_iterator_has_next(const as_record_iterator * iterator);
 
@@ -223,7 +223,7 @@ bool as_record_iterator_has_next(const as_record_iterator * iterator);
  *	@return The next bin from the iterator.
  *
  *	@relates as_record_iterator
- *	@ingroup as_record_t
+ *	@ingroup as_record_object
  */
 as_bin * as_record_iterator_next(as_record_iterator * iterator);
 

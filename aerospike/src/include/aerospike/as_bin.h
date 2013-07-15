@@ -65,7 +65,14 @@ typedef union as_bin_value_s {
 } as_bin_value;
 
 /**
- *	Bin Structure
+ *	Represents a bin of a record. Each bin is a (name,value) pair. 
+ *
+ *	Bins of a record should never be directly accessed. The bins should only
+ *	be modified via as_record functions. The only time an as_bin is directly 
+ *	accessible is during iteration via as_record_iterator, but the 
+ *	as_bin functions should be used to read the values.
+ *
+ *	@ingroup client_objects
  */
 typedef struct as_bin_s {
 
@@ -127,13 +134,11 @@ typedef struct as_bins_s {
  *	char * name = as_bin_get_name(bin);
  *	~~~~~~~~~~
  *
- *
- *	@parameter bin 	The bin to get the name of.
+ *	@param bin 	The bin to get the name of.
  *
  *	@return The name of the bin.
  *
  *	@relates as_bin
- *	@ingroup as_record_t
  */
 inline char * as_bin_get_name(const as_bin * bin) {
 	return (char *) bin->name;
@@ -147,13 +152,11 @@ inline char * as_bin_get_name(const as_bin * bin) {
  *	as_bin_value val = as_bin_get_value(bin);
  *	~~~~~~~~~~
  *
- *
- *	@parameter bin 	The bin to get the value of.
+ *	@param bin 	The bin to get the value of.
  *
  *	@return The value of the bin.
  *
  *	@relates as_bin
- *	@ingroup as_record_t
  */
 inline as_bin_value * as_bin_get_value(const as_bin * bin) {
 	return bin->valuep;
@@ -167,13 +170,11 @@ inline as_bin_value * as_bin_get_value(const as_bin * bin) {
  *	as_val_t type = as_bin_get_type(bin);
  *	~~~~~~~~~~
  *
- *
- *	@parameter bin 	The bin to get value's type.
+ *	@param bin 	The bin to get value's type.
  *
  *	@return The type of the bin's value
  *
  *	@relates as_bin
- *	@ingroup as_record_t
  */
 inline as_val_t as_bin_get_type(const as_bin * bin) {
 	return as_val_type(bin->valuep);

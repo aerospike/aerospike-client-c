@@ -20,11 +20,6 @@
  *	IN THE SOFTWARE.
  *****************************************************************************/
 
-/**
- *	@defgroup as_config_t Configuration
- *	@copydoc as_config
- */
-
 #pragma once 
 
 #include <aerospike/as_error.h>
@@ -55,7 +50,8 @@
 
 /**
  *	Host Information
- *	@ingroup as_config_t
+ *
+ *	@ingroup as_config_object
  */
 typedef struct as_config_host_s {
 	
@@ -74,7 +70,8 @@ typedef struct as_config_host_s {
 
 /**
  *	lua module config
- *	@ingroup as_config_t
+ *
+ *	@ingroup as_config_object
  */
 typedef struct as_config_lua_s {
 
@@ -199,8 +196,7 @@ typedef struct as_config_lua_s {
  *	strcpy(config.mod_lua.user_path, "/home/me/lua");
  *	~~~~~~~~~~
  *
- *
- *	@ingroup as_config_t
+ *	@ingroup client_objects
  */
 typedef struct as_config_s {
 
@@ -255,7 +251,6 @@ typedef struct as_config_s {
  *	@return The initialized configuration on success. Otherwise NULL.
  *
  *	@relates as_config
- *	@ingroup as_config_t
  */
 as_config * as_config_init(as_config * c);
 

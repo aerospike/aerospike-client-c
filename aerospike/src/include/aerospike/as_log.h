@@ -20,36 +20,6 @@
  *	IN THE SOFTWARE.
  *****************************************************************************/
 
-/**
- *	@defgroup as_log_t Logging
- *
- *	Aerospike Client exposed the ability to control the verbosity of logs
- *	emitted from the client, and where the log messages are sent to.
- *
- *	Logging is controlled at a per client (cluster) level. 
- *
- *	## Setting Log Level
- *
- *	To set the log level for the aerospike client, simply use 
- *	as_log_set_level() and pass in the client log to set.
- *
- *	~~~~~~~~~~{.c}
- *	as_log_set_level(&as->log, AS_LOG_LEVEL_INFO);
- *	~~~~~~~~~~
- *
- *	## Redirecting Log Output
- *
- *	By default, the logger sends log messages to STDERR. 
- *
- *	To change where log messages are sent, simply define a new as_log_callback,
- *	and set it for the client using as_log_set_callback():
- *
- *	~~~~~~~~~~{.c}
- *	as_log_set_callback(&as->log, my_callback);
- *	~~~~~~~~~~
- *
- */
-
 #pragma once 
 
 #include <aerospike/as_status.h>
@@ -114,14 +84,58 @@ typedef enum as_log_level_e {
  *
  *	@return true if the message was logged. Otherwise false.
  *
- *	@ingroup as_log_t
+ *	@ingroup as_log_object
  */
 typedef bool (* as_log_callback)(
 	as_log_level level, const char * func, const char * file, uint32_t line,
 	const char * fmt, ...);
 
 /**
- *	@copydoc as_log_t
+ *	Aerospike Client exposed logging functionality including:
+ *	- Ability to control the verbosity of log messages.
+ *	- Direct where log messages are sent to.
+ *
+ *	Each @ref aerospike contains its own as_log instance: aerospike.log.
+ *
+ *	## Setting Log Level
+ *
+ *	To set the log level for the aerospike client, simply use 
+ *	as_log_set_level() and pass in the client log to set.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_log_set_level(&as->log, AS_LOG_LEVEL_INFO);
+ *	~~~~~~~~~~
+ *
+ *	## Redirecting Log Output
+ *
+ *	By default, the logger sends log messages to STDERR. 
+ *
+ *	To change where log messages are sent, simply define a new @ref as_log_callback,
+ *	and set it for the client using as_log_set_callback():
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_log_set_callback(&as->log, my_log_callback);
+ *	~~~~~~~~~~
+ *
+ *	Where the `my_log_callback` could be defined as 
+ *
+ *	~~~~~~~~~~{.c}
+ *	bool my_log_callback(
+ *	    as_log_level level, const char * func, const char * file, uint32_t line,
+ *	    const char * fmt, ...)
+ *	{
+ *	    char msg[1024] = {0};
+ *	    va_list ap;
+ *	    va_start(ap, fmt);
+ *	    vsnprintf(msg, 1024, fmt, ap);
+ *	    msg[1023] = '\0';
+ *	    va_end(ap);
+ *	    fprintf(stderr, "[%s:%d][%s] %d - %s\n", file, line, func, level, msg);
+ *	    return true;
+ *	}
+ *	~~~~~~~~~~
+ *
+ *	@ingroup client_objects
  */
 typedef struct as_log_s {
 
@@ -145,7 +159,6 @@ typedef struct as_log_s {
  *	Initialize Log Context 
  *
  *	@relates as_log
- *	@ingroup as_log_t
  */
 as_log * as_log_init(as_log * log);
 
@@ -157,8 +170,7 @@ as_log * as_log_init(as_log * log);
  *
  *	@return true on success. Otherwise false.
  *
- *	@relatesalso as_log
- *	@ingroup as_log_t
+ *	@relates as_log
  */
 bool as_log_set_level(as_log * log, as_log_level level);
 
@@ -171,10 +183,5 @@ bool as_log_set_level(as_log * log, as_log_level level);
  *	@return true on success. Otherwise false.
  *
  *	@relates as_log
- *	@ingroup as_log_t
  */
 bool as_log_set_callback(as_log * log, as_log_callback callback);
-
-/**
- *	@}
- */

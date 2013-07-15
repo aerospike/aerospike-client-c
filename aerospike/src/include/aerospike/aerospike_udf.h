@@ -21,8 +21,8 @@
  *****************************************************************************/
 
 /** 
- *	@defgroup udf_api UDF API
- *	@ingroup client_api
+ *	@defgroup udf_operations UDF Operations
+ *	@ingroup client_operations
  *
  *	The UDF API provides the ability to manade UDFs in the cluster.
  *
@@ -33,7 +33,6 @@
  *	- aerospike_udf_put() -		Upload a UDF module.
  *	- aerospike_udf_remove() -	Remove a UDF module.
  *
- *	@{
  */
 
 #pragma once 
@@ -50,6 +49,8 @@
 
 /**
  *	Callback for the `aerospike_udf_foreach()` function.
+ *
+ *	@ingroup udf_operations
  */
 typedef int (* aerospike_udf_foreach_callback)(const as_udf_file *, void *);
 
@@ -85,6 +86,8 @@ typedef int (* aerospike_udf_foreach_callback)(const as_udf_file *, void *);
  *	@param files 		The list to populate with the results from the request.
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error occurred.
+ *
+ *	@ingroup udf_operations
  */
 as_status aerospike_udf_list(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
@@ -114,6 +117,8 @@ as_status aerospike_udf_list(
  *	@param udata		User-data to be sent to the callback.
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error occurred.
+ *
+ *	@ingroup udf_operations
  */
 as_status aerospike_udf_foreach(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
@@ -149,6 +154,8 @@ as_status aerospike_udf_foreach(
  *	@param file			The file from the cluster.
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error occurred.
+ *
+ *	@ingroup udf_operations
  */
 as_status aerospike_udf_get(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
@@ -179,6 +186,8 @@ as_status aerospike_udf_get(
  *	@param content		The file of the UDF file.
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error occurred.
+ *
+ *	@ingroup udf_operations
  */
 as_status aerospike_udf_put(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
@@ -200,12 +209,10 @@ as_status aerospike_udf_put(
  *	@param filename 		The name of the UDF file.
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error occurred.
+ *
+ *	@ingroup udf_operations
  */
 as_status aerospike_udf_remove(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
 	const char * filename
 	);
-
-/** 
- *	@}
- */

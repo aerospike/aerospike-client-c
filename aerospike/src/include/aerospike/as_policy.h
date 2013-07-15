@@ -20,37 +20,37 @@
  *	IN THE SOFTWARE.
  *****************************************************************************/
 
-/** 
- *	@defgroup as_policy_t Policies
- *
- *	Policies define the behavior of database operations. 
- *
- *	Policies fall into two groups: policy values and operation policies.
- *	A policy value is a single value which defines how the client behaves. An
- *	operation policy is a group of policy values which affect an operation.
- *
- *	## Policy Values
- *
- *	The following are the policy values. For details, please see the documentation
- *	for each policy value
- *
- *	- as_policy_key
- *	- as_policy_gen
- *	- as_policy_retry
- *	- as_policy_exists
+/**
+ *	@defgroup client_policies Client Policies
  *	
- *	## Operation Policies
+ *  Policies define the behavior of database operations. 
  *
- *	The following are the operation policies. Operation policies are groups of
- *	policy values for a type of operation.
+ *  Policies fall into two groups: policy values and operation policies.
+ *  A policy value is a single value which defines how the client behaves. An
+ *  operation policy is a group of policy values which affect an operation.
  *
- *	- as_policy_read
- *	- as_policy_write
- *	- as_policy_operate
- *	- as_policy_remove
- *	- as_policy_scan
- *	- as_policy_query
- *	- as_policy_read
+ *  ## Policy Values
+ *
+ *  The following are the policy values. For details, please see the documentation
+ *  for each policy value
+ *
+ *  - as_policy_key
+ *  - as_policy_gen
+ *  - as_policy_retry
+ *  - as_policy_exists
+ *  
+ *  ## Operation Policies
+ *
+ *  The following are the operation policies. Operation policies are groups of
+ *  policy values for a type of operation.
+ *
+ *  - as_policy_read
+ *  - as_policy_write
+ *  - as_policy_operate
+ *  - as_policy_remove
+ *  - as_policy_scan
+ *  - as_policy_query
+ *  - as_policy_read
  *
  */
 
@@ -65,26 +65,36 @@
 
 /**
  *	Default timeout value
+ *
+ *	@ingroup client_policies
  */
 #define AS_POLICY_TIMEOUT_DEFAULT 1000
 
 /**
  *	Default as_policy_retry value
+ *
+ *	@ingroup client_policies
  */
 #define AS_POLICY_RETRY_DEFAULT AS_POLICY_RETRY_NONE
 
 /**
  *	Default as_policy_gen value
+ *
+ *	@ingroup client_policies
  */
 #define AS_POLICY_GEN_DEFAULT AS_POLICY_GEN_IGNORE
 
 /**
  *	Default as_policy_key value
+ *
+ *	@ingroup client_policies
  */
 #define AS_POLICY_KEY_DEFAULT AS_POLICY_KEY_DIGEST
 
 /**
  *	Default as_policy_exists value
+ *
+ *	@ingroup client_policies
  */
 #define AS_POLICY_EXISTS_DEFAULT AS_POLICY_EXISTS_IGNORE
 
@@ -97,7 +107,7 @@
  *
  *	Specifies the behavior of failed operations. 
  *
- *	@ingroup as_policy_t
+ *	@ingroup client_policies
  */
 typedef enum as_policy_retry_e {
 
@@ -129,7 +139,7 @@ typedef enum as_policy_retry_e {
  *	Specifies the behavior of record modifications with regard to the 
  *	generation value.
  *
- *	@ingroup as_policy_t
+ *	@ingroup client_policies
  */
 typedef enum as_policy_gen_e {
 
@@ -172,7 +182,7 @@ typedef enum as_policy_gen_e {
  *	Specifies the behavior for whether keys or digests
  *	should be sent to the cluster.
  *
- *	@ingroup as_policy_t
+ *	@ingroup client_policies
  */
 typedef enum as_policy_key_e {
 
@@ -222,7 +232,7 @@ typedef enum as_policy_key_e {
  *	Specifies the behavior for writing the record
  *	depending whether or not it exists.
  *
- *	@ingroup as_policy_t
+ *	@ingroup client_policies
  */
 typedef enum as_policy_exists_e {
 
@@ -256,7 +266,7 @@ typedef enum as_policy_exists_e {
 /**
  *	Write Policy
  *
- *	@ingroup as_policy_t
+ *	@ingroup client_policies
  */
 typedef struct as_policy_write_s {
 
@@ -297,7 +307,7 @@ typedef struct as_policy_write_s {
 /**
  *	Read Policy
  *
- *	@ingroup as_policy_t
+ *	@ingroup client_policies
  */
 typedef struct as_policy_read_s {
 
@@ -321,7 +331,7 @@ typedef struct as_policy_read_s {
 /**
  *	Key Apply Policy
  *
- *	@ingroup as_policy_t
+ *	@ingroup client_policies
  */
 typedef struct as_policy_apply_s {
 
@@ -345,7 +355,7 @@ typedef struct as_policy_apply_s {
 /**
  *	Operate Policy
  *
- *	@ingroup as_policy_t
+ *	@ingroup client_policies
  */
 typedef struct as_policy_operate_s {
 
@@ -380,7 +390,7 @@ typedef struct as_policy_operate_s {
 /**
  *	Remove Policy
  *
- *	@ingroup as_policy_t
+ *	@ingroup client_policies
  */
 typedef struct as_policy_remove_s {
 
@@ -420,7 +430,7 @@ typedef struct as_policy_remove_s {
 /**
  *	Query Policy
  *
- *	@ingroup as_policy_t
+ *	@ingroup client_policies
  */
 typedef struct as_policy_query_s {
 
@@ -439,7 +449,7 @@ typedef struct as_policy_query_s {
 /**
  *	Scan Policy
  *
- *	@ingroup as_policy_t
+ *	@ingroup client_policies
  */
 typedef struct as_policy_scan_s {
 
@@ -463,7 +473,7 @@ typedef struct as_policy_scan_s {
 /**
  *	Info Policy
  *
- *	@ingroup as_policy_t
+ *	@ingroup client_policies
  */
 typedef struct as_policy_info_s {
 

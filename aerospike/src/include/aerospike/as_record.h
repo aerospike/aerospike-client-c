@@ -20,11 +20,6 @@
  *	IN THE SOFTWARE.
  *****************************************************************************/
 
-/** 
- *	@defgroup as_record_t Records
- *	@copydoc as_record
- */
-
 #pragma once 
 
 #include <aerospike/as_bin.h>
@@ -45,7 +40,6 @@
  *****************************************************************************/
 
 /**
- *	
  *	Records in Aerospike are collections of named bins. 
  *
  *	The bins in a record are analogous to columns in relational databases. 
@@ -156,7 +150,6 @@
  *	}
  *	~~~~~~~~~~
  *
- *
  *	## Traversing Bins
  *
  *	If you want to traverse the bins of a record, then you have two options:
@@ -164,9 +157,8 @@
  *	- as_record_foreach() — Calls a function for each bin traversed.
  *	- as_record_iterator — Uses an iterator pattern to traverse bins.
  *
- *
  *	@extends as_rec
- *	@ingroup as_record_t
+ *	@ingroup client_objects
  */
 typedef struct as_record_s {
 
@@ -223,7 +215,7 @@ typedef struct as_record_s {
  *	@param __nbins		The number of `as_record.bins.entries` to allocate on the 
  *						stack.
  *	
- *	@ingroup as_record_t
+ *	@relates as_record
  */
 #define as_record_inita(__rec, __nbins) \
 	as_record_init(__rec, 0);\
@@ -253,7 +245,6 @@ typedef struct as_record_s {
  *	@return a pointer to the new as_record if successful, otherwise NULL.
  *
  *	@relates as_record
- *	@ingroup as_record_t
  */
 as_record * as_record_new(uint16_t nbins);
 
@@ -276,7 +267,6 @@ as_record * as_record_new(uint16_t nbins);
  *	@return a pointer to the initialized as_record if successful, otherwise NULL.
  *
  *	@relates as_record
- *	@ingroup as_record_t
  */
 as_record * as_record_init(as_record * rec, uint16_t nbins);
 
@@ -286,7 +276,6 @@ as_record * as_record_init(as_record * rec, uint16_t nbins);
  *	@param rec The record to destroy.
  *
  *	@relates as_record
- *	@ingroup as_record_t
  */
 void as_record_destroy(as_record * rec);
 
@@ -296,7 +285,6 @@ void as_record_destroy(as_record * rec);
  *	@return the number of bins in the record.
  *
  *	@relates as_record
- *	@ingroup as_record_t
  */
 uint16_t as_record_numbins(const as_record * rec);
 
@@ -310,7 +298,6 @@ uint16_t as_record_numbins(const as_record * rec);
  *	@return true on success, false on failure.
  *
  *	@relates as_record
- *	@ingroup as_record_t
  */
 bool as_record_set(as_record * rec, const as_bin_name name, as_bin_value * value);
 
@@ -328,7 +315,6 @@ bool as_record_set(as_record * rec, const as_bin_name name, as_bin_value * value
  *	@return true on success, false on failure.
  *
  *	@relates as_record
- *	@ingroup as_record_t
  */
 bool as_record_set_int64(as_record * rec, const as_bin_name name, int64_t value);
 
@@ -346,7 +332,6 @@ bool as_record_set_int64(as_record * rec, const as_bin_name name, int64_t value)
  *	@return true on success, false on failure.
  *
  *	@relates as_record
- *	@ingroup as_record_t
  */
 bool as_record_set_str(as_record * rec, const as_bin_name name, const char * value);
 
@@ -366,7 +351,6 @@ bool as_record_set_str(as_record * rec, const as_bin_name name, const char * val
  *	@return true on success, false on failure.
  *
  *	@relates as_record
- *	@ingroup as_record_t
  */
 bool as_record_set_raw(as_record * rec, const as_bin_name name, const uint8_t * value, uint32_t size);
 
@@ -384,7 +368,6 @@ bool as_record_set_raw(as_record * rec, const as_bin_name name, const uint8_t * 
  *	@return true on success, false on failure.
  *
  *	@relates as_record
- *	@ingroup as_record_t
  */
 bool as_record_set_integer(as_record * rec, const as_bin_name name, as_integer * value);
 
@@ -402,7 +385,6 @@ bool as_record_set_integer(as_record * rec, const as_bin_name name, as_integer *
  *	@return true on success, false on failure.
  *
  *	@relates as_record
- *	@ingroup as_record_t
  */
 bool as_record_set_string(as_record * rec, const as_bin_name name, as_string * value);
 
@@ -420,7 +402,6 @@ bool as_record_set_string(as_record * rec, const as_bin_name name, as_string * v
  *	@return true on success, false on failure.
  *
  *	@relates as_record
- *	@ingroup as_record_t
  */
 bool as_record_set_bytes(as_record * rec, const as_bin_name name, as_bytes * value);
 
@@ -444,7 +425,6 @@ bool as_record_set_bytes(as_record * rec, const as_bin_name name, as_bytes * val
  *	@return true on success, false on failure.
  *
  *	@relates as_record
- *	@ingroup as_record_t
  */
 bool as_record_set_list(as_record * rec, const as_bin_name name, as_list * value);
 
@@ -468,7 +448,6 @@ bool as_record_set_list(as_record * rec, const as_bin_name name, as_list * value
  *	@return true on success, false on failure.
  *
  *	@relates as_record
- *	@ingroup as_record_t
  */
 bool as_record_set_map(as_record * rec, const as_bin_name name, as_map * value);
 
@@ -485,7 +464,6 @@ bool as_record_set_map(as_record * rec, const as_bin_name name, as_map * value);
  *	@return true on success, false on failure.
  *
  *	@relates as_record
- *	@ingroup as_record_t
  */
 bool as_record_set_nil(as_record * rec, const as_bin_name name);
 
@@ -502,7 +480,6 @@ bool as_record_set_nil(as_record * rec, const as_bin_name name);
  *	@return the value if it exists, otherwise NULL.
  *
  *	@relates as_record
- *	@ingroup as_record_t
  */
 as_bin_value * as_record_get(const as_record * rec, const as_bin_name name);
 
@@ -520,7 +497,6 @@ as_bin_value * as_record_get(const as_record * rec, const as_bin_name name);
  *	@return the value if it exists, otherwise 0.
  *
  *	@relates as_record
- *	@ingroup as_record_t
  */
 int64_t as_record_get_int64(const as_record * rec, const as_bin_name name, int64_t fallback);
 
@@ -537,7 +513,6 @@ int64_t as_record_get_int64(const as_record * rec, const as_bin_name name, int64
  *	@return the value if it exists, otherwise NULL.
  *
  *	@relates as_record
- *	@ingroup as_record_t
  */
 char * as_record_get_str(const as_record * rec, const as_bin_name name);
 
@@ -554,7 +529,6 @@ char * as_record_get_str(const as_record * rec, const as_bin_name name);
  *	@return the value if it exists, otherwise NULL.
  *
  *	@relates as_record
- *	@ingroup as_record_t
  */
 as_integer * as_record_get_integer(const as_record * rec, const as_bin_name name);
 
@@ -571,7 +545,6 @@ as_integer * as_record_get_integer(const as_record * rec, const as_bin_name name
  *	@return the value if it exists, otherwise NULL.
  *
  *	@relates as_record
- *	@ingroup as_record_t
  */
 as_string * as_record_get_string(const as_record * rec, const as_bin_name name);
 
@@ -588,7 +561,6 @@ as_string * as_record_get_string(const as_record * rec, const as_bin_name name);
  *	@return the value if it exists, otherwise NULL.
  *
  *	@relates as_record
- *	@ingroup as_record_t
  */
 as_bytes * as_record_get_bytes(const as_record * rec, const as_bin_name name);
 
@@ -605,7 +577,6 @@ as_bytes * as_record_get_bytes(const as_record * rec, const as_bin_name name);
  *	@return the value if it exists, otherwise NULL.
  *
  *	@relates as_record
- *	@ingroup as_record_t
  */
 as_list * as_record_get_list(const as_record * rec, const as_bin_name name);
 
@@ -622,7 +593,6 @@ as_list * as_record_get_list(const as_record * rec, const as_bin_name name);
  *	@return the value if it exists, otherwise NULL.
  *
  *	@relates as_record
- *	@ingroup as_record_t
  */
 as_map * as_record_get_map(const as_record * rec, const as_bin_name name);
 
@@ -655,7 +625,6 @@ as_map * as_record_get_map(const as_record * rec, const as_bin_name name);
  *	@return true if iteration completes fully. false if iteration was aborted.
  *
  *	@relates as_record
- *	@ingroup as_record_t
  */
 bool as_record_foreach(const as_record * rec, as_rec_foreach_callback callback, void * udata);
 
@@ -665,6 +634,8 @@ bool as_record_foreach(const as_record * rec, as_rec_foreach_callback callback, 
 
 /**
  *	Convert to an as_val.
+ *
+ *	@relates as_record
  */
 inline as_val * as_record_toval(const as_record * rec) 
 {
@@ -673,6 +644,8 @@ inline as_val * as_record_toval(const as_record * rec)
 
 /**
  *	Convert from an as_val.
+ *
+ *	@relates as_record
  */
 inline as_record * as_record_fromval(const as_val * v) 
 {

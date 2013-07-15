@@ -21,18 +21,20 @@
  *****************************************************************************/
 
 /** 
- *	@defgroup query_api Query API
- *	@ingroup client_api
+ *	@defgroup query_operations Query Operations
+ *	@ingroup client_operations
  *
- *	The Aerospike Query API provides the ability to query data in the 
- *	Aerospike cluster. The queries can only be performed on secondary indexes, 
- *	which have been created in the cluster. To scan all the records in the
- *	database, then you must use the Scan API.
- *
+ *	The Aerospike Query Operations provide the ability to query data in the 
+ *	Aerospike database. The queries can only be performed on secondary indexes, 
+ *	which have been created in the database. To scan all the records in the
+ *	database, then you must use the @ref scan_operations.
+ *	
  *	## Usage
  *
  *	Before you can execute a query, you first need to build a query using 
- *	as_query. Once you have a query defined, then you can execute the query 
+ *	as_query. See as_query for details on building queries.
+ *
+ *	Once you have a query defined, then you can execute the query 
  *	using either:
  *
  *	-	aerospike_query_foreach() -	Executes a query and invokes a callback
@@ -40,10 +42,10 @@
  *	-	aerospike_query_stream() - 	Executes a query and writes the results
  *		to the stream provided. 
  *
- *	The two APIs are very similar in that they provide the ability to read 
+ *	The two operations are very similar in that they provide the ability to read 
  *	the records returned from a query. However, they differ in how they
  *	manage resources.
- *
+ *	
  *	When aerospike_query_foreach() is executed, it will process the results
  *	and create records on the stack. Because the records are on the stack, 
  *	they will only be available within the context of the callback function.
@@ -59,9 +61,9 @@
  *
  *	## Walk-through
  *	
- *	First, we build a query using as_query. The query will be for the "test"
+ *	First, we define a query using as_query. The query will be for the "test"
  *	namespace and "demo" set. We will add a where predicate on "bin2", on which
- *	we have already created a secondary index. For this example, we will limit
+ *	we have already created a secondary index. Also, we will limit
  *	the results to 100 records.
  *	
  *	~~~~~~~~~~{.c}
@@ -73,11 +75,8 @@
  *	as_query_where(&query, "bin2", integer_equals(100));
  *	~~~~~~~~~~
  *
- *	For details on building a query, please read as_query.
- *
- *	Now that we have a query, we want to execute it using one of the query API
- *	calls. We will use aerospike_query_foreach() because it is more efficient
- *	due to it using stack allocated records.
+ *	Now that we have a query defined, we want to execute it using 
+ *	aerospike_query_foreach().
  *	
  *	~~~~~~~~~~{.c}
  *	if ( aerospike_query_foreach(&as, &err, NULL, &query, callback, NULL) != AEROSPIKE_OK ) {
@@ -96,8 +95,8 @@
  *	}
  *	~~~~~~~~~~
  *
- *	You can reuse the same query multiple times. So, if your application 
- *	executes the exact same query each time, then just create it once.
+ *	An as_query is simply a query definition, so it does not contain any state,
+ *	allowing it to be reused for multiple query operations. 
  *	
  *	When you are finished with the query, you should destroy the resources 
  *	allocated to it:
@@ -106,7 +105,6 @@
  *	as_query_destroy(&query);
  *	~~~~~~~~~~
  *
- *	@{
  */
 
 #pragma once
@@ -138,6 +136,8 @@
  *	@param udata 		User-data provided to the calling function.
  *
  *	@return `true` to continue to the next value. Otherwise, iteration will end.
+ *
+ *	@ingroup query_operations
  */
 typedef bool (* aerospike_query_foreach_callback)(const as_val * val, void * udata);
 
@@ -169,6 +169,8 @@ typedef bool (* aerospike_query_foreach_callback)(const as_val * val, void * uda
  *	@param udata			User-data to be passed to the callback.
  *
  *	@return AEROSPIKE_OK on success, otherwise an error.
+ *
+ *	@ingroup query_operations
  */
 as_status aerospike_query_foreach(
 	aerospike * as, as_error * err, const as_policy_query * policy, 
@@ -200,12 +202,10 @@ as_status aerospike_query_foreach(
  *	@param stream 		The writable stream to write results to.
  *
  *	@return AEROSPIKE_OK on success, otherwise an error.
+ *
+ *	@ingroup query_operations
  */
 as_status aerospike_query_stream(
 	aerospike * as, as_error * err, const as_policy_query * policy, 
 	const as_query * query, as_stream * stream
 );
-
-/**
- *	@}
- */

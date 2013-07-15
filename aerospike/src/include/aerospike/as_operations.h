@@ -20,11 +20,6 @@
  *	IN THE SOFTWARE.
  *****************************************************************************/
 
-/**
- *	@defgroup as_operations_t Operations
- *	@copydoc as_operations
- */
-
 #pragma once
 
 #include <aerospike/as_bin.h>
@@ -274,10 +269,8 @@ typedef struct as_binops_s {
  *	~~~~~~~~~~{.c}
  *	as_operations_add_touch(ops);
  *	~~~~~~~~~~
- *	
- *	
  *
- *	@ingroup as_operations_t	
+ *	@ingroup client_objects
  */
 typedef struct as_operations_s {
 
@@ -324,7 +317,7 @@ typedef struct as_operations_s {
  *						stack.
  *
  *	@relates as_operations
- *	@ingroup as_operations_t
+ *	@ingroup as_operations_object
  */
 #define as_operations_inita(__ops, __nops) \
 	(__ops)->_free = false;\
@@ -358,7 +351,7 @@ typedef struct as_operations_s {
  *	@return The initialized `as_operations` on success. Otherwise NULL.
  *
  *	@relates as_operations
- *	@ingroup as_operations_t
+ *	@ingroup as_operations_object
  */
 as_operations * as_operations_init(as_operations * ops, uint16_t nops);
 
@@ -379,7 +372,7 @@ as_operations * as_operations_init(as_operations * ops, uint16_t nops);
  *	@return The new `as_operations` on success. Otherwise NULL.
  *
  *	@relates as_operations
- *	@ingroup as_operations_t
+ *	@ingroup as_operations_object
  */
 as_operations * as_operations_new(uint16_t nops);
 
@@ -393,7 +386,7 @@ as_operations * as_operations_new(uint16_t nops);
  *	@param ops 	The `as_operations` to destroy.
  *
  *	@relates as_operations
- *	@ingroup as_operations_t
+ *	@ingroup as_operations_object
  */
 void as_operations_destroy(as_operations * ops);
 
@@ -407,7 +400,7 @@ void as_operations_destroy(as_operations * ops);
  *	@return true on success. Otherwise an error occurred.
  *
  *	@relates as_operations
- *	@ingroup as_operations_t
+ *	@ingroup as_operations_object
  */
 bool as_operations_add_write(as_operations * ops, const as_bin_name name, as_bin_value * value);
 
@@ -421,7 +414,7 @@ bool as_operations_add_write(as_operations * ops, const as_bin_name name, as_bin
  *	@return true on success. Otherwise an error occurred.
  *
  *	@relates as_operations
- *	@ingroup as_operations_t
+ *	@ingroup as_operations_object
  */
 bool as_operations_add_write_int64(as_operations * ops, const as_bin_name name, int64_t value);
 
@@ -435,7 +428,7 @@ bool as_operations_add_write_int64(as_operations * ops, const as_bin_name name, 
  *	@return true on success. Otherwise an error occurred.
  *
  *	@relates as_operations
- *	@ingroup as_operations_t
+ *	@ingroup as_operations_object
  */
 bool as_operations_add_write_str(as_operations * ops, const as_bin_name name, const char * value);
 
@@ -450,7 +443,7 @@ bool as_operations_add_write_str(as_operations * ops, const as_bin_name name, co
  *	@return true on success. Otherwise an error occurred.
  *
  *	@relates as_operations
- *	@ingroup as_operations_t
+ *	@ingroup as_operations_object
  */
 bool as_operations_add_write_raw(as_operations * ops, const as_bin_name name, const uint8_t * value, uint32_t size);
 
@@ -463,7 +456,7 @@ bool as_operations_add_write_raw(as_operations * ops, const as_bin_name name, co
  *	@return true on success. Otherwise an error occurred.
  *
  *	@relates as_operations
- *	@ingroup as_operations_t
+ *	@ingroup as_operations_object
  */
 bool as_operations_add_read(as_operations * ops, const as_bin_name name);
 
@@ -477,7 +470,7 @@ bool as_operations_add_read(as_operations * ops, const as_bin_name name);
  *	@return true on success. Otherwise an error occurred.
  *
  *	@relates as_operations
- *	@ingroup as_operations_t
+ *	@ingroup as_operations_object
  */
 bool as_operations_add_incr(as_operations * ops, const as_bin_name name, int64_t value);
 
@@ -491,7 +484,7 @@ bool as_operations_add_incr(as_operations * ops, const as_bin_name name, int64_t
  *	@return true on success. Otherwise an error occurred.
  *
  *	@relates as_operations
- *	@ingroup as_operations_t
+ *	@ingroup as_operations_object
  */
 bool as_operations_add_prepend_str(as_operations * ops, const as_bin_name name, const char * value);
 
@@ -506,7 +499,7 @@ bool as_operations_add_prepend_str(as_operations * ops, const as_bin_name name, 
  *	@return true on success. Otherwise an error occurred.
  *
  *	@relates as_operations
- *	@ingroup as_operations_t
+ *	@ingroup as_operations_object
  */
 bool as_operations_add_prepend_raw(as_operations * ops, const as_bin_name name, const uint8_t * value, uint32_t size);
 
@@ -520,7 +513,7 @@ bool as_operations_add_prepend_raw(as_operations * ops, const as_bin_name name, 
  *	@return true on success. Otherwise an error occurred.
  *
  *	@relates as_operations
- *	@ingroup as_operations_t
+ *	@ingroup as_operations_object
  */
 bool as_operations_add_append_str(as_operations * ops, const as_bin_name name, const char * value);
 
@@ -535,7 +528,7 @@ bool as_operations_add_append_str(as_operations * ops, const as_bin_name name, c
  *	@return true on success. Otherwise an error occurred.
  *
  *	@relates as_operations
- *	@ingroup as_operations_t
+ *	@ingroup as_operations_object
  */
 bool as_operations_add_append_raw(as_operations * ops, const as_bin_name name, const uint8_t * value, uint32_t size);
 
@@ -547,6 +540,6 @@ bool as_operations_add_append_raw(as_operations * ops, const as_bin_name name, c
  *	@return true on success. Otherwise an error occurred.
  *
  *	@relates as_operations
- *	@ingroup as_operations_t
+ *	@ingroup as_operations_object
  */
 bool as_operations_add_touch(as_operations * ops);

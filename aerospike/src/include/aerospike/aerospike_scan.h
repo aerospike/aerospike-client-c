@@ -21,21 +21,74 @@
  *****************************************************************************/
 
 /** 
- *	@defgroup scan_api Scan API
- *	@ingroup client_api
+ *	@defgroup scan_operations Scan Operations
+ *	@ingroup client_operations
  *
- *	Aerospike provides several modes of scanning data in a cluster.
+ *	Aerospike Scan Operations provide the ability to scan all record of a 
+ *	namespace and set in an Aerospike database. 
  *
- *	A scan can be performed on the entire cluster or a single node. When a scan
- *	is executed, a scan job is sent from the client to the cluster (or node). 
- *	The client can their wait for results to return or let the scan run 
- *	independently.
- * 
- *	Scans operations:
- *	- aerospike_scan_background()
- *	- aerospike_scan_foreach()
+ *	## Usage
  *
- *	@{
+ *	Before you can execute a scan, you first need to define a scan using 
+ *	as_scan. See as_scan for details on defining scans.
+ *
+ *	Once you have a scan defined, then you can execute the scan
+ *	using either:
+ *
+ *	- aerospike_scan_background() — Send a scan to the database, and not wait 
+ *		for completed. The scan is given an id, which can be used to query the
+ *		scan status.
+ *	- aerospike_scan_foreach() — Execute a scan on the database, then process 
+ *		the results.
+ *
+ *	When aerospike_scan_foreach() is executed, it will process the results
+ *	and create records on the stack. Because the records are on the stack, 
+ *	they will only be available within the context of the callback function.
+ *
+ *	## Walk-through
+ *	
+ *	First, we build a scan using as_scan. The scan will be on the "test"
+ *	namespace and "demo" set. We will select only bins "a" and "b" to be returned 
+ *	for each record.
+ *	
+ *	~~~~~~~~~~{.c}
+ *	as_scan scan;
+ *	as_scan_init(&scan, "test", "demo");
+ *
+ *	as_scan_select_inita(&scan, 2);
+ *	as_scan_select(&scan, "a");
+ *	as_scan_select(&scan, "B");
+ *	~~~~~~~~~~
+ *	
+ *	Now that we have a scan defined, we want to execute it using 
+ *	aerospike_scan_foreach().
+ *	
+ *	~~~~~~~~~~{.c}
+ *	if ( aerospike_scan_foreach(&as, &err, NULL, &scan, callback, NULL) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *	~~~~~~~~~~
+ *	
+ *	The callback provided to the function above is implemented as:
+ *	
+ *	~~~~~~~~~~{.c}
+ *	bool callback(const as_val * val, void * udata) {
+ *		as_record * rec = as_record_fromval(val);
+ *		if ( !rec ) return false;
+ *		fprintf("record contains %d bins", as_record_numbins(rec));
+ *		return true;
+ *	}
+ *	~~~~~~~~~~
+ *	
+ *	An as_scan is simply a scan definition, so it does not contain any state,
+ *	allowing it to be reused for multiple scan operations. 
+ *	
+ *	When you are finished with the scan, you should destroy the resources 
+ *	allocated to it:
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_scan_destroy(&scan);
+ *	~~~~~~~~~~
  */
 
 #pragma once
@@ -69,6 +122,8 @@
  *	@param udata 		User-data provided to the calling function.
  *
  *	@return `true` to continue to the next value. Otherwise, iteration will end.
+ *
+ *	@ingroup scan_operations
  */
 typedef bool (* aerospike_scan_foreach_callback)(const as_val * val, void * udata);
 
@@ -106,6 +161,8 @@ typedef bool (* aerospike_scan_foreach_callback)(const as_val * val, void * udat
  *	@param scan_id		The id for the scan job, which can be used for querying the status of the scan.
  *
  *	@return AEROSPIKE_OK on success. Otherwise an error occurred.
+ *
+ *	@ingroup scan_operations
  */
 as_status aerospike_scan_background(
 	aerospike * as, as_error * err, const as_policy_scan * policy, 
@@ -135,6 +192,8 @@ as_status aerospike_scan_background(
  *	@param info			Information about this scan, to be populated by this operation.
  *
  *	@return AEROSPIKE_OK on success. Otherwise an error occurred.
+ *
+ *	@ingroup scan_operations
  */
 as_status aerospike_scan_info(
 	aerospike * as, as_error * err, const as_policy_info * policy,
@@ -167,13 +226,11 @@ as_status aerospike_scan_info(
  *	@param udata		User-data to be passed to the callback.
  *
  *	@return AEROSPIKE_OK on success. Otherwise an error occurred.
+ *
+ *	@ingroup scan_operations
  */
 as_status aerospike_scan_foreach(
 	aerospike * as, as_error * err, const as_policy_scan * policy, 
 	const as_scan * scan, 
 	aerospike_scan_foreach_callback callback, void * udata
 	);
-
-/**
- *	@}
- */

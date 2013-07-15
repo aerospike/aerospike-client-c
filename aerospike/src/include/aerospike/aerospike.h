@@ -21,13 +21,19 @@
  *****************************************************************************/
 
 /**
- *	@defgroup client_api Aerospike Client API
- *	@copydoc aerospike
+ *	@defgroup client_operations Client Operations
+ *
+ *	Each of the client operations require an initialized @ref aerospike client. 
  */
 
 /**
- *	@defgroup aerospike_t Aerospike Data Types
+ *	@defgroup client_objects Client Objects
  */
+
+/**
+ *	@defgroup aerospike_t Aerospike Types
+ */
+
 
 #pragma once 
 
@@ -48,61 +54,90 @@
 struct cl_cluster_s;
 
 /**
- * 	In order to connect to an Aerospike Database cluster, you will need an
- *	instance of `aerospike`. Each `aerospike` instance is a client for a 
- *	single cluster. 
+ * 	An instance of @ref aerospike is required to connect to and execute 
+ *	operationgs against an Aerospike Database cluster.
  *
- *	You have the option of stack or heap allocating a client. 
+ *	## Configuration
  *
- *	To use a stack allocated client, you will need to initialize the 
- *	client via `aerospike_init()`:
+ *	An initialized client configuration is required to initialize a 
+ *	@ref aerospike client. See as_config for details on configuration options.
+ *	
+ *	At a minimum, a configuration needs to be initialized and have at least
+ *	one host defined:
+ *	
+ *	~~~~~~~~~~{.c}
+ *	as_config config;
+ *	as_config_init(&config);
+ *	config.hosts[0] = { "127.0.0.1", 3000 };
+ *	~~~~~~~~~~
+ *
+ *	A single host is used to specify a host in the database cluster to connect to. 
+ *	Once connected to a host in the cluster, then client will gather information
+ *	about the cluster, including all the other nodes in the cluster. So, all that
+ *	is needed is a single valid host, because once a single host is connected, the 
+ *	then no other hosts in the configuration will be processed.
+ *	
+ *	## Initialization
+ *
+ *	An initialized @ref aerospike object is required to connect to the 
+ *	database. Initialization requires a configuration, to bind to the client
+ *	instance. 
+ *
+ *	The @ref aerospike object can be initialized via either:
+ *
+ * 	- aerospike_init() — Initialize a stack allocated @ref aerospike.
+ *	- aerospike_new() — Create and initialize a heap allocated @ref aerospike.
+ *
+ *	Both initialization functions require a configuration.
+ *
+ *	The following uses a stack allocated @ref aerospike and initializes it
+ *	with aerospike_init():
  *
  *	~~~~~~~~~~{.c}
  *	aerospike as;
  *	aerospike_init(&as, &config);
  *	~~~~~~~~~~
  *	
- *	If you prefer to use a heap allocated client, then you should use
- *	`aerospike_new()`:
+ *	## Connecting
  *
+ *	An application can connect to the database with an initialized
+ *	@ref aerospike. At this point, the client has not connected. The 
+ *	client will be connected if `aerospike_connect()` completes 
+ *	successfully:
+ *	
  *	~~~~~~~~~~{.c}
- *	aerospike * as = aerospike_new(&config);
+ *	if ( aerospike_connect(&as, &err) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
  *	~~~~~~~~~~
  *
- *	The `config` parameter for both calls is an instance of `as_config`.
- *	The `as_config` provides configuration options for the client, including
- *	default policies, set of seed hosts to connect to and other options.
+ *	The `err` parameter will be populated if an error while attemping to
+ *	connect to the database. See as_error, for more information on error 
+ *	handling.
  *
- *	The client is not connected at this point. To connect the client to
- *	the cluster, you must calls `aerospike_connect()`:
+ *	## Disconnecting
+ *
+ *	When the connection to the database is not longer required, then the 
+ *	connection to the cluster can be closed via `aerospike_close()`:
  *
  *	~~~~~~~~~~{.c}
- *	aerospike_connect(as, &err);
+ *	aerospike_close(&as, &err);
  *	~~~~~~~~~~
  *
- *	The `err` parameter is an `as_error`, which get populated with error
- *	information such as error code, message, the function where the error
- *	had occurred, the filename and the line number.
+ *	## Destruction
  *
- *	When you are finished using the client, you should first close the 
- *	connections to the cluster via `aerospike_close()`:
+ *	When the client is not longer required, the client and its resources should 
+ *	be releases via `aerospike_destroy()`:
  *
  *	~~~~~~~~~~{.c}
- *	aerospike_close(as, &err);
- *	~~~~~~~~~~
- *
- *	Once the connection is close, you should clean up the resources 
- *	utilized by the client via `aerospike_destroy()`:
- *
- *	~~~~~~~~~~{.c}
- *	aerospike_destroy(as);
+ *	aerospike_destroy(&as);
  *	~~~~~~~~~~
  *
  *	@note 	Currently, only a single client instance can be created in an
  *			application. In the next release, you will be able to have 
  *			multiple clients in a single application.
  *
- *	@ingroup client_api
+ *	@ingroup client_objects
  */
 typedef struct aerospike_s {
 
@@ -142,8 +177,8 @@ typedef struct aerospike_s {
  *	then the default configuration will be used.
  *
  *	~~~~~~~~~~{.c}
- *		aerospike as;
- *		aerospike_init(&as, &config);
+ *	aerospike as;
+ *	aerospike_init(&as, &config);
  *	~~~~~~~~~~
  *
  *	Once you are finished using the instance, then you should destroy it via the 
@@ -155,8 +190,8 @@ typedef struct aerospike_s {
  *	@returns the initialized aerospike instance
  *
  *	@see config for information on configuring the client.
+ *
  *	@relates aerospike
- *	@ingroup client_api
  */
 aerospike * aerospike_init(aerospike * as, as_config * config);
 
@@ -164,7 +199,7 @@ aerospike * aerospike_init(aerospike * as, as_config * config);
  *	Creates a new heap allocated aerospike instance.
  *
  *	~~~~~~~~~~{.c}
- *		aerospike * as = aerospike_new(&config);
+ *	aerospike * as = aerospike_new(&config);
  *	~~~~~~~~~~
  *
  *	Once you are finished using the instance, then you should destroy it via the 
@@ -175,8 +210,8 @@ aerospike * aerospike_init(aerospike * as, as_config * config);
  *	@returns a new aerospike instance
  *
  *	@see config for information on configuring the client.
+ *
  *	@relates aerospike
- *	@ingroup client_api
  */
 aerospike * aerospike_new(as_config * config);
 
@@ -184,13 +219,12 @@ aerospike * aerospike_new(as_config * config);
  *	Destroy the aerospike instance and associated resources.
  *
  *	~~~~~~~~~~{.c}
- *		aerospike_destroy(&as);
+ *	aerospike_destroy(&as);
  *	~~~~~~~~~~
  *
  *	@param as 		The aerospike instance to destroy
  *
  *	@relates aerospike
- *	@ingroup client_api
  */
 void aerospike_destroy(aerospike * as);
 
@@ -198,7 +232,7 @@ void aerospike_destroy(aerospike * as);
  *	Connect an aerospike instance to the cluster.
  *
  *	~~~~~~~~~~{.c}
- *		aerospike_connect(&as, &err);
+ *	aerospike_connect(&as, &err);
  *	~~~~~~~~~~
  *
  *	Once you are finished using the connection, then you must close it via
@@ -212,7 +246,6 @@ void aerospike_destroy(aerospike * as);
  *	@returns AEROSPIKE_OK on success. Otherwise an error occurred.
  *
  *	@relates aerospike
- *	@ingroup client_api
  */
 as_status aerospike_connect(aerospike * as, as_error * err);
 
@@ -220,7 +253,7 @@ as_status aerospike_connect(aerospike * as, as_error * err);
  *	Close connections to the cluster.
  *
  *	~~~~~~~~~~{.c}
- *		aerospike_close(&as, &err);
+ *	aerospike_close(&as, &err);
  *	~~~~~~~~~~
  *
  *	@param as 		The aerospike instance to disconnect from a cluster.
@@ -229,7 +262,6 @@ as_status aerospike_connect(aerospike * as, as_error * err);
  *	@returns AEROSPIKE_OK on success. Otherwise an error occurred. 
  *
  *	@relates aerospike
- *	@ingroup client_api
  */
 as_status aerospike_close(aerospike * as, as_error * err);
 

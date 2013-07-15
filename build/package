@@ -26,6 +26,7 @@ mkdir -p $packageDir
 
 cp README.md $packageDir
 cp license.txt $packageDir
+cp ../aerospike/RELEASES.md
 
 mkdir -p $packageDir/docs
 cp -r ../aerospike/target/apidocs/html/* $packageDir/docs

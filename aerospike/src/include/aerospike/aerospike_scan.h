@@ -35,15 +35,20 @@
  *	Once you have a scan defined, then you can execute the scan
  *	using either:
  *
+ *	- aerospike_scan_foreach() — Execute a scan on the database, then process 
+ *		the results.
  *	- aerospike_scan_background() — Send a scan to the database, and not wait 
  *		for completed. The scan is given an id, which can be used to query the
  *		scan status.
- *	- aerospike_scan_foreach() — Execute a scan on the database, then process 
- *		the results.
  *
  *	When aerospike_scan_foreach() is executed, it will process the results
  *	and create records on the stack. Because the records are on the stack, 
  *	they will only be available within the context of the callback function.
+ *
+ *	When aerospike_scan_background() is executed, the client will not wait for 
+ *	results from the database. Instead, the client will be given a scan_id, 
+ *	which can be used to query the scan status on the database via 
+ *	aerospike_scan_info().
  *
  *	## Walk-through
  *	
@@ -152,7 +157,9 @@ typedef bool (* aerospike_scan_foreach_callback)(const as_val * val, void * udat
  *
  *	as_scan_destroy(&scan);
  *	~~~~~~~~~~
- *	
+ *
+ *	The scanid can be used to query the status of the scan running in the 
+ *	database via aerospike_scan_info().
  *
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
@@ -170,7 +177,8 @@ as_status aerospike_scan_background(
 	);
 
 /**
- *	Check the progress of a background scan running on the server.
+ *	Check the progress of a background scan running on the database. The status
+ *	of the scan running on the datatabse will be populated into an as_scan_info.
  *	
  *	~~~~~~~~~~{.c}
  *	uint64_t scan_id = 1234;
@@ -180,7 +188,7 @@ as_status aerospike_scan_background(
  *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *	}
  *	else {
- *		printf("Scan id=%ll, status=%s", scan_id, scan_info.status);
+ *		printf("Scan id=%ll, status=%d percent=%d", scan_id, scan_info.status, scan_info.progress_pct);
  *	}
  *	~~~~~~~~~~
  *	

@@ -1,6 +1,6 @@
 /*
  * Aerospike Demo
- * src/main.cpp - Demonstrate using Aerospike UDFs for ad campaigns.
+ * ad_udf.cpp - Demonstrate using Aerospike UDFs for ad campaigns.
  *
  *  Copyright 2013 by Aerospike.  All rights reserved.
  *  THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE.  THE COPYRIGHT NOTICE

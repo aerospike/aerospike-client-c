@@ -1,10 +1,6 @@
 CC = g++
 
-ifdef CLIENTREPO
-PREFIX = $(CLIENTREPO)/aerospike/target/Linux-x86_64
-else
-PREFIX = /usr
-endif
+PREFIX = ../../../../target/Linux-x86_64
 
 LIBRARY_PATH = $(PREFIX)/lib
 INCLUDE_PATH = $(PREFIX)/include

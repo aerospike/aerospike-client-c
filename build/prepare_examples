@@ -35,7 +35,7 @@ do
 			if (idx > 0)
 			{
 				str = $0
-				sub(/$(AEROSPIKE)\/target\/Linux-x86_64\/lib\/libaerospike.a/, "/usr/lib/libaerospike.a", str)
+				sub(/\$\(AEROSPIKE\)\/target\/Linux-x86_64\/lib\/libaerospike.a/, "/usr/lib/libaerospike.a", str)
 				print str
 			}
 		}

@@ -12,7 +12,7 @@ CFLAGS += -DMARCH_$(ARCH) -D_FILE_OFFSET_BITS=64
 CFLAGS += -D_REENTRANT -D_GNU_SOURCE -DMEM_COUNT
 CFLAGS += -I$(MSGPACK_PATH)/src
 
-LDFLAGS = -lssl -lcrypto -lpthread -lrt -llua -lm -lz $(LIBRARY_PATH)/libaerospike.a
+LDFLAGS = $(LIBRARY_PATH)/libaerospike.a -lssl -lcrypto -lpthread -lrt -llua -lm -lz
 
 ../../bin/ad_udf: ad_udf.cpp
 ifeq ($(wildcard $(LIBRARY_PATH)/libaerospike.a),)

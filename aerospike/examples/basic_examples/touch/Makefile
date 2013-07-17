@@ -52,7 +52,7 @@ target/obj/%.o: src/main/%.c | target/obj
 	gcc $(CFLAGS) -o $@ -c $^
 
 target/example: $(addprefix target/obj/,$(OBJECTS)) | target/bin
-	gcc $(LDFLAGS) -o $@ $^ $(AEROSPIKE)/target/Linux-x86_64/lib/libaerospike.a
+	gcc -o $@ $^ $(AEROSPIKE)/target/Linux-x86_64/lib/libaerospike.a $(LDFLAGS)
 
 .PHONY: run
 run: build

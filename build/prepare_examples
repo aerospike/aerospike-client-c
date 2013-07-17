@@ -34,9 +34,9 @@ do
 
 			if (idx > 0)
 			{
-				# Use extra space in lib to compensate for incompatibility
-				# between centos gawk and debian mawk.
-				print substr($0, 0, idx-1)," /usr/lib/libaerospike.a"
+				str = $0
+				sub(/$(AEROSPIKE)\/target\/Linux-x86_64\/lib\/libaerospike.a/, "/usr/lib/libaerospike.a", str)
+				print str
 			}
 		}
 		else

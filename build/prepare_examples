@@ -13,7 +13,7 @@ cp $srcExamplesDir/Makefile $trgExamplesDir
 cp $srcExamplesDir/README.md $trgExamplesDir
 cp -r $srcExamplesDir/utils $trgExamplesDir
 
-for i in $srcExamplesDir/basic_examples/*/Makefile $srcExamplesDir/query_examples/*/Makefile $srcExamplesDir/scan_examples/{background,standard}/Makefile
+for i in $srcExamplesDir/basic_examples/*/Makefile $srcExamplesDir/query_examples/*/Makefile $srcExamplesDir/scan_examples/background/Makefile $srcExamplesDir/scan_examples/standard/Makefile
 do
 	dir=`dirname $i`
 	example=`basename $dir`

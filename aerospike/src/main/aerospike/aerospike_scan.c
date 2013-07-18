@@ -147,6 +147,9 @@ static int simplescan_cb(
 
 	// Call the callback that user wanted to callback
 	bridge->callback((as_val *) rec, bridge->udata);
+
+	// The responsibility to free the bins is on the called callback function
+	citrusleaf_bins_free(bins, n_bins);
 	
 	// release the record
 	as_record_destroy(rec);

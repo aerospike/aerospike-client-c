@@ -152,7 +152,7 @@ as_status aerospike_query_foreach(
 
 	cl_query_destroy(clquery);
 
-	return rc ? AEROSPIKE_ERR_QUERY : AEROSPIKE_OK;
+	return as_error_fromrc(err, rc);
 }
 
 /**

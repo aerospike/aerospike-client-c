@@ -350,6 +350,10 @@ citrusleaf_info_cluster_all(cl_cluster *asc, char *names, char **values_r, bool 
 	uint64_t start = cf_getms();
 	uint64_t end = start + timeout_ms;
 	char *values = 0;
+
+	if (!asc) {
+		return -1;
+	}
 	
 	//
 	// not sure yet about the thread safety of this - I have only read-only use

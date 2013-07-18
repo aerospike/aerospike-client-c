@@ -34,6 +34,7 @@
 #include <unistd.h>
 
 #include <aerospike/aerospike.h>
+#include <aerospike/aerospike_index.h>
 #include <aerospike/aerospike_key.h>
 #include <aerospike/aerospike_udf.h>
 #include <aerospike/as_bin.h>
@@ -490,12 +491,56 @@ example_remove_udf(aerospike* p_as, const char* udf_file_path)
 
 	if (aerospike_udf_remove(p_as, &err, NULL, base) != AEROSPIKE_OK) {
 		LOG("aerospike_udf_remove() returned %d - %s", err.code, err.message);
+		return false;
 	}
 
 	// Wait for the system metadata to spread to all nodes.
 	usleep(100 * 1000);
 
-	return err.code == AEROSPIKE_OK;
+	return true;
+}
+
+
+//==========================================================
+// Secondary Index Registration
+//
+
+//------------------------------------------------
+// Create a numeric secondary index for a
+// specified bin in the database.
+//
+bool
+example_create_integer_index(aerospike* p_as, const char* bin,
+		const char* index)
+{
+	as_error err;
+
+	if (aerospike_index_integer_create(p_as, &err, NULL, g_namespace, g_set,
+			bin, index) != AEROSPIKE_OK) {
+		LOG("aerospike_index_integer_create() returned %d - %s", err.code,
+				err.message);
+		return false;
+	}
+
+	// Wait for the system metadata to spread to all nodes.
+	usleep(100 * 1000);
+
+	return true;
+}
+
+//------------------------------------------------
+// Remove a secondary index from the database.
+//
+void
+example_remove_index(aerospike* p_as, const char* index)
+{
+	as_error err;
+
+	// Ignore errors - just trying to leave the database as we found it.
+	aerospike_index_remove(p_as, &err, NULL, g_namespace, index);
+
+	// Wait for the system metadata to spread to all nodes.
+	usleep(100 * 1000);
 }
 
 

@@ -31,7 +31,6 @@
 #include <stdlib.h>
 
 #include <aerospike/aerospike.h>
-#include <aerospike/aerospike_index.h>
 #include <aerospike/aerospike_key.h>
 #include <aerospike/aerospike_query.h>
 #include <aerospike/as_error.h>
@@ -58,7 +57,6 @@ const char TEST_INDEX_NAME[] = "test-bin-index";
 bool query_cb(const as_val* p_val, void* udata);
 void cleanup(aerospike* p_as);
 bool insert_records(aerospike* p_as);
-void remove_test_index(aerospike* p_as);
 
 
 //==========================================================
@@ -79,15 +77,10 @@ main(int argc, char* argv[])
 
 	// Start clean.
 	example_remove_test_records(&as);
-	remove_test_index(&as);
-
-	as_error err;
+	example_remove_index(&as, TEST_INDEX_NAME);
 
 	// Create a numeric secondary index on test-bin.
-	if (aerospike_index_integer_create(&as, &err, NULL, g_namespace, g_set,
-			"test-bin", TEST_INDEX_NAME) != AEROSPIKE_OK) {
-		LOG("aerospike_index_integer_create() returned %d - %s", err.code,
-				err.message);
+	if (! example_create_integer_index(&as, "test-bin", TEST_INDEX_NAME)) {
 		cleanup(&as);
 		exit(-1);
 	}
@@ -101,6 +94,8 @@ main(int argc, char* argv[])
 		cleanup(&as);
 		exit(-1);
 	}
+
+	as_error err;
 
 	// Create an as_query object.
 	as_query query;
@@ -169,7 +164,7 @@ void
 cleanup(aerospike* p_as)
 {
 	example_remove_test_records(p_as);
-	remove_test_index(p_as);
+	example_remove_index(p_as, TEST_INDEX_NAME);
 	example_cleanup(p_as);
 }
 
@@ -206,13 +201,4 @@ insert_records(aerospike* p_as)
 	LOG("insert succeeded");
 
 	return true;
-}
-
-void
-remove_test_index(aerospike* p_as)
-{
-	as_error err;
-
-	// Ignore errors - just trying to leave the database as we found it.
-	aerospike_index_remove(p_as, &err, NULL, g_namespace, TEST_INDEX_NAME);
 }

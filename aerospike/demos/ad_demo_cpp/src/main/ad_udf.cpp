@@ -17,6 +17,7 @@ extern "C" {
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
@@ -227,6 +228,9 @@ int Ad_Udf::register_module(void)
 			return -1;
 		}
 		cout << "Successfully registered module file \"" <<  module_file << "\" as \"" << module_name << "\"\n";
+		// For now we need to wait a little to make sure the UDF package is
+		// distributed through the cluster before we can use it.
+		usleep(1000 * 100);
 	} else {
 		cout << "Unable to read module file \"" << module_file << "\" as \"" << module_name << "\" b_tot = " << b_tot << "\n";
 		return -1;

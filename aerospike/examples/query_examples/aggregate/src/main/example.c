@@ -133,6 +133,7 @@ main(int argc, char* argv[])
 				err.message);
 		as_query_destroy(&query);
 		cleanup(&as);
+		exit(-1);
 	}
 
 	LOG("query executed");

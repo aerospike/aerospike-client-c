@@ -173,6 +173,7 @@ as_udf_files * as_udf_files_defaults(as_udf_files * files, bool free, uint32_t c
 
 	if ( capacity > 0 ) {
 		files->entries = (as_udf_file *) malloc(sizeof(as_udf_file) * files->capacity);
+		files->entries->_free = true;
 	}
 	else {
 		files->entries = NULL;
@@ -216,8 +217,8 @@ void as_udf_files_destroy(as_udf_files * files)
 {
 	if ( files ) {
 		for ( int i = 0; i < files->size; i++ ) {
-			files->entries[i]._free = false;
 			as_udf_file_destroy(&files->entries[i]);
+			files->entries[i]._free = false;
 		}
 		if ( files->_free ) {
 			free(files->entries);

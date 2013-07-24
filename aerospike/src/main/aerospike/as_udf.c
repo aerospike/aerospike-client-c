@@ -155,6 +155,7 @@ void as_udf_file_destroy(as_udf_file * file)
 		file->content.bytes = NULL;
 		if ( file->_free ) {
 			free(file);
+			file = NULL;
 		}
 	}
 }
@@ -173,7 +174,6 @@ as_udf_files * as_udf_files_defaults(as_udf_files * files, bool free, uint32_t c
 
 	if ( capacity > 0 ) {
 		files->entries = (as_udf_file *) malloc(sizeof(as_udf_file) * files->capacity);
-		files->entries->_free = true;
 	}
 	else {
 		files->entries = NULL;
@@ -216,12 +216,17 @@ as_udf_files * as_udf_files_new(uint32_t capacity)
 void as_udf_files_destroy(as_udf_files * files)
 {
 	if ( files ) {
-		for ( int i = 0; i < files->size; i++ ) {
-			as_udf_file_destroy(&files->entries[i]);
-			files->entries[i]._free = false;
-		}
+
+		// entries is malloced in both init and new
+		// so we can directly free it
+		free(files->entries);
+
+		// files can be malloced or not.
+		// So handle both cases.
 		if ( files->_free ) {
-			free(files->entries);
+			free(files);
+			files = NULL;
+			return;
 		}
 		files->_free = false;
 		files->capacity = 0;

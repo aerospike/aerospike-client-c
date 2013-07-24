@@ -123,6 +123,7 @@ as_status aerospike_key_get(
 			r->bins.capacity = nvalues;
 			r->bins.size = 0;
 			r->bins.entries = malloc(sizeof(as_bin) * nvalues);
+			r->bins._free = true;
 		}
 		clbins_to_asrecord(values, nvalues, r);
 		r->gen = (uint16_t) gen;

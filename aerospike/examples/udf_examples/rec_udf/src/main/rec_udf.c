@@ -1863,8 +1863,8 @@ int do_udf_blob_list_unit_test() {
 
 	// arg 2 -> fancy list of bytes
     as_arraylist * lob = as_arraylist_new(2, 0);
-    as_bytes * b1 = as_bytes_new(test_bytes1,sizeof(test_bytes1),false/*ismalloc*/);
-    as_bytes * b2 = as_bytes_new(test_bytes2,sizeof(test_bytes2),false/*ismalloc*/);
+    as_bytes * b1 = as_bytes_new_wrap(test_bytes1,sizeof(test_bytes1),false/*ismalloc*/);
+    as_bytes * b2 = as_bytes_new_wrap(test_bytes2,sizeof(test_bytes2),false/*ismalloc*/);
     as_arraylist_set(lob,0,(as_val *)b1);
     as_arraylist_set(lob,1,(as_val *)b2);
 
@@ -1953,7 +1953,7 @@ int register_package()
 
 	char *err_str = NULL; 
 	as_bytes udf_content;
-	as_bytes_init(&udf_content, script_code, b_tot, true);
+	as_bytes_init_wrap(&udf_content, script_code, b_tot, true);
 	if (b_tot>0) { 
 		int resp = citrusleaf_udf_put(g_config->asc, basename(g_config->package_file), &udf_content, AS_UDF_LUA, &err_str); 
 		if (resp!=0) { 

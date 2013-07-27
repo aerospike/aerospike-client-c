@@ -112,7 +112,7 @@ int register_package()
 
 	as_error err;
     as_bytes udf_content;
-    as_bytes_init(&udf_content, script_code, b_tot, true);
+    as_bytes_init_wrap(&udf_content, script_code, b_tot, true);
     if (b_tot>0) { 
         int resp = aerospike_udf_put(&g_config->as, &err, NULL, basename(g_config->package_file), AS_UDF_TYPE_LUA, &udf_content); 
         if (resp!=0) { 
@@ -143,7 +143,7 @@ static int run_test2() {
 	as_error_reset(&err);
 
 	as_scan * scan = as_scan_new(g_config->ns, g_config->set);
-	as_scan_apply(scan, "scan_udf", g_config->function_name, NULL);
+	as_scan_apply_each(scan, "scan_udf", g_config->function_name, NULL);
 
 	uint64_t scan_id = cf_get_rand64();
 	extern cf_atomic32 g_initialized;

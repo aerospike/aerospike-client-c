@@ -129,19 +129,19 @@ typedef struct as_config_lua_s {
  *	The configuration also defines default policies for the application. The 
  *	`as_config_init()` function already presets default values for the policies.
  *	
- *	Policies define the behaviour of the client, which can be global across 
+ *	Policies define the behavior of the client, which can be global across
  *	operations, global to a single operation, or local to a single use of an
  *	operation.
  *	
  *	Each database operation accepts a policy for that operation as an a argument.
  *	This is considered a local policy, and is a single use policy. This policy
- *	supercedes any global policy defined.
+ *	supersedes any global policy defined.
  *	
  *	If a value of the policy is not defined, then the rule is to fallback to the
  *	global policy for that operation. If the global policy for that operation is
  *	undefined, then the global default value will be used.
  *
- *	If you find that you have behaviour that you want every use of an operation
+ *	If you find that you have behavior that you want every use of an operation
  *	to utilize, then you can specify the default policy in as_config.policies.
  *
  *	For example, the `aerospike_key_put()` operation takes an `as_policy_write`

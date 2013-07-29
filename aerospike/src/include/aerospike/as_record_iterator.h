@@ -159,7 +159,7 @@ typedef struct as_record_iterator_s {
  *	
  *	@param record 	The record to iterate over.
  *
- *	@return On success, a new as_record_iterator. Otherwsie an error occurred.
+ *	@return On success, a new as_record_iterator. Otherwise an error occurred.
  *
  *	@relates as_record_iterator
  *	@ingroup as_record_object
@@ -186,7 +186,7 @@ as_record_iterator * as_record_iterator_new(const as_record * record);
  *	@param iterator		The iterator to initialize.
  *	@param record		The record to iterate over
  *
- *	@return On success, a new as_record_iterator. Otherwsie an error occurred.
+ *	@return On success, a new as_record_iterator. Otherwise an error occurred.
  *
  *	@relates as_record_iterator
  *	@ingroup as_record_object

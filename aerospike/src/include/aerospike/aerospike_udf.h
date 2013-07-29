@@ -24,9 +24,9 @@
  *	@defgroup udf_operations UDF Operations
  *	@ingroup client_operations
  *
- *	The UDF API provides the ability to manade UDFs in the cluster.
+ *	The UDF API provides the ability to manage UDFs in the cluster.
  *
- *	Management capacilities include:
+ *	Management capabilities include:
  *	- aerospike_udf_list() - 	List the UDF modules in the cluster.
  *	- aerospike_udf_foreach() -	List the UDF modules in the cluster.
  *	- aerospike_udf_get() -		Download a UDF module.

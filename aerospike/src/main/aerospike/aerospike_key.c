@@ -123,6 +123,7 @@ as_status aerospike_key_get(
 			r->bins.capacity = nvalues;
 			r->bins.size = 0;
 			r->bins.entries = malloc(sizeof(as_bin) * nvalues);
+			r->bins._free = true;
 		}
 		clbins_to_asrecord(values, nvalues, r);
 		r->gen = (uint16_t) gen;
@@ -223,6 +224,7 @@ as_status aerospike_key_select(
 			r->bins.capacity = nvalues;
 			r->bins.size = 0;
 			r->bins.entries = malloc(sizeof(as_bin) * nvalues);
+			r->bins._free = true;
 		}
 		clbins_to_asrecord(values, nvalues, r);
 		r->gen = (uint16_t) gen;
@@ -543,6 +545,7 @@ as_status aerospike_key_operate(
 			r->bins.capacity = n_read_ops;
 			r->bins.size = 0;
 			r->bins.entries = malloc(sizeof(as_bin) * n_read_ops);
+			r->bins._free = true;
 		}
 		r->gen = (uint16_t) gen;
 		r->ttl = ttl;

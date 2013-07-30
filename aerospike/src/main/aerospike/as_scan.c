@@ -41,7 +41,8 @@ static as_scan * as_scan_defaults(as_scan * scan, bool free, const as_namespace 
 		scan->ns[0] = '\0';
 	}
 	
-	if ( strlen(set) < AS_SET_MAX_SIZE ) {
+    //check set==NULL and set name length
+	if ( set && strlen(set) < AS_SET_MAX_SIZE ) {
 		strcpy(scan->set, set);
 	}
 	else {

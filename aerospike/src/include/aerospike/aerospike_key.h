@@ -52,16 +52,16 @@
  *	Look up a record by key, then return all bins.
  *
  *	~~~~~~~~~~{.c}
- *		as_key key;
- *		as_key_init(&key, "ns", "set", "key");
- *
- *		as_record * rec = NULL;
- *		if ( aerospike_key_get(&as, &err, NULL, &key, &rec) != AEROSPIKE_OK ) {
- *			fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *		}
- *		else {
- *			as_record_destroy(rec);
- *		}
+ *	as_key key;
+ *	as_key_init(&key, "ns", "set", "key");
+ *	
+ *	as_record * rec = NULL;
+ *	if ( aerospike_key_get(&as, &err, NULL, &key, &rec) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *	else {
+ *		as_record_destroy(rec);
+ *	}
  *	~~~~~~~~~~
  *
  *	@param as			The aerospike instance to use for this operation.
@@ -84,18 +84,18 @@ as_status aerospike_key_get(
  *	Lookup a record by key, then return specified bins.
  *
  *	~~~~~~~~~~{.c}
- *		char * select[] = {"bin1", "bin2", "bin3", NULL};
- *		
- *		as_key key;
- *		as_key_init(&key, "ns", "set", "key");
- *
- *		as_record * rec = NULL;
- *		if ( aerospike_key_select(&as, &err, NULL, &key, select, &rec) != AEROSPIKE_OK ) {
- *			fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *		}
- *		else {
- *			as_record_destroy(rec);
- *		}
+ *	char * select[] = {"bin1", "bin2", "bin3", NULL};
+ *	
+ *	as_key key;
+ *	as_key_init(&key, "ns", "set", "key");
+ *	
+ *	as_record * rec = NULL;
+ *	if ( aerospike_key_select(&as, &err, NULL, &key, select, &rec) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *	else {
+ *		as_record_destroy(rec);
+ *	}
  *	~~~~~~~~~~
  *
  *	@param as			The aerospike instance to use for this operation.
@@ -119,16 +119,16 @@ as_status aerospike_key_select(
  *	Check if a record exists in the cluster via its key.
  *
  *	~~~~~~~~~~{.c}
- *		as_key key;
- *		as_key_init(&key, "ns", "set", "key");
- *
- *		bool exists = true;
- *		if ( aerospike_key_exists(&as, &err, NULL, &key, &exists) != AEROSPIKE_OK ) {
- *			fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *		}
- *		else {
- *			fprintf(stdout, "Record %s", exists ? "exists." : "doesn't exist.");
- *		}
+ *	as_key key;
+ *	as_key_init(&key, "ns", "set", "key");
+ *	
+ *	bool exists = true;
+ *	if ( aerospike_key_exists(&as, &err, NULL, &key, &exists) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *	else {
+ *		fprintf(stdout, "Record %s", exists ? "exists." : "doesn't exist.");
+ *	}
  *	~~~~~~~~~~
  *
  *	@param as			The aerospike instance to use for this operation.
@@ -151,19 +151,19 @@ as_status aerospike_key_exists(
  *	Store a record in the cluster.
  *
  *	~~~~~~~~~~{.c}
- *		as_key key;
- *		as_key_init(&key, "ns", "set", "key");
+ *	as_key key;
+ *	as_key_init(&key, "ns", "set", "key");
  *
- *		as_record rec;
- *		as_record_init(&rec, 2);
- *		as_record_set_str(&rec, "bin1", "abc");
- *		as_record_set_int64(&rec, "bin2", 123);
- *		
- *		if ( aerospike_key_put(&as, &err, NULL, &key, &rec) != AEROSPIKE_OK ) {
- *			fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *		}
- *		
- *		as_record_destroy(&rec);
+ *	as_record rec;
+ *	as_record_init(&rec, 2);
+ *	as_record_set_str(&rec, "bin1", "abc");
+ *	as_record_set_int64(&rec, "bin2", 123);
+ *	
+ *	if ( aerospike_key_put(&as, &err, NULL, &key, &rec) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *	
+ *	as_record_destroy(&rec);
  *	~~~~~~~~~~
  *
  *	@param as			The aerospike instance to use for this operation.
@@ -185,12 +185,12 @@ as_status aerospike_key_put(
  *	Remove a record from the cluster.
  *
  *	~~~~~~~~~~{.c}
- *		as_key key;
- *		as_key_init(&key, "ns", "set", "key");
+ *	as_key key;
+ *	as_key_init(&key, "ns", "set", "key");
  *
- *		if ( aerospike_key_remove(&as, &err, NULL, &key) != AEROSPIKE_OK ) {
- *			fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *		}
+ *	if ( aerospike_key_remove(&as, &err, NULL, &key) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
  *	~~~~~~~~~~
  *
  *	@param as			The aerospike instance to use for this operation.
@@ -211,25 +211,25 @@ as_status aerospike_key_remove(
  *	Lookup a record by key, then perform specified operations.
  *
  *	~~~~~~~~~~{.c}
- *		as_key key;
- *		as_key_init(&key, "ns", "set", "key");
+ *	as_key key;
+ *	as_key_init(&key, "ns", "set", "key");
  *
- *		as_operations ops;
- *		as_operations_inita(&ops,3);
- *		as_operations_add_incr(&ops, "bin1", 456);
- *		as_operations_add_append_str(&ops, "bin2", "def");
- *		as_operations_add_read(&ops, "bin1")
+ *	as_operations ops;
+ *	as_operations_inita(&ops,3);
+ *	as_operations_add_incr(&ops, "bin1", 456);
+ *	as_operations_add_append_str(&ops, "bin2", "def");
+ *	as_operations_add_read(&ops, "bin1")
  *
- *		as_record * rec = NULL;
+ *	as_record * rec = NULL;
  *
- *		if ( aerospike_key_operate(&as, &err, NULL, &key, &ops, &rec) != AEROSPIKE_OK ) {
- *			fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *		}
- *		else {
- *			as_record_destroy(rec);
- *		}
+ *	if ( aerospike_key_operate(&as, &err, NULL, &key, &ops, &rec) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *	else {
+ *		as_record_destroy(rec);
+ *	}
  *
- *		as_operations_destroy(&ops);
+ *	as_operations_destroy(&ops);
  *	~~~~~~~~~~
  *	
  *	@param as			The aerospike instance to use for this operation.
@@ -253,24 +253,24 @@ as_status aerospike_key_operate(
  *	Lookup a record by key, then apply the UDF.
  *
  *	~~~~~~~~~~{.c}
- *		as_key key;
- *		as_key_init(&key, "ns", "set", "key");
+ *	as_key key;
+ *	as_key_init(&key, "ns", "set", "key");
  *
- *		as_arraylist args;
- *		as_arraylist_inita(&args, 2);
- *		as_arraylist_append_int64(&args, 1);
- *		as_arraylist_append_int64(&args, 2);
- *		
- *		as_val * res = NULL;
- *		
- *		if ( aerospike_key_apply(&as, &err, NULL, &key, "math", "add", &args, &res) != AEROSPIKE_OK ) {
- *			fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *		}
- *		else {
- *			as_val_destroy(res);
- *		}
- *		
- *		as_arraylist_destroy(&args);
+ *	as_arraylist args;
+ *	as_arraylist_inita(&args, 2);
+ *	as_arraylist_append_int64(&args, 1);
+ *	as_arraylist_append_int64(&args, 2);
+ *	
+ *	as_val * res = NULL;
+ *	
+ *	if ( aerospike_key_apply(&as, &err, NULL, &key, "math", "add", &args, &res) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *	else {
+ *		as_val_destroy(res);
+ *	}
+ *	
+ *	as_arraylist_destroy(&args);
  *	~~~~~~~~~~
  *
  *

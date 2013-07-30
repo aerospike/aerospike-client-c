@@ -75,7 +75,7 @@ int udf_put(cl_cluster * asc, const char * module, const char * module_path) {
 	
 	if ( rc == 0 ) {
 		as_bytes udf_content;
-		as_bytes_init(&udf_content, content, content_len, true /*is_malloc*/);  // want to re-use content
+		as_bytes_init_wrap(&udf_content, content, content_len, true /*is_malloc*/);  // want to re-use content
 
 		rc = citrusleaf_udf_put(asc, basename(filename), &udf_content, AS_UDF_LUA, &error);
 		if ( rc != 0 ) {

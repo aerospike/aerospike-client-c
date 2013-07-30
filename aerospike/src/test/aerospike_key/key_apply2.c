@@ -240,6 +240,8 @@ TEST( key_apply2_getmap , "apply2: (test,test,foo) <!> key_apply2.getmap() => {x
 	assert( res->type == AS_MAP );
 	as_map *res_map =  as_map_fromval(res);
 	assert_not_null( res_map );
+	
+	as_hashmap_destroy(&map);
 	// assert_int_eq( map, '{x: 7, y: 8, z: 9}' );
 	// assert_int_eq( res_map, map );
 }

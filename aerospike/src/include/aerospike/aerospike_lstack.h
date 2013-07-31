@@ -55,7 +55,7 @@
  *	as_key_init(&key, "ns", "set", "key");
  *
  *	as_ldt stack;
- *	as_ldt_init(&ldt, "stack", "lstack", NULL);
+ *	as_ldt_init(&stack, "stack", "lstack", NULL);
  *	
  *	as_integer ival;
  *	as_integer_init(&ival, 123);
@@ -88,7 +88,7 @@ as_status aerospike_lstack_push(
  *	as_key_init(&key, "ns", "set", "key");
  *
  *	as_ldt stack;
- *	as_ldt_init(&ldt, "stack", "lstack", NULL);
+ *	as_ldt_init(&stack, "stack", "lstack", NULL);
  *	
  *	as_integer ival;
  *	as_integer_init(&ival, 123);
@@ -121,7 +121,7 @@ as_status aerospike_lstack_pushall(
  *	as_key_init(&key, "ns", "set", "key");
  *
  *	as_ldt stack;
- *	as_ldt_init(&ldt, "stack", "lstack", NULL);
+ *	as_ldt_init(&stack, "stack", "lstack", NULL);
  *	
  *	as_arraylist _list, *list = as_arraylist_init(&_list, 3, 0);
  *	

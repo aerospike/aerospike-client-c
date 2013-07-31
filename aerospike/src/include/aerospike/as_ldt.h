@@ -26,29 +26,17 @@
 #include <aerospike/as_map.h>
 
 /******************************************************************************
- *	MACROS
+ *	CONSTANTS
  *****************************************************************************/
 
-/**
- *	Maximum bin name size
- */
-#define AS_LDT_TYPE_MAX_SIZE 16
-
-/**
- *	Maximum bin name length
- */
-#define AS_LDT_TYPE_MAX_LEN (AS_LDT_TYPE_MAX_SIZE - 1)
+#define AS_LDT_LLIST "llist"
+#define AS_LDT_LMAP "lmap"
+#define AS_LDT_LSET "lset"
+#define AS_LDT_LSTACK "lstack"
 
 /******************************************************************************
  *	TYPES
  *****************************************************************************/
-
-/**
- *	LDT Typename
- *
- *	@ingroup as_ldt_object
- */
-typedef char as_ldt_type[AS_LDT_TYPE_MAX_SIZE];
 
 /**
  *	Represents a bin containing an LDT value. 
@@ -65,12 +53,12 @@ typedef struct as_ldt_s {
 	/**
 	 *	LDT Type.
 	 */
-	as_ldt_type type;
+	const char * type;
 
 	/**
-	 *	LDT Properties
+	 *	LDT Module
 	 */
-	as_map * properties;
+	const char * module;
 	
 } as_ldt;
 
@@ -90,14 +78,14 @@ typedef struct as_ldt_s {
  *	
  *	@param name		The name of the bin to contain the ldt.
  *	@param type		The type of ldt bin.
- *	@param props	The properties for the ldt.
+ *	@param module		The LDT module for this bin.
  *
  *	@return The initialized as_key on success. Otherwise NULL.
  *
  *	@relates as_ldt
  *	@ingroup as_ldt_object
  */
-as_ldt * as_ldt_new(as_bin_name name, as_ldt_type type, as_map * props);
+as_ldt * as_ldt_new(as_bin_name name, const char * type, const char * module);
 
 
 /**
@@ -114,14 +102,14 @@ as_ldt * as_ldt_new(as_bin_name name, as_ldt_type type, as_map * props);
  *	@param ldt		The ldt to initialize.
  *	@param name		The name of the bin to contain the ldt.
  *	@param type		The type of ldt bin.
- *	@param props	The properties for the ldt.
+ *	@param module		The LDT module for this bin.
  *
  *	@return The initialized as_key on success. Otherwise NULL.
  *
  *	@relates as_ldt
  *	@ingroup as_ldt_object
  */
-as_ldt * as_ldt_init(as_ldt * ldt, as_bin_name name, as_ldt_type type, as_map * props);
+as_ldt * as_ldt_init(as_ldt * ldt, as_bin_name name, const char * type, as_map * module);
 
 /**
  *	Destory the as_ldt, releasing resources.

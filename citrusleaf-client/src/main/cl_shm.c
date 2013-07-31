@@ -39,10 +39,10 @@
 bool g_shared_memory;
 
 /* Shared memory global variables */
-static shm_info g_shm_info;
+static cl_shm_info g_shm_info;
 
 /* Shared memory pointer */
-static shm * g_shm_pt;
+static cl_shm * g_shm_pt;
 
 /* Shared memory updater thread */
 static pthread_t g_shm_update_thr;
@@ -97,7 +97,7 @@ void* cl_shm_updater_fn(void *);
 int citrusleaf_use_shm(int num_nodes, key_t key) 
 {
 	if (g_shm_initiated) {
-		return SHM_OK;
+		return CL_SHM_OK;
 	}
 
 	g_max_nodes = (num_nodes > 0)? num_nodes : DEFAULT_NUM_NODES_FOR_SHM;
@@ -112,12 +112,12 @@ int citrusleaf_use_shm(int num_nodes, key_t key)
 	cf_debug("Shared memory key is %d",key);
 
 	if (key == -1) {
-		return SHM_ERROR;
+		return CL_SHM_ERROR;
 	}
 	void * shm_pt = (void*)0;
 	
-	/* The size of the shared memory is the size of the shm structure*/
-	g_shm_info.shm_sz = sizeof(shm) + sizeof(shm_ninfo) * g_max_nodes;
+	/* The size of the shared memory is the size of the cl_shm structure*/
+	g_shm_info.shm_sz = sizeof(cl_shm) + sizeof(cl_shm_ninfo) * g_max_nodes;
 	
 	/* Fix the update thread end condition to false and update period to 1*/
 	g_shm_info.update_thread_end_cond = false;
@@ -130,13 +130,13 @@ int citrusleaf_use_shm(int num_nodes, key_t key)
 
 	if (!f) {
 		cf_error("Failed to open file: %s", SHMMAX_SYS_FILE);
-		return SHM_ERROR;
+		return CL_SHM_ERROR;
 	}
 
 	if (fscanf(f, "%zu", &shm_max) != 1) {
 		cf_error("Failed to read shmmax from file: %s", SHMMAX_SYS_FILE);
 		fclose(f);
-		return SHM_ERROR;
+		return CL_SHM_ERROR;
 	}
 
 	fclose(f);
@@ -144,7 +144,7 @@ int citrusleaf_use_shm(int num_nodes, key_t key)
 	if(shm_max < g_shm_info.shm_sz) {
 		cf_error("Shared memory size %zu exceeds system max %zu.", g_shm_info.shm_sz, shm_max);
 		cf_error("You can increase shared memory size by: sysctl -w kernel.shmmax=<new_size>");
-		return SHM_ERROR;
+		return CL_SHM_ERROR;
 	}
 	
 	// First try to exclusively create a shared memory, for this only one process will succeed.
@@ -153,7 +153,7 @@ int citrusleaf_use_shm(int num_nodes, key_t key)
 		// if there are any other errors apart from EEXIST, we can return gracefully 
 		if(errno != EEXIST) {
 			cf_error("Error in getting shared memory exclusively: %s", strerror(errno));
-			return SHM_ERROR;	
+			return CL_SHM_ERROR;	
 		}
 		else {
 			// For all the processes that failed to create with EEXIST,
@@ -161,17 +161,17 @@ int citrusleaf_use_shm(int num_nodes, key_t key)
 			// have a valid shmid
 			if((g_shm_info.id = shmget(key,g_shm_info.shm_sz,IPC_CREAT | 0666))<0) {
 				cf_error("Error in attaching to shared memory: %s", strerror(errno));
-				return SHM_ERROR;
+				return CL_SHM_ERROR;
 			}
 	
 			// Attach to the shared memory
 			if((shm_pt = shmat(g_shm_info.id,NULL,0))==(void*)-1) {
 				cf_error("Error in attaching to shared memory: %s pid: %d", strerror(errno), getpid());
-				return SHM_ERROR;
+				return CL_SHM_ERROR;
 			}
 		
 			// The shared memory base pointer
-			g_shm_pt = (shm*)shm_pt;
+			g_shm_pt = (cl_shm*)shm_pt;
 		}
 	}
 	else {
@@ -181,11 +181,11 @@ int citrusleaf_use_shm(int num_nodes, key_t key)
 		// Attach to the shared memory
 		if ((shm_pt = shmat(g_shm_info.id,NULL,0))==(void*)-1) {
 			cf_error("Error in attaching to shared memory: %s pid: %d", strerror(errno), getpid());
-			return SHM_ERROR;
+			return CL_SHM_ERROR;
 		}
 
 		// The shared memory base pointer
-		g_shm_pt = (shm*)shm_pt;
+		g_shm_pt = (cl_shm*)shm_pt;
 		memset(g_shm_pt,0,g_shm_info.shm_sz);
 
 		// If you are the one who created the shared memory, only you can initialize the mutexes.
@@ -198,7 +198,7 @@ int citrusleaf_use_shm(int num_nodes, key_t key)
 		if(pthread_mutex_init (&(g_shm_pt->shm_lock), &attr)!=0) {
 			cf_error("Mutex init failed pid %d",getpid());
 			pthread_mutexattr_destroy(&attr);
-			return SHM_ERROR;
+			return CL_SHM_ERROR;
 		}
 		pthread_mutexattr_destroy(&attr);
 	}
@@ -206,12 +206,12 @@ int citrusleaf_use_shm(int num_nodes, key_t key)
 
 	// all well? return aok!
 	g_shm_initiated = true;
-	return SHM_OK;
+	return CL_SHM_OK;
 }
 
 // Lock shared memory node exclusively.
 int
-cl_shm_node_lock(shm_ninfo* shared_node)
+cl_shm_node_lock(cl_shm_ninfo* shared_node)
 {
 	int status = pthread_mutex_lock(&shared_node->ninfo_lock);
 
@@ -227,15 +227,15 @@ cl_shm_node_lock(shm_ninfo* shared_node)
 			  * dies and the other process that gets the lock unlocks it without making it consistent
 			  * (via pthread_mutex_consistent function) */
 			cf_warn("Failed to lock shared memory node.");
-			return SHM_ERROR;
+			return CL_SHM_ERROR;
 		}
 	}
-	return SHM_OK;
+	return CL_SHM_OK;
 }
 
 // Unlock shared memory node.
 void
-cl_shm_node_unlock(shm_ninfo* shared_node)
+cl_shm_node_unlock(cl_shm_ninfo* shared_node)
 {
 	pthread_mutex_unlock(&shared_node->ninfo_lock);
 }
@@ -246,12 +246,12 @@ cl_shm_get_partition_count()
 	return g_shm_pt->partition_count;
 }
 
-shm_ninfo*
+cl_shm_ninfo*
 cl_shm_find_node_from_name(const char* node_name)
 {
     // Search nodes for node name
     for (int i = 0; i < g_shm_pt->node_count; i++) {
-    	shm_ninfo* node_info = &g_shm_pt->node_info[i];
+    	cl_shm_ninfo* node_info = &g_shm_pt->node_info[i];
 
     	if (strcmp(node_info->node_name, node_name) == 0) {
 			return node_info;
@@ -260,12 +260,12 @@ cl_shm_find_node_from_name(const char* node_name)
     return 0;
 }
 
-shm_ninfo*
+cl_shm_ninfo*
 cl_shm_find_node_from_address(struct sockaddr_in* sa_in)
 {
     // Search nodes for sockaddr
     for (int i = 0; i < g_shm_pt->node_count; i++) {
-    	shm_ninfo* node_info = &g_shm_pt->node_info[i];
+    	cl_shm_ninfo* node_info = &g_shm_pt->node_info[i];
     	int max = node_info->address_count;
 
         //Search address for the current sockaddr
@@ -279,7 +279,7 @@ cl_shm_find_node_from_address(struct sockaddr_in* sa_in)
 }
 
 static void
-cl_shm_copy_addresses(cl_seed_node* src, shm_ninfo* trg)
+cl_shm_copy_addresses(cl_seed_node* src, cl_shm_ninfo* trg)
 {
 	trg->address_count = src->address_count;
 
@@ -288,7 +288,7 @@ cl_shm_copy_addresses(cl_seed_node* src, shm_ninfo* trg)
 	}
 }
 
-static shm_ninfo*
+static cl_shm_ninfo*
 cl_shm_add_node(cl_seed_node* seed)
 {
 	if (g_shm_pt->node_count >= g_max_nodes) {
@@ -297,7 +297,7 @@ cl_shm_add_node(cl_seed_node* seed)
 	}
 
 	// Place the node at the last offset.
-	shm_ninfo* shared_node = &(g_shm_pt->node_info[g_shm_pt->node_count]);
+	cl_shm_ninfo* shared_node = &(g_shm_pt->node_info[g_shm_pt->node_count]);
 
 	// Copy node addresses.
 	cl_shm_copy_addresses(seed, shared_node);
@@ -329,10 +329,10 @@ cl_shm_request_n_partitions(struct sockaddr_in* address_array, int address_count
 	for (int i = 0; i < address_count; i++) {
 		if (cl_request_n_partitions(&address_array[i], n_partitions) == 0) {
 			// Return on first successful request.
-			return SHM_OK;
+			return CL_SHM_OK;
 		}
 	}
-	return SHM_ERROR;
+	return CL_SHM_ERROR;
 }
 
 static int
@@ -342,10 +342,10 @@ cl_shm_request_node_info(struct sockaddr_in* address_array, int address_count, c
 	for (int i = 0; i < address_count; i++) {
 		if (cl_request_node_info(&address_array[i], node_info) == 0) {
 			// Return on first successful request.
-			return SHM_OK;
+			return CL_SHM_OK;
 		}
 	}
-	return SHM_ERROR;
+	return CL_SHM_ERROR;
 }
 
 static int
@@ -355,10 +355,10 @@ cl_shm_request_replicas(struct sockaddr_in* address_array, int address_count, cl
 	for (int i = 0; i < address_count; i++) {
 		if (cl_request_replicas(&address_array[i], replicas) == 0) {
 			// Return on first successful request.
-			return SHM_OK;
+			return CL_SHM_OK;
 		}
 	}
-	return SHM_ERROR;
+	return CL_SHM_ERROR;
 }
 
 static int
@@ -374,11 +374,11 @@ cl_shm_node_ping(cl_seed_node* seed)
 	// Request node information.
 	cl_node_info request;
 
-	if (cl_shm_request_node_info(seed->address_array, seed->address_count, &request) != SHM_OK) {
+	if (cl_shm_request_node_info(seed->address_array, seed->address_count, &request) != CL_SHM_OK) {
 		return -1;
 	}
 
-	shm_ninfo* shared = cl_shm_find_node_from_name(seed->name);
+	cl_shm_ninfo* shared = cl_shm_find_node_from_name(seed->name);
 	bool add = false;
 
 	if (shared == 0) {
@@ -424,7 +424,7 @@ cl_shm_node_ping(cl_seed_node* seed)
 	if (request_replicas) {
 		cl_replicas replicas;
 
-		if (cl_shm_request_replicas(seed->address_array, seed->address_count, &replicas) != SHM_OK) {
+		if (cl_shm_request_replicas(seed->address_array, seed->address_count, &replicas) != CL_SHM_OK) {
 			return -3;
 		}
 
@@ -441,7 +441,7 @@ cl_shm_node_ping(cl_seed_node* seed)
 		cl_shm_node_unlock(shared);
 		cl_replicas_free(&replicas);
 	}
-	return SHM_OK;
+	return CL_SHM_OK;
 }
 
 /* This function (cl_shm_update) should only be called from cl_shm_updater_fn
@@ -574,11 +574,11 @@ citrusleaf_shm_free()
 
 	// Detach shared memory
 	if (shmdt(g_shm_pt) < 0 ) {
-		return SHM_ERROR;
+		return CL_SHM_ERROR;
 	}
 
 	// Try removing the shared memory - it will fail if any other process is still attached.
 	// Failure is normal behavior, so don't check return code.
 	shmctl(g_shm_info.id, IPC_RMID, 0);
-	return SHM_OK;
+	return CL_SHM_OK;
 }

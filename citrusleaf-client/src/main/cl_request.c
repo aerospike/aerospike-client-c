@@ -84,7 +84,7 @@ int
 cl_get_node_info(const char* node_name, struct sockaddr_in* sa_in, cl_node_info* node_info)
 {
 	if (g_shared_memory) {
-		shm_ninfo* shared = cl_shm_find_node_from_name(node_name);
+		cl_shm_ninfo* shared = cl_shm_find_node_from_name(node_name);
 
 		if (shared) {
 			// cf_debug("Use shared memory for node info.");
@@ -148,7 +148,7 @@ int
 cl_get_replicas(const char* node_name, struct sockaddr_in* sa_in, cl_replicas* replicas)
 {
 	if (g_shared_memory) {
-		shm_ninfo* shared = cl_shm_find_node_from_name(node_name);
+		cl_shm_ninfo* shared = cl_shm_find_node_from_name(node_name);
 
 		if (shared) {
 			// cf_debug("Use shared memory for replicas.");
@@ -214,7 +214,7 @@ int
 cl_get_node_name(struct sockaddr_in* sa_in, char* node_name)
 {
 	if (g_shared_memory) {
-		shm_ninfo* shared = cl_shm_find_node_from_address(sa_in);
+		cl_shm_ninfo* shared = cl_shm_find_node_from_address(sa_in);
 
 		if (shared) {
 			// cf_debug("Use shared memory for node name.");

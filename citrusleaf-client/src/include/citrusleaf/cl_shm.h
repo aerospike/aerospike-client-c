@@ -34,8 +34,8 @@
 #define NUM_NAMESPACES 10
 
 /*Shared memory return values*/
-#define SHM_ERROR -1
-#define SHM_OK 0
+#define CL_SHM_ERROR -1
+#define CL_SHM_OK 0
 
 //The shared memory is divided into nodes, each node has a socket address structure and 
 //the data associated with that structure. 
@@ -67,7 +67,7 @@
 
 /* The shm structure has some metadata (updater_id, node_count, global lock)
  * and then start the actual node information. Each node's information is further
- * represented by a structure shm_ninfo which has a socket address, node level lock
+ * represented by a structure cl_shm_ninfo which has a socket address, node level lock
  * and the fields */
 typedef struct {
 	struct sockaddr_in address_array[MAX_ADDRESSES_PER_NODE];
@@ -79,7 +79,7 @@ typedef struct {
 	char write_replicas[SZ_FIELD_PARTITIONS];
 	char read_replicas[SZ_FIELD_PARTITIONS];
 	bool dun;
-} shm_ninfo;
+} cl_shm_ninfo;
 
 typedef struct {
 	size_t updater_id;
@@ -89,8 +89,8 @@ typedef struct {
 
 	/* Change this approach to calculating address 
  	 * of all the structures in the shared memory upfront*/
-	shm_ninfo node_info[];
-} shm;
+	cl_shm_ninfo node_info[];
+} cl_shm;
 
 /* This is a global structure which has shared memory information like size,
  * its nodes size, and id, the update thread period and the condition on which it will end itself*/
@@ -101,7 +101,7 @@ typedef struct {
 	/*Condition on which the updater thread will exit*/
 	bool update_thread_end_cond;
 	int update_period;
-} shm_info;
+} cl_shm_info;
 
 /*Switch to move between shared memory and back*/
 extern bool g_shared_memory;
@@ -112,8 +112,8 @@ int citrusleaf_shm_free();
 
 int cl_shm_get_partition_count();
 
-shm_ninfo* cl_shm_find_node_from_name(const char* node_name);
-shm_ninfo* cl_shm_find_node_from_address(struct sockaddr_in* sa_in);
+cl_shm_ninfo* cl_shm_find_node_from_name(const char* node_name);
+cl_shm_ninfo* cl_shm_find_node_from_address(struct sockaddr_in* sa_in);
 
-int cl_shm_node_lock(shm_ninfo* shared_node);
-void cl_shm_node_unlock(shm_ninfo* shared_node);
+int cl_shm_node_lock(cl_shm_ninfo* shared_node);
+void cl_shm_node_unlock(cl_shm_ninfo* shared_node);

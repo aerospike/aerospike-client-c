@@ -296,7 +296,7 @@ cl_rv citrusleaf_udf_list(cl_cluster *asc, cl_udf_file *** files, int * count, c
             const char * emsg = "failed_request: ";
             int emsg_len = strlen(emsg);
             int query_len = strlen(query);
-            *error = (char *) malloc(sizeof(char) * (emsg_len + query_len));
+            *error = (char *) calloc ((emsg_len + query_len), sizeof(char));
             strncpy(*error, emsg, emsg_len);
             strncpy(*error+emsg_len, query, query_len);
         }
@@ -310,49 +310,50 @@ cl_rv citrusleaf_udf_list(cl_cluster *asc, cl_udf_file *** files, int * count, c
     
     /**
      * result   := {request}\t{response}
-     * response := count=<int>;files={files};
-     * files    := filename=<name>,hash=<hash>,type=<type>[:filename=<name>...]
+     * response := filename=<name>,hash=<hash>,type=<type>[:filename=<name>...]
      */
     
     char * response = strchr(result, '\t') + 1;
-    
-    citrusleaf_udf_info info = { NULL };
-    citrusleaf_parameters_fold(response, &info, citrusleaf_udf_info_parameters);
 
-    free(result);
-    result = NULL;
+    char delim = ';';
+    char * temp_char;
 
-    if ( info.error ) {
-        if ( error ) {
-            *error = info.error;
-            info.error = NULL;
-        }
-        citrusleaf_udf_info_destroy(&info);
-        return 1;
+    // Calculate number of files mentioned in response
+    // Entry for each file is seperated by delim ';'
+    temp_char = response;
+    while (temp_char = strchr (temp_char, delim))
+    {
+        *count = *count + 1;
+        temp_char = temp_char + 1;
     }
-
-    if ( info.count == 0 ) {
+    
+    if (*count == 0)
+    {
+        // No files at server
         *files = NULL;
-        *count = 0;
-        citrusleaf_udf_info_destroy(&info);
         return 0;
     }
-
-    citrusleaf_udf_filelist filelist = { 
-        .capacity   = info.count,
-        .size       = 0,
-        .files      = (cl_udf_file **) malloc(info.count * sizeof(cl_udf_file *))
+    
+    // Allocate memory for filelist
+    // caller has to free memory for .files
+    citrusleaf_udf_filelist filelist = {
+        .capacity   = *count,              // Allocated size
+        .size       = 0,                   // Actual entries
+        .files      = (cl_udf_file **) calloc((*count), sizeof(cl_udf_file *)) 
     };
-    // Different files' data are separated by ':'. Parse each file dataset and feed them into the callback 
-    citrusleaf_split_fold(info.files, ':', &filelist, citrusleaf_udf_list_files);
+    // Different files' data are separated by ';'.
+    // Parse each file dataset and feed them into the callback
+    // callback will allocate memory for struct cl_udf_file corresponding to each file entry·
+    // caller of this function has to free it.
+    citrusleaf_split_fold(response, delim, &filelist, citrusleaf_udf_list_files);
 
     *files = filelist.files;
     *count = filelist.size;
 
-    citrusleaf_udf_info_destroy(&info);
+    free(result);
+    result = NULL;
 
     return 0;
-    
 }
 
 cl_rv citrusleaf_udf_get(cl_cluster *asc, const char * filename, cl_udf_file * file, cl_udf_type udf_type, char ** error) {

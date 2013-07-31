@@ -24,6 +24,7 @@
 #include <citrusleaf/cf_proto.h>
 
 #include <aerospike/as_bytes.h>
+#include <aerospike/as_nil.h>
 #include <aerospike/as_msgpack.h>
 
 #include <citrusleaf/cl_udf.h>
@@ -142,7 +143,7 @@ int print_buffer(as_buffer * buff) {
 
 as_val *citrusleaf_udf_bin_to_val(as_serializer *ser, cl_bin *bin) {     
 
-    as_val * val;
+    as_val * val = NULL;
 
     switch( bin->object.type ) {
         case CL_INT : {
@@ -175,6 +176,10 @@ as_val *citrusleaf_udf_bin_to_val(as_serializer *ser, cl_bin *bin) {
             };
             // print_buffer(&buf);
             as_serializer_deserialize(ser, &buf, &val);
+            break;
+        }
+        case CL_NULL : {
+            val = (as_val*) &as_nil;
             break;
         }
         default : {
@@ -321,7 +326,7 @@ cl_rv citrusleaf_udf_list(cl_cluster *asc, cl_udf_file *** files, int * count, c
     // Calculate number of files mentioned in response
     // Entry for each file is seperated by delim ';'
     temp_char = response;
-    while (temp_char = strchr (temp_char, delim))
+    while ( (temp_char = strchr (temp_char, delim)) != 0 ) 
     {
         *count = *count + 1;
         temp_char = temp_char + 1;

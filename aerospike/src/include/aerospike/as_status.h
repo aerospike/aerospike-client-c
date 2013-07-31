@@ -245,6 +245,65 @@ typedef enum as_status_e {
 	/**
 	 *	UDF does not exist.
 	 */
-	AEROSPIKE_ERR_UDF_NOT_FOUND				= 1301
+	AEROSPIKE_ERR_UDF_NOT_FOUND				= 1301,
+
+
+	/***************************************************************************
+	 *	Large Data Type (LDT) OPERATIONS
+	 **************************************************************************/
+
+    /* 1400:LDT-Internal Error */
+    AEROSPIKE_ERR_INTERNAL                    = 1400,
+    /* 1401:LDT-Item Not Found */
+    AEROSPIKE_ERR_NOT_FOUND                   = 1401,
+    /* 1402:LDT-Unique Key Violation */
+    AEROSPIKE_ERR_UNIQUE_KEY                  = 1402,
+    /* 1403:LDT-Insert Error */
+    AEROSPIKE_ERR_INSERT                      = 1403,
+    /* 1404:LDT-Search Error */
+    AEROSPIKE_ERR_SEARCH                      = 1404,
+    /* 1405:LDT-Delete Error */
+    AEROSPIKE_ERR_DELETE                      = 1405,
+    /* 1406:LDT-Key Function Not Found */
+    AEROSPIKE_ERR_TRANS_FUN_NOT_FOUND         = 1406,
+    /* 1407:LDT-Transform Function Not Found */
+    AEROSPIKE_ERR_UNTRANS_FUN_NOT_FOUND       = 1407,
+    /* 1408:LDT-UN-Transform Function Not Found */
+    AEROSPIKE_ERR_KEY_FUN_NOT_FOUND           = 1408,
+    /* 1409:LDT-Input Parameter Error */
+    AEROSPIKE_ERR_INPUT_PARM                  = 1409,
+
+    /* 1410:LDT-Type Mismatch for LDT Bin */
+    AEROSPIKE_ERR_TYPE_MISMATCH               = 1410,
+    /* 1411:LDT-Null Bin Name */
+    AEROSPIKE_ERR_NULL_BIN_NAME               = 1411,
+    /* 1412:LDT-Bin Name Not a String */
+    AEROSPIKE_ERR_BIN_NAME_NOT_STRING         = 1412,
+    /* 1413:LDT-Bin Name Exceeds 14 char */
+    AEROSPIKE_ERR_BIN_NAME_TOO_LONG           = 1413,
+    /* 1414:LDT-Exceeded Open Sub-Record Limit */
+    AEROSPIKE_ERR_TOO_MANY_OPEN_SUBRECS       = 1414,
+    /* 1415:LDT-Top Record Not Found */
+    AEROSPIKE_ERR_TOP_REC_NOT_FOUND           = 1415,
+    /* 1416:LDT-Sub Record Not Found */
+    AEROSPIKE_ERR_SUB_REC_NOT_FOUND           = 1416,
+    /* 1417:LDT-LDT Bin Does Not Exist */
+    AEROSPIKE_ERR_BIN_DOES_NOT_EXIST          = 1417,
+    /* 1418:LDT-LDT Bin Already Exists */
+    AEROSPIKE_ERR_BIN_ALREADY_EXISTS          = 1418,
+    /* 1419:LDT-LDT Bin is Damaged */
+    AEROSPIKE_ERR_BIN_DAMAGED                 = 1419,
+
+    /* 1420:LDT-Sub Record Pool is Damaged */
+    AEROSPIKE_ERR_SUBREC_POOL_DAMAGED         = 1420,
+    /* 1421:LDT-Sub Record is Damaged */
+    AEROSPIKE_ERR_SUBREC_DAMAGED              = 1421,
+    /* 1422:LDT-Sub Record Open Error */
+    AEROSPIKE_ERR_SUBREC_OPEN                 = 1422,
+    /* 1423:LDT-Sub Record Update Error */
+    AEROSPIKE_ERR_SUBREC_UPDATE               = 1423,
+    /* 1424:LDT-Sub Record Close Error */
+    AEROSPIKE_ERR_SUBREC_CLOSE                = 1424 
+
 
 } as_status;

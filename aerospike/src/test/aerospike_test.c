@@ -137,6 +137,7 @@ PLAN( aerospike_test ) {
     // aerospike_info module
     plan_add( udf_basics );
     plan_add( udf_types );
+    plan_add( udf_record );
 
     //aerospike_sindex module
     plan_add( index_basics );

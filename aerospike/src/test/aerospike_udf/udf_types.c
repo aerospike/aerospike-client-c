@@ -1,6 +1,7 @@
 
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_udf.h>
+#include <aerospike/aerospike_key.h>
 
 #include <aerospike/as_error.h>
 #include <aerospike/as_status.h>
@@ -11,7 +12,9 @@
 #include <aerospike/as_list.h>
 #include <aerospike/as_arraylist.h>
 #include <aerospike/as_map.h>
+#include <aerospike/as_nil.h>
 #include <aerospike/as_hashmap.h>
+#include <aerospike/as_stringmap.h>
 #include <aerospike/as_val.h>
 #include <aerospike/as_udf.h>
 
@@ -60,14 +63,11 @@ TEST( udf_types_pre , "upload udf_types.lua" ) {
 	as_bytes_destroy(&content);
 }
 
-TEST( udf_types_post , "upload udf_types.lua" ) {
+TEST( udf_types_post , "remove udf_types.lua" ) {
 
 	const char * filename = UDF_FILE".lua";
-	bool exists = false;
 
 	as_error err;
-
-	// remove the file, regardless of whether it is on server or not.
 	
 	aerospike_udf_remove(as, &err, NULL, filename);
 
@@ -179,6 +179,16 @@ TEST( udf_types_string, "udf_types.get_string() returns 'abc' (as_string)" ) {
 	as_key_destroy(&key);
 }
 
+bool udf_types_map_foreach(const as_val * key, const as_val * value, void * udata) {
+	char * k = as_val_tostring(key);
+	char * v = as_val_tostring(value);
+	fprintf(stderr, "%s=%s\n", k, v);
+	free(k);
+	free(v);
+	return true;
+}
+
+
 TEST( udf_types_map, "udf_types.get_map() returns {a:1, b:2, c:3} (as_map)" ) {
 
 	as_error err;
@@ -198,6 +208,9 @@ TEST( udf_types_map, "udf_types.get_map() returns {a:1, b:2, c:3} (as_map)" ) {
 	assert_int_eq( as_stringmap_get_int64(mval,"a"), 1);
 	assert_int_eq( as_stringmap_get_int64(mval,"b"), 2);
 	assert_int_eq( as_stringmap_get_int64(mval,"c"), 3);
+
+	as_map_foreach(mval, udf_types_map_foreach, NULL);
+
 
 	as_val_destroy(val);
 	as_key_destroy(&key);
@@ -227,6 +240,32 @@ TEST( udf_types_list, "udf_types.get_list() returns [1,2,3] (as_list)" ) {
 	as_key_destroy(&key);
 }
 
+TEST( udf_types_rec_map, "udf_types.get_rec_map() returns {t:1, f: 0, n: nil, i: 123, s: 'abc', l: [1,2,3]} (as_map)" ) {
+
+	as_error err;
+
+	as_key key;
+	as_key_init(&key, "test", "test", "test");
+
+	as_val * val = NULL;
+
+	aerospike_key_apply(as, &err, NULL, &key, "udf_types", "get_rec_map", NULL, &val);
+
+	assert_int_eq( err.code, AEROSPIKE_OK );
+	assert_int_eq( as_val_type(val), AS_MAP );
+
+	as_map * mval = as_map_fromval(val);
+	assert_int_eq( as_map_size(mval), 5);
+	assert_int_eq( as_stringmap_get_int64(mval,"t"), 1);
+	assert_int_eq( as_stringmap_get_int64(mval,"f"), 0);
+
+	as_map_foreach(mval, udf_types_map_foreach, NULL);
+
+	as_val_destroy(val);
+	as_key_destroy(&key);
+}
+
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -240,5 +279,6 @@ SUITE( udf_types, "aerospike_udf type tests" ) {
 	suite_add( udf_types_string );
 	suite_add( udf_types_map );
 	suite_add( udf_types_list );
+	suite_add( udf_types_rec_map );
 	suite_add( udf_types_post );
 }

@@ -11,8 +11,8 @@
  *****************************************************************************/
 
 #define MOD_LUA_CACHE_ENABLED false
-#define MOD_LUA_SYSTEM_PATH "/opt/citrusleaf/sys/udf/lua"
-#define MOD_LUA_USER_PATH "/opt/citrusleaf/usr/udf/lua"
+#define MOD_LUA_SYSTEM_PATH "/opt/aerospike/sys/udf/lua"
+#define MOD_LUA_USER_PATH "/opt/aerospike/usr/udf/lua"
 
 /******************************************************************************
  * FUNCTIONS

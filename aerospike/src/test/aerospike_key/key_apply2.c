@@ -388,7 +388,7 @@ TEST( key_apply2_delete_record_test_replication, "apply: (test,test,foo) <!> key
     char ** v_b = get_stats( query, "used-bytes-memory", as->cluster);
     int i = 0;
     while(v_b[i]) {
-    		debug("delete_record_test: Used memory before - node %d = %ld\n",i,atol(v_b[i]));
+    		debug("delete_record_test: Used memory before - node %d = %ld",i,atol(v_b[i]));
     		free(v_b[i]);
     		i++;
     }
@@ -414,7 +414,7 @@ TEST( key_apply2_delete_record_test_replication, "apply: (test,test,foo) <!> key
 	char ** v_a = get_stats( query, "used-bytes-memory", as->cluster);
 	i = 0;
 	while(v_a[i]) {
-		debug("delete_record_test: Used memory after - node %d = %ld\n",i,atol(v_a[i]));
+		debug("delete_record_test: Used memory after - node %d = %ld",i,atol(v_a[i]));
 		free(v_a[i]);
 		i++;
 	}
@@ -442,7 +442,7 @@ TEST( key_apply2_update_record_test_memory, "apply: (test,test,foo) <!> key_appl
     char ** v_b = get_stats( query, "used-bytes-memory", as->cluster);
     int i = 0;
     while(v_b[i]) {
-    		debug("update_record_test: Used memory before - node %d = %ld\n",i,atol(v_b[i]));
+    		debug("update_record_test: Used memory before - node %d = %ld",i,atol(v_b[i]));
     		//free(v_b[i]);
     		i++;
     }
@@ -469,7 +469,7 @@ TEST( key_apply2_update_record_test_memory, "apply: (test,test,foo) <!> key_appl
 		 * varies for memory, disk blocks, file-cache etc
 		 */
 		rec_memory = atol(v_a[i]);
-		debug("update_record_test: Used memory after - node %d = %ld\n",i,atol(v_a[i]));
+		debug("update_record_test: Used memory after - node %d = %ld",i,atol(v_a[i]));
 		// free(v_a[i]);
 		i++;
 	}
@@ -478,7 +478,7 @@ TEST( key_apply2_update_record_test_memory, "apply: (test,test,foo) <!> key_appl
 	char ** v_c = get_stats( query, "repl-factor", as->cluster);
 	int repl_factor = atoi(v_c[0]);
 
-	debug("Replication factor %d\n", repl_factor);
+	debug("Replication factor %d", repl_factor);
 
 	/* verify stats : after-memory = record-memeory * repl-factor
 	 * The difference between the memory usage after and before update should
@@ -543,7 +543,7 @@ TEST( key_apply2_bad_update_test_memory, "apply: (test,test,foo) <!> key_apply2.
 	char ** v_b = get_stats( query, "used-bytes-memory", as->cluster);
 	int i = 0;
 	while(v_b[i]) {
-			debug("Used memory before - node %d = %ld\n",i,atol(v_b[i]));
+			debug("Used memory before - node %d = %ld",i,atol(v_b[i]));
 			//free(v_b[i]);
 			i++;
 	}
@@ -569,7 +569,7 @@ TEST( key_apply2_bad_update_test_memory, "apply: (test,test,foo) <!> key_apply2.
 		 * varies for memory, disk blocks, file-cache etc
 		 */
 		rec_memory = atol(v_a[i]);
-		debug("Used memory after - node %d = %ld\n",i,atol(v_a[i]));
+		debug("Used memory after - node %d = %ld",i,atol(v_a[i]));
 		// free(v_a[i]);
 		i++;
 	}
@@ -577,7 +577,7 @@ TEST( key_apply2_bad_update_test_memory, "apply: (test,test,foo) <!> key_apply2.
 	//get-stats : replication-factor after applying udf
 	char ** v_c = get_stats( query, "repl-factor", as->cluster);
 	int repl_factor = atoi(v_c[0]);
-	debug("Replication factor %d\n", repl_factor);
+	debug("Replication factor %d", repl_factor);
 
 	// verify stats : after-memory = record-memeory * repl-factor
 	// The difference between the memory usage after and before update should be the record memory
@@ -585,7 +585,7 @@ TEST( key_apply2_bad_update_test_memory, "apply: (test,test,foo) <!> key_apply2.
 	int diff = 0, count = 0;
 	char ** cluster_size_str = get_stats( "statistics", "cluster_size", as->cluster);
 	int cluster_size = atol(cluster_size_str[0]);
-	debug("Cluster Size %d\n", cluster_size );
+	debug("Cluster Size %d", cluster_size );
 	for(int i = 0; i < cluster_size; i++) {
 		if(!(v_a[i]) || !(v_b[i])){
 	    	continue;
@@ -636,7 +636,7 @@ TEST( key_apply2_bad_create_test_memory, "apply: (test,test,foo) <!> key_apply2.
 	char ** v_b = get_stats( query, "used-bytes-memory", as->cluster);
 	int i = 0;
 	while(v_b[i]) {
-			debug("bad_create_test_memory: Used memory before - node %d = %ld\n",i,atol(v_b[i]));
+			debug("bad_create_test_memory: Used memory before - node %d = %ld",i,atol(v_b[i]));
 			//free(v_b[i]);
 			i++;
 	}
@@ -654,7 +654,7 @@ TEST( key_apply2_bad_create_test_memory, "apply: (test,test,foo) <!> key_apply2.
 	char ** v_a = get_stats( query, "used-bytes-memory", as->cluster);
 	i = 0;
 	while(v_a[i]) {
-		debug("bad_create_test_memory: Used memory after - node %d = %ld\n",i,atol(v_a[i]));
+		debug("bad_create_test_memory: Used memory after - node %d = %ld",i,atol(v_a[i]));
 		// free(v_a[i]);
 		i++;
 	}
@@ -662,7 +662,7 @@ TEST( key_apply2_bad_create_test_memory, "apply: (test,test,foo) <!> key_apply2.
 	//get-stats : replication-factor after applying udf
 	char ** v_c = get_stats( query, "repl-factor", as->cluster);
 	int repl_factor = atoi(v_c[0]);
-	debug("Replication factor %d\n", repl_factor);
+	debug("Replication factor %d", repl_factor);
 
 	// verify stats : after-memory = record-memeory * repl-factor
 	// The difference between the memory usage after and before update should be the record memory

@@ -72,7 +72,7 @@ as_status aerospike_udf_list(
 	// as_policy_info_resolve(&p, &as->config.policies, policy);
 
 	char * 			error = NULL;
-	cl_udf_file ** 	clfiles = NULL;
+	cl_udf_file * 	clfiles = NULL;
 	int 			count = 0;
 	
 	int rc =  citrusleaf_udf_list(as->cluster, &clfiles, &count, &error);
@@ -82,7 +82,7 @@ as_status aerospike_udf_list(
 		free(error);
 		error = NULL;
 	}
-	else if ( clfiles != NULL && *clfiles != NULL ) {
+	else if ( clfiles != NULL ) {
 	
 		if ( files->capacity == 0 && files->entries == NULL ) {
 			as_udf_files_init(files, count);
@@ -93,12 +93,8 @@ as_status aerospike_udf_list(
 		for ( int i = 0; i < limit; i++ ) {
 
 			as_udf_file * asfile = &files->entries[i];
-			cl_udf_file * clfile = clfiles[i];
+			cl_udf_file * clfile = &clfiles[i];
 			clfile_to_asfile(clfile, asfile);
-
-			free(clfile);
-			clfiles[i] = NULL;
-
 			files->size++;
 		}
 

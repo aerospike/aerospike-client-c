@@ -29,3 +29,15 @@ end
 function get_list()
     return list {1,2,3}
 end
+
+function get_rec_map(rec)
+    local m = map()
+    m.t = true
+    m.f = false
+    m.n = nil
+    m.i = 123
+    m.s = "abc"
+    m.l = list{1,2,3}
+    rec['map'] = m
+    return rec['map']
+end

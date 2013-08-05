@@ -55,7 +55,7 @@
 typedef enum as_scan_priority_e { 
 
 	/**
-	 *	The cluster will auto adjust the scan priroty.
+	 *	The cluster will auto adjust the scan priority.
 	 */
 	AS_SCAN_PRIORITY_AUTO, 
 

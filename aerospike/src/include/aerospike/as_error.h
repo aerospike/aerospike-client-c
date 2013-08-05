@@ -54,7 +54,7 @@
 /**
  *	All operations that interact with the Aerospike cluster accept an as_error
  *	argument and return an as_status value. The as_error argument is populated
- *	with information about the error that occured. The as_status return value
+ *	with information about the error that occurred. The as_status return value
  *	is the as_error.code value.
  *
  *	When an operation succeeds, the as_error.code value is usually set to 

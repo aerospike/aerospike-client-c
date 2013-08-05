@@ -46,25 +46,20 @@ extern "C" {
 
 typedef uint8_t cl_udf_type;
 
-struct cl_udf_file_s {
-  char 			name[128];
-  unsigned char hash[CF_SHA_HEX_BUFF_LEN];
-  cl_udf_type 	type;
-  as_bytes * 	content;
-};
-typedef struct cl_udf_file_s cl_udf_file;
+typedef struct cl_udf_file_s {
+  char			name[128];
+  uint8_t		hash[CF_SHA_HEX_BUFF_LEN];
+  cl_udf_type	type;
+  as_bytes *	content;
+} cl_udf_file;
 
-typedef struct citrusleaf_udf_info_s citrusleaf_udf_info;
-
-struct citrusleaf_udf_info_s {
-    char *        error;
-    char          filename[128];
-    as_bytes      content;
-    char *        gen;
-    char *        files;
-    int           count;
-    unsigned char hash[CF_SHA_HEX_BUFF_LEN];
-};
+typedef struct cl_udf_info_s {
+    char *		error;
+    char		filename[128];
+    as_bytes	content;
+    char *		gen;
+    uint8_t		hash[CF_SHA_HEX_BUFF_LEN];
+} cl_udf_info;
 
 /******************************************************************************
  * FUNCTIONS
@@ -83,7 +78,7 @@ cl_rv citrusleaf_udf_record_apply(cl_cluster * cluster, const char * ns, const c
  * @param count - Number of entries.
  * @param error - Contains an error message, if the return value was non-zero. The value must be freed by the user.
  */
-cl_rv citrusleaf_udf_list(cl_cluster * cluster, cl_udf_file *** files, int * count, char ** error);
+cl_rv citrusleaf_udf_list(cl_cluster * cluster, cl_udf_file ** files, int * count, char ** error);
 
 /**
  * @param filename - The name of the file to download from the cluster.
@@ -118,12 +113,11 @@ cl_rv citrusleaf_udf_put(cl_cluster * cluster, const char * filename, as_bytes *
  */
 cl_rv citrusleaf_udf_remove(cl_cluster * cluster, const char * filename, char ** error);
 
-typedef void * (* citrusleaf_parameters_fold_callback)(const char * key, const char * value, void * context);
-typedef void * (* citrusleaf_split_fold_callback)(char * value, void * context);
-int citrusleaf_parameters_fold(char * parameters, void * context, citrusleaf_parameters_fold_callback callback);
-int citrusleaf_sub_parameters_fold(char * parameters, void * context, citrusleaf_parameters_fold_callback callback);
-int citrusleaf_split_fold(char * str, const char delim, void * context, citrusleaf_split_fold_callback callback);
-void citrusleaf_udf_info_destroy(citrusleaf_udf_info * info);
+/******************************************************************************
+ * UTILITY FUNCTIONS
+ ******************************************************************************/
+
+void cl_udf_info_destroy(cl_udf_info * info);
 
 #ifdef __cplusplus
 } // end extern "C"

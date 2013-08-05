@@ -2,52 +2,7 @@
 ##  OBJECTS                                                      		 	 ##
 ###############################################################################
 
-# TEST_KV = 
-# TEST_KV += kv/kv_string
- 
-# TEST_RECORD = 
-# TEST_RECORD += record/record_basics
-# TEST_RECORD += record/record_lists
- 
-# TEST_STREAM = 
-# TEST_STREAM += stream/stream_simple
-# TEST_STREAM += stream/stream_ads
-
-# TEST_UTIL = 
-# TEST_UTIL += util/udf
-# TEST_UTIL += util/consumer_stream
-# TEST_UTIL += util/producer_stream
-# TEST_UTIL += util/map_rec
-# TEST_UTIL += util/test_aerospike
-# TEST_UTIL += util/test_logger
-# TEST_UTIL += util/info_util
-
-# TEST_LSTACK = 
-# TEST_LSTACK += lstack/lstack_advanced
-# TEST_LSTACK += lstack/lstack_basics
-# TEST_LSTACK += lstack/lstack_operations
-# TEST_LSTACK += lstack/lstack_test
-# TEST_LSTACK += lstack/lstack_util
-# TEST_LSTACK += lstack/test_config
-
-# TEST_LSET =
-# TEST_LSET += lset/lset_advanced
-# TEST_LSET += lset/lset_basics
-# TEST_LSET += lset/lset_operations
-# TEST_LSET += lset/lset_test
-# TEST_LSET += lset/lset_util
-# TEST_LSET += lset/test_config
-
-# TEST_CLIENT = client_test
-# TEST_CLIENT += $(TEST_UTIL) 
-# TEST_CLIENT += $(TEST_LSTACK) 
-# TEST_CLIENT += $(TEST_LSET)
-# TEST_CLIENT += $(TEST_KV) 
-# TEST_CLIENT += $(TEST_RECORD) 
-# TEST_CLIENT += $(TEST_STREAM)
-
 TEST_AEROSPIKE = aerospike_test.c
-# TEST_AEROSPIKE += aerospike_digest/*.c
 TEST_AEROSPIKE += aerospike_index/*.c
 TEST_AEROSPIKE += aerospike_info/*.c
 TEST_AEROSPIKE += aerospike_key/*.c

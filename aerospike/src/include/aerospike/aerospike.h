@@ -55,7 +55,7 @@ struct cl_cluster_s;
 
 /**
  * 	An instance of @ref aerospike is required to connect to and execute 
- *	operationgs against an Aerospike Database cluster.
+ *	operations against an Aerospike Database cluster.
  *
  *	## Configuration
  *
@@ -111,7 +111,7 @@ struct cl_cluster_s;
  *	}
  *	~~~~~~~~~~
  *
- *	The `err` parameter will be populated if an error while attemping to
+ *	The `err` parameter will be populated if an error while attempting to
  *	connect to the database. See as_error, for more information on error 
  *	handling.
  *

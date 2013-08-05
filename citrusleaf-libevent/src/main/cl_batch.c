@@ -191,6 +191,9 @@ struct cl_batch_node_req_s {
 	size_t						rbuf_size;
 	size_t						rbuf_pos;
 
+	// Save read buffer for blob objects to point into.
+	uint8_t*					pbuf;
+
 	// The network event for this node request.
 	bool						event_added;
 	uint8_t						event_space[];
@@ -570,16 +573,6 @@ static void
 cl_batch_job_node_done(cl_batch_job* _this, cl_batch_node_req* p_node_req,
 		int node_result)
 {
-	// Destroy the completed node request.
-	cl_batch_node_req_destroy(p_node_req);
-
-	// Make sure cl_batch_job destructor skips already destroyed node request.
-	for (int n = 0; n < _this->n_node_reqs; n++) {
-		if (_this->node_reqs[n] == p_node_req) {
-			_this->node_reqs[n] = NULL;
-		}
-	}
-
 	// This just reports the result from the last node that doesn't succeed.
 	// TODO - report results per node ???
 	if (node_result != EV2CITRUSLEAF_OK) {
@@ -690,6 +683,10 @@ cl_batch_node_req_destroy(cl_batch_node_req* _this)
 
 	if (_this->rbuf) {
 		free(_this->rbuf);
+	}
+
+	if (_this->pbuf) {
+		free(_this->pbuf);
 	}
 
 	free(_this);
@@ -1035,9 +1032,11 @@ cl_batch_node_req_handle_recv(cl_batch_node_req* _this)
 						return true;
 					}
 					else {
-						// We expect another proto - reset read buffers.
+						// We expect another proto - reset read buffers but save
+						// proto body buffer, since blob records point directly
+						// into it. It is freed after the app callback is made.
 						_this->hbuf_pos = 0;
-						free(_this->rbuf);
+						_this->pbuf = _this->rbuf;
 						_this->rbuf = NULL;
 						_this->rbuf_size = 0;
 						_this->rbuf_pos = 0;
@@ -1255,6 +1254,6 @@ cl_batch_node_req_done(cl_batch_node_req* _this, int node_result)
 	// Reset _this->fd so the destructor doesn't close it.
 	_this->fd = -1;
 
-	// Tell the job object this node request is done (destroys this object).
+	// Tell the job object this node request is done.
 	cl_batch_job_node_done(_this->p_job, _this, node_result);
 }

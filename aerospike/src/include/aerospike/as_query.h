@@ -131,7 +131,7 @@ typedef enum as_predicate_type_e {
 } as_predicate_type;
 
 /**
- *	Defines a predicate, including the bin, type of predcate and the value
+ *	Defines a predicate, including the bin, type of predicate and the value
  *	for the predicate.
  */
 typedef struct as_predicate_s {

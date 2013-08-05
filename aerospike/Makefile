@@ -60,6 +60,7 @@ CITRUSLEAF += cl_cluster.o
 CITRUSLEAF += cl_info.o
 CITRUSLEAF += cl_lookup.o
 CITRUSLEAF += cl_partition.o
+CITRUSLEAF += cl_parsers.o
 CITRUSLEAF += cl_query.o
 CITRUSLEAF += cl_sindex.o
 CITRUSLEAF += cl_scan.o

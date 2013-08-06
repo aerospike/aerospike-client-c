@@ -41,6 +41,7 @@
 #include <aerospike/as_operations.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_status.h>
+#include <aerospike/as_key.h>
 #include <aerospike/as_val.h>
 
 /******************************************************************************
@@ -52,10 +53,10 @@
  *
  *	~~~~~~~~~~{.c}
  *	as_key key;
- *	as_key_init(&key, "ns", "set", "key");
+ *	as_key_init(&key, "myns", "myset", "mykey");
  *
  *	as_ldt stack;
- *	as_ldt_init(&stack, "stack", "lstack", NULL);
+ *	as_ldt_init(&stack, "mystack", AS_LDT_LSTACK, NULL);
  *	
  *	as_integer ival;
  *	as_integer_init(&ival, 123);
@@ -69,7 +70,7 @@
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param key			The key of the record.
- *	@param ldt 			The ldt bin to peek values from.
+ *	@param ldt 			The ldt bin to push values to.
  *	@param val			The value to push on to the lstack.
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error.
@@ -77,51 +78,19 @@
  *	@ingroup ldt_operations
  */
 as_status aerospike_lstack_push(
-	aerospike * as, as_error * err, const as_policy_read * policy,
+	aerospike * as, as_error * err, const as_policy_apply * policy,
 	const as_key * key, const as_ldt * ldt, const as_val * val);
 
-/**
- *	Push all values from the list onto the lstack.
- *
- *	~~~~~~~~~~{.c}
- *	as_key key;
- *	as_key_init(&key, "ns", "set", "key");
- *
- *	as_ldt stack;
- *	as_ldt_init(&stack, "stack", "lstack", NULL);
- *	
- *	as_integer ival;
- *	as_integer_init(&ival, 123);
- *
- *	if ( aerospike_lstack_pushall(&as, &err, NULL, &key, &stack, (as_val *) &ival) != AEROSPIKE_OK ) {
- *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *	}
- *	~~~~~~~~~~
- *
- *	@param as			The aerospike instance to use for this operation.
- *	@param err			The as_error to be populated if an error occurs.
- *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param key			The key of the record.
- *	@param ldt 			The ldt bin to peek values from.
- *	@param list			The list ov values to push on to the lstack.
- *
- *	@return AEROSPIKE_OK if successful. Otherwise an error.
- *
- *	@ingroup ldt_operations
- */
-as_status aerospike_lstack_pushall(
-	aerospike * as, as_error * err, const as_policy_read * policy,
-	const as_key * key, const as_ldt * ldt, const as_list * list);
 
 /**
- *	Look up a record by key, then return all bins.
+ *	Look up a record by key, then peek into a stack bin.
  *
  *	~~~~~~~~~~{.c}
  *	as_key key;
- *	as_key_init(&key, "ns", "set", "key");
+ *	as_key_init(&key, "myns", "myset", "mykey");
  *
  *	as_ldt stack;
- *	as_ldt_init(&stack, "stack", "lstack", NULL);
+ *	as_ldt_init(&stack, "mystack", AS_LDT_LSTACK, NULL);
  *	
  *	as_arraylist _list, *list = as_arraylist_init(&_list, 3, 0);
  *	
@@ -137,16 +106,27 @@ as_status aerospike_lstack_pushall(
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param key			The key of the record.
- *	@param ldt 			The ldt bin to peek values from.
+ *	@param ldt 			The stack bin to peek values from. If not a stack bin, will return error.
  *	@param n			The number of elements to peek from the lstack.
- *	@param list			The elements peeked from the lstack.
+ *	@param list			The elements peeked from the lstack. If stack_size shorter than n, only stack_size is returned
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error.
  *	
  *	@ingroup ldt_operations
  */
+
 as_status aerospike_lstack_peek(
-	aerospike * as, as_error * err, const as_policy_read * policy, 
-	const as_key * key, const as_ldt * ldt, uint32_t n,
-	as_list ** list
+	aerospike * as, as_error * err, const as_policy_apply * policy,
+	const as_key * key, const as_ldt * ldt, uint32_t peek_count,
+	as_list ** elements );
+
+as_status aerospike_lstack_size(
+	aerospike * as, as_error * err, const as_policy_apply * policy,
+	const as_key * key, const as_ldt * ldt, uint32_t *n
 	);
+
+as_status aerospike_lstack_peek_with_filter(
+	aerospike * as, as_error * err, const as_policy_apply * policy,
+	const as_key * key, const as_ldt * ldt, uint32_t peek_count,
+	const as_udf_function_name filter, const as_list *filter_args,
+	as_list ** elements );

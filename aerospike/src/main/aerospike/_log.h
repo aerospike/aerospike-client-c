@@ -9,7 +9,7 @@
 
 #define LOGGER &as->log
 
-#define as_error(__ctx, __fmt, ... ) \
+#define as_err(__ctx, __fmt, ... ) \
 	if ( (__ctx) && (__ctx)->callback && AS_LOG_LEVEL_ERROR <= (__ctx)->level ) {\
 		((as_log_callback) (__ctx)->callback)(AS_LOG_LEVEL_ERROR, __func__, __FILE__, __LINE__, __fmt, ##__VA_ARGS__);\
 	}

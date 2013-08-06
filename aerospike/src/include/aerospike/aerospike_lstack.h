@@ -21,15 +21,17 @@
  *****************************************************************************/
 
 /**
- *	@defgroup key_operations Key Operations
+ *	@defgroup ldt_operations Large Data Type Operations (3.0 only)
  *	@ingroup client_operations
  *
- *	Aerospike provides a key based API to access and modify data into the 
- *	cluster. 
+ *	The ldt_operations module provides API to manipulate
+ *	Large Data Types. Currently supported types include:
+ *	   - lstack = large stack
+ *	   - lset = large set
+ *	Forthcoming are:
+ * 	   - llist = large list
+ * 	   - lmap = large map
  *
- *	The Key API is a collection of APIs that use as_key as for looking up
- *	records for accessing and modifying in the cluster. 
- *	
  */
 
 #pragma once 
@@ -91,13 +93,16 @@ as_status aerospike_lstack_push(
  *
  *	as_ldt stack;
  *	as_ldt_init(&stack, "mystack", AS_LDT_LSTACK, NULL);
+ *
+ *  uint32_t peek_count = 3;
+ *
+ *	as_arraylist list = as_arraylist_init(&list, peek_count, 0);
  *	
- *	as_arraylist _list, *list = as_arraylist_init(&_list, 3, 0);
- *	
- *	if ( aerospike_lstack_peek(&as, &err, NULL, &key, &stack, 3, (as_list *) &list) != AEROSPIKE_OK ) {
+ *	if ( aerospike_lstack_peek(&as, &err, NULL, &key, &stack, peek_count, (as_list *) &list) != AEROSPIKE_OK ) {
  *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *	}
  *	else {
+ *		// process the returned stack elements
  *		as_arraylist_destroy(list);
  *	}
  *	~~~~~~~~~~
@@ -108,7 +113,7 @@ as_status aerospike_lstack_push(
  *	@param key			The key of the record.
  *	@param ldt 			The stack bin to peek values from. If not a stack bin, will return error.
  *	@param n			The number of elements to peek from the lstack.
- *	@param list			The elements peeked from the lstack. If stack_size shorter than n, only stack_size is returned
+ *	@param list			The elements peeked from the lstack. If stack_size shorter than n, only stack_size is returned.
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error.
  *	
@@ -120,13 +125,113 @@ as_status aerospike_lstack_peek(
 	const as_key * key, const as_ldt * ldt, uint32_t peek_count,
 	as_list ** elements );
 
-as_status aerospike_lstack_size(
-	aerospike * as, as_error * err, const as_policy_apply * policy,
-	const as_key * key, const as_ldt * ldt, uint32_t *n
-	);
-
+/**
+ *	Look up a record by key, then peek into a stack bin, and do UDF post processing
+ *	to filter for only the desired values.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_key key;
+ *	as_key_init(&key, "myns", "myset", "mykey");
+ *
+ *	as_ldt stack;
+ *	as_ldt_init(&stack, "mystack", AS_LDT_LSTACK, NULL);
+ *
+ *  uint32_t peek_count = 3;
+ *
+ *	as_arraylist list = as_arraylist_init(&list, peek_count, 0);
+ *
+ *	if ( aerospike_lstack_peek_with_filter(&as, &err, NULL, &key, &stack, peek_count,
+ *			"myfilter", NULL, (as_list *) &list) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *	else {
+ *		// process the returned stack elements
+ *		as_arraylist_destroy(list);
+ *	}
+ *	~~~~~~~~~~
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param key			The key of the record.
+ *	@param ldt 			The stack bin to peek values from. If not a stack bin, will return error.
+ *	@param n			The number of elements to peek from the lstack.
+ *	@param filter		The name of the User-Defined-Function to use as a stack element filter.
+ *	@param fargs		The list of parameters to the User-Defined-Function filter.
+ *	@param list			The elements peeked from the lstack. If stack_size shorter than n, only stack_size is returned
+ *
+ *	@return AEROSPIKE_OK if successful. Otherwise an error.
+ *
+ *	@ingroup ldt_operations
+ */
 as_status aerospike_lstack_peek_with_filter(
 	aerospike * as, as_error * err, const as_policy_apply * policy,
 	const as_key * key, const as_ldt * ldt, uint32_t peek_count,
 	const as_udf_function_name filter, const as_list *filter_args,
 	as_list ** elements );
+
+/**
+ *	Look up a large stack and find its stack size
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_key key;
+ *	as_key_init(&key, "myns", "myset", "mykey");
+ *
+ *	as_ldt stack;
+ *	as_ldt_init(&stack, "mystack", AS_LDT_LSTACK, NULL);
+ *	uint32_t stack_size = 0;
+ *
+ *	if ( aerospike_lstack_size(&as, &err, NULL, &key, &stack, &stack_size) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *	~~~~~~~~~~
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param key			The key of the record.
+ *	@param ldt 			The stack bin to peek values from. If not a stack bin, will return error.
+ *	@param n			Return the number of elements on the lstack.
+ *
+ *	@return AEROSPIKE_OK if successful. Otherwise an error.
+ *
+ *	@ingroup ldt_operations
+ */
+as_status aerospike_lstack_size(
+	aerospike * as, as_error * err, const as_policy_apply * policy,
+	const as_key * key, const as_ldt * ldt, uint32_t *n
+	);
+
+/**
+ *	Look up a large stack and change its storage capacity (in number of elements)
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_key key;
+ *	as_key_init(&key, "myns", "myset", "mykey");
+ *
+ *	as_ldt stack;
+ *	as_ldt_init(&stack, "mystack", AS_LDT_LSTACK, NULL);
+ *	uint32_t cap_elements = 0;
+ *
+ *	if ( aerospike_lstack_set_capacity(&as, &err, NULL, &key, &stack, &cap_elements) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *	~~~~~~~~~~
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param key			The key of the record.
+ *	@param ldt 			The stack bin to peek values from. If not a stack bin, will return error.
+ *	@param n			The number of elements cap for the lstack.
+ *
+ *	@return AEROSPIKE_OK if successful. Otherwise an error.
+ *
+ *	@ingroup ldt_operations
+ */
+as_status aerospike_lstack_set_capacity(
+	aerospike * as, as_error * err, const as_policy_apply * policy,
+	const as_key * key, const as_ldt * ldt, uint32_t n
+	);
+
+

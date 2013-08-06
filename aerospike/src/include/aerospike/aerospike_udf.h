@@ -21,7 +21,7 @@
  *****************************************************************************/
 
 /** 
- *	@defgroup udf_operations UDF Operations
+ *	@defgroup udf_operations UDF Operations (3.0 only)
  *	@ingroup client_operations
  *
  *	The UDF API provides the ability to manage UDFs in the cluster.

@@ -10,3 +10,4 @@ default: all
 	$(MAKE) -C put $@
 	$(MAKE) -C touch $@
 	$(MAKE) -C udf $@
+	$(MAKE) -C lstack $@

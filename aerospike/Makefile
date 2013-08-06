@@ -66,8 +66,8 @@ CITRUSLEAF += cl_sindex.o
 CITRUSLEAF += cl_scan.o
 CITRUSLEAF += cl_scan2.o
 CITRUSLEAF += cl_udf.o
-CITRUSLEAF += aerospike_lstack.o
-CITRUSLEAF += aerospike_lset.o
+#CITRUSLEAF += aerospike_lstack.o
+#CITRUSLEAF += aerospike_lset.o
 
 AEROSPIKE = 
 AEROSPIKE += _bin.o
@@ -81,6 +81,7 @@ AEROSPIKE += aerospike_query.o
 AEROSPIKE += aerospike_scan.o
 AEROSPIKE += aerospike_index.o
 AEROSPIKE += aerospike_udf.o
+AEROSPIKE += aerospike_lstack.o
 AEROSPIKE += as_bin.o
 AEROSPIKE += as_config.o
 AEROSPIKE += as_error.o
@@ -94,6 +95,7 @@ AEROSPIKE += as_record_hooks.o
 AEROSPIKE += as_record_iterator.o
 AEROSPIKE += as_scan.o
 AEROSPIKE += as_udf.o
+AEROSPIKE += as_ldt.o
 
 OBJECTS := 
 OBJECTS += $(CITRUSLEAF:%=$(TARGET_OBJ)/citrusleaf/%) 

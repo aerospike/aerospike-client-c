@@ -21,7 +21,7 @@
  *****************************************************************************/
 
 /** 
- *	@defgroup query_operations Query Operations
+ *	@defgroup query_operations Query Operations (3.0 only)
  *	@ingroup client_operations
  *
  *	The Aerospike Query Operations provide the ability to query data in the 

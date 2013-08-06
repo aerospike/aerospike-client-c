@@ -10,6 +10,7 @@
 #include <citrusleaf/cf_random.h>
 #include <citrusleaf/cf_atomic.h>
 #include <citrusleaf/cf_hist.h>
+#include <citrusleaf/cl_parsers.h>
 #include "info_util.h"
 
 typedef struct key_value_s {
@@ -19,7 +20,7 @@ typedef struct key_value_s {
 } key_value;
 
 // Sets the key value in the hashmap
-void * set_cb(const char * key, const char * value, void * context) {
+void * set_cb(char * key, char * value, void * context) {
 	
 	// Make as_val for key and value
 	as_val * k = (as_val *) as_string_new((char *) key, false);
@@ -36,7 +37,12 @@ void * set_cb(const char * key, const char * value, void * context) {
 void * split_and_set_cb(char * data, void * context) {
 
 	// Split and call map set callback	
-	citrusleaf_sub_parameters_fold(data, context, set_cb);
+	cl_parameters_parser parser = {
+		.delim = ',',
+		.context = context,
+		.callback = set_cb
+	};
+	cl_parameters_parse(data, &parser);
 	
 	// Return the updated map back
 	return context;
@@ -55,7 +61,12 @@ static bool parse_response( const cl_cluster_node * cn, const struct sockaddr_in
 	char * response = strchr(value, '\t') + 1;
 
 	// Split the response string and set the key value pairs in the map
-	citrusleaf_split_fold(response, ';', map, split_and_set_cb);
+	cl_seq_parser parser = {
+		.delim = ';',
+		.context = map,
+		.callback = split_and_set_cb
+	};
+	cl_seq_parse(response, &parser);
 
 	// Make value out of key
 	as_val *  k = (as_val*) as_string_new(kv->key, false);

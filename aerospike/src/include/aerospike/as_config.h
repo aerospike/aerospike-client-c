@@ -84,13 +84,13 @@ typedef struct as_config_lua_s {
 	/**
 	 *	The path to the system UDF files. These UDF files 
 	 *	are installed with the aerospike client library.
-	 *	Default location is: /opt/citrusleaf/sys/udf/lua
+	 *	Default location is: /opt/aerospike/sys/udf/lua
 	 */
 	char system_path[AS_CONFIG_PATH_MAX_SIZE];
 
 	/**
 	 *	The path to user's UDF files.
-	 *	Default location is: /opt/citrusleaf/usr/udf/lua
+	 *	Default location is: /opt/aerospike/usr/udf/lua
 	 */
 	char user_path[AS_CONFIG_PATH_MAX_SIZE];
 

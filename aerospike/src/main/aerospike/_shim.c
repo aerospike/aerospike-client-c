@@ -219,7 +219,7 @@ void clbin_to_asval(cl_bin * bin, as_serializer * ser, as_val ** val)
 
 	switch( bin->object.type ) {
 		case CL_NULL :{
-			*val = &as_nil;
+			*val = (as_val *) &as_nil;
 			break;
 		}
 		case CL_INT : {

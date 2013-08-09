@@ -30,6 +30,7 @@
 static char * DEFAULT_LSTACK_PACKAGE = "lstack";
 static char * DEFAULT_LSET_PACKAGE = "lset";
 static char * DEFAULT_LLIST_PACKAGE = "llist";
+static char * DEFAULT_LMAP_PACKAGE = "lmap";
 
 
 /******************************************************************************
@@ -99,7 +100,22 @@ as_ldt * as_ldt_new(const as_bin_name name, const as_ldt_type type, const as_udf
 as_ldt * as_ldt_init(as_ldt * ldt, const as_bin_name name, const as_ldt_type type, const as_udf_module_name module)
 {
     if (!module || *module=='\0') {
-    	module = DEFAULT_LSTACK_PACKAGE;
+    	switch (type) {
+			case AS_LDT_LSTACK:
+				module = DEFAULT_LSTACK_PACKAGE;
+				break;
+			case AS_LDT_LSET:
+				module = DEFAULT_LSET_PACKAGE;
+				break;
+			case AS_LDT_LLIST:
+				module = DEFAULT_LLIST_PACKAGE;
+				break;
+			case AS_LDT_LMAP:
+				module = DEFAULT_LMAP_PACKAGE;
+				break;
+			default:
+				return NULL;
+		}
     }
 	if (!(name && *name != '\0' && strlen(name) < AS_BIN_NAME_MAX_SIZE
 		 && (module && strlen(module) < AS_UDF_MODULE_MAX_SIZE) ))

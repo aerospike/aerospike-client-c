@@ -19,7 +19,7 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
  * IN THE SOFTWARE.
  *****************************************************************************/
-
+#include <stdlib.h>
 #include "_ldt.h"
 
 as_status ldt_parse_error(as_error *error)

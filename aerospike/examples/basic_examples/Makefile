@@ -11,3 +11,4 @@ default: all
 	$(MAKE) -C touch $@
 	$(MAKE) -C udf $@
 	$(MAKE) -C lstack $@
+	$(MAKE) -C lset $@

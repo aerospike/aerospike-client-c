@@ -291,7 +291,7 @@ example_cleanup(aerospike* p_as)
 	// configurations, this record may come back to life if the server is re-
 	// started. That's why examples that want to start clean remove the test
 	// record at the beginning.
-	// example_remove_test_record(p_as);
+	example_remove_test_record(p_as);
 
 	// Note also example_remove_test_records() is not called here - examples
 	// using multiple records call that from their own cleanup utilities.

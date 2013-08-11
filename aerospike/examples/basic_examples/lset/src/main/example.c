@@ -85,7 +85,6 @@ main(int argc, char* argv[])
 	as_integer ival;
 	as_integer_init(&ival, 12345);
 
-	/*
 	if ( aerospike_lset_add(&as, &err, NULL, &g_key, &lset, (as_val *) &ival) != AEROSPIKE_OK ) {
 		LOG("first aerospike_set_add() returned %d - %s", err.code, err.message);
 		exit(-1);
@@ -98,7 +97,7 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 	LOG("2 values added to set");
-	*/
+
 	// Look at the lset size right now
 	uint32_t n = 0;
 	if ( aerospike_lset_size(&as, &err, NULL, &g_key, &lset, &n) != AEROSPIKE_OK ) {
@@ -125,6 +124,34 @@ main(int argc, char* argv[])
 
 	// See if the elements match what we expect
 	as_arraylist_iterator it;
+	as_arraylist_iterator_init(&it, (as_arraylist *)list);
+	while ( as_arraylist_iterator_has_next(&it) ) {
+		const as_val * val = as_arraylist_iterator_next(&it);
+		LOG(" Peek - type = %d value = %s ", as_val_type(val), as_val_tostring(val));
+	}
+	as_list_destroy(list);
+	list = NULL;
+
+	// Add 3 more items into the set
+	as_arraylist vals;
+	as_arraylist_inita(&vals, 3);
+	as_arraylist_append_int64(&vals, 1001);
+	as_arraylist_append_int64(&vals, 2002);
+	as_arraylist_append_int64(&vals, 3003);
+
+	if ( aerospike_lset_addall(&as, &err, NULL, &g_key, &lset, (as_list *) &vals) != AEROSPIKE_OK ) {
+		LOG("aerospike_lset_addall() returned %d - %s", err.code, err.message);
+		exit(-1);
+	}
+	LOG("3 more values added");
+
+
+	// Get and print all the values back again.
+	if ( aerospike_lset_filter(&as, &err, NULL, &g_key, &lset, NULL, NULL, &list) != AEROSPIKE_OK ) {
+ 		LOG("error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+		as_list_destroy(list);
+		exit(-1);
+ 	}
 	as_arraylist_iterator_init(&it, (as_arraylist *)list);
 	while ( as_arraylist_iterator_has_next(&it) ) {
 		const as_val * val = as_arraylist_iterator_next(&it);

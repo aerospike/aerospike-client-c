@@ -36,7 +36,7 @@
 // ++==============++
 // The names of the Lua Functions that implement Large Set Ops
 static char * LDT_SET_OP_ADD				= "lset_insert";
-//static char * LDT_SET_OP_ADDALL			= "lset_insertall";
+static char * LDT_SET_OP_ADDALL				= "lset_insert_all";
 static char * LDT_SET_OP_SIZE       		= "lset_size";
 static char * LDT_SET_OP_EXISTS     		= "lset_exists";
 static char * LDT_SET_OP_SCAN       		= "lset_scan";
@@ -45,9 +45,9 @@ static char * LDT_SET_OP_REMOVE     		= "lset_delete";
 static char * LDT_SET_OP_DESTROY  			= "lset_remove";
 
 
-as_status aerospike_lset_add(
+static as_status aerospike_lset_add_internal(
 	aerospike * as, as_error * err, const as_policy_apply * policy,
-	const as_key * key, const as_ldt * ldt, const as_val *val)
+	const as_key * key, const as_ldt * ldt, const as_val *val,  const char *operation)
 {
 	if ( !err ) {
 		return AEROSPIKE_ERR_PARAM;
@@ -74,7 +74,7 @@ as_status aerospike_lset_add(
 
 	as_val* p_return_val = NULL;
     aerospike_key_apply(
-		as, err, policy, key, ldt->module, LDT_SET_OP_ADD,
+		as, err, policy, key, ldt->module, operation,
 		(as_list *)&arglist, &p_return_val);
 
     if (ldt_parse_error(err) != AEROSPIKE_OK) {
@@ -94,6 +94,19 @@ as_status aerospike_lset_add(
     }
 
     return err->code;
+}
+
+as_status aerospike_lset_add(
+	aerospike * as, as_error * err, const as_policy_apply * policy,
+	const as_key * key, const as_ldt * ldt, const as_val * val) {
+	return aerospike_lset_add_internal (as, err, policy, key, ldt, val, LDT_SET_OP_ADD);
+}
+
+as_status aerospike_lset_addall(
+	aerospike * as, as_error * err, const as_policy_apply * policy,
+	const as_key * key, const as_ldt * ldt, const as_list * vals) {
+	return aerospike_lset_add_internal (as, err, policy, key, ldt,
+			(as_val *)vals, LDT_SET_OP_ADDALL);
 }
 
 as_status aerospike_lset_size(

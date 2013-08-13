@@ -358,7 +358,7 @@ TEST( scan_basics_set1 , "scan "SET1"" ) {
 		.set = SET1,
 		.count = 0,
 		.nobindata = false,
-		.bins = { "bin1", "bin2", "bin3", "bin4", NULL }
+		.bins = { "bin1", "bin2", "bin3", NULL }
 	};
 
 	as_error err;

@@ -327,13 +327,31 @@ bool as_record_set_int64(as_record * rec, const as_bin_name name, int64_t value)
  *
  *	@param rec		The record containing the bin.
  *	@param name		The name of the bin.
- *	@param value	The value of the bin.
+ *	@param value	The value of the bin. Must last for the lifetime of the record.
  *
  *	@return true on success, false on failure.
  *
  *	@relates as_record
  */
 bool as_record_set_str(as_record * rec, const as_bin_name name, const char * value);
+
+/**
+ *	Set specified bin's value to an NULL terminated string.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_record_set_strp(rec, "bin", strdup("abc"), true);
+ *	~~~~~~~~~~
+ *
+ *	@param rec		The record containing the bin.
+ *	@param name		The name of the bin.
+ *	@param value	The value of the bin.
+ *	@param free		If true, then the value will be freed when the record is destroyed.
+ *
+ *	@return true on success, false on failure.
+ *
+ *	@relates as_record
+ */
+bool as_record_set_strp(as_record * rec, const as_bin_name name, const char * value, bool free);
 
 /**
  *	Set specified bin's value to an NULL terminated string.
@@ -346,13 +364,37 @@ bool as_record_set_str(as_record * rec, const as_bin_name name, const char * val
  *	@param rec		The record containing the bin.
  *	@param name		The name of the bin.
  *	@param value	The value of the bin.
- *	@param size		The size of the value.
+ *	@param size		The size of the value. Must last for the lifetime of the record.
  *
  *	@return true on success, false on failure.
  *
  *	@relates as_record
  */
 bool as_record_set_raw(as_record * rec, const as_bin_name name, const uint8_t * value, uint32_t size);
+
+/**
+ *	Set specified bin's value to an NULL terminated string.
+ *
+ *	~~~~~~~~~~{.c}
+ *	uint8_t * bytes = (uint8_t *) malloc(3);
+ *	bytes[0] = 1;
+ *	bytes[1] = 2;
+ *	bytes[3] = 3;
+ *
+ *	as_record_set_raw(rec, "bin", bytes, 3, true);
+ *	~~~~~~~~~~
+ *
+ *	@param rec		The record containing the bin.
+ *	@param name		The name of the bin.
+ *	@param value	The value of the bin.
+ *	@param size		The size of the value.
+ *	@param free		If true, then the value will be freed when the record is destroyed.
+ *
+ *	@return true on success, false on failure.
+ *
+ *	@relates as_record
+ */
+bool as_record_set_rawp(as_record * rec, const as_bin_name name, const uint8_t * value, uint32_t size, bool free);
 
 /**
  *	Set specified bin's value to an as_integer.

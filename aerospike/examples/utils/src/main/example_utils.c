@@ -76,6 +76,7 @@ const uint32_t DEFAULT_NUM_KEYS = 20;
 // Created using command line options:
 // -n <namespace>
 // -s <set name>
+//
 char g_namespace[MAX_NAMESPACE_SIZE];
 char g_set[MAX_SET_SIZE];
 
@@ -104,6 +105,13 @@ uint32_t g_n_keys;
 static char g_host[MAX_HOST_SIZE];
 static int g_port;
 
+//------------------------------------------------
+// The (string) value of the test key used by all
+// basic examples. From command line option:
+// -k <key string>
+//
+static char g_key_str[MAX_KEY_STR_SIZE];
+
 
 //==========================================================
 // Forward Declarations
@@ -126,11 +134,7 @@ example_get_opts(int argc, char* argv[], const char* which_opts)
 	g_port = DEFAULT_PORT;
 	strcpy(g_namespace, DEFAULT_NAMESPACE);
 	strcpy(g_set, DEFAULT_SET);
-
-	char key_str[MAX_KEY_STR_SIZE];
-
-	strcpy(key_str, DEFAULT_KEY_STR);
-
+	strcpy(g_key_str, DEFAULT_KEY_STR);
 	g_n_keys = DEFAULT_NUM_KEYS;
 
 	int c;
@@ -166,11 +170,11 @@ example_get_opts(int argc, char* argv[], const char* which_opts)
 			break;
 
 		case 'k':
-			if (strlen(optarg) >= sizeof(key_str)) {
+			if (strlen(optarg) >= sizeof(g_key_str)) {
 				LOG("ERROR: key string exceeds max length");
 				return false;
 			}
-			strcpy(key_str, optarg);
+			strcpy(g_key_str, optarg);
 			break;
 
 		case 'K':
@@ -200,7 +204,7 @@ example_get_opts(int argc, char* argv[], const char* which_opts)
 	}
 
 	if (strchr(which_opts, 'k')) {
-		LOG("key (string):   %s", key_str);
+		LOG("key (string):   %s", g_key_str);
 	}
 
 	if (strchr(which_opts, 'K')) {
@@ -209,7 +213,7 @@ example_get_opts(int argc, char* argv[], const char* which_opts)
 
 	// Initialize the test as_key object. We won't need to destroy it since it
 	// isn't being created on the heap or with an external as_key_value.
-	as_key_init_str(&g_key, g_namespace, g_set, key_str);
+	as_key_init_str(&g_key, g_namespace, g_set, g_key_str);
 
 	return true;
 }

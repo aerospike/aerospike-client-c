@@ -280,7 +280,7 @@ as_key * as_key_new_int64(const as_namespace ns, const as_set set, int64_t value
  *	Creates and initializes a heap allocated `as_key` to a NULL-terminated string value.
  *
  *	~~~~~~~~~~{.c}
- *	    as_key * key = as_key_new_str("ns", "set", "key");
+ *	as_key * key = as_key_new_str("ns", "set", "key");
  *	~~~~~~~~~~
  *
  *	Use `as_key_destroy()` to release resources allocated to `as_key` via
@@ -305,7 +305,7 @@ as_key * as_key_new_str(const as_namespace ns, const as_set set, const char * va
  *	Creates and initializes a heap allocated `as_key` to a NULL-terminated string value.
  *
  *	~~~~~~~~~~{.c}
- *	    as_key * key = as_key_new_str("ns", "set", "key");
+ *	as_key * key = as_key_new_strp("ns", "set", strdup("key"), true);
  *	~~~~~~~~~~
  *
  *	Use `as_key_destroy()` to release resources allocated to `as_key` via
@@ -358,9 +358,9 @@ as_key * as_key_new_raw(const as_namespace ns, const as_set set, const uint8_t *
  *	Initialize a stack allocated `as_key` to a raw bytes value.
  *
  *	~~~~~~~~~~{.c}
- *		uint8_t rgb[3] = {254,254,120};
- *
- *	    as_key * key = as_key_new_raw("ns", "set", rgb, 3);
+ *	uint8_t rgb[3] = {254,254,120};
+ *	
+ *	as_key * key = as_key_new_rawp("ns", "set", rgb, 3, false);
  *	~~~~~~~~~~
  *
  *	Use `as_key_destroy()` to release resources allocated to `as_key` via

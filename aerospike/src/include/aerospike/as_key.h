@@ -327,7 +327,7 @@ as_key * as_key_init_str(as_key * key, const as_namespace ns, const as_set set, 
  *
  *	~~~~~~~~~~{.c}
  *	as_key key;
- *	as_key_init_str(&key, "ns", "set", stdup("key"), true);
+ *	as_key_init_strp(&key, "ns", "set", stdup("key"), true);
  *	~~~~~~~~~~
  *
  *	Use as_key_destroy() to release resources allocated to as_key.
@@ -374,10 +374,13 @@ as_key * as_key_init_raw(as_key * key, const as_namespace ns, const as_set set, 
  *	Initialize a stack allocated as_key to bytes array.
  *
  *	~~~~~~~~~~{.c}
- *	uint8_t rgb[3] = {254,254,120};
+ *	uint8_t * rgb = (uint8_t *) malloc(3);
+ *	rgb[0] = 255;
+ *	rgb[1] = 255;
+ *	rgb[3] = 255;
  *	
  *	as_key key;
- *	as_key_init_raw(&key, "ns", "set", rgb, 3, false);
+ *	as_key_init_rawp(&key, "ns", "set", rgb, 3, true);
  *	~~~~~~~~~~
  *
  *	Use as_key_destroy() to release resources allocated to as_key.
@@ -476,7 +479,7 @@ as_key * as_key_new_int64(const as_namespace ns, const as_set set, int64_t value
  *
  *	@param ns 		The namespace for the key.
  *	@param set		The set for the key.
- *	@param value	The key's value. Must be a constant in the same scope of the key.
+ *	@param value	The key's value. Must last for the lifetime of the key.
  *
  *	@return A new as_key on success. Otherwise NULL.
  *
@@ -489,7 +492,7 @@ as_key * as_key_new_str(const as_namespace ns, const as_set set, const char * va
  *	Creates and initializes a heap allocated as_key to a NULL-terminated string value.
  *
  *	~~~~~~~~~~{.c}
- *	as_key * key = as_key_new_str("ns", "set", strdup("key"), true);
+ *	as_key * key = as_key_new_strp("ns", "set", strdup("key"), true);
  *	~~~~~~~~~~
  *
  *	Use as_key_destroy() to release resources allocated to as_key via
@@ -521,7 +524,7 @@ as_key * as_key_new_strp(const as_namespace ns, const as_set set, const char * v
  *
  *	@param ns 		The namespace for the key.
  *	@param set		The set for the key.
- *	@param value	The key's value.
+ *	@param value	The key's value. Must last for the lifetime of the key.
  *	@param size		The number of bytes in the value.
  *
  *	@return A new as_key on success. Otherwise NULL.
@@ -535,9 +538,12 @@ as_key * as_key_new_raw(const as_namespace ns, const as_set set, const uint8_t *
  *	Initialize a stack allocated as_key to a byte array.
  *
  *	~~~~~~~~~~{.c}
- *	uint8_t rgb[3] = {254,254,120};
+ *	uint8_t * rgb = (uint8_t *) malloc(3);
+ *	rgb[0] = 255;
+ *	rgb[1] = 255;
+ *	rgb[3] = 255;
  *	
- *	as_key * key = as_key_new_raw("ns", "set", rgb, 3, false);
+ *	as_key * key = as_key_new_rawp("ns", "set", rgb, 3, true);
  *	~~~~~~~~~~
  *
  *	Use as_key_destroy() to release resources allocated to as_key via

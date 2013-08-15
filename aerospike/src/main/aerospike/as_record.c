@@ -252,10 +252,7 @@ bool as_record_set_int64(as_record * rec, const as_bin_name name, int64_t value)
  */
 bool as_record_set_str(as_record * rec, const as_bin_name name, const char * value) 
 {
-	as_bin * bin = as_record_bin_forupdate(rec, name);
-	if ( !bin ) return false;
-	as_bin_init_str(bin, name, value, false);
-	return true;
+	return as_record_set_strp(rec, name, value, false);
 }
 
 /**
@@ -286,10 +283,7 @@ bool as_record_set_strp(as_record * rec, const as_bin_name name, const char * va
  */
 bool as_record_set_raw(as_record * rec, const as_bin_name name, const uint8_t * value, uint32_t size) 
 {
-	as_bin * bin = as_record_bin_forupdate(rec, name);
-	if ( !bin ) return false;
-	as_bin_init_raw(bin, name, value, size, false);
-	return true;
+	return as_record_set_rawp(rec, name, value, size, false);
 }
 
 /**

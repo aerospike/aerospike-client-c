@@ -207,15 +207,30 @@ bool as_operations_add_write_int64(as_operations * ops, const as_bin_name name, 
  *
  *	@param ops			The `as_operations` to append the operation to.
  *	@param name 		The name of the bin to perform the operation on.
- *	@param value 		The value to be used in the operation.
+ *	@param value 		The value to be used in the operation. Must last for the lifetime of the operations.
  *
  *	@return true on success. Otherwise an error occurred.
  */
 bool as_operations_add_write_str(as_operations * ops, const as_bin_name name, const char * value)
 {
+	return as_operations_add_write_strp(ops, name, value, false);
+}
+
+/**
+ *	Add a AS_OPERATOR_WRITE bin operation with a NULL-terminated string value.
+ *
+ *	@param ops			The `as_operations` to append the operation to.
+ *	@param name 		The name of the bin to perform the operation on.
+ *	@param value 		The value to be used in the operation.
+ *	@param free			If true, then the value will be freed when the operations is destroyed.
+ *
+ *	@return true on success. Otherwise an error occurred.
+ */
+bool as_operations_add_write_strp(as_operations * ops, const as_bin_name name, const char * value, bool free)
+{
 	as_binop * binop = as_binop_forappend(ops, AS_OPERATOR_WRITE, name);
 	if ( !binop ) return false;
-	as_bin_init_str(&binop->bin, name, value);
+	as_bin_init_str(&binop->bin, name, value, free);
 	return true;
 }
 
@@ -224,15 +239,30 @@ bool as_operations_add_write_str(as_operations * ops, const as_bin_name name, co
  *
  *	@param ops			The `as_operations` to append the operation to.
  *	@param name 		The name of the bin to perform the operation on.
- *	@param value 		The value to be used in the operation.
+ *	@param value 		The value to be used in the operation.  Must last for the lifetime of the operations.
  *
  *	@return true on success. Otherwise an error occurred.
  */
 bool as_operations_add_write_raw(as_operations * ops, const as_bin_name name, const uint8_t * value, uint32_t size)
 {
+	return as_operations_add_write_rawp(ops, name, value, size, false);
+}
+
+/**
+ *	Add a AS_OPERATOR_WRITE bin operation with a raw bytes value.
+ *
+ *	@param ops			The `as_operations` to append the operation to.
+ *	@param name 		The name of the bin to perform the operation on.
+ *	@param value 		The value to be used in the operation.
+ *	@param free			If true, then the value will be freed when the operations is destroyed.
+ *
+ *	@return true on success. Otherwise an error occurred.
+ */
+bool as_operations_add_write_rawp(as_operations * ops, const as_bin_name name, const uint8_t * value, uint32_t size, bool free)
+{
 	as_binop * binop = as_binop_forappend(ops, AS_OPERATOR_WRITE, name);
 	if ( !binop ) return false;
-	as_bin_init_raw(&binop->bin, name, value, size);
+	as_bin_init_raw(&binop->bin, name, value, size, free);
 	return true;
 }
 
@@ -274,15 +304,30 @@ bool as_operations_add_incr(as_operations * ops, const as_bin_name name, int64_t
  *
  *	@param ops			The `as_operations` to append the operation to.
  *	@param name 		The name of the bin to perform the operation on.
- *	@param value 		The value to be used in the operation.
+ *	@param value 		The value to be used in the operation. Must last for the lifetime of the operations.
  *
  *	@return true on success. Otherwise an error occurred.
  */
 bool as_operations_add_prepend_str(as_operations * ops, const as_bin_name name, const char * value)
 {
+	return as_operations_add_prepend_strp(ops, name, value, false);
+}
+
+/**
+ *	Add a AS_OPERATOR_PREPEND bin operation with a NULL-terminated string value.
+ *
+ *	@param ops			The `as_operations` to append the operation to.
+ *	@param name 		The name of the bin to perform the operation on.
+ *	@param value 		The value to be used in the operation.
+ *	@param free			If true, then the value will be freed when the operations is destroyed.
+ *
+ *	@return true on success. Otherwise an error occurred.
+ */
+bool as_operations_add_prepend_strp(as_operations * ops, const as_bin_name name, const char * value, bool free)
+{
 	as_binop * binop = as_binop_forappend(ops, AS_OPERATOR_PREPEND, name);
 	if ( !binop ) return false;
-	as_bin_init_str(&binop->bin, name, value);
+	as_bin_init_str(&binop->bin, name, value, free);
 	return true;
 }
 
@@ -291,15 +336,30 @@ bool as_operations_add_prepend_str(as_operations * ops, const as_bin_name name, 
  *
  *	@param ops			The `as_operations` to append the operation to.
  *	@param name 		The name of the bin to perform the operation on.
- *	@param value 		The value to be used in the operation.
+ *	@param value 		The value to be used in the operation. Must last for the lifetime of the operations.
  *
  *	@return true on success. Otherwise an error occurred.
  */
 bool as_operations_add_prepend_raw(as_operations * ops, const as_bin_name name, const uint8_t * value, uint32_t size)
 {
+	return as_operations_add_prepend_rawp(ops, name, value, size, false);
+}
+
+/**
+ *	Add a AS_OPERATOR_PREPEND bin operation with a raw bytes value.
+ *
+ *	@param ops			The `as_operations` to append the operation to.
+ *	@param name 		The name of the bin to perform the operation on.
+ *	@param value 		The value to be used in the operation.
+ *	@param free			If true, then the value will be freed when the operations is destroyed.
+ *
+ *	@return true on success. Otherwise an error occurred.
+ */
+bool as_operations_add_prepend_rawp(as_operations * ops, const as_bin_name name, const uint8_t * value, uint32_t size, bool free)
+{
 	as_binop * binop = as_binop_forappend(ops, AS_OPERATOR_PREPEND, name);
 	if ( !binop ) return false;
-	as_bin_init_raw(&binop->bin, name, value, size);
+	as_bin_init_raw(&binop->bin, name, value, size, free);
 	return true;
 }
 
@@ -308,15 +368,30 @@ bool as_operations_add_prepend_raw(as_operations * ops, const as_bin_name name, 
  *
  *	@param ops			The `as_operations` to append the operation to.
  *	@param name 		The name of the bin to perform the operation on.
- *	@param value 		The value to be used in the operation.
+ *	@param value 		The value to be used in the operation. Must last for the lifetime of the operations.
  *
  *	@return true on success. Otherwise an error occurred.
  */
 bool as_operations_add_append_str(as_operations * ops, const as_bin_name name, const char * value)
 {
+	return as_operations_add_append_strp(ops, name, value, false);
+}
+
+/**
+ *	Add a AS_OPERATOR_APPEND bin operation with a NULL-terminated string value.
+ *
+ *	@param ops			The `as_operations` to append the operation to.
+ *	@param name 		The name of the bin to perform the operation on.
+ *	@param value 		The value to be used in the operation.
+ *	@param free			If true, then the value will be freed when the operations is destroyed.
+ *
+ *	@return true on success. Otherwise an error occurred.
+ */
+bool as_operations_add_append_strp(as_operations * ops, const as_bin_name name, const char * value, bool free)
+{
 	as_binop * binop = as_binop_forappend(ops, AS_OPERATOR_APPEND, name);
 	if ( !binop ) return false;
-	as_bin_init_str(&binop->bin, name, value);
+	as_bin_init_str(&binop->bin, name, value, free);
 	return true;
 }
 
@@ -325,15 +400,30 @@ bool as_operations_add_append_str(as_operations * ops, const as_bin_name name, c
  *
  *	@param ops			The `as_operations` to append the operation to.
  *	@param name 		The name of the bin to perform the operation on.
- *	@param value 		The value to be used in the operation.
+ *	@param value 		The value to be used in the operation. Must last for the lifetime of the operations.
  *
  *	@return true on success. Otherwise an error occurred.
  */
 bool as_operations_add_append_raw(as_operations * ops, const as_bin_name name, const uint8_t * value, uint32_t size)
 {
+	return as_operations_add_append_rawp(ops, name, value, size, false);
+}
+
+/**
+ *	Add a AS_OPERATOR_APPEND bin operation with a raw bytes value.
+ *
+ *	@param ops			The `as_operations` to append the operation to.
+ *	@param name 		The name of the bin to perform the operation on.
+ *	@param value 		The value to be used in the operation.
+ *	@param free			If true, then the value will be freed when the operations is destroyed.
+ *
+ *	@return true on success. Otherwise an error occurred.
+ */
+bool as_operations_add_append_rawp(as_operations * ops, const as_bin_name name, const uint8_t * value, uint32_t size, bool free)
+{
 	as_binop * binop = as_binop_forappend(ops, AS_OPERATOR_APPEND, name);
 	if ( !binop ) return false;
-	as_bin_init_raw(&binop->bin, name, value, size);
+	as_bin_init_raw(&binop->bin, name, value, size, free);
 	return true;
 }
 

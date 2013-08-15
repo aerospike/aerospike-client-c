@@ -81,8 +81,8 @@ as_bin * as_bin_init(as_bin * bin, const as_bin_name name, as_bin_value * value)
  *	Initialize a stack allocated `as_bin` to a int64_t value.
  *
  *	~~~~~~~~~~{.c}
- *		as_bin bin;
- *	    as_bin_init_int64(&key, "abc", 123);
+ *	as_bin bin;
+ *	as_bin_init_int64(&key, "abc", 123);
  *	~~~~~~~~~~
  *
  *	Use `as_bin_destroy()` to release resources allocated to `as_bin`.
@@ -98,47 +98,46 @@ as_bin * as_bin_init_int64(as_bin * bin, const as_bin_name name, int64_t value);
  *	Initialize a stack allocated `as_bin` to a NULL-terminated string value.
  *
  *	~~~~~~~~~~{.c}
- *		as_bin bin;
- *	    as_bin_init_str(&key, "abc", "def");
+ *	as_bin bin;
+ *	as_bin_init_str(&key, "abc", "def", false);
  *	~~~~~~~~~~
  *
  *	Use `as_bin_destroy()` to release resources allocated to `as_bin`.
  *
  *	@param name 	The name of the bin.
  *	@param value	The value of the value.
+ *	@param free		If true, then the value is freed when the bin is destroyed.
  *
  *	@return The initialized `as_bin` on success. Otherwise NULL.
  */
-as_bin * as_bin_init_str(as_bin * bin, const as_bin_name name, const char * value);
+as_bin * as_bin_init_str(as_bin * bin, const as_bin_name name, const char * value, bool free);
 
 /**
  *	Initialize a stack allocated `as_key` to a raw bytes value.
  *
  *	~~~~~~~~~~{.c}
- *		uint8_t rgb[3] = {254,254,120};
+ *	uint8_t rgb[3] = {254,254,120};
  *
- *		as_bin bin;
- *	    as_bin_init_str(&key, "abc", rgb, 3);
+ *	as_bin bin;
+ *  as_bin_init_raw(&key, "abc", rgb, 3, false);
  *	~~~~~~~~~~
  *
  *	Use `as_bin_destroy()` to release resources allocated to `as_bin`.
  *
  *	@param name 	The name of the bin.
  *	@param value	The value of the value.
+ *	@param free		If true, then the value is freed when the bin is destroyed.
  *
  *	@return The initialized `as_bin` on success. Otherwise NULL.
  */
-as_bin * as_bin_init_raw(as_bin * bin, const as_bin_name name, const uint8_t * value, uint32_t size);
+as_bin * as_bin_init_raw(as_bin * bin, const as_bin_name name, const uint8_t * value, uint32_t size, bool free);
 
 /**
  *	Initialize a stack allocated `as_key` to a an `as_key_value`.
  *
  *	~~~~~~~~~~{.c}
- *		as_string str;
- *		as_string_init(&str, "abc", false);
- *
- *		as_bin bin;
- *	    as_bin_init_str(&key, "abc", (as_key_value *) str);
+ *	as_bin bin;
+ *	as_bin_init_nil(&key, "abc");
  *	~~~~~~~~~~
  *
  *	Use `as_bin_destroy()` to release resources allocated to `as_bin`.
@@ -154,7 +153,7 @@ as_bin * as_bin_init_nil(as_bin * bin, const as_bin_name name);
  *	Destroy the given `as_bin` and associated resources.
  *
  *	~~~~~~~~~~{.c}
- * 		as_bin_destroy(bin);
+ * 	as_bin_destroy(bin);
  *	~~~~~~~~~~
  *
  *	@param bin The `as_bin` to destroy.

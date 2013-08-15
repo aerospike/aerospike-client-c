@@ -110,10 +110,10 @@ as_bin * as_bin_init_int64(as_bin * bin, const as_bin_name name, int64_t value)
  *
  *	@return The initialized `as_bin` on success. Otherwise NULL.
  */
-as_bin * as_bin_init_str(as_bin * bin, const as_bin_name name, const char * value)
+as_bin * as_bin_init_str(as_bin * bin, const as_bin_name name, const char * value, bool free)
 {
 	if ( !bin ) return bin;
-	as_string_init((as_string *) &bin->value, (char *) value, false);
+	as_string_init((as_string *) &bin->value, (char *) value, free);
 	return as_bin_defaults(bin, name, &bin->value);
 }
 
@@ -134,10 +134,10 @@ as_bin * as_bin_init_str(as_bin * bin, const as_bin_name name, const char * valu
  *
  *	@return The initialized `as_bin` on success. Otherwise NULL.
  */
-as_bin * as_bin_init_raw(as_bin * bin, const as_bin_name name, const uint8_t * value, uint32_t size)
+as_bin * as_bin_init_raw(as_bin * bin, const as_bin_name name, const uint8_t * value, uint32_t size, bool free)
 {
 	if ( !bin ) return bin;
-	as_bytes_init_wrap((as_bytes *) &bin->value, (uint8_t *) value, size, false);
+	as_bytes_init_wrap((as_bytes *) &bin->value, (uint8_t *) value, size, free);
 	return as_bin_defaults(bin, name, &bin->value);
 }
 

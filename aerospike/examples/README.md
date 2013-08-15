@@ -112,6 +112,42 @@ combination of arithmetic and read operations in the same transaction, in order
 to perform an atomic arithmetic operation.
 
 
+# lset (3.0 feature)
+
+aerospike_lset_add()
+aerospike_lset_addall()
+aerospike_lset_size()
+aerospike_lset_filter()
+aerospike_lset_exists()
+aerospike_lset_destroy()
+
+This example demonstrates manipulation of a "large set" record bin. It shows how
+to add values using aerospike_lset_add() and aerospike_lset_addall(), how to get
+the number of elements (size) using aerospike_lset_size(), and how to check the
+existence of a particular value using aerospike_lset_exists(). It also shows how
+to return all the values using aerospike_lset_filter(), and how to remove an
+entire lset using aerospike_lset_destroy().
+
+
+# lstack (3.0 feature)
+
+aerospike_lstack_push()
+aerospike_lstack_pushall()
+aerospike_lstack_size()
+aerospike_lstack_peek()
+aerospike_lstack_set_capacity()
+aerospike_lstack_get_capacity()
+aerospike_lstack_destroy()
+
+This example demonstrates manipulation of a "large stack" record bin. It shows
+how to push values using aerospike_lstack_push() and aerospike_lstack_pushall(),
+how to get the number of elements (size) using aerospike_lstack_size(), and how
+to peek to a specified depth using aerospike_lstack_peek(). It also shows how to
+set and query capacity using aerospike_lstack_set_capacity() and
+aerospike_lstack_get_capacity(), and how to remove an entire lstack using
+aerospike_lstack_destroy().
+
+
 # put
 
 aerospike_key_put()
@@ -136,7 +172,7 @@ operation, to reset the TTL to a different value. Finally it reads the record
 again to show that the TTL value was updated.
 
 
-# udf
+# udf (3.0 feature)
 
 aerospike_key_apply()
 aerospike_key_put()
@@ -158,7 +194,7 @@ show the effect.
 These examples each use multiple records to demonstrate particular API calls.
 
 
-# aggregate
+# aggregate (3.0 feature)
 
 aerospike_index_integer_create()
 as_query_where()
@@ -174,7 +210,7 @@ using a second UDF (that sums the values) before making a callback to report the
 final result. This is a simple 'map reduce' example.
 
 
-# simple
+# simple (3.0 feature)
 
 aerospike_index_integer_create()
 as_query_where()
@@ -194,7 +230,7 @@ such record, in this case a single record.
 These examples each use multiple records to demonstrate particular API calls.
 
 
-# background
+# background (3.0 feature)
 
 as_scan_apply_each()
 aerospike_scan_background()

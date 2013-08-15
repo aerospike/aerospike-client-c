@@ -61,9 +61,9 @@ static cl_query * as_query_toclquery(const as_query * query)
 {
 	cl_query * clquery = cl_query_new(query->ns, query->set);
 
-	if ( query->limit != UINT64_MAX ) {
-		cl_query_limit(clquery, query->limit);
-	}
+	// if ( query->limit != UINT64_MAX ) {
+		// cl_query_limit(clquery, query->limit);
+	// }
 
 	for ( int i = 0; i < query->select.size; i++ ) {
 		as_bin_name * bin = &query->select.entries[i];

@@ -415,18 +415,6 @@ typedef struct as_query_sort_s {
  *	as_query_orderby(query, "bin2", AS_ORDER_ASCENDING);
  *	~~~~~~~~~~
  *
- *	### Limiting Results
- *
- *	as_query_limt() is used to specify the number of results to return for 
- *	a query.
- *	
- *	~~~~~~~~~~{.c}
- *	as_query_limit(query, 100);
- *	~~~~~~~~~~
- *	
- *	Using `UINT64_MAX` for the value will result in all results for the
- *	query being returned.
- *
  *	### Applying a UDF to Query Results
  *
  *	A UDF can be applied to the results of a query.
@@ -499,19 +487,9 @@ typedef struct as_query_s {
 	as_query_ordering orderby;
 
 	/**
-	 *	Limit the result set.
-	 *
-	 *	Should be set via `as_query_limit()`.
-	 *
-	 *	If set to UINT64_MAX (default), then the query will 
-	 *	return all matching results.
-	 */
-	uint64_t limit;
-
-	/**
 	 *	UDF to apply to results of the query
 	 *
-	 *	Should be set via `as_query_limit()`.
+	 *	Should be set via `as_query_apply()`.
 	 */
 	as_udf_call apply;
 
@@ -795,22 +773,6 @@ bool as_query_orderby(as_query * query, const char * bin, as_order order);
 /******************************************************************************
  *	QUERY MODIFIER FUNCTIONS
  *****************************************************************************/
-
-/**
- *	Limit the number of results by `limit`. If limit is `UINT64_MAX`, then all matching results are returned.
- *
- *	~~~~~~~~~~{.c}
- *	as_query_limit(&query, 100);
- *	~~~~~~~~~~
- *
- *	@param query 		The query to modify.
- *	@param limit 		The number of records to limit by.
- *
- *	@return On success, true. Otherwise an error occurred.
- *
- *	@relates as_query
- */
-bool as_query_limit(as_query * query, uint64_t limit);
 
 /**
  *	Apply a function to the results of the query.

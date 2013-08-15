@@ -305,28 +305,6 @@ as_key * as_key_init_int64(as_key * key, const as_namespace ns, const as_set set
  *
  *	~~~~~~~~~~{.c}
  *	as_key key;
- *	as_key_init_str(&key, "ns", "set", "key");
- *	~~~~~~~~~~
- *
- *	Use as_key_destroy() to release resources allocated to as_key.
- *
- *	@param key		The key to initialize.
- *	@param ns 		The namespace for the key.
- *	@param set		The set for the key.
- *	@param value	The key's value. Must last for the lifetime of the key.
- *
- *	@return The initialized as_key on success. Otherwise NULL.
- *
- *	@relates as_key
- *	@ingroup as_key_object
- */
-as_key * as_key_init_str(as_key * key, const as_namespace ns, const as_set set, const char * value);
-
-/**
- *	Initialize a stack allocated as_key to a NULL-terminated string value.
- *
- *	~~~~~~~~~~{.c}
- *	as_key key;
  *	as_key_init_strp(&key, "ns", "set", stdup("key"), true);
  *	~~~~~~~~~~
  *
@@ -346,13 +324,11 @@ as_key * as_key_init_str(as_key * key, const as_namespace ns, const as_set set, 
 as_key * as_key_init_strp(as_key * key, const as_namespace ns, const as_set set, const char * value, bool free);
 
 /**
- *	Initialize a stack allocated as_key to bytes array.
+ *	Initialize a stack allocated as_key to a NULL-terminated string value.
  *
  *	~~~~~~~~~~{.c}
- *	uint8_t rgb[3] = {254,254,120};
- *	
  *	as_key key;
- *	as_key_init_raw(&key, "ns", "set", rgb, 3);
+ *	as_key_init_str(&key, "ns", "set", "key");
  *	~~~~~~~~~~
  *
  *	Use as_key_destroy() to release resources allocated to as_key.
@@ -360,15 +336,17 @@ as_key * as_key_init_strp(as_key * key, const as_namespace ns, const as_set set,
  *	@param key		The key to initialize.
  *	@param ns 		The namespace for the key.
  *	@param set		The set for the key.
- *	@param value	The key's value.
- *	@param size		The number of bytes in value. Must last for the lifetime of the key.
+ *	@param value	The key's value. Must last for the lifetime of the key.
  *
  *	@return The initialized as_key on success. Otherwise NULL.
  *
  *	@relates as_key
  *	@ingroup as_key_object
  */
-as_key * as_key_init_raw(as_key * key, const as_namespace ns, const as_set set, const uint8_t * value, uint32_t size);
+inline as_key * as_key_init_str(as_key * key, const as_namespace ns, const as_set set, const char * value)
+{
+	return as_key_init_strp(key, ns, set, value, false);
+}
 
 /**
  *	Initialize a stack allocated as_key to bytes array.
@@ -398,6 +376,34 @@ as_key * as_key_init_raw(as_key * key, const as_namespace ns, const as_set set, 
  *	@ingroup as_key_object
  */
 as_key * as_key_init_rawp(as_key * key, const as_namespace ns, const as_set set, const uint8_t * value, uint32_t size, bool free);
+
+/**
+ *	Initialize a stack allocated as_key to bytes array.
+ *
+ *	~~~~~~~~~~{.c}
+ *	uint8_t rgb[3] = {254,254,120};
+ *	
+ *	as_key key;
+ *	as_key_init_raw(&key, "ns", "set", rgb, 3);
+ *	~~~~~~~~~~
+ *
+ *	Use as_key_destroy() to release resources allocated to as_key.
+ *
+ *	@param key		The key to initialize.
+ *	@param ns 		The namespace for the key.
+ *	@param set		The set for the key.
+ *	@param value	The key's value.
+ *	@param size		The number of bytes in value. Must last for the lifetime of the key.
+ *
+ *	@return The initialized as_key on success. Otherwise NULL.
+ *
+ *	@relates as_key
+ *	@ingroup as_key_object
+ */
+inline as_key * as_key_init_raw(as_key * key, const as_namespace ns, const as_set set, const uint8_t * value, uint32_t size)
+{
+	return as_key_init_rawp(key, ns, set, value, size, false);
+}
 
 /**
  *	Initialize a stack allocated as_key to an as_key_value.

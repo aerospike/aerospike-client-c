@@ -54,6 +54,7 @@
 #include <aerospike/aerospike.h>
 #include <aerospike/as_bin.h>
 #include <aerospike/as_error.h>
+#include <aerospike/as_key.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_status.h>
 
@@ -85,13 +86,13 @@
  */
 as_status aerospike_index_integer_create(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
-	const char * ns, const char * set, const char * bin, const char * name);
+	const as_namespace ns, const as_set set, const as_bin_name bin, const char * name);
 
 /**
  *	Create a new secondary index on a string bin.
  *
  *	~~~~~~~~~~{.c}
- *	if ( aerospike_index_sparse_string_create(&as, &err, NULL, 
+ *	if ( aerospike_index_string_create(&as, &err, NULL, 
  *			"test", "demo", "bin1", "idx_test_demo_bin1") != AEROSPIKE_OK ) {
  *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *	}
@@ -111,7 +112,7 @@ as_status aerospike_index_integer_create(
  */
 as_status aerospike_index_string_create(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
-	const char * ns, const char * set, const char * bin, const char * name);
+	const as_namespace ns, const as_set set, const as_bin_name bin, const char * name);
 
 /**
  *	Removes (drops) a secondary index.
@@ -134,7 +135,7 @@ as_status aerospike_index_string_create(
  */
 as_status aerospike_index_remove(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
-	const char * ns, const char * name); 
+	const as_namespace ns, const char * name); 
 
 
 /** 

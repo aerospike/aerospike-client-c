@@ -114,7 +114,7 @@ as_key * as_key_init_int64(as_key * key, const as_namespace ns, const as_set set
  *
  *	@param ns 		The namespace for the key.
  *	@param set		The set for the key.
- *	@param value	The key's value.
+ *	@param value	The key's value.  Must last for the lifetime of the key.
  *
  *	@return The initialized `as_key` on success. Otherwise NULL.
  */
@@ -123,6 +123,31 @@ as_key * as_key_init_str(as_key * key, const as_namespace ns, const as_set set, 
 	if ( !key ) return key;
 	
 	as_string_init((as_string *) &key->value, (char *) value, false);
+	return as_key_defaults(key, false, ns, set, &key->value);
+}
+
+/**
+ *	Initialize a stack allocated `as_key` to a NULL-terminated string value.
+ *
+ *	~~~~~~~~~~{.c}
+ *		as_key key;
+ *	    as_key_init_str(&key, "ns", "set", "key");
+ *	~~~~~~~~~~
+ *
+ *	Use `as_key_destroy()` to release resources allocated to `as_key`.
+ *
+ *	@param ns 		The namespace for the key.
+ *	@param set		The set for the key.
+ *	@param value	The key's value.
+ *	@param free		If true, then the key value can be freed when the key is destroyed.
+ *
+ *	@return The initialized `as_key` on success. Otherwise NULL.
+ */
+as_key * as_key_init_strp(as_key * key, const as_namespace ns, const as_set set, const char * value, bool free)
+{
+	if ( !key ) return key;
+	
+	as_string_init((as_string *) &key->value, (char *) value, free);
 	return as_key_defaults(key, false, ns, set, &key->value);
 }
 
@@ -138,7 +163,7 @@ as_key * as_key_init_str(as_key * key, const as_namespace ns, const as_set set, 
  *
  *	@param ns 		The namespace for the key.
  *	@param set		The set for the key.
- *	@param value	The key's value.
+ *	@param value	The key's value. Must last for the lifetime of the key.
  *
  *	@return The initialized `as_key` on success. Otherwise NULL.
  */
@@ -147,6 +172,33 @@ as_key * as_key_init_raw(as_key * key, const as_namespace ns, const as_set set, 
 	if ( !key ) return key;
 	
 	as_bytes_init_wrap((as_bytes *) &key->value, (uint8_t *) value, size, false);
+	return as_key_defaults(key, false, ns, set, &key->value);
+}
+
+/**
+ *	Initialize a stack allocated `as_key` to a raw bytes value.
+ *
+ *	~~~~~~~~~~{.c}
+ *		uint8_t rgb[3] = {254,254,120};
+ *
+ *		as_key key;
+ *	    as_key_init_raw(&key, "ns", "set", rgb, 3);
+ *	~~~~~~~~~~
+ *
+ *	@param key		The key to initialize.
+ *	@param ns 		The namespace for the key.
+ *	@param set		The set for the key.
+ *	@param value	The key's value.
+ *	@param size		The number of bytes in value.
+ *	@param free		If true, then the key's value can be freed when the key is destroyed.
+ *
+ *	@return The initialized `as_key` on success. Otherwise NULL.
+ */
+as_key * as_key_init_rawp(as_key * key, const as_namespace ns, const as_set set, const uint8_t * value, uint32_t size, bool free)
+{
+	if ( !key ) return key;
+	
+	as_bytes_init_wrap((as_bytes *) &key->value, (uint8_t *) value, size, free);
 	return as_key_defaults(key, false, ns, set, &key->value);
 }
 
@@ -236,7 +288,7 @@ as_key * as_key_new_int64(const as_namespace ns, const as_set set, int64_t value
  *
  *	@param ns 		The namespace for the key.
  *	@param set		The set for the key.
- *	@param value	The key's value.
+ *	@param value	The key's value. Must last for the lifetime of the key.
  *
  *	@return The initialized `as_key` on success. Otherwise NULL.
  */
@@ -246,6 +298,59 @@ as_key * as_key_new_str(const as_namespace ns, const as_set set, const char * va
 	if ( !key ) return key;
 	
 	as_string_init((as_string *) &key->value, (char *) value, false);
+	return as_key_defaults(key, true, ns, set, &key->value);
+}
+
+/**
+ *	Creates and initializes a heap allocated `as_key` to a NULL-terminated string value.
+ *
+ *	~~~~~~~~~~{.c}
+ *	    as_key * key = as_key_new_str("ns", "set", "key");
+ *	~~~~~~~~~~
+ *
+ *	Use `as_key_destroy()` to release resources allocated to `as_key` via
+ *	this function.
+ *
+ *	@param ns 		The namespace for the key.
+ *	@param set		The set for the key.
+ *	@param value	The key's value. 
+ *	@param free		If true, then the key's value can be freed when the key is destroyed.
+ *
+ *	@return The initialized `as_key` on success. Otherwise NULL.
+ */
+as_key * as_key_new_strp(const as_namespace ns, const as_set set, const char * value, bool free)
+{
+	as_key * key = (as_key *) malloc(sizeof(as_key));
+	if ( !key ) return key;
+	
+	as_string_init((as_string *) &key->value, (char *) value, free);
+	return as_key_defaults(key, true, ns, set, &key->value);
+}
+
+/**
+ *	Initialize a stack allocated `as_key` to a raw bytes value.
+ *
+ *	~~~~~~~~~~{.c}
+ *		uint8_t rgb[3] = {254,254,120};
+ *
+ *	    as_key * key = as_key_new_raw("ns", "set", rgb, 3);
+ *	~~~~~~~~~~
+ *
+ *	Use `as_key_destroy()` to release resources allocated to `as_key` via
+ *	this function.
+ *
+ *	@param ns 		The namespace for the key.
+ *	@param set		The set for the key.
+ *	@param value	The key's value. Must last for the lifetime of the key.
+ *
+ *	@return The initialized `as_key` on success. Otherwise NULL.
+ */
+as_key * as_key_new_raw(const as_namespace ns, const as_set set, const uint8_t * value, uint32_t size)
+{
+	as_key * key = (as_key *) malloc(sizeof(as_key));
+	if ( !key ) return key;
+	
+	as_bytes_init_wrap((as_bytes *) &key->value, (uint8_t *) value, size, false);
 	return as_key_defaults(key, true, ns, set, &key->value);
 }
 
@@ -264,15 +369,16 @@ as_key * as_key_new_str(const as_namespace ns, const as_set set, const char * va
  *	@param ns 		The namespace for the key.
  *	@param set		The set for the key.
  *	@param value	The key's value.
+ *	@param free		If true, then the key's value can be freed when the key is destroyed.
  *
  *	@return The initialized `as_key` on success. Otherwise NULL.
  */
-as_key * as_key_new_raw(const as_namespace ns, const as_set set, const uint8_t * value, uint32_t size)
+as_key * as_key_new_rawp(const as_namespace ns, const as_set set, const uint8_t * value, uint32_t size, bool free)
 {
 	as_key * key = (as_key *) malloc(sizeof(as_key));
 	if ( !key ) return key;
 	
-	as_bytes_init_wrap((as_bytes *) &key->value, (uint8_t *) value, size, false);
+	as_bytes_init_wrap((as_bytes *) &key->value, (uint8_t *) value, size, free);
 	return as_key_defaults(key, true, ns, set, &key->value);
 }
 

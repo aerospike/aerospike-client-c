@@ -154,7 +154,7 @@ void asval_to_clobject(as_val * val, cl_object * obj)
 		}
 		case AS_STRING: {
 			as_string * v = as_string_fromval(val);
-			citrusleaf_object_init_str(obj, as_string_tostring(v));
+			citrusleaf_object_init_str(obj, as_string_get(v));
 			break;
 		}
 		case AS_BYTES: {

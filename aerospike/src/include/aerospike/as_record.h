@@ -33,6 +33,7 @@
 #include <aerospike/as_util.h>
 #include <aerospike/as_val.h>
 
+#include <stdbool.h>
 #include <stdint.h>
 
 /******************************************************************************
@@ -322,23 +323,6 @@ bool as_record_set_int64(as_record * rec, const as_bin_name name, int64_t value)
  *	Set specified bin's value to an NULL terminated string.
  *
  *	~~~~~~~~~~{.c}
- *	as_record_set_str(rec, "bin", "abc");
- *	~~~~~~~~~~
- *
- *	@param rec		The record containing the bin.
- *	@param name		The name of the bin.
- *	@param value	The value of the bin. Must last for the lifetime of the record.
- *
- *	@return true on success, false on failure.
- *
- *	@relates as_record
- */
-bool as_record_set_str(as_record * rec, const as_bin_name name, const char * value);
-
-/**
- *	Set specified bin's value to an NULL terminated string.
- *
- *	~~~~~~~~~~{.c}
  *	as_record_set_strp(rec, "bin", strdup("abc"), true);
  *	~~~~~~~~~~
  *
@@ -357,20 +341,21 @@ bool as_record_set_strp(as_record * rec, const as_bin_name name, const char * va
  *	Set specified bin's value to an NULL terminated string.
  *
  *	~~~~~~~~~~{.c}
- *	uint8_t bytes[3] = {1,2,3};
- *	as_record_set_raw(rec, "bin", bytes, 3);
+ *	as_record_set_str(rec, "bin", "abc");
  *	~~~~~~~~~~
  *
  *	@param rec		The record containing the bin.
  *	@param name		The name of the bin.
- *	@param value	The value of the bin.
- *	@param size		The size of the value. Must last for the lifetime of the record.
+ *	@param value	The value of the bin. Must last for the lifetime of the record.
  *
  *	@return true on success, false on failure.
  *
  *	@relates as_record
  */
-bool as_record_set_raw(as_record * rec, const as_bin_name name, const uint8_t * value, uint32_t size);
+inline bool as_record_set_str(as_record * rec, const as_bin_name name, const char * value)
+{
+	return as_record_set_strp(rec, name, value, false);
+}
 
 /**
  *	Set specified bin's value to an NULL terminated string.
@@ -395,6 +380,28 @@ bool as_record_set_raw(as_record * rec, const as_bin_name name, const uint8_t * 
  *	@relates as_record
  */
 bool as_record_set_rawp(as_record * rec, const as_bin_name name, const uint8_t * value, uint32_t size, bool free);
+
+/**
+ *	Set specified bin's value to an NULL terminated string.
+ *
+ *	~~~~~~~~~~{.c}
+ *	uint8_t bytes[3] = {1,2,3};
+ *	as_record_set_raw(rec, "bin", bytes, 3);
+ *	~~~~~~~~~~
+ *
+ *	@param rec		The record containing the bin.
+ *	@param name		The name of the bin.
+ *	@param value	The value of the bin.
+ *	@param size		The size of the value. Must last for the lifetime of the record.
+ *
+ *	@return true on success, false on failure.
+ *
+ *	@relates as_record
+ */
+inline bool as_record_set_raw(as_record * rec, const as_bin_name name, const uint8_t * value, uint32_t size)
+{
+	return as_record_set_rawp(rec, name, value, size, false);
+}
 
 /**
  *	Set specified bin's value to an as_integer.

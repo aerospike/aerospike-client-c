@@ -47,6 +47,9 @@ extern const as_rec_hooks as_record_rec_hooks;
 extern inline as_val * as_record_toval(const as_record * rec);
 extern inline as_record * as_record_fromval(const as_val * v);
 
+extern inline bool as_record_set_str(as_record * rec, const as_bin_name name, const char * value);
+extern inline bool as_record_set_raw(as_record * rec, const as_bin_name name, const uint8_t * value, uint32_t size);
+
 /******************************************************************************
  *	STATIC FUNCTIONS
  *****************************************************************************/
@@ -250,40 +253,12 @@ bool as_record_set_int64(as_record * rec, const as_bin_name name, int64_t value)
  *	@param value - the value of the bin
  *	@return true on success, false on failure.
  */
-bool as_record_set_str(as_record * rec, const as_bin_name name, const char * value) 
-{
-	return as_record_set_strp(rec, name, value, false);
-}
-
-/**
- *	Set specified bin's value to an NULL terminated string.
- *	as_record_set_str(rec, "bin", "abc");
- *	@param rec 	- the record containing the bin
- *	@param name 	- the name of the bin
- *	@param value - the value of the bin
- *	@return true on success, false on failure.
- */
 bool as_record_set_strp(as_record * rec, const as_bin_name name, const char * value, bool free) 
 {
 	as_bin * bin = as_record_bin_forupdate(rec, name);
 	if ( !bin ) return false;
 	as_bin_init_str(bin, name, value, free);
 	return true;
-}
-
-/**
- *	Set specified bin's value to raw bytes of given length.
- *	uint8_t bytes[3] = {1,2,3}
- *	as_record_set_raw(rec, "bin", bytes, 3);
- *	@param rec 	- the record containing the bin
- *	@param name 	- the name of the bin
- *	@param value - the value of the bin
- *	@param size 	- the size of the value
- *	@return true on success, false on failure.
- */
-bool as_record_set_raw(as_record * rec, const as_bin_name name, const uint8_t * value, uint32_t size) 
-{
-	return as_record_set_rawp(rec, name, value, size, false);
 }
 
 /**
@@ -401,7 +376,8 @@ bool as_record_set_map(as_record * rec, const as_bin_name name, as_map * value)
  *	@param name 	- the name of the bin
  *	@return true on success, false on failure.
  */
-bool as_record_set_nil(as_record * rec, const as_bin_name name) {
+bool as_record_set_nil(as_record * rec, const as_bin_name name)
+{
 	return as_record_set(rec, name, (as_bin_value *) &as_nil);
 }
 

@@ -66,8 +66,6 @@ static as_query * as_query_defaults(as_query * query, bool free, const as_namesp
 	query->orderby.size = 0;
 	query->orderby.entries = NULL;
 	
-	query->limit = UINT64_MAX;
-	
 	as_udf_call_init(&query->apply, NULL, NULL, NULL);
 
 	return query;
@@ -384,22 +382,6 @@ bool as_query_orderby(as_query * query, const as_bin_name bin, as_order order)
  *	QUERY MODIFIER FUNCTIONS
  *****************************************************************************/
 
-/**
- * Limit the number of results by `limit`. If limit is UINT64_MAX, then all matching results are returned.
- *
- *		as_query_orderby(&q, "bin1", true);
- *
- * @param query 	- the query to modify
- * @param limit 	- the number of records to limit by
- *
- * @param 0 on success. Otherwise an error occurred.
- */
-bool as_query_limit(as_query * query, uint64_t limit)
-{
-	if ( !query ) return false;
-	query->limit = limit;
-	return true;
-}
 
 /**
  * Apply a function to the results of the query.

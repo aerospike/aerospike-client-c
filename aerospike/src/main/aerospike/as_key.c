@@ -120,10 +120,7 @@ as_key * as_key_init_int64(as_key * key, const as_namespace ns, const as_set set
  */
 as_key * as_key_init_str(as_key * key, const as_namespace ns, const as_set set, const char * value)
 {
-	if ( !key ) return key;
-	
-	as_string_init((as_string *) &key->value, (char *) value, false);
-	return as_key_defaults(key, false, ns, set, &key->value);
+	return as_key_init_strp(key, ns, set, value, false);
 }
 
 /**
@@ -169,10 +166,7 @@ as_key * as_key_init_strp(as_key * key, const as_namespace ns, const as_set set,
  */
 as_key * as_key_init_raw(as_key * key, const as_namespace ns, const as_set set, const uint8_t * value, uint32_t size)
 {
-	if ( !key ) return key;
-	
-	as_bytes_init_wrap((as_bytes *) &key->value, (uint8_t *) value, size, false);
-	return as_key_defaults(key, false, ns, set, &key->value);
+	return as_key_init_rawp(key, ns, set, value, size, false);
 }
 
 /**
@@ -294,11 +288,7 @@ as_key * as_key_new_int64(const as_namespace ns, const as_set set, int64_t value
  */
 as_key * as_key_new_str(const as_namespace ns, const as_set set, const char * value)
 {
-	as_key * key = (as_key *) malloc(sizeof(as_key));
-	if ( !key ) return key;
-	
-	as_string_init((as_string *) &key->value, (char *) value, false);
-	return as_key_defaults(key, true, ns, set, &key->value);
+	return as_key_new_strp(ns, set, value, false);
 }
 
 /**
@@ -347,11 +337,7 @@ as_key * as_key_new_strp(const as_namespace ns, const as_set set, const char * v
  */
 as_key * as_key_new_raw(const as_namespace ns, const as_set set, const uint8_t * value, uint32_t size)
 {
-	as_key * key = (as_key *) malloc(sizeof(as_key));
-	if ( !key ) return key;
-	
-	as_bytes_init_wrap((as_bytes *) &key->value, (uint8_t *) value, size, false);
-	return as_key_defaults(key, true, ns, set, &key->value);
+	return as_key_new_rawp(ns, set, value, size, false);
 }
 
 /**

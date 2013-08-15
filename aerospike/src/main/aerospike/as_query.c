@@ -37,14 +37,14 @@ static as_query * as_query_defaults(as_query * query, bool free, const as_namesp
 {
 	query->_free = free;
 
-	if ( strlen(ns) < AS_NAMESPACE_MAX_SIZE ) {
+	if ( ns && strlen(ns) < AS_NAMESPACE_MAX_SIZE ) {
 		strcpy(query->ns, ns);
 	}
 	else {
 		query->ns[0] = '\0';
 	}
 	
-	if ( strlen(set) < AS_SET_MAX_SIZE ) {
+	if ( set && strlen(set) < AS_SET_MAX_SIZE ) {
 		strcpy(query->set, set);
 	}
 	else {

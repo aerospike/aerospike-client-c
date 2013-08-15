@@ -34,6 +34,13 @@
 #include "_shim.h"
 
 /******************************************************************************
+ *	INLINE FUNCTIONS
+ *****************************************************************************/
+
+extern inline as_key * as_key_init_str(as_key * key, const as_namespace ns, const as_set set, const char * value);
+extern inline as_key * as_key_init_raw(as_key * key, const as_namespace ns, const as_set set, const uint8_t * value, uint32_t size);
+
+/******************************************************************************
  *	STATIC FUNCTIONS
  *****************************************************************************/
 
@@ -114,27 +121,6 @@ as_key * as_key_init_int64(as_key * key, const as_namespace ns, const as_set set
  *
  *	@param ns 		The namespace for the key.
  *	@param set		The set for the key.
- *	@param value	The key's value.  Must last for the lifetime of the key.
- *
- *	@return The initialized `as_key` on success. Otherwise NULL.
- */
-as_key * as_key_init_str(as_key * key, const as_namespace ns, const as_set set, const char * value)
-{
-	return as_key_init_strp(key, ns, set, value, false);
-}
-
-/**
- *	Initialize a stack allocated `as_key` to a NULL-terminated string value.
- *
- *	~~~~~~~~~~{.c}
- *		as_key key;
- *	    as_key_init_str(&key, "ns", "set", "key");
- *	~~~~~~~~~~
- *
- *	Use `as_key_destroy()` to release resources allocated to `as_key`.
- *
- *	@param ns 		The namespace for the key.
- *	@param set		The set for the key.
  *	@param value	The key's value.
  *	@param free		If true, then the key value can be freed when the key is destroyed.
  *
@@ -146,27 +132,6 @@ as_key * as_key_init_strp(as_key * key, const as_namespace ns, const as_set set,
 	
 	as_string_init((as_string *) &key->value, (char *) value, free);
 	return as_key_defaults(key, false, ns, set, &key->value);
-}
-
-/**
- *	Initialize a stack allocated `as_key` to a raw bytes value.
- *
- *	~~~~~~~~~~{.c}
- *		uint8_t rgb[3] = {254,254,120};
- *
- *		as_key key;
- *	    as_key_init_raw(&key, "ns", "set", rgb, 3);
- *	~~~~~~~~~~
- *
- *	@param ns 		The namespace for the key.
- *	@param set		The set for the key.
- *	@param value	The key's value. Must last for the lifetime of the key.
- *
- *	@return The initialized `as_key` on success. Otherwise NULL.
- */
-as_key * as_key_init_raw(as_key * key, const as_namespace ns, const as_set set, const uint8_t * value, uint32_t size)
-{
-	return as_key_init_rawp(key, ns, set, value, size, false);
 }
 
 /**

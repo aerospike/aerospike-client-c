@@ -312,12 +312,8 @@ as_status aerospike_lset_remove(
     	return err->code;
     }
 
-    int64_t ival = as_integer_getorelse(as_integer_fromval(p_return_val), -1);
-	as_val_destroy(p_return_val);
-
-    if (ival != 0) {
-		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL,
-				"value returned from server not parse-able");
+    if (p_return_val != NULL) {
+    	as_val_destroy(p_return_val);
     }
 
     return err->code;

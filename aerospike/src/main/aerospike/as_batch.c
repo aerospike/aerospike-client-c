@@ -24,46 +24,82 @@
 #include <citrusleaf/cl_batch.h>
 #include <citrusleaf/cf_random.h>
 
-static as_batch * as_batch_defaults(as_batch * batch, bool free, const as_namespace ns, const as_set set)
+/******************************************************************************
+ *	INLINE FUNCTIONS
+ *****************************************************************************/
+
+/**
+ *	Get the key at given position of the batch. If the position is not
+ *	within the allocated capacity for the batchm then NULL is returned.
+ */
+extern inline as_key * as_batch_get(as_batch * batch, uint32_t i);
+
+/******************************************************************************
+ *	FUNCTIONS
+ *****************************************************************************/
+
+/**
+ *	Create and initialize a heap allocated as_batch capable of storing
+ *	`capacity` keys.
+ */
+as_batch * as_batch_new(uint32_t capacity)
 {
-	if(batch == NULL) return batch;
-	
-	batch->_free = free;
-	
-	 if ( strlen(ns) < AS_NAMESPACE_MAX_SIZE ) {
-                strcpy(batch->ns, ns);
-        }
-        else {
-                batch->ns[0] = '\0';
-        }
+	as_batch * batch = (as_batch *) malloc(sizeof(as_batch) + sizeof(as_key) * capacity);
+	if ( !batch ) return NULL;
 
-    //check set==NULL and set name length
-	if ( set && strlen(set) < AS_SET_MAX_SIZE ) {
-                strcpy(batch->set, set);
-        }
-        else {
-                batch->set[0] = '\0';
-        }
-
-        batch->select._free = false;
-        batch->select.capacity = 0;
-        batch->select.size = 0;
-        batch->select.entries = NULL;
-
-        return batch;
+	batch->_free = true;
+	batch->keys._free = false;
+	batch->keys.size = 0;
+	batch->keys.capacity = capacity;
+	batch->keys.entries = (as_key *) (batch + sizeof(batch));
+	return batch;
 }
 
-as_batch * as_batch_new(const as_namespace ns, const as_set set)
+/**
+ *	Initialize a stack allocated as_batch capable of storing `capacity` keys.
+ */
+as_batch * as_batch_init(as_batch * batch, uint32_t capacity)
 {
-	as_batch * batch = (as_batch*) malloc(sizeof(as_batch));
-	if(!batch) return NULL;
-	return as_batch_defaults(batch, true, ns, set);
+	if ( !batch ) return batch;
+
+	as_key * entries = NULL;
+	if ( capacity > 0 ) {
+		entries = (as_key *) malloc(sizeof(as_key) * capacity);
+		if ( !entries ) return batch;
+	}
+
+	batch->_free = false;
+	batch->keys._free = true;
+	batch->keys.size = 0;
+	batch->keys.capacity = capacity;
+	batch->keys.entries = entries;
+	return batch;
 }
 
-as_batch * as_batch_init(as_batch * batch, const as_namespace ns, as_set set)
+/**
+ *	Destroy the batch of keys.
+ */
+void as_batch_destroy(as_batch * batch)
 {
-	if(!batch) return batch;
-	return as_batch_defaults(batch, false, ns, set);
-}
-	
+	if ( !batch ) return;
 
+	if ( batch->keys.entries ) {
+
+		for (int i = 0; i < batch->keys.size; i++ ) {
+			as_key_destroy(&batch->keys.entries[i]);
+		}
+
+		if ( batch->keys._free ) {
+			free(batch->keys.entries);
+		}
+
+		batch->keys._free = false;
+		batch->keys.size = 0;
+		batch->keys.capacity = 0;
+		batch->keys.entries = NULL;
+	}
+
+	if ( batch->_free ) {
+		free(batch);
+	}
+}

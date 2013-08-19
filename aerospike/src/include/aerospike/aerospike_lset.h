@@ -237,7 +237,7 @@ as_status aerospike_lset_size(
  *	as_key_init(&key, "myns", "myset", "mykey");
  *
  *	as_ldt lset;
- *	as_ldt_init(&stack, "lset", AS_LDT_LSET, NULL);
+ *	as_ldt_init(&lset, "lset", AS_LDT_LSET, NULL);
  *
  *	as_integer ival;
  *	as_integer_init(&ival, 123);

@@ -182,13 +182,14 @@ main(int argc, char* argv[])
 			int64_t myival = as_integer_get ((const as_integer *)p_val);
 			if (myival != 1001 && myival != 2002 && myival != 3003
 					&& myival !=12345) {
-				LOG("unexpected integer value returned %d", myival);
+				LOG("unexpected integer value returned %d", (int)myival);
 				as_list_destroy(p_list);
 				exit(-1);
 			}
 		} else if (as_val_type(p_val)==AS_STRING) {
 			if (strcmp("lset value", as_string_get((as_string *)p_val)) != 0) {
-				LOG("unexpected string value returned %s", as_string_get(p_val));
+				LOG("unexpected string value returned %s",
+						as_string_get((const as_string *)p_val));
 				as_list_destroy(p_list);
 				exit(-1);
 			}

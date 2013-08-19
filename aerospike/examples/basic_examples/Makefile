@@ -12,3 +12,4 @@ default: all
 	$(MAKE) -C udf $@
 	$(MAKE) -C lstack $@
 	$(MAKE) -C lset $@
+	$(MAKE) -C llist $@

@@ -76,6 +76,7 @@ AEROSPIKE += _shim.o
 AEROSPIKE += aerospike.o
 AEROSPIKE += aerospike_index.o
 AEROSPIKE += aerospike_info.o
+AEROSPIKE += aerospike_llist.o
 AEROSPIKE += aerospike_lset.o
 AEROSPIKE += aerospike_lstack.o
 AEROSPIKE += aerospike_key.o

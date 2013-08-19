@@ -34,6 +34,7 @@
 #pragma once 
 
 #include <aerospike/aerospike.h>
+#include <aerospike/as_batch.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_key.h>
 #include <aerospike/as_list.h>
@@ -101,18 +102,15 @@ typedef bool (* aerospike_batch_exists_callback)(const as_key * key, bool exists
  *	as_batch batch;
  *	as_batch_inita(&batch, 3);
  *	
- *	as_key_init(&batch.entries[0], "ns", "set", "key1");
- *	as_key_init(&batch.entries[1], "ns", "set", "key2");
- *	as_key_init(&batch.entries[2], "ns", "set", "key3");
+ *	as_key_init(as_batch_get(&batch,0), "ns", "set", "key1");
+ *	as_key_init(as_batch_get(&batch,1), "ns", "set", "key2");
+ *	as_key_init(as_batch_get(&batch,2), "ns", "set", "key3");
  *	
- *	as_record * rec = NULL;
- *
  *	if ( aerospike_batch_get(&as, &err, NULL, &batch, callback, NULL) != AEROSPIKE_OK ) {
  *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *	}
- *	else {
- *		as_record_destroy(rec);
- *	}
+ *
+ *	as_batch_destroy(&batch);
  *	~~~~~~~~~~
  *
  *	@param as			The aerospike instance to use for this operation.
@@ -133,26 +131,23 @@ as_status aerospike_batch_get(
 	);
 
 /**
- *	Look up multiple records by key, then return all bins.
+ *	Look up multiple records by key, then return selected bins.
  *
  *	~~~~~~~~~~{.c}
  *	as_batch batch;
  *	as_batch_inita(&batch, 3);
  *	
- *	as_key_init(&batch.entries[0], "ns", "set", "key");
- *	as_key_init(&batch.entries[1], "ns", "set", "key");
- *	as_key_init(&batch.entries[2], "ns", "set", "key");
+ *	as_key_init(as_batch_get(&batch,0), "ns", "set", "key1");
+ *	as_key_init(as_batch_get(&batch,1), "ns", "set", "key2");
+ *	as_key_init(as_batch_get(&batch,2), "ns", "set", "key3");
  *	
  *	char * select[] = {"bin1", "bin2", "bin3", NULL};
- *
- *	as_record * rec = NULL;
- *
+ *	
  *	if ( aerospike_batch_select(&as, &err, NULL, &key, select, callback, NULL) != AEROSPIKE_OK ) {
  *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *	}
- *	else {
- *		as_record_destroy(rec);
- *	}
+ *
+ *	as_batch_destroy(&batch);
  *	~~~~~~~~~~
  *
  *	@param as			The aerospike instance to use for this operation.
@@ -183,14 +178,11 @@ as_status aerospike_batch_select(
  *	as_key_init(&batch.entries[1], "ns", "set", "key");
  *	as_key_init(&batch.entries[2], "ns", "set", "key");
  *	
- *	as_record * rec = NULL;
- *	
  *	if ( aerospike_batch_exists(&as, &err, NULL, &batch, callback, NULL) != AEROSPIKE_OK ) {
  *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *	}
- *	else {
- *		as_record_destroy(rec);
- *	}
+ *
+ *	as_batch_destroy(&batch);
  *	~~~~~~~~~~
  *
  *	@param as			The aerospike instance to use for this operation.

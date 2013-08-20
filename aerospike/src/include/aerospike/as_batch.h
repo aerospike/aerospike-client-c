@@ -67,6 +67,9 @@ typedef struct as_batch_s {
 		 */
 		as_key * entries;
 	} keys;
+	
+	//to retrieve the key along with the digest in this batch.
+	bool get_key;
 
 } as_batch;
 

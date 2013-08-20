@@ -120,7 +120,7 @@ as_status aerospike_batch_get(
 	
 	
 	cl_rv rv = citrusleaf_get_many_digest(as->cluster, batch->keys.entries[0].ns, digests, n_digests, NULL, 0, 
-					batch->get_key, simplebatch_cb, &bridge_udata);
+					true, simplebatch_cb, &bridge_udata);
 		
 	rc = as_error_fromrc(err, rv);
 

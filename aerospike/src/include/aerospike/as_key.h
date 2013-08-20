@@ -394,13 +394,14 @@ inline as_key * as_key_init_raw(as_key * key, const as_namespace ns, const as_se
  *	as_digest_value digest = {0};
  *	
  *	as_key key;
- *	as_key_init_digest(&key, "ns", digest);
+ *	as_key_init_digest(&key, "ns", "set", digest);
  *	~~~~~~~~~~
  *
  *	Use as_key_destroy() to release resources allocated to as_key.
  *	
  *	@param key 		The key to initialize.
  *	@param ns 		The namespace for the key.
+ *	@param set		The set for the key.
  *	@param digest	The digest for the key.
  *
  *	@return The initialized as_key on success. Otherwise NULL.
@@ -408,7 +409,7 @@ inline as_key * as_key_init_raw(as_key * key, const as_namespace ns, const as_se
  *	@relates as_key
  *	@ingroup as_key_object
  */
-as_key * as_key_init_digest(as_key * key, const as_namespace ns, const as_digest_value digest);
+as_key * as_key_init_digest(as_key * key, const as_namespace ns, const as_set set, const as_digest_value digest);
 
 /**
  *	Initialize a stack allocated as_key to an as_key_value.
@@ -585,7 +586,7 @@ inline as_key * as_key_new_raw(const as_namespace ns, const as_set set, const ui
  *	~~~~~~~~~~{.c}
  *	as_digest_value digest = {0};
  *	
- *	as_key * key = as_key_new_digest("ns", digest);
+ *	as_key * key = as_key_new_digest("ns", "set", digest);
  *	~~~~~~~~~~
  *
  *	Use as_key_destroy() to release resources allocated to as_key via
@@ -600,7 +601,7 @@ inline as_key * as_key_new_raw(const as_namespace ns, const as_set set, const ui
  *	@relates as_key
  *	@ingroup as_key_object
  */
-as_key * as_key_new_digest(const as_namespace ns, const as_digest_value digest);
+as_key * as_key_new_digest(const as_namespace ns, const as_set set, const as_digest_value digest);
 
 /**
  *	Initialize a stack allocated as_key to a an as_key_value.

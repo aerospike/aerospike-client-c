@@ -120,11 +120,11 @@ as_key * as_key_init_rawp(as_key * key, const as_namespace ns, const as_set set,
 /**
  *	Initialize a stack allocated as_key with a digest.
  */
-as_key * as_key_init_digest(as_key * key, const as_namespace ns, const as_digest_value digest)
+as_key * as_key_init_digest(as_key * key, const as_namespace ns, const as_set set, const as_digest_value digest)
 {
 	if ( !key ) return key;
 
-	return as_key_cons(key, true, ns, NULL, NULL, digest);
+	return as_key_cons(key, false, ns, set, NULL, digest);
 }
 
 /**
@@ -185,12 +185,12 @@ as_key * as_key_new_rawp(const as_namespace ns, const as_set set, const uint8_t 
 /**
  *	Initialize a stack allocated as_key with a digest value.
  */
-as_key * as_key_new_digest(const as_namespace ns, const as_digest_value digest)
+as_key * as_key_new_digest(const as_namespace ns, const as_set set, const as_digest_value digest)
 {
 	as_key * key = (as_key *) malloc(sizeof(as_key));
 	if ( !key ) return key;
 
-	return as_key_cons(key, true, ns, NULL, NULL, digest);
+	return as_key_cons(key, true, ns, set, NULL, digest);
 }
 
 /**

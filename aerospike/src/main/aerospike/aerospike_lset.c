@@ -208,6 +208,8 @@ as_status aerospike_lset_exists(
 				"value returned from server not parse-able");
     }
 
+	as_boolean_init(exists, ival==1 ? true: false);
+
     return err->code;
 } // aerospike_lset_exists()
 

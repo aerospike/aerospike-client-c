@@ -11,8 +11,8 @@
  *****************************************************************************/
 
 #define MOD_LUA_CACHE_ENABLED false
-#define MOD_LUA_SYSTEM_PATH "/opt/aerospike/sys/udf/lua"
-#define MOD_LUA_USER_PATH "/opt/aerospike/usr/udf/lua"
+#define MOD_LUA_SYSTEM_PATH "/opt/aerospike/client/sys/udf/lua"
+#define MOD_LUA_USER_PATH   "/opt/aerospike/client/usr/udf/lua"
 
 /******************************************************************************
  * FUNCTIONS

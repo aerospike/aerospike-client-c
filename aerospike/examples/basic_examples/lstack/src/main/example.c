@@ -138,10 +138,10 @@ main(int argc, char* argv[])
 	// See if the elements match what we expect.
 	while (as_arraylist_iterator_has_next(&it)) {
 		const as_val* p_val = as_arraylist_iterator_next(&it);
-		char *p_str = as_val_tostring(p_val);
-		LOG("   peek - type = %d, value = %s", as_val_type(p_val),
-				p_str);
-		free (p_str);
+		char* p_str = as_val_tostring(p_val);
+
+		LOG("   peek - type = %d, value = %s", as_val_type(p_val), p_str);
+		free(p_str);
 	}
 
 	as_list_destroy(p_list);
@@ -183,8 +183,8 @@ main(int argc, char* argv[])
 	while (as_arraylist_iterator_has_next(&it)) {
 		const as_val* p_val = as_arraylist_iterator_next(&it);
 		char* p_str = as_val_tostring(p_val);
-		LOG("   peek - type = %d, value = %s ", as_val_type(p_val),
-				p_str);
+
+		LOG("   peek - type = %d, value = %s ", as_val_type(p_val), p_str);
 		free(p_str);
 	}
 

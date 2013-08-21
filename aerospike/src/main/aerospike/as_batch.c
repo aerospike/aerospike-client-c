@@ -32,7 +32,7 @@
  *	Get the key at given position of the batch. If the position is not
  *	within the allocated capacity for the batchm then NULL is returned.
  */
-extern inline as_key * as_batch_get(as_batch * batch, uint32_t i);
+extern inline as_key * as_batch_keyat(as_batch * batch, uint32_t i);
 
 /******************************************************************************
  *	FUNCTIONS

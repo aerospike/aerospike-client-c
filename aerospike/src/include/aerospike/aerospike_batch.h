@@ -49,47 +49,54 @@
  *****************************************************************************/
 
 /**
- *	This callback will be called for each value or record returned from 
- *	a query.
+ *	This callback will be called with the results of either 
+ *	aerospike_batch_get() or aerospike_batch_select() functions.
  *
- *	The aerospike_batch_get() and aerospike_batch_select() functions accepts 
- *	this callback.
+ * 	The `results` argument will be an array of contain `n` as_batch_read 
+ *	entries. The `results` argument is on the stack and is only available within
+ *	the context of the callback. To use the data outside of the callback, you 
+ *	should malloc a pointer and copy the data into the pointer.
  *
  *	~~~~~~~~~~{.c}
- *	bool my_callback(const as_key * key, const as_record * rec, void * udata) {
+ *	bool my_callback(const as_batch_read * results, uint32_t n, void * udata) {
  *		return true;
  *	}
  *	~~~~~~~~~~
  *
- *	@param val 			The value received from the query.
+ *	@param results 		The results from the batch request.
+ *	@param n			The number of results from the batch request.
  *	@param udata 		User-data provided to the calling function.
- *
- *	@return `true` to continue to the next value. Otherwise, iteration will end.
+ *	
+ *	@return `true` on success. Otherwise, an error occurred.
  *
  *	@ingroup batch_operations
  */
-typedef bool (* aerospike_batch_read_callback)(const as_key * key, const as_record * rec, void * udata);
+typedef bool (* aerospike_batch_read_callback)(const as_batch_read * results, uint32_t n, void * udata);
 
 /**
- *	This callback will be called for each value key looked up and will indicate
- *	whether the key exists in the cluster.
- *	
- *	The aerospike_batch_exists() function accepts this callback.
+ *	This callback will be called with the results of aerospike_batch_exists() 
+ *	function.
+ *
+ * 	The `results` argument will be an array of contain `n` as_batch_exists 
+ *	entries. The `results` argument is on the stack and is only available within
+ *	the context of the callback. To use the data outside of the callback, you 
+ *	should malloc a pointer and copy the data into the pointer.
  *
  *	~~~~~~~~~~{.c}
- *	bool my_callback(const as_key * key, bool exists, void * udata) {
+ *	bool my_callback(const as_batch_exists * results, uint32_t n, void * udata) {
  *		return true;
  *	}
  *	~~~~~~~~~~
  *
- *	@param val 			The value received from the query.
+ *	@param results 		The results from the batch request.
+ *	@param n			The number of results from the batch request.
  *	@param udata 		User-data provided to the calling function.
- *
- *	@return `true` to continue to the next value. Otherwise, iteration will end.
+ *	
+ *	@return `true` on success. Otherwise, an error occurred.
  *
  *	@ingroup batch_operations
  */
-typedef bool (* aerospike_batch_exists_callback)(const as_key * key, bool exists, void * udata);
+typedef bool (* aerospike_batch_exists_callback)(const as_batch_exists * results, uint32_t n, void * udata);
 
 /******************************************************************************
  *	FUNCTIONS
@@ -102,9 +109,9 @@ typedef bool (* aerospike_batch_exists_callback)(const as_key * key, bool exists
  *	as_batch batch;
  *	as_batch_inita(&batch, 3);
  *	
- *	as_key_init(as_batch_get(&batch,0), "ns", "set", "key1");
- *	as_key_init(as_batch_get(&batch,1), "ns", "set", "key2");
- *	as_key_init(as_batch_get(&batch,2), "ns", "set", "key3");
+ *	as_key_init(as_batch_keyat(&batch,0), "ns", "set", "key1");
+ *	as_key_init(as_batch_keyat(&batch,1), "ns", "set", "key2");
+ *	as_key_init(as_batch_keyat(&batch,2), "ns", "set", "key3");
  *	
  *	if ( aerospike_batch_get(&as, &err, NULL, &batch, callback, NULL) != AEROSPIKE_OK ) {
  *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
@@ -137,9 +144,9 @@ as_status aerospike_batch_get(
  *	as_batch batch;
  *	as_batch_inita(&batch, 3);
  *	
- *	as_key_init(as_batch_get(&batch,0), "ns", "set", "key1");
- *	as_key_init(as_batch_get(&batch,1), "ns", "set", "key2");
- *	as_key_init(as_batch_get(&batch,2), "ns", "set", "key3");
+ *	as_key_init(as_batch_keyat(&batch,0), "ns", "set", "key1");
+ *	as_key_init(as_batch_keyat(&batch,1), "ns", "set", "key2");
+ *	as_key_init(as_batch_keyat(&batch,2), "ns", "set", "key3");
  *	
  *	char * select[] = {"bin1", "bin2", "bin3", NULL};
  *	
@@ -174,9 +181,9 @@ as_status aerospike_batch_select(
  *	as_batch batch;
  *	as_batch_inita(&batch, 3);
  *	
- *	as_key_init(&batch.entries[0], "ns", "set", "key");
- *	as_key_init(&batch.entries[1], "ns", "set", "key");
- *	as_key_init(&batch.entries[2], "ns", "set", "key");
+ *	as_key_init(as_batch_keyat(&batch,0), "ns", "set", "key1");
+ *	as_key_init(as_batch_keyat(&batch,1), "ns", "set", "key2");
+ *	as_key_init(as_batch_keyat(&batch,2), "ns", "set", "key3");
  *	
  *	if ( aerospike_batch_exists(&as, &err, NULL, &batch, callback, NULL) != AEROSPIKE_OK ) {
  *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);

@@ -90,6 +90,8 @@ bool example_get_opts(int argc, char* argv[], const char* which_opts);
 //
 
 void example_connect_to_aerospike(aerospike* p_as);
+void example_connect_to_aerospike_with_udf_config(aerospike* p_as,
+		const char* lua_user_path);
 void example_cleanup(aerospike* p_as);
 bool example_read_test_record(aerospike* p_as);
 void example_remove_test_record(aerospike* p_as);

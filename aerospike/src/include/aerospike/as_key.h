@@ -73,34 +73,16 @@ typedef char as_namespace[AS_NAMESPACE_MAX_SIZE];
 typedef char as_set[AS_SET_MAX_SIZE];
 
 /**
+ *	Digest value
+ *
+ *	@ingroup as_key_object
+ */
+typedef uint8_t as_digest_value[AS_DIGEST_VALUE_SIZE];
+
+/**
  *	The digest is the value used to locate a record based on the
  *	set and digest of the record. The digest is calculated using RIPEMD-160.
  *	Keys for digests can be either a string or integer.
- *
- *	To initialize a stack allocated instance as an string digest:
- *	
- *	~~~~~~~~~~{.c}
- *	as_digest digest;
- *	as_digest_init(&digest, "set", as_string_new("abc",false));
- *	~~~~~~~~~~
- *
- *	Alternatively, you can use an integer digest:
- *
- *	~~~~~~~~~~{.c}
- *	as_digest_init2(&digest, "set", 123);
- *	~~~~~~~~~~
- *
- *	You can also heap allocate and initialize an instance:
- *
- *	~~~~~~~~~~{.c}
- *	as_digest * digest = as_digest_new("set", "digest");
- *	~~~~~~~~~~
- *	
- *	When you are finished using the digest, you should always destroy it:
- *
- *	~~~~~~~~~~{.c}
- *	as_digest_destroy(digest);
- *	~~~~~~~~~~
  *
  *	@ingroup as_key_object
  */
@@ -114,7 +96,7 @@ typedef struct as_digest_s {
 	/**
 	 *	The digest value.
 	 */
-	uint8_t value[AS_DIGEST_VALUE_SIZE];
+	as_digest_value value;
 
 } as_digest;
 
@@ -406,6 +388,30 @@ inline as_key * as_key_init_raw(as_key * key, const as_namespace ns, const as_se
 }
 
 /**
+ *	Initialize a stack allocated as_key with a digest.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_digest_value digest = {0};
+ *	
+ *	as_key key;
+ *	as_key_init_digest(&key, "ns", "set", digest);
+ *	~~~~~~~~~~
+ *
+ *	Use as_key_destroy() to release resources allocated to as_key.
+ *	
+ *	@param key 		The key to initialize.
+ *	@param ns 		The namespace for the key.
+ *	@param set		The set for the key.
+ *	@param digest	The digest for the key.
+ *
+ *	@return The initialized as_key on success. Otherwise NULL.
+ *
+ *	@relates as_key
+ *	@ingroup as_key_object
+ */
+as_key * as_key_init_digest(as_key * key, const as_namespace ns, const as_set set, const as_digest_value digest);
+
+/**
  *	Initialize a stack allocated as_key to an as_key_value.
  *
  *	~~~~~~~~~~{.c}
@@ -477,27 +483,6 @@ as_key * as_key_new_int64(const as_namespace ns, const as_set set, int64_t value
  *	Creates and initializes a heap allocated as_key to a NULL-terminated string value.
  *
  *	~~~~~~~~~~{.c}
- *	as_key * key = as_key_new_str("ns", "set", "key");
- *	~~~~~~~~~~
- *
- *	Use as_key_destroy() to release resources allocated to as_key via
- *	this function.
- *
- *	@param ns 		The namespace for the key.
- *	@param set		The set for the key.
- *	@param value	The key's value. Must last for the lifetime of the key.
- *
- *	@return A new as_key on success. Otherwise NULL.
- *
- *	@relates as_key
- *	@ingroup as_key_object
- */
-as_key * as_key_new_str(const as_namespace ns, const as_set set, const char * value);
-
-/**
- *	Creates and initializes a heap allocated as_key to a NULL-terminated string value.
- *
- *	~~~~~~~~~~{.c}
  *	as_key * key = as_key_new_strp("ns", "set", strdup("key"), true);
  *	~~~~~~~~~~
  *
@@ -517,12 +502,10 @@ as_key * as_key_new_str(const as_namespace ns, const as_set set, const char * va
 as_key * as_key_new_strp(const as_namespace ns, const as_set set, const char * value, bool free);
 
 /**
- *	Initialize a stack allocated as_key to a byte array.
+ *	Creates and initializes a heap allocated as_key to a NULL-terminated string value.
  *
  *	~~~~~~~~~~{.c}
- *	uint8_t rgb[3] = {254,254,120};
- *	
- *	as_key * key = as_key_new_raw("ns", "set", rgb, 3);
+ *	as_key * key = as_key_new_str("ns", "set", "key");
  *	~~~~~~~~~~
  *
  *	Use as_key_destroy() to release resources allocated to as_key via
@@ -531,14 +514,16 @@ as_key * as_key_new_strp(const as_namespace ns, const as_set set, const char * v
  *	@param ns 		The namespace for the key.
  *	@param set		The set for the key.
  *	@param value	The key's value. Must last for the lifetime of the key.
- *	@param size		The number of bytes in the value.
  *
  *	@return A new as_key on success. Otherwise NULL.
  *
  *	@relates as_key
  *	@ingroup as_key_object
  */
-as_key * as_key_new_raw(const as_namespace ns, const as_set set, const uint8_t * value, uint32_t size);
+inline as_key * as_key_new_str(const as_namespace ns, const as_set set, const char * value)
+{
+	return as_key_new_strp(ns, set, value, false);
+}
 
 /**
  *	Initialize a stack allocated as_key to a byte array.
@@ -567,6 +552,56 @@ as_key * as_key_new_raw(const as_namespace ns, const as_set set, const uint8_t *
  *	@ingroup as_key_object
  */
 as_key * as_key_new_rawp(const as_namespace ns, const as_set set, const uint8_t * value, uint32_t size, bool free);
+
+/**
+ *	Initialize a stack allocated as_key to a byte array.
+ *
+ *	~~~~~~~~~~{.c}
+ *	uint8_t rgb[3] = {254,254,120};
+ *	
+ *	as_key * key = as_key_new_raw("ns", "set", rgb, 3);
+ *	~~~~~~~~~~
+ *
+ *	Use as_key_destroy() to release resources allocated to as_key via
+ *	this function.
+ *
+ *	@param ns 		The namespace for the key.
+ *	@param set		The set for the key.
+ *	@param value	The key's value. Must last for the lifetime of the key.
+ *	@param size		The number of bytes in the value.
+ *
+ *	@return A new as_key on success. Otherwise NULL.
+ *
+ *	@relates as_key
+ *	@ingroup as_key_object
+ */
+inline as_key * as_key_new_raw(const as_namespace ns, const as_set set, const uint8_t * value, uint32_t size)
+{
+	return as_key_new_rawp(ns, set, value, size, false);
+}
+
+/**
+ *	Initialize a stack allocated as_key with a digest.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_digest_value digest = {0};
+ *	
+ *	as_key * key = as_key_new_digest("ns", "set", digest);
+ *	~~~~~~~~~~
+ *
+ *	Use as_key_destroy() to release resources allocated to as_key via
+ *	this function.
+ *
+ *	@param ns 		The namespace for the key.
+ *	@param set		The set for the key.
+ *	@param digest	The key's digest.
+ *
+ *	@return A new as_key on success. Otherwise NULL.
+ *
+ *	@relates as_key
+ *	@ingroup as_key_object
+ */
+as_key * as_key_new_digest(const as_namespace ns, const as_set set, const as_digest_value digest);
 
 /**
  *	Initialize a stack allocated as_key to a an as_key_value.

@@ -32,14 +32,15 @@
 #include <aerospike/as_val.h>
 
 #include <citrusleaf/cl_batch.h>
+
 /************************************************************************
- * 	STRUCTURES
+ * 	TYPES
  ************************************************************************/
 
-typedef struct batch_bridge_s{
+typedef struct batch_bridge_s {
 	
 	//user-provided data
-	void *udata;
+	void * udata;
 
 	//user-provided callback for batch read
 	aerospike_batch_read_callback read_cb;
@@ -49,6 +50,7 @@ typedef struct batch_bridge_s{
 
 	//to distinguish between read and exists callbacks
 	bool is_read;
+
 } batch_bridge;
 
 /**************************************************************************
@@ -59,6 +61,7 @@ static int simplebatch_cb(
 	char *ns, cf_digest *keyd, char *set, uint32_t generation,
 	uint32_t record_void_time, cl_bin *bins, int n_bins, bool is_last, void *udata)
 {
+/*
 	batch_bridge * bridge = (batch_bridge * ) udata;
 	
 	// Fill the bin data
@@ -82,7 +85,7 @@ static int simplebatch_cb(
 
 	// release the record
 	as_record_destroy(rec);
-
+*/
     return 0;
 }
 
@@ -104,6 +107,7 @@ as_status aerospike_batch_get(
 {
 	as_status rc = AEROSPIKE_OK;
 
+/*
 	batch_bridge bridge_udata; 
 	bridge_udata.udata = udata;
 	bridge_udata.read_cb = callback;
@@ -123,7 +127,7 @@ as_status aerospike_batch_get(
 					true, simplebatch_cb, &bridge_udata);
 		
 	rc = as_error_fromrc(err, rv);
-
+*/
 	return rc;
 }
 

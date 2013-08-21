@@ -24,7 +24,9 @@
 
 #include <aerospike/as_bin.h>
 #include <aerospike/as_key.h>
+#include <aerospike/as_record.h>
 #include <stdint.h>
+#include <stdbool.h>
 
 /*****************************************************************************
  *	STRUCTURES
@@ -66,10 +68,47 @@ typedef struct as_batch_s {
 		 *	The keys contained by this batch.
 		 */
 		as_key * entries;
-		
+
 	} keys;
 
 } as_batch;
+
+/**
+ *	The (key,record) for an entry in a batch read.
+ *	The record is NULL if the record does not exist.
+ */
+typedef struct as_batch_read_s {
+
+	/**
+	 *	The key requested
+	 */
+	const as_key * key;
+	
+	/**
+	 *	The record for the key requested
+	 */
+	const as_record * record;
+
+} as_batch_read;
+
+/**
+ *	The (key,exists) pair an entry in a batch.
+ *	The exists flag is true, if the record exists.
+ */
+typedef struct as_batch_exists_s {
+
+	/**
+	 *	The key requested
+	 */
+	const as_key * key;
+	
+	/**
+	 *	The record for the key requested
+	 */
+	bool exists;
+
+} as_batch_exists;
+
 
 /*********************************************************************************
  *	INSTANCE MACROS
@@ -179,7 +218,7 @@ void as_batch_destroy(as_batch * batch);
  *	@relates as_batch
  *	@ingroup batch_object
  */
-inline as_key * as_batch_get(as_batch * batch, uint32_t i)
+inline as_key * as_batch_keyat(as_batch * batch, uint32_t i)
 {
 	return (batch != NULL && batch->keys.entries != NULL && batch->keys.capacity > i) ? &batch->keys.entries[i] : NULL;
 }

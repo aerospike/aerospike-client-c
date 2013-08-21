@@ -49,7 +49,8 @@
 //
 
 #define UDF_MODULE "query_udf"
-const char UDF_FILE_PATH[] = "src/lua/" UDF_MODULE ".lua";
+#define UDF_USER_PATH "src/lua/"
+const char UDF_FILE_PATH[] =  UDF_USER_PATH UDF_MODULE ".lua";
 
 const char TEST_INDEX_NAME[] = "test-bin-index";
 
@@ -77,7 +78,7 @@ main(int argc, char* argv[])
 
 	// Connect to the aerospike database cluster.
 	aerospike as;
-	example_connect_to_aerospike(&as);
+	example_connect_to_aerospike_with_udf_config(&as, UDF_USER_PATH);
 
 	// Start clean.
 	example_remove_test_records(&as);

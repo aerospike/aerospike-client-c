@@ -262,6 +262,17 @@ usage(const char* which_opts)
 void
 example_connect_to_aerospike(aerospike* p_as)
 {
+	example_connect_to_aerospike_with_udf_config(p_as, NULL);
+}
+
+//------------------------------------------------
+// Connect to database cluster, setting UDF
+// configuration.
+//
+void
+example_connect_to_aerospike_with_udf_config(aerospike* p_as,
+		const char* lua_user_path)
+{
 	// Start with default configuration.
 	as_config cfg;
 	as_config_init(&cfg);
@@ -270,8 +281,13 @@ example_connect_to_aerospike(aerospike* p_as)
 	cfg.hosts[0].addr = g_host;
 	cfg.hosts[0].port = g_port;
 
-	// Aerospike developers only - uncomment with appropriate lua path:
+	// Explicitly set Lua system path if it's not the default installation path
+	// '/opt/aerospike/client/src/lua'
 //	strcpy(cfg.lua.system_path, "/home/citrusleaf/aerospike/modules/mod-lua/src/lua");
+
+	if (lua_user_path) {
+		strcpy(cfg.lua.user_path, lua_user_path);
+	}
 
 	as_error err;
 

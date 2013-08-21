@@ -7,9 +7,10 @@ default: all
 	$(MAKE) -C generation $@
 	$(MAKE) -C get $@
 	$(MAKE) -C incr $@
+	$(MAKE) -C llist $@
+	$(MAKE) -C lset $@
+	$(MAKE) -C lstack $@
 	$(MAKE) -C put $@
 	$(MAKE) -C touch $@
 	$(MAKE) -C udf $@
-	$(MAKE) -C lstack $@
-	$(MAKE) -C lset $@
-	$(MAKE) -C llist $@
+

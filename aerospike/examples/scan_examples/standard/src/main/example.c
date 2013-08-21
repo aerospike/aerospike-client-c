@@ -29,7 +29,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
-#include <unistd.h> // temp, for sleep
+#include <unistd.h>
 
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
@@ -95,8 +95,7 @@ main(int argc, char* argv[])
 	// made in the scope of this call.
 	if (aerospike_scan_foreach(&as, &err, NULL, &scan, scan_cb, NULL) !=
 			AEROSPIKE_OK ){
-		LOG("aerospike_scan_foreach() returned %d - %s", err.code,
-				err.message);
+		LOG("aerospike_scan_foreach() returned %d - %s", err.code, err.message);
 		cleanup(&as);
 		exit(-1);
 	}

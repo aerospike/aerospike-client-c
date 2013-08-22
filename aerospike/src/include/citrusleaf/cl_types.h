@@ -204,7 +204,9 @@ typedef struct cl_addrmap {
 /**
  * Callback function type used by batch and scan
  */
-typedef int (*citrusleaf_get_many_cb) (char *ns, cf_digest *keyd, char *set, uint32_t generation, uint32_t record_ttl, cl_bin *bins, int n_bins, bool is_last, void *udata);
+typedef int (*citrusleaf_get_many_cb) (char *ns, cf_digest *keyd, char *set,
+		int result, uint32_t generation, uint32_t ttl, cl_bin *bins,
+		uint16_t n_bins, void *udata);
 
 /******************************************************************************
  * FUNCTIONS

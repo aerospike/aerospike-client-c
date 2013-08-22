@@ -31,6 +31,9 @@
 #include <aerospike/as_status.h>
 #include <aerospike/as_val.h>
 
+#include "_log.h"
+#include "_shim.h"
+
 #include <citrusleaf/cl_batch.h>
 
 /************************************************************************
@@ -38,18 +41,15 @@
  ************************************************************************/
 
 typedef struct batch_bridge_s {
-	
-	//user-provided data
-	void * udata;
 
-	//user-provided callback for batch read
-	aerospike_batch_read_callback read_cb;
-	
-	//user-provided callback for batch exist
-	aerospike_batch_exists_callback exist_cb;
+	// Needed for logging only.
+	aerospike * as;
 
-	//to distinguish between read and exists callbacks
-	bool is_read;
+	// Array of results.
+	as_batch_read * results;
+
+	// Number of array elements.
+	uint32_t n;
 
 } batch_bridge;
 
@@ -57,40 +57,109 @@ typedef struct batch_bridge_s {
  * 	STATIC FUNCTIONS
  **************************************************************************/
 
-static int simplebatch_cb(
-	char *ns, cf_digest *keyd, char *set, uint32_t generation,
-	uint32_t record_void_time, cl_bin *bins, int n_bins, bool is_last, void *udata)
+static int
+cl_batch_cb(char *ns, cf_digest *keyd, char *set, int result,
+		uint32_t generation, uint32_t ttl, cl_bin *bins, uint16_t n_bins,
+		void *udata)
 {
-/*
-	batch_bridge * bridge = (batch_bridge * ) udata;
-	
-	// Fill the bin data
-	as_record _rec, * rec = &_rec;
-    as_record_inita(rec, n_bins);
-    clbins_to_asrecord(bins, n_bins, rec); 	
+	batch_bridge * p_bridge = (batch_bridge *) udata;
+	aerospike * as = p_bridge->as;
+	as_batch_read * p_r = NULL;
 
-	// Fill the metadata
-	 as_key_init_value(&rec->key, ns, set, NULL);
-     memcpy(rec->key.digest.value, keyd, sizeof(cf_digest));
-     rec->key.digest.init = true;
-     rec->gen = generation;
-     rec->ttl = record_void_time;
-	
-	// Call the callback that user wanted to callback
-	if( bridge->is_read == true) {
-		 bridge->read_cb(&rec->key, rec, bridge->udata);
+	// Find the digest.
+	for (uint32_t i = 0; i < p_bridge->n; i++) {
+		p_r = &p_bridge->results[i];
+
+		if (memcmp(keyd, p_r->key->digest.value, AS_DIGEST_VALUE_SIZE) == 0) {
+			// Not bothering to check set, which is not always filled.
+			break;
+		}
+
+		p_r = NULL;
 	}
-	// The responsibility to free the bins is on the called callback function
-	citrusleaf_bins_free(bins, n_bins);
 
-	// release the record
-	as_record_destroy(rec);
-*/
-    return 0;
+	if (! p_r) {
+		as_err(LOGGER, "couldn't find digest");
+		return -1; // not that this is even checked...
+	}
+
+	// Fill out this result slot.
+	as_error err;
+	p_r->result = as_error_fromrc(&err, result);
+
+	// If the result wasn't success, we won't have any record data or metadata.
+	if (result != 0) {
+		return 0;
+	}
+
+	as_record_init(&p_r->record, n_bins); // works even if n_bins is 0
+
+	// There should be record metadata.
+	p_r->record.gen = (uint16_t)generation;
+	p_r->record.ttl = ttl;
+
+	// There may be bin data.
+	if (n_bins != 0) {
+		clbins_to_asrecord(bins, (uint32_t)n_bins, &p_r->record);
+	}
+
+	return 0;
 }
 
+static as_status batch_read(
+		aerospike * as, as_error * err, const as_policy_read * policy,
+		const as_batch * batch,
+		aerospike_batch_read_callback callback, void * udata,
+		bool get_bin_data
+		)
+{
+	as_error_reset(err);
 
- 	
+	// This is not very nice:
+	citrusleaf_batch_init();
+
+	uint32_t n = batch->keys.size;
+	as_batch_read* results = (as_batch_read*)alloca(sizeof(as_batch_read) * n);
+
+	if (! results) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
+				"failed results array allocation");
+	}
+
+	cf_digest* digests = (cf_digest*)alloca(sizeof(cf_digest) * n);
+
+	if (! digests) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
+				"failed digests array allocation");
+	}
+
+	for (uint32_t i = 0; i < n; i++) {
+		as_batch_read * p_r = &results[i];
+
+		p_r->result = -1; // TODO - make an 'undefined' error
+		as_record_init(&p_r->record, 0);
+		p_r->key = (const as_key*)as_batch_keyat(batch, i);
+
+		memcpy(&digests[i], as_key_digest((as_key*)p_r->key)->value,
+				AS_DIGEST_VALUE_SIZE);
+	}
+
+	batch_bridge bridge;
+	bridge.as = as;
+	bridge.results = results;
+	bridge.n = n;
+
+	cl_rv rc = citrusleaf_batch_read(as->cluster, batch->keys.entries[0].ns,
+			digests, n, NULL, 0, get_bin_data, cl_batch_cb, &bridge);
+
+	callback(results, n, udata);
+
+	for (uint32_t i = 0; i < n; i++) {
+		as_record_destroy(&results[i].record);
+	}
+
+	return as_error_fromrc(err, rc);
+}
 
 /******************************************************************************
  *	FUNCTIONS
@@ -105,30 +174,7 @@ as_status aerospike_batch_get(
 	aerospike_batch_read_callback callback, void * udata
 	)
 {
-	as_status rc = AEROSPIKE_OK;
-
-/*
-	batch_bridge bridge_udata; 
-	bridge_udata.udata = udata;
-	bridge_udata.read_cb = callback;
-
-	int n_digests = batch->keys.size;
-	cf_digest * digests = NULL;
-
-	if (n_digests > 0) {
-		digests = (cf_digest *) malloc (sizeof(cf_digest) * n_digests);
-		for ( int i=0; i<n_digests; i++){
-			memcpy(digests[i].digest, batch->keys.entries[i].digest.value, sizeof(cf_digest));
-		}
-	}		
-	
-	
-	cl_rv rv = citrusleaf_get_many_digest(as->cluster, batch->keys.entries[0].ns, digests, n_digests, NULL, 0, 
-					true, simplebatch_cb, &bridge_udata);
-		
-	rc = as_error_fromrc(err, rv);
-*/
-	return rc;
+	return batch_read(as, err, policy, batch, callback, udata, true);
 }
 
 /**
@@ -149,8 +195,8 @@ as_status aerospike_batch_select(
 as_status aerospike_batch_exists(
 	aerospike * as, as_error * err, const as_policy_read * policy, 
 	const as_batch * batch, 
-	aerospike_batch_exists_callback callback, void * udata
+	aerospike_batch_read_callback callback, void * udata
 	)
 {
-	return AEROSPIKE_OK;
+	return batch_read(as, err, policy, batch, callback, udata, false);
 }

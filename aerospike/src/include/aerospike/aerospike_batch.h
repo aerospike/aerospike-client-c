@@ -49,13 +49,12 @@
  *****************************************************************************/
 
 /**
- *	This callback will be called with the results of either 
- *	aerospike_batch_get() or aerospike_batch_select() functions.
+ *	This callback will be called with the results of aerospike_batch_get(),
+ *	aerospike_batch_select(), or aerospike_batch_exists() functions.
  *
- * 	The `results` argument will be an array of contain `n` as_batch_read 
- *	entries. The `results` argument is on the stack and is only available within
- *	the context of the callback. To use the data outside of the callback, you 
- *	should malloc a pointer and copy the data into the pointer.
+ * 	The `results` argument will be an array of `n` as_batch_read entries. The
+ * 	`results` argument is on the stack and is only available within the context
+ * 	of the callback. To use the data outside of the callback, copy the data.
  *
  *	~~~~~~~~~~{.c}
  *	bool my_callback(const as_batch_read * results, uint32_t n, void * udata) {
@@ -72,31 +71,6 @@
  *	@ingroup batch_operations
  */
 typedef bool (* aerospike_batch_read_callback)(const as_batch_read * results, uint32_t n, void * udata);
-
-/**
- *	This callback will be called with the results of aerospike_batch_exists() 
- *	function.
- *
- * 	The `results` argument will be an array of contain `n` as_batch_exists 
- *	entries. The `results` argument is on the stack and is only available within
- *	the context of the callback. To use the data outside of the callback, you 
- *	should malloc a pointer and copy the data into the pointer.
- *
- *	~~~~~~~~~~{.c}
- *	bool my_callback(const as_batch_exists * results, uint32_t n, void * udata) {
- *		return true;
- *	}
- *	~~~~~~~~~~
- *
- *	@param results 		The results from the batch request.
- *	@param n			The number of results from the batch request.
- *	@param udata 		User-data provided to the calling function.
- *	
- *	@return `true` on success. Otherwise, an error occurred.
- *
- *	@ingroup batch_operations
- */
-typedef bool (* aerospike_batch_exists_callback)(const as_batch_exists * results, uint32_t n, void * udata);
 
 /******************************************************************************
  *	FUNCTIONS
@@ -206,5 +180,5 @@ as_status aerospike_batch_select(
 as_status aerospike_batch_exists(
 	aerospike * as, as_error * err, const as_policy_read * policy, 
 	const as_batch * batch, 
-	aerospike_batch_exists_callback callback, void * udata
+	aerospike_batch_read_callback callback, void * udata
 	);

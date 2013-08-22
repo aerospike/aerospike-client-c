@@ -21,6 +21,7 @@
  *****************************************************************************/
 #pragma once
 
+#include <stdbool.h>
 #include <citrusleaf/cl_types.h>
 #include <citrusleaf/cl_cluster.h>
 
@@ -28,59 +29,14 @@
  * TYPES
  ******************************************************************************/
 
-
-
 /******************************************************************************
  * INLINE FUNCTIONS
  ******************************************************************************/
-
-
-
 
 /******************************************************************************
  * FUNCTIONS
  ******************************************************************************/
 
-
-
-
-/**
- * Get many digest
- * This version of the call acts exactly as the get digest call, but takes an array
- * of digests. Those digests will be retrieved with the same API conventions as the
- * previous ones.
- * To come: an array of keys, but it'll just be a wrapper on this.
- */
-cl_rv citrusleaf_get_many_digest(
-    cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, 
-    cl_bin *bins, int n_bins, bool get_key /*if true, retrieve key instead of simply digest*/, 
-    citrusleaf_get_many_cb cb, void *udata
-    );
-
-/**
- * Get many digest without a callback
- * This version of the batch-get call does not need the callback function. It will return an array of records. 
- * The results are returned in an array. No ordering is guaranteed between the input digest array and 
- * the returned rows. If the corresponding records for the digests are not found in the cluster, there wont 
- * be any corresponding entry in the result array indicating that the records are missing. The caller must 
- * call the citrusleaf_free_batchresult() to free the memory allocated during this operation.
- */
-cl_rv citrusleaf_get_many_digest_direct(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_batchresult **br);
-
-/**
- * Utility function to free the memory allocated by the citrusleaf_get_many_digest_direct() function
- */
-void citrusleaf_free_batchresult(cl_batchresult *br);
-
-/**
- * Key exists many digest
- * This version of the call acts exactly as the exists digest call, but takes an array
- * of digests. Those digests will be retrieved with the same API conventions as the
- * previous ones.
- * To come: an array of keys, but it'll just be a wrapper on this.
- */
-cl_rv citrusleaf_exists_many_digest(
-    cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, 
-    cl_bin *bins, int n_bins, bool get_key /*if true, retrieve key instead of simply digest*/, 
-    citrusleaf_get_many_cb cb, void *udata
-    );
+cl_rv citrusleaf_batch_read(cl_cluster *asc, char *ns,
+		const cf_digest *digests, int n_digests, cl_bin *bins, int n_bins,
+		bool get_bin_data, citrusleaf_get_many_cb cb, void *udata);

@@ -32,7 +32,8 @@
  *	Get the key at given position of the batch. If the position is not
  *	within the allocated capacity for the batchm then NULL is returned.
  */
-extern inline as_key * as_batch_keyat(as_batch * batch, uint32_t i);
+extern inline as_key * as_batch_keyat(const as_batch * batch, uint32_t i);
+
 
 /******************************************************************************
  *	FUNCTIONS
@@ -42,15 +43,14 @@ extern inline as_key * as_batch_keyat(as_batch * batch, uint32_t i);
  *	Create and initialize a heap allocated as_batch capable of storing
  *	`capacity` keys.
  */
-as_batch * as_batch_new(uint32_t capacity)
+as_batch * as_batch_new(uint32_t size)
 {
-	as_batch * batch = (as_batch *) malloc(sizeof(as_batch) + sizeof(as_key) * capacity);
+	as_batch * batch = (as_batch *) malloc(sizeof(as_batch) + sizeof(as_key) * size);
 	if ( !batch ) return NULL;
 
 	batch->_free = true;
 	batch->keys._free = false;
-	batch->keys.size = 0;
-	batch->keys.capacity = capacity;
+	batch->keys.size = size;
 	batch->keys.entries = (as_key *) (batch + sizeof(batch));
 	return batch;
 }
@@ -58,20 +58,19 @@ as_batch * as_batch_new(uint32_t capacity)
 /**
  *	Initialize a stack allocated as_batch capable of storing `capacity` keys.
  */
-as_batch * as_batch_init(as_batch * batch, uint32_t capacity)
+as_batch * as_batch_init(as_batch * batch, uint32_t size)
 {
 	if ( !batch ) return batch;
 
 	as_key * entries = NULL;
-	if ( capacity > 0 ) {
-		entries = (as_key *) malloc(sizeof(as_key) * capacity);
+	if ( size > 0 ) {
+		entries = (as_key *) malloc(sizeof(as_key) * size);
 		if ( !entries ) return batch;
 	}
 
 	batch->_free = false;
 	batch->keys._free = true;
-	batch->keys.size = 0;
-	batch->keys.capacity = capacity;
+	batch->keys.size = size;
 	batch->keys.entries = entries;
 	return batch;
 }
@@ -95,7 +94,6 @@ void as_batch_destroy(as_batch * batch)
 
 		batch->keys._free = false;
 		batch->keys.size = 0;
-		batch->keys.capacity = 0;
 		batch->keys.entries = NULL;
 	}
 

@@ -211,14 +211,19 @@ as_status aerospike_close(aerospike * as, as_error * err)
 	// rc = rc || aerospike_batch_destroy(as, err);
 
 	extern as_status aerospike_query_destroy(aerospike * as, as_error * err);
-	rc = rc || aerospike_query_destroy(as, err);
+	rc = rc ? rc : aerospike_query_destroy(as, err);
 
 	extern as_status aerospike_scan_destroy(aerospike * as, as_error * err);
-	rc = rc || aerospike_scan_destroy(as, err);
+	rc = rc ? rc : aerospike_scan_destroy(as, err);
 
-	if (as->cluster) {
+	if ( as->cluster ) {
 		citrusleaf_cluster_destroy(as->cluster);
 		as->cluster = NULL;
+	}
+
+	if ( mod_lua.logger != NULL ) {
+		as_logger_destroy(mod_lua.logger);
+		mod_lua.logger = NULL;
 	}
 
 	return err->code;

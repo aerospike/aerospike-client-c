@@ -106,45 +106,8 @@ typedef bool (* aerospike_batch_read_callback)(const as_batch_read * results, ui
  *	@ingroup batch_operations
  */
 as_status aerospike_batch_get(
-	aerospike * as, as_error * err, const as_policy_read * policy, 
+	aerospike * as, as_error * err, const as_policy_batch * policy, 
 	const as_batch * batch, 
-	aerospike_batch_read_callback callback, void * udata
-	);
-
-/**
- *	Look up multiple records by key, then return selected bins.
- *
- *	~~~~~~~~~~{.c}
- *	as_batch batch;
- *	as_batch_inita(&batch, 3);
- *	
- *	as_key_init(as_batch_keyat(&batch,0), "ns", "set", "key1");
- *	as_key_init(as_batch_keyat(&batch,1), "ns", "set", "key2");
- *	as_key_init(as_batch_keyat(&batch,2), "ns", "set", "key3");
- *	
- *	char * select[] = {"bin1", "bin2", "bin3", NULL};
- *	
- *	if ( aerospike_batch_select(&as, &err, NULL, &key, select, callback, NULL) != AEROSPIKE_OK ) {
- *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *	}
- *
- *	as_batch_destroy(&batch);
- *	~~~~~~~~~~
- *
- *	@param as			The aerospike instance to use for this operation.
- *	@param err			The as_error to be populated if an error occurs.
- *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param batch		The batch of keys to read.
- *	@param callback 	The callback to invoke for each record read.
- *	@param udata		The user-data for the callback.
- *
- *	@return AEROSPIKE_OK if successful. Otherwise an error.
- *
- *	@ingroup batch_operations
- */
-as_status aerospike_batch_select(
-	aerospike * as, as_error * err, const as_policy_read * policy, 
-	const as_batch * batch, const char * bins[], 
 	aerospike_batch_read_callback callback, void * udata
 	);
 
@@ -178,7 +141,7 @@ as_status aerospike_batch_select(
  *	@ingroup batch_operations
  */
 as_status aerospike_batch_exists(
-	aerospike * as, as_error * err, const as_policy_read * policy, 
+	aerospike * as, as_error * err, const as_policy_batch * policy, 
 	const as_batch * batch, 
 	aerospike_batch_read_callback callback, void * udata
 	);

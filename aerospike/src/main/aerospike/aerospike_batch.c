@@ -107,7 +107,7 @@ cl_batch_cb(char *ns, cf_digest *keyd, char *set, int result,
 }
 
 static as_status batch_read(
-		aerospike * as, as_error * err, const as_policy_read * policy,
+		aerospike * as, as_error * err, const as_policy_batch * policy,
 		const as_batch * batch,
 		aerospike_batch_read_callback callback, void * udata,
 		bool get_bin_data
@@ -169,7 +169,7 @@ static as_status batch_read(
  *	Look up multiple records by key, then return all bins.
  */
 as_status aerospike_batch_get(
-	aerospike * as, as_error * err, const as_policy_read * policy, 
+	aerospike * as, as_error * err, const as_policy_batch * policy, 
 	const as_batch * batch, 
 	aerospike_batch_read_callback callback, void * udata
 	)
@@ -178,22 +178,10 @@ as_status aerospike_batch_get(
 }
 
 /**
- *	Look up multiple records by key, then return selected bins.
- */
-as_status aerospike_batch_select(
-	aerospike * as, as_error * err, const as_policy_read * policy, 
-	const as_batch * batch, const char * bins[], 
-	aerospike_batch_read_callback callback, void * udata
-	)
-{
-	return AEROSPIKE_OK;
-}
-
-/**
  *	Test whether multiple records exist in the cluster.
  */
 as_status aerospike_batch_exists(
-	aerospike * as, as_error * err, const as_policy_read * policy, 
+	aerospike * as, as_error * err, const as_policy_batch * policy, 
 	const as_batch * batch, 
 	aerospike_batch_read_callback callback, void * udata
 	)

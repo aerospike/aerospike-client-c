@@ -274,7 +274,7 @@ void clbin_to_asrecord(cl_bin * bin, as_record * r)
 			break;
 		}
 		case CL_STR: {
-			as_record_set_str(r, bin->bin_name, bin->object.u.str);
+			as_record_set_strp(r, bin->bin_name, bin->object.u.str, true);
 			break;
 		}
 		case CL_LIST:
@@ -295,7 +295,7 @@ void clbin_to_asrecord(cl_bin * bin, as_record * r)
 			break;
 		}
 		default: {
-			as_record_set_raw(r, bin->bin_name, bin->object.u.blob, bin->object.sz);
+			as_record_set_rawp(r, bin->bin_name, bin->object.u.blob, bin->object.sz, true);
 			break;
 		}
 	}

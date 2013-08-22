@@ -39,9 +39,6 @@ clean:
 target:
 	mkdir $@
 
-target/bin: | target
-	mkdir $@
-
 target/obj: | target
 	mkdir $@
 
@@ -57,3 +54,7 @@ target/example: $(addprefix target/obj/,$(OBJECTS)) | target/bin
 .PHONY: run
 run: build
 	./target/example
+
+.PHONY: valgrind
+valgrind: build
+	valgrind --tool=memcheck --leak-check=yes --show-reachable=yes --num-callers=20 --track-fds=yes -v ./target/example

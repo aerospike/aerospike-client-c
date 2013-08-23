@@ -128,26 +128,26 @@ PLAN( aerospike_test ) {
 
     // // aerospike_key module
     plan_add( key_basics );
-    // plan_add( key_apply );
-    // plan_add( key_apply2 );
+    plan_add( key_apply );
+    plan_add( key_apply2 );
     
-    // // aerospike_info module
-    // plan_add( info_basics );
+    // aerospike_info module
+    plan_add( info_basics );
 
-    // // aerospike_info module
-    // plan_add( udf_basics );
-    // plan_add( udf_types );
-    // plan_add( udf_record );
+    // aerospike_info module
+    plan_add( udf_basics );
+    plan_add( udf_types );
+    plan_add( udf_record );
 
-    // //aerospike_sindex module
-    // plan_add( index_basics );
+    //aerospike_sindex module
+    plan_add( index_basics );
 
-    // // aerospike_query module
-    // plan_add( query_stream );
-    // plan_add( query_foreach );
+    // aerospike_query module
+    plan_add( query_stream );
+    plan_add( query_foreach );
 
-    // // aerospike_scan module
-    // plan_add( scan_basics );
+    // aerospike_scan module
+    plan_add( scan_basics );
 
     // aerospike_scan module
     plan_add( batch_get );

@@ -80,8 +80,7 @@ build: modules libcitrusleaf
 
 .PHONY: build-clean
 build-clean:
-	@rm -rf $(TARGET_BIN)
-	@rm -rf $(TARGET_LIB)
+	@rm -rf $(TARGET)
 
 .PHONY: libcitrusleaf
 libcitrusleaf: libcitrusleaf.a libcitrusleaf.so

@@ -26,7 +26,7 @@
 #include <netinet/in.h>
  
 #include <citrusleaf/cf_atomic.h>
-#include <citrusleaf/cf_log.h>
+// #include <citrusleaf/cf_log.h>
 #include <citrusleaf/cf_ll.h>
 #include <citrusleaf/cf_clock.h>
 #include <citrusleaf/cf_vector.h>

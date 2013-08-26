@@ -126,7 +126,7 @@ PLAN( aerospike_test ) {
     plan_before( before );
     plan_after( after );
 
-    // aerospike_key module
+    // // aerospike_key module
     plan_add( key_basics );
     plan_add( key_apply );
     plan_add( key_apply2 );
@@ -148,6 +148,9 @@ PLAN( aerospike_test ) {
 
     // aerospike_scan module
     plan_add( scan_basics );
+
+    // aerospike_scan module
+    plan_add( batch_get );
 
 }
 

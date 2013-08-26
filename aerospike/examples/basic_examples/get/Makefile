@@ -39,9 +39,6 @@ clean:
 target:
 	mkdir $@
 
-target/bin: | target
-	mkdir $@
-
 target/obj: | target
 	mkdir $@
 
@@ -51,9 +48,13 @@ target/obj/example_utils.o: ../../utils/src/main/example_utils.c | target/obj
 target/obj/%.o: src/main/%.c | target/obj
 	gcc $(CFLAGS) -o $@ -c $^
 
-target/example: $(addprefix target/obj/,$(OBJECTS)) | target/bin
+target/example: $(addprefix target/obj/,$(OBJECTS)) | target
 	gcc -o $@ $^ $(AEROSPIKE)/target/Linux-x86_64/lib/libaerospike.a $(LDFLAGS)
 
 .PHONY: run
 run: build
 	./target/example
+
+.PHONY: valgrind
+valgrind: build
+	valgrind --tool=memcheck --leak-check=yes --track-origins=yes --show-reachable=yes --num-callers=20 --track-fds=yes -v ./target/example

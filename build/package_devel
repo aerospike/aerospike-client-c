@@ -24,10 +24,11 @@ mkdir -p $build/usr/lib
 cp ../aerospike/target/Linux-x86_64/lib/* $build/usr/lib
 mkdir -p $build/usr/include
 cp -r ../aerospike/target/Linux-x86_64/include $build/usr
+chmod 644 $build/usr/include/{citrusleaf,aerospike}/*
 mkdir -p $build/opt/aerospike/client/sys/udf/lua
 mkdir -p $build/opt/aerospike/client/usr/udf/lua
 cp ../aerospike-mod-lua/src/lua/{aerospike.lua,as.lua,stream_ops.lua} $build/opt/aerospike/client/sys/udf/lua
-
+exit
 if $rpm
 then
   spec=/tmp/client_v.spec

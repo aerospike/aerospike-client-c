@@ -468,9 +468,14 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 				done = true;
 			}
 
-			if (cb && (msg->n_ops || (msg->info1 & CL_MSG_INFO1_NOBINDATA))) {
-				// (Note:  In the key exists case, there is no bin data.)
-				(*cb) ( ns_ret, keyd, set_ret, msg->generation, msg->record_ttl, bins_local, msg->n_ops, false /*islast*/, udata);
+			if (cb && ! done) {
+				if (msg->record_ttl != 0) {
+					uint32_t now = cf_clepoch_seconds();
+					msg->record_ttl = msg->record_ttl > now ? msg->record_ttl - now : 0;
+				}
+
+				(*cb)(ns_ret, keyd, set_ret, msg->result_code, msg->generation, msg->record_ttl,
+						msg->n_ops != 0 ? bins_local : NULL, msg->n_ops, udata);
 				rv = 0;
 			}
 
@@ -558,6 +563,10 @@ typedef struct {
 	
 } digest_work;
 
+typedef struct {
+	int result;
+	cl_cluster_node* my_node;
+} work_complete;
 
 static void *
 batch_worker_fn(void *dummy)
@@ -574,19 +583,28 @@ batch_worker_fn(void *dummy)
 			pthread_exit(NULL);
 		}
 
-		int an_int = do_batch_monte( work.asc, work.info1, work.info2, work.ns, work.digests, work.nodes, work.n_digests, work.bins, work.operator, work.operations, work.n_ops, work.my_node, work.my_node_digest_count, work.cb, work.udata );
-		
-		cf_queue_push(work.complete_q, (void *) &an_int);
+		work_complete wc;
+
+		wc.my_node = work.my_node;
+		wc.result = do_batch_monte( work.asc, work.info1, work.info2, work.ns,
+				work.digests, work.nodes, work.n_digests, work.bins,
+				work.operator, work.operations, work.n_ops, work.my_node,
+				work.my_node_digest_count, work.cb, work.udata );
+
+		cf_queue_push(work.complete_q, (void *) &wc);
 		
 	} while (1);
+
+	return NULL;
 }
 
 
 #define MAX_NODES 32
 
 
-static cl_rv
-do_get_exists_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_bin *bins, int n_bins, bool get_key, bool get_bin_data, citrusleaf_get_many_cb cb, void *udata)
+cl_rv
+citrusleaf_batch_read(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests,
+		cl_bin *bins, int n_bins, bool get_bin_data, citrusleaf_get_many_cb cb, void *udata)
 {
 	// fast path: if there's only one node, or the number of digests is super short, just dispatch to the server directly
 
@@ -654,7 +672,7 @@ do_get_exists_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, i
 	work.digests = (cf_digest *) digests; // discarding const to make compiler happy
 	work.nodes = nodes;
 	work.n_digests = n_digests;
-	work.get_key = get_key;
+	work.get_key = false; // we don't use this
 	work.bins = bins;
 	work.operator = CL_OP_READ;
 	work.operations = 0;
@@ -680,11 +698,18 @@ do_get_exists_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, i
 	// wait for the work to complete
 	int retval = 0;
 	for (int i=0;i<n_nodes;i++) {
-		int z;
-		cf_queue_pop(work.complete_q, &z, CF_QUEUE_FOREVER);
-		if (z != 0) {
-			cf_error("Node %d retcode error: %d", i, z);
-			retval = z;
+		work_complete wc;
+		cf_queue_pop(work.complete_q, &wc, CF_QUEUE_FOREVER);
+		if (wc.result != 0) {
+			cf_error("Node %d retcode error: %d", i, wc.result);
+			// Find all the records we were looking for on this node.
+			for (int j = 0; j < n_digests; j++) {
+				if (nodes[j] == wc.my_node) {
+					cf_error("   rec %d", j);
+					cb(ns, &work.digests[j], NULL, wc.result, 0, 0, NULL, 0, udata);
+				}
+			}
+			retval = wc.result;
 		}
 	}
 	
@@ -695,105 +720,6 @@ do_get_exists_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, i
 	}
 	free(nodes);
 	return retval;
-}
-
-
-cl_rv
-citrusleaf_get_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_bin *bins, int n_bins, bool get_key, citrusleaf_get_many_cb cb, void *udata)
-{
-	return do_get_exists_many_digest(asc, ns, digests, n_digests, bins, n_bins, get_key, true, cb, udata);
-}
-
-//This is an internal batch helper function which will collect all the records and put it in an array.
-int direct_batchget_cb(char *ns, cf_digest *keyd, char *set, uint32_t generation,
-			uint32_t record_voidtime, cl_bin *bins, int n_bins, bool islast, void *udata)
-{
-	cl_bin* targetBins;
-
-	if (citrusleaf_copy_bins(&targetBins, bins, n_bins) == 0) {
-		cl_batchresult *br = (cl_batchresult *)udata;
-
-		// Get record slot in a lock.
-		pthread_mutex_lock(&br->lock);
-		cl_rec *rec = &br->records[br->numrecs];
-		br->numrecs++;
-		pthread_mutex_unlock(&br->lock);
-
-		// Copy data to record slot.
-		memcpy(&rec->digest, keyd, sizeof(cf_digest));
-		rec->generation = generation;
-		rec->record_voidtime = record_voidtime;
-		rec->bins = targetBins;
-		rec->n_bins = n_bins;
-	}
-	else {
-		// Do not include record in array.
-		char digest[CF_DIGEST_KEY_SZ*2 + 3];
-		cf_digest_string(keyd, digest);
-		cf_warn("Failed to copy bin(s) for record digest %s", digest);
-	}
-
-	// We are supposed to free the bins in the callback.
-	citrusleaf_bins_free(bins, n_bins);
-	return 0;
-}
-
-void
-citrusleaf_free_batchresult(cl_batchresult *br)
-{
-	if (br && br->records) {
-		//We should free the bins in each of the records
-		for (int i=0; i<(br->numrecs); i++) {
-			citrusleaf_bins_free(br->records[i].bins, br->records[i].n_bins);
-			free(br->records[i].bins);
-		}
-
-		//Finally free the record array and the whole structure
-		free(br->records);
-		free(br);
-	}
-}
-
-cl_rv
-citrusleaf_get_many_digest_direct(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_batchresult **br)
-{
-	//Fist allocate the result structure
-	cl_batchresult *localbr = (cl_batchresult *) malloc(sizeof(cl_batchresult));
-	if (localbr == NULL) {
-		return CITRUSLEAF_FAIL_CLIENT;
-	} else {
-		//Assume that we are going to get all the records and allocate memory for them
-		localbr->records = malloc(sizeof(cl_rec) * n_digests);
-		if (localbr->records == NULL) {
-			free(localbr);
-			return CITRUSLEAF_FAIL_CLIENT;
-		}
-	}
-
-	pthread_mutex_init(&localbr->lock, 0);
-
-	//Call the actual batch-get with our internal callback function which will store the results in an array
-	localbr->numrecs = 0;
-	cl_rv rv = citrusleaf_get_many_digest(asc, ns, digests, n_digests, 0, 0, true, &direct_batchget_cb, localbr);
-
-	pthread_mutex_destroy(&localbr->lock);
-
-	//If something goes wrong we are responsible for freeing up the allocated memory. The caller may not free it.
-	if (rv == CITRUSLEAF_FAIL_CLIENT) {
-		citrusleaf_free_batchresult(localbr);
-		return CITRUSLEAF_FAIL_CLIENT;
-	} else {
-		*br = localbr;
-	}
-
-	return CITRUSLEAF_OK;
-	
-}
-
-cl_rv
-citrusleaf_exists_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests, cl_bin *bins, int n_bins, bool get_key, citrusleaf_get_many_cb cb, void *udata)
-{
-	return do_get_exists_many_digest(asc, ns, digests, n_digests, bins, n_bins, get_key, false, cb, udata);
 }
 
 

@@ -95,6 +95,15 @@ as_policy_info * as_policy_info_init(as_policy_info * p)
 }
 
 /**
+ *	Initialize as_policy_batch to default values.
+ */
+as_policy_batch * as_policy_batch_init(as_policy_batch * p)
+{
+	p->timeout		= 0;
+	return p;
+}
+
+/**
  *	Initialize as_policies to default values.
  */
 as_policies * as_policies_init(as_policies * p)
@@ -114,6 +123,7 @@ as_policies * as_policies_init(as_policies * p)
 	as_policy_scan_init(&p->scan);
 	as_policy_query_init(&p->query);
 	as_policy_info_init(&p->info);
+	as_policy_info_init(&p->batch);
 	return p;
 }
 

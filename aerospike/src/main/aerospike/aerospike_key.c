@@ -54,17 +54,7 @@
 
 /**
  *	Look up a record by key, then return all bins.
- *
- *	~~~~~~~~~~{.c}
- *		as_record * rec = NULL;
- *		if ( aerospike_key_get(&as, &err, NULL, "test", "demo", "foo", &rec) != AEROSPIKE_OK ) {
- *			fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *		}
- *		else {
- *			as_record_destroy(rec);
- *		}
- *	~~~~~~~~~~
- *
+ *	
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
@@ -88,7 +78,6 @@ as_status aerospike_key_get(
 	uint32_t    timeout = p.timeout == UINT32_MAX ? 0 : p.timeout;          
 	uint32_t    gen = 0;
 	uint32_t 	ttl = 0;
-	char *      set = NULL;
 	int         nvalues = 0;
 	cl_bin *    values = NULL;
 
@@ -98,7 +87,7 @@ as_status aerospike_key_get(
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
 			rc = citrusleaf_get_all_digest_getsetname(as->cluster, key->ns, (cf_digest *) digest->value,
-					&values, &nvalues, timeout, &gen, &set, &ttl);
+					&values, &nvalues, timeout, &gen, NULL, &ttl);
 			break;
 		}
 		case AS_POLICY_KEY_SEND: {
@@ -131,27 +120,16 @@ as_status aerospike_key_get(
 		*rec = r;
 	}
 
+	if ( values != NULL ) {
+		free(values);
+	}
+
 	return as_error_fromrc(err,rc);
 }
 
 /**
  *	Lookup a record by key, then return specified bins.
- *
- *	~~~~~~~~~~{.c}
- *		char * select[] = {"bin1", "bin2", "bin3", NULL};
- *		
- *		as_key key;
- *		as_key_init(&key, "ns", "set", "key");
- *
- *		as_record * rec = NULL;
- *		if ( aerospike_key_select(&as, &err, NULL, &key, select, &rec) != AEROSPIKE_OK ) {
- *			fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *		}
- *		else {
- *			as_record_destroy(rec);
- *		}
- *	~~~~~~~~~~
- *
+ *	
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
@@ -176,7 +154,6 @@ as_status aerospike_key_select(
 	uint32_t    timeout = p.timeout == UINT32_MAX ? 0 : p.timeout;
 	uint32_t    gen = 0;
 	uint32_t 	ttl = 0;
-	// char *      set = NULL;
 	int         nvalues = 0;
 	cl_bin *    values = NULL;
 
@@ -237,20 +214,7 @@ as_status aerospike_key_select(
 
 /**
  *	Check if a record exists in the cluster via its key.
- *
- *	~~~~~~~~~~{.c}
- *		as_key key;
- *		as_key_init(&key, "ns", "set", "key");
- *
- *		bool exists = true;
- *		if ( aerospike_key_exists(&as, &err, NULL, &key, &exists) != AEROSPIKE_OK ) {
- *			fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *		}
- *		else {
- *			fprintf(stdout, "Record %s", exists ? "exists." : "doesn't exist.");
- *		}
- *	~~~~~~~~~~
- *
+ *	
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
@@ -299,6 +263,10 @@ as_status aerospike_key_exists(
 		}
 	}
 
+	if ( values != NULL ) {
+		free(values);
+	}
+
 	switch(rc) {
 		case CITRUSLEAF_OK:
 			if ( exists ) {
@@ -320,23 +288,7 @@ as_status aerospike_key_exists(
 
 /**
  *	Store a record in the cluster.
- *
- *	~~~~~~~~~~{.c}
- *		as_key key;
- *		as_key_init(&key, "ns", "set", "key");
- *
- *		as_record rec;
- *		as_record_init(&rec, 2);
- *		as_record_set_string(&rec, "bin1", "abc");
- *		as_record_set_integer(&rec, "bin2", 123);
- *		
- *		if ( aerospike_key_put(&as, &err, NULL, &key, &rec) != AEROSPIKE_OK ) {
- *			fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *		}
- *		
- *		as_record_destroy(&rec);
- *	~~~~~~~~~~
- *
+ *	
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.

@@ -44,13 +44,14 @@
  *  The following are the operation policies. Operation policies are groups of
  *  policy values for a type of operation.
  *
- *  - as_policy_read
- *  - as_policy_write
+ *  - as_policy_batch
+ *  - as_policy_info
  *  - as_policy_operate
- *  - as_policy_remove
- *  - as_policy_scan
- *  - as_policy_query
  *  - as_policy_read
+ *  - as_policy_remove
+ *  - as_policy_query
+ *  - as_policy_scan
+ *  - as_policy_write
  *
  */
 
@@ -500,6 +501,25 @@ typedef struct as_policy_info_s {
 } as_policy_info;
 
 /**
+ *	Batch Policy
+ *
+ *	@ingroup client_policies
+ */
+typedef struct as_policy_batch_s {
+
+	/**
+	 *	Maximum time in milliseconds to wait for 
+	 *	the operation to complete.
+	 *
+	 *	If 0 (zero), then the value will default to
+	 *	either as_config.policies.timeout
+	 *	or `AS_POLICY_TIMEOUT_DEFAULT`.
+	 */
+	uint32_t timeout;
+
+} as_policy_batch;
+
+/**
  *	Struct of all policy values and operation policies. 
  *	
  *	This is utilizes by as_config, to define global and default values
@@ -595,6 +615,11 @@ typedef struct as_policies_s {
 	 *	The default info policy.
 	 */
 	as_policy_info info;
+
+	/**
+	 *	The default batch policy.
+	 */
+	as_policy_batch batch;
 
 } as_policies;
 

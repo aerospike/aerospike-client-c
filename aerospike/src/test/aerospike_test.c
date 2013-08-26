@@ -11,17 +11,20 @@
  * MACROS
  *****************************************************************************/
 
-#define HOST "127.0.0.1"
-#define PORT 3000
 #define TIMEOUT 1000
 
 #define SCRIPT_LEN_MAX 1048576
+#define MAX_HOST_SIZE	1024
 
 /******************************************************************************
  * VARIABLES
  *****************************************************************************/
 
 aerospike * as = NULL;
+int g_argc = 0;
+char ** g_argv = NULL;
+char g_host[MAX_HOST_SIZE];
+int g_port = 3000;
 
 /******************************************************************************
  * STATIC FUNCTIONS
@@ -49,6 +52,38 @@ static void citrusleaf_log_callback(cf_log_level level, const char* fmt, ...) {
     va_end(ap);
 }
 
+#define VALID_OPTS "h:p:"
+
+static bool parse_opts(int argc, char* argv[])
+{
+	int c;
+
+	strcpy(g_host, "127.0.0.1");
+
+	while ((c = getopt(argc, argv, VALID_OPTS)) != -1) {
+		switch (c) {
+		case 'h':
+			if (strlen(optarg) >= sizeof(g_host)) {
+				error("ERROR: host exceeds max length");
+				return false;
+			}
+			strcpy(g_host, optarg);
+			error("host:           %s", g_host);
+			break;
+
+		case 'p':
+			g_port = atoi(optarg);
+			break;
+
+		default:
+	        error("unrecognized options");
+			return false;
+		}
+	}
+
+	return true;
+}
+
 static bool before(atf_plan * plan) {
 
 
@@ -57,10 +92,14 @@ static bool before(atf_plan * plan) {
         return false;
     }
 
+    if (! parse_opts(g_argc, g_argv)) {
+        error("failed to parse options");
+    	return false;
+    }
     as_config config = {
         .non_blocking = false,
         .hosts = { 
-        	{ .addr = HOST, .port = PORT },
+        	{ .addr = g_host , .port = g_port },
         	{ 0 }
         },
         .lua = {
@@ -82,7 +121,7 @@ static bool before(atf_plan * plan) {
 	as_log_set_level(&as->log, AS_LOG_LEVEL_INFO);
 	
 	if ( aerospike_connect(as, &err) == AEROSPIKE_OK ) {
-		info("connected to %s:%d", HOST, PORT);
+		info("connected to %s:%d", g_host, g_port);
     	return true;
 	}
 	else {
@@ -102,11 +141,11 @@ static bool after(atf_plan * plan) {
 	as_error_reset(&err);
 	
 	if ( aerospike_close(as, &err) == AEROSPIKE_OK ) {
-		info("disconnected from %s:%d", HOST, PORT);
+		info("disconnected from %s:%d", g_host, g_port);
     	return true;
 	}
 	else {
-		error("%s @ %s[%s:%d]", HOST, PORT, err.message, err.func, err.file, err.line);
+		error("%s @ %s[%s:%d]", g_host, g_port, err.message, err.func, err.file, err.line);
 		return false;
 	}
 	
@@ -148,6 +187,9 @@ PLAN( aerospike_test ) {
 
     // aerospike_scan module
     plan_add( scan_basics );
+
+    // aerospike_scan module
+    plan_add( batch_get );
 
 }
 

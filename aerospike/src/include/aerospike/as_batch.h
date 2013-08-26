@@ -25,6 +25,7 @@
 #include <aerospike/as_bin.h>
 #include <aerospike/as_key.h>
 #include <aerospike/as_record.h>
+#include <aerospike/as_status.h>
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -55,14 +56,9 @@ typedef struct as_batch_s {
 		bool _free;
 
 		/**
-		 *	The number of keys this structure currently contains.
+		 *	The number of keys this structure contains.
 		 */
 		uint32_t size;
-
-		/**
-		 *	The maximum number of keys this structure can contain.
-		 */
-		uint32_t capacity;
 
 		/**
 		 *	The keys contained by this batch.
@@ -74,40 +70,32 @@ typedef struct as_batch_s {
 } as_batch;
 
 /**
- *	The (key,record) for an entry in a batch read.
- *	The record is NULL if the record does not exist.
+ *	The (key, result, record) for an entry in a batch read.
+ *	The result is AEROSPIKE_OK if the record is found,
+ *	AEROSPIKE_ERR_RECORD_NOT_FOUND if the transaction succeeds but the record is
+ *	not found, or another error code if the transaction fails.
+ *	The record is NULL if either the transaction failed or the record does not
+ *	exist. For aerospike_batch_exists() calls the record will never contain bins
+ *	but will contain metadata (generation and expiration).
  */
 typedef struct as_batch_read_s {
 
 	/**
-	 *	The key requested
+	 *	The key requested.
 	 */
 	const as_key * key;
-	
+
 	/**
-	 *	The record for the key requested
+	 *	The result of the transaction to read this key.
 	 */
-	const as_record * record;
+	as_status result;
+
+	/**
+	 *	The record for the key requested, NULL if the key was not found.
+	 */
+	as_record record;
 
 } as_batch_read;
-
-/**
- *	The (key,exists) pair an entry in a batch.
- *	The exists flag is true, if the record exists.
- */
-typedef struct as_batch_exists_s {
-
-	/**
-	 *	The key requested
-	 */
-	const as_key * key;
-	
-	/**
-	 *	The record for the key requested
-	 */
-	bool exists;
-
-} as_batch_exists;
 
 
 /*********************************************************************************
@@ -136,14 +124,13 @@ typedef struct as_batch_exists_s {
  *	@relates as_batch
  *	@ingroup batch_object
  */
-#define as_batch_inita(__batch, __capacity) \
-	if ( (__batch) != NULL && (__batch)->keys.entries == NULL ) {\
+#define as_batch_inita(__batch, __size) \
+	if ( (__batch) != NULL ) {\
 		(__batch)->_free = false;\
-		(__batch)->keys.entries = (as_key *) alloca(sizeof(as_key) * __capacity);\
+		(__batch)->keys.entries = (as_key *) alloca(sizeof(as_key) * __size);\
 		if ( (__batch)->keys.entries ) { \
 			(__batch)->keys._free = false;\
-			(__batch)->keys.capacity = __capacity;\
-			(__batch)->keys.size = 0;\
+			(__batch)->keys.size = __size;\
 		}\
  	}
 
@@ -169,7 +156,7 @@ typedef struct as_batch_exists_s {
  *	@relates as_batch
  *	@ingroup batch_object
  */
-as_batch * as_batch_new(uint32_t capacity);
+as_batch * as_batch_new(uint32_t size);
 
 /**
  *	Initialize a stack allocated as_batch capable of storing `capacity` keys.
@@ -190,7 +177,7 @@ as_batch * as_batch_new(uint32_t capacity);
  *	@relates as_batch
  *	@ingroup batch_object
  */
-as_batch * as_batch_init(as_batch * batch, uint32_t capacity);
+as_batch * as_batch_init(as_batch * batch, uint32_t size);
 
 /**
  *	Destroy the batch of keys.
@@ -218,8 +205,7 @@ void as_batch_destroy(as_batch * batch);
  *	@relates as_batch
  *	@ingroup batch_object
  */
-inline as_key * as_batch_keyat(as_batch * batch, uint32_t i)
+inline as_key * as_batch_keyat(const as_batch * batch, uint32_t i)
 {
-	return (batch != NULL && batch->keys.entries != NULL && batch->keys.capacity > i) ? &batch->keys.entries[i] : NULL;
+	return (batch != NULL && batch->keys.entries != NULL && batch->keys.size > i) ? &batch->keys.entries[i] : NULL;
 }
-

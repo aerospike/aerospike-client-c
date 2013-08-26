@@ -154,6 +154,8 @@ void atf_plan_result_destroy(atf_plan_result * result);
     }; \
     atf_plan * __plan_name = & plan__##__plan_name; \
     int main(int argc, char ** args) { \
+    	g_argc = argc; \
+		g_argv = args; \
         atf_plan_result * result = atf_plan_result_new(__plan_name); \
         plan_spec__##__plan_name(__plan_name); \
         int rc = atf_plan_run(__plan_name, result); \

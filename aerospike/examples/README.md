@@ -188,6 +188,26 @@ show the effect.
 
 
 ##################################################
+# Batch Examples
+#
+
+These examples each use multiple records to demonstrate particular API calls.
+
+
+# get
+
+aerospike_batch_exists()
+aerospike_batch_get()
+
+This example uses aerospike_batch_exists() to check whether a bunch of records
+written to the database exist, and get their metadata (generation and TTL). It
+uses aerospike_batch_get() to read all these records. It then deletes a few of
+the records from the database and repeats the batch calls, showing that the
+calls report the deleted records as not found, while returning all the remaining
+records as before.
+
+
+##################################################
 # Query Examples
 #
 

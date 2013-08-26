@@ -140,8 +140,6 @@ COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_atomic.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_types.h
 
 EXCLUDE-HEADERS = 
-EXCLUDE-HEADERS += $(SOURCE_INCL)/aerospike/as_batch.h
-EXCLUDE-HEADERS += $(SOURCE_INCL)/aerospike/aerospike_batch.h
 
 HEADERS := 
 HEADERS += $(filter-out $(EXCLUDE-HEADERS), $(wildcard $(SOURCE_INCL)/aerospike/*.h))

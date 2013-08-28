@@ -123,7 +123,7 @@ as_policies * as_policies_init(as_policies * p)
 	as_policy_scan_init(&p->scan);
 	as_policy_query_init(&p->query);
 	as_policy_info_init(&p->info);
-	as_policy_info_init(&p->batch);
+	as_policy_batch_init(&p->batch);
 	return p;
 }
 

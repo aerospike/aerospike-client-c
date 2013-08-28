@@ -207,8 +207,8 @@ as_status aerospike_close(aerospike * as, as_error * err)
 	// extern as_status aerospike_async_destroy(aerospike * as, as_error * err);
 	// rc = rc || aerospike_async_destroy(as, err);
 
-	// extern as_status aerospike_batch_destroy(aerospike * as, as_error * err);
-	// rc = rc || aerospike_batch_destroy(as, err);
+	extern as_status aerospike_batch_destroy(aerospike * as, as_error * err);
+	rc = rc ? rc : aerospike_batch_destroy(as, err);
 
 	extern as_status aerospike_query_destroy(aerospike * as, as_error * err);
 	rc = rc ? rc : aerospike_query_destroy(as, err);

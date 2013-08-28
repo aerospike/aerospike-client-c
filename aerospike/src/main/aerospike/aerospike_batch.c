@@ -35,6 +35,7 @@
 #include "_shim.h"
 
 #include <citrusleaf/cl_batch.h>
+#include "../citrusleaf/internal.h"
 
 /************************************************************************
  * 	TYPES
@@ -133,7 +134,18 @@ static as_status batch_read(
 				"failed digests array allocation");
 	}
 
+	// Because we're wrapping the old functionality, we only support a batch
+	// with all keys in the same namespace.
+	char* ns = batch->keys.entries[0].ns;
+
 	for (uint32_t i = 0; i < n; i++) {
+		if (strcmp(ns, batch->keys.entries[i].ns) != 0) {
+			// Don't need to destroy results' records since they won't have any
+			// associated allocations yet.
+			return as_error_update(err, AEROSPIKE_ERR_PARAM,
+					"batch keys must all be in the same namespace");
+		}
+
 		as_batch_read * p_r = &results[i];
 
 		p_r->result = -1; // TODO - make an 'undefined' error
@@ -149,8 +161,8 @@ static as_status batch_read(
 	bridge.results = results;
 	bridge.n = n;
 
-	cl_rv rc = citrusleaf_batch_read(as->cluster, batch->keys.entries[0].ns,
-			digests, n, NULL, 0, get_bin_data, cl_batch_cb, &bridge);
+	cl_rv rc = citrusleaf_batch_read(as->cluster, ns, digests, n, NULL, 0,
+			get_bin_data, cl_batch_cb, &bridge);
 
 	callback(results, n, udata);
 
@@ -187,4 +199,17 @@ as_status aerospike_batch_exists(
 	)
 {
 	return batch_read(as, err, policy, batch, callback, udata, false);
+}
+
+/**
+ * Destroy batch environment.
+ */
+as_status aerospike_batch_destroy(aerospike * as, as_error * err)
+{
+	extern cf_atomic32 batch_initialized;
+	if ( batch_initialized == 0 ) {
+		return AEROSPIKE_OK;
+	}
+	citrusleaf_batch_shutdown();
+	return AEROSPIKE_OK;
 }

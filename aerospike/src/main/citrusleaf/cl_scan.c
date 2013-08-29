@@ -290,7 +290,7 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 				}
 
     			// got one good value? call it a success!
-				(*cb) ( ns_ret, keyd, set_ret, msg->generation, ttl, bins_local, msg->n_ops, false /*islast*/, udata);
+				(*cb) (ns_ret, keyd, set_ret, CL_RESULT_OK, msg->generation, ttl, bins_local, msg->n_ops, udata);
 				rv = 0;
 			}
 //			else

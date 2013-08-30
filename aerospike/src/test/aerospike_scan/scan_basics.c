@@ -278,34 +278,25 @@ static void insert_data(int numrecs, const char *setname)
 	as_error err;
 	as_error_reset(&err);
 
-	as_record r;
-	as_record_init(&r, 3);
-
-	as_hashmap m;
-	as_hashmap_init(&m, 8);
-
-	as_key k;
-
 	for (int i=0; i<numrecs; i++) {
-		// Simple integer bin
-		as_record_set_int64(&r, "bin1", i);
 
-		// Simple string bin
 		sprintf(strval, "str-%s-%d", setname ? setname : "noset", i);
-		as_record_set_str(&r, "bin2", strval);
+		sprintf(strkey, "key-%s-%d", setname, i);
 
 		// Map bin
+        as_hashmap m;
+        as_hashmap_init(&m, 8);
 		as_stringmap_set_int64((as_map *) &m, "x", i);
 		as_stringmap_set_int64((as_map *) &m, "y", i+1);
 		as_stringmap_set_int64((as_map *) &m, "z", i+2);
-		// as_record_set() will try to destroy the bin value (hashmap) if it already exists
-		// To reuse the same hashmap again and again in the loop we should protect it from
-		// getting destroyed. The trick is to bump up the ref count.
-		as_val_reserve(&m);
+
+        as_record r;
+        as_record_init(&r, 3);
+		as_record_set_int64(&r, "bin1", i);
+		as_record_set_str(&r, "bin2", strval);
 		as_record_set_map(&r, "bin3", (as_map *) &m);
 
-		sprintf(strkey, "key-%s-%d", setname, i);
-
+        as_key k;
 		as_key_init(&k, NS, setname, strkey);
 
 		rc = aerospike_key_put(as, &err, NULL, &k, &r);
@@ -313,8 +304,11 @@ static void insert_data(int numrecs, const char *setname)
 			error("digest put failed with error %d", rc);
 		}
 
+        as_hashmap_destroy(&m);
 		as_key_destroy(&k);
+        as_record_destroy(&r);
 	}
+
 }
 
 

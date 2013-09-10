@@ -66,8 +66,7 @@
  *	Create a new secondary index on an integer bin.
  *
  *	~~~~~~~~~~{.c}
- *	if ( aerospike_index_integer_create(&as, &err, NULL, 
- *			"test", "demo", "bin1", "idx_test_demo_bin1") != AEROSPIKE_OK ) {
+ *	if ( aerospike_index_integer_create(&as, &err, NULL, "test", "demo", "bin1", "idx_test_demo_bin1") != AEROSPIKE_OK ) {
  *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *	}
  *	~~~~~~~~~~
@@ -92,8 +91,7 @@ as_status aerospike_index_integer_create(
  *	Create a new secondary index on a string bin.
  *
  *	~~~~~~~~~~{.c}
- *	if ( aerospike_index_string_create(&as, &err, NULL, 
- *			"test", "demo", "bin1", "idx_test_demo_bin1") != AEROSPIKE_OK ) {
+ *	if ( aerospike_index_string_create(&as, &err, NULL, "test", "demo", "bin1", "idx_test_demo_bin1") != AEROSPIKE_OK ) {
  *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *	}
  *	~~~~~~~~~~
@@ -118,9 +116,9 @@ as_status aerospike_index_string_create(
  *	Removes (drops) a secondary index.
  *
  *	~~~~~~~~~~{.c}
- *		if ( aerospike_index_remove(&as, &err, NULL, "idx_test_demo_bin1") != AEROSPIKE_OK ) {
- *			fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *		}
+ *	if ( aerospike_index_remove(&as, &err, NULL, "test", idx_test_demo_bin1") != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
  *	~~~~~~~~~~
  *
  *	@param as			The aerospike instance to use for this operation.

@@ -47,6 +47,9 @@
 //#define DEBUG 1
 //#define DEBUG_VERBOSE 1
 
+#define DISABLE_COMPRESSION 0
+uint compression_version[] = {2,6,8};
+
 // Forward references
 static void cluster_tend( cl_cluster *asc); 
 
@@ -1382,6 +1385,118 @@ void
 citrusleaf_cluster_change_tend_speed(cl_cluster *asc, int secs)
 {
 	asc->tend_speed = secs;
+}
+
+/*·
+ * Function to update compression stat.
+ * Parameters : asc - cluster object. - Input
+ *         actual_sz - Actual size of the compressed data. - Input
+ *         compressed_sz - Size of data after compression. - Input
+ */
+void
+citrusleaf_cluster_put_compression_stat(cl_cluster *asc, uint64_t actual_sz, uint64_t compressed_sz)
+{
+    pthread_mutex_lock(&asc->LOCK);
+    asc->compression_stat.actual_sz = asc->compression_stat.actual_sz + actual_sz;
+    asc->compression_stat.compressed_sz = asc->compression_stat.compressed_sz + compressed_sz;
+    pthread_mutex_unlock(&asc->LOCK);
+}
+
+/*
+ * Function to read compression stat.
+ * Parameters : asc - cluster object. - Input
+ *         actual_sz - Pointer to hold actual size of the compressed data. - Output
+ *         compressed_sz - Pointer to hold size of data after compression. - Output
+ */
+void
+citrusleaf_cluster_get_compression_stat(cl_cluster *asc, uint64_t *actual_sz, uint64_t *compressed_sz)
+{
+    *actual_sz = 0;
+    *compressed_sz = 0;
+    if (asc != NULL)
+    {
+        *actual_sz = asc->compression_stat.actual_sz;
+        *compressed_sz = asc->compression_stat.compressed_sz;
+    }
+}
+
+/*·
+ * Function to set compression threshold.
+ * Parameters : asc - cluster object. - Input
+ *         size_in_bytes - > 0 - Compression threshold, above which packet will be compressed. - Input
+ *                         = 0 - Disable compression.
+ *:   Output : Compression threshold value set to.
+ */
+int
+citrusleaf_cluster_change_compression_threshold(cl_cluster *asc, int size_in_bytes)
+{
+    // Check if receiving cluster will be able to handle compressed data
+    uint n_hosts = cf_vector_size(&asc->host_str_v);
+    cf_vector_define(sockaddr_in_v, sizeof( struct sockaddr_in ), 0);
+    struct sockaddr_in *sin;
+    char *values;
+    char *tmp_chr;
+    char *tmp_ptr;
+    uint version[3];
+    char *host;
+    char *token_seperator[] = {".", ".", "-"};
+    
+    if (size_in_bytes == DISABLE_COMPRESSION)
+    {
+        goto Set_Compression;
+    }
+    
+    /*
+     * Check whether destination cluster could handle compressed packets.
+     * If not, disable compression
+     * If yes, set compression threshold to specified level
+     */
+    for (uint index = 0; index < n_hosts; index++)
+    {
+        host = cf_vector_pointer_get(&asc->host_str_v, index);
+        cl_lookup(asc, cf_vector_pointer_get(&asc->host_str_v, index), cf_vector_integer_get(&asc->host_port_v, index)     , &sockaddr_in_v);
+        for (uint index_addr = 0; index_addr < cf_vector_size(&sockaddr_in_v); index_addr++)
+        {
+            sin = cf_vector_getp(&sockaddr_in_v, index_addr);
+            // Check version of server
+            if (citrusleaf_info_host(sin, "build", &values, 300, false) == 0)
+            {
+                // build string will of format e.g. build\t2.6.3-8-g6f1cadf
+                tmp_chr = strtok_r (values, "\t", &tmp_ptr);
+                index = 0;
+                while (index < 3)
+                {
+                    tmp_chr = strtok_r (NULL, token_seperator[index], &tmp_ptr);
+                    if (!tmp_chr)
+                    {
+                        cf_info("Server %s does not support compression. Disable it.", host);
+                        size_in_bytes = DISABLE_COMPRESSION;
+                        goto Set_Compression;
+                    }
+                    version[index++] = atoi(tmp_chr);
+                }
+                if ( version[0] < compression_version[0] ||
+                    (version[0] == compression_version[0] && version[1] < compression_version[1]) ||
+                    (version[0] == compression_version[0] && version[1] == compression_version[1] && version[2] < compression_version[2]))
+                {
+                    cf_info("Server %s does not support compression. Disable it.", host);
+                    size_in_bytes = DISABLE_COMPRESSION;
+                    goto Set_Compression;
+                }
+            }
+            else
+            {
+                cf_info("Server %s does not support compression. Disable it.", host);
+                size_in_bytes = DISABLE_COMPRESSION;
+                goto Set_Compression;
+            }
+        }
+    }
+Set_Compression:
+    pthread_mutex_lock(&asc->LOCK);
+    asc->compression_stat.compression_threshold = size_in_bytes;
+    pthread_mutex_unlock(&asc->LOCK);
+    return size_in_bytes;
 }
 
 void 

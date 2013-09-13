@@ -265,6 +265,9 @@ extern void citrusleaf_cluster_change_info_timeout(struct cl_cluster_s *asc, int
 extern void citrusleaf_cluster_change_tend_speed(struct cl_cluster_s *asc, int secs);
 extern void citrusleaf_cluster_use_nbconnect(struct cl_cluster_s *asc);
 
+extern void citrusleaf_cluster_put_compression_stat(cl_cluster *asc, uint64_t actual_sz, uint64_t compressed_sz);
+extern void citrusleaf_cluster_get_compression_stat(cl_cluster *asc, uint64_t *actual_sz, uint64_t *compressed_sz);
+
 // the timeout is how long to wait before the cluster is "settled"
 // 0 - a sensible default
 // N - some number of MS
@@ -448,6 +451,13 @@ citrusleaf_check_cluster_health(cl_cluster *asc);
 
 void
 citrusleaf_sleep_for_tender(cl_cluster *asc);
+
+/*
+ * Set minimum size of packet, above which packet will be compressed before sending on wire,
+ * provided compression is enabled.
+ */
+int
+citrusleaf_cluster_change_compression_threshold(cl_cluster *asc, int size_in_bytes);
 
 //
 // Get is like select in SQL. Create a list of bins to get, and call this function to retrieve

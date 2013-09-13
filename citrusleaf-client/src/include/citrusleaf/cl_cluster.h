@@ -109,6 +109,7 @@ struct cl_cluster_s {
 	
 	uint32_t		ref_count;
 	uint32_t		tend_speed;
+    int             info_timeout;   // timeout in ms for info requests
 	// Need a lock
 	pthread_mutex_t	LOCK;
 	

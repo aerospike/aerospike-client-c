@@ -90,6 +90,7 @@ struct cl_cluster_s {
     
     uint32_t            ref_count;
     uint32_t            tend_speed;
+    int                 info_timeout;  // timeout in ms for info requests
     // Need a lock
     pthread_mutex_t     LOCK;
     
@@ -140,6 +141,7 @@ extern void citrusleaf_cluster_shutdown(void);
 
 extern cl_cluster * citrusleaf_cluster_get_or_create(char *host, short port, int timeout_ms);
 extern void citrusleaf_cluster_release_or_destroy(cl_cluster **asc);
+extern void citrusleaf_cluster_change_info_timeout(struct cl_cluster_s *asc, int msecs);
 extern void citrusleaf_cluster_change_tend_speed(struct cl_cluster_s *asc, int secs);
 extern void citrusleaf_cluster_use_nbconnect(struct cl_cluster_s *asc);
 

@@ -1372,6 +1372,12 @@ cluster_tend(cl_cluster *asc)
 	return;
 }
 
+void
+citrusleaf_cluster_change_info_timeout(cl_cluster *asc, int msecs)
+{
+    asc->info_timeout = msecs;
+}
+
 void 
 citrusleaf_cluster_change_tend_speed(cl_cluster *asc, int secs)
 {

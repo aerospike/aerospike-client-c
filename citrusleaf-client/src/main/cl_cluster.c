@@ -47,6 +47,11 @@
 //#define DEBUG 1
 //#define DEBUG_VERBOSE 1
 
+/*
+ * Packet will be compressed only if its size is > cl_cluster.compression_threshold
+ * Unit : Bytes
+ * Default : Compression disabled.
+ */
 #define DISABLE_COMPRESSION 0
 uint compression_version[] = {2,6,8};
 
@@ -179,6 +184,10 @@ citrusleaf_cluster_create(void)
 	
 	asc->n_partitions = 0;
 	asc->partition_table_head = 0;
+	
+	asc->compression_stat.compression_threshold = DISABLE_COMPRESSION;
+	asc->compression_stat.actual_sz = 0;
+	asc->compression_stat.compressed_sz = 0;
 	
 	return(asc);
 }

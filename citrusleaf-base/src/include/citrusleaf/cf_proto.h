@@ -116,6 +116,20 @@ typedef struct cl_proto_s {
 } cl_proto;
 #pragma pack(pop) // packing is back to what it was
 
+#pragma pack(push, 1) // packing is now 1
+/*
+ * zlib decompression API needs original size of the compressed data.
+ * So we need to transfer it to another end.
+ * This structure packs together - 
+ * header + original size of data + compressed data
+ */
+typedef struct cl_comp_proto_s {
+	cl_proto  	proto;     // Protocol header
+	uint64_t 	org_sz;    // Original size of compressed data hold in 'data'
+	uint8_t data[];        // Compressed data
+}  cl_comp_proto;
+#pragma pack(pop) // packing is back to what it was
+
 
 /* cl_msg_field
  * Aerospike message field */
@@ -215,6 +229,17 @@ typedef struct cl_proto_s {
 	uint8_t		data[];
 } __attribute__ ((__packed__)) cl_proto;
 
+/*
+ * zlib decompression API needs original size of the compressed data.
+ * So we need to transfer it to another end.
+ * This structure packs together - 
+ * header + original size of data + compressed data
+ */
+typedef struct cl_comp_proto_s {
+	cl_proto  	proto;     // Protocol header
+	uint64_t 	org_sz;    // Original size of compressed data hold in 'data'
+	uint8_t data[];        // Compressed data
+}  cl_comp_proto;
 
  /* cl_msg_field
  * Aerospike message field */

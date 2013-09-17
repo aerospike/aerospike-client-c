@@ -255,6 +255,9 @@ int citrusleaf_copy_bins(cl_bin **destbins, const cl_bin *srcbins, int n_bins);
 struct cl_cluster_s;
 typedef struct cl_cluster_s cl_cluster;
 
+struct cl_cluster_compression_stat_s;
+typedef struct cl_cluster_compression_stat_s cl_cluster_compression_stat;
+
 extern cl_cluster *citrusleaf_cluster_create(void);
 extern void citrusleaf_cluster_destroy(cl_cluster *asc);
 extern void citrusleaf_cluster_shutdown(void);

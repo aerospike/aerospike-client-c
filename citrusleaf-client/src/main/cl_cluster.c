@@ -170,6 +170,7 @@ citrusleaf_cluster_create(void)
 	// For the cluster user has to specifically set the own
 	// value
 	asc->tend_speed = 0;
+	asc->info_timeout = INFO_TIMEOUT_MS;
 	
 	pthread_mutex_init(&asc->LOCK, 0);
 	
@@ -1152,7 +1153,7 @@ cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 		struct sockaddr_in *sa_in = cf_vector_getp(&cn->sockaddr_in_v, i);
 		cl_node_info node_info;
 
-		if (cl_get_node_info(cn->name, sa_in, &node_info) != 0) {
+		if (cl_get_node_info(cn->name, sa_in, &node_info, asc->info_timeout) != 0) {
 			// todo: this address is no longer right for this node, update the node's list
 			// and if there's no addresses left, dun node
 			cf_debug("Info request failed for %s", cn->name);
@@ -1198,7 +1199,7 @@ cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 			struct sockaddr_in *sa_in = cf_vector_getp(&cn->sockaddr_in_v, i);
 			cl_replicas replicas;
 
-			if (cl_get_replicas(cn->name, sa_in, &replicas) != 0) {
+			if (cl_get_replicas(cn->name, sa_in, &replicas, asc->info_timeout) != 0) {
 				continue;
 			}
 
@@ -1224,7 +1225,7 @@ cluster_ping_address(cl_cluster *asc, struct sockaddr_in *sa_in)
 {
 	char node_name[NODE_NAME_SIZE];
 
-	if (cl_get_node_name(sa_in, node_name) != 0) {
+	if (cl_get_node_name(sa_in, node_name, asc->info_timeout) != 0) {
 		return;
 	}
 		
@@ -1265,7 +1266,7 @@ cluster_get_n_partitions( cl_cluster *asc, cf_vector *sockaddr_in_v )
 		struct sockaddr_in *sa_in = cf_vector_getp(sockaddr_in_v, i);
 		int n_partitions = 0;
 
-		if (cl_get_n_partitions(sa_in, &n_partitions) != 0) {
+		if (cl_get_n_partitions(sa_in, &n_partitions, asc->info_timeout) != 0) {
 			continue;
 		}
 		asc->n_partitions = n_partitions;

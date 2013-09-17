@@ -41,7 +41,7 @@ typedef struct info_data_s info_data;
 
 static bool info_compare(const as_error * err, const as_node * node, const char * req, const char * res, void * udata) {
 	info_data * data = (info_data *) udata;
-
+	
 	// count results
 	data->count++;
 
@@ -85,7 +85,7 @@ TEST( info_basics_help , "help" ) {
 	assert_int_eq( rc, AEROSPIKE_OK );
 	assert( data.count > 0 );
 	assert( data.matches > 0 );
-	assert_int_eq( data.count, data.matches );
+	assert( data.count == data.matches );
 
 	char * res = NULL;
 

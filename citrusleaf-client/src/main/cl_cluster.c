@@ -941,10 +941,8 @@ cl_cluster_node_fd_create(cl_cluster_node *cn, bool nonblocking)
 			//in-progress is a valid return value. We can do select later and use the socket.
 			if (nonblocking && (errno == EINPROGRESS))
 			{
-#if XDS //Hack for XDS
 				cf_print_sockaddr_in("Connecting to ", sa_in);
 				cf_debug("Non-blocking connect returned EINPROGRESS as expected");
-#endif
 				goto Done;
 			}
 			// todo: remove this sockaddr from the list, or dun the node?

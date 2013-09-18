@@ -69,6 +69,7 @@ main(int argc, char* argv[])
 	// as_ldt_init() on stack object.
 	if (! as_ldt_init(&lset, "mylset", AS_LDT_LSET, NULL)) {
 		LOG("unable to initialize ldt");
+		example_cleanup(&as);
 		exit(-1);
 	}
 
@@ -83,6 +84,7 @@ main(int argc, char* argv[])
 			(const as_val*)&ival) != AEROSPIKE_OK) {
 		LOG("first aerospike_set_add() returned %d - %s", err.code,
 				err.message);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
@@ -95,6 +97,7 @@ main(int argc, char* argv[])
 			(const as_val*)&sval) != AEROSPIKE_OK) {
 		LOG("second aerospike_set_add() returned %d - %s", err.code,
 				err.message);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
@@ -106,11 +109,13 @@ main(int argc, char* argv[])
 	if (aerospike_lset_size(&as, &err, NULL, &g_key, &lset, &n_elements)
 			!= AEROSPIKE_OK) {
 		LOG("aerospike_lset_size() returned %d - %s", err.code, err.message);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
 	if (n_elements != 2) {
 		LOG("unexpected lset size %u", n_elements);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
@@ -126,6 +131,7 @@ main(int argc, char* argv[])
 			&p_list) != AEROSPIKE_OK) {
 		LOG("aerospike_lset_filter() returned %d - %s", err.code, err.message);
 		as_list_destroy(p_list);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
@@ -144,9 +150,9 @@ main(int argc, char* argv[])
 	as_list_destroy(p_list);
 	p_list = NULL;
 
-	// Add 3 more items into the set. By using as_arraylist_inita(), we won't
-	// need to destroy the as_arraylist if we only use
-	// as_arraylist_append_int64().
+	// Add 3 more items into the set. By using as_arraylist_inita() we avoid
+	// some but not all internal heap usage, so we must call
+	// as_arraylist_destroy().
 	as_arraylist vals;
 	as_arraylist_inita(&vals, 3);
 	as_arraylist_append_int64(&vals, 1001);
@@ -156,8 +162,12 @@ main(int argc, char* argv[])
 	if (aerospike_lset_addall(&as, &err, NULL, &g_key, &lset,
 			(const as_list*)&vals) != AEROSPIKE_OK) {
 		LOG("aerospike_lset_addall() returned %d - %s", err.code, err.message);
+		as_arraylist_destroy(&vals);
+		example_cleanup(&as);
 		exit(-1);
 	}
+
+	as_arraylist_destroy(&vals);
 
 	LOG("3 more values added");
 
@@ -167,6 +177,7 @@ main(int argc, char* argv[])
 		LOG("second aerospike_lset_filter() returned %d - %s", err.code,
 				err.message);
 		as_list_destroy(p_list);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
@@ -219,11 +230,13 @@ main(int argc, char* argv[])
 	if (aerospike_lset_exists(&as, &err, NULL, &g_key, &lset2,
 			(const as_val*)&ival, &exists) != AEROSPIKE_OK) {
 		LOG("aerospike_lset_exists() returned %d - %s", err.code, err.message);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
 	if (! as_boolean_get(&exists)) {
 		LOG("not able to find a value which should be in the set");
+		example_cleanup(&as);
 		exit(-1);
 	}
 	LOG("existence checked");
@@ -240,11 +253,13 @@ main(int argc, char* argv[])
 			(const as_val*)&ival, &exists) != AEROSPIKE_OK) {
 		LOG("second aerospike_lset_exists() returned %d - %s", err.code,
 				err.message);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
 	if (as_boolean_get(&exists)) {
 		LOG("found a value which should not be in the set");
+		example_cleanup(&as);
 		exit(-1);
 	}
 
@@ -266,6 +281,7 @@ main(int argc, char* argv[])
 	if (aerospike_lset_destroy(&as, &err, NULL, &g_key, &lset) !=
 			AEROSPIKE_OK) {
 		LOG("aerospike_lset_destroy() returned %d - %s", err.code, err.message);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
@@ -275,6 +291,7 @@ main(int argc, char* argv[])
 	if (aerospike_lset_size(&as, &err, NULL, &g_key, &lset, &n_elements) ==
 			AEROSPIKE_OK) {
 		LOG("aerospike_lset_size() did not return error");
+		example_cleanup(&as);
 		exit(-1);
 	}
 	LOG("lset destroyed and checked");

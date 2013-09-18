@@ -178,6 +178,7 @@ citrusleaf_cluster_create(void)
 	// For the cluster user has to specifically set the own
 	// value
 	asc->tend_speed = 0;
+    asc->info_timeout = INFO_TIMEOUT_MS;
 	
 	pthread_mutex_init(&asc->LOCK, 0);
 	
@@ -1296,7 +1297,7 @@ cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 		
 		char *values = 0;
 		if (0 != citrusleaf_info_host_limit(sa_in, "node\npartition-generation\nservices\n",
-				&values, INFO_TIMEOUT_MS, false, 10000, /* check bounds */ true)) {
+				&values, asc->info_timeout, false, 10000, /* check bounds */ true)) {
 			// todo: this address is no longer right for this node, update the node's list
 			// and if there's no addresses left, dun node
 			cf_debug("Info request failed for %s", cn->name);
@@ -1348,7 +1349,7 @@ cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 			char *values = 0;
 
 			if (0 != citrusleaf_info_host_limit(sa_in, "partition-generation\nreplicas-master\nreplicas-prole\n",
-					&values, INFO_TIMEOUT_MS, false, 2000000, /*check bounds */ true)) {
+					&values, asc->info_timeout, false, 2000000, /*check bounds */ true)) {
 				continue;
 			}
 
@@ -1372,7 +1373,7 @@ cluster_ping_address(cl_cluster *asc, struct sockaddr_in *sa_in)
 {
 		
 	char *values = 0;
-	if (0 != citrusleaf_info_host(sa_in, "node", &values, INFO_TIMEOUT_MS, false, /* check bounds */ true)){
+	if (0 != citrusleaf_info_host(sa_in, "node", &values, asc->info_timeout, false, /* check bounds */ true)){
 	 return;
 	}
 	
@@ -1422,7 +1423,7 @@ cluster_get_n_partitions( cl_cluster *asc, cf_vector *sockaddr_in_v )
 		struct sockaddr_in *sa_in = cf_vector_getp(sockaddr_in_v, i);
 
 		char *values = 0;
-		if (0 != citrusleaf_info_host(sa_in, "partitions", &values, INFO_TIMEOUT_MS, false, /*check bounds*/ true)) {
+		if (0 != citrusleaf_info_host(sa_in, "partitions", &values, asc->info_timeout, false, /*check bounds*/ true)) {
 			continue;
 		}
 		
@@ -1545,6 +1546,12 @@ cluster_tend(cl_cluster *asc)
 	pthread_mutex_unlock(&asc->LOCK);
 
 	return;
+}
+
+void
+citrusleaf_cluster_change_info_timeout(cl_cluster *asc, int msecs)
+{
+    asc->info_timeout = msecs;
 }
 
 void 

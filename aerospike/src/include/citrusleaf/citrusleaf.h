@@ -51,6 +51,7 @@ extern "C" {
  * unable to fail.
  */
 
+#define INFO_TIMEOUT_MS 500
 
 /**
  * Call this init function sometime early, create our mutexes and a few other things.

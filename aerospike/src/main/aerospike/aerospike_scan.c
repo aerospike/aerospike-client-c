@@ -128,15 +128,15 @@ static as_status process_node_response(cf_vector *v, as_error *err)
  * record and will call the callback that user supplied (folded into the udata structure)
  */
 static int simplescan_cb(
-	char *ns, cf_digest *keyd, char *set, uint32_t generation,
-	uint32_t record_void_time, cl_bin *bins, int n_bins, bool is_last, void *udata)
+	char *ns, cf_digest *keyd, char *set, int result, uint32_t generation,
+	uint32_t record_void_time, cl_bin *bins, uint16_t n_bins, void *udata)
 {
 	scan_bridge * bridge = (scan_bridge *) udata;
 
 	// Fill the bin data
 	as_record _rec, * rec = &_rec;
 	as_record_inita(rec, n_bins);
-	clbins_to_asrecord(bins, n_bins, rec);
+	clbins_to_asrecord(bins, (uint32_t)n_bins, rec);
 
 	// Fill the metadata
 	as_key_init_value(&rec->key, ns, set, NULL);
@@ -149,8 +149,9 @@ static int simplescan_cb(
 	bridge->callback((as_val *) rec, bridge->udata);
 
 	// The responsibility to free the bins is on the called callback function
-	citrusleaf_bins_free(bins, n_bins);
-	
+    if( bins->object.type == CL_MAP || bins->object.type == CL_LIST) {
+  	    citrusleaf_bins_free(bins, (int)n_bins);
+    }
 	// release the record
 	as_record_destroy(rec);
 

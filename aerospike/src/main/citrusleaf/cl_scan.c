@@ -98,7 +98,7 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 		node = cl_cluster_node_get_byname(asc,node_name);
 		// grab a reservation
 		if (node)
-			cf_client_rc_reserve(node);
+			cl_cluster_node_reserve(node, "T+");
 	} else {
 		pthread_mutex_lock(&asc->LOCK);
 		node = cl_cluster_node_get_random(asc);
@@ -290,7 +290,7 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 				}
 
     			// got one good value? call it a success!
-				(*cb) ( ns_ret, keyd, set_ret, msg->generation, ttl, bins_local, msg->n_ops, false /*islast*/, udata);
+				(*cb) (ns_ret, keyd, set_ret, CL_RESULT_OK, msg->generation, ttl, bins_local, msg->n_ops, udata);
 				rv = 0;
 			}
 //			else

@@ -65,6 +65,7 @@ BASE += cf_service.o
 # BASE += cf_shash.o
 BASE += cf_socket.o
 # BASE += cf_vector.o
+BASE += cf_packet_compression.o
 
 HEADERS := $(wildcard $(SOURCE_INCL)/citrusleaf/*.h)
 

@@ -29,7 +29,6 @@
 #include <citrusleaf/cl_request.h>
 #include <citrusleaf/cl_shm.h>
 
-#define INFO_TIMEOUT_MS 300
 
 static char*
 get_name_value(char* p, char** name, char** value)
@@ -81,7 +80,7 @@ cl_strncpy(char* trg, const char* src, int len)
 }
 
 int
-cl_get_node_info(const char* node_name, struct sockaddr_in* sa_in, cl_node_info* node_info)
+cl_get_node_info(const char* node_name, struct sockaddr_in* sa_in, cl_node_info* node_info, int timeout_ms)
 {
 	if (g_shared_memory) {
 		cl_shm_ninfo* shared = cl_shm_find_node_from_name(node_name);
@@ -99,25 +98,25 @@ cl_get_node_info(const char* node_name, struct sockaddr_in* sa_in, cl_node_info*
 		}
 	}
 	// cf_debug("Issue request for node info.");
-	return cl_request_node_info(sa_in, node_info);
+	return cl_request_node_info(sa_in, node_info, timeout_ms);
 }
 
 int
-cl_request_node_info(struct sockaddr_in* sa_in, cl_node_info* node_info)
+cl_request_node_info(struct sockaddr_in* sa_in, cl_node_info* node_info, int timeout_ms)
 {
 	node_info->node_name[0] = 0;
 	node_info->partition_generation = 0;
 	node_info->services = 0;
 	node_info->dun = false;
 
-	if (citrusleaf_info_host_limit(sa_in, "node\npartition-generation\nservices", &node_info->values, INFO_TIMEOUT_MS, false, 10000) != 0) {
+	if (citrusleaf_info_host_limit(sa_in, "node\npartition-generation\nservices", &node_info->values, timeout_ms, false, 10000) != 0) {
 		node_info->dun = true;
 		return -1;
 	}
 
 	char* p = node_info->values;
 	char* name;
-	char* value;
+    char* value;
 
 	while ((p = get_name_value(p, &name, &value)) != 0) {
 		if (strcmp(name, "node") == 0) {
@@ -145,7 +144,7 @@ cl_node_info_free(cl_node_info* node_info)
 }
 
 int
-cl_get_replicas(const char* node_name, struct sockaddr_in* sa_in, cl_replicas* replicas)
+cl_get_replicas(const char* node_name, struct sockaddr_in* sa_in, cl_replicas* replicas, int timeout_ms)
 {
 	if (g_shared_memory) {
 		cl_shm_ninfo* shared = cl_shm_find_node_from_name(node_name);
@@ -171,16 +170,16 @@ cl_get_replicas(const char* node_name, struct sockaddr_in* sa_in, cl_replicas* r
 		}
 	}
 	// cf_debug("Request replicas from server.");
-	return cl_request_replicas(sa_in, replicas);
+	return cl_request_replicas(sa_in, replicas, timeout_ms);
 }
 
 int
-cl_request_replicas(struct sockaddr_in* sa_in, cl_replicas* replicas)
+cl_request_replicas(struct sockaddr_in* sa_in, cl_replicas* replicas, int timeout_ms)
 {
 	replicas->write_replicas = 0;
 	replicas->read_replicas = 0;
 
-	if (citrusleaf_info_host_limit(sa_in, "replicas-read\nreplicas-write", &replicas->values, INFO_TIMEOUT_MS, false, 2000000) != 0) {
+	if (citrusleaf_info_host_limit(sa_in, "replicas-read\nreplicas-write", &replicas->values, timeout_ms, false, 2000000) != 0) {
 		return -1;
 	}
 
@@ -211,7 +210,7 @@ cl_replicas_free(cl_replicas* replicas)
 }
 
 int
-cl_get_node_name(struct sockaddr_in* sa_in, char* node_name)
+cl_get_node_name(struct sockaddr_in* sa_in, char* node_name, int timeout_ms)
 {
 	if (g_shared_memory) {
 		cl_shm_ninfo* shared = cl_shm_find_node_from_address(sa_in);
@@ -224,16 +223,16 @@ cl_get_node_name(struct sockaddr_in* sa_in, char* node_name)
 			return 0;
 		}
 	}
-	return cl_request_node_name(sa_in, node_name);
+	return cl_request_node_name(sa_in, node_name, timeout_ms);
 }
 
 int
-cl_request_node_name(struct sockaddr_in* sa_in, char* node_name)
+cl_request_node_name(struct sockaddr_in* sa_in, char* node_name, int timeout_ms)
 {
 	*node_name = 0;
 	char* values;
 
-	if (citrusleaf_info_host(sa_in, "node", &values, INFO_TIMEOUT_MS, false) != 0){
+	if (citrusleaf_info_host(sa_in, "node", &values, timeout_ms, false) != 0){
 		return -1;
 	}
 
@@ -254,7 +253,7 @@ cl_request_node_name(struct sockaddr_in* sa_in, char* node_name)
 }
 
 int
-cl_get_n_partitions(struct sockaddr_in* sa_in, int* n_partitions)
+cl_get_n_partitions(struct sockaddr_in* sa_in, int* n_partitions, int timeout_ms)
 {
 	if (g_shared_memory) {
 		int count = cl_shm_get_partition_count();
@@ -264,16 +263,16 @@ cl_get_n_partitions(struct sockaddr_in* sa_in, int* n_partitions)
 			return 0;
 		}
 	}
-	return cl_request_n_partitions(sa_in, n_partitions);
+	return cl_request_n_partitions(sa_in, n_partitions, timeout_ms);
 }
 
 int
-cl_request_n_partitions(struct sockaddr_in* sa_in, int* n_partitions)
+cl_request_n_partitions(struct sockaddr_in* sa_in, int* n_partitions, int timeout_ms)
 {
 	*n_partitions = 0;
 	char* values;
 
-	if (citrusleaf_info_host(sa_in, "partitions", &values, INFO_TIMEOUT_MS, false) != 0) {
+	if (citrusleaf_info_host(sa_in, "partitions", &values, timeout_ms, false) != 0) {
 		return -1;
 	}
 

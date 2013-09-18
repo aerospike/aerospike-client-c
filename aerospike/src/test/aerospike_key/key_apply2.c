@@ -40,29 +40,29 @@ extern aerospike * as;
 
 static bool before(atf_suite * suite) {
 
-    if ( ! udf_put(LUA_FILE) ) {
-        error("failure while uploading: %s", LUA_FILE);
-        return false;
-    }
+	if ( ! udf_put(LUA_FILE) ) {
+		error("failure while uploading: %s", LUA_FILE);
+		return false;
+	}
 
 	WAIT_MS(100);
 
-    if ( ! udf_exists(LUA_FILE) ) {
-        error("lua file does not exist: %s", LUA_FILE);
-        return false;
-    }
+	if ( ! udf_exists(LUA_FILE) ) {
+		error("lua file does not exist: %s", LUA_FILE);
+		return false;
+	}
 
-    return true;
+	return true;
 }
 
 static bool after(atf_suite * suite) {
 
-    if ( ! udf_remove(LUA_FILE) ) {
-        error("failure while removing: %s", LUA_FILE);
-        return false;
-    }
+	if ( ! udf_remove(LUA_FILE) ) {
+		error("failure while removing: %s", LUA_FILE);
+		return false;
+	}
 
-    return true;
+	return true;
 }
 
 /******************************************************************************
@@ -76,19 +76,19 @@ TEST( key_apply2_file_exists , "apply2: key_apply2 exists" ) {
 
 	const char * filename = LUA_FILE;
 
-    as_udf_file file;
-    as_udf_file_init(&file);
+	as_udf_file file;
+	as_udf_file_init(&file);
 
-    char * base = basename(filename);
+	char * base = basename(filename);
 
 	as_key key;
 	as_key_init(&key, "test", "test", "foo");
 
-    if ( aerospike_udf_get(as, &err, NULL, base, AS_UDF_TYPE_LUA, &file) != AEROSPIKE_OK ) {
-        error("error caused by aerospike_udf_get(%s): (%d) %s @ %s[%s:%d]", err.code, err.message, err.func, err.file, err.line);
-    }
+	if ( aerospike_udf_get(as, &err, NULL, base, AS_UDF_TYPE_LUA, &file) != AEROSPIKE_OK ) {
+		error("error caused by aerospike_udf_get(%s): (%d) %s @ %s[%s:%d]", err.code, err.message, err.func, err.file, err.line);
+	}
 
-    as_udf_file_destroy(&file);
+	as_udf_file_destroy(&file);
 
 }
 
@@ -135,9 +135,9 @@ TEST( key_apply2_getinteger , "apply2: (test,test,foo) <!> key_apply2.getinteger
 	assert_int_eq( rc, AEROSPIKE_OK );
 	assert_not_null( res );
 	assert( res->type == AS_INTEGER );
-    as_integer * i = as_integer_fromval(res);
-    assert_not_null( i );
-    assert_int_eq(  as_integer_toint(i), 123 );
+	as_integer * i = as_integer_fromval(res);
+	assert_not_null( i );
+	assert_int_eq(  as_integer_toint(i), 123 );
 
 }
 
@@ -264,7 +264,7 @@ TEST( key_apply2_add_strings , "apply: (test,test,foo) <!> key_apply2.add_string
 
 	as_key_destroy(&key);
 
-    assert_int_eq( rc, AEROSPIKE_OK );
+	assert_int_eq( rc, AEROSPIKE_OK );
 	assert_not_null( res );
 	as_string * str = as_string_fromval(res);
 	assert_not_null( str );
@@ -291,12 +291,12 @@ TEST( key_apply2_call_nonlocal_sum, "apply: (test,test,foo) <!> key_apply2.call_
 
 	// rc is OK, but result is NULL : verify !!
 
-    assert_int_ne( rc, AEROSPIKE_OK );
+	assert_int_ne( rc, AEROSPIKE_OK );
 	// assert_not_null( res );
 
    // as_integer * i = as_integer_fromval(res);
-    // assert_not_null( i );
-    // assert_int_ne(  as_integer_toint(i), 3 );
+	// assert_not_null( i );
+	// assert_int_ne(  as_integer_toint(i), 3 );
 }
 
 TEST( key_apply2_call_local_sum, "apply: (test,test,foo) <!> key_apply2.call_local_sum(1,2) => 3") {
@@ -316,12 +316,12 @@ TEST( key_apply2_call_local_sum, "apply: (test,test,foo) <!> key_apply2.call_loc
 
 	as_status rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "sum_local", (as_list *) &arglist, &res);
 
-    assert_int_eq( rc, AEROSPIKE_OK );
+	assert_int_eq( rc, AEROSPIKE_OK );
 	assert_not_null( res );
 
-    as_integer * i = as_integer_fromval(res);
-    assert_not_null( i );
-    assert_int_eq(  as_integer_toint(i), 3 );
+	as_integer * i = as_integer_fromval(res);
+	assert_not_null( i );
+	assert_int_eq(  as_integer_toint(i), 3 );
 }
 
 TEST( key_apply2_udf_func_does_not_exist, "apply: (test,test,foo) <!> key_apply2.udf_func_does_not_exist() => 1" ) {
@@ -336,7 +336,7 @@ TEST( key_apply2_udf_func_does_not_exist, "apply: (test,test,foo) <!> key_apply2
 
 	as_status rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "udf_does_not_exist", NULL, &res);
 
-    assert_int_ne( rc, AEROSPIKE_OK );
+	assert_int_ne( rc, AEROSPIKE_OK );
 
 }
 
@@ -352,14 +352,109 @@ TEST( key_apply2_udf_file_does_not_exist, "apply: (test,test,foo) <!> key_apply2
 
 	as_status rc = aerospike_key_apply(as, &err, NULL, &key, "udf_does_not_exist", "udf_does_not_exist", NULL, &res);
 
-    assert_int_ne( rc, AEROSPIKE_OK );
+	assert_int_ne( rc, AEROSPIKE_OK );
 
 }
 
-// Check to see if the record is getting replicated on a delete from UDF
-TEST( key_apply2_delete_record_test_replication, "apply: (test,test,foo) <!> key_apply2.delete_record_test_replication() => 1" ) {
+#define KVPAIR_KEY_MAX 64
+#define KVPAIR_KEY_LEN 64 - 1
 
-	// Delete the record
+#define KVPAIR_VAL_MAX 64
+#define KVPAIR_VAL_LEN 64 - 1
+
+#define KVPAIR_VALS_MAX 256
+
+typedef char kvpair_key[KVPAIR_KEY_MAX];
+typedef char kvpair_val[KVPAIR_VAL_MAX];
+
+typedef struct {
+	kvpair_key	key;
+	kvpair_val	vals[KVPAIR_VALS_MAX];
+	uint32_t 	vals_size;
+} kvpair;
+
+#define kvpair_init(__name) { \
+		.key = __name, \
+		.vals = {{0}}, \
+		.vals_size = 0 \
+	}
+
+#define each_stats(__query, __name, __key, __val, __block) \
+	if ( strlen(__query) > 0 && strlen(__name) > 0 ) { \
+		kvpair kvp = kvpair_init(__name); \
+		aerospike_info_foreach(as, &err, NULL, __query, kvpair_search, &kvp);\
+		if ( err.code != AEROSPIKE_OK ) {\
+			error("(%d) %s [%s:%d]", err.code, err.message, err.file, err.line);\
+			assert(err.code != AEROSPIKE_OK);\
+		}\
+		char * __key = kvp.key; \
+		for( int i = 0; i < kvp.vals_size && kvp.vals[i] != '\0'; i++ ) {\
+			char * __val = kvp.vals[i]; \
+			__block; \
+			__val = NULL; \
+		}\
+		__key = NULL; \
+	}
+
+#define first_stats(__query, __name, __key, __val, __block) \
+	if ( strlen(__query) > 0 && strlen(__name) > 0 ) { \
+		kvpair kvp = kvpair_init(__name); \
+		aerospike_info_foreach(as, &err, NULL, __query, kvpair_search, &kvp);\
+		if ( err.code != AEROSPIKE_OK ) {\
+			error("(%d) %s [%s:%d]", err.code, err.message, err.file, err.line);\
+			assert(err.code != AEROSPIKE_OK);\
+		}\
+		char * __key = kvp.key; \
+		char * __val = kvp.vals[0]; \
+		__block; \
+		__key = NULL; \
+		__val = NULL; \
+	}
+
+bool kvpair_search(const as_error * err, const as_node * node, const char * req, const char * res, void * udata)
+{
+	kvpair * kvp = (kvpair *) udata;
+
+	if ( kvp->vals_size >= KVPAIR_VALS_MAX ) {
+		return false;
+	}
+
+	// Skip the query and only take the response
+	char * response = strchr(res, '\t') + 1;
+
+	char * pair_ = NULL;
+	for ( char * pair = strtok_r(response, ";", &pair_); pair; pair = strtok_r(NULL, ";", &pair_) ) {
+
+		char * del = strchr(pair, '=');
+
+		if ( del == NULL ) {
+			continue;
+		}
+
+		del[0] = '\0';
+		char * key = pair;
+
+		if ( strcmp(key, kvp->key) != 0 ) {
+			continue;
+		}
+
+		char * val = del + 1;
+
+		strcpy(kvp->vals[kvp->vals_size], val);
+		kvp->vals_size++;
+
+		return true;
+	}
+
+	return true;
+}
+
+// Check to see if the record is getting replicated on a delete from UDF
+TEST( key_apply2_delete_record_test_replication, "apply: (test,test,foo) <!> key_apply2.delete_record_test_replication() => 1" )
+{
+	int64_t mem_pre = 0;
+	int64_t mem_post = 0;
+	
 	as_error err;
 	as_error_reset(&err);
 	as_status rc;
@@ -369,11 +464,11 @@ TEST( key_apply2_delete_record_test_replication, "apply: (test,test,foo) <!> key
 
 	rc = aerospike_key_remove(as, &err, NULL, &key);
 
-    assert_int_eq( rc, AEROSPIKE_OK );
+	assert_int_eq( rc, AEROSPIKE_OK );
 
-    // Insert 3 bins
-    as_record r;
-    as_record_init(&r, 3);
+	// Insert 3 bins
+	as_record r;
+	as_record_init(&r, 3);
 	as_record_set_string(&r, "a", as_string_new("String 1",true));
 	as_record_set_string(&r, "b", as_string_new("String 2",true));
 	as_record_set_string(&r, "c", as_string_new("String 3",true));
@@ -381,27 +476,24 @@ TEST( key_apply2_delete_record_test_replication, "apply: (test,test,foo) <!> key
 	as_key_init(&key, "test", "test", "foo");
 	rc = aerospike_key_put(as, &err, NULL, &key, &r);
 
-    assert_int_eq( rc, AEROSPIKE_OK );
+	assert_int_eq( rc, AEROSPIKE_OK );
 
-    // get stats
-    char * query = "namespace/test";
-    char ** v_b = get_stats( query, "used-bytes-memory", as->cluster);
-    int i = 0;
-    while(v_b[i]) {
-    		debug("delete_record_test: Used memory before - node %d = %ld",i,atol(v_b[i]));
-    		free(v_b[i]);
-    		i++;
-    }
+	each_stats("namespace/test", "used-bytes-memory", key, val, {
+		uint64_t mem = atol(val);
+		mem_pre += mem;
+		debug("used-bytes-memory(pre): %ld", mem);
+	});
 
-    // Apply udf to delete bins
-    as_error_reset(&err);
-    as_val * res = NULL;
-    as_key_init(&key, "test", "test", "foo");
+
+	// Apply udf to delete bins
+	as_error_reset(&err);
+	as_val * res = NULL;
+	as_key_init(&key, "test", "test", "foo");
 	rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "delete", NULL, &res);
 
 	assert_int_eq( rc, AEROSPIKE_OK );
 
-    //Get bins
+	//Get bins
 	as_error_reset(&err);
 	as_record_init(&r, 0);
 	as_record *rec = &r;
@@ -409,23 +501,19 @@ TEST( key_apply2_delete_record_test_replication, "apply: (test,test,foo) <!> key
 	rc = aerospike_key_get(as, &err, NULL, &key, &rec);
 	assert_int_eq( rc, AEROSPIKE_OK );
 
-    //Get stats
-	// Get used memory after applying udf
-	char ** v_a = get_stats( query, "used-bytes-memory", as->cluster);
-	i = 0;
-	while(v_a[i]) {
-		debug("delete_record_test: Used memory after - node %d = %ld",i,atol(v_a[i]));
-		free(v_a[i]);
-		i++;
-	}
+	each_stats("namespace/test", "used-bytes-memory", key, val, {
+		uint64_t mem = atol(val);
+		mem_post += mem;
+		debug("used-bytes-memory(post): %ld", mem);
+	});
 
-	free(v_a);
-	free(v_b);
-
+	debug("memory: pre=%ld post=%ld diff=%ld", mem_pre, mem_post, mem_pre - mem_post);
 }
 
-TEST( key_apply2_update_record_test_memory, "apply: (test,test,foo) <!> key_apply2.update_record_test_memory() => 1" ) {
-	// Delete and start clean-slate
+TEST( key_apply2_update_record_test_memory, "apply: (test,test,foo) <!> key_apply2.update_record_test_memory() => 1" )
+{
+	int64_t mem_pre = 0;
+	int64_t mem_post = 0;
 
 	as_error err;
 	as_error_reset(&err);
@@ -435,98 +523,35 @@ TEST( key_apply2_update_record_test_memory, "apply: (test,test,foo) <!> key_appl
 
 	as_status rc = aerospike_key_remove(as, &err, NULL, &key);
 
-    assert_int_eq( rc, AEROSPIKE_OK );
+	assert_int_eq( rc, AEROSPIKE_OK );
 
-	//get-stats before applying udf
-    char * query = "namespace/test";
-    char ** v_b = get_stats( query, "used-bytes-memory", as->cluster);
-    int i = 0;
-    while(v_b[i]) {
-    		debug("update_record_test: Used memory before - node %d = %ld",i,atol(v_b[i]));
-    		//free(v_b[i]);
-    		i++;
-    }
+	each_stats("namespace/test", "used-bytes-memory", key, val, {
+		uint64_t mem = atol(val);
+		mem_pre += mem;
+		debug("used-bytes-memory(pre): %ld", mem);
+	});
 
 	// Create & Update record
-    as_error_reset(&err);
-    as_val * res = NULL;
-    as_key_init(&key, "test", "test", "foo");
+	as_error_reset(&err);
+	as_val * res = NULL;
+	as_key_init(&key, "test", "test", "foo");
 	rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "update_record", NULL, &res);
 
 	assert_int_eq( rc, AEROSPIKE_OK );
 
-	/*get-stats : memory after applying udf
-	 * Note : This does not return a vector of memory-usage strings, instead
-	 * it returns a single number for memory usage
-	 * So it cannot be used as a replication-factor test for memory.
-	 */
+	each_stats("namespace/test", "used-bytes-memory", key, val, {
+		uint64_t mem = atol(val);
+		mem_post += mem;
+		debug("used-bytes-memory(post): %ld", mem);
+	});
 
-	char ** v_a = get_stats( query, "used-bytes-memory", as->cluster);
-	i = 0;
-	uint64_t rec_memory = 0;
-	while(v_a[i]) {
-		/* Not a good idea to hard-code this, since size
-		 * varies for memory, disk blocks, file-cache etc
-		 */
-		rec_memory = atol(v_a[i]);
-		debug("update_record_test: Used memory after - node %d = %ld",i,atol(v_a[i]));
-		// free(v_a[i]);
-		i++;
-	}
-
-	//get-stats : replication-factor after applying udf
-	char ** v_c = get_stats( query, "repl-factor", as->cluster);
-	int repl_factor = atoi(v_c[0]);
-
-	debug("Replication factor %d", repl_factor);
-
-	/* verify stats : after-memory = record-memeory * repl-factor
-	 * The difference between the memory usage after and before update should
-	 * be the record memory times 'replication factor' number of nodes */
-
-	int diff = 0, count = 0;
-
-
-	int cluster_size = 0;
-
-	char ** cluster_size_str = get_stats( "statistics", "cluster_size", as->cluster);
-	cluster_size = atol(cluster_size_str[0]);
-
-	debug("Cluster Size %d", cluster_size);
-
-	for(int i = 0; i < cluster_size; i++) {
-			if(!(v_a[i]) && !(v_b[i])){
-		    	continue;
-		    }
-			diff = atol(v_a[i]) - atol(v_b[i]);
-			debug("Diff %d", diff);
-			if ( diff > 0 ) {
-				count ++ ;
-			}
-	}
-
-	//debug("Count is: %d", count);
-
-	/* Verify that the diff or memory-counter before & after applying udf,
-	 * is the same as record-memory. What does this really mean ?? */
-	assert_int_eq(count * rec_memory, rec_memory);
-
-	// Free memory
-	for ( i = 0;i < cluster_size; i++) {
-		if (v_a[i]) free(v_a[i]);
-		if (v_b[i]) free(v_b[i]);
-		if (v_c[i]) free(v_c[i]);
-		if (cluster_size_str[i]) free(cluster_size_str[i]);
-	}
-
-	free(v_a);
-	free(v_b);
-	free(v_c);
-	free(cluster_size_str);
+	debug("memory: pre=%ld post=%ld diff=%ld", mem_pre, mem_post, mem_pre - mem_post);
 }
 
-TEST( key_apply2_bad_update_test_memory, "apply: (test,test,foo) <!> key_apply2.bad_update_test_memory() => 1" ) {
-// Delete and start clean-slate
+TEST( key_apply2_bad_update_test_memory, "apply: (test,test,foo) <!> key_apply2.bad_update_test_memory() => 1" )
+{
+	int64_t mem_pre = 0;
+	int64_t mem_post = 0;
 
 	as_error err;
 	as_error_reset(&err);
@@ -538,88 +563,33 @@ TEST( key_apply2_bad_update_test_memory, "apply: (test,test,foo) <!> key_apply2.
 
 	assert_int_eq( rc, AEROSPIKE_OK );
 
-	//get-stats before applying udf
-	char * query = "namespace/test";
-	char ** v_b = get_stats( query, "used-bytes-memory", as->cluster);
-	int i = 0;
-	while(v_b[i]) {
-			debug("Used memory before - node %d = %ld",i,atol(v_b[i]));
-			//free(v_b[i]);
-			i++;
-	}
+	each_stats("namespace/test", "used-bytes-memory", key, val, {
+		uint64_t mem = atol(val);
+		mem_pre += mem;
+		debug("used-bytes-memory(pre): %ld", mem);
+	});
 
 	// Create & Update record
 	as_error_reset(&err);
 	as_val * res = NULL;
-    as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, "test", "test", "foo");
 	rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "bad_update", NULL, &res);
 
 	assert_int_eq( rc, AEROSPIKE_OK );
 
-	/*get-stats : memory after applying udf
-	* Note : This does not return a vector of memory-usage strings, instead
-	* it returns a single number for memory usage
-	* So it cannot be used as a replication-factor test for memory.
-	*/
-	char ** v_a = get_stats( query, "used-bytes-memory", as->cluster);
-	i = 0;
-	uint64_t rec_memory = 0;
-	while(v_a[i]) {
-		/* Not a good idea to hard-code this, since size
-		 * varies for memory, disk blocks, file-cache etc
-		 */
-		rec_memory = atol(v_a[i]);
-		debug("Used memory after - node %d = %ld",i,atol(v_a[i]));
-		// free(v_a[i]);
-		i++;
-	}
+	each_stats("namespace/test", "used-bytes-memory", key, val, {
+		uint64_t mem = atol(val);
+		mem_post += mem;
+		debug("used-bytes-memory(post): %ld", mem);
+	});
 
-	//get-stats : replication-factor after applying udf
-	char ** v_c = get_stats( query, "repl-factor", as->cluster);
-	int repl_factor = atoi(v_c[0]);
-	debug("Replication factor %d", repl_factor);
-
-	// verify stats : after-memory = record-memeory * repl-factor
-	// The difference between the memory usage after and before update should be the record memory
-	// for only 'replication factor' number of nodes
-	int diff = 0, count = 0;
-	char ** cluster_size_str = get_stats( "statistics", "cluster_size", as->cluster);
-	int cluster_size = atol(cluster_size_str[0]);
-	debug("Cluster Size %d", cluster_size );
-	for(int i = 0; i < cluster_size; i++) {
-		if(!(v_a[i]) || !(v_b[i])){
-	    	continue;
-	    }
-		diff = atol(v_a[i]) - atol(v_b[i]);
-		if ( diff > 0 ) {
-			count ++ ;
-		}
-	}
-
-	//debug("Count is: %d", count);
-
-	/* Verify that the diff-counter before & after applying udf,
-	 * is the same as record-memory. What does this really mean ?? */
-
-	assert_int_eq(count * rec_memory, rec_memory);
-
-
-	// Free memory
-	for ( i = 0;i < cluster_size; i++) {
-		if (v_a[i]) free(v_a[i]);
-		if (v_b[i]) free(v_b[i]);
-		if (v_c[i]) free(v_c[i]);
-		if (cluster_size_str[i]) free(cluster_size_str[i]);
-	}
-
-	free(v_a);
-	free(v_b);
-	free(v_c);
-	free(cluster_size_str);
+	debug("memory: pre=%ld post=%ld diff=%ld", mem_pre, mem_post, mem_pre - mem_post);
 }
 
-TEST( key_apply2_bad_create_test_memory, "apply: (test,test,foo) <!> key_apply2.bad_create_test_memory() => 1" ) {
-// Delete and start clean-slate
+TEST( key_apply2_bad_create_test_memory, "apply: (test,test,foo) <!> key_apply2.bad_create_test_memory() => 1" )
+{
+	int64_t mem_pre = 0;
+	int64_t mem_post = 0;
 
 	as_error err;
 	as_error_reset(&err);
@@ -631,74 +601,28 @@ TEST( key_apply2_bad_create_test_memory, "apply: (test,test,foo) <!> key_apply2.
 
 	assert_int_eq( rc, AEROSPIKE_OK );
 
-	//get-stats before applying udf
-	char * query = "namespace/test";
-	char ** v_b = get_stats( query, "used-bytes-memory", as->cluster);
-	int i = 0;
-	while(v_b[i]) {
-			debug("bad_create_test_memory: Used memory before - node %d = %ld",i,atol(v_b[i]));
-			//free(v_b[i]);
-			i++;
-	}
+	each_stats("namespace/test", "used-bytes-memory", key, val, {
+		uint64_t mem = atol(val);
+		mem_pre += mem;
+		debug("used-bytes-memory(pre): %ld", mem);
+	});
 
 	// Create & Update record
 	as_error_reset(&err);
 	as_val * res = NULL;
-    as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, "test", "test", "foo");
 
 	rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "bad_create", NULL, &res);
 
 	assert_int_eq( rc, AEROSPIKE_OK );
-
-	//get-stats : memory after applying udf
-	char ** v_a = get_stats( query, "used-bytes-memory", as->cluster);
-	i = 0;
-	while(v_a[i]) {
-		debug("bad_create_test_memory: Used memory after - node %d = %ld",i,atol(v_a[i]));
-		// free(v_a[i]);
-		i++;
-	}
-
-	//get-stats : replication-factor after applying udf
-	char ** v_c = get_stats( query, "repl-factor", as->cluster);
-	int repl_factor = atoi(v_c[0]);
-	debug("Replication factor %d", repl_factor);
-
-	// verify stats : after-memory = record-memeory * repl-factor
-	// The difference between the memory usage after and before update should be the record memory
-	// for only 'replication factor' number of nodes
-	int diff = 0;
-
-	// these two are unused!
-	// int count = 0;
-	// uint64_t rec_memory = 64;
 	
-	char ** cluster_size_str = get_stats( "statistics", "cluster_size", as->cluster);
-	int cluster_size = atol(cluster_size_str[0]);
+	each_stats("namespace/test", "used-bytes-memory", key, val, {
+		uint64_t mem = atol(val);
+		mem_post += mem;
+		debug("used-bytes-memory(post): %ld", mem);
+	});
 
-	for(int i = 0; i < cluster_size; i++) {
-		if(!(v_a[i]) || !(v_b[i])){
-	    	continue;
-	    }
-		diff = atol(v_a[i]) - atol(v_b[i]);
-		/* The difference between before & after should be 0, because
-		 * our udf-creation should've failed.
-		 */
-		assert_int_eq(diff, 0);
-	}
-
-	// Free memory
-	for ( i = 0;i < cluster_size; i++) {
-		if (v_a[i]) free(v_a[i]);
-		if (v_b[i]) free(v_b[i]);
-		if (v_c[i]) free(v_c[i]);
-		if (cluster_size_str[i]) free(cluster_size_str[i]);
-	}
-
-	free(v_a);
-	free(v_b);
-	free(v_c);
-	free(cluster_size_str);
+	debug("memory: pre=%ld post=%ld diff=%ld", mem_pre, mem_post, mem_pre - mem_post);
 }
 
 TEST( key_apply2_create_rec_test_gen_ttl, "apply: (test,test,foo) <!> key_apply2.create_rec_test_gen_ttl() => 1" ) {
@@ -723,21 +647,21 @@ TEST( key_apply2_create_rec_test_gen_ttl, "apply: (test,test,foo) <!> key_apply2
 
 SUITE( key_apply2, "aerospike_key_apply2 tests" ) {
 
-    suite_before( before );
-    suite_after( after );
-    suite_add( key_apply2_file_exists );
-    suite_add( key_apply2_getinteger );
-    suite_add( key_apply2_getstring );
-    suite_add( key_apply2_getlist );
-    suite_add( key_apply2_getmap );
-    suite_add( key_apply2_add_strings );
-    suite_add( key_apply2_call_nonlocal_sum );
-    suite_add( key_apply2_call_local_sum );
-    suite_add( key_apply2_udf_func_does_not_exist );
-    suite_add( key_apply2_udf_file_does_not_exist );
-    suite_add( key_apply2_delete_record_test_replication );
-    suite_add( key_apply2_update_record_test_memory );
-    suite_add( key_apply2_bad_update_test_memory );
-    suite_add( key_apply2_bad_create_test_memory );
+	suite_before( before );
+	suite_after( after );
+	suite_add( key_apply2_file_exists );
+	suite_add( key_apply2_getinteger );
+	suite_add( key_apply2_getstring );
+	suite_add( key_apply2_getlist );
+	suite_add( key_apply2_getmap );
+	suite_add( key_apply2_add_strings );
+	suite_add( key_apply2_call_nonlocal_sum );
+	suite_add( key_apply2_call_local_sum );
+	suite_add( key_apply2_udf_func_does_not_exist );
+	suite_add( key_apply2_udf_file_does_not_exist );
+	suite_add( key_apply2_delete_record_test_replication );
+	suite_add( key_apply2_update_record_test_memory );
+	suite_add( key_apply2_bad_update_test_memory );
+	suite_add( key_apply2_bad_create_test_memory );
 
 }

@@ -79,6 +79,13 @@ typedef struct cl_partition_table_s {
 	
 } cl_partition_table;
 
+//Structure to hold information about compression.
+struct cl_cluster_compression_stat_s {
+    int compression_threshold; // Minimum size of packet, to be compressed. 0 = No cpmpression.
+    uint64_t actual_sz;        // Accumulative count. Actual size of data, compressed till now.
+    uint64_t compressed_sz;    // Accumulative count. Size of data after compression.
+};
+
 
 struct cl_cluster_s {
 	// Linked list element should be first element in the structure
@@ -106,9 +113,12 @@ struct cl_cluster_s {
 	// information about where all the partitions are
 	cl_partition_id		n_partitions;
 	cl_partition_table *partition_table_head;
+
+    struct cl_cluster_compression_stat_s compression_stat;
 	
 	uint32_t		ref_count;
 	uint32_t		tend_speed;
+    int             info_timeout;   // timeout in ms for info requests
 	// Need a lock
 	pthread_mutex_t	LOCK;
 	

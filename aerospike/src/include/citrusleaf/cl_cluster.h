@@ -32,13 +32,7 @@
  * CONSTANTS
  ******************************************************************************/
 
-#define NODE_DUN_THRESHOLD  800
-#define NODE_DUN_INFO_ERR   300
-#define NODE_DUN_NAME_CHG   801
-#define NODE_DUN_NET_ERR    50
-#define NODE_DUN_TIMEOUT    1
-
-#define MAX_REPLICA_COUNT 5
+#define MAX_INTERVALS_ABSENT 1
 
 #define CLS_TENDER_RUNNING  0x00000001
 #define CLS_FREED       0x00000002
@@ -58,16 +52,13 @@ typedef struct cl_partition_table_s cl_partition_table;
 
 struct cl_cluster_node_s {
     char            name[NODE_NAME_SIZE];
-    cf_atomic32     dun_score;              // keep track of how "unhealthy" a node is
-    bool            dunned;                 // had a problem. Will get deleted next pass through.
+	uint32_t		intervals_absent;		// how many tend periods this node has been out of partitions map
     cf_vector       sockaddr_in_v;          // A vector of sockaddr_in which the host is currently known by
     uint32_t        partition_generation;   // the server's generation count for all its partition management
     cf_queue *      conn_q;                 // pool of current, cached FDs
     cf_queue *      conn_q_asyncfd;         // FDs for async command execution
     int             asyncfd;
     cf_queue *      asyncwork_q;
-    pthread_mutex_t LOCK;
-    
 };
 
 struct cl_cluster_s {
@@ -90,7 +81,7 @@ struct cl_cluster_s {
     cf_vector           host_addr_map_v; //Mapping from host string to its alternate
     
     // list actual node objects that represent the cluster
-    uint                last_node;
+	uint32_t			last_node;
     cf_vector           node_v;      // vector is pointer-type, host objects are ref-counted
     
     // information about where all the partitions are
@@ -99,17 +90,23 @@ struct cl_cluster_s {
     
     uint32_t            ref_count;
     uint32_t            tend_speed;
+    int                 info_timeout;  // timeout in ms for info requests
     // Need a lock
     pthread_mutex_t     LOCK;
     
 };
 
 struct cl_partition_s {
-    cl_cluster_node *   write;
-    int                 n_read;
-    cl_cluster_node *   read[MAX_REPLICA_COUNT];
-};
+	// Mutex to cover master/prole transitions for this partition.
+	pthread_mutex_t			lock;
 
+	// Which node, if any, is the master.
+	cl_cluster_node*		master;
+
+	// Which node, if any, is the prole.
+	// TODO - not ideal for replication factor > 2.
+	cl_cluster_node*		prole;
+};
 
 struct cl_partition_table_s {
     cl_partition_table *    next;
@@ -125,10 +122,9 @@ struct cl_partition_table_s {
 // Cluster calls
 extern cl_cluster_node * cl_cluster_node_get_random(cl_cluster *asc);  // get node from cluster
 extern cl_cluster_node * cl_cluster_node_get(cl_cluster *asc, const char *ns, const cf_digest *d, bool write);  // get node from cluster
-extern void cl_cluster_node_release(cl_cluster_node *cn);
+extern void cl_cluster_node_release(cl_cluster_node *cn, const char *tag);
+extern void cl_cluster_node_reserve(cl_cluster_node *cn, const char *tag);
 extern void cl_cluster_node_put(cl_cluster_node *cn);          // put node back
-extern void cl_cluster_node_dun(cl_cluster_node *cn, int32_t score);            // node is less healthy!
-extern void cl_cluster_node_ok(cl_cluster_node *cn);
 extern int cl_cluster_node_fd_get(cl_cluster_node *cn, bool asyncfd, bool nbconnect);   // get an FD to the node
 extern void cl_cluster_node_fd_put(cl_cluster_node *cn, int fd, bool asyncfd);      // put the FD back
 extern int citrusleaf_cluster_init();
@@ -145,6 +141,7 @@ extern void citrusleaf_cluster_shutdown(void);
 
 extern cl_cluster * citrusleaf_cluster_get_or_create(char *host, short port, int timeout_ms);
 extern void citrusleaf_cluster_release_or_destroy(cl_cluster **asc);
+extern void citrusleaf_cluster_change_info_timeout(struct cl_cluster_s *asc, int msecs);
 extern void citrusleaf_cluster_change_tend_speed(struct cl_cluster_s *asc, int secs);
 extern void citrusleaf_cluster_use_nbconnect(struct cl_cluster_s *asc);
 

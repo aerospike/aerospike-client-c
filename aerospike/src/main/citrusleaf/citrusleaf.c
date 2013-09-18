@@ -1457,7 +1457,6 @@ do_the_full_monte(cl_cluster *asc, int info1, int info2, int info3, const char *
                          deadline_ms, progress_timeout_ms);           	
 #endif
 
-			cl_cluster_node_dun(node, rv == ETIMEDOUT ? NODE_DUN_TIMEOUT : NODE_DUN_NET_ERR);
 			goto Retry;
 		}
 
@@ -1484,7 +1483,6 @@ do_the_full_monte(cl_cluster *asc, int info1, int info2, int info3, const char *
                          deadline_ms, progress_timeout_ms);           	
 #endif            
 
-			cl_cluster_node_dun(node, rv == ETIMEDOUT ? NODE_DUN_TIMEOUT : NODE_DUN_NET_ERR);
 			goto Retry;
 	
 		}
@@ -1539,7 +1537,6 @@ do_the_full_monte(cl_cluster *asc, int info1, int info2, int info3, const char *
                              deadline_ms, progress_timeout_ms);           	
 #endif
 
-				cl_cluster_node_dun(node, rv == ETIMEDOUT ? NODE_DUN_TIMEOUT : NODE_DUN_NET_ERR);
 				goto Retry;
 			}
 
@@ -1592,7 +1589,6 @@ Error:
     
 Ok:    
 
-	cl_cluster_node_ok(node);
     cl_cluster_node_fd_put(node, fd, false);
 	cl_cluster_node_put(node);
    
@@ -1777,11 +1773,10 @@ citrusleaf_check_cluster_health(cl_cluster *asc)
 
 	pthread_mutex_lock(&asc->LOCK);
 	for (uint i = 0; i < cf_vector_size(&asc->node_v); i++) {
-		cl_cluster_node *cn = cf_vector_pointer_get(&asc->node_v, i);
+//		cl_cluster_node *cn = cf_vector_pointer_get(&asc->node_v, i);
 
-		if (cn->dunned == false){
-			number_of_nodes_alive++;
-		}
+		// For now there's no throttling or measure of health - count them all.
+		number_of_nodes_alive++;
 	}
 	pthread_mutex_unlock(&asc->LOCK);
 

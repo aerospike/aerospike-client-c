@@ -365,6 +365,7 @@ int Ad_Udf::do_udf_user_write(int user_id)
 
 	if (AEROSPIKE_OK != aerospike_key_apply(&as, &err, NULL, &key, module_name, "put_behavior", (as_list *) &arglist, &res)) {
 		cout << "Error: user(" << user_id << ") : put_behavior() failed with (" << err.code << ") " << err.message << ")\n";
+		as_arraylist_destroy(&arglist);
 		return -1;
 	}
 
@@ -376,6 +377,9 @@ int Ad_Udf::do_udf_user_write(int user_id)
 		free(a);
 		free(r);
 	}
+
+	// Done with the argument list.
+	as_arraylist_destroy(&arglist);
 
 	// Done with the result.
 	as_val_destroy(res);
@@ -429,6 +433,7 @@ int Ad_Udf::do_udf_user_read(int user_id)
 
 	if (AEROSPIKE_OK != aerospike_key_apply(&as, &err, NULL, &key, module_name, "get_campaign", (as_list *) &arglist, &res)) {
 		cout << "Error: user(" << user_id << ") : get_campaign() failed with (" << err.code << ") " << err.message << "\n";
+		as_arraylist_destroy(&arglist);
 		return -1;
 	}
 
@@ -440,6 +445,9 @@ int Ad_Udf::do_udf_user_read(int user_id)
 		free(a);
 		free(r);
 	}
+
+	// Done with the argument list.
+	as_arraylist_destroy(&arglist);
 
 	// Check for the required number of campaigns.
 	as_map *m = as_map_fromval(res);

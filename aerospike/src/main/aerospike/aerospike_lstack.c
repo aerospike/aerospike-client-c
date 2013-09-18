@@ -80,6 +80,8 @@ static as_status aerospike_lstack_push_internal(
 		as, err, policy, key, ldt->module, operation,
 		(as_list *)&arglist, &p_return_val);
 
+    as_arraylist_destroy(&arglist);
+
     if (ldt_parse_error(err) != AEROSPIKE_OK) {
     	return err->code;
     }
@@ -139,6 +141,8 @@ static as_status aerospike_lstack_peek_with_filter_internal(
 		as, err, policy, key, ldt->module, filter ? LDT_STACK_OP_FILTER : LDT_STACK_OP_PEEK,
 		(as_list *)&arglist, &p_return_val);
 
+    as_arraylist_destroy(&arglist);
+
     if (ldt_parse_error(err) != AEROSPIKE_OK) {
     	return err->code;
     }
@@ -197,6 +201,8 @@ as_status aerospike_lstack_size(
     aerospike_key_apply(
 		as, err, policy, key, ldt->module, LDT_STACK_OP_SIZE,
 		(as_list *)&arglist, &p_return_val);
+
+    as_arraylist_destroy(&arglist);
 
     if (ldt_parse_error(err) != AEROSPIKE_OK) {
     	return err->code;
@@ -271,6 +277,8 @@ as_status aerospike_lstack_set_capacity(
 		as, err, policy, key, ldt->module, LDT_STACK_OP_CAPACITY_SET,
 		(as_list *)&arglist, &p_return_val);
 
+    as_arraylist_destroy(&arglist);
+
     if (ldt_parse_error(err) != AEROSPIKE_OK) {
     	return err->code;
     }
@@ -322,6 +330,8 @@ as_status aerospike_lstack_get_capacity(
 		as, err, policy, key, ldt->module, LDT_STACK_OP_CAPACITY_GET,
 		(as_list *)&arglist, &p_return_val);
 
+    as_arraylist_destroy(&arglist);
+
     if (ldt_parse_error(err) != AEROSPIKE_OK) {
     	return err->code;
     }
@@ -369,6 +379,8 @@ as_status aerospike_lstack_destroy(
     aerospike_key_apply(
 		as, err, policy, key, ldt->module, LDT_STACK_OP_DESTROY,
 		(as_list *)&arglist, &p_return_val);
+
+    as_arraylist_destroy(&arglist);
 
     if (ldt_parse_error(err) != AEROSPIKE_OK) {
     	return err->code;

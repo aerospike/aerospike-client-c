@@ -108,8 +108,8 @@ main(int argc, char* argv[])
 	}
 
 	// Create an argument list for a (different) UDF. By using
-	// as_arraylist_inita(), we won't need to destroy the list if we only use
-	// as_arraylist_append_int64() and as_arraylist_append_str().
+	// as_arraylist_inita() we avoid some but not all internal heap usage, so we
+	// must call as_arraylist_destroy().
 	as_arraylist args;
 	as_arraylist_inita(&args, 3);
 	as_arraylist_append_str(&args, "test-bin-2");
@@ -123,9 +123,12 @@ main(int argc, char* argv[])
 	if (aerospike_key_apply(&as, &err, NULL, &g_key, UDF_MODULE,
 			"bin_transform", (as_list*)&args, &p_return_val) != AEROSPIKE_OK) {
 		LOG("aerospike_key_apply() returned %d - %s", err.code, err.message);
+		as_arraylist_destroy(&args);
 		cleanup(&as);
 		exit(-1);
 	}
+
+	as_arraylist_destroy(&args);
 
 	if (! p_return_val) {
 		LOG("aerospike_key_apply() retrieved null as_val object");

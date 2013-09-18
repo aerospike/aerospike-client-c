@@ -28,7 +28,9 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
@@ -36,6 +38,7 @@
 #include <aerospike/as_error.h>
 #include <aerospike/as_integer.h>
 #include <aerospike/as_key.h>
+#include <aerospike/as_map.h>
 #include <aerospike/as_query.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_status.h>
@@ -54,14 +57,19 @@ const char UDF_FILE_PATH[] =  UDF_USER_PATH UDF_MODULE ".lua";
 
 const char TEST_INDEX_NAME[] = "test-bin-index";
 
+const int TOKENS_PER_BIN = 5;
+const int MAX_TOKEN = 10; // don't exceed 2 digits, i.e. 99
+
 
 //==========================================================
 // Forward Declarations
 //
 
 bool query_cb(const as_val* p_val, void* udata);
+bool query_cb_map(const as_val* p_val, void* udata);
 void cleanup(aerospike* p_as);
 bool insert_records(aerospike* p_as);
+char* generate_numbers(char* numbers);
 
 
 //==========================================================
@@ -116,10 +124,12 @@ main(int argc, char* argv[])
 	// care of destroying all the query's member objects if necessary. However
 	// using as_query_where_inita() does avoid internal heap usage.
 	as_query_where_inita(&query, 1);
-	as_query_where(&query, "test-bin", integer_range(1, 4));
+	as_query_where(&query, "test-bin", integer_range(1, 10));
+
+	// Specify the UDF to use on the resulting stream.
 	as_query_apply(&query, UDF_MODULE, "sum_test_bin", NULL);
 
-	LOG("executing query: where test-bin = 1 ... 4");
+	LOG("executing map-reduce query: where test-bin = 1 ... 10");
 
 	// Execute the query. This call blocks - callbacks are made in the scope of
 	// this call.
@@ -132,7 +142,92 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
-	LOG("query executed");
+	LOG("map-reduce query executed");
+
+	// Reuse the as_query object for another query.
+	as_query_destroy(&query);
+	as_query_init(&query, g_namespace, g_set);
+
+	// Generate an as_query.where condition.
+	as_query_where_inita(&query, 1);
+	as_query_where(&query, "test-bin", integer_range(1, 10));
+
+	// Specify another UDF to use on the resulting stream. Like the previous UDF
+	// it sums the test-bin values that satisfy the where condition, but does so
+	// in a different, more efficient manner (see query_udf.lua).
+	as_query_apply(&query, UDF_MODULE, "sum_test_bin_2", NULL);
+
+	LOG("executing aggregate-reduce query: where test-bin = 1 ... 10");
+
+	// Execute the query. This call blocks - callbacks are made in the scope of
+	// this call.
+	if (aerospike_query_foreach(&as, &err, NULL, &query, query_cb, NULL) !=
+			AEROSPIKE_OK) {
+		LOG("aerospike_query_foreach() returned %d - %s", err.code,
+				err.message);
+		as_query_destroy(&query);
+		cleanup(&as);
+		exit(-1);
+	}
+
+	LOG("aggregate-reduce query executed");
+
+	// Reuse the as_query object for another query.
+	as_query_destroy(&query);
+	as_query_init(&query, g_namespace, g_set);
+
+	// Generate an as_query.where condition.
+	as_query_where_inita(&query, 1);
+	as_query_where(&query, "test-bin", integer_range(1, 10));
+
+	// Specify another UDF to use on the resulting stream. Like the previous
+	// UDFs it sums test-bin values that satisfy the where condition, but first
+	// applies a filter to sum only even values (see query_udf.lua).
+	as_query_apply(&query, UDF_MODULE, "sum_test_bin_even", NULL);
+
+	LOG("executing filter-aggregate-reduce query: where test-bin = 1 ... 10");
+
+	// Execute the query. This call blocks - callbacks are made in the scope of
+	// this call.
+	if (aerospike_query_foreach(&as, &err, NULL, &query, query_cb, NULL) !=
+			AEROSPIKE_OK) {
+		LOG("aerospike_query_foreach() returned %d - %s", err.code,
+				err.message);
+		as_query_destroy(&query);
+		cleanup(&as);
+		exit(-1);
+	}
+
+	LOG("filter-aggregate-reduce query executed");
+
+	// Reuse the as_query object for another query.
+	as_query_destroy(&query);
+	as_query_init(&query, g_namespace, g_set);
+
+	// Generate an as_query.where condition. Here we'll use the entire test-bin
+	// range (for 20 records inserted), to include everything.
+	as_query_where_inita(&query, 1);
+	as_query_where(&query, "test-bin", integer_range(0, 19));
+
+	// Specify another UDF to use on the resulting stream. This UDF operates on
+	// the numbers-bin (string) values, and demonstrates a case where the value
+	// returned by the query callback is an as_map (instead of an as_integer).
+	as_query_apply(&query, UDF_MODULE, "count_numbers", NULL);
+
+	LOG("executing numbers aggregate-reduce query: where test-bin = 0 ... 19");
+
+	// Execute the query. This call blocks - callbacks are made in the scope of
+	// this call.
+	if (aerospike_query_foreach(&as, &err, NULL, &query, query_cb_map, NULL) !=
+			AEROSPIKE_OK) {
+		LOG("aerospike_query_foreach() returned %d - %s", err.code,
+				err.message);
+		as_query_destroy(&query);
+		cleanup(&as);
+		exit(-1);
+	}
+
+	LOG("numbers aggregate-reduce query executed");
 
 	as_query_destroy(&query);
 
@@ -146,7 +241,7 @@ main(int argc, char* argv[])
 
 
 //==========================================================
-// Query Callback
+// Query Callbacks
 //
 
 bool
@@ -155,14 +250,37 @@ query_cb(const as_val* p_val, void* udata)
 	// Because of the UDF used, we expect an as_integer to be returned.
 	int64_t i_val = as_integer_getorelse(as_integer_fromval(p_val), -1);
 
-	// Caller's responsibility to destroy as_val returned.
-	as_val_destroy(p_val);
-
 	if (i_val == -1) {
 		LOG("query callback returned non-as_integer object");
 	}
+	else {
+		LOG("query callback returned %ld", i_val);
+	}
 
-	LOG("query callback returned %ld", i_val);
+	// Caller's responsibility to destroy as_val returned.
+	as_val_destroy(p_val);
+
+	return true;
+}
+
+bool
+query_cb_map(const as_val* p_val, void* udata)
+{
+	// Because of the UDF used, we expect an as_map to be returned.
+	if (! as_map_fromval(p_val)) {
+		LOG("query callback returned non-as_map object");
+	}
+	else {
+		// The map keys are number tokens ("1" to "20") and each value is the
+		// total number of occurrences of the token in the records aggregated.
+		char* val_as_str = as_val_tostring(p_val);
+
+		LOG("query callback returned %s", val_as_str);
+		free(val_as_str);
+	}
+
+	// Caller's responsibility to destroy as_val returned.
+	as_val_destroy(p_val);
 
 	return true;
 }
@@ -184,14 +302,17 @@ cleanup(aerospike* p_as)
 bool
 insert_records(aerospike* p_as)
 {
-	// Create an as_record object with one (integer value) bin. By using
+	srand(time(0));
+
+	// Create an as_record object with an integer value bin, and a string value
+	// bin, where the string is a list of comma-separated numbers. By using
 	// as_record_inita(), we won't need to destroy the record if we only set
-	// bins using as_record_set_int64().
+	// bins using as_record_set_int64() and as_record_set_str().
 	as_record rec;
-	as_record_inita(&rec, 1);
+	as_record_inita(&rec, 2);
 
 	// Re-using rec, write records into the database such that each record's key
-	// and (test-bin) value is based on the loop index.
+	// and test-bin value is based on the loop index.
 	for (uint32_t i = 0; i < g_n_keys; i++) {
 		as_error err;
 
@@ -204,6 +325,9 @@ insert_records(aerospike* p_as)
 		// destroy any previous value.
 		as_record_set_int64(&rec, "test-bin", (int64_t)i);
 
+		char numbers[(TOKENS_PER_BIN * 3) + 1];
+		as_record_set_str(&rec, "numbers-bin", generate_numbers(numbers));
+
 		// Write a record to the database.
 		if (aerospike_key_put(p_as, &err, NULL, &key, &rec) != AEROSPIKE_OK) {
 			LOG("aerospike_key_put() returned %d - %s", err.code, err.message);
@@ -214,4 +338,20 @@ insert_records(aerospike* p_as)
 	LOG("insert succeeded");
 
 	return true;
+}
+
+char*
+generate_numbers(char* numbers)
+{
+	char* p_write = numbers;
+
+	// Generate a comma-separated string of number tokens.
+	for (int i = 0; i < TOKENS_PER_BIN; i++) {
+		p_write += sprintf(p_write, "%d,", (rand() % MAX_TOKEN) + 1);
+	}
+
+	// Truncate the last comma.
+	*(p_write - 1) = '\0';
+
+	return numbers;
 }

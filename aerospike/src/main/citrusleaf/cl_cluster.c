@@ -1332,7 +1332,6 @@ cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 				else if (strcmp(name, "partition-generation") == 0) {
 					if (cn->partition_generation != (uint32_t) atoi(value)) {
 						update_partitions = true;				
-						cn->partition_generation = atoi(value);
 					}
 				}
 				else if (strcmp(name, "services")==0) {

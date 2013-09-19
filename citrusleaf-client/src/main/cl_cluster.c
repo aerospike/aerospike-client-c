@@ -1147,6 +1147,7 @@ cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 	// cf_debug("cluster ping node: %s",cn->name);
 
 	bool update_partitions = false;
+	int new_partition_generation = 0;
 
 	// for all elements in the sockaddr_in list - ping and add hosts.
 	for (uint i=0;i<cf_vector_size(&cn->sockaddr_in_v);i++) {
@@ -1179,7 +1180,7 @@ cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 
 		if (cn->partition_generation != node_info.partition_generation) {
 			update_partitions = true;
-			cn->partition_generation = node_info.partition_generation;
+			new_partition_generation = node_info.partition_generation;
 		}
 
 		cluster_services_parse(asc, node_info.services, services_v);
@@ -1211,6 +1212,8 @@ cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 				cluster_partitions_process(asc, cn, replicas.read_replicas, false);
 			}
 
+			// Update the local partition generation only after successful update of partition map
+			cn->partition_generation = new_partition_generation;
 			cl_replicas_free(&replicas);
 			break;
 		}

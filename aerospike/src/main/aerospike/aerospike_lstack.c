@@ -76,7 +76,7 @@ static as_status aerospike_lstack_push_internal(
 	as_arraylist_append_string(&arglist, &ldt_bin);
     as_val_reserve( val );
 	as_arraylist_append(&arglist, (as_val *) val);
-	if (ldt->module[0] == '0') {
+	if (ldt->module[0] != '0') {
 		as_string ldt_module;
 		as_string_init(&ldt_module, (char *)ldt->module, false);
 		as_arraylist_append_string(&arglist, &ldt_module);

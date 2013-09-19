@@ -8,6 +8,7 @@ default: all
 	$(MAKE) -C get $@
 	$(MAKE) -C incr $@
 	$(MAKE) -C llist $@
+	$(MAKE) -C lmap $@
 	$(MAKE) -C lset $@
 	$(MAKE) -C lstack $@
 	$(MAKE) -C put $@

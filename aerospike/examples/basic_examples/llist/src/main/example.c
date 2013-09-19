@@ -69,6 +69,7 @@ main(int argc, char* argv[])
 	// as_ldt_init() on stack object.
 	if (! as_ldt_init(&llist, "myllist", AS_LDT_LLIST, NULL)) {
 		LOG("unable to initialize ldt");
+		example_cleanup(&as);
 		exit(-1);
 	}
 
@@ -87,6 +88,7 @@ main(int argc, char* argv[])
 			(const as_val*)&ival) != AEROSPIKE_OK) {
 		LOG("first aerospike_llist_add() returned %d - %s", err.code,
 				err.message);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
@@ -95,6 +97,7 @@ main(int argc, char* argv[])
 			(const as_val*)&ival) != AEROSPIKE_OK) {
 		LOG("second aerospike_llist_add() returned %d - %s", err.code,
 				err.message);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
@@ -103,6 +106,7 @@ main(int argc, char* argv[])
 			(const as_val*)&ival) != AEROSPIKE_OK) {
 		LOG("third aerospike_llist_add() returned %d - %s", err.code,
 				err.message);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
@@ -114,11 +118,13 @@ main(int argc, char* argv[])
 	if (aerospike_llist_size(&as, &err, NULL, &g_key, &llist, &n_elements)
 			!= AEROSPIKE_OK) {
 		LOG("aerospike_llist_size() returned %d - %s", err.code, err.message);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
 	if (n_elements != 3) {
 		LOG("unexpected llist size %u", n_elements);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
@@ -135,6 +141,7 @@ main(int argc, char* argv[])
 		LOG("second aerospike_llist_filter() returned %d - %s", err.code,
 				err.message);
 		as_list_destroy(p_list);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
@@ -142,17 +149,18 @@ main(int argc, char* argv[])
 	as_arraylist_iterator_init(&it, (const as_arraylist*)p_list);
 
 	int item_count = 0;
-	int small_value = 0;
 
 	while (as_arraylist_iterator_has_next(&it)) {
 		const as_val* p_val = as_arraylist_iterator_next(&it);
-		LOG("   element - type = %d, value = %s ", as_val_type(p_val),
-				as_val_tostring(p_val));
+		char* p_str = as_val_tostring(p_val);
+		LOG("   element - type = %d, value = %s ", as_val_type(p_val),p_str);
+		free(p_str);
 
 		// make sure it's integer type
 		if (as_val_type(p_val)!=AS_INTEGER) {
 			LOG("unexpected value type %d", as_val_type(p_val));
 			as_list_destroy(p_list);
+			example_cleanup(&as);
 			exit(-1);
 		}
 		int64_t myival = as_integer_get ((const as_integer *)p_val);
@@ -160,6 +168,7 @@ main(int argc, char* argv[])
 			LOG("unexpected integer value returned %d on count %d",
 					(int)myival, item_count);
 			as_list_destroy(p_list);
+			example_cleanup(&as);
 			exit(-1);
 		}
 		item_count++;
@@ -177,6 +186,7 @@ main(int argc, char* argv[])
 	if (aerospike_llist_add(&as, &err, NULL, &g_key, &llist,
 			(const as_val*)&sval) == AEROSPIKE_OK) {
 		LOG("Unexpected success of aerospike_llist_add().");
+		example_cleanup(&as);
 		exit(-1);
 	}
 
@@ -186,11 +196,13 @@ main(int argc, char* argv[])
 	if (aerospike_llist_size(&as, &err, NULL, &g_key, &llist, &n_elements)
 			!= AEROSPIKE_OK) {
 		LOG("aerospike_llist_size() returned %d - %s", err.code, err.message);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
 	if (n_elements != 3) {
 		LOG("unexpected llist size %u", n_elements);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
@@ -198,27 +210,9 @@ main(int argc, char* argv[])
 	if (aerospike_llist_remove(&as, &err, NULL, &g_key, &llist2,
 			(const as_val*)&ival) != AEROSPIKE_OK) {
 		LOG("aerospike_llist_remove() returned %d - %s", err.code, err.message);
+		example_cleanup(&as);
 		exit(-1);
 	}
-
-	// No need to destroy as_boolean if using as_boolean_init() on stack object.
-	/*
-	as_boolean exists;
-	as_boolean_init(&exists, false);
-
-	// Check that the deleted value is no longer in the list
-	if (aerospike_llist_exists(&as, &err, NULL, &g_key, &llist2,
-			(const as_val*)&ival, &exists) != AEROSPIKE_OK) {
-		LOG(" aerospike_llist_exists() returned %d - %s", err.code,
-				err.message);
-		exit(-1);
-	}
-
-	if (as_boolean_get(&exists)) {
-		LOG("found a value which should not be in the list");
-		exit(-1);
-	}
-	*/
 
 	n_elements = 0;
 
@@ -226,11 +220,13 @@ main(int argc, char* argv[])
 	if (aerospike_llist_size(&as, &err, NULL, &g_key, &llist, &n_elements)
 			!= AEROSPIKE_OK) {
 		LOG("aerospike_llist_size() returned %d - %s", err.code, err.message);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
 	if (n_elements != 2) {
 		LOG("unexpected list size %u", n_elements);
+		example_cleanup(&as);
 		exit(-1);
 	}
 	LOG("one value removed and checked");
@@ -239,6 +235,7 @@ main(int argc, char* argv[])
 	if (aerospike_llist_destroy(&as, &err, NULL, &g_key, &llist) !=
 			AEROSPIKE_OK) {
 		LOG("aerospike_llist_destroy() returned %d - %s", err.code, err.message);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
@@ -248,6 +245,7 @@ main(int argc, char* argv[])
 	if (aerospike_llist_size(&as, &err, NULL, &g_key, &llist, &n_elements) ==
 			AEROSPIKE_OK) {
 		LOG("aerospike_llist_size() did not return error");
+		example_cleanup(&as);
 		exit(-1);
 	}
 	LOG("llist destroyed and checked");

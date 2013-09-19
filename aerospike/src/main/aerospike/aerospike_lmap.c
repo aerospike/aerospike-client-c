@@ -20,10 +20,9 @@
  * IN THE SOFTWARE.
  *****************************************************************************/
 #include <aerospike/aerospike.h>
-#include <aerospike/aerospike_llist.h>
+#include <aerospike/aerospike_lmap.h>
 #include <aerospike/aerospike_key.h>
 #include <aerospike/as_ldt.h>
-#include <aerospike/as_list.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_status.h>
@@ -35,35 +34,36 @@
 // ++==============++
 // || Fixed Values ||
 // ++==============++
-// The names of the Lua Functions that implement Large Set Ops
-static char * LDT_LIST_OP_ADD				= "add";
-static char * LDT_LIST_OP_ADDALL			= "add_all";
-// @TODO static char * LDT_LIST_OP_FIND     			= "find";
-static char * LDT_LIST_OP_SCAN       		= "scan";
-static char * LDT_LIST_OP_FILTER			= "filter";
-static char * LDT_LIST_OP_REMOVE     		= "remove";
-static char * LDT_LIST_OP_DESTROY  			= "destroy";
-static char * LDT_LIST_OP_SIZE       		= "size";
-// @TODO static char * LDT_LIST_OP_SET_CAPACITY      = "set_capacity";
-// @TODO static char * LDT_LIST_OP_GET_CAPACITY      = "get_capacity";
+// The names of the Lua Functions that implement Large Map Ops
+static char * LDT_MAP_OP_PUT				= "put";
+static char * LDT_MAP_OP_PUTALL				= "put_all";
+static char * LDT_MAP_OP_GET     			= "get";
+static char * LDT_MAP_OP_SCAN       		= "scan";
+static char * LDT_MAP_OP_FILTER				= "filter";
+static char * LDT_MAP_OP_REMOVE     		= "remove";
+static char * LDT_MAP_OP_DESTROY  			= "destroy";
+static char * LDT_MAP_OP_SIZE       		= "size";
+//@TODO static char * LDT_MAP_OP_SET_CAPACITY       = "set_capacity";
+//@TODO static char * LDT_MAP_OP_GET_CAPACITY       = "get_capacity";
 
 
-static as_status aerospike_llist_add_internal(
+as_status aerospike_lmap_put(
 	aerospike * as, as_error * err, const as_policy_apply * policy,
-	const as_key * key, const as_ldt * ldt, const as_val *val,  const char *operation)
+	const as_key * key, const as_ldt * ldt,
+	const as_val * mkey, const as_val * mval)
 {
 	if ( !err ) {
 		return AEROSPIKE_ERR_PARAM;
 	}
 	as_error_reset(err);
 
-	if (!as || !key || !ldt) {
+	if (!as || !key || !ldt || !mkey || !mval) {
 		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
-				"as/key/ldt/n cannot be null");
+				"as/key/ldt/mkey/mval cannot be null");
 	}
-	if (ldt->type != AS_LDT_LLIST) {
+	if (ldt->type != AS_LDT_LMAP) {
 		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
-				"not llist type");
+				"not lmap type");
 	}
 
 	/* stack allocate the arg list */
@@ -71,14 +71,16 @@ static as_status aerospike_llist_add_internal(
 	as_string_init(&ldt_bin, (char *)ldt->name, false);
 
 	as_arraylist arglist;
-	as_arraylist_inita(&arglist, 2);
+	as_arraylist_inita(&arglist, 3);
 	as_arraylist_append_string(&arglist, &ldt_bin);
-	as_val_reserve( val ); // bump the ref count so the arraylist_destroy will not reset the val
-	as_arraylist_append(&arglist, (as_val *)val);
+    as_val_reserve( mkey ); // bump the ref count so the arraylist_destroy will not reset the val
+	as_arraylist_append(&arglist, (as_val *)mkey);
+    as_val_reserve( mval ); // bump the ref count so the arraylist_destroy will not reset the val
+	as_arraylist_append(&arglist, (as_val *)mval);
 
 	as_val* p_return_val = NULL;
     aerospike_key_apply(
-		as, err, policy, key, ldt->module, operation,
+		as, err, policy, key, ldt->module, LDT_MAP_OP_PUT,
 		(as_list *)&arglist, &p_return_val);
 
     as_arraylist_destroy(&arglist);
@@ -102,22 +104,64 @@ static as_status aerospike_llist_add_internal(
     return err->code;
 }
 
-as_status aerospike_llist_add(
+as_status aerospike_lmap_put_all(
 	aerospike * as, as_error * err, const as_policy_apply * policy,
-	const as_key * key, const as_ldt * ldt, const as_val * val) {
-	return aerospike_llist_add_internal (as, err, policy, key, ldt, val, LDT_LIST_OP_ADD);
+	const as_key * key, const as_ldt * ldt, const as_map * vals)
+{
+	if ( !err ) {
+		return AEROSPIKE_ERR_PARAM;
+	}
+	as_error_reset(err);
+
+	if (!as || !key || !ldt || vals) {
+		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
+				"as/key/ldt/vals cannot be null");
+	}
+	if (ldt->type != AS_LDT_LMAP) {
+		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
+				"not lmap type");
+	}
+
+	/* stack allocate the arg list */
+	as_string ldt_bin;
+	as_string_init(&ldt_bin, (char *)ldt->name, false);
+
+	as_arraylist arglist;
+	as_arraylist_inita(&arglist, 2);
+	as_arraylist_append_string(&arglist, &ldt_bin);
+    as_val_reserve( vals ); // bump the ref count so the arraylist_destroy will not reset the val
+	as_arraylist_append(&arglist, (as_val *)vals);
+
+	as_val* p_return_val = NULL;
+    aerospike_key_apply(
+		as, err, policy, key, ldt->module, LDT_MAP_OP_PUTALL,
+		(as_list *)&arglist, &p_return_val);
+
+    as_arraylist_destroy(&arglist);
+
+    if (ldt_parse_error(err) != AEROSPIKE_OK) {
+    	return err->code;
+    }
+
+    if (!p_return_val) {
+		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL,
+				"no value returned from server");
+    }
+    int64_t ival = as_integer_getorelse(as_integer_fromval(p_return_val), -1);
+	as_val_destroy(p_return_val);
+
+    if (ival == -1) {
+		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL,
+				"value returned from server not parse-able");
+    }
+
+    return err->code;
 }
 
-as_status aerospike_llist_add_all(
+as_status aerospike_lmap_size(
 	aerospike * as, as_error * err, const as_policy_apply * policy,
-	const as_key * key, const as_ldt * ldt, const as_list * vals) {
-	return aerospike_llist_add_internal (as, err, policy, key, ldt,
-			(as_val *)vals, LDT_LIST_OP_ADDALL);
-}
-
-as_status aerospike_llist_size(
-	aerospike * as, as_error * err, const as_policy_apply * policy,
-	const as_key * key, const as_ldt * ldt, uint32_t *n)
+	const as_key * key, const as_ldt * ldt,
+	uint32_t *n)
 {
 	if ( !err ) {
 		return AEROSPIKE_ERR_PARAM;
@@ -128,9 +172,9 @@ as_status aerospike_llist_size(
 		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
 				"as/key/ldt/n cannot be null");
 	}
-	if (ldt->type != AS_LDT_LLIST) {
+	if (ldt->type != AS_LDT_LMAP) {
 		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
-				"not llist type");
+				"not lmap type");
 	}
 
 	/* stack allocate the arg list */
@@ -143,7 +187,7 @@ as_status aerospike_llist_size(
 
 	as_val* p_return_val = NULL;
     aerospike_key_apply(
-		as, err, policy, key, ldt->module, LDT_LIST_OP_SIZE,
+		as, err, policy, key, ldt->module, LDT_MAP_OP_SIZE,
 		(as_list *)&arglist, &p_return_val);
 
     as_arraylist_destroy(&arglist);
@@ -168,12 +212,69 @@ as_status aerospike_llist_size(
     return err->code;
 }
 
-
-as_status aerospike_llist_filter(
+as_status aerospike_lmap_get(
 	aerospike * as, as_error * err, const as_policy_apply * policy,
-	const as_key * key, const as_ldt * ldt,
-	const as_udf_function_name filter, const as_list *filter_args,
-	as_list ** elements )
+	const as_key * key, const as_ldt * ldt, const as_val * mkey,
+	as_val ** mval)
+{
+	if ( !err ) {
+		return AEROSPIKE_ERR_PARAM;
+	}
+	as_error_reset(err);
+
+	if (!as || !key || !ldt || !mkey || !mval) {
+		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
+				"as/key/ldt/n cannot be null");
+	}
+	if (ldt->type != AS_LDT_LMAP) {
+		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
+				"not lmap type");
+	}
+
+	/* stack allocate the arg list */
+	as_string ldt_bin;
+	as_string_init(&ldt_bin, (char *)ldt->name, false);
+
+	as_arraylist arglist;
+	as_arraylist_inita(&arglist, 2);
+	as_arraylist_append_string(&arglist, &ldt_bin);
+    as_val_reserve( mkey ); // bump the ref count so the arraylist_destroy will not reset the val
+
+	as_arraylist_append(&arglist, (as_val *)mkey);
+
+	as_val* p_return_val = NULL;
+    aerospike_key_apply(
+		as, err, policy, key, ldt->module, LDT_MAP_OP_GET,
+		(as_list *)&arglist, &p_return_val);
+
+    as_arraylist_destroy(&arglist);
+
+    if (ldt_parse_error(err) != AEROSPIKE_OK) {
+    	return err->code;
+    }
+
+    if (!p_return_val) {
+		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL,
+				"no value returned from server");
+    }
+    int64_t ival = as_integer_getorelse(as_integer_fromval(p_return_val), -1);
+	as_val_destroy(p_return_val);
+
+    if (ival == -1) {
+		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL,
+				"value returned from server not parse-able");
+    }
+    *mval = p_return_val;
+
+    return err->code;
+} // aerospike_lmap_exists()
+
+
+as_status aerospike_lmap_filter_internal(
+		aerospike * as, as_error * err, const as_policy_apply * policy,
+		const as_key * key, const as_ldt * ldt,
+		const as_udf_function_name filter, const as_list *filter_args,
+		as_map ** elements)
 {
 	if ( !err ) {
 		return AEROSPIKE_ERR_PARAM;
@@ -188,9 +289,9 @@ as_status aerospike_llist_filter(
 		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
 				"as/key/ldt/peek_count/elements cannot be null");
 	}
-	if (ldt->type != AS_LDT_LLIST) {
+	if (ldt->type != AS_LDT_LMAP) {
 		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
-				"not llist type");
+				"not lmap type");
 	}
 
 	int list_argc = filter ? 3 : 1;
@@ -212,7 +313,7 @@ as_status aerospike_llist_filter(
 
 	as_val* p_return_val = NULL;
     aerospike_key_apply(
-		as, err, policy, key, ldt->module, filter ? LDT_LIST_OP_FILTER : LDT_LIST_OP_SCAN,
+		as, err, policy, key, ldt->module, filter ? LDT_MAP_OP_FILTER : LDT_MAP_OP_SCAN,
 		(as_list *)&arglist, &p_return_val);
 
     as_arraylist_destroy(&arglist);
@@ -226,17 +327,35 @@ as_status aerospike_llist_filter(
 				"no value returned from server");
     }
 
-    *elements = (as_list *)p_return_val;
+    *elements = (as_map *)p_return_val;
 
     return err->code;
 
-} // aerospike_llist_scan()
+} // aerospike_lmap_filter_internal()
 
+as_status aerospike_lmap_get_all(
+		aerospike * as, as_error * err, const as_policy_apply * policy,
+		const as_key * key, const as_ldt * ldt,
+		as_map ** elements)
+{
+	return aerospike_lmap_filter_internal(as, err, policy,
+		key, ldt, NULL, NULL, elements);
 
-as_status aerospike_llist_remove(
+}
+
+as_status aerospike_lmap_filter(
+		aerospike * as, as_error * err, const as_policy_apply * policy,
+		const as_key * key, const as_ldt * ldt,
+		const as_udf_function_name filter, const as_list *filter_args,
+		as_map ** elements)
+{
+	return aerospike_lmap_filter_internal(as, err, policy,
+		key, ldt, filter, filter_args, elements);
+}
+
+as_status aerospike_lmap_remove(
 	aerospike * as, as_error * err, const as_policy_apply * policy,
-	const as_key * key, const as_ldt * ldt, const as_val *val
-	)
+	const as_key * key, const as_ldt * ldt, const as_val *mkey)
 {
 	if ( !err ) {
 		return AEROSPIKE_ERR_PARAM;
@@ -247,9 +366,9 @@ as_status aerospike_llist_remove(
 		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
 				"as/key/ldt/capacity cannot be null");
 	}
-	if (ldt->type != AS_LDT_LLIST) {
+	if (ldt->type != AS_LDT_LMAP) {
 		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
-				"not llist type");
+				"not lmap type");
 	}
 
 	/* stack allocate the arg list */
@@ -259,12 +378,12 @@ as_status aerospike_llist_remove(
 	as_arraylist arglist;
 	as_arraylist_inita(&arglist, 2);
 	as_arraylist_append_string(&arglist, &ldt_bin);
-    as_val_reserve( val );
-	as_arraylist_append(&arglist, (as_val *) val);
+    as_val_reserve( mkey );
+	as_arraylist_append(&arglist, (as_val *) mkey);
 
 	as_val* p_return_val = NULL;
     aerospike_key_apply(
-		as, err, policy, key, ldt->module, LDT_LIST_OP_REMOVE,
+		as, err, policy, key, ldt->module, LDT_MAP_OP_REMOVE,
 		(as_list *)&arglist, &p_return_val);
 
     as_arraylist_destroy(&arglist);
@@ -281,10 +400,9 @@ as_status aerospike_llist_remove(
 }
 
 
-as_status aerospike_llist_destroy(
+as_status aerospike_lmap_destroy(
 	aerospike * as, as_error * err, const as_policy_apply * policy,
-	const as_key * key, const as_ldt * ldt
-	)
+	const as_key * key, const as_ldt * ldt)
 {
 	if ( !err ) {
 		return AEROSPIKE_ERR_PARAM;
@@ -293,11 +411,11 @@ as_status aerospike_llist_destroy(
 
 	if (!as || !key || !ldt) {
 		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
-				"as/key/ldt/capacity cannot be null");
+				"as/key/ldt cannot be null");
 	}
-	if (ldt->type != AS_LDT_LLIST) {
+	if (ldt->type != AS_LDT_LMAP) {
 		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
-				"not llist type");
+				"not lmap type");
 	}
 
 	/* stack allocate the arg list */
@@ -310,7 +428,7 @@ as_status aerospike_llist_destroy(
 
 	as_val* p_return_val = NULL;
     aerospike_key_apply(
-		as, err, policy, key, ldt->module, LDT_LIST_OP_DESTROY,
+		as, err, policy, key, ldt->module, LDT_MAP_OP_DESTROY,
 		(as_list *)&arglist, &p_return_val);
 
     as_arraylist_destroy(&arglist);

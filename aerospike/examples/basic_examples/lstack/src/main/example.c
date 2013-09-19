@@ -71,6 +71,7 @@ main(int argc, char* argv[])
 	// as_ldt_init() on stack object.
 	if (! as_ldt_init(&lstack, "mystack", AS_LDT_LSTACK, NULL)) {
 		LOG("unable to initialize ldt");
+		example_cleanup(&as);
 		exit(-1);
 	}
 
@@ -85,6 +86,7 @@ main(int argc, char* argv[])
 			(const as_val*)&ival) != AEROSPIKE_OK) {
 		LOG("first aerospike_lstack_push() returned %d - %s", err.code,
 				err.message);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
@@ -96,6 +98,7 @@ main(int argc, char* argv[])
 			(const as_val*)&sval) != AEROSPIKE_OK) {
 		LOG("second aerospike_lstack_push() returned %d - %s", err.code,
 				err.message);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
@@ -107,11 +110,13 @@ main(int argc, char* argv[])
 	if (aerospike_lstack_size(&as, &err, NULL, &g_key, &lstack, &n_elements) !=
 			AEROSPIKE_OK) {
 		LOG("aerospike_lstack_size() returned %d - %s", err.code, err.message);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
 	if (n_elements != 2) {
 		LOG("unexpected stack size %u", n_elements);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
@@ -129,6 +134,7 @@ main(int argc, char* argv[])
 		LOG("first aerospike_lstack_peek() returned %d - %s", err.code,
 				err.message);
 		as_list_destroy(p_list);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
@@ -147,9 +153,9 @@ main(int argc, char* argv[])
 	as_list_destroy(p_list);
 	p_list = NULL;
 
-	// Push 3 more items onto the stack. By using as_arraylist_inita(), we won't
-	// need to destroy the as_arraylist if we only use
-	// as_arraylist_append_int64().
+	// Push 3 more items onto the stack. By using as_arraylist_inita() we avoid
+	// some but not all internal heap usage, so we must call
+	// as_arraylist_destroy().
 	as_arraylist vals;
 	as_arraylist_inita(&vals, 3);
 	as_arraylist_append_int64(&vals, 1000);
@@ -160,8 +166,12 @@ main(int argc, char* argv[])
 			(const as_list*)&vals) != AEROSPIKE_OK) {
 		LOG("aerospike_lstack_pushall() returned %d - %s", err.code,
 				err.message);
+		as_arraylist_destroy(&vals);
+		example_cleanup(&as);
 		exit(-1);
 	}
+
+	as_arraylist_destroy(&vals);
 
 	LOG("3 more values pushed");
 
@@ -174,6 +184,7 @@ main(int argc, char* argv[])
 		LOG("second aerospike_lstack_peek() returned %d - %s", err.code,
 				err.message);
 		as_list_destroy(p_list);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
@@ -195,6 +206,7 @@ main(int argc, char* argv[])
 			10000) != AEROSPIKE_OK) {
 		LOG("aerospike_lstack_set_capacity() returned %d - %s", err.code,
 				err.message);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
@@ -205,11 +217,13 @@ main(int argc, char* argv[])
 			&cap_size) != AEROSPIKE_OK) {
 		LOG("aerospike_lstack_get_capacity() returned %d - %s", err.code,
 				err.message);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
 	if (cap_size != 10000) {
 		LOG("unexpected capacity size %u", cap_size);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
@@ -218,6 +232,7 @@ main(int argc, char* argv[])
 			AEROSPIKE_OK) {
 		LOG("aerospike_lstack_destroy() returned %d - %s", err.code,
 				err.message);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
@@ -227,6 +242,7 @@ main(int argc, char* argv[])
 	if (aerospike_lstack_size(&as, &err, NULL, &g_key, &lstack, &n_elements) ==
 			AEROSPIKE_OK) {
 		LOG("aerospike_lstack_size() did not return error");
+		example_cleanup(&as);
 		exit(-1);
 	}
 

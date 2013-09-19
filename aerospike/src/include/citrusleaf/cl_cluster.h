@@ -61,6 +61,13 @@ struct cl_cluster_node_s {
     cf_queue *      asyncwork_q;
 };
 
+//Structure to hold information about compression.
+struct cl_cluster_compression_stat_s {
+    int compression_threshold; // Minimum size of packet, to be compressed. 0 = No cpmpression.
+    uint64_t actual_sz;        // Accumulative count. Actual size of data, compressed till now.
+    uint64_t compressed_sz;    // Accumulative count. Size of data after compression.
+};
+
 struct cl_cluster_s {
     // Linked list element should be first element in the structure
     cf_ll_element       ll_e;
@@ -87,9 +94,12 @@ struct cl_cluster_s {
     // information about where all the partitions are
     cl_partition_id     n_partitions;
     cl_partition_table *partition_table_head;
+
+    struct cl_cluster_compression_stat_s compression_stat;
     
     uint32_t            ref_count;
     uint32_t            tend_speed;
+    int                 info_timeout;  // timeout in ms for info requests
     // Need a lock
     pthread_mutex_t     LOCK;
     
@@ -140,6 +150,7 @@ extern void citrusleaf_cluster_shutdown(void);
 
 extern cl_cluster * citrusleaf_cluster_get_or_create(char *host, short port, int timeout_ms);
 extern void citrusleaf_cluster_release_or_destroy(cl_cluster **asc);
+extern void citrusleaf_cluster_change_info_timeout(struct cl_cluster_s *asc, int msecs);
 extern void citrusleaf_cluster_change_tend_speed(struct cl_cluster_s *asc, int secs);
 extern void citrusleaf_cluster_use_nbconnect(struct cl_cluster_s *asc);
 

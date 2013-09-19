@@ -633,7 +633,7 @@ as_status aerospike_key_apply(
 	if (! (rc == CITRUSLEAF_OK || rc == CITRUSLEAF_FAIL_UDF_BAD_RESPONSE)) {
 		as_error_fromrc(err, rc);
 	}
-	else if ( result ) {
+	else {
 
 		// Begin processing the data returned from the server,
 		// IFF `result` argument is not NULL.
@@ -644,28 +644,30 @@ as_status aerospike_key_apply(
 			cl_bin * bin = &bins[0];
 
 			if ( strcmp(bin->bin_name,"SUCCESS") == 0 ) {
-				as_val * val = NULL;
-				clbin_to_asval(bin, &ser, &val);
-				*result = val;
+				if ( result ) {
+					as_val * val = NULL;
+					clbin_to_asval(bin, &ser, &val);
+					*result = val;
+				}
 			}
 			else if ( strcmp(bin->bin_name,"FAILURE") == 0 ) {
 				as_val * val = NULL;
 				clbin_to_asval(bin, &ser, &val);
 				if ( val->type == AS_STRING ) {
 					as_string * s = as_string_fromval(val);
-					as_error_update(err, AEROSPIKE_ERR, as_string_tostring(s));
+					as_error_update(err, AEROSPIKE_ERR_UDF, as_string_tostring(s));
 				}
 				else {
-					as_error_update(err, AEROSPIKE_ERR, "Invalid Response (1)");
+					as_error_update(err, AEROSPIKE_ERR_SERVER, "unexpected failure bin type");
 				}
 				as_val_destroy(val);
 			}
 			else {
-				as_error_update(err, AEROSPIKE_ERR, "Invalid Response (2)");
+				as_error_update(err, AEROSPIKE_ERR_SERVER, "unexpected bin name");
 			}
 		}
 		else {
-			as_error_update(err, AEROSPIKE_ERR, "Invalid Response (4)");
+			as_error_update(err, AEROSPIKE_ERR_SERVER, "unexpected number of bins");
 		}
 	}
 

@@ -37,8 +37,9 @@
 
 #define STACK_BUF_SZ (1024 * 16) // provide a safe number for your system - linux tends to have 8M stacks these days
 #define DEFAULT_PROGRESS_TIMEOUT 50
+#define INFO_TIMEOUT_MS 500
 
-#define NODE_NAME_SIZE 20	
+#define NODE_NAME_SIZE 20
 
 #ifdef __cplusplus
 extern "C" {
@@ -255,14 +256,21 @@ int citrusleaf_copy_bins(cl_bin **destbins, const cl_bin *srcbins, int n_bins);
 struct cl_cluster_s;
 typedef struct cl_cluster_s cl_cluster;
 
+struct cl_cluster_compression_stat_s;
+typedef struct cl_cluster_compression_stat_s cl_cluster_compression_stat;
+
 extern cl_cluster *citrusleaf_cluster_create(void);
 extern void citrusleaf_cluster_destroy(cl_cluster *asc);
 extern void citrusleaf_cluster_shutdown(void);
 
 extern cl_cluster * citrusleaf_cluster_get_or_create(char *host, short port, int timeout_ms);
 extern void citrusleaf_cluster_release_or_destroy(cl_cluster **asc);
+extern void citrusleaf_cluster_change_info_timeout(struct cl_cluster_s *asc, int msecs);
 extern void citrusleaf_cluster_change_tend_speed(struct cl_cluster_s *asc, int secs);
 extern void citrusleaf_cluster_use_nbconnect(struct cl_cluster_s *asc);
+
+extern void citrusleaf_cluster_put_compression_stat(cl_cluster *asc, uint64_t actual_sz, uint64_t compressed_sz);
+extern void citrusleaf_cluster_get_compression_stat(cl_cluster *asc, uint64_t *actual_sz, uint64_t *compressed_sz);
 
 // the timeout is how long to wait before the cluster is "settled"
 // 0 - a sensible default
@@ -447,6 +455,13 @@ citrusleaf_check_cluster_health(cl_cluster *asc);
 
 void
 citrusleaf_sleep_for_tender(cl_cluster *asc);
+
+/*
+ * Set minimum size of packet, above which packet will be compressed before sending on wire,
+ * provided compression is enabled.
+ */
+int
+citrusleaf_cluster_change_compression_threshold(cl_cluster *asc, int size_in_bytes);
 
 //
 // Get is like select in SQL. Create a list of bins to get, and call this function to retrieve

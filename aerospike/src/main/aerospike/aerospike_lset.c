@@ -77,6 +77,8 @@ static as_status aerospike_lset_add_internal(
 		as, err, policy, key, ldt->module, operation,
 		(as_list *)&arglist, &p_return_val);
 
+    as_arraylist_destroy(&arglist);
+
     if (ldt_parse_error(err) != AEROSPIKE_OK) {
     	return err->code;
     }
@@ -140,6 +142,8 @@ as_status aerospike_lset_size(
 		as, err, policy, key, ldt->module, LDT_SET_OP_SIZE,
 		(as_list *)&arglist, &p_return_val);
 
+    as_arraylist_destroy(&arglist);
+
     if (ldt_parse_error(err) != AEROSPIKE_OK) {
     	return err->code;
     }
@@ -191,6 +195,8 @@ as_status aerospike_lset_exists(
     aerospike_key_apply(
 		as, err, policy, key, ldt->module, LDT_SET_OP_EXISTS,
 		(as_list *)&arglist, &p_return_val);
+
+    as_arraylist_destroy(&arglist);
 
     if (ldt_parse_error(err) != AEROSPIKE_OK) {
     	return err->code;
@@ -260,6 +266,8 @@ as_status aerospike_lset_filter(
 		as, err, policy, key, ldt->module, filter ? LDT_SET_OP_SCAN_WITH_FILTER : LDT_SET_OP_SCAN,
 		(as_list *)&arglist, &p_return_val);
 
+    as_arraylist_destroy(&arglist);
+
     if (ldt_parse_error(err) != AEROSPIKE_OK) {
     	return err->code;
     }
@@ -310,6 +318,8 @@ as_status aerospike_lset_remove(
 		as, err, policy, key, ldt->module, LDT_SET_OP_REMOVE,
 		(as_list *)&arglist, &p_return_val);
 
+    as_arraylist_destroy(&arglist);
+
     if (ldt_parse_error(err) != AEROSPIKE_OK) {
     	return err->code;
     }
@@ -357,6 +367,8 @@ as_status aerospike_lset_destroy(
     aerospike_key_apply(
 		as, err, policy, key, ldt->module, LDT_SET_OP_DESTROY,
 		(as_list *)&arglist, &p_return_val);
+
+    as_arraylist_destroy(&arglist);
 
     if (ldt_parse_error(err) != AEROSPIKE_OK) {
     	return err->code;

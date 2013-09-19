@@ -34,6 +34,8 @@
 // ++==============++
 // || Fixed Values ||
 // ++==============++
+static char * DEFAULT_LMAP_PACKAGE = "lmap";
+
 // The names of the Lua Functions that implement Large Map Ops
 static char * LDT_MAP_OP_PUT				= "put";
 static char * LDT_MAP_OP_PUTALL				= "put_all";
@@ -80,7 +82,7 @@ as_status aerospike_lmap_put(
 
 	as_val* p_return_val = NULL;
     aerospike_key_apply(
-		as, err, policy, key, ldt->module, LDT_MAP_OP_PUT,
+		as, err, policy, key, DEFAULT_LMAP_PACKAGE, LDT_MAP_OP_PUT,
 		(as_list *)&arglist, &p_return_val);
 
     as_arraylist_destroy(&arglist);
@@ -134,7 +136,7 @@ as_status aerospike_lmap_put_all(
 
 	as_val* p_return_val = NULL;
     aerospike_key_apply(
-		as, err, policy, key, ldt->module, LDT_MAP_OP_PUTALL,
+		as, err, policy, key, DEFAULT_LMAP_PACKAGE, LDT_MAP_OP_PUTALL,
 		(as_list *)&arglist, &p_return_val);
 
     as_arraylist_destroy(&arglist);
@@ -187,7 +189,7 @@ as_status aerospike_lmap_size(
 
 	as_val* p_return_val = NULL;
     aerospike_key_apply(
-		as, err, policy, key, ldt->module, LDT_MAP_OP_SIZE,
+		as, err, policy, key, DEFAULT_LMAP_PACKAGE, LDT_MAP_OP_SIZE,
 		(as_list *)&arglist, &p_return_val);
 
     as_arraylist_destroy(&arglist);
@@ -244,7 +246,7 @@ as_status aerospike_lmap_get(
 
 	as_val* p_return_val = NULL;
     aerospike_key_apply(
-		as, err, policy, key, ldt->module, LDT_MAP_OP_GET,
+		as, err, policy, key, DEFAULT_LMAP_PACKAGE, LDT_MAP_OP_GET,
 		(as_list *)&arglist, &p_return_val);
 
     as_arraylist_destroy(&arglist);
@@ -313,7 +315,8 @@ as_status aerospike_lmap_filter_internal(
 
 	as_val* p_return_val = NULL;
     aerospike_key_apply(
-		as, err, policy, key, ldt->module, filter ? LDT_MAP_OP_FILTER : LDT_MAP_OP_SCAN,
+		as, err, policy, key, DEFAULT_LMAP_PACKAGE,
+		filter ? LDT_MAP_OP_FILTER : LDT_MAP_OP_SCAN,
 		(as_list *)&arglist, &p_return_val);
 
     as_arraylist_destroy(&arglist);
@@ -383,7 +386,7 @@ as_status aerospike_lmap_remove(
 
 	as_val* p_return_val = NULL;
     aerospike_key_apply(
-		as, err, policy, key, ldt->module, LDT_MAP_OP_REMOVE,
+		as, err, policy, key, DEFAULT_LMAP_PACKAGE, LDT_MAP_OP_REMOVE,
 		(as_list *)&arglist, &p_return_val);
 
     as_arraylist_destroy(&arglist);
@@ -428,7 +431,7 @@ as_status aerospike_lmap_destroy(
 
 	as_val* p_return_val = NULL;
     aerospike_key_apply(
-		as, err, policy, key, ldt->module, LDT_MAP_OP_DESTROY,
+		as, err, policy, key, DEFAULT_LMAP_PACKAGE, LDT_MAP_OP_DESTROY,
 		(as_list *)&arglist, &p_return_val);
 
     as_arraylist_destroy(&arglist);

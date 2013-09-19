@@ -34,6 +34,8 @@
 // ++==============++
 // || Fixed Values ||
 // ++==============++
+static char * DEFAULT_LSTACK_PACKAGE = "lstack";
+
 // The names of the Lua Functions that implement Large Stack Ops
 static char * LDT_STACK_OP_PUSH             = "push";
 static char * LDT_STACK_OP_PUSHALL          = "push_all";
@@ -70,14 +72,19 @@ static as_status aerospike_lstack_push_internal(
 	as_string_init(&ldt_bin, (char *)ldt->name, false);
 
 	as_arraylist arglist;
-	as_arraylist_inita(&arglist, 2);
+	as_arraylist_inita(&arglist, ldt->module[0] == '0' ? 2 : 3);
 	as_arraylist_append_string(&arglist, &ldt_bin);
     as_val_reserve( val );
 	as_arraylist_append(&arglist, (as_val *) val);
+	if (ldt->module[0] == '0') {
+		as_string ldt_module;
+		as_string_init(&ldt_module, (char *)ldt->module, false);
+		as_arraylist_append_string(&arglist, &ldt_module);
+	}
 
 	as_val* p_return_val = NULL;
     aerospike_key_apply(
-		as, err, policy, key, ldt->module, operation,
+		as, err, policy, key, DEFAULT_LSTACK_PACKAGE, operation,
 		(as_list *)&arglist, &p_return_val);
 
     as_arraylist_destroy(&arglist);
@@ -118,7 +125,7 @@ static as_status aerospike_lstack_peek_with_filter(
 				"not stack type");
 	}
 
-	int list_argc = filter ? 4 : 2;
+	int list_argc = filter ? 5 : 2;
 	/* stack allocate the arg list */
 	as_string ldt_bin;
 	as_string_init(&ldt_bin, (char *)ldt->name, false);
@@ -129,6 +136,10 @@ static as_status aerospike_lstack_peek_with_filter(
     as_arraylist_append_int64(&arglist, peek_count );
 
     if (filter){
+   		as_string ldt_module;
+		as_string_init(&ldt_module, (char *)ldt->module, false);
+   		as_arraylist_append_string(&arglist, &ldt_module);
+
     	as_string filter_name;
     	as_string_init(&filter_name, (char *)filter, false);
         as_arraylist_append_string(&arglist, &filter_name );
@@ -138,7 +149,8 @@ static as_status aerospike_lstack_peek_with_filter(
 
 	as_val* p_return_val = NULL;
     aerospike_key_apply(
-		as, err, policy, key, ldt->module, filter ? LDT_STACK_OP_FILTER : LDT_STACK_OP_PEEK,
+		as, err, policy, key, DEFAULT_LSTACK_PACKAGE,
+		filter ? LDT_STACK_OP_FILTER : LDT_STACK_OP_PEEK,
 		(as_list *)&arglist, &p_return_val);
 
     as_arraylist_destroy(&arglist);
@@ -199,7 +211,7 @@ as_status aerospike_lstack_size(
 
 	as_val* p_return_val = NULL;
     aerospike_key_apply(
-		as, err, policy, key, ldt->module, LDT_STACK_OP_SIZE,
+		as, err, policy, key, DEFAULT_LSTACK_PACKAGE, LDT_STACK_OP_SIZE,
 		(as_list *)&arglist, &p_return_val);
 
     as_arraylist_destroy(&arglist);
@@ -274,7 +286,7 @@ as_status aerospike_lstack_set_capacity(
 
 	as_val* p_return_val = NULL;
     aerospike_key_apply(
-		as, err, policy, key, ldt->module, LDT_STACK_OP_CAPACITY_SET,
+		as, err, policy, key, DEFAULT_LSTACK_PACKAGE, LDT_STACK_OP_CAPACITY_SET,
 		(as_list *)&arglist, &p_return_val);
 
     as_arraylist_destroy(&arglist);
@@ -327,7 +339,7 @@ as_status aerospike_lstack_get_capacity(
 
 	as_val* p_return_val = NULL;
     aerospike_key_apply(
-		as, err, policy, key, ldt->module, LDT_STACK_OP_CAPACITY_GET,
+		as, err, policy, key, DEFAULT_LSTACK_PACKAGE, LDT_STACK_OP_CAPACITY_GET,
 		(as_list *)&arglist, &p_return_val);
 
     as_arraylist_destroy(&arglist);
@@ -377,7 +389,7 @@ as_status aerospike_lstack_destroy(
 
 	as_val* p_return_val = NULL;
     aerospike_key_apply(
-		as, err, policy, key, ldt->module, LDT_STACK_OP_DESTROY,
+		as, err, policy, key, DEFAULT_LSTACK_PACKAGE, LDT_STACK_OP_DESTROY,
 		(as_list *)&arglist, &p_return_val);
 
     as_arraylist_destroy(&arglist);

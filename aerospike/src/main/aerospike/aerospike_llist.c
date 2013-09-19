@@ -35,6 +35,8 @@
 // ++==============++
 // || Fixed Values ||
 // ++==============++
+static char * DEFAULT_LLIST_PACKAGE = "llist";
+
 // The names of the Lua Functions that implement Large Set Ops
 static char * LDT_LIST_OP_ADD				= "add";
 static char * LDT_LIST_OP_ADDALL			= "add_all";
@@ -78,7 +80,7 @@ static as_status aerospike_llist_add_internal(
 
 	as_val* p_return_val = NULL;
     aerospike_key_apply(
-		as, err, policy, key, ldt->module, operation,
+		as, err, policy, key, DEFAULT_LLIST_PACKAGE, operation,
 		(as_list *)&arglist, &p_return_val);
 
     as_arraylist_destroy(&arglist);
@@ -143,7 +145,7 @@ as_status aerospike_llist_size(
 
 	as_val* p_return_val = NULL;
     aerospike_key_apply(
-		as, err, policy, key, ldt->module, LDT_LIST_OP_SIZE,
+		as, err, policy, key, DEFAULT_LLIST_PACKAGE, LDT_LIST_OP_SIZE,
 		(as_list *)&arglist, &p_return_val);
 
     as_arraylist_destroy(&arglist);
@@ -212,7 +214,7 @@ as_status aerospike_llist_filter(
 
 	as_val* p_return_val = NULL;
     aerospike_key_apply(
-		as, err, policy, key, ldt->module, filter ? LDT_LIST_OP_FILTER : LDT_LIST_OP_SCAN,
+		as, err, policy, key, DEFAULT_LLIST_PACKAGE, filter ? LDT_LIST_OP_FILTER : LDT_LIST_OP_SCAN,
 		(as_list *)&arglist, &p_return_val);
 
     as_arraylist_destroy(&arglist);
@@ -264,7 +266,7 @@ as_status aerospike_llist_remove(
 
 	as_val* p_return_val = NULL;
     aerospike_key_apply(
-		as, err, policy, key, ldt->module, LDT_LIST_OP_REMOVE,
+		as, err, policy, key, DEFAULT_LLIST_PACKAGE, LDT_LIST_OP_REMOVE,
 		(as_list *)&arglist, &p_return_val);
 
     as_arraylist_destroy(&arglist);
@@ -310,7 +312,7 @@ as_status aerospike_llist_destroy(
 
 	as_val* p_return_val = NULL;
     aerospike_key_apply(
-		as, err, policy, key, ldt->module, LDT_LIST_OP_DESTROY,
+		as, err, policy, key, DEFAULT_LLIST_PACKAGE, LDT_LIST_OP_DESTROY,
 		(as_list *)&arglist, &p_return_val);
 
     as_arraylist_destroy(&arglist);

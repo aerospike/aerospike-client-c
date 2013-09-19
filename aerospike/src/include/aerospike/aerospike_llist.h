@@ -29,7 +29,6 @@
 #include <aerospike/aerospike.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_ldt.h>
-#include <aerospike/as_list.h>
 #include <aerospike/as_operations.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_status.h>
@@ -92,7 +91,7 @@ as_status aerospike_llist_add(
  *	as_arraylist_append_string(&vals, s);
  *	as_arraylist_append_int64(&vals, 35);
  *
- *	if ( aerospike_llist_addall(&as, &err, NULL, &key, &llist, (as_list *)vals) != AEROSPIKE_OK ) {
+ *	if ( aerospike_llist_add_all(&as, &err, NULL, &key, &llist, (as_list *)vals) != AEROSPIKE_OK ) {
  *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *	}
  *
@@ -109,7 +108,7 @@ as_status aerospike_llist_add(
  *
  *	@ingroup ldt_operations
  */
-as_status aerospike_llist_addall(
+as_status aerospike_llist_add_all(
 	aerospike * as, as_error * err, const as_policy_apply * policy,
 	const as_key * key, const as_ldt * ldt, const as_list * vals);
 

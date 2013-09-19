@@ -92,7 +92,7 @@ as_status aerospike_lset_add(
  *	as_arraylist_append_string(&vals, s);
  *	as_arraylist_append_int64(&vals, 35);
  *
- *	if ( aerospike_lset_addall(&as, &err, NULL, &key, &lset, (as_list *)vals) != AEROSPIKE_OK ) {
+ *	if ( aerospike_lset_add_all(&as, &err, NULL, &key, &lset, (as_list *)vals) != AEROSPIKE_OK ) {
  *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *	}
  *
@@ -109,7 +109,7 @@ as_status aerospike_lset_add(
  *
  *	@ingroup ldt_operations
  */
-as_status aerospike_lset_addall(
+as_status aerospike_lset_add_all(
 	aerospike * as, as_error * err, const as_policy_apply * policy,
 	const as_key * key, const as_ldt * ldt, const as_list * vals);
 
@@ -194,6 +194,45 @@ as_status aerospike_lset_filter(
 	aerospike * as, as_error * err, const as_policy_apply * policy,
 	const as_key * key, const as_ldt * ldt,
 	const as_udf_function_name filter, const as_list *filter_args,
+	as_list ** elements );
+
+/**
+ *	Given an lset bin, scan for all the values in the set
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_key key;
+ *	as_key_init(&key, "myns", "myset", "mykey");
+ *
+ *	as_ldt lset;
+ *	as_ldt_init(&lset, "mylset", AS_LDT_LSET, NULL);
+ *
+ *	as_list *list = NULL;
+ *
+ *	if ( aerospike_lset_scan(&as, &err, NULL, &key, &lset,
+ *			"search_filter", NULL, (as_list *) &list) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *	else {
+ *		// process the returned elements
+ *		as_arraylist_destroy(list);
+ *	}
+ *	~~~~~~~~~~
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param key			The key of the record.
+ *	@param ldt 			The lset bin to search from. If not an lset bin, will return error.
+ *	@param list			The pointer to a list of elements returned from search function. Pointer should
+ *						be NULL passed in.
+ *
+ *	@return AEROSPIKE_OK if successful. Otherwise an error.
+ *
+ *	@ingroup ldt_operations
+ */
+as_status aerospike_lset_scan(
+	aerospike * as, as_error * err, const as_policy_apply * policy,
+	const as_key * key, const as_ldt * ldt,
 	as_list ** elements );
 
 /**

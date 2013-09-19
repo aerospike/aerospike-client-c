@@ -162,7 +162,7 @@ main(int argc, char* argv[])
 	as_arraylist_append_int64(&vals, 2000);
 	as_arraylist_append_int64(&vals, 3000);
 
-	if (aerospike_lstack_pushall(&as, &err, NULL, &g_key, &lstack,
+	if (aerospike_lstack_push_all(&as, &err, NULL, &g_key, &lstack,
 			(const as_list*)&vals) != AEROSPIKE_OK) {
 		LOG("aerospike_lstack_pushall() returned %d - %s", err.code,
 				err.message);

@@ -23,6 +23,7 @@
 #include <aerospike/aerospike_llist.h>
 #include <aerospike/aerospike_key.h>
 #include <aerospike/as_ldt.h>
+#include <aerospike/as_list.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_status.h>
@@ -35,14 +36,16 @@
 // || Fixed Values ||
 // ++==============++
 // The names of the Lua Functions that implement Large Set Ops
-static char * LDT_LIST_OP_ADD				= "llist_insert";
-static char * LDT_LIST_OP_ADDALL			= "llist_insert_all";
-static char * LDT_LIST_OP_SIZE       		= "llist_size";
-static char * LDT_LIST_OP_EXISTS     		= "llist_exists";
-static char * LDT_LIST_OP_SCAN       		= "llist_scan";
-static char * LDT_LIST_OP_SCAN_WITH_FILTER	= "llist_scan_then_filter";
-static char * LDT_LIST_OP_REMOVE     		= "llist_delete";
-static char * LDT_LIST_OP_DESTROY  			= "llist_remove";
+static char * LDT_LIST_OP_ADD				= "add";
+static char * LDT_LIST_OP_ADDALL			= "add_all";
+// @TODO static char * LDT_LIST_OP_FIND     			= "find";
+static char * LDT_LIST_OP_SCAN       		= "scan";
+static char * LDT_LIST_OP_FILTER			= "filter";
+static char * LDT_LIST_OP_REMOVE     		= "remove";
+static char * LDT_LIST_OP_DESTROY  			= "destroy";
+static char * LDT_LIST_OP_SIZE       		= "size";
+// @TODO static char * LDT_LIST_OP_SET_CAPACITY      = "set_capacity";
+// @TODO static char * LDT_LIST_OP_GET_CAPACITY      = "get_capacity";
 
 
 static as_status aerospike_llist_add_internal(
@@ -70,6 +73,7 @@ static as_status aerospike_llist_add_internal(
 	as_arraylist arglist;
 	as_arraylist_inita(&arglist, 2);
 	as_arraylist_append_string(&arglist, &ldt_bin);
+	as_val_reserve( val ); // bump the ref count so the arraylist_destroy will not reset the val
 	as_arraylist_append(&arglist, (as_val *)val);
 
 	as_val* p_return_val = NULL;
@@ -102,7 +106,7 @@ as_status aerospike_llist_add(
 	return aerospike_llist_add_internal (as, err, policy, key, ldt, val, LDT_LIST_OP_ADD);
 }
 
-as_status aerospike_llist_addall(
+as_status aerospike_llist_add_all(
 	aerospike * as, as_error * err, const as_policy_apply * policy,
 	const as_key * key, const as_ldt * ldt, const as_list * vals) {
 	return aerospike_llist_add_internal (as, err, policy, key, ldt,
@@ -160,57 +164,6 @@ as_status aerospike_llist_size(
     return err->code;
 }
 
-as_status aerospike_llist_exists(
-	aerospike * as, as_error * err, const as_policy_apply * policy,
-	const as_key * key, const as_ldt * ldt, const as_val * val, as_boolean *exists)
-{
-	if ( !err ) {
-		return AEROSPIKE_ERR_PARAM;
-	}
-	as_error_reset(err);
-
-	if (!as || !key || !ldt || !exists) {
-		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
-				"as/key/ldt/n cannot be null");
-	}
-	if (ldt->type != AS_LDT_LLIST) {
-		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
-				"not llist type");
-	}
-
-	/* stack allocate the arg list */
-	as_string ldt_bin;
-	as_string_init(&ldt_bin, (char *)ldt->name, false);
-
-	as_arraylist arglist;
-	as_arraylist_inita(&arglist, 2);
-	as_arraylist_append_string(&arglist, &ldt_bin);
-	as_arraylist_append(&arglist, (as_val *)val);
-
-	as_val* p_return_val = NULL;
-    aerospike_key_apply(
-		as, err, policy, key, ldt->module, LDT_LIST_OP_EXISTS,
-		(as_list *)&arglist, &p_return_val);
-
-    if (ldt_parse_error(err) != AEROSPIKE_OK) {
-    	return err->code;
-    }
-
-    if (!p_return_val) {
-		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL,
-				"no value returned from server");
-    }
-    int64_t ival = as_integer_getorelse(as_integer_fromval(p_return_val), -1);
-	as_val_destroy(p_return_val);
-
-    if (ival == -1) {
-		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL,
-				"value returned from server not parse-able");
-    }
-
-    return err->code;
-} // aerospike_llist_exists()
-
 
 as_status aerospike_llist_filter(
 	aerospike * as, as_error * err, const as_policy_apply * policy,
@@ -255,7 +208,7 @@ as_status aerospike_llist_filter(
 
 	as_val* p_return_val = NULL;
     aerospike_key_apply(
-		as, err, policy, key, ldt->module, filter ? LDT_LIST_OP_SCAN_WITH_FILTER : LDT_LIST_OP_SCAN,
+		as, err, policy, key, ldt->module, filter ? LDT_LIST_OP_FILTER : LDT_LIST_OP_SCAN,
 		(as_list *)&arglist, &p_return_val);
 
     if (ldt_parse_error(err) != AEROSPIKE_OK) {

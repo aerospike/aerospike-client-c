@@ -51,6 +51,7 @@ extern "C" {
  * unable to fail.
  */
 
+#define INFO_TIMEOUT_MS 500
 
 /**
  * Call this init function sometime early, create our mutexes and a few other things.
@@ -73,6 +74,19 @@ void citrusleaf_set_debug(bool debug_flag);
  * This call will print stats to stderr
  */
 void citrusleaf_print_stats(void);
+
+struct cl_cluster_compression_stat_s;
+typedef struct cl_cluster_compression_stat_s cl_cluster_compression_stat;
+
+extern void citrusleaf_cluster_put_compression_stat(cl_cluster *asc, uint64_t actual_sz, uint64_t compressed_sz);
+extern void citrusleaf_cluster_get_compression_stat(cl_cluster *asc, uint64_t *actual_sz, uint64_t *compressed_sz);
+
+/*
+ * Set minimum size of packet, above which packet will be compressed before sending on wire,
+ * provided compression is enabled.
+ */
+int
+citrusleaf_cluster_change_compression_threshold(cl_cluster *asc, int size_in_bytes);
 
 /**
  * This call is good for testing. Call it when you think you know the values. If the key doesn't exist, or

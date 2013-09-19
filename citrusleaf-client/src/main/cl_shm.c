@@ -327,7 +327,7 @@ cl_shm_request_n_partitions(struct sockaddr_in* address_array, int address_count
 {
 	// Loop through node's addresses and make request.
 	for (int i = 0; i < address_count; i++) {
-		if (cl_request_n_partitions(&address_array[i], n_partitions) == 0) {
+		if (cl_request_n_partitions(&address_array[i], n_partitions, INFO_TIMEOUT_MS) == 0) {
 			// Return on first successful request.
 			return CL_SHM_OK;
 		}
@@ -340,7 +340,7 @@ cl_shm_request_node_info(struct sockaddr_in* address_array, int address_count, c
 {
 	// Loop through node's addresses and make request.
 	for (int i = 0; i < address_count; i++) {
-		if (cl_request_node_info(&address_array[i], node_info) == 0) {
+		if (cl_request_node_info(&address_array[i], node_info, INFO_TIMEOUT_MS) == 0) {
 			// Return on first successful request.
 			return CL_SHM_OK;
 		}
@@ -353,7 +353,7 @@ cl_shm_request_replicas(struct sockaddr_in* address_array, int address_count, cl
 {
 	// Loop through node's addresses and make request.
 	for (int i = 0; i < address_count; i++) {
-		if (cl_request_replicas(&address_array[i], replicas) == 0) {
+		if (cl_request_replicas(&address_array[i], replicas, INFO_TIMEOUT_MS) == 0) {
 			// Return on first successful request.
 			return CL_SHM_OK;
 		}

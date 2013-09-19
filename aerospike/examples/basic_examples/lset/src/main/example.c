@@ -159,7 +159,7 @@ main(int argc, char* argv[])
 	as_arraylist_append_int64(&vals, 2002);
 	as_arraylist_append_int64(&vals, 3003);
 
-	if (aerospike_lset_addall(&as, &err, NULL, &g_key, &lset,
+	if (aerospike_lset_add_all(&as, &err, NULL, &g_key, &lset,
 			(const as_list*)&vals) != AEROSPIKE_OK) {
 		LOG("aerospike_lset_addall() returned %d - %s", err.code, err.message);
 		as_arraylist_destroy(&vals);

@@ -35,14 +35,17 @@
 // || Fixed Values ||
 // ++==============++
 // The names of the Lua Functions that implement Large Set Ops
-static char * LDT_SET_OP_ADD				= "lset_insert";
-static char * LDT_SET_OP_ADDALL				= "lset_insert_all";
-static char * LDT_SET_OP_SIZE       		= "lset_size";
-static char * LDT_SET_OP_EXISTS     		= "lset_exists";
-static char * LDT_SET_OP_SCAN       		= "lset_scan";
-static char * LDT_SET_OP_SCAN_WITH_FILTER	= "lset_scan_then_filter";
-static char * LDT_SET_OP_REMOVE     		= "lset_delete";
-static char * LDT_SET_OP_DESTROY  			= "lset_remove";
+static char * LDT_SET_OP_ADD				= "add";
+static char * LDT_SET_OP_ADDALL				= "add_all";
+// @TODO static char * LDT_SET_OP_GET				= "get";
+static char * LDT_SET_OP_EXISTS     		= "exists";
+static char * LDT_SET_OP_SCAN       		= "scan";
+static char * LDT_SET_OP_FILTER				= "filter";
+static char * LDT_SET_OP_REMOVE     		= "remove";
+static char * LDT_SET_OP_DESTROY  			= "destroy";
+static char * LDT_SET_OP_SIZE       		= "size";
+// @TODO static char * LDT_SET_OP_SET_CAPACITY 		= "set_capacity";
+// @TODO static char * LDT_SET_OP_GET_CAPACITY       = "get_capacity";
 
 
 static as_status aerospike_lset_add_internal(
@@ -70,6 +73,7 @@ static as_status aerospike_lset_add_internal(
 	as_arraylist arglist;
 	as_arraylist_inita(&arglist, 2);
 	as_arraylist_append_string(&arglist, &ldt_bin);
+    as_val_reserve( val ); // bump the ref count so the arraylist_destroy will not reset the val
 	as_arraylist_append(&arglist, (as_val *)val);
 
 	as_val* p_return_val = NULL;
@@ -104,7 +108,7 @@ as_status aerospike_lset_add(
 	return aerospike_lset_add_internal (as, err, policy, key, ldt, val, LDT_SET_OP_ADD);
 }
 
-as_status aerospike_lset_addall(
+as_status aerospike_lset_add_all(
 	aerospike * as, as_error * err, const as_policy_apply * policy,
 	const as_key * key, const as_ldt * ldt, const as_list * vals) {
 	return aerospike_lset_add_internal (as, err, policy, key, ldt,
@@ -189,6 +193,7 @@ as_status aerospike_lset_exists(
 	as_arraylist arglist;
 	as_arraylist_inita(&arglist, 2);
 	as_arraylist_append_string(&arglist, &ldt_bin);
+    as_val_reserve( val ); // bump the ref count
 	as_arraylist_append(&arglist, (as_val *)val);
 
 	as_val* p_return_val = NULL;
@@ -263,7 +268,7 @@ as_status aerospike_lset_filter(
 
 	as_val* p_return_val = NULL;
     aerospike_key_apply(
-		as, err, policy, key, ldt->module, filter ? LDT_SET_OP_SCAN_WITH_FILTER : LDT_SET_OP_SCAN,
+		as, err, policy, key, ldt->module, filter ? LDT_SET_OP_FILTER : LDT_SET_OP_SCAN,
 		(as_list *)&arglist, &p_return_val);
 
     as_arraylist_destroy(&arglist);

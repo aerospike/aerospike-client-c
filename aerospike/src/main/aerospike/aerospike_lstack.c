@@ -38,8 +38,8 @@
 static char * LDT_STACK_OP_PUSH             = "push";
 static char * LDT_STACK_OP_PUSHALL          = "push_all";
 static char * LDT_STACK_OP_PEEK             = "peek";
-static char * LDT_STACK_OP_POP             	= "pop";
-static char * LDT_STACK_OP_SCAN  			= "scan";
+// @TODO static char * LDT_STACK_OP_POP             	= "pop";
+// @TODO static char * LDT_STACK_OP_SCAN  			= "scan";
 static char * LDT_STACK_OP_FILTER  			= "filter";
 static char * LDT_STACK_OP_DESTROY			= "destroy";
 static char * LDT_STACK_OP_SIZE             = "size";
@@ -94,7 +94,7 @@ static as_status aerospike_lstack_push_internal(
     return err->code;
 } // end aerospike_lstack_push_internal()
 
-static as_status aerospike_lstack_peek_with_filter_internal(
+static as_status aerospike_lstack_peek_with_filter(
 	aerospike * as, as_error * err, const as_policy_apply * policy,
 	const as_key * key, const as_ldt * ldt, uint32_t peek_count,
 	const as_udf_function_name filter, const as_list *filter_args,

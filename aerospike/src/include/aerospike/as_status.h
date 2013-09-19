@@ -270,17 +270,11 @@ typedef enum as_status_e {
 	/** General error during delete operation. */
 	AEROSPIKE_ERR_LDT_DELETE                      = 1405,
 
-	/** The function to extract the key from a complex object was not found. */
-	AEROSPIKE_ERR_LDT_TRANS_FUN_NOT_FOUND         = 1406,
-
-	/** The function to transform an object into a binary form was not found. */
-	AEROSPIKE_ERR_LDT_UNTRANS_FUN_NOT_FOUND       = 1407,
-
-	/** The function to Un-Transform an object from binary form was not found. */
-	AEROSPIKE_ERR_LDT_KEY_FUN_NOT_FOUND           = 1408,
 
 	/** General input parameter error. */
 	AEROSPIKE_ERR_LDT_INPUT_PARM                  = 1409,
+
+    // -------------------------------------------------
 
 	/** LDT Type mismatch for this bin.  */
 	AEROSPIKE_ERR_LDT_TYPE_MISMATCH               = 1410,
@@ -312,10 +306,13 @@ typedef enum as_status_e {
 	/** LDT control structures in the Top Record are damaged. Cannot proceed. */
 	AEROSPIKE_ERR_LDT_BIN_DAMAGED                 = 1419,
 
+    // -------------------------------------------------
+
 	/** Internal Error: LDT Subrecord pool is damaged. */
 	AEROSPIKE_ERR_LDT_SUBREC_POOL_DAMAGED         = 1420,
 
 	/** LDT control structures in the Sub Record are damaged. Cannot proceed. */
+	AEROSPIKE_ERR_LDT_SUBREC_DAMAGED              = 1421,
 
 	/** Error encountered while opening a Sub Record. */
 	AEROSPIKE_ERR_LDT_SUBREC_OPEN                 = 1422,
@@ -323,8 +320,45 @@ typedef enum as_status_e {
 	/** Error encountered while updating a Sub Record. */
 	AEROSPIKE_ERR_LDT_SUBREC_UPDATE               = 1423,
 
-	/** Error encountered while closing a Sub Record. */
-	AEROSPIKE_ERR_LDT_SUBREC_CLOSE                = 1424 
+	/** Error encountered while creating a Sub Record. */
+	AEROSPIKE_ERR_LDT_SUBREC_CREATE               = 1424,
 
+	/** Error encountered while deleting a Sub Record. */
+	AEROSPIKE_ERR_LDT_SUBREC_DELETE               = 1425, 
+
+	/** Error encountered while closing a Sub Record. */
+	AEROSPIKE_ERR_LDT_SUBREC_CLOSE                = 1426,
+
+    // -------------------------------------------------
+
+	/** The filter function name was invalid. */
+	AEROSPIKE_ERR_LDT_FILTER_FUNCTION_BAD         = 1430,
+
+	/** The filter function was not found. */
+	AEROSPIKE_ERR_LDT_FILTER_FUNCTION_NOT_FOUND   = 1431,
+
+	/** The function to extract the Unique Value from a complex object was invalid. */
+	AEROSPIKE_ERR_LDT_KEY_FUNCTION_BAD            = 1432,
+
+	/** The function to extract the Unique Value from a complex object was not found. */
+	AEROSPIKE_ERR_LDT_KEY_FUNCTION_NOT_FOUND      = 1433,
+
+	/** The function to transform an object into a binary form was invalid. */
+	AEROSPIKE_ERR_LDT_TRANS_FUNCTION_BAD          = 1434,
+
+	/** The function to transform an object into a binary form was not found. */
+	AEROSPIKE_ERR_LDT_TRANS_FUNCTION_NOT_FOUND    = 1435,
+
+	/** The function to untransform an object from binary form to live form was invalid. */
+	AEROSPIKE_ERR_LDT_UNTRANS_FUNCTION_BAD        = 1436,
+
+	/** The function to untransform an object from binary form to live form not found. */
+	AEROSPIKE_ERR_LDT_UNTRANS_FUNCTION_NOT_FOUND  = 1437,
+
+	/** The UDF user module name for LDT Overrides was invalid */
+	AEROSPIKE_ERR_LDT_USER_MODULE_BAD             = 1438,
+
+	/** The UDF user module name for LDT Overrides was not found */
+	AEROSPIKE_ERR_LDT_USER_MODULE_NOT_FOUND       = 1439
 
 } as_status;

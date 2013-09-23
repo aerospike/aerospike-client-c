@@ -352,11 +352,6 @@ void atf_assert_string_eq(atf_test_result * result, const char * actual_exp, con
     result->success = false;
 }
 
-void atf_assert_string_ne(atf_test_result * result, const char * actual_exp, const char * actual, const char * expected, const char * file, int line) {
-    snprintf(result->message, LOG_MESSAGE_MAX, "assertion failed: %s == \"%s\", when it shouldn't be. [at %s:%d]", actual_exp, actual, file, line);
-    result->success = false;
-}
-
 void atf_assert_log(atf_test_result * result, const char * exp, const char * file, int line, const char * fmt, ...) {
 
     char msg[LOG_MESSAGE_MAX] = {0};

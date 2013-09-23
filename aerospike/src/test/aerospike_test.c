@@ -168,7 +168,7 @@ PLAN( aerospike_test ) {
     // aerospike_key module
     plan_add( key_basics );
     plan_add( key_apply );
-    plan_add( key_apply2 );
+//    plan_add( key_apply2 );
     
     // aerospike_info module
     plan_add( info_basics );

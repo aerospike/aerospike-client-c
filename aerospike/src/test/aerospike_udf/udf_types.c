@@ -21,6 +21,7 @@
 #include <time.h>
 
 #include "../test.h"
+#include "../unittest.h"
 #include "../util/udf.h"
 #include "../util/info_util.h"
 
@@ -82,7 +83,7 @@ TEST( udf_types_nil, "udf_types.get_nil() returns as_nil" ) {
 	as_error err;
 
 	as_key key;
-	as_key_init(&key, "test", "test", "test");
+	as_key_init(&key, TEST_NAMESPACE, SET, "test");
 
 	as_val * val = NULL;
 
@@ -100,7 +101,7 @@ TEST( udf_types_true, "udf_types.get_true() returns 1 (as_integer)" ) {
 	as_error err;
 
 	as_key key;
-	as_key_init(&key, "test", "test", "test");
+	as_key_init(&key, TEST_NAMESPACE, SET, "test");
 
 	as_val * val = NULL;
 
@@ -121,7 +122,7 @@ TEST( udf_types_false, "udf_types.get_false() returns 0 (as_integer)" ) {
 	as_error err;
 
 	as_key key;
-	as_key_init(&key, "test", "test", "test");
+	as_key_init(&key, TEST_NAMESPACE, SET, "test");
 
 	as_val * val = NULL;
 
@@ -142,7 +143,7 @@ TEST( udf_types_integer, "udf_types.get_integer() returns 123 (as_integer)" ) {
 	as_error err;
 
 	as_key key;
-	as_key_init(&key, "test", "test", "test");
+	as_key_init(&key, TEST_NAMESPACE, SET, "test");
 
 	as_val * val = NULL;
 
@@ -163,7 +164,7 @@ TEST( udf_types_string, "udf_types.get_string() returns 'abc' (as_string)" ) {
 	as_error err;
 
 	as_key key;
-	as_key_init(&key, "test", "test", "test");
+	as_key_init(&key, TEST_NAMESPACE, SET, "test");
 
 	as_val * val = NULL;
 
@@ -194,7 +195,7 @@ TEST( udf_types_map, "udf_types.get_map() returns {a:1, b:2, c:3} (as_map)" ) {
 	as_error err;
 
 	as_key key;
-	as_key_init(&key, "test", "test", "test");
+	as_key_init(&key, TEST_NAMESPACE, SET, "test");
 
 	as_val * val = NULL;
 
@@ -221,7 +222,7 @@ TEST( udf_types_list, "udf_types.get_list() returns [1,2,3] (as_list)" ) {
 	as_error err;
 
 	as_key key;
-	as_key_init(&key, "test", "test", "test");
+	as_key_init(&key, TEST_NAMESPACE, SET, "test");
 
 	as_val * val = NULL;
 
@@ -245,7 +246,7 @@ TEST( udf_types_rec_map, "udf_types.get_rec_map() returns {t:1, f: 0, n: nil, i:
 	as_error err;
 
 	as_key key;
-	as_key_init(&key, "test", "test", "test");
+	as_key_init(&key, TEST_NAMESPACE, SET, "test");
 
 	as_val * val = NULL;
 

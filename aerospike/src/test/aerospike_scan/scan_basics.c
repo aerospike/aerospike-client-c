@@ -19,9 +19,9 @@
 #include <citrusleaf/cl_cluster.h>
 
 #include "../test.h"
+#include "../unittest.h"
 #include "../util/udf.h"
 
-#define NS "test"
 #define SET_STRSZ 20
 #define NUM_RECS_SET1 100
 #define SET1 "sb_set1"
@@ -297,7 +297,7 @@ static void insert_data(int numrecs, const char *setname)
 		as_record_set_map(&r, "bin3", (as_map *) &m);
 
         as_key k;
-		as_key_init(&k, NS, setname, strkey);
+		as_key_init(&k, TEST_NAMESPACE, setname, strkey);
 
 		rc = aerospike_key_put(as, &err, NULL, &k, &r);
 		if (rc != AEROSPIKE_OK) {
@@ -329,7 +329,7 @@ TEST( scan_basics_null_set , "full scan (using NULL setname)" ) {
 	as_error err;
 
 	as_scan scan;
-	as_scan_init(&scan, NS, "");
+	as_scan_init(&scan, TEST_NAMESPACE, "");
 
 	as_status rc = aerospike_scan_foreach(as, &err, NULL, &scan, scan_check_callback, &check);
 	
@@ -358,7 +358,7 @@ TEST( scan_basics_set1 , "scan "SET1"" ) {
 	as_error err;
 
 	as_scan scan;
-	as_scan_init(&scan, NS, SET1);
+	as_scan_init(&scan, TEST_NAMESPACE, SET1);
 
 	as_status rc = aerospike_scan_foreach(as, &err, NULL, &scan, scan_check_callback, &check);
 	
@@ -385,7 +385,7 @@ TEST( scan_basics_set1_select , "scan "SET1" and select 'bin1'" ) {
 	as_error err;
 
 	as_scan scan;
-	as_scan_init(&scan, NS, SET1);
+	as_scan_init(&scan, TEST_NAMESPACE, SET1);
 
 	as_scan_select_inita(&scan, 1);
 	as_scan_select(&scan, "bin1");
@@ -415,7 +415,7 @@ TEST( scan_basics_set1_nodata , "scan "SET1" with no-bin-data" ) {
 	as_error err;
 
 	as_scan scan;
-	as_scan_init(&scan, NS, SET1);
+	as_scan_init(&scan, TEST_NAMESPACE, SET1);
 	as_scan_set_nobins(&scan, true);
 
 	as_status rc = aerospike_scan_foreach(as, &err, NULL, &scan, scan_check_callback, &check);
@@ -443,7 +443,7 @@ TEST( scan_basics_background , "scan "SET2" in background to insert a new bin" )
 	as_error err;
 
 	as_scan scan;
-	as_scan_init(&scan, NS, SET1);
+	as_scan_init(&scan, TEST_NAMESPACE, SET1);
 	as_scan_apply_each(&scan, "aerospike_scan_test", "scan_insert_bin4", NULL);
 
 	uint64_t scanid = 0;
@@ -456,7 +456,7 @@ TEST( scan_basics_background , "scan "SET2" in background to insert a new bin" )
 
 	// See if the above udf ran fine
 	as_scan scan2;
-	as_scan_init(&scan2, NS, SET1);
+	as_scan_init(&scan2, TEST_NAMESPACE, SET1);
 
 	as_status rc = aerospike_scan_foreach(as, &err, NULL, &scan2, scan_check_callback, &check);
 
@@ -473,7 +473,7 @@ TEST( scan_basics_background_sameid , "starting two udf scan of "SET2" in backgr
 
 	// insert a new bin using udf
 	as_scan scan;
-	as_scan_init(&scan, NS, SET2);
+	as_scan_init(&scan, TEST_NAMESPACE, SET2);
 	as_scan_apply_each(&scan, "aerospike_scan_test", "scan_noop", NULL);
 
 	uint64_t scanid = 0;
@@ -482,7 +482,7 @@ TEST( scan_basics_background_sameid , "starting two udf scan of "SET2" in backgr
 	assert_int_eq( udf_rc, AEROSPIKE_OK );
 
 	as_scan scan2;
-	as_scan_init(&scan2, NS, SET2);
+	as_scan_init(&scan2, TEST_NAMESPACE, SET2);
 	as_scan_apply_each(&scan2, "aerospike_scan_test", "scan_noop", NULL);
 
 	uint64_t scanid2 = scanid;

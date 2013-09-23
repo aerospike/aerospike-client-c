@@ -17,7 +17,6 @@
 #include <aerospike/as_val.h>
 
 #include "../test.h"
-#include "../unittest.h"
 
 /******************************************************************************
  * GLOBAL VARS
@@ -25,6 +24,8 @@
 
 extern aerospike * as;
 
+#define NAMESPACE "test"
+#define SET "test"
 #define N_KEYS 5
 
 /******************************************************************************
@@ -86,10 +87,10 @@ TEST( batch_get_pre , "Pre: Create Records" )
     as_record rec;
     as_record_inita(&rec, 1);
 
-    for (uint32_t i = 1; i < N_KEYS + 1; i++) {
+    for (uint32_t i = 1; i < N_KEYS+1; i++) {
 
         as_key key;
-        as_key_init_int64(&key, TEST_NAMESPACE, SET, (int64_t) i);
+        as_key_init_int64(&key, NAMESPACE, SET, (int64_t) i);
 
         as_record_set_int64(&rec, "val", (int64_t) i);
 
@@ -103,30 +104,6 @@ TEST( batch_get_pre , "Pre: Create Records" )
     }
 }
 
-TEST( batch_get_null , "Pre: Create Records with null values" )
-{
-    as_error err;
-
-    as_record rec;
-    as_record_inita(&rec, 1);
-
-    for (uint32_t i = 1; i < N_KEYS + 1; i++) {
-
-        as_key key;
-        as_key_init_int64(&key, TEST_NAMESPACE, SET, (int64_t) i);
-
-        as_record_set_int64(&rec, "val", (int64_t) i);
-
-        aerospike_key_put(as, &err, NULL, NULL, &rec);
-
-        if ( err.code == AEROSPIKE_OK ) {
-            info("Error: Records should not be created.");
-        }
-
-        assert_int_ne( err.code , AEROSPIKE_OK );
-    }
-}
-
 TEST( batch_get_1 , "Simple" )
 {
     as_error err;
@@ -135,7 +112,7 @@ TEST( batch_get_1 , "Simple" )
     as_batch_inita(&batch, N_KEYS);
 
     for (uint32_t i = 0; i < N_KEYS; i++) {
-        as_key_init_int64(as_batch_keyat(&batch,i), TEST_NAMESPACE, SET, i+1);
+        as_key_init_int64(as_batch_keyat(&batch,i), NAMESPACE, SET, i+1);
     }
 
     batch_read_data data = {0};
@@ -150,39 +127,14 @@ TEST( batch_get_1 , "Simple" )
     assert_int_eq( data.errors , 0 );
 }
 
-TEST( batch_get_nonexisting_keys , "Simple" )
-{
-    as_error err;
-
-    as_batch batch;
-    as_batch_inita(&batch, N_KEYS);
-
-    for (uint32_t i = 0; i < N_KEYS; i++) {
-        as_key_init_int64(as_batch_keyat(&batch,i), TEST_NAMESPACE, SET, i + 999);
-    }
-
-    batch_read_data data = {0};
-
-    aerospike_batch_get(as, &err, NULL, &batch, batch_get_1_callback, &data);
-
-    if ( err.code == AEROSPIKE_OK && err.code == AEROSPIKE_ERR_INDEX_FOUND )
-    {
-        info("Error: No record should be returned for non-existing keys");
-    }
-
-    assert_int_ne( err.code , AEROSPIKE_OK );
-    assert_int_ne( data.found , N_KEYS );
-    assert_int_ne( data.errors , 0 );
-}
-
 TEST( batch_get_post , "Post: Remove Records" )
 {
     as_error err;
 
-    for (uint32_t i = 1; i < N_KEYS + 1; i++) {
+    for (uint32_t i = 1; i < N_KEYS+1; i++) {
 
         as_key key;
-        as_key_init_int64(&key, TEST_NAMESPACE, SET, (int64_t) i);
+        as_key_init_int64(&key, NAMESPACE, SET, (int64_t) i);
 
         aerospike_key_remove(as, &err, NULL, &key);
 
@@ -194,26 +146,6 @@ TEST( batch_get_post , "Post: Remove Records" )
     }
 }
 
-TEST( batch_get_post_null , "Post: Remove Records using null key value" )
-{
-    as_error err;
-
-    for (uint32_t i = 1; i < N_KEYS + 1; i++) {
-
-        as_key key;
-        as_key_init_int64(&key, TEST_NAMESPACE, SET, (int64_t) i);
-
-        aerospike_key_remove(as, &err, NULL, NULL);
-
-        if ( err.code == AEROSPIKE_OK )
-        {
-            info("Error: No record should be removed because key does not exist");
-        }
-
-        assert_int_ne( err.code , AEROSPIKE_OK );
-    }
-}
-
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -222,9 +154,4 @@ SUITE( batch_get, "aerospike_batch_get tests" ) {
     suite_add( batch_get_pre );
     suite_add( batch_get_1 );
     suite_add( batch_get_post );
-
-//    suite_add( batch_get_null );
-    suite_add( batch_get_nonexisting_keys );
-//    suite_add( batch_get_post_null );
-
 }

@@ -16,7 +16,6 @@
 #include <aerospike/as_val.h>
 
 #include "../test.h"
-#include "../unittest.h"
 
 /******************************************************************************
  * GLOBAL VARS
@@ -90,7 +89,7 @@ TEST( info_basics_help , "help" ) {
 
 	char * res = NULL;
 
-	rc = aerospike_info_host(as, &err, NULL, as->config.hosts[0].addr, 3000, "help", &res);
+	rc = aerospike_info_host(as, &err, NULL, "127.0.0.1", 3000, "help", &res);
 	
 	assert_not_null( res );
 	assert_string_eq(res, data.actual);
@@ -125,79 +124,13 @@ TEST( info_basics_features , "features" ) {
 
 	char * res = NULL;
 
-	rc = aerospike_info_host(as, &err, NULL, as->config.hosts[0].addr, 3000, "features", &res);
+	rc = aerospike_info_host(as, &err, NULL, "127.0.0.1", 3000, "features", &res);
 	
 	assert_not_null( res );
 	assert_string_eq(res, data.actual);
 
 	free(res);
 	res = NULL;
-}
-
-TEST( info_basics_help_bad_params_foreach , "help with bad parameters foreach" ) {
-
-	as_error err;
-	as_error_reset(&err);
-
-	info_data data = {
-		.actual = NULL,
-		.matches = 0,
-		.count = 0
-	};
-
-	as_status rc = AEROSPIKE_OK;
-
-	rc = aerospike_info_foreach(as, &err, NULL, 99999, info_compare, &data);
-	assert_int_ne( rc, AEROSPIKE_OK );
-
-	char * res = NULL;
-
-//	rc = aerospike_info_host(as, &err, NULL, "127.0.0.1", 3000, "help", &res);
-
-	rc = aerospike_info_host(as, &err, NULL, as->config.hosts[0].addr, 3000, "help", &res);
-
-	assert_null( res );
-	assert_string_ne(res, data.actual);
-
-	free(res);
-	res = NULL;
-
-	if ( data.actual ) {
-		free(data.actual);
-	}
-}
-
-TEST( info_basics_help_bad_params_info_host , "help with bad parameters info_host" ) {
-
-	as_error err;
-	as_error_reset(&err);
-
-	info_data data = {
-		.actual = NULL,
-		.matches = 0,
-		.count = 0
-	};
-
-	as_status rc = AEROSPIKE_OK;
-
-	rc = aerospike_info_foreach(as, &err, NULL, "help", info_compare, &data);
-	assert_int_ne( rc, AEROSPIKE_OK );
-
-	char * res = NULL;
-
-//	rc = aerospike_info_host(as, &err, NULL, "127.0.0.1", 3000, "help", &res);
-
-	rc = aerospike_info_host(as, &err, NULL, as->config.hosts[0].addr, 3000, 99999, &res);
-
-	assert_null( res );
-	assert_string_ne(res, data.actual);
-
-	free(res);
-	res = NULL;
-
-	if ( data.actual ) {
-		free(data.actual);
-	}
 }
 
 /******************************************************************************
@@ -207,7 +140,4 @@ TEST( info_basics_help_bad_params_info_host , "help with bad parameters info_hos
 SUITE( info_basics, "aerospike_info basic tests" ) {
 	suite_add( info_basics_help );
 	suite_add( info_basics_features );
-
-//	suite_add( info_basics_help_bad_params_foreach );
-//	suite_add( info_basics_help_bad_params_info_host );
 }

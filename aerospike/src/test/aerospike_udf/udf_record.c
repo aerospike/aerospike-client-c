@@ -23,7 +23,6 @@
 #include "../test.h"
 #include "../util/udf.h"
 #include "../util/info_util.h"
-#include "../unittest.h"
 
 /******************************************************************************
  * GLOBAL VARS
@@ -92,7 +91,7 @@ TEST( udf_record_update_map, "udf_record.update_map()" ) {
   as_error err;
 
   as_key key;
-  as_key_init(&key, TEST_NAMESPACE, SET, "test");
+  as_key_init(&key, "test", "test", "test");
 
   as_arraylist args;
   as_arraylist_init(&args,2,0);

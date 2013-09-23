@@ -16,6 +16,7 @@
 #include <aerospike/as_val.h>
 
 #include "../test.h"
+#include "../unittest.h"
 
 /******************************************************************************
  * GLOBAL VARS
@@ -40,7 +41,7 @@ static bool key_basics_print_bins(const char * name, const as_val * value, void 
  * TEST CASES
  *****************************************************************************/
 
-TEST( key_basics_put , "put: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 'def', e: [1,2,3], f: {x: 7, y: 8, z: 9}}" ) {
+TEST( key_basics_put , "put: (TEST_NAMESPACE, SET,foo) = {a: 123, b: 'abc', c: 456, d: 'def', e: [1,2,3], f: {x: 7, y: 8, z: 9}}" ) {
 
 	as_error err;
 	as_error_reset(&err);
@@ -67,7 +68,7 @@ TEST( key_basics_put , "put: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 'de
 	as_record_set_map(rec, "f", (as_map *) &map);
 
 	as_key key;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, TEST_NAMESPACE, SET, "foo");
 
 	as_status rc = aerospike_key_put(as, &err, NULL, &key, rec);
 
@@ -82,7 +83,7 @@ TEST( key_basics_put , "put: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 'de
 }
 
 
-TEST( key_basics_get , "get: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 'def', e: [1,2,3], f: {x: 7, y: 8, z: 9}}" ) {
+TEST( key_basics_get , "get: (TEST_NAMESPACE, SET,foo) = {a: 123, b: 'abc', c: 456, d: 'def', e: [1,2,3], f: {x: 7, y: 8, z: 9}}" ) {
 
 	as_error err;
 	as_error_reset(&err);
@@ -91,7 +92,7 @@ TEST( key_basics_get , "get: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 'de
 	as_record_init(&r, 0);
 
 	as_key key;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, TEST_NAMESPACE, SET, "foo");
 
 	as_status rc = aerospike_key_get(as, &err, NULL, &key, &rec);
 
@@ -130,7 +131,8 @@ TEST( key_basics_get , "get: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 'de
     as_record_destroy(rec);
 }
 
-TEST( key_basics_select , "select: (test,test,foo) = {a: 123, b: 'abc'}" ) {
+
+TEST( key_basics_get_nonexistent_bin , "get: (TEST_NAMESPACE, SET,foo) = {a: 123, b: 'abc', c: 456, d: 'def', e: [1,2,3], f: {x: 7, y: 8, z: 9}}" ) {
 
 	as_error err;
 	as_error_reset(&err);
@@ -139,7 +141,34 @@ TEST( key_basics_select , "select: (test,test,foo) = {a: 123, b: 'abc'}" ) {
 	as_record_init(&r, 0);
 
 	as_key key;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, TEST_NAMESPACE, SET, "foo");
+
+	as_status rc = aerospike_key_get(as, &err, NULL, &key, &rec);
+
+	as_key_destroy(&key);
+
+    assert_int_ne( rc, AEROSPIKE_OK );
+    assert_int_ne( as_record_numbins(rec), 6 );
+
+    assert_int_ne( as_record_get_int64(rec, "my_bin", 0), 123 );
+	assert_null( as_record_get_string(rec, "my_rec") );
+
+    info("bins: ");
+    as_record_foreach(rec, key_basics_print_bins, NULL);
+
+    as_record_destroy(rec);
+}
+
+TEST( key_basics_select , "select: (TEST_NAMESPACE, SET,foo) = {a: 123, b: 'abc'}" ) {
+
+	as_error err;
+	as_error_reset(&err);
+
+	as_record r, *rec = &r;
+	as_record_init(&r, 0);
+
+	as_key key;
+	as_key_init(&key, TEST_NAMESPACE, SET, "foo");
 
 	const char * bins[3] = { "a", "b", NULL };
 
@@ -172,13 +201,50 @@ TEST( key_basics_select , "select: (test,test,foo) = {a: 123, b: 'abc'}" ) {
     as_record_destroy(rec);
 }
 
-TEST( key_basics_exists , "exists: (test,test,foo)" ) {
+TEST( key_basics_select_nonexistent_bin , "select: (TEST_NAMESPACE,SET,foo) = {a: 123, b: 'abc'}" ) {
+
+	as_error err;
+	as_error_reset(&err);
+
+	as_record r, *rec = &r;
+	as_record_init(&r, 0);
+
+	as_key key;
+	as_key_init(&key, TEST_NAMESPACE, SET, "foo");
+
+	const char * bins[3] = { "mya", "myb", NULL };
+
+	as_status rc = aerospike_key_select(as, &err, NULL, &key, bins, &rec);
+
+	as_key_destroy(&key);
+
+    assert_int_ne( rc, AEROSPIKE_OK );
+    assert_int_ne( as_record_numbins(rec), 2 );
+
+    assert_int_ne( as_record_get_int64(rec, "mya", 0), 123 );
+	assert_null( as_record_get_string(rec, "myb") );
+
+    assert_int_eq( as_record_get_int64(rec, "c", 0), 0 );
+    assert_null( as_record_get_integer(rec, "c") );
+	assert_null( as_record_get_str(rec, "d") );
+	assert_null( as_record_get_string(rec, "d") );
+    assert_null( as_record_get_list(rec, "e") );
+    assert_null( as_record_get_map(rec, "f") );
+
+
+    info("bins: ");
+    as_record_foreach(rec, key_basics_print_bins, NULL);
+
+    as_record_destroy(rec);
+}
+
+TEST( key_basics_exists , "exists: (TEST_NAMESPACE,SET,foo)" ) {
 
 	as_error err;
 	as_error_reset(&err);
 
 	as_key key;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, TEST_NAMESPACE, SET, "foo");
 
 	bool exists = false;
 
@@ -190,13 +256,32 @@ TEST( key_basics_exists , "exists: (test,test,foo)" ) {
 	assert_true( exists );
 }
 
-TEST( key_basics_notexists , "not exists: (test,test,foo)" ) {
+TEST( key_basics_no_existent_key , "not exists: (TEST_NAMESPACE,SET,myfoo)" ) {
 
 	as_error err;
 	as_error_reset(&err);
 
 	as_key key;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, TEST_NAMESPACE, SET, "tyujkmkl");
+
+	bool exists = false;
+
+	as_status rc = aerospike_key_exists(as, &err, NULL, &key, &exists);
+
+	info("RC =  %d", rc);
+	as_key_destroy(&key);
+
+    assert_int_ne( rc, AEROSPIKE_OK );
+	assert_false( exists );
+}
+
+TEST( key_basics_notexists , "not exists: (TEST_NAMESPACE,SET,foo)" ) {
+
+	as_error err;
+	as_error_reset(&err);
+
+	as_key key;
+	as_key_init(&key, TEST_NAMESPACE, SET, "foo");
 
 	bool exists = false;
 
@@ -208,13 +293,13 @@ TEST( key_basics_notexists , "not exists: (test,test,foo)" ) {
 	assert_false( exists );
 }
 
-TEST( key_basics_remove , "remove: (test,test,foo)" ) {
+TEST( key_basics_remove , "remove: (TEST_NAMESPACE,SET,foo)" ) {
 
 	as_error err;
 	as_error_reset(&err);
 
 	as_key key;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, TEST_NAMESPACE, SET, "foo");
 
 	as_status rc = aerospike_key_remove(as, &err, NULL, &key);
 
@@ -223,8 +308,23 @@ TEST( key_basics_remove , "remove: (test,test,foo)" ) {
     assert_int_eq( rc, AEROSPIKE_OK );
 }
 
+TEST( key_basics_remove_non_existent_key , "remove: (TEST_NAMESPACE,SET,myfoo)" ) {
 
-TEST( key_basics_operate , "operate: (test,test,foo) => {a: incr(321), b: append('def'), d: prepend('abc')}" ) {
+	as_error err;
+	as_error_reset(&err);
+
+	as_key key;
+	as_key_init(&key, TEST_NAMESPACE, SET, "myfoo");
+
+	as_status rc = aerospike_key_remove(as, &err, NULL, &key);
+
+	as_key_destroy(&key);
+
+    assert_int_ne( rc, AEROSPIKE_OK );
+}
+
+
+TEST( key_basics_operate , "operate: (TEST_NAMESPACE, SET,foo) => {a: incr(321), b: append('def'), d: prepend('abc')}" ) {
 
 	as_error err;
 	as_error_reset(&err);
@@ -236,7 +336,7 @@ TEST( key_basics_operate , "operate: (test,test,foo) => {a: incr(321), b: append
 	as_operations_add_prepend_str(&ops, "d", "abc");
 
 	as_key key;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, TEST_NAMESPACE, SET, "foo");
 
 	as_status rc = aerospike_key_operate(as, &err, NULL, &key, &ops, NULL);
 
@@ -245,13 +345,13 @@ TEST( key_basics_operate , "operate: (test,test,foo) => {a: incr(321), b: append
     assert_int_eq( rc, AEROSPIKE_OK );
 }
 
-TEST( key_basics_get2 , "get: (test,test,foo) = {a: 444, b: 'abcdef', d: 'abcdef'}" ) {
+TEST( key_basics_get2 , "get: (TEST_NAMESPACE,SET,foo) = {a: 444, b: 'abcdef', d: 'abcdef'}" ) {
 
 	as_error err;
 	as_error_reset(&err);
 
 	as_key key;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, TEST_NAMESPACE, SET, "foo");
 
 	as_record r, *rec = &r;
 	as_record_init(&r, 0);
@@ -305,4 +405,10 @@ SUITE( key_basics, "aerospike_key basic tests" ) {
     suite_add( key_basics_get2 );
     suite_add( key_basics_remove );
     suite_add( key_basics_notexists );
+
+    suite_add( key_basics_get_nonexistent_bin );
+    suite_add( key_basics_select_nonexistent_bin );
+    suite_add( key_basics_no_existent_key );
+    suite_add( key_basics_remove_non_existent_key );
+
 }

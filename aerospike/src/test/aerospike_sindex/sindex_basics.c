@@ -15,15 +15,13 @@
 #include <aerospike/as_val.h>
 
 #include "../test.h"
+#include "../unittest.h"
 
 /******************************************************************************
  * GLOBAL VARS
  *****************************************************************************/
 
 extern aerospike * as;
-
-#define NAMESPACE "test"
-#define SET "test"
 
 
 /******************************************************************************
@@ -45,7 +43,7 @@ TEST( sindex_basics_create , "Create index on bin" ) {
     as_error err;
     as_error_reset(&err);
     
-    aerospike_index_create(as, &err, NULL, NAMESPACE, SET, "new_bin", AS_TYPE_STR, "idx_test_new_bin");
+    aerospike_index_create(as, &err, NULL, TEST_NAMESPACE, SET, "new_bin", AS_TYPE_STR, "idx_test_new_bin");
     if ( err.code != AEROSPIKE_OK && err.code != AEROSPIKE_ERR_INDEX_EXISTS ) {
         info("error(%d): %s", err.code, err.message);
     }
@@ -58,7 +56,7 @@ TEST( sindex_basics_drop , "Drop index" ) {
     as_error err;
     as_error_reset(&err);
 
-    aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_new_bin");
+    aerospike_index_remove(as, &err, NULL, TEST_NAMESPACE, "idx_test_new_bin");
     if ( err.code != AEROSPIKE_OK ) {
         info("error(%d): %s", err.code, err.message);
     }

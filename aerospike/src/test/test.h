@@ -12,6 +12,8 @@
 #define ATF_PLAN_SUITE_MAX 128
 #define ATF_SUITE_TEST_MAX 128
 
+
+
 /******************************************************************************
  * atf_test
  *****************************************************************************/
@@ -219,6 +221,10 @@ void atf_assert_log(atf_test_result * result, const char * exp, const char * fil
 
 #define assert_string_eq(ACTUAL, EXPECTED) \
     if ( strcmp(ACTUAL, EXPECTED) != 0 ) return atf_assert_string_eq(__result__, #ACTUAL, ACTUAL, EXPECTED, __FILE__, __LINE__);
+
+#define assert_string_ne(ACTUAL, EXPECTED) \
+    if ( strcmp(ACTUAL, EXPECTED) == 0 ) return atf_assert_string_ne(__result__, #ACTUAL, ACTUAL, EXPECTED, __FILE__, __LINE__);
+
 
 
 #define assert_log(EXP, fmt, args ... ) \

@@ -20,6 +20,7 @@
 #include <aerospike/mod_lua.h>
 
 #include "../test.h"
+#include "../unittest.h"
 #include "../util/udf.h"
 #include "../util/consumer_stream.h"
 #include "../util/test_logger.h"
@@ -36,9 +37,6 @@ extern aerospike * as;
 
 #define LUA_FILE "src/test/lua/client_stream_simple.lua"
 #define UDF_FILE "client_stream_simple"
-
-#define NAMESPACE "test"
-#define SET "test"
 
 /******************************************************************************
  * STATIC FUNCTIONS
@@ -111,28 +109,28 @@ TEST( query_stream_create, "create 100 records and 4 indices" ) {
 
     // create index on "a"
 
-    aerospike_index_string_create(as, &err, NULL, NAMESPACE, SET, "a", "idx_test_a");
+    aerospike_index_string_create(as, &err, NULL, TEST_NAMESPACE, SET, "a", "idx_test_a");
     if ( err.code != AEROSPIKE_OK && err.code != AEROSPIKE_ERR_INDEX_FOUND ) {
         info("error(%d): %s", err.code, err.message);
     }
 
     // create index on "b"
 
-    aerospike_index_integer_create(as, &err, NULL, NAMESPACE, SET, "b", "idx_test_b");
+    aerospike_index_integer_create(as, &err, NULL, TEST_NAMESPACE, SET, "b", "idx_test_b");
     if ( err.code != AEROSPIKE_OK && err.code != AEROSPIKE_ERR_INDEX_FOUND ) {
         info("error(%d): %s", err.code, err.message);
     }
 
     // create index on "c"
 
-    aerospike_index_integer_create(as, &err, NULL, NAMESPACE, SET, "c", "idx_test_c");
+    aerospike_index_integer_create(as, &err, NULL, TEST_NAMESPACE, SET, "c", "idx_test_c");
     if ( err.code != AEROSPIKE_OK && err.code != AEROSPIKE_ERR_INDEX_FOUND ) {
         info("error(%d): %s", err.code, err.message);
     }
 
     // create index on "d"
 
-    aerospike_index_integer_create(as, &err, NULL, NAMESPACE, SET, "d", "idx_test_d");
+    aerospike_index_integer_create(as, &err, NULL, TEST_NAMESPACE, SET, "d", "idx_test_d");
     if ( err.code != AEROSPIKE_OK && err.code != AEROSPIKE_ERR_INDEX_FOUND ) {
         info("error(%d): %s", err.code, err.message);
     }
@@ -158,7 +156,7 @@ TEST( query_stream_create, "create 100 records and 4 indices" ) {
 		as_record_set_int64(&r, "e", e);
 
 		as_key key;
-		as_key_init(&key, NAMESPACE, SET, keystr);
+		as_key_init(&key, TEST_NAMESPACE, SET, keystr);
 
         aerospike_key_put(as, &err, NULL, &key, &r);
 
@@ -198,7 +196,7 @@ TEST( query_stream_1, "count(*) where a == 'abc' (non-aggregating)" ) {
     as_stream * consumer = consumer_stream_new(consume);
 
     as_query q;
-    as_query_init(&q, NAMESPACE, SET);
+    as_query_init(&q, TEST_NAMESPACE, SET);
     as_query_select_inita(&q, 1);
     as_query_where_inita(&q, 1);
     as_query_select(&q, "c");
@@ -232,7 +230,7 @@ TEST( query_stream_2, "count(*) where a == 'abc' (aggregating)" ) {
     as_stream * consumer = consumer_stream_new(consume);
 
     as_query q;
-    as_query_init(&q, NAMESPACE, SET);
+    as_query_init(&q, TEST_NAMESPACE, SET);
     as_query_where_inita(&q, 1);
     as_query_where(&q, "a", string_equals("abc"));
     as_query_apply(&q, UDF_FILE, "count", NULL);
@@ -270,7 +268,7 @@ TEST( query_stream_3, "sum(e) where a == 'abc'" ) {
     as_stream * consumer = consumer_stream_new(consume);
     
     as_query q;
-    as_query_init(&q, NAMESPACE, SET);
+    as_query_init(&q, TEST_NAMESPACE, SET);
     as_query_where_inita(&q, 1);
     as_query_where(&q, "a", string_equals("abc"));
     as_query_apply(&q, UDF_FILE, "sum", NULL);
@@ -313,7 +311,7 @@ TEST( query_stream_4, "sum(d) where b == 100 and d == 1" ) {
     as_arraylist_append_int64(&args, 1);
 
     as_query q;
-    as_query_init(&q, NAMESPACE, SET);
+    as_query_init(&q, TEST_NAMESPACE, SET);
     as_query_where_inita(&q, 1);
     as_query_where(&q, "b", integer_equals(100));
     as_query_apply(&q, UDF_FILE, "sum_on_match", (as_list *) &args);

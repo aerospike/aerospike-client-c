@@ -227,7 +227,14 @@ demonstrates an aggregation query - a query which finds all records satisfying a
 'where' clause (where the bin's value falls in a specified range), applies a
 simple UDF (which just returns the bin's value) then aggregates these results
 using a second UDF (that sums the values) before making a callback to report the
-final result. This is a simple 'map reduce' example.
+final result. The example then performs another query that accomplishes the same
+task, but using different UDF internals that do an 'aggregate reduce' instead of
+a 'map reduce'. The example then repeats the 'aggregate reduce' query with a UDF
+filter applied before aggregation. The filter selects even numbers, showing off
+filtering functionality that can't be achieved with a 'where' clause. Finally
+the example performs a complex aggregation on a different (string value) bin to
+show a case where the aggregation process and the value returned involve a more
+complex object - a Map - rather than a simple integer.
 
 
 # simple (3.0 feature)

@@ -103,7 +103,6 @@ typedef struct {
     size_t                  query_sz;
     void *                  udata;
     int                     (* callback)(as_val *, void *);
-    bool                    isinline;
 	cf_queue              * complete_q;
 	bool                    abort;
 } cl_query_task;
@@ -181,7 +180,7 @@ static cl_rv cl_query_udf_destroy(cl_query_udf * udf);
 
 // static cl_rv cl_query_execute_sink(cl_cluster * cluster, const cl_query * query, as_stream * stream);
 
-static cl_rv cl_query_execute(cl_cluster * cluster, const cl_query * query, void * udata, int (* callback)(as_val *, void *), bool istream);
+static cl_rv cl_query_execute(cl_cluster * cluster, const cl_query * query, void * udata, int (* callback)(as_val *, void *));
 
 static void cl_range_destroy(query_range *range) {
     citrusleaf_object_free(&range->start_obj);
@@ -789,8 +788,7 @@ static int cl_query_worker_do(cl_cluster_node * node, cl_query_task * task) {
 
             bool free_bins = false;
             buf = (uint8_t *) mf;
-            if ((msg->n_ops > STACK_BINS) 
-                    || (!task->isinline)) {
+            if (msg->n_ops > STACK_BINS) {
                 bins = malloc(sizeof(cl_bin) * msg->n_ops);
                 free_bins = true;
             }
@@ -842,12 +840,7 @@ static int cl_query_worker_do(cl_cluster_node * node, cl_query_task * task) {
                 as_record r;
                 as_record * record = &r;
 
-                if ( task->isinline ) {
-                	as_record_inita(record, msg->n_ops);
-                }
-                else {
-                	record = as_record_new(msg->n_ops);
-                }
+				as_record_inita(record, msg->n_ops);
 
                 strcpy(record->key.set, set_ret ? set_ret : "");
                 record->key.digest.init = true;
@@ -882,15 +875,41 @@ static int cl_query_worker_do(cl_cluster_node * node, cl_query_task * task) {
                     // Need to detach the value from the record (result)
                     // then release the record back to the wild... or wherever
                     // it came from.
-                    as_val_reserve(v);
-                    task->callback(v, task->udata);
-
-                    as_record_destroy(record);
+					as_val * vp = NULL;
+					if ( !v->free ) {
+						switch(as_val_type(v)) {
+							case AS_INTEGER:
+								vp = (as_val *) as_integer_new(as_integer_get((as_integer *)v));
+								break;
+							case AS_STRING: {
+								as_string * s = (as_string *)v;
+								vp = (as_val *) as_string_new(as_string_get(s), true);
+								s->value = NULL;
+								break;
+							}
+							case AS_BYTES: {
+								as_bytes * b = (as_bytes *)v;
+								vp = (as_val *) as_bytes_new_wrap(as_bytes_get(b), as_bytes_size(b), true);
+								b->value = NULL;
+								b->size = 0;
+								break;
+							}
+							default:
+								LOG("[WARNING] unknown stack as_val type\n");
+								break;
+						}
+					}
+					else {
+						vp = as_val_reserve(v);
+					}
+					task->callback(vp, task->udata);
                 }
                 else {
                     task->callback((as_val *) record, task->udata);
                 }
-              rc = CITRUSLEAF_OK;
+
+				as_record_destroy(record);
+				rc = CITRUSLEAF_OK;
             }
 
             // if done free stack allocated stuff
@@ -985,12 +1004,8 @@ static as_val * queue_stream_read(const as_stream * s) {
     return val;
 }
 
+// This is a no-op. the queue and its contents are destroyed in cl_query_destroy().
 static int queue_stream_destroy(as_stream *s) {
-    as_val * val = NULL;
-    while (CF_QUEUE_EMPTY != cf_queue_pop(as_stream_source(s), &val, CF_QUEUE_NOWAIT)) {
-        if (val) as_val_destroy(val);
-    }
-    cf_queue_destroy(as_stream_source(s));
     return 0;
 }
 
@@ -1022,6 +1037,7 @@ static int callback_stream_destroy(as_stream *s) {
 static as_stream_status callback_stream_write(const as_stream * s, as_val * val) {
     callback_stream_source * source = (callback_stream_source *) as_stream_source(s);
     source->callback(val, source->udata);
+    as_val_destroy(val);
     return AS_STREAM_OK;
 }
 
@@ -1099,7 +1115,7 @@ static const as_aerospike_hooks query_aerospike_hooks = {
 };
 
 
-static cl_rv cl_query_execute(cl_cluster * cluster, const cl_query * query, void * udata, int (* callback)(as_val *, void *), bool isinline) {
+static cl_rv cl_query_execute(cl_cluster * cluster, const cl_query * query, void * udata, int (* callback)(as_val *, void *)) {
 
     cl_rv       rc                          = CITRUSLEAF_OK;
     uint8_t     wr_stack_buf[STACK_BUF_SZ]  = { 0 };
@@ -1122,7 +1138,6 @@ static cl_rv cl_query_execute(cl_cluster * cluster, const cl_query * query, void
         .query_sz           = wr_buf_sz,
         .udata              = udata,
         .callback           = callback,
-        .isinline           = isinline,
 		.abort              = false
     };
 
@@ -1375,59 +1390,6 @@ cl_rv cl_query_limit(cl_query *query, uint64_t limit) {
 }
 
 
-// callback for cl_query_execute()
-static int citrusleaf_query_stream_callback_stream(as_val * v, void * udata) {
-	as_stream * queue_stream = (as_stream *) udata;
-    as_stream_write(queue_stream, v == NULL ? AS_STREAM_END : v );
-    return 0;
-}
-
-// callback for cl_query_execute()
-static int citrusleaf_query_stream_callback(as_val * v, void * udata) {
-	as_stream * ostream = (as_stream *) udata;
-    as_stream_write(ostream, v == NULL ? AS_STREAM_END : v );
-    return 0;
-}
-
-cl_rv citrusleaf_query_stream(cl_cluster * cluster, const cl_query * query, as_stream * ostream) {
-
-    cl_rv rc = CITRUSLEAF_OK;
-
-    // deserializer
-    as_serializer ser;
-    as_msgpack_init(&ser);
-
-    if ( query->udf.type == AS_QUERY_UDF_STREAM ) {
-
-        // Setup as_aerospike, so we can get log() function.
-        // TODO: this should occur only once
-        as_aerospike as;
-        as_aerospike_init(&as, NULL, &query_aerospike_hooks);
-
-        // stream for results from each node
-        as_stream queue_stream;
-        as_stream_init(&queue_stream, query->res_streamq, &queue_stream_hooks); 
-
-        // sink the data from multiple sources into the result stream
-        rc = cl_query_execute(cluster, query, &queue_stream, citrusleaf_query_stream_callback_stream, false);
-
-        if ( rc == CITRUSLEAF_OK ) {
-            as_module_apply_stream(&mod_lua, &as, query->udf.filename, query->udf.function, &queue_stream, query->udf.arglist, ostream);
-        }
-    }
-    else {
-        // sink the data from multiple sources into the result stream
-        rc = cl_query_execute(cluster, query, ostream, citrusleaf_query_stream_callback, false);
-    }
-
-    // cleanup deserializer
-    as_serializer_destroy(&ser);
-
-    return rc;
-}
-
-
-
 // This callback will populate an intermediate stream, to be used for the aggregation
 static int citrusleaf_query_foreach_callback_stream(as_val * v, void * udata) {
 	as_stream * queue_stream = (as_stream *) udata;
@@ -1469,7 +1431,7 @@ cl_rv citrusleaf_query_foreach(cl_cluster * cluster, const cl_query * query, voi
         callback_stream_init(&ostream, &source);
 
         // sink the data from multiple sources into the result stream
-        rc = cl_query_execute(cluster, query, &queue_stream, citrusleaf_query_foreach_callback_stream, true);
+        rc = cl_query_execute(cluster, query, &queue_stream, citrusleaf_query_foreach_callback_stream);
 
         if ( rc == CITRUSLEAF_OK ) {
             // Apply the UDF to the result stream
@@ -1479,7 +1441,7 @@ cl_rv citrusleaf_query_foreach(cl_cluster * cluster, const cl_query * query, voi
     }
     else {
         // sink the data from multiple sources into the result stream
-        rc = cl_query_execute(cluster, query, &source, citrusleaf_query_foreach_callback, true);
+        rc = cl_query_execute(cluster, query, &source, citrusleaf_query_foreach_callback);
     }
 
     return rc;

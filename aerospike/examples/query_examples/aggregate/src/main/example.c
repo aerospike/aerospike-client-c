@@ -257,9 +257,6 @@ query_cb(const as_val* p_val, void* udata)
 		LOG("query callback returned %ld", i_val);
 	}
 
-	// Caller's responsibility to destroy as_val returned.
-	as_val_destroy(p_val);
-
 	return true;
 }
 
@@ -278,9 +275,6 @@ query_cb_map(const as_val* p_val, void* udata)
 		LOG("query callback returned %s", val_as_str);
 		free(val_as_str);
 	}
-
-	// Caller's responsibility to destroy as_val returned.
-	as_val_destroy(p_val);
 
 	return true;
 }

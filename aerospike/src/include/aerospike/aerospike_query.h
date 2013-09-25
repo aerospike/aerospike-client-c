@@ -177,35 +177,3 @@ as_status aerospike_query_foreach(
 	const as_query * query, 
 	aerospike_query_foreach_callback callback, void * udata
 	);
-
-/**
- *	Execute a query and send the results to a writable stream.
- *
- *	~~~~~~~~~~{.c}
- *		as_query query;
- *		as_query_init(&query, "test", "demo");
- *		as_query_select(&query, "bin1");
- *		as_query_where(&query, "bin2", integer_equals(100));
- *
- *		if ( aerospike_query_stream(&as, &err, NULL, &query, &stream) != AEROSPIKE_OK ) {
- *			fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *		}
- *
- *		as_query_destroy(&query);
- *	~~~~~~~~~~
- *
- *
- *	@param as			The aerospike instance to use for this operation.
- *	@param err			The as_error to be populated if an error occurs.
- *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param query		The query to execute against the cluster.
- *	@param stream 		The writable stream to write results to.
- *
- *	@return AEROSPIKE_OK on success, otherwise an error.
- *
- *	@ingroup query_operations
- */
-as_status aerospike_query_stream(
-	aerospike * as, as_error * err, const as_policy_query * policy, 
-	const as_query * query, as_stream * stream
-);

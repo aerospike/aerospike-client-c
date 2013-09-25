@@ -36,6 +36,7 @@ extern "C" {
 #include <citrusleaf/cl_object.h>
 #include <citrusleaf/cl_partition.h>
 #include <citrusleaf/cl_scan.h>
+#include <citrusleaf/cl_batch.h>
 
 /******************************************************************************
  * FUNCTIONS

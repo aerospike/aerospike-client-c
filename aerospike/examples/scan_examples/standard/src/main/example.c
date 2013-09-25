@@ -130,9 +130,6 @@ scan_cb(const as_val* p_val, void* udata)
 	LOG("scan callback returned record:");
 	example_dump_record(as_record_fromval(p_val));
 
-	// Caller's responsibility to destroy as_val returned.
-	as_val_destroy(p_val);
-
 	return true;
 }
 

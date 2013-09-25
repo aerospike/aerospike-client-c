@@ -184,7 +184,6 @@ static bool query_foreach_1_callback(const as_val * v, void * udata) {
 	}
 	else {
 		*count += 1;
-		as_val_destroy(v);
 	}
 	return true;
 }
@@ -220,7 +219,6 @@ static bool query_foreach_2_callback(const as_val * v, void * udata) {
 			int64_t * count = (int64_t *) udata;
 			*count = i ? as_integer_toint(i) : 0;
 		}
-		as_val_destroy(v);
 	}
 	return true;
 }

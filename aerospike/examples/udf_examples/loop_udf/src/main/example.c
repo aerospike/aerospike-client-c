@@ -76,9 +76,13 @@ typedef struct config_s {
 	bool	debug; // debug for the citrusleaf library
 	int 	delay;
 
-	cf_atomic_int success;
-	cf_atomic_int fail;
+	cf_atomic_int success; // this is UDF success
+	cf_atomic_int fail; 
 	cf_atomic_int transactions;
+
+	char *log_file;	// the log file which will have counters
+	cf_atomic_int function_success; // UDF function return value
+	cf_atomic_int function_fail;
 			
 } config;
 
@@ -114,13 +118,31 @@ void *
 counter_fn(void *arg)
 {
 	uint64_t t = 0;
+
 	while (1) {
 		sleep(1);
 		cf_info("Transactions in the last second %ld",g_config->transactions - t);	
 		cf_debug("Every sec check: total success %ld fail %ld",g_config->success,g_config->fail);
-		cf_histogram_dump(g_read_histogram); 
-		cf_histogram_dump(g_write_histogram); 
+		//cf_info("Every sec check: total success %ld fail %ld",g_config->function_success,g_config->function_fail);
+		cf_histogram_dump(g_read_histogram);
+		cf_histogram_dump(g_write_histogram);
 		t = g_config->transactions;
+
+		// log counters only if log file is given by user
+		if (g_config->log_file) {
+			//cf_info(" log file name is %s", g_config->log_file);
+
+			FILE* FD;
+			char buf[100]; 
+			if (NULL == (FD = fopen(g_config->log_file, "w"))) {
+				cf_info("Error opening log file");
+			}
+			sprintf(buf, "success = %ld failure = %ld", g_config->function_success, g_config->function_fail);	
+			if (1 != fwrite(buf, 100, 1, FD)) {
+				cf_info("Error writing log file");
+			}
+			fclose(FD);
+		}
 	}
 	return(0);
 }
@@ -225,15 +247,15 @@ worker_fn(void *udata)
 	cl_write_parameters_set_default(&cl_wp);
 	cl_wp.timeout_ms = g_config->timeout_ms;
 	cl_wp.record_ttl = g_config->record_ttl;
-		
+
 	uint32_t delay_factor = 0;
-			
+
 	while (1) {
-	
+
 		uint64_t rnumber = cf_get_rand64();
 		uint key_int = ( rnumber % g_config->n_keys) + g_config->start_key;
 		key_value *kv = make_key_value(key_int, g_config->key_len, g_config->value_len);
-	
+
 		// Create a key for accessing
 		cl_object o_key;
 		if (g_config->key_type == CL_STR) {
@@ -247,33 +269,47 @@ worker_fn(void *udata)
 		if (rnumber % 100 > g_config->rw_ratio) {
 			isRead = false;
 		} 
-		
-        as_list * arglist = as_arraylist_new(3, 8);
 
-        // arg 1 -> bin name
-        as_list_append_str(arglist, "bin1");
+		as_list * arglist = as_arraylist_new(3, 8);
 
-        if ( !isRead ) {
-            // arg #2 -> bin value
-            as_list_append_str(arglist, kv->value_str);
-        }
+		// arg 1 -> bin name
+		as_list_append_str(arglist, "bin1");
+
+
+		// arg 2   
+		if(g_config->log_file) {
+			// pass key as arg #2
+			as_list_append_int64(arglist, key_int);
+		} else if ( !isRead ) {
+			// arg #2 -> bin value
+			as_list_append_str(arglist, kv->value_str);
+		}
+
 
 		// do the actual work
-        as_result res;
-        as_result_init(&res);
+		as_result res;
+		as_result_init(&res);
 
-        uint64_t start_time = cf_getms();
-    	cl_rv rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, g_config->package_name, g_config->f_name, arglist, g_config->timeout_ms, &res);
+		uint64_t start_time = cf_getms();
+		cl_rv rsp = citrusleaf_udf_record_apply(g_config->asc, g_config->ns, g_config->set, &o_key, g_config->package_name, g_config->f_name, arglist, g_config->timeout_ms, &res);
 
 #ifdef DEBUG_VERBOSE
-	fprintf(stderr,"%s: %s\n", res.is_success ? "SUCCESS" : "FAILURE", as_val_tostring(res.value));
+		fprintf(stderr,"%s: %s\n", res.is_success ? "SUCCESS" : "FAILURE", as_val_tostring(res.value));
 #endif
-        as_val_destroy(arglist);
-        arglist = NULL;
-        as_result_destroy(&res);
+
+		if(strcmp(as_val_tostring(res.value), "1") == 0)
+			g_config->function_success++;
+
+		if(strcmp(as_val_tostring(res.value), "0") == 0)
+			g_config->function_fail++;
+		
+
+		as_val_destroy(arglist);
+		arglist = NULL;
+		as_result_destroy(&res);
 
 		cf_histogram_insert_data_point(isRead ? g_read_histogram : g_write_histogram, start_time);		
-		
+
 		if (rsp != CITRUSLEAF_OK) {
 			//fprintf(stderr,"failed citrusleaf_run_udf rsp=%d\n",rsp);
 			fprintf(stderr,"Key_str is %s, key_int %ld\n",kv->key_str,kv->key_int);
@@ -284,7 +320,7 @@ worker_fn(void *udata)
 		cf_atomic_int_incr(&g_config->transactions);
 		citrusleaf_object_free(&o_key);		
 		free(kv);
-		
+
 		// do delay if any
 		if (g_config->delay) {
 			if (g_config->delay >= 1000) {
@@ -295,7 +331,7 @@ worker_fn(void *udata)
 					usleep( 1000 );
 				}
 			}
-		}		
+		}
 	}	
 	return(0);
 }
@@ -303,19 +339,20 @@ worker_fn(void *udata)
 
 
 void usage(int argc, char *argv[]) {
-    fprintf(stderr, "Usage %s:\n", argv[0]);
-    fprintf(stderr, "-h host [default 127.0.0.1] \n");
-    fprintf(stderr, "-p port [default 3000]\n");
-    fprintf(stderr, "-n namespace [default test]\n");
-    fprintf(stderr, "-s set [default *all*]\n");
-    fprintf(stderr, "-f udf_file [default lua_files/udf_loop_test.lua]\n");
-    fprintf(stderr, "-x f_name [default udf_loop_test] \n");    
-    fprintf(stderr, "-v is verbose\n");
-    fprintf(stderr, "-r read/write ratio (0-100) [default 80]\n");
-    fprintf(stderr, "-t thread_count [default 8]\n");
-    fprintf(stderr, "-i start_key [default 0]\n");
-    fprintf(stderr, "-j n_keys [default 1000]\n");
+	fprintf(stderr, "Usage %s:\n", argv[0]);
+	fprintf(stderr, "-h host [default 127.0.0.1] \n");
+	fprintf(stderr, "-p port [default 3000]\n");
+	fprintf(stderr, "-n namespace [default test]\n");
+	fprintf(stderr, "-s set [default *all*]\n");
+	fprintf(stderr, "-f udf_file [default lua_files/udf_loop_test.lua]\n");
+	fprintf(stderr, "-x f_name [default udf_loop_test] \n");    
+	fprintf(stderr, "-v is verbose\n");
+	fprintf(stderr, "-r read/write ratio (0-100) [default 80]\n");
+	fprintf(stderr, "-t thread_count [default 8]\n");
+	fprintf(stderr, "-i start_key [default 0]\n");
+	fprintf(stderr, "-j n_keys [default 1000]\n");
 	fprintf(stderr, "-d debug [default false]\n");
+	fprintf(stderr, "-l log file [default logging is disabled]\n");
 }
 
 int init_configuration (int argc, char *argv[])
@@ -344,9 +381,10 @@ int init_configuration (int argc, char *argv[])
 	g_config->rw_ratio     = 80;
 	g_config->delay        = 0;
    	g_config->transactions = 0;             
+	g_config->log_file     = NULL;		
 	fprintf(stderr, "Starting Loop Test Record Sproc\n");
 	int optcase;
-	while ((optcase = getopt(argc, argv, "ckmh:p:n:s:P:f:v:x:r:t:i:j:d")) != -1) {
+	while ((optcase = getopt(argc, argv, "ckmh:p:n:s:P:f:v:x:r:t:i:j:d:l:")) != -1) {
 		switch (optcase) {
 		case 'h': g_config->host         = strdup(optarg);          break;
 		case 'p': g_config->port         = atoi(optarg);            break;
@@ -366,6 +404,7 @@ int init_configuration (int argc, char *argv[])
 		case 'i': g_config->start_key    = atoi(optarg);            break;
 		case 'j': g_config->n_keys       = atoi(optarg);            break;
 		case 'd': g_config->debug = true; break;
+		case 'l': g_config->log_file = strdup(optarg);          break;
 		default:  usage(argc, argv);                      return(-1);
         }
     }

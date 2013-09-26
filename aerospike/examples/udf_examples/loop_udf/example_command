@@ -1,0 +1,1 @@
+./target/Linux-x86_64/bin/example -x validate -i 0 -j 100000 -r 0 -l log.txt

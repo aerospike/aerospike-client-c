@@ -261,23 +261,6 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
-	// Check that the deleted value is no longer in the set
-	/*
-	if (aerospike_lset_exists(&as, &err, NULL, &g_key, &lset2,
-			(const as_val*)&ival, &exists) != AEROSPIKE_OK) {
-		LOG("second aerospike_lset_exists() returned %d - %s", err.code,
-				err.message);
-		example_cleanup(&as);
-		exit(-1);
-	}
-
-	if (as_boolean_get(&exists)) {
-		LOG("found a value which should not be in the set");
-		example_cleanup(&as);
-		exit(-1);
-	}
-	*/
-
 	n_elements = 0;
 
 	// See how many elements we have in the set now.
@@ -306,15 +289,7 @@ main(int argc, char* argv[])
 
 	n_elements = 0;
 
-	// See if we can still do any lset operations.
-	if (aerospike_lset_size(&as, &err, NULL, &g_key, &lset, &n_elements) ==
-			AEROSPIKE_OK) {
-		LOG("aerospike_lset_size() did not return error");
-		example_cleanup(&as);
-		exit(-1);
-	}
-
-	LOG("lset destroyed and checked");
+	LOG("lset destroyed");
 
 	// Cleanup and disconnect from the database cluster.
 	example_cleanup(&as);

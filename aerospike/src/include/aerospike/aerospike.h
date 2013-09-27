@@ -20,6 +20,30 @@
  *	IN THE SOFTWARE.
  *****************************************************************************/
 
+/*! \mainpage Aerospike C Client
+ *
+ * \section intro_sec Introduction
+ *
+ * This package describes the Aerospike C Client API in detail.
+ *   
+ * For Overview and Developer Guide, please check http://www.aerospike.com.
+ * 
+ * Click on "Modules" to browse through the differen operations
+ * provided by the client.
+ * 
+ * \section download_sec Downloading & Installing
+ * 
+ * Download installable binary packages from http://www.aerospike.com/aerospike-3-client-sdk/
+ * 
+ * \section make_sec Making Example
+ * 
+ * Once installed, go into the example directory and type in:
+ * 
+ * <pre>
+ *    make
+ * </pre>
+ */
+ 
 /**
  *	@defgroup client_operations Client Operations
  *

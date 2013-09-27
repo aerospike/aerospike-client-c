@@ -143,7 +143,7 @@ main(int argc, char* argv[])
 		const as_val* p_val = as_arraylist_iterator_next(&it);
 		char* p_str = as_val_tostring(p_val);
 
-		LOG("   element - type = %d, value = %s ", as_val_type(p_val), p_str);
+		LOG("   element - type = %d, value = %s", as_val_type(p_val), p_str);
 		free(p_str);
 	}
 
@@ -184,39 +184,50 @@ main(int argc, char* argv[])
 	as_arraylist_iterator_init(&it, (const as_arraylist*)p_list);
 
 	int item_count = 0;
+
 	while (as_arraylist_iterator_has_next(&it)) {
 		const as_val* p_val = as_arraylist_iterator_next(&it);
 		char* p_str = as_val_tostring(p_val);
-		LOG("   element - type = %d, value = %s ", as_val_type(p_val), p_str);
+
+		LOG("   element - type = %d, value = %s", as_val_type(p_val), p_str);
 		free(p_str);
 
 		item_count++;
 
-		// make sure it's a value we expect
-		if (as_val_type(p_val)==AS_INTEGER) {
-			int64_t myival = as_integer_get ((const as_integer *)p_val);
-			if (myival != 1001 && myival != 2002 && myival != 3003
-					&& myival !=12345) {
-				LOG("unexpected integer value returned %d", (int)myival);
+		// Make sure it's a value we expect.
+		if (as_val_type(p_val) == AS_INTEGER) {
+			int64_t myival = as_integer_get((const as_integer*)p_val);
+
+			if (myival != 1001 && myival != 2002 && myival != 3003 &&
+					myival != 12345) {
+				LOG("unexpected integer value %ld returned", myival);
 				as_list_destroy(p_list);
+				example_cleanup(&as);
 				exit(-1);
 			}
-		} else if (as_val_type(p_val)==AS_STRING) {
-			if (strcmp("lset value", as_string_get((as_string *)p_val)) != 0) {
-				LOG("unexpected string value returned %s",
-						as_string_get((const as_string *)p_val));
+		}
+		else if (as_val_type(p_val) == AS_STRING) {
+			if (strcmp("lset value", as_string_get((as_string*)p_val)) != 0) {
+				LOG("unexpected string value %s returned",
+						as_string_get((const as_string*)p_val));
 				as_list_destroy(p_list);
+				example_cleanup(&as);
 				exit(-1);
 			}
-		} else {
+		}
+		else {
 			LOG("unexpected value type %d", as_val_type(p_val));
 			as_list_destroy(p_list);
+			example_cleanup(&as);
 			exit(-1);
 		}
 	}
 
-	if (item_count !=5 ) {
+	if (item_count != 5) {
 		LOG("unexpected number of values %d", item_count);
+		as_list_destroy(p_list);
+		example_cleanup(&as);
+		exit(-1);
 	}
 
 	as_list_destroy(p_list);
@@ -239,16 +250,19 @@ main(int argc, char* argv[])
 		example_cleanup(&as);
 		exit(-1);
 	}
+
 	LOG("existence checked");
 
-	// Remove the value from the set
+	// Remove the value from the set.
 	if (aerospike_lset_remove(&as, &err, NULL, &g_key, &lset2,
 			(const as_val*)&ival) != AEROSPIKE_OK) {
 		LOG("aerospike_lset_remove() returned %d - %s", err.code, err.message);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
 	// Check that the deleted value is no longer in the set
+	/*
 	if (aerospike_lset_exists(&as, &err, NULL, &g_key, &lset2,
 			(const as_val*)&ival, &exists) != AEROSPIKE_OK) {
 		LOG("second aerospike_lset_exists() returned %d - %s", err.code,
@@ -262,19 +276,24 @@ main(int argc, char* argv[])
 		example_cleanup(&as);
 		exit(-1);
 	}
+	*/
 
 	n_elements = 0;
+
 	// See how many elements we have in the set now.
 	if (aerospike_lset_size(&as, &err, NULL, &g_key, &lset, &n_elements)
 			!= AEROSPIKE_OK) {
 		LOG("aerospike_lset_size() returned %d - %s", err.code, err.message);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
 	if (n_elements != 4) {
 		LOG("unexpected lset size %u", n_elements);
+		example_cleanup(&as);
 		exit(-1);
 	}
+
 	LOG("one value removed and checked");
 
 	// Destroy the lset.
@@ -294,6 +313,7 @@ main(int argc, char* argv[])
 		example_cleanup(&as);
 		exit(-1);
 	}
+
 	LOG("lset destroyed and checked");
 
 	// Cleanup and disconnect from the database cluster.

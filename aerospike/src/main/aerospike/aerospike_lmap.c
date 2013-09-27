@@ -34,19 +34,19 @@
 // ++==============++
 // || Fixed Values ||
 // ++==============++
-static char * DEFAULT_LMAP_PACKAGE = "lmap";
+const char * DEFAULT_LMAP_PACKAGE = "lmap";
 
 // The names of the Lua Functions that implement Large Map Ops
-static char * LDT_MAP_OP_PUT				= "put";
-static char * LDT_MAP_OP_PUTALL				= "put_all";
-static char * LDT_MAP_OP_GET     			= "get";
-static char * LDT_MAP_OP_SCAN       		= "scan";
-static char * LDT_MAP_OP_FILTER				= "filter";
-static char * LDT_MAP_OP_REMOVE     		= "remove";
-static char * LDT_MAP_OP_DESTROY  			= "destroy";
-static char * LDT_MAP_OP_SIZE       		= "size";
-//@TODO static char * LDT_MAP_OP_SET_CAPACITY       = "set_capacity";
-//@TODO static char * LDT_MAP_OP_GET_CAPACITY       = "get_capacity";
+const char * LDT_MAP_OP_PUT				= "put";
+const char * LDT_MAP_OP_PUTALL			= "put_all";
+const char * LDT_MAP_OP_GET 			= "get";
+const char * LDT_MAP_OP_SCAN   			= "scan";
+const char * LDT_MAP_OP_FILTER			= "filter";
+const char * LDT_MAP_OP_REMOVE 			= "remove";
+const char * LDT_MAP_OP_DESTROY  		= "destroy";
+const char * LDT_MAP_OP_SIZE   			= "size";
+//@TODO const char * LDT_MAP_OP_SET_CAPACITY   = "set_capacity";
+//@TODO const char * LDT_MAP_OP_GET_CAPACITY   = "get_capacity";
 
 
 as_status aerospike_lmap_put(
@@ -75,35 +75,35 @@ as_status aerospike_lmap_put(
 	as_arraylist arglist;
 	as_arraylist_inita(&arglist, 3);
 	as_arraylist_append_string(&arglist, &ldt_bin);
-    as_val_reserve( mkey ); // bump the ref count so the arraylist_destroy will not reset the val
+	as_val_reserve( mkey ); // bump the ref count so the arraylist_destroy will not reset the val
 	as_arraylist_append(&arglist, (as_val *)mkey);
-    as_val_reserve( mval ); // bump the ref count so the arraylist_destroy will not reset the val
+	as_val_reserve( mval ); // bump the ref count so the arraylist_destroy will not reset the val
 	as_arraylist_append(&arglist, (as_val *)mval);
 
 	as_val* p_return_val = NULL;
-    aerospike_key_apply(
+	aerospike_key_apply(
 		as, err, policy, key, DEFAULT_LMAP_PACKAGE, LDT_MAP_OP_PUT,
 		(as_list *)&arglist, &p_return_val);
 
-    as_arraylist_destroy(&arglist);
+	as_arraylist_destroy(&arglist);
 
-    if (ldt_parse_error(err) != AEROSPIKE_OK) {
-    	return err->code;
-    }
+	if (ldt_parse_error(err) != AEROSPIKE_OK) {
+		return err->code;
+	}
 
-    if (!p_return_val) {
+	if (!p_return_val) {
 		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL,
 				"no value returned from server");
-    }
-    int64_t ival = as_integer_getorelse(as_integer_fromval(p_return_val), -1);
+	}
+	int64_t ival = as_integer_getorelse(as_integer_fromval(p_return_val), -1);
 	as_val_destroy(p_return_val);
 
-    if (ival == -1) {
+	if (ival == -1) {
 		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL,
 				"value returned from server not parse-able");
-    }
+	}
 
-    return err->code;
+	return err->code;
 }
 
 as_status aerospike_lmap_put_all(
@@ -131,33 +131,33 @@ as_status aerospike_lmap_put_all(
 	as_arraylist arglist;
 	as_arraylist_inita(&arglist, 2);
 	as_arraylist_append_string(&arglist, &ldt_bin);
-    as_val_reserve( vals ); // bump the ref count so the arraylist_destroy will not reset the val
+	as_val_reserve( vals ); // bump the ref count so the arraylist_destroy will not reset the val
 	as_arraylist_append(&arglist, (as_val *)vals);
 
 	as_val* p_return_val = NULL;
-    aerospike_key_apply(
+	aerospike_key_apply(
 		as, err, policy, key, DEFAULT_LMAP_PACKAGE, LDT_MAP_OP_PUTALL,
 		(as_list *)&arglist, &p_return_val);
 
-    as_arraylist_destroy(&arglist);
+	as_arraylist_destroy(&arglist);
 
-    if (ldt_parse_error(err) != AEROSPIKE_OK) {
-    	return err->code;
-    }
+	if (ldt_parse_error(err) != AEROSPIKE_OK) {
+		return err->code;
+	}
 
-    if (!p_return_val) {
+	if (!p_return_val) {
 		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL,
 				"no value returned from server");
-    }
-    int64_t ival = as_integer_getorelse(as_integer_fromval(p_return_val), -1);
+	}
+	int64_t ival = as_integer_getorelse(as_integer_fromval(p_return_val), -1);
 	as_val_destroy(p_return_val);
 
-    if (ival == -1) {
+	if (ival == -1) {
 		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL,
 				"value returned from server not parse-able");
-    }
+	}
 
-    return err->code;
+	return err->code;
 }
 
 as_status aerospike_lmap_size(
@@ -188,30 +188,30 @@ as_status aerospike_lmap_size(
 	as_arraylist_append_string(&arglist, &ldt_bin);
 
 	as_val* p_return_val = NULL;
-    aerospike_key_apply(
+	aerospike_key_apply(
 		as, err, policy, key, DEFAULT_LMAP_PACKAGE, LDT_MAP_OP_SIZE,
 		(as_list *)&arglist, &p_return_val);
 
-    as_arraylist_destroy(&arglist);
+	as_arraylist_destroy(&arglist);
 
-    if (ldt_parse_error(err) != AEROSPIKE_OK) {
-    	return err->code;
-    }
+	if (ldt_parse_error(err) != AEROSPIKE_OK) {
+		return err->code;
+	}
 
-    if (!p_return_val) {
+	if (!p_return_val) {
 		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL,
 				"no value returned from server");
-    }
-    int64_t ival = as_integer_getorelse(as_integer_fromval(p_return_val), -1);
+	}
+	int64_t ival = as_integer_getorelse(as_integer_fromval(p_return_val), -1);
 	as_val_destroy(p_return_val);
 
-    if (ival == -1) {
+	if (ival == -1) {
 		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL,
 				"value returned from server not parse-able");
-    }
-    *n = ival;
+	}
+	*n = ival;
 
-    return err->code;
+	return err->code;
 }
 
 as_status aerospike_lmap_get(
@@ -240,35 +240,35 @@ as_status aerospike_lmap_get(
 	as_arraylist arglist;
 	as_arraylist_inita(&arglist, 2);
 	as_arraylist_append_string(&arglist, &ldt_bin);
-    as_val_reserve( mkey ); // bump the ref count so the arraylist_destroy will not reset the val
+	as_val_reserve( mkey ); // bump the ref count so the arraylist_destroy will not reset the val
 
 	as_arraylist_append(&arglist, (as_val *)mkey);
 
 	as_val* p_return_val = NULL;
-    aerospike_key_apply(
+	aerospike_key_apply(
 		as, err, policy, key, DEFAULT_LMAP_PACKAGE, LDT_MAP_OP_GET,
 		(as_list *)&arglist, &p_return_val);
 
-    as_arraylist_destroy(&arglist);
+	as_arraylist_destroy(&arglist);
 
-    if (ldt_parse_error(err) != AEROSPIKE_OK) {
-    	return err->code;
-    }
+	if (ldt_parse_error(err) != AEROSPIKE_OK) {
+		return err->code;
+	}
 
-    if (!p_return_val) {
+	if (!p_return_val) {
 		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL,
 				"no value returned from server");
-    }
-    int64_t ival = as_integer_getorelse(as_integer_fromval(p_return_val), -1);
+	}
+	int64_t ival = as_integer_getorelse(as_integer_fromval(p_return_val), -1);
 	as_val_destroy(p_return_val);
 
-    if (ival == -1) {
+	if (ival == -1) {
 		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL,
 				"value returned from server not parse-able");
-    }
-    *mval = p_return_val;
+	}
+	*mval = p_return_val;
 
-    return err->code;
+	return err->code;
 } // aerospike_lmap_exists()
 
 
@@ -305,34 +305,34 @@ as_status aerospike_lmap_filter_internal(
 	as_arraylist_inita(&arglist, list_argc);
 	as_arraylist_append_string(&arglist, &ldt_bin);
 
-    if (filter){
-    	as_string filter_name;
-    	as_string_init(&filter_name, (char *)filter, false);
-        as_arraylist_append_string(&arglist, &filter_name );
-        as_val_reserve( filter_args ); // bump the ref count
-        as_arraylist_append(&arglist, (as_val *) filter_args );
-    }
+	if (filter){
+		as_string filter_name;
+		as_string_init(&filter_name, (char *)filter, false);
+		as_arraylist_append_string(&arglist, &filter_name );
+		as_val_reserve( filter_args ); // bump the ref count
+		as_arraylist_append(&arglist, (as_val *) filter_args );
+	}
 
 	as_val* p_return_val = NULL;
-    aerospike_key_apply(
+	aerospike_key_apply(
 		as, err, policy, key, DEFAULT_LMAP_PACKAGE,
 		filter ? LDT_MAP_OP_FILTER : LDT_MAP_OP_SCAN,
 		(as_list *)&arglist, &p_return_val);
 
-    as_arraylist_destroy(&arglist);
+	as_arraylist_destroy(&arglist);
 
-    if (ldt_parse_error(err) != AEROSPIKE_OK) {
-    	return err->code;
-    }
+	if (ldt_parse_error(err) != AEROSPIKE_OK) {
+		return err->code;
+	}
 
-    if (!p_return_val) {
+	if (!p_return_val) {
 		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL,
 				"no value returned from server");
-    }
+	}
 
-    *elements = (as_map *)p_return_val;
+	*elements = (as_map *)p_return_val;
 
-    return err->code;
+	return err->code;
 
 } // aerospike_lmap_filter_internal()
 
@@ -381,25 +381,25 @@ as_status aerospike_lmap_remove(
 	as_arraylist arglist;
 	as_arraylist_inita(&arglist, 2);
 	as_arraylist_append_string(&arglist, &ldt_bin);
-    as_val_reserve( mkey );
+	as_val_reserve( mkey );
 	as_arraylist_append(&arglist, (as_val *) mkey);
 
 	as_val* p_return_val = NULL;
-    aerospike_key_apply(
+	aerospike_key_apply(
 		as, err, policy, key, DEFAULT_LMAP_PACKAGE, LDT_MAP_OP_REMOVE,
 		(as_list *)&arglist, &p_return_val);
 
-    as_arraylist_destroy(&arglist);
+	as_arraylist_destroy(&arglist);
 
-    if (ldt_parse_error(err) != AEROSPIKE_OK) {
-    	return err->code;
-    }
+	if (ldt_parse_error(err) != AEROSPIKE_OK) {
+		return err->code;
+	}
 
-    if (p_return_val != NULL) {
-    	as_val_destroy(p_return_val);
-    }
+	if (p_return_val != NULL) {
+		as_val_destroy(p_return_val);
+	}
 
-    return err->code;
+	return err->code;
 }
 
 
@@ -430,23 +430,23 @@ as_status aerospike_lmap_destroy(
 	as_arraylist_append_string(&arglist, &ldt_bin);
 
 	as_val* p_return_val = NULL;
-    aerospike_key_apply(
+	aerospike_key_apply(
 		as, err, policy, key, DEFAULT_LMAP_PACKAGE, LDT_MAP_OP_DESTROY,
 		(as_list *)&arglist, &p_return_val);
 
-    as_arraylist_destroy(&arglist);
+	as_arraylist_destroy(&arglist);
 
-    if (ldt_parse_error(err) != AEROSPIKE_OK) {
-    	return err->code;
-    }
+	if (ldt_parse_error(err) != AEROSPIKE_OK) {
+		return err->code;
+	}
 
-    int64_t ival = as_integer_getorelse(as_integer_fromval(p_return_val), -1);
+	int64_t ival = as_integer_getorelse(as_integer_fromval(p_return_val), -1);
 	as_val_destroy(p_return_val);
 
-    if (ival != 0) {
+	if (ival != 0) {
 		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL,
 				"value returned from server not parse-able");
-    }
+	}
 
-    return err->code;
+	return err->code;
 }

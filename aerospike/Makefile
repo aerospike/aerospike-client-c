@@ -128,6 +128,7 @@ COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_iterator.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_list.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_list_iterator.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_map.h
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_map_iterator.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_nil.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_pair.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_rec.h

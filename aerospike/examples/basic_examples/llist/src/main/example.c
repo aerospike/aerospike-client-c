@@ -75,15 +75,17 @@ main(int argc, char* argv[])
 
 	as_error err;
 
-	// example values
-	int example_values[3] = {12000,2000,22000};
-	int example_ordered[3] = {2000,12000,22000};
+	// Example values.
+	int example_values[3] = { 12000, 2000, 22000 };
+	int example_ordered[3] = { 2000, 12000, 22000 };
 
 	// No need to destroy as_integer if using as_integer_init() on stack object.
 	as_integer ival;
+
+	// Add 3 integer values to the list, one per operation.
+
 	as_integer_init(&ival, example_values[0]);
 
-	// Add 3 integer values to the list.
 	if (aerospike_llist_add(&as, &err, NULL, &g_key, &llist,
 			(const as_val*)&ival) != AEROSPIKE_OK) {
 		LOG("first aerospike_llist_add() returned %d - %s", err.code,
@@ -92,7 +94,9 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
+	// It's ok to reset the as_integer.
 	as_integer_init(&ival, example_values[1]);
+
 	if (aerospike_llist_add(&as, &err, NULL, &g_key, &llist,
 			(const as_val*)&ival) != AEROSPIKE_OK) {
 		LOG("second aerospike_llist_add() returned %d - %s", err.code,
@@ -102,6 +106,7 @@ main(int argc, char* argv[])
 	}
 
 	as_integer_init(&ival, example_values[2]);
+
 	if (aerospike_llist_add(&as, &err, NULL, &g_key, &llist,
 			(const as_val*)&ival) != AEROSPIKE_OK) {
 		LOG("third aerospike_llist_add() returned %d - %s", err.code,
@@ -115,8 +120,8 @@ main(int argc, char* argv[])
 	uint32_t n_elements = 0;
 
 	// See how many elements we have in the list now.
-	if (aerospike_llist_size(&as, &err, NULL, &g_key, &llist, &n_elements)
-			!= AEROSPIKE_OK) {
+	if (aerospike_llist_size(&as, &err, NULL, &g_key, &llist, &n_elements) !=
+			AEROSPIKE_OK) {
 		LOG("aerospike_llist_size() returned %d - %s", err.code, err.message);
 		example_cleanup(&as);
 		exit(-1);
@@ -135,7 +140,7 @@ main(int argc, char* argv[])
 
 	as_list* p_list = NULL;
 
-	// Get all the values back and print them. Make sure they are ordered
+	// Get all the values back and print them. Make sure they are ordered.
 	if (aerospike_llist_filter(&as, &err, NULL, &g_key, &llist, NULL, NULL,
 			&p_list) != AEROSPIKE_OK) {
 		LOG("second aerospike_llist_filter() returned %d - %s", err.code,
@@ -153,24 +158,28 @@ main(int argc, char* argv[])
 	while (as_arraylist_iterator_has_next(&it)) {
 		const as_val* p_val = as_arraylist_iterator_next(&it);
 		char* p_str = as_val_tostring(p_val);
-		LOG("   element - type = %d, value = %s ", as_val_type(p_val),p_str);
+
+		LOG("   element - type = %d, value = %s", as_val_type(p_val), p_str);
 		free(p_str);
 
-		// make sure it's integer type
-		if (as_val_type(p_val)!=AS_INTEGER) {
+		// Make sure it's integer type.
+		if (as_val_type(p_val) != AS_INTEGER) {
 			LOG("unexpected value type %d", as_val_type(p_val));
 			as_list_destroy(p_list);
 			example_cleanup(&as);
 			exit(-1);
 		}
+
 		int64_t myival = as_integer_get ((const as_integer *)p_val);
+
 		if (myival != example_ordered[item_count]) {
-			LOG("unexpected integer value returned %d on count %d",
-					(int)myival, item_count);
+			LOG("unexpected integer value %ld returned on count %d", myival,
+					item_count);
 			as_list_destroy(p_list);
 			example_cleanup(&as);
 			exit(-1);
 		}
+
 		item_count++;
 	}
 
@@ -181,11 +190,11 @@ main(int argc, char* argv[])
 	as_string sval;
 	as_string_init(&sval, "llist value", false);
 
-	// Should not be able to add string to the LList since first element
-	// defines the list type (integer in this case)
+	// Should not be able to add string to the llist since first element defines
+	// the list type (integer in this case).
 	if (aerospike_llist_add(&as, &err, NULL, &g_key, &llist,
 			(const as_val*)&sval) == AEROSPIKE_OK) {
-		LOG("Unexpected success of aerospike_llist_add().");
+		LOG("unexpected success of aerospike_llist_add()");
 		example_cleanup(&as);
 		exit(-1);
 	}
@@ -206,7 +215,7 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
-	// Remove the value from the list
+	// Remove the value from the list.
 	if (aerospike_llist_remove(&as, &err, NULL, &g_key, &llist2,
 			(const as_val*)&ival) != AEROSPIKE_OK) {
 		LOG("aerospike_llist_remove() returned %d - %s", err.code, err.message);
@@ -229,6 +238,7 @@ main(int argc, char* argv[])
 		example_cleanup(&as);
 		exit(-1);
 	}
+
 	LOG("one value removed and checked");
 
 	// Destroy the list.
@@ -248,6 +258,7 @@ main(int argc, char* argv[])
 		example_cleanup(&as);
 		exit(-1);
 	}
+
 	LOG("llist destroyed and checked");
 
 	// Cleanup and disconnect from the database cluster.

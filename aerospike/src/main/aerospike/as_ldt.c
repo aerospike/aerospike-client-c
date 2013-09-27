@@ -103,11 +103,11 @@ as_ldt * as_ldt_init(as_ldt * ldt, const as_bin_name name, const as_ldt_type typ
 		ldt->_free = false;
 		ldt->type = type;
 		strcpy(ldt->name,name);
-	    if (!module || *module=='\0') {
-	    	ldt->module[0] = '0';
-	    } else {
-	    	strcpy(ldt->module,module);
-	    }
+		if (!module || *module=='\0') {
+			ldt->module[0] = '\0';
+		} else {
+			strcpy(ldt->module,module);
+		}
 	}
 	return ldt;
 }

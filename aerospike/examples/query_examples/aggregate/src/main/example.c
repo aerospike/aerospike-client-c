@@ -247,15 +247,20 @@ main(int argc, char* argv[])
 bool
 query_cb(const as_val* p_val, void* udata)
 {
-	// Because of the UDF used, we expect an as_integer to be returned.
-	int64_t i_val = as_integer_getorelse(as_integer_fromval(p_val), -1);
+	if (! p_val) {
+		LOG("query callback returned null - query is complete");
+		return true;
+	}
 
-	if (i_val == -1) {
+	// Because of the UDF used, we expect an as_integer to be returned.
+	as_integer* p_integer = as_integer_fromval(p_val);
+
+	if (! p_integer) {
 		LOG("query callback returned non-as_integer object");
+		return true;
 	}
-	else {
-		LOG("query callback returned %ld", i_val);
-	}
+
+	LOG("query callback returned %ld", as_integer_get(p_integer));
 
 	return true;
 }
@@ -263,18 +268,23 @@ query_cb(const as_val* p_val, void* udata)
 bool
 query_cb_map(const as_val* p_val, void* udata)
 {
+	if (! p_val) {
+		LOG("query callback returned null - query is complete");
+		return true;
+	}
+
 	// Because of the UDF used, we expect an as_map to be returned.
 	if (! as_map_fromval(p_val)) {
 		LOG("query callback returned non-as_map object");
+		return true;
 	}
-	else {
-		// The map keys are number tokens ("1" to "20") and each value is the
-		// total number of occurrences of the token in the records aggregated.
-		char* val_as_str = as_val_tostring(p_val);
 
-		LOG("query callback returned %s", val_as_str);
-		free(val_as_str);
-	}
+	// The map keys are number tokens ("1" to "10") and each value is the total
+	// number of occurrences of the token in the records aggregated.
+	char* val_as_str = as_val_tostring(p_val);
+
+	LOG("query callback returned %s", val_as_str);
+	free(val_as_str);
 
 	return true;
 }

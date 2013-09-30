@@ -146,8 +146,15 @@ query_cb(const as_val* p_val, void* udata)
 	}
 
 	// The query didn't use a UDF, so the as_val object should be an as_record.
+	as_record* p_rec = as_record_fromval(p_val);
+
+	if (! p_rec) {
+		LOG("query callback returned non-as_record object");
+		return true;
+	}
+
 	LOG("query callback returned record:");
-	example_dump_record(as_record_fromval(p_val));
+	example_dump_record(p_rec);
 
 	return true;
 }

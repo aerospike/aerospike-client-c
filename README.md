@@ -19,8 +19,8 @@ Please read the `README.md` for each module before using them or running make. T
 
 The `aerospike` module generates the following libraries:
 
-	aerospike/target/{target}/lib/libcitrusleaf.a
-	aerospike/target/{target}/lib/libcitrusleaf.so
+	aerospike/target/{target}/lib/libaerospike.a
+	aerospike/target/{target}/lib/libaerospike.so
 
 It also generates public header files in:
 

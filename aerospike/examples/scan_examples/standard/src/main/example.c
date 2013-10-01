@@ -77,7 +77,6 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
-	// Read back all the records that have been inserted
 	if (! example_read_test_records(&as)) {
 		cleanup(&as);
 		exit(-1);
@@ -89,7 +88,7 @@ main(int argc, char* argv[])
 	as_scan scan;
 	as_scan_init(&scan, g_namespace, g_set);
 
-	LOG("starting scan ...");
+	LOG("starting scan all ...");
 
 	// Do the scan. This call blocks while the scan is running - callbacks are
 	// made in the scope of this call.
@@ -101,7 +100,28 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
-	LOG("... scan completed");
+	LOG("... scan all completed");
+
+	// Now specify that only two bins are to be returned by the scan. The first
+	// ten records do not have these two bins, so they should not be returned by
+	// the scan. The remaining records should be returned without test-bin-1.
+	as_scan_select_inita(&scan, 2);
+	as_scan_select(&scan, "test-bin-2");
+	as_scan_select(&scan, "test-bin-3");
+
+	LOG("starting scan with select ...");
+
+	// Do the scan. This call blocks while the scan is running - callbacks are
+	// made in the scope of this call.
+	if (aerospike_scan_foreach(&as, &err, NULL, &scan, scan_cb, NULL) !=
+			AEROSPIKE_OK) {
+		LOG("aerospike_scan_foreach() returned %d - %s", err.code, err.message);
+		as_scan_destroy(&scan);
+		cleanup(&as);
+		exit(-1);
+	}
+
+	LOG("... scan with select completed");
 
 	// Destroy the as_scan object.
 	as_scan_destroy(&scan);
@@ -156,11 +176,11 @@ cleanup(aerospike* p_as)
 bool
 insert_records(aerospike* p_as)
 {
-	// Create an as_record object with one (integer value) bin. By using
+	// Create an as_record object with up to three integer value bins. By using
 	// as_record_inita(), we won't need to destroy the record if we only set
 	// bins using as_record_set_int64().
 	as_record rec;
-	as_record_inita(&rec, 1);
+	as_record_inita(&rec, 3);
 
 	// Re-using rec, write records into the database such that each record's key
 	// and (test-bin) value is based on the loop index.
@@ -174,7 +194,17 @@ insert_records(aerospike* p_as)
 
 		// In general it's ok to reset a bin value - all as_record_set_... calls
 		// destroy any previous value.
-		as_record_set_int64(&rec, "test-bin", (int64_t)i);
+
+		if (i < 10) {
+			// Only write one bin in the first ten records.
+			as_record_set_int64(&rec, "test-bin-1", (int64_t)i);
+		}
+		else {
+			// Write three bins in all remaining records.
+			as_record_set_int64(&rec, "test-bin-1", (int64_t)i);
+			as_record_set_int64(&rec, "test-bin-2", (int64_t)(100 + i));
+			as_record_set_int64(&rec, "test-bin-3", (int64_t)(1000 + i));
+		}
 
 		// Write a record to the database.
 		if (aerospike_key_put(p_as, &err, NULL, &key, &rec) != AEROSPIKE_OK) {

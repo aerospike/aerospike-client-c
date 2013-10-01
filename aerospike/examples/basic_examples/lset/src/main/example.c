@@ -69,6 +69,7 @@ main(int argc, char* argv[])
 	// as_ldt_init() on stack object.
 	if (! as_ldt_init(&lset, "mylset", AS_LDT_LSET, NULL)) {
 		LOG("unable to initialize ldt");
+		example_cleanup(&as);
 		exit(-1);
 	}
 
@@ -83,6 +84,7 @@ main(int argc, char* argv[])
 			(const as_val*)&ival) != AEROSPIKE_OK) {
 		LOG("first aerospike_set_add() returned %d - %s", err.code,
 				err.message);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
@@ -95,6 +97,7 @@ main(int argc, char* argv[])
 			(const as_val*)&sval) != AEROSPIKE_OK) {
 		LOG("second aerospike_set_add() returned %d - %s", err.code,
 				err.message);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
@@ -106,11 +109,13 @@ main(int argc, char* argv[])
 	if (aerospike_lset_size(&as, &err, NULL, &g_key, &lset, &n_elements)
 			!= AEROSPIKE_OK) {
 		LOG("aerospike_lset_size() returned %d - %s", err.code, err.message);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
 	if (n_elements != 2) {
 		LOG("unexpected lset size %u", n_elements);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
@@ -126,6 +131,7 @@ main(int argc, char* argv[])
 			&p_list) != AEROSPIKE_OK) {
 		LOG("aerospike_lset_filter() returned %d - %s", err.code, err.message);
 		as_list_destroy(p_list);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
@@ -137,27 +143,31 @@ main(int argc, char* argv[])
 		const as_val* p_val = as_arraylist_iterator_next(&it);
 		char* p_str = as_val_tostring(p_val);
 
-		LOG("   element - type = %d, value = %s ", as_val_type(p_val), p_str);
+		LOG("   element - type = %d, value = %s", as_val_type(p_val), p_str);
 		free(p_str);
 	}
 
 	as_list_destroy(p_list);
 	p_list = NULL;
 
-	// Add 3 more items into the set. By using as_arraylist_inita(), we won't
-	// need to destroy the as_arraylist if we only use
-	// as_arraylist_append_int64().
+	// Add 3 more items into the set. By using as_arraylist_inita() we avoid
+	// some but not all internal heap usage, so we must call
+	// as_arraylist_destroy().
 	as_arraylist vals;
 	as_arraylist_inita(&vals, 3);
 	as_arraylist_append_int64(&vals, 1001);
 	as_arraylist_append_int64(&vals, 2002);
 	as_arraylist_append_int64(&vals, 3003);
 
-	if (aerospike_lset_addall(&as, &err, NULL, &g_key, &lset,
+	if (aerospike_lset_add_all(&as, &err, NULL, &g_key, &lset,
 			(const as_list*)&vals) != AEROSPIKE_OK) {
 		LOG("aerospike_lset_addall() returned %d - %s", err.code, err.message);
+		as_arraylist_destroy(&vals);
+		example_cleanup(&as);
 		exit(-1);
 	}
+
+	as_arraylist_destroy(&vals);
 
 	LOG("3 more values added");
 
@@ -167,17 +177,57 @@ main(int argc, char* argv[])
 		LOG("second aerospike_lset_filter() returned %d - %s", err.code,
 				err.message);
 		as_list_destroy(p_list);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
 	as_arraylist_iterator_init(&it, (const as_arraylist*)p_list);
 
+	int item_count = 0;
+
 	while (as_arraylist_iterator_has_next(&it)) {
 		const as_val* p_val = as_arraylist_iterator_next(&it);
 		char* p_str = as_val_tostring(p_val);
 
-		LOG("   element - type = %d, value = %s ", as_val_type(p_val), p_str);
+		LOG("   element - type = %d, value = %s", as_val_type(p_val), p_str);
 		free(p_str);
+
+		item_count++;
+
+		// Make sure it's a value we expect.
+		if (as_val_type(p_val) == AS_INTEGER) {
+			int64_t myival = as_integer_get((const as_integer*)p_val);
+
+			if (myival != 1001 && myival != 2002 && myival != 3003 &&
+					myival != 12345) {
+				LOG("unexpected integer value %ld returned", myival);
+				as_list_destroy(p_list);
+				example_cleanup(&as);
+				exit(-1);
+			}
+		}
+		else if (as_val_type(p_val) == AS_STRING) {
+			if (strcmp("lset value", as_string_get((as_string*)p_val)) != 0) {
+				LOG("unexpected string value %s returned",
+						as_string_get((const as_string*)p_val));
+				as_list_destroy(p_list);
+				example_cleanup(&as);
+				exit(-1);
+			}
+		}
+		else {
+			LOG("unexpected value type %d", as_val_type(p_val));
+			as_list_destroy(p_list);
+			example_cleanup(&as);
+			exit(-1);
+		}
+	}
+
+	if (item_count != 5) {
+		LOG("unexpected number of values %d", item_count);
+		as_list_destroy(p_list);
+		example_cleanup(&as);
+		exit(-1);
 	}
 
 	as_list_destroy(p_list);
@@ -191,47 +241,55 @@ main(int argc, char* argv[])
 	if (aerospike_lset_exists(&as, &err, NULL, &g_key, &lset2,
 			(const as_val*)&ival, &exists) != AEROSPIKE_OK) {
 		LOG("aerospike_lset_exists() returned %d - %s", err.code, err.message);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
 	if (! as_boolean_get(&exists)) {
 		LOG("not able to find a value which should be in the set");
+		example_cleanup(&as);
 		exit(-1);
 	}
 
-	as_boolean_init(&exists, false);
-	as_integer_init(&ival, 33333);
+	LOG("existence checked");
 
-	// Check that a value which should not be in the set, really isn't.
-	if (aerospike_lset_exists(&as, &err, NULL, &g_key, &lset2,
-			(const as_val*)&ival, &exists) != AEROSPIKE_OK) {
-		LOG("second aerospike_lset_exists() returned %d - %s", err.code,
-				err.message);
-		exit(-1);
-	}
-
-	if (as_boolean_get(&exists)) {
-		LOG("found a value which should not be in the set");
-		exit(-1);
-	}
-
-	LOG("existence functionality checked");
-
-	// Destroy the lset.
-	if (aerospike_lset_destroy(&as, &err, NULL, &g_key, &lset) !=
-			AEROSPIKE_OK) {
-		LOG("aerospike_lset_destroy() returned %d - %s", err.code, err.message);
+	// Remove the value from the set.
+	if (aerospike_lset_remove(&as, &err, NULL, &g_key, &lset2,
+			(const as_val*)&ival) != AEROSPIKE_OK) {
+		LOG("aerospike_lset_remove() returned %d - %s", err.code, err.message);
+		example_cleanup(&as);
 		exit(-1);
 	}
 
 	n_elements = 0;
 
-	// See if we can still do any lset operations.
-	if (aerospike_lset_size(&as, &err, NULL, &g_key, &lset, &n_elements) ==
-			AEROSPIKE_OK) {
-		LOG("aerospike_lset_size() did not return error");
+	// See how many elements we have in the set now.
+	if (aerospike_lset_size(&as, &err, NULL, &g_key, &lset, &n_elements)
+			!= AEROSPIKE_OK) {
+		LOG("aerospike_lset_size() returned %d - %s", err.code, err.message);
+		example_cleanup(&as);
 		exit(-1);
 	}
+
+	if (n_elements != 4) {
+		LOG("unexpected lset size %u", n_elements);
+		example_cleanup(&as);
+		exit(-1);
+	}
+
+	LOG("one value removed and checked");
+
+	// Destroy the lset.
+	if (aerospike_lset_destroy(&as, &err, NULL, &g_key, &lset) !=
+			AEROSPIKE_OK) {
+		LOG("aerospike_lset_destroy() returned %d - %s", err.code, err.message);
+		example_cleanup(&as);
+		exit(-1);
+	}
+
+	n_elements = 0;
+
+	LOG("lset destroyed");
 
 	// Cleanup and disconnect from the database cluster.
 	example_cleanup(&as);

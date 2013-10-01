@@ -403,7 +403,6 @@ cl_shm_node_ping(cl_seed_node* seed)
 	// Set partition generation after determining if replicas should be requested.
 	bool request_replicas = false;
 	if (shared->partition_generation != request.partition_generation) {
-		shared->partition_generation = request.partition_generation;
 		request_replicas = true;
 	}
 
@@ -438,6 +437,8 @@ cl_shm_node_ping(cl_seed_node* seed)
 			cf_warn("Shared memory read replicas buffer full: size=%d", sizeof(shared->read_replicas));
 		}
 
+		// Update the local partition generation only after successful update of partition map
+		shared->partition_generation = request.partition_generation;
 		cl_shm_node_unlock(shared);
 		cl_replicas_free(&replicas);
 	}

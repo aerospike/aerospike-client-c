@@ -139,6 +139,14 @@ void citrusleaf_object_init_blob2(cl_object *o, const void *blob, size_t len, cl
 	o->free = 0;
 }
 
+void citrusleaf_object_init_blob_handoff(cl_object *o, void *blob, size_t len, cl_type t)
+{
+	o->type = t;
+	o->sz = len;
+	o->free = o->u.blob = blob;
+}
+
+// TODO - is this even used?
 void citrusleaf_object_init_blob_type(cl_object *o, int blob_type, void *blob, size_t len)
 {
 	o->type = blob_type;

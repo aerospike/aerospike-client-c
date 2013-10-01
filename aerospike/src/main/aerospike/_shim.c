@@ -171,7 +171,7 @@ void asval_to_clobject(as_val * val, cl_object * obj)
 			as_serializer_serialize(&ser, val, &buffer);
 			as_serializer_destroy(&ser);
 			
-			citrusleaf_object_init_blob2(obj, buffer.data, buffer.size, CL_LIST);
+			citrusleaf_object_init_blob_handoff(obj, buffer.data, buffer.size, CL_LIST);
 			break;
 		}
 		case AS_MAP: {
@@ -183,7 +183,7 @@ void asval_to_clobject(as_val * val, cl_object * obj)
 			as_serializer_serialize(&ser, val, &buffer);
 			as_serializer_destroy(&ser);
 
-			citrusleaf_object_init_blob2(obj, buffer.data, buffer.size, CL_MAP);
+			citrusleaf_object_init_blob_handoff(obj, buffer.data, buffer.size, CL_MAP);
 			break;
 		}
 		default: {

@@ -102,7 +102,7 @@ as_status aerospike_lstack_push(
  *	as_arraylist_append_string(&vals, s);
  *	as_arraylist_append_int64(&vals, 35);
  *
- *	if ( aerospike_lstack_pushall(&as, &err, NULL, &key, &stack, (as_val *) &ival) != AEROSPIKE_OK ) {
+ *	if ( aerospike_lstack_push_all(&as, &err, NULL, &key, &stack, (as_val *) &ival) != AEROSPIKE_OK ) {
  *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *	}
  *	~~~~~~~~~~
@@ -119,7 +119,7 @@ as_status aerospike_lstack_push(
  *
  *	@ingroup ldt_operations
  */
-as_status aerospike_lstack_pushall(
+as_status aerospike_lstack_push_all(
 	aerospike * as, as_error * err, const as_policy_apply * policy,
 	const as_key * key, const as_ldt * ldt, const as_list * vals);
 

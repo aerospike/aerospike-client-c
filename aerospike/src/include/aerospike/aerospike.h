@@ -20,6 +20,19 @@
  *	IN THE SOFTWARE.
  *****************************************************************************/
 
+/** 
+ * @mainpage Aerospike C Client
+ *
+ * @section intro_sec Introduction
+ *
+ * This package describes the Aerospike C Client API in detail.
+ * Click on "Modules" to see the API.
+ *
+ * For Overview and Developer Guide, please go to http://www.aerospike.com.
+ * 
+ * 
+ */
+ 
 /**
  *	@defgroup client_operations Client Operations
  *
@@ -34,6 +47,12 @@
  *	@defgroup aerospike_t Aerospike Types
  */
 
+/**
+ *	@defgroup client_utilities Client Utilities
+ *  @{
+ *    @defgroup stringmap_t
+ *  @}
+ */
 
 #pragma once 
 

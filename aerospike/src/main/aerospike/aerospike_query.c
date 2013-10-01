@@ -152,42 +152,6 @@ as_status aerospike_query_foreach(
 }
 
 /**
- * Execute a query and send the results to a writable stream.
- *
- * @param as        - the aerospike cluster to connect to.
- * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
- * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
- * @param query     - the query to execute against the cluster
- * @param stream    - the writable stream to write results to.
- *
- * @return AEROSPIKE_OK on success, otherwise an error.
- */
-as_status aerospike_query_stream(
-	aerospike * as, as_error * err, const as_policy_query * policy, 
-	const as_query * query, 
-	as_stream * stream)
-{
-	// we want to reset the error so, we have a clean state
-	as_error_reset(err);
-	
-	// resolve policies
-	// as_policy_query p;
-	// as_policy_query_resolve(&p, &as->config.policies, policy);
-	
-	if ( aerospike_query_init(as, err) != AEROSPIKE_OK ) {
-		return err->code;
-	}
-
-	cl_query * clquery = as_query_toclquery(query);
-
-	cl_rv rc = citrusleaf_query_stream(as->cluster, clquery, stream);
-
-    cl_query_destroy(clquery);
-
-	return rc ? AEROSPIKE_ERR_QUERY : AEROSPIKE_OK;
-}
-
-/**
  * Initialize query environment
  */
 as_status aerospike_query_init(aerospike * as, as_error * err) 

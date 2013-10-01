@@ -32,7 +32,8 @@
 
 #include <citrusleaf/citrusleaf.h>
 #include <citrusleaf/cl_cluster.h>
- 
+#include <citrusleaf/cf_packet_compression.h>
+
 #include "internal.h"
 
 
@@ -406,6 +407,50 @@ cl_do_async_monte(cl_cluster *asc, int info1, int info2, const char *ns, const c
 	workitem->starttime = cf_getms();
 	workitem->udata = udata;
 
+    as_msg *msgp;
+    // Hate special cases, but we have to clear the verify bit on delete verify
+    if ( (info2 & CL_MSG_INFO2_DELETE) && (info1 & CL_MSG_INFO1_VERIFY))
+    {
+        msgp = (as_msg *)wr_buf;
+        msgp->m.info1 &= ~CL_MSG_INFO1_VERIFY;
+    }
+    
+    if (asc->compression_stat.compression_threshold > 0 
+     && wr_buf_sz > (size_t)asc->compression_stat.compression_threshold)
+    {
+        /* Compression is enabled.
+         * Packet size is above threshold.
+         * Compress the data
+         */
+        uint8_t *compressed_buf = NULL;
+        size_t compressed_buf_sz = 0;
+
+        // Contstruct packet for compressed data.
+        cf_packet_compression (wr_buf, wr_buf_sz, &compressed_buf, &compressed_buf_sz);
+        if (compressed_buf)
+        {
+            // If original packet size is > 16k, cl_compile had allocated memory for it.
+            // Free that memory.
+            // cf_packet_compression will allocate memory for compressed packet
+            if (wr_buf != wr_stack_buf) {
+                free(wr_buf);
+            }
+             // Update stats.
+            citrusleaf_cluster_put_compression_stat(asc, wr_buf_sz, compressed_buf_sz);	
+            wr_buf =  compressed_buf;
+            wr_buf_sz = compressed_buf_sz;
+            //memcpy (wr_buf, compressed_buf, compressed_buf_sz);
+            //wr_buf_sz = compressed_buf_sz;
+            //free (compressed_buf);
+        }
+        //else compression failed, continue with uncompressed packet
+        else
+        {
+            // Set compression stat
+            citrusleaf_cluster_put_compression_stat(asc, wr_buf_sz, wr_buf_sz);	
+        }
+    }
+
 	int try = 0;
 	// retry request based on the write_policy
 	do {
@@ -442,13 +487,6 @@ cl_do_async_monte(cl_cluster *asc, int info1, int info2, const char *ns, const c
 			goto Retry;
 		}
 
-		// Hate special cases, but we have to clear the verify bit on delete verify
-		if ( (info2 & CL_MSG_INFO2_DELETE) && (info1 & CL_MSG_INFO1_VERIFY))
-		{
-			as_msg *msgp = (as_msg *)wr_buf;
-			msgp->m.info1 &= ~CL_MSG_INFO1_VERIFY;
-		}
-		
 		// Send the command to the node
 		starttime = cf_getms();
 		rv = cf_socket_write_timeout(fd, wr_buf, wr_buf_sz, deadline_ms, progress_timeout_ms);

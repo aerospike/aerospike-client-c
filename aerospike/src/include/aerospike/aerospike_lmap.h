@@ -21,7 +21,7 @@
  *****************************************************************************/
 
 /**
- * Functionality related to Large Set Data Type
+ * Functionality related to Large Map Data Type
  */
 
 #pragma once 
@@ -42,19 +42,19 @@
  *****************************************************************************/
 
 /**
- *	Add a value into the lset.
+ *	Add a value into the lmap.
  *
  *	~~~~~~~~~~{.c}
  *	as_key key;
  *	as_key_init(&key, "myns", "myset", "mykey");
  *
- *	as_ldt lset;
- *	as_ldt_init(&lset, "mylset", AS_LDT_LSET, NULL);
+ *	as_ldt lmap;
+ *	as_ldt_init(&lmap, "mylmap", AS_LDT_LMAP, NULL);
  *	
  *	as_integer ival;
  *	as_integer_init(&ival, 123);
  *
- *	if ( aerospike_lset_add(&as, &err, NULL, &key, &lset, (as_val *) &ival) != AEROSPIKE_OK ) {
+ *	if ( aerospike_lmap_put(&as, &err, NULL, &key, &lmap, (const as_val *) &ival, (as_val *) &ival) != AEROSPIKE_OK ) {
  *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *	}
  *	~~~~~~~~~~
@@ -64,25 +64,28 @@
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param key			The key of the record.
  *	@param ldt 			The ldt bin to insert values to.
- *	@param val			The value to insert into the lset.
+ *	@param mkey			The map-key.
+ *	@param val			The map-value associated with mkey.
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error.
  *
  *	@ingroup ldt_operations
  */
-as_status aerospike_lset_add(
+as_status aerospike_lmap_put(
 	aerospike * as, as_error * err, const as_policy_apply * policy,
-	const as_key * key, const as_ldt * ldt, const as_val * val);
+	const as_key * key, const as_ldt * ldt,
+	const as_val * mkey, const as_val * mval
+	);
 
 /**
- *	Add a list of values into the lset.
+ *	Add multiple entries into the lmap.
  *
  *	~~~~~~~~~~{.c}
  *	as_key key;
  *	as_key_init(&key, "myns", "myset", "mykey");
  *
- *	as_ldt lset;
- *	as_ldt_init(&lset, "mylset", AS_LDT_LSET, NULL);
+ *	as_ldt lmap;
+ *	as_ldt_init(&lmap, "mylmap", AS_LDT_LMAP, NULL);
  *
  *
  *	as_arraylist vals;
@@ -92,7 +95,7 @@ as_status aerospike_lset_add(
  *	as_arraylist_append_string(&vals, s);
  *	as_arraylist_append_int64(&vals, 35);
  *
- *	if ( aerospike_lset_add_all(&as, &err, NULL, &key, &lset, (as_list *)vals) != AEROSPIKE_OK ) {
+ *	if ( aerospike_lmap_put_all(&as, &err, NULL, &key, &lmap, (const as_map *)vals) != AEROSPIKE_OK ) {
  *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *	}
  *
@@ -103,32 +106,33 @@ as_status aerospike_lset_add(
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param key			The key of the record.
  *	@param ldt 			The ldt bin to insert values to.
- *	@param vals			The list of values to insert into the lset.
+ *	@param vals			A map containing the entries to add to the lmap.
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error.
  *
  *	@ingroup ldt_operations
  */
-as_status aerospike_lset_add_all(
+as_status aerospike_lmap_put_all(
 	aerospike * as, as_error * err, const as_policy_apply * policy,
-	const as_key * key, const as_ldt * ldt, const as_list * vals);
+	const as_key * key, const as_ldt * ldt, const as_map * vals
+	);
 
 /**
- *	See if a value exists in an lset
+ *	Get the value of an entry in the Lmap, using the given map-key
  *
  *	~~~~~~~~~~{.c}
  *	as_key key;
  *	as_key_init(&key, "myns", "myset", "mykey");
  *
- *	as_ldt lset;
- *	as_ldt_init(&lset, "mylset", AS_LDT_LSET, NULL);
+ *	as_ldt lmap;
+ *	as_ldt_init(&lmap, "mylmap", AS_LDT_LMAP, NULL);
  *
  *	as_integer ival;
  *	as_integer_init(&ival, 123);
  *
  *  boolean exists = false;
  *	
- *	if ( aerospike_lset_exists(&as, &err, NULL, &key, &lset, &ival, &exists) != AEROSPIKE_OK ) {
+ *	if ( aerospike_lmap_get(&as, &err, NULL, &key, &lmap, &ikey, &p_val) != AEROSPIKE_OK ) {
  *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *	}
  *	else {
@@ -140,7 +144,7 @@ as_status aerospike_lset_add_all(
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param key			The key of the record.
- *	@param ldt 			The lset bin to lookup from. If not an lset bin, will return error.
+ *	@param ldt 			The lmap bin to lookup from. If not an lmap bin, will return error.
  *	@param exists 		Returned boolean value to indicate value exists.
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error.
@@ -148,31 +152,29 @@ as_status aerospike_lset_add_all(
  *	@ingroup ldt_operations
  */
 
-as_status aerospike_lset_exists(
+as_status aerospike_lmap_get(
 	aerospike * as, as_error * err, const as_policy_apply * policy,
-	const as_key * key, const as_ldt * ldt, const as_val * val,
-	as_boolean *exists);
+	const as_key * key, const as_ldt * ldt, const as_val * mkey,
+	as_val ** mval
+	);
 
 /**
- *	Given an lset bin, filter the set of objects using the given filter function.
- *	If no filter function is specified, all values in the set will be returned.
+ *	Get all the entries in an lmap
  *
  *	~~~~~~~~~~{.c}
  *	as_key key;
  *	as_key_init(&key, "myns", "myset", "mykey");
  *
- *	as_ldt lset;
- *	as_ldt_init(&lset, "mylset", AS_LDT_LSET, NULL);
+ *	as_ldt lmap;
+ *	as_ldt_init(&lmap, "mylmap", AS_LDT_LMAP, NULL);
  *
- *	as_list *list = NULL;
+ *  as_map *p_map = NULL;
  *
- *	if ( aerospike_lset_filter(&as, &err, NULL, &key, &lset,
- *			"search_filter", NULL, (as_list *) &list) != AEROSPIKE_OK ) {
+ *	if ( aerospike_lmap_get_all(&as, &err, NULL, &key, &lmap, &p_map) != AEROSPIKE_OK ) {
  *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *	}
  *	else {
- *		// process the returned elements
- *		as_arraylist_destroy(list);
+ *		// do logic because element exists
  *	}
  *	~~~~~~~~~~
  *
@@ -180,73 +182,78 @@ as_status aerospike_lset_exists(
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param key			The key of the record.
- *	@param ldt 			The lset bin to search from. If not an lset bin, will return error.
- *	@param filter		The name of the User-Defined-Function to use as a search filter.
+ *	@param ldt 			The lmap bin to lookup from. If not an lmap bin, will return error.
+ *	@param elements 	Returned pointer to the map of entries.
+ *
+ *	@return AEROSPIKE_OK if successful. Otherwise an error.
+ *
+ *	@ingroup ldt_operations
+ */
+
+as_status aerospike_lmap_get_all(
+	aerospike * as, as_error * err, const as_policy_apply * policy,
+	const as_key * key, const as_ldt * ldt,
+	as_map ** elements
+	);
+
+/**
+ *	Given an lmap bin, scan through all entries in the map, and apply the
+ *	given filter function. If no filter function is specified, all values
+ *	in the lmap will be returned.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_key key;
+ *	as_key_init(&key, "myns", "myset", "mykey");
+ *
+ *	as_ldt lmap;
+ *	as_ldt_init(&lmap, "mylmap", AS_LDT_LMAP, NULL);
+ *
+ *	as_map *p_map = NULL;
+ *
+ *	if ( aerospike_lmap_filter(&as, &err, NULL, &key, &lmap,
+ *			"counter_filter", NULL, (as_map *) &p_map) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *	else {
+ *		// process the returned elements
+ *		as_map_destroy(p_map);
+ *	}
+ *	~~~~~~~~~~
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param key			The key of the record.
+ *	@param ldt 			The lmap bin to operate on. If not an lmap bin, will return error.
+ *	@param filter		The name of the User-Defined-Function to use as a read-filter.
+ *						The UDF should either return the entry, or nil, if filtered out.
  *	@param fargs		The list of parameters passed in to the User-Defined-Function filter.
- *	@param list			The pointer to a list of elements returned from search function. Pointer should
+ *	@param elements		The pointer to a map of entries returned from the function. Pointer should
  *						be NULL passed in.
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error.
  *
  *	@ingroup ldt_operations
  */
-as_status aerospike_lset_filter(
+as_status aerospike_lmap_filter(
 	aerospike * as, as_error * err, const as_policy_apply * policy,
 	const as_key * key, const as_ldt * ldt,
 	const as_udf_function_name filter, const as_list *filter_args,
-	as_list ** elements );
+	as_map ** elements
+	);
 
 /**
- *	Given an lset bin, scan for all the values in the set
+ *	Look up a lmap and find how many elements it contains
  *
  *	~~~~~~~~~~{.c}
  *	as_key key;
  *	as_key_init(&key, "myns", "myset", "mykey");
  *
- *	as_ldt lset;
- *	as_ldt_init(&lset, "mylset", AS_LDT_LSET, NULL);
+ *	as_ldt lmap;
+ *	as_ldt_init(&lmap, "mylmap", AS_LDT_LMAP, NULL);
+ *	uint32_t lmap_size = 0;
  *
- *	as_list *list = NULL;
- *
- *	if ( aerospike_lset_scan(&as, &err, NULL, &key, &lset,
- *			"search_filter", NULL, (as_list *) &list) != AEROSPIKE_OK ) {
- *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *	}
- *	else {
- *		// process the returned elements
- *		as_arraylist_destroy(list);
- *	}
- *	~~~~~~~~~~
- *
- *	@param as			The aerospike instance to use for this operation.
- *	@param err			The as_error to be populated if an error occurs.
- *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param key			The key of the record.
- *	@param ldt 			The lset bin to search from. If not an lset bin, will return error.
- *	@param list			The pointer to a list of elements returned from search function. Pointer should
- *						be NULL passed in.
- *
- *	@return AEROSPIKE_OK if successful. Otherwise an error.
- *
- *	@ingroup ldt_operations
- */
-as_status aerospike_lset_scan(
-	aerospike * as, as_error * err, const as_policy_apply * policy,
-	const as_key * key, const as_ldt * ldt,
-	as_list ** elements );
-
-/**
- *	Look up a lset and find how many elements it contains
- *
- *	~~~~~~~~~~{.c}
- *	as_key key;
- *	as_key_init(&key, "myns", "myset", "mykey");
- *
- *	as_ldt lset;
- *	as_ldt_init(&lset, "mylset", AS_LDT_LSET, NULL);
- *	uint32_t lset_size = 0;
- *
- *	if ( aerospike_lset_size(&as, &err, NULL, &key, &lset, &lset_size) != AEROSPIKE_OK ) {
+ *	if ( aerospike_lmap_size(&as, &err, NULL, &key, &lmap, &lmap_size) != AEROSPIKE_OK ) {
  *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *	}
  *	~~~~~~~~~~
@@ -255,33 +262,33 @@ as_status aerospike_lset_scan(
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param key			The key of the record.
- *	@param ldt 			The lset to operate on. If not an lset bin, will return error.
- *	@param n			Return the number of elements in the lset.
+ *	@param ldt 			The lmap to operate on. If not an lmap bin, will return error.
+ *	@param n			Return the number of elements in the lmap.
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error.
  *
  *	@ingroup ldt_operations
  */
-as_status aerospike_lset_size(
+as_status aerospike_lmap_size(
 	aerospike * as, as_error * err, const as_policy_apply * policy,
 	const as_key * key, const as_ldt * ldt,
 	uint32_t *n
 	);
 
 /**
- *	Delete the given value from the lset
+ *	Delete the given value from the lmap
  *
  *	~~~~~~~~~~{.c}
  *	as_key key;
  *	as_key_init(&key, "myns", "myset", "mykey");
  *
- *	as_ldt lset;
- *	as_ldt_init(&lset, "lset", AS_LDT_LSET, NULL);
+ *	as_ldt lmap;
+ *	as_ldt_init(&lmap, "lmap", AS_LDT_LMAP, NULL);
  *
  *	as_integer ival;
  *	as_integer_init(&ival, 123);
  *
- *	if ( aerospike_lset_remove(&as, &err, NULL, &key, &lset, &ival) != AEROSPIKE_OK ) {
+ *	if ( aerospike_lmap_remove(&as, &err, NULL, &key, &lmap, (const as_val*)&ikey) != AEROSPIKE_OK ) {
  *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *	}
  *	~~~~~~~~~~
@@ -290,29 +297,29 @@ as_status aerospike_lset_size(
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param key			The key of the record.
- *	@param ldt 			The lset bin to delete from. If not an lset bin, will return error.
+ *	@param ldt 			The lmap bin to delete from. If not an lmap bin, will return error.
  *	@param val			The value to delete from the set.
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error.
  *
  *	@ingroup ldt_operations
  */
-as_status aerospike_lset_remove(
+as_status aerospike_lmap_remove(
 	aerospike * as, as_error * err, const as_policy_apply * policy,
-	const as_key * key, const as_ldt * ldt, const as_val *element
+	const as_key * key, const as_ldt * ldt, const as_val *mkey
 	);
 
 /**
- *	Destroy the lset bin
+ *	Destroy the lmap bin
  *
  *	~~~~~~~~~~{.c}
  *	as_key key;
  *	as_key_init(&key, "myns", "myset", "mykey");
  *
- *	as_ldt lset;
- *	as_ldt_init(&lset, "mylset", AS_LDT_LSET, NULL);
+ *	as_ldt lmap;
+ *	as_ldt_init(&lmap, "mylmap", AS_LDT_LMAP, NULL);
  *
- *	if ( aerospike_lset_destroy(&as, &err, NULL, &key, &lset) != AEROSPIKE_OK ) {
+ *	if ( aerospike_lmap_destroy(&as, &err, NULL, &key, &lmap) != AEROSPIKE_OK ) {
  *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *	}
  *	~~~~~~~~~~
@@ -321,13 +328,13 @@ as_status aerospike_lset_remove(
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param key			The key of the record.
- *	@param ldt 			The lset bin to destroy. If not an lset bin, will return error.
+ *	@param ldt 			The lmap bin to destroy. If not an lmap bin, will return error.
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error.
  *
  *	@ingroup ldt_operations
  */
-as_status aerospike_lset_destroy(
+as_status aerospike_lmap_destroy(
 	aerospike * as, as_error * err, const as_policy_apply * policy,
 	const as_key * key, const as_ldt * ldt
 	);

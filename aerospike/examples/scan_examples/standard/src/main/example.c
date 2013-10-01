@@ -94,8 +94,9 @@ main(int argc, char* argv[])
 	// Do the scan. This call blocks while the scan is running - callbacks are
 	// made in the scope of this call.
 	if (aerospike_scan_foreach(&as, &err, NULL, &scan, scan_cb, NULL) !=
-			AEROSPIKE_OK ){
+			AEROSPIKE_OK) {
 		LOG("aerospike_scan_foreach() returned %d - %s", err.code, err.message);
+		as_scan_destroy(&scan);
 		cleanup(&as);
 		exit(-1);
 	}
@@ -127,11 +128,15 @@ scan_cb(const as_val* p_val, void* udata)
 	}
 
 	// The scan didn't use a UDF, so the as_val object should be an as_record.
-	LOG("scan callback returned record:");
-	example_dump_record(as_record_fromval(p_val));
+	as_record* p_rec = as_record_fromval(p_val);
 
-	// Caller's responsibility to destroy as_val returned.
-	as_val_destroy(p_val);
+	if (! p_rec) {
+		LOG("scan callback returned non-as_record object");
+		return true;
+	}
+
+	LOG("scan callback returned record:");
+	example_dump_record(p_rec);
 
 	return true;
 }

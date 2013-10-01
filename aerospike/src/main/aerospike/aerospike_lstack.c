@@ -34,15 +34,19 @@
 // ++==============++
 // || Fixed Values ||
 // ++==============++
+const char * DEFAULT_LSTACK_PACKAGE = "lstack";
+
 // The names of the Lua Functions that implement Large Stack Ops
-static char * LDT_STACK_OP_PUSH             = "lstack_push";
-static char * LDT_STACK_OP_PUSHALL          = "lstack_push_all";
-static char * LDT_STACK_OP_PEEK             = "lstack_peek";
-static char * LDT_STACK_OP_PEEK_FILTER  	= "lstack_peek_then_filter";
-static char * LDT_STACK_OP_SIZE             = "lstack_size";
-static char * LDT_STACK_OP_CAPACITY_SET		= "lstack_set_capacity";
-static char * LDT_STACK_OP_CAPACITY_GET		= "lstack_get_capacity";
-static char * LDT_STACK_OP_DESTROY			= "lstack_remove";
+const char * LDT_STACK_OP_PUSH				= "push";
+const char * LDT_STACK_OP_PUSHALL			= "push_all";
+const char * LDT_STACK_OP_PEEK				= "peek";
+// @TODO const char * LDT_STACK_OP_POP			= "pop";
+// @TODO const char * LDT_STACK_OP_SCAN			= "scan";
+const char * LDT_STACK_OP_FILTER  			= "filter";
+const char * LDT_STACK_OP_DESTROY			= "destroy";
+const char * LDT_STACK_OP_SIZE				= "size";
+const char * LDT_STACK_OP_CAPACITY_SET		= "set_capacity";
+const char * LDT_STACK_OP_CAPACITY_GET		= "get_capacity";
 
 
 static as_status aerospike_lstack_push_internal(
@@ -68,27 +72,104 @@ static as_status aerospike_lstack_push_internal(
 	as_string_init(&ldt_bin, (char *)ldt->name, false);
 
 	as_arraylist arglist;
-	as_arraylist_inita(&arglist, 2);
+	as_arraylist_inita(&arglist, ldt->module[0] == 0 ? 2 : 3);
 	as_arraylist_append_string(&arglist, &ldt_bin);
-    as_val_reserve( val );
+	as_val_reserve( val );
 	as_arraylist_append(&arglist, (as_val *) val);
 
+	if (ldt->module[0] != 0) {
+		as_string ldt_module;
+		as_string_init(&ldt_module, (char *)ldt->module, false);
+		as_arraylist_append_string(&arglist, &ldt_module);
+	}
+
 	as_val* p_return_val = NULL;
-    aerospike_key_apply(
-		as, err, policy, key, ldt->module, operation,
+	aerospike_key_apply(
+		as, err, policy, key, DEFAULT_LSTACK_PACKAGE, operation,
 		(as_list *)&arglist, &p_return_val);
 
-    if (ldt_parse_error(err) != AEROSPIKE_OK) {
-    	return err->code;
-    }
+	as_arraylist_destroy(&arglist);
 
-    // return value is the input
-    if (p_return_val) {
-    	as_val_destroy(p_return_val);
-    }
+	if (ldt_parse_error(err) != AEROSPIKE_OK) {
+		return err->code;
+	}
 
-    return err->code;
+	// return value is the input
+	if (p_return_val) {
+		as_val_destroy(p_return_val);
+	}
+
+	return err->code;
 } // end aerospike_lstack_push_internal()
+
+static as_status aerospike_lstack_peek_with_filter(
+	aerospike * as, as_error * err, const as_policy_apply * policy,
+	const as_key * key, const as_ldt * ldt, uint32_t peek_count,
+	const as_udf_function_name filter, const as_list *filter_args,
+	as_list ** elements )
+{
+	if ( !err ) {
+		return AEROSPIKE_ERR_PARAM;
+	}
+	as_error_reset(err);
+
+	if (filter_args && !filter) {
+		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
+				"filter arguments without filter name specification");
+	}
+	if (!as || !key || !ldt || !peek_count || !elements) {
+		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
+				"as/key/ldt/peek_count/elements cannot be null");
+	}
+	if (ldt->type != AS_LDT_LSTACK) {
+		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
+				"not stack type");
+	}
+
+	int list_argc = filter ? 5 : 2;
+	/* stack allocate the arg list */
+	as_string ldt_bin;
+	as_string_init(&ldt_bin, (char *)ldt->name, false);
+
+	as_arraylist arglist;
+	as_arraylist_inita(&arglist, list_argc);
+	as_arraylist_append_string(&arglist, &ldt_bin);
+	as_arraylist_append_int64(&arglist, peek_count );
+
+	if (filter){
+   		as_string ldt_module;
+		as_string_init(&ldt_module, (char *)ldt->module, false);
+   		as_arraylist_append_string(&arglist, &ldt_module);
+
+		as_string filter_name;
+		as_string_init(&filter_name, (char *)filter, false);
+		as_arraylist_append_string(&arglist, &filter_name );
+		as_val_reserve( filter_args ); // bump the ref count
+		as_arraylist_append(&arglist, (as_val *) filter_args );
+	}
+
+	as_val* p_return_val = NULL;
+	aerospike_key_apply(
+		as, err, policy, key, DEFAULT_LSTACK_PACKAGE,
+		filter ? LDT_STACK_OP_FILTER : LDT_STACK_OP_PEEK,
+		(as_list *)&arglist, &p_return_val);
+
+	as_arraylist_destroy(&arglist);
+
+	if (ldt_parse_error(err) != AEROSPIKE_OK) {
+		return err->code;
+	}
+
+	if (!p_return_val) {
+		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL,
+				"no value returned from server");
+	}
+
+	*elements = (as_list *)p_return_val;
+
+	return err->code;
+
+} // aerospike_lstack_peek_with_filter()
 
 as_status aerospike_lstack_push(
 	aerospike * as, as_error * err, const as_policy_apply * policy,
@@ -96,7 +177,7 @@ as_status aerospike_lstack_push(
 	return aerospike_lstack_push_internal (as, err, policy, key, ldt, val, LDT_STACK_OP_PUSH);
 }
 
-as_status aerospike_lstack_pushall(
+as_status aerospike_lstack_push_all(
 	aerospike * as, as_error * err, const as_policy_apply * policy,
 	const as_key * key, const as_ldt * ldt, const as_list * vals) {
 	return aerospike_lstack_push_internal (as, err, policy, key, ldt,
@@ -130,28 +211,30 @@ as_status aerospike_lstack_size(
 	as_arraylist_append_string(&arglist, &ldt_bin);
 
 	as_val* p_return_val = NULL;
-    aerospike_key_apply(
-		as, err, policy, key, ldt->module, LDT_STACK_OP_SIZE,
+	aerospike_key_apply(
+		as, err, policy, key, DEFAULT_LSTACK_PACKAGE, LDT_STACK_OP_SIZE,
 		(as_list *)&arglist, &p_return_val);
 
-    if (ldt_parse_error(err) != AEROSPIKE_OK) {
-    	return err->code;
-    }
+	as_arraylist_destroy(&arglist);
 
-    if (!p_return_val) {
+	if (ldt_parse_error(err) != AEROSPIKE_OK) {
+		return err->code;
+	}
+
+	if (!p_return_val) {
 		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL,
 				"no value returned from server");
-    }
-    int64_t ival = as_integer_getorelse(as_integer_fromval(p_return_val), -1);
+	}
+	int64_t ival = as_integer_getorelse(as_integer_fromval(p_return_val), -1);
 	as_val_destroy(p_return_val);
 
-    if (ival == -1) {
+	if (ival == -1) {
 		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL,
 				"value returned from server not parse-able");
-    }
-    *n = ival;
+	}
+	*n = ival;
 
-    return err->code;
+	return err->code;
 }
 
 as_status aerospike_lstack_peek(
@@ -159,71 +242,20 @@ as_status aerospike_lstack_peek(
 	const as_key * key, const as_ldt * ldt, uint32_t peek_count,
 	as_list ** elements )
 {
-	return aerospike_lstack_filter(as, err, policy, key, ldt, peek_count, NULL, NULL, elements);
+	return aerospike_lstack_peek_with_filter(as, err, policy, key, ldt, peek_count, NULL, NULL, elements);
 } // aerospike_lstack_peek()
 
-
 as_status aerospike_lstack_filter(
-	aerospike * as, as_error * err, const as_policy_apply * policy,
-	const as_key * key, const as_ldt * ldt, uint32_t peek_count,
-	const as_udf_function_name filter, const as_list *filter_args,
-	as_list ** elements )
+		aerospike * as, as_error * err, const as_policy_apply * policy,
+		const as_key * key, const as_ldt * ldt, uint32_t peek_count,
+		const as_udf_function_name filter, const as_list *filter_args,
+		as_list ** elements )
 {
-	if ( !err ) {
+	if (!filter || ! filter_args) {
 		return AEROSPIKE_ERR_PARAM;
 	}
-	as_error_reset(err);
-
-	if (filter_args && !filter) {
-		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
-				"filter arguments without filter name specification");
-	}
-	if (!as || !key || !ldt || !peek_count || !elements) {
-		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
-				"as/key/ldt/peek_count/elements cannot be null");
-	}
-	if (ldt->type != AS_LDT_LSTACK) {
-		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
-				"not stack type");
-	}
-
-	int list_argc = filter ? 4 : 2;
-	/* stack allocate the arg list */
-	as_string ldt_bin;
-	as_string_init(&ldt_bin, (char *)ldt->name, false);
-
-	as_arraylist arglist;
-	as_arraylist_inita(&arglist, list_argc);
-	as_arraylist_append_string(&arglist, &ldt_bin);
-    as_arraylist_append_int64(&arglist, peek_count );
-
-    if (filter){
-    	as_string filter_name;
-    	as_string_init(&filter_name, (char *)filter, false);
-        as_arraylist_append_string(&arglist, &filter_name );
-        as_val_reserve( filter_args ); // bump the ref count
-        as_arraylist_append(&arglist, (as_val *) filter_args );
-    }
-
-	as_val* p_return_val = NULL;
-    aerospike_key_apply(
-		as, err, policy, key, ldt->module, filter ? LDT_STACK_OP_PEEK_FILTER : LDT_STACK_OP_PEEK,
-		(as_list *)&arglist, &p_return_val);
-
-    if (ldt_parse_error(err) != AEROSPIKE_OK) {
-    	return err->code;
-    }
-
-    if (!p_return_val) {
-		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL,
-				"no value returned from server");
-    }
-
-    *elements = (as_list *)p_return_val;
-
-    return err->code;
-
-} // aerospike_lstack_peek_with_filter()
+	return aerospike_lstack_peek_with_filter(as, err, policy, key, ldt, peek_count, filter, filter_args, elements);
+}
 
 as_status aerospike_lstack_set_capacity(
 	aerospike * as, as_error * err, const as_policy_apply * policy,
@@ -254,27 +286,29 @@ as_status aerospike_lstack_set_capacity(
 	as_arraylist_append_int64(&arglist, elements_capacity);
 
 	as_val* p_return_val = NULL;
-    aerospike_key_apply(
-		as, err, policy, key, ldt->module, LDT_STACK_OP_CAPACITY_SET,
+	aerospike_key_apply(
+		as, err, policy, key, DEFAULT_LSTACK_PACKAGE, LDT_STACK_OP_CAPACITY_SET,
 		(as_list *)&arglist, &p_return_val);
 
-    if (ldt_parse_error(err) != AEROSPIKE_OK) {
-    	return err->code;
-    }
+	as_arraylist_destroy(&arglist);
 
-    int64_t ival = as_integer_getorelse(as_integer_fromval(p_return_val), -1);
+	if (ldt_parse_error(err) != AEROSPIKE_OK) {
+		return err->code;
+	}
+
+	int64_t ival = as_integer_getorelse(as_integer_fromval(p_return_val), -1);
 	as_val_destroy(p_return_val);
 
-    if (ival == -1) {
+	if (ival == -1) {
 		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL,
 				"value returned from server not parse-able");
-    }
-    if (ival !=0 ) {
+	}
+	if (ival !=0 ) {
 		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL,
 				"capacity setting failed");
-    }
+	}
 
-    return err->code;
+	return err->code;
 }
 
 as_status aerospike_lstack_get_capacity(
@@ -305,24 +339,26 @@ as_status aerospike_lstack_get_capacity(
 	as_arraylist_append_string(&arglist, &ldt_bin);
 
 	as_val* p_return_val = NULL;
-    aerospike_key_apply(
-		as, err, policy, key, ldt->module, LDT_STACK_OP_CAPACITY_GET,
+	aerospike_key_apply(
+		as, err, policy, key, DEFAULT_LSTACK_PACKAGE, LDT_STACK_OP_CAPACITY_GET,
 		(as_list *)&arglist, &p_return_val);
 
-    if (ldt_parse_error(err) != AEROSPIKE_OK) {
-    	return err->code;
-    }
+	as_arraylist_destroy(&arglist);
 
-    int64_t ival = as_integer_getorelse(as_integer_fromval(p_return_val), -1);
+	if (ldt_parse_error(err) != AEROSPIKE_OK) {
+		return err->code;
+	}
+
+	int64_t ival = as_integer_getorelse(as_integer_fromval(p_return_val), -1);
 	as_val_destroy(p_return_val);
 
-    if (ival == -1) {
+	if (ival == -1) {
 		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL,
 				"value returned from server not parse-able");
-    }
-    *elements_capacity = ival;
+	}
+	*elements_capacity = ival;
 
-    return err->code;
+	return err->code;
 }
 
 as_status aerospike_lstack_destroy(
@@ -353,21 +389,23 @@ as_status aerospike_lstack_destroy(
 	as_arraylist_append_string(&arglist, &ldt_bin);
 
 	as_val* p_return_val = NULL;
-    aerospike_key_apply(
-		as, err, policy, key, ldt->module, LDT_STACK_OP_DESTROY,
+	aerospike_key_apply(
+		as, err, policy, key, DEFAULT_LSTACK_PACKAGE, LDT_STACK_OP_DESTROY,
 		(as_list *)&arglist, &p_return_val);
 
-    if (ldt_parse_error(err) != AEROSPIKE_OK) {
-    	return err->code;
-    }
+	as_arraylist_destroy(&arglist);
 
-    int64_t ival = as_integer_getorelse(as_integer_fromval(p_return_val), -1);
+	if (ldt_parse_error(err) != AEROSPIKE_OK) {
+		return err->code;
+	}
+
+	int64_t ival = as_integer_getorelse(as_integer_fromval(p_return_val), -1);
 	as_val_destroy(p_return_val);
 
-    if (ival != 0) {
+	if (ival != 0) {
 		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL,
 				"value returned from server not parse-able");
-    }
+	}
 
-    return err->code;
+	return err->code;
 }

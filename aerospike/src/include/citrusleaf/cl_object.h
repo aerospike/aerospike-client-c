@@ -78,6 +78,7 @@ void citrusleaf_object_init_str(cl_object * o, char const * str);
 void citrusleaf_object_init_str2(cl_object * o, char const * str, size_t str_len);
 void citrusleaf_object_init_blob(cl_object * o, void const * buf, size_t buf_len);
 void citrusleaf_object_init_blob2(cl_object * o, void const * buf, size_t buf_len, cl_type type);
+void citrusleaf_object_init_blob_handoff(cl_object *o, void *blob, size_t len, cl_type t);
 void citrusleaf_object_init_int(cl_object * o, int64_t i);
 void citrusleaf_object_init_null(cl_object * o);
 void citrusleaf_object_free(cl_object * o);

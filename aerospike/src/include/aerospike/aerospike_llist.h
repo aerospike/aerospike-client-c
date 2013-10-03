@@ -113,7 +113,7 @@ as_status aerospike_llist_add_all(
 	const as_key * key, const as_ldt * ldt, const as_list * vals);
 
 /**
- *	See if a value exists in an llist
+ *	Search for a value in the llist.
  *
  *	~~~~~~~~~~{.c}
  *	as_key key;
@@ -124,10 +124,13 @@ as_status aerospike_llist_add_all(
  *
  *	as_integer ival;
  *	as_integer_init(&ival, 123);
- *
- *  boolean exists = false;
  *	
- *	if ( aerospike_llist_exists(&as, &err, NULL, &key, &llist, &ival, &exists) != AEROSPIKE_OK ) {
+ *	as_integer search_val;
+ *	as_integer_init(&search_val, 42);
+ *
+ *	as_list *result_list = NULL;
+ *
+ *	if ( aerospike_llist_find(&as, &err, NULL, &key, &llist, &ival, &search_val, &result_list ) != AEROSPIKE_OK ) {
  *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *	}
  *	else {
@@ -140,21 +143,21 @@ as_status aerospike_llist_add_all(
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param key			The key of the record.
  *	@param ldt 			The llist bin to lookup from. If not an llist bin, will return error.
- *	@param exists 		Returned boolean value to indicate value exists.
+ *	@param search_val 	The search value
+ *	@param result_list	The returned list of values
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error.
  *	
  *	@ingroup ldt_operations
  */
-
-as_status aerospike_llist_exists(
+as_status aerospike_llist_find(
 	aerospike * as, as_error * err, const as_policy_apply * policy,
-	const as_key * key, const as_ldt * ldt, const as_val * val,
-	as_boolean *exists);
+	const as_key * key, const as_ldt * ldt, const as_val * search_val,
+	as_list ** elements );
+
 
 /**
- *	Given an llist bin, filter the set of objects using the given filter function.
- *	If no filter function is specified, all values in the set will be returned.
+ *	Given an llist bin, return all values in the list.
  *
  *	~~~~~~~~~~{.c}
  *	as_key key;
@@ -163,15 +166,54 @@ as_status aerospike_llist_exists(
  *	as_ldt llist;
  *	as_ldt_init(&llist, "myllist", AS_LDT_LLIST, NULL);
  *
- *	as_list *list = NULL;
+ *	as_list *result_list = NULL;
  *
  *	if ( aerospike_llist_filter(&as, &err, NULL, &key, &llist,
- *			"search_filter", NULL, (as_list *) &list) != AEROSPIKE_OK ) {
+ *			 &result_list) != AEROSPIKE_OK ) {
  *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *	}
  *	else {
  *		// process the returned elements
- *		as_arraylist_destroy(list);
+ *		as_arraylist_destroy(result_list);
+ *	}
+ *	~~~~~~~~~~
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param key			The key of the record.
+ *	@param ldt 			The llist bin to search from. If not an llist bin, will return error.
+ *	@param list			The pointer to a list of elements returned from search function. Pointer should
+ *						be NULL passed in.
+ *
+ *	@return AEROSPIKE_OK if successful. Otherwise an error.
+ *
+ *	@ingroup ldt_operations
+ */
+as_status aerospike_llist_scan(
+	aerospike * as, as_error * err, const as_policy_apply * policy,
+	const as_key * key, const as_ldt * ldt, as_list ** elements );
+
+/**
+ *	Given an llist bin, filter the collection of objects using the given
+ *	filter function. If no filter function is specified, return all values.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_key key;
+ *	as_key_init(&key, "myns", "myset", "mykey");
+ *
+ *	as_ldt llist;
+ *	as_ldt_init(&llist, "myllist", AS_LDT_LLIST, NULL);
+ *
+ *	as_list *result_list = NULL;
+ *
+ *	if ( aerospike_llist_filter(&as, &err, NULL, &key, &llist,
+ *			"search_filter", NULL, &result_list) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *	else {
+ *		// process the returned elements
+ *		as_arraylist_destroy(result_list);
  *	}
  *	~~~~~~~~~~
  *

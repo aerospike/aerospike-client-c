@@ -40,7 +40,7 @@ const char * DEFAULT_LLIST_PACKAGE = "llist";
 // The names of the Lua Functions that implement Large Set Ops
 const char * LDT_LIST_OP_ADD			= "add";
 const char * LDT_LIST_OP_ADDALL			= "add_all";
-// @TODO const char * LDT_LIST_OP_FIND		= "find";
+const char * LDT_LIST_OP_FIND		    = "find";
 const char * LDT_LIST_OP_SCAN   		= "scan";
 const char * LDT_LIST_OP_FILTER			= "filter";
 const char * LDT_LIST_OP_REMOVE		 	= "remove";
@@ -170,6 +170,107 @@ as_status aerospike_llist_size(
 	return err->code;
 }
 
+as_status aerospike_llist_find(
+	aerospike * as, as_error * err, const as_policy_apply * policy,
+	const as_key * key, const as_ldt * ldt, const as_val * search_val,
+	as_list ** elements )
+{
+	if ( !err ) {
+		return AEROSPIKE_ERR_PARAM;
+	}
+	as_error_reset(err);
+
+	if (!as || !key || !ldt || !search_val || !elements) {
+		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
+				"as/key/ldt/search_val/elements cannot be null");
+	}
+	if (ldt->type != AS_LDT_LLIST) {
+		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
+				"not llist type");
+	}
+
+	int list_argc = 2;
+	/* stack allocate the arg list */
+	as_string ldt_bin;
+	as_string_init(&ldt_bin, (char *)ldt->name, false);
+
+	as_arraylist arglist;
+	as_arraylist_inita(&arglist, list_argc);
+	as_arraylist_append_string(&arglist, &ldt_bin);
+	as_val_reserve( search_val ); // bump the ref count so the arraylist_destroy will not reset the search_val
+	as_arraylist_append(&arglist, (as_val *) search_val);
+
+	as_val* p_return_val = NULL;
+	aerospike_key_apply(
+		as, err, policy, key, DEFAULT_LLIST_PACKAGE, LDT_LIST_OP_FIND,
+		(as_list *)&arglist, &p_return_val);
+
+	as_arraylist_destroy(&arglist);
+
+	if (ldt_parse_error(err) != AEROSPIKE_OK) {
+		return err->code;
+	}
+
+	if (!p_return_val) {
+		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL,
+				"no value returned from server");
+	}
+
+	*elements = (as_list *)p_return_val;
+
+	return err->code;
+
+} // aerospike_llist_find()
+
+as_status aerospike_llist_scan(
+	aerospike * as, as_error * err, const as_policy_apply * policy,
+	const as_key * key, const as_ldt * ldt, as_list ** elements )
+{
+	if ( !err ) {
+		return AEROSPIKE_ERR_PARAM;
+	}
+	as_error_reset(err);
+
+	if (!as || !key || !ldt || !elements) {
+		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
+				"as/key/ldt/elements cannot be null");
+	}
+	if (ldt->type != AS_LDT_LLIST) {
+		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
+				"not llist type");
+	}
+
+	int list_argc = 1;
+	/* stack allocate the arg list */
+	as_string ldt_bin;
+	as_string_init(&ldt_bin, (char *)ldt->name, false);
+
+	as_arraylist arglist;
+	as_arraylist_inita(&arglist, list_argc);
+	as_arraylist_append_string(&arglist, &ldt_bin);
+
+	as_val* p_return_val = NULL;
+	aerospike_key_apply(
+		as, err, policy, key, DEFAULT_LLIST_PACKAGE, LDT_LIST_OP_SCAN,
+		(as_list *)&arglist, &p_return_val);
+
+	as_arraylist_destroy(&arglist);
+
+	if (ldt_parse_error(err) != AEROSPIKE_OK) {
+		return err->code;
+	}
+
+	if (!p_return_val) {
+		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL,
+				"no value returned from server");
+	}
+
+	*elements = (as_list *)p_return_val;
+
+	return err->code;
+
+} // aerospike_llist_scan()
+
 
 as_status aerospike_llist_filter(
 	aerospike * as, as_error * err, const as_policy_apply * policy,
@@ -232,7 +333,7 @@ as_status aerospike_llist_filter(
 
 	return err->code;
 
-} // aerospike_llist_scan()
+} // aerospike_llist_filter()
 
 
 as_status aerospike_llist_remove(

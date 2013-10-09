@@ -1,6 +1,6 @@
 [submodule "msgpack"]
 	path = msgpack
-	url = git@github.com:aerospike/msgpack
+	url = git@github.com:citrusleaf/msgpack
 [submodule "aerospike-common"]
 	path = aerospike-common
 	url = git@github.com:citrusleaf/aerospike-common.git

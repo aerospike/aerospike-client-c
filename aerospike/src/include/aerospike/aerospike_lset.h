@@ -141,6 +141,7 @@ as_status aerospike_lset_add_all(
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param key			The key of the record.
  *	@param ldt 			The lset bin to lookup from. If not an lset bin, will return error.
+ *	@param val          The value we're searching for.
  *	@param exists 		Returned boolean value to indicate value exists.
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error.
@@ -152,6 +153,54 @@ as_status aerospike_lset_exists(
 	aerospike * as, as_error * err, const as_policy_apply * policy,
 	const as_key * key, const as_ldt * ldt, const as_val * val,
 	as_boolean *exists);
+
+
+/**
+ *	Fetch (get) a value from the lset.
+ *	Note that this is useful mainly in the case where the search criteria for
+ *	an object is less than the entire object -- and that is when the standard
+ *	defaults are overridden and the unique_identifier() function is employed
+ *	to use only part of the object for search and compare. 
+ *	The unique_identifier() function is defined on create -- and declared in
+ *	the USER_MODULE.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_key key;
+ *	as_key_init(&key, "myns", "myset", "mykey");
+ *
+ *	as_ldt lset;
+ *	as_ldt_init(&lset, "mylset", AS_LDT_LSET, NULL);
+ *
+ *	as_integer ival;
+ *	as_integer_init(&ival, 123);
+ *
+ *  as_val * p_return_val;
+ *	
+ *	if ( aerospike_lset_exists(&as, &err, NULL, &key, &lset, &ival, &p_return_value) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *	else {
+ *		// do logic because element exists
+ *	}
+ *	~~~~~~~~~~
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param key			The key of the record.
+ *	@param ldt 			The lset bin to lookup from. If not an lset bin, will return error.
+ *	@param val          The value we're searching for.
+ *	@param pp_return_val   Returned value.
+ *
+ *	@return AEROSPIKE_OK if successful. Otherwise an error.
+ *	
+ *	@ingroup ldt_operations
+ */
+
+as_status aerospike_lset_get(
+	aerospike * as, as_error * err, const as_policy_apply * policy,
+	const as_key * key, const as_ldt * ldt, const as_val * val,
+	as_val ** pp_return_val );
 
 /**
  *	Given an lset bin, filter the set of objects using the given filter function.

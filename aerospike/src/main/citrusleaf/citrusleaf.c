@@ -1363,7 +1363,7 @@ do_the_full_monte(cl_cluster *asc, int info1, int info2, int info3, const char *
     progress_timeout_ms = 0;
     if (cl_w_p && cl_w_p->timeout_ms) {
     	// policy: if asking for a long timeout, give enough time to try two servers
-    	if (cl_w_p->timeout_ms > 700) {
+    	if (cl_w_p->timeout_ms > 700 && cl_w_p->w_pol == CL_WRITE_RETRY) {
 			deadline_ms = cf_getms() + cl_w_p->timeout_ms;
 			progress_timeout_ms = cl_w_p->timeout_ms / 2;
 		}

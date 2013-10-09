@@ -39,7 +39,7 @@ const char * DEFAULT_LSET_PACKAGE = "lset";
 // The names of the Lua Functions that implement Large Set Ops
 const char * LDT_SET_OP_ADD				= "add";
 const char * LDT_SET_OP_ADDALL			= "add_all";
-// @TODO const char * LDT_SET_OP_GET				= "get";
+const char * LDT_SET_OP_GET				= "get";
 const char * LDT_SET_OP_EXISTS			= "exists";
 const char * LDT_SET_OP_SCAN			= "scan";
 const char * LDT_SET_OP_FILTER			= "filter";
@@ -172,7 +172,8 @@ as_status aerospike_lset_size(
 
 as_status aerospike_lset_exists(
 	aerospike * as, as_error * err, const as_policy_apply * policy,
-	const as_key * key, const as_ldt * ldt, const as_val * val, as_boolean *exists)
+	const as_key * key, const as_ldt * ldt, const as_val * val,
+    as_boolean *exists)
 {
 	if ( !err ) {
 		return AEROSPIKE_ERR_PARAM;
@@ -225,6 +226,54 @@ as_status aerospike_lset_exists(
 
 	return err->code;
 } // aerospike_lset_exists()
+
+
+as_status aerospike_lset_get(
+	aerospike * as, as_error * err, const as_policy_apply * policy,
+	const as_key * key, const as_ldt * ldt, const as_val * val,
+    as_val **pp_return_val)
+{
+	if ( !err ) {
+		return AEROSPIKE_ERR_PARAM;
+	}
+	as_error_reset(err);
+
+	if (!as || !key || !ldt || !pp_return_val) {
+		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
+				"as/key/ldt/return cannot be null");
+	}
+	if (ldt->type != AS_LDT_LSET) {
+		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
+				"not lset type");
+	}
+
+	/* stack allocate the arg list */
+	as_string ldt_bin;
+	as_string_init(&ldt_bin, (char *)ldt->name, false);
+
+	as_arraylist arglist;
+	as_arraylist_inita(&arglist, 2);
+	as_arraylist_append_string(&arglist, &ldt_bin);
+	as_val_reserve( val ); // bump the ref count
+	as_arraylist_append(&arglist, (as_val *)val);
+
+	aerospike_key_apply(
+		as, err, policy, key, DEFAULT_LSET_PACKAGE, LDT_SET_OP_GET,
+		(as_list *)&arglist, pp_return_val);
+
+	as_arraylist_destroy(&arglist);
+
+	if (ldt_parse_error(err) != AEROSPIKE_OK) {
+		return err->code;
+	}
+
+	if (! *pp_return_val) {
+		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL,
+				"no value returned from server");
+	}
+
+	return err->code;
+} // aerospike_lset_get()
 
 
 as_status aerospike_lset_filter(
@@ -289,7 +338,7 @@ as_status aerospike_lset_filter(
 
 	return err->code;
 
-} // aerospike_lset_scan()
+} // aerospike_lset_filter()
 
 
 as_status aerospike_lset_remove(

@@ -24,7 +24,6 @@
 #include <citrusleaf/cf_atomic.h>
 #include <citrusleaf/cf_queue.h>
 #include <citrusleaf/cf_vector.h>
-#include <citrusleaf/cf_ll.h>
 
 #include <citrusleaf/cl_types.h>
 
@@ -34,11 +33,10 @@
 
 #define MAX_INTERVALS_ABSENT 1
 
-#define CLS_TENDER_RUNNING  0x00000001
-#define CLS_FREED       0x00000002
-#define CLS_UNUSED1     0x00000004
-#define CLS_UNUSED2     0x00000008
-#define CLS_UNUSED3     0x00000010
+#define NUM_BATCH_THREADS	6
+#define NUM_SCAN_THREADS	5
+#define NUM_QUERY_THREADS	5
+
 
 /******************************************************************************
  * TYPES
@@ -51,76 +49,86 @@ typedef struct cl_partition_table_s cl_partition_table;
 
 
 struct cl_cluster_node_s {
-    char            name[NODE_NAME_SIZE];
+	char			name[NODE_NAME_SIZE];
 	uint32_t		intervals_absent;		// how many tend periods this node has been out of partitions map
-    cf_vector       sockaddr_in_v;          // A vector of sockaddr_in which the host is currently known by
-    uint32_t        partition_generation;   // the server's generation count for all its partition management
-    cf_queue *      conn_q;                 // pool of current, cached FDs
-    cf_queue *      conn_q_asyncfd;         // FDs for async command execution
-    int             asyncfd;
-    cf_queue *      asyncwork_q;
+	cf_vector		sockaddr_in_v;			// a vector of sockaddr_in which the host is currently known by
+	uint32_t		partition_generation;	// the server's generation count for all its partition management
+	cf_queue*		conn_q;					// pool of current, cached FDs
+	cf_queue*		conn_q_asyncfd;			// FDs for async command execution
+	int				asyncfd;
+	cf_queue*		asyncwork_q;
 };
 
 //Structure to hold information about compression.
 struct cl_cluster_compression_stat_s {
-    int compression_threshold; // Minimum size of packet, to be compressed. 0 = No cpmpression.
-    uint64_t actual_sz;        // Accumulative count. Actual size of data, compressed till now.
-    uint64_t compressed_sz;    // Accumulative count. Size of data after compression.
+	int compression_threshold;	// Minimum size of packet, to be compressed. 0 = no compression.
+	uint64_t actual_sz;			// Accumulative count. Actual size of data, compressed till now.
+	uint64_t compressed_sz;		// Accumulative count. Size of data after compression.
 };
 
 struct cl_cluster_s {
-    // Linked list element should be first element in the structure
-    cf_ll_element       ll_e;
+	// Cluster management.
+	pthread_t			tender_thread;
+	cf_atomic32			tender_running;
+	uint32_t			tend_speed;
 
-    uint32_t            state;      //bitmap representing state information
-    
-    bool                follow;   // possible to create a no-follow cluster
-    bool                nbconnect;  
-                          // mostly for testing
-                          // that only targets specific nodes
+	bool				follow;				// possible to create a no-follow cluster
+	bool				nbconnect;
 
-    volatile bool       found_all; // have, at some time, found all cluster memebers
-    
-    // List of host-strings added by the user.
-    cf_vector           host_str_v; // vector is pointer-type
-    cf_vector           host_port_v;  // vector is integer-type
-    
-    cf_vector           host_addr_map_v; //Mapping from host string to its alternate
-    
-    // list actual node objects that represent the cluster
+	volatile bool		found_all;			// have, at some time, found all cluster members
+
+	// List of host-strings added by the user.
+	cf_vector			host_str_v;			// vector is pointer-type
+	cf_vector			host_port_v;		// vector is integer-type
+
+	cf_vector			host_addr_map_v;	// mapping from host string to its alternate
+
+	// list actual node objects that represent the cluster.
 	uint32_t			last_node;
-    cf_vector           node_v;      // vector is pointer-type, host objects are ref-counted
-    
-    // information about where all the partitions are
-    cl_partition_id     n_partitions;
-    cl_partition_table *partition_table_head;
+	cf_vector			node_v;				// vector is pointer-type, host objects are ref-counted
 
-    struct cl_cluster_compression_stat_s compression_stat;
-    
-    uint32_t            ref_count;
-    uint32_t            tend_speed;
-    int                 info_timeout;  // timeout in ms for info requests
-    // Need a lock
-    pthread_mutex_t     LOCK;
-    
+	// Information about where all the partitions are.
+	cl_partition_id		n_partitions;
+	cl_partition_table* partition_table_head;
+
+	struct cl_cluster_compression_stat_s compression_stat;
+
+	int					info_timeout;		// timeout in ms for info requests
+
+	pthread_mutex_t		LOCK;
+
+	// Batch transaction management.
+	cf_atomic32			batch_initialized;
+	cf_queue*			batch_q;
+	pthread_t			batch_threads[NUM_BATCH_THREADS];
+
+	// Scan transaction management.
+	cf_atomic32			scan_initialized;
+	cf_queue*			scan_q;
+	pthread_t			scan_threads[NUM_SCAN_THREADS];
+
+	// Query transaction management.
+	cf_atomic32			query_initialized;
+	cf_queue*			query_q;
+	pthread_t			query_threads[NUM_QUERY_THREADS];
 };
 
 struct cl_partition_s {
 	// Mutex to cover master/prole transitions for this partition.
-	pthread_mutex_t			lock;
+	pthread_mutex_t		lock;
 
 	// Which node, if any, is the master.
-	cl_cluster_node*		master;
+	cl_cluster_node*	master;
 
 	// Which node, if any, is the prole.
 	// TODO - not ideal for replication factor > 2.
-	cl_cluster_node*		prole;
+	cl_cluster_node*	prole;
 };
 
 struct cl_partition_table_s {
-    cl_partition_table *    next;
-    char                    ns[33];  // the namespace name
-    cl_partition            partitions[];  
+	cl_partition_table*	next;
+	char				ns[33];
+	cl_partition		partitions[];
 };
 
 
@@ -129,24 +137,19 @@ struct cl_partition_table_s {
  ******************************************************************************/
 
 // Cluster calls
-extern cl_cluster_node * cl_cluster_node_get_random(cl_cluster *asc);  // get node from cluster
-extern cl_cluster_node * cl_cluster_node_get(cl_cluster *asc, const char *ns, const cf_digest *d, bool write);  // get node from cluster
+extern cl_cluster_node * cl_cluster_node_get_random(cl_cluster *asc);
+extern cl_cluster_node * cl_cluster_node_get(cl_cluster *asc, const char *ns, const cf_digest *d, bool write);
 extern void cl_cluster_node_release(cl_cluster_node *cn, const char *tag);
 extern void cl_cluster_node_reserve(cl_cluster_node *cn, const char *tag);
-extern void cl_cluster_node_put(cl_cluster_node *cn);          // put node back
-extern int cl_cluster_node_fd_get(cl_cluster_node *cn, bool asyncfd, bool nbconnect);   // get an FD to the node
-extern void cl_cluster_node_fd_put(cl_cluster_node *cn, int fd, bool asyncfd);      // put the FD back
-extern int citrusleaf_cluster_init();
+extern void cl_cluster_node_put(cl_cluster_node *cn);
+extern int cl_cluster_node_fd_get(cl_cluster_node *cn, bool asyncfd, bool nbconnect);
+extern void cl_cluster_node_fd_put(cl_cluster_node *cn, int fd, bool asyncfd);
 extern cl_cluster_node *cl_cluster_node_get_byname(cl_cluster *asc, const char *name);
 
-//
 extern int citrusleaf_info_parse_single(char *values, char **value);
-
-
 
 extern cl_cluster * citrusleaf_cluster_create(void);
 extern void citrusleaf_cluster_destroy(cl_cluster *asc);
-extern void citrusleaf_cluster_shutdown(void);
 
 extern cl_cluster * citrusleaf_cluster_get_or_create(char *host, short port, int timeout_ms);
 extern void citrusleaf_cluster_release_or_destroy(cl_cluster **asc);
@@ -161,7 +164,7 @@ extern void citrusleaf_cluster_use_nbconnect(struct cl_cluster_s *asc);
 
 extern cl_rv citrusleaf_cluster_add_host(cl_cluster *asc, char const *host, short port, int timeout_ms);
 
-extern void  citrusleaf_cluster_add_addr_map(cl_cluster *asc, char *orig, char *alt);
+extern void	citrusleaf_cluster_add_addr_map(cl_cluster *asc, char *orig, char *alt);
 
 extern bool citrusleaf_cluster_settled(cl_cluster *asc);
 

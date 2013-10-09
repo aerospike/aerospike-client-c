@@ -56,8 +56,6 @@ typedef struct scan_bridge_s {
 
 as_status aerospike_scan_init(aerospike * as, as_error * err);
 
-as_status aerospike_scan_destroy(aerospike * as, as_error * err);
-
 /******************************************************************************
  * STATIC FUNCTIONS
  *****************************************************************************/
@@ -496,23 +494,7 @@ as_status aerospike_scan_foreach(
  */
 as_status aerospike_scan_init(aerospike * as, as_error * err) 
 {
-	extern cf_atomic32 scan_initialized;
-	if ( scan_initialized > 0 ) {
-		return AEROSPIKE_OK;
-	}
-	citrusleaf_scan_init();
-	return AEROSPIKE_OK;
-}
-
-/**
- * Destroy scan environment
- */
-as_status aerospike_scan_destroy(aerospike * as, as_error * err) 
-{
-	extern cf_atomic32 scan_initialized;
-	if ( scan_initialized == 0 ) {
-		return AEROSPIKE_OK;
-	}
-	citrusleaf_scan_shutdown();
+	// TODO - failure cases?
+	cl_cluster_scan_init(as->cluster);
 	return AEROSPIKE_OK;
 }

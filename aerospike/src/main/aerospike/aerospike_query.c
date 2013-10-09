@@ -51,7 +51,6 @@ typedef struct clquery_bridge_s {
  *****************************************************************************/
 
 as_status aerospike_query_init(aerospike * as, as_error * err);
-as_status aerospike_query_destroy(aerospike * as, as_error * err);
 
 /******************************************************************************
  * STATIC FUNCTIONS
@@ -156,23 +155,7 @@ as_status aerospike_query_foreach(
  */
 as_status aerospike_query_init(aerospike * as, as_error * err) 
 {
-	extern cf_atomic32 query_initialized;
-	if ( query_initialized > 0 ) {
-		return AEROSPIKE_OK;
-	}
-	citrusleaf_query_init();
-	return AEROSPIKE_OK;
-}
-
-/**
- * Destroy query environment
- */
-as_status aerospike_query_destroy(aerospike * as, as_error * err) 
-{
-	extern cf_atomic32 query_initialized;
-	if ( query_initialized == 0 ) {
-		return AEROSPIKE_OK;
-	}
-	citrusleaf_query_shutdown();
+	// TODO - failure cases?
+	cl_cluster_query_init(as->cluster);
 	return AEROSPIKE_OK;
 }

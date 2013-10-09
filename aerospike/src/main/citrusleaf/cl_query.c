@@ -66,7 +66,6 @@
  */ 
 #define STACK_BUF_SZ        (1024 * 16) 
 #define STACK_BINS           100
-#define N_MAX_QUERY_THREADS  5
 
 #define LOG_ENABLED 0
 
@@ -150,10 +149,6 @@ typedef struct query_orderby_clause {
  * VARIABLES
  *****************************************************************************/
 
-cf_atomic32     query_initialized  = 0;
-cf_queue *      g_query_q          = 0;
-pthread_t       g_query_th[N_MAX_QUERY_THREADS];
-cl_query_task   g_null_task;
 bool            gasq_abort         = false;
 
 /******************************************************************************
@@ -959,12 +954,13 @@ Final:
     return rc;
 }
 
-static void * cl_query_worker(void * dummy) {
-    while (1) {
+static void * cl_query_worker(void * pv_asc) {
+	cl_cluster* asc = (cl_cluster*)pv_asc;
 
+    while (true) {
         cl_query_task task;
 
-        if ( 0 != cf_queue_pop(g_query_q, &task, CF_QUEUE_FOREVER) ) {
+        if ( 0 != cf_queue_pop(asc->query_q, &task, CF_QUEUE_FOREVER) ) {
             LOG("[WARNING] cl_query_worker: queue pop failed\n");
         }
 
@@ -972,10 +968,10 @@ static void * cl_query_worker(void * dummy) {
             LOG("[DEBUG] cl_query_worker: getting one task item\n");
         }
 
-        // a NULL structure is the condition that we should exit. See shutdown()
-        if( 0 == memcmp(&task, &g_null_task, sizeof(cl_query_task)) ) { 
+        // This is how query shutdown signals we're done.
+        if( ! task.asc ) {
             LOG("[DEBUG] cl_query_worker: exiting\n");
-            pthread_exit(NULL); 
+            break;
         }
 
         // query if the node is still around
@@ -989,6 +985,8 @@ static void * cl_query_worker(void * dummy) {
 
         cf_queue_push(task.complete_q, (void *)&rc);
     }
+
+    return NULL;
 }
 
 
@@ -1158,7 +1156,7 @@ static cl_rv cl_query_execute(cl_cluster * cluster, const cl_query * query, void
     for ( int i=0; i < node_count; i++ ) {
         // fill in per-request specifics
         strcpy(task.node_name, node_name);
-        cf_queue_push(g_query_q, &task);
+        cf_queue_push(cluster->query_q, &task);
         node_name += NODE_NAME_SIZE;                    
     }
     free(node_names);
@@ -1448,38 +1446,53 @@ cl_rv citrusleaf_query_foreach(cl_cluster * cluster, const cl_query * query, voi
 }
 
 
-int citrusleaf_query_init() {
-    if (1 == cf_atomic32_incr(&query_initialized)) {
+int
+cl_cluster_query_init(cl_cluster* asc)
+{
+	// We do this lazily, during the first query request, so make sure it's only
+	// done once.
+	if (cf_atomic32_incr(&asc->query_initialized) > 1 || asc->query_q) {
+		return 0;
+	}
 
-        if (cf_debug_enabled()) {
-            LOG("[DEBUG] citrusleaf_query_init: creating %d threads\n",N_MAX_QUERY_THREADS);
-        }
+	if (cf_debug_enabled()) {
+		LOG("[DEBUG] cl_cluster_query_init: creating %d threads\n", NUM_QUERY_THREADS);
+	}
 
-        memset(&g_null_task,0,sizeof(cl_query_task));
+	// Create dispatch queue.
+	asc->query_q = cf_queue_create(sizeof(cl_query_task), true);
 
-        // create dispatch queue
-        g_query_q = cf_queue_create(sizeof(cl_query_task), true);
+	// Create thread pool.
+	for (int i = 0; i < NUM_QUERY_THREADS; i++) {
+		pthread_create(&asc->query_threads[i], 0, cl_query_worker, (void*)asc);
+	}
 
-
-        // create thread pool
-        for (int i = 0; i < N_MAX_QUERY_THREADS; i++) {
-            pthread_create(&g_query_th[i], 0, cl_query_worker, 0);
-        }
-    }
-    return(0);    
+	return 0;
 }
 
-void citrusleaf_query_shutdown() {
-
-    if (0 != cf_atomic32_get(query_initialized)) {
-	    for( int i=0; i<N_MAX_QUERY_THREADS; i++) {
-   	     	cf_queue_push(g_query_q, &g_null_task);
-   		}
-
-	    for( int i=0; i<N_MAX_QUERY_THREADS; i++) {
-    	    pthread_join(g_query_th[i],NULL);
-	    }
-    	cf_queue_destroy(g_query_q);
-    	cf_atomic32_decr(&query_initialized);
+void
+cl_cluster_query_shutdown(cl_cluster* asc)
+{
+	// Check whether we ever (lazily) initialized query machinery.
+	if (cf_atomic32_get(asc->query_initialized) == 0 && ! asc->query_q) {
+		return;
 	}
+
+	// This tells the worker threads to stop. We do this (instead of using a
+	// "running" flag) to allow the workers to "wait forever" on processing the
+	// work dispatch queue, which has minimum impact when the queue is empty.
+	// This also means all queued requests get processed when shutting down.
+	for (int i = 0; i < NUM_QUERY_THREADS; i++) {
+		cl_query_task task;
+		task.asc = NULL;
+		cf_queue_push(asc->query_q, &task);
+	}
+
+	for (int i = 0; i < NUM_QUERY_THREADS; i++) {
+		pthread_join(asc->query_threads[i], NULL);
+	}
+
+	cf_queue_destroy(asc->query_q);
+	asc->query_q = NULL;
+	cf_atomic32_set(&asc->query_initialized, 0);
 }

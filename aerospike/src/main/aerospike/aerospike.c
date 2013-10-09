@@ -95,10 +95,9 @@ as_status aerospike_connect(aerospike * as, as_error * err)
 {
 	as_error_reset(err);
 
-	extern cf_atomic32 g_initialized;
-	extern int g_init_pid;
-
-	if ( g_initialized ) {
+	// This is not 100% bulletproof against, say, simultaneously calling
+	// aerospike_connect() from two different threads with the same as object...
+	if ( as->cluster ) {
 		as_debug(LOGGER, "already connected.");
 		return AEROSPIKE_OK;
 	}
@@ -110,10 +109,6 @@ as_status aerospike_connect(aerospike * as, as_error * err)
 		as_err(LOGGER, "no hosts provided");
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "no hosts provided");
 	}
-
-	// remember the process id which is spawning the background threads.
-	// only this process can call a pthread_join() on the threads that it spawned.
-	g_init_pid = getpid();
 
     mod_lua_config config = {
         .server_mode    = false,
@@ -129,34 +124,18 @@ as_status aerospike_connect(aerospike * as, as_error * err)
     mod_lua.logger = aerospike_logger(as);
 	as_debug(LOGGER, "as_module_configure: OK");
 
-	// start the cluster tend thread (for all clusters)
-	as_trace(LOGGER, "citrusleaf_cluster_init: ...");
-	citrusleaf_cluster_init();
-	as_debug(LOGGER, "citrusleaf_cluster_init: OK");
-
-	// Hack to stop tender thread interfering with add_host loop ... cluster's
-	// tend interval set after loop will govern tending anyway.
-	citrusleaf_change_tend_speed(100);
-
-	// create the cluster object
-	as_trace(LOGGER, "citrusleaf_cluster_create: ...");
+	// Create the cluster object.
 	as->cluster = citrusleaf_cluster_create();
+
+	if ( ! as->cluster ) {
+		as_err(LOGGER, "can't create cluster object");
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "can't create cluster object");
+	}
+
 	as_debug(LOGGER, "citrusleaf_cluster_create: OK");
 
-#ifdef DEBUG_HISTOGRAM  
-	if ( NULL == (cf_hist = cf_histogram_create("transaction times"))) {
-		as_err(LOGGER, "couldn't create histogram for client");
-	}
-#endif  
-	
-	if ( as->cluster == NULL ) {
-		as_err(LOGGER, "Can't create client");
-		citrusleaf_cluster_destroy(as->cluster);
-		as->cluster = NULL;
-		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Can't create client");
-	}
-
 	as->cluster->nbconnect = as->config.non_blocking;
+	as->cluster->tend_speed = as->config.tender_interval == 0 ? 1 : (as->config.tender_interval + 999) / 1000;
 
 	uint32_t nhosts = sizeof(as->config.hosts) / sizeof(as_config_host);
 
@@ -167,7 +146,7 @@ as_status aerospike_connect(aerospike * as, as_error * err)
 
 		int rc = citrusleaf_cluster_add_host(as->cluster, as->config.hosts[i].addr, as->config.hosts[i].port, 1000);
 
-		// as long as we succeed with one host, we've found the cluster
+		// As long as we succeed with one host, we've found the cluster.
 		if ( rc == 0 ) {
 			as_debug(LOGGER, "citrusleaf_cluster_add_host: OK");
 			as_error_reset(err);
@@ -185,12 +164,7 @@ as_status aerospike_connect(aerospike * as, as_error * err)
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "can't connect to any host");
 	}
 
-	// Set cluster tend interval, now that tend thread can't mess up add_host.
-	citrusleaf_cluster_change_tend_speed(as->cluster,
-			as->config.tender_interval == 0 ? 1 : (as->config.tender_interval + 999) / 1000);
-
 	as_debug(LOGGER, "connected.");
-	g_initialized = true;
 
 	return err->code;
 }
@@ -201,21 +175,9 @@ as_status aerospike_connect(aerospike * as, as_error * err)
 as_status aerospike_close(aerospike * as, as_error * err) 
 {
 	as_error_reset(err);
-	
-	as_status rc = AEROSPIKE_OK;
-	
-	// extern as_status aerospike_async_destroy(aerospike * as, as_error * err);
-	// rc = rc || aerospike_async_destroy(as, err);
 
-	extern as_status aerospike_batch_destroy(aerospike * as, as_error * err);
-	rc = rc ? rc : aerospike_batch_destroy(as, err);
-
-	extern as_status aerospike_query_destroy(aerospike * as, as_error * err);
-	rc = rc ? rc : aerospike_query_destroy(as, err);
-
-	extern as_status aerospike_scan_destroy(aerospike * as, as_error * err);
-	rc = rc ? rc : aerospike_scan_destroy(as, err);
-
+	// This is not 100% bulletproof against simultaneous aerospike_close() calls
+	// from different threads.
 	if ( as->cluster ) {
 		citrusleaf_cluster_destroy(as->cluster);
 		as->cluster = NULL;

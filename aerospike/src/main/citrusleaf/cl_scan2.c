@@ -67,7 +67,6 @@ extern as_val * citrusleaf_udf_bin_to_val(as_serializer *ser, cl_bin *);
  */ 
 #define STACK_BUF_SZ        (1024 * 16) 
 #define STACK_BINS           100
-#define N_MAX_SCAN_THREADS  5
 
 static void __log(const char * file, const int line, const char * fmt, ...) {
     char msg[256] = {0};
@@ -102,14 +101,6 @@ typedef struct {
 	cf_queue              * complete_q;
 } cl_scan_task;
 
-/******************************************************************************
- * VARIABLES
- *****************************************************************************/
-
-cf_atomic32     scan_initialized  = 0;
-cf_queue *      g_scan_q          = 0;
-pthread_t       g_scan_th[N_MAX_SCAN_THREADS];
-static cl_scan_task    g_null_task;
 
 /******************************************************************************
  * STATIC FUNCTIONS
@@ -455,15 +446,17 @@ Final:
     return rc;
 }
 
-void * cl_scan_worker(void * dummy) {
-    while (1) {
+void * cl_scan_worker(void * pv_asc) {
+	cl_cluster* asc = (cl_cluster*)pv_asc;
+
+	while (true) {
         // Response structure to be pushed in the complete q
         cl_node_response response; 
         memset(&response, 0, sizeof(cl_node_response));
 
         cl_scan_task task;
 
-        if ( 0 != cf_queue_pop(g_scan_q, &task, CF_QUEUE_FOREVER) ) {
+        if ( 0 != cf_queue_pop(asc->scan_q, &task, CF_QUEUE_FOREVER) ) {
             LOG("[WARNING] cl_scan_worker: queue pop failed\n");
         }
 
@@ -471,9 +464,9 @@ void * cl_scan_worker(void * dummy) {
             LOG("[DEBUG] cl_scan_worker: getting one task item\n");
         }
 
-        // a NULL structure is the condition that we should exit. See shutdown()
-        if( 0 == memcmp(&task, &g_null_task, sizeof(cl_scan_task)) ) { 
-            pthread_exit(NULL); 
+        // This is how scan shutdown signals we're done.
+        if ( ! task.asc ) {
+            break;
         }
 
         // query if the node is still around
@@ -491,6 +484,8 @@ void * cl_scan_worker(void * dummy) {
         response.job_id = task.job_id;
         cf_queue_push(task.complete_q, (void *)&response);
     }
+
+	return NULL;
 }
 
 cl_rv cl_scan_params_init(cl_scan_params * oparams, cl_scan_params *iparams) {
@@ -628,7 +623,7 @@ cf_vector * cl_scan_execute(cl_cluster * cluster, const cl_scan * scan, char * n
     if (node_name) {
         // Copy the node name in the task and push it in the global scan queue. One task for each node
         strcpy(task.node_name, node_name);
-        cf_queue_push(g_scan_q, &task);
+        cf_queue_push(cluster->scan_q, &task);
         node_count = 1;
     }
     else {
@@ -649,7 +644,7 @@ cf_vector * cl_scan_execute(cl_cluster * cluster, const cl_scan * scan, char * n
         for ( int i=0; i < node_count; i++ ) {
             // fill in per-request specifics
             strcpy(task.node_name, node_name);
-            cf_queue_push(g_scan_q, &task);
+            cf_queue_push(cluster->scan_q, &task);
             node_name += NODE_NAME_SIZE;                    
         }
         free(node_names);
@@ -739,34 +734,53 @@ cl_rv cl_scan_limit(cl_scan *scan, uint64_t limit) {
     return CITRUSLEAF_OK;    
 }
 
-int citrusleaf_scan_init() {
-    if (1 == cf_atomic32_incr(&scan_initialized)) {
+int
+cl_cluster_scan_init(cl_cluster* asc)
+{
+	// We do this lazily, during the first scan request, so make sure it's only
+	// done once.
+	if (cf_atomic32_incr(&asc->scan_initialized) > 1 || asc->scan_q) {
+		return 0;
+	}
 
-        if (cf_debug_enabled()) {
-            LOG("[DEBUG] citrusleaf_scan_init: creating %d threads\n",N_MAX_SCAN_THREADS);
-        }
+	if (cf_debug_enabled()) {
+		LOG("[DEBUG] cl_cluster_scan_init: creating %d threads\n", NUM_SCAN_THREADS);
+	}
 
-        memset(&g_null_task,0,sizeof(cl_scan_task));
+	// Create dispatch queue.
+	asc->scan_q = cf_queue_create(sizeof(cl_scan_task), true);
 
-        // create dispatch queue
-        g_scan_q = cf_queue_create(sizeof(cl_scan_task), true);
+	// Create thread pool.
+	for (int i = 0; i < NUM_SCAN_THREADS; i++) {
+		pthread_create(&asc->scan_threads[i], 0, cl_scan_worker, (void*)asc);
+	}
 
-        // create thread pool
-        for (int i = 0; i < N_MAX_SCAN_THREADS; i++) {
-            pthread_create(&g_scan_th[i], 0, cl_scan_worker, 0);
-        }
-    }
-    return(0);    
+	return 0;
 }
 
-void citrusleaf_scan_shutdown() {
+void
+cl_cluster_scan_shutdown(cl_cluster* asc)
+{
+	// Check whether we ever (lazily) initialized scan machinery.
+	if (cf_atomic32_get(asc->scan_initialized) == 0 && ! asc->scan_q) {
+		return;
+	}
 
-    for( int i=0; i<N_MAX_SCAN_THREADS; i++) {
-        cf_queue_push(g_scan_q, &g_null_task);
-    }
+	// This tells the worker threads to stop. We do this (instead of using a
+	// "running" flag) to allow the workers to "wait forever" on processing the
+	// work dispatch queue, which has minimum impact when the queue is empty.
+	// This also means all queued requests get processed when shutting down.
+	for (int i = 0; i < NUM_SCAN_THREADS; i++) {
+		cl_scan_task task;
+		task.asc = NULL;
+		cf_queue_push(asc->scan_q, &task);
+	}
 
-    for( int i=0; i<N_MAX_SCAN_THREADS; i++) {
-        pthread_join(g_scan_th[i],NULL);
-    }
-    cf_queue_destroy(g_scan_q);
+	for (int i = 0; i < NUM_SCAN_THREADS; i++) {
+		pthread_join(asc->scan_threads[i], NULL);
+	}
+
+	cf_queue_destroy(asc->scan_q);
+	asc->scan_q = NULL;
+	cf_atomic32_set(&asc->scan_initialized, 0);
 }

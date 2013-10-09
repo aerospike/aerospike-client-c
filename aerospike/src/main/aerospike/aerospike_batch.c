@@ -116,8 +116,8 @@ static as_status batch_read(
 {
 	as_error_reset(err);
 
-	// This is not very nice:
-	citrusleaf_batch_init();
+	// Lazily initialize batch machinery:
+	cl_cluster_batch_init(as->cluster);
 
 	uint32_t n = batch->keys.size;
 	as_batch_read* results = (as_batch_read*)alloca(sizeof(as_batch_read) * n);
@@ -199,17 +199,4 @@ as_status aerospike_batch_exists(
 	)
 {
 	return batch_read(as, err, policy, batch, callback, udata, false);
-}
-
-/**
- * Destroy batch environment.
- */
-as_status aerospike_batch_destroy(aerospike * as, as_error * err)
-{
-	extern cf_atomic32 batch_initialized;
-	if ( batch_initialized == 0 ) {
-		return AEROSPIKE_OK;
-	}
-	citrusleaf_batch_shutdown();
-	return AEROSPIKE_OK;
 }

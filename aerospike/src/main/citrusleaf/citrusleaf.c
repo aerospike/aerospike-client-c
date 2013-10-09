@@ -57,13 +57,6 @@
 // This is a per-transaction deadline kind of thing
 #define DEFAULT_TIMEOUT 200
 
-// 
-
-bool g_initialized = false;
-int g_init_pid;
-extern cf_atomic32 batch_initialized;
-extern int g_clust_initialized;
-
 
 // #define DEBUG_HISTOGRAM 1 // histogram printed in citrusleaf_print_stats()
 // #define DEBUG 1
@@ -1338,18 +1331,6 @@ do_the_full_monte(cl_cluster *asc, int info1, int info2, int info3, const char *
 //	}else if( *operations ){
 //		dump_values(null, *operations, *n_values);
 //	}	
-	 
-	/* 
-	 * Check if the current process is the one which spawned the background threads (tend,batch).
-	 * If it is not, it means that this process is a forked child process. The threads would not
-	 * be running in this case. So, spawn the background threads and remember that this process
-	 * has started the threads.
-	 */
-	if(g_init_pid != getpid()) {
-		cf_atomic32_set(&batch_initialized,0);
-		g_clust_initialized = 0;
-		citrusleaf_init();
-	}
 
 	cf_digest d_ret;	
 	if (n_values && ( values || operations) ){
@@ -1654,8 +1635,6 @@ extern cl_rv
 citrusleaf_get(cl_cluster *asc, const char *ns, const char *set, const cl_object *key,
 		cl_bin *values, int n_values, int timeout_ms, uint32_t *cl_gen, uint32_t* cl_ttl)
 {
-    if (!g_initialized) return(-1);
-
     	uint64_t trid=0;
 	cl_write_parameters cl_w_p;
 	cl_write_parameters_set_default(&cl_w_p);
@@ -1669,9 +1648,6 @@ extern cl_rv
 citrusleaf_get_digest(cl_cluster *asc, const char *ns, const cf_digest *digest,
 		cl_bin *values, int n_values, int timeout_ms, uint32_t *cl_gen, uint32_t* cl_ttl)
 {
-	
-    if (!g_initialized) return(-1);
-    
     	uint64_t trid=0;
 	cl_write_parameters cl_w_p;
 	cl_write_parameters_set_default(&cl_w_p);
@@ -1685,8 +1661,6 @@ citrusleaf_get_digest(cl_cluster *asc, const char *ns, const cf_digest *digest,
 extern cl_rv
 citrusleaf_put(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, const cl_bin *values, int n_values, const cl_write_parameters *cl_w_p)
 {
-    if (!g_initialized) return(-1);
-
     	uint64_t trid=0;
 	return( do_the_full_monte( asc, 0, CL_MSG_INFO2_WRITE, 0, ns, set, key, 0, 
 			(cl_bin **) &values, CL_OP_WRITE, 0, &n_values, NULL, cl_w_p, 
@@ -1696,9 +1670,6 @@ citrusleaf_put(cl_cluster *asc, const char *ns, const char *set, const cl_object
 extern cl_rv
 citrusleaf_put_digest(cl_cluster *asc, const char *ns, const cf_digest *digest, const cl_bin *values, int n_values, const cl_write_parameters *cl_w_p)
 {
-    if (!g_initialized) return(-1);
-
-    
     	uint64_t trid=0;
 	return( do_the_full_monte( asc, 0, CL_MSG_INFO2_WRITE, 0, ns, 0, 0, digest, 
 			(cl_bin **) &values, CL_OP_WRITE, 0, &n_values, NULL, cl_w_p, 
@@ -1708,9 +1679,6 @@ citrusleaf_put_digest(cl_cluster *asc, const char *ns, const cf_digest *digest, 
 extern cl_rv
 citrusleaf_put_digest_with_setname(cl_cluster *asc, const char *ns, const char *set, const cf_digest *digest, const cl_bin *values, int n_values, const cl_write_parameters *cl_w_p)
 {
-    if (!g_initialized) return(-1);
-
-    
     	uint64_t trid=0;
 	return( do_the_full_monte( asc, 0, CL_MSG_INFO2_WRITE, 0, ns, set, 0, digest, 
 			(cl_bin **) &values, CL_OP_WRITE, 0, &n_values, NULL, cl_w_p, 
@@ -1720,8 +1688,6 @@ citrusleaf_put_digest_with_setname(cl_cluster *asc, const char *ns, const char *
 cl_rv
 citrusleaf_put_replace(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, const cl_bin *values, int n_values, const cl_write_parameters *cl_w_p)
 {
-    if (!g_initialized) return(-1);
-
     uint64_t trid=0;
 	return( do_the_full_monte( asc, 0, CL_MSG_INFO2_WRITE, CL_MSG_INFO3_REPLACE, ns, 
 			set, key, 0, (cl_bin **) &values, CL_OP_WRITE, 0, &n_values, 
@@ -1731,8 +1697,6 @@ citrusleaf_put_replace(cl_cluster *asc, const char *ns, const char *set, const c
 extern cl_rv
 citrusleaf_restore(cl_cluster *asc, const char *ns, const cf_digest *digest, const char *set, const cl_bin *values, int n_values, const cl_write_parameters *cl_w_p)
 {
-    if (!g_initialized) return(-1);
-
     uint64_t trid=0;
 	return( do_the_full_monte( asc, 0, CL_MSG_INFO2_WRITE, 0, ns, set, 0, digest, 
 			(cl_bin **) &values, CL_OP_WRITE, 0, &n_values, NULL, cl_w_p, 
@@ -1743,8 +1707,6 @@ extern cl_rv
 citrusleaf_async_put(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, const cl_bin *values, 
 			int n_values, const cl_write_parameters *cl_w_p, uint64_t trid, void *udata)
 {
-	if (!g_initialized) return(-1);
-
 	//Hardcoding to say that the client is XDS(in info1 bitmap). 
 	//If this is used by some other clients in the future, we should parameterize it.
 	return( cl_do_async_monte( asc, CL_MSG_INFO1_XDS, CL_MSG_INFO2_WRITE, ns, set, key, 0, (cl_bin **) &values,
@@ -1754,8 +1716,6 @@ citrusleaf_async_put(cl_cluster *asc, const char *ns, const char *set, const cl_
 extern cl_rv
 citrusleaf_async_delete_digest(cl_cluster *asc, const char *ns, const cf_digest *digest, const cl_write_parameters *cl_w_p, void *udata)
 {
-    if (!g_initialized) return(-1);
-    
     	uint64_t trid=0;
 	return( cl_do_async_monte( asc, CL_MSG_INFO1_XDS, CL_MSG_INFO2_DELETE | CL_MSG_INFO2_WRITE, ns,
 			NULL, 0, digest, NULL, CL_OP_WRITE, 0, NULL, NULL, cl_w_p, &trid, udata));
@@ -1766,8 +1726,6 @@ citrusleaf_async_put_digest(cl_cluster *asc, const char *ns, const cf_digest *di
 			char *setname, const cl_bin *values, int n_values, 
 			const cl_write_parameters *cl_w_p, uint64_t trid, void *udata)
 {
-	if (!g_initialized) return(-1);
-
 	//Hardcoding to say that the client is XDS(in info1 bitmap). 
 	//If this is used by some other clients in the future, we should parameterize it.
 	return( cl_do_async_monte( asc, CL_MSG_INFO1_XDS, CL_MSG_INFO2_WRITE, ns, setname, 0, digest, (cl_bin **) &values,
@@ -1797,8 +1755,6 @@ citrusleaf_check_cluster_health(cl_cluster *asc)
 extern cl_rv
 citrusleaf_delete(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, const cl_write_parameters *cl_w_p)
 {
-    if (!g_initialized) return(-1);
-    
     	uint64_t trid=0;
 	return( do_the_full_monte( asc, 0, CL_MSG_INFO2_DELETE | CL_MSG_INFO2_WRITE, 0, 
 			ns, set, key, 0, 0, 0, 0, 0, NULL, cl_w_p, &trid, NULL, NULL, NULL) );
@@ -1807,8 +1763,6 @@ citrusleaf_delete(cl_cluster *asc, const char *ns, const char *set, const cl_obj
 extern cl_rv
 citrusleaf_delete_digest(cl_cluster *asc, const char *ns, const cf_digest *digest, const cl_write_parameters *cl_w_p)
 {
-    if (!g_initialized) return(-1);
-    
     	uint64_t trid=0;
 	return( do_the_full_monte( asc, 0, CL_MSG_INFO2_DELETE | CL_MSG_INFO2_WRITE, 0, 
 			ns, 0, 0, digest, 0, 0, 0, 0, NULL, cl_w_p, &trid, NULL, NULL, NULL) );
@@ -1824,8 +1778,6 @@ extern cl_rv
 citrusleaf_exists_key(cl_cluster *asc, const char *ns, const char *set, const cl_object *key,
 		cl_bin *values, int n_values, int timeout_ms, uint32_t *cl_gen, uint32_t* cl_ttl)
 {
-    if (!g_initialized) return(-1);
-
     	uint64_t trid=0;
 	cl_write_parameters cl_w_p;
 	cl_write_parameters_set_default(&cl_w_p);
@@ -1840,9 +1792,6 @@ extern cl_rv
 citrusleaf_exists_digest(cl_cluster *asc, const char *ns, const cf_digest *digest,
 		cl_bin *values, int n_values, int timeout_ms, uint32_t *cl_gen, uint32_t* cl_ttl)
 {
-	
-    if (!g_initialized) return(-1);
-    
     	uint64_t trid=0;
 	cl_write_parameters cl_w_p;
 	cl_write_parameters_set_default(&cl_w_p);
@@ -1862,7 +1811,6 @@ citrusleaf_get_all(cl_cluster *asc, const char *ns, const char *set, const cl_ob
 		cf_error("citrusleaf_get_all: illegal parameters passed");
 		return(-1);
 	}
-    if (!g_initialized) return(-1);
 
 	*values = 0;
 	*n_values = 0;
@@ -1885,7 +1833,6 @@ citrusleaf_get_all_digest_getsetname(cl_cluster *asc, const char *ns, const cf_d
 		cf_error("citrusleaf_get_all: illegal parameters passed");
 		return(-1);
 	}
-    if (!g_initialized) return(-1);
 
 	*values = 0;
 	*n_values = 0;
@@ -1918,9 +1865,6 @@ citrusleaf_get_all_digest(cl_cluster *asc, const char *ns, const cf_digest *dige
 extern cl_rv
 citrusleaf_verify(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, const cl_bin *values, int n_values, int timeout_ms, uint32_t *cl_gen)
 {
-    if (!g_initialized) return(-1);
-    
-
     	uint64_t trid=0;
 	cl_write_parameters cl_w_p;
 	cl_write_parameters_set_default(&cl_w_p);
@@ -1934,8 +1878,6 @@ citrusleaf_verify(cl_cluster *asc, const char *ns, const char *set, const cl_obj
 extern cl_rv
 citrusleaf_delete_verify(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, const cl_write_parameters *cl_w_p)
 {
-    if (!g_initialized) return(-1);
-    
     	uint64_t trid=0;
 	return( do_the_full_monte( asc, CL_MSG_INFO1_VERIFY, CL_MSG_INFO2_DELETE | CL_MSG_INFO2_WRITE, 
 			0, ns, set, key, 0, 0, 0, 0, 0, NULL, cl_w_p, &trid, NULL, NULL, NULL) );
@@ -1993,8 +1935,6 @@ citrusleaf_operate_digest(cl_cluster *asc, const char *ns, cf_digest *digest,
 		cl_operation *operations, int n_operations, const cl_write_parameters *cl_w_p, int replace,
 		uint32_t *generation, uint32_t* ttl)
 {
-    if (!g_initialized) return(-1);
-    
 	// see if there are any read or write bits ---
 	//   (this is slightly obscure c usage....)
 	int info1 = 0, info2 = 0, info3 = 0;
@@ -2037,8 +1977,6 @@ citrusleaf_operate(cl_cluster *asc, const char *ns, const char *set, const cl_ob
 		cl_operation *operations, int n_operations, const cl_write_parameters *cl_w_p, int replace,
 		uint32_t *generation, uint32_t* ttl)
 {
-    if (!g_initialized) return(-1);
-    
 	// see if there are any read or write bits ---
 	//   (this is slightly obscure c usage....)
 	int info1 = 0, info2 = 0, info3 = 0;
@@ -2076,53 +2014,29 @@ citrusleaf_operate(cl_cluster *asc, const char *ns, const char *set, const cl_ob
 }
 
 
-extern int citrusleaf_cluster_init();
-
 void citrusleaf_set_debug(bool debug_flag) 
 {
 	cf_set_log_level(debug_flag? CF_DEBUG : CF_INFO);
 }
 
+
+//
+// citrusleaf_init() and citrusleaf_shutdown() are deprecated. Everything is now
+// per-cluster, no globals.
+//
+
 int citrusleaf_init() 
 {
-	// extern char *citrusleaf_build_string;
-	//cf_info("Aerospike client version %s", citrusleaf_build_string);
-
-	// remember the process id which is spawning the background threads.
-	// only this process can call a pthread_join() on the threads that it spawned.
-	g_init_pid = getpid();
-
- 	citrusleaf_batch_init();
-// #ifdef USE_LUA_MR
-	// citrusleaf_mr_init();
-// #endif
-	// citrusleaf_query_init();
-	citrusleaf_cluster_init();
-
-#ifdef DEBUG_HISTOGRAM	
+	// Eventually, use a histogram per cluster object, not a global.
+#ifdef DEBUG_HISTOGRAM
     if (NULL == (cf_hist = cf_histogram_create("transaction times")))
-        cf_error("couldn't create histogram for client");
-#endif	
+		cf_error("couldn't create histogram for client");
+#endif
 
-    g_initialized = true;
-    
 	return(0);
 }
 
 void citrusleaf_shutdown(void) {
-
-	if (g_initialized == false)	return;
-
-	citrusleaf_cluster_shutdown();
-	// citrusleaf_query_shutdown();
-// #ifdef USE_LUA_MR
-	// citrusleaf_mr_shutdown();
-// #endif
-	citrusleaf_batch_shutdown();
-	// citrusleaf_info_shutdown();
-
-	g_initialized = false;
-
 }
 
 extern void citrusleaf_print_stats();

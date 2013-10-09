@@ -123,8 +123,8 @@ cl_rv citrusleaf_query_foreach(cl_cluster * cluster, const cl_query * query, voi
 
 
 /*
- * Init and destroy for client query environment. Should be called for once per client
+ * Init and destroy for client query environment. Should be called for once per cluster
  * instance before performing citrusleaf query
  */
-int    citrusleaf_query_init();
-void   citrusleaf_query_shutdown();
+int    cl_cluster_query_init(cl_cluster* asc);
+void   cl_cluster_query_shutdown(cl_cluster* asc);

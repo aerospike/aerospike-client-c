@@ -47,9 +47,6 @@
  * CONSTANTS
  ******************************************************************************/
 
-// TUNING PARAMETER FOR BATCH
-#define N_BATCH_THREADS 20
-
 #define MAX_PACKAGE_NAME_SIZE 64
 
 // 30-39 RESEVED FOR UDF
@@ -143,9 +140,8 @@ int cl_object_get_size(cl_object *obj, size_t *sz);
 
 int cl_object_to_buf (cl_object *obj, uint8_t *data);
 
-int citrusleaf_batch_init();
-
-void citrusleaf_batch_shutdown();
+void cl_cluster_batch_init();
+void cl_cluster_batch_shutdown();
 
 
 int cl_do_async_monte(cl_cluster *asc, int info1, int info2, const char *ns, const char *set, const cl_object *key,

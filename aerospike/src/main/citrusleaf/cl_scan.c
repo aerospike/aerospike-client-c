@@ -100,9 +100,7 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 		if (node)
 			cl_cluster_node_reserve(node, "T+");
 	} else {
-		pthread_mutex_lock(&asc->LOCK);
 		node = cl_cluster_node_get_random(asc);
-		pthread_mutex_unlock(&asc->LOCK);
 	}
 	if (!node) {
 #ifdef DEBUG

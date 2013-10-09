@@ -40,6 +40,9 @@
 #include <citrusleaf/cf_queue.h>
 #include <citrusleaf/cf_vector.h>
 
+#include <citrusleaf/as_scan.h>
+#include <citrusleaf/cl_query.h>
+
 #include <citrusleaf/citrusleaf.h>
 #include <citrusleaf/cl_cluster.h>
 
@@ -55,6 +58,7 @@
 uint compression_version[] = {2,6,8};
 
 // Forward references
+static void* cluster_tender_fn(void* pv_asc);
 static void cluster_tend( cl_cluster *asc); 
 
 #include <time.h>
@@ -63,9 +67,6 @@ static inline void print_ms(char *pre)
 	cf_debug("%s %"PRIu64, pre, cf_getms());
 }
 
-int g_clust_initialized = 0;
-static int g_clust_tend_speed = 1;
-extern int g_init_pid;
 
 //
 // Debug function. Should be elsewhere.
@@ -155,235 +156,98 @@ str_split(char split_c, char *str, cf_vector *v)
 }
 
 
-
-// List of all current clusters so the tender can maintain them
-// 
-static pthread_t	tender_thr;
-static cf_ll		cluster_ll;
-static pthread_mutex_t cluster_ll_LOCK = PTHREAD_MUTEX_INITIALIZER; 
-
 cl_cluster *
 citrusleaf_cluster_create(void)
 {
-    if (! g_clust_initialized )    return(0);
-    
-	cl_cluster *asc = malloc(sizeof(cl_cluster));
-	if (!asc)	return(0);
-	
-	asc->state = 0;
+	cl_cluster* asc = malloc(sizeof(cl_cluster));
+
+	if (! asc) {
+		return NULL;
+	}
+
+	memset((void*)asc, 0, sizeof(cl_cluster));
+
 	asc->follow = true;
 	asc->nbconnect = false;
 	asc->found_all = false;
 	asc->last_node = 0;
-	asc->ref_count = 1;
-	// Default is 0 so the cluster uses global tend speed.
-	// For the cluster user has to specifically set the own
-	// value
-	asc->tend_speed = 0;
+	asc->tend_speed = 1;
     asc->info_timeout = INFO_TIMEOUT_MS;
-	
+
 	pthread_mutex_init(&asc->LOCK, 0);
-	
+
 	cf_vector_pointer_init(&asc->host_str_v, 10, 0);
 	cf_vector_integer_init(&asc->host_port_v, 10, 0);
 	cf_vector_pointer_init(&asc->host_addr_map_v, 10, 0);
 	cf_vector_pointer_init(&asc->node_v, 10, 0);
-	
-	pthread_mutex_lock(&cluster_ll_LOCK);
-	cf_ll_append(&cluster_ll, (cf_ll_element *) asc);
-	pthread_mutex_unlock(&cluster_ll_LOCK);
-	
+
 	asc->n_partitions = 0;
 	asc->partition_table_head = 0;
-	
+
 	asc->compression_stat.compression_threshold = DISABLE_COMPRESSION;
 	asc->compression_stat.actual_sz = 0;
 	asc->compression_stat.compressed_sz = 0;
-	
-	return(asc);
-}
 
-// Wrapper over create function and add_host to check if a cluster object for 
-// this host is already created. Return the object if it exists or else
-// create the cluster object, add the host and return the new object.
-cl_cluster *
-citrusleaf_cluster_get_or_create(char *host, short port, int timeout_ms)
-{
-	if (! g_clust_initialized )    return(0);
-#ifdef DEBUG
-        cf_debug("get or create for host %s:%d",host, (int)port);
-#endif
-	cl_cluster *asc = NULL;
-
-	// Check if the host and port exists in the linked list of hosts
-	pthread_mutex_lock(&cluster_ll_LOCK);
-	cf_ll_element *cur_element = cf_ll_get_head(&cluster_ll);
-	char *hostp;
-	short portp;
-	while(cur_element) {
-		asc = (cl_cluster *) cur_element;
-		pthread_mutex_lock(&asc->LOCK);
-		for (uint32_t i=0; i<cf_vector_size(&asc->host_str_v); i++) {
-			hostp = (char*) cf_vector_pointer_get(&asc->host_str_v, i);
-			portp = (int ) cf_vector_integer_get(&asc->host_port_v, i);
-			if ((strncmp(host,hostp,strlen(host)+1) == 0) && (port == portp)) {
-				// Found the cluster object.
-				// Increment the reference count
-				#ifdef DEBUG
-				cf_debug("host already added on a cluster object. Increment ref_count (%d) and returning pointer - %p", asc->ref_count, asc);
-				#endif
-				asc->ref_count++;
-				pthread_mutex_unlock(&asc->LOCK);
-				pthread_mutex_unlock(&cluster_ll_LOCK);
-				return(asc);
-			}
-		}
-		pthread_mutex_unlock(&asc->LOCK);
-		cur_element = cf_ll_get_next(cur_element);
-	}
-	pthread_mutex_unlock(&cluster_ll_LOCK);
-
-	// Cluster object for this host does not exist. Create new.
-	asc = citrusleaf_cluster_create();
-	if (!asc) {
-		cf_error("get_or_create - could not create cluster");
-		return(0);
-	}
-
-	// Add the host to the created cluster object	
-	int ret = citrusleaf_cluster_add_host(asc, host, port, timeout_ms);
-	if (0 != ret) {
-		cf_error("get_or_create - add_host failed with error %d", ret);
-		citrusleaf_cluster_release_or_destroy(&asc);
-		return(0);
-	}
+	// The tender thread will be started after the first successful add_host()
+	// call. TODO - conflate this create() call with a loop of add_host() calls.
 
 	return(asc);
 }
 
-//
-// Major TODO!
-// * destroy all the linked hosts
-// * remove self from cluster list
-//
 
 void
 citrusleaf_cluster_destroy(cl_cluster *asc)
 {
-	// First remove the entry from global linked list of clusters
-	// so that the tender function will not look into it.
-	// As there is no destruction function specified in cf_ll_init()
-	// the element will not freed in cf_ll_delete. It will just be 
-	// removed from the linked list. So we need to free it later in
-	// this function
-	pthread_mutex_lock(&cluster_ll_LOCK);
-	cf_ll_delete( &cluster_ll , (cf_ll_element *) asc);
-	pthread_mutex_unlock(&cluster_ll_LOCK);
+	cl_cluster_batch_shutdown(asc);
+	cl_cluster_scan_shutdown(asc);
+	cl_cluster_query_shutdown(asc);
 
-retry:
-	pthread_mutex_lock(&asc->LOCK);
-	if (asc->state & CLS_TENDER_RUNNING) {
-		//If tender process is active, we cannot destroy at the moment
-		pthread_mutex_unlock(&asc->LOCK);
-		sleep(1);
-		goto retry;
+	if (asc->tender_running) {
+		asc->tender_running = false;
+		pthread_join(asc->tender_thread, NULL);
 	}
-	asc->state |= CLS_FREED;
-	pthread_mutex_unlock(&asc->LOCK);
 
-	for (uint i=0;i<cf_vector_size(&asc->host_str_v);i++) {
+	for (uint32_t i = 0; i < cf_vector_size(&asc->host_str_v); i++) {
 		char * host_str = cf_vector_pointer_get(&asc->host_str_v, i);
 		free(host_str);
 	}
+
 	cf_vector_destroy(&asc->host_str_v);
 	cf_vector_destroy(&asc->host_port_v);
 	
-	for (uint i=0;i<cf_vector_size(&asc->host_addr_map_v);i++) {
+	for (uint32_t i = 0; i < cf_vector_size(&asc->host_addr_map_v); i++) {
 		cl_addrmap * addr_map_str = cf_vector_pointer_get(&asc->host_addr_map_v, i);
 		free(addr_map_str->orig);
 		free(addr_map_str->alt);
 		free(addr_map_str);
 	}
+
 	cf_vector_destroy(&asc->host_addr_map_v);
 
-	for (uint i=0;i<cf_vector_size(&asc->node_v);i++) {
+	for (uint32_t i = 0; i < cf_vector_size(&asc->node_v); i++) {
 		cl_cluster_node *cn = cf_vector_pointer_get(&asc->node_v, i);
 		cl_cluster_node_release(cn, "C-");
 	}
+
 	cf_vector_destroy(&asc->node_v);
-	
+
 	cl_partition_table_destroy_all(asc);
-	
+
 	pthread_mutex_destroy(&asc->LOCK);
 
 	free(asc);
-
 }
 
-// Function to release (decrement reference count) and destroy the object if
-// the reference count becomes 0
-void
-citrusleaf_cluster_release_or_destroy(cl_cluster **asc) {
-#ifdef DEBUG
-	if (asc && *asc) {
-		cf_debug("release or destroy for cluster object - %p. ref_count = %d", *asc, (*asc)->ref_count);
-	} else {
-		cf_debug("release or destroy - asc is  NULL");
-	}
-#endif
-
-	if (!asc || !(*asc))
-		return;
-
-	pthread_mutex_lock(&(*asc)->LOCK);
-	if ((*asc)->ref_count > 0) {
-		(*asc)->ref_count--;
-
-		if (0 == (*asc)->ref_count) {
-			pthread_mutex_unlock(&(*asc)->LOCK);
-			// Destroy the object as reference count is 0
-			#ifdef DEBUG
-			cf_debug("destroying the cluster object as reference count is 0");
-			#endif
-			citrusleaf_cluster_destroy(*asc);
-			*asc = NULL;
-			return;
-		}
-	}
-	pthread_mutex_unlock(&(*asc)->LOCK);
-}
-
-
-void
-citrusleaf_cluster_shutdown(void)
-{
-	// this one use has to be threadsafe, because two simultaneous shutdowns???
-	cf_ll_element *e;
-	// pthread_mutex_lock(&cluster_ll_LOCK);
-	while ((e = cf_ll_get_head(&cluster_ll))) {
-		cl_cluster *asc = (cl_cluster *)e; 
-		citrusleaf_cluster_destroy(asc); // safe?
-	}
-
-	/* Cancel tender thread */	
-	pthread_cancel(tender_thr);
-
-	/* 
-	 * If a process is forked, the threads in it do not get spawned in the child process.
-	 * In citrusleaf_init(), we are remembering the processid(g_init_pid) of the process who spawned the 
-	 * background threads. If the current process is not the process who spawned the background threads
-	 * then it cannot call pthread_join() on the threads which does not exist in this process.
-	 */
-	if(g_init_pid == getpid()) {
-		pthread_join(tender_thr,NULL);
-	}
-
-	// pthread_mutex_unlock(&cluster_ll_LOCK);
-}
 
 cl_rv
 citrusleaf_cluster_add_host(cl_cluster *asc, char const *host_in, short port, int timeout_ms)
 {
+	// Going forward, this will be conflated with the create() call. For now
+	// just make sure spurious add_host() calls are ignored...
+	if (asc->tender_running) {
+		return CITRUSLEAF_OK;
+	}
+
 	int rv = CITRUSLEAF_OK;
 #ifdef DEBUG	
 	cf_debug("adding host %s:%d timeout %d",host_in, (int)port, timeout_ms);
@@ -392,13 +256,12 @@ citrusleaf_cluster_add_host(cl_cluster *asc, char const *host_in, short port, in
 	char *hostp;
 	// int portp, found = 0;
 	int portp;
-	pthread_mutex_lock(&asc->LOCK);
+
 	for (uint32_t i=0; i<cf_vector_size(&asc->host_str_v); i++) {
 		hostp = (char*) cf_vector_pointer_get(&asc->host_str_v, i);
 		portp = (int ) cf_vector_integer_get(&asc->host_port_v, i);
 		if ((strncmp(host_in,hostp,strlen(host_in)+1)==0) && (port == portp)) {
 			// Return OK if host is already added in the list
-			pthread_mutex_unlock(&asc->LOCK);
 			#ifdef DEBUG
 			cf_debug("host already added in this cluster object. Return OK");
 			#endif
@@ -408,22 +271,21 @@ citrusleaf_cluster_add_host(cl_cluster *asc, char const *host_in, short port, in
 
 	char *host = strdup(host_in);
 
-	pthread_mutex_unlock(&asc->LOCK);
 	// Lookup the address before adding to asc. If lookup fails
 	// return CITRUSLEAF_FAIL_CLIENT
 	// Resolve - error message need to change.
 	cf_vector_define(sockaddr_in_v, sizeof( struct sockaddr_in ), 0);
  	if(cl_lookup(asc, host, port, &sockaddr_in_v) != 0) {
+ 		free(host);
 		rv = CITRUSLEAF_FAIL_CLIENT;
 		goto cleanup;
 	}
 	
 	// Host not found on this cluster object
 	// Add the host and port to the lists of hosts to try when maintaining
-	pthread_mutex_lock(&asc->LOCK);
 	cf_vector_pointer_append(&asc->host_str_v, host);
 	cf_vector_integer_append(&asc->host_port_v, (int) port);
-	pthread_mutex_unlock(&asc->LOCK);
+
 	asc->found_all = false; // Added a new item in the list. Mark the cluster not fully discovered.
 
 	// Fire the normal tender function to speed up resolution
@@ -462,6 +324,15 @@ citrusleaf_cluster_add_host(cl_cluster *asc, char const *host_in, short port, in
 
 cleanup:
 	cf_vector_destroy(&sockaddr_in_v);
+
+	if (rv == CITRUSLEAF_OK) {
+		// Success - start tender thread and ignore further add_host() calls.
+		if (! asc->tender_running) {
+			asc->tender_running = true;
+			pthread_create(&asc->tender_thread, 0, cluster_tender_fn, (void*)asc);
+		}
+	}
+
 	return rv;
 }
 
@@ -521,100 +392,7 @@ citrusleaf_cluster_follow(cl_cluster *asc, bool flag)
 	asc->follow = flag;
 }
 
-//
-// this helper is specific to the PHP implementation, although maybe it's not too bad
-// an idea elsewhere
-//
-cl_cluster *
-citrusleaf_cluster_get(char const *url)
-{
-//	cf_debug(" cluster get: %s",url);
 
-	// make sure it's a citrusleaf url
-	char *urlx = strdup(url);
-	char *proto = strchr(urlx, ':');
-	if (!proto) {
-		cf_error("warning: url %s illegal for citrusleaf connect", url);
-		free(urlx);
-		return(0);
-	}
-	*proto = 0;
-	if (strcmp(proto, "citrusleaf") == 0) {
-		cf_error("warning: url %s illegal for citrusleaf connect", url);
-		free(urlx);
-		return(0);
-	}
-	char *host = proto+3;
-	char *port = strchr(host, ':');
-	int port_i = 0;
-
-	if (port) {
-		*port = 0; // will terminate the host string properly
-		port_i = atoi(port + 1);
-	}
-	else {
-		port = strchr(host, '/');
-		if (port) *port = 0;
-	}
-	if (port_i == 0) port_i = 3000; 
-
-	// cf_debug(" cluster get: host %s port %d",host, port_i);
-
-	// search the cluster list for matching url open names
-	cl_cluster *asc = 0;
-	pthread_mutex_lock(&cluster_ll_LOCK);
-	cf_ll_element *e = cf_ll_get_head(&cluster_ll);
-	while (e && asc == 0) {
-		cl_cluster *cl_asc = (cl_cluster *) e;
-
-		// cf_debug(" cluster get: comparing against %p",cl_asc);
-
-		uint i;
-		pthread_mutex_lock(&cl_asc->LOCK);
-		for (i=0;i<cf_vector_size(&cl_asc->host_str_v);i++) {
-			char *cl_host_str = cf_vector_pointer_get(&cl_asc->host_str_v, i);
-			int   cl_port_i = cf_vector_integer_get(&cl_asc->host_port_v, i);
-
-			// cf_debug(" cluster get: comparing against %s %d",cl_host_str, cl_port_i);
-
-			if (strcmp(cl_host_str, host)!= 0)	continue;
-			if (cl_port_i == port_i) {
-				// found
-				asc = cl_asc;
-				break;
-			}
-			// cf_debug(" cluster get: comparing against %p",cl_asc);
-		}
-		pthread_mutex_unlock(&cl_asc->LOCK);
-
-		e = cf_ll_get_next(e);
-	}
-	pthread_mutex_unlock(&cluster_ll_LOCK);
-
-	if (asc) {
-		// cf_debug(" cluster get: reusing cluster %p",asc);
-		free(urlx);
-		return(asc);
-	}
-
-	// doesn't exist yet? create a new one
-	asc = citrusleaf_cluster_create();
-	citrusleaf_cluster_add_host(asc, host, port_i, 0);
-
-    // check to see if we actually got some initial node
-	uint node_v_sz = cf_vector_size(&asc->node_v);
-    if (node_v_sz==0) {
-		cf_error("no node added in initial create");
-        citrusleaf_cluster_destroy(asc);
-    	free(urlx);
-        return NULL;
-    }
-        
-	// cf_debug(" cluster get: new cluster %p",asc);
-
-	free(urlx);
-	return(asc);	
-}
 
 cl_cluster_node *
 cl_cluster_node_create(char *name, struct sockaddr_in *sa_in)
@@ -1445,18 +1223,6 @@ cluster_get_n_partitions( cl_cluster *asc, cf_vector *sockaddr_in_v )
 static void
 cluster_tend(cl_cluster *asc)
 {
-	pthread_mutex_lock(&asc->LOCK);
-	// If thre is already a tending process running for this cluster, there is no
-	// point in running one more immediately. Moreover, there are assumptions in
-	// the code that only one tender function is running at a time. So, abort.
-	if ((asc->state & CLS_FREED) || (asc->state & CLS_TENDER_RUNNING)) {
-		cf_debug("Not running cluster tend as the state of the cluster is 0x%x", asc->state);
-		pthread_mutex_unlock(&asc->LOCK);
-		return;
-	}
-	asc->state |= CLS_TENDER_RUNNING;
-	pthread_mutex_unlock(&asc->LOCK);
-
 	// For all registered hosts --- resolve into the cluster's sockaddr_in list
 	uint n_hosts = cf_vector_size(&asc->host_str_v);
 	cf_vector_define(sockaddr_in_v, sizeof( struct sockaddr_in ), 0);
@@ -1543,12 +1309,6 @@ cluster_tend(cl_cluster *asc)
 #ifdef DEBUG	
 	dump_cluster(asc);
 #endif	
-
-	pthread_mutex_lock(&asc->LOCK);
-	asc->state &= ~CLS_TENDER_RUNNING;
-	pthread_mutex_unlock(&asc->LOCK);
-
-	return;
 }
 
 void
@@ -1681,72 +1441,20 @@ citrusleaf_cluster_use_nbconnect(struct cl_cluster_s *asc)
 	asc->nbconnect = true;
 }
 
-void
-citrusleaf_change_tend_speed(int secs)
-{
-	g_clust_tend_speed = secs;
-}
 
-void
-citrusleaf_sleep_for_tender(cl_cluster *asc)
+static void*
+cluster_tender_fn(void* pv_asc)
 {
-	if (asc->tend_speed  > 0)
-		sleep(asc->tend_speed);
-	else
-		sleep(g_clust_tend_speed);
-}
-
-//
-// This rolls through every cluster, tries to add and delete nodes that might
-// have gone bad
-//
-static void *
-cluster_tender_fn(void *gcc_is_ass)
-{
+	cl_cluster* asc = (cl_cluster*)pv_asc;
 	uint64_t cnt = 1;
-	do {
+
+	while (asc->tender_running) {
 		sleep(1);
-		
-		// if tend speed is non zero tend at that speed
-		// otherwise at default speed
-		cf_ll_element *e = cf_ll_get_head(&cluster_ll);
-		while (e) {
-			int speed = ((cl_cluster *)e)->tend_speed;
-			if (speed) {
-				if ((cnt % speed) == 0) {
-					cluster_tend( (cl_cluster *) e);
-				}
-			} else {
-				if ((cnt % g_clust_tend_speed) == 0) {
-					cluster_tend( (cl_cluster *) e);
-				}
-			}
-			e = cf_ll_get_next(e);
+
+		if (asc->tender_running && cnt++ % asc->tend_speed == 0) {
+			cluster_tend(asc);
 		}
-		cnt++;
-	} while (1);
-	return(0);
+	}
+
+	return NULL;
 }
-
-
-//
-// Initialize the thread that keeps track of the cluster
-//
-int citrusleaf_cluster_init()
-{
-    if (g_clust_initialized)    return(0);
-    
-    	// No destruction function is used. 
-	// NOTE: A destruction function should not be used because elements
-	// in this list are used even after they are removed from the list.
-	// Refer to the function citrusleaf_cluster_destroy() for more info.
-	cf_ll_init(&cluster_ll, 0, false);
-	
-    g_clust_initialized = 1;
-    
-   	g_clust_tend_speed = 1;
-	pthread_create( &tender_thr, 0, cluster_tender_fn, 0);
-	return(0);	
-}
-
-

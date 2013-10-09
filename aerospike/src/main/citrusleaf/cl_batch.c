@@ -40,8 +40,6 @@
 
 #include "internal.h"
 
-extern int g_init_pid;
-
 
 //
 // Decompresses a compressed CL msg
@@ -525,11 +523,6 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 	return(rv);
 }
 
-cf_atomic32 batch_initialized = 0;
-
-static cf_queue *g_batch_q = 0;
-static pthread_t g_batch_th[N_BATCH_THREADS];
-
 
 //
 // These externally visible functions are exposed through citrusleaf.h
@@ -569,18 +562,20 @@ typedef struct {
 } work_complete;
 
 static void *
-batch_worker_fn(void *dummy)
+batch_worker_fn(void* pv_asc)
 {
-	do {
+	cl_cluster* asc = (cl_cluster*)pv_asc;
+
+	while (true) {
 		digest_work work;
-		
-		if (0 != cf_queue_pop(g_batch_q, &work, CF_QUEUE_FOREVER)) {
+
+		if (0 != cf_queue_pop(asc->batch_q, &work, CF_QUEUE_FOREVER)) {
 			cf_error("queue pop failed");
 		}
-		
-		/* See function citrusleaf_batch_shutdown() for more details */
-		if(work.digests==NULL) {
-			pthread_exit(NULL);
+
+		// This is how batch shutdown signals we're done.
+		if (! work.asc) {
+			break;
 		}
 
 		work_complete wc;
@@ -592,8 +587,7 @@ batch_worker_fn(void *dummy)
 				work.my_node_digest_count, work.cb, work.udata );
 
 		cf_queue_push(work.complete_q, (void *) &wc);
-		
-	} while (1);
+	}
 
 	return NULL;
 }
@@ -628,9 +622,7 @@ citrusleaf_batch_read(cl_cluster *asc, char *ns, const cf_digest *digests, int n
 		// it's certainly safer though
 		if (nodes[i] == 0) {
 			cf_error("index %d: no specific node, getting random", i);
-			pthread_mutex_lock(&asc->LOCK);
 			nodes[i] = cl_cluster_node_get_random(asc);
-			pthread_mutex_unlock(&asc->LOCK);
 		}
 		if (nodes[i] == 0) {
 			cf_error("index %d: can't get any node", i);
@@ -692,7 +684,7 @@ citrusleaf_batch_read(cl_cluster *asc, char *ns, const cf_digest *digests, int n
 		work.index = i;
 		
 		// dispatch - copies data
-		cf_queue_push(g_batch_q, &work);
+		cf_queue_push(asc->batch_q, &work);
 	}
 	
 	// wait for the work to complete
@@ -723,61 +715,48 @@ citrusleaf_batch_read(cl_cluster *asc, char *ns, const cf_digest *digests, int n
 }
 
 
-//
-// Initializes the shared thread pool and whatever queues
-//
-
-int
-citrusleaf_batch_init()
+void
+cl_cluster_batch_init(cl_cluster* asc)
 {
-	if (1 == cf_atomic32_incr(&batch_initialized)) {
-
-		// create dispatch queue
-		g_batch_q = cf_queue_create(sizeof(digest_work), true);
-		
-		// create thread pool
-		for (int i=0;i<N_BATCH_THREADS;i++)
-			pthread_create(&g_batch_th[i], 0, batch_worker_fn, 0);
-
+	// We do this lazily, during the first batch request, so make sure it's only
+	// done once.
+	if (cf_atomic32_incr(&asc->batch_initialized) > 1 || asc->batch_q) {
+		return;
 	}
-	
-	return(0);	
-}
 
-/*
-* This function is used to close the batch threads gracefully. The earlier plan was to use pthread_cancel
-* with pthread_join. When the cancellation request comes, the thread is waiting on a cond variable. (see batch_worker_fn)
-* The pthread_cond_wait is a cancellation point. If a thread that's blocked on a condition variable is canceled,
-* the thread reacquires the mutex that's guarding the condition variable, so that the thread's cleanup handlers run
-* in the same state as the critical code before and after the call to this function. If some other thread owns the lock,
-* the canceled thread blocks until the mutex is available. So the first thread, holds the mutex, gets unlocked on the cond
-* variable and then dies. The case maybe that the mutex might be released or not. When the next thread gets the cancellation
-* request, it waits on the mutex to get free which may never happen and it blocks itself forever. This is why we use our own
-* thread cleanup routine. We push NULL work items in the queue. When we pop them, we signal the thread to exit. We join on the
-* thread thereafter.
-*/
-void citrusleaf_batch_shutdown() {
+	// Create dispatch queue.
+	asc->batch_q = cf_queue_create(sizeof(digest_work), true);
 
-	int i;
-	digest_work work;
-
-	/* 
-	 * If a process is forked, the threads in it do not get spawned in the child process.
-	 * In citrusleaf_init(), we are remembering the processid(g_init_pid) of the process who spawned the 
-	 * background threads. If the current process is not the process who spawned the background threads
-	 * then it cannot call pthread_join() on the threads which does not exist in this process.
-	 */
-	if(g_init_pid == getpid()) {
-		memset(&work,0,sizeof(digest_work));
-		for(i=0;i<N_BATCH_THREADS;i++) {
-			cf_queue_push(g_batch_q,&work);
-		}
-
-		for(i=0;i<N_BATCH_THREADS;i++) {
-			pthread_join(g_batch_th[i],NULL);
-		}
-		cf_queue_destroy(g_batch_q);
-		g_batch_q = 0;
+	// Create thread pool.
+	for (int i = 0; i < NUM_BATCH_THREADS; i++) {
+		pthread_create(&asc->batch_threads[i], 0, batch_worker_fn, (void*)asc);
 	}
 }
 
+
+void
+cl_cluster_batch_shutdown(cl_cluster* asc)
+{
+	// Check whether we ever (lazily) initialized batch machinery.
+	if (cf_atomic32_get(asc->batch_initialized) == 0 && ! asc->batch_q) {
+		return;
+	}
+
+	// This tells the worker threads to stop. We do this (instead of using a
+	// "running" flag) to allow the workers to "wait forever" on processing the
+	// work dispatch queue, which has minimum impact when the queue is empty.
+	// This also means all queued requests get processed when shutting down.
+	for (int i = 0; i < NUM_BATCH_THREADS; i++) {
+		digest_work work;
+		work.asc = NULL;
+		cf_queue_push(asc->batch_q, &work);
+	}
+
+	for (int i = 0; i < NUM_BATCH_THREADS; i++) {
+		pthread_join(asc->batch_threads[i], NULL);
+	}
+
+	cf_queue_destroy(asc->batch_q);
+	asc->batch_q = NULL;
+	cf_atomic32_set(&asc->batch_initialized, 0);
+}

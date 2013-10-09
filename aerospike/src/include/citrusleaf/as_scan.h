@@ -111,8 +111,8 @@ cf_vector * citrusleaf_udf_scan_background  (cl_cluster *asc, cl_scan *scan);
 cl_rv citrusleaf_udf_scan_node_background  (cl_cluster *asc, cl_scan *scan, char *node_name);
 
 /*
- * Init and destroy for client scan environment. Should be called for once per client
+ * Init and destroy for client scan environment. Should be called for once per cluster
  * instance before performing citrusleaf scan
  */
-int    citrusleaf_scan_init();
-void   citrusleaf_scan_shutdown();
+int    cl_cluster_scan_init(cl_cluster* asc);
+void   cl_cluster_scan_shutdown(cl_cluster* asc);

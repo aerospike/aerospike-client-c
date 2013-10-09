@@ -259,17 +259,19 @@ as_status aerospike_lmap_get(
 		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL,
 				"no value returned from server");
 	}
-	int64_t ival = as_integer_getorelse(as_integer_fromval(p_return_val), -1);
-	as_val_destroy(p_return_val);
-
-	if (ival == -1) {
-		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL,
-				"value returned from server not parse-able");
-	}
+    // This looks like left over code from a copy/paste.
+    // We wouldn't be able to ASSUME that the map VALUE is an integer.
+//	int64_t ival = as_integer_getorelse(as_integer_fromval(p_return_val), -1);
+//	as_val_destroy(p_return_val);
+//
+//	if (ival == -1) {
+//		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL,
+//				"value returned from server not parse-able");
+//	}
 	*mval = p_return_val;
 
 	return err->code;
-} // aerospike_lmap_exists()
+} // aerospike_lmap_get()
 
 
 as_status aerospike_lmap_filter_internal(

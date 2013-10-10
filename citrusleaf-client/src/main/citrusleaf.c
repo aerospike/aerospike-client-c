@@ -933,7 +933,7 @@ set_object(cl_msg_op *op, cl_object *obj)
 			obj->free = 0;
 			break;
 		case CL_INT:
-			obj->sz = 0; // unused in integer case
+			obj->sz = 8;
 			obj->free = 0;
 			rv = op_to_value_int(cl_msg_op_get_value_p(op), cl_msg_op_get_value_sz(op),&(obj->u.i64));
 			break;
@@ -1306,7 +1306,6 @@ do_the_full_monte(cl_cluster *asc, int info1, int info2, int info3, const char *
                          deadline_ms, progress_timeout_ms);           	
 #endif
 
-			cl_cluster_node_dun(node, rv == ETIMEDOUT ? NODE_DUN_TIMEOUT : NODE_DUN_NET_ERR);
 			goto Retry;
 		}
 
@@ -1333,7 +1332,6 @@ do_the_full_monte(cl_cluster *asc, int info1, int info2, int info3, const char *
                          deadline_ms, progress_timeout_ms);           	
 #endif            
 
-			cl_cluster_node_dun(node, rv == ETIMEDOUT ? NODE_DUN_TIMEOUT : NODE_DUN_NET_ERR);
 			goto Retry;
 	
 		}
@@ -1379,7 +1377,6 @@ do_the_full_monte(cl_cluster *asc, int info1, int info2, int info3, const char *
                              deadline_ms, progress_timeout_ms);           	
 #endif
 
-				cl_cluster_node_dun(node, rv == ETIMEDOUT ? NODE_DUN_TIMEOUT : NODE_DUN_NET_ERR);
 				goto Retry;
 			}
 
@@ -1432,7 +1429,7 @@ Error:
     
 Ok:    
 
-	cl_cluster_node_ok(node);
+	cf_atomic32_set(&node->intervals_unreachable, 0);
     cl_cluster_node_fd_put(node, fd, false);
 	cl_cluster_node_put(node);
    
@@ -1630,19 +1627,27 @@ citrusleaf_async_put_digest_xdr(cl_cluster *asc, const char *ns, const cf_digest
 extern cl_rvclient
 citrusleaf_check_cluster_health(cl_cluster *asc)
 {
-	int number_of_nodes_alive = 0;
+	uint32_t n_alive = 0;
+	uint32_t n_dead = 0;
 
 	pthread_mutex_lock(&asc->LOCK);
 	for (uint i = 0; i < cf_vector_size(&asc->node_v); i++) {
 		cl_cluster_node *cn = cf_vector_pointer_get(&asc->node_v, i);
 
-		if (cn->dunned == false){
-			number_of_nodes_alive++;
+		// Consider a node dead if it's been unreachable for the last 3+
+		// cluster tend passes.
+		if (cf_atomic32_get(cn->intervals_unreachable) >= 3) {
+			n_dead++;
+		}
+		else {
+			n_alive++;
 		}
 	}
 	pthread_mutex_unlock(&asc->LOCK);
 
-	if (number_of_nodes_alive > 0)
+	cf_debug("cluster %p - %u nodes 'alive', %u nodes 'dead'", asc, n_alive, n_dead);
+
+	if (n_alive > 0)
 		return CITRUSLEAF_FAIL_DC_UP;
 	else
 		return CITRUSLEAF_FAIL_DC_DOWN;
@@ -1882,6 +1887,46 @@ citrusleaf_operate(cl_cluster *asc, const char *ns, const char *set, const cl_ob
 		info3 = CL_MSG_INFO3_REPLACE;
 
 	return( do_the_full_monte( asc, info1, info2, info3, ns, set, key, 0, 0, 0, 
+			&operations, &n_operations, generation, cl_w_p, &trid, NULL) );
+}
+
+extern cl_rv
+citrusleaf_operate_digest(cl_cluster *asc, const char *ns, cf_digest *digest, cl_operation *operations, int n_operations, const cl_write_parameters *cl_w_p,  int replace, uint32_t *generation)
+{
+    if (!g_initialized) return(-1);
+
+	// see if there are any read or write bits ---
+	//   (this is slightly obscure c usage....)
+	int info1 = 0, info2 = 0, info3 = 0;
+	uint64_t trid=0;
+
+	for (int i=0;i<n_operations;i++) {
+		switch (operations[i].op) {
+		case CL_OP_WRITE:
+		case CL_OP_MC_INCR:
+		case CL_OP_INCR:
+		case CL_OP_APPEND:
+		case CL_OP_PREPEND:
+		case CL_OP_MC_APPEND:
+		case CL_OP_MC_PREPEND:
+		case CL_OP_MC_TOUCH:
+		case CL_OP_TOUCH:
+			info2 = CL_MSG_INFO2_WRITE;
+			break;
+		case CL_OP_READ:
+			info1 = CL_MSG_INFO1_READ;
+			break;
+		default:
+			break;
+		}
+
+		if (info1 && info2) break;
+	}
+
+	if (replace)
+		info3 = CL_MSG_INFO3_REPLACE;
+
+	return( do_the_full_monte( asc, info1, info2, info3, ns, 0, 0, digest, 0, 0,
 			&operations, &n_operations, generation, cl_w_p, &trid, NULL) );
 }
 

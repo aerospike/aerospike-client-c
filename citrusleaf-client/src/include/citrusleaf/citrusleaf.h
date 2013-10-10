@@ -265,8 +265,8 @@ extern void citrusleaf_cluster_shutdown(void);
 
 extern cl_cluster * citrusleaf_cluster_get_or_create(char *host, short port, int timeout_ms);
 extern void citrusleaf_cluster_release_or_destroy(cl_cluster **asc);
-extern void citrusleaf_cluster_change_info_timeout(struct cl_cluster_s *asc, int msecs);
 extern void citrusleaf_cluster_change_tend_speed(struct cl_cluster_s *asc, int secs);
+extern void citrusleaf_cluster_change_info_timeout(struct cl_cluster_s *asc, int msecs);
 extern void citrusleaf_cluster_use_nbconnect(struct cl_cluster_s *asc);
 
 extern void citrusleaf_cluster_put_compression_stat(cl_cluster *asc, uint64_t actual_sz, uint64_t compressed_sz);
@@ -595,6 +595,9 @@ citrusleaf_delete_verify(cl_cluster *asc, const char *ns, const char *set, const
 
 cl_rv
 citrusleaf_operate(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, cl_operation *operations, int n_operations, const cl_write_parameters *cl_w_p, int replace, uint32_t *generation);
+
+cl_rv
+citrusleaf_operate_digest(cl_cluster *asc, const char *ns, cf_digest *digest, cl_operation *operations, int n_operations, const cl_write_parameters *cl_w_p, int replace, uint32_t *generation);
 
 //
 // This debugging call can be useful for tracking down errors and coordinating with server failures

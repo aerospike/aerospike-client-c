@@ -292,6 +292,7 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 #ifdef DEBUG			
 		cf_debug("Citrusleaf: write timeout or error when writing header to server - %d fd %d errno %d", rv, fd, errno);
 #endif
+		close(fd);
 		return(-1);
 	}
 
@@ -303,6 +304,7 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 		// Now turn around and read a fine cl_pro - that's the first 8 bytes that has types and lenghts
 		if ((rv = cf_socket_read_forever(fd, (uint8_t *) &proto, sizeof(cl_proto) ) ) ) {
 			cf_error("network error: errno %d fd %d", rv, fd);
+			close(fd);
 			return(-1);
 		}
 #ifdef DEBUG_VERBOSE
@@ -312,10 +314,12 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 
 		if (proto.version != CL_PROTO_VERSION) {
 			cf_error("network error: received protocol message of wrong version %d", proto.version);
+			close(fd);
 			return(-1);
 		}
 		if ((proto.type != CL_PROTO_TYPE_CL_MSG) && (proto.type != CL_PROTO_TYPE_CL_MSG_COMPRESSED)) {
 			cf_error("network error: received incorrect message version %d", proto.type);
+			close(fd);
 			return(-1);
 		}
 		
@@ -329,11 +333,15 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 				rd_buf = malloc(rd_buf_sz);
 			else
 				rd_buf = rd_stack_buf;
-			if (rd_buf == NULL)		return (-1);
+			if (rd_buf == NULL) {
+				close(fd);
+				return (-1);
+			}
 
 			if ((rv = cf_socket_read_forever(fd, rd_buf, rd_buf_sz))) {
 				cf_error("network error: errno %d fd %d", rv, fd);
 				if (rd_buf != rd_stack_buf)	{ free(rd_buf); }
+				close(fd);
 				return(-1);
 			}
 // this one's a little much: printing the entire body before printing the other bits			
@@ -351,6 +359,7 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 			if (rv != 0) {
 				cf_error("could not decompress compressed message: error %d", rv);
 				if (rd_buf != rd_stack_buf)	{ free(rd_buf); }
+				close(fd);
 				return -1;
 			}				
 				
@@ -384,6 +393,7 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 			if (msg->header_sz != sizeof(cl_msg)) {
 				cf_error("received cl msg of unexpected size: expecting %zd found %d, internal error",
 					sizeof(cl_msg),msg->header_sz);
+				close(fd);
 				return(-1);
 			}
 
@@ -429,6 +439,7 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 				if (set_ret) {
 					free(set_ret);
 				}
+				close(fd);
 				return (-1);
 			}
 

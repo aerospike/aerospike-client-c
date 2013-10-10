@@ -233,6 +233,7 @@ static int cl_scan_worker_do(cl_cluster_node * node, cl_scan_task * task) {
 
     // send it to the cluster - non blocking socket, but we're blocking
     if (0 != cf_socket_write_forever(fd, (uint8_t *) task->scan_buf, (size_t) task->scan_sz)) {
+    	close(fd);
         return CITRUSLEAF_FAIL_CLIENT;
     }
 
@@ -246,17 +247,20 @@ static int cl_scan_worker_do(cl_cluster_node * node, cl_scan_task * task) {
         // that has types and lengths
         if ( (rc = cf_socket_read_forever(fd, (uint8_t *) &proto, sizeof(cl_proto) ) ) ) {
             LOG("[ERROR] cl_scan_worker_do: network error: errno %d fd %d node name %s\n", rc, fd, node->name);
+    		close(fd);
             return CITRUSLEAF_FAIL_CLIENT;
         }
         cl_proto_swap(&proto);
 
         if ( proto.version != CL_PROTO_VERSION) {
             LOG("[ERROR] cl_scan_worker_do: network error: received protocol message of wrong version %d from node %s\n", proto.version, node->name);
+    		close(fd);
             return CITRUSLEAF_FAIL_CLIENT;
         }
 
         if ( proto.type != CL_PROTO_TYPE_CL_MSG && proto.type != CL_PROTO_TYPE_CL_MSG_COMPRESSED ) {
             LOG("[ERROR] cl_scan_worker_do: network error: received incorrect message version %d from node %s \n",proto.type, node->name);
+    		close(fd);
             return CITRUSLEAF_FAIL_CLIENT;
         }
 
@@ -272,11 +276,15 @@ static int cl_scan_worker_do(cl_cluster_node * node, cl_scan_task * task) {
                 rd_buf = rd_stack_buf;
             }
 
-            if (rd_buf == NULL) return CITRUSLEAF_FAIL_CLIENT;
+            if (rd_buf == NULL) {
+        		close(fd);
+            	return CITRUSLEAF_FAIL_CLIENT;
+            }
 
             if ( (rc = cf_socket_read_forever(fd, rd_buf, rd_buf_sz)) ) {
                 LOG("[ERROR] cl_scan_worker_do: network error: errno %d fd %d node name %s\n", rc, fd, node->name);
                 if ( rd_buf != rd_stack_buf ) free(rd_buf);
+        		close(fd);
                 return CITRUSLEAF_FAIL_CLIENT;
             }
         }
@@ -298,6 +306,7 @@ static int cl_scan_worker_do(cl_cluster_node * node, cl_scan_task * task) {
             if ( msg->header_sz != sizeof(cl_msg) ) {
                 LOG("[ERROR] cl_scan_worker_do: received cl msg of unexpected size: expecting %zd found %d, internal error\n",
                         sizeof(cl_msg),msg->header_sz);
+        		close(fd);
                 return CITRUSLEAF_FAIL_CLIENT;
             }
 
@@ -340,7 +349,8 @@ static int cl_scan_worker_do(cl_cluster_node * node, cl_scan_task * task) {
                 if (set_ret) {
                     free(set_ret);
                 }
-                return CITRUSLEAF_FAIL_CLIENT;
+        		close(fd);
+               return CITRUSLEAF_FAIL_CLIENT;
             }
 
             // parse through the bins/ops
@@ -434,10 +444,6 @@ static int cl_scan_worker_do(cl_cluster_node * node, cl_scan_task * task) {
 
     } while ( done == false );
     cl_cluster_node_fd_put(node, fd, false);
-
-    goto Final;
-
-Final:    
 
 #ifdef DEBUG_VERBOSE    
     LOG("[DEBUG] cl_scan_worker_do: exited loop: rc %d\n", rc );

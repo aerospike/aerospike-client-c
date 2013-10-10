@@ -54,11 +54,20 @@
  *	services 192.168.3.102:3000;192.168.3.103:3000
  */
 
-#define SZ_FIELD_PARTITIONS 	(NUM_NAMESPACES * NUM_PARTITIONS * (SZ_NAMESPACE + SZ_PARTITION_ID + 2) + 1)
+// For 3 field names with line separators, and partition-generation value:
+#define SZ_OVERHEAD				((3 * 32) + 20)
+// Size of each base-64 encoded bitmap:
+#define SZ_BITMAP				((NUM_PARTITIONS + 7) / 8)
+#define SZ_ENCODED_BITMAP		(((SZ_BITMAP + 2) / 3) * 4)
+// With namespace name and per-namespace separators:
+#define SZ_NS_ENCODED_BITMAP	(64 + SZ_ENCODED_BITMAP + 1)
+// Finally:
+#define SZ_REPLICAS_TEXT 		(SZ_OVERHEAD + (NUM_NAMESPACES * 2 * SZ_NS_ENCODED_BITMAP))
 /*
  *  Example:
- * 	replicas-read   bar:0;bar:2;bar:3;.....
- *	replicas-write  bar:0;bar:4;bar:5;.....
+ *  partition-generation 292219
+ * 	replicas-master      foo:Ab2T60...;bar:ry4Jfs...; ...
+ * 	replicas-prole       foo:8xd4K2...;bar:4hTe5q...; ...
  */
 
 #define SHMMAX_SYS_FILE 		"/proc/sys/kernel/shmmax"
@@ -76,9 +85,7 @@ typedef struct {
 	uint32_t partition_generation;
 	char node_name[NODE_NAME_SIZE];
 	char services[SZ_FIELD_NEIGHBORS];
-	char write_replicas[SZ_FIELD_PARTITIONS];
-	char read_replicas[SZ_FIELD_PARTITIONS];
-	bool dun;
+	char replicas[SZ_REPLICAS_TEXT];
 } cl_shm_ninfo;
 
 typedef struct {

@@ -409,7 +409,6 @@ cl_shm_node_ping(cl_seed_node* seed)
 	if (cl_strncpy(shared->services, request.services, sizeof(shared->services))) {
 		cf_warn("Shared memory services full: size=%d", sizeof(shared->services));
 	}
-	shared->dun = request.dun;
 
 	cl_shm_node_unlock(shared);
 	cl_node_info_free(&request);
@@ -429,12 +428,8 @@ cl_shm_node_ping(cl_seed_node* seed)
 
 		cl_shm_node_lock(shared);
 
-		if (cl_strncpy(shared->write_replicas, replicas.write_replicas, sizeof(shared->write_replicas))) {
-			cf_warn("Shared memory write replicas buffer full: size=%d", sizeof(shared->write_replicas));
-		}
-
-		if (cl_strncpy(shared->read_replicas, replicas.read_replicas, sizeof(shared->read_replicas))) {
-			cf_warn("Shared memory read replicas buffer full: size=%d", sizeof(shared->read_replicas));
+		if (cl_strncpy(shared->replicas, replicas.values, sizeof(shared->replicas))) {
+			cf_warn("Shared memory replicas buffer full: size=%d", sizeof(shared->replicas));
 		}
 
 		// Update the local partition generation only after successful update of partition map

@@ -8,32 +8,16 @@ libc and openssl packages must be installed to compile the client library.
 
 For Debian-based distributions (Debian, Ubuntu, etc.):
 
-	$ sudo apt-get install libc6-dev libssl-dev
+	$ sudo apt-get install libc6-dev libssl-dev liblua5.1-dev autoconf automake libtool g++
+	$ sudo ln -s /usr/lib/x86_64-linux-gnu/liblua5.1.so /usr/lib/liblua.so
+	$ sudo ln -s /usr/lib/x86_64-linux-gnu/liblua5.1.a /usr/lib/liblua.a
+	$ export CPATH=$CPATH:/usr/include/lua5.1
 
 For Redhat-based distributions (RHEL, CentOS, etc.):
 
-	$ sudo yum install openssl-devel glibc-devel
+	$ sudo yum install openssl-devel glibc-devel lua-devel autoconf automake libtool
 
 Installation of these packages will also install gcc. gcc -version must show a version of 4.1 or better. g++ is also supported with the same version restriction.
-
-### Library Dependencies
-
-#### msgpack-0.5.7
-
-Aerospike utilizes msgpack for serializing some data. You can download it here:
-
-	http://msgpack.org/releases/cpp/msgpack-0.5.7.tar.gz 
-
-Just extract the archive, then set the variable MSGPACK to point to the path of the extracted archive.
-
-The variable can be set in your environment:
-
-	$ export MSGPACK=~/msgpack-0.5.7
-
-Or it can be set when running make:
-
-	$ make MSGPACK=~/msgpack-0.5.7
- 
 
 ## Usage
 
@@ -41,7 +25,11 @@ Or it can be set when running make:
 
 Before building, please ensure you have the prerequisites installed.
 
-This project uses "git submodules", so you will need to initialize and update the submodules before building thie project.
+This project uses git submodules, so you will need to initialize and update the submodules before building thie project. To initialize and update submodules, run:
+
+	$ cd ..
+	$ git submodule update --init
+	$ cd aerospike
 
 To build:
 
@@ -49,8 +37,8 @@ To build:
 
 This will generate the following files:
 
-- `target/{target}/lib/libcitrusleaf.so` – dynamic shared library 
-- `target/{target}/lib/libcitrusleaf.a` – static archive
+- `target/{target}/lib/libaerospike.so` – dynamic shared library 
+- `target/{target}/lib/libaerospike.a` – static archive
 - `target/{target}/include` – header files
 
 Static linking with the `.a` prevents you from having to install the libraries on your target platform. Dynamic linking with the `.so` avoids a client rebuild if you upgrade the client.  Choose the option that is right for you.
@@ -74,7 +62,8 @@ To run unit tests:
 
 The module is structured as follows:
 
-- `examples` - example applications using the generated libraries.
+- `demo` - demo applications, making use of multiple features.
+- `examples` - simple example applications, focused on specific features.
 - `src` – developer maintained code for the project
 - `src/include` – public header files
 - `src/main` – source code for the library

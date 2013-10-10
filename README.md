@@ -15,45 +15,20 @@ Each module has its own `README.md` and `Makefile`.
 
 Please read the `README.md` for each module before using them or running make. The document contains information on prerequisites, usage and directory structure.
 
-### [aerospike](./aerospike)
-
-The `aerospike` module generates the following libraries:
-
-	aerospike/target/{target}/lib/libaerospike.a
-	aerospike/target/{target}/lib/libaerospike.so
-
-It also generates public header files in:
-
-	aerospike/target/{target}/include
-
-### [citrusleaf-libevent](./citrusleaf-client)
-
-The `citrusleaf-libevent` module generates the following libraries:
-
-	citrusleaf-libevent/target/{target}/lib/libev2citrusleaf.a
-	citrusleaf-libevent/target/{target}/lib/libev2citrusleaf.so
-
-It also generates public header files in:
-
-	citrusleaf-libevent/target/{target}/include
-
-### [citrusleaf-client](./citrusleaf-client)
-
-**NOTE:** *The `citrusleaf` libraries are deprecated in favor of `aerospike` libraries. We maintain the `citrusleaf` libraries for existing customers and ask all new users to use `aerospike` libraries.*
-
-The `citrusleaf-client` module generates the following libraries:
-
-	citrusleaf-client/target/{target}/lib/libcitrusleaf.a
-	citrusleaf-client/target/{target}/lib/libcitrusleaf.so
-	
-It also generates public header files in:
-
-	citrusleaf-client/target/{target}/include
-
-
 ## Usage
 
 Please ensure you have resolved the prerequisites and dependencies in the README.me for each module before running commands accross all modules.
+
+### Cloning
+
+To clone this repository, run:
+
+	$ git clone https://github.com/aerospike/aerospike-client-c.git
+
+This repository makes use of git submodules. Before you can build, you need to make sure all submodules are initialized and updated:
+
+	$ cd aerospike-client-c
+	$ git submodule update --init
 
 ### Build
 

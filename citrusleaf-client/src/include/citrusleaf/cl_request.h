@@ -29,13 +29,10 @@ typedef struct {
 	char node_name[NODE_NAME_SIZE];
 	char* services;
 	uint32_t partition_generation;
-	bool dun;
 } cl_node_info;
 
 typedef struct {
 	char* values;
-	char* write_replicas;
-	char* read_replicas;
 } cl_replicas;
 
 int cl_get_node_info(const char* node_name, struct sockaddr_in* sa_in, cl_node_info* node_info, int timeout_ms);

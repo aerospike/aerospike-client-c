@@ -517,6 +517,7 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 	// call will read stale data.
 
 	if (rv == 0) {
+		cf_atomic32_set(&node->intervals_unreachable, 0);
 		cl_cluster_node_fd_put(node, fd, false);
 	} else {
 		close(fd);
@@ -628,9 +629,7 @@ do_get_exists_many_digest(cl_cluster *asc, char *ns, const cf_digest *digests, i
 		// it's certainly safer though
 		if (nodes[i] == 0) {
 			cf_error("index %d: no specific node, getting random", i);
-			pthread_mutex_lock(&asc->LOCK);
 			nodes[i] = cl_cluster_node_get_random(asc);
-			pthread_mutex_unlock(&asc->LOCK);
 		}
 		if (nodes[i] == 0) {
 			cf_error("index %d: can't get any node", i);

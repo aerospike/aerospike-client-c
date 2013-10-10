@@ -90,11 +90,9 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 		node = cl_cluster_node_get_byname(asc,node_name);
 		// grab a reservation
 		if (node)
-			cf_client_rc_reserve(node);
+			cl_cluster_node_reserve(node, "T+");
 	} else {
-		pthread_mutex_lock(&asc->LOCK);
 		node = cl_cluster_node_get_random(asc);
-		pthread_mutex_unlock(&asc->LOCK);
 	}
 	if (!node) {
 #ifdef DEBUG
@@ -318,6 +316,7 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 		wr_buf = 0;
 	}
 
+	cf_atomic32_set(&node->intervals_unreachable, 0);
 	cl_cluster_node_fd_put(node, fd, false);
 	cl_cluster_node_put(node);
 	node = 0;

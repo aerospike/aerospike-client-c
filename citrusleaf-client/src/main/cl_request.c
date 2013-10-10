@@ -92,7 +92,6 @@ cl_get_node_info(const char* node_name, struct sockaddr_in* sa_in, cl_node_info*
 			node_info->partition_generation = shared->partition_generation;
 			node_info->values = strdup(shared->services);
 			node_info->services = node_info->values;
-			node_info->dun = shared->dun;
 			cl_shm_node_unlock(shared);
 			return 0;
 		}
@@ -107,10 +106,9 @@ cl_request_node_info(struct sockaddr_in* sa_in, cl_node_info* node_info, int tim
 	node_info->node_name[0] = 0;
 	node_info->partition_generation = 0;
 	node_info->services = 0;
-	node_info->dun = false;
 
-	if (citrusleaf_info_host_limit(sa_in, "node\npartition-generation\nservices", &node_info->values, timeout_ms, false, 10000) != 0) {
-		node_info->dun = true;
+	if (citrusleaf_info_host_limit(sa_in, "node\npartition-generation\nservices\n",
+			&node_info->values, timeout_ms, false, 10000) != 0) {
 		return -1;
 	}
 
@@ -153,17 +151,10 @@ cl_get_replicas(const char* node_name, struct sockaddr_in* sa_in, cl_replicas* r
 			// cf_debug("Use shared memory for replicas.");
 			cl_shm_node_lock(shared);
 
-			int wr_len = strlen(shared->write_replicas);
-			int rr_len = strlen(shared->read_replicas);
-			replicas->values = (char*)malloc(wr_len + rr_len + 2);
-
-			replicas->write_replicas = replicas->values;
-			memcpy(replicas->write_replicas, shared->write_replicas, wr_len);
-			replicas->write_replicas[wr_len] = 0;
-
-			replicas->read_replicas = replicas->values + wr_len + 1;
-			memcpy(replicas->read_replicas, shared->read_replicas, rr_len);
-			replicas->read_replicas[rr_len] = 0;
+			int len = strlen(shared->replicas);
+			replicas->values = (char*)malloc(len + 1);
+			memcpy(replicas->values, shared->replicas, len);
+			replicas->values[len] = 0;
 
 			cl_shm_node_unlock(shared);
 			return 0;
@@ -176,29 +167,8 @@ cl_get_replicas(const char* node_name, struct sockaddr_in* sa_in, cl_replicas* r
 int
 cl_request_replicas(struct sockaddr_in* sa_in, cl_replicas* replicas, int timeout_ms)
 {
-	replicas->write_replicas = 0;
-	replicas->read_replicas = 0;
-
-	if (citrusleaf_info_host_limit(sa_in, "replicas-read\nreplicas-write", &replicas->values, timeout_ms, false, 2000000) != 0) {
-		return -1;
-	}
-
-	char* p = replicas->values;
-	char* name;
-	char* value;
-
-	while ((p = get_name_value(p, &name, &value)) != 0) {
-		if (strcmp(name, "replicas-write") == 0) {
-			replicas->write_replicas = value;
-		}
-		else if (strcmp(name, "replicas-read") == 0) {
-			replicas->read_replicas = value;
-		}
-		else {
-			cf_warn("Invalid replicas name %s", name);
-		}
-	}
-	return 0;
+	return citrusleaf_info_host_limit(sa_in, "partition-generation\nreplicas-master\nreplicas-prole\n",
+			&replicas->values, timeout_ms, false, 2000000);
 }
 
 void

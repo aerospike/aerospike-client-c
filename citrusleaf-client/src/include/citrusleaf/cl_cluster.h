@@ -30,18 +30,17 @@
 #ifndef __CL_C_H__
 #define __CL_C_H__
 
-#define NODE_DUN_THRESHOLD	800
-#define NODE_DUN_INFO_ERR	300
-#define NODE_DUN_NAME_CHG	801
-#define NODE_DUN_NET_ERR	50
-#define NODE_DUN_TIMEOUT	1
+#define MAX_INTERVALS_ABSENT 1
 
 typedef struct cl_cluster_node_s {
 	
 	char		name[NODE_NAME_SIZE];
 	
-	cf_atomic32	dun_score;	// keep track of how "unhealthy" a node is
-	bool 		dunned;		// had a problem. Will get deleted next pass through.
+	// How many tend periods this node has been out of partitions map.
+	uint32_t	intervals_absent;
+
+	// How many tend periods this node has been unreachable (for XDR only).
+	cf_atomic32	intervals_unreachable;
 	
 	// A vector of sockaddr_in which the host is currently known by
 	cf_vector		sockaddr_in_v;
@@ -56,18 +55,19 @@ typedef struct cl_cluster_node_s {
 	int		asyncfd;
 	cf_queue	*asyncwork_q;
 	
-	pthread_mutex_t LOCK;
-	
 } cl_cluster_node;
 
-#define MAX_REPLICA_COUNT 5
-
 typedef struct cl_partition_s {
-	cl_cluster_node	*write;
-	int n_read;
-	cl_cluster_node *read[MAX_REPLICA_COUNT];
-} cl_partition;
+	// Mutex to cover master/prole transitions for this partition.
+	pthread_mutex_t			lock;
 
+	// Which node, if any, is the master.
+	cl_cluster_node*		master;
+
+	// Which node, if any, is the prole.
+	// TODO - not ideal for replication factor > 2.
+	cl_cluster_node*		prole;
+} cl_partition;
 
 typedef struct cl_partition_table_s {
 	
@@ -85,7 +85,6 @@ struct cl_cluster_compression_stat_s {
     uint64_t actual_sz;        // Accumulative count. Actual size of data, compressed till now.
     uint64_t compressed_sz;    // Accumulative count. Size of data after compression.
 };
-
 
 struct cl_cluster_s {
 	// Linked list element should be first element in the structure
@@ -107,7 +106,7 @@ struct cl_cluster_s {
 	cf_vector		host_addr_map_v; //Mapping from host string to its alternate
 	
 	// list actual node objects that represent the cluster
-	uint			last_node;
+	uint32_t		last_node;
 	cf_vector		node_v;      // vector is pointer-type, host objects are ref-counted
 	
 	// information about where all the partitions are
@@ -134,10 +133,9 @@ extern cf_ll cluster_ll;
 // Cluster calls
 extern cl_cluster_node *cl_cluster_node_get_random(cl_cluster *asc);  // get node from cluster
 extern cl_cluster_node *cl_cluster_node_get(cl_cluster *asc, const char *ns, const cf_digest *d, bool write);  // get node from cluster
-extern void cl_cluster_node_release(cl_cluster_node *cn);
+extern void cl_cluster_node_release(cl_cluster_node *cn, const char *tag);
+extern void cl_cluster_node_reserve(cl_cluster_node *cn, const char *tag);
 extern void cl_cluster_node_put(cl_cluster_node *cn);          // put node back
-extern void cl_cluster_node_dun(cl_cluster_node *cn, int32_t score);			// node is less healthy!
-extern void cl_cluster_node_ok(cl_cluster_node *cn);
 extern int cl_cluster_node_fd_get(cl_cluster_node *cn, bool asyncfd, bool nbconnect);	// get an FD to the node
 extern void cl_cluster_node_fd_put(cl_cluster_node *cn, int fd, bool asyncfd); 		// put the FD back
 extern int citrusleaf_cluster_init();
@@ -151,10 +149,10 @@ extern int citrusleaf_info_parse_single(char *values, char **value);
 
 // Partition table calls
 // --- all these assume the partition lock is held
-extern void cl_partition_table_remove_node( cl_cluster *asc, cl_cluster_node *node );
 extern void cl_partition_table_destroy_all(cl_cluster *asc);
-extern void cl_partition_table_set( cl_cluster *asc, cl_cluster_node *node, char *ns, cl_partition_id pid, bool write);
-extern cl_cluster_node *cl_partition_table_get( cl_cluster *asc, char *ns, cl_partition_id pid, bool write);
+extern bool cl_partition_table_is_node_present(cl_cluster* asc, cl_cluster_node* node);
+extern void cl_partition_table_update(cl_cluster* asc, cl_cluster_node* node, const char* ns, bool* masters, bool* proles);
+extern cl_cluster_node* cl_partition_table_get(cl_cluster* asc, const char* ns, cl_partition_id pid, bool write);
 
 #endif
 

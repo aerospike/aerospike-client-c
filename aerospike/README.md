@@ -6,12 +6,24 @@
 
 libc and openssl packages must be installed to compile the client library.
 
+### Debian-based Distributions
+
 For Debian-based distributions (Debian, Ubuntu, etc.):
 
 	$ sudo apt-get install libc6-dev libssl-dev liblua5.1-dev autoconf automake libtool g++
+	$ export CPATH=$CPATH:/usr/include/lua5.1
+
+For Debian:
+
+	$ sudo ln -s /usr/lib/liblua5.1.so /usr/lib/liblua.so
+	$ sudo ln -s /usr/lib/liblua5.1.a /usr/lib/liblua.a
+
+For Ubuntu:
+
 	$ sudo ln -s /usr/lib/x86_64-linux-gnu/liblua5.1.so /usr/lib/liblua.so
 	$ sudo ln -s /usr/lib/x86_64-linux-gnu/liblua5.1.a /usr/lib/liblua.a
-	$ export CPATH=$CPATH:/usr/include/lua5.1
+
+### Redhat-based Distributions
 
 For Redhat-based distributions (RHEL, CentOS, etc.):
 

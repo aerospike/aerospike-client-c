@@ -1,5 +1,9 @@
 # RELEASE NOTES
 
+### Release 3.0.33
+
+* Ported updated INFO protocol.
+
 ### Release 3.0.32
 
 * Fixed file descriptor leaks in batch and scan.

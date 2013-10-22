@@ -42,7 +42,6 @@
 #include "internal.h"
 
 
-#define INFO_TIMEOUT_MS 300
 extern int g_cl_turn_debug_on;
 
 static char * citrusleaf_secondary_index_fold_args(as_list * arglist) {

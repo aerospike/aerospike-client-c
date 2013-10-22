@@ -38,6 +38,7 @@
 #include <citrusleaf/cf_client_rc.h>
 #include <citrusleaf/cf_proto.h>
 #include <citrusleaf/cf_queue.h>
+#include <citrusleaf/cf_socket.h>
 #include <citrusleaf/cf_vector.h>
 
 #include <citrusleaf/as_scan.h>
@@ -414,11 +415,11 @@ cl_cluster_node_create(char *name, struct sockaddr_in *sa_in)
 	
 	cn->conn_q = cf_queue_create( sizeof(int), true );
 	cn->conn_q_asyncfd = cf_queue_create( sizeof(int), true );
-
-	cn->asyncfd = -1;
 	cn->asyncwork_q = cf_queue_create(sizeof(cl_async_work *), true);
 	
 	cn->partition_generation = 0xFFFFFFFF;
+
+	cn->info_fd = -1;
 
 	return(cn);
 }
@@ -469,15 +470,13 @@ cl_cluster_node_release(cl_cluster_node *cn, const char *tag)
 			shash_reduce_delete(g_cl_async_hashtab, cl_del_node_asyncworkitems, cn);
 		}
 
-		//Now that all the workitems are released the FD can be closed
-		if (cn->asyncfd != -1) {
-			close(cn->asyncfd);
-			cn->asyncfd = -1;
-		}
-
 		cf_queue_destroy(cn->conn_q);
 		cf_queue_destroy(cn->conn_q_asyncfd);
 		cf_queue_destroy(cn->asyncwork_q);
+
+		if (cn->info_fd != -1) {
+			close(cn->info_fd);
+		}
 
 		cf_client_rc_free(cn);
 	}
@@ -1057,90 +1056,227 @@ cl_cluster_node_parse_replicas(cl_cluster* asc, cl_cluster_node* cn, char* rbuf)
 	cf_vector_destroy(&prole_maps_v);
 }
 
+// Equivalent to node_info_req_parse_check() in libevent client.
+bool
+cl_cluster_node_parse_check(cl_cluster* asc, cl_cluster_node* cn, char* rbuf,
+		cf_vector* services_v)
+{
+	bool update_partitions = false;
+
+	// Returned list format is name1\tvalue1\nname2\tvalue2\n...
+	cf_vector_define(lines_v, sizeof(void*), 0);
+	str_split('\n', rbuf, &lines_v);
+
+	for (uint32_t j = 0; j < cf_vector_size(&lines_v); j++) {
+		char* line = cf_vector_pointer_get(&lines_v, j);
+
+		cf_vector_define(pair_v, sizeof(void*), 0);
+		str_split('\t', line, &pair_v);
+
+		if (cf_vector_size(&pair_v) != 2) {
+			// Will happen if a requested field is returned empty.
+			cf_vector_destroy(&pair_v);
+			continue;
+		}
+
+		char* name = (char*)cf_vector_pointer_get(&pair_v, 0);
+		char* value = (char*)cf_vector_pointer_get(&pair_v, 1);
+
+		if (strcmp(name, "node") == 0) {
+			if (strcmp(value, cn->name) != 0) {
+				cf_warn("node name changed from %s to %s", cn->name, value);
+				cf_vector_destroy(&pair_v);
+				cf_vector_destroy(&lines_v);
+				return false;
+			}
+		}
+		else if (strcmp(name, "partition-generation") == 0) {
+			if (cn->partition_generation != (uint32_t)atoi(value)) {
+				update_partitions = true;
+			}
+		}
+		else if (strcmp(name, "services") == 0) {
+			cluster_services_parse(asc, value, services_v);
+		}
+		else {
+			cf_warn("node %s info check did not request %s", cn->name, name);
+		}
+
+		cf_vector_destroy(&pair_v);
+	}
+
+	cf_vector_destroy(&lines_v);
+
+	return update_partitions;
+}
+
+bool
+cl_cluster_node_prep_info_fd(cl_cluster_node* cn)
+{
+	if (cn->info_fd != -1) {
+		// Socket was left open. We don't check it (should we?) so try use it.
+		return true;
+	}
+
+	// Try to open a new socket.
+
+	// We better have a sockaddr.
+	if (cf_vector_size(&cn->sockaddr_in_v) == 0) {
+		cf_warn("node %s has no sockaddrs", cn->name);
+		return false;
+	}
+
+	// Loop over sockaddrs until we successfully start a connection.
+	for (uint32_t i = 0; i < cf_vector_size(&cn->sockaddr_in_v); i++) {
+		struct sockaddr_in* sa_in = cf_vector_getp(&cn->sockaddr_in_v, i);
+
+		cn->info_fd = cf_socket_create_and_connect_nb(sa_in);
+
+		if (cn->info_fd != -1) {
+			// Connection started ok - we have our info socket.
+			return true;
+		}
+	}
+
+	return false;
+}
+
+void
+cl_cluster_node_close_info_fd(cl_cluster_node* cn)
+{
+	shutdown(cn->info_fd, SHUT_RDWR);
+	close(cn->info_fd);
+	cn->info_fd = -1;
+}
+
+// Replicas take ~2K per namespace, so this will cover most deployments:
+#define INFO_STACK_BUF_SIZE (16 * 1024)
+
+uint8_t*
+cl_cluster_node_get_info(cl_cluster_node* cn, const char* names,
+		size_t names_len, int timeout_ms, uint8_t* stack_buf)
+{
+	// If we can't get a live socket, we're not getting very far.
+	if (! cl_cluster_node_prep_info_fd(cn)) {
+		cf_info("node %s failed info socket connection", cn->name);
+		return NULL;
+	}
+
+	// Prepare the write request buffer.
+	size_t write_size = sizeof(cl_proto) + names_len;
+	cl_proto* proto = (cl_proto*)stack_buf;
+
+	proto->sz = names_len;
+	proto->version = CL_PROTO_VERSION;
+	proto->type = CL_PROTO_TYPE_INFO;
+	cl_proto_swap(proto);
+
+	memcpy((void*)(stack_buf + sizeof(cl_proto)), (const void*)names, names_len);
+
+	// Write the request. Note that timeout_ms is never 0.
+	if (cf_socket_write_timeout(cn->info_fd, stack_buf, write_size, 0, timeout_ms) != 0) {
+		cf_debug("node %s failed info socket write", cn->name);
+		cl_cluster_node_close_info_fd(cn);
+		return NULL;
+	}
+
+	// Reuse the buffer, read the response - first 8 bytes contains body size.
+	if (cf_socket_read_timeout(cn->info_fd, stack_buf, sizeof(cl_proto), 0, timeout_ms) != 0) {
+		cf_debug("node %s failed info socket read header", cn->name);
+		cl_cluster_node_close_info_fd(cn);
+		return NULL;
+	}
+
+	proto = (cl_proto*)stack_buf;
+	cl_proto_swap(proto);
+
+	// Sanity check body size.
+	if (proto->sz == 0 || proto->sz > 512 * 1024) {
+		cf_info("node %s bad info response size %lu", cn->name, proto->sz);
+		cl_cluster_node_close_info_fd(cn);
+		return NULL;
+	}
+
+	// Allocate a buffer if the response is bigger than the stack buffer -
+	// caller must free it if this call succeeds.
+	size_t rbuf_size = proto->sz + 1;
+	uint8_t* rbuf = rbuf_size > INFO_STACK_BUF_SIZE ? (uint8_t*)malloc(rbuf_size) : stack_buf;
+
+	if (! rbuf) {
+		cf_error("node %s failed allocation for info response", cn->name);
+		cl_cluster_node_close_info_fd(cn);
+		return NULL;
+	}
+
+	// Read the response body.
+	if (cf_socket_read_timeout(cn->info_fd, rbuf, proto->sz, 0, timeout_ms) != 0) {
+		cf_debug("node %s failed info socket read body", cn->name);
+		cl_cluster_node_close_info_fd(cn);
+
+		if (rbuf != stack_buf) {
+			free(rbuf);
+		}
+
+		return NULL;
+	}
+
+	// Null-terminate the response body and return it.
+	rbuf[rbuf_size] = 0;
+
+	return rbuf;
+}
+
 //
 // Ping a given node. Make sure it's node name is still its node name.
 // See if there's been a re-vote of the cluster.
 // Grab the services and insert them into the services vector.
 // Try all known addresses of this node, too
 
+const char INFO_STR_CHECK[] = "node\npartition-generation\nservices\n";
+const char INFO_STR_GET_REPLICAS[] = "partition-generation\nreplicas-master\nreplicas-prole\n";
+
 static void
 cluster_ping_node(cl_cluster *asc, cl_cluster_node *cn, cf_vector *services_v)
 {
-	bool update_partitions = false;
+#ifdef DEBUG
+	cf_debug("cluster ping node: %s", cn->name);
+#endif
 
-#ifdef DEBUG	
-	cf_debug("cluster ping node: %s",cn->name);
-#endif	
-	
-	// for all elements in the sockaddr_in list - ping and add hosts, if not
-	// already extant
-	for (uint i=0;i<cf_vector_size(&cn->sockaddr_in_v);i++) {
-		struct sockaddr_in *sa_in = cf_vector_getp(&cn->sockaddr_in_v, i);
-		
-		char *values = 0;
-		if (0 != citrusleaf_info_host_limit(sa_in, "node\npartition-generation\nservices\n",
-				&values, asc->info_timeout, false, 10000, /* check bounds */ true)) {
-			// todo: this address is no longer right for this node, update the node's list
-			// and if there's no addresses left, dun node
-			cf_debug("Info request failed for %s", cn->name);
-			continue;
-		}
+	uint8_t stack_buf[INFO_STACK_BUF_SIZE];
+	uint8_t* rbuf = cl_cluster_node_get_info(cn, INFO_STR_CHECK,
+			sizeof(INFO_STR_CHECK) - 1, asc->info_timeout, stack_buf);
 
-		// reminder: returned list is name1\tvalue1\nname2\tvalue2\n
-		cf_vector_define(lines_v, sizeof(void *), 0);
-		str_split('\n',values,&lines_v);
-		for (uint j=0;j<cf_vector_size(&lines_v);j++) {
-			char *line = cf_vector_pointer_get(&lines_v, j);
-			cf_vector_define(pair_v, sizeof(void *), 0);
-			str_split('\t',line, &pair_v);
-			
-			if (cf_vector_size(&pair_v) == 2) {
-				char *name = cf_vector_pointer_get(&pair_v,0);
-				char *value = cf_vector_pointer_get(&pair_v,1);
-				
-				if ( strcmp(name, "node") == 0) {
-					
-					if (strcmp(value, cn->name) != 0) {
-						// node name has changed. Dun is easy, would be better to remove the address
-						// from the list of addresses for this node, and only dun if there
-						// are no addresses left
-						cf_info("node name has changed!");
-					}
-				}
-				else if (strcmp(name, "partition-generation") == 0) {
-					if (cn->partition_generation != (uint32_t) atoi(value)) {
-						update_partitions = true;				
-					}
-				}
-				else if (strcmp(name, "services")==0) {
-					cluster_services_parse(asc, value, services_v);
-				}
-			}
-			cf_vector_destroy(&pair_v);
-		}
-		cf_vector_destroy(&lines_v);
-		free(values);
+	if (! rbuf) {
+		cf_debug("node %s failed info check", cn->name);
+		return;
 	}
 
-	if (update_partitions) {
-		// cf_debug("node %s: partitions have changed, need update", cn->name);
+	bool update_partitions =
+			cl_cluster_node_parse_check(asc, cn, (char*)rbuf, services_v);
 
-		for (uint i=0;i<cf_vector_size(&cn->sockaddr_in_v);i++) {
-			struct sockaddr_in *sa_in = cf_vector_getp(&cn->sockaddr_in_v, i);
-			char *values = 0;
+	if (rbuf != stack_buf) {
+		free(rbuf);
+	}
 
-			if (0 != citrusleaf_info_host_limit(sa_in, "partition-generation\nreplicas-master\nreplicas-prole\n",
-					&values, asc->info_timeout, false, 2000000, /*check bounds */ true)) {
-				continue;
-			}
+	if (! update_partitions) {
+		// Partitions haven't changed - we don't need to fetch replicas.
+		return;
+	}
 
-			if (values) {
-				cl_cluster_node_parse_replicas(asc, cn, values);
-				free(values);
-			}
+//	cf_debug("node %s: partitions have changed, need update", cn->name);
 
-			break;
-		}
+	rbuf = cl_cluster_node_get_info(cn, INFO_STR_GET_REPLICAS,
+			sizeof(INFO_STR_GET_REPLICAS) - 1, asc->info_timeout, stack_buf);
+
+	if (! rbuf) {
+		cf_debug("node %s failed info get replicas", cn->name);
+		return;
+	}
+
+	cl_cluster_node_parse_replicas(asc, cn, (char*)rbuf);
+
+	if (rbuf != stack_buf) {
+		free(rbuf);
 	}
 }
 
@@ -1314,7 +1450,12 @@ cluster_tend(cl_cluster *asc)
 void
 citrusleaf_cluster_change_info_timeout(cl_cluster *asc, int msecs)
 {
-    asc->info_timeout = msecs;
+	if (msecs <= 0) {
+		cf_warn("can't use info timeout of %d - leaving %d ms", msecs, asc->info_timeout);
+		return;
+	}
+
+	asc->info_timeout = msecs;
 }
 
 void 

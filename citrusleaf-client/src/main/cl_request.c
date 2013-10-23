@@ -80,27 +80,6 @@ cl_strncpy(char* trg, const char* src, int len)
 }
 
 int
-cl_get_node_info(const char* node_name, struct sockaddr_in* sa_in, cl_node_info* node_info, int timeout_ms)
-{
-	if (g_shared_memory) {
-		cl_shm_ninfo* shared = cl_shm_find_node_from_name(node_name);
-
-		if (shared) {
-			// cf_debug("Use shared memory for node info.");
-			cl_shm_node_lock(shared);
-			cl_strncpy(node_info->node_name, shared->node_name, NODE_NAME_SIZE);
-			node_info->partition_generation = shared->partition_generation;
-			node_info->values = strdup(shared->services);
-			node_info->services = node_info->values;
-			cl_shm_node_unlock(shared);
-			return 0;
-		}
-	}
-	// cf_debug("Issue request for node info.");
-	return cl_request_node_info(sa_in, node_info, timeout_ms);
-}
-
-int
 cl_request_node_info(struct sockaddr_in* sa_in, cl_node_info* node_info, int timeout_ms)
 {
 	node_info->node_name[0] = 0;
@@ -139,29 +118,6 @@ cl_node_info_free(cl_node_info* node_info)
 	if (node_info->values) {
 		free(node_info->values);
 	}
-}
-
-int
-cl_get_replicas(const char* node_name, struct sockaddr_in* sa_in, cl_replicas* replicas, int timeout_ms)
-{
-	if (g_shared_memory) {
-		cl_shm_ninfo* shared = cl_shm_find_node_from_name(node_name);
-
-		if (shared) {
-			// cf_debug("Use shared memory for replicas.");
-			cl_shm_node_lock(shared);
-
-			int len = strlen(shared->replicas);
-			replicas->values = (char*)malloc(len + 1);
-			memcpy(replicas->values, shared->replicas, len);
-			replicas->values[len] = 0;
-
-			cl_shm_node_unlock(shared);
-			return 0;
-		}
-	}
-	// cf_debug("Request replicas from server.");
-	return cl_request_replicas(sa_in, replicas, timeout_ms);
 }
 
 int

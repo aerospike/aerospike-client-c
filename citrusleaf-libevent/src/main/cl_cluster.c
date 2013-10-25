@@ -696,7 +696,13 @@ node_info_req_cancel(cl_cluster_node* cn)
 {
 	if (cn->info_req.type != INFO_REQ_NONE) {
 		event_del(cluster_node_get_info_event(cn));
-		node_info_req_fail(cn, false);
+		node_info_req_free(&cn->info_req);
+	}
+
+	if (cn->info_fd != -1) {
+		cf_close(cn->info_fd);
+		cn->info_fd = -1;
+		cf_atomic32_decr(&cn->n_fds_open);
 	}
 }
 

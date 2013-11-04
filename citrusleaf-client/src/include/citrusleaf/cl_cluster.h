@@ -51,10 +51,11 @@ typedef struct cl_cluster_node_s {
 	// pool of current, cached FDs
 	cf_queue	*conn_q;
 	cf_queue	*conn_q_asyncfd;	// FDs for async command execution
-
-	int		asyncfd;
 	cf_queue	*asyncwork_q;
-	
+
+	// Socket for internal info transactions on this node.
+	int			info_fd;
+
 } cl_cluster_node;
 
 typedef struct cl_partition_s {

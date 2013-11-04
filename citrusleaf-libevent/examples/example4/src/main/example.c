@@ -651,9 +651,6 @@ trigger_cb(int fd, short event, void* pv_udata)
 
 			// Done with insertion phase on this base, start mixed phase.
 			g_bases[b].trigger_phase = MIXED;
-			g_bases[b].stats.puts = 0;
-			g_bases[b].stats.puts_throttled = 0;
-			g_bases[b].stats.put_timeouts = 0;
 		}
 	}
 	// Continue mixed (read or write) phase until user stops run.

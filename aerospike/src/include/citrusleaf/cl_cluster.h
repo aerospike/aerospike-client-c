@@ -55,8 +55,8 @@ struct cl_cluster_node_s {
 	uint32_t		partition_generation;	// the server's generation count for all its partition management
 	cf_queue*		conn_q;					// pool of current, cached FDs
 	cf_queue*		conn_q_asyncfd;			// FDs for async command execution
-	int				asyncfd;
 	cf_queue*		asyncwork_q;
+	int				info_fd;				// socket for internal info transactions on this node
 };
 
 //Structure to hold information about compression.

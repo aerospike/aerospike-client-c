@@ -2,6 +2,35 @@
 
 This directory contains a collection of examples of using the Aerospike client.
 
+## Prerequisites
+
+libc and openssl packages must be installed to compile the client library.
+
+### Debian-based Distributions
+
+For Debian-based distributions (Debian, Ubuntu, etc.):
+
+	$ sudo apt-get install libc6-dev libssl-dev liblua5.1-dev autoconf automake libtool g++
+	$ export CPATH=$CPATH:/usr/include/lua5.1
+
+For Debian:
+
+	$ sudo ln -s /usr/lib/liblua5.1.so /usr/lib/liblua.so
+	$ sudo ln -s /usr/lib/liblua5.1.a /usr/lib/liblua.a
+
+For Ubuntu:
+
+	$ sudo ln -s /usr/lib/x86_64-linux-gnu/liblua5.1.so /usr/lib/liblua.so
+	$ sudo ln -s /usr/lib/x86_64-linux-gnu/liblua5.1.a /usr/lib/liblua.a
+
+### Redhat-based Distributions
+
+For Redhat-based distributions (RHEL, CentOS, etc.):
+
+	$ sudo yum install openssl-devel glibc-devel lua-devel autoconf automake libtool
+
+Installation of these packages will also install gcc. gcc -version must show a version of 4.1 or better. g++ is also supported with the same version restriction.
+
 ## Build
 
 To build all examples:
@@ -23,9 +52,8 @@ To run a specific example:
 	$ make -C {example} run
 
 
-############################################################
 # Summary of Examples
-#
+
 
 The examples are intended to demonstrate client API usage. They do not
 exhaustively cover all features. Each example focuses on a particular API call
@@ -33,25 +61,24 @@ or set of calls, although all use helper functions (in example_utils and
 sometimes local functions) that use other API calls. Some API calls are used
 only in example_utils:
 
-aerospike_connect()
-aerospike_destroy()
-aerospike_udf_put()
-aerospike_udf_remove()
-... and usage of as_record_iterator
+	aerospike_connect()
+	aerospike_destroy()
+	aerospike_udf_put()
+	aerospike_udf_remove()
+... and usage of as_record_iterator.
 
 All examples clean up after themselves, leaving the database as they found it.
 
 
-##################################################
-# Basic Examples
-#
+## Basic Examples
+
 
 These examples each use a single record to demonstrate particular API calls.
 
 
-# append
+### append
 
-aerospike_key_operate()
+	aerospike_key_operate()
 
 This example demonstrates aerospike_key_operate() for append and prepend
 operations. It demonstrates that such operations create a record or bin that did
@@ -61,10 +88,10 @@ and "raw bytes" to raw byte values, otherwise the operation will return error
 code AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE.
 
 
-# expire
+### expire
 
-aerospike_key_put()
-aerospike_key_exists()
+	aerospike_key_put()
+	aerospike_key_exists()
 
 This example demonstrates writing a record to the database with its TTL (time to
 live) value set. It uses aerospike_key_put() to write the record and then
@@ -72,10 +99,10 @@ aerospike_key_exists() to verify first that the record was written to the
 database and then after waiting past the TTL, that the record expired.
 
 
-# generation
+### generation
 
-aerospike_key_put()
-aerospike_key_get()
+	aerospike_key_put()
+	aerospike_key_get()
 
 This example demonstrates writing a record to the database using non-default
 generation policies. It writes (creates) a record, reads the record back noting
@@ -86,11 +113,11 @@ written once more to demonstrate policy requiring that the specified generation
 is greater than that of the record in the database.
 
 
-# get
+### get
 
-aerospike_key_get()
-aerospike_key_select()
-aerospike_key_put()
+	aerospike_key_get()
+	aerospike_key_select()
+	aerospike_key_put()
 
 This example demonstrates reading a record from the database using both
 aerospike_key_get() to retrieve the whole record, and aerospike_key_select() to
@@ -99,9 +126,9 @@ returned if the record does not exist. It also shows a bin with null value is
 returned if a non-existent bin is retrieved via aerospike_key_select().
 
 
-# incr
+### incr
 
-aerospike_key_operate()
+	aerospike_key_operate()
 
 This example demonstrates aerospike_key_operate() for arithmetic operations. It
 demonstrates that such operations create a record or bin that did not previously
@@ -112,14 +139,14 @@ combination of arithmetic and read operations in the same transaction, in order
 to perform an atomic arithmetic operation.
 
 
-# lset (3.0 feature)
+### lset (3.0 feature)
 
-aerospike_lset_add()
-aerospike_lset_addall()
-aerospike_lset_size()
-aerospike_lset_filter()
-aerospike_lset_exists()
-aerospike_lset_destroy()
+	aerospike_lset_add()
+	aerospike_lset_addall()
+	aerospike_lset_size()
+	aerospike_lset_filter()
+	aerospike_lset_exists()
+	aerospike_lset_destroy()
 
 This example demonstrates manipulation of a "large set" record bin. It shows how
 to add values using aerospike_lset_add() and aerospike_lset_addall(), how to get
@@ -129,15 +156,15 @@ to return all the values using aerospike_lset_filter(), and how to remove an
 entire lset using aerospike_lset_destroy().
 
 
-# lstack (3.0 feature)
+### lstack (3.0 feature)
 
-aerospike_lstack_push()
-aerospike_lstack_pushall()
-aerospike_lstack_size()
-aerospike_lstack_peek()
-aerospike_lstack_set_capacity()
-aerospike_lstack_get_capacity()
-aerospike_lstack_destroy()
+	aerospike_lstack_push()
+	aerospike_lstack_pushall()
+	aerospike_lstack_size()
+	aerospike_lstack_peek()
+	aerospike_lstack_set_capacity()
+	aerospike_lstack_get_capacity()
+	aerospike_lstack_destroy()
 
 This example demonstrates manipulation of a "large stack" record bin. It shows
 how to push values using aerospike_lstack_push() and aerospike_lstack_pushall(),
@@ -148,10 +175,10 @@ aerospike_lstack_get_capacity(), and how to remove an entire lstack using
 aerospike_lstack_destroy().
 
 
-# put
+### put
 
-aerospike_key_put()
-aerospike_key_remove()
+	aerospike_key_put()
+	aerospike_key_remove()
 
 This example demonstrates writing a record to the database using
 aerospike_key_put(). It shows that bins are written independently, and that bin
@@ -161,10 +188,10 @@ AEROSPIKE_ERR_RECORD_EXISTS is returned if the record exists. It then uses
 aerospike_key_remove() to delete the record, then shows the next create succeed.
 
 
-# touch
+### touch
 
-aerospike_key_operate()
-aerospike_key_put()
+	aerospike_key_operate()
+	aerospike_key_put()
 
 This example writes a record to the database with its TTL set, and reads it back
 to show the TTL. It then demonstrates aerospike_key_operate() with a touch
@@ -172,10 +199,10 @@ operation, to reset the TTL to a different value. Finally it reads the record
 again to show that the TTL value was updated.
 
 
-# udf (3.0 feature)
+### udf (3.0 feature)
 
-aerospike_key_apply()
-aerospike_key_put()
+	aerospike_key_apply()
+	aerospike_key_put()
 
 This example demonstrates the application of UDFs (user defined functions) to a
 record in the database. It registers a UDF package and writes a record in the
@@ -187,17 +214,15 @@ bin values, and return the integer result. It again reads the record back to
 show the effect.
 
 
-##################################################
-# Batch Examples
-#
+## Batch Examples
 
 These examples each use multiple records to demonstrate particular API calls.
 
 
-# get
+### get
 
-aerospike_batch_exists()
-aerospike_batch_get()
+	aerospike_batch_exists()
+	aerospike_batch_get()
 
 This example uses aerospike_batch_exists() to check whether a bunch of records
 written to the database exist, and get their metadata (generation and TTL). It
@@ -207,19 +232,18 @@ calls report the deleted records as not found, while returning all the remaining
 records as before.
 
 
-##################################################
-# Query Examples
-#
+## Query Examples
+
 
 These examples each use multiple records to demonstrate particular API calls.
 
 
-# aggregate (3.0 feature)
+### aggregate (3.0 feature)
 
-aerospike_index_integer_create()
-as_query_where()
-as_query_apply()
-aerospike_query_foreach()
+	aerospike_index_integer_create()
+	as_query_where()
+	as_query_apply()
+	aerospike_query_foreach()
 
 This example uses aerospike_index_integer_create() to create a numeric secondary
 index for a particular bin name, then using aerospike_query_foreach() it
@@ -237,11 +261,11 @@ show a case where the aggregation process and the value returned involve a more
 complex object - a Map - rather than a simple integer.
 
 
-# simple (3.0 feature)
+### simple (3.0 feature)
 
-aerospike_index_integer_create()
-as_query_where()
-aerospike_query_foreach()
+	aerospike_index_integer_create()
+	as_query_where()
+	aerospike_query_foreach()
 
 This example uses aerospike_index_integer_create() to create a numeric secondary
 index for a particular bin name, then using aerospike_query_foreach() it
@@ -250,18 +274,18 @@ demonstrates a simple query which finds all records satisfying a 'where' clause
 such record, in this case a single record.
 
 
-##################################################
-# Scan Examples
-#
+
+## Scan Examples
+
 
 These examples each use multiple records to demonstrate particular API calls.
 
 
-# background (3.0 feature)
+### background (3.0 feature)
 
-as_scan_apply_each()
-aerospike_scan_background()
-aerospike_scan_info()
+	as_scan_apply_each()
+	aerospike_scan_background()
+	aerospike_scan_info()
 
 This example uses aerospike_scan_background() to start a background scan of the
 database, which applies a UDF that performs a simple arithmetic operation on a
@@ -270,9 +294,9 @@ detect when the scan is complete. Finally, it reads back all the records to show
 the effect of the scan.
 
 
-# standard
+### standard
 
-aerospike_scan_foreach()
+	aerospike_scan_foreach()
 
 This example uses aerospike_scan_background() to do a standard foreground scan
 of the database, where a callback is made for each record found.

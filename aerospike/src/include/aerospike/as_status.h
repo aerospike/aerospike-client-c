@@ -119,6 +119,12 @@ typedef enum as_status_e {
 	 */
 	AEROSPIKE_ERR_CLUSTER_CHANGE			= 504,
 
+	/**
+	 *	Sometimes our doc, or our customers wishes, get ahead of us.  We may have
+	 *	processed something that the server is not ready for (unsupported feature).
+	 */
+	AEROSPIKE_ERR_UNSUPPORTED_FEATURE		= 505,
+
 	/***************************************************************************
 	 *	RECORD-SPECIFIC
 	 **************************************************************************/

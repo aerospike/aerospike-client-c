@@ -60,10 +60,13 @@
 
 typedef struct cl_conn_s cl_conn;
 
+// These numbers match with proto.h on the server (AS_PROTO_RESULT_FAIL....)
+
 typedef enum cl_rv_e {
 
 	// negative = client
-	// positivie = server
+	// positive = server
+
 
     CITRUSLEAF_FAIL_ASYNCQ_FULL             = -3,
     CITRUSLEAF_FAIL_TIMEOUT                 = -2,
@@ -115,7 +118,10 @@ typedef enum cl_rv_e {
     CITRUSLEAF_FAIL_KEY_BUSY                = 14,
 
     // scan was aborted ... but why?
-    CITRUSLEAF_FAIL_SCAN_ABORT		    = 15,
+    CITRUSLEAF_FAIL_SCAN_ABORT				= 15,
+
+    // Server does not (yet) support this function
+    CITRUSLEAF_FAIL_UNSUPPORTED_FEATURE		= 16,
 
     // ???
     CITRUSLEAF_FAIL_INVALID_DATA              = 99,

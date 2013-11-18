@@ -698,6 +698,26 @@ as_policy_query * as_policy_query_init(as_policy_query * p);
 as_policy_info * as_policy_info_init(as_policy_info * p);
 
 /**
+ *	Initialize as_policy_remove to default values.
+ *
+ *	@param p	The policy to initialize
+ *	@return The initialized policy.
+ *
+ *	@relates as_policy_remove
+ */
+as_policy_remove * as_policy_remove_init(as_policy_remove * p);
+
+/**
+ *	Initialize as_policies to default values.
+ *
+ *	@param p	The policy to initialize
+ *	@return The initialized policy.
+ *
+ *	@relates as_policy_batch
+ */
+as_policy_batch * as_policy_batch_init(as_policy_batch * p);
+
+/**
  *	Initialize as_policies to default values.
  *
  *	@param p	The policies to initialize

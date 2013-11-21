@@ -282,7 +282,7 @@ citrusleaf_info(char *hostname, short port, char *names, char **values, int time
 		struct sockaddr_in  sa_in;
 		cf_vector_get(&sockaddr_in_v, i, &sa_in);
 
-		if (0 == citrusleaf_info_host(&sa_in, names, values, timeout_ms, false, /* check bounds */ true)) {
+		if (0 == citrusleaf_info_host(&sa_in, names, values, timeout_ms, true, /* check bounds */ true)) {
 			rv = 0;
 			goto Done;
 		}

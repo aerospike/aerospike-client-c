@@ -708,7 +708,7 @@ as_policy_info * as_policy_info_init(as_policy_info * p);
 as_policy_remove * as_policy_remove_init(as_policy_remove * p);
 
 /**
- *	Initialize as_policies to default values.
+ *	Initialize as_policy_batch to default values.
  *
  *	@param p	The policy to initialize
  *	@return The initialized policy.

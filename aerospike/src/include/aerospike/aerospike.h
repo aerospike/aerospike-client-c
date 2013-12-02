@@ -133,7 +133,14 @@ struct cl_cluster_s;
  *	The `err` parameter will be populated if an error while attempting to
  *	connect to the database. See as_error, for more information on error 
  *	handling.
+ * 
+ *	An aerospike object internally keeps cluster state and maintains connection pools to the cluster. 
+ *	The same aerospike object should be reused by the application for database operations 
+ *	to a given cluster. 
  *
+ *	If the application requires connecting to multiple Aerospike clusters, the application must
+ *	create multiple aerospike objects, each connecting to a different cluster.
+ * 
  *	## Disconnecting
  *
  *	When the connection to the database is not longer required, then the 
@@ -151,10 +158,6 @@ struct cl_cluster_s;
  *	~~~~~~~~~~{.c}
  *	aerospike_destroy(&as);
  *	~~~~~~~~~~
- *
- *	@note 	Currently, only a single client instance can be created in an
- *			application. In the next release, you will be able to have 
- *			multiple clients in a single application.
  *
  *	@ingroup client_objects
  */

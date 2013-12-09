@@ -254,7 +254,11 @@ typedef struct cl_msg_field_s {
 #define CL_MSG_FIELD_TYPE_GU_TID 5
 #define CL_MSG_FIELD_TYPE_DIGEST_RIPE_ARRAY 6
 #define CL_MSG_FIELD_TYPE_TRID 7
+// We are going to overload the OPTIONS field -- this will hold either SCAN
+// options or QUERY options, depending on the type of call.  THis is done with
+// the expectation that the call will have only one or the other (Nov 20, 2013 tjl)
 #define CL_MSG_FIELD_TYPE_SCAN_OPTIONS 8
+#define CL_MSG_FIELD_TYPE_QUERY_OPTIONS 8
 
 // 20-29 RESERVED FOR SECONDARY INDEX
 #define CL_MSG_FIELD_TYPE_INDEX_NAME			21
@@ -268,6 +272,19 @@ typedef struct cl_msg_field_s {
 #define CL_MSG_FIELD_TYPE_UDF_FUNCTION          31
 #define CL_MSG_FIELD_TYPE_UDF_ARGLIST           32
 #define CL_MSG_FIELD_TYPE_UDF_OP                33
+// NOTE: UDF_OP really holds "Stream" or "Record" UDF type.  And, going forward
+// from this point (Nov 21, 2013), we're going to have two fields that all will
+// treat the same.  Udf type will be (None, Record, Stream), and the Transaction
+// Call type will be Query/Scan and the Transaction ResultType will be
+// FOREGROUND or BACKGROUND  (as specified in the query/scan options).
+// Historical note:  Somehow QUERY and SCAN took different paths and started
+// using this field differently.
+// QUERY CLIENT had: None, Record, Stream
+// QUERY SERVER had: UDF, Aggregate, MR
+// SCAN  SERVER had: None, UDF, Background
+// On the wire, we put: 0=Record and 1=Stream into field 33 (above)
+#define CL_UDF_MSG_VAL_RECORD 0
+#define CL_UDF_MSG_VAL_STREAM 1
 
 // 40-49 RESERVED FOR QUERY
 #define CL_MSG_FIELD_TYPE_QUERY_BINLIST			40
@@ -277,8 +294,6 @@ typedef struct cl_msg_field_s {
 	uint8_t data[];
 } __attribute__((__packed__)) cl_msg_field;
 
-
- 
  
 typedef struct cl_msg_op_s {
 	uint32_t op_sz;
@@ -290,7 +305,6 @@ typedef struct cl_msg_op_s {
 	// there's also a value here but you can't have two variable size arrays
 } __attribute__((__packed__)) cl_msg_op;
  
-
 
 typedef struct cl_msg_key_s {
 	cl_msg_field	f;

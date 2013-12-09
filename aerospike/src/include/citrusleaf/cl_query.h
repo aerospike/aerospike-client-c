@@ -37,11 +37,12 @@
 typedef enum cl_query_op         { CL_EQ, CL_LT, CL_GT, CL_LE, CL_GE, CL_RANGE } cl_query_op;
 typedef enum cl_query_orderby_op { CL_ORDERBY_ASC, CL_ORDERBY_DESC } cl_query_orderby_op;
 
-
+// These are the types of UDF calls that go over the wire from the client to
+// the server.
 typedef enum cl_query_udf_type_s { 
-    AS_QUERY_UDF_NONE,
-    AS_QUERY_UDF_RECORD, 
-    AS_QUERY_UDF_STREAM
+    AS_UDF_CALLTYPE_NONE, // Regular UDF call, no query involved.
+    AS_UDF_CALLTYPE_RECORD, 
+    AS_UDF_CALLTYPE_STREAM
 } cl_query_udf_type;
 
 

@@ -357,7 +357,8 @@ cl_write_header(uint8_t *buf, size_t msg_sz, uint info1, uint info2, uint info3,
 // The digest will be  
 
 static uint8_t *
-write_fields(uint8_t *buf, const char *ns, int ns_len, const char *set, int set_len, const cl_object *key, const cf_digest *d, cf_digest *d_ret, 
+write_fields(uint8_t *buf, const char *ns, int ns_len, const char *set, int set_len,
+		const cl_object *key, const cf_digest *d, cf_digest *d_ret,
 	uint64_t trid, cl_scan_param_field *scan_param_field)
 {
 	

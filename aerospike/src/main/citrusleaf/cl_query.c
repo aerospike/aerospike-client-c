@@ -350,7 +350,7 @@ static int query_compile(const cl_query * query, uint8_t ** buf_r, size_t * buf_
     as_buffer argbuffer;
     as_buffer_init(&argbuffer);
 
-    if ( (query->udf.type != AS_QUERY_UDF_NONE) && (query->udf.arglist != NULL) ) {
+    if ( (query->udf.type != AS_UDF_CALLTYPE_NONE) && (query->udf.arglist != NULL) ) {
         as_serializer ser;
         as_msgpack_init(&ser);
         as_serializer_serialize(&ser, (as_val *) query->udf.arglist, &argbuffer);
@@ -420,7 +420,7 @@ static int query_compile(const cl_query * query, uint8_t ** buf_r, size_t * buf_
         // TODO filter field
         // TODO orderby field
         // TODO limit field
-        if ( query->udf.type != AS_QUERY_UDF_NONE ) {
+        if ( query->udf.type != AS_UDF_CALLTYPE_NONE ) {
             // as_call *udf = (as_call *)query->udf;
             msg_sz += sizeof(cl_msg_field) + strlen(query->udf.filename);
             msg_sz += sizeof(cl_msg_field) + strlen(query->udf.function);
@@ -511,15 +511,15 @@ static int query_compile(const cl_query * query, uint8_t ** buf_r, size_t * buf_
         mf = mf_tmp;
     }
 
-    if ( query->udf.type != AS_QUERY_UDF_NONE ) {
+    if ( query->udf.type != AS_UDF_CALLTYPE_NONE ) {
         mf->type = CL_MSG_FIELD_TYPE_UDF_OP;
         mf->field_sz =  1 + 1;
         switch ( query->udf.type ) {
-            case AS_QUERY_UDF_RECORD:
-                *mf->data = 0;
+            case AS_UDF_CALLTYPE_RECORD:
+                *mf->data = CL_UDF_MSG_VAL_RECORD;
                 break;
-            case AS_QUERY_UDF_STREAM:
-                *mf->data = 1;
+            case AS_UDF_CALLTYPE_STREAM:
+                *mf->data = CL_UDF_MSG_VAL_STREAM;
                 break;
             default:
                 // should never happen!
@@ -1062,7 +1062,7 @@ static cl_rv cl_query_udf_init(cl_query_udf * udf, cl_query_udf_type type, const
 
 static cl_rv cl_query_udf_destroy(cl_query_udf * udf) {
 
-    udf->type = AS_QUERY_UDF_NONE;
+    udf->type = AS_UDF_CALLTYPE_NONE;
 
     if ( udf->filename ) {
         free(udf->filename);
@@ -1287,7 +1287,7 @@ cl_query * cl_query_init(cl_query * query, const char * ns, const char * setname
     query->setname = setname == NULL ? NULL : strdup(setname);
     query->ns = ns == NULL ? NULL : strdup(ns);
 
-    cl_query_udf_init(&query->udf, AS_QUERY_UDF_NONE, NULL, NULL, NULL);
+    cl_query_udf_init(&query->udf, AS_UDF_CALLTYPE_NONE, NULL, NULL, NULL);
 
     return query;
 }
@@ -1376,11 +1376,11 @@ cl_rv cl_query_orderby(cl_query *query, const char *binname, cl_query_orderby_op
 }
 
 cl_rv cl_query_aggregate(cl_query * query, const char * filename, const char * function, as_list * arglist) {
-    return cl_query_udf_init(&query->udf, AS_QUERY_UDF_STREAM, filename, function, arglist);
+    return cl_query_udf_init(&query->udf, AS_UDF_CALLTYPE_STREAM, filename, function, arglist);
 }
 
 cl_rv cl_query_foreach(cl_query * query, const char * filename, const char * function, as_list * arglist) {
-    return cl_query_udf_init(&query->udf, AS_QUERY_UDF_RECORD, filename, function, arglist);
+    return cl_query_udf_init(&query->udf, AS_UDF_CALLTYPE_RECORD, filename, function, arglist);
 }
 
 cl_rv cl_query_limit(cl_query *query, uint64_t limit) {
@@ -1412,7 +1412,7 @@ cl_rv citrusleaf_query_foreach(cl_cluster * cluster, const cl_query * query, voi
         .callback   = foreach
     };
 
-    if ( query->udf.type == AS_QUERY_UDF_STREAM ) {
+    if ( query->udf.type == AS_UDF_CALLTYPE_STREAM ) {
 
         // Setup as_aerospike, so we can get log() function.
         // TODO: this should occur only once

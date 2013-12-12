@@ -91,21 +91,24 @@ main(int argc, char* argv[])
 
 	LOG("write succeeded");
 
-	bool exists;
-
+	as_record * r = NULL;
 	// Check that the record is in the database.
-	if (aerospike_key_exists(&as, &err, NULL, &g_key, &exists) !=
+	if (aerospike_key_exists(&as, &err, NULL, &g_key, &r) !=
 			AEROSPIKE_OK) {
 		LOG("aerospike_key_exists() returned %d - %s", err.code, err.message);
 		example_cleanup(&as);
 		exit(-1);
 	}
 
-	if (! exists) {
+	if ( r == NULL ) {
 		LOG("verified record is NOT in database");
 		example_cleanup(&as);
 		exit(-1);
 	}
+
+	as_record_destroy(r);
+
+	as_record *r1 = NULL;
 
 	LOG("verified record is in database");
 
@@ -114,14 +117,14 @@ main(int argc, char* argv[])
 	sleep(TEST_TTL + 1);
 
 	// Check that it's no longer in the database.
-	if (aerospike_key_exists(&as, &err, NULL, &g_key, &exists) !=
+	if (aerospike_key_exists(&as, &err, NULL, &g_key, &r1) !=
 			AEROSPIKE_OK) {
 		LOG("aerospike_key_exists() returned %d - %s", err.code, err.message);
 		example_cleanup(&as);
 		exit(-1);
 	}
 
-	if (exists) {
+	if (r1 != NULL) {
 		LOG("verified record did NOT successfully expire");
 		example_cleanup(&as);
 		exit(-1);

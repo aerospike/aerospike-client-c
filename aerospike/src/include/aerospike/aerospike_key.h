@@ -123,7 +123,7 @@ as_status aerospike_key_select(
  *	as_key_init(&key, "ns", "set", "key");
  *	
  *	bool exists = true;
- *	if ( aerospike_key_exists(&as, &err, NULL, &key, &exists) != AEROSPIKE_OK ) {
+ *	if ( aerospike_key_exists(&as, &err, NULL, &key, &rec) != AEROSPIKE_OK ) {
  *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *	}
  *	else {
@@ -144,7 +144,7 @@ as_status aerospike_key_select(
 as_status aerospike_key_exists(
 	aerospike * as, as_error * err, const as_policy_read * policy, 
 	const as_key * key, 
-	bool * exists
+	as_record ** rec	
 	);
 
 /**

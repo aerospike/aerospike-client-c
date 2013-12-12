@@ -180,14 +180,13 @@ TEST( key_basics_exists , "exists: (test,test,foo)" ) {
 	as_key key;
 	as_key_init(&key, "test", "test", "foo");
 
-	bool exists = false;
-
-	as_status rc = aerospike_key_exists(as, &err, NULL, &key, &exists);
+	as_record *r = NULL;
+	as_status rc = aerospike_key_exists(as, &err, NULL, &key, &r);
 
 	as_key_destroy(&key);
 
     assert_int_eq( rc, AEROSPIKE_OK );
-	assert_true( exists );
+	assert_not_null( r );
 }
 
 TEST( key_basics_notexists , "not exists: (test,test,foo)" ) {
@@ -198,14 +197,14 @@ TEST( key_basics_notexists , "not exists: (test,test,foo)" ) {
 	as_key key;
 	as_key_init(&key, "test", "test", "foo");
 
-	bool exists = false;
-
-	as_status rc = aerospike_key_exists(as, &err, NULL, &key, &exists);
+	
+	as_record * r1 = NULL;
+	as_status rc = aerospike_key_exists(as, &err, NULL, &key, &r1);
 
 	as_key_destroy(&key);
 
     assert_int_eq( rc, AEROSPIKE_OK );
-	assert_false( exists );
+	assert_null( r1 );
 }
 
 TEST( key_basics_remove , "remove: (test,test,foo)" ) {

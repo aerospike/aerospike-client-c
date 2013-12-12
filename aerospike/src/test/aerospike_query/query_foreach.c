@@ -164,16 +164,16 @@ TEST( query_foreach_create, "create 100 records and 4 indices" ) {
 
 		assert_int_eq( err.code, AEROSPIKE_OK);
 
+
 		as_record_destroy(&r);
 
-		bool exists = false;
+		as_record *r1 = NULL;
 
-		aerospike_key_exists(as, &err, NULL, &key, &exists);
+		aerospike_key_exists(as, &err, NULL, &key, &r1);
 
-		as_key_destroy(&key);
-		
+		as_key_destroy(&key);	
 		assert_int_eq( err.code, AEROSPIKE_OK );
-		assert_true( exists );
+		assert_not_null( r1 );
 	}
 }
 

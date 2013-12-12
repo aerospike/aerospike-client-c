@@ -219,14 +219,14 @@ as_status aerospike_key_select(
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param key			The key of the record.
- *	@param exists    	The variable to populate with `true` if the record exists, otherwise `false`.
+ *	@param record       The record to populated with metadata if record exists, otherwise NULL
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error.
  */
 as_status aerospike_key_exists(
 	aerospike * as, as_error * err, const as_policy_read * policy, 
 	const as_key * key, 
-	bool * exists) 
+	as_record ** rec) 
 {
 	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
@@ -268,20 +268,23 @@ as_status aerospike_key_exists(
 	}
 
 	switch(rc) {
-		case CITRUSLEAF_OK:
-			if ( exists ) {
-				*exists = true;
+		case CITRUSLEAF_OK: 
+			{
+				as_record * r = *rec;
+				if ( r == NULL ) { 
+					r = as_record_new(0);
+				}   
+				r->gen = (uint16_t) gen;
+				r->ttl = ttl;
+				*rec = r;
+				return AEROSPIKE_OK;
 			}
-			return AEROSPIKE_OK;
 		case CITRUSLEAF_FAIL_NOTFOUND:
-			if ( exists ) {
-				*exists = false;
-			}
+			*rec = NULL;
 			return AEROSPIKE_OK;
+
 		default:
-			if ( exists ) {
-				*exists = false;
-			}
+			*rec = NULL;
 			return as_error_fromrc(err,rc);
 	}
 }

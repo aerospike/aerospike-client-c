@@ -117,13 +117,16 @@ is greater than that of the record in the database.
 
 	aerospike_key_get()
 	aerospike_key_select()
+	aerospike_key_exists()
 	aerospike_key_put()
 
 This example demonstrates reading a record from the database using both
 aerospike_key_get() to retrieve the whole record, and aerospike_key_select() to
 retrieve particular bins. It shows error code AEROSPIKE_ERR_RECORD_NOT_FOUND is
 returned if the record does not exist. It also shows a bin with null value is
-returned if a non-existent bin is retrieved via aerospike_key_select().
+returned if a non-existent bin is retrieved via aerospike_key_select(). It also
+demonstrates that aerospike_key_exists() returns metadata but no bin data if a
+record exists.
 
 
 ### incr

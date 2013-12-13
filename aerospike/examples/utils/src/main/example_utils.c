@@ -594,8 +594,8 @@ example_dump_record(const as_record* p_rec)
 
 	uint16_t num_bins = as_record_numbins(p_rec);
 
-	LOG("  generation %u, ttl %u, %u bin%s:", p_rec->gen, p_rec->ttl, num_bins,
-			num_bins == 1 ? "" : "s");
+	LOG("  generation %u, ttl %u, %u bin%s", p_rec->gen, p_rec->ttl, num_bins,
+			num_bins == 0 ? "s" : (num_bins == 1 ? ":" : "s:"));
 
 	as_record_iterator it;
 	as_record_iterator_init(&it, p_rec);

@@ -62,7 +62,6 @@ main(int argc, char* argv[])
 	aerospike as;
 	example_connect_to_aerospike(&as);
 
-	for (int i = 0; i < 100; i++) {
 	// Start clean.
 	example_remove_test_record(&as);
 
@@ -119,12 +118,12 @@ main(int argc, char* argv[])
 	as_record_destroy(p_rec);
 	p_rec = NULL;
 
-	// Select non-existent bin 4 to read.
-	static const char* bins_4[] = { "test-bin-4", NULL };
+	// Select non-existent bin 5 to read.
+	static const char* bins_5[] = { "test-bin-5", NULL };
 
 	// Read only this bin from the database. This call should return an
 	// as_record object with one bin, with null as_bin_value.
-	if (aerospike_key_select(&as, &err, NULL, &g_key, bins_4, &p_rec) !=
+	if (aerospike_key_select(&as, &err, NULL, &g_key, bins_5, &p_rec) !=
 			AEROSPIKE_OK) {
 		LOG("aerospike_key_select() returned %d - %s", err.code, err.message);
 		example_cleanup(&as);
@@ -132,10 +131,29 @@ main(int argc, char* argv[])
 	}
 
 	// Log the result and destroy the as_record object.
-	LOG("non-existent bin 4 was read from database:");
+	LOG("non-existent bin 5 was read from database:");
 	example_dump_record(p_rec);
 	as_record_destroy(p_rec);
+	p_rec = NULL;
+
+	// Use aerospike_key_exists() to get only record metadata.
+	if (aerospike_key_exists(&as, &err, NULL, &g_key, &p_rec) != AEROSPIKE_OK) {
+		LOG("aerospike_key_exists() returned %d - %s", err.code, err.message);
+		example_cleanup(&as);
+		exit(-1);
 	}
+
+	if (! p_rec) {
+		LOG("unexpected - record is NOT in database");
+		example_cleanup(&as);
+		exit(-1);
+	}
+
+	// Log the result, which will only have metadata.
+	LOG("existence check found record metadata:");
+	example_dump_record(p_rec);
+	as_record_destroy(p_rec);
+
 	// Cleanup and disconnect from the database cluster.
 	example_cleanup(&as);
 
@@ -154,17 +172,18 @@ write_record(aerospike* p_as)
 {
 	as_error err;
 
-	// Create an as_record object with three bins with different value types. By
+	// Create an as_record object with four bins with different value types. By
 	// using as_record_inita(), we won't need to destroy the record if we only
-	// set bins using as_record_set_int64() and as_record_set_str().
+	// set bins using as_record_set_int64(), as_record_set_str(), and
+	// as_record_set_raw().
 	as_record rec;
 	as_record_inita(&rec, 4);
 	as_record_set_int64(&rec, "test-bin-1", 1111);
 	as_record_set_int64(&rec, "test-bin-2", 2222);
 	as_record_set_str(&rec, "test-bin-3", "test-bin-3-data");
 
-	uint8_t bytes[3] = {1,2,3};
-	as_record_set_raw(&rec,"blob-bin",bytes, 3);
+	static const uint8_t bytes[] = { 1, 2, 3 };
+	as_record_set_raw(&rec, "test-bin-4", bytes, 3);
 
 	// Log its contents.
 	LOG("as_record object to write to database:");

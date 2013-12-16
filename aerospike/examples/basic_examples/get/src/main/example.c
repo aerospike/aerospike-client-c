@@ -29,6 +29,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
@@ -136,8 +137,10 @@ main(int argc, char* argv[])
 	as_record_destroy(p_rec);
 	p_rec = NULL;
 
-	// Sleep to show the effect on ttl
+	// Sleep 2 seconds, just to show the TTL decrease.
+	LOG("waiting 2 seconds ...");
 	sleep(2);
+
 	// Use aerospike_key_exists() to get only record metadata.
 	if (aerospike_key_exists(&as, &err, NULL, &g_key, &p_rec) != AEROSPIKE_OK) {
 		LOG("aerospike_key_exists() returned %d - %s", err.code, err.message);

@@ -44,6 +44,8 @@ typedef struct scan_check_s {
 	bool nobindata;
 	int count;
 	char * bins[10];
+	int unique_tcount;
+	pthread_t threadids[32];
 } scan_check;
 
 /******************************************************************************
@@ -186,6 +188,8 @@ static int check_bin4(as_record * rec, scan_check * check)
 
 static bool scan_check_callback(const as_val * val, void * udata) 
 {
+	int i;
+
 	// NULL is END OF SCAN
 	if ( !val ) {
 		return false;
@@ -202,6 +206,21 @@ static bool scan_check_callback(const as_val * val, void * udata)
 	const char * set = rec->key.set[0] == '\0' ? NULL : rec->key.set;
 
 	check->count++;
+	// Find the number of unique threads spawned under the hood.
+	// Note that the scan callback will be called in the thread context.
+	// As the number of threads is same as node count, they will be limited.
+	// A linear search is good enough for this.
+	pthread_t cur_thread = pthread_self();
+	for (i=0; i<check->unique_tcount; i++) {
+		if (check->threadids[i] == cur_thread) {
+			break;
+		}
+	}
+	// Found a new thread
+	if (i == check->unique_tcount) {
+		check->threadids[check->unique_tcount] = cur_thread;
+		check->unique_tcount++;
+	}
 
 	// Check if we are getting the results only from the set the scan is triggered for
 	// If scan is called with NULL set, all the recs will come. So, no checks in this case.
@@ -352,7 +371,8 @@ TEST( scan_basics_set1 , "scan "SET1"" ) {
 		.set = SET1,
 		.count = 0,
 		.nobindata = false,
-		.bins = { "bin1", "bin2", "bin3", NULL }
+		.bins = { "bin1", "bin2", "bin3", NULL },
+		.unique_tcount = 0
 	};
 
 	as_error err;
@@ -365,9 +385,38 @@ TEST( scan_basics_set1 , "scan "SET1"" ) {
 	assert_int_eq( rc, AEROSPIKE_OK );
 	assert_false( check.failed );
 
-	// assert_int_eq( scan_data.ret_failed, false );
-	// assert_int_eq( scan_data.ret_rec_count, NUM_RECS_SET1 );
-	// info("Got %d records in the scan. Expected %d", scan_data.ret_rec_count, NUM_RECS_SET1);
+	assert_int_eq( check.count, NUM_RECS_SET1 );
+	info("Got %d records in the scan. Expected %d", check.count, NUM_RECS_SET1);
+	info("Number of threads used = %d", check.unique_tcount);
+
+	as_scan_destroy(&scan);
+}
+
+TEST( scan_basics_set1_concurrent , "scan "SET1" concurrently" ) {
+
+	scan_check check = {
+		.failed = false,
+		.set = SET1,
+		.count = 0,
+		.nobindata = false,
+		.bins = { "bin1", "bin2", "bin3", NULL },
+		.unique_tcount = 0
+	};
+
+	as_error err;
+
+	as_scan scan;
+	as_scan_init(&scan, NS, SET1);
+	as_scan_set_concurrent(&scan, true);
+
+	as_status rc = aerospike_scan_foreach(as, &err, NULL, &scan, scan_check_callback, &check);
+	
+	assert_int_eq( rc, AEROSPIKE_OK );
+	assert_false( check.failed );
+
+	assert_int_eq( check.count, NUM_RECS_SET1 );
+	info("Got %d records in the concurrent scan. Expected %d", check.count, NUM_RECS_SET1);
+	info("Number of threads used = %d", check.unique_tcount);
 
 	as_scan_destroy(&scan);
 }
@@ -527,6 +576,7 @@ SUITE( scan_basics, "aerospike_scan basic tests" ) {
 
 	suite_add( scan_basics_null_set );
 	suite_add( scan_basics_set1 );
+	suite_add( scan_basics_set1_concurrent );
 	suite_add( scan_basics_set1_select );
 	suite_add( scan_basics_set1_nodata );
 	suite_add( scan_basics_background );

@@ -50,7 +50,8 @@ typedef struct cl_scan_udf_s {
 typedef struct cl_scan_parameters {
     bool                fail_on_cluster_change; // honored by server: terminate scan if cluster in fluctuating state
     cl_scan_priority    priority;               // honored by server: priority of scan
-    cl_scan_pct         pct;
+    cl_scan_pct         pct;                    // honored by server: % of data to be scanned
+    bool                concurrent_nodes;       // honored by client: if all the nodes should be scanned in parallel or not
 } cl_scan_params;
 
 typedef struct cl_scan_s {

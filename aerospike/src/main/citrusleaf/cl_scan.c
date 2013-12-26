@@ -55,6 +55,30 @@
 
 #define STACK_BINS 100
 
+// Fixed component of the scan definition which is common for all the threads
+typedef struct scan_node_worker_fixed_def {
+	// Scan definition
+	cl_cluster	*asc;
+	char		*ns;
+	char		*set;
+	cl_bin		*bins;
+	int			n_bins;
+	bool		nobindata;
+	uint8_t		scan_pct;
+	void		*udata;
+	cl_scan_parameters		*scan_param;
+	citrusleaf_get_many_cb	cb;
+
+	// Response 
+	cf_vector	*rsp_v;
+} scan_node_worker_fixed_def;
+
+// Full scan definition for the worker thread scanning a node
+typedef struct scan_node_worker_scandef {
+	scan_node_worker_fixed_def *fd;
+	// Variable component of the scan definition which will change per thread
+	char	*nptr;		// Node name
+} scan_node_worker_scandef;
 
 extern bool gasq_abort;
 static int
@@ -398,6 +422,29 @@ citrusleaf_scan_node (cl_cluster *asc, char *node_name, char *ns, char *set, cl_
 	return( do_scan_monte( asc, node_name, info, 0, ns, set, bins, n_bins, scan_pct, cb, udata, scan_param ) ); 
 }
 
+void *
+scan_node_worker(void *udata)
+{
+	//Typecast into worker data
+	scan_node_worker_scandef *wd = (scan_node_worker_scandef *)udata;
+
+	// Trigger the scan for the specific node
+	cl_rv r = citrusleaf_scan_node (wd->fd->asc, wd->nptr, wd->fd->ns, 
+					wd->fd->set, wd->fd->bins, wd->fd->n_bins, wd->fd->nobindata,
+					wd->fd->scan_pct, wd->fd->cb, wd->fd->udata, wd->fd->scan_param);
+
+	// Gather the response and put it into the response vector
+	cl_node_response resp_s;
+	resp_s.node_response = r;
+	memcpy(resp_s.node_name, wd->nptr, NODE_NAME_SIZE);
+	cf_vector_append(wd->fd->rsp_v, (void *)&resp_s);
+
+	// Free only the overall scan definition structure. We cannot free the 
+	// fixed component because it is shared by the threads
+	free(wd);
+	return NULL;
+}
+
 cf_vector *
 citrusleaf_scan_all_nodes (cl_cluster *asc, char *ns, char *set, cl_bin *bins, int n_bins, bool nobindata, uint8_t scan_pct,
 		citrusleaf_get_many_cb cb, void *udata, cl_scan_parameters *scan_param)
@@ -411,7 +458,8 @@ citrusleaf_scan_all_nodes (cl_cluster *asc, char *ns, char *set, cl_bin *bins, i
 		return NULL;
 	}
 
-	cf_vector *rsp_v = cf_vector_create(sizeof(cl_node_response), n_nodes, 0);
+	// The vector needs lock synchronization for the case of concurrent node scan
+	cf_vector *rsp_v = cf_vector_create(sizeof(cl_node_response), n_nodes, VECTOR_FLAG_BIGLOCK);
 	if (rsp_v == NULL) {
 		cf_error("citrusleaf scan all nodes: cannot allocate for response array for %d nodes", n_nodes);
 		free(node_names);
@@ -419,7 +467,47 @@ citrusleaf_scan_all_nodes (cl_cluster *asc, char *ns, char *set, cl_bin *bins, i
 	}
 	 
 	if (scan_param && scan_param->concurrent_nodes) {
-		cf_error("citrusleaf scan all nodes: concurrent node scanning not yet supported");
+		pthread_t	node_pthreads[n_nodes];
+		char *nptr = node_names;
+
+		// Setup the fixed component of the scan definition which is common for all threads
+		scan_node_worker_fixed_def *fd = (scan_node_worker_fixed_def *)malloc(sizeof(scan_node_worker_fixed_def));
+		fd->asc = asc;
+		fd->ns = ns;
+		fd->set = set;
+		fd->bins = bins;
+		fd->n_bins = n_bins;
+		fd->nobindata = nobindata;
+		fd->scan_pct = scan_pct;
+		fd->cb = cb;
+		fd->udata = udata;
+		fd->scan_param = scan_param;
+		fd->rsp_v = rsp_v;
+
+		// Spawn one thread for each of the nodes in the cluster.
+		// Duplicate the scan definition and send to each worker thread.
+		for (int i=0; i<n_nodes; i++) {
+			scan_node_worker_scandef *wd = (scan_node_worker_scandef *)malloc(sizeof(scan_node_worker_scandef));
+			wd->fd = fd;
+			wd->nptr = nptr;
+			if (pthread_create(&node_pthreads[i], 0, scan_node_worker, wd) != 0) {
+				cf_error("citrusleaf scan all nodes: Failed to create worker thread to scan nodes in parallel");
+				free(fd);
+				free(wd);
+				free(node_names);
+				return NULL;
+			}
+			nptr+=NODE_NAME_SIZE;
+		}
+
+		// Now wait for all the threads to finish.
+		// The response vector will be populated by each thread
+		for (int i=0; i<n_nodes; i++) {
+			pthread_join(node_pthreads[i], NULL);
+		}
+
+		// Once all the threads are done, we can free up the fixed definition part.
+		free(fd);
 	} else {
 		char *nptr = node_names;
 		for (int i=0;i< n_nodes; i++) {

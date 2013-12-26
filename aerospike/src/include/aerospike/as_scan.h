@@ -45,6 +45,11 @@
  */
 #define AS_SCAN_NOBINS_DEFAULT false
 
+/**
+ *	Default value for as_scan.concurrent_nodes
+ */
+#define AS_SCAN_CONC_NODES_DEFAULT false
+
 /******************************************************************************
  *	TYPES
  *****************************************************************************/
@@ -238,6 +243,14 @@ typedef struct as_scan_bins_s {
  *	as_scan_set_nobins(scan, true);
  *	~~~~~~~~~~
  *
+ *	### Scan nodes in parallel
+ *
+ *	A scan can be made to scan all the nodes in parallel
+ *	
+ *	~~~~~~~~~~{.c}
+ *	as_scan_set_concurrent(scan, true);
+ *	~~~~~~~~~~
+ *
  *	### Scan a Percentage of Records
  *
  *	A scan can define the percentage of record in the cluster to be scaned.
@@ -300,6 +313,13 @@ typedef struct as_scan_s {
 	 *	Default value is AS_SCAN_NOBINS_DEFAULT.
 	 */
 	bool no_bins;
+
+	/**
+	 *	Set to true if the scan should scan all the nodes in parallel
+	 *
+	 *	Default value is AS_SCAN_CONC_NODES_DEFAULT.
+	 */
+	bool concurrent_nodes;
 
 	/**
 	 * 	@memberof as_scan
@@ -527,6 +547,20 @@ bool as_scan_set_priority(as_scan * scan, as_scan_priority priority);
  *	@ingroup as_scan_object
  */
 bool as_scan_set_nobins(as_scan * scan, bool nobins);
+
+/**
+ *	Scan all the nodes in prallel
+ *	
+ *	~~~~~~~~~~{.c}
+ *	as_scan_set_concurrent(&q, true);
+ *	~~~~~~~~~~
+ *
+ *	@param scan 		The scan to set the concurrency on.
+ *	@param concurrent	If true, scan all the nodes in parallel
+ *
+ *	@return On success, true. Otherwise an error occurred.
+ */
+bool as_scan_set_concurrent(as_scan * scan, bool concurrent);
 
 /**
  *	Apply a UDF to each record scanned on the server.

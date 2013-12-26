@@ -57,6 +57,7 @@ static as_scan * as_scan_defaults(as_scan * scan, bool free, const as_namespace 
 	scan->priority = AS_SCAN_PRIORITY_DEFAULT;
 	scan->percent = AS_SCAN_PERCENT_DEFAULT;
 	scan->no_bins = AS_SCAN_NOBINS_DEFAULT;
+	scan->concurrent_nodes = AS_SCAN_CONC_NODES_DEFAULT;
 	
 	as_udf_call_init(&scan->apply_each, NULL, NULL, NULL);
 
@@ -232,6 +233,25 @@ bool as_scan_set_nobins(as_scan * scan, bool nobins)
 {
 	if ( !scan ) return false;
 	scan->no_bins = nobins;
+	return true;
+}
+
+/**
+ *	Scan all the nodes in prallel
+ *	
+ *	~~~~~~~~~~{.c}
+ *	as_scan_set_concurrent(&q, true);
+ *	~~~~~~~~~~
+ *
+ *	@param scan 		The scan to set the concurrency on.
+ *	@param concurrent	If true, scan all the nodes in parallel
+ *
+ *	@return On success, true. Otherwise an error occurred.
+ */
+bool as_scan_set_concurrent(as_scan * scan, bool concurrent)
+{
+	if ( !scan ) return false;
+	scan->concurrent_nodes = concurrent;
 	return true;
 }
 

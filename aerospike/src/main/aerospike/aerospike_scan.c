@@ -68,7 +68,7 @@ static void as_scan_toclscan(const as_scan * scan, const as_policy_scan * policy
 	clscan->params.fail_on_cluster_change = policy->fail_on_cluster_change;
 	clscan->params.priority = scan->priority;
 	clscan->params.pct = scan->percent;
-	clscan->params.concurrent_nodes = scan->concurrent_nodes;
+	clscan->params.concurrent = scan->concurrent;
 
 	clscan->udf.type = CL_SCAN_UDF_NONE;
 	clscan->udf.filename = NULL;
@@ -210,7 +210,7 @@ static as_status aerospike_scan_generic(
 		struct cl_scan_parameters_s params = {
 			.fail_on_cluster_change = clscan.params.fail_on_cluster_change,
 			.priority = clscan.params.priority,
-			.concurrent_nodes = clscan.params.concurrent_nodes,
+			.concurrent = clscan.params.concurrent,
 			.threads_per_node = 0
 		};
 

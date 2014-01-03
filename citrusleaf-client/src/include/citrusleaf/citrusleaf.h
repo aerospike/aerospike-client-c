@@ -359,7 +359,7 @@ cl_write_parameters_set_generation_dup( cl_write_parameters *cl_w_p, uint32_t ge
 typedef struct cl_scan_parameters_s {
 	bool fail_on_cluster_change;	// honored by server: terminate scan if cluster in fluctuating state
 	cl_scan_priority	priority;	// honored by server: priority of scan
-	bool concurrent_nodes;	  		// honored on client: work on nodes in parallel or serially
+	bool concurrent;				// honored on client: work on nodes in parallel or serially
 	uint8_t	threads_per_node;		// honored on client: have multiple threads per node. @TODO
 } cl_scan_parameters;
 
@@ -367,7 +367,7 @@ static inline void
 cl_scan_parameters_set_default(cl_scan_parameters *cl_scan_p)
 {
 	cl_scan_p->fail_on_cluster_change = false;
-	cl_scan_p->concurrent_nodes = false;
+	cl_scan_p->concurrent = false;
 	cl_scan_p->threads_per_node = 1;	// not honored currently
 	cl_scan_p->priority = CL_SCAN_PRIORITY_AUTO;
 }

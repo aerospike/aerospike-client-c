@@ -391,7 +391,7 @@ citrusleaf_scan_all_nodes (cl_cluster *asc, char *ns, char *set, cl_bin *bins, i
 		return NULL;
 	}
 	 
-	if (scan_param && scan_param->concurrent_nodes) {
+	if (scan_param && scan_param->concurrent) {
 		cf_error("citrusleaf scan all nodes: concurrent node scanning not yet supported");
 	} else {
 		char *nptr = node_names;

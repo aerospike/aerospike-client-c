@@ -46,9 +46,9 @@
 #define AS_SCAN_NOBINS_DEFAULT false
 
 /**
- *	Default value for as_scan.concurrent_nodes
+ *	Default value for as_scan.concurrent
  */
-#define AS_SCAN_CONC_NODES_DEFAULT false
+#define AS_SCAN_CONCURRENT_DEFAULT false
 
 /******************************************************************************
  *	TYPES
@@ -317,9 +317,9 @@ typedef struct as_scan_s {
 	/**
 	 *	Set to true if the scan should scan all the nodes in parallel
 	 *
-	 *	Default value is AS_SCAN_CONC_NODES_DEFAULT.
+	 *	Default value is AS_SCAN_CONCURRENT_DEFAULT.
 	 */
-	bool concurrent_nodes;
+	bool concurrent;
 
 	/**
 	 * 	@memberof as_scan

@@ -232,6 +232,9 @@ void clbin_to_asval(cl_bin * bin, as_serializer * ser, as_val ** val)
 		case CL_STR : {
 			// steal the pointer from the object into the val
 			*val = (as_val *) as_string_new(strdup(bin->object.u.str), true /*ismalloc*/);
+			// TODO: re-evaluate the follow zero-copy for strings from cl_bins
+			// *val = (as_val *) as_string_new(bin->object.u.str, true /*ismalloc*/);
+			// bin->object.free = NULL;
 			break;
 		}
 		case CL_LIST :
@@ -278,6 +281,8 @@ void clbin_to_asrecord(cl_bin * bin, as_record * r)
 		}
 		case CL_STR: {
 			as_record_set_strp(r, bin->bin_name, bin->object.u.str, true);
+			// the following completes the handoff of the value.
+			bin->object.free = NULL;
 			break;
 		}
 		case CL_LIST:
@@ -299,6 +304,8 @@ void clbin_to_asrecord(cl_bin * bin, as_record * r)
 		}
 		default: {
 			as_record_set_rawp(r, bin->bin_name, bin->object.u.blob, bin->object.sz, true);
+			// the following completes the handoff of the value.
+			bin->object.free = NULL;
 			break;
 		}
 	}

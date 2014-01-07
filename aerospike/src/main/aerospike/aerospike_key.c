@@ -338,6 +338,9 @@ as_status aerospike_key_put(
 			break;
 		}
 	}
+	
+	// We are freeing the bins' objects, as opposed to bins themselves.
+	citrusleaf_bins_free(values, nvalues);
 
 	return as_error_fromrc(err,rc); 
 }

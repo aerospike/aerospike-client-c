@@ -533,14 +533,6 @@ as_status aerospike_key_operate(
 		*rec = r;
 	}
 
-
-	// TODO: SOON
-	// if ( values != NULL ) {
-	// 	// We are freeing the bins' objects, as opposed to bins themselves.
-	// 	citrusleaf_bins_free(values, nvalues);
-	// 	free(values);
-	// }
-
 	return as_error_fromrc(err,rc);
 }
 

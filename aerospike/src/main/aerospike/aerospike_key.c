@@ -121,6 +121,8 @@ as_status aerospike_key_get(
 	}
 
 	if ( values != NULL ) {
+		// We are freeing the bins' objects, as opposed to bins themselves.
+		citrusleaf_bins_free(values, nvalues);
 		free(values);
 	}
 
@@ -157,7 +159,7 @@ as_status aerospike_key_select(
 	int         nvalues = 0;
 	cl_bin *    values = NULL;
 
-	for (nvalues = 0; bins[nvalues] != NULL; nvalues++)
+	for (nvalues = 0; bins[nvalues] != NULL && bins[nvalues][0] != '\0'; nvalues++)
 		;
 
 	values = (cl_bin *) alloca(sizeof(cl_bin) * nvalues);
@@ -207,6 +209,11 @@ as_status aerospike_key_select(
 		r->gen = (uint16_t) gen;
 		r->ttl = ttl;
 		*rec = r;
+	}
+
+	if ( values != NULL ) {
+		// We are freeing the bins' objects, as opposed to bins themselves.
+		citrusleaf_bins_free(values, nvalues);
 	}
 
 	return as_error_fromrc(err,rc);
@@ -264,6 +271,8 @@ as_status aerospike_key_exists(
 	}
 
 	if ( values != NULL ) {
+		// We are freeing the bins' objects, as opposed to bins themselves.
+		citrusleaf_bins_free(values, nvalues);
 		free(values);
 	}
 
@@ -338,7 +347,7 @@ as_status aerospike_key_put(
 			break;
 		}
 	}
-	
+
 	// We are freeing the bins' objects, as opposed to bins themselves.
 	citrusleaf_bins_free(values, nvalues);
 
@@ -515,6 +524,7 @@ as_status aerospike_key_operate(
 			for (int j = 0; j < n_operations; j++) {
 				if (strcmp(read_op_bins[i], operations[j].bin.bin_name) == 0) {
 					clbin_to_asrecord(&operations[j].bin, r);
+					citrusleaf_object_free(&operations[j].bin.object);
 					break;
 				}
 			}
@@ -522,6 +532,14 @@ as_status aerospike_key_operate(
 
 		*rec = r;
 	}
+
+
+	// TODO: SOON
+	// if ( values != NULL ) {
+	// 	// We are freeing the bins' objects, as opposed to bins themselves.
+	// 	citrusleaf_bins_free(values, nvalues);
+	// 	free(values);
+	// }
 
 	return as_error_fromrc(err,rc);
 }

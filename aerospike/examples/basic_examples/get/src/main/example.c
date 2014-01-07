@@ -148,12 +148,6 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
-	if (! p_rec) {
-		LOG("unexpected - record is NOT in database");
-		example_cleanup(&as);
-		exit(-1);
-	}
-
 	// Log the result, which will only have metadata.
 	LOG("existence check found record metadata:");
 	example_dump_record(p_rec);

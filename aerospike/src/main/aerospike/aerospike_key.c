@@ -290,7 +290,7 @@ as_status aerospike_key_exists(
 			}
 		case CITRUSLEAF_FAIL_NOTFOUND:
 			*rec = NULL;
-			return AEROSPIKE_OK;
+			return AEROSPIKE_ERR_RECORD_NOT_FOUND;
 
 		default:
 			*rec = NULL;

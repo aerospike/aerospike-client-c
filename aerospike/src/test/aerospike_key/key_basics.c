@@ -180,13 +180,15 @@ TEST( key_basics_exists , "exists: (test,test,foo)" ) {
 	as_key key;
 	as_key_init(&key, "test", "test", "foo");
 
-	as_record *r = NULL;
-	as_status rc = aerospike_key_exists(as, &err, NULL, &key, &r);
+	as_record * rec = NULL;
+	as_status rc = aerospike_key_exists(as, &err, NULL, &key, &rec);
 
 	as_key_destroy(&key);
 
     assert_int_eq( rc, AEROSPIKE_OK );
-	assert_not_null( r );
+	assert_not_null( rec );
+	
+	as_record_destroy(&rec);
 }
 
 TEST( key_basics_notexists , "not exists: (test,test,foo)" ) {
@@ -195,16 +197,18 @@ TEST( key_basics_notexists , "not exists: (test,test,foo)" ) {
 	as_error_reset(&err);
 
 	as_key key;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, "test", "test", "foozoo");
 
 	
-	as_record * r1 = NULL;
-	as_status rc = aerospike_key_exists(as, &err, NULL, &key, &r1);
+	as_record * rec = NULL;
+	as_status rc = aerospike_key_exists(as, &err, NULL, &key, &rec);
 
 	as_key_destroy(&key);
 
-    assert_int_eq( rc, AEROSPIKE_OK );
-	assert_null( r1 );
+    assert_int_eq( rc, AEROSPIKE_ERR_RECORD_NOT_FOUND );
+	assert_null( rec );
+	
+	as_record_destroy(&rec);
 }
 
 TEST( key_basics_remove , "remove: (test,test,foo)" ) {
@@ -298,6 +302,7 @@ TEST( key_basics_get2 , "get: (test,test,foo) = {a: 444, b: 'abcdef', d: 'abcdef
 SUITE( key_basics, "aerospike_key basic tests" ) {
     suite_add( key_basics_put );
     suite_add( key_basics_exists );
+    suite_add( key_basics_notexists );
     suite_add( key_basics_get );
     suite_add( key_basics_select );
     suite_add( key_basics_operate );

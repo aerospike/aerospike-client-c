@@ -286,16 +286,15 @@ as_status aerospike_key_exists(
 				r->gen = (uint16_t) gen;
 				r->ttl = ttl;
 				*rec = r;
-				return AEROSPIKE_OK;
+				break;;
 			}
-		case CITRUSLEAF_FAIL_NOTFOUND:
-			*rec = NULL;
-			return AEROSPIKE_ERR_RECORD_NOT_FOUND;
 
 		default:
 			*rec = NULL;
-			return as_error_fromrc(err,rc);
+			break;
 	}
+
+	return as_error_fromrc(err,rc);
 }
 
 /**

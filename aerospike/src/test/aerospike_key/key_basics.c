@@ -191,7 +191,7 @@ TEST( key_basics_exists , "exists: (test,test,foo)" ) {
 	as_record_destroy(&rec);
 }
 
-TEST( key_basics_notexists , "not exists: (test,test,foo)" ) {
+TEST( key_basics_notexists , "not exists: (test,test,foozoo)" ) {
 
 	as_error err;
 	as_error_reset(&err);

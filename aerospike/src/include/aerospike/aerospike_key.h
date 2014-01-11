@@ -116,7 +116,8 @@ as_status aerospike_key_select(
 	);
 
 /**
- *	Check if a record exists in the cluster via its key.
+ *	Check if a record exists in the cluster via its key. The record's metadata 
+ * 	will be populated if the record exists.
  *
  *	~~~~~~~~~~{.c}
  *	as_key key;
@@ -135,9 +136,9 @@ as_status aerospike_key_select(
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param key			The key of the record.
- *	@param exists    	The variable to populate with `true` if the record exists, otherwise `false`.
+ *	@param rec    		The metadata will be populated if the record exists.
  *
- *	@return AEROSPIKE_OK if successful. Otherwise an error.
+ *	@return AEROSPIKE_OK if successful. AEROSPIKE_ERR_RECORD_NOT_FOUND if not found. Otherwise an error.
  *
  *	@ingroup key_operations
  */

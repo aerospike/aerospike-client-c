@@ -957,10 +957,50 @@ Done:
 	return(fd);
 }
 
+// A quick non-blocking check to see if a server is connected. It may have
+// dropped a connection while it's queued, so don't use those connections. If
+// the fd is connected, we actually expect an error - ewouldblock or similar.
+
+#define CONNECTED		0
+#define CONNECTED_NOT	1
+#define CONNECTED_ERROR	2
+#define CONNECTED_BADFD	3
+
+int
+is_connected(int fd)
+{
+	uint8_t buf[8];
+	int rv = recv(fd, (void*)buf, sizeof(buf), MSG_PEEK | MSG_DONTWAIT | MSG_NOSIGNAL);
+
+	if (rv == 0) {
+		cf_debug("connected check: found disconnected fd %d", fd);
+		return CONNECTED_NOT;
+	}
+
+	if (rv < 0) {
+		if (errno == EBADF) {
+			cf_warn("connected check: bad fd %d", fd);
+			return CONNECTED_BADFD;
+		}
+		else if (errno == EWOULDBLOCK || errno == EAGAIN) {
+			// The normal case.
+			return CONNECTED;
+		}
+		else {
+			cf_info("connected check: fd %d error %d", fd, errno);
+			return CONNECTED_ERROR;
+		}
+	}
+
+	cf_info("connected check: peek got data - surprising! fd %d", fd);
+	return CONNECTED;
+}
+
 int
 cl_cluster_node_fd_get(cl_cluster_node *cn, bool asyncfd, bool nbconnect)
 {
-	int fd;
+	int fd = -1;
+
 #if ONEASYNCFD
 	if (asyncfd == true) {
 		if (cn->asyncfd == -1) {
@@ -970,6 +1010,7 @@ cl_cluster_node_fd_get(cl_cluster_node *cn, bool asyncfd, bool nbconnect)
 		return fd;
 	}
 #endif
+
 	cf_queue *q;
 	if (asyncfd == true) {
 		q = cn->conn_q_asyncfd;
@@ -977,19 +1018,51 @@ cl_cluster_node_fd_get(cl_cluster_node *cn, bool asyncfd, bool nbconnect)
 		q = cn->conn_q;
 	}
 
-	int rv = cf_queue_pop(q, &fd, CF_QUEUE_NOWAIT);
-	if (rv == CF_QUEUE_OK)
-		;
-	else if (rv == CF_QUEUE_EMPTY) {
-		if ((asyncfd == true) || (nbconnect == true)) {
-			//Use a non-blocking socket for async client
-			fd = cl_cluster_node_fd_create(cn, true);
-		} else {
-			fd = cl_cluster_node_fd_create(cn, false);
+	while (fd == -1) {
+		int rv = cf_queue_pop(q, &fd, CF_QUEUE_NOWAIT);
+
+		if (rv == CF_QUEUE_OK) {
+			int rv2 = is_connected(fd);
+
+			switch (rv2) {
+				case CONNECTED:
+					// It's still good.
+					break;
+				case CONNECTED_BADFD:
+					// Local problem, don't try closing.
+					cf_warn("found bad file descriptor in queue: fd %d", fd);
+					fd = -1;
+					break;
+				case CONNECTED_NOT:
+					// Can't use it - the remote end closed it.
+				case CONNECTED_ERROR:
+					// Some other problem, could have to do with remote end.
+				default:
+					close(fd);
+					fd = -1;
+					break;
+			}
 		}
-	}
-	else {
-		fd = -1;
+		else if (rv == CF_QUEUE_EMPTY) {
+			if ((asyncfd == true) || (nbconnect == true)) {
+				// Use a non-blocking socket for async client.
+				fd = cl_cluster_node_fd_create(cn, true);
+			}
+			else {
+				fd = cl_cluster_node_fd_create(cn, false);
+			}
+
+			// We exhausted the queue and can't open a fresh socket.
+			if (fd == -1) {
+				break;
+			}
+		}
+		else {
+			// Since we can't assert:
+			cf_error("bad return value from cf_queue_pop");
+			fd = -1;
+			break;
+		}
 	}
 
 	return fd;

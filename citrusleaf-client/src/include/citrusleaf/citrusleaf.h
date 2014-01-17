@@ -313,6 +313,8 @@ extern void citrusleaf_cluster_follow(cl_cluster *asc, bool flag);
 // There's a lot of info that can go into a write ---
 typedef struct {
 	bool unique;  // write unique - means success if didn't exist before
+	bool update_only; // means success only if the record did exist before
+	bool create_or_replace; // completely overwrite existing record if any, otherwise create
 	bool unique_bin;  // write unique bin - means success if the bin didn't exist before
 	bool use_generation;     // generation must be exact for write to succeed
 	bool use_generation_gt;  // generation must be less - good for backup & restore
@@ -327,6 +329,8 @@ static inline void
 cl_write_parameters_set_default(cl_write_parameters *cl_w_p)
 {
 	cl_w_p->unique = false;
+	cl_w_p->update_only = false;
+	cl_w_p->create_or_replace = false;
 	cl_w_p->unique_bin = false;
 	cl_w_p->use_generation = false;
 	cl_w_p->use_generation_gt = false;
@@ -409,9 +413,6 @@ citrusleaf_put(cl_cluster *asc, const char *ns, const char *set, const cl_object
 
 cl_rv
 citrusleaf_put_digest(cl_cluster *asc, const char *ns, const cf_digest *d, const cl_bin *bins, int n_bins, const cl_write_parameters *cl_w_p);
-
-cl_rv
-citrusleaf_put_replace(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, const cl_bin *values, int n_values, const cl_write_parameters *cl_w_p);
 
 cl_rv
 citrusleaf_restore(cl_cluster *asc, const char *ns, const cf_digest *digest, const char *set, const cl_bin *values, int n_values, const cl_write_parameters *cl_w_p);

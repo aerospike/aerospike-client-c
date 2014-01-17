@@ -328,6 +328,8 @@ void aspolicywrite_to_clwriteparameters(const as_policy_write * policy, const as
 	}
 
 	wp->unique = policy->exists == AS_POLICY_EXISTS_CREATE;
+	wp->update_only = policy->exists == AS_POLICY_EXISTS_UPDATE;
+	wp->create_or_replace = policy->exists == AS_POLICY_EXISTS_CREATE_OR_REPLACE;
 	wp->unique_bin = false;
 
 	wp->use_generation = false;
@@ -373,6 +375,8 @@ void aspolicyoperate_to_clwriteparameters(const as_policy_operate * policy, cons
 	}
 	
 	wp->unique = false;
+	wp->update_only = false;
+	wp->create_or_replace = false;
 	wp->unique_bin = false;
 
 	wp->use_generation = false;
@@ -418,6 +422,8 @@ void aspolicyremove_to_clwriteparameters(const as_policy_remove * policy, cl_wri
 	}
 	
 	wp->unique = false;
+	wp->update_only = false;
+	wp->create_or_replace = false;
 	wp->unique_bin = false;
 
 	wp->use_generation = false;

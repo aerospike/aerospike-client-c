@@ -51,7 +51,7 @@ as_batch * as_batch_new(uint32_t size)
 	batch->_free = true;
 	batch->keys._free = false;
 	batch->keys.size = size;
-	batch->keys.entries = (as_key *) (batch + sizeof(batch));
+	batch->keys.entries = (as_key *) (batch + 1);
 	return batch;
 }
 

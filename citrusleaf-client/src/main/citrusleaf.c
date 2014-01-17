@@ -771,6 +771,10 @@ cl_compile(uint info1, uint info2, uint info3, const char *ns, const char *set, 
 	if (cl_w_p) {
 		if (cl_w_p->unique) {
 			info2 |= CL_MSG_INFO2_WRITE_UNIQUE;
+		} else if (cl_w_p->update_only) {
+			info3 |= CL_MSG_INFO3_UPDATE_ONLY;
+		} else if (cl_w_p->create_or_replace) {
+			info3 |= CL_MSG_INFO3_CREATE_OR_REPLACE;
 		} else if (cl_w_p->unique_bin) {
 			info2 |= CL_MSG_INFO2_WRITE_BINUNIQUE;
 		} else if (cl_w_p->use_generation) {
@@ -868,6 +872,10 @@ compile_digests(uint info1, uint info2, uint info3, const char *ns, const cf_dig
 	if (cl_w_p) {
 		if (cl_w_p->unique) {
 			info2 |= CL_MSG_INFO2_WRITE_UNIQUE;
+		} else if (cl_w_p->update_only) {
+			info3 |= CL_MSG_INFO3_UPDATE_ONLY;
+		} else if (cl_w_p->create_or_replace) {
+			info3 |= CL_MSG_INFO3_CREATE_OR_REPLACE;
 		} else if (cl_w_p->unique_bin) {
 			info2 |= CL_MSG_INFO2_WRITE_BINUNIQUE;
 		} else if (cl_w_p->use_generation) {
@@ -1537,17 +1545,6 @@ citrusleaf_put_digest(cl_cluster *asc, const char *ns, const cf_digest *digest, 
 			&trid, NULL) );
 }
 
-cl_rv
-citrusleaf_put_replace(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, const cl_bin *values, int n_values, const cl_write_parameters *cl_w_p)
-{
-    if (!g_initialized) return(-1);
-
-    uint64_t trid=0;
-	return( do_the_full_monte( asc, 0, CL_MSG_INFO2_WRITE, CL_MSG_INFO3_REPLACE, ns, 
-			set, key, 0, (cl_bin **) &values, CL_OP_WRITE, 0, &n_values, 
-			NULL, cl_w_p, &trid, NULL) );
-}
-
 extern cl_rv
 citrusleaf_restore(cl_cluster *asc, const char *ns, const cf_digest *digest, const char *set, const cl_bin *values, int n_values, const cl_write_parameters *cl_w_p)
 {
@@ -1882,10 +1879,11 @@ citrusleaf_operate(cl_cluster *asc, const char *ns, const char *set, const cl_ob
 		
 		if (info1 && info2) break;
 	}
-	
 
-	if (replace)
-		info3 = CL_MSG_INFO3_REPLACE;
+	if (replace) {
+		cf_error("parameter 'replace' is deprecated");
+		return -1;
+	}
 
 	return( do_the_full_monte( asc, info1, info2, info3, ns, set, key, 0, 0, 0, 
 			&operations, &n_operations, generation, cl_w_p, &trid, NULL) );
@@ -1924,8 +1922,10 @@ citrusleaf_operate_digest(cl_cluster *asc, const char *ns, cf_digest *digest, cl
 		if (info1 && info2) break;
 	}
 
-	if (replace)
-		info3 = CL_MSG_INFO3_REPLACE;
+	if (replace) {
+		cf_error("parameter 'replace' is deprecated");
+		return -1;
+	}
 
 	return( do_the_full_monte( asc, info1, info2, info3, ns, 0, 0, digest, 0, 0,
 			&operations, &n_operations, generation, cl_w_p, &trid, NULL) );

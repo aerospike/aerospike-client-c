@@ -175,10 +175,17 @@ batch_compile(uint info1, uint info2, char *ns, cf_digest *digests, cl_cluster_n
 	memset(buf, 0, msg_sz);
 	
 	// lay in some parameters
+	uint info3 = 0;
 	uint32_t generation = 0;
 	if (cl_w_p) {
 		if (cl_w_p->unique) {
 			info2 |= CL_MSG_INFO2_WRITE_UNIQUE;
+		}
+		else if (cl_w_p->update_only) {
+			info3 |= CL_MSG_INFO3_UPDATE_ONLY;
+		}
+		else if (cl_w_p->create_or_replace) {
+			info3 |= CL_MSG_INFO3_CREATE_OR_REPLACE;
 		}
 		else if (cl_w_p->use_generation) {
 			info2 |= CL_MSG_INFO2_GENERATION;
@@ -199,7 +206,7 @@ batch_compile(uint info1, uint info2, char *ns, cf_digest *digests, cl_cluster_n
 	
 	// lay out the header - currently always 2, the digest array and the ns
 	int n_fields = 2;
-	buf = cl_write_header(buf, msg_sz, info1, info2, 0, generation, record_ttl, transaction_ttl, n_fields, n_values);
+	buf = cl_write_header(buf, msg_sz, info1, info2, info3, generation, record_ttl, transaction_ttl, n_fields, n_values);
 		
 	// now the fields
 	buf = write_fields_batch_digests(buf, ns, ns_len, digests, nodes, n_digests,n_my_digests, my_node);

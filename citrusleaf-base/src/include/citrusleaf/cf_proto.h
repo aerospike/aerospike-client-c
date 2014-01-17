@@ -382,7 +382,8 @@ typedef struct as_msg_s {
 #define CL_MSG_INFO3_LAST      			(1 << 0)     	// this is the last of a multi-part message
 #define CL_MSG_INFO3_TRACE				(1 << 1)		// apply server trace logging for this transaction
 #define CL_MSG_INFO3_TOMBSTONE			(1 << 2)		// if set on response, a version was a delete tombstone
-#define CL_MSG_INFO3_REPLACE			(1 << 3)		// properly a write option, but there are no more bits. Overwrite existing record only; do not create new record
+#define CL_MSG_INFO3_UPDATE_ONLY		(1 << 3)		// properly a write option, but there are no more bits. Update existing record only; do not create new record
+#define CL_MSG_INFO3_CREATE_OR_REPLACE	(1 << 4)		// properly a write option, but there are no more bits. Completely replace existing record or create new record
 
 
 static inline uint8_t * cl_msg_op_get_value_p(cl_msg_op *op)

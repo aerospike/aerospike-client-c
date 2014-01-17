@@ -450,7 +450,6 @@ as_status aerospike_key_operate(
 	cl_write_parameters wp;
 	aspolicyoperate_to_clwriteparameters(&p, ops, &wp);
 
-	int 			replace = 0;
 	uint32_t 		gen = 0;
 	uint32_t 		ttl = 0;
 	int 			n_operations = ops->binops.size;
@@ -486,14 +485,14 @@ as_status aerospike_key_operate(
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
 			rc = citrusleaf_operate_digest(as->cluster, key->ns, (cf_digest *) digest->value,
-					operations, n_operations, &wp, replace, &gen, &ttl);
+					operations, n_operations, &wp, &gen, &ttl);
 			break;
 		}
 		case AS_POLICY_KEY_SEND: {
 			cl_object okey;
 			asval_to_clobject((as_val *) key->valuep, &okey);
 			rc = citrusleaf_operate(as->cluster, key->ns, key->set, &okey,
-					operations, n_operations, &wp, replace, &gen, &ttl);
+					operations, n_operations, &wp, &gen, &ttl);
 			break;
 		}
 		default: {

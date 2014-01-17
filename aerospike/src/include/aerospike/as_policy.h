@@ -242,12 +242,12 @@ typedef enum as_policy_exists_e {
 	 *
 	 *	If set, then the value will default to
 	 *	either as_config.policies.exists
-	 *	or `AS_POLICY_KEY_DDEFAULT`.
+	 *	or `AS_POLICY_EXISTS_DEFAULT`.
 	 */
 	AS_POLICY_EXISTS_UNDEF,
 
 	/**
-	 *	Write the record, regardless of existence.
+	 *	Write the record, regardless of existence. (i.e. create or update.)
 	 */
 	AS_POLICY_EXISTS_IGNORE,
 
@@ -258,9 +258,13 @@ typedef enum as_policy_exists_e {
 
 	/**
 	 *	Update a record, ONLY if it exists.
-	 *	@warning Not yet implemented
 	 */
-	AS_POLICY_EXISTS_UPDATE
+	AS_POLICY_EXISTS_UPDATE,
+
+	/**
+	 *	Completely replace a record if it exists, otherwise create it.
+	 */
+	AS_POLICY_EXISTS_CREATE_OR_REPLACE
 
 } as_policy_exists;
 

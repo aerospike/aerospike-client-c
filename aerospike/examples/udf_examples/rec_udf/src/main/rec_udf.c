@@ -1997,7 +1997,7 @@ int game_next_order_id(){
 	ops[0].op = CL_OP_INCR;
 	strcpy(ops[0].bin.bin_name, "nextID");
 	citrusleaf_object_init_int(&ops[0].bin.object, 1);
-	if (0 != (rv = citrusleaf_operate(g_config->asc, g_config->ns, "IDtable", &key, ops, 1, 0, 0, &generation, 0))) {
+	if (0 != (rv = citrusleaf_operate(g_config->asc, g_config->ns, "IDtable", &key, ops, 1, 0, &generation, 0))) {
 		LOG("get nextID failed: %d",rv);
 		return(-1);
 	}

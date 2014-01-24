@@ -38,9 +38,11 @@ typedef enum cl_write_policy_e {
  */
 typedef struct cl_write_parameters_s {
     bool            unique;                 // write unique - means success if didn't exist before
+    bool            unique_bin;             // write unique bin - means success if the bin didn't exist before
     bool            update_only;            // means success only if the record did exist before
     bool            create_or_replace;      // completely overwrite existing record if any, otherwise create
-    bool            unique_bin;             // write unique bin - means success if the bin didn't exist before
+    bool            replace_only;           // completely overwrite existing record, do not create new record
+    bool            bin_replace_only;       // replace existing bin, do not create new bin
     bool            use_generation;         // generation must be exact for write to succeed
     bool            use_generation_gt;      // generation must be less - good for backup & restore
     bool            use_generation_dup;     // on generation collision, create a duplicate
@@ -56,9 +58,11 @@ typedef struct cl_write_parameters_s {
 
 static inline void cl_write_parameters_set_default(cl_write_parameters *cl_w_p) {
     cl_w_p->unique = false;
+    cl_w_p->unique_bin = false;
     cl_w_p->update_only = false;
     cl_w_p->create_or_replace = false;
-    cl_w_p->unique_bin = false;
+    cl_w_p->replace_only = false;
+    cl_w_p->bin_replace_only = false;
     cl_w_p->use_generation = false;
     cl_w_p->use_generation_gt = false;
     cl_w_p->use_generation_dup = false;

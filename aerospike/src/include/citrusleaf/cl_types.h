@@ -123,6 +123,9 @@ typedef enum cl_rv_e {
     // Server does not (yet) support this function
     CITRUSLEAF_FAIL_UNSUPPORTED_FEATURE		= 16,
 
+    // Bin-level replace-only supported on server but not on client.
+    CITRUSLEAF_FAIL_BIN_NOT_FOUND			= 17,
+
     // ???
     CITRUSLEAF_FAIL_INVALID_DATA              = 99,
 

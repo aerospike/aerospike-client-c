@@ -921,13 +921,17 @@ cl_compile(uint info1, uint info2, uint info3, const char *ns, const char *set, 
 	uint32_t generation = 0;
 	if (cl_w_p) {
 		if (cl_w_p->unique) {
-			info2 |= CL_MSG_INFO2_WRITE_UNIQUE;
+			info2 |= CL_MSG_INFO2_CREATE_ONLY;
+		} else if (cl_w_p->unique_bin) {
+			info2 |= CL_MSG_INFO2_BIN_CREATE_ONLY;
 		} else if (cl_w_p->update_only) {
 			info3 |= CL_MSG_INFO3_UPDATE_ONLY;
 		} else if (cl_w_p->create_or_replace) {
 			info3 |= CL_MSG_INFO3_CREATE_OR_REPLACE;
-		} else if (cl_w_p->unique_bin) {
-			info2 |= CL_MSG_INFO2_WRITE_BINUNIQUE;
+		} else if (cl_w_p->replace_only) {
+			info3 |= CL_MSG_INFO3_REPLACE_ONLY;
+		} else if (cl_w_p->bin_replace_only) {
+			info3 |= CL_MSG_INFO3_BIN_REPLACE_ONLY;
 		} else if (cl_w_p->use_generation) {
 			info2 |= CL_MSG_INFO2_GENERATION;
 			generation = cl_w_p->generation;

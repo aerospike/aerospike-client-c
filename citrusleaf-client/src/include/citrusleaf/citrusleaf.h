@@ -312,13 +312,15 @@ extern void citrusleaf_cluster_follow(cl_cluster *asc, bool flag);
 // write info structure
 // There's a lot of info that can go into a write ---
 typedef struct {
-	bool unique;  // write unique - means success if didn't exist before
-	bool update_only; // means success only if the record did exist before
-	bool create_or_replace; // completely overwrite existing record if any, otherwise create
-	bool unique_bin;  // write unique bin - means success if the bin didn't exist before
-	bool use_generation;     // generation must be exact for write to succeed
-	bool use_generation_gt;  // generation must be less - good for backup & restore
-	bool use_generation_dup;	// on generation collision, create a duplicat
+	bool unique;				// write unique - means success if didn't exist before
+	bool unique_bin;			// write unique bin - means success if the bin didn't exist before
+	bool update_only;			// means success only if the record did exist before
+	bool create_or_replace;		// completely overwrite existing record if any, otherwise create
+	bool replace_only;			// completely overwrite existing record, do not create new record
+	bool bin_replace_only;		// replace existing bin, do not create new bin
+	bool use_generation;		// generation must be exact for write to succeed
+	bool use_generation_gt;		// generation must be less - good for backup & restore
+	bool use_generation_dup;	// on generation collision, create a duplicate
 	uint32_t generation;
 	int timeout_ms;
 	uint32_t record_ttl;    // seconds, from now, when the record would be auto-removed from the DBcd 
@@ -329,9 +331,11 @@ static inline void
 cl_write_parameters_set_default(cl_write_parameters *cl_w_p)
 {
 	cl_w_p->unique = false;
+	cl_w_p->unique_bin = false;
 	cl_w_p->update_only = false;
 	cl_w_p->create_or_replace = false;
-	cl_w_p->unique_bin = false;
+    cl_w_p->replace_only = false;
+    cl_w_p->bin_replace_only = false;
 	cl_w_p->use_generation = false;
 	cl_w_p->use_generation_gt = false;
 	cl_w_p->use_generation_dup = false;

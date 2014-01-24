@@ -262,6 +262,11 @@ typedef enum as_policy_exists_e {
 	AS_POLICY_EXISTS_UPDATE,
 
 	/**
+	 *	Completely replace a record, ONLY if it exists.
+	 */
+	AS_POLICY_EXISTS_REPLACE,
+
+	/**
 	 *	Completely replace a record if it exists, otherwise create it.
 	 */
 	AS_POLICY_EXISTS_CREATE_OR_REPLACE

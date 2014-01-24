@@ -85,6 +85,10 @@ as_status as_error_fromrc(as_error * err, cl_rv rc)
 	case CITRUSLEAF_FAIL_KEY_BUSY:
 		ERR_ASSIGN(AEROSPIKE_ERR_RECORD_BUSY);
 		break;
+	case CITRUSLEAF_FAIL_BIN_NOT_FOUND:
+		strcpy(err->message, "got bin-not-found error - not supported");
+		ERR_ASSIGN(AEROSPIKE_ERR_SERVER);
+		break;
 
 	// TODO - just guessing from here on down ... fill out correctly.
 
@@ -328,9 +332,11 @@ void aspolicywrite_to_clwriteparameters(const as_policy_write * policy, const as
 	}
 
 	wp->unique = policy->exists == AS_POLICY_EXISTS_CREATE;
+	wp->unique_bin = false;
 	wp->update_only = policy->exists == AS_POLICY_EXISTS_UPDATE;
 	wp->create_or_replace = policy->exists == AS_POLICY_EXISTS_CREATE_OR_REPLACE;
-	wp->unique_bin = false;
+	wp->replace_only = policy->exists == AS_POLICY_EXISTS_REPLACE;
+	wp->bin_replace_only = false;
 
 	wp->use_generation = false;
 	wp->use_generation_gt = false;
@@ -375,9 +381,11 @@ void aspolicyoperate_to_clwriteparameters(const as_policy_operate * policy, cons
 	}
 	
 	wp->unique = false;
+	wp->unique_bin = false;
 	wp->update_only = false;
 	wp->create_or_replace = false;
-	wp->unique_bin = false;
+	wp->replace_only = false;
+	wp->bin_replace_only = false;
 
 	wp->use_generation = false;
 	wp->use_generation_gt = false;
@@ -422,9 +430,11 @@ void aspolicyremove_to_clwriteparameters(const as_policy_remove * policy, cl_wri
 	}
 	
 	wp->unique = false;
+	wp->unique_bin = false;
 	wp->update_only = false;
 	wp->create_or_replace = false;
-	wp->unique_bin = false;
+	wp->replace_only = false;
+	wp->bin_replace_only = false;
 
 	wp->use_generation = false;
 	wp->use_generation_gt = false;

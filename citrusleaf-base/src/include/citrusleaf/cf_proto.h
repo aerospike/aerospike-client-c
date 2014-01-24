@@ -43,6 +43,8 @@ extern "C" {
 #define CL_PROTO_RESULT_FAIL_INCOMPATIBLE_TYPE 12  // op and bin type incompatibilty
 #define CL_PROTO_RESULT_FAIL_RECORD_TOO_BIG 13
 #define CL_PROTO_RESULT_FAIL_KEY_BUSY 14
+// 15 and 16 used for 3.x functionality.
+#define CL_PROTO_RESULT_FAIL_BIN_NOT_FOUND 17
 
 // Forward definitions
 struct cl_bin_s;
@@ -363,27 +365,29 @@ typedef struct as_msg_s {
 #define CL_MSG_OP_MC_PREPEND 131        // Memcache compatile prepend. Allow prepending to ints.
 #define CL_MSG_OP_MC_TOUCH   132        // Memcache compatible touch - does not change generation count
 
-#define CL_MSG_INFO1_READ				(1 << 0)		// contains a read operation
-#define CL_MSG_INFO1_GET_ALL			(1 << 1) 		// get all bins, period
-#define CL_MSG_INFO1_GET_ALL_NODATA 	(1 << 2) 		// get all bins WITHOUT data (currently unimplemented)
-#define CL_MSG_INFO1_VERIFY     		(1 << 3) 		// verify is a GET transaction that includes data, and assert if the data aint right
-#define CL_MSG_INFO1_XDS				(1 << 4)                // operation is being performed by XDS
-#define CL_MSG_INFO1_NOBINDATA			(1 << 5)                // dOBo not read the bin information
+#define CL_MSG_INFO1_READ				(1 << 0) // contains a read operation
+#define CL_MSG_INFO1_GET_ALL			(1 << 1) // get all bins, period
+#define CL_MSG_INFO1_GET_ALL_NODATA 	(1 << 2) // get all bins WITHOUT data (currently unimplemented)
+#define CL_MSG_INFO1_VERIFY     		(1 << 3) // verify is a GET transaction that includes data, and assert if the data aint right
+#define CL_MSG_INFO1_XDS				(1 << 4) // operation is being performed by XDS
+#define CL_MSG_INFO1_NOBINDATA			(1 << 5) // do not get information about bins and its data
 
-#define CL_MSG_INFO2_WRITE				(1 << 0)		// contains a write semantic
-#define CL_MSG_INFO2_DELETE 			(1 << 1)  		// fling a record into the belly of Moloch
-#define CL_MSG_INFO2_GENERATION			(1 << 2) 		// pay attention to the generation
-#define CL_MSG_INFO2_GENERATION_GT		(1 << 3) 		// apply write if new generation >= old, good for restore
-#define CL_MSG_INFO2_GENERATION_DUP  	(1 << 4)		// if a generation collision, create a duplicate
-#define CL_MSG_INFO2_WRITE_UNIQUE		(1 << 5) 		// write only if it doesn't exist
-#define CL_MSG_INFO2_WRITE_BINUNIQUE	(1 << 6)
-#define CL_MSG_INFO2_WRITE_MERGE		(1 << 7)		// merge this with current
+#define CL_MSG_INFO2_WRITE				(1 << 0) // contains a write semantic
+#define CL_MSG_INFO2_DELETE 			(1 << 1) // fling a record into the belly of Moloch
+#define CL_MSG_INFO2_GENERATION			(1 << 2) // pay attention to the generation
+#define CL_MSG_INFO2_GENERATION_GT		(1 << 3) // apply write if new generation >= old, good for restore
+#define CL_MSG_INFO2_GENERATION_DUP  	(1 << 4) // if a generation collision, create a duplicate
+#define CL_MSG_INFO2_CREATE_ONLY		(1 << 5) // write record only if it doesn't exist
+#define CL_MSG_INFO2_BIN_CREATE_ONLY	(1 << 6) // write bin only if it doesn't exist
+#define CL_MSG_INFO2_WRITE_MERGE		(1 << 7) // merge this with current
 
-#define CL_MSG_INFO3_LAST      			(1 << 0)     	// this is the last of a multi-part message
-#define CL_MSG_INFO3_TRACE				(1 << 1)		// apply server trace logging for this transaction
-#define CL_MSG_INFO3_TOMBSTONE			(1 << 2)		// if set on response, a version was a delete tombstone
-#define CL_MSG_INFO3_UPDATE_ONLY		(1 << 3)		// properly a write option, but there are no more bits. Update existing record only; do not create new record
-#define CL_MSG_INFO3_CREATE_OR_REPLACE	(1 << 4)		// properly a write option, but there are no more bits. Completely replace existing record or create new record
+#define CL_MSG_INFO3_LAST      			(1 << 0) // this is the last of a multi-part message
+#define CL_MSG_INFO3_TRACE				(1 << 1) // apply server trace logging for this transaction
+#define CL_MSG_INFO3_TOMBSTONE			(1 << 2) // if set on response, a version was a delete tombstone
+#define CL_MSG_INFO3_UPDATE_ONLY		(1 << 3) // update existing record only, do not create new record
+#define CL_MSG_INFO3_CREATE_OR_REPLACE	(1 << 4) // completely replace existing record, or create new record
+#define CL_MSG_INFO3_REPLACE_ONLY		(1 << 5) // completely replace existing record, do not create new record
+#define CL_MSG_INFO3_BIN_REPLACE_ONLY	(1 << 6) // replace existing bin, do not create new bin
 
 
 static inline uint8_t * cl_msg_op_get_value_p(cl_msg_op *op)

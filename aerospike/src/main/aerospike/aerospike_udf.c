@@ -75,7 +75,7 @@ as_status aerospike_udf_list(
 	cl_udf_file * 	clfiles = NULL;
 	int 			count = 0;
 	
-	int rc =  citrusleaf_udf_list(as->cluster, &clfiles, &count, &error);
+	cl_rv clrv =  citrusleaf_udf_list(as->cluster, &clfiles, &count, &error);
 
 	if ( error != NULL ) {
 		as_error_update(err, AEROSPIKE_ERR, error);
@@ -100,7 +100,7 @@ as_status aerospike_udf_list(
 
 		free(clfiles);
 	}
-	return as_error_fromrc(err, rc);
+	return as_error_fromrc(err, clrv);
 }
 
 /**
@@ -121,7 +121,7 @@ as_status aerospike_udf_get(
 	cl_udf_file clfile;
     memset(&clfile,0,sizeof(cl_udf_file));
 
-	int rc = citrusleaf_udf_get(as->cluster, filename, &clfile, type, &error);
+	cl_rv clrv = citrusleaf_udf_get(as->cluster, filename, &clfile, type, &error);
 	
 	if ( error != NULL ) {
 		as_error_update(err, AEROSPIKE_ERR, error);
@@ -137,7 +137,7 @@ as_status aerospike_udf_get(
 		as_bytes_destroy(clfile.content);
 		clfile.content = NULL;
 	}
-	return as_error_fromrc(err, rc);
+	return as_error_fromrc(err, clrv);
 }
 
 /**
@@ -149,21 +149,23 @@ as_status aerospike_udf_put(
 {
 	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
-	
+	cl_rv clrv;
 	// resolve policies
 	// as_policy_info p;
 	// as_policy_info_resolve(&p, &as->config.policies, policy);
 	
 	char * error = NULL;
 
-	int rc = citrusleaf_udf_put(as->cluster, filename, content, type, &error);
+	clrv = citrusleaf_udf_put(as->cluster, filename, content, type, &error);
 
 	if ( error != NULL ) {
-		as_error_update(err, AEROSPIKE_ERR, error);
+		// This returns an as_status code called inline.
+		as_error_update(err, AEROSPIKE_ERR_REQUEST_INVALID, error);
 		free(error);
 		error = NULL;
 	}
-	return as_error_fromrc(err, rc);
+
+	return as_error_fromrc(err, clrv);
 }
 
 /**
@@ -182,12 +184,12 @@ as_status aerospike_udf_remove(
 	
 	char * error = NULL;
 	
-	int rc = citrusleaf_udf_remove(as->cluster, filename, &error);
+	cl_rv clrv = citrusleaf_udf_remove(as->cluster, filename, &error);
 
 	if ( error != NULL ) {
 		as_error_update(err, AEROSPIKE_ERR, error);
 		free(error);
 		error = NULL;
 	}
-	return as_error_fromrc(err, rc);
+	return as_error_fromrc(err, clrv);
 }

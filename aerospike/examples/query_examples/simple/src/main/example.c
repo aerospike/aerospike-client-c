@@ -79,25 +79,11 @@ main(int argc, char* argv[])
 	example_remove_test_records(&as);
 	example_remove_index(&as, TEST_INDEX_NAME);
 
-        bool rv = example_create_integer_index(&as, "test-bin", TEST_INDEX_NAME); 
 	// Create a numeric secondary index on test-bin.
-	if (!rv) {
+	if (! example_create_integer_index(&as, "test-bin", TEST_INDEX_NAME)) {
 		cleanup(&as);
 		exit(-1);
-	}else{
-		LOG("Created secondary index:%s successfully rv:%d \n ", (char *)TEST_INDEX_NAME, rv);
-        }
-
-        rv = example_create_integer_index(&as, "test-bin", TEST_INDEX_NAME); 
-	// Create a numeric secondary index on test-bin.
-	if (!rv) {
-		cleanup(&as);
-		exit(-1);
-	}else{
-		LOG("Created secondary index:%s successfully rv:%d \n ", (char *)TEST_INDEX_NAME, rv);
-        }
-
-
+	}
 
 	if (! insert_records(&as)) {
 		cleanup(&as);

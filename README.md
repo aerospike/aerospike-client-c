@@ -40,6 +40,15 @@ To build a specific module:
 
 	$ make -C {module}
 
+### troubleshooting
+
+If you run into a problem in the msgpack module where a .Tpo file is not found,
+do the following:
+	$ cd msgpack
+  $ autoreconf
+  $ ./configure
+  $ make
+
 ### Clean
 
 To clean all modules:

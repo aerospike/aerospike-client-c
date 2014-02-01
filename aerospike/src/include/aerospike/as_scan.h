@@ -21,6 +21,7 @@
  *****************************************************************************/
 
 #pragma once 
+#pragma GCC diagnostic ignored "-Waddress"
 
 #include <aerospike/as_bin.h>
 #include <aerospike/as_key.h>

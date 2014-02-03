@@ -204,13 +204,13 @@ local function lsoSummary( lsoMap )
   resultMap.BinName           = lsoMap.BinName;
   resultMap.NameSpace         = lsoMap.NameSpace;
   resultMap.Set               = lsoMap.Set;
-  resultMap.ChunkSize         = lsoMap.ChunkSize;
+  resultMap.LdrByteMax         = lsoMap.LdrByteMax;
   resultMap.HotItemCount      = lsoMap.HotItemCount;
   resultMap.HotCacheMax       = lsoMap.HotCacheMax;
   resultMap.HotCacheTransfer  = lsoMap.HotCacheTransfer;
   resultMap.WarmItemCount     = lsoMap.WarmItemCount;
   resultMap.WarmChunkCount    = lsoMap.WarmChunkCount;
-  resultMap.WarmChunkMax      = lsoMap.WarmChunkMax;
+  resultMap.WarmCacheDirMax      = lsoMap.WarmCacheDirMax;
   resultMap.ColdItemCount     = lsoMap.ColdItemCount;
   resultMap.ColdChunkCount    = lsoMap.ColdChunkCount;
   resultMap.ColdDirCount      = lsoMap.ColdDirCount;
@@ -439,7 +439,7 @@ local function warmDirListHasRoom( lsoMap )
   info("[ENTER]: <%s:%s> LSO BIN(%s) Bin Map(%s)\n", 
     mod, meth, lsoMap.BinName, tostring( lsoMap ));
 
---  if lsoMap.WarmChunkCount >= lsoMap.WarmChunkMax then
+--  if lsoMap.WarmChunkCount >= lsoMap.WarmCacheDirMax then
 --    decision = 0;
 --  end
     -- NOTE:  (TODO: FIXME: Right now we're disabling the Cold Cache,
@@ -1017,6 +1017,64 @@ local function hotCacheInsert( lsoMap, newStorageValue  )
 end -- hotCacheInsert()
 -- ======================================================================
 
+-- ======================================================================
+-- initializeLsoMap:
+-- ======================================================================
+-- Set up the LSO Map with the standard (default) values.
+-- These values may later be overridden by the user.
+-- The structure held in the Record's "LSO BIN" is this map.  This single
+-- structure contains ALL of the settings/parameters that drive the LSO
+-- behavior.
+-- ======================================================================
+local function initializeLsoMap( topRec, lsoBinName )
+  local mod = "LsoStickman";
+  local meth = "initializeLsoMap()";
+  info("[ENTER]: <%s:%s>:: LsoBinName(%s)\n", mod, meth, tostring(lsoBinName));
+
+  -- Create the map, and fill it in.
+  local lsoMap = map();
+  -- General Parms:
+  lsoMap.ItemCount = 0;     -- A count of all items in the stack
+  lsoMap.DesignVersion = 1; -- Current version of the code
+  lsoMap.Magic = "MAGIC"; -- we will use this to verify we have a valid map
+  lsoMap.BinName = lsoBinName; -- Defines the LSO Bin
+  lsoMap.NameSpace = "test"; -- Default NS Name -- to be overridden by user
+  lsoMap.Set = "set";       -- Default Set Name -- to be overridden by user
+  -- LSO Data Record Chunk Settings
+  lsoMap.LdrEntryMax = 100;  -- Max # of items in a Data Chunk (List Mode)
+  lsoMap.LdrEntrySize = 20;  -- Must be a setable parm
+  lsoMap.LdrByteMax = 2000;  -- Max # of BYTES in a Data Chunk (binary mode)
+  -- Hot Cache Settings
+  lsoMap.HotCacheList = list();
+  lsoMap.HotItemCount = 0; -- Number of elements in the Top Cache
+  lsoMap.HotCacheMax = 100; -- Max Number for the cache -- when we transfer
+  lsoMap.HotCacheTransfer = 50; -- How much to Transfer at a time.
+  -- Warm Cache Settings
+  lsoMap.WarmDirList = list();   -- Define a new list for the Warm Stuff
+  lsoMap.WarmChunkCount = 0; -- Number of Warm Data Record Chunks
+  lsoMap.WarmCacheDirMax = 1000; -- Number of Warm Data Record Chunks
+  lsoMap.WarmChunkTransfer = 10; -- Number of Warm Data Record Chunks
+  lsoMap.WarmTopChunkEntryCount = 0; -- Count of entries in top warm chunk
+  lsoMap.WarmTopChunkByteCount = 0; -- Count of bytes used in top warm Chunk
+  -- Cold Cache Settings
+  lsoMap.ColdChunkCount = 0; -- Number of Cold Data Record Chunks
+  lsoMap.ColdDirCount = 0; -- Number of Cold Data Record DIRECTORY Chunks
+  lsoMap.ColdListHead  = 0;   -- Nothing here yet
+  lsoMap.ColdCacheDirMax = 100;  -- Should be a setable parm
+
+  info("[DEBUG]: <%s:%s> : CTRL Map after Init(%s)\n",
+    mod, meth , tostring(lsoMap));
+
+  -- Put our new map in the record, then store the record.
+  topRec[lsoBinName] = lsoMap;
+
+
+  info("[EXIT]:<%s:%s>:Dir Map after Init(%s)\n", mod,meth,tostring(lsoMap));
+  return lsoMap
+end -- initializeLsoMap
+
+-- ======================================================================
+
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 -- LSO Main Functions
 -- ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
@@ -1055,7 +1113,7 @@ end -- hotCacheInsert()
 --  (2.1) LsoBinName
 --  (2.2) Namespace (just one, for now)
 --  (2.3) Set
---  (2.4) ChunkSize
+--  (2.4) LdrByteMax
 --  (2.5) Design Version
 --
 --  !!!! More parms needed here to appropriately configure the LSO
@@ -1078,18 +1136,11 @@ function stackCreate( topRec, lsoBinName, arglist )
     mod, meth, tostring( lsoBinName), tostring( arglist ));
   end
 
-  -- Remove this later -- hardcode for now.
-  lsoBinName = "LsoBin";
-
-
-  -- local lsoBinName = arglist[1];
-  if( lsoBinName == nil ) then
-    info("[ERROR EXIT]: <%s:%s> Bad LSO BIN Parameter\n", mod, meth );
-    return('Bad LSO Bin Parameter');
+  -- Some simple protection if things are weird
+  if lsoBinName == nil then
+    warn("[WARNING]: <%s:%s> Bad LSO BIN Name: Using default\n", mod, meth );
+    lsoBinName = "LsoBin";
   end
-
---  info("[DEBUG]: <%s:%s> bin(%s) argList(%s)\n",
---    mod, meth, lsoBinName, tostring(arglist) );
 
   -- Check to see if LSO Structure (or anything) is already there,
   -- and if so, error
@@ -1097,55 +1148,10 @@ function stackCreate( topRec, lsoBinName, arglist )
     info("[ERROR EXIT]: <%s:%s> LSO BIN(%s) Already Exists\n",
       mod, meth, tostring(lsoBinName) );
     return('LSO_BIN already exists');
+  else
+    -- Create and initialize the LSO MAP -- the main LSO structure
+    local lsoMap = initializeLsoMap( topRec );
   end
-
-  info("[DEBUG]: <%s:%s> : Initialize LSO Map\n", mod, meth );
-
-  -- Define our control information and put it in the record's control bin
-  -- Notice that in the next version, Top of Stack (TOS) will not be at the
-  -- end, but will instead move and will have a TOS ptr var in the ctrl map.
-  local lsoMap = map();
-  -- local digest = aerospike:create_digest( record );
-  local designVersion = 1; -- Not exactly sure how to deal with code versions
-  local entryMax = 100; -- items per chunk (TODO: should be a property)
-  local bytesMax = 2000; -- bytes per chunk (TODO: should be a property)
-
-  lsoMap.Magic = "MAGIC"; -- we will use this to verify we have a valid map
-  lsoMap.BinName = "LsoBin"; -- arglist[1];
-  lsoMap.NameSpace = "test"; -- arglist[2];
-  lsoMap.Set = "set"; -- arglist[3];
-  lsoMap.ChunkSize = 2000; -- arglist[4];
-  lsoMap.HotCacheList = list();
-  lsoMap.HotItemCount = 0; -- Number of elements in the Top Cache
-  -- TODO: FIXME: This is the place to change the WarmCache parameter
-  -- behavior:  To get the HotCache to migrate after just 10 pushes,
-  -- we use HotCacheMax = 10, HotCacheTransfer=5;
-  -- Normal (default numbers would be around 100 and 50)
-  -- So -- we SHOULD see a "transfer" when we try to insert item # 9.
-  lsoMap.HotCacheMax = 100; -- Max Number for the cache -- when we transfer
-  lsoMap.HotCacheTransfer = 50; -- How much to Transfer at a time.
-  lsoMap.WarmChunkCount = 0; -- Number of Warm Data Record Chunks
-  lsoMap.WarmChunkMax = 1000; -- Number of Warm Data Record Chunks
-  lsoMap.WarmChunkTransfer = 10; -- Number of Warm Data Record Chunks
-  lsoMap.WarmTopChunkEntryCount = 0; -- Count of entries in top warm chunk
-  lsoMap.WarmTopChunkByteCount = 0; -- Count of bytes used in top warm Chunk
-  lsoMap.ColdChunkCount = 0; -- Number of Cold Data Record Chunks
-  lsoMap.ColdDirCount = 0; -- Number of Cold Data Record DIRECTORY Chunks
-  lsoMap.ItemCount = 0;     -- A count of all items in the stack
-  lsoMap.WarmDirList = list();   -- Define a new list for the Warm Stuff
-  lsoMap.ColdListHead  = 0;   -- Nothing here yet
-  lsoMap.LdrEntryMax = 100;  -- Should be a setable parm
-  lsoMap.LdrEntrySize = 20;  -- Must be a setable parm
-  lsoMap.LdrByteMax = 2000;  -- Should be a setable parm
-  lsoMap.LdirColdDirMax = 100;  -- Should be a setable parm
-  lsoMap.DesignVersion = designVersion;
-
-  info("[DEBUG]: <%s:%s> : CTRL Map after Init(%s)\n",
-    mod, meth , tostring(lsoMap));
-
-  -- Note:  We no longer create chunks initially -- we wait until the
-  -- LSO has accumulated some number of entries, and after that we
-  -- transfer a block of HotCache entries into WarmCache chunk storage
 
   -- Put our new map in the record, then store the record.
   topRec[lsoBinName] = lsoMap;
@@ -1200,21 +1206,24 @@ local function localStackPush( topRec, lsoBinName, newValue, func, fargs )
       mod, meth, lsoBinName, tostring( newValue ));
   end
 
-  if( not aerospike:exists( topRec ) ) then
-    print("ERROR ON RECORD EXISTS\n");
-    info("[ERROR EXIT]:<%s:%s>:Missing Record. Exit\n", mod, meth );
-    return('Base Record Does NOT exist');
+  -- Some simple protection if things are weird
+  if lsoBinName == nil then
+    warn("[WARNING]: <%s:%s> Bad LSO BIN Name: Using default\n", mod, meth );
+    lsoBinName = "LsoBin";
   end
 
-  -- Verify that the LSO Structure is there: otherwise, error.
-  if( lsoBinName == nil ) then
-    info("[ERROR EXIT]: <%s:%s> Bad LSO BIN Parameter\n", mod, meth );
-    return('Bad LSO Bin Parameter');
+  local lsoMap;
+  if( not aerospike:exists( topRec ) ) then
+    warn("[WARNING]:<%s:%s>:Record Does Not exist. Creating\n", mod, meth );
+    lsoMap = initializeLsoMap( topRec, lsoBinName );
+    aerospike:create( topRec );
   end
+
   if( topRec[lsoBinName] == nil ) then
-    info("[ERROR EXIT]: <%s:%s> LSO BIN (%s) DOES NOT Exist\n",
+    warn("[WARNING]: <%s:%s> LSO BIN (%s) DOES NOT Exist: Creating\n",
       mod, meth, lsoBinName );
-    return('LSO BIN Does NOT exist');
+    lsoMap = initializeLsoMap( topRec, lsoBinName );
+    aerospike:create( topRec );
   end
   
   -- check that our bin is (relatively intact
@@ -1560,13 +1569,13 @@ function largeStackCreate(topRec)
   lsoMap.BinName = binname;
   lsoMap.NameSpace = "test"; -- arglist[2];
   lsoMap.Set = "set"; -- arglist[3];
-  lsoMap.ChunkSize = 2000; -- arglist[4];
+  lsoMap.LdrByteMax = 2000; -- arglist[4];
   lsoMap.HotCache = list(); -- List of data entries
   lsoMap.HotItemCount = 0; -- Number of elements in the Top Cache
   lsoMap.HotCacheMax = 8; -- Max Number for the cache -- when we transfer
   lsoMap.HotCacheTransfer = 4; -- How much to Transfer at a time.
   lsoMap.WarmChunkCount = 0; -- Number of Warm Data Record Chunks
-  lsoMap.WarmChunkMax = 100; -- Number of Warm Data Record Chunks
+  lsoMap.WarmCacheDirMax = 100; -- Number of Warm Data Record Chunks
   lsoMap.WarmChunkTransfer = 10; -- Number of Warm Data Record Chunks
   lsoMap.WarmTopChunkEntryCount = 0; -- Count of entries in top warm chunk
   lsoMap.WarmTopChunkByteCount = 0; -- Count of bytes used in top warm Chunk
@@ -1578,7 +1587,7 @@ function largeStackCreate(topRec)
   lsoMap.LdrEntryMax = 100;  -- Should be a setable parm
   lsoMap.LdrEntrySize = 20;  -- Must be a setable parm
   lsoMap.LdrByteMax = 2000;  -- Should be a setable parm
-  lsoMap.LdirColdDirMax = 100;  -- Should be a setable parm
+  lsoMap.ColdCacheDirMax = 100;  -- Should be a setable parm
   lsoMap.DesignVersion = designVersion;
 
   topRec[binname] = lsoMap;

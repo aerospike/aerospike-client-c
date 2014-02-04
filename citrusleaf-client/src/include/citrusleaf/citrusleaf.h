@@ -285,6 +285,8 @@ extern bool citrusleaf_cluster_settled(cl_cluster *asc);
 
 extern int citrusleaf_cluster_get_nodecount(cl_cluster *asc);
 
+extern int *citrusleaf_cluster_get_version(cl_cluster *asc);
+
 // must free node_names when done
 extern void cl_cluster_get_node_names(cl_cluster *asc, int *n_nodes, char **node_names);
 

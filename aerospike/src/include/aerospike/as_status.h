@@ -239,6 +239,15 @@ typedef enum as_status_e {
 	 */
 	AEROSPIKE_ERR_INDEX_NOT_READABLE 		= 1204,
 
+	/**
+	 *	Index name is too long.
+	 */
+	AEROSPIKE_ERR_INDEX_NAME_MAXLEN 		= 1205,
+
+	/**
+	 *	System already has maximum allowed indices.
+	 */
+	AEROSPIKE_ERR_INDEX_MAXCOUNT 			= 1206,
 	/***************************************************************************
 	 *	UDF OPERATIONS
 	 **************************************************************************/

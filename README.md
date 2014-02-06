@@ -4,7 +4,7 @@
 
 ## Prerequisites
 
-libc and openssl packages must be installed to compile the client library.
+libc, openssl, and lua development packages must be installed to compile the client library.
 
 ### Debian-based Distributions
 
@@ -31,6 +31,10 @@ For Redhat-based distributions (RHEL, CentOS, etc.):
 
 Installation of these packages will also install gcc. gcc -version must show a version of 4.1 or better. g++ is also supported with the same version restriction.
 
+### Lua from source
+
+If you wish to install Lua from source, make sure you install Lua 5.1. By default, Lua will be installed in /usr/local with the correct names, so no extra steps are necessary - only validate that liblua.so and liblua.a are in the default library search path of your build environment.
+
 ## Usage
 
 ### Build
@@ -52,6 +56,15 @@ This will generate the following files:
 - `target/{target}/include` – header files
 
 Static linking with the `.a` prevents you from having to install the libraries on your target platform. Dynamic linking with the `.so` avoids a client rebuild if you upgrade the client.  Choose the option that is right for you.
+
+### Troubleshooting
+
+If you run into a problem with the msgpack module where a .Tpo file is not found, which seems to happen often on clean builds in some Debian distros, do the following:
+
+$ cd modules/msgpack
+$ autoreconf
+$ ./configure
+$ make
 
 ### Clean
 

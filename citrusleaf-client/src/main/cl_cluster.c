@@ -1984,6 +1984,8 @@ citrusleaf_cluster_get_version(cl_cluster *asc)
 						break;
 					}
 				}
+				// we can break if one info call is successful
+				break;
 			}
 			else
 			{

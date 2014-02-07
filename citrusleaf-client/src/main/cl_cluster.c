@@ -1942,7 +1942,8 @@ citrusleaf_cluster_get_version(cl_cluster *asc)
 		// Iterate through all hosts
 		host = cf_vector_pointer_get(&asc->host_str_v, index);
 		cl_lookup(asc, cf_vector_pointer_get(&asc->host_str_v, index), cf_vector_integer_get(&asc->host_port_v, index)     , &sockaddr_in_v);
-		for (uint index_addr = 0; index_addr < cf_vector_size(&sockaddr_in_v); index_addr++)
+		uint n_sockets = cf_vector_size(&sockaddr_in_v);
+		for (uint index_addr = 0; index_addr < n_sockets; index_addr++)
 		{
 			// Iterate through all sockets
 			sin = cf_vector_getp(&sockaddr_in_v, index_addr);
@@ -1984,11 +1985,12 @@ citrusleaf_cluster_get_version(cl_cluster *asc)
 						break;
 					}
 				}
-				// we can break if one info call is successful
+				// we can break if any info call is successful
 				break;
 			}
-			else
+			else if (index_addr == n_sockets - 1)
 			{
+				// This means we have tried all the sockets and didn't succeed in any.
 				cf_info("Info call failed to Server %s while trying to get minimum version", host);
 				goto err;
 			}

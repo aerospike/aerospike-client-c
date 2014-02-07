@@ -23,6 +23,7 @@
 #include <sys/types.h>
 #include <sys/socket.h> // socket calls
 #include <stdio.h>
+#include <limits.h>
 #include <errno.h> //errno
 #include <stdlib.h> //fprintf
 #include <unistd.h> // close
@@ -1908,6 +1909,95 @@ citrusleaf_cluster_get_compression_stat(cl_cluster *asc, uint64_t *actual_sz, ui
         *compressed_sz = asc->compression_stat.compressed_sz;
     }
 }
+
+/* This function will return the minimum node version in the cluster as array of integers of size 3. 
+ * If any node is not rechable it will return NULL.
+ * It is upto the application to retry in case we return NULL from here.
+ *
+ * Input : Cluster object pointer
+ * Output : Minimum version of node in form of array in the cluster
+ * 		NULL in case any node is not reachable.	
+ */
+int *  
+citrusleaf_cluster_get_version(cl_cluster *asc)
+{
+	int cur_version[3] = {0,0,0};
+	int * min_version = (int *) cf_malloc(sizeof(int)*3);
+	uint n_hosts = cf_vector_size(&asc->host_str_v);
+	cf_vector_define(sockaddr_in_v, sizeof( struct sockaddr_in ), 0);
+	struct sockaddr_in *sin;
+	char *values;
+	char *tmp_chr;
+	char *tmp_ptr;
+	char *host;
+	char *token_seperator[] = {".", ".", "-"};
+
+	// Initialize min_version to max value
+	for(int  index=0; index<3; index++) {
+		min_version[index] = INT_MAX; 
+	}
+
+	for (uint index = 0; index < n_hosts; index++)
+	{
+		// Iterate through all hosts
+		host = cf_vector_pointer_get(&asc->host_str_v, index);
+		cl_lookup(asc, cf_vector_pointer_get(&asc->host_str_v, index), cf_vector_integer_get(&asc->host_port_v, index)     , &sockaddr_in_v);
+		for (uint index_addr = 0; index_addr < cf_vector_size(&sockaddr_in_v); index_addr++)
+		{
+			// Iterate through all sockets
+			sin = cf_vector_getp(&sockaddr_in_v, index_addr);
+			// Check version of server
+			if (citrusleaf_info_host(sin, "build", &values, 300, false) == 0)
+			{
+				// build string will of format e.g. build\t2.6.3-8-g6f1cadf
+				tmp_chr = strtok_r (values, "\t", &tmp_ptr);
+				index = 0;
+				while (index < 3)
+				{
+					tmp_chr = strtok_r (NULL, token_seperator[index], &tmp_ptr);
+					if (!tmp_chr)
+					{
+						cf_info("Info call returned wrong info from Server %s while tryiing to get minimum version", host);
+						goto err;
+					}
+					cur_version[index++] = atoi(tmp_chr);
+				}
+
+				// following loop will get the minimum version from all the nodes  
+				for (index=0; index<3; index++)
+				{
+					if (min_version[index] == cur_version[index])
+					{
+						// both versions are same upto this point so continue
+						continue;
+					}
+					else if (min_version[index] > cur_version[index])
+					{
+						// update min_version
+						for (index=0; index<3; index++)
+						{
+							min_version[index] = cur_version[index];
+						}
+						break;
+					} else {
+						// min_version already has minimum version
+						break;
+					}
+				}
+			}
+			else
+			{
+				cf_info("Info call failed to Server %s while trying to get minimum version", host);
+				goto err;
+			}
+		}
+	}
+	return min_version;
+
+err:
+	return NULL;
+}
+
 
 /*
  * Function to set compression threshold.

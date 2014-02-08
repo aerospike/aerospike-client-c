@@ -39,9 +39,7 @@ Before building, please ensure you have the prerequisites installed.
 
 This project uses git submodules, so you will need to initialize and update the submodules before building thie project. To initialize and update submodules, run:
 
-	$ cd ..
 	$ git submodule update --init
-	$ cd aerospike
 
 To build:
 

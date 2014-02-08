@@ -1,71 +1,90 @@
-# Aerospike C Client API
+# Aerospike C-client API
 
-This repository is a collection of C client libraries for interfacing with Aerospike database clusters.
+`aerospike` is a C client library (API) for interfacing with the Aerospike Database.
 
-## Modules
+## Prerequisites
 
-The C Client repository is composed of multiple modules. Each module is either a client library or shared module.
+libc and openssl packages must be installed to compile the client library.
 
-- **[aerospike](./aerospike)** – Aerospike (3.x) C API 
-- **[citrusleaf-base](./citrusleaf-base)** – Shared files for citrusleaf submodules.
-- **[citrusleaf-client](./citrusleaf-client)** – Citrusleaf (2.x) C API (*deprecated*)
-- **[citrusleaf-libevent](./citrusleaf-client)** – libevent-based API
+### Debian-based Distributions
 
-Each module has its own `README.md` and `Makefile`. 
+For Debian-based distributions (Debian, Ubuntu, etc.):
 
-Please read the `README.md` for each module before using them or running make. The document contains information on prerequisites, usage and directory structure.
+	$ sudo apt-get install libc6-dev libssl-dev liblua5.1-dev autoconf automake libtool g++
+	$ export CPATH=$CPATH:/usr/include/lua5.1
+
+For Debian:
+
+	$ sudo ln -s /usr/lib/liblua5.1.so /usr/lib/liblua.so
+	$ sudo ln -s /usr/lib/liblua5.1.a /usr/lib/liblua.a
+
+For Ubuntu:
+
+	$ sudo ln -s /usr/lib/x86_64-linux-gnu/liblua5.1.so /usr/lib/liblua.so
+	$ sudo ln -s /usr/lib/x86_64-linux-gnu/liblua5.1.a /usr/lib/liblua.a
+
+### Redhat-based Distributions
+
+For Redhat-based distributions (RHEL, CentOS, etc.):
+
+	$ sudo yum install openssl-devel glibc-devel lua-devel autoconf automake libtool
+
+Installation of these packages will also install gcc. gcc -version must show a version of 4.1 or better. g++ is also supported with the same version restriction.
 
 ## Usage
 
-Please ensure you have resolved the prerequisites and dependencies in the README.me for each module before running commands accross all modules.
-
-### Cloning
-
-To clone this repository, run:
-
-	$ git clone https://github.com/aerospike/aerospike-client-c.git
-
-This repository makes use of git submodules. Before you can build, you need to make sure all submodules are initialized and updated:
-
-	$ cd aerospike-client-c
-	$ git submodule update --init
-
 ### Build
 
-To build all modules:
+Before building, please ensure you have the prerequisites installed.
+
+This project uses git submodules, so you will need to initialize and update the submodules before building thie project. To initialize and update submodules, run:
+
+	$ cd ..
+	$ git submodule update --init
+	$ cd aerospike
+
+To build:
 
 	$ make
 
-To build a specific module:
+This will generate the following files:
 
-	$ make -C {module}
+- `target/{target}/lib/libaerospike.so` – dynamic shared library 
+- `target/{target}/lib/libaerospike.a` – static archive
+- `target/{target}/include` – header files
 
-### troubleshooting
-
-If you run into a problem in the msgpack module where a .Tpo file is not found,
-do the following:
-	$ cd msgpack
-  $ autoreconf
-  $ ./configure
-  $ make
+Static linking with the `.a` prevents you from having to install the libraries on your target platform. Dynamic linking with the `.so` avoids a client rebuild if you upgrade the client.  Choose the option that is right for you.
 
 ### Clean
 
-To clean all modules:
+To clean:
 
 	$ make clean
 
-To clean a specific module:
+This will remove all generated files.
 
-	$ make -C {module} clean
+### Test
 
-### Other Targets
+To run unit tests:
 
-To run `{target}` on all module:
+	$ make test
 
-	$ make {target}
 
-To run `{target}` on a specific module:
+## Project Layout
 
-	$ make -C {module} {target}
+The module is structured as follows:
+
+- `demo` - demo applications, making use of multiple features.
+- `examples` - simple example applications, focused on specific features.
+- `src` – developer maintained code for the project
+- `src/include` – public header files
+- `src/main` – source code for the library
+- `src/test` - unit tests
+- `target` – generated files
+- `target/{target}` – platform specific targets
+- `target/{target}/include` – public headers (API) for end users
+- `target/{target}/lib` – libraries for end users
+- `target/{target}/obj` – generated objects files
+- `target/{target}/deps` – generated dependency files
+
 

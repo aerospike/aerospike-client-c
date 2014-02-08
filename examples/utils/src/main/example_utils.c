@@ -59,7 +59,7 @@
 #define MAX_KEY_STR_SIZE 1024
 
 const char DEFAULT_HOST[] = "127.0.0.1";
-const int DEFAULT_PORT = 3010;
+const int DEFAULT_PORT = 3000;
 const char DEFAULT_NAMESPACE[] = "test";
 const char DEFAULT_SET[] = "test-set";
 const char DEFAULT_KEY_STR[] = "test-key";

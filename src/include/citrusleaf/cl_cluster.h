@@ -73,7 +73,6 @@ struct cl_cluster_s {
 	uint32_t			tend_speed;
 
 	bool				follow;				// possible to create a no-follow cluster
-	bool				nbconnect;
 
 	volatile bool		found_all;			// have, at some time, found all cluster members
 
@@ -142,7 +141,7 @@ extern cl_cluster_node * cl_cluster_node_get(cl_cluster *asc, const char *ns, co
 extern void cl_cluster_node_release(cl_cluster_node *cn, const char *tag);
 extern void cl_cluster_node_reserve(cl_cluster_node *cn, const char *tag);
 extern void cl_cluster_node_put(cl_cluster_node *cn);
-extern int cl_cluster_node_fd_get(cl_cluster_node *cn, bool asyncfd, bool nbconnect);
+extern int cl_cluster_node_fd_get(cl_cluster_node *cn, bool asyncfd);
 extern void cl_cluster_node_fd_put(cl_cluster_node *cn, int fd, bool asyncfd);
 extern cl_cluster_node *cl_cluster_node_get_byname(cl_cluster *asc, const char *name);
 
@@ -155,7 +154,6 @@ extern cl_cluster * citrusleaf_cluster_get_or_create(char *host, short port, int
 extern void citrusleaf_cluster_release_or_destroy(cl_cluster **asc);
 extern void citrusleaf_cluster_change_info_timeout(struct cl_cluster_s *asc, int msecs);
 extern void citrusleaf_cluster_change_tend_speed(struct cl_cluster_s *asc, int secs);
-extern void citrusleaf_cluster_use_nbconnect(struct cl_cluster_s *asc);
 
 // the timeout is how long to wait before the cluster is "settled"
 // 0 - a sensible default

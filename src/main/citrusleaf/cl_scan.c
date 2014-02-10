@@ -132,7 +132,7 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 #endif			
 		return(-1);
 	}
-	fd = cl_cluster_node_fd_get(node, false, asc->nbconnect);
+	fd = cl_cluster_node_fd_get(node, false);
 	if (fd == -1) {
 #ifdef DEBUG			
 		cf_debug("warning: node %s has no file descriptors, retrying transaction", node->name);
@@ -145,7 +145,7 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 #ifdef DEBUG			
 		cf_debug("Citrusleaf: write timeout or error when writing header to server - %d fd %d errno %d", rv, fd, errno);
 #endif
-		close(fd);
+		cf_close(fd);
 		return(-1);
 	}
 
@@ -157,7 +157,7 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 		// Now turn around and read a fine cl_pro - that's the first 8 bytes that has types and lengths
 		if ((rv = cf_socket_read_forever(fd, (uint8_t *) &proto, sizeof(cl_proto) ) ) ) {
 			cf_error("network error: errno %d fd %d",rv, fd);
-			close(fd);
+			cf_close(fd);
 			return(-1);
 		}
 #ifdef DEBUG_VERBOSE
@@ -167,12 +167,12 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 
 		if (proto.version != CL_PROTO_VERSION) {
 			cf_error("network error: received protocol message of wrong version %d", proto.version);
-			close(fd);
+			cf_close(fd);
 			return(-1);
 		}
 		if (proto.type != CL_PROTO_TYPE_CL_MSG) {
 			cf_error("network error: received incorrect message version %d", proto.type);
-			close(fd);
+			cf_close(fd);
 			return(-1);
 		}
 		
@@ -189,14 +189,14 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 			else
 				rd_buf = rd_stack_buf;
 			if (rd_buf == NULL) {
-				close(fd);
+				cf_close(fd);
 				return (-1);
 			}
 
 			if ((rv = cf_socket_read_forever(fd, rd_buf, rd_buf_sz))) {
 				cf_error("network error: errno %d fd %d", rv, fd);
 				if (rd_buf != rd_stack_buf)	{ free(rd_buf); }
-				close(fd);
+				cf_close(fd);
 				return(-1);
 			}
 // this one's a little much: printing the entire body before printing the other bits			
@@ -225,7 +225,7 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 			if (msg->header_sz != sizeof(cl_msg)) {
 				cf_error("received cl msg of unexpected size: expecting %zd found %d, internal error",
 					sizeof(cl_msg),msg->header_sz);
-				close(fd);
+				cf_close(fd);
 				return(-1);
 			}
 
@@ -272,7 +272,7 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 				if (set_ret) {
 					free(set_ret);
 				}
-				close(fd);
+				cf_close(fd);
 				return (-1);
 			}
 			
@@ -352,7 +352,7 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 		}
 		
 		if (gasq_abort) {
-			close(fd);
+			cf_close(fd);
 			cl_cluster_node_put(node);
 			node = 0;
 			return (rv);

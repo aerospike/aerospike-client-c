@@ -1415,7 +1415,7 @@ do_the_full_monte(cl_cluster *asc, int info1, int info2, int info3, const char *
 			usleep(10000);
 			goto Retry;
 		}
-		fd = cl_cluster_node_fd_get(node, false, asc->nbconnect);
+		fd = cl_cluster_node_fd_get(node, false);
 		if (fd == -1) {
 #ifdef DEBUG			
 			cf_debug("warning: node %s has no file descriptors, retrying transaction (tid %zu)", node->name, (uint64_t)pthread_self());
@@ -1549,7 +1549,7 @@ do_the_full_monte(cl_cluster *asc, int info1, int info2, int info3, const char *
 Retry:		
 
 		if (fd != -1) {
-			close(fd);
+			cf_close(fd);
 			fd = -1;
 		}
 
@@ -1577,7 +1577,7 @@ Error:
 		(int)(deadline_ms - cf_getms() ), rv );
 #endif	
 
-    if (fd != -1)   close(fd);
+    if (fd != -1)   cf_close(fd);
 
 	if (wr_buf != wr_stack_buf)		free(wr_buf);
 	if (rd_buf && (rd_buf != rd_stack_buf))		free(rd_buf);

@@ -255,7 +255,7 @@ citrusleaf_info_host_limit(struct sockaddr_in *sa_in, char *names, char **values
 
 Done:	
 	shutdown(fd, SHUT_RDWR);
-	close(fd);
+	cf_close(fd);
 	return(rv);
 }
 

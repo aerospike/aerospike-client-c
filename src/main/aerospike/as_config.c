@@ -20,7 +20,6 @@
 
 as_config * as_config_init(as_config * c) 
 {
-	c->non_blocking = true;
 	c->tender_interval = 1000;
 	as_policies_init(&c->policies);
 	memset(c->hosts, 0, sizeof(c->hosts));

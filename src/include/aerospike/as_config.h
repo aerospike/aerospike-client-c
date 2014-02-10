@@ -201,11 +201,6 @@ typedef struct as_config_lua_s {
 typedef struct as_config_s {
 
 	/**
-	 *	Use non-blocking sockets
-	 */
-	bool non_blocking;
-
-	/**
 	 *	Polling interval in milliseconds for cluster tender
 	 */
 	uint32_t tender_interval;

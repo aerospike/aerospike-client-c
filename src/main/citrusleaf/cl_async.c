@@ -246,7 +246,7 @@ Error:
 		//We do not know the state of FD. It may have pending data to be read.
 		//We cannot reuse the FD. So, close it to be on safe side.
 		cf_error("async receiver: Closing the fd %d because of error", workitem->fd);
-		close(workitem->fd);
+		cf_close(workitem->fd);
 		workitem->fd = -1;
 #endif
 		cf_atomic_int_incr(&g_async_stats.dropouts);
@@ -474,7 +474,7 @@ cl_do_async_monte(cl_cluster *asc, int info1, int info2, const char *ns, const c
 
 		// Now get the dedicated async FD of this node
 		starttime = cf_getms();
-		fd = cl_cluster_node_fd_get(node, true, asc->nbconnect);
+		fd = cl_cluster_node_fd_get(node, true);
 		endtime = cf_getms();
 		if ((endtime - starttime) > 10) {
 			cf_debug("Time to get FD for a node (>10ms)=%"PRIu64, (endtime - starttime));
@@ -518,14 +518,14 @@ Retry:
 //Do not close the FD
 #else
 			cf_error("async sender: Closing the fd %d because of network error", fd);
-			close(fd);
+			cf_close(fd);
 			fd = -1;
 #endif
 		}
 
 		if (fd != -1) {
 			cf_error("async sender: Closing the fd %d because of retry", fd);
-			close(fd);
+			cf_close(fd);
 			fd = -1;
 		}
 
@@ -561,7 +561,7 @@ Error:
 	//So, we reach this place with a valid FD in case of timeout.
 	if (fd != -1) {
 		cf_error("async sender: Closing the fd %d because of timeout", fd);
-		close(fd);
+		cf_close(fd);
 	}
 #endif
 

@@ -169,7 +169,6 @@ citrusleaf_cluster_create(void)
 	memset((void*)asc, 0, sizeof(cl_cluster));
 
 	asc->follow = true;
-	asc->nbconnect = false;
 	asc->found_all = false;
 	asc->last_node = 0;
 	asc->tend_speed = 1;
@@ -448,13 +447,13 @@ cl_cluster_node_release(cl_cluster_node *cn, const char *tag)
 			int	fd;
 			rv = cf_queue_pop(cn->conn_q, &fd, CF_QUEUE_NOWAIT);
 			if (rv == CF_QUEUE_OK)
-				close(fd);
+				cf_close(fd);
 		} while (rv == CF_QUEUE_OK);
 		do {
 			int	fd;
 			rv = cf_queue_pop(cn->conn_q_asyncfd, &fd, CF_QUEUE_NOWAIT);
 			if (rv == CF_QUEUE_OK)
-				close(fd);
+				cf_close(fd);
 		} while (rv == CF_QUEUE_OK);
 
 		do {
@@ -475,7 +474,7 @@ cl_cluster_node_release(cl_cluster_node *cn, const char *tag)
 		cf_queue_destroy(cn->asyncwork_q);
 
 		if (cn->info_fd != -1) {
-			close(cn->info_fd);
+			cf_close(cn->info_fd);
 		}
 
 		cf_client_rc_free(cn);
@@ -622,81 +621,36 @@ cl_cluster_node_put(cl_cluster_node *cn)
 }
 
 int
-cl_cluster_node_fd_create(cl_cluster_node *cn, bool nonblocking)
+cl_cluster_node_fd_create_and_connect(cl_cluster_node* cn)
 {
-	int fd;
-	// uint64_t starttime, endtime;
-		
-	// allocate a new file descriptor
-	if (-1 == (fd = socket ( AF_INET, SOCK_STREAM, 0))) {
-#ifdef DEBUG			
-		cf_debug("could not allocate a socket, serious problem");
-#endif			
-		return(-1);
-	}
-#ifdef DEBUG_VERBOSE		
-	else {
-		cf_debug("new socket: fd %d node %s",fd, cn->name);
-	}
-#endif
-
-	if (nonblocking == true) {
-		int flags;
-		if (-1 == (flags = fcntl(fd, F_GETFL, 0)))
-			flags = 0;
-		if (-1 == fcntl(fd, F_SETFL, flags | O_NONBLOCK)) {
-			close(fd); 
-			fd = -1;
-			goto Done;
-		}
+	// We better have a sockaddr.
+	if (cf_vector_size(&cn->sockaddr_in_v) == 0) {
+		cf_warn("node %s has no sockaddrs", cn->name);
+		return -1;
 	}
 	
-	int f = 1;
-	setsockopt(fd, SOL_TCP, TCP_NODELAY, &f, sizeof(f));
+	// Create a non-blocking socket.
+	int fd = cf_socket_create_nb();
 
-	// loop over all known IP addresses for the server
-	for (uint i=0;i< cf_vector_size(&cn->sockaddr_in_v);i++) {
+	if (fd == -1) {
+		// Local problem - socket create failed.
+		return -1;
+	}
+
+	// Try socket addresses until we connect.
+	for (uint32_t i = 0; i < cf_vector_size(&cn->sockaddr_in_v); i++) {
 		struct sockaddr_in *sa_in = cf_vector_getp(&cn->sockaddr_in_v, i);
 	
-		// uint64_t starttime = cf_getms();
-		//dump_sockaddr_in("Connecting to ", sa_in);
-		if (0 == connect(fd, (struct sockaddr *) sa_in, sizeof(struct sockaddr_in) ) )
-		{
-			// set nonblocking 
-			int flags;
-			if (-1 == (flags = fcntl(fd, F_GETFL, 0)))
-				flags = 0;
-			if (-1 == fcntl(fd, F_SETFL, flags | O_NONBLOCK)) {
-				close(fd); fd = -1; goto Done;
+		if (0 == cf_socket_start_connect_nb(fd, sa_in)) {
+			// Connection started ok - we have our socket.
+			return fd;
+		}
+		// TODO - else remove this sockaddr from the list?
 			}
 			
-			goto Done;
-		}
-		else {
-			//In case of a non-blocking connect, the connection may not be established immediately.
-			//in-progress is a valid return value. We can do select later and use the socket.
-			if (nonblocking && (errno == EINPROGRESS))
-			{
-				dump_sockaddr_in("Connecting to ", sa_in);
-				cf_debug("Non-blocking connect returned EINPROGRESS as expected");
-				goto Done;
-			}
-			// todo: remove this sockaddr from the list, or dun the node?
-			if (errno == ECONNREFUSED) {
-				cf_error("a host is refusing connections");
-			}
-			else {
-				cf_error("connect fail: errno %d", errno);
-			}
-		}
-	}
-	close(fd);
-	fd = -1;
-		
-Done:
-	// endtime = cf_getms();
-	//cf_debug("Time taken to open a new connection = %"PRIu64, (endtime - starttime));
-	return(fd);
+	// Couldn't start a connection on any socket address - close the socket.
+	cf_close(fd);
+	return -1;
 }
 
 // A quick non-blocking check to see if a server is connected. It may have
@@ -739,7 +693,7 @@ is_connected(int fd)
 }
 
 int
-cl_cluster_node_fd_get(cl_cluster_node *cn, bool asyncfd, bool nbconnect)
+cl_cluster_node_fd_get(cl_cluster_node *cn, bool asyncfd)
 {
 	int fd = -1;
 
@@ -753,12 +707,7 @@ cl_cluster_node_fd_get(cl_cluster_node *cn, bool asyncfd, bool nbconnect)
 	}
 #endif
 
-	cf_queue *q;
-	if (asyncfd == true) {
-		q = cn->conn_q_asyncfd;
-	} else {
-		q = cn->conn_q;
-	}
+	cf_queue *q = asyncfd ? cn->conn_q_asyncfd : cn->conn_q;
 
 	while (fd == -1) {
 		int rv = cf_queue_pop(q, &fd, CF_QUEUE_NOWAIT);
@@ -780,19 +729,13 @@ cl_cluster_node_fd_get(cl_cluster_node *cn, bool asyncfd, bool nbconnect)
 				case CONNECTED_ERROR:
 					// Some other problem, could have to do with remote end.
 				default:
-					close(fd);
+					cf_close(fd);
 					fd = -1;
 					break;
 			}
 		}
 		else if (rv == CF_QUEUE_EMPTY) {
-			if ((asyncfd == true) || (nbconnect == true)) {
-				// Use a non-blocking socket for async client.
-				fd = cl_cluster_node_fd_create(cn, true);
-			}
-			else {
-				fd = cl_cluster_node_fd_create(cn, false);
-			}
+			fd = cl_cluster_node_fd_create_and_connect(cn);
 
 			// We exhausted the queue and can't open a fresh socket.
 			if (fd == -1) {
@@ -825,7 +768,7 @@ cl_cluster_node_fd_put(cl_cluster_node *cn, int fd, bool asyncfd)
 	} else {
 		q = cn->conn_q;
 		if (! cf_queue_push_limit(q, &fd, 300)) {
-			close(fd);
+			cf_close(fd);
 		}
 	}
 }
@@ -1192,33 +1135,16 @@ cl_cluster_node_prep_info_fd(cl_cluster_node* cn)
 	}
 
 	// Try to open a new socket.
+	cn->info_fd = cl_cluster_node_fd_create_and_connect(cn);
 
-	// We better have a sockaddr.
-	if (cf_vector_size(&cn->sockaddr_in_v) == 0) {
-		cf_warn("node %s has no sockaddrs", cn->name);
-		return false;
-	}
-
-	// Loop over sockaddrs until we successfully start a connection.
-	for (uint32_t i = 0; i < cf_vector_size(&cn->sockaddr_in_v); i++) {
-		struct sockaddr_in* sa_in = cf_vector_getp(&cn->sockaddr_in_v, i);
-
-		cn->info_fd = cf_socket_create_and_connect_nb(sa_in);
-
-		if (cn->info_fd != -1) {
-			// Connection started ok - we have our info socket.
-			return true;
-		}
-	}
-
-	return false;
+	return cn->info_fd != -1;
 }
 
 void
 cl_cluster_node_close_info_fd(cl_cluster_node* cn)
 {
 	shutdown(cn->info_fd, SHUT_RDWR);
-	close(cn->info_fd);
+	cf_close(cn->info_fd);
 	cn->info_fd = -1;
 }
 
@@ -1647,12 +1573,6 @@ Set_Compression:
     asc->compression_stat.compression_threshold = size_in_bytes;
     pthread_mutex_unlock(&asc->LOCK);
     return size_in_bytes;
-}
-
-void 
-citrusleaf_cluster_use_nbconnect(struct cl_cluster_s *asc)
-{
-	asc->nbconnect = true;
 }
 
 

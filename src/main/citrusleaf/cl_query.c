@@ -677,7 +677,7 @@ static int cl_query_worker_do(cl_cluster_node * node, cl_query_task * task) {
     uint8_t *   rd_buf = rd_stack_buf;
     size_t      rd_buf_sz = 0;
 
-    int fd = cl_cluster_node_fd_get(node, false, task->asc->nbconnect);
+    int fd = cl_cluster_node_fd_get(node, false);
     if ( fd == -1 ) { 
         LOG("[ERROR] cl_query_worker_do: do query monte: cannot get fd for node %s ",node->name);
         return CITRUSLEAF_FAIL_CLIENT; 
@@ -936,7 +936,7 @@ static int cl_query_worker_do(cl_cluster_node * node, cl_query_task * task) {
 
         // abort requested by the user
         if (task->abort || gasq_abort) {
-            close(fd);
+			cf_close(fd);
             goto Final;
         }
     } while ( done == false );

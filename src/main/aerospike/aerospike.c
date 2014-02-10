@@ -134,7 +134,6 @@ as_status aerospike_connect(aerospike * as, as_error * err)
 
 	as_debug(LOGGER, "citrusleaf_cluster_create: OK");
 
-	as->cluster->nbconnect = as->config.non_blocking;
 	as->cluster->tend_speed = as->config.tender_interval == 0 ? 1 : (as->config.tender_interval + 999) / 1000;
 
 	uint32_t nhosts = sizeof(as->config.hosts) / sizeof(as_config_host);

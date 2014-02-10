@@ -225,7 +225,7 @@ static int cl_scan_worker_do(cl_cluster_node * node, cl_scan_task * task) {
     uint8_t *   rd_buf = rd_stack_buf;
     size_t      rd_buf_sz = 0;
 
-    int fd = cl_cluster_node_fd_get(node, false, task->asc->nbconnect);
+    int fd = cl_cluster_node_fd_get(node, false);
     if ( fd == -1 ) { 
         LOG("[ERROR] cl_scan_worker_do: cannot get fd for node %s ",node->name);
         return CITRUSLEAF_FAIL_CLIENT; 
@@ -233,7 +233,7 @@ static int cl_scan_worker_do(cl_cluster_node * node, cl_scan_task * task) {
 
     // send it to the cluster - non blocking socket, but we're blocking
     if (0 != cf_socket_write_forever(fd, (uint8_t *) task->scan_buf, (size_t) task->scan_sz)) {
-    	close(fd);
+    	cf_close(fd);
         return CITRUSLEAF_FAIL_CLIENT;
     }
 
@@ -247,20 +247,20 @@ static int cl_scan_worker_do(cl_cluster_node * node, cl_scan_task * task) {
         // that has types and lengths
         if ( (rc = cf_socket_read_forever(fd, (uint8_t *) &proto, sizeof(cl_proto) ) ) ) {
             LOG("[ERROR] cl_scan_worker_do: network error: errno %d fd %d node name %s\n", rc, fd, node->name);
-    		close(fd);
+            cf_close(fd);
             return CITRUSLEAF_FAIL_CLIENT;
         }
         cl_proto_swap(&proto);
 
         if ( proto.version != CL_PROTO_VERSION) {
             LOG("[ERROR] cl_scan_worker_do: network error: received protocol message of wrong version %d from node %s\n", proto.version, node->name);
-    		close(fd);
+            cf_close(fd);
             return CITRUSLEAF_FAIL_CLIENT;
         }
 
         if ( proto.type != CL_PROTO_TYPE_CL_MSG && proto.type != CL_PROTO_TYPE_CL_MSG_COMPRESSED ) {
             LOG("[ERROR] cl_scan_worker_do: network error: received incorrect message version %d from node %s \n",proto.type, node->name);
-    		close(fd);
+            cf_close(fd);
             return CITRUSLEAF_FAIL_CLIENT;
         }
 
@@ -277,14 +277,14 @@ static int cl_scan_worker_do(cl_cluster_node * node, cl_scan_task * task) {
             }
 
             if (rd_buf == NULL) {
-        		close(fd);
+            	cf_close(fd);
             	return CITRUSLEAF_FAIL_CLIENT;
             }
 
             if ( (rc = cf_socket_read_forever(fd, rd_buf, rd_buf_sz)) ) {
                 LOG("[ERROR] cl_scan_worker_do: network error: errno %d fd %d node name %s\n", rc, fd, node->name);
                 if ( rd_buf != rd_stack_buf ) free(rd_buf);
-        		close(fd);
+                cf_close(fd);
                 return CITRUSLEAF_FAIL_CLIENT;
             }
         }
@@ -306,7 +306,7 @@ static int cl_scan_worker_do(cl_cluster_node * node, cl_scan_task * task) {
             if ( msg->header_sz != sizeof(cl_msg) ) {
                 LOG("[ERROR] cl_scan_worker_do: received cl msg of unexpected size: expecting %zd found %d, internal error\n",
                         sizeof(cl_msg),msg->header_sz);
-        		close(fd);
+                cf_close(fd);
                 return CITRUSLEAF_FAIL_CLIENT;
             }
 
@@ -349,7 +349,7 @@ static int cl_scan_worker_do(cl_cluster_node * node, cl_scan_task * task) {
                 if (set_ret) {
                     free(set_ret);
                 }
-        		close(fd);
+                cf_close(fd);
                return CITRUSLEAF_FAIL_CLIENT;
             }
 

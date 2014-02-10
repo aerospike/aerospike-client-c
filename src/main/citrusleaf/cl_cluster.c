@@ -628,7 +628,7 @@ cl_cluster_node_fd_create_and_connect(cl_cluster_node* cn)
 		cf_warn("node %s has no sockaddrs", cn->name);
 		return -1;
 	}
-	
+
 	// Create a non-blocking socket.
 	int fd = cf_socket_create_nb();
 
@@ -640,14 +640,14 @@ cl_cluster_node_fd_create_and_connect(cl_cluster_node* cn)
 	// Try socket addresses until we connect.
 	for (uint32_t i = 0; i < cf_vector_size(&cn->sockaddr_in_v); i++) {
 		struct sockaddr_in *sa_in = cf_vector_getp(&cn->sockaddr_in_v, i);
-	
+
 		if (0 == cf_socket_start_connect_nb(fd, sa_in)) {
 			// Connection started ok - we have our socket.
 			return fd;
 		}
 		// TODO - else remove this sockaddr from the list?
-			}
-			
+	}
+
 	// Couldn't start a connection on any socket address - close the socket.
 	cf_close(fd);
 	return -1;

@@ -97,7 +97,6 @@ static bool before(atf_plan * plan) {
     	return false;
     }
     as_config config = {
-        .non_blocking = false,
         .hosts = { 
         	{ .addr = g_host , .port = g_port },
         	{ 0 }

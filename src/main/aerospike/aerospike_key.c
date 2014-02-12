@@ -298,7 +298,8 @@ as_status aerospike_key_exists(
 }
 
 /**
- *	Store a record in the cluster.
+ *	Store a record in the cluster.  Note that the TTL (time to live) value
+ *	is specified inside of the rec (as_record) object.
  *	
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.

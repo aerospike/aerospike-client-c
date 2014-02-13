@@ -1,9 +1,9 @@
 [submodule "modules/common"]
 	path = modules/common
-	url = git@github.com:citrusleaf/aerospike-common
+	url = git@github.com:aerospike/aerospike-common
 [submodule "modules/mod-lua"]
 	path = modules/mod-lua
-	url = git@github.com:citrusleaf/aerospike-mod-lua
+	url = git@github.com:aerospike/aerospike-mod-lua
 [submodule "modules/msgpack"]
 	path = modules/msgpack
-	url = git@github.com:citrusleaf/msgpack
+	url = git@github.com:aerospike/msgpack

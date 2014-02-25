@@ -65,7 +65,7 @@ cl_rv citrusleaf_secondary_index_create(
         iname, binname, type
     );
 
-    int rc = citrusleaf_info_cluster_all(asc, ddl, response, true, /* check bounds */ true, 5000);
+    int rc = citrusleaf_info_cluster(asc, ddl, response, true, /* check bounds */ true, 5000);
 
     if ( rc != 0 ) return rc;
 
@@ -84,49 +84,11 @@ cl_rv citrusleaf_secondary_index_create(
     return CITRUSLEAF_OK;
 }        
 
-cl_rv citrusleaf_secondary_index_create_functional(
-    cl_cluster * asc, const char * ns, const char * set, const char * finame,
-    const char * file, const char * func, as_list * args, const char * type,
-    char **response
-){
-
-    if (!ns || !finame || !file || !func || !args || !type) {
-        return CITRUSLEAF_FAIL_CLIENT;
-    }
-
-    char ddl[1024];
-
-    sprintf(ddl,  
-        "sindex-create:ns=%s%s%s;indexname=%s;"
-        "funcdata=%s,%s;funcargs=%s;indextype=%s;priority=normal\n",
-        ns, set ? ";set=" : "", set ? set : "", finame, file, func, 
-        citrusleaf_secondary_index_fold_args(args), type
-    );
-    
-    int rc = citrusleaf_info_cluster_all(asc, ddl, response, true, /* check bounds */ true, 5000);
-
-    if ( rc != 0 ) return rc;
-
-    char * fail = strstr(*response,"FAIL:");
-    if ( fail != NULL ) {
-        fail = fail + 5;
-        char * end = strchr(fail,':');
-        if ( end != NULL ) {
-            *end     = '\0';
-            int code = atoi(fail);
-            return code;
-        }
-        return CITRUSLEAF_FAIL_CLIENT;
-    }
-
-    return CITRUSLEAF_OK;
-}        
-
 cl_rv citrusleaf_secondary_index_drop(cl_cluster *asc, const char *ns, const char *indexname, char **response) {
 
     char ddl[1024];
     sprintf(ddl, "sindex-delete:ns=%s;indexname=%s", ns, indexname);
-    if ( citrusleaf_info_cluster_all(asc, ddl, response, true, /* check bounds */ true, 5000) ) {
+    if ( citrusleaf_info_cluster(asc, ddl, response, true, /* check bounds */ true, 5000) ) {
         INFO("[ERROR] sindex-drop: response: %s\n", *response);
         return CITRUSLEAF_FAIL_CLIENT;
     }

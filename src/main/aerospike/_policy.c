@@ -15,6 +15,11 @@
  		__local->__field : \
 		(__global.__field ? __global.__field : __default))
 
+#define as_policy_resolve_bool(__field, __global, __local, __default) \
+ 	(__local && __local->__field != -1 ? \
+ 		__local->__field : \
+		(__global.__field != -1 ? __global.__field : __default))
+
 /******************************************************************************
  *	FUNCTIONS
  *****************************************************************************/
@@ -83,7 +88,7 @@ as_policy_remove * as_policy_remove_resolve(as_policy_remove * p, const as_polic
 as_policy_scan * as_policy_scan_resolve(as_policy_scan * p, const as_policies * global, const as_policy_scan * local)
 {
 	p->timeout					= as_policy_resolve(timeout, global->scan, local, global->timeout);
-	p->fail_on_cluster_change	= as_policy_resolve(fail_on_cluster_change, global->scan, local, true);
+	p->fail_on_cluster_change	= as_policy_resolve_bool(fail_on_cluster_change, global->scan, local, true);
 	return p;
 }
 
@@ -102,7 +107,7 @@ as_policy_query * as_policy_query_resolve(as_policy_query * p, const as_policies
 as_policy_info * as_policy_info_resolve(as_policy_info * p, const as_policies * global, const as_policy_info * local)
 {
 	p->timeout		= as_policy_resolve(timeout, global->info, local, global->timeout);
-	p->send_as_is	= as_policy_resolve(send_as_is, global->info, local, true);
-	p->check_bounds	= as_policy_resolve(check_bounds, global->info, local, true);
+	p->send_as_is	= as_policy_resolve_bool(send_as_is, global->info, local, true);
+	p->check_bounds	= as_policy_resolve_bool(check_bounds, global->info, local, true);
 	return p;
 }

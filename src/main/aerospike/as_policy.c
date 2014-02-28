@@ -70,7 +70,7 @@ as_policy_remove * as_policy_remove_init(as_policy_remove * p)
 as_policy_scan * as_policy_scan_init(as_policy_scan * p) 
 {
 	p->timeout					= 0;
-	p->fail_on_cluster_change	= true;
+	p->fail_on_cluster_change	= -1;
 	return p;
 }
 
@@ -89,8 +89,8 @@ as_policy_query * as_policy_query_init(as_policy_query * p)
 as_policy_info * as_policy_info_init(as_policy_info * p)
 {
 	p->timeout		= 0;
-	p->send_as_is	= true;
-	p->check_bounds	= true;
+	p->send_as_is	= -1;
+	p->check_bounds	= -1;
 	return p;
 }
 

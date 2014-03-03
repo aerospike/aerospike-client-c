@@ -31,7 +31,7 @@
 #include <unistd.h>
 #include <stdbool.h>
 
-#include <citrusleaf/cf_alloc.h>
+#include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_atomic.h>
 
 typedef cf_atomic32 cf_rc_counter;

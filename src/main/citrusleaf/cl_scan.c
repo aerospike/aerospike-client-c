@@ -31,7 +31,6 @@
 #include <zlib.h>
 #include <time.h> // for job ID
 
-#include <citrusleaf/cf_alloc.h>
 #include <citrusleaf/cf_atomic.h>
 #include <citrusleaf/cf_log.h>
 #include <citrusleaf/cf_socket.h>

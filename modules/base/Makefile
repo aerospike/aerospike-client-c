@@ -58,7 +58,6 @@ INC_PATH += $(COMMON)/$(TARGET_INCL) $(CF)/include
 ###############################################################################
 
 BASE =
-BASE += cf_alloc.o
 BASE += cf_average.o
 BASE += cf_client_rc.o
 # BASE += cf_digest.o

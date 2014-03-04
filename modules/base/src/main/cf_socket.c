@@ -37,7 +37,6 @@
 #include <netinet/tcp.h>
 #include <sys/socket.h>
 #include <sys/types.h>
-#include <sys/event.h>
 #include <sys/time.h>
 
 #if defined(__linux__)

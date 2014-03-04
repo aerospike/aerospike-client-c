@@ -4,6 +4,3 @@
 [submodule "modules/mod-lua"]
 	path = modules/mod-lua
 	url = git@github.com:citrusleaf/aerospike-mod-lua
-[submodule "modules/msgpack"]
-	path = modules/msgpack
-	url = git@github.com:citrusleaf/msgpack

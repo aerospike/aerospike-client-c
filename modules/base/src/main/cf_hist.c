@@ -59,7 +59,7 @@ cf_histogram_dump_new( cf_histogram *h, char *outbuff, size_t outbuff_len)
   int pos = 0; // location to print from
   printbuf[0] = '\0';
 
-  sprintf(printbuf, "histogram dump: %s (%zu total)",h->name, h->n_counts);
+  sprintf(printbuf, "histogram dump: %s (%" PRIu64 " total)", h->name, h->n_counts);
   if (outbuff) {
     strncat(outbuff, printbuf, outbuff_len - strlen(outbuff) - 1);
             strncat(outbuff, "  |", outbuff_len - strlen(outbuff) - 1);
@@ -74,7 +74,7 @@ cf_histogram_dump_new( cf_histogram *h, char *outbuff, size_t outbuff_len)
   for (; i<=j;i++) {
     if (h->count[i] > 0) { // print only non zero columns
       int bytes =
-        sprintf((char *) (printbuf + pos), " (%02d: %010zu) ", i, h->count[i]);
+        sprintf((char *) (printbuf + pos), " (%02d: %010" PRIu64 ") ", i, h->count[i]);
       if (bytes <= 0) {
         cf_debug("histogram printing error. (bytes < 0 ) Bailing ...");
         return;

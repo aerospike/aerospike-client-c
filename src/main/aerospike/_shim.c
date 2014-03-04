@@ -172,7 +172,7 @@ void asval_to_clobject(as_val * val, cl_object * obj)
 		}
 		case AS_BYTES: {
 			as_bytes * v = as_bytes_fromval(val);
-			citrusleaf_object_init_blob2(obj, v->value, v->size, v->type);
+			citrusleaf_object_init_blob2(obj, v->value, v->size, (cl_type)v->type);
 			break;
 		}
 		case AS_LIST:{
@@ -269,8 +269,8 @@ void clbin_to_asval(cl_bin * bin, as_serializer * ser, as_val ** val)
 			*val = NULL;
 			uint8_t * raw = malloc(sizeof(bin->object.sz));
 			memcpy(raw, bin->object.u.blob, bin->object.sz);
-			as_bytes * b = as_bytes_new_wrap(raw, bin->object.sz, true /*ismalloc*/);
-			b->type = bin->object.type;
+			as_bytes * b = as_bytes_new_wrap(raw, (uint32_t)bin->object.sz, true /*ismalloc*/);
+			b->type = (as_bytes_type)bin->object.type;
 			*val = (as_val *) b;
 			break;
 		}
@@ -302,7 +302,7 @@ void clbin_to_asrecord(cl_bin * bin, as_record * r)
 
 			as_buffer buffer;
 			buffer.data = (uint8_t *) bin->object.u.blob;
-			buffer.size = bin->object.sz;
+			buffer.size = (uint32_t)bin->object.sz;
 
 			as_serializer ser;
 			as_msgpack_init(&ser);
@@ -313,7 +313,7 @@ void clbin_to_asrecord(cl_bin * bin, as_record * r)
 			break;
 		}
 		default: {
-			as_record_set_rawp(r, bin->bin_name, bin->object.u.blob, bin->object.sz, true);
+			as_record_set_rawp(r, bin->bin_name, bin->object.u.blob, (uint32_t)bin->object.sz, true);
 			// the following completes the handoff of the value.
 			bin->object.free = NULL;
 			break;

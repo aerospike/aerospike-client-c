@@ -29,8 +29,8 @@
 #include <pthread.h>
 #include <fcntl.h>
 #include <assert.h>
-#include <asm/byteorder.h> // 64-bit swap macro
 
+#include <citrusleaf/cf_byte_order.h>
 #include <citrusleaf/cf_atomic.h>
 #include <citrusleaf/cf_queue.h>
 #include <citrusleaf/cf_socket.h>
@@ -250,7 +250,7 @@ static int cl_scan_worker_do(cl_cluster_node * node, cl_scan_task * task) {
             cf_close(fd);
             return CITRUSLEAF_FAIL_CLIENT;
         }
-        cl_proto_swap(&proto);
+        cl_proto_swap_from_be(&proto);
 
         if ( proto.version != CL_PROTO_VERSION) {
             LOG("[ERROR] cl_scan_worker_do: network error: received protocol message of wrong version %d from node %s\n", proto.version, node->name);
@@ -300,7 +300,7 @@ static int cl_scan_worker_do(cl_cluster_node * node, cl_scan_task * task) {
             uint8_t *   buf_start = buf;
             cl_msg *    msg = (cl_msg *) buf;
 
-            cl_msg_swap_header(msg);
+            cl_msg_swap_header_from_be(msg);
             buf += sizeof(cl_msg);
 
             if ( msg->header_sz != sizeof(cl_msg) ) {
@@ -317,7 +317,7 @@ static int cl_scan_worker_do(cl_cluster_node * node, cl_scan_task * task) {
             cl_msg_field *  mf          = (cl_msg_field *)buf;
 
             for (int i=0; i < msg->n_fields; i++) {
-                cl_msg_swap_field(mf);
+                cl_msg_swap_field_from_be(mf);
                 if (mf->type == CL_MSG_FIELD_TYPE_KEY) {
                     LOG("[ERROR] cl_scan_worker_do: read: found a key - unexpected\n");
                 }
@@ -356,7 +356,7 @@ static int cl_scan_worker_do(cl_cluster_node * node, cl_scan_task * task) {
             // parse through the bins/ops
             cl_msg_op * op = (cl_msg_op *) buf;
             for (int i=0;i<msg->n_ops;i++) {
-                cl_msg_swap_op(op);
+                cl_msg_swap_op_from_be(op);
 
 #ifdef DEBUG_VERBOSE
                 LOG("[DEBUG] cl_scan_worker_do: op receive: %p size %d op %d ptype %d pversion %d namesz %d \n",

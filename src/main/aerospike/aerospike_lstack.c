@@ -252,7 +252,7 @@ as_status aerospike_lstack_ask_internal(
 		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL,
 				"value returned from server not parse-able");
 	}
-	*n = ival;
+	*n = (uint32_t)ival;
 
 	return err->code;
 } // end as_status aerospike_lstack_ask_internal()
@@ -406,7 +406,7 @@ as_status aerospike_lstack_get_capacity(
 		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL,
 				"value returned from server not parse-able");
 	}
-	*elements_capacity = ival;
+	*elements_capacity = (uint32_t)ival;
 
 	return err->code;
 }
@@ -519,7 +519,7 @@ as_status aerospike_lstack_same(
 		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL,
 				"same() Function Failed");
 	}
-    *out_valp = ival;
+    *out_valp = (uint32_t)ival;
 
 	return err->code;
 } // end as_status aerospike_lstack_same()

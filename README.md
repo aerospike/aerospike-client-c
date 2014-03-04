@@ -57,15 +57,6 @@ This will generate the following files:
 
 Static linking with the `.a` prevents you from having to install the libraries on your target platform. Dynamic linking with the `.so` avoids a client rebuild if you upgrade the client.  Choose the option that is right for you.
 
-### Troubleshooting
-
-If you run into a problem with the msgpack module where a .Tpo file is not found, which seems to happen often on clean builds in some Debian distros, do the following:
-
-$ cd modules/msgpack
-$ autoreconf
-$ ./configure
-$ make
-
 ### Clean
 
 To clean:

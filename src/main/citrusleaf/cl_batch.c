@@ -74,10 +74,10 @@ batch_decompress(uint8_t *in_buf, size_t in_sz, uint8_t **out_buf, size_t *out_s
     	return(-1);
     }
     
-    strm.avail_in = in_sz - 8;
+    strm.avail_in = (uInt)in_sz - 8;
     strm.next_in = in_buf + 8;
     
-	strm.avail_out = b_sz_alloc; // round up: seems to like that
+	strm.avail_out = (uInt)b_sz_alloc; // round up: seems to like that
 	strm.next_out = b;
 
 	rv = inflate(&strm, Z_FINISH);
@@ -112,7 +112,7 @@ write_fields_batch_digests(uint8_t *buf, char *ns, int ns_len, cf_digest *digest
 		mf->field_sz = ns_len + 1;
 		memcpy(mf->data, ns, ns_len);
 		mf_tmp = cl_msg_field_get_next(mf);
-		cl_msg_swap_field(mf);
+		cl_msg_swap_field_to_be(mf);
 		mf = mf_tmp;
 	}
 
@@ -128,7 +128,7 @@ write_fields_batch_digests(uint8_t *buf, char *ns, int ns_len, cf_digest *digest
 	}
 		
 	mf_tmp = cl_msg_field_get_next(mf);
-	cl_msg_swap_field(mf);		
+	cl_msg_swap_field_to_be(mf);
 	mf = mf_tmp;
 
 	return ( (uint8_t *) mf_tmp );
@@ -140,7 +140,7 @@ batch_compile(uint info1, uint info2, char *ns, cf_digest *digests, cl_cluster_n
 	uint8_t **buf_r, size_t *buf_sz_r, const cl_write_parameters *cl_w_p)
 {
 	// I hate strlen
-	int		ns_len = ns ? strlen(ns) : 0;
+	int		ns_len = ns ? (int)strlen(ns) : 0;
 	int		i;
 	
 	// determine the size
@@ -237,7 +237,7 @@ batch_compile(uint info1, uint info2, char *ns, cf_digest *digests, cl_cluster_n
 			}
 	
 			op_tmp = cl_msg_op_get_next(op);
-			cl_msg_swap_op(op);
+			cl_msg_swap_op_to_be(op);
 			op = op_tmp;
 		}
 	}
@@ -326,7 +326,7 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 #ifdef DEBUG_VERBOSE
 		dump_buf("read proto header from cluster", (uint8_t *) &proto, sizeof(cl_proto));
 #endif	
-		cl_proto_swap(&proto);
+		cl_proto_swap_from_be(&proto);
 
 		if (proto.version != CL_PROTO_VERSION) {
 			cf_error("network error: received protocol message of wrong version %d", proto.version);
@@ -403,7 +403,7 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 			
 			uint8_t *buf_start = buf;
 			cl_msg *msg = (cl_msg *) buf;
-			cl_msg_swap_header(msg);
+			cl_msg_swap_header_from_be(msg);
 			buf += sizeof(cl_msg);
 			
 			if (msg->header_sz != sizeof(cl_msg)) {
@@ -419,7 +419,7 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 			char *set_ret = NULL;
 			cl_msg_field *mf = (cl_msg_field *)buf;
 			for (int i=0;i<msg->n_fields;i++) {
-				cl_msg_swap_field(mf);
+				cl_msg_swap_field_from_be(mf);
 				if (mf->type == CL_MSG_FIELD_TYPE_KEY) {
 					cf_error("read: found a key - unexpected");
 				}
@@ -463,7 +463,7 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 			cl_msg_op *op = (cl_msg_op *)buf;
 			for (int i=0;i<msg->n_ops;i++) {
 
-				cl_msg_swap_op(op);
+				cl_msg_swap_op_from_be(op);
 
 #ifdef DEBUG_VERBOSE
 				cf_debug("op receive: %p size %d op %d ptype %d pversion %d namesz %d",

@@ -470,7 +470,7 @@ as_status aerospike_key_operate(
 //		}
 
 		strcpy(clop->bin.bin_name, op->bin.name);
-		clop->op = op->op;
+		clop->op = (cl_operator)op->op;
 
 		// Collect bin names that are read.
 		if (op->op == AS_OPERATOR_READ) {

@@ -21,6 +21,7 @@
  *****************************************************************************/
 
 #include <citrusleaf/cf_random.h>
+#include <citrusleaf/cf_types.h>
 
 #include <errno.h>
 #include <stdio.h>
@@ -40,10 +41,25 @@ static uint rand_buf_off = 0;
 static int  seeded = 0;
 static pthread_mutex_t rand_buf_lock = PTHREAD_MUTEX_INITIALIZER;
 
+#ifdef __APPLE__
+
+int cf_rand_reload() {
+    if (seeded == 0) {
+        arc4random_stir();
+        seeded = 1;
+    }
+    
+    arc4random_buf(rand_buf, sizeof(rand_buf));
+    rand_buf_off = sizeof(rand_buf);
+    return(0);
+}
+
+#else
+
 int cf_rand_reload() {
     if (seeded == 0) {
         int rfd = open("/dev/urandom",  O_RDONLY);
-        int rsz = read(rfd, rand_buf, SEED_SZ);
+        int rsz = (int)read(rfd, rand_buf, SEED_SZ);
         if (rsz < SEED_SZ) {
             fprintf(stderr, "warning! can't seed random number generator");
             return(-1);
@@ -54,12 +70,13 @@ int cf_rand_reload() {
     }
     if (1 != RAND_bytes(rand_buf, sizeof(rand_buf))) {
         fprintf(stderr, "RAND_bytes not so happy.\n");
-        pthread_mutex_unlock(&rand_buf_lock);
         return(-1);
     }
     rand_buf_off = sizeof(rand_buf);
     return(0);
 }
+
+#endif
 
 
 int cf_get_rand_buf(uint8_t *buf, int len) {
@@ -109,5 +126,5 @@ uint32_t cf_get_rand32() {
     rand_buf_off -= sizeof(uint64_t);
     uint64_t r = *(uint64_t *) (&rand_buf[rand_buf_off]);
     pthread_mutex_unlock(&rand_buf_lock);
-    return(r);
+    return((uint32_t)r);
 }

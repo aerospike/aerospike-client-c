@@ -108,7 +108,7 @@ typedef enum {
 #define CL_RESULT_FAIL 1
 #define CL_RESULT_NOTFOUND 2
 
-#ifdef CF_WINDOWS
+#if defined(__APPLE__) || defined(CF_WINDOWS)
 
 #pragma pack(push, 1) // packing is now 1
 typedef struct cl_proto_s {
@@ -138,15 +138,6 @@ typedef struct cl_comp_proto_s {
 
 #pragma pack(push, 1)
 typedef struct cl_msg_field_s {
-#define CL_MSG_FIELD_TYPE_NAMESPACE 0 // UTF8 string
-#define CL_MSG_FIELD_TYPE_SET 1
-#define CL_MSG_FIELD_TYPE_KEY 2  // contains a key type
-#define CL_MSG_FIELD_TYPE_BIN 3  // used for secondary key access - contains a bin, thus a name and value
-#define CL_MSG_FIELD_TYPE_DIGEST_RIPE 4  // used to send the digest just computed to the server so it doesn't have to
-#define CL_MSG_FIELD_TYPE_GU_TID 5
-#define CL_MSG_FIELD_TYPE_DIGEST_RIPE_ARRAY 6
-#define CL_MSG_FIELD_TYPE_TRID 7
-#define CL_MSG_FIELD_TYPE_SCAN_OPTIONS 8
 	uint32_t field_sz; // get the data size through the accessor function, don't worry, it's a small macro
 	uint8_t type;
 	uint8_t data[];
@@ -246,51 +237,6 @@ typedef struct cl_comp_proto_s {
  /* cl_msg_field
  * Aerospike message field */
 typedef struct cl_msg_field_s {
-
-// 0-19 STANDARD 
-#define CL_MSG_FIELD_TYPE_NAMESPACE 0 // UTF8 string
-#define CL_MSG_FIELD_TYPE_SET 1
-#define CL_MSG_FIELD_TYPE_KEY 2  // contains a key type
-#define CL_MSG_FIELD_TYPE_BIN 3  // used for secondary key access - contains a bin, thus a name and value
-#define CL_MSG_FIELD_TYPE_DIGEST_RIPE 4  // used to send the digest just computed to the server so it doesn't have to
-#define CL_MSG_FIELD_TYPE_GU_TID 5
-#define CL_MSG_FIELD_TYPE_DIGEST_RIPE_ARRAY 6
-#define CL_MSG_FIELD_TYPE_TRID 7
-// We are going to overload the OPTIONS field -- this will hold either SCAN
-// options or QUERY options, depending on the type of call.  THis is done with
-// the expectation that the call will have only one or the other (Nov 20, 2013 tjl)
-#define CL_MSG_FIELD_TYPE_SCAN_OPTIONS 8
-#define CL_MSG_FIELD_TYPE_QUERY_OPTIONS 8
-
-// 20-29 RESERVED FOR SECONDARY INDEX
-#define CL_MSG_FIELD_TYPE_INDEX_NAME			21
-#define CL_MSG_FIELD_TYPE_INDEX_RANGE			22
-#define CL_MSG_FIELD_TYPE_INDEX_FILTER			23
-#define CL_MSG_FIELD_TYPE_INDEX_LIMIT			24
-#define CL_MSG_FIELD_TYPE_INDEX_ORDER_BY		25
-
-// 30-39 RESEVED FOR UDF
-#define CL_MSG_FIELD_TYPE_UDF_FILENAME          30
-#define CL_MSG_FIELD_TYPE_UDF_FUNCTION          31
-#define CL_MSG_FIELD_TYPE_UDF_ARGLIST           32
-#define CL_MSG_FIELD_TYPE_UDF_OP                33
-// NOTE: UDF_OP really holds "Stream" or "Record" UDF type.  And, going forward
-// from this point (Nov 21, 2013), we're going to have two fields that all will
-// treat the same.  Udf type will be (None, Record, Stream), and the Transaction
-// Call type will be Query/Scan and the Transaction ResultType will be
-// FOREGROUND or BACKGROUND  (as specified in the query/scan options).
-// Historical note:  Somehow QUERY and SCAN took different paths and started
-// using this field differently.
-// QUERY CLIENT had: None, Record, Stream
-// QUERY SERVER had: UDF, Aggregate, MR
-// SCAN  SERVER had: None, UDF, Background
-// On the wire, we put: 0=Record and 1=Stream into field 33 (above)
-#define CL_UDF_MSG_VAL_RECORD 0
-#define CL_UDF_MSG_VAL_STREAM 1
-
-// 40-49 RESERVED FOR QUERY
-#define CL_MSG_FIELD_TYPE_QUERY_BINLIST			40
-
 	uint32_t field_sz; // get the data size through the accessor function, don't worry, it's a small macro
 	uint8_t type;
 	uint8_t data[];
@@ -348,6 +294,51 @@ typedef struct as_msg_s {
 
 #endif
 
+// 0-19 STANDARD
+#define CL_MSG_FIELD_TYPE_NAMESPACE 0 // UTF8 string
+#define CL_MSG_FIELD_TYPE_SET 1
+#define CL_MSG_FIELD_TYPE_KEY 2  // contains a key type
+#define CL_MSG_FIELD_TYPE_BIN 3  // used for secondary key access - contains a bin, thus a name and value
+#define CL_MSG_FIELD_TYPE_DIGEST_RIPE 4  // used to send the digest just computed to the server so it doesn't have to
+#define CL_MSG_FIELD_TYPE_GU_TID 5
+#define CL_MSG_FIELD_TYPE_DIGEST_RIPE_ARRAY 6
+#define CL_MSG_FIELD_TYPE_TRID 7
+// We are going to overload the OPTIONS field -- this will hold either SCAN
+// options or QUERY options, depending on the type of call.  THis is done with
+// the expectation that the call will have only one or the other (Nov 20, 2013 tjl)
+#define CL_MSG_FIELD_TYPE_SCAN_OPTIONS 8
+#define CL_MSG_FIELD_TYPE_QUERY_OPTIONS 8
+	
+// 20-29 RESERVED FOR SECONDARY INDEX
+#define CL_MSG_FIELD_TYPE_INDEX_NAME			21
+#define CL_MSG_FIELD_TYPE_INDEX_RANGE			22
+#define CL_MSG_FIELD_TYPE_INDEX_FILTER			23
+#define CL_MSG_FIELD_TYPE_INDEX_LIMIT			24
+#define CL_MSG_FIELD_TYPE_INDEX_ORDER_BY		25
+	
+// 30-39 RESEVED FOR UDF
+#define CL_MSG_FIELD_TYPE_UDF_FILENAME          30
+#define CL_MSG_FIELD_TYPE_UDF_FUNCTION          31
+#define CL_MSG_FIELD_TYPE_UDF_ARGLIST           32
+#define CL_MSG_FIELD_TYPE_UDF_OP                33
+// NOTE: UDF_OP really holds "Stream" or "Record" UDF type.  And, going forward
+// from this point (Nov 21, 2013), we're going to have two fields that all will
+// treat the same.  Udf type will be (None, Record, Stream), and the Transaction
+// Call type will be Query/Scan and the Transaction ResultType will be
+// FOREGROUND or BACKGROUND  (as specified in the query/scan options).
+// Historical note:  Somehow QUERY and SCAN took different paths and started
+// using this field differently.
+// QUERY CLIENT had: None, Record, Stream
+// QUERY SERVER had: UDF, Aggregate, MR
+// SCAN  SERVER had: None, UDF, Background
+// On the wire, we put: 0=Record and 1=Stream into field 33 (above)
+#define CL_UDF_MSG_VAL_RECORD 0
+#define CL_UDF_MSG_VAL_STREAM 1
+	
+// 40-49 RESERVED FOR QUERY
+#define CL_MSG_FIELD_TYPE_QUERY_BINLIST			40
+	
+	
 #define CL_MSG_OP_READ 1			// read the value in question
 #define CL_MSG_OP_WRITE 2			// write the value in question
 #define CL_MSG_OP_WRITE_UNIQUE 3	// write a namespace-wide unique value
@@ -477,15 +468,15 @@ cl_proto_size_get(cl_proto *proto)
 
 
 /* Function declarations */
-extern void cl_proto_swap(cl_proto *m);
-extern void cl_msg_swap_header(cl_msg *m);
-extern void cl_msg_swap_field(cl_msg_field *mf);
-extern void cl_msg_swap_fields(cl_msg *m);
-extern void cl_msg_swap_ops(cl_msg *m);
-extern void cl_msg_swap_op(cl_msg_op *op);
-extern void cl_msg_swap_fields_and_ops(cl_msg *m);
+extern void cl_proto_swap_to_be(cl_proto *m);
+extern void cl_proto_swap_from_be(cl_proto *m);
+extern void cl_msg_swap_header_to_be(cl_msg *m);
+extern void cl_msg_swap_header_from_be(cl_msg *m);
+extern void cl_msg_swap_field_to_be(cl_msg_field *mf);
+extern void cl_msg_swap_field_from_be(cl_msg_field *mf);
+extern void cl_msg_swap_op_to_be(cl_msg_op *op);
+extern void cl_msg_swap_op_from_be(cl_msg_op *op);
 
 #ifdef __cplusplus
 } // end extern "C"
 #endif
-

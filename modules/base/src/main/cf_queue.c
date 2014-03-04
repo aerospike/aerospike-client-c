@@ -253,6 +253,27 @@ bool cf_queue_push_limit(cf_queue *q, void *ptr, uint32_t limit) {
 	return true;
 }
 
+/*
+ * Set timespec to wait in milliseconds
+ */
+static void cf_set_wait_timespec(int ms_wait, struct timespec* tp) {
+#ifdef __APPLE__
+    // Use the cl generic functions defined in cf_clock.h. It is going to have
+    // slightly less resolution than the pure linux version.
+    uint64_t curms = cf_getms();
+    tp->tv_sec = (curms + ms_wait) / 1000;
+    tp->tv_nsec = (ms_wait % 1000) * 1000000;
+#else // linux
+    clock_gettime( CLOCK_REALTIME, tp);
+    tp->tv_sec += ms_wait / 1000;
+    tp->tv_nsec += (ms_wait % 1000) * 1000000;
+    if (tp->tv_nsec > 1000000000) {
+        tp->tv_nsec -= 1000000000;
+        tp->tv_sec++;
+    }
+#endif
+}
+
 /* cf_queue_pop
  * if ms_wait < 0, wait forever
  * if ms_wait = 0, don't wait at all
@@ -275,19 +296,7 @@ int cf_queue_pop(cf_queue *q, void *buf, int ms_wait) {
 
 	struct timespec tp;
 	if (ms_wait > 0) {
-#ifdef OSX
-		uint64_t curms = cf_getms(); // using the cl generic functions defined in cf_clock.h. It is going to have slightly less resolution than the pure linux version
-		tp.tv_sec = (curms + ms_wait)/1000;
-		tp.tv_nsec = (ms_wait %1000) * 1000000;
-#else // linux
-		clock_gettime( CLOCK_REALTIME, &tp); 
-		tp.tv_sec += ms_wait / 1000;
-		tp.tv_nsec += (ms_wait % 1000) * 1000000;
-		if (tp.tv_nsec > 1000000000) {
-			tp.tv_nsec -= 1000000000;
-			tp.tv_sec++;
-		}
-#endif
+        cf_set_wait_timespec(ms_wait, &tp);
 	}
 
 	/* FIXME error checking */
@@ -548,13 +557,7 @@ int cf_queue_priority_pop(cf_queue_priority *q, void *buf, int ms_wait) {
 
 	struct timespec tp;
 	if (ms_wait > 0) {
-		clock_gettime( CLOCK_REALTIME, &tp); 
-		tp.tv_sec += ms_wait / 1000;
-		tp.tv_nsec += (ms_wait % 1000) * 1000000;
-		if (tp.tv_nsec > 1000000000) {
-			tp.tv_nsec -= 1000000000;
-			tp.tv_sec++;
-		}
+        cf_set_wait_timespec(ms_wait, &tp);
 	}
 
 	if (q->threadsafe) {

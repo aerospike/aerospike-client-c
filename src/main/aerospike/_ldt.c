@@ -28,7 +28,7 @@ as_status ldt_parse_error(as_error *error)
 	if ( error && error->message[delim_pos]==':' ) {
 		long code = strtol(error->message, NULL, 10);
 		if (code > 0) {
-			error->code = code;
+			error->code = (as_status)code;
 			memmove(error->message, &error->message[delim_pos], strlen(error->message)+1);
 		}
 	}

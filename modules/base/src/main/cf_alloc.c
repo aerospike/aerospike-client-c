@@ -101,11 +101,11 @@ static inline cf_atomic_int_t cf_rc_release_x(void *addr, bool autofree) {
 }
 
 int cf_rc_release(void *addr) {
-    return cf_rc_release_x(addr,false);
+    return (int)cf_rc_release_x(addr,false);
 }
 
 int cf_rc_releaseandfree(void *addr) {
-    return cf_rc_release_x(addr,true);
+    return (int)cf_rc_release_x(addr,true);
 }
 
 /* cf_rc_alloc

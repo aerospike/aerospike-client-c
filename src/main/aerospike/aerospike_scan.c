@@ -66,7 +66,7 @@ static void as_scan_toclscan(const as_scan * scan, const as_policy_scan * policy
 	clscan->ns = (char *) scan->ns;
 	clscan->setname = (char *) scan->set;
 	clscan->params.fail_on_cluster_change = policy->fail_on_cluster_change;
-	clscan->params.priority = scan->priority;
+	clscan->params.priority = (cl_scan_priority)scan->priority;
 	clscan->params.pct = scan->percent;
 	clscan->params.concurrent = scan->concurrent;
 
@@ -439,7 +439,7 @@ as_status aerospike_scan_info(
 	info->records_scanned = 0;
 
 	bg_scan_info bsi;
-	bsi.job_id_len = sprintf(bsi.job_id, "job_id=%lu:", scan_id);
+	bsi.job_id_len = sprintf(bsi.job_id, "job_id=%" PRIu64 ":", scan_id);
 	bsi.info = info;
 
 	return aerospike_info_foreach(as, err, policy, "scan-list\n", scan_info_cb, (void *) &bsi);

@@ -58,7 +58,7 @@ int cl_pair_parse(char * pair, cl_pair_parser * parser)
 	}
 
 	vs = ks + ke + 1;
-	ve = strlen(vs);
+	ve = (int)strlen(vs);
 
 	k = ks;
 	k[ke] = '\0';

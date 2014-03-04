@@ -177,8 +177,8 @@ async_receiver_fn(void *thdata)
 #ifdef DEBUG_VERBOSE
 		dump_buf("read header from cluster", (uint8_t *) &msg, sizeof(cl_msg));
 #endif
-		cl_proto_swap(&msg.proto);
-		cl_msg_swap_header(&msg.m);
+		cl_proto_swap_from_be(&msg.proto);
+		cl_msg_swap_header_from_be(&msg.m);
 
 		// second read for the remainder of the message 
 		rd_buf_sz =  msg.proto.sz  - msg.m.header_sz;

@@ -35,6 +35,7 @@
 #include <netdb.h> //gethostbyname_r
 #include <netinet/tcp.h>
 
+#include <citrusleaf/cf_byte_order.h>
 #include <citrusleaf/cf_client_rc.h>
 #include <citrusleaf/cf_proto.h>
 #include <citrusleaf/cf_queue.h>
@@ -79,7 +80,7 @@ dump_sockaddr_in(char *prefix, struct sockaddr_in *sa_in)
 	if (cf_debug_enabled()) {
 		char str[INET_ADDRSTRLEN];
 		inet_ntop(AF_INET, &(sa_in->sin_addr), str, INET_ADDRSTRLEN);
-		cf_debug("%s %s:%d", prefix, str, (int)ntohs(sa_in->sin_port));
+		cf_debug("%s %s:%d", prefix, str, (int)cf_swap_from_be16(sa_in->sin_port));
 	}
 }
 
@@ -104,7 +105,7 @@ dump_cluster(cl_cluster *asc)
 			char str[INET_ADDRSTRLEN];
 			inet_ntop(AF_INET, &(sa_in->sin_addr), str, INET_ADDRSTRLEN);
 			cf_debug("%d %s : %s:%d (%d conns) (%d async conns)",i,cn->name,str,
-				(int)ntohs(sa_in->sin_port),cf_queue_sz(cn->conn_q),
+				(int)cf_swap_from_be16(sa_in->sin_port),cf_queue_sz(cn->conn_q),
 				cf_queue_sz(cn->conn_q_asyncfd));
 		}
 		cf_debug("partitions: %d",asc->n_partitions);
@@ -666,7 +667,7 @@ int
 is_connected(int fd)
 {
 	uint8_t buf[8];
-	int rv = recv(fd, (void*)buf, sizeof(buf), MSG_PEEK | MSG_DONTWAIT | MSG_NOSIGNAL);
+	ssize_t rv = recv(fd, (void*)buf, sizeof(buf), MSG_PEEK | MSG_DONTWAIT | MSG_NOSIGNAL);
 
 	if (rv == 0) {
 		cf_debug("connected check: found disconnected fd %d", fd);
@@ -1029,7 +1030,7 @@ cl_cluster_node_parse_replicas(cl_cluster* asc, cl_cluster_node* cn, char* rbuf)
 			int gen = atoi(value);
 
 			// Update to the new partition generation.
-			cf_atomic_int_set(&cn->partition_generation, (cf_atomic_int_t)gen);
+			cf_atomic32_set(&cn->partition_generation, (uint32_t)gen);
 
 			cf_debug("node %s got partition generation %d", cn->name, gen);
 		}
@@ -1168,7 +1169,7 @@ cl_cluster_node_get_info(cl_cluster_node* cn, const char* names,
 	proto->sz = names_len;
 	proto->version = CL_PROTO_VERSION;
 	proto->type = CL_PROTO_TYPE_INFO;
-	cl_proto_swap(proto);
+	cl_proto_swap_to_be(proto);
 
 	memcpy((void*)(stack_buf + sizeof(cl_proto)), (const void*)names, names_len);
 
@@ -1187,7 +1188,7 @@ cl_cluster_node_get_info(cl_cluster_node* cn, const char* names,
 	}
 
 	proto = (cl_proto*)stack_buf;
-	cl_proto_swap(proto);
+	cl_proto_swap_from_be(proto);
 
 	// Sanity check body size.
 	if (proto->sz == 0 || proto->sz > 512 * 1024) {

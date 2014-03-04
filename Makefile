@@ -7,8 +7,7 @@ include project/settings.mk
 BASE 		:= $(realpath modules/base)
 COMMON 		:= $(realpath modules/common)
 MOD_LUA 	:= $(realpath modules/mod-lua)
-MSGPACK 	:= $(realpath modules/msgpack)
-MODULES 	:= BASE COMMON MOD_LUA MSGPACK
+MODULES 	:= BASE COMMON MOD_LUA
 
 # Overrride optimizations via: make O=n
 O=3
@@ -17,13 +16,16 @@ O=3
 MEM_COUNT=1
 
 # Make-local Compiler Flags
+ifeq ($(OS),Darwin)
+CC_FLAGS = -std=gnu99 -g -Wall
+LD_FLAGS = -undefined dynamic_lookup -lm
+else
 CC_FLAGS = -std=gnu99 -g -rdynamic -Wall 
+LD_FLAGS = -lm
+endif
 CC_FLAGS += -fno-common -fno-strict-aliasing -fPIC 
 CC_FLAGS += -DMARCH_$(ARCH) -D_FILE_OFFSET_BITS=64 
 CC_FLAGS += -D_REENTRANT -D_GNU_SOURCE -DMEM_COUNT
-
-# Make-local Linker Flags
-LD_FLAGS = -lm
 
 # DEBUG Settings
 ifdef DEBUG
@@ -47,7 +49,7 @@ endif
 INC_PATH += $(BASE)/$(TARGET_INCL)
 INC_PATH += $(COMMON)/$(TARGET_INCL) $(CF)/include
 INC_PATH += $(MOD_LUA)/$(TARGET_INCL)
-INC_PATH += $(MSGPACK)/src
+INC_PATH += /usr/local/include
 
 # Library Paths
 # LIB_PATH +=
@@ -114,7 +116,6 @@ DEPS += $(COMMON)/$(TARGET_OBJ)/common/aerospike/*.o
 DEPS += $(COMMON)/$(TARGET_OBJ)/common/citrusleaf/*.o
 DEPS += $(BASE)/$(TARGET_OBJ)/base/*.o
 DEPS += $(MOD_LUA)/$(TARGET_OBJ)/*.o
-DEPS += $(addprefix $(MSGPACK)/src/.libs/, unpack.o objectc.o version.o vrefbuffer.o zone.o)
 
 ###############################################################################
 ##  HEADERS                                                                  ##

@@ -79,7 +79,6 @@ cf_compress(int argc, uint8_t *argv[])
 int
 cf_packet_compression(uint8_t *buf, size_t buf_sz, uint8_t **compressed_packet, size_t *compressed_packet_sz)
 {
-	int ret_value = 0;
 	uint8_t *tmp_buf;
 	uint8_t wr_stack_buf[STACK_BUF_SZ];
 	uint8_t *wr_buf = wr_stack_buf;
@@ -129,7 +128,7 @@ cf_packet_compression(uint8_t *buf, size_t buf_sz, uint8_t **compressed_packet, 
 	cl_comp_protop->proto.type = CL_PROTO_TYPE_CL_MSG_COMPRESSED;
 	cl_comp_protop->proto.sz = *compressed_packet_sz - 8;
 	cl_proto *proto = (cl_proto *) *compressed_packet;
-	cl_proto_swap(proto);
+	cl_proto_swap_to_be(proto);
 	cl_comp_protop->org_sz = buf_sz;
 
 	tmp_buf = *compressed_packet +  sizeof(cl_comp_proto);

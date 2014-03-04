@@ -209,7 +209,7 @@ as_status aerospike_lmap_size(
 		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL,
 				"value returned from server not parse-able");
 	}
-	*n = ival;
+	*n = (uint32_t)ival;
 
 	return err->code;
 }

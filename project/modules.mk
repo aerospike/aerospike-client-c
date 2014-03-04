@@ -1,55 +1,4 @@
 ###############################################################################
-##  MSGPACK MODULE                                                           ##
-###############################################################################
-
-ifndef MSGPACK
-$(warning ***************************************************************)
-$(warning *)
-$(warning *  MSGPACK is not defined. )
-$(warning *  MSGPACK should be set to a valid path. )
-$(warning *)
-$(warning ***************************************************************)
-$(error )
-endif
-
-ifeq ($(wildcard $(MSGPACK)/configure.in),) 
-$(warning ***************************************************************)
-$(warning *)
-$(warning *  MSGPACK is '$(MSGPACK)')
-$(warning *  MSGPACK doesn't contain 'configure'. )
-$(warning *  MSGPACK should be set to a valid path. )
-$(warning *)
-$(warning ***************************************************************)
-$(error )
-endif
-
-.PHONY: MSGPACK-build
-MSGPACK-build: $(MSGPACK)/src/.libs/libmsgpackc.a
-
-.PHONY: MSGPACK-prepare
-MSGPACK-prepare: 
-	$(noop)
-
-PHONY: MSGPACK-clean
-MSGPACK-clean:
-	@if [ -e "$(MSGPACK)/Makefile" ]; then \
-		$(MAKE) -e -C $(MSGPACK) clean; \
-		$(MAKE) -e -C $(MSGPACK) distclean; \
-	fi
-	@if [ -e "$(MSGPACK)/configure" ]; then \
-		rm -f $(MSGPACK)/configure; \
-	fi
-
-$(MSGPACK)/configure: $(MSGPACK)/configure.in
-	cd $(MSGPACK) && autoreconf -iv --force
-
-$(MSGPACK)/Makefile: $(MSGPACK)/configure
-	cd $(MSGPACK) && ./configure CFLAGS="-fPIC"
-
-$(MSGPACK)/src/.libs/libmsgpackc.a: $(MSGPACK)/Makefile
-	$(MAKE) -e -C $(MSGPACK) CFLAGS="-fPIC"
-
-###############################################################################
 ##  COMMON MODULE                                                            ##
 ###############################################################################
 
@@ -79,10 +28,10 @@ COMMON-build: $(COMMON)/$(TARGET_LIB)/libaerospike-common.a
 
 .PHONY: COMMON-clean
 COMMON-clean:
-	$(MAKE) -e -C $(COMMON) clean MSGPACK=$(MSGPACK)
+	$(MAKE) -e -C $(COMMON) clean
 
 $(COMMON)/$(TARGET_LIB)/libaerospike-common.a:
-	$(MAKE) -e -C $(COMMON) libaerospike-common.a MSGPACK=$(MSGPACK)
+	$(MAKE) -e -C $(COMMON) libaerospike-common.a
 
 
 .PHONY: COMMON-prepare
@@ -91,7 +40,7 @@ COMMON-prepare: COMMON-make-prepare $(subst $(COMMON)/$(SOURCE_INCL),$(TARGET_IN
 
 .PHONY: COMMON-make-prepare
 COMMON-make-prepare:
-	$(MAKE) -e -C $(COMMON) prepare MSGPACK=$(MSGPACK)
+	$(MAKE) -e -C $(COMMON) prepare
 
 $(TARGET_INCL)/aerospike/%.h: $(COMMON)/$(TARGET_INCL)/aerospike/%.h | $(TARGET_INCL)/aerospike
 	 cp $^ $@
@@ -129,10 +78,10 @@ BASE-build: $(BASE)/$(TARGET_LIB)/libaerospike-base.a
 
 .PHONY: BASE-clean
 BASE-clean:
-	$(MAKE) -e -C $(BASE) clean MSGPACK=$(MSGPACK) COMMON=$(COMMON)
+	$(MAKE) -e -C $(BASE) clean COMMON=$(COMMON)
 
 $(BASE)/$(TARGET_LIB)/libaerospike-base.a:
-	$(MAKE) -e -C $(BASE) libaerospike-base.a MSGPACK=$(MSGPACK) COMMON=$(COMMON)
+	$(MAKE) -e -C $(BASE) libaerospike-base.a COMMON=$(COMMON)
 
 .PHONY: BASE-prepare
 BASE-prepare: BASE-make-prepare
@@ -140,7 +89,7 @@ BASE-prepare: BASE-make-prepare
 
 .PHONY: BASE-make-prepare
 BASE-make-prepare:
-	$(MAKE) -e -C $(BASE) prepare MSGPACK=$(MSGPACK) COMMON=$(COMMON)
+	$(MAKE) -e -C $(BASE) prepare COMMON=$(COMMON)
 
 ###############################################################################
 ##  MOD-LUA MODULE                                                           ##
@@ -172,10 +121,10 @@ MOD_LUA-build: $(MOD_LUA)/$(TARGET_LIB)/libmod_lua.a
 
 .PHONY: MOD_LUA-clean
 MOD_LUA-clean:
-	$(MAKE) -e -C $(MOD_LUA) clean COMMON=$(COMMON) MSGPACK=$(MSGPACK)
+	$(MAKE) -e -C $(MOD_LUA) clean COMMON=$(COMMON)
 
 $(MOD_LUA)/$(TARGET_LIB)/libmod_lua.a:
-	$(MAKE) -e -C $(MOD_LUA) libmod_lua.a COMMON=$(COMMON) MSGPACK=$(MSGPACK)
+	$(MAKE) -e -C $(MOD_LUA) libmod_lua.a COMMON=$(COMMON)
 
 .PHONY: MOD_LUA-prepare
 MOD_LUA-prepare: MOD_LUA-make-prepare
@@ -183,4 +132,4 @@ MOD_LUA-prepare: MOD_LUA-make-prepare
 
 .PHONY: MOD_LUA-make-prepare
 MOD_LUA-make-prepare:
-	$(MAKE) -e -C $(MOD_LUA) prepare MSGPACK=$(MSGPACK) COMMON=$(COMMON)
+	$(MAKE) -e -C $(MOD_LUA) prepare COMMON=$(COMMON)

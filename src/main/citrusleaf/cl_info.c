@@ -111,7 +111,7 @@ citrusleaf_info_host_limit(struct sockaddr_in *sa_in, char *names, char **values
 	uint32_t	slen = 0;
 	if (names) {
 		if (send_asis) {
-			slen = strlen(names);
+			slen = (uint32_t)strlen(names);
 		} else {
 			char *_t = names;
 			while (*_t) { 
@@ -156,7 +156,7 @@ citrusleaf_info_host_limit(struct sockaddr_in *sa_in, char *names, char **values
 	
 	bool        rmalloced = false;
 	if (names) {
-		uint sz = strlen(names);
+		uint sz = (uint)strlen(names);
 		buf_sz = sz + sizeof(cl_proto);
 		if (buf_sz < bb_size)
 			req = (cl_proto *) buf;
@@ -167,7 +167,7 @@ citrusleaf_info_host_limit(struct sockaddr_in *sa_in, char *names, char **values
 		if (req == NULL)	goto Done;
 
 		req->sz = sz;
-		memcpy(req->data,names,sz);
+		memcpy((void*)req + sizeof(cl_proto), names, sz);
 	}
 	else {
 		req = (cl_proto *) buf;
@@ -178,7 +178,7 @@ citrusleaf_info_host_limit(struct sockaddr_in *sa_in, char *names, char **values
 		
 	req->version = CL_PROTO_VERSION;
 	req->type = CL_PROTO_TYPE_INFO;
-	cl_proto_swap(req);
+	cl_proto_swap_to_be(req);
 	
     if (timeout_ms)
         io_rv = cf_socket_write_timeout(fd, (uint8_t *) req, buf_sz, 0, timeout_ms);
@@ -207,7 +207,7 @@ citrusleaf_info_host_limit(struct sockaddr_in *sa_in, char *names, char **values
 #endif        
 		goto Done;
 	}
-	cl_proto_swap(rsp);
+	cl_proto_swap_from_be(rsp);
 	
 	if (rsp->sz) {
 		size_t read_length = rsp->sz;
@@ -293,15 +293,6 @@ Done:
 	return(rv);
 }
 
-// static void
-// dump_sockaddr_in(char *prefix, struct sockaddr_in *sa_in)
-// {
-// 	char str[INET_ADDRSTRLEN];
-// 	inet_ntop(AF_INET, &(sa_in->sin_addr), str, INET_ADDRSTRLEN);	
-// 	fprintf(stderr,"%s %s:%d\n",prefix,str,(int)ntohs(sa_in->sin_port));
-// }
-
-
 /* gets information back from any of the nodes in the cluster */
 int
 citrusleaf_info_cluster(cl_cluster *asc, char *names, char **values_r, bool send_asis, bool check_bounds, int timeout_ms)
@@ -329,7 +320,7 @@ citrusleaf_info_cluster(cl_cluster *asc, char *names, char **values_r, bool send
 			
 			values = 0;
 			
-			if (0 == citrusleaf_info_host(sa_in, names, &values, end - cf_getms(), send_asis, check_bounds)) {
+			if (0 == citrusleaf_info_host(sa_in, names, &values, (int)(end - cf_getms()), send_asis, check_bounds)) {
 				// success
 				*values_r = values;
 				return(0);
@@ -373,7 +364,7 @@ citrusleaf_info_cluster_all(cl_cluster *asc, char *names, char **values_r, bool 
 			
 			values = 0;
 			
-			if (0 == citrusleaf_info_host(sa_in, names, &values, end - cf_getms(), send_asis, check_bounds)) {
+			if (0 == citrusleaf_info_host(sa_in, names, &values, (int)(end - cf_getms()), send_asis, check_bounds)) {
 				// success
 				*values_r = values;
 				break;
@@ -428,7 +419,7 @@ int citrusleaf_info_cluster_foreach(cl_cluster *cluster, const char *command, bo
 
 			value = 0;
 
-			if (0 == citrusleaf_info_host(sa_in, (char *)command, &value, end - cf_getms(), send_asis, check_bounds)) {
+			if (0 == citrusleaf_info_host(sa_in, (char *)command, &value, (int)(end - cf_getms()), send_asis, check_bounds)) {
 				bSuccess = callback(node, sa_in, command, value, udata);
 				if(!bSuccess){
 							if(value){free(value);}

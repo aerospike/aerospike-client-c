@@ -106,7 +106,7 @@ cf_process_daemonize(const char *redirect_file, int *fd_ignore_list, int list_si
     if (redirect_file == NULL){ 
         snprintf(cfile, 128, "/tmp/aerospike-console.%d", getpid());
     }else{
-        snprintf(cfile, 128, redirect_file);
+        snprintf(cfile, 128, "%s", redirect_file);
     }
     if (-1 == (FD = open(cfile, O_WRONLY|O_CREAT|O_APPEND,S_IRUSR|S_IWUSR))){
         cf_error("Couldn't open console redirection file: %s", strerror(errno));

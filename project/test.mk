@@ -24,7 +24,14 @@ TEST_VALGRIND = --tool=memcheck --leak-check=yes --show-reachable=yes --num-call
 
 TEST_CFLAGS = -I$(TARGET_INCL)
 
+ifeq ($(OS),Darwin)
+TEST_LDFLAGS = -L/usr/local/lib -lssl -lcrypto -llua -lpthread -lm
+else
 TEST_LDFLAGS = -lssl -lcrypto -llua -lpthread -lm -lrt
+endif
+
+AS_HOST := 127.0.0.1
+AS_PORT := 3000
 
 ###############################################################################
 ##  TARGETS                                                      		     ##
@@ -32,7 +39,7 @@ TEST_LDFLAGS = -lssl -lcrypto -llua -lpthread -lm -lrt
 
 .PHONY: test
 test: $(TARGET_TEST)/aerospike_test
-	$(TARGET_TEST)/aerospike_test
+	$(TARGET_TEST)/aerospike_test -h $(AS_HOST) -p $(AS_PORT)
 
 .PHONY: test-valgrind
 test-valgrind: test-build

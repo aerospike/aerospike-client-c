@@ -29,8 +29,8 @@
 #include <pthread.h>
 #include <fcntl.h>
 #include <assert.h>
-#include <asm/byteorder.h> // 64-bit swap macro
 
+#include <citrusleaf/cf_byte_order.h>
 #include <citrusleaf/cf_atomic.h>
 #include <citrusleaf/cf_queue.h>
 #include <citrusleaf/cf_socket.h>
@@ -224,7 +224,7 @@ static int query_compile_range(cf_vector *range_v, uint8_t *buf, int *sz_p) {
         query_range *range = (query_range *)cf_vector_getp(range_v,i);
 
         // binname size
-        int binnamesz = strlen(range->bin_name);
+        int binnamesz = (int)strlen(range->bin_name);
         sz += 1;
         if (buf) {
             *buf++ = binnamesz;
@@ -249,8 +249,8 @@ static int query_compile_range(cf_vector *range_v, uint8_t *buf, int *sz_p) {
         size_t psz = 0;
         cl_object_get_size(&range->start_obj,&psz);
         if (buf) {
-            uint32_t ss = psz; 
-            *((uint32_t *)buf) = ntohl(ss);
+            uint32_t ss = (uint32_t)psz;
+            *((uint32_t *)buf) = cf_swap_to_be32(ss);
             buf += sizeof(uint32_t);
         } 
 
@@ -267,8 +267,8 @@ static int query_compile_range(cf_vector *range_v, uint8_t *buf, int *sz_p) {
         psz = 0;
         cl_object_get_size(&range->end_obj,&psz);
         if (buf) {
-            uint32_t ss = psz; 
-            *((uint32_t *)buf) = ntohl(ss);
+            uint32_t ss = (uint32_t)psz;
+            *((uint32_t *)buf) = cf_swap_to_be32(ss);
             buf += sizeof(uint32_t);
         } 
 
@@ -317,7 +317,7 @@ static int query_compile_select(cf_vector *binnames, uint8_t *buf, int *sz_p) {
         char *binname = (char *)cf_vector_getp(binnames, i);
 
         // binname size
-        int binnamesz = strlen(binname);
+        int binnamesz = (int)strlen(binname);
         sz += 1;
         if (buf) {
             *buf++ = binnamesz;
@@ -371,7 +371,7 @@ static int query_compile(const cl_query * query, uint8_t ** buf_r, size_t * buf_
         // namespace field 
         if ( !query->ns ) return CITRUSLEAF_FAIL_CLIENT;
 
-        ns_len  = strlen(query->ns);
+        ns_len  = (int)strlen(query->ns);
         if (ns_len) {
             n_fields++;
             msg_sz += ns_len  + sizeof(cl_msg_field); 
@@ -379,7 +379,7 @@ static int query_compile(const cl_query * query, uint8_t ** buf_r, size_t * buf_
 
         // indexname field
         if ( query->indexname ) {
-            iname_len = strlen(query->indexname);
+            iname_len = (int)strlen(query->indexname);
             if (iname_len) {
                 n_fields++;
                 msg_sz += strlen(query->indexname) + sizeof(cl_msg_field);
@@ -387,7 +387,7 @@ static int query_compile(const cl_query * query, uint8_t ** buf_r, size_t * buf_
         }
 
         if (query->setname) {
-            setname_len = strlen(query->setname);
+            setname_len = (int)strlen(query->setname);
             if (setname_len) {
                 n_fields++;
                 msg_sz += setname_len + sizeof(cl_msg_field);
@@ -454,7 +454,7 @@ static int query_compile(const cl_query * query, uint8_t ** buf_r, size_t * buf_
         mf->field_sz = ns_len + 1;
         memcpy(mf->data, query->ns, ns_len);
         mf_tmp = cl_msg_field_get_next(mf);
-        cl_msg_swap_field(mf);
+        cl_msg_swap_field_to_be(mf);
         mf = mf_tmp;
     }
 
@@ -463,7 +463,7 @@ static int query_compile(const cl_query * query, uint8_t ** buf_r, size_t * buf_
         mf->field_sz = iname_len + 1;
         memcpy(mf->data, query->indexname, iname_len);
         mf_tmp = cl_msg_field_get_next(mf);
-        cl_msg_swap_field(mf);
+        cl_msg_swap_field_to_be(mf);
         mf = mf_tmp;
         if (cf_debug_enabled()) {
             LOG("[DEBUG] query_compile: adding indexname %d %s\n",iname_len+1, query->indexname);
@@ -475,7 +475,7 @@ static int query_compile(const cl_query * query, uint8_t ** buf_r, size_t * buf_
         mf->field_sz = setname_len + 1;
         memcpy(mf->data, query->setname, setname_len);
         mf_tmp = cl_msg_field_get_next(mf);
-        cl_msg_swap_field(mf);
+        cl_msg_swap_field_to_be(mf);
         mf = mf_tmp;
         if (cf_debug_enabled()) {
             LOG("[DEBUG] query_compile: adding setname %d %s\n",setname_len+1, query->setname);
@@ -487,7 +487,7 @@ static int query_compile(const cl_query * query, uint8_t ** buf_r, size_t * buf_
         mf->field_sz = range_sz + 1;
         query_compile_range(query->ranges, mf->data, &range_sz);
         mf_tmp = cl_msg_field_get_next(mf);
-        cl_msg_swap_field(mf);
+        cl_msg_swap_field_to_be(mf);
         mf = mf_tmp;
     }
 
@@ -496,18 +496,18 @@ static int query_compile(const cl_query * query, uint8_t ** buf_r, size_t * buf_
         mf->field_sz = num_bins + 1;
         query_compile_select(query->binnames, mf->data, &num_bins);
         mf_tmp = cl_msg_field_get_next(mf);
-        cl_msg_swap_field(mf);
+        cl_msg_swap_field_to_be(mf);
         mf = mf_tmp;
     }
 
     if (query->job_id) {
         mf->type = CL_MSG_FIELD_TYPE_TRID;
         // Convert the transaction-id to network byte order (big-endian)
-        uint64_t trid_nbo = __cpu_to_be64(query->job_id); //swaps in place
+        uint64_t trid_nbo = cf_swap_to_be64(query->job_id); //swaps in place
         mf->field_sz = sizeof(trid_nbo) + 1;
         memcpy(mf->data, &trid_nbo, sizeof(trid_nbo));
         mf_tmp = cl_msg_field_get_next(mf);
-        cl_msg_swap_field(mf);
+        cl_msg_swap_field_to_be(mf);
         mf = mf_tmp;
     }
 
@@ -527,28 +527,28 @@ static int query_compile(const cl_query * query, uint8_t ** buf_r, size_t * buf_
         }
 
         mf_tmp = cl_msg_field_get_next(mf);
-        cl_msg_swap_field(mf);
+        cl_msg_swap_field_to_be(mf);
         mf = mf_tmp;
 
         // Append filename to message fields
         int len = 0;
-        len = strlen(query->udf.filename) * sizeof(char);
+        len = (int)strlen(query->udf.filename) * sizeof(char);
         mf->type = CL_MSG_FIELD_TYPE_UDF_FILENAME;
         mf->field_sz =  len + 1;
         memcpy(mf->data, query->udf.filename, len);
 
         mf_tmp = cl_msg_field_get_next(mf);
-        cl_msg_swap_field(mf);
+        cl_msg_swap_field_to_be(mf);
         mf = mf_tmp;
 
         // Append function name to message fields
-        len = strlen(query->udf.function) * sizeof(char);
+        len = (int)strlen(query->udf.function) * sizeof(char);
         mf->type = CL_MSG_FIELD_TYPE_UDF_FUNCTION;
         mf->field_sz =  len + 1;
         memcpy(mf->data, query->udf.function, len);
 
         mf_tmp = cl_msg_field_get_next(mf);
-        cl_msg_swap_field(mf);
+        cl_msg_swap_field_to_be(mf);
         mf = mf_tmp;
 
         // Append arglist to message fields
@@ -558,7 +558,7 @@ static int query_compile(const cl_query * query, uint8_t ** buf_r, size_t * buf_
         memcpy(mf->data, argbuffer.data, len);
 
         mf_tmp = cl_msg_field_get_next(mf);
-        cl_msg_swap_field(mf);
+        cl_msg_swap_field_to_be(mf);
         mf = mf_tmp;
     }
 
@@ -701,7 +701,7 @@ static int cl_query_worker_do(cl_cluster_node * node, cl_query_task * task) {
             LOG("[ERROR] cl_query_worker_do: network error: errno %d fd %d\n", rc, fd);
             return CITRUSLEAF_FAIL_CLIENT;
         }
-        cl_proto_swap(&proto);
+        cl_proto_swap_from_be(&proto);
 
         if ( proto.version != CL_PROTO_VERSION) {
             LOG("[ERROR] cl_query_worker_do: network error: received protocol message of wrong version %d\n",proto.version);
@@ -745,7 +745,7 @@ static int cl_query_worker_do(cl_cluster_node * node, cl_query_task * task) {
             uint8_t *   buf_start = buf;
             cl_msg *    msg = (cl_msg *) buf;
 
-            cl_msg_swap_header(msg);
+            cl_msg_swap_header_from_be(msg);
             buf += sizeof(cl_msg);
 
             if ( msg->header_sz != sizeof(cl_msg) ) {
@@ -761,7 +761,7 @@ static int cl_query_worker_do(cl_cluster_node * node, cl_query_task * task) {
             cl_msg_field *  mf          = (cl_msg_field *)buf;
 
             for (int i=0; i < msg->n_fields; i++) {
-                cl_msg_swap_field(mf);
+                cl_msg_swap_field_from_be(mf);
                 if (mf->type == CL_MSG_FIELD_TYPE_KEY) {
                     LOG("[INFO] cl_query_worker_do: read: found a key - unexpected\n");
                 }
@@ -802,7 +802,7 @@ static int cl_query_worker_do(cl_cluster_node * node, cl_query_task * task) {
             cl_msg_op * op = (cl_msg_op *) buf;
             for (int i=0;i<msg->n_ops;i++) {
 
-                cl_msg_swap_op(op);
+                cl_msg_swap_op_from_be(op);
 
 #ifdef DEBUG_VERBOSE
                 LOG("[DEBUG] cl_query_worker_do: op receive: %p size %d op %d ptype %d pversion %d namesz %d \n",

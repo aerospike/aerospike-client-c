@@ -5,7 +5,6 @@ include $(ROOT)/project/settings.mk
 ###############################################################################
 
 # Modules
-MSGPACK 	:= $(realpath ../msgpack)
 COMMON 		:= $(realpath ../aerospike-common)
 MODULES 	:= COMMON
 
@@ -14,7 +13,11 @@ O = 3
 
 
 # Make-local Compiler Flags
+ifeq ($(OS),Darwin)
+CC_FLAGS = -std=gnu99 -g -Wextra
+else
 CC_FLAGS = -std=gnu99 -g -rdynamic -Wextra
+endif
 CC_FLAGS += -fno-common -fno-strict-aliasing -fPIC 
 CC_FLAGS += -D_FILE_OFFSET_BITS=64 
 CC_FLAGS += -D_REENTRANT 

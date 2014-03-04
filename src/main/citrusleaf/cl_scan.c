@@ -162,7 +162,7 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 #ifdef DEBUG_VERBOSE
 		dump_buf("read proto header from cluster", (uint8_t *) &proto, sizeof(cl_proto));
 #endif	
-		cl_proto_swap(&proto);
+		cl_proto_swap_from_be(&proto);
 
 		if (proto.version != CL_PROTO_VERSION) {
 			cf_error("network error: received protocol message of wrong version %d", proto.version);
@@ -218,7 +218,7 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 			
 			uint8_t *buf_start = buf;
 			cl_msg *msg = (cl_msg *) buf;
-			cl_msg_swap_header(msg);
+			cl_msg_swap_header_from_be(msg);
 			buf += sizeof(cl_msg);
 			
 			if (msg->header_sz != sizeof(cl_msg)) {
@@ -234,7 +234,7 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 			char *set_ret = NULL;
 			cl_msg_field *mf = (cl_msg_field *)buf;
 			for (int i=0;i<msg->n_fields;i++) {
-				cl_msg_swap_field(mf);
+				cl_msg_swap_field_from_be(mf);
 				if (mf->type == CL_MSG_FIELD_TYPE_KEY) {
 					cf_error("read: found a key - unexpected");
 				}
@@ -279,7 +279,7 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 			cl_msg_op *op = (cl_msg_op *)buf;
 			for (int i=0;i<msg->n_ops;i++) {
 
-				cl_msg_swap_op(op);
+				cl_msg_swap_op_from_be(op);
 
 #ifdef DEBUG_VERBOSE
 				cf_debug("op receive: %p size %d op %d ptype %d pversion %d namesz %d",

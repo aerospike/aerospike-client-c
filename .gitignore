@@ -53,3 +53,10 @@ aerospike/client_test-valgrind
 Icon?
 ehthumbs.db
 Thumbs.db
+
+# Mac OSX 
+xcuserdata
+*.xccheckout
+*.swp
+*~.nib
+

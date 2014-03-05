@@ -17,6 +17,7 @@
 #include <aerospike/as_val.h>
 
 #include <citrusleaf/cl_cluster.h>
+#include <citrusleaf/cf_types.h>
 
 #include "../test.h"
 #include "../util/udf.h"
@@ -93,7 +94,7 @@ static int check_bin2(as_record * rec, scan_check * check)
 	// Check the string bin
 	char expected[SET_STRSZ];
 	int64_t bin1 = as_record_get_int64(rec, "bin1", INT64_MIN);
-	sprintf(expected, "str-%s-%ld", rec->key.set[0] == '\0' ? "noset" : rec->key.set, bin1);
+	sprintf(expected, "str-%s-%" PRId64, rec->key.set[0] == '\0' ? "noset" : rec->key.set, bin1);
 
 	if (strcmp(expected, str) != 0) {
 		error("Expected '%s' in bin('%s'), but got '%s'", expected, "bin2", str);

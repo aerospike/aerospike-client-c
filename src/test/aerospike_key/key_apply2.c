@@ -79,7 +79,8 @@ TEST( key_apply2_file_exists , "apply2: key_apply2 exists" ) {
 	as_udf_file file;
 	as_udf_file_init(&file);
 
-	char * base = basename(filename);
+	as_string filename_string;
+	const char * base = as_basename(&filename_string, filename);
 
 	as_key key;
 	as_key_init(&key, "test", "test", "foo");
@@ -88,8 +89,9 @@ TEST( key_apply2_file_exists , "apply2: key_apply2 exists" ) {
 		error("error caused by aerospike_udf_get(%s): (%d) %s @ %s[%s:%d]", err.code, err.message, err.func, err.file, err.line);
 	}
 
+	as_string_destroy(&filename_string);
 	as_udf_file_destroy(&file);
-
+	
 }
 
 // TEST( key_apply2_getboolean , "apply2: (test,test,foo) <!> key_apply2.getboolean() => 1" ) {
@@ -411,7 +413,7 @@ typedef struct {
 		__val = NULL; \
 	}
 
-bool kvpair_search(const as_error * err, const as_node * node, const char * req, const char * res, void * udata)
+bool kvpair_search(const as_error * err, const as_node * node, const char * req, char * res, void * udata)
 {
 	kvpair * kvp = (kvpair *) udata;
 

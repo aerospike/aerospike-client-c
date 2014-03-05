@@ -160,9 +160,10 @@ cf_decompress(int argc, uint8_t **argv)
     uint8_t *out_buf;
     int ret_value = 0;
 
-    cf_debug ("In cf_decompress");
+	cf_debug ("In cf_decompress");
 
-    compression_type = *argv[0];
+	(void)argc; // Suppress not used warning.
+	compression_type = *argv[0];
     buf_len = (size_t *)argv[1];
     buf = argv[2];
     out_buf_len = (size_t *)argv[3];

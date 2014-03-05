@@ -79,18 +79,13 @@ static bool parse_response( const cl_cluster_node * cn, const struct sockaddr_in
     char * v = buf;
     for(int i = 0; i<len; i++) {
         if(*r == '"') {
-            *r++;
+            r++;
         }
         else {
             *buf++ = *r++;
         }
     }
 
-	// Found a null value, return.
-	if(!v) {
-		return false;
-	}
-	
 	// update the key value structure to be sent back
 	(kv->value)[kv->elements] = (char*) calloc(1, len - 1);
 	memcpy((kv->value)[kv->elements], v, len - 1);

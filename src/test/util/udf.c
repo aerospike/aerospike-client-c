@@ -87,12 +87,14 @@ bool udf_put(const char * filename) {
 	as_error err;
 	as_error_reset(&err);
 
-    char * base = basename(filename);
+	as_string filename_string;
+	const char * base = as_basename(&filename_string, filename);
 
     if ( aerospike_udf_put(as, &err, NULL, base, AS_UDF_TYPE_LUA, &udf_content) != AEROSPIKE_OK ) {
         error("error caused by aerospike_udf_put(): (%d) %s @ %s[%s:%d]", err.code, err.message, err.func, err.file, err.line);
     }
 
+	as_string_destroy(&filename_string);
     as_val_destroy(&udf_content);
 
 	WAIT_MS(100);
@@ -105,13 +107,15 @@ bool udf_remove(const char * filename) {
 	as_error err;
 	as_error_reset(&err);
 
-    char * base = basename(filename);
+	as_string filename_string;
+	const char * base = as_basename(&filename_string, filename);
 
     if ( aerospike_udf_remove(as, &err, NULL, base) != AEROSPIKE_OK ) {
         error("error caused by aerospike_udf_remove(): (%d) %s @ %s[%s:%d]", err.code, err.message, err.func, err.file, err.line);
     }
 
-	WAIT_MS(100);
+	as_string_destroy(&filename_string);
+ 	WAIT_MS(100);
 	
     return err.code == AEROSPIKE_OK;
 }
@@ -124,11 +128,14 @@ bool udf_exists(const char * filename) {
     as_udf_file file;
     as_udf_file_init(&file);
 
-    char * base = basename(filename);
+	as_string filename_string;
+	const char * base = as_basename(&filename_string, filename);
 
     if ( aerospike_udf_get(as, &err, NULL, base, AS_UDF_TYPE_LUA, &file) != AEROSPIKE_OK ) {
         error("error caused by aerospike_udf_get: (%d) %s @ %s[%s:%d]", err.code, err.message, err.func, err.file, err.line);
     }
+
+	as_string_destroy(&filename_string);
 
     as_udf_file_destroy(&file);
 

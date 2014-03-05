@@ -476,7 +476,7 @@ typedef struct as_policy_scan_s {
 	 *	Abort the scan if the cluster is not in a 
 	 *	stable state.
 	 */
-	bool fail_on_cluster_change;
+	char fail_on_cluster_change;
 
 } as_policy_scan;
 
@@ -500,12 +500,12 @@ typedef struct as_policy_info_s {
 	/**
 	 *	Send request without any further processing.
 	 */
-	bool send_as_is;
+	char send_as_is;
 
 	/**
 	 *	Ensure the request is within allowable size limits.
 	 */
-	bool check_bounds;
+	char check_bounds;
 
 } as_policy_info;
 

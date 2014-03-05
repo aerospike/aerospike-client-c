@@ -283,7 +283,7 @@ const int SCANNED_RECORDS_TAG_LEN = sizeof(SCANNED_RECORDS_TAG) - 1;
  * The info callback made for each node when doing aerospike_scan_info().
  */
 static bool
-scan_info_cb(const as_error * err, const as_node * node, const char * req, const char * res, void * udata)
+scan_info_cb(const as_error * err, const as_node * node, const char * req, char * res, void * udata)
 {
 	bg_scan_info* p_bsi = (bg_scan_info*)udata;
 

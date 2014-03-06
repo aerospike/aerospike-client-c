@@ -115,7 +115,7 @@ as_status aerospike_lmap_put_all(
 	}
 	as_error_reset(err);
 
-	if (!as || !key || !ldt || vals) {
+	if (!as || !key || !ldt || !vals) {
 		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
 				"as/key/ldt/vals cannot be null");
 	}

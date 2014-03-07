@@ -1904,7 +1904,7 @@ citrusleaf_calculate_digest(const char *set, const cl_object *key, cf_digest *di
 // any bin. It can't be used to operate and 'get many' in the response, though.
 //
 extern cl_rv
-citrusleaf_operate_digest(cl_cluster *asc, const char *ns, cf_digest *digest,
+citrusleaf_operate_digest(cl_cluster *asc, const char *ns, const char *set, cf_digest *digest,
 		cl_operation *operations, int n_operations, const cl_write_parameters *cl_w_p,
 		uint32_t *generation, uint32_t* ttl)
 {
@@ -1936,7 +1936,7 @@ citrusleaf_operate_digest(cl_cluster *asc, const char *ns, cf_digest *digest,
 		if (info1 && info2) break;
 	}
 
-	return( do_the_full_monte( asc, info1, info2, info3, ns, NULL, NULL, digest, 0, 0, 
+	return( do_the_full_monte( asc, info1, info2, info3, ns, set, NULL, digest, 0, 0,
 			&operations, &n_operations, generation, cl_w_p, &trid, NULL, NULL, ttl) );
 }
 

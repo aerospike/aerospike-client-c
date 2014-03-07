@@ -9,7 +9,7 @@ CFLAGS = -I$(INCLUDE_PATH)
 CFLAGS += -std=c++0x -g -rdynamic -Wall 
 CFLAGS += -fno-common -fno-strict-aliasing -fPIC 
 CFLAGS += -DMARCH_$(ARCH) -D_FILE_OFFSET_BITS=64 
-CFLAGS += -D_REENTRANT -D_GNU_SOURCE -DMEM_COUNT
+CFLAGS += -D_REENTRANT -D_GNU_SOURCE
 CFLAGS += -I$(MSGPACK_PATH)/src
 
 LDFLAGS = $(LIBRARY_PATH)/libaerospike.a -lssl -lcrypto -lpthread -lrt -llua -lm -lz

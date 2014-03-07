@@ -16,6 +16,7 @@
 #include <aerospike/as_val.h>
 
 #include "../test.h"
+#include "../aerospike_test.h"
 
 /******************************************************************************
  * GLOBAL VARS
@@ -39,7 +40,7 @@ typedef struct info_data_s info_data;
  * STATIC FUNCTIONS
  *****************************************************************************/
 
-static bool info_compare(const as_error * err, const as_node * node, const char * req, const char * res, void * udata) {
+static bool info_compare(const as_error * err, const as_node * node, const char * req, char * res, void * udata) {
 	info_data * data = (info_data *) udata;
 	
 	// count results
@@ -89,7 +90,7 @@ TEST( info_basics_help , "help" ) {
 
 	char * res = NULL;
 
-	rc = aerospike_info_host(as, &err, NULL, "127.0.0.1", 3000, "help", &res);
+	rc = aerospike_info_host(as, &err, NULL, g_host, 3000, "help", &res);
 	
 	assert_not_null( res );
 	assert_string_eq(res, data.actual);
@@ -124,7 +125,7 @@ TEST( info_basics_features , "features" ) {
 
 	char * res = NULL;
 
-	rc = aerospike_info_host(as, &err, NULL, "127.0.0.1", 3000, "features", &res);
+	rc = aerospike_info_host(as, &err, NULL, g_host, 3000, "features", &res);
 	
 	assert_not_null( res );
 	assert_string_eq(res, data.actual);

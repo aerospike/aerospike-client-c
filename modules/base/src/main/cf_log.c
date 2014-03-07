@@ -32,6 +32,7 @@
 static void
 cf_default_log(cf_log_level level, const char* fmt_no_newline, ...)
 {
+	(void)level; // Suppress level not used warning.
 	size_t fmt_size = strlen(fmt_no_newline) + 2;
 	char* fmt = (char*)alloca(fmt_size);
 

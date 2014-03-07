@@ -274,6 +274,37 @@ typedef enum as_policy_exists_e {
 } as_policy_exists;
 
 /**
+ *	Boolean Policy.
+ *
+ *	This enum provides boolean values (true,false) and an
+ *	undefined value for the boolean.
+ *
+ *	@ingroup client_policies
+ */
+typedef enum as_policy_bool_e {
+
+	/**
+	 *	If the value is neither true or false,
+	 * 	then it is undefined. This is used for cases
+	 *	where we initialize a variable, but do not want
+	 *  it to have a value.
+	 */
+	AS_POLICY_BOOL_UNDEF = -1,
+
+	/**
+	 *	This value is interchangable with `false`.
+	 */
+	AS_POLICY_BOOL_FALSE = false,
+
+	/**
+	 *	This value is interchangable with `true`.
+	 */
+	AS_POLICY_BOOL_TRUE = true
+
+} as_policy_bool;
+
+
+/**
  *	Write Policy
  *
  *	@ingroup client_policies
@@ -476,7 +507,7 @@ typedef struct as_policy_scan_s {
 	 *	Abort the scan if the cluster is not in a 
 	 *	stable state.
 	 */
-	bool fail_on_cluster_change;
+	as_policy_bool fail_on_cluster_change;
 
 } as_policy_scan;
 
@@ -500,12 +531,12 @@ typedef struct as_policy_info_s {
 	/**
 	 *	Send request without any further processing.
 	 */
-	bool send_as_is;
+	as_policy_bool send_as_is;
 
 	/**
 	 *	Ensure the request is within allowable size limits.
 	 */
-	bool check_bounds;
+	as_policy_bool check_bounds;
 
 } as_policy_info;
 

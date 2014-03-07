@@ -5,6 +5,7 @@
 
 #include "../main/aerospike/_log.h"
 #include "test.h"
+#include "aerospike_test.h"
 #include "util/info_util.h"
 
 /******************************************************************************
@@ -12,9 +13,7 @@
  *****************************************************************************/
 
 #define TIMEOUT 1000
-
 #define SCRIPT_LEN_MAX 1048576
-#define MAX_HOST_SIZE	1024
 
 /******************************************************************************
  * VARIABLES
@@ -188,6 +187,10 @@ PLAN( aerospike_test ) {
 
     // aerospike_scan module
     plan_add( batch_get );
+
+    // as_policy module
+    plan_add( policy_read );
+    plan_add( policy_scan );
 
 }
 

@@ -44,9 +44,11 @@
 
 extern int g_cl_turn_debug_on;
 
+/*
 static char * citrusleaf_secondary_index_fold_args(as_list * arglist) {
     return "";
 }
+*/
 
 cl_rv citrusleaf_secondary_index_create(
     cl_cluster * asc, const char * ns, const char * set,

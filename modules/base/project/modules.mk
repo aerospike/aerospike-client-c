@@ -31,10 +31,10 @@ COMMON-prepare: $(COMMON)/$(TARGET_INCL)/aerospike/*.h $(COMMON)/$(TARGET_INCL)/
 
 .PHONY: COMMON-clean
 COMMON-clean:
-	$(MAKE) -e -C $(COMMON) clean MSGPACK=$(MSGPACK)
+	$(MAKE) -e -C $(COMMON) clean
 
 $(COMMON)/$(TARGET_INCL)/aerospike/%.h: $(COMMON)/$(SOURCE_INCL)/aerospike/%.h
-	$(MAKE) -e -C $(COMMON) prepare MSGPACK=$(MSGPACK)
+	$(MAKE) -e -C $(COMMON) prepare
 
 $(COMMON)/$(TARGET_INCL)/citrusleaf/%.h: $(COMMON)/$(SOURCE_INCL)/citrusleaf/%.h
-	$(MAKE) -e -C $(COMMON) prepare MSGPACK=$(MSGPACK)
+	$(MAKE) -e -C $(COMMON) prepare

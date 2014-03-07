@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <citrusleaf/cf_types.h>
 
 /******************************************************************************
  * MACROS
@@ -338,12 +339,12 @@ void atf_assert_not_null(atf_test_result * result, const char * exp, const char 
 }
 
 void atf_assert_int_eq(atf_test_result * result, const char * actual_exp, int64_t actual, int64_t expected, const char * file, int line) {
-    snprintf(result->message, LOG_MESSAGE_MAX, "assertion failed: %s == %ld, when %ld was expected. [at %s:%d]", actual_exp, actual, expected, file, line);
+    snprintf(result->message, LOG_MESSAGE_MAX, "assertion failed: %s == %" PRId64 ", when %" PRId64 " was expected. [at %s:%d]", actual_exp, actual, expected, file, line);
     result->success = false;
 }
 
 void atf_assert_int_ne(atf_test_result * result, const char * actual_exp, int64_t actual, int64_t expected, const char * file, int line) {
-    snprintf(result->message, LOG_MESSAGE_MAX, "assertion failed: %s == %ld, when it shouldn't be. [at %s:%d]", actual_exp, actual, file, line);
+    snprintf(result->message, LOG_MESSAGE_MAX, "assertion failed: %s == %" PRId64 ", when it shouldn't be. [at %s:%d]", actual_exp, actual, file, line);
     result->success = false;
 }
 

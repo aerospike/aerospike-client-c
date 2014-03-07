@@ -32,10 +32,10 @@
 #include <string.h>
 #include <pthread.h>
 #include <fcntl.h>
-#include <arpa/inet.h>  // ntonl
 #include <inttypes.h> // PRIu64
 #include <signal.h>
 
+#include <citrusleaf/cf_byte_order.h>
 #include <citrusleaf/cf_atomic.h>
 #include <citrusleaf/cf_hist.h>
 #include <citrusleaf/cf_proto.h>
@@ -46,17 +46,8 @@
 
 #include "internal.h"
 
-
-#ifdef OSX
-#include <libkern/OSByteOrder.h> // for the 64-bit swap macro.
-#else //Linux
-#include <asm/byteorder.h> // 64-bit swap macro
-#endif
-
-
 // This is a per-transaction deadline kind of thing
 #define DEFAULT_TIMEOUT 200
-
 
 // #define DEBUG_HISTOGRAM 1 // histogram printed in citrusleaf_print_stats()
 // #define DEBUG 1
@@ -343,7 +334,7 @@ cl_write_header(uint8_t *buf, size_t msg_sz, uint info1, uint info2, uint info3,
 	msg->proto.version = CL_PROTO_VERSION;
 	msg->proto.type = CL_PROTO_TYPE_CL_MSG;
 	msg->proto.sz = msg_sz - sizeof(cl_proto);
-	cl_proto_swap(&msg->proto);
+	cl_proto_swap_to_be(&msg->proto);
 	msg->m.header_sz = sizeof(cl_msg);
 	msg->m.info1 = info1;
 	msg->m.info2 = info2;
@@ -355,7 +346,7 @@ cl_write_header(uint8_t *buf, size_t msg_sz, uint info1, uint info2, uint info3,
 	msg->m.transaction_ttl = transaction_ttl;
 	msg->m.n_fields = n_fields;
 	msg->m.n_ops = n_ops;
-	cl_msg_swap_header(&msg->m);
+	cl_msg_swap_header_to_be(&msg->m);
 	return (buf + sizeof(as_msg));
 }
 
@@ -384,7 +375,7 @@ write_fields(uint8_t *buf, const char *ns, int ns_len, const char *set, int set_
 	// printf("write_fields: ns: write_fields: %d\n", mf->field_sz);
 		memcpy(mf->data, ns, ns_len);
 		mf_tmp = cl_msg_field_get_next(mf);
-		cl_msg_swap_field(mf);
+		cl_msg_swap_field_to_be(mf);
 		mf = mf_tmp;
 	}
 
@@ -394,19 +385,19 @@ write_fields(uint8_t *buf, const char *ns, int ns_len, const char *set, int set_
 		//printf("write_fields: set: write_fields: %d\n", mf->field_sz);
 		memcpy(mf->data, set, set_len);
 		mf_tmp = cl_msg_field_get_next(mf);
-		cl_msg_swap_field(mf);
+		cl_msg_swap_field_to_be(mf);
 		mf = mf_tmp;
 	}
 
 	if (trid) {
 		mf->type = CL_MSG_FIELD_TYPE_TRID;
 		//Convert the transaction-id to network byte order (big-endian)
-		uint64_t trid_nbo = __cpu_to_be64(trid); //swaps in place
+		uint64_t trid_nbo = cf_swap_to_be64(trid); //swaps in place
 		mf->field_sz = sizeof(trid_nbo) + 1;
 		//printf("write_fields: trid: write_fields: %d\n", mf->field_sz);
 		memcpy(mf->data, &trid_nbo, sizeof(trid_nbo));
 		mf_tmp = cl_msg_field_get_next(mf);
-		cl_msg_swap_field(mf);
+		cl_msg_swap_field_to_be(mf);
 		mf = mf_tmp;
 	}
 
@@ -416,7 +407,7 @@ write_fields(uint8_t *buf, const char *ns, int ns_len, const char *set, int set_
 		//printf("write_fields: scan: write_fields: %d\n", mf->field_sz);
 		memcpy(mf->data, scan_param_field, sizeof(cl_scan_param_field));
 		mf_tmp = cl_msg_field_get_next(mf);
-		cl_msg_swap_field(mf);
+		cl_msg_swap_field_to_be(mf);
 		mf = mf_tmp;
 	}	
 
@@ -428,23 +419,23 @@ write_fields(uint8_t *buf, const char *ns, int ns_len, const char *set, int set_
 		int len = 0;
 
 		// Append filename to message fields
-		len = as_string_len(call->file) * sizeof(char);
+		len = (int)as_string_len(call->file) * sizeof(char);
         mf->type = CL_MSG_FIELD_TYPE_UDF_FILENAME;
         mf->field_sz =  len + 1;
         memcpy(mf->data, as_string_tostring(call->file), len);
 
         mf_tmp = cl_msg_field_get_next(mf);
-        cl_msg_swap_field(mf);
+        cl_msg_swap_field_to_be(mf);
         mf = mf_tmp;
 
 		// Append function name to message fields
-		len = as_string_len(call->func) * sizeof(char);
+		len = (int)as_string_len(call->func) * sizeof(char);
         mf->type = CL_MSG_FIELD_TYPE_UDF_FUNCTION;
         mf->field_sz =  len + 1;
         memcpy(mf->data, as_string_tostring(call->func), len);
 
         mf_tmp = cl_msg_field_get_next(mf);
-        cl_msg_swap_field(mf);
+        cl_msg_swap_field_to_be(mf);
         mf = mf_tmp;
 
         // Append arglist to message fields
@@ -454,7 +445,7 @@ write_fields(uint8_t *buf, const char *ns, int ns_len, const char *set, int set_
         memcpy(mf->data, call->args->data, len);
 
         mf_tmp = cl_msg_field_get_next(mf);
-        cl_msg_swap_field(mf);
+        cl_msg_swap_field_to_be(mf);
         mf = mf_tmp;
 
 	}
@@ -466,7 +457,7 @@ write_fields(uint8_t *buf, const char *ns, int ns_len, const char *set, int set_
 		// which we do not send to the server. 
 		*mf->data = udf_type;
 		mf_tmp = cl_msg_field_get_next(mf);
-		cl_msg_swap_field(mf);
+		cl_msg_swap_field_to_be(mf);
 		mf = mf_tmp;
 	}
 		
@@ -477,13 +468,13 @@ write_fields(uint8_t *buf, const char *ns, int ns_len, const char *set, int set_
 		switch (key->type) {
 			case CL_STR:
 				fd[0] = key->type;
-				mf->field_sz = key->sz + 2;
+				mf->field_sz = (uint32_t)key->sz + 2;
 				memcpy(&fd[1], key->u.str, key->sz);
 				break;
 			case CL_INT:
 				fd[0] = key->type;
 				mf->field_sz = value_to_op_int(key->u.i64, &fd[1]) + 2; 
-                uint64_t swapped = __swab64(key->u.i64);
+                uint64_t swapped = cf_swap_to_be64(key->u.i64);
                 memcpy(&fd[1], &swapped, sizeof(swapped));
 				break;
 			case CL_LIST:
@@ -496,7 +487,7 @@ write_fields(uint8_t *buf, const char *ns, int ns_len, const char *set, int set_
 			case CL_PHP_BLOB:
 			case CL_LUA_BLOB:
 				fd[0] = key->type;
-				mf->field_sz = key->sz + 2;
+				mf->field_sz = (uint32_t)key->sz + 2;
 				memcpy(&fd[1], key->u.blob, key->sz);
 				break;
 			default:
@@ -504,7 +495,7 @@ write_fields(uint8_t *buf, const char *ns, int ns_len, const char *set, int set_
 				return(0);
 		}
 		mf_tmp = cl_msg_field_get_next(mf);
-		cl_msg_swap_field(mf);
+		cl_msg_swap_field_to_be(mf);
 		
 		// calculate digest
 		if (d_ret) {
@@ -519,7 +510,7 @@ write_fields(uint8_t *buf, const char *ns, int ns_len, const char *set, int set_
 		mf->field_sz = sizeof(cf_digest) + 1;
 		memcpy(mf->data, d, sizeof(cf_digest));
 		mf_tmp = cl_msg_field_get_next(mf);
-		cl_msg_swap_field(mf);
+		cl_msg_swap_field_to_be(mf);
 		if (d_ret)
 			memcpy(d_ret, d, sizeof(cf_digest));
 
@@ -565,11 +556,7 @@ write_fields(uint8_t *buf, const char *ns, int ns_len, const char *set, int set_
 static int
 value_to_op_int(int64_t value, uint8_t *data)
 {
-#ifdef OSX
-	uint64_t swapped = OSSwapHostToBigInt64(value);
-#else // Linux
-	uint64_t swapped = __cpu_to_be64((__u64) value);  // swap in place
-#endif
+	uint64_t swapped = cf_swap_to_be64(value);
 	memcpy(data, &swapped, sizeof(uint64_t));
 	return(8);
 }
@@ -584,20 +571,16 @@ value_to_op_int_sz(int64_t i)
 }
 
 // In the MC_INCR operation, two uint64s are packed into a 
-// blob. ntoh them both and put into the output.
+// blob. Byte swap them both and put into the output.
 static int
 value_to_op_two_ints(void *value, uint8_t *data)
 {
 	int64_t value1  = *(int64_t *)value;
 	int64_t value2  = *(int64_t *)((uint8_t *)value + sizeof(int64_t));
 
-#ifdef OSX
-	uint64_t swapped1 = OSSwapHostToBigInt64(value1);
-	uint64_t swapped2 = OSSwapHostToBigInt64(value2);
-#else // Linux
-	uint64_t swapped1 = __cpu_to_be64((__u64) value1);  // swap in place
-	uint64_t swapped2 = __cpu_to_be64((__u64) value2);  // swap in place
-#endif
+	uint64_t swapped1 = cf_swap_to_be64(value1);
+	uint64_t swapped2 = cf_swap_to_be64(value2);
+
 	memcpy(data, &swapped1, sizeof(uint64_t));
 	memcpy(data + sizeof(uint64_t), &swapped2, sizeof(uint64_t));
 
@@ -612,11 +595,7 @@ op_to_value_int(uint8_t	*buf, int sz, int64_t *value)
 	if (sz > 8)	return(-1);
 	if (sz == 8) {
 		// no need to worry about sign extension - blast it
-#ifdef OSX
-		*value = OSSwapHostToBigInt64(*(uint64_t *) buf);
-#else //Linux
-		*value = __cpu_to_be64(*(__u64 *) buf);
-#endif	
+		*value = cf_swap_from_be64(*(uint64_t *) buf);
 		return(0);
 	}
 	if (sz == 0) {
@@ -634,11 +613,7 @@ op_to_value_int(uint8_t	*buf, int sz, int64_t *value)
 		int i;
 		for (i=0;i<8-sz;i++)	lg_buf[i]=0xff;
 		memcpy(&lg_buf[i],buf,sz);
-#ifdef OSX
-		*value = OSSwapHostToBigInt64(*(uint64_t *) buf);
-#else //Linux
-		*value = __cpu_to_be64((__u64) *buf);
-#endif
+		*value = cf_swap_from_be64(*(uint64_t *) buf);
 		return(0);
 	}
 	// positive numbers don't
@@ -651,7 +626,6 @@ op_to_value_int(uint8_t	*buf, int sz, int64_t *value)
 		*value = v;
 		return(0);
 	}
-	
 	
 	return(0);
 }
@@ -725,7 +699,7 @@ int
 cl_value_to_op(cl_bin *v, cl_operator operator, cl_operation *operation, cl_msg_op *op)
 {
 	cl_bin *bin = v?v:&operation->bin;
-	int	bin_len = strlen(bin->bin_name);
+	int	bin_len = (int)strlen(bin->bin_name);
 	op->op_sz = sizeof(cl_msg_op) + bin_len - sizeof(uint32_t);
 	op->name_sz = bin_len;
 	op->version = 0;
@@ -862,8 +836,8 @@ cl_compile(uint info1, uint info2, uint info3, const char *ns, const char *set, 
 	uint8_t udf_type)
 {
 	// I hate strlen
-	int		ns_len = ns ? strlen(ns) : 0;
-	int		set_len = set ? strlen(set) : 0;
+	int		ns_len = ns ? (int)strlen(ns) : 0;
+	int		set_len = set ? (int)strlen(set) : 0;
 	int		i;
 
 	// determine the size
@@ -970,7 +944,7 @@ cl_compile(uint info1, uint info2, uint info3, const char *ns, const char *set, 
 			}
 	
 			op_tmp = cl_msg_op_get_next(op);
-			cl_msg_swap_op(op);
+			cl_msg_swap_op_to_be(op);
 			op = op_tmp;
 		}
 	}
@@ -1203,14 +1177,14 @@ cl_parse(cl_msg *msg, uint8_t *buf, size_t buf_len, cl_bin **values_r, cl_operat
 				return(-1);
 			}
 
-			cl_msg_swap_field(mf);
+			cl_msg_swap_field_from_be(mf);
 			if (mf->type == CL_MSG_FIELD_TYPE_TRID) {
 				uint64_t trid_nbo;
 				//We get the transaction-id in network byte order (big-endian)
 				//We should convert to host byte order
 				memcpy(&trid_nbo, mf->data, sizeof(trid_nbo));
 				if (trid_r) {
-					*trid_r = __be64_to_cpu(trid_nbo);
+					*trid_r = cf_swap_from_be64(trid_nbo);
 				}
 			} else if (mf->type == CL_MSG_FIELD_TYPE_SET) {
 				// In case of set name, the field size is set to one more than the 
@@ -1259,7 +1233,7 @@ cl_parse(cl_msg *msg, uint8_t *buf, size_t buf_len, cl_bin **values_r, cl_operat
 					return(-1);
 				}
 
-				cl_msg_swap_op(op);
+				cl_msg_swap_op_from_be(op);
 				
 				cl_set_value_particular(op, value);
 				
@@ -1279,7 +1253,7 @@ cl_parse(cl_msg *msg, uint8_t *buf, size_t buf_len, cl_bin **values_r, cl_operat
 					return(-1);
 				}
 
-				cl_msg_swap_op(op);
+				cl_msg_swap_op_from_be(op);
 				
 				// This is a little peculiar. We could get a response that wasn't in the result
 				// set, would be nice to throw an error
@@ -1486,8 +1460,8 @@ do_the_full_monte(cl_cluster *asc, int info1, int info2, int info3, const char *
 #ifdef DEBUG_VERBOSE
 		dump_buf("read header from cluster", (uint8_t *) &msg, sizeof(cl_msg));
 #endif	
-		cl_proto_swap(&msg.proto);
-		cl_msg_swap_header(&msg.m);
+		cl_proto_swap_from_be(&msg.proto);
+		cl_msg_swap_header_from_be(&msg.m);
 
 		if (/*(info1 & CL_MSG_INFO1_READ) &&*/ cl_gen) {
 			*cl_gen = msg.m.generation;
@@ -1885,7 +1859,7 @@ citrusleaf_delete_verify(cl_cluster *asc, const char *ns, const char *set, const
 extern int
 citrusleaf_calculate_digest(const char *set, const cl_object *key, cf_digest *digest)
 {
-	int set_len = set ? strlen(set) : 0;
+	int set_len = set ? (int)strlen(set) : 0;
 	
 	// make the key as it's laid out for digesting
 	// THIS IS A STRIPPED DOWN VERSION OF THE CODE IN write_fields ABOVE

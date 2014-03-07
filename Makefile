@@ -7,23 +7,22 @@ include project/settings.mk
 BASE 		:= $(realpath modules/base)
 COMMON 		:= $(realpath modules/common)
 MOD_LUA 	:= $(realpath modules/mod-lua)
-MSGPACK 	:= $(realpath modules/msgpack)
-MODULES 	:= BASE COMMON MOD_LUA MSGPACK
+MODULES 	:= BASE COMMON MOD_LUA
 
 # Overrride optimizations via: make O=n
 O=3
 
-# Enable memcount 
-MEM_COUNT=1
-
 # Make-local Compiler Flags
+ifeq ($(OS),Darwin)
+CC_FLAGS = -std=gnu99 -g -Wall
+LD_FLAGS = -undefined dynamic_lookup -lm
+else
 CC_FLAGS = -std=gnu99 -g -rdynamic -Wall 
+LD_FLAGS = -lm
+endif
 CC_FLAGS += -fno-common -fno-strict-aliasing -fPIC 
 CC_FLAGS += -DMARCH_$(ARCH) -D_FILE_OFFSET_BITS=64 
-CC_FLAGS += -D_REENTRANT -D_GNU_SOURCE -DMEM_COUNT
-
-# Make-local Linker Flags
-LD_FLAGS = -lm
+CC_FLAGS += -D_REENTRANT -D_GNU_SOURCE
 
 # DEBUG Settings
 ifdef DEBUG
@@ -33,7 +32,7 @@ LD_FLAGS += -pg -fprofile-arcs -lgcov
 endif
 
 # Make-tree Compler Flags
-CFLAGS = -O$(O) -DMEM_COUNT=$(MEM_COUNT)
+CFLAGS = -O$(O)
 
 # Make-tree Linker Flags
 # LDFLAGS = 
@@ -42,7 +41,7 @@ CFLAGS = -O$(O) -DMEM_COUNT=$(MEM_COUNT)
 INC_PATH += $(BASE)/$(TARGET_INCL)
 INC_PATH += $(COMMON)/$(TARGET_INCL)
 INC_PATH += $(MOD_LUA)/$(TARGET_INCL)
-INC_PATH += $(MSGPACK)/src
+INC_PATH += /usr/local/include
 
 # Library Paths
 # LIB_PATH +=
@@ -109,7 +108,6 @@ DEPS += $(COMMON)/$(TARGET_OBJ)/common/aerospike/*.o
 DEPS += $(COMMON)/$(TARGET_OBJ)/common/citrusleaf/*.o
 DEPS += $(BASE)/$(TARGET_OBJ)/base/*.o
 DEPS += $(MOD_LUA)/$(TARGET_OBJ)/*.o
-DEPS += $(addprefix $(MSGPACK)/src/.libs/, unpack.o objectc.o version.o vrefbuffer.o zone.o)
 
 ###############################################################################
 ##  HEADERS                                                                  ##
@@ -136,6 +134,7 @@ COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_string.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_stringmap.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_util.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_val.h
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/alloc.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_arch.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_atomic.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_types.h

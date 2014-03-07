@@ -33,6 +33,10 @@
 
 #include "internal.h"
 
+#ifdef __APPLE__
+#include <libgen.h>
+#endif
+
 /******************************************************************************
  * MACROS
  ******************************************************************************/
@@ -77,7 +81,7 @@ static void * cl_udf_info_parse(char * key, char * value, void * context)
 	}
 	else if ( strcmp(key,"content") == 0 ) {
 		as_bytes_destroy(&info->content);
-		int c_len = strlen(value);
+		int c_len = (int)strlen(value);
 		uint8_t * c = (uint8_t *) malloc(c_len + 1);
 		memcpy(c, value, c_len);
 		c[c_len] = 0;
@@ -107,7 +111,7 @@ static void * cl_udf_file_parse(char * key, char * value, void * context)
 	}
 	else if ( strcmp(key,"content") == 0 ) {
 		as_bytes_destroy(file->content);
-		int c_len = strlen(value);
+		int c_len = (int)strlen(value);
 		uint8_t * c = (uint8_t *) malloc(c_len + 1);
 		memcpy(c, value, c_len);
 		c[c_len] = 0;
@@ -162,27 +166,6 @@ static void * cl_udf_list_parse(char * key, char * value, void * context)
 }
 */
 
-static int print_buffer(as_buffer * buff)
-{
-	msgpack_sbuffer sbuf;
-	msgpack_sbuffer_init(&sbuf);
-
-	sbuf.data = (char *) buff->data;
-	sbuf.size = buff->size;
-	sbuf.alloc = buff->capacity;
-
-	msgpack_zone mempool;
-	msgpack_zone_init(&mempool, 2048);
-
-	msgpack_object deserialized;
-	msgpack_unpack(sbuf.data, sbuf.size, NULL, &mempool, &deserialized);
-	
-	msgpack_object_print(stdout, deserialized);
-	
-	msgpack_zone_destroy(&mempool);
-	return 0;
-}
-
 
 static as_val * cl_udf_bin_to_val(as_serializer * ser, cl_bin * bin) {
 
@@ -207,7 +190,7 @@ static as_val * cl_udf_bin_to_val(as_serializer * ser, cl_bin * bin) {
 		{
 			uint8_t *b = malloc(sizeof(bin->object.sz));
 			memcpy(b, bin->object.u.blob, bin->object.sz);
-			val = (as_val *)as_bytes_new_wrap(b, bin->object.sz, true /*ismalloc*/);
+			val = (as_val *)as_bytes_new_wrap(b, (uint32_t)bin->object.sz, true /*ismalloc*/);
 		}
 		case CL_LIST :
 		case CL_MAP : {
@@ -217,7 +200,6 @@ static as_val * cl_udf_bin_to_val(as_serializer * ser, cl_bin * bin) {
 				.size = (uint32_t) bin->object.sz,
 				.data = (uint8_t *) bin->object.u.blob
 			};
-			// print_buffer(&buf);
 			as_serializer_deserialize(ser, &buf, &val);
 			break;
 		}
@@ -245,7 +227,7 @@ as_val * citrusleaf_udf_bin_to_val(as_serializer * ser, cl_bin * bin) {
 char * citrusleaf_udf_build_error_resp(char *result, char *b64_msg) {
 	// There is a valid error-message from server.
 	b64_msg +=8;
-	int b64_msg_len = strlen(b64_msg) -1; // remove the string termination
+	int b64_msg_len = (int)strlen(b64_msg) -1; // remove the string termination
 	char * response = strchr(result, '\t') + 1;
 	char *err_str = NULL;
 
@@ -293,8 +275,6 @@ cl_rv citrusleaf_udf_record_apply(cl_cluster * cl, const char * ns, const char *
 
 	cl_bin *bins = 0;
 	int n_bins = 0;
-
-	// print_buffer(&args);
 
 	rv = do_the_full_monte( 
 		cl, 0, CL_MSG_INFO2_WRITE, 0, 
@@ -541,8 +521,17 @@ cl_rv citrusleaf_udf_get_with_gen(cl_cluster *asc, const char * filename, cl_udf
 
 	// Update file hash
 	unsigned char hash[SHA_DIGEST_LENGTH];
+#ifdef __APPLE__
+	// Openssl is deprecated on mac, but the library is still included.
+	// Save old settings and disable deprecated warnings.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
 	SHA1(info.content.value, info.content.size, hash);
-
+#ifdef __APPLE__
+	// Restore old settings.
+#pragma GCC diagnostic pop
+#endif
 	cf_convert_sha1_to_hex(hash, file->hash);
 	
 	if ( gen ) {
@@ -563,13 +552,15 @@ cl_rv citrusleaf_udf_put(cl_cluster *asc, const char * filename, as_bytes *conte
 	}
 
 	char * query = NULL;
-	char *  filepath    = strdup(filename);
-	char *  filebase    = basename(filepath);
+	
+	as_string filename_string;
+	const char * filebase = as_basename(&filename_string, filename);
 
 	int  clen = content->size;
 	if (udf_type < 0 || udf_type > (MAX_UDF_TYPE - 1))
 	{
 		fprintf(stderr, "Invalid UDF type");
+		as_string_destroy(&filename_string);
 		return CITRUSLEAF_FAIL_PARAMETER;
 	}
 	char * content_base64 = malloc(cf_base64_encode_maxlen(clen));
@@ -577,12 +568,13 @@ cl_rv citrusleaf_udf_put(cl_cluster *asc, const char * filename, as_bytes *conte
 
 	if (! asprintf(&query, "udf-put:filename=%s;content=%s;content-len=%d;udf-type=%s;", filebase, content_base64, clen, cl_udf_type_str[udf_type])) {
 		fprintf(stderr, "Query allocation failed");
+		as_string_destroy(&filename_string);
 		return CITRUSLEAF_FAIL_CLIENT;
 	}
 	
+	as_string_destroy(&filename_string);
 	// fprintf(stderr, "QUERY: |%s|\n",query);
-
-	free(filepath);
+	
 	int rc = 0;
 	rc = citrusleaf_info_cluster(asc, query, result, true, false, 1000);
 

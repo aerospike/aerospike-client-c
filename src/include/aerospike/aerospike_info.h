@@ -58,7 +58,7 @@
  *
  *	@ingroup info_operations
  */
-typedef bool (* aerospike_info_foreach_callback)(const as_error * err, const as_node * node, const char * req, const char * res, void * udata);
+typedef bool (* aerospike_info_foreach_callback)(const as_error * err, const as_node * node, const char * req, char * res, void * udata);
 
 /******************************************************************************
  *	FUNCTIONS

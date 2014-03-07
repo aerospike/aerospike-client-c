@@ -33,8 +33,8 @@
 #include <netdb.h> //gethostbyname_r
 
 #include <citrusleaf/cf_log_internal.h>
+#include <citrusleaf/cf_byte_order.h>
 #include <citrusleaf/cf_proto.h>
-
 #include <citrusleaf/citrusleaf.h>
 #include <citrusleaf/cl_cluster.h>
 
@@ -60,7 +60,7 @@ cl_lookup(cl_cluster *asc, char *hostname, short port, cf_vector *sockaddr_in_v)
 	uint8_t	stack_hstbuf[hstbuflen];
 	void *tmphstbuf = stack_hstbuf;
 	int rv, herr, addrmapsz;
-	struct hostent hostbuf, *hp;
+	struct hostent *hp;
 	cl_addrmap *map;
 	int retry = 0;
 	//Find if there is an alternate address that should be used for this hostname.
@@ -78,13 +78,15 @@ cl_lookup(cl_cluster *asc, char *hostname, short port, cf_vector *sockaddr_in_v)
 	}
 
 	do {
-#ifdef OSX // on OSX, gethostbyname is thread safe and there is no '_r' version 
+#ifdef __APPLE__
+		// on OSX, gethostbyname is thread safe and there is no '_r' version
 		hp = gethostbyname2(hostname, AF_INET);
 		rv = 0;
 		if(hp == NULL){
 			herr = h_errno; // I'm hoping this is thread-safe too, in the Mac world...
 		}
 #else
+		struct hostent hostbuf;
 		rv = gethostbyname2_r(hostname, AF_INET, &hostbuf, tmphstbuf, hstbuflen,
 				&hp, &herr);
 #endif
@@ -178,7 +180,7 @@ cl_lookup(cl_cluster *asc, char *hostname, short port, cf_vector *sockaddr_in_v)
 		memset(&addr,0,sizeof(addr));
 		addr.sin_family = hp->h_addrtype;
 		addr.sin_addr.s_addr = *(uint32_t *) hp->h_addr_list[i];
-		addr.sin_port = htons(port);
+		addr.sin_port = (in_port_t)cf_swap_to_be16(port);
 		
 		cf_vector_append_unique(sockaddr_in_v, &addr);
 	}

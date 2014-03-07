@@ -24,12 +24,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-
-#ifndef CF_WINDOWS
-//====================================================================
-// Linux
-//
-
+#if defined(__linux__) || defined(__APPLE__)
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -45,7 +40,6 @@
 // The API below is not used by the libevent2
 // client, so we'll postpone the Windows version.
 //
-
 extern int
 cf_socket_read_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_deadline, int attempt_ms);
 extern int
@@ -57,13 +51,13 @@ cf_socket_write_forever(int fd, uint8_t *buf, size_t buf_len);
 
 extern void
 cf_print_sockaddr_in(char *prefix, struct sockaddr_in *sa_in);
+#endif
 
+#if defined(__APPLE__)
+#define MSG_NOSIGNAL SO_NOSIGPIPE
+#endif
 
-#else // CF_WINDOWS
-//====================================================================
-// Windows
-//
-
+#if defined(CF_WINDOWS)
 #include <WinSock2.h>
 #include <Ws2tcpip.h>
 
@@ -76,8 +70,6 @@ cf_print_sockaddr_in(char *prefix, struct sockaddr_in *sa_in);
 #define MSG_NOSIGNAL	0
 
 #define SHUT_RDWR		SD_BOTH
-
-
 #endif // CF_WINDOWS
 
 

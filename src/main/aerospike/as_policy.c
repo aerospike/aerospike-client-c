@@ -9,7 +9,7 @@
  *****************************************************************************/
 
 /**
- *	Initialize as_policy_read to default values.
+ *	Initialize as_policy_read to undefined values.
  */
 as_policy_read * as_policy_read_init(as_policy_read * p) {
 	p->timeout	= 0;
@@ -18,7 +18,7 @@ as_policy_read * as_policy_read_init(as_policy_read * p) {
 }
 
 /**
- *	Initialize as_policy_apply to default values.
+ *	Initialize as_policy_apply to undefined values.
  */
 as_policy_apply * as_policy_apply_init(as_policy_apply * p) {
 	p->timeout	= 0;
@@ -27,7 +27,7 @@ as_policy_apply * as_policy_apply_init(as_policy_apply * p) {
 }
 
 /**
- *	Initialize as_policy_write to default values.
+ *	Initialize as_policy_write to undefined values.
  */
 as_policy_write * as_policy_write_init(as_policy_write * p) 
 {
@@ -40,7 +40,7 @@ as_policy_write * as_policy_write_init(as_policy_write * p)
 }
 
 /**
- *	Initialize as_policy_operate to default values.
+ *	Initialize as_policy_operate to undefined values.
  */
 as_policy_operate * as_policy_operate_init(as_policy_operate * p)
 {
@@ -52,7 +52,7 @@ as_policy_operate * as_policy_operate_init(as_policy_operate * p)
 }
 
 /**
- *	Initialize as_policy_remove to default values.
+ *	Initialize as_policy_remove to undefined values.
  */
 as_policy_remove * as_policy_remove_init(as_policy_remove * p)
 {
@@ -65,17 +65,17 @@ as_policy_remove * as_policy_remove_init(as_policy_remove * p)
 }
 
 /**
- *	Initialize as_policy_scan to default values.
+ *	Initialize as_policy_scan to undefined values.
  */
 as_policy_scan * as_policy_scan_init(as_policy_scan * p) 
 {
 	p->timeout					= 0;
-	p->fail_on_cluster_change	= -1;
+	p->fail_on_cluster_change	= AS_POLICY_BOOL_UNDEF;
 	return p;
 }
 
 /**
- *	Initialize as_policy_query to default values.
+ *	Initialize as_policy_query to undefined values.
  */
 as_policy_query * as_policy_query_init(as_policy_query * p)
 {
@@ -84,18 +84,18 @@ as_policy_query * as_policy_query_init(as_policy_query * p)
 }
 
 /**
- *	Initialize as_policy_info to default values.
+ *	Initialize as_policy_info to undefined values.
  */
 as_policy_info * as_policy_info_init(as_policy_info * p)
 {
 	p->timeout		= 0;
-	p->send_as_is	= -1;
-	p->check_bounds	= -1;
+	p->send_as_is	= AS_POLICY_BOOL_UNDEF;
+	p->check_bounds	= AS_POLICY_BOOL_UNDEF;
 	return p;
 }
 
 /**
- *	Initialize as_policy_batch to default values.
+ *	Initialize as_policy_batch to undefined values.
  */
 as_policy_batch * as_policy_batch_init(as_policy_batch * p)
 {

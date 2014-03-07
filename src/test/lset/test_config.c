@@ -7,6 +7,7 @@
  */
 
 #include "test_config.h"
+#include "../aerospike_test.h"
 
 /** ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
  *  Set up the configuration for the LSET Routines.  The config structure
@@ -16,7 +17,7 @@
 int lset_set_config_defaults ( test_config * config_ptr ){
     static char * meth = "init_configuration()";
 
-    config_ptr->host         = "127.0.0.1";
+    config_ptr->host         = g_host;
     config_ptr->port         = 3000;
     config_ptr->ns           = "test";
     config_ptr->set          = "demo";

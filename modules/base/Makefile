@@ -61,7 +61,6 @@ BASE += cf_hist.o
 # BASE += cf_ll.o
 BASE += cf_log.o
 BASE += cf_proto.o
-BASE += cf_queue.o
 BASE += cf_random.o
 BASE += cf_service.o
 # BASE += cf_shash.o

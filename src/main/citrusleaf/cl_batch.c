@@ -588,7 +588,6 @@ typedef struct {
 	cl_cluster_node* my_node;
 } work_complete;
 
-pthread_mutex_t batch_init_lock = PTHREAD_MUTEX_INITIALIZER;
 static void *
 batch_worker_fn(void* pv_asc)
 {
@@ -748,33 +747,17 @@ cl_cluster_batch_init(cl_cluster* asc)
 {
 	// We do this lazily, during the first batch request, so make sure it's only
 	// done once.
-	if (cf_atomic32_get(asc->batch_initialized) == 1 ) {
+	if (cf_atomic32_incr(&asc->batch_initialized) > 1 || asc->batch_q) {
 		return;
 	}
-    else {
-        pthread_mutex_lock( &batch_init_lock);
-        // Check once again for batch_initialized, for the case where, 
-        // while the current thread was waiting on the lock, some other thread has
-        // initialized the queues.
-        if ( cf_atomic32_get( asc->batch_initialized) == 1) {
-            pthread_mutex_unlock( &batch_init_lock);
-            return;
-        }   
 
-        // Create dispatch queue.
-        asc->batch_q = cf_queue_create(sizeof(digest_work), true);
+	// Create dispatch queue.
+	asc->batch_q = cf_queue_create(sizeof(digest_work), true);
 
-        // Create thread pool.
-        for (int i = 0; i < NUM_BATCH_THREADS; i++) {
-            pthread_create(&asc->batch_threads[i], 0, batch_worker_fn, (void*)asc);
-        }
-        // increment the batch_initialized the queue creation and thread spawning,
-        // not before that.
-        cf_atomic32_incr(&asc->batch_initialized);
-        printf("batch_initialized %d \n", asc->batch_initialized);
-        pthread_mutex_unlock( &batch_init_lock);
-
-    }
+	// Create thread pool.
+	for (int i = 0; i < NUM_BATCH_THREADS; i++) {
+		pthread_create(&asc->batch_threads[i], 0, batch_worker_fn, (void*)asc);
+	}
 }
 
 

@@ -188,7 +188,7 @@ TEST( key_basics_exists , "exists: (test,test,foo)" ) {
     assert_int_eq( rc, AEROSPIKE_OK );
 	assert_not_null( rec );
 	
-	as_record_destroy(&rec);
+	as_record_destroy(rec);
 }
 
 TEST( key_basics_notexists , "not exists: (test,test,foozoo)" ) {
@@ -208,7 +208,7 @@ TEST( key_basics_notexists , "not exists: (test,test,foozoo)" ) {
     assert_int_eq( rc, AEROSPIKE_ERR_RECORD_NOT_FOUND );
 	assert_null( rec );
 	
-	as_record_destroy(&rec);
+	as_record_destroy(rec);
 }
 
 TEST( key_basics_remove , "remove: (test,test,foo)" ) {

@@ -552,13 +552,15 @@ cl_rv citrusleaf_udf_put(cl_cluster *asc, const char * filename, as_bytes *conte
 	}
 
 	char * query = NULL;
-	char *  filepath    = strdup(filename);
-	char *  filebase    = basename(filepath);
+	
+	as_string filename_string;
+	const char * filebase = as_basename(&filename_string, filename);
 
 	int  clen = content->size;
 	if (udf_type < 0 || udf_type > (MAX_UDF_TYPE - 1))
 	{
 		fprintf(stderr, "Invalid UDF type");
+		as_string_destroy(&filename_string);
 		return CITRUSLEAF_FAIL_PARAMETER;
 	}
 	char * content_base64 = malloc(cf_base64_encode_maxlen(clen));
@@ -566,12 +568,13 @@ cl_rv citrusleaf_udf_put(cl_cluster *asc, const char * filename, as_bytes *conte
 
 	if (! asprintf(&query, "udf-put:filename=%s;content=%s;content-len=%d;udf-type=%s;", filebase, content_base64, clen, cl_udf_type_str[udf_type])) {
 		fprintf(stderr, "Query allocation failed");
+		as_string_destroy(&filename_string);
 		return CITRUSLEAF_FAIL_CLIENT;
 	}
 	
+	as_string_destroy(&filename_string);
 	// fprintf(stderr, "QUERY: |%s|\n",query);
-
-	free(filepath);
+	
 	int rc = 0;
 	rc = citrusleaf_info_cluster(asc, query, result, true, false, 1000);
 

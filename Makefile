@@ -12,9 +12,6 @@ MODULES 	:= BASE COMMON MOD_LUA
 # Overrride optimizations via: make O=n
 O=3
 
-# Enable memcount 
-MEM_COUNT=1
-
 # Make-local Compiler Flags
 ifeq ($(OS),Darwin)
 CC_FLAGS = -std=gnu99 -g -Wall
@@ -25,7 +22,7 @@ LD_FLAGS = -lm
 endif
 CC_FLAGS += -fno-common -fno-strict-aliasing -fPIC 
 CC_FLAGS += -DMARCH_$(ARCH) -D_FILE_OFFSET_BITS=64 
-CC_FLAGS += -D_REENTRANT -D_GNU_SOURCE -DMEM_COUNT
+CC_FLAGS += -D_REENTRANT -D_GNU_SOURCE
 
 # DEBUG Settings
 ifdef DEBUG
@@ -35,19 +32,14 @@ LD_FLAGS += -pg -fprofile-arcs -lgcov
 endif
 
 # Make-tree Compler Flags
-CFLAGS = -O$(O) -DMEM_COUNT=$(MEM_COUNT)
+CFLAGS = -O$(O)
 
 # Make-tree Linker Flags
 # LDFLAGS = 
 
-# If CF is not passed in, use the default allocator in Common.
-ifeq ($(CF), )
-  CF = $(COMMON)/src/default
-endif
-
 # Include Paths
 INC_PATH += $(BASE)/$(TARGET_INCL)
-INC_PATH += $(COMMON)/$(TARGET_INCL) $(CF)/include
+INC_PATH += $(COMMON)/$(TARGET_INCL)
 INC_PATH += $(MOD_LUA)/$(TARGET_INCL)
 INC_PATH += /usr/local/include
 
@@ -142,6 +134,7 @@ COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_string.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_stringmap.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_util.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_val.h
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/alloc.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_arch.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_atomic.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_types.h

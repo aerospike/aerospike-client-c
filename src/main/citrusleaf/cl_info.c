@@ -422,8 +422,7 @@ int citrusleaf_info_cluster_foreach(cl_cluster *cluster, const char *command, bo
 			if (0 == citrusleaf_info_host(sa_in, (char *)command, &value, (int)(end - cf_getms()), send_asis, check_bounds)) {
 				bSuccess = callback(node, sa_in, command, value, udata);
 				if(!bSuccess){
-							if(value){free(value);}
-							return (-1);
+					return (-1);
 				}
 				break;
 			}

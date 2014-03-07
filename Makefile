@@ -134,6 +134,7 @@ COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_string.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_stringmap.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_util.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_val.h
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/alloc.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_arch.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_atomic.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_types.h

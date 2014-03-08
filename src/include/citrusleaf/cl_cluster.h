@@ -97,6 +97,7 @@ struct cl_cluster_s {
 	pthread_mutex_t		LOCK;
 
 	// Batch transaction management.
+	pthread_mutex_t		batch_init_lock;
 	cf_atomic32			batch_initialized;
 	cf_queue*			batch_q;
 	pthread_t			batch_threads[NUM_BATCH_THREADS];

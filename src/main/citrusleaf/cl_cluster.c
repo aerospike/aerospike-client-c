@@ -176,6 +176,7 @@ citrusleaf_cluster_create(void)
     asc->info_timeout = INFO_TIMEOUT_MS;
 
 	pthread_mutex_init(&asc->LOCK, 0);
+	pthread_mutex_init(&asc->batch_init_lock, 0);
 
 	cf_vector_pointer_init(&asc->host_str_v, 10, 0);
 	cf_vector_integer_init(&asc->host_port_v, 10, 0);
@@ -235,6 +236,7 @@ citrusleaf_cluster_destroy(cl_cluster *asc)
 	cl_partition_table_destroy_all(asc);
 
 	pthread_mutex_destroy(&asc->LOCK);
+	pthread_mutex_destroy(&asc->batch_init_lock);
 
 	free(asc);
 }

@@ -192,5 +192,8 @@ PLAN( aerospike_test ) {
     plan_add( policy_read );
     plan_add( policy_scan );
 
+    // as_ldt module
+    plan_add( ldt_lmap );
+
 }
 

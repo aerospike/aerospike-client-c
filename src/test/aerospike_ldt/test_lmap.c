@@ -13,7 +13,7 @@
 //#include <aerospike/as_val.h>
 #include <aerospike/as_hashmap.h>
 #include <aerospike/as_hashmap_iterator.h>
-//#include <aerospike/as_integer.h>
+#include <aerospike/as_stringmap.h>
 
 #include "../test.h"
 
@@ -58,7 +58,7 @@ TEST( lmap_put , "put: (test,test,t1) = {bin:1}" ) {
 	as_map* p_map = NULL;
 
 	// Make sure we cannot get the value any more.
-	rc = aerospike_lmap_get(as, &err, NULL, &skey, &lmap,(const as_val*)&iname, &p_map);
+	rc = aerospike_lmap_get(as, &err, NULL, &skey, &lmap,(const as_val*)&iname, (as_val**)&p_map);
 	assert_not_null(p_map);
 
 	assert_int_eq(as_val_type(p_map), AS_MAP);
@@ -97,7 +97,7 @@ TEST( lmap_put_all , "putall: (test,test,1) = {x:1,y:2,z:3}" ) {
 	as_stringmap_set_int64((as_map *) &map, "z", 2);
 
 	// Put all map entry to the lmap.
-	as_status rc = (aerospike_lmap_put_all(as, &err, NULL, &skey, &lmap, &map));
+	as_status rc = (aerospike_lmap_put_all(as, &err, NULL, &skey, &lmap, (as_map*)&map));
 	assert_int_eq( rc, AEROSPIKE_OK );
 
 	// Make sure we can read each one back
@@ -111,7 +111,7 @@ TEST( lmap_put_all , "putall: (test,test,1) = {x:1,y:2,z:3}" ) {
 	as_hashmap_iterator it;
 	as_hashmap_iterator_init(&it, (const as_hashmap*)p_map);
 
-	assert_int_eq(as_hashmap_size(p_map),3);
+	assert_int_eq(as_hashmap_size((as_hashmap*)p_map),3);
 	int loop = 0;
 	while (as_hashmap_iterator_has_next(&it)) {
 		const as_val* p_val = as_hashmap_iterator_next(&it);

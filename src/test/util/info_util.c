@@ -74,7 +74,7 @@ static bool parse_response( const cl_cluster_node * cn, const struct sockaddr_in
 	char * d = r;
 
 	// Strip quotes off the string
-    int len = strlen(r);
+    int len = (int)strlen(r);
     char * buf = (char*)calloc(1, len - 1);
     char * v = buf;
     for(int i = 0; i<len; i++) {

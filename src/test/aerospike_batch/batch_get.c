@@ -15,6 +15,8 @@
 #include <aerospike/as_map.h>
 #include <aerospike/as_hashmap.h>
 #include <aerospike/as_val.h>
+#include <pthread.h>
+#include <unistd.h>
 
 #include "../test.h"
 
@@ -26,7 +28,10 @@ extern aerospike * as;
 
 #define NAMESPACE "test"
 #define SET "test"
-#define N_KEYS 5
+#define N_KEYS 200
+
+int num_threads = 0;
+pthread_rwlock_t rwlock;
 
 /******************************************************************************
  * TYPES
@@ -146,6 +151,58 @@ TEST( batch_get_post , "Post: Remove Records" )
     }
 }
 
+void *batch_get_function(void  *thread_id)
+{
+    int thread_num = *(int*)thread_id;
+    as_error err;
+	
+    as_batch batch;
+    as_batch_inita(&batch, 20);
+	
+    int start_index = thread_num * 20;
+    int end_index = start_index + 20;
+    int j = 0;
+    for (uint32_t i = start_index; i < end_index; i++) {
+        as_key_init_int64(as_batch_keyat(&batch,j++), NAMESPACE, SET, i+1);
+    }
+	
+    batch_read_data data = {0};
+	
+    num_threads++;
+	
+    pthread_rwlock_rdlock(&rwlock);
+    aerospike_batch_get(as, &err, NULL, &batch, batch_get_1_callback, &data);
+    pthread_rwlock_unlock(&rwlock);
+	
+    if ( err.code != AEROSPIKE_OK && err.code != AEROSPIKE_ERR_INDEX_FOUND ) {
+        info("error(%d): %s", err.code, err.message);
+    }
+	
+    return(0);
+}
+
+TEST( multithreaded_batch_get , "Batch Get - with multiple threads ")
+{
+    pthread_t batch_thread[10];
+    int threads = 10;
+    pthread_rwlock_init(&rwlock, NULL);
+    pthread_rwlock_wrlock( &rwlock);
+    for (uint32_t i = 0; i < threads; i++) {
+        int thread_id = i;
+        pthread_create( &batch_thread[i], 0, batch_get_function,(void*) &thread_id);
+    }
+	
+    while ( num_threads < 10 ) {
+        sleep(1);
+    }
+    pthread_rwlock_unlock( &rwlock);
+	
+    for ( uint32_t i = 0; i < num_threads; i++) {
+        pthread_join( batch_thread[i], NULL);
+    }
+    pthread_rwlock_destroy( &rwlock);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -153,5 +210,6 @@ TEST( batch_get_post , "Post: Remove Records" )
 SUITE( batch_get, "aerospike_batch_get tests" ) {
     suite_add( batch_get_pre );
     suite_add( batch_get_1 );
+    //suite_add( multithreaded_batch_get );
     suite_add( batch_get_post );
 }

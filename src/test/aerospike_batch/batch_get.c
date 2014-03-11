@@ -30,7 +30,7 @@ extern aerospike * as;
 #define SET "test"
 #define N_KEYS 200
 
-int num_threads = 0;
+cf_atomic32 num_threads = 0;
 pthread_rwlock_t rwlock;
 
 /******************************************************************************
@@ -38,6 +38,7 @@ pthread_rwlock_t rwlock;
  *****************************************************************************/
 
 typedef struct batch_read_data_s {
+	uint32_t thread_id;
     uint32_t total;
     uint32_t found;
     uint32_t errors;
@@ -52,7 +53,7 @@ typedef struct batch_read_data_s {
 bool batch_get_1_callback(const as_batch_read * results, uint32_t n, void * udata)
 {
     batch_read_data * data = (batch_read_data *) udata;
-
+	
     data->total = n;
 
     for (uint32_t i = 0; i < n; i++) {
@@ -71,7 +72,7 @@ bool batch_get_1_callback(const as_batch_read * results, uint32_t n, void * udat
         else if (results[i].result != AEROSPIKE_ERR_RECORD_NOT_FOUND) {
             data->errors++;
             data->last_error = results[i].result;
-            warn("error(%d)", data->last_error);
+            warn("batch callback thread(%d) error(%d)", data->thread_id, data->last_error);
         }
     }
 
@@ -166,16 +167,17 @@ void *batch_get_function(void  *thread_id)
         as_key_init_int64(as_batch_keyat(&batch,j++), NAMESPACE, SET, i+1);
     }
 	
-    batch_read_data data = {0};
+    batch_read_data data = {thread_num, 0, 0, 0, 0};
 	
-    num_threads++;
-	
+    cf_atomic32_incr(&num_threads);
     pthread_rwlock_rdlock(&rwlock);
-    aerospike_batch_get(as, &err, NULL, &batch, batch_get_1_callback, &data);
-    pthread_rwlock_unlock(&rwlock);
 	
+	aerospike_batch_get(as, &err, NULL, &batch, batch_get_1_callback, &data);
+	
+	pthread_rwlock_unlock(&rwlock);
+
     if ( err.code != AEROSPIKE_OK && err.code != AEROSPIKE_ERR_INDEX_FOUND ) {
-        info("error(%d): %s", err.code, err.message);
+        info("multi-thread error(%d): %s", err.code, err.message);
     }
 	
     return(0);
@@ -183,21 +185,23 @@ void *batch_get_function(void  *thread_id)
 
 TEST( multithreaded_batch_get , "Batch Get - with multiple threads ")
 {
-    pthread_t batch_thread[10];
     int threads = 10;
+	
+    pthread_t batch_thread[threads];
+	int ids[threads];
     pthread_rwlock_init(&rwlock, NULL);
     pthread_rwlock_wrlock( &rwlock);
     for (uint32_t i = 0; i < threads; i++) {
-        int thread_id = i;
-        pthread_create( &batch_thread[i], 0, batch_get_function,(void*) &thread_id);
+        ids[i] = i;
+        pthread_create( &batch_thread[i], 0, batch_get_function, &ids[i]);
     }
 	
-    while ( num_threads < 10 ) {
+    while ( cf_atomic32_get(num_threads) < threads ) {
         sleep(1);
     }
     pthread_rwlock_unlock( &rwlock);
 	
-    for ( uint32_t i = 0; i < num_threads; i++) {
+    for ( uint32_t i = 0; i < threads; i++) {
         pthread_join( batch_thread[i], NULL);
     }
     pthread_rwlock_destroy( &rwlock);
@@ -210,6 +214,6 @@ TEST( multithreaded_batch_get , "Batch Get - with multiple threads ")
 SUITE( batch_get, "aerospike_batch_get tests" ) {
     suite_add( batch_get_pre );
     suite_add( batch_get_1 );
-    //suite_add( multithreaded_batch_get );
+    suite_add( multithreaded_batch_get );
     suite_add( batch_get_post );
 }

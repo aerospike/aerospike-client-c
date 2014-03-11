@@ -441,6 +441,78 @@ Done:
 	return(rv);
 }
 
+//
+// These FOREVER calls are only called in the 'getmany' case, which is used
+// for application level highly variable queries
+//
+int
+cf_socket_read_forever(int fd, uint8_t *buf, size_t buf_len)
+{
+	// one way is to make sure the fd is blocking, and block
+	int flags;
+	if (-1 == (flags = fcntl(fd, F_GETFL, 0)))
+		flags = 0;
+	if (flags & O_NONBLOCK) {
+		if (-1 == fcntl(fd, F_SETFL, flags & ~O_NONBLOCK)) {
+			return(ENOENT);
+		}
+	}
+    
+	size_t pos = 0;
+	do {
+		int r_bytes = (int)read(fd, buf + pos, buf_len - pos );
+		if (r_bytes < 0) { // don't combine these into one line! think about it!
+			if (errno != ETIMEDOUT) {
+				return(errno);
+			}
+		}
+		else if (r_bytes == 0) {
+			// blocking read returns 0 bytes socket timedout at server side
+			// is closed
+			return EBADF;
+		}
+		else {
+			pos += r_bytes;
+		}
+	} while (pos < buf_len);
+    
+	return(0);
+}
+
+
+int
+cf_socket_write_forever(int fd, uint8_t *buf, size_t buf_len)
+{
+	// one way is to make sure the fd is blocking, and block
+	int flags;
+	if (-1 == (flags = fcntl(fd, F_GETFL, 0)))
+		flags = 0;
+	if (flags & O_NONBLOCK) {
+		if (-1 == fcntl(fd, F_SETFL, flags & ~O_NONBLOCK)) {
+			return(ENOENT);
+		}
+	}
+    
+	size_t pos = 0;
+	do {
+		int r_bytes = (int)write(fd, buf + pos, buf_len - pos );
+		if (r_bytes < 0) { // don't combine these into one line! think about it!
+			if (errno != ETIMEDOUT) {
+				return(errno);
+			}
+		}
+		else {
+			pos += r_bytes;
+		}
+	} while (pos < buf_len);
+    
+	if (-1 == fcntl(fd, F_SETFL, flags & O_NONBLOCK)) {
+		return(ENOENT);
+	}
+    
+	return(0);
+}
+
 #endif // __linux__
 
 
@@ -698,9 +770,6 @@ Out:
 	return( rv );
 }
 
-#endif // __APPLE__
-
-
 //
 // These FOREVER calls are only called in the 'getmany' case, which is used
 // for application level highly variable queries
@@ -743,35 +812,15 @@ cf_socket_read_forever(int fd, uint8_t *buf, size_t buf_len)
 int
 cf_socket_write_forever(int fd, uint8_t *buf, size_t buf_len)
 {
-	// one way is to make sure the fd is blocking, and block
-	int flags;
-	if (-1 == (flags = fcntl(fd, F_GETFL, 0)))
-		flags = 0;
-	if (flags & O_NONBLOCK) {
-		if (-1 == fcntl(fd, F_SETFL, flags & ~O_NONBLOCK)) {
-			return(ENOENT);
-		}
-	}
-    
-	size_t pos = 0;
-	do {
-		int r_bytes = (int)write(fd, buf + pos, buf_len - pos );
-		if (r_bytes < 0) { // don't combine these into one line! think about it!
-			if (errno != ETIMEDOUT) {
-				return(errno);
-			}
-		}
-		else {
-			pos += r_bytes;
-		}
-	} while (pos < buf_len);
-    
-	if (-1 == fcntl(fd, F_SETFL, flags & O_NONBLOCK)) {
-		return(ENOENT);
-	}
-    
-	return(0);
+	// MacOS will return "socket not connected" errors even when connection is
+	// blocking.  Therefore, select() is required before writing.  Since write
+	// timeout function also calls select(), use write timeout function with
+	// 1 minute timeout.
+	return cf_socket_write_timeout(fd, buf, buf_len, 0, 60000);
 }
+
+#endif // __APPLE__
+
 
 #else // CF_WINDOWS
 //====================================================================

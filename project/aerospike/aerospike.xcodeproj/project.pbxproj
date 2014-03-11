@@ -644,6 +644,7 @@
 					../../src/default/include,
 					/usr/local/include,
 				);
+				OTHER_CFLAGS = "-D_DARWIN_UNLIMITED_SELECT";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Debug;
@@ -662,6 +663,7 @@
 					../../src/default/include,
 					/usr/local/include,
 				);
+				OTHER_CFLAGS = "-D_DARWIN_UNLIMITED_SELECT";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Release;

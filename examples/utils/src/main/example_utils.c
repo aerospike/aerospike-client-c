@@ -483,8 +483,8 @@ example_register_udf(aerospike* p_as, const char* udf_file_path)
 	as_bytes_init_wrap(&udf_content, content, size, true);
 
 	as_error err;
-	as_string path_string;
-	const char * base = as_basename(&path_string, udf_file_path);
+	as_string base_string;
+	const char * base = as_basename(&base_string, udf_file_path);
 	
 	// Register the UDF file in the database cluster.
 	if (aerospike_udf_put(p_as, &err, NULL, base, AS_UDF_TYPE_LUA,
@@ -492,7 +492,7 @@ example_register_udf(aerospike* p_as, const char* udf_file_path)
 		LOG("aerospike_udf_put() returned %d - %s", err.code, err.message);
 	}
 
-	as_string_destroy(&path_string);
+	as_string_destroy(&base_string);
 
 	// This frees the local buffer.
 	as_bytes_destroy(&udf_content);

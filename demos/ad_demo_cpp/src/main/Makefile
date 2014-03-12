@@ -1,6 +1,10 @@
 CC = g++
 
-PREFIX = ../../../../target/Linux-x86_64
+OS = $(shell uname)
+ARCH = $(shell arch)
+PLATFORM = $(OS)-$(ARCH)
+
+PREFIX = ../../../../target/$(PLATFORM)
 
 LIBRARY_PATH = $(PREFIX)/lib
 INCLUDE_PATH = $(PREFIX)/include
@@ -12,7 +16,11 @@ CFLAGS += -DMARCH_$(ARCH) -D_FILE_OFFSET_BITS=64
 CFLAGS += -D_REENTRANT -D_GNU_SOURCE
 CFLAGS += -I$(MSGPACK_PATH)/src
 
+ifeq ($(OS),Darwin)
+LDFLAGS = $(LIBRARY_PATH)/libaerospike.a -lssl -lcrypto -lpthread -L/usr/local/lib -llua -lm -lz
+else
 LDFLAGS = $(LIBRARY_PATH)/libaerospike.a -lssl -lcrypto -lpthread -lrt -llua -lm -lz
+endif
 
 ../../bin/ad_udf: ad_udf.cpp
 ifeq ($(wildcard $(LIBRARY_PATH)/libaerospike.a),)

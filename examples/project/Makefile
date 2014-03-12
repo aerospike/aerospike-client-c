@@ -9,15 +9,15 @@ OS = $(shell uname)
 ARCH = $(shell arch)
 PLATFORM = $(OS)-$(ARCH)
 
-CC_FLAGS = -std=gnu99 -g -Wall -fPIC
-CC_FLAGS += -fno-common -fno-strict-aliasing
-CC_FLAGS += -march=nocona -DMARCH_$(ARCH)
-CC_FLAGS += -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_GNU_SOURCE
+CFLAGS = -std=gnu99 -g -Wall -fPIC
+CFLAGS += -fno-common -fno-strict-aliasing
+CFLAGS += -march=nocona -DMARCH_$(ARCH)
+CFLAGS += -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_GNU_SOURCE
 
 ifeq ($(OS),Darwin)
-CC_FLAGS += -D_DARWIN_UNLIMITED_SELECT
+CFLAGS += -D_DARWIN_UNLIMITED_SELECT
 else
-CC_FLAGS += -rdynamic
+CFLAGS += -rdynamic
 endif
 
 CFLAGS += -I$(AEROSPIKE)/target/$(PLATFORM)/include
@@ -80,3 +80,4 @@ run: build
 .PHONY: valgrind
 valgrind: build
 	valgrind --tool=memcheck --leak-check=yes --show-reachable=yes --num-callers=20 --track-fds=yes -v ./target/example
+

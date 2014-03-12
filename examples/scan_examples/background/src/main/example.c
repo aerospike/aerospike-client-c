@@ -30,6 +30,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <inttypes.h>
 
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
@@ -117,7 +118,7 @@ main(int argc, char* argv[])
 	// Destroy the as_scan object.
 	as_scan_destroy(&scan);
 
-	LOG("started background scan %lu ...", scan_id);
+	LOG("started background scan %" PRIu64 " ...", scan_id);
 
 	as_scan_info info;
 

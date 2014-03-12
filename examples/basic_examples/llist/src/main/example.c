@@ -29,6 +29,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <inttypes.h>
 
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
@@ -173,7 +174,7 @@ main(int argc, char* argv[])
 		int64_t myival = as_integer_get ((const as_integer *)p_val);
 
 		if (myival != example_ordered[item_count]) {
-			LOG("unexpected integer value %ld returned on count %d", myival,
+			LOG("unexpected integer value %" PRId64 " returned on count %d", myival,
 					item_count);
 			as_list_destroy(p_list);
 			example_cleanup(&as);

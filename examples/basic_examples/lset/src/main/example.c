@@ -29,6 +29,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <inttypes.h>
 
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
@@ -200,7 +201,7 @@ main(int argc, char* argv[])
 
 			if (myival != 1001 && myival != 2002 && myival != 3003 &&
 					myival != 12345) {
-				LOG("unexpected integer value %ld returned", myival);
+				LOG("unexpected integer value %" PRId64 " returned", myival);
 				as_list_destroy(p_list);
 				example_cleanup(&as);
 				exit(-1);

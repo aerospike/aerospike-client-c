@@ -14,7 +14,6 @@ CFLAGS += -std=c++0x -g -rdynamic -Wall
 CFLAGS += -fno-common -fno-strict-aliasing -fPIC 
 CFLAGS += -DMARCH_$(ARCH) -D_FILE_OFFSET_BITS=64 
 CFLAGS += -D_REENTRANT -D_GNU_SOURCE
-CFLAGS += -I$(MSGPACK_PATH)/src
 
 ifeq ($(OS),Darwin)
 LDFLAGS = $(LIBRARY_PATH)/libaerospike.a -lssl -lcrypto -lpthread -L/usr/local/lib -llua -lm -lz

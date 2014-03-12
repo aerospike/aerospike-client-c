@@ -63,17 +63,9 @@ uint compression_version[] = {2,6,8};
 static void* cluster_tender_fn(void* pv_asc);
 static void cluster_tend( cl_cluster *asc); 
 
-#include <time.h>
-static inline void print_ms(char *pre)
-{
-	cf_debug("%s %"PRIu64, pre, cf_getms());
-}
-
-
 //
 // Debug function. Should be elsewhere.
 //
-
 static void
 dump_sockaddr_in(char *prefix, struct sockaddr_in *sa_in)
 {

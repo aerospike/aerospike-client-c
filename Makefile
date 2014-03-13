@@ -177,11 +177,11 @@ build-clean:
 	@rm -rf $(TARGET)
 
 .PHONY: libaerospike
-libaerospike: libaerospike.a libaerospike.so
+libaerospike: libaerospike.a libaerospike.$(DYNAMIC_SUFFIX)
 
-.PHONY: libaerospike.a libaerospike.so
+.PHONY: libaerospike.a libaerospike.$(DYNAMIC_SUFFIX)
 libaerospike.a: $(TARGET_LIB)/libaerospike.a
-libaerospike.so: $(TARGET_LIB)/libaerospike.so
+libaerospike.$(DYNAMIC_SUFFIX): $(TARGET_LIB)/libaerospike.$(DYNAMIC_SUFFIX)
 
 ###############################################################################
 ##  BUILD TARGETS                                                            ##
@@ -193,7 +193,7 @@ $(TARGET_OBJ)/%.o: $(BASE)/$(TARGET_LIB)/libaerospike-base.a $(COMMON)/$(TARGET_
 $(TARGET_OBJ)/aerospike/%.o: $(BASE)/$(TARGET_LIB)/libaerospike-base.a $(COMMON)/$(TARGET_LIB)/libaerospike-common.a $(MOD_LUA)/$(TARGET_LIB)/libmod_lua.a $(SOURCE_MAIN)/aerospike/%.c $(SOURCE_INCL)/citrusleaf/*.h $(SOURCE_INCL)/aerospike/*.h | modules
 	$(object)
 
-$(TARGET_LIB)/libaerospike.so: $(OBJECTS) $(TARGET_OBJ)/version.o | modules
+$(TARGET_LIB)/libaerospike.$(DYNAMIC_SUFFIX): $(OBJECTS) $(TARGET_OBJ)/version.o | modules
 	$(library) $(wildcard $(DEPS))
 
 $(TARGET_LIB)/libaerospike.a: $(OBJECTS) $(TARGET_OBJ)/version.o | modules

@@ -39,6 +39,12 @@ ifeq ($(OS),Darwin)
 LDFLAGS += -lz
 endif
 
+ifeq ($(OS),Darwin)
+CC = clang
+else
+CC = gcc
+endif
+
 ###############################################################################
 ##  OBJECTS                                                                  ##
 ###############################################################################
@@ -65,13 +71,13 @@ target/obj: | target
 	mkdir $@
 
 target/obj/example_utils.o: ../../utils/src/main/example_utils.c | target/obj
-	gcc $(CFLAGS) -o $@ -c $^
+	$(CC) $(CFLAGS) -o $@ -c $^
 
 target/obj/%.o: src/main/%.c | target/obj
-	gcc $(CFLAGS) -o $@ -c $^
+	$(CC) $(CFLAGS) -o $@ -c $^
 
 target/example: $(addprefix target/obj/,$(OBJECTS)) | target
-	gcc -o $@ $^ $(AEROSPIKE)/target/$(PLATFORM)/lib/libaerospike.a $(LDFLAGS)
+	$(CC) -o $@ $^ $(AEROSPIKE)/target/$(PLATFORM)/lib/libaerospike.a $(LDFLAGS)
 
 .PHONY: run
 run: build

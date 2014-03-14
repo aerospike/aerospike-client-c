@@ -14,14 +14,6 @@ NAME = $(shell basename $(CURDIR))
 OS = $(shell uname)
 ARCH = $(shell arch)
 
-ifeq ($(OS),Darwin)
-DYNAMIC_SUFFIX=dylib
-DYNAMIC_FLAG=-dynamiclib
-else
-DYNAMIC_SUFFIX=so
-DYNAMIC_FLAG=-shared
-endif
-
 PROJECT = project
 MODULES = modules
 SOURCE  = src
@@ -33,10 +25,19 @@ MODULES =
 ##  BUILD TOOLS                                                              ##
 ###############################################################################
 
+ifeq ($(OS),Darwin)
+CC = clang
+LD = clang
+DYNAMIC_SUFFIX=dylib
+DYNAMIC_FLAG=-dynamiclib
+else
 CC = gcc
-CC_FLAGS =
-
 LD = gcc
+DYNAMIC_SUFFIX=so
+DYNAMIC_FLAG=-shared
+endif
+
+CC_FLAGS =
 LD_FLAGS =
 
 AR = ar

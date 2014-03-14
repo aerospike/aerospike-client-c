@@ -1,5 +1,3 @@
-CC = g++
-
 OS = $(shell uname)
 ARCH = $(shell arch)
 PLATFORM = $(OS)-$(ARCH)
@@ -16,8 +14,10 @@ CFLAGS += -DMARCH_$(ARCH) -D_FILE_OFFSET_BITS=64
 CFLAGS += -D_REENTRANT -D_GNU_SOURCE
 
 ifeq ($(OS),Darwin)
+CC = clang++
 LDFLAGS = $(LIBRARY_PATH)/libaerospike.a -lssl -lcrypto -lpthread -L/usr/local/lib -llua -lm -lz
 else
+CC = g++
 LDFLAGS = $(LIBRARY_PATH)/libaerospike.a -lssl -lcrypto -lpthread -lrt -llua -lm -lz
 endif
 

@@ -841,14 +841,7 @@ static int cl_query_worker_do(cl_cluster_node * node, cl_query_task * task) {
                 record->key.digest.init = true;
                 memcpy(record->key.digest.value, &keyd, 20);
 
-                record->ttl = 0;
-    			if (msg->record_ttl != 0) {
-    				// Note that the server actually returns void-time, so we have
-    				// to convert to TTL here.
-    				uint32_t now = cf_clepoch_seconds();
-    				record->ttl = msg->record_ttl > now ? msg->record_ttl - now : 0;
-    			}
-
+                record->ttl = cf_server_void_time_to_ttl(msg->record_ttl);
     			record->gen = msg->generation;
 
                 clbins_to_asrecord(bins, msg->n_ops, record);

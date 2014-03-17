@@ -312,16 +312,10 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 				done = true;
 			}
 			else if ((msg->n_ops) || (operation_info & CL_MSG_INFO1_NOBINDATA)) {
-				uint32_t ttl = 0;
-				if (msg->record_ttl != 0) {
-					// Note that the server actually returns void-time, so we have
-					// to convert to TTL here.
-					uint32_t now = cf_clepoch_seconds();
-					ttl = msg->record_ttl > now ? msg->record_ttl - now : 0;
-				}
-
     			// got one good value? call it a success!
-				(*cb) (ns_ret, keyd, set_ret, CL_RESULT_OK, msg->generation, ttl, bins_local, msg->n_ops, udata);
+				(*cb) (ns_ret, keyd, set_ret, CL_RESULT_OK, msg->generation,
+						cf_server_void_time_to_ttl(msg->record_ttl), bins_local,
+						msg->n_ops, udata);
 				rv = 0;
 			}
 //			else

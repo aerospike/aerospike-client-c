@@ -97,7 +97,7 @@ static int usage(int argc, char *argv[])
 	cout << "    -n namespace [default test]\n";
 	cout << "    -s set [default *all*]\n";
 	cout << "    -v verbose [default false]\n";
-	cout << "    -f udf_file [default \"" << LUA_MODULE_PATH"/"UDF_FILE << "\"]\n";
+	cout << "    -f udf_file [default \"" << LUA_MODULE_PATH "/" UDF_FILE << "\"]\n";
 	cout << "    -P udf_module [default \"" << UDF_MODULE << "\"]\n";
 	cout << "    -b n_behaviors [default " << default_n_behaviors << "]\n";
 	cout << "    -u n_users [default " << default_n_users << "]\n";
@@ -114,7 +114,7 @@ Ad_Udf::Ad_Udf(int argc, char *argv[])
 	timeout_ms   = 1000;
 	record_ttl   = 864000;
 	verbose      = false;
-	module_file  = LUA_MODULE_PATH"/"UDF_FILE;
+	module_file  = LUA_MODULE_PATH "/" UDF_FILE;
 	module_name  = UDF_MODULE;
 	n_behaviors  = default_n_behaviors;
 	n_users      = default_n_users;
@@ -223,10 +223,16 @@ int Ad_Udf::register_module(void)
 
 	if (b_tot > 0) {
 		as_error err;
-		if (AEROSPIKE_OK != aerospike_udf_put(&as, &err, NULL, basename(module_file), AS_UDF_TYPE_LUA, &udf_content)) {
+		as_string base_string;
+		const char* base = as_basename(&base_string, module_file);
+
+		if (AEROSPIKE_OK != aerospike_udf_put(&as, &err, NULL, base, AS_UDF_TYPE_LUA, &udf_content)) {
 			cout << "Unable to register module file \"" << module_file << "\" as \"" << module_name << "\" rv = " << err.code << "\n";
 			return -1;
 		}
+
+		as_string_destroy(&base_string);
+
 		cout << "Successfully registered module file \"" <<  module_file << "\" as \"" << module_name << "\"\n";
 		// For now we need to wait a little to make sure the UDF package is
 		// distributed through the cluster before we can use it.

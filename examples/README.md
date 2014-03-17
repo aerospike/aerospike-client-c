@@ -29,7 +29,18 @@ For Redhat-based distributions (RHEL, CentOS, etc.):
 
 	$ sudo yum install openssl-devel glibc-devel lua-devel autoconf automake libtool
 
-Installation of these packages will also install gcc. gcc -version must show a version of 4.1 or better. g++ is also supported with the same version restriction.
+	Installation of these packages will also install gcc. gcc -version must show a version of 4.1 or better. g++ is also supported with the same version restriction.
+
+### Mac OS X Distribution
+
+	Install XCode from https://developer.apple.com/technologies/mac/
+	Install Lua 5.1
+	$ curl -O http://www.lua.org/ftp/lua-5.1.5.tar.gz
+	$ tar -xvf lua-5.1.5.tar.gz
+	$ cd lua-5.1.5
+	$ make macosx
+	$ make test
+	$ sudo make install
 
 ## Build
 
@@ -45,11 +56,11 @@ To build a specific example:
 
 To run all examples:
 
-	$ make run
+	$ make AS_HOST=<server IP address> run
 	
 To run a specific example:
 
-	$ make -C {example} run
+	$ make AS_HOST=<server IP address> -C {example} run
 
 
 # Summary of Examples

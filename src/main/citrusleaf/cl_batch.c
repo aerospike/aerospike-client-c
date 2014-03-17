@@ -494,12 +494,8 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 			}
 
 			if (cb && ! done) {
-				if (msg->record_ttl != 0) {
-					uint32_t now = cf_clepoch_seconds();
-					msg->record_ttl = msg->record_ttl > now ? msg->record_ttl - now : 0;
-				}
-
-				(*cb)(ns_ret, keyd, set_ret, msg->result_code, msg->generation, msg->record_ttl,
+				(*cb)(ns_ret, keyd, set_ret, msg->result_code, msg->generation,
+						cf_server_void_time_to_ttl(msg->record_ttl),
 						msg->n_ops != 0 ? bins_local : NULL, msg->n_ops, udata);
 				rv = 0;
 			}
@@ -747,12 +743,28 @@ cl_cluster_batch_init(cl_cluster* asc)
 {
 	// We do this lazily, during the first batch request, so make sure it's only
 	// done once.
-	if (cf_atomic32_incr(&asc->batch_initialized) > 1 || asc->batch_q) {
+
+	// Quicker than pulling a lock, handles everything except first race:
+	if (cf_atomic32_get(asc->batch_initialized) == 1) {
+		return;
+	}
+
+	// Handle first race - losers must wait for winner to create dispatch queue.
+	pthread_mutex_lock(&asc->batch_init_lock);
+
+	if (cf_atomic32_get(asc->batch_initialized) == 1) {
+		// Lost race - another thread got here first.
+		pthread_mutex_unlock(&asc->batch_init_lock);
 		return;
 	}
 
 	// Create dispatch queue.
 	asc->batch_q = cf_queue_create(sizeof(digest_work), true);
+
+	// It's now safe to push to the queue.
+	cf_atomic32_set(&asc->batch_initialized, 1);
+
+	pthread_mutex_unlock(&asc->batch_init_lock);
 
 	// Create thread pool.
 	for (int i = 0; i < NUM_BATCH_THREADS; i++) {
@@ -764,8 +776,12 @@ cl_cluster_batch_init(cl_cluster* asc)
 void
 cl_cluster_batch_shutdown(cl_cluster* asc)
 {
+	// Note - we assume this doesn't race cl_cluster_batch_init(), i.e. that no
+	// threads are initiating batch transactions while we're shutting down the
+	// cluster.
+
 	// Check whether we ever (lazily) initialized batch machinery.
-	if (cf_atomic32_get(asc->batch_initialized) == 0 && ! asc->batch_q) {
+	if (cf_atomic32_get(asc->batch_initialized) == 0) {
 		return;
 	}
 

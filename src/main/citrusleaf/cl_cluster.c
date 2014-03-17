@@ -63,17 +63,9 @@ uint compression_version[] = {2,6,8};
 static void* cluster_tender_fn(void* pv_asc);
 static void cluster_tend( cl_cluster *asc); 
 
-#include <time.h>
-static inline void print_ms(char *pre)
-{
-	cf_debug("%s %"PRIu64, pre, cf_getms());
-}
-
-
 //
 // Debug function. Should be elsewhere.
 //
-
 static void
 dump_sockaddr_in(char *prefix, struct sockaddr_in *sa_in)
 {
@@ -176,6 +168,7 @@ citrusleaf_cluster_create(void)
     asc->info_timeout = INFO_TIMEOUT_MS;
 
 	pthread_mutex_init(&asc->LOCK, 0);
+	pthread_mutex_init(&asc->batch_init_lock, 0);
 
 	cf_vector_pointer_init(&asc->host_str_v, 10, 0);
 	cf_vector_integer_init(&asc->host_port_v, 10, 0);
@@ -235,6 +228,7 @@ citrusleaf_cluster_destroy(cl_cluster *asc)
 	cl_partition_table_destroy_all(asc);
 
 	pthread_mutex_destroy(&asc->LOCK);
+	pthread_mutex_destroy(&asc->batch_init_lock);
 
 	free(asc);
 }

@@ -31,6 +31,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <inttypes.h>
 
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
@@ -260,7 +261,7 @@ query_cb(const as_val* p_val, void* udata)
 		return true;
 	}
 
-	LOG("query callback returned %ld", as_integer_get(p_integer));
+	LOG("query callback returned %" PRId64, as_integer_get(p_integer));
 
 	return true;
 }

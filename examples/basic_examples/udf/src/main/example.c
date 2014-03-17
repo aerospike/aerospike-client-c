@@ -29,6 +29,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <inttypes.h>
 
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
@@ -148,7 +149,7 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
-	LOG("bin_transform() was successfully applied - returned %ld", i_val);
+	LOG("bin_transform() was successfully applied - returned %" PRId64, i_val);
 
 	if (! example_read_test_record(&as)) {
 		example_cleanup(&as);

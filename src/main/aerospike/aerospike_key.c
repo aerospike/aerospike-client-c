@@ -485,7 +485,7 @@ as_status aerospike_key_operate(
 	switch ( p.key ) {
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
-			rc = citrusleaf_operate_digest(as->cluster, key->ns, (cf_digest *) digest->value,
+			rc = citrusleaf_operate_digest(as->cluster, key->ns, key->set, (cf_digest *) digest->value,
 					operations, n_operations, &wp, &gen, &ttl);
 			break;
 		}

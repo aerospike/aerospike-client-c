@@ -29,6 +29,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <inttypes.h>
 
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_batch.h>
@@ -179,7 +180,7 @@ batch_read_cb(const as_batch_read* results, uint32_t n, void* udata)
 	uint32_t n_found = 0;
 
 	for (uint32_t i = 0; i < n; i++) {
-		LOG("index %u, key %ld:", i,
+		LOG("index %u, key %" PRId64 ":", i,
 				as_integer_getorelse((as_integer*)results[i].key->valuep, -1));
 
 		if (results[i].result == AEROSPIKE_OK) {

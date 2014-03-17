@@ -41,11 +41,11 @@ bool udf_readfile(const char * filename, as_bytes * content) {
     int size = 0; 
 
     uint8_t * buff = bytes; 
-    int read = fread(buff, 1, 512, file); 
+    int read = (int)fread(buff, 1, 512, file);
     while ( read ) { 
         size += read; 
         buff += read; 
-        read = fread(buff, 1, 512, file); 
+        read = (int)fread(buff, 1, 512, file);
     }                        
     fclose(file); 
 
@@ -73,11 +73,11 @@ bool udf_put(const char * filename) {
     int size = 0; 
 
     uint8_t * buff = content; 
-    int read = fread(buff, 1, 512, file); 
+    int read = (int)fread(buff, 1, 512, file);
     while ( read ) { 
         size += read; 
         buff += read; 
-        read = fread(buff, 1, 512, file); 
+        read = (int)fread(buff, 1, 512, file);
     }                        
     fclose(file); 
 

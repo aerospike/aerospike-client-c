@@ -494,12 +494,8 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 			}
 
 			if (cb && ! done) {
-				if (msg->record_ttl != 0) {
-					uint32_t now = cf_clepoch_seconds();
-					msg->record_ttl = msg->record_ttl > now ? msg->record_ttl - now : 0;
-				}
-
-				(*cb)(ns_ret, keyd, set_ret, msg->result_code, msg->generation, msg->record_ttl,
+				(*cb)(ns_ret, keyd, set_ret, msg->result_code, msg->generation,
+						cf_server_void_time_to_ttl(msg->record_ttl),
 						msg->n_ops != 0 ? bins_local : NULL, msg->n_ops, udata);
 				rv = 0;
 			}

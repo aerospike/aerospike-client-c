@@ -1468,13 +1468,7 @@ do_the_full_monte(cl_cluster *asc, int info1, int info2, int info3, const char *
 		}
 
 		if (cl_ttl) {
-			*cl_ttl = 0;
-			if (msg.m.record_ttl != 0) {
-				// Note that the server actually returns void-time, so we have
-				// to convert to TTL here.
-				uint32_t now = cf_clepoch_seconds();
-				*cl_ttl = msg.m.record_ttl > now ? msg.m.record_ttl - now : 0;
-			}
+			*cl_ttl = cf_server_void_time_to_ttl(msg.m.record_ttl);
 		}
 
 		// second read for the remainder of the message - expect this to cover everything requested

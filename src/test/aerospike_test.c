@@ -102,7 +102,7 @@ static bool before(atf_plan * plan) {
         },
         .lua = {
         	.cache_enabled = false,
-        	.system_path = "modules/mod-lua/src/lua",
+        	.system_path = "modules/lua-core/src",
         	.user_path = "src/test/lua"
         }
     };

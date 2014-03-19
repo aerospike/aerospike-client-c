@@ -13,12 +13,12 @@ For Debian-based distributions (Debian, Ubuntu, etc.):
 	$ sudo apt-get install libc6-dev libssl-dev liblua5.1-dev autoconf automake libtool g++
 	$ export CPATH=$CPATH:/usr/include/lua5.1
 
-For Debian:
+For Debian 6:
 
 	$ sudo ln -s /usr/lib/liblua5.1.so /usr/lib/liblua.so
 	$ sudo ln -s /usr/lib/liblua5.1.a /usr/lib/liblua.a
 
-For Ubuntu:
+For Ubuntu and Debian 7:
 
 	$ sudo ln -s /usr/lib/x86_64-linux-gnu/liblua5.1.so /usr/lib/liblua.so
 	$ sudo ln -s /usr/lib/x86_64-linux-gnu/liblua5.1.a /usr/lib/liblua.a

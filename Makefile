@@ -6,6 +6,7 @@ include project/settings.mk
 # Modules
 BASE 		:= $(realpath modules/base)
 COMMON 		:= $(realpath modules/common)
+LUA_CORE 	:= $(realpath modules/lua-core)
 MOD_LUA 	:= $(realpath modules/mod-lua)
 MODULES 	:= BASE COMMON MOD_LUA
 

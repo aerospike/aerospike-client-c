@@ -1077,22 +1077,20 @@ static cl_rv cl_query_udf_destroy(cl_query_udf * udf) {
 
 
 static int query_aerospike_log(const as_aerospike * as, const char * file, const int line, const int level, const char * msg) {
-    char l[10] = {'\0'};
     switch(level) {
         case 1:
-            strncpy(l,"WARN",10);
+			as_logger_warn(mod_lua.logger, "%s:%d - %s", file, line, msg);
             break;
         case 2:
-            strncpy(l,"INFO",10);
+			as_logger_info(mod_lua.logger, "%s:%d - %s", file, line, msg);
             break;
         case 3:
-            strncpy(l,"DEBUG",10);
+ 			as_logger_debug(mod_lua.logger, "%s:%d - %s", file, line, msg);
             break;
         default:
-            strncpy(l,"TRACE",10);
+			as_logger_trace(mod_lua.logger, "%s:%d - %s", file, line, msg);
             break;
     }
-    LOG("[%s:%d] %s - %s\n", file, line, l, msg);
     return 0;
 }
 
@@ -1426,7 +1424,7 @@ cl_rv citrusleaf_query_foreach(cl_cluster * cluster, const cl_query * query, voi
 
         if ( rc == CITRUSLEAF_OK ) {
             // Apply the UDF to the result stream
-            as_module_apply_stream(&mod_lua, &as, query->udf.filename, query->udf.function, &queue_stream, query->udf.arglist, &ostream);
+            rc = as_module_apply_stream(&mod_lua, &as, query->udf.filename, query->udf.function, &queue_stream, query->udf.arglist, &ostream);
         }
 
     }

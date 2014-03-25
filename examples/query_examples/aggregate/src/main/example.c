@@ -307,7 +307,7 @@ cleanup(aerospike* p_as)
 bool
 insert_records(aerospike* p_as)
 {
-	srand(time(0));
+	srand((unsigned int)time(0));
 
 	// Create an as_record object with an integer value bin, and a string value
 	// bin, where the string is a list of comma-separated numbers. By using

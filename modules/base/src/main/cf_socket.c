@@ -97,7 +97,9 @@ cf_socket_create_nb()
 
 	int f = 1;
 	setsockopt(fd, SOL_TCP, TCP_NODELAY, &f, sizeof(f));
-
+#ifdef __APPLE__
+	setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &f, sizeof(f));
+#endif
 	return fd;
 }
 

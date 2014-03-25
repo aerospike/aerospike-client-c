@@ -281,19 +281,32 @@ example_connect_to_aerospike_with_udf_config(aerospike* p_as,
 	cfg.hosts[0].addr = g_host;
 	cfg.hosts[0].port = g_port;
 
-	// Explicitly set Lua system path if it's not the default installation path
-	// '/opt/aerospike/sys/udf/lua'
-//	strcpy(cfg.lua.system_path, "/home/citrusleaf/aerospike-client-c/aerospike-mod-lua/src/lua");
-
+	// Examples can be run from binary package installation of lua files or from
+	// git source tree.  If default aerospike binary package not installed, look
+	// for lua system files in source tree.
+	int rc = access(cfg.lua.system_path, R_OK);
+	
+	if (rc != 0) {
+		// Use lua files in source tree if they exist.
+		char* path = "../../../modules/lua-core/src";
+		rc = access(path, R_OK);
+		
+		if (rc == 0) {
+			strcpy(cfg.lua.system_path, path);
+		}
+	}
+	
 	if (lua_user_path) {
 		strcpy(cfg.lua.user_path, lua_user_path);
 	}
 
+	aerospike_init(p_as, &cfg);
+	
 	as_error err;
 
 	// Connect to the Aerospike database cluster. Assume this is the first thing
 	// done after calling example_get_opts(), so it's ok to exit on failure.
-	if (aerospike_connect(aerospike_init(p_as, &cfg), &err) != AEROSPIKE_OK) {
+	if (aerospike_connect(p_as, &err) != AEROSPIKE_OK) {
 		LOG("aerospike_connect() returned %d - %s", err.code, err.message);
 		aerospike_destroy(p_as);
 		exit(-1);
@@ -467,13 +480,13 @@ example_register_udf(aerospike* p_as, const char* udf_file_path)
 	}
 
 	uint8_t* p_write = content;
-	int read = fread(p_write, 1, 512, file);
+	int read = (int)fread(p_write, 1, 512, file);
 	int size = 0;
 
 	while (read) {
 		size += read;
 		p_write += read;
-		read = fread(p_write, 1, 512, file);
+		read = (int)fread(p_write, 1, 512, file);
 	}
 
 	fclose(file);

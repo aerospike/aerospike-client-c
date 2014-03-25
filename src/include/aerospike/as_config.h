@@ -29,6 +29,30 @@
  *	MACROS
  *****************************************************************************/
 
+#ifdef __linux__
+/**
+ * Default path to the system UDF files.
+ */
+#define AS_CONFIG_LUA_SYSTEM_PATH "/opt/aerospike/client/sys/udf/lua"
+
+/**
+ * Default path to the user UDF files.
+ */
+#define AS_CONFIG_LUA_USER_PATH "/opt/aerospike/client/usr/udf/lua"
+#endif
+
+#ifdef __APPLE__
+/**
+ * Default path to the system UDF files.
+ */
+#define AS_CONFIG_LUA_SYSTEM_PATH "/usr/local/aerospike/client/sys/udf/lua"
+
+/**
+ * Default path to the user UDF files.
+ */
+#define AS_CONFIG_LUA_USER_PATH "/usr/local/aerospike/client/usr/udf/lua"
+#endif
+
 /**
  * The size of path strings
  */
@@ -84,13 +108,13 @@ typedef struct as_config_lua_s {
 	/**
 	 *	The path to the system UDF files. These UDF files 
 	 *	are installed with the aerospike client library.
-	 *	Default location is: /opt/aerospike/sys/udf/lua
+	 *	Default location defined in: AS_CONFIG_LUA_SYSTEM_PATH
 	 */
 	char system_path[AS_CONFIG_PATH_MAX_SIZE];
 
 	/**
 	 *	The path to user's UDF files.
-	 *	Default location is: /opt/aerospike/usr/udf/lua
+	 *	Default location defined in: AS_CONFIG_LUA_USER_PATH
 	 */
 	char user_path[AS_CONFIG_PATH_MAX_SIZE];
 

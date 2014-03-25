@@ -2,12 +2,12 @@
 <Workspace
    version = "1.0">
    <FileRef
-      location = "group:aerospike-test/aerospike-test.xcodeproj">
+      location = "group:aerospike-test.xcodeproj">
    </FileRef>
    <FileRef
-      location = "group:aerospike/../../src">
+      location = "group:../src">
    </FileRef>
    <FileRef
-      location = "group:aerospike/../../modules">
+      location = "group:../modules">
    </FileRef>
 </Workspace>

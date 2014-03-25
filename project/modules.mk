@@ -121,10 +121,10 @@ MOD_LUA-build: $(MOD_LUA)/$(TARGET_LIB)/libmod_lua.a
 
 .PHONY: MOD_LUA-clean
 MOD_LUA-clean:
-	$(MAKE) -e -C $(MOD_LUA) clean COMMON=$(COMMON)
+	$(MAKE) -e -C $(MOD_LUA) clean COMMON=$(COMMON) LUA_CORE=$(LUA_CORE)
 
 $(MOD_LUA)/$(TARGET_LIB)/libmod_lua.a:
-	$(MAKE) -e -C $(MOD_LUA) libmod_lua.a COMMON=$(COMMON)
+	$(MAKE) -e -C $(MOD_LUA) libmod_lua.a COMMON=$(COMMON) LUA_CORE=$(LUA_CORE)
 
 .PHONY: MOD_LUA-prepare
 MOD_LUA-prepare: MOD_LUA-make-prepare
@@ -132,4 +132,4 @@ MOD_LUA-prepare: MOD_LUA-make-prepare
 
 .PHONY: MOD_LUA-make-prepare
 MOD_LUA-make-prepare:
-	$(MAKE) -e -C $(MOD_LUA) prepare COMMON=$(COMMON)
+	$(MAKE) -e -C $(MOD_LUA) prepare COMMON=$(COMMON) LUA_CORE=$(LUA_CORE)

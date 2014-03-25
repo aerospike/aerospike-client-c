@@ -26,18 +26,17 @@ MODULES =
 ###############################################################################
 
 ifeq ($(OS),Darwin)
-CC = clang
-LD = clang
 DYNAMIC_SUFFIX=dylib
 DYNAMIC_FLAG=-dynamiclib
 else
-CC = gcc
-LD = gcc
 DYNAMIC_SUFFIX=so
 DYNAMIC_FLAG=-shared
 endif
 
+CC = cc
 CC_FLAGS =
+
+LD = cc
 LD_FLAGS =
 
 AR = ar

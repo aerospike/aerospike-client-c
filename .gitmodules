@@ -4,3 +4,6 @@
 [submodule "modules/mod-lua"]
 	path = modules/mod-lua
 	url = git@github.com:citrusleaf/aerospike-mod-lua
+[submodule "modules/lua-core"]
+	path = modules/lua-core
+	url = git@github.com:citrusleaf/aerospike-lua-core

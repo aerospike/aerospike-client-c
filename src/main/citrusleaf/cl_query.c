@@ -1412,7 +1412,8 @@ cl_rv citrusleaf_query_foreach(cl_cluster * cluster, const cl_query * query, voi
 
         as_udf_context ctx = {
             .as    = &as,
-            .timer = NULL
+            .timer = NULL,
+			.memtracker = NULL
         };
 
         // stream for results from each node

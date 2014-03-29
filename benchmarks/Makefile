@@ -10,7 +10,7 @@ OS = $(shell uname)
 ARCH = $(shell arch)
 PLATFORM = $(OS)-$(ARCH)
 
-CFLAGS = -std=gnu99 -g -Wall -fPIC
+CFLAGS = -std=gnu99 -g -Wall -fPIC -O3
 CFLAGS += -fno-common -fno-strict-aliasing
 CFLAGS += -march=nocona -DMARCH_$(ARCH)
 CFLAGS += -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_GNU_SOURCE

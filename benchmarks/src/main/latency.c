@@ -89,8 +89,8 @@ latency_print_column(latency* l, int limit, double sum, int value, char* out)
 	}
 	
 	char fmt[32];
-	int width = sprintf(fmt, "%d", limit) + 4;
-	sprintf(fmt, "%%%dd%%", width);
+	int width = sprintf(fmt, "%d", limit) + 3;
+	sprintf(fmt, "%%%dd%%%%", width);
 	return sprintf(out, fmt, percent);
 }
 

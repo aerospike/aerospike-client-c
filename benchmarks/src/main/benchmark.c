@@ -251,7 +251,7 @@ run_benchmark(arguments* args)
 	}
 	
 	if (args->init) {
-		data.records = args->keys / 100 * args->init_pct;
+		data.records = (int)((double)args->keys / 100.0 * args->init_pct + 0.5);
 		ret = linear_write(&data);
 	}
 	else {

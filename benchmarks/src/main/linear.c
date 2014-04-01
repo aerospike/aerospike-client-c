@@ -83,8 +83,8 @@ linear_write_worker(void* udata)
 	while (data->valid) {
 		key = cf_atomic32_incr(&data->current_key);
 		
-		if (key >= records) {
-			if (key == records) {
+		if (key > records) {
+			if (key - 1 == records) {
 				blog_info("write(tps=%d timeouts=%d errors=%d total=%d)",
 					cf_atomic32_get(data->write_count),
 					cf_atomic32_get(data->write_timeout_count),

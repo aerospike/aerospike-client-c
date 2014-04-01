@@ -198,6 +198,7 @@ read_record(int keyval, clientdata* data)
 		if (status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND) {
 			cf_atomic32_incr(&data->read_count);
 			latency_add(&data->read_latency, end - begin);
+			as_record_destroy(rec);
 			return status;
 		}
 	}
@@ -207,6 +208,7 @@ read_record(int keyval, clientdata* data)
 		// Record may not have been initialized, so not found is ok.
 		if (status == AEROSPIKE_OK|| status == AEROSPIKE_ERR_RECORD_NOT_FOUND) {
 			cf_atomic32_incr(&data->read_count);
+			as_record_destroy(rec);
 			return status;
 		}
 	}

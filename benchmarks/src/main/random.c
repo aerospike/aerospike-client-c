@@ -100,7 +100,7 @@ random_worker(void* udata)
 	
 	while (data->valid) {
 		// Choose key at random.
-		key = cf_get_rand32() % records;
+		key = cf_get_rand32() % records + 1;
 		
 		// Roll a percentage die.
 		die = cf_get_rand32() % 100;

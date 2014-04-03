@@ -1410,12 +1410,6 @@ cl_rv citrusleaf_query_foreach(cl_cluster * cluster, const cl_query * query, voi
         as_aerospike as;
         as_aerospike_init(&as, NULL, &query_aerospike_hooks);
 
-        as_udf_context ctx = {
-            .as    = &as,
-            .timer = NULL,
-			.memtracker = NULL
-        };
-
         // stream for results from each node
         as_stream queue_stream;
         as_stream_init(&queue_stream, query->res_streamq, &queue_stream_hooks); 
@@ -1430,7 +1424,7 @@ cl_rv citrusleaf_query_foreach(cl_cluster * cluster, const cl_query * query, voi
 
         if ( rc == CITRUSLEAF_OK ) {
             // Apply the UDF to the result stream
-            rc = as_module_apply_stream(&mod_lua, &ctx, query->udf.filename, query->udf.function, &queue_stream, query->udf.arglist, &ostream);
+            rc = as_module_apply_stream(&mod_lua, &as, query->udf.filename, query->udf.function, &queue_stream, query->udf.arglist, &ostream);
         }
 
     }

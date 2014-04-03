@@ -51,13 +51,6 @@ cf_socket_write_forever(int fd, uint8_t *buf, size_t buf_len);
 
 extern void
 cf_print_sockaddr_in(char *prefix, struct sockaddr_in *sa_in);
-
-extern int
-cf_fdset_create_key();
-
-extern int
-cf_fdset_delete_key();
-
 #endif
 
 #if defined(__APPLE__)

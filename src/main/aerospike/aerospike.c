@@ -31,6 +31,7 @@
 #include <citrusleaf/citrusleaf.h>
 #include <citrusleaf/cl_cluster.h>
 #include <citrusleaf/cf_log_internal.h>
+#include <citrusleaf/cf_socket.h>
 
 #include "_logger.h"
 #include "_log.h"
@@ -51,6 +52,10 @@ static aerospike * aerospike_defaults(aerospike * as, bool free, as_config * con
 		as_config_init(&as->config);
 	}
 	as_log_init(&as->log);
+	
+	if (cf_fdset_create_key()) {
+		as_err(LOGGER, "failed to create fdset key");
+	}
 	return as;
 }
 
@@ -86,6 +91,7 @@ void aerospike_destroy(aerospike * as) {
 	if ( as->_free ) {
 		free(as);
 	}
+	cf_fdset_delete_key();
 }
 
 /**

@@ -22,7 +22,6 @@ CFLAGS += -rdynamic
 endif
 
 CFLAGS += -I$(AEROSPIKE)/target/$(PLATFORM)/include
-CFLAGS += -I../modules/common/src/include
 
 LDFLAGS = 
 LDFLAGS += -lssl -lcrypto -lpthread

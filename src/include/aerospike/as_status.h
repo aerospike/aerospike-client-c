@@ -344,6 +344,12 @@ typedef enum as_status_e {
 	/** Error encountered while closing a Sub Record. */
 	AEROSPIKE_ERR_LDT_SUBREC_CLOSE                = 1426,
 
+	/** Error encountered while updating a TOP Record. */
+	AEROSPIKE_ERR_LDT_TOPREC_UPDATE               = 1427,
+
+	/** Error encountered while creating a TOP Record. */
+	AEROSPIKE_ERR_LDT_TOPREC_CREATE               = 1428,
+
     // -------------------------------------------------
 
 	/** The filter function name was invalid. */

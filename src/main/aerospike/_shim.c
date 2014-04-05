@@ -89,6 +89,9 @@ as_status as_error_fromrc(as_error * err, cl_rv rc)
 		strcpy(err->message, "got bin-not-found error - not supported");
 		ERR_ASSIGN(AEROSPIKE_ERR_SERVER);
 		break;
+	case CITRUSLEAF_FAIL_DEVICE_OVERLOAD:
+		ERR_ASSIGN(AEROSPIKE_ERR_DEVICE_OVERLOAD);
+		break;
 
 	// TODO - just guessing from here on down ... fill out correctly.
 

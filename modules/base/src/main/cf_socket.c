@@ -25,6 +25,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_byte_order.h>
 #include <citrusleaf/cf_clock.h>
 #include <citrusleaf/cf_errno.h>
@@ -50,12 +51,13 @@
 #define SOL_TCP IPPROTO_TCP
 #endif // __APPLE__
 
+#define STACK_LIMIT (128 * 1024)
 
 // #define DEBUG_TIME
 
 #ifdef DEBUG_TIME
-#include <pthread.h>
-static void debug_time_printf(const char* desc, int try, int busy, uint64_t start, uint64_t end, uint64_t deadline)
+static void
+debug_time_printf(const char* desc, int try, int busy, uint64_t start, uint64_t end, uint64_t deadline)
 {
 	cf_info("%s|%zu|%d|%d|%lu|%lu|%lu",
 		desc, (uint64_t)pthread_self(),
@@ -67,7 +69,6 @@ static void debug_time_printf(const char* desc, int try, int busy, uint64_t star
 	);
 }
 #endif
-
 
 int
 cf_socket_create_nb()
@@ -112,7 +113,9 @@ cf_print_sockaddr_in(char *prefix, struct sockaddr_in *sa_in)
 }
 
 
-#if defined(__linux__)
+#if 0
+// Don't use epoll in this way.
+// #if defined(__linux__)
 
 static char *
 my_strerror_r(const int err, char *errbuf, size_t errbuf_len)
@@ -517,26 +520,26 @@ cf_socket_write_forever(int fd, uint8_t *buf, size_t buf_len)
 
 #endif // __linux__
 
-
-#if defined(__APPLE__)
+#if defined(__linux__) || defined(__APPLE__)
+// Use select() implementation for both Linux and Mac.
+// #if defined(__APPLE__)
 
 //
 // There is a conflict even among various versions of
 // linux, because it's common to compile kernels - or set ulimits -
 // where the FD_SETSIZE is much greater than a compiled version.
 // Thus, we can compute the required size of the fdset and use a reasonable size
-// the other option is using epoll, which is a little scary for this kind of "I just want a timeout"
-// usage.
+// the other option is using epoll, which is a little scary for this kind of
+// "I just want a timeout" usage.
 //
 // The reality is 8 bits per byte, but this calculation is a little more general
-static size_t
-get_fdset_size( int fd )
+//
+static inline size_t
+cf_fdset_size(int fd)
 {
-	if (fd < FD_SETSIZE)	return(sizeof(fd_set));
-	int bytes_per_512 = sizeof(fd_set)  / (FD_SETSIZE / 512);
-	return (  ((fd / 512)+1) * bytes_per_512 );
+	// Roundup fd in increments of FD_SETSIZE and convert to bytes.
+	return ((fd / FD_SETSIZE) + 1) * FD_SETSIZE / 8;
 }
-
 
 //
 // Network socket helpers
@@ -576,22 +579,16 @@ cf_socket_read_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_dead
     if ((trans_deadline != 0) && (trans_deadline < deadline))
 		deadline = trans_deadline;
     
-	// Setup fdset. This looks weird, but there's no guarentee
-	// that FD_SETSIZE this was compiled on has much to do with the machine
-	// we're running on.
- 	fd_set *rset = 0;
- 	fd_set  stackset;
- 	size_t  rset_size;
- 	if (fd < FD_SETSIZE) { // common case
- 		rset = &stackset;
- 		rset_size = sizeof(stackset);
- 	}
- 	else {
- 		rset_size = get_fdset_size(fd);
- 		rset = (fd_set*)malloc ( rset_size );
- 		if (!rset)	return(-1);
- 	}
-    
+	// Setup fdset. This looks weird, but there's no guarantee that compiled
+	// FD_SETSIZE has much to do with the machine we're running on.
+	size_t rset_size = cf_fdset_size(fd);
+	fd_set* rset = (fd_set*)(rset_size > STACK_LIMIT ? cf_malloc(rset_size) : alloca(rset_size));
+	
+	if (!rset) {
+		cf_warn("fdset allocation error: %d", rset_size);
+		return -1;
+	}
+
 	int rv = 0;
 	int try = 0;
 #ifdef DEBUG_TIME
@@ -659,7 +656,9 @@ cf_socket_read_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_dead
 	rv = 0; // success!
     
 Out:
-	if (rset != &stackset)	free(rset);
+	if (rset_size > STACK_LIMIT) {
+		cf_free(rset);
+	}
 	return( rv );
 }
 
@@ -688,22 +687,16 @@ cf_socket_write_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_dea
     if ((trans_deadline != 0) && (trans_deadline < deadline))
 		deadline = trans_deadline;
     
-	// Setup fdset. This looks weird, but there's no guarentee
-	// that FD_SETSIZE this was compiled on has much to do with the machine
-	// we're running on.
- 	fd_set *wset = 0;
- 	fd_set  stackset;
- 	size_t  wset_size;
- 	if (fd < FD_SETSIZE) { // common case
- 		wset = &stackset;
- 		wset_size = sizeof(stackset);
- 	}
- 	else {
- 		wset_size = get_fdset_size(fd);
- 		wset = (fd_set*)malloc ( wset_size );
- 		if (wset == 0)	return(-1);
- 	}
-    
+	// Setup fdset. This looks weird, but there's no guarantee that compiled
+	// FD_SETSIZE has much to do with the machine we're running on.
+	size_t wset_size = cf_fdset_size(fd);
+	fd_set* wset = (fd_set*)(wset_size > STACK_LIMIT ? cf_malloc(wset_size) : alloca(wset_size));
+	   
+	if (!wset) {
+		cf_warn("fdset allocation error: %d", wset_size);
+		return -1;
+	}
+
 	int rv = 0;
 	int try = 0;
 #ifdef DEBUG_TIME
@@ -767,8 +760,9 @@ cf_socket_write_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_dea
     rv = 0;
     
 Out:
-	if (wset != &stackset) free(wset);
-    
+	if (wset_size > STACK_LIMIT) {
+		cf_free(wset);
+	}
 	return( rv );
 }
 

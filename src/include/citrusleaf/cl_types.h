@@ -125,6 +125,9 @@ typedef enum cl_rv_e {
     // Bin-level replace-only supported on server but not on client.
     CITRUSLEAF_FAIL_BIN_NOT_FOUND			= 17,
 
+    // Storage device(s) can't keep up with the current write load.
+    CITRUSLEAF_FAIL_DEVICE_OVERLOAD			= 18,
+
     // ???
     CITRUSLEAF_FAIL_INVALID_DATA              = 99,
 

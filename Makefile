@@ -144,11 +144,7 @@ COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/alloc.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_arch.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_atomic.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_types.h
-<<<<<<< HEAD
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_digest.h
-=======
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_clock.h
->>>>>>> cdafd336c6d2d1ecdb103a65fd7277ab9f73b932
 
 EXCLUDE-HEADERS = 
 

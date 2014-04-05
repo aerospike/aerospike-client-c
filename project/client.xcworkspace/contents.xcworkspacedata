@@ -5,9 +5,18 @@
       location = "group:aerospike-test.xcodeproj">
    </FileRef>
    <FileRef
+      location = "group:benchmarks.xcodeproj">
+   </FileRef>
+   <FileRef
       location = "group:../src">
    </FileRef>
    <FileRef
       location = "group:../modules">
+   </FileRef>
+   <FileRef
+      location = "group:../examples">
+   </FileRef>
+   <FileRef
+      location = "group:../benchmarks">
    </FileRef>
 </Workspace>

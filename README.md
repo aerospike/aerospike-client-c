@@ -76,6 +76,7 @@ To run unit tests:
 
 The module is structured as follows:
 
+- `benchmarks` - measure read/write performance.
 - `demo` - demo applications, making use of multiple features.
 - `examples` - simple example applications, focused on specific features.
 - `src` – developer maintained code for the project

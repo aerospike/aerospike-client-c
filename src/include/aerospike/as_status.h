@@ -125,6 +125,11 @@ typedef enum as_status_e {
 	 */
 	AEROSPIKE_ERR_UNSUPPORTED_FEATURE		= 505,
 
+	/**
+	 *	The server node's storage device(s) can't keep up with the write load.
+	 */
+	AEROSPIKE_ERR_DEVICE_OVERLOAD			= 506,
+
 	/***************************************************************************
 	 *	RECORD-SPECIFIC
 	 **************************************************************************/
@@ -248,6 +253,7 @@ typedef enum as_status_e {
 	 *	System already has maximum allowed indices.
 	 */
 	AEROSPIKE_ERR_INDEX_MAXCOUNT 			= 1206,
+
 	/***************************************************************************
 	 *	UDF OPERATIONS
 	 **************************************************************************/
@@ -261,7 +267,6 @@ typedef enum as_status_e {
 	 *	UDF does not exist.
 	 */
 	AEROSPIKE_ERR_UDF_NOT_FOUND				= 1301,
-
 
 	/***************************************************************************
 	 *	Large Data Type (LDT) OPERATIONS

@@ -14,7 +14,7 @@ MODULES 	:= BASE COMMON MOD_LUA
 O = 3
 
 # Make-local Compiler Flags
-CC_FLAGS = -std=gnu99 -g -Wall -fPIC 
+CC_FLAGS = -std=gnu99 -g -Wall -fPIC -O$(O)
 CC_FLAGS += -fno-common -fno-strict-aliasing -finline-functions
 CC_FLAGS += -march=nocona -DMARCH_$(ARCH)
 CC_FLAGS += -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_GNU_SOURCE $(EXT_CFLAGS)
@@ -42,12 +42,6 @@ O=0
 CC_FLAGS += -pg -fprofile-arcs -ftest-coverage -g2
 LD_FLAGS += -pg -fprofile-arcs -lgcov
 endif
-
-# Make-tree Compiler Flags
-CFLAGS = -O$(O)
-
-# Make-tree Linker Flags
-# LDFLAGS = 
 
 # Include Paths
 INC_PATH += $(BASE)/$(TARGET_INCL)
@@ -150,7 +144,11 @@ COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/alloc.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_arch.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_atomic.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_types.h
+<<<<<<< HEAD
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_digest.h
+=======
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_clock.h
+>>>>>>> cdafd336c6d2d1ecdb103a65fd7277ab9f73b932
 
 EXCLUDE-HEADERS = 
 

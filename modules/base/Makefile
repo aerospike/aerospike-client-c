@@ -11,14 +11,13 @@ MODULES 	:= COMMON
 # Overrride optimizations via: make O=n
 O = 3
 
-
 # Make-local Compiler Flags
 ifeq ($(OS),Darwin)
 CC_FLAGS = -std=gnu99 -g -Wextra
 else
 CC_FLAGS = -std=gnu99 -g -rdynamic -Wextra
 endif
-CC_FLAGS += -fno-common -fno-strict-aliasing -fPIC 
+CC_FLAGS += -fno-common -fno-strict-aliasing -fPIC -O$(O)
 CC_FLAGS += -D_FILE_OFFSET_BITS=64 
 CC_FLAGS += -D_REENTRANT 
 CC_FLAGS += -D_GNU_SOURCE
@@ -32,15 +31,6 @@ O=0
 CC_FLAGS += -pg -fprofile-arcs -ftest-coverage -g2
 LD_FLAGS += -pg -fprofile-arcs -lgcov
 endif
-
-# Make-tree Compiler Flags
-CFLAGS = -O$(O) 
-
-# Make-tree Linker Flags
-# LDFLAGS = 
-
-# Make-tree Linker Flags
-# LDFLAGS = 
 
 # Include Paths
 INC_PATH += $(COMMON)/$(TARGET_INCL)

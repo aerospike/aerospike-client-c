@@ -12,7 +12,6 @@ default: all
 	$(MAKE) -C lset $@
 	$(MAKE) -C lstack $@
 	$(MAKE) -C put $@
-	$(MAKE) -C digest $@
 	$(MAKE) -C touch $@
 	$(MAKE) -C udf $@
 

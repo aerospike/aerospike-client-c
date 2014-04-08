@@ -56,6 +56,8 @@
 // #define DEBUG_TIME
 
 #ifdef DEBUG_TIME
+#include <pthread.h>
+
 static void
 debug_time_printf(const char* desc, int try, int busy, uint64_t start, uint64_t end, uint64_t deadline)
 {

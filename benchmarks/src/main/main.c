@@ -132,11 +132,11 @@ print_usage(const char* program)
 	blog_line("   <columns> Number of elapsed time ranges.");
 	blog_line("   <shift>   Power of 2 multiple between each range starting at column 3.");
 	blog_line("");
-	blog_line("   A latency definition of '-latency 7,1' results in this layout:");
+	blog_line("   A latency definition of '--latency 7,1' results in this layout:");
 	blog_line("       <=1ms >1ms >2ms >4ms >8ms >16ms >32ms");
 	blog_line("          x%%   x%%   x%%   x%%   x%%    x%%    x%%");
 	blog_line("");
-	blog_line("   A latency definition of '-latency 4,3' results in this layout:");
+	blog_line("   A latency definition of '--latency 4,3' results in this layout:");
 	blog_line("       <=1ms >1ms >8ms >64ms");
 	blog_line("           x%%  x%%   x%%    x%%");
 	blog_line("");

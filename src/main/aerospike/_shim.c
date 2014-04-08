@@ -17,6 +17,7 @@
 #include <citrusleaf/cf_log_internal.h>
 
 #include <stdint.h>
+#include <errno.h>
 
 #include "_shim.h"
 
@@ -146,6 +147,9 @@ as_status as_error_fromrc(as_error * err, cl_rv rc)
 		if (rc < 0) {
 			// TODO - what about CITRUSLEAF_FAIL_ASYNCQ_FULL?
 			ERR_ASSIGN(AEROSPIKE_ERR_CLIENT);
+		}
+		else if (rc == ETIMEDOUT) {
+			ERR_ASSIGN(AEROSPIKE_ERR_TIMEOUT);
 		}
 		else {
 			ERR_ASSIGN(AEROSPIKE_ERR_SERVER);

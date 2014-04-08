@@ -115,7 +115,7 @@ print_usage(const char* program)
 	blog_line("   Write timeout in milliseconds.");
 	blog_line("");
 	
-	blog_line("   --maxRetries {0,1}  # Default: 0");
+	blog_line("   --maxRetries {0,1}  # Default: 1");
 	blog_line("   Maximum number of retries before aborting the current transaction.");
 	blog_line("");
 	
@@ -477,7 +477,7 @@ main(int argc, char * const * argv)
 	args.throughput = 0;
 	args.read_timeout = 0;
 	args.write_timeout = 0;
-	args.max_retries = 0;
+	args.max_retries = 1;
 	args.debug = false;
 	args.latency = false;
 	args.latency_columns = 4;

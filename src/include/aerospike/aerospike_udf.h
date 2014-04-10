@@ -28,7 +28,6 @@
  *
  *	Management capabilities include:
  *	- aerospike_udf_list() - 	List the UDF modules in the cluster.
- *	- aerospike_udf_foreach() -	List the UDF modules in the cluster.
  *	- aerospike_udf_get() -		Download a UDF module.
  *	- aerospike_udf_put() -		Upload a UDF module.
  *	- aerospike_udf_remove() -	Remove a UDF module.
@@ -94,36 +93,6 @@ as_status aerospike_udf_list(
 	as_udf_files * files
 	);
 
-/**
- *	Call the callback function for each the UDF file in the cluster.
- *
- *	~~~~~~~~~~{.c}
- *	bool callback(cont as_udf_file * file, void * udata) {
- *	    printf("  - %s (%d) [%s]\n", file->name, file->type, file->hash);
- *	    return true;
- *	}
- *	
- *	printf("files[%d]:\n", list.size);
- *	if ( aerospike_udf_foreach(&as, &err, NULL, callback, NULL) != AEROSPIKE_OK ) {
- *	    fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *	}
- *	~~~~~~~~~~
- *
- *
- *	@param as			The aerospike instance to use for this operation.
- *	@param err			The as_error to be populated if an error occurs.
- *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param callback 	The function to call for each udf file returned.
- *	@param udata		User-data to be sent to the callback.
- *
- *	@return AEROSPIKE_OK if successful. Otherwise an error occurred.
- *
- *	@ingroup udf_operations
- */
-as_status aerospike_udf_foreach(
-	aerospike * as, as_error * err, const as_policy_info * policy, 
-	aerospike_udf_foreach_callback callback, void * udata
-	);
 
 /**
  *	Get specified UDF file from the cluster.

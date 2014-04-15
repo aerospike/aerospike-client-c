@@ -611,6 +611,14 @@ example_dump_record(const as_record* p_rec)
 		return;
 	}
 
+	if (p_rec->key.valuep) {
+		char* key_val_as_str = as_val_tostring(p_rec->key.valuep);
+
+		LOG("  key: %s", key_val_as_str);
+
+		free(key_val_as_str);
+	}
+
 	uint16_t num_bins = as_record_numbins(p_rec);
 
 	LOG("  generation %u, ttl %u, %u bin%s", p_rec->gen, p_rec->ttl, num_bins,

@@ -84,6 +84,8 @@ as_status aerospike_key_get(
 	cl_rv rc = CITRUSLEAF_OK;
 
 	switch ( p.key ) {
+		case AS_POLICY_KEY_STORE:
+			// STORE is not relevant for this operation - will use DIGEST.
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
 			rc = citrusleaf_get_all_digest_getsetname(as->cluster, key->ns, (cf_digest *) digest->value,
@@ -93,7 +95,15 @@ as_status aerospike_key_get(
 		case AS_POLICY_KEY_SEND: {
 			cl_object okey;
 			asval_to_clobject((as_val *) key->valuep, &okey);
-			rc = citrusleaf_get_all(as->cluster, key->ns, key->set, &okey,
+			rc = citrusleaf_get_all(as->cluster, key->ns, key->set, &okey, NULL,
+					&values, &nvalues, timeout, &gen, &ttl);
+			break;
+		}
+		case AS_POLICY_KEY_CHECK: {
+			cl_object okey;
+			asval_to_clobject((as_val *) key->valuep, &okey);
+			as_digest * digest = as_key_digest((as_key *) key);
+			rc = citrusleaf_get_all(as->cluster, key->ns, key->set, &okey, (cf_digest*)digest->value,
 					&values, &nvalues, timeout, &gen, &ttl);
 			break;
 		}
@@ -175,6 +185,8 @@ as_status aerospike_key_select(
 	cl_rv rc = CITRUSLEAF_OK;
 
 	switch ( p.key ) {
+		case AS_POLICY_KEY_STORE:
+			// STORE is not relevant for this operation - will use DIGEST.
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
 			rc = citrusleaf_get_digest(as->cluster, key->ns, (cf_digest *) digest->value,
@@ -184,7 +196,15 @@ as_status aerospike_key_select(
 		case AS_POLICY_KEY_SEND: {
 			cl_object okey;
 			asval_to_clobject((as_val *) key->valuep, &okey);
-			rc = citrusleaf_get(as->cluster, key->ns, key->set, &okey,
+			rc = citrusleaf_get(as->cluster, key->ns, key->set, &okey, NULL,
+					values, nvalues, timeout, &gen, &ttl);
+			break;
+		}
+		case AS_POLICY_KEY_CHECK: {
+			cl_object okey;
+			asval_to_clobject((as_val *) key->valuep, &okey);
+			as_digest * digest = as_key_digest((as_key *) key);
+			rc = citrusleaf_get(as->cluster, key->ns, key->set, &okey, (cf_digest*)digest->value,
 					values, nvalues, timeout, &gen, &ttl);
 			break;
 		}
@@ -251,6 +271,8 @@ as_status aerospike_key_exists(
 	cl_rv rc = CITRUSLEAF_OK;
 
 	switch ( p.key ) {
+		case AS_POLICY_KEY_STORE:
+			// STORE is not relevant for this operation - will use DIGEST.
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
 			rc = citrusleaf_exists_digest(as->cluster, key->ns, (cf_digest *) digest->value,
@@ -260,7 +282,15 @@ as_status aerospike_key_exists(
 		case AS_POLICY_KEY_SEND: {
 			cl_object okey;
 			asval_to_clobject((as_val *) key->valuep, &okey);
-			rc = citrusleaf_exists_key(as->cluster, key->ns, key->set, &okey,
+			rc = citrusleaf_exists_key(as->cluster, key->ns, key->set, &okey, NULL,
+					values, nvalues, timeout, &gen, &ttl);
+			break;
+		}
+		case AS_POLICY_KEY_CHECK: {
+			cl_object okey;
+			asval_to_clobject((as_val *) key->valuep, &okey);
+			as_digest * digest = as_key_digest((as_key *) key);
+			rc = citrusleaf_exists_key(as->cluster, key->ns, key->set, &okey, (cf_digest*)digest->value,
 					values, nvalues, timeout, &gen, &ttl);
 			break;
 		}
@@ -286,7 +316,7 @@ as_status aerospike_key_exists(
 				r->gen = (uint16_t) gen;
 				r->ttl = ttl;
 				*rec = r;
-				break;;
+				break;
 			}
 
 		default:
@@ -339,7 +369,21 @@ as_status aerospike_key_put(
 		case AS_POLICY_KEY_SEND: {
 			cl_object okey;
 			asval_to_clobject((as_val *) key->valuep, &okey);
-			rc = citrusleaf_put(as->cluster, key->ns, key->set, &okey, values, nvalues, &wp);
+			rc = citrusleaf_put(as->cluster, key->ns, key->set, &okey, false, NULL, values, nvalues, &wp);
+			break;
+		}
+		case AS_POLICY_KEY_STORE: {
+			cl_object okey;
+			asval_to_clobject((as_val *) key->valuep, &okey);
+			as_digest * digest = as_key_digest((as_key *) key);
+			rc = citrusleaf_put(as->cluster, key->ns, key->set, &okey, false, (cf_digest*)digest->value, values, nvalues, &wp);
+			break;
+		}
+		case AS_POLICY_KEY_CHECK: {
+			cl_object okey;
+			asval_to_clobject((as_val *) key->valuep, &okey);
+			as_digest * digest = as_key_digest((as_key *) key);
+			rc = citrusleaf_put(as->cluster, key->ns, key->set, &okey, true, (cf_digest*)digest->value, values, nvalues, &wp);
 			break;
 		}
 		default: {
@@ -390,6 +434,8 @@ as_status aerospike_key_remove(
 	cl_rv rc = CITRUSLEAF_OK;
 
 	switch ( p.key ) {
+		case AS_POLICY_KEY_STORE:
+			// STORE is not relevant for this operation - will use DIGEST.
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
 			rc = citrusleaf_delete_digest(as->cluster, key->ns, (cf_digest *) digest->value, &wp);
@@ -398,7 +444,14 @@ as_status aerospike_key_remove(
 		case AS_POLICY_KEY_SEND: {
 			cl_object okey;
 			asval_to_clobject((as_val *) key->valuep, &okey);
-			rc = citrusleaf_delete(as->cluster, key->ns, key->set, &okey, &wp);
+			rc = citrusleaf_delete(as->cluster, key->ns, key->set, &okey, NULL, &wp);
+			break;
+		}
+		case AS_POLICY_KEY_CHECK: {
+			cl_object okey;
+			asval_to_clobject((as_val *) key->valuep, &okey);
+			as_digest * digest = as_key_digest((as_key *) key);
+			rc = citrusleaf_delete(as->cluster, key->ns, key->set, &okey, (cf_digest*)digest->value, &wp);
 			break;
 		}
 		default: {
@@ -492,7 +545,23 @@ as_status aerospike_key_operate(
 		case AS_POLICY_KEY_SEND: {
 			cl_object okey;
 			asval_to_clobject((as_val *) key->valuep, &okey);
-			rc = citrusleaf_operate(as->cluster, key->ns, key->set, &okey,
+			rc = citrusleaf_operate(as->cluster, key->ns, key->set, &okey, false, NULL,
+					operations, n_operations, &wp, &gen, &ttl);
+			break;
+		}
+		case AS_POLICY_KEY_STORE: {
+			cl_object okey;
+			asval_to_clobject((as_val *) key->valuep, &okey);
+			as_digest * digest = as_key_digest((as_key *) key);
+			rc = citrusleaf_operate(as->cluster, key->ns, key->set, &okey, false, (cf_digest*)digest->value,
+					operations, n_operations, &wp, &gen, &ttl);
+			break;
+		}
+		case AS_POLICY_KEY_CHECK: {
+			cl_object okey;
+			asval_to_clobject((as_val *) key->valuep, &okey);
+			as_digest * digest = as_key_digest((as_key *) key);
+			rc = citrusleaf_operate(as->cluster, key->ns, key->set, &okey, true, (cf_digest*)digest->value,
 					operations, n_operations, &wp, &gen, &ttl);
 			break;
 		}

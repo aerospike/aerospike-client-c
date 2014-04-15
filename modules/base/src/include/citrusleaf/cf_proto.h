@@ -362,6 +362,7 @@ typedef struct as_msg_s {
 #define CL_MSG_INFO1_VERIFY     		(1 << 3) // verify is a GET transaction that includes data, and assert if the data aint right
 #define CL_MSG_INFO1_XDS				(1 << 4) // operation is being performed by XDS
 #define CL_MSG_INFO1_NOBINDATA			(1 << 5) // do not get information about bins and its data
+#define CL_MSG_INFO1_CHECK_KEY			(1 << 6) // check key against record's stored key
 
 #define CL_MSG_INFO2_WRITE				(1 << 0) // contains a write semantic
 #define CL_MSG_INFO2_DELETE 			(1 << 1) // fling a record into the belly of Moloch

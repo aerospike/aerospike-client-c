@@ -30,13 +30,13 @@
 #include <fcntl.h>
 #include <assert.h>
 
-#include <citrusleaf/cf_byte_order.h>
 #include <citrusleaf/cf_atomic.h>
+#include <citrusleaf/cf_byte_order.h>
+#include <citrusleaf/cf_proto.h>
 #include <citrusleaf/cf_queue.h>
+#include <citrusleaf/cf_random.h>
 #include <citrusleaf/cf_socket.h>
 #include <citrusleaf/cf_vector.h>
-#include <citrusleaf/cf_random.h>
-#include <citrusleaf/cf_proto.h>
 
 #include <aerospike/as_aerospike.h>
 #include <aerospike/as_module.h>
@@ -739,6 +739,8 @@ static int cl_query_worker_do(cl_cluster_node * node, cl_query_task * task) {
         uint        pos = 0;
         cl_bin      stack_bins[STACK_BINS];
         cl_bin *    bins;
+		cl_object   key;
+		citrusleaf_object_init_null(&key);
 
         while (pos < rd_buf_sz) {
 
@@ -763,7 +765,26 @@ static int cl_query_worker_do(cl_cluster_node * node, cl_query_task * task) {
             for (int i=0; i < msg->n_fields; i++) {
                 cl_msg_swap_field_from_be(mf);
                 if (mf->type == CL_MSG_FIELD_TYPE_KEY) {
-                    LOG("[INFO] cl_query_worker_do: read: found a key - unexpected\n");
+					uint8_t* flat_key = mf->data;
+					uint8_t* flat_val = &flat_key[1];
+					switch (flat_key[0]) {
+					case CL_INT:
+						citrusleaf_object_init_int(&key, cf_swap_from_be64(*(int64_t*)flat_val));
+						break;
+					case CL_STR:
+						// The object value pointer points straight into rd_buf,
+						// and relies on shim to copy and null-terminate it.
+						citrusleaf_object_init_str2(&key, (const char*)flat_val, cl_msg_field_get_value_sz(mf) - 1);
+						break;
+					case CL_BLOB:
+						// The object value pointer points straight into rd_buf,
+						// and relies on shim to copy it.
+						citrusleaf_object_init_blob(&key, (const void*)flat_val, cl_msg_field_get_value_sz(mf) - 1);
+						break;
+					default:
+						cf_error("scan: ignoring key with unrecognized type %d", flat_key[0]);
+						break;
+					}
                 }
                 else if (mf->type == CL_MSG_FIELD_TYPE_DIGEST_RIPE) {
                     memcpy(&keyd, mf->data, sizeof(cf_digest));
@@ -837,9 +858,9 @@ static int cl_query_worker_do(cl_cluster_node * node, cl_query_task * task) {
 
 				as_record_inita(record, msg->n_ops);
 
-                strcpy(record->key.set, set_ret ? set_ret : "");
-                record->key.digest.init = true;
+				askey_from_clkey(&record->key, ns_ret, set_ret, &key);
                 memcpy(record->key.digest.value, &keyd, 20);
+                record->key.digest.init = true;
 
                 record->ttl = cf_server_void_time_to_ttl(msg->record_ttl);
     			record->gen = msg->generation;

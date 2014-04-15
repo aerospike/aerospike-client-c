@@ -15,6 +15,8 @@
 
 as_status as_error_fromrc(as_error * err, cl_rv rc);
 
+void askey_from_clkey(as_key * key, const as_namespace ns, const as_set set, cl_object * obj);
+
 void clbin_to_asval(cl_bin * bin, as_serializer * ser, as_val ** val);
 
 void clbin_to_asrecord(cl_bin * bin, as_record * r);

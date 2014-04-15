@@ -494,7 +494,7 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 			}
 
 			if (cb && ! done) {
-				(*cb)(ns_ret, keyd, set_ret, msg->result_code, msg->generation,
+				(*cb)(ns_ret, keyd, set_ret, NULL, msg->result_code, msg->generation,
 						cf_server_void_time_to_ttl(msg->record_ttl),
 						msg->n_ops != 0 ? bins_local : NULL, msg->n_ops, udata);
 				rv = 0;
@@ -721,7 +721,7 @@ citrusleaf_batch_read(cl_cluster *asc, char *ns, const cf_digest *digests, int n
 			for (int j = 0; j < n_digests; j++) {
 				if (nodes[j] == wc.my_node) {
 					cf_error("   rec %d", j);
-					cb(ns, &work.digests[j], NULL, wc.result, 0, 0, NULL, 0, udata);
+					cb(ns, &work.digests[j], NULL, NULL, wc.result, 0, 0, NULL, 0, udata);
 				}
 			}
 			retval = wc.result;

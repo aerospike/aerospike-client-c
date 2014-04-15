@@ -126,9 +126,9 @@ static as_status process_node_response(cf_vector *v, as_error *err)
  * mechanism. When this gets called, it will create an as_val structure out of the
  * record and will call the callback that user supplied (folded into the udata structure)
  */
-static int simplescan_cb(
-	char *ns, cf_digest *keyd, char *set, int result, uint32_t generation,
-	uint32_t record_void_time, cl_bin *bins, uint16_t n_bins, void *udata)
+static int simplescan_cb(char *ns, cf_digest *keyd, char *set, cl_object *key,
+		int result, uint32_t generation, uint32_t record_void_time,
+		cl_bin *bins, uint16_t n_bins, void *udata)
 {
 	scan_bridge * bridge = (scan_bridge *) udata;
 
@@ -138,7 +138,7 @@ static int simplescan_cb(
 	clbins_to_asrecord(bins, (uint32_t)n_bins, rec);
 
 	// Fill the metadata
-	as_key_init_value(&rec->key, ns, set, NULL);
+	askey_from_clkey(&rec->key, ns, set, key);
 	memcpy(rec->key.digest.value, keyd, sizeof(cf_digest));
 	rec->key.digest.init = true;
 	rec->gen = generation;

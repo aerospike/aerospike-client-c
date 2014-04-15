@@ -32,10 +32,11 @@
 #include <time.h> // for job ID
 
 #include <citrusleaf/cf_atomic.h>
-#include <citrusleaf/cf_log.h>
-#include <citrusleaf/cf_socket.h>
-#include <citrusleaf/cf_proto.h>
+#include <citrusleaf/cf_byte_order.h>
 #include <citrusleaf/cf_client_rc.h>
+#include <citrusleaf/cf_log.h>
+#include <citrusleaf/cf_proto.h>
+#include <citrusleaf/cf_socket.h>
 
 #include <citrusleaf/citrusleaf.h>
 #include <citrusleaf/cl_cluster.h>
@@ -232,11 +233,34 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 			cf_digest *keyd = 0;
 			char ns_ret[33] = {0};
 			char *set_ret = NULL;
+			cl_object key;
+			citrusleaf_object_init_null(&key);
+
 			cl_msg_field *mf = (cl_msg_field *)buf;
+
 			for (int i=0;i<msg->n_fields;i++) {
 				cl_msg_swap_field_from_be(mf);
 				if (mf->type == CL_MSG_FIELD_TYPE_KEY) {
-					cf_error("read: found a key - unexpected");
+					uint8_t* flat_key = mf->data;
+					uint8_t* flat_val = &flat_key[1];
+					switch (flat_key[0]) {
+					case CL_INT:
+						citrusleaf_object_init_int(&key, cf_swap_from_be64(*(int64_t*)flat_val));
+						break;
+					case CL_STR:
+						// The object value pointer points straight into rd_buf,
+						// and relies on shim to copy and null-terminate it.
+						citrusleaf_object_init_str2(&key, (const char*)flat_val, cl_msg_field_get_value_sz(mf) - 1);
+						break;
+					case CL_BLOB:
+						// The object value pointer points straight into rd_buf,
+						// and relies on shim to copy it.
+						citrusleaf_object_init_blob(&key, (const void*)flat_val, cl_msg_field_get_value_sz(mf) - 1);
+						break;
+					default:
+						cf_error("scan: ignoring key with unrecognized type %d", flat_key[0]);
+						break;
+					}
 				}
 				else if (mf->type == CL_MSG_FIELD_TYPE_DIGEST_RIPE) {
 					keyd = (cf_digest *) mf->data;
@@ -313,7 +337,7 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 			}
 			else if ((msg->n_ops) || (operation_info & CL_MSG_INFO1_NOBINDATA)) {
     			// got one good value? call it a success!
-				(*cb) (ns_ret, keyd, set_ret, CL_RESULT_OK, msg->generation,
+				(*cb)(ns_ret, keyd, set_ret, &key, CL_RESULT_OK, msg->generation,
 						cf_server_void_time_to_ttl(msg->record_ttl), bins_local,
 						msg->n_ops, udata);
 				rv = 0;

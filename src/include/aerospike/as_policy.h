@@ -205,13 +205,14 @@ typedef enum as_policy_key_e {
 	AS_POLICY_KEY_DIGEST,
 
 	/**
+	 *	@deprecated
 	 *	Send the key, but do not store it.
 	 *	
 	 *	This policy is ideal if you want to reduce the number of bytes sent
 	 *	over the network. This will only work if the combination the set and
 	 *	key value are less than 20 bytes, which is the size of the digest.
 	 *
-	 *	This will also cause the digest to be computer once on the client
+	 *	This will also cause the digest to be computed once on the client
 	 * 	and once on the server. 
 	 *	
 	 *	If your values are not less than 20 bytes, then you should just 
@@ -221,9 +222,26 @@ typedef enum as_policy_key_e {
 
 	/**
 	 *	Store the key.
-	 *	@warning Not yet implemented
+	 *
+	 *	If you want keys to be returned when scanning or querying, the keys must
+	 *	be stored on the server. This policy causes a write operation to store
+	 *	the key. Once a key is stored, the server will keep it - there is no
+	 *	need to use this policy on subsequent updates of the record.
+	 *
+	 *	This policy is not relevant for read or delete operations. If this
+	 *	policy is set for operations for which it's irrelevant,
+	 *	AS_POLICY_KEY_DIGEST will be used instead.
 	 */
-	AS_POLICY_KEY_STORE
+	AS_POLICY_KEY_STORE,
+
+	/**
+	 *	Check that the key matches the stored key.
+	 *
+	 *	Use this policy to compare the key with the key stored on the server.
+	 *	For write operations, if the key is not already stored on the server,
+	 *	this policy will cause the key to be stored.
+	 */
+	AS_POLICY_KEY_CHECK
 
 } as_policy_key;
 

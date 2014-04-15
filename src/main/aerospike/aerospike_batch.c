@@ -59,7 +59,7 @@ typedef struct batch_bridge_s {
  **************************************************************************/
 
 static int
-cl_batch_cb(char *ns, cf_digest *keyd, char *set, int result,
+cl_batch_cb(char *ns, cf_digest *keyd, char *set, cl_object *key, int result,
 		uint32_t generation, uint32_t ttl, cl_bin *bins, uint16_t n_bins,
 		void *udata)
 {

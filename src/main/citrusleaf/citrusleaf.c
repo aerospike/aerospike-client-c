@@ -498,7 +498,7 @@ write_fields(uint8_t *buf, const char *ns, int ns_len, const char *set, int set_
 		cl_msg_swap_field_to_be(mf);
 		
 		// calculate digest
-		if (d_ret) {
+		if (d_ret && ! d) {
 			cf_digest_compute2( (char *)set, set_len, mf->data, key->sz + 1, d_ret);
 		}
 		
@@ -846,7 +846,7 @@ cl_compile(uint info1, uint info2, uint info3, const char *ns, const char *set, 
 	if (ns)     msg_sz += sizeof(cl_msg_field) + ns_len;
 	if (set)    msg_sz += sizeof(cl_msg_field) + set_len;
 	if (key)    msg_sz += sizeof(cl_msg_field) + 1 + key->sz;
-	if (digest) msg_sz += sizeof(cl_msg_field) + 1 + sizeof(cf_digest);
+	if (digest) msg_sz += sizeof(cl_msg_field) + 1 + sizeof(cf_digest); // AKG TODO - I believe the +1 is incorrect!
 	if (trid)   msg_sz += sizeof(cl_msg_field) + sizeof(trid);
 	if (scan_param_field)	msg_sz += sizeof(cl_msg_field) + 1 + sizeof(cl_scan_param_field);
 
@@ -1609,14 +1609,15 @@ Ok:
 
 extern cl_rv
 citrusleaf_get(cl_cluster *asc, const char *ns, const char *set, const cl_object *key,
-		cl_bin *values, int n_values, int timeout_ms, uint32_t *cl_gen, uint32_t* cl_ttl)
+		const cf_digest *digest, cl_bin *values, int n_values, int timeout_ms,
+		uint32_t *cl_gen, uint32_t* cl_ttl)
 {
     	uint64_t trid=0;
 	cl_write_parameters cl_w_p;
 	cl_write_parameters_set_default(&cl_w_p);
 	cl_w_p.timeout_ms = timeout_ms;
 
-	return( do_the_full_monte( asc, CL_MSG_INFO1_READ, 0, 0, ns, set, key, 0, &values, 
+	return( do_the_full_monte( asc, CL_MSG_INFO1_READ | (digest ? CL_MSG_INFO1_CHECK_KEY : 0), 0, 0, ns, set, key, digest, &values,
 			CL_OP_READ, 0, &n_values, cl_gen, &cl_w_p, &trid, NULL, NULL, cl_ttl) );
 }
 
@@ -1635,10 +1636,10 @@ citrusleaf_get_digest(cl_cluster *asc, const char *ns, const cf_digest *digest,
 
 
 extern cl_rv
-citrusleaf_put(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, const cl_bin *values, int n_values, const cl_write_parameters *cl_w_p)
+citrusleaf_put(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, bool check_key, const cf_digest *digest, const cl_bin *values, int n_values, const cl_write_parameters *cl_w_p)
 {
     	uint64_t trid=0;
-	return( do_the_full_monte( asc, 0, CL_MSG_INFO2_WRITE, 0, ns, set, key, 0, 
+	return( do_the_full_monte( asc, check_key ? CL_MSG_INFO1_CHECK_KEY : 0, CL_MSG_INFO2_WRITE, 0, ns, set, key, digest,
 			(cl_bin **) &values, CL_OP_WRITE, 0, &n_values, NULL, cl_w_p, 
 			&trid, NULL, NULL, NULL) );
 }
@@ -1720,11 +1721,12 @@ citrusleaf_check_cluster_health(cl_cluster *asc)
 }
 
 extern cl_rv
-citrusleaf_delete(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, const cl_write_parameters *cl_w_p)
+citrusleaf_delete(cl_cluster *asc, const char *ns, const char *set, const cl_object *key,
+		const cf_digest *digest, const cl_write_parameters *cl_w_p)
 {
     	uint64_t trid=0;
-	return( do_the_full_monte( asc, 0, CL_MSG_INFO2_DELETE | CL_MSG_INFO2_WRITE, 0, 
-			ns, set, key, 0, 0, 0, 0, 0, NULL, cl_w_p, &trid, NULL, NULL, NULL) );
+	return( do_the_full_monte( asc, digest ? CL_MSG_INFO1_CHECK_KEY : 0, CL_MSG_INFO2_DELETE | CL_MSG_INFO2_WRITE, 0,
+			ns, set, key, digest, 0, 0, 0, 0, NULL, cl_w_p, &trid, NULL, NULL, NULL) );
 }
 
 extern cl_rv
@@ -1743,15 +1745,16 @@ citrusleaf_delete_digest(cl_cluster *asc, const char *ns, const cf_digest *diges
 
 extern cl_rv
 citrusleaf_exists_key(cl_cluster *asc, const char *ns, const char *set, const cl_object *key,
-		cl_bin *values, int n_values, int timeout_ms, uint32_t *cl_gen, uint32_t* cl_ttl)
+		const cf_digest *digest, cl_bin *values, int n_values, int timeout_ms,
+		uint32_t *cl_gen, uint32_t* cl_ttl)
 {
     	uint64_t trid=0;
 	cl_write_parameters cl_w_p;
 	cl_write_parameters_set_default(&cl_w_p);
 	cl_w_p.timeout_ms = timeout_ms;
 
-	return( do_the_full_monte( asc, CL_MSG_INFO1_READ | CL_MSG_INFO1_NOBINDATA, 0, 0, 
-			ns, set, key, 0, &values, CL_OP_READ, 0, &n_values, cl_gen, 
+	return( do_the_full_monte( asc, CL_MSG_INFO1_READ | CL_MSG_INFO1_NOBINDATA | (digest ? CL_MSG_INFO1_CHECK_KEY : 0), 0, 0,
+			ns, set, key, digest, &values, CL_OP_READ, 0, &n_values, cl_gen,
 			&cl_w_p, &trid, NULL, NULL, cl_ttl) );
 }
 
@@ -1772,7 +1775,8 @@ citrusleaf_exists_digest(cl_cluster *asc, const char *ns, const cf_digest *diges
 
 extern cl_rv
 citrusleaf_get_all(cl_cluster *asc, const char *ns, const char *set, const cl_object *key,
-		cl_bin **values, int *n_values, int timeout_ms, uint32_t *cl_gen, uint32_t* cl_ttl)
+		const cf_digest *digest, cl_bin **values, int *n_values, int timeout_ms,
+		uint32_t *cl_gen, uint32_t* cl_ttl)
 {
 	if ((values == 0) || (n_values == 0)) {
 		cf_error("citrusleaf_get_all: illegal parameters passed");
@@ -1787,8 +1791,8 @@ citrusleaf_get_all(cl_cluster *asc, const char *ns, const char *set, const cl_ob
 	cl_write_parameters_set_default(&cl_w_p);
 	cl_w_p.timeout_ms = timeout_ms;
 	
-	return( do_the_full_monte( asc, CL_MSG_INFO1_READ | CL_MSG_INFO1_GET_ALL, 0, 0, 
-			ns, set, key, 0/*dig*/, values, CL_OP_READ, 0, n_values, 
+	return( do_the_full_monte( asc, CL_MSG_INFO1_READ | CL_MSG_INFO1_GET_ALL | (digest ? CL_MSG_INFO1_CHECK_KEY : 0), 0, 0,
+			ns, set, key, digest, values, CL_OP_READ, 0, n_values,
 			cl_gen, &cl_w_p, &trid, NULL, NULL, cl_ttl) );
 }
 
@@ -1937,8 +1941,8 @@ citrusleaf_operate_digest(cl_cluster *asc, const char *ns, const char *set, cf_d
 
 extern cl_rv
 citrusleaf_operate(cl_cluster *asc, const char *ns, const char *set, const cl_object *key,
-		cl_operation *operations, int n_operations, const cl_write_parameters *cl_w_p,
-		uint32_t *generation, uint32_t* ttl)
+		bool check_key, cf_digest *digest, cl_operation *operations, int n_operations,
+		const cl_write_parameters *cl_w_p, uint32_t *generation, uint32_t* ttl)
 {
 	// see if there are any read or write bits ---
 	//   (this is slightly obscure c usage....)
@@ -1968,7 +1972,11 @@ citrusleaf_operate(cl_cluster *asc, const char *ns, const char *set, const cl_ob
 		if (info1 && info2) break;
 	}
 
-	return( do_the_full_monte( asc, info1, info2, info3, ns, set, key, 0, 0, 0, 
+	if (check_key) {
+		info1 |= CL_MSG_INFO1_CHECK_KEY;
+	}
+
+	return( do_the_full_monte( asc, info1, info2, info3, ns, set, key, digest, 0, 0, 
 			&operations, &n_operations, generation, cl_w_p, &trid, NULL, NULL, ttl) );
 }
 

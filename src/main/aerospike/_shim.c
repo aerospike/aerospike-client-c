@@ -233,6 +233,48 @@ void asrecord_to_clbins(as_record * rec, cl_bin * bins, uint32_t nbins)
 	}
 }
 
+
+void askey_from_clkey(as_key * key, const as_namespace ns, const as_set set, cl_object * clkey)
+{
+	if (! (key && clkey)) {
+		return;
+	}
+
+	switch (clkey->type) {
+		case CL_NULL:
+			as_key_init_value(key, ns, set, NULL);
+			break;
+		case CL_INT:
+			as_key_init_int64(key, ns, set, clkey->u.i64);
+			break;
+		case CL_STR: {
+			// Must null-terminate here.
+			char* s = (char*)malloc(clkey->sz + 1);
+			memcpy(s, clkey->u.str, clkey->sz);
+			s[clkey->sz] = 0;
+			as_key_init_strp(key, ns, set, s, true);
+			break;
+		}
+		case CL_BLOB:
+		case CL_JAVA_BLOB:
+		case CL_CSHARP_BLOB:
+		case CL_PYTHON_BLOB:
+		case CL_RUBY_BLOB:
+		case CL_ERLANG_BLOB: {
+			// obj value points into recv buf - don't free it.
+			as_key_init_raw(key, ns, set, (const uint8_t*)clkey->u.blob, (uint32_t)clkey->sz);
+			break;
+		}
+		// Unsupported as key types for now:
+		case CL_LIST:
+		case CL_MAP:
+		default:
+			as_key_init_value(key, ns, set, NULL);
+			break;
+	}
+}
+
+
 void clbin_to_asval(cl_bin * bin, as_serializer * ser, as_val ** val) 
 {
 	if ( val == NULL ) return;

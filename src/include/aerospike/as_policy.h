@@ -235,9 +235,11 @@ typedef enum as_policy_key_e {
 	AS_POLICY_KEY_STORE,
 
 	/**
-	 *	Check that the key matches the stored key.
+	 *	Check that the key matches the stored key, if there is a stored key.
 	 *
 	 *	Use this policy to compare the key with the key stored on the server.
+	 *	A mismatch will cause AEROSPIKE_ERR_RECORD_KEY_MISMATCH to be returned.
+	 *
 	 *	For write operations, if the key is not already stored on the server,
 	 *	this policy will cause the key to be stored.
 	 */

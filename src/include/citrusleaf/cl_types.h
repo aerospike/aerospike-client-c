@@ -128,6 +128,9 @@ typedef enum cl_rv_e {
     // Storage device(s) can't keep up with the current write load.
     CITRUSLEAF_FAIL_DEVICE_OVERLOAD			= 18,
 
+    // Record key sent with transaction did not match key stored on server.
+    CITRUSLEAF_FAIL_KEY_MISMATCH			= 19,
+
     // ???
     CITRUSLEAF_FAIL_INVALID_DATA              = 99,
 

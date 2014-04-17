@@ -93,6 +93,9 @@ as_status as_error_fromrc(as_error * err, cl_rv rc)
 	case CITRUSLEAF_FAIL_DEVICE_OVERLOAD:
 		ERR_ASSIGN(AEROSPIKE_ERR_DEVICE_OVERLOAD);
 		break;
+	case CITRUSLEAF_FAIL_KEY_MISMATCH:
+		ERR_ASSIGN(AEROSPIKE_ERR_RECORD_KEY_MISMATCH);
+		break;
 
 	// TODO - just guessing from here on down ... fill out correctly.
 

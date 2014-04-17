@@ -173,6 +173,11 @@ typedef enum as_status_e {
 	 */
 	AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE		= 606,
 
+	/**
+	 *	Record key sent with transaction did not match key stored on server.
+	 */
+	AEROSPIKE_ERR_RECORD_KEY_MISMATCH		= 607,
+
 	/***************************************************************************
 	 * XDR-SPECIFIC
 	 **************************************************************************/

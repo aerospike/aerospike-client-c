@@ -45,6 +45,7 @@
 #include <aerospike/as_record.h>
 #include <aerospike/as_serializer.h>
 #include <aerospike/as_string.h>
+#include <aerospike/as_udf_context.h>
 #include <aerospike/mod_lua.h>
 #include <aerospike/mod_lua_config.h>
 
@@ -1444,8 +1445,15 @@ cl_rv citrusleaf_query_foreach(cl_cluster * cluster, const cl_query * query, voi
         rc = cl_query_execute(cluster, query, &queue_stream, citrusleaf_query_foreach_callback_stream);
 
         if ( rc == CITRUSLEAF_OK ) {
+
+        	as_udf_context ctx = {
+        		.as = &as,
+        		.timer = NULL,
+        		.memtracker = NULL
+        	};
+
             // Apply the UDF to the result stream
-            rc = as_module_apply_stream(&mod_lua, &as, query->udf.filename, query->udf.function, &queue_stream, query->udf.arglist, &ostream);
+            rc = as_module_apply_stream(&mod_lua, &ctx, query->udf.filename, query->udf.function, &queue_stream, query->udf.arglist, &ostream);
         }
 
     }

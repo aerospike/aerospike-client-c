@@ -9,7 +9,7 @@ COMMON 		:= $(realpath modules/common)
 LUA_CORE 	:= $(realpath modules/lua-core)
 MOD_LUA 	:= $(realpath modules/mod-lua)
 MODULES 	:= BASE COMMON MOD_LUA
-
+LUA_DEBUG_HOOK  = 1
 # Override optimizations via: make O=n
 O = 3
 

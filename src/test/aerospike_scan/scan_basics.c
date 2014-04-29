@@ -537,7 +537,7 @@ TEST( scan_basics_background_delete_bins , "Apply scan to count num-records in S
 	as_status rc = aerospike_scan_foreach(as, &err, NULL, &scan, scan_check_callback, &check);
 	
 	assert_int_eq( rc, AEROSPIKE_OK );
-	assert_false( check.failed ); // searching for bin1 will work here
+	assert_false( check.failed );
 
 	assert_int_eq( check.count, NUM_RECS_SET1 );
 	debug("Got %d records in the scan. Expected %d", check.count, NUM_RECS_SET1);
@@ -559,7 +559,7 @@ TEST( scan_basics_background_delete_bins , "Apply scan to count num-records in S
 		.set = SET1,
 		.count = 0,
 		.nobindata = false,
-		.bins = { "bin1", "bin2", "bin3", NULL },
+		.bins = { NULL }, // look for all the bins 
 		.unique_tcount = 0
 	};
 	as_scan scan2;
@@ -569,7 +569,7 @@ TEST( scan_basics_background_delete_bins , "Apply scan to count num-records in S
 	rc = aerospike_scan_foreach(as, &err, NULL, &scan2, scan_check_callback, &check2);
 	
 	assert_int_eq( rc, AEROSPIKE_OK );
-	assert_true( check2.failed ); // searching for bin1 will no longer pass 
+	assert_false( check2.failed );  
 
 	assert_int_eq( check2.count,  NUM_RECS_SET1);
 	debug("Got %d records in the scan after deletion ", check.count);
@@ -586,7 +586,7 @@ TEST( scan_basics_background_delete_records , "Apply scan to count num-records i
 		.set = SET1,
 		.count = 0,
 		.nobindata = false,
-		.bins = { NULL, "bin2", "bin3", NULL },
+		.bins = { NULL }, // look for all the bins 
 		.unique_tcount = 0
 	};
 
@@ -614,7 +614,7 @@ TEST( scan_basics_background_delete_records , "Apply scan to count num-records i
 	debug("Got done with deletion of all the records in SET1. "); 
 
 	// We should let the background scan to finish
-	sleep(5);
+	sleep(10);
 
 	as_scan scan2;
 	as_scan_init(&scan2, NS, SET1);

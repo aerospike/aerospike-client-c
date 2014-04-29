@@ -373,7 +373,7 @@ bool as_record_set_strp(as_record * rec, const as_bin_name name, const char * va
  *
  *	@relates as_record
  */
-inline bool as_record_set_str(as_record * rec, const as_bin_name name, const char * value)
+static inline bool as_record_set_str(as_record * rec, const as_bin_name name, const char * value)
 {
 	return as_record_set_strp(rec, name, value, false);
 }
@@ -419,7 +419,7 @@ bool as_record_set_rawp(as_record * rec, const as_bin_name name, const uint8_t *
  *
  *	@relates as_record
  */
-inline bool as_record_set_raw(as_record * rec, const as_bin_name name, const uint8_t * value, uint32_t size)
+static inline bool as_record_set_raw(as_record * rec, const as_bin_name name, const uint8_t * value, uint32_t size)
 {
 	return as_record_set_rawp(rec, name, value, size, false);
 }
@@ -707,7 +707,7 @@ bool as_record_foreach(const as_record * rec, as_rec_foreach_callback callback, 
  *
  *	@relates as_record
  */
-inline as_val * as_record_toval(const as_record * rec) 
+static inline as_val * as_record_toval(const as_record * rec) 
 {
 	return (as_val *) rec;
 }
@@ -717,7 +717,7 @@ inline as_val * as_record_toval(const as_record * rec)
  *
  *	@relates as_record
  */
-inline as_record * as_record_fromval(const as_val * v) 
+static inline as_record * as_record_fromval(const as_val * v) 
 {
 	return (as_record *) as_util_fromval(v, AS_REC, as_rec);
 }

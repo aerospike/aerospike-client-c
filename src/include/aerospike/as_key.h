@@ -325,7 +325,7 @@ as_key * as_key_init_strp(as_key * key, const as_namespace ns, const as_set set,
  *	@relates as_key
  *	@ingroup as_key_object
  */
-inline as_key * as_key_init_str(as_key * key, const as_namespace ns, const as_set set, const char * value)
+static inline as_key * as_key_init_str(as_key * key, const as_namespace ns, const as_set set, const char * value)
 {
 	return as_key_init_strp(key, ns, set, value, false);
 }
@@ -382,7 +382,7 @@ as_key * as_key_init_rawp(as_key * key, const as_namespace ns, const as_set set,
  *	@relates as_key
  *	@ingroup as_key_object
  */
-inline as_key * as_key_init_raw(as_key * key, const as_namespace ns, const as_set set, const uint8_t * value, uint32_t size)
+static inline as_key * as_key_init_raw(as_key * key, const as_namespace ns, const as_set set, const uint8_t * value, uint32_t size)
 {
 	return as_key_init_rawp(key, ns, set, value, size, false);
 }
@@ -520,7 +520,7 @@ as_key * as_key_new_strp(const as_namespace ns, const as_set set, const char * v
  *	@relates as_key
  *	@ingroup as_key_object
  */
-inline as_key * as_key_new_str(const as_namespace ns, const as_set set, const char * value)
+static inline as_key * as_key_new_str(const as_namespace ns, const as_set set, const char * value)
 {
 	return as_key_new_strp(ns, set, value, false);
 }
@@ -575,7 +575,7 @@ as_key * as_key_new_rawp(const as_namespace ns, const as_set set, const uint8_t 
  *	@relates as_key
  *	@ingroup as_key_object
  */
-inline as_key * as_key_new_raw(const as_namespace ns, const as_set set, const uint8_t * value, uint32_t size)
+static inline as_key * as_key_new_raw(const as_namespace ns, const as_set set, const uint8_t * value, uint32_t size)
 {
 	return as_key_new_rawp(ns, set, value, size, false);
 }

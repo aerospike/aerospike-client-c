@@ -42,7 +42,7 @@ extern aerospike * as;
 typedef struct scan_check_s {
 	bool failed;
 	char * set;
-	bool nobindata;
+	bool nobindata; // flag to be set when you dont expect to get back any bins 
 	int count;
 	char * bins[10];
 	int unique_tcount;
@@ -517,6 +517,123 @@ TEST( scan_basics_background , "scan "SET2" in background to insert a new bin" )
 	as_scan_destroy(&scan2);
 }
 
+TEST( scan_basics_background_delete_bins , "Apply scan to count num-records in SET1, conditional-delete of bin1, verify that bin1 is gone" ) {
+
+	scan_check check = {
+		.failed = false,
+		.set = SET1,
+		.count = 0,
+		.nobindata = false,
+		.bins = { "bin1", "bin2", "bin3", NULL },
+		.unique_tcount = 0
+	};
+
+	as_error err;
+
+	as_scan scan;
+	as_scan_init(&scan, NS, SET1);
+	as_scan_set_concurrent(&scan, true);
+
+	as_status rc = aerospike_scan_foreach(as, &err, NULL, &scan, scan_check_callback, &check);
+	
+	assert_int_eq( rc, AEROSPIKE_OK );
+	assert_false( check.failed ); // searching for bin1 will work here
+
+	assert_int_eq( check.count, NUM_RECS_SET1 );
+	debug("Got %d records in the scan. Expected %d", check.count, NUM_RECS_SET1);
+
+	as_scan scan_del;
+	as_scan_init(&scan_del, NS, SET1);
+	as_scan_apply_each(&scan_del, "aerospike_scan_test", "scan_delete_bin", NULL);
+
+	uint64_t scanid = 0;
+	as_status udf_rc = aerospike_scan_background(as, &err, NULL, &scan_del, &scanid);
+	assert_int_eq( udf_rc, AEROSPIKE_OK );
+	debug("Got done with deletion of bin1 in SET1. "); 
+
+	// We should let the background scan to finish
+	sleep(5);
+
+	scan_check check2 = {
+		.failed = false,
+		.set = SET1,
+		.count = 0,
+		.nobindata = false,
+		.bins = { "bin1", "bin2", "bin3", NULL },
+		.unique_tcount = 0
+	};
+	as_scan scan2;
+	as_scan_init(&scan2, NS, SET1);
+	as_scan_set_concurrent(&scan2, true);
+
+	rc = aerospike_scan_foreach(as, &err, NULL, &scan2, scan_check_callback, &check2);
+	
+	assert_int_eq( rc, AEROSPIKE_OK );
+	assert_true( check2.failed ); // searching for bin1 will no longer pass 
+
+	assert_int_eq( check2.count,  NUM_RECS_SET1);
+	debug("Got %d records in the scan after deletion ", check.count);
+
+	as_scan_destroy(&scan);
+	as_scan_destroy(&scan_del);
+	as_scan_destroy(&scan2);
+}
+
+TEST( scan_basics_background_delete_records , "Apply scan to count num-records in SET1, delete some of them and verify the count after deletion" ) {
+
+	scan_check check = {
+		.failed = false,
+		.set = SET1,
+		.count = 0,
+		.nobindata = false,
+		.bins = { NULL, "bin2", "bin3", NULL },
+		.unique_tcount = 0
+	};
+
+	as_error err;
+
+	as_scan scan;
+	as_scan_init(&scan, NS, SET1);
+	as_scan_set_concurrent(&scan, true);
+
+	as_status rc = aerospike_scan_foreach(as, &err, NULL, &scan, scan_check_callback, &check);
+	
+	assert_int_eq( rc, AEROSPIKE_OK );
+	assert_false( check.failed );
+
+	assert_int_eq( check.count, NUM_RECS_SET1 );
+	debug("Got %d records in the scan. Expected %d", check.count, NUM_RECS_SET1);
+
+	as_scan scan_del;
+	as_scan_init(&scan_del, NS, SET1);
+	as_scan_apply_each(&scan_del, "aerospike_scan_test", "scan_delete_rec", NULL);
+
+	uint64_t scanid = 0;
+	as_status udf_rc = aerospike_scan_background(as, &err, NULL, &scan_del, &scanid);
+	assert_int_eq( udf_rc, AEROSPIKE_OK );
+	debug("Got done with deletion of all the records in SET1. "); 
+
+	// We should let the background scan to finish
+	sleep(5);
+
+	as_scan scan2;
+	as_scan_init(&scan2, NS, SET1);
+	as_scan_set_concurrent(&scan2, true);
+	check.count = 0; // reset the param from previous call and re-use 
+
+	rc = aerospike_scan_foreach(as, &err, NULL, &scan2, scan_check_callback, &check);
+	
+	assert_int_eq( rc, AEROSPIKE_OK );
+	assert_false( check.failed );
+
+	debug("Got %d records in the scan after deletion ", check.count);
+	assert_int_eq( check.count, 0 );
+
+	as_scan_destroy(&scan);
+	as_scan_destroy(&scan_del);
+	as_scan_destroy(&scan2);
+}
+
 TEST( scan_basics_background_sameid , "starting two udf scan of "SET2" in background with same scan-id" ) {
 
 	as_error err;
@@ -582,4 +699,6 @@ SUITE( scan_basics, "aerospike_scan basic tests" ) {
 	suite_add( scan_basics_set1_nodata );
 	suite_add( scan_basics_background );
 	suite_add( scan_basics_background_sameid );
+	suite_add( scan_basics_background_delete_bins );
+	suite_add( scan_basics_background_delete_records );
 }

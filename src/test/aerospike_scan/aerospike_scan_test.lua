@@ -20,6 +20,25 @@ function scan_getrec(record)
 	return record
 end
 
+function scan_delete_bin(record)
+	local x = record['bin1']
+
+	if (x < 10) then
+		x = nil
+        else
+		x = 123 
+        end
+
+	record['bin1'] = x
+	aerospike:update(record)
+	return true
+end
+
+function scan_delete_rec(record)
+	aerospike:remove(record)
+	return true
+end
+
 function scan_noop(record)
 	return true
 end

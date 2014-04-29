@@ -150,7 +150,7 @@ typedef struct as_error_s {
  *	@relates as_error
  *	@ingroup as_error_object
  */
-inline as_error * as_error_init(as_error * err) {
+static inline as_error * as_error_init(as_error * err) {
 	err->code = AEROSPIKE_OK;
 	err->message[0] = '\0';
 	err->func = NULL;
@@ -169,7 +169,7 @@ inline as_error * as_error_init(as_error * err) {
  *	@relates as_error
  *	@ingroup as_error_object
  */
-inline as_status as_error_reset(as_error * err) {
+static inline as_status as_error_reset(as_error * err) {
 	err->code = AEROSPIKE_OK;
 	err->message[0] = '\0';
 	err->func = NULL;
@@ -185,7 +185,7 @@ inline as_status as_error_reset(as_error * err) {
  *
  *	@relates as_error
  */
-inline as_status as_error_setall(as_error * err, as_status code, const char * message, const char * func, const char * file, uint32_t line) {
+static inline as_status as_error_setall(as_error * err, as_status code, const char * message, const char * func, const char * file, uint32_t line) {
 	err->code = code;
 	strncpy(err->message, message, AS_ERROR_MESSAGE_MAX_LEN);
 	err->message[AS_ERROR_MESSAGE_MAX_LEN] = '\0';
@@ -202,7 +202,7 @@ inline as_status as_error_setall(as_error * err, as_status code, const char * me
  *
  *	@relates as_error
  */
-inline as_status as_error_setallv(as_error * err, as_status code, const char * func, const char * file, uint32_t line, const char * fmt, ...) {
+static inline as_status as_error_setallv(as_error * err, as_status code, const char * func, const char * file, uint32_t line, const char * fmt, ...) {
 	if ( fmt != NULL ) {
 		va_list ap;
 		va_start(ap, fmt);
@@ -222,7 +222,7 @@ inline as_status as_error_setallv(as_error * err, as_status code, const char * f
  *
  *	@relates as_error
  */
-inline as_status as_error_set(as_error * err, as_status code, const char * fmt, ...) {
+static inline as_status as_error_set(as_error * err, as_status code, const char * fmt, ...) {
 	if ( fmt != NULL ) {
 		va_list ap;
 		va_start(ap, fmt);

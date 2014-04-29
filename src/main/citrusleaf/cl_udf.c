@@ -48,6 +48,7 @@
  * Mapping between string udf type and integer type
  */
 #define MAX_UDF_TYPE 1
+#define UDF_TYPE_LUA 0 
 char * cl_udf_type_str[] = {"LUA", 0};
 
 /******************************************************************************
@@ -557,7 +558,7 @@ cl_rv citrusleaf_udf_put(cl_cluster *asc, const char * filename, as_bytes *conte
 	const char * filebase = as_basename(&filename_string, filename);
 
 	int  clen = content->size;
-	if (udf_type < 0 || udf_type > (MAX_UDF_TYPE - 1))
+	if (udf_type != UDF_TYPE_LUA)
 	{
 		fprintf(stderr, "Invalid UDF type");
 		as_string_destroy(&filename_string);

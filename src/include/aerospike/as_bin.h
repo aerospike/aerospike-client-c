@@ -140,7 +140,7 @@ typedef struct as_bins_s {
  *
  *	@relates as_bin
  */
-inline char * as_bin_get_name(const as_bin * bin) {
+static inline char * as_bin_get_name(const as_bin * bin) {
 	return (char *) bin->name;
 }
 
@@ -158,7 +158,7 @@ inline char * as_bin_get_name(const as_bin * bin) {
  *
  *	@relates as_bin
  */
-inline as_bin_value * as_bin_get_value(const as_bin * bin) {
+static inline as_bin_value * as_bin_get_value(const as_bin * bin) {
 	return bin->valuep;
 }
 
@@ -176,7 +176,7 @@ inline as_bin_value * as_bin_get_value(const as_bin * bin) {
  *
  *	@relates as_bin
  */
-inline as_val_t as_bin_get_type(const as_bin * bin) {
+static inline as_val_t as_bin_get_type(const as_bin * bin) {
 	return as_val_type(bin->valuep);
 }
 

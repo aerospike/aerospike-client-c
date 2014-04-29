@@ -206,7 +206,7 @@ void as_batch_destroy(as_batch * batch);
  *	@relates as_batch
  *	@ingroup batch_object
  */
-inline as_key * as_batch_keyat(const as_batch * batch, uint32_t i)
+static inline as_key * as_batch_keyat(const as_batch * batch, uint32_t i)
 {
 	return (batch != NULL && batch->keys.entries != NULL && batch->keys.size > i) ? &batch->keys.entries[i] : NULL;
 }

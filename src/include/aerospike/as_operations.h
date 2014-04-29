@@ -447,7 +447,7 @@ bool as_operations_add_write_strp(as_operations * ops, const as_bin_name name, c
  *	@relates as_operations
  *	@ingroup as_operations_object
  */
-inline bool as_operations_add_write_str(as_operations * ops, const as_bin_name name, const char * value)
+static inline bool as_operations_add_write_str(as_operations * ops, const as_bin_name name, const char * value)
 {
 	return as_operations_add_write_strp(ops, name, value, false);
 }
@@ -481,7 +481,7 @@ bool as_operations_add_write_rawp(as_operations * ops, const as_bin_name name, c
  *	@relates as_operations
  *	@ingroup as_operations_object
  */
-inline bool as_operations_add_write_raw(as_operations * ops, const as_bin_name name, const uint8_t * value, uint32_t size)
+static inline bool as_operations_add_write_raw(as_operations * ops, const as_bin_name name, const uint8_t * value, uint32_t size)
 {
 	return as_operations_add_write_rawp(ops, name, value, size, false);
 }
@@ -540,7 +540,7 @@ bool as_operations_add_prepend_strp(as_operations * ops, const as_bin_name name,
  *	@relates as_operations
  *	@ingroup as_operations_object
  */
-inline bool as_operations_add_prepend_str(as_operations * ops, const as_bin_name name, const char * value)
+static inline bool as_operations_add_prepend_str(as_operations * ops, const as_bin_name name, const char * value)
 {
 	return as_operations_add_prepend_strp(ops, name, value, false);
 }
@@ -574,7 +574,7 @@ bool as_operations_add_prepend_rawp(as_operations * ops, const as_bin_name name,
  *	@relates as_operations
  *	@ingroup as_operations_object
  */
-inline bool as_operations_add_prepend_raw(as_operations * ops, const as_bin_name name, const uint8_t * value, uint32_t size)
+static inline bool as_operations_add_prepend_raw(as_operations * ops, const as_bin_name name, const uint8_t * value, uint32_t size)
 {
 	return as_operations_add_prepend_rawp(ops, name, value, size, false);
 }
@@ -606,7 +606,7 @@ bool as_operations_add_append_strp(as_operations * ops, const as_bin_name name, 
  *	@relates as_operations
  *	@ingroup as_operations_object
  */
-inline bool as_operations_add_append_str(as_operations * ops, const as_bin_name name, const char * value)
+static inline bool as_operations_add_append_str(as_operations * ops, const as_bin_name name, const char * value)
 {
 	return as_operations_add_append_strp(ops, name, value, false);
 }
@@ -640,7 +640,7 @@ bool as_operations_add_append_rawp(as_operations * ops, const as_bin_name name, 
  *	@relates as_operations
  *	@ingroup as_operations_object
  */
-inline bool as_operations_add_append_raw(as_operations * ops, const as_bin_name name, const uint8_t * value, uint32_t size)
+static inline bool as_operations_add_append_raw(as_operations * ops, const as_bin_name name, const uint8_t * value, uint32_t size)
 {
 	return as_operations_add_append_rawp(ops, name, value, size, false);
 }

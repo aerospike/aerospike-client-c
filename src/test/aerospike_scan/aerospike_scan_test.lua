@@ -34,6 +34,13 @@ function scan_delete_bin(record)
 	return true
 end
 
+function scan_dummy_read_update_rec(record)
+	local x = record['bin1']
+	record['bin1'] = x
+	aerospike:update(record)
+	return true
+end
+
 function scan_delete_rec(record)
 	aerospike:remove(record)
 	return true

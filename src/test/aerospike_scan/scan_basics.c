@@ -2,6 +2,7 @@
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_scan.h>
 #include <aerospike/aerospike_key.h>
+#include <aerospike/aerospike_info.h>
 
 #include <aerospike/as_error.h>
 #include <aerospike/as_status.h>
@@ -517,6 +518,56 @@ TEST( scan_basics_background , "scan "SET2" in background to insert a new bin" )
 	as_scan_destroy(&scan2);
 }
 
+static bool scan_udf_info_callback(const as_error * err, const as_node * node, const char * req, char * res, void * udata) {
+        if ( err->code != AEROSPIKE_OK ) {
+                debug("UDF_CALLBACK Error: (%d) %s - node=%s response=%s\n", err->code, err->message, node ? node->name : "NULL", res);
+        }
+        else {
+                if ( res == NULL || strlen(res) == 0 ) {
+                        return true;
+                }
+
+                char * start_resp = strchr(res, '\t');
+
+                if ( start_resp == NULL || strlen(start_resp) == 0 ) {
+                        return true;
+                }
+
+                char print_resp[128]; 
+		strncpy(print_resp, start_resp, 127); 		
+	 	debug("%s", print_resp); 
+	}
+
+	return true;
+}
+
+TEST( scan_basics_background_poll_job_status , " Start a UDF scan job in the background and poll for job-status" ) {
+
+	as_error err;
+
+	as_scan scan;
+	as_scan_init(&scan, NS, "");
+
+	as_scan_apply_each(&scan, "aerospike_scan_test", "scan_dummy_read_update_rec", NULL);
+
+	uint64_t scanid = 0;
+	as_status udf_rc = aerospike_scan_background(as, &err, NULL, &scan, &scanid);
+	
+	assert_int_eq( udf_rc, AEROSPIKE_OK );
+
+	as_status rc = AEROSPIKE_OK;
+	as_error cb_err;
+        
+	for(int i = 0; i < 5; i++){
+		as_error_reset(&cb_err);
+		rc = aerospike_info_foreach(as, &cb_err, NULL, "jobs:module=scan", scan_udf_info_callback, NULL);
+		sleep(1);
+	}
+
+	as_scan_destroy(&scan);
+
+}
+
 TEST( scan_basics_background_delete_bins , "Apply scan to count num-records in SET1, conditional-delete of bin1, verify that bin1 is gone" ) {
 
 	scan_check check = {
@@ -699,6 +750,7 @@ SUITE( scan_basics, "aerospike_scan basic tests" ) {
 	suite_add( scan_basics_set1_nodata );
 	suite_add( scan_basics_background );
 	suite_add( scan_basics_background_sameid );
+	suite_add( scan_basics_background_poll_job_status );
 	suite_add( scan_basics_background_delete_bins );
 	suite_add( scan_basics_background_delete_records );
 }

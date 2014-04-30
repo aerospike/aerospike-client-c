@@ -148,9 +148,9 @@ static int simplescan_cb(char *ns, cf_digest *keyd, char *set, cl_object *key,
 	bridge->callback((as_val *) rec, bridge->udata);
 
 	// The responsibility to free the bins is on the called callback function
-    if( bins->object.type == CL_MAP || bins->object.type == CL_LIST) {
-  	    citrusleaf_bins_free(bins, (int)n_bins);
-    }
+	// In scan case, only LIST & MAP will have an active free
+
+	citrusleaf_bins_free(bins, (int)n_bins);
 	// release the record
 	as_record_destroy(rec);
 

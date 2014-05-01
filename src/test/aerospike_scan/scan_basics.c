@@ -519,25 +519,34 @@ TEST( scan_basics_background , "scan "SET2" in background to insert a new bin" )
 }
 
 static bool scan_udf_info_callback(const as_error * err, const as_node * node, const char * req, char * res, void * udata) {
+
+	if (!err) {
+		goto done;
+	}
+
         if ( err->code != AEROSPIKE_OK ) {
                 debug("UDF_CALLBACK Error: (%d) %s - node=%s response=%s\n", err->code, err->message, node ? node->name : "NULL", res);
         }
         else {
                 if ( res == NULL || strlen(res) == 0 ) {
-                        return true;
+                        goto done;
                 }
 
                 char * start_resp = strchr(res, '\t');
 
                 if ( start_resp == NULL || strlen(start_resp) == 0 ) {
-                        return true;
+                        goto done;
                 }
 
                 char print_resp[128]; 
 		strncpy(print_resp, start_resp, 127); 		
-	 	debug("%s", print_resp); 
+	 	debug("%s", print_resp);
 	}
-
+done:
+	if (res) {
+		free(res);
+		res =  NULL;
+	}
 	return true;
 }
 

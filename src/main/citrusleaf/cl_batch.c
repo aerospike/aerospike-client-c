@@ -616,7 +616,7 @@ batch_worker_fn(void* pv_asc)
 }
 
 
-#define MAX_NODES 32
+#define MAX_NODES 128
 
 
 cl_rv

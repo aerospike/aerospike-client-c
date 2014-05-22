@@ -51,6 +51,13 @@ cf_socket_write_forever(int fd, uint8_t *buf, size_t buf_len);
 
 extern void
 cf_print_sockaddr_in(char *prefix, struct sockaddr_in *sa_in);
+
+static inline void
+as_socket_address_name(struct sockaddr_in* address, char* name)
+{
+	inet_ntop(AF_INET, &(address->sin_addr), name, INET_ADDRSTRLEN);
+}
+
 #endif
 
 #if defined(__APPLE__)

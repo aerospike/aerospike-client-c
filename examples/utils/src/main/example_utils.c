@@ -281,27 +281,28 @@ example_connect_to_aerospike_with_udf_config(aerospike* p_as,
 	cfg.hosts[0].addr = g_host;
 	cfg.hosts[0].port = g_port;
 
-	// Examples can be run from binary package installation of lua files or from
-	// git source tree.  If default aerospike binary package not installed, look
-	// for lua system files in source tree.
+	// Examples can be run from client binary package-installed lua files or
+	// from git client source tree lua files. If client binary package is not
+	// installed, look for lua system files in client source tree.
 	int rc = access(cfg.lua.system_path, R_OK);
-	
+
 	if (rc != 0) {
 		// Use lua files in source tree if they exist.
 		char* path = "../../../modules/lua-core/src";
+
 		rc = access(path, R_OK);
-		
+
 		if (rc == 0) {
 			strcpy(cfg.lua.system_path, path);
 		}
 	}
-	
+
 	if (lua_user_path) {
 		strcpy(cfg.lua.user_path, lua_user_path);
 	}
 
 	aerospike_init(p_as, &cfg);
-	
+
 	as_error err;
 
 	// Connect to the Aerospike database cluster. Assume this is the first thing

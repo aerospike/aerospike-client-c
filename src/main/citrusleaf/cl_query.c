@@ -759,8 +759,8 @@ static int cl_query_worker_do(cl_cluster_node * node, cl_query_task * task) {
 
             // parse through the fields
             cf_digest       keyd;
-            char            ns_ret[33]  = {0};
-            char           	set_ret[65] = {0};
+            char            ns_ret[AS_NAMESPACE_MAX_SIZE] = {0};
+            char           	set_ret[AS_SET_MAX_SIZE] = {0};
             cl_msg_field *  mf          = (cl_msg_field *)buf;
 
             for (int i=0; i < msg->n_fields; i++) {
@@ -918,13 +918,12 @@ static int cl_query_worker_do(cl_cluster_node * node, cl_query_task * task) {
 				rc = CITRUSLEAF_OK;
             }
 
-            // if done free stack allocated stuff
-            if (done) {
-                if (free_bins) {
-                    free(bins);
-                    bins = 0;
-                }
-            }
+			citrusleaf_bins_free(bins, (int)msg->n_ops);
+
+			if (free_bins) {
+				free(bins);
+				bins = 0;
+			}
 
             // don't have to free object internals. They point into the read buffer, where
             // a pointer is required

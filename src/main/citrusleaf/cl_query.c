@@ -760,7 +760,7 @@ static int cl_query_worker_do(cl_cluster_node * node, cl_query_task * task) {
             // parse through the fields
             cf_digest       keyd;
             char            ns_ret[33]  = {0};
-            char *          set_ret     = NULL;
+            char           	set_ret[65] = {0};
             cl_msg_field *  mf          = (cl_msg_field *)buf;
 
             for (int i=0; i < msg->n_fields; i++) {
@@ -796,7 +796,6 @@ static int cl_query_worker_do(cl_cluster_node * node, cl_query_task * task) {
                 }
                 else if (mf->type == CL_MSG_FIELD_TYPE_SET) {
                     uint32_t set_name_len = cl_msg_field_get_value_sz(mf);
-                    set_ret = (char *)malloc(set_name_len + 1);
                     memcpy(set_ret, mf->data, set_name_len);
                     set_ret[ set_name_len ] = '\0';
                 }
@@ -814,9 +813,6 @@ static int cl_query_worker_do(cl_cluster_node * node, cl_query_task * task) {
             }
 
             if (bins == NULL) {
-                if (set_ret) {
-                    free(set_ret);
-                }
                 return CITRUSLEAF_FAIL_CLIENT;
             }
 
@@ -927,11 +923,6 @@ static int cl_query_worker_do(cl_cluster_node * node, cl_query_task * task) {
                 if (free_bins) {
                     free(bins);
                     bins = 0;
-                }
-
-                if (set_ret) {
-                    free(set_ret);
-                    set_ret = NULL;
                 }
             }
 

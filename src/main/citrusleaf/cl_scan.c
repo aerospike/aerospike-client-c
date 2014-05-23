@@ -31,6 +31,8 @@
 #include <zlib.h>
 #include <time.h> // for job ID
 
+#include <aerospike/as_key.h>
+
 #include <citrusleaf/cf_atomic.h>
 #include <citrusleaf/cf_byte_order.h>
 #include <citrusleaf/cf_client_rc.h>
@@ -231,8 +233,8 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 
 			// parse through the fields
 			cf_digest *keyd = 0;
-			char ns_ret[33] = {0};
-			char *set_ret = NULL;
+			char ns_ret[AS_NAMESPACE_MAX_SIZE] = {0};
+			char set_ret[AS_SET_MAX_SIZE] = {0};
 			cl_object key;
 			citrusleaf_object_init_null(&key);
 
@@ -271,7 +273,6 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 				}
 				else if (mf->type == CL_MSG_FIELD_TYPE_SET) {
 					uint32_t set_name_len = cl_msg_field_get_value_sz(mf);
-					set_ret = (char *)malloc(set_name_len + 1);
 					memcpy(set_ret, mf->data, set_name_len);
 					set_ret[ set_name_len ] = '\0';
 				}
@@ -292,9 +293,6 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 				bins_local = stack_bins;
 			}
 			if (bins_local == NULL) {
-				if (set_ret) {
-					free(set_ret);
-				}
 				cf_close(fd);
 				return (-1);
 			}
@@ -348,11 +346,6 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 			if (bins_local != stack_bins) {
 				free(bins_local);
 				bins_local = 0;
-			}
-
-			if (set_ret) {
-				free(set_ret);
-				set_ret = NULL;
 			}
 
 			// don't have to free object internals. They point into the read buffer, where

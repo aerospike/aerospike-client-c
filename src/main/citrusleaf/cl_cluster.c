@@ -1192,7 +1192,8 @@ cl_cluster_node_get_info(cl_cluster_node* cn, const char* names,
 	}
 
 	// Allocate a buffer if the response is bigger than the stack buffer -
-	// caller must free it if this call succeeds.
+	// caller must free it if this call succeeds. Note that proto is overwritten
+	// if stack_buf is used, so we save the sz field here.
 	size_t proto_sz = proto->sz;
 	uint8_t* rbuf = proto_sz >= INFO_STACK_BUF_SIZE ? (uint8_t*)malloc(proto_sz + 1) : stack_buf;
 
@@ -1203,7 +1204,7 @@ cl_cluster_node_get_info(cl_cluster_node* cn, const char* names,
 	}
 
 	// Read the response body.
-	if (cf_socket_read_timeout(cn->info_fd, rbuf, proto->sz, 0, timeout_ms) != 0) {
+	if (cf_socket_read_timeout(cn->info_fd, rbuf, proto_sz, 0, timeout_ms) != 0) {
 		cf_debug("node %s failed info socket read body", cn->name);
 		cl_cluster_node_close_info_fd(cn);
 

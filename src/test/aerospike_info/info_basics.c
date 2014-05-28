@@ -56,11 +56,6 @@ static bool info_compare(const as_error * err, const as_node * node, const char 
 		data->matches += strcmp(data->actual, res) == 0 ? 1 : 0;
 	}
 
-	if(res) {
-		free(res);
-		res =  NULL;
-	}
-
 	return true;
 }
 

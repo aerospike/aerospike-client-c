@@ -50,7 +50,7 @@
 
 /**
  *	This callback will be called with the results of aerospike_batch_get(),
- *	aerospike_batch_select(), or aerospike_batch_exists() functions.
+ *	or aerospike_batch_exists() functions.
  *
  * 	The `results` argument will be an array of `n` as_batch_read entries. The
  * 	`results` argument is on the stack and is only available within the context

@@ -1193,7 +1193,8 @@ cl_cluster_node_get_info(cl_cluster_node* cn, const char* names,
 
 	// Allocate a buffer if the response is bigger than the stack buffer -
 	// caller must free it if this call succeeds.
-	uint8_t* rbuf = proto->sz >= INFO_STACK_BUF_SIZE ? (uint8_t*)malloc(proto->sz + 1) : stack_buf;
+	size_t proto_sz = proto->sz;
+	uint8_t* rbuf = proto_sz >= INFO_STACK_BUF_SIZE ? (uint8_t*)malloc(proto_sz + 1) : stack_buf;
 
 	if (! rbuf) {
 		cf_error("node %s failed allocation for info response", cn->name);
@@ -1214,7 +1215,7 @@ cl_cluster_node_get_info(cl_cluster_node* cn, const char* names,
 	}
 
 	// Null-terminate the response body and return it.
-	rbuf[proto->sz] = 0;
+	rbuf[proto_sz] = 0;
 
 	return rbuf;
 }

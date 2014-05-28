@@ -524,29 +524,23 @@ static bool scan_udf_info_callback(const as_error * err, const as_node * node, c
 		goto done;
 	}
 
-        if ( err->code != AEROSPIKE_OK ) {
-                debug("UDF_CALLBACK Error: (%d) %s - node=%s response=%s\n", err->code, err->message, node ? node->name : "NULL", res);
-        }
-        else {
-                if ( res == NULL || strlen(res) == 0 ) {
-                        goto done;
-                }
+	if ( err->code != AEROSPIKE_OK ) {
+		debug("UDF_CALLBACK Error: (%d) %s - node=%s response=%s\n", err->code, err->message, node ? node->name : "NULL", res);
+	}
+	else {
+		if ( res == NULL || strlen(res) == 0 ) {
+			goto done;
+		}
+		char * start_resp = strchr(res, '\t');
 
-                char * start_resp = strchr(res, '\t');
-
-                if ( start_resp == NULL || strlen(start_resp) == 0 ) {
-                        goto done;
-                }
-
-                char print_resp[128]; 
+		if ( start_resp == NULL || strlen(start_resp) == 0 ) {
+			goto done;
+		}
+		char print_resp[128];
 		strncpy(print_resp, start_resp, 127); 		
 	 	debug("%s", print_resp);
 	}
 done:
-	if (res) {
-		free(res);
-		res =  NULL;
-	}
 	return true;
 }
 

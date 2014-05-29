@@ -187,6 +187,10 @@ insert_records(aerospike* p_as)
 	for (uint32_t i = 0; i < g_n_keys; i++) {
 		as_error err;
 
+		// Set up a default as_policy_write object.
+		as_policy_write wpol;
+		as_policy_write_init(&wpol);
+
 		// No need to destroy a stack as_key object, if we only use
 		// as_key_init_int64().
 		as_key key;
@@ -198,16 +202,25 @@ insert_records(aerospike* p_as)
 		if (i < 10) {
 			// Only write one bin in the first ten records.
 			as_record_set_int64(&rec, "test-bin-1", (int64_t)i);
+
+			// By default, we don't store the key with the record in the
+			// database. For these records, the key will not be returned in the
+			// scan callback.
 		}
 		else {
 			// Write three bins in all remaining records.
 			as_record_set_int64(&rec, "test-bin-1", (int64_t)i);
 			as_record_set_int64(&rec, "test-bin-2", (int64_t)(100 + i));
 			as_record_set_int64(&rec, "test-bin-3", (int64_t)(1000 + i));
+
+			// If we want the key to be returned in the scan callback, we must
+			// store it with the record in the database. AS_POLICY_KEY_SEND
+			// causes the key to be stored.
+			wpol.key = AS_POLICY_KEY_SEND;
 		}
 
 		// Write a record to the database.
-		if (aerospike_key_put(p_as, &err, NULL, &key, &rec) != AEROSPIKE_OK) {
+		if (aerospike_key_put(p_as, &err, &wpol, &key, &rec) != AEROSPIKE_OK) {
 			LOG("aerospike_key_put() returned %d - %s", err.code, err.message);
 			return false;
 		}

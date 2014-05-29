@@ -39,13 +39,13 @@ TEST( policy_read_resolve_1 , "resolve: global.read (init)" )
 	assert_int_ne(resolved.timeout, global.read.timeout);
 }
 
-TEST( policy_read_resolve_2 , "resolve: global.read.timeout=10, global.read.key=AS_POLICY_KEY_STORE" )
+TEST( policy_read_resolve_2 , "resolve: global.read.timeout=10, global.read.key=AS_POLICY_KEY_SEND" )
 {
 	as_policies global;
 	as_policies_init(&global);
 
 	global.read.timeout = 10;
-	global.read.key = AS_POLICY_KEY_STORE;
+	global.read.key = AS_POLICY_KEY_SEND;
 
 	as_policy_read resolved;
 
@@ -60,7 +60,7 @@ TEST( policy_read_resolve_2 , "resolve: global.read.timeout=10, global.read.key=
 	assert_int_eq(resolved.key, global.read.key);
 }
 
-TEST( policy_read_resolve_3 , "resolve: local.timeout=10, local.key=AS_POLICY_KEY_STORE" )
+TEST( policy_read_resolve_3 , "resolve: local.timeout=10, local.key=AS_POLICY_KEY_SEND" )
 {
 	as_policies global;
 	as_policies_init(&global);
@@ -69,7 +69,7 @@ TEST( policy_read_resolve_3 , "resolve: local.timeout=10, local.key=AS_POLICY_KE
 	as_policy_read_init(&local);
 
 	local.timeout = 10;
-	local.key = AS_POLICY_KEY_STORE;
+	local.key = AS_POLICY_KEY_SEND;
 
 	as_policy_read resolved;
 
@@ -86,7 +86,7 @@ TEST( policy_read_resolve_3 , "resolve: local.timeout=10, local.key=AS_POLICY_KE
 	assert_int_ne(resolved.key, global.read.key);
 }
 
-TEST( policy_read_resolve_4 , "resolve: global.read.timeout=100, global.read.key=AS_POLICY_KEY_SEND, local.timeout=10, local.key=AS_POLICY_KEY_STORE" )
+TEST( policy_read_resolve_4 , "resolve: global.read.timeout=100, global.read.key=AS_POLICY_KEY_SEND, local.timeout=10, local.key=AS_POLICY_KEY_DIGEST" )
 {
 	as_policies global;
 	as_policies_init(&global);
@@ -98,7 +98,7 @@ TEST( policy_read_resolve_4 , "resolve: global.read.timeout=100, global.read.key
 	as_policy_read_init(&local);
 
 	local.timeout = 10;
-	local.key = AS_POLICY_KEY_STORE;
+	local.key = AS_POLICY_KEY_DIGEST;
 
 	as_policy_read resolved;
 

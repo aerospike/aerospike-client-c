@@ -51,7 +51,7 @@ cl_rv citrusleaf_get_all_digest_getsetname(cl_cluster *asc, const char *ns, cons
 /**
  * Put is like insert. Create a list of bins, and call this function to set them.
  */
-cl_rv citrusleaf_put(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, bool check_key, const cf_digest *d, const cl_bin *bins, int n_bins, const cl_write_parameters *cl_w_p);
+cl_rv citrusleaf_put(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, const cf_digest *d, const cl_bin *bins, int n_bins, const cl_write_parameters *cl_w_p);
 cl_rv citrusleaf_put_digest(cl_cluster *asc, const char *ns, const cf_digest *d, const cl_bin *bins, int n_bins, const cl_write_parameters *cl_w_p);
 cl_rv citrusleaf_put_digest_with_setname(cl_cluster *asc, const char *ns, const char *set, const cf_digest *d, const cl_bin *bins, int n_bins, const cl_write_parameters *cl_w_p);
 cl_rv citrusleaf_restore(cl_cluster *asc, const char *ns, const cf_digest *digest, const char *set, const cl_bin *values, int n_values, const cl_write_parameters *cl_w_p);

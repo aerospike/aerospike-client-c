@@ -54,6 +54,94 @@ typedef struct scan_check_s {
  * STATIC FUNCTIONS
  *****************************************************************************/
 
+static bool scan_udf_job_status_callback(const as_error * err, const as_node * node, const char * req, char * res, void * udata) {
+
+	bool * ret_flag = (bool *)udata; 
+
+	if (!err) {
+		goto done;
+	}
+
+	if ( err->code != AEROSPIKE_OK ) {
+		debug("UDF_CALLBACK Error: (%d) %s - node=%s response=%s\n", err->code, err->message, node ? node->name : "NULL", res);
+	}
+	else {
+		if ( res == NULL || strlen(res) == 0 ) {
+			goto done;
+		}
+		char * start_resp = strchr(res, '\t');
+
+		if ( start_resp == NULL || strlen(start_resp) == 0 ) {
+			goto done;
+		}
+		
+		char *str_index = "status="; 
+
+		start_resp = strstr(start_resp, str_index); 
+		start_resp = start_resp + 7; 
+
+		char *str_status = "IN_PROGRESS";
+
+		if (strcmp(start_resp, str_status) >= 0) {
+			*ret_flag = false; 
+		} else {
+			// For any other status such as DONE, ABORTED etc, return true; 
+			*ret_flag = true; 
+		}
+	}
+done:
+	return *ret_flag;
+}
+
+/* This function returns only when a scan-job moves out of "IN_PROGRESS" state
+ * into either "DONE" or "ABORTED" or "TIMEDOUT" state. */
+
+static void wait_for_scan_job_done(uint64_t scanid)
+{
+	as_error cb_err; 
+	as_status rv = AEROSPIKE_OK;
+	bool job_done_flag = false; 
+	char scan_query_str[128]; 
+	sprintf(scan_query_str, "jobs:module=scan;cmd=get-job;trid=%"PRIu64"", scanid); 
+	// debug(" scan_query_str is %s", scan_query_str); 
+
+	while (!job_done_flag) {
+	        job_done_flag = false; 
+		as_error_reset(&cb_err);
+		rv = AEROSPIKE_OK;
+		rv = aerospike_info_foreach(as, &cb_err, NULL, scan_query_str, scan_udf_job_status_callback, &job_done_flag);
+		sleep(1);
+	}
+	
+	return; 
+}
+
+static bool scan_udf_info_callback(const as_error * err, const as_node * node, const char * req, char * res, void * udata) {
+
+	if (!err) {
+		goto done;
+	}
+
+	if ( err->code != AEROSPIKE_OK ) {
+		debug("UDF_CALLBACK Error: (%d) %s - node=%s response=%s\n", err->code, err->message, node ? node->name : "NULL", res);
+	}
+	else {
+		if ( res == NULL || strlen(res) == 0 ) {
+			goto done;
+		}
+		char * start_resp = strchr(res, '\t');
+
+		if ( start_resp == NULL || strlen(start_resp) == 0 ) {
+			goto done;
+		}
+		char print_resp[128];
+		strncpy(print_resp, start_resp, 127); 		
+	 	debug("%s", print_resp);
+	}
+done:
+	return true;
+}
+
 static int check_bin1(as_record * rec, scan_check * check)
 {
 	as_val * bin = (as_val *) as_record_get(rec, "bin1");
@@ -481,7 +569,8 @@ TEST( scan_basics_set1_nodata , "scan "SET1" with no-bin-data" ) {
 	as_scan_destroy(&scan);
 }
 
-TEST( scan_basics_background , "scan "SET2" in background to insert a new bin" ) {
+
+TEST( scan_basics_background , "scan "SET1" in background to insert a new bin" ) {
 
 	scan_check check = {
 		.failed = false,
@@ -499,11 +588,10 @@ TEST( scan_basics_background , "scan "SET2" in background to insert a new bin" )
 
 	uint64_t scanid = 0;
 	as_status udf_rc = aerospike_scan_background(as, &err, NULL, &scan, &scanid);
-	
+
 	assert_int_eq( udf_rc, AEROSPIKE_OK );
 
-	// We should let the background scan to finish
-	sleep(2);
+        wait_for_scan_job_done(scanid); 
 
 	// See if the above udf ran fine
 	as_scan scan2;
@@ -516,32 +604,6 @@ TEST( scan_basics_background , "scan "SET2" in background to insert a new bin" )
 
 	as_scan_destroy(&scan);
 	as_scan_destroy(&scan2);
-}
-
-static bool scan_udf_info_callback(const as_error * err, const as_node * node, const char * req, char * res, void * udata) {
-
-	if (!err) {
-		goto done;
-	}
-
-	if ( err->code != AEROSPIKE_OK ) {
-		debug("UDF_CALLBACK Error: (%d) %s - node=%s response=%s\n", err->code, err->message, node ? node->name : "NULL", res);
-	}
-	else {
-		if ( res == NULL || strlen(res) == 0 ) {
-			goto done;
-		}
-		char * start_resp = strchr(res, '\t');
-
-		if ( start_resp == NULL || strlen(start_resp) == 0 ) {
-			goto done;
-		}
-		char print_resp[128];
-		strncpy(print_resp, start_resp, 127); 		
-	 	debug("%s", print_resp);
-	}
-done:
-	return true;
 }
 
 TEST( scan_basics_background_poll_job_status , " Start a UDF scan job in the background and poll for job-status" ) {
@@ -560,7 +622,8 @@ TEST( scan_basics_background_poll_job_status , " Start a UDF scan job in the bac
 
 	as_status rc = AEROSPIKE_OK;
 	as_error cb_err;
-        
+       
+	debug("    This is a UDF Background Scan job-polling test .. ");  
 	for(int i = 0; i < 5; i++){
 		as_error_reset(&cb_err);
 		rc = aerospike_info_foreach(as, &cb_err, NULL, "jobs:module=scan", scan_udf_info_callback, NULL);
@@ -602,11 +665,12 @@ TEST( scan_basics_background_delete_bins , "Apply scan to count num-records in S
 
 	uint64_t scanid = 0;
 	as_status udf_rc = aerospike_scan_background(as, &err, NULL, &scan_del, &scanid);
-	assert_int_eq( udf_rc, AEROSPIKE_OK );
-	debug("Got done with deletion of bin1 in SET1. "); 
 
-	// We should let the background scan to finish
-	sleep(5);
+	assert_int_eq( udf_rc, AEROSPIKE_OK );
+
+        wait_for_scan_job_done(scanid); 
+
+	debug("Got done with deletion of bin1 in SET1. "); 
 
 	scan_check check2 = {
 		.failed = false,
@@ -664,11 +728,12 @@ TEST( scan_basics_background_delete_records , "Apply scan to count num-records i
 
 	uint64_t scanid = 0;
 	as_status udf_rc = aerospike_scan_background(as, &err, NULL, &scan_del, &scanid);
-	assert_int_eq( udf_rc, AEROSPIKE_OK );
-	debug("Got done with deletion of all the records in SET1. "); 
 
-	// We should let the background scan to finish
-	sleep(10);
+	assert_int_eq( udf_rc, AEROSPIKE_OK );
+
+        wait_for_scan_job_done(scanid); 
+
+	debug("Got done with deletion of all the records in SET1. "); 
 
 	as_scan scan2;
 	as_scan_init(&scan2, NS, SET1);
@@ -699,17 +764,21 @@ TEST( scan_basics_background_sameid , "starting two udf scan of "SET2" in backgr
 
 	uint64_t scanid = 0;
 	as_status udf_rc = aerospike_scan_background(as, &err, NULL, &scan, &scanid);
-	
+
 	assert_int_eq( udf_rc, AEROSPIKE_OK );
 
+        wait_for_scan_job_done(scanid);
+ 
 	as_scan scan2;
 	as_scan_init(&scan2, NS, SET2);
 	as_scan_apply_each(&scan2, "aerospike_scan_test", "scan_noop", NULL);
 
 	uint64_t scanid2 = scanid;
 	as_status udf_rc2 = aerospike_scan_background(as, &err, NULL, &scan2, &scanid2);
-	
+
 	assert_int_eq( udf_rc2, AEROSPIKE_ERR_SERVER );
+
+        wait_for_scan_job_done(scanid2); 
 
 	as_scan_destroy(&scan);
 	as_scan_destroy(&scan2);
@@ -743,8 +812,8 @@ SUITE( scan_basics, "aerospike_scan basic tests" ) {
 
 	// For the cluster to settle as it is important for the per-node testcases
 	sleep(1);
-    suite_before( before );
-    suite_after( after );
+    	suite_before( before );
+   	suite_after( after );
 
 	suite_add( scan_basics_null_set );
 	suite_add( scan_basics_set1 );

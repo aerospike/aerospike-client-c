@@ -28,28 +28,10 @@
 extern "C" {
 #endif
 
-#define CL_PROTO_RESULT_OK 0
-#define CL_PROTO_RESULT_FAIL_UNKNOWN 1 // unknown failure
-#define CL_PROTO_RESULT_FAIL_NOTFOUND 2
-#define CL_PROTO_RESULT_FAIL_GENERATION 3
-#define CL_PROTO_RESULT_FAIL_PARAMETER 4
-#define CL_PROTO_RESULT_FAIL_KEY_EXISTS 5 // if 'WRITE_ADD', could fail because already exists
-#define CL_PROTO_RESULT_FAIL_BIN_EXISTS 6
-#define CL_PROTO_RESULT_FAIL_CLUSTER_KEY_MISMATCH 7
-#define CL_PROTO_RESULT_FAIL_PARTITION_OUT_OF_SPACE 8
-#define CL_PROTO_RESULT_FAIL_TIMEOUT 9
-#define CL_PROTO_RESULT_FAIL_NOXDS 10
-#define CL_PROTO_RESULT_FAIL_UNAVAILABLE 11       // error returned during node down and partition isn't available
-#define CL_PROTO_RESULT_FAIL_INCOMPATIBLE_TYPE 12  // op and bin type incompatibilty
-#define CL_PROTO_RESULT_FAIL_RECORD_TOO_BIG 13
-#define CL_PROTO_RESULT_FAIL_KEY_BUSY 14
-// 15 and 16 used for 3.x functionality.
-#define CL_PROTO_RESULT_FAIL_BIN_NOT_FOUND 17
+// See aerospike-client-c/src/include/citrusleaf/cl_types.h for server error codes.
 
 // Forward definitions
 struct cl_bin_s;
-
-
 
 
 // NOTE! This is the only place where datamodel.h is exported in the external
@@ -351,7 +333,7 @@ typedef struct as_msg_s {
 #define CL_MSG_OP_PREPEND 10                // Add to the beginning of an existing particle
 #define CL_MSG_OP_TOUCH   11                // Touch 
 
-#define CL_MSG_OP_MC_INCR 129         // Memcache-compatible version of the increment command
+#define CL_MSG_OP_MC_INCR    129        // Memcache-compatible version of the increment command
 #define CL_MSG_OP_MC_APPEND  130        // Memcache compatible append. Allow appending to ints.
 #define CL_MSG_OP_MC_PREPEND 131        // Memcache compatile prepend. Allow prepending to ints.
 #define CL_MSG_OP_MC_TOUCH   132        // Memcache compatible touch - does not change generation count
@@ -362,7 +344,6 @@ typedef struct as_msg_s {
 #define CL_MSG_INFO1_VERIFY     		(1 << 3) // verify is a GET transaction that includes data, and assert if the data aint right
 #define CL_MSG_INFO1_XDS				(1 << 4) // operation is being performed by XDS
 #define CL_MSG_INFO1_NOBINDATA			(1 << 5) // do not get information about bins and its data
-#define CL_MSG_INFO1_CHECK_KEY			(1 << 6) // check key against record's stored key
 
 #define CL_MSG_INFO2_WRITE				(1 << 0) // contains a write semantic
 #define CL_MSG_INFO2_DELETE 			(1 << 1) // fling a record into the belly of Moloch

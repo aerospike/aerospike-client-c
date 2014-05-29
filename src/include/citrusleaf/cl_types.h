@@ -86,7 +86,7 @@ typedef enum cl_rv_e {
 
     // digest/record exists when attempting to CREATE ONLY
     // SCOPE: WRITE ONLY
-    CITRUSLEAF_FAIL_KEY_EXISTS              = 5,
+    CITRUSLEAF_FAIL_RECORD_EXISTS           = 5,
 
     // @todo ??
     CITRUSLEAF_FAIL_BIN_EXISTS              = 6,

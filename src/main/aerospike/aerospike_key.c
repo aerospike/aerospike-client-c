@@ -633,13 +633,13 @@ as_status aerospike_key_apply(
 			);
 			break;
 		}
-		// TODO - send key and digest, to store key on server.
 		case AS_POLICY_KEY_SEND: {
 			cl_object okey;
 			asval_to_clobject((as_val *) key->valuep, &okey);
+			as_digest * digest = as_key_digest((as_key *) key);
 			rc = do_the_full_monte( 
 				as->cluster, 0, CL_MSG_INFO2_WRITE, 0, 
-				key->ns, key->set, &okey, 0, &bins, CL_OP_WRITE, 0, &n_bins, 
+				key->ns, key->set, &okey, (cf_digest*)digest->value, &bins, CL_OP_WRITE, 0, &n_bins,
 				NULL, &wp, &trid, NULL, &call, NULL
 			);
 			break;

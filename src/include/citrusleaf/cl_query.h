@@ -120,12 +120,12 @@ cl_rv cl_query_foreach(cl_query * query, const char * filename, const char * fun
 int   cl_query_limit(cl_query * query, uint64_t limit);
 
 
-cl_rv citrusleaf_query_foreach(cl_cluster * cluster, const cl_query * query, void * udata, bool (*foreach)(as_val *, void *));
+cl_rv citrusleaf_query_foreach(as_cluster * cluster, const cl_query * query, void * udata, bool (*foreach)(as_val *, void *));
 
 
 /*
  * Init and destroy for client query environment. Should be called for once per cluster
  * instance before performing citrusleaf query
  */
-int    cl_cluster_query_init(cl_cluster* asc);
-void   cl_cluster_query_shutdown(cl_cluster* asc);
+int    cl_cluster_query_init(as_cluster* asc);
+void   cl_cluster_query_shutdown(as_cluster* asc);

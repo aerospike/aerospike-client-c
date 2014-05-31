@@ -29,7 +29,7 @@
 #include <aerospike/mod_lua_config.h>
 
 #include <citrusleaf/citrusleaf.h>
-#include <citrusleaf/cl_cluster.h>
+#include <aerospike/as_cluster.h>
 #include <citrusleaf/cf_log_internal.h>
 
 #include "_logger.h"
@@ -123,48 +123,15 @@ as_status aerospike_connect(aerospike * as, as_error * err)
     as_module_configure(&mod_lua, &config);
     mod_lua.logger = aerospike_logger(as);
 	as_debug(LOGGER, "as_module_configure: OK");
-
+	
 	// Create the cluster object.
-	as->cluster = citrusleaf_cluster_create();
-
-	if ( ! as->cluster ) {
-		as_err(LOGGER, "can't create cluster object");
-		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "can't create cluster object");
+	as->cluster = as_cluster_create(&as->config);
+	
+	if (! as->cluster) {
+		as_err(LOGGER, "failed to initialize cluster");
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "failed to initialize cluster");
 	}
-
-	as_debug(LOGGER, "citrusleaf_cluster_create: OK");
-
-	as->cluster->tend_speed = as->config.tender_interval == 0 ? 1 : (as->config.tender_interval + 999) / 1000;
-
-	uint32_t nhosts = sizeof(as->config.hosts) / sizeof(as_config_host);
-
-	as_trace(LOGGER, "citrusleaf_cluster_add_host: ...");
-
-	for ( int i = 0; as->config.hosts[i].addr != NULL && i < nhosts; i ++ ) {
-		as_trace(LOGGER, "connecting to %s:%d", as->config.hosts[i].addr, as->config.hosts[i].port);
-
-		int rc = citrusleaf_cluster_add_host(as->cluster, as->config.hosts[i].addr, as->config.hosts[i].port, 1000);
-
-		// As long as we succeed with one host, we've found the cluster.
-		if ( rc == 0 ) {
-			as_debug(LOGGER, "citrusleaf_cluster_add_host: OK");
-			as_error_reset(err);
-			break;
-		}
-
-		as_warn(LOGGER, "can't connect to %s:%d", as->config.hosts[i].addr, as->config.hosts[i].port);
-		as_error_update(err, AEROSPIKE_ERR_CLIENT, NULL);
-	}
-
-	if ( err->code != AEROSPIKE_OK ) {
-		as_err(LOGGER, "can't connect to any host");
-		citrusleaf_cluster_destroy(as->cluster);
-		as->cluster = NULL;
-		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "can't connect to any host");
-	}
-
-	as_debug(LOGGER, "connected.");
-
+	
 	return err->code;
 }
 
@@ -178,7 +145,7 @@ as_status aerospike_close(aerospike * as, as_error * err)
 	// This is not 100% bulletproof against simultaneous aerospike_close() calls
 	// from different threads.
 	if ( as->cluster ) {
-		citrusleaf_cluster_destroy(as->cluster);
+		as_cluster_destroy(as->cluster);
 		as->cluster = NULL;
 	}
 

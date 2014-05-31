@@ -21,7 +21,7 @@
  *****************************************************************************/
 #pragma once
 
-#include <citrusleaf/cl_cluster.h>
+#include <aerospike/as_cluster.h>
 #include <citrusleaf/cl_types.h>
 
 #include <aerospike/as_list.h>
@@ -44,7 +44,7 @@ typedef struct cl_sindex_t {
 /******************************************************************************
  * FUNCTIONS
  ******************************************************************************/
-cl_rv citrusleaf_secondary_index_create(cl_cluster *asc, const char *ns, const char *set, const char *iname, const char *binname, const char *type, char **response);
-cl_rv citrusleaf_secondary_index_create_functional(cl_cluster *asc, const char *ns, const char *set, const char *finame, const char *file, const char *func, as_list    *arglist, const char *type, char **response);
-cl_rv citrusleaf_secondary_index_drop(cl_cluster *asc, const char *ns, const char *iname, char **response); 
+cl_rv citrusleaf_secondary_index_create(as_cluster *asc, const char *ns, const char *set, const char *iname, const char *binname, const char *type, char **response);
+cl_rv citrusleaf_secondary_index_create_functional(as_cluster *asc, const char *ns, const char *set, const char *finame, const char *file, const char *func, as_list    *arglist, const char *type, char **response);
+cl_rv citrusleaf_secondary_index_drop(as_cluster *asc, const char *ns, const char *iname, char **response); 
 

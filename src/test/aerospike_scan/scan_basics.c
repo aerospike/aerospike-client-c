@@ -17,7 +17,7 @@
 #include <aerospike/as_stringmap.h>
 #include <aerospike/as_val.h>
 
-#include <citrusleaf/cl_cluster.h>
+#include <aerospike/as_cluster.h>
 #include <citrusleaf/cf_types.h>
 
 #include "../test.h"
@@ -588,7 +588,7 @@ TEST( scan_basics_background , "scan "SET1" in background to insert a new bin" )
 
 	uint64_t scanid = 0;
 	as_status udf_rc = aerospike_scan_background(as, &err, NULL, &scan, &scanid);
-
+	
 	assert_int_eq( udf_rc, AEROSPIKE_OK );
 
         wait_for_scan_job_done(scanid); 
@@ -622,7 +622,7 @@ TEST( scan_basics_background_poll_job_status , " Start a UDF scan job in the bac
 
 	as_status rc = AEROSPIKE_OK;
 	as_error cb_err;
-       
+        
 	debug("    This is a UDF Background Scan job-polling test .. ");  
 	for(int i = 0; i < 5; i++){
 		as_error_reset(&cb_err);
@@ -691,7 +691,7 @@ TEST( scan_basics_background_delete_bins , "Apply scan to count num-records in S
 
 	assert_int_eq( check2.count,  NUM_RECS_SET1);
 	debug("Got %d records in the scan after deletion ", check.count);
-
+	
 	as_scan_destroy(&scan);
 	as_scan_destroy(&scan_del);
 	as_scan_destroy(&scan2);
@@ -733,7 +733,7 @@ TEST( scan_basics_background_delete_records , "Apply scan to count num-records i
 
         wait_for_scan_job_done(scanid); 
 
-	debug("Got done with deletion of all the records in SET1. "); 
+	debug("Got done with deletion of all the records in SET1. ");
 
 	as_scan scan2;
 	as_scan_init(&scan2, NS, SET1);
@@ -764,7 +764,7 @@ TEST( scan_basics_background_sameid , "starting two udf scan of "SET2" in backgr
 
 	uint64_t scanid = 0;
 	as_status udf_rc = aerospike_scan_background(as, &err, NULL, &scan, &scanid);
-
+	
 	assert_int_eq( udf_rc, AEROSPIKE_OK );
 
         wait_for_scan_job_done(scanid);
@@ -775,7 +775,7 @@ TEST( scan_basics_background_sameid , "starting two udf scan of "SET2" in backgr
 
 	uint64_t scanid2 = scanid;
 	as_status udf_rc2 = aerospike_scan_background(as, &err, NULL, &scan2, &scanid2);
-
+	
 	assert_int_eq( udf_rc2, AEROSPIKE_ERR_SERVER );
 
         wait_for_scan_job_done(scanid2); 
@@ -812,8 +812,8 @@ SUITE( scan_basics, "aerospike_scan basic tests" ) {
 
 	// For the cluster to settle as it is important for the per-node testcases
 	sleep(1);
-    	suite_before( before );
-   	suite_after( after );
+    suite_before( before );
+    suite_after( after );
 
 	suite_add( scan_basics_null_set );
 	suite_add( scan_basics_set1 );

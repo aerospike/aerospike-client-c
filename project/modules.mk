@@ -84,12 +84,15 @@ $(BASE)/$(TARGET_LIB)/libaerospike-base.a:
 	$(MAKE) -e -C $(BASE) libaerospike-base.a COMMON=$(COMMON)
 
 .PHONY: BASE-prepare
-BASE-prepare: BASE-make-prepare
+BASE-prepare: BASE-make-prepare $(subst $(BASE)/$(SOURCE_INCL),$(TARGET_INCL),$(BASE-HEADERS))
 	$(noop)
 
 .PHONY: BASE-make-prepare
 BASE-make-prepare:
 	$(MAKE) -e -C $(BASE) prepare COMMON=$(COMMON)
+
+$(TARGET_INCL)/citrusleaf/%.h: $(BASE)/$(TARGET_INCL)/citrusleaf/%.h | $(TARGET_INCL)/citrusleaf
+	cp $^ $@
 
 ###############################################################################
 ##  MOD-LUA MODULE                                                           ##
@@ -133,3 +136,22 @@ MOD_LUA-prepare: MOD_LUA-make-prepare
 .PHONY: MOD_LUA-make-prepare
 MOD_LUA-make-prepare:
 	$(MAKE) -e -C $(MOD_LUA) prepare COMMON=$(COMMON) LUA_CORE=$(LUA_CORE)
+
+###############################################################################
+##  Concurrency Kit                                                          ##
+###############################################################################
+
+.PHONY: CK-build
+CK-build:
+	$(noop)
+
+.PHONY: CK-clean
+CK-clean:
+	$(noop)
+
+.PHONY: CK-prepare
+CK-prepare: $(TARGET_INCL)/ck
+	rsync -rp $(CK)/include/* $(TARGET_INCL)/ck
+
+$(TARGET_INCL)/ck: | $(TARGET_INCL)
+	mkdir $@

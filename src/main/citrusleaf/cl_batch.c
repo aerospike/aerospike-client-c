@@ -30,12 +30,12 @@
 #include <fcntl.h>
 #include <zlib.h>
 
-#include <citrusleaf/cf_atomic.h>
+#include <aerospike/as_cluster.h>
+
 #include <citrusleaf/cf_socket.h>
 #include <citrusleaf/cf_proto.h>
 
 #include <citrusleaf/citrusleaf.h>
-#include <citrusleaf/cl_cluster.h>
 #include <citrusleaf/cl_types.h>
 
 #include "internal.h"
@@ -99,8 +99,8 @@ batch_decompress(uint8_t *in_buf, size_t in_sz, uint8_t **out_buf, size_t *out_s
 
 
 static uint8_t *
-write_fields_batch_digests(uint8_t *buf, char *ns, int ns_len, cf_digest *digests, cl_cluster_node **nodes, int n_digests, 
-	int n_my_digests, cl_cluster_node *my_node )
+write_fields_batch_digests(uint8_t *buf, char *ns, int ns_len, cf_digest *digests, as_node **nodes, int n_digests, 
+	int n_my_digests, as_node *my_node )
 {
 	
 	// lay out the fields
@@ -136,7 +136,7 @@ write_fields_batch_digests(uint8_t *buf, char *ns, int ns_len, cf_digest *digest
 
 
 static int
-batch_compile(uint info1, uint info2, char *ns, cf_digest *digests, cl_cluster_node **nodes, int n_digests, cl_cluster_node *my_node, int n_my_digests, cl_bin *values, cl_operator operator, cl_operation *operations, int n_values,  
+batch_compile(uint info1, uint info2, char *ns, cf_digest *digests, as_node **nodes, int n_digests, as_node *my_node, int n_my_digests, cl_bin *values, cl_operator operator, cl_operation *operations, int n_values,  
 	uint8_t **buf_r, size_t *buf_sz_r, const cl_write_parameters *cl_w_p)
 {
 	// I hate strlen
@@ -252,7 +252,7 @@ batch_compile(uint info1, uint info2, char *ns, cf_digest *digests, cl_cluster_n
 #define STACK_BINS 100
 
 //
-// do_batch_monte(cl_cluster *asc, int info1, int info2, const char *ns, const cf_digest *digests, const cf_node *nodes, int n_digests,
+// do_batch_monte(as_cluster *asc, int info1, int info2, const char *ns, const cf_digest *digests, const cf_node *nodes, int n_digests,
 //					cf_node node, citrusleaf_get_many_cb cb, void *udata)
 //
 // asc - cluster to send to 
@@ -268,9 +268,9 @@ batch_compile(uint info1, uint info2, char *ns, cf_digest *digests, cl_cluster_n
 //
 
 static int
-do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *digests, cl_cluster_node **nodes, 
+do_batch_monte(as_cluster *asc, int info1, int info2, char *ns, cf_digest *digests, as_node **nodes, 
 	int n_digests, cl_bin *bins, cl_operator operator, cl_operation *operations, int n_ops,
-	cl_cluster_node *node, int n_node_digests, citrusleaf_get_many_cb cb, void *udata)
+	as_node *node, int n_node_digests, citrusleaf_get_many_cb cb, void *udata)
 {
 	int rv = -1;
 
@@ -295,7 +295,7 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 	dump_buf("sending request to cluster:", wr_buf, wr_buf_sz);
 #endif	
 
-	int fd = cl_cluster_node_fd_get(node, false);
+	int fd = as_node_fd_get(node);
 	if (fd == -1) {
 #ifdef DEBUG			
 		cf_debug("warning: node %s has no file descriptors, retrying transaction", node->name);
@@ -534,7 +534,7 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 	// call will read stale data.
 
 	if (rv == 0) {
-		cl_cluster_node_fd_put(node, fd, false);
+		as_node_fd_put(node, fd);
 	} else {
 		cf_close(fd);
 	}
@@ -554,12 +554,12 @@ do_batch_monte(cl_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 typedef struct {
 	
 	// these sections are the same for the same query
-	cl_cluster 	*asc; 
+	as_cluster 	*asc;
     int          info1;
 	int          info2;
 	char 		*ns;
 	cf_digest 	*digests; 
-	cl_cluster_node **nodes;
+	as_node **nodes;
 	int 		n_digests; 
 	bool 		get_key;
 	cl_bin 		*bins;         // Bins. If this is used, 'operation' should be null, and 'operator' should be the operation to be used on the bins
@@ -572,7 +572,7 @@ typedef struct {
 	cf_queue *complete_q;
 	
 	// this is different for every work
-	cl_cluster_node *my_node;				
+	as_node *my_node;				
 	int				my_node_digest_count;
 	
 	int 			index; // debug only
@@ -581,13 +581,13 @@ typedef struct {
 
 typedef struct {
 	int result;
-	cl_cluster_node* my_node;
+	as_node* my_node;
 } work_complete;
 
 static void *
 batch_worker_fn(void* pv_asc)
 {
-	cl_cluster* asc = (cl_cluster*)pv_asc;
+	as_cluster* asc = (as_cluster*)pv_asc;
 
 	while (true) {
 		digest_work work;
@@ -620,7 +620,7 @@ batch_worker_fn(void* pv_asc)
 
 
 cl_rv
-citrusleaf_batch_read(cl_cluster *asc, char *ns, const cf_digest *digests, int n_digests,
+citrusleaf_batch_read(as_cluster *asc, char *ns, const cf_digest *digests, int n_digests,
 		cl_bin *bins, int n_bins, bool get_bin_data, citrusleaf_get_many_cb cb, void *udata)
 {
 	// fast path: if there's only one node, or the number of digests is super short, just dispatch to the server directly
@@ -630,33 +630,33 @@ citrusleaf_batch_read(cl_cluster *asc, char *ns, const cf_digest *digests, int n
 	//
 	// allocate the digest-node array, and populate it
 	// 
-	cl_cluster_node **nodes = malloc( sizeof(cl_cluster_node *)  * n_digests);
+	as_node **nodes = malloc( sizeof(as_node *)  * n_digests);
 	if (!nodes) {
 		cf_error("allocation failed");
 		return(-1);
 	}
 	
 	// loop through all digests and determine a node
-	for (int i=0;i<n_digests;i++) {
+	as_partition_table* table = as_cluster_get_partition_table(asc, ns);
+	
+	for (int i = 0; i < n_digests; i++) {
+		// Must use write mode to get master paritition since batch doesn't proxy.
+		nodes[i] = as_partition_table_get_node(asc, table, &digests[i], true);
 		
-		nodes[i] = cl_cluster_node_get(asc, ns, &digests[i], true/*write, but that's Ok*/);
-		
-		// not sure if this is required - it looks like cluster_node_get automatically calls random?
-		// it's certainly safer though
-		if (nodes[i] == 0) {
-			cf_error("index %d: no specific node, getting random", i);
-			nodes[i] = cl_cluster_node_get_random(asc);
-		}
 		if (nodes[i] == 0) {
 			cf_error("index %d: can't get any node", i);
+			
+			// Release previous nodes just reserved.
+			for (int j = 0; j < i; j++) {
+				as_node_release(nodes[j]);
+			}
 			free(nodes);
 			return(-1);
 		}
-			
 	}
 
 	// find unique set
-	cl_cluster_node *unique_nodes[MAX_NODES];
+	as_node *unique_nodes[MAX_NODES];
 	int				unique_nodes_count[MAX_NODES];
 	int 			n_nodes = 0;
 	for (int i=0;i<n_digests;i++) {
@@ -731,7 +731,7 @@ citrusleaf_batch_read(cl_cluster *asc, char *ns, const cf_digest *digests, int n
 	// free and return what needs freeing and putting
 	cf_queue_destroy(work.complete_q);
 	for (int i=0;i<n_digests;i++) {
-		cl_cluster_node_put(nodes[i]);	
+		as_node_release(nodes[i]);
 	}
 	free(nodes);
 	return retval;
@@ -739,20 +739,20 @@ citrusleaf_batch_read(cl_cluster *asc, char *ns, const cf_digest *digests, int n
 
 
 void
-cl_cluster_batch_init(cl_cluster* asc)
+cl_cluster_batch_init(as_cluster* asc)
 {
 	// We do this lazily, during the first batch request, so make sure it's only
 	// done once.
 
 	// Quicker than pulling a lock, handles everything except first race:
-	if (cf_atomic32_get(asc->batch_initialized) == 1) {
+	if (ck_pr_load_32(&asc->batch_initialized) == 1) {
 		return;
 	}
 
 	// Handle first race - losers must wait for winner to create dispatch queue.
 	pthread_mutex_lock(&asc->batch_init_lock);
 
-	if (cf_atomic32_get(asc->batch_initialized) == 1) {
+	if (ck_pr_load_32(&asc->batch_initialized) == 1) {
 		// Lost race - another thread got here first.
 		pthread_mutex_unlock(&asc->batch_init_lock);
 		return;
@@ -762,26 +762,26 @@ cl_cluster_batch_init(cl_cluster* asc)
 	asc->batch_q = cf_queue_create(sizeof(digest_work), true);
 
 	// It's now safe to push to the queue.
-	cf_atomic32_set(&asc->batch_initialized, 1);
+	ck_pr_store_32(&asc->batch_initialized, 1);
 
 	pthread_mutex_unlock(&asc->batch_init_lock);
 
 	// Create thread pool.
-	for (int i = 0; i < NUM_BATCH_THREADS; i++) {
+	for (int i = 0; i < AS_NUM_BATCH_THREADS; i++) {
 		pthread_create(&asc->batch_threads[i], 0, batch_worker_fn, (void*)asc);
 	}
 }
 
 
 void
-cl_cluster_batch_shutdown(cl_cluster* asc)
+cl_cluster_batch_shutdown(as_cluster* asc)
 {
 	// Note - we assume this doesn't race cl_cluster_batch_init(), i.e. that no
 	// threads are initiating batch transactions while we're shutting down the
 	// cluster.
 
 	// Check whether we ever (lazily) initialized batch machinery.
-	if (cf_atomic32_get(asc->batch_initialized) == 0) {
+	if (ck_pr_load_32(&asc->batch_initialized) == 0) {
 		return;
 	}
 
@@ -789,17 +789,17 @@ cl_cluster_batch_shutdown(cl_cluster* asc)
 	// "running" flag) to allow the workers to "wait forever" on processing the
 	// work dispatch queue, which has minimum impact when the queue is empty.
 	// This also means all queued requests get processed when shutting down.
-	for (int i = 0; i < NUM_BATCH_THREADS; i++) {
+	for (int i = 0; i < AS_NUM_BATCH_THREADS; i++) {
 		digest_work work;
 		work.asc = NULL;
 		cf_queue_push(asc->batch_q, &work);
 	}
 
-	for (int i = 0; i < NUM_BATCH_THREADS; i++) {
+	for (int i = 0; i < AS_NUM_BATCH_THREADS; i++) {
 		pthread_join(asc->batch_threads[i], NULL);
 	}
 
 	cf_queue_destroy(asc->batch_q);
 	asc->batch_q = NULL;
-	cf_atomic32_set(&asc->batch_initialized, 0);
+	ck_pr_store_32(&asc->batch_initialized, 0);
 }

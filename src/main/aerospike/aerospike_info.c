@@ -29,7 +29,7 @@
 
 
 #include <citrusleaf/citrusleaf.h>
-#include <citrusleaf/cl_cluster.h>
+#include <aerospike/as_cluster.h>
 #include <citrusleaf/cl_info.h>
 
 #include <netinet/in.h>
@@ -54,9 +54,9 @@ typedef struct citrusleaf_info_cluster_foreach_data_s citrusleaf_info_cluster_fo
  * STATIC FUNCTIONS
  *****************************************************************************/
 
-bool citrusleaf_info_cluster_foreach_callback(const cl_cluster_node * clnode, const struct sockaddr_in * sa_in, const char * req, char * res, void * udata)
+bool citrusleaf_info_cluster_foreach_callback(const as_node * node, const struct sockaddr_in * sa_in, const char * req, char * res, void * udata)
 {
-	if ( ! clnode ) {
+	if ( ! node ) {
 		return FALSE;
 	}
 
@@ -65,11 +65,7 @@ bool citrusleaf_info_cluster_foreach_callback(const cl_cluster_node * clnode, co
 
     citrusleaf_info_cluster_foreach_data * data = (citrusleaf_info_cluster_foreach_data *) udata;
 
-    as_node node;
-    memcpy(node.name, clnode->name, AS_NODE_NAME_MAX_LEN);
-    node.name[AS_NODE_NAME_MAX_LEN] = '\0';
-
-	bool result = (data->callback)(&err, &node, req, res, data->udata);
+	bool result = (data->callback)(&err, node, req, res, data->udata);
 
 	return result;
 }

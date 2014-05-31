@@ -22,7 +22,7 @@
 #pragma once
 
 #include <citrusleaf/cl_types.h>
-#include <citrusleaf/cl_cluster.h>
+#include <aerospike/as_cluster.h>
 #include <citrusleaf/cl_scan.h>
 
 #include <aerospike/as_list.h>
@@ -106,14 +106,14 @@ int       cl_scan_foreach       (cl_scan *scan, const char *filename, const char
 /**
  * Return vector of cl_rv for each node
  */
-cl_rv citrusleaf_udf_scan_node        (cl_cluster *asc, cl_scan *scan, char *node_name, int( *callback)(as_val *, void *), void * udata);
-cf_vector * citrusleaf_udf_scan_all_nodes   (cl_cluster *asc, cl_scan *scan, int( *callback)(as_val *, void *), void * udata);
-cf_vector * citrusleaf_udf_scan_background  (cl_cluster *asc, cl_scan *scan);
-cl_rv citrusleaf_udf_scan_node_background  (cl_cluster *asc, cl_scan *scan, char *node_name);
+cl_rv citrusleaf_udf_scan_node        (as_cluster *asc, cl_scan *scan, char *node_name, int( *callback)(as_val *, void *), void * udata);
+cf_vector * citrusleaf_udf_scan_all_nodes   (as_cluster *asc, cl_scan *scan, int( *callback)(as_val *, void *), void * udata);
+cf_vector * citrusleaf_udf_scan_background  (as_cluster *asc, cl_scan *scan);
+cl_rv citrusleaf_udf_scan_node_background  (as_cluster *asc, cl_scan *scan, char *node_name);
 
 /*
  * Init and destroy for client scan environment. Should be called for once per cluster
  * instance before performing citrusleaf scan
  */
-int    cl_cluster_scan_init(cl_cluster* asc);
-void   cl_cluster_scan_shutdown(cl_cluster* asc);
+int    cl_cluster_scan_init(as_cluster* asc);
+void   cl_cluster_scan_shutdown(as_cluster* asc);

@@ -51,7 +51,7 @@ static char * citrusleaf_secondary_index_fold_args(as_list * arglist) {
 */
 
 cl_rv citrusleaf_secondary_index_create(
-    cl_cluster * asc, const char * ns, const char * set,
+    as_cluster * asc, const char * ns, const char * set,
     const char * iname, const char * binname, const char * type,
     char ** response
 ){
@@ -86,7 +86,7 @@ cl_rv citrusleaf_secondary_index_create(
     return CITRUSLEAF_OK;
 }        
 
-cl_rv citrusleaf_secondary_index_drop(cl_cluster *asc, const char *ns, const char *indexname, char **response) {
+cl_rv citrusleaf_secondary_index_drop(as_cluster *asc, const char *ns, const char *indexname, char **response) {
 
     char ddl[1024];
     sprintf(ddl, "sindex-delete:ns=%s;indexname=%s", ns, indexname);

@@ -9,4 +9,4 @@
 	url = https://github.com/aerospike/aerospike-lua-core
 [submodule "modules/ck"]
 	path = modules/ck
-	url = https://github.com/concurrencykit/ck.git
+	url = https://github.com/aerospike/ck

@@ -28,7 +28,7 @@ extern "C" {
 
 #include <openssl/sha.h>
 
-#include <citrusleaf/cl_cluster.h>
+#include <aerospike/as_cluster.h>
 #include <citrusleaf/cf_crypto.h>
 
 #include <aerospike/as_result.h>

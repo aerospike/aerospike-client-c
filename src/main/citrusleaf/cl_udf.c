@@ -242,7 +242,7 @@ char * citrusleaf_udf_build_error_resp(char *result, char *b64_msg) {
 }
 
 
-cl_rv citrusleaf_udf_record_apply(cl_cluster * cl, const char * ns, const char * set, const cl_object * key, 
+cl_rv citrusleaf_udf_record_apply(as_cluster * cl, const char * ns, const char * set, const cl_object * key, 
 	const char * filename, const char * function, as_list * arglist, int timeout_ms, as_result * res) {
 
 	cl_rv rv = CITRUSLEAF_OK;
@@ -338,7 +338,7 @@ cl_rv citrusleaf_udf_record_apply(cl_cluster * cl, const char * ns, const char *
 
 
 
-cl_rv citrusleaf_udf_list(cl_cluster *asc, cl_udf_file ** files, int * count, char ** resp) {
+cl_rv citrusleaf_udf_list(as_cluster *asc, cl_udf_file ** files, int * count, char ** resp) {
 	
 	*files = NULL;
 	*count = 0;
@@ -424,11 +424,11 @@ cl_rv citrusleaf_udf_list(cl_cluster *asc, cl_udf_file ** files, int * count, ch
 	return 0;
 }
 
-cl_rv citrusleaf_udf_get(cl_cluster *asc, const char * filename, cl_udf_file * file, cl_udf_type udf_type, char ** result) {
+cl_rv citrusleaf_udf_get(as_cluster *asc, const char * filename, cl_udf_file * file, cl_udf_type udf_type, char ** result) {
 	return citrusleaf_udf_get_with_gen(asc, filename, file, 0, NULL, result);
 }
 
-cl_rv citrusleaf_udf_get_with_gen(cl_cluster *asc, const char * filename, cl_udf_file * file, cl_udf_type udf_type, char **gen, char ** resp) {
+cl_rv citrusleaf_udf_get_with_gen(as_cluster *asc, const char * filename, cl_udf_file * file, cl_udf_type udf_type, char **gen, char ** resp) {
 
 	if ( file->content ) return -1;
 
@@ -545,7 +545,7 @@ cl_rv citrusleaf_udf_get_with_gen(cl_cluster *asc, const char * filename, cl_udf
 	return 0;
 }
 
-cl_rv citrusleaf_udf_put(cl_cluster *asc, const char * filename, as_bytes *content, cl_udf_type udf_type, char ** result) {
+cl_rv citrusleaf_udf_put(as_cluster *asc, const char * filename, as_bytes *content, cl_udf_type udf_type, char ** result) {
 
 	if ( !filename || !(content)) {
 		fprintf(stderr, "filename and content required\n");
@@ -613,7 +613,7 @@ cl_rv citrusleaf_udf_put(cl_cluster *asc, const char * filename, as_bytes *conte
 	return 0;
 }
 
-cl_rv citrusleaf_udf_remove(cl_cluster *asc, const char * filename, char ** resp) {
+cl_rv citrusleaf_udf_remove(as_cluster *asc, const char * filename, char ** resp) {
 
 	char    query[512]  = {0};
 

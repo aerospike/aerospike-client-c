@@ -50,7 +50,7 @@ void * split_and_set_cb(char * data, void * context) {
 
 // Parses the response received for the command at each node and splits the resulting string
 // into 'key=value' strings and calls split_and_set_cb on them
-static bool parse_response( const cl_cluster_node * cn, const struct sockaddr_in * sa_in, const char * query, char * value, void * udata) {
+static bool parse_response( const as_node * cn, const struct sockaddr_in * sa_in, const char * query, char * value, void * udata) {
 
 	key_value * kv = (key_value *)udata;
 
@@ -101,7 +101,7 @@ static bool parse_response( const cl_cluster_node * cn, const struct sockaddr_in
 }
 
 // Get stats from all the nodes in the cluster and returns an array of strings
-char **get_stats(char * query, char * key, cl_cluster * asc) {
+char **get_stats(char * query, char * key, as_cluster * asc) {
 	
 	// Initialize the key_value structure
 	key_value kv;

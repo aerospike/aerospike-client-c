@@ -22,7 +22,7 @@
 #pragma once
 
 #include <citrusleaf/cl_types.h>
-#include <citrusleaf/cl_cluster.h>
+#include <aerospike/as_cluster.h>
 
 /******************************************************************************
  * TYPES
@@ -92,18 +92,18 @@ static inline void cl_scan_parameters_set_default(cl_scan_parameters *cl_scan_p)
  ******************************************************************************/
 
 
-cl_rv citrusleaf_scan(cl_cluster *asc, char *ns, char *set, cl_bin *bins, int n_bins, bool get_key, citrusleaf_get_many_cb cb, void *udata, bool nobindata);
+cl_rv citrusleaf_scan(as_cluster *asc, char *ns, char *set, cl_bin *bins, int n_bins, bool get_key, citrusleaf_get_many_cb cb, void *udata, bool nobindata);
 
 /**
  * response is a vector of cl_node_response
  */
 cf_vector * citrusleaf_scan_all_nodes (
-    cl_cluster *asc, char *ns, char *set, cl_bin *bins, int n_bins, bool nobindata, uint8_t scan_pct,
+    as_cluster *asc, char *ns, char *set, cl_bin *bins, int n_bins, bool nobindata, uint8_t scan_pct,
     citrusleaf_get_many_cb cb, void *udata, cl_scan_parameters *scan_p
     );
 
 cl_rv citrusleaf_scan_node (
-    cl_cluster *asc, char *node_name, char *ns, char *set, cl_bin *bins, int n_bins, bool nobindata, uint8_t scan_pct,
+    as_cluster *asc, char *node_name, char *ns, char *set, cl_bin *bins, int n_bins, bool nobindata, uint8_t scan_pct,
     citrusleaf_get_many_cb cb, void *udata, cl_scan_parameters *scan_p);
 
 //
@@ -111,9 +111,9 @@ cl_rv citrusleaf_scan_node (
 //
 
 // TODO
-cf_vector * citrusleaf_terminate_job_all_nodes(cl_cluster *asc, uint64_t job_uid);
+cf_vector * citrusleaf_terminate_job_all_nodes(as_cluster *asc, uint64_t job_uid);
 
 // TODO
-cf_vector * citrusleaf_get_job_status_all_nodes(cl_cluster *asc, uint64_t job_uid);
+cf_vector * citrusleaf_get_job_status_all_nodes(as_cluster *asc, uint64_t job_uid);
 
 

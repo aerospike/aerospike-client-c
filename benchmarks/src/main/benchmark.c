@@ -21,6 +21,7 @@
  ******************************************************************************/
 #include "benchmark.h"
 #include "aerospike/aerospike_info.h"
+#include "citrusleaf/cf_log.h"
 #include <stdint.h>
 #include <time.h>
 
@@ -49,14 +50,18 @@ blog_line(const char* fmt, ...)
 void
 blog_detailv(as_log_level level, const char* fmt, va_list ap)
 {
+	// Write message all at once so messages generated from multiple threads have less of a chance
+	// of getting garbled.
+	char fmtbuf[1024];
 	time_t now = time(NULL);
 	struct tm* t = localtime(&now);
-	
-	printf("%d-%02d-%02d %02d:%02d:%02d %s ",
+	int len = sprintf(fmtbuf, "%d-%02d-%02d %02d:%02d:%02d %s ",
 		t->tm_year+1900, t->tm_mon+1, t->tm_mday, t->tm_hour, t->tm_min, t->tm_sec, as_log_level_strings[level]);
+	char* p = stpcpy(fmtbuf + len, fmt);
+	*p++ = '\n';
+	*p = 0;
 	
-	vprintf(fmt, ap);
-	printf("\n");
+	vprintf(fmtbuf, ap);
 }
 
 void
@@ -69,13 +74,22 @@ blog_detail(as_log_level level, const char* fmt, ...)
 }
 
 static bool
-client_log_callback(as_log_level level, const char * func, const char * file, uint32_t line, const char * fmt, ...)
+as_client_log_callback(as_log_level level, const char * func, const char * file, uint32_t line, const char * fmt, ...)
 {
 	va_list ap;
 	va_start(ap, fmt);
 	blog_detailv(level, fmt, ap);
 	va_end(ap);
 	return true;
+}
+
+static void
+cf_client_log_callback(cf_log_level level, const char* fmt, ...)
+{
+	va_list ap;
+	va_start(ap, fmt);
+	blog_detailv((as_log_level)level, fmt, ap);
+	va_end(ap);
 }
 
 static int
@@ -216,13 +230,16 @@ run_benchmark(arguments* args)
 	
 	if (args->debug) {
 		as_log_set_level(&log, AS_LOG_LEVEL_DEBUG);
+		cf_set_log_level(CF_DEBUG);
 	}
 	else {
 		as_log_set_level(&log, AS_LOG_LEVEL_INFO);
+		cf_set_log_level(CF_INFO);
 	}
 
-	as_log_set_callback(&log, client_log_callback);
-	
+	as_log_set_callback(&log, as_client_log_callback);
+	cf_set_log_callback(cf_client_log_callback);
+
 	int ret = connect_to_server(args, &data.client);
 	
 	if (ret != 0) {

@@ -22,7 +22,7 @@
 #pragma once
 
 #include <citrusleaf/cl_types.h>
-#include <citrusleaf/cl_cluster.h>
+#include <aerospike/as_cluster.h>
 
 #include <sys/socket.h> // socket calls
 #include <arpa/inet.h> // inet_ntop
@@ -43,8 +43,10 @@
 
 int citrusleaf_info(char *host, short port, char *names, char **values, int timeout_ms);
 int citrusleaf_info_host(struct sockaddr_in *sa_in, char *names, char **values, int timeout_ms, bool send_asis, bool check_bounds);
-int citrusleaf_info_cluster(cl_cluster *asc, char *names, char **values, bool send_asis, bool check_bounds, int timeout_ms);
-int citrusleaf_info_cluster_all(cl_cluster *asc, char *names, char **values, bool send_asis, bool check_bounds, int timeout_ms);
-int citrusleaf_info_cluster_foreach(cl_cluster *cluster, const char *command, bool send_asis, bool check_bounds, int timeout_ms,
-									void *udata,
-									bool (*callback)(const cl_cluster_node *node, const struct sockaddr_in * sa_in, const char *command, char *values, void *udata));
+int citrusleaf_info_cluster(as_cluster *asc, char *names, char **values, bool send_asis, bool check_bounds, int timeout_ms);
+
+int citrusleaf_info_cluster_foreach(
+	as_cluster *cluster, const char *command, bool send_asis, bool check_bounds, int timeout_ms, void *udata,
+	bool (*callback)(const as_node * node, const struct sockaddr_in * sa_in, const char *command, char *value, void *udata));
+
+int citrusleaf_info_parse_single(char *values, char **value);

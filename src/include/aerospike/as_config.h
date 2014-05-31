@@ -91,6 +91,24 @@ typedef struct as_config_host_s {
 
 } as_config_host;
 
+/**
+ *	IP translation table.
+ *
+ *	@ingroup as_config_object
+ */
+typedef struct as_addr_map_s {
+	
+	/**
+	 *	Original hostname or IP address in string format.
+	 */
+    char * orig;
+	
+	/**
+	 *	Use this IP address instead.
+	 */
+    char * alt;
+	
+} as_addr_map;
 
 /**
  *	lua module config
@@ -225,15 +243,58 @@ typedef struct as_config_lua_s {
 typedef struct as_config_s {
 
 	/**
+	 *	A IP translation table is used in cases where different clients use different server
+	 *	IP addresses.  This may be necessary when using clients from both inside and outside
+	 *	a local area network.  Default is no translation.
+	 *
+	 *	The key is the IP address returned from friend info requests to other servers.  The
+	 *	value is the real IP address used to connect to the server.
+	 *
+	 *	A deep copy of ip_map is performed in aerospike_connect().  The caller is
+	 *  responsible for memory deallocation of the original data structure.
+	 */
+	as_addr_map * ip_map;
+	
+	/**
+	 *	Length of ip_map array.
+	 *  Default: 0
+	 */
+	uint32_t ip_map_size;
+	
+	/**
+	 *	Estimate of incoming threads concurrently using synchronous methods in the client instance.
+	 *	This field is used to size the synchronous connection pool for each server node.
+	 *	Default: 300
+	 */
+	uint32_t max_threads;
+	
+	/**
+	 *	@private
+	 *	Not currently used.
+	 *	Maximum socket idle in seconds.  Socket connection pools will discard sockets
+	 *	that have been idle longer than the maximum.
+	 *	Default: 14
+	 */
+	uint32_t max_socket_idle_sec;
+	
+	/**
+	 *	Initial host connection timeout in milliseconds.  The timeout when opening a connection
+	 *	to the server host for the first time.
+	 *	Default: 1000
+	 */
+	uint32_t conn_timeout_ms;
+
+	/**
 	 *	Polling interval in milliseconds for cluster tender
+	 *	Default: 1000
 	 */
 	uint32_t tender_interval;
 
 	/**
-	 *	Client policies
+	 *	Count of entries in hosts array.
 	 */
-	as_policies policies;
-
+	uint32_t hosts_size;
+	
 	/**
 	 *	(seed) hosts
 	 *	Populate with one or more hosts in the cluster
@@ -242,10 +303,15 @@ typedef struct as_config_s {
 	as_config_host hosts[AS_CONFIG_HOSTS_SIZE];
 
 	/**
+	 *	Client policies
+	 */
+	as_policies policies;
+
+	/**
 	 *	lua config
 	 */
 	as_config_lua lua;
-
+	
 } as_config;
 
 /******************************************************************************
@@ -261,8 +327,7 @@ typedef struct as_config_s {
  *	~~~~~~~~~~{.c}
  *		as_config config;
  *		as_config_init(&config);
- *
- *		config.hosts[0] = {.addr = "127.0.0.1", .port = 3000};
+ *		as_config_add_host(&config, "127.0.0.1", 3000);
  *	~~~~~~~~~~
  *	
  *	@param c The configuration to initialize.
@@ -273,3 +338,21 @@ typedef struct as_config_s {
  */
 as_config * as_config_init(as_config * c);
 
+/**
+ *	Add host to seed the cluster.
+ *
+ *	~~~~~~~~~~{.c}
+ *		as_config config;
+ *		as_config_init(&config);
+ *		as_config_add_host(&config, "127.0.0.1", 3000);
+ *	~~~~~~~~~~
+ *
+ *	@relates as_config
+ */
+static inline void
+as_config_add_host(as_config* config, const char* addr, uint16_t port)
+{
+	as_config_host* host = &config->hosts[config->hosts_size++];
+	host->addr = addr;
+	host->port = port;
+}

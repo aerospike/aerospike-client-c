@@ -8,7 +8,13 @@ BASE 		:= $(realpath modules/base)
 COMMON 		:= $(realpath modules/common)
 LUA_CORE 	:= $(realpath modules/lua-core)
 MOD_LUA 	:= $(realpath modules/mod-lua)
-MODULES 	:= BASE COMMON MOD_LUA
+# If concurrency kit repo path not defined, use default ck module in this repo.
+# Currency kit headers are used only.
+ifndef CK
+	CK := $(realpath modules/ck)
+endif
+MODULES 	:= BASE COMMON MOD_LUA CK
+
 # Override optimizations via: make O=n
 O = 3
 
@@ -46,6 +52,7 @@ endif
 INC_PATH += $(BASE)/$(TARGET_INCL)
 INC_PATH += $(COMMON)/$(TARGET_INCL)
 INC_PATH += $(MOD_LUA)/$(TARGET_INCL)
+INC_PATH += $(CK)/include
 INC_PATH += /usr/local/include
 
 # Library Paths
@@ -57,12 +64,8 @@ INC_PATH += /usr/local/include
 
 CITRUSLEAF = 
 CITRUSLEAF += citrusleaf.o
-CITRUSLEAF += cl_async.o
 CITRUSLEAF += cl_batch.o
-CITRUSLEAF += cl_cluster.o
 CITRUSLEAF += cl_info.o
-CITRUSLEAF += cl_lookup.o
-CITRUSLEAF += cl_partition.o
 CITRUSLEAF += cl_parsers.o
 CITRUSLEAF += cl_query.o
 CITRUSLEAF += cl_sindex.o
@@ -91,10 +94,15 @@ AEROSPIKE += aerospike_udf.o
 AEROSPIKE += as_batch.o
 AEROSPIKE += as_bin.o
 AEROSPIKE += as_config.o
+AEROSPIKE += as_cluster.o
 AEROSPIKE += as_error.o
+AEROSPIKE += as_info.o
 AEROSPIKE += as_key.o
 AEROSPIKE += as_log.o
+AEROSPIKE += as_lookup.o
+AEROSPIKE += as_node.o
 AEROSPIKE += as_operations.o
+AEROSPIKE += as_partition.o
 AEROSPIKE += as_policy.o
 AEROSPIKE += as_query.o
 AEROSPIKE += as_record.o
@@ -139,11 +147,15 @@ COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_string.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_stringmap.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_util.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_val.h
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_vector.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/alloc.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_arch.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_atomic.h
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_queue.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_types.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_clock.h
+
+BASE-HEADERS := $(BASE)/$(SOURCE_INCL)/citrusleaf/cf_log.h
 
 EXCLUDE-HEADERS = 
 
@@ -155,6 +167,10 @@ HEADERS += $(filter-out $(EXCLUDE-HEADERS), $(wildcard $(SOURCE_INCL)/aerospike/
 ###############################################################################
 
 all: modules build prepare
+
+.PHONY: configure
+configure:
+	(cd $(CK); ./configure)
 
 .PHONY: prepare
 prepare: modules-prepare $(subst $(SOURCE_INCL),$(TARGET_INCL),$(HEADERS)) 

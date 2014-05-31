@@ -24,7 +24,6 @@
 #include <sys/socket.h> // socket calls
 #include <stdio.h>
 #include <errno.h> //errno
-#include <stdlib.h> //fprintf
 #include <unistd.h> // close
 #include <string.h>
 #include <pthread.h>
@@ -35,7 +34,7 @@
 #include <citrusleaf/cf_proto.h>
 
 #include <citrusleaf/citrusleaf.h>
-#include <citrusleaf/cl_cluster.h>
+#include <aerospike/as_cluster.h>
 
 #include "internal.h"
 
@@ -248,7 +247,7 @@ citrusleaf_info_host_limit(struct sockaddr_in *sa_in, char *names, char **values
 		*values = (char *) v_buf;
 	}                                                                                               
 	else {
-		fprintf(stderr, "rsp size is 0\n");
+		cf_warn("rsp size is 0");
 		*values = 0;
 	}
 	rv = 0;
@@ -270,172 +269,106 @@ int
 citrusleaf_info(char *hostname, short port, char *names, char **values, int timeout_ms)
 {
 	int rv = -1;
-	cf_vector sockaddr_in_v;
-	cf_vector_init(&sockaddr_in_v, sizeof( struct sockaddr_in ), 5, 0);
-	if (0 != cl_lookup(NULL, hostname, port, &sockaddr_in_v)) {
-		cf_debug("Could not find host %s", hostname);
+	as_vector sockaddr_in_v;
+	as_vector_inita(&sockaddr_in_v, sizeof(struct sockaddr_in), 5);
+	
+	if (! as_lookup(NULL, hostname, port, &sockaddr_in_v)) {
 		goto Done;
 	}
-	
-	for (uint i=0; i < cf_vector_size(&sockaddr_in_v) ; i++) 
+		
+	for (uint32_t i = 0; i < sockaddr_in_v.size; i++)
 	{
-		struct sockaddr_in  sa_in;
-		cf_vector_get(&sockaddr_in_v, i, &sa_in);
+		struct sockaddr_in* sa_in = as_vector_get(&sockaddr_in_v, i);
 
-		if (0 == citrusleaf_info_host(&sa_in, names, values, timeout_ms, true, /* check bounds */ true)) {
+		if (0 == citrusleaf_info_host(sa_in, names, values, timeout_ms, true, /* check bounds */ true)) {
 			rv = 0;
 			goto Done;
 		}
 	}
 	
 Done:
-	cf_vector_destroy( &sockaddr_in_v );	
+	as_vector_destroy(&sockaddr_in_v);
 	return(rv);
 }
 
 /* gets information back from any of the nodes in the cluster */
 int
-citrusleaf_info_cluster(cl_cluster *asc, char *names, char **values_r, bool send_asis, bool check_bounds, int timeout_ms)
+citrusleaf_info_cluster(as_cluster *cluster, char *names, char **values_r, bool send_asis, bool check_bounds, int timeout_ms)
 {
-	if (timeout_ms == 0) timeout_ms = 100; // milliseconds
+	if (timeout_ms == 0) {
+		timeout_ms = 100; // milliseconds
+	}
+	
 	uint64_t start = cf_getms();
 	uint64_t end = start + timeout_ms;
-	char *values = 0;
+	int ret = -1;
+
+	as_nodes* nodes = as_nodes_reserve(cluster);
 	
-	//
-	// not sure yet about the thread safety of this - I have only read-only use
-	// of these vectors
-	// 
-	for (uint i=0;i<cf_vector_size(&asc->node_v);i++) {
+	for (uint32_t i = 0; i < nodes->size; i++) {
+		as_node* node = nodes->array[i];
+		struct sockaddr_in* sa_in = as_node_get_address(node);
+		char* values = 0;
 		
-		cl_cluster_node *cn = cf_vector_pointer_get(&asc->node_v, i);
-		if (cn == 0) continue;
+		if (citrusleaf_info_host(sa_in, names, &values, (int)(end - cf_getms()), send_asis, check_bounds) == 0) {
+			*values_r = values;
+			ret = 0;
+			break;
+		}
 		
-		for (uint j=0;j<cf_vector_size(&cn->sockaddr_in_v);j++) {
-			
-			struct sockaddr_in *sa_in = cf_vector_getp(&cn->sockaddr_in_v, j);
-			if (sa_in == 0) continue;
-			
-//			dump_sockaddr_in("info_cluster call to address ",sa_in);
-			
-			values = 0;
-			
-			if (0 == citrusleaf_info_host(sa_in, names, &values, (int)(end - cf_getms()), send_asis, check_bounds)) {
-				// success
-				*values_r = values;
-				return(0);
-			}
-			if (cf_getms() >= end) 
-				return(-1);
+		if (cf_getms() >= end) {
+			ret = -2;
+			break;
 		}
 	}
-	return(-1);
+	as_nodes_release(nodes);
+	return ret;
 }
-	
-/* gets information back from ALL of the nodes in the cluster */
-/* @TODO error checking in case a node doens't return the same value as another */
+
 int
-citrusleaf_info_cluster_all(cl_cluster *asc, char *names, char **values_r, bool send_asis, bool check_bounds, int timeout_ms)
+citrusleaf_info_cluster_foreach(
+	as_cluster *cluster, const char *command, bool send_asis, bool check_bounds, int timeout_ms, void *udata,
+	bool (*callback)(const as_node * node, const struct sockaddr_in * sa_in, const char *command, char *value, void *udata)
+)
 {
-	if (timeout_ms == 0) timeout_ms = 100; // milliseconds
-	uint64_t start = cf_getms();
-	uint64_t end = start + timeout_ms;
-	char *values = 0;
-
-	if (!asc) {
-		return -1;
-	}
-	
-	//
-	// not sure yet about the thread safety of this - I have only read-only use
-	// of these vectors
-	// 
-	for (uint i=0;i<cf_vector_size(&asc->node_v);i++) {
-		
-		cl_cluster_node *cn = cf_vector_pointer_get(&asc->node_v, i);
-		if (cn == 0) continue;
-		
-		for (uint j=0;j<cf_vector_size(&cn->sockaddr_in_v);j++) {
-			
-			struct sockaddr_in *sa_in = cf_vector_getp(&cn->sockaddr_in_v, j);
-			if (sa_in == 0) continue;
-			
-			// dump_sockaddr_in("info_cluster call to address ",sa_in);
-			
-			values = 0;
-			
-			if (0 == citrusleaf_info_host(sa_in, names, &values, (int)(end - cf_getms()), send_asis, check_bounds)) {
-				// success
-				*values_r = values;
-				break;
-			} 			
-			if (cf_getms() >= end) {
-				fprintf(stderr, "failing clinfo_cluster_all() timeout %d\n",timeout_ms);
-				return(-1);
-			}
-		}
-	}
-	return(0);
-}
-
-
-int citrusleaf_info_cluster_foreach(cl_cluster *cluster, const char *command, bool send_asis, bool check_bounds, int timeout_ms,
-									void *udata,
-									bool (*callback)(const cl_cluster_node * node, const struct sockaddr_in * sa_in, const char *command, char *value, void *udata))
-{
-	//Author: Piyush Gupta 5/7/13
 	//Usage Notes:
 	//udata = memory allocated by caller, passed back to the caller callback function, ufn()
 	//command = command string, memory allocated by caller, caller must free it, passed to server for execution
 	//value = memory allocated by c-client for caller, caller must free it after using it.
-
-	if (!callback) {
-		fprintf(stderr, "citrusleaf_info_cluster_foreach(): callback function is null.");
-		return(-1);
+	
+	if (timeout_ms == 0) {
+		timeout_ms = 100; // milliseconds
 	}
-
-	if (timeout_ms == 0) timeout_ms = 100; // milliseconds
+	
 	uint64_t start = cf_getms();
 	uint64_t end = start + timeout_ms;
-	char *value = 0;
+	int ret = 0;
 
-	//
-	// not sure yet about the thread safety of this - I have only read-only use
-	// of these vectors
-	//
-	bool bSuccess = false;
-	for (uint i=0;i<cf_vector_size(&cluster->node_v);i++) {
+	as_nodes* nodes = as_nodes_reserve(cluster);
+	
+	for (uint32_t i = 0; i < nodes->size; i++) {
+		as_node* node = nodes->array[i];
+		struct sockaddr_in* sa_in = as_node_get_address(node);
+		char* value = 0;
 
-		cl_cluster_node *node = cf_vector_pointer_get(&cluster->node_v, i);
-
-		if (node == 0) continue;
-
-		for (uint j=0; j < cf_vector_size(&node->sockaddr_in_v); j++) {
-
-			struct sockaddr_in *sa_in = cf_vector_getp(&node->sockaddr_in_v, j);
-			if (sa_in == 0) continue;
-
-			// dump_sockaddr_in("info_cluster call to address ",sa_in);
-
-			value = 0;
-
-			if (0 == citrusleaf_info_host(sa_in, (char *)command, &value, (int)(end - cf_getms()), send_asis, check_bounds)) {
-				bSuccess = callback(node, sa_in, command, value, udata);
-				if (value) {
-					free (value);
-				}
-				if(!bSuccess){
-					return (-1);
-				}
+		if (citrusleaf_info_host(sa_in, (char *)command, &value, (int)(end - cf_getms()), send_asis, check_bounds) == 0) {
+			bool status = callback(node, sa_in, command, value, udata);
+			
+			if (value) {
+				free(value);
+			}
+			
+			if(! status) {
+				ret = -1;
 				break;
 			}
-			if (cf_getms() >= end) {
-				fprintf(stderr, "failing clinfo_cluster_all() timeout %d\n",timeout_ms);
-				return(-1);
-			}
+		}
+		
+		if (cf_getms() >= end) {
+			ret = -2;
+			break;
 		}
 	}
-	return(0);
+	as_nodes_release(nodes);
+	return ret;
 }
-
-

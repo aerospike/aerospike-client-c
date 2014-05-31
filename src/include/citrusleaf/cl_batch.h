@@ -23,7 +23,7 @@
 
 #include <stdbool.h>
 #include <citrusleaf/cl_types.h>
-#include <citrusleaf/cl_cluster.h>
+#include <aerospike/as_cluster.h>
 
 /******************************************************************************
  * TYPES
@@ -37,6 +37,12 @@
  * FUNCTIONS
  ******************************************************************************/
 
-cl_rv citrusleaf_batch_read(cl_cluster *asc, char *ns,
+void
+cl_cluster_batch_init(as_cluster* asc);
+
+void
+cl_cluster_batch_shutdown(as_cluster* asc);
+
+cl_rv citrusleaf_batch_read(as_cluster *asc, char *ns,
 		const cf_digest *digests, int n_digests, cl_bin *bins, int n_bins,
 		bool get_bin_data, citrusleaf_get_many_cb cb, void *udata);

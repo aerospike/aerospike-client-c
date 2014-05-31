@@ -49,7 +49,7 @@
 #include <aerospike/mod_lua_config.h>
 
 #include <citrusleaf/citrusleaf.h>
-#include <citrusleaf/cl_cluster.h>
+#include <aerospike/as_cluster.h>
 #include <citrusleaf/as_scan.h>
 #include <citrusleaf/cl_udf.h>
 
@@ -89,7 +89,7 @@ static void __log(const char * file, const int line, const char * fmt, ...) {
  * Work item which gets queued up to each node
  */
 typedef struct {
-    cl_cluster *            asc; 
+    as_cluster *            asc; 
     const char *            ns;
     char                    node_name[NODE_NAME_SIZE];    
     const uint8_t *         scan_buf;
@@ -110,7 +110,7 @@ static int scan_compile(const cl_scan * scan, uint8_t **buf_r, size_t *buf_sz_r)
 
 static cl_rv cl_scan_udf_destroy(cl_scan_udf * udf);
 
-cf_vector * cl_scan_execute(cl_cluster * cluster, const cl_scan * scan, char *node_name, cl_rv * res, int (* callback)(as_val *, void *), void *udata);
+cf_vector * cl_scan_execute(as_cluster * cluster, const cl_scan * scan, char *node_name, cl_rv * res, int (* callback)(as_val *, void *), void *udata);
 
 // Creates a message, internally calling cl_compile to pass to the server
 static int scan_compile(const cl_scan * scan, uint8_t ** buf_r, size_t * buf_sz_r) {
@@ -219,13 +219,13 @@ const as_rec_hooks scan_response_hooks = {
  * task->callback on the returned data. The returned data is a bin of name SUCCESS/FAILURE
  * and the value of the bin is the return value from the udf.
  */
-static int cl_scan_worker_do(cl_cluster_node * node, cl_scan_task * task) {
+static int cl_scan_worker_do(as_node * node, cl_scan_task * task) {
 
     uint8_t     rd_stack_buf[STACK_BUF_SZ] = {0};    
     uint8_t *   rd_buf = rd_stack_buf;
     size_t      rd_buf_sz = 0;
 
-    int fd = cl_cluster_node_fd_get(node, false);
+    int fd = as_node_fd_get(node);
     if ( fd == -1 ) { 
         LOG("[ERROR] cl_scan_worker_do: cannot get fd for node %s ",node->name);
         return CITRUSLEAF_FAIL_CLIENT; 
@@ -381,9 +381,11 @@ static int cl_scan_worker_do(cl_cluster_node * node, cl_scan_task * task) {
                 }
             }
             else if (msg->info3 & CL_MSG_INFO3_LAST)    {
-                if ( cf_debug_enabled() ) {
+#ifdef DEBUG_VERBOSE
+               if ( cf_debug_enabled() ) {
                     LOG("[INFO] cl_scan_worker_do: Received final message from node [%s], scan complete\n", node->name);
                 }
+#endif
                 done = true;
             }
             else if ((msg->n_ops || (msg->info1 & CL_MSG_INFO1_NOBINDATA))) {
@@ -443,7 +445,7 @@ static int cl_scan_worker_do(cl_cluster_node * node, cl_scan_task * task) {
         }
 
     } while ( done == false );
-    cl_cluster_node_fd_put(node, fd, false);
+    as_node_fd_put(node, fd);
 
 #ifdef DEBUG_VERBOSE    
     LOG("[DEBUG] cl_scan_worker_do: exited loop: rc %d\n", rc );
@@ -453,7 +455,7 @@ static int cl_scan_worker_do(cl_cluster_node * node, cl_scan_task * task) {
 }
 
 void * cl_scan_worker(void * pv_asc) {
-	cl_cluster* asc = (cl_cluster*)pv_asc;
+	as_cluster* asc = (as_cluster*)pv_asc;
 
 	while (true) {
         // Response structure to be pushed in the complete q
@@ -466,9 +468,11 @@ void * cl_scan_worker(void * pv_asc) {
             LOG("[WARNING] cl_scan_worker: queue pop failed\n");
         }
 
-        if ( cf_debug_enabled() ) {
+#ifdef DEBUG_VERBOSE
+       if ( cf_debug_enabled() ) {
             LOG("[DEBUG] cl_scan_worker: getting one task item\n");
         }
+#endif
 
         // This is how scan shutdown signals we're done.
         if ( ! task.asc ) {
@@ -478,9 +482,10 @@ void * cl_scan_worker(void * pv_asc) {
         // query if the node is still around
         int rc = CITRUSLEAF_FAIL_UNAVAILABLE;
 
-        cl_cluster_node * node = cl_cluster_node_get_byname(task.asc, task.node_name);
+        as_node * node = as_node_get_by_name(task.asc, task.node_name);
         if ( node ) {
             rc = cl_scan_worker_do(node, &task);
+			as_node_release(node);
         }
         else {
             LOG("[INFO] cl_scan_worker: No node found with the name %s\n", task.node_name);
@@ -538,7 +543,7 @@ cl_rv cl_scan_udf_destroy(cl_scan_udf * udf) {
  * Calls a scan on all the nodes in the cluster. This function initializes a background scan.
  * The udf return values are not returned back to the client. 
  */
-cf_vector * citrusleaf_udf_scan_background(cl_cluster * asc, cl_scan * scan) {
+cf_vector * citrusleaf_udf_scan_background(as_cluster * asc, cl_scan * scan) {
     scan->udf.type = CL_SCAN_UDF_BACKGROUND;
     cl_rv res = CITRUSLEAF_OK;
 
@@ -550,7 +555,7 @@ cf_vector * citrusleaf_udf_scan_background(cl_cluster * asc, cl_scan * scan) {
  * Calls a scan on a specified node in the cluster. This function initializes a background scan.
  * The udf return values are not returned back to the client. 
  */
-cl_rv citrusleaf_udf_scan_node_background(cl_cluster * asc, cl_scan * scan, char *node_name) {
+cl_rv citrusleaf_udf_scan_node_background(as_cluster * asc, cl_scan * scan, char *node_name) {
     scan->udf.type = CL_SCAN_UDF_BACKGROUND;
 	cl_node_response resp;
     cl_rv rv = CITRUSLEAF_OK;
@@ -570,7 +575,7 @@ cl_rv citrusleaf_udf_scan_node_background(cl_cluster * asc, cl_scan * scan, char
  *  Calls a scan on a particular node in the cluster with the given parameters and then applies
  *  the udf on the results. It returns values from the udf. The callback is then applied on those values at the client.
  */
-cl_rv citrusleaf_udf_scan_node(cl_cluster *asc, cl_scan *scan, char *node_name, int( *callback)(as_val *, void *), void * udata) {
+cl_rv citrusleaf_udf_scan_node(as_cluster *asc, cl_scan *scan, char *node_name, int( *callback)(as_val *, void *), void * udata) {
     scan->udf.type = CL_SCAN_UDF_CLIENT_RECORD;
 	cl_node_response resp;
     cl_rv rv = CITRUSLEAF_FAIL_CLIENT;
@@ -588,13 +593,13 @@ cl_rv citrusleaf_udf_scan_node(cl_cluster *asc, cl_scan *scan, char *node_name, 
 /* Calls a scan of all the nodes in the cluster with the given parameters and then applies the udf on the results.
  * It returns values from the udf. The callback is then applied on those values at the client. 
  */
-cf_vector * citrusleaf_udf_scan_all_nodes(cl_cluster *asc, cl_scan * scan, int (*callback)(as_val*, void*), void * udata) {
+cf_vector * citrusleaf_udf_scan_all_nodes(as_cluster *asc, cl_scan * scan, int (*callback)(as_val*, void*), void * udata) {
     scan->udf.type = CL_SCAN_UDF_CLIENT_RECORD;
     cl_rv rc = CITRUSLEAF_OK;
     return cl_scan_execute(asc, scan, NULL, &rc, callback, udata);
 }
 
-cf_vector * cl_scan_execute(cl_cluster * cluster, const cl_scan * scan, char * node_name, cl_rv * res, int (* callback)(as_val *, void *), void * udata) {
+cf_vector * cl_scan_execute(as_cluster * cluster, const cl_scan * scan, char * node_name, cl_rv * res, int (* callback)(as_val *, void *), void * udata) {
 
     cl_rv           rc                          = CITRUSLEAF_OK;
     uint8_t         wr_stack_buf[STACK_BUF_SZ]  = { 0 };
@@ -637,7 +642,7 @@ cf_vector * cl_scan_execute(cl_cluster * cluster, const cl_scan * scan, char * n
         char *node_names    = NULL;    
 
         // Get a list of the node names, so we can can send work to each node
-        cl_cluster_get_node_names(cluster, &node_count, &node_names);
+        as_cluster_get_node_names(cluster, &node_count, &node_names);
         if ( node_count == 0 ) {
             LOG("[ERROR] cl_scan_execute: don't have any nodes?\n");
             *res = CITRUSLEAF_FAIL_CLIENT;
@@ -741,23 +746,25 @@ cl_rv cl_scan_limit(cl_scan *scan, uint64_t limit) {
 }
 
 int
-cl_cluster_scan_init(cl_cluster* asc)
+cl_cluster_scan_init(as_cluster* asc)
 {
 	// We do this lazily, during the first scan request, so make sure it's only
 	// done once.
-	if (cf_atomic32_incr(&asc->scan_initialized) > 1 || asc->scan_q) {
+	if (ck_pr_fas_32(&asc->scan_initialized, 1) == 1 || asc->scan_q) {
 		return 0;
 	}
 
+#ifdef DEBUG_VERBOSE
 	if (cf_debug_enabled()) {
-		LOG("[DEBUG] cl_cluster_scan_init: creating %d threads\n", NUM_SCAN_THREADS);
+		LOG("[DEBUG] cl_cluster_scan_init: creating %d threads\n", AS_NUM_SCAN_THREADS);
 	}
-
+#endif
+	
 	// Create dispatch queue.
 	asc->scan_q = cf_queue_create(sizeof(cl_scan_task), true);
 
 	// Create thread pool.
-	for (int i = 0; i < NUM_SCAN_THREADS; i++) {
+	for (int i = 0; i < AS_NUM_SCAN_THREADS; i++) {
 		pthread_create(&asc->scan_threads[i], 0, cl_scan_worker, (void*)asc);
 	}
 
@@ -765,10 +772,10 @@ cl_cluster_scan_init(cl_cluster* asc)
 }
 
 void
-cl_cluster_scan_shutdown(cl_cluster* asc)
+cl_cluster_scan_shutdown(as_cluster* asc)
 {
 	// Check whether we ever (lazily) initialized scan machinery.
-	if (cf_atomic32_get(asc->scan_initialized) == 0 && ! asc->scan_q) {
+	if (ck_pr_load_32(&asc->scan_initialized) == 0 && ! asc->scan_q) {
 		return;
 	}
 
@@ -776,17 +783,17 @@ cl_cluster_scan_shutdown(cl_cluster* asc)
 	// "running" flag) to allow the workers to "wait forever" on processing the
 	// work dispatch queue, which has minimum impact when the queue is empty.
 	// This also means all queued requests get processed when shutting down.
-	for (int i = 0; i < NUM_SCAN_THREADS; i++) {
+	for (int i = 0; i < AS_NUM_SCAN_THREADS; i++) {
 		cl_scan_task task;
 		task.asc = NULL;
 		cf_queue_push(asc->scan_q, &task);
 	}
 
-	for (int i = 0; i < NUM_SCAN_THREADS; i++) {
+	for (int i = 0; i < AS_NUM_SCAN_THREADS; i++) {
 		pthread_join(asc->scan_threads[i], NULL);
 	}
 
 	cf_queue_destroy(asc->scan_q);
 	asc->scan_q = NULL;
-	cf_atomic32_set(&asc->scan_initialized, 0);
+	ck_pr_store_32(&asc->scan_initialized, 0);
 }

@@ -42,7 +42,7 @@
 #include <citrusleaf/cf_socket.h>
 
 #include <citrusleaf/citrusleaf.h>
-#include <citrusleaf/cl_cluster.h>
+#include <aerospike/as_cluster.h>
 
 #include "internal.h"
 
@@ -685,9 +685,7 @@ cl_object_get_size(cl_object *obj, size_t *sz)
 			*sz += obj->sz;
 			break;
 		default:
-//#ifdef DEBUG			
-			fprintf(stderr, "internal error value_to_op get size has unknown value type %d\n",obj->type);
-//#endif			
+			cf_error("internal error value_to_op get size has unknown value type %d", obj->type);
 			return(-1);
 	}
 	return(0);
@@ -781,7 +779,7 @@ cl_value_to_op(cl_bin *v, cl_operator operator, cl_operation *operation, cl_msg_
 			}
 			break;
 		default:
-#ifdef DEBUG				
+#ifdef DEBUG_VERBOSE				
 			cf_debug("internal error value_to_op has unknown value type %d",tmpValue->object.type);
 #endif				
 			return(-1);
@@ -816,9 +814,9 @@ cl_object_to_buf (cl_object *obj, uint8_t *data)
 			memcpy(data, obj->u.blob, obj->sz);
 			break;
 		default:
-#ifdef DEBUG				
-			fprintf(stderr, "internal error value_to_op has unknown value type %d\n",obj->type);
-#endif				
+#ifdef DEBUG_VERBOSE
+			cf_error("internal error value_to_op has unknown value type %d", obj->type);
+#endif
 			return(-1);
 	}
 	return(0);
@@ -1117,7 +1115,7 @@ set_value_search(cl_msg_op *op, cl_bin *values, cl_operation *operations, int n_
 			break;
 	}
 	if (i == n_values) {
-#ifdef DEBUG		
+#ifdef DEBUG_VERBOSE		
 		cf_debug("set value: but value wasn't there to begin with. Don't understand.");
 #endif		
 		return(-1);
@@ -1135,7 +1133,7 @@ void
 cl_set_value_particular(cl_msg_op *op, cl_bin *value)
 {
 	if (op->name_sz > sizeof(value->bin_name)) {
-#ifdef DEBUG		
+#ifdef DEBUG_VERBOSE		
 		cf_debug("Set Value Particular: bad response from server");
 #endif	
 		return;
@@ -1171,7 +1169,7 @@ cl_parse(cl_msg *msg, uint8_t *buf, size_t buf_len, cl_bin **values_r, cl_operat
 		for (i=0;i<msg->n_fields;i++) {
 			
 			if (buf_lim < buf + sizeof(cl_msg_field)) {
-#ifdef DEBUG
+#ifdef DEBUG_VERBOSE
 				cf_error("parse: too short message: said there was a field, but too short");
 #endif
 				return(-1);
@@ -1227,7 +1225,7 @@ cl_parse(cl_msg *msg, uint8_t *buf, size_t buf_len, cl_bin **values_r, cl_operat
 				cl_bin *value = values_r ? &((*values_r)[i]) : &((*operations_r)[i].bin);
 				
 				if (buf_lim < buf + sizeof(cl_msg_op)) {
-#ifdef DEBUG
+#ifdef DEBUG_VERBOSE
 					cf_debug("parse: too short message: said there was ops, iteration %d, but too short", i);
 #endif
 					return(-1);
@@ -1247,7 +1245,7 @@ cl_parse(cl_msg *msg, uint8_t *buf, size_t buf_len, cl_bin **values_r, cl_operat
 			for (i=0;i<msg->n_ops;i++) {
 
 				if (buf_lim < buf + sizeof(cl_msg_op)) {
-#ifdef DEBUG
+#ifdef DEBUG_VERBOSE
 					cf_debug("parse: too short message: said there was ops, iteration %d, but too short", i);
 #endif
 					return(-1);
@@ -1282,7 +1280,7 @@ cl_parse(cl_msg *msg, uint8_t *buf, size_t buf_len, cl_bin **values_r, cl_operat
 // Similarly, either values or operations must be set, but not both.
 
 int
-do_the_full_monte(cl_cluster *asc, int info1, int info2, int info3, const char *ns, const char *set, const cl_object *key,
+do_the_full_monte(as_cluster *asc, int info1, int info2, int info3, const char *ns, const char *set, const cl_object *key,
 	const cf_digest *digest, cl_bin **values, cl_operator operator, cl_operation **operations, int *n_values, 
 	uint32_t *cl_gen, const cl_write_parameters *cl_w_p, uint64_t *trid, char **setname_r, as_call * call, uint32_t* cl_ttl)
 {
@@ -1304,7 +1302,7 @@ do_the_full_monte(cl_cluster *asc, int info1, int info2, int info3, const char *
     
     uint        progress_timeout_ms;
 	uint64_t deadline_ms;
-	cl_cluster_node *node = 0;
+	as_node *node = 0;
 	
 	int fd = -1;
 
@@ -1374,24 +1372,24 @@ do_the_full_monte(cl_cluster *asc, int info1, int info2, int info3, const char *
 		after_read_body_time = 0;
 #endif
         
-#ifdef DEBUG		
+#ifdef DEBUG_VERBOSE		
 		if (try > 0)
 			cf_debug("request retrying try %d tid %zu", try, (uint64_t)pthread_self());
 #endif        
 		try++;
 		
 		// Get an FD from a cluster
-		node = cl_cluster_node_get(asc, ns, &d_ret, info2 & CL_MSG_INFO2_WRITE ? true : false);
+		node = as_node_get(asc, ns, &d_ret, info2 & CL_MSG_INFO2_WRITE ? true : false);
 		if (!node) {
-#ifdef DEBUG
+#ifdef DEBUG_VERBOSE
 			cf_debug("warning: no healthy nodes in cluster, retrying");
 #endif
 			usleep(10000);
 			goto Retry;
 		}
-		fd = cl_cluster_node_fd_get(node, false);
+		fd = as_node_fd_get(node);
 		if (fd == -1) {
-#ifdef DEBUG			
+#ifdef DEBUG_VERBOSE			
 			cf_debug("warning: node %s has no file descriptors, retrying transaction (tid %zu)", node->name, (uint64_t)pthread_self());
 #endif			
 			usleep(1000);
@@ -1420,7 +1418,7 @@ do_the_full_monte(cl_cluster *asc, int info1, int info2, int info3, const char *
 #endif
 
 		if (rv != 0) {
-#ifdef DEBUG			
+#ifdef DEBUG_VERBOSE			
 			cf_debug("Citrusleaf: write timeout or error when writing header to server - %d fd %d errno %d (tid %zu)",rv,fd,errno,(uint64_t)pthread_self());
 #endif
 #ifdef DEBUG_TIME
@@ -1431,7 +1429,7 @@ do_the_full_monte(cl_cluster *asc, int info1, int info2, int info3, const char *
 			goto Retry;
 		}
 
-#ifdef DEBUG		
+#ifdef DEBUG_VERBOSE		
 		memset(&msg, 0, sizeof(as_msg));
 #endif
 #ifdef DEBUG_TIME
@@ -1446,7 +1444,7 @@ do_the_full_monte(cl_cluster *asc, int info1, int info2, int info3, const char *
 
 		if (rv) {
 
-#ifdef DEBUG            
+#ifdef DEBUG_VERBOSE            
 			cf_debug("Citrusleaf: error when reading header from server - rv %d fd %d", rv, fd);
 #endif
 #ifdef DEBUG_TIME
@@ -1494,7 +1492,7 @@ do_the_full_monte(cl_cluster *asc, int info1, int info2, int info3, const char *
 				if (rd_buf != rd_stack_buf) { free(rd_buf); }
                 rd_buf = 0;
                 
-#ifdef DEBUG            
+#ifdef DEBUG_VERBOSE            
                 cf_debug("Citrusleaf: error when reading from server - rv %d fd %d", rv, fd);
 #endif
 #ifdef DEBUG_TIME
@@ -1522,12 +1520,12 @@ Retry:
 		}
 
 		if (node) {
-            cl_cluster_node_put(node); 
+            as_node_release(node);
             node = 0; 
         }
 
         if (deadline_ms && (deadline_ms < cf_getms() ) ) {
-#ifdef DEBUG            
+#ifdef DEBUG_VERBOSE            
             cf_debug("out of luck out of time : deadline %"PRIu64" now %"PRIu64,
                 deadline_ms, cf_getms());
 #endif            
@@ -1539,7 +1537,7 @@ Retry:
 	
 Error:	
 	
-#ifdef DEBUG	
+#ifdef DEBUG_VERBOSE	
 	cf_debug("exiting with failure: wpol %d timeleft %d rv %d",
 		(int)(cl_w_p ? cl_w_p->w_pol : 0),
 		(int)(deadline_ms - cf_getms() ), rv );
@@ -1554,8 +1552,8 @@ Error:
     
 Ok:    
 
-    cl_cluster_node_fd_put(node, fd, false);
-	cl_cluster_node_put(node);
+    as_node_fd_put(node, fd);
+	as_node_release(node);
    
 	if (wr_buf != wr_stack_buf)		free(wr_buf);
 
@@ -1608,7 +1606,7 @@ Ok:
 
 
 extern cl_rv
-citrusleaf_get(cl_cluster *asc, const char *ns, const char *set, const cl_object *key,
+citrusleaf_get(as_cluster *asc, const char *ns, const char *set, const cl_object *key,
 		const cf_digest *digest, cl_bin *values, int n_values, int timeout_ms,
 		uint32_t *cl_gen, uint32_t* cl_ttl)
 {
@@ -1622,7 +1620,7 @@ citrusleaf_get(cl_cluster *asc, const char *ns, const char *set, const cl_object
 }
 
 extern cl_rv
-citrusleaf_get_digest(cl_cluster *asc, const char *ns, const cf_digest *digest,
+citrusleaf_get_digest(as_cluster *asc, const char *ns, const cf_digest *digest,
 		cl_bin *values, int n_values, int timeout_ms, uint32_t *cl_gen, uint32_t* cl_ttl)
 {
     	uint64_t trid=0;
@@ -1636,7 +1634,7 @@ citrusleaf_get_digest(cl_cluster *asc, const char *ns, const cf_digest *digest,
 
 
 extern cl_rv
-citrusleaf_put(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, const cf_digest *digest, const cl_bin *values, int n_values, const cl_write_parameters *cl_w_p)
+citrusleaf_put(as_cluster *asc, const char *ns, const char *set, const cl_object *key, const cf_digest *digest, const cl_bin *values, int n_values, const cl_write_parameters *cl_w_p)
 {
     	uint64_t trid=0;
 	return( do_the_full_monte( asc, 0, CL_MSG_INFO2_WRITE, 0, ns, set, key, digest,
@@ -1645,7 +1643,7 @@ citrusleaf_put(cl_cluster *asc, const char *ns, const char *set, const cl_object
 }
 
 extern cl_rv
-citrusleaf_put_digest(cl_cluster *asc, const char *ns, const cf_digest *digest, const cl_bin *values, int n_values, const cl_write_parameters *cl_w_p)
+citrusleaf_put_digest(as_cluster *asc, const char *ns, const cf_digest *digest, const cl_bin *values, int n_values, const cl_write_parameters *cl_w_p)
 {
     	uint64_t trid=0;
 	return( do_the_full_monte( asc, 0, CL_MSG_INFO2_WRITE, 0, ns, 0, 0, digest, 
@@ -1654,7 +1652,7 @@ citrusleaf_put_digest(cl_cluster *asc, const char *ns, const cf_digest *digest, 
 }
 
 extern cl_rv
-citrusleaf_put_digest_with_setname(cl_cluster *asc, const char *ns, const char *set, const cf_digest *digest, const cl_bin *values, int n_values, const cl_write_parameters *cl_w_p)
+citrusleaf_put_digest_with_setname(as_cluster *asc, const char *ns, const char *set, const cf_digest *digest, const cl_bin *values, int n_values, const cl_write_parameters *cl_w_p)
 {
     	uint64_t trid=0;
 	return( do_the_full_monte( asc, 0, CL_MSG_INFO2_WRITE, 0, ns, set, 0, digest, 
@@ -1663,7 +1661,7 @@ citrusleaf_put_digest_with_setname(cl_cluster *asc, const char *ns, const char *
 }
 
 extern cl_rv
-citrusleaf_restore(cl_cluster *asc, const char *ns, const cf_digest *digest, const char *set, const cl_bin *values, int n_values, const cl_write_parameters *cl_w_p)
+citrusleaf_restore(as_cluster *asc, const char *ns, const cf_digest *digest, const char *set, const cl_bin *values, int n_values, const cl_write_parameters *cl_w_p)
 {
     uint64_t trid=0;
 	return( do_the_full_monte( asc, 0, CL_MSG_INFO2_WRITE, 0, ns, set, 0, digest, 
@@ -1672,65 +1670,16 @@ citrusleaf_restore(cl_cluster *asc, const char *ns, const cf_digest *digest, con
 }
 
 extern cl_rv
-citrusleaf_async_put(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, const cl_bin *values, 
-			int n_values, const cl_write_parameters *cl_w_p, uint64_t trid, void *udata)
-{
-	//Hardcoding to say that the client is XDS(in info1 bitmap). 
-	//If this is used by some other clients in the future, we should parameterize it.
-	return( cl_do_async_monte( asc, CL_MSG_INFO1_XDS, CL_MSG_INFO2_WRITE, ns, set, key, 0, (cl_bin **) &values,
-					CL_OP_WRITE, 0, &n_values, NULL, cl_w_p, &trid, udata) ); 
-}
-
-extern cl_rv
-citrusleaf_async_delete_digest(cl_cluster *asc, const char *ns, const cf_digest *digest, const cl_write_parameters *cl_w_p, void *udata)
-{
-    	uint64_t trid=0;
-	return( cl_do_async_monte( asc, CL_MSG_INFO1_XDS, CL_MSG_INFO2_DELETE | CL_MSG_INFO2_WRITE, ns,
-			NULL, 0, digest, NULL, CL_OP_WRITE, 0, NULL, NULL, cl_w_p, &trid, udata));
-}
-
-extern cl_rv
-citrusleaf_async_put_digest(cl_cluster *asc, const char *ns, const cf_digest *digest, 
-			char *setname, const cl_bin *values, int n_values, 
-			const cl_write_parameters *cl_w_p, uint64_t trid, void *udata)
-{
-	//Hardcoding to say that the client is XDS(in info1 bitmap). 
-	//If this is used by some other clients in the future, we should parameterize it.
-	return( cl_do_async_monte( asc, CL_MSG_INFO1_XDS, CL_MSG_INFO2_WRITE, ns, setname, 0, digest, (cl_bin **) &values,
-					CL_OP_WRITE, 0, &n_values, NULL, cl_w_p, &trid, udata) ); 
-}
-
-extern cl_rvclient
-citrusleaf_check_cluster_health(cl_cluster *asc)
-{
-	int number_of_nodes_alive = 0;
-
-	pthread_mutex_lock(&asc->LOCK);
-	for (uint i = 0; i < cf_vector_size(&asc->node_v); i++) {
-//		cl_cluster_node *cn = cf_vector_pointer_get(&asc->node_v, i);
-
-		// For now there's no throttling or measure of health - count them all.
-		number_of_nodes_alive++;
-	}
-	pthread_mutex_unlock(&asc->LOCK);
-
-	if (number_of_nodes_alive > 0)
-		return CITRUSLEAF_FAIL_DC_UP;
-	else
-		return CITRUSLEAF_FAIL_DC_DOWN;
-}
-
-extern cl_rv
-citrusleaf_delete(cl_cluster *asc, const char *ns, const char *set, const cl_object *key,
+citrusleaf_delete(as_cluster *asc, const char *ns, const char *set, const cl_object *key,
 		const cf_digest *digest, const cl_write_parameters *cl_w_p)
 {
-    	uint64_t trid=0;
+	uint64_t trid=0;
 	return( do_the_full_monte( asc, 0, CL_MSG_INFO2_DELETE | CL_MSG_INFO2_WRITE, 0,
 			ns, set, key, digest, 0, 0, 0, 0, NULL, cl_w_p, &trid, NULL, NULL, NULL) );
 }
 
 extern cl_rv
-citrusleaf_delete_digest(cl_cluster *asc, const char *ns, const cf_digest *digest, const cl_write_parameters *cl_w_p)
+citrusleaf_delete_digest(as_cluster *asc, const char *ns, const cf_digest *digest, const cl_write_parameters *cl_w_p)
 {
     	uint64_t trid=0;
 	return( do_the_full_monte( asc, 0, CL_MSG_INFO2_DELETE | CL_MSG_INFO2_WRITE, 0, 
@@ -1744,7 +1693,7 @@ citrusleaf_delete_digest(cl_cluster *asc, const char *ns, const cf_digest *diges
 //
 
 extern cl_rv
-citrusleaf_exists_key(cl_cluster *asc, const char *ns, const char *set, const cl_object *key,
+citrusleaf_exists_key(as_cluster *asc, const char *ns, const char *set, const cl_object *key,
 		const cf_digest *digest, cl_bin *values, int n_values, int timeout_ms,
 		uint32_t *cl_gen, uint32_t* cl_ttl)
 {
@@ -1759,7 +1708,7 @@ citrusleaf_exists_key(cl_cluster *asc, const char *ns, const char *set, const cl
 }
 
 extern cl_rv
-citrusleaf_exists_digest(cl_cluster *asc, const char *ns, const cf_digest *digest,
+citrusleaf_exists_digest(as_cluster *asc, const char *ns, const cf_digest *digest,
 		cl_bin *values, int n_values, int timeout_ms, uint32_t *cl_gen, uint32_t* cl_ttl)
 {
     	uint64_t trid=0;
@@ -1774,7 +1723,7 @@ citrusleaf_exists_digest(cl_cluster *asc, const char *ns, const cf_digest *diges
 
 
 extern cl_rv
-citrusleaf_get_all(cl_cluster *asc, const char *ns, const char *set, const cl_object *key,
+citrusleaf_get_all(as_cluster *asc, const char *ns, const char *set, const cl_object *key,
 		const cf_digest *digest, cl_bin **values, int *n_values, int timeout_ms,
 		uint32_t *cl_gen, uint32_t* cl_ttl)
 {
@@ -1797,7 +1746,7 @@ citrusleaf_get_all(cl_cluster *asc, const char *ns, const char *set, const cl_ob
 }
 
 extern cl_rv
-citrusleaf_get_all_digest_getsetname(cl_cluster *asc, const char *ns, const cf_digest *digest, 
+citrusleaf_get_all_digest_getsetname(as_cluster *asc, const char *ns, const cf_digest *digest, 
 	cl_bin **values, int *n_values, int timeout_ms, uint32_t *cl_gen, char **setname, uint32_t* cl_ttl)
 {
 	if ((values == 0) || (n_values == 0)) {
@@ -1825,7 +1774,7 @@ citrusleaf_get_all_digest_getsetname(cl_cluster *asc, const char *ns, const cf_d
 }
 
 extern cl_rv
-citrusleaf_get_all_digest(cl_cluster *asc, const char *ns, const cf_digest *digest, 
+citrusleaf_get_all_digest(as_cluster *asc, const char *ns, const cf_digest *digest, 
 	cl_bin **values, int *n_values, int timeout_ms, uint32_t *cl_gen, uint32_t* cl_ttl)
 {
 
@@ -1834,7 +1783,7 @@ citrusleaf_get_all_digest(cl_cluster *asc, const char *ns, const cf_digest *dige
 }
 
 extern cl_rv
-citrusleaf_verify(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, const cl_bin *values, int n_values, int timeout_ms, uint32_t *cl_gen)
+citrusleaf_verify(as_cluster *asc, const char *ns, const char *set, const cl_object *key, const cl_bin *values, int n_values, int timeout_ms, uint32_t *cl_gen)
 {
     	uint64_t trid=0;
 	cl_write_parameters cl_w_p;
@@ -1847,7 +1796,7 @@ citrusleaf_verify(cl_cluster *asc, const char *ns, const char *set, const cl_obj
 }
 
 extern cl_rv
-citrusleaf_delete_verify(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, const cl_write_parameters *cl_w_p)
+citrusleaf_delete_verify(as_cluster *asc, const char *ns, const char *set, const cl_object *key, const cl_write_parameters *cl_w_p)
 {
     	uint64_t trid=0;
 	return( do_the_full_monte( asc, CL_MSG_INFO1_VERIFY, CL_MSG_INFO2_DELETE | CL_MSG_INFO2_WRITE, 
@@ -1902,7 +1851,7 @@ citrusleaf_calculate_digest(const char *set, const cl_object *key, cf_digest *di
 // any bin. It can't be used to operate and 'get many' in the response, though.
 //
 extern cl_rv
-citrusleaf_operate_digest(cl_cluster *asc, const char *ns, const char *set, cf_digest *digest,
+citrusleaf_operate_digest(as_cluster *asc, const char *ns, const char *set, cf_digest *digest,
 		cl_operation *operations, int n_operations, const cl_write_parameters *cl_w_p,
 		uint32_t *generation, uint32_t* ttl)
 {
@@ -1940,7 +1889,7 @@ citrusleaf_operate_digest(cl_cluster *asc, const char *ns, const char *set, cf_d
 
 
 extern cl_rv
-citrusleaf_operate(cl_cluster *asc, const char *ns, const char *set, const cl_object *key,
+citrusleaf_operate(as_cluster *asc, const char *ns, const char *set, const cl_object *key,
 		cf_digest *digest, cl_operation *operations, int n_operations,
 		const cl_write_parameters *cl_w_p, uint32_t *generation, uint32_t* ttl)
 {

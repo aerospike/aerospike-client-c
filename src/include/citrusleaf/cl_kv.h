@@ -22,7 +22,7 @@
 #pragma once
 
 #include <citrusleaf/cl_types.h>
-#include <citrusleaf/cl_cluster.h>
+#include <aerospike/as_cluster.h>
 #include <citrusleaf/cl_write.h>
 
 /******************************************************************************
@@ -44,42 +44,34 @@
  * (the simple 'get') See that call for information there.
  */
  
-cl_rv citrusleaf_get_all(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, const cf_digest *d, cl_bin **bins, int *n_bins, int timeout_ms, uint32_t *cl_gen, uint32_t* cl_ttl);
-cl_rv citrusleaf_get_all_digest(cl_cluster *asc, const char *ns, const cf_digest *d, cl_bin **bins, int *n_bins, int timeout_ms, uint32_t *cl_gen, uint32_t* cl_ttl);
-cl_rv citrusleaf_get_all_digest_getsetname(cl_cluster *asc, const char *ns, const cf_digest *d, cl_bin **bins, int *n_bins, int timeout_ms, uint32_t *cl_gen, char **setname, uint32_t* cl_ttl);
+cl_rv citrusleaf_get_all(as_cluster *asc, const char *ns, const char *set, const cl_object *key, const cf_digest *d, cl_bin **bins, int *n_bins, int timeout_ms, uint32_t *cl_gen, uint32_t* cl_ttl);
+cl_rv citrusleaf_get_all_digest(as_cluster *asc, const char *ns, const cf_digest *d, cl_bin **bins, int *n_bins, int timeout_ms, uint32_t *cl_gen, uint32_t* cl_ttl);
+cl_rv citrusleaf_get_all_digest_getsetname(as_cluster *asc, const char *ns, const cf_digest *d, cl_bin **bins, int *n_bins, int timeout_ms, uint32_t *cl_gen, char **setname, uint32_t* cl_ttl);
 
 /**
  * Put is like insert. Create a list of bins, and call this function to set them.
  */
-cl_rv citrusleaf_put(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, const cf_digest *d, const cl_bin *bins, int n_bins, const cl_write_parameters *cl_w_p);
-cl_rv citrusleaf_put_digest(cl_cluster *asc, const char *ns, const cf_digest *d, const cl_bin *bins, int n_bins, const cl_write_parameters *cl_w_p);
-cl_rv citrusleaf_put_digest_with_setname(cl_cluster *asc, const char *ns, const char *set, const cf_digest *d, const cl_bin *bins, int n_bins, const cl_write_parameters *cl_w_p);
-cl_rv citrusleaf_restore(cl_cluster *asc, const char *ns, const cf_digest *digest, const char *set, const cl_bin *values, int n_values, const cl_write_parameters *cl_w_p);
-
-/**
- * Async versions of the put calls
- */
-cl_rv citrusleaf_async_put(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, const cl_bin *bins, int n_bins, const cl_write_parameters *cl_w_p, uint64_t trid, void *udata);
-cl_rv citrusleaf_async_put_digest(cl_cluster *asc, const char *ns, const cf_digest *d, char *setname, const cl_bin *bins, int n_bins, const cl_write_parameters *cl_w_p, uint64_t trid, void *udata);
-cl_rvclient citrusleaf_check_cluster_health(cl_cluster *asc);
-cl_rv citrusleaf_async_delete_digest(cl_cluster *asc, const char *ns, const cf_digest *digest, const cl_write_parameters *cl_w_p, void *udata);
+cl_rv citrusleaf_put(as_cluster *asc, const char *ns, const char *set, const cl_object *key, const cf_digest *d, const cl_bin *bins, int n_bins, const cl_write_parameters *cl_w_p);
+cl_rv citrusleaf_put_digest(as_cluster *asc, const char *ns, const cf_digest *d, const cl_bin *bins, int n_bins, const cl_write_parameters *cl_w_p);
+cl_rv citrusleaf_put_digest_with_setname(as_cluster *asc, const char *ns, const char *set, const cf_digest *d, const cl_bin *bins, int n_bins, const cl_write_parameters *cl_w_p);
+cl_rv citrusleaf_restore(as_cluster *asc, const char *ns, const cf_digest *digest, const char *set, const cl_bin *values, int n_values, const cl_write_parameters *cl_w_p);
 
 /**
  * Get is like select in SQL. Create a list of bins to get, and call this function to retrieve
  * the values.
  */
-cl_rv citrusleaf_get(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, const cf_digest *d, cl_bin *bins, int n_bins, int timeout_ms, uint32_t *cl_gen, uint32_t* cl_ttl);
-cl_rv citrusleaf_get_digest(cl_cluster *asc, const char *ns, const cf_digest *d, cl_bin *bins, int n_bins, int timeout_ms, uint32_t *cl_gen, uint32_t* cl_ttl);
+cl_rv citrusleaf_get(as_cluster *asc, const char *ns, const char *set, const cl_object *key, const cf_digest *d, cl_bin *bins, int n_bins, int timeout_ms, uint32_t *cl_gen, uint32_t* cl_ttl);
+cl_rv citrusleaf_get_digest(as_cluster *asc, const char *ns, const cf_digest *d, cl_bin *bins, int n_bins, int timeout_ms, uint32_t *cl_gen, uint32_t* cl_ttl);
 
 /**
  * Delete simply wipes this single key off the face of the earth.
  */
-cl_rv citrusleaf_delete(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, const cf_digest *d, const cl_write_parameters *cl_w_p);
-cl_rv citrusleaf_delete_digest(cl_cluster *asc, const char *ns,  const cf_digest *d, const cl_write_parameters *cl_w_p);
+cl_rv citrusleaf_delete(as_cluster *asc, const char *ns, const char *set, const cl_object *key, const cf_digest *d, const cl_write_parameters *cl_w_p);
+cl_rv citrusleaf_delete_digest(as_cluster *asc, const char *ns,  const cf_digest *d, const cl_write_parameters *cl_w_p);
 
 /**
  * Efficiently determine if the key exists.
  *  (Note:  The bins are currently ignored but may be testable in the future.)
  */
-cl_rv citrusleaf_exists_key(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, const cf_digest *d, cl_bin *bins, int n_bins, int timeout_ms, uint32_t *cl_gen, uint32_t* cl_ttl);
-cl_rv citrusleaf_exists_digest(cl_cluster *asc, const char *ns, const cf_digest *d, cl_bin *bins, int n_bins, int timeout_ms, uint32_t *cl_gen, uint32_t* cl_ttl);
+cl_rv citrusleaf_exists_key(as_cluster *asc, const char *ns, const char *set, const cl_object *key, const cf_digest *d, cl_bin *bins, int n_bins, int timeout_ms, uint32_t *cl_gen, uint32_t* cl_ttl);
+cl_rv citrusleaf_exists_digest(as_cluster *asc, const char *ns, const cf_digest *d, cl_bin *bins, int n_bins, int timeout_ms, uint32_t *cl_gen, uint32_t* cl_ttl);

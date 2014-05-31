@@ -25,16 +25,16 @@
 extern "C" {
 #endif
 
+#include <aerospike/as_cluster.h>
+#include <aerospike/as_lookup.h>
+#include <aerospike/as_partition.h>
+
 #include <citrusleaf/cl_types.h>
-#include <citrusleaf/cl_async.h>
-#include <citrusleaf/cl_cluster.h>
 #include <citrusleaf/cl_object.h>
 #include <citrusleaf/cl_write.h>
 #include <citrusleaf/cl_info.h>
 #include <citrusleaf/cl_kv.h>
-#include <citrusleaf/cl_lookup.h>
 #include <citrusleaf/cl_object.h>
-#include <citrusleaf/cl_partition.h>
 #include <citrusleaf/cl_scan.h>
 #include <citrusleaf/cl_batch.h>
 
@@ -79,31 +79,31 @@ void citrusleaf_print_stats(void);
 struct cl_cluster_compression_stat_s;
 typedef struct cl_cluster_compression_stat_s cl_cluster_compression_stat;
 
-extern void citrusleaf_cluster_put_compression_stat(cl_cluster *asc, uint64_t actual_sz, uint64_t compressed_sz);
-extern void citrusleaf_cluster_get_compression_stat(cl_cluster *asc, uint64_t *actual_sz, uint64_t *compressed_sz);
+extern void citrusleaf_cluster_put_compression_stat(as_cluster *asc, uint64_t actual_sz, uint64_t compressed_sz);
+extern void citrusleaf_cluster_get_compression_stat(as_cluster *asc, uint64_t *actual_sz, uint64_t *compressed_sz);
 
 /*
  * Set minimum size of packet, above which packet will be compressed before sending on wire,
  * provided compression is enabled.
  */
 int
-citrusleaf_cluster_change_compression_threshold(cl_cluster *asc, int size_in_bytes);
+citrusleaf_cluster_change_compression_threshold(as_cluster *asc, int size_in_bytes);
 
 /**
  * This call is good for testing. Call it when you think you know the values. If the key doesn't exist, or
  * the data is incorrect, then the server that is serving the request will spit a failure, and if you're
  * running in the right server debug mode you can examine the error in detail.
  */
-cl_rv citrusleaf_verify(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, const cl_bin *bins, int n_bins, int timeout_ms, uint32_t *cl_gen);
-cl_rv citrusleaf_delete_verify(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, const cl_write_parameters *cl_w_p);
+cl_rv citrusleaf_verify(as_cluster *asc, const char *ns, const char *set, const cl_object *key, const cl_bin *bins, int n_bins, int timeout_ms, uint32_t *cl_gen);
+cl_rv citrusleaf_delete_verify(as_cluster *asc, const char *ns, const char *set, const cl_object *key, const cl_write_parameters *cl_w_p);
 
 /**
  * This call allows the caller to specify the operation - read, write, add, etc.  Multiple operations
  * can be specified in a single call.
  */
 
-cl_rv citrusleaf_operate(cl_cluster *asc, const char *ns, const char *set, const cl_object *key, cf_digest *d, cl_operation *operations, int n_operations, const cl_write_parameters *cl_w_p, uint32_t *generation, uint32_t* ttl);
-cl_rv citrusleaf_operate_digest(cl_cluster *asc, const char *ns, const char *set, cf_digest *d, cl_operation *operations, int n_operations, const cl_write_parameters *cl_w_p, uint32_t *generation, uint32_t* ttl);
+cl_rv citrusleaf_operate(as_cluster *asc, const char *ns, const char *set, const cl_object *key, cf_digest *d, cl_operation *operations, int n_operations, const cl_write_parameters *cl_w_p, uint32_t *generation, uint32_t* ttl);
+cl_rv citrusleaf_operate_digest(as_cluster *asc, const char *ns, const char *set, cf_digest *d, cl_operation *operations, int n_operations, const cl_write_parameters *cl_w_p, uint32_t *generation, uint32_t* ttl);
 
 /**
  * This debugging call can be useful for tracking down errors and coordinating with server failures

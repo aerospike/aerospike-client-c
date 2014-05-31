@@ -21,7 +21,7 @@ else
 CFLAGS += -rdynamic
 endif
 
-CFLAGS += -I$(AEROSPIKE)/target/$(PLATFORM)/include
+CFLAGS += -I$(AEROSPIKE)/target/$(PLATFORM)/include -I$(AEROSPIKE)/target/$(PLATFORM)/include/ck
 
 LDFLAGS = 
 LDFLAGS += -lssl -lcrypto -lpthread

@@ -28,7 +28,7 @@
 #include <aerospike/as_stream.h>
 
 #include <citrusleaf/citrusleaf.h>
-#include <citrusleaf/cl_cluster.h>
+#include <aerospike/as_cluster.h>
 #include <citrusleaf/cl_query.h>
 
 #include <stdint.h>

@@ -1,5 +1,5 @@
 /******************************************************************************
- * Copyright 2008-2013 by Aerospike.
+ * Copyright 2008-2014 by Aerospike.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy 
  * of this software and associated documentation files (the "Software"), to 
@@ -21,15 +21,18 @@
  *****************************************************************************/
 #pragma once
 
-#include <citrusleaf/cl_types.h>
-#include <citrusleaf/cl_cluster.h>
+#include <aerospike/as_cluster.h>
+#include <aerospike/as_vector.h>
 
 /******************************************************************************
  * FUNCTIONS
  ******************************************************************************/
 
 /**
- * Do a lookup with this name and port, and add the sockaddr to the
- * vector using the unique lookup
+ *	@private
+ *	Lookup address(es) given hostname. Addresses are returned in the sockaddr_in vector
+ *	if it's not null.  The addition to the vector will be done via a unique add just in
+ *	case there are duplicates. Return true on success.
  */
-int cl_lookup(cl_cluster *asc, char *hostname, short port, cf_vector *sockaddr_in_v);
+bool
+as_lookup(as_cluster* cluster, char* hostname, uint16_t port, as_vector* /*<struct sockaddr_in>*/ addresses);

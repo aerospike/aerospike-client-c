@@ -70,7 +70,7 @@
  *	@private
  *	Forward declaration of a cluster object.
  */
-struct cl_cluster_s;
+struct as_cluster_s;
 
 /**
  * 	An instance of @ref aerospike is required to connect to and execute 
@@ -172,9 +172,8 @@ typedef struct aerospike_s {
 	/**
 	 *	@private
 	 *	Cluster state.
-	 *	This is for internal use only. Do not use this in the application.
 	 */
-	struct cl_cluster_s * cluster;
+	struct as_cluster_s * cluster;
 
 	/**
 	 *	client configuration

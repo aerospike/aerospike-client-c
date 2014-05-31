@@ -31,8 +31,6 @@
 #include <zlib.h>
 #include <time.h> // for job ID
 
-#include <aerospike/as_key.h>
-
 #include <citrusleaf/cf_atomic.h>
 #include <citrusleaf/cf_byte_order.h>
 #include <citrusleaf/cf_client_rc.h>
@@ -41,7 +39,8 @@
 #include <citrusleaf/cf_socket.h>
 
 #include <citrusleaf/citrusleaf.h>
-#include <citrusleaf/cl_cluster.h>
+#include <aerospike/as_cluster.h>
+#include <aerospike/as_key.h>
 
 #include "internal.h"
 
@@ -60,7 +59,7 @@
 // Fixed component of the scan definition which is common for all the threads
 typedef struct scan_node_worker_fixed_def {
 	// Scan definition
-	cl_cluster	*asc;
+	as_cluster	*asc;
 	char		*ns;
 	char		*set;
 	cl_bin		*bins;
@@ -84,7 +83,7 @@ typedef struct scan_node_worker_scandef {
 
 extern bool gasq_abort;
 static int
-do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operation_info2, const char *ns, const char *set, 
+do_scan_monte(as_cluster *asc, char *node_name, uint operation_info, uint operation_info2, const char *ns, const char *set, 
 	cl_bin *bins, int n_bins, uint8_t scan_pct, 
 	citrusleaf_get_many_cb cb, void *udata, cl_scan_parameters *scan_opt)
 {
@@ -117,16 +116,13 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 #endif
 
 	int fd;
-	cl_cluster_node *node = 0;
+	as_node *node = 0;
 
 	// Get an FD from a cluster
 	if (node_name) {
-		node = cl_cluster_node_get_byname(asc,node_name);
-		// grab a reservation
-		if (node)
-			cl_cluster_node_reserve(node, "T+");
+		node = as_node_get_by_name(asc,node_name);
 	} else {
-		node = cl_cluster_node_get_random(asc);
+		node = as_node_get_random(asc);
 	}
 	if (!node) {
 #ifdef DEBUG
@@ -134,11 +130,12 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 #endif			
 		return(-1);
 	}
-	fd = cl_cluster_node_fd_get(node, false);
+	fd = as_node_fd_get(node);
 	if (fd == -1) {
 #ifdef DEBUG			
 		cf_debug("warning: node %s has no file descriptors, retrying transaction", node->name);
 #endif
+		as_node_release(node);
 		return(-1);
 	}
 	
@@ -148,6 +145,7 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 		cf_debug("Citrusleaf: write timeout or error when writing header to server - %d fd %d errno %d", rv, fd, errno);
 #endif
 		cf_close(fd);
+		as_node_release(node);
 		return(-1);
 	}
 
@@ -160,6 +158,7 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 		if ((rv = cf_socket_read_forever(fd, (uint8_t *) &proto, sizeof(cl_proto) ) ) ) {
 			cf_error("network error: errno %d fd %d",rv, fd);
 			cf_close(fd);
+			as_node_release(node);
 			return(-1);
 		}
 #ifdef DEBUG_VERBOSE
@@ -170,11 +169,13 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 		if (proto.version != CL_PROTO_VERSION) {
 			cf_error("network error: received protocol message of wrong version %d", proto.version);
 			cf_close(fd);
+			as_node_release(node);
 			return(-1);
 		}
 		if (proto.type != CL_PROTO_TYPE_CL_MSG) {
 			cf_error("network error: received incorrect message version %d", proto.type);
 			cf_close(fd);
+			as_node_release(node);
 			return(-1);
 		}
 		
@@ -192,6 +193,7 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 				rd_buf = rd_stack_buf;
 			if (rd_buf == NULL) {
 				cf_close(fd);
+				as_node_release(node);
 				return (-1);
 			}
 
@@ -199,6 +201,7 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 				cf_error("network error: errno %d fd %d", rv, fd);
 				if (rd_buf != rd_stack_buf)	{ free(rd_buf); }
 				cf_close(fd);
+				as_node_release(node);
 				return(-1);
 			}
 // this one's a little much: printing the entire body before printing the other bits			
@@ -228,6 +231,7 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 				cf_error("received cl msg of unexpected size: expecting %zd found %d, internal error",
 					sizeof(cl_msg),msg->header_sz);
 				cf_close(fd);
+				as_node_release(node);
 				return(-1);
 			}
 
@@ -294,6 +298,7 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 			}
 			if (bins_local == NULL) {
 				cf_close(fd);
+				as_node_release(node);
 				return (-1);
 			}
 			
@@ -363,7 +368,7 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 		
 		if (gasq_abort) {
 			cf_close(fd);
-			cl_cluster_node_put(node);
+			as_node_release(node);
 			node = 0;
 			return (rv);
 		}
@@ -375,8 +380,8 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 		wr_buf = 0;
 	}
 
-	cl_cluster_node_fd_put(node, fd, false);
-	cl_cluster_node_put(node);
+	as_node_fd_put(node, fd);
+	as_node_release(node);
 	node = 0;
 	
 #ifdef DEBUG_VERBOSE	
@@ -388,7 +393,7 @@ do_scan_monte(cl_cluster *asc, char *node_name, uint operation_info, uint operat
 
 
 extern cl_rv
-citrusleaf_scan(cl_cluster *asc, char *ns, char *set, cl_bin *bins, int n_bins, bool get_key, citrusleaf_get_many_cb cb, void *udata, bool nobindata)
+citrusleaf_scan(as_cluster *asc, char *ns, char *set, cl_bin *bins, int n_bins, bool get_key, citrusleaf_get_many_cb cb, void *udata, bool nobindata)
 {
 #if 0
 	if (n_bins != 0) {
@@ -407,7 +412,7 @@ citrusleaf_scan(cl_cluster *asc, char *ns, char *set, cl_bin *bins, int n_bins, 
 }
 
 extern cl_rv
-citrusleaf_scan_node (cl_cluster *asc, char *node_name, char *ns, char *set, cl_bin *bins, int n_bins, bool nobindata, uint8_t scan_pct,
+citrusleaf_scan_node (as_cluster *asc, char *node_name, char *ns, char *set, cl_bin *bins, int n_bins, bool nobindata, uint8_t scan_pct,
 		citrusleaf_get_many_cb cb, void *udata, cl_scan_parameters *scan_param)
 {
 #if 0
@@ -456,12 +461,12 @@ scan_node_worker(void *udata)
 }
 
 cf_vector *
-citrusleaf_scan_all_nodes (cl_cluster *asc, char *ns, char *set, cl_bin *bins, int n_bins, bool nobindata, uint8_t scan_pct,
+citrusleaf_scan_all_nodes (as_cluster *asc, char *ns, char *set, cl_bin *bins, int n_bins, bool nobindata, uint8_t scan_pct,
 		citrusleaf_get_many_cb cb, void *udata, cl_scan_parameters *scan_param)
 {
 	char *node_names = NULL;	
 	int	n_nodes = 0;
-	cl_cluster_get_node_names(asc, &n_nodes, &node_names);
+	as_cluster_get_node_names(asc, &n_nodes, &node_names);
 
 	if (n_nodes == 0) {
 		cf_error("citrusleaf scan all nodes: don't have any nodes?");

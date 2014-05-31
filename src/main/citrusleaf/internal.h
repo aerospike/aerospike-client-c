@@ -38,7 +38,7 @@
 #include <aerospike/as_string.h>
 
 #include <citrusleaf/citrusleaf.h>
-#include <citrusleaf/cl_cluster.h>
+#include <aerospike/as_cluster.h>
 #include <citrusleaf/cl_udf.h>
 #include <citrusleaf/cl_scan.h>
 
@@ -71,20 +71,20 @@ struct cl_async_work {
 	uint64_t			trid;		//Transaction-id of the submitted work
 	uint64_t			deadline;	//Deadline time for this work item
 	uint64_t			starttime;	//Start time for this work item
-	cl_cluster_node *	node;		//Node to which the work item was sent
+	as_node *			node;		//Node to which the work item was sent
 	int					fd;		//FD used to send the command asynchronously
 	void *				udata;
 };
 
 struct cl_batch_work {
 	// these sections are the same for the same query
-	cl_cluster *			asc; 
+	as_cluster *			asc; 
     int          			info1;
 	int          			info2;
 	int          			info3;
 	char *					ns;
 	cf_digest * 			digests; 
-	cl_cluster_node **		nodes;
+	as_node **				nodes;
 	int 					n_digests; 
 	bool 					get_key;
 	cl_bin *				bins;         // Bins. If this is used, 'operation' should be null, and 'operator' should be the operation to be used on the bins
@@ -96,7 +96,7 @@ struct cl_batch_work {
 	// struct mr_state_s * 	mr_state;
 	cf_queue *				complete_q;
 	// this is different for every work
-	cl_cluster_node *		my_node;				
+	as_node *				my_node;
 	int						my_node_digest_count;
 	int 					index; // debug only
     int           			imatch;
@@ -140,15 +140,14 @@ int cl_object_get_size(cl_object *obj, size_t *sz);
 int cl_object_to_buf (cl_object *obj, uint8_t *data);
 
 void cl_cluster_batch_init();
-void cl_cluster_batch_shutdown();
 
 
-int cl_do_async_monte(cl_cluster *asc, int info1, int info2, const char *ns, const char *set, const cl_object *key,
+int cl_do_async_monte(as_cluster *asc, int info1, int info2, const char *ns, const char *set, const cl_object *key,
 	const cf_digest *digest, cl_bin **values, cl_operator operator, cl_operation **operations,
 	int *n_values, uint32_t *cl_gen, const cl_write_parameters *cl_w_p, uint64_t *trid, void *udata
 	);
 
-int do_the_full_monte(cl_cluster *asc, int info1, int info2, int info3, const char *ns, const char *set, const cl_object *key,
+int do_the_full_monte(as_cluster *asc, int info1, int info2, int info3, const char *ns, const char *set, const cl_object *key,
 	const cf_digest *digest, cl_bin **values, cl_operator operator, cl_operation **operations, int *n_values, 
 	uint32_t *cl_gen, const cl_write_parameters *cl_w_p, uint64_t *trid, char **setname_r, as_call * call, uint32_t* cl_ttl
 	);
@@ -192,9 +191,9 @@ int cl_parse(cl_msg *msg, uint8_t *buf, size_t buf_len, cl_bin **values_r, cl_op
 // int sproc_compile_arg_field(char * const*argk, cl_object * const*argv, int argc, uint8_t *buf, int *sz_p);
 
 
-// int citrusleaf_sproc_package_get(cl_cluster *asc, const char *package, cl_script_lang_t lang);
+// int citrusleaf_sproc_package_get(as_cluster *asc, const char *package, cl_script_lang_t lang);
 
-// int citrusleaf_sproc_package_get_with_gen(cl_cluster *asc, const char *package_name, char **content, int *content_len, char **gen, cl_script_lang_t lang_t);
+// int citrusleaf_sproc_package_get_with_gen(as_cluster *asc, const char *package_name, char **content, int *content_len, char **gen, cl_script_lang_t lang_t);
 
 #ifdef DEBUG_VERBOSE
 void

@@ -9,4 +9,4 @@
 	url = git@github.com:citrusleaf/aerospike-lua-core
 [submodule "modules/ck"]
 	path = modules/ck
-	url = https://github.com/concurrencykit/ck.git
+	url = git@github.com:concurrencykit/ck

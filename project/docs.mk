@@ -4,7 +4,7 @@ html: docs
 
 .PHONY: docs
 docs:
-	doxygen project/doxyfile TARGET_INCL=$TARGET_INCL
+	TARGET_INCL=$(TARGET_INCL) doxygen project/doxyfile
 
 .PHONY: docs-clean
 docs-clean:

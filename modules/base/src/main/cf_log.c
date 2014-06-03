@@ -32,6 +32,7 @@
 static void
 cf_default_log(cf_log_level level, const char* fmt_no_newline, ...)
 {
+	/* Do not log by default.
 	(void)level; // Suppress level not used warning.
 	size_t fmt_size = strlen(fmt_no_newline) + 2;
 	char* fmt = (char*)alloca(fmt_size);
@@ -44,6 +45,7 @@ cf_default_log(cf_log_level level, const char* fmt_no_newline, ...)
 	va_start(ap, fmt_no_newline);
 	vfprintf(stderr, fmt, ap);
 	va_end(ap);
+	*/
 }
 
 cf_atomic32 g_log_level = (cf_atomic32)CF_INFO;

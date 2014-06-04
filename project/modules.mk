@@ -153,7 +153,7 @@ CK-clean:
 
 .PHONY: CK-prepare
 CK-prepare: $(TARGET_INCL)/ck
-	rsync -rp $(CK)/include/* $(TARGET_INCL)/ck
+	@rsync -rp $(CK)/include/* $(TARGET_INCL)/ck
 
 $(TARGET_INCL)/ck: | $(TARGET_INCL)
 	mkdir $@

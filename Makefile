@@ -168,10 +168,6 @@ HEADERS += $(filter-out $(EXCLUDE-HEADERS), $(wildcard $(SOURCE_INCL)/aerospike/
 
 all: modules build prepare
 
-.PHONY: configure
-configure:
-	(cd $(CK); ./configure)
-
 .PHONY: prepare
 prepare: modules-prepare $(subst $(SOURCE_INCL),$(TARGET_INCL),$(HEADERS)) 
 	$(noop)

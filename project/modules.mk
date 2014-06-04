@@ -142,8 +142,10 @@ MOD_LUA-make-prepare:
 ###############################################################################
 
 .PHONY: CK-build
-CK-build:
-	$(noop)
+CK-build: $(CK)/include/ck_md.h
+
+$(CK)/include/ck_md.h:
+	(cd $(CK); ./configure)
 
 .PHONY: CK-clean
 CK-clean:

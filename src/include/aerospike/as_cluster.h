@@ -145,6 +145,18 @@ typedef struct as_cluster_s {
 	
 	/**
 	 *	@private
+	 *	User name in UTF-8 encoded bytes.
+	 */
+	char* user;
+	
+	/**
+	 *	@private
+	 *	Password in hashed format in bytes.
+	 */
+	char* password;
+	
+	/**
+	 *	@private
 	 *	Initial seed nodes specified by user.
 	 */
 	as_seed* seeds;

@@ -35,6 +35,7 @@
 
 #include <citrusleaf/citrusleaf.h>
 #include <aerospike/as_cluster.h>
+#include <aerospike/as_admin.h>
 
 #include "internal.h"
 
@@ -91,14 +92,51 @@ citrusleaf_info_parse_single(char *values, char **value)
 int
 citrusleaf_info_host(struct sockaddr_in *sa_in, char *names, char **values, int timeout_ms, bool send_asis, bool check_bounds)
 {
-	return citrusleaf_info_host_limit(sa_in, names, values, timeout_ms, send_asis, 0, check_bounds);
+	// Actually doing a non-blocking connect
+	int fd = cf_socket_create_and_connect_nb(sa_in);
+	
+	if (fd == -1) {
+		return -1;
+	}
+	
+	int rv = citrusleaf_info_host_limit(fd, names, values, timeout_ms, send_asis, 0, check_bounds);
+	
+	shutdown(fd, SHUT_RDWR);
+	cf_close(fd);
+	
+	return rv;
+}
+
+// Authenticate connection and request the info of a particular sockaddr_in.
+// Return 0 on success and -1 on error.
+int
+citrusleaf_info_host_auth(as_cluster* cluster, struct sockaddr_in *sa_in, char *names, char **values, int timeout_ms, bool send_asis, bool check_bounds)
+{
+	int fd = cf_socket_create_and_connect_nb(sa_in);
+	
+	if (fd == -1) {
+		return -1;
+	}
+	
+	if (cluster->user) {
+		if (! as_authenticate(fd, cluster->user, cluster->password, timeout_ms)) {
+			cf_error("Authentication failed for %s", cluster->user);
+			cf_close(fd);
+			return -1;
+		}
+	}
+	
+	int rv = citrusleaf_info_host_limit(fd, names, values, timeout_ms, send_asis, 0, check_bounds);
+	shutdown(fd, SHUT_RDWR);
+	cf_close(fd);
+	return rv;
 }
 
 // Request the info of a particular sockaddr_in.
 // Reject info request if response length is greater than max_response_length.
 // Return 0 on success and -1 on error.
 int
-citrusleaf_info_host_limit(struct sockaddr_in *sa_in, char *names, char **values, int timeout_ms, bool send_asis, uint64_t max_response_length, bool check_bounds)
+citrusleaf_info_host_limit(int fd, char *names, char **values, int timeout_ms, bool send_asis, uint64_t max_response_length, bool check_bounds)
 {
 	uint bb_size = 2048;
 	int rv = -1;
@@ -141,12 +179,6 @@ citrusleaf_info_host_limit(struct sockaddr_in *sa_in, char *names, char **values
 		names_with_term[slen-1] = '\n';
 		names_with_term[slen] = 0;
 		names = names_with_term;
-	}
-		
-	// Actually doing a non-blocking connect
-	int fd = cf_socket_create_and_connect_nb(sa_in);
-	if (fd == -1) {
-		return -1;
 	}
 
 	cl_proto 	*req;
@@ -253,8 +285,6 @@ citrusleaf_info_host_limit(struct sockaddr_in *sa_in, char *names, char **values
 	rv = 0;
 
 Done:	
-	shutdown(fd, SHUT_RDWR);
-	cf_close(fd);
 	return(rv);
 }
 
@@ -310,7 +340,7 @@ citrusleaf_info_cluster(as_cluster *cluster, char *names, char **values_r, bool 
 		struct sockaddr_in* sa_in = as_node_get_address(node);
 		char* values = 0;
 		
-		if (citrusleaf_info_host(sa_in, names, &values, (int)(end - cf_getms()), send_asis, check_bounds) == 0) {
+		if (citrusleaf_info_host_auth(cluster, sa_in, names, &values, (int)(end - cf_getms()), send_asis, check_bounds) == 0) {
 			*values_r = values;
 			ret = 0;
 			break;
@@ -351,7 +381,7 @@ citrusleaf_info_cluster_foreach(
 		struct sockaddr_in* sa_in = as_node_get_address(node);
 		char* value = 0;
 
-		if (citrusleaf_info_host(sa_in, (char *)command, &value, (int)(end - cf_getms()), send_asis, check_bounds) == 0) {
+		if (citrusleaf_info_host_auth(cluster, sa_in, (char *)command, &value, (int)(end - cf_getms()), send_asis, check_bounds) == 0) {
 			bool status = callback(node, sa_in, command, value, udata);
 			
 			if (value) {

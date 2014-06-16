@@ -1,0 +1,441 @@
+/******************************************************************************
+ * Copyright 2008-2014 by Aerospike.
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy 
+ * of this software and associated documentation files (the "Software"), to 
+ * deal in the Software without restriction, including without limitation the 
+ * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or 
+ * sell copies of the Software, and to permit persons to whom the Software is 
+ * furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included in 
+ * all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING 
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+ * IN THE SOFTWARE.
+ *****************************************************************************/
+#include <aerospike/as_admin.h>
+#include <aerospike/as_cluster.h>
+#include <citrusleaf/cf_byte_order.h>
+#include <citrusleaf/cf_proto.h>
+#include <citrusleaf/cf_socket.h>
+#include <citrusleaf/cl_types.h>
+#include <string.h>
+
+// Commands
+#define AUTHENTICATE 0
+#define CREATE_USER 1
+#define DROP_USER 2
+#define CHANGE_PASSWORD 3
+#define GRANT_ROLES 4
+#define REVOKE_ROLES 5
+#define CREATE_ROLE 6
+#define QUERY_USERS 7
+#define QUERY_ROLES 8
+
+// Field IDs
+#define USER 0
+#define PASSWORD 1
+#define CREDENTIAL 2
+#define ROLES 10
+#define PRIVILEGES 11
+
+// Misc
+#define FIELD_HEADER_SIZE 5
+#define HEADER_SIZE 24
+#define HEADER_REMAINING 16
+#define RESULT_CODE 9
+#define MSG_VERSION 0L
+#define MSG_TYPE 2L
+#define MORE_USERS 50
+
+static uint8_t*
+write_header(uint8_t* p, uint8_t command, uint8_t field_count)
+{
+	memset(p, 0, HEADER_REMAINING);
+	p += 2;
+	*p++ = command;
+	*p++ = field_count;
+	return p + 12;
+}
+
+static uint8_t*
+write_field_header(uint8_t* p, uint8_t id, int size)
+{
+	*(int*)p = cf_swap_to_be32(size+1);
+	p += 4;
+	*p++ = id;
+	return p;
+}
+
+static uint8_t*
+write_field_string(uint8_t* p, uint8_t id, const char* val)
+{
+	uint8_t* q = (uint8_t*)stpcpy((char*)p + FIELD_HEADER_SIZE, val);
+	write_field_header(p, id, (int)(q - p - FIELD_HEADER_SIZE));
+	return q;
+}
+
+static uint8_t*
+write_roles(uint8_t* p, const char** roles, int length)
+{
+	uint8_t* q = p + FIELD_HEADER_SIZE;
+	*q++ = (uint8_t)length;
+	
+	uint8_t* r;
+	for (uint32_t i = 0; i < length; i++) {
+		r = (uint8_t*)stpcpy((char*)q + 1, roles[i]);
+		*q = (uint8_t)(r - q - 1);
+		q = r;
+	}
+	
+	write_field_header(p, ROLES, (int)(q - p - FIELD_HEADER_SIZE));
+	return q;
+}
+
+static int
+as_send(int fd, uint8_t* buffer, uint8_t* end, uint64_t deadline_ms, int timeout_ms)
+{
+	uint64_t len = (end - buffer - 8) | (MSG_VERSION << 56) | (MSG_TYPE << 48);
+	*(uint64_t*)buffer = cf_swap_to_be64(len);
+	
+	return cf_socket_write_timeout(fd, buffer, len, deadline_ms, timeout_ms);
+}
+
+static int
+as_execute(aerospike* as, const as_policy_admin* policy, uint8_t* buffer, uint8_t* end)
+{
+	int timeout_ms = (policy)? policy->timeout : as->config.policies.admin.timeout;
+	uint64_t deadline_ms = cf_getms() + timeout_ms;
+	as_node* node = as_node_get_random(as->cluster);
+	
+	if (! node) {
+		return CITRUSLEAF_FAIL_CLIENT;
+	}
+	
+	int fd = as_node_fd_get(node);
+	
+	if (fd < 0) {
+		as_node_release(node);
+		return CITRUSLEAF_FAIL_TIMEOUT;
+	}
+
+	if (as_send(fd, buffer, end, deadline_ms, timeout_ms)) {
+		cf_close(fd);
+		as_node_release(node);
+		return CITRUSLEAF_FAIL_TIMEOUT;
+	}
+	
+	if (cf_socket_read_timeout(fd, buffer, HEADER_SIZE, deadline_ms, timeout_ms)) {
+		cf_close(fd);
+		as_node_release(node);
+		return CITRUSLEAF_FAIL_TIMEOUT;
+	}
+	
+	as_node_fd_put(node, fd);
+	as_node_release(node);
+	return buffer[RESULT_CODE];
+}
+
+int
+as_authenticate(int fd, const char* user, const char* credential, int timeout_ms)
+{
+	uint8_t buffer[STACK_BUF_SZ];
+	uint8_t* p = buffer + 8;
+
+	p = write_header(p, AUTHENTICATE, 2);
+	p = write_field_string(p, USER, user);
+	p = write_field_string(p, CREDENTIAL, credential);
+	
+	if (timeout_ms == 0) {
+		timeout_ms = 60000; // Default timeout is one minute.
+	}
+	uint64_t deadline_ms = cf_getms() + timeout_ms;
+	
+	if (as_send(fd, buffer, p, deadline_ms, timeout_ms)) {
+		return CITRUSLEAF_FAIL_TIMEOUT;
+	}
+
+	if (cf_socket_read_timeout(fd, buffer, HEADER_SIZE, deadline_ms, timeout_ms)) {
+		return CITRUSLEAF_FAIL_TIMEOUT;
+	}
+	return buffer[RESULT_CODE];
+}
+
+int
+as_create_user(aerospike* as, const as_policy_admin* policy, const char* user, const char* password, const char** roles, int roles_size)
+{
+	uint8_t buffer[STACK_BUF_SZ];
+	uint8_t* p = buffer + 8;
+	
+	p = write_header(p, CREATE_USER, 3);
+	p = write_field_string(p, USER, user);
+	p = write_field_string(p, PASSWORD, password);
+	p = write_roles(p, roles, roles_size);
+	return as_execute(as, policy, buffer, p);
+}
+
+int
+as_drop_user(aerospike* as, const as_policy_admin* policy, const char* user)
+{
+	uint8_t buffer[STACK_BUF_SZ];
+	uint8_t* p = buffer + 8;
+	
+	p = write_header(p, DROP_USER, 1);
+	p = write_field_string(p, USER, user);
+	return as_execute(as, policy, buffer, p);
+}
+
+int
+as_change_password(aerospike* as, const as_policy_admin* policy, const char* user, const char* password)
+{
+	uint8_t buffer[STACK_BUF_SZ];
+	uint8_t* p = buffer + 8;
+	
+	p = write_header(p, CHANGE_PASSWORD, 2);
+	p = write_field_string(p, USER, user);
+	p = write_field_string(p, PASSWORD, password);
+	return as_execute(as, policy, buffer, p);
+}
+
+int
+as_grant_roles(aerospike* as, const as_policy_admin* policy, const char* user, const char** roles, int roles_size)
+{
+	uint8_t buffer[STACK_BUF_SZ];
+	uint8_t* p = buffer + 8;
+	
+	p = write_header(p, GRANT_ROLES, 2);
+	p = write_field_string(p, USER, user);
+	p = write_roles(p, roles, roles_size);
+	return as_execute(as, policy, buffer, p);
+}
+
+int
+as_revoke_roles(aerospike* as, const as_policy_admin* policy, const char* user, const char** roles, int roles_size)
+{
+	uint8_t buffer[STACK_BUF_SZ];
+	uint8_t* p = buffer + 8;
+	
+	p = write_header(p, REVOKE_ROLES, 2);
+	p = write_field_string(p, USER, user);
+	p = write_roles(p, roles, roles_size);
+	return as_execute(as, policy, buffer, p);
+}
+
+static uint8_t*
+as_parse_roles(uint8_t* p, as_user_roles** user_roles)
+{
+	uint8_t size = *p++;
+	as_user_roles* user = cf_malloc(sizeof(as_user_roles) + (size * AS_ROLE_SIZE));
+	user->roles_size = size;
+	
+	char* role;
+	uint8_t len;
+	uint8_t sz;
+	for (uint8_t i = 0; i < size; i++) {
+		role = user->roles[i];
+		len = *p++;
+		sz = (len <= (AS_ROLE_SIZE-1))? len : (AS_ROLE_SIZE-1);
+		memcpy(role, p, sz);
+		role[sz] = 0;
+		p += len;
+	}
+	*user_roles = user;
+	return p;
+}
+
+static int
+as_parse_users(uint8_t* buffer, int size, as_vector* /*<as_user_roles*>*/ users)
+{
+	uint8_t* p = buffer;
+	uint8_t* end = buffer + size;
+	
+	as_user_roles* user_roles = 0;
+	char user[AS_USER_SIZE];
+	user[0] = 0;
+	
+	int len;
+	int sz;
+	uint8_t id;
+	uint8_t field_count;
+	uint8_t result;
+	
+	while (p < end) {
+		result = p[1];
+		field_count = p[3];
+		p += HEADER_REMAINING;
+		
+		for (uint8_t b = 0; b < field_count; b++) {
+			len = *(int*)p;
+			p += 4;
+			id = *p++;
+			len--;
+			
+			if (id == USER) {
+				sz = (len <= (AS_USER_SIZE-1))? len : (AS_USER_SIZE-1);
+				memcpy(user, p, sz);
+				user[sz] = 0;
+				p += len;
+			}
+			else if (id == ROLES) {
+				p = as_parse_roles(p, &user_roles);
+			}
+			else {
+				p += len;
+			}
+		}
+		
+		if (user[0] == 0 && ! user_roles) {
+			continue;
+		}
+		
+		if (! user_roles) {
+			user_roles = cf_malloc(sizeof(as_user_roles));
+			user_roles->roles_size = 0;
+		}
+		strcpy(user_roles->user, user);
+		as_vector_append(users, &user_roles);
+	}
+	return result;
+}
+
+static int
+as_read_user_blocks(int fd, uint8_t* buffer, uint64_t deadline_ms, int timeout_ms, as_vector* /*<as_user_roles*>*/ users)
+{
+	int buffer_size = STACK_BUF_SZ;
+	uint8_t* buf = buffer;
+	int status = MORE_USERS;
+	int size;
+	
+	while (status == MORE_USERS) {
+		if (cf_socket_read_timeout(fd, buf, 8, deadline_ms, timeout_ms)) {
+			status = -1;
+			break;
+		}
+		size = (int)((*(uint64_t*)buf) & 0xFFFFFFFFFFFFL);
+		
+		if (size > 0) {
+			if (size > buffer_size) {
+				buffer_size = size;
+				
+				if (buf != buffer) {
+					cf_free(buf);
+				}
+				buf = cf_malloc(size);
+			}
+			
+			if (cf_socket_read_timeout(fd, buf, size, deadline_ms, timeout_ms)) {
+				status = -1;
+				break;
+			}
+			
+			status = as_parse_users(buf, size, users);
+		}
+		else {
+			status = 0;
+			break;
+		}
+	}
+	
+	if (buf != buffer) {
+		cf_free(buf);
+	}
+	return status;
+}
+
+static int
+as_read_users(aerospike* as, const as_policy_admin* policy, uint8_t* buffer, uint8_t* end, as_vector* /*<as_user_roles*>*/ users)
+{
+	int timeout_ms = (policy)? policy->timeout : as->config.policies.admin.timeout;
+	uint64_t deadline_ms = cf_getms() + timeout_ms;
+	as_node* node = as_node_get_random(as->cluster);
+	
+	if (! node) {
+		return CITRUSLEAF_FAIL_CLIENT;
+	}
+	
+	int fd = as_node_fd_get(node);
+	
+	if (fd < 0) {
+		as_node_release(node);
+		return CITRUSLEAF_FAIL_TIMEOUT;
+	}
+	
+	if (as_send(fd, buffer, end, deadline_ms, timeout_ms)) {
+		cf_close(fd);
+		as_node_release(node);
+		return CITRUSLEAF_FAIL_TIMEOUT;
+	}
+	
+	int status = as_read_user_blocks(fd, buffer, deadline_ms, timeout_ms, users);
+	
+	if (status >= 0) {
+		as_node_fd_put(node, fd);
+	}
+	else {
+		cf_close(fd);
+	}
+	as_node_release(node);
+	return status;
+}
+
+int
+as_query_user(aerospike* as, const as_policy_admin* policy, const char* user_name, as_user_roles** user_roles)
+{
+	uint8_t buffer[STACK_BUF_SZ];
+	uint8_t* p = buffer + 8;
+	
+	p = write_header(p, QUERY_USERS, 1);
+	p = write_field_string(p, USER, user_name);
+	
+	as_vector users;
+	as_vector_inita(&users, sizeof(as_user_roles*), 1);
+	int status = as_read_users(as, policy, buffer, p, &users);
+	
+	if (users.size > 0) {
+		*user_roles = as_vector_get(&users, 0);
+	}
+	else {
+		*user_roles = 0;
+	}
+	as_vector_destroy(&users);
+	return status;
+}
+
+void
+as_query_user_destroy(as_user_roles* user_roles)
+{
+	cf_free(user_roles);
+}
+
+int
+as_query_users(aerospike* as, const as_policy_admin* policy, as_user_roles** user_roles, int* user_roles_size)
+{
+	uint8_t buffer[STACK_BUF_SZ];
+	uint8_t* p = buffer + 8;
+	
+	p = write_header(p, QUERY_USERS, 0);
+	
+	as_vector users;
+	as_vector_init(&users, sizeof(as_user_roles*), 100);
+	int status = as_read_users(as, policy, buffer, p, &users);
+	
+	// Transfer array to output argument. Do not destroy vector.
+	*user_roles_size = users.size;
+	*user_roles = users.list;
+	return status;
+}
+
+void
+as_query_users_destroy(as_user_roles* user_roles, int user_roles_size)
+{
+	for (uint32_t i = 0; i < user_roles_size; i++) {
+		cf_free(&user_roles[i]);
+	}
+	cf_free(user_roles);
+}

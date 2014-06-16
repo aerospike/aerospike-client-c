@@ -22,6 +22,7 @@
 #pragma once
 
 #include "aerospike/aerospike.h"
+#include "aerospike/as_password.h"
 #include "aerospike/as_record.h"
 #include "latency.h"
 
@@ -30,6 +31,8 @@ typedef struct arguments_t {
 	char** hosts;
 	int host_count;
 	int port;
+	const char* user;
+	char password[AS_PASSWORD_HASH_SIZE];
 	const char* namespace;
 	const char* set;
 	int keys;

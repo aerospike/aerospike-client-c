@@ -65,6 +65,7 @@ typedef struct cl_query {
     void            * res_streamq;
     int             limit;  
     uint64_t        job_id;
+    as_val          * err_val;
 } cl_query;
 
 typedef struct cl_query_response_record_t {
@@ -120,7 +121,7 @@ cl_rv cl_query_foreach(cl_query * query, const char * filename, const char * fun
 int   cl_query_limit(cl_query * query, uint64_t limit);
 
 
-cl_rv citrusleaf_query_foreach(as_cluster * cluster, const cl_query * query, void * udata, bool (*foreach)(as_val *, void *));
+cl_rv citrusleaf_query_foreach(as_cluster * cluster, cl_query * query, void * udata, bool (*foreach)(as_val *, void *));
 
 
 /*

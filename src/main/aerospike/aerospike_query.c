@@ -144,9 +144,18 @@ as_status aerospike_query_foreach(
 	};
 
 	cl_rv rc = citrusleaf_query_foreach(as->cluster, clquery, &bridge, clquery_callback);
+    as_status ret = as_error_fromrc(err, rc);
 
+    if(clquery->err_val) {
+        char * err_str = as_val_tostring(clquery->err_val);
+        if(err_str) {
+            strncat(err->message," : ",sizeof(err->message) - strlen(err->message));
+            strncat(err->message,err_str,sizeof(err->message) - strlen(err->message));
+            cf_free(err_str);
+        }
+        as_val_destroy(clquery->err_val);
+    }
 	cl_query_destroy(clquery);
-
 	return as_error_fromrc(err, rc);
 }
 

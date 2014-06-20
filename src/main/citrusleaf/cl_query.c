@@ -105,6 +105,7 @@ typedef struct {
     int                     (* callback)(as_val *, void *);
 	cf_queue              * complete_q;
 	bool                    abort;
+    as_val                * err_val;
 } cl_query_task;
 
 
@@ -145,6 +146,10 @@ typedef struct query_orderby_clause {
     cl_query_orderby_op ordertype;
 } query_orderby;
 
+typedef struct as_query_fail_s { 
+    int       rc;
+    as_val  * err_val;
+} as_query_fail_t;
 
 /******************************************************************************
  * VARIABLES
@@ -176,7 +181,7 @@ static cl_rv cl_query_udf_destroy(cl_query_udf * udf);
 
 // static cl_rv cl_query_execute_sink(as_cluster * cluster, const cl_query * query, as_stream * stream);
 
-static cl_rv cl_query_execute(as_cluster * cluster, const cl_query * query, void * udata, int (* callback)(as_val *, void *));
+static cl_rv cl_query_execute(as_cluster * cluster, cl_query * query, void * udata, int (* callback)(as_val *, void *));
 
 static void cl_range_destroy(query_range *range) {
     citrusleaf_object_free(&range->start_obj);
@@ -911,11 +916,41 @@ static int cl_query_worker_do(as_node * node, cl_query_task * task) {
 					task->callback(vp, task->udata);
                 }
                 else {
-                    task->callback((as_val *) record, task->udata);
+                    done = true;
+                    rc = CITRUSLEAF_FAIL_UNKNOWN;
+                    as_val * v_fail = (as_val *) as_record_get(record, "FAILURE");
+                    if(v_fail != NULL) {
+                        as_val * vp = NULL;
+                        if ( !v_fail->free ) {
+                            switch(as_val_type(v_fail)) {
+
+                                case AS_STRING: {
+                                                    as_string * s = (as_string *)v_fail;
+                                                    vp = (as_val *) as_string_new(as_string_get(s), true);
+                                                    s->value = NULL;
+                                                    break;
+                                                }    
+                                default:
+                                                LOG("[WARNING] unknown stack as_val type\n");
+                                                break;
+                            }    
+                        }    
+                        else {
+                            vp = as_val_reserve(v_fail);
+                        }    
+                        task->err_val = vp;
+
+                    }    
+                    else {
+                        task->callback((as_val *) record, task->udata);
+                    }
                 }
 
 				as_record_destroy(record);
-				rc = CITRUSLEAF_OK;
+                if(task->err_val) 
+                    rc = CITRUSLEAF_FAIL_UNKNOWN;
+                else
+                    rc = CITRUSLEAF_OK;
             }
 
 			citrusleaf_bins_free(bins, (int)msg->n_ops);
@@ -982,16 +1017,18 @@ static void * cl_query_worker(void * pv_asc) {
         }
 
         // query if the node is still around
-        int rc = CITRUSLEAF_FAIL_UNAVAILABLE;
+        as_query_fail_t rc_fail = {CITRUSLEAF_FAIL_UNAVAILABLE,NULL};
 
         as_node * node = as_node_get_by_name(task.asc, task.node_name);
         if ( node ) {
             LOG("[DEBUG] cl_query_worker: working\n");
-            rc = cl_query_worker_do(node, &task);
+            rc_fail.rc = cl_query_worker_do(node, &task);
 			as_node_release(node);
         }
-
-        cf_queue_push(task.complete_q, (void *)&rc);
+        if(task.err_val) {
+            rc_fail.err_val = task.err_val;
+        }
+        cf_queue_push(task.complete_q, (void *)&rc_fail);
     }
 
     return NULL;
@@ -1119,7 +1156,7 @@ static const as_aerospike_hooks query_aerospike_hooks = {
 };
 
 
-static cl_rv cl_query_execute(as_cluster * cluster, const cl_query * query, void * udata, int (* callback)(as_val *, void *)) {
+static cl_rv cl_query_execute(as_cluster * cluster, cl_query * query, void * udata, int (* callback)(as_val *, void *)) {
 
     cl_rv       rc                          = CITRUSLEAF_OK;
     uint8_t     wr_stack_buf[STACK_BUF_SZ]  = { 0 };
@@ -1142,7 +1179,8 @@ static cl_rv cl_query_execute(as_cluster * cluster, const cl_query * query, void
         .query_sz           = wr_buf_sz,
         .udata              = udata,
         .callback           = callback,
-		.abort              = false
+		.abort              = false,
+        .err_val            = NULL
     };
 
     char *node_names    = NULL;    
@@ -1155,7 +1193,7 @@ static cl_rv cl_query_execute(as_cluster * cluster, const cl_query * query, void
         return CITRUSLEAF_FAIL_CLIENT;
     }
 
-	task.complete_q = cf_queue_create(sizeof(int), true);
+	task.complete_q = cf_queue_create(sizeof(as_query_fail_t), true);
     // Dispatch work to the worker queue to allow the transactions in parallel
     // NOTE: if a new node is introduced in the middle, it is NOT taken care of
     char * node_name = node_names;
@@ -1171,13 +1209,14 @@ static cl_rv cl_query_execute(as_cluster * cluster, const cl_query * query, void
     // wait for the work to complete from all the nodes.
     rc = CITRUSLEAF_OK;
     for ( int i=0; i < node_count; i++ ) {
-        int node_rc;
+        as_query_fail_t node_rc;
         cf_queue_pop(task.complete_q, &node_rc, CF_QUEUE_FOREVER);
-        if ( node_rc != 0 ) {
+        if ( node_rc.rc != 0 ) {
             // Got failure from one node. Trigger abort for all 
             // the ongoing request
             task.abort = true;
-            rc = node_rc;
+            rc = node_rc.rc;
+            query->err_val = node_rc.err_val;
         }
     }
 
@@ -1191,7 +1230,7 @@ static cl_rv cl_query_execute(as_cluster * cluster, const cl_query * query, void
     	callback(NULL, udata);
     }
 
-	if (task.complete_q) cf_queue_destroy(task.complete_q);
+	if (task.complete_q) cf_queue_destroy(task.complete_q); //SUMIT TODO destroy each element seperately
     return rc;
 }
 
@@ -1409,7 +1448,7 @@ static int citrusleaf_query_foreach_callback(as_val * v, void * udata) {
 }
 
 
-cl_rv citrusleaf_query_foreach(as_cluster * cluster, const cl_query * query, void * udata, cl_query_cb foreach) {
+cl_rv citrusleaf_query_foreach(as_cluster * cluster, cl_query * query, void * udata, cl_query_cb foreach) {
 
     cl_rv rc = CITRUSLEAF_OK;
 
@@ -1446,7 +1485,29 @@ cl_rv citrusleaf_query_foreach(as_cluster * cluster, const cl_query * query, voi
         	};
 
             // Apply the UDF to the result stream
-            rc = as_module_apply_stream(&mod_lua, &ctx, query->udf.filename, query->udf.function, &queue_stream, query->udf.arglist, &ostream);
+            as_result   *res       = as_result_new();
+            int ret = as_module_apply_stream(&mod_lua, &ctx, query->udf.filename, query->udf.function, &queue_stream, query->udf.arglist, &ostream,res); //
+            if(ret != 0) { 
+                rc = CITRUSLEAF_FAIL_UDF_LUA_EXECUTION;
+                as_val * vp = NULL;
+                if ( res->value != NULL) {
+                    switch(as_val_type(res->value)) {
+                        case AS_STRING: {
+                                            as_string * s = (as_string *)res->value;
+                                            vp = (as_val *) as_string_new(as_string_get(s), true);
+                                            s->value = NULL;
+                                            break;
+                                        }    
+                        default:
+                                        LOG("[WARNING] unknown stack as_val type\n");
+                                        break;
+                    }    
+                }    
+                if(vp != NULL) {
+                    query->err_val = vp;
+                }    
+              }    
+              as_result_destroy(res);
         }
 
     }

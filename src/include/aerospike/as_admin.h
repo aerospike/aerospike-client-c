@@ -94,6 +94,12 @@ int
 as_revoke_roles(aerospike* as, const as_policy_admin* policy, const char* user, const char** roles, int roles_size);
 
 /**
+ *	Replace user's list of roles with a new list of roles.  Return zero on success.
+ */
+int
+as_replace_roles(aerospike* as, const as_policy_admin* policy, const char* user, const char** roles, int roles_size);
+
+/**
  *	Retrieve roles for a given user.  Return zero on success..
  */
 int

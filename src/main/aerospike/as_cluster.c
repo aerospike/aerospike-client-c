@@ -765,6 +765,19 @@ as_cluster_is_connected(as_cluster* cluster)
 	return connected;
 }
 
+void
+as_cluster_change_password(as_cluster* cluster, const char* user, const char* password)
+{
+	if (user && *user) {
+		if (cluster->user == 0 || strcmp(cluster->user, user) == 0) {
+			cf_free(cluster->user);
+			cf_free(cluster->password);
+			cluster->user = cf_strdup(user);
+			cluster->password = cf_strdup(password);
+		}
+	}
+}
+
 as_cluster*
 as_cluster_create(as_config* config)
 {

@@ -52,7 +52,7 @@
 #define RESULT_CODE 9
 #define MSG_VERSION 0L
 #define MSG_TYPE 2L
-#define MORE_USERS 50
+#define QUERY_END 50
 
 static uint8_t*
 write_header(uint8_t* p, uint8_t command, uint8_t field_count)
@@ -267,6 +267,11 @@ as_parse_users(uint8_t* buffer, int size, as_vector* /*<as_user_roles*>*/ users)
 	
 	while (p < end) {
 		result = p[1];
+		
+		if (result != 0) {
+			return result;
+		}
+		
 		field_count = p[3];
 		p += HEADER_REMAINING;
 		
@@ -301,7 +306,7 @@ as_parse_users(uint8_t* buffer, int size, as_vector* /*<as_user_roles*>*/ users)
 		strcpy(user_roles->user, user);
 		as_vector_append(users, &user_roles);
 	}
-	return result;
+	return 0;
 }
 
 static int
@@ -309,10 +314,10 @@ as_read_user_blocks(int fd, uint8_t* buffer, uint64_t deadline_ms, int timeout_m
 {
 	int buffer_size = STACK_BUF_SZ;
 	uint8_t* buf = buffer;
-	int status = MORE_USERS;
+	int status = 0;
 	int size;
 	
-	while (status == MORE_USERS) {
+	while (status == 0) {
 		if (cf_socket_read_timeout(fd, buf, 8, deadline_ms, timeout_ms)) {
 			status = -1;
 			break;
@@ -337,7 +342,6 @@ as_read_user_blocks(int fd, uint8_t* buffer, uint64_t deadline_ms, int timeout_m
 			status = as_parse_users(buf, size, users);
 		}
 		else {
-			status = 0;
 			break;
 		}
 	}
@@ -345,7 +349,7 @@ as_read_user_blocks(int fd, uint8_t* buffer, uint64_t deadline_ms, int timeout_m
 	if (buf != buffer) {
 		cf_free(buf);
 	}
-	return status;
+	return (status == QUERY_END)? 0 : status;
 }
 
 static int
@@ -384,6 +388,16 @@ as_read_users(aerospike* as, const as_policy_admin* policy, uint8_t* buffer, uin
 	return status;
 }
 
+static void
+as_free_users(as_vector* users, int offset)
+{
+	for (uint32_t i = offset; i < users->size; i++) {
+		as_user_roles* item = as_vector_get(users, i);
+		cf_free(item);
+	}
+	as_vector_destroy(users);
+}
+
 int
 as_query_user(aerospike* as, const as_policy_admin* policy, const char* user_name, as_user_roles** user_roles)
 {
@@ -397,13 +411,23 @@ as_query_user(aerospike* as, const as_policy_admin* policy, const char* user_nam
 	as_vector_inita(&users, sizeof(as_user_roles*), 1);
 	int status = as_read_users(as, policy, buffer, p, &users);
 	
-	if (users.size > 0) {
-		*user_roles = as_vector_get(&users, 0);
+	if (status == 0) {
+		if (users.size == 1) {
+			*user_roles = as_vector_get(&users, 0);
+		}
+		else if (users.size <= 0) {
+			*user_roles = 0;
+		}
+		else {
+			*user_roles = as_vector_get(&users, 0);
+			// Delete excess users.
+			as_free_users(&users, 1);
+		}
 	}
 	else {
 		*user_roles = 0;
+		as_free_users(&users, 0);
 	}
-	as_vector_destroy(&users);
 	return status;
 }
 
@@ -425,9 +449,16 @@ as_query_users(aerospike* as, const as_policy_admin* policy, as_user_roles** use
 	as_vector_init(&users, sizeof(as_user_roles*), 100);
 	int status = as_read_users(as, policy, buffer, p, &users);
 	
-	// Transfer array to output argument. Do not destroy vector.
-	*user_roles_size = users.size;
-	*user_roles = users.list;
+	if (status == 0) {
+		// Transfer array to output argument. Do not destroy vector.
+		*user_roles_size = users.size;
+		*user_roles = users.list;
+	}
+	else {
+		*user_roles_size = 0;
+		*user_roles = 0;
+		as_free_users(&users, 0);
+	}
 	return status;
 }
 

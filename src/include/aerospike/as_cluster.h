@@ -333,6 +333,13 @@ as_nodes_release(as_nodes* nodes)
 
 /**
  *	@private
+ *	Change user and password that is used to authenticate with cluster servers.
+ */
+void
+as_cluster_change_password(as_cluster* cluster, const char* user, const char* password);
+
+/**
+ *	@private
  *	Get random node in the cluster.
  *	as_nodes_release() must be called when done with node.
  */

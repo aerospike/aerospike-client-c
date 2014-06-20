@@ -34,9 +34,10 @@
 #define CHANGE_PASSWORD 3
 #define GRANT_ROLES 4
 #define REVOKE_ROLES 5
-#define CREATE_ROLE 6
-#define QUERY_USERS 7
-#define QUERY_ROLES 8
+#define REPLACE_ROLES 6
+#define CREATE_ROLE 7
+#define QUERY_USERS 8
+#define QUERY_ROLES 9
 
 // Field IDs
 #define USER 0
@@ -46,12 +47,12 @@
 #define PRIVILEGES 11
 
 // Misc
+#define MSG_VERSION 0L
+#define MSG_TYPE 2L
 #define FIELD_HEADER_SIZE 5
 #define HEADER_SIZE 24
 #define HEADER_REMAINING 16
 #define RESULT_CODE 9
-#define MSG_VERSION 0L
-#define MSG_TYPE 2L
 #define QUERY_END 50
 
 static uint8_t*
@@ -194,13 +195,21 @@ as_drop_user(aerospike* as, const as_policy_admin* policy, const char* user)
 int
 as_change_password(aerospike* as, const as_policy_admin* policy, const char* user, const char* password)
 {
+	char hash[AS_PASSWORD_HASH_SIZE];
+	as_password_get_constant_hash(password, hash);
+	
 	uint8_t buffer[STACK_BUF_SZ];
 	uint8_t* p = buffer + 8;
 	
 	p = write_header(p, CHANGE_PASSWORD, 2);
 	p = write_field_string(p, USER, user);
-	p = write_field_string(p, PASSWORD, password);
-	return as_execute(as, policy, buffer, p);
+	p = write_field_string(p, PASSWORD, hash);
+	int status = as_execute(as, policy, buffer, p);
+	
+	if (status == 0) {
+		as_cluster_change_password(as->cluster, user, hash);
+	}
+	return status;
 }
 
 int
@@ -222,6 +231,18 @@ as_revoke_roles(aerospike* as, const as_policy_admin* policy, const char* user, 
 	uint8_t* p = buffer + 8;
 	
 	p = write_header(p, REVOKE_ROLES, 2);
+	p = write_field_string(p, USER, user);
+	p = write_roles(p, roles, roles_size);
+	return as_execute(as, policy, buffer, p);
+}
+
+int
+as_replace_roles(aerospike* as, const as_policy_admin* policy, const char* user, const char** roles, int roles_size)
+{
+	uint8_t buffer[STACK_BUF_SZ];
+	uint8_t* p = buffer + 8;
+	
+	p = write_header(p, REPLACE_ROLES, 2);
 	p = write_field_string(p, USER, user);
 	p = write_roles(p, roles, roles_size);
 	return as_execute(as, policy, buffer, p);

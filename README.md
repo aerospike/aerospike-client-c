@@ -52,10 +52,6 @@ For MacOS X:
 	$ ./Configure darwin64-x86_64-cc
 	$ make
 	$ sudo make install
-	$ cd ../../
-	$ # Build and install the C client
-	$ # for MacOS builds it is necessary to export ARCH prior to calling make
-	$ export ARCH=x86_64
 
 ## Usage
 

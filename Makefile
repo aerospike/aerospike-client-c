@@ -192,6 +192,9 @@ libaerospike: libaerospike.a libaerospike.$(DYNAMIC_SUFFIX)
 libaerospike.a: $(TARGET_LIB)/libaerospike.a
 libaerospike.$(DYNAMIC_SUFFIX): $(TARGET_LIB)/libaerospike.$(DYNAMIC_SUFFIX)
 
+install:
+	cp $(TARGET_LIB)/libaerospike.* /usr/local/lib/
+
 ###############################################################################
 ##  BUILD TARGETS                                                            ##
 ###############################################################################

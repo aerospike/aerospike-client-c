@@ -4,9 +4,16 @@
 
 AS_HOST := 127.0.0.1
 AS_PORT := 3000
+AS_ARGS := -h $(AS_HOST) -p $(AS_PORT)
 
 OS = $(shell uname)
+
+ifeq ($(OS),Darwin)
+ARCH = $(shell uname -m)
+else
 ARCH = $(shell arch)
+endif
+
 PLATFORM = $(OS)-$(ARCH)
 
 CFLAGS = -std=gnu99 -g -Wall -fPIC
@@ -81,7 +88,7 @@ target/example: $(addprefix target/obj/,$(OBJECTS)) | target
 
 .PHONY: run
 run: build
-	./target/example -h $(AS_HOST) -p $(AS_PORT)
+	./target/example $(AS_ARGS)
 
 .PHONY: valgrind
 valgrind: build

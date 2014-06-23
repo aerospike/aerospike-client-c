@@ -181,7 +181,7 @@ static cl_rv cl_query_udf_destroy(cl_query_udf * udf);
 
 // static cl_rv cl_query_execute_sink(as_cluster * cluster, const cl_query * query, as_stream * stream);
 
-static cl_rv cl_query_execute(as_cluster * cluster, cl_query * query, void * udata, int (* callback)(as_val *, void *));
+static cl_rv cl_query_execute(as_cluster * cluster, const cl_query * query, void * udata, int (* callback)(as_val *, void *), as_val ** err_val);
 
 static void cl_range_destroy(query_range *range) {
     citrusleaf_object_free(&range->start_obj);
@@ -922,17 +922,17 @@ static int cl_query_worker_do(as_node * node, cl_query_task * task) {
                     if(v_fail != NULL) {
                         as_val * vp = NULL;
                         if ( !v_fail->free ) {
-                            switch(as_val_type(v_fail)) {
+                            switch (as_val_type(v_fail)) {
 
                                 case AS_STRING: {
-                                                    as_string * s = (as_string *)v_fail;
-                                                    vp = (as_val *) as_string_new(as_string_get(s), true);
-                                                    s->value = NULL;
-                                                    break;
-                                                }    
+                                    as_string * s = (as_string *)v_fail;
+                                    vp = (as_val *) as_string_new(as_string_get(s), true);
+                                    s->value = NULL;
+                                    break;
+                                    }    
                                 default:
-                                                LOG("[WARNING] unknown stack as_val type\n");
-                                                break;
+                                    LOG("[WARNING] unknown stack as_val type\n");
+                                    break;
                             }    
                         }    
                         else {
@@ -947,7 +947,7 @@ static int cl_query_worker_do(as_node * node, cl_query_task * task) {
                 }
 
 				as_record_destroy(record);
-                if(task->err_val) 
+                if (task->err_val) 
                     rc = CITRUSLEAF_FAIL_UNKNOWN;
                 else
                     rc = CITRUSLEAF_OK;
@@ -1025,7 +1025,7 @@ static void * cl_query_worker(void * pv_asc) {
             rc_fail.rc = cl_query_worker_do(node, &task);
 			as_node_release(node);
         }
-        if(task.err_val) {
+        if (task.err_val) {
             rc_fail.err_val = task.err_val;
         }
         cf_queue_push(task.complete_q, (void *)&rc_fail);
@@ -1156,7 +1156,7 @@ static const as_aerospike_hooks query_aerospike_hooks = {
 };
 
 
-static cl_rv cl_query_execute(as_cluster * cluster, cl_query * query, void * udata, int (* callback)(as_val *, void *)) {
+static cl_rv cl_query_execute(as_cluster * cluster, const cl_query * query, void * udata, int (* callback)(as_val *, void *), as_val ** err_val) {
 
     cl_rv       rc                          = CITRUSLEAF_OK;
     uint8_t     wr_stack_buf[STACK_BUF_SZ]  = { 0 };
@@ -1216,7 +1216,14 @@ static cl_rv cl_query_execute(as_cluster * cluster, cl_query * query, void * uda
             // the ongoing request
             task.abort = true;
             rc = node_rc.rc;
-            query->err_val = node_rc.err_val;
+            if ( err_val ) {
+                if ( *err_val )
+                    as_val_destroy(*err_val);
+                *err_val = node_rc.err_val;
+            }
+            else {
+                as_val_destroy(node_rc.err_val);
+            }   
         }
     }
 
@@ -1230,7 +1237,7 @@ static cl_rv cl_query_execute(as_cluster * cluster, cl_query * query, void * uda
     	callback(NULL, udata);
     }
 
-	if (task.complete_q) cf_queue_destroy(task.complete_q); //SUMIT TODO destroy each element seperately
+	if (task.complete_q) cf_queue_destroy(task.complete_q);
     return rc;
 }
 
@@ -1448,7 +1455,7 @@ static int citrusleaf_query_foreach_callback(as_val * v, void * udata) {
 }
 
 
-cl_rv citrusleaf_query_foreach(as_cluster * cluster, cl_query * query, void * udata, cl_query_cb foreach) {
+cl_rv citrusleaf_query_foreach(as_cluster * cluster, const cl_query * query, void * udata, cl_query_cb foreach, as_val ** err_val) {
 
     cl_rv rc = CITRUSLEAF_OK;
 
@@ -1474,7 +1481,7 @@ cl_rv citrusleaf_query_foreach(as_cluster * cluster, cl_query * query, void * ud
         callback_stream_init(&ostream, &source);
 
         // sink the data from multiple sources into the result stream
-        rc = cl_query_execute(cluster, query, &queue_stream, citrusleaf_query_foreach_callback_stream);
+        rc = cl_query_execute(cluster, query, &queue_stream, citrusleaf_query_foreach_callback_stream, err_val);
 
         if ( rc == CITRUSLEAF_OK ) {
 
@@ -1485,35 +1492,41 @@ cl_rv citrusleaf_query_foreach(as_cluster * cluster, cl_query * query, void * ud
         	};
 
             // Apply the UDF to the result stream
-            as_result   *res       = as_result_new();
-            int ret = as_module_apply_stream(&mod_lua, &ctx, query->udf.filename, query->udf.function, &queue_stream, query->udf.arglist, &ostream,res); //
-            if(ret != 0) { 
+            as_result   res;
+            as_result_init(&res);
+            int ret = as_module_apply_stream(&mod_lua, &ctx, query->udf.filename, query->udf.function, &queue_stream, query->udf.arglist, &ostream, &res); //
+            if (ret != 0 && err_val) { 
                 rc = CITRUSLEAF_FAIL_UDF_LUA_EXECUTION;
+                char *rs = as_module_err_string(ret);
                 as_val * vp = NULL;
-                if ( res->value != NULL) {
-                    switch(as_val_type(res->value)) {
+                if (res.value != NULL) {
+                    switch (as_val_type(res.value)) {
                         case AS_STRING: {
-                                            as_string * s = (as_string *)res->value;
-                                            vp = (as_val *) as_string_new(as_string_get(s), true);
-                                            s->value = NULL;
-                                            break;
-                                        }    
+                            as_string * lua_s   = as_string_fromval(res.value);
+                            char *      lua_err  = (char *) as_string_tostring(lua_s);
+                            if (lua_err != NULL) {
+                                int l_rs_len = strlen(rs);
+                                rs = cf_realloc(rs,l_rs_len + strlen(lua_err) + 4);
+                                sprintf(&rs[l_rs_len]," : %s",lua_err);
+                            }
+                            vp = (as_val *) as_string_new(rs, true);
+                            break;
+                            }    
                         default:
-                                        LOG("[WARNING] unknown stack as_val type\n");
-                                        break;
+                            LOG("[WARNING] unknown stack as_val type\n");
+                            break;
                     }    
                 }    
-                if(vp != NULL) {
-                    query->err_val = vp;
+                if (vp != NULL) {
+                    *err_val = vp;
                 }    
               }    
-              as_result_destroy(res);
+              as_result_destroy(&res);
         }
-
     }
     else {
         // sink the data from multiple sources into the result stream
-        rc = cl_query_execute(cluster, query, &source, citrusleaf_query_foreach_callback);
+        rc = cl_query_execute(cluster, query, &source, citrusleaf_query_foreach_callback, err_val);
     }
 
     return rc;

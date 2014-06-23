@@ -1,4 +1,5 @@
 #include <errno.h>
+#include <getopt.h>
 
 #include <aerospike/aerospike.h>
 #include <citrusleaf/cf_log.h>
@@ -24,6 +25,8 @@ int g_argc = 0;
 char ** g_argv = NULL;
 char g_host[MAX_HOST_SIZE];
 int g_port = 3000;
+static char g_user[AS_USER_SIZE];
+static char g_password[AS_PASSWORD_HASH_SIZE];
 
 /******************************************************************************
  * STATIC FUNCTIONS
@@ -51,15 +54,24 @@ static void citrusleaf_log_callback(cf_log_level level, const char* fmt, ...) {
     va_end(ap);
 }
 
-#define VALID_OPTS "h:p:"
+static const char* short_options = "h:p:U:P::";
+
+static struct option long_options[] = {
+	{"hosts",        1, 0, 'h'},
+	{"port",         1, 0, 'p'},
+	{"user",         1, 0, 'U'},
+	{"password",     2, 0, 'P'},
+	{0,              0, 0, 0}
+};
 
 static bool parse_opts(int argc, char* argv[])
 {
+	int option_index = 0;
 	int c;
 
 	strcpy(g_host, "127.0.0.1");
 
-	while ((c = getopt(argc, argv, VALID_OPTS)) != -1) {
+	while ((c = getopt_long(argc, argv, short_options, long_options, &option_index)) != -1) {
 		switch (c) {
 		case 'h':
 			if (strlen(optarg) >= sizeof(g_host)) {
@@ -74,6 +86,19 @@ static bool parse_opts(int argc, char* argv[])
 			g_port = atoi(optarg);
 			break;
 
+		case 'U':
+			if (strlen(optarg) >= sizeof(g_user)) {
+				error("ERROR: user exceeds max length");
+				return false;
+			}
+			strcpy(g_user, optarg);
+			error("user:           %s", g_user);
+			break;
+
+		case 'P':
+			as_password_prompt_hash(optarg, g_password);
+			break;
+				
 		default:
 	        error("unrecognized options");
 			return false;
@@ -95,18 +120,14 @@ static bool before(atf_plan * plan) {
         error("failed to parse options");
     	return false;
     }
-    as_config config = {
-        .hosts = { 
-        	{ .addr = g_host , .port = g_port },
-        	{ 0 }
-        },
-        .lua = {
-        	.cache_enabled = false,
-        	.system_path = "modules/lua-core/src",
-        	.user_path = "src/test/lua"
-        }
-    };
-
+	
+	as_config config;
+	as_config_init(&config);
+	as_config_add_host(&config, g_host, g_port);
+	as_config_set_user(&config, g_user, g_password);
+	config.lua.cache_enabled = false;
+	strcpy(config.lua.system_path, "modules/lua-core/src");
+	strcpy(config.lua.user_path, "src/test/lua");
     as_policies_init(&config.policies);
 
 	as_error err;

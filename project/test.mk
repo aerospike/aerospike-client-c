@@ -34,6 +34,7 @@ endif
 
 AS_HOST := 127.0.0.1
 AS_PORT := 3000
+AS_ARGS := -h $(AS_HOST) -p $(AS_PORT)
 
 ###############################################################################
 ##  TARGETS                                                      		     ##
@@ -41,7 +42,7 @@ AS_PORT := 3000
 
 .PHONY: test
 test: $(TARGET_TEST)/aerospike_test
-	$(TARGET_TEST)/aerospike_test -h $(AS_HOST) -p $(AS_PORT)
+	$(TARGET_TEST)/aerospike_test $(AS_ARGS)
 
 .PHONY: test-valgrind
 test-valgrind: test-build

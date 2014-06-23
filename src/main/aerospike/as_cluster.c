@@ -790,7 +790,7 @@ as_cluster_create(as_config* config)
 	}
 	
 	if (*(config->password)) {
-		cluster->user = cf_strdup(config->password);
+		cluster->password = cf_strdup(config->password);
 	}
 	
 	// Initialize cluster tend and node parameters

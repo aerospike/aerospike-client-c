@@ -21,6 +21,7 @@
  *****************************************************************************/
 
 #include <aerospike/as_node.h>
+#include <aerospike/as_admin.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_info.h>
 #include <aerospike/as_string.h>
@@ -45,7 +46,7 @@ as_partition_tables_update(struct as_cluster_s* cluster, as_node* node, char* bu
  *****************************************************************************/
 
 as_node*
-as_node_create(const char* name, struct sockaddr_in* addr)
+as_node_create(as_cluster* cluster, const char* name, struct sockaddr_in* addr)
 {
 	as_node* node = cf_malloc(sizeof(as_node));
 
@@ -55,6 +56,7 @@ as_node_create(const char* name, struct sockaddr_in* addr)
 	
 	node->ref_count = 1;
 	node->partition_generation = 0xFFFFFFFF;
+	node->cluster = cluster;
 			
 	strcpy(node->name, name);
 	node->address_index = 0;
@@ -246,6 +248,17 @@ as_node_fd_get(as_node* node)
 			// We exhausted the queue and can't open a fresh socket.
 			if (fd == -1) {
 				break;
+			}
+			
+			as_cluster* cluster = node->cluster;
+			
+			if (cluster->user) {
+				if (! as_authenticate(fd, cluster->user, cluster->password, cluster->conn_timeout_ms)) {
+					cf_error("Authentication failed for %s", cluster->user);
+					cf_close(fd);
+					fd = -1;
+					break;
+				}
 			}
 		}
 		else {

@@ -554,6 +554,25 @@ typedef struct as_policy_batch_s {
 } as_policy_batch;
 
 /**
+ *	Administration Policy
+ *
+ *	@ingroup client_policies
+ */
+typedef struct as_policy_admin_s {
+	
+	/**
+	 *	Maximum time in milliseconds to wait for
+	 *	the operation to complete.
+	 *
+	 *	If 0 (zero), then the value will default to
+	 *	either as_config.policies.timeout
+	 *	or `AS_POLICY_TIMEOUT_DEFAULT`.
+	 */
+	uint32_t timeout;
+	
+} as_policy_admin;
+
+/**
  *	Struct of all policy values and operation policies. 
  *	
  *	This is utilizes by as_config, to define global and default values
@@ -654,6 +673,11 @@ typedef struct as_policies_s {
 	 *	The default batch policy.
 	 */
 	as_policy_batch batch;
+	
+	/**
+	 *	The default administration policy.
+	 */
+	as_policy_admin admin;
 
 } as_policies;
 
@@ -750,6 +774,16 @@ as_policy_remove * as_policy_remove_init(as_policy_remove * p);
  *	@relates as_policy_batch
  */
 as_policy_batch * as_policy_batch_init(as_policy_batch * p);
+
+/**
+ *	Initialize as_policy_admin to default values.
+ *
+ *	@param p	The policy to initialize
+ *	@return The initialized policy.
+ *
+ *	@relates as_policy_admin
+ */
+as_policy_admin * as_policy_admin_init(as_policy_admin * p);
 
 /**
  *	Initialize as_policies to default values.

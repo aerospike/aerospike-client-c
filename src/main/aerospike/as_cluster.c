@@ -21,13 +21,15 @@
  *****************************************************************************/
 
 #include <aerospike/as_cluster.h>
+#include <aerospike/as_admin.h>
+#include <aerospike/as_password.h>
 #include <aerospike/as_lookup.h>
 #include <aerospike/as_vector.h>
+#include <citrusleaf/as_scan.h>
 #include <citrusleaf/cl_info.h>
 #include <citrusleaf/cl_batch.h>
 #include <citrusleaf/cf_byte_order.h>
 #include <citrusleaf/cl_query.h>
-#include <citrusleaf/as_scan.h>
 #include <citrusleaf/cf_socket.h>
 #include <citrusleaf/cf_log_internal.h>
 
@@ -82,11 +84,11 @@ as_add_seeds(as_cluster* cluster, as_seed* seeds, uint32_t seeds_size) {
 }
 
 static bool
-as_lookup_node_name(struct sockaddr_in* addr, int timeout_ms, char* node_name, int node_name_size)
+as_lookup_node_name(as_cluster* cluster, struct sockaddr_in* addr, char* node_name, int node_name_size)
 {
 	char* values = 0;
 	
-	if (citrusleaf_info_host(addr, "node", &values, timeout_ms, false, true)) {
+	if (citrusleaf_info_host_auth(cluster, addr, "node", &values, cluster->conn_timeout_ms, false, true)) {
 		return false;
 	}
 	
@@ -199,7 +201,7 @@ as_cluster_seed_nodes(as_cluster* cluster)
 
 		for (uint32_t i = 0; i < addresses.size; i++) {
 			struct sockaddr_in* addr = as_vector_get(&addresses, i);
-			bool status = as_lookup_node_name(addr, cluster->conn_timeout_ms, name, AS_NODE_NAME_MAX_SIZE);
+			bool status = as_lookup_node_name(cluster, addr, name, AS_NODE_NAME_MAX_SIZE);
 			
 			if (status) {
 				as_node* node = as_cluster_find_node_in_vector(&nodes_to_add, name);
@@ -208,7 +210,7 @@ as_cluster_seed_nodes(as_cluster* cluster)
 					as_node_add_address(node, addr);
 				}
 				else {
-					node = as_node_create(name, addr);
+					node = as_node_create(cluster, name, addr);
 					as_address* a = as_node_get_address_full(node);
 					cf_info("Add node %s %s:%d", node->name, a->name, (int)cf_swap_from_be16(a->addr.sin_port));
 					as_vector_append(&nodes_to_add, &node);
@@ -247,7 +249,7 @@ as_cluster_find_nodes_to_add(as_cluster* cluster, as_vector* /* <as_friend> */ f
 		
 		for (uint32_t i = 0; i < addresses.size; i++) {
 			struct sockaddr_in* addr = as_vector_get(&addresses, i);
-			bool status = as_lookup_node_name(addr, cluster->conn_timeout_ms, name, AS_NODE_NAME_MAX_SIZE);
+			bool status = as_lookup_node_name(cluster, addr, name, AS_NODE_NAME_MAX_SIZE);
 			
 			if (status) {
 				as_node* node = as_cluster_find_node(cluster->nodes, name);
@@ -264,7 +266,7 @@ as_cluster_find_nodes_to_add(as_cluster* cluster, as_vector* /* <as_friend> */ f
 					continue;
 				}
 				
-				node = as_node_create(name, addr);
+				node = as_node_create(cluster, name, addr);
 				as_address* a = as_node_get_address_full(node);
 				cf_info("Add node %s %s:%d", name, a->name, (int)cf_swap_from_be16(a->addr.sin_port));
 				as_vector_append(nodes_to_add, &node);
@@ -439,7 +441,7 @@ as_cluster_set_partition_size(as_cluster* cluster)
 		struct sockaddr_in* addr = as_node_get_address(node);
 		char* values = 0;
 		
-		if (citrusleaf_info_host(addr, "partitions", &values, cluster->conn_timeout_ms, false, true)) {
+		if (citrusleaf_info_host_auth(cluster, addr, "partitions", &values, cluster->conn_timeout_ms, false, true)) {
 			continue;
 		}
 		
@@ -763,11 +765,33 @@ as_cluster_is_connected(as_cluster* cluster)
 	return connected;
 }
 
+void
+as_cluster_change_password(as_cluster* cluster, const char* user, const char* password)
+{
+	if (user && *user) {
+		if (cluster->user == 0 || strcmp(cluster->user, user) == 0) {
+			cf_free(cluster->user);
+			cf_free(cluster->password);
+			cluster->user = cf_strdup(user);
+			cluster->password = cf_strdup(password);
+		}
+	}
+}
+
 as_cluster*
 as_cluster_create(as_config* config)
 {
 	as_cluster* cluster = cf_malloc(sizeof(as_cluster));
 	memset(cluster, 0, sizeof(as_cluster));
+	
+	// Initialize user/password.
+	if (*(config->user)) {
+		cluster->user = cf_strdup(config->user);
+	}
+	
+	if (*(config->password)) {
+		cluster->user = cf_strdup(config->password);
+	}
 	
 	// Initialize cluster tend and node parameters
 	cluster->tend_interval = (config->tender_interval < 1000)? 1000 : config->tender_interval;
@@ -854,6 +878,9 @@ as_cluster_destroy(as_cluster* cluster)
 	
 	// Destroy batch lock.
 	pthread_mutex_destroy(&cluster->batch_init_lock);
+	
+	cf_free(cluster->user);
+	cf_free(cluster->password);
 	
 	// Destroy cluster.
 	cf_free(cluster);

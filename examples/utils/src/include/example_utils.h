@@ -78,11 +78,11 @@ extern uint32_t g_n_keys;
 // Example Command Line Options
 //
 
-#define EXAMPLE_BASIC_OPTS "h:p:n:s:k:"
-#define EXAMPLE_MULTI_KEY_OPTS "h:p:n:s:K:"
+#define EXAMPLE_BASIC_OPTS 0
+#define EXAMPLE_MULTI_KEY_OPTS 1
 
 // Must be called first!
-bool example_get_opts(int argc, char* argv[], const char* which_opts);
+bool example_get_opts(int argc, char* argv[], int which_opts);
 
 
 //==========================================================

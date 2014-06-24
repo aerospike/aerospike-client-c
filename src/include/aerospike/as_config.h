@@ -24,6 +24,7 @@
 
 #include <aerospike/as_error.h>
 #include <aerospike/as_policy.h>
+#include <aerospike/as_password.h>
 
 /******************************************************************************
  *	MACROS
@@ -160,10 +161,10 @@ typedef struct as_config_lua_s {
  *	configuration. The seed host is defined in `as_config.hosts`. 
  *
  *	~~~~~~~~~~{.c}
- *	config.hosts[0] = { .addr = "127.0.0.1", .port = 3000 };
+ *	as_config_add_host(&config, "127.0.0.1", 3000);
  *	~~~~~~~~~~
  *
- *	You can define up to 16 hosts for the seed. The client will iterate over 
+ *	You can define up to 256 hosts for the seed. The client will iterate over
  *	the list until it connects with one of the hosts. 
  *
  *	## Policies
@@ -242,6 +243,17 @@ typedef struct as_config_lua_s {
  */
 typedef struct as_config_s {
 
+	/**
+	 *	User authentication to cluster.  Leave empty for clusters running without restricted access.
+	 */
+	char user[AS_USER_SIZE];
+	
+	/**
+	 *	Password authentication to cluster.  The password will be stored by the client and sent to
+	 *  server in hashed format.  Leave empty for clusters running without restricted access.
+	 */
+	char password[AS_PASSWORD_HASH_SIZE];
+	
 	/**
 	 *	A IP translation table is used in cases where different clients use different server
 	 *	IP addresses.  This may be necessary when using clients from both inside and outside
@@ -356,3 +368,18 @@ as_config_add_host(as_config* config, const char* addr, uint16_t port)
 	host->addr = addr;
 	host->port = port;
 }
+
+/**
+ *	User authentication for servers with restricted access.  The password will be stored by the
+ *	client and sent to server in hashed format.
+ *
+ *	~~~~~~~~~~{.c}
+ *		as_config config;
+ *		as_config_init(&config);
+ *		as_config_set_user(&config, "charlie", "mypassword");
+ *	~~~~~~~~~~
+ *
+ *	@relates as_config
+ */
+bool
+as_config_set_user(as_config* config, const char* user, const char* password);

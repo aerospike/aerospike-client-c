@@ -54,6 +54,8 @@ typedef struct as_address_s {
 	char name[INET_ADDRSTRLEN];
 } as_address;
 
+struct as_cluster_s;
+
 /**
  *	Server node representation.
  */
@@ -87,6 +89,8 @@ typedef struct as_node_s {
 	 *	Only used by tend thread. Not thread-safe.
 	 */
 	as_vector /* <as_address> */ addresses;
+
+	struct as_cluster_s* cluster;
 	
 	/**
 	 *	@private
@@ -158,7 +162,7 @@ typedef struct as_friend_s {
  *	Create new cluster node.
  */
 as_node*
-as_node_create(const char* name, struct sockaddr_in* addr);
+as_node_create(struct as_cluster_s* cluster, const char* name, struct sockaddr_in* addr);
 
 /**
  *	@private

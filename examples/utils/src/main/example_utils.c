@@ -63,9 +63,31 @@ const int DEFAULT_PORT = 3000;
 const char DEFAULT_NAMESPACE[] = "test";
 const char DEFAULT_SET[] = "test-set";
 const char DEFAULT_KEY_STR[] = "test-key";
-
 const uint32_t DEFAULT_NUM_KEYS = 20;
 
+static const char* short_options_basic = "h:p:U:P::n:s:k:";
+static struct option long_options_basic[] = {
+	{"hosts",        1, 0, 'h'},
+	{"port",         1, 0, 'p'},
+	{"user",         1, 0, 'U'},
+	{"password",     2, 0, 'P'},
+	{"namespace",    1, 0, 'n'},
+	{"set",          1, 0, 's'},
+	{"key",          1, 0, 'k'},
+	{0,              0, 0, 0}
+};
+
+static const char* short_options_multikey = "h:p:U:P::n:s:K:";
+static struct option long_options_multikey[] = {
+	{"hosts",        1, 0, 'h'},
+	{"port",         1, 0, 'p'},
+	{"user",         1, 0, 'U'},
+	{"password",     2, 0, 'P'},
+	{"namespace",    1, 0, 'n'},
+	{"set",          1, 0, 's'},
+	{"multikey",     1, 0, 'k'},
+	{0,              0, 0, 0}
+};
 
 //==========================================================
 // Globals
@@ -106,6 +128,15 @@ static char g_host[MAX_HOST_SIZE];
 static int g_port;
 
 //------------------------------------------------
+// The optional user/password.
+// Obtained using command line options:
+// -U <user name>
+// -p[<password>]
+//
+static char g_user[AS_USER_SIZE];
+static char g_password[AS_PASSWORD_HASH_SIZE];
+
+//------------------------------------------------
 // The (string) value of the test key used by all
 // basic examples. From command line option:
 // -k <key string>
@@ -117,7 +148,7 @@ static char g_key_str[MAX_KEY_STR_SIZE];
 // Forward Declarations
 //
 
-static void usage(const char* which_opts);
+static void usage(const char* short_options);
 
 
 //==========================================================
@@ -128,7 +159,7 @@ static void usage(const char* which_opts);
 // Parse command line options.
 //
 bool
-example_get_opts(int argc, char* argv[], const char* which_opts)
+example_get_opts(int argc, char* argv[], int which_opts)
 {
 	strcpy(g_host, DEFAULT_HOST);
 	g_port = DEFAULT_PORT;
@@ -136,10 +167,23 @@ example_get_opts(int argc, char* argv[], const char* which_opts)
 	strcpy(g_set, DEFAULT_SET);
 	strcpy(g_key_str, DEFAULT_KEY_STR);
 	g_n_keys = DEFAULT_NUM_KEYS;
-
+	
+	const char* short_options;
+	struct option* long_options;
+	
+	if (which_opts) {
+		short_options = short_options_multikey;
+		long_options = long_options_multikey;
+	}
+	else  {
+		short_options = short_options_basic;
+		long_options = long_options_basic;
+	}
+	
+	int option_index = 0;
 	int c;
-
-	while ((c = getopt(argc, argv, which_opts)) != -1) {
+	
+	while ((c = getopt_long(argc, argv, short_options, long_options, &option_index)) != -1) {
 		switch (c) {
 		case 'h':
 			if (strlen(optarg) >= sizeof(g_host)) {
@@ -153,6 +197,14 @@ example_get_opts(int argc, char* argv[], const char* which_opts)
 			g_port = atoi(optarg);
 			break;
 
+		case 'U':
+			strcpy(g_user, optarg);
+			break;
+			
+		case 'P':
+			as_password_prompt_hash(optarg, g_password);
+			break;
+				
 		case 'n':
 			if (strlen(optarg) >= sizeof(g_namespace)) {
 				LOG("ERROR: namespace exceeds max length");
@@ -182,32 +234,36 @@ example_get_opts(int argc, char* argv[], const char* which_opts)
 			break;
 
 		default:
-			usage(which_opts);
+			usage(short_options);
 			return false;
 		}
 	}
 
-	if (strchr(which_opts, 'h')) {
+	if (strchr(short_options, 'h')) {
 		LOG("host:           %s", g_host);
 	}
 
-	if (strchr(which_opts, 'p')) {
+	if (strchr(short_options, 'p')) {
 		LOG("port:           %d", g_port);
 	}
 
-	if (strchr(which_opts, 'n')) {
+	if (strchr(short_options, 'U')) {
+		LOG("user:           %s", g_user);
+	}
+
+	if (strchr(short_options, 'n')) {
 		LOG("namespace:      %s", g_namespace);
 	}
 
-	if (strchr(which_opts, 's')) {
+	if (strchr(short_options, 's')) {
 		LOG("set name:       %s", g_set);
 	}
 
-	if (strchr(which_opts, 'k')) {
+	if (strchr(short_options, 'k')) {
 		LOG("key (string):   %s", g_key_str);
 	}
 
-	if (strchr(which_opts, 'K')) {
+	if (strchr(short_options, 'K')) {
 		LOG("number of keys: %u", g_n_keys);
 	}
 
@@ -222,31 +278,39 @@ example_get_opts(int argc, char* argv[], const char* which_opts)
 // Display supported command line options.
 //
 static void
-usage(const char* which_opts)
+usage(const char* short_options)
 {
 	LOG("Usage:");
 
-	if (strchr(which_opts, 'h')) {
+	if (strchr(short_options, 'h')) {
 		LOG("-h host [default: %s]", DEFAULT_HOST);
 	}
 
-	if (strchr(which_opts, 'p')) {
+	if (strchr(short_options, 'p')) {
 		LOG("-p port [default: %d]", DEFAULT_PORT);
 	}
 
-	if (strchr(which_opts, 'n')) {
+	if (strchr(short_options, 'U')) {
+		LOG("-U username [default: none]");
+	}
+	
+	if (strchr(short_options, 'P')) {
+		LOG("-P[password] [default: none]");
+	}
+
+	if (strchr(short_options, 'n')) {
 		LOG("-n namespace [default: %s]", DEFAULT_NAMESPACE);
 	}
 
-	if (strchr(which_opts, 's')) {
+	if (strchr(short_options, 's')) {
 		LOG("-s set name [default: %s]", DEFAULT_SET);
 	}
 
-	if (strchr(which_opts, 'k')) {
+	if (strchr(short_options, 'k')) {
 		LOG("-k key string [default: %s]", DEFAULT_KEY_STR);
 	}
 
-	if (strchr(which_opts, 'K')) {
+	if (strchr(short_options, 'K')) {
 		LOG("-K number of keys [default: %u]", DEFAULT_NUM_KEYS);
 	}
 }
@@ -276,10 +340,8 @@ example_connect_to_aerospike_with_udf_config(aerospike* p_as,
 	// Start with default configuration.
 	as_config cfg;
 	as_config_init(&cfg);
-
-	// Must provide host and port. Example must have called example_get_opts()!
-	cfg.hosts[0].addr = g_host;
-	cfg.hosts[0].port = g_port;
+	as_config_add_host(&cfg, g_host, g_port);
+	as_config_set_user(&cfg, g_user, g_password);
 
 	// Examples can be run from client binary package-installed lua files or
 	// from git client source tree lua files. If client binary package is not

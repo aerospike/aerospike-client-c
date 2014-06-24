@@ -99,9 +99,10 @@ connect_to_server(arguments* args, aerospike* client)
 	as_config_init(&cfg);
 	
 	for (int i = 0; i < args->host_count; i++) {
-		cfg.hosts[i].addr = args->hosts[i];
-		cfg.hosts[i].port = args->port;
+		as_config_add_host(&cfg, args->hosts[i], args->port);
 	}
+	
+	as_config_set_user(&cfg, args->user, args->password);
 	
 	as_policies* p = &cfg.policies;
 	p->timeout	= args->read_timeout;

@@ -26,11 +26,13 @@
 #include <string.h>
 #include <getopt.h>
 
-static const char* short_options = "h:p:n:s:k:o:Rw:z:g:T:dL:u";
+static const char* short_options = "h:p:U:P::n:s:k:o:Rw:z:g:T:dL:u";
 
 static struct option long_options[] = {
 	{"hosts",        1, 0, 'h'},
 	{"port",         1, 0, 'p'},
+	{"user",         1, 0, 'U'},
+	{"password",     2, 0, 'P'},
 	{"namespace",    1, 0, 'n'},
 	{"set",          1, 0, 's'},
 	{"keys",         1, 0, 'k'},
@@ -40,7 +42,7 @@ static struct option long_options[] = {
 	{"threads",      1, 0, 'z'},
 	{"throughput",   1, 0, 'g'},
 	{"timeout",      1, 0, 'T'},
-	{"readTimeout",  1, 0, 'U'},
+	{"readTimeout",  1, 0, 'X'},
 	{"writeTimeout", 1, 0, 'V'},
 	{"maxRetries",   1, 0, 'r'},
 	{"debug",        0, 0, 'd'},
@@ -60,19 +62,32 @@ print_usage(const char* program)
 	blog_line("   Aerospike server seed hostnames or IP addresses.");
 	blog_line("");
 	
-	blog_line("-p --port <port>     # Default: 3000");
+	blog_line("-p --port <port>      # Default: 3000");
 	blog_line("   Aerospike server seed hostname or IP address.");
 	blog_line("");
 	
-	blog_line("-n --namespace <ns>  # Default: test");
+	blog_line("-U --user <user name> # Default: empty");
+	blog_line("   User name for Aerospike servers that require authentication.");
+	blog_line("");
+
+	blog_line("-P[<password>]  # Default: empty");
+	blog_line("   User's password for Aerospike servers that require authentication.");
+	blog_line("   If -P is set, the actual password if optional. If the password is not given,");
+	blog_line("   the user will be prompted on the command line.");
+	blog_line("   If the password is given, it must be provided directly after -P with no");
+	blog_line("   intrevening space (ie. -Pmypass).");
+	blog_line("   ");
+	blog_line("");
+
+	blog_line("-n --namespace <ns>   # Default: test");
 	blog_line("   Aerospike namespace.");
 	blog_line("");
 	
-	blog_line("-s --set <set name>  # Default: testset");
+	blog_line("-s --set <set name>   # Default: testset");
 	blog_line("   Aerospike set name.");
 	blog_line("");
 	
-	blog_line("-k --keys <count>    # Default: 1000000");
+	blog_line("-k --keys <count>     # Default: 1000000");
 	blog_line("   Key/record count or key/record range.");
 	blog_line("");
 	
@@ -173,6 +188,7 @@ print_args(arguments* args)
 	blog_line("");
 	
 	blog_line("port:           %d", args->port);
+	blog_line("user:           %s", args->user);
 	blog_line("namespace:      %s", args->namespace);
 	blog_line("set:            %s", args->set);
 	blog_line("keys/records:   %d", args->keys);
@@ -339,6 +355,14 @@ set_args(int argc, char * const * argv, arguments* args)
 				args->port = atoi(optarg);
 				break;
 				
+			case 'U':
+				args->user = optarg;
+				break;
+			
+			case 'P':
+				as_password_prompt_hash(optarg, args->password);
+				break;
+
 			case 'n':
 				args->namespace = optarg;
 				break;
@@ -403,7 +427,7 @@ set_args(int argc, char * const * argv, arguments* args)
 				args->write_timeout = args->read_timeout;
 				break;
 				
-			case 'U':
+			case 'X':
 				args->read_timeout = atoi(optarg);
 				break;
 				
@@ -465,6 +489,8 @@ main(int argc, char * const * argv)
 	args.hosts[0] = args.host_string;
 	args.host_count = 1;
 	args.port = 3000;
+	args.user = 0;
+	args.password[0] = 0;
 	args.namespace = "test";
 	args.set = "testset";
 	args.keys = 1000000;

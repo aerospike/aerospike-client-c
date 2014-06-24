@@ -1017,7 +1017,10 @@ static void * cl_query_worker(void * pv_asc) {
         }
 
         // query if the node is still around
-        as_query_fail_t rc_fail = {CITRUSLEAF_FAIL_UNAVAILABLE,NULL};
+        as_query_fail_t rc_fail = {
+            .rc      = CITRUSLEAF_FAIL_UNAVAILABLE,
+            .err_val = NULL
+        };
 
         as_node * node = as_node_get_by_name(task.asc, task.node_name);
         if ( node ) {

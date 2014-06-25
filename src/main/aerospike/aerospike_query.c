@@ -127,6 +127,7 @@ as_status aerospike_query_foreach(
 {
 	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
+    as_val *  err_val = NULL;
 	
 	// resolve policies
 	// as_policy_query p;
@@ -142,12 +143,20 @@ as_status aerospike_query_foreach(
 		.udata = udata,
 		.callback = callback
 	};
+	cl_rv rc = citrusleaf_query_foreach(as->cluster, clquery, &bridge, clquery_callback, &err_val);
+    as_status ret = as_error_fromrc(err, rc);
 
-	cl_rv rc = citrusleaf_query_foreach(as->cluster, clquery, &bridge, clquery_callback);
-
+    if (CITRUSLEAF_OK != rc && err_val) {
+        char * err_str = as_val_tostring(err_val);
+        if(err_str) {
+            strncat(err->message," : ",sizeof(err->message) - strlen(err->message));
+            strncat(err->message,err_str,sizeof(err->message) - strlen(err->message));
+            cf_free(err_str);
+        }
+        as_val_destroy(err_val);
+    }
 	cl_query_destroy(clquery);
-
-	return as_error_fromrc(err, rc);
+	return ret;
 }
 
 /**

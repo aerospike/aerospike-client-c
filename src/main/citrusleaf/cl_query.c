@@ -1508,7 +1508,7 @@ cl_rv citrusleaf_query_foreach(as_cluster * cluster, const cl_query * query, voi
                             as_string * lua_s   = as_string_fromval(res.value);
                             char *      lua_err  = (char *) as_string_tostring(lua_s);
                             if (lua_err != NULL) {
-                                int l_rs_len = strlen(rs);
+                                int l_rs_len = (int)strlen(rs);
                                 rs = cf_realloc(rs,l_rs_len + strlen(lua_err) + 4);
                                 sprintf(&rs[l_rs_len]," : %s",lua_err);
                             }

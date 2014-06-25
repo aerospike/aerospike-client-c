@@ -107,7 +107,7 @@ as_status aerospike_connect(aerospike * as, as_error * err)
 	// configuration checks
 	if ( as->config.hosts[0].addr == NULL ) {
 		as_err(LOGGER, "no hosts provided");
-		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "no hosts provided");
+		return as_error_update(err, AEROSPIKE_ERR_CLUSTER, "no hosts provided");
 	}
 
     mod_lua_config config = {
@@ -129,7 +129,7 @@ as_status aerospike_connect(aerospike * as, as_error * err)
 	
 	if (! as->cluster) {
 		as_err(LOGGER, "failed to initialize cluster");
-		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "failed to initialize cluster");
+		return as_error_update(err, AEROSPIKE_ERR_CLUSTER, "failed to initialize cluster");
 	}
 	
 	return err->code;

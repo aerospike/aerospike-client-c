@@ -111,6 +111,9 @@ as_status as_error_fromrc(as_error * err, cl_rv rc)
 	case CITRUSLEAF_FAIL_UDF_BAD_RESPONSE:
 		ERR_ASSIGN(AEROSPIKE_ERR_UDF);
 		break;
+    case CITRUSLEAF_FAIL_UDF_LUA_EXECUTION:
+        ERR_ASSIGN(AEROSPIKE_ERR_UDF); 
+        break; 
 	case CITRUSLEAF_FAIL_INDEX_FOUND:
 		ERR_ASSIGN(AEROSPIKE_ERR_INDEX_FOUND);
 		break;

@@ -7,6 +7,9 @@
 [submodule "modules/lua-core"]
 	path = modules/lua-core
 	url = https://github.com/aerospike/aerospike-lua-core
+[submodule "modules/msgpack"]
+	path = modules/msgpack
+	url = https://github.com/aerospike/msgpack
 [submodule "modules/ck"]
 	path = modules/ck
 	url = https://github.com/aerospike/ck

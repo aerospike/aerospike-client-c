@@ -543,6 +543,25 @@ cf_fdset_size(int fd)
 	return ((fd / FD_SETSIZE) + 1) * FD_SETSIZE / 8;
 }
 
+// From glibc-2.15 (ubuntu 12.0.4+), the FD_* functions has a check on the 
+// number of fds passed. According to the man page of FD_SET, the behavior
+// is undefined for fd > 1024. But this is enforced from glibc-2.15
+// https://sourceware.org/bugzilla/show_bug.cgi?id=10352
+//
+// So, manipulate the base and the offset of the fd in it
+// 
+static inline void
+cf_fd_set(int fd, fd_set *fdset)
+{
+	FD_SET(fd%FD_SETSIZE, &fdset[fd/FD_SETSIZE]);
+}
+
+static inline int
+cf_fd_isset(int fd, fd_set *fdset)
+{
+	return FD_ISSET(fd%FD_SETSIZE, &fdset[fd/FD_SETSIZE]);
+}
+
 //
 // Network socket helpers
 // Often, you know the amount you want to read, and you have a timeout.
@@ -612,11 +631,11 @@ cf_socket_read_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_dead
 		tv.tv_usec = (ms_left % 1000) * 1000;
         
 		memset((void*)rset, 0, rset_size);
-		FD_SET(fd, rset);
+		cf_fd_set(fd, rset);
 		rv = select(fd +1, rset /*readfd*/, 0 /*writefd*/, 0 /*oobfd*/, &tv);
         
 		// we only have one fd, so we know it's ours?
-		if ((rv > 0) && FD_ISSET(fd, rset)) {
+		if ((rv > 0) && cf_fd_isset(fd, rset)) {
             
 			int r_bytes = (int)read(fd, buf + pos, buf_len - pos );
             
@@ -720,12 +739,12 @@ cf_socket_write_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_dea
 		tv.tv_usec = (ms_left % 1000) * 1000;
         
 		memset((void*)wset, 0, wset_size);
-		FD_SET(fd, wset);
+		cf_fd_set(fd, wset);
         
 		rv = select(fd +1, 0 /*readfd*/, wset /*writefd*/, 0/*oobfd*/, &tv);
         
 		// we only have one fd, so we know it's ours, but select seems confused sometimes - do the safest thing
-		if ((rv > 0) && FD_ISSET(fd, wset)) {
+		if ((rv > 0) && cf_fd_isset(fd, wset)) {
             
 			int r_bytes = (int)write(fd, buf + pos, buf_len - pos );
             

@@ -27,6 +27,7 @@ else
 CFLAGS += -rdynamic
 endif
 
+
 CFLAGS += -I$(AEROSPIKE)/target/$(PLATFORM)/include
 CFLAGS += -I../../utils/src/include
 
@@ -39,8 +40,25 @@ else
 LDFLAGS += -lrt
 endif
 
-LDFLAGS += -llua
+LUA_CPATH += $(or \
+    $(wildcard /usr/include/lua-5.1), \
+    $(wildcard /usr/include/lua5.1))
+
+CFLAGS += $(LUA_CPATH:%:-I%)
+
+LUA_LIBPATH += $(or \
+    $(wildcard /usr/lib/liblua5.1.so), \
+    $(wildcard /usr/lib/x86_64-linux-gnu/liblua5.1.so), \
+    $(wildcard /usr/lib64/liblua-5.1.so), \
+    $(wildcard /usr/lib/liblua.so), \
+	$(error Cannot find "liblua") \
+    )
+
+LUA_LIB = $(patsubst lib%.so,%,$(notdir $(LUA_LIBPATH)))
+
+LDFLAGS += $(LUA_LIB:%=-l%)
 LDFLAGS += -lm
+LDFLAGS += -lz
 
 ifeq ($(OS),Darwin)
 LDFLAGS += -lz

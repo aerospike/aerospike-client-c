@@ -51,7 +51,7 @@
 #define SOL_TCP IPPROTO_TCP
 #endif // __APPLE__
 
-#define STACK_LIMIT (128 * 1024)
+#define STACK_LIMIT (16 * 1024)
 
 // #define DEBUG_TIME
 

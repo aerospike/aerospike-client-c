@@ -74,6 +74,9 @@ $(TARGET_OBJ)/%.o : %.c | $(TARGET_OBJ)
 
 .DEFAULT_GOAL := all
 
+%.h:
+	$(noop)
+
 %.o:
 	$(object)
 

@@ -7,13 +7,7 @@ AS_PORT := 3000
 AS_ARGS := -h $(AS_HOST) -p $(AS_PORT)
 
 OS = $(shell uname)
-
-ifeq ($(OS),Darwin)
 ARCH = $(shell uname -m)
-else
-ARCH = $(shell arch)
-endif
-
 PLATFORM = $(OS)-$(ARCH)
 
 CFLAGS = -std=gnu99 -g -Wall -fPIC
@@ -44,15 +38,13 @@ LUA_CPATH += $(or \
     $(wildcard /usr/include/lua-5.1), \
     $(wildcard /usr/include/lua5.1))
 
-CFLAGS += $(LUA_CPATH:%:-I%)
-
 ifeq ($(OS),Darwin)
 LUA_LIBPATH += $(or \
     $(wildcard /usr/local/lib/liblua.5.1.dylib), \
 	$(error Cannot find liblua 5.1) \
     )
-LDFLAGS += -L$(dir LUA_LIBPATH)
-LDFLAGS += -l$(patsubst lib%.dylib,%,$(notdir $(LUA_LIBPATH)))
+LUA_LIBDIR = $(dir LUA_LIBPATH)
+LUA_LIB = $(patsubst lib%.dylib,%,$(notdir $(LUA_LIBPATH)))
 else
 # Linux
 LUA_LIBPATH += $(or \
@@ -63,9 +55,12 @@ LUA_LIBPATH += $(or \
     $(wildcard /usr/lib/liblua.so), \
 	$(error Cannot find liblua 5.1) \
     )
-LDFLAGS += -L$(dir LUA_LIBPATH)
-LDFLAGS += -l$(patsubst lib%.so,%,$(notdir $(LUA_LIBPATH)))
+LUA_LIBDIR = $(dir LUA_LIBPATH)
+LUA_LIB = $(patsubst lib%.so,%,$(notdir $(LUA_LIBPATH)))
 endif
+
+CFLAGS += $(LUA_CPATH:%:-I%)
+LDFLAGS += -L$(LUA_LIBDIR) -l$(LUA_LIB)
 
 LDFLAGS += -lm
 LDFLAGS += -lz

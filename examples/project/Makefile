@@ -46,23 +46,33 @@ LUA_CPATH += $(or \
 
 CFLAGS += $(LUA_CPATH:%:-I%)
 
+ifeq ($(OS),Darwin)
+LUA_LIBPATH += $(or \
+    $(wildcard /usr/local/lib/liblua.5.1.dylib), \
+	$(error Cannot find liblua 5.1) \
+    )
+LDFLAGS += -L$(dir LUA_LIBPATH)
+LDFLAGS += -l$(patsubst lib%.dylib,%,$(notdir $(LUA_LIBPATH)))
+else
+# Linux
 LUA_LIBPATH += $(or \
     $(wildcard /usr/lib/liblua5.1.so), \
     $(wildcard /usr/lib/x86_64-linux-gnu/liblua5.1.so), \
     $(wildcard /usr/lib64/liblua-5.1.so), \
     $(wildcard /usr/lib/liblua.so), \
-	$(error Cannot find "liblua") \
+    $(wildcard /usr/lib/liblua.so), \
+	$(error Cannot find liblua 5.1) \
     )
+LDFLAGS += -L$(dir LUA_LIBPATH)
+LDFLAGS += -l$(patsubst lib%.so,%,$(notdir $(LUA_LIBPATH)))
+endif
 
-LUA_LIB = $(patsubst lib%.so,%,$(notdir $(LUA_LIBPATH)))
-
-LDFLAGS += $(LUA_LIB:%=-l%)
 LDFLAGS += -lm
 LDFLAGS += -lz
 
-ifeq ($(OS),Darwin)
-LDFLAGS += -lz
-endif
+# ifeq ($(OS),Darwin)
+# LDFLAGS += -lz
+# endif
 
 ifeq ($(OS),Darwin)
 CC = clang

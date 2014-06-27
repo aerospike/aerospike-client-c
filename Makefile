@@ -57,7 +57,8 @@ INC_PATH += /usr/local/include
 
 INC_PATH += $(or \
     $(wildcard /usr/include/lua-5.1), \
-    $(wildcard /usr/include/lua5.1))
+    $(wildcard /usr/include/lua5.1) \
+    )
 
 # Library Paths
 # LIB_PATH +=
@@ -167,6 +168,8 @@ EXCLUDE-HEADERS =
 
 HEADERS := 
 HEADERS += $(filter-out $(EXCLUDE-HEADERS), $(wildcard $(SOURCE_INCL)/aerospike/*.h))
+HEADERS += $(COMMON-HEADERS)
+HEADERS += $(BASE-HEADERS)
 
 ###############################################################################
 ##  MAIN TARGETS                                                             ##

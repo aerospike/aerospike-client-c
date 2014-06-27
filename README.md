@@ -1,35 +1,34 @@
-# Aerospike C-client API
+# Aerospike C Client Library
 
 `aerospike` is a C client library (API) for interfacing with the Aerospike Database.
 
 ## Prerequisites
 
-libc, openssl, and lua development packages must be installed to compile the client library.
+The C client library requires `gcc` and `g++` 4.1 or newer.
 
-### Debian-based Distributions
+Development packages of the following libraries must be installed.
+
+- `libc`
+- `openssl`
+- `lua 5.1`
+
+### Debian 6+ and Ubuntu 12+
 
 For Debian-based distributions (Debian, Ubuntu, etc.):
 
 	$ sudo apt-get install libc6-dev libssl-dev liblua5.1-dev autoconf automake libtool g++
-	$ export CPATH=$CPATH:/usr/include/lua5.1
 
-For Debian 6:
+### Redhat Enterprise Linux 6+
 
-	$ sudo ln -s /usr/lib/liblua5.1.so /usr/lib/liblua.so
-	$ sudo ln -s /usr/lib/liblua5.1.a /usr/lib/liblua.a
+For Redhat Enterprise 6 or newer, or related distributions (CentOS, etc.):
 
-For Ubuntu and Debian 7:
+	$ sudo yum install openssl-devel glibc-devel autoconf automake libtool lua-devel
 
-	$ sudo ln -s /usr/lib/x86_64-linux-gnu/liblua5.1.so /usr/lib/liblua.so
-	$ sudo ln -s /usr/lib/x86_64-linux-gnu/liblua5.1.a /usr/lib/liblua.a
+### Fedora 20+
 
-### Redhat-based Distributions
+For Fedora 20 or newer:
 
-For Redhat-based distributions (RHEL, CentOS, etc.):
-
-	$ sudo yum install openssl-devel glibc-devel lua-devel autoconf automake libtool
-
-Installation of these packages will also install gcc. gcc -version must show a version of 4.1 or better. g++ is also supported with the same version restriction.
+	$ sudo yum install openssl-devel glibc-devel autoconf automake libtool compat-lua-devel-5.1.5
 
 ### Lua from source
 

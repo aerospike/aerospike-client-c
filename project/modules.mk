@@ -151,9 +151,19 @@ $(CK)/include/ck_md.h:
 CK-clean:
 	$(noop)
 
-.PHONY: CK-prepare
-CK-prepare: $(TARGET_INCL)/ck
-	@rsync -rp $(CK)/include/* $(TARGET_INCL)/ck
+CK_INCLUDES := $(shell find $(CK)/include -type f)
+CK_PATSUB := $(patsubst $(CK)/include/%.h,$(TARGET_INCL)/ck/%.h,$(CK_INCLUDES))
+
+$(TARGET_INCL)/ck/%.h: $(CK)/include/%.h
+	mkdir -p $(@D)
+	cp $< $@
+
+CK-prepare: $(CK_PATSUB)
+	$(noop)
+
+# .PHONY: CK-prepare
+# CK-prepare: $(TARGET_INCL)/ck
+# 	@rsync -rp $(CK)/include/* $(TARGET_INCL)/ck
 
 $(TARGET_INCL)/ck: | $(TARGET_INCL)
 	mkdir $@

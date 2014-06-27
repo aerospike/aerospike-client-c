@@ -55,6 +55,10 @@ INC_PATH += $(MOD_LUA)/$(TARGET_INCL)
 INC_PATH += $(CK)/include
 INC_PATH += /usr/local/include
 
+INC_PATH += $(or \
+    $(wildcard /usr/include/lua-5.1), \
+    $(wildcard /usr/include/lua5.1))
+
 # Library Paths
 # LIB_PATH +=
 

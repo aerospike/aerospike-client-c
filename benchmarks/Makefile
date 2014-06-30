@@ -39,22 +39,28 @@ LUA_CPATH += $(or \
 ifeq ($(OS),Darwin)
 LUA_LIBPATH += $(or \
     $(wildcard /usr/local/lib/liblua.5.1.dylib), \
+    $(wildcard /usr/local/lib/liblua.5.1.a), \
+    $(wildcard /usr/local/lib/liblua.dylib), \
+    $(wildcard /usr/local/lib/liblua.a), \
 	$(error Cannot find liblua 5.1) \
     )
 LUA_LIBDIR = $(dir LUA_LIBPATH)
-LUA_LIB = $(patsubst lib%.dylib,%,$(notdir $(LUA_LIBPATH)))
+LUA_LIB = $(patsubst lib%,%,$(basename $(notdir $(LUA_LIBPATH))))
 else
 # Linux
 LUA_LIBPATH += $(or \
     $(wildcard /usr/lib/liblua5.1.so), \
+    $(wildcard /usr/lib/liblua5.1.a), \
     $(wildcard /usr/lib/x86_64-linux-gnu/liblua5.1.so), \
+    $(wildcard /usr/lib/x86_64-linux-gnu/liblua5.1.a), \
     $(wildcard /usr/lib64/liblua-5.1.so), \
+    $(wildcard /usr/lib64/liblua-5.1.a), \
     $(wildcard /usr/lib/liblua.so), \
-    $(wildcard /usr/lib/liblua.so), \
+    $(wildcard /usr/lib/liblua.a), \
 	$(error Cannot find liblua 5.1) \
     )
 LUA_LIBDIR = $(dir LUA_LIBPATH)
-LUA_LIB = $(patsubst lib%.so,%,$(notdir $(LUA_LIBPATH)))
+LUA_LIB = $(patsubst lib%,%,$(basename $(notdir $(LUA_LIBPATH))))
 endif
 
 CFLAGS += $(LUA_CPATH:%:-I%)

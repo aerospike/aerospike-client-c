@@ -142,7 +142,7 @@ MOD_LUA-make-prepare:
 ###############################################################################
 
 .PHONY: CK-build
-CK-build: $(CK)/include/ck_md.h
+CK-build: $(TARGET_INCL)/ck/ck_md.h
 
 $(CK)/include/ck_md.h:
 	(cd $(CK); ./configure)

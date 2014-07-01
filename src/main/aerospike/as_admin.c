@@ -171,12 +171,15 @@ as_authenticate(int fd, const char* user, const char* credential, int timeout_ms
 int
 as_create_user(aerospike* as, const as_policy_admin* policy, const char* user, const char* password, const char** roles, int roles_size)
 {
+	char hash[AS_PASSWORD_HASH_SIZE];
+	as_password_get_constant_hash(password, hash);
+	
 	uint8_t buffer[STACK_BUF_SZ];
 	uint8_t* p = buffer + 8;
 	
 	p = write_header(p, CREATE_USER, 3);
 	p = write_field_string(p, USER, user);
-	p = write_field_string(p, PASSWORD, password);
+	p = write_field_string(p, PASSWORD, hash);
 	p = write_roles(p, roles, roles_size);
 	return as_execute(as, policy, buffer, p);
 }

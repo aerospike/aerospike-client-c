@@ -7,9 +7,6 @@
 [submodule "modules/lua-core"]
 	path = modules/lua-core
 	url = git@github.com:citrusleaf/aerospike-lua-core
-[submodule "modules/msgpack"]
-	path = modules/msgpack
-	url = git@github.com:citrusleaf/msgpack
 [submodule "modules/ck"]
 	path = modules/ck
 	url = git@github.com:concurrencykit/ck

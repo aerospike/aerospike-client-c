@@ -54,6 +54,7 @@
 #define HEADER_REMAINING 16
 #define RESULT_CODE 9
 #define QUERY_END 50
+#define DEFAULT_TIMEOUT 60000  // one minute
 
 static uint8_t*
 write_header(uint8_t* p, uint8_t command, uint8_t field_count)
@@ -112,6 +113,9 @@ static int
 as_execute(aerospike* as, const as_policy_admin* policy, uint8_t* buffer, uint8_t* end)
 {
 	int timeout_ms = (policy)? policy->timeout : as->config.policies.admin.timeout;
+	if (timeout_ms <= 0) {
+		timeout_ms = DEFAULT_TIMEOUT;
+	}
 	uint64_t deadline_ms = cf_getms() + timeout_ms;
 	as_node* node = as_node_get_random(as->cluster);
 	
@@ -154,7 +158,7 @@ as_authenticate(int fd, const char* user, const char* credential, int timeout_ms
 	p = write_field_string(p, CREDENTIAL, credential);
 	
 	if (timeout_ms == 0) {
-		timeout_ms = 60000; // Default timeout is one minute.
+		timeout_ms = DEFAULT_TIMEOUT;
 	}
 	uint64_t deadline_ms = cf_getms() + timeout_ms;
 	
@@ -383,6 +387,9 @@ static int
 as_read_users(aerospike* as, const as_policy_admin* policy, uint8_t* buffer, uint8_t* end, as_vector* /*<as_user_roles*>*/ users)
 {
 	int timeout_ms = (policy)? policy->timeout : as->config.policies.admin.timeout;
+	if (timeout_ms <= 0) {
+		timeout_ms = DEFAULT_TIMEOUT;
+	}
 	uint64_t deadline_ms = cf_getms() + timeout_ms;
 	as_node* node = as_node_get_random(as->cluster);
 	

@@ -108,7 +108,7 @@ as_policy_batch * as_policy_batch_init(as_policy_batch * p)
  */
 as_policy_admin * as_policy_admin_init(as_policy_admin * p)
 {
-	p->timeout = 1000;  // one second default;
+	p->timeout = 0;
 	return p;
 }
 

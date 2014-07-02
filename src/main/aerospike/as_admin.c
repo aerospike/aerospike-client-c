@@ -201,6 +201,9 @@ as_change_password(aerospike* as, const as_policy_admin* policy, const char* use
 	char hash[AS_PASSWORD_HASH_SIZE];
 	as_password_get_constant_hash(password, hash);
 	
+	if (! user) {
+		user = as->cluster->user;
+	}
 	uint8_t buffer[STACK_BUF_SZ];
 	uint8_t* p = buffer + 8;
 	

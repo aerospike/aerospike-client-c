@@ -83,19 +83,20 @@ as_add_seeds(as_cluster* cluster, as_seed* seeds, uint32_t seeds_size) {
 	cluster->seeds_size = new_length;
 }
 
-static bool
+static int
 as_lookup_node_name(as_cluster* cluster, struct sockaddr_in* addr, char* node_name, int node_name_size)
 {
 	char* values = 0;
+	int status = citrusleaf_info_host_auth(cluster, addr, "node", &values, cluster->conn_timeout_ms, false, true);
 	
-	if (citrusleaf_info_host_auth(cluster, addr, "node", &values, cluster->conn_timeout_ms, false, true)) {
-		return false;
+	if (status) {
+		return status;
 	}
 	
 	char* value;
-	bool status = (citrusleaf_info_parse_single(values, &value) == 0);
+	status = citrusleaf_info_parse_single(values, &value);
 	
-	if (status) {
+	if (status == 0) {
 		as_strncpy(node_name, value, node_name_size);
 	}
 	free(values);
@@ -201,9 +202,9 @@ as_cluster_seed_nodes(as_cluster* cluster)
 
 		for (uint32_t i = 0; i < addresses.size; i++) {
 			struct sockaddr_in* addr = as_vector_get(&addresses, i);
-			bool status = as_lookup_node_name(cluster, addr, name, AS_NODE_NAME_MAX_SIZE);
+			int status = as_lookup_node_name(cluster, addr, name, AS_NODE_NAME_MAX_SIZE);
 			
-			if (status) {
+			if (status == 0) {
 				as_node* node = as_cluster_find_node_in_vector(&nodes_to_add, name);
 				
 				if (node) {
@@ -249,9 +250,9 @@ as_cluster_find_nodes_to_add(as_cluster* cluster, as_vector* /* <as_friend> */ f
 		
 		for (uint32_t i = 0; i < addresses.size; i++) {
 			struct sockaddr_in* addr = as_vector_get(&addresses, i);
-			bool status = as_lookup_node_name(cluster, addr, name, AS_NODE_NAME_MAX_SIZE);
+			int status = as_lookup_node_name(cluster, addr, name, AS_NODE_NAME_MAX_SIZE);
 			
-			if (status) {
+			if (status == 0) {
 				as_node* node = as_cluster_find_node(cluster->nodes, name);
 				
 				if (node) {
@@ -473,7 +474,7 @@ as_cluster_gc(as_vector* /* <as_gc_item> */ vector)
 /**
  * Check health of all nodes in the cluster.
  */
-static void
+static bool
 as_cluster_tend(as_cluster* cluster)
 {
 	// All node additions/deletions are performed in tend thread.
@@ -487,8 +488,7 @@ as_cluster_tend(as_cluster* cluster)
 	as_nodes* nodes = cluster->nodes;
 	if (nodes->size == 0) {
 		if (! as_cluster_seed_nodes(cluster)) {
-			cf_debug("Failed to seed cluster.");
-			return;
+			return false;
 		}
 	}
 
@@ -496,7 +496,7 @@ as_cluster_tend(as_cluster* cluster)
 	if (cluster->n_partitions == 0) {
 		if (! as_cluster_set_partition_size(cluster)) {
 			cf_warn("Failed to set retrieve n_partitions from cluster nodes.");
-			return;
+			return false;
 		}
 	}
 	
@@ -549,6 +549,7 @@ as_cluster_tend(as_cluster* cluster)
 	as_vector_destroy(&nodes_to_add);
 	as_vector_destroy(&nodes_to_remove);
 	as_vector_destroy(&friends);
+	return true;
 }
 
 /**
@@ -560,24 +561,28 @@ as_cluster_tend(as_cluster* cluster)
  * control as well.  Do not return an error since future
  * database requests may still succeed.
  */
-static void
+static bool
 as_wait_till_stabilized(as_cluster* cluster)
 {
 	uint64_t limit = cf_getms() + cluster->conn_timeout_ms;
 	uint32_t count = -1;
 	
 	do {
-		as_cluster_tend(cluster);
+		if (! as_cluster_tend(cluster)) {
+			return false;
+		}
 		
 		// Check to see if cluster has changed since the last tend.
 		// If not, assume cluster has stabilized and return.
 		as_nodes* nodes = cluster->nodes;
 		if (count == nodes->size) {
-			return;
+			return true;
 		}
 		count = nodes->size;
 		usleep(1);  // Sleep 1 microsecond before next cluster tend.
 	} while (cf_getms() < limit);
+	
+	return true;
 }
 
 static void*
@@ -593,11 +598,15 @@ as_cluster_tender(void* data)
 	return NULL;
 }
 
-static void
-as_init_tend_thread(as_cluster* cluster)
+static bool
+as_init_tend_thread(as_cluster* cluster, bool fail_if_not_connected)
 {
 	// Tend cluster until all nodes identified.
-	as_wait_till_stabilized(cluster);
+	if (! as_wait_till_stabilized(cluster)) {
+		if (fail_if_not_connected) {
+			return false;
+		}
+	}
 	
 	if (cf_debug_enabled()) {
 		as_seed* seed = cluster->seeds;
@@ -642,6 +651,7 @@ as_init_tend_thread(as_cluster* cluster)
 	// Run cluster tend thread.
 	cluster->valid = true;
 	pthread_create(&cluster->tend_thread, 0, as_cluster_tender, cluster);
+	return true;
 }
 
 static uint32_t
@@ -821,7 +831,10 @@ as_cluster_create(as_config* config)
 	pthread_mutex_init(&cluster->batch_init_lock, 0);
 		
 	// Run cluster tend thread.
-	as_init_tend_thread(cluster);
+	if (! as_init_tend_thread(cluster, config->fail_if_not_connected)) {
+		as_cluster_destroy(cluster);
+		return 0;
+	}
 	return cluster;
 }
 

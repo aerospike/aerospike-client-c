@@ -108,27 +108,35 @@ citrusleaf_info_host(struct sockaddr_in *sa_in, char *names, char **values, int 
 }
 
 // Authenticate connection and request the info of a particular sockaddr_in.
-// Return 0 on success and -1 on error.
+// Return 0 on success.
 int
 citrusleaf_info_host_auth(as_cluster* cluster, struct sockaddr_in *sa_in, char *names, char **values, int timeout_ms, bool send_asis, bool check_bounds)
 {
 	int fd = cf_socket_create_and_connect_nb(sa_in);
 	
 	if (fd == -1) {
-		return -1;
+		return CITRUSLEAF_FAIL_UNAVAILABLE;
 	}
 	
 	if (cluster->user) {
-		if (! as_authenticate(fd, cluster->user, cluster->password, timeout_ms)) {
+		int status = as_authenticate(fd, cluster->user, cluster->password, timeout_ms);
+		
+		if (status) {
 			cf_error("Authentication failed for %s", cluster->user);
 			cf_close(fd);
-			return -1;
+			return status;
 		}
 	}
 	
 	int rv = citrusleaf_info_host_limit(fd, names, values, timeout_ms, send_asis, 0, check_bounds);
 	shutdown(fd, SHUT_RDWR);
 	cf_close(fd);
+	
+	if (rv == 0 && strncmp(*values, "security error", 14) == 0) {
+		cf_error("%s", *values);
+		free(*values);
+		return CITRUSLEAF_NOT_AUTHENTICATED;
+	}
 	return rv;
 }
 

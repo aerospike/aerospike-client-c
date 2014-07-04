@@ -228,15 +228,15 @@ as_val * citrusleaf_udf_bin_to_val(as_serializer * ser, cl_bin * bin) {
 char * citrusleaf_udf_build_error_resp(char *result, char *b64_msg) {
 	// There is a valid error-message from server.
 	b64_msg +=8;
-	int b64_msg_len = (int)strlen(b64_msg) -1; // remove the string termination
+	uint32_t b64_msg_len = strlen(b64_msg) - 1; // ignore the '\n' at the end
+	uint32_t msg_len = 0;
 	char * response = strchr(result, '\t') + 1;
 	char *err_str = NULL;
 
-  	if (cf_base64_validate_input((uint8_t *)b64_msg, b64_msg_len)) {
-		cf_base64_decode_inplace((uint8_t *)b64_msg, &b64_msg_len, true); // decode will always shorten input
-        b64_msg[b64_msg_len + 1] = '\0';
+	if (cf_b64_validate_and_decode_in_place((uint8_t*)b64_msg, b64_msg_len, &msg_len)) {
+		b64_msg[msg_len] = '\0';
 		err_str = strdup((const char *)response); // freed by caller of udf-put
-  	}
+	}
 
   	return err_str;
 }
@@ -505,11 +505,13 @@ cl_rv citrusleaf_udf_get_with_gen(as_cluster *asc, const char * filename, cl_udf
 	}
 
 	uint8_t *   content = info.content.value;
-	int         clen    = info.content.size - 1; // this is a byte array, not string. last char is NULL.
+	uint32_t    size    = 0;
 
-	cf_base64_decode_inplace(content, &clen, true);
-	
-	file->content = as_bytes_new_wrap(content, clen, true);
+	// info.content.size includes a null-terminator.
+	cf_b64_validate_and_decode_in_place(content, info.content.size - 1, &size);
+	// TODO - do we want to check the validation result?
+
+	file->content = as_bytes_new_wrap(content, size, true);
 
 	info.content.value = NULL;
 	info.content.free = false;
@@ -557,17 +559,21 @@ cl_rv citrusleaf_udf_put(as_cluster *asc, const char * filename, as_bytes *conte
 	as_string filename_string;
 	const char * filebase = as_basename(&filename_string, filename);
 
-	int  clen = content->size;
 	if (udf_type != UDF_TYPE_LUA)
 	{
 		fprintf(stderr, "Invalid UDF type");
 		as_string_destroy(&filename_string);
 		return CITRUSLEAF_FAIL_PARAMETER;
 	}
-	char * content_base64 = malloc(cf_base64_encode_maxlen(clen));
-	cf_base64_tostring(content->value, content_base64, &clen);
 
-	if (! asprintf(&query, "udf-put:filename=%s;content=%s;content-len=%d;udf-type=%s;", filebase, content_base64, clen, cl_udf_type_str[udf_type])) {
+	uint32_t encoded_len = cf_b64_encoded_len(content->size);
+	char * content_base64 = malloc(encoded_len + 1);
+
+	cf_b64_encode(content->value, content->size, content_base64);
+	content_base64[encoded_len] = 0;
+
+	if (! asprintf(&query, "udf-put:filename=%s;content=%s;content-len=%d;udf-type=%s;",
+			filebase, content_base64, encoded_len, cl_udf_type_str[udf_type])) {
 		fprintf(stderr, "Query allocation failed");
 		as_string_destroy(&filename_string);
 		return CITRUSLEAF_FAIL_CLIENT;

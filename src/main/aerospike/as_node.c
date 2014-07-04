@@ -253,7 +253,9 @@ as_node_fd_get(as_node* node)
 			as_cluster* cluster = node->cluster;
 			
 			if (cluster->user) {
-				if (! as_authenticate(fd, cluster->user, cluster->password, cluster->conn_timeout_ms)) {
+				int status = as_authenticate(fd, cluster->user, cluster->password, cluster->conn_timeout_ms);
+				
+				if (status) {
 					cf_error("Authentication failed for %s", cluster->user);
 					cf_close(fd);
 					fd = -1;

@@ -82,7 +82,7 @@ int
 aerospike_change_password(aerospike* as, const as_policy_admin* policy, const char* user, const char* password);
 
 /**
- *	Add role to user's list of roles.  Return zero on success..
+ *	Add role to user's list of roles.  Return zero on success.
  */
 int
 aerospike_grant_roles(aerospike* as, const as_policy_admin* policy, const char* user, const char** roles, int roles_size);
@@ -100,7 +100,8 @@ int
 aerospike_replace_roles(aerospike* as, const as_policy_admin* policy, const char* user, const char** roles, int roles_size);
 
 /**
- *	Retrieve roles for a given user.  Return zero on success..
+ *	Retrieve roles for a given user.  Return zero on success.
+ *	When successful, as_user_roles_destroy() must be called to free resources.
  */
 int
 aerospike_query_user(aerospike* as, const as_policy_admin* policy, const char* user, as_user_roles** user_roles);
@@ -109,10 +110,11 @@ aerospike_query_user(aerospike* as, const as_policy_admin* policy, const char* u
  *	Release as_user_roles memory.
  */
 void
-aerospike_query_user_destroy(as_user_roles* user_roles);
+as_user_roles_destroy(as_user_roles* user_roles);
 
 /**
  *	Retrieve all users and their roles.  Return zero on success.
+ *	When successful, as_user_roles_destroy_array() must be called to free resources.
  */
 int
 aerospike_query_users(aerospike* as, const as_policy_admin* policy, as_user_roles*** user_roles, int* user_roles_size);
@@ -121,7 +123,7 @@ aerospike_query_users(aerospike* as, const as_policy_admin* policy, as_user_role
  *	Release memory for as_user_roles array.
  */
 void
-aerospike_query_users_destroy(as_user_roles** user_roles, int user_roles_size);
+as_user_roles_destroy_array(as_user_roles** user_roles, int user_roles_size);
 
 /**
  *	@private

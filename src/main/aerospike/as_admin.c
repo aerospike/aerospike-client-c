@@ -498,7 +498,7 @@ aerospike_query_user(aerospike* as, const as_policy_admin* policy, const char* u
 }
 
 void
-aerospike_query_user_destroy(as_user_roles* user_roles)
+as_user_roles_destroy(as_user_roles* user_roles)
 {
 	cf_free(user_roles);
 }
@@ -529,7 +529,7 @@ aerospike_query_users(aerospike* as, const as_policy_admin* policy, as_user_role
 }
 
 void
-aerospike_query_users_destroy(as_user_roles** user_roles, int user_roles_size)
+as_user_roles_destroy_array(as_user_roles** user_roles, int user_roles_size)
 {
 	for (uint32_t i = 0; i < user_roles_size; i++) {
 		cf_free(user_roles[i]);

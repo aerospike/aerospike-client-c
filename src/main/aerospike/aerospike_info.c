@@ -113,7 +113,7 @@ as_status aerospike_info_host(
 		return AEROSPIKE_ERR;
 	}
 
-	cl_rv rc = citrusleaf_info((char *) addr, port, (char *) req, res, p.timeout);
+	cl_rv rc = citrusleaf_info_auth(as->cluster, (char *) addr, port, (char *) req, res, p.timeout);
 
 	return as_error_fromrc(err, rc);
 }

@@ -22,6 +22,7 @@
 #include <aerospike/as_partition.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_string.h>
+#include "citrusleaf/cf_b64.h"
 #include "citrusleaf/cf_log_internal.h"
 #include "ck_pr.h"
 
@@ -186,45 +187,6 @@ as_partition_tables_find_node(as_partition_tables* tables, as_node* node)
 	return false;
 }
 
-// TODO - MOVE B64 CODE TO COMMON.  ANDY PROMISED.
-const uint8_t CF_BASE64_DECODE_ARRAY[] = {
-	/*00*/ /*01*/ /*02*/ /*03*/ /*04*/ /*05*/ /*06*/ /*07*/   /*08*/ /*09*/ /*0A*/ /*0B*/ /*0C*/ /*0D*/ /*0E*/ /*0F*/
-	/*00*/	    0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,     0,     0,     0,     0,     0,
-	/*10*/      0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,     0,     0,     0,     0,     0,
-	/*20*/	    0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,    62,     0,     0,     0,    63,
-	/*30*/	   52,    53,    54,    55,    56,    57,    58,    59,      60,    61,     0,     0,     0,     0,     0,     0,
-	/*40*/	    0,     0,     1,     2,     3,     4,     5,     6,       7,     8,     9,    10,    11,    12,    13,    14,
-	/*50*/	   15,    16,    17,    18,    19,    20,    21,    22,      23,    24,    25,     0,     0,     0,     0,     0,
-	/*60*/	    0,    26,    27,    28,    29,    30,    31,    32,      33,    34,    35,    36,    37,    38,    39,    40,
-	/*70*/	   41,    42,    43,    44,    45,    46,    47,    48,      49,    50,    51,     0,     0,     0,     0,     0,
-	/*80*/	    0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,     0,     0,     0,     0,     0,
-	/*90*/	    0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,     0,     0,     0,     0,     0,
-	/*A0*/	    0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,     0,     0,     0,     0,     0,
-	/*B0*/	    0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,     0,     0,     0,     0,     0,
-	/*C0*/	    0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,     0,     0,     0,     0,     0,
-	/*D0*/	    0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,     0,     0,     0,     0,     0,
-	/*E0*/	    0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,     0,     0,     0,     0,     0,
-	/*F0*/	    0,     0,     0,     0,     0,     0,     0,     0,       0,     0,     0,     0,     0,     0,     0,     0
-};
-
-#define B64DA CF_BASE64_DECODE_ARRAY
-
-static void
-b64_decode(const uint8_t* in, int len, uint8_t* out)
-{
-	int i = 0;
-	int j = 0;
-	
-	while (i < len) {
-		out[j + 0] = (B64DA[in[i + 0]] << 2) | (B64DA[in[i + 1]] >> 4);
-		out[j + 1] = (B64DA[in[i + 1]] << 4) | (B64DA[in[i + 2]] >> 2);
-		out[j + 2] = (B64DA[in[i + 2]] << 6) |  B64DA[in[i + 3]];
-		
-		i += 4;
-		j += 3;
-	}
-}
-
 static inline void
 force_replicas_refresh(as_node* node)
 {
@@ -294,6 +256,27 @@ as_partition_vector_get(as_vector* tables, const char* ns)
 }
 
 static void
+decode_and_update(char* bitmap_b64, long len, as_partition_table* table, as_node* node, bool master)
+{
+	// Size allows for padding - is actual size rounded up to multiple of 3.
+	uint8_t* bitmap = (uint8_t*)alloca(cf_b64_decoded_buf_size((uint32_t)len));
+
+	// For now - for speed - trust validity of encoded characters.
+	cf_b64_decode(bitmap_b64, (uint32_t)len, bitmap, NULL);
+
+	// Expand the bitmap.
+	for (uint32_t i = 0; i < table->size; i++) {
+		bool owns = ((bitmap[i >> 3] & (0x80 >> (i & 7))) != 0);
+		/*
+		if (owns) {
+			cf_debug("Set partition %s:%s:%u:%s", master? "master" : "prole", table->ns, i, node->name);
+		}
+		*/
+		as_partition_update(&table->partitions[i], node, master, owns);
+	}
+}
+
+static void
 release_partition_tables(as_partition_tables* tables)
 {
 	as_partition_tables_release(tables);
@@ -329,8 +312,7 @@ as_partition_tables_update(as_cluster* cluster, as_node* node, char* buf, bool m
 	char* p = buf;
 	char* ns = p;
 	char* bitmap_b64 = 0;
-	uint8_t* bitmap;
-	long len;
+	int64_t len;
 	
 	// Add all tables at once to avoid copying entire array multiple times.
 	as_vector tables_to_add;
@@ -357,15 +339,19 @@ as_partition_tables_update(as_cluster* cluster, as_node* node, char* buf, bool m
 				}
 				p++;
 			}
-			
-			if (p == bitmap_b64) {
-				cf_error("Partition update. Empty partition id for namespace %s", ns);
+
+			len = p - bitmap_b64;
+
+			// Check encoded length.
+			uint32_t bitmap_size = (cluster->n_partitions + 7) / 8;
+			long expected_len = (long)cf_b64_encoded_len(bitmap_size);
+
+			if (expected_len != len) {
+				cf_error("Partition update. unexpected partition map encoded length %" PRId64 " for namespace %s", len, ns);
 				as_vector_destroy(&tables_to_add);
 				return false;
 			}
-			
-			len = p - bitmap_b64;
-			
+
 			as_partition_table* table = as_partition_tables_get(tables, ns);
 			
 			if (! table) {
@@ -376,22 +362,10 @@ as_partition_tables_update(as_cluster* cluster, as_node* node, char* buf, bool m
 					as_vector_append(&tables_to_add, &table);
 				}
 			}
-			
-			// Decode partition bitmap.
-			// Size allows for padding - is actual size rounded up to multiple of 3.
-			bitmap = (uint8_t*)alloca((len / 4) * 3);
-			b64_decode((const uint8_t*)bitmap_b64, (int)len, bitmap);
-			
-			// Expand the bitmap.
-			for (uint32_t i = 0; i < table->size; i++) {
-				bool owns = ((bitmap[i >> 3] & (0x80 >> (i & 7))) != 0);
-				/*
-				if (owns) {
-					cf_debug("Set partition %s:%s:%u:%s", master? "master" : "prole", table->ns, i, node->name);
-				}
-				*/
-				as_partition_update(&table->partitions[i], node, master, owns);
-			}
+
+			// Decode partition bitmap and update client's view.
+			decode_and_update(bitmap_b64, len, table, node, master);
+
 			ns = ++p;
 		}
 		else {

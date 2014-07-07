@@ -329,6 +329,32 @@ Done:
 	return(rv);
 }
 
+int
+citrusleaf_info_auth(as_cluster *cluster, char *hostname, short port, char *names, char **values, int timeout_ms)
+{
+	int rv = -1;
+	as_vector sockaddr_in_v;
+	as_vector_inita(&sockaddr_in_v, sizeof(struct sockaddr_in), 5);
+	
+	if (! as_lookup(NULL, hostname, port, &sockaddr_in_v)) {
+		goto Done;
+	}
+	
+	for (uint32_t i = 0; i < sockaddr_in_v.size; i++)
+	{
+		struct sockaddr_in* sa_in = as_vector_get(&sockaddr_in_v, i);
+		
+		if (0 == citrusleaf_info_host_auth(cluster, sa_in, names, values, timeout_ms, true, /* check bounds */ true)) {
+			rv = 0;
+			goto Done;
+		}
+	}
+	
+Done:
+	as_vector_destroy(&sockaddr_in_v);
+	return(rv);
+}
+
 /* gets information back from any of the nodes in the cluster */
 int
 citrusleaf_info_cluster(as_cluster *cluster, char *names, char **values_r, bool send_asis, bool check_bounds, int timeout_ms)

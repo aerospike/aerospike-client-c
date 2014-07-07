@@ -68,6 +68,7 @@ as_node_create(as_cluster* cluster, const char* name, struct sockaddr_in* addr)
 	// node->conn_q_asyncfd = cf_queue_create(sizeof(int), true);
 	// node->asyncwork_q = cf_queue_create(sizeof(cl_async_work*), true);
 	
+	node->info_fd = -1;
 	node->friends = 0;
 	node->failures = 0;
 	node->active = true;
@@ -116,6 +117,10 @@ as_node_destroy(as_node* node)
 	//cf_queue_destroy(node->conn_q_asyncfd);
 	//cf_queue_destroy(node->asyncwork_q);
 	
+	if (node->info_fd >= 0) {
+		cf_close(node->info_fd);
+	}
+
 	cf_free(node);
 }
 
@@ -167,6 +172,23 @@ is_connected(int fd)
 }
 
 static int
+as_node_fd_authenticate(as_node* node, int fd)
+{
+	as_cluster* cluster = node->cluster;
+	
+	if (cluster->user) {
+		int status = as_authenticate(fd, cluster->user, cluster->password, cluster->conn_timeout_ms);
+		
+		if (status) {
+			cf_error("Authentication failed for %s", cluster->user);
+			cf_close(fd);
+			return -1;
+		}
+	}
+	return fd;
+}
+
+static int
 as_node_fd_create_and_connect(as_node* node)
 {
 	// Create a non-blocking socket.
@@ -182,7 +204,7 @@ as_node_fd_create_and_connect(as_node* node)
 	
 	if (cf_socket_start_connect_nb(fd, &primary->addr) == 0) {
 		// Connection started ok - we have our socket.
-		return fd;
+		return as_node_fd_authenticate(node, fd);
 	}
 	
 	// Try other addresses.
@@ -198,7 +220,7 @@ as_node_fd_create_and_connect(as_node* node)
 				// It's just a hint, not a requirement to try this new address first.
 				cf_debug("Change node address %s %s:%d", node->name, address->name, (int)cf_swap_from_be16(address->addr.sin_port));
 				ck_pr_store_32(&node->address_index, i);
-				return fd;
+				return as_node_fd_authenticate(node, fd);
 			}
 		}
 	}
@@ -249,19 +271,6 @@ as_node_fd_get(as_node* node)
 			if (fd == -1) {
 				break;
 			}
-			
-			as_cluster* cluster = node->cluster;
-			
-			if (cluster->user) {
-				int status = as_authenticate(fd, cluster->user, cluster->password, cluster->conn_timeout_ms);
-				
-				if (status) {
-					cf_error("Authentication failed for %s", cluster->user);
-					cf_close(fd);
-					fd = -1;
-					break;
-				}
-			}
 		}
 		else {
 			// Since we can't assert:
@@ -295,11 +304,22 @@ as_node_fd_put(as_node* node, int fd)
 	}*/
 }
 
-static inline void
-as_socket_shutdown_close(int fd)
+static int
+as_node_fd_get_info(as_node* node)
 {
-	shutdown(fd, SHUT_RDWR);
-	cf_close(fd);
+	if (node->info_fd < 0) {
+		// Try to open a new socket.
+		node->info_fd = as_node_fd_create_and_connect(node);
+	}
+	return node->info_fd;
+}
+
+static void
+as_node_fd_close_info(as_node* node)
+{
+	shutdown(node->info_fd, SHUT_RDWR);
+	cf_close(node->info_fd);
+	node->info_fd = -1;
 }
 
 static uint8_t*
@@ -550,9 +570,10 @@ const char INFO_STR_GET_REPLICAS[] = "partition-generation\nreplicas-master\nrep
 bool
 as_node_refresh(as_cluster* cluster, as_node* node, as_vector* /* <as_friend> */ friends)
 {
-	int fd = as_node_fd_get(node);
+	int fd = as_node_fd_get_info(node);
 	
 	if (fd < 0) {
+		cf_warn("Failed to get info fd for node %s", node->name);
 		return 0;
 	}
 	
@@ -561,7 +582,7 @@ as_node_refresh(as_cluster* cluster, as_node* node, as_vector* /* <as_friend> */
 	uint8_t* buf = as_node_get_info(node, fd, INFO_STR_CHECK, sizeof(INFO_STR_CHECK) - 1, info_timeout, stack_buf);
 	
 	if (! buf) {
-		as_socket_shutdown_close(fd);
+		as_node_fd_close_info(node);
 		return false;
 	}
 	
@@ -581,7 +602,7 @@ as_node_refresh(as_cluster* cluster, as_node* node, as_vector* /* <as_friend> */
 		buf = as_node_get_info(node, fd, INFO_STR_GET_REPLICAS, sizeof(INFO_STR_GET_REPLICAS) - 1, info_timeout, stack_buf);
 		
 		if (! buf) {
-			as_socket_shutdown_close(fd);
+			as_node_fd_close_info(node);
 			as_vector_destroy(&values);
 			return false;
 		}
@@ -599,7 +620,6 @@ as_node_refresh(as_cluster* cluster, as_node* node, as_vector* /* <as_friend> */
 		}
 	}
 	
-	as_node_fd_put(node, fd);
 	as_vector_destroy(&values);
 	return status;
 }

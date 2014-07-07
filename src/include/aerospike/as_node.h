@@ -100,6 +100,12 @@ typedef struct as_node_s {
 	
 	/**
 	 *	@private
+	 *	Socket used exclusively for cluster tend thread info requests.
+	 */
+	int info_fd;
+	
+	/**
+	 *	@private
 	 *	FDs for async command execution. Not currently used.
 	 */
 	// cf_queue* conn_q_asyncfd;

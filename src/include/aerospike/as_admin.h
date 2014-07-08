@@ -75,7 +75,14 @@ int
 aerospike_drop_user(aerospike* as, const as_policy_admin* policy, const char* user);
 
 /**
- *	Change user's password.  Clear-text password will be hashed using bcrypt before sending to server.
+ *	Set user's password by user administrator.  Clear-text password will be hashed using bcrypt before sending to server.
+ *	Return zero on success.
+ */
+int
+aerospike_set_password(aerospike* as, const as_policy_admin* policy, const char* user, const char* password);
+
+/**
+ *	Change user's password by user.  Clear-text password will be hashed using bcrypt before sending to server.
  *	Return zero on success.
  */
 int

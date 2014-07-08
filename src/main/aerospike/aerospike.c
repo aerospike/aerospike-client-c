@@ -128,8 +128,7 @@ as_status aerospike_connect(aerospike * as, as_error * err)
 	as->cluster = as_cluster_create(&as->config);
 	
 	if (! as->cluster) {
-		as_err(LOGGER, "failed to initialize cluster");
-		return as_error_update(err, AEROSPIKE_ERR_CLUSTER, "failed to initialize cluster");
+		return as_error_update(err, AEROSPIKE_ERR_CLUSTER, "Failed to initialize cluster");
 	}
 	
 	return err->code;

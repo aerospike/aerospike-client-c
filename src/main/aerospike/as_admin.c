@@ -31,18 +31,20 @@
 #define AUTHENTICATE 0
 #define CREATE_USER 1
 #define DROP_USER 2
-#define CHANGE_PASSWORD 3
-#define GRANT_ROLES 4
-#define REVOKE_ROLES 5
-#define REPLACE_ROLES 6
-#define CREATE_ROLE 7
-#define QUERY_USERS 8
-#define QUERY_ROLES 9
+#define SET_PASSWORD 3
+#define CHANGE_PASSWORD 4
+#define GRANT_ROLES 5
+#define REVOKE_ROLES 6
+#define REPLACE_ROLES 7
+#define CREATE_ROLE 8
+#define QUERY_USERS 9
+#define QUERY_ROLES 10
 
 // Field IDs
 #define USER 0
 #define PASSWORD 1
-#define CREDENTIAL 2
+#define OLD_PASSWORD 2
+#define CREDENTIAL 3
 #define ROLES 10
 #define PRIVILEGES 11
 
@@ -60,10 +62,9 @@ static uint8_t*
 write_header(uint8_t* p, uint8_t command, uint8_t field_count)
 {
 	memset(p, 0, HEADER_REMAINING);
-	p += 2;
-	*p++ = command;
-	*p++ = field_count;
-	return p + 12;
+	p[2] = command;
+	p[3] = field_count;
+	return p + HEADER_REMAINING;;
 }
 
 static uint8_t*
@@ -103,8 +104,9 @@ write_roles(uint8_t* p, const char** roles, int length)
 static int
 as_send(int fd, uint8_t* buffer, uint8_t* end, uint64_t deadline_ms, int timeout_ms)
 {
-	uint64_t len = (end - buffer - 8) | (MSG_VERSION << 56) | (MSG_TYPE << 48);
-	*(uint64_t*)buffer = cf_swap_to_be64(len);
+	uint64_t len = end - buffer;
+	uint64_t proto = (len - 8) | (MSG_VERSION << 56) | (MSG_TYPE << 48);
+	*(uint64_t*)buffer = cf_swap_to_be64(proto);
 	
 	return cf_socket_write_timeout(fd, buffer, len, deadline_ms, timeout_ms);
 }
@@ -173,7 +175,7 @@ as_authenticate(int fd, const char* user, const char* credential, int timeout_ms
 }
 
 int
-as_create_user(aerospike* as, const as_policy_admin* policy, const char* user, const char* password, const char** roles, int roles_size)
+aerospike_create_user(aerospike* as, const as_policy_admin* policy, const char* user, const char* password, const char** roles, int roles_size)
 {
 	char hash[AS_PASSWORD_HASH_SIZE];
 	as_password_get_constant_hash(password, hash);
@@ -189,7 +191,7 @@ as_create_user(aerospike* as, const as_policy_admin* policy, const char* user, c
 }
 
 int
-as_drop_user(aerospike* as, const as_policy_admin* policy, const char* user)
+aerospike_drop_user(aerospike* as, const as_policy_admin* policy, const char* user)
 {
 	uint8_t buffer[STACK_BUF_SZ];
 	uint8_t* p = buffer + 8;
@@ -200,7 +202,7 @@ as_drop_user(aerospike* as, const as_policy_admin* policy, const char* user)
 }
 
 int
-as_change_password(aerospike* as, const as_policy_admin* policy, const char* user, const char* password)
+aerospike_set_password(aerospike* as, const as_policy_admin* policy, const char* user, const char* password)
 {
 	char hash[AS_PASSWORD_HASH_SIZE];
 	as_password_get_constant_hash(password, hash);
@@ -211,7 +213,7 @@ as_change_password(aerospike* as, const as_policy_admin* policy, const char* use
 	uint8_t buffer[STACK_BUF_SZ];
 	uint8_t* p = buffer + 8;
 	
-	p = write_header(p, CHANGE_PASSWORD, 2);
+	p = write_header(p, SET_PASSWORD, 2);
 	p = write_field_string(p, USER, user);
 	p = write_field_string(p, PASSWORD, hash);
 	int status = as_execute(as, policy, buffer, p);
@@ -223,7 +225,31 @@ as_change_password(aerospike* as, const as_policy_admin* policy, const char* use
 }
 
 int
-as_grant_roles(aerospike* as, const as_policy_admin* policy, const char* user, const char** roles, int roles_size)
+aerospike_change_password(aerospike* as, const as_policy_admin* policy, const char* user, const char* password)
+{
+	char hash[AS_PASSWORD_HASH_SIZE];
+	as_password_get_constant_hash(password, hash);
+	
+	if (! user) {
+		user = as->cluster->user;
+	}
+	uint8_t buffer[STACK_BUF_SZ];
+	uint8_t* p = buffer + 8;
+	
+	p = write_header(p, CHANGE_PASSWORD, 3);
+	p = write_field_string(p, USER, user);
+	p = write_field_string(p, OLD_PASSWORD, as->cluster->password);
+	p = write_field_string(p, PASSWORD, hash);
+	int status = as_execute(as, policy, buffer, p);
+	
+	if (status == 0) {
+		as_cluster_change_password(as->cluster, user, hash);
+	}
+	return status;
+}
+
+int
+aerospike_grant_roles(aerospike* as, const as_policy_admin* policy, const char* user, const char** roles, int roles_size)
 {
 	uint8_t buffer[STACK_BUF_SZ];
 	uint8_t* p = buffer + 8;
@@ -235,7 +261,7 @@ as_grant_roles(aerospike* as, const as_policy_admin* policy, const char* user, c
 }
 
 int
-as_revoke_roles(aerospike* as, const as_policy_admin* policy, const char* user, const char** roles, int roles_size)
+aerospike_revoke_roles(aerospike* as, const as_policy_admin* policy, const char* user, const char** roles, int roles_size)
 {
 	uint8_t buffer[STACK_BUF_SZ];
 	uint8_t* p = buffer + 8;
@@ -247,7 +273,7 @@ as_revoke_roles(aerospike* as, const as_policy_admin* policy, const char* user, 
 }
 
 int
-as_replace_roles(aerospike* as, const as_policy_admin* policy, const char* user, const char** roles, int roles_size)
+aerospike_replace_roles(aerospike* as, const as_policy_admin* policy, const char* user, const char** roles, int roles_size)
 {
 	uint8_t buffer[STACK_BUF_SZ];
 	uint8_t* p = buffer + 8;
@@ -286,10 +312,8 @@ as_parse_users(uint8_t* buffer, int size, as_vector* /*<as_user_roles*>*/ users)
 	uint8_t* p = buffer;
 	uint8_t* end = buffer + size;
 	
-	as_user_roles* user_roles = 0;
+	as_user_roles* user_roles;
 	char user[AS_USER_SIZE];
-	user[0] = 0;
-	
 	int len;
 	int sz;
 	uint8_t id;
@@ -306,8 +330,11 @@ as_parse_users(uint8_t* buffer, int size, as_vector* /*<as_user_roles*>*/ users)
 		field_count = p[3];
 		p += HEADER_REMAINING;
 		
+		user[0] = 0;
+		user_roles = 0;
+		
 		for (uint8_t b = 0; b < field_count; b++) {
-			len = *(int*)p;
+			len = cf_swap_from_be32(*(int*)p);
 			p += 4;
 			id = *p++;
 			len--;
@@ -326,7 +353,7 @@ as_parse_users(uint8_t* buffer, int size, as_vector* /*<as_user_roles*>*/ users)
 			}
 		}
 		
-		if (user[0] == 0 && ! user_roles) {
+		if (user[0] == 0 && user_roles == 0) {
 			continue;
 		}
 		
@@ -345,6 +372,7 @@ as_read_user_blocks(int fd, uint8_t* buffer, uint64_t deadline_ms, int timeout_m
 {
 	int buffer_size = STACK_BUF_SZ;
 	uint8_t* buf = buffer;
+	uint64_t proto;
 	int status = 0;
 	int size;
 	
@@ -353,7 +381,8 @@ as_read_user_blocks(int fd, uint8_t* buffer, uint64_t deadline_ms, int timeout_m
 			status = -1;
 			break;
 		}
-		size = (int)((*(uint64_t*)buf) & 0xFFFFFFFFFFFFL);
+		proto = cf_swap_from_be64(*(uint64_t*)buf);
+		size = (int)(proto & 0xFFFFFFFFFFFFL);
 		
 		if (size > 0) {
 			if (size > buffer_size) {
@@ -432,14 +461,45 @@ as_free_users(as_vector* users, int offset)
 	as_vector_destroy(users);
 }
 
-int
-as_query_user(aerospike* as, const as_policy_admin* policy, const char* user_name, as_user_roles** user_roles)
+#if 0
+static void print_users(as_vector* /*<as_user_roles*>*/ users)
 {
+	for (uint32_t i = 0; i < users->size; i++) {
+		as_user_roles* urs = as_vector_get_ptr(users, i);
+		printf("User %s Roles ", urs->user);
+		
+		for (uint32_t j = 0; j < urs->roles_size; j++) {
+			printf("%s", urs->roles[j]);
+		}
+		printf("\n");
+	}
+}
+
+static void print_users2(as_user_roles** users, int size)
+{
+	for (uint32_t i = 0; i < size; i++) {
+		as_user_roles* urs = users[i];
+		printf("User %s Roles ", urs->user);
+		
+		for (uint32_t j = 0; j < urs->roles_size; j++) {
+			printf("%s", urs->roles[j]);
+		}
+		printf("\n");
+	}
+}
+#endif
+
+int
+aerospike_query_user(aerospike* as, const as_policy_admin* policy, const char* user, as_user_roles** user_roles)
+{
+	if (! user) {
+		user = as->cluster->user;
+	}
 	uint8_t buffer[STACK_BUF_SZ];
 	uint8_t* p = buffer + 8;
 	
 	p = write_header(p, QUERY_USERS, 1);
-	p = write_field_string(p, USER, user_name);
+	p = write_field_string(p, USER, user);
 	
 	as_vector users;
 	as_vector_inita(&users, sizeof(as_user_roles*), 1);
@@ -447,13 +507,14 @@ as_query_user(aerospike* as, const as_policy_admin* policy, const char* user_nam
 	
 	if (status == 0) {
 		if (users.size == 1) {
-			*user_roles = as_vector_get(&users, 0);
+			*user_roles = as_vector_get_ptr(&users, 0);
 		}
 		else if (users.size <= 0) {
 			*user_roles = 0;
+			as_free_users(&users, 0);
 		}
 		else {
-			*user_roles = as_vector_get(&users, 0);
+			*user_roles = as_vector_get_ptr(&users, 0);
 			// Delete excess users.
 			as_free_users(&users, 1);
 		}
@@ -466,13 +527,13 @@ as_query_user(aerospike* as, const as_policy_admin* policy, const char* user_nam
 }
 
 void
-as_query_user_destroy(as_user_roles* user_roles)
+as_user_roles_destroy(as_user_roles* user_roles)
 {
 	cf_free(user_roles);
 }
 
 int
-as_query_users(aerospike* as, const as_policy_admin* policy, as_user_roles** user_roles, int* user_roles_size)
+aerospike_query_users(aerospike* as, const as_policy_admin* policy, as_user_roles*** user_roles, int* user_roles_size)
 {
 	uint8_t buffer[STACK_BUF_SZ];
 	uint8_t* p = buffer + 8;
@@ -497,10 +558,10 @@ as_query_users(aerospike* as, const as_policy_admin* policy, as_user_roles** use
 }
 
 void
-as_query_users_destroy(as_user_roles* user_roles, int user_roles_size)
+as_user_roles_destroy_array(as_user_roles** user_roles, int user_roles_size)
 {
 	for (uint32_t i = 0; i < user_roles_size; i++) {
-		cf_free(&user_roles[i]);
+		cf_free(user_roles[i]);
 	}
 	cf_free(user_roles);
 }

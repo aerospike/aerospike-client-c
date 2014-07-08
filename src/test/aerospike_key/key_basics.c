@@ -97,6 +97,9 @@ TEST( key_basics_get , "get: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 'de
 
 	as_key_destroy(&key);
     
+    info("bins: ");
+    as_record_foreach(rec, key_basics_print_bins, NULL);
+	
     assert_int_eq( rc, AEROSPIKE_OK );
     assert_int_eq( as_record_numbins(rec), 6 );
     
@@ -123,9 +126,6 @@ TEST( key_basics_get , "get: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 'de
     as_map * map = as_record_get_map(rec, "f");
     assert_not_null( map );
     assert_int_eq( as_map_size(map), 3 );
-
-    info("bins: ");
-    as_record_foreach(rec, key_basics_print_bins, NULL);
 
     as_record_destroy(rec);
 }
@@ -223,7 +223,7 @@ TEST( key_basics_remove , "remove: (test,test,foo)" ) {
 
 	as_key_destroy(&key);
 
-    assert_int_eq( rc, AEROSPIKE_OK );
+    assert_true( rc == AEROSPIKE_OK || rc == AEROSPIKE_ERR_RECORD_NOT_FOUND);
 }
 
 
@@ -263,6 +263,9 @@ TEST( key_basics_get2 , "get: (test,test,foo) = {a: 444, b: 'abcdef', d: 'abcdef
 
 	as_key_destroy(&key);
     
+    info("bins: ");
+    as_record_foreach(rec, key_basics_print_bins, NULL);
+	
     assert_int_eq( rc, AEROSPIKE_OK );
     assert_int_eq( as_record_numbins(rec), 6 );
     
@@ -290,9 +293,6 @@ TEST( key_basics_get2 , "get: (test,test,foo) = {a: 444, b: 'abcdef', d: 'abcdef
     assert_not_null( map );
     assert_int_eq( as_map_size(map), 3 );
 
-    info("bins: ");
-    as_record_foreach(rec, key_basics_print_bins, NULL);
-
     as_record_destroy(rec);
 }
 /******************************************************************************
@@ -300,6 +300,8 @@ TEST( key_basics_get2 , "get: (test,test,foo) = {a: 444, b: 'abcdef', d: 'abcdef
  *****************************************************************************/
 
 SUITE( key_basics, "aerospike_key basic tests" ) {
+	// Remove at beginning to clear out record.
+    suite_add( key_basics_remove );
     suite_add( key_basics_put );
     suite_add( key_basics_exists );
     suite_add( key_basics_notexists );

@@ -223,7 +223,7 @@ TEST( key_basics_remove , "remove: (test,test,foo)" ) {
 
 	as_key_destroy(&key);
 
-    assert_int_eq( rc, AEROSPIKE_OK );
+    assert_true( rc == AEROSPIKE_OK || rc == AEROSPIKE_ERR_RECORD_NOT_FOUND);
 }
 
 

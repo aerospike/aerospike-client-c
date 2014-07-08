@@ -916,10 +916,10 @@ static int cl_query_worker_do(as_node * node, cl_query_task * task) {
 					task->callback(vp, task->udata);
                 }
                 else {
-                    done = true;
-                    rc = CITRUSLEAF_FAIL_UNKNOWN;
                     as_val * v_fail = (as_val *) as_record_get(record, "FAILURE");
                     if(v_fail != NULL) {
+                        done = true;
+                        rc = CITRUSLEAF_FAIL_UNKNOWN;
                         as_val * vp = NULL;
                         if ( !v_fail->free ) {
                             switch (as_val_type(v_fail)) {

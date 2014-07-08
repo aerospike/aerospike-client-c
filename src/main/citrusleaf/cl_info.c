@@ -108,27 +108,35 @@ citrusleaf_info_host(struct sockaddr_in *sa_in, char *names, char **values, int 
 }
 
 // Authenticate connection and request the info of a particular sockaddr_in.
-// Return 0 on success and -1 on error.
+// Return 0 on success.
 int
 citrusleaf_info_host_auth(as_cluster* cluster, struct sockaddr_in *sa_in, char *names, char **values, int timeout_ms, bool send_asis, bool check_bounds)
 {
 	int fd = cf_socket_create_and_connect_nb(sa_in);
 	
 	if (fd == -1) {
-		return -1;
+		return CITRUSLEAF_FAIL_UNAVAILABLE;
 	}
 	
 	if (cluster->user) {
-		if (! as_authenticate(fd, cluster->user, cluster->password, timeout_ms)) {
+		int status = as_authenticate(fd, cluster->user, cluster->password, timeout_ms);
+		
+		if (status) {
 			cf_error("Authentication failed for %s", cluster->user);
 			cf_close(fd);
-			return -1;
+			return status;
 		}
 	}
 	
 	int rv = citrusleaf_info_host_limit(fd, names, values, timeout_ms, send_asis, 0, check_bounds);
 	shutdown(fd, SHUT_RDWR);
 	cf_close(fd);
+	
+	if (rv == 0 && strncmp(*values, "security error", 14) == 0) {
+		cf_error("%s", *values);
+		free(*values);
+		return CITRUSLEAF_NOT_AUTHENTICATED;
+	}
 	return rv;
 }
 
@@ -311,6 +319,32 @@ citrusleaf_info(char *hostname, short port, char *names, char **values, int time
 		struct sockaddr_in* sa_in = as_vector_get(&sockaddr_in_v, i);
 
 		if (0 == citrusleaf_info_host(sa_in, names, values, timeout_ms, true, /* check bounds */ true)) {
+			rv = 0;
+			goto Done;
+		}
+	}
+	
+Done:
+	as_vector_destroy(&sockaddr_in_v);
+	return(rv);
+}
+
+int
+citrusleaf_info_auth(as_cluster *cluster, char *hostname, short port, char *names, char **values, int timeout_ms)
+{
+	int rv = -1;
+	as_vector sockaddr_in_v;
+	as_vector_inita(&sockaddr_in_v, sizeof(struct sockaddr_in), 5);
+	
+	if (! as_lookup(NULL, hostname, port, &sockaddr_in_v)) {
+		goto Done;
+	}
+	
+	for (uint32_t i = 0; i < sockaddr_in_v.size; i++)
+	{
+		struct sockaddr_in* sa_in = as_vector_get(&sockaddr_in_v, i);
+		
+		if (0 == citrusleaf_info_host_auth(cluster, sa_in, names, values, timeout_ms, true, /* check bounds */ true)) {
 			rv = 0;
 			goto Done;
 		}

@@ -66,62 +66,71 @@ typedef struct as_user_roles_s {
  *	sending to server.  Return zero on success.
  */
 int
-as_create_user(aerospike* as, const as_policy_admin* policy, const char* user, const char* password, const char** roles, int roles_size);
+aerospike_create_user(aerospike* as, const as_policy_admin* policy, const char* user, const char* password, const char** roles, int roles_size);
 
 /**
  *	Remove user from cluster.  Return zero on success.
  */
 int
-as_drop_user(aerospike* as, const as_policy_admin* policy, const char* user);
+aerospike_drop_user(aerospike* as, const as_policy_admin* policy, const char* user);
 
 /**
- *	Change user's password.  Clear-text password will be hashed using bcrypt before sending to server.
+ *	Set user's password by user administrator.  Clear-text password will be hashed using bcrypt before sending to server.
  *	Return zero on success.
  */
 int
-as_change_password(aerospike* as, const as_policy_admin* policy, const char* user, const char* password);
+aerospike_set_password(aerospike* as, const as_policy_admin* policy, const char* user, const char* password);
 
 /**
- *	Add role to user's list of roles.  Return zero on success..
+ *	Change user's password by user.  Clear-text password will be hashed using bcrypt before sending to server.
+ *	Return zero on success.
  */
 int
-as_grant_roles(aerospike* as, const as_policy_admin* policy, const char* user, const char** roles, int roles_size);
+aerospike_change_password(aerospike* as, const as_policy_admin* policy, const char* user, const char* password);
+
+/**
+ *	Add role to user's list of roles.  Return zero on success.
+ */
+int
+aerospike_grant_roles(aerospike* as, const as_policy_admin* policy, const char* user, const char** roles, int roles_size);
 
 /**
  *	Remove role from user's list of roles.  Return zero on success.
  */
 int
-as_revoke_roles(aerospike* as, const as_policy_admin* policy, const char* user, const char** roles, int roles_size);
+aerospike_revoke_roles(aerospike* as, const as_policy_admin* policy, const char* user, const char** roles, int roles_size);
 
 /**
  *	Replace user's list of roles with a new list of roles.  Return zero on success.
  */
 int
-as_replace_roles(aerospike* as, const as_policy_admin* policy, const char* user, const char** roles, int roles_size);
+aerospike_replace_roles(aerospike* as, const as_policy_admin* policy, const char* user, const char** roles, int roles_size);
 
 /**
- *	Retrieve roles for a given user.  Return zero on success..
+ *	Retrieve roles for a given user.  Return zero on success.
+ *	When successful, as_user_roles_destroy() must be called to free resources.
  */
 int
-as_query_user(aerospike* as, const as_policy_admin* policy, const char* user, as_user_roles** user_roles);
+aerospike_query_user(aerospike* as, const as_policy_admin* policy, const char* user, as_user_roles** user_roles);
 
 /**
  *	Release as_user_roles memory.
  */
 void
-as_query_user_destroy(as_user_roles* user_roles);
+as_user_roles_destroy(as_user_roles* user_roles);
 
 /**
  *	Retrieve all users and their roles.  Return zero on success.
+ *	When successful, as_user_roles_destroy_array() must be called to free resources.
  */
 int
-as_query_users(aerospike* as, const as_policy_admin* policy, as_user_roles** user_roles, int* user_roles_size);
+aerospike_query_users(aerospike* as, const as_policy_admin* policy, as_user_roles*** user_roles, int* user_roles_size);
 
 /**
  *	Release memory for as_user_roles array.
  */
 void
-as_query_users_destroy(as_user_roles* user_roles, int user_roles_size);
+as_user_roles_destroy_array(as_user_roles** user_roles, int user_roles_size);
 
 /**
  *	@private

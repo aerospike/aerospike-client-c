@@ -65,13 +65,13 @@ typedef struct as_nodes_s {
 	 *  Reference count of node array.
 	 */
 	uint32_t ref_count;
-
+	
 	/**
 	 *	@private
 	 *  Length of node array.
 	 */
 	uint32_t size;
-		
+	
 	/**
 	 *	@private
 	 *  Server node array.
@@ -166,7 +166,7 @@ typedef struct as_cluster_s {
 	 *	Length of seeds array.
 	 */
 	uint32_t seeds_size;
-		
+	
 	/**
 	 *	@private
 	 *	Length of ip_map array.
@@ -201,7 +201,7 @@ typedef struct as_cluster_s {
 	 *	Maximum socket idle in seconds.
 	 */
 	uint32_t max_socket_idle;
-
+	
 	/**
 	 *	@private
 	 *	Milliseconds between cluster tends.
@@ -309,7 +309,7 @@ as_cluster_get_node_names(as_cluster* cluster, int* n_nodes, char** node_names);
 static inline as_nodes*
 as_nodes_reserve(as_cluster* cluster)
 {
-	as_nodes* nodes = ck_pr_load_ptr(&cluster->nodes);
+	as_nodes* nodes = (as_nodes *)ck_pr_load_ptr(&cluster->nodes);
 	//ck_pr_fence_acquire();
 	ck_pr_inc_32(&nodes->ref_count);
 	return nodes;
@@ -362,7 +362,7 @@ as_node_get_by_name(as_cluster* cluster, const char* name);
 static inline as_partition_tables*
 as_partition_tables_reserve(as_cluster* cluster)
 {
-	as_partition_tables* tables = ck_pr_load_ptr(&cluster->partition_tables);
+	as_partition_tables* tables = (as_partition_tables *)ck_pr_load_ptr(&cluster->partition_tables);
 	ck_pr_inc_32(&tables->ref_count);
 	return tables;
 }

@@ -89,7 +89,7 @@ typedef struct as_node_s {
 	 *	Only used by tend thread. Not thread-safe.
 	 */
 	as_vector /* <as_address> */ addresses;
-
+	
 	struct as_cluster_s* cluster;
 	
 	/**
@@ -97,6 +97,12 @@ typedef struct as_node_s {
 	 *	Pool of current, cached FDs.
 	 */
 	cf_queue* conn_q;
+	
+	/**
+	 *	@private
+	 *	Socket used exclusively for cluster tend thread info requests.
+	 */
+	int info_fd;
 	
 	/**
 	 *	@private
@@ -224,7 +230,7 @@ as_node_add_address(as_node* node, struct sockaddr_in* addr);
 static inline struct sockaddr_in*
 as_node_get_address(as_node* node)
 {
-	as_address* address = as_vector_get(&node->addresses, node->address_index);
+	as_address* address = (as_address *)as_vector_get(&node->addresses, node->address_index);
 	return &address->addr;
 }
 
@@ -234,7 +240,7 @@ as_node_get_address(as_node* node)
 static inline as_address*
 as_node_get_address_full(as_node* node)
 {
-	return as_vector_get(&node->addresses, node->address_index);
+	return (as_address *)as_vector_get(&node->addresses, node->address_index);
 }
 
 /**

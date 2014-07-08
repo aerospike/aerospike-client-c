@@ -324,6 +324,16 @@ typedef struct as_config_s {
 	 */
 	as_config_lua lua;
 	
+	/**
+	 *	Action to perform if client fails to connect to seed hosts.
+	 *
+	 *	If fail_if_not_connected is false (default), an empty cluster will be
+	 *	created and the client will automatically connect when Aerospike server
+	 *	becomes available.
+	 *
+	 *	If fail_if_not_connected is true, the cluster creation will fail.
+	 */
+	bool fail_if_not_connected;
 } as_config;
 
 /******************************************************************************

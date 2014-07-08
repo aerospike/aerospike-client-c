@@ -490,13 +490,16 @@ static void print_users2(as_user_roles** users, int size)
 #endif
 
 int
-aerospike_query_user(aerospike* as, const as_policy_admin* policy, const char* user_name, as_user_roles** user_roles)
+aerospike_query_user(aerospike* as, const as_policy_admin* policy, const char* user, as_user_roles** user_roles)
 {
+	if (! user) {
+		user = as->cluster->user;
+	}
 	uint8_t buffer[STACK_BUF_SZ];
 	uint8_t* p = buffer + 8;
 	
 	p = write_header(p, QUERY_USERS, 1);
-	p = write_field_string(p, USER, user_name);
+	p = write_field_string(p, USER, user);
 	
 	as_vector users;
 	as_vector_inita(&users, sizeof(as_user_roles*), 1);

@@ -228,7 +228,7 @@ as_val * citrusleaf_udf_bin_to_val(as_serializer * ser, cl_bin * bin) {
 char * citrusleaf_udf_build_error_resp(char *result, char *b64_msg) {
 	// There is a valid error-message from server.
 	b64_msg +=8;
-	uint32_t b64_msg_len = strlen(b64_msg) - 1; // ignore the '\n' at the end
+	uint32_t b64_msg_len = (uint32_t)strlen(b64_msg) - 1; // ignore the '\n' at the end
 	uint32_t msg_len = 0;
 	char * response = strchr(result, '\t') + 1;
 	char *err_str = NULL;

@@ -35,4 +35,4 @@
  *	case there are duplicates. Return true on success.
  */
 bool
-as_lookup(as_cluster* cluster, char* hostname, uint16_t port, as_vector* /*<struct sockaddr_in>*/ addresses);
+as_lookup(as_cluster* cluster, char* hostname, uint16_t port, bool enable_warning, as_vector* /*<struct sockaddr_in>*/ addresses);

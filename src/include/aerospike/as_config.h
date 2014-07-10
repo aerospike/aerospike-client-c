@@ -327,11 +327,11 @@ typedef struct as_config_s {
 	/**
 	 *	Action to perform if client fails to connect to seed hosts.
 	 *
-	 *	If fail_if_not_connected is false (default), an empty cluster will be
-	 *	created and the client will automatically connect when Aerospike server
-	 *	becomes available.
+	 *	If fail_if_not_connected is true (default), the cluster creation will fail
+	 *	when all seed hosts are not reachable.
 	 *
-	 *	If fail_if_not_connected is true, the cluster creation will fail.
+	 *	If fail_if_not_connected is false, an empty cluster will be created and the 
+	 *	client will automatically connect when Aerospike server becomes available.
 	 */
 	bool fail_if_not_connected;
 } as_config;

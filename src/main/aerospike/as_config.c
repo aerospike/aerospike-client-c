@@ -34,7 +34,7 @@ as_config * as_config_init(as_config * c)
 	c->lua.cache_enabled = MOD_LUA_CACHE_ENABLED;
 	strcpy(c->lua.system_path, AS_CONFIG_LUA_SYSTEM_PATH);
 	strcpy(c->lua.user_path, AS_CONFIG_LUA_USER_PATH);
-	c->fail_if_not_connected = false;
+	c->fail_if_not_connected = true;
 	return c;
 }
 

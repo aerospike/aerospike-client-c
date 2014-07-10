@@ -26,7 +26,7 @@
 #include <netdb.h>
 
 bool
-as_lookup(as_cluster* cluster, char* hostname, uint16_t port, as_vector* /*<struct sockaddr_in>*/ addresses)
+as_lookup(as_cluster* cluster, char* hostname, uint16_t port, bool enable_warning, as_vector* /*<struct sockaddr_in>*/ addresses)
 {
 	// Check if there is an alternate address that should be used for this hostname.
 	if (cluster && cluster->ip_map) {
@@ -52,7 +52,9 @@ as_lookup(as_cluster* cluster, char* hostname, uint16_t port, as_vector* /*<stru
 	int ret = getaddrinfo(hostname, 0, &hints, &results);
 	
 	if (ret) {
-		cf_error("Invalid hostname %s: %s", hostname, gai_strerror(ret));
+		if (enable_warning) {
+			cf_warn("Invalid hostname %s: %s", hostname, gai_strerror(ret));
+		}
 		return false;
 	}
 	

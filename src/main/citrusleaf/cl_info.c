@@ -310,7 +310,7 @@ citrusleaf_info(char *hostname, short port, char *names, char **values, int time
 	as_vector sockaddr_in_v;
 	as_vector_inita(&sockaddr_in_v, sizeof(struct sockaddr_in), 5);
 	
-	if (! as_lookup(NULL, hostname, port, &sockaddr_in_v)) {
+	if (! as_lookup(NULL, hostname, port, true, &sockaddr_in_v)) {
 		goto Done;
 	}
 		
@@ -336,7 +336,7 @@ citrusleaf_info_auth(as_cluster *cluster, char *hostname, short port, char *name
 	as_vector sockaddr_in_v;
 	as_vector_inita(&sockaddr_in_v, sizeof(struct sockaddr_in), 5);
 	
-	if (! as_lookup(NULL, hostname, port, &sockaddr_in_v)) {
+	if (! as_lookup(NULL, hostname, port, true, &sockaddr_in_v)) {
 		goto Done;
 	}
 	

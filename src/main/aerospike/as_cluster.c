@@ -181,7 +181,7 @@ as_cluster_add_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ nodes
 }
 
 static bool
-as_cluster_seed_nodes(as_cluster* cluster)
+as_cluster_seed_nodes(as_cluster* cluster, bool enable_warnings)
 {
 	// Add all nodes at once to avoid copying entire array multiple times.
 	as_vector nodes_to_add;
@@ -196,7 +196,7 @@ as_cluster_seed_nodes(as_cluster* cluster)
 		as_seed* seed = &cluster->seeds[i];
 		as_vector_clear(&addresses);
 		
-		if (! as_lookup(cluster, seed->name, seed->port, &addresses)) {
+		if (! as_lookup(cluster, seed->name, seed->port, enable_warnings, &addresses)) {
 			continue;
 		}
 
@@ -215,6 +215,13 @@ as_cluster_seed_nodes(as_cluster* cluster)
 					as_address* a = as_node_get_address_full(node);
 					cf_info("Add node %s %s:%d", node->name, a->name, (int)cf_swap_from_be16(a->addr.sin_port));
 					as_vector_append(&nodes_to_add, &node);
+				}
+			}
+			else {
+				if (enable_warnings) {
+					char name[INET_ADDRSTRLEN];
+					as_socket_address_name(addr, name);
+					cf_warn("Connection failed for %s (%s:%d)", seed->name, name, (int)seed->port);
 				}
 			}
 		}
@@ -244,7 +251,7 @@ as_cluster_find_nodes_to_add(as_cluster* cluster, as_vector* /* <as_friend> */ f
 		as_friend* friend = as_vector_get(friends, i);
 		as_vector_clear(&addresses);
 		
-		if (! as_lookup(cluster, friend->name, friend->port, &addresses)) {
+		if (! as_lookup(cluster, friend->name, friend->port, true, &addresses)) {
 			continue;
 		}
 		
@@ -296,7 +303,7 @@ as_cluster_find_nodes_to_remove(as_cluster* cluster, uint32_t refresh_count, as_
 				// Single node clusters rely on whether it responded to info requests.
 				if (node->failures >= 5) {
 					// 5 consecutive info requests failed. Try seeds.
-					if (as_cluster_seed_nodes(cluster)) {
+					if (as_cluster_seed_nodes(cluster, false)) {
 						// Seed nodes found. Remove unresponsive node.
 						as_vector_append(nodes_to_remove, &node);
 					}
@@ -475,7 +482,7 @@ as_cluster_gc(as_vector* /* <as_gc_item> */ vector)
  * Check health of all nodes in the cluster.
  */
 static bool
-as_cluster_tend(as_cluster* cluster)
+as_cluster_tend(as_cluster* cluster, bool enable_seed_warnings)
 {
 	// All node additions/deletions are performed in tend thread.
 	// Garbage collect data structures released in previous tend.
@@ -487,7 +494,7 @@ as_cluster_tend(as_cluster* cluster)
 	// If active nodes don't exist, seed cluster.
 	as_nodes* nodes = cluster->nodes;
 	if (nodes->size == 0) {
-		if (! as_cluster_seed_nodes(cluster)) {
+		if (! as_cluster_seed_nodes(cluster, enable_seed_warnings)) {
 			return false;
 		}
 	}
@@ -568,7 +575,7 @@ as_wait_till_stabilized(as_cluster* cluster)
 	uint32_t count = -1;
 	
 	do {
-		if (! as_cluster_tend(cluster)) {
+		if (! as_cluster_tend(cluster, true)) {
 			return false;
 		}
 		
@@ -592,7 +599,7 @@ as_cluster_tender(void* data)
 	uint32_t tend_interval_micro = cluster->tend_interval * 1000;
 	
 	while (cluster->valid) {
-		as_cluster_tend(cluster);
+		as_cluster_tend(cluster, false);
 		usleep(tend_interval_micro);
 	}
 	return NULL;

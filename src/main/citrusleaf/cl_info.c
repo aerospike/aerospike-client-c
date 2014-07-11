@@ -122,7 +122,7 @@ citrusleaf_info_host_auth(as_cluster* cluster, struct sockaddr_in *sa_in, char *
 		int status = as_authenticate(fd, cluster->user, cluster->password, timeout_ms);
 		
 		if (status) {
-			cf_error("Authentication failed for %s", cluster->user);
+			cf_debug("Authentication failed for %s", cluster->user);
 			cf_close(fd);
 			return status;
 		}

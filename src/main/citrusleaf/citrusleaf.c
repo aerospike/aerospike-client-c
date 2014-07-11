@@ -1387,18 +1387,12 @@ do_the_full_monte(as_cluster *asc, int info1, int info2, int info3, const char *
 			usleep(10000);
 			goto Retry;
 		}
-		fd = as_node_fd_get(node);
-		if (fd == -1) {
-#ifdef DEBUG_VERBOSE			
-			cf_debug("warning: node %s has no file descriptors, retrying transaction (tid %zu)", node->name, (uint64_t)pthread_self());
-#endif			
+		
+		rv = as_node_get_connection(node, &fd);
+		if (rv) {
 			usleep(1000);
 			goto Retry;
 		}
-
-#ifdef DEBUG_VERBOSE
-		cf_debug("node %s fd %d", node->name, fd);
-#endif		
 		
 		// Hate special cases, but we have to clear the verify bit on delete verify
 		if ( (info2 & CL_MSG_INFO2_DELETE) && (info1 & CL_MSG_INFO1_VERIFY))
@@ -1552,7 +1546,7 @@ Error:
     
 Ok:    
 
-    as_node_fd_put(node, fd);
+    as_node_put_connection(node, fd);
 	as_node_release(node);
    
 	if (wr_buf != wr_stack_buf)		free(wr_buf);

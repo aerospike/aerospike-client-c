@@ -125,11 +125,12 @@ as_execute(aerospike* as, const as_policy_admin* policy, uint8_t* buffer, uint8_
 		return CITRUSLEAF_FAIL_CLIENT;
 	}
 	
-	int fd = as_node_fd_get(node);
+	int fd;
+	int status = as_node_get_connection(node, &fd);
 	
-	if (fd < 0) {
+	if (status) {
 		as_node_release(node);
-		return CITRUSLEAF_FAIL_TIMEOUT;
+		return status;
 	}
 
 	if (as_send(fd, buffer, end, deadline_ms, timeout_ms)) {
@@ -144,7 +145,7 @@ as_execute(aerospike* as, const as_policy_admin* policy, uint8_t* buffer, uint8_
 		return CITRUSLEAF_FAIL_TIMEOUT;
 	}
 	
-	as_node_fd_put(node, fd);
+	as_node_put_connection(node, fd);
 	as_node_release(node);
 	return buffer[RESULT_CODE];
 }
@@ -426,11 +427,12 @@ as_read_users(aerospike* as, const as_policy_admin* policy, uint8_t* buffer, uin
 		return CITRUSLEAF_FAIL_CLIENT;
 	}
 	
-	int fd = as_node_fd_get(node);
+	int fd;
+	int status = as_node_get_connection(node, &fd);
 	
-	if (fd < 0) {
+	if (status) {
 		as_node_release(node);
-		return CITRUSLEAF_FAIL_TIMEOUT;
+		return status;
 	}
 	
 	if (as_send(fd, buffer, end, deadline_ms, timeout_ms)) {
@@ -439,10 +441,10 @@ as_read_users(aerospike* as, const as_policy_admin* policy, uint8_t* buffer, uin
 		return CITRUSLEAF_FAIL_TIMEOUT;
 	}
 	
-	int status = as_read_user_blocks(fd, buffer, deadline_ms, timeout_ms, users);
+	status = as_read_user_blocks(fd, buffer, deadline_ms, timeout_ms, users);
 	
 	if (status >= 0) {
-		as_node_fd_put(node, fd);
+		as_node_put_connection(node, fd);
 	}
 	else {
 		cf_close(fd);

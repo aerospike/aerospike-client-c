@@ -683,10 +683,10 @@ static int cl_query_worker_do(as_node * node, cl_query_task * task) {
     uint8_t *   rd_buf = rd_stack_buf;
     size_t      rd_buf_sz = 0;
 
-    int fd = as_node_fd_get(node);
-    if ( fd == -1 ) { 
-        LOG("[ERROR] cl_query_worker_do: do query monte: cannot get fd for node %s ",node->name);
-        return CITRUSLEAF_FAIL_CLIENT; 
+	int fd;
+	int rc = as_node_get_connection(node, &fd);
+    if (rc) {
+        return rc;
     }
 
     // send it to the cluster - non blocking socket, but we're blocking
@@ -696,7 +696,6 @@ static int cl_query_worker_do(as_node * node, cl_query_task * task) {
     }
 
     cl_proto  proto;
-    int       rc   = CITRUSLEAF_OK;
     bool      done = false;
 
     do {
@@ -981,7 +980,7 @@ static int cl_query_worker_do(as_node * node, cl_query_task * task) {
         }
     } while ( done == false );
 
-    as_node_fd_put(node, fd);
+    as_node_put_connection(node, fd);
 
     goto Final;
 

@@ -289,22 +289,19 @@ do_batch_monte(as_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 		cf_error("do batch monte: batch compile failed: some kind of intermediate error");
 		return (rv);
 	}
-
 	
 #ifdef DEBUG_VERBOSE
 	dump_buf("sending request to cluster:", wr_buf, wr_buf_sz);
 #endif	
 
-	int fd = as_node_fd_get(node);
-	if (fd == -1) {
-#ifdef DEBUG			
-		cf_debug("warning: node %s has no file descriptors, retrying transaction", node->name);
-#endif
-		return(-1);
+	int fd;
+	rv = as_node_get_connection(node, &fd);
+	if (rv) {
+		return rv;
 	}
 	
 	// send it to the cluster - non blocking socket, but we're blocking
-	if (0 != cf_socket_write_forever(fd, wr_buf, wr_buf_sz)) {
+	if ((rv = cf_socket_write_forever(fd, wr_buf, wr_buf_sz))) {
 #ifdef DEBUG			
 		cf_debug("Citrusleaf: write timeout or error when writing header to server - %d fd %d errno %d", rv, fd, errno);
 #endif
@@ -534,7 +531,7 @@ do_batch_monte(as_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 	// call will read stale data.
 
 	if (rv == 0) {
-		as_node_fd_put(node, fd);
+		as_node_put_connection(node, fd);
 	} else {
 		cf_close(fd);
 	}

@@ -130,17 +130,15 @@ do_scan_monte(as_cluster *asc, char *node_name, uint operation_info, uint operat
 #endif			
 		return(-1);
 	}
-	fd = as_node_fd_get(node);
-	if (fd == -1) {
-#ifdef DEBUG			
-		cf_debug("warning: node %s has no file descriptors, retrying transaction", node->name);
-#endif
+	
+	rv = as_node_get_connection(node, &fd);
+	if (rv) {
 		as_node_release(node);
-		return(-1);
+		return rv;
 	}
 	
 	// send it to the cluster - non blocking socket, but we're blocking
-	if (0 != cf_socket_write_forever(fd, wr_buf, wr_buf_sz)) {
+	if ((rv = cf_socket_write_forever(fd, wr_buf, wr_buf_sz))) {
 #ifdef DEBUG			
 		cf_debug("Citrusleaf: write timeout or error when writing header to server - %d fd %d errno %d", rv, fd, errno);
 #endif
@@ -380,7 +378,7 @@ do_scan_monte(as_cluster *asc, char *node_name, uint operation_info, uint operat
 		wr_buf = 0;
 	}
 
-	as_node_fd_put(node, fd);
+	as_node_put_connection(node, fd);
 	as_node_release(node);
 	node = 0;
 	

@@ -224,11 +224,12 @@ static int cl_scan_worker_do(as_node * node, cl_scan_task * task) {
     uint8_t     rd_stack_buf[STACK_BUF_SZ] = {0};    
     uint8_t *   rd_buf = rd_stack_buf;
     size_t      rd_buf_sz = 0;
-
-    int fd = as_node_fd_get(node);
-    if ( fd == -1 ) { 
+	
+	int fd;
+    int rc = as_node_get_connection(node, &fd);
+    if (rc) {
         LOG("[ERROR] cl_scan_worker_do: cannot get fd for node %s ",node->name);
-        return CITRUSLEAF_FAIL_CLIENT; 
+        return rc;
     }
 
     // send it to the cluster - non blocking socket, but we're blocking
@@ -238,7 +239,6 @@ static int cl_scan_worker_do(as_node * node, cl_scan_task * task) {
     }
 
     cl_proto  proto;
-    int       rc   = CITRUSLEAF_OK;
     bool      done = false;
 
     do {
@@ -445,7 +445,7 @@ static int cl_scan_worker_do(as_node * node, cl_scan_task * task) {
         }
 
     } while ( done == false );
-    as_node_fd_put(node, fd);
+    as_node_put_connection(node, fd);
 
 #ifdef DEBUG_VERBOSE    
     LOG("[DEBUG] cl_scan_worker_do: exited loop: rc %d\n", rc );

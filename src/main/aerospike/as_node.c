@@ -172,39 +172,41 @@ is_connected(int fd)
 }
 
 static int
-as_node_fd_authenticate(as_node* node, int fd)
+as_node_authenticate_connection(as_node* node, int* fd)
 {
 	as_cluster* cluster = node->cluster;
 	
 	if (cluster->user) {
-		int status = as_authenticate(fd, cluster->user, cluster->password, cluster->conn_timeout_ms);
+		int status = as_authenticate(*fd, cluster->user, cluster->password, cluster->conn_timeout_ms);
 		
 		if (status) {
-			cf_error("Authentication failed for %s", cluster->user);
-			cf_close(fd);
-			return -1;
+			cf_debug("Authentication failed for %s", cluster->user);
+			cf_close(*fd);
+			*fd = -1;
+			return status;
 		}
 	}
-	return fd;
+	return 0;
 }
 
 static int
-as_node_fd_create_and_connect(as_node* node)
+as_node_create_connection(as_node* node, int* fd)
 {
 	// Create a non-blocking socket.
-	int fd = cf_socket_create_nb();
+	*fd = cf_socket_create_nb();
 	
-	if (fd == -1) {
+	if (*fd == -1) {
 		// Local problem - socket create failed.
-		return -1;
+		cf_debug("Socket create failed for %s", node->name);
+		return CITRUSLEAF_FAIL_CLIENT;
 	}
 	
 	// Try primary address.
 	as_address* primary = as_vector_get(&node->addresses, node->address_index);
 	
-	if (cf_socket_start_connect_nb(fd, &primary->addr) == 0) {
+	if (cf_socket_start_connect_nb(*fd, &primary->addr) == 0) {
 		// Connection started ok - we have our socket.
-		return as_node_fd_authenticate(node, fd);
+		return as_node_authenticate_connection(node, fd);
 	}
 	
 	// Try other addresses.
@@ -214,76 +216,69 @@ as_node_fd_create_and_connect(as_node* node)
 		
 		// Address points into alias array, so pointer comparison is sufficient.
 		if (address != primary) {
-			if (cf_socket_start_connect_nb(fd, &address->addr) == 0) {
+			if (cf_socket_start_connect_nb(*fd, &address->addr) == 0) {
 				// Replace invalid primary address with valid alias.
 				// Other threads may not see this change immediately.
 				// It's just a hint, not a requirement to try this new address first.
 				cf_debug("Change node address %s %s:%d", node->name, address->name, (int)cf_swap_from_be16(address->addr.sin_port));
 				ck_pr_store_32(&node->address_index, i);
-				return as_node_fd_authenticate(node, fd);
+				return as_node_authenticate_connection(node, fd);
 			}
 		}
 	}
 	
 	// Couldn't start a connection on any socket address - close the socket.
 	cf_info("Failed to connect: %s %s:%d", node->name, primary->name, (int)cf_swap_from_be16(primary->addr.sin_port));
-	cf_close(fd);
-	return -1;
+	cf_close(*fd);
+	*fd = -1;
+	return CITRUSLEAF_FAIL_UNAVAILABLE;
 }
 
 int
-as_node_fd_get(as_node* node)
+as_node_get_connection(as_node* node, int* fd)
 {
-	int fd = -1;
-		
 	//cf_queue* q = asyncfd ? node->conn_q_asyncfd : node->conn_q;
 	cf_queue* q = node->conn_q;
 	
-	while (fd == -1) {
-		int rv = cf_queue_pop(q, &fd, CF_QUEUE_NOWAIT);
+	while (1) {
+		int rv = cf_queue_pop(q, fd, CF_QUEUE_NOWAIT);
 		
 		if (rv == CF_QUEUE_OK) {
-			int rv2 = is_connected(fd);
+			int rv2 = is_connected(*fd);
 			
 			switch (rv2) {
 				case CONNECTED:
 					// It's still good.
-					break;
+					return 0;
+					
 				case CONNECTED_BADFD:
 					// Local problem, don't try closing.
-					cf_warn("Found bad file descriptor in queue: fd %d", fd);
-					fd = -1;
+					cf_warn("Found bad file descriptor in queue: fd %d", *fd);
 					break;
+				
 				case CONNECTED_NOT:
 					// Can't use it - the remote end closed it.
 				case CONNECTED_ERROR:
 					// Some other problem, could have to do with remote end.
 				default:
-					cf_close(fd);
-					fd = -1;
+					cf_close(*fd);
 					break;
 			}
 		}
 		else if (rv == CF_QUEUE_EMPTY) {
-			fd = as_node_fd_create_and_connect(node);
-			
-			// We exhausted the queue and can't open a fresh socket.
-			if (fd == -1) {
-				break;
-			}
+			// We exhausted the queue. Try creating a fresh socket.
+			return as_node_create_connection(node, fd);
 		}
 		else {
-			// Since we can't assert:
 			cf_error("Bad return value from cf_queue_pop");
-			fd = -1;
-			break;
+			*fd = -1;
+			return CITRUSLEAF_FAIL_CLIENT;
 		}
 	}
-	return fd;
 }
 
 void
-as_node_fd_put(as_node* node, int fd)
+as_node_put_connection(as_node* node, int fd)
 {
 	cf_queue *q = node->conn_q;
 	if (! cf_queue_push_limit(q, &fd, 300)) {
@@ -305,17 +300,17 @@ as_node_fd_put(as_node* node, int fd)
 }
 
 static int
-as_node_fd_get_info(as_node* node)
+as_node_get_info_connection(as_node* node)
 {
 	if (node->info_fd < 0) {
 		// Try to open a new socket.
-		node->info_fd = as_node_fd_create_and_connect(node);
+		return as_node_create_connection(node, &node->info_fd);
 	}
-	return node->info_fd;
+	return 0;
 }
 
 static void
-as_node_fd_close_info(as_node* node)
+as_node_close_info_connection(as_node* node)
 {
 	shutdown(node->info_fd, SHUT_RDWR);
 	cf_close(node->info_fd);
@@ -323,8 +318,10 @@ as_node_fd_close_info(as_node* node)
 }
 
 static uint8_t*
-as_node_get_info(as_node* node, int fd, const char* names, size_t names_len, int timeout_ms, uint8_t* stack_buf)
+as_node_get_info(as_node* node, const char* names, size_t names_len, int timeout_ms, uint8_t* stack_buf)
 {
+	int fd = node->info_fd;
+	
 	// Prepare the write request buffer.
 	size_t write_size = sizeof(cl_proto) + names_len;
 	cl_proto* proto = (cl_proto*)stack_buf;
@@ -570,19 +567,18 @@ const char INFO_STR_GET_REPLICAS[] = "partition-generation\nreplicas-master\nrep
 bool
 as_node_refresh(as_cluster* cluster, as_node* node, as_vector* /* <as_friend> */ friends)
 {
-	int fd = as_node_fd_get_info(node);
+	int ret = as_node_get_info_connection(node);
 	
-	if (fd < 0) {
-		cf_warn("Failed to get info fd for node %s", node->name);
-		return 0;
+	if (ret) {
+		return false;
 	}
 	
 	uint32_t info_timeout = cluster->conn_timeout_ms;
 	uint8_t stack_buf[INFO_STACK_BUF_SIZE];
-	uint8_t* buf = as_node_get_info(node, fd, INFO_STR_CHECK, sizeof(INFO_STR_CHECK) - 1, info_timeout, stack_buf);
+	uint8_t* buf = as_node_get_info(node, INFO_STR_CHECK, sizeof(INFO_STR_CHECK) - 1, info_timeout, stack_buf);
 	
 	if (! buf) {
-		as_node_fd_close_info(node);
+		as_node_close_info_connection(node);
 		return false;
 	}
 	
@@ -599,10 +595,10 @@ as_node_refresh(as_cluster* cluster, as_node* node, as_vector* /* <as_friend> */
 	}
 	
 	if (status && update_partitions) {
-		buf = as_node_get_info(node, fd, INFO_STR_GET_REPLICAS, sizeof(INFO_STR_GET_REPLICAS) - 1, info_timeout, stack_buf);
+		buf = as_node_get_info(node, INFO_STR_GET_REPLICAS, sizeof(INFO_STR_GET_REPLICAS) - 1, info_timeout, stack_buf);
 		
 		if (! buf) {
-			as_node_fd_close_info(node);
+			as_node_close_info_connection(node);
 			as_vector_destroy(&values);
 			return false;
 		}

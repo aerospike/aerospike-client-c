@@ -245,14 +245,14 @@ as_node_get_address_full(as_node* node)
 
 /**
  *	@private
- *	Get a connection to the given node from pool.  Return fd on success and -1 on error.
+ *	Get a connection to the given node from pool and validate.  Return 0 on success.
  */
 int
-as_node_fd_get(as_node* node);
+as_node_get_connection(as_node* node, int* fd);
 
 /**
  *	@private
  *	Put connection back into pool.
  */
 void
-as_node_fd_put(as_node* node, int fd);
+as_node_put_connection(as_node* node, int fd);

@@ -132,7 +132,7 @@ citrusleaf_info_host_auth(as_cluster* cluster, struct sockaddr_in *sa_in, char *
 	shutdown(fd, SHUT_RDWR);
 	cf_close(fd);
 	
-	if (rv == 0 && strncmp(*values, "security error", 14) == 0) {
+	if (rv == 0 && *values && strncmp(*values, "security error", 14) == 0) {
 		cf_error("%s", *values);
 		free(*values);
 		return CITRUSLEAF_NOT_AUTHENTICATED;

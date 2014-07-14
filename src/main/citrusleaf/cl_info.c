@@ -287,7 +287,7 @@ citrusleaf_info_host_limit(int fd, char *names, char **values, int timeout_ms, b
 		*values = (char *) v_buf;
 	}                                                                                               
 	else {
-		cf_warn("rsp size is 0");
+		cf_debug("rsp size is 0");
 		*values = 0;
 	}
 	rv = 0;

@@ -155,6 +155,7 @@ typedef enum cl_rv_e {
     // UDF RANGE 100-110
     CITRUSLEAF_FAIL_UDF_BAD_RESPONSE        = 100,
     CITRUSLEAF_FAIL_UDF_LUA_EXECUTION       = 101,
+    CITRUSLEAF_FAIL_LUA_FILE_NOTFOUND       = 102,
 
     // Secondary Index Query Codes 200 - 230
     CITRUSLEAF_FAIL_INDEX_FOUND             = 200,

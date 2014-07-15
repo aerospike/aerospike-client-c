@@ -272,6 +272,10 @@ typedef enum as_status_e {
 	 *	UDF does not exist.
 	 */
 	AEROSPIKE_ERR_UDF_NOT_FOUND				= 1301,
+	/**
+	 *	LUA file does not exist.
+	 */
+	AEROSPIKE_ERR_LUA_FILE_NOT_FOUND		= 1302,
 
 	/***************************************************************************
 	 *	Large Data Type (LDT) OPERATIONS

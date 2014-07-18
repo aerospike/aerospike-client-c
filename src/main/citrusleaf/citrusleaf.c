@@ -37,7 +37,6 @@
 
 #include <citrusleaf/cf_byte_order.h>
 #include <citrusleaf/cf_atomic.h>
-#include <citrusleaf/cf_hist.h>
 #include <citrusleaf/cf_proto.h>
 #include <citrusleaf/cf_socket.h>
 
@@ -49,14 +48,9 @@
 // This is a per-transaction deadline kind of thing
 #define DEFAULT_TIMEOUT 200
 
-// #define DEBUG_HISTOGRAM 1 // histogram printed in citrusleaf_print_stats()
 // #define DEBUG 1
 // #define DEBUG_VERBOSE 1
 // #define DEBUG_TIME 1 // debugs involving timing
-
-#ifdef DEBUG_HISTOGRAM
-    static cf_histogram *cf_hist;
-#endif
 
 #ifdef DEBUG_TIME
 static void debug_printf(long before_write_time, long after_write_time, long before_read_header_time, long after_read_header_time, 
@@ -1578,9 +1572,7 @@ Ok:
 //			}
 	// 	}
 	// }
-#ifdef DEBUG_HISTOGRAM	
-    cf_histogram_insert_data_point(cf_hist, start_time);
-#endif	
+
 #ifdef DEBUG_VERBOSE
 	if (rv != 0) {
 		cf_debug("exiting OK clause with failure: wpol %d timeleft %d rv %d",
@@ -1933,23 +1925,15 @@ void citrusleaf_set_debug(bool debug_flag)
 
 int citrusleaf_init() 
 {
-	// Eventually, use a histogram per cluster object, not a global.
-#ifdef DEBUG_HISTOGRAM
-    if (NULL == (cf_hist = cf_histogram_create("transaction times")))
-		cf_error("couldn't create histogram for client");
-#endif
-
-	return(0);
+	return 0;
 }
 
-void citrusleaf_shutdown(void) {
+void citrusleaf_shutdown(void)
+{
 }
 
 extern void citrusleaf_print_stats();
 
 void citrusleaf_print_stats(void)
 {
-#ifdef DEBUG_HISTOGRAM
-        cf_histogram_dump(cf_hist);
-#endif
 }

@@ -1439,7 +1439,7 @@ do_the_full_monte(as_cluster *asc, int info1, int info2, int info3, const char *
             debug_printf(before_write_time, after_write_time, before_read_header_time, after_read_header_time, before_read_body_time, after_read_body_time,
                          deadline_ms, progress_timeout_ms);           	
 #endif            
-
+			rv = CITRUSLEAF_FAIL_TIMEOUT;
 			goto Retry;
 	
 		}
@@ -1488,6 +1488,7 @@ do_the_full_monte(as_cluster *asc, int info1, int info2, int info3, const char *
                              deadline_ms, progress_timeout_ms);           	
 #endif
 
+				rv = CITRUSLEAF_FAIL_TIMEOUT;
 				goto Retry;
 			}
 

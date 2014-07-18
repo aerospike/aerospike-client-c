@@ -41,6 +41,28 @@ typedef enum as_status_e {
 	AEROSPIKE_OK							= 0,
 
 	/***************************************************************************
+	 *	ERRORS (all < 100)
+	 **************************************************************************/
+	
+	AEROSPIKE_QUERY_END						= 50,
+	AEROSPIKE_SECURITY_NOT_SUPPORTED		= 51,
+	AEROSPIKE_SECURITY_NOT_ENABLED			= 52,
+	AEROSPIKE_SECURITY_SCHEME_NOT_SUPPORTED = 53,
+	AEROSPIKE_INVALID_COMMAND				= 54,
+	AEROSPIKE_INVALID_FIELD					= 55,
+	AEROSPIKE_ILLEGAL_STATE					= 56,
+	AEROSPIKE_INVALID_USER					= 60,
+	AEROSPIKE_USER_ALREADY_EXISTS			= 61,
+	AEROSPIKE_INVALID_PASSWORD				= 62,
+	AEROSPIKE_EXPIRED_PASSWORD				= 63,
+	AEROSPIKE_FORBIDDEN_PASSWORD			= 64,
+	AEROSPIKE_INVALID_CREDENTIAL			= 65,
+	AEROSPIKE_INVALID_ROLE					= 70,
+	AEROSPIKE_INVALID_PRIVILEGE				= 71,
+	AEROSPIKE_NOT_AUTHENTICATED				= 80,
+	AEROSPIKE_ROLE_VIOLATION				= 81,
+	
+	/***************************************************************************
 	 *	ERRORS (all >= 100)
 	 **************************************************************************/
 

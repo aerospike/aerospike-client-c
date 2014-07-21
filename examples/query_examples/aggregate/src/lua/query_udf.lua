@@ -1,6 +1,6 @@
 -- A simple UDF that just returns the value of the bin 'test-bin'.
-local function get_test_bin(record)
-	return record['test-bin']
+local function get_test_bin(rec)
+	return rec['test-bin']
 end
 
 -- A simple arithmetic UDF that adds two arguments and returns the result.
@@ -15,8 +15,8 @@ function sum_test_bin(stream)
 end
 
 -- A UDF that returns the sum of the argument and the bin value of 'test-bin'.
-local function add_test_bin(a, record)
-	return a + record['test-bin']
+local function add_test_bin(a, rec)
+	return a + rec['test-bin']
 end
 
 -- An aggregation UDF that uses local UDFs above to execute an aggregation and
@@ -26,8 +26,8 @@ function sum_test_bin_2(stream)
 end
 
 -- A UDF that returns true if the bin value of 'test-bin' is even, false if not.
-local function even_test_bin(record)
-	return record['test-bin'] % 2 == 0
+local function even_test_bin(rec)
+	return rec['test-bin'] % 2 == 0
 end
 
 -- An aggregation UDF that uses local UDFs above to execute an aggregation after
@@ -39,8 +39,8 @@ end
 -- A UDF that parses the string in 'numbers-bin'. Each numeric token found is
 -- inserted (as a key) in supplied map m with initial value 1. If the key
 -- already exists the value is incremented. The resulting map m is returned.
-local function parse_numbers(m, record)
-	local s = record['numbers-bin']
+local function parse_numbers(m, rec)
+	local s = rec['numbers-bin']
 	for n in string.gmatch(s, "%d+") do
 		m[n] = (m[n] or 0) + 1
 	end

@@ -112,6 +112,31 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
+	// Remove a bin by setting it with an as_nil.using as_record_set_nil()
+	// reuse the stack object by calling as_record_inita() again, as long as the
+	// previous contents are destroyed if necessary.
+	as_record_inita(&rec, 2);
+	as_record_set_nil(&rec, "test-bin-3");
+
+	// Log its contents.
+	LOG("as_record object to write to database:");
+	example_dump_record(&rec);
+
+	// Write the record to the database. This will remove test-bin-3 and
+	// will leave test-bin-1 and test-bin-2 unchanged.
+	if (aerospike_key_put(&as, &err, NULL, &g_key, &rec) != AEROSPIKE_OK) {
+		LOG("aerospike_key_put() returned %d - %s", err.code, err.message);
+		example_cleanup(&as);
+		exit(-1);
+	}
+
+	LOG("write succeeded");
+
+	if (! example_read_test_record(&as)) {
+		example_cleanup(&as);
+		exit(-1);
+	}
+
 	// Generate another as_record object to write.
 	as_record_inita(&rec, 1);
 	as_record_set_int64(&rec, "test-bin-1", 1111);

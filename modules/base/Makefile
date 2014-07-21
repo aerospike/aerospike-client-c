@@ -46,7 +46,6 @@ BASE =
 BASE += cf_average.o
 BASE += cf_client_rc.o
 # BASE += cf_digest.o
-BASE += cf_hist.o
 # BASE += cf_hooks.o
 # BASE += cf_ll.o
 BASE += cf_log.o

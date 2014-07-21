@@ -270,13 +270,13 @@ typedef struct bg_scan_info_s {
 	as_scan_info * info;
 } bg_scan_info;
 
-const char JOB_STATUS_TAG[] = "job-status=";
+const char JOB_STATUS_TAG[] = "job_status=";
 const int JOB_STATUS_TAG_LEN = sizeof(JOB_STATUS_TAG) - 1;
 
-const char JOB_PROGRESS_TAG[] = "job-progress(%)=";
+const char JOB_PROGRESS_TAG[] = "job_progress(%)=";
 const int JOB_PROGRESS_TAG_LEN = sizeof(JOB_PROGRESS_TAG) - 1;
 
-const char SCANNED_RECORDS_TAG[] = "scanned-records=";
+const char SCANNED_RECORDS_TAG[] = "scanned_records=";
 const int SCANNED_RECORDS_TAG_LEN = sizeof(SCANNED_RECORDS_TAG) - 1;
 
 /**

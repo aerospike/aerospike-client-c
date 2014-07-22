@@ -196,10 +196,11 @@ aerospike_lstack_destroy().
 
 This example demonstrates writing a record to the database using
 aerospike_key_put(). It shows that bins are written independently, and that bin
-value types may be changed when a bin is rewritten. It also demonstrates the
-non-default AS_POLICY_EXISTS_CREATE write policy, showing that error code
-AEROSPIKE_ERR_RECORD_EXISTS is returned if the record exists. It then uses
-aerospike_key_remove() to delete the record, then shows the next create succeed.
+value types may be changed when a bin is rewritten. It also shows how to remove
+a bin. It demonstrates the non-default AS_POLICY_EXISTS_CREATE write policy,
+showing that error code AEROSPIKE_ERR_RECORD_EXISTS is returned if the record
+exists. It then uses aerospike_key_remove() to delete the record, then shows
+the next create succeed.
 
 
 ### touch

@@ -62,7 +62,8 @@ main(int argc, char* argv[])
 
 	// Create an as_record object with two bins with different value types. By
 	// using as_record_inita(), we won't need to destroy the record if we only
-	// set bins using as_record_set_int64() and as_record_set_str().
+	// set bins using as_record_set_int64(), as_record_set_str(), and
+	// as_record_set_nil().
 	as_record rec;
 	as_record_inita(&rec, 2);
 	as_record_set_int64(&rec, "test-bin-1", 1234);
@@ -112,10 +113,8 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
-	// Remove a bin by setting it with an as_nil.using as_record_set_nil()
-	// reuse the stack object by calling as_record_inita() again, as long as the
-	// previous contents are destroyed if necessary.
-	as_record_inita(&rec, 2);
+	// Generate another as_record object to write.
+	as_record_inita(&rec, 1);
 	as_record_set_nil(&rec, "test-bin-3");
 
 	// Log its contents.

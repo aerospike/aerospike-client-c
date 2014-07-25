@@ -68,7 +68,7 @@ static inline void cl_write_parameters_set_default(cl_write_parameters *cl_w_p) 
     cl_w_p->use_generation_dup = false;
     cl_w_p->timeout_ms = 0;
     cl_w_p->record_ttl = 0;
-    cl_w_p->w_pol = CL_WRITE_RETRY;
+    cl_w_p->w_pol = CL_WRITE_ONESHOT;
 }
 
 static inline void cl_write_parameters_set_generation( cl_write_parameters *cl_w_p, uint32_t generation) {

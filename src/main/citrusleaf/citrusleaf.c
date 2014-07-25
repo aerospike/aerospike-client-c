@@ -1336,18 +1336,12 @@ do_the_full_monte(as_cluster *asc, int info1, int info2, int info3, const char *
     deadline_ms = 0;
     progress_timeout_ms = 0;
     if (cl_w_p && cl_w_p->timeout_ms) {
-    	// policy: if asking for a long timeout, give enough time to try two servers
-    	if (cl_w_p->timeout_ms > 700 && cl_w_p->w_pol == CL_WRITE_RETRY) {
-			deadline_ms = cf_getms() + cl_w_p->timeout_ms;
-			progress_timeout_ms = cl_w_p->timeout_ms / 2;
-		}
-		else {
-			deadline_ms = cf_getms() + cl_w_p->timeout_ms;
-			progress_timeout_ms = cl_w_p->timeout_ms;
-		}
+		// Use the same timeout time and policy for reads and writes.
+		deadline_ms = cf_getms() + cl_w_p->timeout_ms;
+		progress_timeout_ms = cl_w_p->timeout_ms;
 #ifdef DEBUG_VERBOSE        
-        cf_debug("transaction has deadline: in %d deadlinems %"PRIu64" progress %d",
-        	(int)cl_w_p->timeout_ms,deadline_ms,progress_timeout_ms);
+		cf_debug("transaction has deadline: in %d deadlinems %"PRIu64" progress %d",
+			(int)cl_w_p->timeout_ms,deadline_ms,progress_timeout_ms);
 #endif        
     }
     else {

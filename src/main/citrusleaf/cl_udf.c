@@ -628,7 +628,7 @@ cl_rv citrusleaf_udf_remove(as_cluster *asc, const char * filename, char ** resp
 	int rc = 0;
 	rc = citrusleaf_info_cluster(asc, query, resp, true, /* check bounds */ true, 100);
 
-    	if ( *resp ) {
+    if ( *resp ) {
 		// This is true, irrespective of whether there is a real error or not.
 		// So we must look for the error-message string in *error.
 		// 2 things are base64 encoded in the error-message, the content of the file
@@ -643,7 +643,7 @@ cl_rv citrusleaf_udf_remove(as_cluster *asc, const char * filename, char ** resp
 			*resp = err_str;
 			return CITRUSLEAF_FAIL_LUA_FILE_NOTFOUND;
 		}
-    	}
+	}
 
 	// fprintf(stderr, " Server-return : %d Response-string: %s", rc, *resp);
 

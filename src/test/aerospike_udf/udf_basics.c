@@ -48,11 +48,12 @@ TEST( udf_basics_1 , "manage udf_basics.lua" ) {
 	as_error err;
 	as_error_reset(&err);
 
-	// remove the file, regardless of whether it is on server or not.
-	
+	/* This test uploads, lists, downloads, and then proceeds to remove the udf-lua-file as well. 
+         * As a safe-guard, always ensure that the file does not exist in the first place. */ 
+ 	
 	aerospike_udf_remove(as, &err, NULL, filename);
 
-	assert_int_eq( err.code, AEROSPIKE_OK );
+	assert_int_eq( err.code, AEROSPIKE_ERR_LUA_FILE_NOT_FOUND );
 
 	WAIT_MS(100);
 
@@ -129,6 +130,7 @@ TEST( udf_basics_1 , "manage udf_basics.lua" ) {
 
 	// remove the file
 
+	info("removing file: %s ", filename);
 	aerospike_udf_remove(as, &err, NULL, filename);
 
 	assert_int_eq( err.code, AEROSPIKE_OK );

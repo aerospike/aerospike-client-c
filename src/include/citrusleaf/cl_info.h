@@ -45,11 +45,13 @@ int citrusleaf_info(char *host, short port, char *names, char **values, int time
 int citrusleaf_info_auth(as_cluster* cluster, char *host, short port, char *names, char **values, int timeout_ms);
 int citrusleaf_info_host(struct sockaddr_in *sa_in, char *names, char **values, int timeout_ms, bool send_asis, bool check_bounds);
 int citrusleaf_info_host_auth(as_cluster* cluster, struct sockaddr_in *sa_in, char *names, char **values, int timeout_ms, bool send_asis, bool check_bounds);
-
+int citrusleaf_info_host_limit(int fd, char *names, char **values, int timeout_ms, bool send_asis, uint64_t max_response_length, bool check_bounds);
 int citrusleaf_info_cluster(as_cluster *asc, char *names, char **values, bool send_asis, bool check_bounds, int timeout_ms);
 
 int citrusleaf_info_cluster_foreach(
-	as_cluster *cluster, const char *command, bool send_asis, bool check_bounds, int timeout_ms, void *udata,
-	bool (*callback)(const as_node * node, const struct sockaddr_in * sa_in, const char *command, char *value, void *udata));
+	as_cluster *cluster, const char *command, bool send_asis, bool check_bounds, int timeout_ms, void *udata, char** error,
+	bool (*callback)(const as_node * node, const char *command, char *value, void *udata));
 
+int citrusleaf_info_validate(char* response, char** message);
+int citrusleaf_info_parse_error(char* begin, char** message);
 int citrusleaf_info_parse_single(char *values, char **value);

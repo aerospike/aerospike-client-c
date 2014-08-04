@@ -152,8 +152,6 @@ int do_the_full_monte(as_cluster *asc, int info1, int info2, int info3, const ch
 	uint32_t *cl_gen, const cl_write_parameters *cl_w_p, uint64_t *trid, char **setname_r, as_call * call, uint32_t* cl_ttl
 	);
 
-int citrusleaf_info_host_limit(int fd, char *names, char **values, int timeout_ms, bool send_asis, uint64_t max_response_length, bool check_bounds);
-
 int cl_compile(uint info1, uint info2, uint info3, const char *ns, const char *set, const cl_object *key, const cf_digest *digest,
 	cl_bin *values, cl_operator operator, cl_operation *operations, int n_values,  
 	uint8_t **buf_r, size_t *buf_sz_r, const cl_write_parameters *cl_w_p, cf_digest *d_ret, uint64_t trid, 

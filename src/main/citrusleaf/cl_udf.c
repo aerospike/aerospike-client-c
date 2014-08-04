@@ -220,29 +220,98 @@ as_val * citrusleaf_udf_bin_to_val(as_serializer * ser, cl_bin * bin) {
 	return cl_udf_bin_to_val(ser, bin);
 }
 
-/******************************************************************************
- * FUNCTIONS
- ******************************************************************************/
-
 // caller is assumed to have checked all the parameters for validity
-char * citrusleaf_udf_build_error_resp(char *result, char *b64_msg) {
+static char*
+citrusleaf_udf_build_error_resp(char *result, char *b64_msg) {
 	// There is a valid error-message from server.
-	b64_msg +=8;
 	uint32_t b64_msg_len = (uint32_t)strlen(b64_msg) - 1; // ignore the '\n' at the end
 	uint32_t msg_len = 0;
 	char * response = strchr(result, '\t') + 1;
 	char *err_str = NULL;
-
+	
 	if (cf_b64_validate_and_decode_in_place((uint8_t*)b64_msg, b64_msg_len, &msg_len)) {
 		b64_msg[msg_len] = '\0';
 		err_str = strdup((const char *)response); // freed by caller of udf-put
 	}
-
+	
   	return err_str;
 }
 
+static int
+citrusleaf_udf_validate_response(char* response, char** error_message)
+{
+	char* p = response;
+	char* error = 0;
+	int rc = 0;
+	
+	if (p) {
+		// Check for errors embedded in the response.
+		// ERROR: may appear at beginning of string.
+		if (strncmp(p, "ERROR:", 6) == 0) {
+			char* msg;
+			rc = citrusleaf_info_parse_error(p + 6, &msg);
+			*error_message = strdup(msg);
+			free(response);
+			return rc;
+		}
+		
+		// ERROR:, error= or message= may appear after a tab.
+		while ((p = strchr(p, '\t'))) {
+			p++;
+			
+			if (strncmp(p, "ERROR:", 6) == 0) {
+				char* msg;
+				rc = citrusleaf_info_parse_error(p + 6, &msg);
+				*error_message = strdup(msg);
+				free(response);
+				return rc;
+			}
+			
+			if (strncmp(p, "error=", 6) == 0) {
+				rc = CITRUSLEAF_FAIL_UDF_BAD_RESPONSE;
+				
+				if (error) {
+					break;
+				}
+				
+				p += 6;
+				char* q = strchr(p, ';');
+				
+				if (q) {
+					*q = 0;
+					error = strdup(p);
+					// Keep going because we may get a more descriptive error message.
+				}
+				else {
+					*error_message = strdup(p);
+					free(response);
+					return rc;
+				}
+			}
+			else if (strncmp(p, "message=", 8) == 0) {
+				rc = CITRUSLEAF_FAIL_UDF_BAD_RESPONSE;
+				free(error);
+				error = citrusleaf_udf_build_error_resp(response, p + 8);
+			}
+		}
+		
+		if (rc) {
+			*error_message = error;
+			free(response);
+		}
+		return rc;
+	}
+	else {
+		*error_message = strdup("Empty response");
+		return CITRUSLEAF_FAIL_UDF_BAD_RESPONSE;
+	}
+}
 
-cl_rv citrusleaf_udf_record_apply(as_cluster * cl, const char * ns, const char * set, const cl_object * key, 
+/******************************************************************************
+ * FUNCTIONS
+ ******************************************************************************/
+
+cl_rv citrusleaf_udf_record_apply(as_cluster * cl, const char * ns, const char * set, const cl_object * key,
 	const char * filename, const char * function, as_list * arglist, int timeout_ms, as_result * res) {
 
 	cl_rv rv = CITRUSLEAF_OK;
@@ -345,35 +414,20 @@ cl_rv citrusleaf_udf_list(as_cluster *asc, cl_udf_file ** files, int * count, ch
 
 	char *  query   = "udf-list";
 	char *  result  = 0;
-
-	if ( citrusleaf_info_cluster(asc, query, &result, true, /* check bounds */ true, 100) ) {
-		// rc is 0 for udf-put errors from the server-side. so we should not check for rc.
-		// Also, we get a complete resp-string from the server. We must parse it, instead of
-		// over-writing it !!
-		if ( result ) {
-			// This is true, irrespective of whether there is a real resp or not.
-			// So we must look for the resp-message string in *resp.
-			// 2 things are base64 encoded in the resp-message, the content of the file
-			// and the message sent by the server
-
-			char *b64_msg = strstr(result, "message=");
-			if (b64_msg) {
-				// There is a valid resp-message from server.
-	            char *err_str = citrusleaf_udf_build_error_resp(result, b64_msg);
-				free(result);
-				*resp = err_str;
-				return -1;
-			}
-		}
-	}
-
-	if ( !result ) {
-		if ( resp ) {
-			*resp = strdup("invalid_response");
-		}
-		return -2;
+	
+	int rc = citrusleaf_info_cluster(asc, query, &result, true, /* check bounds */ true, 100);
+	
+	if (rc) {
+		*resp = result;
+		return rc;
 	}
 	
+	rc = citrusleaf_udf_validate_response(result, resp);
+	
+	if (rc) {
+		return rc;
+	}
+			
 	// The code below needs to be kept, it populates the udf file-list and count
 	// It has only 1 error check.
 
@@ -397,6 +451,7 @@ cl_rv citrusleaf_udf_list(as_cluster *asc, cl_udf_file ** files, int * count, ch
 	{
 		// No files at server
 		*files = NULL;
+		free(result);
 		return 0;
 	}
 	
@@ -437,34 +492,17 @@ cl_rv citrusleaf_udf_get_with_gen(as_cluster *asc, const char * filename, cl_udf
 
 	snprintf(query, sizeof(query), "udf-get:filename=%s;", filename);
 
+	int rc = citrusleaf_info_cluster(asc, query, &result, true, /* check bounds */ true, 100);
 
-	// fprintf(stderr, "QUERY: |%s|\n", query);
-
-
-	if ( citrusleaf_info_cluster(asc, query, &result, true, /* check bounds */ true, 100) ) {
-		// rc is 0 for udf-put errors from the server-side. so we should not check for rc.
-		// Also, we get a complete error-string from the server. We must parse it, instead of
-		// over-writing it !!
-		if ( result ) {
-			// This is true, irrespective of whether there is a real error or not.
-			// So we must look for the error-message string in *error.
-			// 2 things are base64 encoded in the error-message, the content of the file
-			// and the message sent by the server
-
-			char *b64_msg = strstr(result, "message=");
-			if (b64_msg) {
-				// There is a valid error-message from server.
-	            char *err_str = citrusleaf_udf_build_error_resp(result, b64_msg);
-				free(result);
-				*resp = err_str;
-				return -1;
-			}
-		}
+	if (rc) {
+		*resp = result;
+		return rc;
 	}
 
-	if ( !result ) {
-		if ( resp ) * resp = strdup("invalid_response");
-		return -2;
+	rc = citrusleaf_udf_validate_response(result, resp);
+	
+	if (rc) {
+		return rc;
 	}
 	
 	// Keeping some useful but hack-based checks,
@@ -582,40 +620,21 @@ cl_rv citrusleaf_udf_put(as_cluster *asc, const char * filename, as_bytes *conte
 	as_string_destroy(&filename_string);
 	// fprintf(stderr, "QUERY: |%s|\n",query);
 	
-	int rc = 0;
-	rc = citrusleaf_info_cluster(asc, query, result, true, false, 1000);
-
-	// rc is 0 for udf-put errors from the server-side. so we should not check for rc.
-	// Also, we get a complete error-string from the server. We must parse it, instead of
-	// over-writing it !!
-	if ( *result ) {
-		// This is true, irrespective of whether there is a real error or not.
-		// So we must look for the error-message string in *error.
-		// 2 things are base64 encoded in the error-message, the content of the file
-		// and the message sent by the server
-
-		char *b64_msg = strstr(*result, "message=");
-		if (b64_msg) {
-			// There is a valid error-message from server.
-            char *err_str = citrusleaf_udf_build_error_resp(*result, b64_msg);
-			free(*result);
-			*result = err_str;
-			free(query);
-			free(content_base64);
-			return -1;
-		}
-	}
-
-	// Adding check for null-response for udf-put
-	if ( !*result ) {
-		if ( result ) *result = strdup("invalid_response");
-		return -2;
-	}
-
+	int rc = citrusleaf_info_cluster(asc, query, result, true, false, 1000);
 	free(query);
 	free(content_base64);
-	content_base64 = 0;
-	query = NULL;
+
+	if (rc) {
+		return rc;
+	}
+	
+	char* error_message = 0;
+	rc = citrusleaf_udf_validate_response(*result, &error_message);
+	
+	if (rc) {
+		*result = error_message;
+		return rc;
+	}
 	return 0;
 }
 
@@ -625,37 +644,23 @@ cl_rv citrusleaf_udf_remove(as_cluster *asc, const char * filename, char ** resp
 
 	snprintf(query, sizeof(query), "udf-remove:filename=%s;", filename);
 
-	int rc = 0;
-	rc = citrusleaf_info_cluster(asc, query, resp, true, /* check bounds */ true, 100);
+	int rc = citrusleaf_info_cluster(asc, query, resp, true, /* check bounds */ true, 100);
 
-    if ( *resp ) {
-		// This is true, irrespective of whether there is a real error or not.
-		// So we must look for the error-message string in *error.
-		// 2 things are base64 encoded in the error-message, the content of the file
-		// and the message sent by the server
-
-		// fprintf(stderr, " Resp: %s", *resp);
-		char *b64_msg = strstr(*resp, "error=");
-		if (b64_msg) {
-			// There is a valid error-message from server.
-			char *err_str = citrusleaf_udf_build_error_resp(*resp, b64_msg);
-			free(*resp);
-			*resp = err_str;
-			return CITRUSLEAF_FAIL_LUA_FILE_NOTFOUND;
-		}
+	if (rc) {
+		return rc;
 	}
 
-	// fprintf(stderr, " Server-return : %d Response-string: %s", rc, *resp);
-
-	if ( !*resp ) {
-		if ( resp ) *resp = strdup("invalid_response");
-		return -2;
-	}
+	char* error_message = 0;
+	rc = citrusleaf_udf_validate_response(*resp, &error_message);
 	
+	if (rc) {
+		*resp = error_message;
+		return rc;
+	}
+		
 	// Removed redundant error-checks (everything will be caught with the checks above)
 	// They are not useful for covering any other bugs.
 	return 0;
-	
 }
 
 void cl_udf_info_destroy(cl_udf_info * info)

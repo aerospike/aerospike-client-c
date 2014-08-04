@@ -136,6 +136,14 @@ typedef struct as_error_s {
 #define as_error_update(__err, __code, __fmt, ...) \
 	as_error_setallv( __err, __code, __func__, __FILE__, __LINE__, __fmt, ##__VA_ARGS__ );
 
+/**
+ *	as_error_set_message(&as->error, AEROSPIKE_ERR, "error message");
+ *
+ *	@ingroup as_error_object
+ */
+#define as_error_set_message(__err, __code, __msg) \
+	as_error_setall( __err, __code, __msg, __func__, __FILE__, __LINE__ );
+
 /******************************************************************************
  *	FUNCTIONS
  *****************************************************************************/

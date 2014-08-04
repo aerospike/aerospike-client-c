@@ -73,9 +73,7 @@ as_status as_error_fromrc(as_error * err, cl_rv rc)
 		ERR_ASSIGN(AEROSPIKE_ERR_NO_XDR);
 		break;
 	case CITRUSLEAF_FAIL_UNAVAILABLE:
-		// Yes, "unavailable" means a scan with cluster-change flag set won't
-		// start, because migrations are happening.
-		ERR_ASSIGN(AEROSPIKE_ERR_CLUSTER_CHANGE);
+		ERR_ASSIGN(AEROSPIKE_ERR_CLUSTER);
 		break;
 	case CITRUSLEAF_FAIL_INCOMPATIBLE_TYPE:
 		ERR_ASSIGN(AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE);

@@ -79,7 +79,7 @@
  *	@param bin			The bin to be indexed.
  *	@param name			The name of the index.
  *	
- *	@return AEROSPIKE_OK if successful. AEROSPIKE_ERR_INDEX_FOUND if the index already exists. Otherwise an error.
+ *	@return AEROSPIKE_OK if successful or index already exists. Otherwise an error.
  *
  *	@ingroup index_operations
  */
@@ -104,7 +104,7 @@ as_status aerospike_index_integer_create(
  *	@param bin			The bin to be indexed.
  *	@param name			The name of the index.
  *
- *	@return AEROSPIKE_OK if successful. AEROSPIKE_ERR_INDEX_FOUND if the index already exists. Otherwise an error.
+ *	@return AEROSPIKE_OK if successful or index already exists. Otherwise an error.
  *
  *	@ingroup index_operations
  */
@@ -127,7 +127,7 @@ as_status aerospike_index_string_create(
  *	@param ns			The namespace containing the index to be removed.
  *	@param name			The name of the index to be removed.
  *
- *	@return AEROSPIKE_OK if successful. Otherwise an error.
+ *	@return AEROSPIKE_OK if successful or index does not exist. Otherwise an error.
  *
  *	@ingroup index_operations
  */

@@ -9,6 +9,7 @@
 #include "citrusleaf/cl_udf.h"
 #include <citrusleaf/cf_random.h>
 #include <citrusleaf/cf_atomic.h>
+#include <citrusleaf/cf_log_internal.h>
 #include <citrusleaf/cl_parsers.h>
 #include "info_util.h"
 
@@ -49,7 +50,7 @@ void * split_and_set_cb(char * data, void * context) {
 
 // Parses the response received for the command at each node and splits the resulting string
 // into 'key=value' strings and calls split_and_set_cb on them
-static bool parse_response( const as_node * cn, const struct sockaddr_in * sa_in, const char * query, char * value, void * udata) {
+static bool parse_response( const as_node * cn, const char * query, char * value, void * udata) {
 
 	key_value * kv = (key_value *)udata;
 
@@ -111,9 +112,13 @@ char **get_stats(char * query, char * key, as_cluster * asc) {
 	kv.value = (char**)calloc(1, 64 * sizeof(char*));
 
 	// Info the cluster with the query for the result
-	citrusleaf_info_cluster_foreach(asc, query, true, false, 0, &kv, parse_response);
+	char* error = 0;
+	int rc = citrusleaf_info_cluster_foreach(asc, query, true, false, 0, &kv, &error, parse_response);
 
+	if (rc) {
+		cf_warn("Error get_stats (%d): %s", rc, error);
+		free(error);
+	}
 	// Caller's responsibility to free value
 	return kv.value;
 }
-

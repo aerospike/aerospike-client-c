@@ -53,7 +53,7 @@ TEST( udf_basics_1 , "manage udf_basics.lua" ) {
  	
 	aerospike_udf_remove(as, &err, NULL, filename);
 
-	assert_int_eq( err.code, AEROSPIKE_ERR_LUA_FILE_NOT_FOUND );
+	assert_int_eq( err.code, AEROSPIKE_ERR_UDF );
 
 	WAIT_MS(100);
 

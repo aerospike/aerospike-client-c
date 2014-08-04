@@ -20,6 +20,15 @@
  * IN THE SOFTWARE.
  *****************************************************************************/
  
+#include <citrusleaf/cl_info.h>
+#include <aerospike/as_admin.h>
+#include <aerospike/as_cluster.h>
+#include <aerospike/as_info.h>
+#include <aerospike/as_lookup.h>
+#include <citrusleaf/cf_b64.h>
+#include <citrusleaf/cf_log_internal.h>
+#include <citrusleaf/cf_proto.h>
+#include <citrusleaf/cf_socket.h>
 #include <sys/types.h>
 #include <sys/socket.h> // socket calls
 #include <stdio.h>
@@ -30,17 +39,7 @@
 #include <fcntl.h>
 #include <arpa/inet.h>
 
-#include <citrusleaf/cf_socket.h>
-#include <citrusleaf/cf_proto.h>
-
-#include <citrusleaf/citrusleaf.h>
-#include <aerospike/as_cluster.h>
-#include <aerospike/as_admin.h>
-
-#include "internal.h"
-
-
-// #define DEBUG 1
+// #define DEBUG_INFO 1
 
 //
 // The interesting note here is that using blocking calls - if you're in a non-event-oriented
@@ -56,7 +55,6 @@
 // Only problem with this approach is it's bad for the DNS lookup we do through there
 // so figure out how to be careful with that
 //
-
 
 // static int
 // info_expire_transaction( void *udata)
@@ -131,12 +129,6 @@ citrusleaf_info_host_auth(as_cluster* cluster, struct sockaddr_in *sa_in, char *
 	int rv = citrusleaf_info_host_limit(fd, names, values, timeout_ms, send_asis, 0, check_bounds);
 	shutdown(fd, SHUT_RDWR);
 	cf_close(fd);
-	
-	if (rv == 0 && *values && strncmp(*values, "security error", 14) == 0) {
-		cf_error("%s", *values);
-		free(*values);
-		return CITRUSLEAF_NOT_AUTHENTICATED;
-	}
 	return rv;
 }
 
@@ -228,7 +220,7 @@ citrusleaf_info_host_limit(int fd, char *names, char **values, int timeout_ms, b
 		free (req); 
 	}
 	if (io_rv != 0) {
-#ifdef DEBUG        
+#ifdef DEBUG_INFO
 		cf_debug("info returned error, rv %d errno %d bufsz %d", io_rv, errno, buf_sz);
 #endif        
 		goto Done;
@@ -241,7 +233,7 @@ citrusleaf_info_host_limit(int fd, char *names, char **values, int timeout_ms, b
         io_rv = cf_socket_read_forever(fd, buf, 8);
     
     if (0 != io_rv) {
-#ifdef DEBUG        
+#ifdef DEBUG_INFO
 		cf_debug("info socket read failed: rv %d errno %d", io_rv, errno);
 #endif        
 		goto Done;
@@ -332,107 +324,172 @@ Done:
 int
 citrusleaf_info_auth(as_cluster *cluster, char *hostname, short port, char *names, char **values, int timeout_ms)
 {
-	int rv = -1;
 	as_vector sockaddr_in_v;
 	as_vector_inita(&sockaddr_in_v, sizeof(struct sockaddr_in), 5);
 	
 	if (! as_lookup(NULL, hostname, port, true, &sockaddr_in_v)) {
-		goto Done;
+		as_vector_destroy(&sockaddr_in_v);
+		return CITRUSLEAF_FAIL_UNAVAILABLE;
 	}
 	
-	for (uint32_t i = 0; i < sockaddr_in_v.size; i++)
+	int rc = CITRUSLEAF_FAIL_UNAVAILABLE;
+	
+	for (uint32_t i = 0; i < sockaddr_in_v.size && rc == CITRUSLEAF_FAIL_UNAVAILABLE; i++)
 	{
 		struct sockaddr_in* sa_in = as_vector_get(&sockaddr_in_v, i);
-		
-		if (0 == citrusleaf_info_host_auth(cluster, sa_in, names, values, timeout_ms, true, /* check bounds */ true)) {
-			rv = 0;
-			goto Done;
-		}
+		rc = citrusleaf_info_host_auth(cluster, sa_in, names, values, timeout_ms, true, /* check bounds */ true);
 	}
-	
-Done:
 	as_vector_destroy(&sockaddr_in_v);
-	return(rv);
+	return rc;
 }
 
 /* gets information back from any of the nodes in the cluster */
 int
-citrusleaf_info_cluster(as_cluster *cluster, char *names, char **values_r, bool send_asis, bool check_bounds, int timeout_ms)
+citrusleaf_info_cluster(as_cluster *cluster, char *names, char **values, bool send_asis, bool check_bounds, int timeout_ms)
 {
+	// Try each node until one succeeds.
 	if (timeout_ms == 0) {
-		timeout_ms = 100; // milliseconds
+		timeout_ms = 1000;
 	}
 	
+	int rc = CITRUSLEAF_FAIL_UNAVAILABLE;
 	uint64_t start = cf_getms();
 	uint64_t end = start + timeout_ms;
-	int ret = -1;
-
 	as_nodes* nodes = as_nodes_reserve(cluster);
 	
 	for (uint32_t i = 0; i < nodes->size; i++) {
 		as_node* node = nodes->array[i];
 		struct sockaddr_in* sa_in = as_node_get_address(node);
-		char* values = 0;
+		rc = citrusleaf_info_host_auth(cluster, sa_in, names, values, (int)(end - cf_getms()), send_asis, check_bounds);
 		
-		if (citrusleaf_info_host_auth(cluster, sa_in, names, &values, (int)(end - cf_getms()), send_asis, check_bounds) == 0) {
-			*values_r = values;
-			ret = 0;
-			break;
+		if (rc == CITRUSLEAF_FAIL_UNAVAILABLE) {
+			if (cf_getms() >= end) {
+				rc = CITRUSLEAF_FAIL_TIMEOUT;
+				break;
+			}
 		}
-		
-		if (cf_getms() >= end) {
-			ret = -2;
+		else {
 			break;
 		}
 	}
 	as_nodes_release(nodes);
-	return ret;
+	return rc;
 }
 
 int
 citrusleaf_info_cluster_foreach(
-	as_cluster *cluster, const char *command, bool send_asis, bool check_bounds, int timeout_ms, void *udata,
-	bool (*callback)(const as_node * node, const struct sockaddr_in * sa_in, const char *command, char *value, void *udata)
+	as_cluster *cluster, const char *command, bool send_asis, bool check_bounds, int timeout_ms, void *udata, char** error,
+	bool (*callback)(const as_node * node, const char *command, char *value, void *udata)
 )
 {
 	//Usage Notes:
 	//udata = memory allocated by caller, passed back to the caller callback function, ufn()
 	//command = command string, memory allocated by caller, caller must free it, passed to server for execution
 	//value = memory allocated by c-client for caller, caller must free it after using it.
-	
 	if (timeout_ms == 0) {
-		timeout_ms = 100; // milliseconds
+		timeout_ms = 1000;
 	}
+	*error = 0;
 	
+	int rc = CITRUSLEAF_FAIL_UNAVAILABLE;
 	uint64_t start = cf_getms();
 	uint64_t end = start + timeout_ms;
-	int ret = 0;
-
 	as_nodes* nodes = as_nodes_reserve(cluster);
 	
 	for (uint32_t i = 0; i < nodes->size; i++) {
 		as_node* node = nodes->array[i];
 		struct sockaddr_in* sa_in = as_node_get_address(node);
-		char* value = 0;
+		char* response = 0;
 
-		if (citrusleaf_info_host_auth(cluster, sa_in, (char *)command, &value, (int)(end - cf_getms()), send_asis, check_bounds) == 0) {
-			bool status = callback(node, sa_in, command, value, udata);
+		rc = citrusleaf_info_host_auth(cluster, sa_in, (char *)command, &response, (int)(end - cf_getms()), send_asis, check_bounds);
+		
+		if (rc == 0) {
+			char* message = 0;
+			rc = citrusleaf_info_validate(response, &message);
 			
-			if (value) {
-				free(value);
+			if (rc) {
+				*error = strdup(message);
+				free(response);
+				break;
 			}
 			
-			if(! status) {
-				ret = -1;
+			bool status = callback(node, command, response, udata);
+			free(response);
+			
+			if (! status) {
+				rc = CITRUSLEAF_FAIL_QUERY_ABORTED;
 				break;
 			}
 		}
-		
+		else {
+			if (rc != CITRUSLEAF_FAIL_UNAVAILABLE) {
+				break;
+			}
+		}
+				
 		if (cf_getms() >= end) {
-			ret = -2;
+			rc = CITRUSLEAF_FAIL_TIMEOUT;
 			break;
 		}
 	}
 	as_nodes_release(nodes);
-	return ret;
+	return rc;
+}
+
+int
+citrusleaf_info_validate(char* response, char** message)
+{
+	char* p = response;
+	
+	if (p) {
+		// Check for errors embedded in the response.
+		// ERROR: may appear at beginning of string.
+		if (strncmp(p, "ERROR:", 6) == 0) {
+			return citrusleaf_info_parse_error(p + 6, message);
+		}
+		
+		// ERROR: or FAIL: may appear after a tab.
+		while ((p = strchr(p, '\t'))) {
+			p++;
+			
+			if (strncmp(p, "ERROR:", 6) == 0) {
+				return citrusleaf_info_parse_error(p + 6, message);
+			}
+			
+			if (strncmp(p, "FAIL:", 5) == 0) {
+				return citrusleaf_info_parse_error(p + 5, message);
+			}
+		}
+	}
+	return 0;
+}
+
+int
+citrusleaf_info_parse_error(char* begin, char** message)
+{
+	// Parse error format: <code>:<message>
+	char* end = strchr(begin, ':');
+	
+	if (! end) {
+		*message = 0;
+		return CITRUSLEAF_FAIL_UNKNOWN;
+	}
+	*end = 0;
+	
+	int rc = atoi(begin);
+	
+	if (rc == 0) {
+		*message = 0;
+		return CITRUSLEAF_FAIL_UNKNOWN;
+	}
+	end++;
+	
+	char * newline = strchr(end, '\n');
+	
+	if (newline) {
+		*newline = 0;
+	}
+	
+	*message = end;
+	return rc;
 }

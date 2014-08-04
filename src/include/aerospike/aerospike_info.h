@@ -51,8 +51,8 @@
  *	
  *	@param err			The status and possible error information for the info request.
  *	@param node			The node which provided the response.
- *	@param res			The response to the info request. The response must be freed by the caller.
- *	@param udata			The udata provided to the aerospike_info_foreach()
+ *	@param res			The response to the info request.
+ *	@param udata		The udata provided to the aerospike_info_foreach()
  *
  *	@return TRUE to continue to the next info response. FALSE to stop processing.
  *
@@ -65,7 +65,7 @@ typedef bool (* aerospike_info_foreach_callback)(const as_error * err, const as_
  *****************************************************************************/
 
 /**
- *	Send an info request to a specific host. The response must be freed by the caller.
+ *	Send an info request to a specific host. The response must be freed by the caller on success.
  *	
  *	~~~~~~~~~~{.c}
  *	char * res = NULL;
@@ -106,13 +106,11 @@ as_status aerospike_info_host(
  *	}
  *	~~~~~~~~~~
  *
- *	The callback takes a response string, which the caller is reponsible for freeing.
+ *	The callback takes a response string. The caller should not free this string.
  *
  *	~~~~~~~~~~{.c}
  *	bool callback(const as_error * err, const char * node, char * res, void * udata) {
  *		// handle response
- *		free(res);
- *		res = NULL;
  *	}
  *	~~~~~~~~~~
  *	     
@@ -122,7 +120,7 @@ as_status aerospike_info_host(
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param req			The info request to send.
  *	@param callback		The function to call when a response is received.
- *	@param udata			User-data to send to the callback.
+ *	@param udata		User-data to send to the callback.
  *
  *	@return AEROSPIKE_OK on success. Otherwise an error.
  *

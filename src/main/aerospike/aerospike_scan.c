@@ -130,7 +130,6 @@ static int simplescan_cb(char *ns, cf_digest *keyd, char *set, cl_object *key,
 		int result, uint32_t generation, uint32_t record_void_time,
 		cl_bin *bins, uint16_t n_bins, void *udata)
 {
-	bool rv = false;
 	scan_bridge * bridge = (scan_bridge *) udata;
 
 	// Fill the bin data
@@ -146,7 +145,7 @@ static int simplescan_cb(char *ns, cf_digest *keyd, char *set, cl_object *key,
 	rec->ttl = record_void_time;
 
 	// Call the callback that user wanted to callback
-	rv = bridge->callback((as_val *) rec, bridge->udata);
+	bool rv = bridge->callback((as_val *) rec, bridge->udata);
 
 	// The responsibility to free the bins is on the called callback function
 	// In scan case, only LIST & MAP will have an active free
@@ -155,10 +154,7 @@ static int simplescan_cb(char *ns, cf_digest *keyd, char *set, cl_object *key,
 	// release the record
 	as_record_destroy(rec);
 
-	if( rv ) {
-		return 0;
-	}	
-	return -1;
+	return rv ? 0 : 1;
 }
 
 /**
@@ -168,17 +164,12 @@ static int simplescan_cb(char *ns, cf_digest *keyd, char *set, cl_object *key,
  */
 static int generic_cb(as_val * val, void * udata)
 {
-	bool rv = false;
-
 	scan_bridge * bridge = (scan_bridge *) udata;
 	
 	// Call the callback that user wanted to callback
-	rv = bridge->callback(val, bridge->udata);
+	bool rv = bridge->callback(val, bridge->udata);
 	
-	if( rv ) {
-		return 0;
-	}
-	return -1;
+	return rv ? 0 : 1;
 }
 
 /**

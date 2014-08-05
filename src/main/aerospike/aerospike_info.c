@@ -128,7 +128,7 @@ as_status aerospike_info_host(
 	
 	if (rc) {
 		as_strncpy(err->message, error, sizeof(err->message));
-		free(res);
+		free(*res);
 		return as_error_fromrc(err, rc);
 	}
 	

@@ -338,10 +338,11 @@ do_scan_monte(as_cluster *asc, char *node_name, uint operation_info, uint operat
 			}
 			else if ((msg->n_ops) || (operation_info & CL_MSG_INFO1_NOBINDATA)) {
     			// got one good value? call it a success!
-				(*cb)(ns_ret, keyd, set_ret, &key, CL_RESULT_OK, msg->generation,
+				rv = (*cb)(ns_ret, keyd, set_ret, &key, CL_RESULT_OK, msg->generation,
 						cf_server_void_time_to_ttl(msg->record_ttl), bins_local,
 						msg->n_ops, udata);
-				rv = 0;
+				done = true;
+				break;
 			}
 //			else
 //				cf_debug("received message with no bins, signal of an error");

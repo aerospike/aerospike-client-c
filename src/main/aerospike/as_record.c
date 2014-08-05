@@ -280,6 +280,27 @@ bool as_record_set_rawp(as_record * rec, const as_bin_name name, const uint8_t *
 }
 
 /**
+ *	Set specified bin's value to raw bytes of given length.
+ *	uint8_t bytes[3] = {1,2,3}
+ *	as_record_set_raw(rec, "bin", bytes, 3);
+ *	@param rec 	- the record containing the bin
+ *	@param name 	- the name of the bin
+ *	@param value - the value of the bin
+ *	@param size 	- the size of the value
+ *	@param type 	- the as_bytes_type designation (AS_BYTES_*)
+ *	@return true on success, false on failure.
+ */
+bool as_record_set_raw_typep(as_record * rec, const as_bin_name name, const uint8_t * value, uint32_t size, as_bytes_type type, bool free)
+{
+	as_bin * bin = as_record_bin_forupdate(rec, name);
+	if ( !bin ) return false;
+	as_bin_init_raw(bin, name, value, size, free);
+	as_bytes *bytes_val = &bin->value;
+	bytes_val->type = type;
+	return true;
+}
+
+/**
  *	Set specified bin's value to an as_integer.
  *	as_record_set_integer(rec, "bin", as_integer_new(123));
  *	@param rec 	- the record containing the bin

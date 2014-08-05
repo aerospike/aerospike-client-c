@@ -413,7 +413,7 @@ void clbin_to_asrecord(cl_bin * bin, as_record * r)
 			break;
 		}
 		default: {
-			as_record_set_rawp(r, bin->bin_name, bin->object.u.blob, (uint32_t)bin->object.sz, true);
+			as_record_set_raw_typep(r, bin->bin_name, bin->object.u.blob, (uint32_t)bin->object.sz, (as_bytes_type)bin->object.type, true);
 			// the following completes the handoff of the value.
 			bin->object.free = NULL;
 			break;

@@ -699,6 +699,8 @@ static int cl_query_worker_do(as_node * node, cl_query_task * task) {
     bool      done = false;
 
     do {
+	int ret_val = 0;	
+
         // multiple CL proto per response
         // Now turn around and read a fine cl_proto - that's the first 8 bytes 
         // that has types and lengths
@@ -912,7 +914,7 @@ static int cl_query_worker_do(as_node * node, cl_query_task * task) {
 					else {
 						vp = as_val_reserve(v);
 					}
-					task->callback(vp, task->udata);
+					ret_val = task->callback(vp, task->udata);
                 }
                 else {
                     as_val * v_fail = (as_val *) as_record_get(record, "FAILURE");
@@ -941,7 +943,7 @@ static int cl_query_worker_do(as_node * node, cl_query_task * task) {
 
                     }    
                     else {
-                        task->callback((as_val *) record, task->udata);
+                        ret_val = task->callback((as_val *) record, task->udata);
                     }
                 }
 
@@ -962,7 +964,7 @@ static int cl_query_worker_do(as_node * node, cl_query_task * task) {
             // don't have to free object internals. They point into the read buffer, where
             // a pointer is required
             pos += buf - buf_start;
-            if (task->abort || gasq_abort) {
+            if (task->abort || gasq_abort || ret_val) {
                 break;
             }
 
@@ -974,7 +976,7 @@ static int cl_query_worker_do(as_node * node, cl_query_task * task) {
         }
 
         // abort requested by the user
-        if (task->abort || gasq_abort) {
+        if (task->abort || gasq_abort || ret_val) {
 			cf_close(fd);
             goto Final;
         }
@@ -1452,8 +1454,8 @@ static int citrusleaf_query_foreach_callback_stream(as_val * v, void * udata) {
 // The callback calls the foreach function for each value
 static int citrusleaf_query_foreach_callback(as_val * v, void * udata) {
 	callback_stream_source * source = (callback_stream_source *) udata;
-    source->callback(v, source->udata);
-    return 0;
+	int rv = source->callback(v, source->udata);
+	return rv ? 0 : 1;
 }
 
 

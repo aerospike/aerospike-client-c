@@ -965,7 +965,7 @@ static int cl_query_worker_do(as_node * node, cl_query_task * task) {
             // a pointer is required
             pos += buf - buf_start;
             if (task->abort || gasq_abort || ret_val) {
-                break;
+		break;
             }
 
         }
@@ -1454,7 +1454,7 @@ static int citrusleaf_query_foreach_callback_stream(as_val * v, void * udata) {
 // The callback calls the foreach function for each value
 static int citrusleaf_query_foreach_callback(as_val * v, void * udata) {
 	callback_stream_source * source = (callback_stream_source *) udata;
-	int rv = source->callback(v, source->udata);
+	bool rv = source->callback(v, source->udata);
 	return rv ? 0 : 1;
 }
 

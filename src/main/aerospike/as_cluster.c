@@ -90,6 +90,7 @@ as_lookup_node_name(as_cluster* cluster, struct sockaddr_in* addr, char* node_na
 	int status = citrusleaf_info_host_auth(cluster, addr, "node", &values, cluster->conn_timeout_ms, false, true);
 	
 	if (status) {
+		free(values);
 		return status;
 	}
 	
@@ -450,6 +451,7 @@ as_cluster_set_partition_size(as_cluster* cluster)
 		char* values = 0;
 		
 		if (citrusleaf_info_host_auth(cluster, addr, "partitions", &values, cluster->conn_timeout_ms, false, true)) {
+			free(values);
 			continue;
 		}
 		

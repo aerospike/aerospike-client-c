@@ -120,18 +120,11 @@ as_status aerospike_info_host(
 	cl_rv rc = citrusleaf_info_auth(as->cluster, (char *) addr, port, (char *) req, res, p.timeout);
 
 	if (rc) {
-		return as_error_fromrc(err, rc);
-	}
-	
-	char* error;
-	rc = citrusleaf_info_validate(*res, &error);
-	
-	if (rc) {
-		as_strncpy(err->message, error, sizeof(err->message));
+		as_strncpy(err->message, *res, sizeof(err->message));
 		free(*res);
 		return as_error_fromrc(err, rc);
 	}
-	
+		
 	return AEROSPIKE_OK;
 }
 

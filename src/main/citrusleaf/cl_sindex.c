@@ -44,7 +44,7 @@
 cl_rv citrusleaf_secondary_index_create(
     as_cluster * asc, const char * ns, const char * set,
     const char * iname, const char * binname, const char * type,
-    char ** response, char ** error
+    char ** response
 ){
 
     if (!ns || !iname || !binname || !type) return CITRUSLEAF_FAIL_CLIENT;
@@ -58,25 +58,13 @@ cl_rv citrusleaf_secondary_index_create(
         iname, binname, type
     );
 
-    int rc = citrusleaf_info_cluster(asc, ddl, response, true, /* check bounds */ true, 5000);
-
-    if (rc) {
-		return rc;
-	}
-	
-	return citrusleaf_info_validate(*response, error);
+    return citrusleaf_info_cluster(asc, ddl, response, true, /* check bounds */ true, 5000);
 }
 
-cl_rv citrusleaf_secondary_index_drop(as_cluster *asc, const char *ns, const char *indexname, char **response, char ** error) {
+cl_rv citrusleaf_secondary_index_drop(as_cluster *asc, const char *ns, const char *indexname, char **response) {
 
     char ddl[1024];
     sprintf(ddl, "sindex-delete:ns=%s;indexname=%s", ns, indexname);
 	
-	int rc = citrusleaf_info_cluster(asc, ddl, response, true, /* check bounds */ true, 5000);
-	
-    if (rc) {
-        return rc;
-    }
-	
-	return citrusleaf_info_validate(*response, error);
+	return citrusleaf_info_cluster(asc, ddl, response, true, /* check bounds */ true, 5000);
 }

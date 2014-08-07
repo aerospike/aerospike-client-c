@@ -53,9 +53,7 @@ static as_status aerospike_index_create(
 	as_error_reset(err);
 
 	char * response = NULL;
-	char * error = NULL;
-
-	int rc = citrusleaf_secondary_index_create(as->cluster, ns, set, name, bin, type, &response, &error);
+	int rc = citrusleaf_secondary_index_create(as->cluster, ns, set, name, bin, type, &response);
 	
 	switch ( rc ) {
 		case CITRUSLEAF_OK:
@@ -63,7 +61,7 @@ static as_status aerospike_index_create(
 			break;
 
 		default:
-			as_strncpy(err->message, error, sizeof(err->message));
+			as_strncpy(err->message, response, sizeof(err->message));
 			as_error_fromrc(err, rc);
 			break;
 	}
@@ -154,9 +152,7 @@ as_status aerospike_index_remove(
 	as_error_reset(err);
 
 	char * response = NULL;
-	char * error = NULL;
-
-	int rc = citrusleaf_secondary_index_drop(as->cluster, ns, name, &response, &error);
+	int rc = citrusleaf_secondary_index_drop(as->cluster, ns, name, &response);
 
 	switch (rc) {
 		case CITRUSLEAF_OK:
@@ -164,7 +160,7 @@ as_status aerospike_index_remove(
 			break;
 
 		default:
-			as_strncpy(err->message, error, sizeof(err->message));
+			as_strncpy(err->message, response, sizeof(err->message));
 			as_error_fromrc(err, rc);
 			break;
 	}

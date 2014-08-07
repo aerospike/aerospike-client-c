@@ -53,5 +53,4 @@ int citrusleaf_info_cluster_foreach(
 	bool (*callback)(const as_node * node, const char *command, char *value, void *udata));
 
 int citrusleaf_info_validate(char* response, char** message);
-int citrusleaf_info_parse_error(char* begin, char** message);
 int citrusleaf_info_parse_single(char *values, char **value);

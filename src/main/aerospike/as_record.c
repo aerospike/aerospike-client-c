@@ -295,7 +295,7 @@ bool as_record_set_raw_typep(as_record * rec, const as_bin_name name, const uint
 	as_bin * bin = as_record_bin_forupdate(rec, name);
 	if ( !bin ) return false;
 	as_bin_init_raw(bin, name, value, size, free);
-	as_bytes *bytes_val = &bin->value;
+	as_bytes *bytes_val = (as_bytes*) &bin->value;
 	bytes_val->type = type;
 	return true;
 }

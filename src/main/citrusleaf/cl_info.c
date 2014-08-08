@@ -106,6 +106,7 @@ citrusleaf_info_host(struct sockaddr_in *sa_in, char *names, char **values, int 
 }
 
 // Authenticate connection and request the info of a particular sockaddr_in.
+// values should be freed on both success and error (where values contains error message).
 // Return 0 on success.
 int
 citrusleaf_info_host_auth(as_cluster* cluster, struct sockaddr_in *sa_in, char *names, char **values, int timeout_ms, bool send_asis, bool check_bounds)
@@ -113,6 +114,7 @@ citrusleaf_info_host_auth(as_cluster* cluster, struct sockaddr_in *sa_in, char *
 	int fd = cf_socket_create_and_connect_nb(sa_in);
 	
 	if (fd == -1) {
+		*values = 0;
 		return CITRUSLEAF_FAIL_UNAVAILABLE;
 	}
 	
@@ -122,14 +124,29 @@ citrusleaf_info_host_auth(as_cluster* cluster, struct sockaddr_in *sa_in, char *
 		if (status) {
 			cf_debug("Authentication failed for %s", cluster->user);
 			cf_close(fd);
+			*values = 0;
 			return status;
 		}
 	}
 	
-	int rv = citrusleaf_info_host_limit(fd, names, values, timeout_ms, send_asis, 0, check_bounds);
+	int rc = citrusleaf_info_host_limit(fd, names, values, timeout_ms, send_asis, 0, check_bounds);
 	shutdown(fd, SHUT_RDWR);
 	cf_close(fd);
-	return rv;
+	
+	if (rc) {
+		*values = 0;
+		return rc;
+	}
+	
+	char* error = 0;
+	rc = citrusleaf_info_validate(*values, &error);
+	
+	if (rc) {
+		char* rs = strdup(error);
+		free(*values);
+		*values = rs;
+	}
+	return rc;
 }
 
 // Request the info of a particular sockaddr_in.
@@ -336,6 +353,9 @@ citrusleaf_info_auth(as_cluster *cluster, char *hostname, short port, char *name
 	
 	for (uint32_t i = 0; i < sockaddr_in_v.size && rc == CITRUSLEAF_FAIL_UNAVAILABLE; i++)
 	{
+		if (i > 0) {
+			free(*values);
+		}
 		struct sockaddr_in* sa_in = as_vector_get(&sockaddr_in_v, i);
 		rc = citrusleaf_info_host_auth(cluster, sa_in, names, values, timeout_ms, true, /* check bounds */ true);
 	}
@@ -358,6 +378,10 @@ citrusleaf_info_cluster(as_cluster *cluster, char *names, char **values, bool se
 	as_nodes* nodes = as_nodes_reserve(cluster);
 	
 	for (uint32_t i = 0; i < nodes->size; i++) {
+		if (i > 0) {
+			free(*values);
+		}
+		
 		as_node* node = nodes->array[i];
 		struct sockaddr_in* sa_in = as_node_get_address(node);
 		rc = citrusleaf_info_host_auth(cluster, sa_in, names, values, (int)(end - cf_getms()), send_asis, check_bounds);
@@ -404,15 +428,6 @@ citrusleaf_info_cluster_foreach(
 		rc = citrusleaf_info_host_auth(cluster, sa_in, (char *)command, &response, (int)(end - cf_getms()), send_asis, check_bounds);
 		
 		if (rc == 0) {
-			char* message = 0;
-			rc = citrusleaf_info_validate(response, &message);
-			
-			if (rc) {
-				*error = strdup(message);
-				free(response);
-				break;
-			}
-			
 			bool status = callback(node, command, response, udata);
 			free(response);
 			
@@ -422,6 +437,7 @@ citrusleaf_info_cluster_foreach(
 			}
 		}
 		else {
+			free(response);
 			if (rc != CITRUSLEAF_FAIL_UNAVAILABLE) {
 				break;
 			}
@@ -434,6 +450,55 @@ citrusleaf_info_cluster_foreach(
 	}
 	as_nodes_release(nodes);
 	return rc;
+}
+
+static int
+citrusleaf_info_parse_error(char* begin, char** message)
+{
+	// Parse error format: <code>:<message>\n
+	char* end = strchr(begin, ':');
+	
+	if (! end) {
+		*message = 0;
+		return CITRUSLEAF_FAIL_UNKNOWN;
+	}
+	*end = 0;
+	
+	int rc = atoi(begin);
+	
+	if (rc == 0) {
+		*message = 0;
+		return CITRUSLEAF_FAIL_UNKNOWN;
+	}
+	end++;
+	
+	char* newline = strchr(end, '\n');
+	
+	if (newline) {
+		*newline = 0;
+	}
+	
+	*message = end;
+	return rc;
+}
+
+static void
+citrusleaf_info_decode_error(char* begin)
+{
+	// Decode base64 message in place.
+	// UDF error format: <error message>;file=<file>;line=<line>;message=<base64 message>\n
+	char* msg = strstr(begin, "message=");
+	
+	if (msg) {
+		msg += 8;
+		
+		uint32_t src_len = (uint32_t)strlen(msg) - 1; // Ignore newline '\n' at the end
+		uint32_t trg_len = 0;
+		
+		if (cf_b64_validate_and_decode_in_place((uint8_t*)msg, src_len, &trg_len)) {
+			msg[trg_len] = 0;
+		}
+	}
 }
 
 int
@@ -459,37 +524,13 @@ citrusleaf_info_validate(char* response, char** message)
 			if (strncmp(p, "FAIL:", 5) == 0) {
 				return citrusleaf_info_parse_error(p + 5, message);
 			}
+			
+			if (strncmp(p, "error=", 6) == 0) {
+				*message = p;
+				citrusleaf_info_decode_error(p + 6);
+				return CITRUSLEAF_FAIL_UDF_BAD_RESPONSE;
+			}
 		}
 	}
 	return 0;
-}
-
-int
-citrusleaf_info_parse_error(char* begin, char** message)
-{
-	// Parse error format: <code>:<message>
-	char* end = strchr(begin, ':');
-	
-	if (! end) {
-		*message = 0;
-		return CITRUSLEAF_FAIL_UNKNOWN;
-	}
-	*end = 0;
-	
-	int rc = atoi(begin);
-	
-	if (rc == 0) {
-		*message = 0;
-		return CITRUSLEAF_FAIL_UNKNOWN;
-	}
-	end++;
-	
-	char * newline = strchr(end, '\n');
-	
-	if (newline) {
-		*newline = 0;
-	}
-	
-	*message = end;
-	return rc;
 }

@@ -255,7 +255,7 @@ TEST( udf_types_rec_map, "udf_types.get_rec_map() returns {t:1, f: 0, n: nil, i:
 	assert_int_eq( as_val_type(val), AS_MAP );
 
 	as_map * mval = as_map_fromval(val);
-	assert_int_eq( as_map_size(mval), 5);
+	assert_int_eq( as_map_size(mval), 6);
 	assert_int_eq( as_stringmap_get_int64(mval,"t"), 1);
 	assert_int_eq( as_stringmap_get_int64(mval,"f"), 0);
 

@@ -188,6 +188,13 @@ bool udf_types_map_foreach(const as_val * key, const as_val * value, void * udat
 	return true;
 }
 
+bool udf_types_map_notnil_foreach(const as_val * key, const as_val * value, void * udata) {
+	uint32_t * count = (uint32_t *)udata;
+	if ( as_val_type(value) != AS_NIL ) {
+		(*count)++;
+	}
+	return true;
+}
 
 TEST( udf_types_map, "udf_types.get_map() returns {a:1, b:2, c:3} (as_map)" ) {
 
@@ -255,7 +262,10 @@ TEST( udf_types_rec_map, "udf_types.get_rec_map() returns {t:1, f: 0, n: nil, i:
 	assert_int_eq( as_val_type(val), AS_MAP );
 
 	as_map * mval = as_map_fromval(val);
-	assert_int_eq( as_map_size(mval), 6);
+
+	uint32_t non_nil_count = 0;
+	as_map_foreach(mval, udf_types_map_notnil_foreach, &non_nil_count);
+	assert_int_eq( non_nil_count, 5);
 	assert_int_eq( as_stringmap_get_int64(mval,"t"), 1);
 	assert_int_eq( as_stringmap_get_int64(mval,"f"), 0);
 

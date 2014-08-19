@@ -2,10 +2,10 @@ language: c
 compiler:
   - gcc
   - clang
-script: make
 branches:
   only:
     - master
 os:
   - linux
   - osx
+script: make

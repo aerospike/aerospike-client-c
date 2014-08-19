@@ -1,11 +1,16 @@
 language: c
+
 compiler:
   - gcc
   - clang
-branches:
-  only:
-    - master
+
 os:
   - linux
   - osx
+
+before_install:
+  - sudo apt-get install libc6-dev
+  - sudo apt-get install libssl-dev
+  - sudo apt-get install liblua5.1-dev
+
 script: make

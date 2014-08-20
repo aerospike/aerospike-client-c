@@ -146,6 +146,10 @@ do_scan_monte(as_cluster *asc, char *node_name, uint operation_info, uint operat
 		as_node_release(node);
 		return(-1);
 	}
+	if (wr_buf != wr_stack_buf) {
+		free(wr_buf);
+		wr_buf = 0;
+	}
 
 	cl_proto 		proto;
 	bool done = false;
@@ -337,11 +341,29 @@ do_scan_monte(as_cluster *asc, char *node_name, uint operation_info, uint operat
 				done = true;
 			}
 			else if ((msg->n_ops) || (operation_info & CL_MSG_INFO1_NOBINDATA)) {
-    			// got one good value? call it a success!
-				(*cb)(ns_ret, keyd, set_ret, &key, CL_RESULT_OK, msg->generation,
+				// got one good value? call it a success!
+				rv = (*cb)(ns_ret, keyd, set_ret, &key, CL_RESULT_OK, msg->generation,
 						cf_server_void_time_to_ttl(msg->record_ttl), bins_local,
 						msg->n_ops, udata);
-				rv = 0;
+				// To be cleaned up.   
+				if (rv) {
+
+					if (bins_local != stack_bins) {
+						free(bins_local);
+						bins_local = 0;
+					}
+
+					if (rd_buf && (rd_buf != rd_stack_buf))	{
+						free(rd_buf);
+						rd_buf = 0;
+					}
+
+					cf_close(fd);
+					as_node_release(node);
+					node = 0;
+
+					return 0;
+				}
 			}
 //			else
 //				cf_debug("received message with no bins, signal of an error");
@@ -372,11 +394,6 @@ do_scan_monte(as_cluster *asc, char *node_name, uint operation_info, uint operat
 		}
 
 	} while ( done == false );
-
-	if (wr_buf != wr_stack_buf) {
-		free(wr_buf);
-		wr_buf = 0;
-	}
 
 	as_node_put_connection(node, fd);
 	as_node_release(node);

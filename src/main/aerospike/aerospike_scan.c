@@ -145,16 +145,16 @@ static int simplescan_cb(char *ns, cf_digest *keyd, char *set, cl_object *key,
 	rec->ttl = record_void_time;
 
 	// Call the callback that user wanted to callback
-	bridge->callback((as_val *) rec, bridge->udata);
+	bool rv = bridge->callback((as_val *) rec, bridge->udata);
 
 	// The responsibility to free the bins is on the called callback function
 	// In scan case, only LIST & MAP will have an active free
-
 	citrusleaf_bins_free(bins, (int)n_bins);
+
 	// release the record
 	as_record_destroy(rec);
 
-	return 0;
+	return rv ? 0 : 1;
 }
 
 /**
@@ -167,9 +167,9 @@ static int generic_cb(as_val * val, void * udata)
 	scan_bridge * bridge = (scan_bridge *) udata;
 	
 	// Call the callback that user wanted to callback
-	bridge->callback(val, bridge->udata);
+	bool rv = bridge->callback(val, bridge->udata);
 	
-	return 0;
+	return rv ? 0 : 1;
 }
 
 /**

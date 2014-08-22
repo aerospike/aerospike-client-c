@@ -14,14 +14,14 @@ install:
 - cp -f .travis/aerospike.conf ./aerospike-server/share/etc
 - cd aerospike-server
 - mkdir instance1
+- ./bin/aerospike init --home instance1 --instance 1 --service-port 3000
 - cd instance1
-- ./bin/aerospike init --instance 1 --service-port 3000
 - sudo ./bin/aerospike start
 - cd ..
-#- mkdir instance2
-#- ./bin/aerospike init --home instance2 --instance 2 --service-port 3010
-#- cd instance2
-#- sudo ./bin/aerospike start
+# - mkdir instance2
+# - ./bin/aerospike init --home instance2 --instance 2 --service-port 3000
+# - cd instance1
+# - sudo ./bin/aerospike start
 # - cd ..
 - cd ..
 - sleep 3

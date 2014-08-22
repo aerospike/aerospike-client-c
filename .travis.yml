@@ -15,7 +15,7 @@ install:
 - cd aerospike-server
 - mkdir instance1
 - cd instance1
-- ./bin/aerospike init instance1 --instance 1 --service-port 3000
+- ./bin/aerospike init --instance 1 --service-port 3000
 - sudo ./bin/aerospike start
 - cd ..
 #- mkdir instance2

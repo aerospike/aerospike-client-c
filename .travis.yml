@@ -23,7 +23,7 @@ install:
 - cd instance2
 - sudo ./bin/aerospike start
 - cd ../..
-- sleep 3
+- sleep 10
 script:
 - make
 - make test

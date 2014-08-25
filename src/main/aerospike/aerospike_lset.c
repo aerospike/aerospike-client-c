@@ -46,8 +46,9 @@ const char * LDT_SET_OP_FILTER			= "filter";
 const char * LDT_SET_OP_REMOVE			= "remove";
 const char * LDT_SET_OP_DESTROY			= "destroy";
 const char * LDT_SET_OP_SIZE			= "size";
-// @TODO const char * LDT_SET_OP_SET_CAPACITY		= "set_capacity";
-// @TODO const char * LDT_SET_OP_GET_CAPACITY		= "get_capacity";
+const char * LDT_SET_OP_SET_CAPACITY	= "set_capacity";
+const char * LDT_SET_OP_GET_CAPACITY	= "get_capacity";
+const char * LDT_SET_OP_LDT_EXISTS		= "ldt_exists";
 
 
 static as_status aerospike_lset_add_internal(
@@ -435,3 +436,170 @@ as_status aerospike_lset_destroy(
 
 	return err->code;
 }
+
+// =======================================================================
+// SET CAPACITY
+// =======================================================================
+as_status aerospike_lset_set_capacity(
+	aerospike * as, as_error * err, const as_policy_apply * policy,
+	const as_key * key, const as_ldt * ldt, uint32_t ldt_capacity
+	)
+{
+	if ( !err ) {
+		return AEROSPIKE_ERR_PARAM;
+	}
+	as_error_reset(err);
+
+	if (!as || !key || !ldt || !ldt_capacity) {
+		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
+				"as/key/ldt/capacity cannot be null");
+	}
+	if (ldt->type != AS_LDT_LLIST) {
+		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
+				"not stack type");
+	}
+
+	/* stack allocate the arg list */
+	as_string ldt_bin;
+	as_string_init(&ldt_bin, (char *)ldt->name, false);
+
+	as_arraylist arglist;
+	as_arraylist_inita(&arglist, 2);
+	as_arraylist_append_string(&arglist, &ldt_bin);
+	as_arraylist_append_int64(&arglist, ldt_capacity);
+
+	as_val* p_return_val = NULL;
+	aerospike_key_apply(
+		as, err, policy, key, DEFAULT_LSET_PACKAGE, LDT_SET_OP_SET_CAPACITY,
+		(as_list *)&arglist, &p_return_val);
+
+	as_arraylist_destroy(&arglist);
+
+	if (ldt_parse_error(err) != AEROSPIKE_OK) {
+		return err->code;
+	}
+
+	int64_t ival = as_integer_getorelse(as_integer_fromval(p_return_val), -1);
+	as_val_destroy(p_return_val);
+
+	if (ival == -1) {
+		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL,
+				"value returned from server not parse-able");
+	}
+	if (ival !=0 ) {
+		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL,
+				"capacity setting failed");
+	}
+
+	return err->code;
+} // aerospike_lset_set_capacity()
+
+// =======================================================================
+// GET_CAPACITY
+// =======================================================================
+as_status aerospike_lset_get_capacity(
+	aerospike * as, as_error * err, const as_policy_apply * policy,
+	const as_key * key, const as_ldt * ldt, uint32_t *elements_capacity
+	)
+{
+	if ( !err ) {
+		return AEROSPIKE_ERR_PARAM;
+	}
+	as_error_reset(err);
+
+	if (!as || !key || !ldt || !elements_capacity) {
+		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
+				"as/key/ldt/capacity cannot be null");
+	}
+	if (ldt->type != AS_LDT_LLIST) {
+		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
+				"not stack type");
+	}
+
+	/* stack allocate the arg list */
+	as_string ldt_bin;
+	as_string_init(&ldt_bin, (char *)ldt->name, false);
+
+	as_arraylist arglist;
+	as_arraylist_inita(&arglist, 1);
+	as_arraylist_append_string(&arglist, &ldt_bin);
+
+	as_val* p_return_val = NULL;
+	aerospike_key_apply(
+		as, err, policy, key, DEFAULT_LSET_PACKAGE, LDT_SET_OP_GET_CAPACITY,
+		(as_list *)&arglist, &p_return_val);
+
+	as_arraylist_destroy(&arglist);
+
+	if (ldt_parse_error(err) != AEROSPIKE_OK) {
+		return err->code;
+	}
+
+	int64_t ival = as_integer_getorelse(as_integer_fromval(p_return_val), -1);
+	as_val_destroy(p_return_val);
+
+	if (ival == -1) {
+		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL,
+				"value returned from server not parse-able");
+	}
+	*elements_capacity = (uint32_t)ival;
+
+	return err->code;
+} // end aerospike_lset_get_capacity()
+
+// =======================================================================
+// LDT EXISTS
+// =======================================================================
+as_status aerospike_lset_ldt_exists(
+	aerospike * as, as_error * err, const as_policy_apply * policy,
+	const as_key * key, const as_ldt * ldt, as_boolean * ldt_exists)
+{
+	if ( !err ) {
+		return AEROSPIKE_ERR_PARAM;
+	}
+	as_error_reset(err);
+
+	if (!as || !key || !ldt || !ldt_exists) {
+		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
+				"as/key/ldt/ldt_exists cannot be null");
+	}
+	if (ldt->type != AS_LDT_LSET) {
+		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
+				"not LSET type");
+	}
+
+	/* stack allocate the arg list */
+	as_string ldt_bin;
+	as_string_init(&ldt_bin, (char *)ldt->name, false);
+
+	as_arraylist arglist;
+	as_arraylist_inita(&arglist, 1);
+	as_arraylist_append_string(&arglist, &ldt_bin);
+
+	as_val* p_return_val = NULL;
+	aerospike_key_apply(
+		as, err, policy, key, DEFAULT_LSET_PACKAGE, LDT_SET_OP_LDT_EXISTS,
+		(as_list *)&arglist, &p_return_val);
+
+	as_arraylist_destroy(&arglist);
+
+	if (ldt_parse_error(err) != AEROSPIKE_OK) {
+		return err->code;
+	}
+
+	if (!p_return_val) {
+		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL,
+				"no value returned from server");
+	}
+	int64_t ival = as_integer_getorelse(as_integer_fromval(p_return_val), -1);
+	as_val_destroy(p_return_val);
+
+	if (ival == -1) {
+		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL,
+				"value returned from server not parse-able");
+	}
+
+	as_boolean_init(ldt_exists, ival==1 ? true: false);
+
+	return err->code;
+} // end aerospike_lset_exists()

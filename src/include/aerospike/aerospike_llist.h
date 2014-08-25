@@ -334,3 +334,102 @@ as_status aerospike_llist_destroy(
 	const as_key * key, const as_ldt * ldt
 	);
 
+/**
+ *	SET the storage capacity for this LDT.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_key key;
+ *	as_key_init(&key, "myns", "myset", "mykey");
+ *
+ *	as_ldt llist;
+ *	as_ldt_init(&llist, "myllist", AS_LDT_LLIST, NULL);
+ *	uint32_t ldt_capacity = 5000;
+ *
+ *	if ( aerospike_llist_set_capacity(&as, &err, NULL, &key, &llist, ldt_capacity) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *	~~~~~~~~~~
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param key			The key of the record.
+ *	@param ldt 			The LDT to operate on. If not an LLIST bin, will return error.
+ *	@param ldt_capacity Set by function to 1 for true, 0 for false
+ *
+ *	@return AEROSPIKE_OK if successful. Otherwise an error.
+ *
+ *	@ingroup ldt_operations
+ */
+as_status aerospike_llist_set_capacity(
+	aerospike * as, as_error * err, const as_policy_apply * policy,
+	const as_key * key, const as_ldt * ldt,
+	uint32_t ldt_capacity
+	);
+
+/**
+ *	Check the storage capacity for this LDT.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_key key;
+ *	as_key_init(&key, "myns", "myset", "mykey");
+ *
+ *	as_ldt llist;
+ *	as_ldt_init(&llist, "myllist", AS_LDT_LLIST, NULL);
+ *	uint32_t ldt_capacity = 0;
+ *
+ *	if ( aerospike_llist_get_capacity(&as, &err, NULL, &key, &llist, &ldt_capacity) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *	~~~~~~~~~~
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param key			The key of the record.
+ *	@param ldt 			The LDT to operate on. If not an LLIST bin, will return error.
+ *	@param ldt_capacity Set by function to 1 for true, 0 for false
+ *
+ *	@return AEROSPIKE_OK if successful. Otherwise an error.
+ *
+ *	@ingroup ldt_operations
+ */
+as_status aerospike_llist_get_capacity(
+	aerospike * as, as_error * err, const as_policy_apply * policy,
+	const as_key * key, const as_ldt * ldt,
+	uint32_t *ldt_capacity
+	);
+
+/**
+ *	Check to see if an LLIST object exists in this record bin.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_key key;
+ *	as_key_init(&key, "myns", "myset", "mykey");
+ *
+ *	as_ldt llist;
+ *	as_ldt_init(&llist, "myllist", AS_LDT_LLIST, NULL);
+ *	uint32_t ldt_exists = 0;
+ *
+ *	if ( aerospike_llist_size(&as, &err, NULL, &key, &llist, &ldt_exists) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *	~~~~~~~~~~
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param key			The key of the record.
+ *	@param ldt 			The LDT to operate on. If not an LLIST bin, will return error.
+ *	@param ldt_exists	Ptr to as_boolean: Set to TRUE if ldt exists, otherwise false.
+ *
+ *	@return AEROSPIKE_OK if successful. Otherwise an error.
+ *
+ *	@ingroup ldt_operations
+ */
+as_status aerospike_llist_ldt_exists(
+	aerospike * as, as_error * err, const as_policy_apply * policy,
+	const as_key * key, const as_ldt * ldt,
+	as_boolean *ldt_exists
+	);
+

@@ -64,17 +64,40 @@ main(int argc, char* argv[])
 	// Start clean.
 	example_remove_test_record(&as);
 
-	as_ldt lset;
 
 	// Create a lset bin to use. No need to destroy as_ldt if using
 	// as_ldt_init() on stack object.
+	as_ldt lset;
 	if (! as_ldt_init(&lset, "mylset", AS_LDT_LSET, NULL)) {
 		LOG("unable to initialize ldt");
 		example_cleanup(&as);
 		exit(-1);
 	}
 
+	// Define the aerospike error object that will contain the error when there's
+	// a problem with an Aerospike call.
 	as_error err;
+
+	// Use the "ldt_exists" call to verify that the LDT is not already there.
+	as_boolean ldt_exists;
+	as_boolean_init(&ldt_exists, false);
+
+	if (aerospike_lset_ldt_exists(&as, &err, NULL, &g_key, &lset,
+			&ldt_exists) != AEROSPIKE_OK) {
+		LOG("first aerospike_lset_ldt_exists() returned %d - %s", err.code,
+				err.message);
+		example_cleanup(&as);
+		exit(-1);
+	}
+
+	// Validate not there (error if we find it).
+	if (as_boolean_get(&ldt_exists)) {
+		LOG("Found LDT that should NOT be present.");
+		example_cleanup(&as);
+		exit(-1);
+	} else {
+		LOG("Verified that LSET LDT is not present (LDT exists == false).");
+	}
 
 	// No need to destroy as_integer if using as_integer_init() on stack object.
 	as_integer ival;
@@ -252,7 +275,27 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
-	LOG("existence checked");
+	LOG("Value Existence checked");
+
+	// Use the "ldt_exists" call to verify that the LDT is now present
+	as_boolean_init(&ldt_exists, false);
+
+	if (aerospike_lset_ldt_exists(&as, &err, NULL, &g_key, &lset,
+			&ldt_exists) != AEROSPIKE_OK) {
+		LOG("first aerospike_lset_ldt_exists() returned %d - %s", err.code,
+				err.message);
+		example_cleanup(&as);
+		exit(-1);
+	}
+
+	// Validate LDT is now there.
+	if ( ! as_boolean_get(&ldt_exists)) {
+		LOG("Did NOT Find LDT that SHOULD BE be present.");
+		example_cleanup(&as);
+		exit(-1);
+	} else {
+		LOG("Verified that LSET LDT is present (LDT Exists == true).");
+	}
 
 	// Remove the value from the set.
 	if (aerospike_lset_remove(&as, &err, NULL, &g_key, &lset2,

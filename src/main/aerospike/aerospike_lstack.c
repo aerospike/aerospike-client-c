@@ -44,6 +44,7 @@ const char * LDT_STACK_OP_PEEK				= "peek";
 // @TODO const char * LDT_STACK_OP_SCAN			= "scan";
 const char * LDT_STACK_OP_FILTER  			= "filter";
 const char * LDT_STACK_OP_DESTROY			= "destroy";
+const char * LDT_STACK_OP_LDT_EXISTS		= "ldt_exists";
 const char * LDT_STACK_OP_SIZE				= "size";
 const char * LDT_STACK_OP_CAPACITY_SET		= "set_capacity";
 const char * LDT_STACK_OP_CAPACITY_GET		= "get_capacity";
@@ -462,6 +463,62 @@ as_status aerospike_lstack_destroy(
 } // end as_status aerospike_lstack_destroy()
 
 // =======================================================================
+// LDT EXISTS
+// =======================================================================
+as_status aerospike_lstack_ldt_exists(
+	aerospike * as, as_error * err, const as_policy_apply * policy,
+	const as_key * key, const as_ldt * ldt, as_boolean *ldt_exists)
+{
+	if ( !err ) {
+		return AEROSPIKE_ERR_PARAM;
+	}
+	as_error_reset(err);
+
+	if (!as || !key || !ldt || !ldt_exists) {
+		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
+				"as/key/ldt/ldt_exists cannot be null");
+	}
+	if (ldt->type != AS_LDT_LSTACK) {
+		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
+				"not LSTACK type");
+	}
+
+	/* stack allocate the arg list */
+	as_string ldt_bin;
+	as_string_init(&ldt_bin, (char *)ldt->name, false);
+
+	as_arraylist arglist;
+	as_arraylist_inita(&arglist, 1);
+	as_arraylist_append_string(&arglist, &ldt_bin);
+
+	as_val* p_return_val = NULL;
+	aerospike_key_apply(
+		as, err, policy, key, DEFAULT_LSTACK_PACKAGE, LDT_STACK_OP_LDT_EXISTS,
+		(as_list *)&arglist, &p_return_val);
+
+	as_arraylist_destroy(&arglist);
+
+	if (ldt_parse_error(err) != AEROSPIKE_OK) {
+		return err->code;
+	}
+
+	if (!p_return_val) {
+		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL,
+				"no value returned from server");
+	}
+	int64_t ival = as_integer_getorelse(as_integer_fromval(p_return_val), -1);
+	as_val_destroy(p_return_val);
+
+	if (ival == -1) {
+		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL,
+				"value returned from server not parse-able");
+	}
+	as_boolean_init(ldt_exists, ival==1 ? true: false);
+
+	return err->code;
+} // end aerospike_lstack_ldt_exists()
+
+// =======================================================================
 // Pass in a value into the UDF -- and then get it back.  Simple.
 // This is used to measure the performance of the end to end
 // call infrastructure.
@@ -480,11 +537,11 @@ as_status aerospike_lstack_same(
 
 	if (!as || !key || !ldt || !out_valp) {
 		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
-				"as/key/ldt/outvalp cannot be null");
+				"as/key/ldt/out_valp cannot be null");
 	}
 	if (ldt->type != AS_LDT_LSTACK) {
 		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
-				"not stack type");
+				"not LSTACK type");
 	}
 
 	// stack allocate the arg list.

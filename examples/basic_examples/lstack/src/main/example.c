@@ -65,7 +65,7 @@ main(int argc, char* argv[])
 	// Start clean.
 	example_remove_test_record(&as);
 
-	// Create a large stack bin to use. No need to destroy as_ldt if using
+	// Create a large stack object to use. No need to destroy lstack if using
 	// as_ldt_init() on stack object.
 	as_ldt lstack;
 	if (! as_ldt_init(&lstack, "mystack", AS_LDT_LSTACK, NULL)) {
@@ -74,14 +74,11 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
-	// Define the aerospike error object that will contain the error when there's
-	// a problem with an Aerospike call.
 	as_error err;
-
-	// Use the "ldt_exists" call to verify that the LDT is not already there.
 	as_boolean ldt_exists;
 	as_boolean_init(&ldt_exists, false);
 
+	// Verify that the LDT is not already there.
 	if (aerospike_lstack_ldt_exists(&as, &err, NULL, &g_key, &lstack,
 			&ldt_exists) != AEROSPIKE_OK) {
 		LOG("first aerospike_lstack_ldt_exists() returned %d - %s", err.code,
@@ -90,16 +87,16 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
-	// Validate not there (error if we find it).
 	if (as_boolean_get(&ldt_exists)) {
-		LOG("Found LDT that should NOT be present.");
+		LOG("found ldt that should not be present");
 		example_cleanup(&as);
 		exit(-1);
-	} else {
-		LOG("Verified that LSTACK LDT is not present (LDT exists == false).");
+	}
+	else {
+		LOG("verified that lstack ldt is not present");
 	}
 
-	// No need to destroy as_integer if using as_integer_init() on stack object.
+	// No need to destroy ival if using as_integer_init() on stack object.
 	as_integer ival;
 	as_integer_init(&ival, 123);
 
@@ -112,7 +109,7 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
-	// No need to destroy as_string if using as_string_init() on stack object.
+	// No need to destroy sval if using as_string_init() on stack object.
 	as_string sval;
 	as_string_init(&sval, "string stack value", false);
 
@@ -249,9 +246,9 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
-	// Use the "ldt_exists" call to verify that the LDT is now present
 	as_boolean_init(&ldt_exists, false);
 
+	// Verify that the LDT is now present.
 	if (aerospike_lstack_ldt_exists(&as, &err, NULL, &g_key, &lstack,
 			&ldt_exists) != AEROSPIKE_OK) {
 		LOG("first aerospike_lstack_ldt_exists() returned %d - %s", err.code,
@@ -260,13 +257,13 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
-	// Validate LDT is now there.
-	if ( ! as_boolean_get(&ldt_exists)) {
-		LOG("Did NOT Find LDT that SHOULD BE be present.");
+	if (! as_boolean_get(&ldt_exists)) {
+		LOG("did not find ldt that should be be present");
 		example_cleanup(&as);
 		exit(-1);
-	} else {
-		LOG("Verified that LSTACK LDT is present (LDT Exists == true).");
+	}
+	else {
+		LOG("verified that lstack ldt is present");
 	}
 
 	// Destroy the lstack.

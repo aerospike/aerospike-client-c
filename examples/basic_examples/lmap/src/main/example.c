@@ -33,9 +33,9 @@
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
 #include <aerospike/aerospike_lmap.h>
+#include <aerospike/as_error.h>
 #include <aerospike/as_hashmap.h>
 #include <aerospike/as_hashmap_iterator.h>
-#include <aerospike/as_error.h>
 #include <aerospike/as_ldt.h>
 #include <aerospike/as_list.h>
 #include <aerospike/as_record.h>
@@ -63,7 +63,7 @@ main(int argc, char* argv[])
 	// Start clean.
 	example_remove_test_record(&as);
 
-	// Create a lmap bin to use. No need to destroy as_ldt if using
+	// Create a large map object to use. No need to destroy lmap if using
 	// as_ldt_init() on stack object.
 	as_ldt lmap;
 	if (! as_ldt_init(&lmap, "mylmap", AS_LDT_LMAP, NULL)) {
@@ -72,14 +72,11 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
-	// Define the aerospike error object that will contain the error when there's
-	// a problem with an Aerospike call.
 	as_error err;
-
-	// Use the "ldt_exists" call to verify that the LDT is not already there.
 	as_boolean ldt_exists;
 	as_boolean_init(&ldt_exists, false);
 
+	// Verify that the LDT is not already there.
 	if (aerospike_lmap_ldt_exists(&as, &err, NULL, &g_key, &lmap,
 			&ldt_exists) != AEROSPIKE_OK) {
 		LOG("first aerospike_lmap_ldt_exists() returned %d - %s", err.code,
@@ -88,21 +85,21 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
-	// Validate not there (error if we find it).
 	if (as_boolean_get(&ldt_exists)) {
-		LOG("Found LDT that should NOT be present.");
+		LOG("found ldt that should not be present");
 		example_cleanup(&as);
 		exit(-1);
-	} else {
-		LOG("Verified that LMAP LDT is not present (LDT exists == false).");
+	}
+	else {
+		LOG("verified that lmap ldt is not present");
 	}
 
-	// No need to destroy as_integer if using as_integer_init() on stack object.
+	// No need to destroy ikey if using as_integer_init() on stack object.
 	as_integer ikey;
 	as_integer_init(&ikey, 12345);
 
-	// No need to destroy as_string if using as_string_init() on stack object
-	// with free parameter false.
+	// No need to destroy sval if using as_string_init() on stack object with
+	// free parameter false.
 	as_string sval;
 	as_string_init(&sval, "lmap value", false);
 
@@ -115,11 +112,11 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
+	// Ok to reuse.
+	as_integer_init(&ikey, 345);
+
 	as_integer ival;
 	as_integer_init(&ival, 1000);
-
-	// It's ok to reset the as_integer.
-	as_integer_init(&ikey, 345);
 
 	// Put an integer entry to the lmap.
 	if (aerospike_lmap_put(&as, &err, NULL, &g_key, &lmap,
@@ -150,9 +147,9 @@ main(int argc, char* argv[])
 
 	LOG("lmap size confirmed to be %u", n_elements);
 
-	// Use the "ldt_exists" call to verify that the LDT is now present
 	as_boolean_init(&ldt_exists, false);
 
+	// Verify that the LDT is now present.
 	if (aerospike_lmap_ldt_exists(&as, &err, NULL, &g_key, &lmap,
 			&ldt_exists) != AEROSPIKE_OK) {
 		LOG("first aerospike_lmap_ldt_exists() returned %d - %s", err.code,
@@ -161,13 +158,13 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
-	// Validate LDT is now there.
-	if ( ! as_boolean_get(&ldt_exists)) {
-		LOG("Did NOT Find LDT that SHOULD BE be present.");
+	if (! as_boolean_get(&ldt_exists)) {
+		LOG("did not find ldt that should be be present");
 		example_cleanup(&as);
 		exit(-1);
-	} else {
-		LOG("Verified that LMAP LDT is present (LDT Exists == true).");
+	}
+	else {
+		LOG("verified that lmap ldt is present");
 	}
 
 	as_ldt lmap2;
@@ -183,10 +180,10 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
-	// See if the elements match what we expect.
 	as_hashmap_iterator it;
 	as_hashmap_iterator_init(&it, (const as_hashmap*)p_map);
 
+	// See if the elements match what we expect.
 	while (as_hashmap_iterator_has_next(&it)) {
 		const as_val* p_val = as_hashmap_iterator_next(&it);
 		char* p_str = as_val_tostring(p_val);
@@ -198,22 +195,19 @@ main(int argc, char* argv[])
 	as_map_destroy(p_map);
 	p_map = NULL;
 
-	as_integer_init(&ikey, 345);
-	as_integer_init(&ival, 2000);
+	as_integer_init(&ikey, 12345);
 
 	// Remove an entry from the map.
-	as_integer_init(&ikey, 12345);
 	if (aerospike_lmap_remove(&as, &err, NULL, &g_key, &lmap,
 			(const as_val*)&ikey) != AEROSPIKE_OK) {
-		LOG("aerospike_lmap_remove() returned %d - %s", err.code,
-				err.message);
+		LOG("aerospike_lmap_remove() returned %d - %s", err.code, err.message);
 		example_cleanup(&as);
 		exit(-1);
 	}
 
 	as_val* p_val = NULL;
 
-	// Make sure we cannot get the value any more.
+	// Make sure we can't get the value any more.
 	if (aerospike_lmap_get(&as, &err, NULL, &g_key, &lmap,
 			(const as_val*)&ikey, &p_val) == AEROSPIKE_OK) {
 		LOG("unexpected success getting a removed entry");

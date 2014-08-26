@@ -25,11 +25,11 @@
 // Includes
 //
 
+#include <inttypes.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
-#include <inttypes.h>
 
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
@@ -64,8 +64,7 @@ main(int argc, char* argv[])
 	// Start clean.
 	example_remove_test_record(&as);
 
-
-	// Create a lset bin to use. No need to destroy as_ldt if using
+	// Create a large set object to use. No need to destroy lset if using
 	// as_ldt_init() on stack object.
 	as_ldt lset;
 	if (! as_ldt_init(&lset, "mylset", AS_LDT_LSET, NULL)) {
@@ -74,14 +73,11 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
-	// Define the aerospike error object that will contain the error when there's
-	// a problem with an Aerospike call.
 	as_error err;
-
-	// Use the "ldt_exists" call to verify that the LDT is not already there.
 	as_boolean ldt_exists;
 	as_boolean_init(&ldt_exists, false);
 
+	// Verify that the LDT is not already there.
 	if (aerospike_lset_ldt_exists(&as, &err, NULL, &g_key, &lset,
 			&ldt_exists) != AEROSPIKE_OK) {
 		LOG("first aerospike_lset_ldt_exists() returned %d - %s", err.code,
@@ -90,16 +86,16 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
-	// Validate not there (error if we find it).
 	if (as_boolean_get(&ldt_exists)) {
-		LOG("Found LDT that should NOT be present.");
+		LOG("found ldt that should not be present");
 		example_cleanup(&as);
 		exit(-1);
-	} else {
-		LOG("Verified that LSET LDT is not present (LDT exists == false).");
+	}
+	else {
+		LOG("verified that lset ldt is not present");
 	}
 
-	// No need to destroy as_integer if using as_integer_init() on stack object.
+	// No need to destroy ival if using as_integer_init() on stack object.
 	as_integer ival;
 	as_integer_init(&ival, 12345);
 
@@ -112,7 +108,8 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
-	// No need to destroy as_string if using as_string_init() on stack object.
+	// No need to destroy sval if using as_string_init() on stack object with
+	// free parameter false.
 	as_string sval;
 	as_string_init(&sval, "lset value", false);
 
@@ -159,10 +156,10 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
-	// See if the elements match what we expect.
 	as_arraylist_iterator it;
 	as_arraylist_iterator_init(&it, (const as_arraylist*)p_list);
 
+	// See if the elements match what we expect.
 	while (as_arraylist_iterator_has_next(&it)) {
 		const as_val* p_val = as_arraylist_iterator_next(&it);
 		char* p_str = as_val_tostring(p_val);
@@ -224,7 +221,7 @@ main(int argc, char* argv[])
 
 			if (myival != 1001 && myival != 2002 && myival != 3003 &&
 					myival != 12345) {
-				LOG("unexpected integer value %" PRId64 " returned", myival);
+				LOG("unexpected integer value %"PRId64" returned", myival);
 				as_list_destroy(p_list);
 				example_cleanup(&as);
 				exit(-1);
@@ -257,7 +254,7 @@ main(int argc, char* argv[])
 	as_list_destroy(p_list);
 	p_list = NULL;
 
-	// No need to destroy as_boolean if using as_boolean_init() on stack object.
+	// No need to destroy exists if using as_boolean_init() on stack object.
 	as_boolean exists;
 	as_boolean_init(&exists, false);
 
@@ -275,11 +272,11 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
-	LOG("Value Existence checked");
+	LOG("value existence checked");
 
-	// Use the "ldt_exists" call to verify that the LDT is now present
 	as_boolean_init(&ldt_exists, false);
 
+	// Verify that the LDT is now present.
 	if (aerospike_lset_ldt_exists(&as, &err, NULL, &g_key, &lset,
 			&ldt_exists) != AEROSPIKE_OK) {
 		LOG("first aerospike_lset_ldt_exists() returned %d - %s", err.code,
@@ -288,13 +285,13 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
-	// Validate LDT is now there.
-	if ( ! as_boolean_get(&ldt_exists)) {
-		LOG("Did NOT Find LDT that SHOULD BE be present.");
+	if (! as_boolean_get(&ldt_exists)) {
+		LOG("did not find ldt that should be be present");
 		example_cleanup(&as);
 		exit(-1);
-	} else {
-		LOG("Verified that LSET LDT is present (LDT Exists == true).");
+	}
+	else {
+		LOG("verified that lset ldt is present");
 	}
 
 	// Remove the value from the set.

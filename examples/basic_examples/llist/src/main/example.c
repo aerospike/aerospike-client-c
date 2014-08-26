@@ -25,28 +25,27 @@
 // Includes
 //
 
+#include <inttypes.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
-#include <inttypes.h>
 
+#include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
 #include <aerospike/aerospike_llist.h>
-#include <aerospike/as_record.h>
-
-#include <aerospike/as_arraylist_iterator.h>
 #include <aerospike/as_arraylist.h>
+#include <aerospike/as_arraylist_iterator.h>
 #include <aerospike/as_boolean.h>
-#include <aerospike/as_integer.h>
-#include <aerospike/as_list.h>
-#include <aerospike/as_string.h>
-#include <aerospike/as_val.h>
-#include <aerospike/aerospike.h>
 #include <aerospike/as_error.h>
+#include <aerospike/as_integer.h>
 #include <aerospike/as_key.h>
 #include <aerospike/as_ldt.h>
+#include <aerospike/as_list.h>
+#include <aerospike/as_record.h>
 #include <aerospike/as_status.h>
+#include <aerospike/as_string.h>
+#include <aerospike/as_val.h>
 
 #include "example_utils.h"
 
@@ -67,11 +66,11 @@ main(int argc, char* argv[])
 	aerospike as;
 	example_connect_to_aerospike(&as);
 
-	// Start clean.  Remove any old test records that might be present.
+	// Start clean.
 	example_remove_test_record(&as);
 
-	// Create a llist object to use. No need to destroy the as_ldt object if
-	// we are using as_ldt_init() on a stack allocated object.
+	// Create a large list object to use. No need to destroy llist if using
+	// as_ldt_init() on stack object.
 	as_ldt llist;
 	if (! as_ldt_init(&llist, "myllist", AS_LDT_LLIST, NULL)) {
 		LOG("unable to initialize ldt");
@@ -79,14 +78,11 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
-	// Define the aerospike error object that will contain the error when there's
-	// a problem with an Aerospike call.
 	as_error err;
-
-	// Use the "ldt_exists" call to verify that the LDT is not already there.
 	as_boolean ldt_exists;
 	as_boolean_init(&ldt_exists, false);
 
+	// Verify that the LDT is not already there.
 	if (aerospike_llist_ldt_exists(&as, &err, NULL, &g_key, &llist,
 			&ldt_exists) != AEROSPIKE_OK) {
 		LOG("first aerospike_llist_ldt_exists() returned %d - %s", err.code,
@@ -95,23 +91,21 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
-	// Validate not there (error if we find it).
 	if (as_boolean_get(&ldt_exists)) {
-		LOG("Found LDT that should NOT be present.");
+		LOG("found ldt that should not be present");
 		example_cleanup(&as);
 		exit(-1);
-	} else {
-		LOG("Verified that LLIST LDT is not present (LDT exists == false).");
+	}
+	else {
+		LOG("verified that llist ldt is not present");
 	}
 
-	// Example values.
+	// Add 3 integer values to the list, one per operation.
 	int example_values[3] = { 12000, 2000, 22000 };
 	int example_ordered[3] = { 2000, 12000, 22000 };
 
-	// No need to destroy as_integer if using as_integer_init() on stack object.
+	// No need to destroy ival if using as_integer_init() on stack object.
 	as_integer ival;
-
-	// Add 3 integer values to the list, one per operation.
 	as_integer_init(&ival, example_values[0]);
 
 	if (aerospike_llist_add(&as, &err, NULL, &g_key, &llist,
@@ -122,7 +116,7 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
-	// It's ok to reset the as_integer.
+	// Ok to reuse.
 	as_integer_init(&ival, example_values[1]);
 
 	if (aerospike_llist_add(&as, &err, NULL, &g_key, &llist,
@@ -198,11 +192,11 @@ main(int argc, char* argv[])
 			exit(-1);
 		}
 
-		int64_t myival = as_integer_get ((const as_integer *)p_val);
+		int64_t myival = as_integer_get((const as_integer*)p_val);
 
 		if (myival != example_ordered[item_count]) {
-			LOG("unexpected integer value %"PRId64" returned on count %d", myival,
-					item_count);
+			LOG("unexpected integer value %"PRId64" returned on count %d",
+					myival, item_count);
 			as_list_destroy(p_list);
 			example_cleanup(&as);
 			exit(-1);
@@ -214,7 +208,8 @@ main(int argc, char* argv[])
 	as_list_destroy(p_list);
 	p_list = NULL;
 
-	// No need to destroy as_string if using as_string_init() on stack object.
+	// No need to destroy sval if using as_string_init() on stack object with
+	// free parameter false.
 	as_string sval;
 	as_string_init(&sval, "llist value", false);
 
@@ -269,9 +264,9 @@ main(int argc, char* argv[])
 
 	LOG("one value removed and checked");
 
-	// Use the "ldt_exists" call to verify that the LDT is now present
 	as_boolean_init(&ldt_exists, false);
 
+	// Verify that the LDT is now present.
 	if (aerospike_llist_ldt_exists(&as, &err, NULL, &g_key, &llist,
 			&ldt_exists) != AEROSPIKE_OK) {
 		LOG("first aerospike_llist_ldt_exists() returned %d - %s", err.code,
@@ -280,19 +275,20 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
-	// Validate LDT is now there.
-	if ( ! as_boolean_get(&ldt_exists)) {
-		LOG("Did NOT Find LDT that SHOULD BE be present.");
+	if (! as_boolean_get(&ldt_exists)) {
+		LOG("did not find ldt that should be present");
 		example_cleanup(&as);
 		exit(-1);
-	} else {
-		LOG("Verified that LLIST LDT is present (LDT Exists == true).");
+	}
+	else {
+		LOG("verified that llist ldt is present");
 	}
 
 	// Destroy the list.
 	if (aerospike_llist_destroy(&as, &err, NULL, &g_key, &llist) !=
 			AEROSPIKE_OK) {
-		LOG("aerospike_llist_destroy() returned %d - %s", err.code, err.message);
+		LOG("aerospike_llist_destroy() returned %d - %s", err.code,
+				err.message);
 		example_cleanup(&as);
 		exit(-1);
 	}

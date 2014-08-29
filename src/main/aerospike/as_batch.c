@@ -45,7 +45,8 @@ extern inline as_key * as_batch_keyat(const as_batch * batch, uint32_t i);
  */
 as_batch * as_batch_new(uint32_t size)
 {
-	as_batch * batch = (as_batch *) malloc(sizeof(as_batch) + sizeof(as_key) * size);
+    size_t alloc_size = sizeof(as_batch) + sizeof(as_key) * size;
+	as_batch * batch = (as_batch *) calloc(1, alloc_size);
 	if ( !batch ) return NULL;
 
 	batch->_free = true;
@@ -64,8 +65,8 @@ as_batch * as_batch_init(as_batch * batch, uint32_t size)
 
 	as_key * entries = NULL;
 	if ( size > 0 ) {
-		entries = (as_key *) malloc(sizeof(as_key) * size);
-		if ( !entries ) return batch;
+		entries = (as_key *) calloc(size, sizeof(as_key));
+		if ( !entries ) return NULL;
 	}
 
 	batch->_free = false;

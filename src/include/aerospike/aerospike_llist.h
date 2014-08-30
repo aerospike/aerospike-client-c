@@ -121,16 +121,13 @@ as_status aerospike_llist_add_all(
  *
  *	as_ldt llist;
  *	as_ldt_init(&llist, "myllist", AS_LDT_LLIST, NULL);
- *
- *	as_integer ival;
- *	as_integer_init(&ival, 123);
  *	
  *	as_integer search_val;
  *	as_integer_init(&search_val, 42);
  *
  *	as_list *result_list = NULL;
  *
- *	if ( aerospike_llist_find(&as, &err, NULL, &key, &llist, &ival, &search_val, &result_list ) != AEROSPIKE_OK ) {
+ *	if ( aerospike_llist_find(&as, &err, NULL, &key, &llist, &search_val, &result_list ) != AEROSPIKE_OK ) {
  *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *	}
  *	else {
@@ -234,6 +231,59 @@ as_status aerospike_llist_scan(
 as_status aerospike_llist_filter(
 	aerospike * as, as_error * err, const as_policy_apply * policy,
 	const as_key * key, const as_ldt * ldt,
+	const as_udf_function_name filter, const as_list *filter_args,
+	as_list ** elements );
+
+/**
+ *	Given an llist bin, return the key values from MIN to MAX, and then
+ *	filter the returned collection of objects using the given
+ *	filter function. If no filter function is specified, return all values.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_key key;
+ *	as_key_init(&key, "myns", "myset", "mykey");
+ *
+ *	as_ldt llist;
+ *	as_ldt_init(&llist, "myllist", AS_LDT_LLIST, NULL);
+ *
+ *	as_integer min_value;
+ *	as_integer_init(&min_value, 18);
+ *
+ *	as_integer max_value;
+ *	as_integer_init(&max_value, 99);
+ *
+ *	as_list *result_list = NULL;
+ *
+ *	if ( aerospike_llist_range(&as, &err, NULL, &key, &llist, &min_value, &max_value,
+ *	    "search_filter", NULL, &result_list) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *	else {
+ *		// process the returned elements
+ *		as_arraylist_destroy(result_list);
+ *	}
+ *	~~~~~~~~~~
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param key			The key of the record.
+ *	@param ldt 			The llist bin to search from. If not an llist bin, will return error.
+ *	@param min_value	The minimum range value (or null to be LEAST value)
+ *	@param max_value	The maximum range value (or null to be the GREATEST value)
+ *	@param filter		The name of the User-Defined-Function to use as a search filter (or null if no filter)
+ *	@param fargs		The list of parameters passed in to the User-Defined-Function filter (or null)
+ *	@param list			The pointer to a list of elements returned from search function. Pointer should
+ *						be NULL passed in.
+ *
+ *	@return AEROSPIKE_OK if successful. Otherwise an error.
+ *
+ *	@ingroup ldt_operations
+ */
+as_status aerospike_llist_range(
+	aerospike * as, as_error * err, const as_policy_apply * policy,
+	const as_key * key, const as_ldt * ldt,
+	const as_val * min_value, const as_val * max_value,
 	const as_udf_function_name filter, const as_list *filter_args,
 	as_list ** elements );
 

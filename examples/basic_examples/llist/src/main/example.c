@@ -238,7 +238,52 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
-	// Remove the value from the list.
+	// Perform a Range Query on the List.  Let's query for the range that will
+	// get us the last two elements in the list (12,000 and 22,000).
+	// 	int example_ordered[3] = { 2000, 12000, 22000 };
+	as_integer min_val;
+	as_integer_init(&min_val, 10000);
+	as_integer max_val;
+	as_integer_init(&max_val, 25000);
+	p_list = NULL;
+
+	if (aerospike_llist_range(&as, &err, NULL, &g_key, &llist,
+			(const as_val*) &min_val, (const as_val*)&max_val,
+			NULL, NULL, &p_list) != AEROSPIKE_OK)
+	{
+		LOG("second aerospike_llist_filter() returned %d - %s", err.code,
+				err.message);
+		as_list_destroy(p_list);
+		example_cleanup(&as);
+		exit(-1);
+	}
+	else {
+		LOG("Attempt Range Query: From 10000 to 25000");
+	}
+
+	// We expect the size of the returned list to be 2, and the elements to be
+	// 12000 and 22000.
+	int returned_size = as_list_size(p_list);
+
+	if (returned_size != 2) {
+		LOG("ERROR: Range Query does not return correct size.  Expected 2, got(%d)",
+				returned_size);
+		char* p_str = as_val_tostring(p_list);
+		LOG(">> List Contents: %s", p_str);
+		free(p_str);
+
+		as_list_destroy(p_list);
+		example_cleanup(&as);
+		exit(-1);
+	}
+	else {
+		LOG("Range Query result returns expected size(2).");
+	}
+	as_list_destroy(p_list);
+
+
+	// Remove the last inserted value (22000) from the list.
+	// Note that the variable ival still retains the value 22000.
 	if (aerospike_llist_remove(&as, &err, NULL, &g_key, &llist2,
 			(const as_val*)&ival) != AEROSPIKE_OK) {
 		LOG("aerospike_llist_remove() returned %d - %s", err.code, err.message);

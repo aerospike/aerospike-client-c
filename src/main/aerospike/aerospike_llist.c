@@ -389,7 +389,7 @@ as_status aerospike_llist_range(
 
 	// Get ready for the appropriate number of parameters, bases on whether
 	// the input parm "filter" is valid .. or not.
-	int list_argc = filter ? 5 : 3;
+	int list_argc = filter ? 7 : 5;
 	/* stack allocate the arg list */
 	as_string ldt_bin;
 	as_string_init(&ldt_bin, (char *)ldt->name, false);
@@ -419,7 +419,7 @@ as_status aerospike_llist_range(
 
 	as_val* p_return_val = NULL;
 	aerospike_key_apply(
-		as, err, policy, key, DEFAULT_LLIST_PACKAGE, filter ? LDT_LIST_OP_FILTER : LDT_LIST_OP_SCAN,
+		as, err, policy, key, DEFAULT_LLIST_PACKAGE, LDT_LIST_OP_RANGE,
 		(as_list *)&arglist, &p_return_val);
 
 	as_arraylist_destroy(&arglist);

@@ -92,9 +92,8 @@ main(int argc, char* argv[])
 		example_cleanup(&as);
 		exit(-1);
 	}
-	else {
-		LOG("verified that lstack ldt is not present");
-	}
+
+	LOG("verified that lstack ldt is not present");
 
 	// No need to destroy ival if using as_integer_init() on stack object.
 	as_integer ival;
@@ -262,9 +261,8 @@ main(int argc, char* argv[])
 		example_cleanup(&as);
 		exit(-1);
 	}
-	else {
-		LOG("verified that lstack ldt is present");
-	}
+
+	LOG("verified that lstack ldt is present");
 
 	// Destroy the lstack.
 	if (aerospike_lstack_destroy(&as, &err, NULL, &g_key, &lstack) !=

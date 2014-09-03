@@ -90,9 +90,8 @@ main(int argc, char* argv[])
 		example_cleanup(&as);
 		exit(-1);
 	}
-	else {
-		LOG("verified that lmap ldt is not present");
-	}
+
+	LOG("verified that lmap ldt is not present");
 
 	// No need to destroy ikey if using as_integer_init() on stack object.
 	as_integer ikey;
@@ -163,9 +162,8 @@ main(int argc, char* argv[])
 		example_cleanup(&as);
 		exit(-1);
 	}
-	else {
-		LOG("verified that lmap ldt is present");
-	}
+
+	LOG("verified that lmap ldt is present");
 
 	as_ldt lmap2;
 	as_ldt_init(&lmap2, "mylmap", AS_LDT_LMAP, NULL);

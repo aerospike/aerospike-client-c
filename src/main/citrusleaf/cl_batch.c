@@ -497,6 +497,12 @@ do_batch_monte(as_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 				rv = 0;
 			}
 
+            // should free allocated memory for blob object
+            for (int i=0;i<msg->n_ops;i++) {
+                if ( bins_local[i].object.free ) {
+                    free(bins_local[i].object.u.blob);
+                }
+            }
 			if (bins_local != stack_bins) {
 				free(bins_local);
 				bins_local = 0;

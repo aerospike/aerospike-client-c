@@ -91,9 +91,8 @@ main(int argc, char* argv[])
 		example_cleanup(&as);
 		exit(-1);
 	}
-	else {
-		LOG("verified that lset ldt is not present");
-	}
+
+	LOG("verified that lset ldt is not present");
 
 	// No need to destroy ival if using as_integer_init() on stack object.
 	as_integer ival;
@@ -290,9 +289,8 @@ main(int argc, char* argv[])
 		example_cleanup(&as);
 		exit(-1);
 	}
-	else {
-		LOG("verified that lset ldt is present");
-	}
+
+	LOG("verified that lset ldt is present");
 
 	// Remove the value from the set.
 	if (aerospike_lset_remove(&as, &err, NULL, &g_key, &lset2,

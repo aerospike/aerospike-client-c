@@ -497,6 +497,8 @@ do_batch_monte(as_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 				rv = 0;
 			}
 
+            // should free allocated memory for blob object
+            citrusleaf_bins_free( bins_local, (int)msg->n_ops );
 			if (bins_local != stack_bins) {
 				free(bins_local);
 				bins_local = 0;

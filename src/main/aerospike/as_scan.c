@@ -93,6 +93,10 @@ void as_scan_destroy(as_scan * scan)
 	scan->ns[0] = '\0';
 	scan->set[0] = '\0';
 
+	if ( scan->select._free ) {
+		free(scan->select.entries);
+	}
+
 	as_udf_call_destroy(&scan->apply_each);
 
 	// If the whole structure should be freed

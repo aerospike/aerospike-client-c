@@ -125,7 +125,6 @@ typedef enum as_status_e {
 
 	/**
 	 *	Namespace in request not found on server.
-	 *	@warning	Not yet supported, shows as AEROSPIKE_ERR_REQUEST_INVALID.
 	 */
 	AEROSPIKE_ERR_NAMESPACE_NOT_FOUND		= 502,
 
@@ -199,6 +198,12 @@ typedef enum as_status_e {
 	 *	Record key sent with transaction did not match key stored on server.
 	 */
 	AEROSPIKE_ERR_RECORD_KEY_MISMATCH		= 607,
+
+	/**
+	 *	Sent too-long bin name (should be impossible in this client) or exceeded
+	 *	namespace's bin name quota.
+	 */
+	AEROSPIKE_ERR_BIN_NAME					= 608,
 
 	/***************************************************************************
 	 * XDR-SPECIFIC

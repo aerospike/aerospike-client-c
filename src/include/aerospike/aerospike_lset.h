@@ -381,3 +381,101 @@ as_status aerospike_lset_destroy(
 	const as_key * key, const as_ldt * ldt
 	);
 
+/**
+ *	Change an LDT storage capacity (in number of elements)
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_key key;
+ *	as_key_init(&key, "myns", "myset", "mykey");
+ *
+ *	as_ldt lset;
+ *	as_ldt_init(&lset, "mylset", AS_LDT_LMAP, NULL);
+ *	uint32_t ldt_capacity = 0;
+ *
+ *	if ( aerospike_lset_set_capacity(&as, &err, NULL, &key, &lset, ldt_capacity) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *	~~~~~~~~~~
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param key			The key of the record.
+ *	@param ldt 			The LDT to check
+ *	@param ldt_capacity	The number of elements cap for the LDT.
+ *
+ *	@return AEROSPIKE_OK if successful. Otherwise an error.
+ *
+ *	@ingroup ldt_operations
+ */
+as_status aerospike_lset_set_capacity(
+	aerospike * as, as_error * err, const as_policy_apply * policy,
+	const as_key * key, const as_ldt * ldt, uint32_t ldt_capacity
+	);
+
+/**
+ *	Get an LDTs storage capacity (in number of elements)
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_key key;
+ *	as_key_init(&key, "myns", "myset", "mykey");
+ *
+ *	as_ldt lset;
+ *	as_ldt_init(&lset, "mylset", AS_LDT_LMAP, NULL);
+ *	uint32_t ldt_capacity = 0;
+ *
+ *	if ( aerospike_lset_get_capacity(&as, &err, NULL, &key, &lset, &ldt_capacity) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *	~~~~~~~~~~
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param key			The key of the record.
+ *	@param ldt 			The LDT bin to operate on
+ *	@param ldt_capacity The LDT Capacity, in terms of elements, not bytes.
+ *
+ *	@return AEROSPIKE_OK if successful. Otherwise an error.
+ *
+ *	@ingroup ldt_operations
+ */
+as_status aerospike_lset_get_capacity(
+	aerospike * as, as_error * err, const as_policy_apply * policy,
+	const as_key * key, const as_ldt * ldt,
+	uint32_t *ldt_capacity
+	);
+
+/**
+ *	Check to see if an LDT object exists in this record bin.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_key key;
+ *	as_key_init(&key, "myns", "myset", "mykey");
+ *
+ *	as_ldt lset;
+ *	as_ldt_init(&lset, "mylset", AS_LDT_LSET, NULL);
+ *	uint32_t ldt_exists = 0;
+ *
+ *	if ( aerospike_lset_ldt_exists(&as, &err, NULL, &key, &lset, &ldt_exists) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *	~~~~~~~~~~
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param key			The key of the record.
+ *	@param ldt 			The LDT to operate on. If not an LMAP bin, will return error.
+ *	@param ldt_exists	Ptr to as_boolean: Set to TRUE if ldt exists, otherwise false.
+ *
+ *	@return AEROSPIKE_OK if successful. Otherwise an error.
+ *
+ *	@ingroup ldt_operations
+ */
+as_status aerospike_lset_ldt_exists(
+	aerospike * as, as_error * err, const as_policy_apply * policy,
+	const as_key * key, const as_ldt * ldt,
+	as_boolean *ldt_exists
+	);
+

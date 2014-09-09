@@ -33,9 +33,9 @@
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
 #include <aerospike/aerospike_lmap.h>
+#include <aerospike/as_error.h>
 #include <aerospike/as_hashmap.h>
 #include <aerospike/as_hashmap_iterator.h>
-#include <aerospike/as_error.h>
 #include <aerospike/as_ldt.h>
 #include <aerospike/as_list.h>
 #include <aerospike/as_record.h>
@@ -63,10 +63,9 @@ main(int argc, char* argv[])
 	// Start clean.
 	example_remove_test_record(&as);
 
-	as_ldt lmap;
-
-	// Create a lmap bin to use. No need to destroy as_ldt if using
+	// Create a large map object to use. No need to destroy lmap if using
 	// as_ldt_init() on stack object.
+	as_ldt lmap;
 	if (! as_ldt_init(&lmap, "mylmap", AS_LDT_LMAP, NULL)) {
 		LOG("unable to initialize ldt");
 		example_cleanup(&as);
@@ -74,13 +73,32 @@ main(int argc, char* argv[])
 	}
 
 	as_error err;
+	as_boolean ldt_exists;
+	as_boolean_init(&ldt_exists, false);
 
-	// No need to destroy as_integer if using as_integer_init() on stack object.
+	// Verify that the LDT is not already there.
+	if (aerospike_lmap_ldt_exists(&as, &err, NULL, &g_key, &lmap,
+			&ldt_exists) != AEROSPIKE_OK) {
+		LOG("first aerospike_lmap_ldt_exists() returned %d - %s", err.code,
+				err.message);
+		example_cleanup(&as);
+		exit(-1);
+	}
+
+	if (as_boolean_get(&ldt_exists)) {
+		LOG("found ldt that should not be present");
+		example_cleanup(&as);
+		exit(-1);
+	}
+
+	LOG("verified that lmap ldt is not present");
+
+	// No need to destroy ikey if using as_integer_init() on stack object.
 	as_integer ikey;
 	as_integer_init(&ikey, 12345);
 
-	// No need to destroy as_string if using as_string_init() on stack object
-	// with free parameter false.
+	// No need to destroy sval if using as_string_init() on stack object with
+	// free parameter false.
 	as_string sval;
 	as_string_init(&sval, "lmap value", false);
 
@@ -93,11 +111,11 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
+	// Ok to reuse.
+	as_integer_init(&ikey, 345);
+
 	as_integer ival;
 	as_integer_init(&ival, 1000);
-
-	// It's ok to reset the as_integer.
-	as_integer_init(&ikey, 345);
 
 	// Put an integer entry to the lmap.
 	if (aerospike_lmap_put(&as, &err, NULL, &g_key, &lmap,
@@ -128,6 +146,25 @@ main(int argc, char* argv[])
 
 	LOG("lmap size confirmed to be %u", n_elements);
 
+	as_boolean_init(&ldt_exists, false);
+
+	// Verify that the LDT is now present.
+	if (aerospike_lmap_ldt_exists(&as, &err, NULL, &g_key, &lmap,
+			&ldt_exists) != AEROSPIKE_OK) {
+		LOG("first aerospike_lmap_ldt_exists() returned %d - %s", err.code,
+				err.message);
+		example_cleanup(&as);
+		exit(-1);
+	}
+
+	if (! as_boolean_get(&ldt_exists)) {
+		LOG("did not find ldt that should be be present");
+		example_cleanup(&as);
+		exit(-1);
+	}
+
+	LOG("verified that lmap ldt is present");
+
 	as_ldt lmap2;
 	as_ldt_init(&lmap2, "mylmap", AS_LDT_LMAP, NULL);
 
@@ -141,10 +178,10 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
-	// See if the elements match what we expect.
 	as_hashmap_iterator it;
 	as_hashmap_iterator_init(&it, (const as_hashmap*)p_map);
 
+	// See if the elements match what we expect.
 	while (as_hashmap_iterator_has_next(&it)) {
 		const as_val* p_val = as_hashmap_iterator_next(&it);
 		char* p_str = as_val_tostring(p_val);
@@ -156,22 +193,19 @@ main(int argc, char* argv[])
 	as_map_destroy(p_map);
 	p_map = NULL;
 
-	as_integer_init(&ikey, 345);
-	as_integer_init(&ival, 2000);
+	as_integer_init(&ikey, 12345);
 
 	// Remove an entry from the map.
-	as_integer_init(&ikey, 12345);
 	if (aerospike_lmap_remove(&as, &err, NULL, &g_key, &lmap,
 			(const as_val*)&ikey) != AEROSPIKE_OK) {
-		LOG("aerospike_lmap_remove() returned %d - %s", err.code,
-				err.message);
+		LOG("aerospike_lmap_remove() returned %d - %s", err.code, err.message);
 		example_cleanup(&as);
 		exit(-1);
 	}
 
 	as_val* p_val = NULL;
 
-	// Make sure we cannot get the value any more.
+	// Make sure we can't get the value any more.
 	if (aerospike_lmap_get(&as, &err, NULL, &g_key, &lmap,
 			(const as_val*)&ikey, &p_val) == AEROSPIKE_OK) {
 		LOG("unexpected success getting a removed entry");

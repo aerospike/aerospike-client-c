@@ -46,6 +46,7 @@
 #include <aerospike/as_status.h>
 #include <aerospike/as_key.h>
 #include <aerospike/as_val.h>
+#include <aerospike/as_boolean.h>
 
 /******************************************************************************
  *	FUNCTIONS
@@ -213,6 +214,38 @@ as_status aerospike_lstack_filter(
 	as_list ** elements );
 
 /**
+ *	Destroys an existing lstack
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_key key;
+ *	as_key_init(&key, "myns", "myset", "mykey");
+ *
+ *	as_ldt stack;
+ *	as_ldt_init(&stack, "mystack", AS_LDT_LSTACK, NULL);
+ *	uint32_t cap_elements = 0;
+ *
+ *	if ( aerospike_lstack_destroy(&as, &err, NULL, &key, &stack) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *	~~~~~~~~~~
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param key			The key of the record.
+ *	@param ldt 			The stack bin to peek values from. If not a stack bin, will return error.
+ *
+ *	@return AEROSPIKE_OK if successful. Otherwise an error.
+ *
+ *	@ingroup ldt_operations
+ */
+
+as_status aerospike_lstack_destroy(
+	aerospike * as, as_error * err, const as_policy_apply * policy,
+	const as_key * key, const as_ldt * ldt
+	);
+
+/**
  *	Find how many elements are on the lstack
  *
  *	~~~~~~~~~~{.c}
@@ -246,7 +279,7 @@ as_status aerospike_lstack_size(
 	);
 
 /**
- *	Change an lstack storage capacity (in number of elements)
+ *	Change an LDT storage capacity (in number of elements)
  *
  *	~~~~~~~~~~{.c}
  *	as_key key;
@@ -254,9 +287,9 @@ as_status aerospike_lstack_size(
  *
  *	as_ldt stack;
  *	as_ldt_init(&stack, "mystack", AS_LDT_LSTACK, NULL);
- *	uint32_t cap_elements = 0;
+ *	uint32_t ldt_capacity = 0;
  *
- *	if ( aerospike_lstack_set_capacity(&as, &err, NULL, &key, &stack, cap_elements) != AEROSPIKE_OK ) {
+ *	if ( aerospike_lstack_set_capacity(&as, &err, NULL, &key, &stack, ldt_capacity) != AEROSPIKE_OK ) {
  *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *	}
  *	~~~~~~~~~~
@@ -266,7 +299,7 @@ as_status aerospike_lstack_size(
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param key			The key of the record.
  *	@param ldt 			The stack bin to peek values from. If not a stack bin, will return error.
- *	@param n			The number of elements cap for the lstack.
+ *	@param ldt_capacity	The number of elements cap for the lstack.
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error.
  *
@@ -274,7 +307,7 @@ as_status aerospike_lstack_size(
  */
 as_status aerospike_lstack_set_capacity(
 	aerospike * as, as_error * err, const as_policy_apply * policy,
-	const as_key * key, const as_ldt * ldt, uint32_t n
+	const as_key * key, const as_ldt * ldt, uint32_t ldt_capacity
 	);
 
 /**
@@ -286,9 +319,9 @@ as_status aerospike_lstack_set_capacity(
  *
  *	as_ldt stack;
  *	as_ldt_init(&stack, "mystack", AS_LDT_LSTACK, NULL);
- *	uint32_t cap_elements = 0;
+ *	uint32_t ldt_capacity = 0;
  *
- *	if ( aerospike_lstack_get_capacity(&as, &err, NULL, &key, &stack, &cap_elements) != AEROSPIKE_OK ) {
+ *	if ( aerospike_lstack_get_capacity(&as, &err, NULL, &key, &stack, &ldt_capacity) != AEROSPIKE_OK ) {
  *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *	}
  *	~~~~~~~~~~
@@ -298,7 +331,7 @@ as_status aerospike_lstack_set_capacity(
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param key			The key of the record.
  *	@param ldt 			The stack bin to peek values from. If not a stack bin, will return error.
- *	@param n			The number of elements cap for the lstack.
+ *	@param ldt_capacity The LDT Capacity, in terms of elements, not bytes.
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error.
  *
@@ -307,22 +340,21 @@ as_status aerospike_lstack_set_capacity(
 as_status aerospike_lstack_get_capacity(
 	aerospike * as, as_error * err, const as_policy_apply * policy,
 	const as_key * key, const as_ldt * ldt,
-	uint32_t *n
+	uint32_t *ldt_capacity
 	);
 
-
 /**
- *	Destroys an existing lstack
+ *	Check to see if an LSTACK object exists in this record bin.
  *
  *	~~~~~~~~~~{.c}
  *	as_key key;
  *	as_key_init(&key, "myns", "myset", "mykey");
  *
- *	as_ldt stack;
- *	as_ldt_init(&stack, "mystack", AS_LDT_LSTACK, NULL);
- *	uint32_t cap_elements = 0;
+ *	as_ldt lstack;
+ *	as_ldt_init(&lstack, "mylstack", AS_LDT_LSTACK, NULL);
+ *	uint32_t ldt_exists = 0;
  *
- *	if ( aerospike_lstack_destroy(&as, &err, NULL, &key, &stack) != AEROSPIKE_OK ) {
+ *	if ( aerospike_lstack_size(&as, &err, NULL, &key, &lstack, &ldt_exists) != AEROSPIKE_OK ) {
  *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *	}
  *	~~~~~~~~~~
@@ -331,14 +363,17 @@ as_status aerospike_lstack_get_capacity(
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param key			The key of the record.
- *	@param ldt 			The stack bin to peek values from. If not a stack bin, will return error.
+ *	@param ldt 			The LDT to operate on. If not an LSTACK bin, will return error.
+ *	@param ldt_exists	Ptr to as_boolean: Set to TRUE if ldt exists, otherwise false.
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error.
  *
  *	@ingroup ldt_operations
  */
-
-as_status aerospike_lstack_destroy(
+as_status aerospike_lstack_ldt_exists(
 	aerospike * as, as_error * err, const as_policy_apply * policy,
-	const as_key * key, const as_ldt * ldt
+	const as_key * key, const as_ldt * ldt,
+	as_boolean *ldt_exists
 	);
+
+

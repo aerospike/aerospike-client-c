@@ -131,6 +131,12 @@ typedef enum cl_rv_e {
     // Record key sent with transaction did not match key stored on server.
     CITRUSLEAF_FAIL_KEY_MISMATCH			= 19,
 
+    // Request made with no namespace or unrecognized namespace.
+    CITRUSLEAF_FAIL_NAMESPACE				= 20,
+
+    // Write operation made with too-long bin name, or bin name quota exceeded.
+    CITRUSLEAF_FAIL_BIN_NAME				= 21,
+
 	CITRUSLEAF_QUERY_END					= 50,
 	CITRUSLEAF_SECURITY_NOT_SUPPORTED		= 51,
 	CITRUSLEAF_SECURITY_NOT_ENABLED			= 52,

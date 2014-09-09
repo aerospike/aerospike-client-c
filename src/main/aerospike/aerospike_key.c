@@ -86,8 +86,8 @@ as_status aerospike_key_get(
 	switch ( p.key ) {
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
-			rc = citrusleaf_get_all_digest_getsetname(as->cluster, key->ns, (cf_digest *) digest->value,
-					&values, &nvalues, timeout, &gen, NULL, &ttl);
+			rc = citrusleaf_get_all(as->cluster, key->ns, key->set, NULL, (cf_digest*)digest->value,
+					&values, &nvalues, timeout, &gen, &ttl);
 			break;
 		}
 		case AS_POLICY_KEY_SEND: {
@@ -178,7 +178,7 @@ as_status aerospike_key_select(
 	switch ( p.key ) {
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
-			rc = citrusleaf_get_digest(as->cluster, key->ns, (cf_digest *) digest->value,
+			rc = citrusleaf_get(as->cluster, key->ns, key->set, NULL, (cf_digest*)digest->value,
 					values, nvalues, timeout, &gen, &ttl);
 			break;
 		}
@@ -255,7 +255,7 @@ as_status aerospike_key_exists(
 	switch ( p.key ) {
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
-			rc = citrusleaf_exists_digest(as->cluster, key->ns, (cf_digest *) digest->value,
+			rc = citrusleaf_exists_key(as->cluster, key->ns, key->set, NULL, (cf_digest*)digest->value,
 					values, nvalues, timeout, &gen, &ttl);
 			break;
 		}
@@ -336,7 +336,7 @@ as_status aerospike_key_put(
 	switch ( p.key ) {
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
-			rc = citrusleaf_put_digest_with_setname(as->cluster, key->ns, key->set, (cf_digest *) digest->value, values, nvalues, &wp);
+			rc = citrusleaf_put(as->cluster, key->ns, key->set, NULL, (cf_digest*)digest->value, values, nvalues, &wp);
 			break;
 		}
 		case AS_POLICY_KEY_SEND: {
@@ -396,7 +396,7 @@ as_status aerospike_key_remove(
 	switch ( p.key ) {
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
-			rc = citrusleaf_delete_digest(as->cluster, key->ns, (cf_digest *) digest->value, &wp);
+			rc = citrusleaf_delete(as->cluster, key->ns, key->set, NULL, (cf_digest*)digest->value, &wp);
 			break;
 		}
 		case AS_POLICY_KEY_SEND: {
@@ -490,7 +490,7 @@ as_status aerospike_key_operate(
 	switch ( p.key ) {
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
-			rc = citrusleaf_operate_digest(as->cluster, key->ns, key->set, (cf_digest *) digest->value,
+			rc = citrusleaf_operate(as->cluster, key->ns, key->set, NULL, (cf_digest*)digest->value,
 					operations, n_operations, &wp, &gen, &ttl);
 			break;
 		}
@@ -628,7 +628,7 @@ as_status aerospike_key_apply(
 			as_digest * digest = as_key_digest((as_key *) key);
 			rc = do_the_full_monte( 
 				as->cluster, 0, CL_MSG_INFO2_WRITE, 0, 
-				key->ns, key->set, 0, (cf_digest *) digest->value, &bins, CL_OP_WRITE, 0, &n_bins, 
+				key->ns, key->set, NULL, (cf_digest*)digest->value, &bins, CL_OP_WRITE, 0, &n_bins,
 				NULL, &wp, &trid, NULL, &call, NULL
 			);
 			break;

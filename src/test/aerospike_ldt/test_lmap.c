@@ -69,6 +69,8 @@ TEST( lmap_put , "put: (test,test,t1) = {bin:1}" ) {
 	assert_int_eq(as_val_type(p_val),AS_INTEGER);
 	assert_int_eq(as_integer_get((as_integer *)p_val),34);
 
+	as_val_destroy(p_map);
+
 	// Destroy the lmap.
 	rc = aerospike_lmap_destroy(as, &err, NULL, &skey, &lmap);
 	assert_int_eq( rc, AEROSPIKE_OK );

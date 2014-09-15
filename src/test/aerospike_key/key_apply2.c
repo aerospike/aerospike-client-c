@@ -141,6 +141,9 @@ TEST( key_apply2_getinteger , "apply2: (test,test,foo) <!> key_apply2.getinteger
 	assert_not_null( i );
 	assert_int_eq(  as_integer_toint(i), 123 );
 
+	as_val_destroy(&arglist);
+	as_val_destroy(res);
+
 }
 
 TEST( key_apply2_getstring , "apply2: (test,test,foo) <!> key_apply2.getstring() => abc" ) {
@@ -170,6 +173,8 @@ TEST( key_apply2_getstring , "apply2: (test,test,foo) <!> key_apply2.getstring()
 	as_string * str = as_string_fromval(res);
 	assert_not_null( str );
 	assert_string_eq( as_string_tostring(str), "abc" );
+	as_val_destroy(&arglist);
+	as_val_destroy(res);
 }
 
 // Table is the same as list, so no test for gettable()
@@ -209,6 +214,10 @@ TEST( key_apply2_getlist , "apply2: (test,test,foo) <!> key_apply2.getlist() => 
 	// Not sure if this comparison is valid : needs testing
 	// assert_int_eq( list,'[1,2,3]' );
 	// assert_int_eq( list, compare_list )
+
+	as_val_destroy(res);
+	as_val_destroy(&arglist);
+	as_val_destroy(&compare_list);
 }
 
 TEST( key_apply2_getmap , "apply2: (test,test,foo) <!> key_apply2.getmap() => {x: 7, y: 8, z: 9}" ) {
@@ -227,6 +236,7 @@ TEST( key_apply2_getmap , "apply2: (test,test,foo) <!> key_apply2.getmap() => {x
 	as_status rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "getmap", (as_list *) &arglist, &res);
 
 	as_key_destroy(&key);
+	as_val_destroy(&arglist);
 
 	if ( rc != AEROSPIKE_OK ) {
 		error("[%s:%d][%s][%d] %s", err.file, err.line, err.func, err.code, err.message);
@@ -243,6 +253,7 @@ TEST( key_apply2_getmap , "apply2: (test,test,foo) <!> key_apply2.getmap() => {x
 	as_map *res_map =  as_map_fromval(res);
 	assert_not_null( res_map );
 	
+	as_val_destroy(res);
 	as_hashmap_destroy(&map);
 	// assert_int_eq( map, '{x: 7, y: 8, z: 9}' );
 	// assert_int_eq( res_map, map );
@@ -271,6 +282,9 @@ TEST( key_apply2_add_strings , "apply: (test,test,foo) <!> key_apply2.add_string
 	as_string * str = as_string_fromval(res);
 	assert_not_null( str );
 	assert_string_eq( as_string_tostring(str), "abcdef" );
+
+	as_val_destroy(&arglist);
+	as_val_destroy(res);
 }
 
 // skipping record_basics_add, already present in key_apply.c
@@ -294,6 +308,8 @@ TEST( key_apply2_call_nonlocal_sum, "apply: (test,test,foo) <!> key_apply2.call_
 	// rc is OK, but result is NULL : verify !!
 
 	assert_int_ne( rc, AEROSPIKE_OK );
+	as_val_destroy(&arglist);
+	as_val_destroy(res);
 	// assert_not_null( res );
 
    // as_integer * i = as_integer_fromval(res);
@@ -324,6 +340,9 @@ TEST( key_apply2_call_local_sum, "apply: (test,test,foo) <!> key_apply2.call_loc
 	as_integer * i = as_integer_fromval(res);
 	assert_not_null( i );
 	assert_int_eq(  as_integer_toint(i), 3 );
+
+	as_val_destroy(&arglist);
+	as_val_destroy(res);
 }
 
 TEST( key_apply2_udf_func_does_not_exist, "apply: (test,test,foo) <!> key_apply2.udf_func_does_not_exist() => 1" ) {
@@ -494,8 +513,9 @@ TEST( key_apply2_delete_record_test_replication, "apply: (test,test,foo) <!> key
 	rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "delete", NULL, &res);
 
 	assert_int_eq( rc, AEROSPIKE_OK );
+	as_val_destroy(res);
 
-	//Get bins
+	// Get bins
 	as_error_reset(&err);
 	as_record_init(&r, 0);
 	as_record *rec = &r;
@@ -510,6 +530,7 @@ TEST( key_apply2_delete_record_test_replication, "apply: (test,test,foo) <!> key
 	});
 
 	debug("memory: pre=%ld post=%ld diff=%ld", mem_pre, mem_post, mem_pre - mem_post);
+	as_record_destroy(&r);
 }
 
 TEST( key_apply2_update_record_test_memory, "apply: (test,test,foo) <!> key_apply2.update_record_test_memory() => 1" )
@@ -578,6 +599,7 @@ TEST( key_apply2_bad_update_test_memory, "apply: (test,test,foo) <!> key_apply2.
 	rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "bad_update", NULL, &res);
 
 	assert_int_eq( rc, AEROSPIKE_OK );
+	as_val_destroy(res);
 
 	each_stats("namespace/test", "used-bytes-memory", key, val, {
 		uint64_t mem = atol(val);
@@ -617,6 +639,7 @@ TEST( key_apply2_bad_create_test_memory, "apply: (test,test,foo) <!> key_apply2.
 	rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "bad_create", NULL, &res);
 
 	assert_int_eq( rc, AEROSPIKE_OK );
+	as_val_destroy(res);
 	
 	each_stats("namespace/test", "used-bytes-memory", key, val, {
 		uint64_t mem = atol(val);

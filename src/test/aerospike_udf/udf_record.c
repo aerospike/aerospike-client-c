@@ -115,7 +115,7 @@ TEST( udf_record_update_map, "udf_record.update_map()" ) {
   // assert_int_eq( as_stringmap_get_int64(mval,"c"), as_stringmap_get_int64(mval,"a") + 2);
 
   // as_map_foreach(mval, udf_record_update_map_foreach, NULL);
-  
+  as_val_destroy(&args);
   as_val_destroy(val);
   as_key_destroy(&key);
 }

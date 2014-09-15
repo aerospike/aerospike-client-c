@@ -174,6 +174,8 @@ TEST( query_foreach_create, "create 100 records and 4 indices" ) {
 		as_key_destroy(&key);	
 		assert_int_eq( err.code, AEROSPIKE_OK );
 		assert_not_null( r1 );
+
+		as_record_destroy(r1);
 	}
 }
 

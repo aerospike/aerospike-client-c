@@ -83,7 +83,7 @@ TEST( key_apply_put , "put: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 'def
 	as_stringmap_set_int64((as_map *) &map, "z", 9);
 
 	as_record r;
-	as_record_init(&r, 10);
+	as_record_inita(&r, 6);
 	as_record_set_int64(&r, "a", 123);
 	as_record_set_str(&r, "b", "abc");
 	as_record_set_integer(&r, "c", as_integer_new(456));
@@ -122,6 +122,7 @@ TEST( key_apply_one , "apply: (test,test,foo) <!> key_apply.one() => 1" ) {
     assert_not_null( i );
     assert_int_eq(  as_integer_toint(i), 1 );
 
+    as_val_destroy(res);
 }
 
 TEST( key_apply_ten , "apply: (test,test,foo) <!> key_apply.one() => 10" ) {
@@ -144,6 +145,8 @@ TEST( key_apply_ten , "apply: (test,test,foo) <!> key_apply.one() => 10" ) {
     as_integer * i = as_integer_fromval(res);
     assert_not_null( i );
     assert_int_eq(  as_integer_toint(i), 10 );
+
+    as_val_destroy(res);
 }
 
 TEST( key_apply_add_1_2 , "apply: (test,test,foo) <!> key_apply.add(1,2) => 3" ) {
@@ -171,6 +174,9 @@ TEST( key_apply_add_1_2 , "apply: (test,test,foo) <!> key_apply.add(1,2) => 3" )
     as_integer * i = as_integer_fromval(res);
     assert_not_null( i );
     assert_int_eq(  as_integer_toint(i), 3 );
+
+    as_val_destroy(&arglist);
+    as_val_destroy(res);
 }
 
 TEST( key_apply_record_exists , "apply: (test,test,foo) <!> key_apply.record_exists() => 1" ) {
@@ -193,10 +199,12 @@ TEST( key_apply_record_exists , "apply: (test,test,foo) <!> key_apply.record_exi
     as_integer * i = as_integer_fromval(res);
     assert_not_null( i );
     assert_int_eq(  as_integer_toint(i), 1 );
+
+    as_val_destroy(res);
 }
 
 
-TEST( key_apply_get_bin_a , "apply: (test,test,foo) <!> key_apply.get_bin_a() => 123" ) {
+TEST( key_apply_get_bin_a , "apply: (test,test,foo1) <!> key_apply.get_bin_a() => 123" ) {
 
 	as_error err;
 	as_error_reset(&err);
@@ -220,6 +228,9 @@ TEST( key_apply_get_bin_a , "apply: (test,test,foo) <!> key_apply.get_bin_a() =>
     as_integer * i = as_integer_fromval(res);
     assert_not_null( i );
     assert_int_eq(  as_integer_toint(i), 123 );
+
+    as_val_destroy(&arglist);
+    as_val_destroy(res);
 }
 
 
@@ -233,9 +244,9 @@ SUITE( key_apply, "aerospike_key_apply tests" ) {
     suite_after( after );
     
 	suite_add( key_apply_put );
-	suite_add( key_apply_one );
-	suite_add( key_apply_ten );
-	suite_add( key_apply_add_1_2 );
-	suite_add( key_apply_record_exists );
+    suite_add( key_apply_one );
+    suite_add( key_apply_ten );
+    suite_add( key_apply_add_1_2 );
+    suite_add( key_apply_record_exists );
 	suite_add( key_apply_get_bin_a );
 }

@@ -158,10 +158,6 @@ int cl_compile(uint info1, uint info2, uint info3, const char *ns, const char *s
 	cl_scan_param_field *scan_field, as_call * as_call, uint8_t udf_type
 	);
 
-int cl_parse(cl_msg *msg, uint8_t *buf, size_t buf_len, cl_bin **values_r, cl_operation **operations_r, 
-	int *n_values_r, uint64_t *trid, char **setname_r
-	);
-
 // // Get a map reduce state - the instance - based on the job description
 // cl_mr_state * cl_mr_state_get(const cl_mr_job *mrj);
 // void cl_mr_state_put(cl_mr_state *mrs);

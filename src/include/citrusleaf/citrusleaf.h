@@ -102,8 +102,7 @@ cl_rv citrusleaf_delete_verify(as_cluster *asc, const char *ns, const char *set,
  * can be specified in a single call.
  */
 
-cl_rv citrusleaf_operate(as_cluster *asc, const char *ns, const char *set, const cl_object *key, cf_digest *d, cl_operation *operations, int n_operations, const cl_write_parameters *cl_w_p, uint32_t *generation, uint32_t* ttl);
-cl_rv citrusleaf_operate_digest(as_cluster *asc, const char *ns, const char *set, cf_digest *d, cl_operation *operations, int n_operations, const cl_write_parameters *cl_w_p, uint32_t *generation, uint32_t* ttl);
+cl_rv citrusleaf_operate(as_cluster *asc, const char *ns, const char *set, const cl_object *key, cf_digest *d, cl_bin **values, cl_operation *operations, int *n_values, const cl_write_parameters *cl_w_p, uint32_t *generation, uint32_t* ttl);
 
 /**
  * This debugging call can be useful for tracking down errors and coordinating with server failures

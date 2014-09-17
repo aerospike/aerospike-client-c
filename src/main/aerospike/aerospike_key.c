@@ -461,9 +461,8 @@ as_status aerospike_key_operate(
 	int 			n_operations = ops->binops.size;
 	cl_operation * 	operations = (cl_operation *) alloca(sizeof(cl_operation) * n_operations);
 	int				n_read_ops = 0;
-	as_bin_name *	read_op_bins = alloca(sizeof(as_bin_name) * n_operations);
 
-	for(int i=0; i<n_operations; i++) {
+	for(int i = 0; i < n_operations; i++) {
 		cl_operation * clop = &operations[i];
 		as_binop * op = &ops->binops.entries[i];
 
@@ -479,19 +478,20 @@ as_status aerospike_key_operate(
 
 		// Collect bin names that are read.
 		if (op->op == AS_OPERATOR_READ) {
-			strcpy(read_op_bins[n_read_ops++], op->bin.name);
+			n_read_ops++;
 		}
 
 		asbinvalue_to_clobject(op->bin.valuep, &clop->bin.object);
 	}
 
 	cl_rv rc = CITRUSLEAF_OK;
+	cl_bin *result_bins = NULL;
 
 	switch ( p.key ) {
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
 			rc = citrusleaf_operate(as->cluster, key->ns, key->set, NULL, (cf_digest*)digest->value,
-					operations, n_operations, &wp, &gen, &ttl);
+					&result_bins, operations, &n_operations, &wp, &gen, &ttl);
 			break;
 		}
 		case AS_POLICY_KEY_SEND: {
@@ -499,7 +499,7 @@ as_status aerospike_key_operate(
 			asval_to_clobject((as_val *) key->valuep, &okey);
 			as_digest * digest = as_key_digest((as_key *) key);
 			rc = citrusleaf_operate(as->cluster, key->ns, key->set, &okey, (cf_digest*)digest->value,
-					operations, n_operations, &wp, &gen, &ttl);
+					&result_bins, operations, &n_operations, &wp, &gen, &ttl);
 			break;
 		}
 		default: {
@@ -508,34 +508,36 @@ as_status aerospike_key_operate(
 		}
 	}
 
+	if (n_read_ops != n_operations) {
+		if (result_bins) {
+			citrusleaf_bins_free(result_bins, n_operations);
+			free(result_bins);
+		}
+
+		return as_error_update(err, AEROSPIKE_ERR, "expected %d bins, got %d", n_read_ops, n_operations);
+	}
+
 	if ( n_read_ops != 0 && rc == CITRUSLEAF_OK && rec != NULL ) {
 		as_record * r = *rec;
 		if ( r == NULL ) {
 			r = as_record_new(0);
 		}
 		if ( r->bins.entries == NULL ) {
-			r->bins.capacity = n_read_ops;
+			r->bins.capacity = n_operations;
 			r->bins.size = 0;
-			r->bins.entries = malloc(sizeof(as_bin) * n_read_ops);
+			r->bins.entries = malloc(sizeof(as_bin) * n_operations);
 			r->bins._free = true;
 		}
+		clbins_to_asrecord(result_bins, n_operations, r);
 		r->gen = (uint16_t) gen;
 		r->ttl = ttl;
 
-		// This works around an existing client bug where the data returned for
-		// a read operation is stored in the first bin struct with that bin
-		// name, not necessarily the bin struct corresponding to the read.
-		for (int i = 0; i < n_read_ops; i++) {
-			for (int j = 0; j < n_operations; j++) {
-				if (strcmp(read_op_bins[i], operations[j].bin.bin_name) == 0) {
-					clbin_to_asrecord(&operations[j].bin, r);
-					citrusleaf_object_free(&operations[j].bin.object);
-					break;
-				}
-			}
-		}
-
 		*rec = r;
+	}
+
+	if (result_bins) {
+		citrusleaf_bins_free(result_bins, n_operations);
+		free(result_bins);
 	}
 
 	return as_error_fromrc(err,rc);

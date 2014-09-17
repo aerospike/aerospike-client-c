@@ -1091,31 +1091,25 @@ set_object(cl_msg_op *op, cl_object *obj)
 	return(rv);
 }	
 
-//
-// Search through the value list and set the pre-existing correct one
-// Leads ot n-squared in this section of code
-// See other comment....
+// Search through the value list and set the pre-existing correct one.
 static int
-set_value_search(cl_msg_op *op, cl_bin *values, cl_operation *operations, int n_values)
+set_value_search(cl_msg_op *op, cl_bin *values, int n_values)
 {
-	// currently have to loop through the values to find the right one
-	// how that sucks! it's easy to fix eventuallythough
 	int i;
 	cl_bin *value = 0;
-	for (i=0;i<n_values;i++)
-	{	
-		value = values ? &(values[i]) : &(operations[i].bin);
-		if (memcmp(value->bin_name, op->name, op->name_sz) == 0)
+
+	for (i = 0; i < n_values; i++) {
+		value = &values[i];
+
+		if (memcmp(value->bin_name, op->name, op->name_sz) == 0) {
 			break;
+		}
 	}
+
 	if (i == n_values) {
-#ifdef DEBUG_VERBOSE		
-		cf_debug("set value: but value wasn't there to begin with. Don't understand.");
-#endif		
 		return(-1);
 	}
-	
-	// copy
+
 	set_object(op, &value->object);
 	return(0);
 }
@@ -1151,25 +1145,22 @@ cl_set_value_particular(cl_msg_op *op, cl_bin *value)
 //
 
 int
-cl_parse(cl_msg *msg, uint8_t *buf, size_t buf_len, cl_bin **values_r, cl_operation **operations_r, 
+cl_parse(cl_msg *msg, uint8_t *buf, size_t buf_len, cl_bin **values_r,
 	int *n_values_r, uint64_t *trid_r, char **setname_r)
 {
 	uint8_t *buf_lim = buf + buf_len;
-	
+
 	int i;
 	if (msg->n_fields) {
 		cl_msg_field *mf = (cl_msg_field *)buf;
-		
-		for (i=0;i<msg->n_fields;i++) {
-			
+
+		for (i = 0; i < msg->n_fields; i++) {
 			if (buf_lim < buf + sizeof(cl_msg_field)) {
-#ifdef DEBUG_VERBOSE
-				cf_error("parse: too short message: said there was a field, but too short");
-#endif
 				return(-1);
 			}
 
 			cl_msg_swap_field_from_be(mf);
+
 			if (mf->type == CL_MSG_FIELD_TYPE_TRID) {
 				uint64_t trid_nbo;
 				//We get the transaction-id in network byte order (big-endian)
@@ -1180,7 +1171,7 @@ cl_parse(cl_msg *msg, uint8_t *buf, size_t buf_len, cl_bin **values_r, cl_operat
 				}
 			} else if (mf->type == CL_MSG_FIELD_TYPE_SET) {
 				// In case of set name, the field size is set to one more than the 
-				// size of set name (to accomodate the byte used for 'type' value)
+				// size of set name (to accommodate the byte used for 'type' value)
 				if (setname_r) {
 					*setname_r = strndup((char *)mf->data, (mf->field_sz-1));
 				}
@@ -1188,75 +1179,56 @@ cl_parse(cl_msg *msg, uint8_t *buf, size_t buf_len, cl_bin **values_r, cl_operat
 
 			mf = cl_msg_field_get_next(mf);
 		}
+
 		buf = (uint8_t *) mf;
 	}
 
 	cl_msg_op *op = (cl_msg_op *)buf;
 	
-	// if we weren't passed in a buffer to complete, we need to make a new one
-	// XXX - You've got a likely memory leak here.  If we need *more* bins than the 
-	// caller has allocated to us, we allocate a larger block. But we do so by 
-	// nuking the reference to the block that the caller has given us, replacing
-	// it with our own (malloc'd) memory, and not telling the caller.  - CSW
-	if (n_values_r && (values_r || operations_r) ) {
-		if (msg->n_ops > *n_values_r) {
-			// straight bin path..
-			if( values_r ){								   
-				cl_bin *values = malloc( sizeof(cl_bin) * msg->n_ops );
-				if (values == 0) 		return(-1);
-				*n_values_r = msg->n_ops;
-				*values_r = values;
-			}else{ // operations path 
-				cl_operation *operations = (cl_operation *)malloc( sizeof(cl_operation) *msg->n_ops );
-				if( operations == 0 )		return(-1);
-				*n_values_r = msg->n_ops;
-				*operations_r = operations;
-			}
-			
+	// If we weren't passed in a buffer to complete, we allocate one.
 
-			// if we already have our filled-out value structure, just copy in
-			for (i=0;i<msg->n_ops;i++) {
-				cl_bin *value = values_r ? &((*values_r)[i]) : &((*operations_r)[i].bin);
-				
+	// If we need *more* bins than the caller has allocated to us, we allocate a
+	// larger block. But we do so by overwriting the reference to the block that
+	// the caller has given us, replacing it with our own (malloc'd) memory, and
+	// not telling the caller. This never happens.
+
+	if (n_values_r && values_r) {
+		if (msg->n_ops > *n_values_r) {
+			cl_bin *values = malloc( sizeof(cl_bin) * msg->n_ops );
+
+			if (values == 0) {
+				return(-1);
+			}
+
+			*n_values_r = msg->n_ops;
+			*values_r = values;
+
+			for (i = 0; i < msg->n_ops; i++) {
 				if (buf_lim < buf + sizeof(cl_msg_op)) {
-#ifdef DEBUG_VERBOSE
-					cf_debug("parse: too short message: said there was ops, iteration %d, but too short", i);
-#endif
 					return(-1);
 				}
 
+				cl_bin *value = &(*values_r)[i];
+
 				cl_msg_swap_op_from_be(op);
-				
 				cl_set_value_particular(op, value);
-				
 				op = cl_msg_op_get_next(op);
-				
 			}
-			
 		}
 		else {
-			// if we already have our filled-out value structure, just copy in
-			for (i=0;i<msg->n_ops;i++) {
-
+			// If we already have our filled-out value structure, just copy in.
+			for (i = 0; i < msg->n_ops; i++) {
 				if (buf_lim < buf + sizeof(cl_msg_op)) {
-#ifdef DEBUG_VERBOSE
-					cf_debug("parse: too short message: said there was ops, iteration %d, but too short", i);
-#endif
 					return(-1);
 				}
 
 				cl_msg_swap_op_from_be(op);
-				
-				// This is a little peculiar. We could get a response that wasn't in the result
-				// set, would be nice to throw an error
-				set_value_search(op, values_r?*values_r:NULL, operations_r?*operations_r:NULL, *n_values_r);
-				
+				set_value_search(op, *values_r, *n_values_r);
 				op = cl_msg_op_get_next(op);
 			}
 		}
 	}
-	
-	
+
 	return(0);
 }
 
@@ -1311,6 +1283,10 @@ do_the_full_monte(as_cluster *asc, int info1, int info2, int info3, const char *
 		if (cl_compile(info1, info2, info3, ns, set, key, digest, values?*values:NULL, operator, operations?*operations:NULL,
 				*n_values , &wr_buf, &wr_buf_sz, cl_w_p, &d_ret, *trid, NULL, call, 0 /* udf_type */)) {
 			return(rv);
+		}
+		if (operations) {
+			// Force results of operations returned in response to be malloc'd.
+			*n_values = 0;
 		}
 	}else{
 		if (cl_compile(info1, info2, info3, ns, set, key, digest, 0, 0, 0, 0, &wr_buf, &wr_buf_sz, cl_w_p, &d_ret, *trid, NULL, call, 0 /*udf_type*/)) {
@@ -1547,7 +1523,7 @@ Ok:
 	if (wr_buf != wr_stack_buf)		free(wr_buf);
 
 	if (rd_buf) {
-		if (0 != cl_parse(&msg.m, rd_buf, rd_buf_sz, values, operations, n_values, trid, setname_r)) {
+		if (0 != cl_parse(&msg.m, rd_buf, rd_buf_sz, values, n_values, trid, setname_r)) {
 			rv = CITRUSLEAF_FAIL_UNKNOWN;
 		}
 		else {
@@ -1833,51 +1809,9 @@ citrusleaf_calculate_digest(const char *set, const cl_object *key, cf_digest *di
 }
 
 
-//
-// operate allows the caller to specify any set of operations on any record.
-// any bin. It can't be used to operate and 'get many' in the response, though.
-//
-extern cl_rv
-citrusleaf_operate_digest(as_cluster *asc, const char *ns, const char *set, cf_digest *digest,
-		cl_operation *operations, int n_operations, const cl_write_parameters *cl_w_p,
-		uint32_t *generation, uint32_t* ttl)
-{
-	// see if there are any read or write bits ---
-	//   (this is slightly obscure c usage....)
-	int info1 = 0, info2 = 0, info3 = 0;
-	uint64_t trid=0;
-
-	for (int i=0;i<n_operations;i++) {
-		switch (operations[i].op) {
-		case CL_OP_WRITE:
-		case CL_OP_MC_INCR:
-		case CL_OP_INCR:
-		case CL_OP_APPEND:
-		case CL_OP_PREPEND:
-		case CL_OP_MC_APPEND:
-		case CL_OP_MC_PREPEND:
-		case CL_OP_MC_TOUCH:
-		case CL_OP_TOUCH:
-			info2 = CL_MSG_INFO2_WRITE;
-			break;
-		case CL_OP_READ:
-			info1 = CL_MSG_INFO1_READ;
-			break;
-		default:
-			break;
-		}
-		
-		if (info1 && info2) break;
-	}
-
-	return( do_the_full_monte( asc, info1, info2, info3, ns, set, NULL, digest, 0, 0,
-			&operations, &n_operations, generation, cl_w_p, &trid, NULL, NULL, ttl) );
-}
-
-
 extern cl_rv
 citrusleaf_operate(as_cluster *asc, const char *ns, const char *set, const cl_object *key,
-		cf_digest *digest, cl_operation *operations, int n_operations,
+		cf_digest *digest, cl_bin **values, cl_operation *operations, int *n_values,
 		const cl_write_parameters *cl_w_p, uint32_t *generation, uint32_t* ttl)
 {
 	// see if there are any read or write bits ---
@@ -1885,7 +1819,7 @@ citrusleaf_operate(as_cluster *asc, const char *ns, const char *set, const cl_ob
 	int info1 = 0, info2 = 0, info3 = 0;
 	uint64_t trid=0;
 
-	for (int i=0;i<n_operations;i++) {
+	for (int i = 0; i < *n_values; i++) {
 		switch (operations[i].op) {
 		case CL_OP_WRITE:
 		case CL_OP_MC_INCR:
@@ -1908,8 +1842,10 @@ citrusleaf_operate(as_cluster *asc, const char *ns, const char *set, const cl_ob
 		if (info1 && info2) break;
 	}
 
-	return( do_the_full_monte( asc, info1, info2, info3, ns, set, key, digest, 0, 0, 
-			&operations, &n_operations, generation, cl_w_p, &trid, NULL, NULL, ttl) );
+	*values = 0;
+
+	return( do_the_full_monte( asc, info1, info2, info3, ns, set, key, digest, values, 0,
+			&operations, n_values, generation, cl_w_p, &trid, NULL, NULL, ttl) );
 }
 
 

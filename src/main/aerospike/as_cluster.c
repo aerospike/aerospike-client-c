@@ -21,6 +21,7 @@
  *****************************************************************************/
 
 #include <aerospike/as_cluster.h>
+#include <aerospike/as_shm_cluster.h>
 #include <aerospike/as_admin.h>
 #include <aerospike/as_password.h>
 #include <aerospike/as_lookup.h>
@@ -158,7 +159,7 @@ release_nodes(as_nodes* nodes)
 /**
  *	Add nodes using copy on write semantics.
  */
-static void
+void
 as_cluster_add_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_add)
 {
 	// Create temporary nodes array.
@@ -179,6 +180,17 @@ as_cluster_add_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ nodes
 	item.data = nodes_old;
 	item.release_fn = (as_release_fn)release_nodes;
 	as_vector_append(cluster->gc, &item);
+}
+
+static void
+as_cluster_add_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_add)
+{
+	as_cluster_add_nodes_copy(cluster, nodes_to_add);
+
+	// Update shared memory nodes.
+	if (cluster->shm_info) {
+		as_shm_add_nodes(cluster, nodes_to_add);
+	}
 }
 
 static bool
@@ -231,7 +243,7 @@ as_cluster_seed_nodes(as_cluster* cluster, bool enable_warnings)
 	bool status = false;
 	
 	if (nodes_to_add.size > 0) {
-		as_cluster_add_nodes_copy(cluster, &nodes_to_add);
+		as_cluster_add_nodes(cluster, &nodes_to_add);
 		status = true;
 	}
 	
@@ -373,7 +385,7 @@ release_node(as_node* node)
 /**
  * Remove nodes using copy on write semantics.
  */
-static void
+void
 as_cluster_remove_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_remove)
 {
 	// Create temporary nodes array.
@@ -438,6 +450,11 @@ as_cluster_remove_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_t
 			
 	// Remove all nodes at once to avoid copying entire array multiple times.
 	as_cluster_remove_nodes_copy(cluster, nodes_to_remove);
+	
+	// Update shared memory nodes.
+	if (cluster->shm_info) {
+		as_shm_remove_nodes(cluster, nodes_to_remove);
+	}
 }
 
 static bool
@@ -483,7 +500,7 @@ as_cluster_gc(as_vector* /* <as_gc_item> */ vector)
 /**
  * Check health of all nodes in the cluster.
  */
-static bool
+bool
 as_cluster_tend(as_cluster* cluster, bool enable_seed_warnings)
 {
 	// All node additions/deletions are performed in tend thread.
@@ -552,7 +569,7 @@ as_cluster_tend(as_cluster* cluster, bool enable_seed_warnings)
 	
 	// Add nodes in a batch.
 	if (nodes_to_add.size > 0) {
-		as_cluster_add_nodes_copy(cluster, &nodes_to_add);
+		as_cluster_add_nodes(cluster, &nodes_to_add);
 	}
 	
 	as_vector_destroy(&nodes_to_add);
@@ -607,16 +624,10 @@ as_cluster_tender(void* data)
 	return NULL;
 }
 
-static bool
-as_init_tend_thread(as_cluster* cluster, bool fail_if_not_connected)
+void
+as_cluster_add_seeds(as_cluster* cluster)
 {
-	// Tend cluster until all nodes identified.
-	if (! as_wait_till_stabilized(cluster)) {
-		if (fail_if_not_connected) {
-			return false;
-		}
-	}
-	
+	// Add other nodes as seeds, if they don't already exist.
 	if (cf_debug_enabled()) {
 		as_seed* seed = cluster->seeds;
 		for (uint32_t i = 0; i < cluster->seeds_size; i++) {
@@ -625,7 +636,6 @@ as_init_tend_thread(as_cluster* cluster, bool fail_if_not_connected)
 		}
 	}
 	
-	// Add other nodes as seeds, if they don't already exist.
 	as_nodes* nodes = cluster->nodes;
 	as_vector seeds_to_add;
 	as_vector_inita(&seeds_to_add, sizeof(as_seed), nodes->size);
@@ -656,10 +666,19 @@ as_init_tend_thread(as_cluster* cluster, bool fail_if_not_connected)
 		as_add_seeds(cluster, (as_seed*)seeds_to_add.list, seeds_to_add.size);
 	}
 	as_vector_destroy(&seeds_to_add);
-	
-	// Run cluster tend thread.
+}
+
+bool
+as_cluster_init(as_cluster* cluster, bool fail_if_not_connected)
+{
+	// Tend cluster until all nodes identified.
+	if (! as_wait_till_stabilized(cluster)) {
+		if (fail_if_not_connected) {
+			return false;
+		}
+	}
+	as_cluster_add_seeds(cluster);
 	cluster->valid = true;
-	pthread_create(&cluster->tend_thread, 0, as_cluster_tender, cluster);
 	return true;
 }
 
@@ -835,14 +854,25 @@ as_cluster_create(as_config* config)
 	
 	// Initialize garbage collection array.
 	cluster->gc = as_vector_create(sizeof(as_gc_item), 8);
-	
+
 	// Initialize batch.
 	pthread_mutex_init(&cluster->batch_init_lock, 0);
-		
-	// Run cluster tend thread.
-	if (! as_init_tend_thread(cluster, config->fail_if_not_connected)) {
-		as_cluster_destroy(cluster);
-		return 0;
+	
+	if (config->use_shm) {
+		// Create shared memory cluster.
+		if (! as_shm_create(cluster, config)) {
+			as_cluster_destroy(cluster);
+			return 0;
+		}
+	}
+	else {
+		// Initialize normal cluster.
+		if (! as_cluster_init(cluster, config->fail_if_not_connected)) {
+			as_cluster_destroy(cluster);
+			return 0;
+		}
+		// Run cluster tend thread.
+		pthread_create(&cluster->tend_thread, 0, as_cluster_tender, cluster);
 	}
 	return cluster;
 }
@@ -858,9 +888,15 @@ as_cluster_destroy(as_cluster* cluster)
 	// Stop tend thread and wait till finished.
 	if (cluster->valid) {
 		cluster->valid = false;
-		pthread_join(cluster->tend_thread, NULL);
+		
+		if (cluster->shm_info) {
+			as_shm_destroy(cluster, true);
+		}
+		else {
+			pthread_join(cluster->tend_thread, NULL);
+		}
 	}
-	
+
 	// Release everything in garbage collector.
 	as_cluster_gc(cluster->gc);
 	as_vector_destroy(cluster->gc);

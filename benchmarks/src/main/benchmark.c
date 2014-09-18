@@ -103,6 +103,7 @@ connect_to_server(arguments* args, aerospike* client)
 	}
 	
 	as_config_set_user(&cfg, args->user, args->password);
+	cfg.use_shm = args->use_shm;
 	
 	as_policies* p = &cfg.policies;
 	p->timeout	= args->read_timeout;

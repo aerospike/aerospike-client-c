@@ -115,6 +115,7 @@ AEROSPIKE += as_record.o
 AEROSPIKE += as_record_hooks.o
 AEROSPIKE += as_record_iterator.o
 AEROSPIKE += as_scan.o
+AEROSPIKE += as_shm_cluster.o
 AEROSPIKE += as_udf.o
 AEROSPIKE += as_ldt.o
 

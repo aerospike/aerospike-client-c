@@ -51,6 +51,7 @@ typedef struct arguments_t {
 	bool latency;
 	int latency_columns;
 	int latency_shift;
+	bool use_shm;
 } arguments;
 
 typedef struct clientdata_t {

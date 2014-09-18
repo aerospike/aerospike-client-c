@@ -145,6 +145,12 @@ typedef struct as_cluster_s {
 	
 	/**
 	 *	@private
+	 *	Shared memory implementation of cluster.
+	 */
+	struct as_shm_info_s* shm_info;
+	
+	/**
+	 *	@private
 	 *	User name in UTF-8 encoded bytes.
 	 */
 	char* user;
@@ -410,12 +416,25 @@ as_partition_table_get_node(as_cluster* cluster, as_partition_table* table, cons
 
 /**
  *	@private
+ *	Get shared memory mapped node given digest key.  If there is no mapped node, a random node is used instead.
+ *	as_nodes_release() must be called when done with node.
+ */
+as_node*
+as_shm_node_get(as_cluster* cluster, const char* ns, const cf_digest* d, bool write);
+
+/**
+ *	@private
  *	Get mapped node given digest key.  If there is no mapped node, a random node is used instead.
  *	as_nodes_release() must be called when done with node.
  */
 static inline as_node*
 as_node_get(as_cluster* cluster, const char* ns, const cf_digest* d, bool write)
 {
-	as_partition_table* table = as_cluster_get_partition_table(cluster, ns);
-	return as_partition_table_get_node(cluster, table, d, write);
+	if (cluster->shm_info) {
+		return as_shm_node_get(cluster, ns, d, write);
+	}
+	else {
+		as_partition_table* table = as_cluster_get_partition_table(cluster, ns);
+		return as_partition_table_get_node(cluster, table, d, write);
+	}
 }

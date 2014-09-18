@@ -21,9 +21,10 @@
  *****************************************************************************/
 #include <aerospike/as_partition.h>
 #include <aerospike/as_cluster.h>
+#include <aerospike/as_shm_cluster.h>
 #include <aerospike/as_string.h>
-#include "citrusleaf/cf_b64.h"
-#include "citrusleaf/cf_log_internal.h"
+#include <citrusleaf/cf_b64.h>
+#include <citrusleaf/cf_log_internal.h>
 #include "ck_pr.h"
 
 /******************************************************************************
@@ -352,20 +353,24 @@ as_partition_tables_update(as_cluster* cluster, as_node* node, char* buf, bool m
 				return false;
 			}
 
-			as_partition_table* table = as_partition_tables_get(tables, ns);
-			
-			if (! table) {
-				table = as_partition_vector_get(&tables_to_add, ns);
+			if (cluster->shm_info) {
+				as_shm_update_partitions(cluster->shm_info, ns, bitmap_b64, len, node, master);
+			}
+			else {
+				as_partition_table* table = as_partition_tables_get(tables, ns);
 				
 				if (! table) {
-					table = as_partition_table_create(ns, cluster->n_partitions);
-					as_vector_append(&tables_to_add, &table);
+					table = as_partition_vector_get(&tables_to_add, ns);
+					
+					if (! table) {
+						table = as_partition_table_create(ns, cluster->n_partitions);
+						as_vector_append(&tables_to_add, &table);
+					}
 				}
+
+				// Decode partition bitmap and update client's view.
+				decode_and_update(bitmap_b64, len, table, node, master);
 			}
-
-			// Decode partition bitmap and update client's view.
-			decode_and_update(bitmap_b64, len, table, node, master);
-
 			ns = ++p;
 		}
 		else {

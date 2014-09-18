@@ -127,6 +127,12 @@ typedef struct as_node_s {
 	 *	Number of consecutive info request failures.
 	 */
 	uint32_t failures;
+
+	/**
+	 *	@private
+	 *	Shared memory node array index.
+	 */
+	uint32_t index;
 	
 	/**
 	 *	@private

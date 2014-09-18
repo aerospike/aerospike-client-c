@@ -71,6 +71,7 @@ as_node_create(as_cluster* cluster, const char* name, struct sockaddr_in* addr)
 	node->info_fd = -1;
 	node->friends = 0;
 	node->failures = 0;
+	node->index = 0;
 	node->active = true;
 	return node;
 }

@@ -11,6 +11,7 @@
 		BF07F65718B4362000CE1850 /* cf_client_rc.c in Sources */ = {isa = PBXBuildFile; fileRef = BF07F65618B4362000CE1850 /* cf_client_rc.c */; };
 		BF07F65C18B4365100CE1850 /* cf_log.c in Sources */ = {isa = PBXBuildFile; fileRef = BF07F65918B4365100CE1850 /* cf_log.c */; };
 		BF07F65D18B4365100CE1850 /* cf_packet_compression.c in Sources */ = {isa = PBXBuildFile; fileRef = BF07F65A18B4365100CE1850 /* cf_packet_compression.c */; };
+		BF26A38919C2621000AE763C /* as_shm_cluster.c in Sources */ = {isa = PBXBuildFile; fileRef = BF26A38819C2621000AE763C /* as_shm_cluster.c */; };
 		BF2AA79B18BEB91100E54AF3 /* as_log.c in Sources */ = {isa = PBXBuildFile; fileRef = BF2AA78D18BEB91100E54AF3 /* as_log.c */; };
 		BF2AA79C18BEB91100E54AF3 /* citrusleaf.c in Sources */ = {isa = PBXBuildFile; fileRef = BF2AA78E18BEB91100E54AF3 /* citrusleaf.c */; };
 		BF2AA79E18BEB91100E54AF3 /* cl_batch.c in Sources */ = {isa = PBXBuildFile; fileRef = BF2AA79018BEB91100E54AF3 /* cl_batch.c */; };
@@ -137,6 +138,7 @@
 		BF07F65618B4362000CE1850 /* cf_client_rc.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = cf_client_rc.c; path = ../modules/base/src/main/cf_client_rc.c; sourceTree = "<group>"; };
 		BF07F65918B4365100CE1850 /* cf_log.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = cf_log.c; path = ../modules/base/src/main/cf_log.c; sourceTree = "<group>"; };
 		BF07F65A18B4365100CE1850 /* cf_packet_compression.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = cf_packet_compression.c; path = ../modules/base/src/main/cf_packet_compression.c; sourceTree = "<group>"; };
+		BF26A38819C2621000AE763C /* as_shm_cluster.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_shm_cluster.c; path = ../src/main/aerospike/as_shm_cluster.c; sourceTree = "<group>"; };
 		BF2AA78D18BEB91100E54AF3 /* as_log.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_log.c; path = ../src/main/citrusleaf/as_log.c; sourceTree = "<group>"; };
 		BF2AA78E18BEB91100E54AF3 /* citrusleaf.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; lineEnding = 0; name = citrusleaf.c; path = ../src/main/citrusleaf/citrusleaf.c; sourceTree = "<group>"; };
 		BF2AA79018BEB91100E54AF3 /* cl_batch.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; lineEnding = 0; name = cl_batch.c; path = ../src/main/citrusleaf/cl_batch.c; sourceTree = "<group>"; };
@@ -271,6 +273,7 @@
 		BF07F62E18B4252500CE1850 = {
 			isa = PBXGroup;
 			children = (
+				BF26A38819C2621000AE763C /* as_shm_cluster.c */,
 				BFC38AE01948F7CA000C53D9 /* as_admin.c */,
 				BFBA04B41947B42000F9924E /* as_password.c */,
 				BFBA04AA1947AA9C00F9924E /* crypt_blowfish.c */,
@@ -558,6 +561,7 @@
 				BF843C5B18D3E64900A06CFB /* cf_queue.c in Sources */,
 				BF07F65518B4337000CE1850 /* cf_average.c in Sources */,
 				BF2AA7DE18BEBFA500E54AF3 /* aerospike_llist.c in Sources */,
+				BF26A38919C2621000AE763C /* as_shm_cluster.c in Sources */,
 				BFBA106918B7D8B300A64E68 /* as_val.c in Sources */,
 				BF2AA7E718BEBFA500E54AF3 /* as_bin.c in Sources */,
 				BF2AA7EF18BEBFA500E54AF3 /* as_query.c in Sources */,

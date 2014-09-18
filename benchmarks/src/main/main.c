@@ -26,7 +26,7 @@
 #include <string.h>
 #include <getopt.h>
 
-static const char* short_options = "h:p:U:P::n:s:k:o:Rw:z:g:T:dL:u";
+static const char* short_options = "h:p:U:P::n:s:k:o:Rw:z:g:T:dL:Su";
 
 static struct option long_options[] = {
 	{"hosts",        1, 0, 'h'},
@@ -47,6 +47,7 @@ static struct option long_options[] = {
 	{"maxRetries",   1, 0, 'r'},
 	{"debug",        0, 0, 'd'},
 	{"latency",      1, 0, 'L'},
+	{"shared",       0, 0, 'S'},
 	{"usage",        0, 0, 'u'},
 	{0,              0, 0, 0}
 };
@@ -159,6 +160,10 @@ print_usage(const char* program)
 	blog_line("   included in both the >1ms and >8ms columns.");
 	blog_line("");
 	
+	blog_line("-S --shared          # Default: false");
+	blog_line("   Use shared memory cluster tending.");
+	blog_line("");
+
 	blog_line("-u --usage           # Default: usage not printed.");
 	blog_line("   Display program usage.");
 	blog_line("");
@@ -241,6 +246,8 @@ print_args(arguments* args)
 	else {
 		blog_line("latency:        false");
 	}
+	
+	blog_line("shared memory:  %s", boolstring(args->use_shm));
 }
 
 static int
@@ -466,6 +473,10 @@ set_args(int argc, char * const * argv, arguments* args)
 				break;
 			}
 				
+			case 'S':
+				args->use_shm = true;
+				break;
+
 			case 'u':
 			default:
 				return 1;
@@ -508,6 +519,7 @@ main(int argc, char * const * argv)
 	args.latency = false;
 	args.latency_columns = 4;
 	args.latency_shift = 3;
+	args.use_shm = false;
 	
 	int ret = set_args(argc, argv, &args);
 	

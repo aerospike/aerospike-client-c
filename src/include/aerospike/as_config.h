@@ -334,6 +334,48 @@ typedef struct as_config_s {
 	 *	client will automatically connect when Aerospike server becomes available.
 	 */
 	bool fail_if_not_connected;
+	
+	/**
+	 *	Indicates if shared memory should be used for cluster tending.  Shared memory
+	 *	is useful when operating in single threaded mode with multiple client processes.
+	 *	This model is used by wrapper languages such as PHP and Python.  When enabled, 
+	 *	the data partition maps are maintained by only one process and all other processes 
+	 *	use these shared memory maps.
+	 *
+	 *	Shared memory should not be enabled for multi-threaded programs.
+	 *	Default: false
+	 */
+	bool use_shm;
+
+	/**
+	 *	Shared memory identifier.  This identifier should be the same for all applications
+	 *	that use the Aerospike C client. 
+	 *	Default: 148374583
+	 */
+	int shm_key;
+	
+	/**
+	 *	Shared memory maximum number of server nodes allowed.  This value is used to size
+	 *	the fixed shared memory segment.  Leave a sizeable cushion between actual server node
+	 *	count and shm_max_nodes so new nodes can be added without having to reboot the client.
+	 *	Default: 16
+	 */
+	uint32_t shm_max_nodes;
+	
+	/**
+	 *	Shared memory maximum number of namespaces allowed.  This value is used to size
+	 *	the fixed shared memory segment.  Leave a sizeable cushion between actual namespaces
+	 *	and shm_max_namespaces so new namespaces can be added without having to reboot the client.
+	 *	Default: 8
+	 */
+	uint32_t shm_max_namespaces;
+	
+	/**
+	 *	Take over shared memory cluster tending if the cluster hasn't been tended by this
+	 *	second threshold.
+	 *	Default: 30
+	 */
+	uint32_t shm_takeover_threshold_sec;
 } as_config;
 
 /******************************************************************************

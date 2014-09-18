@@ -490,9 +490,9 @@ TEST( key_apply2_delete_record_test_replication, "apply: (test,test,foo) <!> key
 	// Insert 3 bins
 	as_record r;
 	as_record_init(&r, 3);
-	as_record_set_string(&r, "a", as_string_new("String 1",true));
-	as_record_set_string(&r, "b", as_string_new("String 2",true));
-	as_record_set_string(&r, "c", as_string_new("String 3",true));
+	as_record_set_string(&r, "a", as_string_new("String 1",false));
+	as_record_set_string(&r, "b", as_string_new("String 2",false));
+	as_record_set_string(&r, "c", as_string_new("String 3",false));
 	as_error_reset(&err);
 	as_key_init(&key, "test", "test", "foo");
 	rc = aerospike_key_put(as, &err, NULL, &key, &r);
@@ -514,6 +514,7 @@ TEST( key_apply2_delete_record_test_replication, "apply: (test,test,foo) <!> key
 
 	assert_int_eq( rc, AEROSPIKE_OK );
 	as_val_destroy(res);
+	as_record_destroy(&r);
 
 	// Get bins
 	as_error_reset(&err);
@@ -568,6 +569,7 @@ TEST( key_apply2_update_record_test_memory, "apply: (test,test,foo) <!> key_appl
 		debug("used-bytes-memory(post): %ld", mem);
 	});
 
+	as_val_destroy(res);
 	debug("memory: pre=%ld post=%ld diff=%ld", mem_pre, mem_post, mem_pre - mem_post);
 }
 

@@ -87,7 +87,7 @@ TEST( key_apply_put , "put: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 'def
 	as_record_set_int64(&r, "a", 123);
 	as_record_set_str(&r, "b", "abc");
 	as_record_set_integer(&r, "c", as_integer_new(456));
-	as_record_set_string(&r, "d", as_string_new("def",true));
+	as_record_set_string(&r, "d", as_string_new("def",false));
 	as_record_set_list(&r, "e", (as_list *) &list);
 	as_record_set_map(&r, "f", (as_map *) &map);
 
@@ -98,6 +98,7 @@ TEST( key_apply_put , "put: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 'def
 
 	as_key_destroy(&key);
 
+	as_record_destroy(&r);
 	assert_int_eq( rc, AEROSPIKE_OK );
 }
 
@@ -245,8 +246,8 @@ SUITE( key_apply, "aerospike_key_apply tests" ) {
     
 	suite_add( key_apply_put );
     suite_add( key_apply_one );
-    suite_add( key_apply_ten );
-    suite_add( key_apply_add_1_2 );
-    suite_add( key_apply_record_exists );
+	suite_add( key_apply_ten );
+	suite_add( key_apply_add_1_2 );
+	suite_add( key_apply_record_exists );
 	suite_add( key_apply_get_bin_a );
 }

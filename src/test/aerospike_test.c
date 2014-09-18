@@ -161,17 +161,17 @@ static bool after(atf_plan * plan) {
 	
 	if ( aerospike_close(as, &err) == AEROSPIKE_OK ) {
 		info("disconnected from %s:%d", g_host, g_port);
+		aerospike_destroy(as);
+
     	return true;
 	}
 	else {
 		error("%s @ %s[%s:%d]", g_host, g_port, err.message, err.func, err.file, err.line);
+		aerospike_destroy(as);
+
 		return false;
 	}
 	
-	aerospike_destroy(as);
-	
-	as = NULL;
-
     return true;
 }
 

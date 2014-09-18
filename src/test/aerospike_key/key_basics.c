@@ -58,7 +58,7 @@ TEST( key_basics_put , "put: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 'de
 	as_stringmap_set_int64((as_map *) &map, "z", 9);
 
 	as_record r, * rec = &r;
-	as_record_init(rec, 10);
+	as_record_init(rec, 6);
 	as_record_set_int64(rec, "a", 123);
 	as_record_set_str(rec, "b", "abc");
 	as_record_set_integer(rec, "c", as_integer_new(456));
@@ -74,7 +74,7 @@ TEST( key_basics_put , "put: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 'de
 	as_key_destroy(&key);
 
     info("bins: ");
-    as_record_foreach(&r, key_basics_print_bins, NULL);
+    as_record_foreach(rec, key_basics_print_bins, NULL);
 
 	as_record_destroy(rec);
 

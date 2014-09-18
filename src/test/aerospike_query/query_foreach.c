@@ -46,9 +46,9 @@ extern aerospike * as;
 
 static bool before(atf_suite * suite) {
 
-	// if ( mod_lua.logger == NULL ) {
-	mod_lua.logger = test_logger_new();
-	// }
+	if ( mod_lua.logger == NULL ) {
+		mod_lua.logger = test_logger_new();
+	}
 
 	if ( ! udf_put(LUA_FILE) ) {
 		error("failure while uploading: %s", LUA_FILE);

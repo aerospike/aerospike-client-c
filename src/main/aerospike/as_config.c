@@ -37,7 +37,7 @@ as_config * as_config_init(as_config * c)
 	c->fail_if_not_connected = true;
 	
 	c->use_shm = false;
-	c->shm_key = 148374583;
+	c->shm_key = 0xA5000000;
 	c->shm_max_nodes = 16;
 	c->shm_max_namespaces = 8;
 	c->shm_takeover_threshold_sec = 30;

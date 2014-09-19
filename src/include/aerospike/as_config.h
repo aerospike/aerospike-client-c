@@ -356,7 +356,7 @@ typedef struct as_config_s {
 	
 	/**
 	 *	Shared memory maximum number of server nodes allowed.  This value is used to size
-	 *	the fixed shared memory segment.  Leave a sizeable cushion between actual server node
+	 *	the fixed shared memory segment.  Leave a cushion between actual server node
 	 *	count and shm_max_nodes so new nodes can be added without having to reboot the client.
 	 *	Default: 16
 	 */
@@ -364,7 +364,7 @@ typedef struct as_config_s {
 	
 	/**
 	 *	Shared memory maximum number of namespaces allowed.  This value is used to size
-	 *	the fixed shared memory segment.  Leave a sizeable cushion between actual namespaces
+	 *	the fixed shared memory segment.  Leave a cushion between actual namespaces
 	 *	and shm_max_namespaces so new namespaces can be added without having to reboot the client.
 	 *	Default: 8
 	 */

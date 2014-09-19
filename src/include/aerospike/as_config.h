@@ -372,7 +372,7 @@ typedef struct as_config_s {
 	
 	/**
 	 *	Take over shared memory cluster tending if the cluster hasn't been tended by this
-	 *	second threshold.
+	 *	threshold in seconds.
 	 *	Default: 30
 	 */
 	uint32_t shm_takeover_threshold_sec;

@@ -204,6 +204,7 @@ PLAN( aerospike_test ) {
     plan_add( key_basics );
     plan_add( key_apply );
     plan_add( key_apply2 );
+    plan_add( key_operate );
     
     // aerospike_info module
     plan_add( info_basics );

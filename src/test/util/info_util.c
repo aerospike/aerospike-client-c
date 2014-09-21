@@ -1,14 +1,24 @@
-/* *  Citrusleaf Stored Procedure Test Program
- *  rec_udf.c - Validates stored procedure functionality
+/*
+ * Copyright 2008-2014 Aerospike, Inc.
  *
- *  Copyright 2012 by Citrusleaf.  All rights reserved.
- *  THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE.  THE COPYRIGHT NOTICE
- *  ABOVE DOES NOT EVIDENCE ANY ACTUAL OR INTENDED PUBLICATION.
+ * Portions may be licensed to Aerospike, Inc. under one or more contributor
+ * license agreements.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not
+ * use this file except in compliance with the License. You may obtain a copy of
+ * the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
  */
 #include <stdio.h>
 #include "citrusleaf/cl_udf.h"
 #include <citrusleaf/cf_random.h>
 #include <citrusleaf/cf_atomic.h>
+#include <citrusleaf/cf_log_internal.h>
 #include <citrusleaf/cl_parsers.h>
 #include "info_util.h"
 
@@ -49,7 +59,7 @@ void * split_and_set_cb(char * data, void * context) {
 
 // Parses the response received for the command at each node and splits the resulting string
 // into 'key=value' strings and calls split_and_set_cb on them
-static bool parse_response( const as_node * cn, const struct sockaddr_in * sa_in, const char * query, char * value, void * udata) {
+static bool parse_response( const as_node * cn, const char * query, char * value, void * udata) {
 
 	key_value * kv = (key_value *)udata;
 
@@ -111,9 +121,13 @@ char **get_stats(char * query, char * key, as_cluster * asc) {
 	kv.value = (char**)calloc(1, 64 * sizeof(char*));
 
 	// Info the cluster with the query for the result
-	citrusleaf_info_cluster_foreach(asc, query, true, false, 0, &kv, parse_response);
+	char* error = 0;
+	int rc = citrusleaf_info_cluster_foreach(asc, query, true, false, 0, &kv, &error, parse_response);
 
+	if (rc) {
+		cf_warn("Error get_stats (%d): %s", rc, error);
+		free(error);
+	}
 	// Caller's responsibility to free value
 	return kv.value;
 }
-

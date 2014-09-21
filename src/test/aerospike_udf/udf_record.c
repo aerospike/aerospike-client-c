@@ -1,4 +1,19 @@
-
+/*
+ * Copyright 2008-2014 Aerospike, Inc.
+ *
+ * Portions may be licensed to Aerospike, Inc. under one or more contributor
+ * license agreements.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not
+ * use this file except in compliance with the License. You may obtain a copy of
+ * the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_udf.h>
 #include <aerospike/aerospike_key.h>
@@ -115,7 +130,7 @@ TEST( udf_record_update_map, "udf_record.update_map()" ) {
   // assert_int_eq( as_stringmap_get_int64(mval,"c"), as_stringmap_get_int64(mval,"a") + 2);
 
   // as_map_foreach(mval, udf_record_update_map_foreach, NULL);
-  
+  as_val_destroy(&args);
   as_val_destroy(val);
   as_key_destroy(&key);
 }

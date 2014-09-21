@@ -1,4 +1,19 @@
-
+/*
+ * Copyright 2008-2014 Aerospike, Inc.
+ *
+ * Portions may be licensed to Aerospike, Inc. under one or more contributor
+ * license agreements.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not
+ * use this file except in compliance with the License. You may obtain a copy of
+ * the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_udf.h>
 
@@ -48,11 +63,12 @@ TEST( udf_basics_1 , "manage udf_basics.lua" ) {
 	as_error err;
 	as_error_reset(&err);
 
-	// remove the file, regardless of whether it is on server or not.
-	
+	/* This test uploads, lists, downloads, and then proceeds to remove the udf-lua-file as well. 
+         * As a safe-guard, always ensure that the file does not exist in the first place. */ 
+ 	
 	aerospike_udf_remove(as, &err, NULL, filename);
 
-	assert_int_eq( err.code, AEROSPIKE_OK );
+	assert_int_eq( err.code, AEROSPIKE_ERR_UDF );
 
 	WAIT_MS(100);
 
@@ -129,6 +145,7 @@ TEST( udf_basics_1 , "manage udf_basics.lua" ) {
 
 	// remove the file
 
+	info("removing file: %s ", filename);
 	aerospike_udf_remove(as, &err, NULL, filename);
 
 	assert_int_eq( err.code, AEROSPIKE_OK );

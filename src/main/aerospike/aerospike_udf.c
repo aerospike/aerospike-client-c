@@ -1,25 +1,19 @@
-/******************************************************************************
- * Copyright 2008-2013 by Aerospike.
+/*
+ * Copyright 2008-2014 Aerospike, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy 
- * of this software and associated documentation files (the "Software"), to 
- * deal in the Software without restriction, including without limitation the 
- * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or 
- * sell copies of the Software, and to permit persons to whom the Software is 
- * furnished to do so, subject to the following conditions:
- * 
- * The above copyright notice and this permission notice shall be included in 
- * all copies or substantial portions of the Software.
- * 
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING 
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
- *****************************************************************************/
-
+ * Portions may be licensed to Aerospike, Inc. under one or more contributor
+ * license agreements.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not
+ * use this file except in compliance with the License. You may obtain a copy of
+ * the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_udf.h>
 #include <aerospike/as_error.h>
@@ -75,12 +69,11 @@ as_status aerospike_udf_list(
 	cl_udf_file * 	clfiles = NULL;
 	int 			count = 0;
 	
-	cl_rv clrv =  citrusleaf_udf_list(as->cluster, &clfiles, &count, &error);
+	cl_rv rc = citrusleaf_udf_list(as->cluster, &clfiles, &count, &error);
 
-	if ( error != NULL ) {
-		as_error_update(err, AEROSPIKE_ERR, error);
+	if (rc) {
+		as_strncpy(err->message, error, sizeof(err->message));
 		free(error);
-		error = NULL;
 	}
 	else if ( clfiles != NULL ) {
 	
@@ -100,7 +93,8 @@ as_status aerospike_udf_list(
 
 		free(clfiles);
 	}
-	return as_error_fromrc(err, clrv);
+	
+	return as_error_fromrc(err, rc);
 }
 
 /**
@@ -121,12 +115,11 @@ as_status aerospike_udf_get(
 	cl_udf_file clfile;
     memset(&clfile,0,sizeof(cl_udf_file));
 
-	cl_rv clrv = citrusleaf_udf_get(as->cluster, filename, &clfile, type, &error);
+	cl_rv rc = citrusleaf_udf_get(as->cluster, filename, &clfile, type, &error);
 	
-	if ( error != NULL ) {
-		as_error_update(err, AEROSPIKE_ERR, error);
+	if (rc) {
+		as_strncpy(err->message, error, sizeof(err->message));
 		free(error);
-		error = NULL;
 	}
 	else {
 		clfile_to_asfile(&clfile, file);
@@ -137,7 +130,7 @@ as_status aerospike_udf_get(
 		as_bytes_destroy(clfile.content);
 		clfile.content = NULL;
 	}
-	return as_error_fromrc(err, clrv);
+	return as_error_fromrc(err, rc);
 }
 
 /**
@@ -149,23 +142,21 @@ as_status aerospike_udf_put(
 {
 	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
-	cl_rv clrv;
+
 	// resolve policies
 	// as_policy_info p;
 	// as_policy_info_resolve(&p, &as->config.policies, policy);
 	
 	char * error = NULL;
 
-	clrv = citrusleaf_udf_put(as->cluster, filename, content, type, &error);
+	int rc = citrusleaf_udf_put(as->cluster, filename, content, type, &error);
 
-	if ( error != NULL ) {
-		// This returns an as_status code called inline.
-		as_error_update(err, AEROSPIKE_ERR_REQUEST_INVALID, error);
+	if (rc) {
+		as_strncpy(err->message, error, sizeof(err->message));
 		free(error);
-		error = NULL;
 	}
 
-	return as_error_fromrc(err, clrv);
+	return as_error_fromrc(err, rc);
 }
 
 /**
@@ -184,12 +175,12 @@ as_status aerospike_udf_remove(
 	
 	char * error = NULL;
 	
-	cl_rv clrv = citrusleaf_udf_remove(as->cluster, filename, &error);
+	cl_rv rc = citrusleaf_udf_remove(as->cluster, filename, &error);
 
-	if ( error != NULL ) {
-		as_error_update(err, AEROSPIKE_ERR, error);
+	if (rc) {
+		as_strncpy(err->message, error, sizeof(err->message));
 		free(error);
-		error = NULL;
 	}
-	return as_error_fromrc(err, clrv);
+
+	return as_error_fromrc(err, rc);
 }

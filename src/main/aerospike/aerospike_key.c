@@ -1,25 +1,19 @@
-/******************************************************************************
- * Copyright 2008-2013 by Aerospike.
+/*
+ * Copyright 2008-2014 Aerospike, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy 
- * of this software and associated documentation files (the "Software"), to 
- * deal in the Software without restriction, including without limitation the 
- * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or 
- * sell copies of the Software, and to permit persons to whom the Software is 
- * furnished to do so, subject to the following conditions:
- * 
- * The above copyright notice and this permission notice shall be included in 
- * all copies or substantial portions of the Software.
- * 
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING 
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
- *****************************************************************************/
-
+ * Portions may be licensed to Aerospike, Inc. under one or more contributor
+ * license agreements.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not
+ * use this file except in compliance with the License. You may obtain a copy of
+ * the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
 
@@ -86,8 +80,8 @@ as_status aerospike_key_get(
 	switch ( p.key ) {
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
-			rc = citrusleaf_get_all_digest_getsetname(as->cluster, key->ns, (cf_digest *) digest->value,
-					&values, &nvalues, timeout, &gen, NULL, &ttl);
+			rc = citrusleaf_get_all(as->cluster, key->ns, key->set, NULL, (cf_digest*)digest->value,
+					&values, &nvalues, timeout, &gen, &ttl);
 			break;
 		}
 		case AS_POLICY_KEY_SEND: {
@@ -178,7 +172,7 @@ as_status aerospike_key_select(
 	switch ( p.key ) {
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
-			rc = citrusleaf_get_digest(as->cluster, key->ns, (cf_digest *) digest->value,
+			rc = citrusleaf_get(as->cluster, key->ns, key->set, NULL, (cf_digest*)digest->value,
 					values, nvalues, timeout, &gen, &ttl);
 			break;
 		}
@@ -255,7 +249,7 @@ as_status aerospike_key_exists(
 	switch ( p.key ) {
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
-			rc = citrusleaf_exists_digest(as->cluster, key->ns, (cf_digest *) digest->value,
+			rc = citrusleaf_exists_key(as->cluster, key->ns, key->set, NULL, (cf_digest*)digest->value,
 					values, nvalues, timeout, &gen, &ttl);
 			break;
 		}
@@ -336,7 +330,7 @@ as_status aerospike_key_put(
 	switch ( p.key ) {
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
-			rc = citrusleaf_put_digest_with_setname(as->cluster, key->ns, key->set, (cf_digest *) digest->value, values, nvalues, &wp);
+			rc = citrusleaf_put(as->cluster, key->ns, key->set, NULL, (cf_digest*)digest->value, values, nvalues, &wp);
 			break;
 		}
 		case AS_POLICY_KEY_SEND: {
@@ -396,7 +390,7 @@ as_status aerospike_key_remove(
 	switch ( p.key ) {
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
-			rc = citrusleaf_delete_digest(as->cluster, key->ns, (cf_digest *) digest->value, &wp);
+			rc = citrusleaf_delete(as->cluster, key->ns, key->set, NULL, (cf_digest*)digest->value, &wp);
 			break;
 		}
 		case AS_POLICY_KEY_SEND: {
@@ -461,9 +455,8 @@ as_status aerospike_key_operate(
 	int 			n_operations = ops->binops.size;
 	cl_operation * 	operations = (cl_operation *) alloca(sizeof(cl_operation) * n_operations);
 	int				n_read_ops = 0;
-	as_bin_name *	read_op_bins = alloca(sizeof(as_bin_name) * n_operations);
 
-	for(int i=0; i<n_operations; i++) {
+	for(int i = 0; i < n_operations; i++) {
 		cl_operation * clop = &operations[i];
 		as_binop * op = &ops->binops.entries[i];
 
@@ -479,19 +472,20 @@ as_status aerospike_key_operate(
 
 		// Collect bin names that are read.
 		if (op->op == AS_OPERATOR_READ) {
-			strcpy(read_op_bins[n_read_ops++], op->bin.name);
+			n_read_ops++;
 		}
 
 		asbinvalue_to_clobject(op->bin.valuep, &clop->bin.object);
 	}
 
 	cl_rv rc = CITRUSLEAF_OK;
+	cl_bin *result_bins = NULL;
 
 	switch ( p.key ) {
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
-			rc = citrusleaf_operate_digest(as->cluster, key->ns, key->set, (cf_digest *) digest->value,
-					operations, n_operations, &wp, &gen, &ttl);
+			rc = citrusleaf_operate(as->cluster, key->ns, key->set, NULL, (cf_digest*)digest->value,
+					&result_bins, operations, &n_operations, &wp, &gen, &ttl);
 			break;
 		}
 		case AS_POLICY_KEY_SEND: {
@@ -499,7 +493,7 @@ as_status aerospike_key_operate(
 			asval_to_clobject((as_val *) key->valuep, &okey);
 			as_digest * digest = as_key_digest((as_key *) key);
 			rc = citrusleaf_operate(as->cluster, key->ns, key->set, &okey, (cf_digest*)digest->value,
-					operations, n_operations, &wp, &gen, &ttl);
+					&result_bins, operations, &n_operations, &wp, &gen, &ttl);
 			break;
 		}
 		default: {
@@ -508,34 +502,36 @@ as_status aerospike_key_operate(
 		}
 	}
 
+	if (n_read_ops != n_operations) {
+		if (result_bins) {
+			citrusleaf_bins_free(result_bins, n_operations);
+			free(result_bins);
+		}
+
+		return as_error_update(err, AEROSPIKE_ERR, "expected %d bins, got %d", n_read_ops, n_operations);
+	}
+
 	if ( n_read_ops != 0 && rc == CITRUSLEAF_OK && rec != NULL ) {
 		as_record * r = *rec;
 		if ( r == NULL ) {
 			r = as_record_new(0);
 		}
 		if ( r->bins.entries == NULL ) {
-			r->bins.capacity = n_read_ops;
+			r->bins.capacity = n_operations;
 			r->bins.size = 0;
-			r->bins.entries = malloc(sizeof(as_bin) * n_read_ops);
+			r->bins.entries = malloc(sizeof(as_bin) * n_operations);
 			r->bins._free = true;
 		}
+		clbins_to_asrecord(result_bins, n_operations, r);
 		r->gen = (uint16_t) gen;
 		r->ttl = ttl;
 
-		// This works around an existing client bug where the data returned for
-		// a read operation is stored in the first bin struct with that bin
-		// name, not necessarily the bin struct corresponding to the read.
-		for (int i = 0; i < n_read_ops; i++) {
-			for (int j = 0; j < n_operations; j++) {
-				if (strcmp(read_op_bins[i], operations[j].bin.bin_name) == 0) {
-					clbin_to_asrecord(&operations[j].bin, r);
-					citrusleaf_object_free(&operations[j].bin.object);
-					break;
-				}
-			}
-		}
-
 		*rec = r;
+	}
+
+	if (result_bins) {
+		citrusleaf_bins_free(result_bins, n_operations);
+		free(result_bins);
 	}
 
 	return as_error_fromrc(err,rc);
@@ -628,7 +624,7 @@ as_status aerospike_key_apply(
 			as_digest * digest = as_key_digest((as_key *) key);
 			rc = do_the_full_monte( 
 				as->cluster, 0, CL_MSG_INFO2_WRITE, 0, 
-				key->ns, key->set, 0, (cf_digest *) digest->value, &bins, CL_OP_WRITE, 0, &n_bins, 
+				key->ns, key->set, NULL, (cf_digest*)digest->value, &bins, CL_OP_WRITE, 0, &n_bins,
 				NULL, &wp, &trid, NULL, &call, NULL
 			);
 			break;

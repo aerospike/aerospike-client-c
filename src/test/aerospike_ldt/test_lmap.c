@@ -1,4 +1,19 @@
-
+/*
+ * Copyright 2008-2014 Aerospike, Inc.
+ *
+ * Portions may be licensed to Aerospike, Inc. under one or more contributor
+ * license agreements.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not
+ * use this file except in compliance with the License. You may obtain a copy of
+ * the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
 
@@ -68,6 +83,8 @@ TEST( lmap_put , "put: (test,test,t1) = {bin:1}" ) {
 	assert_not_null(p_val);
 	assert_int_eq(as_val_type(p_val),AS_INTEGER);
 	assert_int_eq(as_integer_get((as_integer *)p_val),34);
+
+	as_val_destroy(p_map);
 
 	// Destroy the lmap.
 	rc = aerospike_lmap_destroy(as, &err, NULL, &skey, &lmap);

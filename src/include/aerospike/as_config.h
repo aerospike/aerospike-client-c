@@ -1,25 +1,19 @@
-/******************************************************************************
- *	Copyright 2008-2013 by Aerospike.
+/*
+ * Copyright 2008-2014 Aerospike, Inc.
  *
- *	Permission is hereby granted, free of charge, to any person obtaining a copy 
- *	of this software and associated documentation files (the "Software"), to 
- *	deal in the Software without restriction, including without limitation the 
- *	rights to use, copy, modify, merge, publish, distribute, sublicense, and/or 
- *	sell copies of the Software, and to permit persons to whom the Software is 
- *	furnished to do so, subject to the following conditions:
- *	
- *	The above copyright notice and this permission notice shall be included in 
- *	all copies or substantial portions of the Software.
- *	
- *	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- *	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- *	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- *	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- *	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING 
- *	FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- *	IN THE SOFTWARE.
- *****************************************************************************/
-
+ * Portions may be licensed to Aerospike, Inc. under one or more contributor
+ * license agreements.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not
+ * use this file except in compliance with the License. You may obtain a copy of
+ * the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
 #pragma once 
 
 #include <aerospike/as_error.h>
@@ -334,6 +328,48 @@ typedef struct as_config_s {
 	 *	client will automatically connect when Aerospike server becomes available.
 	 */
 	bool fail_if_not_connected;
+	
+	/**
+	 *	Indicates if shared memory should be used for cluster tending.  Shared memory
+	 *	is useful when operating in single threaded mode with multiple client processes.
+	 *	This model is used by wrapper languages such as PHP and Python.  When enabled, 
+	 *	the data partition maps are maintained by only one process and all other processes 
+	 *	use these shared memory maps.
+	 *
+	 *	Shared memory should not be enabled for multi-threaded programs.
+	 *	Default: false
+	 */
+	bool use_shm;
+
+	/**
+	 *	Shared memory identifier.  This identifier should be the same for all applications
+	 *	that use the Aerospike C client. 
+	 *	Default: 0xA5000000
+	 */
+	int shm_key;
+	
+	/**
+	 *	Shared memory maximum number of server nodes allowed.  This value is used to size
+	 *	the fixed shared memory segment.  Leave a cushion between actual server node
+	 *	count and shm_max_nodes so new nodes can be added without having to reboot the client.
+	 *	Default: 16
+	 */
+	uint32_t shm_max_nodes;
+	
+	/**
+	 *	Shared memory maximum number of namespaces allowed.  This value is used to size
+	 *	the fixed shared memory segment.  Leave a cushion between actual namespaces
+	 *	and shm_max_namespaces so new namespaces can be added without having to reboot the client.
+	 *	Default: 8
+	 */
+	uint32_t shm_max_namespaces;
+	
+	/**
+	 *	Take over shared memory cluster tending if the cluster hasn't been tended by this
+	 *	threshold in seconds.
+	 *	Default: 30
+	 */
+	uint32_t shm_takeover_threshold_sec;
 } as_config;
 
 /******************************************************************************

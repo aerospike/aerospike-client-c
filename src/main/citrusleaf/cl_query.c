@@ -1,25 +1,19 @@
-/******************************************************************************
- * Copyright 2008-2013 by Aerospike.
+/*
+ * Copyright 2008-2014 Aerospike, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy 
- * of this software and associated documentation files (the "Software"), to 
- * deal in the Software without restriction, including without limitation the 
- * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or 
- * sell copies of the Software, and to permit persons to whom the Software is 
- * furnished to do so, subject to the following conditions:
- * 
- * The above copyright notice and this permission notice shall be included in 
- * all copies or substantial portions of the Software.
- * 
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING 
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
- *****************************************************************************/
-
+ * Portions may be licensed to Aerospike, Inc. under one or more contributor
+ * license agreements.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not
+ * use this file except in compliance with the License. You may obtain a copy of
+ * the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
 #include <sys/types.h>
 #include <stdio.h>
 #include <errno.h> //errno
@@ -699,6 +693,8 @@ static int cl_query_worker_do(as_node * node, cl_query_task * task) {
     bool      done = false;
 
     do {
+	int ret_val = 0;	
+
         // multiple CL proto per response
         // Now turn around and read a fine cl_proto - that's the first 8 bytes 
         // that has types and lengths
@@ -912,7 +908,7 @@ static int cl_query_worker_do(as_node * node, cl_query_task * task) {
 					else {
 						vp = as_val_reserve(v);
 					}
-					task->callback(vp, task->udata);
+					ret_val = task->callback(vp, task->udata);
                 }
                 else {
                     as_val * v_fail = (as_val *) as_record_get(record, "FAILURE");
@@ -941,7 +937,7 @@ static int cl_query_worker_do(as_node * node, cl_query_task * task) {
 
                     }    
                     else {
-                        task->callback((as_val *) record, task->udata);
+                        ret_val = task->callback((as_val *) record, task->udata);
                     }
                 }
 
@@ -962,8 +958,8 @@ static int cl_query_worker_do(as_node * node, cl_query_task * task) {
             // don't have to free object internals. They point into the read buffer, where
             // a pointer is required
             pos += buf - buf_start;
-            if (task->abort || gasq_abort) {
-                break;
+            if (task->abort || gasq_abort || ret_val) {
+		break;
             }
 
         }
@@ -974,7 +970,7 @@ static int cl_query_worker_do(as_node * node, cl_query_task * task) {
         }
 
         // abort requested by the user
-        if (task->abort || gasq_abort) {
+        if (task->abort || gasq_abort || ret_val) {
 			cf_close(fd);
             goto Final;
         }
@@ -1452,8 +1448,8 @@ static int citrusleaf_query_foreach_callback_stream(as_val * v, void * udata) {
 // The callback calls the foreach function for each value
 static int citrusleaf_query_foreach_callback(as_val * v, void * udata) {
 	callback_stream_source * source = (callback_stream_source *) udata;
-    source->callback(v, source->udata);
-    return 0;
+	bool rv = source->callback(v, source->udata);
+	return rv ? 0 : 1;
 }
 
 

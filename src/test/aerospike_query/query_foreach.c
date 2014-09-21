@@ -1,4 +1,19 @@
-
+/*
+ * Copyright 2008-2014 Aerospike, Inc.
+ *
+ * Portions may be licensed to Aerospike, Inc. under one or more contributor
+ * license agreements.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not
+ * use this file except in compliance with the License. You may obtain a copy of
+ * the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
 #include <aerospike/aerospike_query.h>
@@ -46,9 +61,9 @@ extern aerospike * as;
 
 static bool before(atf_suite * suite) {
 
-	// if ( mod_lua.logger == NULL ) {
-	mod_lua.logger = test_logger_new();
-	// }
+	if ( mod_lua.logger == NULL ) {
+		mod_lua.logger = test_logger_new();
+	}
 
 	if ( ! udf_put(LUA_FILE) ) {
 		error("failure while uploading: %s", LUA_FILE);
@@ -174,6 +189,8 @@ TEST( query_foreach_create, "create 100 records and 4 indices" ) {
 		as_key_destroy(&key);	
 		assert_int_eq( err.code, AEROSPIKE_OK );
 		assert_not_null( r1 );
+
+		as_record_destroy(r1);
 	}
 }
 

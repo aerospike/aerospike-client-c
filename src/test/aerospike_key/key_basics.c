@@ -1,4 +1,19 @@
-
+/*
+ * Copyright 2008-2014 Aerospike, Inc.
+ *
+ * Portions may be licensed to Aerospike, Inc. under one or more contributor
+ * license agreements.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not
+ * use this file except in compliance with the License. You may obtain a copy of
+ * the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
 
@@ -58,7 +73,7 @@ TEST( key_basics_put , "put: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 'de
 	as_stringmap_set_int64((as_map *) &map, "z", 9);
 
 	as_record r, * rec = &r;
-	as_record_init(rec, 10);
+	as_record_init(rec, 6);
 	as_record_set_int64(rec, "a", 123);
 	as_record_set_str(rec, "b", "abc");
 	as_record_set_integer(rec, "c", as_integer_new(456));
@@ -74,7 +89,7 @@ TEST( key_basics_put , "put: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 'de
 	as_key_destroy(&key);
 
     info("bins: ");
-    as_record_foreach(&r, key_basics_print_bins, NULL);
+    as_record_foreach(rec, key_basics_print_bins, NULL);
 
 	as_record_destroy(rec);
 

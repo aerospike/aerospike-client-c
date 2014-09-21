@@ -1,24 +1,19 @@
-/******************************************************************************
- * Copyright 2008-2013 by Aerospike.
+/*
+ * Copyright 2008-2014 Aerospike, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy 
- * of this software and associated documentation files (the "Software"), to 
- * deal in the Software without restriction, including without limitation the 
- * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or 
- * sell copies of the Software, and to permit persons to whom the Software is 
- * furnished to do so, subject to the following conditions:
- * 
- * The above copyright notice and this permission notice shall be included in 
- * all copies or substantial portions of the Software.
- * 
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING 
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
- *****************************************************************************/
+ * Portions may be licensed to Aerospike, Inc. under one or more contributor
+ * license agreements.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not
+ * use this file except in compliance with the License. You may obtain a copy of
+ * the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
 #pragma once
 
 #ifdef __cplusplus
@@ -102,8 +97,7 @@ cl_rv citrusleaf_delete_verify(as_cluster *asc, const char *ns, const char *set,
  * can be specified in a single call.
  */
 
-cl_rv citrusleaf_operate(as_cluster *asc, const char *ns, const char *set, const cl_object *key, cf_digest *d, cl_operation *operations, int n_operations, const cl_write_parameters *cl_w_p, uint32_t *generation, uint32_t* ttl);
-cl_rv citrusleaf_operate_digest(as_cluster *asc, const char *ns, const char *set, cf_digest *d, cl_operation *operations, int n_operations, const cl_write_parameters *cl_w_p, uint32_t *generation, uint32_t* ttl);
+cl_rv citrusleaf_operate(as_cluster *asc, const char *ns, const char *set, const cl_object *key, cf_digest *d, cl_bin **values, cl_operation *operations, int *n_values, const cl_write_parameters *cl_w_p, uint32_t *generation, uint32_t* ttl);
 
 /**
  * This debugging call can be useful for tracking down errors and coordinating with server failures

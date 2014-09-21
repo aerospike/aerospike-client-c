@@ -1,22 +1,19 @@
-/******************************************************************************
- *	Copyright 2008-2013 by Aerospike.
- *	Permission is hereby granted, free of charge, to any person obtaining a copy 
- *	of this software and associated documentation files (the "Software"), to 
- *	deal in the Software without restriction, including without limitation the 
- *	rights to use, copy, modify, merge, publish, distribute, sublicense, and/or 
- *	sell copies of the Software, and to permit persons to whom the Software is 
- *	furnished to do so, subject to the following conditions:
- *	The above copyright notice and this permission notice shall be included in 
- *	all copies or substantial portions of the Software.
- *	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- *	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- *	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- *	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- *	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING 
- *	FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- *	IN THE SOFTWARE.
- *****************************************************************************/
-
+/*
+ * Copyright 2008-2014 Aerospike, Inc.
+ *
+ * Portions may be licensed to Aerospike, Inc. under one or more contributor
+ * license agreements.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not
+ * use this file except in compliance with the License. You may obtain a copy of
+ * the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
 #include <aerospike/as_bin.h>
 #include <aerospike/as_bytes.h>
 #include <aerospike/as_integer.h>
@@ -276,6 +273,27 @@ bool as_record_set_rawp(as_record * rec, const as_bin_name name, const uint8_t *
 	as_bin * bin = as_record_bin_forupdate(rec, name);
 	if ( !bin ) return false;
 	as_bin_init_raw(bin, name, value, size, free);
+	return true;
+}
+
+/**
+ *	Set specified bin's value to raw bytes of given length.
+ *	uint8_t bytes[3] = {1,2,3}
+ *	as_record_set_raw(rec, "bin", bytes, 3);
+ *	@param rec 	- the record containing the bin
+ *	@param name 	- the name of the bin
+ *	@param value - the value of the bin
+ *	@param size 	- the size of the value
+ *	@param type 	- the as_bytes_type designation (AS_BYTES_*)
+ *	@return true on success, false on failure.
+ */
+bool as_record_set_raw_typep(as_record * rec, const as_bin_name name, const uint8_t * value, uint32_t size, as_bytes_type type, bool free)
+{
+	as_bin * bin = as_record_bin_forupdate(rec, name);
+	if ( !bin ) return false;
+	as_bin_init_raw(bin, name, value, size, free);
+	as_bytes *bytes_val = (as_bytes*) &bin->value;
+	bytes_val->type = type;
 	return true;
 }
 

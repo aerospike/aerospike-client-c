@@ -1,25 +1,19 @@
-/******************************************************************************
- * Copyright 2008-2013 by Aerospike.
+/*
+ * Copyright 2008-2014 Aerospike, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy 
- * of this software and associated documentation files (the "Software"), to 
- * deal in the Software without restriction, including without limitation the 
- * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or 
- * sell copies of the Software, and to permit persons to whom the Software is 
- * furnished to do so, subject to the following conditions:
- * 
- * The above copyright notice and this permission notice shall be included in 
- * all copies or substantial portions of the Software.
- * 
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING 
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
- *****************************************************************************/
-
+ * Portions may be licensed to Aerospike, Inc. under one or more contributor
+ * license agreements.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not
+ * use this file except in compliance with the License. You may obtain a copy of
+ * the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
 #include <sys/types.h>
 #include <stdio.h>
 #include <errno.h> //errno
@@ -145,6 +139,10 @@ do_scan_monte(as_cluster *asc, char *node_name, uint operation_info, uint operat
 		cf_close(fd);
 		as_node_release(node);
 		return(-1);
+	}
+	if (wr_buf != wr_stack_buf) {
+		free(wr_buf);
+		wr_buf = 0;
 	}
 
 	cl_proto 		proto;
@@ -337,11 +335,29 @@ do_scan_monte(as_cluster *asc, char *node_name, uint operation_info, uint operat
 				done = true;
 			}
 			else if ((msg->n_ops) || (operation_info & CL_MSG_INFO1_NOBINDATA)) {
-    			// got one good value? call it a success!
-				(*cb)(ns_ret, keyd, set_ret, &key, CL_RESULT_OK, msg->generation,
+				// got one good value? call it a success!
+				rv = (*cb)(ns_ret, keyd, set_ret, &key, CL_RESULT_OK, msg->generation,
 						cf_server_void_time_to_ttl(msg->record_ttl), bins_local,
 						msg->n_ops, udata);
-				rv = 0;
+				// To be cleaned up.   
+				if (rv) {
+
+					if (bins_local != stack_bins) {
+						free(bins_local);
+						bins_local = 0;
+					}
+
+					if (rd_buf && (rd_buf != rd_stack_buf))	{
+						free(rd_buf);
+						rd_buf = 0;
+					}
+
+					cf_close(fd);
+					as_node_release(node);
+					node = 0;
+
+					return 0;
+				}
 			}
 //			else
 //				cf_debug("received message with no bins, signal of an error");
@@ -372,11 +388,6 @@ do_scan_monte(as_cluster *asc, char *node_name, uint operation_info, uint operat
 		}
 
 	} while ( done == false );
-
-	if (wr_buf != wr_stack_buf) {
-		free(wr_buf);
-		wr_buf = 0;
-	}
 
 	as_node_put_connection(node, fd);
 	as_node_release(node);

@@ -1,25 +1,19 @@
-/******************************************************************************
- * Copyright 2008-2013 by Aerospike.
+/*
+ * Copyright 2008-2014 Aerospike, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy 
- * of this software and associated documentation files (the "Software"), to 
- * deal in the Software without restriction, including without limitation the 
- * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or 
- * sell copies of the Software, and to permit persons to whom the Software is 
- * furnished to do so, subject to the following conditions:
- * 
- * The above copyright notice and this permission notice shall be included in 
- * all copies or substantial portions of the Software.
- * 
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING 
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
- *****************************************************************************/
-
+ * Portions may be licensed to Aerospike, Inc. under one or more contributor
+ * license agreements.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not
+ * use this file except in compliance with the License. You may obtain a copy of
+ * the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
 #include <aerospike/aerospike_scan.h>
 #include <aerospike/aerospike_info.h>
 #include <aerospike/as_key.h>
@@ -145,16 +139,16 @@ static int simplescan_cb(char *ns, cf_digest *keyd, char *set, cl_object *key,
 	rec->ttl = record_void_time;
 
 	// Call the callback that user wanted to callback
-	bridge->callback((as_val *) rec, bridge->udata);
+	bool rv = bridge->callback((as_val *) rec, bridge->udata);
 
 	// The responsibility to free the bins is on the called callback function
 	// In scan case, only LIST & MAP will have an active free
-
 	citrusleaf_bins_free(bins, (int)n_bins);
+
 	// release the record
 	as_record_destroy(rec);
 
-	return 0;
+	return rv ? 0 : 1;
 }
 
 /**
@@ -167,9 +161,9 @@ static int generic_cb(as_val * val, void * udata)
 	scan_bridge * bridge = (scan_bridge *) udata;
 	
 	// Call the callback that user wanted to callback
-	bridge->callback(val, bridge->udata);
+	bool rv = bridge->callback(val, bridge->udata);
 	
-	return 0;
+	return rv ? 0 : 1;
 }
 
 /**
@@ -270,13 +264,13 @@ typedef struct bg_scan_info_s {
 	as_scan_info * info;
 } bg_scan_info;
 
-const char JOB_STATUS_TAG[] = "job-status=";
+const char JOB_STATUS_TAG[] = "job_status=";
 const int JOB_STATUS_TAG_LEN = sizeof(JOB_STATUS_TAG) - 1;
 
-const char JOB_PROGRESS_TAG[] = "job-progress(%)=";
+const char JOB_PROGRESS_TAG[] = "job_progress(%)=";
 const int JOB_PROGRESS_TAG_LEN = sizeof(JOB_PROGRESS_TAG) - 1;
 
-const char SCANNED_RECORDS_TAG[] = "scanned-records=";
+const char SCANNED_RECORDS_TAG[] = "scanned_records=";
 const int SCANNED_RECORDS_TAG_LEN = sizeof(SCANNED_RECORDS_TAG) - 1;
 
 /**

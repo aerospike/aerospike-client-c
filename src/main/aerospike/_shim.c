@@ -1,4 +1,19 @@
-
+/*
+ * Copyright 2008-2014 Aerospike, Inc.
+ *
+ * Portions may be licensed to Aerospike, Inc. under one or more contributor
+ * license agreements.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not
+ * use this file except in compliance with the License. You may obtain a copy of
+ * the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
 #include <aerospike/as_bytes.h>
 #include <aerospike/as_integer.h>
 #include <aerospike/as_list.h>
@@ -73,9 +88,7 @@ as_status as_error_fromrc(as_error * err, cl_rv rc)
 		ERR_ASSIGN(AEROSPIKE_ERR_NO_XDR);
 		break;
 	case CITRUSLEAF_FAIL_UNAVAILABLE:
-		// Yes, "unavailable" means a scan with cluster-change flag set won't
-		// start, because migrations are happening.
-		ERR_ASSIGN(AEROSPIKE_ERR_CLUSTER_CHANGE);
+		ERR_ASSIGN(AEROSPIKE_ERR_CLUSTER);
 		break;
 	case CITRUSLEAF_FAIL_INCOMPATIBLE_TYPE:
 		ERR_ASSIGN(AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE);
@@ -95,6 +108,12 @@ as_status as_error_fromrc(as_error * err, cl_rv rc)
 		break;
 	case CITRUSLEAF_FAIL_KEY_MISMATCH:
 		ERR_ASSIGN(AEROSPIKE_ERR_RECORD_KEY_MISMATCH);
+		break;
+	case CITRUSLEAF_FAIL_NAMESPACE:
+		ERR_ASSIGN(AEROSPIKE_ERR_NAMESPACE_NOT_FOUND);
+		break;
+	case CITRUSLEAF_FAIL_BIN_NAME:
+		ERR_ASSIGN(AEROSPIKE_ERR_BIN_NAME);
 		break;
 	case CITRUSLEAF_FAIL_SCAN_ABORT:
 		ERR_ASSIGN(AEROSPIKE_ERR_SCAN_ABORTED);
@@ -158,9 +177,12 @@ as_status as_error_fromrc(as_error * err, cl_rv rc)
 	case CITRUSLEAF_FAIL_UDF_BAD_RESPONSE:
 		ERR_ASSIGN(AEROSPIKE_ERR_UDF);
 		break;
-    case CITRUSLEAF_FAIL_UDF_LUA_EXECUTION:
-        ERR_ASSIGN(AEROSPIKE_ERR_UDF); 
-        break; 
+    	case CITRUSLEAF_FAIL_UDF_LUA_EXECUTION:
+        	ERR_ASSIGN(AEROSPIKE_ERR_UDF);
+        	break; 
+    	case CITRUSLEAF_FAIL_LUA_FILE_NOTFOUND:
+        	ERR_ASSIGN(AEROSPIKE_ERR_LUA_FILE_NOT_FOUND);
+        	break;
 	case CITRUSLEAF_FAIL_INDEX_FOUND:
 		ERR_ASSIGN(AEROSPIKE_ERR_INDEX_FOUND);
 		break;
@@ -412,7 +434,7 @@ void clbin_to_asrecord(cl_bin * bin, as_record * r)
 			break;
 		}
 		default: {
-			as_record_set_rawp(r, bin->bin_name, bin->object.u.blob, (uint32_t)bin->object.sz, true);
+			as_record_set_raw_typep(r, bin->bin_name, bin->object.u.blob, (uint32_t)bin->object.sz, (as_bytes_type)bin->object.type, true);
 			// the following completes the handoff of the value.
 			bin->object.free = NULL;
 			break;

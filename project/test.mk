@@ -29,7 +29,7 @@ TEST_CFLAGS = -I$(TARGET_INCL)
 ifeq ($(OS),Darwin)
 TEST_LDFLAGS = -L/usr/local/lib -lssl -lcrypto -llua -lpthread -lm
 else
-TEST_LDFLAGS = -lssl -lcrypto -llua -lpthread -lm -lrt
+TEST_LDFLAGS = -lssl -lcrypto -llua -lpthread -lm -lrt -lz
 endif
 
 AS_HOST := 127.0.0.1

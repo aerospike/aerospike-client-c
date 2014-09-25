@@ -341,7 +341,7 @@ static int query_compile_select(cf_vector *binnames, uint8_t *buf, int *sz_p) {
  */
 static int query_compile(const cl_query * query, uint8_t ** buf_r, size_t * buf_sz_r) {
 
-    if (!query || !query->ranges) return CITRUSLEAF_FAIL_CLIENT;
+    if (!query) return CITRUSLEAF_FAIL_CLIENT;
 
     /**
      * If the query has a udf w/ arglist,
@@ -400,12 +400,14 @@ static int query_compile(const cl_query * query, uint8_t ** buf_r, size_t * buf_
         }
 
         // query field    
-        n_fields++;
-        range_sz = 0; 
-        if (query_compile_range(query->ranges, NULL, &range_sz)) {
-            return CITRUSLEAF_FAIL_CLIENT;
-        }
-        msg_sz += range_sz + sizeof(cl_msg_field);
+	if (query->ranges) { 
+		n_fields++;
+		range_sz = 0; 
+		if (query_compile_range(query->ranges, NULL, &range_sz)) {
+			return CITRUSLEAF_FAIL_CLIENT;
+		}
+		msg_sz += range_sz + sizeof(cl_msg_field);
+	}
 
         // bin field    
         if (query->binnames) {
@@ -519,7 +521,11 @@ static int query_compile(const cl_query * query, uint8_t ** buf_r, size_t * buf_
                 *mf->data = CL_UDF_MSG_VAL_RECORD;
                 break;
             case AS_UDF_CALLTYPE_STREAM:
-                *mf->data = CL_UDF_MSG_VAL_STREAM;
+		if ( query->ranges) { 
+			*mf->data = CL_UDF_MSG_VAL_QUERY_STREAM;
+		} else {
+			*mf->data = CL_UDF_MSG_VAL_SCAN_STREAM; 
+		}
                 break;
             default:
                 // should never happen!

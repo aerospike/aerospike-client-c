@@ -456,7 +456,7 @@ as_status aerospike_key_operate(
 	cl_operation * 	operations = (cl_operation *) alloca(sizeof(cl_operation) * n_operations);
 	int				n_read_ops = 0;
 
-	for(int i = 0; i < n_operations; i++) {
+	for (int i = 0; i < n_operations; i++) {
 		cl_operation * clop = &operations[i];
 		as_binop * op = &ops->binops.entries[i];
 
@@ -502,7 +502,11 @@ as_status aerospike_key_operate(
 		}
 	}
 
-	if (n_read_ops != n_operations) {
+	for (int i = 0; i < n_operations; i++) {
+		citrusleaf_object_free(&operations[i].bin.object);
+	}
+
+    if (n_read_ops != n_operations) {
 		if (result_bins) {
 			citrusleaf_bins_free(result_bins, n_operations);
 			free(result_bins);

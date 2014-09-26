@@ -98,14 +98,6 @@ TEST( key_operate_touchget , "operate: (test,test,key2) = {touch, get}" ) {
 
 }
 
-static bool key_basics_print_bins(const char * name, const as_val * value, void * udata)
-{
-	char * sval = as_val_tostring(value);
-	info("bin: name=%s, value=%s", name, sval);
-	free(sval);
-	return true;
-}
-
 TEST( key_operate_9 , "operate: (test,test,key3) = {append, read, write, read, incr, read, prepend}" ) {
 
 	as_error err;

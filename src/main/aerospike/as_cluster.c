@@ -334,7 +334,7 @@ as_cluster_find_nodes_to_remove(as_cluster* cluster, uint32_t refresh_count, as_
 						// Node is alive, but not referenced by other nodes.  Check if mapped.
 						if (! as_partition_tables_find_node(cluster->partition_tables, node)) {
 							// Node doesn't have any partitions mapped to it.
-							// There is not point in keeping it in the cluster.
+							// There is no point in keeping it in the cluster.
 							as_vector_append(nodes_to_remove, &node);
 						}
 					}

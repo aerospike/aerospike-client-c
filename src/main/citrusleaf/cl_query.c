@@ -341,7 +341,7 @@ static int query_compile_select(cf_vector *binnames, uint8_t *buf, int *sz_p) {
  */
 static int query_compile(const cl_query * query, uint8_t ** buf_r, size_t * buf_sz_r) {
 
-    if (!query || !query->ranges) return CITRUSLEAF_FAIL_CLIENT;
+    if (!query || !query->ranges) return AEROSPIKE_ERR_CLIENT;
 
     /**
      * If the query has a udf w/ arglist,
@@ -369,7 +369,7 @@ static int query_compile(const cl_query * query, uint8_t ** buf_r, size_t * buf_
     if (query) {
 
         // namespace field 
-        if ( !query->ns ) return CITRUSLEAF_FAIL_CLIENT;
+        if ( !query->ns ) return AEROSPIKE_ERR_CLIENT;
 
         ns_len  = (int)strlen(query->ns);
         if (ns_len) {
@@ -403,7 +403,7 @@ static int query_compile(const cl_query * query, uint8_t ** buf_r, size_t * buf_
         n_fields++;
         range_sz = 0; 
         if (query_compile_range(query->ranges, NULL, &range_sz)) {
-            return CITRUSLEAF_FAIL_CLIENT;
+            return AEROSPIKE_ERR_CLIENT;
         }
         msg_sz += range_sz + sizeof(cl_msg_field);
 
@@ -412,7 +412,7 @@ static int query_compile(const cl_query * query, uint8_t ** buf_r, size_t * buf_
             n_fields++;
             num_bins = 0;
             if ( query_compile_select(query->binnames, NULL, &num_bins) != 0 ) {
-                return CITRUSLEAF_FAIL_CLIENT;
+                return AEROSPIKE_ERR_CLIENT;
             }
             msg_sz += num_bins + sizeof(cl_msg_field);
         }
@@ -567,11 +567,11 @@ static int query_compile(const cl_query * query, uint8_t ** buf_r, size_t * buf_
             free(mbuf); 
         }
         as_buffer_destroy(&argbuffer);
-        return CITRUSLEAF_FAIL_CLIENT;
+        return AEROSPIKE_ERR_CLIENT;
     }
 
     as_buffer_destroy(&argbuffer);
-    return CITRUSLEAF_OK;
+    return AEROSPIKE_OK;
 }
 
 //
@@ -686,7 +686,7 @@ static int cl_query_worker_do(as_node * node, cl_query_task * task) {
     // send it to the cluster - non blocking socket, but we're blocking
     if (0 != cf_socket_write_forever(fd, (uint8_t *) task->query_buf, (size_t) task->query_sz)) {
         LOG("[ERROR] cl_query_worker_do: unable to write to %s ",node->name);
-        return CITRUSLEAF_FAIL_CLIENT;
+        return AEROSPIKE_ERR_CLIENT;
     }
 
     cl_proto  proto;
@@ -700,18 +700,18 @@ static int cl_query_worker_do(as_node * node, cl_query_task * task) {
         // that has types and lengths
         if ( (rc = cf_socket_read_forever(fd, (uint8_t *) &proto, sizeof(cl_proto) ) ) ) {
             LOG("[ERROR] cl_query_worker_do: network error: errno %d fd %d\n", rc, fd);
-            return CITRUSLEAF_FAIL_CLIENT;
+            return AEROSPIKE_ERR_CLIENT;
         }
         cl_proto_swap_from_be(&proto);
 
         if ( proto.version != CL_PROTO_VERSION) {
             LOG("[ERROR] cl_query_worker_do: network error: received protocol message of wrong version %d\n",proto.version);
-            return CITRUSLEAF_FAIL_CLIENT;
+            return AEROSPIKE_ERR_CLIENT;
         }
 
         if ( proto.type != CL_PROTO_TYPE_CL_MSG && proto.type != CL_PROTO_TYPE_CL_MSG_COMPRESSED ) {
             LOG("[ERROR] cl_query_worker_do: network error: received incorrect message version %d\n",proto.type);
-            return CITRUSLEAF_FAIL_CLIENT;
+            return AEROSPIKE_ERR_CLIENT;
         }
 
         // second read for the remainder of the message - expect this to cover 
@@ -726,12 +726,12 @@ static int cl_query_worker_do(as_node * node, cl_query_task * task) {
                 rd_buf = rd_stack_buf;
             }
 
-            if (rd_buf == NULL) return CITRUSLEAF_FAIL_CLIENT;
+            if (rd_buf == NULL) return AEROSPIKE_ERR_CLIENT;
 
             if ( (rc = cf_socket_read_forever(fd, rd_buf, rd_buf_sz)) ) {
                 LOG("[ERROR] cl_query_worker_do: network error: errno %d fd %d\n", rc, fd);
                 if ( rd_buf != rd_stack_buf ) free(rd_buf);
-                return CITRUSLEAF_FAIL_CLIENT;
+                return AEROSPIKE_ERR_CLIENT;
             }
         }
 
@@ -754,7 +754,7 @@ static int cl_query_worker_do(as_node * node, cl_query_task * task) {
             if ( msg->header_sz != sizeof(cl_msg) ) {
                 LOG("[ERROR] cl_query_worker_do: received cl msg of unexpected size: expecting %zd found %d, internal error\n",
                         sizeof(cl_msg),msg->header_sz);
-                return CITRUSLEAF_FAIL_CLIENT;
+                return AEROSPIKE_ERR_CLIENT;
             }
 
             // parse through the fields
@@ -813,7 +813,7 @@ static int cl_query_worker_do(as_node * node, cl_query_task * task) {
             }
 
             if (bins == NULL) {
-                return CITRUSLEAF_FAIL_CLIENT;
+                return AEROSPIKE_ERR_CLIENT;
             }
 
             // parse through the bins/ops
@@ -914,7 +914,7 @@ static int cl_query_worker_do(as_node * node, cl_query_task * task) {
                     as_val * v_fail = (as_val *) as_record_get(record, "FAILURE");
                     if(v_fail != NULL) {
                         done = true;
-                        rc = CITRUSLEAF_FAIL_UNKNOWN;
+                        rc = AEROSPIKE_ERR_SERVER;
                         as_val * vp = NULL;
                         if ( !v_fail->free ) {
                             switch (as_val_type(v_fail)) {
@@ -943,9 +943,9 @@ static int cl_query_worker_do(as_node * node, cl_query_task * task) {
 
 				as_record_destroy(record);
                 if (task->err_val) 
-                    rc = CITRUSLEAF_FAIL_UNKNOWN;
+                    rc = AEROSPIKE_ERR_SERVER;
                 else
-                    rc = CITRUSLEAF_OK;
+                    rc = AEROSPIKE_OK;
             }
 
 			citrusleaf_bins_free(bins, (int)msg->n_ops);
@@ -1013,7 +1013,7 @@ static void * cl_query_worker(void * pv_asc) {
 
         // query if the node is still around
         as_query_fail_t rc_fail = {
-            .rc      = CITRUSLEAF_FAIL_UNAVAILABLE,
+            .rc      = AEROSPIKE_ERR_CLUSTER,
             .err_val = NULL
         };
 
@@ -1100,7 +1100,7 @@ static cl_rv cl_query_udf_init(cl_query_udf * udf, cl_query_udf_type type, const
     udf->filename    = filename == NULL ? NULL : strdup(filename);
     udf->function    = function == NULL ? NULL : strdup(function);
     udf->arglist     = arglist;
-    return CITRUSLEAF_OK;
+    return AEROSPIKE_OK;
 }
 
 static cl_rv cl_query_udf_destroy(cl_query_udf * udf) {
@@ -1122,7 +1122,7 @@ static cl_rv cl_query_udf_destroy(cl_query_udf * udf) {
         udf->arglist = NULL;
     }
 
-    return CITRUSLEAF_OK;
+    return AEROSPIKE_OK;
 }
 
 
@@ -1156,7 +1156,7 @@ static const as_aerospike_hooks query_aerospike_hooks = {
 
 static cl_rv cl_query_execute(as_cluster * cluster, const cl_query * query, void * udata, int (* callback)(as_val *, void *), as_val ** err_val) {
 
-    cl_rv       rc                          = CITRUSLEAF_OK;
+    cl_rv       rc                          = AEROSPIKE_OK;
     uint8_t     wr_stack_buf[STACK_BUF_SZ]  = { 0 };
     uint8_t *   wr_buf                      = wr_stack_buf;
     size_t      wr_buf_sz                   = sizeof(wr_stack_buf);
@@ -1164,7 +1164,7 @@ static cl_rv cl_query_execute(as_cluster * cluster, const cl_query * query, void
     // compile the query - a good place to fail    
     rc = query_compile(query, &wr_buf, &wr_buf_sz);
 
-    if ( rc != CITRUSLEAF_OK ) {
+    if ( rc != AEROSPIKE_OK ) {
         LOG("[ERROR] cl_query_execute query compile failed: \n");
         return rc;
     }
@@ -1188,7 +1188,7 @@ static cl_rv cl_query_execute(as_cluster * cluster, const cl_query * query, void
 	as_cluster_get_node_names(cluster, &node_count, &node_names);
     if ( node_count == 0 ) {
         LOG("[ERROR] cl_query_execute: don't have any nodes?\n");
-        return CITRUSLEAF_FAIL_CLIENT;
+        return AEROSPIKE_ERR_CLIENT;
     }
 
 	task.complete_q = cf_queue_create(sizeof(as_query_fail_t), true);
@@ -1205,7 +1205,7 @@ static cl_rv cl_query_execute(as_cluster * cluster, const cl_query * query, void
     node_names = NULL;
 
     // wait for the work to complete from all the nodes.
-    rc = CITRUSLEAF_OK;
+    rc = AEROSPIKE_OK;
     for ( int i=0; i < node_count; i++ ) {
         as_query_fail_t node_rc;
         cf_queue_pop(task.complete_q, &node_rc, CF_QUEUE_FOREVER);
@@ -1231,7 +1231,7 @@ static cl_rv cl_query_execute(as_cluster * cluster, const cl_query * query, void
     }
 
     // If completely successful, make the callback that signals completion.
-    if (rc == CITRUSLEAF_OK) {
+    if (rc == AEROSPIKE_OK) {
     	callback(NULL, udata);
     }
 
@@ -1293,15 +1293,15 @@ static cl_rv query_where_generic(bool isfunction, cl_query *query, const char *b
     if (!query->ranges) {
         query->ranges = cf_vector_create(sizeof(query_range),5,0);
         if (query->ranges==NULL) {
-            return CITRUSLEAF_FAIL_CLIENT;
+            return AEROSPIKE_ERR_CLIENT;
         }
     }
     strcpy(range.bin_name, binname);
     cf_vector_append(query->ranges,(void *)&range);
-    return CITRUSLEAF_OK;
+    return AEROSPIKE_OK;
 Cleanup:
     va_end(list);
-    return CITRUSLEAF_FAIL_CLIENT;
+    return AEROSPIKE_ERR_CLIENT;
 }
 
 
@@ -1394,11 +1394,11 @@ cl_rv cl_query_select(cl_query *query, const char *binname) {
     if ( !query->binnames ) {
         query->binnames = cf_vector_create(CL_BINNAME_SIZE, 5, 0);
         if (query->binnames==NULL) {
-            return CITRUSLEAF_FAIL_CLIENT;
+            return AEROSPIKE_ERR_CLIENT;
         }
     }
     cf_vector_append(query->binnames, (void *)binname);    
-    return CITRUSLEAF_OK;    
+    return AEROSPIKE_OK;    
 }
 
 cl_rv cl_query_where_function(cl_query *query, const char *finame, cl_query_op op, ...) {
@@ -1418,11 +1418,11 @@ cl_rv cl_query_where(cl_query *query, const char *binname, cl_query_op op, ...) 
 }
 
 cl_rv cl_query_filter(cl_query *query, const char *binname, cl_query_op op, ...) {
-    return CITRUSLEAF_OK;
+    return AEROSPIKE_OK;
 }
 
 cl_rv cl_query_orderby(cl_query *query, const char *binname, cl_query_orderby_op op) {
-    return CITRUSLEAF_OK;
+    return AEROSPIKE_OK;
 }
 
 cl_rv cl_query_aggregate(cl_query * query, const char * filename, const char * function, as_list * arglist) {
@@ -1434,7 +1434,7 @@ cl_rv cl_query_foreach(cl_query * query, const char * filename, const char * fun
 }
 
 cl_rv cl_query_limit(cl_query *query, uint64_t limit) {
-    return CITRUSLEAF_OK;    
+    return AEROSPIKE_OK;    
 }
 
 
@@ -1455,7 +1455,7 @@ static int citrusleaf_query_foreach_callback(as_val * v, void * udata) {
 
 cl_rv citrusleaf_query_foreach(as_cluster * cluster, const cl_query * query, void * udata, cl_query_cb foreach, as_val ** err_val) {
 
-    cl_rv rc = CITRUSLEAF_OK;
+    cl_rv rc = AEROSPIKE_OK;
 
     callback_stream_source source = {
         .udata      = udata,
@@ -1481,7 +1481,7 @@ cl_rv citrusleaf_query_foreach(as_cluster * cluster, const cl_query * query, voi
         // sink the data from multiple sources into the result stream
         rc = cl_query_execute(cluster, query, &queue_stream, citrusleaf_query_foreach_callback_stream, err_val);
 
-        if ( rc == CITRUSLEAF_OK ) {
+        if ( rc == AEROSPIKE_OK ) {
 
         	as_udf_context ctx = {
         		.as = &as,
@@ -1494,7 +1494,7 @@ cl_rv citrusleaf_query_foreach(as_cluster * cluster, const cl_query * query, voi
             as_result_init(&res);
             int ret = as_module_apply_stream(&mod_lua, &ctx, query->udf.filename, query->udf.function, &queue_stream, query->udf.arglist, &ostream, &res); //
             if (ret != 0 && err_val) { 
-                rc = CITRUSLEAF_FAIL_UDF_LUA_EXECUTION;
+                rc = AEROSPIKE_ERR_UDF;
                 char *rs = as_module_err_string(ret);
                 as_val * vp = NULL;
                 if (res.value != NULL) {

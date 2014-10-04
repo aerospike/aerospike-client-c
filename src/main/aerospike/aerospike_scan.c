@@ -101,7 +101,7 @@ static as_status process_node_response(cf_vector *v, as_error *err)
 
 		cf_vector_get(v, i, &resp);
 		// Even if one of the node responded with an error, set the overall status as error
-		if (resp.node_response != CITRUSLEAF_OK) {
+		if (resp.node_response != AEROSPIKE_OK) {
 			rc = as_error_fromrc(err, resp.node_response);
 		}
 

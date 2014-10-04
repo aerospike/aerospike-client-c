@@ -193,7 +193,7 @@ as_node_create_connection(as_node* node, int* fd)
 	if (*fd == -1) {
 		// Local problem - socket create failed.
 		cf_debug("Socket create failed for %s", node->name);
-		return CITRUSLEAF_FAIL_CLIENT;
+		return AEROSPIKE_ERR_CLIENT;
 	}
 	
 	// Try primary address.
@@ -226,7 +226,7 @@ as_node_create_connection(as_node* node, int* fd)
 	cf_info("Failed to connect: %s %s:%d", node->name, primary->name, (int)cf_swap_from_be16(primary->addr.sin_port));
 	cf_close(*fd);
 	*fd = -1;
-	return CITRUSLEAF_FAIL_UNAVAILABLE;
+	return AEROSPIKE_ERR_CLUSTER;
 }
 
 int
@@ -267,7 +267,7 @@ as_node_get_connection(as_node* node, int* fd)
 		else {
 			cf_error("Bad return value from cf_queue_pop");
 			*fd = -1;
-			return CITRUSLEAF_FAIL_CLIENT;
+			return AEROSPIKE_ERR_CLIENT;
 		}
 	}
 }

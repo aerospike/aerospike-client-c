@@ -50,8 +50,8 @@ static as_status aerospike_index_create(
 	int rc = citrusleaf_secondary_index_create(as->cluster, ns, set, name, bin, type, &response);
 	
 	switch ( rc ) {
-		case CITRUSLEAF_OK:
-		case CITRUSLEAF_FAIL_INDEX_FOUND:
+		case AEROSPIKE_OK:
+		case AEROSPIKE_ERR_INDEX_FOUND:
 			break;
 
 		default:
@@ -149,8 +149,8 @@ as_status aerospike_index_remove(
 	int rc = citrusleaf_secondary_index_drop(as->cluster, ns, name, &response);
 
 	switch (rc) {
-		case CITRUSLEAF_OK:
-		case CITRUSLEAF_FAIL_INDEX_NOTFOUND:
+		case AEROSPIKE_OK:
+		case AEROSPIKE_ERR_INDEX_NOT_FOUND:
 			break;
 
 		default:

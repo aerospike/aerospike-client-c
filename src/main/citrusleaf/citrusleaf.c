@@ -1400,7 +1400,7 @@ do_the_full_monte(as_cluster *asc, int info1, int info2, int info3, const char *
             debug_printf(before_write_time, after_write_time, before_read_header_time, after_read_header_time, before_read_body_time, after_read_body_time,
                          deadline_ms, progress_timeout_ms);           	
 #endif            
-			rv = CITRUSLEAF_FAIL_TIMEOUT;
+			rv = AEROSPIKE_ERR_TIMEOUT;
 			goto Retry;
 	
 		}
@@ -1449,7 +1449,7 @@ do_the_full_monte(as_cluster *asc, int info1, int info2, int info3, const char *
                              deadline_ms, progress_timeout_ms);           	
 #endif
 
-				rv = CITRUSLEAF_FAIL_TIMEOUT;
+				rv = AEROSPIKE_ERR_TIMEOUT;
 				goto Retry;
 			}
 
@@ -1479,7 +1479,7 @@ Retry:
             cf_debug("out of luck out of time : deadline %"PRIu64" now %"PRIu64,
                 deadline_ms, cf_getms());
 #endif            
-            rv = CITRUSLEAF_FAIL_TIMEOUT;
+            rv = AEROSPIKE_ERR_TIMEOUT;
             goto Error;
         }
 		
@@ -1509,7 +1509,7 @@ Ok:
 
 	if (rd_buf) {
 		if (0 != cl_parse(&msg.m, rd_buf, rd_buf_sz, values, n_values, trid, setname_r)) {
-			rv = CITRUSLEAF_FAIL_UNKNOWN;
+			rv = AEROSPIKE_ERR_SERVER;
 		}
 		else {
 			rv = msg.m.result_code;
@@ -1522,7 +1522,7 @@ Ok:
 		}
     }
     else {
-        rv = CITRUSLEAF_FAIL_UNKNOWN;
+        rv = AEROSPIKE_ERR_SERVER;
     }    
 	if (rd_buf && (rd_buf != rd_stack_buf))		free(rd_buf);
 	

@@ -140,7 +140,7 @@ as_status aerospike_query_foreach(
 	cl_rv rc = citrusleaf_query_foreach(as->cluster, clquery, &bridge, clquery_callback, &err_val);
     as_status ret = as_error_fromrc(err, rc);
 
-    if (CITRUSLEAF_OK != rc && err_val) {
+    if (AEROSPIKE_OK != rc && err_val) {
         char * err_str = as_val_tostring(err_val);
         if(err_str) {
             strncat(err->message," : ",sizeof(err->message) - strlen(err->message));

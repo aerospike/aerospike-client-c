@@ -75,7 +75,7 @@ as_status aerospike_key_get(
 	int         nvalues = 0;
 	cl_bin *    values = NULL;
 
-	cl_rv rc = CITRUSLEAF_OK;
+	cl_rv rc = AEROSPIKE_OK;
 
 	switch ( p.key ) {
 		case AS_POLICY_KEY_DIGEST: {
@@ -98,7 +98,7 @@ as_status aerospike_key_get(
 		}
 	}
 	
-	if ( rc == CITRUSLEAF_OK && rec != NULL ) {
+	if ( rc == AEROSPIKE_OK && rec != NULL ) {
 		as_record * r = *rec;
 		if ( r == NULL ) {
 			r = as_record_new(0);
@@ -167,7 +167,7 @@ as_status aerospike_key_select(
 		citrusleaf_object_init(&values[i].object);
 	}
 
-	cl_rv rc = CITRUSLEAF_OK;
+	cl_rv rc = AEROSPIKE_OK;
 
 	switch ( p.key ) {
 		case AS_POLICY_KEY_DIGEST: {
@@ -190,7 +190,7 @@ as_status aerospike_key_select(
 		}
 	}
 
-	if ( rc == CITRUSLEAF_OK && rec != NULL ) {
+	if ( rc == AEROSPIKE_OK && rec != NULL ) {
 		as_record * r = *rec;
 		if ( r == NULL ) {
 			r = as_record_new(0);
@@ -244,7 +244,7 @@ as_status aerospike_key_exists(
 	int     	nvalues = 0;
 	cl_bin *	values = NULL;
 	
-	cl_rv rc = CITRUSLEAF_OK;
+	cl_rv rc = AEROSPIKE_OK;
 
 	switch ( p.key ) {
 		case AS_POLICY_KEY_DIGEST: {
@@ -274,7 +274,7 @@ as_status aerospike_key_exists(
 	}
 
 	switch(rc) {
-		case CITRUSLEAF_OK: 
+		case AEROSPIKE_OK: 
 			{
 				as_record * r = *rec;
 				if ( r == NULL ) { 
@@ -325,7 +325,7 @@ as_status aerospike_key_put(
 
 	asrecord_to_clbins(rec, values, nvalues);
 
-	cl_rv rc = CITRUSLEAF_OK;
+	cl_rv rc = AEROSPIKE_OK;
 
 	switch ( p.key ) {
 		case AS_POLICY_KEY_DIGEST: {
@@ -385,7 +385,7 @@ as_status aerospike_key_remove(
 	cl_write_parameters wp;
 	aspolicyremove_to_clwriteparameters(&p, &wp);
 
-	cl_rv rc = CITRUSLEAF_OK;
+	cl_rv rc = AEROSPIKE_OK;
 
 	switch ( p.key ) {
 		case AS_POLICY_KEY_DIGEST: {
@@ -478,7 +478,7 @@ as_status aerospike_key_operate(
 		asbinvalue_to_clobject(op->bin.valuep, &clop->bin.object);
 	}
 
-	cl_rv rc = CITRUSLEAF_OK;
+	cl_rv rc = AEROSPIKE_OK;
 	cl_bin *result_bins = NULL;
 
 	switch ( p.key ) {
@@ -515,7 +515,7 @@ as_status aerospike_key_operate(
 		return as_error_update(err, AEROSPIKE_ERR, "expected %d bins, got %d", n_read_ops, n_operations);
 	}
 
-	if ( n_read_ops != 0 && rc == CITRUSLEAF_OK && rec != NULL ) {
+	if ( n_read_ops != 0 && rc == AEROSPIKE_OK && rec != NULL ) {
 		as_record * r = *rec;
 		if ( r == NULL ) {
 			r = as_record_new(0);
@@ -621,7 +621,7 @@ as_status aerospike_key_apply(
 	cl_bin * bins = 0;
 	int n_bins = 0;
 
-	cl_rv rc = CITRUSLEAF_OK;
+	cl_rv rc = AEROSPIKE_OK;
 
 	switch ( p.key ) {
 		case AS_POLICY_KEY_DIGEST: {
@@ -652,7 +652,7 @@ as_status aerospike_key_apply(
 
 	as_buffer_destroy(&args);
 
-	if (! (rc == CITRUSLEAF_OK || rc == CITRUSLEAF_FAIL_UDF_BAD_RESPONSE)) {
+	if (! (rc == AEROSPIKE_OK || rc == AEROSPIKE_ERR_UDF)) {
 		as_error_fromrc(err, rc);
 	}
 	else {

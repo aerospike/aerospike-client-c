@@ -221,7 +221,7 @@ as_val * citrusleaf_udf_bin_to_val(as_serializer * ser, cl_bin * bin) {
 cl_rv citrusleaf_udf_record_apply(as_cluster * cl, const char * ns, const char * set, const cl_object * key,
 	const char * filename, const char * function, as_list * arglist, int timeout_ms, as_result * res) {
 
-	cl_rv rv = CITRUSLEAF_OK;
+	cl_rv rv = AEROSPIKE_OK;
 	char err_str[256];
 
 	as_serializer ser;
@@ -261,7 +261,7 @@ cl_rv citrusleaf_udf_record_apply(as_cluster * cl, const char * ns, const char *
 
 	as_buffer_destroy(&args);
 
-	if (! (rv == CITRUSLEAF_OK || rv == CITRUSLEAF_FAIL_UDF_BAD_RESPONSE)) {
+	if (! (rv == AEROSPIKE_OK || rv == AEROSPIKE_ERR_UDF)) {
 		// Add the exact error-code to return value
 		//snprintf(err_str, 256, "None UDF failure Error-code: %d", rv);
 		snprintf(err_str, 256, "Error in parsing udf params Error-code: %d", rv);
@@ -484,7 +484,7 @@ cl_rv citrusleaf_udf_put(as_cluster *asc, const char * filename, as_bytes *conte
 
 	if ( !filename || !(content)) {
 		fprintf(stderr, "filename and content required\n");
-		return CITRUSLEAF_FAIL_CLIENT;
+		return AEROSPIKE_ERR_CLIENT;
 	}
 
 	char * query = NULL;
@@ -496,7 +496,7 @@ cl_rv citrusleaf_udf_put(as_cluster *asc, const char * filename, as_bytes *conte
 	{
 		fprintf(stderr, "Invalid UDF type");
 		as_string_destroy(&filename_string);
-		return CITRUSLEAF_FAIL_PARAMETER;
+		return AEROSPIKE_ERR_REQUEST_INVALID;
 	}
 
 	uint32_t encoded_len = cf_b64_encoded_len(content->size);
@@ -509,7 +509,7 @@ cl_rv citrusleaf_udf_put(as_cluster *asc, const char * filename, as_bytes *conte
 			filebase, content_base64, encoded_len, cl_udf_type_str[udf_type])) {
 		fprintf(stderr, "Query allocation failed");
 		as_string_destroy(&filename_string);
-		return CITRUSLEAF_FAIL_CLIENT;
+		return AEROSPIKE_ERR_CLIENT;
 	}
 	
 	as_string_destroy(&filename_string);

@@ -109,7 +109,7 @@ citrusleaf_info_host_auth(as_cluster* cluster, struct sockaddr_in *sa_in, char *
 	
 	if (fd == -1) {
 		*values = 0;
-		return CITRUSLEAF_FAIL_UNAVAILABLE;
+		return AEROSPIKE_ERR_CLUSTER;
 	}
 	
 	if (cluster->user) {
@@ -340,12 +340,12 @@ citrusleaf_info_auth(as_cluster *cluster, char *hostname, short port, char *name
 	
 	if (! as_lookup(NULL, hostname, port, true, &sockaddr_in_v)) {
 		as_vector_destroy(&sockaddr_in_v);
-		return CITRUSLEAF_FAIL_UNAVAILABLE;
+		return AEROSPIKE_ERR_CLUSTER;
 	}
 	
-	int rc = CITRUSLEAF_FAIL_UNAVAILABLE;
+	int rc = AEROSPIKE_ERR_CLUSTER;
 	
-	for (uint32_t i = 0; i < sockaddr_in_v.size && rc == CITRUSLEAF_FAIL_UNAVAILABLE; i++)
+	for (uint32_t i = 0; i < sockaddr_in_v.size && rc == AEROSPIKE_ERR_CLUSTER; i++)
 	{
 		if (i > 0) {
 			free(*values);
@@ -366,7 +366,7 @@ citrusleaf_info_cluster(as_cluster *cluster, char *names, char **values, bool se
 		timeout_ms = 1000;
 	}
 	
-	int rc = CITRUSLEAF_FAIL_UNAVAILABLE;
+	int rc = AEROSPIKE_ERR_CLUSTER;
 	uint64_t start = cf_getms();
 	uint64_t end = start + timeout_ms;
 	as_nodes* nodes = as_nodes_reserve(cluster);
@@ -380,9 +380,9 @@ citrusleaf_info_cluster(as_cluster *cluster, char *names, char **values, bool se
 		struct sockaddr_in* sa_in = as_node_get_address(node);
 		rc = citrusleaf_info_host_auth(cluster, sa_in, names, values, (int)(end - cf_getms()), send_asis, check_bounds);
 		
-		if (rc == CITRUSLEAF_FAIL_UNAVAILABLE) {
+		if (rc == AEROSPIKE_ERR_CLUSTER) {
 			if (cf_getms() >= end) {
-				rc = CITRUSLEAF_FAIL_TIMEOUT;
+				rc = AEROSPIKE_ERR_TIMEOUT;
 				break;
 			}
 		}
@@ -409,7 +409,7 @@ citrusleaf_info_cluster_foreach(
 	}
 	*error = 0;
 	
-	int rc = CITRUSLEAF_FAIL_UNAVAILABLE;
+	int rc = AEROSPIKE_ERR_CLUSTER;
 	uint64_t start = cf_getms();
 	uint64_t end = start + timeout_ms;
 	as_nodes* nodes = as_nodes_reserve(cluster);
@@ -426,19 +426,19 @@ citrusleaf_info_cluster_foreach(
 			free(response);
 			
 			if (! status) {
-				rc = CITRUSLEAF_FAIL_QUERY_ABORTED;
+				rc = AEROSPIKE_ERR_QUERY_ABORTED;
 				break;
 			}
 		}
 		else {
 			free(response);
-			if (rc != CITRUSLEAF_FAIL_UNAVAILABLE) {
+			if (rc != AEROSPIKE_ERR_CLUSTER) {
 				break;
 			}
 		}
 				
 		if (cf_getms() >= end) {
-			rc = CITRUSLEAF_FAIL_TIMEOUT;
+			rc = AEROSPIKE_ERR_TIMEOUT;
 			break;
 		}
 	}
@@ -454,7 +454,7 @@ citrusleaf_info_parse_error(char* begin, char** message)
 	
 	if (! end) {
 		*message = 0;
-		return CITRUSLEAF_FAIL_UNKNOWN;
+		return AEROSPIKE_ERR_SERVER;
 	}
 	*end = 0;
 	
@@ -462,7 +462,7 @@ citrusleaf_info_parse_error(char* begin, char** message)
 	
 	if (rc == 0) {
 		*message = 0;
-		return CITRUSLEAF_FAIL_UNKNOWN;
+		return AEROSPIKE_ERR_SERVER;
 	}
 	end++;
 	
@@ -522,7 +522,7 @@ citrusleaf_info_validate(char* response, char** message)
 			if (strncmp(p, "error=", 6) == 0) {
 				*message = p;
 				citrusleaf_info_decode_error(p + 6);
-				return CITRUSLEAF_FAIL_UDF_BAD_RESPONSE;
+				return AEROSPIKE_ERR_UDF;
 			}
 		}
 	}

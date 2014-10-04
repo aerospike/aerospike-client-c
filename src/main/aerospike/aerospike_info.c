@@ -108,7 +108,7 @@ as_status aerospike_info_host(
 	as_policy_info_resolve(&p, &as->config.policies, policy);
 
 	if (! as) {
-		return AEROSPIKE_ERR;
+		return AEROSPIKE_ERR_CLIENT;
 	}
 
 	cl_rv rc = citrusleaf_info_auth(as->cluster, (char *) addr, port, (char *) req, res, p.timeout);
@@ -164,7 +164,7 @@ as_status aerospike_info_foreach(
 	as_policy_info_resolve(&p, &as->config.policies, policy);
 	
 	if ( !as ) {
-		return AEROSPIKE_ERR;
+		return AEROSPIKE_ERR_CLIENT;
 	}
 
 	citrusleaf_info_cluster_foreach_data data = {

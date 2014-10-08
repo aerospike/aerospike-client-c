@@ -17,12 +17,12 @@
 #include <aerospike/aerospike_scan.h>
 #include <aerospike/aerospike_info.h>
 #include <aerospike/as_key.h>
+#include <aerospike/as_log.h>
 
 #include <citrusleaf/as_scan.h>
 #include <citrusleaf/cl_scan.h>
 #include <citrusleaf/cf_random.h>
 
-#include "_log.h"
 #include "_policy.h"
 #include "_shim.h"
 

@@ -16,19 +16,13 @@
  */
 #include <aerospike/aerospike.h>
 #include <aerospike/as_config.h>
-#include <aerospike/as_log.h>
-#include <aerospike/as_logger.h>
+#include <aerospike/as_log_macros.h>
 #include <aerospike/as_module.h>
 #include <aerospike/mod_lua.h>
 #include <aerospike/mod_lua_config.h>
 
 #include <citrusleaf/citrusleaf.h>
 #include <aerospike/as_cluster.h>
-#include <citrusleaf/cf_log_internal.h>
-
-#include "_logger.h"
-#include "_log.h"
-
 
 /******************************************************************************
  * STATIC FUNCTIONS
@@ -44,7 +38,6 @@ static aerospike * aerospike_defaults(aerospike * as, bool free, as_config * con
 	else {
 		as_config_init(&as->config);
 	}
-	as_log_init(&as->log);
 	return as;
 }
 
@@ -92,15 +85,12 @@ as_status aerospike_connect(aerospike * as, as_error * err)
 	// This is not 100% bulletproof against, say, simultaneously calling
 	// aerospike_connect() from two different threads with the same as object...
 	if ( as->cluster ) {
-		as_debug(LOGGER, "already connected.");
 		return AEROSPIKE_OK;
 	}
 
-	as_debug(LOGGER, "connecting...");
-
 	// configuration checks
 	if ( as->config.hosts[0].addr == NULL ) {
-		as_err(LOGGER, "no hosts provided");
+		as_log_error("No hosts provided");
 		return as_error_update(err, AEROSPIKE_ERR_CLUSTER, "no hosts provided");
 	}
 
@@ -113,10 +103,7 @@ as_status aerospike_connect(aerospike * as, as_error * err)
     memcpy(config.system_path, as->config.lua.system_path, sizeof(config.system_path));
     memcpy(config.user_path, as->config.lua.user_path, sizeof(config.user_path));
     
-	as_trace(LOGGER, "as_module_configure: ...");
     as_module_configure(&mod_lua, &config);
-    mod_lua.logger = aerospike_logger(as);
-	as_debug(LOGGER, "as_module_configure: OK");
 	
 	// Create the cluster object.
 	as->cluster = as_cluster_create(&as->config);
@@ -140,11 +127,6 @@ as_status aerospike_close(aerospike * as, as_error * err)
 	if ( as->cluster ) {
 		as_cluster_destroy(as->cluster);
 		as->cluster = NULL;
-	}
-
-	if ( mod_lua.logger != NULL ) {
-		as_logger_destroy(mod_lua.logger);
-		mod_lua.logger = NULL;
 	}
 
 	return err->code;

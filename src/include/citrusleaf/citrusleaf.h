@@ -64,8 +64,6 @@ void citrusleaf_change_tend_speed(int secs);
  */
 void citrusleaf_shutdown(void);
 
-void citrusleaf_set_debug(bool debug_flag);
-
 /**
  * This call will print stats to stderr
  */

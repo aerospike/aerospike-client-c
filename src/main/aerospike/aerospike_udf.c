@@ -17,12 +17,12 @@
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_udf.h>
 #include <aerospike/as_error.h>
+#include <aerospike/as_log.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_status.h>
 
 #include <citrusleaf/cl_udf.h>
 
-#include "_log.h"
 #include "_policy.h"
 #include "_shim.h"
 

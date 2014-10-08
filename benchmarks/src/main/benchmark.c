@@ -21,16 +21,15 @@
  ******************************************************************************/
 #include "benchmark.h"
 #include "aerospike/aerospike_info.h"
-#include "citrusleaf/cf_log.h"
+#include "aerospike/as_log.h"
 #include <stdint.h>
 #include <time.h>
 
-static const char * as_log_level_strings[5] = {
+static const char * as_log_level_strings[] = {
 	[AS_LOG_LEVEL_ERROR]	= "ERROR",
 	[AS_LOG_LEVEL_WARN]		= "WARN",
 	[AS_LOG_LEVEL_INFO]		= "INFO",
-	[AS_LOG_LEVEL_DEBUG]	= "DEBUG",
-	[AS_LOG_LEVEL_TRACE] 	= "TRACE"
+	[AS_LOG_LEVEL_DEBUG]	= "DEBUG"
 };
 
 void
@@ -81,15 +80,6 @@ as_client_log_callback(as_log_level level, const char * func, const char * file,
 	blog_detailv(level, fmt, ap);
 	va_end(ap);
 	return true;
-}
-
-static void
-cf_client_log_callback(cf_log_level level, const char* fmt, ...)
-{
-	va_list ap;
-	va_start(ap, fmt);
-	blog_detailv((as_log_level)level, fmt, ap);
-	va_end(ap);
 }
 
 static int
@@ -228,19 +218,14 @@ run_benchmark(arguments* args)
 	data.debug = args->debug;
 	data.valid = 1;
 
-	as_log log;
-	
 	if (args->debug) {
-		as_log_set_level(&log, AS_LOG_LEVEL_DEBUG);
-		cf_set_log_level(CF_DEBUG);
+		as_log_set_level(AS_LOG_LEVEL_DEBUG);
 	}
 	else {
-		as_log_set_level(&log, AS_LOG_LEVEL_INFO);
-		cf_set_log_level(CF_INFO);
+		as_log_set_level(AS_LOG_LEVEL_INFO);
 	}
 
-	as_log_set_callback(&log, as_client_log_callback);
-	cf_set_log_callback(cf_client_log_callback);
+	as_log_set_callback(as_client_log_callback);
 
 	int ret = connect_to_server(args, &data.client);
 	

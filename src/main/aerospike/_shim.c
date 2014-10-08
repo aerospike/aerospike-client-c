@@ -29,7 +29,6 @@
 
 #include <citrusleaf/citrusleaf.h>
 #include <citrusleaf/cl_types.h>
-#include <citrusleaf/cf_log_internal.h>
 
 #include <stdint.h>
 #include <errno.h>

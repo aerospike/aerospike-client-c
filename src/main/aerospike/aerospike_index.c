@@ -15,10 +15,9 @@
  * the License.
  */
 #include <aerospike/aerospike_index.h>
-
+#include <aerospike/as_log.h>
 #include <citrusleaf/cl_sindex.h>
 
-#include "_log.h"
 #include "_policy.h"
 #include "_shim.h"
 

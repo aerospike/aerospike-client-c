@@ -22,6 +22,7 @@
 #include <aerospike/as_error.h>
 #include <aerospike/as_key.h>
 #include <aerospike/as_list.h>
+#include <aerospike/as_log.h>
 #include <aerospike/as_operations.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_record.h>
@@ -34,9 +35,7 @@
 #include <citrusleaf/cl_object.h>
 #include <citrusleaf/cl_write.h>
 #include <citrusleaf/cf_proto.h>
-#include <citrusleaf/cf_log_internal.h>
 
-#include "_log.h"
 #include "_policy.h"
 #include "_shim.h"
 

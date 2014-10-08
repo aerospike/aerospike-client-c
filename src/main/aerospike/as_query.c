@@ -16,11 +16,10 @@
  */
 #include <aerospike/as_bin.h>
 #include <aerospike/as_key.h>
+#include <aerospike/as_log.h>
 #include <aerospike/as_query.h>
 #include <aerospike/as_udf.h>
 #include <stdarg.h>
-
-#include "_log.h"
 
 /******************************************************************************
  *	INSTANCE FUNCTIONS

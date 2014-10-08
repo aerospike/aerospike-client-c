@@ -18,9 +18,9 @@
 #include <aerospike/as_admin.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_info.h>
+#include <aerospike/as_log_macros.h>
 #include <aerospike/as_string.h>
 #include <citrusleaf/cf_byte_order.h>
-#include <citrusleaf/cf_log_internal.h>
 #include <citrusleaf/cf_proto.h>
 #include <citrusleaf/cf_socket.h>
 #include <errno.h> //errno
@@ -143,13 +143,13 @@ is_connected(int fd)
 	ssize_t rv = recv(fd, (void*)buf, sizeof(buf), MSG_PEEK | MSG_DONTWAIT | MSG_NOSIGNAL);
 	
 	if (rv == 0) {
-		cf_debug("Connected check: Found disconnected fd %d", fd);
+		as_log_debug("Connected check: Found disconnected fd %d", fd);
 		return CONNECTED_NOT;
 	}
 	
 	if (rv < 0) {
 		if (errno == EBADF) {
-			cf_warn("Connected check: Bad fd %d", fd);
+			as_log_warn("Connected check: Bad fd %d", fd);
 			return CONNECTED_BADFD;
 		}
 		else if (errno == EWOULDBLOCK || errno == EAGAIN) {
@@ -157,12 +157,12 @@ is_connected(int fd)
 			return CONNECTED;
 		}
 		else {
-			cf_info("Connected check: fd %d error %d", fd, errno);
+			as_log_info("Connected check: fd %d error %d", fd, errno);
 			return CONNECTED_ERROR;
 		}
 	}
 	
-	cf_info("Connected check: Peek got unexpected data for fd %d", fd);
+	as_log_info("Connected check: Peek got unexpected data for fd %d", fd);
 	return CONNECTED;
 }
 
@@ -175,7 +175,7 @@ as_node_authenticate_connection(as_node* node, int* fd)
 		int status = as_authenticate(*fd, cluster->user, cluster->password, cluster->conn_timeout_ms);
 		
 		if (status) {
-			cf_debug("Authentication failed for %s", cluster->user);
+			as_log_debug("Authentication failed for %s", cluster->user);
 			cf_close(*fd);
 			*fd = -1;
 			return status;
@@ -192,7 +192,7 @@ as_node_create_connection(as_node* node, int* fd)
 	
 	if (*fd == -1) {
 		// Local problem - socket create failed.
-		cf_debug("Socket create failed for %s", node->name);
+		as_log_debug("Socket create failed for %s", node->name);
 		return AEROSPIKE_ERR_CLIENT;
 	}
 	
@@ -215,7 +215,7 @@ as_node_create_connection(as_node* node, int* fd)
 				// Replace invalid primary address with valid alias.
 				// Other threads may not see this change immediately.
 				// It's just a hint, not a requirement to try this new address first.
-				cf_debug("Change node address %s %s:%d", node->name, address->name, (int)cf_swap_from_be16(address->addr.sin_port));
+				as_log_debug("Change node address %s %s:%d", node->name, address->name, (int)cf_swap_from_be16(address->addr.sin_port));
 				ck_pr_store_32(&node->address_index, i);
 				return as_node_authenticate_connection(node, fd);
 			}
@@ -223,7 +223,7 @@ as_node_create_connection(as_node* node, int* fd)
 	}
 	
 	// Couldn't start a connection on any socket address - close the socket.
-	cf_info("Failed to connect: %s %s:%d", node->name, primary->name, (int)cf_swap_from_be16(primary->addr.sin_port));
+	as_log_info("Failed to connect: %s %s:%d", node->name, primary->name, (int)cf_swap_from_be16(primary->addr.sin_port));
 	cf_close(*fd);
 	*fd = -1;
 	return AEROSPIKE_ERR_CLUSTER;
@@ -248,7 +248,7 @@ as_node_get_connection(as_node* node, int* fd)
 					
 				case CONNECTED_BADFD:
 					// Local problem, don't try closing.
-					cf_warn("Found bad file descriptor in queue: fd %d", *fd);
+					as_log_warn("Found bad file descriptor in queue: fd %d", *fd);
 					break;
 				
 				case CONNECTED_NOT:
@@ -265,7 +265,7 @@ as_node_get_connection(as_node* node, int* fd)
 			return as_node_create_connection(node, fd);
 		}
 		else {
-			cf_error("Bad return value from cf_queue_pop");
+			as_log_error("Bad return value from cf_queue_pop");
 			*fd = -1;
 			return AEROSPIKE_ERR_CLIENT;
 		}
@@ -330,13 +330,13 @@ as_node_get_info(as_node* node, const char* names, size_t names_len, int timeout
 	
 	// Write the request. Note that timeout_ms is never 0.
 	if (cf_socket_write_timeout(fd, stack_buf, write_size, 0, timeout_ms) != 0) {
-		cf_debug("Node %s failed info socket write", node->name);
+		as_log_debug("Node %s failed info socket write", node->name);
 		return 0;
 	}
 	
 	// Reuse the buffer, read the response - first 8 bytes contains body size.
 	if (cf_socket_read_timeout(fd, stack_buf, sizeof(cl_proto), 0, timeout_ms) != 0) {
-		cf_debug("Node %s failed info socket read header", node->name);
+		as_log_debug("Node %s failed info socket read header", node->name);
 		return 0;
 	}
 	
@@ -345,7 +345,7 @@ as_node_get_info(as_node* node, const char* names, size_t names_len, int timeout
 	
 	// Sanity check body size.
 	if (proto->sz == 0 || proto->sz > 512 * 1024) {
-		cf_info("Node %s bad info response size %lu", node->name, proto->sz);
+		as_log_info("Node %s bad info response size %lu", node->name, proto->sz);
 		return 0;
 	}
 	
@@ -356,13 +356,13 @@ as_node_get_info(as_node* node, const char* names, size_t names_len, int timeout
 	uint8_t* rbuf = proto_sz >= INFO_STACK_BUF_SIZE ? (uint8_t*)cf_malloc(proto_sz + 1) : stack_buf;
 	
 	if (! rbuf) {
-		cf_error("Node %s failed allocation for info response", node->name);
+		as_log_error("Node %s failed allocation for info response", node->name);
 		return 0;
 	}
 	
 	// Read the response body.
 	if (cf_socket_read_timeout(fd, rbuf, proto_sz, 0, timeout_ms) != 0) {
-		cf_debug("Node %s failed info socket read body", node->name);
+		as_log_debug("Node %s failed info socket read body", node->name);
 		
 		if (rbuf != stack_buf) {
 			cf_free(rbuf);
@@ -379,13 +379,13 @@ static bool
 as_node_verify_name(as_node* node, const char* name)
 {
 	if (name == 0 || *name == 0) {
-		cf_warn("Node name not returned from info request.");
+		as_log_warn("Node name not returned from info request.");
 		return false;
 	}
 	
 	if (strcmp(node->name, name) != 0) {
 		// Set node to inactive immediately.
-		cf_warn("Node name has changed. Old=%s New=%s", node->name, name);
+		as_log_warn("Node name has changed. Old=%s New=%s", node->name, name);
 		
 		// Make volatile write so changes are reflected in other threads.
 		ck_pr_store_8(&node->active, false);
@@ -486,7 +486,7 @@ as_node_add_friends(as_cluster* cluster, as_node* node, char* buf, as_vector* /*
 				}
 			}
 			else {
-				cf_warn("Invalid services address: %s:%d", addr_str, (int)port);
+				as_log_warn("Invalid services address: %s:%d", addr_str, (int)port);
 			}
 			addr_str = ++p;
 		}
@@ -518,7 +518,7 @@ as_node_process_response(as_cluster* cluster, as_node* node, as_vector* values,
 		else if (strcmp(nv->name, "partition-generation") == 0) {
 			uint32_t gen = (uint32_t)atoi(nv->value);
 			if (node->partition_generation != gen) {
-				cf_debug("Node %s partition generation changed: %u", node->name, gen);
+				as_log_debug("Node %s partition generation changed: %u", node->name, gen);
 				*update_partitions = true;
 			}
 		}
@@ -526,7 +526,7 @@ as_node_process_response(as_cluster* cluster, as_node* node, as_vector* values,
 			as_node_add_friends(cluster, node, nv->value, friends);
 		}
 		else {
-			cf_warn("Node %s did not request info '%s'", node->name, nv->name);
+			as_log_warn("Node %s did not request info '%s'", node->name, nv->name);
 		}
 	}
 	return status;
@@ -548,7 +548,7 @@ as_node_process_partitions(as_cluster* cluster, as_node* node, as_vector* values
 			as_partition_tables_update(cluster, node, nv->value, false);
 		}
 		else {
-			cf_warn("Node %s did not request info '%s'", node->name, nv->name);
+			as_log_warn("Node %s did not request info '%s'", node->name, nv->name);
 		}
 	}
 }

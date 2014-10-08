@@ -15,19 +15,19 @@
  * the License.
  */
 #include <aerospike/aerospike_query.h>
+#include <aerospike/as_cluster.h>
 #include <aerospike/as_error.h>
+#include <aerospike/as_log.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_query.h>
 #include <aerospike/as_status.h>
 #include <aerospike/as_stream.h>
 
 #include <citrusleaf/citrusleaf.h>
-#include <aerospike/as_cluster.h>
 #include <citrusleaf/cl_query.h>
 
 #include <stdint.h>
 
-#include "_log.h"
 #include "_policy.h"
 #include "_shim.h"
  

@@ -19,11 +19,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <aerospike/as_log_macros.h>
 #include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_byte_order.h>
 #include <citrusleaf/cf_clock.h>
 #include <citrusleaf/cf_errno.h>
-#include <citrusleaf/cf_log_internal.h>
 #include <citrusleaf/cf_socket.h>
 
 #if ! defined(CF_WINDOWS)
@@ -55,7 +55,7 @@
 static void
 debug_time_printf(const char* desc, int try, int busy, uint64_t start, uint64_t end, uint64_t deadline)
 {
-	cf_info("%s|%zu|%d|%d|%lu|%lu|%lu",
+	as_log_info("%s|%zu|%d|%d|%lu|%lu|%lu",
 		desc, (uint64_t)pthread_self(),
 		try,
 		busy,
@@ -73,7 +73,7 @@ cf_socket_create_nb()
 	int fd = socket(AF_INET, SOCK_STREAM, 0);
 
 	if (-1 == fd) {
-		cf_warn("could not allocate socket, errno %d", errno);
+		as_log_warn("could not allocate socket, errno %d", errno);
 		return -1;
 	}
 
@@ -81,13 +81,13 @@ cf_socket_create_nb()
 	int flags = fcntl(fd, F_GETFL, 0);
 
     if (flags < 0) {
-		cf_warn("could not read socket flags");
+		as_log_warn("could not read socket flags");
 		close(fd);
         return -1;
 	}
 
     if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
-		cf_warn("could not set socket nonblocking");
+		as_log_warn("could not set socket nonblocking");
 		close(fd);
         return -1;
 	}
@@ -105,7 +105,7 @@ cf_print_sockaddr_in(char *prefix, struct sockaddr_in *sa_in)
 {
 	char str[INET_ADDRSTRLEN];
 	inet_ntop(AF_INET, &(sa_in->sin_addr), str, INET_ADDRSTRLEN);
-	cf_error("%s %s:%d", prefix, str, (int)cf_swap_from_be16(sa_in->sin_port));
+	as_log_error("%s %s:%d", prefix, str, (int)cf_swap_from_be16(sa_in->sin_port));
 }
 
 
@@ -175,7 +175,7 @@ cf_socket_read_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_dead
     
 	if (0 > (epoll_fd = epoll_create(1))) {
 		rv = errno;
-		cf_warn("%s: epoll_create() failed (errno %d: \"%s\") ~~ Failing!", ctx, errno, my_strerror_r(errno, errbuf, errbuf_len));
+		as_log_warn("%s: epoll_create() failed (errno %d: \"%s\") ~~ Failing!", ctx, errno, my_strerror_r(errno, errbuf, errbuf_len));
 		goto Fail;
 	}
     
@@ -186,7 +186,7 @@ cf_socket_read_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_dead
     
 	if (0 > epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &event)) {
 		rv = errno;
-		cf_warn("%s: epoll_ctl(ADD) of socket failed (errno %d: \"%s\") ~~ Failing!", ctx, errno, my_strerror_r(errno, errbuf, errbuf_len));
+		as_log_warn("%s: epoll_ctl(ADD) of socket failed (errno %d: \"%s\") ~~ Failing!", ctx, errno, my_strerror_r(errno, errbuf, errbuf_len));
 		goto Fail;
 	}
     
@@ -209,37 +209,37 @@ cf_socket_read_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_dead
         
 		if (0 > (nevents = epoll_wait(epoll_fd, events, max_events, wait_ms))) {
 			if ((rv = errno) == EINTR) {
-				cf_debug("%s: epoll_wait() on socket encountered EINTR ~~ Retrying!", ctx);
+				as_log_debug("%s: epoll_wait() on socket encountered EINTR ~~ Retrying!", ctx);
 				busy++;
 				goto Retry;
 			} else {
-				cf_warn("%s: epoll_wait() on socket failed (errno %d: \"%s\") ~~ Failing!", ctx, errno, my_strerror_r(errno, errbuf, errbuf_len));
+				as_log_warn("%s: epoll_wait() on socket failed (errno %d: \"%s\") ~~ Failing!", ctx, errno, my_strerror_r(errno, errbuf, errbuf_len));
 			}
 			goto Fail;
 		} else {
 			if (nevents == 0) {
-				cf_debug("%s: epoll_wait() returned no events ~~ Retrying!", ctx);
+				as_log_debug("%s: epoll_wait() returned no events ~~ Retrying!", ctx);
 				busy++;
 				goto Retry;
 			}
 			if (nevents != 1) {
-				cf_warn("%s: epoll_wait() returned %d events ~~ only 1 expected, so ignoring others!", ctx, nevents);
+				as_log_warn("%s: epoll_wait() returned %d events ~~ only 1 expected, so ignoring others!", ctx, nevents);
 			}
 			if (events[0].data.fd == fd) {
 				if (events[0].events & EPOLLIN) {
-					cf_debug("%s: epoll_wait() on socket ready for read detected ~~ Succeeding!", ctx);
+					as_log_debug("%s: epoll_wait() on socket ready for read detected ~~ Succeeding!", ctx);
 				} else {
 					// (Note:  ERR and HUP events are automatically waited for as well.)
 					if (events[0].events & (EPOLLERR | EPOLLHUP)) {
-						cf_debug("%s: epoll_wait() on socket detected failure event 0x%x ~~ Failing!", ctx, events[0].events);
+						as_log_debug("%s: epoll_wait() on socket detected failure event 0x%x ~~ Failing!", ctx, events[0].events);
 					} else {
-						cf_warn("%s: epoll_wait() on socket detected non-read events 0x%x ~~ Failing!", ctx, events[0].events);
+						as_log_warn("%s: epoll_wait() on socket detected non-read events 0x%x ~~ Failing!", ctx, events[0].events);
 					}
 					rv = EBADF;
 					goto Fail;
 				}
 			} else {
-				cf_warn("%s: epoll_wait() on socket returned event on unknown socket %d ~~ Retrying!", ctx, events[0].data.fd);
+				as_log_warn("%s: epoll_wait() on socket returned event on unknown socket %d ~~ Retrying!", ctx, events[0].data.fd);
 				goto Retry;
 			}
             
@@ -270,7 +270,7 @@ cf_socket_read_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_dead
     
 Success:
 	if (0 > epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, &event)) {
-		cf_warn("%s: epoll_ctl(DEL) on socket failed (errno %d: \"%s\")", ctx, errno, my_strerror_r(errno, errbuf, errbuf_len));
+		as_log_warn("%s: epoll_ctl(DEL) on socket failed (errno %d: \"%s\")", ctx, errno, my_strerror_r(errno, errbuf, errbuf_len));
 	}
 	close(epoll_fd);
     
@@ -278,11 +278,11 @@ Success:
 	goto Done;
     
 Fail:
-	cf_debug("%s: socket read timeout fail: %d (%s)", ctx, errno, my_strerror_r(errno, errbuf, errbuf_len));
+	as_log_debug("%s: socket read timeout fail: %d (%s)", ctx, errno, my_strerror_r(errno, errbuf, errbuf_len));
     
 	if (epoll_fd > 0) {
 		if (0 > epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, &event)) {
-			cf_warn("%s: epoll_ctl(DEL) on socket failed (errno %d: \"%s\")", ctx, errno, my_strerror_r(errno, errbuf, errbuf_len));
+			as_log_warn("%s: epoll_ctl(DEL) on socket failed (errno %d: \"%s\")", ctx, errno, my_strerror_r(errno, errbuf, errbuf_len));
 		}
 		close(epoll_fd);
 	}
@@ -326,7 +326,7 @@ cf_socket_write_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_dea
     
 	if (0 > (epoll_fd = epoll_create(1))) {
 		rv = errno;
-		cf_warn("%s: epoll_create() failed (errno %d: \"%s\") ~~ Failing!", ctx, errno, my_strerror_r(errno, errbuf, errbuf_len));
+		as_log_warn("%s: epoll_create() failed (errno %d: \"%s\") ~~ Failing!", ctx, errno, my_strerror_r(errno, errbuf, errbuf_len));
 		goto Fail;
 	}
     
@@ -337,7 +337,7 @@ cf_socket_write_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_dea
     
 	if (0 > epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &event)) {
 		rv = errno;
-		cf_warn("%s: epoll_ctl(ADD) of socket failed (errno %d: \"%s\") ~~ Failing!", ctx, errno, my_strerror_r(errno, errbuf, errbuf_len));
+		as_log_warn("%s: epoll_ctl(ADD) of socket failed (errno %d: \"%s\") ~~ Failing!", ctx, errno, my_strerror_r(errno, errbuf, errbuf_len));
 		goto Fail;
 	}
     
@@ -360,37 +360,37 @@ cf_socket_write_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_dea
         
 		if (0 > (nevents = epoll_wait(epoll_fd, events, max_events, wait_ms))) {
 			if ((rv = errno) == EINTR) {
-				cf_debug("%s: epoll_wait() on socket encountered EINTR ~~ Retrying!", ctx);
+				as_log_debug("%s: epoll_wait() on socket encountered EINTR ~~ Retrying!", ctx);
 				busy++;
 				goto Retry;
 			} else {
-				cf_warn("%s: epoll_wait() on socket failed (errno %d: \"%s\") ~~ Failing!", ctx, errno, my_strerror_r(errno, errbuf, errbuf_len));
+				as_log_warn("%s: epoll_wait() on socket failed (errno %d: \"%s\") ~~ Failing!", ctx, errno, my_strerror_r(errno, errbuf, errbuf_len));
 			}
 			goto Fail;
 		} else {
 			if (nevents == 0) {
-				cf_debug("%s: epoll_wait() returned no events ~~ Retrying!", ctx);
+				as_log_debug("%s: epoll_wait() returned no events ~~ Retrying!", ctx);
 				busy++;
 				goto Retry;
 			}
 			if (nevents != 1) {
-				cf_warn("%s: epoll_wait() returned %d events ~~ only 1 expected, so ignoring others!", ctx, nevents);
+				as_log_warn("%s: epoll_wait() returned %d events ~~ only 1 expected, so ignoring others!", ctx, nevents);
 			}
 			if (events[0].data.fd == fd) {
 				if (events[0].events & EPOLLOUT) {
-					cf_debug("%s: epoll_wait() on socket ready for write detected ~~ Succeeding!", ctx);
+					as_log_debug("%s: epoll_wait() on socket ready for write detected ~~ Succeeding!", ctx);
 				} else {
 					// (Note:  ERR and HUP events are automatically waited for as well.)
 					if (events[0].events & (EPOLLERR | EPOLLHUP)) {
-						cf_debug("%s: epoll_wait() on socket detected failure event 0x%x ~~ Failing!", ctx, events[0].events);
+						as_log_debug("%s: epoll_wait() on socket detected failure event 0x%x ~~ Failing!", ctx, events[0].events);
 					} else {
-						cf_warn("%s: epoll_wait() on socket detected non-write events 0x%x ~~ Failing!", ctx, events[0].events);
+						as_log_warn("%s: epoll_wait() on socket detected non-write events 0x%x ~~ Failing!", ctx, events[0].events);
 					}
 					rv = EBADF;
 					goto Fail;
 				}
 			} else {
-				cf_warn("%s: epoll_wait() on socket returned event on unknown socket %d ~~ Retrying!", ctx, events[0].data.fd);
+				as_log_warn("%s: epoll_wait() on socket returned event on unknown socket %d ~~ Retrying!", ctx, events[0].data.fd);
 				goto Retry;
 			}
             
@@ -421,7 +421,7 @@ cf_socket_write_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_dea
     
 Success:
 	if (0 > epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, &event)) {
-		cf_warn("%s: epoll_ctl(DEL) on socket failed (errno %d: \"%s\")", ctx, errno, my_strerror_r(errno, errbuf, errbuf_len));
+		as_log_warn("%s: epoll_ctl(DEL) on socket failed (errno %d: \"%s\")", ctx, errno, my_strerror_r(errno, errbuf, errbuf_len));
 	}
 	close(epoll_fd);
     
@@ -429,11 +429,11 @@ Success:
 	goto Done;
     
 Fail:
-	cf_debug("%s: socket write timeout fail: %d (%s)", ctx, errno, my_strerror_r(errno, errbuf, errbuf_len));
+	as_log_debug("%s: socket write timeout fail: %d (%s)", ctx, errno, my_strerror_r(errno, errbuf, errbuf_len));
     
 	if (epoll_fd > 0) {
 		if (0 > epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, &event)) {
-			cf_warn("%s: epoll_ctl(DEL) on socket failed (errno %d: \"%s\")", ctx, errno, my_strerror_r(errno, errbuf, errbuf_len));
+			as_log_warn("%s: epoll_ctl(DEL) on socket failed (errno %d: \"%s\")", ctx, errno, my_strerror_r(errno, errbuf, errbuf_len));
 		}
 		close(epoll_fd);
 	}
@@ -600,7 +600,7 @@ cf_socket_read_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_dead
 	fd_set* rset = (fd_set*)(rset_size > STACK_LIMIT ? cf_malloc(rset_size) : alloca(rset_size));
 	
 	if (!rset) {
-		cf_warn("fdset allocation error: %d", rset_size);
+		as_log_warn("fdset allocation error: %d", rset_size);
 		return -1;
 	}
 
@@ -708,7 +708,7 @@ cf_socket_write_timeout(int fd, uint8_t *buf, size_t buf_len, uint64_t trans_dea
 	fd_set* wset = (fd_set*)(wset_size > STACK_LIMIT ? cf_malloc(wset_size) : alloca(wset_size));
 	   
 	if (!wset) {
-		cf_warn("fdset allocation error: %d", wset_size);
+		as_log_warn("fdset allocation error: %d", wset_size);
 		return -1;
 	}
 
@@ -849,7 +849,7 @@ cf_socket_create_nb()
 	SOCKET fd = socket(AF_INET, SOCK_STREAM, 0);
 
 	if (-1 == fd) {
-		cf_warn("could not allocate socket, errno %d", errno);
+		as_log_warn("could not allocate socket, errno %d", errno);
 		return -1;
 	}
 
@@ -857,7 +857,7 @@ cf_socket_create_nb()
 	u_long iMode = 1;
 
 	if (NO_ERROR != ioctlsocket(fd, FIONBIO, &iMode)) {
-		cf_info("could not connect nonblocking socket %d, errno %d", fd, errno);
+		as_log_info("could not connect nonblocking socket %d, errno %d", fd, errno);
 		return -1;
 	}
 
@@ -877,10 +877,10 @@ cf_socket_start_connect_nb(int fd, struct sockaddr_in* sa)
 	if (0 != connect(fd, (struct sockaddr*)sa, sizeof(*sa))) {
         if (! IS_CONNECTING()) {
         	if (errno == ECONNREFUSED) {
-        		cf_debug("host refused socket connection");
+        		as_log_debug("host refused socket connection");
         	}
         	else {
-        		cf_info("could not connect nonblocking socket %d, errno %d", fd, errno);
+        		as_log_info("could not connect nonblocking socket %d, errno %d", fd, errno);
         	}
 
         	return -1;

@@ -24,9 +24,8 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#include <citrusleaf/cf_log_internal.h>
+#include <aerospike/as_log_macros.h>
 #include <citrusleaf/cf_service.h>
-
 
 void
 cf_process_privsep(uid_t uid, gid_t gid)
@@ -36,19 +35,19 @@ cf_process_privsep(uid_t uid, gid_t gid)
 
     /* Drop all auxiliary groups */
     if (0 > setgroups(0, (const gid_t *)0)){
-        cf_error("Could not set groups: %s", strerror(errno));
+        as_log_error("Could not set groups: %s", strerror(errno));
 //        cf_crash(CF_MISC, CF_GLOBAL, CF_CRITICAL, "setgroups: %s", cf_strerror(errno));
         exit(-1);
     }
 
     /* Change privileges */
     if (0 > setgid(gid)){
-    	cf_error("Could not set gid: %s", strerror(errno));
+    	as_log_error("Could not set gid: %s", strerror(errno));
 //        cf_crash(CF_MISC, CF_GLOBAL, CF_CRITICAL, "setgid: %s", cf_strerror(errno));
         exit(-2);
     }
     if (0 > setuid(uid)){
-    	cf_error("Could not set uid: %s", strerror(errno));
+    	as_log_error("Could not set uid: %s", strerror(errno));
 //        cf_crash(CF_MISC, CF_GLOBAL, CF_CRITICAL, "setuid: %s", cf_strerror(errno));
         exit(-2);
     }
@@ -69,7 +68,7 @@ cf_process_daemonize(const char *redirect_file, int *fd_ignore_list, int list_si
  
     /* Fork ourselves, then let the parent expire */
     if (-1 == (p = fork())){
-    	cf_error("Couldn't fork: %s", strerror(errno));
+    	as_log_error("Couldn't fork: %s", strerror(errno));
 //      cf_crash(CF_MISC, CF_GLOBAL, CF_CRITICAL, "couldn't fork: %s", cf_strerror(errno));
         exit(-1);
     }
@@ -78,7 +77,7 @@ cf_process_daemonize(const char *redirect_file, int *fd_ignore_list, int list_si
 
     /* Get a new session */
     if (-1 == setsid()){
-    	cf_error("Couldn't set session: %s", strerror(errno));
+    	as_log_error("Couldn't set session: %s", strerror(errno));
         exit(-2);
 //      cf_crash(CF_MISC, CF_GLOBAL, CF_CRITICAL, "couldn't set session: %s", cf_strerror(errno));
     }
@@ -103,12 +102,12 @@ cf_process_daemonize(const char *redirect_file, int *fd_ignore_list, int list_si
         snprintf(cfile, 128, "%s", redirect_file);
     }
     if (-1 == (FD = open(cfile, O_WRONLY|O_CREAT|O_APPEND,S_IRUSR|S_IWUSR))){
-        cf_error("Couldn't open console redirection file: %s", strerror(errno));
+        as_log_error("Couldn't open console redirection file: %s", strerror(errno));
 //        cf_crash(CF_MISC, CF_GLOBAL, CF_CRITICAL, "couldn't open console redirection file: %s", cf_strerror(errno));
         exit(-3);
     }
     if (-1 == chmod(cfile, (S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH))){
-    	cf_error("Couldn't set mode on console redirection file: %s", strerror(errno));
+    	as_log_error("Couldn't set mode on console redirection file: %s", strerror(errno));
 //        cf_crash(CF_MISC, CF_GLOBAL, CF_CRITICAL, "couldn't set mode on console redirection file: %s", cf_strerror(errno));
         exit(-4);
     }
@@ -116,7 +115,7 @@ cf_process_daemonize(const char *redirect_file, int *fd_ignore_list, int list_si
     /* Redirect stdout, stderr, and stdin to the console file */
     for (int i = 0; i < 3; i++) {
         if (-1 == dup2(FD, i)){
-        	cf_error("Couldn't duplicate FD: %s", strerror(errno));
+        	as_log_error("Couldn't duplicate FD: %s", strerror(errno));
 //            cf_crash(CF_MISC, CF_GLOBAL, CF_CRITICAL, "couldn't duplicate FD: %s", cf_strerror(errno));
             exit(-5);
         }

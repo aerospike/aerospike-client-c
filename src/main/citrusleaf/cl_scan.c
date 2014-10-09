@@ -334,7 +334,7 @@ do_scan_monte(as_cluster *asc, char *node_name, uint operation_info, uint operat
 #endif
 				done = true;
 			}
-			else if ((msg->n_ops) || (operation_info & CL_MSG_INFO1_NOBINDATA)) {
+			else if ((msg->n_ops) || (operation_info & CL_MSG_INFO1_GET_NOBINDATA)) {
 				// got one good value? call it a success!
 				rv = (*cb)(ns_ret, keyd, set_ret, &key, CL_RESULT_OK, msg->generation,
 						cf_server_void_time_to_ttl(msg->record_ttl), bins_local,
@@ -412,7 +412,7 @@ citrusleaf_scan(as_cluster *asc, char *ns, char *set, cl_bin *bins, int n_bins, 
 
 	uint info=0;
 	if (nobindata == true) {
-		info = (CL_MSG_INFO1_READ | CL_MSG_INFO1_NOBINDATA);
+		info = (CL_MSG_INFO1_READ | CL_MSG_INFO1_GET_NOBINDATA);
 	} else {
 		info = CL_MSG_INFO1_READ; 
 	}
@@ -432,7 +432,7 @@ citrusleaf_scan_node (as_cluster *asc, char *node_name, char *ns, char *set, cl_
 
 	uint info=0;
 	if (nobindata == true) {
-		info = (CL_MSG_INFO1_READ | CL_MSG_INFO1_NOBINDATA);
+		info = (CL_MSG_INFO1_READ | CL_MSG_INFO1_GET_NOBINDATA);
 	} else {
 		info = CL_MSG_INFO1_READ; 
 	}

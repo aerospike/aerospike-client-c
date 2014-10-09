@@ -36,7 +36,6 @@
 #include <citrusleaf/cl_write.h>
 #include <citrusleaf/cf_proto.h>
 
-#include "_policy.h"
 #include "_shim.h"
 
 #include "../citrusleaf/internal.h"
@@ -64,11 +63,11 @@ as_status aerospike_key_get(
 	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
 	
-	// resolve policies
-	as_policy_read p;
-	as_policy_read_resolve(&p, &as->config.policies, policy);
+	if (! policy) {
+		policy = &as->config.policies.read;
+	}
 
-	uint32_t    timeout = p.timeout == UINT32_MAX ? 0 : p.timeout;          
+	uint32_t    timeout = policy->timeout == UINT32_MAX ? 0 : policy->timeout;
 	uint32_t    gen = 0;
 	uint32_t 	ttl = 0;
 	int         nvalues = 0;
@@ -76,7 +75,7 @@ as_status aerospike_key_get(
 
 	cl_rv rc = AEROSPIKE_OK;
 
-	switch ( p.key ) {
+	switch ( policy->key ) {
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
 			rc = citrusleaf_get_all(as->cluster, key->ns, key->set, NULL, (cf_digest*)digest->value,
@@ -143,11 +142,11 @@ as_status aerospike_key_select(
 	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
 	
-	// resolve policies
-	as_policy_read p;
-	as_policy_read_resolve(&p, &as->config.policies, policy);
+	if (! policy) {
+		policy = &as->config.policies.read;
+	}
 
-	uint32_t    timeout = p.timeout == UINT32_MAX ? 0 : p.timeout;
+	uint32_t    timeout = policy->timeout == UINT32_MAX ? 0 : policy->timeout;
 	uint32_t    gen = 0;
 	uint32_t 	ttl = 0;
 	int         nvalues = 0;
@@ -168,7 +167,7 @@ as_status aerospike_key_select(
 
 	cl_rv rc = AEROSPIKE_OK;
 
-	switch ( p.key ) {
+	switch ( policy->key ) {
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
 			rc = citrusleaf_get(as->cluster, key->ns, key->set, NULL, (cf_digest*)digest->value,
@@ -233,11 +232,11 @@ as_status aerospike_key_exists(
 	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
 	
-	// resolve policies
-	as_policy_read p;
-	as_policy_read_resolve(&p, &as->config.policies, policy);
+	if (! policy) {
+		policy = &as->config.policies.read;
+	}
 
-	uint32_t	timeout = p.timeout == UINT32_MAX ? 0 : p.timeout;
+	uint32_t    timeout = policy->timeout == UINT32_MAX ? 0 : policy->timeout;
 	uint32_t	gen = 0;
 	uint32_t	ttl = 0; // TODO - a version of 'exists' that returns all metadata
 	int     	nvalues = 0;
@@ -245,7 +244,7 @@ as_status aerospike_key_exists(
 	
 	cl_rv rc = AEROSPIKE_OK;
 
-	switch ( p.key ) {
+	switch ( policy->key ) {
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
 			rc = citrusleaf_exists_key(as->cluster, key->ns, key->set, NULL, (cf_digest*)digest->value,
@@ -312,12 +311,12 @@ as_status aerospike_key_put(
 	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
 	
-	// resolve policies
-	as_policy_write p;
-	as_policy_write_resolve(&p, &as->config.policies, policy);
+	if (! policy) {
+		policy = &as->config.policies.write;
+	}
 
 	cl_write_parameters wp;
-	aspolicywrite_to_clwriteparameters(&p, rec, &wp);
+	aspolicywrite_to_clwriteparameters(policy, rec, &wp);
 
 	int			nvalues	= rec->bins.size;
 	cl_bin *	values	= (cl_bin *) alloca(sizeof(cl_bin) * nvalues);
@@ -326,7 +325,7 @@ as_status aerospike_key_put(
 
 	cl_rv rc = AEROSPIKE_OK;
 
-	switch ( p.key ) {
+	switch ( policy->key ) {
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
 			rc = citrusleaf_put(as->cluster, key->ns, key->set, NULL, (cf_digest*)digest->value, values, nvalues, &wp);
@@ -377,16 +376,16 @@ as_status aerospike_key_remove(
 	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
 	
-	// resolve policies
-	as_policy_remove p;
-	as_policy_remove_resolve(&p, &as->config.policies, policy);
+	if (! policy) {
+		policy = &as->config.policies.remove;
+	}
 
 	cl_write_parameters wp;
-	aspolicyremove_to_clwriteparameters(&p, &wp);
+	aspolicyremove_to_clwriteparameters(policy, &wp);
 
 	cl_rv rc = AEROSPIKE_OK;
 
-	switch ( p.key ) {
+	switch ( policy->key ) {
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
 			rc = citrusleaf_delete(as->cluster, key->ns, key->set, NULL, (cf_digest*)digest->value, &wp);
@@ -442,12 +441,12 @@ as_status aerospike_key_operate(
 	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
 	
-	// resolve policies
-	as_policy_operate p;
-	as_policy_operate_resolve(&p, &as->config.policies, policy);
+	if (! policy) {
+		policy = &as->config.policies.operate;
+	}
 
 	cl_write_parameters wp;
-	aspolicyoperate_to_clwriteparameters(&p, ops, &wp);
+	aspolicyoperate_to_clwriteparameters(policy, ops, &wp);
 
 	uint32_t 		gen = 0;
 	uint32_t 		ttl = 0;
@@ -480,7 +479,7 @@ as_status aerospike_key_operate(
 	cl_rv rc = AEROSPIKE_OK;
 	cl_bin *result_bins = NULL;
 
-	switch ( p.key ) {
+	switch ( policy->key ) {
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
 			rc = citrusleaf_operate(as->cluster, key->ns, key->set, NULL, (cf_digest*)digest->value,
@@ -585,13 +584,13 @@ as_status aerospike_key_apply(
 	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
 	
-	// resolve policies
-	as_policy_apply p;
-	as_policy_apply_resolve(&p, &as->config.policies, policy);
+	if (! policy) {
+		policy = &as->config.policies.apply;
+	}
 
 	cl_write_parameters wp;
 	cl_write_parameters_set_default(&wp);
-	wp.timeout_ms = p.timeout == UINT32_MAX ? 0 : p.timeout;
+	wp.timeout_ms = policy->timeout == UINT32_MAX ? 0 : policy->timeout;
 
 	cl_object okey;
 	asval_to_clobject((as_val *) key->valuep, &okey);
@@ -622,7 +621,7 @@ as_status aerospike_key_apply(
 
 	cl_rv rc = AEROSPIKE_OK;
 
-	switch ( p.key ) {
+	switch ( policy->key ) {
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
 			rc = do_the_full_monte( 

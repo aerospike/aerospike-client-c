@@ -18,7 +18,6 @@
 #include <aerospike/as_log.h>
 #include <citrusleaf/cl_sindex.h>
 
-#include "_policy.h"
 #include "_shim.h"
 
 /******************************************************************************

@@ -38,6 +38,7 @@ static aerospike * aerospike_defaults(aerospike * as, bool free, as_config * con
 	else {
 		as_config_init(&as->config);
 	}
+	as_policies_resolve(&as->config.policies);
 	return as;
 }
 

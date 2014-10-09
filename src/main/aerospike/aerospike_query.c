@@ -28,7 +28,6 @@
 
 #include <stdint.h>
 
-#include "_policy.h"
 #include "_shim.h"
  
 /******************************************************************************
@@ -123,9 +122,9 @@ as_status aerospike_query_foreach(
 	as_error_reset(err);
     as_val *  err_val = NULL;
 	
-	// resolve policies
-	// as_policy_query p;
-	// as_policy_query_resolve(&p, &as->config.policies, policy);
+	//if (! policy) {
+	//	policy = &as->config.policies.query;
+	//}
 	
 	if ( aerospike_query_init(as, err) != AEROSPIKE_OK ) {
 		return err->code;

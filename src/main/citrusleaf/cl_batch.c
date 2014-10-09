@@ -674,7 +674,7 @@ citrusleaf_batch_read(as_cluster *asc, char *ns, const cf_digest *digests, int n
 	//
 	digest_work work;
 	work.asc = asc;
-	work.info1 = CL_MSG_INFO1_READ | (get_bin_data ? 0 : CL_MSG_INFO1_NOBINDATA);
+	work.info1 = CL_MSG_INFO1_READ | (get_bin_data ? 0 : CL_MSG_INFO1_GET_NOBINDATA);
 	work.info2 = 0;
 	work.ns = ns;
 	work.digests = (cf_digest *) digests; // discarding const to make compiler happy

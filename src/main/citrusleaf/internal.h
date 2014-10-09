@@ -109,7 +109,7 @@ struct as_call_s {
 
 extern shash * 	g_cl_async_hashtab;
 
-// For XDS...
+// For XDR...
 extern cf_queue * g_cl_async_q;
 extern cf_queue	* g_cl_workitems_freepool_q;
 

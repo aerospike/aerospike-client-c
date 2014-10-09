@@ -81,7 +81,6 @@ CITRUSLEAF += cl_udf.o
 AEROSPIKE = 
 AEROSPIKE += _bin.o
 AEROSPIKE += _ldt.o
-AEROSPIKE += _policy.o
 AEROSPIKE += _shim.o
 AEROSPIKE += aerospike.o
 AEROSPIKE += aerospike_batch.o

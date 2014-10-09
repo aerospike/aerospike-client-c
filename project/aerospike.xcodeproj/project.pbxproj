@@ -24,8 +24,6 @@
 		BF2AA7D018BEBFA500E54AF3 /* _bin.h in Headers */ = {isa = PBXBuildFile; fileRef = BF2AA7AA18BEBFA400E54AF3 /* _bin.h */; };
 		BF2AA7D118BEBFA500E54AF3 /* _ldt.c in Sources */ = {isa = PBXBuildFile; fileRef = BF2AA7AB18BEBFA400E54AF3 /* _ldt.c */; };
 		BF2AA7D218BEBFA500E54AF3 /* _ldt.h in Headers */ = {isa = PBXBuildFile; fileRef = BF2AA7AC18BEBFA400E54AF3 /* _ldt.h */; };
-		BF2AA7D618BEBFA500E54AF3 /* _policy.c in Sources */ = {isa = PBXBuildFile; fileRef = BF2AA7B018BEBFA400E54AF3 /* _policy.c */; };
-		BF2AA7D718BEBFA500E54AF3 /* _policy.h in Headers */ = {isa = PBXBuildFile; fileRef = BF2AA7B118BEBFA400E54AF3 /* _policy.h */; };
 		BF2AA7D818BEBFA500E54AF3 /* _shim.c in Sources */ = {isa = PBXBuildFile; fileRef = BF2AA7B218BEBFA400E54AF3 /* _shim.c */; };
 		BF2AA7D918BEBFA500E54AF3 /* _shim.h in Headers */ = {isa = PBXBuildFile; fileRef = BF2AA7B318BEBFA400E54AF3 /* _shim.h */; };
 		BF2AA7DA18BEBFA500E54AF3 /* aerospike_batch.c in Sources */ = {isa = PBXBuildFile; fileRef = BF2AA7B418BEBFA400E54AF3 /* aerospike_batch.c */; };
@@ -145,8 +143,6 @@
 		BF2AA7AA18BEBFA400E54AF3 /* _bin.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = _bin.h; path = ../src/main/aerospike/_bin.h; sourceTree = "<group>"; };
 		BF2AA7AB18BEBFA400E54AF3 /* _ldt.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = _ldt.c; path = ../src/main/aerospike/_ldt.c; sourceTree = "<group>"; };
 		BF2AA7AC18BEBFA400E54AF3 /* _ldt.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = _ldt.h; path = ../src/main/aerospike/_ldt.h; sourceTree = "<group>"; };
-		BF2AA7B018BEBFA400E54AF3 /* _policy.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = _policy.c; path = ../src/main/aerospike/_policy.c; sourceTree = "<group>"; };
-		BF2AA7B118BEBFA400E54AF3 /* _policy.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = _policy.h; path = ../src/main/aerospike/_policy.h; sourceTree = "<group>"; };
 		BF2AA7B218BEBFA400E54AF3 /* _shim.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = _shim.c; path = ../src/main/aerospike/_shim.c; sourceTree = "<group>"; };
 		BF2AA7B318BEBFA400E54AF3 /* _shim.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = _shim.h; path = ../src/main/aerospike/_shim.h; sourceTree = "<group>"; };
 		BF2AA7B418BEBFA400E54AF3 /* aerospike_batch.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = aerospike_batch.c; path = ../src/main/aerospike/aerospike_batch.c; sourceTree = "<group>"; };
@@ -244,7 +240,7 @@
 		BFBDEF8618B56CB8003AF603 /* cf_socket.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; lineEnding = 0; name = cf_socket.c; path = ../modules/base/src/main/cf_socket.c; sourceTree = "<group>"; };
 		BFC002871901BCB200CB9BC8 /* as_vector.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_vector.c; path = ../modules/common/src/main/aerospike/as_vector.c; sourceTree = "<group>"; };
 		BFC002891901E08500CB9BC8 /* as_lookup.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_lookup.c; path = ../src/main/aerospike/as_lookup.c; sourceTree = "<group>"; };
-		BFC38AE01948F7CA000C53D9 /* as_admin.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; lineEnding = 0; name = as_admin.c; path = ../src/main/aerospike/as_admin.c; sourceTree = "<group>"; xcLanguageSpecificationIdentifier = xcode.lang.c; };
+		BFC38AE01948F7CA000C53D9 /* as_admin.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; lineEnding = 0; name = as_admin.c; path = ../src/main/aerospike/as_admin.c; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -281,8 +277,6 @@
 				BF2AA7AA18BEBFA400E54AF3 /* _bin.h */,
 				BF2AA7AB18BEBFA400E54AF3 /* _ldt.c */,
 				BF2AA7AC18BEBFA400E54AF3 /* _ldt.h */,
-				BF2AA7B018BEBFA400E54AF3 /* _policy.c */,
-				BF2AA7B118BEBFA400E54AF3 /* _policy.h */,
 				BF2AA7B218BEBFA400E54AF3 /* _shim.c */,
 				BF2AA7B318BEBFA400E54AF3 /* _shim.h */,
 				BF2AA7B418BEBFA400E54AF3 /* aerospike_batch.c */,
@@ -397,7 +391,6 @@
 			isa = PBXHeadersBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				BF2AA7D718BEBFA500E54AF3 /* _policy.h in Headers */,
 				BF2AA7D218BEBFA500E54AF3 /* _ldt.h in Headers */,
 				BF2AA7D018BEBFA500E54AF3 /* _bin.h in Headers */,
 				BF2AA7D918BEBFA500E54AF3 /* _shim.h in Headers */,
@@ -519,7 +512,6 @@
 				BF2AA7F218BEBFA500E54AF3 /* as_record.c in Sources */,
 				BFBA105118B7D8B300A64E68 /* as_boolean.c in Sources */,
 				BFBDAFE0191B0C5C007EB07C /* as_info.c in Sources */,
-				BF2AA7D618BEBFA500E54AF3 /* _policy.c in Sources */,
 				BFBBBAEE18B6D9D0003FFD88 /* cf_crypto.c in Sources */,
 				BF2AA79C18BEB91100E54AF3 /* citrusleaf.c in Sources */,
 				BFBDEF8218B5484D003AF603 /* cf_proto.c in Sources */,

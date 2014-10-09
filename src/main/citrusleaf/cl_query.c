@@ -848,7 +848,7 @@ static int cl_query_worker_do(as_node * node, cl_query_task * task) {
 #endif                
                 done = true;
             }
-            else if ((msg->n_ops || (msg->info1 & CL_MSG_INFO1_NOBINDATA))) {
+            else if ((msg->n_ops || (msg->info1 & CL_MSG_INFO1_GET_NOBINDATA))) {
 
                 as_record r;
                 as_record * record = &r;

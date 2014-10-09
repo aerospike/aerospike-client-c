@@ -1650,7 +1650,7 @@ citrusleaf_exists_key(as_cluster *asc, const char *ns, const char *set, const cl
 	cl_write_parameters_set_default(&cl_w_p);
 	cl_w_p.timeout_ms = timeout_ms;
 
-	return( do_the_full_monte( asc, CL_MSG_INFO1_READ | CL_MSG_INFO1_NOBINDATA, 0, 0,
+	return( do_the_full_monte( asc, CL_MSG_INFO1_READ | CL_MSG_INFO1_GET_NOBINDATA, 0, 0,
 			ns, set, key, digest, &values, CL_OP_READ, 0, &n_values, cl_gen,
 			&cl_w_p, &trid, NULL, NULL, cl_ttl) );
 }
@@ -1664,7 +1664,7 @@ citrusleaf_exists_digest(as_cluster *asc, const char *ns, const cf_digest *diges
 	cl_write_parameters_set_default(&cl_w_p);
 	cl_w_p.timeout_ms = timeout_ms;
 
-	return( do_the_full_monte( asc, CL_MSG_INFO1_READ | CL_MSG_INFO1_NOBINDATA, 0, 0, 
+	return( do_the_full_monte( asc, CL_MSG_INFO1_READ | CL_MSG_INFO1_GET_NOBINDATA, 0, 0,
 			ns, 0,0, digest, &values, CL_OP_READ, 0, &n_values, cl_gen, 
 			&cl_w_p, &trid, NULL, NULL, cl_ttl) );
 }
@@ -1711,10 +1711,10 @@ citrusleaf_get_all_digest_getsetname(as_cluster *asc, const char *ns, const cf_d
 	cl_w_p.timeout_ms = timeout_ms;
 
 	int info1 = CL_MSG_INFO1_READ | CL_MSG_INFO1_GET_ALL;
-	// Currently, the setname is returned only if XDS bit is set (for backward compatibility reasons).
+	// Currently, the setname is returned only if XDR bit is set (for backward compatibility reasons).
 	// This will/should be made the default in the future.
 	if (setname != NULL) {
-		info1 |= CL_MSG_INFO1_XDS;
+		info1 |= CL_MSG_INFO1_XDR;
 	}
 	
 	return( do_the_full_monte( asc, info1, 0, 0, ns, 0, 0, digest, values, 

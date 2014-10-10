@@ -283,7 +283,7 @@ as_node_put_connection(as_node* node, int fd)
 	/*
 	if (asyncfd == true) {
 		q = cn->conn_q_asyncfd;
-		// Async queue is used by XDS. It can open lot of connections
+		// Async queue is used by XDR. It can open lot of connections
 		// depending on batch-size. Dont worry about limiting the pool.
 		cf_queue_push(q, &fd);
 	} else {

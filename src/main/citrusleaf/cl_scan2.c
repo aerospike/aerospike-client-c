@@ -382,7 +382,7 @@ static int cl_scan_worker_do(as_node * node, cl_scan_task * task) {
 #endif
                 done = true;
             }
-            else if ((msg->n_ops || (msg->info1 & CL_MSG_INFO1_NOBINDATA))) {
+            else if ((msg->n_ops || (msg->info1 & CL_MSG_INFO1_GET_NOBINDATA))) {
 
                 cl_scan_response_rec rec;
                 cl_scan_response_rec *recp = &rec;

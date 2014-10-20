@@ -15,10 +15,11 @@
  * the License.
  */
 #include <aerospike/as_cluster.h>
-#include <aerospike/as_shm_cluster.h>
 #include <aerospike/as_admin.h>
-#include <aerospike/as_password.h>
+#include <aerospike/as_log_macros.h>
 #include <aerospike/as_lookup.h>
+#include <aerospike/as_password.h>
+#include <aerospike/as_shm_cluster.h>
 #include <aerospike/as_vector.h>
 #include <citrusleaf/as_scan.h>
 #include <citrusleaf/cl_info.h>
@@ -26,7 +27,6 @@
 #include <citrusleaf/cf_byte_order.h>
 #include <citrusleaf/cl_query.h>
 #include <citrusleaf/cf_socket.h>
-#include <citrusleaf/cf_log_internal.h>
 
 /******************************************************************************
  *	Function declarations
@@ -69,7 +69,7 @@ as_add_seeds(as_cluster* cluster, as_seed* seeds, uint32_t seeds_size) {
 	as_seed* trg = cluster->seeds + old_length;
 
 	for (uint32_t i = 0; i < seeds_size; i++) {
-		cf_debug("Add seed %s:%d", src->name, src->port);
+		as_log_debug("Add seed %s:%d", src->name, src->port);
 		trg->name = cf_strdup(src->name);
 		trg->port = src->port;
 		src++;
@@ -220,7 +220,7 @@ as_cluster_seed_nodes(as_cluster* cluster, bool enable_warnings)
 				else {
 					node = as_node_create(cluster, name, addr);
 					as_address* a = as_node_get_address_full(node);
-					cf_info("Add node %s %s:%d", node->name, a->name, (int)cf_swap_from_be16(a->addr.sin_port));
+					as_log_info("Add node %s %s:%d", node->name, a->name, (int)cf_swap_from_be16(a->addr.sin_port));
 					as_vector_append(&nodes_to_add, &node);
 				}
 			}
@@ -228,7 +228,7 @@ as_cluster_seed_nodes(as_cluster* cluster, bool enable_warnings)
 				if (enable_warnings) {
 					char name[INET_ADDRSTRLEN];
 					as_socket_address_name(addr, name);
-					cf_warn("Connection failed for %s (%s:%d)", seed->name, name, (int)seed->port);
+					as_log_warn("Connection failed for %s (%s:%d)", seed->name, name, (int)seed->port);
 				}
 			}
 		}
@@ -275,7 +275,7 @@ as_cluster_find_nodes_to_add(as_cluster* cluster, as_vector* /* <as_friend> */ f
 					// for the same node.  Add new host to list of alias filters
 					// and do not add new node.
 					as_address* a = as_node_get_address_full(node);
-					cf_info("Duplicate node found %s %s:%d", node->name, a->name, (int)cf_swap_from_be16(a->addr.sin_port));
+					as_log_info("Duplicate node found %s %s:%d", node->name, a->name, (int)cf_swap_from_be16(a->addr.sin_port));
 					node->friends++;
 					as_node_add_address(node, addr);
 					continue;
@@ -283,7 +283,7 @@ as_cluster_find_nodes_to_add(as_cluster* cluster, as_vector* /* <as_friend> */ f
 				
 				node = as_node_create(cluster, name, addr);
 				as_address* a = as_node_get_address_full(node);
-				cf_info("Add node %s %s:%d", name, a->name, (int)cf_swap_from_be16(a->addr.sin_port));
+				as_log_info("Add node %s %s:%d", name, a->name, (int)cf_swap_from_be16(a->addr.sin_port));
 				as_vector_append(nodes_to_add, &node);
 			}
 		}
@@ -397,7 +397,7 @@ as_cluster_remove_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ no
 		
 		if (as_cluster_find_node_by_reference(nodes_to_remove, node)) {
 			as_address* a = as_node_get_address_full(node);
-			cf_info("Remove node %s %s:%d", node->name, a->name, (int)cf_swap_from_be16(a->addr.sin_port));
+			as_log_info("Remove node %s %s:%d", node->name, a->name, (int)cf_swap_from_be16(a->addr.sin_port));
 			as_gc_item item;
 			item.data = node;
 			item.release_fn = (as_release_fn)release_node;
@@ -409,14 +409,14 @@ as_cluster_remove_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ no
 			}
 			else {
 				as_address* a = as_node_get_address_full(node);
-				cf_error("Remove node error. Node count exceeded %d, %s %s:%d", count, node->name, a->name, (int)cf_swap_from_be16(a->addr.sin_port));
+				as_log_error("Remove node error. Node count exceeded %d, %s %s:%d", count, node->name, a->name, (int)cf_swap_from_be16(a->addr.sin_port));
 			}
 		}
 	}
 		
 	// Do sanity check to make sure assumptions are correct.
 	if (count < nodes_new->size) {
-		cf_warn("Node remove mismatch. Expected %d Received %d", nodes_new->size, count);
+		as_log_warn("Node remove mismatch. Expected %d Received %d", nodes_new->size, count);
 	}
 	
 	// Replace nodes with copy.
@@ -515,7 +515,7 @@ as_cluster_tend(as_cluster* cluster, bool enable_seed_warnings)
 	// Retrieve fixed number of partitions only once from any node.
 	if (cluster->n_partitions == 0) {
 		if (! as_cluster_set_partition_size(cluster)) {
-			cf_warn("Failed to set retrieve n_partitions from cluster nodes.");
+			as_log_warn("Failed to set retrieve n_partitions from cluster nodes.");
 			return false;
 		}
 	}
@@ -622,10 +622,10 @@ void
 as_cluster_add_seeds(as_cluster* cluster)
 {
 	// Add other nodes as seeds, if they don't already exist.
-	if (cf_debug_enabled()) {
+	if (as_log_debug_enabled()) {
 		as_seed* seed = cluster->seeds;
 		for (uint32_t i = 0; i < cluster->seeds_size; i++) {
-			cf_debug("Add seed %s:%d", seed->name, seed->port);
+			as_log_debug("Add seed %s:%d", seed->name, seed->port);
 			seed++;
 		}
 	}

@@ -18,9 +18,9 @@
 #include <aerospike/as_admin.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_info.h>
+#include <aerospike/as_log_macros.h>
 #include <aerospike/as_lookup.h>
 #include <citrusleaf/cf_b64.h>
-#include <citrusleaf/cf_log_internal.h>
 #include <citrusleaf/cf_proto.h>
 #include <citrusleaf/cf_socket.h>
 #include <sys/types.h>
@@ -116,7 +116,7 @@ citrusleaf_info_host_auth(as_cluster* cluster, struct sockaddr_in *sa_in, char *
 		int status = as_authenticate(fd, cluster->user, cluster->password, timeout_ms);
 		
 		if (status) {
-			cf_debug("Authentication failed for %s", cluster->user);
+			as_log_debug("Authentication failed for %s", cluster->user);
 			cf_close(fd);
 			*values = 0;
 			return status;
@@ -232,7 +232,7 @@ citrusleaf_info_host_limit(int fd, char *names, char **values, int timeout_ms, b
 	}
 	if (io_rv != 0) {
 #ifdef DEBUG_INFO
-		cf_debug("info returned error, rv %d errno %d bufsz %d", io_rv, errno, buf_sz);
+		as_log_debug("info returned error, rv %d errno %d bufsz %d", io_rv, errno, buf_sz);
 #endif        
 		goto Done;
 	}
@@ -245,7 +245,7 @@ citrusleaf_info_host_limit(int fd, char *names, char **values, int timeout_ms, b
     
     if (0 != io_rv) {
 #ifdef DEBUG_INFO
-		cf_debug("info socket read failed: rv %d errno %d", io_rv, errno);
+		as_log_debug("info socket read failed: rv %d errno %d", io_rv, errno);
 #endif        
 		goto Done;
 	}
@@ -263,7 +263,7 @@ citrusleaf_info_host_limit(int fd, char *names, char **values, int timeout_ms, b
 
 		uint8_t *v_buf = malloc(read_length + 1);
 		if (!v_buf) {
-			cf_warn("Info request '%s' failed. Failed to malloc %d bytes", names, read_length);
+			as_log_warn("Info request '%s' failed. Failed to malloc %d bytes", names, read_length);
 			goto Done;
 		}
 
@@ -276,7 +276,7 @@ citrusleaf_info_host_limit(int fd, char *names, char **values, int timeout_ms, b
             free(v_buf);
 
             if (io_rv != ETIMEDOUT) {
-            	cf_warn("Info request '%s' failed. Failed to read %d bytes. Return code %d", names, read_length, io_rv);
+            	as_log_warn("Info request '%s' failed. Failed to read %d bytes. Return code %d", names, read_length, io_rv);
             }
             goto Done;
 		}
@@ -284,13 +284,13 @@ citrusleaf_info_host_limit(int fd, char *names, char **values, int timeout_ms, b
 
 		if (limit_reached) {
 			// Response buffer is too big.  Log warning and reject.
-			cf_warn("Info request '%s' failed. Response buffer length %lu is excessive. Buffer: %s", names, rsp->sz, v_buf);
+			as_log_warn("Info request '%s' failed. Response buffer length %lu is excessive. Buffer: %s", names, rsp->sz, v_buf);
 			goto Done;
 		}
 		*values = (char *) v_buf;
 	}                                                                                               
 	else {
-		cf_debug("rsp size is 0");
+		as_log_debug("rsp size is 0");
 		*values = 0;
 	}
 	rv = 0;

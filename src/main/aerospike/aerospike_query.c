@@ -15,20 +15,19 @@
  * the License.
  */
 #include <aerospike/aerospike_query.h>
+#include <aerospike/as_cluster.h>
 #include <aerospike/as_error.h>
+#include <aerospike/as_log.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_query.h>
 #include <aerospike/as_status.h>
 #include <aerospike/as_stream.h>
 
 #include <citrusleaf/citrusleaf.h>
-#include <aerospike/as_cluster.h>
 #include <citrusleaf/cl_query.h>
 
 #include <stdint.h>
 
-#include "_log.h"
-#include "_policy.h"
 #include "_shim.h"
  
 /******************************************************************************
@@ -123,9 +122,9 @@ as_status aerospike_query_foreach(
 	as_error_reset(err);
     as_val *  err_val = NULL;
 	
-	// resolve policies
-	// as_policy_query p;
-	// as_policy_query_resolve(&p, &as->config.policies, policy);
+	//if (! policy) {
+	//	policy = &as->config.policies.query;
+	//}
 	
 	if ( aerospike_query_init(as, err) != AEROSPIKE_OK ) {
 		return err->code;

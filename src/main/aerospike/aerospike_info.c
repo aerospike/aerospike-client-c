@@ -16,21 +16,19 @@
  */
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_info.h>
+#include <aerospike/as_cluster.h>
 #include <aerospike/as_error.h>
+#include <aerospike/as_log.h>
 #include <aerospike/as_node.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_status.h>
 
-
 #include <citrusleaf/citrusleaf.h>
-#include <aerospike/as_cluster.h>
 #include <citrusleaf/cl_info.h>
 
 #include <netinet/in.h>
 #include <sys/socket.h>
 
-#include "_log.h"
-#include "_policy.h"
 #include "_shim.h"
 
 /******************************************************************************
@@ -103,15 +101,15 @@ as_status aerospike_info_host(
 	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
 	
-	// resolve policies
-	as_policy_info p;
-	as_policy_info_resolve(&p, &as->config.policies, policy);
+	if (! policy) {
+		policy = &as->config.policies.info;
+	}
 
 	if (! as) {
 		return AEROSPIKE_ERR_CLIENT;
 	}
 
-	cl_rv rc = citrusleaf_info_auth(as->cluster, (char *) addr, port, (char *) req, res, p.timeout);
+	cl_rv rc = citrusleaf_info_auth(as->cluster, (char *) addr, port, (char *) req, res, policy->timeout);
 
 	if (rc) {
 		as_strncpy(err->message, *res, sizeof(err->message));
@@ -159,9 +157,9 @@ as_status aerospike_info_foreach(
 	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
 	
-	// resolve policies
-	as_policy_info p;
-	as_policy_info_resolve(&p, &as->config.policies, policy);
+	if (! policy) {
+		policy = &as->config.policies.info;
+	}
 	
 	if ( !as ) {
 		return AEROSPIKE_ERR_CLIENT;
@@ -175,7 +173,7 @@ as_status aerospike_info_foreach(
 	char* error = 0;
 
 	int rc = citrusleaf_info_cluster_foreach(
-		as->cluster, req, p.send_as_is, p.check_bounds, p.timeout, (void *) &data, &error,
+		as->cluster, req, policy->send_as_is, policy->check_bounds, policy->timeout, (void *) &data, &error,
 		citrusleaf_info_cluster_foreach_callback);
 
 	if (rc) {

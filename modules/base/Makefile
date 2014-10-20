@@ -45,16 +45,10 @@ INC_PATH += $(COMMON)/$(TARGET_INCL)
 BASE =
 BASE += cf_average.o
 BASE += cf_client_rc.o
-# BASE += cf_digest.o
-# BASE += cf_hooks.o
-# BASE += cf_ll.o
-BASE += cf_log.o
+BASE += cf_packet_compression.o
 BASE += cf_proto.o
 BASE += cf_service.o
-# BASE += cf_shash.o
 BASE += cf_socket.o
-# BASE += cf_vector.o
-BASE += cf_packet_compression.o
 
 HEADERS := $(wildcard $(SOURCE_INCL)/citrusleaf/*.h)
 

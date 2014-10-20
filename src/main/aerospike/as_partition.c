@@ -16,10 +16,10 @@
  */
 #include <aerospike/as_partition.h>
 #include <aerospike/as_cluster.h>
+#include <aerospike/as_log_macros.h>
 #include <aerospike/as_shm_cluster.h>
 #include <aerospike/as_string.h>
 #include <citrusleaf/cf_b64.h>
-#include <citrusleaf/cf_log_internal.h>
 #include "ck_pr.h"
 
 /******************************************************************************
@@ -89,7 +89,7 @@ reserve_node(as_cluster* cluster, as_node* node)
 		return node;
 	}
 #ifdef DEBUG_VERBOSE
-	cf_debug("Choose random node for unmapped namespace/partition");
+	as_log_debug("Choose random node for unmapped namespace/partition");
 #endif
 	return as_node_get_random(cluster);
 }
@@ -142,7 +142,7 @@ as_partition_table_get_node(as_cluster* cluster, as_partition_table* table, cons
 	}
 	
 #ifdef DEBUG_VERBOSE
-	cf_debug("Choose random node for null partition table");
+	as_log_debug("Choose random node for null partition table");
 #endif
 	return as_node_get_random(cluster);
 }
@@ -265,7 +265,7 @@ decode_and_update(char* bitmap_b64, long len, as_partition_table* table, as_node
 		bool owns = ((bitmap[i >> 3] & (0x80 >> (i & 7))) != 0);
 		/*
 		if (owns) {
-			cf_debug("Set partition %s:%s:%u:%s", master? "master" : "prole", table->ns, i, node->name);
+			as_log_debug("Set partition %s:%s:%u:%s", master? "master" : "prole", table->ns, i, node->name);
 		}
 		*/
 		as_partition_update(&table->partitions[i], node, master, owns);
@@ -321,7 +321,7 @@ as_partition_tables_update(as_cluster* cluster, as_node* node, char* buf, bool m
 			len = p - ns;
 			
 			if (len <= 0 || len >= 32) {
-				cf_error("Partition update. Invalid partition namespace %s", ns);
+				as_log_error("Partition update. Invalid partition namespace %s", ns);
 				as_vector_destroy(&tables_to_add);
 				return false;
 			}
@@ -343,7 +343,7 @@ as_partition_tables_update(as_cluster* cluster, as_node* node, char* buf, bool m
 			long expected_len = (long)cf_b64_encoded_len(bitmap_size);
 
 			if (expected_len != len) {
-				cf_error("Partition update. unexpected partition map encoded length %" PRId64 " for namespace %s", len, ns);
+				as_log_error("Partition update. unexpected partition map encoded length %" PRId64 " for namespace %s", len, ns);
 				as_vector_destroy(&tables_to_add);
 				return false;
 			}

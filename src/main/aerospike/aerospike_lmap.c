@@ -19,11 +19,11 @@
 #include <aerospike/aerospike_key.h>
 #include <aerospike/as_ldt.h>
 #include <aerospike/as_error.h>
+#include <aerospike/as_log.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_status.h>
 #include <aerospike/as_types.h>
 
-#include "_log.h"
 #include "_ldt.h"
 
 // ++==============++

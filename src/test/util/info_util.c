@@ -15,10 +15,10 @@
  * the License.
  */
 #include <stdio.h>
+#include <aerospike/as_log_macros.h>
 #include "citrusleaf/cl_udf.h"
 #include <citrusleaf/cf_random.h>
 #include <citrusleaf/cf_atomic.h>
-#include <citrusleaf/cf_log_internal.h>
 #include <citrusleaf/cl_parsers.h>
 #include "info_util.h"
 
@@ -125,7 +125,7 @@ char **get_stats(char * query, char * key, as_cluster * asc) {
 	int rc = citrusleaf_info_cluster_foreach(asc, query, true, false, 0, &kv, &error, parse_response);
 
 	if (rc) {
-		cf_warn("Error get_stats (%d): %s", rc, error);
+		as_log_warn("Error get_stats (%d): %s", rc, error);
 		free(error);
 	}
 	// Caller's responsibility to free value

@@ -48,7 +48,6 @@
  *  - as_policy_query
  *  - as_policy_scan
  *  - as_policy_write
- *
  */
 
 #include <stdbool.h>
@@ -70,7 +69,7 @@
  *
  *	@ingroup client_policies
  */
-#define AS_POLICY_RETRY_DEFAULT AS_POLICY_RETRY_NONE
+#define AS_POLICY_RETRY_DEFAULT AS_POLICY_RETRY_ONCE
 
 /**
  *	Default as_policy_gen value
@@ -107,15 +106,6 @@
 typedef enum as_policy_retry_e {
 
 	/**
-	 *	The policy is undefined.
-	 *
-	 *	If set, then the value will default to
-	 *	either as_config.policies.retry
-	 *	or `AS_POLICY_RETRY_DEFAULT`.
-	 */
-	AS_POLICY_RETRY_UNDEF, 
-
-	/**
 	 *	Only attempt an operation once.
 	 */
 	AS_POLICY_RETRY_NONE, 
@@ -137,15 +127,6 @@ typedef enum as_policy_retry_e {
  *	@ingroup client_policies
  */
 typedef enum as_policy_gen_e {
-
-	/**
-	 *	The policy is undefined.
-	 *
-	 *	If set, then the value will default to
-	 *	either as_config.policies.gen
-	 *	or `AS_POLICY_GEN_DEFAULT`.
-	 */
-	AS_POLICY_GEN_UNDEF,
 
 	/**
 	 *	Write a record, regardless of generation.
@@ -180,14 +161,6 @@ typedef enum as_policy_gen_e {
  *	@ingroup client_policies
  */
 typedef enum as_policy_key_e {
-
-	/**
-	 *	The policy is undefined.
-	 *
-	 *	If set, then the value will default to either as_config.policies.key
-	 *	or `AS_POLICY_KEY_DEFAULT`.
-	 */
-	AS_POLICY_KEY_UNDEF,
 
 	/**
 	 *	Send the digest value of the key.
@@ -226,15 +199,6 @@ typedef enum as_policy_key_e {
 typedef enum as_policy_exists_e {
 
 	/**
-	 *	The policy is undefined.
-	 *
-	 *	If set, then the value will default to
-	 *	either as_config.policies.exists
-	 *	or `AS_POLICY_EXISTS_DEFAULT`.
-	 */
-	AS_POLICY_EXISTS_UNDEF,
-
-	/**
 	 *	Write the record, regardless of existence. (i.e. create or update.)
 	 */
 	AS_POLICY_EXISTS_IGNORE,
@@ -262,37 +226,6 @@ typedef enum as_policy_exists_e {
 } as_policy_exists;
 
 /**
- *	Boolean Policy.
- *
- *	This enum provides boolean values (true,false) and an
- *	undefined value for the boolean.
- *
- *	@ingroup client_policies
- */
-typedef enum as_policy_bool_e {
-
-	/**
-	 *	If the value is neither true or false,
-	 * 	then it is undefined. This is used for cases
-	 *	where we initialize a variable, but do not want
-	 *  it to have a value.
-	 */
-	AS_POLICY_BOOL_UNDEF = -1,
-
-	/**
-	 *	This value is interchangable with `false`.
-	 */
-	AS_POLICY_BOOL_FALSE = false,
-
-	/**
-	 *	This value is interchangable with `true`.
-	 */
-	AS_POLICY_BOOL_TRUE = true
-
-} as_policy_bool;
-
-
-/**
  *	Write Policy
  *
  *	@ingroup client_policies
@@ -303,7 +236,7 @@ typedef struct as_policy_write_s {
 	 *	Maximum time in milliseconds to wait for 
 	 *	the operation to complete.
 	 *
-	 *	If 0 (zero), then the value will default to
+	 *	If undefined (-1), then the value will default to
 	 *	either as_config.policies.timeout
 	 *	or `AS_POLICY_TIMEOUT_DEFAULT`.
 	 */
@@ -344,7 +277,7 @@ typedef struct as_policy_read_s {
 	 *	Maximum time in milliseconds to wait for 
 	 *	the operation to complete.
 	 *
-	 *	If 0 (zero), then the value will default to
+	 *	If undefined (-1), then the value will default to
 	 *	either as_config.policies.timeout
 	 *	or `AS_POLICY_TIMEOUT_DEFAULT`.
 	 */
@@ -368,7 +301,7 @@ typedef struct as_policy_apply_s {
 	 *	Maximum time in milliseconds to wait for 
 	 *	the operation to complete.
 	 *
-	 *	If 0 (zero), then the value will default to
+	 *	If undefined (-1), then the value will default to
 	 *	either as_config.policies.timeout
 	 *	or `AS_POLICY_TIMEOUT_DEFAULT`.
 	 */
@@ -392,7 +325,7 @@ typedef struct as_policy_operate_s {
 	 *	Maximum time in milliseconds to wait for 
 	 *	the operation to complete.
 	 *
-	 *	If 0 (zero), then the value will default to
+	 *	If undefined (-1), then the value will default to
 	 *	either as_config.policies.timeout
 	 *	or `AS_POLICY_TIMEOUT_DEFAULT`.
 	 */
@@ -427,7 +360,7 @@ typedef struct as_policy_remove_s {
 	 *	Maximum time in milliseconds to wait for 
 	 *	the operation to complete.
 	 *
-	 *	If 0 (zero), then the value will default to
+	 *	If undefined (-1), then the value will default to
 	 *	either as_config.policies.timeout
 	 *	or `AS_POLICY_TIMEOUT_DEFAULT`.
 	 */
@@ -467,9 +400,7 @@ typedef struct as_policy_query_s {
 	 *	Maximum time in milliseconds to wait for 
 	 *	the operation to complete.
 	 *
-	 *	If 0 (zero), then the value will default to
-	 *	either as_config.policies.timeout
-	 *	or Aerospike's recommended default.
+	 *	The default (0) means do not timeout.
 	 */
 	uint32_t timeout;
 
@@ -485,9 +416,7 @@ typedef struct as_policy_scan_s {
 	/**
 	 *	Maximum time in milliseconds to wait for the operation to complete.
 	 *
-	 *	If 0 (zero), then the value will default to
-	 *	either as_config.policies.timeout
-	 *	or `AS_POLICY_TIMEOUT_DEFAULT`.
+	 *	The default (0) means do not timeout.
 	 */
 	uint32_t timeout;
 
@@ -495,7 +424,7 @@ typedef struct as_policy_scan_s {
 	 *	Abort the scan if the cluster is not in a 
 	 *	stable state.
 	 */
-	as_policy_bool fail_on_cluster_change;
+	bool fail_on_cluster_change;
 
 } as_policy_scan;
 
@@ -510,7 +439,7 @@ typedef struct as_policy_info_s {
 	 *	Maximum time in milliseconds to wait for 
 	 *	the operation to complete.
 	 *
-	 *	If 0 (zero), then the value will default to
+	 *	If undefined (-1), then the value will default to
 	 *	either as_config.policies.timeout
 	 *	or `AS_POLICY_TIMEOUT_DEFAULT`.
 	 */
@@ -519,12 +448,12 @@ typedef struct as_policy_info_s {
 	/**
 	 *	Send request without any further processing.
 	 */
-	as_policy_bool send_as_is;
+	bool send_as_is;
 
 	/**
 	 *	Ensure the request is within allowable size limits.
 	 */
-	as_policy_bool check_bounds;
+	bool check_bounds;
 
 } as_policy_info;
 
@@ -539,7 +468,7 @@ typedef struct as_policy_batch_s {
 	 *	Maximum time in milliseconds to wait for 
 	 *	the operation to complete.
 	 *
-	 *	If 0 (zero), then the value will default to
+	 *	If undefined (-1), then the value will default to
 	 *	either as_config.policies.timeout
 	 *	or `AS_POLICY_TIMEOUT_DEFAULT`.
 	 */
@@ -558,7 +487,7 @@ typedef struct as_policy_admin_s {
 	 *	Maximum time in milliseconds to wait for
 	 *	the operation to complete.
 	 *
-	 *	If 0 (zero), then the value will default to
+	 *	If undefined (-1), then the value will default to
 	 *	either as_config.policies.timeout
 	 *	or `AS_POLICY_TIMEOUT_DEFAULT`.
 	 */
@@ -682,111 +611,343 @@ typedef struct as_policies_s {
 /**
  *	Initialize as_policy_read to default values.
  *
- *	@param p	The policy to initialize
- *	@return The initialized policy.
+ *	@param p	The policy to initialize.
+ *	@return		The initialized policy.
  *
  *	@relates as_policy_read
  */
-as_policy_read * as_policy_read_init(as_policy_read * p);
+static inline as_policy_read*
+as_policy_read_init(as_policy_read* p)
+{
+	p->timeout = AS_POLICY_TIMEOUT_DEFAULT;
+	p->key = AS_POLICY_KEY_DEFAULT;
+	return p;
+}
 
 /**
- *	Initialize as_policy_apply to default values.
+ *	Copy as_policy_read values.
  *
- *	@param p	The policy to initialize
- *	@return The initialized policy.
+ *	@param src	The source policy.
+ *	@param trg	The target policy.
  *
- *	@relates as_policy_apply
+ *	@relates as_policy_read
  */
-as_policy_apply * as_policy_apply_init(as_policy_apply * p);
+static inline void
+as_policy_read_copy(as_policy_read* src, as_policy_read* trg)
+{
+	trg->timeout = src->timeout;
+	trg->key = src->key;
+}
 
 /**
  *	Initialize as_policy_write to default values.
  *
- *	@param p	The policy to initialize
- *	@return The initialized policy.
+ *	@param p	The policy to initialize.
+ *	@return		The initialized policy.
  *
  *	@relates as_policy_write
  */
-as_policy_write * as_policy_write_init(as_policy_write * p);
+static inline as_policy_write*
+as_policy_write_init(as_policy_write* p)
+{
+	p->timeout = AS_POLICY_TIMEOUT_DEFAULT;
+	p->retry = AS_POLICY_RETRY_DEFAULT;
+	p->key = AS_POLICY_KEY_DEFAULT;
+	p->gen = AS_POLICY_GEN_DEFAULT;
+	p->exists = AS_POLICY_EXISTS_DEFAULT;
+	return p;
+}
+
+/**
+ *	Copy as_policy_write values.
+ *
+ *	@param src	The source policy.
+ *	@param trg	The target policy.
+ *
+ *	@relates as_policy_write
+ */
+static inline void
+as_policy_write_copy(as_policy_write* src, as_policy_write* trg)
+{
+	trg->timeout = src->timeout;
+	trg->retry = src->retry;
+	trg->key = src->key;
+	trg->gen = src->gen;
+	trg->exists = src->exists;
+}
 
 /**
  *	Initialize as_policy_operate to default values.
  *
- *	@param p	The policy to initialize
- *	@return The initialized policy.
+ *	@param p	The policy to initialize.
+ *	@return		The initialized policy.
  *
  *	@relates as_policy_operate
  */
-as_policy_operate * as_policy_operate_init(as_policy_operate * p);
+static inline as_policy_operate*
+as_policy_operate_init(as_policy_operate* p)
+{
+	p->timeout = AS_POLICY_TIMEOUT_DEFAULT;
+	p->retry = AS_POLICY_RETRY_DEFAULT;
+	p->key = AS_POLICY_KEY_DEFAULT;
+	p->gen = AS_POLICY_GEN_DEFAULT;
+	return p;
+}
 
 /**
- *	Initialize as_policy_scan to default values.
+ *	Copy as_policy_operate values.
  *
- *	@param p	The policy to initialize
- *	@return The initialized policy.
+ *	@param src	The source policy.
+ *	@param trg	The target policy.
  *
- *	@relates as_policy_scan
+ *	@relates as_policy_operate
  */
-as_policy_scan * as_policy_scan_init(as_policy_scan * p);
-
-/**
- *	Initialize as_policy_query to default values.
- *
- *	@param p	The policy to initialize
- *	@return The initialized policy.
- *
- *	@relates as_policy_query
- */
-as_policy_query * as_policy_query_init(as_policy_query * p);
-
-/**
- *	Initialize as_policy_info to default values.
- *
- *	@param p	The policy to initialize
- *	@return The initialized policy.
- *
- *	@relates as_policy_info
- */
-as_policy_info * as_policy_info_init(as_policy_info * p);
+static inline void
+as_policy_operate_copy(as_policy_operate* src, as_policy_operate* trg)
+{
+	trg->timeout = src->timeout;
+	trg->retry = src->retry;
+	trg->key = src->key;
+	trg->gen = src->gen;
+}
 
 /**
  *	Initialize as_policy_remove to default values.
  *
- *	@param p	The policy to initialize
- *	@return The initialized policy.
+ *	@param p	The policy to initialize.
+ *	@return		The initialized policy.
  *
  *	@relates as_policy_remove
  */
-as_policy_remove * as_policy_remove_init(as_policy_remove * p);
+static inline as_policy_remove*
+as_policy_remove_init(as_policy_remove* p)
+{
+	p->timeout = AS_POLICY_TIMEOUT_DEFAULT;
+	p->retry = AS_POLICY_RETRY_DEFAULT;
+	p->key = AS_POLICY_KEY_DEFAULT;
+	p->gen = AS_POLICY_GEN_DEFAULT;
+	p->generation = 0;
+	return p;
+}
+
+/**
+ *	Copy as_policy_remove values.
+ *
+ *	@param src	The source policy.
+ *	@param trg	The target policy.
+ *
+ *	@relates as_policy_remove
+ */
+static inline void
+as_policy_remove_copy(as_policy_remove* src, as_policy_remove* trg)
+{
+	trg->timeout = src->timeout;
+	trg->retry = src->retry;
+	trg->key = src->key;
+	trg->gen = src->gen;
+	trg->generation = src->generation;
+}
+
+/**
+ *	Initialize as_policy_apply to default values.
+ *
+ *	@param p	The policy to initialize.
+ *	@return		The initialized policy.
+ *
+ *	@relates as_policy_apply
+ */
+static inline as_policy_apply*
+as_policy_apply_init(as_policy_apply* p)
+{
+	p->timeout = AS_POLICY_TIMEOUT_DEFAULT;
+	p->key = AS_POLICY_KEY_DEFAULT;
+	return p;
+}
+
+/**
+ *	Copy as_policy_apply values.
+ *
+ *	@param src	The source policy.
+ *	@param trg	The target policy.
+ *
+ *	@relates as_policy_apply
+ */
+static inline void
+as_policy_apply_copy(as_policy_apply* src, as_policy_apply* trg)
+{
+	trg->timeout = src->timeout;
+	trg->key = src->key;
+}
+
+/**
+ *	Initialize as_policy_info to default values.
+ *
+ *	@param p	The policy to initialize.
+ *	@return		The initialized policy.
+ *
+ *	@relates as_policy_info
+ */
+static inline as_policy_info*
+as_policy_info_init(as_policy_info* p)
+{
+	p->timeout = AS_POLICY_TIMEOUT_DEFAULT;
+	p->send_as_is = true;
+	p->check_bounds	= true;
+	return p;
+}
+
+/**
+ *	Copy as_policy_info values.
+ *
+ *	@param src	The source policy.
+ *	@param trg	The target policy.
+ *
+ *	@relates as_policy_info
+ */
+static inline void
+as_policy_info_copy(as_policy_info* src, as_policy_info* trg)
+{
+	trg->timeout = src->timeout;
+	trg->send_as_is = src->send_as_is;
+	trg->check_bounds = src->check_bounds;
+}
 
 /**
  *	Initialize as_policy_batch to default values.
  *
- *	@param p	The policy to initialize
- *	@return The initialized policy.
+ *	@param p	The policy to initialize.
+ *	@return		The initialized policy.
  *
  *	@relates as_policy_batch
  */
-as_policy_batch * as_policy_batch_init(as_policy_batch * p);
+static inline as_policy_batch*
+as_policy_batch_init(as_policy_batch* p)
+{
+	p->timeout = AS_POLICY_TIMEOUT_DEFAULT;
+	return p;
+}
+
+/**
+ *	Copy as_policy_batch values.
+ *
+ *	@param src	The source policy.
+ *	@param trg	The target policy.
+ *
+ *	@relates as_policy_batch
+ */
+static inline void
+as_policy_batch_copy(as_policy_batch* src, as_policy_batch* trg)
+{
+	trg->timeout = src->timeout;
+}
 
 /**
  *	Initialize as_policy_admin to default values.
  *
- *	@param p	The policy to initialize
- *	@return The initialized policy.
+ *	@param p	The policy to initialize.
+ *	@return		The initialized policy.
  *
  *	@relates as_policy_admin
  */
-as_policy_admin * as_policy_admin_init(as_policy_admin * p);
+static inline as_policy_admin*
+as_policy_admin_init(as_policy_admin* p)
+{
+	p->timeout = AS_POLICY_TIMEOUT_DEFAULT;
+	return p;
+}
 
 /**
- *	Initialize as_policies to default values.
+ *	Copy as_policy_admin values.
  *
- *	@param p	The policies to initialize
- *	@return The initialized policies.
+ *	@param src	The source policy.
+ *	@param trg	The target policy.
+ *
+ *	@relates as_policy_admin
+ */
+static inline void
+as_policy_admin_copy(as_policy_admin* src, as_policy_admin* trg)
+{
+	trg->timeout = src->timeout;
+}
+
+/**
+ *	Initialize as_policy_scan to default values.
+ *
+ *	@param p	The policy to initialize.
+ *	@return		The initialized policy.
+ *
+ *	@relates as_policy_scan
+ */
+static inline as_policy_scan*
+as_policy_scan_init(as_policy_scan* p)
+{
+	p->timeout = 0;
+	p->fail_on_cluster_change = false;
+	return p;
+}
+
+/**
+ *	Copy as_policy_scan values.
+ *
+ *	@param src	The source policy.
+ *	@param trg	The target policy.
+ *
+ *	@relates as_policy_scan
+ */
+static inline void
+as_policy_scan_copy(as_policy_scan* src, as_policy_scan* trg)
+{
+	trg->timeout = src->timeout;
+	trg->fail_on_cluster_change = src->fail_on_cluster_change;
+}
+
+/**
+ *	Initialize as_policy_query to default values.
+ *
+ *	@param p	The policy to initialize.
+ *	@return		The initialized policy.
+ *
+ *	@relates as_policy_query
+ */
+static inline as_policy_query*
+as_policy_query_init(as_policy_query* p)
+{
+	p->timeout = 0;
+	return p;
+}
+
+/**
+ *	Copy as_policy_query values.
+ *
+ *	@param src	The source policy.
+ *	@param trg	The target policy.
+ *
+ *	@relates as_policy_query
+ */
+static inline void
+as_policy_query_copy(as_policy_query* src, as_policy_query* trg)
+{
+	trg->timeout = src->timeout;
+}
+
+/**
+ *	Initialize as_policies to undefined values.
+ *  as_policies_resolve() will later be called resolve undefined values to global defaults.
+ *
+ *	@param p	The policies to undefine
+ *	@return		The undefined policies.
  *
  *	@relates as_policies
  */
-as_policies * as_policies_init(as_policies * p);
+as_policies*
+as_policies_init(as_policies* p);
 
-
+/**
+ *	Resolve global policies (like timeout) with operational policies (like as_policy_read).
+ *
+ *	@param p	The policies to resolve
+ *
+ *	@relates as_policies
+ */
+void
+as_policies_resolve(as_policies* p);

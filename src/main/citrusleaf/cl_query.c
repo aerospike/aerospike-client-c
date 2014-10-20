@@ -36,6 +36,7 @@
 #include <aerospike/as_module.h>
 #include <aerospike/as_msgpack.h>
 #include <aerospike/as_list.h>
+#include <aerospike/as_log_macros.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_serializer.h>
 #include <aerospike/as_string.h>
@@ -465,9 +466,6 @@ static int query_compile(const cl_query * query, uint8_t ** buf_r, size_t * buf_
         mf_tmp = cl_msg_field_get_next(mf);
         cl_msg_swap_field_to_be(mf);
         mf = mf_tmp;
-        if (cf_debug_enabled()) {
-            LOG("[DEBUG] query_compile: adding indexname %d %s\n",iname_len+1, query->indexname);
-        }
     }
 
     if (setname_len) {
@@ -477,9 +475,6 @@ static int query_compile(const cl_query * query, uint8_t ** buf_r, size_t * buf_
         mf_tmp = cl_msg_field_get_next(mf);
         cl_msg_swap_field_to_be(mf);
         mf = mf_tmp;
-        if (cf_debug_enabled()) {
-            LOG("[DEBUG] query_compile: adding setname %d %s\n",setname_len+1, query->setname);
-        }
     }
 
     if (query->ranges) {
@@ -783,7 +778,7 @@ static int cl_query_worker_do(as_node * node, cl_query_task * task) {
 						citrusleaf_object_init_blob(&key, (const void*)flat_val, cl_msg_field_get_value_sz(mf) - 1);
 						break;
 					default:
-						cf_error("scan: ignoring key with unrecognized type %d", flat_key[0]);
+						as_log_error("scan: ignoring key with unrecognized type %d", flat_key[0]);
 						break;
 					}
                 }
@@ -1000,7 +995,7 @@ static void * cl_query_worker(void * pv_asc) {
         }
 
 #ifdef DEBUG_VERBOSE
-        if ( cf_debug_enabled() ) {
+        if ( as_log_debug_enabled() ) {
             LOG("[DEBUG] cl_query_worker: getting one task item\n");
         }
 #endif
@@ -1129,16 +1124,16 @@ static cl_rv cl_query_udf_destroy(cl_query_udf * udf) {
 static int query_aerospike_log(const as_aerospike * as, const char * file, const int line, const int level, const char * msg) {
     switch(level) {
         case 1:
-			as_logger_warn(mod_lua.logger, "%s:%d - %s", file, line, msg);
+			as_log_warn("%s:%d - %s", file, line, msg);
             break;
         case 2:
-			as_logger_info(mod_lua.logger, "%s:%d - %s", file, line, msg);
+			as_log_info("%s:%d - %s", file, line, msg);
             break;
         case 3:
- 			as_logger_debug(mod_lua.logger, "%s:%d - %s", file, line, msg);
+ 			as_log_debug("%s:%d - %s", file, line, msg);
             break;
         default:
-			as_logger_trace(mod_lua.logger, "%s:%d - %s", file, line, msg);
+			as_log_trace("%s:%d - %s", file, line, msg);
             break;
     }
     return 0;
@@ -1538,10 +1533,6 @@ cl_cluster_query_init(as_cluster* asc)
 	// done once.
 	if (ck_pr_fas_32(&asc->query_initialized, 1) == 1 || asc->query_q) {
 		return 0;
-	}
-
-	if (cf_debug_enabled()) {
-		LOG("[DEBUG] cl_cluster_query_init: creating %d threads\n", NUM_QUERY_THREADS);
 	}
 
 	// Create dispatch queue.

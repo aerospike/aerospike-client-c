@@ -25,7 +25,6 @@
 #include <citrusleaf/cf_vector.h>
 #include <citrusleaf/cf_queue.h>
 #include <citrusleaf/cf_digest.h>
-#include <citrusleaf/cf_log_internal.h>
 #include <citrusleaf/cf_proto.h>
 
 #include <aerospike/as_buffer.h>
@@ -35,6 +34,7 @@
 #include <aerospike/as_cluster.h>
 #include <citrusleaf/cl_udf.h>
 #include <citrusleaf/cl_scan.h>
+
 
 /******************************************************************************
  * CONSTANTS

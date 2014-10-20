@@ -174,11 +174,6 @@ typedef struct aerospike_s {
 	 */
 	as_config config;
 
-	/**
-	 *	client logging
-	 */
-	as_log log;
-
 } aerospike;
 
 /******************************************************************************

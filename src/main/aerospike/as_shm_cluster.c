@@ -16,11 +16,11 @@
  */
 #include <aerospike/as_shm_cluster.h>
 #include <aerospike/as_cluster.h>
+#include <aerospike/as_log_macros.h>
 #include <aerospike/as_node.h>
 #include <aerospike/as_string.h>
 #include <citrusleaf/cf_b64.h>
 #include <citrusleaf/cf_types.h>
-#include <citrusleaf/cf_log_internal.h>
 #include <citrusleaf/cf_byte_order.h>
 #include <errno.h>
 #include <string.h>
@@ -92,12 +92,12 @@ as_shm_get_max_size()
 	FILE *f = fopen(fn, "r");
 	
 	if (!f) {
-		cf_error("Failed to open file: %s", fn);
+		as_log_error("Failed to open file: %s", fn);
 		return 0;
 	}
 	
 	if (fscanf(f, "%zu", &shm_max) != 1) {
-		cf_error("Failed to read shmmax from file: %s", fn);
+		as_log_error("Failed to read shmmax from file: %s", fn);
 		fclose(f);
 		return 0;
 	}
@@ -172,7 +172,7 @@ as_shm_add_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_add)
 			}
 			else {
 				// There are no more node slots available in shared memory.
-				cf_error("Failed to add node %s %s:%d. Shared memory capacity exceeeded: %d",
+				as_log_error("Failed to add node %s %s:%d. Shared memory capacity exceeeded: %d",
 					node_to_add->name, address->name,
 					(int)cf_swap_from_be16(address->addr.sin_port),
 					cluster_shm->nodes_capacity);
@@ -235,7 +235,7 @@ as_shm_reset_nodes(as_cluster* cluster)
 				node = as_node_create(cluster, node_tmp.name, &node_tmp.addr);
 				node->index = i;
 				as_address* a = as_node_get_address_full(node);
-				cf_info("Add node %s %s:%d", node_tmp.name, a->name, (int)cf_swap_from_be16(a->addr.sin_port));
+				as_log_info("Add node %s %s:%d", node_tmp.name, a->name, (int)cf_swap_from_be16(a->addr.sin_port));
 				as_vector_append(&nodes_to_add, &node);
 				ck_pr_store_ptr(&shm_info->local_nodes[i], node);
 			}
@@ -283,7 +283,7 @@ as_shm_add_partition_table(as_cluster_shm* cluster_shm, const char* ns)
 {
 	if (cluster_shm->partition_tables_size >= cluster_shm->partition_tables_capacity) {
 		// There are no more partition table slots available in shared memory.
-		cf_error("Failed to add partition table namespace %s. Shared memory capacity exceeeded: %d",
+		as_log_error("Failed to add partition table namespace %s. Shared memory capacity exceeeded: %d",
 				 ns, cluster_shm->partition_tables_capacity);
 		return 0;
 	}
@@ -390,7 +390,7 @@ as_shm_reserve_node(as_cluster* cluster, as_node** local_nodes, uint32_t node_in
 		}
 	}
 	
-	// cf_debug("Choose random node for unmapped namespace/partition");
+	// as_log_debug("Choose random node for unmapped namespace/partition");
 	return as_node_get_random(cluster);
 }
 
@@ -448,14 +448,14 @@ as_shm_node_get(as_cluster* cluster, const char* ns, const cf_digest* d, bool wr
 		return as_shm_reserve_node_alternate(cluster, shm_info->local_nodes, prole, master);
 	}
 	
-	// cf_debug("Choose random node for null partition table");
+	// as_log_debug("Choose random node for null partition table");
 	return as_node_get_random(cluster);
 }
 
 static void
 as_shm_takeover_cluster(as_shm_info* shm_info, as_cluster_shm* cluster_shm, uint32_t pid)
 {
-	cf_info("Take over shared memory cluster: %d", pid);
+	as_log_info("Take over shared memory cluster: %d", pid);
 	ck_pr_store_32(&cluster_shm->owner_pid, pid);
 	shm_info->is_tend_master = true;
 }
@@ -578,14 +578,14 @@ as_shm_create(as_cluster* cluster, as_config* config)
 	
 	if (id >= 0) {
 		// Exclusive shared memory lock succeeded.
-		cf_info("Create shared memory cluster: %d", pid);
+		as_log_info("Create shared memory cluster: %d", pid);
 		
 		// Attach to shared memory.
 		cluster_shm = shmat(id, NULL, 0);
 		
 		if (cluster_shm == (void*)-1) {
 			// Shared memory attach failed.
-			cf_error("Error attaching to shared memory: %s pid: %d", strerror(errno), pid);
+			as_log_error("Error attaching to shared memory: %s pid: %d", strerror(errno), pid);
 			as_shm_cleanup(id, 0);
 			return false;
 		}
@@ -603,14 +603,14 @@ as_shm_create(as_cluster* cluster, as_config* config)
 		id = shmget(config->shm_key, size, IPC_CREAT | 0666);
 		
 		if (id < 0) {
-			cf_error("Shared memory get failed: %s pid: %d", strerror(errno), pid);
+			as_log_error("Shared memory get failed: %s pid: %d", strerror(errno), pid);
 			return false;
 		}
 		
 		cluster_shm = shmat(id, NULL, 0);
 
 		if (cluster_shm == (void*)-1) {
-			cf_error("Error attaching to shared memory: %s pid: %d", strerror(errno), pid);
+			as_log_error("Error attaching to shared memory: %s pid: %d", strerror(errno), pid);
 			as_shm_cleanup(id, 0);
 			return false;
 		}
@@ -618,18 +618,18 @@ as_shm_create(as_cluster* cluster, as_config* config)
 	else if (errno == ENOMEM) {
 		// OS shared memory max exceeded.
 		size_t max = as_shm_get_max_size();
-		cf_error("Shared memory max %zu has been exceeded with latest shared memory request of size %zu", max, size);
+		as_log_error("Shared memory max %zu has been exceeded with latest shared memory request of size %zu", max, size);
 		
 #ifdef __linux__
-		cf_error("You can increase shared memory size by: sysctl -w kernel.shmmax=<new_size>");
+		as_log_error("You can increase shared memory size by: sysctl -w kernel.shmmax=<new_size>");
 #else
-		cf_error("You can increase shared memory size by: sysctl -w kern.sysv.shmmax=<new_size>");
+		as_log_error("You can increase shared memory size by: sysctl -w kern.sysv.shmmax=<new_size>");
 #endif
 		return false;
 	}
 	else {
 		// Exclusive shared memory lock failed.
-		cf_error("Shared memory get failed: %s pid: %d", strerror(errno), pid);
+		as_log_error("Shared memory get failed: %s pid: %d", strerror(errno), pid);
 		return false;
 	}
 
@@ -642,7 +642,7 @@ as_shm_create(as_cluster* cluster, as_config* config)
 	cluster->shm_info = shm_info;
 	
 	if (shm_info->is_tend_master) {
-		cf_info("Take over shared memory cluster: %d", pid);
+		as_log_info("Take over shared memory cluster: %d", pid);
 		ck_pr_store_32(&cluster_shm->owner_pid, pid);
 		
 		// Ensure shared memory cluster is fully initialized.
@@ -661,7 +661,7 @@ as_shm_create(as_cluster* cluster, as_config* config)
 		}
 	}
 	else {
-		cf_info("Follow shared memory cluster: %d", pid);
+		as_log_info("Follow shared memory cluster: %d", pid);
 		
 		// Prole should wait until master has fully initialized shared memory.
 		if (! ck_pr_load_8(&cluster_shm->ready)) {

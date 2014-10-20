@@ -37,7 +37,6 @@
 #include "../test.h"
 #include "../util/udf.h"
 #include "../util/consumer_stream.h"
-#include "../util/test_logger.h"
 
 /******************************************************************************
  * GLOBAL VARS
@@ -61,10 +60,6 @@ extern aerospike * as;
 
 static bool before(atf_suite * suite) {
 
-	if ( mod_lua.logger == NULL ) {
-		mod_lua.logger = test_logger_new();
-	}
-
 	if ( ! udf_put(LUA_FILE) ) {
 		error("failure while uploading: %s", LUA_FILE);
 		return false;
@@ -81,11 +76,6 @@ static bool before(atf_suite * suite) {
 
 static bool after(atf_suite * suite) {
 	
-	if ( mod_lua.logger ) {
-		free(mod_lua.logger);
-		mod_lua.logger = NULL;
-	}
-
 	if ( ! udf_remove(LUA_FILE) ) {
 		error("failure while removing: %s", LUA_FILE);
 		return false;

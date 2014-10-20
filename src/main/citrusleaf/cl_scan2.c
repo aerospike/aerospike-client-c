@@ -376,7 +376,7 @@ static int cl_scan_worker_do(as_node * node, cl_scan_task * task) {
             }
             else if (msg->info3 & CL_MSG_INFO3_LAST)    {
 #ifdef DEBUG_VERBOSE
-               if ( cf_debug_enabled() ) {
+               if ( as_log_debug_enabled() ) {
                     LOG("[INFO] cl_scan_worker_do: Received final message from node [%s], scan complete\n", node->name);
                 }
 #endif
@@ -463,7 +463,7 @@ void * cl_scan_worker(void * pv_asc) {
         }
 
 #ifdef DEBUG_VERBOSE
-       if ( cf_debug_enabled() ) {
+       if ( as_log_debug_enabled() ) {
             LOG("[DEBUG] cl_scan_worker: getting one task item\n");
         }
 #endif
@@ -749,7 +749,7 @@ cl_cluster_scan_init(as_cluster* asc)
 	}
 
 #ifdef DEBUG_VERBOSE
-	if (cf_debug_enabled()) {
+	if (as_log_debug_enabled()) {
 		LOG("[DEBUG] cl_cluster_scan_init: creating %d threads\n", AS_NUM_SCAN_THREADS);
 	}
 #endif

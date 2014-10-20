@@ -26,13 +26,14 @@
 #include <inttypes.h> // PRIu64
 #include <signal.h>
 
+#include <aerospike/as_cluster.h>
+#include <aerospike/as_log_macros.h>
+
 #include <citrusleaf/cf_byte_order.h>
 #include <citrusleaf/cf_atomic.h>
 #include <citrusleaf/cf_proto.h>
 #include <citrusleaf/cf_socket.h>
-
 #include <citrusleaf/citrusleaf.h>
-#include <aerospike/as_cluster.h>
 
 #include "internal.h"
 
@@ -47,12 +48,12 @@
 static void debug_printf(long before_write_time, long after_write_time, long before_read_header_time, long after_read_header_time, 
 		long before_read_body_time, long after_read_body_time, long deadline_ms, int progress_timeout_ms)
 {
-	cf_info("tid %zu - Before Write - deadline %"PRIu64" progress_timeout %d now is %"PRIu64, (uint64_t)pthread_self(), deadline_ms, progress_timeout_ms, before_write_time);
-	cf_info("tid %zu - After Write - now is %"PRIu64, (uint64_t)pthread_self(), after_write_time);
-	cf_info("tid %zu - Before Read header - deadline %"PRIu64" progress_timeout %d now is %"PRIu64, (uint64_t)pthread_self(), deadline_ms, progress_timeout_ms, before_read_header_time);
-	cf_info("tid %zu - After Read header - now is %"PRIu64, (uint64_t)pthread_self(), after_read_header_time);
-	cf_info("tid %zu - Before Read body - deadline %"PRIu64" progress_timeout %d now is %"PRIu64, (uint64_t)pthread_self(), deadline_ms, progress_timeout_ms, before_read_body_time);
-	cf_info("tid %zu - After Read body - now is %"PRIu64, (uint64_t)pthread_self(), after_read_body_time);
+	as_log_info("tid %zu - Before Write - deadline %"PRIu64" progress_timeout %d now is %"PRIu64, (uint64_t)pthread_self(), deadline_ms, progress_timeout_ms, before_write_time);
+	as_log_info("tid %zu - After Write - now is %"PRIu64, (uint64_t)pthread_self(), after_write_time);
+	as_log_info("tid %zu - Before Read header - deadline %"PRIu64" progress_timeout %d now is %"PRIu64, (uint64_t)pthread_self(), deadline_ms, progress_timeout_ms, before_read_header_time);
+	as_log_info("tid %zu - After Read header - now is %"PRIu64, (uint64_t)pthread_self(), after_read_header_time);
+	as_log_info("tid %zu - Before Read body - deadline %"PRIu64" progress_timeout %d now is %"PRIu64, (uint64_t)pthread_self(), deadline_ms, progress_timeout_ms, before_read_body_time);
+	as_log_info("tid %zu - After Read body - now is %"PRIu64, (uint64_t)pthread_self(), after_read_body_time);
 }
 #endif
 
@@ -184,7 +185,7 @@ int citrusleaf_copy_object(cl_object *destobj, cl_object *srcobj)
 			memcpy(destobj->u.blob, srcobj->u.blob, destobj->sz);
 			break;
 		default:
-			cf_error("Encountered an unknown bin type %d", srcobj->type);
+			as_log_error("Encountered an unknown bin type %d", srcobj->type);
 			return -1;
 			break;
 	}
@@ -229,7 +230,7 @@ int citrusleaf_copy_bins(cl_bin **destbins, cl_bin *srcbins, int n_bins)
 void
 dump_buf(char *info, uint8_t *buf, size_t buf_len)
 {
-	if (cf_debug_enabled()) {
+	if (as_log_debug_enabled()) {
 		char msg[buf_len * 4 + 2];
 		char* p = msg;
 
@@ -252,7 +253,7 @@ dump_buf(char *info, uint8_t *buf, size_t buf_len)
 			p += 3;
 		}
 		*p = 0;
-		cf_debug(msg);
+		as_log_debug(msg);
 	}
 }
 #endif
@@ -263,24 +264,24 @@ static int value_to_op_int(int64_t value, uint8_t *data);
 // static void
 // dump_values(cl_bin *bins, cl_operation *operations, int n_bins)
 // {
-// 	if (cf_debug_enabled()) {
-// 		cf_debug(" n bins: %d", n_bins);
+// 	if (as_log_debug_enabled()) {
+// 		as_log_debug(" n bins: %d", n_bins);
 // 		for (int i=0;i<n_bins;i++) {
 // 			cl_object *object = (bins ? &bins[i].object : &operations[i].bin.object);
 // 			char *name        = (bins ? bins[i].bin_name : operations[i].bin.bin_name);
-// 			cf_debug("%d %s:  (sz %zd)",i, name,object->sz);
+// 			as_log_debug("%d %s:  (sz %zd)",i, name,object->sz);
 // 			switch (object->type) {
 // 				case CL_NULL:
-// 					cf_debug("NULL ");
+// 					as_log_debug("NULL ");
 // 					break;
 // 				case CL_INT:
-// 					cf_debug("int   %"PRIu64,object->u.i64);
+// 					as_log_debug("int   %"PRIu64,object->u.i64);
 // 					break;
 // 				case CL_STR:
-// 					cf_debug("str   %s",object->u.str);
+// 					as_log_debug("str   %s",object->u.str);
 // 					break;
 // 				default:
-// 					cf_debug("unk type %d",object->type);
+// 					as_log_debug("unk type %d",object->type);
 // 					break;
 // 			}
 // 		}
@@ -292,16 +293,16 @@ static int value_to_op_int(int64_t value, uint8_t *data);
 // {
 // 	switch (key->type) {
 // 		case CL_NULL:
-// 			cf_debug("%s: key NULL ",msg);
+// 			as_log_debug("%s: key NULL ",msg);
 // 			break;
 // 		case CL_INT:
-// 			cf_debug("%s: key int   %"PRIu64,msg,key->u.i64);
+// 			as_log_debug("%s: key int   %"PRIu64,msg,key->u.i64);
 // 			break;
 // 		case CL_STR:
-// 			cf_debug("%s: key str   %s",msg,key->u.str);
+// 			as_log_debug("%s: key str   %s",msg,key->u.str);
 // 			break;
 // 		default:
-// 			cf_debug("%s: key unk type %d",msg,key->type);
+// 			as_log_debug("%s: key unk type %d",msg,key->type);
 // 			break;
 // 	}
 // }
@@ -476,7 +477,7 @@ write_fields(uint8_t *buf, const char *ns, int ns_len, const char *set, int set_
 				memcpy(&fd[1], key->u.blob, key->sz);
 				break;
 			default:
-				cf_error("transmit key: unknown citrusleaf type %d",key->type);
+				as_log_error("transmit key: unknown citrusleaf type %d",key->type);
 				return(0);
 		}
 		mf_tmp = cl_msg_field_get_next(mf);
@@ -639,7 +640,7 @@ cl_value_to_op_get_size(cl_bin *v, size_t *sz)
 			*sz += v->object.sz;
 			break;
 		default:
-			cf_error("internal error value_to_op get size has unknown value type %d", v->object.type);
+			as_log_error("internal error value_to_op get size has unknown value type %d", v->object.type);
 			return(-1);
 	}
 	return(0);
@@ -670,7 +671,7 @@ cl_object_get_size(cl_object *obj, size_t *sz)
 			*sz += obj->sz;
 			break;
 		default:
-			cf_error("internal error value_to_op get size has unknown value type %d", obj->type);
+			as_log_error("internal error value_to_op get size has unknown value type %d", obj->type);
 			return(-1);
 	}
 	return(0);
@@ -731,7 +732,7 @@ cl_value_to_op(cl_bin *v, cl_operator operator, cl_operation *operation, cl_msg_
 			op->op = CL_MSG_OP_MC_TOUCH;
 			break;
 		default:
-			cf_error("API user requested unknown operation type %d, fail", (int)tmpOp);
+			as_log_error("API user requested unknown operation type %d, fail", (int)tmpOp);
 			return(-1);
 	}
 
@@ -765,7 +766,7 @@ cl_value_to_op(cl_bin *v, cl_operator operator, cl_operation *operation, cl_msg_
 			break;
 		default:
 #ifdef DEBUG_VERBOSE				
-			cf_debug("internal error value_to_op has unknown value type %d",tmpValue->object.type);
+			as_log_debug("internal error value_to_op has unknown value type %d",tmpValue->object.type);
 #endif				
 			return(-1);
 	}
@@ -800,7 +801,7 @@ cl_object_to_buf (cl_object *obj, uint8_t *data)
 			break;
 		default:
 #ifdef DEBUG_VERBOSE
-			cf_error("internal error value_to_op has unknown value type %d", obj->type);
+			as_log_error("internal error value_to_op has unknown value type %d", obj->type);
 #endif
 			return(-1);
 	}
@@ -853,7 +854,7 @@ cl_compile(uint info1, uint info2, uint info3, const char *ns, const char *set, 
 		msg_sz += sizeof(cl_msg_op) + strlen(tmpValue->bin_name);
 
         if (0 != cl_value_to_op_get_size(tmpValue, &msg_sz)) {
-			cf_error("illegal parameter: bad type %d write op %d", tmpValue->object.type,i);
+			as_log_error("illegal parameter: bad type %d write op %d", tmpValue->object.type,i);
 			return(-1);
 		}
 	}
@@ -957,7 +958,7 @@ cl_compile(uint info1, uint info2, uint info3, const char *ns, const char *set, 
 // 		msg_sz += sizeof(cl_msg_op) + strlen(tmpValue->bin_name);
 
 //         if (0 != cl_value_to_op_get_size(tmpValue, &msg_sz)) {
-//             cf_error("illegal parameter: bad type %d write op %d", tmpValue->object.type, i);
+//             as_log_error("illegal parameter: bad type %d write op %d", tmpValue->object.type, i);
 //             return(-1);
 //         }
 // 	}
@@ -1076,7 +1077,7 @@ set_object(cl_msg_op *op, cl_object *obj)
 			memcpy(obj->u.blob, cl_msg_op_get_value_p(op), obj->sz);
 			break;
 		default:
-			cf_error("parse: received unknown object type %d", op->particle_type);
+			as_log_error("parse: received unknown object type %d", op->particle_type);
 			return(-1);
 	}
 	return(rv);
@@ -1113,7 +1114,7 @@ cl_set_value_particular(cl_msg_op *op, cl_bin *value)
 {
 	if (op->name_sz > sizeof(value->bin_name)) {
 #ifdef DEBUG_VERBOSE		
-		cf_debug("Set Value Particular: bad response from server");
+		as_log_debug("Set Value Particular: bad response from server");
 #endif	
 		return;
 	}
@@ -1307,7 +1308,7 @@ do_the_full_monte(as_cluster *asc, int info1, int info2, int info3, const char *
 		deadline_ms = cf_getms() + cl_w_p->timeout_ms;
 		progress_timeout_ms = cl_w_p->timeout_ms;
 #ifdef DEBUG_VERBOSE        
-		cf_debug("transaction has deadline: in %d deadlinems %"PRIu64" progress %d",
+		as_log_debug("transaction has deadline: in %d deadlinems %"PRIu64" progress %d",
 			(int)cl_w_p->timeout_ms,deadline_ms,progress_timeout_ms);
 #endif        
     }
@@ -1329,7 +1330,7 @@ do_the_full_monte(as_cluster *asc, int info1, int info2, int info3, const char *
         
 #ifdef DEBUG_VERBOSE		
 		if (try > 0)
-			cf_debug("request retrying try %d tid %zu", try, (uint64_t)pthread_self());
+			as_log_debug("request retrying try %d tid %zu", try, (uint64_t)pthread_self());
 #endif        
 		try++;
 		
@@ -1337,7 +1338,7 @@ do_the_full_monte(as_cluster *asc, int info1, int info2, int info3, const char *
 		node = as_node_get(asc, ns, &d_ret, info2 & CL_MSG_INFO2_WRITE ? true : false);
 		if (!node) {
 #ifdef DEBUG_VERBOSE
-			cf_debug("warning: no healthy nodes in cluster, retrying");
+			as_log_debug("warning: no healthy nodes in cluster, retrying");
 #endif
 			usleep(10000);
 			goto Retry;
@@ -1368,7 +1369,7 @@ do_the_full_monte(as_cluster *asc, int info1, int info2, int info3, const char *
 
 		if (rv != 0) {
 #ifdef DEBUG_VERBOSE			
-			cf_debug("Citrusleaf: write timeout or error when writing header to server - %d fd %d errno %d (tid %zu)",rv,fd,errno,(uint64_t)pthread_self());
+			as_log_debug("Citrusleaf: write timeout or error when writing header to server - %d fd %d errno %d (tid %zu)",rv,fd,errno,(uint64_t)pthread_self());
 #endif
 #ifdef DEBUG_TIME
             debug_printf(before_write_time, after_write_time, before_read_header_time, after_read_header_time, before_read_body_time, after_read_body_time,
@@ -1394,7 +1395,7 @@ do_the_full_monte(as_cluster *asc, int info1, int info2, int info3, const char *
 		if (rv) {
 
 #ifdef DEBUG_VERBOSE            
-			cf_debug("Citrusleaf: error when reading header from server - rv %d fd %d", rv, fd);
+			as_log_debug("Citrusleaf: error when reading header from server - rv %d fd %d", rv, fd);
 #endif
 #ifdef DEBUG_TIME
             debug_printf(before_write_time, after_write_time, before_read_header_time, after_read_header_time, before_read_body_time, after_read_body_time,
@@ -1425,7 +1426,7 @@ do_the_full_monte(as_cluster *asc, int info1, int info2, int info3, const char *
 			if (rd_buf_sz > sizeof(rd_stack_buf)) {
 				rd_buf = malloc(rd_buf_sz);
 				if (!rd_buf) {
-                    cf_error("malloc fail: trying %zu", rd_buf_sz);
+                    as_log_error("malloc fail: trying %zu", rd_buf_sz);
                     rv = -1; 
                     goto Error; 
                 }
@@ -1442,7 +1443,7 @@ do_the_full_monte(as_cluster *asc, int info1, int info2, int info3, const char *
                 rd_buf = 0;
                 
 #ifdef DEBUG_VERBOSE            
-                cf_debug("Citrusleaf: error when reading from server - rv %d fd %d", rv, fd);
+                as_log_debug("Citrusleaf: error when reading from server - rv %d fd %d", rv, fd);
 #endif
 #ifdef DEBUG_TIME
 				debug_printf(before_write_time, after_write_time, before_read_header_time, after_read_header_time, before_read_body_time, after_read_body_time, 
@@ -1476,7 +1477,7 @@ Retry:
 
         if (deadline_ms && (deadline_ms < cf_getms() ) ) {
 #ifdef DEBUG_VERBOSE            
-            cf_debug("out of luck out of time : deadline %"PRIu64" now %"PRIu64,
+            as_log_debug("out of luck out of time : deadline %"PRIu64" now %"PRIu64,
                 deadline_ms, cf_getms());
 #endif            
             rv = AEROSPIKE_ERR_TIMEOUT;
@@ -1488,7 +1489,7 @@ Retry:
 Error:	
 	
 #ifdef DEBUG_VERBOSE	
-	cf_debug("exiting with failure: wpol %d timeleft %d rv %d",
+	as_log_debug("exiting with failure: wpol %d timeleft %d rv %d",
 		(int)(cl_w_p ? cl_w_p->w_pol : 0),
 		(int)(deadline_ms - cf_getms() ), rv );
 #endif	
@@ -1537,7 +1538,7 @@ Ok:
 
 #ifdef DEBUG_VERBOSE
 	if (rv != 0) {
-		cf_debug("exiting OK clause with failure: wpol %d timeleft %d rv %d",
+		as_log_debug("exiting OK clause with failure: wpol %d timeleft %d rv %d",
 			(int)(cl_w_p ? cl_w_p->w_pol : 0),
 			(int)(deadline_ms - cf_getms() ), rv );
 	}
@@ -1676,7 +1677,7 @@ citrusleaf_get_all(as_cluster *asc, const char *ns, const char *set, const cl_ob
 		uint32_t *cl_gen, uint32_t* cl_ttl)
 {
 	if ((values == 0) || (n_values == 0)) {
-		cf_error("citrusleaf_get_all: illegal parameters passed");
+		as_log_error("citrusleaf_get_all: illegal parameters passed");
 		return(-1);
 	}
 
@@ -1698,7 +1699,7 @@ citrusleaf_get_all_digest_getsetname(as_cluster *asc, const char *ns, const cf_d
 	cl_bin **values, int *n_values, int timeout_ms, uint32_t *cl_gen, char **setname, uint32_t* cl_ttl)
 {
 	if ((values == 0) || (n_values == 0)) {
-		cf_error("citrusleaf_get_all: illegal parameters passed");
+		as_log_error("citrusleaf_get_all: illegal parameters passed");
 		return(-1);
 	}
 
@@ -1782,7 +1783,7 @@ citrusleaf_calculate_digest(const char *set, const cl_object *key, cf_digest *di
 			memcpy(&k[1], key->u.blob, key->sz);
 			break;
 		default:
-			cf_error(" transmit key: unknown citrusleaf type %d", key->type);
+			as_log_error(" transmit key: unknown citrusleaf type %d", key->type);
 			return(-1);
 	}
 
@@ -1833,18 +1834,10 @@ citrusleaf_operate(as_cluster *asc, const char *ns, const char *set, const cl_ob
 			&operations, n_values, generation, cl_w_p, &trid, NULL, NULL, ttl) );
 }
 
-
-void citrusleaf_set_debug(bool debug_flag) 
-{
-	cf_set_log_level(debug_flag? CF_DEBUG : CF_INFO);
-}
-
-
 //
 // citrusleaf_init() and citrusleaf_shutdown() are deprecated. Everything is now
 // per-cluster, no globals.
 //
-
 int citrusleaf_init() 
 {
 	return 0;

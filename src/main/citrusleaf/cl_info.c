@@ -305,31 +305,28 @@ Done:
 // TODO: timeouts are wrong here. If there are 3 addresses for a host name,
 // you'll end up with 3x timeout_ms
 //
-
 int
 citrusleaf_info(char *hostname, short port, char *names, char **values, int timeout_ms)
 {
-	int rv = -1;
 	as_vector sockaddr_in_v;
 	as_vector_inita(&sockaddr_in_v, sizeof(struct sockaddr_in), 5);
 	
-	if (! as_lookup(NULL, hostname, port, true, &sockaddr_in_v)) {
-		goto Done;
+	int status = as_lookup(NULL, hostname, port, true, &sockaddr_in_v);
+	
+	if (status != 0) {
+		as_vector_destroy(&sockaddr_in_v);
+		return status;
 	}
 		
-	for (uint32_t i = 0; i < sockaddr_in_v.size; i++)
-	{
-		struct sockaddr_in* sa_in = as_vector_get(&sockaddr_in_v, i);
+	status = AEROSPIKE_ERR_CLUSTER;
 
-		if (0 == citrusleaf_info_host(sa_in, names, values, timeout_ms, true, /* check bounds */ true)) {
-			rv = 0;
-			goto Done;
-		}
+	for (uint32_t i = 0; i < sockaddr_in_v.size && status; i++) {
+		struct sockaddr_in* sa_in = as_vector_get(&sockaddr_in_v, i);
+		status = citrusleaf_info_host(sa_in, names, values, timeout_ms, true, /* check bounds */ true);
 	}
 	
-Done:
 	as_vector_destroy(&sockaddr_in_v);
-	return(rv);
+	return status;
 }
 
 int
@@ -338,23 +335,26 @@ citrusleaf_info_auth(as_cluster *cluster, char *hostname, short port, char *name
 	as_vector sockaddr_in_v;
 	as_vector_inita(&sockaddr_in_v, sizeof(struct sockaddr_in), 5);
 	
-	if (! as_lookup(NULL, hostname, port, true, &sockaddr_in_v)) {
+	int status = as_lookup(NULL, hostname, port, true, &sockaddr_in_v);
+	
+	if (status != 0) {
 		as_vector_destroy(&sockaddr_in_v);
-		return AEROSPIKE_ERR_CLUSTER;
+		return status;
 	}
 	
-	int rc = AEROSPIKE_ERR_CLUSTER;
+	status = AEROSPIKE_ERR_CLUSTER;
 	
-	for (uint32_t i = 0; i < sockaddr_in_v.size && rc == AEROSPIKE_ERR_CLUSTER; i++)
+	for (uint32_t i = 0; i < sockaddr_in_v.size && status; i++)
 	{
 		if (i > 0) {
 			free(*values);
 		}
 		struct sockaddr_in* sa_in = as_vector_get(&sockaddr_in_v, i);
-		rc = citrusleaf_info_host_auth(cluster, sa_in, names, values, timeout_ms, true, /* check bounds */ true);
+		status = citrusleaf_info_host_auth(cluster, sa_in, names, values, timeout_ms, true, /* check bounds */ true);
 	}
+	
 	as_vector_destroy(&sockaddr_in_v);
-	return rc;
+	return status;
 }
 
 /* gets information back from any of the nodes in the cluster */

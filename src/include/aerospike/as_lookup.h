@@ -27,7 +27,7 @@
  *	@private
  *	Lookup address(es) given hostname. Addresses are returned in the sockaddr_in vector
  *	if it's not null.  The addition to the vector will be done via a unique add just in
- *	case there are duplicates. Return true on success.
+ *	case there are duplicates. Return zero on success.
  */
-bool
+int
 as_lookup(as_cluster* cluster, char* hostname, uint16_t port, bool enable_warning, as_vector* /*<struct sockaddr_in>*/ addresses);

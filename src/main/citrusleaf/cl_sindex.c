@@ -31,7 +31,6 @@
 
 #include <citrusleaf/citrusleaf.h>
 #include <citrusleaf/cl_sindex.h>
-#include <citrusleaf/as_log.h>
 
 #include "internal.h"
 

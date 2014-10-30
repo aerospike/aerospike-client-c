@@ -20,7 +20,7 @@
 #include <citrusleaf/cf_byte_order.h>
 #include <netdb.h>
 
-bool
+int
 as_lookup(as_cluster* cluster, char* hostname, uint16_t port, bool enable_warning, as_vector* /*<struct sockaddr_in>*/ addresses)
 {
 	// Check if there is an alternate address that should be used for this hostname.
@@ -50,7 +50,7 @@ as_lookup(as_cluster* cluster, char* hostname, uint16_t port, bool enable_warnin
 		if (enable_warning) {
 			as_log_warn("Invalid hostname %s: %s", hostname, gai_strerror(ret));
 		}
-		return false;
+		return AEROSPIKE_ERR_CLUSTER;
 	}
 	
 	// Add addresses to vector if it exists.
@@ -65,5 +65,5 @@ as_lookup(as_cluster* cluster, char* hostname, uint16_t port, bool enable_warnin
 	}
 	
 	freeaddrinfo(results);
-	return true;
+	return 0;
 }

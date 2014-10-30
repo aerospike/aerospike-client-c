@@ -25,13 +25,6 @@
 #include <stdint.h>
 #include <time.h>
 
-static const char * as_log_level_strings[] = {
-	[AS_LOG_LEVEL_ERROR]	= "ERROR",
-	[AS_LOG_LEVEL_WARN]		= "WARN",
-	[AS_LOG_LEVEL_INFO]		= "INFO",
-	[AS_LOG_LEVEL_DEBUG]	= "DEBUG"
-};
-
 void
 blog_line(const char* fmt, ...)
 {
@@ -55,7 +48,7 @@ blog_detailv(as_log_level level, const char* fmt, va_list ap)
 	time_t now = time(NULL);
 	struct tm* t = localtime(&now);
 	int len = sprintf(fmtbuf, "%d-%02d-%02d %02d:%02d:%02d %s ",
-		t->tm_year+1900, t->tm_mon+1, t->tm_mday, t->tm_hour, t->tm_min, t->tm_sec, as_log_level_strings[level]);
+		t->tm_year+1900, t->tm_mon+1, t->tm_mday, t->tm_hour, t->tm_min, t->tm_sec, as_log_level_tostring(level));
 	char* p = stpcpy(fmtbuf + len, fmt);
 	*p++ = '\n';
 	*p = 0;
@@ -119,7 +112,7 @@ connect_to_server(arguments* args, aerospike* client)
 	as_error err;
 	
 	if (aerospike_connect(client, &err) != AEROSPIKE_OK) {
-		blog_error("Aerospike connect failed: %d-%s", err.code, err.message);
+		blog_error("Aerospike connect failed: %d : %s", err.code, err.message);
 		aerospike_destroy(client);
 		return 1;
 	}

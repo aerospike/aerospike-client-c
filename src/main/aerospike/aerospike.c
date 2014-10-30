@@ -16,13 +16,14 @@
  */
 #include <aerospike/aerospike.h>
 #include <aerospike/as_config.h>
+#include <aerospike/as_cluster.h>
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_module.h>
 #include <aerospike/mod_lua.h>
 #include <aerospike/mod_lua_config.h>
 
 #include <citrusleaf/citrusleaf.h>
-#include <aerospike/as_cluster.h>
+#include "_shim.h"
 
 /******************************************************************************
  * STATIC FUNCTIONS
@@ -107,13 +108,13 @@ as_status aerospike_connect(aerospike * as, as_error * err)
     as_module_configure(&mod_lua, &config);
 	
 	// Create the cluster object.
-	as->cluster = as_cluster_create(&as->config);
+	int status = as_cluster_create(&as->config, &as->cluster);
 	
-	if (! as->cluster) {
-		return as_error_update(err, AEROSPIKE_ERR_CLUSTER, "Failed to initialize cluster");
+	if (status != 0) {
+		return as_error_fromrc(err, status);
 	}
 	
-	return err->code;
+	return AEROSPIKE_OK;
 }
 
 /**

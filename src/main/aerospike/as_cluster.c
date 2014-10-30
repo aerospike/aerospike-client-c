@@ -187,7 +187,7 @@ as_cluster_add_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_a
 	}
 }
 
-static bool
+static int
 as_cluster_seed_nodes(as_cluster* cluster, bool enable_warnings)
 {
 	// Add all nodes at once to avoid copying entire array multiple times.
@@ -198,18 +198,24 @@ as_cluster_seed_nodes(as_cluster* cluster, bool enable_warnings)
 	as_vector_inita(&addresses, sizeof(struct sockaddr_in), 5);
 	
 	char name[AS_NODE_NAME_MAX_SIZE];
+	int first_error = 0;
 	
 	for (uint32_t i = 0; i < cluster->seeds_size; i++) {
 		as_seed* seed = &cluster->seeds[i];
 		as_vector_clear(&addresses);
 		
-		if (! as_lookup(cluster, seed->name, seed->port, enable_warnings, &addresses)) {
+		int status = as_lookup(cluster, seed->name, seed->port, enable_warnings, &addresses);
+		
+		if (status != 0) {
+			if (first_error == 0) {
+				first_error = status;
+			}
 			continue;
 		}
 
 		for (uint32_t i = 0; i < addresses.size; i++) {
 			struct sockaddr_in* addr = as_vector_get(&addresses, i);
-			int status = as_lookup_node_name(cluster, addr, name, AS_NODE_NAME_MAX_SIZE);
+			status = as_lookup_node_name(cluster, addr, name, AS_NODE_NAME_MAX_SIZE);
 			
 			if (status == 0) {
 				as_node* node = as_cluster_find_node_in_vector(&nodes_to_add, name);
@@ -225,6 +231,10 @@ as_cluster_seed_nodes(as_cluster* cluster, bool enable_warnings)
 				}
 			}
 			else {
+				if (first_error == 0) {
+					first_error = status;
+				}
+				
 				if (enable_warnings) {
 					char name[INET_ADDRSTRLEN];
 					as_socket_address_name(addr, name);
@@ -234,16 +244,19 @@ as_cluster_seed_nodes(as_cluster* cluster, bool enable_warnings)
 		}
 	}
 	
-	bool status = false;
-	
+	int final_status;
+
 	if (nodes_to_add.size > 0) {
 		as_cluster_add_nodes(cluster, &nodes_to_add);
-		status = true;
+		final_status = 0;
+	}
+	else {
+		final_status = (first_error)? first_error : AEROSPIKE_ERR_CLIENT;
 	}
 	
 	as_vector_destroy(&nodes_to_add);
 	as_vector_destroy(&addresses);
-	return status;
+	return final_status;
 }
 
 static void
@@ -258,13 +271,15 @@ as_cluster_find_nodes_to_add(as_cluster* cluster, as_vector* /* <as_friend> */ f
 		as_friend* friend = as_vector_get(friends, i);
 		as_vector_clear(&addresses);
 		
-		if (! as_lookup(cluster, friend->name, friend->port, true, &addresses)) {
+		int status = as_lookup(cluster, friend->name, friend->port, true, &addresses);
+		
+		if (status != 0) {
 			continue;
 		}
 		
 		for (uint32_t i = 0; i < addresses.size; i++) {
 			struct sockaddr_in* addr = as_vector_get(&addresses, i);
-			int status = as_lookup_node_name(cluster, addr, name, AS_NODE_NAME_MAX_SIZE);
+			status = as_lookup_node_name(cluster, addr, name, AS_NODE_NAME_MAX_SIZE);
 			
 			if (status == 0) {
 				as_node* node = as_cluster_find_node(cluster->nodes, name);
@@ -310,7 +325,7 @@ as_cluster_find_nodes_to_remove(as_cluster* cluster, uint32_t refresh_count, as_
 				// Single node clusters rely on whether it responded to info requests.
 				if (node->failures >= 5) {
 					// 5 consecutive info requests failed. Try seeds.
-					if (as_cluster_seed_nodes(cluster, false)) {
+					if (as_cluster_seed_nodes(cluster, false) == 0) {
 						// Seed nodes found. Remove unresponsive node.
 						as_vector_append(nodes_to_remove, &node);
 					}
@@ -451,31 +466,49 @@ as_cluster_remove_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_t
 	}
 }
 
-static bool
+static int
 as_cluster_set_partition_size(as_cluster* cluster)
 {
 	as_nodes* nodes = cluster->nodes;
+	int first_error = 0;
 	
 	for (uint32_t i = 0; i < nodes->size && cluster->n_partitions == 0; i++) {
 		as_node* node = nodes->array[i];
 		struct sockaddr_in* addr = as_node_get_address(node);
 		char* values = 0;
 		
-		if (citrusleaf_info_host_auth(cluster, addr, "partitions", &values, cluster->conn_timeout_ms, false, true)) {
+		int status = citrusleaf_info_host_auth(cluster, addr, "partitions", &values, cluster->conn_timeout_ms, false, true);
+		
+		if (status != 0) {
 			free(values);
+			
+			if (first_error == 0) {
+				first_error = status;
+			}
 			continue;
 		}
 		
 		char *value = 0;
-		bool status = (citrusleaf_info_parse_single(values, &value) == 0);
-		
-		if (status) {
+		status = citrusleaf_info_parse_single(values, &value);
+			
+		if (status == 0) {
 			cluster->n_partitions = atoi(value);
+		}
+		else {
+			if (first_error == 0) {
+				first_error = status;
+			}
 		}
 		
 		free(values);
 	}
-	return cluster->n_partitions > 0;
+	
+	if (cluster->n_partitions > 0) {
+		return 0;
+	}
+	
+	// Must return error code even if first_error not set.
+	return (first_error)? first_error : AEROSPIKE_ERR_CLIENT;
 }
 
 /**
@@ -494,7 +527,7 @@ as_cluster_gc(as_vector* /* <as_gc_item> */ vector)
 /**
  * Check health of all nodes in the cluster.
  */
-bool
+int
 as_cluster_tend(as_cluster* cluster, bool enable_seed_warnings)
 {
 	// All node additions/deletions are performed in tend thread.
@@ -507,16 +540,20 @@ as_cluster_tend(as_cluster* cluster, bool enable_seed_warnings)
 	// If active nodes don't exist, seed cluster.
 	as_nodes* nodes = cluster->nodes;
 	if (nodes->size == 0) {
-		if (! as_cluster_seed_nodes(cluster, enable_seed_warnings)) {
-			return false;
+		int status = as_cluster_seed_nodes(cluster, enable_seed_warnings);
+		
+		if (status != 0) {
+			return status;
 		}
 	}
 
 	// Retrieve fixed number of partitions only once from any node.
 	if (cluster->n_partitions == 0) {
-		if (! as_cluster_set_partition_size(cluster)) {
+		int status = as_cluster_set_partition_size(cluster);
+		
+		if (status != 0) {
 			as_log_warn("Failed to set retrieve n_partitions from cluster nodes.");
-			return false;
+			return status;
 		}
 	}
 	
@@ -569,7 +606,7 @@ as_cluster_tend(as_cluster* cluster, bool enable_seed_warnings)
 	as_vector_destroy(&nodes_to_add);
 	as_vector_destroy(&nodes_to_remove);
 	as_vector_destroy(&friends);
-	return true;
+	return 0;
 }
 
 /**
@@ -581,28 +618,30 @@ as_cluster_tend(as_cluster* cluster, bool enable_seed_warnings)
  * control as well.  Do not return an error since future
  * database requests may still succeed.
  */
-static bool
+static int
 as_wait_till_stabilized(as_cluster* cluster)
 {
 	uint64_t limit = cf_getms() + cluster->conn_timeout_ms;
 	uint32_t count = -1;
 	
 	do {
-		if (! as_cluster_tend(cluster, true)) {
-			return false;
+		int status = as_cluster_tend(cluster, true);
+		
+		if (status != 0) {
+			return status;
 		}
 		
 		// Check to see if cluster has changed since the last tend.
 		// If not, assume cluster has stabilized and return.
 		as_nodes* nodes = cluster->nodes;
 		if (count == nodes->size) {
-			return true;
+			return 0;
 		}
 		count = nodes->size;
 		usleep(1);  // Sleep 1 microsecond before next cluster tend.
 	} while (cf_getms() < limit);
 	
-	return true;
+	return 0;
 }
 
 static void*
@@ -662,18 +701,20 @@ as_cluster_add_seeds(as_cluster* cluster)
 	as_vector_destroy(&seeds_to_add);
 }
 
-bool
+int
 as_cluster_init(as_cluster* cluster, bool fail_if_not_connected)
 {
 	// Tend cluster until all nodes identified.
-	if (! as_wait_till_stabilized(cluster)) {
+	int status = as_wait_till_stabilized(cluster);
+	
+	if (status != 0) {
 		if (fail_if_not_connected) {
-			return false;
+			return status;
 		}
 	}
 	as_cluster_add_seeds(cluster);
 	cluster->valid = true;
-	return true;
+	return 0;
 }
 
 static uint32_t
@@ -810,8 +851,8 @@ as_cluster_change_password(as_cluster* cluster, const char* user, const char* pa
 	}
 }
 
-as_cluster*
-as_cluster_create(as_config* config)
+int
+as_cluster_create(as_config* config, as_cluster** cluster_out)
 {
 	as_cluster* cluster = cf_malloc(sizeof(as_cluster));
 	memset(cluster, 0, sizeof(as_cluster));
@@ -854,21 +895,28 @@ as_cluster_create(as_config* config)
 	
 	if (config->use_shm) {
 		// Create shared memory cluster.
-		if (! as_shm_create(cluster, config)) {
+		int status = as_shm_create(cluster, config);
+		
+		if (status != 0) {
 			as_cluster_destroy(cluster);
-			return 0;
+			*cluster_out = 0;
+			return status;
 		}
 	}
 	else {
 		// Initialize normal cluster.
-		if (! as_cluster_init(cluster, config->fail_if_not_connected)) {
+		int status = as_cluster_init(cluster, config->fail_if_not_connected);
+		
+		if (status != 0) {
 			as_cluster_destroy(cluster);
-			return 0;
+			*cluster_out = 0;
+			return status;
 		}
 		// Run cluster tend thread.
 		pthread_create(&cluster->tend_thread, 0, as_cluster_tender, cluster);
 	}
-	return cluster;
+	*cluster_out = cluster;
+	return 0;
 }
 
 void

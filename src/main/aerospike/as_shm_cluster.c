@@ -32,13 +32,13 @@
  * DECLARATIONS
  ******************************************************************************/
 
-bool
+int
 as_cluster_init(as_cluster* cluster, bool fail_if_not_connected);
 
 void
 as_cluster_add_seeds(as_cluster* cluster);
 
-bool
+int
 as_cluster_tend(as_cluster* cluster, bool enable_seed_warnings);
 
 void
@@ -558,7 +558,7 @@ as_shm_cleanup(int id, as_cluster_shm* cluster_shm)
 	shmctl(id, IPC_RMID, 0);
 }
 
-bool
+int
 as_shm_create(as_cluster* cluster, as_config* config)
 {
 	// In order to calculate total shared memory size, n_partitions needs to be initialized
@@ -587,7 +587,7 @@ as_shm_create(as_cluster* cluster, as_config* config)
 			// Shared memory attach failed.
 			as_log_error("Error attaching to shared memory: %s pid: %d", strerror(errno), pid);
 			as_shm_cleanup(id, 0);
-			return false;
+			return AEROSPIKE_ERR_CLIENT;
 		}
 		
 		memset(cluster_shm, 0, size);
@@ -604,7 +604,7 @@ as_shm_create(as_cluster* cluster, as_config* config)
 		
 		if (id < 0) {
 			as_log_error("Shared memory get failed: %s pid: %d", strerror(errno), pid);
-			return false;
+			return AEROSPIKE_ERR_CLIENT;
 		}
 		
 		cluster_shm = shmat(id, NULL, 0);
@@ -612,7 +612,7 @@ as_shm_create(as_cluster* cluster, as_config* config)
 		if (cluster_shm == (void*)-1) {
 			as_log_error("Error attaching to shared memory: %s pid: %d", strerror(errno), pid);
 			as_shm_cleanup(id, 0);
-			return false;
+			return AEROSPIKE_ERR_CLIENT;
 		}
 	}
 	else if (errno == ENOMEM) {
@@ -625,12 +625,12 @@ as_shm_create(as_cluster* cluster, as_config* config)
 #else
 		as_log_error("You can increase shared memory size by: sysctl -w kern.sysv.shmmax=<new_size>");
 #endif
-		return false;
+		return AEROSPIKE_ERR_CLIENT;
 	}
 	else {
 		// Exclusive shared memory lock failed.
 		as_log_error("Shared memory get failed: %s pid: %d", strerror(errno), pid);
-		return false;
+		return AEROSPIKE_ERR_CLIENT;
 	}
 
 	as_shm_info* shm_info = cf_malloc(sizeof(as_shm_info));
@@ -652,10 +652,12 @@ as_shm_create(as_cluster* cluster, as_config* config)
 			as_cluster_add_seeds(cluster);
 		}
 		else {
-			if (! as_cluster_init(cluster, true)) {
+			int status = as_cluster_init(cluster, true);
+			
+			if (status != 0) {
 				ck_pr_store_8(&cluster_shm->lock, 0);
 				as_shm_destroy(cluster, false);
-				return 0;
+				return status;
 			}
 			cluster_shm->ready = 1;
 		}
@@ -676,7 +678,7 @@ as_shm_create(as_cluster* cluster, as_config* config)
 	
 	// Run tending thread which handles both master and prole tending.
 	pthread_create(&cluster->tend_thread, 0, as_shm_tender, cluster);
-	return true;
+	return 0;
 }
 
 void

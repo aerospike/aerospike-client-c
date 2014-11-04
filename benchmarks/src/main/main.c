@@ -10,7 +10,7 @@
  *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- *s
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -26,7 +26,7 @@
 #include <string.h>
 #include <getopt.h>
 
-static const char* short_options = "h:p:U:P::n:s:k:o:Rw:z:g:T:dL:Su";
+static const char* short_options = "h:p:U:P::n:s:k:o:Rt:w:z:g:T:dL:SC:N:M:u";
 
 static struct option long_options[] = {
 	{"hosts",        1, 0, 'h'},
@@ -38,6 +38,7 @@ static struct option long_options[] = {
 	{"keys",         1, 0, 'k'},
 	{"objectSpec",   1, 0, 'o'},
 	{"random",       0, 0, 'R'},
+	{"transactions", 1, 0, 't'},
 	{"workload",     1, 0, 'w'},
 	{"threads",      1, 0, 'z'},
 	{"throughput",   1, 0, 'g'},
@@ -48,6 +49,9 @@ static struct option long_options[] = {
 	{"debug",        0, 0, 'd'},
 	{"latency",      1, 0, 'L'},
 	{"shared",       0, 0, 'S'},
+	{"replica",      1, 0, 'C'},
+	{"consistencyLevel", 1, 0, 'N'},
+	{"commitLevel",  1, 0, 'M'},
 	{"usage",        0, 0, 'u'},
 	{0,              0, 0, 0}
 };
@@ -76,8 +80,7 @@ print_usage(const char* program)
 	blog_line("   If -P is set, the actual password if optional. If the password is not given,");
 	blog_line("   the user will be prompted on the command line.");
 	blog_line("   If the password is given, it must be provided directly after -P with no");
-	blog_line("   intrevening space (ie. -Pmypass).");
-	blog_line("   ");
+	blog_line("   intervening space (ie. -Pmypass).");
 	blog_line("");
 
 	blog_line("-n --namespace <ns>   # Default: test");
@@ -103,6 +106,10 @@ print_usage(const char* program)
 	blog_line("   Use dynamically generated random bin values instead of default static fixed bin values.");
 	blog_line("");
 	
+	blog_line("-t --transactions       # Default: -1 (unlimited)");
+	blog_line("    Minimum number of transactions to perform.");
+	blog_line("");
+
 	blog_line("-w --workload I,<percent> | RU,<read percent>  # Default: RU,50");
 	blog_line("   Desired workload.");
 	blog_line("   -w I,60  : Linear 'insert' workload initializing 60%% of the keys.");
@@ -164,6 +171,18 @@ print_usage(const char* program)
 	blog_line("   Use shared memory cluster tending.");
 	blog_line("");
 
+	blog_line("-C --replica {master,any}       # Default: master");
+	blog_line("   Which replica to use for reads.");
+	blog_line("");
+
+	blog_line("-N --consistencyLevel {one,all} # Default: one");
+	blog_line("   Read consistency guarantee level.");
+	blog_line("");
+
+	blog_line("-M --commitLevel {all,master}   # Default: all");
+	blog_line("   Write commit guarantee level.");
+	blog_line("");
+
 	blog_line("-u --usage           # Default: usage not printed.");
 	blog_line("   Display program usage.");
 	blog_line("");
@@ -203,23 +222,25 @@ print_args(arguments* args)
 		case 'I':
 			blog_line("int");
 			break;
-		
+
 		case 'B':
 			blog_line("byte[%d]", args->binlen);
 			break;
-			
+
 		case 'S':
 			blog_line("UTF8 string[%d]", args->binlen);
 			break;
-			
+
 		default:
 			blog_line("");
 			break;
 	}
 	
 	blog_line("random values:  %s", boolstring(args->random));
+	blog_line("minimum number of transactions:  %d", args->transactions_limit);
+
 	blog("workload:       ");
-	
+
 	if (args->init) {
 		blog_line("initialize %d%% of records", args->init_pct);
 	}
@@ -248,6 +269,10 @@ print_args(arguments* args)
 	}
 	
 	blog_line("shared memory:  %s", boolstring(args->use_shm));
+
+	blog_line("read replica:   %s", (AS_POLICY_REPLICA_MASTER == args->read_replica ? "master" : "any"));
+	blog_line("read consistency level: %s", (AS_POLICY_CONSISTENCY_LEVEL_ONE == args->read_consistency_level ? "one" : "all"));
+	blog_line("write commit level: %s", (AS_POLICY_COMMIT_LEVEL_ALL == args->write_commit_level ? "all" : "master"));
 }
 
 static int
@@ -316,6 +341,7 @@ validate_args(arguments* args)
 		blog_line("Invalid latency exponent shift: %d  Valid values: [1-5]", args->latency_shift);
 		return 1;
 	}
+
 	return 0;
 }
 
@@ -402,6 +428,10 @@ set_args(int argc, char * const * argv, arguments* args)
 				args->random = true;
 				break;
 				
+			case 't':
+				args->transactions_limit = atoi(optarg);
+				break;
+
 			case 'w': {
 				char* tmp = strdup(optarg);
 				char* p = strchr(tmp, ',');
@@ -477,6 +507,45 @@ set_args(int argc, char * const * argv, arguments* args)
 				args->use_shm = true;
 				break;
 
+			case 'C':
+				if (strcmp(optarg, "master") == 0) {
+					args->read_replica = AS_POLICY_REPLICA_MASTER;
+				}
+				else if (strcmp(optarg, "any") == 0) {
+					args->read_replica = AS_POLICY_REPLICA_ANY;
+				}
+				else {
+					blog_line("replica must be master or any");
+					return 1;
+				}
+				break;
+
+			case 'N':
+				if (strcmp(optarg, "one") == 0) {
+					args->read_consistency_level = AS_POLICY_CONSISTENCY_LEVEL_ONE;
+				}
+				else if (strcmp(optarg, "all") == 0) {
+					args->read_consistency_level = AS_POLICY_CONSISTENCY_LEVEL_ALL;
+				}
+				else {
+					blog_line("consistencyLevel must be one or all");
+					return 1;
+				}
+				break;
+
+			case 'M':
+				if (strcmp(optarg, "all") == 0) {
+					args->write_commit_level = AS_POLICY_COMMIT_LEVEL_ALL;
+				}
+				else if (strcmp(optarg, "master") == 0) {
+					args->write_commit_level = AS_POLICY_COMMIT_LEVEL_MASTER;
+				}
+				else {
+					blog_line("commitLevel be all or master");
+					return 1;
+				}
+				break;
+
 			case 'u':
 			default:
 				return 1;
@@ -508,6 +577,7 @@ main(int argc, char * const * argv)
 	args.bintype = 'I';
 	args.binlen = 50;
 	args.random = false;
+	args.transactions_limit = -1;
 	args.init_pct = 100;
 	args.read_pct = 50;
 	args.threads = 16;
@@ -520,6 +590,9 @@ main(int argc, char * const * argv)
 	args.latency_columns = 4;
 	args.latency_shift = 3;
 	args.use_shm = false;
+	args.read_replica = AS_POLICY_REPLICA_MASTER;
+	args.read_consistency_level = AS_POLICY_CONSISTENCY_LEVEL_ONE;
+	args.write_commit_level = AS_POLICY_COMMIT_LEVEL_ALL;
 	
 	int ret = set_args(argc, argv, &args);
 	

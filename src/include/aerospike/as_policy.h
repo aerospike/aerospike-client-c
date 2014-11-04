@@ -34,7 +34,10 @@
  *  - as_policy_gen
  *  - as_policy_retry
  *  - as_policy_exists
- *  
+ *  - as_policy_replica
+ *  - as_policy_consistency_level
+ *  - as_policy_commit_level
+ *
  *  ## Operation Policies
  *
  *  The following are the operation policies. Operation policies are groups of
@@ -91,6 +94,27 @@
  *	@ingroup client_policies
  */
 #define AS_POLICY_EXISTS_DEFAULT AS_POLICY_EXISTS_IGNORE
+
+/**
+ *	Default as_policy_replica value
+ *
+ *	@ingroup client_policies
+ */
+#define AS_POLICY_REPLICA_DEFAULT AS_POLICY_REPLICA_MASTER
+
+/**
+ *	Default as_policy_consistency_level value for read
+ *
+ *	@ingroup client_policies
+ */
+#define AS_POLICY_CONSISTENCY_LEVEL_DEFAULT AS_POLICY_CONSISTENCY_LEVEL_ONE
+
+/**
+ *	Default as_policy_commit_level value for write
+ *
+ *	@ingroup client_policies
+ */
+#define AS_POLICY_COMMIT_LEVEL_DEFAULT AS_POLICY_COMMIT_LEVEL_ALL
 
 /******************************************************************************
  *	TYPES
@@ -189,7 +213,7 @@ typedef enum as_policy_key_e {
 } as_policy_key;
 
 /**
- *	Existence Policy.
+ *	Existence Policy
  *	
  *	Specifies the behavior for writing the record
  *	depending whether or not it exists.
@@ -224,6 +248,73 @@ typedef enum as_policy_exists_e {
 	AS_POLICY_EXISTS_CREATE_OR_REPLACE
 
 } as_policy_exists;
+
+/**
+ *  Replica Policy
+ *
+ *  Specifies which partition replica to read from.
+ *
+ *  @ingroup client_policies
+ */
+typedef enum as_policy_replica_e {
+
+	/**
+	 *  Read from the partition master replica node.
+	 */
+	AS_POLICY_REPLICA_MASTER,
+
+	/**
+	 *  Read from an unspecified replica node.
+	 */
+	AS_POLICY_REPLICA_ANY
+
+} as_policy_replica;
+
+/**
+ *  Consistency Level
+ *
+ *  Specifies the number of replicas to be consulted
+ *  in a read operation to provide the desired
+ *  consistency guarantee.
+ *
+ *  @ingroup client_policies
+ */
+typedef enum as_policy_consistency_level_e {
+
+	/**
+	 *  Involve a single replica in the operation.
+	 */
+	AS_POLICY_CONSISTENCY_LEVEL_ONE,
+
+	/**
+	 *  Involve all replicas in the operation.
+	 */
+	AS_POLICY_CONSISTENCY_LEVEL_ALL,
+
+} as_policy_consistency_level;
+
+/**
+ *  Commit Level
+ *
+ *  Specifies the number of replicas required to be successfully
+ *  committed before returning success in a write operation
+ *  to provide the desired consistency guarantee.
+ *
+ *  @ingroup client_policies
+ */
+typedef enum as_policy_commit_level_e {
+
+	/**
+	 *  Return succcess only after successfully committing all replicas.
+	 */
+	AS_POLICY_COMMIT_LEVEL_ALL,
+
+	/**
+	 *  Return succcess after successfully committing the master replica.
+	 */
+	AS_POLICY_COMMIT_LEVEL_MASTER,
+
+} as_policy_commit_level;
 
 /**
  *	Write Policy
@@ -264,6 +355,13 @@ typedef struct as_policy_write_s {
 	 */
 	as_policy_exists exists;
 
+	/**
+	 *  Specifies the number of replicas required
+	 *  to be committed successfully when writing
+	 *  before returning transaction succeeded.
+	 */
+	as_policy_commit_level commit_level;
+
 } as_policy_write;
 
 /**
@@ -288,6 +386,17 @@ typedef struct as_policy_read_s {
 	 */
 	as_policy_key key;
 
+	/**
+	 *  Specifies the replica to be consulted for the read.
+	 */
+	as_policy_replica replica;
+
+	/**
+	 *  Specifies the number of replicas consulted
+	 *  when reading for the desired consistency guarantee.
+	 */
+	as_policy_consistency_level consistency_level;
+
 } as_policy_read;
 
 /**
@@ -311,6 +420,13 @@ typedef struct as_policy_apply_s {
 	 *	Specifies the behavior for the key.
 	 */
 	as_policy_key key;
+
+	/**
+	 *  Specifies the number of replicas required
+	 *  to be committed successfully when writing
+	 *  before returning transaction succeeded.
+	 */
+	as_policy_commit_level commit_level;
 
 } as_policy_apply;
 
@@ -346,6 +462,24 @@ typedef struct as_policy_operate_s {
 	 *	value.
 	 */
 	as_policy_gen gen;
+
+	/**
+	 *  Specifies the replica to be consulted for the read.
+	 */
+	as_policy_replica replica;
+
+	/**
+	 *  Specifies the number of replicas consulted
+	 *  when reading for the desired consistency guarantee.
+	 */
+	as_policy_consistency_level consistency_level;
+
+	/**
+	 *  Specifies the number of replicas required
+	 *  to be committed successfully when writing
+	 *  before returning transaction succeeded.
+	 */
+	as_policy_commit_level commit_level;
 
 } as_policy_operate;
 
@@ -386,6 +520,13 @@ typedef struct as_policy_remove_s {
 	 *	value.
 	 */
 	as_policy_gen gen;
+
+	/**
+	 *  Specifies the number of replicas required
+	 *  to be committed successfully when writing
+	 *  before returning transaction succeeded.
+	 */
+	as_policy_commit_level commit_level;
 
 } as_policy_remove;
 
@@ -548,6 +689,27 @@ typedef struct as_policies_s {
 	 */
 	as_policy_exists exists;
 
+	/**
+	 *	Specifies which replica to read.
+	 *
+	 *	The default value is `AS_POLICY_REPLICA_MASTER`.
+	 */
+	as_policy_replica replica;
+
+	/**
+	 *	Specifies the consistency level for reading.
+	 *
+	 *	The default value is `AS_POLICY_CONSISTENCY_LEVEL_ONE`.
+	 */
+	as_policy_consistency_level consistency_level;
+
+	/**
+	 *	Specifies the commit level for writing.
+	 *
+	 *	The default value is `AS_POLICY_COMMIT_LEVEL_ALL`.
+	 */
+	as_policy_commit_level commit_level;
+
 	/***************************************************************************
 	 *	SPECIFIC POLICIES
 	 **************************************************************************/
@@ -621,6 +783,8 @@ as_policy_read_init(as_policy_read* p)
 {
 	p->timeout = AS_POLICY_TIMEOUT_DEFAULT;
 	p->key = AS_POLICY_KEY_DEFAULT;
+	p->replica = AS_POLICY_REPLICA_DEFAULT;
+	p->consistency_level = AS_POLICY_CONSISTENCY_LEVEL_DEFAULT;
 	return p;
 }
 
@@ -637,6 +801,8 @@ as_policy_read_copy(as_policy_read* src, as_policy_read* trg)
 {
 	trg->timeout = src->timeout;
 	trg->key = src->key;
+	trg->replica = src->replica;
+	trg->consistency_level = src->consistency_level;
 }
 
 /**
@@ -655,6 +821,7 @@ as_policy_write_init(as_policy_write* p)
 	p->key = AS_POLICY_KEY_DEFAULT;
 	p->gen = AS_POLICY_GEN_DEFAULT;
 	p->exists = AS_POLICY_EXISTS_DEFAULT;
+	p->commit_level = AS_POLICY_COMMIT_LEVEL_DEFAULT;
 	return p;
 }
 
@@ -674,6 +841,7 @@ as_policy_write_copy(as_policy_write* src, as_policy_write* trg)
 	trg->key = src->key;
 	trg->gen = src->gen;
 	trg->exists = src->exists;
+	trg->commit_level = src->commit_level;
 }
 
 /**
@@ -691,6 +859,9 @@ as_policy_operate_init(as_policy_operate* p)
 	p->retry = AS_POLICY_RETRY_DEFAULT;
 	p->key = AS_POLICY_KEY_DEFAULT;
 	p->gen = AS_POLICY_GEN_DEFAULT;
+	p->replica = AS_POLICY_REPLICA_DEFAULT;
+	p->consistency_level = AS_POLICY_CONSISTENCY_LEVEL_DEFAULT;
+	p->commit_level = AS_POLICY_COMMIT_LEVEL_DEFAULT;
 	return p;
 }
 
@@ -709,6 +880,9 @@ as_policy_operate_copy(as_policy_operate* src, as_policy_operate* trg)
 	trg->retry = src->retry;
 	trg->key = src->key;
 	trg->gen = src->gen;
+	trg->replica = src->replica;
+	trg->consistency_level = src->consistency_level;
+	trg->commit_level = src->commit_level;
 }
 
 /**
@@ -727,6 +901,7 @@ as_policy_remove_init(as_policy_remove* p)
 	p->key = AS_POLICY_KEY_DEFAULT;
 	p->gen = AS_POLICY_GEN_DEFAULT;
 	p->generation = 0;
+	p->commit_level = AS_POLICY_COMMIT_LEVEL_DEFAULT;
 	return p;
 }
 
@@ -746,6 +921,7 @@ as_policy_remove_copy(as_policy_remove* src, as_policy_remove* trg)
 	trg->key = src->key;
 	trg->gen = src->gen;
 	trg->generation = src->generation;
+	trg->commit_level = src->commit_level;
 }
 
 /**
@@ -761,6 +937,7 @@ as_policy_apply_init(as_policy_apply* p)
 {
 	p->timeout = AS_POLICY_TIMEOUT_DEFAULT;
 	p->key = AS_POLICY_KEY_DEFAULT;
+	p->commit_level = AS_POLICY_COMMIT_LEVEL_DEFAULT;
 	return p;
 }
 
@@ -777,6 +954,7 @@ as_policy_apply_copy(as_policy_apply* src, as_policy_apply* trg)
 {
 	trg->timeout = src->timeout;
 	trg->key = src->key;
+	trg->commit_level = src->commit_level;
 }
 
 /**

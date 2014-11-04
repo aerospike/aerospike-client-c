@@ -75,11 +75,27 @@ as_status aerospike_key_get(
 
 	cl_rv rc = AEROSPIKE_OK;
 
+	int consistency_level = 0;
+	switch ( policy->consistency_level ) {
+		case AS_POLICY_CONSISTENCY_LEVEL_ONE:
+			consistency_level &= ~CL_MSG_INFO1_CONSISTENCY_LEVEL_B0;
+			consistency_level &= ~CL_MSG_INFO1_CONSISTENCY_LEVEL_B1;
+			break;
+		case AS_POLICY_CONSISTENCY_LEVEL_ALL:
+			consistency_level |= CL_MSG_INFO1_CONSISTENCY_LEVEL_B0;
+			consistency_level &= ~CL_MSG_INFO1_CONSISTENCY_LEVEL_B1;
+			break;
+		default: {
+			// ERROR CASE
+			break;
+		}
+	}
+
 	switch ( policy->key ) {
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
 			rc = citrusleaf_get_all(as->cluster, key->ns, key->set, NULL, (cf_digest*)digest->value,
-					&values, &nvalues, timeout, &gen, &ttl);
+					&values, &nvalues, timeout, &gen, &ttl, consistency_level, policy->replica);
 			break;
 		}
 		case AS_POLICY_KEY_SEND: {
@@ -87,7 +103,7 @@ as_status aerospike_key_get(
 			asval_to_clobject((as_val *) key->valuep, &okey);
 			as_digest * digest = as_key_digest((as_key *) key);
 			rc = citrusleaf_get_all(as->cluster, key->ns, key->set, &okey, (cf_digest*)digest->value,
-					&values, &nvalues, timeout, &gen, &ttl);
+					&values, &nvalues, timeout, &gen, &ttl, consistency_level, policy->replica);
 			break;
 		}
 		default: {
@@ -95,7 +111,7 @@ as_status aerospike_key_get(
 			break;
 		}
 	}
-	
+
 	if ( rc == AEROSPIKE_OK && rec != NULL ) {
 		as_record * r = *rec;
 		if ( r == NULL ) {
@@ -167,11 +183,27 @@ as_status aerospike_key_select(
 
 	cl_rv rc = AEROSPIKE_OK;
 
+	int consistency_level = 0;
+	switch ( policy->consistency_level ) {
+		case AS_POLICY_CONSISTENCY_LEVEL_ONE:
+			consistency_level &= ~CL_MSG_INFO1_CONSISTENCY_LEVEL_B0;
+			consistency_level &= ~CL_MSG_INFO1_CONSISTENCY_LEVEL_B1;
+			break;
+		case AS_POLICY_CONSISTENCY_LEVEL_ALL:
+			consistency_level |= CL_MSG_INFO1_CONSISTENCY_LEVEL_B0;
+			consistency_level &= ~CL_MSG_INFO1_CONSISTENCY_LEVEL_B1;
+			break;
+		default: {
+			// ERROR CASE
+			break;
+		}
+	}
+
 	switch ( policy->key ) {
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
 			rc = citrusleaf_get(as->cluster, key->ns, key->set, NULL, (cf_digest*)digest->value,
-					values, nvalues, timeout, &gen, &ttl);
+					values, nvalues, timeout, &gen, &ttl, consistency_level, policy->replica);
 			break;
 		}
 		case AS_POLICY_KEY_SEND: {
@@ -179,7 +211,7 @@ as_status aerospike_key_select(
 			asval_to_clobject((as_val *) key->valuep, &okey);
 			as_digest * digest = as_key_digest((as_key *) key);
 			rc = citrusleaf_get(as->cluster, key->ns, key->set, &okey, (cf_digest*)digest->value,
-					values, nvalues, timeout, &gen, &ttl);
+					values, nvalues, timeout, &gen, &ttl, consistency_level, policy->replica);
 			break;
 		}
 		default: {
@@ -244,11 +276,27 @@ as_status aerospike_key_exists(
 	
 	cl_rv rc = AEROSPIKE_OK;
 
+	int consistency_level = 0;
+	switch ( policy->consistency_level ) {
+		case AS_POLICY_CONSISTENCY_LEVEL_ONE:
+			consistency_level &= ~CL_MSG_INFO1_CONSISTENCY_LEVEL_B0;
+			consistency_level &= ~CL_MSG_INFO1_CONSISTENCY_LEVEL_B1;
+			break;
+		case AS_POLICY_CONSISTENCY_LEVEL_ALL:
+			consistency_level |= CL_MSG_INFO1_CONSISTENCY_LEVEL_B0;
+			consistency_level &= ~CL_MSG_INFO1_CONSISTENCY_LEVEL_B1;
+			break;
+		default: {
+			// ERROR CASE
+			break;
+		}
+	}
+
 	switch ( policy->key ) {
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
 			rc = citrusleaf_exists_key(as->cluster, key->ns, key->set, NULL, (cf_digest*)digest->value,
-					values, nvalues, timeout, &gen, &ttl);
+					values, nvalues, timeout, &gen, &ttl, consistency_level, policy->replica);
 			break;
 		}
 		case AS_POLICY_KEY_SEND: {
@@ -256,7 +304,7 @@ as_status aerospike_key_exists(
 			asval_to_clobject((as_val *) key->valuep, &okey);
 			as_digest * digest = as_key_digest((as_key *) key);
 			rc = citrusleaf_exists_key(as->cluster, key->ns, key->set, &okey, (cf_digest*)digest->value,
-					values, nvalues, timeout, &gen, &ttl);
+					values, nvalues, timeout, &gen, &ttl, consistency_level, policy->replica);
 			break;
 		}
 		default: {
@@ -325,17 +373,33 @@ as_status aerospike_key_put(
 
 	cl_rv rc = AEROSPIKE_OK;
 
+	int commit_level = 0;
+	switch ( policy->commit_level ) {
+		case AS_POLICY_COMMIT_LEVEL_ALL:
+			commit_level &= ~CL_MSG_INFO3_COMMIT_LEVEL_B0;
+			commit_level &= ~CL_MSG_INFO3_COMMIT_LEVEL_B1;
+			break;
+		case AS_POLICY_COMMIT_LEVEL_MASTER:
+			commit_level |= CL_MSG_INFO3_COMMIT_LEVEL_B0;
+			commit_level &= ~CL_MSG_INFO3_COMMIT_LEVEL_B1;
+			break;
+		default: {
+			// ERROR CASE
+			break;
+		}
+	}
+
 	switch ( policy->key ) {
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
-			rc = citrusleaf_put(as->cluster, key->ns, key->set, NULL, (cf_digest*)digest->value, values, nvalues, &wp);
+			rc = citrusleaf_put(as->cluster, key->ns, key->set, NULL, (cf_digest*)digest->value, values, nvalues, &wp, commit_level);
 			break;
 		}
 		case AS_POLICY_KEY_SEND: {
 			cl_object okey;
 			asval_to_clobject((as_val *) key->valuep, &okey);
 			as_digest * digest = as_key_digest((as_key *) key);
-			rc = citrusleaf_put(as->cluster, key->ns, key->set, &okey, (cf_digest*)digest->value, values, nvalues, &wp);
+			rc = citrusleaf_put(as->cluster, key->ns, key->set, &okey, (cf_digest*)digest->value, values, nvalues, &wp, commit_level);
 			break;
 		}
 		default: {
@@ -385,17 +449,33 @@ as_status aerospike_key_remove(
 
 	cl_rv rc = AEROSPIKE_OK;
 
+	int commit_level = 0;
+	switch ( policy->commit_level ) {
+		case AS_POLICY_COMMIT_LEVEL_ALL:
+			commit_level &= ~CL_MSG_INFO3_COMMIT_LEVEL_B0;
+			commit_level &= ~CL_MSG_INFO3_COMMIT_LEVEL_B1;
+			break;
+		case AS_POLICY_COMMIT_LEVEL_MASTER:
+			commit_level |= CL_MSG_INFO3_COMMIT_LEVEL_B0;
+			commit_level &= ~CL_MSG_INFO3_COMMIT_LEVEL_B1;
+			break;
+		default: {
+			// ERROR CASE
+			break;
+		}
+	}
+
 	switch ( policy->key ) {
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
-			rc = citrusleaf_delete(as->cluster, key->ns, key->set, NULL, (cf_digest*)digest->value, &wp);
+			rc = citrusleaf_delete(as->cluster, key->ns, key->set, NULL, (cf_digest*)digest->value, &wp, commit_level);
 			break;
 		}
 		case AS_POLICY_KEY_SEND: {
 			cl_object okey;
 			asval_to_clobject((as_val *) key->valuep, &okey);
 			as_digest * digest = as_key_digest((as_key *) key);
-			rc = citrusleaf_delete(as->cluster, key->ns, key->set, &okey, (cf_digest*)digest->value, &wp);
+			rc = citrusleaf_delete(as->cluster, key->ns, key->set, &okey, (cf_digest*)digest->value, &wp, commit_level);
 			break;
 		}
 		default: {
@@ -476,6 +556,38 @@ as_status aerospike_key_operate(
 		asbinvalue_to_clobject(op->bin.valuep, &clop->bin.object);
 	}
 
+	int consistency_level = 0;
+	switch ( policy->consistency_level ) {
+		case AS_POLICY_CONSISTENCY_LEVEL_ONE:
+			consistency_level &= ~CL_MSG_INFO1_CONSISTENCY_LEVEL_B0;
+			consistency_level &= ~CL_MSG_INFO1_CONSISTENCY_LEVEL_B1;
+			break;
+		case AS_POLICY_CONSISTENCY_LEVEL_ALL:
+			consistency_level |= CL_MSG_INFO1_CONSISTENCY_LEVEL_B0;
+			consistency_level &= ~CL_MSG_INFO1_CONSISTENCY_LEVEL_B1;
+			break;
+		default: {
+			// ERROR CASE
+			break;
+		}
+	}
+
+	int commit_level = 0;
+	switch ( policy->commit_level ) {
+		case AS_POLICY_COMMIT_LEVEL_ALL:
+			commit_level &= ~CL_MSG_INFO3_COMMIT_LEVEL_B0;
+			commit_level &= ~CL_MSG_INFO3_COMMIT_LEVEL_B1;
+			break;
+		case AS_POLICY_COMMIT_LEVEL_MASTER:
+			commit_level |= CL_MSG_INFO3_COMMIT_LEVEL_B0;
+			commit_level &= ~CL_MSG_INFO3_COMMIT_LEVEL_B1;
+			break;
+		default: {
+			// ERROR CASE
+			break;
+		}
+	}
+
 	cl_rv rc = AEROSPIKE_OK;
 	cl_bin *result_bins = NULL;
 
@@ -483,7 +595,7 @@ as_status aerospike_key_operate(
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
 			rc = citrusleaf_operate(as->cluster, key->ns, key->set, NULL, (cf_digest*)digest->value,
-					&result_bins, operations, &n_operations, &wp, &gen, &ttl);
+					&result_bins, operations, &n_operations, &wp, &gen, &ttl, consistency_level, commit_level, policy->replica);
 			break;
 		}
 		case AS_POLICY_KEY_SEND: {
@@ -491,7 +603,7 @@ as_status aerospike_key_operate(
 			asval_to_clobject((as_val *) key->valuep, &okey);
 			as_digest * digest = as_key_digest((as_key *) key);
 			rc = citrusleaf_operate(as->cluster, key->ns, key->set, &okey, (cf_digest*)digest->value,
-					&result_bins, operations, &n_operations, &wp, &gen, &ttl);
+					&result_bins, operations, &n_operations, &wp, &gen, &ttl, consistency_level, commit_level, policy->replica);
 			break;
 		}
 		default: {
@@ -621,13 +733,29 @@ as_status aerospike_key_apply(
 
 	cl_rv rc = AEROSPIKE_OK;
 
+	int commit_level = 0;
+	switch ( policy->commit_level ) {
+		case AS_POLICY_COMMIT_LEVEL_ALL:
+			commit_level &= ~CL_MSG_INFO3_COMMIT_LEVEL_B0;
+			commit_level &= ~CL_MSG_INFO3_COMMIT_LEVEL_B1;
+			break;
+		case AS_POLICY_COMMIT_LEVEL_MASTER:
+			commit_level |= CL_MSG_INFO3_COMMIT_LEVEL_B0;
+			commit_level &= ~CL_MSG_INFO3_COMMIT_LEVEL_B1;
+			break;
+		default: {
+			// ERROR CASE
+			break;
+		}
+	}
+
 	switch ( policy->key ) {
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
 			rc = do_the_full_monte( 
-				as->cluster, 0, CL_MSG_INFO2_WRITE, 0, 
+				as->cluster, 0, CL_MSG_INFO2_WRITE, commit_level,
 				key->ns, key->set, NULL, (cf_digest*)digest->value, &bins, CL_OP_WRITE, 0, &n_bins,
-				NULL, &wp, &trid, NULL, &call, NULL
+				NULL, &wp, &trid, NULL, &call, NULL, -1
 			);
 			break;
 		}
@@ -636,9 +764,9 @@ as_status aerospike_key_apply(
 			asval_to_clobject((as_val *) key->valuep, &okey);
 			as_digest * digest = as_key_digest((as_key *) key);
 			rc = do_the_full_monte( 
-				as->cluster, 0, CL_MSG_INFO2_WRITE, 0, 
+				as->cluster, 0, CL_MSG_INFO2_WRITE, commit_level,
 				key->ns, key->set, &okey, (cf_digest*)digest->value, &bins, CL_OP_WRITE, 0, &n_bins,
-				NULL, &wp, &trid, NULL, &call, NULL
+				NULL, &wp, &trid, NULL, &call, NULL, -1
 			);
 			break;
 		}

@@ -102,7 +102,12 @@ connect_to_server(arguments* args, aerospike* client)
 	p->gen = AS_POLICY_GEN_IGNORE;
 	p->exists = AS_POLICY_EXISTS_IGNORE;
 	
+	p->read.replica = args->read_replica;
+	p->read.consistency_level = args->read_consistency_level;
+
 	p->write.timeout = args->write_timeout;
+	p->write.commit_level = args->write_commit_level;
+
 	p->operate.timeout = args->write_timeout;
 	p->remove.timeout = args->write_timeout;
 	p->info.timeout = 1000;
@@ -207,6 +212,8 @@ run_benchmark(arguments* args)
 	data.binlen = args->binlen;
 	data.bintype = args->bintype;
 	data.random = args->random;
+	data.transactions_limit = args->transactions_limit;
+	data.transactions_count = 0;
 	data.latency = args->latency;
 	data.debug = args->debug;
 	data.valid = 1;

@@ -17,6 +17,7 @@
 #include <aerospike/as_partition.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_log_macros.h>
+#include <aerospike/as_policy.h>
 #include <aerospike/as_shm_cluster.h>
 #include <aerospike/as_string.h>
 #include <citrusleaf/cf_b64.h>
@@ -108,37 +109,54 @@ reserve_node_alternate(as_cluster* cluster, as_node* chosen, as_node* alternate)
 static uint32_t g_randomizer = 0;
 
 as_node*
-as_partition_table_get_node(as_cluster* cluster, as_partition_table* table, const cf_digest* d, bool write)
+as_partition_table_get_node(as_cluster* cluster, as_partition_table* table, const cf_digest* d, bool write, as_policy_replica replica)
 {
 	if (table) {
 		cl_partition_id partition_id = cl_partition_getid(cluster->n_partitions, d);
 		as_partition* p = &table->partitions[partition_id];
-		
+
 		// Make volatile reference so changes to tend thread will be reflected in this thread.
 		as_node* master = ck_pr_load_ptr(&p->master);
-		
+
 		if (write) {
 			// Writes always go to master.
 			return reserve_node(cluster, master);
 		}
-		
-		as_node* prole = ck_pr_load_ptr(&p->prole);
-			
-		if (! prole) {
-			return reserve_node(cluster, master);
-		}
-		
-		if (! master) {
-			return reserve_node(cluster, prole);
+
+		bool use_master_replica = true;
+		switch (replica) {
+			case AS_POLICY_REPLICA_MASTER:
+				use_master_replica = true;
+				break;
+			case AS_POLICY_REPLICA_ANY:
+				use_master_replica = false;
+				break;
+			default:
+				// (No policy supplied ~~ Use the default.)
+				break;
 		}
 
-		// Alternate between master and prole for reads.
-		uint32_t r = ck_pr_faa_32(&g_randomizer, 1);
+		if (use_master_replica) {
+			return reserve_node(cluster, master);
+		} else {
+			as_node* prole = ck_pr_load_ptr(&p->prole);
+
+			if (! prole) {
+				return reserve_node(cluster, master);
+			}
+
+			if (! master) {
+				return reserve_node(cluster, prole);
+			}
+
+			// Alternate between master and prole for reads.
+			uint32_t r = ck_pr_faa_32(&g_randomizer, 1);
 				
-		if (r & 1) {
-			return reserve_node_alternate(cluster, master, prole);
+			if (r & 1) {
+				return reserve_node_alternate(cluster, master, prole);
+			}
+			return reserve_node_alternate(cluster, prole, master);
 		}
-		return reserve_node_alternate(cluster, prole, master);
 	}
 	
 #ifdef DEBUG_VERBOSE

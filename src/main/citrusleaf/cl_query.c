@@ -442,10 +442,10 @@ static int query_compile(const cl_query * query, uint8_t ** buf_r, size_t * buf_
     memset(buf, 0, msg_sz);  // NOTE: this line is debug - shouldn't be required
 
     // write the headers
-    int    info1      = CL_MSG_INFO1_READ;
+    int info1      = CL_MSG_INFO1_READ;
     int info2      = 0;
     int info3      = 0;
-    buf = cl_write_header(buf, msg_sz, info1, info2, info3, 0, 0, 0, 
+    buf = cl_write_header(buf, msg_sz, info1, info2, info3, 0, 0, 0,
             n_fields, 0);
     // now write the fields
     cl_msg_field *mf = (cl_msg_field *) buf;

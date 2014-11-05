@@ -55,7 +55,8 @@ ticker_worker(void* udata)
 		int32_t read_current = cf_atomic32_fas_m(&data->read_count, 0);
 		int32_t read_timeout_current = cf_atomic32_fas_m(&data->read_timeout_count, 0);
 		int32_t read_error_current = cf_atomic32_fas_m(&data->read_error_count, 0);
-		
+		int32_t transactions_current = cf_atomic32_get(data->transactions_count);
+
 		data->period_begin = time;
 	
 		int32_t write_tps = (int32_t)((double)write_current * 1000 / elapsed + 0.5);
@@ -73,7 +74,13 @@ ticker_worker(void* udata)
 			latency_print_results(read_latency, "read", latency_detail);
 			blog_line("%s", latency_detail);
 		}
-		
+
+		if ((data->transactions_limit > 0) && (transactions_current > data->transactions_limit)) {
+			blog_line("Performed %d (> %d) transactions. Shutting down...", transactions_current, data->transactions_limit);
+			data->valid = false;
+			continue;
+		}
+
 		if (write_timeout_current + write_error_current > 10) {
 			if (is_stop_writes(&data->client, data->host, data->port, data->namespace)) {
 				if (data->valid) {
@@ -83,6 +90,7 @@ ticker_worker(void* udata)
 				}
 			}
 		}
+
 		sleep(1);
 	}
 	return 0;
@@ -111,7 +119,8 @@ random_worker(void* udata)
 		else {
 			write_record(key, data);
 		}
-		
+		cf_atomic32_incr(&data->transactions_count);
+
 		if (throughput > 0) {
 			int transactions = data->write_count + data->read_count;
 			

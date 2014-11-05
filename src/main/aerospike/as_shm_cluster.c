@@ -18,6 +18,7 @@
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_node.h>
+#include <aerospike/as_policy.h>
 #include <aerospike/as_string.h>
 #include <citrusleaf/cf_b64.h>
 #include <citrusleaf/cf_types.h>
@@ -411,43 +412,60 @@ as_shm_reserve_node_alternate(as_cluster* cluster, as_node** local_nodes, uint32
 static uint32_t g_shm_randomizer = 0;
 
 as_node*
-as_shm_node_get(as_cluster* cluster, const char* ns, const cf_digest* d, bool write)
+as_shm_node_get(as_cluster* cluster, const char* ns, const cf_digest* d, bool write, as_policy_replica replica)
 {
 	as_shm_info* shm_info = cluster->shm_info;
 	as_cluster_shm* cluster_shm = shm_info->cluster_shm;
 	as_partition_table_shm* table = as_shm_find_partition_table(cluster_shm, ns);
-	
+
 	if (table) {
 		cl_partition_id partition_id = cl_partition_getid(cluster_shm->n_partitions, d);
 		as_partition_shm* p = &table->partitions[partition_id];
-		
+
 		// Make volatile reference so changes to tend thread will be reflected in this thread.
 		uint32_t master = ck_pr_load_32(&p->master);
-		
+
 		if (write) {
 			// Writes always go to master.
 			return as_shm_reserve_node(cluster, shm_info->local_nodes, master);
 		}
-		
-		uint32_t prole = ck_pr_load_32(&p->prole);
-		
-		if (! prole) {
+
+		bool use_master_replica = true;
+		switch (replica) {
+			case AS_POLICY_REPLICA_MASTER:
+				use_master_replica = true;
+				break;
+			case AS_POLICY_REPLICA_ANY:
+				use_master_replica = false;
+				break;
+			default:
+				// (No policy supplied ~~ Use the default.)
+				break;
+		}
+
+		if (use_master_replica) {
 			return as_shm_reserve_node(cluster, shm_info->local_nodes, master);
+		} else {
+			uint32_t prole = ck_pr_load_32(&p->prole);
+
+			if (! prole) {
+				return as_shm_reserve_node(cluster, shm_info->local_nodes, master);
+			}
+
+			if (! master) {
+				return as_shm_reserve_node(cluster, shm_info->local_nodes, prole);
+			}
+
+			// Alternate between master and prole for reads.
+			uint32_t r = ck_pr_faa_32(&g_shm_randomizer, 1);
+
+			if (r & 1) {
+				return as_shm_reserve_node_alternate(cluster, shm_info->local_nodes, master, prole);
+			}
+			return as_shm_reserve_node_alternate(cluster, shm_info->local_nodes, prole, master);
 		}
-		
-		if (! master) {
-			return as_shm_reserve_node(cluster, shm_info->local_nodes, prole);
-		}
-		
-		// Alternate between master and prole for reads.
-		uint32_t r = ck_pr_faa_32(&g_shm_randomizer, 1);
-		
-		if (r & 1) {
-			return as_shm_reserve_node_alternate(cluster, shm_info->local_nodes, master, prole);
-		}
-		return as_shm_reserve_node_alternate(cluster, shm_info->local_nodes, prole, master);
 	}
-	
+
 	// as_log_debug("Choose random node for null partition table");
 	return as_node_get_random(cluster);
 }

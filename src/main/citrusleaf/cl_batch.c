@@ -212,7 +212,7 @@ batch_compile(uint info1, uint info2, char *ns, cf_digest *digests, as_node **no
 	buf = cl_write_header(buf, msg_sz, info1, info2, info3, generation, record_ttl, transaction_ttl, n_fields, n_values);
 		
 	// now the fields
-	buf = write_fields_batch_digests(buf, ns, ns_len, digests, nodes, n_digests,n_my_digests, my_node);
+	buf = write_fields_batch_digests(buf, ns, ns_len, digests, nodes, n_digests, n_my_digests, my_node);
 	if (!buf) {
 		if (mbuf)	free(mbuf);
 		return(-1);
@@ -628,7 +628,7 @@ citrusleaf_batch_read(as_cluster *asc, char *ns, const cf_digest *digests, int n
 	
 	for (int i = 0; i < n_digests; i++) {
 		// Must use write mode to get master paritition since batch doesn't proxy.
-		nodes[i] = as_partition_table_get_node(asc, table, &digests[i], true);
+		nodes[i] = as_partition_table_get_node(asc, table, &digests[i], true, -1);
 		
 		if (nodes[i] == 0) {
 			as_log_error("index %d: can't get any node", i);

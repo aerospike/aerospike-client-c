@@ -398,6 +398,40 @@ as_status aerospike_scan_background(
 }
 
 /**
+ *	Wait for a background scan to be completed by servers.
+ *
+ *	~~~~~~~~~~{.c}
+ *	uint64_t scan_id = 1234;
+ *	aerospike_scan_wait(&as, &err, NULL, scan_id, 0);
+ *	~~~~~~~~~~
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param scan_id		The id for the scan job.
+ *	@param interval_ms	The polling interval in milliseconds. If zero, 1000 ms is used.
+ *
+ *	@return AEROSPIKE_OK on success. Otherwise an error occurred.
+ */
+as_status aerospike_scan_wait(
+	aerospike * as, as_error * err, const as_policy_info * policy,
+	uint64_t scan_id, uint32_t interval_ms
+	)
+{
+	uint32_t interval_micros = (interval_ms <= 0)? 1000 * 1000 : interval_ms * 1000;
+	as_scan_info info;
+	as_status status;
+	
+	// Poll to see when scan is done.
+	do {
+		usleep(interval_micros);
+		status = aerospike_scan_info(as, err, policy, scan_id, &info);
+	} while (status == AEROSPIKE_OK && info.status == AS_SCAN_STATUS_INPROGRESS);
+	
+	return status;
+}
+
+/**
  *	Check on a background scan running on the server.
  *
  *	~~~~~~~~~~{.c}

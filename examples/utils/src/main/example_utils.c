@@ -563,8 +563,11 @@ example_register_udf(aerospike* p_as, const char* udf_file_path)
 	const char * base = as_basename(&base_string, udf_file_path);
 	
 	// Register the UDF file in the database cluster.
-	if (aerospike_udf_put(p_as, &err, NULL, base, AS_UDF_TYPE_LUA,
-			&udf_content) != AEROSPIKE_OK) {
+	if (aerospike_udf_put(p_as, &err, NULL, base, AS_UDF_TYPE_LUA, &udf_content) == AEROSPIKE_OK) {
+		// Wait for the system metadata to spread to all nodes.
+		aerospike_udf_put_wait(p_as, &err, NULL, base, 100);
+	}
+	else {
 		LOG("aerospike_udf_put() returned %d - %s", err.code, err.message);
 	}
 
@@ -572,9 +575,6 @@ example_register_udf(aerospike* p_as, const char* udf_file_path)
 
 	// This frees the local buffer.
 	as_bytes_destroy(&udf_content);
-
-	// Wait for the system metadata to spread to all nodes.
-	usleep(100 * 1000);
 
 	return err.code == AEROSPIKE_OK;
 }
@@ -615,17 +615,16 @@ bool
 example_create_integer_index(aerospike* p_as, const char* bin,
 		const char* index)
 {
+	as_index_task task;
 	as_error err;
 
-	if (aerospike_index_integer_create(p_as, &err, NULL, g_namespace, g_set,
-			bin, index) != AEROSPIKE_OK) {
-		LOG("aerospike_index_integer_create() returned %d - %s", err.code,
-				err.message);
+	if (aerospike_index_create(p_as, &err, &task, NULL, g_namespace, g_set, bin, index, AS_INDEX_NUMERIC) != AEROSPIKE_OK) {
+		LOG("aerospike_index_create() returned %d - %s", err.code, err.message);
 		return false;
 	}
 
 	// Wait for the system metadata to spread to all nodes.
-	usleep(100 * 1000);
+	aerospike_index_create_wait(&err, &task, 0);
 
 	return true;
 }

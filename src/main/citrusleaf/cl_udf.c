@@ -218,102 +218,6 @@ as_val * citrusleaf_udf_bin_to_val(as_serializer * ser, cl_bin * bin) {
  * FUNCTIONS
  ******************************************************************************/
 
-cl_rv citrusleaf_udf_record_apply(as_cluster * cl, const char * ns, const char * set, const cl_object * key,
-	const char * filename, const char * function, as_list * arglist, int timeout_ms, as_result * res) {
-
-	cl_rv rv = CITRUSLEAF_OK;
-	char err_str[256];
-
-	as_serializer ser;
-	as_msgpack_init(&ser);
-
-	as_string file;
-	as_string_init(&file, (char *) filename, true /*ismalloc*/);
-
-	as_string func;
-	as_string_init(&func, (char *) function, true /*ismalloc*/);
-	
-	as_buffer args;
-	as_buffer_init(&args);
-
-	as_serializer_serialize(&ser, (as_val *) arglist, &args);
-
-	as_call call = {
-		.file = &file,
-		.func = &func,
-		.args = &args
-	};
-
-	uint64_t trid = 0;
-
-	cl_write_parameters wp;
-	cl_write_parameters_set_default(&wp);
-	wp.timeout_ms = timeout_ms;
-
-	cl_bin *bins = 0;
-	int n_bins = 0;
-
-	rv = do_the_full_monte( 
-		cl, 0, CL_MSG_INFO2_WRITE, 0, 
-		ns, set, key, 0, &bins, CL_OP_WRITE, 0, &n_bins, 
-		NULL, &wp, &trid, NULL, &call, NULL
-	);
-
-	as_buffer_destroy(&args);
-
-	if (! (rv == CITRUSLEAF_OK || rv == CITRUSLEAF_FAIL_UDF_BAD_RESPONSE)) {
-		// Add the exact error-code to return value
-		//snprintf(err_str, 256, "None UDF failure Error-code: %d", rv);
-		snprintf(err_str, 256, "Error in parsing udf params Error-code: %d", rv);
-		as_result_setfailure(res, (as_val *) as_string_new(err_str,false));
-	} else if ( n_bins == 1  ) {
-
-		cl_bin *bin = &bins[0];
-
-		as_val *val = cl_udf_bin_to_val(&ser, bin);
-
-		if ( val ) {
-			if ( strcmp(bin->bin_name,"FAILURE") == 0 ) {
-				snprintf(err_str, 256, "Failure in converting udf-bin to value for type :%d", val->type);
-				as_result_setfailure(res, (as_val *) as_string_new(err_str,false));
-				as_val_destroy(val);
-				//	as_result_setfailure(res, val);
-			}
-			else if ( strcmp(bin->bin_name,"SUCCESS") == 0 ) {
-				as_result_setsuccess(res, val);
-			}
-			else {
-				snprintf(err_str, 256, "Invalid response in converting udf-bin to value for type :%d", val->type);
-				as_result_setfailure(res, (as_val *) as_string_new(err_str,false));
-				as_val_destroy(val);
-				//as_result_setfailure(res, (as_val *) as_string_new("Invalid response. (1)",false/*ismalloc*/));
-			}
-		}
-		else {
-			snprintf(err_str, 256, "Null value returned in converting udf-bin to value ");
-			as_result_setfailure(res, (as_val *) as_string_new(err_str,false));
-		   // as_result_setfailure(res, (as_val *) as_string_new("Invalid response. (2)",false/*ismalloc*/));
-		}
-
-	}
-	else {
-		snprintf(err_str, 256, " Generic parser error for udf-apply, Error-code: %d", rv);
-		as_result_setfailure(res, (as_val *) as_string_new(err_str,false));
-	   // as_result_setfailure(res, (as_val *) as_string_new("Invalid response. (3)",false/*ismalloc*/));
-	}
-
-	if (bins) {
-		citrusleaf_bins_free(bins, n_bins);
-		free(bins);
-	}
-
-	as_serializer_destroy(&ser);
-	
-	return rv;
-}
-
-
-
 cl_rv citrusleaf_udf_list(as_cluster *asc, cl_udf_file ** files, int * count, char ** resp) {
 	
 	*files = NULL;
@@ -484,7 +388,7 @@ cl_rv citrusleaf_udf_put(as_cluster *asc, const char * filename, as_bytes *conte
 
 	if ( !filename || !(content)) {
 		fprintf(stderr, "filename and content required\n");
-		return CITRUSLEAF_FAIL_CLIENT;
+		return AEROSPIKE_ERR_CLIENT;
 	}
 
 	char * query = NULL;
@@ -496,7 +400,7 @@ cl_rv citrusleaf_udf_put(as_cluster *asc, const char * filename, as_bytes *conte
 	{
 		fprintf(stderr, "Invalid UDF type");
 		as_string_destroy(&filename_string);
-		return CITRUSLEAF_FAIL_PARAMETER;
+		return AEROSPIKE_ERR_REQUEST_INVALID;
 	}
 
 	uint32_t encoded_len = cf_b64_encoded_len(content->size);
@@ -509,7 +413,7 @@ cl_rv citrusleaf_udf_put(as_cluster *asc, const char * filename, as_bytes *conte
 			filebase, content_base64, encoded_len, cl_udf_type_str[udf_type])) {
 		fprintf(stderr, "Query allocation failed");
 		as_string_destroy(&filename_string);
-		return CITRUSLEAF_FAIL_CLIENT;
+		return AEROSPIKE_ERR_CLIENT;
 	}
 	
 	as_string_destroy(&filename_string);

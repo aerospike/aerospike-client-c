@@ -15,12 +15,12 @@
  * the License.
  */
 #include <aerospike/as_lookup.h>
+#include <aerospike/as_log_macros.h>
 #include <citrusleaf/cl_info.h>
-#include <citrusleaf/cf_log_internal.h>
 #include <citrusleaf/cf_byte_order.h>
 #include <netdb.h>
 
-bool
+int
 as_lookup(as_cluster* cluster, char* hostname, uint16_t port, bool enable_warning, as_vector* /*<struct sockaddr_in>*/ addresses)
 {
 	// Check if there is an alternate address that should be used for this hostname.
@@ -30,7 +30,7 @@ as_lookup(as_cluster* cluster, char* hostname, uint16_t port, bool enable_warnin
 		for (uint32_t i = 0; i < cluster->ip_map_size; i++) {
 			if (strcmp(entry->orig, hostname) == 0) {
 				// Found mapping for this address.  Use alternate.
-				cf_debug("Using %s instead of %s", entry->alt, hostname);
+				as_log_debug("Using %s instead of %s", entry->alt, hostname);
 				hostname = entry->alt;
 				break;
 			}
@@ -48,9 +48,9 @@ as_lookup(as_cluster* cluster, char* hostname, uint16_t port, bool enable_warnin
 	
 	if (ret) {
 		if (enable_warning) {
-			cf_warn("Invalid hostname %s: %s", hostname, gai_strerror(ret));
+			as_log_warn("Invalid hostname %s: %s", hostname, gai_strerror(ret));
 		}
-		return false;
+		return AEROSPIKE_ERR_CLUSTER;
 	}
 	
 	// Add addresses to vector if it exists.
@@ -65,5 +65,5 @@ as_lookup(as_cluster* cluster, char* hostname, uint16_t port, bool enable_warnin
 	}
 	
 	freeaddrinfo(results);
-	return true;
+	return 0;
 }

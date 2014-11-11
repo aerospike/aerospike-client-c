@@ -19,6 +19,7 @@
 #include <aerospike/as_config.h>
 #include <aerospike/as_node.h>
 #include <aerospike/as_partition.h>
+#include <aerospike/as_policy.h>
 #include <citrusleaf/cf_atomic.h>
 #include <citrusleaf/cl_types.h>
 #include "ck_pr.h"
@@ -283,8 +284,8 @@ typedef struct as_cluster_s {
 /**
  *	Create and initialize cluster.
  */
-as_cluster*
-as_cluster_create(as_config* config);
+int
+as_cluster_create(as_config* config, as_cluster** cluster);
 
 /**
  *	Close all connections and release memory associated with cluster.
@@ -407,7 +408,7 @@ as_cluster_get_partition_table(as_cluster* cluster, const char* ns)
  *	as_nodes_release() must be called when done with node.
  */
 as_node*
-as_partition_table_get_node(as_cluster* cluster, as_partition_table* table, const cf_digest* d, bool write);
+as_partition_table_get_node(as_cluster* cluster, as_partition_table* table, const cf_digest* d, bool write, as_policy_replica replica);
 
 /**
  *	@private
@@ -415,7 +416,7 @@ as_partition_table_get_node(as_cluster* cluster, as_partition_table* table, cons
  *	as_nodes_release() must be called when done with node.
  */
 as_node*
-as_shm_node_get(as_cluster* cluster, const char* ns, const cf_digest* d, bool write);
+as_shm_node_get(as_cluster* cluster, const char* ns, const cf_digest* d, bool write, as_policy_replica replica);
 
 /**
  *	@private
@@ -423,13 +424,13 @@ as_shm_node_get(as_cluster* cluster, const char* ns, const cf_digest* d, bool wr
  *	as_nodes_release() must be called when done with node.
  */
 static inline as_node*
-as_node_get(as_cluster* cluster, const char* ns, const cf_digest* d, bool write)
+as_node_get(as_cluster* cluster, const char* ns, const cf_digest* d, bool write, as_policy_replica replica)
 {
 	if (cluster->shm_info) {
-		return as_shm_node_get(cluster, ns, d, write);
+		return as_shm_node_get(cluster, ns, d, write, replica);
 	}
 	else {
 		as_partition_table* table = as_cluster_get_partition_table(cluster, ns);
-		return as_partition_table_get_node(cluster, table, d, write);
+		return as_partition_table_get_node(cluster, table, d, write, replica);
 	}
 }

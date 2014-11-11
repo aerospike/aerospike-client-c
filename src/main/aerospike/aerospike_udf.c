@@ -17,13 +17,12 @@
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_udf.h>
 #include <aerospike/as_error.h>
+#include <aerospike/as_log.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_status.h>
 
 #include <citrusleaf/cl_udf.h>
 
-#include "_log.h"
-#include "_policy.h"
 #include "_shim.h"
 
 /******************************************************************************
@@ -61,9 +60,9 @@ as_status aerospike_udf_list(
 	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
 	
-	// resolve policies
-	// as_policy_info p;
-	// as_policy_info_resolve(&p, &as->config.policies, policy);
+	//if (! policy) {
+	//	policy = &as->config.policies.info;
+	//}
 
 	char * 			error = NULL;
 	cl_udf_file * 	clfiles = NULL;
@@ -107,9 +106,9 @@ as_status aerospike_udf_get(
 	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
 	
-	// resolve policies
-	// as_policy_info p;
-	// as_policy_info_resolve(&p, &as->config.policies, policy);
+	//if (! policy) {
+	//	policy = &as->config.policies.info;
+	//}
 	
 	char * error = NULL;
 	cl_udf_file clfile;
@@ -143,9 +142,9 @@ as_status aerospike_udf_put(
 	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
 
-	// resolve policies
-	// as_policy_info p;
-	// as_policy_info_resolve(&p, &as->config.policies, policy);
+	//if (! policy) {
+	//	policy = &as->config.policies.info;
+	//}
 	
 	char * error = NULL;
 
@@ -159,6 +158,56 @@ as_status aerospike_udf_put(
 	return as_error_fromrc(err, rc);
 }
 
+static bool
+aerospike_udf_put_is_done(as_cluster* cluster, const as_policy_info* policy, char* filter)
+{
+	// Query all nodes for task completion status.
+	bool done = true;
+	as_nodes* nodes = as_nodes_reserve(cluster);
+	
+	for (uint32_t i = 0; i < nodes->size && done; i++) {
+		as_node* node = nodes->array[i];
+		struct sockaddr_in* sa_in = as_node_get_address(node);
+		
+		char* response = 0;
+		int rc = citrusleaf_info_host_auth(cluster, sa_in, "udf-list", &response, policy->timeout, false, true);
+		
+		if (rc == AEROSPIKE_OK) {
+			char* p = strstr(response, filter);
+			
+			if (! p) {
+				done = false;
+			}
+		}
+		free(response);
+	}
+	as_nodes_release(nodes);
+	return done;
+}
+
+as_status aerospike_udf_put_wait(
+	aerospike * as, as_error * err, const as_policy_info * policy,
+	const char * filename, uint32_t interval_ms)
+{
+	if (! policy) {
+		policy = &as->config.policies.info;
+	}
+
+	char filter[256];
+	snprintf(filter, sizeof(filter), "filename=%s", filename);
+	
+	uint32_t interval_micros = (interval_ms <= 0)? 1000 * 1000 : interval_ms * 1000;
+	
+	bool done;
+		
+	do {
+		usleep(interval_micros);
+		done = aerospike_udf_put_is_done(as->cluster, policy, filter);
+	} while (! done);
+	
+	return AEROSPIKE_OK;
+}
+
 /**
  * @return AEROSPIKE_OK if successful. Otherwise an error occurred.
  */
@@ -169,9 +218,9 @@ as_status aerospike_udf_remove(
 	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
 	
-	// resolve policies
-	// as_policy_info p;
-	// as_policy_info_resolve(&p, &as->config.policies, policy);
+	//if (! policy) {
+	//	policy = &as->config.policies.info;
+	//}
 	
 	char * error = NULL;
 	

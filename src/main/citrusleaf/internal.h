@@ -25,7 +25,6 @@
 #include <citrusleaf/cf_vector.h>
 #include <citrusleaf/cf_queue.h>
 #include <citrusleaf/cf_digest.h>
-#include <citrusleaf/cf_log_internal.h>
 #include <citrusleaf/cf_proto.h>
 
 #include <aerospike/as_buffer.h>
@@ -33,8 +32,10 @@
 
 #include <citrusleaf/citrusleaf.h>
 #include <aerospike/as_cluster.h>
+#include <aerospike/as_policy.h>
 #include <citrusleaf/cl_udf.h>
 #include <citrusleaf/cl_scan.h>
+
 
 /******************************************************************************
  * CONSTANTS
@@ -109,7 +110,7 @@ struct as_call_s {
 
 extern shash * 	g_cl_async_hashtab;
 
-// For XDS...
+// For XDR...
 extern cf_queue * g_cl_async_q;
 extern cf_queue	* g_cl_workitems_freepool_q;
 
@@ -143,8 +144,8 @@ int cl_do_async_monte(as_cluster *asc, int info1, int info2, const char *ns, con
 
 int do_the_full_monte(as_cluster *asc, int info1, int info2, int info3, const char *ns, const char *set, const cl_object *key,
 	const cf_digest *digest, cl_bin **values, cl_operator operator, cl_operation **operations, int *n_values, 
-	uint32_t *cl_gen, const cl_write_parameters *cl_w_p, uint64_t *trid, char **setname_r, as_call * call, uint32_t* cl_ttl
-	);
+	uint32_t *cl_gen, const cl_write_parameters *cl_w_p, uint64_t *trid, char **setname_r, as_call * call, uint32_t* cl_ttl,
+	as_policy_replica replica);
 
 int cl_compile(uint info1, uint info2, uint info3, const char *ns, const char *set, const cl_object *key, const cf_digest *digest,
 	cl_bin *values, cl_operator operator, cl_operation *operations, int n_values,  

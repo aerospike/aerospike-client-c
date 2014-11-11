@@ -255,12 +255,12 @@ These examples each use multiple records to demonstrate particular API calls.
 
 ### aggregate (3.0 feature)
 
-	aerospike_index_integer_create()
+	aerospike_index_create()
 	as_query_where()
 	as_query_apply()
 	aerospike_query_foreach()
 
-This example uses aerospike_index_integer_create() to create a numeric secondary
+This example uses aerospike_index_create() to create a numeric secondary
 index for a particular bin name, then using aerospike_query_foreach() it
 demonstrates an aggregation query - a query which finds all records satisfying a
 'where' clause (where the bin's value falls in a specified range), applies a
@@ -278,11 +278,11 @@ complex object - a Map - rather than a simple integer.
 
 ### simple (3.0 feature)
 
-	aerospike_index_integer_create()
+	aerospike_index_create()
 	as_query_where()
 	aerospike_query_foreach()
 
-This example uses aerospike_index_integer_create() to create a numeric secondary
+This example uses aerospike_index_create() to create a numeric secondary
 index for a particular bin name, then using aerospike_query_foreach() it
 demonstrates a simple query which finds all records satisfying a 'where' clause
 (where the bin's value equals a specified value) and makes a callback for each

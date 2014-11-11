@@ -31,7 +31,6 @@
 
 #include <citrusleaf/citrusleaf.h>
 #include <citrusleaf/cl_sindex.h>
-#include <citrusleaf/as_log.h>
 
 #include "internal.h"
 
@@ -41,7 +40,7 @@ cl_rv citrusleaf_secondary_index_create(
     char ** response
 ){
 
-    if (!ns || !iname || !binname || !type) return CITRUSLEAF_FAIL_CLIENT;
+    if (!ns || !iname || !binname || !type) return AEROSPIKE_ERR_CLIENT;
 
     char ddl[1024];
     

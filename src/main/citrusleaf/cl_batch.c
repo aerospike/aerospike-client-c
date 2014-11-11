@@ -25,6 +25,7 @@
 #include <zlib.h>
 
 #include <aerospike/as_cluster.h>
+#include <aerospike/as_log_macros.h>
 
 #include <citrusleaf/cf_socket.h>
 #include <citrusleaf/cf_proto.h>
@@ -33,7 +34,6 @@
 #include <citrusleaf/cl_types.h>
 
 #include "internal.h"
-
 
 //
 // Decompresses a compressed CL msg
@@ -63,7 +63,7 @@ batch_decompress(uint8_t *in_buf, size_t in_sz, uint8_t **out_buf, size_t *out_s
     size_t  	b_sz_alloc = *(uint64_t *)in_buf;
     uint8_t 	*b = malloc(b_sz_alloc);
     if (0 == b) {
-    	cf_error("batch_decompress: could not malloc %"PRIu64" bytes", b_sz_alloc);
+    	as_log_error("batch_decompress: could not malloc %"PRIu64" bytes", b_sz_alloc);
     	inflateEnd(&strm);
     	return(-1);
     }
@@ -77,7 +77,7 @@ batch_decompress(uint8_t *in_buf, size_t in_sz, uint8_t **out_buf, size_t *out_s
 	rv = inflate(&strm, Z_FINISH);
 
 	if (rv != Z_STREAM_END) {
-		cf_error("could not deflate data: zlib error %d (check zlib.h)", rv);
+		as_log_error("could not deflate data: zlib error %d (check zlib.h)", rv);
 		free(b);
 		inflateEnd(&strm);
 		return(-1);
@@ -147,7 +147,7 @@ batch_compile(uint info1, uint info2, char *ns, cf_digest *digests, as_node **no
 		msg_sz += sizeof(cl_msg_op) + strlen(values[i].bin_name);
 
         if (0 != cl_value_to_op_get_size(&values[i], &msg_sz)) {
-            cf_error("illegal parameter: bad type %d write op %d", values[i].object.type, i);
+            as_log_error("illegal parameter: bad type %d write op %d", values[i].object.type, i);
             return(-1);
         }
 	}
@@ -212,7 +212,7 @@ batch_compile(uint info1, uint info2, char *ns, cf_digest *digests, as_node **no
 	buf = cl_write_header(buf, msg_sz, info1, info2, info3, generation, record_ttl, transaction_ttl, n_fields, n_values);
 		
 	// now the fields
-	buf = write_fields_batch_digests(buf, ns, ns_len, digests, nodes, n_digests,n_my_digests, my_node);
+	buf = write_fields_batch_digests(buf, ns, ns_len, digests, nodes, n_digests, n_my_digests, my_node);
 	if (!buf) {
 		if (mbuf)	free(mbuf);
 		return(-1);
@@ -280,7 +280,7 @@ do_batch_monte(as_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 	rv = batch_compile(info1, info2, ns, digests, nodes, n_digests, node, n_node_digests, bins, operator, operations, n_ops, 
 		&wr_buf, &wr_buf_sz, 0);
 	if (rv != 0) {
-		cf_error("do batch monte: batch compile failed: some kind of intermediate error");
+		as_log_error("do batch monte: batch compile failed: some kind of intermediate error");
 		return (rv);
 	}
 	
@@ -296,9 +296,6 @@ do_batch_monte(as_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 	
 	// send it to the cluster - non blocking socket, but we're blocking
 	if ((rv = cf_socket_write_forever(fd, wr_buf, wr_buf_sz))) {
-#ifdef DEBUG			
-		cf_debug("Citrusleaf: write timeout or error when writing header to server - %d fd %d errno %d", rv, fd, errno);
-#endif
 		cf_close(fd);
 		return(-1);
 	}
@@ -310,7 +307,7 @@ do_batch_monte(as_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 		
 		// Now turn around and read a fine cl_pro - that's the first 8 bytes that has types and lenghts
 		if ((rv = cf_socket_read_forever(fd, (uint8_t *) &proto, sizeof(cl_proto) ) ) ) {
-			cf_error("network error: errno %d fd %d", rv, fd);
+			as_log_error("network error: errno %d fd %d", rv, fd);
 			cf_close(fd);
 			return(-1);
 		}
@@ -320,12 +317,12 @@ do_batch_monte(as_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 		cl_proto_swap_from_be(&proto);
 
 		if (proto.version != CL_PROTO_VERSION) {
-			cf_error("network error: received protocol message of wrong version %d", proto.version);
+			as_log_error("network error: received protocol message of wrong version %d", proto.version);
 			cf_close(fd);
 			return(-1);
 		}
 		if ((proto.type != CL_PROTO_TYPE_CL_MSG) && (proto.type != CL_PROTO_TYPE_CL_MSG_COMPRESSED)) {
-			cf_error("network error: received incorrect message version %d", proto.type);
+			as_log_error("network error: received incorrect message version %d", proto.type);
 			cf_close(fd);
 			return(-1);
 		}
@@ -346,7 +343,7 @@ do_batch_monte(as_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 			}
 
 			if ((rv = cf_socket_read_forever(fd, rd_buf, rd_buf_sz))) {
-				cf_error("network error: errno %d fd %d", rv, fd);
+				as_log_error("network error: errno %d fd %d", rv, fd);
 				if (rd_buf != rd_stack_buf)	{ free(rd_buf); }
 				cf_close(fd);
 				return(-1);
@@ -364,7 +361,7 @@ do_batch_monte(as_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 			
 			rv = batch_decompress(rd_buf, rd_buf_sz, &new_rd_buf, &new_rd_buf_sz);
 			if (rv != 0) {
-				cf_error("could not decompress compressed message: error %d", rv);
+				as_log_error("could not decompress compressed message: error %d", rv);
 				if (rd_buf != rd_stack_buf)	{ free(rd_buf); }
 				cf_close(fd);
 				return -1;
@@ -398,7 +395,7 @@ do_batch_monte(as_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 			buf += sizeof(cl_msg);
 			
 			if (msg->header_sz != sizeof(cl_msg)) {
-				cf_error("received cl msg of unexpected size: expecting %zd found %d, internal error",
+				as_log_error("received cl msg of unexpected size: expecting %zd found %d, internal error",
 					sizeof(cl_msg),msg->header_sz);
 				cf_close(fd);
 				return(-1);
@@ -412,7 +409,7 @@ do_batch_monte(as_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 			for (int i=0;i<msg->n_fields;i++) {
 				cl_msg_swap_field_from_be(mf);
 				if (mf->type == CL_MSG_FIELD_TYPE_KEY) {
-					cf_error("read: found a key - unexpected");
+					as_log_error("read: found a key - unexpected");
 				}
 				else if (mf->type == CL_MSG_FIELD_TYPE_DIGEST_RIPE) {
 					keyd = (cf_digest *) mf->data;
@@ -432,7 +429,7 @@ do_batch_monte(as_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 			buf = (uint8_t *) mf;
 
 #ifdef DEBUG_VERBOSE
-			cf_debug("message header fields: nfields %u nops %u",msg->n_fields,msg->n_ops);
+			as_log_debug("message header fields: nfields %u nops %u",msg->n_fields,msg->n_ops);
 #endif
 
 
@@ -457,7 +454,7 @@ do_batch_monte(as_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 				cl_msg_swap_op_from_be(op);
 
 #ifdef DEBUG_VERBOSE
-				cf_debug("op receive: %p size %d op %d ptype %d pversion %d namesz %d",
+				as_log_debug("op receive: %p size %d op %d ptype %d pversion %d namesz %d",
 					op,op->op_sz, op->op, op->particle_type, op->version, op->name_sz);
 #endif			
 
@@ -478,9 +475,6 @@ do_batch_monte(as_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 			}
 
 			if (msg->info3 & CL_MSG_INFO3_LAST)	{
-#ifdef DEBUG				
-				cf_debug("received final message");
-#endif				
 				done = true;
 			}
 
@@ -533,7 +527,7 @@ do_batch_monte(as_cluster *asc, int info1, int info2, char *ns, cf_digest *diges
 	}
 
 #ifdef DEBUG_VERBOSE	
-	cf_debug("exited loop: rv %d", rv );
+	as_log_debug("exited loop: rv %d", rv );
 #endif	
 	
 	return(rv);
@@ -586,7 +580,7 @@ batch_worker_fn(void* pv_asc)
 		digest_work work;
 
 		if (0 != cf_queue_pop(asc->batch_q, &work, CF_QUEUE_FOREVER)) {
-			cf_error("queue pop failed");
+			as_log_error("queue pop failed");
 		}
 
 		// This is how batch shutdown signals we're done.
@@ -625,7 +619,7 @@ citrusleaf_batch_read(as_cluster *asc, char *ns, const cf_digest *digests, int n
 	// 
 	as_node **nodes = malloc( sizeof(as_node *)  * n_digests);
 	if (!nodes) {
-		cf_error("allocation failed");
+		as_log_error("allocation failed");
 		return(-1);
 	}
 	
@@ -634,10 +628,10 @@ citrusleaf_batch_read(as_cluster *asc, char *ns, const cf_digest *digests, int n
 	
 	for (int i = 0; i < n_digests; i++) {
 		// Must use write mode to get master paritition since batch doesn't proxy.
-		nodes[i] = as_partition_table_get_node(asc, table, &digests[i], true);
+		nodes[i] = as_partition_table_get_node(asc, table, &digests[i], true, -1);
 		
 		if (nodes[i] == 0) {
-			cf_error("index %d: can't get any node", i);
+			as_log_error("index %d: can't get any node", i);
 			
 			// Release previous nodes just reserved.
 			for (int j = 0; j < i; j++) {
@@ -674,7 +668,7 @@ citrusleaf_batch_read(as_cluster *asc, char *ns, const cf_digest *digests, int n
 	//
 	digest_work work;
 	work.asc = asc;
-	work.info1 = CL_MSG_INFO1_READ | (get_bin_data ? 0 : CL_MSG_INFO1_NOBINDATA);
+	work.info1 = CL_MSG_INFO1_READ | (get_bin_data ? 0 : CL_MSG_INFO1_GET_NOBINDATA);
 	work.info2 = 0;
 	work.ns = ns;
 	work.digests = (cf_digest *) digests; // discarding const to make compiler happy
@@ -709,11 +703,11 @@ citrusleaf_batch_read(as_cluster *asc, char *ns, const cf_digest *digests, int n
 		work_complete wc;
 		cf_queue_pop(work.complete_q, &wc, CF_QUEUE_FOREVER);
 		if (wc.result != 0) {
-			cf_error("Node %d retcode error: %d", i, wc.result);
+			as_log_error("Node %d retcode error: %d", i, wc.result);
 			// Find all the records we were looking for on this node.
 			for (int j = 0; j < n_digests; j++) {
 				if (nodes[j] == wc.my_node) {
-					cf_error("   rec %d", j);
+					as_log_error("   rec %d", j);
 					cb(ns, &work.digests[j], NULL, NULL, wc.result, 0, 0, NULL, 0, udata);
 				}
 			}

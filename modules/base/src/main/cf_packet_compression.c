@@ -20,7 +20,6 @@
 #include <stdlib.h>
 #include <zlib.h>
 #include "citrusleaf/cf_proto.h"
-#include "citrusleaf/cf_log_internal.h"
 #include <arpa/inet.h>
 
 #define STACK_BUF_SZ (1024 * 16)
@@ -51,13 +50,9 @@ cf_compress(int argc, uint8_t *argv[])
 	int compression_level;
 	int ret_value = 0;
 	
-	cf_debug("In cf_compress");
-
 	if (argc < MANDATORY_NO_ARGUMENTS)
 	{
 		// Insufficient arguments
-		cf_debug("cf_compress : In sufficient arguments\n");
-		cf_debug("Returned cf_compress : -1");
 		return -1;
 	}
 		
@@ -76,7 +71,6 @@ cf_compress(int argc, uint8_t *argv[])
 			ret_value = compress2(out_buf, out_buf_len, buf, *buf_len, compression_level);
 			break;
 	}
-	cf_debug("Returned cf_compress : %d", ret_value);
 	return ret_value;
 }
 
@@ -95,7 +89,6 @@ cf_packet_compression(uint8_t *buf, size_t buf_sz, uint8_t **compressed_packet, 
 	uint8_t wr_stack_buf[STACK_BUF_SZ];
 	uint8_t *wr_buf = wr_stack_buf;
 	size_t  wr_buf_sz = sizeof(wr_stack_buf);
-	cf_debug("In cf_packet_compression");
 
 	/* Compress the data using client API for compression.
 	 * Expected arguments
@@ -120,7 +113,6 @@ cf_packet_compression(uint8_t *buf, size_t buf_sz, uint8_t **compressed_packet, 
 	{
 		compressed_packet = NULL;
 		compressed_packet_sz = 0;
-		cf_debug("Returned cf_packet_compression : -1");
 		return -1;
 	}
 	
@@ -130,8 +122,6 @@ cf_packet_compression(uint8_t *buf, size_t buf_sz, uint8_t **compressed_packet, 
 
 	if(!*compressed_packet)
 	{
-		cf_debug("cf_packet_compression : failed to allocte memory");
-		cf_debug("Returned cf_packet_compression : -1");
 		return -1;
 	}
 	// Construct the packet for compressed data.
@@ -146,7 +136,6 @@ cf_packet_compression(uint8_t *buf, size_t buf_sz, uint8_t **compressed_packet, 
 	tmp_buf = *compressed_packet +  sizeof(cl_comp_proto);
 	memcpy (tmp_buf, wr_buf, wr_buf_sz);
 
-	cf_debug("Returned cf_packet_compression : 0");
 	return 0;
 }
 
@@ -172,8 +161,6 @@ cf_decompress(int argc, uint8_t **argv)
     uint8_t *out_buf;
     int ret_value = 0;
 
-	cf_debug ("In cf_decompress");
-
 	(void)argc; // Suppress not used warning.
 	compression_type = *argv[0];
     buf_len = (size_t *)argv[1];
@@ -188,7 +175,6 @@ cf_decompress(int argc, uint8_t **argv)
 			ret_value = uncompress(out_buf, out_buf_len, buf, *buf_len);
 			break;
 	}
-	cf_debug ("Returned cf_decompress : %d", ret_value);
 	return ret_value;
 }
 
@@ -207,12 +193,8 @@ cf_packet_decompression(uint8_t *buf, uint8_t **decompressed_packet)
 
     cl_comp_proto *cl_comp_protop = (cl_comp_proto *) buf;
 
-    cf_debug ("In cf_packet_decompression");
-
     if (cl_comp_protop->proto.type != CL_PROTO_TYPE_CL_MSG_COMPRESSED)
 	{
-        cf_debug ("cf_packet_decompression : Invalid input data");
-        cf_debug ("Returned cf_packet_decompression : -1");
         return -1;
 	}
 
@@ -246,6 +228,5 @@ cf_packet_decompression(uint8_t *buf, uint8_t **decompressed_packet)
         free (decompressed_packet);
         decompressed_packet = NULL;
     }
-    cf_debug ("Returned cf_packet_decompression : %d", ret_value);
     return (ret_value);
 }

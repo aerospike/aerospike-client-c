@@ -33,7 +33,6 @@
 		BFBC11F218CE416100D0B5BE /* map_rec.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBC11D218CE416100D0B5BE /* map_rec.c */; };
 		BFBC11F318CE416100D0B5BE /* producer_stream.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBC11D418CE416100D0B5BE /* producer_stream.c */; };
 		BFBC11F418CE416100D0B5BE /* test_aerospike.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBC11D618CE416100D0B5BE /* test_aerospike.c */; };
-		BFBC11F518CE416100D0B5BE /* test_logger.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBC11D818CE416100D0B5BE /* test_logger.c */; };
 		BFBC11F618CE416100D0B5BE /* udf.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBC11DA18CE416100D0B5BE /* udf.c */; };
 		BFD8C86F18D7E3A300CB8B6D /* libaerospike.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFD8C86C18D7E37800CB8B6D /* libaerospike.a */; };
 /* End PBXBuildFile section */
@@ -106,8 +105,6 @@
 		BFBC11D518CE416100D0B5BE /* producer_stream.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = producer_stream.h; path = ../src/test/util/producer_stream.h; sourceTree = "<group>"; };
 		BFBC11D618CE416100D0B5BE /* test_aerospike.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = test_aerospike.c; path = ../src/test/util/test_aerospike.c; sourceTree = "<group>"; };
 		BFBC11D718CE416100D0B5BE /* test_aerospike.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = test_aerospike.h; path = ../src/test/util/test_aerospike.h; sourceTree = "<group>"; };
-		BFBC11D818CE416100D0B5BE /* test_logger.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = test_logger.c; path = ../src/test/util/test_logger.c; sourceTree = "<group>"; };
-		BFBC11D918CE416100D0B5BE /* test_logger.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = test_logger.h; path = ../src/test/util/test_logger.h; sourceTree = "<group>"; };
 		BFBC11DA18CE416100D0B5BE /* udf.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = udf.c; path = ../src/test/util/udf.c; sourceTree = "<group>"; };
 		BFBC11DB18CE416100D0B5BE /* udf.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = udf.h; path = ../src/test/util/udf.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -147,8 +144,6 @@
 				BFBC11D518CE416100D0B5BE /* producer_stream.h */,
 				BFBC11D618CE416100D0B5BE /* test_aerospike.c */,
 				BFBC11D718CE416100D0B5BE /* test_aerospike.h */,
-				BFBC11D818CE416100D0B5BE /* test_logger.c */,
-				BFBC11D918CE416100D0B5BE /* test_logger.h */,
 				BFBC11DA18CE416100D0B5BE /* udf.c */,
 				BFBC11DB18CE416100D0B5BE /* udf.h */,
 				BFBC11B218CE411900D0B5BE /* scan_basics.c */,
@@ -279,7 +274,6 @@
 				BFBC11A618CE406D00D0B5BE /* key_basics.c in Sources */,
 				BFBC11F018CE416100D0B5BE /* consumer_stream.c in Sources */,
 				BFBC11A718CE406D00D0B5BE /* key_operate.c in Sources */,
-				BFBC11F518CE416100D0B5BE /* test_logger.c in Sources */,
 				BFBC11A418CE406D00D0B5BE /* key_apply.c in Sources */,
 				BFBC11F318CE416100D0B5BE /* producer_stream.c in Sources */,
 				BFBC11DF18CE416100D0B5BE /* udf_types.c in Sources */,

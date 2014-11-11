@@ -19,13 +19,13 @@
 #include <aerospike/as_error.h>
 #include <aerospike/as_key.h>
 #include <aerospike/as_list.h>
+#include <aerospike/as_log_macros.h>
 #include <aerospike/as_operations.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_status.h>
 #include <aerospike/as_val.h>
 
-#include "_log.h"
 #include "_shim.h"
 
 #include <citrusleaf/cl_batch.h>
@@ -58,7 +58,6 @@ cl_batch_cb(char *ns, cf_digest *keyd, char *set, cl_object *key, int result,
 		void *udata)
 {
 	batch_bridge * p_bridge = (batch_bridge *) udata;
-	aerospike * as = p_bridge->as;
 	as_batch_read * p_r = NULL;
 
 	// Find the digest.
@@ -74,7 +73,7 @@ cl_batch_cb(char *ns, cf_digest *keyd, char *set, cl_object *key, int result,
 	}
 
 	if (! p_r) {
-		as_err(LOGGER, "couldn't find digest");
+		as_log_error("Couldn't find digest");
 		return -1; // not that this is even checked...
 	}
 

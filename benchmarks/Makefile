@@ -24,7 +24,7 @@ endif
 CFLAGS += -I$(AEROSPIKE)/target/$(PLATFORM)/include -I$(AEROSPIKE)/target/$(PLATFORM)/include/ck
 
 LDFLAGS = 
-LDFLAGS += -lssl -lcrypto -lpthread
+LDFLAGS += -lssl -lcrypto -lpthread -lz
 
 ifeq ($(OS),Darwin)
 LDFLAGS += -L/usr/local/lib
@@ -67,10 +67,6 @@ CFLAGS += $(LUA_CPATH:%:-I%)
 LDFLAGS += -L$(LUA_LIBDIR) -l$(LUA_LIB)
 
 LDFLAGS += -lm
-
-ifeq ($(OS),Darwin)
-LDFLAGS += -lz
-endif
 
 ifeq ($(OS),Darwin)
 CC = clang

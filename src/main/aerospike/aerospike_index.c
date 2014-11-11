@@ -15,11 +15,8 @@
  * the License.
  */
 #include <aerospike/aerospike_index.h>
-
+#include <aerospike/as_log.h>
 #include <citrusleaf/cl_sindex.h>
-
-#include "_log.h"
-#include "_policy.h"
 #include "_shim.h"
 
 /******************************************************************************
@@ -27,97 +24,138 @@
  *****************************************************************************/
 
 /**
- * Create a new secondary index.
+ *	Create secondary index.
  *
- * @param as        - the aerospike cluster to connect to.
- * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
- * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
- * @param ns        - the namespace to be indexed
- * @param set       - the set to be indexed
- * @param bin       - the bin to be indexed
- * @param type      - the type of the bin to be indexed
- * @param name      - the name of the index
+ *	This asynchronous server call will return before the command is complete.
+ *	The user can optionally wait for command completion by using a task instance.
  *
- * @return AEROSPIKE_OK if successful or index already exists. Otherwise an error.
+ *	~~~~~~~~~~{.c}
+ *	as_index_task task;
+ *	if ( aerospike_index_create(&as, &err, &task, NULL, "test", "demo", "bin1", "idx_test_demo_bin1") == AEROSPIKE_OK ) {
+ *		aerospike_index_create_wait(&err, &task, 0);
+ *	}
+ *	~~~~~~~~~~
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param task			The optional task data used to poll for completion.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param ns			The namespace to be indexed.
+ *	@param set			The set to be indexed.
+ *	@param bin			The bin to be indexed.
+ *	@param name			The name of the index.
+ *
+ *	@return AEROSPIKE_OK if successful or index already exists. Otherwise an error.
+ *
+ *	@ingroup index_operations
  */
-static as_status aerospike_index_create(
-	aerospike * as, as_error * err, const as_policy_info * policy, 
-	const char * ns, const char * set, const char * bin, const char * type, const char * name)
+as_status aerospike_index_create(
+	aerospike * as, as_error * err, as_index_task * task, const as_policy_info * policy,
+	const as_namespace ns, const as_set set, const as_bin_name bin, const char * name, as_index_type type)
 {
 	as_error_reset(err);
-
-	char * response = NULL;
-	int rc = citrusleaf_secondary_index_create(as->cluster, ns, set, name, bin, type, &response);
 	
-	switch ( rc ) {
-		case CITRUSLEAF_OK:
-		case CITRUSLEAF_FAIL_INDEX_FOUND:
+	const char* type_string = (type == AS_INDEX_NUMERIC)? "NUMERIC" : "STRING";
+	char * response = NULL;
+	int rc = citrusleaf_secondary_index_create(as->cluster, ns, set, name, bin, type_string, &response);
+	
+	switch (rc) {
+		case AEROSPIKE_OK:
+			// Return task that could optionally be polled for completion.
+			if (task) {
+				task->as = as;
+				as_strncpy(task->ns, ns, sizeof(task->ns));
+				as_strncpy(task->name, name, sizeof(task->name));
+				task->done = false;
+			}
 			break;
-
+			
+		case AEROSPIKE_ERR_INDEX_FOUND:
+			// Index has already been created.  Do not need to poll for completion.
+			if (task) {
+				task->done = true;
+			}
+			break;
+			
 		default:
 			as_strncpy(err->message, response, sizeof(err->message));
 			as_error_fromrc(err, rc);
 			break;
 	}
-
+	
 	free(response);
 	return err->code;
 }
 
-/**
- *	Create a new secondary index on an integer bin.
- *
- *	~~~~~~~~~~{.c}
- *	if ( aerospike_index_integer_create(&as, &err, NULL, "test", "demo", "bin1", "idx_test_demo_bin1") != AEROSPIKE_OK ) {
- *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *	}
- *	~~~~~~~~~~
- *
- *	@param as			The aerospike instance to use for this operation.
- *	@param err			The as_error to be populated if an error occurs.
- *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param ns			The namespace to be indexed.
- *	@param set			The set to be indexed.
- *	@param bin			The bin to be indexed.
- *	@param name			The name of the index.
- *
- *	@return AEROSPIKE_OK if successful or index already exists. Otherwise an error.
- *
- *	@ingroup index_operations
- */
-as_status aerospike_index_integer_create(
-	aerospike * as, as_error * err, const as_policy_info * policy, 
-	const char * ns, const char * set, const char * bin, const char * name)
+static bool
+aerospike_index_create_is_done(as_cluster* cluster, char* command)
 {
-	return aerospike_index_create(as, err, policy, ns, set, bin, "NUMERIC", name);
+	// Index is not done if any node reports percent completed < 100.
+	// Errors are ignored and considered done.
+	bool done = true;
+	as_nodes* nodes = as_nodes_reserve(cluster);
+	
+	for (uint32_t i = 0; i < nodes->size && done; i++) {
+		as_node* node = nodes->array[i];
+		struct sockaddr_in* sa_in = as_node_get_address(node);
+		
+		char* response = 0;
+		int rc = citrusleaf_info_host_auth(cluster, sa_in, command, &response, 1000, false, true);
+		
+		if (rc == AEROSPIKE_OK) {
+			char* find = "load_pct=";
+			char* p = strstr(response, find);
+			
+			if (p) {
+				p += strlen(find);
+				char* q = strchr(p, ';');
+				
+				if (q) {
+					*q = 0;
+				}
+				
+				int pct = atoi(p);
+				
+				if (pct >= 0 && pct < 100) {
+					done = false;
+				}
+			}
+		}
+		free(response);
+	}
+	as_nodes_release(nodes);
+	return done;
 }
 
 /**
- *	Create a new secondary index on a string bin.
+ *	Wait for asynchronous task to complete using given polling interval.
  *
- *	~~~~~~~~~~{.c}
- *	if ( aerospike_index_string_create(&as, &err, NULL, "test", "demo", "bin1", "idx_test_demo_bin1") != AEROSPIKE_OK ) {
- *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *	}
- *	~~~~~~~~~~
- *
- *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
- *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param ns			The namespace to be indexed.
- *	@param set			The set to be indexed.
- *	@param bin			The bin to be indexed.
- *	@param name			The name of the index.
+ *	@param task			The task data used to poll for completion.
+ *	@param interval_ms	The polling interval in milliseconds. If zero, 1000 ms is used.
  *
- *	@return AEROSPIKE_OK if successful or index already exists. Otherwise an error.
+ *	@return AEROSPIKE_OK if successful. Otherwise an error.
  *
  *	@ingroup index_operations
  */
-as_status aerospike_index_string_create(
-	aerospike * as, as_error * err, const as_policy_info * policy, 
-	const char * ns, const char * set, const char * bin, const char * name)
+as_status
+aerospike_index_create_wait(as_error * err, as_index_task * task, uint32_t interval_ms)
 {
-	return aerospike_index_create(as, err, policy, ns, set, bin, "STRING", name);
+	if (task->done) {
+		return AEROSPIKE_OK;
+	}
+	
+	char command[256];
+	snprintf(command, sizeof(command), "sindex/%s/%s" , task->ns, task->name);
+	
+	as_cluster* cluster = task->as->cluster;
+	uint32_t interval_micros = (interval_ms <= 0)? 1000 * 1000 : interval_ms * 1000;
+	
+	while (! task->done) {
+		usleep(interval_micros);
+		task->done = aerospike_index_create_is_done(cluster, command);
+	}
+	return AEROSPIKE_OK;
 }
 
 /**
@@ -149,8 +187,8 @@ as_status aerospike_index_remove(
 	int rc = citrusleaf_secondary_index_drop(as->cluster, ns, name, &response);
 
 	switch (rc) {
-		case CITRUSLEAF_OK:
-		case CITRUSLEAF_FAIL_INDEX_NOTFOUND:
+		case AEROSPIKE_OK:
+		case AEROSPIKE_ERR_INDEX_NOT_FOUND:
 			break;
 
 		default:

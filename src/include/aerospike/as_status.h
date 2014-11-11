@@ -26,268 +26,303 @@
 typedef enum as_status_e {
 
 	/***************************************************************************
-	 *	SUCCESS (all < 100)
+	 *	Client Errors
+	 **************************************************************************/
+	
+	/**
+	 *	Invalid client API parameter.
+	 */
+	AEROSPIKE_ERR_PARAM	= -2,
+	
+	/**
+	 *	Generic client API usage error.
+	 */
+	AEROSPIKE_ERR_CLIENT = -1,
+	
+	/**
+	 *	Deprecated.  Generic client error.  Keep for legacy reasons.
+	 */
+	AEROSPIKE_ERR = -1,
+
+	/***************************************************************************
+	 *	Success
 	 **************************************************************************/
 
 	/**
 	 *	Generic success.
 	 */
-	AEROSPIKE_OK							= 0,
-
-	/***************************************************************************
-	 *	ERRORS (all < 100)
-	 **************************************************************************/
-	
-	AEROSPIKE_QUERY_END						= 50,
-	AEROSPIKE_SECURITY_NOT_SUPPORTED		= 51,
-	AEROSPIKE_SECURITY_NOT_ENABLED			= 52,
-	AEROSPIKE_SECURITY_SCHEME_NOT_SUPPORTED = 53,
-	AEROSPIKE_INVALID_COMMAND				= 54,
-	AEROSPIKE_INVALID_FIELD					= 55,
-	AEROSPIKE_ILLEGAL_STATE					= 56,
-	AEROSPIKE_INVALID_USER					= 60,
-	AEROSPIKE_USER_ALREADY_EXISTS			= 61,
-	AEROSPIKE_INVALID_PASSWORD				= 62,
-	AEROSPIKE_EXPIRED_PASSWORD				= 63,
-	AEROSPIKE_FORBIDDEN_PASSWORD			= 64,
-	AEROSPIKE_INVALID_CREDENTIAL			= 65,
-	AEROSPIKE_INVALID_ROLE					= 70,
-	AEROSPIKE_INVALID_PRIVILEGE				= 71,
-	AEROSPIKE_NOT_AUTHENTICATED				= 80,
-	AEROSPIKE_ROLE_VIOLATION				= 81,
+	AEROSPIKE_OK = 0,
 	
 	/***************************************************************************
-	 *	ERRORS (all >= 100)
+	 *	Server Errors
 	 **************************************************************************/
-
-	/**
-	 *	Generic error.
-	 */
-	AEROSPIKE_ERR							= 100,
-
-	/***************************************************************************
-	 *	CLIENT API USAGE
-	 **************************************************************************/
-
-	/**
-	 *	Generic client API usage error.
-	 */
-	AEROSPIKE_ERR_CLIENT					= 200,
-
-	/**
-	 *	Invalid client API parameter.
-	 */
-	AEROSPIKE_ERR_PARAM						= 201,
-
-	/***************************************************************************
-	 *	CLUSTER DISCOVERY & CONNECTION
-	 **************************************************************************/
-
-	/**
-	 *	Generic cluster discovery & connection error.
-	 */
-	AEROSPIKE_ERR_CLUSTER					= 300,
-
-	/***************************************************************************
-	 *	INCOMPLETE REQUESTS (i.e. NOT from server-returned error codes)
-	 **************************************************************************/
-
-	/**
-	 *	Request timed out.
-	 */
-	AEROSPIKE_ERR_TIMEOUT					= 400,
-
-	/**
-	 *	Request randomly dropped by client for throttling.
-	 *	@warning	Not yet supported.
-	 */
-	AEROSPIKE_ERR_THROTTLED					= 401,
-
-	/***************************************************************************
-	 *	COMPLETED REQUESTS (all >= 500, from server-returned error codes)
-	 **************************************************************************/
-
+	
 	/**
 	 *	Generic error returned by server.
 	 */
-	AEROSPIKE_ERR_SERVER					= 500,
-
-	/**
-	 *	Request protocol invalid, or invalid protocol field.
-	 */
-	AEROSPIKE_ERR_REQUEST_INVALID			= 501,
-
-	/**
-	 *	Namespace in request not found on server.
-	 */
-	AEROSPIKE_ERR_NAMESPACE_NOT_FOUND		= 502,
-
-	/**
-	 *	The server node is running out of memory and/or storage device space
-	 *	reserved for the specified namespace.
-	 */
-	AEROSPIKE_ERR_SERVER_FULL				= 503,
-
-	/**
-	 *	A cluster state change occurred during the request. This may also be
-	 *	returned by scan operations with the fail_on_cluster_change flag set.
-	 */
-	AEROSPIKE_ERR_CLUSTER_CHANGE			= 504,
-
-	/**
-	 *	Sometimes our doc, or our customers wishes, get ahead of us.  We may have
-	 *	processed something that the server is not ready for (unsupported feature).
-	 */
-	AEROSPIKE_ERR_UNSUPPORTED_FEATURE		= 505,
-
-	/**
-	 *	The server node's storage device(s) can't keep up with the write load.
-	 */
-	AEROSPIKE_ERR_DEVICE_OVERLOAD			= 506,
-
-	/***************************************************************************
-	 *	RECORD-SPECIFIC
-	 **************************************************************************/
-
-	/**
-	 *	Generic record error.
-	 */
-	AEROSPIKE_ERR_RECORD					= 600,
-
-	/**
-	 *	Too may concurrent requests for one record - a "hot-key" situation.
-	 */
-	AEROSPIKE_ERR_RECORD_BUSY				= 601,
-
+	AEROSPIKE_ERR_SERVER = 1,
+	
 	/**
 	 *	Record does not exist in database. May be returned by read, or write
 	 *	with policy AS_POLICY_EXISTS_UPDATE.
 	 *	@warning	AS_POLICY_EXISTS_UPDATE not yet supported.
 	 */
-	AEROSPIKE_ERR_RECORD_NOT_FOUND			= 602,
-
+	AEROSPIKE_ERR_RECORD_NOT_FOUND = 2,
+	
+	/**
+	 *	Generation of record in database does not satisfy write policy.
+	 */
+	AEROSPIKE_ERR_RECORD_GENERATION = 3,
+	
+	/**
+	 *	Request protocol invalid, or invalid protocol field.
+	 */
+	AEROSPIKE_ERR_REQUEST_INVALID = 4,
+	
 	/**
 	 *	Record already exists. May be returned by write with policy
 	 *	AS_POLICY_EXISTS_CREATE.
 	 */
-	AEROSPIKE_ERR_RECORD_EXISTS				= 603,
+	AEROSPIKE_ERR_RECORD_EXISTS = 5,
+	
+	/**
+	 *	Bin already exists.
+	 */
+	AEROSPIKE_ERR_BIN_EXISTS = 6,
 
 	/**
-	 *	Generation of record in database does not satisfy write policy.
+	 *	A cluster state change occurred during the request. This may also be
+	 *	returned by scan operations with the fail_on_cluster_change flag set.
 	 */
-	AEROSPIKE_ERR_RECORD_GENERATION			= 604,
-
+	AEROSPIKE_ERR_CLUSTER_CHANGE = 7,
+	
 	/**
-	 *	Record being (re-)written can't fit in a storage write block.
+	 *	The server node is running out of memory and/or storage device space
+	 *	reserved for the specified namespace.
 	 */
-	AEROSPIKE_ERR_RECORD_TOO_BIG			= 605,
-
+	AEROSPIKE_ERR_SERVER_FULL = 8,
+	
+	/**
+	 *	Request timed out.  Can be triggered by client or server.
+	 */
+	AEROSPIKE_ERR_TIMEOUT = 9,
+	
+	/**
+	 *	XDR is not available for the cluster.
+	 */
+	AEROSPIKE_ERR_NO_XDR = 10,
+	
+	/**
+	 *	Generic cluster discovery & connection error.
+	 */
+	AEROSPIKE_ERR_CLUSTER = 11,
+	
 	/**
 	 *	Bin modification operation can't be done on an existing bin due to its
 	 *	value type.
 	 */
-	AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE		= 606,
-
+	AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE = 12,
+	
+	/**
+	 *	Record being (re-)written can't fit in a storage write block.
+	 */
+	AEROSPIKE_ERR_RECORD_TOO_BIG = 13,
+	
+	/**
+	 *	Too may concurrent requests for one record - a "hot-key" situation.
+	 */
+	AEROSPIKE_ERR_RECORD_BUSY = 14,
+	
+	/**
+	 *	Scan aborted by user.
+	 */
+	AEROSPIKE_ERR_SCAN_ABORTED = 15,
+	
+	/**
+	 *	Sometimes our doc, or our customers wishes, get ahead of us.  We may have
+	 *	processed something that the server is not ready for (unsupported feature).
+	 */
+	AEROSPIKE_ERR_UNSUPPORTED_FEATURE = 16,
+	
+	/**
+	 *	Bin-level replace-only supported on server but not on client.
+	 */
+    AEROSPIKE_ERR_BIN_NOT_FOUND = 17,
+	
+	/**
+	 *	The server node's storage device(s) can't keep up with the write load.
+	 */
+	AEROSPIKE_ERR_DEVICE_OVERLOAD = 18,
+	
 	/**
 	 *	Record key sent with transaction did not match key stored on server.
 	 */
-	AEROSPIKE_ERR_RECORD_KEY_MISMATCH		= 607,
-
+	AEROSPIKE_ERR_RECORD_KEY_MISMATCH = 19,
+	
+	/**
+	 *	Namespace in request not found on server.
+	 */
+	AEROSPIKE_ERR_NAMESPACE_NOT_FOUND = 20,
+	
 	/**
 	 *	Sent too-long bin name (should be impossible in this client) or exceeded
 	 *	namespace's bin name quota.
 	 */
-	AEROSPIKE_ERR_BIN_NAME					= 608,
-
-	/***************************************************************************
-	 * XDR-SPECIFIC
-	 **************************************************************************/
+	AEROSPIKE_ERR_BIN_NAME = 21,
+	
+	/**
+	 *	There are no more records left for query.
+	 */
+	AEROSPIKE_QUERY_END = 50,
+	
+	/**
+	 *	Security functionality not supported by connected server.
+	 */
+	AEROSPIKE_SECURITY_NOT_SUPPORTED = 51,
+	
+	/**
+	 *	Security functionality not enabled by connected server.
+	 */
+	AEROSPIKE_SECURITY_NOT_ENABLED = 52,
+		
+	/**
+	 *	Security type not supported by connected server.
+	 */
+	AEROSPIKE_SECURITY_SCHEME_NOT_SUPPORTED = 53,
+	
+	/**
+	 *	Administration command is invalid.
+	 */
+	AEROSPIKE_INVALID_COMMAND = 54,
+	
+	/**
+	 *	Administration field is invalid.
+	 */
+	AEROSPIKE_INVALID_FIELD = 55,
+	
+	/**
+	 *	Security protocol not followed.
+	 */
+	AEROSPIKE_ILLEGAL_STATE = 56,
+	
+	/**
+	 *	User name is invalid.
+	 */
+	AEROSPIKE_INVALID_USER = 60,
+	
+	/**
+	 *	User was previously created.
+	 */
+	AEROSPIKE_USER_ALREADY_EXISTS = 61,
+	
+	/**
+	 *	Password is invalid.
+	 */
+	AEROSPIKE_INVALID_PASSWORD = 62,
+	
+	/**
+	 *	Password has expired.
+	 */
+	AEROSPIKE_EXPIRED_PASSWORD = 63,
+	
+	/**
+	 *	Forbidden password (e.g. recently used)
+	 */
+	AEROSPIKE_FORBIDDEN_PASSWORD = 64,
+	
+	/**
+	 *	Security credential is invalid.
+	 */
+	AEROSPIKE_INVALID_CREDENTIAL = 65,
 
 	/**
-	 *	XDR is not available for the cluster.
+	 *	Role name is invalid.
 	 */
-	AEROSPIKE_ERR_NO_XDR					= 900,
-
-	/***************************************************************************
-	 *	SCAN OPERATIONS
-	 **************************************************************************/
-
+	AEROSPIKE_INVALID_ROLE = 70,
+	
 	/**
-	 *	Generic scan error.
+	 *	Privilege is invalid.
 	 */
-	AEROSPIKE_ERR_SCAN						= 1000,
-
+	AEROSPIKE_INVALID_PRIVILEGE = 71,
+	
 	/**
-	 *	Scan aborted by user.
+	 *	User must be authentication before performing database operations.
 	 */
-	AEROSPIKE_ERR_SCAN_ABORTED				= 1001,
-
-	/***************************************************************************
-	 *	QUERY OPERATIONS
-	 **************************************************************************/
-
+	AEROSPIKE_NOT_AUTHENTICATED = 80,
+	
 	/**
-	 *	Generic query error.
+	 *	User does not possess the required role to perform the database operation.
 	 */
-	AEROSPIKE_ERR_QUERY						= 1100,
-
+	AEROSPIKE_ROLE_VIOLATION = 81,
+	
 	/**
-	 *	Query was aborted.
+	 *	Generic UDF error.
 	 */
-	AEROSPIKE_ERR_QUERY_ABORTED 			= 1101,
-
+	AEROSPIKE_ERR_UDF = 100,
+	
 	/**
-	 *	Query processing queue is full.
+	 *	The requested item in a large collection was not found.
 	 */
-	AEROSPIKE_ERR_QUERY_QUEUE_FULL 			= 1102,
-
-	/***************************************************************************
-	 *	SECONDARY INDEX OPERATIONS
-	 **************************************************************************/
-
-	/**
-	 *	Generic secondary index error.
-	 */
-	AEROSPIKE_ERR_INDEX 					= 1200,
-
-	/**
-	 *	Index is out of memory
-	 */
-	AEROSPIKE_ERR_INDEX_OOM 				= 1201,
-
-	/**
-	 *	Index not found
-	 */
-	AEROSPIKE_ERR_INDEX_NOT_FOUND 			= 1202,
+	AEROSPIKE_ERR_LARGE_ITEM_NOT_FOUND = 125,
 
 	/**
 	 *	Index found.
 	 */
-	AEROSPIKE_ERR_INDEX_FOUND 				= 1203,
-
+	AEROSPIKE_ERR_INDEX_FOUND = 200,
+	
+	/**
+	 *	Index not found
+	 */
+	AEROSPIKE_ERR_INDEX_NOT_FOUND = 201,
+	
+	/**
+	 *	Index is out of memory
+	 */
+	AEROSPIKE_ERR_INDEX_OOM = 202,
+	
 	/**
 	 *	Unable to read the index.
 	 */
-	AEROSPIKE_ERR_INDEX_NOT_READABLE 		= 1204,
-
+	AEROSPIKE_ERR_INDEX_NOT_READABLE = 203,
+	
+	/**
+	 *	Generic secondary index error.
+	 */
+	AEROSPIKE_ERR_INDEX = 204,
+	
 	/**
 	 *	Index name is too long.
 	 */
-	AEROSPIKE_ERR_INDEX_NAME_MAXLEN 		= 1205,
-
+	AEROSPIKE_ERR_INDEX_NAME_MAXLEN = 205,
+	
 	/**
 	 *	System already has maximum allowed indices.
 	 */
-	AEROSPIKE_ERR_INDEX_MAXCOUNT 			= 1206,
+	AEROSPIKE_ERR_INDEX_MAXCOUNT = 206,
+	
+	/**
+	 *	Query was aborted.
+	 */
+	AEROSPIKE_ERR_QUERY_ABORTED = 210,
+	
+	/**
+	 *	Query processing queue is full.
+	 */
+	AEROSPIKE_ERR_QUERY_QUEUE_FULL = 211,
 
+	/**
+	 *	Secondary index query timed out on server.
+	 */
+	AEROSPIKE_ERR_QUERY_TIMEOUT = 212,
+
+	/**
+	 *	Generic query error.
+	 */
+	AEROSPIKE_ERR_QUERY = 213,
+	
 	/***************************************************************************
 	 *	UDF OPERATIONS
 	 **************************************************************************/
-
-	/**
-	 *	Generic UDF error.
-	 */
-	AEROSPIKE_ERR_UDF						= 1300,
 
 	/**
 	 *	UDF does not exist.

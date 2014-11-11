@@ -22,6 +22,7 @@
 #include <aerospike/as_error.h>
 #include <aerospike/as_key.h>
 #include <aerospike/as_list.h>
+#include <aerospike/as_log.h>
 #include <aerospike/as_operations.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_record.h>
@@ -34,10 +35,7 @@
 #include <citrusleaf/cl_object.h>
 #include <citrusleaf/cl_write.h>
 #include <citrusleaf/cf_proto.h>
-#include <citrusleaf/cf_log_internal.h>
 
-#include "_log.h"
-#include "_policy.h"
 #include "_shim.h"
 
 #include "../citrusleaf/internal.h"
@@ -65,23 +63,39 @@ as_status aerospike_key_get(
 	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
 	
-	// resolve policies
-	as_policy_read p;
-	as_policy_read_resolve(&p, &as->config.policies, policy);
+	if (! policy) {
+		policy = &as->config.policies.read;
+	}
 
-	uint32_t    timeout = p.timeout == UINT32_MAX ? 0 : p.timeout;          
+	uint32_t    timeout = policy->timeout == UINT32_MAX ? 0 : policy->timeout;
 	uint32_t    gen = 0;
 	uint32_t 	ttl = 0;
 	int         nvalues = 0;
 	cl_bin *    values = NULL;
 
-	cl_rv rc = CITRUSLEAF_OK;
+	cl_rv rc = AEROSPIKE_OK;
 
-	switch ( p.key ) {
+	int consistency_level = 0;
+	switch ( policy->consistency_level ) {
+		case AS_POLICY_CONSISTENCY_LEVEL_ONE:
+			consistency_level &= ~CL_MSG_INFO1_CONSISTENCY_LEVEL_B0;
+			consistency_level &= ~CL_MSG_INFO1_CONSISTENCY_LEVEL_B1;
+			break;
+		case AS_POLICY_CONSISTENCY_LEVEL_ALL:
+			consistency_level |= CL_MSG_INFO1_CONSISTENCY_LEVEL_B0;
+			consistency_level &= ~CL_MSG_INFO1_CONSISTENCY_LEVEL_B1;
+			break;
+		default: {
+			// ERROR CASE
+			break;
+		}
+	}
+
+	switch ( policy->key ) {
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
 			rc = citrusleaf_get_all(as->cluster, key->ns, key->set, NULL, (cf_digest*)digest->value,
-					&values, &nvalues, timeout, &gen, &ttl);
+					&values, &nvalues, timeout, &gen, &ttl, consistency_level, policy->replica);
 			break;
 		}
 		case AS_POLICY_KEY_SEND: {
@@ -89,7 +103,7 @@ as_status aerospike_key_get(
 			asval_to_clobject((as_val *) key->valuep, &okey);
 			as_digest * digest = as_key_digest((as_key *) key);
 			rc = citrusleaf_get_all(as->cluster, key->ns, key->set, &okey, (cf_digest*)digest->value,
-					&values, &nvalues, timeout, &gen, &ttl);
+					&values, &nvalues, timeout, &gen, &ttl, consistency_level, policy->replica);
 			break;
 		}
 		default: {
@@ -97,8 +111,8 @@ as_status aerospike_key_get(
 			break;
 		}
 	}
-	
-	if ( rc == CITRUSLEAF_OK && rec != NULL ) {
+
+	if ( rc == AEROSPIKE_OK && rec != NULL ) {
 		as_record * r = *rec;
 		if ( r == NULL ) {
 			r = as_record_new(0);
@@ -144,11 +158,11 @@ as_status aerospike_key_select(
 	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
 	
-	// resolve policies
-	as_policy_read p;
-	as_policy_read_resolve(&p, &as->config.policies, policy);
+	if (! policy) {
+		policy = &as->config.policies.read;
+	}
 
-	uint32_t    timeout = p.timeout == UINT32_MAX ? 0 : p.timeout;
+	uint32_t    timeout = policy->timeout == UINT32_MAX ? 0 : policy->timeout;
 	uint32_t    gen = 0;
 	uint32_t 	ttl = 0;
 	int         nvalues = 0;
@@ -167,13 +181,29 @@ as_status aerospike_key_select(
 		citrusleaf_object_init(&values[i].object);
 	}
 
-	cl_rv rc = CITRUSLEAF_OK;
+	cl_rv rc = AEROSPIKE_OK;
 
-	switch ( p.key ) {
+	int consistency_level = 0;
+	switch ( policy->consistency_level ) {
+		case AS_POLICY_CONSISTENCY_LEVEL_ONE:
+			consistency_level &= ~CL_MSG_INFO1_CONSISTENCY_LEVEL_B0;
+			consistency_level &= ~CL_MSG_INFO1_CONSISTENCY_LEVEL_B1;
+			break;
+		case AS_POLICY_CONSISTENCY_LEVEL_ALL:
+			consistency_level |= CL_MSG_INFO1_CONSISTENCY_LEVEL_B0;
+			consistency_level &= ~CL_MSG_INFO1_CONSISTENCY_LEVEL_B1;
+			break;
+		default: {
+			// ERROR CASE
+			break;
+		}
+	}
+
+	switch ( policy->key ) {
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
 			rc = citrusleaf_get(as->cluster, key->ns, key->set, NULL, (cf_digest*)digest->value,
-					values, nvalues, timeout, &gen, &ttl);
+					values, nvalues, timeout, &gen, &ttl, consistency_level, policy->replica);
 			break;
 		}
 		case AS_POLICY_KEY_SEND: {
@@ -181,7 +211,7 @@ as_status aerospike_key_select(
 			asval_to_clobject((as_val *) key->valuep, &okey);
 			as_digest * digest = as_key_digest((as_key *) key);
 			rc = citrusleaf_get(as->cluster, key->ns, key->set, &okey, (cf_digest*)digest->value,
-					values, nvalues, timeout, &gen, &ttl);
+					values, nvalues, timeout, &gen, &ttl, consistency_level, policy->replica);
 			break;
 		}
 		default: {
@@ -190,7 +220,7 @@ as_status aerospike_key_select(
 		}
 	}
 
-	if ( rc == CITRUSLEAF_OK && rec != NULL ) {
+	if ( rc == AEROSPIKE_OK && rec != NULL ) {
 		as_record * r = *rec;
 		if ( r == NULL ) {
 			r = as_record_new(0);
@@ -234,23 +264,39 @@ as_status aerospike_key_exists(
 	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
 	
-	// resolve policies
-	as_policy_read p;
-	as_policy_read_resolve(&p, &as->config.policies, policy);
+	if (! policy) {
+		policy = &as->config.policies.read;
+	}
 
-	uint32_t	timeout = p.timeout == UINT32_MAX ? 0 : p.timeout;
+	uint32_t    timeout = policy->timeout == UINT32_MAX ? 0 : policy->timeout;
 	uint32_t	gen = 0;
 	uint32_t	ttl = 0; // TODO - a version of 'exists' that returns all metadata
 	int     	nvalues = 0;
 	cl_bin *	values = NULL;
 	
-	cl_rv rc = CITRUSLEAF_OK;
+	cl_rv rc = AEROSPIKE_OK;
 
-	switch ( p.key ) {
+	int consistency_level = 0;
+	switch ( policy->consistency_level ) {
+		case AS_POLICY_CONSISTENCY_LEVEL_ONE:
+			consistency_level &= ~CL_MSG_INFO1_CONSISTENCY_LEVEL_B0;
+			consistency_level &= ~CL_MSG_INFO1_CONSISTENCY_LEVEL_B1;
+			break;
+		case AS_POLICY_CONSISTENCY_LEVEL_ALL:
+			consistency_level |= CL_MSG_INFO1_CONSISTENCY_LEVEL_B0;
+			consistency_level &= ~CL_MSG_INFO1_CONSISTENCY_LEVEL_B1;
+			break;
+		default: {
+			// ERROR CASE
+			break;
+		}
+	}
+
+	switch ( policy->key ) {
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
 			rc = citrusleaf_exists_key(as->cluster, key->ns, key->set, NULL, (cf_digest*)digest->value,
-					values, nvalues, timeout, &gen, &ttl);
+					values, nvalues, timeout, &gen, &ttl, consistency_level, policy->replica);
 			break;
 		}
 		case AS_POLICY_KEY_SEND: {
@@ -258,7 +304,7 @@ as_status aerospike_key_exists(
 			asval_to_clobject((as_val *) key->valuep, &okey);
 			as_digest * digest = as_key_digest((as_key *) key);
 			rc = citrusleaf_exists_key(as->cluster, key->ns, key->set, &okey, (cf_digest*)digest->value,
-					values, nvalues, timeout, &gen, &ttl);
+					values, nvalues, timeout, &gen, &ttl, consistency_level, policy->replica);
 			break;
 		}
 		default: {
@@ -274,7 +320,7 @@ as_status aerospike_key_exists(
 	}
 
 	switch(rc) {
-		case CITRUSLEAF_OK: 
+		case AEROSPIKE_OK: 
 			{
 				as_record * r = *rec;
 				if ( r == NULL ) { 
@@ -313,31 +359,47 @@ as_status aerospike_key_put(
 	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
 	
-	// resolve policies
-	as_policy_write p;
-	as_policy_write_resolve(&p, &as->config.policies, policy);
+	if (! policy) {
+		policy = &as->config.policies.write;
+	}
 
 	cl_write_parameters wp;
-	aspolicywrite_to_clwriteparameters(&p, rec, &wp);
+	aspolicywrite_to_clwriteparameters(policy, rec, &wp);
 
 	int			nvalues	= rec->bins.size;
 	cl_bin *	values	= (cl_bin *) alloca(sizeof(cl_bin) * nvalues);
 
 	asrecord_to_clbins(rec, values, nvalues);
 
-	cl_rv rc = CITRUSLEAF_OK;
+	cl_rv rc = AEROSPIKE_OK;
 
-	switch ( p.key ) {
+	int commit_level = 0;
+	switch ( policy->commit_level ) {
+		case AS_POLICY_COMMIT_LEVEL_ALL:
+			commit_level &= ~CL_MSG_INFO3_COMMIT_LEVEL_B0;
+			commit_level &= ~CL_MSG_INFO3_COMMIT_LEVEL_B1;
+			break;
+		case AS_POLICY_COMMIT_LEVEL_MASTER:
+			commit_level |= CL_MSG_INFO3_COMMIT_LEVEL_B0;
+			commit_level &= ~CL_MSG_INFO3_COMMIT_LEVEL_B1;
+			break;
+		default: {
+			// ERROR CASE
+			break;
+		}
+	}
+
+	switch ( policy->key ) {
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
-			rc = citrusleaf_put(as->cluster, key->ns, key->set, NULL, (cf_digest*)digest->value, values, nvalues, &wp);
+			rc = citrusleaf_put(as->cluster, key->ns, key->set, NULL, (cf_digest*)digest->value, values, nvalues, &wp, commit_level);
 			break;
 		}
 		case AS_POLICY_KEY_SEND: {
 			cl_object okey;
 			asval_to_clobject((as_val *) key->valuep, &okey);
 			as_digest * digest = as_key_digest((as_key *) key);
-			rc = citrusleaf_put(as->cluster, key->ns, key->set, &okey, (cf_digest*)digest->value, values, nvalues, &wp);
+			rc = citrusleaf_put(as->cluster, key->ns, key->set, &okey, (cf_digest*)digest->value, values, nvalues, &wp, commit_level);
 			break;
 		}
 		default: {
@@ -378,26 +440,42 @@ as_status aerospike_key_remove(
 	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
 	
-	// resolve policies
-	as_policy_remove p;
-	as_policy_remove_resolve(&p, &as->config.policies, policy);
+	if (! policy) {
+		policy = &as->config.policies.remove;
+	}
 
 	cl_write_parameters wp;
-	aspolicyremove_to_clwriteparameters(&p, &wp);
+	aspolicyremove_to_clwriteparameters(policy, &wp);
 
-	cl_rv rc = CITRUSLEAF_OK;
+	cl_rv rc = AEROSPIKE_OK;
 
-	switch ( p.key ) {
+	int commit_level = 0;
+	switch ( policy->commit_level ) {
+		case AS_POLICY_COMMIT_LEVEL_ALL:
+			commit_level &= ~CL_MSG_INFO3_COMMIT_LEVEL_B0;
+			commit_level &= ~CL_MSG_INFO3_COMMIT_LEVEL_B1;
+			break;
+		case AS_POLICY_COMMIT_LEVEL_MASTER:
+			commit_level |= CL_MSG_INFO3_COMMIT_LEVEL_B0;
+			commit_level &= ~CL_MSG_INFO3_COMMIT_LEVEL_B1;
+			break;
+		default: {
+			// ERROR CASE
+			break;
+		}
+	}
+
+	switch ( policy->key ) {
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
-			rc = citrusleaf_delete(as->cluster, key->ns, key->set, NULL, (cf_digest*)digest->value, &wp);
+			rc = citrusleaf_delete(as->cluster, key->ns, key->set, NULL, (cf_digest*)digest->value, &wp, commit_level);
 			break;
 		}
 		case AS_POLICY_KEY_SEND: {
 			cl_object okey;
 			asval_to_clobject((as_val *) key->valuep, &okey);
 			as_digest * digest = as_key_digest((as_key *) key);
-			rc = citrusleaf_delete(as->cluster, key->ns, key->set, &okey, (cf_digest*)digest->value, &wp);
+			rc = citrusleaf_delete(as->cluster, key->ns, key->set, &okey, (cf_digest*)digest->value, &wp, commit_level);
 			break;
 		}
 		default: {
@@ -443,12 +521,12 @@ as_status aerospike_key_operate(
 	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
 	
-	// resolve policies
-	as_policy_operate p;
-	as_policy_operate_resolve(&p, &as->config.policies, policy);
+	if (! policy) {
+		policy = &as->config.policies.operate;
+	}
 
 	cl_write_parameters wp;
-	aspolicyoperate_to_clwriteparameters(&p, ops, &wp);
+	aspolicyoperate_to_clwriteparameters(policy, ops, &wp);
 
 	uint32_t 		gen = 0;
 	uint32_t 		ttl = 0;
@@ -456,7 +534,7 @@ as_status aerospike_key_operate(
 	cl_operation * 	operations = (cl_operation *) alloca(sizeof(cl_operation) * n_operations);
 	int				n_read_ops = 0;
 
-	for(int i = 0; i < n_operations; i++) {
+	for (int i = 0; i < n_operations; i++) {
 		cl_operation * clop = &operations[i];
 		as_binop * op = &ops->binops.entries[i];
 
@@ -478,14 +556,46 @@ as_status aerospike_key_operate(
 		asbinvalue_to_clobject(op->bin.valuep, &clop->bin.object);
 	}
 
-	cl_rv rc = CITRUSLEAF_OK;
+	int consistency_level = 0;
+	switch ( policy->consistency_level ) {
+		case AS_POLICY_CONSISTENCY_LEVEL_ONE:
+			consistency_level &= ~CL_MSG_INFO1_CONSISTENCY_LEVEL_B0;
+			consistency_level &= ~CL_MSG_INFO1_CONSISTENCY_LEVEL_B1;
+			break;
+		case AS_POLICY_CONSISTENCY_LEVEL_ALL:
+			consistency_level |= CL_MSG_INFO1_CONSISTENCY_LEVEL_B0;
+			consistency_level &= ~CL_MSG_INFO1_CONSISTENCY_LEVEL_B1;
+			break;
+		default: {
+			// ERROR CASE
+			break;
+		}
+	}
+
+	int commit_level = 0;
+	switch ( policy->commit_level ) {
+		case AS_POLICY_COMMIT_LEVEL_ALL:
+			commit_level &= ~CL_MSG_INFO3_COMMIT_LEVEL_B0;
+			commit_level &= ~CL_MSG_INFO3_COMMIT_LEVEL_B1;
+			break;
+		case AS_POLICY_COMMIT_LEVEL_MASTER:
+			commit_level |= CL_MSG_INFO3_COMMIT_LEVEL_B0;
+			commit_level &= ~CL_MSG_INFO3_COMMIT_LEVEL_B1;
+			break;
+		default: {
+			// ERROR CASE
+			break;
+		}
+	}
+
+	cl_rv rc = AEROSPIKE_OK;
 	cl_bin *result_bins = NULL;
 
-	switch ( p.key ) {
+	switch ( policy->key ) {
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
 			rc = citrusleaf_operate(as->cluster, key->ns, key->set, NULL, (cf_digest*)digest->value,
-					&result_bins, operations, &n_operations, &wp, &gen, &ttl);
+					&result_bins, operations, &n_operations, &wp, &gen, &ttl, consistency_level, commit_level, policy->replica);
 			break;
 		}
 		case AS_POLICY_KEY_SEND: {
@@ -493,7 +603,7 @@ as_status aerospike_key_operate(
 			asval_to_clobject((as_val *) key->valuep, &okey);
 			as_digest * digest = as_key_digest((as_key *) key);
 			rc = citrusleaf_operate(as->cluster, key->ns, key->set, &okey, (cf_digest*)digest->value,
-					&result_bins, operations, &n_operations, &wp, &gen, &ttl);
+					&result_bins, operations, &n_operations, &wp, &gen, &ttl, consistency_level, commit_level, policy->replica);
 			break;
 		}
 		default: {
@@ -502,7 +612,11 @@ as_status aerospike_key_operate(
 		}
 	}
 
-	if (n_read_ops != n_operations) {
+	for (int i = 0; i < n_operations; i++) {
+		citrusleaf_object_free(&operations[i].bin.object);
+	}
+
+    if (n_read_ops != n_operations) {
 		if (result_bins) {
 			citrusleaf_bins_free(result_bins, n_operations);
 			free(result_bins);
@@ -511,7 +625,7 @@ as_status aerospike_key_operate(
 		return as_error_update(err, AEROSPIKE_ERR, "expected %d bins, got %d", n_read_ops, n_operations);
 	}
 
-	if ( n_read_ops != 0 && rc == CITRUSLEAF_OK && rec != NULL ) {
+	if ( n_read_ops != 0 && rc == AEROSPIKE_OK && rec != NULL ) {
 		as_record * r = *rec;
 		if ( r == NULL ) {
 			r = as_record_new(0);
@@ -582,13 +696,13 @@ as_status aerospike_key_apply(
 	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
 	
-	// resolve policies
-	as_policy_apply p;
-	as_policy_apply_resolve(&p, &as->config.policies, policy);
+	if (! policy) {
+		policy = &as->config.policies.apply;
+	}
 
 	cl_write_parameters wp;
 	cl_write_parameters_set_default(&wp);
-	wp.timeout_ms = p.timeout == UINT32_MAX ? 0 : p.timeout;
+	wp.timeout_ms = policy->timeout == UINT32_MAX ? 0 : policy->timeout;
 
 	cl_object okey;
 	asval_to_clobject((as_val *) key->valuep, &okey);
@@ -617,15 +731,31 @@ as_status aerospike_key_apply(
 	cl_bin * bins = 0;
 	int n_bins = 0;
 
-	cl_rv rc = CITRUSLEAF_OK;
+	cl_rv rc = AEROSPIKE_OK;
 
-	switch ( p.key ) {
+	int commit_level = 0;
+	switch ( policy->commit_level ) {
+		case AS_POLICY_COMMIT_LEVEL_ALL:
+			commit_level &= ~CL_MSG_INFO3_COMMIT_LEVEL_B0;
+			commit_level &= ~CL_MSG_INFO3_COMMIT_LEVEL_B1;
+			break;
+		case AS_POLICY_COMMIT_LEVEL_MASTER:
+			commit_level |= CL_MSG_INFO3_COMMIT_LEVEL_B0;
+			commit_level &= ~CL_MSG_INFO3_COMMIT_LEVEL_B1;
+			break;
+		default: {
+			// ERROR CASE
+			break;
+		}
+	}
+
+	switch ( policy->key ) {
 		case AS_POLICY_KEY_DIGEST: {
 			as_digest * digest = as_key_digest((as_key *) key);
 			rc = do_the_full_monte( 
-				as->cluster, 0, CL_MSG_INFO2_WRITE, 0, 
+				as->cluster, 0, CL_MSG_INFO2_WRITE, commit_level,
 				key->ns, key->set, NULL, (cf_digest*)digest->value, &bins, CL_OP_WRITE, 0, &n_bins,
-				NULL, &wp, &trid, NULL, &call, NULL
+				NULL, &wp, &trid, NULL, &call, NULL, -1
 			);
 			break;
 		}
@@ -634,9 +764,9 @@ as_status aerospike_key_apply(
 			asval_to_clobject((as_val *) key->valuep, &okey);
 			as_digest * digest = as_key_digest((as_key *) key);
 			rc = do_the_full_monte( 
-				as->cluster, 0, CL_MSG_INFO2_WRITE, 0, 
+				as->cluster, 0, CL_MSG_INFO2_WRITE, commit_level,
 				key->ns, key->set, &okey, (cf_digest*)digest->value, &bins, CL_OP_WRITE, 0, &n_bins,
-				NULL, &wp, &trid, NULL, &call, NULL
+				NULL, &wp, &trid, NULL, &call, NULL, -1
 			);
 			break;
 		}
@@ -648,7 +778,7 @@ as_status aerospike_key_apply(
 
 	as_buffer_destroy(&args);
 
-	if (! (rc == CITRUSLEAF_OK || rc == CITRUSLEAF_FAIL_UDF_BAD_RESPONSE)) {
+	if (! (rc == AEROSPIKE_OK || rc == AEROSPIKE_ERR_UDF)) {
 		as_error_fromrc(err, rc);
 	}
 	else {

@@ -80,9 +80,7 @@ CITRUSLEAF += cl_udf.o
 
 AEROSPIKE = 
 AEROSPIKE += _bin.o
-AEROSPIKE += _logger.o
 AEROSPIKE += _ldt.o
-AEROSPIKE += _policy.o
 AEROSPIKE += _shim.o
 AEROSPIKE += aerospike.o
 AEROSPIKE += aerospike_batch.o
@@ -104,7 +102,6 @@ AEROSPIKE += as_cluster.o
 AEROSPIKE += as_error.o
 AEROSPIKE += as_info.o
 AEROSPIKE += as_key.o
-AEROSPIKE += as_log.o
 AEROSPIKE += as_lookup.o
 AEROSPIKE += as_node.o
 AEROSPIKE += as_operations.o
@@ -144,6 +141,7 @@ COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_integer.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_iterator.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_list.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_list_iterator.h
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_log.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_map.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_map_iterator.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_nil.h
@@ -164,14 +162,11 @@ COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_clock.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_queue.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_types.h
 
-BASE-HEADERS := $(BASE)/$(SOURCE_INCL)/citrusleaf/cf_log.h
-
 EXCLUDE-HEADERS = 
 
 HEADERS := 
 HEADERS += $(filter-out $(EXCLUDE-HEADERS), $(wildcard $(SOURCE_INCL)/aerospike/*.h))
 HEADERS += $(COMMON-HEADERS)
-HEADERS += $(BASE-HEADERS)
 
 ###############################################################################
 ##  MAIN TARGETS                                                             ##

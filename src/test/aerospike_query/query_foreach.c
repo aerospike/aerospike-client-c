@@ -37,7 +37,6 @@
 #include "../test.h"
 #include "../util/udf.h"
 #include "../util/consumer_stream.h"
-#include "../util/test_logger.h"
 
 /******************************************************************************
  * GLOBAL VARS
@@ -61,10 +60,6 @@ extern aerospike * as;
 
 static bool before(atf_suite * suite) {
 
-	if ( mod_lua.logger == NULL ) {
-		mod_lua.logger = test_logger_new();
-	}
-
 	if ( ! udf_put(LUA_FILE) ) {
 		error("failure while uploading: %s", LUA_FILE);
 		return false;
@@ -81,11 +76,6 @@ static bool before(atf_suite * suite) {
 
 static bool after(atf_suite * suite) {
 	
-	if ( mod_lua.logger ) {
-		free(mod_lua.logger);
-		mod_lua.logger = NULL;
-	}
-
 	if ( ! udf_remove(LUA_FILE) ) {
 		error("failure while removing: %s", LUA_FILE);
 		return false;
@@ -123,32 +113,38 @@ TEST( query_foreach_create, "create 100 records and 4 indices" ) {
 	as_error_reset(&err);
 
 	int n_recs = 100;
+	
+	as_status status;
 
 	// create index on "a"
-
-	aerospike_index_string_create(as, &err, NULL, NAMESPACE, SET, "a", "idx_test_a");
-	if ( err.code != AEROSPIKE_OK && err.code != AEROSPIKE_ERR_INDEX_FOUND ) {
+	
+	status = aerospike_index_create(as, &err, 0, NULL, NAMESPACE, SET, "a", "idx_test_a", AS_INDEX_STRING);
+	if ( status != AEROSPIKE_OK ) {
 		info("error(%d): %s", err.code, err.message);
 	}
 
 	// create index on "b"
 
-	aerospike_index_integer_create(as, &err, NULL, NAMESPACE, SET, "b", "idx_test_b");
-	if ( err.code != AEROSPIKE_OK && err.code != AEROSPIKE_ERR_INDEX_FOUND ) {
+	status = aerospike_index_create(as, &err, 0, NULL, NAMESPACE, SET, "b", "idx_test_b", AS_INDEX_NUMERIC);
+	if ( status != AEROSPIKE_OK ) {
 		info("error(%d): %s", err.code, err.message);
 	}
 
 	// create index on "c"
 
-	aerospike_index_integer_create(as, &err, NULL, NAMESPACE, SET, "c", "idx_test_c");
-	if ( err.code != AEROSPIKE_OK && err.code != AEROSPIKE_ERR_INDEX_FOUND ) {
+	status = aerospike_index_create(as, &err, 0, NULL, NAMESPACE, SET, "c", "idx_test_c", AS_INDEX_NUMERIC);
+	if ( status != AEROSPIKE_OK ) {
 		info("error(%d): %s", err.code, err.message);
 	}
 
 	// create index on "d"
 
-	aerospike_index_integer_create(as, &err, NULL, NAMESPACE, SET, "d", "idx_test_d");
-	if ( err.code != AEROSPIKE_OK && err.code != AEROSPIKE_ERR_INDEX_FOUND ) {
+	as_index_task task;
+	status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, SET, "d", "idx_test_d", AS_INDEX_NUMERIC);
+	if ( status == AEROSPIKE_OK ) {
+		aerospike_index_create_wait(&err, &task, 0);
+	}
+	else {
 		info("error(%d): %s", err.code, err.message);
 	}
 

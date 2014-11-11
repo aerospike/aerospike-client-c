@@ -18,9 +18,9 @@
 #include <aerospike/as_admin.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_info.h>
+#include <aerospike/as_log_macros.h>
 #include <aerospike/as_lookup.h>
 #include <citrusleaf/cf_b64.h>
-#include <citrusleaf/cf_log_internal.h>
 #include <citrusleaf/cf_proto.h>
 #include <citrusleaf/cf_socket.h>
 #include <sys/types.h>
@@ -109,14 +109,14 @@ citrusleaf_info_host_auth(as_cluster* cluster, struct sockaddr_in *sa_in, char *
 	
 	if (fd == -1) {
 		*values = 0;
-		return CITRUSLEAF_FAIL_UNAVAILABLE;
+		return AEROSPIKE_ERR_CLUSTER;
 	}
 	
 	if (cluster->user) {
 		int status = as_authenticate(fd, cluster->user, cluster->password, timeout_ms);
 		
 		if (status) {
-			cf_debug("Authentication failed for %s", cluster->user);
+			as_log_debug("Authentication failed for %s", cluster->user);
 			cf_close(fd);
 			*values = 0;
 			return status;
@@ -232,7 +232,7 @@ citrusleaf_info_host_limit(int fd, char *names, char **values, int timeout_ms, b
 	}
 	if (io_rv != 0) {
 #ifdef DEBUG_INFO
-		cf_debug("info returned error, rv %d errno %d bufsz %d", io_rv, errno, buf_sz);
+		as_log_debug("info returned error, rv %d errno %d bufsz %d", io_rv, errno, buf_sz);
 #endif        
 		goto Done;
 	}
@@ -245,7 +245,7 @@ citrusleaf_info_host_limit(int fd, char *names, char **values, int timeout_ms, b
     
     if (0 != io_rv) {
 #ifdef DEBUG_INFO
-		cf_debug("info socket read failed: rv %d errno %d", io_rv, errno);
+		as_log_debug("info socket read failed: rv %d errno %d", io_rv, errno);
 #endif        
 		goto Done;
 	}
@@ -263,7 +263,7 @@ citrusleaf_info_host_limit(int fd, char *names, char **values, int timeout_ms, b
 
 		uint8_t *v_buf = malloc(read_length + 1);
 		if (!v_buf) {
-			cf_warn("Info request '%s' failed. Failed to malloc %d bytes", names, read_length);
+			as_log_warn("Info request '%s' failed. Failed to malloc %d bytes", names, read_length);
 			goto Done;
 		}
 
@@ -276,7 +276,7 @@ citrusleaf_info_host_limit(int fd, char *names, char **values, int timeout_ms, b
             free(v_buf);
 
             if (io_rv != ETIMEDOUT) {
-            	cf_warn("Info request '%s' failed. Failed to read %d bytes. Return code %d", names, read_length, io_rv);
+            	as_log_warn("Info request '%s' failed. Failed to read %d bytes. Return code %d", names, read_length, io_rv);
             }
             goto Done;
 		}
@@ -284,13 +284,13 @@ citrusleaf_info_host_limit(int fd, char *names, char **values, int timeout_ms, b
 
 		if (limit_reached) {
 			// Response buffer is too big.  Log warning and reject.
-			cf_warn("Info request '%s' failed. Response buffer length %lu is excessive. Buffer: %s", names, rsp->sz, v_buf);
+			as_log_warn("Info request '%s' failed. Response buffer length %lu is excessive. Buffer: %s", names, rsp->sz, v_buf);
 			goto Done;
 		}
 		*values = (char *) v_buf;
 	}                                                                                               
 	else {
-		cf_debug("rsp size is 0");
+		as_log_debug("rsp size is 0");
 		*values = 0;
 	}
 	rv = 0;
@@ -305,31 +305,28 @@ Done:
 // TODO: timeouts are wrong here. If there are 3 addresses for a host name,
 // you'll end up with 3x timeout_ms
 //
-
 int
 citrusleaf_info(char *hostname, short port, char *names, char **values, int timeout_ms)
 {
-	int rv = -1;
 	as_vector sockaddr_in_v;
 	as_vector_inita(&sockaddr_in_v, sizeof(struct sockaddr_in), 5);
 	
-	if (! as_lookup(NULL, hostname, port, true, &sockaddr_in_v)) {
-		goto Done;
+	int status = as_lookup(NULL, hostname, port, true, &sockaddr_in_v);
+	
+	if (status != 0) {
+		as_vector_destroy(&sockaddr_in_v);
+		return status;
 	}
 		
-	for (uint32_t i = 0; i < sockaddr_in_v.size; i++)
-	{
-		struct sockaddr_in* sa_in = as_vector_get(&sockaddr_in_v, i);
+	status = AEROSPIKE_ERR_CLUSTER;
 
-		if (0 == citrusleaf_info_host(sa_in, names, values, timeout_ms, true, /* check bounds */ true)) {
-			rv = 0;
-			goto Done;
-		}
+	for (uint32_t i = 0; i < sockaddr_in_v.size && status; i++) {
+		struct sockaddr_in* sa_in = as_vector_get(&sockaddr_in_v, i);
+		status = citrusleaf_info_host(sa_in, names, values, timeout_ms, true, /* check bounds */ true);
 	}
 	
-Done:
 	as_vector_destroy(&sockaddr_in_v);
-	return(rv);
+	return status;
 }
 
 int
@@ -338,23 +335,26 @@ citrusleaf_info_auth(as_cluster *cluster, char *hostname, short port, char *name
 	as_vector sockaddr_in_v;
 	as_vector_inita(&sockaddr_in_v, sizeof(struct sockaddr_in), 5);
 	
-	if (! as_lookup(NULL, hostname, port, true, &sockaddr_in_v)) {
+	int status = as_lookup(NULL, hostname, port, true, &sockaddr_in_v);
+	
+	if (status != 0) {
 		as_vector_destroy(&sockaddr_in_v);
-		return CITRUSLEAF_FAIL_UNAVAILABLE;
+		return status;
 	}
 	
-	int rc = CITRUSLEAF_FAIL_UNAVAILABLE;
+	status = AEROSPIKE_ERR_CLUSTER;
 	
-	for (uint32_t i = 0; i < sockaddr_in_v.size && rc == CITRUSLEAF_FAIL_UNAVAILABLE; i++)
+	for (uint32_t i = 0; i < sockaddr_in_v.size && status; i++)
 	{
 		if (i > 0) {
 			free(*values);
 		}
 		struct sockaddr_in* sa_in = as_vector_get(&sockaddr_in_v, i);
-		rc = citrusleaf_info_host_auth(cluster, sa_in, names, values, timeout_ms, true, /* check bounds */ true);
+		status = citrusleaf_info_host_auth(cluster, sa_in, names, values, timeout_ms, true, /* check bounds */ true);
 	}
+	
 	as_vector_destroy(&sockaddr_in_v);
-	return rc;
+	return status;
 }
 
 /* gets information back from any of the nodes in the cluster */
@@ -366,7 +366,7 @@ citrusleaf_info_cluster(as_cluster *cluster, char *names, char **values, bool se
 		timeout_ms = 1000;
 	}
 	
-	int rc = CITRUSLEAF_FAIL_UNAVAILABLE;
+	int rc = AEROSPIKE_ERR_CLUSTER;
 	uint64_t start = cf_getms();
 	uint64_t end = start + timeout_ms;
 	as_nodes* nodes = as_nodes_reserve(cluster);
@@ -380,9 +380,9 @@ citrusleaf_info_cluster(as_cluster *cluster, char *names, char **values, bool se
 		struct sockaddr_in* sa_in = as_node_get_address(node);
 		rc = citrusleaf_info_host_auth(cluster, sa_in, names, values, (int)(end - cf_getms()), send_asis, check_bounds);
 		
-		if (rc == CITRUSLEAF_FAIL_UNAVAILABLE) {
+		if (rc == AEROSPIKE_ERR_CLUSTER) {
 			if (cf_getms() >= end) {
-				rc = CITRUSLEAF_FAIL_TIMEOUT;
+				rc = AEROSPIKE_ERR_TIMEOUT;
 				break;
 			}
 		}
@@ -409,7 +409,7 @@ citrusleaf_info_cluster_foreach(
 	}
 	*error = 0;
 	
-	int rc = CITRUSLEAF_FAIL_UNAVAILABLE;
+	int rc = AEROSPIKE_ERR_CLUSTER;
 	uint64_t start = cf_getms();
 	uint64_t end = start + timeout_ms;
 	as_nodes* nodes = as_nodes_reserve(cluster);
@@ -426,19 +426,19 @@ citrusleaf_info_cluster_foreach(
 			free(response);
 			
 			if (! status) {
-				rc = CITRUSLEAF_FAIL_QUERY_ABORTED;
+				rc = AEROSPIKE_ERR_QUERY_ABORTED;
 				break;
 			}
 		}
 		else {
 			free(response);
-			if (rc != CITRUSLEAF_FAIL_UNAVAILABLE) {
+			if (rc != AEROSPIKE_ERR_CLUSTER) {
 				break;
 			}
 		}
 				
 		if (cf_getms() >= end) {
-			rc = CITRUSLEAF_FAIL_TIMEOUT;
+			rc = AEROSPIKE_ERR_TIMEOUT;
 			break;
 		}
 	}
@@ -454,7 +454,7 @@ citrusleaf_info_parse_error(char* begin, char** message)
 	
 	if (! end) {
 		*message = 0;
-		return CITRUSLEAF_FAIL_UNKNOWN;
+		return AEROSPIKE_ERR_SERVER;
 	}
 	*end = 0;
 	
@@ -462,7 +462,7 @@ citrusleaf_info_parse_error(char* begin, char** message)
 	
 	if (rc == 0) {
 		*message = 0;
-		return CITRUSLEAF_FAIL_UNKNOWN;
+		return AEROSPIKE_ERR_SERVER;
 	}
 	end++;
 	
@@ -522,7 +522,7 @@ citrusleaf_info_validate(char* response, char** message)
 			if (strncmp(p, "error=", 6) == 0) {
 				*message = p;
 				citrusleaf_info_decode_error(p + 6);
-				return CITRUSLEAF_FAIL_UDF_BAD_RESPONSE;
+				return AEROSPIKE_ERR_UDF;
 			}
 		}
 	}

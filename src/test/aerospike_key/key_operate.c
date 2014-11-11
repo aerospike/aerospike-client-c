@@ -27,6 +27,7 @@
 #include <aerospike/as_arraylist.h>
 #include <aerospike/as_map.h>
 #include <aerospike/as_hashmap.h>
+#include <aerospike/as_stringmap.h>
 #include <aerospike/as_val.h>
 
 #include "../test.h"
@@ -97,10 +98,54 @@ TEST( key_operate_touchget , "operate: (test,test,key2) = {touch, get}" ) {
 
 }
 
+TEST( key_operate_9 , "operate: (test,test,key3) = {append, read, write, read, incr, read, prepend}" ) {
+
+	as_error err;
+	as_error_reset(&err);
+
+	as_key key;
+    as_operations asops;
+    as_operations *ops = &asops;
+    as_map *map = NULL;
+    as_record *rec = NULL;
+    int rc;
+
+    as_key_init( &key, "test", "test-set", "test-key1" );
+	rc = aerospike_key_remove(as, &err, NULL, &key);
+	assert_true( rc == AEROSPIKE_OK || rc == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+    as_operations_init( ops, 8);
+
+    as_operations_add_append_strp( ops, "app", "append str", 0 );
+    as_operations_add_read( ops, "app" );
+
+    map = (as_map*)as_hashmap_new(1);
+    as_stringmap_set_str( map, "hello", "world" );
+    as_operations_add_write( ops, "map", (void*)map );
+    as_operations_add_read( ops, "map" );
+
+    as_operations_add_incr( ops, "incr", 1900 );
+    as_operations_add_read( ops, "incr" );
+
+    as_operations_add_prepend_strp( ops, "pp", "prepend str", false );
+    as_operations_add_read( ops, "pp" );
+
+    rc = aerospike_key_operate(as, &err, NULL, &key, ops, &rec );
+	assert_int_eq( rc, AEROSPIKE_OK );
+
+	assert_string_eq( as_record_get_str(rec, "app"), "append str" );
+    assert_int_eq( as_record_get_int64(rec, "incr", 0), 1900 );
+	assert_string_eq( as_record_get_str(rec, "pp"), "prepend str" );
+
+    as_record_destroy( rec );
+    as_operations_destroy( ops );
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
 
 SUITE( key_operate, "aerospike_key_operate tests" ) {
 	suite_add( key_operate_touchget );
+	suite_add( key_operate_9 );
 }

@@ -18,9 +18,7 @@
 #include <getopt.h>
 
 #include <aerospike/aerospike.h>
-#include <citrusleaf/cf_log.h>
 
-#include "../main/aerospike/_log.h"
 #include "test.h"
 #include "aerospike_test.h"
 #include "util/info_util.h"
@@ -48,26 +46,14 @@ static char g_password[AS_PASSWORD_HASH_SIZE];
  * STATIC FUNCTIONS
  *****************************************************************************/
 
-static void citrusleaf_log_callback(cf_log_level level, const char* fmt, ...) {
-    va_list ap;
-    va_start(ap, fmt);
-	switch(level) {
-		case CF_ERROR: 
-			atf_logv(stderr, "ERROR", ATF_LOG_PREFIX, NULL, 0, fmt, ap);
-			break;
-		case CF_WARN: 
-			atf_logv(stderr, "WARN", ATF_LOG_PREFIX, NULL, 0, fmt, ap);
-			break;
-		case CF_INFO: 
-			atf_logv(stderr, "INFO", ATF_LOG_PREFIX, NULL, 0, fmt, ap);
-			break;
-		case CF_DEBUG: 
-			atf_logv(stderr, "DEBUG", ATF_LOG_PREFIX, NULL, 0, fmt, ap);
-			break;
-		default:
-			break;
-	}
-    va_end(ap);
+static bool
+as_client_log_callback(as_log_level level, const char * func, const char * file, uint32_t line, const char * fmt, ...)
+{
+	va_list ap;
+	va_start(ap, fmt);
+	atf_logv(stderr, as_log_level_tostring(level), ATF_LOG_PREFIX, NULL, 0, fmt, ap);
+	va_end(ap);
+	return true;
 }
 
 static const char* short_options = "h:p:U:P::";
@@ -151,9 +137,8 @@ static bool before(atf_plan * plan) {
 
 	as = aerospike_new(&config);
 
-	cf_set_log_level(CF_INFO);
-	cf_set_log_callback(citrusleaf_log_callback);
-	as_log_set_level(&as->log, AS_LOG_LEVEL_INFO);
+	as_log_set_level(AS_LOG_LEVEL_INFO);
+	as_log_set_callback(as_client_log_callback);
 	
 	if ( aerospike_connect(as, &err) == AEROSPIKE_OK ) {
 		info("connected to %s:%d", g_host, g_port);

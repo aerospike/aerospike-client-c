@@ -109,7 +109,7 @@ cf_vector * cl_scan_execute(as_cluster * cluster, const cl_scan * scan, char *no
 // Creates a message, internally calling cl_compile to pass to the server
 static int scan_compile(const cl_scan * scan, uint8_t ** buf_r, size_t * buf_sz_r) {
 
-    if (!scan) return CITRUSLEAF_FAIL_CLIENT;
+    if (!scan) return AEROSPIKE_ERR_CLIENT;
 
     //  Prepare udf call to send to the server
     as_call call;
@@ -154,7 +154,7 @@ static int scan_compile(const cl_scan * scan, uint8_t ** buf_r, size_t * buf_sz_
         as_serializer_destroy(&ser);
     }
     as_buffer_destroy(&argbuffer);
-    return CITRUSLEAF_OK;
+    return AEROSPIKE_OK;
 }
 
 /**
@@ -229,7 +229,7 @@ static int cl_scan_worker_do(as_node * node, cl_scan_task * task) {
     // send it to the cluster - non blocking socket, but we're blocking
     if (0 != cf_socket_write_forever(fd, (uint8_t *) task->scan_buf, (size_t) task->scan_sz)) {
     	cf_close(fd);
-        return CITRUSLEAF_FAIL_CLIENT;
+        return AEROSPIKE_ERR_CLIENT;
     }
 
     cl_proto  proto;
@@ -242,20 +242,20 @@ static int cl_scan_worker_do(as_node * node, cl_scan_task * task) {
         if ( (rc = cf_socket_read_forever(fd, (uint8_t *) &proto, sizeof(cl_proto) ) ) ) {
             LOG("[ERROR] cl_scan_worker_do: network error: errno %d fd %d node name %s\n", rc, fd, node->name);
             cf_close(fd);
-            return CITRUSLEAF_FAIL_CLIENT;
+            return AEROSPIKE_ERR_CLIENT;
         }
         cl_proto_swap_from_be(&proto);
 
         if ( proto.version != CL_PROTO_VERSION) {
             LOG("[ERROR] cl_scan_worker_do: network error: received protocol message of wrong version %d from node %s\n", proto.version, node->name);
             cf_close(fd);
-            return CITRUSLEAF_FAIL_CLIENT;
+            return AEROSPIKE_ERR_CLIENT;
         }
 
         if ( proto.type != CL_PROTO_TYPE_CL_MSG && proto.type != CL_PROTO_TYPE_CL_MSG_COMPRESSED ) {
             LOG("[ERROR] cl_scan_worker_do: network error: received incorrect message version %d from node %s \n",proto.type, node->name);
             cf_close(fd);
-            return CITRUSLEAF_FAIL_CLIENT;
+            return AEROSPIKE_ERR_CLIENT;
         }
 
         // second read for the remainder of the message - expect this to cover 
@@ -272,14 +272,14 @@ static int cl_scan_worker_do(as_node * node, cl_scan_task * task) {
 
             if (rd_buf == NULL) {
             	cf_close(fd);
-            	return CITRUSLEAF_FAIL_CLIENT;
+            	return AEROSPIKE_ERR_CLIENT;
             }
 
             if ( (rc = cf_socket_read_forever(fd, rd_buf, rd_buf_sz)) ) {
                 LOG("[ERROR] cl_scan_worker_do: network error: errno %d fd %d node name %s\n", rc, fd, node->name);
                 if ( rd_buf != rd_stack_buf ) free(rd_buf);
                 cf_close(fd);
-                return CITRUSLEAF_FAIL_CLIENT;
+                return AEROSPIKE_ERR_CLIENT;
             }
         }
 
@@ -301,7 +301,7 @@ static int cl_scan_worker_do(as_node * node, cl_scan_task * task) {
                 LOG("[ERROR] cl_scan_worker_do: received cl msg of unexpected size: expecting %zd found %d, internal error\n",
                         sizeof(cl_msg),msg->header_sz);
                 cf_close(fd);
-                return CITRUSLEAF_FAIL_CLIENT;
+                return AEROSPIKE_ERR_CLIENT;
             }
 
             // parse through the fields
@@ -344,7 +344,7 @@ static int cl_scan_worker_do(as_node * node, cl_scan_task * task) {
                     free(set_ret);
                 }
                 cf_close(fd);
-               return CITRUSLEAF_FAIL_CLIENT;
+               return AEROSPIKE_ERR_CLIENT;
             }
 
             // parse through the bins/ops
@@ -370,19 +370,19 @@ static int cl_scan_worker_do(as_node * node, cl_scan_task * task) {
 
                 rc = (int) msg->result_code;
                 done = true;
-                if (rc == CITRUSLEAF_FAIL_SCAN_ABORT) {
+                if (rc == AEROSPIKE_ERR_SCAN_ABORTED) {
                     LOG("[INFO] cl_scan_worker_do: Scan successfully aborted at node [%s]\n", node->name);
                 }
             }
             else if (msg->info3 & CL_MSG_INFO3_LAST)    {
 #ifdef DEBUG_VERBOSE
-               if ( cf_debug_enabled() ) {
+               if ( as_log_debug_enabled() ) {
                     LOG("[INFO] cl_scan_worker_do: Received final message from node [%s], scan complete\n", node->name);
                 }
 #endif
                 done = true;
             }
-            else if ((msg->n_ops || (msg->info1 & CL_MSG_INFO1_NOBINDATA))) {
+            else if ((msg->n_ops || (msg->info1 & CL_MSG_INFO1_GET_NOBINDATA))) {
 
                 cl_scan_response_rec rec;
                 cl_scan_response_rec *recp = &rec;
@@ -410,7 +410,7 @@ static int cl_scan_worker_do(as_node * node, cl_scan_task * task) {
 
                 }
 
-                rc = CITRUSLEAF_OK;
+                rc = AEROSPIKE_OK;
             }
 
             // if done free it 
@@ -463,7 +463,7 @@ void * cl_scan_worker(void * pv_asc) {
         }
 
 #ifdef DEBUG_VERBOSE
-       if ( cf_debug_enabled() ) {
+       if ( as_log_debug_enabled() ) {
             LOG("[DEBUG] cl_scan_worker: getting one task item\n");
         }
 #endif
@@ -474,7 +474,7 @@ void * cl_scan_worker(void * pv_asc) {
         }
 
         // query if the node is still around
-        int rc = CITRUSLEAF_FAIL_UNAVAILABLE;
+        int rc = AEROSPIKE_ERR_CLUSTER;
 
         as_node * node = as_node_get_by_name(task.asc, task.node_name);
         if ( node ) {
@@ -500,7 +500,7 @@ cl_rv cl_scan_params_init(cl_scan_params * oparams, cl_scan_params *iparams) {
     oparams->priority = iparams ? iparams->priority : CL_SCAN_PRIORITY_AUTO;
     //    oparams->threads_per_node = iparams ? iparams->threads_per_node : 1;
     oparams->pct = iparams ? iparams->pct : 100;
-    return CITRUSLEAF_OK;
+    return AEROSPIKE_OK;
 }
 
 cl_rv cl_scan_udf_init(cl_scan_udf * udf, udf_execution_type type, const char * filename, const char * function, as_list * arglist) {
@@ -508,7 +508,7 @@ cl_rv cl_scan_udf_init(cl_scan_udf * udf, udf_execution_type type, const char * 
     udf->filename    = filename == NULL ? NULL : strdup(filename);
     udf->function    = function == NULL ? NULL : strdup(function);
     udf->arglist     = arglist;
-    return CITRUSLEAF_OK;
+    return AEROSPIKE_OK;
 }
 
 cl_rv cl_scan_udf_destroy(cl_scan_udf * udf) {
@@ -530,7 +530,7 @@ cl_rv cl_scan_udf_destroy(cl_scan_udf * udf) {
         udf->arglist = NULL;
     }
 
-    return CITRUSLEAF_OK;
+    return AEROSPIKE_OK;
 }
 
 /*
@@ -539,7 +539,7 @@ cl_rv cl_scan_udf_destroy(cl_scan_udf * udf) {
  */
 cf_vector * citrusleaf_udf_scan_background(as_cluster * asc, cl_scan * scan) {
     scan->udf.type = CL_SCAN_UDF_BACKGROUND;
-    cl_rv res = CITRUSLEAF_OK;
+    cl_rv res = AEROSPIKE_OK;
 
     // Call cl_scan_execute with a NULL node_name.
 	return cl_scan_execute(asc, scan, NULL, &res, NULL, NULL);
@@ -552,7 +552,7 @@ cf_vector * citrusleaf_udf_scan_background(as_cluster * asc, cl_scan * scan) {
 cl_rv citrusleaf_udf_scan_node_background(as_cluster * asc, cl_scan * scan, char *node_name) {
     scan->udf.type = CL_SCAN_UDF_BACKGROUND;
 	cl_node_response resp;
-    cl_rv rv = CITRUSLEAF_OK;
+    cl_rv rv = AEROSPIKE_OK;
 
     // Call cl_scan_execute with a NULL node_name.
     cf_vector * v = cl_scan_execute(asc, scan, node_name, &rv, NULL, NULL);
@@ -572,7 +572,7 @@ cl_rv citrusleaf_udf_scan_node_background(as_cluster * asc, cl_scan * scan, char
 cl_rv citrusleaf_udf_scan_node(as_cluster *asc, cl_scan *scan, char *node_name, int( *callback)(as_val *, void *), void * udata) {
     scan->udf.type = CL_SCAN_UDF_CLIENT_RECORD;
 	cl_node_response resp;
-    cl_rv rv = CITRUSLEAF_FAIL_CLIENT;
+    cl_rv rv = AEROSPIKE_ERR_CLIENT;
 
     // If cl_scan_execute returns a non null vector, return the value in the vector, else return a failure
     cf_vector *v = cl_scan_execute(asc, scan, node_name, &rv, callback, udata);
@@ -589,13 +589,13 @@ cl_rv citrusleaf_udf_scan_node(as_cluster *asc, cl_scan *scan, char *node_name, 
  */
 cf_vector * citrusleaf_udf_scan_all_nodes(as_cluster *asc, cl_scan * scan, int (*callback)(as_val*, void*), void * udata) {
     scan->udf.type = CL_SCAN_UDF_CLIENT_RECORD;
-    cl_rv rc = CITRUSLEAF_OK;
+    cl_rv rc = AEROSPIKE_OK;
     return cl_scan_execute(asc, scan, NULL, &rc, callback, udata);
 }
 
 cf_vector * cl_scan_execute(as_cluster * cluster, const cl_scan * scan, char * node_name, cl_rv * res, int (* callback)(as_val *, void *), void * udata) {
 
-    cl_rv           rc                          = CITRUSLEAF_OK;
+    cl_rv           rc                          = AEROSPIKE_OK;
     uint8_t         wr_stack_buf[STACK_BUF_SZ]  = { 0 };
     uint8_t *       wr_buf                      = wr_stack_buf;
     size_t          wr_buf_sz                   = sizeof(wr_stack_buf);
@@ -603,7 +603,7 @@ cf_vector * cl_scan_execute(as_cluster * cluster, const cl_scan * scan, char * n
     cl_node_response  response;
     rc = scan_compile(scan, &wr_buf, &wr_buf_sz);
 
-    if ( rc != CITRUSLEAF_OK ) {
+    if ( rc != AEROSPIKE_OK ) {
         LOG("[ERROR] cl_scan_execute: scan compile failed: \n");
         *res = rc;
         return NULL;
@@ -639,7 +639,7 @@ cf_vector * cl_scan_execute(as_cluster * cluster, const cl_scan * scan, char * n
         as_cluster_get_node_names(cluster, &node_count, &node_names);
         if ( node_count == 0 ) {
             LOG("[ERROR] cl_scan_execute: don't have any nodes?\n");
-            *res = CITRUSLEAF_FAIL_CLIENT;
+            *res = AEROSPIKE_ERR_CLIENT;
             goto Cleanup;
         }
 
@@ -736,7 +736,7 @@ cl_rv cl_scan_foreach(cl_scan * scan, const char * filename, const char * functi
 }
 
 cl_rv cl_scan_limit(cl_scan *scan, uint64_t limit) {
-    return CITRUSLEAF_OK;    
+    return AEROSPIKE_OK;    
 }
 
 int
@@ -749,7 +749,7 @@ cl_cluster_scan_init(as_cluster* asc)
 	}
 
 #ifdef DEBUG_VERBOSE
-	if (cf_debug_enabled()) {
+	if (as_log_debug_enabled()) {
 		LOG("[DEBUG] cl_cluster_scan_init: creating %d threads\n", AS_NUM_SCAN_THREADS);
 	}
 #endif

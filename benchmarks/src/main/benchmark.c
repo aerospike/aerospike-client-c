@@ -21,17 +21,9 @@
  ******************************************************************************/
 #include "benchmark.h"
 #include "aerospike/aerospike_info.h"
-#include "citrusleaf/cf_log.h"
+#include "aerospike/as_log.h"
 #include <stdint.h>
 #include <time.h>
-
-static const char * as_log_level_strings[5] = {
-	[AS_LOG_LEVEL_ERROR]	= "ERROR",
-	[AS_LOG_LEVEL_WARN]		= "WARN",
-	[AS_LOG_LEVEL_INFO]		= "INFO",
-	[AS_LOG_LEVEL_DEBUG]	= "DEBUG",
-	[AS_LOG_LEVEL_TRACE] 	= "TRACE"
-};
 
 void
 blog_line(const char* fmt, ...)
@@ -56,7 +48,7 @@ blog_detailv(as_log_level level, const char* fmt, va_list ap)
 	time_t now = time(NULL);
 	struct tm* t = localtime(&now);
 	int len = sprintf(fmtbuf, "%d-%02d-%02d %02d:%02d:%02d %s ",
-		t->tm_year+1900, t->tm_mon+1, t->tm_mday, t->tm_hour, t->tm_min, t->tm_sec, as_log_level_strings[level]);
+		t->tm_year+1900, t->tm_mon+1, t->tm_mday, t->tm_hour, t->tm_min, t->tm_sec, as_log_level_tostring(level));
 	char* p = stpcpy(fmtbuf + len, fmt);
 	*p++ = '\n';
 	*p = 0;
@@ -81,15 +73,6 @@ as_client_log_callback(as_log_level level, const char * func, const char * file,
 	blog_detailv(level, fmt, ap);
 	va_end(ap);
 	return true;
-}
-
-static void
-cf_client_log_callback(cf_log_level level, const char* fmt, ...)
-{
-	va_list ap;
-	va_start(ap, fmt);
-	blog_detailv((as_log_level)level, fmt, ap);
-	va_end(ap);
 }
 
 static int
@@ -119,7 +102,12 @@ connect_to_server(arguments* args, aerospike* client)
 	p->gen = AS_POLICY_GEN_IGNORE;
 	p->exists = AS_POLICY_EXISTS_IGNORE;
 	
+	p->read.replica = args->read_replica;
+	p->read.consistency_level = args->read_consistency_level;
+
 	p->write.timeout = args->write_timeout;
+	p->write.commit_level = args->write_commit_level;
+
 	p->operate.timeout = args->write_timeout;
 	p->remove.timeout = args->write_timeout;
 	p->info.timeout = 1000;
@@ -129,7 +117,7 @@ connect_to_server(arguments* args, aerospike* client)
 	as_error err;
 	
 	if (aerospike_connect(client, &err) != AEROSPIKE_OK) {
-		blog_error("Aerospike connect failed: %d-%s", err.code, err.message);
+		blog_error("Aerospike connect failed: %d : %s", err.code, err.message);
 		aerospike_destroy(client);
 		return 1;
 	}
@@ -224,23 +212,20 @@ run_benchmark(arguments* args)
 	data.binlen = args->binlen;
 	data.bintype = args->bintype;
 	data.random = args->random;
+	data.transactions_limit = args->transactions_limit;
+	data.transactions_count = 0;
 	data.latency = args->latency;
 	data.debug = args->debug;
 	data.valid = 1;
 
-	as_log log;
-	
 	if (args->debug) {
-		as_log_set_level(&log, AS_LOG_LEVEL_DEBUG);
-		cf_set_log_level(CF_DEBUG);
+		as_log_set_level(AS_LOG_LEVEL_DEBUG);
 	}
 	else {
-		as_log_set_level(&log, AS_LOG_LEVEL_INFO);
-		cf_set_log_level(CF_INFO);
+		as_log_set_level(AS_LOG_LEVEL_INFO);
 	}
 
-	as_log_set_callback(&log, as_client_log_callback);
-	cf_set_log_callback(cf_client_log_callback);
+	as_log_set_callback(as_client_log_callback);
 
 	int ret = connect_to_server(args, &data.client);
 	

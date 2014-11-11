@@ -42,6 +42,7 @@ typedef struct arguments_t {
 	bool init;
 	int init_pct;
 	int read_pct;
+	int transactions_limit;
 	int threads;
 	int throughput;
 	int read_timeout;
@@ -52,6 +53,9 @@ typedef struct arguments_t {
 	int latency_columns;
 	int latency_shift;
 	bool use_shm;
+	as_policy_replica read_replica;
+	as_policy_consistency_level read_consistency_level;
+	as_policy_commit_level write_commit_level;
 } arguments;
 
 typedef struct clientdata_t {
@@ -75,6 +79,9 @@ typedef struct clientdata_t {
 	cf_atomic32 read_timeout_count;
 	cf_atomic32 read_error_count;
 	
+	cf_atomic32 transactions_limit;
+	cf_atomic32 transactions_count;
+
 	cf_atomic32 current_key;
 	cf_atomic32 valid;
 	int32_t records;

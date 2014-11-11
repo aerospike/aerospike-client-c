@@ -15,139 +15,121 @@
  * the License.
  */
 #include <aerospike/as_policy.h>
-
 #include <stdbool.h>
 #include <stdint.h>
+
+/******************************************************************************
+ *	MACROS
+ *****************************************************************************/
+
+#define as_policy_resolve(__local, __global) \
+	if ((int)__local == -1) {\
+		__local = __global;\
+	}
 
 /******************************************************************************
  *	FUNCTIONS
  *****************************************************************************/
 
-/**
- *	Initialize as_policy_read to undefined values.
- */
-as_policy_read * as_policy_read_init(as_policy_read * p) {
-	p->timeout	= 0;
-	p->key		= AS_POLICY_KEY_UNDEF;
-	return p;
-}
-
-/**
- *	Initialize as_policy_apply to undefined values.
- */
-as_policy_apply * as_policy_apply_init(as_policy_apply * p) {
-	p->timeout	= 0;
-	p->key		= AS_POLICY_KEY_UNDEF;
-	return p;
-}
-
-/**
- *	Initialize as_policy_write to undefined values.
- */
-as_policy_write * as_policy_write_init(as_policy_write * p) 
+as_policies*
+as_policies_init(as_policies* p)
 {
-	p->timeout	= 0;
-	p->retry	= AS_POLICY_RETRY_UNDEF;
-	p->key		= AS_POLICY_KEY_UNDEF;
-	p->gen		= AS_POLICY_GEN_UNDEF;
-	p->exists	= AS_POLICY_EXISTS_UNDEF;
-	return p;
-}
-
-/**
- *	Initialize as_policy_operate to undefined values.
- */
-as_policy_operate * as_policy_operate_init(as_policy_operate * p)
-{
-	p->timeout		= 0;
-	p->retry		= AS_POLICY_RETRY_UNDEF;
-	p->key			= AS_POLICY_KEY_UNDEF;
-	p->gen			= AS_POLICY_GEN_UNDEF;
-	return p;
-}
-
-/**
- *	Initialize as_policy_remove to undefined values.
- */
-as_policy_remove * as_policy_remove_init(as_policy_remove * p)
-{
-	p->timeout		= 0;
-	p->generation	= 0;
-	p->retry		= AS_POLICY_RETRY_UNDEF;
-	p->key			= AS_POLICY_KEY_UNDEF;
-	p->gen			= AS_POLICY_GEN_UNDEF;
-	return p;
-}
-
-/**
- *	Initialize as_policy_scan to undefined values.
- */
-as_policy_scan * as_policy_scan_init(as_policy_scan * p) 
-{
-	p->timeout					= 0;
-	p->fail_on_cluster_change	= AS_POLICY_BOOL_UNDEF;
-	return p;
-}
-
-/**
- *	Initialize as_policy_query to undefined values.
- */
-as_policy_query * as_policy_query_init(as_policy_query * p)
-{
-	p->timeout = 0;
-	return p;
-}
-
-/**
- *	Initialize as_policy_info to undefined values.
- */
-as_policy_info * as_policy_info_init(as_policy_info * p)
-{
-	p->timeout		= 0;
-	p->send_as_is	= AS_POLICY_BOOL_UNDEF;
-	p->check_bounds	= AS_POLICY_BOOL_UNDEF;
-	return p;
-}
-
-/**
- *	Initialize as_policy_batch to undefined values.
- */
-as_policy_batch * as_policy_batch_init(as_policy_batch * p)
-{
-	p->timeout		= 0;
-	return p;
-}
-
-/**
- *	Initialize as_policy_admin to undefined values.
- */
-as_policy_admin * as_policy_admin_init(as_policy_admin * p)
-{
-	p->timeout = 0;
-	return p;
-}
-
-/**
- *	Initialize as_policies to default values.
- */
-as_policies * as_policies_init(as_policies * p)
-{
-	// defaults
-	p->timeout	= AS_POLICY_TIMEOUT_DEFAULT;
-	p->retry	= AS_POLICY_RETRY_DEFAULT;
-	p->key		= AS_POLICY_KEY_DEFAULT;
-	p->gen		= AS_POLICY_GEN_DEFAULT;
-	p->exists	= AS_POLICY_EXISTS_DEFAULT;
+	// Global defaults
+	p->timeout = AS_POLICY_TIMEOUT_DEFAULT;
+	p->retry = AS_POLICY_RETRY_DEFAULT;
+	p->key = AS_POLICY_KEY_DEFAULT;
+	p->gen = AS_POLICY_GEN_DEFAULT;
+	p->exists = AS_POLICY_EXISTS_DEFAULT;
+	p->replica = AS_POLICY_REPLICA_DEFAULT;
+	p->consistency_level = AS_POLICY_CONSISTENCY_LEVEL_DEFAULT;
+	p->commit_level = AS_POLICY_COMMIT_LEVEL_DEFAULT;
 	
-	as_policy_write_init(&p->write);
-	as_policy_read_init(&p->read);
-	as_policy_operate_init(&p->operate);
-	as_policy_remove_init(&p->remove);
-	as_policy_apply_init(&p->apply);
-	as_policy_scan_init(&p->scan);
-	as_policy_query_init(&p->query);
-	as_policy_info_init(&p->info);
-	as_policy_batch_init(&p->batch);
-	as_policy_admin_init(&p->admin);
+	// Set local defaults to undefined.
+	// Undefined variables will be set to global defaults in as_policies_resolve().
+	p->read.timeout = -1;
+	p->read.key = -1;
+	p->read.replica = -1;
+	p->read.consistency_level = -1;
+
+	p->write.timeout = -1;
+	p->write.retry = -1;
+	p->write.key = -1;
+	p->write.gen = -1;
+	p->write.exists = -1;
+	p->write.commit_level = -1;
+
+	p->operate.timeout = -1;
+	p->operate.retry = -1;
+	p->operate.key = -1;
+	p->operate.gen = -1;
+	p->operate.replica = -1;
+	p->operate.consistency_level = -1;
+	p->operate.commit_level = -1;
+
+	p->remove.timeout = -1;
+	p->remove.retry = -1;
+	p->remove.key = -1;
+	p->remove.gen = -1;
+	p->remove.generation = 0;
+	p->remove.commit_level = -1;
+
+	p->apply.timeout = -1;
+	p->apply.key = -1;
+	p->apply.commit_level = -1;
+
+	p->info.timeout = -1;
+	p->info.send_as_is = true;
+	p->info.check_bounds = true;
+
+	p->batch.timeout = -1;
+
+	p->admin.timeout = -1;
+
+	// Scan timeout should not be tied to global timeout.
+	p->scan.timeout = 0;
+	p->scan.fail_on_cluster_change = false;
+
+	// Query timeout should not be tied to global timeout.
+	p->query.timeout = 0;
+
 	return p;
+}
+
+void
+as_policies_resolve(as_policies* p)
+{
+	as_policy_resolve(p->read.timeout, p->timeout);
+	as_policy_resolve(p->read.key, p->key);
+	as_policy_resolve(p->read.replica, p->replica);
+	as_policy_resolve(p->read.consistency_level, p->consistency_level);
+
+	as_policy_resolve(p->write.timeout, p->timeout);
+	as_policy_resolve(p->write.retry, p->retry);
+	as_policy_resolve(p->write.key, p->key);
+	as_policy_resolve(p->write.gen, p->gen);
+	as_policy_resolve(p->write.exists, p->exists);
+	as_policy_resolve(p->write.commit_level, p->commit_level);
+
+	as_policy_resolve(p->operate.timeout, p->timeout);
+	as_policy_resolve(p->operate.retry, p->retry);
+	as_policy_resolve(p->operate.key, p->key);
+	as_policy_resolve(p->operate.gen, p->gen);
+	as_policy_resolve(p->operate.consistency_level, p->consistency_level);
+	as_policy_resolve(p->operate.commit_level, p->commit_level);
+
+	as_policy_resolve(p->remove.timeout, p->timeout);
+	as_policy_resolve(p->remove.retry, p->retry);
+	as_policy_resolve(p->remove.key, p->key);
+	as_policy_resolve(p->remove.gen, p->gen);
+	as_policy_resolve(p->remove.commit_level, p->commit_level);
+
+	as_policy_resolve(p->apply.timeout, p->timeout);
+	as_policy_resolve(p->apply.key, p->key);
+	as_policy_resolve(p->apply.commit_level, p->commit_level);
+
+	as_policy_resolve(p->info.timeout, p->timeout);
+
+	as_policy_resolve(p->batch.timeout, p->timeout);
+
+	as_policy_resolve(p->admin.timeout, p->timeout);
 }

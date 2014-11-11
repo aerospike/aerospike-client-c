@@ -30,8 +30,6 @@
  *	if you query for an indexed bin with value "abc", then only the records 
  *	containing bins with "abc" will be returned.
  *
- *	To create a string index, see aerospike_index_string_create().
- *	
  *	## Integer Indexes
  *
  *	An integer index allows for either equality or range lookups. An equality
@@ -39,10 +37,7 @@
  *	the records containing bins with the value 123 will be returned. A range 
  *	lookup means that you can query bins within a range. So, if your range is 
  *	(1...100), then all records containing the a value in that range will
- *	be returned. 
- *	
- *	To create a integer index, see aerospike_index_integer_create().
- *
+ *	be returned.
  */
 
 #include <aerospike/aerospike.h>
@@ -53,58 +48,101 @@
 #include <aerospike/as_status.h>
 
 /******************************************************************************
+ *	TYPES
+ *****************************************************************************/
+
+/**
+ *  Index Type
+ *
+ *  @ingroup index_operations
+ */
+typedef enum as_index_type_e {
+	/**
+	 *  Index on integer bin.
+	 */
+	AS_INDEX_NUMERIC,
+	
+	/**
+	 *  Index on string bin.
+	 */
+	AS_INDEX_STRING
+} as_index_type;
+
+/**
+ *	Index Task
+ *
+ *	Task used to poll for long running create index completion.
+ *
+ *	@ingroup index_operations
+ */
+typedef struct as_index_task_s {
+	/**
+	 *	The aerospike instance to use for this operation.
+	 */
+	aerospike * as;
+	
+	/**
+	 *	The namespace to be indexed.
+	 */
+	as_namespace ns;
+	
+	/**
+	 *	The name of the index.
+	 */
+	char name[64];
+	
+	/**
+	 *	Has operation completed
+	 */
+	bool done;
+} as_index_task;
+
+/******************************************************************************
  *	FUNCTIONS
  *****************************************************************************/
 
 /**
- *	Create a new secondary index on an integer bin.
+ *	Create secondary index.
+ *
+ *	This asynchronous server call will return before the command is complete.
+ *	The user can optionally wait for command completion by using a task instance.
  *
  *	~~~~~~~~~~{.c}
- *	if ( aerospike_index_integer_create(&as, &err, NULL, "test", "demo", "bin1", "idx_test_demo_bin1") != AEROSPIKE_OK ) {
- *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	as_index_task task;
+ *	if ( aerospike_index_create(&as, &err, &task, NULL, "test", "demo", "bin1", "idx_test_demo_bin1") == AEROSPIKE_OK ) {
+ *		aerospike_index_create_wait(&err, &task, 0);
  *	}
  *	~~~~~~~~~~
  *
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
+ *	@param task			The optional task data used to poll for completion.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param ns			The namespace to be indexed.
  *	@param set			The set to be indexed.
  *	@param bin			The bin to be indexed.
  *	@param name			The name of the index.
- *	
+ *
  *	@return AEROSPIKE_OK if successful or index already exists. Otherwise an error.
  *
  *	@ingroup index_operations
  */
-as_status aerospike_index_integer_create(
-	aerospike * as, as_error * err, const as_policy_info * policy, 
-	const as_namespace ns, const as_set set, const as_bin_name bin, const char * name);
+as_status aerospike_index_create(
+	aerospike * as, as_error * err, as_index_task * task, const as_policy_info * policy,
+	const as_namespace ns, const as_set set, const as_bin_name bin, const char * name, as_index_type type);
 
 /**
- *	Create a new secondary index on a string bin.
+ *	Wait for asynchronous task to complete using given polling interval.
  *
- *	~~~~~~~~~~{.c}
- *	if ( aerospike_index_string_create(&as, &err, NULL, "test", "demo", "bin1", "idx_test_demo_bin1") != AEROSPIKE_OK ) {
- *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *	}
- *	~~~~~~~~~~
- *
- *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
- *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param ns			The namespace to be indexed.
- *	@param set			The set to be indexed.
- *	@param bin			The bin to be indexed.
- *	@param name			The name of the index.
+ *	@param task			The task data used to poll for completion.
+ *	@param interval_ms	The polling interval in milliseconds. If zero, 1000 ms is used.
  *
- *	@return AEROSPIKE_OK if successful or index already exists. Otherwise an error.
+ *	@return AEROSPIKE_OK if successful. Otherwise an error.
  *
  *	@ingroup index_operations
  */
-as_status aerospike_index_string_create(
-	aerospike * as, as_error * err, const as_policy_info * policy, 
-	const as_namespace ns, const as_set set, const as_bin_name bin, const char * name);
+as_status aerospike_index_create_wait(as_error * err, as_index_task * task, uint32_t interval_ms);
 
 /**
  *	Removes (drops) a secondary index.
@@ -126,10 +164,37 @@ as_status aerospike_index_string_create(
  *	@ingroup index_operations
  */
 as_status aerospike_index_remove(
-	aerospike * as, as_error * err, const as_policy_info * policy, 
-	const as_namespace ns, const char * name); 
+	aerospike * as, as_error * err, const as_policy_info * policy,
+	const as_namespace ns, const char * name);
 
+/******************************************************************************
+ *	DEPRECATED FUNCTIONS
+ *****************************************************************************/
 
-/** 
- *	@}
+/**
+ *	Create a new secondary index on an integer bin.
+ *
+ *	@deprecated Use aerospike_index_create() instead.
+ *
+ *	@ingroup index_operations
  */
+static inline as_status aerospike_index_integer_create(
+	aerospike * as, as_error * err, const as_policy_info * policy, 
+	const as_namespace ns, const as_set set, const as_bin_name bin, const char * name)
+{
+	return aerospike_index_create(as, err, 0, policy, ns, set, bin, name, AS_INDEX_NUMERIC);
+}
+
+/**
+ *	Create a new secondary index on a string bin.
+ *
+ *	@deprecated Use aerospike_index_create() instead.
+ *
+ *	@ingroup index_operations
+ */
+static inline as_status aerospike_index_string_create(
+	aerospike * as, as_error * err, const as_policy_info * policy, 
+	const as_namespace ns, const as_set set, const as_bin_name bin, const char * name)
+{
+	return aerospike_index_create(as, err, 0, policy, ns, set, bin, name, AS_INDEX_STRING);
+}

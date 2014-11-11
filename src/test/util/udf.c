@@ -103,14 +103,15 @@ bool udf_put(const char * filename) {
 	as_string filename_string;
 	const char * base = as_basename(&filename_string, filename);
 
-    if ( aerospike_udf_put(as, &err, NULL, base, AS_UDF_TYPE_LUA, &udf_content) != AEROSPIKE_OK ) {
+    if ( aerospike_udf_put(as, &err, NULL, base, AS_UDF_TYPE_LUA, &udf_content) == AEROSPIKE_OK ) {
+		aerospike_udf_put_wait(as, &err, NULL, base, 100);
+	}
+	else {
         error("error caused by aerospike_udf_put(): (%d) %s @ %s[%s:%d]", err.code, err.message, err.func, err.file, err.line);
     }
 
 	as_string_destroy(&filename_string);
     as_val_destroy(&udf_content);
-
-	WAIT_MS(100);
 
     return err.code == AEROSPIKE_OK;
 }

@@ -147,6 +147,33 @@ as_status aerospike_udf_put(
 	);
 
 /**
+ *	Wait for asynchronous udf put to complete using given polling interval.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_bytes content;
+ *	as_bytes_init(&content);
+ *
+ *	if (aerospike_udf_put(&as, &err, NULL, "my.lua", AS_UDF_TYPE_LUA, &content) == AEROSPIKE_OK ) {
+ *	    aerospike_udf_put_wait(&as, &err, NULL, "my.lua", 0);
+ *	}
+ *	as_bytes_destroy(&content);
+ *	~~~~~~~~~~
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param filename		The name of the UDF file.
+ *	@param interval_ms	The polling interval in milliseconds. If zero, 1000 ms is used.
+ *
+ *	@return AEROSPIKE_OK if successful. Otherwise an error occurred.
+ *
+ *	@ingroup udf_operations
+ */
+as_status aerospike_udf_put_wait(
+	aerospike * as, as_error * err, const as_policy_info * policy,
+	const char * filename, uint32_t interval_ms);
+
+/**
  *	Remove a UDF file from the cluster.
  *
  *	~~~~~~~~~~{.c}

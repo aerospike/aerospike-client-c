@@ -56,11 +56,12 @@ TEST( index_basics_create , "Create index on bin" ) {
     as_error err;
     as_error_reset(&err);
 
-    aerospike_index_string_create(as, &err, NULL, "test", "test", "new_bin", "idx_test_new_bin");
-    if ( err.code != AEROSPIKE_OK && err.code != AEROSPIKE_ERR_INDEX_FOUND ) {
+	as_status status = aerospike_index_create(as, &err, 0, NULL, "test", "test", "new_bin", "idx_test_new_bin", AS_INDEX_STRING);
+	
+    if (status != AEROSPIKE_OK) {
         info("error(%d): %s", err.code, err.message);
     }
-    assert_int_eq( err.code , AEROSPIKE_OK );
+    assert_int_eq( status , AEROSPIKE_OK );
 
 }
 

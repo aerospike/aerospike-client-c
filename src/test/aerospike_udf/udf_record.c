@@ -73,7 +73,7 @@ TEST( udf_record_pre , "upload udf_record.lua" ) {
 
   assert_int_eq( err.code, AEROSPIKE_OK );
 
-  WAIT_MS(100);
+  aerospike_udf_put_wait(as, &err, NULL, filename, 100);
 
   as_bytes_destroy(&content);
 }

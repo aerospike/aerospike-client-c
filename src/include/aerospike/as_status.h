@@ -65,7 +65,6 @@ typedef enum as_status_e {
 	/**
 	 *	Record does not exist in database. May be returned by read, or write
 	 *	with policy AS_POLICY_EXISTS_UPDATE.
-	 *	@warning	AS_POLICY_EXISTS_UPDATE not yet supported.
 	 */
 	AEROSPIKE_ERR_RECORD_NOT_FOUND = 2,
 	

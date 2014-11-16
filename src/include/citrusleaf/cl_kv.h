@@ -49,7 +49,7 @@ cl_rv citrusleaf_get_all_digest_getsetname(as_cluster *asc, const char *ns, cons
 cl_rv citrusleaf_put(as_cluster *asc, const char *ns, const char *set, const cl_object *key, const cf_digest *d, const cl_bin *bins, int n_bins, const cl_write_parameters *cl_w_p, int commit_level);
 cl_rv citrusleaf_put_digest(as_cluster *asc, const char *ns, const cf_digest *d, const cl_bin *bins, int n_bins, const cl_write_parameters *cl_w_p, int commit_level);
 cl_rv citrusleaf_put_digest_with_setname(as_cluster *asc, const char *ns, const char *set, const cf_digest *d, const cl_bin *bins, int n_bins, const cl_write_parameters *cl_w_p, int commit_level);
-cl_rv citrusleaf_restore(as_cluster *asc, const char *ns, const cf_digest *digest, const char *set, const cl_object *key, const cl_bin *values, int n_values, const cl_write_parameters *cl_w_p, int commit_level);
+cl_rv citrusleaf_restore(as_cluster *asc, const char *ns, const char *set, const cl_object *key, const cf_digest *digest, const cl_bin *values, int n_values, const cl_write_parameters *cl_w_p, int commit_level);
 
 /**
  * Get is like select in SQL. Create a list of bins to get, and call this function to retrieve

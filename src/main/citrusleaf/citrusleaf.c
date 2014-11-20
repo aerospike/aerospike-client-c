@@ -1603,11 +1603,11 @@ citrusleaf_put_digest_with_setname(as_cluster *asc, const char *ns, const char *
 }
 
 extern cl_rv
-citrusleaf_restore(as_cluster *asc, const char *ns, const cf_digest *digest,
-		const char *set, const cl_bin *values, int n_values, const cl_write_parameters *cl_w_p, int commit_level)
+citrusleaf_restore(as_cluster *asc, const char *ns, const char *set, const cl_object *key,
+		const cf_digest *digest, const cl_bin *values, int n_values, const cl_write_parameters *cl_w_p, int commit_level)
 {
 	uint64_t trid=0;
-	return( do_the_full_monte( asc, 0, CL_MSG_INFO2_WRITE, commit_level, ns, set, 0, digest,
+	return( do_the_full_monte( asc, 0, CL_MSG_INFO2_WRITE, commit_level, ns, set, key, digest,
 			(cl_bin **) &values, CL_OP_WRITE, 0, &n_values, NULL, cl_w_p,
 			&trid, NULL, NULL, NULL, -1) );
 }

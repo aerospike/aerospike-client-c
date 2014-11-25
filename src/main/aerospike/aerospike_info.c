@@ -132,7 +132,7 @@ as_status aerospike_info_host(
  *	The callback takes a response string. The caller should not free this string.
  *
  *	~~~~~~~~~~{.c}
- *	bool callback(const as_error * err, const char * node, char * res, void * udata) {
+ *	bool callback(const as_error * err, const as_node * node, const char * req, char * res, void * udata) {
  *		// handle response
  *	}
  *	~~~~~~~~~~

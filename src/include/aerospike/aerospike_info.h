@@ -103,11 +103,11 @@ as_status aerospike_info_host(
  *	The callback takes a response string. The caller should not free this string.
  *
  *	~~~~~~~~~~{.c}
- *	bool callback(const as_error * err, const char * node, char * res, void * udata) {
+ *	bool callback(const as_error * err, const as_node * node, const char * req, char * res, void * udata) {
  *		// handle response
  *	}
  *	~~~~~~~~~~
- *	     
+ *
  *
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
@@ -123,5 +123,5 @@ as_status aerospike_info_host(
 as_status aerospike_info_foreach(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
 	const char * req, 
-    aerospike_info_foreach_callback callback, void * udata
+	aerospike_info_foreach_callback callback, void * udata
 	);

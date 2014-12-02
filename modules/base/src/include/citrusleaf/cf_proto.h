@@ -309,9 +309,8 @@ typedef struct as_msg_s {
 // QUERY SERVER had: UDF, Aggregate, MR
 // SCAN  SERVER had: None, UDF, Background
 // On the wire, we put: 0=Record and 1=Stream into field 33 (above)
-#define CL_UDF_MSG_VAL_RECORD 0
-#define CL_UDF_MSG_VAL_QUERY_STREAM 1
-#define CL_UDF_MSG_VAL_SCAN_STREAM 3
+#define CL_UDF_MSG_VAL_RECORD 2
+#define CL_UDF_MSG_VAL_STREAM 1
 	
 // 40-49 RESERVED FOR QUERY
 #define CL_MSG_FIELD_TYPE_QUERY_BINLIST			40

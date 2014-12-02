@@ -43,10 +43,10 @@ COMMON-make-prepare:
 	$(MAKE) -e -C $(COMMON) prepare
 
 $(TARGET_INCL)/aerospike/%.h: $(COMMON)/$(TARGET_INCL)/aerospike/%.h | $(TARGET_INCL)/aerospike
-	 cp $^ $@
+	 cp -p $^ $@
 
 $(TARGET_INCL)/citrusleaf/%.h: $(COMMON)/$(TARGET_INCL)/citrusleaf/%.h | $(TARGET_INCL)/citrusleaf
-	 cp $^ $@
+	 cp -p $^ $@
 
 ###############################################################################
 ##  BASE MODULE                                                              ##
@@ -92,7 +92,7 @@ BASE-make-prepare:
 	$(MAKE) -e -C $(BASE) prepare COMMON=$(COMMON)
 
 $(TARGET_INCL)/citrusleaf/%.h: $(BASE)/$(TARGET_INCL)/citrusleaf/%.h | $(TARGET_INCL)/citrusleaf
-	cp $^ $@
+	cp -p $^ $@
 
 ###############################################################################
 ##  MOD-LUA MODULE                                                           ##
@@ -156,7 +156,7 @@ CK_PATSUB := $(patsubst $(CK)/include/%.h,$(TARGET_INCL)/ck/%.h,$(CK_INCLUDES))
 
 $(TARGET_INCL)/ck/%.h: $(CK)/include/%.h
 	mkdir -p $(@D)
-	cp $< $@
+	cp -p $< $@
 
 CK-prepare: $(CK_PATSUB)
 	$(noop)

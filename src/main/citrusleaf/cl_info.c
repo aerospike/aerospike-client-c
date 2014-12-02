@@ -170,11 +170,10 @@ citrusleaf_info_host_limit(int fd, char *names, char **values, int timeout_ms, b
 		}
 	}
 	
-	// Sometimes people forget/cant add the trailing '\n'. Be nice and add it for them.
-	// using a stack allocated variable so we dn't have to clean up, Pain in the ass syntactically
-	// but a nice little thing
+	// Sometimes people forget to/cannot add the trailing '\n'. Be nice and
+	// add it for them using a stack allocated variable so we don't have to clean up.
 	if (names) {
-		if (names[slen-1] == '\n') {
+		if (slen && names[slen-1] == '\n') {
 			slen = 0;
 		} else { 
 			slen++;

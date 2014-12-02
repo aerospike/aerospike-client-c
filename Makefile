@@ -197,7 +197,7 @@ libaerospike.a: $(TARGET_LIB)/libaerospike.a
 libaerospike.$(DYNAMIC_SUFFIX): $(TARGET_LIB)/libaerospike.$(DYNAMIC_SUFFIX)
 
 install:
-	cp $(TARGET_LIB)/libaerospike.* /usr/local/lib/
+	cp -p $(TARGET_LIB)/libaerospike.* /usr/local/lib/
 
 ###############################################################################
 ##  BUILD TARGETS                                                            ##
@@ -222,10 +222,10 @@ $(TARGET_INCL)/citrusleaf: | $(TARGET_INCL)
 	mkdir $@
 
 $(TARGET_INCL)/aerospike/%.h:: $(SOURCE_INCL)/aerospike/%.h | $(TARGET_INCL)/aerospike
-	cp $^ $@
+	cp -p $^ $@
 
 $(TARGET)/old-include/citrusleaf/%.h:: $(SOURCE_INCL)/citrusleaf/%.h | $(TARGET_INCL)/citrusleaf
-	cp $^ $@
+	cp -p $^ $@
 
 ###############################################################################
 include project/modules.mk project/test.mk project/docs.mk project/rules.mk

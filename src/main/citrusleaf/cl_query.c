@@ -343,7 +343,7 @@ static int query_compile_select(cf_vector *binnames, uint8_t *buf, int *sz_p) {
 static int query_compile(const cl_query * query, uint8_t ** buf_r, size_t * buf_sz_r) 
 {
 
-    if (!query) return CITRUSLEAF_FAIL_CLIENT;
+    if (!query) return AEROSPIKE_ERR_CLIENT;
     /**
      * If the query has a udf w/ arglist,
      * then serialize it.
@@ -401,11 +401,11 @@ static int query_compile(const cl_query * query, uint8_t ** buf_r, size_t * buf_
         }
 
         // query field    
-	if (query->ranges) { 
+	if (query->ranges) {
 		n_fields++;
 		range_sz = 0; 
 		if (query_compile_range(query->ranges, NULL, &range_sz)) {
-			return CITRUSLEAF_FAIL_CLIENT;
+			return AEROSPIKE_ERR_CLIENT;
 		}
 		msg_sz += range_sz + sizeof(cl_msg_field);
 	}
@@ -516,11 +516,7 @@ static int query_compile(const cl_query * query, uint8_t ** buf_r, size_t * buf_
                 *mf->data = CL_UDF_MSG_VAL_RECORD;
                 break;
             case AS_UDF_CALLTYPE_STREAM:
-		if ( query->ranges) { 
-			*mf->data = CL_UDF_MSG_VAL_QUERY_STREAM;
-		} else {
-			*mf->data = CL_UDF_MSG_VAL_SCAN_STREAM; 
-		}
+			*mf->data = CL_UDF_MSG_VAL_STREAM;
                 break;
             default:
                 // should never happen!

@@ -44,13 +44,11 @@
  *	
  *	First, we define a query using as_query. The query will be for the "test"
  *	namespace and "demo" set. We will add a where predicate on "bin2", on which
- *	we have already created a secondary index. Also, we will limit
- *	the results to 100 records.
+ *	we have already created a secondary index. 
  *	
  *	~~~~~~~~~~{.c}
  *	as_query query;
  *	as_query_init(&query, "test", "demo");
- *	as_query_limit(&query, 100);
  *
  *	as_query_where_init(&query, 1);
  *	as_query_where(&query, "bin2", integer_equals(100));

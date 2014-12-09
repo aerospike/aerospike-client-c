@@ -618,7 +618,7 @@ example_create_integer_index(aerospike* p_as, const char* bin,
 	as_index_task task;
 	as_error err;
 
-	if (aerospike_index_create(p_as, &err, &task, NULL, g_namespace, g_set, bin, index, AS_INDEX_NUMERIC) != AEROSPIKE_OK) {
+	if (aerospike_index_create(p_as, &err, &task, NULL, g_namespace, g_set, bin, index, AS_INDEX_TYPE_DEFAULT, AS_INDEX_NUMERIC) != AEROSPIKE_OK) {
 		LOG("aerospike_index_create() returned %d - %s", err.code, err.message);
 		return false;
 	}

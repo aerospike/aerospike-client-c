@@ -56,7 +56,7 @@ TEST( index_basics_create , "Create index on bin" ) {
     as_error err;
     as_error_reset(&err);
 
-	as_status status = aerospike_index_create(as, &err, 0, NULL, "test", "test", "new_bin", "idx_test_new_bin", AS_INDEX_STRING);
+	as_status status = aerospike_index_create(as, &err, 0, NULL, "test", "test", "new_bin", "idx_test_new_bin", AS_INDEX_TYPE_DEFAULT, AS_INDEX_STRING);
 	
     if (status != AEROSPIKE_OK) {
         info("error(%d): %s", err.code, err.message);

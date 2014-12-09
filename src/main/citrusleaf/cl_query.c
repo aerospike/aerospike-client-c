@@ -386,6 +386,9 @@ static int query_compile(const cl_query * query, uint8_t ** buf_r, size_t * buf_
                 msg_sz += strlen(query->indexname) + sizeof(cl_msg_field);
             }
         }
+	
+        n_fields++;
+        msg_sz += sizeof(query->indextype) + sizeof(cl_msg_field);
 
         if (query->setname) {
             setname_len = (int)strlen(query->setname);
@@ -467,6 +470,13 @@ static int query_compile(const cl_query * query, uint8_t ** buf_r, size_t * buf_
         cl_msg_swap_field_to_be(mf);
         mf = mf_tmp;
     }
+
+    mf->type = CL_MSG_FIELD_TYPE_INDEX_TYPE;
+    mf->field_sz = sizeof(query->indextype);
+   	*(mf->data) = query->indextype;
+	mf_tmp = cl_msg_field_get_next(mf);
+    cl_msg_swap_field_to_be(mf);
+    mf = mf_tmp;
 
     if (setname_len) {
         mf->type = CL_MSG_FIELD_TYPE_SET;

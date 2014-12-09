@@ -265,7 +265,7 @@ bool as_query_where_init(as_query * query, uint16_t n)
  *	
  *	@return On success, true. Otherwise an error occurred.
  */
-bool as_query_where(as_query * query, const char * bin, as_predicate_type type, ... )
+bool as_query_where(as_query * query, const char * bin, as_predicate_type type, as_index_datatype dtype, as_index_type itype, ... )
 {
 	// test preconditions
 	if ( !query || !bin || strlen(bin) >= AS_BIN_NAME_MAX_SIZE ) {
@@ -278,22 +278,33 @@ bool as_query_where(as_query * query, const char * bin, as_predicate_type type, 
 	as_predicate * p = &query->where.entries[query->where.size++];
 
 	strcpy(p->bin, bin);
-	p->type = type;
-
+	p->type  = type;
+	p->dtype = dtype;
+	p->itype = itype;
     va_list ap;
     va_start(ap, type);
 
     switch(type) {
-    	case AS_PREDICATE_STRING_EQUAL:
-    		p->value.string = va_arg(ap, char *);
+    	case AS_PREDICATE_EQUAL:
+			if (dtype == AS_INDEX_DATA_STRING) {
+    			p->value.string = va_arg(ap, char *);
+			}
+			else if (dtype == AS_INDEX_DATA_NUMERIC) {
+				p->value.integer = va_arg(ap, int64_t);
+			}
+			else {
+				return false;
+			}
     		break;
-    	case AS_PREDICATE_INTEGER_EQUAL:
-    		p->value.integer = va_arg(ap, int64_t);
-    		break;
-    	case AS_PREDICATE_INTEGER_RANGE:
-    		p->value.integer_range.min = va_arg(ap, int64_t);
-    		p->value.integer_range.max = va_arg(ap, int64_t);
-    		break;
+    	case AS_PREDICATE_RANGE:
+    		if (dtype == AS_INDEX_DATA_NUMERIC) {
+				p->value.integer_range.min = va_arg(ap, int64_t);
+    			p->value.integer_range.max = va_arg(ap, int64_t);
+    		}
+			else {
+				return false;
+			}
+			break;
     }
 
     va_end(ap);

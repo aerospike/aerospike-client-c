@@ -36,19 +36,19 @@
 
 cl_rv citrusleaf_secondary_index_create(
     as_cluster * asc, const char * ns, const char * set,
-    const char * iname, const char * binname, const char * type,
+    const char * iname, const char * position, const char * itype, const char * dtype,
     char ** response
 ){
 
-    if (!ns || !iname || !binname || !type) return AEROSPIKE_ERR_CLIENT;
+    if (!ns || !iname || !position || !dtype) return AEROSPIKE_ERR_CLIENT;
 
     char ddl[1024];
     
     sprintf(ddl, 
         "sindex-create:ns=%s%s%s;indexname=%s;" 
-        "numbins=1;indexdata=%s,%s;priority=normal\n",
+        "numbins=1;indextype=%s,indexdata=%s,%s;priority=normal\n",
         ns, set ? ";set=" : "", set ? set : "",
-        iname, binname, type
+        iname, itype, position, dtype
     );
 
     return citrusleaf_info_cluster(asc, ddl, response, true, /* check bounds */ true, 5000);

@@ -50,23 +50,29 @@
 /******************************************************************************
  *	TYPES
  *****************************************************************************/
+#define AS_INDEX_POSITION_MAX_SZ 256
+
+typedef char as_index_position[AS_INDEX_POSITION_MAX_SZ];
 
 /**
  *  Index Type
  *
  *  @ingroup index_operations
  */
-typedef enum as_index_type_e {
-	/**
-	 *  Index on integer bin.
-	 */
-	AS_INDEX_NUMERIC,
-	
-	/**
-	 *  Index on string bin.
-	 */
-	AS_INDEX_STRING
+typedef enum as_index_type_s {
+	AS_INDEX_TYPE_DEFAULT,
+	AS_INDEX_TYPE_LIST,
+	AS_INDEX_TYPE_MAPKEYS,
+	AS_INDEX_TYPE_MAPVALUES
 } as_index_type;
+
+/*
+ * Type of data which is going to indexed
+ */
+typedef enum as_index_datatype_s {
+	AS_INDEX_DATA_STRING,
+	AS_INDEX_DATA_NUMERIC
+} as_index_datatype;
 
 /**
  *	Index Task
@@ -96,6 +102,7 @@ typedef struct as_index_task_s {
 	 */
 	bool done;
 } as_index_task;
+
 
 /******************************************************************************
  *	FUNCTIONS
@@ -128,8 +135,8 @@ typedef struct as_index_task_s {
  *	@ingroup index_operations
  */
 as_status aerospike_index_create(
-	aerospike * as, as_error * err, as_index_task * task, const as_policy_info * policy,
-	const as_namespace ns, const as_set set, const as_bin_name bin, const char * name, as_index_type type);
+	aerospike * as, as_error * err, as_index_task * task, const as_policy_info * policy, const as_namespace ns, 
+	const as_set set, const as_index_position position, const char * name, as_index_type itype, as_index_datatype dtype);
 
 /**
  *	Wait for asynchronous task to complete using given polling interval.
@@ -180,9 +187,9 @@ as_status aerospike_index_remove(
  */
 static inline as_status aerospike_index_integer_create(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
-	const as_namespace ns, const as_set set, const as_bin_name bin, const char * name)
+	const as_namespace ns, const as_set set, const as_index_position position, const char * name)
 {
-	return aerospike_index_create(as, err, 0, policy, ns, set, bin, name, AS_INDEX_NUMERIC);
+	return aerospike_index_create(as, err, 0, policy, ns, set, position, name, AS_INDEX_TYPE_DEFAULT, AS_INDEX_DATA_NUMERIC);
 }
 
 /**
@@ -194,7 +201,7 @@ static inline as_status aerospike_index_integer_create(
  */
 static inline as_status aerospike_index_string_create(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
-	const as_namespace ns, const as_set set, const as_bin_name bin, const char * name)
+	const as_namespace ns, const as_set set, const as_index_position position, const char * name)
 {
-	return aerospike_index_create(as, err, 0, policy, ns, set, bin, name, AS_INDEX_STRING);
+	return aerospike_index_create(as, err, 0, policy, ns, set, position, name, AS_INDEX_TYPE_DEFAULT, AS_INDEX_DATA_STRING);
 }

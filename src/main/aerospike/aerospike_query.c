@@ -62,16 +62,19 @@ static cl_query * as_query_toclquery(const as_query * query)
 	for ( int i = 0; i < query->where.size; i++ ) {
 		as_predicate * p = &query->where.entries[i];
 		switch(p->type) {
-			case AS_PREDICATE_STRING_EQUAL:
-				cl_query_where(clquery, p->bin, CL_EQ, CL_STR, p->value.string);
+			case AS_PREDICATE_EQUAL:
+				if (p->dtype == AS_INDEX_DATA_STRING) {
+					cl_query_where(clquery, p->bin, CL_EQ, CL_STR, p->value.string);
+				}
+				else if (p->dtype == AS_INDEX_DATA_NUMERIC) {
+					cl_query_where(clquery, p->bin, CL_EQ, CL_INT, p->value.integer);
+				}
 				break;
-			case AS_PREDICATE_INTEGER_EQUAL:
-				cl_query_where(clquery, p->bin, CL_EQ, CL_INT, p->value.integer);
-				break;
-			case AS_PREDICATE_INTEGER_RANGE:
+			case AS_PREDICATE_RANGE:
 				cl_query_where(clquery, p->bin, CL_RANGE, CL_INT, p->value.integer_range.min, p->value.integer_range.max);
 				break;
 		}
+		clquery->indextype = p->itype;	
 	}
 
 	for ( int i = 0; i < query->orderby.size; i++ ) {

@@ -40,6 +40,6 @@ typedef struct cl_sindex_t {
  * FUNCTIONS
  ******************************************************************************/
 
-cl_rv citrusleaf_secondary_index_create(as_cluster *asc, const char *ns, const char *set, const char *iname, const char *binname, const char *type, char **response);
+cl_rv citrusleaf_secondary_index_create(as_cluster *asc, const char *ns, const char *set, const char *iname, const char *binname, const char *itype, const char *dtype, char **response);
 
 cl_rv citrusleaf_secondary_index_drop(as_cluster *asc, const char *ns, const char *iname, char **response);

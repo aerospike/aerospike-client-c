@@ -696,17 +696,7 @@ example_dump_record(const as_record* p_rec)
 	as_record_iterator_destroy(&it);
 }
 
-const char* AS_OPERATORS[] = {
-		"AS_OPERATOR_WRITE",
-		"AS_OPERATOR_READ",
-		"AS_OPERATOR_INCR",
-		"NOT DEFINED",
-		"AS_OPERATOR_PREPEND",
-		"AS_OPERATOR_APPEND",
-		"NOT DEFINED",
-		"NOT DEFINED",
-		"AS_OPERATOR_TOUCH"
-};
+#define OPERATOR_TO_STRING(__enum) (#__enum)
 
 static void
 example_dump_op(const as_binop* p_binop)
@@ -715,20 +705,22 @@ example_dump_op(const as_binop* p_binop)
 		LOG("  null as_binop object");
 		return;
 	}
+	
+	const char* op_string = OPERATOR_TO_STRING(p_binop->op);
 
 	if (p_binop->op == AS_OPERATOR_TOUCH) {
-		LOG("  %s", AS_OPERATORS[p_binop->op]);
+		LOG("  %s", op_string);
 		return;
 	}
 
 	if (p_binop->op == AS_OPERATOR_READ) {
-		LOG("  %s : %s", AS_OPERATORS[p_binop->op], p_binop->bin.name);
+		LOG("  %s : %s", op_string, p_binop->bin.name);
 		return;
 	}
 
 	char* val_as_str = as_val_tostring(p_binop->bin.valuep);
 
-	LOG("  %s : %s : %s", AS_OPERATORS[p_binop->op], p_binop->bin.name,
+	LOG("  %s : %s : %s", op_string, p_binop->bin.name,
 			val_as_str);
 
 	free(val_as_str);

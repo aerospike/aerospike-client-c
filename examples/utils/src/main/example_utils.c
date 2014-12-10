@@ -696,7 +696,22 @@ example_dump_record(const as_record* p_rec)
 	as_record_iterator_destroy(&it);
 }
 
-#define OPERATOR_TO_STRING(__enum) (#__enum)
+#define OP_CASE_ASSIGN(__enum) \
+	case __enum : \
+		return #__enum; \
+
+static const char*
+operator_to_string(as_operator op)
+{
+	switch (op) {
+		OP_CASE_ASSIGN(AS_OPERATOR_READ);
+		OP_CASE_ASSIGN(AS_OPERATOR_WRITE);
+		OP_CASE_ASSIGN(AS_OPERATOR_INCR);
+		OP_CASE_ASSIGN(AS_OPERATOR_APPEND);
+		OP_CASE_ASSIGN(AS_OPERATOR_PREPEND);
+		OP_CASE_ASSIGN(AS_OPERATOR_TOUCH);
+	}
+}
 
 static void
 example_dump_op(const as_binop* p_binop)
@@ -706,7 +721,7 @@ example_dump_op(const as_binop* p_binop)
 		return;
 	}
 	
-	const char* op_string = OPERATOR_TO_STRING(p_binop->op);
+	const char* op_string = operator_to_string(p_binop->op);
 
 	if (p_binop->op == AS_OPERATOR_TOUCH) {
 		LOG("  %s", op_string);

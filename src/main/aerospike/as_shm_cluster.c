@@ -487,7 +487,9 @@ as_shm_tender(void* userdata)
 	as_cluster_shm* cluster_shm = shm_info->cluster_shm;
 	uint64_t threshold = shm_info->takeover_threshold_ms;
 	uint64_t limit = 0;
-	uint32_t tend_interval_micro = cluster->tend_interval * 1000;
+	struct timespec timeout;
+	timeout.tv_sec = cluster->tend_interval / 1000;
+	timeout.tv_nsec = (cluster->tend_interval * 1000 * 1000) % (1000 * 1000 * 1000);
 	uint32_t pid = getpid();
 	uint32_t nodes_gen = 0;
 	
@@ -538,7 +540,7 @@ as_shm_tender(void* userdata)
 				as_shm_reset_nodes(cluster);
 			}
 		}
-		usleep(tend_interval_micro);
+		pthread_mutex_timedlock(&cluster->tend_lock, &timeout);
 	}
 	
 	if (shm_info->is_tend_master) {

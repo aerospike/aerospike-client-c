@@ -648,11 +648,13 @@ static void*
 as_cluster_tender(void* data)
 {
 	as_cluster* cluster = (as_cluster*)data;
-	uint32_t tend_interval_micro = cluster->tend_interval * 1000;
-	
+	struct timespec timeout;
+	timeout.tv_sec = cluster->tend_interval / 1000;
+	timeout.tv_nsec = (cluster->tend_interval * 1000 * 1000) % (1000 * 1000 * 1000);
+
 	while (cluster->valid) {
 		as_cluster_tend(cluster, false);
-		usleep(tend_interval_micro);
+		pthread_mutex_timedlock(&cluster->tend_lock, &timeout);
 	}
 	return NULL;
 }
@@ -713,6 +715,8 @@ as_cluster_init(as_cluster* cluster, bool fail_if_not_connected)
 		}
 	}
 	as_cluster_add_seeds(cluster);
+	pthread_mutex_init(&cluster->tend_lock, NULL);
+	pthread_mutex_lock(&cluster->tend_lock);
 	cluster->valid = true;
 	return 0;
 }
@@ -930,13 +934,16 @@ as_cluster_destroy(as_cluster* cluster)
 	// Stop tend thread and wait till finished.
 	if (cluster->valid) {
 		cluster->valid = false;
-		
+		pthread_mutex_unlock(&cluster->tend_lock);
+
 		if (cluster->shm_info) {
 			as_shm_destroy(cluster, true);
 		}
 		else {
 			pthread_join(cluster->tend_thread, NULL);
 		}
+
+		pthread_mutex_destroy(&cluster->tend_lock);
 	}
 
 	// Release everything in garbage collector.

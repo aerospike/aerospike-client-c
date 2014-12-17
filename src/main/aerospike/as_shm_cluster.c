@@ -487,9 +487,9 @@ as_shm_tender(void* userdata)
 	as_cluster_shm* cluster_shm = shm_info->cluster_shm;
 	uint64_t threshold = shm_info->takeover_threshold_ms;
 	uint64_t limit = 0;
-	struct timespec timeout;
-	timeout.tv_sec = cluster->tend_interval / 1000;
-	timeout.tv_nsec = (cluster->tend_interval * 1000 * 1000) % (1000 * 1000 * 1000);
+	struct timespec ts;
+	ts.tv_sec = cluster->tend_interval / 1000;
+	ts.tv_nsec = (cluster->tend_interval * 1000 * 1000) % (1000 * 1000 * 1000);
 	uint32_t pid = getpid();
 	uint32_t nodes_gen = 0;
 	
@@ -540,7 +540,7 @@ as_shm_tender(void* userdata)
 				as_shm_reset_nodes(cluster);
 			}
 		}
-		pthread_mutex_timedlock(&cluster->tend_lock, &timeout);
+		nanosleep(&ts, 0);
 	}
 	
 	if (shm_info->is_tend_master) {
@@ -676,7 +676,7 @@ as_shm_create(as_cluster* cluster, as_config* config)
 			
 			if (status != 0) {
 				ck_pr_store_8(&cluster_shm->lock, 0);
-				as_shm_destroy(cluster, false);
+				as_shm_destroy(cluster);
 				return status;
 			}
 			cluster_shm->ready = 1;
@@ -702,13 +702,8 @@ as_shm_create(as_cluster* cluster, as_config* config)
 }
 
 void
-as_shm_destroy(as_cluster* cluster, bool join_threads)
+as_shm_destroy(as_cluster* cluster)
 {
-	if (join_threads) {
-		pthread_join(cluster->tend_thread, NULL);
-	}
-
-	// Wait for threads to finish.
 	as_shm_info* shm_info = cluster->shm_info;
 	
 	if (!shm_info) {

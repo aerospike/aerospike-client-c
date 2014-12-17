@@ -16,7 +16,6 @@
  */
 #pragma once
 
-#include <pthread.h>
 #include <aerospike/as_config.h>
 #include <aerospike/as_node.h>
 #include <aerospike/as_partition.h>
@@ -210,15 +209,6 @@ typedef struct as_cluster_s {
 	 *	Milliseconds between cluster tends.
 	 */
 	uint32_t tend_interval;
-	
-	/**
-	 *	@private
-	 *	Lock for the tend thread to wait on with the tend interval as timeout.
-	 *	Normally locked, resulting in waiting a full interval between
-	 *	tend iterations.  Upon cluster shutdown, unlocked by the main
-	 *	thread, allowing a fast termination of the tend thread.
-	 */
-	pthread_mutex_t tend_lock;
 	
 	/**
 	 *	@private

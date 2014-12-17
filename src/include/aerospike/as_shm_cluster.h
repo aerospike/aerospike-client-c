@@ -255,7 +255,7 @@ as_shm_create(struct as_cluster_s* cluster, as_config* config);
  *	Destroy shared memory components.
  */
 void
-as_shm_destroy(struct as_cluster_s* cluster, bool join_threads);
+as_shm_destroy(struct as_cluster_s* cluster);
 
 /**
  *	@private

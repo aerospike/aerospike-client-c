@@ -25,9 +25,9 @@
 #include <citrusleaf/cl_info.h>
 #include <citrusleaf/cl_batch.h>
 #include <citrusleaf/cf_byte_order.h>
+#include <citrusleaf/cf_clock.h>
 #include <citrusleaf/cl_query.h>
 #include <citrusleaf/cf_socket.h>
-#include <signal.h>
 
 /******************************************************************************
  *	Function declarations
@@ -39,11 +39,6 @@ as_node_refresh(as_cluster* cluster, as_node* node, as_vector* /* <as_friend> */
 /******************************************************************************
  *	Functions
  *****************************************************************************/
-
-static void
-as_cluster_signal_handler(int sig)
-{
-}
 
 static inline void
 set_nodes(as_cluster* cluster, as_nodes* nodes)
@@ -654,15 +649,24 @@ static void*
 as_cluster_tender(void* data)
 {
 	as_cluster* cluster = (as_cluster*)data;
-
-	struct timespec ts;
-	ts.tv_sec = cluster->tend_interval / 1000;
-	ts.tv_nsec = (cluster->tend_interval * 1000 * 1000) % (1000 * 1000 * 1000);
 	
+	struct timespec delta;
+	cf_clock_set_timespec_ms(cluster->tend_interval, &delta);
+	
+	struct timespec abstime;
+	
+	pthread_mutex_lock(&cluster->tend_lock);
+
 	while (cluster->valid) {
 		as_cluster_tend(cluster, false);
-		nanosleep(&ts, 0);
+		
+		// Convert tend interval into absolute timeout.
+		cf_clock_current_add(&delta, &abstime);
+		
+		// Sleep for tend interval and exit early if cluster destroy is signaled.
+		pthread_cond_timedwait(&cluster->tend_cond, &cluster->tend_lock, &abstime);
 	}
+	pthread_mutex_unlock(&cluster->tend_lock);
 	return NULL;
 }
 
@@ -899,15 +903,12 @@ as_cluster_create(as_config* config, as_cluster** cluster_out)
 	// Initialize garbage collection array.
 	cluster->gc = as_vector_create(sizeof(as_gc_item), 8);
 
+	// Initialize tend lock and condition.
+	pthread_mutex_init(&cluster->tend_lock, NULL);
+	pthread_cond_init(&cluster->tend_cond, NULL);
+
 	// Initialize batch.
 	pthread_mutex_init(&cluster->batch_init_lock, 0);
-	
-	// Initialize cluster tend signal handler.
-	struct sigaction sa;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = 0;
-    sa.sa_handler = as_cluster_signal_handler;
-    sigaction(SIGUSR2, &sa, NULL);
 	
 	if (config->use_shm) {
 		// Create shared memory cluster.
@@ -947,8 +948,10 @@ as_cluster_destroy(as_cluster* cluster)
 	if (cluster->valid) {
 		cluster->valid = false;
 		
-		// Send signal to tend thread so it will interrupt sleep.
-		pthread_kill(cluster->tend_thread, SIGUSR2);
+		// Signal tend thread to wake up from sleep and stop.
+		pthread_mutex_lock(&cluster->tend_lock);
+		pthread_cond_signal(&cluster->tend_cond);
+		pthread_mutex_unlock(&cluster->tend_lock);
 		
 		// Wait for tend thread to finish.
 		pthread_join(cluster->tend_thread, NULL);
@@ -995,6 +998,10 @@ as_cluster_destroy(as_cluster* cluster)
 	}
 	cf_free(cluster->seeds);
 	
+	// Destroy tend lock and condition.
+	pthread_mutex_destroy(&cluster->tend_lock);
+	pthread_cond_destroy(&cluster->tend_cond);
+
 	// Destroy batch lock.
 	pthread_mutex_destroy(&cluster->batch_init_lock);
 	

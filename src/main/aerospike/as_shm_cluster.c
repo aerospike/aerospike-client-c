@@ -23,6 +23,7 @@
 #include <citrusleaf/cf_b64.h>
 #include <citrusleaf/cf_types.h>
 #include <citrusleaf/cf_byte_order.h>
+#include <citrusleaf/cf_clock.h>
 #include <errno.h>
 #include <string.h>
 #include <signal.h>
@@ -487,11 +488,15 @@ as_shm_tender(void* userdata)
 	as_cluster_shm* cluster_shm = shm_info->cluster_shm;
 	uint64_t threshold = shm_info->takeover_threshold_ms;
 	uint64_t limit = 0;
-	struct timespec ts;
-	ts.tv_sec = cluster->tend_interval / 1000;
-	ts.tv_nsec = (cluster->tend_interval * 1000 * 1000) % (1000 * 1000 * 1000);
 	uint32_t pid = getpid();
 	uint32_t nodes_gen = 0;
+	
+	struct timespec delta;
+	cf_clock_set_timespec_ms(cluster->tend_interval, &delta);
+	
+	struct timespec abstime;
+	
+	pthread_mutex_lock(&cluster->tend_lock);
 	
 	while (cluster->valid) {
 		if (shm_info->is_tend_master) {
@@ -540,8 +545,14 @@ as_shm_tender(void* userdata)
 				as_shm_reset_nodes(cluster);
 			}
 		}
-		nanosleep(&ts, 0);
+
+		// Convert tend interval into absolute timeout.
+		cf_clock_current_add(&delta, &abstime);
+		
+		// Sleep for tend interval and exit early if cluster destroy is signaled.
+		pthread_cond_timedwait(&cluster->tend_cond, &cluster->tend_lock, &abstime);
 	}
+	pthread_mutex_unlock(&cluster->tend_lock);
 	
 	if (shm_info->is_tend_master) {
 		shm_info->is_tend_master = false;

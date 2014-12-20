@@ -663,6 +663,115 @@ const as_rec_hooks query_response_hooks = {
     .destroy    = query_response_destroy
 };
 
+typedef struct {
+	char *ns;
+	char *set;
+	cl_object *key;
+	cf_digest *keyd;
+	cl_bin *bins;
+} cl_record;
+
+int process_query_result(cl_msg *msg, cl_record *cl_rec, cl_query_task *task, int *rc, bool *done )
+{
+	as_record r;
+	as_record * record = &r;
+
+	as_record_inita(record, msg->n_ops);
+
+	askey_from_clkey(&record->key, cl_rec->ns, cl_rec->set, cl_rec->key);
+	memcpy(record->key.digest.value, cl_rec->keyd, 20);
+	record->key.digest.init = true;
+
+	record->ttl = cf_server_void_time_to_ttl(msg->record_ttl);
+	record->gen = msg->generation;
+
+	clbins_to_asrecord(cl_rec->bins, msg->n_ops, record);
+
+	// TODO:
+	//      Fix the following block of code. It is really lame 
+	//      to check for a bin called "SUCCESS" to determine
+	//      whether you have a single value or not.
+	// TODO:
+	//      Fix how we are to handle errors.... not everything
+	//      will be a "SUCCESS"... or will it?
+	//
+	// got one good value? call it a success!
+	// (Note:  In the key exists case, there is no bin data.)
+	as_val * v = (as_val *) as_record_get(record, "SUCCESS");
+	int ret_val = 0;
+
+	if ( v  != NULL ) {
+		// I only need this value. The rest of the record is useless.
+		// Need to detach the value from the record (result)
+		// then release the record back to the wild... or wherever
+		// it came from.
+		as_val * vp = NULL;
+		if ( !v->free ) {
+			switch(as_val_type(v)) {
+				case AS_INTEGER:
+					vp = (as_val *) as_integer_new(as_integer_get((as_integer *)v));
+					break;
+				case AS_STRING: {
+									as_string * s = (as_string *)v;
+									vp = (as_val *) as_string_new(as_string_get(s), true);
+									s->value = NULL;
+									break;
+								}
+				case AS_BYTES: {
+								   as_bytes * b = (as_bytes *)v;
+								   vp = (as_val *) as_bytes_new_wrap(as_bytes_get(b), as_bytes_size(b), true);
+								   b->value = NULL;
+								   b->size = 0;
+								   break;
+							   }
+				default:
+							   LOG("[WARNING] unknown stack as_val type\n");
+							   break;
+			}
+		}
+		else {
+			vp = as_val_reserve(v);
+		}
+		ret_val = task->callback(vp, task->udata);
+	}
+	else {
+		as_val * v_fail = (as_val *) as_record_get(record, "FAILURE");
+		if(v_fail != NULL) {
+			*done = true;
+			*rc = AEROSPIKE_ERR_SERVER;
+			as_val * vp = NULL;
+			if ( !v_fail->free ) {
+				switch (as_val_type(v_fail)) {
+
+					case AS_STRING: {
+										as_string * s = (as_string *)v_fail;
+										vp = (as_val *) as_string_new(as_string_get(s), true);
+										s->value = NULL;
+										break;
+									}    
+					default:
+									LOG("[WARNING] unknown stack as_val type\n");
+									break;
+				}    
+			}    
+			else {
+				vp = as_val_reserve(v_fail);
+			}    
+			task->err_val = vp;
+
+		}    
+		else {
+			ret_val = task->callback((as_val *) record, task->udata);
+		}
+	}
+
+	as_record_destroy(record);
+	if (task->err_val) 
+		*rc = AEROSPIKE_ERR_SERVER;
+	else
+		*rc = AEROSPIKE_OK;
+	return ret_val;
+}
 /* 
  * this is an actual instance of a query, running on a query thread
  */
@@ -685,7 +794,7 @@ static int cl_query_worker_do(as_node * node, cl_query_task * task) {
     }
 
     cl_proto  proto;
-    bool      done = false;
+	bool done = 0;
 
     do {
 	int ret_val = 0;	
@@ -844,120 +953,30 @@ static int cl_query_worker_do(as_node * node, cl_query_task * task) {
                 done = true;
             }
             else if ((msg->n_ops || (msg->info1 & CL_MSG_INFO1_GET_NOBINDATA))) {
-
-                as_record r;
-                as_record * record = &r;
-
-				as_record_inita(record, msg->n_ops);
-
-				askey_from_clkey(&record->key, ns_ret, set_ret, &key);
-                memcpy(record->key.digest.value, &keyd, 20);
-                record->key.digest.init = true;
-
-                record->ttl = cf_server_void_time_to_ttl(msg->record_ttl);
-    			record->gen = msg->generation;
-
-                clbins_to_asrecord(bins, msg->n_ops, record);
-
-                // TODO:
-                //      Fix the following block of code. It is really lame 
-                //      to check for a bin called "SUCCESS" to determine
-                //      whether you have a single value or not.
-                // TODO:
-                //      Fix how we are to handle errors.... not everything
-                //      will be a "SUCCESS"... or will it?
-                //
-                // got one good value? call it a success!
-                // (Note:  In the key exists case, there is no bin data.)
-                as_val * v = (as_val *) as_record_get(record, "SUCCESS");
-
-                if ( v  != NULL ) {
-                    // I only need this value. The rest of the record is useless.
-                    // Need to detach the value from the record (result)
-                    // then release the record back to the wild... or wherever
-                    // it came from.
-					as_val * vp = NULL;
-					if ( !v->free ) {
-						switch(as_val_type(v)) {
-							case AS_INTEGER:
-								vp = (as_val *) as_integer_new(as_integer_get((as_integer *)v));
-								break;
-							case AS_STRING: {
-								as_string * s = (as_string *)v;
-								vp = (as_val *) as_string_new(as_string_get(s), true);
-								s->value = NULL;
-								break;
-							}
-							case AS_BYTES: {
-								as_bytes * b = (as_bytes *)v;
-								vp = (as_val *) as_bytes_new_wrap(as_bytes_get(b), as_bytes_size(b), true);
-								b->value = NULL;
-								b->size = 0;
-								break;
-							}
-							default:
-								LOG("[WARNING] unknown stack as_val type\n");
-								break;
-						}
-					}
-					else {
-						vp = as_val_reserve(v);
-					}
-					ret_val = task->callback(vp, task->udata);
-                }
-                else {
-                    as_val * v_fail = (as_val *) as_record_get(record, "FAILURE");
-                    if(v_fail != NULL) {
-                        done = true;
-                        rc = AEROSPIKE_ERR_SERVER;
-                        as_val * vp = NULL;
-                        if ( !v_fail->free ) {
-                            switch (as_val_type(v_fail)) {
-
-                                case AS_STRING: {
-                                    as_string * s = (as_string *)v_fail;
-                                    vp = (as_val *) as_string_new(as_string_get(s), true);
-                                    s->value = NULL;
-                                    break;
-                                    }    
-                                default:
-                                    LOG("[WARNING] unknown stack as_val type\n");
-                                    break;
-                            }    
-                        }    
-                        else {
-                            vp = as_val_reserve(v_fail);
-                        }    
-                        task->err_val = vp;
-
-                    }    
-                    else {
-                        ret_val = task->callback((as_val *) record, task->udata);
-                    }
-                }
-
-				as_record_destroy(record);
-                if (task->err_val) 
-                    rc = AEROSPIKE_ERR_SERVER;
-                else
-                    rc = AEROSPIKE_OK;
+				cl_record rec;
+				rec.ns = ns_ret;
+				rec.set = set_ret;
+				rec.key = &key;
+				rec.keyd = &keyd;
+				rec.bins = bins;
+				ret_val = process_query_result(msg, &rec, task, &rc, &done);
             }
 
 			citrusleaf_bins_free(bins, (int)msg->n_ops);
 
-                if (free_bins) {
-                    free(bins);
-                    bins = 0;
-                }
+			if (free_bins) {
+				free(bins);
+				bins = 0;
+			}
 
-            // don't have to free object internals. They point into the read buffer, where
-            // a pointer is required
-            pos += buf - buf_start;
-            if (task->abort || gasq_abort || ret_val) {
-		break;
-            }
+			// don't have to free object internals. They point into the read buffer, where
+			// a pointer is required
+			pos += buf - buf_start;
+			if (task->abort || gasq_abort || ret_val) {
+				break;
+			}
 
-        }
+		}
 
         if (rd_buf && (rd_buf != rd_stack_buf))    {
             free(rd_buf);

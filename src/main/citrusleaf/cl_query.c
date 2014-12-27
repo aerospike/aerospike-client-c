@@ -340,10 +340,10 @@ static int query_compile_select(cf_vector *binnames, uint8_t *buf, int *sz_p) {
  * If the query is null, then you run the MR job over the entire set or namespace
  * If the job is null, just run the query
  */
-static int query_compile(const cl_query * query, uint8_t ** buf_r, size_t * buf_sz_r) {
+static int query_compile(const cl_query * query, uint8_t ** buf_r, size_t * buf_sz_r) 
+{
 
-    if (!query || !query->ranges) return AEROSPIKE_ERR_CLIENT;
-
+    if (!query) return AEROSPIKE_ERR_CLIENT;
     /**
      * If the query has a udf w/ arglist,
      * then serialize it.
@@ -401,12 +401,14 @@ static int query_compile(const cl_query * query, uint8_t ** buf_r, size_t * buf_
         }
 
         // query field    
-        n_fields++;
-        range_sz = 0; 
-        if (query_compile_range(query->ranges, NULL, &range_sz)) {
-            return AEROSPIKE_ERR_CLIENT;
-        }
-        msg_sz += range_sz + sizeof(cl_msg_field);
+	if (query->ranges) {
+		n_fields++;
+		range_sz = 0; 
+		if (query_compile_range(query->ranges, NULL, &range_sz)) {
+			return AEROSPIKE_ERR_CLIENT;
+		}
+		msg_sz += range_sz + sizeof(cl_msg_field);
+	}
 
         // bin field    
         if (query->binnames) {
@@ -514,7 +516,7 @@ static int query_compile(const cl_query * query, uint8_t ** buf_r, size_t * buf_
                 *mf->data = CL_UDF_MSG_VAL_RECORD;
                 break;
             case AS_UDF_CALLTYPE_STREAM:
-                *mf->data = CL_UDF_MSG_VAL_STREAM;
+			*mf->data = CL_UDF_MSG_VAL_STREAM;
                 break;
             default:
                 // should never happen!

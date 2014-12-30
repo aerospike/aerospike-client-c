@@ -207,9 +207,9 @@ main(int argc, char* argv[])
 			(const as_val*)&ikey, &p_val);
 
 	if (result == AEROSPIKE_OK) {
-		// Server version 3.4.1 - empty map returned if element doesn't exist.
+		// Server version >= 3.4.1 returns empty map if element doesn't exist.
 		if (p_val && (as_val_type(p_val) != AS_MAP ||
-				as_map_size((as_map *)p_val) != 0)) {
+				as_map_size((as_map*)p_val) != 0)) {
 			char* p_str = as_val_tostring(p_val);
 
 			LOG("entry was not successfully removed");

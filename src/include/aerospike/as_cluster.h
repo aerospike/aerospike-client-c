@@ -188,6 +188,27 @@ typedef struct as_cluster_s {
 	
 	/**
 	 *	@private
+	 *	Lock for the tend thread to wait on with the tend interval as timeout.
+	 *	Normally locked, resulting in waiting a full interval between
+	 *	tend iterations.  Upon cluster shutdown, unlocked by the main
+	 *	thread, allowing a fast termination of the tend thread.
+	 */
+	pthread_mutex_t tend_lock;
+	
+	/**
+	 *	@private
+	 *	Tend thread identifier to be used with tend_lock.
+	 */
+	pthread_cond_t tend_cond;
+	
+	/**
+	 *	@private
+	 *	Milliseconds between cluster tends.
+	 */
+	uint32_t tend_interval;
+	
+	/**
+	 *	@private
 	 *	Size of node's synchronous connection pool.
 	 */
 	uint32_t conn_queue_size;
@@ -203,12 +224,6 @@ typedef struct as_cluster_s {
 	 *	Maximum socket idle in seconds.
 	 */
 	uint32_t max_socket_idle;
-	
-	/**
-	 *	@private
-	 *	Milliseconds between cluster tends.
-	 */
-	uint32_t tend_interval;
 	
 	/**
 	 *	@private

@@ -165,9 +165,6 @@ main(int argc, char* argv[])
 
 	LOG("verified that lmap ldt is present");
 
-	as_ldt lmap2;
-	as_ldt_init(&lmap2, "mylmap", AS_LDT_LMAP, NULL);
-
 	as_map* p_map = NULL;
 
 	// Get all the entries back.
@@ -186,7 +183,7 @@ main(int argc, char* argv[])
 		const as_val* p_val = as_hashmap_iterator_next(&it);
 		char* p_str = as_val_tostring(p_val);
 
-		LOG("   element - type = %d, value = %s", as_val_type(p_val), p_str);
+		LOG("   element type %d, value %s", as_val_type(p_val), p_str);
 		free(p_str);
 	}
 
@@ -206,10 +203,26 @@ main(int argc, char* argv[])
 	as_val* p_val = NULL;
 
 	// Make sure we can't get the value any more.
-	if (aerospike_lmap_get(&as, &err, NULL, &g_key, &lmap,
-			(const as_val*)&ikey, &p_val) == AEROSPIKE_OK) {
-		LOG("unexpected success getting a removed entry");
-		as_val_destroy(p_val);
+	as_status result = aerospike_lmap_get(&as, &err, NULL, &g_key, &lmap,
+			(const as_val*)&ikey, &p_val);
+
+	if (result == AEROSPIKE_OK) {
+		// Server version >= 3.4.1 returns empty map if element doesn't exist.
+		if (p_val && (as_val_type(p_val) != AS_MAP ||
+				as_map_size((as_map*)p_val) != 0)) {
+			char* p_str = as_val_tostring(p_val);
+
+			LOG("entry was not successfully removed");
+			LOG("   element type %d, value %s", as_val_type(p_val), p_str);
+			free(p_str);
+
+			as_val_destroy(p_val);
+			example_cleanup(&as);
+			exit(-1);
+		}
+	}
+	else if (result != AEROSPIKE_ERR_LARGE_ITEM_NOT_FOUND) {
+		LOG("aerospike_lmap_get() returned %d - %s", err.code, err.message);
 		example_cleanup(&as);
 		exit(-1);
 	}

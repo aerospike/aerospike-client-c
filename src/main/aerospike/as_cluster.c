@@ -25,6 +25,7 @@
 #include <citrusleaf/cl_info.h>
 #include <citrusleaf/cl_batch.h>
 #include <citrusleaf/cf_byte_order.h>
+#include <citrusleaf/cf_clock.h>
 #include <citrusleaf/cl_query.h>
 #include <citrusleaf/cf_socket.h>
 
@@ -648,12 +649,24 @@ static void*
 as_cluster_tender(void* data)
 {
 	as_cluster* cluster = (as_cluster*)data;
-	uint32_t tend_interval_micro = cluster->tend_interval * 1000;
 	
+	struct timespec delta;
+	cf_clock_set_timespec_ms(cluster->tend_interval, &delta);
+	
+	struct timespec abstime;
+	
+	pthread_mutex_lock(&cluster->tend_lock);
+
 	while (cluster->valid) {
 		as_cluster_tend(cluster, false);
-		usleep(tend_interval_micro);
+		
+		// Convert tend interval into absolute timeout.
+		cf_clock_current_add(&delta, &abstime);
+		
+		// Sleep for tend interval and exit early if cluster destroy is signaled.
+		pthread_cond_timedwait(&cluster->tend_cond, &cluster->tend_lock, &abstime);
 	}
+	pthread_mutex_unlock(&cluster->tend_lock);
 	return NULL;
 }
 
@@ -890,6 +903,10 @@ as_cluster_create(as_config* config, as_cluster** cluster_out)
 	// Initialize garbage collection array.
 	cluster->gc = as_vector_create(sizeof(as_gc_item), 8);
 
+	// Initialize tend lock and condition.
+	pthread_mutex_init(&cluster->tend_lock, NULL);
+	pthread_cond_init(&cluster->tend_cond, NULL);
+
 	// Initialize batch.
 	pthread_mutex_init(&cluster->batch_init_lock, 0);
 	
@@ -931,11 +948,16 @@ as_cluster_destroy(as_cluster* cluster)
 	if (cluster->valid) {
 		cluster->valid = false;
 		
+		// Signal tend thread to wake up from sleep and stop.
+		pthread_mutex_lock(&cluster->tend_lock);
+		pthread_cond_signal(&cluster->tend_cond);
+		pthread_mutex_unlock(&cluster->tend_lock);
+		
+		// Wait for tend thread to finish.
+		pthread_join(cluster->tend_thread, NULL);
+		
 		if (cluster->shm_info) {
-			as_shm_destroy(cluster, true);
-		}
-		else {
-			pthread_join(cluster->tend_thread, NULL);
+			as_shm_destroy(cluster);
 		}
 	}
 
@@ -943,7 +965,7 @@ as_cluster_destroy(as_cluster* cluster)
 	as_cluster_gc(cluster->gc);
 	as_vector_destroy(cluster->gc);
 		
-	// Release paritition tables.
+	// Release partition tables.
 	as_partition_tables* tables = cluster->partition_tables;
 	for (uint32_t i = 0; i < tables->size; i++) {
 		as_partition_table_destroy(tables->array[i]);
@@ -976,6 +998,10 @@ as_cluster_destroy(as_cluster* cluster)
 	}
 	cf_free(cluster->seeds);
 	
+	// Destroy tend lock and condition.
+	pthread_mutex_destroy(&cluster->tend_lock);
+	pthread_cond_destroy(&cluster->tend_cond);
+
 	// Destroy batch lock.
 	pthread_mutex_destroy(&cluster->batch_init_lock);
 	

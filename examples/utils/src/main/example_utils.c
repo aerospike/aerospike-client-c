@@ -43,9 +43,11 @@
 #include <aerospike/as_config.h>
 #include <aerospike/as_key.h>
 #include <aerospike/as_operations.h>
+#include <aerospike/as_password.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_record_iterator.h>
 #include <aerospike/as_status.h>
+#include <aerospike/as_string.h>
 #include <aerospike/as_val.h>
 
 #include "example_utils.h"
@@ -65,28 +67,28 @@ const char DEFAULT_SET[] = "test-set";
 const char DEFAULT_KEY_STR[] = "test-key";
 const uint32_t DEFAULT_NUM_KEYS = 20;
 
-static const char* short_options_basic = "h:p:U:P::n:s:k:";
-static struct option long_options_basic[] = {
-	{"hosts",        1, 0, 'h'},
-	{"port",         1, 0, 'p'},
-	{"user",         1, 0, 'U'},
-	{"password",     2, 0, 'P'},
-	{"namespace",    1, 0, 'n'},
-	{"set",          1, 0, 's'},
-	{"key",          1, 0, 'k'},
-	{0,              0, 0, 0}
+const char* SHORT_OPTS_BASIC = "h:p:U:P::n:s:k:";
+const struct option LONG_OPTS_BASIC[] = {
+	{ "hosts",		1, NULL, 'h' },
+	{ "port",		1, NULL, 'p' },
+	{ "user",		1, NULL, 'U' },
+	{ "password",	2, NULL, 'P' },
+	{ "namespace",	1, NULL, 'n' },
+	{ "set",		1, NULL, 's' },
+	{ "key",		1, NULL, 'k' },
+	{ NULL,			0, NULL, 0 }
 };
 
-static const char* short_options_multikey = "h:p:U:P::n:s:K:";
-static struct option long_options_multikey[] = {
-	{"hosts",        1, 0, 'h'},
-	{"port",         1, 0, 'p'},
-	{"user",         1, 0, 'U'},
-	{"password",     2, 0, 'P'},
-	{"namespace",    1, 0, 'n'},
-	{"set",          1, 0, 's'},
-	{"multikey",     1, 0, 'k'},
-	{0,              0, 0, 0}
+const char* SHORT_OPTS_MULTI_KEY = "h:p:U:P::n:s:K:";
+const struct option LONG_OPTS_MULTI_KEY[] = {
+	{ "hosts",		1, NULL, 'h' },
+	{ "port",		1, NULL, 'p' },
+	{ "user",		1, NULL, 'U' },
+	{ "password",	2, NULL, 'P' },
+	{ "namespace",	1, NULL, 'n' },
+	{ "set",		1, NULL, 's' },
+	{ "multikey",	1, NULL, 'k' },
+	{ NULL,			0, NULL, 0 }
 };
 
 //==========================================================
@@ -131,7 +133,7 @@ static int g_port;
 // The optional user/password.
 // Obtained using command line options:
 // -U <user name>
-// -p[<password>]
+// -P [<password>]
 //
 static char g_user[AS_USER_SIZE];
 static char g_password[AS_PASSWORD_HASH_SIZE];
@@ -148,7 +150,7 @@ static char g_key_str[MAX_KEY_STR_SIZE];
 // Forward Declarations
 //
 
-static void usage(const char* short_options);
+static void usage(const char* short_opts);
 
 
 //==========================================================
@@ -167,23 +169,28 @@ example_get_opts(int argc, char* argv[], int which_opts)
 	strcpy(g_set, DEFAULT_SET);
 	strcpy(g_key_str, DEFAULT_KEY_STR);
 	g_n_keys = DEFAULT_NUM_KEYS;
-	
-	const char* short_options;
-	struct option* long_options;
-	
-	if (which_opts) {
-		short_options = short_options_multikey;
-		long_options = long_options_multikey;
+
+	const char* short_opts;
+	const struct option* long_opts;
+
+	switch (which_opts) {
+	case EXAMPLE_BASIC_OPTS:
+		short_opts = SHORT_OPTS_BASIC;
+		long_opts = LONG_OPTS_BASIC;
+		break;
+	case EXAMPLE_MULTI_KEY_OPTS:
+		short_opts = SHORT_OPTS_MULTI_KEY;
+		long_opts = LONG_OPTS_MULTI_KEY;
+		break;
+	default:
+		LOG("ERROR: unrecognized which_opts parameter");
+		return false;
 	}
-	else  {
-		short_options = short_options_basic;
-		long_options = long_options_basic;
-	}
-	
-	int option_index = 0;
+
 	int c;
-	
-	while ((c = getopt_long(argc, argv, short_options, long_options, &option_index)) != -1) {
+	int i;
+
+	while ((c = getopt_long(argc, argv, short_opts, long_opts, &i)) != -1) {
 		switch (c) {
 		case 'h':
 			if (strlen(optarg) >= sizeof(g_host)) {
@@ -200,11 +207,11 @@ example_get_opts(int argc, char* argv[], int which_opts)
 		case 'U':
 			strcpy(g_user, optarg);
 			break;
-			
+
 		case 'P':
 			as_password_prompt_hash(optarg, g_password);
 			break;
-				
+
 		case 'n':
 			if (strlen(optarg) >= sizeof(g_namespace)) {
 				LOG("ERROR: namespace exceeds max length");
@@ -234,36 +241,36 @@ example_get_opts(int argc, char* argv[], int which_opts)
 			break;
 
 		default:
-			usage(short_options);
+			usage(short_opts);
 			return false;
 		}
 	}
 
-	if (strchr(short_options, 'h')) {
+	if (strchr(short_opts, 'h')) {
 		LOG("host:           %s", g_host);
 	}
 
-	if (strchr(short_options, 'p')) {
+	if (strchr(short_opts, 'p')) {
 		LOG("port:           %d", g_port);
 	}
 
-	if (strchr(short_options, 'U')) {
+	if (strchr(short_opts, 'U')) {
 		LOG("user:           %s", g_user);
 	}
 
-	if (strchr(short_options, 'n')) {
+	if (strchr(short_opts, 'n')) {
 		LOG("namespace:      %s", g_namespace);
 	}
 
-	if (strchr(short_options, 's')) {
+	if (strchr(short_opts, 's')) {
 		LOG("set name:       %s", g_set);
 	}
 
-	if (strchr(short_options, 'k')) {
+	if (strchr(short_opts, 'k')) {
 		LOG("key (string):   %s", g_key_str);
 	}
 
-	if (strchr(short_options, 'K')) {
+	if (strchr(short_opts, 'K')) {
 		LOG("number of keys: %u", g_n_keys);
 	}
 
@@ -278,39 +285,39 @@ example_get_opts(int argc, char* argv[], int which_opts)
 // Display supported command line options.
 //
 static void
-usage(const char* short_options)
+usage(const char* short_opts)
 {
 	LOG("Usage:");
 
-	if (strchr(short_options, 'h')) {
+	if (strchr(short_opts, 'h')) {
 		LOG("-h host [default: %s]", DEFAULT_HOST);
 	}
 
-	if (strchr(short_options, 'p')) {
+	if (strchr(short_opts, 'p')) {
 		LOG("-p port [default: %d]", DEFAULT_PORT);
 	}
 
-	if (strchr(short_options, 'U')) {
+	if (strchr(short_opts, 'U')) {
 		LOG("-U username [default: none]");
 	}
-	
-	if (strchr(short_options, 'P')) {
-		LOG("-P[password] [default: none]");
+
+	if (strchr(short_opts, 'P')) {
+		LOG("-P [password] [default: none]");
 	}
 
-	if (strchr(short_options, 'n')) {
+	if (strchr(short_opts, 'n')) {
 		LOG("-n namespace [default: %s]", DEFAULT_NAMESPACE);
 	}
 
-	if (strchr(short_options, 's')) {
+	if (strchr(short_opts, 's')) {
 		LOG("-s set name [default: %s]", DEFAULT_SET);
 	}
 
-	if (strchr(short_options, 'k')) {
+	if (strchr(short_opts, 'k')) {
 		LOG("-k key string [default: %s]", DEFAULT_KEY_STR);
 	}
 
-	if (strchr(short_options, 'K')) {
+	if (strchr(short_opts, 'K')) {
 		LOG("-K number of keys [default: %u]", DEFAULT_NUM_KEYS);
 	}
 }
@@ -560,10 +567,11 @@ example_register_udf(aerospike* p_as, const char* udf_file_path)
 
 	as_error err;
 	as_string base_string;
-	const char * base = as_basename(&base_string, udf_file_path);
-	
+	const char* base = as_basename(&base_string, udf_file_path);
+
 	// Register the UDF file in the database cluster.
-	if (aerospike_udf_put(p_as, &err, NULL, base, AS_UDF_TYPE_LUA, &udf_content) == AEROSPIKE_OK) {
+	if (aerospike_udf_put(p_as, &err, NULL, base, AS_UDF_TYPE_LUA,
+			&udf_content) == AEROSPIKE_OK) {
 		// Wait for the system metadata to spread to all nodes.
 		aerospike_udf_put_wait(p_as, &err, NULL, base, 100);
 	}
@@ -586,15 +594,15 @@ bool
 example_remove_udf(aerospike* p_as, const char* udf_file_path)
 {
 	as_error err;
-	as_string path_string;
-	const char * base = as_basename(&path_string, udf_file_path);
+	as_string base_string;
+	const char* base = as_basename(&base_string, udf_file_path);
 
 	if (aerospike_udf_remove(p_as, &err, NULL, base) != AEROSPIKE_OK) {
 		LOG("aerospike_udf_remove() returned %d - %s", err.code, err.message);
 		return false;
 	}
 
-	as_string_destroy(&path_string);
+	as_string_destroy(&base_string);
 
 	// Wait for the system metadata to spread to all nodes.
 	usleep(100 * 1000);
@@ -615,8 +623,8 @@ bool
 example_create_integer_index(aerospike* p_as, const char* bin,
 		const char* index)
 {
-	as_index_task task;
 	as_error err;
+	as_index_task task;
 
 	if (aerospike_index_create(p_as, &err, &task, NULL, g_namespace, g_set, bin, index, AS_INDEX_TYPE_DEFAULT, AS_INDEX_NUMERIC) != AEROSPIKE_OK) {
 		LOG("aerospike_index_create() returned %d - %s", err.code, err.message);
@@ -696,17 +704,24 @@ example_dump_record(const as_record* p_rec)
 	as_record_iterator_destroy(&it);
 }
 
-const char* AS_OPERATORS[] = {
-		"AS_OPERATOR_WRITE",
-		"AS_OPERATOR_READ",
-		"AS_OPERATOR_INCR",
-		"NOT DEFINED",
-		"AS_OPERATOR_PREPEND",
-		"AS_OPERATOR_APPEND",
-		"NOT DEFINED",
-		"NOT DEFINED",
-		"AS_OPERATOR_TOUCH"
-};
+#define OP_CASE_ASSIGN(__enum) \
+	case __enum : \
+		return #__enum; \
+
+static const char*
+operator_to_string(as_operator op)
+{
+	switch (op) {
+		OP_CASE_ASSIGN(AS_OPERATOR_READ);
+		OP_CASE_ASSIGN(AS_OPERATOR_WRITE);
+		OP_CASE_ASSIGN(AS_OPERATOR_INCR);
+		OP_CASE_ASSIGN(AS_OPERATOR_APPEND);
+		OP_CASE_ASSIGN(AS_OPERATOR_PREPEND);
+		OP_CASE_ASSIGN(AS_OPERATOR_TOUCH);
+	}
+
+	return "NOT DEFINED";
+}
 
 static void
 example_dump_op(const as_binop* p_binop)
@@ -716,19 +731,21 @@ example_dump_op(const as_binop* p_binop)
 		return;
 	}
 
+	const char* op_string = operator_to_string(p_binop->op);
+
 	if (p_binop->op == AS_OPERATOR_TOUCH) {
-		LOG("  %s", AS_OPERATORS[p_binop->op]);
+		LOG("  %s", op_string);
 		return;
 	}
 
 	if (p_binop->op == AS_OPERATOR_READ) {
-		LOG("  %s : %s", AS_OPERATORS[p_binop->op], p_binop->bin.name);
+		LOG("  %s : %s", op_string, p_binop->bin.name);
 		return;
 	}
 
 	char* val_as_str = as_val_tostring(p_binop->bin.valuep);
 
-	LOG("  %s : %s : %s", AS_OPERATORS[p_binop->op], p_binop->bin.name,
+	LOG("  %s : %s : %s", op_string, p_binop->bin.name,
 			val_as_str);
 
 	free(val_as_str);

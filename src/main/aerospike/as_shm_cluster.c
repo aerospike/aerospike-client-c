@@ -23,6 +23,7 @@
 #include <citrusleaf/cf_b64.h>
 #include <citrusleaf/cf_types.h>
 #include <citrusleaf/cf_byte_order.h>
+#include <citrusleaf/cf_clock.h>
 #include <errno.h>
 #include <string.h>
 #include <signal.h>
@@ -487,9 +488,15 @@ as_shm_tender(void* userdata)
 	as_cluster_shm* cluster_shm = shm_info->cluster_shm;
 	uint64_t threshold = shm_info->takeover_threshold_ms;
 	uint64_t limit = 0;
-	uint32_t tend_interval_micro = cluster->tend_interval * 1000;
 	uint32_t pid = getpid();
 	uint32_t nodes_gen = 0;
+	
+	struct timespec delta;
+	cf_clock_set_timespec_ms(cluster->tend_interval, &delta);
+	
+	struct timespec abstime;
+	
+	pthread_mutex_lock(&cluster->tend_lock);
 	
 	while (cluster->valid) {
 		if (shm_info->is_tend_master) {
@@ -538,8 +545,14 @@ as_shm_tender(void* userdata)
 				as_shm_reset_nodes(cluster);
 			}
 		}
-		usleep(tend_interval_micro);
+
+		// Convert tend interval into absolute timeout.
+		cf_clock_current_add(&delta, &abstime);
+		
+		// Sleep for tend interval and exit early if cluster destroy is signaled.
+		pthread_cond_timedwait(&cluster->tend_cond, &cluster->tend_lock, &abstime);
 	}
+	pthread_mutex_unlock(&cluster->tend_lock);
 	
 	if (shm_info->is_tend_master) {
 		shm_info->is_tend_master = false;
@@ -674,7 +687,7 @@ as_shm_create(as_cluster* cluster, as_config* config)
 			
 			if (status != 0) {
 				ck_pr_store_8(&cluster_shm->lock, 0);
-				as_shm_destroy(cluster, false);
+				as_shm_destroy(cluster);
 				return status;
 			}
 			cluster_shm->ready = 1;
@@ -700,13 +713,8 @@ as_shm_create(as_cluster* cluster, as_config* config)
 }
 
 void
-as_shm_destroy(as_cluster* cluster, bool join_threads)
+as_shm_destroy(as_cluster* cluster)
 {
-	if (join_threads) {
-		pthread_join(cluster->tend_thread, NULL);
-	}
-
-	// Wait for threads to finish.
 	as_shm_info* shm_info = cluster->shm_info;
 	
 	if (!shm_info) {

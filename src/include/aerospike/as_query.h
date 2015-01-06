@@ -17,6 +17,7 @@
 #pragma once 
 #pragma GCC diagnostic ignored "-Waddress"
 
+#include <aerospike/aerospike_index.h>
 #include <aerospike/as_bin.h>
 #include <aerospike/as_key.h>
 #include <aerospike/as_list.h>
@@ -37,7 +38,7 @@
  *
  *	@relates as_query
  */
-#define string_equals(__val) AS_PREDICATE_STRING_EQUAL, __val
+#define string_equals(__val) AS_PREDICATE_EQUAL, AS_INDEX_STRING, AS_INDEX_TYPE_DEFAULT, __val
 
 /**
  *	Macro for setting setting the INTEGER_EQUAL predicate.
@@ -48,7 +49,7 @@
  *
  *	@relates as_query
  */
-#define integer_equals(__val) AS_PREDICATE_INTEGER_EQUAL, __val
+#define integer_equals(__val) AS_PREDICATE_EQUAL, AS_INDEX_NUMERIC, AS_INDEX_TYPE_DEFAULT, __val
 
 /**
  *	Macro for setting setting the INTEGER_RANGE predicate.
@@ -60,10 +61,47 @@
  *	@relates as_query
  *	@ingroup query_object
  */
-#define integer_range(__min, __max) AS_PREDICATE_INTEGER_RANGE, __min, __max
+#define integer_range(__min, __max) AS_PREDICATE_RANGE,  AS_INDEX_NUMERIC, AS_INDEX_TYPE_DEFAULT, __min, __max
+
+/**
+ *	Macro for setting setting the RANGE predicate.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_query_where(query, "bin1", integer_range(1,100));
+ *	~~~~~~~~~~
+ *	
+ *	@relates as_query
+ *	@ingroup query_object
+ */
+#define range(indextype, datatype, __min, __max) AS_PREDICATE_RANGE, AS_INDEX_DATA_ ##datatype, AS_INDEX_TYPE_ ##indextype, __min, __max
+
+/**
+ *	Macro for setting setting the CONTAINS predicate.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_query_where(query, "bin1", integer_range(1,100));
+ *	~~~~~~~~~~
+ *	
+ *	@relates as_query
+ *	@ingroup query_object
+ */
+#define contains(indextype, datatype, __val) AS_PREDICATE_EQUAL, AS_INDEX_DATA_ ##datatype, AS_INDEX_TYPE_ ##indextype, __val
+
+/**
+ *	Macro for setting setting the EQUALS predicate.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_query_where(query, "bin1", integer_range(1,100));
+ *	~~~~~~~~~~
+ *	
+ *	@relates as_query
+ *	@ingroup query_object
+ */
+#define equals(datatype, __val) AS_PREDICATE_EQUAL, AS_INDEX_DATA_ ##datatype, AS_INDEX_TYPE_DEFAULT, __val
+
 
 /******************************************************************************
- *	TYPES
+ *	TYPES 	
  *****************************************************************************/
 
 /**
@@ -109,20 +147,9 @@ typedef enum as_predicate_type_e {
 	 *	String Equality Predicate. 
 	 *	Requires as_predicate_value.string to be set.
 	 */
-	AS_PREDICATE_STRING_EQUAL,
+	AS_PREDICATE_EQUAL,
 
-	/**
-	 *	Integer Equality Predicate.
-	 *	Requires as_predicate_value.integer to be set.
-	 */
-	AS_PREDICATE_INTEGER_EQUAL,
-
-	/**
-	 *	Integer Range Predicate.
-	 *	Requires as_predicate_value.integer_range to be set.
-	 */
-	AS_PREDICATE_INTEGER_RANGE
-
+	AS_PREDICATE_RANGE
 } as_predicate_type;
 
 /**
@@ -137,7 +164,7 @@ typedef struct as_predicate_s {
 	as_bin_name bin;
 
 	/**
-	 *	The predicate type, dictates which value to use from the union
+	 *	The predicate type, dictates which values to use from the union
 	 */
 	as_predicate_type type;
 
@@ -146,6 +173,16 @@ typedef struct as_predicate_s {
 	 */
 	as_predicate_value value;
 
+	/*
+	 * The type of data user wants to query
+	 */
+
+	as_index_datatype dtype;
+
+	/*
+	 * The type of index predicate is on
+	 */
+	as_index_type itype;
 } as_predicate;
 
 /**
@@ -692,7 +729,7 @@ bool as_query_where_init(as_query * query, uint16_t n);
  *
  *	@relates as_query
  */
-bool as_query_where(as_query * query, const char * bin, as_predicate_type type, ... );
+bool as_query_where(as_query * query, const char * bin, as_predicate_type type, as_index_datatype dtype, as_index_type itype, ... );
 
 /******************************************************************************
  *	ORDERBY FUNCTIONS

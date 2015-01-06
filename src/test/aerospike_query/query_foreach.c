@@ -118,21 +118,21 @@ TEST( query_foreach_create, "create 100 records and 4 indices" ) {
 
 	// create index on "a"
 	
-	status = aerospike_index_create(as, &err, 0, NULL, NAMESPACE, SET, "a", "idx_test_a", AS_INDEX_TYPE_DEFAULT, AS_INDEX_STRING);
+	status = aerospike_index_create(as, &err, 0, NULL, NAMESPACE, SET, "a", "idx_test_a", AS_INDEX_STRING);
 	if ( status != AEROSPIKE_OK ) {
 		info("error(%d): %s", err.code, err.message);
 	}
 
 	// create index on "b"
 
-	status = aerospike_index_create(as, &err, 0, NULL, NAMESPACE, SET, "b", "idx_test_b", AS_INDEX_TYPE_DEFAULT, AS_INDEX_NUMERIC);
+	status = aerospike_index_create(as, &err, 0, NULL, NAMESPACE, SET, "b", "idx_test_b", AS_INDEX_NUMERIC);
 	if ( status != AEROSPIKE_OK ) {
 		info("error(%d): %s", err.code, err.message);
 	}
 
 	// create index on "c"
 
-	status = aerospike_index_create(as, &err, 0, NULL, NAMESPACE, SET, "c", "idx_test_c", AS_INDEX_TYPE_DEFAULT, AS_INDEX_NUMERIC);
+	status = aerospike_index_create(as, &err, 0, NULL, NAMESPACE, SET, "c", "idx_test_c", AS_INDEX_NUMERIC);
 	if ( status != AEROSPIKE_OK ) {
 		info("error(%d): %s", err.code, err.message);
 	}
@@ -140,7 +140,7 @@ TEST( query_foreach_create, "create 100 records and 4 indices" ) {
 	// create index on "d"
 
 	as_index_task task;
-	status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, SET, "d", "idx_test_d", AS_INDEX_TYPE_DEFAULT, AS_INDEX_NUMERIC);
+	status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, SET, "d", "idx_test_d", AS_INDEX_NUMERIC);
 	if ( status == AEROSPIKE_OK ) {
 		aerospike_index_create_wait(&err, &task, 0);
 	}

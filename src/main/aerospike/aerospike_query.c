@@ -63,10 +63,10 @@ static cl_query * as_query_toclquery(const as_query * query)
 		as_predicate * p = &query->where.entries[i];
 		switch(p->type) {
 			case AS_PREDICATE_EQUAL:
-				if (p->dtype == AS_INDEX_DATA_STRING) {
+				if (p->dtype == AS_INDEX_STRING) {
 					cl_query_where(clquery, p->bin, CL_EQ, CL_STR, p->value.string);
 				}
-				else if (p->dtype == AS_INDEX_DATA_NUMERIC) {
+				else if (p->dtype == AS_INDEX_NUMERIC) {
 					cl_query_where(clquery, p->bin, CL_EQ, CL_INT, p->value.integer);
 				}
 				break;

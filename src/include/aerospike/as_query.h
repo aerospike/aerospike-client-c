@@ -38,7 +38,7 @@
  *
  *	@relates as_query
  */
-#define string_equals(__val) AS_PREDICATE_EQUAL, AS_INDEX_DATA_STRING, AS_INDEX_TYPE_DEFAULT, __val
+#define string_equals(__val) AS_PREDICATE_EQUAL, AS_INDEX_STRING, AS_INDEX_TYPE_DEFAULT, __val
 
 /**
  *	Macro for setting setting the INTEGER_EQUAL predicate.
@@ -49,7 +49,7 @@
  *
  *	@relates as_query
  */
-#define integer_equals(__val) AS_PREDICATE_EQUAL, AS_INDEX_DATA_NUMERIC, AS_INDEX_TYPE_DEFAULT, __val
+#define integer_equals(__val) AS_PREDICATE_EQUAL, AS_INDEX_NUMERIC, AS_INDEX_TYPE_DEFAULT, __val
 
 /**
  *	Macro for setting setting the INTEGER_RANGE predicate.
@@ -61,7 +61,7 @@
  *	@relates as_query
  *	@ingroup query_object
  */
-#define integer_range(__min, __max) AS_PREDICATE_RANGE,  AS_INDEX_DATA_NUMERIC, AS_INDEX_TYPE_DEFAULT, __min, __max
+#define integer_range(__min, __max) AS_PREDICATE_RANGE,  AS_INDEX_NUMERIC, AS_INDEX_TYPE_DEFAULT, __min, __max
 
 /**
  *	Macro for setting setting the RANGE predicate.

@@ -49,15 +49,36 @@
  *
  *	@ingroup index_operations
  */
-as_status aerospike_index_create(
+as_status aerospike_index_create_complex(
 	aerospike * as, as_error * err, as_index_task * task, const as_policy_info * policy,
-	const as_namespace ns, const as_set set, const as_bin_name bin, const char * name, as_index_type type)
+	const as_namespace ns, const as_set set, const as_index_position position, const char * name, as_index_type itype, as_index_datatype dtype)
 {
 	as_error_reset(err);
 	
-	const char* type_string = (type == AS_INDEX_NUMERIC)? "NUMERIC" : "STRING";
+	const char* dtype_string = (dtype == AS_INDEX_NUMERIC)? "NUMERIC" : "STRING";
+	const char* itype_string = NULL;
+	switch (itype) {
+		default:
+		case AS_INDEX_TYPE_DEFAULT: {
+			itype_string = "DEFAULT";
+			break;
+		}
+		case AS_INDEX_TYPE_LIST: {
+			itype_string = "LIST";
+			break;
+		}
+		case AS_INDEX_TYPE_MAPKEYS: {
+			itype_string = "MAPKEYS";
+			break;
+		}
+		case AS_INDEX_TYPE_MAPVALUES: {
+			itype_string = "MAPVALUES";
+			break;
+		}
+	}
+
 	char * response = NULL;
-	int rc = citrusleaf_secondary_index_create(as->cluster, ns, set, name, bin, type_string, &response);
+	int rc = citrusleaf_secondary_index_create(as->cluster, ns, set, name, position, itype_string, dtype_string, &response);
 	
 	switch (rc) {
 		case AEROSPIKE_OK:

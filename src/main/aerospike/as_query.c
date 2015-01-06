@@ -282,14 +282,14 @@ bool as_query_where(as_query * query, const char * bin, as_predicate_type type, 
 	p->dtype = dtype;
 	p->itype = itype;
     va_list ap;
-    va_start(ap, type);
+    va_start(ap, itype);
 
     switch(type) {
     	case AS_PREDICATE_EQUAL:
-			if (dtype == AS_INDEX_DATA_STRING) {
+			if (dtype == AS_INDEX_STRING) {
     			p->value.string = va_arg(ap, char *);
 			}
-			else if (dtype == AS_INDEX_DATA_NUMERIC) {
+			else if (dtype == AS_INDEX_NUMERIC) {
 				p->value.integer = va_arg(ap, int64_t);
 			}
 			else {
@@ -297,7 +297,7 @@ bool as_query_where(as_query * query, const char * bin, as_predicate_type type, 
 			}
     		break;
     	case AS_PREDICATE_RANGE:
-    		if (dtype == AS_INDEX_DATA_NUMERIC) {
+    		if (dtype == AS_INDEX_NUMERIC) {
 				p->value.integer_range.min = va_arg(ap, int64_t);
     			p->value.integer_range.max = va_arg(ap, int64_t);
     		}

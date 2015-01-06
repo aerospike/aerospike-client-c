@@ -70,8 +70,8 @@ typedef enum as_index_type_s {
  * Type of data which is going to indexed
  */
 typedef enum as_index_datatype_s {
-	AS_INDEX_DATA_STRING,
-	AS_INDEX_DATA_NUMERIC
+	AS_INDEX_STRING,
+	AS_INDEX_NUMERIC
 } as_index_datatype;
 
 /**
@@ -109,14 +109,49 @@ typedef struct as_index_task_s {
  *****************************************************************************/
 
 /**
- *	Create secondary index.
+ *	Create secondary index given collection type and data type.
  *
  *	This asynchronous server call will return before the command is complete.
  *	The user can optionally wait for command completion by using a task instance.
  *
  *	~~~~~~~~~~{.c}
  *	as_index_task task;
- *	if ( aerospike_index_create(&as, &err, &task, NULL, "test", "demo", "bin1", "idx_test_demo_bin1") == AEROSPIKE_OK ) {
+ *	if ( aerospike_index_create_complex(&as, &err, &task, NULL, "test", "demo", "bin1", 
+ *		"idx_test_demo_bin1", AS_INDEX_TYPE_DEFAULT, AS_INDEX_NUMERIC) == AEROSPIKE_OK ) {
+ *		aerospike_index_create_wait(&err, &task, 0);
+ *	}
+*	~~~~~~~~~~
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param task			The optional task data used to poll for completion.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param ns			The namespace to be indexed.
+ *	@param set			The set to be indexed.
+ *	@param position		The bin or complex position name to be indexed.
+ *	@param name			The name of the index.
+ *	@param itype		The type of index, default or complex type.
+ *	@param dtype		The data type of index, string or integer.
+ *
+ *	@return AEROSPIKE_OK if successful or index already exists. Otherwise an error.
+ *
+ *	@ingroup index_operations
+ */
+as_status aerospike_index_create_complex(
+	aerospike * as, as_error * err, as_index_task * task, const as_policy_info * policy,
+	const as_namespace ns, const as_set set, const as_index_position position, const char * name,
+	as_index_type itype, as_index_datatype dtype);
+
+/**
+ *	Create secondary index given data type.
+ *
+ *	This asynchronous server call will return before the command is complete.
+ *	The user can optionally wait for command completion by using a task instance.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_index_task task;
+ *	if ( aerospike_index_create(&as, &err, &task, NULL, "test", "demo", "bin1", 
+ *		"idx_test_demo_bin1", AS_INDEX_NUMERIC) == AEROSPIKE_OK ) {
  *		aerospike_index_create_wait(&err, &task, 0);
  *	}
  *	~~~~~~~~~~
@@ -129,14 +164,19 @@ typedef struct as_index_task_s {
  *	@param set			The set to be indexed.
  *	@param bin			The bin to be indexed.
  *	@param name			The name of the index.
+ *	@param dtype		The data type of index, string or integer.
  *
  *	@return AEROSPIKE_OK if successful or index already exists. Otherwise an error.
  *
  *	@ingroup index_operations
  */
-as_status aerospike_index_create(
-	aerospike * as, as_error * err, as_index_task * task, const as_policy_info * policy, const as_namespace ns, 
-	const as_set set, const as_index_position position, const char * name, as_index_type itype, as_index_datatype dtype);
+static inline as_status aerospike_index_create(
+	aerospike * as, as_error * err, as_index_task * task, const as_policy_info * policy,
+	const as_namespace ns, const as_set set, const as_bin_name bin, const char * name,
+	as_index_datatype dtype)
+{
+	return aerospike_index_create_complex(as, err, task, policy, ns, set, bin, name, AS_INDEX_TYPE_DEFAULT, dtype);
+}
 
 /**
  *	Wait for asynchronous task to complete using given polling interval.
@@ -187,9 +227,9 @@ as_status aerospike_index_remove(
  */
 static inline as_status aerospike_index_integer_create(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
-	const as_namespace ns, const as_set set, const as_index_position position, const char * name)
+	const as_namespace ns, const as_set set, const as_bin_name bin, const char * name)
 {
-	return aerospike_index_create(as, err, 0, policy, ns, set, position, name, AS_INDEX_TYPE_DEFAULT, AS_INDEX_DATA_NUMERIC);
+	return aerospike_index_create_complex(as, err, 0, policy, ns, set, bin, name, AS_INDEX_TYPE_DEFAULT, AS_INDEX_NUMERIC);
 }
 
 /**
@@ -201,7 +241,7 @@ static inline as_status aerospike_index_integer_create(
  */
 static inline as_status aerospike_index_string_create(
 	aerospike * as, as_error * err, const as_policy_info * policy, 
-	const as_namespace ns, const as_set set, const as_index_position position, const char * name)
+	const as_namespace ns, const as_set set, const as_bin_name bin, const char * name)
 {
-	return aerospike_index_create(as, err, 0, policy, ns, set, position, name, AS_INDEX_TYPE_DEFAULT, AS_INDEX_DATA_STRING);
+	return aerospike_index_create_complex(as, err, 0, policy, ns, set, bin, name, AS_INDEX_TYPE_DEFAULT, AS_INDEX_STRING);
 }

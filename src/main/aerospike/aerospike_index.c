@@ -49,13 +49,13 @@
  *
  *	@ingroup index_operations
  */
-as_status aerospike_index_create(
+as_status aerospike_index_create_complex(
 	aerospike * as, as_error * err, as_index_task * task, const as_policy_info * policy,
 	const as_namespace ns, const as_set set, const as_index_position position, const char * name, as_index_type itype, as_index_datatype dtype)
 {
 	as_error_reset(err);
 	
-	const char* dtype_string = (dtype == AS_INDEX_DATA_NUMERIC)? "NUMERIC" : "STRING";
+	const char* dtype_string = (dtype == AS_INDEX_NUMERIC)? "NUMERIC" : "STRING";
 	const char* itype_string = NULL;
 	switch (itype) {
 		case AS_INDEX_TYPE_DEFAULT: {

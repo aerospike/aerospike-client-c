@@ -19,6 +19,7 @@
 #include <citrusleaf/cl_types.h>
 #include <citrusleaf/cl_sindex.h>
  
+#include <aerospike/aerospike_index.h>
 #include <aerospike/as_rec.h>
 #include <aerospike/as_map.h>
 #include <aerospike/as_list.h>
@@ -57,6 +58,7 @@ typedef struct cl_query {
     cf_vector       * filters;
     cf_vector       * orderbys;
     cl_query_udf    udf;
+	as_index_type   indextype;
     void            * res_streamq;
     int             limit;  
     uint64_t        job_id;

@@ -44,12 +44,24 @@ cl_rv citrusleaf_secondary_index_create(
 
     char ddl[1024];
     
-    sprintf(ddl, 
-        "sindex-create:ns=%s%s%s;indexname=%s;" 
-        "numbins=1;indextype=%s,indexdata=%s,%s;priority=normal\n",
-        ns, set ? ";set=" : "", set ? set : "",
-        iname, itype, position, dtype
-    );
+	if (strcmp(itype, "DEFAULT") == 0) {
+		// Use old format, so command can work with older servers.
+		sprintf(ddl,
+			"sindex-create:ns=%s%s%s;indexname=%s;"
+			"numbins=1;indexdata=%s,%s;priority=normal\n",
+			ns, set ? ";set=" : "", set ? set : "",
+			iname, position, dtype
+			);
+	}
+	else {
+		// Use new format.
+		sprintf(ddl,
+			"sindex-create:ns=%s%s%s;indexname=%s;" 
+			"numbins=1;indextype=%s,indexdata=%s,%s;priority=normal\n",
+			ns, set ? ";set=" : "", set ? set : "",
+			iname, itype, position, dtype
+		);
+	}
 
     return citrusleaf_info_cluster(asc, ddl, response, true, /* check bounds */ true, 5000);
 }

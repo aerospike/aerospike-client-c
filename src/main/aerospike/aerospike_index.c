@@ -58,6 +58,7 @@ as_status aerospike_index_create_complex(
 	const char* dtype_string = (dtype == AS_INDEX_NUMERIC)? "NUMERIC" : "STRING";
 	const char* itype_string = NULL;
 	switch (itype) {
+		default:
 		case AS_INDEX_TYPE_DEFAULT: {
 			itype_string = "DEFAULT";
 			break;
@@ -74,8 +75,6 @@ as_status aerospike_index_create_complex(
 			itype_string = "MAPVALUES";
 			break;
 		}
-		default:
-			break;
 	}
 
 	char * response = NULL;

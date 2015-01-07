@@ -15,22 +15,19 @@
  * the License.
  */
 #include <aerospike/aerospike.h>
+#include <aerospike/aerospike_info.h>
 #include <aerospike/aerospike_key.h>
-
-#include <aerospike/as_error.h>
-#include <aerospike/as_status.h>
-
-#include <aerospike/as_record.h>
-#include <aerospike/aerospike.h>
 #include <aerospike/aerospike_lmap.h>
-#include <aerospike/aerospike_key.h>
-#include <aerospike/as_ldt.h>
-//#include <aerospike/as_val.h>
+#include <aerospike/as_error.h>
 #include <aerospike/as_hashmap.h>
 #include <aerospike/as_hashmap_iterator.h>
+#include <aerospike/as_ldt.h>
+#include <aerospike/as_record.h>
 #include <aerospike/as_stringmap.h>
+#include <aerospike/as_status.h>
 
 #include "../test.h"
+#include "../aerospike_test.h"
 
 /******************************************************************************
  * GLOBAL VARS
@@ -41,7 +38,24 @@ extern aerospike * as;
 /******************************************************************************
  * STATIC FUNCTIONS
  *****************************************************************************/
+bool is_ldt_enabled()
+{
+	char * res = NULL;
+	int rc;
 
+	as_error err;
+	as_error_reset(&err);
+
+	const char *cfg_param = "ldt-enabled=true";
+
+	rc = aerospike_info_host(as, &err, NULL, g_host, 3000, "namespace/test", &res);
+
+	char *st = strstr(res,cfg_param);
+	if (st) {
+		return true;
+	}
+	return false;
+}
 
 
 /******************************************************************************
@@ -49,6 +63,11 @@ extern aerospike * as;
  *****************************************************************************/
 
 TEST( lmap_put , "put: (test,test,t1) = {bin:1}" ) {
+
+	if (!is_ldt_enabled()) {
+		fprintf(stderr, "ldt not enabled. skipping test");
+		return;
+	}
 
 	as_error err;
 	as_error_reset(&err);

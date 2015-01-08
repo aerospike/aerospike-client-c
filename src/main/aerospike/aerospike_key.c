@@ -772,6 +772,10 @@ as_status aerospike_key_apply(
 		}
 		default: {
 			// ERROR CASE
+			// rc default value is AEROSPIKE_OK.
+			// When policy->key value is corrupted and a call to server is not made
+			// set the rc value appropriately and error out.
+			rc = AEROSPIKE_ERR_PARAM;
 			break;
 		}
 	}

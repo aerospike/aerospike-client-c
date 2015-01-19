@@ -30,6 +30,9 @@
  */
 #define AS_NODE_NAME_SIZE 20
 
+// Leave this is in for backwards compatibility.
+#define AS_NODE_NAME_MAX_SIZE AS_NODE_NAME_SIZE
+
 /******************************************************************************
  *	TYPES
  *****************************************************************************/

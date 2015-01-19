@@ -15,7 +15,6 @@
  * the License.
  */
 #include <aerospike/as_scan.h>
-#include <citrusleaf/cl_scan.h>
 #include <citrusleaf/cf_random.h>
 
 /******************************************************************************
@@ -52,6 +51,7 @@ static as_scan * as_scan_defaults(as_scan * scan, bool free, const as_namespace 
 	scan->percent = AS_SCAN_PERCENT_DEFAULT;
 	scan->no_bins = AS_SCAN_NOBINS_DEFAULT;
 	scan->concurrent = AS_SCAN_CONCURRENT_DEFAULT;
+	scan->deserialize_list_map = AS_SCAN_DESERIALIZE_DEFAULT;
 	
 	as_udf_call_init(&scan->apply_each, NULL, NULL, NULL);
 

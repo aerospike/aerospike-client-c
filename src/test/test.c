@@ -371,7 +371,7 @@ void atf_assert_string_eq(atf_test_result * result, const char * actual_exp, con
 
 void atf_assert_log(atf_test_result * result, const char * exp, const char * file, int line, const char * fmt, ...) {
 
-    char msg[LOG_MESSAGE_MAX] = {0};
+    char msg[LOG_MESSAGE_MAX];
     va_list ap;
     va_start(ap, fmt);
     vsnprintf(msg, LOG_MESSAGE_MAX, fmt, ap);
@@ -386,7 +386,7 @@ void atf_assert_log(atf_test_result * result, const char * exp, const char * fil
  *****************************************************************************/
 
 void atf_log(FILE * f, const char * level, const char * prefix, const char * file, int line, const char * fmt, ...) {
-    char msg[LOG_MESSAGE_MAX] = {0};
+    char msg[LOG_MESSAGE_MAX];
     va_list ap;
     va_start(ap, fmt);
     vsnprintf(msg, LOG_MESSAGE_MAX, fmt, ap);
@@ -395,13 +395,13 @@ void atf_log(FILE * f, const char * level, const char * prefix, const char * fil
 }
 
 void atf_logv(FILE * f, const char * level, const char * prefix, const char * file, int line, const char * fmt, va_list ap) {
-	char msg[LOG_MESSAGE_MAX] = {0};
+	char msg[LOG_MESSAGE_MAX];
     vsnprintf(msg, LOG_MESSAGE_MAX, fmt, ap);
     fprintf(f, "%s[%s] %s\n", prefix, level, msg);
 }
 
 void atf_log_line(FILE * f, const char * level, const char * prefix, const char * file, int line, const char * fmt, ...) {
-    char msg[LOG_MESSAGE_MAX] = {0};
+    char msg[LOG_MESSAGE_MAX];
     va_list ap;
     va_start(ap, fmt);
     vsnprintf(msg, LOG_MESSAGE_MAX, fmt, ap);

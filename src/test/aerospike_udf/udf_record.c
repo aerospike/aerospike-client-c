@@ -37,7 +37,6 @@
 
 #include "../test.h"
 #include "../util/udf.h"
-#include "../util/info_util.h"
 
 /******************************************************************************
  * GLOBAL VARS

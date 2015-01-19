@@ -235,3 +235,11 @@ static inline as_status as_error_set(as_error * err, as_status code, const char 
 	err->code = code;
 	return err->code;
 }
+
+/**
+ *	Return string representation of error code.  Result should not be freed.
+ *
+ *	@relates as_error
+ */
+char*
+as_error_string(as_status status);

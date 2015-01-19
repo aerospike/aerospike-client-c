@@ -20,7 +20,7 @@
 as_status ldt_parse_error(as_error *error)
 {
 	int delim_pos = 4;
-	if ( error && error->message[delim_pos]==':' ) {
+	if ( error->message[0] && error->message[delim_pos]==':' ) {
 		long code = strtol(error->message, NULL, 10);
 		if (code > 0) {
 			error->code = (as_status)code;

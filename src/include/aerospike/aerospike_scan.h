@@ -257,3 +257,44 @@ as_status aerospike_scan_foreach(
 	const as_scan * scan, 
 	aerospike_scan_foreach_callback callback, void * udata
 	);
+
+/**
+ *	Scan the records in the specified namespace and set for a single node.
+ *
+ *	The callback function will be called for each record scanned. When all records have
+ *	been scanned, then callback will be called with a NULL value for the record.
+ *
+ *	~~~~~~~~~~{.c}
+ *	char* node_names = NULL;
+ *	int n_nodes = 0;
+ *	as_cluster_get_node_names(as->cluster, &n_nodes, &node_names);
+ *
+ *	if (n_nodes <= 0)
+ *		return <error>;
+ *
+ *	as_scan scan;
+ *	as_scan_init(&scan, "test", "demo");
+ *
+ *	if (aerospike_scan_node(&as, &err, NULL, &scan, node_names[0], callback, NULL) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *
+ *	free(node_names);
+ *	as_scan_destroy(&scan);
+ *	~~~~~~~~~~
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param scan			The scan to execute against the cluster.
+ *	@param node_name	The node name to scan.
+ *	@param callback		The function to be called for each record scanned.
+ *	@param udata		User-data to be passed to the callback.
+ *
+ *	@return AEROSPIKE_OK on success. Otherwise an error occurred.
+ */
+as_status aerospike_scan_node(
+	aerospike * as, as_error * err, const as_policy_scan * policy,
+	const as_scan * scan,  const char* node_name,
+	aerospike_scan_foreach_callback callback, void * udata
+	);

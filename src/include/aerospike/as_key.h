@@ -16,9 +16,11 @@
  */
 #pragma once 
 
-#include <aerospike/as_integer.h>
-#include <aerospike/as_string.h>
 #include <aerospike/as_bytes.h>
+#include <aerospike/as_integer.h>
+#include <aerospike/as_error.h>
+#include <aerospike/as_string.h>
+#include <aerospike/as_status.h>
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -653,3 +655,18 @@ void as_key_destroy(as_key * key);
  *	@ingroup as_key_object
  */
 as_digest * as_key_digest(as_key * key);
+
+/**
+ *	Set the digest value in the key structure.  Keys must be integer, string or blob.
+ *	Otherwise, an error is returned.
+ *
+ *	@param err Error message that is populated on error.
+ *	@param key The key to get the digest for.
+ *
+ *	@return Status code.
+ *
+ *	@relates as_key
+ *	@ingroup as_key_object
+ */
+as_status
+as_key_set_digest(as_error* err, as_key* key);

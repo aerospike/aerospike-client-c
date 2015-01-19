@@ -45,6 +45,11 @@
  */
 #define AS_SCAN_CONCURRENT_DEFAULT false
 
+/**
+ *	Default value for as_scan.deserialize_list_map
+ */
+#define AS_SCAN_DESERIALIZE_DEFAULT true
+
 /******************************************************************************
  *	TYPES
  *****************************************************************************/
@@ -316,6 +321,14 @@ typedef struct as_scan_s {
 	 */
 	bool concurrent;
 
+	/**
+	 *	Set to true if the scan should deserialize list and map raw bytes.
+	 *	Set to false for backup programs that just need access to raw bytes.
+	 *
+	 *	Default value is AS_SCAN_DESERIALIZE_DEFAULT.
+	 */
+	bool deserialize_list_map;
+	
 	/**
 	 * 	@memberof as_scan
 	 *	Namespace to be scanned.

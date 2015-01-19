@@ -22,9 +22,6 @@
 #include <aerospike/mod_lua.h>
 #include <aerospike/mod_lua_config.h>
 
-#include <citrusleaf/citrusleaf.h>
-#include "_shim.h"
-
 /******************************************************************************
  * STATIC FUNCTIONS
  *****************************************************************************/
@@ -110,8 +107,8 @@ as_status aerospike_connect(aerospike * as, as_error * err)
 	// Create the cluster object.
 	int status = as_cluster_create(&as->config, &as->cluster);
 	
-	if (status != 0) {
-		return as_error_fromrc(err, status);
+	if (status) {
+		return as_error_update(err, status, "Failed to connect to cluster: %s", as_error_string(status));
 	}
 	
 	return AEROSPIKE_OK;

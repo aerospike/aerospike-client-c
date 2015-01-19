@@ -19,7 +19,6 @@
 #include <aerospike/as_config.h>
 #include <aerospike/as_partition.h>
 #include <citrusleaf/cf_queue.h>
-#include <citrusleaf/cl_types.h>
 #include <ck_spinlock.h>
 #include <ck_swlock.h>
 
@@ -36,7 +35,7 @@ typedef struct as_node_shm_s {
 	 *	@private
 	 *	Node name.
 	 */
-	char name[NODE_NAME_SIZE];
+	char name[AS_NODE_NAME_SIZE];
 		
 	/**
 	 *	@private

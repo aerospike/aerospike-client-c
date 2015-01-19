@@ -88,7 +88,7 @@ static bool scan_udf_info_callback(const as_error * err, const as_node * node, c
 			goto done;
 		}
 		char print_resp[128];
-		strncpy(print_resp, start_resp, 127); 		
+		as_strncpy(print_resp, start_resp, sizeof(print_resp));
 	 	debug("%s", print_resp);
 	}
 done:

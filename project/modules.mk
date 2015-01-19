@@ -49,52 +49,6 @@ $(TARGET_INCL)/citrusleaf/%.h: $(COMMON)/$(TARGET_INCL)/citrusleaf/%.h | $(TARGE
 	 cp -p $^ $@
 
 ###############################################################################
-##  BASE MODULE                                                              ##
-###############################################################################
-
-ifndef BASE
-$(warning ***************************************************************)
-$(warning *)
-$(warning *  BASE is not defined. )
-$(warning *  BASE should be set to a valid path. )
-$(warning *)
-$(warning ***************************************************************)
-$(error )
-endif
-
-ifeq ($(wildcard $(BASE)/Makefile),) 
-$(warning ***************************************************************)
-$(warning *)
-$(warning *  BASE is '$(BASE)')
-$(warning *  BASE doesn't contain 'BASE'. )
-$(warning *  BASE should be set to a valid path. )
-$(warning *)
-$(warning ***************************************************************)
-$(error )
-endif
-
-.PHONY: BASE-build
-BASE-build: $(BASE)/$(TARGET_LIB)/libaerospike-base.a
-
-.PHONY: BASE-clean
-BASE-clean:
-	$(MAKE) -e -C $(BASE) clean COMMON=$(COMMON)
-
-$(BASE)/$(TARGET_LIB)/libaerospike-base.a:
-	$(MAKE) -e -C $(BASE) libaerospike-base.a COMMON=$(COMMON)
-
-.PHONY: BASE-prepare
-BASE-prepare: BASE-make-prepare $(subst $(BASE)/$(SOURCE_INCL),$(TARGET_INCL),$(BASE-HEADERS))
-	$(noop)
-
-.PHONY: BASE-make-prepare
-BASE-make-prepare:
-	$(MAKE) -e -C $(BASE) prepare COMMON=$(COMMON)
-
-$(TARGET_INCL)/citrusleaf/%.h: $(BASE)/$(TARGET_INCL)/citrusleaf/%.h | $(TARGET_INCL)/citrusleaf
-	cp -p $^ $@
-
-###############################################################################
 ##  MOD-LUA MODULE                                                           ##
 ###############################################################################
 

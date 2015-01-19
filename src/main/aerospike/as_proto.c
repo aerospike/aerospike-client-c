@@ -14,15 +14,14 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
+#include <aerospike/as_proto.h>
+#include <citrusleaf/cf_byte_order.h>
 #include <stdint.h>
 #include <string.h>
 
-#include <citrusleaf/cf_byte_order.h>
-#include <citrusleaf/cf_proto.h>
-
 // Byte swap proto from current machine byte order to network byte order (big endian).
 void
-cl_proto_swap_to_be(cl_proto *p)
+as_proto_swap_to_be(as_proto *p)
 {
 	uint8_t	 version = p->version;
 	uint8_t  type = p->type;
@@ -34,7 +33,7 @@ cl_proto_swap_to_be(cl_proto *p)
 
 // Byte swap proto from network byte order (big endian) to current machine byte order.
 void
-cl_proto_swap_from_be(cl_proto *p)
+as_proto_swap_from_be(as_proto *p)
 {
 	uint8_t	 version = p->version;
 	uint8_t  type = p->type;
@@ -44,52 +43,13 @@ cl_proto_swap_from_be(cl_proto *p)
 	p->type = type;
 }
 
-// Byte swap header from current machine byte order to network byte order (big endian).
-void
-cl_msg_swap_header_to_be(cl_msg *m)
-{
-	m->generation = cf_swap_to_be32(m->generation);
-	m->record_ttl =  cf_swap_to_be32(m->record_ttl);
-	m->transaction_ttl = cf_swap_to_be32(m->transaction_ttl);
-	m->n_fields = cf_swap_to_be16(m->n_fields);
-	m->n_ops= cf_swap_to_be16(m->n_ops);
-}
-
 // Byte swap header from network byte order (big endian) to current machine byte order.
 void
-cl_msg_swap_header_from_be(cl_msg *m)
+as_msg_swap_header_from_be(as_msg *m)
 {
 	m->generation = cf_swap_from_be32(m->generation);
 	m->record_ttl =  cf_swap_from_be32(m->record_ttl);
 	m->transaction_ttl = cf_swap_from_be32(m->transaction_ttl);
 	m->n_fields = cf_swap_from_be16(m->n_fields);
 	m->n_ops= cf_swap_from_be16(m->n_ops);
-}
-
-// Byte swap operation from current machine byte order to network byte order (big endian).
-void
-cl_msg_swap_op_to_be(cl_msg_op *op)
-{
-	op->op_sz = cf_swap_to_be32(op->op_sz);
-}
-
-// Byte swap operation from network byte order (big endian) to current machine byte order.
-void
-cl_msg_swap_op_from_be(cl_msg_op *op)
-{
-	op->op_sz = cf_swap_from_be32(op->op_sz);
-}
-
-// Byte swap field from current machine byte order to network byte order (big endian).
-void
-cl_msg_swap_field_to_be(cl_msg_field *mf)
-{
-	mf->field_sz = cf_swap_to_be32(mf->field_sz);
-}
-
-// Byte swap field from network byte order (big endian) to current machine byte order.
-void
-cl_msg_swap_field_from_be(cl_msg_field *mf)
-{
-	mf->field_sz = cf_swap_from_be32(mf->field_sz);
 }

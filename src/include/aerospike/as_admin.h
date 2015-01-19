@@ -132,5 +132,5 @@ as_user_roles_destroy_array(as_user_roles** user_roles, int user_roles_size);
  *	Authenticate user with a server node.  This is done automatically after socket open.
  *  Do not use this method directly.
  */
-int
-as_authenticate(int fd, const char* user, const char* credential, int timeout_ms);
+as_status
+as_authenticate(as_error* err, int fd, const char* user, const char* credential, uint64_t deadline_ms);

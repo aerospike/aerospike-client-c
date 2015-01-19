@@ -14,18 +14,18 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-#include <aerospike/as_integer.h>
 #include <aerospike/as_key.h>
+#include <aerospike/as_integer.h>
+#include <aerospike/as_command.h>
+#include <aerospike/as_log_macros.h>
 #include <aerospike/as_string.h>
 #include <aerospike/as_bytes.h>
 
+#include <citrusleaf/cf_byte_order.h>
 #include <citrusleaf/cf_digest.h>
-#include <citrusleaf/cl_object.h>
 
 #include <stdbool.h>
 #include <stdint.h>
-
-#include "_shim.h"
 
 /******************************************************************************
  *	INLINE FUNCTIONS
@@ -218,20 +218,63 @@ void as_key_destroy(as_key * key)
  */
 as_digest * as_key_digest(as_key * key)
 {
-	if ( !key ) return NULL;
-	if ( key->digest.init ) return &key->digest;
-
-	char * set = key->set;
-	as_val * val = (as_val *) key->valuep;
-	as_digest * digest = &key->digest;
+	as_error err;
+	as_status status = as_key_set_digest(&err, key);
 	
-	if ( val ) {
-		cl_object obj;
-		asval_to_clobject(val, &obj);
-		citrusleaf_calculate_digest(set, &obj, (cf_digest *) digest->value);
-		key->digest.init = true;
+	if (status == AEROSPIKE_OK) {
 		return &key->digest;
 	}
+	else {
+		as_log_error(err.message);
+		return NULL;
+	}
+}
 
-	return NULL;
+as_status
+as_key_set_digest(as_error* err, as_key* key)
+{
+	if (key->digest.init) {
+		return AEROSPIKE_OK;
+	}
+	
+	size_t set_len = strlen(key->set);
+	size_t size;
+	
+	as_val* val = (as_val*)key->valuep;
+	uint8_t* buf;
+	
+	switch (val->type) {
+		case AS_INTEGER: {
+			as_integer* v = as_integer_fromval(val);
+			size = 9;
+			buf = alloca(size);
+			buf[0] = AS_PARTICLE_TYPE_INTEGER;
+			*(uint64_t*)&buf[1] = cf_swap_to_be64(v->value);
+			break;
+		}
+		case AS_STRING: {
+			as_string* v = as_string_fromval(val);
+			size_t len = as_string_len(v);
+			size = len + 1;
+			buf = alloca(size);
+			buf[0] = AS_PARTICLE_TYPE_STRING;
+			memcpy(&buf[1], v->value, len);
+			break;
+		}
+		case AS_BYTES: {
+			as_bytes* v = as_bytes_fromval(val);
+			size = v->size + 1;
+			buf = alloca(size);
+			buf[0] = AS_PARTICLE_TYPE_BLOB;
+			memcpy(&buf[1], v->value, v->size);
+			break;
+		}
+		default: {
+			return as_error_update(err, AEROSPIKE_ERR_PARAM, "Invalid key type: %d", val->type);
+		}
+	}
+		
+	cf_digest_compute2(key->set, set_len, buf, size, (cf_digest*)key->digest.value);
+	key->digest.init = true;
+	return AEROSPIKE_OK;
 }

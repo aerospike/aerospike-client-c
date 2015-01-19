@@ -92,6 +92,70 @@ as_status aerospike_info_host(
 	);
 
 /**
+ *	Send an info request to a specific socket address. The response must be freed by the caller on success.
+ *
+ *	~~~~~~~~~~{.c}
+ *	char * res = NULL;
+ *	if ( aerospike_info_socket_address(&as, &err, NULL, &sa_in, "info", &res) != AEROSPIKE_OK ) {
+ *		// handle error
+ *	}
+ *	else {
+ *		// handle response
+ *		free(res);
+ *		res = NULL;
+ *	}
+ *	~~~~~~~~~~
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param sa_in		The IP address and port to send the request to.
+ *	@param req			The info request to send.
+ *	@param res			The response from the node. The response will be a NULL terminated string, allocated by the function, and must be freed by the caller.
+ *
+ *	@return AEROSPIKE_OK on success. Otherwise an error.
+ *
+ *	@ingroup info_operations
+ */
+as_status aerospike_info_socket_address(
+	aerospike * as, as_error * err, const as_policy_info * policy,
+	struct sockaddr_in* sa_in, const char * req,
+	char ** res
+	);
+
+/**
+ *	Send an info request to a node in the cluster.  If node request fails, send request to the next
+ *	node in the cluster.  Repeat until the node request succeeds. The response must be freed by
+ *	the caller on success.
+ *
+ *	~~~~~~~~~~{.c}
+ *	char * res = NULL;
+ *	if ( aerospike_info_any(&as, &err, NULL, "info", &res) != AEROSPIKE_OK ) {
+ *		// handle error
+ *	}
+ *	else {
+ *		// handle response
+ *		free(res);
+ *		res = NULL;
+ *	}
+ *	~~~~~~~~~~
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param req			The info request to send.
+ *	@param res			The response from the node. The response will be a NULL terminated string, allocated by the function, and must be freed by the caller.
+ *
+ *	@return AEROSPIKE_OK on success. Otherwise an error.
+ *
+ *	@ingroup info_operations
+ */
+as_status aerospike_info_any(
+	aerospike * as, as_error * err, const as_policy_info * policy,
+	const char * req, char ** res
+	);
+
+/**
  *	Send an info request to the entire cluster.
  *
  *	~~~~~~~~~~{.c}

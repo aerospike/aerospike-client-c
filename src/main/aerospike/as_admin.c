@@ -15,11 +15,12 @@
  * the License.
  */
 #include <aerospike/as_admin.h>
+#include <aerospike/as_command.h>
 #include <aerospike/as_cluster.h>
+#include <aerospike/as_proto.h>
+#include <aerospike/as_socket.h>
 #include <citrusleaf/cf_byte_order.h>
-#include <citrusleaf/cf_proto.h>
-#include <citrusleaf/cf_socket.h>
-#include <citrusleaf/cl_types.h>
+#include <citrusleaf/cf_clock.h>
 #include <string.h>
 
 // Commands
@@ -96,24 +97,24 @@ write_roles(uint8_t* p, const char** roles, int length)
 	return q;
 }
 
-static int
-as_send(int fd, uint8_t* buffer, uint8_t* end, uint64_t deadline_ms, int timeout_ms)
+static as_status
+as_send(as_error* err, int fd, uint8_t* buffer, uint8_t* end, uint64_t deadline_ms)
 {
 	uint64_t len = end - buffer;
 	uint64_t proto = (len - 8) | (MSG_VERSION << 56) | (MSG_TYPE << 48);
 	*(uint64_t*)buffer = cf_swap_to_be64(proto);
 	
-	return cf_socket_write_timeout(fd, buffer, len, deadline_ms, timeout_ms);
+	return as_socket_write_deadline(err, fd, buffer, len, deadline_ms);
 }
 
 static int
 as_execute(aerospike* as, const as_policy_admin* policy, uint8_t* buffer, uint8_t* end)
 {
-	int timeout_ms = (policy)? policy->timeout : as->config.policies.admin.timeout;
+	uint32_t timeout_ms = (policy)? policy->timeout : as->config.policies.admin.timeout;
 	if (timeout_ms <= 0) {
 		timeout_ms = DEFAULT_TIMEOUT;
 	}
-	uint64_t deadline_ms = cf_getms() + timeout_ms;
+	uint64_t deadline_ms = as_socket_deadline(timeout_ms);
 	as_node* node = as_node_get_random(as->cluster);
 	
 	if (! node) {
@@ -121,23 +122,28 @@ as_execute(aerospike* as, const as_policy_admin* policy, uint8_t* buffer, uint8_
 	}
 	
 	int fd;
-	int status = as_node_get_connection(node, &fd);
+	as_status status = as_node_get_connection(node, &fd);
 	
 	if (status) {
 		as_node_release(node);
 		return status;
 	}
 
-	if (as_send(fd, buffer, end, deadline_ms, timeout_ms)) {
-		cf_close(fd);
+	as_error err;
+	status = as_send(&err, fd, buffer, end, deadline_ms);
+	
+	if (status) {
+		as_close(fd);
 		as_node_release(node);
-		return AEROSPIKE_ERR_TIMEOUT;
+		return status;
 	}
 	
-	if (cf_socket_read_timeout(fd, buffer, HEADER_SIZE, deadline_ms, timeout_ms)) {
-		cf_close(fd);
+	status = as_socket_read_deadline(&err, fd, buffer, HEADER_SIZE, deadline_ms);
+	
+	if (status) {
+		as_close(fd);
 		as_node_release(node);
-		return AEROSPIKE_ERR_TIMEOUT;
+		return status;
 	}
 	
 	as_node_put_connection(node, fd);
@@ -145,29 +151,34 @@ as_execute(aerospike* as, const as_policy_admin* policy, uint8_t* buffer, uint8_
 	return buffer[RESULT_CODE];
 }
 
-int
-as_authenticate(int fd, const char* user, const char* credential, int timeout_ms)
+as_status
+as_authenticate(as_error* err, int fd, const char* user, const char* credential, uint64_t deadline_ms)
 {
-	uint8_t buffer[STACK_BUF_SZ];
+	uint8_t buffer[AS_STACK_BUF_SIZE];
 	uint8_t* p = buffer + 8;
 
 	p = write_header(p, AUTHENTICATE, 2);
 	p = write_field_string(p, USER, user);
 	p = write_field_string(p, CREDENTIAL, credential);
 	
-	if (timeout_ms == 0) {
-		timeout_ms = DEFAULT_TIMEOUT;
-	}
-	uint64_t deadline_ms = cf_getms() + timeout_ms;
+	as_status status = as_send(err, fd, buffer, p, deadline_ms);
 	
-	if (as_send(fd, buffer, p, deadline_ms, timeout_ms)) {
-		return AEROSPIKE_ERR_TIMEOUT;
+	if (status) {
+		return status;
 	}
 
-	if (cf_socket_read_timeout(fd, buffer, HEADER_SIZE, deadline_ms, timeout_ms)) {
-		return AEROSPIKE_ERR_TIMEOUT;
+	status = as_socket_read_deadline(err, fd, buffer, HEADER_SIZE, deadline_ms);
+	
+	if (status) {
+		return status;
 	}
-	return buffer[RESULT_CODE];
+	
+	status = buffer[RESULT_CODE];
+	
+	if (status) {
+		as_error_set_message(err, status, as_error_string(status));
+	}
+	return status;
 }
 
 int
@@ -176,7 +187,7 @@ aerospike_create_user(aerospike* as, const as_policy_admin* policy, const char* 
 	char hash[AS_PASSWORD_HASH_SIZE];
 	as_password_get_constant_hash(password, hash);
 	
-	uint8_t buffer[STACK_BUF_SZ];
+	uint8_t buffer[AS_STACK_BUF_SIZE];
 	uint8_t* p = buffer + 8;
 	
 	p = write_header(p, CREATE_USER, 3);
@@ -189,7 +200,7 @@ aerospike_create_user(aerospike* as, const as_policy_admin* policy, const char* 
 int
 aerospike_drop_user(aerospike* as, const as_policy_admin* policy, const char* user)
 {
-	uint8_t buffer[STACK_BUF_SZ];
+	uint8_t buffer[AS_STACK_BUF_SIZE];
 	uint8_t* p = buffer + 8;
 	
 	p = write_header(p, DROP_USER, 1);
@@ -206,7 +217,7 @@ aerospike_set_password(aerospike* as, const as_policy_admin* policy, const char*
 	if (! user) {
 		user = as->cluster->user;
 	}
-	uint8_t buffer[STACK_BUF_SZ];
+	uint8_t buffer[AS_STACK_BUF_SIZE];
 	uint8_t* p = buffer + 8;
 	
 	p = write_header(p, SET_PASSWORD, 2);
@@ -229,7 +240,7 @@ aerospike_change_password(aerospike* as, const as_policy_admin* policy, const ch
 	if (! user) {
 		user = as->cluster->user;
 	}
-	uint8_t buffer[STACK_BUF_SZ];
+	uint8_t buffer[AS_STACK_BUF_SIZE];
 	uint8_t* p = buffer + 8;
 	
 	p = write_header(p, CHANGE_PASSWORD, 3);
@@ -247,7 +258,7 @@ aerospike_change_password(aerospike* as, const as_policy_admin* policy, const ch
 int
 aerospike_grant_roles(aerospike* as, const as_policy_admin* policy, const char* user, const char** roles, int roles_size)
 {
-	uint8_t buffer[STACK_BUF_SZ];
+	uint8_t buffer[AS_STACK_BUF_SIZE];
 	uint8_t* p = buffer + 8;
 	
 	p = write_header(p, GRANT_ROLES, 2);
@@ -259,7 +270,7 @@ aerospike_grant_roles(aerospike* as, const as_policy_admin* policy, const char* 
 int
 aerospike_revoke_roles(aerospike* as, const as_policy_admin* policy, const char* user, const char** roles, int roles_size)
 {
-	uint8_t buffer[STACK_BUF_SZ];
+	uint8_t buffer[AS_STACK_BUF_SIZE];
 	uint8_t* p = buffer + 8;
 	
 	p = write_header(p, REVOKE_ROLES, 2);
@@ -271,7 +282,7 @@ aerospike_revoke_roles(aerospike* as, const as_policy_admin* policy, const char*
 int
 aerospike_replace_roles(aerospike* as, const as_policy_admin* policy, const char* user, const char** roles, int roles_size)
 {
-	uint8_t buffer[STACK_BUF_SZ];
+	uint8_t buffer[AS_STACK_BUF_SIZE];
 	uint8_t* p = buffer + 8;
 	
 	p = write_header(p, REPLACE_ROLES, 2);
@@ -364,16 +375,16 @@ as_parse_users(uint8_t* buffer, int size, as_vector* /*<as_user_roles*>*/ users)
 }
 
 static int
-as_read_user_blocks(int fd, uint8_t* buffer, uint64_t deadline_ms, int timeout_ms, as_vector* /*<as_user_roles*>*/ users)
+as_read_user_blocks(as_error* err, int fd, uint8_t* buffer, uint64_t deadline_ms, as_vector* /*<as_user_roles*>*/ users)
 {
-	int buffer_size = STACK_BUF_SZ;
+	int buffer_size = AS_STACK_BUF_SIZE;
 	uint8_t* buf = buffer;
 	uint64_t proto;
 	int status = 0;
 	int size;
 	
 	while (status == 0) {
-		if (cf_socket_read_timeout(fd, buf, 8, deadline_ms, timeout_ms)) {
+		if (as_socket_read_deadline(err, fd, buf, 8, deadline_ms)) {
 			status = -1;
 			break;
 		}
@@ -390,7 +401,7 @@ as_read_user_blocks(int fd, uint8_t* buffer, uint64_t deadline_ms, int timeout_m
 				buf = cf_malloc(size);
 			}
 			
-			if (cf_socket_read_timeout(fd, buf, size, deadline_ms, timeout_ms)) {
+			if (as_socket_read_deadline(err, fd, buf, size, deadline_ms)) {
 				status = -1;
 				break;
 			}
@@ -430,19 +441,21 @@ as_read_users(aerospike* as, const as_policy_admin* policy, uint8_t* buffer, uin
 		return status;
 	}
 	
-	if (as_send(fd, buffer, end, deadline_ms, timeout_ms)) {
-		cf_close(fd);
+	as_error err;
+	
+	if (as_send(&err, fd, buffer, end, deadline_ms)) {
+		as_close(fd);
 		as_node_release(node);
 		return AEROSPIKE_ERR_TIMEOUT;
 	}
 	
-	status = as_read_user_blocks(fd, buffer, deadline_ms, timeout_ms, users);
+	status = as_read_user_blocks(&err, fd, buffer, deadline_ms, users);
 	
 	if (status >= 0) {
 		as_node_put_connection(node, fd);
 	}
 	else {
-		cf_close(fd);
+		as_close(fd);
 	}
 	as_node_release(node);
 	return status;
@@ -492,7 +505,7 @@ aerospike_query_user(aerospike* as, const as_policy_admin* policy, const char* u
 	if (! user) {
 		user = as->cluster->user;
 	}
-	uint8_t buffer[STACK_BUF_SZ];
+	uint8_t buffer[AS_STACK_BUF_SIZE];
 	uint8_t* p = buffer + 8;
 	
 	p = write_header(p, QUERY_USERS, 1);
@@ -532,7 +545,7 @@ as_user_roles_destroy(as_user_roles* user_roles)
 int
 aerospike_query_users(aerospike* as, const as_policy_admin* policy, as_user_roles*** user_roles, int* user_roles_size)
 {
-	uint8_t buffer[STACK_BUF_SZ];
+	uint8_t buffer[AS_STACK_BUF_SIZE];
 	uint8_t* p = buffer + 8;
 	
 	p = write_header(p, QUERY_USERS, 0);

@@ -14,53 +14,20 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-#include <aerospike/aerospike.h>
 #include <aerospike/aerospike_info.h>
+#include <aerospike/as_admin.h>
 #include <aerospike/as_cluster.h>
+#include <aerospike/as_command.h>
 #include <aerospike/as_error.h>
-#include <aerospike/as_log.h>
+#include <aerospike/as_info.h>
+#include <aerospike/as_log_macros.h>
+#include <aerospike/as_lookup.h>
 #include <aerospike/as_node.h>
 #include <aerospike/as_policy.h>
-#include <aerospike/as_status.h>
-
-#include <citrusleaf/citrusleaf.h>
-#include <citrusleaf/cl_info.h>
-
+#include <aerospike/as_proto.h>
+#include <aerospike/as_socket.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
-
-#include "_shim.h"
-
-/******************************************************************************
- * TYPES
- *****************************************************************************/
-
-struct citrusleaf_info_cluster_foreach_data_s {
-	aerospike_info_foreach_callback callback;
-	void * udata;
-};
-
-typedef struct citrusleaf_info_cluster_foreach_data_s citrusleaf_info_cluster_foreach_data;
-
-/******************************************************************************
- * STATIC FUNCTIONS
- *****************************************************************************/
-
-bool citrusleaf_info_cluster_foreach_callback(const as_node * node, const char * req, char * res, void * udata)
-{
-	if ( ! node ) {
-		return FALSE;
-	}
-	
-	as_error err;
-    as_error_reset(&err);
-
-    citrusleaf_info_cluster_foreach_data * data = (citrusleaf_info_cluster_foreach_data *) udata;
-	
-	bool result = (data->callback)(&err, node, req, res, data->udata);
-
-	return result;
-}
 
 /******************************************************************************
  * FUNCTIONS
@@ -98,26 +65,150 @@ as_status aerospike_info_host(
 	const char * addr, uint16_t port, const char * req, 
 	char ** res) 
 {
-	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
 	
 	if (! policy) {
 		policy = &as->config.policies.info;
 	}
-
-	if (! as) {
-		return AEROSPIKE_ERR_CLIENT;
+	
+	as_vector sockaddr_in_v;
+	as_vector_inita(&sockaddr_in_v, sizeof(struct sockaddr_in), 5);
+	
+	as_status status = as_lookup(NULL, (char*)addr, port, true, &sockaddr_in_v);
+	
+	if (status) {
+		as_vector_destroy(&sockaddr_in_v);
+		return status;
 	}
+	
+	uint64_t deadline = as_socket_deadline(policy->timeout);
+	as_cluster* cluster = as->cluster;
+	status = AEROSPIKE_ERR_CLUSTER;
+	bool loop = true;
+	
+	for (uint32_t i = 0; i < sockaddr_in_v.size && loop; i++) {
+		struct sockaddr_in* sa_in = as_vector_get(&sockaddr_in_v, i);
+		status = as_info_command_host(cluster, err, sa_in, (char*)req, policy->send_as_is, deadline, res);
 
-	cl_rv rc = citrusleaf_info_auth(as->cluster, (char *) addr, port, (char *) req, res, policy->timeout);
-
-	if (rc) {
-		as_strncpy(err->message, *res, sizeof(err->message));
-		free(*res);
-		return as_error_fromrc(err, rc);
+		switch (status) {
+			case AEROSPIKE_OK:
+			case AEROSPIKE_ERR_TIMEOUT:
+			case AEROSPIKE_ERR_INDEX_FOUND:
+			case AEROSPIKE_ERR_INDEX_NOT_FOUND:
+				loop = false;
+				break;
+				
+			default:
+				break;
+		}
 	}
+	as_vector_destroy(&sockaddr_in_v);
+	return status;
+}
+
+/**
+ *	Send an info request to a specific socket address. The response must be freed by the caller on success.
+ *
+ *	~~~~~~~~~~{.c}
+ *	char * res = NULL;
+ *	if ( aerospike_info_socket_address(&as, &err, NULL, &socket_addr, "info", &res) != AEROSPIKE_OK ) {
+ *		// handle error
+ *	}
+ *	else {
+ *		// handle response
+ *		free(res);
+ *		res = NULL;
+ *	}
+ *	~~~~~~~~~~
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param sa_in		The IP address and port to send the request to.
+ *	@param req			The info request to send.
+ *	@param res			The response from the node. The response will be a NULL terminated string, allocated by the function, and must be freed by the caller.
+ *
+ *	@return AEROSPIKE_OK on success. Otherwise an error.
+ *
+ *	@ingroup info_operations
+ */
+as_status aerospike_info_socket_address(
+	aerospike * as, as_error * err, const as_policy_info * policy,
+	struct sockaddr_in* sa_in, const char * req,
+	char ** res)
+{
+	as_error_reset(err);
+	
+	if (! policy) {
+		policy = &as->config.policies.info;
+	}
+	
+	uint64_t deadline = as_socket_deadline(policy->timeout);
+	return as_info_command_host(as->cluster, err, sa_in, (char*)req, policy->send_as_is, deadline, res);
+}
+
+/**
+ *	Send an info request to a node in the cluster.  If node request fails, send request to the next
+ *	node in the cluster.  Repeat until the node request succeeds. The response must be freed by 
+ *	the caller on success.
+ *
+ *	~~~~~~~~~~{.c}
+ *	char * res = NULL;
+ *	if ( aerospike_info_any(&as, &err, NULL, "info", &res) != AEROSPIKE_OK ) {
+ *		// handle error
+ *	}
+ *	else {
+ *		// handle response
+ *		free(res);
+ *		res = NULL;
+ *	}
+ *	~~~~~~~~~~
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param req			The info request to send.
+ *	@param res			The response from the node. The response will be a NULL terminated string, allocated by the function, and must be freed by the caller.
+ *
+ *	@return AEROSPIKE_OK on success. Otherwise an error.
+ *
+ *	@ingroup info_operations
+ */
+as_status aerospike_info_any(
+	aerospike * as, as_error * err, const as_policy_info * policy,
+	const char * req, char ** res)
+{
+	as_error_reset(err);
+	
+	if (! policy) {
+		policy = &as->config.policies.info;
+	}
+	
+	as_status status = AEROSPIKE_ERR_CLUSTER;
+	uint64_t deadline = as_socket_deadline(policy->timeout);
+	as_cluster* cluster = as->cluster;
+	as_nodes* nodes = as_nodes_reserve(cluster);
+	bool loop = true;
+	
+	for (uint32_t i = 0; i < nodes->size && loop; i++) {
+		as_node* node = nodes->array[i];
+		struct sockaddr_in* sa_in = as_node_get_address(node);
+		status = as_info_command_host(cluster, err, sa_in, (char*)req, policy->send_as_is, deadline, res);
 		
-	return AEROSPIKE_OK;
+		switch (status) {
+			case AEROSPIKE_OK:
+			case AEROSPIKE_ERR_TIMEOUT:
+			case AEROSPIKE_ERR_INDEX_FOUND:
+			case AEROSPIKE_ERR_INDEX_NOT_FOUND:
+				loop = false;
+				break;
+				
+			default:
+				break;
+		}
+	}
+	as_nodes_release(nodes);
+	return status;
 }
 
 /**
@@ -150,36 +241,42 @@ as_status aerospike_info_host(
  *	@ingroup info_operations
  */
 as_status aerospike_info_foreach(
-	aerospike * as, as_error * err, const as_policy_info * policy, 
-	const char * req, 
+	aerospike * as, as_error * err, const as_policy_info * policy, const char * req,
 	aerospike_info_foreach_callback callback, void * udata)
 {
-	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
 	
 	if (! policy) {
 		policy = &as->config.policies.info;
 	}
 	
-	if ( !as ) {
-		return AEROSPIKE_ERR_CLIENT;
-	}
-
-	citrusleaf_info_cluster_foreach_data data = {
-		.callback = callback,
-		.udata = udata
-	};
+	as_status status = AEROSPIKE_ERR_CLUSTER;
+	uint64_t deadline = as_socket_deadline(policy->timeout);
+	as_cluster* cluster = as->cluster;
+	as_nodes* nodes = as_nodes_reserve(cluster);
 	
-	char* error = 0;
-
-	int rc = citrusleaf_info_cluster_foreach(
-		as->cluster, req, policy->send_as_is, policy->check_bounds, policy->timeout, (void *) &data, &error,
-		citrusleaf_info_cluster_foreach_callback);
-
-	if (rc) {
-		as_strncpy(err->message, error, sizeof(err->message));
-		free(error);
-		return as_error_fromrc(err, rc);
+	for (uint32_t i = 0; i < nodes->size; i++) {
+		as_node* node = nodes->array[i];
+		struct sockaddr_in* sa_in = as_node_get_address(node);
+		char* response = 0;
+	
+		status = as_info_command_host(cluster, err, sa_in, (char*)req, policy->send_as_is, deadline, &response);
+		
+		if (status == AEROSPIKE_OK) {
+			bool result = callback(err, node, req, response, udata);
+			free(response);
+			
+			if (! result) {
+				status = AEROSPIKE_ERR_QUERY_ABORTED;
+				break;
+			}
+		}
+		else {
+			if (status != AEROSPIKE_ERR_CLUSTER) {
+				break;
+			}
+		}
 	}
-	return AEROSPIKE_OK;
+	as_nodes_release(nodes);
+	return status;
 }

@@ -15,7 +15,6 @@
  * the License.
  */
 #include <aerospike/as_batch.h>
-#include <citrusleaf/cl_batch.h>
 #include <citrusleaf/cf_random.h>
 
 /******************************************************************************

@@ -21,7 +21,6 @@
 
 #include "test.h"
 #include "aerospike_test.h"
-#include "util/info_util.h"
 
 /******************************************************************************
  * MACROS
@@ -141,7 +140,7 @@ static bool before(atf_plan * plan) {
 	as_log_set_callback(as_client_log_callback);
 	
 	if ( aerospike_connect(as, &err) == AEROSPIKE_OK ) {
-		info("connected to %s:%d", g_host, g_port);
+		debug("connected to %s:%d", g_host, g_port);
     	return true;
 	}
 	else {
@@ -161,7 +160,7 @@ static bool after(atf_plan * plan) {
 	as_error_reset(&err);
 	
 	if ( aerospike_close(as, &err) == AEROSPIKE_OK ) {
-		info("disconnected from %s:%d", g_host, g_port);
+		debug("disconnected from %s:%d", g_host, g_port);
 		aerospike_destroy(as);
 
     	return true;

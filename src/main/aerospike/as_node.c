@@ -17,12 +17,12 @@
 #include <aerospike/as_node.h>
 #include <aerospike/as_admin.h>
 #include <aerospike/as_cluster.h>
+#include <aerospike/as_command.h>
 #include <aerospike/as_info.h>
 #include <aerospike/as_log_macros.h>
+#include <aerospike/as_socket.h>
 #include <aerospike/as_string.h>
 #include <citrusleaf/cf_byte_order.h>
-#include <citrusleaf/cf_proto.h>
-#include <citrusleaf/cf_socket.h>
 #include <errno.h> //errno
 
 // Replicas take ~2K per namespace, so this will cover most deployments:
@@ -79,7 +79,7 @@ as_node_destroy(as_node* node)
 		int	fd;
 		rv = cf_queue_pop(node->conn_q, &fd, CF_QUEUE_NOWAIT);
 		if (rv == CF_QUEUE_OK)
-			cf_close(fd);
+			as_close(fd);
 	} while (rv == CF_QUEUE_OK);
 	
 	/*
@@ -87,7 +87,7 @@ as_node_destroy(as_node* node)
 	 int	fd;
 	 rv = cf_queue_pop(node->conn_q_asyncfd, &fd, CF_QUEUE_NOWAIT);
 	 if (rv == CF_QUEUE_OK)
-	 cf_close(fd);
+	 as_close(fd);
 	 } while (rv == CF_QUEUE_OK);
 	 */
 	
@@ -113,7 +113,7 @@ as_node_destroy(as_node* node)
 	//cf_queue_destroy(node->asyncwork_q);
 	
 	if (node->info_fd >= 0) {
-		cf_close(node->info_fd);
+		as_close(node->info_fd);
 	}
 
 	cf_free(node);
@@ -166,31 +166,32 @@ is_connected(int fd)
 	return CONNECTED;
 }
 
-static int
-as_node_authenticate_connection(as_node* node, int* fd)
+static as_status
+as_node_authenticate_connection(as_error* err, as_node* node, int* fd)
 {
 	as_cluster* cluster = node->cluster;
 	
 	if (cluster->user) {
-		int status = as_authenticate(*fd, cluster->user, cluster->password, cluster->conn_timeout_ms);
+		uint64_t deadline_ms = as_socket_deadline(cluster->conn_timeout_ms);
+		as_status status = as_authenticate(err, *fd, cluster->user, cluster->password, deadline_ms);
 		
 		if (status) {
-			as_log_debug("Authentication failed for %s", cluster->user);
-			cf_close(*fd);
+			as_close(*fd);
 			*fd = -1;
 			return status;
 		}
 	}
-	return 0;
+	return AEROSPIKE_OK;
 }
 
 static int
 as_node_create_connection(as_node* node, int* fd)
 {
 	// Create a non-blocking socket.
-	*fd = cf_socket_create_nb();
+	as_error err;
+	as_status status = as_socket_create_nb(&err, fd);
 	
-	if (*fd == -1) {
+	if (status) {
 		// Local problem - socket create failed.
 		as_log_debug("Socket create failed for %s", node->name);
 		return AEROSPIKE_ERR_CLIENT;
@@ -199,9 +200,9 @@ as_node_create_connection(as_node* node, int* fd)
 	// Try primary address.
 	as_address* primary = as_vector_get(&node->addresses, node->address_index);
 	
-	if (cf_socket_start_connect_nb(*fd, &primary->addr) == 0) {
+	if (as_socket_start_connect_nb(&err, *fd, &primary->addr) == AEROSPIKE_OK) {
 		// Connection started ok - we have our socket.
-		return as_node_authenticate_connection(node, fd);
+		return as_node_authenticate_connection(&err, node, fd);
 	}
 	
 	// Try other addresses.
@@ -211,20 +212,20 @@ as_node_create_connection(as_node* node, int* fd)
 		
 		// Address points into alias array, so pointer comparison is sufficient.
 		if (address != primary) {
-			if (cf_socket_start_connect_nb(*fd, &address->addr) == 0) {
+			if (as_socket_start_connect_nb(&err, *fd, &address->addr) == AEROSPIKE_OK) {
 				// Replace invalid primary address with valid alias.
 				// Other threads may not see this change immediately.
 				// It's just a hint, not a requirement to try this new address first.
 				as_log_debug("Change node address %s %s:%d", node->name, address->name, (int)cf_swap_from_be16(address->addr.sin_port));
 				ck_pr_store_32(&node->address_index, i);
-				return as_node_authenticate_connection(node, fd);
+				return as_node_authenticate_connection(&err, node, fd);
 			}
 		}
 	}
 	
 	// Couldn't start a connection on any socket address - close the socket.
 	as_log_info("Failed to connect: %s %s:%d", node->name, primary->name, (int)cf_swap_from_be16(primary->addr.sin_port));
-	cf_close(*fd);
+	as_close(*fd);
 	*fd = -1;
 	return AEROSPIKE_ERR_CLUSTER;
 }
@@ -256,7 +257,7 @@ as_node_get_connection(as_node* node, int* fd)
 				case CONNECTED_ERROR:
 					// Some other problem, could have to do with remote end.
 				default:
-					cf_close(*fd);
+					as_close(*fd);
 					break;
 			}
 		}
@@ -277,7 +278,7 @@ as_node_put_connection(as_node* node, int fd)
 {
 	cf_queue *q = node->conn_q;
 	if (! cf_queue_push_limit(q, &fd, 300)) {
-		cf_close(fd);
+		as_close(fd);
 	}
 	
 	/*
@@ -289,7 +290,7 @@ as_node_put_connection(as_node* node, int fd)
 	} else {
 		q = cn->conn_q;
 		if (! cf_queue_push_limit(q, &fd, 300)) {
-			cf_close(fd);
+			as_close(fd);
 		}
 	}*/
 }
@@ -308,40 +309,42 @@ static void
 as_node_close_info_connection(as_node* node)
 {
 	shutdown(node->info_fd, SHUT_RDWR);
-	cf_close(node->info_fd);
+	as_close(node->info_fd);
 	node->info_fd = -1;
 }
 
 static uint8_t*
-as_node_get_info(as_node* node, const char* names, size_t names_len, int timeout_ms, uint8_t* stack_buf)
+as_node_get_info(as_error* err, as_node* node, const char* names, size_t names_len, int timeout_ms, uint8_t* stack_buf)
 {
 	int fd = node->info_fd;
 	
 	// Prepare the write request buffer.
-	size_t write_size = sizeof(cl_proto) + names_len;
-	cl_proto* proto = (cl_proto*)stack_buf;
+	size_t write_size = sizeof(as_proto) + names_len;
+	as_proto* proto = (as_proto*)stack_buf;
 	
 	proto->sz = names_len;
-	proto->version = CL_PROTO_VERSION;
-	proto->type = CL_PROTO_TYPE_INFO;
-	cl_proto_swap_to_be(proto);
+	proto->version = AS_MESSAGE_VERSION;
+	proto->type = AS_INFO_MESSAGE_TYPE;
+	as_proto_swap_to_be(proto);
 	
-	memcpy((void*)(stack_buf + sizeof(cl_proto)), (const void*)names, names_len);
-	
+	memcpy((void*)(stack_buf + sizeof(as_proto)), (const void*)names, names_len);
+
+	uint64_t deadline_ms = as_socket_deadline(timeout_ms);
+
 	// Write the request. Note that timeout_ms is never 0.
-	if (cf_socket_write_timeout(fd, stack_buf, write_size, 0, timeout_ms) != 0) {
+	if (as_socket_write_deadline(err, fd, stack_buf, write_size, deadline_ms) != 0) {
 		as_log_debug("Node %s failed info socket write", node->name);
 		return 0;
 	}
 	
 	// Reuse the buffer, read the response - first 8 bytes contains body size.
-	if (cf_socket_read_timeout(fd, stack_buf, sizeof(cl_proto), 0, timeout_ms) != 0) {
+	if (as_socket_read_deadline(err, fd, stack_buf, sizeof(as_proto), deadline_ms) != 0) {
 		as_log_debug("Node %s failed info socket read header", node->name);
 		return 0;
 	}
 	
-	proto = (cl_proto*)stack_buf;
-	cl_proto_swap_from_be(proto);
+	proto = (as_proto*)stack_buf;
+	as_proto_swap_from_be(proto);
 	
 	// Sanity check body size.
 	if (proto->sz == 0 || proto->sz > 512 * 1024) {
@@ -361,7 +364,7 @@ as_node_get_info(as_node* node, const char* names, size_t names_len, int timeout
 	}
 	
 	// Read the response body.
-	if (cf_socket_read_timeout(fd, rbuf, proto_sz, 0, timeout_ms) != 0) {
+	if (as_socket_read_deadline(err, fd, rbuf, proto_sz, deadline_ms) != 0) {
 		as_log_debug("Node %s failed info socket read body", node->name);
 		
 		if (rbuf != stack_buf) {
@@ -568,9 +571,11 @@ as_node_refresh(as_cluster* cluster, as_node* node, as_vector* /* <as_friend> */
 		return false;
 	}
 	
+	as_error err;
+	
 	uint32_t info_timeout = cluster->conn_timeout_ms;
 	uint8_t stack_buf[INFO_STACK_BUF_SIZE];
-	uint8_t* buf = as_node_get_info(node, INFO_STR_CHECK, sizeof(INFO_STR_CHECK) - 1, info_timeout, stack_buf);
+	uint8_t* buf = as_node_get_info(&err, node, INFO_STR_CHECK, sizeof(INFO_STR_CHECK) - 1, info_timeout, stack_buf);
 	
 	if (! buf) {
 		as_node_close_info_connection(node);
@@ -590,7 +595,7 @@ as_node_refresh(as_cluster* cluster, as_node* node, as_vector* /* <as_friend> */
 	}
 	
 	if (status && update_partitions) {
-		buf = as_node_get_info(node, INFO_STR_GET_REPLICAS, sizeof(INFO_STR_GET_REPLICAS) - 1, info_timeout, stack_buf);
+		buf = as_node_get_info(&err, node, INFO_STR_GET_REPLICAS, sizeof(INFO_STR_GET_REPLICAS) - 1, info_timeout, stack_buf);
 		
 		if (! buf) {
 			as_node_close_info_connection(node);

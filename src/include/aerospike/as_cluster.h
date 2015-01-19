@@ -21,7 +21,6 @@
 #include <aerospike/as_partition.h>
 #include <aerospike/as_policy.h>
 #include <citrusleaf/cf_atomic.h>
-#include <citrusleaf/cl_types.h>
 #include "ck_pr.h"
 
 /******************************************************************************

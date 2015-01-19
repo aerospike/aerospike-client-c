@@ -40,19 +40,17 @@ extern aerospike * as;
  *****************************************************************************/
 bool is_ldt_enabled()
 {
-	char * res = NULL;
-	int rc;
-
+	char* res = NULL;
 	as_error err;
-	as_error_reset(&err);
+	int rc = aerospike_info_host(as, &err, NULL, g_host, 3000, "namespace/test", &res);
 
-	const char *cfg_param = "ldt-enabled=true";
-
-	rc = aerospike_info_host(as, &err, NULL, g_host, 3000, "namespace/test", &res);
-
-	char *st = strstr(res,cfg_param);
-	if (st) {
-		return true;
+	if (rc == AEROSPIKE_OK) {
+		char *st = strstr(res, "ldt-enabled=true");
+		free(res);
+	
+		if (st) {
+			return true;
+		}
 	}
 	return false;
 }

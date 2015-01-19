@@ -16,33 +16,35 @@
  */
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
-
 #include <aerospike/as_bin.h>
 #include <aerospike/as_buffer.h>
+#include <aerospike/as_command.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_key.h>
 #include <aerospike/as_list.h>
 #include <aerospike/as_log.h>
+#include <aerospike/as_msgpack.h>
 #include <aerospike/as_operations.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_record.h>
-#include <aerospike/as_status.h>
-
-#include <aerospike/as_msgpack.h>
 #include <aerospike/as_serializer.h>
-
-#include <citrusleaf/citrusleaf.h>
-#include <citrusleaf/cl_object.h>
-#include <citrusleaf/cl_write.h>
-#include <citrusleaf/cf_proto.h>
-
-#include "_shim.h"
-
-#include "../citrusleaf/internal.h"
+#include <aerospike/as_status.h>
 
 /******************************************************************************
  * FUNCTIONS
  *****************************************************************************/
+
+static inline void
+as_command_node_init(as_command_node* cn, as_cluster* cluster, const char* ns,
+	const cf_digest* digest, as_policy_replica replica, bool write)
+{
+	cn->node = 0;
+	cn->cluster = cluster;
+	cn->ns = ns;
+	cn->digest = digest;
+	cn->replica = replica;
+	cn->write = write;
+}
 
 /**
  *	Look up a record by key, then return all bins.
@@ -57,85 +59,35 @@
  */
 as_status aerospike_key_get(
 	aerospike * as, as_error * err, const as_policy_read * policy, 
-	const as_key * key, 
-	as_record ** rec) 
+	const as_key * key, as_record ** rec)
 {
-	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
 	
 	if (! policy) {
 		policy = &as->config.policies.read;
 	}
 
-	uint32_t    timeout = policy->timeout == UINT32_MAX ? 0 : policy->timeout;
-	uint32_t    gen = 0;
-	uint32_t 	ttl = 0;
-	int         nvalues = 0;
-	cl_bin *    values = NULL;
-
-	cl_rv rc = AEROSPIKE_OK;
-
-	int consistency_level = 0;
-	switch ( policy->consistency_level ) {
-		case AS_POLICY_CONSISTENCY_LEVEL_ONE:
-			consistency_level &= ~CL_MSG_INFO1_CONSISTENCY_LEVEL_B0;
-			consistency_level &= ~CL_MSG_INFO1_CONSISTENCY_LEVEL_B1;
-			break;
-		case AS_POLICY_CONSISTENCY_LEVEL_ALL:
-			consistency_level |= CL_MSG_INFO1_CONSISTENCY_LEVEL_B0;
-			consistency_level &= ~CL_MSG_INFO1_CONSISTENCY_LEVEL_B1;
-			break;
-		default: {
-			// ERROR CASE
-			break;
-		}
+	int status = as_key_set_digest(err, (as_key*)key);
+	
+	if (status != AEROSPIKE_OK) {
+		return status;
 	}
-
-	switch ( policy->key ) {
-		case AS_POLICY_KEY_DIGEST: {
-			as_digest * digest = as_key_digest((as_key *) key);
-			rc = citrusleaf_get_all(as->cluster, key->ns, key->set, NULL, (cf_digest*)digest->value,
-					&values, &nvalues, timeout, &gen, &ttl, consistency_level, policy->replica);
-			break;
-		}
-		case AS_POLICY_KEY_SEND: {
-			cl_object okey;
-			asval_to_clobject((as_val *) key->valuep, &okey);
-			as_digest * digest = as_key_digest((as_key *) key);
-			rc = citrusleaf_get_all(as->cluster, key->ns, key->set, &okey, (cf_digest*)digest->value,
-					&values, &nvalues, timeout, &gen, &ttl, consistency_level, policy->replica);
-			break;
-		}
-		default: {
-			// ERROR CASE
-			break;
-		}
-	}
-
-	if ( rc == AEROSPIKE_OK && rec != NULL ) {
-		as_record * r = *rec;
-		if ( r == NULL ) {
-			r = as_record_new(0);
-		}
-		if ( r->bins.entries == NULL ) {
-			r->bins.capacity = nvalues;
-			r->bins.size = 0;
-			r->bins.entries = malloc(sizeof(as_bin) * nvalues);
-			r->bins._free = true;
-		}
-		clbins_to_asrecord(values, nvalues, r);
-		r->gen = (uint16_t) gen;
-		r->ttl = ttl;
-		*rec = r;
-	}
-
-	if ( values != NULL ) {
-		// We are freeing the bins' objects, as opposed to bins themselves.
-		citrusleaf_bins_free(values, nvalues);
-		free(values);
-	}
-
-	return as_error_fromrc(err,rc);
+	
+	uint16_t n_fields;
+	size_t size = as_command_key_size(key, &n_fields);
+		
+	uint8_t* cmd = as_command_init(size);
+	uint8_t* p = as_command_write_header_read(cmd, AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_ALL, policy->consistency_level, policy->timeout, n_fields, 0);
+	p = as_command_write_key(p, key);
+	size = as_command_write_end(cmd, p);
+	
+	as_command_node cn;
+	as_command_node_init(&cn, as->cluster, key->ns, (const cf_digest*)&key->digest, policy->replica, false);
+	
+	status = as_command_execute(err, &cn, cmd, size, policy->timeout, AS_POLICY_RETRY_NONE, as_command_parse_result, rec);
+	
+	as_command_free(cmd, size);
+	return status;
 }
 
 /**
@@ -152,97 +104,48 @@ as_status aerospike_key_get(
  */
 as_status aerospike_key_select(
 	aerospike * as, as_error * err, const as_policy_read * policy, 
-	const as_key * key, const char * bins[], 
-	as_record ** rec) 
+	const as_key * key, const char * bins[], as_record ** rec)
 {
-	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
 	
 	if (! policy) {
 		policy = &as->config.policies.read;
 	}
-
-	uint32_t    timeout = policy->timeout == UINT32_MAX ? 0 : policy->timeout;
-	uint32_t    gen = 0;
-	uint32_t 	ttl = 0;
-	int         nvalues = 0;
-	cl_bin *    values = NULL;
-
-	for (nvalues = 0; bins[nvalues] != NULL && bins[nvalues][0] != '\0'; nvalues++)
-		;
-
-	values = (cl_bin *) alloca(sizeof(cl_bin) * nvalues);
-	for ( int i = 0; i < nvalues; i++ ) {
-		if ( strlen(bins[i]) > AS_BIN_NAME_MAX_LEN ) {
-			return as_error_update(err, AEROSPIKE_ERR_PARAM, "bin name too long: %s", bins[i]);
-		}
-
-		strcpy(values[i].bin_name, bins[i]);
-		citrusleaf_object_init(&values[i].object);
+	
+	int status = as_key_set_digest(err, (as_key*)key);
+	
+	if (status != AEROSPIKE_OK) {
+		return status;
 	}
-
-	cl_rv rc = AEROSPIKE_OK;
-
-	int consistency_level = 0;
-	switch ( policy->consistency_level ) {
-		case AS_POLICY_CONSISTENCY_LEVEL_ONE:
-			consistency_level &= ~CL_MSG_INFO1_CONSISTENCY_LEVEL_B0;
-			consistency_level &= ~CL_MSG_INFO1_CONSISTENCY_LEVEL_B1;
-			break;
-		case AS_POLICY_CONSISTENCY_LEVEL_ALL:
-			consistency_level |= CL_MSG_INFO1_CONSISTENCY_LEVEL_B0;
-			consistency_level &= ~CL_MSG_INFO1_CONSISTENCY_LEVEL_B1;
-			break;
-		default: {
-			// ERROR CASE
-			break;
+	
+	uint16_t n_fields;
+	size_t size = as_command_key_size(key, &n_fields);
+	int nvalues = 0;
+	
+	for (nvalues = 0; bins[nvalues] != NULL && bins[nvalues][0] != '\0'; nvalues++) {
+		status = as_command_bin_name_size(err, bins[nvalues], &size);
+		
+		if (status != AEROSPIKE_OK) {
+			return status;
 		}
 	}
-
-	switch ( policy->key ) {
-		case AS_POLICY_KEY_DIGEST: {
-			as_digest * digest = as_key_digest((as_key *) key);
-			rc = citrusleaf_get(as->cluster, key->ns, key->set, NULL, (cf_digest*)digest->value,
-					values, nvalues, timeout, &gen, &ttl, consistency_level, policy->replica);
-			break;
-		}
-		case AS_POLICY_KEY_SEND: {
-			cl_object okey;
-			asval_to_clobject((as_val *) key->valuep, &okey);
-			as_digest * digest = as_key_digest((as_key *) key);
-			rc = citrusleaf_get(as->cluster, key->ns, key->set, &okey, (cf_digest*)digest->value,
-					values, nvalues, timeout, &gen, &ttl, consistency_level, policy->replica);
-			break;
-		}
-		default: {
-			// ERROR CASE
-			break;
-		}
+	
+	uint8_t* cmd = as_command_init(size);
+	uint8_t* p = as_command_write_header_read(cmd, AS_MSG_INFO1_READ, policy->consistency_level, policy->timeout, n_fields, nvalues);
+	p = as_command_write_key(p, key);
+	
+	for (int i = 0; i < nvalues; i++) {
+		p = as_command_write_bin_name(p, bins[i]);
 	}
-
-	if ( rc == AEROSPIKE_OK && rec != NULL ) {
-		as_record * r = *rec;
-		if ( r == NULL ) {
-			r = as_record_new(0);
-		}
-		if ( r->bins.entries == NULL ) {
-			r->bins.capacity = nvalues;
-			r->bins.size = 0;
-			r->bins.entries = malloc(sizeof(as_bin) * nvalues);
-			r->bins._free = true;
-		}
-		clbins_to_asrecord(values, nvalues, r);
-		r->gen = (uint16_t) gen;
-		r->ttl = ttl;
-		*rec = r;
-	}
-
-	if ( values != NULL ) {
-		// We are freeing the bins' objects, as opposed to bins themselves.
-		citrusleaf_bins_free(values, nvalues);
-	}
-
-	return as_error_fromrc(err,rc);
+	size = as_command_write_end(cmd, p);
+	
+	as_command_node cn;
+	as_command_node_init(&cn, as->cluster, key->ns, (const cf_digest*)&key->digest, policy->replica, false);
+	
+	status = as_command_execute(err, &cn, cmd, size, policy->timeout, AS_POLICY_RETRY_NONE, as_command_parse_result, rec);
+	
+	as_command_free(cmd, size);
+	return status;
 }
 
 /**
@@ -258,86 +161,52 @@ as_status aerospike_key_select(
  */
 as_status aerospike_key_exists(
 	aerospike * as, as_error * err, const as_policy_read * policy, 
-	const as_key * key, 
-	as_record ** rec) 
+	const as_key * key, as_record ** rec)
 {
-	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
 	
 	if (! policy) {
 		policy = &as->config.policies.read;
 	}
-
-	uint32_t    timeout = policy->timeout == UINT32_MAX ? 0 : policy->timeout;
-	uint32_t	gen = 0;
-	uint32_t	ttl = 0; // TODO - a version of 'exists' that returns all metadata
-	int     	nvalues = 0;
-	cl_bin *	values = NULL;
 	
-	cl_rv rc = AEROSPIKE_OK;
-
-	int consistency_level = 0;
-	switch ( policy->consistency_level ) {
-		case AS_POLICY_CONSISTENCY_LEVEL_ONE:
-			consistency_level &= ~CL_MSG_INFO1_CONSISTENCY_LEVEL_B0;
-			consistency_level &= ~CL_MSG_INFO1_CONSISTENCY_LEVEL_B1;
-			break;
-		case AS_POLICY_CONSISTENCY_LEVEL_ALL:
-			consistency_level |= CL_MSG_INFO1_CONSISTENCY_LEVEL_B0;
-			consistency_level &= ~CL_MSG_INFO1_CONSISTENCY_LEVEL_B1;
-			break;
-		default: {
-			// ERROR CASE
-			break;
-		}
+	as_status status = as_key_set_digest(err, (as_key*)key);
+	
+	if (status != AEROSPIKE_OK) {
+		return status;
 	}
 
-	switch ( policy->key ) {
-		case AS_POLICY_KEY_DIGEST: {
-			as_digest * digest = as_key_digest((as_key *) key);
-			rc = citrusleaf_exists_key(as->cluster, key->ns, key->set, NULL, (cf_digest*)digest->value,
-					values, nvalues, timeout, &gen, &ttl, consistency_level, policy->replica);
-			break;
-		}
-		case AS_POLICY_KEY_SEND: {
-			cl_object okey;
-			asval_to_clobject((as_val *) key->valuep, &okey);
-			as_digest * digest = as_key_digest((as_key *) key);
-			rc = citrusleaf_exists_key(as->cluster, key->ns, key->set, &okey, (cf_digest*)digest->value,
-					values, nvalues, timeout, &gen, &ttl, consistency_level, policy->replica);
-			break;
-		}
-		default: {
-			// ERROR CASE
-			break;
-		}
-	}
+	uint16_t n_fields;
+	size_t size = as_command_key_size(key, &n_fields);
+	
+	uint8_t* cmd = as_command_init(size);
+	uint8_t* p = as_command_write_header_read(cmd, AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA, policy->consistency_level, policy->timeout, n_fields, 0);
+	p = as_command_write_key(p, key);
+	size = as_command_write_end(cmd, p);
+	
+	as_command_node cn;
+	as_command_node_init(&cn, as->cluster, key->ns, (const cf_digest*)&key->digest, policy->replica, false);
+	
+	as_proto_msg msg;
+	status = as_command_execute(err, &cn, cmd, size, policy->timeout, AS_POLICY_RETRY_NONE, as_command_parse_header, &msg);
+	
+	as_command_free(cmd, size);
 
-	if ( values != NULL ) {
-		// We are freeing the bins' objects, as opposed to bins themselves.
-		citrusleaf_bins_free(values, nvalues);
-		free(values);
-	}
-
-	switch(rc) {
-		case AEROSPIKE_OK: 
-			{
-				as_record * r = *rec;
-				if ( r == NULL ) { 
-					r = as_record_new(0);
-				}   
-				r->gen = (uint16_t) gen;
-				r->ttl = ttl;
+	if (rec) {
+		if (status == AEROSPIKE_OK) {
+			as_record* r = *rec;
+			
+			if (r == 0) {
+				r = as_record_new(0);
 				*rec = r;
-				break;
 			}
-
-		default:
-			*rec = NULL;
-			break;
+			r->gen = (uint16_t)msg.m.generation;
+			r->ttl = msg.m.record_ttl;
+		}
+		else {
+			*rec = 0;
+		}
 	}
-
-	return as_error_fromrc(err,rc);
+	return status;
 }
 
 /**
@@ -356,62 +225,65 @@ as_status aerospike_key_put(
 	aerospike * as, as_error * err, const as_policy_write * policy, 
 	const as_key * key, as_record * rec) 
 {
-	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
 	
 	if (! policy) {
 		policy = &as->config.policies.write;
 	}
+	
+	as_status status = as_key_set_digest(err, (as_key*)key);
+	
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+	
+	uint16_t n_fields;
+	size_t size = as_command_key_size(key, &n_fields);
 
-	cl_write_parameters wp;
-	aspolicywrite_to_clwriteparameters(policy, rec, &wp);
+	if (policy->key == AS_POLICY_KEY_SEND) {
+		size += as_command_user_key_size(key);
+		n_fields++;
+	}
+	
+	as_bin* bins = rec->bins.entries;
+	uint32_t n_bins = rec->bins.size;
+	as_buffer* buffers = (as_buffer*)alloca(sizeof(as_buffer) * n_bins);
+	memset(buffers, 0, sizeof(as_buffer) * n_bins);
 
-	int			nvalues	= rec->bins.size;
-	cl_bin *	values	= (cl_bin *) alloca(sizeof(cl_bin) * nvalues);
-
-	asrecord_to_clbins(rec, values, nvalues);
-
-	cl_rv rc = AEROSPIKE_OK;
-
-	int commit_level = 0;
-	switch ( policy->commit_level ) {
-		case AS_POLICY_COMMIT_LEVEL_ALL:
-			commit_level &= ~CL_MSG_INFO3_COMMIT_LEVEL_B0;
-			commit_level &= ~CL_MSG_INFO3_COMMIT_LEVEL_B1;
-			break;
-		case AS_POLICY_COMMIT_LEVEL_MASTER:
-			commit_level |= CL_MSG_INFO3_COMMIT_LEVEL_B0;
-			commit_level &= ~CL_MSG_INFO3_COMMIT_LEVEL_B1;
-			break;
-		default: {
-			// ERROR CASE
-			break;
-		}
+	for (uint32_t i = 0; i < n_bins; i++) {
+		size += as_command_bin_size(&bins[i], &buffers[i]);
+	}
+	
+	uint8_t* cmd = as_command_init(size);
+	uint8_t* p = as_command_write_header(cmd, 0, AS_MSG_INFO2_WRITE, policy->commit_level, 0, policy->exists, policy->gen, rec->gen, rec->ttl, policy->timeout, n_fields, n_bins);
+		
+	p = as_command_write_key(p, key);
+	
+	if (policy->key == AS_POLICY_KEY_SEND) {
+		p = as_command_write_user_key(p, key);
 	}
 
-	switch ( policy->key ) {
-		case AS_POLICY_KEY_DIGEST: {
-			as_digest * digest = as_key_digest((as_key *) key);
-			rc = citrusleaf_put(as->cluster, key->ns, key->set, NULL, (cf_digest*)digest->value, values, nvalues, &wp, commit_level);
-			break;
-		}
-		case AS_POLICY_KEY_SEND: {
-			cl_object okey;
-			asval_to_clobject((as_val *) key->valuep, &okey);
-			as_digest * digest = as_key_digest((as_key *) key);
-			rc = citrusleaf_put(as->cluster, key->ns, key->set, &okey, (cf_digest*)digest->value, values, nvalues, &wp, commit_level);
-			break;
-		}
-		default: {
-			// ERROR CASE
-			break;
+	for (uint32_t i = 0; i < n_bins; i++) {
+		p = as_command_write_bin(p, AS_OPERATOR_WRITE, &bins[i], &buffers[i]);
+	}
+	
+	size = as_command_write_end(cmd, p);
+
+	as_command_node cn;
+	as_command_node_init(&cn, as->cluster, key->ns, (const cf_digest*)&key->digest, AS_POLICY_REPLICA_MASTER, true);
+	
+	as_proto_msg msg;
+	status = as_command_execute(err, &cn, cmd, size, policy->timeout, policy->retry, as_command_parse_header, &msg);
+	
+	for (uint32_t i = 0; i < n_bins; i++) {
+		as_buffer* buffer = &buffers[i];
+		
+		if (buffer->data) {
+			cf_free(buffer->data);
 		}
 	}
-
-	// We are freeing the bins' objects, as opposed to bins themselves.
-	citrusleaf_bins_free(values, nvalues);
-
-	return as_error_fromrc(err,rc); 
+	as_command_free(cmd, size);
+	return status;
 }
 
 /**
@@ -434,57 +306,36 @@ as_status aerospike_key_put(
  *	@return AEROSPIKE_OK if successful. Otherwise an error.
  */
 as_status aerospike_key_remove(
-	aerospike * as, as_error * err, const as_policy_remove * policy, 
-	const as_key * key) 
+	aerospike * as, as_error * err, const as_policy_remove * policy, const as_key * key)
 {
-	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
 	
 	if (! policy) {
 		policy = &as->config.policies.remove;
 	}
-
-	cl_write_parameters wp;
-	aspolicyremove_to_clwriteparameters(policy, &wp);
-
-	cl_rv rc = AEROSPIKE_OK;
-
-	int commit_level = 0;
-	switch ( policy->commit_level ) {
-		case AS_POLICY_COMMIT_LEVEL_ALL:
-			commit_level &= ~CL_MSG_INFO3_COMMIT_LEVEL_B0;
-			commit_level &= ~CL_MSG_INFO3_COMMIT_LEVEL_B1;
-			break;
-		case AS_POLICY_COMMIT_LEVEL_MASTER:
-			commit_level |= CL_MSG_INFO3_COMMIT_LEVEL_B0;
-			commit_level &= ~CL_MSG_INFO3_COMMIT_LEVEL_B1;
-			break;
-		default: {
-			// ERROR CASE
-			break;
-		}
+	
+	as_status status = as_key_set_digest(err, (as_key*)key);
+	
+	if (status != AEROSPIKE_OK) {
+		return status;
 	}
 
-	switch ( policy->key ) {
-		case AS_POLICY_KEY_DIGEST: {
-			as_digest * digest = as_key_digest((as_key *) key);
-			rc = citrusleaf_delete(as->cluster, key->ns, key->set, NULL, (cf_digest*)digest->value, &wp, commit_level);
-			break;
-		}
-		case AS_POLICY_KEY_SEND: {
-			cl_object okey;
-			asval_to_clobject((as_val *) key->valuep, &okey);
-			as_digest * digest = as_key_digest((as_key *) key);
-			rc = citrusleaf_delete(as->cluster, key->ns, key->set, &okey, (cf_digest*)digest->value, &wp, commit_level);
-			break;
-		}
-		default: {
-			// ERROR CASE
-			break;
-		}
-	}
-
-	return as_error_fromrc(err,rc);
+	uint16_t n_fields;
+	size_t size = as_command_key_size(key, &n_fields);
+		
+	uint8_t* cmd = as_command_init(size);
+	uint8_t* p = as_command_write_header(cmd, 0, AS_MSG_INFO2_WRITE | AS_MSG_INFO2_DELETE, policy->commit_level, 0, AS_POLICY_EXISTS_IGNORE, policy->gen, 0, 0, policy->timeout, n_fields, 0);
+	p = as_command_write_key(p, key);
+	size = as_command_write_end(cmd, p);
+	
+	as_command_node cn;
+	as_command_node_init(&cn, as->cluster, key->ns, (const cf_digest*)&key->digest, AS_POLICY_REPLICA_MASTER, true);
+	
+	as_proto_msg msg;
+	status = as_command_execute(err, &cn, cmd, size, policy->timeout, policy->retry, as_command_parse_header, &msg);
+	
+	as_command_free(cmd, size);
+	return (status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND)? AEROSPIKE_OK : status;
 }
 
 /**
@@ -518,137 +369,92 @@ as_status aerospike_key_operate(
 	const as_key * key, const as_operations * ops,
 	as_record ** rec)
 {
-	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
 	
 	if (! policy) {
 		policy = &as->config.policies.operate;
 	}
 
-	cl_write_parameters wp;
-	aspolicyoperate_to_clwriteparameters(policy, ops, &wp);
+	int status = as_key_set_digest(err, (as_key*)key);
+	
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
 
-	uint32_t 		gen = 0;
-	uint32_t 		ttl = 0;
-	int 			n_operations = ops->binops.size;
-	cl_operation * 	operations = (cl_operation *) alloca(sizeof(cl_operation) * n_operations);
-	int				n_read_ops = 0;
-
+	uint32_t n_operations = ops->binops.size;
+	as_buffer* buffers = (as_buffer*)alloca(sizeof(as_buffer) * n_operations);
+	memset(buffers, 0, sizeof(as_buffer) * n_operations);
+	
+	uint16_t n_fields;
+	size_t size = as_command_key_size(key, &n_fields);
+	uint8_t read_attr = 0;
+	uint8_t write_attr = 0;
+	bool user_key_field_calculated = false;
+	
 	for (int i = 0; i < n_operations; i++) {
-		cl_operation * clop = &operations[i];
-		as_binop * op = &ops->binops.entries[i];
+		as_binop* op = &ops->binops.entries[i];
+		
+		switch (op->op)
+		{
+			case AS_OPERATOR_READ:
+				read_attr |= AS_MSG_INFO1_READ;
+				break;
 
-		// Length check already done on as_bin name length. For performance we
-		// we'll leave out this down-size check since this is a temporary shim
-		// and we know the CL and AS limits are the same...
-//		if ( strlen(op->bin.name) > CL_BINNAME_SIZE - 1 ) {
-//			return as_error_update(err, AEROSPIKE_ERR_PARAM, "bin name too long: %s", op->bin.name);
-//		}
-
-		strcpy(clop->bin.bin_name, op->bin.name);
-		clop->op = (cl_operator)op->op;
-
-		// Collect bin names that are read.
-		if (op->op == AS_OPERATOR_READ) {
-			n_read_ops++;
+			default:
+				// Check if write policy requires saving the user key and calculate the data size.
+				// This should only be done once for the entire request even with multiple write operations.
+				if (policy->key == AS_POLICY_KEY_SEND && ! user_key_field_calculated) {
+					size += as_command_user_key_size(key);
+					n_fields++;
+					user_key_field_calculated = true;
+				}
+				write_attr |= AS_MSG_INFO2_WRITE;
+				break;
 		}
-
-		asbinvalue_to_clobject(op->bin.valuep, &clop->bin.object);
+		size += as_command_bin_size(&op->bin, &buffers[i]);
 	}
 
-	int consistency_level = 0;
-	switch ( policy->consistency_level ) {
-		case AS_POLICY_CONSISTENCY_LEVEL_ONE:
-			consistency_level &= ~CL_MSG_INFO1_CONSISTENCY_LEVEL_B0;
-			consistency_level &= ~CL_MSG_INFO1_CONSISTENCY_LEVEL_B1;
-			break;
-		case AS_POLICY_CONSISTENCY_LEVEL_ALL:
-			consistency_level |= CL_MSG_INFO1_CONSISTENCY_LEVEL_B0;
-			consistency_level &= ~CL_MSG_INFO1_CONSISTENCY_LEVEL_B1;
-			break;
-		default: {
-			// ERROR CASE
-			break;
+	uint32_t gen = 0;
+	uint32_t ttl = 0;
+	
+	if (rec) {
+		as_record* r = *rec;
+		
+		if (r) {
+			gen = r->gen;
+			ttl = r->ttl;
 		}
 	}
-
-	int commit_level = 0;
-	switch ( policy->commit_level ) {
-		case AS_POLICY_COMMIT_LEVEL_ALL:
-			commit_level &= ~CL_MSG_INFO3_COMMIT_LEVEL_B0;
-			commit_level &= ~CL_MSG_INFO3_COMMIT_LEVEL_B1;
-			break;
-		case AS_POLICY_COMMIT_LEVEL_MASTER:
-			commit_level |= CL_MSG_INFO3_COMMIT_LEVEL_B0;
-			commit_level &= ~CL_MSG_INFO3_COMMIT_LEVEL_B1;
-			break;
-		default: {
-			// ERROR CASE
-			break;
-		}
+	
+	uint8_t* cmd = as_command_init(size);
+	uint8_t* p = as_command_write_header(cmd, read_attr, write_attr, policy->commit_level, policy->consistency_level, AS_POLICY_EXISTS_IGNORE, policy->gen, gen, ttl, policy->timeout, n_fields, n_operations);
+	p = as_command_write_key(p, key);
+	
+	if (policy->key == AS_POLICY_KEY_SEND) {
+		p = as_command_write_user_key(p, key);
 	}
 
-	cl_rv rc = AEROSPIKE_OK;
-	cl_bin *result_bins = NULL;
-
-	switch ( policy->key ) {
-		case AS_POLICY_KEY_DIGEST: {
-			as_digest * digest = as_key_digest((as_key *) key);
-			rc = citrusleaf_operate(as->cluster, key->ns, key->set, NULL, (cf_digest*)digest->value,
-					&result_bins, operations, &n_operations, &wp, &gen, &ttl, consistency_level, commit_level, policy->replica);
-			break;
-		}
-		case AS_POLICY_KEY_SEND: {
-			cl_object okey;
-			asval_to_clobject((as_val *) key->valuep, &okey);
-			as_digest * digest = as_key_digest((as_key *) key);
-			rc = citrusleaf_operate(as->cluster, key->ns, key->set, &okey, (cf_digest*)digest->value,
-					&result_bins, operations, &n_operations, &wp, &gen, &ttl, consistency_level, commit_level, policy->replica);
-			break;
-		}
-		default: {
-			// ERROR CASE
-			break;
-		}
+	for (uint32_t i = 0; i < n_operations; i++) {
+		as_binop* op = &ops->binops.entries[i];
+		p = as_command_write_bin(p, op->op, &op->bin, &buffers[i]);
 	}
 
-	for (int i = 0; i < n_operations; i++) {
-		citrusleaf_object_free(&operations[i].bin.object);
-	}
-
-    if (n_read_ops != n_operations) {
-		if (result_bins) {
-			citrusleaf_bins_free(result_bins, n_operations);
-			free(result_bins);
+	size = as_command_write_end(cmd, p);
+	
+	as_command_node cn;
+	as_command_node_init(&cn, as->cluster, key->ns, (const cf_digest*)&key->digest, policy->replica, write_attr != 0);
+	
+	status = as_command_execute(err, &cn, cmd, size, policy->timeout, policy->retry, as_command_parse_result, rec);
+	
+	for (uint32_t i = 0; i < n_operations; i++) {
+		as_buffer* buffer = &buffers[i];
+		
+		if (buffer->data) {
+			cf_free(buffer->data);
 		}
-
-		return as_error_update(err, AEROSPIKE_ERR, "expected %d bins, got %d", n_read_ops, n_operations);
 	}
-
-	if ( n_read_ops != 0 && rc == AEROSPIKE_OK && rec != NULL ) {
-		as_record * r = *rec;
-		if ( r == NULL ) {
-			r = as_record_new(0);
-		}
-		if ( r->bins.entries == NULL ) {
-			r->bins.capacity = n_operations;
-			r->bins.size = 0;
-			r->bins.entries = malloc(sizeof(as_bin) * n_operations);
-			r->bins._free = true;
-		}
-		clbins_to_asrecord(result_bins, n_operations, r);
-		r->gen = (uint16_t) gen;
-		r->ttl = ttl;
-
-		*rec = r;
-	}
-
-	if (result_bins) {
-		citrusleaf_bins_free(result_bins, n_operations);
-		free(result_bins);
-	}
-
-	return as_error_fromrc(err,rc);
+	as_command_free(cmd, size);
+	return status;
 }
 
 /**
@@ -693,142 +499,90 @@ as_status aerospike_key_apply(
 	const char * module, const char * function, as_list * arglist, 
 	as_val ** result) 
 {
-	// we want to reset the error so, we have a clean state
 	as_error_reset(err);
 	
 	if (! policy) {
 		policy = &as->config.policies.apply;
 	}
 
-	cl_write_parameters wp;
-	cl_write_parameters_set_default(&wp);
-	wp.timeout_ms = policy->timeout == UINT32_MAX ? 0 : policy->timeout;
-
-	cl_object okey;
-	asval_to_clobject((as_val *) key->valuep, &okey);
-
+	int status = as_key_set_digest(err, (as_key*)key);
+	
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+	
+	uint16_t n_fields;
+	size_t size = as_command_key_size(key, &n_fields);
+	size += as_command_string_field_size(module);
+	size += as_command_string_field_size(function);
+	
 	as_serializer ser;
 	as_msgpack_init(&ser);
-
-	as_string file;
-	as_string_init(&file, (char *) module, true /*ismalloc*/);
-
-	as_string func;
-	as_string_init(&func, (char *) function, true /*ismalloc*/);
-	
 	as_buffer args;
 	as_buffer_init(&args);
+	as_serializer_serialize(&ser, (as_val*)arglist, &args);
+	size += as_command_field_size(args.size);
+	n_fields += 3;
 
-	as_serializer_serialize(&ser, (as_val *) arglist, &args);
+	uint8_t* cmd = as_command_init(size);
+	uint8_t* p = as_command_write_header(cmd, 0, AS_MSG_INFO2_WRITE, policy->commit_level, 0, 0, 0, 0, 0, policy->timeout, n_fields, 0);
+	p = as_command_write_key(p, key);
 
-	as_call call = {
-		.file = &file,
-		.func = &func,
-		.args = &args
-	};
-
-	uint64_t trid = 0;
-	cl_bin * bins = 0;
-	int n_bins = 0;
-
-	cl_rv rc = AEROSPIKE_OK;
-
-	int commit_level = 0;
-	switch ( policy->commit_level ) {
-		case AS_POLICY_COMMIT_LEVEL_ALL:
-			commit_level &= ~CL_MSG_INFO3_COMMIT_LEVEL_B0;
-			commit_level &= ~CL_MSG_INFO3_COMMIT_LEVEL_B1;
-			break;
-		case AS_POLICY_COMMIT_LEVEL_MASTER:
-			commit_level |= CL_MSG_INFO3_COMMIT_LEVEL_B0;
-			commit_level &= ~CL_MSG_INFO3_COMMIT_LEVEL_B1;
-			break;
-		default: {
-			// ERROR CASE
-			break;
-		}
+	if (policy->key == AS_POLICY_KEY_SEND) {
+		p = as_command_write_user_key(p, key);
 	}
 
-	switch ( policy->key ) {
-		case AS_POLICY_KEY_DIGEST: {
-			as_digest * digest = as_key_digest((as_key *) key);
-			rc = do_the_full_monte( 
-				as->cluster, 0, CL_MSG_INFO2_WRITE, commit_level,
-				key->ns, key->set, NULL, (cf_digest*)digest->value, &bins, CL_OP_WRITE, 0, &n_bins,
-				NULL, &wp, &trid, NULL, &call, NULL, -1
-			);
-			break;
-		}
-		case AS_POLICY_KEY_SEND: {
-			cl_object okey;
-			asval_to_clobject((as_val *) key->valuep, &okey);
-			as_digest * digest = as_key_digest((as_key *) key);
-			rc = do_the_full_monte( 
-				as->cluster, 0, CL_MSG_INFO2_WRITE, commit_level,
-				key->ns, key->set, &okey, (cf_digest*)digest->value, &bins, CL_OP_WRITE, 0, &n_bins,
-				NULL, &wp, &trid, NULL, &call, NULL, -1
-			);
-			break;
-		}
-		default: {
-			// ERROR CASE
-			// rc default value is AEROSPIKE_OK.
-			// When policy->key value is corrupted and a call to server is not made
-			// set the rc value appropriately and error out.
-			rc = AEROSPIKE_ERR_PARAM;
-			break;
-		}
-	}
+	p = as_command_write_field_string(p, AS_FIELD_UDF_PACKAGE_NAME, module);
+	p = as_command_write_field_string(p, AS_FIELD_UDF_FUNCTION, function);
+	p = as_command_write_field_buffer(p, AS_FIELD_UDF_ARGLIST, &args);
+	size = as_command_write_end(cmd, p);
+	
+	as_record rec;
+	as_record* recp = &rec;
+	as_record_inita(&rec, 1);
 
-	as_buffer_destroy(&args);
-
-	if (! (rc == AEROSPIKE_OK || rc == AEROSPIKE_ERR_UDF)) {
-		as_error_fromrc(err, rc);
-	}
-	else {
-
-		// Begin processing the data returned from the server,
-		// IFF `result` argument is not NULL.
-		// The reason is if `result` is NULL, then it implies the end user
-		// does not care about the data returned from the server.
-
-		if ( n_bins == 1  ) {
-			cl_bin * bin = &bins[0];
-
-			if ( strcmp(bin->bin_name,"SUCCESS") == 0 ) {
-				if ( result ) {
-					as_val * val = NULL;
-					clbin_to_asval(bin, &ser, &val);
-					*result = val;
+	as_command_node cn;
+	as_command_node_init(&cn, as->cluster, key->ns, (const cf_digest*)&key->digest, AS_POLICY_REPLICA_MASTER, true);
+	
+	status = as_command_execute(err, &cn, cmd, size, policy->timeout, 0, as_command_parse_result, &recp);
+	
+	if (status == AEROSPIKE_OK) {
+		as_bin_value* val = as_record_get(&rec, "SUCCESS");
+		
+		if (val) {
+			if (result) {
+				// Transfer bin value to result.
+				*result = (as_val*)val;
+				
+				// Destroy all other bin values in the record.
+				for (int i = 0; i < rec.bins.size; i++) {
+					as_bin_value* tmp = rec.bins.entries[i].valuep;
+					
+					if (tmp && tmp != val) {
+						as_val_destroy((as_val*)tmp);
+					}
 				}
-			}
-			else if ( strcmp(bin->bin_name,"FAILURE") == 0 ) {
-				as_val * val = NULL;
-				clbin_to_asval(bin, &ser, &val);
-				if ( val->type == AS_STRING ) {
-					as_string * s = as_string_fromval(val);
-					as_error_update(err, AEROSPIKE_ERR_UDF, as_string_tostring(s));
-				}
-				else {
-					as_error_update(err, AEROSPIKE_ERR_SERVER, "unexpected failure bin type");
-				}
-				as_val_destroy(val);
+				as_val_destroy((as_val*)rec.key.valuep);
 			}
 			else {
-				as_error_update(err, AEROSPIKE_ERR_SERVER, "unexpected bin name");
+				as_record_destroy(&rec);
 			}
 		}
 		else {
-			as_error_update(err, AEROSPIKE_ERR_SERVER, "unexpected number of bins");
+			val = as_record_get(&rec, "FAILURE");
+			
+			if (val) {
+				as_error_update(err, AEROSPIKE_ERR_UDF, "%s", as_val_tostring(val));
+			}
+			else {
+				as_error_update(err, AEROSPIKE_ERR_UDF, "Invalid UDF return value");
+			}
+			as_record_destroy(&rec);
 		}
 	}
-
-	if ( bins ) {
-		citrusleaf_bins_free(bins, n_bins);
-		free(bins);
-	}
-
-	as_serializer_destroy(&ser);
 	
-	return err->code;
+	as_command_free(cmd, size);
+	as_buffer_destroy(&args);
+	as_serializer_destroy(&ser);
+	return status;
 }

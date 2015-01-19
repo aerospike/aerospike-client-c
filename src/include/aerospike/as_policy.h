@@ -166,13 +166,7 @@ typedef enum as_policy_gen_e {
 	 *	Write a record, ONLY if local generation is 
 	 *	greater-than remote generation
 	 */
-	AS_POLICY_GEN_GT,
-
-	/**
-	 *	Write a record creating a duplicate, ONLY if
-	 *	the generation collides (?)
-	 */
-	AS_POLICY_GEN_DUP
+	AS_POLICY_GEN_GT
 
 } as_policy_gen;
 

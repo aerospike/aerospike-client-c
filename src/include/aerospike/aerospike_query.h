@@ -141,9 +141,9 @@ typedef bool (* aerospike_query_foreach_callback)(const as_val * val, void * uda
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param query			The query to execute against the cluster.
+ *	@param query		The query to execute against the cluster.
  *	@param callback		The callback function to call for each result value.
- *	@param udata			User-data to be passed to the callback.
+ *	@param udata		User-data to be passed to the callback.
  *
  *	@return AEROSPIKE_OK on success, otherwise an error.
  *

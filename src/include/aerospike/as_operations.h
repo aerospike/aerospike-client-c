@@ -30,37 +30,37 @@
 typedef enum as_operator_e {
 
 	/**
-	 *	Update the bin.
-	 */
-	AS_OPERATOR_WRITE      = 0,
-
-	/**
 	 *	Return the bin from the cluster.
 	 */
 	AS_OPERATOR_READ       = 1,
+	
+	/**
+	 *	Update the bin.
+	 */
+	AS_OPERATOR_WRITE      = 2,
 
 	/**
 	 *	Increment a bin containing an
 	 *	integer value.
 	 */
-	AS_OPERATOR_INCR       = 2,
-
-	/**
-	 *	Prepend bytes to the bin containing
-	 *	either a string or blob.
-	 */
-	AS_OPERATOR_PREPEND    = 4,
+	AS_OPERATOR_INCR       = 5,
 
 	/**
 	 *	Append bytes to the bin containing
 	 *	either a string or blob.
 	 */
-	AS_OPERATOR_APPEND     = 5,
+	AS_OPERATOR_APPEND     = 9,
+	
+	/**
+	 *	Prepend bytes to the bin containing
+	 *	either a string or blob.
+	 */
+	AS_OPERATOR_PREPEND    = 10,
 
 	/**
 	 *	Touch the record's ttl.
 	 */
-	AS_OPERATOR_TOUCH      = 8
+	AS_OPERATOR_TOUCH      = 11
 
 } as_operator;
 

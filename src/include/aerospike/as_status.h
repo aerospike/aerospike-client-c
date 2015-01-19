@@ -30,6 +30,11 @@ typedef enum as_status_e {
 	 **************************************************************************/
 	
 	/**
+	 *	No more records available when parsing batch, scan or query records.
+	 */
+	AEROSPIKE_NO_MORE_RECORDS = -3,
+	
+	/**
 	 *	Invalid client API parameter.
 	 */
 	AEROSPIKE_ERR_PARAM	= -2,

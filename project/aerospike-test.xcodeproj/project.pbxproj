@@ -29,7 +29,6 @@
 		BFBC11EC18CE416100D0B5BE /* read.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBC11CA18CE416100D0B5BE /* read.c */; };
 		BFBC11ED18CE416100D0B5BE /* scan.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBC11CB18CE416100D0B5BE /* scan.c */; };
 		BFBC11F018CE416100D0B5BE /* consumer_stream.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBC11CE18CE416100D0B5BE /* consumer_stream.c */; };
-		BFBC11F118CE416100D0B5BE /* info_util.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBC11D018CE416100D0B5BE /* info_util.c */; };
 		BFBC11F218CE416100D0B5BE /* map_rec.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBC11D218CE416100D0B5BE /* map_rec.c */; };
 		BFBC11F318CE416100D0B5BE /* producer_stream.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBC11D418CE416100D0B5BE /* producer_stream.c */; };
 		BFBC11F418CE416100D0B5BE /* test_aerospike.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBC11D618CE416100D0B5BE /* test_aerospike.c */; };
@@ -97,8 +96,6 @@
 		BFBC11CB18CE416100D0B5BE /* scan.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = scan.c; path = ../src/test/policy/scan.c; sourceTree = "<group>"; };
 		BFBC11CE18CE416100D0B5BE /* consumer_stream.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = consumer_stream.c; path = ../src/test/util/consumer_stream.c; sourceTree = "<group>"; };
 		BFBC11CF18CE416100D0B5BE /* consumer_stream.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = consumer_stream.h; path = ../src/test/util/consumer_stream.h; sourceTree = "<group>"; };
-		BFBC11D018CE416100D0B5BE /* info_util.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; lineEnding = 0; name = info_util.c; path = ../src/test/util/info_util.c; sourceTree = "<group>"; };
-		BFBC11D118CE416100D0B5BE /* info_util.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; lineEnding = 0; name = info_util.h; path = ../src/test/util/info_util.h; sourceTree = "<group>"; };
 		BFBC11D218CE416100D0B5BE /* map_rec.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = map_rec.c; path = ../src/test/util/map_rec.c; sourceTree = "<group>"; };
 		BFBC11D318CE416100D0B5BE /* map_rec.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = map_rec.h; path = ../src/test/util/map_rec.h; sourceTree = "<group>"; };
 		BFBC11D418CE416100D0B5BE /* producer_stream.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = producer_stream.c; path = ../src/test/util/producer_stream.c; sourceTree = "<group>"; };
@@ -136,8 +133,6 @@
 				BFBC11CB18CE416100D0B5BE /* scan.c */,
 				BFBC11CE18CE416100D0B5BE /* consumer_stream.c */,
 				BFBC11CF18CE416100D0B5BE /* consumer_stream.h */,
-				BFBC11D018CE416100D0B5BE /* info_util.c */,
-				BFBC11D118CE416100D0B5BE /* info_util.h */,
 				BFBC11D218CE416100D0B5BE /* map_rec.c */,
 				BFBC11D318CE416100D0B5BE /* map_rec.h */,
 				BFBC11D418CE416100D0B5BE /* producer_stream.c */,
@@ -260,7 +255,6 @@
 				BFBC11DE18CE416100D0B5BE /* udf_record.c in Sources */,
 				BFBC11A918CE409900D0B5BE /* batch_get.c in Sources */,
 				BFB7BC9518CAAB0E00F0D4A0 /* aerospike_test.c in Sources */,
-				BFBC11F118CE416100D0B5BE /* info_util.c in Sources */,
 				BFBC11AD18CE40D700D0B5BE /* info_basics.c in Sources */,
 				BFBC11F618CE416100D0B5BE /* udf.c in Sources */,
 				BFBC11ED18CE416100D0B5BE /* scan.c in Sources */,

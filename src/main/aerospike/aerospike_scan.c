@@ -16,244 +16,457 @@
  */
 #include <aerospike/aerospike_scan.h>
 #include <aerospike/aerospike_info.h>
+#include <aerospike/as_command.h>
 #include <aerospike/as_key.h>
 #include <aerospike/as_log.h>
+#include <aerospike/as_msgpack.h>
+#include <aerospike/as_serializer.h>
+#include <aerospike/as_socket.h>
 
-#include <citrusleaf/as_scan.h>
-#include <citrusleaf/cl_scan.h>
+#include <citrusleaf/cf_clock.h>
+#include <citrusleaf/cf_queue.h>
 #include <citrusleaf/cf_random.h>
-
-#include "_shim.h"
-
-/******************************************************************************
- * LOCAL STRUCTURES
- *****************************************************************************/
 
 /******************************************************************************
  * TYPES
  *****************************************************************************/
 
-typedef struct scan_bridge_s {
+typedef struct as_scan_task_s {
+	as_node* node;
+	
+	as_cluster* cluster;
+	const as_policy_scan* policy;
+	const as_scan* scan;
+	aerospike_scan_foreach_callback callback;
+	void* udata;
+	as_error* err;
+	cf_queue* complete_q;
+	uint32_t* error_mutex;
+	uint64_t task_id;
+	
+	uint8_t* cmd;
+	size_t cmd_size;
+} as_scan_task;
 
-	// user-provided data
-	void * udata;
-
-	// user-provided callback
-	aerospike_scan_foreach_callback	callback;
-
-} scan_bridge;
-
-/******************************************************************************
- * FUNCTION DECLS
- *****************************************************************************/
-
-as_status aerospike_scan_init(aerospike * as, as_error * err);
+typedef struct as_scan_complete_task_s {
+	as_node* node;
+	uint64_t task_id;
+	as_status result;
+} as_scan_complete_task;
 
 /******************************************************************************
  * STATIC FUNCTIONS
  *****************************************************************************/
 
-static void as_scan_toclscan(const as_scan * scan, const as_policy_scan * policy, cl_scan * clscan, bool background, uint64_t * job_id) 
+static uint8_t*
+as_scan_parse_record(uint8_t* p, as_msg* msg, as_scan_task* task)
 {
-	clscan->job_id = 0;
-	clscan->ns = (char *) scan->ns;
-	clscan->setname = (char *) scan->set;
-	clscan->params.fail_on_cluster_change = policy->fail_on_cluster_change;
-	clscan->params.priority = (cl_scan_priority)scan->priority;
-	clscan->params.pct = scan->percent;
-	clscan->params.concurrent = scan->concurrent;
+	as_record rec;
+	as_record_inita(&rec, msg->n_ops);
+	
+	rec.gen = msg->generation;
+	rec.ttl = cf_server_void_time_to_ttl(msg->record_ttl);
+	
+	p = as_command_parse_key(p, msg->n_fields, &rec.key);
+	p = as_command_parse_bins(&rec, p, msg->n_ops, task->scan->deserialize_list_map);
+	
+	if (task->callback) {
+		bool rv = task->callback((as_val*)&rec, task->udata);
+		as_record_destroy(&rec);
+		return rv ? p : 0;
+	}
+	as_record_destroy(&rec);
+	return p;
+}
 
-	clscan->udf.type = CL_SCAN_UDF_NONE;
-	clscan->udf.filename = NULL;
-	clscan->udf.function = NULL;
-	clscan->udf.arglist = NULL;
-
-	if ( background ) {
-		if ( job_id != NULL ) {
-			clscan->job_id = *job_id;
+static as_status
+as_scan_parse_records(uint8_t* buf, size_t size, as_scan_task* task)
+{
+	uint8_t* p = buf;
+	uint8_t* end = buf + size;
+	
+	while (p < end) {
+		as_msg* msg = (as_msg*)p;
+		as_msg_swap_header_from_be(msg);
+		
+		if (msg->result_code && msg->result_code != AEROSPIKE_ERR_RECORD_NOT_FOUND) {
+			return msg->result_code;
 		}
-
-		if ( clscan->job_id == 0 ) {
-			clscan->job_id = (cf_get_rand64())/2;
-			if ( job_id != NULL ) {
-				*job_id = clscan->job_id;
-			}
+		p += sizeof(as_msg);
+		
+		if (msg->info3 & AS_MSG_INFO3_LAST) {
+			return AEROSPIKE_NO_MORE_RECORDS;
 		}
-
-		if ( scan->apply_each.module[0] != '\0' && scan->apply_each.function[0] != '\0' ) {
-			clscan->udf.type = CL_SCAN_UDF_BACKGROUND;
-			clscan->udf.filename = (char *) scan->apply_each.module;
-			clscan->udf.function = (char *) scan->apply_each.function;
-			clscan->udf.arglist = scan->apply_each.arglist;
+		
+		p = as_scan_parse_record(p, msg, task);
+		
+		if (!p) {
+			return AEROSPIKE_NO_MORE_RECORDS;
+		}
+		
+		if (ck_pr_load_32(task->error_mutex)) {
+			return AEROSPIKE_NO_MORE_RECORDS;
 		}
 	}
+	return AEROSPIKE_OK;
 }
 
-static as_status process_node_response(cf_vector *v, as_error *err)
+static as_status
+as_scan_parse(as_error* err, int fd, uint64_t deadline_ms, void* udata)
 {
-	as_status rc = AEROSPIKE_OK;
+	as_scan_task* task = udata;
+	as_status status = AEROSPIKE_OK;
+	uint8_t* buf = 0;
+	size_t capacity = 0;
 	
-	// This returns a vector of return values, the size of which is the size of the cluster
-	int sz = cf_vector_size(v);
-	cl_node_response resp;
-	for(int i=0; i < sz; i++) {
-
-		cf_vector_get(v, i, &resp);
-		// Even if one of the node responded with an error, set the overall status as error
-		if (resp.node_response != AEROSPIKE_OK) {
-			rc = as_error_fromrc(err, resp.node_response);
+	while (true) {
+		// Read header
+		as_proto proto;
+		status = as_socket_read_deadline(err, fd, (uint8_t*)&proto, sizeof(as_proto), deadline_ms);
+		
+		if (status) {
+			break;
 		}
-
-		// Set the resp back to zero
-		memset(&resp, 0, sizeof(cl_node_response));
-	}
-
-	// Free the result vector
-	cf_vector_destroy(v);
-
-	return rc;
-}
-
-/**
- * The is the proxy callback function. This will be passed to the old simple-scan
- * mechanism. When this gets called, it will create an as_val structure out of the
- * record and will call the callback that user supplied (folded into the udata structure)
- */
-static int simplescan_cb(char *ns, cf_digest *keyd, char *set, cl_object *key,
-		int result, uint32_t generation, uint32_t record_void_time,
-		cl_bin *bins, uint16_t n_bins, void *udata)
-{
-	scan_bridge * bridge = (scan_bridge *) udata;
-
-	// Fill the bin data
-	as_record _rec, * rec = &_rec;
-	as_record_inita(rec, n_bins);
-	clbins_to_asrecord(bins, (uint32_t)n_bins, rec);
-
-	// Fill the metadata
-	askey_from_clkey(&rec->key, ns, set, key);
-	memcpy(rec->key.digest.value, keyd, sizeof(cf_digest));
-	rec->key.digest.init = true;
-	rec->gen = generation;
-	rec->ttl = record_void_time;
-
-	// Call the callback that user wanted to callback
-	bool rv = bridge->callback((as_val *) rec, bridge->udata);
-
-	// The responsibility to free the bins is on the called callback function
-	// In scan case, only LIST & MAP will have an active free
-	citrusleaf_bins_free(bins, (int)n_bins);
-
-	// release the record
-	as_record_destroy(rec);
-
-	return rv ? 0 : 1;
-}
-
-/**
- * The is the proxy callback function. This will be passed to the old simple-scan
- * mechanism. When this gets called, it will create an as_val structure out of the
- * record and will call the callback that user supplied (folded into the udata structure)
- */
-static int generic_cb(as_val * val, void * udata)
-{
-	scan_bridge * bridge = (scan_bridge *) udata;
-	
-	// Call the callback that user wanted to callback
-	bool rv = bridge->callback(val, bridge->udata);
-	
-	return rv ? 0 : 1;
-}
-
-/**
- * This is the main driver function which can cater to different types of
- * scan interfaces exposed to the outside world. This functions should not be
- * exposed to the outside world. This generic function exists because we dont
- * want to duplicate too much of code.
- * 
- * @param as        - the aerospike cluster to connect to.
- * @param err       - the error is populated if the return value is not AEROSPIKE_OK.
- * @param policy    - the policy to use for this operation. If NULL, then the default policy will be used.
- * @param node      - the name of the node to perform the scan on.
- * @param scan      - the scan to perform
- * @param callback  - the function to be called for each record scanned.
- * @param udata     - user-data to be passed to the callback
- *
- * @return AEROSPIKE_OK on success. Otherwise an error occurred.
- */
-static as_status aerospike_scan_generic(
-	aerospike * as, as_error * err, const as_policy_scan * policy,
-	const char * node, const as_scan * scan,
-	aerospike_scan_foreach_callback callback, void * udata)
-{
-
-	cl_rv clrv;
-	as_status rc = AEROSPIKE_OK;
-
-	cl_scan clscan;
-	as_scan_toclscan(scan, policy, &clscan, false, NULL);
-
-	if ( clscan.udf.type == CL_SCAN_UDF_NONE ) {
-
-		scan_bridge bridge_udata = {
-			.udata = udata,
-			.callback = callback
-		};
-
-		struct cl_scan_parameters_s params = {
-			.fail_on_cluster_change = clscan.params.fail_on_cluster_change,
-			.priority = clscan.params.priority,
-			.concurrent = clscan.params.concurrent,
-			.threads_per_node = 0
-		};
-
-		int n_bins = scan->select.size;
-		cl_bin * bins = NULL;
-		if ( n_bins > 0 ) {
-			bins = (cl_bin *) alloca(sizeof(cl_bin) * n_bins);
-			for( int i = 0; i < n_bins; i++ ) {
-				strcpy(bins[i].bin_name, scan->select.entries[i]);
-				citrusleaf_object_init_null(&bins[i].object);
+		as_proto_swap_from_be(&proto);
+		size_t size = proto.sz;
+		
+		if (size > 0) {
+			// Prepare buffer
+			if (size > capacity) {
+				as_command_free(buf, capacity);
+				capacity = size;
+				buf = as_command_init(capacity);
+			}
+			
+			// Read remaining message bytes in group
+			status = as_socket_read_deadline(err, fd, buf, size, deadline_ms);
+			
+			if (status) {
+				break;
+			}
+			
+			status = as_scan_parse_records(buf, size, task);
+			
+			if (status != AEROSPIKE_OK) {
+				if (status == AEROSPIKE_NO_MORE_RECORDS) {
+					status = AEROSPIKE_OK;
+				}
+				break;
 			}
 		}
-
-
-		// If the user want to execute only on a single node...
-		if (node) {
-			clrv = citrusleaf_scan_node(as->cluster, (char *) node, (char *) scan->ns, (char *) scan->set, bins, n_bins, 
-						scan->no_bins, scan->percent, simplescan_cb, &bridge_udata, &params);
-			rc = as_error_fromrc(err, clrv);
-		} 
 		else {
-
-			// We are not using the very old citrusleaf_scan() call here. First of all, its
-			// very inefficient. It makes a single node on the cluster coordinate the job
-			// of scan. Moreover, it does not accept params like priority etc.
-			cf_vector *v = citrusleaf_scan_all_nodes(as->cluster, (char *) scan->ns, (char *) scan->set, bins, n_bins, 
-						scan->no_bins, scan->percent, simplescan_cb, &bridge_udata, &params);
-			rc = process_node_response(v, err);
+			break;
 		}
+	}
+	as_command_free(buf, capacity);
+	return status;
+}
 
+static as_status
+as_scan_command_execute(as_scan_task* task)
+{
+	as_command_node cn;
+	cn.node = task->node;
+	
+	as_error err;
+	as_status status = as_command_execute(&err, &cn, task->cmd, task->cmd_size, task->policy->timeout, AS_POLICY_RETRY_NONE, as_scan_parse, task);
+	
+	if (status) {
+		// Copy error to main error only once.
+		if (ck_pr_fas_32(task->error_mutex, 1) == 0) {
+			memcpy(task->err, &err, sizeof(as_error));
+		}
+	}
+	return status;
+}
+
+static void*
+as_scan_worker(void* data)
+{
+	as_cluster* cluster = (as_cluster*)data;
+	as_scan_task task;
+	
+	while (cf_queue_pop(cluster->scan_q, &task, CF_QUEUE_FOREVER) == CF_QUEUE_OK) {
+		// This is how batch shutdown signals we're done.
+		if (! task.cluster) {
+			break;
+		}
+		
+		as_scan_complete_task complete_task;
+		complete_task.node = task.node;
+		complete_task.task_id = task.task_id;
+		complete_task.result = as_scan_command_execute(&task);
+		
+		cf_queue_push(task.complete_q, &complete_task);
+	}
+	return 0;
+}
+
+static void
+as_scan_threads_init(as_cluster* cluster)
+{
+	// We do this lazily, during the first scan request, so make sure it's only
+	// done once.
+	if (ck_pr_fas_32(&cluster->scan_initialized, 1) == 1 || cluster->scan_q) {
+		return;
+	}
+		
+	// Create dispatch queue.
+	cluster->scan_q = cf_queue_create(sizeof(as_scan_task), true);
+	
+	// Create thread pool.
+	for (int i = 0; i < AS_NUM_SCAN_THREADS; i++) {
+		pthread_create(&cluster->scan_threads[i], 0, as_scan_worker, cluster);
+	}
+}
+
+void
+as_scan_threads_shutdown(as_cluster* cluster)
+{
+	// Check whether we ever (lazily) initialized scan machinery.
+	if (ck_pr_load_32(&cluster->scan_initialized) == 0 && ! cluster->scan_q) {
+		return;
+	}
+	
+	// This tells the worker threads to stop. We do this (instead of using a
+	// "running" flag) to allow the workers to "wait forever" on processing the
+	// work dispatch queue, which has minimum impact when the queue is empty.
+	// This also means all queued requests get processed when shutting down.
+	for (int i = 0; i < AS_NUM_SCAN_THREADS; i++) {
+		as_scan_task task;
+		task.cluster = NULL;
+		cf_queue_push(cluster->scan_q, &task);
+	}
+	
+	for (int i = 0; i < AS_NUM_SCAN_THREADS; i++) {
+		pthread_join(cluster->scan_threads[i], NULL);
+	}
+	
+	cf_queue_destroy(cluster->scan_q);
+	cluster->scan_q = NULL;
+	ck_pr_store_32(&cluster->scan_initialized, 0);
+}
+
+static size_t
+as_scan_command_size(const as_scan* scan, uint16_t* fields, as_buffer* argbuffer)
+{
+	// Build Command.  It's okay to share command across threads because scan does not have retries.
+	// If retries were allowed, the timeout field in the command would change on retry which
+	// would conflict with other threads.
+	size_t size = AS_HEADER_SIZE;
+	uint16_t n_fields = 0;
+	
+	if (scan->ns) {
+		size += as_command_string_field_size(scan->ns);
+		n_fields++;
+	}
+	
+	if (scan->set) {
+		size += as_command_string_field_size(scan->set);
+		n_fields++;
+	}
+	
+	// Estimate scan options size.
+	size += as_command_field_size(2);
+	n_fields++;
+	
+	// Estimate taskId size.
+	size += as_command_field_size(8);
+	n_fields++;
+	
+	// Estimate background function size.
+	as_buffer_init(argbuffer);
+	
+	if (scan->apply_each.function[0]) {
+		size += as_command_field_size(1);
+		size += as_command_string_field_size(scan->apply_each.module);
+		size += as_command_string_field_size(scan->apply_each.function);
+		
+		if (scan->apply_each.arglist) {
+			// If the query has a udf w/ arglist, then serialize it.
+			as_serializer ser;
+			as_msgpack_init(&ser);
+            as_serializer_serialize(&ser, (as_val*)scan->apply_each.arglist, argbuffer);
+			as_serializer_destroy(&ser);
+		}
+		size += as_command_field_size(argbuffer->size);
+		n_fields += 4;
+	}
+	
+	// Estimate size for selected bin names.
+	if (scan->select.size > 0) {
+		for (uint16_t i = 0; i < scan->select.size; i++) {
+			size += as_command_string_operation_size(scan->select.entries[i]);
+		}
+	}
+	*fields = n_fields;
+	return size;
+}
+
+static size_t
+as_scan_command_init(uint8_t* cmd, const as_policy_scan* policy, const as_scan* scan,
+	uint64_t task_id, uint16_t n_fields, as_buffer* argbuffer)
+{
+	uint8_t* p;
+	
+	if (scan->apply_each.function[0]) {
+		p = as_command_write_header(cmd, AS_MSG_INFO1_READ, AS_MSG_INFO2_WRITE,
+			AS_POLICY_COMMIT_LEVEL_ALL, AS_POLICY_CONSISTENCY_LEVEL_ONE, AS_POLICY_EXISTS_IGNORE,
+			AS_POLICY_GEN_IGNORE, 0, 0, policy->timeout, n_fields, 0);
 	}
 	else {
-		// If the user want to execute only on a single node...
-		if (node) {
-			clrv = citrusleaf_udf_scan_node(as->cluster, &clscan, (char *)node, generic_cb, udata);
-			rc = as_error_fromrc(err, clrv);
-		} 
-		else {
-
-			cf_vector *v = citrusleaf_udf_scan_all_nodes(as->cluster, &clscan, generic_cb, udata);
-			rc = process_node_response(v, err);
+		uint8_t read_attr = (scan->no_bins)? AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA : AS_MSG_INFO1_READ;
+		p = as_command_write_header_read(cmd, read_attr, AS_POLICY_CONSISTENCY_LEVEL_ONE, policy->timeout, n_fields, scan->select.size);
+	}
+	
+	if (scan->ns) {
+		p = as_command_write_field_string(p, AS_FIELD_NAMESPACE, scan->ns);
+	}
+	
+	if (scan->set) {
+		p = as_command_write_field_string(p, AS_FIELD_SETNAME, scan->set);
+	}
+	
+	// Write scan options
+	p = as_command_write_field_header(p, AS_FIELD_SCAN_OPTIONS, 2);
+	uint8_t priority = scan->priority << 4;
+	
+	if (policy->fail_on_cluster_change) {
+		priority |= 0x08;
+	}
+	*p++ = priority;
+	*p++ = scan->percent;
+	
+	// Write taskId field
+	p = as_command_write_field_uint64(p, AS_FIELD_TASK_ID, task_id);
+	
+	// Write background function
+	if (scan->apply_each.function[0]) {
+		p = as_command_write_field_header(p, AS_FIELD_UDF_OP, 1);
+		*p++ = 2;
+		p = as_command_write_field_string(p, AS_FIELD_UDF_PACKAGE_NAME, scan->apply_each.module);
+		p = as_command_write_field_string(p, AS_FIELD_UDF_FUNCTION, scan->apply_each.function);
+		p = as_command_write_field_buffer(p, AS_FIELD_UDF_ARGLIST, argbuffer);
+	}
+    as_buffer_destroy(argbuffer);
+	
+	if (scan->select.size > 0) {
+		for (uint16_t i = 0; i < scan->select.size; i++) {
+			p = as_command_write_bin_name(p, scan->select.entries[i]);
 		}
 	}
+	return as_command_write_end(cmd, p);
+}
 
-    // If completely successful, make the callback that signals completion.
-	if (rc == AEROSPIKE_OK) {
-		callback(NULL, udata);
+static as_status
+as_scan_generic(
+	aerospike* as, as_error* err, const as_policy_scan* policy, const as_scan* scan,
+	aerospike_scan_foreach_callback callback, void* udata, uint64_t* task_id_ptr)
+{
+	as_error_reset(err);
+	
+	if (! policy) {
+		policy = &as->config.policies.scan;
+	}
+	
+	as_cluster* cluster = as->cluster;
+	as_nodes* nodes = as_nodes_reserve(cluster);
+	uint32_t n_nodes = nodes->size;
+	
+	if (n_nodes == 0) {
+		as_nodes_release(nodes);
+		return as_error_set_message(err, AEROSPIKE_ERR_SERVER, "Scan command failed because cluster is empty.");
+	}
+	
+	// Reserve each node in cluster.
+	for (uint32_t i = 0; i < n_nodes; i++) {
+		as_node_reserve(nodes->array[i]);
+	}
+	
+	uint64_t task_id;
+	if (task_id_ptr) {
+		if (*task_id_ptr == 0) {
+			*task_id_ptr = cf_get_rand64() / 2;
+		}
+		task_id = *task_id_ptr;
+	}
+	else {
+		task_id = cf_get_rand64() / 2;
 	}
 
-	return rc;
+	// Create scan command
+	as_buffer argbuffer;
+	uint16_t n_fields = 0;
+	size_t size = as_scan_command_size(scan, &n_fields, &argbuffer);
+	uint8_t* cmd = as_command_init(size);
+	size = as_scan_command_init(cmd, policy, scan, task_id, n_fields, &argbuffer);
+	
+	// Initialize task.
+	uint32_t error_mutex = 0;
+	as_scan_task task;
+	task.cluster = as->cluster;
+	task.policy = policy;
+	task.scan = scan;
+	task.callback = callback;
+	task.udata = udata;
+	task.err = err;
+	task.error_mutex = &error_mutex;
+	task.task_id = task_id;
+	task.cmd = cmd;
+	task.cmd_size = size;
+	
+	as_status status = AEROSPIKE_OK;
+	
+	if (scan->concurrent) {
+		// Run node scans in parallel.
+		as_scan_threads_init(cluster);
+		
+		task.complete_q = cf_queue_create(sizeof(as_scan_complete_task), true);
+
+		for (uint32_t i = 0; i < n_nodes; i++) {
+			task.node = nodes->array[i];
+			cf_queue_push(cluster->scan_q, &task);
+		}
+
+		// Wait for tasks to complete.
+		for (uint32_t i = 0; i < n_nodes; i++) {
+			as_scan_complete_task complete;
+			cf_queue_pop(task.complete_q, &complete, CF_QUEUE_FOREVER);
+			
+			if (complete.result != AEROSPIKE_OK && status == AEROSPIKE_OK) {
+				status = complete.result;
+			}
+		}
+		
+		// Release temporary queue.
+		cf_queue_destroy(task.complete_q);
+	}
+	else {
+		task.complete_q = 0;
+		
+		// Run node scans in series.
+		for (uint32_t i = 0; i < n_nodes && status == AEROSPIKE_OK; i++) {
+			task.node = nodes->array[i];
+			status = as_scan_command_execute(&task);
+		}
+	}
+	
+	// Release each node in cluster.
+	for (uint32_t i = 0; i < n_nodes; i++) {
+		as_node_release(nodes->array[i]);
+	}
+	
+	// Release nodes array.
+	as_nodes_release(nodes);
+
+	// Free command memory.
+	as_command_free(cmd, size);
+
+	// If completely successful, make the callback that signals completion.
+	if (callback && status == AEROSPIKE_OK) {
+		callback(NULL, udata);
+	}
+	return status;
 }
 
 // Wrapper for background scan info.
@@ -378,23 +591,7 @@ as_status aerospike_scan_background(
 	const as_scan * scan, uint64_t * scan_id
 	)
 {
-	// we want to reset the error so, we have a clean state
-	as_error_reset(err);
-	
-	if (! policy) {
-		policy = &as->config.policies.scan;
-	}
-	
-	if ( aerospike_scan_init(as, err) != AEROSPIKE_OK ) {
-		return err->code;
-	}
-
-	cl_scan clscan;
-	as_scan_toclscan(scan, policy, &clscan, true, scan_id);
-
-	cf_vector *v = citrusleaf_udf_scan_background(as->cluster, &clscan);
-	as_status rc = process_node_response(v, err);
-	return rc;
+	return as_scan_generic(as, err, policy, scan, 0, 0, scan_id);
 }
 
 /**
@@ -503,26 +700,98 @@ as_status aerospike_scan_foreach(
 	const as_scan * scan, 
 	aerospike_scan_foreach_callback callback, void * udata) 
 {
-	// we want to reset the error so, we have a clean state
+	return as_scan_generic(as, err, policy, scan, callback, udata, 0);
+}
+
+/**
+ *	Scan the records in the specified namespace and set for a single node.
+ *
+ *	The callback function will be called for each record scanned. When all records have
+ *	been scanned, then callback will be called with a NULL value for the record.
+ *
+ *	~~~~~~~~~~{.c}
+ *	char* node_names = NULL;
+ *	int n_nodes = 0;
+ *	as_cluster_get_node_names(as->cluster, &n_nodes, &node_names);
+ *
+ *	if (n_nodes <= 0)
+ *		return <error>;
+ *
+ *	as_scan scan;
+ *	as_scan_init(&scan, "test", "demo");
+ *
+ *	if (aerospike_scan_node(&as, &err, NULL, &scan, node_names[0], callback, NULL) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *
+ *	free(node_names);
+ *	as_scan_destroy(&scan);
+ *	~~~~~~~~~~
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param scan			The scan to execute against the cluster.
+ *	@param node_name	The node name to scan.
+ *	@param callback		The function to be called for each record scanned.
+ *	@param udata		User-data to be passed to the callback.
+ *
+ *	@return AEROSPIKE_OK on success. Otherwise an error occurred.
+ */
+as_status aerospike_scan_node(
+	aerospike * as, as_error * err, const as_policy_scan * policy,
+	const as_scan * scan,  const char* node_name,
+	aerospike_scan_foreach_callback callback, void * udata)
+{
 	as_error_reset(err);
 	
 	if (! policy) {
 		policy = &as->config.policies.scan;
 	}
+
+	// Retrieve node.
+	as_node* node = as_node_get_by_name(as->cluster, node_name);
 	
-	if ( aerospike_scan_init(as, err) != AEROSPIKE_OK ) {
-		return err->code;
+	if (! node) {
+		return as_error_update(err, AEROSPIKE_ERR_PARAM, "Invalid node name: %s", node_name);
 	}
 
-	return aerospike_scan_generic(as, err, policy, NULL, scan, callback, udata);
-}
-
-/**
- * Initialize scan environment
- */
-as_status aerospike_scan_init(aerospike * as, as_error * err) 
-{
-	// TODO - failure cases?
-	cl_cluster_scan_init(as->cluster);
-	return AEROSPIKE_OK;
+	// Create scan command
+	uint64_t task_id = cf_get_rand64() / 2;
+	as_buffer argbuffer;
+	uint16_t n_fields = 0;
+	size_t size = as_scan_command_size(scan, &n_fields, &argbuffer);
+	uint8_t* cmd = as_command_init(size);
+	size = as_scan_command_init(cmd, policy, scan, task_id, n_fields, &argbuffer);
+	
+	// Initialize task.
+	uint32_t error_mutex = 0;
+	as_scan_task task;
+	task.node = node;
+	task.cluster = as->cluster;
+	task.policy = policy;
+	task.scan = scan;
+	task.callback = callback;
+	task.udata = udata;
+	task.err = err;
+	task.complete_q = 0;
+	task.error_mutex = &error_mutex;
+	task.task_id = task_id;
+	task.cmd = cmd;
+	task.cmd_size = size;
+	
+	// Run scan.
+	as_status status = as_scan_command_execute(&task);
+		
+	// Free command memory.
+	as_command_free(cmd, size);
+	
+	// Release node.
+	as_node_release(node);
+	
+	// If completely successful, make the callback that signals completion.
+	if (callback && status == AEROSPIKE_OK) {
+		callback(NULL, udata);
+	}
+	return status;
 }

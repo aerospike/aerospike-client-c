@@ -160,7 +160,7 @@ as_shm_add_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_add)
 				
 				// Update shared memory node in write lock.
 				ck_swlock_write_lock(&node_shm->lock);
-				memcpy(node_shm->name, node_to_add->name, NODE_NAME_SIZE);
+				memcpy(node_shm->name, node_to_add->name, AS_NODE_NAME_SIZE);
 				memcpy(&node_shm->addr, &address->addr, sizeof(struct sockaddr_in));
 				node_shm->active = true;
 				ck_swlock_write_unlock(&node_shm->lock);

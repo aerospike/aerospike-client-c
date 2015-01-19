@@ -28,7 +28,7 @@
 /**
  *	Maximum size of node name
  */
-#define AS_NODE_NAME_MAX_SIZE 20
+#define AS_NODE_NAME_SIZE 20
 
 /******************************************************************************
  *	TYPES
@@ -70,7 +70,7 @@ typedef struct as_node_s {
 	/**
 	 *	The name of the node.
 	 */
-	char name[AS_NODE_NAME_MAX_SIZE];
+	char name[AS_NODE_NAME_SIZE];
 	
 	/**
 	 *	@private

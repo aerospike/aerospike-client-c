@@ -16,7 +16,7 @@
  */
 #pragma once
 
-#include <aerospike/as_vector.h>
+#include <aerospike/as_cluster.h>
 
 /******************************************************************************
  *	TYPES
@@ -31,9 +31,27 @@ typedef struct as_name_value_s {
 	char* value;
 } as_name_value;
 
+struct sockaddr_in;
+
 /******************************************************************************
  * FUNCTIONS
  ******************************************************************************/
+
+/**
+ *	@private
+ *	Send info command to specific host. The values must be freed by the caller on success.
+ */
+as_status
+as_info_command_host(as_cluster* cluster, as_error* err, struct sockaddr_in* sa_in, char* command,
+	 bool send_asis, uint64_t deadline_ms, char** response);
+
+/**
+ *	@private
+ *	Return the single command's info response buffer value.
+ *	The original buffer will be modified with the null termination character.
+ */
+as_status
+as_info_parse_single_response(char *values, char **value);
 
 /**
  *	@private

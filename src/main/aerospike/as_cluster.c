@@ -16,18 +16,16 @@
  */
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_admin.h>
+#include <aerospike/as_info.h>
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_lookup.h>
 #include <aerospike/as_password.h>
 #include <aerospike/as_shm_cluster.h>
+#include <aerospike/as_socket.h>
+#include <aerospike/as_string.h>
 #include <aerospike/as_vector.h>
-#include <citrusleaf/as_scan.h>
-#include <citrusleaf/cl_info.h>
-#include <citrusleaf/cl_batch.h>
 #include <citrusleaf/cf_byte_order.h>
 #include <citrusleaf/cf_clock.h>
-#include <citrusleaf/cl_query.h>
-#include <citrusleaf/cf_socket.h>
 
 /******************************************************************************
  *	Function declarations
@@ -35,6 +33,15 @@
 
 bool
 as_node_refresh(as_cluster* cluster, as_node* node, as_vector* /* <as_friend> */ friends);
+
+void
+as_batch_threads_shutdown(as_cluster* cluster);
+
+void
+as_scan_threads_shutdown(as_cluster* cluster);
+
+void
+as_query_threads_shutdown(as_cluster* cluster);
 
 /******************************************************************************
  *	Functions
@@ -82,21 +89,22 @@ as_add_seeds(as_cluster* cluster, as_seed* seeds, uint32_t seeds_size) {
 static int
 as_lookup_node_name(as_cluster* cluster, struct sockaddr_in* addr, char* node_name, int node_name_size)
 {
-	char* values = 0;
-	int status = citrusleaf_info_host_auth(cluster, addr, "node", &values, cluster->conn_timeout_ms, false, true);
+	as_error err;
+	char* response = 0;
+	uint64_t deadline = as_socket_deadline(cluster->conn_timeout_ms);
+	as_status status = as_info_command_host(cluster, &err, addr, "node", true, deadline, &response);
 	
 	if (status) {
-		free(values);
 		return status;
 	}
 	
 	char* value;
-	status = citrusleaf_info_parse_single(values, &value);
+	status = as_info_parse_single_response(response, &value);
 	
-	if (status == 0) {
+	if (status == AEROSPIKE_OK) {
 		as_strncpy(node_name, value, node_name_size);
 	}
-	free(values);
+	free(response);
 	return status;
 }
 
@@ -198,7 +206,7 @@ as_cluster_seed_nodes(as_cluster* cluster, bool enable_warnings)
 	as_vector addresses;
 	as_vector_inita(&addresses, sizeof(struct sockaddr_in), 5);
 	
-	char name[AS_NODE_NAME_MAX_SIZE];
+	char name[AS_NODE_NAME_SIZE];
 	int first_error = 0;
 	
 	for (uint32_t i = 0; i < cluster->seeds_size; i++) {
@@ -216,7 +224,7 @@ as_cluster_seed_nodes(as_cluster* cluster, bool enable_warnings)
 
 		for (uint32_t i = 0; i < addresses.size; i++) {
 			struct sockaddr_in* addr = as_vector_get(&addresses, i);
-			status = as_lookup_node_name(cluster, addr, name, AS_NODE_NAME_MAX_SIZE);
+			status = as_lookup_node_name(cluster, addr, name, AS_NODE_NAME_SIZE);
 			
 			if (status == 0) {
 				as_node* node = as_cluster_find_node_in_vector(&nodes_to_add, name);
@@ -266,7 +274,7 @@ as_cluster_find_nodes_to_add(as_cluster* cluster, as_vector* /* <as_friend> */ f
 	as_vector addresses;
 	as_vector_inita(&addresses, sizeof(struct sockaddr_in), 5);
 	
-	char name[AS_NODE_NAME_MAX_SIZE];
+	char name[AS_NODE_NAME_SIZE];
 
 	for (uint32_t i = 0; i < friends->size; i++) {
 		as_friend* friend = as_vector_get(friends, i);
@@ -280,7 +288,7 @@ as_cluster_find_nodes_to_add(as_cluster* cluster, as_vector* /* <as_friend> */ f
 		
 		for (uint32_t i = 0; i < addresses.size; i++) {
 			struct sockaddr_in* addr = as_vector_get(&addresses, i);
-			status = as_lookup_node_name(cluster, addr, name, AS_NODE_NAME_MAX_SIZE);
+			status = as_lookup_node_name(cluster, addr, name, AS_NODE_NAME_SIZE);
 			
 			if (status == 0) {
 				as_node* node = as_cluster_find_node(cluster->nodes, name);
@@ -470,19 +478,19 @@ as_cluster_remove_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_t
 static int
 as_cluster_set_partition_size(as_cluster* cluster)
 {
+	as_error err;
 	as_nodes* nodes = cluster->nodes;
 	int first_error = 0;
 	
 	for (uint32_t i = 0; i < nodes->size && cluster->n_partitions == 0; i++) {
 		as_node* node = nodes->array[i];
 		struct sockaddr_in* addr = as_node_get_address(node);
-		char* values = 0;
 		
-		int status = citrusleaf_info_host_auth(cluster, addr, "partitions", &values, cluster->conn_timeout_ms, false, true);
-		
+		char* response = 0;
+		uint64_t deadline = as_socket_deadline(cluster->conn_timeout_ms);
+		as_status status = as_info_command_host(cluster, &err, addr, "partitions", true, deadline, &response);
+				
 		if (status != 0) {
-			free(values);
-			
 			if (first_error == 0) {
 				first_error = status;
 			}
@@ -490,9 +498,9 @@ as_cluster_set_partition_size(as_cluster* cluster)
 		}
 		
 		char *value = 0;
-		status = citrusleaf_info_parse_single(values, &value);
+		status = as_info_parse_single_response(response, &value);
 			
-		if (status == 0) {
+		if (status == AEROSPIKE_OK) {
 			cluster->n_partitions = atoi(value);
 		}
 		else {
@@ -500,8 +508,7 @@ as_cluster_set_partition_size(as_cluster* cluster)
 				first_error = status;
 			}
 		}
-		
-		free(values);
+		free(response);
 	}
 	
 	if (cluster->n_partitions > 0) {
@@ -827,7 +834,7 @@ as_cluster_get_node_names(as_cluster* cluster, int* n_nodes, char** node_names)
 		return;
 	}
 	
-	*node_names = malloc(NODE_NAME_SIZE * size);
+	*node_names = malloc(AS_NODE_NAME_SIZE * size);
 	if (*node_names == 0) {
 		as_nodes_release(nodes);
 		return;
@@ -836,8 +843,8 @@ as_cluster_get_node_names(as_cluster* cluster, int* n_nodes, char** node_names)
 	char* nptr = *node_names;
 	for (uint32_t i = 0; i < size; i++) {
 		as_node* node = nodes->array[i];
-		memcpy(nptr, node->name, NODE_NAME_SIZE);
-		nptr += NODE_NAME_SIZE;
+		memcpy(nptr, node->name, AS_NODE_NAME_SIZE);
+		nptr += AS_NODE_NAME_SIZE;
 	}
 	as_nodes_release(nodes);
 }
@@ -940,9 +947,9 @@ void
 as_cluster_destroy(as_cluster* cluster)
 {
 	// Shutdown work queues.
-	cl_cluster_batch_shutdown(cluster);
-	cl_cluster_scan_shutdown(cluster);
-	cl_cluster_query_shutdown(cluster);
+	as_batch_threads_shutdown(cluster);
+	as_scan_threads_shutdown(cluster);
+	as_query_threads_shutdown(cluster);
 
 	// Stop tend thread and wait till finished.
 	if (cluster->valid) {

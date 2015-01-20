@@ -768,3 +768,16 @@ example_dump_operations(const as_operations* p_ops)
 		example_dump_op(&p_ops->binops.entries[n]);
 	}
 }
+
+int
+example_handle_udf_error(as_error* err, const char* prefix)
+{
+	if (strstr(err->message, " 1500:")) {
+		LOG("LDT not enabled on server. Skipping example.");
+		return 0;
+	}
+	else {
+		LOG("%s returned %d - %s", prefix, err->code, err->message);
+		return -1;
+	}
+}

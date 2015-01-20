@@ -79,10 +79,9 @@ main(int argc, char* argv[])
 	// Verify that the LDT is not already there.
 	if (aerospike_lmap_ldt_exists(&as, &err, NULL, &g_key, &lmap,
 			&ldt_exists) != AEROSPIKE_OK) {
-		LOG("first aerospike_lmap_ldt_exists() returned %d - %s", err.code,
-				err.message);
+		int rc = example_handle_udf_error(&err, "first aerospike_lmap_ldt_exists()");
 		example_cleanup(&as);
-		exit(-1);
+		exit(rc);
 	}
 
 	if (as_boolean_get(&ldt_exists)) {

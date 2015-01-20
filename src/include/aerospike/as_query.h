@@ -73,7 +73,7 @@
  *	@relates as_query
  *	@ingroup query_object
  */
-#define as_range(indextype, datatype, __min, __max) AS_PREDICATE_RANGE, AS_INDEX_TYPE_ ##indextype, AS_INDEX_ ##datatype, , __min, __max
+#define as_range(indextype, datatype, __min, __max) AS_PREDICATE_RANGE, AS_INDEX_TYPE_ ##indextype, AS_INDEX_ ##datatype, __min, __max
 
 /**
  *	Macro for setting setting the CONTAINS predicate.
@@ -85,7 +85,7 @@
  *	@relates as_query
  *	@ingroup query_object
  */
-#define as_contains(indextype, datatype, __val) AS_PREDICATE_EQUAL, AS_INDEX_TYPE_ ##indextype, AS_INDEX_ ##datatype, , __val
+#define as_contains(indextype, datatype, __val) AS_PREDICATE_EQUAL, AS_INDEX_TYPE_ ##indextype, AS_INDEX_ ##datatype, __val
 
 /**
  *	Macro for setting setting the EQUALS predicate.

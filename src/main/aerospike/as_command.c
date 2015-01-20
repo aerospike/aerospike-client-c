@@ -360,9 +360,11 @@ as_command_execute(as_error * err, as_command_node* cn, uint8_t* command, size_t
 					if (release_node) {
 						as_node_release(node);
 					}
+					err->code = status;
 					return status;
 				
 				default:
+					err->code = status;
 					break;
 			}
 		}

@@ -125,7 +125,7 @@ main(int argc, char* argv[])
 	// care of destroying all the query's member objects if necessary. However
 	// using as_query_where_inita() does avoid internal heap usage.
 	as_query_where_inita(&query, 1);
-	as_query_where(&query, "test-bin", integer_range(1, 10));
+	as_query_where(&query, "test-bin", as_integer_range(1, 10));
 
 	// Specify the UDF to use on the resulting stream.
 	as_query_apply(&query, UDF_MODULE, "sum_test_bin", NULL);
@@ -151,7 +151,7 @@ main(int argc, char* argv[])
 
 	// Generate an as_query.where condition.
 	as_query_where_inita(&query, 1);
-	as_query_where(&query, "test-bin", integer_range(1, 10));
+	as_query_where(&query, "test-bin", as_integer_range(1, 10));
 
 	// Specify another UDF to use on the resulting stream. Like the previous UDF
 	// it sums the test-bin values that satisfy the where condition, but does so
@@ -179,7 +179,7 @@ main(int argc, char* argv[])
 
 	// Generate an as_query.where condition.
 	as_query_where_inita(&query, 1);
-	as_query_where(&query, "test-bin", integer_range(1, 10));
+	as_query_where(&query, "test-bin", as_integer_range(1, 10));
 
 	// Specify another UDF to use on the resulting stream. Like the previous
 	// UDFs it sums test-bin values that satisfy the where condition, but first
@@ -208,7 +208,7 @@ main(int argc, char* argv[])
 	// Generate an as_query.where condition. Here we'll use the entire test-bin
 	// range (for 20 records inserted), to include everything.
 	as_query_where_inita(&query, 1);
-	as_query_where(&query, "test-bin", integer_range(0, 19));
+	as_query_where(&query, "test-bin", as_integer_range(0, 19));
 
 	// Specify another UDF to use on the resulting stream. This UDF operates on
 	// the numbers-bin (string) values, and demonstrates a case where the value

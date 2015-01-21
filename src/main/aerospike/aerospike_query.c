@@ -686,7 +686,7 @@ as_query_execute(as_query_task* task, const as_query * query, as_nodes* nodes, u
  *	as_query query;
  *	as_query_init(&query, "test", "demo");
  *	as_query_select(&query, "bin1");
- *	as_query_where(&query, "bin2", integer_equals(100));
+ *	as_query_where(&query, "bin2", as_integer_equals(100));
  *
  *	if ( aerospike_query_foreach(&as, &err, NULL, &query, callback, NULL) != AEROSPIKE_OK ) {
  *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);

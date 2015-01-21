@@ -220,9 +220,9 @@ bool as_query_select(as_query * query, const char * bin)
  *
  *	~~~~~~~~~~{.c}
  *	as_query_where_init(&q, 3);
- *	as_query_where(&q, "bin1", string_equals("abc"));
- *	as_query_where(&q, "bin1", integer_equals(123));
- *	as_query_where(&q, "bin1", integer_range(0,123));
+ *	as_query_where(&q, "bin1", as_string_equals("abc"));
+ *	as_query_where(&q, "bin1", as_integer_equals(123));
+ *	as_query_where(&q, "bin1", as_integer_range(0,123));
  *	~~~~~~~~~~
  *
  *	@param query	The query to initialize.
@@ -248,24 +248,28 @@ bool as_query_where_init(as_query * query, uint16_t n)
 /**
  *	Add a predicate to the query.
  *
- *	You have to ensure as_query.where has sufficient capacity, prior to 
- *	adding a predicate. If capacity is sufficient then false is returned.
- *	
+ *	You have to ensure as_query.where has sufficient capacity, prior to
+ *	adding a predicate. If capacity is insufficient then false is returned.
+ *
  *	~~~~~~~~~~{.c}
- *	as_query_where_init(&q, 3);
- *	as_query_where(&q, "bin1", string_equals("abc"));
- *	as_query_where(&q, "bin1", integer_equals(123));
- *	as_query_where(&q, "bin1", integer_range(0,123));
+ *	as_query_where_init(&query, 3);
+ *	as_query_where(&query, "bin1", as_string_equals("abc"));
+ *	as_query_where(&query, "bin1", as_integer_equals(123));
+ *	as_query_where(&query, "bin1", as_integer_range(0,123));
  *	~~~~~~~~~~
  *
  *	@param query		The query add the predicate to.
  *	@param bin			The name of the bin the predicate will apply to.
  *	@param type			The type of predicate.
+ *	@param itype		The type of index.
+ *	@param dtype		The underlying data type that the index is based on.
  *	@param ... 			The values for the predicate.
- *	
+ *
  *	@return On success, true. Otherwise an error occurred.
+ *
+ *	@relates as_query
  */
-bool as_query_where(as_query * query, const char * bin, as_predicate_type type, as_index_datatype dtype, as_index_type itype, ... )
+bool as_query_where(as_query * query, const char * bin, as_predicate_type type, as_index_type itype, as_index_datatype dtype, ... )
 {
 	// test preconditions
 	if ( !query || !bin || strlen(bin) >= AS_BIN_NAME_MAX_SIZE ) {
@@ -282,7 +286,7 @@ bool as_query_where(as_query * query, const char * bin, as_predicate_type type, 
 	p->dtype = dtype;
 	p->itype = itype;
     va_list ap;
-    va_start(ap, itype);
+    va_start(ap, dtype);
 
     switch(type) {
     	case AS_PREDICATE_EQUAL:

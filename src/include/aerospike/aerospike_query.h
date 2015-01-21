@@ -51,7 +51,7 @@
  *	as_query_init(&query, "test", "demo");
  *
  *	as_query_where_init(&query, 1);
- *	as_query_where(&query, "bin2", integer_equals(100));
+ *	as_query_where(&query, "bin2", as_integer_equals(100));
  *	~~~~~~~~~~
  *
  *	Now that we have a query defined, we want to execute it using 
@@ -129,7 +129,7 @@ typedef bool (* aerospike_query_foreach_callback)(const as_val * val, void * uda
  *	as_query query;
  *	as_query_init(&query, "test", "demo");
  *	as_query_select(&query, "bin1");
- *	as_query_where(&query, "bin2", integer_equals(100));
+ *	as_query_where(&query, "bin2", as_integer_equals(100));
  *	
  *	if ( aerospike_query_foreach(&as, &err, NULL, &query, callback, NULL) != AEROSPIKE_OK ) {
  *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);

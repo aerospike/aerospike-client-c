@@ -105,7 +105,7 @@ main(int argc, char* argv[])
 	// care of destroying all the query's member objects if necessary. However
 	// using as_query_where_inita() does avoid internal heap usage.
 	as_query_where_inita(&query, 1);
-	as_query_where(&query, "test-bin", integer_equals(7));
+	as_query_where(&query, "test-bin", as_integer_equals(7));
 
 	LOG("executing query: where test-bin = 7");
 

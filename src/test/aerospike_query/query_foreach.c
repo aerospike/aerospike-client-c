@@ -215,7 +215,7 @@ TEST( query_foreach_1, "count(*) where a == 'abc' (non-aggregating)" ) {
 	as_query_select(&q, "c");
 	
 	as_query_where_inita(&q, 1);
-	as_query_where(&q, "a", string_equals("abc"));
+	as_query_where(&q, "a", as_string_equals("abc"));
 	
 	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_1_callback, &count);
 
@@ -247,7 +247,7 @@ TEST( query_foreach_2, "count(*) where a == 'abc' (aggregating)" ) {
 	as_query_init(&q, NAMESPACE, SET);
 
 	as_query_where_inita(&q, 1);
-	as_query_where(&q, "a", string_equals("abc"));
+	as_query_where(&q, "a", as_string_equals("abc"));
 
 	as_query_apply(&q, UDF_FILE, "count", NULL);
 	
@@ -286,7 +286,7 @@ TEST( query_foreach_3, "sum(e) where a == 'abc'" ) {
 	as_query_init(&q, NAMESPACE, SET);
 
 	as_query_where_inita(&q, 1);
-	as_query_where(&q, "a", string_equals("abc"));
+	as_query_where(&q, "a", as_string_equals("abc"));
 
 	as_query_apply(&q, UDF_FILE, "sum", NULL);
 
@@ -332,7 +332,7 @@ TEST( query_foreach_4, "sum(d) where b == 100 and d == 1" ) {
 	as_query_init(&q, NAMESPACE, SET);
 
 	as_query_where_inita(&q, 1);
-	as_query_where(&q, "b", integer_equals(100));
+	as_query_where(&q, "b", as_integer_equals(100));
 
 	as_query_apply(&q, UDF_FILE, "sum_on_match", (as_list *) &args);
 

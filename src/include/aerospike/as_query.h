@@ -33,71 +33,71 @@
  *	Macro for setting setting the STRING_EQUAL predicate.
  *
  *	~~~~~~~~~~{.c}
- *	as_query_where(query, "bin1", string_equals("abc"));
+ *	as_query_where(query, "bin1", as_string_equals("abc"));
  *	~~~~~~~~~~
  *
  *	@relates as_query
  */
-#define string_equals(__val) AS_PREDICATE_EQUAL, AS_INDEX_STRING, AS_INDEX_TYPE_DEFAULT, __val
+#define as_string_equals(__val) AS_PREDICATE_EQUAL, AS_INDEX_TYPE_DEFAULT, AS_INDEX_STRING, __val
 
 /**
  *	Macro for setting setting the INTEGER_EQUAL predicate.
  *
  *	~~~~~~~~~~{.c}
- *	as_query_where(query, "bin1", integer_equals(123));
+ *	as_query_where(query, "bin1", as_integer_equals(123));
  *	~~~~~~~~~~
  *
  *	@relates as_query
  */
-#define integer_equals(__val) AS_PREDICATE_EQUAL, AS_INDEX_NUMERIC, AS_INDEX_TYPE_DEFAULT, __val
+#define as_integer_equals(__val) AS_PREDICATE_EQUAL, AS_INDEX_TYPE_DEFAULT, AS_INDEX_NUMERIC, __val
 
 /**
  *	Macro for setting setting the INTEGER_RANGE predicate.
  *
  *	~~~~~~~~~~{.c}
- *	as_query_where(query, "bin1", integer_range(1,100));
+ *	as_query_where(query, "bin1", as_integer_range(1,100));
  *	~~~~~~~~~~
  *	
  *	@relates as_query
  *	@ingroup query_object
  */
-#define integer_range(__min, __max) AS_PREDICATE_RANGE,  AS_INDEX_NUMERIC, AS_INDEX_TYPE_DEFAULT, __min, __max
+#define as_integer_range(__min, __max) AS_PREDICATE_RANGE, AS_INDEX_TYPE_DEFAULT, AS_INDEX_NUMERIC, __min, __max
 
 /**
  *	Macro for setting setting the RANGE predicate.
  *
  *	~~~~~~~~~~{.c}
- *	as_query_where(query, "bin1", integer_range(1,100));
+ *	as_query_where(query, "bin1", as_range(LIST,NUMERIC,1,100));
  *	~~~~~~~~~~
  *	
  *	@relates as_query
  *	@ingroup query_object
  */
-#define range(indextype, datatype, __min, __max) AS_PREDICATE_RANGE, AS_INDEX_DATA_ ##datatype, AS_INDEX_TYPE_ ##indextype, __min, __max
+#define as_range(indextype, datatype, __min, __max) AS_PREDICATE_RANGE, AS_INDEX_TYPE_ ##indextype, AS_INDEX_ ##datatype, , __min, __max
 
 /**
  *	Macro for setting setting the CONTAINS predicate.
  *
  *	~~~~~~~~~~{.c}
- *	as_query_where(query, "bin1", integer_range(1,100));
+ *	as_query_where(query, "bin1", as_contains(LIST,STRING,"val"));
  *	~~~~~~~~~~
  *	
  *	@relates as_query
  *	@ingroup query_object
  */
-#define contains(indextype, datatype, __val) AS_PREDICATE_EQUAL, AS_INDEX_DATA_ ##datatype, AS_INDEX_TYPE_ ##indextype, __val
+#define as_contains(indextype, datatype, __val) AS_PREDICATE_EQUAL, AS_INDEX_TYPE_ ##indextype, AS_INDEX_ ##datatype, , __val
 
 /**
  *	Macro for setting setting the EQUALS predicate.
  *
  *	~~~~~~~~~~{.c}
- *	as_query_where(query, "bin1", integer_range(1,100));
+ *	as_query_where(query, "bin1", as_equals(NUMERIC,5));
  *	~~~~~~~~~~
  *	
  *	@relates as_query
  *	@ingroup query_object
  */
-#define equals(datatype, __val) AS_PREDICATE_EQUAL, AS_INDEX_DATA_ ##datatype, AS_INDEX_TYPE_DEFAULT, __val
+#define as_equals(datatype, __val) AS_PREDICATE_EQUAL, AS_INDEX_TYPE_DEFAULT, AS_INDEX_ ##datatype, __val
 
 
 /******************************************************************************
@@ -397,13 +397,13 @@ typedef struct as_query_sort_s {
  *	you will want to use a UDF to process the result set on the server.
  *	
  *	~~~~~~~~~~{.c}
- *	as_query_where(query, "bin1", string_equals("abc"));
+ *	as_query_where(query, "bin1", as_string_equals("abc"));
  *	~~~~~~~~~~
  *
  *	The predicates that you can apply to a bin include:
- *	- string_equals() - Test for string equality.
- *	- integer_equals() - Test for integer equality.
- *	- integer_range() - Test for integer within a range.
+ *	- as_string_equals() - Test for string equality.
+ *	- as_integer_equals() - Test for integer equality.
+ *	- as_integer_range() - Test for integer within a range.
  *
  *	Before adding predicates, the where structure must be initialized. To
  *	initialize the where structure, you can choose to use one of the following:
@@ -416,7 +416,7 @@ typedef struct as_query_sort_s {
  *
  *	~~~~~~~~~~{.c}
  *	as_query_where_inita(query, 1);
- *	as_query_where(query, "bin1", string_equals("abc"));
+ *	as_query_where(query, "bin1", as_string_equals("abc"));
  *	~~~~~~~~~~
  *
  *
@@ -664,9 +664,9 @@ bool as_query_select(as_query * query, const char * bin);
  *
  *	~~~~~~~~~~{.c}
  *	as_query_where_inita(&query, 3);
- *	as_query_where(&query, "bin1", string_equals("abc"));
- *	as_query_where(&query, "bin2", integer_equals(123));
- *	as_query_where(&query, "bin3", integer_range(0,123));
+ *	as_query_where(&query, "bin1", as_string_equals("abc"));
+ *	as_query_where(&query, "bin2", as_integer_equals(123));
+ *	as_query_where(&query, "bin3", as_integer_range(0,123));
  *	~~~~~~~~~~
  *
  *	@param __query	The query to initialize.
@@ -693,9 +693,9 @@ bool as_query_select(as_query * query, const char * bin);
  *
  *	~~~~~~~~~~{.c}
  *	as_query_where_init(&query, 3);
- *	as_query_where(&query, "bin1", string_equals("abc"));
- *	as_query_where(&query, "bin1", integer_equals(123));
- *	as_query_where(&query, "bin1", integer_range(0,123));
+ *	as_query_where(&query, "bin1", as_string_equals("abc"));
+ *	as_query_where(&query, "bin1", as_integer_equals(123));
+ *	as_query_where(&query, "bin1", as_integer_range(0,123));
  *	~~~~~~~~~~
  *
  *	@param query	The query to initialize.
@@ -715,21 +715,23 @@ bool as_query_where_init(as_query * query, uint16_t n);
  *	
  *	~~~~~~~~~~{.c}
  *	as_query_where_init(&query, 3);
- *	as_query_where(&query, "bin1", string_equals("abc"));
- *	as_query_where(&query, "bin1", integer_equals(123));
- *	as_query_where(&query, "bin1", integer_range(0,123));
+ *	as_query_where(&query, "bin1", as_string_equals("abc"));
+ *	as_query_where(&query, "bin1", as_integer_equals(123));
+ *	as_query_where(&query, "bin1", as_integer_range(0,123));
  *	~~~~~~~~~~
  *
  *	@param query		The query add the predicate to.
  *	@param bin			The name of the bin the predicate will apply to.
  *	@param type			The type of predicate.
+ *	@param itype		The type of index.
+ *	@param dtype		The underlying data type that the index is based on.
  *	@param ... 			The values for the predicate.
  *	
  *	@return On success, true. Otherwise an error occurred.
  *
  *	@relates as_query
  */
-bool as_query_where(as_query * query, const char * bin, as_predicate_type type, as_index_datatype dtype, as_index_type itype, ... );
+bool as_query_where(as_query * query, const char * bin, as_predicate_type type, as_index_type itype, as_index_datatype dtype, ... );
 
 /******************************************************************************
  *	ORDERBY FUNCTIONS

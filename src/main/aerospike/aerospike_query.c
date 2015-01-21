@@ -460,7 +460,7 @@ as_query_execute(as_query_task* task, const as_query * query, as_nodes* nodes, u
 	// Estimate indextype size.
 	// For single where clause queries
 	if (query->where.size == 1) {
-		size += as_command_field_size(sizeof(as_index_type));
+		size += as_command_field_size(1);
 		n_fields++;
 	}
 
@@ -562,9 +562,8 @@ as_query_execute(as_query_task* task, const as_query * query, as_nodes* nodes, u
 	// Write indextype.
 	if (query->where.size == 1) {
 		as_predicate* pred = &query->where.entries[0];
-		p = as_command_write_field_header(p, AS_FIELD_INDEX_TYPE, sizeof(pred->itype));
-		*p = pred->itype;
-		p = p + sizeof(pred->itype);
+		p = as_command_write_field_header(p, AS_FIELD_INDEX_TYPE, 1);
+		*p++ = pred->itype;
 	}
 
 	// Write taskId field

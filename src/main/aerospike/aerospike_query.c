@@ -457,6 +457,13 @@ as_query_execute(as_query_task* task, const as_query * query, as_nodes* nodes, u
 		n_fields++;
 	}
 	
+	// Estimate indextype size.
+	// For single where clause queries
+	if (query->where.size == 1) {
+		size += as_command_field_size(sizeof(as_index_type));
+		n_fields++;
+	}
+
 	// Estimate taskId size.
 	size += as_command_field_size(8);
 	n_fields++;
@@ -552,6 +559,14 @@ as_query_execute(as_query_task* task, const as_query * query, as_nodes* nodes, u
 		p = as_command_write_field_string(p, AS_FIELD_SETNAME, query->set);
 	}
 	
+	// Write indextype.
+	if (query->where.size == 1) {
+		as_predicate* pred = &query->where.entries[0];
+		p = as_command_write_field_header(p, AS_FIELD_INDEX_TYPE, sizeof(pred->itype));
+		*p = pred->itype;
+		p = p + sizeof(pred->itype);
+	}
+
 	// Write taskId field
 	p = as_command_write_field_uint64(p, AS_FIELD_TASK_ID, task->task_id);
 

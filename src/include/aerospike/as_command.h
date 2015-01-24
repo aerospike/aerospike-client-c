@@ -400,10 +400,31 @@ as_command_parse_header(as_error* err, int fd, uint64_t deadline_ms, void* user_
 
 /**
  *	@private
- *	Parse server result code.  Used for writes.
+ *	Parse server record.  Used for reads.
  */
 as_status
 as_command_parse_result(as_error* err, int fd, uint64_t deadline_ms, void* user_data);
+
+/**
+ *	@private
+ *	Parse server success or failure result.
+ */
+as_status
+as_command_parse_success_failure(as_error* err, int fd, uint64_t deadline_ms, void* user_data);
+
+/**
+ *	@private
+ *	Parse server success or failure bins.
+ */
+uint8_t*
+as_command_parse_success_failure_bins(uint8_t* p, as_error* err, as_msg* msg, as_val** value);
+
+/**
+ *	@private
+ *	Parse bins received from the server.
+ */
+uint8_t*
+as_command_parse_bins(as_record* rec, uint8_t* buf, uint32_t n_bins, bool deserialize);
 
 /**
  *	@private
@@ -418,17 +439,3 @@ as_command_ignore_fields(uint8_t* p, uint32_t n_fields);
  */
 uint8_t*
 as_command_parse_key(uint8_t* p, uint32_t n_fields, as_key* key);
-
-/**
- *	@private
- *	Parse one bin received from server.
- */
-uint8_t*
-as_command_parse_bin(uint8_t* p, as_bin_name name, as_val** value);
-
-/**
- *	@private
- *	Parse bins received from the server.
- */
-uint8_t*
-as_command_parse_bins(as_record* rec, uint8_t* buf, uint32_t n_bins, bool deserialize);

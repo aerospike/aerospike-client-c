@@ -575,24 +575,10 @@ as_command_parse_key(uint8_t* p, uint32_t n_fields, as_key* key)
 	return p;
 }
 
-uint8_t*
-as_command_parse_bin(uint8_t* p, as_bin_name name, as_val** value)
+static void
+as_command_parse_value(uint8_t* p, uint8_t type, uint32_t value_size, as_val** value)
 {
-	// Called by aggregation methods only.
 	// Allocate values on heap.
-	uint32_t op_size = cf_swap_from_be32(*(uint32_t*)p);
-	p += 5;
-	uint8_t type = *p;
-	p += 2;
-	
-	uint8_t name_size = *p++;
-	uint8_t name_len = (name_size <= AS_BIN_NAME_MAX_LEN)? name_size : AS_BIN_NAME_MAX_LEN;
-	memcpy(name, p, name_len);
-	name[name_len] = 0;
-	p += name_size;
-	
-	uint32_t value_size = (op_size - (name_size + 4));
-	
 	switch (type) {
 		case AS_BYTES_UNDEF: {
 			*value = (as_val*)&as_nil;
@@ -630,8 +616,110 @@ as_command_parse_bin(uint8_t* p, as_bin_name name, as_val** value)
 			break;
 		}
 	}
-	p += value_size;
-	return p;
+}
+
+uint8_t*
+as_command_parse_success_failure_bins(uint8_t* p, as_error* err, as_msg* msg, as_val** value)
+{
+	p = as_command_ignore_fields(p, msg->n_fields);
+		
+	as_bin_name name;
+	
+	for (uint32_t i = 0; i < msg->n_ops; i++) {
+		uint32_t op_size = cf_swap_from_be32(*(uint32_t*)p);
+		p += 5;
+		uint8_t type = *p;
+		p += 2;
+		
+		uint8_t name_size = *p++;
+		uint8_t name_len = (name_size <= AS_BIN_NAME_MAX_LEN)? name_size : AS_BIN_NAME_MAX_LEN;
+		memcpy(name, p, name_len);
+		name[name_len] = 0;
+		p += name_size;
+		
+		uint32_t value_size = (op_size - (name_size + 4));
+
+		if (strcmp(name, "SUCCESS") == 0) {
+			as_command_parse_value(p, type, value_size, value);
+			return p + value_size;
+		}
+		
+		if (strcmp(name, "FAILURE") == 0) {
+			as_val* val = 0;
+			as_command_parse_value(p, type, value_size, &val);
+			
+			if (val == 0) {
+				as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Received null FAILURE bin.");
+			}
+			else if (val->type == AS_STRING) {
+				as_error_set_message(err, AEROSPIKE_ERR_CLIENT, ((as_string*)val)->value);
+			}
+			else {
+				as_error_update(err, AEROSPIKE_ERR_CLIENT, "Expected string for FAILURE bin. Received %d", val->type);
+			}
+			as_val_destroy(val);
+			return 0;
+		}
+		p += value_size;
+	}
+	as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to find SUCCESS or FAILURE bin.");
+	return 0;
+}
+
+static as_status
+as_command_parse_udf_error(as_error* err, as_status status, as_val* val)
+{
+	if (val && val->type == AS_STRING) {
+		char* begin = ((as_string*)val)->value;
+		char* p = strrchr(begin, ':');
+		
+		if (p) {
+			p = strrchr(++p, ':');
+			
+			if (p) {
+				int code = atoi(++p);
+				
+				if (code > 0) {
+					return as_error_set_message(err, code, begin);
+				}
+			}
+		}
+		return as_error_set_message(err, status, begin);
+	}
+	return as_error_set_message(err, status, as_error_string(status));
+}
+
+static as_status
+as_command_parse_udf_failure(uint8_t* p, as_error* err, as_msg* msg, as_status status)
+{
+	p = as_command_ignore_fields(p, msg->n_fields);
+	
+	as_bin_name name;
+	
+	for (uint32_t i = 0; i < msg->n_ops; i++) {
+		uint32_t op_size = cf_swap_from_be32(*(uint32_t*)p);
+		p += 5;
+		uint8_t type = *p;
+		p += 2;
+		
+		uint8_t name_size = *p++;
+		uint8_t name_len = (name_size <= AS_BIN_NAME_MAX_LEN)? name_size : AS_BIN_NAME_MAX_LEN;
+		memcpy(name, p, name_len);
+		name[name_len] = 0;
+		p += name_size;
+		
+		uint32_t value_size = (op_size - (name_size + 4));
+		
+		if (strcmp(name, "FAILURE") == 0) {
+			as_val* val = 0;
+			as_command_parse_value(p, type, value_size, &val);
+			status = as_command_parse_udf_error(err, status, val);
+			as_val_destroy(val);
+			return status;
+		}
+		p += value_size;
+	}
+	return as_error_set_message(err, status, as_error_string(status));
 }
 
 uint8_t*
@@ -715,31 +803,6 @@ as_command_parse_bins(as_record* rec, uint8_t* p, uint32_t n_bins, bool deserial
 	return p;
 }
 
-static int
-as_command_udf_error(as_error* err, as_record* rec, int status)
-{
-	char* begin = as_record_get_str(rec, "FAILURE");
-	
-	if (! begin) {
-		return as_error_set_message(err, status, as_error_string(status));
-	}
-	
-	char* p = strrchr(begin, ':');
-	
-	if (p) {
-		p = strrchr(++p, ':');
-
-		if (p) {
-			int code = atoi(++p);
-			
-			if (code > 0) {
-				return as_error_update(err, code, "%s", begin);
-			}
-		}
-	}
-	return as_error_update(err, status, "%s", begin);
-}
-
 as_status
 as_command_parse_result(as_error* err, int fd, uint64_t deadline_ms, void* user_data)
 {
@@ -777,7 +840,10 @@ as_command_parse_result(as_error* err, int fd, uint64_t deadline_ms, void* user_
 				as_record* rec = *record;
 				
 				if (rec) {
-					if (rec->bins.entries == 0 && msg.m.n_ops > 0) {
+					if (msg.m.n_ops > rec->bins.capacity) {
+						if (rec->bins._free) {
+							free(rec->bins.entries);
+						}
 						rec->bins.capacity = msg.m.n_ops;
 						rec->bins.size = 0;
 						rec->bins.entries = malloc(sizeof(as_bin) * msg.m.n_ops);
@@ -798,16 +864,7 @@ as_command_parse_result(as_error* err, int fd, uint64_t deadline_ms, void* user_
 		}
 			
 		case AEROSPIKE_ERR_UDF: {
-			// Create temporary record so error message can be parsed.
-			as_record rec;
-			as_record_inita(&rec, msg.m.n_ops);
-			rec.gen = msg.m.generation;
-			rec.ttl = cf_server_void_time_to_ttl(msg.m.record_ttl);
-			
-			uint8_t* p = as_command_ignore_fields(buf, msg.m.n_fields);
-			as_command_parse_bins(&rec, p, msg.m.n_ops, true);
-			as_command_udf_error(err, &rec, status);
-			as_record_destroy(&rec);
+			status = as_command_parse_udf_failure(buf, err, &msg.m, status);
 			break;
 		}
 			
@@ -817,6 +874,64 @@ as_command_parse_result(as_error* err, int fd, uint64_t deadline_ms, void* user_
 
 		default:
 			as_error_update(err, status, "Server returned error: %s", as_error_string(status));
+			break;
+	}
+	as_command_free(buf, size);
+	return status;
+}
+
+as_status
+as_command_parse_success_failure(as_error* err, int fd, uint64_t deadline_ms, void* user_data)
+{
+	// Read header
+	as_proto_msg msg;
+	as_status status = as_socket_read_deadline(err, fd, (uint8_t*)&msg, sizeof(as_proto_msg), deadline_ms);
+	
+	if (status) {
+		return status;
+	}
+	
+	as_proto_swap_from_be(&msg.proto);
+	as_msg_swap_header_from_be(&msg.m);
+	size_t size = msg.proto.sz  - msg.m.header_sz;
+	uint8_t* buf = 0;
+	
+	if (size > 0) {
+		// Read remaining message bytes.
+		buf = as_command_init(size);
+		status = as_socket_read_deadline(err, fd, buf, size, deadline_ms);
+		
+		if (status) {
+			as_command_free(buf, size);
+			return status;
+		}
+	}
+	
+	as_val** val = user_data;
+	
+	// Parse result code and record.
+	status = msg.m.result_code;
+	
+	switch (status) {
+		case AEROSPIKE_OK: {
+			as_command_parse_success_failure_bins(buf, err, &msg.m, val);
+			break;
+		}
+			
+		case AEROSPIKE_ERR_UDF: {
+			status = as_command_parse_udf_failure(buf, err, &msg.m, status);
+			*val = 0;
+			break;
+		}
+			
+		case AEROSPIKE_ERR_RECORD_NOT_FOUND:
+		case AEROSPIKE_ERR_LARGE_ITEM_NOT_FOUND:
+			*val = 0;
+			break;
+			
+		default:
+			as_error_update(err, status, "Server returned error: %s", as_error_string(status));
+			*val = 0;
 			break;
 	}
 	as_command_free(buf, size);

@@ -282,6 +282,7 @@ as_query_parse(as_error* err, int fd, uint64_t deadline_ms, void* udata)
 			}
 		}
 		else {
+			status = as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Received zero sized data packet from server.");
 			break;
 		}
 	}

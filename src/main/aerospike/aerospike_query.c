@@ -173,30 +173,18 @@ as_query_parse_record(uint8_t* p, as_msg* msg, as_query_task* task, as_error* er
 	
 	if (task->stream_q) {
 		// Parse aggregate return values.
-		if (msg->n_ops != 1) {
-			as_error_update(err, AEROSPIKE_ERR_CLIENT, "Query aggregate expected exactly one bin. Received %d bins.", (int)msg->n_ops);
-			return 0;
-		}
-		
-		p = as_command_ignore_fields(p, msg->n_fields);
-		
-		as_bin_name name;
 		as_val* val = 0;
-		p = as_command_parse_bin(p, name, &val);
+		p = as_command_parse_success_failure_bins(p, err, msg, &val);
 		
-		if (strcmp(name, "SUCCESS")) {
-			if (strcmp(name, "FAILURE") == 0 && val && val->type == AS_STRING) {
-				as_error_update(err, AEROSPIKE_ERR_CLIENT, "Query aggregate expected bin name SUCCESS. Received %s", ((as_string*)val)->value);
-			}
-			else {
-				as_error_update(err, AEROSPIKE_ERR_CLIENT, "Query aggregate expected bin name SUCCESS. Received %s", name);
-			}
-			as_val_destroy(val);
-			return 0;
+		if (! p) {
+			return p;
 		}
-				
+		
 		if (task->callback) {
 			rv = task->callback(val, task->udata);
+		}
+		else {
+			as_val_destroy(val);
 		}
 	}
 	else {

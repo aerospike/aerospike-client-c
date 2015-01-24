@@ -537,49 +537,10 @@ as_status aerospike_key_apply(
 	p = as_command_write_field_buffer(p, AS_FIELD_UDF_ARGLIST, &args);
 	size = as_command_write_end(cmd, p);
 	
-	as_record rec;
-	as_record* recp = &rec;
-	as_record_inita(&rec, 1);
-
 	as_command_node cn;
 	as_command_node_init(&cn, as->cluster, key->ns, (const cf_digest*)&key->digest, AS_POLICY_REPLICA_MASTER, true);
 	
-	status = as_command_execute(err, &cn, cmd, size, policy->timeout, 0, as_command_parse_result, &recp);
-	
-	if (status == AEROSPIKE_OK) {
-		as_bin_value* val = as_record_get(&rec, "SUCCESS");
-		
-		if (val) {
-			if (result) {
-				// Transfer bin value to result.
-				*result = (as_val*)val;
-				
-				// Destroy all other bin values in the record.
-				for (int i = 0; i < rec.bins.size; i++) {
-					as_bin_value* tmp = rec.bins.entries[i].valuep;
-					
-					if (tmp && tmp != val) {
-						as_val_destroy((as_val*)tmp);
-					}
-				}
-				as_val_destroy((as_val*)rec.key.valuep);
-			}
-			else {
-				as_record_destroy(&rec);
-			}
-		}
-		else {
-			val = as_record_get(&rec, "FAILURE");
-			
-			if (val) {
-				as_error_update(err, AEROSPIKE_ERR_UDF, "%s", as_val_tostring(val));
-			}
-			else {
-				as_error_update(err, AEROSPIKE_ERR_UDF, "Invalid UDF return value");
-			}
-			as_record_destroy(&rec);
-		}
-	}
+	status = as_command_execute(err, &cn, cmd, size, policy->timeout, 0, as_command_parse_success_failure, result);
 	
 	as_command_free(cmd, size);
 	as_buffer_destroy(&args);

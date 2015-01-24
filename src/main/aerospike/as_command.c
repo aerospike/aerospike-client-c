@@ -640,7 +640,9 @@ as_command_parse_success_failure_bins(uint8_t* p, as_error* err, as_msg* msg, as
 		uint32_t value_size = (op_size - (name_size + 4));
 
 		if (strcmp(name, "SUCCESS") == 0) {
-			as_command_parse_value(p, type, value_size, value);
+			if (value) {
+				as_command_parse_value(p, type, value_size, value);
+			}
 			return p + value_size;
 		}
 		

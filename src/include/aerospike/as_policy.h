@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2014 Aerospike, Inc.
+ * Copyright 2008-2015 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -15,6 +15,10 @@
  * the License.
  */
 #pragma once
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /**
  *	@defgroup client_policies Client Policies
@@ -1123,3 +1127,7 @@ as_policies_init(as_policies* p);
  */
 void
 as_policies_resolve(as_policies* p);
+
+#ifdef __cplusplus
+} // end extern "C"
+#endif

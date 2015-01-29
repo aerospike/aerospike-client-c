@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2014 Aerospike, Inc.
+ * Copyright 2008-2015 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -15,6 +15,10 @@
  * the License.
  */
 #pragma once 
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <aerospike/as_bin.h>
 #include <aerospike/as_bytes.h>
@@ -741,3 +745,6 @@ static inline as_record * as_record_fromval(const as_val * v)
 	return (as_record *) as_util_fromval(v, AS_REC, as_rec);
 }
 
+#ifdef __cplusplus
+} // end extern "C"
+#endif

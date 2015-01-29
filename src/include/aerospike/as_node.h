@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2014 Aerospike, Inc.
+ * Copyright 2008-2015 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -15,6 +15,10 @@
  * the License.
  */
 #pragma once
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <aerospike/as_vector.h>
 #include <citrusleaf/cf_queue.h>
@@ -260,3 +264,7 @@ as_node_get_connection(as_node* node, int* fd);
  */
 void
 as_node_put_connection(as_node* node, int fd);
+
+#ifdef __cplusplus
+} // end extern "C"
+#endif

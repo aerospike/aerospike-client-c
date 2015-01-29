@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2014 Aerospike, Inc.
+ * Copyright 2008-2015 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -15,6 +15,10 @@
  * the License.
  */
 #pragma once
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <aerospike/as_node.h>
 #include <citrusleaf/cf_digest.h>
@@ -130,3 +134,7 @@ as_partition_tables_get(as_partition_tables* tables, const char* ns);
  */
 bool
 as_partition_tables_find_node(as_partition_tables* tables, as_node* node);
+
+#ifdef __cplusplus
+} // end extern "C"
+#endif

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2014 Aerospike, Inc.
+ * Copyright 2008-2015 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -15,6 +15,10 @@
  * the License.
  */
 #pragma once 
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <aerospike/as_bin.h>
 #include <aerospike/as_buffer.h>
@@ -439,3 +443,7 @@ as_command_ignore_fields(uint8_t* p, uint32_t n_fields);
  */
 uint8_t*
 as_command_parse_key(uint8_t* p, uint32_t n_fields, as_key* key);
+
+#ifdef __cplusplus
+} // end extern "C"
+#endif

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2014 Aerospike, Inc.
+ * Copyright 2008-2015 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -15,6 +15,10 @@
  * the License.
  */
 #pragma once
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <aerospike/as_config.h>
 #include <aerospike/as_partition.h>
@@ -314,3 +318,7 @@ as_shm_next_partition_table(as_cluster_shm* cluster_shm, as_partition_table_shm*
 {
 	return (as_partition_table_shm*) ((char*)table + cluster_shm->partition_table_byte_size);
 }
+
+#ifdef __cplusplus
+} // end extern "C"
+#endif

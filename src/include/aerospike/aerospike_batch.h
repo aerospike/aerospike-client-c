@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2014 Aerospike, Inc.
+ * Copyright 2008-2015 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -15,6 +15,10 @@
  * the License.
  */
 #pragma once
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /**
  *	@defgroup batch_operations Batch Operations
@@ -139,3 +143,7 @@ as_status aerospike_batch_exists(
 	const as_batch * batch, 
 	aerospike_batch_read_callback callback, void * udata
 	);
+
+#ifdef __cplusplus
+} // end extern "C"
+#endif

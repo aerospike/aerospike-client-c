@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2014 Aerospike, Inc.
+ * Copyright 2008-2015 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -15,6 +15,10 @@
  * the License.
  */
 #pragma once 
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <aerospike/as_bin.h>
 #include <aerospike/as_map.h>
@@ -132,3 +136,7 @@ as_ldt * as_ldt_init(as_ldt * ldt, const as_bin_name name, const as_ldt_type typ
  *	@ingroup as_ldt_object
  */
 void as_ldt_destroy(as_ldt * ldt);
+
+#ifdef __cplusplus
+} // end extern "C"
+#endif

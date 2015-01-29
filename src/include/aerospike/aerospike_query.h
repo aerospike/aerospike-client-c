@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2014 Aerospike, Inc.
+ * Copyright 2008-2015 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -15,6 +15,10 @@
  * the License.
  */
 #pragma once
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /** 
  *	@defgroup query_operations Query Operations (3.0 only)
@@ -154,3 +158,7 @@ as_status aerospike_query_foreach(
 	const as_query * query, 
 	aerospike_query_foreach_callback callback, void * udata
 	);
+
+#ifdef __cplusplus
+} // end extern "C"
+#endif

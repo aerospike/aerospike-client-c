@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2014 Aerospike, Inc.
+ * Copyright 2008-2015 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -15,6 +15,10 @@
  * the License.
  */
 #pragma once 
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <aerospike/as_bin.h>
 #include <aerospike/as_bytes.h>
@@ -222,3 +226,6 @@ bool as_record_iterator_has_next(const as_record_iterator * iterator);
 as_bin * as_record_iterator_next(as_record_iterator * iterator);
 
 
+#ifdef __cplusplus
+} // end extern "C"
+#endif

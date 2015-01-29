@@ -145,14 +145,12 @@ aerospike_drop_user(aerospike* as, as_error* err, const as_policy_admin* policy,
 
 /**
  *	Set user's password by user administrator.  Clear-text password will be hashed using bcrypt before sending to server.
- *	Return zero on success.
  */
 as_status
 aerospike_set_password(aerospike* as, as_error* err, const as_policy_admin* policy, const char* user_name, const char* password);
 
 /**
  *	Change user's password by user.  Clear-text password will be hashed using bcrypt before sending to server.
- *	Return zero on success.
  */
 as_status
 aerospike_change_password(aerospike* as, as_error* err, const as_policy_admin* policy, const char* user_name, const char* password);
@@ -171,14 +169,12 @@ aerospike_revoke_roles(aerospike* as, as_error* err, const as_policy_admin* poli
 
 /**
  *	Create user defined role.
- *	Return zero on success.
  */
 as_status
 aerospike_create_role(aerospike* as, as_error* err, const as_policy_admin* policy, const char* role, as_privilege** privileges, int privileges_size);
 
 /**
  *	Delete user defined role.
- *	Return zero on success.
  */
 as_status
 aerospike_drop_role(aerospike* as, as_error* err, const as_policy_admin* policy, const char* role);

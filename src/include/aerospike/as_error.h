@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2014 Aerospike, Inc.
+ * Copyright 2008-2015 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -15,6 +15,10 @@
  * the License.
  */
 #pragma once 
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <aerospike/as_status.h>
 
@@ -243,3 +247,7 @@ static inline as_status as_error_set(as_error * err, as_status code, const char 
  */
 char*
 as_error_string(as_status status);
+
+#ifdef __cplusplus
+} // end extern "C"
+#endif

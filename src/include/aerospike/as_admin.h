@@ -16,6 +16,10 @@
  */
 #pragma once 
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <aerospike/aerospike.h>
 #include <aerospike/as_config.h>
 #include <aerospike/as_key.h>
@@ -250,3 +254,7 @@ as_roles_destroy(as_role** roles, int roles_size);
  */
 as_status
 as_authenticate(as_error* err, int fd, const char* user, const char* credential, uint64_t deadline_ms);
+
+#ifdef __cplusplus
+} // end extern "C"
+#endif

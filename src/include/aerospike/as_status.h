@@ -16,6 +16,10 @@
  */
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*******************************************************************************
  *	TYPES
  ******************************************************************************/
@@ -462,3 +466,7 @@ typedef enum as_status_e {
 	AEROSPIKE_ERR_LDT_USER_MODULE_NOT_FOUND       = 1439
 
 } as_status;
+
+#ifdef __cplusplus
+} // end extern "C"
+#endif

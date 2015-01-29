@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2014 Aerospike, Inc.
+ * Copyright 2008-2015 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -16,6 +16,10 @@
  */
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_vector.h>
 
@@ -31,3 +35,7 @@
  */
 int
 as_lookup(as_cluster* cluster, char* hostname, uint16_t port, bool enable_warning, as_vector* /*<struct sockaddr_in>*/ addresses);
+
+#ifdef __cplusplus
+} // end extern "C"
+#endif

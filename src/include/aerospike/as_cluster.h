@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2014 Aerospike, Inc.
+ * Copyright 2008-2015 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -15,6 +15,10 @@
  * the License.
  */
 #pragma once
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <aerospike/as_config.h>
 #include <aerospike/as_node.h>
@@ -448,3 +452,7 @@ as_node_get(as_cluster* cluster, const char* ns, const cf_digest* d, bool write,
 		return as_partition_table_get_node(cluster, table, d, write, replica);
 	}
 }
+
+#ifdef __cplusplus
+} // end extern "C"
+#endif

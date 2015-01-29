@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2014 Aerospike, Inc.
+ * Copyright 2008-2015 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -15,6 +15,10 @@
  * the License.
  */
 #pragma once
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /**
  *	@defgroup index_operations Index Operations
@@ -245,3 +249,7 @@ static inline as_status aerospike_index_string_create(
 {
 	return aerospike_index_create_complex(as, err, 0, policy, ns, set, bin, name, AS_INDEX_TYPE_DEFAULT, AS_INDEX_STRING);
 }
+
+#ifdef __cplusplus
+} // end extern "C"
+#endif

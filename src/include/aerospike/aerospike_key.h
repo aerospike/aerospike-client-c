@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2014 Aerospike, Inc.
+ * Copyright 2008-2015 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -15,6 +15,10 @@
  * the License.
  */
 #pragma once
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /**
  *	@defgroup key_operations Key Operations
@@ -288,3 +292,7 @@ as_status aerospike_key_apply(
 	const char * module, const char * function, as_list * arglist, 
 	as_val ** result
 	);
+
+#ifdef __cplusplus
+} // end extern "C"
+#endif

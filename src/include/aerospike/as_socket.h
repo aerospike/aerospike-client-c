@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2014 Aerospike, Inc.
+ * Copyright 2008-2015 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -15,6 +15,10 @@
  * the License.
  */
 #pragma once
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <aerospike/as_error.h>
 #include <citrusleaf/cf_clock.h>
@@ -188,4 +192,8 @@ as_socket_address_name(struct sockaddr_in* address, char* name)
 	inet_ntop(AF_INET, &(address->sin_addr), name, INET_ADDRSTRLEN);
 }
 
+#endif
+
+#ifdef __cplusplus
+} // end extern "C"
 #endif

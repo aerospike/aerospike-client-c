@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2014 Aerospike, Inc.
+ * Copyright 2008-2015 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -23,6 +23,16 @@
 #include <citrusleaf/cf_clock.h>
 #include <string.h>
 
+/******************************************************************************
+ *	TYPES
+ *****************************************************************************/
+
+typedef as_status (*as_admin_parse_fn) (as_error* err, uint8_t* buffer, size_t size, as_vector* list);
+
+/******************************************************************************
+ *	MACROS
+ *****************************************************************************/
+
 // Commands
 #define AUTHENTICATE 0
 #define CREATE_USER 1
@@ -31,10 +41,12 @@
 #define CHANGE_PASSWORD 4
 #define GRANT_ROLES 5
 #define REVOKE_ROLES 6
-#define REPLACE_ROLES 7
-#define CREATE_ROLE 8
 #define QUERY_USERS 9
-#define QUERY_ROLES 10
+#define CREATE_ROLE 10
+#define DELETE_ROLE 11
+#define ADD_PRIVILEGES 12
+#define DELETE_PRIVILEGES 13
+#define QUERY_ROLES 16
 
 // Field IDs
 #define USER 0
@@ -42,7 +54,8 @@
 #define OLD_PASSWORD 2
 #define CREDENTIAL 3
 #define ROLES 10
-#define PRIVILEGES 11
+#define ROLE 11
+#define PRIVILEGES 12
 
 // Misc
 #define MSG_VERSION 0L
@@ -51,11 +64,14 @@
 #define HEADER_SIZE 24
 #define HEADER_REMAINING 16
 #define RESULT_CODE 9
-#define QUERY_END 50
 #define DEFAULT_TIMEOUT 60000  // one minute
 
+/******************************************************************************
+ *	STATIC FUNCTIONS
+ *****************************************************************************/
+
 static uint8_t*
-write_header(uint8_t* p, uint8_t command, uint8_t field_count)
+as_admin_write_header(uint8_t* p, uint8_t command, uint8_t field_count)
 {
 	memset(p, 0, HEADER_REMAINING);
 	p[2] = command;
@@ -64,7 +80,7 @@ write_header(uint8_t* p, uint8_t command, uint8_t field_count)
 }
 
 static uint8_t*
-write_field_header(uint8_t* p, uint8_t id, int size)
+as_admin_write_field_header(uint8_t* p, uint8_t id, int size)
 {
 	*(int*)p = cf_swap_to_be32(size+1);
 	p += 4;
@@ -73,32 +89,76 @@ write_field_header(uint8_t* p, uint8_t id, int size)
 }
 
 static uint8_t*
-write_field_string(uint8_t* p, uint8_t id, const char* val)
+as_admin_write_field_string(uint8_t* p, uint8_t id, const char* val)
 {
-	uint8_t* q = (uint8_t*)stpcpy((char*)p + FIELD_HEADER_SIZE, val);
-	write_field_header(p, id, (int)(q - p - FIELD_HEADER_SIZE));
+	// Copy string, but do not transfer null byte.
+	uint8_t* q = p + FIELD_HEADER_SIZE;
+	while (*val) {
+		*q++ = *val++;
+	}
+	as_admin_write_field_header(p, id, (int)(q - p - FIELD_HEADER_SIZE));
 	return q;
 }
 
 static uint8_t*
-write_roles(uint8_t* p, const char** roles, int length)
+as_admin_write_roles(uint8_t* p, const char** roles, int length)
 {
 	uint8_t* q = p + FIELD_HEADER_SIZE;
 	*q++ = (uint8_t)length;
 	
-	uint8_t* r;
-	for (uint32_t i = 0; i < length; i++) {
-		r = (uint8_t*)stpcpy((char*)q + 1, roles[i]);
+	for (int i = 0; i < length; i++) {
+		// Copy string, but do not transfer null byte.
+		const char* role = roles[i];
+		uint8_t* r = q + 1;
+		while (*role) {
+			*r++ = *role++;
+		}
 		*q = (uint8_t)(r - q - 1);
 		q = r;
 	}
-	
-	write_field_header(p, ROLES, (int)(q - p - FIELD_HEADER_SIZE));
+	as_admin_write_field_header(p, ROLES, (int)(q - p - FIELD_HEADER_SIZE));
+	return q;
+}
+
+static uint8_t*
+as_admin_write_string(uint8_t* p, const char* str)
+{
+	// Copy string, but do not transfer null byte.
+	uint8_t* q = p + 1;
+	while (*str) {
+		*q++ = *str++;
+	}
+	*p = (uint8_t)(q - p - 1);
 	return q;
 }
 
 static as_status
-as_send(as_error* err, int fd, uint8_t* buffer, uint8_t* end, uint64_t deadline_ms)
+as_admin_write_privileges(uint8_t** p, as_error* err, as_privilege** privileges, int privileges_size)
+{
+	uint8_t* q = *p + FIELD_HEADER_SIZE;
+	*q++ = (uint8_t)privileges_size;
+	
+	for (int i = 0; i < privileges_size; i++) {
+		as_privilege* priv = privileges[i];
+		*q++ = (uint8_t)priv->code;
+		
+		if (priv->code >= AS_PRIVILEGE_READ) {
+			q = as_admin_write_string(q, priv->ns);
+			q = as_admin_write_string(q, priv->set);
+		}
+		else {
+			if (priv->ns[0] || priv->set[0]) {
+				return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Admin privilege has namespace/set scope which is invalid.");
+			}
+		}
+	}
+	as_admin_write_field_header(*p, PRIVILEGES, (int)(q - *p - FIELD_HEADER_SIZE));
+	*p = q;
+	return AEROSPIKE_OK;
+}
+
+static as_status
+as_admin_send(as_error* err, int fd, uint8_t* buffer, uint8_t* end, uint64_t deadline_ms)
 {
 	uint64_t len = end - buffer;
 	uint64_t proto = (len - 8) | (MSG_VERSION << 56) | (MSG_TYPE << 48);
@@ -107,8 +167,8 @@ as_send(as_error* err, int fd, uint8_t* buffer, uint8_t* end, uint64_t deadline_
 	return as_socket_write_deadline(err, fd, buffer, len, deadline_ms);
 }
 
-static int
-as_execute(aerospike* as, const as_policy_admin* policy, uint8_t* buffer, uint8_t* end)
+static as_status
+as_admin_execute(aerospike* as, as_error* err, const as_policy_admin* policy, uint8_t* buffer, uint8_t* end)
 {
 	uint32_t timeout_ms = (policy)? policy->timeout : as->config.policies.admin.timeout;
 	if (timeout_ms <= 0) {
@@ -118,7 +178,7 @@ as_execute(aerospike* as, const as_policy_admin* policy, uint8_t* buffer, uint8_
 	as_node* node = as_node_get_random(as->cluster);
 	
 	if (! node) {
-		return AEROSPIKE_ERR_CLIENT;
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to find server node.");
 	}
 	
 	int fd;
@@ -126,11 +186,10 @@ as_execute(aerospike* as, const as_policy_admin* policy, uint8_t* buffer, uint8_
 	
 	if (status) {
 		as_node_release(node);
-		return status;
+		return as_error_update(err, status, "Failed to connect to node %s.", node->name);
 	}
 
-	as_error err;
-	status = as_send(&err, fd, buffer, end, deadline_ms);
+	status = as_admin_send(err, fd, buffer, end, deadline_ms);
 	
 	if (status) {
 		as_close(fd);
@@ -138,7 +197,7 @@ as_execute(aerospike* as, const as_policy_admin* policy, uint8_t* buffer, uint8_
 		return status;
 	}
 	
-	status = as_socket_read_deadline(&err, fd, buffer, HEADER_SIZE, deadline_ms);
+	status = as_socket_read_deadline(err, fd, buffer, HEADER_SIZE, deadline_ms);
 	
 	if (status) {
 		as_close(fd);
@@ -148,8 +207,115 @@ as_execute(aerospike* as, const as_policy_admin* policy, uint8_t* buffer, uint8_
 	
 	as_node_put_connection(node, fd);
 	as_node_release(node);
-	return buffer[RESULT_CODE];
+	
+	status = buffer[RESULT_CODE];
+	
+	if (status) {
+		return as_error_set_message(err, status, as_error_string(status));
+	}
+	return status;
 }
+
+static as_status
+as_admin_read_blocks(as_error* err, int fd, uint64_t deadline_ms, as_admin_parse_fn parse_fn, as_vector* list)
+{
+	as_status status = AEROSPIKE_OK;
+	uint8_t* buf = 0;
+	size_t capacity = 0;
+	
+	while (true) {
+		// Read header
+		as_proto proto;
+		status = as_socket_read_deadline(err, fd, (uint8_t*)&proto, sizeof(as_proto), deadline_ms);
+		
+		if (status) {
+			break;
+		}
+		as_proto_swap_from_be(&proto);
+		size_t size = proto.sz;
+		
+		if (size > 0) {
+			// Prepare buffer
+			if (size > capacity) {
+				as_command_free(buf, capacity);
+				capacity = size;
+				buf = as_command_init(capacity);
+			}
+			
+			// Read remaining message bytes in group
+			status = as_socket_read_deadline(err, fd, buf, size, deadline_ms);
+			
+			if (status) {
+				break;
+			}
+			
+			status = parse_fn(err, buf, size, list);
+			
+			if (status != AEROSPIKE_OK) {
+				if (status == AEROSPIKE_QUERY_END) {
+					status = AEROSPIKE_OK;
+				}
+				else {
+					as_error_set_message(err, status, as_error_string(status));
+				}
+				break;
+			}
+		}
+		else {
+			status = as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Received zero sized data packet from server.");
+			break;
+		}
+	}
+	as_command_free(buf, capacity);
+	return status;
+}
+
+static as_status
+as_admin_read_list(aerospike* as, as_error* err, const as_policy_admin* policy, uint8_t* command, uint8_t* end, as_admin_parse_fn parse_fn, as_vector* list)
+{
+	int timeout_ms = (policy)? policy->timeout : as->config.policies.admin.timeout;
+	if (timeout_ms <= 0) {
+		timeout_ms = DEFAULT_TIMEOUT;
+	}
+	uint64_t deadline_ms = cf_getms() + timeout_ms;
+	as_node* node = as_node_get_random(as->cluster);
+	
+	if (! node) {
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to find server node.");
+	}
+	
+	int fd;
+	as_status status = as_node_get_connection(node, &fd);
+	
+	if (status) {
+		as_node_release(node);
+		return as_error_update(err, status, "Failed to connect to node %s.", node->name);
+	}
+	
+	status = as_admin_send(err, fd, command, end, deadline_ms);
+	
+	if (status) {
+		as_close(fd);
+		as_node_release(node);
+		return status;
+	}
+	
+	status = as_admin_read_blocks(err, fd, deadline_ms, parse_fn, list);
+	
+	if (status) {
+		as_close(fd);
+		as_node_release(node);
+		return status;
+	}
+
+	as_node_put_connection(node, fd);
+	as_node_release(node);
+	return status;
+}
+
+/******************************************************************************
+ *	FUNCTIONS
+ *****************************************************************************/
 
 as_status
 as_authenticate(as_error* err, int fd, const char* user, const char* credential, uint64_t deadline_ms)
@@ -157,11 +323,11 @@ as_authenticate(as_error* err, int fd, const char* user, const char* credential,
 	uint8_t buffer[AS_STACK_BUF_SIZE];
 	uint8_t* p = buffer + 8;
 
-	p = write_header(p, AUTHENTICATE, 2);
-	p = write_field_string(p, USER, user);
-	p = write_field_string(p, CREDENTIAL, credential);
+	p = as_admin_write_header(p, AUTHENTICATE, 2);
+	p = as_admin_write_field_string(p, USER, user);
+	p = as_admin_write_field_string(p, CREDENTIAL, credential);
 	
-	as_status status = as_send(err, fd, buffer, p, deadline_ms);
+	as_status status = as_admin_send(err, fd, buffer, p, deadline_ms);
 	
 	if (status) {
 		return status;
@@ -181,59 +347,42 @@ as_authenticate(as_error* err, int fd, const char* user, const char* credential,
 	return status;
 }
 
-int
-aerospike_create_user(aerospike* as, const as_policy_admin* policy, const char* user, const char* password, const char** roles, int roles_size)
+as_status
+aerospike_create_user(aerospike* as, as_error* err, const as_policy_admin* policy, const char* user, const char* password, const char** roles, int roles_size)
 {
+	as_error_reset(err);
+	
 	char hash[AS_PASSWORD_HASH_SIZE];
 	as_password_get_constant_hash(password, hash);
 	
 	uint8_t buffer[AS_STACK_BUF_SIZE];
 	uint8_t* p = buffer + 8;
 	
-	p = write_header(p, CREATE_USER, 3);
-	p = write_field_string(p, USER, user);
-	p = write_field_string(p, PASSWORD, hash);
-	p = write_roles(p, roles, roles_size);
-	return as_execute(as, policy, buffer, p);
+	p = as_admin_write_header(p, CREATE_USER, 3);
+	p = as_admin_write_field_string(p, USER, user);
+	p = as_admin_write_field_string(p, PASSWORD, hash);
+	p = as_admin_write_roles(p, roles, roles_size);
+	return as_admin_execute(as, err, policy, buffer, p);
 }
 
-int
-aerospike_drop_user(aerospike* as, const as_policy_admin* policy, const char* user)
+as_status
+aerospike_drop_user(aerospike* as, as_error* err, const as_policy_admin* policy, const char* user)
 {
+	as_error_reset(err);
+
 	uint8_t buffer[AS_STACK_BUF_SIZE];
 	uint8_t* p = buffer + 8;
 	
-	p = write_header(p, DROP_USER, 1);
-	p = write_field_string(p, USER, user);
-	return as_execute(as, policy, buffer, p);
+	p = as_admin_write_header(p, DROP_USER, 1);
+	p = as_admin_write_field_string(p, USER, user);
+	return as_admin_execute(as, err, policy, buffer, p);
 }
 
-int
-aerospike_set_password(aerospike* as, const as_policy_admin* policy, const char* user, const char* password)
+as_status
+aerospike_set_password(aerospike* as, as_error* err, const as_policy_admin* policy, const char* user, const char* password)
 {
-	char hash[AS_PASSWORD_HASH_SIZE];
-	as_password_get_constant_hash(password, hash);
-	
-	if (! user) {
-		user = as->cluster->user;
-	}
-	uint8_t buffer[AS_STACK_BUF_SIZE];
-	uint8_t* p = buffer + 8;
-	
-	p = write_header(p, SET_PASSWORD, 2);
-	p = write_field_string(p, USER, user);
-	p = write_field_string(p, PASSWORD, hash);
-	int status = as_execute(as, policy, buffer, p);
-	
-	if (status == 0) {
-		as_cluster_change_password(as->cluster, user, hash);
-	}
-	return status;
-}
+	as_error_reset(err);
 
-int
-aerospike_change_password(aerospike* as, const as_policy_admin* policy, const char* user, const char* password)
-{
 	char hash[AS_PASSWORD_HASH_SIZE];
 	as_password_get_constant_hash(password, hash);
 	
@@ -243,11 +392,10 @@ aerospike_change_password(aerospike* as, const as_policy_admin* policy, const ch
 	uint8_t buffer[AS_STACK_BUF_SIZE];
 	uint8_t* p = buffer + 8;
 	
-	p = write_header(p, CHANGE_PASSWORD, 3);
-	p = write_field_string(p, USER, user);
-	p = write_field_string(p, OLD_PASSWORD, as->cluster->password);
-	p = write_field_string(p, PASSWORD, hash);
-	int status = as_execute(as, policy, buffer, p);
+	p = as_admin_write_header(p, SET_PASSWORD, 2);
+	p = as_admin_write_field_string(p, USER, user);
+	p = as_admin_write_field_string(p, PASSWORD, hash);
+	int status = as_admin_execute(as, err, policy, buffer, p);
 	
 	if (status == 0) {
 		as_cluster_change_password(as->cluster, user, hash);
@@ -255,47 +403,132 @@ aerospike_change_password(aerospike* as, const as_policy_admin* policy, const ch
 	return status;
 }
 
-int
-aerospike_grant_roles(aerospike* as, const as_policy_admin* policy, const char* user, const char** roles, int roles_size)
+as_status
+aerospike_change_password(aerospike* as, as_error* err, const as_policy_admin* policy, const char* user, const char* password)
 {
+	as_error_reset(err);
+
+	char hash[AS_PASSWORD_HASH_SIZE];
+	as_password_get_constant_hash(password, hash);
+	
+	if (! user) {
+		user = as->cluster->user;
+	}
 	uint8_t buffer[AS_STACK_BUF_SIZE];
 	uint8_t* p = buffer + 8;
 	
-	p = write_header(p, GRANT_ROLES, 2);
-	p = write_field_string(p, USER, user);
-	p = write_roles(p, roles, roles_size);
-	return as_execute(as, policy, buffer, p);
+	p = as_admin_write_header(p, CHANGE_PASSWORD, 3);
+	p = as_admin_write_field_string(p, USER, user);
+	p = as_admin_write_field_string(p, OLD_PASSWORD, as->cluster->password);
+	p = as_admin_write_field_string(p, PASSWORD, hash);
+	int status = as_admin_execute(as, err, policy, buffer, p);
+	
+	if (status == 0) {
+		as_cluster_change_password(as->cluster, user, hash);
+	}
+	return status;
 }
 
-int
-aerospike_revoke_roles(aerospike* as, const as_policy_admin* policy, const char* user, const char** roles, int roles_size)
+as_status
+aerospike_grant_roles(aerospike* as, as_error* err, const as_policy_admin* policy, const char* user, const char** roles, int roles_size)
 {
+	as_error_reset(err);
+	
 	uint8_t buffer[AS_STACK_BUF_SIZE];
 	uint8_t* p = buffer + 8;
 	
-	p = write_header(p, REVOKE_ROLES, 2);
-	p = write_field_string(p, USER, user);
-	p = write_roles(p, roles, roles_size);
-	return as_execute(as, policy, buffer, p);
+	p = as_admin_write_header(p, GRANT_ROLES, 2);
+	p = as_admin_write_field_string(p, USER, user);
+	p = as_admin_write_roles(p, roles, roles_size);
+	return as_admin_execute(as, err, policy, buffer, p);
 }
 
-int
-aerospike_replace_roles(aerospike* as, const as_policy_admin* policy, const char* user, const char** roles, int roles_size)
+as_status
+aerospike_revoke_roles(aerospike* as, as_error* err, const as_policy_admin* policy, const char* user, const char** roles, int roles_size)
+{
+	as_error_reset(err);
+	
+	uint8_t buffer[AS_STACK_BUF_SIZE];
+	uint8_t* p = buffer + 8;
+	
+	p = as_admin_write_header(p, REVOKE_ROLES, 2);
+	p = as_admin_write_field_string(p, USER, user);
+	p = as_admin_write_roles(p, roles, roles_size);
+	return as_admin_execute(as, err, policy, buffer, p);
+}
+
+as_status
+aerospike_create_role(aerospike* as, as_error* err, const as_policy_admin* policy, const char* role, as_privilege** privileges, int privileges_size)
+{
+	as_error_reset(err);
+
+	uint8_t buffer[AS_STACK_BUF_SIZE];
+	uint8_t* p = buffer + 8;
+	
+	p = as_admin_write_header(p, CREATE_ROLE, 2);
+	p = as_admin_write_field_string(p, ROLE, role);
+	as_status status = as_admin_write_privileges(&p, err, privileges, privileges_size);
+	
+	if (status) {
+		return status;
+	}
+	return as_admin_execute(as, err, policy, buffer, p);
+}
+
+as_status
+aerospike_drop_role(aerospike* as, as_error* err, const as_policy_admin* policy, const char* role)
+{
+	as_error_reset(err);
+
+	uint8_t buffer[AS_STACK_BUF_SIZE];
+	uint8_t* p = buffer + 8;
+	
+	p = as_admin_write_header(p, DELETE_ROLE, 1);
+	p = as_admin_write_field_string(p, ROLE, role);
+	return as_admin_execute(as, err, policy, buffer, p);
+}
+
+as_status
+aerospike_grant_privileges(aerospike* as, as_error* err, const as_policy_admin* policy, const char* role, as_privilege** privileges, int privileges_size)
 {
 	uint8_t buffer[AS_STACK_BUF_SIZE];
 	uint8_t* p = buffer + 8;
 	
-	p = write_header(p, REPLACE_ROLES, 2);
-	p = write_field_string(p, USER, user);
-	p = write_roles(p, roles, roles_size);
-	return as_execute(as, policy, buffer, p);
+	p = as_admin_write_header(p, ADD_PRIVILEGES, 2);
+	p = as_admin_write_field_string(p, ROLE, role);
+	as_status status = as_admin_write_privileges(&p, err, privileges, privileges_size);
+	
+	if (status) {
+		return status;
+	}
+	return as_admin_execute(as, err, policy, buffer, p);
 }
+
+as_status
+aerospike_revoke_privileges(aerospike* as, as_error* err, const as_policy_admin* policy, const char* role, as_privilege** privileges, int privileges_size)
+{
+	uint8_t buffer[AS_STACK_BUF_SIZE];
+	uint8_t* p = buffer + 8;
+	
+	p = as_admin_write_header(p, DELETE_PRIVILEGES, 2);
+	p = as_admin_write_field_string(p, ROLE, role);
+	as_status status = as_admin_write_privileges(&p, err, privileges, privileges_size);
+	
+	if (status) {
+		return status;
+	}
+	return as_admin_execute(as, err, policy, buffer, p);
+}
+
+/******************************************************************************
+ *	QUERY USERS
+ *****************************************************************************/
 
 static uint8_t*
-as_parse_roles(uint8_t* p, as_user_roles** user_roles)
+as_parse_users_roles(uint8_t* p, as_user** user_out)
 {
 	uint8_t size = *p++;
-	as_user_roles* user = cf_malloc(sizeof(as_user_roles) + (size * AS_ROLE_SIZE));
+	as_user* user = cf_malloc(sizeof(as_user) + (size * AS_ROLE_SIZE));
 	user->roles_size = size;
 	
 	char* role;
@@ -309,18 +542,18 @@ as_parse_roles(uint8_t* p, as_user_roles** user_roles)
 		role[sz] = 0;
 		p += len;
 	}
-	*user_roles = user;
+	*user_out = user;
 	return p;
 }
 
-static int
-as_parse_users(uint8_t* buffer, int size, as_vector* /*<as_user_roles*>*/ users)
+static as_status
+as_parse_users(as_error* err, uint8_t* buffer, size_t size, as_vector* /*<as_user*>*/ users)
 {
 	uint8_t* p = buffer;
 	uint8_t* end = buffer + size;
 	
-	as_user_roles* user_roles;
-	char user[AS_USER_SIZE];
+	as_user* user;
+	char user_name[AS_USER_SIZE];
 	int len;
 	int sz;
 	uint8_t id;
@@ -337,8 +570,8 @@ as_parse_users(uint8_t* buffer, int size, as_vector* /*<as_user_roles*>*/ users)
 		field_count = p[3];
 		p += HEADER_REMAINING;
 		
-		user[0] = 0;
-		user_roles = 0;
+		user_name[0] = 0;
+		user = 0;
 		
 		for (uint8_t b = 0; b < field_count; b++) {
 			len = cf_swap_from_be32(*(int*)p);
@@ -348,230 +581,309 @@ as_parse_users(uint8_t* buffer, int size, as_vector* /*<as_user_roles*>*/ users)
 			
 			if (id == USER) {
 				sz = (len <= (AS_USER_SIZE-1))? len : (AS_USER_SIZE-1);
-				memcpy(user, p, sz);
-				user[sz] = 0;
+				memcpy(user_name, p, sz);
+				user_name[sz] = 0;
 				p += len;
 			}
 			else if (id == ROLES) {
-				p = as_parse_roles(p, &user_roles);
+				p = as_parse_users_roles(p, &user);
 			}
 			else {
 				p += len;
 			}
 		}
 		
-		if (user[0] == 0 && user_roles == 0) {
+		if (user_name[0] == 0 && user == 0) {
 			continue;
 		}
 		
-		if (! user_roles) {
-			user_roles = cf_malloc(sizeof(as_user_roles));
-			user_roles->roles_size = 0;
+		if (! user) {
+			user = cf_malloc(sizeof(as_user));
+			user->roles_size = 0;
 		}
-		strcpy(user_roles->user, user);
-		as_vector_append(users, &user_roles);
+		strcpy(user->name, user_name);
+		as_vector_append(users, &user);
 	}
 	return 0;
-}
-
-static int
-as_read_user_blocks(as_error* err, int fd, uint8_t* buffer, uint64_t deadline_ms, as_vector* /*<as_user_roles*>*/ users)
-{
-	int buffer_size = AS_STACK_BUF_SIZE;
-	uint8_t* buf = buffer;
-	uint64_t proto;
-	int status = 0;
-	int size;
-	
-	while (status == 0) {
-		if (as_socket_read_deadline(err, fd, buf, 8, deadline_ms)) {
-			status = -1;
-			break;
-		}
-		proto = cf_swap_from_be64(*(uint64_t*)buf);
-		size = (int)(proto & 0xFFFFFFFFFFFFL);
-		
-		if (size > 0) {
-			if (size > buffer_size) {
-				buffer_size = size;
-				
-				if (buf != buffer) {
-					cf_free(buf);
-				}
-				buf = cf_malloc(size);
-			}
-			
-			if (as_socket_read_deadline(err, fd, buf, size, deadline_ms)) {
-				status = -1;
-				break;
-			}
-			
-			status = as_parse_users(buf, size, users);
-		}
-		else {
-			break;
-		}
-	}
-	
-	if (buf != buffer) {
-		cf_free(buf);
-	}
-	return (status == QUERY_END)? 0 : status;
-}
-
-static int
-as_read_users(aerospike* as, const as_policy_admin* policy, uint8_t* buffer, uint8_t* end, as_vector* /*<as_user_roles*>*/ users)
-{
-	int timeout_ms = (policy)? policy->timeout : as->config.policies.admin.timeout;
-	if (timeout_ms <= 0) {
-		timeout_ms = DEFAULT_TIMEOUT;
-	}
-	uint64_t deadline_ms = cf_getms() + timeout_ms;
-	as_node* node = as_node_get_random(as->cluster);
-	
-	if (! node) {
-		return AEROSPIKE_ERR_CLIENT;
-	}
-	
-	int fd;
-	int status = as_node_get_connection(node, &fd);
-	
-	if (status) {
-		as_node_release(node);
-		return status;
-	}
-	
-	as_error err;
-	
-	if (as_send(&err, fd, buffer, end, deadline_ms)) {
-		as_close(fd);
-		as_node_release(node);
-		return AEROSPIKE_ERR_TIMEOUT;
-	}
-	
-	status = as_read_user_blocks(&err, fd, buffer, deadline_ms, users);
-	
-	if (status >= 0) {
-		as_node_put_connection(node, fd);
-	}
-	else {
-		as_close(fd);
-	}
-	as_node_release(node);
-	return status;
 }
 
 static void
 as_free_users(as_vector* users, int offset)
 {
 	for (uint32_t i = offset; i < users->size; i++) {
-		as_user_roles* item = as_vector_get(users, i);
-		cf_free(item);
+		as_user* user = as_vector_get_ptr(users, i);
+		cf_free(user);
 	}
 	as_vector_destroy(users);
 }
 
-#if 0
-static void print_users(as_vector* /*<as_user_roles*>*/ users)
+as_status
+aerospike_query_user(aerospike* as, as_error* err, const as_policy_admin* policy, const char* user_name, as_user** user)
 {
-	for (uint32_t i = 0; i < users->size; i++) {
-		as_user_roles* urs = as_vector_get_ptr(users, i);
-		printf("User %s Roles ", urs->user);
-		
-		for (uint32_t j = 0; j < urs->roles_size; j++) {
-			printf("%s", urs->roles[j]);
-		}
-		printf("\n");
-	}
-}
+	as_error_reset(err);
 
-static void print_users2(as_user_roles** users, int size)
-{
-	for (uint32_t i = 0; i < size; i++) {
-		as_user_roles* urs = users[i];
-		printf("User %s Roles ", urs->user);
+	if (! user_name) {
+		user_name = as->cluster->user;
 		
-		for (uint32_t j = 0; j < urs->roles_size; j++) {
-			printf("%s", urs->roles[j]);
+		if (! user_name) {
+			return AEROSPIKE_INVALID_USER;
 		}
-		printf("\n");
-	}
-}
-#endif
-
-int
-aerospike_query_user(aerospike* as, const as_policy_admin* policy, const char* user, as_user_roles** user_roles)
-{
-	if (! user) {
-		user = as->cluster->user;
 	}
 	uint8_t buffer[AS_STACK_BUF_SIZE];
 	uint8_t* p = buffer + 8;
 	
-	p = write_header(p, QUERY_USERS, 1);
-	p = write_field_string(p, USER, user);
+	p = as_admin_write_header(p, QUERY_USERS, 1);
+	p = as_admin_write_field_string(p, USER, user_name);
 	
-	as_vector users;
-	as_vector_inita(&users, sizeof(as_user_roles*), 1);
-	int status = as_read_users(as, policy, buffer, p, &users);
+	as_vector list;
+	as_vector_inita(&list, sizeof(as_user*), 1);
+	as_status status = as_admin_read_list(as, err, policy, buffer, p, as_parse_users, &list);
 	
-	if (status == 0) {
-		if (users.size == 1) {
-			*user_roles = as_vector_get_ptr(&users, 0);
+	if (status == AEROSPIKE_OK) {
+		if (list.size == 1) {
+			*user = as_vector_get_ptr(&list, 0);
 		}
-		else if (users.size <= 0) {
-			*user_roles = 0;
-			as_free_users(&users, 0);
+		else if (list.size <= 0) {
+			*user = 0;
+			as_free_users(&list, 0);
 		}
 		else {
-			*user_roles = as_vector_get_ptr(&users, 0);
+			*user = as_vector_get_ptr(&list, 0);
 			// Delete excess users.
-			as_free_users(&users, 1);
+			as_free_users(&list, 1);
 		}
 	}
 	else {
-		*user_roles = 0;
-		as_free_users(&users, 0);
+		*user = 0;
+		as_free_users(&list, 0);
 	}
 	return status;
 }
 
 void
-as_user_roles_destroy(as_user_roles* user_roles)
+as_user_destroy(as_user* user)
 {
-	cf_free(user_roles);
+	cf_free(user);
 }
 
-int
-aerospike_query_users(aerospike* as, const as_policy_admin* policy, as_user_roles*** user_roles, int* user_roles_size)
+as_status
+aerospike_query_users(aerospike* as, as_error* err, const as_policy_admin* policy, as_user*** users, int* users_size)
+{
+	as_error_reset(err);
+
+	uint8_t buffer[AS_STACK_BUF_SIZE];
+	uint8_t* p = buffer + 8;
+	
+	p = as_admin_write_header(p, QUERY_USERS, 0);
+	
+	as_vector list;
+	as_vector_init(&list, sizeof(as_user*), 100);
+	as_status status = as_admin_read_list(as, err, policy, buffer, p, as_parse_users, &list);
+	
+	if (status == AEROSPIKE_OK) {
+		// Transfer array to output argument. Do not destroy vector.
+		*users_size = list.size;
+		*users = list.list;
+	}
+	else {
+		*users_size = 0;
+		*users = 0;
+		as_free_users(&list, 0);
+	}
+	return status;
+}
+
+void
+as_users_destroy(as_user** users, int users_size)
+{
+	for (int i = 0; i < users_size; i++) {
+		cf_free(users[i]);
+	}
+	cf_free(users);
+}
+
+/******************************************************************************
+ *	QUERY ROLES
+ *****************************************************************************/
+
+static uint8_t*
+as_parse_privileges(uint8_t* p, as_role** role_out)
+{
+	uint8_t size = *p++;
+	as_role* role = cf_malloc(sizeof(as_role) + (sizeof(as_privilege) * size));
+	role->privileges_size = size;
+	
+	as_privilege* priv;
+	uint8_t len;
+	uint8_t sz;
+	
+	for (uint8_t i = 0; i < size; i++) {
+		priv = &role->privileges[i];
+		priv->code = *p++;
+		
+		if (priv->code >= AS_PRIVILEGE_READ) {
+			len = *p++;
+			sz = (len <= (AS_NAMESPACE_MAX_SIZE-1))? len : (AS_NAMESPACE_MAX_SIZE-1);
+			memcpy(priv->ns, p, sz);
+			priv->ns[sz] = 0;
+			p += len;
+			
+			len = *p++;
+			sz = (len <= (AS_SET_MAX_SIZE-1))? len : (AS_SET_MAX_SIZE-1);
+			memcpy(priv->set, p, sz);
+			priv->set[sz] = 0;
+			p += len;
+		}
+		else {
+			priv->ns[0] = 0;
+			priv->set[0] = 0;
+		}
+	}
+	*role_out = role;
+	return p;
+}
+
+static as_status
+as_parse_roles(as_error* err, uint8_t* buffer, size_t size, as_vector* /*<as_role*>*/ roles)
+{
+	uint8_t* p = buffer;
+	uint8_t* end = buffer + size;
+	
+	as_role* role;
+	char role_name[AS_ROLE_SIZE];
+	int len;
+	int sz;
+	uint8_t id;
+	uint8_t field_count;
+	uint8_t result;
+	
+	while (p < end) {
+		result = p[1];
+		
+		if (result != 0) {
+			return result;
+		}
+		
+		field_count = p[3];
+		p += HEADER_REMAINING;
+		
+		role_name[0] = 0;
+		role = 0;
+		
+		for (uint8_t b = 0; b < field_count; b++) {
+			len = cf_swap_from_be32(*(int*)p);
+			p += 4;
+			id = *p++;
+			len--;
+			
+			if (id == ROLE) {
+				sz = (len <= (AS_ROLE_SIZE-1))? len : (AS_ROLE_SIZE-1);
+				memcpy(role_name, p, sz);
+				role_name[sz] = 0;
+				p += len;
+			}
+			else if (id == PRIVILEGES) {
+				p = as_parse_privileges(p, &role);
+			}
+			else {
+				p += len;
+			}
+		}
+		
+		if (role_name[0] == 0 && role == 0) {
+			continue;
+		}
+		
+		if (! role) {
+			role = cf_malloc(sizeof(as_role));
+			role->privileges_size = 0;
+		}
+		strcpy(role->name, role_name);
+		as_vector_append(roles, &role);
+	}
+	return AEROSPIKE_OK;
+}
+
+static void
+as_free_roles(as_vector* roles, int offset)
+{
+	for (uint32_t i = offset; i < roles->size; i++) {
+		as_role* role = as_vector_get_ptr(roles, i);
+		cf_free(role);
+	}
+	as_vector_destroy(roles);
+}
+
+as_status
+aerospike_query_role(aerospike* as, as_error* err, const as_policy_admin* policy, const char* role_name, as_role** role)
 {
 	uint8_t buffer[AS_STACK_BUF_SIZE];
 	uint8_t* p = buffer + 8;
 	
-	p = write_header(p, QUERY_USERS, 0);
+	p = as_admin_write_header(p, QUERY_ROLES, 1);
+	p = as_admin_write_field_string(p, ROLE, role_name);
 	
-	as_vector users;
-	as_vector_init(&users, sizeof(as_user_roles*), 100);
-	int status = as_read_users(as, policy, buffer, p, &users);
+	as_vector list;
+	as_vector_inita(&list, sizeof(as_role*), 1);
+	as_status status = as_admin_read_list(as, err, policy, buffer, p, as_parse_roles, &list);
 	
-	if (status == 0) {
-		// Transfer array to output argument. Do not destroy vector.
-		*user_roles_size = users.size;
-		*user_roles = users.list;
+	if (status == AEROSPIKE_OK) {
+		if (list.size == 1) {
+			*role = as_vector_get_ptr(&list, 0);
+		}
+		else if (list.size <= 0) {
+			*role = 0;
+			as_free_roles(&list, 0);
+		}
+		else {
+			*role = as_vector_get_ptr(&list, 0);
+			// Delete excess users.
+			as_free_roles(&list, 1);
+		}
 	}
 	else {
-		*user_roles_size = 0;
-		*user_roles = 0;
-		as_free_users(&users, 0);
+		*role = 0;
+		as_free_roles(&list, 0);
 	}
 	return status;
 }
 
 void
-as_user_roles_destroy_array(as_user_roles** user_roles, int user_roles_size)
+as_role_destroy(as_role* role)
 {
-	for (uint32_t i = 0; i < user_roles_size; i++) {
-		cf_free(user_roles[i]);
+	cf_free(role);
+}
+
+as_status
+aerospike_query_roles(aerospike* as, as_error* err, const as_policy_admin* policy, as_role*** roles, int* roles_size)
+{
+	uint8_t buffer[AS_STACK_BUF_SIZE];
+	uint8_t* p = buffer + 8;
+	
+	p = as_admin_write_header(p, QUERY_ROLES, 0);
+	
+	as_vector list;
+	as_vector_init(&list, sizeof(as_role*), 100);
+	as_status status = as_admin_read_list(as, err, policy, buffer, p, as_parse_roles, &list);
+	
+	if (status == AEROSPIKE_OK) {
+		// Transfer array to output argument. Do not destroy vector.
+		*roles_size = list.size;
+		*roles = list.list;
 	}
-	cf_free(user_roles);
+	else {
+		*roles_size = 0;
+		*roles = 0;
+		as_free_roles(&list, 0);
+	}
+	return status;
+}
+
+void
+as_roles_destroy(as_role** roles, int roles_size)
+{
+	for (uint32_t i = 0; i < roles_size; i++) {
+		cf_free(roles[i]);
+	}
+	cf_free(roles);
 }

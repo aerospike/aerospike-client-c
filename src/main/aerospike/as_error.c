@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2014 Aerospike, Inc.
+ * Copyright 2008-2015 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -69,6 +69,7 @@ as_error_string(as_status status)
 		CASE_ASSIGN(AEROSPIKE_FORBIDDEN_PASSWORD);
 		CASE_ASSIGN(AEROSPIKE_INVALID_CREDENTIAL);
 		CASE_ASSIGN(AEROSPIKE_INVALID_ROLE);
+		CASE_ASSIGN(AEROSPIKE_ROLE_ALREADY_EXISTS);
 		CASE_ASSIGN(AEROSPIKE_INVALID_PRIVILEGE);
 		CASE_ASSIGN(AEROSPIKE_NOT_AUTHENTICATED);
 		CASE_ASSIGN(AEROSPIKE_ROLE_VIOLATION);

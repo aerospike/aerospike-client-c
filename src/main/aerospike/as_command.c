@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2014 Aerospike, Inc.
+ * Copyright 2008-2015 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -443,7 +443,7 @@ as_command_parse_header(as_error* err, int fd, uint64_t deadline_ms, void* user_
 	}
 	
 	if (msg->m.result_code && msg->m.result_code != AEROSPIKE_ERR_RECORD_NOT_FOUND) {
-		return as_error_update(err, msg->m.result_code, "Server returned error: %s", as_error_string(msg->m.result_code));
+		return as_error_set_message(err, msg->m.result_code, as_error_string(msg->m.result_code));
 	}
 	return msg->m.result_code;
 }
@@ -875,7 +875,7 @@ as_command_parse_result(as_error* err, int fd, uint64_t deadline_ms, void* user_
 			break;
 
 		default:
-			as_error_update(err, status, "Server returned error: %s", as_error_string(status));
+			as_error_set_message(err, status, as_error_string(status));
 			break;
 	}
 	as_command_free(buf, size);
@@ -932,7 +932,7 @@ as_command_parse_success_failure(as_error* err, int fd, uint64_t deadline_ms, vo
 			break;
 			
 		default:
-			as_error_update(err, status, "Server returned error: %s", as_error_string(status));
+			as_error_set_message(err, status, as_error_string(status));
 			*val = 0;
 			break;
 	}

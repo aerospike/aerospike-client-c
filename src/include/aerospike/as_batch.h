@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2014 Aerospike, Inc.
+ * Copyright 2008-2015 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -15,6 +15,10 @@
  * the License.
  */
 #pragma once 
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 #pragma GCC diagnostic ignored "-Waddress"
 
 #include <aerospike/as_bin.h>
@@ -204,3 +208,7 @@ static inline as_key * as_batch_keyat(const as_batch * batch, uint32_t i)
 {
 	return (batch != NULL && batch->keys.entries != NULL && batch->keys.size > i) ? &batch->keys.entries[i] : NULL;
 }
+
+#ifdef __cplusplus
+} // end extern "C"
+#endif

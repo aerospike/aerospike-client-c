@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2014 Aerospike, Inc.
+ * Copyright 2008-2015 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -15,6 +15,10 @@
  * the License.
  */
 #pragma once
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -650,3 +654,7 @@ static inline bool as_operations_add_append_raw(as_operations * ops, const as_bi
  *	@ingroup as_operations_object
  */
 bool as_operations_add_touch(as_operations * ops);
+
+#ifdef __cplusplus
+} // end extern "C"
+#endif

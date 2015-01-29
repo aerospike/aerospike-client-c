@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2014 Aerospike, Inc.
+ * Copyright 2008-2015 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -15,6 +15,10 @@
  * the License.
  */
 #pragma once
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /**
  * Functionality related to Large Set Data Type
@@ -473,3 +477,6 @@ as_status aerospike_lset_ldt_exists(
 	as_boolean *ldt_exists
 	);
 
+#ifdef __cplusplus
+} // end extern "C"
+#endif

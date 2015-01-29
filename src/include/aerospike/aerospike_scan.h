@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2014 Aerospike, Inc.
+ * Copyright 2008-2015 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -15,6 +15,10 @@
  * the License.
  */
 #pragma once
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /** 
  *	@defgroup scan_operations Scan Operations
@@ -298,3 +302,7 @@ as_status aerospike_scan_node(
 	const as_scan * scan,  const char* node_name,
 	aerospike_scan_foreach_callback callback, void * udata
 	);
+
+#ifdef __cplusplus
+} // end extern "C"
+#endif

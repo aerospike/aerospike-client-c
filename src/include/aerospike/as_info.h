@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2014 Aerospike, Inc.
+ * Copyright 2008-2015 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -15,6 +15,10 @@
  * the License.
  */
 #pragma once
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <aerospike/as_cluster.h>
 
@@ -61,3 +65,7 @@ as_info_parse_single_response(char *values, char **value);
  */
 void
 as_info_parse_multi_response(char* buf, as_vector* /* <as_name_value> */ values);
+
+#ifdef __cplusplus
+} // end extern "C"
+#endif

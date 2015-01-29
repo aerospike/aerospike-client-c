@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2014 Aerospike, Inc.
+ * Copyright 2008-2015 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -15,6 +15,10 @@
  * the License.
  */
 #pragma once 
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <aerospike/as_bytes.h>
 #include <aerospike/as_integer.h>
@@ -670,3 +674,7 @@ as_digest * as_key_digest(as_key * key);
  */
 as_status
 as_key_set_digest(as_error* err, as_key* key);
+
+#ifdef __cplusplus
+} // end extern "C"
+#endif

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2014 Aerospike, Inc.
+ * Copyright 2008-2015 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -15,6 +15,10 @@
  * the License.
  */
 #pragma once
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /**
  *	@defgroup ldt_operations Large Data Type Operations (3.0 only)
@@ -371,3 +375,6 @@ as_status aerospike_lstack_ldt_exists(
 	);
 
 
+#ifdef __cplusplus
+} // end extern "C"
+#endif

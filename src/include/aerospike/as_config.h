@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2014 Aerospike, Inc.
+ * Copyright 2008-2015 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -15,6 +15,10 @@
  * the License.
  */
 #pragma once 
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <aerospike/as_error.h>
 #include <aerospike/as_policy.h>
@@ -429,3 +433,7 @@ as_config_add_host(as_config* config, const char* addr, uint16_t port)
  */
 bool
 as_config_set_user(as_config* config, const char* user, const char* password);
+
+#ifdef __cplusplus
+} // end extern "C"
+#endif

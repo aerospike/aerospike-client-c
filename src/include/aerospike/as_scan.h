@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2014 Aerospike, Inc.
+ * Copyright 2008-2015 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -16,6 +16,10 @@
  */
 #pragma once 
 #pragma GCC diagnostic ignored "-Waddress"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <aerospike/as_bin.h>
 #include <aerospike/as_key.h>
@@ -595,3 +599,7 @@ bool as_scan_set_concurrent(as_scan * scan, bool concurrent);
  *	@ingroup as_scan_object
  */
 bool as_scan_apply_each(as_scan * scan, const char * module, const char * function, as_list * arglist);
+
+#ifdef __cplusplus
+} // end extern "C"
+#endif

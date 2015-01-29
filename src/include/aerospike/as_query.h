@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2014 Aerospike, Inc.
+ * Copyright 2008-2015 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -14,8 +14,12 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-#pragma once 
+#pragma once
 #pragma GCC diagnostic ignored "-Waddress"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <aerospike/aerospike_index.h>
 #include <aerospike/as_bin.h>
@@ -825,3 +829,7 @@ bool as_query_orderby(as_query * query, const char * bin, as_order order);
  *	@relates as_query
  */
 bool as_query_apply(as_query * query, const char * module, const char * function, const as_list * arglist);
+
+#ifdef __cplusplus
+} // end extern "C"
+#endif

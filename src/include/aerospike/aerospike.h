@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2014 Aerospike, Inc.
+ * Copyright 2008-2015 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -15,6 +15,10 @@
  * the License.
  */
 #pragma once
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /** 
  * @mainpage Aerospike C Client
@@ -275,3 +279,6 @@ as_status aerospike_connect(aerospike * as, as_error * err);
  */
 as_status aerospike_close(aerospike * as, as_error * err);
 
+#ifdef __cplusplus
+} // end extern "C"
+#endif

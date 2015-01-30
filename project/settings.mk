@@ -62,34 +62,34 @@ INC_PATH = $(SOURCE_INCL)
 ###############################################################################
 
 ifeq ($(shell test -e $(PROJECT)/target.$(DISTRO_NAME)-$(DISTRO_VERS)-$(ARCH).makefile && echo 1), 1)
-PLATFORM = $(DISTRO_NAME)-$(DISTRO_VERS)-$(ARCH)
-include $(PROJECT)/target.$(PLATFORM).makefile
+  PLATFORM = $(DISTRO_NAME)-$(DISTRO_VERS)-$(ARCH)
+  include $(PROJECT)/target.$(PLATFORM).makefile
 else
-ifeq ($(shell test -e $(PROJECT)/target.$(DISTRO_NAME)-$(ARCH).makefile && echo 1), 1)
-PLATFORM = $(DISTRO_NAME)-$(ARCH)
-include $(PROJECT)/target.$(PLATFORM).makefile
-else
-ifeq ($(shell test -e $(PROJECT)/target.$(OS)-$(ARCH).makefile && echo 1), 1)
-PLATFORM = $(OS)-$(ARCH)
-include $(PROJECT)/target.$(PLATFORM).makefile
-else
-ifeq ($(shell test -e project/target.$(OS)-noarch.makefile && echo 1), 1)
-PLATFORM = $(OS)-noarch
-include $(PROJECT)/target.$(PLATFORM).makefile
-else
-PLATFORM = $(OS)-$(ARCH)
-endif
-endif
-endif
+  ifeq ($(shell test -e $(PROJECT)/target.$(DISTRO_NAME)-$(ARCH).makefile && echo 1), 1)
+    PLATFORM = $(DISTRO_NAME)-$(ARCH)
+    include $(PROJECT)/target.$(PLATFORM).makefile
+  else
+    ifeq ($(shell test -e $(PROJECT)/target.$(OS)-$(ARCH).makefile && echo 1), 1)
+      PLATFORM = $(OS)-$(ARCH)
+      include $(PROJECT)/target.$(PLATFORM).makefile
+    else
+      ifeq ($(shell test -e project/target.$(OS)-noarch.makefile && echo 1), 1)
+        PLATFORM = $(OS)-noarch
+        include $(PROJECT)/target.$(PLATFORM).makefile
+      else
+        PLATFORM = $(OS)-$(ARCH)
+      endif
+    endif
+  endif
 endif
 
 TARGET_PATH = $(TARGET)
 TARGET_BASE = $(TARGET_PATH)/$(PLATFORM)
-TARGET_BIN 	= $(TARGET_BASE)/bin
-TARGET_DOC 	= $(TARGET_BASE)/doc
-TARGET_LIB 	= $(TARGET_BASE)/lib
-TARGET_OBJ 	= $(TARGET_BASE)/obj
-TARGET_SRC 	= $(TARGET_BASE)/src
+TARGET_BIN  = $(TARGET_BASE)/bin
+TARGET_DOC  = $(TARGET_BASE)/doc
+TARGET_LIB  = $(TARGET_BASE)/lib
+TARGET_OBJ  = $(TARGET_BASE)/obj
+TARGET_SRC  = $(TARGET_BASE)/src
 TARGET_INCL = $(TARGET_BASE)/include
 TARGET_TEST = $(TARGET_BASE)/test
 
@@ -106,8 +106,8 @@ TARGET_TEST = $(TARGET_BASE)/test
 # Commands:
 # 		build 			- Automatically determine build type based on target name.
 # 		object 			- Build an object: .o
-# 		library 		- Build a dynamic shared library
-# 		archive 		- Build a static library (archive)
+# 		library 		- Build a dynamic shared library: .so
+# 		archive 		- Build a static library (archive): .a
 #		executable 		- Build an executable
 # 
 # Arguments:

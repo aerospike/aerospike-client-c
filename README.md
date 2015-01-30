@@ -49,6 +49,10 @@ For Debian-based distributions (Debian, Ubuntu, etc.):
 
 	$ sudo apt-get install libc6-dev libssl-dev autoconf automake libtool g++
 
+	[Also do on Ubuntu 12+:]
+
+	$ sudo apt-get install ncurses-dev
+
 	[Optional:]
 
 	$ sudo apt-get install liblua5.1-dev

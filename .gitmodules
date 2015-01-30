@@ -10,3 +10,9 @@
 [submodule "modules/ck"]
 	path = modules/ck
 	url = git@github.com:aerospike/ck
+[submodule "modules/lua"]
+	path = modules/lua
+	url = git@github.com:citrusleaf/lua.git
+[submodule "modules/luajit"]
+	path = modules/luajit
+	url = git@github.com:citrusleaf/luajit.git

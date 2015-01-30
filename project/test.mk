@@ -1,5 +1,5 @@
 ###############################################################################
-##  OBJECTS                                                      		 	 ##
+##  OBJECTS                                                                  ##
 ###############################################################################
 
 TEST_AEROSPIKE = aerospike_test.c
@@ -19,17 +19,20 @@ TEST_SOURCE = $(wildcard $(addprefix $(SOURCE_TEST)/, $(TEST_AEROSPIKE)))
 TEST_OBJECT = $(patsubst %.c,%.o,$(subst $(SOURCE_TEST)/,$(TARGET_TEST)/,$(TEST_SOURCE)))
 
 ###############################################################################
-##  FLAGS                                                      		         ##
+##  FLAGS                                                                    ##
 ###############################################################################
 
 TEST_VALGRIND = --tool=memcheck --leak-check=yes --show-reachable=yes --num-callers=20 --track-fds=yes -v
 
 TEST_CFLAGS = -I$(TARGET_INCL)
 
+TEST_LDFLAGS = -lssl -lcrypto $(LIB_LUA) -lpthread -lm
 ifeq ($(OS),Darwin)
-TEST_LDFLAGS = -L/usr/local/lib -lssl -lcrypto -llua -lpthread -lm
+  ifeq ($(USE_LUAJIT),1)
+    TEST_LDFLAGS += -pagezero_size 10000 -image_base 100000000
+  endif
 else
-TEST_LDFLAGS = -lssl -lcrypto -llua -lpthread -lm -lrt -lz
+  TEST_LDFLAGS += -lrt -ldl
 endif
 
 AS_HOST := 127.0.0.1
@@ -37,7 +40,7 @@ AS_PORT := 3000
 AS_ARGS := -h $(AS_HOST) -p $(AS_PORT)
 
 ###############################################################################
-##  TARGETS                                                      		     ##
+##  TARGETS                                                                  ##
 ###############################################################################
 
 .PHONY: test

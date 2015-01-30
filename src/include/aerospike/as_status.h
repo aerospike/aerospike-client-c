@@ -179,6 +179,11 @@ typedef enum as_status_e {
 	AEROSPIKE_ERR_BIN_NAME = 21,
 	
 	/**
+	 *	Operation not allow at this time.
+	 */
+	AEROSPIKE_ERR_FAIL_FORBIDDEN = 22,
+
+	/**
 	 *	There are no more records left for query.
 	 */
 	AEROSPIKE_QUERY_END = 50,

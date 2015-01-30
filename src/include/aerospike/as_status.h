@@ -179,7 +179,7 @@ typedef enum as_status_e {
 	AEROSPIKE_ERR_BIN_NAME = 21,
 	
 	/**
-	 *	Operation not allow at this time.
+	 *	Operation not allowed at this time.
 	 */
 	AEROSPIKE_ERR_FAIL_FORBIDDEN = 22,
 

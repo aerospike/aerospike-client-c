@@ -1,55 +1,97 @@
-# Aerospike C Client Library
+# Aerospike C Client
 
-`aerospike` is a C client library (API) for interfacing with the Aerospike Database.
+The Aerospike C client provides the standard C Application Programming
+Interface (API) for interfacing with the [Aerospike](http://aerospike.com)
+Database as well as a suite of example applications demonstrating various
+features of the C client.
 
-## Prerequisites
+## Build Prerequisites
 
-The C client library requires `gcc` and `g++` 4.1 or newer.
+The C client can be built on most recent 64-bit Linux distributions
+and Mac OS X 10.8 or greater.
+
+Building the C client library requires `gcc` / `g++` 4.1 or newer (on
+Linux) or `XCode` / `clang` (on Mac OS X.)
+
+### Dependencies
 
 Development packages of the following libraries must be installed.
 
 - `libc`
 - `openssl`
-- `lua 5.1`
 
-### Debian 6+ and Ubuntu 12+
+The C client requires [Lua](http://www.lua.org) 5.1 support for the
+client-side portion of User Defined Function (UDF) query aggregation.
+By default, the C client builds with Lua support provided by the
+included `lua` submodule.
+
+Optionally, Lua support may be provided by either the included `luajit`
+submodule or by the build environment.
+
+To enable [LuaJIT](http://luajit.org) 2.0.3, the build must be performed
+with the `USE_LUAJIT=1` option passed on all relevant `make` command
+lines (i.e., the C client itself, the benchmarks sample application, and
+the API examples.) [Note that on some platforms, [Valgrind](http://www.valgrind.org)
+may not function out-of-the-box on applications built with the C client
+when LuaJIT is enabled without using an unreleased version of LuaJIT
+built with additional options.]
+
+To use Lua provided by the development environment, either the `lua5.1`
+development package may be installed (on platforms that have it), or
+else Lua 5.1.5 may be built from the source release and installed into
+the standard location (usually `/usr/local/`.) In either of these two
+cases, the build must be performed with the option `USE_LUAMOD=0` passed
+on all relevant `make` command lines.
+
+#### Debian 6+ and Ubuntu 12+
 
 For Debian-based distributions (Debian, Ubuntu, etc.):
 
-	$ sudo apt-get install libc6-dev libssl-dev liblua5.1-dev autoconf automake libtool g++
+	$ sudo apt-get install libc6-dev libssl-dev autoconf automake libtool g++
 
-### Redhat Enterprise Linux 6+
+	[Optional:]
 
-For Redhat Enterprise 6 or newer, or related distributions (CentOS, etc.):
+	$ sudo apt-get install liblua5.1-dev
 
-	$ sudo yum install openssl-devel glibc-devel autoconf automake libtool lua-devel
+#### Red Hat Enterprise Linux 6+
 
-### Fedora 20+
+For Red Hat Enterprise 6 or newer, or related distributions (CentOS, etc.):
+
+	$ sudo yum install openssl-devel glibc-devel autoconf automake libtool
+
+	[Optional:]
+
+	$ sudo yum install lua-devel
+
+#### Fedora 20+
 
 For Fedora 20 or newer:
 
-	$ sudo yum install openssl-devel glibc-devel autoconf automake libtool compat-lua-devel-5.1.5
+	$ sudo yum install openssl-devel glibc-devel autoconf automake libtool
 
-### Lua from source
+	[Optional:]
 
-If you wish to install Lua from source, make sure you install Lua 5.1. By default, Lua will be installed in /usr/local with the correct names, so no extra steps are necessary - only validate that liblua.so and liblua.a are in the default library search path of your build environment.
+	$ sudo yum install compat-lua-devel-5.1.5
 
-### MacOS X
+#### Mac OS X
 
-For MacOS X:
+For Mac OS X:
 
-	$ # Compile and install the latest Lua 5.1
-	$ mkdir -p external && cd external
-	$ curl -R -O http://www.lua.org/ftp/lua-5.1.5.tar.gz
-	$ tar zxf lua-5.1.5.tar.gz && cd lua-5.1.5
-	$ make macosx test
-	$ sudo make install
-	$ cd ../
 	$ # Compile and install the latest OpenSSL
 	$ curl -R -O https://www.openssl.org/source/openssl-1.0.1h.tar.gz
 	$ tar zxvf openssl-1.0.1h.tar.gz && cd openssl-1.0.1h
 	$ ./Configure darwin64-x86_64-cc
 	$ make
+	$ sudo make install
+
+	[Optional:]
+
+	$ cd ../
+	$ # Compile and install the latest Lua 5.1
+	$ mkdir -p external && cd external
+	$ curl -R -O http://www.lua.org/ftp/lua-5.1.5.tar.gz
+	$ tar zxf lua-5.1.5.tar.gz && cd lua-5.1.5
+	$ make macosx test
 	$ sudo make install
 
 ## Usage
@@ -58,7 +100,7 @@ For MacOS X:
 
 Before building, please ensure you have the prerequisites installed.
 
-This project uses git submodules, so you will need to initialize and update the submodules before building thie project. To initialize and update submodules, run:
+This project uses git submodules, so you will need to initialize and update the submodules before building this project. To initialize and update submodules, run:
 
 	$ git submodule update --init
 
@@ -74,18 +116,20 @@ This will generate the following files:
   **or**
 - `target/{target}/lib/libaerospike.dylib` – dynamic shared library (for MacOS)
 
-Static linking with the `.a` prevents you from having to install the libraries on your target platform. Dynamic linking with the `.so` avoids a client rebuild if you upgrade the client.  Choose the option that is right for you.
+Static linking with the `.a` prevents you from having to install the libraries on your target platform. Dynamic linking with the `.so` avoids a client rebuild if you upgrade the client. Choose the option that is right for you.
 
 ### Install
 
-For MacOS builds of tools such as AQL you will want to also call the following,
-which places the dynamic shared library in /usr/local/lib/
+For running C client-based tools such as `aql` it is necessary to
+install the C client as follows:
 
 	$ sudo make install
 
+This places the C client dynamic shared library into `/usr/local/lib/`.
+
 ### Clean
 
-To clean:
+To clean up build products:
 
 	$ make clean
 
@@ -96,7 +140,6 @@ This will remove all generated files.
 To run unit tests:
 
 	$ make test
-
 
 ## Project Layout
 
@@ -115,5 +158,3 @@ The module is structured as follows:
 - `target/{target}/lib` – libraries for end users
 - `target/{target}/obj` – generated objects files
 - `target/{target}/deps` – generated dependency files
-
-

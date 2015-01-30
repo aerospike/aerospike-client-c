@@ -10,3 +10,9 @@
 [submodule "modules/ck"]
 	path = modules/ck
 	url = https://github.com/aerospike/ck
+[submodule "modules/lua"]
+	path = modules/lua
+	url = https://github.com/aerospike/lua.git
+[submodule "modules/luajit"]
+	path = modules/luajit
+	url = https://github.com/aerospike/luajit.git

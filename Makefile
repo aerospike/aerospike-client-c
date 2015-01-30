@@ -4,15 +4,40 @@ include project/settings.mk
 ###############################################################################
 
 # Modules
-COMMON 		:= $(realpath modules/common)
-LUA_CORE 	:= $(realpath modules/lua-core)
-MOD_LUA 	:= $(realpath modules/mod-lua)
+COMMON		:= $(realpath modules/common)
+LUA_CORE	:= $(realpath modules/lua-core)
+LUAMOD		:= $(realpath modules/lua)
+LUAJIT		:= $(realpath modules/luajit)
+MOD_LUA		:= $(realpath modules/mod-lua)
 # If concurrency kit repo path not defined, use default ck module in this repo.
 # Currency kit headers are used only.
 ifndef CK
-	CK := $(realpath modules/ck)
+  CK := $(realpath modules/ck)
 endif
-MODULES 	:= COMMON MOD_LUA CK
+MODULES		:= COMMON MOD_LUA CK
+
+# Use the Lua submodule?  [By default, yes.]
+USE_LUAMOD = 1
+
+# Use LuaJIT instead of Lua?  [By default, no.]
+USE_LUAJIT = 0
+
+# Permit easy overriding of the default.
+ifeq ($(USE_LUAJIT),1)
+  USE_LUAMOD = 0
+endif
+
+ifeq ($(and $(USE_LUAMOD:0=),$(USE_LUAJIT:0=)),1)
+  $(error Only at most one of USE_LUAMOD or USE_LUAJIT may be enabled (i.e., set to 1.))
+else
+  ifeq ($(USE_LUAMOD),1)
+    MODULES += LUAMOD
+  else
+    ifeq ($(USE_LUAJIT),1)
+      MODULES += LUAJIT
+    endif
+  endif
+endif
 
 # Override optimizations via: make O=n
 O = 3
@@ -24,42 +49,64 @@ CC_FLAGS += -march=nocona -DMARCH_$(ARCH)
 CC_FLAGS += -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_GNU_SOURCE $(EXT_CFLAGS)
 
 ifeq ($(OS),Darwin)
-CC_FLAGS += -D_DARWIN_UNLIMITED_SELECT
+  CC_FLAGS += -D_DARWIN_UNLIMITED_SELECT
+  LUA_PLATFORM = macosx
 else
-CC_FLAGS += -rdynamic
+  CC_FLAGS += -rdynamic
+  LUA_PLATFORM = linux
 endif
 
-ifneq ($(CF), )
-CC_FLAGS += -I$(CF)/include
+ifneq ($(CF),)
+  CC_FLAGS += -I$(CF)/include
 endif
 
 # Linker flags
 LD_FLAGS = $(LDFLAGS) -lm -fPIC
 
 ifeq ($(OS),Darwin)
-LD_FLAGS += -undefined dynamic_lookup
+  LD_FLAGS += -undefined dynamic_lookup
 endif
 
 # DEBUG Settings
 ifdef DEBUG
-O=0
-CC_FLAGS += -pg -fprofile-arcs -ftest-coverage -g2
-LD_FLAGS += -pg -fprofile-arcs -lgcov
+  O = 0
+  CC_FLAGS += -pg -fprofile-arcs -ftest-coverage -g2
+  LD_FLAGS += -pg -fprofile-arcs -lgcov
 endif
 
 # Include Paths
 INC_PATH += $(COMMON)/$(TARGET_INCL)
 INC_PATH += $(MOD_LUA)/$(TARGET_INCL)
 INC_PATH += $(CK)/include
-INC_PATH += /usr/local/include
-
-INC_PATH += $(or \
-    $(wildcard /usr/include/lua-5.1), \
-    $(wildcard /usr/include/lua5.1) \
-    )
 
 # Library Paths
 # LIB_PATH +=
+
+ifeq ($(USE_LUAMOD),1)
+  INC_PATH += $(LUAMOD)/src
+else
+  ifeq ($(USE_LUAJIT),1)
+    INC_PATH += $(LUAJIT)/src
+  else
+    # Find where the Lua development package is installed in the build environment.
+    INC_PATH += $(or \
+      $(wildcard /usr/include/lua-5.1), \
+      $(wildcard /usr/include/lua5.1))
+    INCLUDE_LUA_5_1 = /usr/include/lua5.1
+    ifneq ($(wildcard $(INCLUDE_LUA_5_1)),)
+      LUA_SUFFIX=5.1
+    endif
+    ifeq ($(OS),Darwin)
+      ifneq ($(wildcard /usr/local/include),)
+        INC_PATH += /usr/local/include
+      endif
+      ifneq ($(wildcard /usr/local/lib),)
+        LIB_LUA = -L/usr/local/lib
+      endif
+    endif
+    LIB_LUA += -llua$(LUA_SUFFIX)
+  endif
+endif
 
 ###############################################################################
 ##  OBJECTS                                                                  ##
@@ -112,6 +159,16 @@ DEPS += $(COMMON)/$(TARGET_OBJ)/common/aerospike/*.o
 DEPS += $(COMMON)/$(TARGET_OBJ)/common/citrusleaf/*.o
 DEPS += $(MOD_LUA)/$(TARGET_OBJ)/*.o
 
+ifeq ($(USE_LUAMOD),1)
+  LUA_DYNAMIC_OBJ = $(filter-out  $(LUAMOD)/src/lua.o $(LUAMOD)/src/luac.o, $(wildcard $(LUAMOD)/src/*.o))
+  LUA_STATIC_OBJ  = $(LUA_DYNAMIC_OBJ)
+else
+  ifeq ($(USE_LUAJIT),1)
+    LUA_DYNAMIC_OBJ = $(wildcard $(LUAJIT)/src/*_dyn.o)
+    LUA_STATIC_OBJ  = $(filter-out $(LUA_DYNAMIC_OBJ) $(LUAJIT)/src/luajit.o, $(wildcard $(LUAJIT)/src/*.o))
+  endif
+endif
+
 ###############################################################################
 ##  HEADERS                                                                  ##
 ###############################################################################
@@ -161,7 +218,7 @@ HEADERS += $(COMMON-HEADERS)
 all: modules build prepare
 
 .PHONY: prepare
-prepare: modules-prepare $(subst $(SOURCE_INCL),$(TARGET_INCL),$(HEADERS)) 
+prepare: modules-prepare $(subst $(SOURCE_INCL),$(TARGET_INCL),$(HEADERS))
 	$(noop)
 
 .PHONY: prepare-clean
@@ -185,6 +242,9 @@ libaerospike.$(DYNAMIC_SUFFIX): $(TARGET_LIB)/libaerospike.$(DYNAMIC_SUFFIX)
 install:
 	cp -p $(TARGET_LIB)/libaerospike.* /usr/local/lib/
 
+tags etags:
+	etags `find benchmarks demos examples modules src -name "*.[ch]" | egrep -v '(target/Linux|m4)'` `find /usr/include -name "*.h"`
+
 ###############################################################################
 ##  BUILD TARGETS                                                            ##
 ###############################################################################
@@ -196,10 +256,10 @@ $(TARGET_OBJ)/aerospike/%.o: $(COMMON)/$(TARGET_LIB)/libaerospike-common.a $(MOD
 	$(object)
 
 $(TARGET_LIB)/libaerospike.$(DYNAMIC_SUFFIX): $(OBJECTS) $(TARGET_OBJ)/version.o | modules
-	$(library) $(wildcard $(DEPS))
+	$(library) $(wildcard $(DEPS)) $(LUA_DYNAMIC_OBJ)
 
 $(TARGET_LIB)/libaerospike.a: $(OBJECTS) $(TARGET_OBJ)/version.o | modules
-	$(archive) $(wildcard $(DEPS))
+	$(archive) $(wildcard $(DEPS)) $(LUA_STATIC_OBJ)
 
 $(TARGET_INCL)/aerospike: | $(TARGET_INCL)
 	mkdir $@

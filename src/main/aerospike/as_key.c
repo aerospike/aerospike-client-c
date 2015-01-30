@@ -248,7 +248,7 @@ as_key_set_digest(as_error* err, as_key* key)
 			as_integer* v = as_integer_fromval(val);
 			size = 9;
 			buf = alloca(size);
-			buf[0] = AS_PARTICLE_TYPE_INTEGER;
+			buf[0] = AS_BYTES_INTEGER;
 			*(uint64_t*)&buf[1] = cf_swap_to_be64(v->value);
 			break;
 		}
@@ -257,7 +257,7 @@ as_key_set_digest(as_error* err, as_key* key)
 			size_t len = as_string_len(v);
 			size = len + 1;
 			buf = alloca(size);
-			buf[0] = AS_PARTICLE_TYPE_STRING;
+			buf[0] = AS_BYTES_STRING;
 			memcpy(&buf[1], v->value, len);
 			break;
 		}
@@ -265,7 +265,10 @@ as_key_set_digest(as_error* err, as_key* key)
 			as_bytes* v = as_bytes_fromval(val);
 			size = v->size + 1;
 			buf = alloca(size);
-			buf[0] = AS_PARTICLE_TYPE_BLOB;
+			// Note: v->type must be a blob type (AS_BYTES_BLOB, AS_BYTES_JAVA, AS_BYTES_PYTHON ...).
+			// Otherwise, the particle type will be reassigned to a non-blob which causes a
+			// mismatch between type and value.
+			buf[0] = v->type;
 			memcpy(&buf[1], v->value, v->size);
 			break;
 		}

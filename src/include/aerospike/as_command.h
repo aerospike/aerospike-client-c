@@ -53,14 +53,6 @@ extern "C" {
 #define AS_FIELD_UDF_OP 33
 #define AS_FIELD_QUERY_BINS 40
 
-// Particle Types
-#define AS_PARTICLE_TYPE_NULL 0
-#define AS_PARTICLE_TYPE_INTEGER 1
-#define AS_PARTICLE_TYPE_STRING 3
-#define AS_PARTICLE_TYPE_BLOB 4
-#define AS_PARTICLE_TYPE_MAP 19
-#define AS_PARTICLE_TYPE_LIST 20
-
 // Message info1 bits
 #define AS_MSG_INFO1_READ				(1 << 0) // contains a read operation
 #define AS_MSG_INFO1_GET_ALL			(1 << 1) // get all bins, period

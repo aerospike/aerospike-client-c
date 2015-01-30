@@ -379,7 +379,7 @@ static uint8_t*
 as_query_write_range_string(uint8_t* p, char* begin, char* end)
 {
 	// Write particle type.
-	*p++ = AS_PARTICLE_TYPE_STRING;
+	*p++ = AS_BYTES_STRING;
 	
 	// Write begin value.
 	char* q = begin;
@@ -406,7 +406,7 @@ static uint8_t*
 as_query_write_range_integer(uint8_t* p, int64_t begin, int64_t end)
 {
 	// Write particle type.
-	*p++ = AS_PARTICLE_TYPE_INTEGER;
+	*p++ = AS_BYTES_INTEGER;
 
 	// Write begin value.
 	*(uint32_t*)p = cf_swap_to_be32(sizeof(int64_t));

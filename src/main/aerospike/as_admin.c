@@ -43,9 +43,9 @@ typedef as_status (*as_admin_parse_fn) (as_error* err, uint8_t* buffer, size_t s
 #define REVOKE_ROLES 6
 #define QUERY_USERS 9
 #define CREATE_ROLE 10
-#define DELETE_ROLE 11
-#define ADD_PRIVILEGES 12
-#define DELETE_PRIVILEGES 13
+#define DROP_ROLE 11
+#define GRANT_PRIVILEGES 12
+#define REVOKE_PRIVILEGES 13
 #define QUERY_ROLES 16
 
 // Field IDs
@@ -483,7 +483,7 @@ aerospike_drop_role(aerospike* as, as_error* err, const as_policy_admin* policy,
 	uint8_t buffer[AS_STACK_BUF_SIZE];
 	uint8_t* p = buffer + 8;
 	
-	p = as_admin_write_header(p, DELETE_ROLE, 1);
+	p = as_admin_write_header(p, DROP_ROLE, 1);
 	p = as_admin_write_field_string(p, ROLE, role);
 	return as_admin_execute(as, err, policy, buffer, p);
 }
@@ -494,7 +494,7 @@ aerospike_grant_privileges(aerospike* as, as_error* err, const as_policy_admin* 
 	uint8_t buffer[AS_STACK_BUF_SIZE];
 	uint8_t* p = buffer + 8;
 	
-	p = as_admin_write_header(p, ADD_PRIVILEGES, 2);
+	p = as_admin_write_header(p, GRANT_PRIVILEGES, 2);
 	p = as_admin_write_field_string(p, ROLE, role);
 	as_status status = as_admin_write_privileges(&p, err, privileges, privileges_size);
 	
@@ -510,7 +510,7 @@ aerospike_revoke_privileges(aerospike* as, as_error* err, const as_policy_admin*
 	uint8_t buffer[AS_STACK_BUF_SIZE];
 	uint8_t* p = buffer + 8;
 	
-	p = as_admin_write_header(p, DELETE_PRIVILEGES, 2);
+	p = as_admin_write_header(p, REVOKE_PRIVILEGES, 2);
 	p = as_admin_write_field_string(p, ROLE, role);
 	as_status status = as_admin_write_privileges(&p, err, privileges, privileges_size);
 	

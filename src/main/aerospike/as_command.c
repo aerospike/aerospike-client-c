@@ -174,13 +174,13 @@ as_command_write_user_key(uint8_t* begin, const as_key* key)
 	switch (val->type) {
 		default:
 		case AS_NIL: {
-			*p++ = AS_PARTICLE_TYPE_NULL;
+			*p++ = AS_BYTES_UNDEF;
 			len = 0;
 			break;
 		}
 		case AS_INTEGER: {
 			as_integer* v = as_integer_fromval(val);
-			*p++ = AS_PARTICLE_TYPE_INTEGER;
+			*p++ = AS_BYTES_INTEGER;
 			*(uint64_t*)p = cf_swap_to_be64(v->value);
 			p += 8;
 			len = 8;
@@ -188,7 +188,7 @@ as_command_write_user_key(uint8_t* begin, const as_key* key)
 		}
 		case AS_STRING: {
 			as_string* v = as_string_fromval(val);
-			*p++ = AS_PARTICLE_TYPE_STRING;
+			*p++ = AS_BYTES_STRING;
 			// v->len should have been already set when calculating the digest.
 			memcpy(p, v->value, v->len);
 			p += v->len;
@@ -197,7 +197,10 @@ as_command_write_user_key(uint8_t* begin, const as_key* key)
 		}
 		case AS_BYTES: {
 			as_bytes* v = as_bytes_fromval(val);
-			*p++ = AS_PARTICLE_TYPE_BLOB;
+			// Note: v->type must be a blob type (AS_BYTES_BLOB, AS_BYTES_JAVA, AS_BYTES_PYTHON ...).
+			// Otherwise, the particle type will be reassigned to a non-blob which causes a
+			// mismatch between type and value.
+			*p++ = v->type;
 			memcpy(p, v->value, v->size);
 			p += v->size;
 			len = v->size;
@@ -227,7 +230,7 @@ as_command_write_bin(uint8_t* begin, uint8_t operation_type, const as_bin* bin, 
 		default:
 		case AS_NIL: {
 			val_len = 0;
-			val_type = AS_PARTICLE_TYPE_NULL;
+			val_type = AS_BYTES_UNDEF;
 			break;
 		}
 		case AS_INTEGER: {
@@ -235,7 +238,7 @@ as_command_write_bin(uint8_t* begin, uint8_t operation_type, const as_bin* bin, 
 			*(uint64_t*)p = cf_swap_to_be64(v->value);
 			p += 8;
 			val_len = 8;
-			val_type = AS_PARTICLE_TYPE_INTEGER;
+			val_type = AS_BYTES_INTEGER;
 			break;
 		}
 		case AS_STRING: {
@@ -244,7 +247,7 @@ as_command_write_bin(uint8_t* begin, uint8_t operation_type, const as_bin* bin, 
 			memcpy(p, v->value, v->len);
 			p += v->len;
 			val_len = (uint32_t)v->len;
-			val_type = AS_PARTICLE_TYPE_STRING;
+			val_type = AS_BYTES_STRING;
 			break;
 		}
 		case AS_BYTES: {
@@ -252,21 +255,24 @@ as_command_write_bin(uint8_t* begin, uint8_t operation_type, const as_bin* bin, 
 			memcpy(p, v->value, v->size);
 			p += v->size;
 			val_len = v->size;
-			val_type = AS_PARTICLE_TYPE_BLOB;
+			// Note: v->type must be a blob type (AS_BYTES_BLOB, AS_BYTES_JAVA, AS_BYTES_PYTHON ...).
+			// Otherwise, the particle type will be reassigned to a non-blob which causes a
+			// mismatch between type and value.
+			val_type = v->type;
 			break;
 		}
 		case AS_LIST: {
 			memcpy(p, buffer->data, buffer->size);
 			p += buffer->size;
 			val_len = buffer->size;
-			val_type = AS_PARTICLE_TYPE_LIST;
+			val_type = AS_BYTES_LIST;
 			break;
 		}
 		case AS_MAP: {
 			memcpy(p, buffer->data, buffer->size);
 			p += buffer->size;
 			val_len = buffer->size;
-			val_type = AS_PARTICLE_TYPE_MAP;
+			val_type = AS_BYTES_MAP;
 			break;
 		}
 	}

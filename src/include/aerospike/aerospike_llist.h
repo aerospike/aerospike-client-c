@@ -139,7 +139,7 @@ as_status aerospike_llist_add_all(
  *	@param key			The key of the record.
  *	@param ldt 			The llist bin to lookup from. If not an llist bin, will return error.
  *	@param search_val 	The search value
- *	@param result_list	The returned list of values
+ *	@param elements		The returned list of values
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error.
  *	
@@ -178,7 +178,7 @@ as_status aerospike_llist_find(
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param key			The key of the record.
  *	@param ldt 			The llist bin to search from. If not an llist bin, will return error.
- *	@param list			The pointer to a list of elements returned from search function. Pointer should
+ *	@param elements		The pointer to a list of elements returned from search function. Pointer should
  *						be NULL passed in.
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error.
@@ -218,8 +218,8 @@ as_status aerospike_llist_scan(
  *	@param key			The key of the record.
  *	@param ldt 			The llist bin to search from. If not an llist bin, will return error.
  *	@param filter		The name of the User-Defined-Function to use as a search filter.
- *	@param fargs		The list of parameters passed in to the User-Defined-Function filter.
- *	@param list			The pointer to a list of elements returned from search function. Pointer should
+ *	@param filter_args	The list of parameters passed in to the User-Defined-Function filter.
+ *	@param elements		The pointer to a list of elements returned from search function. Pointer should
  *						be NULL passed in.
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error.
@@ -270,8 +270,8 @@ as_status aerospike_llist_filter(
  *	@param min_value	The minimum range value (or null to be LEAST value)
  *	@param max_value	The maximum range value (or null to be the GREATEST value)
  *	@param filter		The name of the User-Defined-Function to use as a search filter (or null if no filter)
- *	@param fargs		The list of parameters passed in to the User-Defined-Function filter (or null)
- *	@param list			The pointer to a list of elements returned from search function. Pointer should
+ *	@param filter_args	The list of parameters passed in to the User-Defined-Function filter (or null)
+ *	@param elements		The pointer to a list of elements returned from search function. Pointer should
  *						be NULL passed in.
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error.
@@ -341,7 +341,7 @@ as_status aerospike_llist_size(
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param key			The key of the record.
  *	@param ldt 			The llist bin to delete from. If not an llist bin, will return error.
- *	@param val			The value to delete from the set.
+ *	@param element		The value to delete from the set.
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error.
  *

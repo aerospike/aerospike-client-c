@@ -229,8 +229,8 @@ as_status aerospike_lset_get(
  *	@param key			The key of the record.
  *	@param ldt 			The lset bin to search from. If not an lset bin, will return error.
  *	@param filter		The name of the User-Defined-Function to use as a search filter.
- *	@param fargs		The list of parameters passed in to the User-Defined-Function filter.
- *	@param list			The pointer to a list of elements returned from search function. Pointer should
+ *	@param filter_args	The list of parameters passed in to the User-Defined-Function filter.
+ *	@param elements		The pointer to a list of elements returned from search function. Pointer should
  *						be NULL passed in.
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error.
@@ -270,7 +270,7 @@ as_status aerospike_lset_filter(
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param key			The key of the record.
  *	@param ldt 			The lset bin to search from. If not an lset bin, will return error.
- *	@param list			The pointer to a list of elements returned from search function. Pointer should
+ *	@param elements		The pointer to a list of elements returned from search function. Pointer should
  *						be NULL passed in.
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error.
@@ -338,7 +338,7 @@ as_status aerospike_lset_size(
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param key			The key of the record.
  *	@param ldt 			The lset bin to delete from. If not an lset bin, will return error.
- *	@param val			The value to delete from the set.
+ *	@param element		The value to delete from the set.
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error.
  *

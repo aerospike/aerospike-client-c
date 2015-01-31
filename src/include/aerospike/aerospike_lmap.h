@@ -63,7 +63,7 @@ extern "C" {
  *	@param key			The key of the record.
  *	@param ldt 			The ldt bin to insert values to.
  *	@param mkey			The map-key.
- *	@param val			The map-value associated with mkey.
+ *	@param mval			The map-value associated with mkey.
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error.
  *
@@ -143,7 +143,8 @@ as_status aerospike_lmap_put_all(
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param key			The key of the record.
  *	@param ldt 			The lmap bin to lookup from. If not an lmap bin, will return error.
- *	@param exists 		Returned boolean value to indicate value exists.
+ *	@param mkey 		The map key.
+ *	@param mval 		Returned map value.
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error.
  *	
@@ -225,7 +226,7 @@ as_status aerospike_lmap_get_all(
  *	@param ldt 			The lmap bin to operate on. If not an lmap bin, will return error.
  *	@param filter		The name of the User-Defined-Function to use as a read-filter.
  *						The UDF should either return the entry, or nil, if filtered out.
- *	@param fargs		The list of parameters passed in to the User-Defined-Function filter.
+ *	@param filter_args	The list of parameters passed in to the User-Defined-Function filter.
  *	@param elements		The pointer to a map of entries returned from the function. Pointer should
  *						be NULL passed in.
  *
@@ -296,7 +297,7 @@ as_status aerospike_lmap_size(
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param key			The key of the record.
  *	@param ldt 			The lmap bin to delete from. If not an lmap bin, will return error.
- *	@param val			The value to delete from the set.
+ *	@param mkey			The key to delete from the set.
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error.
  *

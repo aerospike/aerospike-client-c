@@ -118,7 +118,7 @@ typedef struct as_batch_read_s {
  *	release the batch and associated resources.
  *	
  *	@param __batch		The query to initialize.
- *	@param __capacity	The number of keys to allocate.
+ *	@param __size		The number of keys to allocate.
  *
  *	@relates as_batch
  *	@ingroup batch_object
@@ -150,7 +150,7 @@ typedef struct as_batch_read_s {
  *	When the batch is no longer needed, then use as_batch_destroy() to
  *	release the batch and associated resources.
  *	
- *	@param capacity		The number of keys to allocate.
+ *	@param size			The number of keys to allocate.
  *
  *	@relates as_batch
  *	@ingroup batch_object
@@ -171,7 +171,7 @@ as_batch * as_batch_new(uint32_t size);
  *	release the batch and associated resources.
  *	
  *	@param batch		The batch to initialize.
- *	@param capacity		The number of keys to allocate.
+ *	@param size			The number of keys to allocate.
  *	
  *	@relates as_batch
  *	@ingroup batch_object

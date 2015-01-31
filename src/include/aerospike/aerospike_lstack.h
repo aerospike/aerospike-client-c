@@ -150,8 +150,8 @@ as_status aerospike_lstack_push_all(
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param key			The key of the record.
  *	@param ldt 			The stack bin to peek values from. If not a stack bin, will return error.
- *	@param n			The number of elements to peek from the lstack.
- *	@param list			Pointer to a list of elements peeked from the lstack.
+ *	@param peek_count	The number of elements to peek from the lstack.
+ *	@param elements		Pointer to a list of elements peeked from the lstack.
  *						Pointer should be NULL passed in.
  *						If stack_size shorter than n, only stack_size is returned.
  *
@@ -195,10 +195,10 @@ as_status aerospike_lstack_peek(
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param key			The key of the record.
  *	@param ldt 			The stack bin to peek values from. If not a stack bin, will return error.
- *	@param n			The number of elements to peek from the lstack.
+ *	@param peek_count	The number of elements to peek from the lstack.
  *	@param filter		The name of the User-Defined-Function to use as a stack element filter.
- *	@param fargs		The list of parameters to the User-Defined-Function filter.
- *	@param list			Pointer to list of elements peeked from the lstack.
+ *	@param filter_args	The list of parameters to the User-Defined-Function filter.
+ *	@param elements		Pointer to list of elements peeked from the lstack.
  *						Pointer should be initialized to NULL when passed in;
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error.

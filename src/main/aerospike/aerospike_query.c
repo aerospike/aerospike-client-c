@@ -278,6 +278,9 @@ as_query_parse(as_error* err, int fd, uint64_t deadline_ms, void* udata)
 				if (status == AEROSPIKE_NO_MORE_RECORDS) {
 					status = AEROSPIKE_OK;
 				}
+				else {
+					as_error_set_message(err, status, as_error_string(status));
+				}
 				break;
 			}
 		}

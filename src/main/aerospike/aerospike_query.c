@@ -216,7 +216,7 @@ as_query_parse_records(uint8_t* buf, size_t size, as_query_task* task, as_error*
 		as_msg* msg = (as_msg*)p;
 		as_msg_swap_header_from_be(msg);
 		
-		if (msg->result_code && msg->result_code != AEROSPIKE_ERR_RECORD_NOT_FOUND) {
+		if (msg->result_code) {
 			return msg->result_code;
 		}
 		p += sizeof(as_msg);

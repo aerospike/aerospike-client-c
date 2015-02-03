@@ -89,7 +89,15 @@ as_scan_parse_records(uint8_t* buf, size_t size, as_scan_task* task)
 		as_msg* msg = (as_msg*)p;
 		as_msg_swap_header_from_be(msg);
 		
-		if (msg->result_code && msg->result_code != AEROSPIKE_ERR_RECORD_NOT_FOUND) {
+		if (msg->result_code) {
+		   // Special case - if we scan a set name that doesn't exist on a
+		   // node, it will return "not found" - we unify this with the
+		   // case where OK is returned and no callbacks were made. [AKG]
+		   // We are sending "no more records back" to the caller which will
+		   // send OK to the main worker thread.
+			if (msg->result_code == AEROSPIKE_ERR_RECORD_NOT_FOUND) {
+				return AEROSPIKE_NO_MORE_RECORDS;
+			}
 			return msg->result_code;
 		}
 		p += sizeof(as_msg);

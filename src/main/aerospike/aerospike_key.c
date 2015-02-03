@@ -425,7 +425,9 @@ as_status aerospike_key_operate(
 			ttl = r->ttl;
 		}
 	}
-	
+
+	ttl = ops->ttl;
+	gen = ops->gen;
 	uint8_t* cmd = as_command_init(size);
 	uint8_t* p = as_command_write_header(cmd, read_attr, write_attr, policy->commit_level, policy->consistency_level, AS_POLICY_EXISTS_IGNORE, policy->gen, gen, ttl, policy->timeout, n_fields, n_operations);
 	p = as_command_write_key(p, key);

@@ -525,8 +525,8 @@ bool as_record_set_list(as_record * rec, const as_bin_name name, as_list * value
  *	Set specified bin's value to an as_map.
  *
  *	~~~~~~~~~~{.c}
- *	as_map map;
- *	as_stringmap_init(&map);
+ *	as_hashmap map;
+ *	as_hashmap_init(&map, 32);
  *	as_stringmap_set_int64(&map, "a", 1);
  *	as_stringmap_set_int64(&map, "b", 2);
  *	as_stringmap_set_int64(&map, "c", 3);

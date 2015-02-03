@@ -414,22 +414,9 @@ as_status aerospike_key_operate(
 		size += as_command_bin_size(&op->bin, &buffers[i]);
 	}
 
-	uint32_t gen = 0;
-	uint32_t ttl = 0;
-	
-	if (rec) {
-		as_record* r = *rec;
-		
-		if (r) {
-			gen = r->gen;
-			ttl = r->ttl;
-		}
-	}
-
-	ttl = ops->ttl;
-	gen = ops->gen;
 	uint8_t* cmd = as_command_init(size);
-	uint8_t* p = as_command_write_header(cmd, read_attr, write_attr, policy->commit_level, policy->consistency_level, AS_POLICY_EXISTS_IGNORE, policy->gen, gen, ttl, policy->timeout, n_fields, n_operations);
+	uint8_t* p = as_command_write_header(cmd, read_attr, write_attr, policy->commit_level, policy->consistency_level,
+				 AS_POLICY_EXISTS_IGNORE, policy->gen, ops->gen, ops->ttl, policy->timeout, n_fields, n_operations);
 	p = as_command_write_key(p, key);
 	
 	if (policy->key == AS_POLICY_KEY_SEND) {

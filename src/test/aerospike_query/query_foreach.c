@@ -31,6 +31,7 @@
 #include <aerospike/as_map.h>
 #include <aerospike/as_hashmap.h>
 #include <aerospike/as_val.h>
+#include <aerospike/as_stringmap.h>
 
 #include <aerospike/mod_lua.h>
 
@@ -148,6 +149,28 @@ TEST( query_foreach_create, "create 100 records and 4 indices" ) {
 		info("error(%d): %s", err.code, err.message);
 	}
 
+/* Uncomment once sindex on cdt is avaialable at server side.
+	// create complex index on "x"
+
+	status = aerospike_index_create_complex(as, &err, 0, NULL, NAMESPACE, SET, "x", "idx_test_x", AS_INDEX_TYPE_LIST, AS_INDEX_STRING);
+    if (status != AEROSPIKE_OK) {
+        info("error(%d): %s", err.code, err.message);
+    }
+
+	// create complex index on "y"
+
+	status = aerospike_index_create_complex(as, &err, 0, NULL, NAMESPACE, SET, "y", "idx_test_y", AS_INDEX_TYPE_MAPKEYS, AS_INDEX_STRING);
+    if (status != AEROSPIKE_OK) {
+        info("error(%d): %s", err.code, err.message);
+    }
+
+	// create complex index on "y"
+
+	status = aerospike_index_create_complex(as, &err, 0, NULL, NAMESPACE, SET, "y", "idx_test_y1", AS_INDEX_TYPE_MAPVALUES, AS_INDEX_STRING);
+    if (status != AEROSPIKE_OK) {
+        info("error(%d): %s", err.code, err.message);
+    }
+*/
 	// insert records
 	for ( int i = 0; i < n_recs; i++ ) {
 
@@ -160,13 +183,31 @@ TEST( query_foreach_create, "create 100 records and 4 indices" ) {
 		char keystr[64] = { '\0' };
 		snprintf(keystr, 64, "%s-%d-%d-%d-%d", a, b, c, d, e);
 
+		// Make list
+
+		as_arraylist list;
+		as_arraylist_init(&list, 3, 0);
+		as_arraylist_append_str(&list, "x");
+		as_arraylist_append_str(&list, "x");
+		as_arraylist_append_str(&list, "x");
+
+		// Make map
+
+		as_hashmap map;
+		as_hashmap_init(&map, 1);
+		as_stringmap_set_str((as_map *) &map, "y", "y");
+
+
 		as_record r;
-		as_record_init(&r, 5);
+		as_record_init(&r, 7);
 		as_record_set_str(&r, 	"a", a);
 		as_record_set_int64(&r, "b", b);
 		as_record_set_int64(&r, "c", c);
 		as_record_set_int64(&r, "d", d);
 		as_record_set_int64(&r, "e", e);
+		as_record_set_list(&r, "x", (as_list *) &list);
+		as_record_set_map(&r, "y", (as_map *) &map);
+
 
 		as_key key;
 		as_key_init(&key, NAMESPACE, SET, keystr);
@@ -350,6 +391,92 @@ TEST( query_foreach_4, "sum(d) where b == 100 and d == 1" ) {
 	as_query_destroy(&q);
 }
 
+static bool query_foreach_count_callback(const as_val * v, void * udata) {
+	int * count = (int *) udata;
+	if ( v == NULL ) {
+		info("count: %d", (*count));
+	}
+	else {
+		*count += 1;
+	}
+	return true;
+}
+
+TEST( query_foreach_5, "IN LIST count(*) where x contains 'x'" ) {
+	
+	as_error err;
+	as_error_reset(&err);
+
+	int count = 0;
+
+	as_query q;
+	as_query_init(&q, NAMESPACE, SET);
+
+	as_query_where_inita(&q, 1);
+	as_query_where(&q, "x", as_contains(LIST, STRING, "x"));
+
+	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_count_callback, &count);
+
+	if ( err.code != AEROSPIKE_OK ) {
+		 fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+	}
+
+	assert_int_eq( err.code, AEROSPIKE_OK );
+	assert_int_eq( count, 100 );
+
+	as_query_destroy(&q);
+}
+
+TEST( query_foreach_6, "IN MAPKEYS count(*) where y contains 'y'" ) {
+	
+	as_error err;
+	as_error_reset(&err);
+
+	int count = 0;
+
+	as_query q;
+	as_query_init(&q, NAMESPACE, SET);
+
+	as_query_where_inita(&q, 1);
+	as_query_where(&q, "y", as_contains(MAPKEYS, STRING, "y"));
+
+	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_count_callback, &count);
+
+	if ( err.code != AEROSPIKE_OK ) {
+		 fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+	}
+
+	assert_int_eq( err.code, AEROSPIKE_OK );
+	assert_int_eq( count, 100 );
+
+	as_query_destroy(&q);
+}
+
+TEST( query_foreach_7, "IN MAPVALUES count(*) where y contains 'y'" ) {
+
+	as_error err;
+	as_error_reset(&err);
+
+	int count = 0;
+
+	as_query q;
+	as_query_init(&q, NAMESPACE, SET);
+
+	as_query_where_inita(&q, 1);
+	as_query_where(&q, "y", as_contains(MAPVALUES, STRING, "y"));
+
+	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_count_callback, &count);
+
+	if ( err.code != AEROSPIKE_OK ) {
+		 fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+	}
+
+	assert_int_eq( err.code, AEROSPIKE_OK );
+	assert_int_eq( count, 100 );
+
+	as_query_destroy(&q);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -364,4 +491,9 @@ SUITE( query_foreach, "aerospike_query_foreach tests" ) {
 	suite_add( query_foreach_2 );
 	suite_add( query_foreach_3 );
 	suite_add( query_foreach_4 );
+/* Uncomment once sindex on cdt feature is available at server side.
+	suite_add( query_foreach_5 );
+	suite_add( query_foreach_6 );
+	suite_add( query_foreach_7 );
+*/
 }

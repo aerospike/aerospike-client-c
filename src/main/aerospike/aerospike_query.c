@@ -217,7 +217,7 @@ as_query_parse_records(uint8_t* buf, size_t size, as_query_task* task, as_error*
 		as_msg_swap_header_from_be(msg);
 		
 		if (msg->result_code) {
-			return msg->result_code;
+			return as_error_set_message(err, msg->result_code, as_error_string(msg->result_code));
 		}
 		p += sizeof(as_msg);
 		
@@ -277,9 +277,6 @@ as_query_parse(as_error* err, int fd, uint64_t deadline_ms, void* udata)
 			if (status != AEROSPIKE_OK) {
 				if (status == AEROSPIKE_NO_MORE_RECORDS) {
 					status = AEROSPIKE_OK;
-				}
-				else {
-					as_error_set_message(err, status, as_error_string(status));
 				}
 				break;
 			}

@@ -74,11 +74,11 @@ as_status aerospike_key_get(
 	}
 	
 	uint16_t n_fields;
-	size_t size = as_command_key_size(key, &n_fields);
+	size_t size = as_command_key_size(policy->key, key, &n_fields);
 		
 	uint8_t* cmd = as_command_init(size);
 	uint8_t* p = as_command_write_header_read(cmd, AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_ALL, policy->consistency_level, policy->timeout, n_fields, 0);
-	p = as_command_write_key(p, key);
+	p = as_command_write_key(p, policy->key, key);
 	size = as_command_write_end(cmd, p);
 	
 	as_command_node cn;
@@ -119,7 +119,7 @@ as_status aerospike_key_select(
 	}
 	
 	uint16_t n_fields;
-	size_t size = as_command_key_size(key, &n_fields);
+	size_t size = as_command_key_size(policy->key, key, &n_fields);
 	int nvalues = 0;
 	
 	for (nvalues = 0; bins[nvalues] != NULL && bins[nvalues][0] != '\0'; nvalues++) {
@@ -132,7 +132,7 @@ as_status aerospike_key_select(
 	
 	uint8_t* cmd = as_command_init(size);
 	uint8_t* p = as_command_write_header_read(cmd, AS_MSG_INFO1_READ, policy->consistency_level, policy->timeout, n_fields, nvalues);
-	p = as_command_write_key(p, key);
+	p = as_command_write_key(p, policy->key, key);
 	
 	for (int i = 0; i < nvalues; i++) {
 		p = as_command_write_bin_name(p, bins[i]);
@@ -176,11 +176,11 @@ as_status aerospike_key_exists(
 	}
 
 	uint16_t n_fields;
-	size_t size = as_command_key_size(key, &n_fields);
+	size_t size = as_command_key_size(policy->key, key, &n_fields);
 	
 	uint8_t* cmd = as_command_init(size);
 	uint8_t* p = as_command_write_header_read(cmd, AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA, policy->consistency_level, policy->timeout, n_fields, 0);
-	p = as_command_write_key(p, key);
+	p = as_command_write_key(p, policy->key, key);
 	size = as_command_write_end(cmd, p);
 	
 	as_command_node cn;
@@ -238,12 +238,7 @@ as_status aerospike_key_put(
 	}
 	
 	uint16_t n_fields;
-	size_t size = as_command_key_size(key, &n_fields);
-
-	if (policy->key == AS_POLICY_KEY_SEND) {
-		size += as_command_user_key_size(key);
-		n_fields++;
-	}
+	size_t size = as_command_key_size(policy->key, key, &n_fields);
 	
 	as_bin* bins = rec->bins.entries;
 	uint32_t n_bins = rec->bins.size;
@@ -257,11 +252,7 @@ as_status aerospike_key_put(
 	uint8_t* cmd = as_command_init(size);
 	uint8_t* p = as_command_write_header(cmd, 0, AS_MSG_INFO2_WRITE, policy->commit_level, 0, policy->exists, policy->gen, rec->gen, rec->ttl, policy->timeout, n_fields, n_bins);
 		
-	p = as_command_write_key(p, key);
-	
-	if (policy->key == AS_POLICY_KEY_SEND) {
-		p = as_command_write_user_key(p, key);
-	}
+	p = as_command_write_key(p, policy->key, key);
 
 	for (uint32_t i = 0; i < n_bins; i++) {
 		p = as_command_write_bin(p, AS_OPERATOR_WRITE, &bins[i], &buffers[i]);
@@ -321,11 +312,11 @@ as_status aerospike_key_remove(
 	}
 
 	uint16_t n_fields;
-	size_t size = as_command_key_size(key, &n_fields);
+	size_t size = as_command_key_size(policy->key, key, &n_fields);
 		
 	uint8_t* cmd = as_command_init(size);
 	uint8_t* p = as_command_write_header(cmd, 0, AS_MSG_INFO2_WRITE | AS_MSG_INFO2_DELETE, policy->commit_level, 0, AS_POLICY_EXISTS_IGNORE, policy->gen, 0, 0, policy->timeout, n_fields, 0);
-	p = as_command_write_key(p, key);
+	p = as_command_write_key(p, policy->key, key);
 	size = as_command_write_end(cmd, p);
 	
 	as_command_node cn;
@@ -386,10 +377,9 @@ as_status aerospike_key_operate(
 	memset(buffers, 0, sizeof(as_buffer) * n_operations);
 	
 	uint16_t n_fields;
-	size_t size = as_command_key_size(key, &n_fields);
+	size_t size = as_command_key_size(policy->key, key, &n_fields);
 	uint8_t read_attr = 0;
 	uint8_t write_attr = 0;
-	bool user_key_field_calculated = false;
 	
 	for (int i = 0; i < n_operations; i++) {
 		as_binop* op = &ops->binops.entries[i];
@@ -401,13 +391,6 @@ as_status aerospike_key_operate(
 				break;
 
 			default:
-				// Check if write policy requires saving the user key and calculate the data size.
-				// This should only be done once for the entire request even with multiple write operations.
-				if (policy->key == AS_POLICY_KEY_SEND && ! user_key_field_calculated) {
-					size += as_command_user_key_size(key);
-					n_fields++;
-					user_key_field_calculated = true;
-				}
 				write_attr |= AS_MSG_INFO2_WRITE;
 				break;
 		}
@@ -417,12 +400,8 @@ as_status aerospike_key_operate(
 	uint8_t* cmd = as_command_init(size);
 	uint8_t* p = as_command_write_header(cmd, read_attr, write_attr, policy->commit_level, policy->consistency_level,
 				 AS_POLICY_EXISTS_IGNORE, policy->gen, ops->gen, ops->ttl, policy->timeout, n_fields, n_operations);
-	p = as_command_write_key(p, key);
+	p = as_command_write_key(p, policy->key, key);
 	
-	if (policy->key == AS_POLICY_KEY_SEND) {
-		p = as_command_write_user_key(p, key);
-	}
-
 	for (uint32_t i = 0; i < n_operations; i++) {
 		as_binop* op = &ops->binops.entries[i];
 		p = as_command_write_bin(p, op->op, &op->bin, &buffers[i]);
@@ -501,7 +480,7 @@ as_status aerospike_key_apply(
 	}
 	
 	uint16_t n_fields;
-	size_t size = as_command_key_size(key, &n_fields);
+	size_t size = as_command_key_size(policy->key, key, &n_fields);
 	size += as_command_string_field_size(module);
 	size += as_command_string_field_size(function);
 	
@@ -515,12 +494,7 @@ as_status aerospike_key_apply(
 
 	uint8_t* cmd = as_command_init(size);
 	uint8_t* p = as_command_write_header(cmd, 0, AS_MSG_INFO2_WRITE, policy->commit_level, 0, 0, 0, 0, 0, policy->timeout, n_fields, 0);
-	p = as_command_write_key(p, key);
-
-	if (policy->key == AS_POLICY_KEY_SEND) {
-		p = as_command_write_user_key(p, key);
-	}
-
+	p = as_command_write_key(p, policy->key, key);
 	p = as_command_write_field_string(p, AS_FIELD_UDF_PACKAGE_NAME, module);
 	p = as_command_write_field_string(p, AS_FIELD_UDF_FUNCTION, function);
 	p = as_command_write_field_buffer(p, AS_FIELD_UDF_ARGLIST, &args);

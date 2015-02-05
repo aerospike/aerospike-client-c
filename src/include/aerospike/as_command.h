@@ -141,19 +141,8 @@ typedef as_status (*as_parse_results_fn) (as_error* err, int fd, uint64_t deadli
  *	@private
  *	Calculate size of command header plus key fields.
  */
-static inline size_t
-as_command_key_size(const as_key* key, uint16_t* n_fields)
-{
-	*n_fields = 3;
-	return strlen(key->ns) + strlen(key->set) + sizeof(cf_digest) + 45;
-}
-
-/**
- *	@private
- *	Calculate size of user key field.
- */
 size_t
-as_command_user_key_size(const as_key* key);
+as_command_key_size(as_policy_key policy, const as_key* key, uint16_t* n_fields);
 
 /**
  *	@private
@@ -319,21 +308,8 @@ as_command_write_field_digest(uint8_t* p, const as_digest* val)
  *	@private
  *	Write key structure.
  */
-static inline uint8_t*
-as_command_write_key(uint8_t* p, const as_key* key)
-{
-	p = as_command_write_field_string(p, AS_FIELD_NAMESPACE, key->ns);
-	p = as_command_write_field_string(p, AS_FIELD_SETNAME, key->set);
-	p = as_command_write_field_digest(p, &key->digest);
-	return p;
-}
-
-/**
- *	@private
- *	Write user defined key.
- */
 uint8_t*
-as_command_write_user_key(uint8_t* begin, const as_key* key);
+as_command_write_key(uint8_t* p, as_policy_key policy, const as_key* key);
 
 /**
  *	@private

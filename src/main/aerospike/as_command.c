@@ -29,10 +29,10 @@
  * FUNCTIONS
  *****************************************************************************/
 
-size_t
+static size_t
 as_command_user_key_size(const as_key* key)
 {
-	size_t size = 5;
+	size_t size = AS_FIELD_HEADER_SIZE;
 	as_val* val = (as_val*)key->valuep;
 	
 	// Key must not be list or map.
@@ -58,6 +58,19 @@ as_command_user_key_size(const as_key* key)
 		default: {
 			break;
 		}
+	}
+	return size;
+}
+
+size_t
+as_command_key_size(as_policy_key policy, const as_key* key, uint16_t* n_fields)
+{
+	*n_fields = 3;
+	size_t size = strlen(key->ns) + strlen(key->set) + sizeof(cf_digest) + 45;
+	
+	if (policy == AS_POLICY_KEY_SEND) {
+		size += as_command_user_key_size(key);
+		(*n_fields)++;
 	}
 	return size;
 }
@@ -163,7 +176,7 @@ as_command_write_header(uint8_t* cmd, uint8_t read_attr, uint8_t write_attr,
 	return cmd + AS_HEADER_SIZE;
 }
 
-uint8_t*
+static uint8_t*
 as_command_write_user_key(uint8_t* begin, const as_key* key)
 {
 	uint8_t* p = begin + AS_FIELD_HEADER_SIZE;
@@ -208,6 +221,19 @@ as_command_write_user_key(uint8_t* begin, const as_key* key)
 		}
 	}
 	as_command_write_field_header(begin, AS_FIELD_KEY, ++len);
+	return p;
+}
+
+uint8_t*
+as_command_write_key(uint8_t* p, as_policy_key policy, const as_key* key)
+{
+	p = as_command_write_field_string(p, AS_FIELD_NAMESPACE, key->ns);
+	p = as_command_write_field_string(p, AS_FIELD_SETNAME, key->set);
+	p = as_command_write_field_digest(p, &key->digest);
+	
+	if (policy == AS_POLICY_KEY_SEND) {
+		p = as_command_write_user_key(p, key);
+	}
 	return p;
 }
 

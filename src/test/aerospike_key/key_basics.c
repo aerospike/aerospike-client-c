@@ -96,6 +96,41 @@ TEST( key_basics_put , "put: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 'de
 	assert_int_eq( rc, AEROSPIKE_OK );
 }
 
+TEST( key_basics_put_key , "put_with_key: (test,test,foo_key) = <bytes>" ) {
+
+	as_error err;
+	as_error_reset(&err);
+
+	int count = 20000;
+	uint8_t *mybytes = alloca (count);
+	memset(mybytes, count, count);
+
+	as_record r, * rec = &r;
+	as_record_init(rec, 1);
+	as_record_set_rawp(rec, "a", mybytes, count, false);
+
+	// Set up a as_policy_write object with SEND_KEY
+	as_policy_write wpol;
+	as_policy_write_init(&wpol);
+	wpol.key = AS_POLICY_KEY_SEND;
+
+	as_key key;
+	as_key_init(&key, "test", "test", "foo_key");
+
+	as_status rc = aerospike_key_put(as, &err, &wpol, &key, rec);
+	assert_int_eq( rc, AEROSPIKE_OK );
+	as_record_destroy(rec);
+
+	as_error_reset(&err);
+	as_record * rrec=NULL;
+	rc = aerospike_key_get(as, &err, NULL, &key, &rrec);
+	assert_int_eq( rc, AEROSPIKE_OK );
+
+	as_record_foreach(rrec, key_basics_print_bins, NULL);
+
+	as_key_destroy(&key);
+	as_record_destroy(rrec);
+}
 
 TEST( key_basics_get , "get: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 'def', e: [1,2,3], f: {x: 7, y: 8, z: 9}}" ) {
 
@@ -316,14 +351,15 @@ TEST( key_basics_get2 , "get: (test,test,foo) = {a: 444, b: 'abcdef', d: 'abcdef
 
 SUITE( key_basics, "aerospike_key basic tests" ) {
 	// Remove at beginning to clear out record.
+    suite_add( key_basics_put_key );
     suite_add( key_basics_remove );
-    suite_add( key_basics_put );
-    suite_add( key_basics_exists );
-    suite_add( key_basics_notexists );
-    suite_add( key_basics_get );
-    suite_add( key_basics_select );
-    suite_add( key_basics_operate );
-    suite_add( key_basics_get2 );
-    suite_add( key_basics_remove );
-    suite_add( key_basics_notexists );
+	suite_add( key_basics_put );
+	suite_add( key_basics_exists );
+	suite_add( key_basics_notexists );
+	suite_add( key_basics_get );
+	suite_add( key_basics_select );
+	suite_add( key_basics_operate );
+	suite_add( key_basics_get2 );
+	suite_add( key_basics_remove );
+	suite_add( key_basics_notexists );
 }

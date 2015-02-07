@@ -32,7 +32,7 @@
 static size_t
 as_command_user_key_size(const as_key* key)
 {
-	size_t size = AS_FIELD_HEADER_SIZE;
+	size_t size = AS_FIELD_HEADER_SIZE + 1;  // Add 1 for key's value type.
 	as_val* val = (as_val*)key->valuep;
 	
 	// Key must not be list or map.

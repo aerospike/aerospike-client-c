@@ -49,7 +49,9 @@ typedef struct as_batch_task_s {
 	as_batch_read* results;
 	uint32_t* error_mutex;
 	as_key* keys;
+	const char** bins;
 	
+	uint32_t n_bins;
 	uint32_t n_keys;
 	uint32_t timeout_ms;
 	uint32_t index;
@@ -63,7 +65,7 @@ typedef struct as_batch_complete_task_s {
 } as_batch_complete_task;
 
 /******************************************************************************
- *	FUNCTIONS
+ *	STATIC FUNCTIONS
  *****************************************************************************/
 
 static uint8_t*
@@ -193,10 +195,14 @@ as_batch_command_execute(as_batch_task* task)
 	uint32_t byte_size = n_offsets * AS_DIGEST_VALUE_SIZE;
 	size += as_command_field_size(byte_size);
 	
-	// TODO: support bin name filters.
+	if (task->n_bins) {
+		for (uint32_t i = 0; i < task->n_bins; i++) {
+			size += as_command_string_operation_size(task->bins[i]);
+		}
+	}
 	
 	uint8_t* cmd = as_command_init(size);
-	uint8_t* p = as_command_write_header_read(cmd, task->read_attr, AS_POLICY_CONSISTENCY_LEVEL_ONE, task->timeout_ms, 2, 0);
+	uint8_t* p = as_command_write_header_read(cmd, task->read_attr, AS_POLICY_CONSISTENCY_LEVEL_ONE, task->timeout_ms, 2, task->n_bins);
 	p = as_command_write_field_string(p, AS_FIELD_NAMESPACE, task->ns);
 	p = as_command_write_field_header(p, AS_FIELD_DIGEST_ARRAY, byte_size);
 	
@@ -206,6 +212,13 @@ as_batch_command_execute(as_batch_task* task)
 		memcpy(p, key->digest.value, AS_DIGEST_VALUE_SIZE);
 		p += AS_DIGEST_VALUE_SIZE;
 	}
+	
+	if (task->n_bins) {
+		for (uint32_t i = 0; i < task->n_bins; i++) {
+			p = as_command_write_bin_name(p, task->bins[i]);
+		}
+	}
+
 	size = as_command_write_end(cmd, p);
 
 	as_command_node cn;
@@ -340,7 +353,8 @@ as_batch_release_nodes(as_batch_node* batch_nodes, uint32_t n_batch_nodes)
 static as_status
 as_batch_execute(
 	aerospike* as, as_error* err, const as_policy_batch* policy, const as_batch* batch,
-	aerospike_batch_read_callback callback, void* udata, int read_attr)
+	aerospike_batch_read_callback callback, void* udata, int read_attr,
+	const char** bins, uint32_t n_bins)
 {
 	as_error_reset(err);
 	
@@ -429,6 +443,8 @@ as_batch_execute(
 	task.results = results;
 	task.error_mutex = &error_mutex;
 	task.n_keys = n_keys;
+	task.bins = bins;
+	task.n_bins = n_bins;
 	task.keys = batch->keys.entries;
 	task.timeout_ms = policy->timeout;
 	task.index = 0;
@@ -469,6 +485,10 @@ as_batch_execute(
 	return status;
 }
 
+/******************************************************************************
+ *	PUBLIC FUNCTIONS
+ *****************************************************************************/
+
 /**
  *	Look up multiple records by key, then return all bins.
  */
@@ -478,7 +498,19 @@ aerospike_batch_get(
 	aerospike_batch_read_callback callback, void* udata
 	)
 {
-	return as_batch_execute(as, err, policy, batch, callback, udata, AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_ALL);
+	return as_batch_execute(as, err, policy, batch, callback, udata, AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_ALL, 0, 0);
+}
+
+/**
+ *	Look up multiple records by key, then return specified bins.
+ */
+as_status
+aerospike_batch_get_bins(
+	aerospike* as, as_error* err, const as_policy_batch* policy, const as_batch* batch,
+	const char** bins, uint32_t n_bins, aerospike_batch_read_callback callback, void* udata
+	)
+{
+	return as_batch_execute(as, err, policy, batch, callback, udata, AS_MSG_INFO1_READ, bins, n_bins);
 }
 
 /**
@@ -490,5 +522,5 @@ aerospike_batch_exists(
 	aerospike_batch_read_callback callback, void* udata
 	)
 {
-	return as_batch_execute(as, err, policy, batch, callback, udata, AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA);
+	return as_batch_execute(as, err, policy, batch, callback, udata, AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA, 0, 0);
 }

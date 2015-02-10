@@ -954,18 +954,24 @@ as_command_parse_success_failure(as_error* err, int fd, uint64_t deadline_ms, vo
 			
 		case AEROSPIKE_ERR_UDF: {
 			status = as_command_parse_udf_failure(buf, err, &msg.m, status);
-			*val = 0;
+			if (val) {
+				*val = 0;
+			}
 			break;
 		}
 			
 		case AEROSPIKE_ERR_RECORD_NOT_FOUND:
 		case AEROSPIKE_ERR_LARGE_ITEM_NOT_FOUND:
-			*val = 0;
+			if (val) {
+				*val = 0;
+			}
 			break;
 			
 		default:
 			as_error_set_message(err, status, as_error_string(status));
-			*val = 0;
+			if (val) {
+				*val = 0;
+			}
 			break;
 	}
 	as_command_free(buf, size);

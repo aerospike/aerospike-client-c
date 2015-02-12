@@ -20,6 +20,7 @@
 extern "C" {
 #endif
 
+#include <aerospike/as_error.h>
 #include <aerospike/as_vector.h>
 #include <citrusleaf/cf_queue.h>
 #include <netinet/in.h>
@@ -255,8 +256,8 @@ as_node_get_address_full(as_node* node)
  *	@private
  *	Get a connection to the given node from pool and validate.  Return 0 on success.
  */
-int
-as_node_get_connection(as_node* node, int* fd);
+as_status
+as_node_get_connection(as_error* err, as_node* node, int* fd);
 
 /**
  *	@private

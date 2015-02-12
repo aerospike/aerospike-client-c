@@ -458,6 +458,7 @@ as_command_parse_header(as_error* err, int fd, uint64_t deadline_ms, void* user_
 	
 	// Ensure that there is no data left to read.
 	as_proto_swap_from_be(&msg->proto);
+	as_msg_swap_header_from_be(&msg->m);
 	size_t size = msg->proto.sz  - msg->m.header_sz;
 	
 	if (size > 0) {

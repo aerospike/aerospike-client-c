@@ -294,7 +294,7 @@ as_status aerospike_key_put(
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param key			The key of the record.
  *
- *	@return AEROSPIKE_OK if successful. Otherwise an error.
+ *	@return AEROSPIKE_OK if successful and AEROSPIKE_ERR_RECORD_NOT_FOUND if the record was not found. Otherwise an error.
  */
 as_status aerospike_key_remove(
 	aerospike * as, as_error * err, const as_policy_remove * policy, const as_key * key)
@@ -326,11 +326,6 @@ as_status aerospike_key_remove(
 	status = as_command_execute(err, &cn, cmd, size, policy->timeout, policy->retry, as_command_parse_header, &msg);
 	
 	as_command_free(cmd, size);
-	
-	// Convert not found errors to ok.
-	if (status == AEROSPIKE_ERR_RECORD_NOT_FOUND) {
-		status = as_error_reset(err);
-	}
 	return status;
 }
 

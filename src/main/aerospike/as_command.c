@@ -375,7 +375,7 @@ as_command_execute(as_error * err, as_command_node* cn, uint8_t* command, size_t
 		
 		if (status == AEROSPIKE_OK) {
 			// Reset error code if retry had occurred.
-			if (err->code != AEROSPIKE_OK) {
+			if (iterations > 0) {
 				as_error_reset(err);
 			}
 		}

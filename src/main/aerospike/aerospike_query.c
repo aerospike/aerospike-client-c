@@ -166,18 +166,18 @@ as_query_aggregate_callback(const as_val* v, void* udata)
     return status? false : true;
 }
 
-static uint8_t*
-as_query_parse_record(uint8_t* p, as_msg* msg, as_query_task* task, as_error* err)
+static as_status
+as_query_parse_record(uint8_t** pp, as_msg* msg, as_query_task* task, as_error* err)
 {
 	bool rv = true;
 	
 	if (task->stream_q) {
 		// Parse aggregate return values.
 		as_val* val = 0;
-		p = as_command_parse_success_failure_bins(p, err, msg, &val);
+		as_status status = as_command_parse_success_failure_bins(pp, err, msg, &val);
 		
-		if (! p) {
-			return p;
+		if (status != AEROSPIKE_OK) {
+			return status;
 		}
 		
 		if (task->callback) {
@@ -195,15 +195,17 @@ as_query_parse_record(uint8_t* p, as_msg* msg, as_query_task* task, as_error* er
 		rec.gen = msg->generation;
 		rec.ttl = cf_server_void_time_to_ttl(msg->record_ttl);
 		
+		uint8_t* p = *pp;
 		p = as_command_parse_key(p, msg->n_fields, &rec.key);
 		p = as_command_parse_bins(&rec, p, msg->n_ops, true);
+		*pp = p;
 		
 		if (task->callback) {
 			rv = task->callback((as_val*)&rec, task->udata);
 		}
 		as_record_destroy(&rec);
 	}
-	return rv ? p : 0;
+	return rv ? AEROSPIKE_OK : AEROSPIKE_NO_MORE_RECORDS;
 }
 
 static as_status
@@ -211,6 +213,7 @@ as_query_parse_records(uint8_t* buf, size_t size, as_query_task* task, as_error*
 {
 	uint8_t* p = buf;
 	uint8_t* end = buf + size;
+	as_status status;
 	
 	while (p < end) {
 		as_msg* msg = (as_msg*)p;
@@ -225,10 +228,10 @@ as_query_parse_records(uint8_t* buf, size_t size, as_query_task* task, as_error*
 			return AEROSPIKE_NO_MORE_RECORDS;
 		}
 		
-		p = as_query_parse_record(p, msg, task, err);
+		status = as_query_parse_record(&p, msg, task, err);
 		
-		if (!p) {
-			return err->code;
+		if (status != AEROSPIKE_OK) {
+			return status;
 		}
 		
 		if (ck_pr_load_32(task->error_mutex)) {

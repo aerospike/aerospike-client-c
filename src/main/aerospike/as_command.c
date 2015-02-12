@@ -656,9 +656,10 @@ as_command_parse_value(uint8_t* p, uint8_t type, uint32_t value_size, as_val** v
 	}
 }
 
-uint8_t*
-as_command_parse_success_failure_bins(uint8_t* p, as_error* err, as_msg* msg, as_val** value)
+as_status
+as_command_parse_success_failure_bins(uint8_t** pp, as_error* err, as_msg* msg, as_val** value)
 {
+	uint8_t* p = *pp;
 	p = as_command_ignore_fields(p, msg->n_fields);
 		
 	as_bin_name name;
@@ -681,7 +682,8 @@ as_command_parse_success_failure_bins(uint8_t* p, as_error* err, as_msg* msg, as
 			if (value) {
 				as_command_parse_value(p, type, value_size, value);
 			}
-			return p + value_size;
+			*pp = p + value_size;
+			return AEROSPIKE_OK;
 		}
 		
 		if (strcmp(name, "FAILURE") == 0) {
@@ -698,12 +700,11 @@ as_command_parse_success_failure_bins(uint8_t* p, as_error* err, as_msg* msg, as
 				as_error_update(err, AEROSPIKE_ERR_CLIENT, "Expected string for FAILURE bin. Received %d", val->type);
 			}
 			as_val_destroy(val);
-			return 0;
+			return err->code;
 		}
 		p += value_size;
 	}
-	as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to find SUCCESS or FAILURE bin.");
-	return 0;
+	return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to find SUCCESS or FAILURE bin.");
 }
 
 static as_status
@@ -954,7 +955,14 @@ as_command_parse_success_failure(as_error* err, int fd, uint64_t deadline_ms, vo
 	
 	switch (status) {
 		case AEROSPIKE_OK: {
-			as_command_parse_success_failure_bins(buf, err, &msg.m, val);
+			uint8_t* p = buf;
+			status = as_command_parse_success_failure_bins(&p, err, &msg.m, val);
+			
+			if (status != AEROSPIKE_OK) {
+				if (val) {
+					*val = 0;
+				}
+			}
 			break;
 		}
 			

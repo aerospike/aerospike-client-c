@@ -481,7 +481,7 @@ as_command_parse_header(as_error* err, int fd, uint64_t deadline_ms, void* user_
 		}
 	}
 	
-	if (msg->m.result_code && msg->m.result_code != AEROSPIKE_ERR_RECORD_NOT_FOUND) {
+	if (msg->m.result_code) {
 		return as_error_set_message(err, msg->m.result_code, as_error_string(msg->m.result_code));
 	}
 	return msg->m.result_code;
@@ -910,10 +910,6 @@ as_command_parse_result(as_error* err, int fd, uint64_t deadline_ms, void* user_
 			break;
 		}
 			
-		case AEROSPIKE_ERR_RECORD_NOT_FOUND:
-		case AEROSPIKE_ERR_LARGE_ITEM_NOT_FOUND:
-			break;
-
 		default:
 			as_error_set_message(err, status, as_error_string(status));
 			break;
@@ -974,14 +970,7 @@ as_command_parse_success_failure(as_error* err, int fd, uint64_t deadline_ms, vo
 			}
 			break;
 		}
-			
-		case AEROSPIKE_ERR_RECORD_NOT_FOUND:
-		case AEROSPIKE_ERR_LARGE_ITEM_NOT_FOUND:
-			if (val) {
-				*val = 0;
-			}
-			break;
-			
+
 		default:
 			as_error_set_message(err, status, as_error_string(status));
 			if (val) {

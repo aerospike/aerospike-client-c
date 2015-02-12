@@ -89,8 +89,7 @@ as_status aerospike_connect(aerospike * as, as_error * err)
 
 	// configuration checks
 	if ( as->config.hosts[0].addr == NULL ) {
-		as_log_error("No hosts provided");
-		return as_error_update(err, AEROSPIKE_ERR_CLUSTER, "no hosts provided");
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "No hosts provided");
 	}
 
     mod_lua_config config = {
@@ -105,13 +104,7 @@ as_status aerospike_connect(aerospike * as, as_error * err)
     as_module_configure(&mod_lua, &config);
 	
 	// Create the cluster object.
-	int status = as_cluster_create(&as->config, &as->cluster);
-	
-	if (status) {
-		return as_error_update(err, status, "Failed to connect to cluster: %s", as_error_string(status));
-	}
-	
-	return AEROSPIKE_OK;
+	return as_cluster_create(&as->config, err, &as->cluster);
 }
 
 /**

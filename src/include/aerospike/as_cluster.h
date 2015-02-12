@@ -302,8 +302,8 @@ typedef struct as_cluster_s {
 /**
  *	Create and initialize cluster.
  */
-int
-as_cluster_create(as_config* config, as_cluster** cluster);
+as_status
+as_cluster_create(as_config* config, as_error* err, as_cluster** cluster);
 
 /**
  *	Close all connections and release memory associated with cluster.

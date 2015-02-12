@@ -250,8 +250,8 @@ typedef struct as_shm_info_s {
  *	@private
  *	Create shared memory implementation of cluster.
  */
-int
-as_shm_create(struct as_cluster_s* cluster, as_config* config);
+as_status
+as_shm_create(struct as_cluster_s* cluster, as_error* err, as_config* config);
 
 /**
  *	@private

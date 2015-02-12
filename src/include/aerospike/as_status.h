@@ -34,6 +34,11 @@ typedef enum as_status_e {
 	 **************************************************************************/
 	
 	/**
+	 *	Host name could not be found in DNS lookup.
+	 */
+	AEROSPIKE_ERR_INVALID_HOST = -4,
+
+	/**
 	 *	No more records available when parsing batch, scan or query records.
 	 */
 	AEROSPIKE_NO_MORE_RECORDS = -3,

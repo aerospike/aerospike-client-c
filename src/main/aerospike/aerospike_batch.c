@@ -397,6 +397,7 @@ as_batch_execute(
 		as_batch_read* result = &results[i];
 		result->key = key;
 		result->result = AEROSPIKE_ERR_RECORD_NOT_FOUND;
+		as_record_init(&result->record, 0);
 		
 		// Only support batch commands with all keys in the same namespace.
 		if (strcmp(ns, key->ns)) {

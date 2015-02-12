@@ -225,6 +225,7 @@ as_batch_command_execute(as_batch_task* task)
 	cn.node = task->node;
 
 	as_error err;
+	as_error_init(&err);
 	as_status status = as_command_execute(&err, &cn, cmd, size, task->timeout_ms, task->retry, as_batch_parse, task);
 	
 	as_command_free(cmd, size);

@@ -326,7 +326,12 @@ as_status aerospike_key_remove(
 	status = as_command_execute(err, &cn, cmd, size, policy->timeout, policy->retry, as_command_parse_header, &msg);
 	
 	as_command_free(cmd, size);
-	return (status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND)? AEROSPIKE_OK : status;
+	
+	// Convert not found errors to ok.
+	if (status == AEROSPIKE_ERR_RECORD_NOT_FOUND) {
+		status = as_error_reset(err);
+	}
+	return status;
 }
 
 /**

@@ -31,8 +31,8 @@
  *	Function declarations
  *****************************************************************************/
 
-bool
-as_node_refresh(as_cluster* cluster, as_node* node, as_vector* /* <as_friend> */ friends);
+as_status
+as_node_refresh(as_cluster* cluster, as_error* err, as_node* node, as_vector* /* <as_friend> */ friends);
 
 void
 as_batch_threads_shutdown(as_cluster* cluster);
@@ -86,13 +86,12 @@ as_add_seeds(as_cluster* cluster, as_seed* seeds, uint32_t seeds_size) {
 	cluster->seeds_size = new_length;
 }
 
-static int
-as_lookup_node_name(as_cluster* cluster, struct sockaddr_in* addr, char* node_name, int node_name_size)
+static as_status
+as_lookup_node_name(as_cluster* cluster, as_error* err, struct sockaddr_in* addr, char* node_name, int node_name_size)
 {
-	as_error err;
 	char* response = 0;
 	uint64_t deadline = as_socket_deadline(cluster->conn_timeout_ms);
-	as_status status = as_info_command_host(cluster, &err, addr, "node", true, deadline, &response);
+	as_status status = as_info_command_host(cluster, err, addr, "node", true, deadline, &response);
 	
 	if (status) {
 		return status;
@@ -103,6 +102,11 @@ as_lookup_node_name(as_cluster* cluster, struct sockaddr_in* addr, char* node_na
 	
 	if (status == AEROSPIKE_OK) {
 		as_strncpy(node_name, value, node_name_size);
+	}
+	else {
+		char name[INET_ADDRSTRLEN];
+		as_socket_address_name(addr, name);
+		as_error_update(err, status, "Invalid node info response from %s: %s", name, response);
 	}
 	free(response);
 	return status;
@@ -196,8 +200,8 @@ as_cluster_add_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_a
 	}
 }
 
-static int
-as_cluster_seed_nodes(as_cluster* cluster, bool enable_warnings)
+static as_status
+as_cluster_seed_nodes(as_cluster* cluster, as_error* err, bool enable_warnings)
 {
 	// Add all nodes at once to avoid copying entire array multiple times.
 	as_vector nodes_to_add;
@@ -207,26 +211,27 @@ as_cluster_seed_nodes(as_cluster* cluster, bool enable_warnings)
 	as_vector_inita(&addresses, sizeof(struct sockaddr_in), 5);
 	
 	char name[AS_NODE_NAME_SIZE];
-	int first_error = 0;
+	as_error err_local;
+	as_status status = AEROSPIKE_OK;
 	
 	for (uint32_t i = 0; i < cluster->seeds_size; i++) {
 		as_seed* seed = &cluster->seeds[i];
 		as_vector_clear(&addresses);
 		
-		int status = as_lookup(cluster, seed->name, seed->port, enable_warnings, &addresses);
+		status = as_lookup(cluster, &err_local, seed->name, seed->port, &addresses);
 		
-		if (status != 0) {
-			if (first_error == 0) {
-				first_error = status;
+		if (status != AEROSPIKE_OK) {
+			if (enable_warnings) {
+				as_log_warn(err_local.message);
 			}
 			continue;
 		}
 
 		for (uint32_t i = 0; i < addresses.size; i++) {
 			struct sockaddr_in* addr = as_vector_get(&addresses, i);
-			status = as_lookup_node_name(cluster, addr, name, AS_NODE_NAME_SIZE);
+			status = as_lookup_node_name(cluster, &err_local, addr, name, AS_NODE_NAME_SIZE);
 			
-			if (status == 0) {
+			if (status == AEROSPIKE_OK) {
 				as_node* node = as_cluster_find_node_in_vector(&nodes_to_add, name);
 				
 				if (node) {
@@ -240,37 +245,30 @@ as_cluster_seed_nodes(as_cluster* cluster, bool enable_warnings)
 				}
 			}
 			else {
-				if (first_error == 0) {
-					first_error = status;
-				}
-				
 				if (enable_warnings) {
-					char name[INET_ADDRSTRLEN];
-					as_socket_address_name(addr, name);
-					as_log_warn("Connection failed for %s (%s:%d)", seed->name, name, (int)seed->port);
+					as_log_warn(err_local.message);
 				}
 			}
 		}
 	}
 	
-	int final_status;
-
 	if (nodes_to_add.size > 0) {
 		as_cluster_add_nodes(cluster, &nodes_to_add);
-		final_status = 0;
+		status = AEROSPIKE_OK;
 	}
 	else {
-		final_status = (first_error)? first_error : AEROSPIKE_ERR_CLIENT;
+		status = as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to seed cluster");
 	}
 	
 	as_vector_destroy(&nodes_to_add);
 	as_vector_destroy(&addresses);
-	return final_status;
+	return status;
 }
 
 static void
 as_cluster_find_nodes_to_add(as_cluster* cluster, as_vector* /* <as_friend> */ friends, as_vector* /* <as_node*> */ nodes_to_add)
 {
+	as_error err;
 	as_vector addresses;
 	as_vector_inita(&addresses, sizeof(struct sockaddr_in), 5);
 	
@@ -280,17 +278,18 @@ as_cluster_find_nodes_to_add(as_cluster* cluster, as_vector* /* <as_friend> */ f
 		as_friend* friend = as_vector_get(friends, i);
 		as_vector_clear(&addresses);
 		
-		int status = as_lookup(cluster, friend->name, friend->port, true, &addresses);
+		as_status status = as_lookup(cluster, &err, friend->name, friend->port, &addresses);
 		
-		if (status != 0) {
+		if (status != AEROSPIKE_OK) {
+			as_log_warn(err.message);
 			continue;
 		}
 		
 		for (uint32_t i = 0; i < addresses.size; i++) {
 			struct sockaddr_in* addr = as_vector_get(&addresses, i);
-			status = as_lookup_node_name(cluster, addr, name, AS_NODE_NAME_SIZE);
+			status = as_lookup_node_name(cluster, &err, addr, name, AS_NODE_NAME_SIZE);
 			
-			if (status == 0) {
+			if (status == AEROSPIKE_OK) {
 				as_node* node = as_cluster_find_node(cluster->nodes, name);
 				
 				if (node) {
@@ -309,6 +308,9 @@ as_cluster_find_nodes_to_add(as_cluster* cluster, as_vector* /* <as_friend> */ f
 				as_address* a = as_node_get_address_full(node);
 				as_log_info("Add node %s %s:%d", name, a->name, (int)cf_swap_from_be16(a->addr.sin_port));
 				as_vector_append(nodes_to_add, &node);
+			}
+			else {
+				as_log_warn(err.message);
 			}
 		}
 	}
@@ -334,7 +336,8 @@ as_cluster_find_nodes_to_remove(as_cluster* cluster, uint32_t refresh_count, as_
 				// Single node clusters rely on whether it responded to info requests.
 				if (node->failures >= 5) {
 					// 5 consecutive info requests failed. Try seeds.
-					if (as_cluster_seed_nodes(cluster, false) == 0) {
+					as_error err;
+					if (as_cluster_seed_nodes(cluster, &err, false) == AEROSPIKE_OK) {
 						// Seed nodes found. Remove unresponsive node.
 						as_vector_append(nodes_to_remove, &node);
 					}
@@ -475,12 +478,11 @@ as_cluster_remove_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_t
 	}
 }
 
-static int
-as_cluster_set_partition_size(as_cluster* cluster)
+static as_status
+as_cluster_set_partition_size(as_cluster* cluster, as_error* err)
 {
-	as_error err;
 	as_nodes* nodes = cluster->nodes;
-	int first_error = 0;
+	as_status status = AEROSPIKE_OK;
 	
 	for (uint32_t i = 0; i < nodes->size && cluster->n_partitions == 0; i++) {
 		as_node* node = nodes->array[i];
@@ -488,12 +490,9 @@ as_cluster_set_partition_size(as_cluster* cluster)
 		
 		char* response = 0;
 		uint64_t deadline = as_socket_deadline(cluster->conn_timeout_ms);
-		as_status status = as_info_command_host(cluster, &err, addr, "partitions", true, deadline, &response);
+		as_status status = as_info_command_host(cluster, err, addr, "partitions", true, deadline, &response);
 				
-		if (status != 0) {
-			if (first_error == 0) {
-				first_error = status;
-			}
+		if (status != AEROSPIKE_OK) {
 			continue;
 		}
 		
@@ -504,19 +503,26 @@ as_cluster_set_partition_size(as_cluster* cluster)
 			cluster->n_partitions = atoi(value);
 		}
 		else {
-			if (first_error == 0) {
-				first_error = status;
-			}
+			char name[INET_ADDRSTRLEN];
+			as_socket_address_name(addr, name);
+			as_error_update(err, status, "Invalid partitions info response from %s: %s", name, response);
 		}
 		free(response);
 	}
 	
 	if (cluster->n_partitions > 0) {
-		return 0;
+		// Must reset error if previous nodes had failed.
+		if (err->code != AEROSPIKE_OK) {
+			as_error_reset(err);
+		}
+		return AEROSPIKE_OK;
 	}
 	
-	// Must return error code even if first_error not set.
-	return (first_error)? first_error : AEROSPIKE_ERR_CLIENT;
+	// Return error code if no nodes are currently in cluster.
+	if (status == AEROSPIKE_OK) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to retrieve partition size from empty cluster");
+	}
+	return status;
 }
 
 /**
@@ -535,8 +541,8 @@ as_cluster_gc(as_vector* /* <as_gc_item> */ vector)
 /**
  * Check health of all nodes in the cluster.
  */
-int
-as_cluster_tend(as_cluster* cluster, bool enable_seed_warnings)
+as_status
+as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings)
 {
 	// All node additions/deletions are performed in tend thread.
 	// Garbage collect data structures released in previous tend.
@@ -548,19 +554,18 @@ as_cluster_tend(as_cluster* cluster, bool enable_seed_warnings)
 	// If active nodes don't exist, seed cluster.
 	as_nodes* nodes = cluster->nodes;
 	if (nodes->size == 0) {
-		int status = as_cluster_seed_nodes(cluster, enable_seed_warnings);
+		as_status status = as_cluster_seed_nodes(cluster, err, enable_seed_warnings);
 		
-		if (status != 0) {
+		if (status != AEROSPIKE_OK) {
 			return status;
 		}
 	}
 
 	// Retrieve fixed number of partitions only once from any node.
 	if (cluster->n_partitions == 0) {
-		int status = as_cluster_set_partition_size(cluster);
+		as_status status = as_cluster_set_partition_size(cluster, err);
 		
-		if (status != 0) {
-			as_log_warn("Failed to set retrieve n_partitions from cluster nodes.");
+		if (status != AEROSPIKE_OK) {
 			return status;
 		}
 	}
@@ -573,6 +578,7 @@ as_cluster_tend(as_cluster* cluster, bool enable_seed_warnings)
 	}
 	
 	// Refresh all known nodes.
+	as_error err_local;
 	as_vector friends;
 	as_vector_inita(&friends, sizeof(as_friend), 8);
 	uint32_t refresh_count = 0;
@@ -581,11 +587,12 @@ as_cluster_tend(as_cluster* cluster, bool enable_seed_warnings)
 		as_node* node = nodes->array[i];
 		
 		if (node->active) {
-			if (as_node_refresh(cluster, node, &friends)) {
+			if (as_node_refresh(cluster, &err_local, node, &friends) == AEROSPIKE_OK) {
 				node->failures = 0;
 				refresh_count++;
 			}
 			else {
+				as_log_info("Node %s refresh failed: %s %s", node->name, as_error_string(err_local.code), err_local.message);
 				node->failures++;
 			}
 		}
@@ -614,7 +621,7 @@ as_cluster_tend(as_cluster* cluster, bool enable_seed_warnings)
 	as_vector_destroy(&nodes_to_add);
 	as_vector_destroy(&nodes_to_remove);
 	as_vector_destroy(&friends);
-	return 0;
+	return AEROSPIKE_OK;
 }
 
 /**
@@ -626,16 +633,16 @@ as_cluster_tend(as_cluster* cluster, bool enable_seed_warnings)
  * control as well.  Do not return an error since future
  * database requests may still succeed.
  */
-static int
-as_wait_till_stabilized(as_cluster* cluster)
+static as_status
+as_wait_till_stabilized(as_cluster* cluster, as_error* err)
 {
 	uint64_t limit = cf_getms() + cluster->conn_timeout_ms;
 	uint32_t count = -1;
 	
 	do {
-		int status = as_cluster_tend(cluster, true);
+		as_status status = as_cluster_tend(cluster, err, true);
 		
-		if (status != 0) {
+		if (status != AEROSPIKE_OK) {
 			return status;
 		}
 		
@@ -643,13 +650,13 @@ as_wait_till_stabilized(as_cluster* cluster)
 		// If not, assume cluster has stabilized and return.
 		as_nodes* nodes = cluster->nodes;
 		if (count == nodes->size) {
-			return 0;
+			return AEROSPIKE_OK;
 		}
 		count = nodes->size;
 		usleep(1);  // Sleep 1 microsecond before next cluster tend.
 	} while (cf_getms() < limit);
 	
-	return 0;
+	return AEROSPIKE_OK;
 }
 
 static void*
@@ -662,10 +669,17 @@ as_cluster_tender(void* data)
 	
 	struct timespec abstime;
 	
+	as_status status;
+	as_error err;
+	
 	pthread_mutex_lock(&cluster->tend_lock);
 
 	while (cluster->valid) {
-		as_cluster_tend(cluster, false);
+		status = as_cluster_tend(cluster, &err, false);
+		
+		if (status != AEROSPIKE_OK) {
+			as_log_warn("Tend error: %s %s", as_error_string(status), err.message);
+		}
 		
 		// Convert tend interval into absolute timeout.
 		cf_clock_current_add(&delta, &abstime);
@@ -721,20 +735,24 @@ as_cluster_add_seeds(as_cluster* cluster)
 	as_vector_destroy(&seeds_to_add);
 }
 
-int
-as_cluster_init(as_cluster* cluster, bool fail_if_not_connected)
+as_status
+as_cluster_init(as_cluster* cluster, as_error* err, bool fail_if_not_connected)
 {
 	// Tend cluster until all nodes identified.
-	int status = as_wait_till_stabilized(cluster);
+	as_status status = as_wait_till_stabilized(cluster, err);
 	
-	if (status != 0) {
+	if (status != AEROSPIKE_OK) {
 		if (fail_if_not_connected) {
 			return status;
+		}
+		else {
+			as_log_warn("Cluster connection failed: %s %s", as_error_string(err->code), err->message);
+			as_error_reset(err);
 		}
 	}
 	as_cluster_add_seeds(cluster);
 	cluster->valid = true;
-	return 0;
+	return AEROSPIKE_OK;
 }
 
 static uint32_t
@@ -871,8 +889,8 @@ as_cluster_change_password(as_cluster* cluster, const char* user, const char* pa
 	}
 }
 
-int
-as_cluster_create(as_config* config, as_cluster** cluster_out)
+as_status
+as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 {
 	as_cluster* cluster = cf_malloc(sizeof(as_cluster));
 	memset(cluster, 0, sizeof(as_cluster));
@@ -919,9 +937,9 @@ as_cluster_create(as_config* config, as_cluster** cluster_out)
 	
 	if (config->use_shm) {
 		// Create shared memory cluster.
-		int status = as_shm_create(cluster, config);
+		as_status status = as_shm_create(cluster, err, config);
 		
-		if (status != 0) {
+		if (status != AEROSPIKE_OK) {
 			as_cluster_destroy(cluster);
 			*cluster_out = 0;
 			return status;
@@ -929,9 +947,9 @@ as_cluster_create(as_config* config, as_cluster** cluster_out)
 	}
 	else {
 		// Initialize normal cluster.
-		int status = as_cluster_init(cluster, config->fail_if_not_connected);
+		as_status status = as_cluster_init(cluster, err, config->fail_if_not_connected);
 		
-		if (status != 0) {
+		if (status != AEROSPIKE_OK) {
 			as_cluster_destroy(cluster);
 			*cluster_out = 0;
 			return status;
@@ -940,7 +958,7 @@ as_cluster_create(as_config* config, as_cluster** cluster_out)
 		pthread_create(&cluster->tend_thread, 0, as_cluster_tender, cluster);
 	}
 	*cluster_out = cluster;
-	return 0;
+	return AEROSPIKE_OK;
 }
 
 void

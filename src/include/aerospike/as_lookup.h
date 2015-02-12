@@ -33,8 +33,8 @@ extern "C" {
  *	if it's not null.  The addition to the vector will be done via a unique add just in
  *	case there are duplicates. Return zero on success.
  */
-int
-as_lookup(as_cluster* cluster, char* hostname, uint16_t port, bool enable_warning, as_vector* /*<struct sockaddr_in>*/ addresses);
+as_status
+as_lookup(as_cluster* cluster, as_error* err, char* hostname, uint16_t port, as_vector* /*<struct sockaddr_in>*/ addresses);
 
 #ifdef __cplusplus
 } // end extern "C"

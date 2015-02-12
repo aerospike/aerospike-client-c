@@ -345,7 +345,7 @@ as_command_execute(as_error * err, as_command_node* cn, uint8_t* command, size_t
 		}
 		
 		int fd;
-		as_status status = as_node_get_connection(node, &fd);
+		as_status status = as_node_get_connection(err, node, &fd);
 		
 		if (status) {
 			if (release_node) {
@@ -373,7 +373,13 @@ as_command_execute(as_error * err, as_command_node* cn, uint8_t* command, size_t
 		// Parse results returned by server.
 		status = parse_results_fn(err, fd, deadline_ms, parse_results_data);
 		
-		if (status) {
+		if (status == AEROSPIKE_OK) {
+			// Reset error code if retry had occurred.
+			if (err->code != AEROSPIKE_OK) {
+				as_error_reset(err);
+			}
+		}
+		else {
 			switch (status) {
 				// Retry on timeout.
 				case AEROSPIKE_ERR_TIMEOUT:

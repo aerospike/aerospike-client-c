@@ -480,7 +480,9 @@ as_batch_execute(
 
 	// Destroy records. User is responsible for destroying keys with as_batch_destroy().
 	for (uint32_t i = 0; i < n_keys; i++) {
-		as_record_destroy(&task.results[i].record);
+		if( task.results[i].result == AEROSPIKE_OK) {
+			as_record_destroy(&task.results[i].record);
+		}
 	}
 	return status;
 }

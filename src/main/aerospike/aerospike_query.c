@@ -146,9 +146,9 @@ static as_stream_status
 as_callback_stream_write(const as_stream* s, as_val* val)
 {
 	as_query_stream_callback* source = (as_query_stream_callback*)as_stream_source(s);
-	source->callback(val, source->udata);
+	bool rv = source->callback(val, source->udata);
 	as_val_destroy(val);
-	return AS_STREAM_OK;
+	return rv? AS_STREAM_OK : AS_STREAM_ERR;
 }
 
 static const as_stream_hooks callback_stream_hooks = {

@@ -14,7 +14,13 @@ local function one(r)
     return 1;
 end
 
+local function filter_none(rec)
+	return 1
+end
 
+local function map_result(rec)
+	return map {idx=rec.c}
+end
 
 
 function count(s)
@@ -36,4 +42,8 @@ function sum_on_match(s, bin, val)
     end
 
     return s : map(_map) : reduce(add);
+end
+
+function filter_passthrough(s)
+	return s : filter(filter_none) : map(map_result)
 end

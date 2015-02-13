@@ -237,6 +237,8 @@ TEST( key_basics_exists , "exists: (test,test,foo)" ) {
 
     assert_int_eq( rc, AEROSPIKE_OK );
 	assert_not_null( rec );
+	assert_true ( rec->gen != 0 );
+	assert_true ( rec->ttl != 0 );
 	
 	as_record_destroy(rec);
 }
@@ -273,9 +275,24 @@ TEST( key_basics_remove , "remove: (test,test,foo)" ) {
 
 	as_key_destroy(&key);
 
-    assert_true( rc == AEROSPIKE_OK || rc == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+    assert_true( rc == AEROSPIKE_OK );
 }
 
+TEST( key_basics_remove_notexists , "remove not exists: (test,test,foozoo)" ) {
+	
+	as_error err;
+	as_error_reset(&err);
+	
+	as_key key;
+	as_key_init(&key, "test", "test", "foozoo");
+	
+	as_status rc = aerospike_key_remove(as, &err, NULL, &key);
+	
+	as_key_destroy(&key);
+	
+    assert_true( rc == AEROSPIKE_ERR_RECORD_NOT_FOUND );
+	assert_true( err.message[0] != 0 );
+}
 
 TEST( key_basics_operate , "operate: (test,test,foo) => {a: incr(321), b: append('def'), d: prepend('abc')}" ) {
 
@@ -361,5 +378,6 @@ SUITE( key_basics, "aerospike_key basic tests" ) {
 	suite_add( key_basics_operate );
 	suite_add( key_basics_get2 );
 	suite_add( key_basics_remove );
+	suite_add( key_basics_remove_notexists );
 	suite_add( key_basics_notexists );
 }

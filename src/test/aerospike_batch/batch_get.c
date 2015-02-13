@@ -110,12 +110,17 @@ TEST( batch_get_pre , "Pre: Create Records" )
 
     for (uint32_t i = 1; i < N_KEYS+1; i++) {
 
+		// Do not write some records to test not found logic too.
+		if (i % 20 == 0) {
+			continue;
+		}
+			
         as_key key;
         as_key_init_int64(&key, NAMESPACE, SET, (int64_t) i);
 
         as_record_set_int64(&rec, "val", (int64_t) i);
 
-        aerospike_key_put(as, &err, NULL, &key, &rec);
+		aerospike_key_put(as, &err, NULL, &key, &rec);
 
         if ( err.code != AEROSPIKE_OK ) {
             info("error(%d): %s", err.code, err.message);
@@ -144,7 +149,7 @@ TEST( batch_get_1 , "Simple" )
     }
     assert_int_eq( err.code , AEROSPIKE_OK );
 
-    assert_int_eq( data.found , N_KEYS );
+    assert_int_eq( data.found , N_KEYS - N_KEYS/20);
     assert_int_eq( data.errors , 0 );
 }
 
@@ -159,12 +164,12 @@ TEST( batch_get_post , "Post: Remove Records" )
 
         aerospike_key_remove(as, &err, NULL, &key);
 
-        if ( err.code != AEROSPIKE_OK ) {
+        if (err.code != AEROSPIKE_OK && err.code != AEROSPIKE_ERR_RECORD_NOT_FOUND) {
             info("error(%d): %s", err.code, err.message);
         }
 
-        assert_int_eq( err.code , AEROSPIKE_OK );
-    }
+		assert_true( err.code == AEROSPIKE_OK || err.code == AEROSPIKE_ERR_RECORD_NOT_FOUND );
+	}
 }
 
 void *batch_get_function(void  *thread_id)

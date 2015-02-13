@@ -477,6 +477,67 @@ TEST( query_foreach_7, "IN MAPVALUES count(*) where y contains 'y'" ) {
 	as_query_destroy(&q);
 }
 
+static bool query_quit_early_callback(const as_val * v, void * udata) {
+	if (v) {
+		int64_t* count = (int64_t*)udata;
+		(*count)++;
+	}
+	return false;
+}
+
+TEST( query_quit_early, "normal query and quit early" ) {
+	
+	as_error err;
+	as_error_reset(&err);
+	
+	int64_t count = 0;
+	
+	as_query q;
+	as_query_init(&q, NAMESPACE, SET);
+	
+	as_query_where_inita(&q, 1);
+	as_query_where(&q, "a", as_string_equals("abc"));
+	
+	if ( aerospike_query_foreach(as, &err, NULL, &q, query_quit_early_callback, &count) != AEROSPIKE_OK ) {
+		error("%s (%s) [%s:%d]", err.message, err.code, err.file, err.line);
+	}
+	
+	info("count: %d",count);
+	
+	assert_int_eq( err.code, 0 );
+	assert_int_eq( count, 1 );
+	
+	as_query_destroy(&q);
+}
+
+TEST( query_agg_quit_early, "aggregation and quit early" ) {
+	
+	as_error err;
+	as_error_reset(&err);
+	
+	int64_t count = 0;
+	
+	as_query q;
+	as_query_init(&q, NAMESPACE, SET);
+	
+	as_query_where_inita(&q, 1);
+	as_query_where(&q, "a", as_string_equals("abc"));
+	
+	as_query_apply(&q, UDF_FILE, "filter_passthrough", NULL);
+	
+	if ( aerospike_query_foreach(as, &err, NULL, &q, query_quit_early_callback, &count) != AEROSPIKE_OK ) {
+		error("%s (%s) [%s:%d]", err.message, err.code, err.file, err.line);
+	}
+	
+	info("count: %d",count);
+	
+	assert_int_eq( err.code, 0 );
+	assert_int_eq( count, 1 );
+	
+	as_query_destroy(&q);
+}
+
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -496,4 +557,8 @@ SUITE( query_foreach, "aerospike_query_foreach tests" ) {
 	suite_add( query_foreach_6 );
 	suite_add( query_foreach_7 );
 */
+	suite_add( query_quit_early );
+	
+	// TODO: Uncomment when lua-core gets promoted.
+	//suite_add( query_agg_quit_early );
 }

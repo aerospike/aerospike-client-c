@@ -177,6 +177,7 @@ TEST( key_operate_gen_equal , "operate: only if expected generation " )
 	ops.ttl = 120;
 	
 	as_policy_operate policy;
+	as_policy_operate_init(&policy);
 	policy.gen = AS_POLICY_GEN_EQ;
 	
 	// Expect failure.

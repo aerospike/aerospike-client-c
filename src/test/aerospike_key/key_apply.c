@@ -248,6 +248,20 @@ TEST( key_apply_get_bin_a , "apply: (test,test,foo1) <!> key_apply.get_bin_a() =
     as_val_destroy(res);
 }
 
+TEST( key_apply_null_rc , "apply: with null result value" ) {
+	
+	as_error err;
+	as_error_reset(&err);
+	
+	as_key key;
+	as_key_init(&key, "test", "test", "foo");
+	
+	as_status rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "one", NULL, NULL);
+	
+	as_key_destroy(&key);
+	
+    assert_int_eq( rc, AEROSPIKE_OK );
+}
 
 /******************************************************************************
  * TEST SUITE
@@ -264,4 +278,5 @@ SUITE( key_apply, "aerospike_key_apply tests" ) {
 	suite_add( key_apply_add_1_2 );
 	suite_add( key_apply_record_exists );
 	suite_add( key_apply_get_bin_a );
+	suite_add( key_apply_null_rc );
 }

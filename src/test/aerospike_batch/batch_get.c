@@ -106,7 +106,7 @@ TEST( batch_get_pre , "Pre: Create Records" )
     as_error err;
 
     as_record rec;
-    as_record_inita(&rec, 1);
+    as_record_inita(&rec, 2);
 
     for (uint32_t i = 1; i < N_KEYS+1; i++) {
 
@@ -119,6 +119,7 @@ TEST( batch_get_pre , "Pre: Create Records" )
         as_key_init_int64(&key, NAMESPACE, SET, (int64_t) i);
 
         as_record_set_int64(&rec, "val", (int64_t) i);
+        as_record_set_int64(&rec, "val2", (int64_t) i);
 
 		aerospike_key_put(as, &err, NULL, &key, &rec);
 
@@ -227,6 +228,67 @@ TEST( multithreaded_batch_get , "Batch Get - with multiple threads ")
     pthread_rwlock_destroy( &rwlock);
 }
 
+bool batch_get_bins_callback(const as_batch_read * results, uint32_t n, void * udata)
+{
+    batch_read_data * data = (batch_read_data *) udata;
+	
+    data->total = n;
+	
+    for (uint32_t i = 0; i < n; i++) {
+		
+        if (results[i].result == AEROSPIKE_OK) {
+            data->found++;
+			
+            int64_t val = as_record_get_int64(&results[i].record, "val", -1);
+			if (val != -1) {
+				warn("val(%d) should not have been returned!", val);
+				data->errors++;
+				data->last_error = -2;
+			}
+			
+            int64_t key = as_integer_getorelse((as_integer *) results[i].key->valuep, -1);
+            int64_t val2 = as_record_get_int64(&results[i].record, "val2", -1);
+            if ( key != val2 ) {
+                warn("key(%d) != val2(%d)",key,val2);
+                data->errors++;
+                data->last_error = -2;
+            }
+        }
+        else if (results[i].result != AEROSPIKE_ERR_RECORD_NOT_FOUND) {
+            data->errors++;
+            data->last_error = results[i].result;
+            warn("batch callback thread(%d) error(%d)", data->thread_id, data->last_error);
+        }
+    }
+	
+    info("total: %d, found: %d, errors: %d", data->total, data->found, data->errors);
+	
+    return true;
+}
+
+TEST( batch_get_bins , "Batch Get - with bin name filters" )
+{
+    as_error err;
+	
+    as_batch batch;
+    as_batch_inita(&batch, N_KEYS);
+	
+    for (uint32_t i = 0; i < N_KEYS; i++) {
+        as_key_init_int64(as_batch_keyat(&batch,i), NAMESPACE, SET, i+1);
+    }
+	
+    batch_read_data data = {0};
+	const char* bins[] = {"val2"};
+	
+    aerospike_batch_get_bins(as, &err, NULL, &batch, bins, 1, batch_get_bins_callback, &data);
+    if ( err.code != AEROSPIKE_OK && err.code != AEROSPIKE_ERR_INDEX_FOUND ) {
+        info("error(%d): %s", err.code, err.message);
+    }
+    assert_int_eq( err.code , AEROSPIKE_OK );
+    assert_int_eq( data.found , N_KEYS - N_KEYS/20);
+    assert_int_eq( data.errors , 0 );
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -235,5 +297,6 @@ SUITE( batch_get, "aerospike_batch_get tests" ) {
     suite_add( batch_get_pre );
     suite_add( batch_get_1 );
     suite_add( multithreaded_batch_get );
+    suite_add( batch_get_bins );
     suite_add( batch_get_post );
 }

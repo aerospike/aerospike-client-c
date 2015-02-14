@@ -141,6 +141,56 @@ TEST( key_operate_9 , "operate: (test,test,key3) = {append, read, write, read, i
     as_operations_destroy( ops );
 }
 
+TEST( key_operate_gen_equal , "operate: only if expected generation " )
+{
+	as_error err;
+	as_error_reset(&err);
+	
+	as_arraylist list;
+	as_arraylist_init(&list, 3, 0);
+	as_arraylist_append_int64(&list, 1);
+	as_arraylist_append_int64(&list, 2);
+	as_arraylist_append_int64(&list, 3);
+	
+	as_record r, * rec = &r;
+	as_record_init(rec, 3);
+	as_record_set_int64(rec, "a", 123);
+	as_record_set_str(rec, "b", "abc");
+	as_record_set_list(rec, "e", (as_list *) &list);
+	
+	as_key key;
+	as_key_init(&key, "test", "operate", "key2");
+	
+	as_status rc = aerospike_key_remove(as, &err, NULL, &key);
+	
+	rc = aerospike_key_put(as, &err, NULL, &key, rec);
+	assert_int_eq( rc, AEROSPIKE_OK );
+	
+	as_record_destroy(rec);
+	as_record_init(rec, 1);
+	
+	as_operations ops;
+	as_operations_inita(&ops, 2);
+	as_operations_add_touch(&ops);
+	as_operations_add_read(&ops, "e");
+	ops.gen = 2;
+	ops.ttl = 120;
+	
+	as_policy_operate policy;
+	policy.gen = AS_POLICY_GEN_EQ;
+	
+	// Expect failure.
+	rc = aerospike_key_operate(as, &err, &policy, &key, &ops, &rec);
+	assert_int_eq( rc, AEROSPIKE_ERR_RECORD_GENERATION );
+
+	// Expect success.
+	ops.gen = 1;
+	rc = aerospike_key_operate(as, &err, &policy, &key, &ops, &rec);
+	assert_int_eq( rc, AEROSPIKE_OK );
+
+	as_record_destroy(rec);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -148,4 +198,5 @@ TEST( key_operate_9 , "operate: (test,test,key3) = {append, read, write, read, i
 SUITE( key_operate, "aerospike_key_operate tests" ) {
 	suite_add( key_operate_touchget );
 	suite_add( key_operate_9 );
+	suite_add( key_operate_gen_equal );
 }

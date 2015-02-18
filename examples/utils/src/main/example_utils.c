@@ -63,8 +63,8 @@
 const char DEFAULT_HOST[] = "127.0.0.1";
 const int DEFAULT_PORT = 3000;
 const char DEFAULT_NAMESPACE[] = "test";
-const char DEFAULT_SET[] = "test-set";
-const char DEFAULT_KEY_STR[] = "test-key";
+const char DEFAULT_SET[] = "eg-set";
+const char DEFAULT_KEY_STR[] = "eg-key";
 const uint32_t DEFAULT_NUM_KEYS = 20;
 
 const char* SHORT_OPTS_BASIC = "h:p:U:P::n:s:k:";

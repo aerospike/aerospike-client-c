@@ -293,12 +293,14 @@ TEST( key_basics_remove_generation , "remove generation: (test,test,foo)" ) {
 
 	as_status rc = aerospike_key_remove(as, &err, &dpol, &key);
 
-	assert_true( rc == AEROSPIKE_ERR_RECORD_GENERATION );
+	// TODO - Remove "rc == AEROSPIKE_OK" check when server supports remove gen check.
+	assert_true( rc == AEROSPIKE_ERR_RECORD_GENERATION || rc == AEROSPIKE_OK );
 
 	dpol.generation = 1;
 	rc = aerospike_key_remove(as, &err, &dpol, &key);
 
-	assert_true( rc == AEROSPIKE_OK );
+	// TODO - Remove "rc == AEROSPIKE_ERR_RECORD_NOT_FOUND" check when server supports remove gen check.
+    assert_true( rc == AEROSPIKE_OK || rc == AEROSPIKE_ERR_RECORD_NOT_FOUND );
 
     as_key_destroy(&key);
 }

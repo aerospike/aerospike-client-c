@@ -205,17 +205,14 @@ main(int argc, char* argv[])
 	as_query_destroy(&query);
 	as_query_init(&query, g_namespace, g_set);
 
-	// Generate an as_query.where condition. Here we'll use the entire test-bin
-	// range (for 20 records inserted), to include everything.
-	as_query_where_inita(&query, 1);
-	as_query_where(&query, "test-bin", as_integer_range(0, 19));
+	// No as_query.where condition in this case, so we include everything.
 
 	// Specify another UDF to use on the resulting stream. This UDF operates on
 	// the numbers-bin (string) values, and demonstrates a case where the value
 	// returned by the query callback is an as_map (instead of an as_integer).
 	as_query_apply(&query, UDF_MODULE, "count_numbers", NULL);
 
-	LOG("executing numbers aggregate-reduce query: where test-bin = 0 ... 19");
+	LOG("executing numbers aggregate-reduce query: all records");
 
 	// Execute the query. This call blocks - callbacks are made in the scope of
 	// this call.

@@ -29,6 +29,7 @@
 #include <aerospike/as_record.h>
 #include <aerospike/as_serializer.h>
 #include <aerospike/as_status.h>
+#include <citrusleaf/cf_clock.h>
 
 /******************************************************************************
  * FUNCTIONS
@@ -200,7 +201,7 @@ as_status aerospike_key_exists(
 				*rec = r;
 			}
 			r->gen = (uint16_t)msg.m.generation;
-			r->ttl = msg.m.record_ttl;
+			r->ttl = cf_server_void_time_to_ttl(msg.m.record_ttl);
 		}
 		else {
 			*rec = 0;

@@ -146,7 +146,7 @@ TEST( key_basics_get , "get: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 'de
 	as_status rc = aerospike_key_get(as, &err, NULL, &key, &rec);
 
 	as_key_destroy(&key);
-    
+
     info("bins: ");
     as_record_foreach(rec, key_basics_print_bins, NULL);
 	
@@ -278,6 +278,31 @@ TEST( key_basics_remove , "remove: (test,test,foo)" ) {
     assert_true( rc == AEROSPIKE_OK || rc == AEROSPIKE_ERR_RECORD_NOT_FOUND );
 }
 
+TEST( key_basics_remove_generation , "remove generation: (test,test,foo)" ) {
+
+	as_error err;
+	as_error_reset(&err);
+
+	as_policy_remove dpol;
+	as_policy_remove_init(&dpol);
+	dpol.gen = AS_POLICY_GEN_EQ;
+	dpol.generation = 2;
+
+	as_key key;
+	as_key_init(&key, "test", "test", "foo");
+
+	as_status rc = aerospike_key_remove(as, &err, &dpol, &key);
+
+	assert_true( rc == AEROSPIKE_ERR_RECORD_GENERATION );
+
+	dpol.generation = 1;
+	rc = aerospike_key_remove(as, &err, &dpol, &key);
+
+	assert_true( rc == AEROSPIKE_OK );
+
+    as_key_destroy(&key);
+}
+
 TEST( key_basics_remove_notexists , "remove not exists: (test,test,foozoo)" ) {
 	
 	as_error err;
@@ -373,6 +398,8 @@ SUITE( key_basics, "aerospike_key basic tests" ) {
 	suite_add( key_basics_put );
 	suite_add( key_basics_exists );
 	suite_add( key_basics_notexists );
+	suite_add( key_basics_remove_generation );
+	suite_add( key_basics_put );
 	suite_add( key_basics_get );
 	suite_add( key_basics_select );
 	suite_add( key_basics_operate );

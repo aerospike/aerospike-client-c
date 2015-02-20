@@ -16,10 +16,6 @@
  */
 #pragma once
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /**
  * Functionality related to Large Map Data Type
  */
@@ -34,6 +30,10 @@ extern "C" {
 #include <aerospike/as_key.h>
 #include <aerospike/as_val.h>
 #include <aerospike/as_boolean.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /******************************************************************************
  *	FUNCTIONS

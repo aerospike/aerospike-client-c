@@ -17,10 +17,6 @@
 #pragma once
 #pragma GCC diagnostic ignored "-Waddress"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include <aerospike/aerospike_index.h>
 #include <aerospike/as_bin.h>
 #include <aerospike/as_key.h>
@@ -28,6 +24,10 @@ extern "C" {
 #include <aerospike/as_udf.h>
 
 #include <stdarg.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /******************************************************************************
  *	MACROS

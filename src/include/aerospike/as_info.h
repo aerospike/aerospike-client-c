@@ -16,11 +16,11 @@
  */
 #pragma once
 
+#include <aerospike/as_cluster.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include <aerospike/as_cluster.h>
 
 /******************************************************************************
  *	TYPES

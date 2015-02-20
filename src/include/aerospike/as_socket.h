@@ -16,10 +16,6 @@
  */
 #pragma once
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include <aerospike/as_error.h>
 #include <citrusleaf/cf_clock.h>
 #include <stddef.h>
@@ -54,6 +50,10 @@ extern "C" {
 
 #define SHUT_RDWR		SD_BOTH
 #endif // CF_WINDOWS
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /**
  *	@private

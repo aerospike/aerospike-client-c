@@ -16,12 +16,12 @@
  */
 #pragma once 
 
+#include <aerospike/as_bytes.h>
+#include <aerospike/as_list.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include <aerospike/as_bytes.h>
-#include <aerospike/as_list.h>
 
 /******************************************************************************
  *	MACROS

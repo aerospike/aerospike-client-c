@@ -16,10 +16,6 @@
  */
 #pragma once 
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include <aerospike/as_bin.h>
 #include <aerospike/as_buffer.h>
 #include <aerospike/as_cluster.h>
@@ -29,6 +25,10 @@ extern "C" {
 #include <aerospike/as_record.h>
 #include <citrusleaf/cf_byte_order.h>
 #include <citrusleaf/cf_digest.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /******************************************************************************
  *	MACROS

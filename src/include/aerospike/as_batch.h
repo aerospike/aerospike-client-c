@@ -16,9 +16,6 @@
  */
 #pragma once 
 
-#ifdef __cplusplus
-extern "C" {
-#endif
 #pragma GCC diagnostic ignored "-Waddress"
 
 #include <aerospike/as_bin.h>
@@ -27,6 +24,10 @@ extern "C" {
 #include <aerospike/as_status.h>
 #include <stdint.h>
 #include <stdbool.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /*****************************************************************************
  *	STRUCTURES

@@ -16,10 +16,6 @@
  */
 #pragma once
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /**
  *	@defgroup index_operations Index Operations
  *	@ingroup client_operations
@@ -50,6 +46,10 @@ extern "C" {
 #include <aerospike/as_key.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_status.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /******************************************************************************
  *	TYPES

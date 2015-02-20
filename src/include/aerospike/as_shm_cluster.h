@@ -16,15 +16,15 @@
  */
 #pragma once
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include <aerospike/as_config.h>
 #include <aerospike/as_partition.h>
 #include <citrusleaf/cf_queue.h>
 #include <ck_spinlock.h>
 #include <ck_swlock.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /******************************************************************************
  *	TYPES

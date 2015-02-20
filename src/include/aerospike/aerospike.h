@@ -16,10 +16,6 @@
  */
 #pragma once
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /** 
  * @mainpage Aerospike C Client
  *
@@ -59,6 +55,10 @@ extern "C" {
 #include <aerospike/as_log.h>
 #include <aerospike/as_status.h>
 #include <stdbool.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /******************************************************************************
  *	TYPES

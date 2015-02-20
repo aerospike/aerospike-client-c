@@ -16,10 +16,6 @@
  */
 #pragma once
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /** 
  *	@defgroup query_operations Query Operations (3.0 only)
  *	@ingroup client_operations
@@ -96,6 +92,10 @@ extern "C" {
 #include <aerospike/as_query.h>
 #include <aerospike/as_status.h>
 #include <aerospike/as_stream.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /******************************************************************************
  *	TYPES

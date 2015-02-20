@@ -16,15 +16,15 @@
  */
 #pragma once
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include <aerospike/as_error.h>
 #include <aerospike/as_vector.h>
 #include <citrusleaf/cf_queue.h>
 #include <netinet/in.h>
 #include "ck_pr.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /******************************************************************************
  *	MACROS

@@ -16,16 +16,16 @@
  */
 #pragma once 
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include <aerospike/as_status.h>
 
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /******************************************************************************
  *	MACROS

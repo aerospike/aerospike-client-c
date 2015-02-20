@@ -16,13 +16,13 @@
  */
 #pragma once 
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include <aerospike/as_bin.h>
 #include <aerospike/as_map.h>
 #include <aerospike/as_udf.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /******************************************************************************
  *	CONSTANTS

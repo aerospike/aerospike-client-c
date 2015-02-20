@@ -16,10 +16,6 @@
  */
 #pragma once
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /**
  *	@defgroup ldt_operations Large Data Type Operations (3.0 only)
  *	@ingroup client_operations
@@ -45,6 +41,10 @@ extern "C" {
 #include <aerospike/as_key.h>
 #include <aerospike/as_val.h>
 #include <aerospike/as_boolean.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /******************************************************************************
  *	FUNCTIONS

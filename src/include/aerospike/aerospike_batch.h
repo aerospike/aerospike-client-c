@@ -16,10 +16,6 @@
  */
 #pragma once
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /**
  *	@defgroup batch_operations Batch Operations
  *	@ingroup client_operations
@@ -41,6 +37,10 @@ extern "C" {
 #include <aerospike/as_record.h>
 #include <aerospike/as_status.h>
 #include <aerospike/as_val.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /******************************************************************************
  *	TYPES

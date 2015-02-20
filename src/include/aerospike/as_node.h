@@ -20,12 +20,14 @@
 #include <aerospike/as_vector.h>
 #include <citrusleaf/cf_queue.h>
 #include <netinet/in.h>
-#include "ck_pr.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+// Concurrency kit needs to be under extern "C" when compiling C++.
+#include "ck_pr.h"
+	
 /******************************************************************************
  *	MACROS
  *****************************************************************************/

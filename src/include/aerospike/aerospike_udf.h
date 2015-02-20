@@ -16,10 +16,6 @@
  */
 #pragma once
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /** 
  *	@defgroup udf_operations UDF Operations (3.0 only)
  *	@ingroup client_operations
@@ -39,6 +35,10 @@ extern "C" {
 #include <aerospike/as_policy.h>
 #include <aerospike/as_status.h>
 #include <aerospike/as_udf.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /******************************************************************************
  *	FUNCTIONS

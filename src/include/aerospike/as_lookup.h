@@ -16,12 +16,12 @@
  */
 #pragma once
 
+#include <aerospike/as_cluster.h>
+#include <aerospike/as_vector.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include <aerospike/as_cluster.h>
-#include <aerospike/as_vector.h>
 
 /******************************************************************************
  * FUNCTIONS

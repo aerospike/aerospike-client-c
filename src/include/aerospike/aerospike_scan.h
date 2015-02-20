@@ -16,10 +16,6 @@
  */
 #pragma once
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /** 
  *	@defgroup scan_operations Scan Operations
  *	@ingroup client_operations
@@ -102,6 +98,10 @@ extern "C" {
 #include <aerospike/as_scan.h>
 #include <aerospike/as_status.h>
 #include <aerospike/as_val.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /******************************************************************************
  *	TYPES

@@ -16,13 +16,13 @@
  */
 #pragma once 
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include <aerospike/as_error.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_password.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /******************************************************************************
  *	MACROS

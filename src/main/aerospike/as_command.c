@@ -559,6 +559,7 @@ as_command_parse_key(uint8_t* p, uint32_t n_fields, as_key* key)
 		switch (*p++) {
 			case AS_FIELD_DIGEST:
 				size = (len < AS_DIGEST_VALUE_SIZE) ? len : AS_DIGEST_VALUE_SIZE;
+				key->digest.init = true;
 				memcpy(key->digest.value, p, size);
 				break;
 				

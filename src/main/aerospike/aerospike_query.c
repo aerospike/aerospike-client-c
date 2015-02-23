@@ -302,7 +302,7 @@ as_query_command_execute(as_query_task* task)
 	if (status) {
 		// Copy error to main error only once.
 		if (ck_pr_fas_32(task->error_mutex, 1) == 0) {
-			memcpy(task->err, &err, sizeof(as_error));
+			as_error_copy(task->err, &err);
 		}
 	}
 	return status;

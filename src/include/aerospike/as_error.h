@@ -241,6 +241,19 @@ static inline as_status as_error_set(as_error * err, as_status code, const char 
 }
 
 /**
+ *	Copy error from source to target.
+ *
+ *	@relates as_error
+ */
+static inline void as_error_copy(as_error * trg, as_error * src) {
+	trg->code = src->code;
+	strcpy(trg->message, src->message);
+	trg->func = src->func;
+	trg->file = src->file;
+	trg->line = src->line;
+}
+
+/**
  *	Return string representation of error code.  Result should not be freed.
  *
  *	@relates as_error

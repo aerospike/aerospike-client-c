@@ -226,7 +226,7 @@ as_batch_command_execute(as_batch_task* task)
 	if (status) {
 		// Copy error to main error only once.
 		if (ck_pr_fas_32(task->error_mutex, 1) == 0) {
-			memcpy(task->err, &err, sizeof(as_error));
+			as_error_copy(task->err, &err);
 		}
 	}
 	return status;
@@ -427,7 +427,7 @@ as_batch_execute(
 	
 	// Initialize batch worker threads.
 	as_batch_threads_init(cluster);
-	uint32_t error_mutex;
+	uint32_t error_mutex = 0;
 
 	// Initialize task.
 	as_batch_task task;

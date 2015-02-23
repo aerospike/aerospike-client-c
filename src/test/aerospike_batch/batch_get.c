@@ -105,10 +105,7 @@ TEST( batch_get_pre , "Pre: Create Records" )
 {
     as_error err;
 
-    as_record rec;
-    as_record_inita(&rec, 2);
-
-    for (uint32_t i = 1; i < N_KEYS+1; i++) {
+    for (uint32_t i = 0; i < N_KEYS; i++) {
 
 		// Do not write some records to test not found logic too.
 		if (i % 20 == 0) {
@@ -118,8 +115,18 @@ TEST( batch_get_pre , "Pre: Create Records" )
         as_key key;
         as_key_init_int64(&key, NAMESPACE, SET, (int64_t) i);
 
-        as_record_set_int64(&rec, "val", (int64_t) i);
-        as_record_set_int64(&rec, "val2", (int64_t) i);
+		as_record rec;
+		
+		// Some records should be missing bins to test bin filters.
+		if (i % 25 == 0) {
+			as_record_inita(&rec, 1);
+			as_record_set_int64(&rec, "val", (int64_t) i);
+		}
+		else {
+			as_record_inita(&rec, 2);
+			as_record_set_int64(&rec, "val", (int64_t) i);
+			as_record_set_int64(&rec, "val2", (int64_t) i);
+		}
 
 		aerospike_key_put(as, &err, NULL, &key, &rec);
 
@@ -128,6 +135,7 @@ TEST( batch_get_pre , "Pre: Create Records" )
         }
 
         assert_int_eq( err.code , AEROSPIKE_OK );
+		as_record_destroy(&rec);
     }
 }
 
@@ -152,25 +160,6 @@ TEST( batch_get_1 , "Simple" )
 
     assert_int_eq( data.found , N_KEYS - N_KEYS/20);
     assert_int_eq( data.errors , 0 );
-}
-
-TEST( batch_get_post , "Post: Remove Records" )
-{
-    as_error err;
-
-    for (uint32_t i = 1; i < N_KEYS+1; i++) {
-
-        as_key key;
-        as_key_init_int64(&key, NAMESPACE, SET, (int64_t) i);
-
-        aerospike_key_remove(as, &err, NULL, &key);
-
-        if (err.code != AEROSPIKE_OK && err.code != AEROSPIKE_ERR_RECORD_NOT_FOUND) {
-            info("error(%d): %s", err.code, err.message);
-        }
-
-		assert_true( err.code == AEROSPIKE_OK || err.code == AEROSPIKE_ERR_RECORD_NOT_FOUND );
-	}
 }
 
 void *batch_get_function(void  *thread_id)
@@ -248,11 +237,20 @@ bool batch_get_bins_callback(const as_batch_read * results, uint32_t n, void * u
 			
             int64_t key = as_integer_getorelse((as_integer *) results[i].key->valuep, -1);
             int64_t val2 = as_record_get_int64(&results[i].record, "val2", -1);
-            if ( key != val2 ) {
-                warn("key(%d) != val2(%d)",key,val2);
-                data->errors++;
-                data->last_error = -2;
-            }
+
+			if (i % 25 == 0) {
+				if (val2 != -1) {
+					data->errors++;
+					warn("val2(%d) exists when it shouldn't exist!", i, val2);
+				}
+			}
+			else {
+				if (val2 == -1 || key != val2) {
+					warn("key(%d) != val2(%d)", key, val2);
+					data->errors++;
+					data->last_error = -2;
+				}
+			}
         }
         else if (results[i].result != AEROSPIKE_ERR_RECORD_NOT_FOUND) {
             data->errors++;
@@ -274,7 +272,7 @@ TEST( batch_get_bins , "Batch Get - with bin name filters" )
     as_batch_inita(&batch, N_KEYS);
 	
     for (uint32_t i = 0; i < N_KEYS; i++) {
-        as_key_init_int64(as_batch_keyat(&batch,i), NAMESPACE, SET, i+1);
+        as_key_init_int64(as_batch_keyat(&batch,i), NAMESPACE, SET, i);
     }
 	
     batch_read_data data = {0};
@@ -287,6 +285,25 @@ TEST( batch_get_bins , "Batch Get - with bin name filters" )
     assert_int_eq( err.code , AEROSPIKE_OK );
     assert_int_eq( data.found , N_KEYS - N_KEYS/20);
     assert_int_eq( data.errors , 0 );
+}
+
+TEST( batch_get_post , "Post: Remove Records" )
+{
+    as_error err;
+	
+    for (uint32_t i = 1; i < N_KEYS+1; i++) {
+		
+        as_key key;
+        as_key_init_int64(&key, NAMESPACE, SET, (int64_t) i);
+		
+        aerospike_key_remove(as, &err, NULL, &key);
+		
+        if (err.code != AEROSPIKE_OK && err.code != AEROSPIKE_ERR_RECORD_NOT_FOUND) {
+            info("error(%d): %s", err.code, err.message);
+        }
+		
+		assert_true( err.code == AEROSPIKE_OK || err.code == AEROSPIKE_ERR_RECORD_NOT_FOUND );
+	}
 }
 
 /******************************************************************************

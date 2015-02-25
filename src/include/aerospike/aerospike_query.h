@@ -102,8 +102,9 @@ extern "C" {
  *****************************************************************************/
 
 /**
- *	This callback will be called for each value or record returned from 
- *	a query.
+ *	This callback will be called for each value or record returned from a query.
+ *	Multiple threads will likely be calling this callback in parallel.  Therefore,
+ *	your callback implementation should be thread safe.
  *
  *	The aerospike_query_foreach() function accepts this callback.
  *
@@ -128,6 +129,8 @@ typedef bool (* aerospike_query_foreach_callback)(const as_val * val, void * uda
 
 /**
  *	Execute a query and call the callback function for each result item.
+ *	Multiple threads will likely be calling the callback in parallel.  Therefore,
+ *	your callback implementation should be thread safe.
  *
  *	~~~~~~~~~~{.c}
  *	as_query query;

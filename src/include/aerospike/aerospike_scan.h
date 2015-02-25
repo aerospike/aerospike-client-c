@@ -108,8 +108,9 @@ extern "C" {
  *****************************************************************************/
 
 /**
- *	This callback will be called for each value or record returned from 
- *	a scan.
+ *	This callback will be called for each value or record returned from a scan.
+ *	Multiple threads will likely be calling this callback in parallel.  Therefore,
+ *	your callback implementation should be thread safe.
  *
  *	The following functions accept the callback:
  *	-	aerospike_scan_foreach()
@@ -232,6 +233,9 @@ as_status aerospike_scan_info(
  *
  *	Call the callback function for each record scanned. When all records have 
  *	been scanned, then callback will be called with a NULL value for the record.
+ *
+ *	Multiple threads will likely be calling the callback in parallel.  Therefore,
+ *	your callback implementation should be thread safe.
  *
  *	~~~~~~~~~~{.c}
  *	as_scan scan;

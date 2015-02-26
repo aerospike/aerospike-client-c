@@ -300,6 +300,8 @@ as_status aerospike_scan_foreach(
  *	@param udata		User-data to be passed to the callback.
  *
  *	@return AEROSPIKE_OK on success. Otherwise an error occurred.
+ *
+ *	@ingroup scan_operations
  */
 as_status aerospike_scan_node(
 	aerospike * as, as_error * err, const as_policy_scan * policy,

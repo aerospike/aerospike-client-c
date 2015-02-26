@@ -114,7 +114,7 @@ extern "C" {
  *
  *	The following functions accept the callback:
  *	-	aerospike_scan_foreach()
- *	-	aerospike_scan_node_foreach()
+ *	-	aerospike_scan_node()
  *	
  *	~~~~~~~~~~{.c}
  *	bool my_callback(const as_val * val, void * udata) {

@@ -27,6 +27,34 @@
  *	Functions
  *****************************************************************************/
 
+/* Used for debugging only.
+static void
+as_partition_table_print(as_partition_table* table)
+{
+	for (uint32_t i = 0; i < table->size; i++) {
+		as_partition* p = &table->partitions[i];
+		
+		if (p->master) {
+			printf("%u %s\n", i, p->master->name);
+		}
+		else {
+			printf("%u null\n", i);
+		}
+	}
+}
+
+void
+as_partition_tables_print(as_partition_tables* tables)
+{
+	for (uint32_t i = 0; i < tables->size; i++) {
+		as_partition_table* table = tables->array[i];
+		
+		printf("Namespace: %s\n", table->ns);
+		as_partition_table_print(table);
+	}
+}
+*/
+
 static inline void
 set_partition_tables(as_cluster* cluster, as_partition_tables* tables)
 {
@@ -109,10 +137,10 @@ reserve_node_alternate(as_cluster* cluster, as_node* chosen, as_node* alternate)
 static uint32_t g_randomizer = 0;
 
 as_node*
-as_partition_table_get_node(as_cluster* cluster, as_partition_table* table, const cf_digest* d, bool write, as_policy_replica replica)
+as_partition_table_get_node(as_cluster* cluster, as_partition_table* table, const uint8_t* digest, bool write, as_policy_replica replica)
 {
 	if (table) {
-		cl_partition_id partition_id = cl_partition_getid(cluster->n_partitions, d);
+		uint32_t partition_id = as_partition_getid(digest, cluster->n_partitions);
 		as_partition* p = &table->partitions[partition_id];
 
 		// Make volatile reference so changes to tend thread will be reflected in this thread.

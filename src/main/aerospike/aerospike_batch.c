@@ -408,7 +408,7 @@ as_batch_execute(
 			return status;
 		}
 		
-		as_node* node = as_node_get(cluster, key->ns, (cf_digest*)key->digest.value, false, AS_POLICY_REPLICA_MASTER);
+		as_node* node = as_node_get(cluster, key->ns, key->digest.value, false, AS_POLICY_REPLICA_MASTER);
 		as_batch_node* batch_node = as_batch_node_find(batch_nodes, n_batch_nodes, node);
 		
 		if (batch_node) {

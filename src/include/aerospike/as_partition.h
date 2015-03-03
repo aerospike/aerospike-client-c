@@ -134,6 +134,16 @@ as_partition_tables_get(as_partition_tables* tables, const char* ns);
  */
 bool
 as_partition_tables_find_node(as_partition_tables* tables, as_node* node);
+	
+/**
+ *	@private
+ *	Return partition ID given digest.
+ */
+static inline uint32_t
+as_partition_getid(const uint8_t* digest, uint32_t n_partitions)
+{
+	return (*(uint16_t*)digest) & (n_partitions - 1);
+}
 
 #ifdef __cplusplus
 } // end extern "C"

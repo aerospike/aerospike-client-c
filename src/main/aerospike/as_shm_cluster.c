@@ -413,14 +413,14 @@ as_shm_reserve_node_alternate(as_cluster* cluster, as_node** local_nodes, uint32
 static uint32_t g_shm_randomizer = 0;
 
 as_node*
-as_shm_node_get(as_cluster* cluster, const char* ns, const cf_digest* d, bool write, as_policy_replica replica)
+as_shm_node_get(as_cluster* cluster, const char* ns, const uint8_t* digest, bool write, as_policy_replica replica)
 {
 	as_shm_info* shm_info = cluster->shm_info;
 	as_cluster_shm* cluster_shm = shm_info->cluster_shm;
 	as_partition_table_shm* table = as_shm_find_partition_table(cluster_shm, ns);
 
 	if (table) {
-		cl_partition_id partition_id = cl_partition_getid(cluster_shm->n_partitions, d);
+		uint32_t partition_id = as_partition_getid(digest, cluster_shm->n_partitions);
 		as_partition_shm* p = &table->partitions[partition_id];
 
 		// Make volatile reference so changes to tend thread will be reflected in this thread.

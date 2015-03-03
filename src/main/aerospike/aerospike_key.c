@@ -37,7 +37,7 @@
 
 static inline void
 as_command_node_init(as_command_node* cn, as_cluster* cluster, const char* ns,
-	const cf_digest* digest, as_policy_replica replica, bool write)
+	const uint8_t* digest, as_policy_replica replica, bool write)
 {
 	cn->node = 0;
 	cn->cluster = cluster;
@@ -83,7 +83,7 @@ as_status aerospike_key_get(
 	size = as_command_write_end(cmd, p);
 	
 	as_command_node cn;
-	as_command_node_init(&cn, as->cluster, key->ns, (const cf_digest*)&key->digest, policy->replica, false);
+	as_command_node_init(&cn, as->cluster, key->ns, key->digest.value, policy->replica, false);
 	
 	status = as_command_execute(err, &cn, cmd, size, policy->timeout, AS_POLICY_RETRY_NONE, as_command_parse_result, rec);
 	
@@ -141,7 +141,7 @@ as_status aerospike_key_select(
 	size = as_command_write_end(cmd, p);
 	
 	as_command_node cn;
-	as_command_node_init(&cn, as->cluster, key->ns, (const cf_digest*)&key->digest, policy->replica, false);
+	as_command_node_init(&cn, as->cluster, key->ns, key->digest.value, policy->replica, false);
 	
 	status = as_command_execute(err, &cn, cmd, size, policy->timeout, AS_POLICY_RETRY_NONE, as_command_parse_result, rec);
 	
@@ -185,7 +185,7 @@ as_status aerospike_key_exists(
 	size = as_command_write_end(cmd, p);
 	
 	as_command_node cn;
-	as_command_node_init(&cn, as->cluster, key->ns, (const cf_digest*)&key->digest, policy->replica, false);
+	as_command_node_init(&cn, as->cluster, key->ns, key->digest.value, policy->replica, false);
 	
 	as_proto_msg msg;
 	status = as_command_execute(err, &cn, cmd, size, policy->timeout, AS_POLICY_RETRY_NONE, as_command_parse_header, &msg);
@@ -262,7 +262,7 @@ as_status aerospike_key_put(
 	size = as_command_write_end(cmd, p);
 
 	as_command_node cn;
-	as_command_node_init(&cn, as->cluster, key->ns, (const cf_digest*)&key->digest, AS_POLICY_REPLICA_MASTER, true);
+	as_command_node_init(&cn, as->cluster, key->ns, key->digest.value, AS_POLICY_REPLICA_MASTER, true);
 	
 	as_proto_msg msg;
 	status = as_command_execute(err, &cn, cmd, size, policy->timeout, policy->retry, as_command_parse_header, &msg);
@@ -321,7 +321,7 @@ as_status aerospike_key_remove(
 	size = as_command_write_end(cmd, p);
 	
 	as_command_node cn;
-	as_command_node_init(&cn, as->cluster, key->ns, (const cf_digest*)&key->digest, AS_POLICY_REPLICA_MASTER, true);
+	as_command_node_init(&cn, as->cluster, key->ns, key->digest.value, AS_POLICY_REPLICA_MASTER, true);
 	
 	as_proto_msg msg;
 	status = as_command_execute(err, &cn, cmd, size, policy->timeout, policy->retry, as_command_parse_header, &msg);
@@ -411,7 +411,7 @@ as_status aerospike_key_operate(
 	size = as_command_write_end(cmd, p);
 	
 	as_command_node cn;
-	as_command_node_init(&cn, as->cluster, key->ns, (const cf_digest*)&key->digest, policy->replica, write_attr != 0);
+	as_command_node_init(&cn, as->cluster, key->ns, key->digest.value, policy->replica, write_attr != 0);
 	
 	status = as_command_execute(err, &cn, cmd, size, policy->timeout, policy->retry, as_command_parse_result, rec);
 	
@@ -502,7 +502,7 @@ as_status aerospike_key_apply(
 	size = as_command_write_end(cmd, p);
 	
 	as_command_node cn;
-	as_command_node_init(&cn, as->cluster, key->ns, (const cf_digest*)&key->digest, AS_POLICY_REPLICA_MASTER, true);
+	as_command_node_init(&cn, as->cluster, key->ns, key->digest.value, AS_POLICY_REPLICA_MASTER, true);
 	
 	status = as_command_execute(err, &cn, cmd, size, policy->timeout, 0, as_command_parse_success_failure, result);
 	

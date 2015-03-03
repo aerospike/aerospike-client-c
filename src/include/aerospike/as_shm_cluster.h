@@ -289,7 +289,7 @@ as_shm_update_partitions(as_shm_info* shm_info, const char* ns, char* bitmap_b64
  *	used instead.  as_nodes_release() must be called when done with node.
  */
 as_node*
-as_shm_node_get(struct as_cluster_s* cluster, const char* ns, const cf_digest* d, bool write, as_policy_replica replica);
+as_shm_node_get(struct as_cluster_s* cluster, const char* ns, const uint8_t* digest, bool write, as_policy_replica replica);
 
 /**
  *	@private

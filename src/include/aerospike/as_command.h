@@ -122,7 +122,7 @@ typedef struct as_command_node_s {
 	as_node* node;
 	as_cluster* cluster;
 	const char* ns;
-	const cf_digest* digest;
+	const uint8_t* digest;
 	as_policy_replica replica;
 	bool write;
 } as_command_node;

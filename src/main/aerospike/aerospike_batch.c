@@ -384,6 +384,11 @@ as_batch_execute(
 	// Create initial key capacity for each node as average + 25%.
 	uint32_t offsets_capacity = n_keys / n_nodes;
 	offsets_capacity += offsets_capacity >> 2;
+
+	// The minimum key capacity is 10.
+	if (offsets_capacity < 10) {
+		offsets_capacity = 10;
+	}
 	
 	// Map keys to server nodes.
 	for (uint32_t i = 0; i < n_keys; i++) {

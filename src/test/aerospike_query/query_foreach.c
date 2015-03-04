@@ -16,23 +16,21 @@
  */
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
-#include <aerospike/aerospike_query.h>
 #include <aerospike/aerospike_index.h>
-
-#include <aerospike/as_error.h>
-#include <aerospike/as_status.h>
-
-#include <aerospike/as_query.h>
-#include <aerospike/as_record.h>
-#include <aerospike/as_integer.h>
-#include <aerospike/as_string.h>
-#include <aerospike/as_list.h>
+#include <aerospike/aerospike_query.h>
 #include <aerospike/as_arraylist.h>
-#include <aerospike/as_map.h>
+#include <aerospike/as_cluster.h>
+#include <aerospike/as_error.h>
 #include <aerospike/as_hashmap.h>
-#include <aerospike/as_val.h>
+#include <aerospike/as_integer.h>
+#include <aerospike/as_list.h>
+#include <aerospike/as_query.h>
+#include <aerospike/as_map.h>
+#include <aerospike/as_record.h>
+#include <aerospike/as_status.h>
+#include <aerospike/as_string.h>
 #include <aerospike/as_stringmap.h>
-
+#include <aerospike/as_val.h>
 #include <aerospike/mod_lua.h>
 
 #include "../test.h"
@@ -487,6 +485,10 @@ static bool query_quit_early_callback(const as_val * v, void * udata) {
 
 TEST( query_quit_early, "normal query and quit early" ) {
 	
+	as_nodes* nodes = as_nodes_reserve(as->cluster);
+	uint32_t nodes_size = nodes->size;
+	as_nodes_release(nodes);
+
 	as_error err;
 	as_error_reset(&err);
 	
@@ -505,13 +507,17 @@ TEST( query_quit_early, "normal query and quit early" ) {
 	info("count: %d",count);
 	
 	assert_int_eq( err.code, 0 );
-	assert_int_eq( count, 1 );
+	assert_true( count <= nodes_size );
 	
 	as_query_destroy(&q);
 }
 
 TEST( query_agg_quit_early, "aggregation and quit early" ) {
 	
+	as_nodes* nodes = as_nodes_reserve(as->cluster);
+	uint32_t nodes_size = nodes->size;
+	as_nodes_release(nodes);
+
 	as_error err;
 	as_error_reset(&err);
 	
@@ -532,7 +538,7 @@ TEST( query_agg_quit_early, "aggregation and quit early" ) {
 	info("count: %d",count);
 	
 	assert_int_eq( err.code, 0 );
-	assert_int_eq( count, 1 );
+	assert_true( count <= nodes_size );
 	
 	as_query_destroy(&q);
 }

@@ -18,11 +18,6 @@ install:
 - cd instance1
 - sudo ./bin/aerospike start
 - cd ..
-# - mkdir instance2
-# - ./bin/aerospike init --home instance2 --instance 2 --service-port 3000
-# - cd instance1
-# - sudo ./bin/aerospike start
-# - cd ..
 - cd ..
 - sleep 3
 script:
@@ -31,3 +26,8 @@ script:
 notifications:
   slack:
     secure: k1GG7xFMgcLemnI0LxK0Qw2mukjmTKloHOyHI1wljer7GdOGy8icbaI6n7t1PCZ7MDYSmeQ8MFH5XbaUJT1lVkZYe1MNEsT3dpdDgAHBSk5dAu+5ZvFvoDZpRe7WS8X/mEThGgV1sQY1eKFVW8iVhVxLsSiaFPSWz1z/gGryhK4=
+  hipchat:
+    rooms:
+      secure: LU2ZazlCBCJ/DhWZDgwfAASOy+kSxFlqu6w5KFfD42vCs7NU9+9Cs+nmxfg7OTR3QXv7+9rN+AH8w6jNqx7HYKLj4m+MVkceoyEzVoY+p/k0wx6OrcYW8KazBAuECCM8Lp6bOp56emEhizkjOhZcV7ZgwXo7Yn609OmiFDKzhkM=
+  email:
+  - qe-notices@aerospike.com

@@ -293,14 +293,12 @@ TEST( key_basics_remove_generation , "remove generation: (test,test,foo)" ) {
 
 	as_status rc = aerospike_key_remove(as, &err, &dpol, &key);
 
-	// TODO - Remove "rc == AEROSPIKE_OK" check when server supports remove gen check.
-	assert_true( rc == AEROSPIKE_ERR_RECORD_GENERATION || rc == AEROSPIKE_OK );
+	assert_true( rc == AEROSPIKE_ERR_RECORD_GENERATION );
 
 	dpol.generation = 1;
 	rc = aerospike_key_remove(as, &err, &dpol, &key);
 
-	// TODO - Remove "rc == AEROSPIKE_ERR_RECORD_NOT_FOUND" check when server supports remove gen check.
-    assert_true( rc == AEROSPIKE_OK || rc == AEROSPIKE_ERR_RECORD_NOT_FOUND );
+    assert_true( rc == AEROSPIKE_OK );
 
     as_key_destroy(&key);
 }
@@ -458,8 +456,9 @@ SUITE( key_basics, "aerospike_key basic tests" ) {
 	suite_add( key_basics_put );
 	suite_add( key_basics_exists );
 	suite_add( key_basics_notexists );
-	suite_add( key_basics_remove_generation );
-	suite_add( key_basics_put_generation );
+	// TODO - when we're sure we won't be running against older servers, let these in:
+//	suite_add( key_basics_remove_generation );
+//	suite_add( key_basics_put_generation );
 	suite_add( key_basics_put );
 	suite_add( key_basics_get );
 	suite_add( key_basics_select );

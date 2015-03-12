@@ -68,7 +68,7 @@ as_command_key_size(as_policy_key policy, const as_key* key, uint16_t* n_fields)
 	*n_fields = 3;
 	size_t size = strlen(key->ns) + strlen(key->set) + sizeof(cf_digest) + 45;
 	
-	if (policy == AS_POLICY_KEY_SEND) {
+	if (policy == AS_POLICY_KEY_SEND && key->valuep) {
 		size += as_command_user_key_size(key);
 		(*n_fields)++;
 	}
@@ -231,7 +231,7 @@ as_command_write_key(uint8_t* p, as_policy_key policy, const as_key* key)
 	p = as_command_write_field_string(p, AS_FIELD_SETNAME, key->set);
 	p = as_command_write_field_digest(p, &key->digest);
 	
-	if (policy == AS_POLICY_KEY_SEND) {
+	if (policy == AS_POLICY_KEY_SEND && key->valuep) {
 		p = as_command_write_user_key(p, key);
 	}
 	return p;

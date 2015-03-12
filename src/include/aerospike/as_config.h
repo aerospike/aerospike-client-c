@@ -247,8 +247,8 @@ typedef struct as_config_s {
 	char user[AS_USER_SIZE];
 	
 	/**
-	 *	Password authentication to cluster.  The password will be stored by the client and sent to
-	 *  server in hashed format.  Leave empty for clusters running without restricted access.
+	 *	Password authentication to cluster.  The hashed value of password will be stored by the client 
+	 *	and sent to server in same format.  Leave empty for clusters running without restricted access.
 	 */
 	char password[AS_PASSWORD_HASH_SIZE];
 	

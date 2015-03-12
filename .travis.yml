@@ -31,3 +31,4 @@ notifications:
       secure: LU2ZazlCBCJ/DhWZDgwfAASOy+kSxFlqu6w5KFfD42vCs7NU9+9Cs+nmxfg7OTR3QXv7+9rN+AH8w6jNqx7HYKLj4m+MVkceoyEzVoY+p/k0wx6OrcYW8KazBAuECCM8Lp6bOp56emEhizkjOhZcV7ZgwXo7Yn609OmiFDKzhkM=
   email:
   - qe-notices@aerospike.com
+  - qe-notices-clients@aerospike.com

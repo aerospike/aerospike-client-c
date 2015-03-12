@@ -67,7 +67,7 @@ const char DEFAULT_SET[] = "eg-set";
 const char DEFAULT_KEY_STR[] = "eg-key";
 const uint32_t DEFAULT_NUM_KEYS = 20;
 
-const char* SHORT_OPTS_BASIC = "h:p:U:P::n:s:k:";
+const char SHORT_OPTS_BASIC[] = "h:p:U:P::n:s:k:";
 const struct option LONG_OPTS_BASIC[] = {
 	{ "hosts",		1, NULL, 'h' },
 	{ "port",		1, NULL, 'p' },
@@ -79,7 +79,7 @@ const struct option LONG_OPTS_BASIC[] = {
 	{ NULL,			0, NULL, 0 }
 };
 
-const char* SHORT_OPTS_MULTI_KEY = "h:p:U:P::n:s:K:";
+const char SHORT_OPTS_MULTI_KEY[] = "h:p:U:P::n:s:K:";
 const struct option LONG_OPTS_MULTI_KEY[] = {
 	{ "hosts",		1, NULL, 'h' },
 	{ "port",		1, NULL, 'p' },
@@ -87,7 +87,7 @@ const struct option LONG_OPTS_MULTI_KEY[] = {
 	{ "password",	2, NULL, 'P' },
 	{ "namespace",	1, NULL, 'n' },
 	{ "set",		1, NULL, 's' },
-	{ "multikey",	1, NULL, 'k' },
+	{ "multikey",	1, NULL, 'K' },
 	{ NULL,			0, NULL, 0 }
 };
 

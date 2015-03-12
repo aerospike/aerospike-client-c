@@ -293,16 +293,72 @@ TEST( key_basics_remove_generation , "remove generation: (test,test,foo)" ) {
 
 	as_status rc = aerospike_key_remove(as, &err, &dpol, &key);
 
-	// TODO - Remove "rc == AEROSPIKE_OK" check when server supports remove gen check.
-	assert_true( rc == AEROSPIKE_ERR_RECORD_GENERATION || rc == AEROSPIKE_OK );
+	assert_true( rc == AEROSPIKE_ERR_RECORD_GENERATION );
 
 	dpol.generation = 1;
 	rc = aerospike_key_remove(as, &err, &dpol, &key);
 
-	// TODO - Remove "rc == AEROSPIKE_ERR_RECORD_NOT_FOUND" check when server supports remove gen check.
-    assert_true( rc == AEROSPIKE_OK || rc == AEROSPIKE_ERR_RECORD_NOT_FOUND );
+    assert_true( rc == AEROSPIKE_OK );
 
     as_key_destroy(&key);
+}
+
+TEST( key_basics_put_generation , "put generation: (test,test,foo)" ) {
+
+	as_error err;
+	as_error_reset(&err);
+
+	as_key key;
+	as_key_init(&key, "test", "test", "foo");
+
+	as_record r, * rec = &r;
+	as_record_init(rec, 1);
+	as_record_set_int64(rec, "a", 123);
+
+	as_status rc = aerospike_key_put(as, &err, NULL, &key, rec);
+
+	assert_true( rc == AEROSPIKE_OK );
+
+	as_record_destroy(rec);
+	as_record_init(rec, 1);
+	as_record_set_int64(rec, "a", 456);
+
+	as_policy_write wpol;
+	as_policy_write_init(&wpol);
+	wpol.gen = AS_POLICY_GEN_EQ; // perform generation equality check on writes
+
+	rec->gen = 2; // generation in database should be 1, so this should fail
+
+	rc = aerospike_key_put(as, &err, &wpol, &key, rec);
+
+	assert_true( rc == AEROSPIKE_ERR_RECORD_GENERATION );
+
+	rec->gen = 1; // ... but this should succeed
+
+	rc = aerospike_key_put(as, &err, &wpol, &key, rec);
+
+	assert_true( rc == AEROSPIKE_OK );
+
+	as_record_destroy(rec);
+	as_record_init(rec, 1);
+	as_record_set_nil(rec, "a"); // remove bin 'a' - causes record deletion
+
+	rec->gen = 2; // generation in database should be 2, so this should succeed
+
+	rc = aerospike_key_put(as, &err, &wpol, &key, rec);
+
+	assert_true( rc == AEROSPIKE_OK );
+
+	as_record_destroy(rec);
+
+	// Verify the record is gone.
+	rec = NULL;
+	rc = aerospike_key_exists(as, &err, NULL, &key, &rec);
+
+	assert_int_eq( rc, AEROSPIKE_ERR_RECORD_NOT_FOUND );
+	assert_null( rec );
+
+	as_key_destroy(&key);
 }
 
 TEST( key_basics_remove_notexists , "remove not exists: (test,test,foozoo)" ) {
@@ -400,7 +456,9 @@ SUITE( key_basics, "aerospike_key basic tests" ) {
 	suite_add( key_basics_put );
 	suite_add( key_basics_exists );
 	suite_add( key_basics_notexists );
-	suite_add( key_basics_remove_generation );
+	// TODO - when we're sure we won't be running against older servers, let these in:
+//	suite_add( key_basics_remove_generation );
+//	suite_add( key_basics_put_generation );
 	suite_add( key_basics_put );
 	suite_add( key_basics_get );
 	suite_add( key_basics_select );

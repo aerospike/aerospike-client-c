@@ -222,7 +222,7 @@ as_cluster_seed_nodes(as_cluster* cluster, as_error* err, bool enable_warnings)
 		
 		if (status != AEROSPIKE_OK) {
 			if (enable_warnings) {
-				as_log_warn(err_local.message);
+				as_log_warn("%s %s", as_error_string(status), err_local.message);
 			}
 			continue;
 		}
@@ -246,7 +246,7 @@ as_cluster_seed_nodes(as_cluster* cluster, as_error* err, bool enable_warnings)
 			}
 			else {
 				if (enable_warnings) {
-					as_log_warn(err_local.message);
+					as_log_warn("%s %s", as_error_string(status), err_local.message);
 				}
 			}
 		}
@@ -281,7 +281,7 @@ as_cluster_find_nodes_to_add(as_cluster* cluster, as_vector* /* <as_friend> */ f
 		as_status status = as_lookup(cluster, &err, friend->name, friend->port, &addresses);
 		
 		if (status != AEROSPIKE_OK) {
-			as_log_warn(err.message);
+			as_log_warn("%s %s", as_error_string(status), err.message);
 			continue;
 		}
 		
@@ -310,7 +310,7 @@ as_cluster_find_nodes_to_add(as_cluster* cluster, as_vector* /* <as_friend> */ f
 				as_vector_append(nodes_to_add, &node);
 			}
 			else {
-				as_log_warn(err.message);
+				as_log_warn("%s %s", as_error_string(status), err.message);
 			}
 		}
 	}

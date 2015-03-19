@@ -205,7 +205,7 @@ as_query_parse_record(uint8_t** pp, as_msg* msg, as_query_task* task, as_error* 
 		}
 		as_record_destroy(&rec);
 	}
-	return rv ? AEROSPIKE_OK : AEROSPIKE_NO_MORE_RECORDS;
+	return rv ? AEROSPIKE_OK : AEROSPIKE_ERR_CLIENT_ABORT;
 }
 
 static as_status
@@ -235,7 +235,8 @@ as_query_parse_records(uint8_t* buf, size_t size, as_query_task* task, as_error*
 		}
 		
 		if (ck_pr_load_32(task->error_mutex)) {
-			return AEROSPIKE_NO_MORE_RECORDS;
+			err->code = AEROSPIKE_ERR_QUERY_ABORTED;
+			return err->code;
 		}
 	}
 	return AEROSPIKE_OK;
@@ -300,6 +301,11 @@ as_query_command_execute(as_query_task* task)
 	as_status status = as_command_execute(&err, &cn, task->cmd, task->cmd_size, task->policy->timeout, AS_POLICY_RETRY_NONE, as_query_parse, task);
 		
 	if (status) {
+		// Return success when user explicitly aborts query in callback.
+		if (status == AEROSPIKE_ERR_CLIENT_ABORT) {
+			return AEROSPIKE_OK;
+		}
+		
 		// Copy error to main error only once.
 		if (ck_pr_fas_32(task->error_mutex, 1) == 0) {
 			as_error_copy(task->err, &err);

@@ -393,6 +393,7 @@ as_command_execute(as_error * err, as_command_node* cn, uint8_t* command, size_t
 				// Close socket on errors that can leave unread data in socket.
 				case AEROSPIKE_ERR_QUERY_ABORTED:
 				case AEROSPIKE_ERR_SCAN_ABORTED:
+				case AEROSPIKE_ERR_CLIENT_ABORT:
 				case AEROSPIKE_ERR_CLIENT:
 					as_close(fd);
 					if (release_node) {

@@ -58,8 +58,8 @@ typedef struct as_scan_complete_task_s {
  * STATIC FUNCTIONS
  *****************************************************************************/
 
-static uint8_t*
-as_scan_parse_record(uint8_t* p, as_msg* msg, as_scan_task* task)
+static as_status
+as_scan_parse_record(uint8_t** pp, as_msg* msg, as_scan_task* task)
 {
 	as_record rec;
 	as_record_inita(&rec, msg->n_ops);
@@ -67,38 +67,41 @@ as_scan_parse_record(uint8_t* p, as_msg* msg, as_scan_task* task)
 	rec.gen = msg->generation;
 	rec.ttl = cf_server_void_time_to_ttl(msg->record_ttl);
 	
+	uint8_t* p = *pp;
 	p = as_command_parse_key(p, msg->n_fields, &rec.key);
 	p = as_command_parse_bins(&rec, p, msg->n_ops, task->scan->deserialize_list_map);
+	*pp = p;
 	
+	bool rv = true;
+
 	if (task->callback) {
-		bool rv = task->callback((as_val*)&rec, task->udata);
-		as_record_destroy(&rec);
-		return rv ? p : 0;
+		rv = task->callback((as_val*)&rec, task->udata);
 	}
 	as_record_destroy(&rec);
-	return p;
+	return rv ? AEROSPIKE_OK : AEROSPIKE_ERR_CLIENT_ABORT;
 }
 
 static as_status
-as_scan_parse_records(uint8_t* buf, size_t size, as_scan_task* task)
+as_scan_parse_records(uint8_t* buf, size_t size, as_scan_task* task, as_error* err)
 {
 	uint8_t* p = buf;
 	uint8_t* end = buf + size;
+	as_status status;
 	
 	while (p < end) {
 		as_msg* msg = (as_msg*)p;
 		as_msg_swap_header_from_be(msg);
 		
 		if (msg->result_code) {
-		   // Special case - if we scan a set name that doesn't exist on a
-		   // node, it will return "not found" - we unify this with the
-		   // case where OK is returned and no callbacks were made. [AKG]
-		   // We are sending "no more records back" to the caller which will
-		   // send OK to the main worker thread.
+			// Special case - if we scan a set name that doesn't exist on a
+			// node, it will return "not found" - we unify this with the
+			// case where OK is returned and no callbacks were made. [AKG]
+			// We are sending "no more records back" to the caller which will
+			// send OK to the main worker thread.
 			if (msg->result_code == AEROSPIKE_ERR_RECORD_NOT_FOUND) {
 				return AEROSPIKE_NO_MORE_RECORDS;
 			}
-			return msg->result_code;
+			return as_error_set_message(err, msg->result_code, as_error_string(msg->result_code));
 		}
 		p += sizeof(as_msg);
 		
@@ -106,14 +109,15 @@ as_scan_parse_records(uint8_t* buf, size_t size, as_scan_task* task)
 			return AEROSPIKE_NO_MORE_RECORDS;
 		}
 		
-		p = as_scan_parse_record(p, msg, task);
+		status = as_scan_parse_record(&p, msg, task);
 		
-		if (!p) {
-			return AEROSPIKE_NO_MORE_RECORDS;
+		if (status != AEROSPIKE_OK) {
+			return status;
 		}
 		
 		if (ck_pr_load_32(task->error_mutex)) {
-			return AEROSPIKE_NO_MORE_RECORDS;
+			err->code = AEROSPIKE_ERR_SCAN_ABORTED;
+			return err->code;
 		}
 	}
 	return AEROSPIKE_OK;
@@ -153,14 +157,11 @@ as_scan_parse(as_error* err, int fd, uint64_t deadline_ms, void* udata)
 				break;
 			}
 			
-			status = as_scan_parse_records(buf, size, task);
+			status = as_scan_parse_records(buf, size, task, err);
 			
 			if (status != AEROSPIKE_OK) {
 				if (status == AEROSPIKE_NO_MORE_RECORDS) {
 					status = AEROSPIKE_OK;
-				}
-				else {
-					as_error_set_message(err, status, as_error_string(status));
 				}
 				break;
 			}
@@ -181,6 +182,11 @@ as_scan_command_execute(as_scan_task* task)
 	as_status status = as_command_execute(&err, &cn, task->cmd, task->cmd_size, task->policy->timeout, AS_POLICY_RETRY_NONE, as_scan_parse, task);
 	
 	if (status) {
+		// Return success when user explicitly aborts query in callback.
+		if (status == AEROSPIKE_ERR_CLIENT_ABORT) {
+			return AEROSPIKE_OK;
+		}
+		
 		// Copy error to main error only once.
 		if (ck_pr_fas_32(task->error_mutex, 1) == 0) {
 			as_error_copy(task->err, &err);

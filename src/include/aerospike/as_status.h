@@ -34,6 +34,11 @@ typedef enum as_status_e {
 	 **************************************************************************/
 	
 	/**
+	 *	Query or scan was aborted in user's callback.
+	 */
+	AEROSPIKE_ERR_CLIENT_ABORT = -5,
+
+	/**
 	 *	Host name could not be found in DNS lookup.
 	 */
 	AEROSPIKE_ERR_INVALID_HOST = -4,

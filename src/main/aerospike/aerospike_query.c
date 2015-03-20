@@ -301,14 +301,12 @@ as_query_command_execute(as_query_task* task)
 	as_status status = as_command_execute(&err, &cn, task->cmd, task->cmd_size, task->policy->timeout, AS_POLICY_RETRY_NONE, as_query_parse, task);
 		
 	if (status) {
-		// Return success when user explicitly aborts query in callback.
-		if (status == AEROSPIKE_ERR_CLIENT_ABORT) {
-			return AEROSPIKE_OK;
-		}
-		
-		// Copy error to main error only once.
+		// Set main error only once.
 		if (ck_pr_fas_32(task->error_mutex, 1) == 0) {
-			as_error_copy(task->err, &err);
+			// Don't set error when user aborts query,
+			if (status != AEROSPIKE_ERR_CLIENT_ABORT) {
+				as_error_copy(task->err, &err);
+			}
 		}
 	}
 	return status;
@@ -668,6 +666,11 @@ as_query_execute(as_query_task* task, const as_query * query, as_nodes* nodes, u
 		if (complete.result != AEROSPIKE_OK && status == AEROSPIKE_OK) {
 			status = complete.result;
 		}
+	}
+	
+	// If user aborts query, command is considered successful.
+	if (status == AEROSPIKE_ERR_CLIENT_ABORT) {
+		status = AEROSPIKE_OK;
 	}
 	
     // If completely successful, make the callback that signals completion.

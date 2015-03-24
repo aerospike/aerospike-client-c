@@ -106,6 +106,7 @@
 		BFC002881901BCB200CB9BC8 /* as_vector.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC002871901BCB200CB9BC8 /* as_vector.c */; };
 		BFC0028A1901E08500CB9BC8 /* as_lookup.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC002891901E08500CB9BC8 /* as_lookup.c */; };
 		BFC38AE11948F7CA000C53D9 /* as_admin.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC38AE01948F7CA000C53D9 /* as_admin.c */; };
+		BFCF26BF1AC1FBBF0062B75C /* as_string_builder.c in Sources */ = {isa = PBXBuildFile; fileRef = BFCF26BE1AC1FBBF0062B75C /* as_string_builder.c */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -209,6 +210,7 @@
 		BFC002871901BCB200CB9BC8 /* as_vector.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_vector.c; path = ../modules/common/src/main/aerospike/as_vector.c; sourceTree = "<group>"; };
 		BFC002891901E08500CB9BC8 /* as_lookup.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_lookup.c; path = ../src/main/aerospike/as_lookup.c; sourceTree = "<group>"; };
 		BFC38AE01948F7CA000C53D9 /* as_admin.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; lineEnding = 0; name = as_admin.c; path = ../src/main/aerospike/as_admin.c; sourceTree = "<group>"; };
+		BFCF26BE1AC1FBBF0062B75C /* as_string_builder.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_string_builder.c; path = ../modules/common/src/main/aerospike/as_string_builder.c; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -225,6 +227,7 @@
 		BF07F62E18B4252500CE1850 = {
 			isa = PBXGroup;
 			children = (
+				BFCF26BE1AC1FBBF0062B75C /* as_string_builder.c */,
 				BF219F0F1A622C23001E321C /* as_socket.c */,
 				BF219F0D1A62255A001E321C /* as_proto.c */,
 				BF5548EC19E36A7C007DDB9E /* as_log.c */,
@@ -408,6 +411,7 @@
 				BF2AA7F118BEBFA500E54AF3 /* as_record_iterator.c in Sources */,
 				BFBA105218B7D8B300A64E68 /* as_buffer.c in Sources */,
 				BFBA104E18B7D8B300A64E68 /* as_arraylist_iterator_hooks.c in Sources */,
+				BFCF26BF1AC1FBBF0062B75C /* as_string_builder.c in Sources */,
 				BFC0028A1901E08500CB9BC8 /* as_lookup.c in Sources */,
 				BFBD205218BC3436009ED931 /* mod_lua_bytes.c in Sources */,
 				BF5548ED19E36A7C007DDB9E /* as_log.c in Sources */,

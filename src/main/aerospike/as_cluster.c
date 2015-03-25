@@ -880,10 +880,15 @@ void
 as_cluster_change_password(as_cluster* cluster, const char* user, const char* password)
 {
 	if (user && *user) {
-		if (cluster->user == 0 || strcmp(cluster->user, user) == 0) {
-			cf_free(cluster->user);
-			cf_free(cluster->password);
+		if (cluster->user) {
+			if (strcmp(cluster->user, user) == 0) {
+				cf_free(cluster->password);
+				cluster->password = cf_strdup(password);
+			}
+		}
+		else {
 			cluster->user = cf_strdup(user);
+			cf_free(cluster->password);
 			cluster->password = cf_strdup(password);
 		}
 	}

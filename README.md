@@ -71,7 +71,7 @@ For Red Hat Enterprise 6 or newer, or related distributions (CentOS, etc.):
 
 For Fedora 20 or newer:
 
-	$ sudo yum install openssl-devel glibc-devel autoconf automake libtool
+	$ sudo yum install openssl-devel glibc-devel autoconf automake libtool readline-devel
 
 	[Optional:]
 

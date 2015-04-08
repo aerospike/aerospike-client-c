@@ -238,6 +238,232 @@ as_status aerospike_llist_find(
 } // aerospike_llist_find()
 
 // =======================================================================
+// FIND FIRST
+// =======================================================================
+as_status aerospike_llist_find_first(
+	aerospike * as, as_error * err, const as_policy_apply * policy,
+	const as_key * key, const as_ldt * ldt, uint32_t count, as_list ** elements)
+{
+	as_error_reset(err);
+	
+	as_string ldt_bin;
+	as_string_init(&ldt_bin, (char *)ldt->name, false);
+	
+	as_arraylist arglist;
+	as_arraylist_inita(&arglist, 2);
+	as_arraylist_append_string(&arglist, &ldt_bin);
+	as_arraylist_append_int64(&arglist, count);
+	
+	as_val* p_return_val = NULL;
+	aerospike_key_apply(as, err, policy, key, DEFAULT_LLIST_PACKAGE, "find_first",
+						(as_list *)&arglist, &p_return_val);
+	
+	as_arraylist_destroy(&arglist);
+	
+	if (ldt_parse_error(err) != AEROSPIKE_OK) {
+		return err->code;
+	}
+	
+	if (!p_return_val) {
+		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL, "no value returned from server");
+	}
+	
+	*elements = (as_list *)p_return_val;
+	return err->code;
+}
+
+as_status aerospike_llist_find_first_filter(
+	aerospike * as, as_error * err, const as_policy_apply * policy,
+	const as_key * key, const as_ldt * ldt, uint32_t count,
+	const as_udf_function_name filter, const as_list *filter_args, as_list ** elements)
+{
+	as_error_reset(err);
+	
+	as_string ldt_bin;
+	as_string_init(&ldt_bin, (char *)ldt->name, false);
+	
+	as_arraylist arglist;
+	as_arraylist_inita(&arglist, 4);
+	as_arraylist_append_string(&arglist, &ldt_bin);
+	as_arraylist_append_int64(&arglist, count);
+	
+	as_string filter_name;
+	as_string_init(&filter_name, (char *)filter, false);
+	as_arraylist_append_string(&arglist, &filter_name );
+	as_val_reserve( filter_args ); // bump the ref count
+	as_arraylist_append(&arglist, (as_val *) filter_args );
+
+	as_val* p_return_val = NULL;
+	aerospike_key_apply(as, err, policy, key, DEFAULT_LLIST_PACKAGE, "find_first",
+						(as_list *)&arglist, &p_return_val);
+	
+	as_arraylist_destroy(&arglist);
+	
+	if (ldt_parse_error(err) != AEROSPIKE_OK) {
+		return err->code;
+	}
+	
+	if (!p_return_val) {
+		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL, "no value returned from server");
+	}
+	
+	*elements = (as_list *)p_return_val;
+	return err->code;
+}
+
+// =======================================================================
+// FIND LAST
+// =======================================================================
+as_status aerospike_llist_find_last(
+	aerospike * as, as_error * err, const as_policy_apply * policy,
+	const as_key * key, const as_ldt * ldt, uint32_t count, as_list ** elements)
+{
+	as_error_reset(err);
+	
+	as_string ldt_bin;
+	as_string_init(&ldt_bin, (char *)ldt->name, false);
+	
+	as_arraylist arglist;
+	as_arraylist_inita(&arglist, 2);
+	as_arraylist_append_string(&arglist, &ldt_bin);
+	as_arraylist_append_int64(&arglist, count);
+	
+	as_val* p_return_val = NULL;
+	aerospike_key_apply(as, err, policy, key, DEFAULT_LLIST_PACKAGE, "find_last",
+						(as_list *)&arglist, &p_return_val);
+	
+	as_arraylist_destroy(&arglist);
+	
+	if (ldt_parse_error(err) != AEROSPIKE_OK) {
+		return err->code;
+	}
+	
+	if (!p_return_val) {
+		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL, "no value returned from server");
+	}
+	
+	*elements = (as_list *)p_return_val;
+	return err->code;
+}
+
+as_status aerospike_llist_find_last_filter(
+	aerospike * as, as_error * err, const as_policy_apply * policy,
+	const as_key * key, const as_ldt * ldt, uint32_t count,
+	const as_udf_function_name filter, const as_list *filter_args, as_list ** elements)
+{
+	as_error_reset(err);
+	
+	as_string ldt_bin;
+	as_string_init(&ldt_bin, (char *)ldt->name, false);
+	
+	as_arraylist arglist;
+	as_arraylist_inita(&arglist, 4);
+	as_arraylist_append_string(&arglist, &ldt_bin);
+	as_arraylist_append_int64(&arglist, count);
+	
+	as_string filter_name;
+	as_string_init(&filter_name, (char *)filter, false);
+	as_arraylist_append_string(&arglist, &filter_name );
+	as_val_reserve( filter_args ); // bump the ref count
+	as_arraylist_append(&arglist, (as_val *) filter_args );
+	
+	as_val* p_return_val = NULL;
+	aerospike_key_apply(as, err, policy, key, DEFAULT_LLIST_PACKAGE, "find_last",
+						(as_list *)&arglist, &p_return_val);
+	
+	as_arraylist_destroy(&arglist);
+	
+	if (ldt_parse_error(err) != AEROSPIKE_OK) {
+		return err->code;
+	}
+	
+	if (!p_return_val) {
+		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL, "no value returned from server");
+	}
+	
+	*elements = (as_list *)p_return_val;
+	return err->code;
+}
+
+// =======================================================================
+// FIND FROM
+// =======================================================================
+as_status aerospike_llist_find_from(
+	aerospike * as, as_error * err, const as_policy_apply * policy, const as_key * key,
+	const as_ldt * ldt, const as_val * from_val, uint32_t count, as_list ** elements)
+{
+	as_error_reset(err);
+	
+	as_string ldt_bin;
+	as_string_init(&ldt_bin, (char *)ldt->name, false);
+	
+	as_arraylist arglist;
+	as_arraylist_inita(&arglist, 3);
+	as_arraylist_append_string(&arglist, &ldt_bin);
+	as_val_reserve(from_val); // bump the ref count so the arraylist_destroy will not reset
+	as_arraylist_append(&arglist, (as_val *)from_val);
+	as_arraylist_append_int64(&arglist, count);
+	
+	as_val* p_return_val = NULL;
+	aerospike_key_apply(as, err, policy, key, DEFAULT_LLIST_PACKAGE, "find_from",
+						(as_list *)&arglist, &p_return_val);
+	
+	as_arraylist_destroy(&arglist);
+	
+	if (ldt_parse_error(err) != AEROSPIKE_OK) {
+		return err->code;
+	}
+	
+	if (!p_return_val) {
+		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL, "no value returned from server");
+	}
+	
+	*elements = (as_list *)p_return_val;
+	return err->code;
+}
+
+as_status aerospike_llist_find_from_filter(
+	aerospike * as, as_error * err, const as_policy_apply * policy, const as_key * key,
+	const as_ldt * ldt, const as_val * from_val, uint32_t count,
+	const as_udf_function_name filter, const as_list *filter_args, as_list ** elements)
+{
+	as_error_reset(err);
+	
+	as_string ldt_bin;
+	as_string_init(&ldt_bin, (char *)ldt->name, false);
+	
+	as_arraylist arglist;
+	as_arraylist_inita(&arglist, 5);
+	as_arraylist_append_string(&arglist, &ldt_bin);
+	as_val_reserve(from_val); // bump the ref count so the arraylist_destroy will not reset
+	as_arraylist_append(&arglist, (as_val *)from_val);
+	as_arraylist_append_int64(&arglist, count);
+	
+	as_string filter_name;
+	as_string_init(&filter_name, (char *)filter, false);
+	as_arraylist_append_string(&arglist, &filter_name );
+	as_val_reserve( filter_args ); // bump the ref count
+	as_arraylist_append(&arglist, (as_val *) filter_args );
+
+	as_val* p_return_val = NULL;
+	aerospike_key_apply(as, err, policy, key, DEFAULT_LLIST_PACKAGE, "find_from",
+						(as_list *)&arglist, &p_return_val);
+	
+	as_arraylist_destroy(&arglist);
+	
+	if (ldt_parse_error(err) != AEROSPIKE_OK) {
+		return err->code;
+	}
+	
+	if (!p_return_val) {
+		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL, "no value returned from server");
+	}
+	
+	*elements = (as_list *)p_return_val;
+	return err->code;
+}
+
+// =======================================================================
 // SCAN
 // =======================================================================
 as_status aerospike_llist_scan(
@@ -362,7 +588,7 @@ as_status aerospike_llist_filter(
 as_status aerospike_llist_range_limit(
 	aerospike * as, as_error * err, const as_policy_apply * policy,
 	const as_key * key, const as_ldt * ldt,
-	const as_val * min_value, const as_val * max_value, int count,
+	const as_val * min_value, const as_val * max_value, uint32_t count,
 	const as_udf_function_name filter, const as_list *filter_args,
 	as_list ** elements )
 {

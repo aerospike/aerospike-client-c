@@ -237,7 +237,7 @@ as_status aerospike_llist_filter(
  *	filter the returned collection of objects using the given
  *	filter function. If no filter function is specified, return all values.
  *	Limit returned values size to given count.  If count is zero, do not
- *	limit returned values.
+ *	limit returned values.  Count > 0 are supported by server versions >= 3.5.8.
  *
  *	~~~~~~~~~~{.c}
  *	as_key key;
@@ -542,6 +542,7 @@ as_status aerospike_llist_ldt_exists(
 
 /**
  *	Set page size for LLIST bin.
+ *	Supported by server versions >= 3.5.8.
  *
  *	~~~~~~~~~~{.c}
  *	as_key key;

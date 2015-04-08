@@ -236,6 +236,62 @@ as_status aerospike_llist_filter(
  *	Given an llist bin, return the key values from MIN to MAX, and then
  *	filter the returned collection of objects using the given
  *	filter function. If no filter function is specified, return all values.
+ *	Limit returned values size to given count.  If count is zero, do not
+ *	limit returned values.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_key key;
+ *	as_key_init(&key, "myns", "myset", "mykey");
+ *
+ *	as_ldt llist;
+ *	as_ldt_init(&llist, "myllist", AS_LDT_LLIST, NULL);
+ *
+ *	as_integer min_value;
+ *	as_integer_init(&min_value, 18);
+ *
+ *	as_integer max_value;
+ *	as_integer_init(&max_value, 99);
+ *
+ *	as_list *result_list = NULL;
+ *
+ *	if ( aerospike_llist_range_limit(&as, &err, NULL, &key, &llist, &min_value, &max_value, 20,
+ *	    "search_filter", NULL, &result_list) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *	else {
+ *		// process the returned elements
+ *		as_arraylist_destroy(result_list);
+ *	}
+ *	~~~~~~~~~~
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param key			The key of the record.
+ *	@param ldt 			The llist bin to search from. If not an llist bin, will return error.
+ *	@param min_value	The minimum range value (or null to be LEAST value)
+ *	@param max_value	The maximum range value (or null to be the GREATEST value)
+ *	@param count		The maximum number of values to return, pass in zero to obtain all values within range.
+ *	@param filter		The name of the User-Defined-Function to use as a search filter (or null if no filter)
+ *	@param filter_args	The list of parameters passed in to the User-Defined-Function filter (or null)
+ *	@param elements		The pointer to a list of elements returned from search function. Pointer should
+ *						be NULL passed in.
+ *
+ *	@return AEROSPIKE_OK if successful. Otherwise an error.
+ *
+ *	@ingroup ldt_operations
+ */
+as_status aerospike_llist_range_limit(
+	aerospike * as, as_error * err, const as_policy_apply * policy,
+	const as_key * key, const as_ldt * ldt,
+	const as_val * min_value, const as_val * max_value, int count,
+	const as_udf_function_name filter, const as_list *filter_args,
+	as_list ** elements );
+	
+/**
+ *	Given an llist bin, return the key values from MIN to MAX, and then
+ *	filter the returned collection of objects using the given
+ *	filter function. If no filter function is specified, return all values.
  *
  *	~~~~~~~~~~{.c}
  *	as_key key;
@@ -278,12 +334,15 @@ as_status aerospike_llist_filter(
  *
  *	@ingroup ldt_operations
  */
-as_status aerospike_llist_range(
+static inline as_status aerospike_llist_range(
 	aerospike * as, as_error * err, const as_policy_apply * policy,
 	const as_key * key, const as_ldt * ldt,
 	const as_val * min_value, const as_val * max_value,
 	const as_udf_function_name filter, const as_list *filter_args,
-	as_list ** elements );
+	as_list ** elements )
+{
+	return aerospike_llist_range_limit(as, err, policy, key, ldt, min_value, max_value, 0, filter, filter_args, elements);
+}
 
 /**
  *	Look up a llist and find how many elements it contains
@@ -480,6 +539,36 @@ as_status aerospike_llist_ldt_exists(
 	const as_key * key, const as_ldt * ldt,
 	as_boolean *ldt_exists
 	);
+
+/**
+ *	Set page size for LLIST bin.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_key key;
+ *	as_key_init(&key, "myns", "myset", "mykey");
+ *
+ *	as_ldt llist;
+ *	as_ldt_init(&llist, "myllist", AS_LDT_LLIST, NULL);
+ *
+ *	if ( aerospike_llist_set_page_size(&as, &err, NULL, &key, &llist, 8192) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *	~~~~~~~~~~
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param key			The key of the record.
+ *	@param ldt 			The LDT to operate on. If not an LLIST bin, will return error.
+ *	@param page_size	The new llist page size.
+ *
+ *	@return AEROSPIKE_OK if successful. Otherwise an error.
+ *
+ *	@ingroup ldt_operations
+ */
+as_status aerospike_llist_set_page_size(
+	aerospike * as, as_error * err, const as_policy_apply * policy,
+	const as_key * key, const as_ldt * ldt, uint32_t page_size);
 
 #ifdef __cplusplus
 } // end extern "C"

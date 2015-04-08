@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2014 Aerospike, Inc.
+ * Copyright 2008-2015 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -37,6 +37,7 @@ const char * LDT_LIST_OP_ADD			= "add";
 const char * LDT_LIST_OP_ADDALL			= "add_all";
 const char * LDT_LIST_OP_FIND		    = "find";
 const char * LDT_LIST_OP_RANGE		    = "range";
+const char * LDT_LIST_OP_FIND_RANGE		= "find_range";
 const char * LDT_LIST_OP_SCAN   		= "scan";
 const char * LDT_LIST_OP_FILTER			= "filter";
 const char * LDT_LIST_OP_REMOVE		 	= "remove";
@@ -45,6 +46,7 @@ const char * LDT_LIST_OP_SIZE		   	= "size";
 const char * LDT_LIST_OP_SET_CAPACITY	= "set_capacity";
 const char * LDT_LIST_OP_GET_CAPACITY	= "get_capacity";
 const char * LDT_LIST_OP_LDT_EXISTS		= "ldt_exists";
+const char * LDT_LIST_OP_SET_PAGE_SIZE	= "setPageSize";
 
 // =======================================================================
 // ADD INTERNAL
@@ -357,10 +359,10 @@ as_status aerospike_llist_filter(
 // =======================================================================
 // RANGE
 // =======================================================================
-as_status aerospike_llist_range(
+as_status aerospike_llist_range_limit(
 	aerospike * as, as_error * err, const as_policy_apply * policy,
 	const as_key * key, const as_ldt * ldt,
-	const as_val * min_value, const as_val * max_value,
+	const as_val * min_value, const as_val * max_value, int count,
 	const as_udf_function_name filter, const as_list *filter_args,
 	as_list ** elements )
 {
@@ -385,6 +387,16 @@ as_status aerospike_llist_range(
 	// Get ready for the appropriate number of parameters, bases on whether
 	// the input parm "filter" is valid .. or not.
 	int list_argc = filter ? 7 : 5;
+	const char* operation;
+	
+	if (count > 0) {
+		operation = LDT_LIST_OP_FIND_RANGE;
+		list_argc++;
+	}
+	else {
+		operation = LDT_LIST_OP_RANGE;
+	}
+	
 	/* stack allocate the arg list */
 	as_string ldt_bin;
 	as_string_init(&ldt_bin, (char *)ldt->name, false);
@@ -404,6 +416,10 @@ as_status aerospike_llist_range(
 	as_arraylist_append(&arglist, (as_val *) min_value);
 	as_arraylist_append(&arglist, (as_val *) max_value);
 
+	if (count > 0) {
+		as_arraylist_append_int64(&arglist, count);
+	}
+	
 	if (filter){
 		as_string filter_name;
 		as_string_init(&filter_name, (char *)filter, false);
@@ -414,7 +430,7 @@ as_status aerospike_llist_range(
 
 	as_val* p_return_val = NULL;
 	aerospike_key_apply(
-		as, err, policy, key, DEFAULT_LLIST_PACKAGE, LDT_LIST_OP_RANGE,
+		as, err, policy, key, DEFAULT_LLIST_PACKAGE, operation,
 		(as_list *)&arglist, &p_return_val);
 
 	as_arraylist_destroy(&arglist);
@@ -431,8 +447,7 @@ as_status aerospike_llist_range(
 	*elements = (as_list *)p_return_val;
 
 	return err->code;
-
-} // aerospike_llist_range()
+}
 
 // =======================================================================
 // REMOVE
@@ -702,3 +717,46 @@ as_status aerospike_llist_ldt_exists(
 
 	return err->code;
 } // end aerospike_llist_ldt_exists()
+
+// =======================================================================
+// LDT Set page size
+// =======================================================================
+as_status aerospike_llist_set_page_size(
+	aerospike * as, as_error * err, const as_policy_apply * policy,
+	const as_key * key, const as_ldt * ldt, uint32_t page_size)
+{
+	as_error_reset(err);
+		
+	/* stack allocate the arg list */
+	as_string ldt_bin;
+	as_string_init(&ldt_bin, (char *)ldt->name, false);
+	
+	as_arraylist arglist;
+	as_arraylist_inita(&arglist, 2);
+	as_arraylist_append_string(&arglist, &ldt_bin);
+	as_arraylist_append_int64(&arglist, page_size);
+	
+	as_val* p_return_val = NULL;
+	aerospike_key_apply(as, err, policy, key, DEFAULT_LLIST_PACKAGE, LDT_LIST_OP_SET_PAGE_SIZE,
+						(as_list *)&arglist, &p_return_val);
+	
+	as_arraylist_destroy(&arglist);
+	
+	if (ldt_parse_error(err) != AEROSPIKE_OK) {
+		return err->code;
+	}
+	
+	int64_t ival = as_integer_getorelse(as_integer_fromval(p_return_val), -1);
+	as_val_destroy(p_return_val);
+	
+	if (ival == -1) {
+		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL,
+							"value returned from server not parse-able");
+	}
+	if (ival !=0 ) {
+		return as_error_set(err, AEROSPIKE_ERR_LDT_INTERNAL,
+							"set page size failed");
+	}
+	
+	return err->code;
+}

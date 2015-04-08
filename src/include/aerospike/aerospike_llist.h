@@ -150,6 +150,250 @@ as_status aerospike_llist_find(
 	const as_key * key, const as_ldt * ldt, const as_val * search_val,
 	as_list ** elements );
 
+/**
+ *	Select values from the beginning of list up to a maximum count.
+ *	Supported by server versions >= 3.5.8.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_key key;
+ *	as_key_init(&key, "myns", "myset", "mykey");
+ *
+ *	as_ldt llist;
+ *	as_ldt_init(&llist, "myllist", AS_LDT_LLIST, NULL);
+ *
+ *	as_list *result_list = NULL;
+ *
+ *	if ( aerospike_llist_find_first(&as, &err, NULL, &key, &llist, 5, &result_list ) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *	else {
+ *		// process the returned elements
+ *		as_arraylist_destroy(result_list);
+ *	}
+ *	~~~~~~~~~~
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param key			The key of the record.
+ *	@param ldt 			The llist bin to lookup from. If not an llist bin, will return error.
+ *	@param count		Maximum number of values to return.
+ *	@param elements		The returned list of values.
+ *
+ *	@return AEROSPIKE_OK if successful. Otherwise an error.
+ *
+ *	@ingroup ldt_operations
+ */
+as_status aerospike_llist_find_first(
+	aerospike * as, as_error * err, const as_policy_apply * policy,
+	const as_key * key, const as_ldt * ldt, uint32_t count, as_list ** elements);
+	
+/**
+ *	Select values from the beginning of list up to a maximum count after applying lua filter.
+ *	Supported by server versions >= 3.5.8.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_key key;
+ *	as_key_init(&key, "myns", "myset", "mykey");
+ *
+ *	as_ldt llist;
+ *	as_ldt_init(&llist, "myllist", AS_LDT_LLIST, NULL);
+ *
+ *	as_list *result_list = NULL;
+ *
+ *	if ( aerospike_llist_find_first_filter(&as, &err, NULL, &key, &llist, 5, "search_filter", NULL, &result_list ) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *	else {
+ *		// process the returned elements
+ *		as_arraylist_destroy(result_list);
+ *	}
+ *	~~~~~~~~~~
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param key			The key of the record.
+ *	@param ldt 			The llist bin to lookup from. If not an llist bin, will return error.
+ *	@param count		Maximum number of values to return.
+ *	@param filter		The name of the User-Defined-Function to use as a search filter.
+ *	@param filter_args	The list of parameters passed in to the User-Defined-Function filter.
+ *	@param elements		The returned list of values.
+ *
+ *	@return AEROSPIKE_OK if successful. Otherwise an error.
+ *
+ *	@ingroup ldt_operations
+ */
+as_status aerospike_llist_find_first_filter(
+	aerospike * as, as_error * err, const as_policy_apply * policy,
+	const as_key * key, const as_ldt * ldt, uint32_t count,
+	const as_udf_function_name filter, const as_list *filter_args, as_list ** elements);
+
+/**
+ *	Select values from the end of list up to a maximum count.
+ *	Supported by server versions >= 3.5.8.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_key key;
+ *	as_key_init(&key, "myns", "myset", "mykey");
+ *
+ *	as_ldt llist;
+ *	as_ldt_init(&llist, "myllist", AS_LDT_LLIST, NULL);
+ *
+ *	as_list *result_list = NULL;
+ *
+ *	if ( aerospike_llist_find_last(&as, &err, NULL, &key, &llist, 5, &result_list ) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *	else {
+ *		// process the returned elements
+ *		as_arraylist_destroy(result_list);
+ *	}
+ *	~~~~~~~~~~
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param key			The key of the record.
+ *	@param ldt 			The llist bin to lookup from. If not an llist bin, will return error.
+ *	@param count		Maximum number of values to return.
+ *	@param elements		The returned list of values.
+ *
+ *	@return AEROSPIKE_OK if successful. Otherwise an error.
+ *
+ *	@ingroup ldt_operations
+ */
+as_status aerospike_llist_find_last(
+	aerospike * as, as_error * err, const as_policy_apply * policy,
+	const as_key * key, const as_ldt * ldt, uint32_t count, as_list ** elements);
+	
+/**
+ *	Select values from the end of list up to a maximum count after applying lua filter.
+ *	Supported by server versions >= 3.5.8.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_key key;
+ *	as_key_init(&key, "myns", "myset", "mykey");
+ *
+ *	as_ldt llist;
+ *	as_ldt_init(&llist, "myllist", AS_LDT_LLIST, NULL);
+ *
+ *	as_list *result_list = NULL;
+ *
+ *	if ( aerospike_llist_find_last_filter(&as, &err, NULL, &key, &llist, 5, "search_filter", NULL, &result_list ) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *	else {
+ *		// process the returned elements
+ *		as_arraylist_destroy(result_list);
+ *	}
+ *	~~~~~~~~~~
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param key			The key of the record.
+ *	@param ldt 			The llist bin to lookup from. If not an llist bin, will return error.
+ *	@param count		Maximum number of values to return.
+ *	@param filter		The name of the User-Defined-Function to use as a search filter.
+ *	@param filter_args	The list of parameters passed in to the User-Defined-Function filter.
+ *	@param elements		The returned list of values.
+ *
+ *	@return AEROSPIKE_OK if successful. Otherwise an error.
+ *
+ *	@ingroup ldt_operations
+ */
+as_status aerospike_llist_find_last_filter(
+	aerospike * as, as_error * err, const as_policy_apply * policy,
+	const as_key * key, const as_ldt * ldt, uint32_t count,
+	const as_udf_function_name filter, const as_list *filter_args, as_list ** elements);
+
+/**
+ *	Select values from the begin key up to a maximum count.
+ *	Supported by server versions >= 3.5.8.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_key key;
+ *	as_key_init(&key, "myns", "myset", "mykey");
+ *
+ *	as_ldt llist;
+ *	as_ldt_init(&llist, "myllist", AS_LDT_LLIST, NULL);
+ *
+ *	as_integer from_val;
+ *	as_integer_init(&from_val, 42);
+ *
+ *	as_list *result_list = NULL;
+ *
+ *	if ( aerospike_llist_find_from(&as, &err, NULL, &key, &llist, &from_val, 5, &result_list ) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *	else {
+ *		// process the returned elements
+ *		as_arraylist_destroy(result_list);
+ *	}
+ *	~~~~~~~~~~
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param key			The key of the record.
+ *	@param ldt 			The llist bin to lookup from. If not an llist bin, will return error.
+ *	@param from_val		Value from which to start.
+ *	@param count		Maximum number of values to return.
+ *	@param elements		The returned list of values.
+ *
+ *	@return AEROSPIKE_OK if successful. Otherwise an error.
+ *
+ *	@ingroup ldt_operations
+ */
+as_status aerospike_llist_find_from(
+	aerospike * as, as_error * err, const as_policy_apply * policy, const as_key * key,
+	const as_ldt * ldt, const as_val * from_val, uint32_t count, as_list ** elements);
+
+/**
+ *	Select values from the begin key up to a maximum count after applying lua filter.
+ *	Supported by server versions >= 3.5.8.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_key key;
+ *	as_key_init(&key, "myns", "myset", "mykey");
+ *
+ *	as_ldt llist;
+ *	as_ldt_init(&llist, "myllist", AS_LDT_LLIST, NULL);
+ *
+ *	as_integer from_val;
+ *	as_integer_init(&from_val, 42);
+ *
+ *	as_list *result_list = NULL;
+ *
+ *	if ( aerospike_llist_find_from_filter(&as, &err, NULL, &key, &llist, &from_val, 5, "search_filter", NULL, &result_list ) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *	else {
+ *		// process the returned elements
+ *		as_arraylist_destroy(result_list);
+ *	}
+ *	~~~~~~~~~~
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param key			The key of the record.
+ *	@param ldt 			The llist bin to lookup from. If not an llist bin, will return error.
+ *	@param from_val		Value from which to start.
+ *	@param count		Maximum number of values to return.
+ *	@param filter		The name of the User-Defined-Function to use as a search filter.
+ *	@param filter_args	The list of parameters passed in to the User-Defined-Function filter.
+ *	@param elements		The returned list of values.
+ *
+ *	@return AEROSPIKE_OK if successful. Otherwise an error.
+ *
+ *	@ingroup ldt_operations
+ */
+as_status aerospike_llist_find_from_filter(
+	aerospike * as, as_error * err, const as_policy_apply * policy, const as_key * key,
+	const as_ldt * ldt, const as_val * from_val, uint32_t count,
+	const as_udf_function_name filter, const as_list *filter_args, as_list ** elements);
 
 /**
  *	Given an llist bin, return all values in the list.
@@ -284,7 +528,7 @@ as_status aerospike_llist_filter(
 as_status aerospike_llist_range_limit(
 	aerospike * as, as_error * err, const as_policy_apply * policy,
 	const as_key * key, const as_ldt * ldt,
-	const as_val * min_value, const as_val * max_value, int count,
+	const as_val * min_value, const as_val * max_value, uint32_t count,
 	const as_udf_function_name filter, const as_list *filter_args,
 	as_list ** elements );
 	

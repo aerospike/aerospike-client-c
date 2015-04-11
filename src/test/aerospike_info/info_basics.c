@@ -119,7 +119,7 @@ TEST( info_basics_features , "features" ) {
 	as_error_reset(&err);
 
 	info_data data = {
-		.actual = "features\tas_msg;replicas-read;replicas-prole;replicas-write;replicas-master;cluster-generation;partition-info;partition-generation;udf\n",
+		.actual = "features\treplicas-all;replicas-master;replicas-prole;udf\n",
 		.matches = 0,
 		.count = 0
 	};

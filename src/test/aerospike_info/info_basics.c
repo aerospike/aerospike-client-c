@@ -119,7 +119,7 @@ TEST( info_basics_features , "features" ) {
 	as_error_reset(&err);
 
 	info_data data = {
-		.actual = "features\treplicas-all;replicas-master;replicas-prole;udf\n",
+		.actual = NULL,
 		.matches = 0,
 		.count = 0
 	};

@@ -65,7 +65,7 @@ extern "C" {
 /**
  *	The size of a UDF hash value
  */
-#define AS_UDF_FILE_HASH_SIZE 20
+#define AS_UDF_FILE_HASH_SIZE (20 * 2)
 
 /******************************************************************************
  *	TYPES

@@ -28,14 +28,6 @@ extern "C" {
 #include "ck_pr.h"
 
 /******************************************************************************
- *	MACROS
- *****************************************************************************/
-
-#define AS_NUM_BATCH_THREADS 6
-#define AS_NUM_SCAN_THREADS	5
-#define AS_NUM_QUERY_THREADS 5
-
-/******************************************************************************
  *	TYPES
  *****************************************************************************/
 
@@ -102,6 +94,8 @@ typedef struct as_gc_item_s {
 	as_release_fn release_fn;
 } as_gc_item;
 
+struct threadpool_t;
+
 /**
  *	Cluster of server nodes.
  */
@@ -117,24 +111,12 @@ typedef struct as_cluster_s {
 	 *	Hints for best node for a partition.
 	 */
 	as_partition_tables* partition_tables;
-	
+		
 	/**
 	 *	@private
-	 *	Batch process queue.
+	 *	Pool of threads used to query server nodes in parallel for batch, scan and query.
 	 */
-	cf_queue* batch_q;
-	
-	/**
-	 *	@private
-	 *	Scan process queue.
-	 */
-	cf_queue* scan_q;
-	
-	/**
-	 *	@private
-	 *	Query process queue.
-	 */
-	cf_queue* query_q;
+	struct threadpool_t* thread_pool;
 	
 	/**
 	 *	@private
@@ -236,24 +218,6 @@ typedef struct as_cluster_s {
 	
 	/**
 	 *	@private
-	 *	Batch initialize indicator.
-	 */
-	uint32_t batch_initialized;
-	
-	/**
-	 *	@private
-	 *	Scan initialize indicator.
-	 */
-	uint32_t scan_initialized;
-	
-	/**
-	 *	@private
-	 *	Query initialize indicator.
-	 */
-	uint32_t query_initialized;
-	
-	/**
-	 *	@private
 	 *	Total number of data partitions used by cluster.
 	 */
 	cl_partition_id	n_partitions;
@@ -275,24 +239,6 @@ typedef struct as_cluster_s {
 	 *	Cluster tend thread.
 	 */
 	pthread_t tend_thread;
-	
-	/**
-	 *	@private
-	 *	Batch process threads.
-	 */
-	pthread_t batch_threads[AS_NUM_BATCH_THREADS];
-	
-	/**
-	 *	@private
-	 *	Scan process threads.
-	 */
-	pthread_t scan_threads[AS_NUM_SCAN_THREADS];
-	
-	/**
-	 *	@private
-	 *	Query process threads.
-	 */
-	pthread_t query_threads[AS_NUM_QUERY_THREADS];
 } as_cluster;
 
 /******************************************************************************

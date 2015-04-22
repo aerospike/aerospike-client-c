@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2014 Aerospike, Inc.
+ * Copyright 2008-2015 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -27,6 +27,7 @@
 #include <aerospike/as_socket.h>
 #include <aerospike/as_status.h>
 #include <aerospike/as_val.h>
+#include <aerospike/threadpool.h>
 #include <citrusleaf/cf_clock.h>
 
 /************************************************************************
@@ -232,90 +233,16 @@ as_batch_command_execute(as_batch_task* task)
 	return status;
 }
 
-static void*
-as_batch_worker_fn(void* data)
-{
-	as_cluster* cluster = (as_cluster*)data;
-	as_batch_task task;
-	
-	while (cf_queue_pop(cluster->batch_q, &task, CF_QUEUE_FOREVER) == CF_QUEUE_OK) {
-		// This is how batch shutdown signals we're done.
-		if (! task.cluster) {
-			break;
-		}
-		
-		as_batch_complete_task complete_task;
-		complete_task.node = task.node;
-		complete_task.result = as_batch_command_execute(&task);
-		
-		cf_queue_push(task.complete_q, &complete_task);
-	}
-	return 0;
-}
-
 static void
-as_batch_threads_init(as_cluster* cluster)
+as_batch_worker(void* data)
 {
-	// We do this lazily, during the first batch request, so make sure it's only
-	// done once.
+	as_batch_task* task = (as_batch_task*)data;
 	
-	// Quicker than pulling a lock, handles everything except first race:
-	if (ck_pr_load_32(&cluster->batch_initialized) == 1) {
-		return;
-	}
+	as_batch_complete_task complete_task;
+	complete_task.node = task->node;
+	complete_task.result = as_batch_command_execute(task);
 	
-	// Handle first race - losers must wait for winner to create dispatch queue.
-	pthread_mutex_lock(&cluster->batch_init_lock);
-	
-	if (ck_pr_load_32(&cluster->batch_initialized) == 1) {
-		// Lost race - another thread got here first.
-		pthread_mutex_unlock(&cluster->batch_init_lock);
-		return;
-	}
-	
-	// Create dispatch queue.
-	cluster->batch_q = cf_queue_create(sizeof(as_batch_task), true);
-	
-	// It's now safe to push to the queue.
-	ck_pr_store_32(&cluster->batch_initialized, 1);
-	
-	pthread_mutex_unlock(&cluster->batch_init_lock);
-	
-	// Create thread pool.
-	for (int i = 0; i < AS_NUM_BATCH_THREADS; i++) {
-		pthread_create(&cluster->batch_threads[i], 0, as_batch_worker_fn, (void*)cluster);
-	}
-}
-
-void
-as_batch_threads_shutdown(as_cluster* cluster)
-{
-	// Note - we assume this doesn't race as_batch_threads_init(), i.e. that no
-	// threads are initiating batch transactions while we're shutting down the
-	// cluster.
-	
-	// Check whether we ever (lazily) initialized batch machinery.
-	if (ck_pr_load_32(&cluster->batch_initialized) == 0) {
-		return;
-	}
-	
-	// This tells the worker threads to stop. We do this (instead of using a
-	// "running" flag) to allow the workers to "wait forever" on processing the
-	// work dispatch queue, which has minimum impact when the queue is empty.
-	// This also means all queued requests get processed when shutting down.
-	for (int i = 0; i < AS_NUM_BATCH_THREADS; i++) {
-		as_batch_task task;
-		task.cluster = NULL;
-		cf_queue_push(cluster->batch_q, &task);
-	}
-	
-	for (int i = 0; i < AS_NUM_BATCH_THREADS; i++) {
-		pthread_join(cluster->batch_threads[i], NULL);
-	}
-	
-	cf_queue_destroy(cluster->batch_q);
-	cluster->batch_q = NULL;
-	ck_pr_store_32(&cluster->batch_initialized, 0);
+	cf_queue_push(task->complete_q, &complete_task);
 }
 
 static as_batch_node*
@@ -430,8 +357,6 @@ as_batch_execute(
 	}
 	as_nodes_release(nodes);
 	
-	// Initialize batch worker threads.
-	as_batch_threads_init(cluster);
 	uint32_t error_mutex = 0;
 
 	// Initialize task.
@@ -451,16 +376,35 @@ as_batch_execute(
 	task.retry = AS_POLICY_RETRY_NONE;
 	task.read_attr = read_attr;
 	
+	uint32_t n_wait_nodes = n_batch_nodes;
+	
 	// Run task for each node.
 	for (uint32_t i = 0; i < n_batch_nodes; i++) {
+		// Stack allocate task for each node.  It should be fine since the task
+		// only needs to be valid within this function.
+		as_batch_task* task_node = alloca(sizeof(as_batch_task));
+		memcpy(task_node, &task, sizeof(as_batch_task));
+
 		as_batch_node* batch_node = &batch_nodes[i];
-		task.node = batch_node->node;
-		memcpy(&task.offsets, &batch_node->offsets, sizeof(as_vector));
-		cf_queue_push(cluster->batch_q, &task);
+		task_node->node = batch_node->node;
+		memcpy(&task_node->offsets, &batch_node->offsets, sizeof(as_vector));
+
+		int rc = threadpool_add(cluster->thread_pool, as_batch_worker, task_node, 0);
+
+		if (rc) {
+			// Thread could not be added. Abort entire batch.
+			if (ck_pr_fas_32(task.error_mutex, 1) == 0) {
+				status = as_error_update(task.err, AEROSPIKE_ERR_CLIENT, "Failed to add batch thread: %d", rc);
+ 			}
+			
+			// Reset node count to threads that were run.
+			n_wait_nodes = i;
+			break;
+		}
 	}
 	
 	// Wait for tasks to complete.
-	for (uint32_t i = 0; i < n_batch_nodes; i++) {
+	for (uint32_t i = 0; i < n_wait_nodes; i++) {
 		as_batch_complete_task complete;
 		cf_queue_pop(task.complete_q, &complete, CF_QUEUE_FOREVER);
 		

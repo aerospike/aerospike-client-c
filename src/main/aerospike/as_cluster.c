@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2014 Aerospike, Inc.
+ * Copyright 2008-2015 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -24,6 +24,7 @@
 #include <aerospike/as_socket.h>
 #include <aerospike/as_string.h>
 #include <aerospike/as_vector.h>
+#include <aerospike/threadpool.h>
 #include <citrusleaf/cf_byte_order.h>
 #include <citrusleaf/cf_clock.h>
 
@@ -33,15 +34,6 @@
 
 as_status
 as_node_refresh(as_cluster* cluster, as_error* err, as_node* node, as_vector* /* <as_friend> */ friends);
-
-void
-as_batch_threads_shutdown(as_cluster* cluster);
-
-void
-as_scan_threads_shutdown(as_cluster* cluster);
-
-void
-as_query_threads_shutdown(as_cluster* cluster);
 
 /******************************************************************************
  *	Functions
@@ -932,6 +924,19 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 	
 	// Initialize garbage collection array.
 	cluster->gc = as_vector_create(sizeof(as_gc_item), 8);
+	
+	// Initialize thread pool.
+	if (config->thread_pool_size > 0) {
+		cluster->thread_pool = threadpool_create(config->thread_pool_size, config->thread_pool_queue_size, 0);
+		
+		if (! cluster->thread_pool) {
+			as_status status = as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to initialize thread pool: %u %u",
+					config->thread_pool_size, config->thread_pool_queue_size);
+			as_cluster_destroy(cluster);
+			*cluster_out = 0;
+			return status;
+		}
+	}
 
 	// Initialize tend lock and condition.
 	pthread_mutex_init(&cluster->tend_lock, NULL);
@@ -969,10 +974,15 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 void
 as_cluster_destroy(as_cluster* cluster)
 {
-	// Shutdown work queues.
-	as_batch_threads_shutdown(cluster);
-	as_scan_threads_shutdown(cluster);
-	as_query_threads_shutdown(cluster);
+	// Shutdown thread pool.
+	if (cluster->thread_pool) {
+		int rc = threadpool_destroy(cluster->thread_pool, threadpool_graceful);
+		
+		if (rc && rc != threadpool_shutdown) {
+			as_log_warn("Failed to destroy thread pool: %d", rc);
+		}
+		cluster->thread_pool = 0;
+	}
 
 	// Stop tend thread and wait till finished.
 	if (cluster->valid) {

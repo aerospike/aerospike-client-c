@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2014 Aerospike, Inc.
+ * Copyright 2008-2015 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -22,7 +22,7 @@
 #include <aerospike/as_msgpack.h>
 #include <aerospike/as_serializer.h>
 #include <aerospike/as_socket.h>
-
+#include <aerospike/threadpool.h>
 #include <citrusleaf/cf_clock.h>
 #include <citrusleaf/cf_queue.h>
 #include <citrusleaf/cf_random.h>
@@ -193,71 +193,17 @@ as_scan_command_execute(as_scan_task* task)
 	return status;
 }
 
-static void*
+static void
 as_scan_worker(void* data)
 {
-	as_cluster* cluster = (as_cluster*)data;
-	as_scan_task task;
+	as_scan_task* task = (as_scan_task*)data;
 	
-	while (cf_queue_pop(cluster->scan_q, &task, CF_QUEUE_FOREVER) == CF_QUEUE_OK) {
-		// This is how batch shutdown signals we're done.
-		if (! task.cluster) {
-			break;
-		}
+	as_scan_complete_task complete_task;
+	complete_task.node = task->node;
+	complete_task.task_id = task->task_id;
+	complete_task.result = as_scan_command_execute(task);
 		
-		as_scan_complete_task complete_task;
-		complete_task.node = task.node;
-		complete_task.task_id = task.task_id;
-		complete_task.result = as_scan_command_execute(&task);
-		
-		cf_queue_push(task.complete_q, &complete_task);
-	}
-	return 0;
-}
-
-static void
-as_scan_threads_init(as_cluster* cluster)
-{
-	// We do this lazily, during the first scan request, so make sure it's only
-	// done once.
-	if (ck_pr_fas_32(&cluster->scan_initialized, 1) == 1 || cluster->scan_q) {
-		return;
-	}
-		
-	// Create dispatch queue.
-	cluster->scan_q = cf_queue_create(sizeof(as_scan_task), true);
-	
-	// Create thread pool.
-	for (int i = 0; i < AS_NUM_SCAN_THREADS; i++) {
-		pthread_create(&cluster->scan_threads[i], 0, as_scan_worker, cluster);
-	}
-}
-
-void
-as_scan_threads_shutdown(as_cluster* cluster)
-{
-	// Check whether we ever (lazily) initialized scan machinery.
-	if (ck_pr_load_32(&cluster->scan_initialized) == 0 && ! cluster->scan_q) {
-		return;
-	}
-	
-	// This tells the worker threads to stop. We do this (instead of using a
-	// "running" flag) to allow the workers to "wait forever" on processing the
-	// work dispatch queue, which has minimum impact when the queue is empty.
-	// This also means all queued requests get processed when shutting down.
-	for (int i = 0; i < AS_NUM_SCAN_THREADS; i++) {
-		as_scan_task task;
-		task.cluster = NULL;
-		cf_queue_push(cluster->scan_q, &task);
-	}
-	
-	for (int i = 0; i < AS_NUM_SCAN_THREADS; i++) {
-		pthread_join(cluster->scan_threads[i], NULL);
-	}
-	
-	cf_queue_destroy(cluster->scan_q);
-	cluster->scan_q = NULL;
-	ck_pr_store_32(&cluster->scan_initialized, 0);
+	cf_queue_push(task->complete_q, &complete_task);
 }
 
 static size_t
@@ -431,18 +377,33 @@ as_scan_generic(
 	as_status status = AEROSPIKE_OK;
 	
 	if (scan->concurrent) {
-		// Run node scans in parallel.
-		as_scan_threads_init(cluster);
-		
+		uint32_t n_wait_nodes = n_nodes;
 		task.complete_q = cf_queue_create(sizeof(as_scan_complete_task), true);
 
+		// Run node scans in parallel.
 		for (uint32_t i = 0; i < n_nodes; i++) {
-			task.node = nodes->array[i];
-			cf_queue_push(cluster->scan_q, &task);
+			// Stack allocate task for each node.  It should be fine since the task
+			// only needs to be valid within this function.
+			as_scan_task* task_node = alloca(sizeof(as_scan_task));
+			memcpy(task_node, &task, sizeof(as_scan_task));
+			task_node->node = nodes->array[i];
+			
+			int rc = threadpool_add(cluster->thread_pool, as_scan_worker, task_node, 0);
+			
+			if (rc) {
+				// Thread could not be added. Abort entire scan.
+				if (ck_pr_fas_32(task.error_mutex, 1) == 0) {
+					status = as_error_update(task.err, AEROSPIKE_ERR_CLIENT, "Failed to add scan thread: %d", rc);
+				}
+				
+				// Reset node count to threads that were run.
+				n_wait_nodes = i;
+				break;
+			}
 		}
 
 		// Wait for tasks to complete.
-		for (uint32_t i = 0; i < n_nodes; i++) {
+		for (uint32_t i = 0; i < n_wait_nodes; i++) {
 			as_scan_complete_task complete;
 			cf_queue_pop(task.complete_q, &complete, CF_QUEUE_FOREVER);
 			

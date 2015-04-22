@@ -301,6 +301,26 @@ typedef struct as_config_s {
 	uint32_t tender_interval;
 
 	/**
+	 *	Numbers of thread stored in underlying thread pool used in batch, scan, and query commands.
+	 *	These commands are often sent to multiple server nodes in parallel threads.  A thread pool 
+	 *	improves performance because threads do not have to be created/destroyed for each command.
+	 *	Calculate your value using the following formula:
+	 *	<CODE>
+	 *	thread_pool_size = <average concurrent batch/scan/query commands> * <number of server nodes>
+	 *	</CODE>
+	 *	Default: 16
+	 */
+	uint32_t thread_pool_size;
+
+	/**
+	 *	Maximum number of batch, scan commands that can be queued on thread pool at any point in time.
+	 *	If the thread pool queue size is exceeded, further commands will fail until a previous
+	 *	command finishes.
+	 *	Default: 1000
+	 */
+	uint32_t thread_pool_queue_size;
+
+	/**
 	 *	Count of entries in hosts array.
 	 */
 	uint32_t hosts_size;

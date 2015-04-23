@@ -48,10 +48,18 @@ typedef enum as_privilege_code_e {
 	
 	/**
 	 *	User can perform systems administration functions on a database that do not involve user
-	 *	administration.  Global scope only.
+	 *	administration.  Examples include setting dynamic server configuration.
+	 *	Global scope only.
 	 */
 	AS_PRIVILEGE_SYS_ADMIN = 1,
 	
+	/**
+	 *	User can perform data administration functions on a database that do not involve user
+	 *	administration.  Examples include create/drop index and user defined functions. 
+	 *	Global scope only.
+	 */
+	AS_PRIVILEGE_DATA_ADMIN = 2,
+
 	/**
 	 *	User can read data only.
 	 */

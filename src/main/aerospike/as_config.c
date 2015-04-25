@@ -42,7 +42,6 @@ as_config * as_config_init(as_config * c)
 	c->conn_timeout_ms = 1000;
 	c->tender_interval = 1000;
 	c->thread_pool_size = 16;
-	c->thread_pool_queue_size = 1000;
 	c->hosts_size = 0;
 	memset(c->user, 0, sizeof(c->user));
 	memset(c->password, 0, sizeof(c->password));

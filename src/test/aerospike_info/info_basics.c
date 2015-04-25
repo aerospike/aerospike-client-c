@@ -142,6 +142,10 @@ TEST( info_basics_features , "features" ) {
 
 	free(res);
 	res = NULL;
+	
+	if ( data.actual ) {
+		free(data.actual);
+	}
 }
 
 /******************************************************************************

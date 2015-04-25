@@ -28,9 +28,9 @@
 #include <aerospike/as_socket.h>
 #include <aerospike/as_status.h>
 #include <aerospike/as_stream.h>
+#include <aerospike/as_thread_pool.h>
 #include <aerospike/as_udf_context.h>
 #include <aerospike/mod_lua.h>
-#include <aerospike/threadpool.h>
 #include <citrusleaf/cf_random.h>
 #include <stdint.h>
 
@@ -609,7 +609,7 @@ as_query_execute(as_query_task* task, const as_query * query, as_nodes* nodes, u
 		memcpy(task_node, task, sizeof(as_query_task));
 		task_node->node = nodes->array[i];
 		
-		int rc = threadpool_add(task->cluster->thread_pool, as_query_worker, task_node, 0);
+		int rc = as_thread_pool_queue_task(&task->cluster->thread_pool, as_query_worker, task_node);
 		
 		if (rc) {
 			// Thread could not be added. Abort entire query.

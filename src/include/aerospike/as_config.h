@@ -313,14 +313,6 @@ typedef struct as_config_s {
 	uint32_t thread_pool_size;
 
 	/**
-	 *	Maximum number of batch/scan/query commands that can be queued on thread pool at any point in time.
-	 *	If the thread pool queue size is exceeded, future commands will fail until a previous
-	 *	command finishes.
-	 *	Default: 1000
-	 */
-	uint32_t thread_pool_queue_size;
-
-	/**
 	 *	Count of entries in hosts array.
 	 */
 	uint32_t hosts_size;

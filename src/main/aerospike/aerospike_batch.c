@@ -26,8 +26,8 @@
 #include <aerospike/as_record.h>
 #include <aerospike/as_socket.h>
 #include <aerospike/as_status.h>
+#include <aerospike/as_thread_pool.h>
 #include <aerospike/as_val.h>
-#include <aerospike/threadpool.h>
 #include <citrusleaf/cf_clock.h>
 
 /************************************************************************
@@ -389,7 +389,7 @@ as_batch_execute(
 		task_node->node = batch_node->node;
 		memcpy(&task_node->offsets, &batch_node->offsets, sizeof(as_vector));
 
-		int rc = threadpool_add(cluster->thread_pool, as_batch_worker, task_node, 0);
+		int rc = as_thread_pool_queue_task(&cluster->thread_pool, as_batch_worker, task_node);
 
 		if (rc) {
 			// Thread could not be added. Abort entire batch.

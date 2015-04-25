@@ -24,7 +24,6 @@
 #include <aerospike/as_socket.h>
 #include <aerospike/as_string.h>
 #include <aerospike/as_vector.h>
-#include <aerospike/threadpool.h>
 #include <citrusleaf/cf_byte_order.h>
 #include <citrusleaf/cf_clock.h>
 
@@ -926,16 +925,14 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 	cluster->gc = as_vector_create(sizeof(as_gc_item), 8);
 	
 	// Initialize thread pool.
-	if (config->thread_pool_size > 0) {
-		cluster->thread_pool = threadpool_create(config->thread_pool_size, config->thread_pool_queue_size, 0);
-		
-		if (! cluster->thread_pool) {
-			as_status status = as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to initialize thread pool: %u %u",
-					config->thread_pool_size, config->thread_pool_queue_size);
-			as_cluster_destroy(cluster);
-			*cluster_out = 0;
-			return status;
-		}
+	int rc = as_thread_pool_init(&cluster->thread_pool, config->thread_pool_size);
+	
+	if (rc) {
+		as_status status = as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to initialize thread pool of size %u: %d",
+				config->thread_pool_size, rc);
+		as_cluster_destroy(cluster);
+		*cluster_out = 0;
+		return status;
 	}
 
 	// Initialize tend lock and condition.
@@ -975,13 +972,10 @@ void
 as_cluster_destroy(as_cluster* cluster)
 {
 	// Shutdown thread pool.
-	if (cluster->thread_pool) {
-		int rc = threadpool_destroy(cluster->thread_pool, threadpool_graceful);
-		
-		if (rc && rc != threadpool_shutdown) {
-			as_log_warn("Failed to destroy thread pool: %d", rc);
-		}
-		cluster->thread_pool = 0;
+	int rc = as_thread_pool_destroy(&cluster->thread_pool);
+	
+	if (rc) {
+		as_log_warn("Failed to destroy thread pool: %d", rc);
 	}
 
 	// Stop tend thread and wait till finished.

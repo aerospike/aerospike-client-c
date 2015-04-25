@@ -22,7 +22,7 @@
 #include <aerospike/as_msgpack.h>
 #include <aerospike/as_serializer.h>
 #include <aerospike/as_socket.h>
-#include <aerospike/threadpool.h>
+#include <aerospike/as_thread_pool.h>
 #include <citrusleaf/cf_clock.h>
 #include <citrusleaf/cf_queue.h>
 #include <citrusleaf/cf_random.h>
@@ -388,7 +388,7 @@ as_scan_generic(
 			memcpy(task_node, &task, sizeof(as_scan_task));
 			task_node->node = nodes->array[i];
 			
-			int rc = threadpool_add(cluster->thread_pool, as_scan_worker, task_node, 0);
+			int rc = as_thread_pool_queue_task(&cluster->thread_pool, as_scan_worker, task_node);
 			
 			if (rc) {
 				// Thread could not be added. Abort entire scan.

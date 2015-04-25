@@ -24,6 +24,7 @@ extern "C" {
 #include <aerospike/as_node.h>
 #include <aerospike/as_partition.h>
 #include <aerospike/as_policy.h>
+#include <aerospike/as_thread_pool.h>
 #include <citrusleaf/cf_atomic.h>
 #include "ck_pr.h"
 
@@ -114,12 +115,6 @@ typedef struct as_cluster_s {
 		
 	/**
 	 *	@private
-	 *	Pool of threads used to query server nodes in parallel for batch, scan and query.
-	 */
-	struct threadpool_t* thread_pool;
-	
-	/**
-	 *	@private
 	 *	Nodes to be garbage collected.
 	 */
 	as_vector* /* <as_gc_item> */ gc;
@@ -170,6 +165,12 @@ typedef struct as_cluster_s {
 	 *	value is the real IP address used to connect to the server.
 	 */
 	as_addr_map* ip_map;
+	
+	/**
+	 *	@private
+	 *	Pool of threads used to query server nodes in parallel for batch, scan and query.
+	 */
+	as_thread_pool thread_pool;
 	
 	/**
 	 *	@private

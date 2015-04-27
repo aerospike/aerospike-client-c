@@ -38,6 +38,11 @@
  * TYPES
  *****************************************************************************/
 
+typedef struct as_query_user_callback_s {
+	aerospike_query_foreach_callback callback;
+	void* udata;
+} as_query_user_callback;
+
 typedef struct as_query_task_s {
 	as_node* node;
 	
@@ -46,26 +51,30 @@ typedef struct as_query_task_s {
 	const as_query* query;
 	aerospike_query_foreach_callback callback;
 	void* udata;
-	as_error* err;
-	cf_queue* stream_q;
-	cf_queue* complete_q;
 	uint32_t* error_mutex;
+	as_error* err;
+	cf_queue* input_queue;
+	cf_queue* complete_q;
 	uint64_t task_id;
 	
 	uint8_t* cmd;
 	size_t cmd_size;
 } as_query_task;
 
+typedef struct as_query_task_aggr_s {
+	const as_query* query;
+	as_stream* input_stream;
+	as_query_user_callback* callback_data;
+	uint32_t* error_mutex;
+	as_error* err;
+	cf_queue* complete_q;
+} as_query_task_aggr;
+
 typedef struct as_query_complete_task_s {
 	as_node* node;
 	uint64_t task_id;
 	as_status result;
 } as_query_complete_task;
-
-typedef struct as_query_stream_callback_s {
-    void* udata;
-    aerospike_query_foreach_callback callback;
-} as_query_stream_callback;
 
 /******************************************************************************
  * STATIC FUNCTIONS
@@ -74,54 +83,49 @@ typedef struct as_query_stream_callback_s {
 static int
 as_query_aerospike_log(const as_aerospike * as, const char * file, const int line, const int level, const char * msg)
 {
-    switch(level) {
-        case 1:
+	switch(level) {
+		case 1:
 			as_log_warn("%s:%d - %s", file, line, msg);
-            break;
-        case 2:
+			break;
+		case 2:
 			as_log_info("%s:%d - %s", file, line, msg);
-            break;
-        case 3:
- 			as_log_debug("%s:%d - %s", file, line, msg);
-            break;
-        default:
+			break;
+		case 3:
+			as_log_debug("%s:%d - %s", file, line, msg);
+			break;
+		default:
 			as_log_trace("%s:%d - %s", file, line, msg);
-            break;
-    }
-    return 0;
+			break;
+	}
+	return 0;
 }
 
 static const as_aerospike_hooks query_aerospike_hooks = {
-    .destroy = NULL,
-    .rec_create = NULL,
-    .rec_update = NULL,
-    .rec_remove = NULL,
-    .rec_exists = NULL,
-    .log = as_query_aerospike_log,
+	.destroy = NULL,
+	.rec_create = NULL,
+	.rec_update = NULL,
+	.rec_remove = NULL,
+	.rec_exists = NULL,
+	.log = as_query_aerospike_log,
 };
 
-// This is a no-op. the queue and its contents are destroyed in cl_query_destroy().
+// This is a no-op. the queue and its contents are destroyed at end of aerospike_query_foreach().
 static int
-as_queue_stream_destroy(as_stream *s)
+as_input_stream_destroy(as_stream *s)
 {
-    return 0;
+	return 0;
 }
 
 static as_val*
-as_queue_stream_read(const as_stream* s)
+as_input_stream_read(const as_stream* s)
 {
-    as_val* val = NULL;
-	
-    if (cf_queue_pop(as_stream_source(s), &val, CF_QUEUE_NOWAIT) == CF_QUEUE_EMPTY) {
-        return NULL;
-    }
-    // Push it back so it can be destroyed
-    cf_queue_push(as_stream_source(s), &val);
-    return val;
+	as_val* val = NULL;
+	cf_queue_pop(as_stream_source(s), &val, CF_QUEUE_FOREVER);
+	return val;
 }
 
 static as_stream_status
-as_queue_stream_write(const as_stream* s, as_val* val)
+as_input_stream_write(const as_stream* s, as_val* val)
 {
     if (cf_queue_push(as_stream_source(s), &val) != CF_QUEUE_OK) {
         as_log_error("Write to client side stream failed.");
@@ -131,48 +135,48 @@ as_queue_stream_write(const as_stream* s, as_val* val)
     return AS_STREAM_OK;
 }
 
-static const as_stream_hooks queue_stream_hooks = {
-    .destroy  = as_queue_stream_destroy,
-    .read     = as_queue_stream_read,
-    .write    = as_queue_stream_write
-};
-
-static int
-as_callback_stream_destroy(as_stream* s)
-{
-    return 0;
-}
-
-static as_stream_status
-as_callback_stream_write(const as_stream* s, as_val* val)
-{
-	as_query_stream_callback* source = (as_query_stream_callback*)as_stream_source(s);
-	bool rv = source->callback(val, source->udata);
-	as_val_destroy(val);
-	return rv? AS_STREAM_OK : AS_STREAM_ERR;
-}
-
-static const as_stream_hooks callback_stream_hooks = {
-    .destroy  = as_callback_stream_destroy,
-    .read     = NULL,
-    .write    = as_callback_stream_write
+static const as_stream_hooks input_stream_hooks = {
+    .destroy  = as_input_stream_destroy,
+    .read     = as_input_stream_read,
+    .write    = as_input_stream_write
 };
 
 // This callback will populate an intermediate stream, to be used for the aggregation.
 static bool
 as_query_aggregate_callback(const as_val* v, void* udata)
 {
-	as_stream* queue_stream = (as_stream*)udata;
-	as_stream_status status = as_stream_write(queue_stream, (as_val*)v);
+	as_stream* input_stream = (as_stream*)udata;
+	as_stream_status status = as_stream_write(input_stream, (as_val*)v);
     return status? false : true;
 }
+
+static int
+as_output_stream_destroy(as_stream* s)
+{
+    return 0;
+}
+
+static as_stream_status
+as_output_stream_write(const as_stream* s, as_val* val)
+{
+	as_query_user_callback* source = (as_query_user_callback*)as_stream_source(s);
+	bool rv = source->callback(val, source->udata);
+	as_val_destroy(val);
+	return rv? AS_STREAM_OK : AS_STREAM_ERR;
+}
+
+static const as_stream_hooks output_stream_hooks = {
+    .destroy  = as_output_stream_destroy,
+    .read     = NULL,
+    .write    = as_output_stream_write
+};
 
 static as_status
 as_query_parse_record(uint8_t** pp, as_msg* msg, as_query_task* task, as_error* err)
 {
 	bool rv = true;
 	
-	if (task->stream_q) {
+	if (task->input_queue) {
 		// Parse aggregate return values.
 		as_val* val = 0;
 		as_status status = as_command_parse_success_failure_bins(pp, err, msg, &val);
@@ -652,6 +656,62 @@ as_query_execute(as_query_task* task, const as_query * query, as_nodes* nodes, u
 	return status;
 }
 
+static void
+as_query_aggregate(void* data)
+{
+	as_query_task_aggr* task = (as_query_task_aggr*)data;
+	const as_query* query = task->query;
+	
+	// Setup as_aerospike, so we can get log() function.
+	as_aerospike as;
+	as_aerospike_init(&as, NULL, &query_aerospike_hooks);
+	
+	as_udf_context ctx = {
+		.as = &as,
+		.timer = NULL,
+		.memtracker = NULL
+	};
+
+	// The callback stream provides the ability to write to a user callback function
+	// when as_stream_write is called.
+	as_stream output_stream;
+	as_stream_init(&output_stream, task->callback_data, &output_stream_hooks);
+	
+	// Apply the UDF to the result stream
+	as_result res;
+	as_result_init(&res);
+	
+	as_status status = as_module_apply_stream(&mod_lua, &ctx, query->apply.module, query->apply.function, task->input_stream, query->apply.arglist, &output_stream, &res);
+	
+	if (status) {
+		// Aggregation failed. Abort entire query.
+		if (ck_pr_fas_32(task->error_mutex, 1) == 0) {
+			char* rs = as_module_err_string(status);
+			
+			if (res.value) {
+				switch (as_val_type(res.value)) {
+					case AS_STRING: {
+						as_string* lua_s = as_string_fromval(res.value);
+						char* lua_err  = (char*)as_string_tostring(lua_s);
+						status = as_error_update(task->err, AEROSPIKE_ERR_UDF, "%s : %s", rs, lua_err);
+						break;
+					}
+						
+					default:
+						status = as_error_update(task->err, AEROSPIKE_ERR_UDF, "%s : Unknown stack as_val type", rs);
+						break;
+				}
+			}
+			else {
+				status = as_error_set_message(task->err, AEROSPIKE_ERR_UDF, rs);
+			}
+			cf_free(rs);
+		}
+	}
+	as_result_destroy(&res);
+	cf_queue_push(task->complete_q, &status);
+}
+
 /******************************************************************************
  * FUNCTIONS
  *****************************************************************************/
@@ -721,80 +781,53 @@ as_status aerospike_query_foreach(
 	
 	if (query->apply.function[0]) {
 		// Query with aggregation.
-        // Setup as_aerospike, so we can get log() function.
-        as_aerospike as;
-        as_aerospike_init(&as, NULL, &query_aerospike_hooks);
-		
-		task.stream_q = cf_queue_create(sizeof(void*), true);
+		task.input_queue = cf_queue_create(sizeof(void*), true);
 		
         // Stream for results from each node
-        as_stream queue_stream;
-        as_stream_init(&queue_stream, task.stream_q, &queue_stream_hooks);
+        as_stream input_stream;
+        as_stream_init(&input_stream, task.input_queue, &input_stream_hooks);
 		
 		task.callback = as_query_aggregate_callback;
-		task.udata = &queue_stream;
+		task.udata = &input_stream;
+		
+		as_query_user_callback callback_data;
+		callback_data.callback = callback;
+		callback_data.udata = udata;
 
-		as_query_stream_callback source;
-		source.udata = udata;
-		source.callback = callback;
+		as_query_task_aggr task_aggr;
+		task_aggr.query = query;
+		task_aggr.input_stream = &input_stream;
+		task_aggr.callback_data = &callback_data;
+		task_aggr.error_mutex = &error_mutex;
+		task_aggr.err = err;
+		task_aggr.complete_q = cf_queue_create(sizeof(as_status), true);
 		
-        // The callback stream provides the ability to write to a callback function
-        // when as_stream_write is called.
-        as_stream ostream;
-		as_stream_init(&ostream, &source, &callback_stream_hooks);
+		// Run lua aggregation in separate thread.
+		int rc = as_thread_pool_queue_task(&cluster->thread_pool, as_query_aggregate, &task_aggr);
 		
-		status = as_query_execute(&task, query, nodes, n_nodes);
-		
-		if (status == AEROSPIKE_OK) {
-        	as_udf_context ctx = {
-        		.as = &as,
-        		.timer = NULL,
-        		.memtracker = NULL
-        	};
+		if (rc == 0) {
+			status = as_query_execute(&task, query, nodes, n_nodes);
 			
-            // Apply the UDF to the result stream
-            as_result res;
-            as_result_init(&res);
+			// Wait for aggregation thread to finish.
+			as_status complete_status = AEROSPIKE_OK;
+			cf_queue_pop(task_aggr.complete_q, &complete_status, CF_QUEUE_FOREVER);
 			
-            status = as_module_apply_stream(&mod_lua, &ctx, query->apply.module, query->apply.function, &queue_stream, query->apply.arglist, &ostream, &res);
-			
-			if (status) {
-                char* rs = as_module_err_string(status);
-				
-                if (res.value) {
-                    switch (as_val_type(res.value)) {
-                        case AS_STRING: {
-                            as_string* lua_s = as_string_fromval(res.value);
-                            char* lua_err  = (char*)as_string_tostring(lua_s);
-							status = as_error_update(err, AEROSPIKE_ERR_UDF, "%s : %s", rs, lua_err);
-                            break;
-						}
-							
-                        default:
-							status = as_error_update(err, AEROSPIKE_ERR_UDF, "%s : Unknown stack as_val type", rs);
-                            break;
-                    }
-				}
-				else {
-					status = as_error_set_message(err, AEROSPIKE_ERR_UDF, rs);
-				}
-				cf_free(rs);
+			if (complete_status != AEROSPIKE_OK && status == AEROSPIKE_OK) {
+				status = complete_status;
 			}
-			as_result_destroy(&res);
+		}
+		else {
+			status = as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to add aggregate thread: %d", rc);
 		}
 		
-		// Empty stream queue.
-        as_val* val = NULL;
-        while (cf_queue_pop(task.stream_q, &val, CF_QUEUE_NOWAIT) == CF_QUEUE_OK) {
-            as_val_destroy(val);
-        }
-        cf_queue_destroy(task.stream_q);
+		cf_queue_destroy(task_aggr.complete_q);
+        cf_queue_destroy(task.input_queue);
 	}
 	else {
 		// Normal query without aggregation.
 		task.callback = callback;
 		task.udata = udata;
-		task.stream_q = 0;
+		task.input_queue = 0;
 		status = as_query_execute(&task, query, nodes, n_nodes);
 	}
 	

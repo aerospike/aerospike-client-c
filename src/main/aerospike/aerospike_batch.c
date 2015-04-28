@@ -361,6 +361,7 @@ as_batch_execute(
 
 	// Initialize task.
 	as_batch_task task;
+	memset(&task, 0, sizeof(as_batch_task));
 	task.cluster = cluster;
 	task.ns = ns;
 	task.err = err;

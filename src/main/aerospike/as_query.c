@@ -29,19 +29,8 @@ static as_query * as_query_defaults(as_query * query, bool free, const as_namesp
 {
 	query->_free = free;
 
-	if ( ns && strlen(ns) < AS_NAMESPACE_MAX_SIZE ) {
-		strcpy(query->ns, ns);
-	}
-	else {
-		query->ns[0] = '\0';
-	}
-	
-	if ( set && strlen(set) < AS_SET_MAX_SIZE ) {
-		strcpy(query->set, set);
-	}
-	else {
-		query->set[0] = '\0';
-	}
+	as_strncpy(query->ns, ns, AS_NAMESPACE_MAX_SIZE);
+	as_strncpy(query->set, set, AS_SET_MAX_SIZE);
 
 	query->select._free = false;
 	query->select.capacity = 0;

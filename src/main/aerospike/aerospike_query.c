@@ -395,8 +395,8 @@ as_query_execute(as_query_task* task, const as_query * query, as_nodes* nodes, u
 		n_fields++;
 	}
 	
-	// Estimate set size.
-	if (query->set) {
+	// Estimate set size.  Do not send empty sets.
+	if (query->set && *query->set) {
 		size += as_command_string_field_size(query->set);
 		n_fields++;
 	}
@@ -499,7 +499,7 @@ as_query_execute(as_query_task* task, const as_query * query, as_nodes* nodes, u
 	}
 	
 	// Write set.
-	if (query->set) {
+	if (query->set && *query->set) {
 		p = as_command_write_field_string(p, AS_FIELD_SETNAME, query->set);
 	}
 	

@@ -153,7 +153,7 @@ TEST( batch_get_1 , "Simple" )
     batch_read_data data = {0};
 
     aerospike_batch_get(as, &err, NULL, &batch, batch_get_1_callback, &data);
-    if ( err.code != AEROSPIKE_OK && err.code != AEROSPIKE_ERR_INDEX_FOUND ) {
+    if ( err.code != AEROSPIKE_OK ) {
         info("error(%d): %s", err.code, err.message);
     }
     assert_int_eq( err.code , AEROSPIKE_OK );
@@ -186,7 +186,7 @@ void *batch_get_function(void  *thread_id)
 	
 	pthread_rwlock_unlock(&rwlock);
 
-    if ( err.code != AEROSPIKE_OK && err.code != AEROSPIKE_ERR_INDEX_FOUND ) {
+    if ( err.code != AEROSPIKE_OK ) {
         info("multi-thread error(%d): %s", err.code, err.message);
     }
 	
@@ -279,7 +279,7 @@ TEST( batch_get_bins , "Batch Get - with bin name filters" )
 	const char* bins[] = {"val2"};
 	
     aerospike_batch_get_bins(as, &err, NULL, &batch, bins, 1, batch_get_bins_callback, &data);
-    if ( err.code != AEROSPIKE_OK && err.code != AEROSPIKE_ERR_INDEX_FOUND ) {
+    if ( err.code != AEROSPIKE_OK ) {
         info("error(%d): %s", err.code, err.message);
     }
     assert_int_eq( err.code , AEROSPIKE_OK );

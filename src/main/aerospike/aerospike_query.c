@@ -642,10 +642,8 @@ as_query_execute(as_query_task* task, const as_query * query, as_nodes* nodes, u
 		status = AEROSPIKE_OK;
 	}
 	
-    // If completely successful, make the callback that signals completion.
-    if (status == AEROSPIKE_OK) {
-    	task->callback(NULL, task->udata);
-    }
+	// Make the callback that signals completion.
+	task->callback(NULL, task->udata);
 	
 	// Release temporary queue.
 	cf_queue_destroy(task->complete_q);
@@ -821,6 +819,12 @@ as_status aerospike_query_foreach(
 		}
 		
 		cf_queue_destroy(task_aggr.complete_q);
+		
+		// Empty input queue.
+        as_val* val = NULL;
+        while (cf_queue_pop(task.input_queue, &val, CF_QUEUE_NOWAIT) == CF_QUEUE_OK) {
+            as_val_destroy(val);
+        }
         cf_queue_destroy(task.input_queue);
 	}
 	else {

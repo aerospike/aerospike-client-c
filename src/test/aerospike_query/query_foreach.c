@@ -554,7 +554,7 @@ TEST( query_foreach_nullset, "test null-set behavior" ) {
 	char *setname = NULL;
 	as_index_task task;
 
-	status = aerospike_index_create(as, &err, 0, NULL, NAMESPACE, setname, "NUMERIC", "idx2", AS_INDEX_NUMERIC);
+	status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, setname, "NUMERIC", "idx2", AS_INDEX_NUMERIC);
 	if ( status != AEROSPIKE_OK ) {
 		info("error(%d): %s", err.code, err.message);
 	} else {
@@ -611,7 +611,6 @@ SUITE( query_foreach, "aerospike_query_foreach tests" ) {
 	suite_add( query_foreach_7 );
 */
 	suite_add( query_quit_early );
-	// suite_add( query_foreach_nullset );
-	// TODO: Uncomment when lua-core gets promoted.
-	//suite_add( query_agg_quit_early );
+	suite_add( query_agg_quit_early );
+	suite_add( query_foreach_nullset );
 }

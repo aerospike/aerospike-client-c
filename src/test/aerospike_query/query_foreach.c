@@ -544,6 +544,53 @@ TEST( query_agg_quit_early, "aggregation and quit early" ) {
 }
 
 
+TEST( query_foreach_nullset, "test null-set behavior" ) {
+
+	as_error err;
+	as_error_reset(&err);
+
+	as_status status;
+
+	char *setname = NULL;
+	as_index_task task;
+
+	status = aerospike_index_create(as, &err, 0, NULL, NAMESPACE, setname, "NUMERIC", "idx2", AS_INDEX_NUMERIC);
+	if ( status != AEROSPIKE_OK ) {
+		info("error(%d): %s", err.code, err.message);
+	} else {
+		aerospike_index_create_wait(&err, &task, 0);
+	}
+
+	as_record r;
+	as_record_init(&r, 2);
+	as_record_set_int64(&r, "NUMERIC", 1);
+	as_record_set_str(&r, 	"bn_STRING", "2");
+	as_record_set_int64(&r, "bn2", 3);
+
+	as_key key;
+	as_key_init(&key, NAMESPACE, setname, "keyindex-nullset");
+
+	aerospike_key_put(as, &err, NULL, &key, &r);
+	assert_int_eq( err.code, AEROSPIKE_OK);
+
+	as_record_destroy(&r);
+	as_key_destroy(&key);
+
+	int64_t count = 0;
+
+	as_query q;
+	as_query_init(&q, NAMESPACE, setname);
+
+	as_query_where_inita(&q, 1);
+	as_query_where(&q, "NUMERIC", as_integer_equals(1));
+
+	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_count_callback, &count);
+	info("my count: %d",count);
+	assert_true(count == 1);
+
+}
+
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -564,7 +611,7 @@ SUITE( query_foreach, "aerospike_query_foreach tests" ) {
 	suite_add( query_foreach_7 );
 */
 	suite_add( query_quit_early );
-	
+	// suite_add( query_foreach_nullset );
 	// TODO: Uncomment when lua-core gets promoted.
 	//suite_add( query_agg_quit_early );
 }

@@ -34,7 +34,9 @@ const char * DEFAULT_LLIST_PACKAGE = "llist";
 
 // The names of the Lua Functions that implement Large Set Ops
 const char * LDT_LIST_OP_ADD			= "add";
+const char * LDT_LIST_OP_UPDATE			= "update";
 const char * LDT_LIST_OP_ADDALL			= "add_all";
+const char * LDT_LIST_OP_UPDATEALL		= "update_all";
 const char * LDT_LIST_OP_FIND		    = "find";
 const char * LDT_LIST_OP_RANGE		    = "range";
 const char * LDT_LIST_OP_FIND_RANGE		= "find_range";
@@ -117,6 +119,15 @@ as_status aerospike_llist_add(
 }
 
 // =======================================================================
+// UPDATE
+// =======================================================================
+as_status aerospike_llist_update(
+	aerospike * as, as_error * err, const as_policy_apply * policy,
+	const as_key * key, const as_ldt * ldt, const as_val * val) {
+	return aerospike_llist_add_internal (as, err, policy, key, ldt, val, LDT_LIST_OP_UPDATE);
+}
+
+// =======================================================================
 // ADD ALL
 // =======================================================================
 as_status aerospike_llist_add_all(
@@ -124,6 +135,16 @@ as_status aerospike_llist_add_all(
 	const as_key * key, const as_ldt * ldt, const as_list * val_list) {
 	return aerospike_llist_add_internal (as, err, policy, key, ldt,
 			(as_val *)val_list, LDT_LIST_OP_ADDALL);
+}
+
+// =======================================================================
+// UPDATE ALL
+// =======================================================================
+as_status aerospike_llist_update_all(
+	aerospike * as, as_error * err, const as_policy_apply * policy,
+	const as_key * key, const as_ldt * ldt, const as_list * val_list) {
+	return aerospike_llist_add_internal (as, err, policy, key, ldt,
+			(as_val *)val_list, LDT_LIST_OP_UPDATEALL);
 }
 
 // =======================================================================

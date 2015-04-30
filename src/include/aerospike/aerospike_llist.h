@@ -72,6 +72,41 @@ as_status aerospike_llist_add(
 	const as_key * key, const as_ldt * ldt, const as_val * val);
 
 /**
+ *	Add / update a value into the llist. Existing value will be overwritten.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_key key;
+ *	as_key_init(&key, "myns", "myset", "mykey");
+ *
+ *	as_ldt llist;
+ *	as_ldt_init(&llist, "myllist", AS_LDT_LLIST, NULL);
+ *
+ *	as_integer ival;
+ *	as_integer_init(&ival, 123);
+ *
+ *	if ( aerospike_llist_update(&as, &err, NULL, &key, &llist, (as_val *) &ival) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *	~~~~~~~~~~
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param key			The key of the record.
+ *	@param ldt 			The ldt bin to insert values to.
+ *	@param val			The value to update/insert into the llist.
+ *
+ *	@return AEROSPIKE_OK if successful. Otherwise an error.
+ *
+ *	@ingroup ldt_operations
+ */
+as_status aerospike_llist_update(
+	aerospike * as, as_error * err, const as_policy_apply * policy,
+	const as_key * key, const as_ldt * ldt, const as_val * val);
+
+
+
+/**
  *	Add a list of values into the llist.
  *
  *	~~~~~~~~~~{.c}
@@ -107,6 +142,46 @@ as_status aerospike_llist_add(
  *	@ingroup ldt_operations
  */
 as_status aerospike_llist_add_all(
+	aerospike * as, as_error * err, const as_policy_apply * policy,
+	const as_key * key, const as_ldt * ldt, const as_list * vals);
+
+/**
+ *	Add / update a list of values into the llist.
+ *	If the value in input list already exists it will be overwritten.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_key key;
+ *	as_key_init(&key, "myns", "myset", "mykey");
+ *
+ *	as_ldt llist;
+ *	as_ldt_init(&llist, "myllist", AS_LDT_LLIST, NULL);
+ *
+ *
+ *	as_arraylist vals;
+ *	as_arraylist_inita(&vals, 2);
+ *	as_string s;
+ *	as_string_init(s,"a string",false);
+ *	as_arraylist_append_string(&vals, s);
+ *	as_arraylist_append_int64(&vals, 35);
+ *
+ *	if ( aerospike_llist_update_all(&as, &err, NULL, &key, &llist, (as_list *)vals) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *
+ *	~~~~~~~~~~
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param key			The key of the record.
+ *	@param ldt 			The ldt bin to insert values to.
+ *	@param vals			The list of values to update/insert into the llist.
+ *
+ *	@return AEROSPIKE_OK if successful. Otherwise an error.
+ *
+ *	@ingroup ldt_operations
+ */
+as_status aerospike_llist_update_all(
 	aerospike * as, as_error * err, const as_policy_apply * policy,
 	const as_key * key, const as_ldt * ldt, const as_list * vals);
 

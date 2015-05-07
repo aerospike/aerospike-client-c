@@ -426,6 +426,19 @@ typedef struct as_policy_apply_s {
 	 */
 	as_policy_commit_level commit_level;
 
+	/**
+	*	The time-to-live (expiration) of the record in seconds.
+	*	There are two special values that can be set in the record TTL:
+	*	(*) ZERO (defined as AS_RECORD_DEFAULT_TTL), which means that the
+	*	   record will adopt the default TTL value from the namespace.
+	*	(*) 0xFFFFFFFF (also, -1 in a signed 32 bit int)
+	*	   (defined as AS_RECORD_NO_EXPIRE_TTL), which means that the record
+	*	   will get an internal "void_time" of zero, and thus will never expire.
+	*
+	*	Note that the TTL value will be employed ONLY on write/update calls.
+	*/
+	uint32_t ttl;
+
 } as_policy_apply;
 
 /**
@@ -936,6 +949,7 @@ as_policy_apply_init(as_policy_apply* p)
 	p->timeout = AS_POLICY_TIMEOUT_DEFAULT;
 	p->key = AS_POLICY_KEY_DEFAULT;
 	p->commit_level = AS_POLICY_COMMIT_LEVEL_DEFAULT;
+	p->ttl = 0; // AS_RECORD_DEFAULT_TTL
 	return p;
 }
 
@@ -953,6 +967,7 @@ as_policy_apply_copy(as_policy_apply* src, as_policy_apply* trg)
 	trg->timeout = src->timeout;
 	trg->key = src->key;
 	trg->commit_level = src->commit_level;
+	trg->ttl = src->ttl;
 }
 
 /**

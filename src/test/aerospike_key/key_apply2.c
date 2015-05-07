@@ -665,19 +665,33 @@ TEST( key_apply2_bad_create_test_memory, "apply: (test,test,foo) <!> key_apply2.
 	debug("memory: pre=%ld post=%ld diff=%ld", mem_pre, mem_post, mem_pre - mem_post);
 }
 
-TEST( key_apply2_create_rec_test_gen_ttl, "apply: (test,test,foo) <!> key_apply2.create_rec_test_gen_ttl() => 1" ) {
-	/* ttl verification: */
+TEST( key_apply2_ttl, "apply: (test,test,foo_ttl_check)" ) {
 
-	// Set ttl values in policy
-	//  (0) delete & reinsert record to start afresh
-	// (1) put in values
-	// (2) set up udf call for ttl
-	// If the difference b/w the ttl received from the record and pushed into the record is less than 10 secs, we got the right value.
+	as_error err;
+	as_error_reset(&err);
 
-	/* Generation verification */
-	// (2) set up udf apply call for generation test
-	// Generation should get updated twice. Once when we do a citrusleaf_put and once when we
-		// update the record through UDF.
+	as_val * res = NULL;
+
+	as_key key;
+	as_key_init(&key, "test", "test", "foo_ttl_check");
+
+	as_policy_apply policy;
+	as_policy_apply_init(&policy);
+	policy.ttl = 5;
+
+	as_status rc = aerospike_key_apply(as, &err, &policy, &key, UDF_FILE, "update_record", NULL, &res);
+    assert_int_eq( rc, AEROSPIKE_OK );
+
+    as_val_destroy(res);
+
+	as_record r, *rec = &r;
+	as_record_init(&r, 0);
+
+	rc = aerospike_key_get(as, &err, NULL, &key, &rec);
+	info ("ttl = %d",rec->ttl);
+	assert_true (rec->ttl<=5);
+
+	as_record_destroy(rec);
 
 }
 
@@ -703,5 +717,6 @@ SUITE( key_apply2, "aerospike_key_apply2 tests" ) {
 	suite_add( key_apply2_update_record_test_memory );
 	suite_add( key_apply2_bad_update_test_memory );
 	suite_add( key_apply2_bad_create_test_memory );
+	suite_add( key_apply2_ttl );
 
 }

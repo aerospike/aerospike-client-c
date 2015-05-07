@@ -76,6 +76,7 @@ as_policies_init(as_policies* p)
 	p->apply.timeout = -1;
 	p->apply.key = -1;
 	p->apply.commit_level = -1;
+	p->apply.ttl = 0;	// Set to AS_RECORD_DEFAULT_TTL. TTL does not go through as_policies_resolve().
 
 	p->info.timeout = -1;
 	p->info.send_as_is = true;

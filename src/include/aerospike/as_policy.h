@@ -949,6 +949,7 @@ as_policy_apply_init(as_policy_apply* p)
 	p->timeout = AS_POLICY_TIMEOUT_DEFAULT;
 	p->key = AS_POLICY_KEY_DEFAULT;
 	p->commit_level = AS_POLICY_COMMIT_LEVEL_DEFAULT;
+	p->ttl = 0; // AS_RECORD_DEFAULT_TTL
 	return p;
 }
 
@@ -966,6 +967,7 @@ as_policy_apply_copy(as_policy_apply* src, as_policy_apply* trg)
 	trg->timeout = src->timeout;
 	trg->key = src->key;
 	trg->commit_level = src->commit_level;
+	trg->ttl = src->ttl;
 }
 
 /**

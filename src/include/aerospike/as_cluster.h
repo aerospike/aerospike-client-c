@@ -95,8 +95,6 @@ typedef struct as_gc_item_s {
 	as_release_fn release_fn;
 } as_gc_item;
 
-struct threadpool_t;
-
 /**
  *	Cluster of server nodes.
  */

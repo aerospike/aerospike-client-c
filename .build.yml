@@ -16,6 +16,8 @@ build:
       EEREPO:
     script:
       - make
+      - make docs
+      - make examples
       - make $PKG
       - make source
     artifact:

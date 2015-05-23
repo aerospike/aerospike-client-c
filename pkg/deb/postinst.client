@@ -1,0 +1,23 @@
+#!/bin/bash
+
+set -e
+
+case "$1" in
+  configure)  
+  # create aerospike group if it isn't already there
+  if ! getent group aerospike >/dev/null; then
+    groupadd aerospike
+  fi
+
+  # create aerospike user if it isn't already there
+  if ! getent passwd aerospike >/dev/null; then
+    useradd -r -d /opt/aerospike -g aerospike aerospike
+  fi
+
+  chown -R aerospike:aerospike /opt/aerospike
+
+  /sbin/ldconfig
+  ;;
+esac    
+
+exit 0

@@ -83,15 +83,16 @@ else
   endif
 endif
 
-TARGET_PATH = $(TARGET)
-TARGET_BASE = $(TARGET_PATH)/$(PLATFORM)
-TARGET_BIN  = $(TARGET_BASE)/bin
-TARGET_DOC  = $(TARGET_BASE)/doc
-TARGET_LIB  = $(TARGET_BASE)/lib
-TARGET_OBJ  = $(TARGET_BASE)/obj
-TARGET_SRC  = $(TARGET_BASE)/src
-TARGET_INCL = $(TARGET_BASE)/include
-TARGET_TEST = $(TARGET_BASE)/test
+TARGET_PATH     = $(TARGET)
+TARGET_BASE     = $(TARGET_PATH)/$(PLATFORM)
+TARGET_BIN      = $(TARGET_BASE)/bin
+TARGET_DOC      = $(TARGET_BASE)/doc
+TARGET_LIB      = $(TARGET_BASE)/lib
+TARGET_OBJ      = $(TARGET_BASE)/obj
+TARGET_SRC      = $(TARGET_BASE)/src
+TARGET_INCL     = $(TARGET_BASE)/include
+TARGET_TEST     = $(TARGET_BASE)/test
+TARGET_EXAMPLES = $(TARGET_BASE)/examples
 
 ###############################################################################
 ##  FUNCTIONS                                                                ##

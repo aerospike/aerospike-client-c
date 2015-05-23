@@ -1,0 +1,55 @@
+#!/bin/bash
+# Build examples source code package.
+
+if [ $# -ne 1 ]; then
+   echo "Usage: $0 <package dir>"
+   exit 1
+fi
+
+srcDir=.
+trgDir=$1
+platform=`$srcDir/build/os_version`
+
+cp -pr $srcDir/benchmarks $trgDir
+make -C $trgDir/benchmarks clean
+
+cp -pr $srcDir/examples $trgDir
+make -C $trgDir/examples clean
+rm -rf $trgDir/examples/scan_examples/foreground
+
+installDir=/usr
+if [ "$platform" = "mac" ]; then
+   installDir=/usr/local
+fi
+
+# Modify Makefiles for external use.
+for i in benchmarks/Makefile examples/project/Makefile
+do
+   awk 'BEGIN{OFS=""}
+   {
+      if (index($0,"AEROSPIKE") > 0)
+      {
+         idx = index($0,"$(AEROSPIKE)/target/$(PLATFORM)/lib/libaerospike.a")
+
+         if (idx > 0)
+         {
+            str = $0
+            sub(/\$\(AEROSPIKE\)\/target\/\$\(PLATFORM\)\/lib\/libaerospike.a/, "'$installDir'/lib/libaerospike.a", str)
+            print str
+         }
+         else
+         {
+            print "CFLAGS += -I'$installDir'/include -I'$installDir'/include/ck"
+         }
+      }
+      else
+      {
+         print $0
+      }
+   }' $srcDir/$i > $trgDir/$i
+done
+
+cd target
+rm -f benchmarks examples
+ln -s ../$trgDir/benchmarks
+ln -s ../$trgDir/examples

@@ -107,7 +107,11 @@ static as_node*
 as_cluster_find_node_in_vector(as_vector* nodes, const char* name)
 {
 	as_node* node;
-	
+
+	if (nodes == NULL) {
+		return NULL;
+	}
+
 	for (uint32_t i = 0; i < nodes->size; i++) {
 		node = as_vector_get_ptr(nodes, i);
 		
@@ -115,14 +119,21 @@ as_cluster_find_node_in_vector(as_vector* nodes, const char* name)
 			return node;
 		}
 	}
-	return 0;
+	return NULL;
 }
 
 static as_node*
-as_cluster_find_node(as_nodes* nodes, const char* name)
+as_cluster_find_node(as_nodes* nodes, as_vector* /* <as_node*> */ local_node_vector, const char* name)
 {
 	as_node* node;
 	
+	//check local list of nodes for duplicate	
+	node = as_cluster_find_node_in_vector( local_node_vector, name);
+	if(node){
+		return node;
+	}
+
+	//check global list of nodes for duplicate	
 	for (uint32_t i = 0; i < nodes->size; i++) {
 		node = nodes->array[i];
 		
@@ -281,7 +292,7 @@ as_cluster_find_nodes_to_add(as_cluster* cluster, as_vector* /* <as_friend> */ f
 			status = as_lookup_node_name(cluster, &err, addr, name, AS_NODE_NAME_SIZE);
 			
 			if (status == AEROSPIKE_OK) {
-				as_node* node = as_cluster_find_node(cluster->nodes, name);
+				as_node* node = as_cluster_find_node(cluster->nodes, nodes_to_add, name);
 				
 				if (node) {
 					// Duplicate node name found.  This usually occurs when the server

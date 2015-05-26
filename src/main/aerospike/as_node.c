@@ -393,7 +393,7 @@ as_node_verify_name(as_node* node, const char* name)
 }
 
 static as_node*
-as_cluster_find_node(as_cluster* cluster, in_addr_t addr, in_port_t port)
+as_cluster_find_node_given_address(as_cluster* cluster, in_addr_t addr, in_port_t port)
 {
 	as_nodes* nodes = (as_nodes*)cluster->nodes;
 	as_node* node;
@@ -467,7 +467,7 @@ as_node_add_friends(as_cluster* cluster, as_node* node, char* buf, as_vector* /*
 			
 			if (port > 0 && inet_aton(addr_str, &addr_tmp)) {
 				addr = addr_tmp.s_addr;
-				friend = as_cluster_find_node(cluster, addr, port);
+				friend = as_cluster_find_node_given_address(cluster, addr, port);
 				
 				if (friend) {
 					friend->friends++;

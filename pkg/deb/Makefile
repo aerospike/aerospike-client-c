@@ -20,7 +20,7 @@ TGZ = $(PKG)/packages/aerospike-client-c-$(REV).$(OS).$(ARCH).tgz
 all:	tgz
 
 tgz:	lib devel
-	tar cvfhz $(TGZ) -C $(DEPTH) README.md license.txt -C $(PKG)/packages $(LIB_PKG) $(DEVEL_PKG) -C $(DEPTH)/target docs benchmarks examples
+	tar cvfhz $(TGZ) -C $(DEPTH) README.md LICENSE -C $(PKG)/packages $(LIB_PKG) $(DEVEL_PKG) -C $(DEPTH)/target docs benchmarks examples
 
 lib:	dist-lib1 spec-lib package-lib clean1
 

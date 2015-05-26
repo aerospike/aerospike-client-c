@@ -192,6 +192,7 @@ To run unit tests:
 
 The module is structured as follows:
 
+- `LICENSE` - Licenses for open source components.
 - `benchmarks` - measure read/write performance.
 - `demo` - demo applications, making use of multiple features.
 - `examples` - simple example applications, focused on specific features.

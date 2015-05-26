@@ -161,6 +161,10 @@ development kit, i.e., the "devel" package, will be built, as well as a
 ".tgz" archive containing both of the native packages, along with the
 documentation and examples.
 
+You can also build the package for the current platform using:
+
+	$ make package
+
 Finally, to build the source distribution on any platform, use:
 
 	$ make source

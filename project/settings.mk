@@ -12,6 +12,7 @@ export ARFLAGS =
 
 NAME = $(shell basename $(CURDIR))
 OS = $(shell uname)
+DISTRO = $(shell build/os_version)
 
 PROJECT = project
 MODULES = modules
@@ -25,13 +26,23 @@ MODULES =
 ###############################################################################
 
 ifeq ($(OS),Darwin)
-ARCH = $(shell uname -m)
-DYNAMIC_SUFFIX=dylib
-DYNAMIC_FLAG=-dynamiclib
+  ARCH = $(shell uname -m)
+  DYNAMIC_SUFFIX=dylib
+  DYNAMIC_FLAG=-dynamiclib
+  PKG = mac
 else
-ARCH = $(shell arch)
-DYNAMIC_SUFFIX=so
-DYNAMIC_FLAG=-shared
+  ARCH = $(shell arch)
+  DYNAMIC_SUFFIX=so
+  DYNAMIC_FLAG=-shared
+  ifeq ($(DISTRO),el6)
+    PKG = rpm
+  else
+    ifeq ($(DISTRO),el5)
+      PKG = rpm
+    else
+      PKG = deb
+    endif
+  endif
 endif
 
 CC = cc

@@ -249,6 +249,10 @@ examples:
 rpm deb mac src:
 	$(MAKE) -C pkg/$@
 
+.PHONY: package
+package:
+	$(MAKE) $(PKG)
+
 .PHONY: source
 source: src
 

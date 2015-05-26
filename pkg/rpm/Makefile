@@ -11,6 +11,7 @@ REV = $(shell $(DEPTH)/build/version | sed 's/-/_/g')
 OS = $(shell $(DEPTH)/build/os_version)
 ARCH = `uname -m`
 TARGET = target/`uname`-$(ARCH)
+USR_PREFIX = /usr
 
 LIB_PKG = aerospike-client-c-$(REV)-1.$(OS).$(ARCH).rpm
 DEVEL_PKG = aerospike-client-c-devel-$(REV)-1.$(OS).$(ARCH).rpm
@@ -26,25 +27,7 @@ lib:	dist-lib1 spec-lib package1 clean1
 
 devel:	dist-lib2 dist-devel spec-devel package2 clean2
 
-dist-lib%:
-	install -d $(BUILD_ROOT)/usr/lib
-	install -pm 644 $(DEPTH)/$(TARGET)/lib/* $(BUILD_ROOT)/usr/lib
-
-	install -d $(OPT_AS)/client
-	install -d $(OPT_AS)/client/usr/udf/lua
-	install -d $(OPT_AS)/client/sys/udf/lua
-	install -pm 644 $(DEPTH)/modules/lua-core/src/*.lua $(OPT_AS)/client/sys/udf/lua
-
-dist-devel:
-	install -d $(BUILD_ROOT)/usr/include/aerospike
-	install -d $(BUILD_ROOT)/usr/include/citrusleaf
-	install -d $(BUILD_ROOT)/usr/include/ck
-	install -d $(BUILD_ROOT)/usr/include/ck/gcc
-	install -d $(BUILD_ROOT)/usr/include/ck/spinlock
-
-	install -pm 644 $(DEPTH)/$(TARGET)/include/aerospike/* $(BUILD_ROOT)/usr/include/aerospike/
-	install -pm 644 $(DEPTH)/$(TARGET)/include/citrusleaf/* $(BUILD_ROOT)/usr/include/citrusleaf/
-	cp -pr $(DEPTH)/$(TARGET)/include/ck $(BUILD_ROOT)/usr/include/
+include $(PKG)/Makefile.in
 
 spec-lib:
 	sed 's/@VERSION@/'$(REV)'/g' < $(PKG)/rpm/client-spec-base > $(PKG)/rpm/client.spec

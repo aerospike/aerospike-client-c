@@ -108,10 +108,6 @@ as_cluster_find_node_in_vector(as_vector* nodes, const char* name)
 {
 	as_node* node;
 
-	if (nodes == NULL) {
-		return NULL;
-	}
-
 	for (uint32_t i = 0; i < nodes->size; i++) {
 		node = as_vector_get_ptr(nodes, i);
 		
@@ -125,11 +121,9 @@ as_cluster_find_node_in_vector(as_vector* nodes, const char* name)
 static as_node*
 as_cluster_find_node(as_nodes* nodes, as_vector* /* <as_node*> */ local_node_vector, const char* name)
 {
-	as_node* node;
-	
-	//check local list of nodes for duplicate	
-	node = as_cluster_find_node_in_vector( local_node_vector, name);
-	if(node){
+	//check local list of nodes for duplicate
+	as_node* node = as_cluster_find_node_in_vector(local_node_vector, name);
+	if (node) {
 		return node;
 	}
 

@@ -46,9 +46,6 @@ dist-devel:
 	install -pm 644 $(DEPTH)/$(TARGET)/include/citrusleaf/* $(BUILD_ROOT)/usr/include/citrusleaf/
 	cp -pr $(DEPTH)/$(TARGET)/include/ck $(BUILD_ROOT)/usr/include/
 
-#	install -d $(OPT_AS)/client/doc
-#	cp -pr $(DEPTH)/target/apidocs $(OPT_AS)/client/doc
-
 spec-lib:
 	sed 's/@VERSION@/'$(REV)'/g' < $(PKG)/rpm/client-spec-base > $(PKG)/rpm/client.spec
 

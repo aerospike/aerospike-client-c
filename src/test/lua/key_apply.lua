@@ -1,3 +1,10 @@
+function map_arg(rec, ...)
+    local arg = {n = select("#", ...), ...}
+    for i=1, arg.n do
+        -- Uncomment to retrieve map values.
+        -- info("map: {x: %s, y: %s, z: %s}", tostring(arg[i].x), tostring(arg[i].y), tostring(arg[i].z))
+    end
+end
 
 function one(rec)
     return 1

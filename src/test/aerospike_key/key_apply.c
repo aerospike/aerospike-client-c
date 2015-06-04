@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2014 Aerospike, Inc.
+ * Copyright 2008-2015 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -79,6 +79,40 @@ static bool after(atf_suite * suite) {
  * TEST CASES
  *****************************************************************************/
 
+ TEST( key_apply_map , "apply: (test,test,foo) = map: {x: 7, y: 8, z: 9}" ) {
+
+	as_error err;
+	as_error_reset(&err);
+
+	as_arraylist arglist;
+	as_arraylist_inita(&arglist, 1);
+
+	as_hashmap map;
+	as_hashmap_init(&map, 1);
+
+	as_stringmap_set_int64((as_map *) &map, "x", (int64_t)7);
+	as_stringmap_set_int64((as_map *) &map, "y", (int64_t)8);
+	as_stringmap_set_int64((as_map *) &map, "z", (int64_t)9);
+
+	as_val_reserve((as_map *) &map);
+	as_arraylist_append(&arglist, (as_val *)((as_map *) &map));
+
+	as_val * res = NULL;
+
+	as_key key;
+	as_key_init(&key, "test", "test", "foo");
+
+	as_status rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "map_arg", (as_list*) &arglist, &res);
+
+	as_key_destroy(&key);
+	
+    assert_int_eq( rc, AEROSPIKE_OK );
+	assert_not_null( res );
+
+    as_val_destroy(&arglist);
+    as_val_destroy(res);
+}
+
 TEST( key_apply_put , "put: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 'def', e: [1,2,3], f: {x: 7, y: 8, z: 9}}" ) {
 
 	as_error err;
@@ -135,7 +169,7 @@ TEST( key_apply_one , "apply: (test,test,foo) <!> key_apply.one() => 1" ) {
 
     as_integer * i = as_integer_fromval(res);
     assert_not_null( i );
-    assert_int_eq(  as_integer_toint(i), 1 );
+    assert_int_eq( as_integer_toint(i), 1 );
 
     as_val_destroy(res);
 }
@@ -159,7 +193,7 @@ TEST( key_apply_ten , "apply: (test,test,foo) <!> key_apply.one() => 10" ) {
 
     as_integer * i = as_integer_fromval(res);
     assert_not_null( i );
-    assert_int_eq(  as_integer_toint(i), 10 );
+    assert_int_eq( as_integer_toint(i), 10 );
 
     as_val_destroy(res);
 }
@@ -188,7 +222,7 @@ TEST( key_apply_add_1_2 , "apply: (test,test,foo) <!> key_apply.add(1,2) => 3" )
 
     as_integer * i = as_integer_fromval(res);
     assert_not_null( i );
-    assert_int_eq(  as_integer_toint(i), 3 );
+    assert_int_eq( as_integer_toint(i), 3 );
 
     as_val_destroy(&arglist);
     as_val_destroy(res);
@@ -213,7 +247,7 @@ TEST( key_apply_record_exists , "apply: (test,test,foo) <!> key_apply.record_exi
 
     as_integer * i = as_integer_fromval(res);
     assert_not_null( i );
-    assert_int_eq(  as_integer_toint(i), 1 );
+    assert_int_eq( as_integer_toint(i), 1 );
 
     as_val_destroy(res);
 }
@@ -242,7 +276,7 @@ TEST( key_apply_get_bin_a , "apply: (test,test,foo1) <!> key_apply.get_bin_a() =
 
     as_integer * i = as_integer_fromval(res);
     assert_not_null( i );
-    assert_int_eq(  as_integer_toint(i), 123 );
+    assert_int_eq( as_integer_toint(i), 123 );
 
     as_val_destroy(&arglist);
     as_val_destroy(res);
@@ -272,6 +306,7 @@ SUITE( key_apply, "aerospike_key_apply tests" ) {
     suite_before( before );
     suite_after( after );
     
+    suite_add( key_apply_map );
 	suite_add( key_apply_put );
     suite_add( key_apply_one );
 	suite_add( key_apply_ten );

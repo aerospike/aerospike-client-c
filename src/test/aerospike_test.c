@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2014 Aerospike, Inc.
+ * Copyright 2008-2015 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -216,6 +216,4 @@ PLAN( aerospike_test ) {
 
     // as_ldt module
     plan_add( ldt_lmap );
-
 }
-

@@ -145,6 +145,9 @@ To run unit tests:
 
 	$ make test
 
+or with valgrind
+	$ make test-valgrind
+
 ## Project Layout
 
 The module is structured as follows:

@@ -144,7 +144,43 @@ typedef struct as_node_s {
 	 *	Is node currently active.
 	 */
 	uint8_t active;
+	
+	/**
+	 *	@private
+	 *	Does node support batch-index protocol?
+	 */
+	uint8_t has_batch_index;
+	
+	/**
+	 *	@private
+	 *	Does node support replicas-all info protocol?
+	 */
+	uint8_t has_replicas_all;
 } as_node;
+
+/**
+ *	@private
+ *	Node discovery information.
+ */
+typedef struct as_node_info_s {
+	/**
+	 *	@private
+	 *	Node name.
+	 */
+	char name[AS_NODE_NAME_SIZE];
+	
+	/**
+	 *	@private
+	 *	Does node support batch-index protocol?
+	 */
+	uint8_t has_batch_index;
+	
+	/**
+	 *	@private
+	 *	Does node support replicas-all info protocol?
+	 */
+	uint8_t has_replicas_all;
+} as_node_info;
 
 /**
  *	@private
@@ -179,7 +215,7 @@ typedef struct as_friend_s {
  *	Create new cluster node.
  */
 as_node*
-as_node_create(struct as_cluster_s* cluster, const char* name, struct sockaddr_in* addr);
+as_node_create(struct as_cluster_s* cluster, struct sockaddr_in* addr, as_node_info* node_info);
 
 /**
  *	@private

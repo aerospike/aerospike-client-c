@@ -37,6 +37,7 @@
 #include <aerospike/as_record.h>
 #include <aerospike/as_status.h>
 #include <aerospike/as_val.h>
+#include <aerospike/as_vector.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -45,6 +46,68 @@ extern "C" {
 /******************************************************************************
  *	TYPES
  *****************************************************************************/
+
+/**
+ *	Key and bin names used in batch commands where variables bins are needed for each key.
+ *	The returned records are located in the same batch record.
+ */
+typedef struct as_batch_record_s {
+	/**
+	 *	The key requested.
+	 */
+	as_key key;
+	
+	/**
+	 *	Bin names requested for this key.
+	 */
+	char** bin_names;
+	
+	/**
+	 *	Count of bin names requested for this key.
+	 */
+	uint32_t n_bin_names;
+	
+	/**
+	 * If true, ignore bin_names and read all bins.
+	 * If false and bin_names are set, read specified bin_names.
+	 * If false and bin_names are not set, read record header (generation, expiration) only.
+	 */
+	bool read_all_bins;
+	
+	/**
+	 *	The result of the read transaction.
+	 *	<p>
+	 *	Values:
+	 *	<ul>
+	 *	<li>
+	 *	AEROSPIKE_OK: record found
+	 *	</li>
+	 *	<li>
+	 *	AEROSPIKE_ERR_RECORD_NOT_FOUND: record not found
+	 *	</li>
+	 *	<li>
+	 *	Other: transaction error code
+	 *	</li>
+	 *	</ul>
+	 */
+	as_status result;
+	
+	/**
+	 *	The record for the key requested.  For "exists" calls, the record will never contain bins
+	 *	but will contain metadata (generation and expiration) when the record exists.
+	 */
+	as_record record;
+} as_batch_record;
+	
+/**
+ *	List of as_batch_record(s).
+ */
+typedef struct as_batch_records_s {
+	/**
+	 *	List of as_batch_record(s).
+	 */
+	as_vector list;
+} as_batch_records;
 
 /**
  *	This callback will be called with the results of aerospike_batch_get(),
@@ -68,11 +131,124 @@ extern "C" {
  *
  *	@ingroup batch_operations
  */
-typedef bool (* aerospike_batch_read_callback)(const as_batch_read * results, uint32_t n, void * udata);
+typedef bool (*aerospike_batch_read_callback)(const as_batch_read* results, uint32_t n, void* udata);
+
+	
+/**
+ *	@private
+ *	This callback is used by aerospike_batch_get_xdr() to send one batch record at a time
+ *	as soon as they are received in no particular order.
+ */
+typedef bool (*as_batch_callback_xdr)(as_key* key, as_record* record, void* udata);
 
 /******************************************************************************
  *	FUNCTIONS
  *****************************************************************************/
+
+/**
+ *	Initialize `as_batch_records` with specified capacity on the stack using alloca().
+ *
+ *	When the batch is no longer needed, then use as_batch_destroy() to
+ *	release the batch and associated resources.
+ *
+ *	@param __records	Batch record list.
+ *	@param __capacity	Initial capacity of batch record list. List will resize when necessary.
+ *
+ *	@relates as_batch_record
+ *	@ingroup batch_operations
+ */
+#define as_batch_records_inita(__records, __capacity) \
+	as_vector_inita(&((__records)->list), sizeof(as_batch_record), __capacity);
+
+/**
+ *	Initialize `as_batch_records` with specified capacity on the heap.
+ *
+ *	When the batch is no longer needed, then use as_batch_destroy() to
+ *	release the batch and associated resources.
+ *
+ *	@param records	Batch record list.
+ *	@param capacity	Initial capacity of batch record list. List will resize when necessary.
+ *
+ *	@relates as_batch_record
+ *	@ingroup batch_operations
+ */
+static inline void
+as_batch_records_init(as_batch_records* records, uint32_t capacity)
+{
+	as_vector_init(&records->list, sizeof(as_batch_record), capacity);
+}
+
+/**
+ *	Reserve a new `as_batch_record` slot.  Capacity will be increased when necessary.
+ *	Return reference to record.  The record is already initialized to zeroes.
+ *
+ *	@param records	Batch record list.
+ *
+ *	@relates as_batch_record
+ *	@ingroup batch_operations
+ */
+static inline as_batch_record*
+as_batch_records_reserve(as_batch_records* records)
+{
+	return as_vector_reserve(&records->list);
+}
+	
+/**
+ *	Destroy keys and records in record list.  It's the responsility of the caller to 
+ *	free `as_batch_record.bin_names` when necessary.
+ *
+ *	@param records	Batch record list.
+ *
+ *	@relates as_batch_record
+ *	@ingroup batch_operations
+ */
+void
+as_batch_records_destroy(as_batch_records* records);
+
+/**
+ *	Read multiple records for specified batch keys in one batch call.
+ *	This method allows different namespaces/bins to be requested for each key in the batch.
+ *	The returned records are located in the same batch array.
+ *	This method requires Aerospike Server version >= 3.5.14.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_batch_records records;
+ *	as_batch_records_inita(&records, 10);
+ *
+ *	char* bin_names[] = {"bin1", "bin2"};
+ *	char* ns = "ns";
+ *	char* set = "set";
+ *
+ *	as_batch_record* record = as_batch_records_reserve(&records);
+ *	as_key_init(&record->key, ns, set, "key1");
+ *	record->bin_names = bin_names;
+ *	record->n_bin_names = 2;
+ *
+ *	record = as_batch_records_reserve(&records);
+ *	as_key_init(&record->key, ns, set, "key2");
+ *	record->read_all_bins = true;
+ *
+ *	if (aerospike_batch_read(&as, &err, NULL, &records) != AEROSPIKE_OK) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *
+ *	as_batch_records_destroy(&records);
+ *	~~~~~~~~~~
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param records		List of keys and bins to retrieve.
+ *						The returned records are located in the same array.
+ *
+ *	@return AEROSPIKE_OK if successful. Otherwise an error.
+ *
+ *	@ingroup batch_operations
+ */
+as_status
+aerospike_batch_read(
+	aerospike* as, as_error* err, const as_policy_batch* policy, as_batch_records* records
+	);
 
 /**
  *	Look up multiple records by key, then return all bins.
@@ -103,10 +279,21 @@ typedef bool (* aerospike_batch_read_callback)(const as_batch_read * results, ui
  *
  *	@ingroup batch_operations
  */
-as_status aerospike_batch_get(
-	aerospike * as, as_error * err, const as_policy_batch * policy, 
-	const as_batch * batch, 
+as_status
+aerospike_batch_get(
+	aerospike * as, as_error * err, const as_policy_batch * policy, const as_batch * batch,
 	aerospike_batch_read_callback callback, void * udata
+	);
+
+/**
+ *	@private
+ *	Perform batch reads for XDR.  The callback will be called for each record as soon as it's
+ *	received in no particular order.
+ */
+as_status
+aerospike_batch_get_xdr(
+	aerospike* as, as_error* err, const as_policy_batch* policy, const as_batch* batch,
+	as_batch_callback_xdr callback, void* udata
 	);
 
 /**
@@ -177,9 +364,9 @@ aerospike_batch_get_bins(
  *
  *	@ingroup batch_operations
  */
-as_status aerospike_batch_exists(
-	aerospike * as, as_error * err, const as_policy_batch * policy, 
-	const as_batch * batch, 
+as_status
+aerospike_batch_exists(
+	aerospike * as, as_error * err, const as_policy_batch * policy, const as_batch * batch,
 	aerospike_batch_read_callback callback, void * udata
 	);
 

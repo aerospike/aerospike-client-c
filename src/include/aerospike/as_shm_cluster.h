@@ -63,9 +63,21 @@ typedef struct as_node_shm_s {
 	
 	/**
 	 *	@private
+	 *	Does node support batch-index protocol?
+	 */
+	uint8_t has_batch_index;
+	
+	/**
+	 *	@private
+	 *	Does node support replicas-all info protocol?
+	 */
+	uint8_t has_replicas_all;
+
+	/**
+	 *	@private
 	 *	Pad to 8 byte boundary.
 	 */
-	char pad[7];
+	char pad[5];
 } as_node_shm;
 
 /**

@@ -96,6 +96,22 @@ bool batch_get_1_callback(const as_batch_read * results, uint32_t n, void * udat
     return true;
 }
 
+static bool batch_sequence_callback(as_key* key, as_record* record, void* udata)
+{
+	batch_read_data* data = (batch_read_data*)udata;
+
+	data->total++;
+	data->found++;
+
+	int64_t k = as_integer_getorelse((as_integer *)key->valuep, -1);
+	int64_t v = as_record_get_int64(record, "val", -1);
+	if (k != v) {
+		warn("key(%d) != val(%d)", k, v);
+		data->errors++;
+		data->last_error = -2;
+	}
+	return true;
+}
 
 /******************************************************************************
  * TEST CASES
@@ -158,6 +174,29 @@ TEST( batch_get_1 , "Simple" )
     }
     assert_int_eq( err.code , AEROSPIKE_OK );
 
+    assert_int_eq( data.found , N_KEYS - N_KEYS/20);
+    assert_int_eq( data.errors , 0 );
+}
+
+TEST( batch_get_sequence , "Batch get in sequence" )
+{
+    as_error err;
+	
+    as_batch batch;
+    as_batch_inita(&batch, N_KEYS);
+	
+    for (uint32_t i = 0; i < N_KEYS; i++) {
+        as_key_init_int64(as_batch_keyat(&batch,i), NAMESPACE, SET, i+1);
+    }
+	
+    batch_read_data data = {0};
+	
+    aerospike_batch_get_xdr(as, &err, NULL, &batch, batch_sequence_callback, &data);
+    if ( err.code != AEROSPIKE_OK ) {
+        info("error(%d): %s", err.code, err.message);
+    }
+    assert_int_eq( err.code , AEROSPIKE_OK );
+	
     assert_int_eq( data.found , N_KEYS - N_KEYS/20);
     assert_int_eq( data.errors , 0 );
 }
@@ -287,6 +326,116 @@ TEST( batch_get_bins , "Batch Get - with bin name filters" )
     assert_int_eq( data.errors , 0 );
 }
 
+TEST( batch_read_complex , "Batch read complex" )
+{
+	// Batch allows multiple namespaces in one call, but example test environment may only have one namespace.
+	as_batch_records records;
+	as_batch_records_inita(&records, 9);
+	
+	char* bins[] = {"val"};
+	uint32_t n_bins = 1;
+	
+	// get specified bins
+	as_batch_record* record = as_batch_records_reserve(&records);
+	as_key_init_int64(&record->key, NAMESPACE, SET, 1);
+	record->bin_names = bins;
+	record->n_bin_names = n_bins;
+	
+	// get all bins
+	record = as_batch_records_reserve(&records);
+	as_key_init_int64(&record->key, NAMESPACE, SET, 2);
+	record->read_all_bins = true;
+	
+	// get all bins
+	record = as_batch_records_reserve(&records);
+	as_key_init_int64(&record->key, NAMESPACE, SET, 3);
+	record->read_all_bins = true;
+
+	// exists
+	record = as_batch_records_reserve(&records);
+	as_key_init_int64(&record->key, NAMESPACE, SET, 4);
+	
+	// get all bins
+	record = as_batch_records_reserve(&records);
+	as_key_init_int64(&record->key, NAMESPACE, SET, 5);
+	record->read_all_bins = true;
+	
+	// get all bins
+	record = as_batch_records_reserve(&records);
+	as_key_init_int64(&record->key, NAMESPACE, SET, 6);
+	record->read_all_bins = true;
+
+	// get specified bins
+	record = as_batch_records_reserve(&records);
+	as_key_init_int64(&record->key, NAMESPACE, SET, 7);
+	record->bin_names = bins;
+	record->n_bin_names = n_bins;
+
+	// This record should be found, but the requested bin will not be found.
+	record = as_batch_records_reserve(&records);
+	as_key_init_int64(&record->key, NAMESPACE, SET, 8);
+	char* bins2[] = {"binnotfound"};
+	record->bin_names = bins2;
+	record->n_bin_names = 1;
+	
+	// This record should not be found.
+	record = as_batch_records_reserve(&records);
+	as_key_init_int64(&record->key, NAMESPACE, SET, 20);
+	record->bin_names = bins;
+	record->n_bin_names = n_bins;
+
+	as_error err;
+
+	as_status status = aerospike_batch_read(as, &err, NULL, &records);
+	
+	if (status != AEROSPIKE_OK) {
+        error("error(%d): %s", err.code, err.message);
+    }
+	
+    assert_int_eq(status, AEROSPIKE_OK);
+	
+	uint32_t found = 0;
+	uint32_t errors = 0;
+	as_vector* list = &records.list;
+	for (uint32_t i = 0; i < list->size; i++) {
+		as_batch_record* batch = as_vector_get(list, i);
+		as_key* key = &batch->key;
+		
+		if (batch->result == AEROSPIKE_OK) {
+ 			found++;
+			
+			if (batch->read_all_bins || batch->n_bin_names > 0) {
+				int64_t val = as_record_get_int64(&batch->record, "val", -1);
+				
+				if (val != -1) {
+					info("Record: ns=%s set=%s key=%d bin=%d",
+						 key->ns, key->set, (int)key->valuep->integer.value, (int)val);
+				}
+				else {
+					info("Record: ns=%s set=%s key=%d bin=null",
+						 key->ns, key->set, (int)key->valuep->integer.value);
+				}
+			}
+			else {
+				info("Record: ns=%s set=%s key=%d exists=true",
+					 key->ns, key->set, (int)key->valuep->integer.value);
+			}
+		}
+		else if (batch->result == AEROSPIKE_ERR_RECORD_NOT_FOUND) {
+			info("Record not found: ns=%s set=%s key=%d",
+				 key->ns, key->set, (int)key->valuep->integer.value);
+		}
+		else {
+			errors++;
+			error("Unexpected error(%u): %s", i, as_error_string(batch->result));
+		}
+	}
+	as_batch_records_destroy(&records);
+	
+    assert_int_eq(found, 8);
+    assert_int_eq(errors, 0);
+}
+
 TEST( batch_get_post , "Post: Remove Records" )
 {
     as_error err;
@@ -313,7 +462,9 @@ TEST( batch_get_post , "Post: Remove Records" )
 SUITE( batch_get, "aerospike_batch_get tests" ) {
     suite_add( batch_get_pre );
     suite_add( batch_get_1 );
+    suite_add( batch_get_sequence );
     suite_add( multithreaded_batch_get );
     suite_add( batch_get_bins );
+    suite_add( batch_read_complex );
     suite_add( batch_get_post );
 }

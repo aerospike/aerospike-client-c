@@ -324,10 +324,6 @@ typedef struct as_policy_write_s {
 	/**
 	 *	Maximum time in milliseconds to wait for 
 	 *	the operation to complete.
-	 *
-	 *	If undefined (-1), then the value will default to
-	 *	either as_config.policies.timeout
-	 *	or `AS_POLICY_TIMEOUT_DEFAULT`.
 	 */
 	uint32_t timeout;
 
@@ -372,10 +368,6 @@ typedef struct as_policy_read_s {
 	/**
 	 *	Maximum time in milliseconds to wait for 
 	 *	the operation to complete.
-	 *
-	 *	If undefined (-1), then the value will default to
-	 *	either as_config.policies.timeout
-	 *	or `AS_POLICY_TIMEOUT_DEFAULT`.
 	 */
 	uint32_t timeout;
 
@@ -407,10 +399,6 @@ typedef struct as_policy_apply_s {
 	/**
 	 *	Maximum time in milliseconds to wait for 
 	 *	the operation to complete.
-	 *
-	 *	If undefined (-1), then the value will default to
-	 *	either as_config.policies.timeout
-	 *	or `AS_POLICY_TIMEOUT_DEFAULT`.
 	 */
 	uint32_t timeout;
 
@@ -451,10 +439,6 @@ typedef struct as_policy_operate_s {
 	/**
 	 *	Maximum time in milliseconds to wait for 
 	 *	the operation to complete.
-	 *
-	 *	If undefined (-1), then the value will default to
-	 *	either as_config.policies.timeout
-	 *	or `AS_POLICY_TIMEOUT_DEFAULT`.
 	 */
 	uint32_t timeout;
 
@@ -504,10 +488,6 @@ typedef struct as_policy_remove_s {
 	/**
 	 *	Maximum time in milliseconds to wait for 
 	 *	the operation to complete.
-	 *
-	 *	If undefined (-1), then the value will default to
-	 *	either as_config.policies.timeout
-	 *	or `AS_POLICY_TIMEOUT_DEFAULT`.
 	 */
 	uint32_t timeout;
 
@@ -590,10 +570,6 @@ typedef struct as_policy_info_s {
 	/**
 	 *	Maximum time in milliseconds to wait for 
 	 *	the operation to complete.
-	 *
-	 *	If undefined (-1), then the value will default to
-	 *	either as_config.policies.timeout
-	 *	or `AS_POLICY_TIMEOUT_DEFAULT`.
 	 */
 	uint32_t timeout;
 
@@ -619,13 +595,44 @@ typedef struct as_policy_batch_s {
 	/**
 	 *	Maximum time in milliseconds to wait for 
 	 *	the operation to complete.
-	 *
-	 *	If undefined (-1), then the value will default to
-	 *	either as_config.policies.timeout
-	 *	or `AS_POLICY_TIMEOUT_DEFAULT`.
 	 */
 	uint32_t timeout;
 
+	/**
+	 *	Determine if batch commands to each server are run in parallel threads.
+	 *	<p>
+	 *	Values:
+	 *	<ul>
+	 *	<li>
+	 *	false: Issue batch commands sequentially.  This mode has a performance advantage for small
+	 *	to medium sized batch sizes because commands can be issued in the main transaction thread.
+	 *	This is the default.
+	 *	</li>
+	 *	<li>
+	 *	true: Issue batch commands in parallel threads.  This mode has a performance
+	 *	advantage for large batch sizes because each node can process the command immediately.
+	 *	The downside is extra threads will need to be created (or taken from
+	 *	a thread pool).
+	 *	</li>
+	 *	</ul>
+	 */
+	bool concurrent;
+	
+	/**
+	 *	Use old batch direct protocol where batch reads are handled by direct low-level batch server
+	 *	database routines.  The batch direct protocol can be faster when there is a single namespace,
+	 *	but there is one important drawback.  The batch direct protocol will not proxy to a different
+	 *	server node when the mapped node has migrated a record to another node (resulting in not
+	 *	found record).
+	 *	<p>
+	 *	This can happen after a node has been added/removed from the cluster and there is a lag
+	 *	between records being migrated and client partition map update (once per second).
+	 *	<p>
+	 *	The new batch index protocol will perform this record proxy when necessary.
+	 *	Default: false (use new batch index protocol if server supports it)
+	 */
+	bool use_batch_direct;
+	
 } as_policy_batch;
 
 /**
@@ -638,10 +645,6 @@ typedef struct as_policy_admin_s {
 	/**
 	 *	Maximum time in milliseconds to wait for
 	 *	the operation to complete.
-	 *
-	 *	If undefined (-1), then the value will default to
-	 *	either as_config.policies.timeout
-	 *	or `AS_POLICY_TIMEOUT_DEFAULT`.
 	 */
 	uint32_t timeout;
 	
@@ -1015,6 +1018,8 @@ static inline as_policy_batch*
 as_policy_batch_init(as_policy_batch* p)
 {
 	p->timeout = AS_POLICY_TIMEOUT_DEFAULT;
+	p->concurrent = false;
+	p->use_batch_direct = false;
 	return p;
 }
 
@@ -1030,6 +1035,8 @@ static inline void
 as_policy_batch_copy(as_policy_batch* src, as_policy_batch* trg)
 {
 	trg->timeout = src->timeout;
+	trg->concurrent = src->concurrent;
+	trg->use_batch_direct = src->use_batch_direct;
 }
 
 /**

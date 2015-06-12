@@ -226,13 +226,7 @@ typedef struct as_cluster_s {
 	 *	Should continue to tend cluster.
 	 */
 	volatile bool valid;
-	
-	/**
-	 *	@private
-	 *	Batch transaction lock.
-	 */
-	pthread_mutex_t	batch_init_lock;
-	
+		
 	/**
 	 *	@private
 	 *	Cluster tend thread.

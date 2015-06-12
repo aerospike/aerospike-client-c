@@ -52,12 +52,13 @@ extern "C" {
 #define AS_FIELD_UDF_ARGLIST 32
 #define AS_FIELD_UDF_OP 33
 #define AS_FIELD_QUERY_BINS 40
+#define AS_FIELD_BATCH_INDEX 41
 
 // Message info1 bits
 #define AS_MSG_INFO1_READ				(1 << 0) // contains a read operation
 #define AS_MSG_INFO1_GET_ALL			(1 << 1) // get all bins, period
 // (Note:  Bit 2 is unused.)
-// (Note:  Bit 3 is unused.)
+#define AS_MSG_INFO1_BATCH_INDEX		(1 << 3) // batch read
 #define AS_MSG_INFO1_XDR				(1 << 4) // operation is being performed by XDR
 #define AS_MSG_INFO1_GET_NOBINDATA		(1 << 5) // do not get information about bins and its data
 #define AS_MSG_INFO1_CONSISTENCY_ALL	(1 << 6) // read consistency level - bit 0

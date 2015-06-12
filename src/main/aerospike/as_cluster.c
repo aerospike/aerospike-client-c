@@ -78,29 +78,75 @@ as_add_seeds(as_cluster* cluster, as_seed* seeds, uint32_t seeds_size) {
 }
 
 static as_status
-as_lookup_node_name(as_cluster* cluster, as_error* err, struct sockaddr_in* addr, char* node_name, int node_name_size)
+as_lookup_node(as_cluster* cluster, as_error* err, struct sockaddr_in* addr, as_node_info* node_info)
 {
 	char* response = 0;
 	uint64_t deadline = as_socket_deadline(cluster->conn_timeout_ms);
-	as_status status = as_info_command_host(cluster, err, addr, "node", true, deadline, &response);
-	
+	as_status status = as_info_command_host(cluster, err, addr, "node\nfeatures\n", true, deadline, &response);
+
 	if (status) {
 		return status;
 	}
 	
-	char* value;
-	status = as_info_parse_single_response(response, &value);
+	as_vector values;
+	as_vector_inita(&values, sizeof(as_name_value), 2);
 	
-	if (status == AEROSPIKE_OK) {
-		as_strncpy(node_name, value, node_name_size);
+	as_info_parse_multi_response(response, &values);
+	
+	if (values.size != 2) {
+		goto Error;
 	}
-	else {
-		char name[INET_ADDRSTRLEN];
-		as_socket_address_name(addr, name);
-		as_error_update(err, status, "Invalid node info response from %s: %s", name, response);
+	
+	as_name_value* nv = as_vector_get(&values, 0);
+	char* node_name = nv->value;
+	
+	if (node_name == 0 || *node_name == 0) {
+		goto Error;
 	}
+	as_strncpy(node_info->name, node_name, AS_NODE_NAME_SIZE);
+
+	nv = as_vector_get(&values, 1);
+	char* features = nv->value;
+	
+	if (features == 0) {
+		goto Error;
+	}
+			
+	char* begin = features;
+	char* end = begin;
+	uint8_t has_batch_index = 0;
+	uint8_t has_replicas_all = 0;
+	
+	while (*begin && ! (has_batch_index && has_replicas_all)) {
+		while (*end) {
+			if (*end == ';') {
+				*end++ = 0;
+				break;
+			}
+			end++;
+		}
+		
+		if (strcmp(begin, "batch-index") == 0) {
+			has_batch_index = 1;
+		}
+		
+		if (strcmp(begin, "replicas-all") == 0) {
+			has_replicas_all = 1;
+		}
+		begin = end;
+	}
+	node_info->has_batch_index = has_batch_index;
+	node_info->has_replicas_all = has_replicas_all;
 	free(response);
-	return status;
+	return AEROSPIKE_OK;
+	
+Error: {
+		char addr_name[INET_ADDRSTRLEN];
+		as_socket_address_name(addr, addr_name);
+		as_error_update(err, status, "Invalid node info response from %s: %s", addr_name, response);
+		free(response);
+		return AEROSPIKE_ERR_CLIENT;
+	}
 }
 
 static as_node*
@@ -206,7 +252,7 @@ as_cluster_seed_nodes(as_cluster* cluster, as_error* err, bool enable_warnings)
 	as_vector addresses;
 	as_vector_inita(&addresses, sizeof(struct sockaddr_in), 5);
 	
-	char name[AS_NODE_NAME_SIZE];
+	as_node_info node_info;
 	as_error err_local;
 	as_status status = AEROSPIKE_OK;
 	
@@ -225,16 +271,16 @@ as_cluster_seed_nodes(as_cluster* cluster, as_error* err, bool enable_warnings)
 
 		for (uint32_t i = 0; i < addresses.size; i++) {
 			struct sockaddr_in* addr = as_vector_get(&addresses, i);
-			status = as_lookup_node_name(cluster, &err_local, addr, name, AS_NODE_NAME_SIZE);
+			status = as_lookup_node(cluster, &err_local, addr, &node_info);
 			
 			if (status == AEROSPIKE_OK) {
-				as_node* node = as_cluster_find_node_in_vector(&nodes_to_add, name);
+				as_node* node = as_cluster_find_node_in_vector(&nodes_to_add, node_info.name);
 				
 				if (node) {
 					as_node_add_address(node, addr);
 				}
 				else {
-					node = as_node_create(cluster, name, addr);
+					node = as_node_create(cluster, addr, &node_info);
 					as_address* a = as_node_get_address_full(node);
 					as_log_info("Add node %s %s:%d", node->name, a->name, (int)cf_swap_from_be16(a->addr.sin_port));
 					as_vector_append(&nodes_to_add, &node);
@@ -268,7 +314,7 @@ as_cluster_find_nodes_to_add(as_cluster* cluster, as_vector* /* <as_friend> */ f
 	as_vector addresses;
 	as_vector_inita(&addresses, sizeof(struct sockaddr_in), 5);
 	
-	char name[AS_NODE_NAME_SIZE];
+	as_node_info node_info;
 
 	for (uint32_t i = 0; i < friends->size; i++) {
 		as_friend* friend = as_vector_get(friends, i);
@@ -283,10 +329,10 @@ as_cluster_find_nodes_to_add(as_cluster* cluster, as_vector* /* <as_friend> */ f
 		
 		for (uint32_t i = 0; i < addresses.size; i++) {
 			struct sockaddr_in* addr = as_vector_get(&addresses, i);
-			status = as_lookup_node_name(cluster, &err, addr, name, AS_NODE_NAME_SIZE);
+			status = as_lookup_node(cluster, &err, addr, &node_info);
 			
 			if (status == AEROSPIKE_OK) {
-				as_node* node = as_cluster_find_node(cluster->nodes, nodes_to_add, name);
+				as_node* node = as_cluster_find_node(cluster->nodes, nodes_to_add, node_info.name);
 				
 				if (node) {
 					// Duplicate node name found.  This usually occurs when the server
@@ -300,9 +346,9 @@ as_cluster_find_nodes_to_add(as_cluster* cluster, as_vector* /* <as_friend> */ f
 					continue;
 				}
 				
-				node = as_node_create(cluster, name, addr);
+				node = as_node_create(cluster, addr, &node_info);
 				as_address* a = as_node_get_address_full(node);
-				as_log_info("Add node %s %s:%d", name, a->name, (int)cf_swap_from_be16(a->addr.sin_port));
+				as_log_info("Add node %s %s:%d", node_info.name, a->name, (int)cf_swap_from_be16(a->addr.sin_port));
 				as_vector_append(nodes_to_add, &node);
 			}
 			else {
@@ -943,9 +989,6 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 	// Initialize tend lock and condition.
 	pthread_mutex_init(&cluster->tend_lock, NULL);
 	pthread_cond_init(&cluster->tend_cond, NULL);
-
-	// Initialize batch.
-	pthread_mutex_init(&cluster->batch_init_lock, 0);
 	
 	if (config->use_shm) {
 		// Create shared memory cluster.
@@ -1040,9 +1083,6 @@ as_cluster_destroy(as_cluster* cluster)
 	// Destroy tend lock and condition.
 	pthread_mutex_destroy(&cluster->tend_lock);
 	pthread_cond_destroy(&cluster->tend_cond);
-
-	// Destroy batch lock.
-	pthread_mutex_destroy(&cluster->batch_init_lock);
 	
 	cf_free(cluster->user);
 	cf_free(cluster->password);

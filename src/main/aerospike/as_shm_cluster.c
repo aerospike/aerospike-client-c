@@ -163,6 +163,8 @@ as_shm_add_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_add)
 				memcpy(node_shm->name, node_to_add->name, AS_NODE_NAME_SIZE);
 				memcpy(&node_shm->addr, &address->addr, sizeof(struct sockaddr_in));
 				node_shm->active = true;
+				node_shm->has_batch_index = node_to_add->has_batch_index;
+				node_shm->has_replicas_all = node_to_add->has_replicas_all;
 				ck_swlock_write_unlock(&node_shm->lock);
 				
 				// Set shared memory node array index.
@@ -234,7 +236,12 @@ as_shm_reset_nodes(as_cluster* cluster)
 		
 		if (node_tmp.active) {
 			if (! node) {
-				node = as_node_create(cluster, node_tmp.name, &node_tmp.addr);
+				as_node_info node_info;
+				strcpy(node_info.name, node_tmp.name);
+				node_info.has_batch_index = node_tmp.has_batch_index;
+				node_info.has_replicas_all = node_tmp.has_replicas_all;
+				
+				node = as_node_create(cluster, &node_tmp.addr, &node_info);
 				node->index = i;
 				as_address* a = as_node_get_address_full(node);
 				as_log_info("Add node %s %s:%d", node_tmp.name, a->name, (int)cf_swap_from_be16(a->addr.sin_port));

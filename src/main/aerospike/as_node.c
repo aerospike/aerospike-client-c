@@ -40,7 +40,7 @@ as_partition_tables_update(struct as_cluster_s* cluster, as_node* node, char* bu
  *****************************************************************************/
 
 as_node*
-as_node_create(as_cluster* cluster, const char* name, struct sockaddr_in* addr)
+as_node_create(as_cluster* cluster, struct sockaddr_in* addr, as_node_info* node_info)
 {
 	as_node* node = cf_malloc(sizeof(as_node));
 
@@ -52,7 +52,9 @@ as_node_create(as_cluster* cluster, const char* name, struct sockaddr_in* addr)
 	node->partition_generation = 0xFFFFFFFF;
 	node->cluster = cluster;
 			
-	strcpy(node->name, name);
+	strcpy(node->name, node_info->name);
+	node->has_batch_index = node_info->has_batch_index;
+	node->has_replicas_all = node_info->has_replicas_all;
 	node->address_index = 0;
 	
 	as_vector_init(&node->addresses, sizeof(as_address), 2);

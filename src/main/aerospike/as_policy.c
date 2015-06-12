@@ -78,20 +78,19 @@ as_policies_init(as_policies* p)
 	p->apply.commit_level = -1;
 	p->apply.ttl = 0;	// Set to AS_RECORD_DEFAULT_TTL. TTL does not go through as_policies_resolve().
 
+	as_policy_info_init(&p->info);
 	p->info.timeout = -1;
-	p->info.send_as_is = true;
-	p->info.check_bounds = true;
 
+	as_policy_batch_init(&p->batch);
 	p->batch.timeout = -1;
 
 	p->admin.timeout = -1;
 
 	// Scan timeout should not be tied to global timeout.
-	p->scan.timeout = 0;
-	p->scan.fail_on_cluster_change = false;
+	as_policy_scan_init(&p->scan);
 
 	// Query timeout should not be tied to global timeout.
-	p->query.timeout = 0;
+	as_policy_query_init(&p->query);
 
 	return p;
 }

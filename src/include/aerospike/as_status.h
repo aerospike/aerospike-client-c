@@ -294,6 +294,21 @@ typedef enum as_status_e {
 	AEROSPIKE_ERR_LARGE_ITEM_NOT_FOUND = 125,
 
 	/**
+	 * Batch functionality has been disabled.
+	 */
+	AEROSPIKE_ERR_BATCH_DISABLED = 150,
+	
+	/**
+	 * Batch max requests have been exceeded.
+	 */
+	AEROSPIKE_ERR_BATCH_MAX_REQUESTS_EXCEEDED = 151,
+	
+	/**
+	 * All batch queues are full.
+	 */
+	AEROSPIKE_ERR_BATCH_QUEUES_FULL = 152,
+
+	/**
 	 *	Index found.
 	 */
 	AEROSPIKE_ERR_INDEX_FOUND = 200,

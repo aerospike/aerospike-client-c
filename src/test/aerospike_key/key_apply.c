@@ -105,6 +105,7 @@ static bool after(atf_suite * suite) {
 	as_status rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "map_arg", (as_list*) &arglist, &res);
 
 	as_key_destroy(&key);
+	as_hashmap_destroy(&map);
 	
     assert_int_eq( rc, AEROSPIKE_OK );
 	assert_not_null( res );

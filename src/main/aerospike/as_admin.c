@@ -175,7 +175,8 @@ as_admin_execute(aerospike* as, as_error* err, const as_policy_admin* policy, ui
 		timeout_ms = DEFAULT_TIMEOUT;
 	}
 	uint64_t deadline_ms = as_socket_deadline(timeout_ms);
-	as_node* node = as_node_get_random(as->cluster);
+	as_cluster* cluster = as->cluster;
+	as_node* node = as_node_get_random(cluster);
 	
 	if (! node) {
 		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to find server node.");
@@ -205,7 +206,7 @@ as_admin_execute(aerospike* as, as_error* err, const as_policy_admin* policy, ui
 		return status;
 	}
 	
-	as_node_put_connection(node, fd);
+	as_node_put_connection(node, fd, cluster->conn_queue_size);
 	as_node_release(node);
 	
 	status = buffer[RESULT_CODE];
@@ -274,7 +275,8 @@ as_admin_read_list(aerospike* as, as_error* err, const as_policy_admin* policy, 
 		timeout_ms = DEFAULT_TIMEOUT;
 	}
 	uint64_t deadline_ms = cf_getms() + timeout_ms;
-	as_node* node = as_node_get_random(as->cluster);
+	as_cluster* cluster = as->cluster;
+	as_node* node = as_node_get_random(cluster);
 	
 	if (! node) {
 		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to find server node.");
@@ -304,7 +306,7 @@ as_admin_read_list(aerospike* as, as_error* err, const as_policy_admin* policy, 
 		return status;
 	}
 
-	as_node_put_connection(node, fd);
+	as_node_put_connection(node, fd, cluster->conn_queue_size);
 	as_node_release(node);
 	return status;
 }

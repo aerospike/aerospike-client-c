@@ -299,10 +299,15 @@ as_node_get_connection(as_error* err, as_node* node, int* fd);
 
 /**
  *	@private
- *	Put connection back into pool.
+ *	Put connection back into pool if pool size < limit.  Otherwise, close connection.
  */
-void
-as_node_put_connection(as_node* node, int fd);
+static inline void
+as_node_put_connection(as_node* node, int fd, uint32_t limit)
+{
+	if (! cf_queue_push_limit(node->conn_q, &fd, limit)) {
+		close(fd);
+	}
+}
 
 #ifdef __cplusplus
 } // end extern "C"

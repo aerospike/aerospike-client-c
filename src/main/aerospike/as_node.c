@@ -273,28 +273,6 @@ as_node_get_connection(as_error* err, as_node* node, int* fd)
 	}
 }
 
-void
-as_node_put_connection(as_node* node, int fd)
-{
-	cf_queue *q = node->conn_q;
-	if (! cf_queue_push_limit(q, &fd, 300)) {
-		as_close(fd);
-	}
-	
-	/*
-	if (asyncfd == true) {
-		q = cn->conn_q_asyncfd;
-		// Async queue is used by XDR. It can open lot of connections
-		// depending on batch-size. Dont worry about limiting the pool.
-		cf_queue_push(q, &fd);
-	} else {
-		q = cn->conn_q;
-		if (! cf_queue_push_limit(q, &fd, 300)) {
-			as_close(fd);
-		}
-	}*/
-}
-
 static int
 as_node_get_info_connection(as_error* err, as_node* node)
 {

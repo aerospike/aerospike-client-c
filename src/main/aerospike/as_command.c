@@ -312,7 +312,7 @@ as_command_write_bin(uint8_t* begin, uint8_t operation_type, const as_bin* bin, 
 }
 
 as_status
-as_command_execute(as_error * err, as_command_node* cn, uint8_t* command, size_t command_len,
+as_command_execute(as_cluster* cluster, as_error * err, as_command_node* cn, uint8_t* command, size_t command_len,
 	uint32_t timeout_ms, as_policy_retry retry,
 	as_parse_results_fn parse_results_fn, void* parse_results_data
 )
@@ -334,7 +334,7 @@ as_command_execute(as_error * err, as_command_node* cn, uint8_t* command, size_t
 			release_node = false;
 		}
 		else {
-			node = as_node_get(cn->cluster, cn->ns, cn->digest, cn->write, cn->replica);
+			node = as_node_get(cluster, cn->ns, cn->digest, cn->write, cn->replica);
 			release_node = true;
 		}
 		
@@ -409,7 +409,7 @@ as_command_execute(as_error * err, as_command_node* cn, uint8_t* command, size_t
 		}
 		
 		// Put connection back in pool.
-		as_node_put_connection(node, fd);
+		as_node_put_connection(node, fd, cluster->conn_queue_size);
 		
 		// Release resources.
 		if (release_node) {

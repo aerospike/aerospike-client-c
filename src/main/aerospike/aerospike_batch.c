@@ -836,7 +836,7 @@ aerospike_batch_read(
 		if (! as_batch_use_new(policy, node)) {
 			as_batch_release_nodes(batch_nodes, n_batch_nodes);
 			as_nodes_release(nodes);
-			return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "aerospike_batch_read() requires a server that supports new batch index protocol.");
+			return as_error_set_message(err, AEROSPIKE_ERR_UNSUPPORTED_FEATURE, "aerospike_batch_read() requires a server that supports new batch index protocol.");
 		}
 		
 		as_batch_node* batch_node = as_batch_node_find(batch_nodes, n_batch_nodes, node);

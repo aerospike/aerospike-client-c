@@ -335,7 +335,7 @@ as_batch_index_records_execute(as_batch_task* task)
 
 	as_error err;
 	as_error_init(&err);
-	as_status status = as_command_execute(&err, &cn, cmd, size, task->timeout_ms, task->retry, as_batch_parse, task);
+	as_status status = as_command_execute(task->cluster, &err, &cn, cmd, size, task->timeout_ms, task->retry, as_batch_parse, task);
 	
 	as_command_free(cmd, size);
 	
@@ -436,7 +436,7 @@ as_batch_index_execute(as_batch_task* task)
 	
 	as_error err;
 	as_error_init(&err);
-	as_status status = as_command_execute(&err, &cn, cmd, size, task->timeout_ms, task->retry, as_batch_parse, task);
+	as_status status = as_command_execute(task->cluster, &err, &cn, cmd, size, task->timeout_ms, task->retry, as_batch_parse, task);
 	
 	as_command_free(cmd, size);
 	
@@ -490,7 +490,7 @@ as_batch_direct_execute(as_batch_task* task)
 	
 	as_error err;
 	as_error_init(&err);
-	as_status status = as_command_execute(&err, &cn, cmd, size, task->timeout_ms, task->retry, as_batch_parse, task);
+	as_status status = as_command_execute(task->cluster, &err, &cn, cmd, size, task->timeout_ms, task->retry, as_batch_parse, task);
 	
 	as_command_free(cmd, size);
 	

@@ -121,7 +121,6 @@ extern "C" {
  */
 typedef struct as_command_node_s {
 	as_node* node;
-	as_cluster* cluster;
 	const char* ns;
 	const uint8_t* digest;
 	as_policy_replica replica;
@@ -360,7 +359,7 @@ as_command_write_end(uint8_t* begin, uint8_t* end)
  *	Send command to the server.
  */
 as_status
-as_command_execute(as_error * err, as_command_node* cn, uint8_t* command, size_t command_len,
+as_command_execute(as_cluster* cluster, as_error * err, as_command_node* cn, uint8_t* command, size_t command_len,
    uint32_t timeout_ms, as_policy_retry retry,
    as_parse_results_fn parse_results_fn, void* parse_results_data);
 

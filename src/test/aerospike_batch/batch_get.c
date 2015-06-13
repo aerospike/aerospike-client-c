@@ -388,50 +388,56 @@ TEST( batch_read_complex , "Batch read complex" )
 
 	as_status status = aerospike_batch_read(as, &err, NULL, &records);
 	
-	if (status != AEROSPIKE_OK) {
-        error("error(%d): %s", err.code, err.message);
-    }
-	
-    assert_int_eq(status, AEROSPIKE_OK);
-	
 	uint32_t found = 0;
 	uint32_t errors = 0;
-	as_vector* list = &records.list;
-	for (uint32_t i = 0; i < list->size; i++) {
-		as_batch_record* batch = as_vector_get(list, i);
-		as_key* key = &batch->key;
-		
-		if (batch->result == AEROSPIKE_OK) {
- 			found++;
+	
+	if (status == AEROSPIKE_OK) {
+		as_vector* list = &records.list;
+		for (uint32_t i = 0; i < list->size; i++) {
+			as_batch_record* batch = as_vector_get(list, i);
+			as_key* key = &batch->key;
 			
-			if (batch->read_all_bins || batch->n_bin_names > 0) {
-				int64_t val = as_record_get_int64(&batch->record, "val", -1);
+			if (batch->result == AEROSPIKE_OK) {
+				found++;
 				
-				if (val != -1) {
-					info("Record: ns=%s set=%s key=%d bin=%d",
-						 key->ns, key->set, (int)key->valuep->integer.value, (int)val);
+				if (batch->read_all_bins || batch->n_bin_names > 0) {
+					int64_t val = as_record_get_int64(&batch->record, "val", -1);
+					
+					if (val != -1) {
+						info("Record: ns=%s set=%s key=%d bin=%d",
+							 key->ns, key->set, (int)key->valuep->integer.value, (int)val);
+					}
+					else {
+						info("Record: ns=%s set=%s key=%d bin=null",
+							 key->ns, key->set, (int)key->valuep->integer.value);
+					}
 				}
 				else {
-					info("Record: ns=%s set=%s key=%d bin=null",
+					info("Record: ns=%s set=%s key=%d exists=true",
 						 key->ns, key->set, (int)key->valuep->integer.value);
 				}
 			}
-			else {
-				info("Record: ns=%s set=%s key=%d exists=true",
+			else if (batch->result == AEROSPIKE_ERR_RECORD_NOT_FOUND) {
+				info("Record not found: ns=%s set=%s key=%d",
 					 key->ns, key->set, (int)key->valuep->integer.value);
 			}
-		}
-		else if (batch->result == AEROSPIKE_ERR_RECORD_NOT_FOUND) {
-			info("Record not found: ns=%s set=%s key=%d",
-				 key->ns, key->set, (int)key->valuep->integer.value);
-		}
-		else {
-			errors++;
-			error("Unexpected error(%u): %s", i, as_error_string(batch->result));
+			else {
+				errors++;
+				error("Unexpected error(%u): %s", i, as_error_string(batch->result));
+			}
 		}
 	}
 	as_batch_records_destroy(&records);
 	
+	if (status != AEROSPIKE_OK) {
+		if (status == AEROSPIKE_ERR_UNSUPPORTED_FEATURE) {
+			info("aerospike_batch_read() not supported by connected cluster");
+			return;
+		}
+		error("error(%d): %s", err.code, err.message);
+    }
+	
+    assert_int_eq(status, AEROSPIKE_OK);
     assert_int_eq(found, 8);
     assert_int_eq(errors, 0);
 }

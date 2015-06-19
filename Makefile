@@ -228,6 +228,9 @@ prepare-clean:
 .PHONY: build
 build: libaerospike
 
+.PHONY: cleanall
+cleanall: build-clean
+
 .PHONY: build-clean
 build-clean:
 	@rm -rf $(TARGET)

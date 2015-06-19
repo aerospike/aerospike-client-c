@@ -632,7 +632,22 @@ typedef struct as_policy_batch_s {
 	 *	Default: false (use new batch index protocol if server supports it)
 	 */
 	bool use_batch_direct;
-	
+
+	/**
+	 *	Allow batch to be processed immediately in the server's receiving thread when the server
+	 *	deems it to be appropriate.  If false, the batch will always be processed in separate
+	 *	transaction threads.  This field is only relevant for the new batch index protocol.
+	 *	<p>
+	 *	For batch exists or batch reads of smaller sized records (<= 1K per record), inline
+	 *	processing will be significantly faster on "in memory" namespaces.  The server disables
+	 *	inline processing on disk based namespaces regardless of this policy field.
+	 *	<p>
+	 *	Inline processing can introduce the possibility of unfairness because the server
+	 *	can process the entire batch before moving onto the next command.
+	 *	Default: true
+	 */
+	bool allow_inline;
+
 } as_policy_batch;
 
 /**
@@ -1020,6 +1035,7 @@ as_policy_batch_init(as_policy_batch* p)
 	p->timeout = AS_POLICY_TIMEOUT_DEFAULT;
 	p->concurrent = false;
 	p->use_batch_direct = false;
+	p->allow_inline = true;
 	return p;
 }
 
@@ -1037,6 +1053,7 @@ as_policy_batch_copy(as_policy_batch* src, as_policy_batch* trg)
 	trg->timeout = src->timeout;
 	trg->concurrent = src->concurrent;
 	trg->use_batch_direct = src->use_batch_direct;
+	trg->allow_inline = src->allow_inline;
 }
 
 /**

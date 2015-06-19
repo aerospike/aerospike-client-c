@@ -64,6 +64,7 @@ typedef struct as_batch_task_s {
 	uint8_t read_attr;      // Old aerospike_batch_get()
 	bool use_batch_records;
 	bool use_new_batch;
+	bool allow_inline;
 } as_batch_task;
 
 typedef struct as_batch_complete_task_s {
@@ -239,7 +240,7 @@ static as_status
 as_batch_index_records_execute(as_batch_task* task)
 {
 	// Estimate buffer size.
-	size_t size = AS_HEADER_SIZE + AS_FIELD_HEADER_SIZE + sizeof(uint32_t);
+	size_t size = AS_HEADER_SIZE + AS_FIELD_HEADER_SIZE + sizeof(uint32_t) + 1;
 	as_batch_record* prev = 0;
 	uint32_t n_offsets = task->offsets.size;
 	
@@ -277,6 +278,7 @@ as_batch_index_records_execute(as_batch_task* task)
 	p = as_command_write_field_header(p, AS_FIELD_BATCH_INDEX, 0);  // Need to update size at end
 	*(uint32_t*)p = cf_swap_to_be32(n_offsets);
 	p += sizeof(uint32_t);
+	*p++ = task->allow_inline? 1 : 0;
 	
 	prev = 0;
 	
@@ -363,7 +365,7 @@ as_batch_index_execute(as_batch_task* task)
 	}
 	
 	// Estimate buffer size.
-	size_t size = AS_HEADER_SIZE + AS_FIELD_HEADER_SIZE + 4;
+	size_t size = AS_HEADER_SIZE + AS_FIELD_HEADER_SIZE + 5;
 	char* prev_ns = 0;
 	uint32_t n_offsets = task->offsets.size;
 	
@@ -390,6 +392,7 @@ as_batch_index_execute(as_batch_task* task)
 	p = as_command_write_field_header(p, AS_FIELD_BATCH_INDEX, 0);  // Need to update size at end
 	*(uint32_t*)p = cf_swap_to_be32(n_offsets);
 	p += sizeof(uint32_t);
+	*p++ = task->allow_inline? 1 : 0;
 	
 	prev_ns = 0;
 	
@@ -682,6 +685,7 @@ as_batch_execute(
 	task.retry = AS_POLICY_RETRY_NONE;
 	task.read_attr = read_attr;
 	task.use_batch_records = false;
+	task.allow_inline = policy->allow_inline;
 	task.udata = udata;
 	task.callback_xdr = callback_xdr;
 
@@ -868,6 +872,7 @@ aerospike_batch_read(
 	task.timeout_ms = policy->timeout;
 	task.retry = AS_POLICY_RETRY_NONE;
 	task.use_batch_records = true;
+	task.allow_inline = policy->allow_inline;
 	
 	if (policy->concurrent && n_batch_nodes > 1) {
 		// Run batch requests in parallel in separate threads.

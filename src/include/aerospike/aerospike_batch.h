@@ -51,7 +51,7 @@ extern "C" {
  *	Key and bin names used in batch commands where variables bins are needed for each key.
  *	The returned records are located in the same batch record.
  */
-typedef struct as_batch_record_s {
+typedef struct as_batch_read_record_s {
 	/**
 	 *	The key requested.
 	 */
@@ -97,17 +97,17 @@ typedef struct as_batch_record_s {
 	 *	but will contain metadata (generation and expiration) when the record exists.
 	 */
 	as_record record;
-} as_batch_record;
+} as_batch_read_record;
 	
 /**
- *	List of as_batch_record(s).
+ *	List of as_batch_read_record(s).
  */
-typedef struct as_batch_records_s {
+typedef struct as_batch_read_records_s {
 	/**
-	 *	List of as_batch_record(s).
+	 *	List of as_batch_read_record(s).
 	 */
 	as_vector list;
-} as_batch_records;
+} as_batch_read_records;
 
 /**
  *	This callback will be called with the results of aerospike_batch_get(),
@@ -146,7 +146,7 @@ typedef bool (*as_batch_callback_xdr)(as_key* key, as_record* record, void* udat
  *****************************************************************************/
 
 /**
- *	Initialize `as_batch_records` with specified capacity on the stack using alloca().
+ *	Initialize `as_batch_read_records` with specified capacity on the stack using alloca().
  *
  *	When the batch is no longer needed, then use as_batch_destroy() to
  *	release the batch and associated resources.
@@ -154,14 +154,14 @@ typedef bool (*as_batch_callback_xdr)(as_key* key, as_record* record, void* udat
  *	@param __records	Batch record list.
  *	@param __capacity	Initial capacity of batch record list. List will resize when necessary.
  *
- *	@relates as_batch_record
+ *	@relates as_batch_read_record
  *	@ingroup batch_operations
  */
-#define as_batch_records_inita(__records, __capacity) \
-	as_vector_inita(&((__records)->list), sizeof(as_batch_record), __capacity);
+#define as_batch_read_inita(__records, __capacity) \
+	as_vector_inita(&((__records)->list), sizeof(as_batch_read_record), __capacity);
 
 /**
- *	Initialize `as_batch_records` with specified capacity on the heap.
+ *	Initialize `as_batch_read_records` with specified capacity on the heap.
  *
  *	When the batch is no longer needed, then use as_batch_destroy() to
  *	release the batch and associated resources.
@@ -169,41 +169,41 @@ typedef bool (*as_batch_callback_xdr)(as_key* key, as_record* record, void* udat
  *	@param records	Batch record list.
  *	@param capacity	Initial capacity of batch record list. List will resize when necessary.
  *
- *	@relates as_batch_record
+ *	@relates as_batch_read_record
  *	@ingroup batch_operations
  */
 static inline void
-as_batch_records_init(as_batch_records* records, uint32_t capacity)
+as_batch_read_init(as_batch_read_records* records, uint32_t capacity)
 {
-	as_vector_init(&records->list, sizeof(as_batch_record), capacity);
+	as_vector_init(&records->list, sizeof(as_batch_read_record), capacity);
 }
 
 /**
- *	Reserve a new `as_batch_record` slot.  Capacity will be increased when necessary.
+ *	Reserve a new `as_batch_read_record` slot.  Capacity will be increased when necessary.
  *	Return reference to record.  The record is already initialized to zeroes.
  *
  *	@param records	Batch record list.
  *
- *	@relates as_batch_record
+ *	@relates as_batch_read_record
  *	@ingroup batch_operations
  */
-static inline as_batch_record*
-as_batch_records_reserve(as_batch_records* records)
+static inline as_batch_read_record*
+as_batch_read_reserve(as_batch_read_records* records)
 {
 	return as_vector_reserve(&records->list);
 }
 	
 /**
  *	Destroy keys and records in record list.  It's the responsility of the caller to 
- *	free `as_batch_record.bin_names` when necessary.
+ *	free `as_batch_read_record.bin_names` when necessary.
  *
  *	@param records	Batch record list.
  *
- *	@relates as_batch_record
+ *	@relates as_batch_read_record
  *	@ingroup batch_operations
  */
 void
-as_batch_records_destroy(as_batch_records* records);
+as_batch_read_destroy(as_batch_read_records* records);
 
 /**
  *	Read multiple records for specified batch keys in one batch call.
@@ -212,19 +212,19 @@ as_batch_records_destroy(as_batch_records* records);
  *	This method requires Aerospike Server version >= 3.5.14.
  *
  *	~~~~~~~~~~{.c}
- *	as_batch_records records;
- *	as_batch_records_inita(&records, 10);
+ *	as_batch_read_records records;
+ *	as_batch_read_inita(&records, 10);
  *
  *	char* bin_names[] = {"bin1", "bin2"};
  *	char* ns = "ns";
  *	char* set = "set";
  *
- *	as_batch_record* record = as_batch_records_reserve(&records);
+ *	as_batch_read_record* record = as_batch_read_reserve(&records);
  *	as_key_init(&record->key, ns, set, "key1");
  *	record->bin_names = bin_names;
  *	record->n_bin_names = 2;
  *
- *	record = as_batch_records_reserve(&records);
+ *	record = as_batch_read_reserve(&records);
  *	as_key_init(&record->key, ns, set, "key2");
  *	record->read_all_bins = true;
  *
@@ -232,7 +232,7 @@ as_batch_records_destroy(as_batch_records* records);
  *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *	}
  *
- *	as_batch_records_destroy(&records);
+ *	as_batch_read_destroy(&records);
  *	~~~~~~~~~~
  *
  *	@param as			The aerospike instance to use for this operation.
@@ -247,7 +247,7 @@ as_batch_records_destroy(as_batch_records* records);
  */
 as_status
 aerospike_batch_read(
-	aerospike* as, as_error* err, const as_policy_batch* policy, as_batch_records* records
+	aerospike* as, as_error* err, const as_policy_batch* policy, as_batch_read_records* records
 	);
 
 /**

@@ -139,7 +139,7 @@ as_batch_parse_records(as_error* err, uint8_t* buf, size_t size, as_batch_task* 
 		p = as_batch_parse_fields(p, msg->n_fields, &digest);
 		
 		if (task->use_batch_records) {
-			as_batch_record* record = as_vector_get(task->records, offset);
+			as_batch_read_record* record = as_vector_get(task->records, offset);
 
 			if (digest && memcmp(digest, record->key.digest.value, AS_DIGEST_VALUE_SIZE) == 0) {
 				record->result = msg->result_code;
@@ -241,12 +241,12 @@ as_batch_index_records_execute(as_batch_task* task)
 {
 	// Estimate buffer size.
 	size_t size = AS_HEADER_SIZE + AS_FIELD_HEADER_SIZE + sizeof(uint32_t) + 1;
-	as_batch_record* prev = 0;
+	as_batch_read_record* prev = 0;
 	uint32_t n_offsets = task->offsets.size;
 	
 	for (uint32_t i = 0; i < n_offsets; i++) {
 		uint32_t offset = *(uint32_t*)as_vector_get(&task->offsets, i);
-		as_batch_record* record = as_vector_get(task->records, offset);
+		as_batch_read_record* record = as_vector_get(task->records, offset);
 		
 		size += AS_DIGEST_VALUE_SIZE + sizeof(uint32_t);
 		
@@ -287,7 +287,7 @@ as_batch_index_records_execute(as_batch_task* task)
 		*(uint32_t*)p = cf_swap_to_be32(offset);
 		p += sizeof(uint32_t);
 		
-		as_batch_record* record = as_vector_get(task->records, offset);
+		as_batch_read_record* record = as_vector_get(task->records, offset);
 		memcpy(p, record->key.digest.value, AS_DIGEST_VALUE_SIZE);
 		p += AS_DIGEST_VALUE_SIZE;
 		
@@ -514,7 +514,7 @@ as_batch_command_execute(as_batch_task* task)
 	if (task->use_new_batch) {
 		// New batch protocol
 		if (task->use_batch_records) {
-			// Use as_batch_records referenced in aerospike_batch_read().
+			// Use as_batch_read_records referenced in aerospike_batch_read().
 			status = as_batch_index_records_execute(task);
 		}
 		else {
@@ -775,7 +775,7 @@ as_batch_execute(
  */
 as_status
 aerospike_batch_read(
-	aerospike* as, as_error* err, const as_policy_batch* policy, as_batch_records* records
+	aerospike* as, as_error* err, const as_policy_batch* policy, as_batch_read_records* records
 	)
 {
 	as_error_reset(err);
@@ -815,7 +815,7 @@ aerospike_batch_read(
 	
 	// Map keys to server nodes.
 	for (uint32_t i = 0; i < n_keys; i++) {
-		as_batch_record* record = as_vector_get(list, i);
+		as_batch_read_record* record = as_vector_get(list, i);
 		as_key* key = &record->key;
 		
 		record->result = AEROSPIKE_ERR_RECORD_NOT_FOUND;
@@ -938,15 +938,15 @@ aerospike_batch_read(
 
 /**
  *	Destroy keys and records in record list.  It's the responsility of the caller to
- *	free `as_batch_record.bin_names` when necessary.
+ *	free `as_batch_read_record.bin_names` when necessary.
  */
 void
-as_batch_records_destroy(as_batch_records* records)
+as_batch_read_destroy(as_batch_read_records* records)
 {
 	as_vector* list = &records->list;
 	
 	for (uint32_t i = 0; i < list->size; i++) {
-		as_batch_record* record = as_vector_get(list, i);
+		as_batch_read_record* record = as_vector_get(list, i);
 		
 		// Destroy key.
 		as_key_destroy(&record->key);

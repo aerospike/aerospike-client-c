@@ -329,57 +329,57 @@ TEST( batch_get_bins , "Batch Get - with bin name filters" )
 TEST( batch_read_complex , "Batch read complex" )
 {
 	// Batch allows multiple namespaces in one call, but example test environment may only have one namespace.
-	as_batch_records records;
-	as_batch_records_inita(&records, 9);
+	as_batch_read_records records;
+	as_batch_read_inita(&records, 9);
 	
 	char* bins[] = {"val"};
 	uint32_t n_bins = 1;
 	
 	// get specified bins
-	as_batch_record* record = as_batch_records_reserve(&records);
+	as_batch_read_record* record = as_batch_read_reserve(&records);
 	as_key_init_int64(&record->key, NAMESPACE, SET, 1);
 	record->bin_names = bins;
 	record->n_bin_names = n_bins;
 	
 	// get all bins
-	record = as_batch_records_reserve(&records);
+	record = as_batch_read_reserve(&records);
 	as_key_init_int64(&record->key, NAMESPACE, SET, 2);
 	record->read_all_bins = true;
 	
 	// get all bins
-	record = as_batch_records_reserve(&records);
+	record = as_batch_read_reserve(&records);
 	as_key_init_int64(&record->key, NAMESPACE, SET, 3);
 	record->read_all_bins = true;
 
 	// exists
-	record = as_batch_records_reserve(&records);
+	record = as_batch_read_reserve(&records);
 	as_key_init_int64(&record->key, NAMESPACE, SET, 4);
 	
 	// get all bins
-	record = as_batch_records_reserve(&records);
+	record = as_batch_read_reserve(&records);
 	as_key_init_int64(&record->key, NAMESPACE, SET, 5);
 	record->read_all_bins = true;
 	
 	// get all bins
-	record = as_batch_records_reserve(&records);
+	record = as_batch_read_reserve(&records);
 	as_key_init_int64(&record->key, NAMESPACE, SET, 6);
 	record->read_all_bins = true;
 
 	// get specified bins
-	record = as_batch_records_reserve(&records);
+	record = as_batch_read_reserve(&records);
 	as_key_init_int64(&record->key, NAMESPACE, SET, 7);
 	record->bin_names = bins;
 	record->n_bin_names = n_bins;
 
 	// This record should be found, but the requested bin will not be found.
-	record = as_batch_records_reserve(&records);
+	record = as_batch_read_reserve(&records);
 	as_key_init_int64(&record->key, NAMESPACE, SET, 8);
 	char* bins2[] = {"binnotfound"};
 	record->bin_names = bins2;
 	record->n_bin_names = 1;
 	
 	// This record should not be found.
-	record = as_batch_records_reserve(&records);
+	record = as_batch_read_reserve(&records);
 	as_key_init_int64(&record->key, NAMESPACE, SET, 20);
 	record->bin_names = bins;
 	record->n_bin_names = n_bins;
@@ -394,7 +394,7 @@ TEST( batch_read_complex , "Batch read complex" )
 	if (status == AEROSPIKE_OK) {
 		as_vector* list = &records.list;
 		for (uint32_t i = 0; i < list->size; i++) {
-			as_batch_record* batch = as_vector_get(list, i);
+			as_batch_read_record* batch = as_vector_get(list, i);
 			as_key* key = &batch->key;
 			
 			if (batch->result == AEROSPIKE_OK) {
@@ -427,7 +427,7 @@ TEST( batch_read_complex , "Batch read complex" )
 			}
 		}
 	}
-	as_batch_records_destroy(&records);
+	as_batch_read_destroy(&records);
 	
 	if (status != AEROSPIKE_OK) {
 		if (status == AEROSPIKE_ERR_UNSUPPORTED_FEATURE) {

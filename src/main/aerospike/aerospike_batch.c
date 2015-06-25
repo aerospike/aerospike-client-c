@@ -771,7 +771,7 @@ as_batch_execute(
  *	Read multiple records for specified batch keys in one batch call.
  *	This method allows different namespaces/bins to be requested for each key in the batch.
  *	The returned records are located in the same batch array.
- *	This method requires Aerospike Server version >= 3.5.14.
+ *	This method requires Aerospike Server version >= 3.5.15.
  */
 as_status
 aerospike_batch_read(

@@ -242,6 +242,23 @@ libaerospike: libaerospike.a libaerospike.$(DYNAMIC_SUFFIX)
 libaerospike.a: $(TARGET_LIB)/libaerospike.a
 libaerospike.$(DYNAMIC_SUFFIX): $(TARGET_LIB)/libaerospike.$(DYNAMIC_SUFFIX)
 
+.PHONY: examples
+examples:
+	@rm -rf $(TARGET_EXAMPLES)
+	@mkdir $(TARGET_EXAMPLES)
+	./build/prep_examples $(TARGET_EXAMPLES)
+
+.PHONY: rpm deb mac src
+rpm deb mac src:
+	$(MAKE) -C pkg/$@
+
+.PHONY: package
+package:
+	$(MAKE) $(PKG)
+
+.PHONY: source
+source: src
+
 install:
 	cp -p $(TARGET_LIB)/libaerospike.* /usr/local/lib/
 

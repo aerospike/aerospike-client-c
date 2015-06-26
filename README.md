@@ -122,6 +122,53 @@ This will generate the following files:
 
 Static linking with the `.a` prevents you from having to install the libraries on your target platform. Dynamic linking with the `.so` avoids a client rebuild if you upgrade the client. Choose the option that is right for you.
 
+### Packaging
+
+After building, packaging options are available for making RedHat
+Package Manager (RPM), ".deb", Mac OS X "Darwin", and source
+distribution packages.  The results of packaging will left in the
+`pkg/packages/` directory.
+
+First, execute the following two build commands to generate the
+documentation and example applications:
+
+To build the Aerospike C client API documentation, use:
+
+	$ make docs
+
+To prepare the examples in a form suitable for distribution in a package, use:
+
+	$ make examples
+
+Next, depending upon your build platform type, execute the appropriate
+one of the following three build packaging commands:
+
+On a RedHat-based Linux distribution, to build the ".rpm" packages, use:
+
+	$ make rpm
+
+On a Debian-based Linux distribution, to build the ".deb" packages, use:
+
+	$ make deb
+
+On a Mac OS X "Darwin" system, to build the ".pkg" packages, use:
+
+	$ make mac
+
+*Note:* On each of the above three systems, the native packages for the
+Aerospike C client library and as the Aerospike C client API software
+development kit, i.e., the "devel" package, will be built, as well as a
+".tgz" archive containing both of the native packages, along with the
+documentation and examples.
+
+You can also build the package for the current platform using:
+
+	$ make package
+
+Finally, to build the source distribution on any platform, use:
+
+	$ make source
+
 ### Install
 
 For running C client-based tools such as `aql` it is necessary to
@@ -152,6 +199,7 @@ or with valgrind
 
 The module is structured as follows:
 
+- `LICENSE` - Licenses for open source components.
 - `benchmarks` - measure read/write performance.
 - `demo` - demo applications, making use of multiple features.
 - `examples` - simple example applications, focused on specific features.
@@ -165,3 +213,5 @@ The module is structured as follows:
 - `target/{target}/lib` – libraries for end users
 - `target/{target}/obj` – generated objects files
 - `target/{target}/deps` – generated dependency files
+- `target/apidocs` - generated API documentation files
+- `pkg/packages` - generated package files

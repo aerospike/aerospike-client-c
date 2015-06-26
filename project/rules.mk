@@ -35,7 +35,8 @@ info:
 	@echo "  NAME:     " $(NAME) 
 	@echo "  OS:       " $(OS)
 	@echo "  ARCH:     " $(ARCH)
-	@echo "  DISTRO:   " $(DISTRO_NAME)"-"$(DISTRO_VERS)
+	@echo "  DISTRO:   " $(DISTRO)
+	@echo "  PKG:      " $(PKG)
 	@echo
 	@echo "  PATHS:"
 	@echo "      source:     " $(SOURCE)

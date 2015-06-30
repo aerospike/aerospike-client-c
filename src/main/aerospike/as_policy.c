@@ -50,6 +50,7 @@ as_policies_init(as_policies* p)
 	p->read.key = -1;
 	p->read.replica = -1;
 	p->read.consistency_level = -1;
+	p->read.deserialize = true;
 
 	p->write.timeout = -1;
 	p->write.retry = -1;
@@ -65,6 +66,7 @@ as_policies_init(as_policies* p)
 	p->operate.replica = -1;
 	p->operate.consistency_level = -1;
 	p->operate.commit_level = -1;
+	p->operate.deserialize = true;
 
 	p->remove.timeout = -1;
 	p->remove.retry = -1;

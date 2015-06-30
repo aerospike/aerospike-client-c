@@ -728,8 +728,9 @@ TEST( scan_basics_background_sameid , "starting two udf scan of "SET2" in backgr
 
 	uint64_t scanid2 = scanid;
 	as_status udf_rc2 = aerospike_scan_background(as, &err, NULL, &scan2, &scanid2);
-	
-	assert_int_eq( udf_rc2, AEROSPIKE_ERR_SERVER );
+
+	// TODO - don't allow AEROSPIKE_ERR_SERVER when older servers are gone.
+    assert_true( udf_rc2 == AEROSPIKE_ERR_SERVER || udf_rc2 == AEROSPIKE_ERR_REQUEST_INVALID );
 
 	aerospike_scan_wait(as, &err, NULL, scanid, 0);
 

@@ -84,7 +84,11 @@ as_status aerospike_key_get(
 	as_command_node cn;
 	as_command_node_init(&cn, key->ns, key->digest.value, policy->replica, false);
 	
-	status = as_command_execute(as->cluster, err, &cn, cmd, size, policy->timeout, AS_POLICY_RETRY_NONE, as_command_parse_result, rec);
+	as_command_parse_result_data data;
+	data.record = rec;
+	data.deserialize = policy->deserialize;
+	
+	status = as_command_execute(as->cluster, err, &cn, cmd, size, policy->timeout, AS_POLICY_RETRY_NONE, as_command_parse_result, &data);
 	
 	as_command_free(cmd, size);
 	return status;
@@ -142,7 +146,11 @@ as_status aerospike_key_select(
 	as_command_node cn;
 	as_command_node_init(&cn, key->ns, key->digest.value, policy->replica, false);
 	
-	status = as_command_execute(as->cluster, err, &cn, cmd, size, policy->timeout, AS_POLICY_RETRY_NONE, as_command_parse_result, rec);
+	as_command_parse_result_data data;
+	data.record = rec;
+	data.deserialize = policy->deserialize;
+
+	status = as_command_execute(as->cluster, err, &cn, cmd, size, policy->timeout, AS_POLICY_RETRY_NONE, as_command_parse_result, &data);
 	
 	as_command_free(cmd, size);
 	return status;
@@ -412,7 +420,11 @@ as_status aerospike_key_operate(
 	as_command_node cn;
 	as_command_node_init(&cn, key->ns, key->digest.value, policy->replica, write_attr != 0);
 	
-	status = as_command_execute(as->cluster, err, &cn, cmd, size, policy->timeout, policy->retry, as_command_parse_result, rec);
+	as_command_parse_result_data data;
+	data.record = rec;
+	data.deserialize = policy->deserialize;
+
+	status = as_command_execute(as->cluster, err, &cn, cmd, size, policy->timeout, policy->retry, as_command_parse_result, &data);
 	
 	for (uint32_t i = 0; i < n_operations; i++) {
 		as_buffer* buffer = &buffers[i];

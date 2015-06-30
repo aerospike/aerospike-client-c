@@ -202,7 +202,7 @@ as_query_parse_record(uint8_t** pp, as_msg* msg, as_query_task* task, as_error* 
 		
 		uint8_t* p = *pp;
 		p = as_command_parse_key(p, msg->n_fields, &rec.key);
-		p = as_command_parse_bins(&rec, p, msg->n_ops, true);
+		p = as_command_parse_bins(&rec, p, msg->n_ops, task->policy->deserialize);
 		*pp = p;
 		
 		if (task->callback) {

@@ -386,6 +386,13 @@ typedef struct as_policy_read_s {
 	 *  when reading for the desired consistency guarantee.
 	 */
 	as_policy_consistency_level consistency_level;
+	
+	/**
+	 *	Should raw bytes representing a list or map be deserialized to as_list or as_map. 
+	 *	Set to false for backup programs that just need access to raw bytes.
+	 *	Default: true
+	 */
+	bool deserialize;
 
 } as_policy_read;
 
@@ -476,6 +483,13 @@ typedef struct as_policy_operate_s {
 	 */
 	as_policy_commit_level commit_level;
 
+	/**
+	 *	Should raw bytes representing a list or map be deserialized to as_list or as_map.
+	 *	Set to false for backup programs that just need access to raw bytes.
+	 *	Default: true
+	 */
+	bool deserialize;
+
 } as_policy_operate;
 
 /**
@@ -536,6 +550,13 @@ typedef struct as_policy_query_s {
 	 */
 	uint32_t timeout;
 
+	/**
+	 *	Should raw bytes representing a list or map be deserialized to as_list or as_map.
+	 *	Set to false for backup programs that just need access to raw bytes.
+	 *	Default: true
+	 */
+	bool deserialize;
+	
 } as_policy_query;
 
 /**
@@ -647,6 +668,13 @@ typedef struct as_policy_batch_s {
 	 *	Default: true
 	 */
 	bool allow_inline;
+	
+	/**
+	 *	Should raw bytes be deserialized to as_list or as_map. Set to false for backup programs that
+	 *	just need access to raw bytes.
+	 *	Default: true
+	 */
+	bool deserialize;
 
 } as_policy_batch;
 
@@ -814,6 +842,7 @@ as_policy_read_init(as_policy_read* p)
 	p->key = AS_POLICY_KEY_DEFAULT;
 	p->replica = AS_POLICY_REPLICA_DEFAULT;
 	p->consistency_level = AS_POLICY_CONSISTENCY_LEVEL_DEFAULT;
+	p->deserialize = true;
 	return p;
 }
 
@@ -832,6 +861,7 @@ as_policy_read_copy(as_policy_read* src, as_policy_read* trg)
 	trg->key = src->key;
 	trg->replica = src->replica;
 	trg->consistency_level = src->consistency_level;
+	trg->deserialize = src->deserialize;
 }
 
 /**
@@ -891,6 +921,7 @@ as_policy_operate_init(as_policy_operate* p)
 	p->replica = AS_POLICY_REPLICA_DEFAULT;
 	p->consistency_level = AS_POLICY_CONSISTENCY_LEVEL_DEFAULT;
 	p->commit_level = AS_POLICY_COMMIT_LEVEL_DEFAULT;
+	p->deserialize = true;
 	return p;
 }
 
@@ -912,6 +943,7 @@ as_policy_operate_copy(as_policy_operate* src, as_policy_operate* trg)
 	trg->replica = src->replica;
 	trg->consistency_level = src->consistency_level;
 	trg->commit_level = src->commit_level;
+	trg->deserialize = src->deserialize;
 }
 
 /**
@@ -1036,6 +1068,7 @@ as_policy_batch_init(as_policy_batch* p)
 	p->concurrent = false;
 	p->use_batch_direct = false;
 	p->allow_inline = true;
+	p->deserialize = true;
 	return p;
 }
 
@@ -1054,6 +1087,7 @@ as_policy_batch_copy(as_policy_batch* src, as_policy_batch* trg)
 	trg->concurrent = src->concurrent;
 	trg->use_batch_direct = src->use_batch_direct;
 	trg->allow_inline = src->allow_inline;
+	trg->deserialize = src->deserialize;
 }
 
 /**
@@ -1128,6 +1162,7 @@ static inline as_policy_query*
 as_policy_query_init(as_policy_query* p)
 {
 	p->timeout = 0;
+	p->deserialize = true;
 	return p;
 }
 
@@ -1143,6 +1178,7 @@ static inline void
 as_policy_query_copy(as_policy_query* src, as_policy_query* trg)
 {
 	trg->timeout = src->timeout;
+	trg->deserialize = src->deserialize;
 }
 
 /**

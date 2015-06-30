@@ -876,12 +876,12 @@ as_command_parse_result(as_error* err, int fd, uint64_t deadline_ms, void* user_
 	
 	// Parse result code and record.
 	status = msg.m.result_code;
-	as_record** record = user_data;
+	as_command_parse_result_data* data = user_data;
 	
 	switch (status) {
 		case AEROSPIKE_OK: {
-			if (record) {
-				as_record* rec = *record;
+			if (data->record) {
+				as_record* rec = *data->record;
 				
 				if (rec) {
 					if (msg.m.n_ops > rec->bins.capacity) {
@@ -896,13 +896,13 @@ as_command_parse_result(as_error* err, int fd, uint64_t deadline_ms, void* user_
 				}
 				else {
 					rec = as_record_new(msg.m.n_ops);
-					*record = rec;
+					*data->record = rec;
 				}
 				rec->gen = msg.m.generation;
 				rec->ttl = cf_server_void_time_to_ttl(msg.m.record_ttl);
 				
 				uint8_t* p = as_command_ignore_fields(buf, msg.m.n_fields);
-				as_command_parse_bins(rec, p, msg.m.n_ops, true);
+				as_command_parse_bins(rec, p, msg.m.n_ops, data->deserialize);
 			}
 			break;
 		}

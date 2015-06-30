@@ -16,17 +16,18 @@
  */
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
-
-#include <aerospike/as_error.h>
-#include <aerospike/as_status.h>
-
-#include <aerospike/as_record.h>
-#include <aerospike/as_integer.h>
-#include <aerospike/as_string.h>
-#include <aerospike/as_list.h>
 #include <aerospike/as_arraylist.h>
-#include <aerospike/as_map.h>
+#include <aerospike/as_buffer.h>
+#include <aerospike/as_error.h>
 #include <aerospike/as_hashmap.h>
+#include <aerospike/as_integer.h>
+#include <aerospike/as_list.h>
+#include <aerospike/as_map.h>
+#include <aerospike/as_msgpack_serializer.h>
+#include <aerospike/as_record.h>
+#include <aerospike/as_serializer.h>
+#include <aerospike/as_status.h>
+#include <aerospike/as_string.h>
 #include <aerospike/as_stringmap.h>
 #include <aerospike/as_val.h>
 
@@ -445,6 +446,101 @@ TEST( key_basics_get2 , "get: (test,test,foo) = {a: 444, b: 'abcdef', d: 'abcdef
 
     as_record_destroy(rec);
 }
+
+TEST( key_basics_write_preserialized_list , "write pre-serialized list" ) {
+	as_error err;
+	as_error_reset(&err);
+	
+	// Create list.
+	as_arraylist list;
+	as_arraylist_init(&list, sizeof(int), 3);
+	as_arraylist_append_int64(&list, 7);
+	as_arraylist_append_int64(&list, 3);
+	as_arraylist_append_int64(&list, -86);
+
+	// Serialize list.
+	as_buffer buffer;
+	as_serializer ser;
+	as_msgpack_init(&ser);
+	as_serializer_serialize(&ser, (as_val*)&list, &buffer);
+	as_serializer_destroy(&ser);
+	as_arraylist_destroy(&list);
+	
+	// Write pre-serialized list.
+	as_key key;
+	as_key_init(&key, "test", "test", "foo");
+	
+	as_record rec;
+	as_record_init(&rec, 1);
+	as_record_set_raw_typep(&rec, "a", buffer.data, buffer.size, AS_BYTES_LIST, true);
+	
+	as_status rc = aerospike_key_put(as, &err, NULL, &key, &rec);
+    assert_int_eq(rc, AEROSPIKE_OK);
+	
+	as_key_destroy(&key);
+	as_record_destroy(&rec);
+}
+
+TEST( key_basics_read_list , "read list" ) {
+	as_error err;
+	as_error_reset(&err);
+		
+	// Read list
+	as_key key;
+	as_key_init(&key, "test", "test", "foo");
+
+	as_record* rec = 0;
+	as_status rc = aerospike_key_get(as, &err, NULL, &key, &rec);
+    assert_int_eq(rc, AEROSPIKE_OK);
+	
+	// Compare list
+	as_arraylist* list = (as_arraylist*) as_record_get_list(rec, "a");
+    assert_int_eq(as_arraylist_get_int64(list, 0), 7);
+    assert_int_eq(as_arraylist_get_int64(list, 1), 3);
+    assert_int_eq(as_arraylist_get_int64(list, 2), -86);
+	
+	as_record_destroy(rec);
+}
+
+TEST( key_basics_read_raw_list , "read raw list" ) {
+	as_error err;
+	as_error_reset(&err);
+	
+	// Read raw list
+	as_key key;
+	as_key_init(&key, "test", "test", "foo");
+	
+	as_policy_read policy;
+	as_policy_read_init(&policy);
+	policy.deserialize = false;
+	
+	as_record* rec = 0;
+	as_status rc = aerospike_key_get(as, &err, &policy, &key, &rec);
+    assert_int_eq(rc, AEROSPIKE_OK);
+	
+	as_bytes* bytes = as_record_get_bytes(rec, "a");
+	assert_int_eq(bytes->type, AS_BYTES_LIST);
+	
+	// Deserialize list
+	as_val* value = 0;
+	as_buffer buffer;
+	buffer.data = bytes->value;
+	buffer.size = bytes->size;
+	
+	as_serializer ser;
+	as_msgpack_init(&ser);
+	as_serializer_deserialize(&ser, &buffer, &value);
+	as_serializer_destroy(&ser);
+	
+	// Compare list
+	as_arraylist* list = (as_arraylist*)value;
+    assert_int_eq(as_arraylist_get_int64(list, 0), 7);
+    assert_int_eq(as_arraylist_get_int64(list, 1), 3);
+    assert_int_eq(as_arraylist_get_int64(list, 2), -86);
+	
+	as_record_destroy(rec);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -467,4 +563,7 @@ SUITE( key_basics, "aerospike_key basic tests" ) {
 	suite_add( key_basics_remove );
 	suite_add( key_basics_remove_notexists );
 	suite_add( key_basics_notexists );
+	suite_add( key_basics_write_preserialized_list );
+	suite_add( key_basics_read_list );
+	suite_add( key_basics_read_raw_list );
 }

@@ -129,6 +129,15 @@ typedef struct as_command_node_s {
 
 /**
  *	@private
+ *	Data used in as_command_parse_result().
+ */
+typedef struct as_command_parse_result_data_s {
+	as_record** record;
+	bool deserialize;
+} as_command_parse_result_data;
+
+/**
+ *	@private
  *	Parse results callback used in as_command_execute().
  */
 typedef as_status (*as_parse_results_fn) (as_error* err, int fd, uint64_t deadline_ms, void* user_data);

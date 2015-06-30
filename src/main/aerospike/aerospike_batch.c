@@ -65,6 +65,7 @@ typedef struct as_batch_task_s {
 	bool use_batch_records;
 	bool use_new_batch;
 	bool allow_inline;
+	bool deserialize;
 } as_batch_task;
 
 typedef struct as_batch_complete_task_s {
@@ -100,12 +101,12 @@ as_batch_parse_fields(uint8_t* p, uint32_t n_fields, uint8_t** digest)
 }
 
 static inline uint8_t*
-as_batch_parse_record(uint8_t* p, as_msg* msg, as_record* rec)
+as_batch_parse_record(uint8_t* p, as_msg* msg, as_record* rec, bool deserialize)
 {
 	as_record_init(rec, msg->n_ops);
 	rec->gen = msg->generation;
 	rec->ttl = cf_server_void_time_to_ttl(msg->record_ttl);
-	return as_command_parse_bins(rec, p, msg->n_ops, true);
+	return as_command_parse_bins(rec, p, msg->n_ops, deserialize);
 }
 
 static as_status
@@ -145,7 +146,7 @@ as_batch_parse_records(as_error* err, uint8_t* buf, size_t size, as_batch_task* 
 				record->result = msg->result_code;
 				
 				if (msg->result_code == AEROSPIKE_OK) {
-					p = as_batch_parse_record(p, msg, &record->record);
+					p = as_batch_parse_record(p, msg, &record->record, task->deserialize);
 				}
 			}
 			else {
@@ -160,7 +161,7 @@ as_batch_parse_records(as_error* err, uint8_t* buf, size_t size, as_batch_task* 
 				if (task->callback_xdr) {
 					if (msg->result_code == AEROSPIKE_OK) {
 						as_record rec;
-						p = as_batch_parse_record(p, msg, &rec);
+						p = as_batch_parse_record(p, msg, &rec, task->deserialize);
 						bool rv = task->callback_xdr(key, &rec, task->udata);
 						as_record_destroy(&rec);
 						
@@ -174,7 +175,7 @@ as_batch_parse_records(as_error* err, uint8_t* buf, size_t size, as_batch_task* 
 					result->result = msg->result_code;
 					
 					if (msg->result_code == AEROSPIKE_OK) {
-						p = as_batch_parse_record(p, msg, &result->record);
+						p = as_batch_parse_record(p, msg, &result->record, task->deserialize);
 					}
 				}
 			}
@@ -686,6 +687,7 @@ as_batch_execute(
 	task.read_attr = read_attr;
 	task.use_batch_records = false;
 	task.allow_inline = policy->allow_inline;
+	task.deserialize = policy->deserialize;
 	task.udata = udata;
 	task.callback_xdr = callback_xdr;
 
@@ -873,6 +875,7 @@ aerospike_batch_read(
 	task.retry = AS_POLICY_RETRY_NONE;
 	task.use_batch_records = true;
 	task.allow_inline = policy->allow_inline;
+	task.deserialize = policy->deserialize;
 	
 	if (policy->concurrent && n_batch_nodes > 1) {
 		// Run batch requests in parallel in separate threads.

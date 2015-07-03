@@ -53,7 +53,7 @@ extern "C" {
  *
  *	@relates as_query
  */
-#define as_integer_equals(__val) AS_PREDICATE_EQUAL, AS_INDEX_TYPE_DEFAULT, AS_INDEX_NUMERIC, __val
+#define as_integer_equals(__val) AS_PREDICATE_EQUAL, AS_INDEX_TYPE_DEFAULT, AS_INDEX_NUMERIC, (int64_t)__val
 
 /**
  *	Macro for setting setting the INTEGER_RANGE predicate.
@@ -65,7 +65,7 @@ extern "C" {
  *	@relates as_query
  *	@ingroup query_object
  */
-#define as_integer_range(__min, __max) AS_PREDICATE_RANGE, AS_INDEX_TYPE_DEFAULT, AS_INDEX_NUMERIC, __min, __max
+#define as_integer_range(__min, __max) AS_PREDICATE_RANGE, AS_INDEX_TYPE_DEFAULT, AS_INDEX_NUMERIC, (int64_t)__min, (int64_t)__max
 
 /**
  *	Macro for setting setting the RANGE predicate.

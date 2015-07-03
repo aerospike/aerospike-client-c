@@ -88,6 +88,7 @@
 
 #include <aerospike/aerospike.h>
 #include <aerospike/as_error.h>
+#include <aerospike/as_job.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_query.h>
 #include <aerospike/as_status.h>
@@ -156,11 +157,100 @@ typedef bool (* aerospike_query_foreach_callback)(const as_val * val, void * uda
  *
  *	@ingroup query_operations
  */
-as_status aerospike_query_foreach(
+as_status
+aerospike_query_foreach(
 	aerospike * as, as_error * err, const as_policy_query * policy, 
 	const as_query * query, 
 	aerospike_query_foreach_callback callback, void * udata
 	);
+
+/**
+ *	Apply user defined function on records that match the query filter.
+ *	Records are not returned to the client.
+ *	This asynchronous server call will return before command is complete.
+ *	The user can optionally wait for command completion.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_query query;
+ *	as_query_init(&query, "test", "demo");
+ *	as_query_select(&query, "bin1");
+ *	as_query_where(&query, "bin2", as_integer_equals(100));
+ *	as_query_apply(&query, "my_lua.lua", "my_lua_function", NULL);
+ *	uint64_t query_id = 0;
+ *
+ *	if (aerospike_query_background(&as, &err, NULL, &query, &query_id) == AEROSPIKE_OK) {
+ *		aerospike_query_wait(as, &err, NULL, &query, query_id, 0);
+ *	}
+ *	else {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *
+ *	as_query_destroy(&query);
+ *	~~~~~~~~~~
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param query		The query to execute against the cluster.
+ *	@param query_id		The id for the query job, which can be used for querying the status of the query.
+ *
+ *	@return AEROSPIKE_OK on success, otherwise an error.
+ *
+ *	@ingroup query_operations
+ */
+as_status
+aerospike_query_background(
+	aerospike* as, as_error* err, const as_policy_write* policy,
+	const as_query* query, uint64_t* query_id
+	);
+
+/**
+ *	Wait for a background query to be completed by servers.
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The info policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param query		The query that was executed against the cluster.
+ *	@param query_id		The id for the query job, which can be used for querying the status of the query.
+ *	@param interval_ms	Polling interval in milliseconds. If zero, 1000 ms is used.
+ *
+ *	@return AEROSPIKE_OK on success, otherwise an error.
+ *
+ *	@ingroup query_operations
+ */
+static inline as_status
+aerospike_query_wait(
+   aerospike* as, as_error* err, const as_policy_info* policy,
+   const as_query* query, uint64_t query_id, uint32_t interval_ms
+   )
+{
+	const char* module = (query->where.size > 0)? "query" : "scan";
+	return aerospike_job_wait(as, err, policy, module, query_id, interval_ms);
+}
+
+/**
+ *	Check the progress of a background query running on the database.
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The info policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param query		The query that was executed against the cluster.
+ *	@param query_id		The id for the query job, which can be used for querying the status of the query.
+ *	@param info			Information about this background query, to be populated by this operation.
+ *
+ *	@return AEROSPIKE_OK on success, otherwise an error.
+ *
+ *	@ingroup query_operations
+ */
+static inline as_status
+aerospike_query_info(
+	aerospike* as, as_error* err, const as_policy_info* policy,
+	const as_query* query, uint64_t query_id, as_job_info* info
+	)
+{
+	const char* module = (query->where.size > 0)? "query" : "scan";
+	return aerospike_job_info(as, err, policy, module, query_id, false, info);
+}
 
 #ifdef __cplusplus
 } // end extern "C"

@@ -17,6 +17,7 @@
 #include <aerospike/aerospike_scan.h>
 #include <aerospike/aerospike_info.h>
 #include <aerospike/as_command.h>
+#include <aerospike/as_job.h>
 #include <aerospike/as_key.h>
 #include <aerospike/as_log.h>
 #include <aerospike/as_msgpack.h>
@@ -448,88 +449,6 @@ as_scan_generic(
 	return status;
 }
 
-// Wrapper for background scan info.
-typedef struct bg_scan_info_s {
-	char job_id[32];
-	int job_id_len;
-	as_scan_info * info;
-} bg_scan_info;
-
-const char JOB_STATUS_TAG[] = "job_status=";
-const int JOB_STATUS_TAG_LEN = sizeof(JOB_STATUS_TAG) - 1;
-
-const char JOB_PROGRESS_TAG[] = "job_progress(%)=";
-const int JOB_PROGRESS_TAG_LEN = sizeof(JOB_PROGRESS_TAG) - 1;
-
-const char SCANNED_RECORDS_TAG[] = "scanned_records=";
-const int SCANNED_RECORDS_TAG_LEN = sizeof(SCANNED_RECORDS_TAG) - 1;
-
-/**
- * The info callback made for each node when doing aerospike_scan_info().
- */
-static bool
-scan_info_cb(const as_error * err, const as_node * node, const char * req, char * res, void * udata)
-{
-	bg_scan_info* p_bsi = (bg_scan_info*)udata;
-
-	// For now, fast and dirty parsing for exactly what we're looking for...
-	// If we can't find the expected tag on this node, something's wrong, but
-	// try the others. (OK? Or should we ever return false and wipe the info?)
-
-	char* p_read = strstr(res, p_bsi->job_id);
-	if (! p_read) {
-		return true;
-	}
-	p_read += p_bsi->job_id_len;
-
-	// If any node is aborted, we're aborted overall, don't bother parse status.
-	if (p_bsi->info->status != AS_SCAN_STATUS_ABORTED) {
-		p_read = strstr(p_read, JOB_STATUS_TAG);
-		if (! p_read) {
-			return true;
-		}
-		p_read += JOB_STATUS_TAG_LEN;
-
-		if (strncmp(p_read, "ABORTED", 7) == 0) {
-			p_bsi->info->status = AS_SCAN_STATUS_ABORTED;
-		}
-		else if (strncmp(p_read, "IN PROGRESS", 11) == 0) {
-			// Otherwise if any node is in progress, we're in progress overall.
-			p_bsi->info->status = AS_SCAN_STATUS_INPROGRESS;
-		}
-		else if (p_bsi->info->status == AS_SCAN_STATUS_UNDEF &&
-				strncmp(p_read, "DONE", 4) == 0) {
-			// Only if we haven't modified the status - if a prior node was in
-			// progress, overall we're in progress.
-			p_bsi->info->status = AS_SCAN_STATUS_COMPLETED;
-		}
-	}
-
-	p_read = strstr(p_read, JOB_PROGRESS_TAG);
-	if (! p_read) {
-		return true;
-	}
-	p_read += JOB_PROGRESS_TAG_LEN;
-
-	// Be pessimistic - use the slowest node's progress.
-	uint32_t pct = atoi(p_read);
-	if (p_bsi->info->progress_pct == 0 || pct < p_bsi->info->progress_pct) {
-		p_bsi->info->progress_pct = pct;
-	}
-
-	p_read = strstr(p_read, SCANNED_RECORDS_TAG);
-	if (! p_read) {
-		return true;
-	}
-	p_read += SCANNED_RECORDS_TAG_LEN;
-
-	// Accumulate total.
-	p_bsi->info->records_scanned += atoi(p_read);
-
-	return true;
-}
-
-
 /******************************************************************************
  * FUNCTIONS
  *****************************************************************************/
@@ -594,17 +513,7 @@ as_status aerospike_scan_wait(
 	uint64_t scan_id, uint32_t interval_ms
 	)
 {
-	uint32_t interval_micros = (interval_ms <= 0)? 1000 * 1000 : interval_ms * 1000;
-	as_scan_info info;
-	as_status status;
-	
-	// Poll to see when scan is done.
-	do {
-		usleep(interval_micros);
-		status = aerospike_scan_info(as, err, policy, scan_id, &info);
-	} while (status == AEROSPIKE_OK && info.status == AS_SCAN_STATUS_INPROGRESS);
-	
-	return status;
+	return aerospike_job_wait(as, err, policy, "scan", scan_id, interval_ms);
 }
 
 /**
@@ -636,16 +545,27 @@ as_status aerospike_scan_info(
 	uint64_t scan_id, as_scan_info * info
 	)
 {
-	// Initialize the info...
-	info->status = AS_SCAN_STATUS_UNDEF;
-	info->progress_pct = 0;
-	info->records_scanned = 0;
-
-	bg_scan_info bsi;
-	bsi.job_id_len = sprintf(bsi.job_id, "job_id=%" PRIu64 ":", scan_id);
-	bsi.info = info;
-
-	return aerospike_info_foreach(as, err, policy, "scan-list\n", scan_info_cb, (void *) &bsi);
+	as_job_info job_info;
+	as_status status = aerospike_job_info(as, err, policy, "scan", scan_id, false, &job_info);
+	
+	if (status == AEROSPIKE_OK) {
+		switch (job_info.status) {
+			case AS_JOB_STATUS_COMPLETED:
+				info->status = AS_SCAN_STATUS_COMPLETED;
+				break;
+				
+			case AS_JOB_STATUS_INPROGRESS:
+				info->status = AS_SCAN_STATUS_INPROGRESS;
+				break;
+			
+			default:
+				info->status = AS_SCAN_STATUS_UNDEF;
+				break;
+		}
+		info->progress_pct = job_info.progress_pct;
+		info->records_scanned = job_info.records_read;
+	}
+	return status;
 }
 
 /**

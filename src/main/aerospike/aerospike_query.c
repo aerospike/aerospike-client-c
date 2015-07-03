@@ -38,6 +38,9 @@
  * TYPES
  *****************************************************************************/
 
+#define QUERY_FOREGROUND 1
+#define QUERY_BACKGROUND 2
+
 typedef struct as_query_user_callback_s {
 	aerospike_query_foreach_callback callback;
 	void* udata;
@@ -47,7 +50,7 @@ typedef struct as_query_task_s {
 	as_node* node;
 	
 	as_cluster* cluster;
-	const as_policy_query* policy;
+	const as_policy_write* write_policy;
 	const as_query* query;
 	aerospike_query_foreach_callback callback;
 	void* udata;
@@ -59,6 +62,9 @@ typedef struct as_query_task_s {
 	
 	uint8_t* cmd;
 	size_t cmd_size;
+	
+	uint32_t timeout;
+	bool deserialize;
 } as_query_task;
 
 typedef struct as_query_task_aggr_s {
@@ -202,7 +208,7 @@ as_query_parse_record(uint8_t** pp, as_msg* msg, as_query_task* task, as_error* 
 		
 		uint8_t* p = *pp;
 		p = as_command_parse_key(p, msg->n_fields, &rec.key);
-		p = as_command_parse_bins(&rec, p, msg->n_ops, task->policy->deserialize);
+		p = as_command_parse_bins(&rec, p, msg->n_ops, task->deserialize);
 		*pp = p;
 		
 		if (task->callback) {
@@ -303,7 +309,7 @@ as_query_command_execute(as_query_task* task)
 	
 	as_error err;
 	as_error_init(&err);
-	as_status status = as_command_execute(task->cluster, &err, &cn, task->cmd, task->cmd_size, task->policy->timeout, AS_POLICY_RETRY_NONE, as_query_parse, task);
+	as_status status = as_command_execute(task->cluster, &err, &cn, task->cmd, task->cmd_size, task->timeout, AS_POLICY_RETRY_NONE, as_query_parse, task);
 		
 	if (status) {
 		// Set main error only once.
@@ -379,7 +385,7 @@ as_query_write_range_integer(uint8_t* p, int64_t begin, int64_t end)
 }
 
 static as_status
-as_query_execute(as_query_task* task, const as_query * query, as_nodes* nodes, uint32_t n_nodes)
+as_query_execute(as_query_task* task, const as_query * query, as_nodes* nodes, uint32_t n_nodes, uint8_t query_type)
 {
 	// Build Command.  It's okay to share command across threads because query does not have retries.
 	// If retries were allowed, the timeout field in the command would change on retry which
@@ -491,7 +497,15 @@ as_query_execute(as_query_task* task, const as_query * query, as_nodes* nodes, u
 	// Write command buffer.
 	uint8_t* cmd = as_command_init(size);
 	uint16_t n_ops = (query->where.size == 0)? query->select.size : 0;
-	uint8_t* p = as_command_write_header_read(cmd, AS_MSG_INFO1_READ, AS_POLICY_CONSISTENCY_LEVEL_ONE, task->policy->timeout, n_fields, n_ops);
+	uint8_t* p;
+	
+	if (task->write_policy) {
+		const as_policy_write* wp = task->write_policy;
+		p = as_command_write_header(cmd, AS_MSG_INFO1_READ, AS_MSG_INFO2_WRITE, wp->commit_level, 0, wp->exists, AS_POLICY_GEN_IGNORE, 0, 0, task->timeout, n_fields, n_ops);
+	}
+	else {
+		p = as_command_write_header_read(cmd, AS_MSG_INFO1_READ, AS_POLICY_CONSISTENCY_LEVEL_ONE, task->timeout, n_fields, n_ops);
+	}
 	
 	// Write namespace.
 	if (query->ns) {
@@ -581,7 +595,7 @@ as_query_execute(as_query_task* task, const as_query * query, as_nodes* nodes, u
 	// Write aggregation function
 	if (query->apply.function[0]) {
 		p = as_command_write_field_header(p, AS_FIELD_UDF_OP, 1);
-		*p++ = 1;
+		*p++ = query_type;
 		p = as_command_write_field_string(p, AS_FIELD_UDF_PACKAGE_NAME, query->apply.module);
 		p = as_command_write_field_string(p, AS_FIELD_UDF_FUNCTION, query->apply.function);
 		p = as_command_write_field_buffer(p, AS_FIELD_UDF_ARGLIST, &argbuffer);
@@ -643,7 +657,9 @@ as_query_execute(as_query_task* task, const as_query * query, as_nodes* nodes, u
 	}
 	
 	// Make the callback that signals completion.
-	task->callback(NULL, task->udata);
+	if (task->callback) {
+		task->callback(NULL, task->udata);
+	}
 	
 	// Release temporary queue.
 	cf_queue_destroy(task->complete_q);
@@ -757,7 +773,7 @@ as_status aerospike_query_foreach(
 	
 	if (n_nodes == 0) {
 		as_nodes_release(nodes);
-		return as_error_set_message(err, AEROSPIKE_ERR_SERVER, "Query command failed because cluster is empty.");
+		return as_error_set_message(err, AEROSPIKE_ERR_SERVER, "Command failed because cluster is empty.");
 	}
 
 	// Reserve each node in cluster.
@@ -769,13 +785,23 @@ as_status aerospike_query_foreach(
 	uint32_t error_mutex = 0;
 	
 	// Initialize task.
-	as_query_task task;
-	task.cluster = cluster;
-	task.policy = policy;
-	task.query = query;
-	task.err = err;
-	task.error_mutex = &error_mutex;
-	task.task_id = cf_get_rand64() / 2;
+	as_query_task task = {
+		.node = 0,
+		.cluster = cluster,
+		.write_policy = 0,
+		.query = query,
+		.callback = 0,
+		.udata = 0,
+		.error_mutex = &error_mutex,
+		.err = err,
+		.input_queue = 0,
+		.complete_q = 0,
+		.task_id = cf_get_rand64() / 2,
+		.cmd = 0,
+		.cmd_size = 0,
+		.timeout = policy->timeout,
+		.deserialize = policy->deserialize
+	};
 	
 	if (query->apply.function[0]) {
 		// Query with aggregation.
@@ -804,7 +830,7 @@ as_status aerospike_query_foreach(
 		int rc = as_thread_pool_queue_task(&cluster->thread_pool, as_query_aggregate, &task_aggr);
 		
 		if (rc == 0) {
-			status = as_query_execute(&task, query, nodes, n_nodes);
+			status = as_query_execute(&task, query, nodes, n_nodes, QUERY_FOREGROUND);
 			
 			// Wait for aggregation thread to finish.
 			as_status complete_status = AEROSPIKE_OK;
@@ -832,7 +858,7 @@ as_status aerospike_query_foreach(
 		task.callback = callback;
 		task.udata = udata;
 		task.input_queue = 0;
-		status = as_query_execute(&task, query, nodes, n_nodes);
+		status = as_query_execute(&task, query, nodes, n_nodes, QUERY_FOREGROUND);
 	}
 	
 	// Release each node in cluster.
@@ -840,6 +866,80 @@ as_status aerospike_query_foreach(
 		as_node_release(nodes->array[i]);
 	}
 
+	// Release nodes array.
+	as_nodes_release(nodes);
+	return status;
+}
+
+as_status
+aerospike_query_background(
+	aerospike* as, as_error* err, const as_policy_write* policy,
+	const as_query* query, uint64_t* query_id)
+{
+	as_error_reset(err);
+	
+	if (! policy) {
+		policy = &as->config.policies.write;
+	}
+	
+	if (! query->apply.function[0]) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Function is required.");
+	}
+
+	as_cluster* cluster = as->cluster;
+	as_nodes* nodes = as_nodes_reserve(cluster);
+	uint32_t n_nodes = nodes->size;
+	
+	if (n_nodes == 0) {
+		as_nodes_release(nodes);
+		return as_error_set_message(err, AEROSPIKE_ERR_SERVER, "Command failed because cluster is empty.");
+	}
+	
+	// Reserve each node in cluster.
+	for (uint32_t i = 0; i < n_nodes; i++) {
+		as_node_reserve(nodes->array[i]);
+	}
+	
+	// Set task id
+	uint64_t task_id;
+	if (query_id) {
+		if (*query_id == 0) {
+			*query_id = cf_get_rand64() / 2;
+		}
+		task_id = *query_id;
+	}
+	else {
+		task_id = cf_get_rand64() / 2;
+	}
+
+	uint32_t error_mutex = 0;
+
+	// Initialize task.
+	as_query_task task = {
+		.node = 0,
+		.cluster = cluster,
+		.write_policy = policy,
+		.query = query,
+		.callback = 0,
+		.udata = 0,
+		.error_mutex = &error_mutex,
+		.err = err,
+		.input_queue = 0,
+		.complete_q = 0,
+		.task_id = task_id,
+		.cmd = 0,
+		.cmd_size = 0,
+		.timeout = policy->timeout,
+		.deserialize = false
+	};
+	
+	as_status status = as_query_execute(&task, query, nodes, n_nodes, QUERY_BACKGROUND);
+
+	// Release each node in cluster.
+	for (uint32_t i = 0; i < n_nodes; i++) {
+		as_node_release(nodes->array[i]);
+	}
+	
 	// Release nodes array.
 	as_nodes_release(nodes);
 	return status;

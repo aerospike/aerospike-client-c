@@ -134,6 +134,7 @@ AEROSPIKE += as_config.o
 AEROSPIKE += as_cluster.o
 AEROSPIKE += as_error.o
 AEROSPIKE += as_info.o
+AEROSPIKE += as_job.o
 AEROSPIKE += as_key.o
 AEROSPIKE += as_lookup.o
 AEROSPIKE += as_node.o

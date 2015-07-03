@@ -538,6 +538,7 @@ TEST( key_basics_read_raw_list , "read raw list" ) {
     assert_int_eq(as_arraylist_get_int64(list, 1), 3);
     assert_int_eq(as_arraylist_get_int64(list, 2), -86);
 	
+    as_val_destroy(value);
 	as_record_destroy(rec);
 }
 

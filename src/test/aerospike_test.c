@@ -203,6 +203,7 @@ PLAN( aerospike_test ) {
 
     // aerospike_query module
     plan_add( query_foreach );
+    plan_add( query_background );
 
     // aerospike_scan module
     plan_add( scan_basics );

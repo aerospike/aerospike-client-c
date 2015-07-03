@@ -10,6 +10,7 @@
 		BF219F0E1A62255A001E321C /* as_proto.c in Sources */ = {isa = PBXBuildFile; fileRef = BF219F0D1A62255A001E321C /* as_proto.c */; };
 		BF219F101A622C23001E321C /* as_socket.c in Sources */ = {isa = PBXBuildFile; fileRef = BF219F0F1A622C23001E321C /* as_socket.c */; };
 		BF26A38919C2621000AE763C /* as_shm_cluster.c in Sources */ = {isa = PBXBuildFile; fileRef = BF26A38819C2621000AE763C /* as_shm_cluster.c */; };
+		BF26C4671B45AE8F00E6929D /* as_job.c in Sources */ = {isa = PBXBuildFile; fileRef = BF26C4661B45AE8F00E6929D /* as_job.c */; };
 		BF2AA7CF18BEBFA500E54AF3 /* _bin.c in Sources */ = {isa = PBXBuildFile; fileRef = BF2AA7A918BEBFA400E54AF3 /* _bin.c */; };
 		BF2AA7D018BEBFA500E54AF3 /* _bin.h in Headers */ = {isa = PBXBuildFile; fileRef = BF2AA7AA18BEBFA400E54AF3 /* _bin.h */; };
 		BF2AA7D118BEBFA500E54AF3 /* _ldt.c in Sources */ = {isa = PBXBuildFile; fileRef = BF2AA7AB18BEBFA400E54AF3 /* _ldt.c */; };
@@ -115,6 +116,7 @@
 		BF219F0D1A62255A001E321C /* as_proto.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_proto.c; path = ../src/main/aerospike/as_proto.c; sourceTree = "<group>"; };
 		BF219F0F1A622C23001E321C /* as_socket.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_socket.c; path = ../src/main/aerospike/as_socket.c; sourceTree = "<group>"; };
 		BF26A38819C2621000AE763C /* as_shm_cluster.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; lineEnding = 0; name = as_shm_cluster.c; path = ../src/main/aerospike/as_shm_cluster.c; sourceTree = "<group>"; };
+		BF26C4661B45AE8F00E6929D /* as_job.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_job.c; path = ../src/main/aerospike/as_job.c; sourceTree = "<group>"; };
 		BF2AA7A918BEBFA400E54AF3 /* _bin.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = _bin.c; path = ../src/main/aerospike/_bin.c; sourceTree = "<group>"; };
 		BF2AA7AA18BEBFA400E54AF3 /* _bin.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = _bin.h; path = ../src/main/aerospike/_bin.h; sourceTree = "<group>"; };
 		BF2AA7AB18BEBFA400E54AF3 /* _ldt.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = _ldt.c; path = ../src/main/aerospike/_ldt.c; sourceTree = "<group>"; };
@@ -229,6 +231,7 @@
 		BF07F62E18B4252500CE1850 = {
 			isa = PBXGroup;
 			children = (
+				BF26C4661B45AE8F00E6929D /* as_job.c */,
 				BF93AA051AE9E6EB003ECE3B /* as_thread_pool.c */,
 				BFCF26BE1AC1FBBF0062B75C /* as_string_builder.c */,
 				BF219F0F1A622C23001E321C /* as_socket.c */,
@@ -472,6 +475,7 @@
 				BFBA105818B7D8B300A64E68 /* as_integer.c in Sources */,
 				BFBB3C8F192D729A00251B15 /* as_node.c in Sources */,
 				BFBD205418BC3436009ED931 /* mod_lua_list.c in Sources */,
+				BF26C4671B45AE8F00E6929D /* as_job.c in Sources */,
 				BFBD205518BC3436009ED931 /* mod_lua_map.c in Sources */,
 				BF2AA7E518BEBFA500E54AF3 /* aerospike.c in Sources */,
 				BF2AA7E318BEBFA500E54AF3 /* aerospike_scan.c in Sources */,

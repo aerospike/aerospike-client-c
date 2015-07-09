@@ -339,6 +339,23 @@ bool as_record_set(as_record * rec, const as_bin_name name, as_bin_value * value
 bool as_record_set_int64(as_record * rec, const as_bin_name name, int64_t value);
 
 /**
+ *	Set specified bin's value to a double.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_record_set_double(rec, "bin", 123.456);
+ *	~~~~~~~~~~
+ *
+ *	@param rec		The record containing the bin.
+ *	@param name		The name of the bin.
+ *	@param value	The value of the bin.
+ *
+ *	@return true on success, false on failure.
+ *
+ *	@relates as_record
+ */
+bool as_record_set_double(as_record * rec, const as_bin_name name, double value);
+
+/**
  *	Set specified bin's value to an NULL terminated string.
  *
  *	~~~~~~~~~~{.c}
@@ -463,6 +480,23 @@ static inline bool as_record_set_raw(as_record * rec, const as_bin_name name, co
  *	@relates as_record
  */
 bool as_record_set_integer(as_record * rec, const as_bin_name name, as_integer * value);
+
+/**
+ *	Set specified bin's value to an as_double.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_record_set_as_double(rec, "bin", as_double_new(123.456));
+ *	~~~~~~~~~~
+ *
+ *	@param rec		The record containing the bin.
+ *	@param name		The name of the bin.
+ *	@param value	The value of the bin.
+ *
+ *	@return true on success, false on failure.
+ *
+ *	@relates as_record
+ */
+bool as_record_set_as_double(as_record * rec, const as_bin_name name, as_double * value);
 
 /**
  *	Set specified bin's value to an as_string.
@@ -594,6 +628,23 @@ as_bin_value * as_record_get(const as_record * rec, const as_bin_name name);
 int64_t as_record_get_int64(const as_record * rec, const as_bin_name name, int64_t fallback);
 
 /**
+ *	Get specified bin's value as a double.
+ *
+ *	~~~~~~~~~~{.c}
+ *	double value = as_record_get_double(rec, "bin", -1.0);
+ *	~~~~~~~~~~
+ *
+ *	@param rec		The record containing the bin.
+ *	@param name		The name of the bin.
+ *	@param fallback	The default value to use, if the bin doesn't exist or is not an integer.
+ *
+ *	@return the value if it exists, otherwise 0.
+ *
+ *	@relates as_record
+ */
+double as_record_get_double(const as_record * rec, const as_bin_name name, double fallback);
+
+/**
  *	Get specified bin's value as an NULL terminated string.
  *
  *	~~~~~~~~~~{.c}
@@ -624,6 +675,22 @@ char * as_record_get_str(const as_record * rec, const as_bin_name name);
  *	@relates as_record
  */
 as_integer * as_record_get_integer(const as_record * rec, const as_bin_name name);
+
+/**
+ *	Get specified bin's value as an as_double.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_double * value = as_record_get_as_double(rec, "bin");
+ *	~~~~~~~~~~
+ *
+ *	@param rec		The record containing the bin.
+ *	@param name		The name of the bin.
+ *
+ *	@return the value if it exists, otherwise NULL.
+ *
+ *	@relates as_record
+ */
+as_double * as_record_get_as_double(const as_record * rec, const as_bin_name name);
 
 /**
  *	Get specified bin's value as an as_string.

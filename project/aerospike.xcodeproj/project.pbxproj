@@ -9,6 +9,8 @@
 /* Begin PBXBuildFile section */
 		BF219F0E1A62255A001E321C /* as_proto.c in Sources */ = {isa = PBXBuildFile; fileRef = BF219F0D1A62255A001E321C /* as_proto.c */; };
 		BF219F101A622C23001E321C /* as_socket.c in Sources */ = {isa = PBXBuildFile; fileRef = BF219F0F1A622C23001E321C /* as_socket.c */; };
+		BF2337A11B4DC8BD00670C64 /* as_buffer_pool.c in Sources */ = {isa = PBXBuildFile; fileRef = BF23379F1B4DC8BD00670C64 /* as_buffer_pool.c */; };
+		BF2337A21B4DC8BD00670C64 /* as_double.c in Sources */ = {isa = PBXBuildFile; fileRef = BF2337A01B4DC8BD00670C64 /* as_double.c */; };
 		BF26A38919C2621000AE763C /* as_shm_cluster.c in Sources */ = {isa = PBXBuildFile; fileRef = BF26A38819C2621000AE763C /* as_shm_cluster.c */; };
 		BF26C4671B45AE8F00E6929D /* as_job.c in Sources */ = {isa = PBXBuildFile; fileRef = BF26C4661B45AE8F00E6929D /* as_job.c */; };
 		BF2AA7CF18BEBFA500E54AF3 /* _bin.c in Sources */ = {isa = PBXBuildFile; fileRef = BF2AA7A918BEBFA400E54AF3 /* _bin.c */; };
@@ -115,6 +117,8 @@
 		BF07F63718B4252500CE1850 /* libaerospike.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libaerospike.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		BF219F0D1A62255A001E321C /* as_proto.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_proto.c; path = ../src/main/aerospike/as_proto.c; sourceTree = "<group>"; };
 		BF219F0F1A622C23001E321C /* as_socket.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_socket.c; path = ../src/main/aerospike/as_socket.c; sourceTree = "<group>"; };
+		BF23379F1B4DC8BD00670C64 /* as_buffer_pool.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_buffer_pool.c; path = ../modules/common/src/main/aerospike/as_buffer_pool.c; sourceTree = "<group>"; };
+		BF2337A01B4DC8BD00670C64 /* as_double.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_double.c; path = ../modules/common/src/main/aerospike/as_double.c; sourceTree = "<group>"; };
 		BF26A38819C2621000AE763C /* as_shm_cluster.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; lineEnding = 0; name = as_shm_cluster.c; path = ../src/main/aerospike/as_shm_cluster.c; sourceTree = "<group>"; };
 		BF26C4661B45AE8F00E6929D /* as_job.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_job.c; path = ../src/main/aerospike/as_job.c; sourceTree = "<group>"; };
 		BF2AA7A918BEBFA400E54AF3 /* _bin.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = _bin.c; path = ../src/main/aerospike/_bin.c; sourceTree = "<group>"; };
@@ -231,6 +235,8 @@
 		BF07F62E18B4252500CE1850 = {
 			isa = PBXGroup;
 			children = (
+				BF23379F1B4DC8BD00670C64 /* as_buffer_pool.c */,
+				BF2337A01B4DC8BD00670C64 /* as_double.c */,
 				BF26C4661B45AE8F00E6929D /* as_job.c */,
 				BF93AA051AE9E6EB003ECE3B /* as_thread_pool.c */,
 				BFCF26BE1AC1FBBF0062B75C /* as_string_builder.c */,
@@ -412,6 +418,7 @@
 				BFBA916B1914344B00AADA9A /* as_partition.c in Sources */,
 				BFBA104F18B7D8B300A64E68 /* as_arraylist_iterator.c in Sources */,
 				BFBB6481190595E900682A6E /* as_timer.c in Sources */,
+				BF2337A11B4DC8BD00670C64 /* as_buffer_pool.c in Sources */,
 				BFBD205118BC3436009ED931 /* mod_lua_aerospike.c in Sources */,
 				BF843C5918D3E64900A06CFB /* cf_alloc.c in Sources */,
 				BF2AA7F118BEBFA500E54AF3 /* as_record_iterator.c in Sources */,
@@ -438,6 +445,7 @@
 				BFBA106E18B7DFA100A64E68 /* as_msgpack_serializer.c in Sources */,
 				BFBA105D18B7D8B300A64E68 /* as_memtracker.c in Sources */,
 				BFBA04A91947AA8400F9924E /* cf_random.c in Sources */,
+				BF2337A21B4DC8BD00670C64 /* as_double.c in Sources */,
 				BF2AA7DC18BEBFA500E54AF3 /* aerospike_info.c in Sources */,
 				BFBD205018BC3436009ED931 /* internal.c in Sources */,
 				BF2AA7E018BEBFA500E54AF3 /* aerospike_lset.c in Sources */,

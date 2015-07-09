@@ -16,6 +16,7 @@
  */
 #include <aerospike/as_bin.h>
 #include <aerospike/as_bytes.h>
+#include <aerospike/as_double.h>
 #include <aerospike/as_integer.h>
 #include <aerospike/as_key.h>
 #include <aerospike/as_list.h>
@@ -242,6 +243,14 @@ bool as_record_set_int64(as_record * rec, const as_bin_name name, int64_t value)
 	return true;
 }
 
+bool as_record_set_double(as_record * rec, const as_bin_name name, double value)
+{
+	as_bin * bin = as_record_bin_forupdate(rec, name);
+	if ( !bin ) return false;
+	as_bin_init_double(bin, name, value);
+	return true;
+}
+
 /**
  *	Set specified bin's value to an NULL terminated string.
  *	as_record_set_str(rec, "bin", "abc");
@@ -306,6 +315,14 @@ bool as_record_set_raw_typep(as_record * rec, const as_bin_name name, const uint
  *	@return true on success, false on failure.
  */
 bool as_record_set_integer(as_record * rec, const as_bin_name name, as_integer * value) 
+{
+	as_bin * bin = as_record_bin_forupdate(rec, name);
+	if ( !bin ) return false;
+	as_bin_init(bin, name, (as_bin_value *) value);
+	return true;
+}
+
+bool as_record_set_as_double(as_record * rec, const as_bin_name name, as_double * value)
 {
 	as_bin * bin = as_record_bin_forupdate(rec, name);
 	if ( !bin ) return false;
@@ -436,6 +453,12 @@ int64_t as_record_get_int64(const as_record * rec, const as_bin_name name, int64
 	return val ? as_integer_toint(val) : fallback;
 }
 
+double as_record_get_double(const as_record * rec, const as_bin_name name, double fallback)
+{
+	as_double * val = as_double_fromval((as_val *) as_record_get(rec, name));
+	return val ? val->value : fallback;
+}
+
 /**
  *	Get specified bin's value as an NULL terminated string.
  *	char * value = as_record_get_str(rec, "bin");
@@ -459,6 +482,11 @@ char * as_record_get_str(const as_record * rec, const as_bin_name name)
 as_integer * as_record_get_integer(const as_record * rec, const as_bin_name name)
 {
 	return as_integer_fromval((as_val *) as_record_get(rec, name));
+}
+
+as_double * as_record_get_as_double(const as_record * rec, const as_bin_name name)
+{
+	return as_double_fromval((as_val *) as_record_get(rec, name));
 }
 
 /**

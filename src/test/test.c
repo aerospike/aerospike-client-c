@@ -364,6 +364,11 @@ void atf_assert_int_ne(atf_test_result * result, const char * actual_exp, int64_
     result->success = false;
 }
 
+void atf_assert_double_eq(atf_test_result * result, const char * actual_exp, double actual, double expected, const char * file, int line) {
+    snprintf(result->message, LOG_MESSAGE_MAX, "assertion failed: %s == %f when %f was expected. [at %s:%d]", actual_exp, actual, expected, file, line);
+    result->success = false;
+}
+
 void atf_assert_string_eq(atf_test_result * result, const char * actual_exp, const char * actual, const char * expected, const char * file, int line) {
     snprintf(result->message, LOG_MESSAGE_MAX, "assertion failed: %s == \"%s\", when \"%s\" was expected. [at %s:%d]", actual_exp, actual, expected, file, line);
     result->success = false;

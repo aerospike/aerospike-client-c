@@ -252,6 +252,14 @@ as_key_set_digest(as_error* err, as_key* key)
 			*(uint64_t*)&buf[1] = cf_swap_to_be64(v->value);
 			break;
 		}
+		case AS_DOUBLE: {
+			as_double* v = as_double_fromval(val);
+			size = 9;
+			buf = alloca(size);
+			buf[0] = AS_BYTES_DOUBLE;
+			*(double*)&buf[1] = cf_swap_to_big_float64(v->value);
+			break;
+		}
 		case AS_STRING: {
 			as_string* v = as_string_fromval(val);
 			size_t len = as_string_len(v);

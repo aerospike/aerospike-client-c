@@ -207,6 +207,7 @@ as_batch_read_destroy(as_batch_read_records* records);
 
 /**
  *	Do the connected servers support the new batch index protocol.
+ *	The cluster must already be connected (aerospike_connect()) prior to making this call.
  */
 bool
 aerospike_has_batch_index(aerospike* as);

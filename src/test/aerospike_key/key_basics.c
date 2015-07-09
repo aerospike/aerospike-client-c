@@ -56,7 +56,7 @@ static bool key_basics_print_bins(const char * name, const as_val * value, void 
  * TEST CASES
  *****************************************************************************/
 
-TEST( key_basics_put , "put: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 'def', e: [1,2,3], f: {x: 7, y: 8, z: 9}}" ) {
+TEST( key_basics_put , "put: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 'def', e: [1,2,3], f: {x: 7, y: 8, z: 9} g: 67.43}" ) {
 
 	as_error err;
 	as_error_reset(&err);
@@ -74,13 +74,14 @@ TEST( key_basics_put , "put: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 'de
 	as_stringmap_set_int64((as_map *) &map, "z", 9);
 
 	as_record r, * rec = &r;
-	as_record_init(rec, 6);
+	as_record_init(rec, 7);
 	as_record_set_int64(rec, "a", 123);
 	as_record_set_str(rec, "b", "abc");
 	as_record_set_integer(rec, "c", as_integer_new(456));
 	as_record_set_string(rec, "d", as_string_new("def",false));
 	as_record_set_list(rec, "e", (as_list *) &list);
 	as_record_set_map(rec, "f", (as_map *) &map);
+	as_record_set_double(rec, "g", 67.43);
 
 	as_key key;
 	as_key_init(&key, "test", "test", "foo");
@@ -152,7 +153,7 @@ TEST( key_basics_get , "get: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 'de
     as_record_foreach(rec, key_basics_print_bins, NULL);
 	
     assert_int_eq( rc, AEROSPIKE_OK );
-    assert_int_eq( as_record_numbins(rec), 6 );
+    assert_int_eq( as_record_numbins(rec), 7 );
     
     assert_int_eq( as_record_get_int64(rec, "a", 0), 123 );
     assert_not_null( as_record_get_integer(rec, "a") );
@@ -177,6 +178,9 @@ TEST( key_basics_get , "get: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 'de
     as_map * map = as_record_get_map(rec, "f");
     assert_not_null( map );
     assert_int_eq( as_map_size(map), 3 );
+
+    assert_double_eq( as_record_get_double(rec, "g", 0), 67.43);
+    assert_not_null( as_record_get_as_double(rec, "g") );
 
     as_record_destroy(rec);
 }
@@ -418,7 +422,7 @@ TEST( key_basics_get2 , "get: (test,test,foo) = {a: 444, b: 'abcdef', d: 'abcdef
     as_record_foreach(rec, key_basics_print_bins, NULL);
 	
     assert_int_eq( rc, AEROSPIKE_OK );
-    assert_int_eq( as_record_numbins(rec), 6 );
+    assert_int_eq( as_record_numbins(rec), 7 );
     
     assert_int_eq( as_record_get_int64(rec, "a", 0), 444 );
     assert_not_null( as_record_get_integer(rec, "a") );
@@ -443,6 +447,9 @@ TEST( key_basics_get2 , "get: (test,test,foo) = {a: 444, b: 'abcdef', d: 'abcdef
     as_map * map = as_record_get_map(rec, "f");
     assert_not_null( map );
     assert_int_eq( as_map_size(map), 3 );
+
+    assert_double_eq( as_record_get_double(rec, "g", 0), 67.43);
+    assert_not_null( as_record_get_as_double(rec, "g") );
 
     as_record_destroy(rec);
 }

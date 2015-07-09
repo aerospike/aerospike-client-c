@@ -89,6 +89,13 @@ as_bin * as_bin_init_int64(as_bin * bin, const as_bin_name name, int64_t value)
 	return as_bin_defaults(bin, name, &bin->value);
 }
 
+as_bin * as_bin_init_double(as_bin * bin, const as_bin_name name, double value)
+{
+	if ( !bin ) return bin;
+	as_double_init((as_double *) &bin->value, value);
+	return as_bin_defaults(bin, name, &bin->value);
+}
+
 /**
  *	Initialize a stack allocated `as_bin` to a NULL-terminated string value.
  *

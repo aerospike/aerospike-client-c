@@ -205,6 +205,8 @@ void atf_assert_not_null(atf_test_result * test_result, const char * exp, const 
 void atf_assert_int_eq(atf_test_result * result, const char * actual_exp, int64_t actual, int64_t expected, const char * file, int line);
 void atf_assert_int_ne(atf_test_result * result, const char * actual_exp, int64_t actual, int64_t expected, const char * file, int line);
 
+void atf_assert_double_eq(atf_test_result * result, const char * actual_exp, double actual, double expected, const char * file, int line);
+
 void atf_assert_string_eq(atf_test_result * result, const char * actual_exp, const char * actual, const char * expected, const char * file, int line);
 
 void atf_assert_log(atf_test_result * result, const char * exp, const char * file, int line, const char * fmt, ...);
@@ -231,6 +233,10 @@ void atf_assert_log(atf_test_result * result, const char * exp, const char * fil
 
 #define assert_int_ne(ACTUAL, EXPECTED) \
     if ( (ACTUAL) == (EXPECTED) ) return atf_assert_int_ne(__result__, #ACTUAL, ACTUAL, EXPECTED, __FILE__, __LINE__);
+
+
+#define assert_double_eq(ACTUAL, EXPECTED) \
+	if ( (ACTUAL) != (EXPECTED) ) return atf_assert_double_eq(__result__, #ACTUAL, ACTUAL, EXPECTED, __FILE__, __LINE__);
 
 
 #define assert_string_eq(ACTUAL, EXPECTED) \

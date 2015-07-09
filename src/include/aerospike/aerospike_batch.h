@@ -206,6 +206,12 @@ void
 as_batch_read_destroy(as_batch_read_records* records);
 
 /**
+ *	Do the connected servers support the new batch index protocol.
+ */
+bool
+aerospike_has_batch_index(aerospike* as);
+
+/**
  *	Read multiple records for specified batch keys in one batch call.
  *	This method allows different namespaces/bins to be requested for each key in the batch.
  *	The returned records are located in the same batch array.

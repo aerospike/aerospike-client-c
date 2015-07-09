@@ -769,6 +769,21 @@ as_batch_execute(
  *	PUBLIC FUNCTIONS
  *****************************************************************************/
 
+bool
+aerospike_has_batch_index(aerospike* as)
+{
+	as_nodes* nodes = as_nodes_reserve(as->cluster);
+	
+	for (uint32_t i = 0; i < nodes->size; i++) {
+		if (! nodes->array[i]->has_batch_index) {
+			as_nodes_release(nodes);
+			return false;
+		}
+	}
+	as_nodes_release(nodes);
+	return true;
+}
+
 /**
  *	Read multiple records for specified batch keys in one batch call.
  *	This method allows different namespaces/bins to be requested for each key in the batch.

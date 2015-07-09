@@ -89,6 +89,23 @@ as_bin * as_bin_init(as_bin * bin, const as_bin_name name, as_bin_value * value)
 as_bin * as_bin_init_int64(as_bin * bin, const as_bin_name name, int64_t value);
 
 /**
+ *	Initialize a stack allocated `as_bin` to a double value.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_bin bin;
+ *	as_bin_init_double(&key, "abc", 123.456);
+ *	~~~~~~~~~~
+ *
+ *	Use `as_bin_destroy()` to release resources allocated to `as_bin`.
+ *
+ *	@param name 	The name of the bin.
+ *	@param value	The value of the value.
+ *
+ *	@return The initialized `as_bin` on success. Otherwise NULL.
+ */
+as_bin * as_bin_init_double(as_bin * bin, const as_bin_name name, double value);
+
+/**
  *	Initialize a stack allocated `as_bin` to a NULL-terminated string value.
  *
  *	~~~~~~~~~~{.c}

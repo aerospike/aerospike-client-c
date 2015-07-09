@@ -199,6 +199,14 @@ as_command_write_user_key(uint8_t* begin, const as_key* key)
 			len = 8;
 			break;
 		}
+		case AS_DOUBLE: {
+			as_double* v = as_double_fromval(val);
+			*p++ = AS_BYTES_DOUBLE;
+			*(double*)p = cf_swap_to_big_float64(v->value);
+			p += 8;
+			len = 8;
+			break;
+		}
 		case AS_STRING: {
 			as_string* v = as_string_fromval(val);
 			*p++ = AS_BYTES_STRING;
@@ -265,6 +273,14 @@ as_command_write_bin(uint8_t* begin, uint8_t operation_type, const as_bin* bin, 
 			p += 8;
 			val_len = 8;
 			val_type = AS_BYTES_INTEGER;
+			break;
+		}
+		case AS_DOUBLE: {
+			as_double* v = as_double_fromval(val);
+			*(double*)p = cf_swap_to_big_float64(v->value);
+			p += 8;
+			val_len = 8;
+			val_type = AS_BYTES_DOUBLE;
 			break;
 		}
 		case AS_STRING: {
@@ -589,6 +605,12 @@ as_command_parse_key(uint8_t* p, uint32_t n_fields, as_key* key)
 						}
 						break;
 					}
+					case AS_BYTES_DOUBLE: {
+						double value = cf_swap_from_big_float64(*(double*)p);
+						as_double_init((as_double*)&key->value, value);
+						key->valuep = &key->value;
+						break;
+					}
 					case AS_BYTES_STRING: {
 						char* value = malloc(len+1);
 						memcpy(value, p, len);
@@ -629,6 +651,11 @@ as_command_parse_value(uint8_t* p, uint8_t type, uint32_t value_size, as_val** v
 			int64_t v = 0;
 			as_command_bytes_to_int(p, value_size, &v);
 			*value = (as_val*)as_integer_new(v);
+			break;
+		}
+		case AS_BYTES_DOUBLE: {
+			double v = cf_swap_from_big_float64(*(double*)p);
+			*value = (as_val*)as_double_new(v);
 			break;
 		}
 		case AS_BYTES_STRING: {
@@ -797,6 +824,12 @@ as_command_parse_bins(as_record* rec, uint8_t* p, uint32_t n_bins, bool deserial
 					as_integer_init((as_integer*)&bin->value, value);
 					bin->valuep = &bin->value;
 				}
+				break;
+			}
+			case AS_BYTES_DOUBLE: {
+				double value = cf_swap_from_big_float64(*(double*)p);
+				as_double_init((as_double*)&bin->value, value);
+				bin->valuep = &bin->value;
 				break;
 			}
 			case AS_BYTES_STRING: {

@@ -774,6 +774,11 @@ aerospike_has_batch_index(aerospike* as)
 {
 	as_nodes* nodes = as_nodes_reserve(as->cluster);
 	
+	if (nodes->size == 0) {
+		as_nodes_release(nodes);
+		return false;
+	}
+	
 	for (uint32_t i = 0; i < nodes->size; i++) {
 		if (! nodes->array[i]->has_batch_index) {
 			as_nodes_release(nodes);

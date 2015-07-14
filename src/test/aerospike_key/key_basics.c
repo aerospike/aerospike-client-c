@@ -39,6 +39,8 @@
 
 extern aerospike * as;
 
+static bool server_has_double = false;
+
 /******************************************************************************
  * STATIC FUNCTIONS
  *****************************************************************************/
@@ -81,7 +83,13 @@ TEST( key_basics_put , "put: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 'de
 	as_record_set_string(rec, "d", as_string_new("def",false));
 	as_record_set_list(rec, "e", (as_list *) &list);
 	as_record_set_map(rec, "f", (as_map *) &map);
-	as_record_set_double(rec, "g", 67.43);
+	
+	if (server_has_double) {
+		as_record_set_double(rec, "g", 67.43);
+	}
+	else {
+		as_record_set_int64(rec, "g", 67);
+	}
 
 	as_key key;
 	as_key_init(&key, "test", "test", "foo");
@@ -179,9 +187,14 @@ TEST( key_basics_get , "get: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 'de
     assert_not_null( map );
     assert_int_eq( as_map_size(map), 3 );
 
-    assert_double_eq( as_record_get_double(rec, "g", 0), 67.43);
-    assert_not_null( as_record_get_as_double(rec, "g") );
-
+	if (server_has_double) {
+		assert_double_eq( as_record_get_double(rec, "g", 0), 67.43);
+		assert_not_null( as_record_get_as_double(rec, "g") );
+	}
+	else {
+		assert_int_eq( as_record_get_int64(rec, "g", 0), 67 );
+		assert_not_null( as_record_get_integer(rec, "g") );
+	}
     as_record_destroy(rec);
 }
 
@@ -448,8 +461,14 @@ TEST( key_basics_get2 , "get: (test,test,foo) = {a: 444, b: 'abcdef', d: 'abcdef
     assert_not_null( map );
     assert_int_eq( as_map_size(map), 3 );
 
-    assert_double_eq( as_record_get_double(rec, "g", 0), 67.43);
-    assert_not_null( as_record_get_as_double(rec, "g") );
+	if (server_has_double) {
+		assert_double_eq( as_record_get_double(rec, "g", 0), 67.43);
+		assert_not_null( as_record_get_as_double(rec, "g") );
+	}
+	else {
+		assert_int_eq( as_record_get_int64(rec, "g", 0), 67 );
+		assert_not_null( as_record_get_integer(rec, "g") );
+	}
 
     as_record_destroy(rec);
 }
@@ -554,6 +573,8 @@ TEST( key_basics_read_raw_list , "read raw list" ) {
  *****************************************************************************/
 
 SUITE( key_basics, "aerospike_key basic tests" ) {
+	server_has_double = aerospike_has_double(as);
+	
 	// Remove at beginning to clear out record.
     suite_add( key_basics_put_key );
     suite_add( key_basics_remove );

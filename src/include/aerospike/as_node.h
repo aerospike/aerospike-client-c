@@ -156,6 +156,13 @@ typedef struct as_node_s {
 	 *	Does node support replicas-all info protocol?
 	 */
 	uint8_t has_replicas_all;
+	
+	/**
+	 *	@private
+	 *	Does node support floating point type?
+	 */
+	uint8_t has_double;
+	
 } as_node;
 
 /**
@@ -180,6 +187,13 @@ typedef struct as_node_info_s {
 	 *	Does node support replicas-all info protocol?
 	 */
 	uint8_t has_replicas_all;
+	
+	/**
+	 *	@private
+	 *	Does node support floating point type?
+	 */
+	uint8_t has_double;
+	
 } as_node_info;
 
 /**

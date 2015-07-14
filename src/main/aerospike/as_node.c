@@ -55,6 +55,7 @@ as_node_create(as_cluster* cluster, struct sockaddr_in* addr, as_node_info* node
 	strcpy(node->name, node_info->name);
 	node->has_batch_index = node_info->has_batch_index;
 	node->has_replicas_all = node_info->has_replicas_all;
+	node->has_double = node_info->has_double;
 	node->address_index = 0;
 	
 	as_vector_init(&node->addresses, sizeof(as_address), 2);

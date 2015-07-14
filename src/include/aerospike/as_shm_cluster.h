@@ -75,9 +75,15 @@ typedef struct as_node_shm_s {
 
 	/**
 	 *	@private
+	 *	Does node support floating point type?
+	 */
+	uint8_t has_double;
+
+	/**
+	 *	@private
 	 *	Pad to 8 byte boundary.
 	 */
-	char pad[5];
+	char pad[4];
 } as_node_shm;
 
 /**

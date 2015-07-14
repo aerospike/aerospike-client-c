@@ -116,8 +116,9 @@ as_lookup_node(as_cluster* cluster, as_error* err, struct sockaddr_in* addr, as_
 	char* end = begin;
 	uint8_t has_batch_index = 0;
 	uint8_t has_replicas_all = 0;
+	uint8_t has_double = 0;
 	
-	while (*begin && ! (has_batch_index && has_replicas_all)) {
+	while (*begin && ! (has_batch_index && has_replicas_all && has_double)) {
 		while (*end) {
 			if (*end == ';') {
 				*end++ = 0;
@@ -133,10 +134,15 @@ as_lookup_node(as_cluster* cluster, as_error* err, struct sockaddr_in* addr, as_
 		if (strcmp(begin, "replicas-all") == 0) {
 			has_replicas_all = 1;
 		}
+		
+		if (strcmp(begin, "float") == 0) {
+			has_double = 1;
+		}
 		begin = end;
 	}
 	node_info->has_batch_index = has_batch_index;
 	node_info->has_replicas_all = has_replicas_all;
+	node_info->has_double = has_double;
 	free(response);
 	return AEROSPIKE_OK;
 	

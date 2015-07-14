@@ -165,6 +165,7 @@ as_shm_add_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_add)
 				node_shm->active = true;
 				node_shm->has_batch_index = node_to_add->has_batch_index;
 				node_shm->has_replicas_all = node_to_add->has_replicas_all;
+				node_shm->has_double = node_to_add->has_double;
 				ck_swlock_write_unlock(&node_shm->lock);
 				
 				// Set shared memory node array index.
@@ -240,6 +241,7 @@ as_shm_reset_nodes(as_cluster* cluster)
 				strcpy(node_info.name, node_tmp.name);
 				node_info.has_batch_index = node_tmp.has_batch_index;
 				node_info.has_replicas_all = node_tmp.has_replicas_all;
+				node_info.has_double = node_tmp.has_double;
 				
 				node = as_node_create(cluster, &node_tmp.addr, &node_info);
 				node->index = i;

@@ -293,6 +293,13 @@ as_status aerospike_key_apply(
 	as_val ** result
 	);
 
+/**
+ *	Do the connected servers support the new floating point type.
+ *	The cluster must already be connected (aerospike_connect()) prior to making this call.
+ */
+bool
+aerospike_has_double(aerospike* as);
+
 #ifdef __cplusplus
 } // end extern "C"
 #endif

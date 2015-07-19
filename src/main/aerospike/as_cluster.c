@@ -260,6 +260,7 @@ as_cluster_seed_nodes(as_cluster* cluster, as_error* err, bool enable_warnings)
 	
 	as_node_info node_info;
 	as_error err_local;
+	err_local.message[0] = '\0'; // AEROSPIKE_ERR_TIMEOUT doesn't come with a message; make sure it's initialized
 	as_status status = AEROSPIKE_OK;
 	
 	for (uint32_t i = 0; i < cluster->seeds_size; i++) {

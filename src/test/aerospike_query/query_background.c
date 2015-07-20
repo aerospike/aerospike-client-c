@@ -92,11 +92,14 @@ TEST(query_background_create, "create records and indices")
 	as_error err;
 	as_error_reset(&err);
 
-	as_status status = aerospike_index_create(as, &err, 0, NULL, NAMESPACE, SET, "qebin1", "qeindex9", AS_INDEX_NUMERIC);
-	
+	as_index_task task;
+	as_status status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, SET, "qebin1", "qeindex9", AS_INDEX_NUMERIC);
+
 	if (status != AEROSPIKE_OK) {
 		error("error(%d): %s", err.code, err.message);
 	}
+	
+	aerospike_index_create_wait(&err, &task, 0);
 
 	as_key key;
 	char keystr[64];

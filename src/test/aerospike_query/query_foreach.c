@@ -291,7 +291,7 @@ TEST( query_foreach_2, "count(*) where a == 'abc' (aggregating)" ) {
 	as_query_apply(&q, UDF_FILE, "count", NULL);
 	
 	if ( aerospike_query_foreach(as, &err, NULL, &q, query_foreach_2_callback, &count) != AEROSPIKE_OK ) {
-		error("%s (%s) [%s:%d]", err.message, err.code, err.file, err.line);
+		error("%s (%d) [%s:%d]", err.message, err.code, err.file, err.line);
 	}
 
 	info("count: %d",count);
@@ -501,7 +501,7 @@ TEST( query_quit_early, "normal query and quit early" ) {
 	as_query_where(&q, "a", as_string_equals("abc"));
 	
 	if ( aerospike_query_foreach(as, &err, NULL, &q, query_quit_early_callback, &count) != AEROSPIKE_OK ) {
-		error("%s (%s) [%s:%d]", err.message, err.code, err.file, err.line);
+		error("%s (%d) [%s:%d]", err.message, err.code, err.file, err.line);
 	}
 	
 	info("count: %d",count);
@@ -532,7 +532,7 @@ TEST( query_agg_quit_early, "aggregation and quit early" ) {
 	as_query_apply(&q, UDF_FILE, "filter_passthrough", NULL);
 	
 	if ( aerospike_query_foreach(as, &err, NULL, &q, query_quit_early_callback, &count) != AEROSPIKE_OK ) {
-		error("%s (%s) [%s:%d]", err.message, err.code, err.file, err.line);
+		error("%s (%d) [%s:%d]", err.message, err.code, err.file, err.line);
 	}
 	
 	info("count: %d",count);

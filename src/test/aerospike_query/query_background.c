@@ -146,7 +146,7 @@ TEST(query_background1, "query background1")
 		aerospike_query_wait(as, &err, NULL, &q, query_id, 0);
 	}
 	else {
-		error("%s (%s) [%s:%d]", err.message, err.code, err.file, err.line);
+		error("%s (%d) [%s:%d]", err.message, err.code, err.file, err.line);
 	}
 	
 	assert_int_eq(err.code, 0);

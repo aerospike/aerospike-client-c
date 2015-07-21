@@ -37,7 +37,7 @@ then
     else
       ver=`cat /etc/redhat-release | awk '/Fedora/ {printf("%2s\n", $3)}'`
 
-      if [ "$ver" > "10" ]
+      if [ "$ver" -gt "10" ]
       then
         setPlatform el6 centos6
       else

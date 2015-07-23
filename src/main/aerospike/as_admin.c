@@ -183,7 +183,7 @@ as_admin_execute(aerospike* as, as_error* err, const as_policy_admin* policy, ui
 	}
 	
 	int fd;
-	as_status status = as_node_get_connection(err, node, &fd);
+	as_status status = as_node_get_connection(err, node, deadline_ms, &fd);
 	
 	if (status) {
 		as_node_release(node);
@@ -274,7 +274,7 @@ as_admin_read_list(aerospike* as, as_error* err, const as_policy_admin* policy, 
 	if (timeout_ms <= 0) {
 		timeout_ms = DEFAULT_TIMEOUT;
 	}
-	uint64_t deadline_ms = cf_getms() + timeout_ms;
+	uint64_t deadline_ms = as_socket_deadline(timeout_ms);
 	as_cluster* cluster = as->cluster;
 	as_node* node = as_node_get_random(cluster);
 	
@@ -283,7 +283,7 @@ as_admin_read_list(aerospike* as, as_error* err, const as_policy_admin* policy, 
 	}
 	
 	int fd;
-	as_status status = as_node_get_connection(err, node, &fd);
+	as_status status = as_node_get_connection(err, node, deadline_ms, &fd);
 	
 	if (status) {
 		as_node_release(node);

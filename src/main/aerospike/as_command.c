@@ -361,7 +361,7 @@ as_command_execute(as_cluster* cluster, as_error * err, as_command_node* cn, uin
 		}
 		
 		int fd;
-		as_status status = as_node_get_connection(err, node, &fd);
+		as_status status = as_node_get_connection(err, node, deadline_ms, &fd);
 		
 		if (status) {
 			if (release_node) {

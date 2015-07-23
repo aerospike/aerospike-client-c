@@ -170,12 +170,11 @@ is_connected(int fd)
 }
 
 static as_status
-as_node_authenticate_connection(as_error* err, as_node* node, int* fd)
+as_node_authenticate_connection(as_error* err, as_node* node, uint64_t deadline_ms, int* fd)
 {
 	as_cluster* cluster = node->cluster;
 	
 	if (cluster->user) {
-		uint64_t deadline_ms = as_socket_deadline(cluster->conn_timeout_ms);
 		as_status status = as_authenticate(err, *fd, cluster->user, cluster->password, deadline_ms);
 		
 		if (status) {
@@ -188,7 +187,7 @@ as_node_authenticate_connection(as_error* err, as_node* node, int* fd)
 }
 
 static as_status
-as_node_create_connection(as_error* err, as_node* node, int* fd)
+as_node_create_connection(as_error* err, as_node* node, uint64_t deadline_ms, int* fd)
 {
 	// Create a non-blocking socket.
 	as_status status = as_socket_create_nb(err, fd);
@@ -204,7 +203,7 @@ as_node_create_connection(as_error* err, as_node* node, int* fd)
 	
 	if (as_socket_start_connect_nb(&err_local, *fd, &primary->addr) == AEROSPIKE_OK) {
 		// Connection started ok - we have our socket.
-		return as_node_authenticate_connection(err, node, fd);
+		return as_node_authenticate_connection(err, node, deadline_ms, fd);
 	}
 	
 	// Try other addresses.
@@ -220,7 +219,7 @@ as_node_create_connection(as_error* err, as_node* node, int* fd)
 				// It's just a hint, not a requirement to try this new address first.
 				as_log_debug("Change node address %s %s:%d", node->name, address->name, (int)cf_swap_from_be16(address->addr.sin_port));
 				ck_pr_store_32(&node->address_index, i);
-				return as_node_authenticate_connection(err, node, fd);
+				return as_node_authenticate_connection(err, node, deadline_ms, fd);
 			}
 		}
 	}
@@ -233,7 +232,7 @@ as_node_create_connection(as_error* err, as_node* node, int* fd)
 }
 
 as_status
-as_node_get_connection(as_error* err, as_node* node, int* fd)
+as_node_get_connection(as_error* err, as_node* node, uint64_t deadline_ms, int* fd)
 {
 	//cf_queue* q = asyncfd ? node->conn_q_asyncfd : node->conn_q;
 	cf_queue* q = node->conn_q;
@@ -265,7 +264,7 @@ as_node_get_connection(as_error* err, as_node* node, int* fd)
 		}
 		else if (rv == CF_QUEUE_EMPTY) {
 			// We exhausted the queue. Try creating a fresh socket.
-			return as_node_create_connection(err, node, fd);
+			return as_node_create_connection(err, node, deadline_ms, fd);
 		}
 		else {
 			*fd = -1;
@@ -274,12 +273,12 @@ as_node_get_connection(as_error* err, as_node* node, int* fd)
 	}
 }
 
-static int
-as_node_get_info_connection(as_error* err, as_node* node)
+static inline int
+as_node_get_info_connection(as_error* err, as_node* node, uint64_t deadline_ms)
 {
 	if (node->info_fd < 0) {
 		// Try to open a new socket.
-		return as_node_create_connection(err, node, &node->info_fd);
+		return as_node_create_connection(err, node, deadline_ms, &node->info_fd);
 	}
 	return AEROSPIKE_OK;
 }
@@ -293,7 +292,7 @@ as_node_close_info_connection(as_node* node)
 }
 
 static uint8_t*
-as_node_get_info(as_error* err, as_node* node, const char* names, size_t names_len, int timeout_ms, uint8_t* stack_buf)
+as_node_get_info(as_error* err, as_node* node, const char* names, size_t names_len, uint64_t deadline_ms, uint8_t* stack_buf)
 {
 	int fd = node->info_fd;
 	
@@ -307,8 +306,6 @@ as_node_get_info(as_error* err, as_node* node, const char* names, size_t names_l
 	as_proto_swap_to_be(proto);
 	
 	memcpy((void*)(stack_buf + sizeof(as_proto)), (const void*)names, names_len);
-
-	uint64_t deadline_ms = as_socket_deadline(timeout_ms);
 
 	// Write the request. Note that timeout_ms is never 0.
 	if (as_socket_write_deadline(err, fd, stack_buf, write_size, deadline_ms) != AEROSPIKE_OK) {
@@ -540,15 +537,15 @@ const char INFO_STR_GET_REPLICAS[] = "partition-generation\nreplicas-master\nrep
 as_status
 as_node_refresh(as_cluster* cluster, as_error* err, as_node* node, as_vector* /* <as_friend> */ friends)
 {
-	as_status status = as_node_get_info_connection(err, node);
+	uint64_t deadline_ms = as_socket_deadline(cluster->conn_timeout_ms);
+	as_status status = as_node_get_info_connection(err, node, deadline_ms);
 	
 	if (status != AEROSPIKE_OK) {
 		return status;
 	}
 	
-	uint32_t info_timeout = cluster->conn_timeout_ms;
 	uint8_t stack_buf[INFO_STACK_BUF_SIZE];
-	uint8_t* buf = as_node_get_info(err, node, INFO_STR_CHECK, sizeof(INFO_STR_CHECK) - 1, info_timeout, stack_buf);
+	uint8_t* buf = as_node_get_info(err, node, INFO_STR_CHECK, sizeof(INFO_STR_CHECK) - 1, deadline_ms, stack_buf);
 	
 	if (! buf) {
 		as_node_close_info_connection(node);
@@ -568,7 +565,7 @@ as_node_refresh(as_cluster* cluster, as_error* err, as_node* node, as_vector* /*
 	}
 	
 	if (response_status && update_partitions) {
-		buf = as_node_get_info(err, node, INFO_STR_GET_REPLICAS, sizeof(INFO_STR_GET_REPLICAS) - 1, info_timeout, stack_buf);
+		buf = as_node_get_info(err, node, INFO_STR_GET_REPLICAS, sizeof(INFO_STR_GET_REPLICAS) - 1, deadline_ms, stack_buf);
 		
 		if (! buf) {
 			as_node_close_info_connection(node);

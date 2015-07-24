@@ -329,12 +329,11 @@ as_command_write_bin(uint8_t* begin, uint8_t operation_type, const as_bin* bin, 
 
 as_status
 as_command_execute(as_cluster* cluster, as_error * err, as_command_node* cn, uint8_t* command, size_t command_len,
-	uint32_t timeout_ms, as_policy_retry retry,
+	uint32_t timeout_ms, uint32_t retry,
 	as_parse_results_fn parse_results_fn, void* parse_results_data
 )
 {
 	uint64_t deadline_ms = as_socket_deadline(timeout_ms);
-	uint32_t max_retries = retry;
 	uint32_t sleep_between_retries_ms = 0;
 	uint32_t failed_nodes = 0;
 	uint32_t failed_conns = 0;
@@ -435,7 +434,7 @@ as_command_execute(as_cluster* cluster, as_error * err, as_command_node* cn, uin
 
 Retry:
 		// Check if max retries reached.
-		if (++iterations > max_retries) {
+		if (++iterations > retry) {
 			break;
 		}
 		

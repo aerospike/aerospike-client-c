@@ -59,7 +59,7 @@ typedef struct as_batch_task_s {
 	uint32_t index;         // Old aerospike_batch_get()
 	uint32_t n_keys;
 	uint32_t timeout_ms;
-	as_policy_retry retry;
+	uint32_t retry;
 	
 	uint8_t read_attr;      // Old aerospike_batch_get()
 	bool use_batch_records;
@@ -683,7 +683,7 @@ as_batch_execute(
 	task.keys = batch->keys.entries;
 	task.timeout_ms = policy->timeout;
 	task.index = 0;
-	task.retry = AS_POLICY_RETRY_NONE;
+	task.retry = 0;
 	task.read_attr = read_attr;
 	task.use_batch_records = false;
 	task.allow_inline = policy->allow_inline;
@@ -892,7 +892,7 @@ aerospike_batch_read(
 	task.error_mutex = &error_mutex;
 	task.n_keys = n_keys;
 	task.timeout_ms = policy->timeout;
-	task.retry = AS_POLICY_RETRY_NONE;
+	task.retry = 0;
 	task.use_batch_records = true;
 	task.allow_inline = policy->allow_inline;
 	task.deserialize = policy->deserialize;

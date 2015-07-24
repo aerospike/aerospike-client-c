@@ -1,18 +1,24 @@
 [submodule "modules/common"]
 	path = modules/common
 	url = git@github.com:citrusleaf/aerospike-common
+	ignore = dirty
 [submodule "modules/mod-lua"]
 	path = modules/mod-lua
 	url = git@github.com:citrusleaf/aerospike-mod-lua
+	ignore = dirty
 [submodule "modules/lua-core"]
 	path = modules/lua-core
 	url = git@github.com:citrusleaf/aerospike-lua-core
+	ignore = dirty
 [submodule "modules/ck"]
 	path = modules/ck
 	url = git@github.com:aerospike/ck
+	ignore = dirty
 [submodule "modules/lua"]
 	path = modules/lua
 	url = git@github.com:citrusleaf/lua.git
+	ignore = dirty
 [submodule "modules/luajit"]
 	path = modules/luajit
 	url = git@github.com:citrusleaf/luajit.git
+	ignore = dirty

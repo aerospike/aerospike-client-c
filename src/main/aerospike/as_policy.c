@@ -47,6 +47,7 @@ as_policies_init(as_policies* p)
 	// Set local defaults to undefined.
 	// Undefined variables will be set to global defaults in as_policies_resolve().
 	p->read.timeout = -1;
+	p->read.retry = -1;
 	p->read.key = -1;
 	p->read.replica = -1;
 	p->read.consistency_level = -1;
@@ -101,6 +102,7 @@ void
 as_policies_resolve(as_policies* p)
 {
 	as_policy_resolve(p->read.timeout, p->timeout);
+	as_policy_resolve(p->read.retry, p->retry);
 	as_policy_resolve(p->read.key, p->key);
 	as_policy_resolve(p->read.replica, p->replica);
 	as_policy_resolve(p->read.consistency_level, p->consistency_level);

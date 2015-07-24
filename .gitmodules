@@ -1,18 +1,24 @@
 [submodule "modules/common"]
 	path = modules/common
 	url = https://github.com/aerospike/aerospike-common
+	ignore = dirty
 [submodule "modules/mod-lua"]
 	path = modules/mod-lua
 	url = https://github.com/aerospike/aerospike-mod-lua
+	ignore = dirty
 [submodule "modules/lua-core"]
 	path = modules/lua-core
 	url = https://github.com/aerospike/aerospike-lua-core
+	ignore = dirty
 [submodule "modules/ck"]
 	path = modules/ck
 	url = https://github.com/aerospike/ck
+	ignore = dirty
 [submodule "modules/lua"]
 	path = modules/lua
 	url = https://github.com/aerospike/lua.git
+	ignore = dirty
 [submodule "modules/luajit"]
 	path = modules/luajit
 	url = https://github.com/aerospike/luajit.git
+	ignore = dirty

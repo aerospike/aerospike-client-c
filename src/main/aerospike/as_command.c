@@ -334,7 +334,7 @@ as_command_execute(as_cluster* cluster, as_error * err, as_command_node* cn, uin
 )
 {
 	uint64_t deadline_ms = as_socket_deadline(timeout_ms);
-	uint32_t max_retries = retry + 1;
+	uint32_t max_retries = retry;
 	uint32_t sleep_between_retries_ms = 0;
 	uint32_t failed_nodes = 0;
 	uint32_t failed_conns = 0;

@@ -88,7 +88,7 @@ as_status aerospike_key_get(
 	data.record = rec;
 	data.deserialize = policy->deserialize;
 	
-	status = as_command_execute(as->cluster, err, &cn, cmd, size, policy->timeout, AS_POLICY_RETRY_NONE, as_command_parse_result, &data);
+	status = as_command_execute(as->cluster, err, &cn, cmd, size, policy->timeout, policy->retry, as_command_parse_result, &data);
 	
 	as_command_free(cmd, size);
 	return status;
@@ -150,7 +150,7 @@ as_status aerospike_key_select(
 	data.record = rec;
 	data.deserialize = policy->deserialize;
 
-	status = as_command_execute(as->cluster, err, &cn, cmd, size, policy->timeout, AS_POLICY_RETRY_NONE, as_command_parse_result, &data);
+	status = as_command_execute(as->cluster, err, &cn, cmd, size, policy->timeout, policy->retry, as_command_parse_result, &data);
 	
 	as_command_free(cmd, size);
 	return status;
@@ -195,7 +195,7 @@ as_status aerospike_key_exists(
 	as_command_node_init(&cn, key->ns, key->digest.value, policy->replica, false);
 	
 	as_proto_msg msg;
-	status = as_command_execute(as->cluster, err, &cn, cmd, size, policy->timeout, AS_POLICY_RETRY_NONE, as_command_parse_header, &msg);
+	status = as_command_execute(as->cluster, err, &cn, cmd, size, policy->timeout, policy->retry, as_command_parse_header, &msg);
 	
 	as_command_free(cmd, size);
 

@@ -92,15 +92,8 @@ connect_to_server(arguments* args, aerospike* client)
 	cfg.thread_pool_size = 0;
 		
 	as_policies* p = &cfg.policies;
-	p->timeout	= args->read_timeout;
-	
-	if (args->max_retries == 0) {
-		p->retry = AS_POLICY_RETRY_NONE;
-	}
-	else {
-		p->retry = AS_POLICY_RETRY_ONCE;
-	}
-	
+	p->timeout = args->read_timeout;
+	p->retry = args->max_retries;
 	p->key = AS_POLICY_KEY_DIGEST;
 	p->gen = AS_POLICY_GEN_IGNORE;
 	p->exists = AS_POLICY_EXISTS_IGNORE;

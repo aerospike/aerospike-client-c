@@ -32,7 +32,6 @@
  *
  *  - as_policy_key
  *  - as_policy_gen
- *  - as_policy_retry
  *  - as_policy_exists
  *  - as_policy_replica
  *  - as_policy_consistency_level
@@ -72,11 +71,11 @@ extern "C" {
 #define AS_POLICY_TIMEOUT_DEFAULT 1000
 
 /**
- *	Default as_policy_retry value
+ *	Default number of retries when a transaction fails due to a network error.
  *
  *	@ingroup client_policies
  */
-#define AS_POLICY_RETRY_DEFAULT AS_POLICY_RETRY_ONCE
+#define AS_POLICY_RETRY_DEFAULT 1
 
 /**
  *	Default as_policy_gen value
@@ -328,9 +327,9 @@ typedef struct as_policy_write_s {
 	uint32_t timeout;
 
 	/**
-	 *	Specifies the behavior for failed operations.
+	 *	Maximum number of retries when a transaction fails due to a network error.
 	 */
-	as_policy_retry retry;
+	uint32_t retry;
 
 	/**
 	 *	Specifies the behavior for the key.
@@ -370,6 +369,11 @@ typedef struct as_policy_read_s {
 	 *	the operation to complete.
 	 */
 	uint32_t timeout;
+
+	/**
+	 *	Maximum number of retries when a transaction fails due to a network error.
+	 */
+	uint32_t retry;
 
 	/**
 	 *	Specifies the behavior for the key.
@@ -450,9 +454,9 @@ typedef struct as_policy_operate_s {
 	uint32_t timeout;
 
 	/**
-	 *	Specifies the behavior for failed operations.
+	 *	Maximum number of retries when a transaction fails due to a network error.
 	 */
-	as_policy_retry retry;
+	uint32_t retry;
 	
 	/**
 	 *	Specifies the behavior for the key.
@@ -511,9 +515,9 @@ typedef struct as_policy_remove_s {
 	uint16_t generation;
 
 	/**
-	 *	Specifies the behavior of failed operations.
+	 *	Maximum number of retries when a transaction fails due to a network error.
 	 */
-	as_policy_retry retry;
+	uint32_t retry;
 	
 	/**
 	 *	Specifies the behavior for the key.
@@ -717,11 +721,11 @@ typedef struct as_policies_s {
 	uint32_t timeout;
 
 	/**
-	 *	Specifies the behavior for failed operations.
-	 *	
+	 *	Maximum number of retries when a transaction fails due to a network error.
+	 *
 	 *	The default value is `AS_POLICY_RETRY_DEFAULT`.
 	 */
-	as_policy_retry retry;
+	uint32_t retry;
 	
 	/**
 	 *	Specifies the behavior for the key.
@@ -839,6 +843,7 @@ static inline as_policy_read*
 as_policy_read_init(as_policy_read* p)
 {
 	p->timeout = AS_POLICY_TIMEOUT_DEFAULT;
+	p->retry = AS_POLICY_RETRY_DEFAULT;
 	p->key = AS_POLICY_KEY_DEFAULT;
 	p->replica = AS_POLICY_REPLICA_DEFAULT;
 	p->consistency_level = AS_POLICY_CONSISTENCY_LEVEL_DEFAULT;
@@ -858,6 +863,7 @@ static inline void
 as_policy_read_copy(as_policy_read* src, as_policy_read* trg)
 {
 	trg->timeout = src->timeout;
+	trg->retry = src->retry;
 	trg->key = src->key;
 	trg->replica = src->replica;
 	trg->consistency_level = src->consistency_level;

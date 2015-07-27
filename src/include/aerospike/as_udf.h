@@ -140,7 +140,7 @@ typedef struct as_udf_file_s {
 	/** 
 	 *	Hash value of the file contents
 	 */
-	uint8_t hash[AS_UDF_FILE_HASH_SIZE];
+	uint8_t hash[AS_UDF_FILE_HASH_SIZE+1];
 
 	/**
 	 *	The type of UDF

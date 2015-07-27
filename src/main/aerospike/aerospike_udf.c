@@ -145,9 +145,7 @@ as_status aerospike_udf_list(
 		}
 		
 		if (ptr->hash) {
-			// The hash is not null terminated, so normal strncpy is appropriate here.
-			// strncpy will also pad zeroes if hash size is incorrect.
-			strncpy((char*)file->hash, ptr->hash, AS_UDF_FILE_HASH_SIZE);
+			as_strncpy((char*)file->hash, ptr->hash, AS_UDF_FILE_HASH_SIZE+1);
 		}
 		else {
 			file->hash[0] = 0;

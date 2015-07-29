@@ -216,7 +216,7 @@ aerospike_has_batch_index(aerospike* as);
  *	Read multiple records for specified batch keys in one batch call.
  *	This method allows different namespaces/bins to be requested for each key in the batch.
  *	The returned records are located in the same batch array.
- *	This method requires Aerospike Server version >= 3.5.15.
+ *	This method requires Aerospike Server version >= 3.6.0.
  *
  *	~~~~~~~~~~{.c}
  *	as_batch_read_records records;

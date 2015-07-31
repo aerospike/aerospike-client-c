@@ -261,7 +261,49 @@ TEST( udf_types_list, "udf_types.get_list() returns [1,2,3] (as_list)" ) {
 	as_key_destroy(&key);
 }
 
-TEST( udf_types_rec_map, "udf_types.get_rec_map() returns {t:1, f: 0, n: nil, i: 123, s: 'abc', l: [1,2,3]} (as_map)" ) {
+TEST( udf_types_bytes, "udf_types.get_bytes() returns 'zyx' (as_bytes)" ) {
+
+	as_error err;
+
+	as_key key;
+	as_key_init(&key, "test", "test", "test");
+
+	as_val * val = NULL;
+	as_val * val2 = NULL;
+
+	aerospike_key_apply(as, &err, NULL, &key, "udf_types", "get_bytes", NULL, &val);
+	assert_int_eq( err.code, AEROSPIKE_OK );
+	assert_int_eq( as_val_type(val), AS_BYTES );
+
+	as_bytes * bval = as_bytes_fromval(val);
+	assert_int_eq( as_bytes_size(bval), 3);
+	assert_int_eq( memcmp(as_bytes_get(bval), "zyx", as_bytes_size(bval)), 0);
+
+	as_arraylist args;
+	as_arraylist_inita(&args, 1);
+	as_arraylist_append(&args, val);
+
+	aerospike_key_apply(as, &err, NULL, &key, "udf_types", "modify_bytes", (as_list*)&args, &val2);
+	assert_int_eq( err.code, AEROSPIKE_OK );
+	assert_int_eq( as_val_type(val2), AS_BYTES );
+
+	bval = as_bytes_fromval(val2);
+	assert_int_eq( as_bytes_size(bval), 3);
+	uint8_t v = 0;
+	as_bytes_get_byte(bval, 0, &v);
+	assert_int_eq( v, 122);
+	as_bytes_get_byte(bval, 1, &v);
+	assert_int_eq( v, 135);
+	as_bytes_get_byte(bval, 2, &v);
+	assert_int_eq( v, 120);
+	info("changed second byte to 135 via UDF");
+
+	as_val_destroy(val);
+	as_val_destroy(val2);
+	as_key_destroy(&key);
+}
+
+TEST( udf_types_rec_map, "udf_types.get_rec_map() returns {t:1, f: 0, n: nil, i: 123, s: 'abc', l: [1,2,3], b: 'zyx' (as_bytes)} (as_map)" ) {
 
 	as_error err;
 
@@ -279,7 +321,7 @@ TEST( udf_types_rec_map, "udf_types.get_rec_map() returns {t:1, f: 0, n: nil, i:
 
 	uint32_t non_nil_count = 0;
 	as_map_foreach(mval, udf_types_map_notnil_foreach, &non_nil_count);
-	assert_int_eq( non_nil_count, 5);
+	assert_int_eq( non_nil_count, 6);
 	assert_int_eq( as_stringmap_get_int64(mval,"t"), 1);
 	assert_int_eq( as_stringmap_get_int64(mval,"f"), 0);
 
@@ -303,6 +345,7 @@ SUITE( udf_types, "aerospike_udf type tests" ) {
 	suite_add( udf_types_string );
 	suite_add( udf_types_map );
 	suite_add( udf_types_list );
+	suite_add( udf_types_bytes );
 	suite_add( udf_types_rec_map );
 	suite_add( udf_types_post );
 }

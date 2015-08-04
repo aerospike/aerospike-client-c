@@ -743,6 +743,7 @@ as_batch_execute(
 			
 			task.use_new_batch = as_batch_use_new(policy, batch_node->node);
 			task.node = batch_node->node;
+			task.index = 0;
 			memcpy(&task.offsets, &batch_node->offsets, sizeof(as_vector));
 			status = as_batch_command_execute(&task);
 		}

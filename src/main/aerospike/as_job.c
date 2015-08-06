@@ -19,19 +19,6 @@
 #include <aerospike/as_socket.h>
 
 /******************************************************************************
- * STATIC DATA
- *****************************************************************************/
-
-const char JOB_STATUS_TAG[] = "status=";
-const int JOB_STATUS_TAG_LEN = sizeof(JOB_STATUS_TAG) - 1;
-
-const char JOB_PROGRESS_TAG[] = "job-progress=";
-const int JOB_PROGRESS_TAG_LEN = sizeof(JOB_PROGRESS_TAG) - 1;
-
-const char RECORDS_READ_TAG[] = "recs-read=";
-const int RECORDS_READ_TAG_LEN = sizeof(RECORDS_READ_TAG) - 1;
-
-/******************************************************************************
  * STATIC FUNCTIONS
  *****************************************************************************/
 
@@ -67,21 +54,23 @@ as_job_process(char* response, as_job_info* info)
 	char* begin;
 	
 	while (*p) {
-		if (strncmp(p, JOB_STATUS_TAG, JOB_STATUS_TAG_LEN) == 0) {
-			p += JOB_STATUS_TAG_LEN;
+		if (strncmp(p, "status=", 7) == 0) {
+			p += 7;
 			
-			if (strncmp(p, "active", 6) == 0) {
+			// Newer servers use "active(ok)" while older servers use "IN_PROGRESS"
+			if (strncmp(p, "active", 6) == 0 || strncmp(p, "IN_PROGRESS", 11) == 0) {
 				info->status = AS_JOB_STATUS_INPROGRESS;
 			}
-			else if (strncmp(p, "done", 4) == 0) {
+			// Newer servers use "done" while older servers use "DONE"
+			else if (strncasecmp(p, "done", 4) == 0) {
 				if (info->status == AS_JOB_STATUS_UNDEF) {
 					info->status = AS_JOB_STATUS_COMPLETED;
 				}
 			}
 			p = as_find_next(p);
 		}
-		else if (strncmp(p, JOB_PROGRESS_TAG, JOB_PROGRESS_TAG_LEN) == 0) {
-			p += JOB_PROGRESS_TAG_LEN;
+		else if (strncmp(p, "job-progress=", 13) == 0) {
+			p += 13;
 			begin = p;
 			p = as_mark_end(p);
 			
@@ -92,8 +81,9 @@ as_job_process(char* response, as_job_info* info)
 				info->progress_pct = pct;
 			}
 		}
-		else if (strncmp(p, RECORDS_READ_TAG, RECORDS_READ_TAG_LEN) == 0) {
-			p += RECORDS_READ_TAG_LEN;
+		// Newer servers use dash while older servers use underscore
+		else if (strncmp(p, "recs-read=", 10) == 0 || strncmp(p, "recs_read=", 10) == 0) {
+			p += 10;
 			begin = p;
 			p = as_mark_end(p);
 			

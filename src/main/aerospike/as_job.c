@@ -52,6 +52,7 @@ as_job_process(char* response, as_job_info* info)
 {
 	char* p = response;
 	char* begin;
+	bool found_recs_read = false;
 	
 	while (*p) {
 		if (strncmp(p, "status=", 7) == 0) {
@@ -82,13 +83,14 @@ as_job_process(char* response, as_job_info* info)
 			}
 		}
 		// Newer servers use dash while older servers use underscore
-		else if (strncmp(p, "recs-read=", 10) == 0 || strncmp(p, "recs_read=", 10) == 0) {
+		else if (!found_recs_read && (strncmp(p, "recs-read=", 10) == 0 || strncmp(p, "recs_read=", 10) == 0)) {
 			p += 10;
 			begin = p;
 			p = as_mark_end(p);
 			
 			uint64_t count = atol(begin);
 			info->records_read += count;
+			found_recs_read = true;
 		}
 		else {
 			p = as_find_next(p);

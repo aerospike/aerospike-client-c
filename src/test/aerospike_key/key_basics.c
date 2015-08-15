@@ -568,22 +568,98 @@ TEST( key_basics_read_raw_list , "read raw list" ) {
 	as_record_destroy(rec);
 }
 
+
+TEST( key_basics_list_map_double , "put/get double: (test,test,foo_double) = {b1: ['a',2, 3.56], b2: {w: 6.78, x: 7, y: 'b'}}" ) {
+
+	if (server_has_double) {
+		as_error err;
+		as_error_reset(&err);
+
+		as_key key;
+		as_key_init(&key, "test", "test", "foo_double");
+
+		// remove record to have clean test
+		as_status rc = aerospike_key_remove(as, &err, NULL, &key);
+
+		// insert record with list & map with double
+		as_arraylist mylist;
+		as_arraylist_init(&mylist,3,0);
+		as_arraylist_append_str(&mylist, "a");
+		as_arraylist_append_int64(&mylist, 2);
+		as_arraylist_append_double(&mylist,3.56);
+
+		as_hashmap mymap;
+		as_hashmap_init(&mymap, 32);
+		as_stringmap_set_double((as_map *) &mymap, "w", 6.78);
+		as_stringmap_set_int64((as_map *) &mymap, "x", 7);
+		as_stringmap_set_str((as_map *) &mymap, "y", "b");
+
+		as_record r, * rec = &r;
+		as_record_init(rec, 2);
+		as_record_set_list(rec, "b1", (as_list *) &mylist);
+		as_record_set_map(rec, "b2", (as_map *) &mymap);
+
+		rc = aerospike_key_put(as, &err, NULL, &key, rec);
+	    assert_int_eq(rc, AEROSPIKE_OK);
+
+	    as_list_destroy((as_list *)&mylist);
+		as_map_destroy((as_map *)&mymap);
+		as_record_destroy(rec);
+
+		rec = NULL;
+		rc = aerospike_key_get(as, &err, NULL, &key, &rec);
+	    assert_int_eq(rc, AEROSPIKE_OK);
+
+	    // compare list
+	    as_arraylist* rlist = (as_arraylist*)as_record_get_list(rec, "b1");
+		assert_not_null(rlist);
+		assert_string_eq(as_arraylist_get_str(rlist, 0), "a");
+	    assert_int_eq(as_arraylist_get_int64(rlist, 1), 2);
+	    assert_double_eq(as_arraylist_get_double(rlist, 2), 3.56);
+
+	    // compare map
+	    as_hashmap* rmap = (as_hashmap*)as_record_get_map(rec, "b2");
+		assert_not_null(rmap);
+
+		as_hashmap_iterator it;
+		as_hashmap_iterator_init(&it, (const as_hashmap*)rmap);
+
+		// See if the elements match what we expect.
+		while (as_hashmap_iterator_has_next(&it)) {
+			as_pair* p_pair = (as_pair *)as_hashmap_iterator_next(&it);
+			as_val* p_val = as_pair_2(p_pair);
+			if (as_val_type(p_val) == AS_STRING ) {
+				assert_string_eq( as_string_get(as_string_fromval(p_val)), "b");
+			} else if (as_val_type(p_val) == AS_INTEGER ) {
+				assert_int_eq( as_integer_get(as_integer_fromval(p_val)), 7);
+			} else if (as_val_type(p_val) == AS_DOUBLE ) {
+				assert_double_eq( as_double_get(as_double_fromval(p_val)), 6.78);
+			} else {
+				warn ("unexpected type %d", as_val_type(p_val));
+				assert(FALSE);
+			}
+		}
+
+		as_record_destroy(rec);
+	    as_key_destroy(&key);
+	}
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
 
 SUITE( key_basics, "aerospike_key basic tests" ) {
 	server_has_double = aerospike_has_double(as);
-	
+
 	// Remove at beginning to clear out record.
     suite_add( key_basics_put_key );
     suite_add( key_basics_remove );
 	suite_add( key_basics_put );
 	suite_add( key_basics_exists );
 	suite_add( key_basics_notexists );
-	// TODO - when we're sure we won't be running against older servers, let these in:
-//	suite_add( key_basics_remove_generation );
-//	suite_add( key_basics_put_generation );
+	suite_add( key_basics_remove_generation );
+	suite_add( key_basics_put_generation );
 	suite_add( key_basics_put );
 	suite_add( key_basics_get );
 	suite_add( key_basics_select );
@@ -595,4 +671,5 @@ SUITE( key_basics, "aerospike_key basic tests" ) {
 	suite_add( key_basics_write_preserialized_list );
 	suite_add( key_basics_read_list );
 	suite_add( key_basics_read_raw_list );
+	suite_add( key_basics_list_map_double );
 }

@@ -54,12 +54,13 @@ typedef char as_bin_name[AS_BIN_NAME_MAX_SIZE];
  *	Bin Value
  */
 typedef union as_bin_value_s {
-	as_val 		nil;
-	as_integer 	integer;
-	as_string 	string;
-	as_bytes 	bytes;
-	as_list 	list;
-	as_map 		map;
+	as_val nil;
+	as_integer integer;
+	as_double dbl;
+	as_string string;
+	as_bytes bytes;
+	as_list list;
+	as_map map;
 } as_bin_value;
 
 /**

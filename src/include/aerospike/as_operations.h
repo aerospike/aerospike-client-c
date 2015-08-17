@@ -419,6 +419,20 @@ bool as_operations_add_write(as_operations * ops, const as_bin_name name, as_bin
 bool as_operations_add_write_int64(as_operations * ops, const as_bin_name name, int64_t value);
 
 /**
+ *	Add a `AS_OPERATOR_WRITE` bin operation with a double value.
+ *
+ *	@param ops			The `as_operations` to append the operation to.
+ *	@param name 		The name of the bin to perform the operation on.
+ *	@param value 		The value to be used in the operation.
+ *
+ *	@return true on success. Otherwise an error occurred.
+ *
+ *	@relates as_operations
+ *	@ingroup as_operations_object
+ */
+bool as_operations_add_write_double(as_operations * ops, const as_bin_name name, double value);
+
+/**
  *	Add a `AS_OPERATOR_WRITE` bin operation with a NULL-terminated string value.
  *
  *	@param ops			The `as_operations` to append the operation to.
@@ -510,6 +524,20 @@ bool as_operations_add_read(as_operations * ops, const as_bin_name name);
  *	@ingroup as_operations_object
  */
 bool as_operations_add_incr(as_operations * ops, const as_bin_name name, int64_t value);
+
+/**
+ *	Add a `AS_OPERATOR_INCR` bin operation with double value.
+ *
+ *	@param ops			The `as_operations` to append the operation to.
+ *	@param name 		The name of the bin to perform the operation on.
+ *	@param value 		The value to be used in the operation.
+ *
+ *	@return true on success. Otherwise an error occurred.
+ *
+ *	@relates as_operations
+ *	@ingroup as_operations_object
+ */
+bool as_operations_add_incr_double(as_operations * ops, const as_bin_name name, double value);
 
 /**
  *	Add a `AS_OPERATOR_PREPEND` bin operation with a NULL-terminated string value.

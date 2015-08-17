@@ -208,6 +208,23 @@ bool as_operations_add_write_int64(as_operations * ops, const as_bin_name name, 
 }
 
 /**
+ *	Add a `AS_OPERATOR_WRITE` bin operation with a double value.
+ *
+ *	@param ops			The `as_operations` to append the operation to.
+ *	@param name 		The name of the bin to perform the operation on.
+ *	@param value 		The value to be used in the operation.
+ *
+ *	@return true on success. Otherwise an error occurred.
+ */
+bool as_operations_add_write_double(as_operations * ops, const as_bin_name name, double value)
+{
+	as_binop * binop = as_binop_forappend(ops, AS_OPERATOR_WRITE, name);
+	if ( !binop ) return false;
+	as_bin_init_double(&binop->bin, name, value);
+	return true;
+}
+
+/**
  *	Add a AS_OPERATOR_WRITE bin operation with a NULL-terminated string value.
  *
  *	@param ops			The `as_operations` to append the operation to.
@@ -273,6 +290,23 @@ bool as_operations_add_incr(as_operations * ops, const as_bin_name name, int64_t
 	as_binop * binop = as_binop_forappend(ops, AS_OPERATOR_INCR, name);
 	if ( !binop ) return false;
 	as_bin_init_int64(&binop->bin, name, value);
+	return true;
+}
+
+/**
+ *	Add a `AS_OPERATOR_INCR` bin operation with double value.
+ *
+ *	@param ops			The `as_operations` to append the operation to.
+ *	@param name 		The name of the bin to perform the operation on.
+ *	@param value 		The value to be used in the operation.
+ *
+ *	@return true on success. Otherwise an error occurred.
+ */
+bool as_operations_add_incr_double(as_operations * ops, const as_bin_name name, double value)
+{
+	as_binop * binop = as_binop_forappend(ops, AS_OPERATOR_INCR, name);
+	if ( !binop ) return false;
+	as_bin_init_double(&binop->bin, name, value);
 	return true;
 }
 

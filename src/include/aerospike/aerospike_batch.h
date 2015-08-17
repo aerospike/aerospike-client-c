@@ -190,7 +190,7 @@ as_batch_read_init(as_batch_read_records* records, uint32_t capacity)
 static inline as_batch_read_record*
 as_batch_read_reserve(as_batch_read_records* records)
 {
-	return as_vector_reserve(&records->list);
+	return (as_batch_read_record*)as_vector_reserve(&records->list);
 }
 	
 /**

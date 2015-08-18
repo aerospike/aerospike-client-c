@@ -531,25 +531,33 @@ as_shm_tender(void* userdata)
 			// Check if tend owner died without releasing lock.
 			uint64_t now = cf_getms();
 			if (now >= limit) {
-				ck_spinlock_lock(&cluster_shm->take_over_lock);
 				uint64_t ts = ck_pr_load_64(&cluster_shm->timestamp);
 				
-				// Check if owner hasn't tended cluster within threshold.
+				// Check if cluster hasn't been tended within threshold.
 				if (now - ts >= threshold) {
 					uint32_t owner_pid = ck_pr_load_32(&cluster_shm->owner_pid);
 					
-					// Check if owner process id exists.
+					// Check if owner process id is invalid or does not exist.
 					if (owner_pid == 0 || kill(owner_pid, 0) != 0) {
-						// Take over cluster tending.
-						// Update timestamp, so other processes will not try to take over.
-						ck_pr_store_64(&cluster_shm->timestamp, now);
-						ck_pr_store_8(&cluster_shm->lock, 1);
+						// Cluster should be taken over, but this must be done under lock.
+						ck_spinlock_lock(&cluster_shm->take_over_lock);
+						
+						// Reload timestamp, just in case another process just modified it.
+						ts = ck_pr_load_64(&cluster_shm->timestamp);
+						
+						// Check if cluster hasn't been tended within threshold.
+						if (now - ts >= threshold) {
+							// Take over cluster tending.
+							// Update timestamp, so other processes will not try to take over.
+							ck_pr_store_64(&cluster_shm->timestamp, now);
+							ck_pr_store_8(&cluster_shm->lock, 1);
+							ck_spinlock_unlock(&cluster_shm->take_over_lock);
+							as_shm_takeover_cluster(shm_info, cluster_shm, pid);
+							continue;
+						}
 						ck_spinlock_unlock(&cluster_shm->take_over_lock);
-						as_shm_takeover_cluster(shm_info, cluster_shm, pid);
-						continue;
 					}
 				}
-				ck_spinlock_unlock(&cluster_shm->take_over_lock);
 				limit = ts + threshold;
 			}
 			

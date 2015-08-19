@@ -23,6 +23,7 @@
 
 #include <aerospike/as_record.h>
 #include <aerospike/as_integer.h>
+#include <aerospike/as_double.h>
 #include <aerospike/as_string.h>
 #include <aerospike/as_list.h>
 #include <aerospike/as_arraylist.h>
@@ -43,6 +44,8 @@
  *****************************************************************************/
 
 extern aerospike * as;
+
+static bool server_has_double = false;
 
 /******************************************************************************
  * MACROS
@@ -331,13 +334,65 @@ TEST( udf_types_rec_map, "udf_types.get_rec_map() returns {t:1, f: 0, n: nil, i:
 	as_key_destroy(&key);
 }
 
+TEST( udf_types_double, "udf_types.write_f(rec, bname, float_binval) == udf_type_read_f(rec, bname, float_add) + float_add" ) {
+
+	if (server_has_double) {
+		as_error err;
+
+		as_key key;
+		as_key_init(&key, "test", "test", "udf_double");
+
+		// remove record to make sure we are clean
+		aerospike_key_remove(as, &err, NULL, &key);
+
+		// write a double bin value
+		as_arraylist args;
+		as_arraylist_inita(&args, 2);
+		as_arraylist_append_str(&args, "bin1");
+		as_arraylist_append_double(&args,4.4);
+
+		as_val * res = NULL;
+
+		aerospike_key_apply(as, &err, NULL, &key, "udf_types", "write_f", (as_list*)&args, &res);
+
+		assert_int_eq( err.code, AEROSPIKE_OK );
+		assert_int_eq( as_val_type(res), AS_NIL );
+
+		as_val_destroy(res);
+		as_val_destroy(&args);
+		res = NULL;
+
+		// read and pass it back
+		as_arraylist_inita(&args, 2);
+		as_arraylist_append_str(&args, "bin1");
+		as_arraylist_append_double(&args,1.3);
+
+		aerospike_key_apply(as, &err, NULL, &key, "udf_types", "read_f", (as_list*)&args, &res);
+
+		assert_int_eq( err.code, AEROSPIKE_OK );
+		assert_int_eq( as_val_type(res), AS_DOUBLE );
+
+		double result = as_double_get((as_double *)res);
+		info ("double = %lf", result);
+		assert_true( (result> 5.69 && result < 5.71));
+
+		as_val_destroy(res);
+		as_val_destroy(&args);
+
+		as_key_destroy(&key);
+	}
+}
+
 
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
 
 SUITE( udf_types, "aerospike_udf type tests" ) {
+	server_has_double = aerospike_has_double(as);
+
 	suite_add( udf_types_pre );
+
 	suite_add( udf_types_nil );
 	suite_add( udf_types_true );
 	suite_add( udf_types_false );
@@ -347,5 +402,7 @@ SUITE( udf_types, "aerospike_udf type tests" ) {
 	suite_add( udf_types_list );
 	suite_add( udf_types_bytes );
 	suite_add( udf_types_rec_map );
+	suite_add( udf_types_double );
+
 	suite_add( udf_types_post );
 }

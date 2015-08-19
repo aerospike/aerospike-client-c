@@ -55,3 +55,21 @@ function get_rec_map(rec)
     rec['map'] = m
     return rec['map']
 end
+
+
+function write_f(r,b,v)
+    r[b] = v
+    if not aerospike:exists(r) then
+        aerospike:create(r)
+    else
+        aerospike:update(r)
+    end
+end
+
+function read_f(r,b,v)
+    if not aerospike:exists(r) then
+        error(r)
+    end
+    return r[b] + v
+end
+

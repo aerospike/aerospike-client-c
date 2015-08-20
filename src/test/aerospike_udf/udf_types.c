@@ -51,6 +51,8 @@ static bool server_has_double = false;
 /******************************************************************************
  * MACROS
  *****************************************************************************/
+#define NAMESPACE "test"
+#define SET "test_udftype"
 
 #define LUA_FILE "src/test/lua/udf_types.lua"
 #define UDF_FILE "udf_types"
@@ -100,7 +102,7 @@ TEST( udf_types_nil, "udf_types.get_nil() returns as_nil" ) {
 	as_error err;
 
 	as_key key;
-	as_key_init(&key, "test", "test", "test");
+	as_key_init(&key, NAMESPACE, SET, "test");
 
 	as_val * val = NULL;
 
@@ -118,7 +120,7 @@ TEST( udf_types_true, "udf_types.get_true() returns 1 (as_integer)" ) {
 	as_error err;
 
 	as_key key;
-	as_key_init(&key, "test", "test", "test");
+	as_key_init(&key, NAMESPACE, SET, "test");
 
 	as_val * val = NULL;
 
@@ -139,7 +141,7 @@ TEST( udf_types_false, "udf_types.get_false() returns 0 (as_integer)" ) {
 	as_error err;
 
 	as_key key;
-	as_key_init(&key, "test", "test", "test");
+	as_key_init(&key, NAMESPACE, SET, "test");
 
 	as_val * val = NULL;
 
@@ -160,7 +162,7 @@ TEST( udf_types_integer, "udf_types.get_integer() returns 123 (as_integer)" ) {
 	as_error err;
 
 	as_key key;
-	as_key_init(&key, "test", "test", "test");
+	as_key_init(&key, NAMESPACE, SET, "test");
 
 	as_val * val = NULL;
 
@@ -181,7 +183,7 @@ TEST( udf_types_string, "udf_types.get_string() returns 'abc' (as_string)" ) {
 	as_error err;
 
 	as_key key;
-	as_key_init(&key, "test", "test", "test");
+	as_key_init(&key, NAMESPACE, SET, "test");
 
 	as_val * val = NULL;
 
@@ -219,7 +221,7 @@ TEST( udf_types_map, "udf_types.get_map() returns {a:1, b:2, c:3} (as_map)" ) {
 	as_error err;
 
 	as_key key;
-	as_key_init(&key, "test", "test", "test");
+	as_key_init(&key, NAMESPACE, SET, "test");
 
 	as_val * val = NULL;
 
@@ -246,7 +248,7 @@ TEST( udf_types_list, "udf_types.get_list() returns [1,2,3] (as_list)" ) {
 	as_error err;
 
 	as_key key;
-	as_key_init(&key, "test", "test", "test");
+	as_key_init(&key, NAMESPACE, SET, "test");
 
 	as_val * val = NULL;
 
@@ -270,7 +272,7 @@ TEST( udf_types_bytes, "udf_types.get_bytes() returns 'zyx' (as_bytes)" ) {
 	as_error err;
 
 	as_key key;
-	as_key_init(&key, "test", "test", "test");
+	as_key_init(&key, NAMESPACE, SET, "test");
 
 	as_val * val = NULL;
 	as_val * val2 = NULL;
@@ -312,7 +314,7 @@ TEST( udf_types_rec_map, "udf_types.get_rec_map() returns {t:1, f: 0, n: nil, i:
 	as_error err;
 
 	as_key key;
-	as_key_init(&key, "test", "test", "test");
+	as_key_init(&key, NAMESPACE, SET, "test");
 
 	as_val * val = NULL;
 
@@ -341,7 +343,7 @@ TEST( udf_types_double, "udf_types.write_f(rec, bname, float_binval) == udf_type
 		as_error err;
 
 		as_key key;
-		as_key_init(&key, "test", "test", "udf_double");
+		as_key_init(&key, NAMESPACE, SET, "udf_double");
 
 		// remove record to make sure we are clean
 		aerospike_key_remove(as, &err, NULL, &key);
@@ -428,7 +430,7 @@ TEST( udf_types_double, "udf_types.write_f(rec, bname, float_binval) == udf_type
 				info ("map['b'] = %lf", result);
 				assert_true( (result> 7.79 && result < 7.81));
 			}
-			free (p_key);
+			free ((void *)p_key);
 		}
 
 		as_val_destroy(res);

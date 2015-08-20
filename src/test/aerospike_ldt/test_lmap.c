@@ -36,6 +36,13 @@
 extern aerospike * as;
 
 /******************************************************************************
+ * MACROS
+ *****************************************************************************/
+
+#define NAMESPACE "test"
+#define SET "test_ldt"
+
+/******************************************************************************
  * STATIC FUNCTIONS
  *****************************************************************************/
 bool is_ldt_enabled()
@@ -76,7 +83,7 @@ TEST( lmap_put , "put: (test,test,t1) = {bin:1}" ) {
 
 	// No need to destroy as_integer if using as_integer_init() on stack object.
 	as_key skey;
-	as_key_init_str(&skey, "test", "lmap_set", "lmap_put");
+	as_key_init_str(&skey, NAMESPACE, SET, "lmap_put");
 
 	as_integer iname;
 	as_integer_init(&iname, 12);
@@ -121,7 +128,7 @@ TEST( lmap_put_all , "putall: (test,test,1) = {x:1,y:2,z:3}" ) {
 
 	// No need to destroy as_integer if using as_integer_init() on stack object.
 	as_key skey;
-	as_key_init_str(&skey, "test", "lmap_set", "lmap_put_all");
+	as_key_init_str(&skey, NAMESPACE, SET, "lmap_put_all");
 
 	// creating hashmap
 	as_hashmap map;

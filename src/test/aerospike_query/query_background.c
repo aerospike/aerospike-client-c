@@ -52,7 +52,7 @@ extern aerospike* as;
 #define UDF_FILE "query_background"
 
 #define NAMESPACE "test"
-#define SET "test"
+#define SET "test_query"
 
 /******************************************************************************
  * STATIC FUNCTIONS

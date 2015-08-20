@@ -51,7 +51,7 @@ extern aerospike * as;
 #define UDF_FILE "client_stream_simple"
 
 #define NAMESPACE "test"
-#define SET "test"
+#define SET "query_foreach"
 #define SET_STRSZ 20
 
 /******************************************************************************

@@ -41,12 +41,15 @@
 
 extern aerospike * as;
 
-#define NAMESPACE "test"
-#define SET "test"
-#define N_KEYS 200
-
 cf_atomic32 num_threads = 0;
 pthread_rwlock_t rwlock;
+
+/******************************************************************************
+ * MACROS
+ *****************************************************************************/
+#define NAMESPACE "test"
+#define SET "test_batch"
+#define N_KEYS 200
 
 /******************************************************************************
  * TYPES

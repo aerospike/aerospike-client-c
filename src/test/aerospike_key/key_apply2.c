@@ -43,6 +43,8 @@ extern aerospike * as;
 /******************************************************************************
  * MACROS
  *****************************************************************************/
+#define NAMESPACE "test"
+#define SET "test_apply2"
 
 #define LUA_FILE "src/test/lua/key_apply2.lua"
 #define UDF_FILE "key_apply2"
@@ -96,7 +98,7 @@ TEST( key_apply2_file_exists , "apply2: key_apply2 exists" ) {
 	const char * base = as_basename(&filename_string, filename);
 
 	as_key key;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, NAMESPACE, SET, "foo");
 
 	if ( aerospike_udf_get(as, &err, NULL, base, AS_UDF_TYPE_LUA, &file) != AEROSPIKE_OK ) {
 		error("error caused by aerospike_udf_get(%s): (%d) %s @ %s[%s:%d]", err.code, err.message, err.func, err.file, err.line);
@@ -118,7 +120,7 @@ TEST( key_apply2_file_exists , "apply2: key_apply2 exists" ) {
 // 	as_arraylist_init(&arglist, 1, 0);
 // 	as_arraylist_append_str(&arglist, "a");
 
-// 	as_status rc = aerospike_key_apply(as, &err, NULL, "test", "test", "foo", UDF_FILE, "getboolean", &arglist, &res);
+// 	as_status rc = aerospike_key_apply(as, &err, NULL, NAMESPACE, SET, "foo", UDF_FILE, "getboolean", &arglist, &res);
 
 // 	assert_int_eq( rc, AEROSPIKE_OK );
 // 	assert_not_null( res );
@@ -137,7 +139,7 @@ TEST( key_apply2_getinteger , "apply2: (test,test,foo) <!> key_apply2.getinteger
 	as_arraylist_append_str(&arglist, "a");
 
 	as_key key;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, NAMESPACE, SET, "foo");
 
 	as_status rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "getinteger", (as_list *) &arglist, &res);
 
@@ -170,7 +172,7 @@ TEST( key_apply2_getstring , "apply2: (test,test,foo) <!> key_apply2.getstring()
 	as_arraylist_append_str(&arglist, "b");
 
 	as_key key;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, NAMESPACE, SET, "foo");
 
 	as_status rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "getstring", (as_list *) &arglist, &res);
 
@@ -209,7 +211,7 @@ TEST( key_apply2_getlist , "apply2: (test,test,foo) <!> key_apply2.getlist() => 
 	as_arraylist_append_int64(&compare_list, 3);
 
 	as_key key;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, NAMESPACE, SET, "foo");
 
 	as_status rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "getlist", (as_list *) &arglist, &res);
 
@@ -244,7 +246,7 @@ TEST( key_apply2_getmap , "apply2: (test,test,foo) <!> key_apply2.getmap() => {x
 	as_arraylist_append_str(&arglist, "f");
 
 	as_key key;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, NAMESPACE, SET, "foo");
 
 	as_status rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "getmap", (as_list *) &arglist, &res);
 
@@ -284,7 +286,7 @@ TEST( key_apply2_add_strings , "apply: (test,test,foo) <!> key_apply2.add_string
 	as_arraylist_append_str(&arglist, "def");
 
 	as_key key;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, NAMESPACE, SET, "foo");
 
 	as_status rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "add_strings", (as_list *) &arglist, &res);
 
@@ -314,7 +316,7 @@ TEST( key_apply2_call_nonlocal_sum, "apply: (test,test,foo) <!> key_apply2.call_
 	as_arraylist_append_int64(&arglist, 2);
 
 	as_key key;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, NAMESPACE, SET, "foo");
 
 	as_status rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "sum", (as_list *) &arglist, &res);
 
@@ -343,7 +345,7 @@ TEST( key_apply2_call_local_sum, "apply: (test,test,foo) <!> key_apply2.call_loc
 	as_arraylist_append_int64(&arglist, 2);
 
 	as_key key;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, NAMESPACE, SET, "foo");
 
 	as_status rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "sum_local", (as_list *) &arglist, &res);
 
@@ -366,7 +368,7 @@ TEST( key_apply2_udf_func_does_not_exist, "apply: (test,test,foo) <!> key_apply2
 	as_val * res = NULL;
 
 	as_key key;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, NAMESPACE, SET, "foo");
 
 	as_status rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "udf_does_not_exist", NULL, &res);
 
@@ -382,7 +384,7 @@ TEST( key_apply2_udf_file_does_not_exist, "apply: (test,test,foo) <!> key_apply2
 	as_val * res = NULL;
 
 	as_key key;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, NAMESPACE, SET, "foo");
 
 	as_status rc = aerospike_key_apply(as, &err, NULL, &key, "udf_does_not_exist", "udf_does_not_exist", NULL, &res);
 
@@ -494,11 +496,9 @@ TEST( key_apply2_delete_record_test_replication, "apply: (test,test,foo) <!> key
 	as_status rc;
 
 	as_key key;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, NAMESPACE, SET, "foo");
 
 	rc = aerospike_key_remove(as, &err, NULL, &key);
-
-	assert_int_eq( rc, AEROSPIKE_OK );
 
 	// Insert 3 bins
 	as_record r;
@@ -507,7 +507,7 @@ TEST( key_apply2_delete_record_test_replication, "apply: (test,test,foo) <!> key
 	as_record_set_string(&r, "b", as_string_new("String 2",false));
 	as_record_set_string(&r, "c", as_string_new("String 3",false));
 	as_error_reset(&err);
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, NAMESPACE, SET, "foo");
 	rc = aerospike_key_put(as, &err, NULL, &key, &r);
 
 	assert_int_eq( rc, AEROSPIKE_OK );
@@ -522,7 +522,7 @@ TEST( key_apply2_delete_record_test_replication, "apply: (test,test,foo) <!> key
 	// Apply udf to delete bins
 	as_error_reset(&err);
 	as_val * res = NULL;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, NAMESPACE, SET, "foo");
 	rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "delete", NULL, &res);
 
 	assert_int_eq( rc, AEROSPIKE_OK );
@@ -533,7 +533,7 @@ TEST( key_apply2_delete_record_test_replication, "apply: (test,test,foo) <!> key
 	as_error_reset(&err);
 	as_record_init(&r, 0);
 	as_record *rec = &r;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, NAMESPACE, SET, "foo");
 	rc = aerospike_key_get(as, &err, NULL, &key, &rec);
 	assert_int_eq( rc, AEROSPIKE_OK );
 
@@ -556,11 +556,9 @@ TEST( key_apply2_update_record_test_memory, "apply: (test,test,foo) <!> key_appl
 	as_error_reset(&err);
 
 	as_key key;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, NAMESPACE, SET, "foo");
 
 	as_status rc = aerospike_key_remove(as, &err, NULL, &key);
-
-	assert_int_eq( rc, AEROSPIKE_OK );
 
 	each_stats("namespace/test", "used-bytes-memory", key, val, {
 		uint64_t mem = atol(val);
@@ -571,7 +569,7 @@ TEST( key_apply2_update_record_test_memory, "apply: (test,test,foo) <!> key_appl
 	// Create & Update record
 	as_error_reset(&err);
 	as_val * res = NULL;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, NAMESPACE, SET, "foo");
 	rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "update_record", NULL, &res);
 
 	assert_int_eq( rc, AEROSPIKE_OK );
@@ -595,11 +593,9 @@ TEST( key_apply2_bad_update_test_memory, "apply: (test,test,foo) <!> key_apply2.
 	as_error_reset(&err);
 
 	as_key key;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, NAMESPACE, SET, "foo");
 
 	as_status rc = aerospike_key_remove(as, &err, NULL, &key);
-
-	assert_int_eq( rc, AEROSPIKE_OK );
 
 	each_stats("namespace/test", "used-bytes-memory", key, val, {
 		uint64_t mem = atol(val);
@@ -610,7 +606,7 @@ TEST( key_apply2_bad_update_test_memory, "apply: (test,test,foo) <!> key_apply2.
 	// Create & Update record
 	as_error_reset(&err);
 	as_val * res = NULL;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, NAMESPACE, SET, "foo");
 	rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "bad_update", NULL, &res);
 
 	assert_int_eq( rc, AEROSPIKE_OK );
@@ -634,11 +630,9 @@ TEST( key_apply2_bad_create_test_memory, "apply: (test,test,foo) <!> key_apply2.
 	as_error_reset(&err);
 
 	as_key key;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, NAMESPACE, SET, "foo");
 
 	as_status rc = aerospike_key_remove(as, &err, NULL, &key);
-
-	assert_int_eq( rc, AEROSPIKE_OK );
 
 	each_stats("namespace/test", "used-bytes-memory", key, val, {
 		uint64_t mem = atol(val);
@@ -649,7 +643,7 @@ TEST( key_apply2_bad_create_test_memory, "apply: (test,test,foo) <!> key_apply2.
 	// Create & Update record
 	as_error_reset(&err);
 	as_val * res = NULL;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, NAMESPACE, SET, "foo");
 
 	rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "bad_create", NULL, &res);
 
@@ -673,7 +667,7 @@ TEST( key_apply2_ttl, "apply: (test,test,foo_ttl_check)" ) {
 	as_val * res = NULL;
 
 	as_key key;
-	as_key_init(&key, "test", "test", "foo_ttl_check");
+	as_key_init(&key, NAMESPACE, SET, "foo_ttl_check");
 
 	as_policy_apply policy;
 	as_policy_apply_init(&policy);

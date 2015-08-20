@@ -48,6 +48,9 @@ extern aerospike * as;
  * MACROS
  *****************************************************************************/
 
+#define NAMESPACE "test"
+#define SET "query_bg"
+
 #define LUA_FILE "src/test/lua/udf_record.lua"
 #define UDF_FILE "udf_record"
 
@@ -105,7 +108,7 @@ TEST( udf_record_update_map, "udf_record.update_map()" ) {
   as_error err;
 
   as_key key;
-  as_key_init(&key, "test", "test", "test");
+  as_key_init(&key, NAMESPACE, SET, "test");
 
   as_arraylist args;
   as_arraylist_init(&args,2,0);

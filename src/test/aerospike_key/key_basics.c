@@ -38,8 +38,14 @@
  *****************************************************************************/
 
 extern aerospike * as;
-
 static bool server_has_double = false;
+
+/******************************************************************************
+ * MACROS
+ *****************************************************************************/
+
+#define NAMESPACE "test"
+#define SET "test_basics"
 
 /******************************************************************************
  * STATIC FUNCTIONS
@@ -92,7 +98,7 @@ TEST( key_basics_put , "put: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 'de
 	}
 
 	as_key key;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, NAMESPACE, SET, "foo");
 
 	as_status rc = aerospike_key_put(as, &err, NULL, &key, rec);
 
@@ -125,7 +131,7 @@ TEST( key_basics_put_key , "put_with_key: (test,test,foo_key) = <bytes>" ) {
 	wpol.key = AS_POLICY_KEY_SEND;
 
 	as_key key;
-	as_key_init(&key, "test", "test", "foo_key");
+	as_key_init(&key, NAMESPACE, SET, "foo_key");
 
 	as_status rc = aerospike_key_put(as, &err, &wpol, &key, rec);
 	assert_int_eq( rc, AEROSPIKE_OK );
@@ -151,7 +157,7 @@ TEST( key_basics_get , "get: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 'de
 	as_record_init(&r, 0);
 
 	as_key key;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, NAMESPACE, SET, "foo");
 
 	as_status rc = aerospike_key_get(as, &err, NULL, &key, &rec);
 
@@ -207,7 +213,7 @@ TEST( key_basics_select , "select: (test,test,foo) = {a: 123, b: 'abc'}" ) {
 	as_record_init(&r, 0);
 
 	as_key key;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, NAMESPACE, SET, "foo");
 
 	const char * bins[3] = { "a", "b", NULL };
 
@@ -246,7 +252,7 @@ TEST( key_basics_exists , "exists: (test,test,foo)" ) {
 	as_error_reset(&err);
 
 	as_key key;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, NAMESPACE, SET, "foo");
 
 	as_record * rec = NULL;
 	as_status rc = aerospike_key_exists(as, &err, NULL, &key, &rec);
@@ -267,7 +273,7 @@ TEST( key_basics_notexists , "not exists: (test,test,foozoo)" ) {
 	as_error_reset(&err);
 
 	as_key key;
-	as_key_init(&key, "test", "test", "foozoo");
+	as_key_init(&key, NAMESPACE, SET, "foozoo");
 
 	
 	as_record * rec = NULL;
@@ -287,7 +293,7 @@ TEST( key_basics_remove , "remove: (test,test,foo)" ) {
 	as_error_reset(&err);
 
 	as_key key;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, NAMESPACE, SET, "foo");
 
 	as_status rc = aerospike_key_remove(as, &err, NULL, &key);
 
@@ -307,7 +313,7 @@ TEST( key_basics_remove_generation , "remove generation: (test,test,foo)" ) {
 	dpol.generation = 2;
 
 	as_key key;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, NAMESPACE, SET, "foo");
 
 	as_status rc = aerospike_key_remove(as, &err, &dpol, &key);
 
@@ -327,7 +333,7 @@ TEST( key_basics_put_generation , "put generation: (test,test,foo)" ) {
 	as_error_reset(&err);
 
 	as_key key;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, NAMESPACE, SET, "foo");
 
 	as_record r, * rec = &r;
 	as_record_init(rec, 1);
@@ -385,7 +391,7 @@ TEST( key_basics_remove_notexists , "remove not exists: (test,test,foozoo)" ) {
 	as_error_reset(&err);
 	
 	as_key key;
-	as_key_init(&key, "test", "test", "foozoo");
+	as_key_init(&key, NAMESPACE, SET, "foozoo");
 	
 	as_status rc = aerospike_key_remove(as, &err, NULL, &key);
 	
@@ -407,7 +413,7 @@ TEST( key_basics_operate , "operate: (test,test,foo) => {a: incr(321), b: append
 	as_operations_add_prepend_str(&ops, "d", "abc");
 
 	as_key key;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, NAMESPACE, SET, "foo");
 
 	as_status rc = aerospike_key_operate(as, &err, NULL, &key, &ops, NULL);
 
@@ -422,7 +428,7 @@ TEST( key_basics_get2 , "get: (test,test,foo) = {a: 444, b: 'abcdef', d: 'abcdef
 	as_error_reset(&err);
 
 	as_key key;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, NAMESPACE, SET, "foo");
 
 	as_record r, *rec = &r;
 	as_record_init(&r, 0);
@@ -494,7 +500,7 @@ TEST( key_basics_write_preserialized_list , "write pre-serialized list" ) {
 	
 	// Write pre-serialized list.
 	as_key key;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, NAMESPACE, SET, "foo");
 	
 	as_record rec;
 	as_record_init(&rec, 1);
@@ -513,7 +519,7 @@ TEST( key_basics_read_list , "read list" ) {
 		
 	// Read list
 	as_key key;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, NAMESPACE, SET, "foo");
 
 	as_record* rec = 0;
 	as_status rc = aerospike_key_get(as, &err, NULL, &key, &rec);
@@ -534,7 +540,7 @@ TEST( key_basics_read_raw_list , "read raw list" ) {
 	
 	// Read raw list
 	as_key key;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, NAMESPACE, SET, "foo");
 	
 	as_policy_read policy;
 	as_policy_read_init(&policy);
@@ -576,7 +582,7 @@ TEST( key_basics_list_map_double , "put/get double: (test,test,foo_double) = {b1
 		as_error_reset(&err);
 
 		as_key key;
-		as_key_init(&key, "test", "test", "foo_double");
+		as_key_init(&key, NAMESPACE, SET, "foo_double");
 
 		// remove record to have clean test
 		as_status rc = aerospike_key_remove(as, &err, NULL, &key);

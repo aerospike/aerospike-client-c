@@ -39,6 +39,13 @@
 extern aerospike * as;
 static bool server_has_double = false;
 
+/******************************************************************************
+ * MACROS
+ *****************************************************************************/
+
+#define NAMESPACE "test"
+#define SET "test_operate"
+
 
 /******************************************************************************
  * TYPES
@@ -72,7 +79,7 @@ TEST( key_operate_touchget , "operate: (test,test,key2) = {touch, get}" ) {
 	as_record_set_list(rec, "e", (as_list *) &list);
 
 	as_key key;
-	as_key_init(&key, "test", "operate", "key2");
+	as_key_init(&key, NAMESPACE, SET, "key2");
 
 	as_status rc = aerospike_key_remove(as, &err, NULL, &key);
 
@@ -112,7 +119,7 @@ TEST( key_operate_9 , "operate: (test,test,key3) = {append, read, write, read, i
     as_record *rec = NULL;
     int rc;
 
-    as_key_init( &key, "test", "test-set", "test-key1" );
+    as_key_init( &key, NAMESPACE, SET, "test-key1" );
 	rc = aerospike_key_remove(as, &err, NULL, &key);
 	assert_true( rc == AEROSPIKE_OK || rc == AEROSPIKE_ERR_RECORD_NOT_FOUND);
 
@@ -161,7 +168,7 @@ TEST( key_operate_gen_equal , "operate: only if expected generation " )
 	as_record_set_list(rec, "e", (as_list *) &list);
 	
 	as_key key;
-	as_key_init(&key, "test", "operate", "key2");
+	as_key_init(&key, NAMESPACE, SET, "key2");
 	
 	as_status rc = aerospike_key_remove(as, &err, NULL, &key);
 	
@@ -206,7 +213,7 @@ TEST( key_operate_float , "operate: (test,test,opfloat) = {append, read, write, 
 		as_record *rec = NULL;
 		int rc;
 
-		as_key_init( &key, "test", "test-set", "opfloat" );
+		as_key_init( &key, NAMESPACE, SET, "opfloat" );
 		rc = aerospike_key_remove(as, &err, NULL, &key);
 		assert_true( rc == AEROSPIKE_OK || rc == AEROSPIKE_ERR_RECORD_NOT_FOUND);
 

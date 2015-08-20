@@ -43,6 +43,9 @@ extern aerospike * as;
  * MACROS
  *****************************************************************************/
 
+#define NAMESPACE "test"
+#define SET "test_apply"
+
 #define LUA_FILE "src/test/lua/key_apply.lua"
 #define UDF_FILE "key_apply"
 
@@ -100,7 +103,7 @@ static bool after(atf_suite * suite) {
 	as_val * res = NULL;
 
 	as_key key;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, NAMESPACE, SET, "foo");
 
 	as_status rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "map_arg", (as_list*) &arglist, &res);
 
@@ -141,7 +144,7 @@ TEST( key_apply_put , "put: (test,test,foo) = {a: 123, b: 'abc', c: 456, d: 'def
 	as_record_set_map(&r, "f", (as_map *) &map);
 
 	as_key key;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, NAMESPACE, SET, "foo");
 
 	as_status rc = aerospike_key_put(as, &err, NULL, &key, &r);
 
@@ -159,7 +162,7 @@ TEST( key_apply_one , "apply: (test,test,foo) <!> key_apply.one() => 1" ) {
 	as_val * res = NULL;
 
 	as_key key;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, NAMESPACE, SET, "foo");
 
 	as_status rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "one", NULL, &res);
 
@@ -183,7 +186,7 @@ TEST( key_apply_ten , "apply: (test,test,foo) <!> key_apply.one() => 10" ) {
 	as_val * res = NULL;
 
 	as_key key;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, NAMESPACE, SET, "foo");
 
 	as_status rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "ten", NULL, &res);
 
@@ -207,7 +210,7 @@ TEST( key_apply_add_1_2 , "apply: (test,test,foo) <!> key_apply.add(1,2) => 3" )
 	as_val * res = NULL;
 
 	as_key key;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, NAMESPACE, SET, "foo");
 
 	as_arraylist arglist;
 	as_arraylist_init(&arglist, 3, 0);
@@ -237,7 +240,7 @@ TEST( key_apply_record_exists , "apply: (test,test,foo) <!> key_apply.record_exi
 	as_val * res = NULL;
 
 	as_key key;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, NAMESPACE, SET, "foo");
 
 	as_status rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "record_exists", NULL, &res);
 
@@ -262,7 +265,7 @@ TEST( key_apply_get_bin_a , "apply: (test,test,foo1) <!> key_apply.get_bin_a() =
 	as_val * res = NULL;
 
 	as_key key;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, NAMESPACE, SET, "foo");
 
 	as_arraylist arglist;
 	as_arraylist_init(&arglist, 1, 0);
@@ -289,7 +292,7 @@ TEST( key_apply_null_rc , "apply: with null result value" ) {
 	as_error_reset(&err);
 	
 	as_key key;
-	as_key_init(&key, "test", "test", "foo");
+	as_key_init(&key, NAMESPACE, SET, "foo");
 	
 	as_status rc = aerospike_key_apply(as, &err, NULL, &key, UDF_FILE, "one", NULL, NULL);
 	

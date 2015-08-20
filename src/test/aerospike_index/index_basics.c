@@ -38,6 +38,12 @@
 extern aerospike * as;
 
 /******************************************************************************
+ * MACROS
+ *****************************************************************************/
+#define NAMESPACE "test"
+#define SET "test_index"
+
+/******************************************************************************
  * TYPES
  *****************************************************************************/
 
@@ -57,7 +63,7 @@ TEST( index_basics_create , "Create index on bin" ) {
     as_error_reset(&err);
 
 	// DEFAULT type index
-	as_status status = aerospike_index_create(as, &err, 0, NULL, "test", "test", "new_bin", "idx_test_new_bin", AS_INDEX_STRING);
+	as_status status = aerospike_index_create(as, &err, 0, NULL, NAMESPACE, SET, "new_bin", "idx_test_new_bin", AS_INDEX_STRING);
 	
     if (status != AEROSPIKE_OK) {
         info("error(%d): %s", err.code, err.message);
@@ -66,7 +72,7 @@ TEST( index_basics_create , "Create index on bin" ) {
 
 	// LIST type index
 	/* TODO uncomment when server supports complex indicies.
-	status = aerospike_index_create_complex(as, &err, 0, NULL, "test", "test", "new_bin[0]", "idx_test_listbin", AS_INDEX_TYPE_LIST, AS_INDEX_STRING);
+	status = aerospike_index_create_complex(as, &err, 0, NULL, NAMESPACE, SET, "new_bin[0]", "idx_test_listbin", AS_INDEX_TYPE_LIST, AS_INDEX_STRING);
 	
     if (status != AEROSPIKE_OK) {
         info("error(%d): %s", err.code, err.message);
@@ -81,7 +87,7 @@ TEST( index_basics_drop , "Drop index" ) {
     as_error_reset(&err);
 
 	// DEFAUlT type index
-    aerospike_index_remove(as, &err, NULL, "test", "idx_test_new_bin");
+    aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_new_bin");
     if ( err.code != AEROSPIKE_OK ) {
         info("error(%d): %s", err.code, err.message);
     }
@@ -89,7 +95,7 @@ TEST( index_basics_drop , "Drop index" ) {
 
 	// LIST type index
 	/* TODO uncomment when server supports complex indicies.
-	aerospike_index_remove(as, &err, NULL, "test", "idx_test_listbin");
+	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_listbin");
     if ( err.code != AEROSPIKE_OK ) {
         info("error(%d): %s", err.code, err.message);
     }

@@ -57,8 +57,10 @@ function get_rec_map(rec)
 end
 
 
-function write_f(r,b,v)
+function write_f(r,b,b2,b3,v)
     r[b] = v
+    r[b2] = list {1.2,3.4}
+    r[b3] = map { a=5.6, b=7.8}
     if not aerospike:exists(r) then
         aerospike:create(r)
     else
@@ -66,10 +68,9 @@ function write_f(r,b,v)
     end
 end
 
-function read_f(r,b,v)
+function read_f(r,b)
     if not aerospike:exists(r) then
-        error(r)
+        error("record does not exist")
     end
-    return r[b] + v
+    return r[b]
 end
-

@@ -42,6 +42,7 @@
  *****************************************************************************/
 
 extern aerospike * as;
+static bool server_has_double = false;
 
 /******************************************************************************
  * MACROS
@@ -52,7 +53,6 @@ extern aerospike * as;
 
 #define NAMESPACE "test"
 #define SET "query_foreach"
-#define SET_STRSZ 20
 
 /******************************************************************************
  * STATIC FUNCTIONS
@@ -617,7 +617,7 @@ TEST( query_foreach_double, "test query on double behavior" ) {
 	int n_recs = 1000, n_q_recs = 99;
 	char *int_bin = "int_bin";
 	char *double_bin = "double_bin";
-	char strval[SET_STRSZ], strkey[SET_STRSZ];
+	char strval[sizeof(SET)+50], strkey[sizeof(SET)+50];
 
 	as_status status;
 
@@ -650,6 +650,8 @@ TEST( query_foreach_double, "test query on double behavior" ) {
 		policy.key = AS_POLICY_KEY_SEND;
 
 		aerospike_key_put(as, &err, &policy, &key, &r);
+		
+		as_record_destroy(&r);
 	}
 
 	as_query q;
@@ -681,6 +683,8 @@ TEST( query_foreach_double, "test query on double behavior" ) {
 
 SUITE( query_foreach, "aerospike_query_foreach tests" ) {
 
+	server_has_double = aerospike_has_double(as);
+
 	suite_before( before );
 	suite_after( after   );
 	
@@ -697,5 +701,7 @@ SUITE( query_foreach, "aerospike_query_foreach tests" ) {
 	suite_add( query_quit_early );
 	suite_add( query_agg_quit_early );
 	suite_add( query_foreach_nullset );
-	suite_add( query_foreach_double );
+	if (server_has_double) {
+		suite_add( query_foreach_double );
+	}
 }

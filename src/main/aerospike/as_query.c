@@ -240,6 +240,10 @@ bool as_query_where_init(as_query * query, uint16_t n)
  *	You have to ensure as_query.where has sufficient capacity, prior to
  *	adding a predicate. If capacity is insufficient then false is returned.
  *
+ *	String predicates are not owned by as_query.  If the string is allocated 
+ *	on the heap, the caller is responsible for freeing the string after the query 
+ *	has been executed.  as_query_destroy() will not free this string predicate.
+ *
  *	~~~~~~~~~~{.c}
  *	as_query_where_init(&query, 3);
  *	as_query_where(&query, "bin1", as_string_equals("abc"));

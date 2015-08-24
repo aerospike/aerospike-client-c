@@ -617,7 +617,6 @@ TEST( query_foreach_double, "test query on double behavior" ) {
 	int n_recs = 1000, n_q_recs = 99;
 	char *int_bin = "int_bin";
 	char *double_bin = "double_bin";
-	char strval[sizeof(SET)+50], strkey[sizeof(SET)+50];
 
 	as_status status;
 
@@ -632,27 +631,19 @@ TEST( query_foreach_double, "test query on double behavior" ) {
 		info("error(%d): %s", err.code, err.message);
 	}
 
+	as_record r;
+	as_record_init(&r, 2);
 	// insert records
 	for ( int i = 1; i <= n_recs; i++ ) {
-		sprintf(strval, "str-%s-%d", SET, i);
-		sprintf(strkey, "key-%s-%d", SET, i);
-
 		as_key key;
 		as_key_init_int64(&key, NAMESPACE, SET, (int64_t)i);
 
-		as_record r;
-		as_record_init(&r, 2);
-		as_record_set_int64(&r, "int_bin", i);
-		as_record_set_double(&r, "double_bin", i/(double)10);
+		as_record_set_int64(&r, int_bin, i);
+		as_record_set_double(&r, double_bin, i/(double)10);
 
-		as_policy_write policy;
-		as_policy_write_init(&policy);
-		policy.key = AS_POLICY_KEY_SEND;
-
-		aerospike_key_put(as, &err, &policy, &key, &r);
-		
-		as_record_destroy(&r);
+		aerospike_key_put(as, &err, NULL, &key, &r);
 	}
+	as_record_destroy(&r);
 
 	as_query q;
 	as_query_init(&q, NAMESPACE, SET);
@@ -661,7 +652,7 @@ TEST( query_foreach_double, "test query on double behavior" ) {
 	as_query_select(&q, double_bin);
 
 	as_query_where_inita(&q, 1);
-	as_query_where(&q, "int_bin", as_integer_range(0, n_q_recs));
+	as_query_where(&q, int_bin, as_integer_range(0, n_q_recs));
 	
 	double expected_sum = 0;
 	double recieved_sum = 0;
@@ -675,6 +666,7 @@ TEST( query_foreach_double, "test query on double behavior" ) {
 	assert_int_eq( err.code, 0 );
 	assert_double_eq( recieved_sum, expected_sum );
 
+	as_query_destroy(&q);
 }
 
 /******************************************************************************

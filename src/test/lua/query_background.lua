@@ -21,3 +21,17 @@ function process_test_rec(r,name1,name2,addValue)
         aerospike:update(r)
     end
 end
+
+
+-- Aggregation(sum of bins with value as double type)
+local function get_bin(rec)
+    return rec['a_double_bin']
+end
+
+local function add(a, b)
+    return a + b
+end
+
+function sum_bin(stream)
+    return stream : map(get_bin) : reduce(add)
+end

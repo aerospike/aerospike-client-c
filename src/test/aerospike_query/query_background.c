@@ -43,6 +43,7 @@
  *****************************************************************************/
 
 extern aerospike* as;
+static bool server_has_double = false;
 
 /******************************************************************************
  * MACROS
@@ -224,16 +225,97 @@ TEST(query_validate1, "query validate1")
 	as_query_destroy(&q);
 }
 
+bool
+as_query_aggr_cb(const as_val* p_val, void* udata)
+{
+	if (p_val) {
+		// Because of the UDF used, we expect an as_double to be returned.
+		as_double* res = as_double_fromval(p_val);
+		double * sum = (double *) udata;
+
+		*sum = res ? res->value : 0;
+	}
+	return true;
+}
+
+TEST(query_aggregation_double, "query aggregation validate")
+{
+	as_error  err;
+	as_error_reset(&err);
+
+	int n_recs = 1000;
+	int start_range = 1, end_range = 99;
+	char *int_bin = "a_int_bin";
+	char *double_bin = "a_double_bin";
+
+	as_status status;
+	as_index_task task;
+
+	//create index on "a_int_bin"
+	status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, SET, int_bin, "idx_test_a_int_bin", AS_INDEX_NUMERIC);
+	if ( status == AEROSPIKE_OK ) {
+		aerospike_index_create_wait(&err, &task, 0);
+	}
+	else {
+		info("error(%d): %s", err.code, err.message);
+	}
+
+	as_record r;
+	as_record_init(&r, 2);
+
+	// insert records
+	for ( int i = 1; i <= n_recs; i++ ) {
+
+		as_key key;
+		as_key_init_int64(&key, NAMESPACE, SET, (int64_t)i);
+
+		as_record_set_int64(&r, int_bin, i);
+		as_record_set_double(&r, double_bin, i/(double)10);
+
+		aerospike_key_put(as, &err, NULL, &key, &r);
+
+	}
+
+	as_record_destroy(&r);
+
+	as_query q;
+	as_query_init(&q, NAMESPACE, SET);
+
+	as_query_where_inita(&q, 1);
+	as_query_where(&q, "a_int_bin", as_integer_range(start_range, end_range));
+
+	as_query_apply(&q, UDF_FILE, "sum_bin", NULL);
+
+	double expected_sum = 0;
+	double recieved_sum = 0;
+	aerospike_query_foreach(as, &err, NULL, &q, as_query_aggr_cb, &recieved_sum);
+
+	assert_int_eq(err.code, AEROSPIKE_OK);
+
+	for ( int j = start_range; j <= end_range; j++ ) {
+		expected_sum += j/(double)10;
+	}
+
+	assert_true( (expected_sum > (recieved_sum - 0.01)) && (expected_sum < (recieved_sum + 0.01)));
+	as_query_destroy(&q);
+}
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
 
 SUITE(query_background, "aerospike_query_background tests")
 {
+	server_has_double = aerospike_has_double(as);
+
 	suite_before(before);
 	suite_after(after);
-	
+
 	suite_add(query_background_create);
 	suite_add(query_background1);
 	suite_add(query_validate1);
+
+	if (server_has_double) {
+		suite_add( query_aggregation_double );
+	}
+
 }

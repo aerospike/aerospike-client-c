@@ -44,9 +44,9 @@ ticker_worker(void* udata)
 		int64_t elapsed = time - prev_time;
 		prev_time = time;
 
-		int32_t write_current = cf_atomic32_fas_m(&data->write_count, 0);
-		int32_t write_timeout_current = cf_atomic32_fas_m(&data->write_timeout_count, 0);
-		int32_t write_error_current = cf_atomic32_fas_m(&data->write_error_count, 0);
+		int32_t write_current = ck_pr_fas_32(&data->write_count, 0);
+		int32_t write_timeout_current = ck_pr_fas_32(&data->write_timeout_count, 0);
+		int32_t write_error_current = ck_pr_fas_32(&data->write_error_count, 0);
 		int32_t total_count = data->current_key;
 		int32_t write_tps = (int32_t)((double)write_current * 1000 / elapsed + 0.5);
 			
@@ -81,14 +81,14 @@ linear_write_worker(void* udata)
 	int32_t key;
 	
 	while (data->valid) {
-		key = cf_atomic32_incr(&data->current_key);
+		key = ck_pr_faa_32(&data->current_key, 1) + 1;
 		
 		if (key > records) {
 			if (key - 1 == records) {
 				blog_info("write(tps=%d timeouts=%d errors=%d total=%d)",
-					cf_atomic32_get(data->write_count),
-					cf_atomic32_get(data->write_timeout_count),
-					cf_atomic32_get(data->write_error_count),
+					ck_pr_load_32(&data->write_count),
+					ck_pr_load_32(&data->write_timeout_count),
+					ck_pr_load_32(&data->write_error_count),
 					records);
 			}
 			break;

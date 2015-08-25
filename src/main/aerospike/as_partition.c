@@ -20,8 +20,8 @@
 #include <aerospike/as_policy.h>
 #include <aerospike/as_shm_cluster.h>
 #include <aerospike/as_string.h>
+#include <aerospike/ck/ck_pr.h>
 #include <citrusleaf/cf_b64.h>
-#include "ck_pr.h"
 
 /******************************************************************************
  *	Functions

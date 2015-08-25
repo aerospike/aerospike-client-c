@@ -10,10 +10,6 @@
 	path = modules/lua-core
 	url = git@github.com:citrusleaf/aerospike-lua-core
 	ignore = dirty
-[submodule "modules/ck"]
-	path = modules/ck
-	url = git@github.com:aerospike/ck
-	ignore = dirty
 [submodule "modules/lua"]
 	path = modules/lua
 	url = git@github.com:citrusleaf/lua.git

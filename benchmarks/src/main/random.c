@@ -49,18 +49,18 @@ ticker_worker(void* udata)
 		int64_t elapsed = time - prev_time;
 		prev_time = time;
 		
-		int32_t write_current = cf_atomic32_fas_m(&data->write_count, 0);
-		int32_t write_timeout_current = cf_atomic32_fas_m(&data->write_timeout_count, 0);
-		int32_t write_error_current = cf_atomic32_fas_m(&data->write_error_count, 0);
-		int32_t read_current = cf_atomic32_fas_m(&data->read_count, 0);
-		int32_t read_timeout_current = cf_atomic32_fas_m(&data->read_timeout_count, 0);
-		int32_t read_error_current = cf_atomic32_fas_m(&data->read_error_count, 0);
-		int32_t transactions_current = cf_atomic32_get(data->transactions_count);
+		uint32_t write_current = ck_pr_fas_32(&data->write_count, 0);
+		uint32_t write_timeout_current = ck_pr_fas_32(&data->write_timeout_count, 0);
+		uint32_t write_error_current = ck_pr_fas_32(&data->write_error_count, 0);
+		uint32_t read_current = ck_pr_fas_32(&data->read_count, 0);
+		uint32_t read_timeout_current = ck_pr_fas_32(&data->read_timeout_count, 0);
+		uint32_t read_error_current = ck_pr_fas_32(&data->read_error_count, 0);
+		uint32_t transactions_current = ck_pr_load_32(&data->transactions_count);
 
 		data->period_begin = time;
 	
-		int32_t write_tps = (int32_t)((double)write_current * 1000 / elapsed + 0.5);
-		int32_t read_tps = (int32_t)((double)read_current * 1000 / elapsed + 0.5);
+		uint32_t write_tps = (uint32_t)((double)write_current * 1000 / elapsed + 0.5);
+		uint32_t read_tps = (uint32_t)((double)read_current * 1000 / elapsed + 0.5);
 		
 		blog_info("write(tps=%d timeouts=%d errors=%d) read(tps=%d timeouts=%d errors=%d) total(tps=%d timeouts=%d errors=%d)",
 			write_tps, write_timeout_current, write_error_current,
@@ -119,7 +119,7 @@ random_worker(void* udata)
 		else {
 			write_record(key, data);
 		}
-		cf_atomic32_incr(&data->transactions_count);
+		ck_pr_inc_32(&data->transactions_count);
 
 		if (throughput > 0) {
 			int transactions = data->write_count + data->read_count;

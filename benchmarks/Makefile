@@ -22,7 +22,6 @@ else
 endif
 
 CFLAGS += -I$(AEROSPIKE)/target/$(PLATFORM)/include
-CFLAGS += -I$(AEROSPIKE)/target/$(PLATFORM)/include/ck
 
 LDFLAGS = -lssl -lcrypto -lpthread
 ifneq ($(OS),Darwin)

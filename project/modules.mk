@@ -23,6 +23,8 @@ ifeq ($(wildcard $(COMMON)/Makefile),)
   $(error )
 endif
 
+COMMON-TARGET := $(subst $(COMMON)/$(SOURCE_INCL),$(TARGET_INCL),$(COMMON-HEADERS))
+
 .PHONY: COMMON-build
 COMMON-build: $(COMMON)/$(TARGET_LIB)/libaerospike-common.a
 
@@ -34,18 +36,12 @@ $(COMMON)/$(TARGET_LIB)/libaerospike-common.a:
 	$(MAKE) -e -C $(COMMON) libaerospike-common.a
 
 .PHONY: COMMON-prepare
-COMMON-prepare: COMMON-make-prepare $(subst $(COMMON)/$(SOURCE_INCL),$(TARGET_INCL),$(COMMON-HEADERS))
+COMMON-prepare: $(COMMON-TARGET)
 	$(noop)
 
-.PHONY: COMMON-make-prepare
-COMMON-make-prepare:
-	$(MAKE) -e -C $(COMMON) prepare
-
-$(TARGET_INCL)/aerospike/%.h: $(COMMON)/$(TARGET_INCL)/aerospike/%.h | $(TARGET_INCL)/aerospike
-	 cp -p $^ $@
-
-$(TARGET_INCL)/citrusleaf/%.h: $(COMMON)/$(TARGET_INCL)/citrusleaf/%.h | $(TARGET_INCL)/citrusleaf
-	 cp -p $^ $@
+$(TARGET_INCL)/%.h: $(COMMON)/$(SOURCE_INCL)/%.h
+	@mkdir -p $(@D)
+	cp $< $@
 
 ###############################################################################
 ##  MOD-LUA MODULE                                                           ##
@@ -89,37 +85,6 @@ MOD_LUA-prepare: MOD_LUA-make-prepare
 .PHONY: MOD_LUA-make-prepare
 MOD_LUA-make-prepare:
 	$(MAKE) -e -C $(MOD_LUA) prepare COMMON=$(COMMON) LUA_CORE=$(LUA_CORE) USE_LUAJIT=$(USE_LUAJIT) LUAJIT=$(LUAJIT) USE_LUAMOD=$(USE_LUAMOD) LUAMOD=$(LUAMOD)
-
-###############################################################################
-##  CONCURRENCY KIT MODULE                                                   ##
-###############################################################################
-
-.PHONY: CK-build
-CK-build: $(TARGET_INCL)/ck/ck_md.h
-
-$(CK)/include/ck_md.h:
-	(cd $(CK); ./configure)
-
-.PHONY: CK-clean
-CK-clean:
-	$(noop)
-
-CK_INCLUDES := $(shell find $(CK)/include -type f)
-CK_PATSUB := $(patsubst $(CK)/include/%.h,$(TARGET_INCL)/ck/%.h,$(CK_INCLUDES))
-
-$(TARGET_INCL)/ck/%.h: $(CK)/include/%.h
-	mkdir -p $(@D)
-	cp -p $< $@
-
-CK-prepare: $(CK_PATSUB)
-	$(noop)
-
-# .PHONY: CK-prepare
-# CK-prepare: $(TARGET_INCL)/ck
-# 	@rsync -rp $(CK)/include/* $(TARGET_INCL)/ck
-
-$(TARGET_INCL)/ck: | $(TARGET_INCL)
-	mkdir $@
 
 ###############################################################################
 ##  LUA MODULE                                                               ##

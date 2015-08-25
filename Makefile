@@ -9,12 +9,7 @@ LUA_CORE	:= $(realpath modules/lua-core)
 LUAMOD		:= $(realpath modules/lua)
 LUAJIT		:= $(realpath modules/luajit)
 MOD_LUA		:= $(realpath modules/mod-lua)
-# If concurrency kit repo path not defined, use default ck module in this repo.
-# Currency kit headers are used only.
-ifndef CK
-  CK := $(realpath modules/ck)
-endif
-MODULES		:= COMMON MOD_LUA CK
+MODULES		:= COMMON MOD_LUA
 
 # Use the Lua submodule?  [By default, yes.]
 USE_LUAMOD = 1
@@ -84,7 +79,6 @@ endif
 # Include Paths
 INC_PATH += $(COMMON)/$(TARGET_INCL)
 INC_PATH += $(MOD_LUA)/$(TARGET_INCL)
-INC_PATH += $(CK)/include
 
 # Library Paths
 # LIB_PATH +=
@@ -221,6 +215,7 @@ COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_b64.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_clock.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_queue.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_types.h
+COMMON-HEADERS += $(shell find $(COMMON)/$(SOURCE_INCL)/aerospike/ck -type f)
 
 EXCLUDE-HEADERS = 
 

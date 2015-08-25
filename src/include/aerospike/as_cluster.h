@@ -16,17 +16,18 @@
  */
 #pragma once
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include <aerospike/as_config.h>
 #include <aerospike/as_node.h>
 #include <aerospike/as_partition.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_thread_pool.h>
-#include <citrusleaf/cf_atomic.h>
-#include "ck_pr.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+	
+// Concurrency kit needs to be under extern "C" when compiling C++.
+#include <aerospike/ck/ck_pr.h>
 
 /******************************************************************************
  *	TYPES

@@ -90,7 +90,7 @@ put_record(int keyval, as_record* rec, clientdata* data)
 		uint64_t end = cf_getms();
 		
 		if (status == AEROSPIKE_OK) {
-			cf_atomic32_incr(&data->write_count);
+			ck_pr_inc_32(&data->write_count);
 			latency_add(&data->write_latency, end - begin);
 			return status;
 		}
@@ -99,17 +99,17 @@ put_record(int keyval, as_record* rec, clientdata* data)
 		status = aerospike_key_put(&data->client, &err, 0, &key, rec);
 		
 		if (status == AEROSPIKE_OK) {
-			cf_atomic32_incr(&data->write_count);
+			ck_pr_inc_32(&data->write_count);
 			return status;
 		}
 	}
 
 	// Handle error conditions.
 	if (status == AEROSPIKE_ERR_TIMEOUT) {
-		cf_atomic32_incr(&data->write_timeout_count);
+		ck_pr_inc_32(&data->write_timeout_count);
 	}
 	else {
-		cf_atomic32_incr(&data->write_error_count);
+		ck_pr_inc_32(&data->write_error_count);
 		
 		if (data->debug) {
 			blog_error("Write error: ns=%s set=%s key=%d bin=%s code=%d message=%s",
@@ -196,7 +196,7 @@ read_record(int keyval, clientdata* data)
 		
 		// Record may not have been initialized, so not found is ok.
 		if (status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND) {
-			cf_atomic32_incr(&data->read_count);
+			ck_pr_inc_32(&data->read_count);
 			latency_add(&data->read_latency, end - begin);
 			as_record_destroy(rec);
 			return status;
@@ -207,7 +207,7 @@ read_record(int keyval, clientdata* data)
 		
 		// Record may not have been initialized, so not found is ok.
 		if (status == AEROSPIKE_OK|| status == AEROSPIKE_ERR_RECORD_NOT_FOUND) {
-			cf_atomic32_incr(&data->read_count);
+			ck_pr_inc_32(&data->read_count);
 			as_record_destroy(rec);
 			return status;
 		}
@@ -215,10 +215,10 @@ read_record(int keyval, clientdata* data)
 	
 	// Handle error conditions.
 	if (status == AEROSPIKE_ERR_TIMEOUT) {
-		cf_atomic32_incr(&data->read_timeout_count);
+		ck_pr_inc_32(&data->read_timeout_count);
 	}
 	else {
-		cf_atomic32_incr(&data->read_error_count);
+		ck_pr_inc_32(&data->read_error_count);
 		
 		if (data->debug) {
 			blog_error("Read error: ns=%s set=%s key=%d bin=%s code=%d message=%s",

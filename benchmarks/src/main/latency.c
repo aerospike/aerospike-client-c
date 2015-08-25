@@ -20,7 +20,8 @@
  * IN THE SOFTWARE.
  ******************************************************************************/
 #include "latency.h"
-#include "citrusleaf/alloc.h"
+#include <aerospike/ck/ck_pr.h>
+#include <citrusleaf/alloc.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -30,7 +31,7 @@ latency_init(latency* l, int columns, int shift)
 {
 	l->last_bucket = columns - 1;
 	l->bit_shift = shift;
-	l->buckets = cf_calloc(columns, sizeof(cf_atomic32));
+	l->buckets = cf_calloc(columns, sizeof(uint32_t));
 }
 
 void
@@ -59,7 +60,7 @@ void
 latency_add(latency* l, uint64_t elapsed_ms)
 {
 	int index = latency_getindex(l, elapsed_ms);
-	cf_atomic32_incr(&l->buckets[index]);
+	ck_pr_inc_32(&l->buckets[index]);
 }
 
 void
@@ -106,18 +107,18 @@ void
 latency_print_results(latency* l, const char* prefix, char* out) {
 	// Capture snapshot and make buckets cumulative.
 	int max = l->last_bucket + 1;
-	cf_atomic32* array = malloc(max * sizeof(cf_atomic32));
-	cf_atomic32* buckets = l->buckets;
+	uint32_t* array = malloc(max * sizeof(uint32_t));
+	uint32_t* buckets = l->buckets;
 	int sum = 0;
 	int count;
 	
 	for (int i = max - 1; i >= 1 ; i--) {
-		count = cf_atomic32_fas_m(&buckets[i], 0);
+		count = ck_pr_fas_32(&buckets[i], 0);
 		array[i] = count + sum;
 		sum += count;
 	}
 	// The first bucket (<=1ms) does not need a cumulative adjustment.
-	count = cf_atomic32_fas_m(&buckets[0], 0);
+	count = ck_pr_fas_32(&buckets[0], 0);
 	array[0] = count;
 	sum += count;
 	

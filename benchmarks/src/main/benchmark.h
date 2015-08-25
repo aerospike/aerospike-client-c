@@ -64,26 +64,26 @@ typedef struct clientdata_t {
 	const char* set;
 	const char* bin_name;
 	
-	cf_atomic64 period_begin;
+	uint64_t period_begin;
 	
 	aerospike client;
 	as_bin_value fixed_value;
 	
 	latency write_latency;
-	cf_atomic32 write_count;
-	cf_atomic32 write_timeout_count;
-	cf_atomic32 write_error_count;
+	uint32_t write_count;
+	uint32_t write_timeout_count;
+	uint32_t write_error_count;
 	
 	latency read_latency;
-	cf_atomic32 read_count;
-	cf_atomic32 read_timeout_count;
-	cf_atomic32 read_error_count;
+	uint32_t read_count;
+	uint32_t read_timeout_count;
+	uint32_t read_error_count;
 	
-	cf_atomic32 transactions_limit;
-	cf_atomic32 transactions_count;
+	uint32_t transactions_limit;
+	uint32_t transactions_count;
 
-	cf_atomic32 current_key;
-	cf_atomic32 valid;
+	uint32_t current_key;
+	uint32_t valid;
 	int32_t records;
 	
 	int port;

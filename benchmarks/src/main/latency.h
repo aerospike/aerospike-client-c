@@ -21,10 +21,10 @@
  ******************************************************************************/
 #pragma once
 
-#include "citrusleaf/cf_atomic.h"
+#include "aerospike/ck/ck_pr.h"
 
 typedef struct latency_t {
-	cf_atomic32* buckets;
+	uint32_t* buckets;
 	int last_bucket;
 	int bit_shift;
 } latency;

@@ -26,7 +26,7 @@ extern "C" {
 #endif
 
 // Concurrency kit needs to be under extern "C" when compiling C++.
-#include "ck_pr.h"
+#include <aerospike/ck/ck_pr.h>
 	
 /******************************************************************************
  *	MACROS

@@ -39,7 +39,7 @@ do
          }
          else
          {
-            print "CFLAGS += -I'$installDir'/include -I'$installDir'/include/ck"
+            print "CFLAGS += -I'$installDir'/include"
          }
       }
       else

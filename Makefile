@@ -294,6 +294,12 @@ $(TARGET_LIB)/libaerospike.$(DYNAMIC_SUFFIX): $(OBJECTS) $(TARGET_OBJ)/version.o
 $(TARGET_LIB)/libaerospike.a: $(OBJECTS) $(TARGET_OBJ)/version.o $(SYSTEMTAP_PROBES_O) | modules
 	$(archive) $(wildcard $(DEPS)) $(LUA_STATIC_OBJ)
 
+$(TARGET_INCL)/aerospike: | $(TARGET_INCL)
+	mkdir $@
+
+$(TARGET_INCL)/aerospike/%.h:: $(SOURCE_INCL)/aerospike/%.h | $(TARGET_INCL)/aerospike
+	cp -p $^ $@
+
 ifeq ($(USE_SYSTEMTAP),1)
 $(SYSTEMTAP_PROBES_H):	$(SYSTEMTAP_PROBES_D)
 	dtrace -h -s $< -o $@

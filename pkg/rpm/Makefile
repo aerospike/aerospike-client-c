@@ -16,12 +16,24 @@ USR_PREFIX = /usr
 LIB_PKG = aerospike-client-c-$(REV)-1.$(OS).$(ARCH).rpm
 DEVEL_PKG = aerospike-client-c-devel-$(REV)-1.$(OS).$(ARCH).rpm
 
-TGZ = $(PKG)/packages/aerospike-client-c-$(REV).$(OS).$(ARCH).tgz
+BASE_NAME = aerospike-client-c-$(REV).$(OS).$(ARCH)
+BASE_DIR = $(DEPTH)/target/$(BASE_NAME)
+TGZ = $(PKG)/packages/$(BASE_NAME).tgz
 
 all:	tgz
 
 tgz:	lib devel
-	tar cvfhz $(TGZ) -C $(DEPTH) README.md LICENSE -C $(PKG)/packages $(LIB_PKG) $(DEVEL_PKG) -C $(DEPTH)/target docs benchmarks examples
+	rm -rf $(BASE_DIR)
+	mkdir $(BASE_DIR)
+	cd $(BASE_DIR) ; \
+		ln -s $(DEPTH)/README.md ; \
+		ln -s $(DEPTH)/LICENSE ; \
+		ln -s $(PKG)/packages/$(LIB_PKG) ; \
+		ln -s $(PKG)/packages/$(DEVEL_PKG) ; \
+		ln -s $(DEPTH)/target/docs ; \
+		ln -s $(DEPTH)/target/benchmarks ; \
+		ln -s $(DEPTH)/target/examples
+	tar cvfhz $(TGZ) -C $(DEPTH)/target $(BASE_NAME)
 
 lib:	dist-lib1 spec-lib package1 clean1
 

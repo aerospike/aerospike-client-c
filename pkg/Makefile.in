@@ -10,12 +10,4 @@ dist-lib%:
 	install -pm 644 $(DEPTH)/modules/lua-core/src/*.lua $(OPT_AS)/client/sys/udf/lua
 
 dist-devel:
-	install -d $(BUILD_ROOT)$(USR_PREFIX)/include/aerospike
-	install -d $(BUILD_ROOT)$(USR_PREFIX)/include/citrusleaf
-	install -d $(BUILD_ROOT)$(USR_PREFIX)/include/ck
-	install -d $(BUILD_ROOT)$(USR_PREFIX)/include/ck/gcc
-	install -d $(BUILD_ROOT)$(USR_PREFIX)/include/ck/spinlock
-
-	install -pm 644 $(DEPTH)/$(TARGET)/include/aerospike/* $(BUILD_ROOT)$(USR_PREFIX)/include/aerospike/
-	install -pm 644 $(DEPTH)/$(TARGET)/include/citrusleaf/* $(BUILD_ROOT)$(USR_PREFIX)/include/citrusleaf/
-	cp -pr $(DEPTH)/$(TARGET)/include/ck $(BUILD_ROOT)$(USR_PREFIX)/include/
+	cp -pr $(DEPTH)/$(TARGET)/include $(BUILD_ROOT)$(USR_PREFIX)/

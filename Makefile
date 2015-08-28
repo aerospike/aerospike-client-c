@@ -265,7 +265,8 @@ rpm deb mac src:
 	$(MAKE) -C pkg/$@
 
 .PHONY: package
-package:
+package: docs examples
+	rm -rf pkg/packages/*
 	$(MAKE) $(PKG)
 
 .PHONY: source

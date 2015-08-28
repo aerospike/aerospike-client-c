@@ -265,7 +265,7 @@ rpm deb mac src:
 	$(MAKE) -C pkg/$@
 
 .PHONY: package
-package: docs examples
+package: all docs examples
 	rm -rf pkg/packages/*
 	$(MAKE) $(PKG)
 
@@ -293,19 +293,6 @@ $(TARGET_LIB)/libaerospike.$(DYNAMIC_SUFFIX): $(OBJECTS) $(TARGET_OBJ)/version.o
 
 $(TARGET_LIB)/libaerospike.a: $(OBJECTS) $(TARGET_OBJ)/version.o $(SYSTEMTAP_PROBES_O) | modules
 	$(archive) $(wildcard $(DEPS)) $(LUA_STATIC_OBJ)
-
-$(TARGET_INCL)/aerospike: | $(TARGET_INCL)
-	mkdir $@
-
-$(TARGET_INCL)/citrusleaf: | $(TARGET_INCL)
-	mkdir $@
-
-$(TARGET_INCL)/aerospike/%.h:: $(SOURCE_INCL)/aerospike/%.h | $(TARGET_INCL)/aerospike
-	cp -p $^ $@
-
-$(TARGET)/old-include/citrusleaf/%.h:: $(SOURCE_INCL)/citrusleaf/%.h | $(TARGET_INCL)/citrusleaf
-	cp -p $^ $@
-
 
 ifeq ($(USE_SYSTEMTAP),1)
 $(SYSTEMTAP_PROBES_H):	$(SYSTEMTAP_PROBES_D)

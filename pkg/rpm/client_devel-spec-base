@@ -17,7 +17,6 @@ The Aerospike C client is used to connect with an Aerospike server and perform d
 %defattr(-,root,root)
 /usr/include/aerospike
 /usr/include/citrusleaf
-/usr/include/ck
 /usr/lib/libaerospike.a
 /usr/lib/libaerospike.so
 %defattr(-,aerospike,aerospike)

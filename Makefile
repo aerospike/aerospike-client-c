@@ -145,6 +145,7 @@ AEROSPIKE += as_error.o
 AEROSPIKE += as_info.o
 AEROSPIKE += as_job.o
 AEROSPIKE += as_key.o
+AEROSPIKE += as_ldt.o
 AEROSPIKE += as_lookup.o
 AEROSPIKE += as_node.o
 AEROSPIKE += as_operations.o
@@ -159,7 +160,6 @@ AEROSPIKE += as_scan.o
 AEROSPIKE += as_shm_cluster.o
 AEROSPIKE += as_socket.o
 AEROSPIKE += as_udf.o
-AEROSPIKE += as_ldt.o
 
 OBJECTS := 
 OBJECTS += $(AEROSPIKE:%=$(TARGET_OBJ)/aerospike/%)
@@ -170,12 +170,12 @@ DEPS += $(COMMON)/$(TARGET_OBJ)/common/citrusleaf/*.o
 DEPS += $(MOD_LUA)/$(TARGET_OBJ)/*.o
 
 ifeq ($(USE_LUAMOD),1)
-  LUA_DYNAMIC_OBJ = $(filter-out  $(LUAMOD)/src/lua.o $(LUAMOD)/src/luac.o, $(wildcard $(LUAMOD)/src/*.o))
+  LUA_DYNAMIC_OBJ = $(filter-out $(LUAMOD)/src/lua.o $(LUAMOD)/src/luac.o, $(shell ls $(LUAMOD)/src/*.o))
   LUA_STATIC_OBJ  = $(LUA_DYNAMIC_OBJ)
 else
   ifeq ($(USE_LUAJIT),1)
-    LUA_DYNAMIC_OBJ = $(wildcard $(LUAJIT)/src/*_dyn.o)
-    LUA_STATIC_OBJ  = $(filter-out $(LUA_DYNAMIC_OBJ) $(LUAJIT)/src/luajit.o, $(wildcard $(LUAJIT)/src/*.o))
+    LUA_DYNAMIC_OBJ = $(shell ls $(LUAJIT)/src/*_dyn.o)
+    LUA_STATIC_OBJ  = $(filter-out $(LUA_DYNAMIC_OBJ) $(LUAJIT)/src/luajit.o, $(shell ls $(LUAJIT)/src/*.o))
   endif
 endif
 
@@ -287,15 +287,15 @@ $(TARGET_OBJ)/aerospike/%.o: $(COMMON)/$(TARGET_LIB)/libaerospike-common.a $(MOD
 	$(object)
 
 $(TARGET_LIB)/libaerospike.$(DYNAMIC_SUFFIX): $(OBJECTS) $(TARGET_OBJ)/version.o $(SYSTEMTAP_PROBES_O) | modules
-	$(library) $(wildcard $(DEPS)) $(LUA_DYNAMIC_OBJ)
+	$(library) $(DEPS) $(LUA_DYNAMIC_OBJ)
 
 $(TARGET_LIB)/libaerospike.a: $(OBJECTS) $(TARGET_OBJ)/version.o $(SYSTEMTAP_PROBES_O) | modules
-	$(archive) $(wildcard $(DEPS)) $(LUA_STATIC_OBJ)
+	$(archive) $(DEPS) $(LUA_STATIC_OBJ)
 
 $(TARGET_INCL)/aerospike: | $(TARGET_INCL)
 	mkdir $@
 
-$(TARGET_INCL)/aerospike/%.h:: $(SOURCE_INCL)/aerospike/%.h | $(TARGET_INCL)/aerospike
+$(TARGET_INCL)/aerospike/%.h: $(SOURCE_INCL)/aerospike/%.h | $(TARGET_INCL)/aerospike
 	cp -p $^ $@
 
 ifeq ($(USE_SYSTEMTAP),1)

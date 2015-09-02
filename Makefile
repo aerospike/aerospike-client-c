@@ -1,7 +1,7 @@
-include project/settings.mk
 ###############################################################################
 ##  SETTINGS                                                                 ##
 ###############################################################################
+include project/settings.mk
 
 # Modules
 COMMON		:= $(realpath modules/common)
@@ -227,6 +227,7 @@ HEADERS += $(COMMON-HEADERS)
 ##  MAIN TARGETS                                                             ##
 ###############################################################################
 
+.PHONY: all
 all: modules build prepare
 
 .PHONY: prepare
@@ -240,11 +241,8 @@ prepare-clean:
 .PHONY: build
 build:  libaerospike
 
-.PHONY: cleanall
-cleanall: build-clean
-
-.PHONY: build-clean
-build-clean:
+.PHONY: clean
+clean: modules-clean
 	@rm -rf $(TARGET) $(SYSTEMTAP_PROBES_H)
 
 .PHONY: libaerospike

@@ -37,13 +37,14 @@ info:
 	@echo "  ARCH:     " $(ARCH)
 	@echo "  DISTRO:   " $(DISTRO)
 	@echo "  PKG:      " $(PKG)
+	@echo "  MODULES:  " $(MODULES)
+	@echo "  LUA_STATIC_OBJ:  " $(LUA_STATIC_OBJ)
 	@echo
 	@echo "  PATHS:"
 	@echo "      source:     " $(SOURCE)
 	@echo "      target:     " $(TARGET_BASE)
 	@echo "      includes:   " $(INC_PATH)
 	@echo "      libraries:  " $(LIB_PATH)
-	@echo "      submodules: " $(SUBMODULES)
 	@echo
 	@echo "  COMPILER:"
 	@echo "      command:    " $(CC)
@@ -58,11 +59,6 @@ info:
 	@echo "      flags:      " $(AR_FLAGS) $(ARFLAGS)
 	@echo
 
-.PHONY: clean
-clean: modules-clean
-	@rm -rf $(TARGET)
-
-
 .PHONY: $(TARGET_OBJ)/%.o
 $(TARGET_OBJ)/%.o : %.c | $(TARGET_OBJ) 
 	$(object)
@@ -70,22 +66,6 @@ $(TARGET_OBJ)/%.o : %.c | $(TARGET_OBJ)
 ###############################################################################
 ##  IMPLICIT RULES                                                           ##
 ###############################################################################
-
-.PHONY: all
-
-.DEFAULT_GOAL := all
-
-%.h:
-	$(noop)
-
-%.o:
-	$(object)
-
-%.a: 
-	$(archive)
-
-%.so: 
-	$(library)
 
 %: 
 	$(executable)

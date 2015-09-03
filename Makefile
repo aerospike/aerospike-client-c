@@ -160,6 +160,7 @@ AEROSPIKE += as_scan.o
 AEROSPIKE += as_shm_cluster.o
 AEROSPIKE += as_socket.o
 AEROSPIKE += as_udf.o
+AEROSPIKE += version.o
 
 OBJECTS := 
 OBJECTS += $(AEROSPIKE:%=$(TARGET_OBJ)/aerospike/%)
@@ -267,6 +268,10 @@ package: all docs examples
 	rm -rf pkg/packages/*
 	$(MAKE) $(PKG)
 
+.PHONY: version
+version:
+	echo "char* aerospike_client_version = \"$(shell git describe)\";" > $(SOURCE_MAIN)/aerospike/version.c
+
 .PHONY: source
 source: src
 
@@ -286,10 +291,10 @@ $(TARGET_OBJ)/%.o: $(COMMON)/$(TARGET_LIB)/libaerospike-common.a $(MOD_LUA)/$(TA
 $(TARGET_OBJ)/aerospike/%.o: $(COMMON)/$(TARGET_LIB)/libaerospike-common.a $(MOD_LUA)/$(TARGET_LIB)/libmod_lua.a $(SOURCE_MAIN)/aerospike/%.c $(SOURCE_INCL)/citrusleaf/*.h $(SOURCE_INCL)/aerospike/*.h | modules
 	$(object)
 
-$(TARGET_LIB)/libaerospike.$(DYNAMIC_SUFFIX): $(OBJECTS) $(TARGET_OBJ)/version.o $(SYSTEMTAP_PROBES_O) | modules
+$(TARGET_LIB)/libaerospike.$(DYNAMIC_SUFFIX): $(OBJECTS) $(SYSTEMTAP_PROBES_O) | modules
 	$(library) $(DEPS) $(LUA_DYNAMIC_OBJ)
 
-$(TARGET_LIB)/libaerospike.a: $(OBJECTS) $(TARGET_OBJ)/version.o $(SYSTEMTAP_PROBES_O) | modules
+$(TARGET_LIB)/libaerospike.a: $(OBJECTS) $(SYSTEMTAP_PROBES_O) | modules
 	$(archive) $(DEPS) $(LUA_STATIC_OBJ)
 
 $(TARGET_INCL)/aerospike: | $(TARGET_INCL)

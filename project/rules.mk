@@ -2,25 +2,16 @@
 ##  COMMON RULES                                                             ##
 ###############################################################################
 
-$(TARGET_PATH):
+$(TARGET):
 	mkdir $@
 
-$(TARGET_BASE): | $(TARGET_PATH)
-	mkdir $@
-
-$(TARGET_BIN): | $(TARGET_BASE)
-	mkdir $@
-
-$(TARGET_DOC): | $(TARGET_BASE)
+$(TARGET_BASE): | $(TARGET)
 	mkdir $@
 
 $(TARGET_LIB): | $(TARGET_BASE)
 	mkdir $@
 
 $(TARGET_OBJ): | $(TARGET_BASE)
-	mkdir $@
-
-$(TARGET_SRC): | $(TARGET_BASE)
 	mkdir $@
 
 $(TARGET_INCL): | $(TARGET_BASE)

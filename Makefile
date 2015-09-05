@@ -231,6 +231,17 @@ HEADERS += $(COMMON-HEADERS)
 .PHONY: all
 all: modules build prepare
 
+.PHONY: clean
+clean: modules-clean docs-clean package-clean
+	@rm -rf $(TARGET) $(SYSTEMTAP_PROBES_H)
+
+.PHONY: version
+version:
+	echo "char* aerospike_client_version = \"$(shell pkg/version)\";" > $(SOURCE_MAIN)/aerospike/version.c
+
+.PHONY: build
+build:  libaerospike
+
 .PHONY: prepare
 prepare: modules-prepare $(subst $(SOURCE_INCL),$(TARGET_INCL),$(HEADERS))
 	$(noop)
@@ -239,13 +250,6 @@ prepare: modules-prepare $(subst $(SOURCE_INCL),$(TARGET_INCL),$(HEADERS))
 prepare-clean: 
 	@rm -rf $(TARGET_INCL)
 
-.PHONY: build
-build:  libaerospike
-
-.PHONY: clean
-clean: modules-clean
-	@rm -rf $(TARGET) $(SYSTEMTAP_PROBES_H)
-
 .PHONY: libaerospike
 libaerospike: $(SYSTEMTAP_PROBES_H) libaerospike.a libaerospike.$(DYNAMIC_SUFFIX)
 
@@ -253,31 +257,23 @@ libaerospike: $(SYSTEMTAP_PROBES_H) libaerospike.a libaerospike.$(DYNAMIC_SUFFIX
 libaerospike.a: $(TARGET_LIB)/libaerospike.a
 libaerospike.$(DYNAMIC_SUFFIX): $(TARGET_LIB)/libaerospike.$(DYNAMIC_SUFFIX)
 
-.PHONY: examples
-examples:
-	@rm -rf $(TARGET_EXAMPLES)
-	@mkdir $(TARGET_EXAMPLES)
-	./build/prep_examples $(TARGET_EXAMPLES)
+.PHONY: docs
+docs:
+	TARGET_INCL=$(TARGET_INCL) doxygen project/doxyfile
 
-.PHONY: rpm deb mac src
-rpm deb mac src:
-	$(MAKE) -C pkg/$@
+.PHONY: docs-clean
+docs-clean:
+	rm -rf $(TARGET)/docs
 
 .PHONY: package
-package: all docs examples
-	rm -rf pkg/packages/*
-	$(MAKE) $(PKG)
+package: clean version all docs
+	pkg/package
 
-.PHONY: version
-version:
-	echo "char* aerospike_client_version = \"$(shell git describe)\";" > $(SOURCE_MAIN)/aerospike/version.c
+.PHONY: package-clean
+package-clean:
+	rm -rf $(TARGET)/packages/*
 
-.PHONY: source
-source: src
-
-install:
-	cp -p $(TARGET_LIB)/libaerospike.* /usr/local/lib/
-
+.PHONY: tags etags
 tags etags:
 	etags `find benchmarks demos examples modules src -name "*.[ch]" | egrep -v '(target/Linux|m4)'` `find /usr/include -name "*.h"`
 
@@ -312,4 +308,4 @@ $(SYSTEMTAP_PROBES_O):	$(SYSTEMTAP_PROBES_D)
 endif
 
 ###############################################################################
-include project/modules.mk project/test.mk project/docs.mk project/rules.mk
+include project/modules.mk project/test.mk project/rules.mk

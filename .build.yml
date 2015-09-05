@@ -12,10 +12,6 @@ container:
 build:
   - name: default
     script:
-      - make
-      - make docs
-      - make examples
-      - make $PKG
-      - make source
+      - make package
     artifact:
-      - pkg/packages/*
+      - target/packages/*

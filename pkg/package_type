@@ -1,0 +1,93 @@
+#!/bin/bash
+# Package libraries.
+
+if [ $# -ne 4 ]
+then
+  echo "Usage: $0 lib|devel <client dir> <stage dir> <target dir>"
+  exit 1
+fi
+
+pkgType=$1
+baseDir=$2
+stageDir=$3
+targetDir=$4
+
+cd `dirname $0`
+
+platform=`./platform`
+rev=`./version`
+arch=`uname -m`
+os=`uname`-$arch
+
+case $pkgType in
+  lib)
+    idSuffix=""
+    pkgSuffix=""
+    ;;
+
+  devel)
+    idSuffix=".devel"
+    pkgSuffix="-devel"
+    ;;
+
+  *)
+    echo Invalid pkgType $pkgType
+    echo "Usage: $0 lib|devel <client dir> <stage dir> <target dir>"
+    exit 1
+    ;;
+esac
+
+# Create library package.
+buildDir=$stageDir/BUILD
+
+rm -rf $buildDir
+
+function CreatePackage {
+  topDir=$buildDir/$1
+  optDir=$buildDir/$2
+
+  mkdir -p $topDir/lib
+  cp -p $baseDir/target/$os/lib/* $topDir/lib
+  mkdir -p $optDir/aerospike/client/sys/udf/lua
+  mkdir -p $optDir/aerospike/client/usr/udf/lua
+  cp -p $baseDir/modules/lua-core/src/{aerospike.lua,as.lua,stream_ops.lua} $optDir/aerospike/client/sys/udf/lua
+
+  if [ "$pkgType" = "devel" ]
+  then
+    cp -pr $baseDir/target/$os/include $topDir
+    chmod -R g-w,o-w $topDir/include/*
+  fi
+}
+
+case $platform in
+
+el5|el6)
+  CreatePackage usr opt
+  rpmrev=`echo $rev | sed 's/-/_/g'`
+  sed 's/@VERSION@/'$rpmrev'/g' < rpm/client$pkgSuffix.spec > $stageDir/rpm.spec
+  rpmbuild -bb -vv --define "_topdir $stageDir" --buildroot $buildDir $stageDir/rpm.spec
+  mv $stageDir/RPMS/$arch/aerospike-client-c$pkgSuffix-$rpmrev*.rpm $targetDir
+  rm $stageDir/rpm.spec
+  ;;
+
+debian6|debian7|ubuntu10.04|ubuntu12.04)
+  CreatePackage usr opt
+  mkdir -p $buildDir/DEBIAN
+  install -m 755 deb/postinst.client $buildDir/DEBIAN/postinst
+  sed 's/@VERSION@/'$rev'/g' < deb/client$pkgSuffix.spec > $buildDir/DEBIAN/control
+  fakeroot dpkg-deb --build $buildDir $targetDir/aerospike-client-c$pkgSuffix-$rev.$platform.$arch.deb
+  ;;
+
+mac)
+  CreatePackage usr/local usr/local
+  pkgbuild --identifier com.aerospike.client.c$idSuffix.$rev --root $buildDir $targetDir/aerospike-client-c$pkgSuffix-$rev.pkg
+  ;;
+
+*)
+  echo Invalid platform $platform
+  exit 1
+  ;;
+
+esac
+
+rm -rf $buildDir

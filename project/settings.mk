@@ -12,7 +12,6 @@ export ARFLAGS =
 
 NAME = $(shell basename $(CURDIR))
 OS = $(shell uname)
-DISTRO = $(shell build/os_version)
 
 PROJECT = project
 MODULES = modules
@@ -29,20 +28,10 @@ ifeq ($(OS),Darwin)
   ARCH = $(shell uname -m)
   DYNAMIC_SUFFIX=dylib
   DYNAMIC_FLAG=-dynamiclib
-  PKG = mac
 else
   ARCH = $(shell arch)
   DYNAMIC_SUFFIX=so
   DYNAMIC_FLAG=-shared
-  ifeq ($(DISTRO),el6)
-    PKG = rpm
-  else
-    ifeq ($(DISTRO),el5)
-      PKG = rpm
-    else
-      PKG = deb
-    endif
-  endif
 endif
 
 CC = cc
@@ -72,38 +61,12 @@ INC_PATH = $(SOURCE_INCL)
 ##  TARGET PATHS                                                             ##
 ###############################################################################
 
-ifeq ($(shell test -e $(PROJECT)/target.$(DISTRO_NAME)-$(DISTRO_VERS)-$(ARCH).makefile && echo 1), 1)
-  PLATFORM = $(DISTRO_NAME)-$(DISTRO_VERS)-$(ARCH)
-  include $(PROJECT)/target.$(PLATFORM).makefile
-else
-  ifeq ($(shell test -e $(PROJECT)/target.$(DISTRO_NAME)-$(ARCH).makefile && echo 1), 1)
-    PLATFORM = $(DISTRO_NAME)-$(ARCH)
-    include $(PROJECT)/target.$(PLATFORM).makefile
-  else
-    ifeq ($(shell test -e $(PROJECT)/target.$(OS)-$(ARCH).makefile && echo 1), 1)
-      PLATFORM = $(OS)-$(ARCH)
-      include $(PROJECT)/target.$(PLATFORM).makefile
-    else
-      ifeq ($(shell test -e project/target.$(OS)-noarch.makefile && echo 1), 1)
-        PLATFORM = $(OS)-noarch
-        include $(PROJECT)/target.$(PLATFORM).makefile
-      else
-        PLATFORM = $(OS)-$(ARCH)
-      endif
-    endif
-  endif
-endif
-
-TARGET_PATH     = $(TARGET)
-TARGET_BASE     = $(TARGET_PATH)/$(PLATFORM)
-TARGET_BIN      = $(TARGET_BASE)/bin
-TARGET_DOC      = $(TARGET_BASE)/doc
-TARGET_LIB      = $(TARGET_BASE)/lib
-TARGET_OBJ      = $(TARGET_BASE)/obj
-TARGET_SRC      = $(TARGET_BASE)/src
-TARGET_INCL     = $(TARGET_BASE)/include
-TARGET_TEST     = $(TARGET_BASE)/test
-TARGET_EXAMPLES = $(TARGET_BASE)/examples
+PLATFORM = $(OS)-$(ARCH)
+TARGET_BASE = $(TARGET)/$(PLATFORM)
+TARGET_LIB  = $(TARGET_BASE)/lib
+TARGET_OBJ  = $(TARGET_BASE)/obj
+TARGET_INCL = $(TARGET_BASE)/include
+TARGET_TEST = $(TARGET_BASE)/test
 
 ###############################################################################
 ##  FUNCTIONS                                                                ##

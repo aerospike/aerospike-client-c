@@ -7,4 +7,5 @@ if [ "$subbuild" != "" ]
 then
   rev=`echo $rev | awk -F'-' '{printf("%s-%s\n",$1,$2)}'`
 fi
+
 echo $rev

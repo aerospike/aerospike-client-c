@@ -10,7 +10,6 @@ Vendor: Aerospike, Inc.
 %description
 The Aerospike C client is used to connect with an Aerospike server and perform database operations.
 
-%define _topdir pkg/dist
 %define __spec_install_post /usr/lib/rpm/brp-compress
 
 %files

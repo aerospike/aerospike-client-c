@@ -60,6 +60,13 @@ static bool key_basics_print_bins(const char * name, const as_val * value, void 
 	return true;
 }
 
+static bool key_basics_count_bins(const char * name, const as_val * value, void * udata)
+{
+	uint64_t * counter = (uint64_t *) udata;
+	*counter += 1;
+	return true;
+}
+
 /******************************************************************************
  * TEST CASES
  *****************************************************************************/
@@ -215,7 +222,7 @@ TEST( key_basics_select , "select: (test,test,foo) = {a: 123, b: 'abc'}" ) {
 	as_key key;
 	as_key_init(&key, NAMESPACE, SET, "foo");
 
-	const char * bins[3] = { "a", "b", NULL };
+	const char * bins[4] = { "dontexist","b", "a", NULL };
 
 	as_status rc = aerospike_key_select(as, &err, NULL, &key, bins, &rec);
 
@@ -239,9 +246,9 @@ TEST( key_basics_select , "select: (test,test,foo) = {a: 123, b: 'abc'}" ) {
     assert_null( as_record_get_list(rec, "e") );
     assert_null( as_record_get_map(rec, "f") );
 
-
-    info("bins: ");
-    as_record_foreach(rec, key_basics_print_bins, NULL);
+    uint64_t counter = 0;
+    as_record_foreach(rec, key_basics_count_bins, &counter);
+    assert_int_eq( counter, 2 );
 
     as_record_destroy(rec);
 }

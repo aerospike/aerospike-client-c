@@ -395,6 +395,7 @@ TEST( query_foreach_4, "sum(d) where b == 100 and d == 1" ) {
 	assert_int_eq( err.code, AEROSPIKE_OK );
 	assert_int_eq( value, 10 );
 
+	as_arraylist_destroy(&args);
 	as_query_destroy(&q);
 }
 

@@ -10,7 +10,7 @@ Version.java
 *.pyc
 modules/.*
 target/
-aerospike/client_test-valgrind
+client_test-valgrind
 
 # Compiled source #
 ###################

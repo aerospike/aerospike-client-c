@@ -44,14 +44,20 @@ cp -p $baseDir/LICENSE.md $stageFinalDir
 
 # Copy docs
 mkdir -p $stageFinalDir/docs
-cp -pr $baseDir/target/docs/html/* $stageFinalDir/docs
+
+if [ -d $baseDir/target/docs/html ]
+then
+  cp -pr $baseDir/target/docs/html/* $stageFinalDir/docs
+else
+  echo "WARNING: online docs not found."
+fi
 
 # Prepare benchmarks and examples
 cp -pr $baseDir/benchmarks $stageFinalDir
-make -C $stageFinalDir/benchmarks clean
+rm -rf $stageFinalDir/benchmarks/target
 
 cp -pr $baseDir/examples $stageFinalDir
-make -C $stageFinalDir/examples clean
+rm -rf $stageFinalDir/examples/target
 rm -rf $stageFinalDir/examples/scan_examples/foreground
 
 # Modify Makefiles for external use.

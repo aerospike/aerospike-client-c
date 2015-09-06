@@ -15,11 +15,9 @@ for Linux and XCode clang for Mac OS X.
 	$ sudo apt-get install libc6-dev libssl-dev autoconf automake libtool g++
 
 	[Also do on Ubuntu 12+:]
-
 	$ sudo apt-get install ncurses-dev
 
 	[Optional:]
-
 	$ sudo apt-get install liblua5.1-dev
 
 ### Red Hat Enterprise Linux or CentOS 6+
@@ -27,16 +25,16 @@ for Linux and XCode clang for Mac OS X.
 	$ sudo yum install openssl-devel glibc-devel autoconf automake libtool
 
 	[Optional:]
-
 	$ sudo yum install lua-devel
+	$ sudo yum install gcc-c++ graphviz rpm-build 
 
 ### Fedora 20+
 
 	$ sudo yum install openssl-devel glibc-devel autoconf automake libtool
 
 	[Optional:]
-
 	$ sudo yum install compat-lua-devel-5.1.5
+	$ sudo yum install gcc-c++ graphviz rpm-build 
 
 ### Mac OS X
 
@@ -65,17 +63,6 @@ This will generate the following files:
 Static linking with the `.a` prevents you from having to install the libraries on your 
 target platform. Dynamic linking with the `.so` avoids a client rebuild if you upgrade 
 the client. Choose the option that is right for you.
-
-## Package
-
-Installer packages are available for RedHat (rpm), Debian (deb), Mac OS X (pkg).
-These packages contain C client libraries, header files, examples and benchmarks.
-
-Build the client package on the current platform:
-
-	$ make package
-
-The generated packages are located in `target/packages`.
 
 ## Clean
 
@@ -119,3 +106,17 @@ else Lua 5.1.5 may be built from the source release and installed into
 the standard location (usually `/usr/local/`.) In either of these two
 cases, the build must be performed with the option `USE_LUAMOD=0` passed
 on all relevant `make` command lines.
+
+## Package
+
+Installer packages can be created for RedHat (rpm), Debian (deb), Mac OS X (pkg).
+These packages contain C client libraries, header files, online docs, examples and 
+benchmarks.  Package creation requires doxygen 1.8 or greater and its dependencies
+(including graphviz).  Doxygen is used to create online HTML documentation.
+
+Build the client package on the current platform:
+
+	$ make package
+
+The generated packages are located in `target/packages`.
+

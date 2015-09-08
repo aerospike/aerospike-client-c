@@ -1,0 +1,119 @@
+//
+// Replace the
+// process("/home/citrusleaf/aerospike/aerospike-client-c/target/Linux-x86_64/lib/libaerospike.so")
+// with the actual location of your client library.
+//
+
+probe process("/home/citrusleaf/aerospike/aerospike-client-c/target/Linux-x86_64/lib/libaerospike.so").mark("put__execute_starting")
+{
+    printf("%d %d CLI_put_execute_starting taskid=%0x\n",
+           gettimeofday_us(), tid(), $arg1);
+}
+
+probe process("/home/citrusleaf/aerospike/aerospike-client-c/target/Linux-x86_64/lib/libaerospike.so").mark("put__execute_finished")
+{
+    printf("%d %d CLI_put_execute_finished taskid=%0x\n",
+           gettimeofday_us(), tid(), $arg1);
+}
+
+probe process("/home/citrusleaf/aerospike/aerospike-client-c/target/Linux-x86_64/lib/libaerospike.so").mark("query__foreach_starting")
+{
+    printf("%d %d CLI_query_foreach_starting taskid=%0x\n",
+           gettimeofday_us(), tid(), $arg1);
+}
+
+probe process("/home/citrusleaf/aerospike/aerospike-client-c/target/Linux-x86_64/lib/libaerospike.so").mark("query__foreach_finished")
+{
+    printf("%d %d CLI_query_foreach_finished taskid=%0x\n",
+           gettimeofday_us(), tid(), $arg1);
+}
+
+probe process("/home/citrusleaf/aerospike/aerospike-client-c/target/Linux-x86_64/lib/libaerospike.so").mark("query__enqueue_task")
+{
+    printf("%d %d CLI_query_enqueue_task taskid=%0x nodeid=%s\n",
+           gettimeofday_us(), tid(), $arg1, user_string($arg2));
+}
+
+probe process("/home/citrusleaf/aerospike/aerospike-client-c/target/Linux-x86_64/lib/libaerospike.so").mark("query__command_execute")
+{
+    printf("%d %d CLI_query_command_execute taskid=%0x nodeid=%s\n",
+           gettimeofday_us(), tid(), $arg1, user_string($arg2));
+}
+
+probe process("/home/citrusleaf/aerospike/aerospike-client-c/target/Linux-x86_64/lib/libaerospike.so").mark("query__command_complete")
+{
+    printf("%d %d CLI_query_command_complete taskid=%0x nodeid=%s\n",
+           gettimeofday_us(), tid(), $arg1, user_string($arg2));
+}
+
+probe process("/home/citrusleaf/aerospike/aerospike-client-c/target/Linux-x86_64/lib/libaerospike.so").mark("query__parse_records_starting")
+{
+    printf("%d %d CLI_query_parse_records_starting taskid=%0x nodeid=%s size=%d\n",
+           gettimeofday_us(), tid(), $arg1, user_string($arg2), $arg3);
+}
+
+probe process("/home/citrusleaf/aerospike/aerospike-client-c/target/Linux-x86_64/lib/libaerospike.so").mark("query__parse_records_finished")
+{
+    printf("%d %d CLI_query_parse_records_finished taskid=%0x nodeid=%s nrecs=%d status=%d\n",
+           gettimeofday_us(), tid(), $arg1, user_string($arg2), $arg3, $arg4);
+}
+
+probe process("/home/citrusleaf/aerospike/aerospike-client-c/target/Linux-x86_64/lib/libaerospike.so").mark("query__aggparse_starting")
+{
+    printf("%d %d CLI_query_aggparse_starting taskid=%0x nodeid=%s\n",
+           gettimeofday_us(), tid(), $arg1, user_string($arg2));
+}
+
+probe process("/home/citrusleaf/aerospike/aerospike-client-c/target/Linux-x86_64/lib/libaerospike.so").mark("query__aggparse_finished")
+{
+    printf("%d %d CLI_query_aggparse_finished taskid=%0x nodeid=%s\n",
+           gettimeofday_us(), tid(), $arg1, user_string($arg2));
+}
+
+probe process("/home/citrusleaf/aerospike/aerospike-client-c/target/Linux-x86_64/lib/libaerospike.so").mark("query__aggcb_starting")
+{
+    printf("%d %d CLI_query_aggcb_starting taskid=%0x nodeid=%s\n",
+           gettimeofday_us(), tid(), $arg1, user_string($arg2));
+}
+
+probe process("/home/citrusleaf/aerospike/aerospike-client-c/target/Linux-x86_64/lib/libaerospike.so").mark("query__aggcb_finished")
+{
+    printf("%d %d CLI_query_aggcb_finished taskid=%0x nodeid=%s\n",
+           gettimeofday_us(), tid(), $arg1, user_string($arg2));
+}
+
+/*
+
+// The CLI_query_rec* family are orders of magnitude more prevalent then other events.
+
+probe process("/home/citrusleaf/aerospike/aerospike-client-c/target/Linux-x86_64/lib/libaerospike.so").mark("query__recparse_starting")
+{
+    printf("%d %d CLI_query_recparse_starting taskid=%0x nodeid=%s\n",
+           gettimeofday_us(), tid(), $arg1, user_string($arg2));
+}
+
+probe process("/home/citrusleaf/aerospike/aerospike-client-c/target/Linux-x86_64/lib/libaerospike.so").mark("query__recparse_bins")
+{
+    printf("%d %d CLI_query_recparse_bins taskid=%0x nodeid=%s\n",
+           gettimeofday_us(), tid(), $arg1, user_string($arg2));
+}
+
+probe process("/home/citrusleaf/aerospike/aerospike-client-c/target/Linux-x86_64/lib/libaerospike.so").mark("query__recparse_finished")
+{
+    printf("%d %d CLI_query_recparse_finished taskid=%0x nodeid=%s\n",
+           gettimeofday_us(), tid(), $arg1, user_string($arg2));
+}
+
+probe process("/home/citrusleaf/aerospike/aerospike-client-c/target/Linux-x86_64/lib/libaerospike.so").mark("query__reccb_starting")
+{
+    printf("%d %d CLI_query_reccb_starting taskid=%0x nodeid=%s\n",
+           gettimeofday_us(), tid(), $arg1, user_string($arg2));
+}
+
+probe process("/home/citrusleaf/aerospike/aerospike-client-c/target/Linux-x86_64/lib/libaerospike.so").mark("query__reccb_finished")
+{
+    printf("%d %d CLI_query_reccb_finished taskid=%0x nodeid=%s\n",
+           gettimeofday_us(), tid(), $arg1, user_string($arg2));
+}
+
+*/

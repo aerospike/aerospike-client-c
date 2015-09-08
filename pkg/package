@@ -54,10 +54,10 @@ fi
 
 # Prepare benchmarks and examples
 cp -pr $baseDir/benchmarks $stageFinalDir
-rm -rf $stageFinalDir/benchmarks/target
+make -C $stageFinalDir/benchmarks clean
 
 cp -pr $baseDir/examples $stageFinalDir
-rm -rf $stageFinalDir/examples/target
+make -C $stageFinalDir/examples clean
 rm -rf $stageFinalDir/examples/scan_examples/foreground
 
 # Modify Makefiles for external use.

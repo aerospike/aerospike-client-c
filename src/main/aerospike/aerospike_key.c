@@ -30,6 +30,9 @@
 #include <aerospike/as_serializer.h>
 #include <aerospike/as_status.h>
 #include <citrusleaf/cf_clock.h>
+#include <citrusleaf/cf_random.h>
+
+#include "as_stap.h"
 
 /******************************************************************************
  * FUNCTIONS
@@ -257,10 +260,22 @@ as_status aerospike_key_put(
 		size += as_command_bin_size(&bins[i], &buffers[i]);
 	}
 	
+	if (policy->generate_task_id) {
+		size += as_command_field_size(8);
+		n_fields++;
+	}
+
 	uint8_t* cmd = as_command_init(size);
 	uint8_t* p = as_command_write_header(cmd, 0, AS_MSG_INFO2_WRITE, policy->commit_level, 0, policy->exists, policy->gen, rec->gen, rec->ttl, policy->timeout, n_fields, n_bins);
 		
 	p = as_command_write_key(p, policy->key, key);
+
+	// Write taskId field
+	uint64_t task_id = 0;
+	if (policy->generate_task_id) {
+		task_id = cf_get_rand64() / 2;
+		p = as_command_write_field_uint64(p, AS_FIELD_TASK_ID, task_id);
+	}
 
 	for (uint32_t i = 0; i < n_bins; i++) {
 		p = as_command_write_bin(p, AS_OPERATOR_WRITE, &bins[i], &buffers[i]);
@@ -271,8 +286,12 @@ as_status aerospike_key_put(
 	as_command_node cn;
 	as_command_node_init(&cn, key->ns, key->digest.value, AS_POLICY_REPLICA_MASTER, true);
 	
+	AEROSPIKE_PUT_EXECUTE_STARTING(task_id);
+
 	as_proto_msg msg;
 	status = as_command_execute(as->cluster, err, &cn, cmd, size, policy->timeout, policy->retry, as_command_parse_header, &msg);
+
+	AEROSPIKE_PUT_EXECUTE_FINISHED(task_id);
 	
 	for (uint32_t i = 0; i < n_bins; i++) {
 		as_buffer* buffer = &buffers[i];

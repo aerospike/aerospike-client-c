@@ -47,3 +47,12 @@ end
 function filter_passthrough(s)
 	return s : filter(filter_none) : map(map_result)
 end
+
+function filter_passthrough_digest(s)
+
+	local function map_digest(rec)
+		return record.digest(rec)
+	end
+
+	return s : filter(filter_none) : map(map_digest)
+end

@@ -553,6 +553,44 @@ TEST( query_agg_quit_early, "aggregation and quit early" ) {
 	as_query_destroy(&q);
 }
 
+static bool query_quit_early_bytes_callback(const as_val * v, void * udata) {
+	if (v) {
+		as_bytes * bval = as_bytes_fromval(v);
+
+		if (bval) {
+			int64_t* byte_count = (int64_t*)udata;
+			(*byte_count) += as_bytes_size(bval);
+		}
+	}
+	return false;
+}
+
+TEST( query_filter_map_bytes, "return bytes from a mapper" ) {
+
+	as_error err;
+	as_error_reset(&err);
+
+	int64_t byte_count = 0;
+
+	as_query q;
+	as_query_init(&q, NAMESPACE, SET);
+
+	as_query_where_inita(&q, 1);
+	as_query_where(&q, "a", as_string_equals("abc"));
+
+	as_query_apply(&q, UDF_FILE, "filter_passthrough_digest", NULL);
+
+	if ( aerospike_query_foreach(as, &err, NULL, &q, query_quit_early_bytes_callback, &byte_count) != AEROSPIKE_OK ) {
+		error("%s (%d) [%s:%d]", err.message, err.code, err.file, err.line);
+	}
+
+	info("byte count: %d",byte_count);
+
+	assert_int_eq( err.code, 0 );
+	assert_int_eq( byte_count, 20 ); // one digest
+
+	as_query_destroy(&q);
+}
 
 TEST( query_foreach_nullset, "test null-set behavior" ) {
 
@@ -693,6 +731,7 @@ SUITE( query_foreach, "aerospike_query_foreach tests" ) {
 */
 	suite_add( query_quit_early );
 	suite_add( query_agg_quit_early );
+	suite_add( query_filter_map_bytes );
 	suite_add( query_foreach_nullset );
 	if (server_has_double) {
 		suite_add( query_foreach_double );

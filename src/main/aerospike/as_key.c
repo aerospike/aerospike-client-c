@@ -204,9 +204,10 @@ as_key * as_key_new_value(const as_namespace ns, const as_set set, const as_key_
 void as_key_destroy(as_key * key)
 {
 	if ( !key ) return;
-	if ( !key->valuep ) return;
 
-	as_val_destroy((as_val *) key->valuep);
+	if ( key->valuep ) {
+		as_val_destroy((as_val *) key->valuep);
+	}
 
 	if ( key->_free ) {
 		free(key);

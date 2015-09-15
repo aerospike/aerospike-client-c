@@ -42,7 +42,7 @@ USE_SYSTEMTAP = 0
 
 # Make-local Compiler Flags
 CC_FLAGS = -std=gnu99 -g -Wall -fPIC -O$(O)
-CC_FLAGS += -fno-common -fno-strict-aliasing -finline-functions
+CC_FLAGS += -fno-common -fno-strict-aliasing 
 CC_FLAGS += -march=nocona -DMARCH_$(ARCH)
 CC_FLAGS += -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_GNU_SOURCE $(EXT_CFLAGS)
 
@@ -50,7 +50,7 @@ ifeq ($(OS),Darwin)
   CC_FLAGS += -D_DARWIN_UNLIMITED_SELECT
   LUA_PLATFORM = macosx
 else
-  CC_FLAGS += -rdynamic
+  CC_FLAGS += -finline-functions -rdynamic
   LUA_PLATFORM = linux
 endif
 

@@ -76,6 +76,18 @@ as_socket_start_connect_nb(as_error* err, int fd, struct sockaddr_in *sa);
 as_status
 as_socket_create_and_connect_nb(as_error* err, struct sockaddr_in *sa, int* fd);
 
+/**
+ *	@private
+ *	Peek for socket connection status.  Close socket if not connected.
+ *
+ *	@param fd				Socket identifier.
+ *	@param expect_empty 	Log message if socket contains data.
+ *
+ *	@return if socket is connected.
+ */
+bool
+as_socket_validate(int fd, bool expect_empty);
+
 #if defined(__linux__) || defined(__APPLE__)
 
 /**

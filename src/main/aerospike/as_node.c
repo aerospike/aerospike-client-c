@@ -131,44 +131,6 @@ as_node_add_address(as_node* node, struct sockaddr_in* addr)
 	as_vector_append(&node->addresses, &address);
 }
 
-// A quick non-blocking check to see if a server is connected. It may have
-// dropped a connection while it's queued, so don't use those connections. If
-// the fd is connected, we actually expect an error - ewouldblock or similar.
-#define CONNECTED		0
-#define CONNECTED_NOT	1
-#define CONNECTED_ERROR	2
-#define CONNECTED_BADFD	3
-
-static int
-is_connected(int fd)
-{
-	uint8_t buf[8];
-	ssize_t rv = recv(fd, (void*)buf, sizeof(buf), MSG_PEEK | MSG_DONTWAIT | MSG_NOSIGNAL);
-	
-	if (rv == 0) {
-		as_log_debug("Connected check: Found disconnected fd %d", fd);
-		return CONNECTED_NOT;
-	}
-	
-	if (rv < 0) {
-		if (errno == EBADF) {
-			as_log_warn("Connected check: Bad fd %d", fd);
-			return CONNECTED_BADFD;
-		}
-		else if (errno == EWOULDBLOCK || errno == EAGAIN) {
-			// The normal case.
-			return CONNECTED;
-		}
-		else {
-			as_log_info("Connected check: fd %d error %d", fd, errno);
-			return CONNECTED_ERROR;
-		}
-	}
-	
-	as_log_info("Connected check: Peek got unexpected data for fd %d", fd);
-	return CONNECTED;
-}
-
 static as_status
 as_node_authenticate_connection(as_error* err, as_node* node, uint64_t deadline_ms, int* fd)
 {
@@ -241,25 +203,8 @@ as_node_get_connection(as_error* err, as_node* node, uint64_t deadline_ms, int* 
 		int rv = cf_queue_pop(q, fd, CF_QUEUE_NOWAIT);
 		
 		if (rv == CF_QUEUE_OK) {
-			int rv2 = is_connected(*fd);
-			
-			switch (rv2) {
-				case CONNECTED:
-					// It's still good.
-					return 0;
-					
-				case CONNECTED_BADFD:
-					// Local problem, don't try closing.
-					as_log_warn("Found bad file descriptor in queue: fd %d", *fd);
-					break;
-				
-				case CONNECTED_NOT:
-					// Can't use it - the remote end closed it.
-				case CONNECTED_ERROR:
-					// Some other problem, could have to do with remote end.
-				default:
-					as_close(*fd);
-					break;
+			if (as_socket_validate(*fd, true)) {
+				return AEROSPIKE_OK;
 			}
 		}
 		else if (rv == CF_QUEUE_EMPTY) {

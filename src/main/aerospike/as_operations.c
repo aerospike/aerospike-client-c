@@ -28,6 +28,7 @@
  *****************************************************************************/
 
 extern inline bool as_operations_add_write_str(as_operations * ops, const as_bin_name name, const char * value);
+extern inline bool as_operations_add_write_geojson_str(as_operations * ops, const as_bin_name name, const char * value);
 extern inline bool as_operations_add_write_raw(as_operations * ops, const as_bin_name name, const uint8_t * value, uint32_t size);
 extern inline bool as_operations_add_prepend_str(as_operations * ops, const as_bin_name name, const char * value);
 extern inline bool as_operations_add_prepend_raw(as_operations * ops, const as_bin_name name, const uint8_t * value, uint32_t size);
@@ -239,6 +240,24 @@ bool as_operations_add_write_strp(as_operations * ops, const as_bin_name name, c
 	as_binop * binop = as_binop_forappend(ops, AS_OPERATOR_WRITE, name);
 	if ( !binop ) return false;
 	as_bin_init_str(&binop->bin, name, value, free);
+	return true;
+}
+
+/**
+ *	Add a AS_OPERATOR_WRITE bin operation with a NULL-terminated GeoJSON string value.
+ *
+ *	@param ops			The `as_operations` to append the operation to.
+ *	@param name			The name of the bin to perform the operation on.
+ *	@param value		The value to be used in the operation.
+ *	@param free			If true, then the value will be freed when the operations is destroyed.
+ *
+ *	@return true on success. Otherwise an error occurred.
+ */
+bool as_operations_add_write_geojson_strp(as_operations * ops, const as_bin_name name, const char * value, bool free)
+{
+	as_binop * binop = as_binop_forappend(ops, AS_OPERATOR_WRITE, name);
+	if ( !binop ) return false;
+	as_bin_init_geojson(&binop->bin, name, value, free);
 	return true;
 }
 

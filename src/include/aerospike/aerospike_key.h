@@ -300,6 +300,13 @@ as_status aerospike_key_apply(
 bool
 aerospike_has_double(aerospike* as);
 
+/**
+ *	Do the connected servers support geospatial data and queries.
+ *	The cluster must already be connected (aerospike_connect()) prior to making this call.
+ */
+bool
+aerospike_has_geo(aerospike* as);
+
 #ifdef __cplusplus
 } // end extern "C"
 #endif

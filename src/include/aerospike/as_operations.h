@@ -465,6 +465,38 @@ static inline bool as_operations_add_write_str(as_operations * ops, const as_bin
 }
 
 /**
+ *	Add a `AS_OPERATOR_WRITE` bin operation with a NULL-terminated GeoJSON string value.
+ *
+ *	@param ops			The `as_operations` to append the operation to.
+ *	@param name			The name of the bin to perform the operation on.
+ *	@param value		The value to be used in the operation.
+ *	@param free			If true, then the value will be freed when the operations is destroyed.
+ *
+ *	@return true on success. Otherwise an error occurred.
+ *
+ *	@relates as_operations
+ *	@ingroup as_operations_object
+ */
+bool as_operations_add_write_geojson_strp(as_operations * ops, const as_bin_name name, const char * value, bool free);
+
+/**
+ *	Add a `AS_OPERATOR_WRITE` bin operation with a NULL-terminated GeoJSON string value.
+ *
+ *	@param ops			The `as_operations` to append the operation to.
+ *	@param name			The name of the bin to perform the operation on.
+ *	@param value		The value to be used in the operation. Must last for the lifetime of the operations.
+ *
+ *	@return true on success. Otherwise an error occurred.
+ *
+ *	@relates as_operations
+ *	@ingroup as_operations_object
+ */
+static inline bool as_operations_add_write_geojson_str(as_operations * ops, const as_bin_name name, const char * value)
+{
+	return as_operations_add_write_geojson_strp(ops, name, value, false);
+}
+
+/**
  *	Add a `AS_OPERATOR_WRITE` bin operation with a raw bytes value.
  *
  *	@param ops			The `as_operations` to append the operation to.

@@ -164,7 +164,7 @@ main(int argc, char* argv[])
 	// this call.
 	if (aerospike_query_foreach(&as, &err, NULL, &query, query_cb, NULL) !=
 			AEROSPIKE_OK) {
-		LOG("aerospike_query_foreach() retu/trned %d - %s", err.code,
+		LOG("aerospike_query_foreach() returned %d - %s", err.code,
 				err.message);
 		as_query_destroy(&query);
 		cleanup(&as);

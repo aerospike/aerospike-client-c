@@ -298,6 +298,9 @@ bool as_query_where(as_query * query, const char * bin, as_predicate_type type, 
 				p->value.integer_range.min = va_arg(ap, int64_t);
     			p->value.integer_range.max = va_arg(ap, int64_t);
     		}
+			else if (dtype == AS_INDEX_GEO2DSPHERE) {
+    			p->value.string = va_arg(ap, char *);
+			}
 			else {
 				return false;
 			}

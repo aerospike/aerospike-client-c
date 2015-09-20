@@ -6,3 +6,4 @@ default: all
 	$(MAKE) -C batch_examples $@
 	$(MAKE) -C query_examples $@
 	$(MAKE) -C scan_examples $@
+	$(MAKE) -C geospatial_examples $@

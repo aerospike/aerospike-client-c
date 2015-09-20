@@ -542,3 +542,23 @@ aerospike_has_double(aerospike* as)
 	as_nodes_release(nodes);
 	return true;
 }
+
+bool
+aerospike_has_geo(aerospike* as)
+{
+	as_nodes* nodes = as_nodes_reserve(as->cluster);
+	
+	if (nodes->size == 0) {
+		as_nodes_release(nodes);
+		return false;
+	}
+	
+	for (uint32_t i = 0; i < nodes->size; i++) {
+		if (! nodes->array[i]->has_geo) {
+			as_nodes_release(nodes);
+			return false;
+		}
+	}
+	as_nodes_release(nodes);
+	return true;
+}

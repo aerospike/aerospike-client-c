@@ -9,6 +9,8 @@
 /* Begin PBXBuildFile section */
 		BF219F0E1A62255A001E321C /* as_proto.c in Sources */ = {isa = PBXBuildFile; fileRef = BF219F0D1A62255A001E321C /* as_proto.c */; };
 		BF219F101A622C23001E321C /* as_socket.c in Sources */ = {isa = PBXBuildFile; fileRef = BF219F0F1A622C23001E321C /* as_socket.c */; };
+		BF222CFD1BB33961006827A6 /* as_geojson.c in Sources */ = {isa = PBXBuildFile; fileRef = BF222CFC1BB33961006827A6 /* as_geojson.c */; };
+		BF222CFF1BB3397E006827A6 /* mod_lua_geojson.c in Sources */ = {isa = PBXBuildFile; fileRef = BF222CFE1BB3397E006827A6 /* mod_lua_geojson.c */; };
 		BF2337A11B4DC8BD00670C64 /* as_buffer_pool.c in Sources */ = {isa = PBXBuildFile; fileRef = BF23379F1B4DC8BD00670C64 /* as_buffer_pool.c */; };
 		BF2337A21B4DC8BD00670C64 /* as_double.c in Sources */ = {isa = PBXBuildFile; fileRef = BF2337A01B4DC8BD00670C64 /* as_double.c */; };
 		BF26A38919C2621000AE763C /* as_shm_cluster.c in Sources */ = {isa = PBXBuildFile; fileRef = BF26A38819C2621000AE763C /* as_shm_cluster.c */; };
@@ -116,6 +118,8 @@
 		BF07F63718B4252500CE1850 /* libaerospike.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libaerospike.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		BF219F0D1A62255A001E321C /* as_proto.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_proto.c; path = ../src/main/aerospike/as_proto.c; sourceTree = "<group>"; };
 		BF219F0F1A622C23001E321C /* as_socket.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_socket.c; path = ../src/main/aerospike/as_socket.c; sourceTree = "<group>"; };
+		BF222CFC1BB33961006827A6 /* as_geojson.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_geojson.c; path = ../modules/common/src/main/aerospike/as_geojson.c; sourceTree = "<group>"; };
+		BF222CFE1BB3397E006827A6 /* mod_lua_geojson.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = mod_lua_geojson.c; path = "../modules/mod-lua/src/main/mod_lua_geojson.c"; sourceTree = "<group>"; };
 		BF23379F1B4DC8BD00670C64 /* as_buffer_pool.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_buffer_pool.c; path = ../modules/common/src/main/aerospike/as_buffer_pool.c; sourceTree = "<group>"; };
 		BF2337A01B4DC8BD00670C64 /* as_double.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_double.c; path = ../modules/common/src/main/aerospike/as_double.c; sourceTree = "<group>"; };
 		BF26A38819C2621000AE763C /* as_shm_cluster.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; lineEnding = 0; name = as_shm_cluster.c; path = ../src/main/aerospike/as_shm_cluster.c; sourceTree = "<group>"; };
@@ -233,6 +237,8 @@
 		BF07F62E18B4252500CE1850 = {
 			isa = PBXGroup;
 			children = (
+				BF222CFE1BB3397E006827A6 /* mod_lua_geojson.c */,
+				BF222CFC1BB33961006827A6 /* as_geojson.c */,
 				BFC3A8EA1B97D24D00F2F758 /* version.c */,
 				BF23379F1B4DC8BD00670C64 /* as_buffer_pool.c */,
 				BF2337A01B4DC8BD00670C64 /* as_double.c */,
@@ -431,6 +437,7 @@
 				BFC38AE11948F7CA000C53D9 /* as_admin.c in Sources */,
 				BFBD205618BC3436009ED931 /* mod_lua_record.c in Sources */,
 				BFBA105618B7D8B300A64E68 /* as_hashmap_iterator.c in Sources */,
+				BF222CFF1BB3397E006827A6 /* mod_lua_geojson.c in Sources */,
 				BF2AA7DB18BEBFA500E54AF3 /* aerospike_index.c in Sources */,
 				BF2AA7E118BEBFA500E54AF3 /* aerospike_lstack.c in Sources */,
 				BF219F101A622C23001E321C /* as_socket.c in Sources */,
@@ -450,6 +457,7 @@
 				BF2AA7DA18BEBFA500E54AF3 /* aerospike_batch.c in Sources */,
 				BF2AA7EE18BEBFA500E54AF3 /* as_policy.c in Sources */,
 				BF2AA7E918BEBFA500E54AF3 /* as_error.c in Sources */,
+				BF222CFD1BB33961006827A6 /* as_geojson.c in Sources */,
 				BFBA105018B7D8B300A64E68 /* as_arraylist.c in Sources */,
 				BFC3A8EB1B97D24D00F2F758 /* version.c in Sources */,
 				BFBD205818BC3436009ED931 /* mod_lua_stream.c in Sources */,

@@ -325,7 +325,7 @@ as_command_write_bin(uint8_t* begin, uint8_t operation_type, const as_bin* bin, 
 			memcpy(p, v->value, v->len);
 			p += v->len;
 
-			val_len = 1 + 2 + (0 * 8) + v->len;
+			val_len = (uint32_t)(1 + 2 + (0 * 8) + v->len);
 			val_type = AS_BYTES_GEOJSON;
 			break;
 		}

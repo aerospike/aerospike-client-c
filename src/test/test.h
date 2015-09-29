@@ -20,6 +20,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdarg.h>
+#include <math.h>
 
 /******************************************************************************
  * MACROS
@@ -236,7 +237,7 @@ void atf_assert_log(atf_test_result * result, const char * exp, const char * fil
 
 
 #define assert_double_eq(ACTUAL, EXPECTED) \
-	if ( (ACTUAL) != (EXPECTED) ) return atf_assert_double_eq(__result__, #ACTUAL, ACTUAL, EXPECTED, __FILE__, __LINE__);
+	if ( fabs((ACTUAL) - (EXPECTED)) > 0.0000000001) return atf_assert_double_eq(__result__, #ACTUAL, ACTUAL, EXPECTED, __FILE__, __LINE__);
 
 
 #define assert_string_eq(ACTUAL, EXPECTED) \

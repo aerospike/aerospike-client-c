@@ -44,6 +44,10 @@ as_command_user_key_size(const as_key* key)
 			size += 8;
 			break;
 		}
+		case AS_DOUBLE: {
+			size += 8;
+			break;
+		}
 		case AS_STRING: {
 			as_string* v = as_string_fromval(val);
 			// v->len should have been already set when calculating the digest.
@@ -83,6 +87,9 @@ as_command_value_size(as_val* val, as_buffer* buffer)
 			return 0;
 		}
 		case AS_INTEGER: {
+			return 8;
+		}
+		case AS_DOUBLE: {
 			return 8;
 		}
 		case AS_STRING: {

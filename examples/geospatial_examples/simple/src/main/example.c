@@ -79,7 +79,7 @@ main(int argc, char* argv[])
 	// Ensure the server supports geospatial queries.
 	if (! aerospike_has_geo(&as)) {
 		fprintf(stderr, "server does not support geospatial\n");
-		exit(-1);
+		exit(0);
 	}
 	
 	// Start clean.

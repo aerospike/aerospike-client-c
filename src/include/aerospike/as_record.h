@@ -108,6 +108,7 @@ extern "C" {
  *	 `as_record_set_int64()`     | Set the bin value to a 64-bit integer.
  *	 `as_record_set_str()`       | Set the bin value to a NULL-terminated string.
  *	 `as_record_set_integer()`   | Set the bin value to an `as_integer`.
+ *	 `as_record_set_double()`    | Set the bin value to an `as_double`.
  *	 `as_record_set_string()`    | Set the bin value to an `as_string`.
  *	 `as_record_set_geojson()`   | Set the bin value to an `as_geojson`.
  *	 `as_record_set_bytes()`     | Set the bin value to an `as_bytes`.
@@ -127,6 +128,7 @@ extern "C" {
  *	 `as_record_get_int64()`     | Get the bin as a 64-bit integer.
  *	 `as_record_get_str()`       | Get the bin as a NULL-terminated string.
  *	 `as_record_get_integer()`   | Get the bin as an `as_integer`.
+ *	 `as_record_get_double()`    | Get the bin as an `as_double`.
  *	 `as_record_get_string()`    | Get the bin as an `as_string`.
  *	 `as_record_get_geojson()`   | Get the bin as an `as_geojson`.
  *	 `as_record_get_bytes()`     | Get the bin as an `as_bytes`.
@@ -143,6 +145,7 @@ extern "C" {
  *	switch ( as_val_type(value) ) {
  *		case AS_NIL: break;
  *		case AS_INTEGER: break;
+ *		case AS_DOUBLE: break;
  *		case AS_STRING: break;
  *		case AS_GEOJSON: break;
  *		case AS_BYTES: break;

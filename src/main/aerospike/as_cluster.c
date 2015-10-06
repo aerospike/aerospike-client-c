@@ -930,7 +930,21 @@ bool
 as_cluster_is_connected(as_cluster* cluster)
 {
 	as_nodes* nodes = as_nodes_reserve(cluster);
-	bool connected = nodes->size > 0 && cluster->valid;
+	bool connected = false;
+	
+	if (nodes->size > 0 && cluster->valid) {
+		// Even though nodes exist, they may not be currently responding.  Check further.
+		for (uint32_t i = 0; i < nodes->size; i++) {
+			as_node* node = nodes->array[i];
+
+			// Mark connected if any node is active and cluster tend consecutive info request 
+			// failures are less than 5.
+			if (node->active && node->failures < 5) {
+				connected = true;
+				break;
+			}
+		}
+	}
 	as_nodes_release(nodes);
 	return connected;
 }

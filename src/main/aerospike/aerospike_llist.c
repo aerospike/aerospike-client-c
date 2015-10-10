@@ -39,7 +39,7 @@ const char * LDT_LIST_OP_ADDALL			= "add_all";
 const char * LDT_LIST_OP_UPDATEALL		= "update_all";
 const char * LDT_LIST_OP_FIND		    = "find";
 const char * LDT_LIST_OP_RANGE		    = "range";
-const char * LDT_LIST_OP_FIND_RANGE		= "find_range";
+const char * LDT_LIST_OP_FIND_RANGE_LIM	= "find_range_lim";
 const char * LDT_LIST_OP_SCAN   		= "scan";
 const char * LDT_LIST_OP_FILTER			= "filter";
 const char * LDT_LIST_OP_REMOVE		 	= "remove";
@@ -304,10 +304,13 @@ as_status aerospike_llist_find_first_filter(
 	as_string_init(&ldt_bin, (char *)ldt->name, false);
 	
 	as_arraylist arglist;
-	as_arraylist_inita(&arglist, 4);
+	as_arraylist_inita(&arglist, 5);
 	as_arraylist_append_string(&arglist, &ldt_bin);
 	as_arraylist_append_int64(&arglist, count);
 	
+	as_string module_name;
+	as_string_init(&module_name, (char *)ldt->module, false);
+	as_arraylist_append_string(&arglist, &module_name);
 	as_string filter_name;
 	as_string_init(&filter_name, (char *)filter, false);
 	as_arraylist_append_string(&arglist, &filter_name );
@@ -378,10 +381,13 @@ as_status aerospike_llist_find_last_filter(
 	as_string_init(&ldt_bin, (char *)ldt->name, false);
 	
 	as_arraylist arglist;
-	as_arraylist_inita(&arglist, 4);
+	as_arraylist_inita(&arglist, 5);
 	as_arraylist_append_string(&arglist, &ldt_bin);
 	as_arraylist_append_int64(&arglist, count);
 	
+	as_string module_name;
+	as_string_init(&module_name, (char *)ldt->module, false);
+	as_arraylist_append_string(&arglist, &module_name);
 	as_string filter_name;
 	as_string_init(&filter_name, (char *)filter, false);
 	as_arraylist_append_string(&arglist, &filter_name );
@@ -454,12 +460,15 @@ as_status aerospike_llist_find_from_filter(
 	as_string_init(&ldt_bin, (char *)ldt->name, false);
 	
 	as_arraylist arglist;
-	as_arraylist_inita(&arglist, 5);
+	as_arraylist_inita(&arglist, 6);
 	as_arraylist_append_string(&arglist, &ldt_bin);
 	as_val_reserve(from_val); // bump the ref count so the arraylist_destroy will not reset
 	as_arraylist_append(&arglist, (as_val *)from_val);
 	as_arraylist_append_int64(&arglist, count);
 	
+	as_string module_name;
+	as_string_init(&module_name, (char *)ldt->module, false);
+	as_arraylist_append_string(&arglist, &module_name);
 	as_string filter_name;
 	as_string_init(&filter_name, (char *)filter, false);
 	as_arraylist_append_string(&arglist, &filter_name );
@@ -554,16 +563,20 @@ as_status aerospike_llist_filter(
 		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
 				"filter arguments without filter name specification");
 	}
+	if (filter && (!ldt->module || ldt->module[0] == '\0')) {
+		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
+				"filter name without ldt udf module name specification");
+	}
 	if (!as || !key || !ldt || !elements) {
 		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
-				"as/key/ldt/peek_count/elements cannot be null");
+				"as/key/ldt/elements cannot be null");
 	}
 	if (ldt->type != AS_LDT_LLIST) {
 		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
 				"not llist type");
 	}
 
-	int list_argc = filter ? 3 : 1;
+	int list_argc = filter ? 5 : 1;
 	/* stack allocate the arg list */
 	as_string ldt_bin;
 	as_string_init(&ldt_bin, (char *)ldt->name, false);
@@ -573,6 +586,10 @@ as_status aerospike_llist_filter(
 	as_arraylist_append_string(&arglist, &ldt_bin);
 
 	if (filter){
+		as_arraylist_append(&arglist, (as_val *)&as_nil); // use a nil keyList to scan all elements
+		as_string module_name;
+		as_string_init(&module_name, (char *)ldt->module, false);
+		as_arraylist_append_string(&arglist, &module_name);
 		as_string filter_name;
 		as_string_init(&filter_name, (char *)filter, false);
 		as_arraylist_append_string(&arglist, &filter_name );
@@ -622,22 +639,25 @@ as_status aerospike_llist_range_limit(
 		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
 				"filter arguments without filter name specification");
 	}
+	if (filter && (!ldt->module || ldt->module[0] == '\0')) {
+		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
+				"filter name without ldt udf module name specification");
+	}
 	if (!as || !key || !ldt || !elements) {
 		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
-				"as/key/ldt/peek_count/elements cannot be null");
+				"as/key/ldt/elements cannot be null");
 	}
 	if (ldt->type != AS_LDT_LLIST) {
 		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
 				"not llist type");
 	}
 
-	// Get ready for the appropriate number of parameters, bases on whether
-	// the input parm "filter" is valid .. or not.
-	int list_argc = filter ? 7 : 5;
+	// Determine the operation to use and the parameter count.
+	int list_argc = filter ? 6 : 3;
 	const char* operation;
 	
 	if (count > 0) {
-		operation = LDT_LIST_OP_FIND_RANGE;
+		operation = LDT_LIST_OP_FIND_RANGE_LIM;
 		list_argc++;
 	}
 	else {
@@ -668,6 +688,9 @@ as_status aerospike_llist_range_limit(
 	}
 	
 	if (filter){
+		as_string module_name;
+		as_string_init(&module_name, (char *)ldt->module, false);
+		as_arraylist_append_string(&arglist, &module_name);
 		as_string filter_name;
 		as_string_init(&filter_name, (char *)filter, false);
 		as_arraylist_append_string(&arglist, &filter_name );

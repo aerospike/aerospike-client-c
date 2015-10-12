@@ -423,28 +423,11 @@ typedef struct {
 			error("(%d) %s [%s:%d]", err.code, err.message, err.file, err.line);\
 			assert(err.code != AEROSPIKE_OK);\
 		}\
-		char * __key = kvp.key; \
 		for( int i = 0; i < kvp.vals_size && kvp.vals[i] != '\0'; i++ ) {\
 			char * __val = kvp.vals[i]; \
 			__block; \
 			__val = NULL; \
 		}\
-		__key = NULL; \
-	}
-
-#define first_stats(__query, __name, __key, __val, __block) \
-	if ( strlen(__query) > 0 && strlen(__name) > 0 ) { \
-		kvpair kvp = kvpair_init(__name); \
-		aerospike_info_foreach(as, &err, NULL, __query, kvpair_search, &kvp);\
-		if ( err.code != AEROSPIKE_OK ) {\
-			error("(%d) %s [%s:%d]", err.code, err.message, err.file, err.line);\
-			assert(err.code != AEROSPIKE_OK);\
-		}\
-		char * __key = kvp.key; \
-		char * __val = kvp.vals[0]; \
-		__block; \
-		__key = NULL; \
-		__val = NULL; \
 	}
 
 bool kvpair_search(const as_error * err, const as_node * node, const char * req, char * res, void * udata)

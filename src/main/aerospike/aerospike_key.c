@@ -258,7 +258,9 @@ as_status aerospike_key_put(
 	}
 	
 	uint8_t* cmd = as_command_init(size);
-	uint8_t* p = as_command_write_header(cmd, 0, AS_MSG_INFO2_WRITE, policy->commit_level, 0, policy->exists, policy->gen, rec->gen, rec->ttl, policy->timeout, n_fields, n_bins);
+	uint8_t* p = as_command_write_header(cmd, 0, AS_MSG_INFO2_WRITE,
+					policy->commit_level, 0, policy->exists, policy->gen,
+					rec->gen, rec->ttl, policy->timeout, n_fields, n_bins);
 		
 	p = as_command_write_key(p, policy->key, key);
 
@@ -268,11 +270,25 @@ as_status aerospike_key_put(
 	
 	size = as_command_write_end(cmd, p);
 
+	uint8_t *comp_cmd, *comp_cmd_stack;
+	comp_cmd = comp_cmd_stack = NULL;
+	size_t comp_size = 0;
+	if ((policy->compression_threshold != 0)
+			&& (size > policy->compression_threshold)) {
+
+		// Send a stack buffer. If the compressed buffer fits in it, no extra malloc is done
+		comp_cmd = comp_cmd_stack = alloca(AS_STACK_BUF_SIZE);
+		comp_size = AS_STACK_BUF_SIZE;
+		as_command_compress(cmd, size, &comp_cmd, &comp_size);
+	}
+
 	as_command_node cn;
 	as_command_node_init(&cn, key->ns, key->digest.value, AS_POLICY_REPLICA_MASTER, true);
 	
 	as_proto_msg msg;
-	status = as_command_execute(as->cluster, err, &cn, cmd, size, policy->timeout, policy->retry, as_command_parse_header, &msg);
+	status = as_command_execute(as->cluster, err, &cn, 
+				comp_cmd ? comp_cmd : cmd, comp_cmd ? comp_size : size,
+				policy->timeout, policy->retry, as_command_parse_header, &msg);
 	
 	for (uint32_t i = 0; i < n_bins; i++) {
 		as_buffer* buffer = &buffers[i];
@@ -282,6 +298,10 @@ as_status aerospike_key_put(
 		}
 	}
 	as_command_free(cmd, size);
+	if (comp_cmd && (comp_cmd != comp_cmd_stack)) {
+		cf_free(comp_cmd);
+	}
+
 	return status;
 }
 

@@ -38,6 +38,13 @@ typedef struct as_proto_s {
 #pragma pack(pop) // packing is back to what it was
 
 #pragma pack(push, 1) // packing is now 1
+typedef struct as_compressed_proto_s {
+	as_proto	proto;
+	uint64_t	uncompressed_sz;
+} as_compressed_proto;
+#pragma pack(pop) // packing is back to what it was
+
+#pragma pack(push, 1) // packing is now 1
 typedef struct as_msg_s {
 /*00*/	uint8_t		header_sz;			// number of uint8_ts in this header
 /*01*/	uint8_t		info1;				// bitfield about this request
@@ -69,6 +76,12 @@ typedef struct as_proto_s {
 	uint64_t	sz:48;
 	uint8_t		data[];
 } __attribute__ ((__packed__)) as_proto;
+
+typedef struct as_compressed_proto_s {
+	as_proto	proto;
+	uint64_t	uncompressed_sz;
+	uint8_t		data[];					// compressed bytes
+} __attribute__((__packed__)) as_compressed_proto;
 
 typedef struct as_msg_s {
 /*00*/	uint8_t		header_sz;			// number of uint8_ts in this header

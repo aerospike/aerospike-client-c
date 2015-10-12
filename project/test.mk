@@ -69,6 +69,5 @@ $(TARGET_TEST)/%.o: $(SOURCE_TEST)/%.c
 	$(object)
 
 $(TARGET_TEST)/aerospike_test: CFLAGS += $(TEST_CFLAGS)
-$(TARGET_TEST)/aerospike_test: LDFLAGS += $(TEST_LDFLAGS)
 $(TARGET_TEST)/aerospike_test: $(TEST_OBJECT) $(TARGET_TEST)/test.o | build prepare
 	$(executable) $(TARGET_LIB)/libaerospike.a $(TEST_LDFLAGS)

@@ -24,6 +24,7 @@
 #include <aerospike/as_socket.h>
 #include <citrusleaf/cf_clock.h>
 #include <string.h>
+#include <zlib.h>
 
 /******************************************************************************
  * FUNCTIONS
@@ -369,6 +370,51 @@ as_command_write_bin(uint8_t* begin, uint8_t operation_type, const as_bin* bin, 
 	*begin++ = 0;
 	*begin++ = name_len;
 	return p;
+}
+
+/*
+ * Note that the value of aruguments compressed_cmd & compressed_cmd_sz
+ * can change (become NULL & 0) on return
+ */
+void
+as_command_compress(uint8_t *cmd, size_t cmd_sz, uint8_t **compressed_cmd, size_t *compressed_cmd_sz)
+{
+	int max_comp_bufsz = compressBound(cmd_sz);
+	int hdrsz = sizeof(as_compressed_proto);
+	bool alloced_here = false;
+
+	// If passed in buffer is not enough for compressed command, alloc a new one
+	// We may be overallocating here, but this approach needs a single alloc call
+	if ((max_comp_bufsz + hdrsz) > *compressed_cmd_sz) {
+		*compressed_cmd = cf_malloc(max_comp_bufsz + hdrsz);
+		if (*compressed_cmd == NULL) {
+			*compressed_cmd_sz = 0;
+			return;
+		} else {
+			*compressed_cmd_sz = max_comp_bufsz;
+			alloced_here = true;
+		}
+	}
+
+	// The compressed bytes are written after the header which is yet to be filled
+	int ret_val = compress2(*compressed_cmd + hdrsz, compressed_cmd_sz, 
+					cmd, cmd_sz, Z_DEFAULT_COMPRESSION);
+	if (ret_val != 0) {
+		if (alloced_here) {
+			cf_free(*compressed_cmd);
+		}
+		*compressed_cmd = NULL;
+		*compressed_cmd_sz = 0;
+		return;
+	}
+
+	// compressed_cmd_sz will now have to actual compressed size from compress2()
+	as_command_compress_write_end(*compressed_cmd, 
+		*compressed_cmd + hdrsz + *compressed_cmd_sz, cmd_sz);
+	
+	// Adjust the compressed size to include the header size
+	*compressed_cmd_sz += hdrsz;
+	
 }
 
 as_status

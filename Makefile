@@ -63,7 +63,7 @@ CC_FLAGS +=	-DUSE_SYSTEMTAP
 endif
 
 # Linker flags
-LD_FLAGS = $(LDFLAGS) -lm -fPIC
+LD_FLAGS = $(LDFLAGS) -fPIC 
 
 ifeq ($(OS),Darwin)
   LD_FLAGS += -undefined dynamic_lookup

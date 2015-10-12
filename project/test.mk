@@ -26,7 +26,7 @@ TEST_VALGRIND = --tool=memcheck --leak-check=yes --show-reachable=yes --num-call
 
 TEST_CFLAGS = -I$(TARGET_INCL)
 
-TEST_LDFLAGS = -lssl -lcrypto $(LIB_LUA) -lpthread -lm
+TEST_LDFLAGS = -lssl -lcrypto $(LIB_LUA) -lpthread -lm -lz
 ifeq ($(OS),Darwin)
   ifeq ($(USE_LUAJIT),1)
     TEST_LDFLAGS += -pagezero_size 10000 -image_base 100000000

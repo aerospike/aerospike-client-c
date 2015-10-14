@@ -262,6 +262,13 @@ as_roles_destroy(as_role** roles, int roles_size);
  */
 as_status
 as_authenticate(as_error* err, int fd, const char* user, const char* credential, uint64_t deadline_ms);
+	
+/**
+ *	@private
+ *	Write authentication command to buffer.  Return buffer length.
+ */
+uint32_t
+as_authenticate_set(const char* user, const char* credential, uint8_t* buffer);
 
 #ifdef __cplusplus
 } // end extern "C"

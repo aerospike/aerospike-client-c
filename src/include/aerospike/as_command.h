@@ -384,17 +384,24 @@ as_command_compress_write_end(uint8_t* begin, uint8_t* end, uint64_t uncompresse
 
 /**
  *	@private
- *	Compress the command buffer
+ *	Calculate max size the compressed command buffer.
  */
-void
-as_command_compress(uint8_t *cmd, size_t cmd_sz, uint8_t **compressed_cmd, size_t *compressed_cmd_sz);
+size_t
+as_command_compress_max_size(size_t cmd_sz);
+
+/**
+ *	@private
+ *	Compress command buffer.
+ */
+as_status
+as_command_compress(as_error* err, uint8_t* cmd, size_t cmd_sz, uint8_t* compressed_cmd, size_t* compressed_size);
 
 /**
  *	@private
  *	Send command to the server.
  */
 as_status
-as_command_execute(as_cluster* cluster, as_error * err, as_command_node* cn, uint8_t* command, size_t command_len,
+as_command_execute(as_cluster* cluster, as_error* err, as_command_node* cn, uint8_t* command, size_t command_len,
    uint32_t timeout_ms, uint32_t retry,
    as_parse_results_fn parse_results_fn, void* parse_results_data);
 
@@ -432,6 +439,13 @@ as_command_parse_success_failure_bins(uint8_t** pp, as_error* err, as_msg* msg, 
  */
 uint8_t*
 as_command_parse_bins(as_record* rec, uint8_t* buf, uint32_t n_bins, bool deserialize);
+
+/**
+ *	@private
+ *	Parse user defined function error.
+ */
+as_status
+as_command_parse_udf_failure(uint8_t* p, as_error* err, as_msg* msg, as_status status);
 
 /**
  *	@private

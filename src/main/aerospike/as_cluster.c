@@ -986,6 +986,7 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 	cluster->tend_interval = (config->tender_interval < 1000)? 1000 : config->tender_interval;
 	cluster->conn_queue_size = config->max_threads + 1;  // Add one connection for tend thread.
 	cluster->conn_timeout_ms = (config->conn_timeout_ms == 0) ? 1000 : config->conn_timeout_ms;
+	cluster->conns_per_node_event_loop = config->conns_per_node_event_loop;
 	
 	// Initialize seed hosts.
 	cluster->seeds_size = seeds_size(config);

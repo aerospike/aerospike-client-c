@@ -18,6 +18,7 @@
 #include <aerospike/as_admin.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_command.h>
+#include <aerospike/as_event.h>
 #include <aerospike/as_info.h>
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_socket.h>
@@ -34,6 +35,8 @@
 
 bool
 as_partition_tables_update(struct as_cluster_s* cluster, as_node* node, char* buf, bool master);
+
+extern uint32_t as_event_loop_capacity;
 
 /******************************************************************************
  *	Functions.
@@ -63,8 +66,18 @@ as_node_create(as_cluster* cluster, struct sockaddr_in* addr, as_node_info* node
 	as_node_add_address(node, addr);
 		
 	node->conn_q = cf_queue_create(sizeof(int), true);
-	// node->conn_q_asyncfd = cf_queue_create(sizeof(int), true);
-	// node->asyncwork_q = cf_queue_create(sizeof(cl_async_work*), true);
+	
+	if (as_event_loop_capacity > 0) {
+		// Create one queue per event manager.
+		node->async_conn_qs = cf_malloc(sizeof(as_queue) * as_event_loop_capacity);
+		
+		for (uint32_t i = 0; i < as_event_loop_capacity; i++) {
+			as_queue_init(&node->async_conn_qs[i], sizeof(int), cluster->conns_per_node_event_loop);
+		}
+	}
+	else {
+		node->async_conn_qs = 0;
+	}
 	
 	node->info_fd = -1;
 	node->friends = 0;
@@ -113,13 +126,15 @@ as_node_destroy(as_node* node)
 	
 	as_vector_destroy(&node->addresses);
 	cf_queue_destroy(node->conn_q);
-	//cf_queue_destroy(node->conn_q_asyncfd);
-	//cf_queue_destroy(node->asyncwork_q);
+	
+	for (uint32_t i = 0; i < as_event_loop_capacity; i++) {
+		as_queue_destroy(&node->async_conn_qs[i]);
+	}
+	cf_free(node->async_conn_qs);
 	
 	if (node->info_fd >= 0) {
 		as_close(node->info_fd);
 	}
-
 	cf_free(node);
 }
 
@@ -150,23 +165,24 @@ as_node_authenticate_connection(as_error* err, as_node* node, uint64_t deadline_
 }
 
 static as_status
-as_node_create_connection(as_error* err, as_node* node, uint64_t deadline_ms, int* fd)
+as_node_create_connection(as_error* err, as_node* node, uint64_t deadline_ms, int* fd_out)
 {
 	// Create a non-blocking socket.
-	as_status status = as_socket_create_nb(err, fd);
+	int fd = as_socket_create_nb();
 	
-	if (status) {
-		return status;
+	if (fd < 0) {
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Socket create failed");
 	}
+	*fd_out = fd;
 	
 	as_error err_local;
 	
 	// Try primary address.
 	as_address* primary = as_vector_get(&node->addresses, node->address_index);
 	
-	if (as_socket_start_connect_nb(&err_local, *fd, &primary->addr) == AEROSPIKE_OK) {
+	if (as_socket_start_connect_nb(&err_local, fd, &primary->addr) == AEROSPIKE_OK) {
 		// Connection started ok - we have our socket.
-		return as_node_authenticate_connection(err, node, deadline_ms, fd);
+		return as_node_authenticate_connection(err, node, deadline_ms, fd_out);
 	}
 	
 	// Try other addresses.
@@ -176,20 +192,20 @@ as_node_create_connection(as_error* err, as_node* node, uint64_t deadline_ms, in
 		
 		// Address points into alias array, so pointer comparison is sufficient.
 		if (address != primary) {
-			if (as_socket_start_connect_nb(&err_local, *fd, &address->addr) == AEROSPIKE_OK) {
+			if (as_socket_start_connect_nb(&err_local, fd, &address->addr) == AEROSPIKE_OK) {
 				// Replace invalid primary address with valid alias.
 				// Other threads may not see this change immediately.
 				// It's just a hint, not a requirement to try this new address first.
 				as_log_debug("Change node address %s %s:%d", node->name, address->name, (int)cf_swap_from_be16(address->addr.sin_port));
 				ck_pr_store_32(&node->address_index, i);
-				return as_node_authenticate_connection(err, node, deadline_ms, fd);
+				return as_node_authenticate_connection(err, node, deadline_ms, fd_out);
 			}
 		}
 	}
 	
 	// Couldn't start a connection on any socket address - close the socket.
-	as_close(*fd);
-	*fd = -1;
+	as_close(fd);
+	*fd_out = -1;
 	return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to connect: %s %s:%d",
 			node->name, primary->name, (int)cf_swap_from_be16(primary->addr.sin_port))
 }
@@ -197,7 +213,6 @@ as_node_create_connection(as_error* err, as_node* node, uint64_t deadline_ms, in
 as_status
 as_node_get_connection(as_error* err, as_node* node, uint64_t deadline_ms, int* fd)
 {
-	//cf_queue* q = asyncfd ? node->conn_q_asyncfd : node->conn_q;
 	cf_queue* q = node->conn_q;
 	
 	while (1) {

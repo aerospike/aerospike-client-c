@@ -17,9 +17,11 @@
 #pragma once
 
 #include <aerospike/as_error.h>
+#include <aerospike/as_queue.h>
 #include <aerospike/as_vector.h>
 #include <citrusleaf/cf_queue.h>
 #include <netinet/in.h>
+#include <sys/uio.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -59,6 +61,44 @@ typedef struct as_address_s {
 	char name[INET_ADDRSTRLEN];
 } as_address;
 
+#if 0
+/**
+ *	@private
+ *	Async pipeline definition.
+ */
+typedef struct as_pipeline_s {
+	/**
+	 *	@private
+	 *	Socket identifier.
+	 */
+	int fd;
+	
+	/**
+	 *	@private
+	 *	Current buffer index into buffer array.
+	 */
+	uint32_t current;
+	
+	/**
+	 *	@private
+	 *	Offset within current buffer.
+	 */
+	uint32_t offset;
+	
+	/**
+	 *	@private
+	 *	Max number of buffers.
+	 */
+	uint32_t capacity;
+	
+	/**
+	 *	@private
+	 *	Pipeline buffer array of configurable dimension.
+	 */
+	struct iovec buffers[];
+} as_pipeline;
+#endif
+	
 struct as_cluster_s;
 
 /**
@@ -105,22 +145,24 @@ typedef struct as_node_s {
 	
 	/**
 	 *	@private
+	 *	Array of pools of FDs used in async commands.  There is one pool per node/event manager.
+	 *	Only used by event manager thread. Not thread-safe.
+	 */
+	as_queue* async_conn_qs;
+	
+	/**
+	 *	@private
+	 *	Async pipelines.  This is a configurable two dimensional array:
+	 *	[# event managers][# pipelines per event manager]
+	 */
+	//as_pipeline* pipelines;
+
+	/**
+	 *	@private
 	 *	Socket used exclusively for cluster tend thread info requests.
 	 */
 	int info_fd;
-	
-	/**
-	 *	@private
-	 *	FDs for async command execution. Not currently used.
-	 */
-	// cf_queue* conn_q_asyncfd;
-	
-	/**
-	 *	@private
-	 *	Asynchronous work queue. Not currently used.
-	 */
-	// cf_queue* asyncwork_q;
-	
+		
 	/**
 	 *	@private
 	 *	Number of other nodes that consider this node a member of the cluster.

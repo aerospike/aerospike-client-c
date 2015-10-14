@@ -46,16 +46,16 @@ CC_FLAGS += -fno-common -fno-strict-aliasing
 CC_FLAGS += -march=nocona -DMARCH_$(ARCH)
 CC_FLAGS += -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_GNU_SOURCE $(EXT_CFLAGS)
 
+ifeq ($(EVENT_LIB),libev)
+  CC_FLAGS += -DAS_USE_LIBEV
+endif
+
 ifeq ($(OS),Darwin)
-  CC_FLAGS += -D_DARWIN_UNLIMITED_SELECT
+  CC_FLAGS += -D_DARWIN_UNLIMITED_SELECT -I/usr/local/include
   LUA_PLATFORM = macosx
 else
   CC_FLAGS += -finline-functions -rdynamic
   LUA_PLATFORM = linux
-endif
-
-ifneq ($(CF),)
-  CC_FLAGS += -I$(CF)/include
 endif
 
 ifeq ($(USE_SYSTEMTAP),1)
@@ -67,6 +67,10 @@ LD_FLAGS = $(LDFLAGS)
 
 ifeq ($(OS),Darwin)
   LD_FLAGS += -undefined dynamic_lookup
+endif
+
+ifeq ($(EVENT_LIB),libev)
+  LD_FLAGS += -L/usr/local/lib -lev
 endif
 
 # DEBUG Settings
@@ -137,11 +141,13 @@ AEROSPIKE += aerospike_query.o
 AEROSPIKE += aerospike_scan.o
 AEROSPIKE += aerospike_udf.o
 AEROSPIKE += as_admin.o
+AEROSPIKE += as_async.o
 AEROSPIKE += as_batch.o
 AEROSPIKE += as_command.o
 AEROSPIKE += as_config.o
 AEROSPIKE += as_cluster.o
 AEROSPIKE += as_error.o
+AEROSPIKE += as_event.o
 AEROSPIKE += as_info.o
 AEROSPIKE += as_job.o
 AEROSPIKE += as_key.o

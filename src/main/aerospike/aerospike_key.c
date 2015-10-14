@@ -20,6 +20,7 @@
 #include <aerospike/as_buffer.h>
 #include <aerospike/as_command.h>
 #include <aerospike/as_error.h>
+#include <aerospike/as_event.h>
 #include <aerospike/as_key.h>
 #include <aerospike/as_list.h>
 #include <aerospike/as_log.h>
@@ -31,13 +32,15 @@
 #include <aerospike/as_status.h>
 #include <citrusleaf/cf_clock.h>
 
+static const char* CLUSTER_EMPTY = "Cluster is empty";
+
 /******************************************************************************
  * FUNCTIONS
  *****************************************************************************/
 
 static inline void
-as_command_node_init(as_command_node* cn, const char* ns,
-	const uint8_t* digest, as_policy_replica replica, bool write)
+as_command_node_init(as_command_node* cn, const char* ns, const uint8_t* digest,
+	as_policy_replica replica, bool write)
 {
 	cn->node = 0;
 	cn->ns = ns;
@@ -46,20 +49,25 @@ as_command_node_init(as_command_node* cn, const char* ns,
 	cn->write = write;
 }
 
-/**
- *	Look up a record by key, then return all bins.
- *	
- *	@param as			The aerospike instance to use for this operation.
- *	@param err			The as_error to be populated if an error occurs.
- *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param key			The key of the record.
- *	@param rec 			The record to be populated with the data from request.
- *
- *	@return AEROSPIKE_OK if successful. Otherwise an error.
- */
-as_status aerospike_key_get(
-	aerospike * as, as_error * err, const as_policy_read * policy, 
-	const as_key * key, as_record ** rec)
+static inline as_node*
+as_async_command_node_init(aerospike* as, as_error* err, const as_key* key, as_policy_replica replica, bool write)
+{
+	if (as_key_set_digest(err, (as_key*)key) != AEROSPIKE_OK) {
+		return 0;
+	}
+	
+	as_node* node = as_node_get(as->cluster, key->ns, key->digest.value, write, replica);
+	
+	if (! node) {
+		as_error_set_message(err, AEROSPIKE_ERR_CLIENT, CLUSTER_EMPTY);
+		return 0;
+	}
+	return node;
+}
+
+as_status
+aerospike_key_get(aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key,
+	as_record** rec)
 {
 	as_error_reset(err);
 	
@@ -94,21 +102,35 @@ as_status aerospike_key_get(
 	return status;
 }
 
-/**
- *	Lookup a record by key, then return specified bins.
- *	
- *	@param as			The aerospike instance to use for this operation.
- *	@param err			The as_error to be populated if an error occurs.
- *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param key			The key of the record.
- *	@param bins			The bins to select. A NULL terminated array of NULL terminated strings.
- *	@param rec 			The record to be populated with the data from request.
- *
- *	@return AEROSPIKE_OK if successful. Otherwise an error.
- */
-as_status aerospike_key_select(
-	aerospike * as, as_error * err, const as_policy_read * policy, 
-	const as_key * key, const char * bins[], as_record ** rec)
+void
+aerospike_key_get_async(aerospike* as, const as_policy_read* policy, const as_key* key,
+	as_event_loop* event_loop, bool pipeline, as_async_callback_fn ucb, void* udata)
+{
+	if (! policy) {
+		policy = &as->config.policies.read;
+	}
+	
+	as_error err;
+	as_node* node = as_async_command_node_init(as, &err, key, policy->replica, false);
+	if (! node) {
+		ucb(&err, 0, udata, event_loop);
+		return;
+	}
+	
+	uint16_t n_fields;
+	size_t size = as_command_key_size(policy->key, key, &n_fields);
+	
+	as_async_command* cmd = as_async_command_create(size, as->cluster, node, policy->timeout, policy->deserialize, event_loop, pipeline, ucb, udata, as_async_command_parse_result);
+
+	uint8_t* p = as_command_write_header_read(cmd->buf, AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_ALL, policy->consistency_level, policy->timeout, n_fields, 0);
+	p = as_command_write_key(p, policy->key, key);
+	size = as_command_write_end(cmd->buf, p);
+	as_async_command_assign(cmd, size);
+}
+
+as_status
+aerospike_key_select(aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key,
+	const char* bins[], as_record** rec)
 {
 	as_error_reset(err);
 	
@@ -156,20 +178,50 @@ as_status aerospike_key_select(
 	return status;
 }
 
-/**
- *	Check if a record exists in the cluster via its key.
- *	
- *	@param as			The aerospike instance to use for this operation.
- *	@param err			The as_error to be populated if an error occurs.
- *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param key			The key of the record.
- *	@param record       The record to populated with metadata if record exists, otherwise NULL
- *
- *	@return AEROSPIKE_OK if successful. Otherwise an error.
- */
-as_status aerospike_key_exists(
-	aerospike * as, as_error * err, const as_policy_read * policy, 
-	const as_key * key, as_record ** rec)
+void
+aerospike_key_select_async(aerospike* as, const as_policy_read* policy, const as_key* key,
+	const char* bins[], as_event_loop* event_loop, bool pipeline, as_async_callback_fn ucb,
+	void* udata)
+{
+	if (! policy) {
+		policy = &as->config.policies.read;
+	}
+	
+	as_error err;
+	as_node* node = as_async_command_node_init(as, &err, key, policy->replica, false);
+	if (! node) {
+		ucb(&err, 0, udata, event_loop);
+		return;
+	}
+	
+	uint16_t n_fields;
+	size_t size = as_command_key_size(policy->key, key, &n_fields);
+	int nvalues = 0;
+	
+	for (nvalues = 0; bins[nvalues] != NULL && bins[nvalues][0] != '\0'; nvalues++) {
+		as_status status = as_command_bin_name_size(&err, bins[nvalues], &size);
+		
+		if (status != AEROSPIKE_OK) {
+			ucb(&err, 0, udata, event_loop);
+			return;
+		}
+	}
+	
+	as_async_command* cmd = as_async_command_create(size, as->cluster, node, policy->timeout, policy->deserialize, event_loop, pipeline, ucb, udata, as_async_command_parse_result);
+
+	uint8_t* p = as_command_write_header_read(cmd->buf, AS_MSG_INFO1_READ, policy->consistency_level, policy->timeout, n_fields, nvalues);
+	p = as_command_write_key(p, policy->key, key);
+	
+	for (int i = 0; i < nvalues; i++) {
+		p = as_command_write_bin_name(p, bins[i]);
+	}
+	size = as_command_write_end(cmd->buf, p);
+	as_async_command_assign(cmd, size);
+}
+
+as_status
+aerospike_key_exists(aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key,
+	as_record** rec)
 {
 	as_error_reset(err);
 	
@@ -217,21 +269,35 @@ as_status aerospike_key_exists(
 	return status;
 }
 
-/**
- *	Store a record in the cluster.  Note that the TTL (time to live) value
- *	is specified inside of the rec (as_record) object.
- *	
- *	@param as			The aerospike instance to use for this operation.
- *	@param err			The as_error to be populated if an error occurs.
- *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param key			The key of the record.
- *	@param rec 			The record containing the data to be written.
- *
- *	@return AEROSPIKE_OK if successful. Otherwise an error.
- */
-as_status aerospike_key_put(
-	aerospike * as, as_error * err, const as_policy_write * policy, 
-	const as_key * key, as_record * rec) 
+void
+aerospike_key_exists_async(aerospike* as, const as_policy_read* policy, const as_key* key,
+	as_event_loop* event_loop, bool pipeline, as_async_callback_fn ucb, void* udata)
+{
+	if (! policy) {
+		policy = &as->config.policies.read;
+	}
+	
+	as_error err;
+	as_node* node = as_async_command_node_init(as, &err, key, policy->replica, false);
+	if (! node) {
+		ucb(&err, 0, udata, event_loop);
+		return;
+	}
+	
+	uint16_t n_fields;
+	size_t size = as_command_key_size(policy->key, key, &n_fields);
+	
+	as_async_command* cmd = as_async_command_create(size, as->cluster, node, policy->timeout, false, event_loop, pipeline, ucb, udata, as_async_command_parse_result);
+
+	uint8_t* p = as_command_write_header_read(cmd->buf, AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA, policy->consistency_level, policy->timeout, n_fields, 0);
+	p = as_command_write_key(p, policy->key, key);
+	size = as_command_write_end(cmd->buf, p);
+	as_async_command_assign(cmd, size);
+}
+
+as_status
+aerospike_key_put(aerospike* as, as_error* err, const as_policy_write* policy, const as_key* key,
+	as_record* rec)
 {
 	as_error_reset(err);
 	
@@ -245,87 +311,131 @@ as_status aerospike_key_put(
 		return status;
 	}
 	
-	uint16_t n_fields;
-	size_t size = as_command_key_size(policy->key, key, &n_fields);
-	
 	as_bin* bins = rec->bins.entries;
 	uint32_t n_bins = rec->bins.size;
 	as_buffer* buffers = (as_buffer*)alloca(sizeof(as_buffer) * n_bins);
+	
+	uint16_t n_fields;
+	size_t size = as_command_key_size(policy->key, key, &n_fields);
 	memset(buffers, 0, sizeof(as_buffer) * n_bins);
+	
+	for (uint32_t i = 0; i < n_bins; i++) {
+		size += as_command_bin_size(&bins[i], &buffers[i]);
+	}
+		
+	uint8_t* cmd = as_command_init(size);
+	uint8_t* p = as_command_write_header(cmd, 0, AS_MSG_INFO2_WRITE, policy->commit_level, 0,
+					policy->exists, policy->gen, rec->gen, rec->ttl, policy->timeout, n_fields,
+					n_bins);
+		
+	p = as_command_write_key(p, policy->key, key);
+	
+	for (uint32_t i = 0; i < n_bins; i++) {
+		p = as_command_write_bin(p, AS_OPERATOR_WRITE, &bins[i], &buffers[i]);
+	}
+	size = as_command_write_end(cmd, p);
 
+	as_command_node cn;
+	as_command_node_init(&cn, key->ns, key->digest.value, AS_POLICY_REPLICA_MASTER, true);
+	as_proto_msg msg;
+	
+	if (policy->compression_threshold == 0 || (size <= policy->compression_threshold)) {
+		// Send uncompressed command.
+		status = as_command_execute(as->cluster, err, &cn, cmd, size, policy->timeout,
+					policy->retry, as_command_parse_header, &msg);
+	}
+	else {
+		// Send compressed command.
+		size_t comp_size = as_command_compress_max_size(size);
+		uint8_t* comp_cmd = as_command_init(comp_size);
+		status = as_command_compress(err, cmd, size, comp_cmd, &comp_size);
+		
+		if (status == AEROSPIKE_OK) {
+			status = as_command_execute(as->cluster, err, &cn, comp_cmd, comp_size, policy->timeout,
+										policy->retry, as_command_parse_header, &msg);
+		}
+		as_command_free(comp_cmd, comp_size);
+	}
+	as_command_free(cmd, size);
+	return status;
+}
+
+void
+aerospike_key_put_async(aerospike* as, const as_policy_write* policy, const as_key* key,
+	as_record* rec, as_event_loop* event_loop, bool pipeline, as_async_callback_fn ucb, void* udata)
+{
+	if (! policy) {
+		policy = &as->config.policies.write;
+	}
+
+	as_error err;
+	as_node* node = as_async_command_node_init(as, &err, key, AS_POLICY_REPLICA_MASTER, true);
+	if (! node) {
+		ucb(&err, 0, udata, event_loop);
+		return;
+	}
+		
+	as_bin* bins = rec->bins.entries;
+	uint32_t n_bins = rec->bins.size;
+	as_buffer* buffers = (as_buffer*)alloca(sizeof(as_buffer) * n_bins);
+	
+	uint16_t n_fields;
+	size_t size = as_command_key_size(policy->key, key, &n_fields);
+	memset(buffers, 0, sizeof(as_buffer) * n_bins);
+	
 	for (uint32_t i = 0; i < n_bins; i++) {
 		size += as_command_bin_size(&bins[i], &buffers[i]);
 	}
 	
-	uint8_t* cmd = as_command_init(size);
-	uint8_t* p = as_command_write_header(cmd, 0, AS_MSG_INFO2_WRITE,
-					policy->commit_level, 0, policy->exists, policy->gen,
-					rec->gen, rec->ttl, policy->timeout, n_fields, n_bins);
+	if (policy->compression_threshold == 0 || (size <= policy->compression_threshold)) {
+		// Send uncompressed command.
+		as_async_command* cmd = as_async_command_create(size, as->cluster, node, policy->timeout, false,
+				event_loop, pipeline, ucb, udata, as_async_command_parse_header);
 		
-	p = as_command_write_key(p, policy->key, key);
-
-	for (uint32_t i = 0; i < n_bins; i++) {
-		p = as_command_write_bin(p, AS_OPERATOR_WRITE, &bins[i], &buffers[i]);
-	}
-	
-	size = as_command_write_end(cmd, p);
-
-	uint8_t *comp_cmd, *comp_cmd_stack;
-	comp_cmd = comp_cmd_stack = NULL;
-	size_t comp_size = 0;
-	if ((policy->compression_threshold != 0)
-			&& (size > policy->compression_threshold)) {
-
-		// Send a stack buffer. If the compressed buffer fits in it, no extra malloc is done
-		comp_cmd = comp_cmd_stack = alloca(AS_STACK_BUF_SIZE);
-		comp_size = AS_STACK_BUF_SIZE;
-		as_command_compress(cmd, size, &comp_cmd, &comp_size);
-	}
-
-	as_command_node cn;
-	as_command_node_init(&cn, key->ns, key->digest.value, AS_POLICY_REPLICA_MASTER, true);
-	
-	as_proto_msg msg;
-	status = as_command_execute(as->cluster, err, &cn, 
-				comp_cmd ? comp_cmd : cmd, comp_cmd ? comp_size : size,
-				policy->timeout, policy->retry, as_command_parse_header, &msg);
-	
-	for (uint32_t i = 0; i < n_bins; i++) {
-		as_buffer* buffer = &buffers[i];
+		uint8_t* p = as_command_write_header(cmd->buf, 0, AS_MSG_INFO2_WRITE, policy->commit_level, 0,
+				policy->exists, policy->gen, rec->gen, rec->ttl, policy->timeout, n_fields, n_bins);
 		
-		if (buffer->data) {
-			cf_free(buffer->data);
+		p = as_command_write_key(p, policy->key, key);
+		
+		for (uint32_t i = 0; i < n_bins; i++) {
+			p = as_command_write_bin(p, AS_OPERATOR_WRITE, &bins[i], &buffers[i]);
 		}
+		size = as_command_write_end(cmd->buf, p);
+		as_async_command_assign(cmd, size);
 	}
-	as_command_free(cmd, size);
-	if (comp_cmd && (comp_cmd != comp_cmd_stack)) {
-		cf_free(comp_cmd);
-	}
+	else {
+		// Send compressed command.
+		// First write uncompressed buffer.
+		uint8_t* cmd = as_command_init(size);
+		uint8_t* p = as_command_write_header(cmd, 0, AS_MSG_INFO2_WRITE, policy->commit_level, 0,
+				policy->exists, policy->gen, rec->gen, rec->ttl, policy->timeout, n_fields, n_bins);
+		
+		p = as_command_write_key(p, policy->key, key);
+		
+		for (uint32_t i = 0; i < n_bins; i++) {
+			p = as_command_write_bin(p, AS_OPERATOR_WRITE, &bins[i], &buffers[i]);
+		}
+		size = as_command_write_end(cmd, p);
+		
+		// Allocate command with compressed upper bound.
+		size_t comp_size = as_command_compress_max_size(size);
+		
+		as_async_command* comp_cmd = as_async_command_create(comp_size, as->cluster, node,
+			policy->timeout, false, event_loop, pipeline, ucb, udata, as_async_command_parse_header);
 
-	return status;
+		// Compress buffer and execute.
+		if (as_command_compress(&err, cmd, size, comp_cmd->buf, &comp_size) == AEROSPIKE_OK) {
+			as_async_command_assign(comp_cmd, comp_size);
+		}
+		else {
+			as_async_error(comp_cmd, &err);
+		}
+		as_command_free(cmd, size);
+	}
 }
 
-/**
- *	Remove a record from the cluster.
- *
- *	~~~~~~~~~~{.c}
- *		as_key key;
- *		as_key_init(&key, "ns", "set", "key");
- *
- *		if ( aerospike_key_remove(&as, &err, NULL, &key) != AEROSPIKE_OK ) {
- *			fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *		}
- *	~~~~~~~~~~
- *
- *	@param as			The aerospike instance to use for this operation.
- *	@param err			The as_error to be populated if an error occurs.
- *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param key			The key of the record.
- *
- *	@return AEROSPIKE_OK if successful and AEROSPIKE_ERR_RECORD_NOT_FOUND if the record was not found. Otherwise an error.
- */
-as_status aerospike_key_remove(
-	aerospike * as, as_error * err, const as_policy_remove * policy, const as_key * key)
+as_status
+aerospike_key_remove(aerospike* as, as_error* err, const as_policy_remove* policy, const as_key* key)
 {
 	as_error_reset(err);
 	
@@ -357,36 +467,35 @@ as_status aerospike_key_remove(
 	return status;
 }
 
-/**
- *	Lookup a record by key, then perform specified operations.
- *
- *	~~~~~~~~~~{.c}
- *		as_key key;
- *		as_key_init(&key, "ns", "set", "key");
- *
- *		as_operations ops;
- *		as_operations_inita(&ops,2);
- *		as_operations_append_int64(&ops, AS_OPERATOR_INCR, "bin1", 456);
- *		as_operations_append_str(&ops, AS_OPERATOR_APPEND, "bin1", "def");
- *
- *		if ( aerospike_key_remove(&as, &err, NULL, &key, &ops) != AEROSPIKE_OK ) {
- *			fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *		}
- *	~~~~~~~~~~
- *	
- *	@param as			The aerospike instance to use for this operation.
- *	@param err			The as_error to be populated if an error occurs.
- *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param key			The key of the record.
- *	@param ops			The operations to perform on the record.
- *	@param rec			The record to be populated with the data from AS_OPERATOR_READ operations.
- *
- *	@return AEROSPIKE_OK if successful. Otherwise an error.
- */
-as_status aerospike_key_operate(
-	aerospike * as, as_error * err, const as_policy_operate * policy, 
-	const as_key * key, const as_operations * ops,
-	as_record ** rec)
+void
+aerospike_key_remove_async(aerospike* as, const as_policy_remove* policy, const as_key* key,
+	as_event_loop* event_loop, bool pipeline, as_async_callback_fn ucb, void* udata)
+{
+	if (! policy) {
+		policy = &as->config.policies.remove;
+	}
+	
+	as_error err;
+	as_node* node = as_async_command_node_init(as, &err, key, AS_POLICY_REPLICA_MASTER, true);
+	if (! node) {
+		ucb(&err, 0, udata, event_loop);
+		return;
+	}
+	
+	uint16_t n_fields;
+	size_t size = as_command_key_size(policy->key, key, &n_fields);
+	
+	as_async_command* cmd = as_async_command_create(size, as->cluster, node, policy->timeout, false, event_loop, pipeline, ucb, udata, as_async_command_parse_header);
+
+	uint8_t* p = as_command_write_header(cmd->buf, 0, AS_MSG_INFO2_WRITE | AS_MSG_INFO2_DELETE, policy->commit_level, 0, AS_POLICY_EXISTS_IGNORE, policy->gen, policy->generation, 0, policy->timeout, n_fields, 0);
+	p = as_command_write_key(p, policy->key, key);
+	size = as_command_write_end(cmd->buf, p);
+	as_async_command_assign(cmd, size);
+}
+
+as_status
+aerospike_key_operate(aerospike* as, as_error* err, const as_policy_operate* policy,
+	const as_key* key, const as_operations* ops, as_record** rec)
 {
 	as_error_reset(err);
 	
@@ -446,58 +555,75 @@ as_status aerospike_key_operate(
 
 	status = as_command_execute(as->cluster, err, &cn, cmd, size, policy->timeout, policy->retry, as_command_parse_result, &data);
 	
-	for (uint32_t i = 0; i < n_operations; i++) {
-		as_buffer* buffer = &buffers[i];
-		
-		if (buffer->data) {
-			cf_free(buffer->data);
-		}
-	}
 	as_command_free(cmd, size);
 	return status;
 }
 
-/**
- *	Lookup a record by key, then apply the UDF.
- *
- *	~~~~~~~~~~{.c}
- *		as_key key;
- *		as_key_init(&key, "ns", "set", "key");
- *
- *		as_arraylist args;
- *		as_arraylist_init(&args, 2, 0);
- *		as_arraylist_append_int64(&args, 1);
- *		as_arraylist_append_int64(&args, 2);
- *		
- *		as_val * res = NULL;
- *		
- *		if ( aerospike_key_apply(&as, &err, NULL, &key, "math", "add", &args, &res) != AEROSPIKE_OK ) {
- *			fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *		}
- *		else {
- *			as_val_destroy(res);
- *		}
- *		
- *		as_arraylist_destroy(&args);
- *	~~~~~~~~~~
- *
- *
- *	@param as			The aerospike instance to use for this operation.
- *	@param err			The as_error to be populated if an error occurs.
- *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param key			The key of the record.
- *	@param module		The module containing the function to execute.
- *	@param function 	The function to execute.
- *	@param arglist 		The arguments for the function.
- *	@param result 		The return value from the function.
- *
- *	@return AEROSPIKE_OK if successful. Otherwise an error.
- */
-as_status aerospike_key_apply(
-	aerospike * as, as_error * err, const as_policy_apply * policy, 
-	const as_key * key, 
-	const char * module, const char * function, as_list * arglist, 
-	as_val ** result) 
+void
+aerospike_key_operate_async(aerospike* as, const as_policy_operate* policy, const as_key* key,
+	const as_operations* ops, as_event_loop* event_loop, bool pipeline, as_async_callback_fn ucb,
+	void* udata)
+{
+	if (! policy) {
+		policy = &as->config.policies.operate;
+	}
+	
+	uint32_t n_operations = ops->binops.size;
+	as_buffer* buffers = (as_buffer*)alloca(sizeof(as_buffer) * n_operations);
+	memset(buffers, 0, sizeof(as_buffer) * n_operations);
+	
+	uint16_t n_fields;
+	size_t size = as_command_key_size(policy->key, key, &n_fields);
+	uint8_t read_attr = 0;
+	uint8_t write_attr = 0;
+	
+	for (int i = 0; i < n_operations; i++) {
+		as_binop* op = &ops->binops.entries[i];
+		
+		switch (op->op)
+		{
+			case AS_OPERATOR_READ:
+				read_attr |= AS_MSG_INFO1_READ;
+				break;
+				
+			default:
+				write_attr |= AS_MSG_INFO2_WRITE;
+				break;
+		}
+		size += as_command_bin_size(&op->bin, &buffers[i]);
+	}
+	
+	as_error err;
+	as_node* node = as_async_command_node_init(as, &err, key, policy->replica, write_attr != 0);
+	if (! node) {
+		for (uint32_t i = 0; i < n_operations; i++) {
+			as_buffer* buffer = &buffers[i];
+			
+			if (buffer->data) {
+				cf_free(buffer->data);
+			}
+		}
+		ucb(&err, 0, udata, event_loop);
+		return;
+	}
+	
+	as_async_command* cmd = as_async_command_create(size, as->cluster, node, policy->timeout, false, event_loop, pipeline, ucb, udata, as_async_command_parse_result);
+
+	uint8_t* p = as_command_write_header(cmd->buf, read_attr, write_attr, policy->commit_level, policy->consistency_level,
+										 AS_POLICY_EXISTS_IGNORE, policy->gen, ops->gen, ops->ttl, policy->timeout, n_fields, n_operations);
+	p = as_command_write_key(p, policy->key, key);
+	
+	for (uint32_t i = 0; i < n_operations; i++) {
+		as_binop* op = &ops->binops.entries[i];
+		p = as_command_write_bin(p, op->op, &op->bin, &buffers[i]);
+	}
+	size = as_command_write_end(cmd->buf, p);
+	as_async_command_assign(cmd, size);
+}
+
+as_status
+aerospike_key_apply(aerospike* as, as_error* err, const as_policy_apply* policy, const as_key* key,
+	const char* module, const char* function, as_list* arglist, as_val** result)
 {
 	as_error_reset(err);
 	
@@ -541,6 +667,48 @@ as_status aerospike_key_apply(
 	as_buffer_destroy(&args);
 	as_serializer_destroy(&ser);
 	return status;
+}
+
+void
+aerospike_key_apply_async(aerospike* as, const as_policy_apply* policy, const as_key* key,
+	const char* module, const char* function, as_list* arglist,
+	as_event_loop* event_loop, bool pipeline, as_async_callback_fn ucb, void* udata)
+{
+	if (! policy) {
+		policy = &as->config.policies.apply;
+	}
+	
+	as_error err;
+	as_node* node = as_async_command_node_init(as, &err, key, AS_POLICY_REPLICA_MASTER, true);
+	if (! node) {
+		ucb(&err, 0, udata, event_loop);
+		return;
+	}
+	
+	uint16_t n_fields;
+	size_t size = as_command_key_size(policy->key, key, &n_fields);
+	size += as_command_string_field_size(module);
+	size += as_command_string_field_size(function);
+	
+	as_serializer ser;
+	as_msgpack_init(&ser);
+	as_buffer args;
+	as_buffer_init(&args);
+	as_serializer_serialize(&ser, (as_val*)arglist, &args);
+	size += as_command_field_size(args.size);
+	n_fields += 3;
+	
+	as_async_command* cmd = as_async_command_create(size, as->cluster, node, policy->timeout, false, event_loop, pipeline, ucb, udata, as_async_command_parse_success_failure);
+		
+	uint8_t* p = as_command_write_header(cmd->buf, 0, AS_MSG_INFO2_WRITE, policy->commit_level, 0, 0, 0, 0, policy->ttl, policy->timeout, n_fields, 0);
+	p = as_command_write_key(p, policy->key, key);
+	p = as_command_write_field_string(p, AS_FIELD_UDF_PACKAGE_NAME, module);
+	p = as_command_write_field_string(p, AS_FIELD_UDF_FUNCTION, function);
+	p = as_command_write_field_buffer(p, AS_FIELD_UDF_ARGLIST, &args);
+	size = as_command_write_end(cmd->buf, p);
+	as_buffer_destroy(&args);
+	as_serializer_destroy(&ser);
+	as_async_command_assign(cmd, size);
 }
 
 bool

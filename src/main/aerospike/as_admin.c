@@ -315,6 +315,21 @@ as_admin_read_list(aerospike* as, as_error* err, const as_policy_admin* policy, 
  *	FUNCTIONS
  *****************************************************************************/
 
+uint32_t
+as_authenticate_set(const char* user, const char* credential, uint8_t* buffer)
+{
+	uint8_t* p = buffer + 8;
+	
+	p = as_admin_write_header(p, AUTHENTICATE, 2);
+	p = as_admin_write_field_string(p, USER, user);
+	p = as_admin_write_field_string(p, CREDENTIAL, credential);
+
+	uint64_t len = p - buffer;
+	uint64_t proto = (len - 8) | (MSG_VERSION << 56) | (MSG_TYPE << 48);
+	*(uint64_t*)buffer = cf_swap_to_be64(proto);
+	return (uint32_t)len;
+}
+
 as_status
 as_authenticate(as_error* err, int fd, const char* user, const char* credential, uint64_t deadline_ms)
 {

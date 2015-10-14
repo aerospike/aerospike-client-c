@@ -40,6 +40,10 @@ for Linux and XCode clang for Mac OS X.
 
 	Download and install [XCode](https://itunes.apple.com/us/app/xcode/id497799835).
 
+### libev (Optional. Used for asynchronous functions)
+
+	Download and install [libev](http://dist.schmorp.de/libev)
+
 ## Build
 
 Before building, please ensure you have the prerequisites installed.  This project uses 
@@ -48,9 +52,15 @@ this project.
 
 	$ git submodule update --init
 
-To build:
+Build default library:
+
+	$ make [EVENT_LIB=libev|libuv]
+
+Build examples:
 
 	$ make
+	$ make EVENT_LIB=libev  # Support asynchronous functions with libev
+	$ make EVENT_LIB=libuv  # Support asynchronous functions with libuv
 
 This will generate the following files:
 
@@ -76,11 +86,11 @@ This will remove all files in the `target` directory.
 
 To run unit tests:
 
-	$ make [AS_HOST=<hostname>] test
+	$ make [EVENT_LIB=libev|libuv] [AS_HOST=<hostname>] test
 
 or with valgrind:
 
-	$ make [AS_HOST=<hostname>] test-valgrind
+	$ make [EVENT_LIB=libev|libuv] [AS_HOST=<hostname>] test-valgrind
 
 ## Lua
 

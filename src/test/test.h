@@ -247,6 +247,38 @@ void atf_assert_log(atf_test_result * result, const char * exp, const char * fil
 #define assert_log(EXP, fmt, args ... ) \
     if ( (EXP) == true ) return atf_assert_log(__result__, #EXP, __FILE__, __LINE__, fmt, ##args );
 
+#define fail_async(_mon_, fmt, args ... ) \
+	atf_assert_log(__result__, "", __FILE__, __LINE__, fmt, ##args);\
+	as_monitor_notify(_mon_);
+
+#define assert_success_async(_mon_, _err_, _udata_) \
+	atf_test_result* __result__ = _udata_;\
+	if (_err_) {\
+		fail_async(_mon_, "Error %d: %s", _err_->code, _err_->message);\
+		return;\
+	}
+
+#define assert_async(_mon_, EXP) \
+	if (!(EXP)) {\
+		atf_assert(__result__, #EXP, __FILE__, __LINE__);\
+		as_monitor_notify(_mon_);\
+		return;\
+	}
+
+#define assert_int_eq_async(_mon_, ACTUAL, EXPECTED) \
+	if ((ACTUAL) != (EXPECTED)) {\
+		atf_assert_int_eq(__result__, #ACTUAL, ACTUAL, EXPECTED, __FILE__, __LINE__);\
+		as_monitor_notify(_mon_);\
+		return;\
+	}
+
+#define assert_string_eq_async(_mon_, ACTUAL, EXPECTED) \
+	if (strcmp(ACTUAL, EXPECTED) != 0) {\
+		atf_assert_string_eq(__result__, #ACTUAL, ACTUAL, EXPECTED, __FILE__, __LINE__);\
+		as_monitor_notify(_mon_);\
+		return;\
+	}
+
 /******************************************************************************
  * atf_log
  *****************************************************************************/

@@ -279,6 +279,14 @@ typedef struct as_config_s {
 	uint32_t max_threads;
 	
 	/**
+	 *	Initial connection capacity for each asynchronous connection pool. There is one asynchronous
+	 *	connection pool for each node/event loop combination.  This variable is ignored if 
+	 *	asynchronous event loops are not created.
+	 *	Default: 32
+	 */
+	uint32_t conns_per_node_event_loop;
+
+	/**
 	 *	@private
 	 *	Not currently used.
 	 *	Maximum socket idle in seconds.  Socket connection pools will discard sockets

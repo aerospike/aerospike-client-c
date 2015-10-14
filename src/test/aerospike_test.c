@@ -18,6 +18,7 @@
 #include <getopt.h>
 
 #include <aerospike/aerospike.h>
+#include <aerospike/as_event.h>
 
 #include "test.h"
 #include "aerospike_test.h"
@@ -40,6 +41,12 @@ char g_host[MAX_HOST_SIZE];
 int g_port = 3000;
 static char g_user[AS_USER_SIZE];
 static char g_password[AS_PASSWORD_HASH_SIZE];
+
+#if defined(AS_USE_LIBEV)
+static bool g_use_async = true;
+#else
+static bool g_use_async = false;
+#endif
 
 /******************************************************************************
  * STATIC FUNCTIONS
@@ -111,7 +118,6 @@ static bool parse_opts(int argc, char* argv[])
 
 static bool before(atf_plan * plan) {
 
-
     if ( as ) {
         error("aerospike was already initialized");
         return false;
@@ -121,6 +127,16 @@ static bool before(atf_plan * plan) {
         error("failed to parse options");
     	return false;
     }
+	
+	as_log_set_level(AS_LOG_LEVEL_INFO);
+	as_log_set_callback(as_client_log_callback);
+	
+	if (g_use_async) {
+		if (as_event_create_loops(1) == 0) {
+			error("failed to create event loops");
+			return false;
+		}
+	}
 	
 	as_config config;
 	as_config_init(&config);
@@ -136,9 +152,6 @@ static bool before(atf_plan * plan) {
 
 	as = aerospike_new(&config);
 
-	as_log_set_level(AS_LOG_LEVEL_INFO);
-	as_log_set_callback(as_client_log_callback);
-	
 	if ( aerospike_connect(as, &err) == AEROSPIKE_OK ) {
 		debug("connected to %s:%d", g_host, g_port);
     	return true;
@@ -155,6 +168,10 @@ static bool after(atf_plan * plan) {
         error("aerospike was not initialized");
         return false;
     }
+	
+	if (g_use_async) {
+		as_event_close_loops();
+	}
 
 	as_error err;
 	as_error_reset(&err);
@@ -179,42 +196,47 @@ static bool after(atf_plan * plan) {
  * TEST PLAN
  *****************************************************************************/
 
-PLAN( aerospike_test ) {
+PLAN(aerospike_test) {
 
-    plan_before( before );
-    plan_after( after );
+	plan_before(before);
+	plan_after(after);
 
-    // aerospike_key module
-    plan_add( key_basics );
-    plan_add( key_apply );
-    plan_add( key_apply2 );
-    plan_add( key_operate );
-    
-    // aerospike_info module
-    plan_add( info_basics );
+	// aerospike_key module
+	plan_add(key_basics);
+	plan_add(key_apply);
+	plan_add(key_apply2);
+	plan_add(key_operate);
 
-    // aerospike_info module
-    plan_add( udf_basics );
-    plan_add( udf_types );
-    plan_add( udf_record );
+	// aerospike_info module
+	plan_add(info_basics);
 
-    //aerospike_sindex module
-    plan_add( index_basics );
+	// aerospike_info module
+	plan_add(udf_basics);
+	plan_add(udf_types);
+	plan_add(udf_record);
 
-    // aerospike_query module
-    plan_add( query_foreach );
-    plan_add( query_background );
+	//aerospike_sindex module
+	plan_add(index_basics);
 
-    // aerospike_scan module
-    plan_add( scan_basics );
+	// aerospike_query module
+	plan_add(query_foreach);
+	plan_add(query_background);
 
-    // aerospike_scan module
-    plan_add( batch_get );
+	// aerospike_scan module
+	plan_add(scan_basics);
 
-    // as_policy module
-    plan_add( policy_read );
-    plan_add( policy_scan );
+	// aerospike_scan module
+	plan_add(batch_get);
 
-    // as_ldt module
-    plan_add( ldt_lmap );
+	// as_policy module
+	plan_add(policy_read);
+	plan_add(policy_scan);
+
+	// as_ldt module
+	plan_add(ldt_lmap);
+
+	if (g_use_async) {
+		plan_add(key_basics_async);
+		plan_add(key_apply_async);
+	}
 }

@@ -59,8 +59,8 @@ extern "C" {
  *	@private
  *	Create non-blocking socket.
  */
-as_status
-as_socket_create_nb(as_error* err, int* fd);
+int
+as_socket_create_nb();
 
 /**
  *	@private

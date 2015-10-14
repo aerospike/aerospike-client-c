@@ -16,6 +16,7 @@
  */
 #include <aerospike/as_command.h>
 #include <aerospike/as_cluster.h>
+#include <aerospike/as_event.h>
 #include <aerospike/as_key.h>
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_msgpack.h>
@@ -23,7 +24,9 @@
 #include <aerospike/as_serializer.h>
 #include <aerospike/as_socket.h>
 #include <citrusleaf/cf_clock.h>
+#include <errno.h>
 #include <string.h>
+#include <unistd.h>
 #include <zlib.h>
 
 /******************************************************************************
@@ -353,6 +356,7 @@ as_command_write_bin(uint8_t* begin, uint8_t operation_type, const as_bin* bin, 
 			p += buffer->size;
 			val_len = buffer->size;
 			val_type = AS_BYTES_LIST;
+			cf_free(buffer->data);
 			break;
 		}
 		case AS_MAP: {
@@ -360,6 +364,7 @@ as_command_write_bin(uint8_t* begin, uint8_t operation_type, const as_bin* bin, 
 			p += buffer->size;
 			val_len = buffer->size;
 			val_type = AS_BYTES_MAP;
+			cf_free(buffer->data);
 			break;
 		}
 	}
@@ -372,49 +377,30 @@ as_command_write_bin(uint8_t* begin, uint8_t operation_type, const as_bin* bin, 
 	return p;
 }
 
-/*
- * Note that the value of aruguments compressed_cmd & compressed_cmd_sz
- * can change (become NULL & 0) on return
- */
-void
-as_command_compress(uint8_t *cmd, size_t cmd_sz, uint8_t **compressed_cmd, size_t *compressed_cmd_sz)
+size_t
+as_command_compress_max_size(size_t cmd_sz)
 {
-	int max_comp_bufsz = compressBound(cmd_sz);
-	int hdrsz = sizeof(as_compressed_proto);
-	bool alloced_here = false;
+	return compressBound(cmd_sz) + sizeof(as_compressed_proto);
+}
 
-	// If passed in buffer is not enough for compressed command, alloc a new one
-	// We may be overallocating here, but this approach needs a single alloc call
-	if ((max_comp_bufsz + hdrsz) > *compressed_cmd_sz) {
-		*compressed_cmd = cf_malloc(max_comp_bufsz + hdrsz);
-		if (*compressed_cmd == NULL) {
-			*compressed_cmd_sz = 0;
-			return;
-		} else {
-			*compressed_cmd_sz = max_comp_bufsz;
-			alloced_here = true;
-		}
+as_status
+as_command_compress(as_error* err, uint8_t* cmd, size_t cmd_sz, uint8_t* compressed_cmd, size_t* compressed_size)
+{
+	*compressed_size -= sizeof(as_compressed_proto);
+	int ret_val = compress2(compressed_cmd + sizeof(as_compressed_proto), compressed_size,
+							cmd, cmd_sz, Z_DEFAULT_COMPRESSION);
+	
+	if (ret_val) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Compress failed: %d", ret_val);
 	}
-
-	// The compressed bytes are written after the header which is yet to be filled
-	int ret_val = compress2(*compressed_cmd + hdrsz, compressed_cmd_sz, 
-					cmd, cmd_sz, Z_DEFAULT_COMPRESSION);
-	if (ret_val != 0) {
-		if (alloced_here) {
-			cf_free(*compressed_cmd);
-		}
-		*compressed_cmd = NULL;
-		*compressed_cmd_sz = 0;
-		return;
-	}
-
-	// compressed_cmd_sz will now have to actual compressed size from compress2()
-	as_command_compress_write_end(*compressed_cmd, 
-		*compressed_cmd + hdrsz + *compressed_cmd_sz, cmd_sz);
+	
+	// compressed_size will now have to actual compressed size from compress2()
+	as_command_compress_write_end(compressed_cmd, compressed_cmd + sizeof(as_compressed_proto) +
+								  *compressed_size, cmd_sz);
 	
 	// Adjust the compressed size to include the header size
-	*compressed_cmd_sz += hdrsz;
-	
+	*compressed_size += sizeof(as_compressed_proto);
+	return AEROSPIKE_OK;
 }
 
 as_status
@@ -870,7 +856,7 @@ as_command_parse_udf_error(as_error* err, as_status status, as_val* val)
 	return as_error_set_message(err, status, as_error_string(status));
 }
 
-static as_status
+as_status
 as_command_parse_udf_failure(uint8_t* p, as_error* err, as_msg* msg, as_status status)
 {
 	p = as_command_ignore_fields(p, msg->n_fields);

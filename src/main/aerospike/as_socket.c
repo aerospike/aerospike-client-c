@@ -133,36 +133,35 @@ as_fd_isset(int fd, fd_set *fdset)
  * FUNCTIONS
  *****************************************************************************/
 
-as_status
-as_socket_create_nb(as_error* err, int* fd)
+int
+as_socket_create_nb()
 {
 	// Create the socket.
-	int sock = socket(AF_INET, SOCK_STREAM, 0);
+	int fd = socket(AF_INET, SOCK_STREAM, 0);
 
-	if (sock == -1) {
-		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Socket create failed, errno %d", errno);
+	if (fd == -1) {
+		return -1;
 	}
 
     // Make the socket nonblocking.
-	int flags = fcntl(sock, F_GETFL, 0);
+	int flags = fcntl(fd, F_GETFL, 0);
 
     if (flags < 0) {
-		close(sock);
-		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Socket flags read failed.");
+		close(fd);
+		return -2;
 	}
 
-    if (fcntl(sock, F_SETFL, flags | O_NONBLOCK) < 0) {
-		close(sock);
-		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Socket nonblocking set failed.");
+    if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
+		close(fd);
+		return -3;
 	}
 
 	int f = 1;
-	setsockopt(sock, SOL_TCP, TCP_NODELAY, &f, sizeof(f));
+	setsockopt(fd, SOL_TCP, TCP_NODELAY, &f, sizeof(f));
 #ifdef __APPLE__
-	setsockopt(sock, SOL_SOCKET, SO_NOSIGPIPE, &f, sizeof(f));
+	setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &f, sizeof(f));
 #endif
-	*fd = sock;
-	return AEROSPIKE_OK;
+	return fd;
 }
 
 as_status
@@ -177,22 +176,23 @@ as_socket_start_connect_nb(as_error* err, int fd, struct sockaddr_in* sa)
 }
 
 as_status
-as_socket_create_and_connect_nb(as_error* err, struct sockaddr_in *sa, int* fd)
+as_socket_create_and_connect_nb(as_error* err, struct sockaddr_in *sa, int* fd_out)
 {
 	// Create the socket.
-	as_status status = as_socket_create_nb(err, fd);
+	int fd = as_socket_create_nb();
 	
-	if (status) {
-		return status;
+	if (fd < 0) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Socket create failed");
 	}
 	
 	// Initiate non-blocking connect.
-	status = as_socket_start_connect_nb(err, *fd, sa);
+	as_status status = as_socket_start_connect_nb(err, fd, sa);
 	
 	if (status) {
-		as_close(*fd);
+		as_close(fd);
 		return status;
 	}
+	*fd_out = fd;
 	return AEROSPIKE_OK;
 }
 
@@ -492,14 +492,14 @@ Out:
 #include <WinSock2.h>
 #include <Ws2tcpip.h>
 
-as_status
-as_socket_create_nb(as_error* err, int* fd)
+int
+as_socket_create_nb()
 {
 	// Create the socket.
 	SOCKET sock = socket(AF_INET, SOCK_STREAM, 0);
 
 	if (sock == -1) {
-		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Socket create failed, errno %d", errno);
+		return sock;
 	}
 
     // Make the socket nonblocking.
@@ -507,14 +507,13 @@ as_socket_create_nb(as_error* err, int* fd)
 
 	if (NO_ERROR != ioctlsocket(sock, FIONBIO, &iMode)) {
 		// close sock here?
-		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Socket nonblocking set failed.");
+		return -1;
 	}
 
 	int f = 1;
 	setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char*)&f, sizeof(f));
 
-	*fd = (int)sock;
-	return AEROSPIKE_OK;
+	return (int)sock;
 }
 
 #endif // CF_WINDOWS

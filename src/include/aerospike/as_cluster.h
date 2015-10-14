@@ -200,6 +200,14 @@ typedef struct as_cluster_s {
 	
 	/**
 	 *	@private
+	 *	Initial connection capacity for each asynchronous connection pool. There is one asynchronous
+	 *	connection pool for each node/event loop combination.  This variable is ignored if
+	 *	asynchronous event loops are not created.
+	 */
+	uint32_t conns_per_node_event_loop;
+
+	/**
+	 *	@private
 	 *	Initial connection timeout in milliseconds.
 	 */
 	uint32_t conn_timeout_ms;

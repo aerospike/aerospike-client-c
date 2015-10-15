@@ -17,6 +17,7 @@
 #pragma once
 
 #include <aerospike/as_error.h>
+#include <aerospike/as_event.h>
 #include <aerospike/as_queue.h>
 #include <aerospike/as_vector.h>
 #include <citrusleaf/cf_queue.h>
@@ -60,44 +61,6 @@ typedef struct as_address_s {
 	 */
 	char name[INET_ADDRSTRLEN];
 } as_address;
-
-#if 0
-/**
- *	@private
- *	Async pipeline definition.
- */
-typedef struct as_pipeline_s {
-	/**
-	 *	@private
-	 *	Socket identifier.
-	 */
-	int fd;
-	
-	/**
-	 *	@private
-	 *	Current buffer index into buffer array.
-	 */
-	uint32_t current;
-	
-	/**
-	 *	@private
-	 *	Offset within current buffer.
-	 */
-	uint32_t offset;
-	
-	/**
-	 *	@private
-	 *	Max number of buffers.
-	 */
-	uint32_t capacity;
-	
-	/**
-	 *	@private
-	 *	Pipeline buffer array of configurable dimension.
-	 */
-	struct iovec buffers[];
-} as_pipeline;
-#endif
 	
 struct as_cluster_s;
 
@@ -145,17 +108,16 @@ typedef struct as_node_s {
 	
 	/**
 	 *	@private
-	 *	Array of pools of FDs used in async commands.  There is one pool per node/event manager.
-	 *	Only used by event manager thread. Not thread-safe.
+	 *	Array of pools of FDs used in async commands.  There is one pool per node/event loop.
+	 *	Only used by event loop threads. Not thread-safe.
 	 */
 	as_queue* async_conn_qs;
 	
 	/**
 	 *	@private
-	 *	Async pipelines.  This is a configurable two dimensional array:
-	 *	[# event managers][# pipelines per event manager]
+	 *	Async pipeline loop.  Used for pipelined commands only.
 	 */
-	//as_pipeline* pipelines;
+	as_event_loop* pipeline_loop;
 
 	/**
 	 *	@private

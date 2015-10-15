@@ -89,6 +89,7 @@ as_async_server_error(as_async_command* cmd, as_error* err)
 static void
 as_async_server_error_code(as_async_command* cmd, as_status error_code)
 {
+	// TODO: HANDLE AEROSPIKE_ERR_QUERY_ABORTED, AEROSPIKE_ERR_SCAN_ABORTED, AEROSPIKE_ERR_CLIENT_ABORT
 	// Put connection back in pool.
 	as_async_put_connection(cmd);
 	
@@ -381,11 +382,17 @@ as_async_command_assign(as_async_command* cmd, size_t size)
 {
 	cmd->len = (uint32_t)size;
 	
-	if (! cmd->event_loop) {
-		// Assign event loop using round robin distribution.
-		// Not atomic because doesn't need to be exactly accurate.
-		uint32_t current = as_event_loop_current++;
-		cmd->event_loop = &as_event_loops[current % as_event_loop_size];
+	if (cmd->pipeline) {
+		// Assign to node's pipeline event loop.
+		cmd->event_loop = cmd->node->pipeline_loop;
+	}
+	else {
+		if (! cmd->event_loop) {
+			// Assign event loop using round robin distribution.
+			// Not atomic because doesn't need to be exactly accurate.
+			uint32_t current = as_event_loop_current++;
+			cmd->event_loop = &as_event_loops[current % as_event_loop_size];
+		}
 	}
 	
 	// Use pointer comparison for performance.

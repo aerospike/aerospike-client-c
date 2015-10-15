@@ -37,6 +37,7 @@ bool
 as_partition_tables_update(struct as_cluster_s* cluster, as_node* node, char* buf, bool master);
 
 extern uint32_t as_event_loop_capacity;
+static uint32_t as_pipeline_current = 0;
 
 /******************************************************************************
  *	Functions.
@@ -67,6 +68,7 @@ as_node_create(as_cluster* cluster, struct sockaddr_in* addr, as_node_info* node
 		
 	node->conn_q = cf_queue_create(sizeof(int), true);
 	
+	// Initialize async queue.
 	if (as_event_loop_capacity > 0) {
 		// Create one queue per event manager.
 		node->async_conn_qs = cf_malloc(sizeof(as_queue) * as_event_loop_capacity);
@@ -78,6 +80,10 @@ as_node_create(as_cluster* cluster, struct sockaddr_in* addr, as_node_info* node
 	else {
 		node->async_conn_qs = 0;
 	}
+	
+	// Assign pipeline event loop to this node.
+	uint32_t current = ck_pr_faa_32(&as_pipeline_current, 1);
+	node->pipeline_loop = &as_event_loops[current % as_event_loop_size];
 	
 	node->info_fd = -1;
 	node->friends = 0;

@@ -38,11 +38,11 @@ static uint32_t as_event_loop_current = 0;
 static inline void
 as_async_put_connection(as_async_command* cmd)
 {
-	as_queue* q = &cmd->node->async_conn_qs[cmd->event_loop->index];
+	as_queue* q = &cmd->node->async_conn_qs[cmd->event.event_loop->index];
 	
-	if (! as_queue_push_limit(q, &cmd->fd)) {
-		close(cmd->fd);
-		cmd->fd = -1;
+	if (! as_queue_push_limit(q, &cmd->event.fd)) {
+		close(cmd->event.fd);
+		cmd->event.fd = -1;
 	}
 }
 
@@ -54,11 +54,11 @@ as_async_finish(as_async_command* cmd, void* result)
 	}
 	
 	// Command buffer may have been allocated separately from command allocation.
-	if (cmd->buf != cmd->space) {
+	if (cmd->free_buf) {
 		cf_free(cmd->buf);
 	}
 	
-	cmd->ucb(0, result, cmd->udata, cmd->event_loop);
+	cmd->ucb(0, result, cmd->udata, cmd->event.event_loop);
 	cf_free(cmd);
 }
 
@@ -70,11 +70,11 @@ as_async_error(as_async_command* cmd, as_error* err)
 	}
 	
 	// Buffer may have been allocated separately from command allocation.
-	if (cmd->buf != cmd->space) {
+	if (cmd->free_buf) {
 		cf_free(cmd->buf);
 	}
 	
-	cmd->ucb(err, 0, cmd->udata, cmd->event_loop);
+	cmd->ucb(err, 0, cmd->udata, cmd->event.event_loop);
 	cf_free(cmd);
 }
 
@@ -103,18 +103,16 @@ as_async_socket_error(as_async_command* cmd, as_error* err)
 {
 	// Stop watcher if it has been initialized.
 	if (cmd->state > AS_ASYNC_STATE_UNREGISTERED) {
-		as_event_unregister(cmd);
+		as_event_unregister(&cmd->event);
 	}
 	
 	// Stop timer.
-	if (cmd->timeout_ms) {
-		as_event_stop_timer(cmd);
+	if (cmd->event.timeout_ms) {
+		as_event_stop_timer(&cmd->event);
 	}
 	
 	// Do not put connection back in pool.
-	close(cmd->fd);
-	cmd->fd = -1;
-	
+	as_event_close(&cmd->event);
 	as_async_error(cmd, err);
 }
 
@@ -123,16 +121,12 @@ as_async_timeout(as_async_command* cmd)
 {
 	// Stop watcher if it has been initialized.
 	if (cmd->state > AS_ASYNC_STATE_UNREGISTERED) {
-		as_event_unregister(cmd);
+		as_event_unregister(&cmd->event);
 	}
 	
 	// Assume timer has already been stopped.
 	// Do not put connection back in pool.
-	// Timeouts can occur before connection is created, so check fd.
-	if (cmd->fd >= 0) {
-		close(cmd->fd);
-		cmd->fd = -1;
-	}
+	as_event_close(&cmd->event);
 	
 	as_error err;
 	as_error_update(&err, AEROSPIKE_ERR_TIMEOUT, as_error_string(AEROSPIKE_ERR_TIMEOUT));
@@ -143,10 +137,7 @@ static void
 as_async_conn_error(as_async_command* cmd, as_error* err)
 {
 	// Socket never connected or registered, so just close.
-	if (cmd->fd >= 0) {
-		close(cmd->fd);
-		cmd->fd = -1;
-	}
+	as_event_close(&cmd->event);
 	as_async_error(cmd, err);
 }
 
@@ -156,7 +147,7 @@ as_async_command_write(as_async_command* cmd)
 	ssize_t bytes;
 	
 	do {
-		bytes = write(cmd->fd, cmd->buf + cmd->pos, cmd->len - cmd->pos);
+		bytes = write(cmd->event.fd, cmd->buf + cmd->pos, cmd->len - cmd->pos);
 		
 		if (bytes > 0) {
 			cmd->pos += bytes;
@@ -169,13 +160,13 @@ as_async_command_write(as_async_command* cmd)
 			}
 			
 			as_error err;
-			as_error_update(&err, AEROSPIKE_ERR_CLIENT, "Socket %d write failed: %d", cmd->fd, errno);
+			as_error_update(&err, AEROSPIKE_ERR_CLIENT, "Socket %d write failed: %d", cmd->event.fd, errno);
 			as_async_socket_error(cmd, &err);
 			return 2;
 		}
 		else {
 			as_error err;
-			as_error_update(&err, AEROSPIKE_ERR_CLIENT, "Socket %d write closed by peer", cmd->fd);
+			as_error_update(&err, AEROSPIKE_ERR_CLIENT, "Socket %d write closed by peer", cmd->event.fd);
 			as_async_socket_error(cmd, &err);
 			return 3;
 		}
@@ -213,14 +204,14 @@ as_async_connected_auth(as_async_command* cmd)
 	if (ret == 0) {
 		// Done with write. Register for read.
 		as_async_set_auth_read_header(cmd);
-		as_event_register_read(cmd);
+		as_event_register_read(&cmd->event);
 		return;
 	}
 	
 	if (ret == 1) {
 		// Got would-block. Register for write.
 		cmd->state = AS_ASYNC_STATE_AUTH_WRITE;
-		as_event_register_write(cmd);
+		as_event_register_write(&cmd->event);
 	}
 }
 
@@ -244,16 +235,16 @@ as_async_connect_in_progress(as_async_command* cmd)
 	else {
 		cmd->state = AS_ASYNC_STATE_WRITE;
 	}
-	as_event_register_write(cmd);
+	as_event_register_write(&cmd->event);
 }
 
 static bool
 as_async_create_connection(as_async_command* cmd)
 {
 	// Create a non-blocking socket.
-	cmd->fd = as_socket_create_nb();
+	cmd->event.fd = as_socket_create_nb();
 	
-	if (cmd->fd < 0) {
+	if (cmd->event.fd < 0) {
 		as_error err;
 		as_error_set_message(&err, AEROSPIKE_ERR_CLIENT, "Failed to create non-blocking socket");
 		as_async_conn_error(cmd, &err);
@@ -265,7 +256,7 @@ as_async_create_connection(as_async_command* cmd)
 	as_address* primary = as_vector_get(&node->addresses, node->address_index);
 	
 	// Attempt non-blocking connection.
-	if (connect(cmd->fd, (struct sockaddr*)&primary->addr, sizeof(struct sockaddr)) == 0) {
+	if (connect(cmd->event.fd, (struct sockaddr*)&primary->addr, sizeof(struct sockaddr)) == 0) {
 		return as_async_connected(cmd);
 	}
 	
@@ -283,7 +274,7 @@ as_async_create_connection(as_async_command* cmd)
 		
 		// Address points into alias array, so pointer comparison is sufficient.
 		if (address != primary) {
-			if (connect(cmd->fd, (struct sockaddr*)&address->addr, sizeof(struct sockaddr)) == 0) {
+			if (connect(cmd->event.fd, (struct sockaddr*)&address->addr, sizeof(struct sockaddr)) == 0) {
 				// Replace invalid primary address with valid alias.
 				// Other threads may not see this change immediately.
 				// It's just a hint, not a requirement to try this new address first.
@@ -318,10 +309,10 @@ as_async_create_connection(as_async_command* cmd)
 static bool
 as_async_get_connection(as_async_command* cmd)
 {
-	as_queue* q = &cmd->node->async_conn_qs[cmd->event_loop->index];
+	as_queue* q = &cmd->node->async_conn_qs[cmd->event.event_loop->index];
 	
-	while (as_queue_pop(q, &cmd->fd)) {
-		if (as_socket_validate(cmd->fd, true)) {
+	while (as_queue_pop(q, &cmd->event.fd)) {
+		if (as_socket_validate(cmd->event.fd, true)) {
 			return true;
 		}
 	}
@@ -332,8 +323,8 @@ static void
 as_async_command_begin(as_async_command* cmd)
 {
 	// Always initialize timer first when timeouts are specified.
-	if (cmd->timeout_ms) {
-		as_event_init_timer(cmd);
+	if (cmd->event.timeout_ms) {
+		as_event_init_timer(&cmd->event);
 	}
 	
 	if (! as_async_get_connection(cmd)) {
@@ -351,14 +342,14 @@ as_async_command_begin(as_async_command* cmd)
 		cmd->pos = 0;
 		cmd->len = 8;
 		cmd->state = AS_ASYNC_STATE_READ_HEADER;
-		as_event_register_read(cmd);
+		as_event_register_read(&cmd->event);
 		return;
 	}
 	
 	if (ret == 1) {
 		// Got would-block. Register for write.
 		cmd->state = AS_ASYNC_STATE_WRITE;
-		as_event_register_write(cmd);
+		as_event_register_write(&cmd->event);
 	}
 }
 
@@ -366,7 +357,7 @@ void
 as_async_command_execute(as_async_command* cmd)
 {
 	// Check if command timed out after coming off queue.
-	if (cmd->timeout_ms && (cf_getms() - *(uint64_t*)cmd) > cmd->timeout_ms) {
+	if (cmd->event.timeout_ms && (cf_getms() - *(uint64_t*)cmd) > cmd->event.timeout_ms) {
 		as_error err;
 		as_error_set_message(&err, AEROSPIKE_ERR_TIMEOUT, as_error_string(AEROSPIKE_ERR_TIMEOUT));
 		as_async_error(cmd, &err);
@@ -384,32 +375,32 @@ as_async_command_assign(as_async_command* cmd, size_t size)
 	
 	if (cmd->pipeline) {
 		// Assign to node's pipeline event loop.
-		cmd->event_loop = cmd->node->pipeline_loop;
+		cmd->event.event_loop = cmd->node->pipeline_loop;
 	}
 	else {
-		if (! cmd->event_loop) {
+		if (! cmd->event.event_loop) {
 			// Assign event loop using round robin distribution.
 			// Not atomic because doesn't need to be exactly accurate.
 			uint32_t current = as_event_loop_current++;
-			cmd->event_loop = &as_event_loops[current % as_event_loop_size];
+			cmd->event.event_loop = &as_event_loops[current % as_event_loop_size];
 		}
 	}
 	
 	// Use pointer comparison for performance.
 	// If portability becomes an issue, use "pthread_equal(event_loop->thread, pthread_self())"
 	// instead.
-	if (cmd->event_loop->thread == pthread_self()) {
+	if (cmd->event.event_loop->thread == pthread_self()) {
 		// We are already in event loop thread, so start processing.
 		as_async_command_begin(cmd);
 	}
 	else {
-		if (cmd->timeout_ms) {
+		if (cmd->event.timeout_ms) {
 			// Store current time in first 8 bytes which is not used yet.
 			*(uint64_t*)cmd = cf_getms();
 		}
 		
 		// Send command through queue so it can be executed in event loop thread.
-		if (! as_event_send(cmd)) {
+		if (! as_event_send(&cmd->event)) {
 			as_error err;
 			as_error_set_message(&err, AEROSPIKE_ERR_CLIENT, "Failed to queue command");
 			as_async_error(cmd, &err);
@@ -432,7 +423,7 @@ as_async_command_send(as_async_command* cmd)
 			cmd->len = 8;
 			cmd->state = AS_ASYNC_STATE_READ_HEADER;
 		}
-		as_event_set_read(cmd);
+		as_event_set_read(&cmd->event);
 	}
 }
 
@@ -442,7 +433,7 @@ as_async_read(as_async_command* cmd)
 	ssize_t bytes;
 	
 	do {
-		bytes = read(cmd->fd, cmd->buf + cmd->pos, cmd->len - cmd->pos);
+		bytes = read(cmd->event.fd, cmd->buf + cmd->pos, cmd->len - cmd->pos);
 		
 		if (bytes > 0) {
 			cmd->pos += bytes;
@@ -452,14 +443,14 @@ as_async_read(as_async_command* cmd)
 		if (bytes < 0) {
 			if (errno != EWOULDBLOCK) {
 				as_error err;
-				as_error_update(&err, AEROSPIKE_ERR_CLIENT, "Socket %d read failed: %d", cmd->fd, errno);
+				as_error_update(&err, AEROSPIKE_ERR_CLIENT, "Socket %d read failed: %d", cmd->event.fd, errno);
 				as_async_socket_error(cmd, &err);
 			}
 			return false;
 		}
 		else {
 			as_error err;
-			as_error_update(&err, AEROSPIKE_ERR_CLIENT, "Socket %d read closed by peer", cmd->fd);
+			as_error_update(&err, AEROSPIKE_ERR_CLIENT, "Socket %d read closed by peer", cmd->event.fd);
 			as_async_socket_error(cmd, &err);
 			return false;
 		}
@@ -518,14 +509,14 @@ as_async_command_parse_authentication(as_async_command* cmd)
 		cmd->pos = 0;
 		cmd->len = 8;
 		cmd->state = AS_ASYNC_STATE_READ_HEADER;
-		as_event_set_read(cmd);
+		as_event_set_read(&cmd->event);
 		return;
 	}
 
 	if (ret == 1) {
 		// Got would-block. Set command write.
 		cmd->state = AS_ASYNC_STATE_WRITE;
-		as_event_set_write(cmd);
+		as_event_set_write(&cmd->event);
 	}
 }
 
@@ -553,6 +544,7 @@ as_async_command_receive(as_async_command* cmd)
 		if (cmd->len > cmd->capacity) {
 			cmd->buf = cf_malloc(size);
 			cmd->capacity = cmd->len;
+			cmd->free_buf = true;
 		}
 		cmd->state = AS_ASYNC_STATE_READ_BODY;
 	}
@@ -561,10 +553,10 @@ as_async_command_receive(as_async_command* cmd)
 		return;
 	}
 	
-	as_event_unregister(cmd);
+	as_event_unregister(&cmd->event);
 	
-	if (cmd->timeout_ms) {
-		as_event_stop_timer(cmd);
+	if (cmd->event.timeout_ms) {
+		as_event_stop_timer(&cmd->event);
 	}
 	
 	cmd->parse_results(cmd);

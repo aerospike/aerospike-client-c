@@ -134,9 +134,9 @@ as_ev_worker(void* udata)
 static void
 as_ev_wakeup(struct ev_loop* loop, ev_async* watcher, int revents)
 {
-	// Read as_async_command pointers from queue.
+	// Read command pointers from queue.
 	as_event_loop* event_loop = (as_event_loop*)((uint8_t*)watcher - offsetof(as_event_loop, wakeup));
-	as_async_command* cmd;
+	void* cmd;
 	
 	pthread_mutex_lock(&event_loop->lock);
 	
@@ -167,7 +167,7 @@ as_ev_wakeup(struct ev_loop* loop, ev_async* watcher, int revents)
 static void
 as_ev_callback(struct ev_loop* loop, ev_io* watcher, int revents)
 {
-	as_async_command* cmd = (as_async_command*)watcher;
+	void* cmd = watcher;
 	
 	if (revents & EV_READ) {
 		as_async_command_receive(cmd);
@@ -187,7 +187,7 @@ static void
 as_ev_timeout(struct ev_loop* loop, ev_timer* timer, int revents)
 {
 	// One-off timers are automatically stopped by libev.
-	as_async_timeout((as_async_command*)((uint8_t*)timer - offsetof(as_async_command, timer)));
+	as_async_timeout((void*)((uint8_t*)timer - offsetof(as_event_command, timer)));
 }
 
 bool
@@ -229,7 +229,7 @@ as_event_register_wakeup(as_event_loop* event_loop)
 }
 
 bool
-as_event_send(as_async_command* cmd)
+as_event_send(as_event_command* cmd)
 {
 	// Send command through queue so it can be executed in event loop thread.
 	as_event_loop* event_loop = cmd->event_loop;
@@ -245,21 +245,21 @@ as_event_send(as_async_command* cmd)
 }
 
 void
-as_event_register_write(as_async_command* cmd)
+as_event_register_write(as_event_command* cmd)
 {
 	ev_io_init(&cmd->watcher, as_ev_callback, cmd->fd, EV_WRITE);
 	ev_io_start(cmd->event_loop->loop, &cmd->watcher);
 }
 
 void
-as_event_register_read(as_async_command* cmd)
+as_event_register_read(as_event_command* cmd)
 {
 	ev_io_init(&cmd->watcher, as_ev_callback, cmd->fd, EV_READ);
 	ev_io_start(cmd->event_loop->loop, &cmd->watcher);
 }
 
 void
-as_event_set_write(as_async_command* cmd)
+as_event_set_write(as_event_command* cmd)
 {
 	ev_io_stop(cmd->event_loop->loop, &cmd->watcher);
 	ev_io_set(&cmd->watcher, cmd->fd, EV_WRITE);
@@ -267,7 +267,7 @@ as_event_set_write(as_async_command* cmd)
 }
 
 void
-as_event_set_read(as_async_command* cmd)
+as_event_set_read(as_event_command* cmd)
 {
 	ev_io_stop(cmd->event_loop->loop, &cmd->watcher);
 	ev_io_set(&cmd->watcher, cmd->fd, EV_READ);
@@ -275,153 +275,29 @@ as_event_set_read(as_async_command* cmd)
 }
 
 void
-as_event_init_timer(as_async_command* cmd)
+as_event_init_timer(as_event_command* cmd)
 {
 	ev_timer_init(&cmd->timer, as_ev_timeout, cmd->timeout_ms / 1000.0, 0.0);
 	ev_timer_start(cmd->event_loop->loop, &cmd->timer);
 }
 
 void
-as_event_stop_timer(as_async_command* cmd)
+as_event_stop_timer(as_event_command* cmd)
 {
 	ev_timer_stop(cmd->event_loop->loop, &cmd->timer);
 }
 
 void
-as_event_unregister(as_async_command* cmd)
+as_event_unregister(as_event_command* cmd)
 {
 	ev_io_stop(cmd->event_loop->loop, &cmd->watcher);
 }
 
-#elif defined(AS_USE_EPOLL)
+#elif defined(AS_USE_LIBUV)
 
 /******************************************************************************
- * EPOLL - TBD
+ * LIBUV - TBD
  *****************************************************************************/
-
-static bool
-as_epoll_modify(int epoll_fd, int op, int fd)
-{
-	struct epoll_event event;
-	memset(&event, 0, sizeof event);
-	event.events = EPOLLIN;
-	event.data.fd = fd;
-	
-	if (epoll_ctl(epoll_fd, op, fd, &event) < 0) {
-		as_log_error("Failed to modify async file descriptor (%d)", errno);
-		return false;
-	}
-	return true;
-}
-
-static void*
-as_epoll_worker(void* udata)
-{
-	as_event_thread* thread = udata;
-	as_log_trace("Entering async thread function for %p", thread);
-	struct epoll_event* events = alloca(sizeof(struct epoll_event) * thread->event_max);
-	
-	while (true) {
-		int res = epoll_wait(thread->epoll_fd, events, thread->event_max, 1000);
-		as_log_trace("epoll() fired, res = %d", res);
-		
-		if (res < 0) {
-			if (errno != EINTR) {
-				as_log_error("epoll_wait() returned error %d", errno);
-				sleep(1);  // Is this necessary?
-			}
-			continue;
-		}
-		
-		if (res > 0) {
-			for (int i = 0; i < res; i++) {
-				struct epoll_event* event = &events[i];
-				
-				as_log_trace("Handling FD %d, events 0x%x", event->data.fd, event->events);
-				
-				if (event->data.fd == thread->pipe_fd[0]) {
-					as_log_trace("FD is pipe's");
-					goto leave;
-				}
-				thread->event_fn(event->data.fd, NULL, thread->udata, event->events != EPOLLIN);
-			}
-		}
-		else {
-			thread->event_none_fn(thread->udata);
-		}
-	}
-	
-leave:
-	as_log_trace("Leaving async thread function for %p", thread);
-	return NULL;
-}
-
-bool
-as_event_create_thread(
-   as_event_thread* thread,
-   void* udata,
-   as_event_fn event_fn,
-   as_event_none_fn event_none_fn,
-   int event_max
-   )
-{
-	
-	thread->udata = udata;
-	thread->event_fn = event_fn;
-	thread->event_none_fn = event_none_fn;
-	thread->event_max = event_max;
-	thread->pad = 0;
-	
-	if ((thread->epoll_fd = epoll_create(event_max)) < 0) {
-		as_log_error("Failed to create epoll instance.")
-		goto cleanup0;
-	}
-	
-	if (pipe(thread->pipe_fd) < 0) {
-		as_log_error("Failed to create signal pipe.")
-		goto cleanup1;
-	}
-	
-	if (!as_epoll_modify(thread->epoll_fd, EPOLL_CTL_ADD, thread->pipe_fd[0])) {
-		as_log_error("Failed to add signal pipe to epoll.")
-		goto cleanup2;
-	}
-	
-	if (pthread_create(&thread->thread, NULL, as_epoll_worker, thread) != 0) {
-		as_log_error("Failed to create async thread.")
-		goto cleanup2;
-	}
-	return true;
-	
-cleanup2:
-	close(thread->pipe_fd[0]);
-	close(thread->pipe_fd[1]);
-cleanup1:
-	close(thread->epoll_fd);
-cleanup0:
-	return false;
-}
-
-void
-as_event_close_thread(as_event_thread* thread)
-{
-	as_close(thread->pipe_fd[1]);
-	pthread_join(thread->thread, NULL);
-	as_close(thread->pipe_fd[0]);
-	as_close(thread->epoll_fd);
-}
-
-bool
-as_event_register(as_event_thread* thread, int fd, void* context)
-{
-	return as_epoll_modify(thread->epoll_fd, EPOLL_CTL_ADD, fd);
-}
-
-bool
-as_event_unregister(as_event_thread* thread, int fd, void* context)
-{
-	return as_epoll_modify(thread->epoll_fd, EPOLL_CTL_DEL, fd);
-}
 
 #else
 
@@ -447,43 +323,43 @@ as_event_register_wakeup(as_event_loop* event_loop)
 }
 
 bool
-as_event_send(as_async_command* cmd)
+as_event_send(as_event_command* cmd)
 {
 	return false;
 }
 
 void
-as_event_register_write(as_async_command* cmd)
+as_event_register_write(as_event_command* cmd)
 {
 }
 
 void
-as_event_register_read(as_async_command* cmd)
+as_event_register_read(as_event_command* cmd)
 {
 }
 
 void
-as_event_set_write(as_async_command* cmd)
+as_event_set_write(as_event_command* cmd)
 {
 }
 
 void
-as_event_set_read(as_async_command* cmd)
+as_event_set_read(as_event_command* cmd)
 {
 }
 
 void
-as_event_init_timer(as_async_command* cmd)
+as_event_init_timer(as_event_command* cmd)
 {
 }
 
 void
-as_event_stop_timer(as_async_command* cmd)
+as_event_stop_timer(as_event_command* cmd)
 {
 }
 
 void
-as_event_unregister(as_async_command* cmd)
+as_event_unregister(as_event_command* cmd)
 {
 }
 

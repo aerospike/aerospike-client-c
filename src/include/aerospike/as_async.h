@@ -47,6 +47,11 @@ typedef void (*as_async_callback_fn) (as_error* err, void* result, void* udata, 
  * PRIVATE TYPES
  *****************************************************************************/
 
+#define AS_ASYNC_TYPE_RECORD 0
+#define AS_ASYNC_TYPE_BATCH 1
+#define AS_ASYNC_TYPE_SCAN 2
+#define AS_ASYNC_TYPE_QUERY 3
+	
 #define AS_ASYNC_STATE_UNREGISTERED 0
 #define AS_ASYNC_STATE_AUTH_WRITE 1
 #define AS_ASYNC_STATE_AUTH_READ_HEADER 2
@@ -62,64 +67,74 @@ struct as_async_command;
 typedef void (*as_async_parse_results_fn) (struct as_async_command* cmd);
 
 typedef struct as_async_command {
-	as_event_context_placeholder
+	as_event_command event;
 	
-	uint8_t* buf;
-	uint32_t len;
-	uint32_t pos;
-	uint32_t auth_len;
-	uint32_t timeout_ms;
-	uint32_t capacity;
-	int fd;
-
 	as_cluster* cluster;
 	as_node* node;
-	as_event_loop* event_loop;
 	as_async_callback_fn ucb;
 	void* udata;
 	as_async_parse_results_fn parse_results;
-	
+
+	uint8_t* buf;
+	uint32_t capacity;
+	uint32_t len;
+	uint32_t pos;
+	uint32_t auth_len;
+
+	uint8_t type;
 	uint8_t state;
 	bool pipeline;
 	bool deserialize;
-	bool release_node;  // Always release??
+	bool release_node;
 	bool in_authenticate;
-	
-	uint8_t space[];
+	bool free_buf;
 } as_async_command;
 	
+typedef struct {
+	as_async_command cmd;
+	uint8_t space[];
+} as_async_record_command;
+
+typedef struct {
+	as_async_command cmd;
+	// TODO add batch args.
+	uint8_t space[];
+} as_async_batch;
+
 /******************************************************************************
  * PRIVATE FUNCTIONS
  *****************************************************************************/
 
 static inline as_async_command*
-as_async_command_create(size_t size, as_cluster* cluster, as_node* node,
+as_async_record_command_create(size_t size, as_cluster* cluster, as_node* node,
 	uint32_t timeout_ms, bool deserialize, as_event_loop* event_loop, bool pipeline,
 	as_async_callback_fn ucb, void* udata, as_async_parse_results_fn parse_results)
 {
 	// Allocate enough memory to cover: struct size + write buffer size + auth max buffer size
 	// Then, round up memory size in 1KB increments to reduce fragmentation and to allow socket
 	// read to reuse buffer for small socket write sizes.
-	size_t s = (sizeof(as_async_command) + size + AS_AUTHENTICATION_MAX_SIZE + 1023) & ~1023;
+	size_t s = (sizeof(as_async_record_command) + size + AS_AUTHENTICATION_MAX_SIZE + 1023) & ~1023;
 	as_async_command* cmd = cf_malloc(s);
-	cmd->capacity = (uint32_t)(s - sizeof(as_async_command));
-	cmd->buf = cmd->space;
-	cmd->len = 0;
-	cmd->pos = 0;
+	cmd->event.event_loop = event_loop;
+	cmd->event.fd = -1;
+	cmd->event.timeout_ms = timeout_ms;
 	cmd->cluster = cluster;
 	cmd->node = node;
-	cmd->event_loop = event_loop;
 	cmd->ucb = ucb;
 	cmd->udata = udata;
 	cmd->parse_results = parse_results;
+	cmd->buf = ((as_async_record_command*)cmd)->space;
+	cmd->capacity = (uint32_t)(s - sizeof(as_async_command));
+	cmd->len = 0;
+	cmd->pos = 0;
 	cmd->auth_len = 0;
-	cmd->fd = -1;
+	cmd->type = AS_ASYNC_TYPE_RECORD;
 	cmd->state = AS_ASYNC_STATE_UNREGISTERED;
-	cmd->release_node = true;
-	cmd->in_authenticate = false;
 	cmd->pipeline = pipeline;
 	cmd->deserialize = deserialize;
-	cmd->timeout_ms = timeout_ms;
+	cmd->release_node = true;
+	cmd->in_authenticate = false;
+	cmd->free_buf = false;
 	return cmd;
 }
 

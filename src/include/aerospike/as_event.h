@@ -20,6 +20,7 @@
 #include <pthread.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <unistd.h>
 
 /**
  *	@defgroup async_events Asynchronous Event Abstraction
@@ -30,21 +31,9 @@
 
 #if defined(AS_USE_LIBEV)
 #include <ev.h>
-
-#define as_event_context_placeholder \
-struct ev_io watcher;\
-struct ev_timer timer;
-
-#elif defined(AS_USE_EPOLL)
-
-#include <citrusleaf/cf_shash.h>
-#include <sys/epoll.h>
-#define as_event_context_placeholder
-
+#elif defined(AS_USE_LIBUV)
+// TODO Support libuv
 #else
-
-#define as_event_context_placeholder
-
 #endif
 
 #ifdef __cplusplus
@@ -67,11 +56,8 @@ typedef struct {
 	struct ev_async wakeup;
 	pthread_mutex_t lock;
 	as_queue queue;
-#elif defined(AS_USE_EPOLL)
-	int epoll_fd;
-	int read_pipe;
-	int write_pipe;
-	int pad;
+#elif defined(AS_USE_LIBUV)
+	// TODO Support libuv
 #else
 	void* loop;
 #endif
@@ -79,8 +65,20 @@ typedef struct {
 	pthread_t thread;
 	uint32_t index;
 } as_event_loop;
+	
+typedef struct {
+#if defined(AS_USE_LIBEV)
+	struct ev_io watcher;
+	struct ev_timer timer;
+#elif defined(AS_USE_LIBUV)
+	// TODO Support libuv
+#else
+#endif
 
-struct as_async_command;
+	as_event_loop* event_loop;
+	int fd;
+	uint32_t timeout_ms;
+} as_event_command;
 
 /******************************************************************************
  * PUBLIC FUNCTIONS
@@ -195,29 +193,38 @@ void
 as_event_register_wakeup(as_event_loop* event_loop);
 	
 bool
-as_event_send(struct as_async_command* cmd);
+as_event_send(as_event_command* cmd);
 	
 void
-as_event_register_write(struct as_async_command* cmd);
+as_event_register_write(as_event_command* cmd);
 
 void
-as_event_register_read(struct as_async_command* cmd);
+as_event_register_read(as_event_command* cmd);
 
 void
-as_event_set_write(struct as_async_command* cmd);
+as_event_set_write(as_event_command* cmd);
 
 void
-as_event_set_read(struct as_async_command* cmd);
+as_event_set_read(as_event_command* cmd);
 
 void
-as_event_unregister(struct as_async_command* cmd);
+as_event_unregister(as_event_command* cmd);
 
 void
-as_event_init_timer(struct as_async_command* cmd);
+as_event_init_timer(as_event_command* cmd);
 
 void
-as_event_stop_timer(struct as_async_command* cmd);
+as_event_stop_timer(as_event_command* cmd);
 
+static inline void
+as_event_close(as_event_command* cmd)
+{
+	if (cmd->fd >= 0) {
+		close(cmd->fd);
+		cmd->fd = -1;
+	}
+}
+	
 static inline as_event_loop*
 as_event_assign(uint32_t current)
 {

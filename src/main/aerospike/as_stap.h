@@ -26,6 +26,8 @@
 #include <sys/sdt.h>
 #include "probes.h"
 #else
+#define AEROSPIKE_PUT_EXECUTE_STARTING(arg1)
+#define AEROSPIKE_PUT_EXECUTE_FINISHED(arg1)
 #define AEROSPIKE_QUERY_FOREACH_STARTING(arg1)
 #define AEROSPIKE_QUERY_FOREACH_FINISHED(arg1)
 #define AEROSPIKE_QUERY_ENQUEUE_TASK(arg1, arg2)

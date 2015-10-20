@@ -1,4 +1,6 @@
 provider aerospike {
+   probe put__execute_starting(uint64_t);
+   probe put__execute_finished(uint64_t);
    probe query__foreach_starting(uint64_t);
    probe query__foreach_finished(uint64_t);
    probe query__enqueue_task(uint64_t, char *);

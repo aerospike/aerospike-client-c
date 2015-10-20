@@ -75,7 +75,8 @@ typedef enum as_index_type_s {
  */
 typedef enum as_index_datatype_s {
 	AS_INDEX_STRING,
-	AS_INDEX_NUMERIC
+	AS_INDEX_NUMERIC,
+	AS_INDEX_GEO2DSPHERE
 } as_index_datatype;
 
 /**

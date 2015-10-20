@@ -26,7 +26,7 @@ TEST_VALGRIND = --tool=memcheck --leak-check=yes --show-reachable=yes --num-call
 
 TEST_CFLAGS = -I$(TARGET_INCL)
 
-TEST_LDFLAGS = -lssl -lcrypto $(LIB_LUA) -lpthread -lm
+TEST_LDFLAGS = -lssl -lcrypto $(LIB_LUA) -lpthread -lm -lz
 ifeq ($(OS),Darwin)
   ifeq ($(USE_LUAJIT),1)
     TEST_LDFLAGS += -pagezero_size 10000 -image_base 100000000
@@ -69,6 +69,5 @@ $(TARGET_TEST)/%.o: $(SOURCE_TEST)/%.c
 	$(object)
 
 $(TARGET_TEST)/aerospike_test: CFLAGS += $(TEST_CFLAGS)
-$(TARGET_TEST)/aerospike_test: LDFLAGS += $(TEST_LDFLAGS)
 $(TARGET_TEST)/aerospike_test: $(TEST_OBJECT) $(TARGET_TEST)/test.o | build prepare
 	$(executable) $(TARGET_LIB)/libaerospike.a $(TEST_LDFLAGS)

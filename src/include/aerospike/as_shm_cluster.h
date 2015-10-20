@@ -81,9 +81,15 @@ typedef struct as_node_shm_s {
 
 	/**
 	 *	@private
+	 *	Does node support geospatial?
+	 */
+	uint8_t has_geo;
+
+	/**
+	 *	@private
 	 *	Pad to 8 byte boundary.
 	 */
-	char pad[4];
+	char pad[3];
 } as_node_shm;
 
 /**

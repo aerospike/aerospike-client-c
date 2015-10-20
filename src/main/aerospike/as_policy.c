@@ -55,6 +55,7 @@ as_policies_init(as_policies* p)
 
 	p->write.timeout = -1;
 	p->write.retry = -1;
+	p->write.compression_threshold = AS_POLICY_COMPRESSION_THRESHOLD_DEFAULT;
 	p->write.key = -1;
 	p->write.gen = -1;
 	p->write.exists = -1;

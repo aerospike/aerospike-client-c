@@ -87,6 +87,7 @@ extern "C" {
 // Transaction message
 #define AS_MESSAGE_VERSION 2L
 #define AS_MESSAGE_TYPE 3L
+#define AS_COMPRESSED_MESSAGE_TYPE 4L
 
 // Info message
 #define AS_INFO_MESSAGE_VERSION 2L
@@ -362,6 +363,31 @@ as_command_write_end(uint8_t* begin, uint8_t* end)
 	*(uint64_t*)begin = cf_swap_to_be64(proto);
 	return len;
 }
+
+/**
+ *	@private
+ *	Finish writing compressed command.
+ */
+static inline size_t
+as_command_compress_write_end(uint8_t* begin, uint8_t* end, uint64_t uncompressed_sz)
+{
+	uint64_t len = end - begin;
+	uint64_t proto = (len - 8) | (AS_MESSAGE_VERSION << 56) | (AS_COMPRESSED_MESSAGE_TYPE << 48);
+	*(uint64_t*)begin = cf_swap_to_be64(proto);
+
+	// TODO: We are not passing this in network byte order because of a mistake
+	// in the past. Should be fixed in unison with server code.
+	((as_compressed_proto *)begin)->uncompressed_sz = uncompressed_sz;
+
+	return len;
+}
+
+/**
+ *	@private
+ *	Compress the command buffer
+ */
+void
+as_command_compress(uint8_t *cmd, size_t cmd_sz, uint8_t **compressed_cmd, size_t *compressed_cmd_sz);
 
 /**
  *	@private

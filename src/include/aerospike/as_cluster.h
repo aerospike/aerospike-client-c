@@ -384,6 +384,9 @@ as_shm_node_get(as_cluster* cluster, const char* ns, const uint8_t* digest, bool
 static inline as_node*
 as_node_get(as_cluster* cluster, const char* ns, const uint8_t* digest, bool write, as_policy_replica replica)
 {
+#ifdef AS_TEST_PROXY
+	return as_node_get_random(cluster);
+#else
 	if (cluster->shm_info) {
 		return as_shm_node_get(cluster, ns, digest, write, replica);
 	}
@@ -391,6 +394,7 @@ as_node_get(as_cluster* cluster, const char* ns, const uint8_t* digest, bool wri
 		as_partition_table* table = as_cluster_get_partition_table(cluster, ns);
 		return as_partition_table_get_node(cluster, table, digest, write, replica);
 	}
+#endif
 }
 
 #ifdef __cplusplus

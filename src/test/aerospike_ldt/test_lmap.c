@@ -41,20 +41,21 @@ extern aerospike * as;
 
 #define NAMESPACE "test"
 #define SET "test_ldt"
+#define INFO_CALL "namespace/test"
 
 /******************************************************************************
  * STATIC FUNCTIONS
  *****************************************************************************/
-bool is_ldt_enabled()
+static bool is_ldt_enabled()
 {
 	char* res = NULL;
 	as_error err;
-	int rc = aerospike_info_host(as, &err, NULL, g_host, 3000, "namespace/test", &res);
+	int rc = aerospike_info_host(as, &err, NULL, g_host, 3000, INFO_CALL, &res);
 
 	if (rc == AEROSPIKE_OK) {
 		char *st = strstr(res, "ldt-enabled=true");
 		free(res);
-	
+
 		if (st) {
 			return true;
 		}

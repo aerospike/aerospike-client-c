@@ -876,7 +876,15 @@ aerospike_batch_read(
 			// Add batch node.
 			batch_node = &batch_nodes[n_batch_nodes++];
 			batch_node->node = node;  // Transfer node
-			as_vector_inita(&batch_node->offsets, sizeof(uint32_t), offsets_capacity);
+			
+			if (n_keys <= 5000) {
+				// All keys and offsets should fit on stack.
+				as_vector_inita(&batch_node->offsets, sizeof(uint32_t), offsets_capacity);
+			}
+			else {
+				// Allocate vector on heap to avoid stack overflow.
+				as_vector_init(&batch_node->offsets, sizeof(uint32_t), offsets_capacity);
+			}
 		}
 		as_vector_append(&batch_node->offsets, &i);
 	}

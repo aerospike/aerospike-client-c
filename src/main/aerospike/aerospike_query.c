@@ -401,6 +401,33 @@ as_query_write_range_string(uint8_t* p, char* begin, char* end)
 }
 
 static uint8_t*
+as_query_write_range_geojson(uint8_t* p, char* begin, char* end)
+{
+	// Write particle type.
+	*p++ = AS_BYTES_GEOJSON;
+	
+	// Write begin value.
+	char* q = begin;
+	uint32_t* len_ptr = (uint32_t*)p;
+	p += 4;
+	while (*q) {
+		*p++ = *q++;
+	}
+	*len_ptr = cf_swap_to_be32((uint32_t)(q - begin));
+	
+	// Write end value.
+	q = end;
+	len_ptr = (uint32_t*)p;
+	p += 4;
+	while (*q) {
+		*p++ = *q++;
+	}
+	*len_ptr = cf_swap_to_be32((uint32_t)(q - end));
+	
+	return p;
+}
+
+static uint8_t*
 as_query_write_range_integer(uint8_t* p, int64_t begin, int64_t end)
 {
 	// Write particle type.
@@ -476,7 +503,12 @@ as_query_execute(as_query_task* task, const as_query * query, as_nodes* nodes, u
 					}
 					break;
 				case AS_PREDICATE_RANGE:
-					filter_size += sizeof(int64_t) * 2;
+					if (pred->dtype == AS_INDEX_NUMERIC) {
+                        filter_size += sizeof(int64_t) * 2;
+                    }
+					else if (pred->dtype == AS_INDEX_GEO2DSPHERE) {
+						filter_size += strlen(pred->value.string) * 2;
+					}
 					break;
 			}
 		}
@@ -591,7 +623,12 @@ as_query_execute(as_query_task* task, const as_query * query, as_nodes* nodes, u
 					}
 					break;
 				case AS_PREDICATE_RANGE:
-					p = as_query_write_range_integer(p, pred->value.integer_range.min, pred->value.integer_range.max);
+					if (pred->dtype == AS_INDEX_NUMERIC) {
+                        p = as_query_write_range_integer(p, pred->value.integer_range.min, pred->value.integer_range.max);
+                    }
+					else if (pred->dtype == AS_INDEX_GEO2DSPHERE) {
+						p = as_query_write_range_geojson(p, pred->value.string, pred->value.string);
+                    }
 					break;
 			}
 		}

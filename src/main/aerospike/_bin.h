@@ -124,6 +124,24 @@ as_bin * as_bin_init_double(as_bin * bin, const as_bin_name name, double value);
 as_bin * as_bin_init_str(as_bin * bin, const as_bin_name name, const char * value, bool free);
 
 /**
+ *	Initialize a stack allocated `as_bin` to a NULL-terminated GeoJSON string value.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_bin bin;
+ *	as_bin_init_geojson(&key, "abc", "def", false);
+ *	~~~~~~~~~~
+ *
+ *	Use `as_bin_destroy()` to release resources allocated to `as_bin`.
+ *
+ *	@param name		The name of the bin.
+ *	@param value	The value of the value.
+ *	@param free		If true, then the value is freed when the bin is destroyed.
+ *
+ *	@return The initialized `as_bin` on success. Otherwise NULL.
+ */
+as_bin * as_bin_init_geojson(as_bin * bin, const as_bin_name name, const char * value, bool free);
+
+/**
  *	Initialize a stack allocated `as_key` to a raw bytes value.
  *
  *	~~~~~~~~~~{.c}
@@ -216,4 +234,3 @@ void as_bins_destroy(as_bins * bins);
  *	@return true on success. Otherswise an error occurred.
  */
 bool as_bins_append(as_bins * bins, as_bin_name name, as_bin_value * value);
-

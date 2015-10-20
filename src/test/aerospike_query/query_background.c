@@ -287,8 +287,8 @@ TEST(query_aggregation_double, "query aggregation validate")
 	as_query_apply(&q, UDF_FILE, "sum_bin", NULL);
 
 	double expected_sum = 0;
-	double recieved_sum = 0;
-	aerospike_query_foreach(as, &err, NULL, &q, as_query_aggr_cb, &recieved_sum);
+	double received_sum = 0;
+	aerospike_query_foreach(as, &err, NULL, &q, as_query_aggr_cb, &received_sum);
 
 	assert_int_eq(err.code, AEROSPIKE_OK);
 
@@ -296,7 +296,9 @@ TEST(query_aggregation_double, "query aggregation validate")
 		expected_sum += j/(double)10;
 	}
 
-	assert_true( (expected_sum > (recieved_sum - 0.01)) && (expected_sum < (recieved_sum + 0.01)));
+	bool isInboundry = (expected_sum > (received_sum - 0.01)) && (expected_sum < (received_sum + 0.01)) ? true : false;
+	assert_true( isInboundry);
+
 	as_query_destroy(&q);
 }
 /******************************************************************************

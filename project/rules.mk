@@ -43,7 +43,7 @@ info:
 	@echo
 	@echo "  LINKER:"
 	@echo "      command:    " $(LD)
-	@echo "      flags:      " $(LD_FLAGS) $(LDFLAGS)
+	@echo "      flags:      " $(LD_FLAGS)
 	@echo
 	@echo "  ARCHIVER:"
 	@echo "      command:    " $(AR)

@@ -56,7 +56,20 @@ as_status aerospike_index_create_complex(
 {
 	as_error_reset(err);
 	
-	const char* dtype_string = (dtype == AS_INDEX_NUMERIC)? "NUMERIC" : "STRING";
+	const char* dtype_string;
+    switch (dtype) {
+    case AS_INDEX_NUMERIC:
+        dtype_string = "NUMERIC";
+        break;
+    case AS_INDEX_GEO2DSPHERE:
+        dtype_string = "GEO2DSPHERE";
+        break;
+    default:
+    case AS_INDEX_STRING:
+        dtype_string = "STRING";
+        break;
+    }
+
 	const char* itype_string;
 	switch (itype) {
 		default:

@@ -78,6 +78,13 @@ extern "C" {
 #define AS_POLICY_RETRY_DEFAULT 1
 
 /**
+ *	Default value for compression threshold
+ *
+ *	@ingroup client_policies
+ */
+#define AS_POLICY_COMPRESSION_THRESHOLD_DEFAULT 0
+
+/**
  *	Default as_policy_gen value
  *
  *	@ingroup client_policies
@@ -330,6 +337,11 @@ typedef struct as_policy_write_s {
 	 *	Maximum number of retries when a transaction fails due to a network error.
 	 */
 	uint32_t retry;
+
+	/**
+	 *	Minimum record size beyond which it is compressed and sent to the server.
+	 */
+	uint32_t compression_threshold;
 
 	/**
 	 *	Specifies the behavior for the key.
@@ -888,6 +900,7 @@ as_policy_write_init(as_policy_write* p)
 {
 	p->timeout = AS_POLICY_TIMEOUT_DEFAULT;
 	p->retry = AS_POLICY_RETRY_DEFAULT;
+	p->compression_threshold = AS_POLICY_COMPRESSION_THRESHOLD_DEFAULT;
 	p->key = AS_POLICY_KEY_DEFAULT;
 	p->gen = AS_POLICY_GEN_DEFAULT;
 	p->exists = AS_POLICY_EXISTS_DEFAULT;
@@ -909,6 +922,7 @@ as_policy_write_copy(as_policy_write* src, as_policy_write* trg)
 {
 	trg->timeout = src->timeout;
 	trg->retry = src->retry;
+	trg->compression_threshold = src->compression_threshold;
 	trg->key = src->key;
 	trg->gen = src->gen;
 	trg->exists = src->exists;

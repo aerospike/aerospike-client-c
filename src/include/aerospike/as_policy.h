@@ -367,11 +367,6 @@ typedef struct as_policy_write_s {
 	 */
 	as_policy_commit_level commit_level;
 
-	/**
-	 *  If true generate a random task_id for the write.
-	 */
-	bool generate_task_id;
-
 } as_policy_write;
 
 /**
@@ -905,7 +900,6 @@ as_policy_write_init(as_policy_write* p)
 	p->gen = AS_POLICY_GEN_DEFAULT;
 	p->exists = AS_POLICY_EXISTS_DEFAULT;
 	p->commit_level = AS_POLICY_COMMIT_LEVEL_DEFAULT;
-	p->generate_task_id = false;
 	return p;
 }
 
@@ -927,7 +921,6 @@ as_policy_write_copy(as_policy_write* src, as_policy_write* trg)
 	trg->gen = src->gen;
 	trg->exists = src->exists;
 	trg->commit_level = src->commit_level;
-	trg->generate_task_id = src->generate_task_id;
 }
 
 /**

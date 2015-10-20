@@ -31,7 +31,7 @@ Add user to systemtap groups:
 #### Generate query trace log file
 
     cd aerospike-client-c
-    stap systemtap/queries.stp \
+    stap systemtap/client.stp \
         -o /tmp/example-`hostname`-stap.log \
         -c './examples/query_examples/simple/target/example'
 
@@ -39,5 +39,5 @@ Add user to systemtap groups:
 #### Annotate multiple concurrent trace files
 
     cd aerospike-client-c
-    sort -n /tmp/example-*-stap.log | systemtap/query_annotate 
+    sort -n /tmp/example-*-stap.log | systemtap/annotate 
 

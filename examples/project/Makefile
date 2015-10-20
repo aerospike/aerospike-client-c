@@ -79,7 +79,7 @@ else
   endif
 endif
 
-LDFLAGS += -lm
+LDFLAGS += -lm -lz
 
 ifeq ($(OS),Darwin)
   CC = clang

@@ -658,6 +658,44 @@ TEST( key_basics_list_map_double , "put/get double: (test,test,foo_double) = {b1
 	}
 }
 
+TEST( key_basics_compression , "put with compression write policy: (test,test,foo_comp) = {a: <bytes>, b: 'abc', c: 456}" ) {
+
+	as_error err;
+	as_error_reset(&err);
+
+	int count = 2000;
+	uint8_t *mybytes = alloca (count);
+	memset(mybytes, count, count);
+
+	as_record r, * rec = &r;
+	as_record_init(rec, 3);
+	as_record_set_rawp(rec, "a", mybytes, count, false);
+	as_record_set_str(rec, "b", "abc");
+	as_record_set_integer(rec, "c", as_integer_new(456));
+
+	// Set up a as_policy_write object to compress record beyond 1000 bytes
+	as_policy_write wpol;
+	as_policy_write_init(&wpol);
+	wpol.compression_threshold = 1000;
+	wpol.key = AS_POLICY_KEY_SEND;
+
+	as_key key;
+	as_key_init(&key, NAMESPACE, SET, "foo_comp");
+
+	as_status rc = aerospike_key_put(as, &err, &wpol, &key, rec);
+	assert_int_eq( rc, AEROSPIKE_OK );
+	as_record_destroy(rec);
+
+	as_error_reset(&err);
+	as_record * rrec=NULL;
+	rc = aerospike_key_get(as, &err, NULL, &key, &rrec);
+	assert_int_eq( rc, AEROSPIKE_OK );
+	assert_string_eq( as_record_get_str(rrec, "b"), "abc" );
+	assert_int_eq( as_record_get_int64(rrec, "c", 0), 456 );
+
+	as_key_destroy(&key);
+	as_record_destroy(rrec);
+}
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -685,4 +723,5 @@ SUITE( key_basics, "aerospike_key basic tests" ) {
 	suite_add( key_basics_read_list );
 	suite_add( key_basics_read_raw_list );
 	suite_add( key_basics_list_map_double );
+	suite_add( key_basics_compression );
 }

@@ -163,6 +163,12 @@ typedef struct as_node_s {
 	 */
 	uint8_t has_double;
 	
+	/**
+	 *	@private
+	 *	Does node support geospatial queries?
+	 */
+	uint8_t has_geo;
+	
 } as_node;
 
 /**
@@ -193,6 +199,12 @@ typedef struct as_node_info_s {
 	 *	Does node support floating point type?
 	 */
 	uint8_t has_double;
+	
+	/**
+	 *	@private
+	 *	Does node support geospatial queries?
+	 */
+	uint8_t has_geo;
 	
 } as_node_info;
 

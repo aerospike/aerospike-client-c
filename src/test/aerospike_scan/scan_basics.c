@@ -584,6 +584,7 @@ TEST( scan_basics_background_poll_job_status , " Start a UDF scan job in the bac
 	for(int i = 0; i < 5; i++){
 		as_error_reset(&cb_err);
 		rc = aerospike_info_foreach(as, &cb_err, NULL, "jobs:module=scan", scan_udf_info_callback, NULL);
+		assert_int_eq( rc, AEROSPIKE_OK );
 		sleep(1);
 	}
 

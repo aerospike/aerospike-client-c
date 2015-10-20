@@ -2,12 +2,12 @@ name: aerospike-client-c
 
 container:
   - base:
-      - 192.168.106.181/build/aerospike-client-c:centos-6
-      - 192.168.106.181/build/aerospike-client-c:centos-7
-      - 192.168.106.181/build/aerospike-client-c:debian-6
-      - 192.168.106.181/build/aerospike-client-c:debian-7
-      - 192.168.106.181/build/aerospike-client-c:ubuntu-12.04
-      - 192.168.106.181/build/aerospike-client-c:ubuntu-14.04
+      - docker.qe.aerospike.com/build/aerospike-client-c:centos-6
+      - docker.qe.aerospike.com/build/aerospike-client-c:centos-7
+      - docker.qe.aerospike.com/build/aerospike-client-c:debian-6
+      - docker.qe.aerospike.com/build/aerospike-client-c:debian-7
+      - docker.qe.aerospike.com/build/aerospike-client-c:ubuntu-12.04
+      - docker.qe.aerospike.com/build/aerospike-client-c:ubuntu-14.04
 
 build:
   - name: default

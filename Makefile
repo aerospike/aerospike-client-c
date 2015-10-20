@@ -42,7 +42,7 @@ USE_SYSTEMTAP = 0
 
 # Make-local Compiler Flags
 CC_FLAGS = -std=gnu99 -g -Wall -fPIC -O$(O)
-CC_FLAGS += -fno-common -fno-strict-aliasing -finline-functions
+CC_FLAGS += -fno-common -fno-strict-aliasing 
 CC_FLAGS += -march=nocona -DMARCH_$(ARCH)
 CC_FLAGS += -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_GNU_SOURCE $(EXT_CFLAGS)
 
@@ -50,7 +50,7 @@ ifeq ($(OS),Darwin)
   CC_FLAGS += -D_DARWIN_UNLIMITED_SELECT
   LUA_PLATFORM = macosx
 else
-  CC_FLAGS += -rdynamic
+  CC_FLAGS += -finline-functions -rdynamic
   LUA_PLATFORM = linux
 endif
 
@@ -63,7 +63,7 @@ CC_FLAGS +=	-DUSE_SYSTEMTAP
 endif
 
 # Linker flags
-LD_FLAGS = $(LDFLAGS) -lm -fPIC
+LD_FLAGS = $(LDFLAGS) 
 
 ifeq ($(OS),Darwin)
   LD_FLAGS += -undefined dynamic_lookup
@@ -202,9 +202,11 @@ COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_map_iterator.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_nil.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_pair.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_password.h
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_queue.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_rec.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_stream.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_string.h
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_geojson.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_stringmap.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_util.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_val.h
@@ -266,7 +268,7 @@ docs-clean:
 	rm -rf $(TARGET)/docs
 
 .PHONY: package
-package: clean version all docs
+package: clean all docs
 	pkg/package
 
 .PHONY: package-clean

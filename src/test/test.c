@@ -43,8 +43,18 @@ atf_test_result * atf_test_run_isolated(atf_test * test) {
 
     int oldstdin, oldstdout;
 
-    pipe(outfd); // Where the parent is going to write to
-    pipe(infd); // From where parent is going to read
+    int rc = pipe(outfd); // Where the parent is going to write to
+
+    if (!rc) {
+        fprintf(stderr, "pipe for outfd failed\n");
+	exit (-1);
+    }
+
+    rc = pipe(infd); // From where parent is going to read
+    if (!rc) {
+        fprintf(stderr, "pipe for infd failed\n");
+	exit (-1);
+    }
 
     oldstdin = dup(0); // Save current stdin
     oldstdout = dup(1); // Save stdout
@@ -72,7 +82,7 @@ atf_test_result * atf_test_run_isolated(atf_test * test) {
         exit(result->success ? 0 : 1);
     }
     else if ( pid == -1 ) {
-        fprintf(stderr, "failed to fork child for running test.");
+        fprintf(stderr, "failed to fork child for running test.\n");
     }
     else {
         char input[100];
@@ -84,7 +94,11 @@ atf_test_result * atf_test_run_isolated(atf_test * test) {
         close(outfd[0]); // These are being used by the child
         close(infd[1]);
 
-        write(outfd[1],"2^32\n",5); // Write to child’s stdin
+        int wrc = write(outfd[1],"2^32\n",5); // Write to child’s stdin
+        if (!wrc) {
+            fprintf(stderr, "write to outfd failed\n");
+	    exit (-1);
+        }
 
         input[read(infd[0],input,100)] = 0; // Read from child’s stdout
 

@@ -196,6 +196,43 @@ as_socket_create_and_connect_nb(as_error* err, struct sockaddr_in *sa, int* fd)
 	return AEROSPIKE_OK;
 }
 
+bool
+as_socket_validate(int fd, bool expect_empty)
+{
+	uint8_t buf[8];
+	ssize_t rv = recv(fd, (void*)buf, sizeof(buf), MSG_PEEK | MSG_DONTWAIT | MSG_NOSIGNAL);
+	
+	if (rv < 0) {
+		// Handle normal case first.
+		if (errno == EWOULDBLOCK || errno == EAGAIN) {
+			return true;
+		}
+		
+		if (errno == EBADF) {
+			// Local problem, don't try closing.
+			as_log_warn("Connected check: Bad fd %d", fd);
+			return false;
+		}
+
+		// Close on socket error.
+		as_log_info("Connected check: fd %d error %d", fd, errno);
+		as_close(fd);
+		return false;
+	}
+
+	if (rv > 0) {
+		if (expect_empty) {
+			as_log_info("Connected check: Peek got unexpected data for fd %d", fd);
+		}
+		return true;
+	}
+	
+	// Close because already disconnected by peer.
+	as_log_debug("Connected check: Found disconnected fd %d", fd);
+	as_close(fd);
+	return false;
+}
+
 as_status
 as_socket_write_forever(as_error* err, int fd, uint8_t *buf, size_t buf_len)
 {

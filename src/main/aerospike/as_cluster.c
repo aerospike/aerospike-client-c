@@ -117,8 +117,12 @@ as_lookup_node(as_cluster* cluster, as_error* err, struct sockaddr_in* addr, as_
 	uint8_t has_batch_index = 0;
 	uint8_t has_replicas_all = 0;
 	uint8_t has_double = 0;
+	uint8_t has_geo = 0;
 	
-	while (*begin && ! (has_batch_index && has_replicas_all && has_double)) {
+	while (*begin && ! (has_batch_index &&
+						has_replicas_all &&
+						has_double &&
+						has_geo)) {
 		while (*end) {
 			if (*end == ';') {
 				*end++ = 0;
@@ -138,11 +142,17 @@ as_lookup_node(as_cluster* cluster, as_error* err, struct sockaddr_in* addr, as_
 		if (strcmp(begin, "float") == 0) {
 			has_double = 1;
 		}
+
+		if (strcmp(begin, "geo") == 0) {
+			has_geo = 1;
+		}
+
 		begin = end;
 	}
 	node_info->has_batch_index = has_batch_index;
 	node_info->has_replicas_all = has_replicas_all;
 	node_info->has_double = has_double;
+	node_info->has_geo = has_geo;
 	free(response);
 	return AEROSPIKE_OK;
 	
@@ -920,7 +930,21 @@ bool
 as_cluster_is_connected(as_cluster* cluster)
 {
 	as_nodes* nodes = as_nodes_reserve(cluster);
-	bool connected = nodes->size > 0 && cluster->valid;
+	bool connected = false;
+	
+	if (nodes->size > 0 && cluster->valid) {
+		// Even though nodes exist, they may not be currently responding.  Check further.
+		for (uint32_t i = 0; i < nodes->size; i++) {
+			as_node* node = nodes->array[i];
+
+			// Mark connected if any node is active and cluster tend consecutive info request 
+			// failures are less than 5.
+			if (node->active && node->failures < 5) {
+				connected = true;
+				break;
+			}
+		}
+	}
 	as_nodes_release(nodes);
 	return connected;
 }

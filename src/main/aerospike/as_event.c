@@ -28,6 +28,7 @@
 as_event_loop* as_event_loops = 0;
 uint32_t as_event_loop_capacity = 0;
 uint32_t as_event_loop_size = 0;
+uint32_t as_event_loop_current = 0;
 static bool as_event_threads_created = false;
 
 as_event_loop*
@@ -143,7 +144,7 @@ as_ev_wakeup(struct ev_loop* loop, ev_async* watcher, int revents)
 	while (as_queue_pop(&event_loop->queue, &cmd)) {
 		if (cmd) {
 			// Process new command.
-			as_async_command_execute(cmd);
+			as_async_command_thread_execute(cmd);
 		}
 		else {
 			// Received stop signal.

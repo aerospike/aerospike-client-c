@@ -64,8 +64,18 @@ typedef void (*as_async_callback_fn) (as_error* err, void* result, void* udata, 
 	
 struct as_async_command;
 	
-typedef void (*as_async_parse_results_fn) (struct as_async_command* cmd);
+typedef bool (*as_async_parse_results_fn) (struct as_async_command* cmd);
 
+typedef struct {
+	uint32_t max;
+	uint32_t count;
+	as_async_callback_fn ucb;
+	void* udata;
+	void* result;
+	as_event_loop* event_loop;
+	as_error err;
+} as_async_executor;
+	
 typedef struct as_async_command {
 	as_event_command event;
 	
@@ -85,21 +95,9 @@ typedef struct as_async_command {
 	uint8_t state;
 	bool pipeline;
 	bool deserialize;
-	bool release_node;
-	bool in_authenticate;
 	bool free_buf;
+	uint8_t space[];
 } as_async_command;
-	
-typedef struct {
-	as_async_command cmd;
-	uint8_t space[];
-} as_async_record_command;
-
-typedef struct {
-	as_async_command cmd;
-	// TODO add batch args.
-	uint8_t space[];
-} as_async_batch;
 
 /******************************************************************************
  * PRIVATE FUNCTIONS
@@ -113,9 +111,9 @@ as_async_record_command_create(size_t size, as_cluster* cluster, as_node* node,
 	// Allocate enough memory to cover: struct size + write buffer size + auth max buffer size
 	// Then, round up memory size in 1KB increments to reduce fragmentation and to allow socket
 	// read to reuse buffer for small socket write sizes.
-	size_t s = (sizeof(as_async_record_command) + size + AS_AUTHENTICATION_MAX_SIZE + 1023) & ~1023;
+	size_t s = (sizeof(as_async_command) + size + AS_AUTHENTICATION_MAX_SIZE + 1023) & ~1023;
 	as_async_command* cmd = cf_malloc(s);
-	cmd->event.event_loop = event_loop;
+	cmd->event.event_loop = pipeline? node->pipeline_loop : as_event_assign(event_loop);
 	cmd->event.fd = -1;
 	cmd->event.timeout_ms = timeout_ms;
 	cmd->cluster = cluster;
@@ -123,7 +121,7 @@ as_async_record_command_create(size_t size, as_cluster* cluster, as_node* node,
 	cmd->ucb = ucb;
 	cmd->udata = udata;
 	cmd->parse_results = parse_results;
-	cmd->buf = ((as_async_record_command*)cmd)->space;
+	cmd->buf = cmd->space;
 	cmd->capacity = (uint32_t)(s - sizeof(as_async_command));
 	cmd->len = 0;
 	cmd->pos = 0;
@@ -132,25 +130,23 @@ as_async_record_command_create(size_t size, as_cluster* cluster, as_node* node,
 	cmd->state = AS_ASYNC_STATE_UNREGISTERED;
 	cmd->pipeline = pipeline;
 	cmd->deserialize = deserialize;
-	cmd->release_node = true;
-	cmd->in_authenticate = false;
 	cmd->free_buf = false;
 	return cmd;
 }
+	
+void
+as_async_command_execute(as_async_command* cmd, size_t size);
 
 void
-as_async_command_assign(as_async_command* cmd, size_t size);
+as_async_command_thread_execute(as_async_command* cmd);
 
-void
-as_async_command_execute(as_async_command* cmd);
-
-void
+bool
 as_async_command_parse_header(as_async_command* cmd);
 
-void
+bool
 as_async_command_parse_result(as_async_command* cmd);
 
-void
+bool
 as_async_command_parse_success_failure(as_async_command* cmd);
 
 void
@@ -160,10 +156,16 @@ void
 as_async_command_receive(as_async_command* cmd);
 
 void
+as_async_init_error(as_async_command* cmd, as_error* err);
+	
+void
+as_async_response_error(as_async_command* cmd, as_error* err);
+
+void
 as_async_timeout(as_async_command* cmd);
 	
 void
-as_async_error(as_async_command* cmd, as_error* err);
+as_async_executor_finish(as_async_command* cmd);
 
 #ifdef __cplusplus
 } // end extern "C"

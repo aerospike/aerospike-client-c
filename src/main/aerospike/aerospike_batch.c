@@ -109,6 +109,58 @@ as_batch_parse_record(uint8_t* p, as_msg* msg, as_record* rec, bool deserialize)
 	return as_command_parse_bins(rec, p, msg->n_ops, deserialize);
 }
 
+static bool
+as_batch_async_parse_records(as_async_command* cmd)
+{
+	as_async_executor* executor = cmd->udata;  // udata is overloaded to contain executor.
+	as_batch_read_records* read_records = (as_batch_read_records*)executor->result;
+	as_vector* records = &read_records->list;
+	uint8_t* p = cmd->buf;
+	uint8_t* end = p + cmd->len;
+	
+	while (p < end) {
+		as_msg* msg = (as_msg*)p;
+		as_msg_swap_header_from_be(msg);
+		
+		if (msg->result_code && msg->result_code != AEROSPIKE_ERR_RECORD_NOT_FOUND) {
+			as_error err;
+			as_error_set_message(&err, msg->result_code, as_error_string(msg->result_code));
+			as_async_response_error(cmd, &err);
+			return true;
+		}
+		p += sizeof(as_msg);
+		
+		if (msg->info3 & AS_MSG_INFO3_LAST) {
+			as_async_executor_finish(cmd);
+			return true;
+		}
+		
+		uint32_t offset = msg->transaction_ttl; // overloaded to contain batch index
+		
+		uint8_t* digest = 0;
+		p = as_batch_parse_fields(p, msg->n_fields, &digest);
+		
+		as_batch_read_record* record = as_vector_get(records, offset);
+		
+		if (digest && memcmp(digest, record->key.digest.value, AS_DIGEST_VALUE_SIZE) == 0) {
+			record->result = msg->result_code;
+			
+			if (msg->result_code == AEROSPIKE_OK) {
+				p = as_batch_parse_record(p, msg, &record->record, cmd->deserialize);
+			}
+		}
+		else {
+			char digest_string[64];
+			cf_digest_string((cf_digest*)digest, digest_string);
+			as_error err;
+			as_error_update(&err, AEROSPIKE_ERR_CLIENT, "Unexpected batch key returned: %s,%u", digest_string, offset);
+			as_async_response_error(cmd, &err);
+			return true;
+		}
+	}
+	return false;
+}
+
 static as_status
 as_batch_parse_records(as_error* err, uint8_t* buf, size_t size, as_batch_task* task)
 {
@@ -237,17 +289,17 @@ as_batch_parse(as_error* err, int fd, uint64_t deadline_ms, void* udata)
 	return status;
 }
 
-static as_status
-as_batch_index_records_execute(as_batch_task* task)
+static size_t
+as_batch_index_records_size(as_vector* records, as_vector* offsets)
 {
 	// Estimate buffer size.
 	size_t size = AS_HEADER_SIZE + AS_FIELD_HEADER_SIZE + sizeof(uint32_t) + 1;
 	as_batch_read_record* prev = 0;
-	uint32_t n_offsets = task->offsets.size;
+	uint32_t n_offsets = offsets->size;
 	
 	for (uint32_t i = 0; i < n_offsets; i++) {
-		uint32_t offset = *(uint32_t*)as_vector_get(&task->offsets, i);
-		as_batch_read_record* record = as_vector_get(task->records, offset);
+		uint32_t offset = *(uint32_t*)as_vector_get(offsets, i);
+		as_batch_read_record* record = as_vector_get(records, offset);
 		
 		size += AS_DIGEST_VALUE_SIZE + sizeof(uint32_t);
 		
@@ -271,24 +323,28 @@ as_batch_index_records_execute(as_batch_task* task)
 			prev = record;
 		}
 	}
-	
-	// Write command
-	uint8_t* cmd = as_command_init(size);
-	uint8_t* p = as_command_write_header_read(cmd, AS_MSG_INFO1_READ | AS_MSG_INFO1_BATCH_INDEX, AS_POLICY_CONSISTENCY_LEVEL_ONE, task->timeout_ms, 1, 0);
+	return size;
+}
+
+static size_t
+as_batch_index_records_write(as_vector* records, as_vector* offsets, uint32_t timeout_ms, bool allow_inline, uint8_t* cmd)
+{
+	uint32_t n_offsets = offsets->size;
+	uint8_t* p = as_command_write_header_read(cmd, AS_MSG_INFO1_READ | AS_MSG_INFO1_BATCH_INDEX, AS_POLICY_CONSISTENCY_LEVEL_ONE, timeout_ms, 1, 0);
 	uint8_t* field_size_ptr = p;
 	p = as_command_write_field_header(p, AS_FIELD_BATCH_INDEX, 0);  // Need to update size at end
 	*(uint32_t*)p = cf_swap_to_be32(n_offsets);
 	p += sizeof(uint32_t);
-	*p++ = task->allow_inline? 1 : 0;
+	*p++ = allow_inline? 1 : 0;
 	
-	prev = 0;
+	as_batch_read_record* prev = 0;
 	
 	for (uint32_t i = 0; i < n_offsets; i++) {
-		uint32_t offset = *(uint32_t*)as_vector_get(&task->offsets, i);
+		uint32_t offset = *(uint32_t*)as_vector_get(offsets, i);
 		*(uint32_t*)p = cf_swap_to_be32(offset);
 		p += sizeof(uint32_t);
 		
-		as_batch_read_record* record = as_vector_get(task->records, offset);
+		as_batch_read_record* record = as_vector_get(records, offset);
 		memcpy(p, record->key.digest.value, AS_DIGEST_VALUE_SIZE);
 		p += AS_DIGEST_VALUE_SIZE;
 		
@@ -328,10 +384,21 @@ as_batch_index_records_execute(as_batch_task* task)
 		}
 	}
 	// Write real field size.
-	size = p - field_size_ptr - 4;
+	size_t size = p - field_size_ptr - 4;
 	*(uint32_t*)field_size_ptr = cf_swap_to_be32((uint32_t)size);
+	
+	return as_command_write_end(cmd, p);
+}
 
-	size = as_command_write_end(cmd, p);
+static as_status
+as_batch_index_records_execute(as_batch_task* task)
+{
+	// Estimate buffer size.
+	size_t size = as_batch_index_records_size(task->records, &task->offsets);
+		
+	// Write command
+	uint8_t* cmd = as_command_init(size);
+	size = as_batch_index_records_write(task->records, &task->offsets, task->timeout_ms, task->allow_inline, cmd);
 
 	as_command_node cn;
 	cn.node = task->node;
@@ -766,39 +833,137 @@ as_batch_execute(
 	return status;
 }
 
-/******************************************************************************
- *	PUBLIC FUNCTIONS
- *****************************************************************************/
-
-bool
-aerospike_has_batch_index(aerospike* as)
+static as_status
+as_batch_read_execute_sync(
+	as_cluster* cluster, as_error* err, const as_policy_batch* policy, as_vector* records,
+	uint32_t n_keys, uint32_t n_batch_nodes, as_batch_node* batch_nodes
+	)
 {
-	as_nodes* nodes = as_nodes_reserve(as->cluster);
-	
-	if (nodes->size == 0) {
-		as_nodes_release(nodes);
-		return false;
+	as_status status = AEROSPIKE_OK;
+	uint32_t error_mutex = 0;
+
+	// Initialize task.
+	as_batch_task task;
+	memset(&task, 0, sizeof(as_batch_task));
+	task.cluster = cluster;
+	task.err = err;
+	task.records = records;
+	task.error_mutex = &error_mutex;
+	task.n_keys = n_keys;
+	task.timeout_ms = policy->timeout;
+	task.retry = 0;
+	task.use_batch_records = true;
+	task.allow_inline = policy->allow_inline;
+	task.deserialize = policy->deserialize;
+
+	if (policy->concurrent && n_batch_nodes > 1) {
+		// Run batch requests in parallel in separate threads.
+		task.complete_q = cf_queue_create(sizeof(as_batch_complete_task), true);
+		
+		uint32_t n_wait_nodes = n_batch_nodes;
+		
+		// Run task for each node.
+		for (uint32_t i = 0; i < n_batch_nodes; i++) {
+			// Stack allocate task for each node.  It should be fine since the task
+			// only needs to be valid within this function.
+			as_batch_task* task_node = alloca(sizeof(as_batch_task));
+			memcpy(task_node, &task, sizeof(as_batch_task));
+			
+			as_batch_node* batch_node = &batch_nodes[i];
+			task_node->use_new_batch = true;
+			task_node->node = batch_node->node;
+			memcpy(&task_node->offsets, &batch_node->offsets, sizeof(as_vector));
+			
+			int rc = as_thread_pool_queue_task(&cluster->thread_pool, as_batch_worker, task_node);
+			
+			if (rc) {
+				// Thread could not be added. Abort entire batch.
+				if (ck_pr_fas_32(task.error_mutex, 1) == 0) {
+					status = as_error_update(task.err, AEROSPIKE_ERR_CLIENT, "Failed to add batch thread: %d", rc);
+				}
+				
+				// Reset node count to threads that were run.
+				n_wait_nodes = i;
+				break;
+			}
+		}
+		
+		// Wait for tasks to complete.
+		for (uint32_t i = 0; i < n_wait_nodes; i++) {
+			as_batch_complete_task complete;
+			cf_queue_pop(task.complete_q, &complete, CF_QUEUE_FOREVER);
+			
+			if (complete.result != AEROSPIKE_OK && status == AEROSPIKE_OK) {
+				status = complete.result;
+			}
+		}
+		
+		// Release temporary queue.
+		cf_queue_destroy(task.complete_q);
 	}
-	
-	for (uint32_t i = 0; i < nodes->size; i++) {
-		if (! nodes->array[i]->has_batch_index) {
-			as_nodes_release(nodes);
-			return false;
+	else {
+		// Run batch requests sequentially in same thread.
+		for (uint32_t i = 0; status == AEROSPIKE_OK && i < n_batch_nodes; i++) {
+			as_batch_node* batch_node = &batch_nodes[i];
+			
+			task.use_new_batch = true;
+			task.node = batch_node->node;
+			memcpy(&task.offsets, &batch_node->offsets, sizeof(as_vector));
+			status = as_batch_command_execute(&task);
 		}
 	}
-	as_nodes_release(nodes);
-	return true;
+	
+	// Release each node.
+	as_batch_release_nodes(batch_nodes, n_batch_nodes);
+	return status;
 }
 
-/**
- *	Read multiple records for specified batch keys in one batch call.
- *	This method allows different namespaces/bins to be requested for each key in the batch.
- *	The returned records are located in the same batch array.
- *	This method requires Aerospike Server version >= 3.6.0.
- */
-as_status
-aerospike_batch_read(
-	aerospike* as, as_error* err, const as_policy_batch* policy, as_batch_read_records* records
+static void
+as_batch_read_execute_async(
+	as_cluster* cluster, const as_policy_batch* policy, as_vector* records, uint32_t n_batch_nodes,
+	as_batch_node* batch_nodes, as_async_executor* executor
+	)
+{
+	executor->max = n_batch_nodes;
+	
+	for (uint32_t i = 0; i < n_batch_nodes; i++) {
+		as_batch_node* batch_node = &batch_nodes[i];
+		
+		// Estimate buffer size.
+		size_t size = as_batch_index_records_size(records, &batch_node->offsets);
+		
+		// Allocate enough memory to cover, then, round up memory size in 8KB increments to reduce
+		// fragmentation and to allow socket read to reuse buffer.
+		size_t s = (sizeof(as_async_command) + size + AS_AUTHENTICATION_MAX_SIZE + 8191) & ~8191;
+		as_async_command* cmd = cf_malloc(s);
+		cmd->event.event_loop = executor->event_loop;
+		cmd->event.fd = -1;
+		cmd->event.timeout_ms = policy->timeout;
+		cmd->cluster = cluster;
+		cmd->node = batch_node->node;
+		cmd->ucb = 0;           // Real user callback is located in executor.
+		cmd->udata = executor;  // Overload udata to be the executor.
+		cmd->parse_results = as_batch_async_parse_records;
+		cmd->buf = cmd->space;
+		cmd->capacity = (uint32_t)(s - sizeof(as_async_command));
+		cmd->len = 0;
+		cmd->pos = 0;
+		cmd->auth_len = 0;
+		cmd->type = AS_ASYNC_TYPE_BATCH;
+		cmd->state = AS_ASYNC_STATE_UNREGISTERED;
+		cmd->pipeline = false;
+		cmd->deserialize = policy->deserialize;
+		cmd->free_buf = false;
+		
+		size = as_batch_index_records_write(records, &batch_node->offsets, policy->timeout, policy->allow_inline, cmd->buf);
+		as_async_command_execute(cmd, size);
+	}
+}
+
+static as_status
+as_batch_read_execute(
+	aerospike* as, as_error* err, const as_policy_batch* policy, as_batch_read_records* records,
+	as_async_executor* executor
 	)
 {
 	as_error_reset(err);
@@ -822,7 +987,7 @@ aerospike_batch_read(
 		as_nodes_release(nodes);
 		return as_error_set_message(err, AEROSPIKE_ERR_SERVER, "Batch command failed because cluster is empty.");
 	}
-		
+	
 	as_batch_node* batch_nodes = alloca(sizeof(as_batch_node) * n_nodes);
 	uint32_t n_batch_nodes = 0;
 	as_status status = AEROSPIKE_OK;
@@ -890,82 +1055,80 @@ aerospike_batch_read(
 	}
 	as_nodes_release(nodes);
 	
-	uint32_t error_mutex = 0;
-	
-	// Initialize task.
-	as_batch_task task;
-	memset(&task, 0, sizeof(as_batch_task));
-	task.cluster = cluster;
-	task.err = err;
-	task.records = list;
-	task.error_mutex = &error_mutex;
-	task.n_keys = n_keys;
-	task.timeout_ms = policy->timeout;
-	task.retry = 0;
-	task.use_batch_records = true;
-	task.allow_inline = policy->allow_inline;
-	task.deserialize = policy->deserialize;
-	
-	if (policy->concurrent && n_batch_nodes > 1) {
-		// Run batch requests in parallel in separate threads.
-		task.complete_q = cf_queue_create(sizeof(as_batch_complete_task), true);
-		
-		uint32_t n_wait_nodes = n_batch_nodes;
-		
-		// Run task for each node.
-		for (uint32_t i = 0; i < n_batch_nodes; i++) {
-			// Stack allocate task for each node.  It should be fine since the task
-			// only needs to be valid within this function.
-			as_batch_task* task_node = alloca(sizeof(as_batch_task));
-			memcpy(task_node, &task, sizeof(as_batch_task));
-			
-			as_batch_node* batch_node = &batch_nodes[i];
-			task_node->use_new_batch = true;
-			task_node->node = batch_node->node;
-			memcpy(&task_node->offsets, &batch_node->offsets, sizeof(as_vector));
-			
-			int rc = as_thread_pool_queue_task(&cluster->thread_pool, as_batch_worker, task_node);
-			
-			if (rc) {
-				// Thread could not be added. Abort entire batch.
-				if (ck_pr_fas_32(task.error_mutex, 1) == 0) {
-					status = as_error_update(task.err, AEROSPIKE_ERR_CLIENT, "Failed to add batch thread: %d", rc);
-				}
-				
-				// Reset node count to threads that were run.
-				n_wait_nodes = i;
-				break;
-			}
-		}
-		
-		// Wait for tasks to complete.
-		for (uint32_t i = 0; i < n_wait_nodes; i++) {
-			as_batch_complete_task complete;
-			cf_queue_pop(task.complete_q, &complete, CF_QUEUE_FOREVER);
-			
-			if (complete.result != AEROSPIKE_OK && status == AEROSPIKE_OK) {
-				status = complete.result;
-			}
-		}
-		
-		// Release temporary queue.
-		cf_queue_destroy(task.complete_q);
-	}
-	else {
-		// Run batch requests sequentially in same thread.
-		for (uint32_t i = 0; status == AEROSPIKE_OK && i < n_batch_nodes; i++) {
-			as_batch_node* batch_node = &batch_nodes[i];
-			
-			task.use_new_batch = true;
-			task.node = batch_node->node;
-			memcpy(&task.offsets, &batch_node->offsets, sizeof(as_vector));
-			status = as_batch_command_execute(&task);
-		}
+	if (executor) {
+		as_batch_read_execute_async(cluster, policy, list, n_batch_nodes, batch_nodes, executor);
+		return AEROSPIKE_OK;
 	}
 	
-	// Release each node.
-	as_batch_release_nodes(batch_nodes, n_batch_nodes);
-	return status;
+	return as_batch_read_execute_sync(cluster, err, policy, list, n_keys, n_batch_nodes, batch_nodes);
+}
+
+/******************************************************************************
+ *	PUBLIC FUNCTIONS
+ *****************************************************************************/
+
+bool
+aerospike_has_batch_index(aerospike* as)
+{
+	as_nodes* nodes = as_nodes_reserve(as->cluster);
+	
+	if (nodes->size == 0) {
+		as_nodes_release(nodes);
+		return false;
+	}
+	
+	for (uint32_t i = 0; i < nodes->size; i++) {
+		if (! nodes->array[i]->has_batch_index) {
+			as_nodes_release(nodes);
+			return false;
+		}
+	}
+	as_nodes_release(nodes);
+	return true;
+}
+
+/**
+ *	Read multiple records for specified batch keys in one batch call.
+ *	This method allows different namespaces/bins to be requested for each key in the batch.
+ *	The returned records are located in the same batch array.
+ *	This method requires Aerospike Server version >= 3.6.0.
+ */
+as_status
+aerospike_batch_read(
+	aerospike* as, as_error* err, const as_policy_batch* policy, as_batch_read_records* records
+	)
+{
+	return as_batch_read_execute(as, err, policy, records, 0);
+}
+
+void
+aerospike_batch_read_async(
+	aerospike* as, const as_policy_batch* policy, as_batch_read_records* records,
+	as_event_loop* event_loop, as_async_callback_fn ucb, void* udata
+	)
+{
+	// Check for empty batch.
+	if (records->list.size == 0) {
+		ucb(0, records, udata, event_loop);
+		return;
+	}
+	
+	// Batch will be split up into multiple commands for each node.
+	// Allocate batch data shared by each command.
+	as_async_executor* executor = cf_malloc(sizeof(as_async_executor));
+	executor->max = 0;
+	executor->count = 0;
+	executor->ucb = ucb;
+	executor->udata = udata;
+	executor->result = records;
+	executor->event_loop = as_event_assign(event_loop);
+	
+	as_status status = as_batch_read_execute(as, &executor->err, policy, records, executor);
+	
+	if (status != AEROSPIKE_OK) {
+		ucb(&executor->err, 0, udata, event_loop);
+		cf_free(executor);  // Only need to free on error.
+	}
 }
 
 /**

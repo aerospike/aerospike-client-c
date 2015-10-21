@@ -31,6 +31,9 @@
 #include <aerospike/as_serializer.h>
 #include <aerospike/as_status.h>
 #include <citrusleaf/cf_clock.h>
+#include <citrusleaf/cf_random.h>
+
+#include "as_stap.h"
 
 static const char* CLUSTER_EMPTY = "Cluster is empty";
 
@@ -125,7 +128,7 @@ aerospike_key_get_async(aerospike* as, const as_policy_read* policy, const as_ke
 	uint8_t* p = as_command_write_header_read(cmd->buf, AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_ALL, policy->consistency_level, policy->timeout, n_fields, 0);
 	p = as_command_write_key(p, policy->key, key);
 	size = as_command_write_end(cmd->buf, p);
-	as_async_command_assign(cmd, size);
+	as_async_command_execute(cmd, size);
 }
 
 as_status
@@ -216,7 +219,7 @@ aerospike_key_select_async(aerospike* as, const as_policy_read* policy, const as
 		p = as_command_write_bin_name(p, bins[i]);
 	}
 	size = as_command_write_end(cmd->buf, p);
-	as_async_command_assign(cmd, size);
+	as_async_command_execute(cmd, size);
 }
 
 as_status
@@ -292,7 +295,7 @@ aerospike_key_exists_async(aerospike* as, const as_policy_read* policy, const as
 	uint8_t* p = as_command_write_header_read(cmd->buf, AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA, policy->consistency_level, policy->timeout, n_fields, 0);
 	p = as_command_write_key(p, policy->key, key);
 	size = as_command_write_end(cmd->buf, p);
-	as_async_command_assign(cmd, size);
+	as_async_command_execute(cmd, size);
 }
 
 as_status
@@ -317,12 +320,18 @@ aerospike_key_put(aerospike* as, as_error* err, const as_policy_write* policy, c
 	
 	uint16_t n_fields;
 	size_t size = as_command_key_size(policy->key, key, &n_fields);
+
+#if defined(USE_SYSTEMTAP)
+	size += as_command_field_size(8);
+	n_fields++;
+#endif
+
 	memset(buffers, 0, sizeof(as_buffer) * n_bins);
 	
 	for (uint32_t i = 0; i < n_bins; i++) {
 		size += as_command_bin_size(&bins[i], &buffers[i]);
 	}
-		
+
 	uint8_t* cmd = as_command_init(size);
 	uint8_t* p = as_command_write_header(cmd, 0, AS_MSG_INFO2_WRITE, policy->commit_level, 0,
 					policy->exists, policy->gen, rec->gen, rec->ttl, policy->timeout, n_fields,
@@ -330,6 +339,11 @@ aerospike_key_put(aerospike* as, as_error* err, const as_policy_write* policy, c
 		
 	p = as_command_write_key(p, policy->key, key);
 	
+#if defined(USE_SYSTEMTAP)
+	uint64_t task_id = cf_get_rand64() / 2;
+	p = as_command_write_field_uint64(p, AS_FIELD_TASK_ID, task_id);
+#endif
+
 	for (uint32_t i = 0; i < n_bins; i++) {
 		p = as_command_write_bin(p, AS_OPERATOR_WRITE, &bins[i], &buffers[i]);
 	}
@@ -341,8 +355,10 @@ aerospike_key_put(aerospike* as, as_error* err, const as_policy_write* policy, c
 	
 	if (policy->compression_threshold == 0 || (size <= policy->compression_threshold)) {
 		// Send uncompressed command.
+		AEROSPIKE_PUT_EXECUTE_STARTING(task_id);
 		status = as_command_execute(as->cluster, err, &cn, cmd, size, policy->timeout,
 					policy->retry, as_command_parse_header, &msg);
+		AEROSPIKE_PUT_EXECUTE_FINISHED(task_id);
 	}
 	else {
 		// Send compressed command.
@@ -351,8 +367,10 @@ aerospike_key_put(aerospike* as, as_error* err, const as_policy_write* policy, c
 		status = as_command_compress(err, cmd, size, comp_cmd, &comp_size);
 		
 		if (status == AEROSPIKE_OK) {
+			AEROSPIKE_PUT_EXECUTE_STARTING(task_id);
 			status = as_command_execute(as->cluster, err, &cn, comp_cmd, comp_size, policy->timeout,
 										policy->retry, as_command_parse_header, &msg);
+			AEROSPIKE_PUT_EXECUTE_FINISHED(task_id);
 		}
 		as_command_free(comp_cmd, comp_size);
 	}
@@ -401,7 +419,7 @@ aerospike_key_put_async(aerospike* as, const as_policy_write* policy, const as_k
 			p = as_command_write_bin(p, AS_OPERATOR_WRITE, &bins[i], &buffers[i]);
 		}
 		size = as_command_write_end(cmd->buf, p);
-		as_async_command_assign(cmd, size);
+		as_async_command_execute(cmd, size);
 	}
 	else {
 		// Send compressed command.
@@ -425,10 +443,10 @@ aerospike_key_put_async(aerospike* as, const as_policy_write* policy, const as_k
 
 		// Compress buffer and execute.
 		if (as_command_compress(&err, cmd, size, comp_cmd->buf, &comp_size) == AEROSPIKE_OK) {
-			as_async_command_assign(comp_cmd, comp_size);
+			as_async_command_execute(comp_cmd, comp_size);
 		}
 		else {
-			as_async_error(comp_cmd, &err);
+			as_async_init_error(comp_cmd, &err);
 		}
 		as_command_free(cmd, size);
 	}
@@ -490,7 +508,7 @@ aerospike_key_remove_async(aerospike* as, const as_policy_remove* policy, const 
 	uint8_t* p = as_command_write_header(cmd->buf, 0, AS_MSG_INFO2_WRITE | AS_MSG_INFO2_DELETE, policy->commit_level, 0, AS_POLICY_EXISTS_IGNORE, policy->gen, policy->generation, 0, policy->timeout, n_fields, 0);
 	p = as_command_write_key(p, policy->key, key);
 	size = as_command_write_end(cmd->buf, p);
-	as_async_command_assign(cmd, size);
+	as_async_command_execute(cmd, size);
 }
 
 as_status
@@ -618,7 +636,7 @@ aerospike_key_operate_async(aerospike* as, const as_policy_operate* policy, cons
 		p = as_command_write_bin(p, op->op, &op->bin, &buffers[i]);
 	}
 	size = as_command_write_end(cmd->buf, p);
-	as_async_command_assign(cmd, size);
+	as_async_command_execute(cmd, size);
 }
 
 as_status
@@ -708,7 +726,7 @@ aerospike_key_apply_async(aerospike* as, const as_policy_apply* policy, const as
 	size = as_command_write_end(cmd->buf, p);
 	as_buffer_destroy(&args);
 	as_serializer_destroy(&ser);
-	as_async_command_assign(cmd, size);
+	as_async_command_execute(cmd, size);
 }
 
 bool

@@ -17,6 +17,7 @@
 #pragma once 
 
 #include <aerospike/as_status.h>
+#include <aerospike/as_string.h>
 
 #include <stdarg.h>
 #include <stdint.h>
@@ -193,8 +194,7 @@ static inline as_status as_error_reset(as_error * err) {
  */
 static inline as_status as_error_setall(as_error * err, as_status code, const char * message, const char * func, const char * file, uint32_t line) {
 	err->code = code;
-	strncpy(err->message, message, AS_ERROR_MESSAGE_MAX_LEN);
-	err->message[AS_ERROR_MESSAGE_MAX_LEN] = '\0';
+	as_strncpy(err->message, message, AS_ERROR_MESSAGE_MAX_SIZE);
 	err->func = func;
 	err->file = file;
 	err->line = line;

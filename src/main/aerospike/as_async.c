@@ -26,14 +26,18 @@
 #include <errno.h>
 
 /******************************************************************************
- * STATIC VARIABLES
- *****************************************************************************/
-
-static uint32_t as_event_loop_current = 0;
-
-/******************************************************************************
  * FUNCTIONS
  *****************************************************************************/
+
+static inline void
+as_async_unregister(as_async_command* cmd)
+{
+	as_event_unregister(&cmd->event);
+
+	if (cmd->event.timeout_ms) {
+		as_event_stop_timer(&cmd->event);
+	}
+}
 
 static inline void
 as_async_put_connection(as_async_command* cmd)
@@ -47,61 +51,67 @@ as_async_put_connection(as_async_command* cmd)
 }
 
 static inline void
-as_async_finish(as_async_command* cmd, void* result)
+as_async_command_free(as_async_command* cmd)
 {
-	if (cmd->release_node) {
-		as_node_release(cmd->node);
-	}
-	
-	// Command buffer may have been allocated separately from command allocation.
 	if (cmd->free_buf) {
 		cf_free(cmd->buf);
 	}
-	
-	cmd->ucb(0, result, cmd->udata, cmd->event.event_loop);
 	cf_free(cmd);
 }
 
 void
-as_async_error(as_async_command* cmd, as_error* err)
+as_async_init_error(as_async_command* cmd, as_error* err)
 {
-	if (cmd->release_node) {
-		as_node_release(cmd->node);
-	}
-	
-	// Buffer may have been allocated separately from command allocation.
-	if (cmd->free_buf) {
-		cf_free(cmd->buf);
-	}
-	
+	// Async command could not even be initialized, but node has been reserved.
+	// Release node and make callback and free command.
+	as_node_release(cmd->node);
 	cmd->ucb(err, 0, cmd->udata, cmd->event.event_loop);
-	cf_free(cmd);
-}
-
-static inline void
-as_async_server_error(as_async_command* cmd, as_error* err)
-{
-	// Put connection back in pool.
-	as_async_put_connection(cmd);
-	as_async_error(cmd, err);
+	as_async_command_free(cmd);
 }
 
 static void
-as_async_server_error_code(as_async_command* cmd, as_status error_code)
+as_async_error_callback(as_async_command* cmd, as_error* err)
 {
-	// TODO: HANDLE AEROSPIKE_ERR_QUERY_ABORTED, AEROSPIKE_ERR_SCAN_ABORTED, AEROSPIKE_ERR_CLIENT_ABORT
-	// Put connection back in pool.
-	as_async_put_connection(cmd);
+	as_node_release(cmd->node);
 	
-	as_error err;
-	as_error_set_message(&err, error_code, as_error_string(error_code));
-	as_async_error(cmd, &err);
+	// Call error callback with formatted message and free command.
+	if (cmd->type == AS_ASYNC_TYPE_RECORD) {
+		cmd->ucb(err, 0, cmd->udata, cmd->event.event_loop);
+	}
+	else {
+		// Handle command that is part of a group (batch, scan, query).
+		as_async_executor* executor = cmd->udata;
+		
+		// Only accept first error in the group.  All commands in group
+		// run on same event_loop, so it does not need to be thread safe.
+		if (executor->err.code == AEROSPIKE_OK) {
+			as_error_copy(&executor->err, err);
+		}
+		
+		if (++executor->count == executor->max) {
+			executor->ucb(&executor->err, 0, executor->udata, executor->event_loop);
+			cf_free(executor);
+		}
+	}
+	as_async_command_free(cmd);
+}
+
+static inline void
+as_async_conn_error(as_async_command* cmd, as_error* err)
+{
+	// Only timer needs to be released on socket connection failure.
+	// Watcher has not been registered yet.
+	if (cmd->event.timeout_ms) {
+		as_event_stop_timer(&cmd->event);
+	}
+	as_async_error_callback(cmd, err);
 }
 
 static void
 as_async_socket_error(as_async_command* cmd, as_error* err)
 {
-	// Stop watcher if it has been initialized.
+	// Socket read/write failure.
+	// Stop watcher only if it has been initialized.
 	if (cmd->state > AS_ASYNC_STATE_UNREGISTERED) {
 		as_event_unregister(&cmd->event);
 	}
@@ -113,12 +123,39 @@ as_async_socket_error(as_async_command* cmd, as_error* err)
 	
 	// Do not put connection back in pool.
 	as_event_close(&cmd->event);
-	as_async_error(cmd, err);
+	as_async_error_callback(cmd, err);
+}
+
+void
+as_async_response_error(as_async_command* cmd, as_error* err)
+{
+	// Server sent back error.
+	// Release resources, make callback and free command.
+	as_async_unregister(cmd);
+	
+	// Close socket on errors that can leave unread data in socket.
+	switch (err->code) {
+		case AEROSPIKE_ERR_QUERY_ABORTED:
+		case AEROSPIKE_ERR_SCAN_ABORTED:
+		case AEROSPIKE_ERR_CLIENT_ABORT:
+		case AEROSPIKE_ERR_CLIENT:
+			as_event_close(&cmd->event);
+			break;
+			
+		default:
+			as_async_put_connection(cmd);
+			break;
+	}
+	as_async_error_callback(cmd, err);
 }
 
 void
 as_async_timeout(as_async_command* cmd)
 {
+	as_error err;
+	as_error_set_message(&err, AEROSPIKE_ERR_TIMEOUT, as_error_string(AEROSPIKE_ERR_TIMEOUT));
+	
+	// Command has timed out.
 	// Stop watcher if it has been initialized.
 	if (cmd->state > AS_ASYNC_STATE_UNREGISTERED) {
 		as_event_unregister(&cmd->event);
@@ -127,18 +164,41 @@ as_async_timeout(as_async_command* cmd)
 	// Assume timer has already been stopped.
 	// Do not put connection back in pool.
 	as_event_close(&cmd->event);
-	
-	as_error err;
-	as_error_update(&err, AEROSPIKE_ERR_TIMEOUT, as_error_string(AEROSPIKE_ERR_TIMEOUT));
-	as_async_error(cmd, &err);
+	as_async_error_callback(cmd, &err);
 }
 
 static void
-as_async_conn_error(as_async_command* cmd, as_error* err)
+as_async_record_finish(as_async_command* cmd, void* result)
 {
-	// Socket never connected or registered, so just close.
-	as_event_close(&cmd->event);
-	as_async_error(cmd, err);
+	// Command completed without errors.
+	as_async_unregister(cmd);
+	as_async_put_connection(cmd);
+	as_node_release(cmd->node);
+	cmd->ucb(0, result, cmd->udata, cmd->event.event_loop);
+	as_async_command_free(cmd);
+}
+
+void
+as_async_executor_finish(as_async_command* cmd)
+{
+	as_async_unregister(cmd);
+	as_async_put_connection(cmd);
+	as_node_release(cmd->node);
+	
+	// Only invoke user callback after all node commands have completed.
+	as_async_executor* executor = cmd->udata;
+	if (++executor->count == executor->max) {
+		if (executor->err.code == AEROSPIKE_OK) {
+			// All commands completed without errors.
+			executor->ucb(0, executor->result, executor->udata, executor->event_loop);
+		}
+		else {
+			// Error has occurred in previous command.
+			executor->ucb(&executor->err, 0, executor->udata, executor->event_loop);
+		}
+		cf_free(executor);
+	}
+	as_async_command_free(cmd);
 }
 
 static int
@@ -299,6 +359,7 @@ as_async_create_connection(as_async_command* cmd)
 	}
 	
 	// Failed to start a connection on any socket address.
+	close(cmd->event.fd);
 	as_error err;
 	as_error_update(&err, AEROSPIKE_ERR_CLIENT, "Failed to connect: %s %s:%d",
 					node->name, primary->name, (int)cf_swap_from_be16(primary->addr.sin_port));
@@ -354,13 +415,13 @@ as_async_command_begin(as_async_command* cmd)
 }
 
 void
-as_async_command_execute(as_async_command* cmd)
+as_async_command_thread_execute(as_async_command* cmd)
 {
 	// Check if command timed out after coming off queue.
 	if (cmd->event.timeout_ms && (cf_getms() - *(uint64_t*)cmd) > cmd->event.timeout_ms) {
 		as_error err;
 		as_error_set_message(&err, AEROSPIKE_ERR_TIMEOUT, as_error_string(AEROSPIKE_ERR_TIMEOUT));
-		as_async_error(cmd, &err);
+		as_async_error_callback(cmd, &err);
 		return;
 	}
 	
@@ -369,22 +430,9 @@ as_async_command_execute(as_async_command* cmd)
 }
 
 void
-as_async_command_assign(as_async_command* cmd, size_t size)
+as_async_command_execute(as_async_command* cmd, size_t size)
 {
 	cmd->len = (uint32_t)size;
-	
-	if (cmd->pipeline) {
-		// Assign to node's pipeline event loop.
-		cmd->event.event_loop = cmd->node->pipeline_loop;
-	}
-	else {
-		if (! cmd->event.event_loop) {
-			// Assign event loop using round robin distribution.
-			// Not atomic because doesn't need to be exactly accurate.
-			uint32_t current = as_event_loop_current++;
-			cmd->event.event_loop = &as_event_loops[current % as_event_loop_size];
-		}
-	}
 	
 	// Use pointer comparison for performance.
 	// If portability becomes an issue, use "pthread_equal(event_loop->thread, pthread_self())"
@@ -403,7 +451,7 @@ as_async_command_assign(as_async_command* cmd, size_t size)
 		if (! as_event_send(&cmd->event)) {
 			as_error err;
 			as_error_set_message(&err, AEROSPIKE_ERR_CLIENT, "Failed to queue command");
-			as_async_error(cmd, &err);
+			as_async_error_callback(cmd, &err);
 		}
 	}
 }
@@ -495,7 +543,7 @@ as_async_command_parse_authentication(as_async_command* cmd)
 	if (code) {
 		// Can't authenticate socket, so must close it.
 		as_error err;
-		as_error_set_message(&err, code, as_error_string(code));
+		as_error_update(&err, code, "Authentication failed: %s", as_error_string(code));
 		as_async_socket_error(cmd, &err);
 		return;
 	}
@@ -520,6 +568,55 @@ as_async_command_parse_authentication(as_async_command* cmd)
 	}
 }
 
+static void
+as_async_command_receive_multi(as_async_command* cmd)
+{
+	// Batch, scan, query may be waiting on end block.
+	// Prepare for next message block.
+	cmd->len = 8;
+	cmd->pos = 0;
+	cmd->state = AS_ASYNC_STATE_READ_HEADER;
+	
+	if (! as_async_read(cmd)) {
+		return;
+	}
+	
+	as_proto_msg* msg = (as_proto_msg*)cmd->buf;
+	as_proto_swap_from_be(&msg->proto);
+	size_t size = msg->proto.sz;
+	
+	cmd->len = (uint32_t)size;
+	cmd->pos = 0;
+	cmd->state = AS_ASYNC_STATE_READ_BODY;
+
+	// Check for end block size.
+	if (cmd->len == 22) {
+		// Look like we received end block.  Read and parse to make sure.
+		if (! as_async_read(cmd)) {
+			return;
+		}
+
+		if (! cmd->parse_results(cmd)) {
+			// We did not finish after all. Prepare to read next header.
+			cmd->len = 8;
+			cmd->pos = 0;
+			cmd->state = AS_ASYNC_STATE_READ_HEADER;
+		}
+	}
+	else {
+		// Received normal data block.  Stop reading for fairness reasons and wait
+		// till next iteration.
+		if (cmd->len > cmd->capacity) {
+			if (cmd->free_buf) {
+				cf_free(cmd->buf);
+			}
+			cmd->buf = cf_malloc(size);
+			cmd->capacity = cmd->len;
+			cmd->free_buf = true;
+		}
+	}
+}
+
 void
 as_async_command_receive(as_async_command* cmd)
 {
@@ -538,46 +635,65 @@ as_async_command_receive(as_async_command* cmd)
 		as_proto_msg* msg = (as_proto_msg*)cmd->buf;
 		as_proto_swap_from_be(&msg->proto);
 		size_t size = msg->proto.sz;
+		
 		cmd->len = (uint32_t)size;
 		cmd->pos = 0;
+		cmd->state = AS_ASYNC_STATE_READ_BODY;
 		
 		if (cmd->len > cmd->capacity) {
+			if (cmd->free_buf) {
+				cf_free(cmd->buf);
+			}
 			cmd->buf = cf_malloc(size);
 			cmd->capacity = cmd->len;
 			cmd->free_buf = true;
 		}
-		cmd->state = AS_ASYNC_STATE_READ_BODY;
 	}
 	
+	// Read response body
 	if (! as_async_read(cmd)) {
 		return;
 	}
 	
-	as_event_unregister(&cmd->event);
-	
-	if (cmd->event.timeout_ms) {
-		as_event_stop_timer(&cmd->event);
+	if (! cmd->parse_results(cmd)) {
+		// Batch, scan, query is not finished.
+		as_async_command_receive_multi(cmd);
 	}
-	
-	cmd->parse_results(cmd);
 }
 
-void
+bool
 as_async_command_parse_header(as_async_command* cmd)
 {
-	uint8_t ret = cmd->buf[5];
+	if (cmd->len < sizeof(as_msg)) {
+		as_error err;
+		as_error_update(&err, AEROSPIKE_ERR_CLIENT, "Invalid record header size: %u", cmd->len);
+		as_async_socket_error(cmd, &err);
+		return true;
+	}
 	
-	if (ret == AEROSPIKE_OK) {
-		as_async_finish(cmd, 0);
+	uint8_t status = cmd->buf[5];
+	
+	if (status == AEROSPIKE_OK) {
+		as_async_record_finish(cmd, 0);
 	}
 	else {
-		as_async_server_error_code(cmd, ret);
+		as_error err;
+		as_error_set_message(&err, status, as_error_string(status));
+		as_async_response_error(cmd, &err);
 	}
+	return true;
 }
 
-void
+bool
 as_async_command_parse_result(as_async_command* cmd)
 {
+	if (cmd->len < sizeof(as_msg)) {
+		as_error err;
+		as_error_update(&err, AEROSPIKE_ERR_CLIENT, "Invalid record header size: %u", cmd->len);
+		as_async_socket_error(cmd, &err);
+		return true;
+	}
+	
 	as_msg* msg = (as_msg*)cmd->buf;
 	as_msg_swap_header_from_be(msg);
 	uint8_t* p = cmd->buf + sizeof(as_msg);
@@ -600,7 +716,7 @@ as_async_command_parse_result(as_async_command* cmd)
 			p = as_command_ignore_fields(p, msg->n_fields);
 			as_command_parse_bins(&rec, p, msg->n_ops, cmd->deserialize);
 		
-			as_async_finish(cmd, &rec);
+			as_async_record_finish(cmd, &rec);
 			as_record_destroy(&rec);
 			break;
 		}
@@ -608,20 +724,30 @@ as_async_command_parse_result(as_async_command* cmd)
 		case AEROSPIKE_ERR_UDF: {
 			as_error err;
 			as_command_parse_udf_failure(p, &err, msg, status);
-			as_async_server_error(cmd, &err);
+			as_async_response_error(cmd, &err);
 			break;
 		}
 			
 		default: {
-			as_async_server_error_code(cmd, status);
+			as_error err;
+			as_error_set_message(&err, status, as_error_string(status));
+			as_async_response_error(cmd, &err);
 			break;
 		}
 	}
+	return true;
 }
 
-void
+bool
 as_async_command_parse_success_failure(as_async_command* cmd)
 {
+	if (cmd->len < sizeof(as_msg)) {
+		as_error err;
+		as_error_update(&err, AEROSPIKE_ERR_CLIENT, "Invalid record header size: %u", cmd->len);
+		as_async_socket_error(cmd, &err);
+		return true;
+	}
+
 	as_msg* msg = (as_msg*)cmd->buf;
 	as_msg_swap_header_from_be(msg);
 	uint8_t* p = cmd->buf + sizeof(as_msg);
@@ -634,11 +760,11 @@ as_async_command_parse_success_failure(as_async_command* cmd)
 			status = as_command_parse_success_failure_bins(&p, &err, msg, &val);
 			
 			if (status == AEROSPIKE_OK) {
-				as_async_finish(cmd, val);
+				as_async_record_finish(cmd, val);
 				as_val_destroy(val);
 			}
 			else {
-				as_async_server_error(cmd, &err);
+				as_async_response_error(cmd, &err);
 			}
 			break;
 		}
@@ -646,12 +772,16 @@ as_async_command_parse_success_failure(as_async_command* cmd)
 		case AEROSPIKE_ERR_UDF: {
 			as_error err;
 			as_command_parse_udf_failure(p, &err, msg, status);
-			as_async_server_error(cmd, &err);
+			as_async_response_error(cmd, &err);
 			break;
 		}
 
-		default:
-			as_async_server_error_code(cmd, status);
+		default: {
+			as_error err;
+			as_error_set_message(&err, status, as_error_string(status));
+			as_async_response_error(cmd, &err);
 			break;
+		}
 	}
+	return true;
 }

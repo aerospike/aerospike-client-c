@@ -178,6 +178,7 @@ as_event_close_loops();
 
 extern as_event_loop* as_event_loops;
 extern uint32_t as_event_loop_size;
+extern uint32_t as_event_loop_current;
 	
 /******************************************************************************
  * PRIVATE FUNCTIONS
@@ -216,6 +217,18 @@ as_event_init_timer(as_event_command* cmd);
 void
 as_event_stop_timer(as_event_command* cmd);
 
+static inline as_event_loop*
+as_event_assign(as_event_loop* event_loop)
+{
+	if (! event_loop) {
+		// Assign event loop using round robin distribution.
+		// Not atomic because doesn't need to be exactly accurate.
+		uint32_t current = as_event_loop_current++;
+		event_loop = &as_event_loops[current % as_event_loop_size];
+	}
+	return event_loop;
+}
+
 static inline void
 as_event_close(as_event_command* cmd)
 {
@@ -223,12 +236,6 @@ as_event_close(as_event_command* cmd)
 		close(cmd->fd);
 		cmd->fd = -1;
 	}
-}
-	
-static inline as_event_loop*
-as_event_assign(uint32_t current)
-{
-	return &as_event_loops[current % as_event_loop_size];
 }
 
 #ifdef __cplusplus

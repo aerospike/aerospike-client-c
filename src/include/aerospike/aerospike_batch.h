@@ -29,6 +29,7 @@
 
 #include <aerospike/aerospike.h>
 #include <aerospike/as_batch.h>
+#include <aerospike/as_async.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_key.h>
 #include <aerospike/as_list.h>
@@ -132,7 +133,6 @@ typedef struct as_batch_read_records_s {
  *	@ingroup batch_operations
  */
 typedef bool (*aerospike_batch_read_callback)(const as_batch_read* results, uint32_t n, void* udata);
-
 	
 /**
  *	@private
@@ -176,6 +176,24 @@ static inline void
 as_batch_read_init(as_batch_read_records* records, uint32_t capacity)
 {
 	as_vector_init(&records->list, sizeof(as_batch_read_record), capacity);
+}
+
+/**
+ *	Create `as_batch_read_records` on heap with specified list capacity on the heap.
+ *
+ *	When the batch is no longer needed, then use as_batch_destroy() to
+ *	release the batch and associated resources.
+ *
+ *	@param capacity	Initial capacity of batch record list. List will resize when necessary.
+ *	@return			Batch record list.
+ *
+ *	@relates as_batch_read_record
+ *	@ingroup batch_operations
+ */
+static inline as_batch_read_records*
+as_batch_read_create(uint32_t capacity)
+{
+	return (as_batch_read_records*) as_vector_create(sizeof(as_batch_read_record), capacity);
 }
 
 /**
@@ -255,6 +273,62 @@ aerospike_has_batch_index(aerospike* as);
 as_status
 aerospike_batch_read(
 	aerospike* as, as_error* err, const as_policy_batch* policy, as_batch_read_records* records
+	);
+
+/**
+ *	Asynchronously read multiple records for specified batch keys in one batch call.
+ *	This method allows different namespaces/bins to be requested for each key in the batch.
+ *	The returned records are located in the same batch array.
+ *	This method requires Aerospike Server version >= 3.6.0.
+ *
+ *	~~~~~~~~~~{.c}
+ *	void my_callback(as_error* err, void* result, void* udata, as_event_loop* event_loop)
+ *	{
+ *		if (err) {
+ *			fprintf(stderr, "Command failed: %d %s\n", err->code, err->message);
+ *			return;
+ *		}
+ *		as_batch_read_records* records = result;
+ *		as_vector* list = &records->list;
+ *		for (uint32_t i = 0; i < list->size; i++) {
+ *			as_batch_read_record* record = as_vector_get(list, i);
+ *			// Process record
+ *		}
+ *		as_batch_read_destroy(records);
+ *	}
+ *
+ *	as_batch_read_records* records = as_batch_read_create(10);
+ *
+ *	char* bin_names[] = {"bin1", "bin2"};
+ *	char* ns = "ns";
+ *	char* set = "set";
+ *
+ *	as_batch_read_record* record = as_batch_read_reserve(records);
+ *	as_key_init(&record->key, ns, set, "key1");
+ *	record->bin_names = bin_names;
+ *	record->n_bin_names = 2;
+ *
+ *	record = as_batch_read_reserve(records);
+ *	as_key_init(&record->key, ns, set, "key2");
+ *	record->read_all_bins = true;
+ *
+ *	aerospike_batch_read_async(&as, &err, NULL, records, NULL, my_callback, NULL);
+ *	~~~~~~~~~~
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param records		List of keys and bins to retrieve.  The returned records are located in the same array.
+ *						Must be allocated on heap because async method will return immediately after queueing command.
+ *	@param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
+ *	@param ucb 			User function to be called with command results.
+ *	@param udata 		User data to be forwarded to user callback.
+ *
+ *	@ingroup batch_operations
+ */
+void
+aerospike_batch_read_async(
+	aerospike* as, const as_policy_batch* policy, as_batch_read_records* records,
+	as_event_loop* event_loop, as_async_callback_fn ucb, void* udata
 	);
 
 /**

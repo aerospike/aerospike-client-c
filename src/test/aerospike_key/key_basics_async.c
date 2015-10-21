@@ -39,7 +39,7 @@
  * GLOBAL VARS
  *****************************************************************************/
 
-extern aerospike * as;
+extern aerospike* as;
 static as_monitor monitor;
 
 /******************************************************************************
@@ -323,8 +323,8 @@ TEST(key_basics_async_operate, "async operate")
  * TEST SUITE
  *****************************************************************************/
 
-SUITE(key_basics_async, "aerospike_key basic tests") {
-	
+SUITE(key_basics_async, "aerospike_key basic tests")
+{	
 	suite_before(before);
 	suite_after(after);
 

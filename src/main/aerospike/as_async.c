@@ -59,38 +59,38 @@ as_async_command_free(as_async_command* cmd)
 	cf_free(cmd);
 }
 
-void
-as_async_init_error(as_async_command* cmd, as_error* err)
-{
-	// Async command could not even be initialized, but node has been reserved.
-	// Release node and make callback and free command.
-	as_node_release(cmd->node);
-	cmd->ucb(err, 0, cmd->udata, cmd->event.event_loop);
-	as_async_command_free(cmd);
-}
-
 static void
 as_async_error_callback(as_async_command* cmd, as_error* err)
 {
 	as_node_release(cmd->node);
-	
-	// Call error callback with formatted message and free command.
-	if (cmd->type == AS_ASYNC_TYPE_RECORD) {
-		cmd->ucb(err, 0, cmd->udata, cmd->event.event_loop);
-	}
-	else {
-		// Handle command that is part of a group (batch, scan, query).
-		as_async_executor* executor = cmd->udata;
+
+	switch (cmd->type) {
+		case AS_ASYNC_TYPE_WRITE:
+			((as_async_write_command*)cmd)->listener(err, cmd->udata, cmd->event.event_loop);
+			break;
+		case AS_ASYNC_TYPE_RECORD:
+			((as_async_record_command*)cmd)->listener(err, 0, cmd->udata, cmd->event.event_loop);
+			break;
+		case AS_ASYNC_TYPE_VALUE:
+			((as_async_value_command*)cmd)->listener(err, 0, cmd->udata, cmd->event.event_loop);
+			break;
 		
-		// Only accept first error in the group.  All commands in group
-		// run on same event_loop, so it does not need to be thread safe.
-		if (executor->err.code == AEROSPIKE_OK) {
-			as_error_copy(&executor->err, err);
-		}
-		
-		if (++executor->count == executor->max) {
-			executor->ucb(&executor->err, 0, executor->udata, executor->event_loop);
-			cf_free(executor);
+		default: {
+			// Handle command that is part of a group (batch, scan, query).
+			// Commands are issued on same event loop, so we can assume single threaded behavior.
+			as_async_executor* executor = cmd->udata;
+			
+			// Notify user of error only once.
+			if (executor->valid) {
+				executor->complete_fn(executor, err);
+				executor->valid = false;
+			}
+			
+			// Only free executor if all outstanding commands are complete.
+			if (++executor->count == executor->max) {
+				cf_free(executor->commands);
+				cf_free(executor);
+			}
 		}
 	}
 	as_async_command_free(cmd);
@@ -127,6 +127,24 @@ as_async_socket_error(as_async_command* cmd, as_error* err)
 }
 
 void
+as_async_timeout(as_async_command* cmd)
+{
+	as_error err;
+	as_error_set_message(&err, AEROSPIKE_ERR_TIMEOUT, as_error_string(AEROSPIKE_ERR_TIMEOUT));
+	
+	// Command has timed out.
+	// Stop watcher if it has been initialized.
+	if (cmd->state > AS_ASYNC_STATE_UNREGISTERED) {
+		as_event_unregister(&cmd->event);
+	}
+	
+	// Assume timer has already been stopped.
+	// Do not put connection back in pool.
+	as_event_close(&cmd->event);
+	as_async_error_callback(cmd, &err);
+}
+
+void
 as_async_response_error(as_async_command* cmd, as_error* err)
 {
 	// Server sent back error.
@@ -149,54 +167,40 @@ as_async_response_error(as_async_command* cmd, as_error* err)
 	as_async_error_callback(cmd, err);
 }
 
-void
-as_async_timeout(as_async_command* cmd)
-{
-	as_error err;
-	as_error_set_message(&err, AEROSPIKE_ERR_TIMEOUT, as_error_string(AEROSPIKE_ERR_TIMEOUT));
-	
-	// Command has timed out.
-	// Stop watcher if it has been initialized.
-	if (cmd->state > AS_ASYNC_STATE_UNREGISTERED) {
-		as_event_unregister(&cmd->event);
-	}
-	
-	// Assume timer has already been stopped.
-	// Do not put connection back in pool.
-	as_event_close(&cmd->event);
-	as_async_error_callback(cmd, &err);
-}
-
-static void
-as_async_record_finish(as_async_command* cmd, void* result)
-{
-	// Command completed without errors.
-	as_async_unregister(cmd);
-	as_async_put_connection(cmd);
-	as_node_release(cmd->node);
-	cmd->ucb(0, result, cmd->udata, cmd->event.event_loop);
-	as_async_command_free(cmd);
-}
-
-void
-as_async_executor_finish(as_async_command* cmd)
+static inline void
+as_async_response_complete(as_async_command* cmd)
 {
 	as_async_unregister(cmd);
 	as_async_put_connection(cmd);
 	as_node_release(cmd->node);
+}
+
+void
+as_async_executor_complete(as_async_command* cmd)
+{
+	as_async_response_complete(cmd);
 	
 	// Only invoke user callback after all node commands have completed.
 	as_async_executor* executor = cmd->udata;
+	
 	if (++executor->count == executor->max) {
-		if (executor->err.code == AEROSPIKE_OK) {
-			// All commands completed without errors.
-			executor->ucb(0, executor->result, executor->udata, executor->event_loop);
+		// All commands completed.
+		if (executor->valid) {
+			executor->complete_fn(executor, 0);
 		}
-		else {
-			// Error has occurred in previous command.
-			executor->ucb(&executor->err, 0, executor->udata, executor->event_loop);
-		}
+		cf_free(executor->commands);
 		cf_free(executor);
+	}
+	else {
+		// Determine if a new command needs to be started.
+		if (executor->valid) {
+			int next = executor->count + executor->max_concurrent - 1;
+		
+			if (next < executor->max) {
+				// Start new command.
+				as_async_command_execute(executor->commands[next]);
+			}
+		}
 	}
 	as_async_command_free(cmd);
 }
@@ -430,10 +434,8 @@ as_async_command_thread_execute(as_async_command* cmd)
 }
 
 void
-as_async_command_execute(as_async_command* cmd, size_t size)
+as_async_command_execute(as_async_command* cmd)
 {
-	cmd->len = (uint32_t)size;
-	
 	// Use pointer comparison for performance.
 	// If portability becomes an issue, use "pthread_equal(event_loop->thread, pthread_self())"
 	// instead.
@@ -674,7 +676,9 @@ as_async_command_parse_header(as_async_command* cmd)
 	uint8_t status = cmd->buf[5];
 	
 	if (status == AEROSPIKE_OK) {
-		as_async_record_finish(cmd, 0);
+		as_async_response_complete(cmd);
+		((as_async_write_command*)cmd)->listener(0, cmd->udata, cmd->event.event_loop);
+		as_async_command_free(cmd);
 	}
 	else {
 		as_error err;
@@ -716,7 +720,9 @@ as_async_command_parse_result(as_async_command* cmd)
 			p = as_command_ignore_fields(p, msg->n_fields);
 			as_command_parse_bins(&rec, p, msg->n_ops, cmd->deserialize);
 		
-			as_async_record_finish(cmd, &rec);
+			as_async_response_complete(cmd);
+			((as_async_record_command*)cmd)->listener(0, &rec, cmd->udata, cmd->event.event_loop);
+			as_async_command_free(cmd);
 			as_record_destroy(&rec);
 			break;
 		}
@@ -760,7 +766,9 @@ as_async_command_parse_success_failure(as_async_command* cmd)
 			status = as_command_parse_success_failure_bins(&p, &err, msg, &val);
 			
 			if (status == AEROSPIKE_OK) {
-				as_async_record_finish(cmd, val);
+				as_async_response_complete(cmd);
+				((as_async_value_command*)cmd)->listener(0, val, cmd->udata, cmd->event.event_loop);
+				as_async_command_free(cmd);
 				as_val_destroy(val);
 			}
 			else {

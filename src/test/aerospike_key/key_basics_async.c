@@ -63,14 +63,14 @@ typedef struct {
  *****************************************************************************/
 
 static bool
-before(atf_suite * suite)
+before(atf_suite* suite)
 {
 	as_monitor_init(&monitor);
 	return true;
 }
 
 static bool
-after(atf_suite * suite)
+after(atf_suite* suite)
 {
 	as_monitor_destroy(&monitor);
 	return true;
@@ -81,25 +81,24 @@ after(atf_suite * suite)
  *****************************************************************************/
 
 static void
-as_get_callback1(as_error* err, void* result, void* udata, as_event_loop* event_loop)
+as_get_callback1(as_error* err, as_record* rec, void* udata, as_event_loop* event_loop)
 {
 	assert_success_async(&monitor, err, udata);
 	
-	as_record* rec = result;
     assert_int_eq_async(&monitor, as_record_numbins(rec), 1);
     assert_int_eq_async(&monitor, as_record_get_int64(rec, "a", 0), 123);
 	as_monitor_notify(&monitor);
 }
 
 static void
-as_put_callback1(as_error* err, void* result, void* udata, as_event_loop* event_loop)
+as_put_callback1(as_error* err, void* udata, as_event_loop* event_loop)
 {
 	assert_success_async(&monitor, err, udata);
 	
 	as_key key;
 	as_key_init(&key, NAMESPACE, SET, "pa1");
 	
-	aerospike_key_get_async(as, NULL, &key, event_loop, false, as_get_callback1, __result__);
+	aerospike_key_get_async(as, NULL, &key, as_get_callback1, __result__, event_loop, false);
 }
 
 TEST(key_basics_async_get, "async get")
@@ -117,7 +116,7 @@ TEST(key_basics_async_get, "async get")
 	as_policy_write_init(&p);
 	p.timeout = 0;
 	
-	aerospike_key_put_async(as, &p, &key, &rec, 0, false, as_put_callback1, __result__);
+	aerospike_key_put_async(as, &p, &key, &rec, as_put_callback1, __result__, 0, false);
 
 	as_key_destroy(&key);
 	as_record_destroy(&rec);
@@ -125,18 +124,17 @@ TEST(key_basics_async_get, "async get")
 }
 
 static void
-as_get_callback2(as_error* err, void* result, void* udata, as_event_loop* event_loop)
+as_get_callback2(as_error* err, as_record* rec, void* udata, as_event_loop* event_loop)
 {
 	assert_success_async(&monitor, err, udata);
 	
-	as_record* rec = result;
     assert_int_eq_async(&monitor, as_record_numbins(rec), 1);
     assert_string_eq_async(&monitor, as_record_get_str(rec, "bbb"), "pa2 value");
 	as_monitor_notify(&monitor);
 }
 
 static void
-as_put_callback2(as_error* err, void* result, void* udata, as_event_loop* event_loop)
+as_put_callback2(as_error* err, void* udata, as_event_loop* event_loop)
 {
 	assert_success_async(&monitor, err, udata);
 	
@@ -144,7 +142,7 @@ as_put_callback2(as_error* err, void* result, void* udata, as_event_loop* event_
 	as_key_init(&key, NAMESPACE, SET, "pa2");
 	const char* select[] = {"bbb", NULL};
 	
-	aerospike_key_select_async(as, NULL, &key, select, event_loop, false, as_get_callback2, __result__);
+	aerospike_key_select_async(as, NULL, &key, select, as_get_callback2, __result__, event_loop, false);
 }
 
 TEST(key_basics_async_select, "async select")
@@ -158,7 +156,7 @@ TEST(key_basics_async_select, "async select")
 	as_record_inita(&rec, 1);
 	as_record_set_strp(&rec, "bbb", "pa2 value", false);
 	
-	aerospike_key_put_async(as, NULL, &key, &rec, 0, false, as_put_callback2, __result__);
+	aerospike_key_put_async(as, NULL, &key, &rec, as_put_callback2, __result__, 0, false);
 	
 	as_key_destroy(&key);
 	as_record_destroy(&rec);
@@ -166,11 +164,10 @@ TEST(key_basics_async_select, "async select")
 }
 
 static void
-as_get_callback_found(as_error* err, void* result, void* udata, as_event_loop* event_loop)
+as_get_callback_found(as_error* err, as_record* rec, void* udata, as_event_loop* event_loop)
 {
 	assert_success_async(&monitor, err, udata);
 	
-	as_record* rec = result;
     assert_async(&monitor, rec);
     assert_int_eq_async(&monitor, as_record_numbins(rec), 0);
     assert_async(&monitor, rec->gen > 0);
@@ -183,11 +180,11 @@ as_get_callback_found(as_error* err, void* result, void* udata, as_event_loop* e
 }
 
 static void
-as_get_callback_not_found(as_error* err, void* result, void* udata, as_event_loop* event_loop)
+as_get_callback_not_found(as_error* err, as_record* rec, void* udata, as_event_loop* event_loop)
 {
 	atf_test_result* __result__ = udata;
     assert_async(&monitor, err && err->code == AEROSPIKE_ERR_RECORD_NOT_FOUND);
-    assert_async(&monitor, !result);
+    assert_async(&monitor, !rec);
 	
 	counter_data* cdata = udata;
 	cdata->counter++;
@@ -197,16 +194,16 @@ as_get_callback_not_found(as_error* err, void* result, void* udata, as_event_loo
 }
 
 static void
-as_put_callback3(as_error* err, void* result, void* udata, as_event_loop* event_loop)
+as_put_callback3(as_error* err, void* udata, as_event_loop* event_loop)
 {
 	assert_success_async(&monitor, err, udata);
 	
 	as_key key;
 	as_key_init(&key, NAMESPACE, SET, "pa3");
-	aerospike_key_exists_async(as, NULL, &key, event_loop, false, as_get_callback_found, udata);
+	aerospike_key_exists_async(as, NULL, &key, as_get_callback_found, udata, event_loop, false);
 	
 	as_key_init(&key, NAMESPACE, SET, "notfound");
-	aerospike_key_exists_async(as, NULL, &key, event_loop, false, as_get_callback_not_found, udata);
+	aerospike_key_exists_async(as, NULL, &key, as_get_callback_not_found, udata, event_loop, false);
 }
 
 TEST(key_basics_async_exists, "async exists")
@@ -224,7 +221,7 @@ TEST(key_basics_async_exists, "async exists")
 	as_record_inita(&rec, 1);
 	as_record_set_int64(&rec, "c", 55);
 	
-	aerospike_key_put_async(as, NULL, &key, &rec, 0, false, as_put_callback3, &udata);
+	aerospike_key_put_async(as, NULL, &key, &rec, as_put_callback3, &udata, 0, false);
 	
 	as_key_destroy(&key);
 	as_record_destroy(&rec);
@@ -232,20 +229,20 @@ TEST(key_basics_async_exists, "async exists")
 }
 
 static void
-as_remove_callback(as_error* err, void* result, void* udata, as_event_loop* event_loop)
+as_remove_callback(as_error* err, void* udata, as_event_loop* event_loop)
 {
 	assert_success_async(&monitor, err, udata);
 	as_monitor_notify(&monitor);
 }
 
 static void
-as_put_callback4(as_error* err, void* result, void* udata, as_event_loop* event_loop)
+as_put_callback4(as_error* err, void* udata, as_event_loop* event_loop)
 {
 	assert_success_async(&monitor, err, udata);
 	
 	as_key key;
 	as_key_init(&key, NAMESPACE, SET, "pa4");
-	aerospike_key_remove_async(as, NULL, &key, event_loop, false, as_remove_callback, __result__);
+	aerospike_key_remove_async(as, NULL, &key, as_remove_callback, __result__, event_loop, false);
 }
 
 TEST(key_basics_async_remove, "async remove")
@@ -259,7 +256,7 @@ TEST(key_basics_async_remove, "async remove")
 	as_record_inita(&rec, 1);
 	as_record_set_int64(&rec, "c", 55);
 	
-	aerospike_key_put_async(as, NULL, &key, &rec, 0, false, as_put_callback4, __result__);
+	aerospike_key_put_async(as, NULL, &key, &rec, as_put_callback4, __result__, 0, false);
 	
 	as_key_destroy(&key);
 	as_record_destroy(&rec);
@@ -267,11 +264,10 @@ TEST(key_basics_async_remove, "async remove")
 }
 
 static void
-as_operate_callback(as_error* err, void* result, void* udata, as_event_loop* event_loop)
+as_operate_callback(as_error* err, as_record* rec, void* udata, as_event_loop* event_loop)
 {
 	assert_success_async(&monitor, err, udata);
 	
-	as_record* rec = result;
     assert_async(&monitor, rec);
     assert_int_eq_async(&monitor, as_record_numbins(rec), 2);
     assert_int_eq_async(&monitor, as_record_get_int64(rec, "a", 0), 316);
@@ -280,7 +276,7 @@ as_operate_callback(as_error* err, void* result, void* udata, as_event_loop* eve
 }
 
 static void
-as_put_operate_callback(as_error* err, void* result, void* udata, as_event_loop* event_loop)
+as_put_operate_callback(as_error* err, void* udata, as_event_loop* event_loop)
 {
 	assert_success_async(&monitor, err, udata);
 	
@@ -295,7 +291,7 @@ as_put_operate_callback(as_error* err, void* result, void* udata, as_event_loop*
 	as_operations_add_read(&ops, "a");
 	as_operations_add_read(&ops, "b");
 	
-	aerospike_key_operate_async(as, NULL, &key, &ops, event_loop, false, as_operate_callback, __result__);
+	aerospike_key_operate_async(as, NULL, &key, &ops, as_operate_callback, __result__, event_loop, false);
 
 	as_key_destroy(&key);
 	as_operations_destroy(&ops);
@@ -313,7 +309,7 @@ TEST(key_basics_async_operate, "async operate")
 	as_record_set_int64(&rec, "a", 321);
 	as_record_set_strp(&rec, "b", "mid", false);
 
-	aerospike_key_put_async(as, NULL, &key, &rec, 0, false, as_put_operate_callback, __result__);
+	aerospike_key_put_async(as, NULL, &key, &rec, as_put_operate_callback, __result__, 0, false);
 	
 	as_key_destroy(&key);
 	as_monitor_wait(&monitor);

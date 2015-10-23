@@ -140,6 +140,21 @@ typedef bool (*aerospike_batch_read_callback)(const as_batch_read* results, uint
  *	as soon as they are received in no particular order.
  */
 typedef bool (*as_batch_callback_xdr)(as_key* key, as_record* record, void* udata);
+	
+/**
+ *	Asynchronous batch user callback.  This function is called once when the batch completes or an
+ *	error has occurred.
+ *
+ *	@param err			This error structure is only populated when the command fails. Null on success.
+ *	@param records 		Returned records.  Records must be destroyed with as_batch_read_destroy() when done.
+ *	@param udata 		User data that is forwarded from asynchronous command function.
+ *	@param event_loop 	Event loop that this command was executed on.  Use this event loop when running
+ *						nested asynchronous commands when single threaded behavior is desired for the
+ *						group of commands.
+ *
+ *	@ingroup batch_operations
+ */
+typedef void (*as_async_batch_listener)(as_error* err, as_batch_read_records* records, void* udata, as_event_loop* event_loop);
 
 /******************************************************************************
  *	FUNCTIONS
@@ -282,19 +297,20 @@ aerospike_batch_read(
  *	This method requires Aerospike Server version >= 3.6.0.
  *
  *	~~~~~~~~~~{.c}
- *	void my_callback(as_error* err, void* result, void* udata, as_event_loop* event_loop)
+ *	void my_listener(as_error* err, as_batch_read_records* records, void* udata, as_event_loop* event_loop)
  *	{
  *		if (err) {
  *			fprintf(stderr, "Command failed: %d %s\n", err->code, err->message);
  *			return;
  *		}
- *		as_batch_read_records* records = result;
- *		as_vector* list = &records->list;
- *		for (uint32_t i = 0; i < list->size; i++) {
- *			as_batch_read_record* record = as_vector_get(list, i);
- *			// Process record
+ *		else {
+ *			as_vector* list = &records->list;
+ *			for (uint32_t i = 0; i < list->size; i++) {
+ *				as_batch_read_record* record = as_vector_get(list, i);
+ *				// Process record
+ *			}
+ *			// Do not call as_batch_read_destroy() because the calling function will do that for you.
  *		}
- *		as_batch_read_destroy(records);
  *	}
  *
  *	as_batch_read_records* records = as_batch_read_create(10);
@@ -312,23 +328,23 @@ aerospike_batch_read(
  *	as_key_init(&record->key, ns, set, "key2");
  *	record->read_all_bins = true;
  *
- *	aerospike_batch_read_async(&as, &err, NULL, records, NULL, my_callback, NULL);
+ *	aerospike_batch_read_async(&as, &err, NULL, records, NULL, my_listener, NULL);
  *	~~~~~~~~~~
  *
  *	@param as			The aerospike instance to use for this operation.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param records		List of keys and bins to retrieve.  The returned records are located in the same array.
  *						Must be allocated on heap because async method will return immediately after queueing command.
- *	@param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
- *	@param ucb 			User function to be called with command results.
+ *	@param listener 	User function to be called with command results.
  *	@param udata 		User data to be forwarded to user callback.
+ *	@param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
  *
  *	@ingroup batch_operations
  */
 void
 aerospike_batch_read_async(
 	aerospike* as, const as_policy_batch* policy, as_batch_read_records* records,
-	as_event_loop* event_loop, as_async_callback_fn ucb, void* udata
+	as_async_batch_listener listener, void* udata, as_event_loop* event_loop
 	);
 
 /**

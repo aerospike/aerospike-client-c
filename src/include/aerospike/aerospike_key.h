@@ -74,20 +74,20 @@ extern "C" {
  *	@ingroup key_operations
  */
 as_status
-aerospike_key_get(aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key,
-	as_record** rec);
+aerospike_key_get(
+	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, as_record** rec
+	);
 
 /**
  *	Asynchronously look up a record by key and return all bins.
  *
  *	~~~~~~~~~~{.c}
- *	void my_callback(as_error* err, void* result, void* udata, as_event_loop* event_loop)
+ *	void my_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
  *	{
  *		if (err) {
  *			printf("Command failed: %d %s\n", err->code, err->message);
  *			return;
  *		}
- *		as_record* rec = result;
  *		// Process record bins
  *		// Do not call as_record_destroy() because the calling function will do that for you.
  *	}
@@ -95,22 +95,24 @@ aerospike_key_get(aerospike* as, as_error* err, const as_policy_read* policy, co
  *	as_key key;
  *	as_key_init(&key, "ns", "set", "key");
  *
- *	aerospike_key_get_async(&as, NULL, &key, NULL, false, my_callback, NULL);
+ *	aerospike_key_get_async(&as, NULL, &key, my_listener, NULL, NULL, false);
  *	~~~~~~~~~~
  *
  *	@param as			The aerospike instance to use for this operation.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param key			The key of the record.
+ *	@param listener 	User function to be called with command results.
+ *	@param udata 		User data to be forwarded to user callback.
  *	@param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
  *	@param pipeline 	Should responses be combined with other responses before sending back to client.
- *	@param ucb 			User function to be called with command results.
- *	@param udata 		User data to be forwarded to user callback.
  *
  *	@ingroup key_operations
  */
 void
-aerospike_key_get_async(aerospike* as, const as_policy_read* policy, const as_key* key,
-	as_event_loop* event_loop, bool pipeline, as_async_callback_fn ucb, void* udata);
+aerospike_key_get_async(
+	aerospike* as, const as_policy_read* policy, const as_key* key,
+	as_async_record_listener listener, void* udata, as_event_loop* event_loop, bool pipeline
+	);
 
 /**
  *	Lookup a record by key, then return specified bins.
@@ -142,20 +144,21 @@ aerospike_key_get_async(aerospike* as, const as_policy_read* policy, const as_ke
  *	@ingroup key_operations
  */
 as_status
-aerospike_key_select(aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key,
-	const char* bins[], as_record** rec);
+aerospike_key_select(
+	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key,
+	const char* bins[], as_record** rec
+	);
 
 /**
  *	Asynchronously lookup a record by key, then return specified bins.
  *
  *	~~~~~~~~~~{.c}
- *	void my_callback(as_error* err, void* result, void* udata, as_event_loop* event_loop)
+ *	void my_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
  *	{
  *		if (err) {
  *			printf("Command failed: %d %s\n", err->code, err->message);
  *			return;
  *		}
- *		as_record* rec = result;
  *		// Process record bins
  *		// Do not call as_record_destroy() because the calling function will do that for you.
  *	}
@@ -165,24 +168,25 @@ aerospike_key_select(aerospike* as, as_error* err, const as_policy_read* policy,
  *	as_key key;
  *	as_key_init(&key, "ns", "set", "key");
  *
- *	aerospike_key_select_async(&as, &err, NULL, &key, select, NULL, false, my_callback, NULL);
+ *	aerospike_key_select_async(&as, &err, NULL, &key, select, my_listener, NULL, NULL, false);
  *	~~~~~~~~~~
  *
  *	@param as			The aerospike instance to use for this operation.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param key			The key of the record.
  *	@param bins			The bins to select. A NULL terminated array of NULL terminated strings.
+ *	@param listener 	User function to be called with command results.
+ *	@param udata 		User data to be forwarded to user callback.
  *	@param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
  *	@param pipeline 	Should responses be combined with other responses before sending back to client.
- *	@param ucb 			User function to be called with command results.
- *	@param udata 		User data to be forwarded to user callback.
  *
  *	@ingroup key_operations
  */
 void
-aerospike_key_select_async(aerospike* as, const as_policy_read* policy, const as_key* key,
-	const char* bins[], as_event_loop* event_loop, bool pipeline, as_async_callback_fn ucb,
-	void* udata);
+aerospike_key_select_async(
+	aerospike* as, const as_policy_read* policy, const as_key* key, const char* bins[],
+	as_async_record_listener listener, void* udata, as_event_loop* event_loop, bool pipeline
+	);
 
 /**
  *	Check if a record exists in the cluster via its key. The record's metadata 
@@ -218,22 +222,22 @@ aerospike_key_select_async(aerospike* as, const as_policy_read* policy, const as
  *	@ingroup key_operations
  */
 as_status
-aerospike_key_exists(aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key,
-	as_record** rec);
+aerospike_key_exists(
+	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, as_record** rec
+	);
 
 /**
  *	Asynchronously check if a record exists in the cluster via its key. The record's metadata
  * 	will be populated if the record exists.
  *
  *	~~~~~~~~~~{.c}
- *	void my_callback(as_error* err, void* result, void* udata, as_event_loop* event_loop)
+ *	void my_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
  *	{
  *		if (err) {
  *			printf("Command failed: %d %s\n", err->code, err->message);
  *			return;
  *		}
- *		as_record* rec = result;
- *		if (rec) {
+ *		if (record) {
  *			printf("Record exists.");
  *			// Do not call as_record_destroy() because the calling function will do that for you.
  *		}
@@ -245,22 +249,24 @@ aerospike_key_exists(aerospike* as, as_error* err, const as_policy_read* policy,
  *	as_key key;
  *	as_key_init(&key, "ns", "set", "key");
  *
- *	aerospike_key_exists_async(&as, &err, NULL, &key, NULL, false, my_callback, NULL);
+ *	aerospike_key_exists_async(&as, &err, NULL, &key, my_listener, NULL, NULL, false);
  *	~~~~~~~~~~
  *
  *	@param as			The aerospike instance to use for this operation.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param key			The key of the record.
+ *	@param listener		User function to be called with command results.
+ *	@param udata 		User data to be forwarded to user callback.
  *	@param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
  *	@param pipeline 	Should responses be combined with other responses before sending back to client.
- *	@param ucb 			User function to be called with command results.
- *	@param udata 		User data to be forwarded to user callback.
  *
  *	@ingroup key_operations
  */
 void
-aerospike_key_exists_async(aerospike* as, const as_policy_read* policy, const as_key* key,
-	as_event_loop* event_loop, bool pipeline, as_async_callback_fn ucb, void* udata);
+aerospike_key_exists_async(
+	aerospike* as, const as_policy_read* policy, const as_key* key,
+	as_async_record_listener listener, void* udata, as_event_loop* event_loop, bool pipeline
+	);
 
 /**
  *	Store a record in the cluster.
@@ -291,14 +297,15 @@ aerospike_key_exists_async(aerospike* as, const as_policy_read* policy, const as
  *	@ingroup key_operations
  */
 as_status
-aerospike_key_put(aerospike* as, as_error* err, const as_policy_write* policy, const as_key* key,
-	as_record* rec);
+aerospike_key_put(
+	aerospike* as, as_error* err, const as_policy_write* policy, const as_key* key, as_record* rec
+	);
 
 /**
  *	Asynchronously store a record in the cluster.
  *
  *	~~~~~~~~~~{.c}
- *	void my_callback(as_error* err, void* result, void* udata, as_event_loop* event_loop)
+ *	void my_listener(as_error* err, void* udata, as_event_loop* event_loop)
  *	{
  *		if (err) {
  *			printf("Command failed: %d %s\n", err->code, err->message);
@@ -315,7 +322,7 @@ aerospike_key_put(aerospike* as, as_error* err, const as_policy_write* policy, c
  *	as_record_set_str(&rec, "bin1", "abc");
  *	as_record_set_int64(&rec, "bin2", 123);
  *
- *	aerospike_key_put_async(&as, NULL, &key, &rec, NULL, false, my_callback, NULL);
+ *	aerospike_key_put_async(&as, NULL, &key, &rec, my_listener, NULL, NULL, false);
  *	as_record_destroy(&rec);
  *	~~~~~~~~~~
  *
@@ -323,16 +330,18 @@ aerospike_key_put(aerospike* as, as_error* err, const as_policy_write* policy, c
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param key			The key of the record.
  *	@param rec 			The record containing the data to be written.
+ *	@param listener		User function to be called with command results.
+ *	@param udata 		User data to be forwarded to user callback.
  *	@param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
  *	@param pipeline 	Should responses be combined with other responses before sending back to client.
- *	@param ucb 			User function to be called with command results.
- *	@param udata 		User data to be forwarded to user callback.
  *
  *	@ingroup key_operations
  */
 void
-aerospike_key_put_async(aerospike* as, const as_policy_write* policy, const as_key* key,
-	as_record* rec, as_event_loop* event_loop, bool pipeline, as_async_callback_fn ucb, void* udata);
+aerospike_key_put_async(
+	aerospike* as, const as_policy_write* policy, const as_key* key, as_record* rec,
+	as_async_write_listener listener, void* udata, as_event_loop* event_loop, bool pipeline
+	);
 
 /**
  *	Remove a record from the cluster.
@@ -356,13 +365,15 @@ aerospike_key_put_async(aerospike* as, const as_policy_write* policy, const as_k
  *	@ingroup key_operations
  */
 as_status
-aerospike_key_remove(aerospike* as, as_error* err, const as_policy_remove* policy, const as_key* key);
+aerospike_key_remove(
+	aerospike* as, as_error* err, const as_policy_remove* policy, const as_key* key
+	);
 
 /**
  *	Asynchronously remove a record from the cluster.
  *
  *	~~~~~~~~~~{.c}
- *	void my_callback(as_error* err, void* result, void* udata, as_event_loop* event_loop)
+ *	void my_listener(as_error* err, void* udata, as_event_loop* event_loop)
  *	{
  *		if (err) {
  *			printf("Command failed: %d %s\n", err->code, err->message);
@@ -374,22 +385,24 @@ aerospike_key_remove(aerospike* as, as_error* err, const as_policy_remove* polic
  *	as_key key;
  *	as_key_init(&key, "ns", "set", "key");
  *
- *	aerospike_key_remove(&as, &err, NULL, &key, NULL, false, my_callback, NULL);
+ *	aerospike_key_remove(&as, &err, NULL, &key, my_listener, NULL, NULL, false);
  *	~~~~~~~~~~
  *
  *	@param as			The aerospike instance to use for this operation.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param key			The key of the record.
+ *	@param listener 	User function to be called with command results.
+ *	@param udata 		User data to be forwarded to user callback.
  *	@param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
  *	@param pipeline 	Should responses be combined with other responses before sending back to client.
- *	@param ucb 			User function to be called with command results.
- *	@param udata 		User data to be forwarded to user callback.
  *
  *	@ingroup key_operations
  */
 void
-aerospike_key_remove_async(aerospike* as, const as_policy_remove* policy, const as_key* key,
-   as_event_loop* event_loop, bool pipeline, as_async_callback_fn ucb, void* udata);
+aerospike_key_remove_async(
+	aerospike* as, const as_policy_remove* policy, const as_key* key,
+	as_async_write_listener listener, void* udata, as_event_loop* event_loop, bool pipeline
+	);
 
 /**
  *	Lookup a record by key, then perform specified operations.
@@ -427,20 +440,21 @@ aerospike_key_remove_async(aerospike* as, const as_policy_remove* policy, const 
  *	@ingroup key_operations
  */
 as_status
-aerospike_key_operate(aerospike* as, as_error* err, const as_policy_operate* policy,
-	const as_key* key, const as_operations* ops, as_record** rec);
+aerospike_key_operate(
+	aerospike* as, as_error* err, const as_policy_operate* policy, const as_key* key,
+	const as_operations* ops, as_record** rec
+	);
 
 /**
  *	Asynchronously lookup a record by key, then perform specified operations.
  *
  *	~~~~~~~~~~{.c}
- *	void my_callback(as_error* err, void* result, void* udata, as_event_loop* event_loop)
+ *	void my_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
  *	{
  *		if (err) {
  *			printf("Command failed: %d %s\n", err->code, err->message);
  *			return;
  *		}
- *		as_record* rec = result;
  *		// Process record bins
  *		// Do not call as_record_destroy() because the calling function will do that for you.
  *	}
@@ -454,7 +468,7 @@ aerospike_key_operate(aerospike* as, as_error* err, const as_policy_operate* pol
  *	as_operations_add_append_str(&ops, "bin2", "def");
  *	as_operations_add_read(&ops, "bin1")
  *
- *	aerospike_key_operate(&as, &err, NULL, &key, &ops, NULL, false, my_callback, NULL);
+ *	aerospike_key_operate(&as, &err, NULL, &key, &ops, my_listener, NULL, NULL, false);
  *	as_operations_destroy(&ops);
  *	~~~~~~~~~~
  *
@@ -462,17 +476,18 @@ aerospike_key_operate(aerospike* as, as_error* err, const as_policy_operate* pol
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param key			The key of the record.
  *	@param ops			The operations to perform on the record.
+ *	@param listener		User function to be called with command results.
+ *	@param udata 		User data to be forwarded to user callback.
  *	@param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
  *	@param pipeline 	Should responses be combined with other responses before sending back to client.
- *	@param ucb 			User function to be called with command results.
- *	@param udata 		User data to be forwarded to user callback.
  *
  *	@ingroup key_operations
  */
 void
-aerospike_key_operate_async(aerospike* as, const as_policy_operate* policy, const as_key* key,
-	const as_operations* ops, as_event_loop* event_loop, bool pipeline, as_async_callback_fn ucb,
-	void* udata);
+aerospike_key_operate_async(
+	aerospike* as, const as_policy_operate* policy, const as_key* key, const as_operations* ops,
+	as_async_record_listener listener, void* udata, as_event_loop* event_loop, bool pipeline
+	);
 
 /**
  *	Lookup a record by key, then apply the UDF.
@@ -523,13 +538,12 @@ as_status aerospike_key_apply(
  *	Asynchronously lookup a record by key, then apply the UDF.
  *
  *	~~~~~~~~~~{.c}
- *	void my_callback(as_error* err, void* result, void* udata, as_event_loop* event_loop)
+ *	void my_listener(as_error* err, as_val* val, void* udata, as_event_loop* event_loop)
  *	{
  *		if (err) {
  *			printf("Command failed: %d %s\n", err->code, err->message);
  *			return;
  *		}
- *		as_val* val = result;
  *		// Process value.  The calling function will call as_val_destroy().
  *		// If the value needs to be preserved, bump up the reference count using as_val_reserve()
  *		// and call as_val_destroy() when done with the value.
@@ -543,7 +557,7 @@ as_status aerospike_key_apply(
  *	as_arraylist_append_int64(&args, 1);
  *	as_arraylist_append_int64(&args, 2);
  *
- *	aerospike_key_apply(&as, &err, NULL, &key, "math", "add", &args, NULL, false, my_callback, NULL);
+ *	aerospike_key_apply(&as, &err, NULL, &key, "math", "add", &args, my_listener, NULL, NULL, false);
  *	as_arraylist_destroy(&args);
  *	~~~~~~~~~~
  *
@@ -553,17 +567,19 @@ as_status aerospike_key_apply(
  *	@param module		The module containing the function to execute.
  *	@param function 	The function to execute.
  *	@param arglist 		The arguments for the function.
+ *	@param listener		User function to be called with command results.
+ *	@param udata 		User data to be forwarded to user callback.
  *	@param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
  *	@param pipeline 	Should responses be combined with other responses before sending back to client.
- *	@param ucb 			User function to be called with command results.
- *	@param udata 		User data to be forwarded to user callback.
  *
  *	@ingroup key_operations
  */
 void
-aerospike_key_apply_async(aerospike* as, const as_policy_apply* policy, const as_key* key,
+aerospike_key_apply_async(
+	aerospike* as, const as_policy_apply* policy, const as_key* key,
 	const char* module, const char* function, as_list* arglist,
-	as_event_loop* event_loop, bool pipeline, as_async_callback_fn ucb, void* udata);
+	as_async_value_listener listener, void* udata, as_event_loop* event_loop, bool pipeline
+	);
 	
 /**
  *	Do the connected servers support the new floating point type.

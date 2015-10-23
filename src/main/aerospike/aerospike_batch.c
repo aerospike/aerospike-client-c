@@ -73,6 +73,17 @@ typedef struct as_batch_complete_task_s {
 	as_status result;
 } as_batch_complete_task;
 
+typedef struct {
+	as_async_executor executor;
+	as_batch_read_records* records;
+	as_async_batch_listener listener;
+} as_async_batch_executor;
+
+typedef struct as_async_batch_command {
+	as_async_command command;
+	uint8_t space[];
+} as_async_batch_command;
+
 /******************************************************************************
  *	STATIC FUNCTIONS
  *****************************************************************************/
@@ -109,12 +120,20 @@ as_batch_parse_record(uint8_t* p, as_msg* msg, as_record* rec, bool deserialize)
 	return as_command_parse_bins(rec, p, msg->n_ops, deserialize);
 }
 
+static void
+as_batch_complete_async(as_async_executor* executor, as_error* err)
+{
+	as_async_batch_executor* e = (as_async_batch_executor*)executor;
+	e->listener(err, e->records, executor->udata, executor->event_loop);
+	as_batch_read_destroy(e->records);
+	e->records = 0;
+}
+
 static bool
 as_batch_async_parse_records(as_async_command* cmd)
 {
-	as_async_executor* executor = cmd->udata;  // udata is overloaded to contain executor.
-	as_batch_read_records* read_records = (as_batch_read_records*)executor->result;
-	as_vector* records = &read_records->list;
+	as_async_batch_executor* executor = cmd->udata;  // udata is overloaded to contain executor.
+	as_vector* records = &executor->records->list;
 	uint8_t* p = cmd->buf;
 	uint8_t* end = p + cmd->len;
 	
@@ -131,7 +150,7 @@ as_batch_async_parse_records(as_async_command* cmd)
 		p += sizeof(as_msg);
 		
 		if (msg->info3 & AS_MSG_INFO3_LAST) {
-			as_async_executor_finish(cmd);
+			as_async_executor_complete(cmd);
 			return true;
 		}
 		
@@ -921,10 +940,11 @@ as_batch_read_execute_sync(
 static void
 as_batch_read_execute_async(
 	as_cluster* cluster, const as_policy_batch* policy, as_vector* records, uint32_t n_batch_nodes,
-	as_batch_node* batch_nodes, as_async_executor* executor
+	as_batch_node* batch_nodes, as_async_batch_executor* executor
 	)
 {
-	executor->max = n_batch_nodes;
+	as_async_executor* exec = &executor->executor;
+	exec->max_concurrent = exec->max = n_batch_nodes;
 	
 	for (uint32_t i = 0; i < n_batch_nodes; i++) {
 		as_batch_node* batch_node = &batch_nodes[i];
@@ -934,19 +954,17 @@ as_batch_read_execute_async(
 		
 		// Allocate enough memory to cover, then, round up memory size in 8KB increments to reduce
 		// fragmentation and to allow socket read to reuse buffer.
-		size_t s = (sizeof(as_async_command) + size + AS_AUTHENTICATION_MAX_SIZE + 8191) & ~8191;
+		size_t s = (sizeof(as_async_batch_command) + size + AS_AUTHENTICATION_MAX_SIZE + 8191) & ~8191;
 		as_async_command* cmd = cf_malloc(s);
-		cmd->event.event_loop = executor->event_loop;
+		cmd->event.event_loop = exec->event_loop;
 		cmd->event.fd = -1;
 		cmd->event.timeout_ms = policy->timeout;
 		cmd->cluster = cluster;
 		cmd->node = batch_node->node;
-		cmd->ucb = 0;           // Real user callback is located in executor.
 		cmd->udata = executor;  // Overload udata to be the executor.
 		cmd->parse_results = as_batch_async_parse_records;
-		cmd->buf = cmd->space;
+		cmd->buf = ((as_async_batch_command*)cmd)->space;
 		cmd->capacity = (uint32_t)(s - sizeof(as_async_command));
-		cmd->len = 0;
 		cmd->pos = 0;
 		cmd->auth_len = 0;
 		cmd->type = AS_ASYNC_TYPE_BATCH;
@@ -954,16 +972,16 @@ as_batch_read_execute_async(
 		cmd->pipeline = false;
 		cmd->deserialize = policy->deserialize;
 		cmd->free_buf = false;
+		cmd->len = (uint32_t)as_batch_index_records_write(records, &batch_node->offsets, policy->timeout, policy->allow_inline, cmd->buf);
 		
-		size = as_batch_index_records_write(records, &batch_node->offsets, policy->timeout, policy->allow_inline, cmd->buf);
-		as_async_command_execute(cmd, size);
+		as_async_command_execute(cmd);
 	}
 }
 
 static as_status
 as_batch_read_execute(
 	aerospike* as, as_error* err, const as_policy_batch* policy, as_batch_read_records* records,
-	as_async_executor* executor
+	as_async_batch_executor* executor
 	)
 {
 	as_error_reset(err);
@@ -1087,12 +1105,6 @@ aerospike_has_batch_index(aerospike* as)
 	return true;
 }
 
-/**
- *	Read multiple records for specified batch keys in one batch call.
- *	This method allows different namespaces/bins to be requested for each key in the batch.
- *	The returned records are located in the same batch array.
- *	This method requires Aerospike Server version >= 3.6.0.
- */
 as_status
 aerospike_batch_read(
 	aerospike* as, as_error* err, const as_policy_batch* policy, as_batch_read_records* records
@@ -1104,30 +1116,38 @@ aerospike_batch_read(
 void
 aerospike_batch_read_async(
 	aerospike* as, const as_policy_batch* policy, as_batch_read_records* records,
-	as_event_loop* event_loop, as_async_callback_fn ucb, void* udata
+	as_async_batch_listener listener, void* udata, as_event_loop* event_loop
 	)
 {
 	// Check for empty batch.
 	if (records->list.size == 0) {
-		ucb(0, records, udata, event_loop);
+		listener(0, records, udata, event_loop);
+		as_batch_read_destroy(records);
 		return;
 	}
 	
-	// Batch will be split up into multiple commands for each node.
+	// Batch will be split up into a command for each node.
 	// Allocate batch data shared by each command.
-	as_async_executor* executor = cf_malloc(sizeof(as_async_executor));
-	executor->max = 0;
-	executor->count = 0;
-	executor->ucb = ucb;
-	executor->udata = udata;
-	executor->result = records;
-	executor->event_loop = as_event_assign(event_loop);
+	as_async_batch_executor* executor = cf_malloc(sizeof(as_async_batch_executor));
+	as_async_executor* exec = &executor->executor;
+	exec->commands = 0;
+	exec->event_loop = as_event_assign(event_loop);
+	exec->complete_fn = as_batch_complete_async;
+	exec->udata = udata;
+	exec->max_concurrent = 0;
+	exec->max = 0;
+	exec->count = 0;
+	exec->valid = true;
+	executor->records = records;
+	executor->listener = listener;
 	
-	as_status status = as_batch_read_execute(as, &executor->err, policy, records, executor);
+	as_error err;
+	as_status status = as_batch_read_execute(as, &err, policy, records, executor);
 	
 	if (status != AEROSPIKE_OK) {
-		ucb(&executor->err, 0, udata, event_loop);
+		listener(&err, records, udata, event_loop);
 		cf_free(executor);  // Only need to free on error.
+		as_batch_read_destroy(records);
 	}
 }
 

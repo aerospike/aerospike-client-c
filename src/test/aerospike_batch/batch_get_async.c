@@ -40,14 +40,14 @@ static as_monitor monitor;
  *****************************************************************************/
 
 static bool
-before(atf_suite * suite)
+before(atf_suite* suite)
 {
 	as_monitor_init(&monitor);
 	return true;
 }
 
 static bool
-after(atf_suite * suite)
+after(atf_suite* suite)
 {
 	as_monitor_destroy(&monitor);
 	return true;
@@ -96,11 +96,10 @@ TEST(batch_async_pre , "Batch Async: Create Records")
 }
 
 static void
-batch_callback(as_error* err, void* result, void* udata, as_event_loop* event_loop)
+batch_callback(as_error* err, as_batch_read_records* records, void* udata, as_event_loop* event_loop)
 {
 	assert_success_async(&monitor, err, udata);
 
-	as_batch_read_records* records = result;
 	as_vector* list = &records->list;
 	uint32_t found = 0;
 	uint32_t errors = 0;
@@ -138,7 +137,6 @@ batch_callback(as_error* err, void* result, void* udata, as_event_loop* event_lo
 			error("Unexpected error(%u): %s", i, as_error_string(batch->result));
 		}
 	}
-	as_batch_read_destroy(records);
 	
     assert_int_eq_async(&monitor, found, 8);
     assert_int_eq_async(&monitor, errors, 0);
@@ -201,7 +199,7 @@ TEST(batch_async_read_complex, "Batch Async Read Complex")
 	record->bin_names = bins;
 	record->n_bin_names = n_bins;
 
-	aerospike_batch_read_async(as, NULL, records, NULL, batch_callback, __result__);
+	aerospike_batch_read_async(as, NULL, records, batch_callback, __result__, NULL);
 }
 
 TEST(batch_async_post, "Batch Async: Remove Records")
@@ -227,7 +225,7 @@ TEST(batch_async_post, "Batch Async: Remove Records")
  * TEST SUITE
  *****************************************************************************/
 
-SUITE(batch_async_get, "aerospike batch async tests")
+SUITE(batch_async, "aerospike batch async tests")
 {
 	suite_before(before);
 	suite_after(after);

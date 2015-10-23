@@ -93,8 +93,10 @@
  */
 
 #include <aerospike/aerospike.h>
+#include <aerospike/as_async.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_policy.h>
+#include <aerospike/as_record.h>
 #include <aerospike/as_scan.h>
 #include <aerospike/as_status.h>
 #include <aerospike/as_val.h>
@@ -108,7 +110,7 @@ extern "C" {
  *****************************************************************************/
 
 /**
- *	This callback will be called for each value or record returned from a scan.
+ *	This callback will be called for each value or record returned from a synchronous scan.
  *	Multiple threads will likely be calling this callback in parallel.  Therefore,
  *	your callback implementation should be thread safe.
  *
@@ -125,11 +127,29 @@ extern "C" {
  *	@param val 			The value received from the query.
  *	@param udata 		User-data provided to the calling function.
  *
- *	@return `true` to continue to the next value. Otherwise, iteration will end.
+ *	@return `true` to continue to the next value. Otherwise, the scan will end.
  *
  *	@ingroup scan_operations
  */
-typedef bool (* aerospike_scan_foreach_callback)(const as_val * val, void * udata);
+typedef bool (*aerospike_scan_foreach_callback)(const as_val* val, void* udata);
+
+/**
+ *	Asynchronous scan user callback.  This function is called for each record returned.
+ *	This function is also called once when the scan completes or an error has occurred.
+ *
+ *	@param err			This error structure is only populated when the command fails. Null on success.
+ *	@param record 		Returned record.  Use as_val_reserve() on record to prevent calling function from destroying.
+ *						The record will be null on final scan completion or scan error.
+ *	@param udata 		User data that is forwarded from asynchronous command function.
+ *	@param event_loop 	Event loop that this command was executed on.  Use this event loop when running
+ *						nested asynchronous commands when single threaded behavior is desired for the
+ *						group of commands.
+ *
+ *	@return `true` to continue to the next value. Otherwise, the scan will end.
+ *
+ *	@ingroup scan_operations
+ */
+typedef bool (*as_async_scan_listener)(as_error* err, as_record* record, void* udata, as_event_loop* event_loop);
 
 /******************************************************************************
  *	FUNCTIONS
@@ -147,13 +167,12 @@ typedef bool (* aerospike_scan_foreach_callback)(const as_val * val, void * udat
  *	
  *	uint64_t scanid = 0;
  *	
- *	if ( aerospike_scan_background(&as, &err, NULL, &scan, &scanid) != AEROSPIKE_OK ) {
+ *	if (aerospike_scan_background(&as, &err, NULL, &scan, &scanid) != AEROSPIKE_OK) {
  *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *	}
  *	else {
  *		printf("Running background scan job: %ll", scanid);
  *	}
- *
  *	as_scan_destroy(&scan);
  *	~~~~~~~~~~
  *
@@ -170,9 +189,10 @@ typedef bool (* aerospike_scan_foreach_callback)(const as_val * val, void * udat
  *
  *	@ingroup scan_operations
  */
-as_status aerospike_scan_background(
-	aerospike * as, as_error * err, const as_policy_scan * policy, 
-	const as_scan * scan, uint64_t * scan_id
+as_status
+aerospike_scan_background(
+	aerospike* as, as_error* err, const as_policy_scan* policy, const as_scan* scan,
+	uint64_t* scan_id
 	);
 
 /**
@@ -191,9 +211,10 @@ as_status aerospike_scan_background(
  *
  *	@return AEROSPIKE_OK on success. Otherwise an error occurred.
  */
-as_status aerospike_scan_wait(
-	aerospike * as, as_error * err, const as_policy_info * policy,
-	uint64_t scan_id, uint32_t interval_ms
+as_status
+aerospike_scan_wait(
+	aerospike* as, as_error* err, const as_policy_info* policy, uint64_t scan_id,
+	uint32_t interval_ms
 	);
 
 /**
@@ -204,7 +225,7 @@ as_status aerospike_scan_wait(
  *	uint64_t scan_id = 1234;
  *	as_scan_info scan_info;
  *	
- *	if ( aerospike_scan_info(&as, &err, NULL, &scan, scan_id, &scan_info) != AEROSPIKE_OK ) {
+ *	if (aerospike_scan_info(&as, &err, NULL, &scan, scan_id, &scan_info) != AEROSPIKE_OK) {
  *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *	}
  *	else {
@@ -212,7 +233,6 @@ as_status aerospike_scan_wait(
  *	}
  *	~~~~~~~~~~
  *	
- *
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
@@ -223,9 +243,9 @@ as_status aerospike_scan_wait(
  *
  *	@ingroup scan_operations
  */
-as_status aerospike_scan_info(
-	aerospike * as, as_error * err, const as_policy_info * policy,
-	uint64_t scan_id, as_scan_info * info
+as_status
+aerospike_scan_info(
+	aerospike* as, as_error* err, const as_policy_info* policy, uint64_t scan_id, as_scan_info* info
 	);
 
 /**
@@ -241,14 +261,12 @@ as_status aerospike_scan_info(
  *	as_scan scan;
  *	as_scan_init(&scan, "test", "demo");
  *	
- *	if ( aerospike_scan_foreach(&as, &err, NULL, &scan, callback, NULL) != AEROSPIKE_OK ) {
+ *	if (aerospike_scan_foreach(&as, &err, NULL, &scan, callback, NULL) != AEROSPIKE_OK) {
  *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *	}
- *
  *	as_scan_destroy(&scan);
  *	~~~~~~~~~~
  *	
- *
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
@@ -260,10 +278,10 @@ as_status aerospike_scan_info(
  *
  *	@ingroup scan_operations
  */
-as_status aerospike_scan_foreach(
-	aerospike * as, as_error * err, const as_policy_scan * policy, 
-	const as_scan * scan, 
-	aerospike_scan_foreach_callback callback, void * udata
+as_status
+aerospike_scan_foreach(
+	aerospike* as, as_error* err, const as_policy_scan* policy, const as_scan* scan,
+	aerospike_scan_foreach_callback callback, void* udata
 	);
 
 /**
@@ -303,12 +321,121 @@ as_status aerospike_scan_foreach(
  *
  *	@ingroup scan_operations
  */
-as_status aerospike_scan_node(
-	aerospike * as, as_error * err, const as_policy_scan * policy,
-	const as_scan * scan,  const char* node_name,
-	aerospike_scan_foreach_callback callback, void * udata
+as_status
+aerospike_scan_node(
+	aerospike* as, as_error* err, const as_policy_scan* policy, const as_scan* scan,
+	const char* node_name, aerospike_scan_foreach_callback callback, void* udata
 	);
 
+/**
+ *	Asynchronously scan the records in the specified namespace and set in the cluster.
+ *
+ *	Call the listener function for each record scanned. When all records have
+ *	been scanned, then listener will be called with a NULL value for the record.
+ *
+ *	Scans of each node will be run on the same event loop, so the listener's implementation does
+ *	not need to be thread safe.
+ *
+ *	~~~~~~~~~~{.c}
+ *	bool my_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
+ *	{
+ *		if (err) {
+ *			printf("Scan failed: %d %s\n", err->code, err->message);
+ *			return false;
+ *		}
+ *
+ *		if (! record) {
+ *			printf("Scan ended\n");
+ *			return false;
+ *		}
+ *
+ *		// Process record
+ *		// Do not call as_record_destroy() because the calling function will do that for you.
+ *		return true;
+ *	}
+ *
+ *	as_scan scan;
+ *	as_scan_init(&scan, "test", "demo");
+ *
+ *	aerospike_scan_async(&as, NULL, &scan, NULL, my_listener, NULL, NULL);
+ *	as_scan_destroy(&scan);
+ *	~~~~~~~~~~
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param scan			The scan to execute against the cluster.
+ *	@param scan_id		The id for the scan job.  Use NULL if the scan_id will not be used.
+ *	@param listener		The function to be called for each record scanned.
+ *	@param udata		User-data to be passed to the callback.
+ *	@param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
+ *
+ *	@return AEROSPIKE_OK on success. Otherwise an error occurred.
+ *
+ *	@ingroup scan_operations
+ */
+void
+aerospike_scan_async(
+	aerospike* as, const as_policy_scan* policy, const as_scan* scan, uint64_t* scan_id,
+	as_async_scan_listener listener, void* udata, as_event_loop* event_loop
+	);
+	
+/**
+ *	Asynchronously scan the records in the specified namespace and set for a single node.
+ *
+ *	The listener function will be called for each record scanned. When all records have
+ *	been scanned, then callback will be called with a NULL value for the record.
+ *
+ *	~~~~~~~~~~{.c}
+ *	bool my_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
+ *	{
+ *		if (err) {
+ *			printf("Scan failed: %d %s\n", err->code, err->message);
+ *			return false;
+ *		}
+ *
+ *		if (! record) {
+ *			printf("Scan ended\n");
+ *			return false;
+ *		}
+ *
+ *		// Process record
+ *		// Do not call as_record_destroy() because the calling function will do that for you.
+ *		return true;
+ *	}
+ *
+ *	char* node_names = NULL;
+ *	int n_nodes = 0;
+ *	as_cluster_get_node_names(as->cluster, &n_nodes, &node_names);
+ *
+ *	if (n_nodes <= 0)
+ *		return <error>;
+ *
+ *	as_scan scan;
+ *	as_scan_init(&scan, "test", "demo");
+ *
+ *	aerospike_scan_node_async(&as, NULL, &scan, NULL, node_names[0], my_listener, NULL, NULL);
+ *
+ *	free(node_names);
+ *	as_scan_destroy(&scan);
+ *	~~~~~~~~~~
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param scan			The scan to execute against the cluster.
+ *	@param scan_id		The id for the scan job.  Use NULL if the scan_id will not be used.
+ *	@param node_name	The node name to scan.
+ *	@param listener		The function to be called for each record scanned.
+ *	@param udata		User-data to be passed to the callback.
+ *	@param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
+ *
+ *	@ingroup scan_operations
+ */
+void
+aerospike_scan_node_async(
+	aerospike* as, const as_policy_scan* policy, const as_scan* scan, uint64_t* scan_id,
+	const char* node_name, as_async_scan_listener listener, void* udata, as_event_loop* event_loop
+	);
+	
 #ifdef __cplusplus
 } // end extern "C"
 #endif

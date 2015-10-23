@@ -55,9 +55,89 @@ typedef struct as_scan_complete_task_s {
 	as_status result;
 } as_scan_complete_task;
 
+typedef struct as_async_scan_executor {
+	as_async_executor executor;
+	as_async_scan_listener listener;
+} as_async_scan_executor;
+
+typedef struct as_async_scan_command {
+	as_async_command command;
+	uint8_t space[];
+} as_async_scan_command;
+
 /******************************************************************************
  * STATIC FUNCTIONS
  *****************************************************************************/
+
+static void
+as_scan_complete_async(as_async_executor* executor, as_error* err)
+{
+	((as_async_scan_executor*)executor)->listener(err, 0, executor->udata, executor->event_loop);
+}
+
+static bool
+as_scan_parse_record_async(as_async_command* cmd, uint8_t** pp, as_msg* msg)
+{
+	as_record rec;
+	as_record_inita(&rec, msg->n_ops);
+	
+	rec.gen = msg->generation;
+	rec.ttl = cf_server_void_time_to_ttl(msg->record_ttl);
+	
+	uint8_t* p = *pp;
+	p = as_command_parse_key(p, msg->n_fields, &rec.key);
+	p = as_command_parse_bins(&rec, p, msg->n_ops, cmd->deserialize);
+	*pp = p;
+	
+	as_async_executor* executor = cmd->udata;  // udata is overloaded to contain executor.
+	bool rv = ((as_async_scan_executor*)executor)->listener(0, &rec, executor->udata, executor->event_loop);
+	as_record_destroy(&rec);
+	return rv;
+}
+
+static bool
+as_scan_parse_records_async(as_async_command* cmd)
+{
+	as_async_executor* executor = cmd->udata;  // udata is overloaded to contain executor.
+	uint8_t* p = cmd->buf;
+	uint8_t* end = p + cmd->len;
+	
+	while (p < end) {
+		as_msg* msg = (as_msg*)p;
+		as_msg_swap_header_from_be(msg);
+		
+		if (msg->result_code) {
+			// Special case - if we scan a set name that doesn't exist on a
+			// node, it will return "not found" - we unify this with the
+			// case where OK is returned and no callbacks were made. [AKG]
+			// We are sending "no more records back" to the caller which will
+			// send OK to the main worker thread.
+			if (msg->result_code == AEROSPIKE_ERR_RECORD_NOT_FOUND) {
+				return true;
+			}
+			as_error err;
+			as_error_set_message(&err, msg->result_code, as_error_string(msg->result_code));
+			as_async_response_error(cmd, &err);
+			return true;
+		}
+		p += sizeof(as_msg);
+		
+		if (msg->info3 & AS_MSG_INFO3_LAST) {
+			as_async_executor_complete(cmd);
+			return true;
+		}
+		
+		if (! as_scan_parse_record_async(cmd, &p, msg)) {
+			executor->valid = false;
+			return true;
+		}
+
+		if (! executor->valid) {
+			return true;
+		}
+	}
+	return false;
+}
 
 static as_status
 as_scan_parse_record(uint8_t** pp, as_msg* msg, as_scan_task* task)
@@ -449,100 +529,127 @@ as_scan_generic(
 	return status;
 }
 
+static void
+as_scan_async(
+	aerospike* as, const as_policy_scan* policy, const as_scan* scan, uint64_t* scan_id,
+	as_async_scan_listener listener, void* udata, as_event_loop* event_loop,
+	as_node** nodes, uint32_t n_nodes
+	)
+{
+	if (! policy) {
+		policy = &as->config.policies.scan;
+	}
+	
+	// Assign task id.
+	uint64_t task_id;
+	if (scan_id) {
+		if (*scan_id == 0) {
+			*scan_id = cf_get_rand64() / 2;
+		}
+		task_id = *scan_id;
+	}
+	else {
+		task_id = cf_get_rand64() / 2;
+	}
+	
+	bool daisy_chain = ! (scan->concurrent || n_nodes == 1);
+	
+	// Scan will be split up into a command for each node.
+	// Allocate scan data shared by each command.
+	as_async_scan_executor* executor = cf_malloc(sizeof(as_async_scan_executor));
+	as_async_executor* exec = &executor->executor;
+	exec->event_loop = as_event_assign(event_loop);
+	exec->complete_fn = as_scan_complete_async;
+	exec->udata = udata;
+	exec->max = n_nodes;
+	exec->count = 0;
+	exec->valid = true;
+	executor->listener = listener;
+	
+	if (daisy_chain) {
+		exec->commands = cf_malloc(sizeof(as_async_command*) * n_nodes);
+		exec->max_concurrent = 1;
+	}
+	else {
+		exec->commands = 0;
+		exec->max_concurrent = n_nodes;
+	}
+	
+	// Create scan command buffer.
+	as_buffer argbuffer;
+	uint16_t n_fields = 0;
+	size_t size = as_scan_command_size(scan, &n_fields, &argbuffer);
+	uint8_t* cmd_buf = as_command_init(size);
+	size = as_scan_command_init(cmd_buf, policy, scan, task_id, n_fields, &argbuffer);
+	
+	// Allocate enough memory to cover, then, round up memory size in 8KB increments to allow socket
+	// read to reuse buffer.
+	size_t s = (sizeof(as_async_scan_command) + size + AS_AUTHENTICATION_MAX_SIZE + 8191) & ~8191;
+	
+	// Create all scan commands.
+	for (uint32_t i = 0; i < n_nodes; i++) {
+		as_async_command* cmd = cf_malloc(s);
+		cmd->event.event_loop = exec->event_loop;
+		cmd->event.fd = -1;
+		cmd->event.timeout_ms = policy->timeout;
+		cmd->cluster = as->cluster;
+		cmd->node = nodes[i];
+		cmd->udata = executor;  // Overload udata to be the executor.
+		cmd->parse_results = as_scan_parse_records_async;
+		cmd->buf = ((as_async_scan_command*)cmd)->space;
+		cmd->capacity = (uint32_t)(s - sizeof(as_async_command));
+		cmd->len = (uint32_t)size;
+		cmd->pos = 0;
+		cmd->auth_len = 0;
+		cmd->type = AS_ASYNC_TYPE_SCAN;
+		cmd->state = AS_ASYNC_STATE_UNREGISTERED;
+		cmd->pipeline = false;
+		cmd->deserialize = scan->deserialize_list_map;
+		cmd->free_buf = false;
+		memcpy(cmd->buf, cmd_buf, size);
+		
+		if (daisy_chain) {
+			exec->commands[i] = cmd;
+		}
+		else {
+			as_async_command_execute(cmd);
+		}
+	}
+	
+	// If scanning one node at a time, start first command.
+	if (daisy_chain) {
+		as_async_command_execute(exec->commands[0]);
+	}
+		
+	// Free command buffer.
+	as_command_free(cmd_buf, size);
+}
+
 /******************************************************************************
  * FUNCTIONS
  *****************************************************************************/
 
-/**
- *	Scan the records in the specified namespace and set in the cluster.
- *
- *	Scan will be run in the background by a thread on client side.
- *	No callback will be called in this case.
- *	
- *	~~~~~~~~~~{.c}
- *	as_scan scan;
- *	as_scan_init(&scan, "test", "demo");
- *	as_scan_apply_each(&scan, "udf_module", "udf_function", NULL);
- *	
- *	uint64_t scanid = 0;
- *	
- *	if ( aerospike_scan_background(&as, &err, NULL, &scan, &scanid) != AEROSPIKE_OK ) {
- *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *	}
- *	else {
- *		printf("Running background scan job: %ll", scanid);
- *	}
- *
- *	as_scan_destroy(&scan);
- *	~~~~~~~~~~
- *
- *	@param as			The aerospike instance to use for this operation.
- *	@param err			The as_error to be populated if an error occurs.
- *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param scan 		The scan to execute against the cluster.
- *	@param scan_id		The id for the scan job, which can be used for querying the status of the scan.
- *
- *	@return AEROSPIKE_OK on success. Otherwise an error occurred.
- */
-as_status aerospike_scan_background(
-	aerospike * as, as_error * err, const as_policy_scan * policy, 
-	const as_scan * scan, uint64_t * scan_id
+as_status
+aerospike_scan_background(
+	aerospike* as, as_error* err, const as_policy_scan* policy, const as_scan* scan,
+	uint64_t* scan_id
 	)
 {
 	return as_scan_generic(as, err, policy, scan, 0, 0, scan_id);
 }
 
-/**
- *	Wait for a background scan to be completed by servers.
- *
- *	~~~~~~~~~~{.c}
- *	uint64_t scan_id = 1234;
- *	aerospike_scan_wait(&as, &err, NULL, scan_id, 0);
- *	~~~~~~~~~~
- *
- *	@param as			The aerospike instance to use for this operation.
- *	@param err			The as_error to be populated if an error occurs.
- *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param scan_id		The id for the scan job.
- *	@param interval_ms	The polling interval in milliseconds. If zero, 1000 ms is used.
- *
- *	@return AEROSPIKE_OK on success. Otherwise an error occurred.
- */
-as_status aerospike_scan_wait(
-	aerospike * as, as_error * err, const as_policy_info * policy,
-	uint64_t scan_id, uint32_t interval_ms
+as_status
+aerospike_scan_wait(
+	aerospike* as, as_error* err, const as_policy_info* policy, uint64_t scan_id,
+	uint32_t interval_ms
 	)
 {
 	return aerospike_job_wait(as, err, policy, "scan", scan_id, interval_ms);
 }
 
-/**
- *	Check on a background scan running on the server.
- *
- *	~~~~~~~~~~{.c}
- *	uint64_t scan_id = 1234;
- *	as_scan_info scan_info;
- *
- *	if ( aerospike_scan_info(&as, &err, NULL, &scan, scan_id, &scan_info) != AEROSPIKE_OK ) {
- *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *	}
- *	else {
- *		printf("Scan id=%ll, status=%s", scan_id, scan_info.status);
- *	}
- *	~~~~~~~~~~
- *
- *
- *	@param as			The aerospike instance to use for this operation.
- *	@param err			The as_error to be populated if an error occurs.
- *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param scan_id		The id for the scan job to check the status of.
- *	@param info			Information about this scan, to be populated by this operation.
- *
- *	@return AEROSPIKE_OK on success. Otherwise an error occurred.
- */
-as_status aerospike_scan_info(
-	aerospike * as, as_error * err, const as_policy_info * policy,
-	uint64_t scan_id, as_scan_info * info
+as_status
+aerospike_scan_info(
+	aerospike* as, as_error* err, const as_policy_info* policy, uint64_t scan_id, as_scan_info* info
 	)
 {
 	as_job_info job_info;
@@ -568,79 +675,20 @@ as_status aerospike_scan_info(
 	return status;
 }
 
-/**
- *	Scan the records in the specified namespace and set in the cluster.
- *
- *	Call the callback function for each record scanned. When all records have 
- *	been scanned, then callback will be called with a NULL value for the record.
- *
- *	~~~~~~~~~~{.c}
- *	as_scan scan;
- *	as_scan_init(&scan, "test", "demo");
- *	
- *	if ( aerospike_scan_foreach(&as, &err, NULL, &scan, callback, NULL) != AEROSPIKE_OK ) {
- *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *	}
- *
- *	as_scan_destroy(&scan);
- *	~~~~~~~~~~
- *	
- *	@param as			The aerospike instance to use for this operation.
- *	@param err			The as_error to be populated if an error occurs.
- *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param scan			The scan to execute against the cluster.
- *	@param callback		The function to be called for each record scanned.
- *	@param udata		User-data to be passed to the callback.
- *
- *	@return AEROSPIKE_OK on success. Otherwise an error occurred.
- */
-as_status aerospike_scan_foreach(
-	aerospike * as, as_error * err, const as_policy_scan * policy, 
-	const as_scan * scan, 
-	aerospike_scan_foreach_callback callback, void * udata) 
+as_status
+aerospike_scan_foreach(
+	aerospike* as, as_error* err, const as_policy_scan* policy, const as_scan* scan,
+	aerospike_scan_foreach_callback callback, void* udata
+	)
 {
 	return as_scan_generic(as, err, policy, scan, callback, udata, 0);
 }
 
-/**
- *	Scan the records in the specified namespace and set for a single node.
- *
- *	The callback function will be called for each record scanned. When all records have
- *	been scanned, then callback will be called with a NULL value for the record.
- *
- *	~~~~~~~~~~{.c}
- *	char* node_names = NULL;
- *	int n_nodes = 0;
- *	as_cluster_get_node_names(as->cluster, &n_nodes, &node_names);
- *
- *	if (n_nodes <= 0)
- *		return <error>;
- *
- *	as_scan scan;
- *	as_scan_init(&scan, "test", "demo");
- *
- *	if (aerospike_scan_node(&as, &err, NULL, &scan, node_names[0], callback, NULL) != AEROSPIKE_OK ) {
- *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *	}
- *
- *	free(node_names);
- *	as_scan_destroy(&scan);
- *	~~~~~~~~~~
- *
- *	@param as			The aerospike instance to use for this operation.
- *	@param err			The as_error to be populated if an error occurs.
- *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param scan			The scan to execute against the cluster.
- *	@param node_name	The node name to scan.
- *	@param callback		The function to be called for each record scanned.
- *	@param udata		User-data to be passed to the callback.
- *
- *	@return AEROSPIKE_OK on success. Otherwise an error occurred.
- */
-as_status aerospike_scan_node(
-	aerospike * as, as_error * err, const as_policy_scan * policy,
-	const as_scan * scan,  const char* node_name,
-	aerospike_scan_foreach_callback callback, void * udata)
+as_status
+aerospike_scan_node(
+	aerospike* as, as_error* err, const as_policy_scan* policy, const as_scan* scan,
+	const char* node_name, aerospike_scan_foreach_callback callback, void * udata
+	)
 {
 	as_error_reset(err);
 	
@@ -693,4 +741,49 @@ as_status aerospike_scan_node(
 		callback(NULL, udata);
 	}
 	return status;
+}
+
+void
+aerospike_scan_async(
+	aerospike* as, const as_policy_scan* policy, const as_scan* scan, uint64_t* scan_id,
+	as_async_scan_listener listener, void* udata, as_event_loop* event_loop
+	)
+{
+	as_nodes* nodes = as_nodes_reserve(as->cluster);
+	uint32_t n_nodes = nodes->size;
+	
+	if (n_nodes == 0) {
+		as_nodes_release(nodes);
+		as_error err;
+		as_error_set_message(&err, AEROSPIKE_ERR_SERVER, "Scan command failed because cluster is empty.");
+		listener(&err, 0, udata, event_loop);
+		return;
+	}
+
+	// Reserve each node in cluster.
+	for (uint32_t i = 0; i < n_nodes; i++) {
+		as_node_reserve(nodes->array[i]);
+	}
+	
+	as_scan_async(as, policy, scan, scan_id, listener, udata, event_loop, nodes->array, n_nodes);
+	as_nodes_release(nodes);
+}
+
+void
+aerospike_scan_node_async(
+	aerospike* as, const as_policy_scan* policy, const as_scan* scan, uint64_t* scan_id,
+	const char* node_name, as_async_scan_listener listener, void* udata, as_event_loop* event_loop
+	)
+{
+	// Retrieve and reserve node.
+	as_node* node = as_node_get_by_name(as->cluster, node_name);
+	
+	if (! node) {
+		as_error err;
+		as_error_update(&err, AEROSPIKE_ERR_PARAM, "Invalid node name: %s", node_name);
+		listener(&err, 0, udata, event_loop);
+		return;
+	}
+	
+	as_scan_async(as, policy, scan, scan_id, listener, udata, event_loop, &node, 1);
 }

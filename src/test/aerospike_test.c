@@ -238,6 +238,7 @@ PLAN(aerospike_test) {
 	if (g_use_async) {
 		plan_add(key_basics_async);
 		plan_add(key_apply_async);
-		plan_add(batch_async_get);
+		plan_add(batch_async);
+		plan_add(scan_async);
 	}
 }

@@ -229,11 +229,17 @@ bool
 as_query_aggr_cb(const as_val* p_val, void* udata)
 {
 	if (p_val) {
-		// Because of the UDF used, we expect an as_double to be returned.
-		as_double* res = as_double_fromval(p_val);
 		double * sum = (double *) udata;
 
-		*sum = res ? res->value : 0;
+		if (as_val_type(p_val) == AS_DOUBLE) {
+			as_double* res = as_double_fromval(p_val);
+			*sum = res ? res->value : 0;
+		} else if (as_val_type(p_val) == AS_INTEGER) {
+			as_integer* res = as_integer_fromval(p_val);
+			*sum = res ? res->value : 0;
+		} else {
+			warn("unexpected return type %d",as_val_type(p_val));
+		}
 	}
 	return true;
 }

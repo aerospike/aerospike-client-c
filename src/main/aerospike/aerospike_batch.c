@@ -16,6 +16,7 @@
  */
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_batch.h>
+#include <aerospike/as_async.h>
 #include <aerospike/as_command.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_key.h>

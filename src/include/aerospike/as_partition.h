@@ -17,7 +17,6 @@
 #pragma once
 
 #include <aerospike/as_node.h>
-#include <citrusleaf/cf_digest.h>
 
 #ifdef __cplusplus
 extern "C" {

@@ -17,9 +17,9 @@
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_batch.h>
 #include <aerospike/aerospike_key.h>
+#include <aerospike/as_monitor.h>
 
 #include "../test.h"
-#include "../util/monitor.h"
 
 /******************************************************************************
  * GLOBAL VARS

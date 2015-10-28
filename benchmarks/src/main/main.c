@@ -26,34 +26,37 @@
 #include <string.h>
 #include <getopt.h>
 
-static const char* short_options = "h:p:U:P::n:s:k:o:Rt:w:z:g:T:dL:SC:N:M:u";
+static const char* short_options = "h:p:U:P::n:s:k:o:Rt:w:z:g:T:dL:SC:N:M:ac:W:u";
 
 static struct option long_options[] = {
-	{"hosts",        1, 0, 'h'},
-	{"port",         1, 0, 'p'},
-	{"user",         1, 0, 'U'},
-	{"password",     2, 0, 'P'},
-	{"namespace",    1, 0, 'n'},
-	{"set",          1, 0, 's'},
-	{"keys",         1, 0, 'k'},
-	{"objectSpec",   1, 0, 'o'},
-	{"random",       0, 0, 'R'},
-	{"transactions", 1, 0, 't'},
-	{"workload",     1, 0, 'w'},
-	{"threads",      1, 0, 'z'},
-	{"throughput",   1, 0, 'g'},
-	{"timeout",      1, 0, 'T'},
-	{"readTimeout",  1, 0, 'X'},
-	{"writeTimeout", 1, 0, 'V'},
-	{"maxRetries",   1, 0, 'r'},
-	{"debug",        0, 0, 'd'},
-	{"latency",      1, 0, 'L'},
-	{"shared",       0, 0, 'S'},
-	{"replica",      1, 0, 'C'},
-	{"consistencyLevel", 1, 0, 'N'},
-	{"commitLevel",  1, 0, 'M'},
-	{"usage",        0, 0, 'u'},
-	{0,              0, 0, 0}
+	{"hosts",                required_argument, 0, 'h'},
+	{"port",                 required_argument, 0, 'p'},
+	{"user",                 required_argument, 0, 'U'},
+	{"password",             optional_argument, 0, 'P'},
+	{"namespace",            required_argument, 0, 'n'},
+	{"set",                  required_argument, 0, 's'},
+	{"keys",                 required_argument, 0, 'k'},
+	{"objectSpec",           required_argument, 0, 'o'},
+	{"random",               no_argument,       0, 'R'},
+	{"transactions",         required_argument, 0, 't'},
+	{"workload",             required_argument, 0, 'w'},
+	{"threads",              required_argument, 0, 'z'},
+	{"throughput",           required_argument, 0, 'g'},
+	{"timeout",              required_argument, 0, 'T'},
+	{"readTimeout",          required_argument, 0, 'X'},
+	{"writeTimeout",         required_argument, 0, 'V'},
+	{"maxRetries",           required_argument, 0, 'r'},
+	{"debug",                no_argument,       0, 'd'},
+	{"latency",              required_argument, 0, 'L'},
+	{"shared",               no_argument,       0, 'S'},
+	{"replica",              required_argument, 0, 'C'},
+	{"consistencyLevel",     required_argument, 0, 'N'},
+	{"commitLevel",          required_argument, 0, 'M'},
+	{"async",                no_argument,       0, 'a'},
+	{"asyncMaxCommands",     required_argument, 0, 'c'},
+	{"asyncSelectorThreads", required_argument, 0, 'W'},
+	{"usage",                no_argument,       0, 'u'},
+	{0, 0, 0, 0}
 };
 
 static void
@@ -183,6 +186,19 @@ print_usage(const char* program)
 	blog_line("   Write commit guarantee level.");
 	blog_line("");
 
+	blog_line("-a, --async # Default: synchronous mode");
+	blog_line("   Enable asynchronous mode.");
+	blog_line("");
+	
+	blog_line("-W, --asyncMaxCommands <command count> # Default: 200");
+	blog_line("   Maximum number of concurrent asynchronous commands that are active at any point");
+	blog_line("   in time.");
+	blog_line("");
+
+	blog_line("-W, --asyncSelectorThreads <thread count> # Default: 1");
+	blog_line("   Number of event loops (or selector threads) when running in asynchronous mode.");
+	blog_line("");
+
 	blog_line("-u --usage           # Default: usage not printed.");
 	blog_line("   Display program usage.");
 	blog_line("");
@@ -273,6 +289,12 @@ print_args(arguments* args)
 	blog_line("read replica:   %s", (AS_POLICY_REPLICA_MASTER == args->read_replica ? "master" : "any"));
 	blog_line("read consistency level: %s", (AS_POLICY_CONSISTENCY_LEVEL_ONE == args->read_consistency_level ? "one" : "all"));
 	blog_line("write commit level: %s", (AS_POLICY_COMMIT_LEVEL_ALL == args->write_commit_level ? "all" : "master"));
+	blog_line("asynchronous mode:  %s", args->async ? "on" : "off");
+	
+	if (args->async) {
+		blog_line("async max commands:     %d", args->async_max_commands);
+		blog_line("async selector threads: %d", args->event_loop_capacity);
+	}
 }
 
 static int
@@ -301,47 +323,51 @@ validate_args(arguments* args)
 	}
 	
 	if (args->init_pct < 0 || args->init_pct > 100) {
-		
 		blog_line("Invalid initialize percent: %d  Valid values: [0-100]", args->init_pct);
 		return 1;
 	}
 	
 	if (args->read_pct < 0 || args->read_pct > 100) {
-		
 		blog_line("Invalid read percent: %d  Valid values: [0-100]", args->read_pct);
 		return 1;
 	}
 	
 	if (args->threads <= 0 || args->threads > 10000) {
-		
 		blog_line("Invalid number of threads: %d  Valid values: [1-10000]", args->threads);
 		return 1;
 	}
 	
 	if (args->read_timeout < 0) {
-		
 		blog_line("Invalid read timeout: %d  Valid values: [>= 0]", args->read_timeout);
 		return 1;
 	}
 	
 	if (args->read_timeout < 0) {
-		
 		blog_line("Invalid write timeout: %d  Valid values: [>= 0]", args->write_timeout);
 		return 1;
 	}
 	
 	if (args->latency_columns < 0 || args->latency_columns > 16) {
-		
 		blog_line("Invalid latency columns: %d  Valid values: [1-16]", args->latency_columns);
 		return 1;
 	}
 	
 	if (args->latency_shift < 0 || args->latency_shift > 5) {
-		
 		blog_line("Invalid latency exponent shift: %d  Valid values: [1-5]", args->latency_shift);
 		return 1;
 	}
-
+	
+	if (args->async) {
+		if (args->async_max_commands <= 0 || args->async_max_commands > 5000) {
+			blog_line("Invalid asyncMaxCommands: %d  Valid values: [1-5000]", args->async_max_commands);
+			return 1;
+		}
+		
+		if (args->event_loop_capacity <= 0 || args->event_loop_capacity > 1000) {
+			blog_line("Invalid asyncSelectorThreads: %d  Valid values: [1-1000]", args->event_loop_capacity);
+			return 1;
+		}
+	}
 	return 0;
 }
 
@@ -546,6 +572,18 @@ set_args(int argc, char * const * argv, arguments* args)
 				}
 				break;
 
+			case 'a':
+				args->async = true;
+				break;
+
+			case 'c':
+				args->async_max_commands = atoi(optarg);
+				break;
+
+			case 'W':
+				args->event_loop_capacity = atoi(optarg);
+				break;
+
 			case 'u':
 			default:
 				return 1;
@@ -593,6 +631,9 @@ main(int argc, char * const * argv)
 	args.read_replica = AS_POLICY_REPLICA_MASTER;
 	args.read_consistency_level = AS_POLICY_CONSISTENCY_LEVEL_ONE;
 	args.write_commit_level = AS_POLICY_COMMIT_LEVEL_ALL;
+	args.async = false;
+	args.async_max_commands = 200;
+	args.event_loop_capacity = 1;
 	
 	int ret = set_args(argc, argv, &args);
 	

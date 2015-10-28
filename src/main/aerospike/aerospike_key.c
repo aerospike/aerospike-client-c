@@ -16,6 +16,7 @@
  */
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
+#include <aerospike/as_async.h>
 #include <aerospike/as_bin.h>
 #include <aerospike/as_buffer.h>
 #include <aerospike/as_command.h>

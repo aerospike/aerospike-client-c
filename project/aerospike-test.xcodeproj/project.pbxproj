@@ -72,7 +72,6 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		BF225C2C1BC701A200EEE0FB /* monitor.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = monitor.h; path = ../src/test/util/monitor.h; sourceTree = "<group>"; };
 		BF225C2D1BC70A8A00EEE0FB /* key_apply_async.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = key_apply_async.c; path = ../src/test/aerospike_key/key_apply_async.c; sourceTree = "<group>"; };
 		BF22F9131BCD79E8002D04DD /* libev.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libev.a; path = ../../../../usr/local/lib/libev.a; sourceTree = "<group>"; };
 		BF230E9F1BD5B19A007325AF /* batch_get_async.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = batch_get_async.c; path = ../src/test/aerospike_batch/batch_get_async.c; sourceTree = "<group>"; };
@@ -145,7 +144,6 @@
 				BF2372711BBE079C00F1E7D5 /* key_basics_async.c */,
 				BF230E9F1BD5B19A007325AF /* batch_get_async.c */,
 				BF231A351BDAA6FE00280D6F /* scan_async.c */,
-				BF225C2C1BC701A200EEE0FB /* monitor.h */,
 				BFBC11B518CE416100D0B5BE /* udf_basics.c */,
 				BFBC11B618CE416100D0B5BE /* udf_record.c */,
 				BFBC11B718CE416100D0B5BE /* udf_types.c */,

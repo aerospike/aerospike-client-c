@@ -17,6 +17,7 @@
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
 #include <aerospike/aerospike_scan.h>
+#include <aerospike/as_cluster.h>
 #include <aerospike/as_hashmap.h>
 #include <aerospike/as_monitor.h>
 #include <aerospike/as_stringmap.h>

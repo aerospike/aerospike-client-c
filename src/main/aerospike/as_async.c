@@ -623,7 +623,7 @@ void
 as_async_command_receive(as_async_command* cmd)
 {
 	// Check for authenticate read-header or read-body.
-	if (cmd->state & AS_ASYNC_STATE_AUTH_READ_HEADER) {
+	if (cmd->state & (AS_ASYNC_STATE_AUTH_READ_HEADER | AS_ASYNC_STATE_AUTH_READ_BODY)) {
 		as_async_command_parse_authentication(cmd);
 		return;
 	}

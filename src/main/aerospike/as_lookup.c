@@ -23,10 +23,13 @@ as_status
 as_lookup(as_cluster* cluster, as_error* err, char* hostname, uint16_t port, as_vector* /*<struct sockaddr_in>*/ addresses)
 {
 	// Check if there is an alternate address that should be used for this hostname.
-	if (cluster && cluster->ip_map) {
-		as_addr_map* entry = cluster->ip_map;
+	if (cluster) {
+		as_addr_maps* ip_map = as_ip_map_reserve(cluster);
 		
-		for (uint32_t i = 0; i < cluster->ip_map_size; i++) {
+		if (ip_map != NULL) {
+			as_addr_map* entry = ip_map->array;
+
+			for (uint32_t i = 0; i < ip_map->size; i++) {
 			if (strcmp(entry->orig, hostname) == 0) {
 				// Found mapping for this address.  Use alternate.
 				as_log_debug("Using %s instead of %s", entry->alt, hostname);
@@ -34,6 +37,9 @@ as_lookup(as_cluster* cluster, as_error* err, char* hostname, uint16_t port, as_
 				break;
 			}
 			entry++;
+		}
+
+			as_ip_map_release(ip_map);
 		}
 	}
 	

@@ -19,54 +19,13 @@
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_event.h>
-#include <aerospike/as_record.h>
+#include <aerospike/as_listener.h>
 #include <aerospike/as_queue.h>
 #include <citrusleaf/alloc.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/******************************************************************************
- * PUBLIC TYPES
- *****************************************************************************/
-
-/**
- *	User callback when an asynchronous write completes.
- *
- *	@param err			This error structure is only populated when the command fails. Null on success.
- *	@param udata 		User data that is forwarded from asynchronous command function.
- *	@param event_loop 	Event loop that this command was executed on.  Use this event loop when running
- *						nested asynchronous commands when single threaded behavior is desired for the
- *						group of commands.
- */
-typedef void (*as_async_write_listener) (as_error* err, void* udata, as_event_loop* event_loop);
-	
-/**
- *	User callback when an asynchronous read completes with a record result.
- *
- *	@param err			This error structure is only populated when the command fails. Null on success.
- *	@param record 		The return value from the asynchronous command. This value will need to be cast
- *						to the structure that corresponds to the asynchronous command.  Null on error.
- *	@param udata 		User data that is forwarded from asynchronous command function.
- *	@param event_loop 	Event loop that this command was executed on.  Use this event loop when running
- *						nested asynchronous commands when single threaded behavior is desired for the
- *						group of commands.
- */
-typedef void (*as_async_record_listener) (as_error* err, as_record* record, void* udata, as_event_loop* event_loop);
-
-/**
- *	User callback when asynchronous read completes with an as_val result.
- *
- *	@param err			This error structure is only populated when the command fails. Null on success.
- *	@param val			The return value from the asynchronous command. This value will need to be cast
- *						to the structure that corresponds to the asynchronous command.  Null on error.
- *	@param udata 		User data that is forwarded from asynchronous command function.
- *	@param event_loop 	Event loop that this command was executed on.  Use this event loop when running
- *						nested asynchronous commands when single threaded behavior is desired for the
- *						group of commands.
- */
-typedef void (*as_async_value_listener) (as_error* err, as_val* val, void* udata, as_event_loop* event_loop);
 
 /******************************************************************************
  * PRIVATE TYPES

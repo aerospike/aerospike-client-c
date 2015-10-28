@@ -228,7 +228,7 @@ typedef struct as_cluster_s {
 	 *	@private
 	 *	Total number of data partitions used by cluster.
 	 */
-	cl_partition_id	n_partitions;
+	uint16_t n_partitions;
 	
 	/**
 	 *	@private

@@ -76,14 +76,15 @@ as_node_create(as_cluster* cluster, struct sockaddr_in* addr, as_node_info* node
 		for (uint32_t i = 0; i < as_event_loop_capacity; i++) {
 			as_queue_init(&node->async_conn_qs[i], sizeof(int), cluster->conns_per_node_event_loop);
 		}
+		
+		// Assign pipeline event loop to this node.
+		uint32_t current = ck_pr_faa_32(&as_pipeline_current, 1);
+		node->pipeline_loop = &as_event_loops[current % as_event_loop_size];
 	}
 	else {
 		node->async_conn_qs = 0;
+		node->pipeline_loop = 0;
 	}
-	
-	// Assign pipeline event loop to this node.
-	uint32_t current = ck_pr_faa_32(&as_pipeline_current, 1);
-	node->pipeline_loop = &as_event_loops[current % as_event_loop_size];
 	
 	node->info_fd = -1;
 	node->friends = 0;

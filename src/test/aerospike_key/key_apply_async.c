@@ -23,6 +23,7 @@
 #include <aerospike/as_integer.h>
 #include <aerospike/as_list.h>
 #include <aerospike/as_map.h>
+#include <aerospike/as_monitor.h>
 #include <aerospike/as_msgpack_serializer.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_serializer.h>
@@ -33,7 +34,6 @@
 #include <aerospike/as_event.h>
 
 #include "../test.h"
-#include "../util/monitor.h"
 #include "../util/udf.h"
 
 /******************************************************************************

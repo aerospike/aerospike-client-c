@@ -50,6 +50,30 @@ typedef struct as_seed_s {
 
 /**
  *	@private
+ *	Reference counted array of seed hosts.
+ */
+typedef struct as_seeds_s {
+	/**
+	 *	@private
+	 *	Reference count.
+	 */
+	uint32_t ref_count;
+
+	/*
+	 *	@private
+	 *	Length of seed array.
+	 */
+	uint32_t size;
+
+	/**
+	 *	@private
+	 *	Seed array.
+	 */
+	as_seed array[];
+} as_seeds;
+
+/**
+ *	@private
  *  Reference counted array of server node pointers.
  */
 typedef struct as_nodes_s {
@@ -71,6 +95,31 @@ typedef struct as_nodes_s {
 	 */
 	as_node* array[];
 } as_nodes;
+
+
+/**
+ *	@private
+ *	Reference counted array of address maps.
+ */
+typedef struct as_addr_maps_s {
+	/**
+	 *	@private
+	 *	Reference count.
+	 */
+	uint32_t ref_count;
+
+	/*
+	 *	@private
+	 *	Length of address map array.
+	 */
+	uint32_t size;
+
+	/**
+	 *	@private
+	 *	tAddress map array.
+	 */
+	as_addr_map array[];
+} as_addr_maps;
 
 /**
  *	@private
@@ -140,19 +189,13 @@ typedef struct as_cluster_s {
 	 *	@private
 	 *	Initial seed nodes specified by user.
 	 */
-	as_seed* seeds;
+	as_seeds* seeds;
 	
 	/**
 	 *	@private
-	 *	Length of seeds array.
+	 *	Configuration version.  Incremented, when the configuration is changed.
 	 */
-	uint32_t seeds_size;
-	
-	/**
-	 *	@private
-	 *	Length of ip_map array.
-	 */
-	uint32_t ip_map_size;
+	uint32_t version;
 	
 	/**
 	 *	@private
@@ -163,7 +206,7 @@ typedef struct as_cluster_s {
 	 *	The key is the IP address returned from friend info requests to other servers.  The
 	 *	value is the real IP address used to connect to the server.
 	 */
-	as_addr_map* ip_map;
+	as_addr_maps* ip_map;
 	
 	/**
 	 *	@private
@@ -298,6 +341,82 @@ as_nodes_release(as_nodes* nodes)
 		cf_free(nodes);
 	}
 }
+
+/**
+ *	Reserve reference counted access to seeds.
+ */
+static inline as_seeds*
+as_seeds_reserve(as_cluster* cluster)
+{
+	as_seeds* seeds = (as_seeds *)ck_pr_load_ptr(&cluster->seeds);
+	ck_pr_inc_32(&seeds->ref_count);
+	return seeds;
+}
+
+/**
+ *	Release reference counted access to seeds.
+ */
+static inline void
+as_seeds_release(as_seeds* seeds)
+{
+	bool destroy;
+	ck_pr_dec_32_zero(&seeds->ref_count, &destroy);
+
+	if (destroy) {
+		for (uint32_t i = 0; i < seeds->size; i++) {
+			cf_free(seeds->array[i].name);
+		}
+
+		cf_free(seeds);
+	}
+}
+
+/**
+ *	Add seeds to the cluster.
+ */
+void
+as_seeds_add(as_cluster* cluster, as_seed* seed_list, uint32_t size);
+
+/**
+ *	Reserve reference counted access to IP map.
+ */
+static inline as_addr_maps*
+as_ip_map_reserve(as_cluster* cluster)
+{
+	as_addr_maps* ip_map = (as_addr_maps *)ck_pr_load_ptr(&cluster->ip_map);
+
+	if (ip_map == NULL) {
+		return NULL;
+	}
+
+	ck_pr_inc_32(&ip_map->ref_count);
+	return ip_map;
+}
+
+/**
+ *	Release reference counted access to IP map.
+ */
+static inline void
+as_ip_map_release(as_addr_maps* ip_map)
+{
+	bool destroy;
+	ck_pr_dec_32_zero(&ip_map->ref_count, &destroy);
+
+	if (destroy) {
+		for (uint32_t i = 0; i < ip_map->size; i++) {
+			cf_free(ip_map->array[i].orig);
+			cf_free(ip_map->array[i].alt);
+		}
+
+		cf_free(ip_map);
+	}
+}
+
+/**
+ *	Replace the IP address map of the cluster.
+ */
+void
+as_ip_map_update(as_cluster* cluster, as_addr_map* ip_map_list, uint32_t size);
 
 /**
  *	@private

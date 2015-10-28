@@ -41,7 +41,7 @@ void
 as_cluster_add_seeds(as_cluster* cluster);
 
 as_status
-as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings);
+as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings, bool config_change);
 
 void
 as_cluster_add_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_add);
@@ -495,6 +495,7 @@ as_shm_tender(void* userdata)
 {
 	// Shared memory cluster tender.
 	as_cluster* cluster = userdata;
+	uint32_t version = ck_pr_load_32(&cluster->version);
 	as_shm_info* shm_info = cluster->shm_info;
 	as_cluster_shm* cluster_shm = shm_info->cluster_shm;
 	uint64_t threshold = shm_info->takeover_threshold_ms;
@@ -515,7 +516,9 @@ as_shm_tender(void* userdata)
 	while (cluster->valid) {
 		if (shm_info->is_tend_master) {
 			// Tend shared memory cluster.
-			status = as_cluster_tend(cluster, &err, false);
+			uint32_t new_version = ck_pr_load_32(&cluster->version);
+			status = as_cluster_tend(cluster, &err, false, new_version != version);
+			version = new_version;
 			ck_pr_store_64(&cluster_shm->timestamp, cf_getms());
 			
 			if (status != AEROSPIKE_OK) {

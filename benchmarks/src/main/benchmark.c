@@ -21,9 +21,13 @@
  ******************************************************************************/
 #include "benchmark.h"
 #include "aerospike/aerospike_info.h"
+#include "aerospike/as_event.h"
 #include "aerospike/as_log.h"
+#include "aerospike/as_monitor.h"
 #include <stdint.h>
 #include <time.h>
+
+as_monitor monitor;
 
 void
 blog_line(const char* fmt, ...)
@@ -78,6 +82,15 @@ as_client_log_callback(as_log_level level, const char * func, const char * file,
 static int
 connect_to_server(arguments* args, aerospike* client)
 {
+	if (args->async) {
+		as_monitor_init(&monitor);
+		
+		if (! as_event_create_loops(args->event_loop_capacity)) {
+			blog_error("Failed to create asynchronous event loops");
+			return 2;
+		}
+	}
+	
 	as_config cfg;
 	as_config_init(&cfg);
 	
@@ -214,6 +227,8 @@ run_benchmark(arguments* args)
 	data.latency = args->latency;
 	data.debug = args->debug;
 	data.valid = 1;
+	data.async = args->async;
+	data.async_max_commands = args->async;
 
 	if (args->debug) {
 		as_log_set_level(AS_LOG_LEVEL_DEBUG);
@@ -252,11 +267,11 @@ run_benchmark(arguments* args)
 	}
 	
 	if (args->init) {
-		data.records = (int)((double)args->keys / 100.0 * args->init_pct + 0.5);
+		data.key_max = (int)((double)args->keys / 100.0 * args->init_pct + 0.5);
 		ret = linear_write(&data);
 	}
 	else {
-		data.records = args->keys;
+		data.key_max = args->keys;
 		ret = random_read_write(&data);
 	}
 	
@@ -272,6 +287,11 @@ run_benchmark(arguments* args)
 		}
 	}
 
+	if (args->async) {
+		as_event_close_loops();
+		as_monitor_destroy(&monitor);
+	}
+	
 	as_error err;
 	aerospike_close(&data.client, &err);
 	aerospike_destroy(&data.client);

@@ -16,14 +16,25 @@ CFLAGS += -march=nocona -DMARCH_$(ARCH)
 CFLAGS += -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_GNU_SOURCE
 
 ifeq ($(OS),Darwin)
-  CFLAGS += -D_DARWIN_UNLIMITED_SELECT
+  CFLAGS += -D_DARWIN_UNLIMITED_SELECT 
 else
   CFLAGS += -rdynamic
 endif
 
 CFLAGS += -I$(AEROSPIKE)/target/$(PLATFORM)/include
 
-LDFLAGS = -lssl -lcrypto -lpthread
+ifeq ($(EVENT_LIB),libev)
+  CFLAGS += -DAS_USE_LIBEV -I/usr/local/include
+endif
+
+LDFLAGS =
+
+ifeq ($(EVENT_LIB),libev)
+  LDFLAGS += -L/usr/local/lib -lev
+endif
+
+LDFLAGS += -lssl -lcrypto -lpthread
+
 ifneq ($(OS),Darwin)
   LDFLAGS += -lrt -ldl
 endif
@@ -81,7 +92,7 @@ endif
 LDFLAGS += -lm -lz
 
 ifeq ($(OS),Darwin)
-  CC = clang
+  CC = cc
 else
   CC = gcc
 endif

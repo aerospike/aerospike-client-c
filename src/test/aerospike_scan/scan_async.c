@@ -18,10 +18,10 @@
 #include <aerospike/aerospike_key.h>
 #include <aerospike/aerospike_scan.h>
 #include <aerospike/as_hashmap.h>
+#include <aerospike/as_monitor.h>
 #include <aerospike/as_stringmap.h>
 
 #include "../test.h"
-#include "../util/monitor.h"
 
 /******************************************************************************
  * GLOBAL VARS

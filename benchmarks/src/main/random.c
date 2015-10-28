@@ -20,9 +20,12 @@
  * IN THE SOFTWARE.
  ******************************************************************************/
 #include "benchmark.h"
-#include <pthread.h>
+#include <aerospike/as_monitor.h>
 #include <citrusleaf/cf_clock.h>
+#include <pthread.h>
 #include <unistd.h>
+
+extern as_monitor monitor;
 
 uint32_t cf_get_rand32();
 
@@ -99,33 +102,34 @@ ticker_worker(void* udata)
 static void*
 random_worker(void* udata)
 {
-	clientdata* data = (clientdata*)udata;
-	uint32_t records = data->records;
-	int throughput = data->throughput;
-	int read_pct = data->read_pct;
+	clientdata* cdata = (clientdata*)udata;
+	threaddata* tdata = create_threaddata(cdata, 0);
+	uint32_t key_max = cdata->key_max;
+	int throughput = cdata->throughput;
+	int read_pct = cdata->read_pct;
 	int key;
 	int die;
 	
-	while (data->valid) {
+	while (cdata->valid) {
 		// Choose key at random.
-		key = cf_get_rand32() % records + 1;
+		key = cf_get_rand32() % key_max + 1;
 		
 		// Roll a percentage die.
 		die = cf_get_rand32() % 100;
 		
 		if (die < read_pct) {
-			read_record(key, data);
+			read_record_sync(key, cdata);
 		}
 		else {
-			write_record(key, data);
+			write_record_sync(cdata, tdata, key);
 		}
-		ck_pr_inc_32(&data->transactions_count);
+		ck_pr_inc_32(&cdata->transactions_count);
 
 		if (throughput > 0) {
-			int transactions = data->write_count + data->read_count;
+			int transactions = cdata->write_count + cdata->read_count;
 			
 			if (transactions > throughput) {
-				int64_t millis = (int64_t)data->period_begin + 1000L - (int64_t)cf_getms();
+				int64_t millis = (int64_t)cdata->period_begin + 1000L - (int64_t)cf_getms();
 				
 				if (millis > 0) {
 					usleep((uint32_t)millis * 1000);
@@ -133,13 +137,35 @@ random_worker(void* udata)
 			}
 		}
 	}
+	destroy_threaddata(tdata);
 	return 0;
+}
+
+static void
+random_worker_async(clientdata* cdata)
+{
+	// Generate max command writes to seed the event loops.
+	// Then start a new command in each command callback.
+	// This effectively throttles new command generation, by only allowing
+	// asyncMaxCommands at any point in time.
+	as_monitor_begin(&monitor);
+	
+	int max = cdata->async_max_commands;
+	
+	for (int i = 1; i <= max; i++) {
+		// Allocate separate buffers for each seed command and reuse them in callbacks.
+		threaddata* tdata = create_threaddata(cdata, 0);
+		
+		// Start seed commands on random event loops.
+		random_read_write_async(cdata, tdata, 0);
+	}
+	as_monitor_wait(&monitor);
 }
 
 int
 random_read_write(clientdata* data)
 {
-	blog_info("Read/write using %d records", data->records);
+	blog_info("Read/write using %d records", data->key_max);
 	
 	pthread_t ticker;
 	if (pthread_create(&ticker, 0, ticker_worker, data) != 0) {
@@ -148,22 +174,28 @@ random_read_write(clientdata* data)
 		return -1;
 	}
 	
-	int max = data->threads;
-	blog_info("Start %d generator threads", max);
-	pthread_t threads[max];
-	
-	for (int i = 0; i < max; i++) {
-		if (pthread_create(&threads[i], 0, random_worker, data) != 0) {
-			data->valid = false;
-			blog_error("Failed to create thread.");
-			return -1;
+	if (data->async) {
+		// Asynchronous mode.
+		random_worker_async(data);
+	}
+	else {
+		// Synchronous mode.
+		int max = data->threads;
+		blog_info("Start %d generator threads", max);
+		pthread_t threads[max];
+		
+		for (int i = 0; i < max; i++) {
+			if (pthread_create(&threads[i], 0, random_worker, data) != 0) {
+				data->valid = false;
+				blog_error("Failed to create thread.");
+				return -1;
+			}
+		}
+		
+		for (int i = 0; i < max; i++) {
+			pthread_join(threads[i], 0);
 		}
 	}
-	
-	for (int i = 0; i < max; i++) {
-		pthread_join(threads[i], 0);
-	}
-	
 	data->valid = false;
 	pthread_join(ticker, 0);
 	return 0;

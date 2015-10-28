@@ -16,6 +16,7 @@
  */
 #include <aerospike/aerospike_scan.h>
 #include <aerospike/aerospike_info.h>
+#include <aerospike/as_async.h>
 #include <aerospike/as_command.h>
 #include <aerospike/as_job.h>
 #include <aerospike/as_key.h>

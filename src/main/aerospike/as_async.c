@@ -215,7 +215,11 @@ as_async_command_write(as_async_command* cmd)
 	ssize_t bytes;
 	
 	do {
+#if defined(__linux__)
+		bytes = send(cmd->event.fd, cmd->buf + cmd->pos, cmd->len - cmd->pos, MSG_NOSIGNAL);
+#else
 		bytes = write(cmd->event.fd, cmd->buf + cmd->pos, cmd->len - cmd->pos);
+#endif
 		
 		if (bytes > 0) {
 			cmd->pos += bytes;

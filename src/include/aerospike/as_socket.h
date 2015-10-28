@@ -33,10 +33,6 @@
 #define as_close(fd) (close(fd))
 #endif
 
-#if defined(__APPLE__)
-#define MSG_NOSIGNAL SO_NOSIGPIPE
-#endif
-
 #if defined(CF_WINDOWS)
 #include <WinSock2.h>
 #include <Ws2tcpip.h>

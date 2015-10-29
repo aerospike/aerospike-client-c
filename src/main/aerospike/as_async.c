@@ -513,6 +513,8 @@ as_async_read(as_async_command* cmd)
 	return true;
 }
 
+#define AS_ASYNC_AUTH_RETURN_CODE 1
+
 static void
 as_async_command_parse_authentication(as_async_command* cmd)
 {
@@ -524,9 +526,9 @@ as_async_command_parse_authentication(as_async_command* cmd)
 		
 		// Authenticate response buffer is at end of write buffer.
 		cmd->pos = cmd->len - sizeof(as_proto);
-		as_proto_msg* msg = (as_proto_msg*)&cmd->buf[cmd->pos];
-		as_proto_swap_from_be(&msg->proto);
-		cmd->auth_len = (uint32_t)msg->proto.sz;
+		as_proto* proto = (as_proto*)&cmd->buf[cmd->pos];
+		as_proto_swap_from_be(proto);
+		cmd->auth_len = (uint32_t)proto->sz;
 		cmd->len = cmd->pos + cmd->auth_len;
 		
 		if (cmd->len > cmd->capacity) {
@@ -544,7 +546,7 @@ as_async_command_parse_authentication(as_async_command* cmd)
 
 	// Parse authentication response.
 	cmd->len -= cmd->auth_len;
-	uint8_t code = cmd->buf[cmd->len + 1];
+	uint8_t code = cmd->buf[cmd->len + AS_ASYNC_AUTH_RETURN_CODE];
 
 	if (code) {
 		// Can't authenticate socket, so must close it.
@@ -587,9 +589,9 @@ as_async_command_receive_multi(as_async_command* cmd)
 		return;
 	}
 	
-	as_proto_msg* msg = (as_proto_msg*)cmd->buf;
-	as_proto_swap_from_be(&msg->proto);
-	size_t size = msg->proto.sz;
+	as_proto* proto = (as_proto*)cmd->buf;
+	as_proto_swap_from_be(proto);
+	size_t size = proto->sz;
 	
 	cmd->len = (uint32_t)size;
 	cmd->pos = 0;
@@ -638,9 +640,9 @@ as_async_command_receive(as_async_command* cmd)
 			return;
 		}
 		
-		as_proto_msg* msg = (as_proto_msg*)cmd->buf;
-		as_proto_swap_from_be(&msg->proto);
-		size_t size = msg->proto.sz;
+		as_proto* proto = (as_proto*)cmd->buf;
+		as_proto_swap_from_be(proto);
+		size_t size = proto->sz;
 		
 		cmd->len = (uint32_t)size;
 		cmd->pos = 0;
@@ -677,16 +679,16 @@ as_async_command_parse_header(as_async_command* cmd)
 		return true;
 	}
 	
-	uint8_t status = cmd->buf[5];
+	as_msg* msg = (as_msg*)cmd->buf;
 	
-	if (status == AEROSPIKE_OK) {
+	if (msg->result_code == AEROSPIKE_OK) {
 		as_async_response_complete(cmd);
 		((as_async_write_command*)cmd)->listener(0, cmd->udata, cmd->event.event_loop);
 		as_async_command_free(cmd);
 	}
 	else {
 		as_error err;
-		as_error_set_message(&err, status, as_error_string(status));
+		as_error_set_message(&err, msg->result_code, as_error_string(msg->result_code));
 		as_async_response_error(cmd, &err);
 	}
 	return true;

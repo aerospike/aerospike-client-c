@@ -205,6 +205,10 @@ as_async_executor_complete(as_async_command* cmd)
 	as_async_command_free(cmd);
 }
 
+#define AS_ASYNC_WRITE_COMPLETE 0
+#define AS_ASYNC_WRITE_INCOMPLETE 1
+#define AS_ASYNC_WRITE_ERROR 2
+
 static int
 as_async_command_write(as_async_command* cmd)
 {
@@ -220,23 +224,23 @@ as_async_command_write(as_async_command* cmd)
 		
 		if (bytes < 0) {
 			if (errno == EWOULDBLOCK) {
-				return 1;
+				return AS_ASYNC_WRITE_INCOMPLETE;
 			}
 			
 			as_error err;
 			as_error_update(&err, AEROSPIKE_ERR_CLIENT, "Socket %d write failed: %d", cmd->event.fd, errno);
 			as_async_socket_error(cmd, &err);
-			return 2;
+			return AS_ASYNC_WRITE_ERROR;
 		}
 		else {
 			as_error err;
 			as_error_update(&err, AEROSPIKE_ERR_CLIENT, "Socket %d write closed by peer", cmd->event.fd);
 			as_async_socket_error(cmd, &err);
-			return 3;
+			return AS_ASYNC_WRITE_ERROR;
 		}
 	} while (cmd->pos < cmd->len);
 	
-	return 0;
+	return AS_ASYNC_WRITE_COMPLETE;
 }
 
 static inline void
@@ -254,7 +258,7 @@ as_async_set_auth_read_header(as_async_command* cmd)
 {
 	// Authenticate response buffer is at end of write buffer.
 	cmd->pos = cmd->len - cmd->auth_len;
-	cmd->len = cmd->pos + 8;
+	cmd->len = cmd->pos + sizeof(as_proto);
 	cmd->state = AS_ASYNC_STATE_AUTH_READ_HEADER;
 }
 
@@ -265,14 +269,14 @@ as_async_connected_auth(as_async_command* cmd)
 	
 	int ret = as_async_command_write(cmd);
 	
-	if (ret == 0) {
+	if (ret == AS_ASYNC_WRITE_COMPLETE) {
 		// Done with write. Register for read.
 		as_async_set_auth_read_header(cmd);
 		as_event_register_read(&cmd->event);
 		return;
 	}
 	
-	if (ret == 1) {
+	if (ret == AS_ASYNC_WRITE_INCOMPLETE) {
 		// Got would-block. Register for write.
 		cmd->state = AS_ASYNC_STATE_AUTH_WRITE;
 		as_event_register_write(&cmd->event);
@@ -402,16 +406,16 @@ as_async_command_begin(as_async_command* cmd)
 	// Try non-blocking write.
 	int ret = as_async_command_write(cmd);
 	
-	if (ret == 0) {
+	if (ret == AS_ASYNC_WRITE_COMPLETE) {
 		// Done with write. Register for read.
 		cmd->pos = 0;
-		cmd->len = 8;
+		cmd->len = sizeof(as_proto);
 		cmd->state = AS_ASYNC_STATE_READ_HEADER;
 		as_event_register_read(&cmd->event);
 		return;
 	}
 	
-	if (ret == 1) {
+	if (ret == AS_ASYNC_WRITE_INCOMPLETE) {
 		// Got would-block. Register for write.
 		cmd->state = AS_ASYNC_STATE_WRITE;
 		as_event_register_write(&cmd->event);
@@ -463,14 +467,14 @@ as_async_command_send(as_async_command* cmd)
 {
 	int ret = as_async_command_write(cmd);
 	
-	if (ret == 0) {
+	if (ret == AS_ASYNC_WRITE_COMPLETE) {
 		// Done with write. Register for read.
 		if (cmd->state == AS_ASYNC_STATE_AUTH_WRITE) {
 			as_async_set_auth_read_header(cmd);
 		}
 		else {
 			cmd->pos = 0;
-			cmd->len = 8;
+			cmd->len = sizeof(as_proto);
 			cmd->state = AS_ASYNC_STATE_READ_HEADER;
 		}
 		as_event_set_read(&cmd->event);
@@ -519,7 +523,7 @@ as_async_command_parse_authentication(as_async_command* cmd)
 		}
 		
 		// Authenticate response buffer is at end of write buffer.
-		cmd->pos = cmd->len - 8;
+		cmd->pos = cmd->len - sizeof(as_proto);
 		as_proto_msg* msg = (as_proto_msg*)&cmd->buf[cmd->pos];
 		as_proto_swap_from_be(&msg->proto);
 		cmd->auth_len = (uint32_t)msg->proto.sz;
@@ -554,16 +558,16 @@ as_async_command_parse_authentication(as_async_command* cmd)
 	// Try non-blocking command write.
 	int ret = as_async_command_write(cmd);
 	
-	if (ret == 0) {
+	if (ret == AS_ASYNC_WRITE_COMPLETE) {
 		// Done with write. Set command read.
 		cmd->pos = 0;
-		cmd->len = 8;
+		cmd->len = sizeof(as_proto);
 		cmd->state = AS_ASYNC_STATE_READ_HEADER;
 		as_event_set_read(&cmd->event);
 		return;
 	}
 
-	if (ret == 1) {
+	if (ret == AS_ASYNC_WRITE_INCOMPLETE) {
 		// Got would-block. Set command write.
 		cmd->state = AS_ASYNC_STATE_WRITE;
 		as_event_set_write(&cmd->event);
@@ -575,7 +579,7 @@ as_async_command_receive_multi(as_async_command* cmd)
 {
 	// Batch, scan, query may be waiting on end block.
 	// Prepare for next message block.
-	cmd->len = 8;
+	cmd->len = sizeof(as_proto);
 	cmd->pos = 0;
 	cmd->state = AS_ASYNC_STATE_READ_HEADER;
 	
@@ -600,7 +604,7 @@ as_async_command_receive_multi(as_async_command* cmd)
 
 		if (! cmd->parse_results(cmd)) {
 			// We did not finish after all. Prepare to read next header.
-			cmd->len = 8;
+			cmd->len = sizeof(as_proto);
 			cmd->pos = 0;
 			cmd->state = AS_ASYNC_STATE_READ_HEADER;
 		}

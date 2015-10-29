@@ -598,7 +598,7 @@ as_async_command_receive_multi(as_async_command* cmd)
 	cmd->state = AS_ASYNC_STATE_READ_BODY;
 
 	// Check for end block size.
-	if (cmd->len == 22) {
+	if (cmd->len == sizeof(as_msg)) {
 		// Look like we received end block.  Read and parse to make sure.
 		if (! as_async_read(cmd)) {
 			return;

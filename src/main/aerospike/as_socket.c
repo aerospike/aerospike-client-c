@@ -197,7 +197,7 @@ as_socket_create_and_connect_nb(as_error* err, struct sockaddr_in *sa, int* fd_o
 }
 
 bool
-as_socket_validate(int fd, bool expect_empty)
+as_socket_validate(int fd, bool pipe)
 {
 	uint8_t buf[8];
 	ssize_t rv = recv(fd, (void*)buf, sizeof(buf), MSG_PEEK | MSG_DONTWAIT | MSG_NOSIGNAL);
@@ -216,12 +216,14 @@ as_socket_validate(int fd, bool expect_empty)
 
 		// Close on socket error.
 		as_log_info("Connected check: fd %d error %d", fd, errno);
-		as_close(fd);
+		if (! pipe) {
+			as_close(fd);
+		}
 		return false;
 	}
 
 	if (rv > 0) {
-		if (expect_empty) {
+		if (! pipe) {
 			as_log_info("Connected check: Peek got unexpected data for fd %d", fd);
 		}
 		return true;
@@ -229,7 +231,9 @@ as_socket_validate(int fd, bool expect_empty)
 	
 	// Close because already disconnected by peer.
 	as_log_debug("Connected check: Found disconnected fd %d", fd);
-	as_close(fd);
+	if (! pipe) {
+		as_close(fd);
+	}
 	return false;
 }
 

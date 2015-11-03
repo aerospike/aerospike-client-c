@@ -77,12 +77,12 @@ as_socket_create_and_connect_nb(as_error* err, struct sockaddr_in *sa, int* fd);
  *	Peek for socket connection status.  Close socket if not connected.
  *
  *	@param fd				Socket identifier.
- *	@param expect_empty 	Log message if socket contains data.
+ *	@param pipelining 		Do not log message if socket contains data. Do not close the FD.
  *
  *	@return if socket is connected.
  */
 bool
-as_socket_validate(int fd, bool expect_empty);
+as_socket_validate(int fd, bool pipe);
 
 #if defined(__linux__) || defined(__APPLE__)
 

@@ -595,6 +595,7 @@ as_scan_async(
 		cmd->event.timeout_ms = policy->timeout;
 		cmd->cluster = as->cluster;
 		cmd->node = nodes[i];
+		cmd->pipe_conn = NULL;
 		cmd->udata = executor;  // Overload udata to be the executor.
 		cmd->parse_results = as_scan_parse_records_async;
 		cmd->buf = ((as_async_scan_command*)cmd)->space;

@@ -156,6 +156,7 @@ AEROSPIKE += as_lookup.o
 AEROSPIKE += as_node.o
 AEROSPIKE += as_operations.o
 AEROSPIKE += as_partition.o
+AEROSPIKE += as_pipe.o
 AEROSPIKE += as_policy.o
 AEROSPIKE += as_proto.o
 AEROSPIKE += as_query.o

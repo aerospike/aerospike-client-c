@@ -962,6 +962,7 @@ as_batch_read_execute_async(
 		cmd->event.timeout_ms = policy->timeout;
 		cmd->cluster = cluster;
 		cmd->node = batch_node->node;
+		cmd->pipe_conn = NULL;
 		cmd->udata = executor;  // Overload udata to be the executor.
 		cmd->parse_results = as_batch_async_parse_records;
 		cmd->buf = ((as_async_batch_command*)cmd)->space;

@@ -97,40 +97,26 @@ as_node_create(as_cluster* cluster, struct sockaddr_in* addr, as_node_info* node
 void
 as_node_destroy(as_node* node)
 {
-	// Drain out the queue and close the FDs
-	int rv;
-	do {
-		int	fd;
-		rv = cf_queue_pop(node->conn_q, &fd, CF_QUEUE_NOWAIT);
-		if (rv == CF_QUEUE_OK)
+	// Drain out connection queues and close the FDs
+	int	fd;
+	
+	while (cf_queue_pop(node->conn_q, &fd, CF_QUEUE_NOWAIT) == CF_QUEUE_OK) {
+		as_close(fd);
+	}
+	
+	for (uint32_t i = 0; i < as_event_loop_capacity; i++) {
+		as_queue* queue = &node->async_conn_qs[i];
+		
+		while (as_queue_pop(queue, &fd)) {
 			as_close(fd);
-	} while (rv == CF_QUEUE_OK);
+		}
+	}
 	
-	/*
-	 do {
-	 int	fd;
-	 rv = cf_queue_pop(node->conn_q_asyncfd, &fd, CF_QUEUE_NOWAIT);
-	 if (rv == CF_QUEUE_OK)
-	 as_close(fd);
-	 } while (rv == CF_QUEUE_OK);
-	 */
-	
-	/*
-	 do {
-	 //When we reach this point, ideally there should not be any workitems.
-	 cl_async_work *aw;
-	 rv = cf_queue_pop(node->asyncwork_q, &aw, CF_QUEUE_NOWAIT);
-	 if (rv == CF_QUEUE_OK) {
-	 free(aw);
-	 }
-	 } while (rv == CF_QUEUE_OK);
-	 
-	 //We want to delete all the workitems of this node
-	 if (g_cl_async_hashtab) {
-	 shash_reduce_delete(g_cl_async_hashtab, cl_del_node_asyncworkitems, node);
-	 }
-	 */
-	
+	if (node->info_fd >= 0) {
+		as_close(node->info_fd);
+	}
+
+	// Release memory
 	as_vector_destroy(&node->addresses);
 	cf_queue_destroy(node->conn_q);
 	
@@ -138,10 +124,6 @@ as_node_destroy(as_node* node)
 		as_queue_destroy(&node->async_conn_qs[i]);
 	}
 	cf_free(node->async_conn_qs);
-	
-	if (node->info_fd >= 0) {
-		as_close(node->info_fd);
-	}
 	cf_free(node);
 }
 

@@ -112,7 +112,11 @@ cancel_connection(as_async_command* cmd, as_error* err, int32_t source)
 		what &= ~CANCEL_COMMAND_EVENT;
 	}
 
-	// Don't free here. The connection could still be in the pool.
+	if (! conn->active) {
+		cf_free(conn);
+		return;
+	}
+
 	conn->writer = NULL;
 	conn->fd = -1;
 	conn->active = false;

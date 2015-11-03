@@ -1,0 +1,305 @@
+/*
+ * Copyright 2015 Aerospike, Inc.
+ *
+ * Portions may be licensed to Aerospike, Inc. under one or more contributor
+ * license agreements.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not
+ * use this file except in compliance with the License. You may obtain a copy of
+ * the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
+
+#include <aerospike/as_pipe.h>
+
+static as_async_command*
+link_to_command(cf_ll_element* link)
+{
+	return (as_async_command*)((uint8_t*)link - offsetof(as_async_command, pipe_link));
+}
+
+static void
+next_reader(as_async_command* reader)
+{
+	as_pipe_connection* conn = reader->pipe_conn;
+	as_log_trace("Selecting next reader for command %p, pipeline connection %p, FD %d", reader, conn, conn->fd);
+	assert(cf_ll_get_head(&conn->readers) == &reader->pipe_link);
+
+	cf_ll_delete(&conn->readers, &reader->pipe_link);
+	as_async_unregister(reader);
+
+	if (cf_ll_size(&conn->readers) == 0) {
+		as_log_trace("No reader left");
+
+		if (conn->active) {
+			as_log_trace("Pipeline connection still active");
+			return;
+		}
+
+		as_log_trace("Closing inactive pipeline connection %p, FD %d", conn, conn->fd);
+		close(conn->fd);
+		cf_free(conn);
+		return;
+	}
+
+	as_log_trace("Pipeline connection %p has %d reader(s)", conn, cf_ll_size(&conn->readers));
+	cf_ll_element* link = cf_ll_get_head(&conn->readers);
+	as_async_command* next = link_to_command(link);
+	as_log_trace("Next reader after %p is %p", reader, next);
+	as_event_register_read(&next->event);
+}
+
+#define CANCEL_COMMAND_TIMER 1
+#define CANCEL_COMMAND_EVENT 2
+
+static void
+cancel_command(as_async_command* cmd, as_error* err, uint32_t what)
+{
+	as_log_trace("Canceling command %p, error code %d, mask 0x%x", cmd, err->code, what);
+
+	if ((what & CANCEL_COMMAND_EVENT) != 0) {
+		as_log_trace("Unregistering event");
+		as_event_unregister(&cmd->event);
+	}
+
+	if ((what & CANCEL_COMMAND_TIMER) != 0 && cmd->event.timeout_ms != 0) {
+		as_log_trace("Canceling timeout");
+		as_event_stop_timer(&cmd->event);
+	}
+
+	as_log_trace("Invoking callback function");
+	as_async_error_callback(cmd, err);
+}
+
+#define CANCEL_CONNECTION_SOCKET 1
+#define CANCEL_CONNECTION_RESPONSE 2
+#define CANCEL_CONNECTION_TIMEOUT 3
+
+static void
+cancel_connection(as_async_command* cmd, as_error* err, int32_t source)
+{
+	as_pipe_connection* conn = cmd->pipe_conn;
+	as_log_trace("Canceling pipeline connection for command %p, error code %d, connection %p, FD %d", cmd, err->code, conn, conn->fd);
+	assert(cmd == conn->writer || cf_ll_get_head(&conn->readers) == &cmd->pipe_link);
+
+	as_event_close(&cmd->event);
+
+	uint32_t what = CANCEL_COMMAND_EVENT;
+
+	if (source != CANCEL_CONNECTION_TIMEOUT) {
+		what |= CANCEL_COMMAND_TIMER;
+	}
+
+	if (conn->writer != NULL) {
+		as_log_trace("Canceling writer %p", conn->writer);
+		cancel_command(conn->writer, err, what);
+	}
+
+	while (cf_ll_size(&conn->readers) > 0) {
+		cf_ll_element* link = cf_ll_get_head(&conn->readers);
+		as_async_command* walker = link_to_command(link);
+
+		as_log_trace("Canceling reader %p", walker);
+		cf_ll_delete(&conn->readers, link);
+		cancel_command(walker, err, what);
+
+		// Only the first reader has an event registered.
+		what &= ~CANCEL_COMMAND_EVENT;
+	}
+
+	// Don't free here. The connection could still be in the pool.
+	conn->writer = NULL;
+	conn->fd = -1;
+	conn->active = false;
+}
+
+static void
+release_connection(as_pipe_connection* conn)
+{
+	as_log_trace("Releasing pipeline connection %p, FD %d", conn, conn->fd);
+
+	if (conn->writer != NULL || cf_ll_size(&conn->readers) > 0) {
+		as_log_trace("Marking pipeline connection %p as inactive", conn);
+		conn->active = false;
+		return;
+	}
+
+	as_log_trace("Closing pipeline connection %p, FD %d", conn, conn->fd);
+	close(conn->fd);
+	cf_free(conn);
+}
+
+static void
+put_connection(as_async_command* cmd)
+{
+	as_pipe_connection* conn = cmd->pipe_conn;
+	as_log_trace("Returning pipeline connection for command %p, pipeline connection %p, FD %d", cmd, conn, conn->fd);
+	as_queue* q = &cmd->node->pipe_conn_qs[cmd->event.event_loop->index];
+
+	if (! as_queue_push_limit(q, &conn)) {
+		release_connection(conn);
+	}
+}
+
+int32_t
+as_pipe_get_connection(as_async_command* cmd)
+{
+	as_log_trace("Getting pipeline connection for command %p", cmd);
+	as_queue* q = &cmd->node->pipe_conn_qs[cmd->event.event_loop->index];
+	as_pipe_connection* conn;
+
+	while (as_queue_pop(q, &conn)) {
+		as_log_trace("Checking pipeline connection %p, FD %d", conn, conn->fd);
+
+		if (! conn->active) {
+			as_log_trace("Pipeline connection %p was canceled earlier", conn);
+			cf_free(conn);
+			continue;
+		}
+
+		if (as_socket_validate(conn->fd, true)) {
+			as_log_trace("Validation OK");
+			cmd->pipe_conn = conn;
+			cmd->event.fd = conn->fd;
+			return AS_ASYNC_CONNECTION_COMPLETE;
+		}
+
+		as_log_trace("Validation failed");
+		release_connection(conn);
+	}
+
+	as_log_trace("Creating new pipeline connection for command %p", cmd);
+	int32_t res = as_async_create_connection(cmd);
+
+	if (res == AS_ASYNC_CONNECTION_ERROR) {
+		as_log_trace("Failed to create pipeline connection FD");
+		return res;
+	}
+
+	conn = cf_malloc(sizeof(as_pipe_connection));
+	assert(conn != NULL);
+
+	conn->writer = NULL;
+	cf_ll_init(&conn->readers, NULL, false);
+	conn->fd = cmd->event.fd;
+	conn->active = true;
+	as_log_trace("New pipeline connection %p, FD %d", conn, conn->fd);
+	cmd->pipe_conn = conn;
+	return res;
+}
+
+void
+as_pipe_socket_error(as_async_command* cmd, as_error* err)
+{
+	as_log_trace("Socket error for command %p", cmd);
+	cancel_connection(cmd, err, CANCEL_CONNECTION_SOCKET);
+}
+
+void
+as_pipe_timeout(as_async_command* cmd)
+{
+	as_log_trace("Timeout for command %p", cmd);
+	as_error err;
+	as_error_set_message(&err, AEROSPIKE_ERR_TIMEOUT, as_error_string(AEROSPIKE_ERR_TIMEOUT));
+	cancel_connection(cmd, &err, CANCEL_CONNECTION_TIMEOUT);
+}
+
+void
+as_pipe_response_error(as_async_command* cmd, as_error* err)
+{
+	as_log_trace("Error response for command %p, code %d", cmd, err->code);
+
+	switch (err->code) {
+		case AEROSPIKE_ERR_QUERY_ABORTED:
+		case AEROSPIKE_ERR_SCAN_ABORTED:
+		case AEROSPIKE_ERR_CLIENT_ABORT:
+		case AEROSPIKE_ERR_CLIENT:
+			as_log_trace("Error is fatal");
+			cancel_connection(cmd, err, CANCEL_CONNECTION_RESPONSE);
+			break;
+
+		default:
+			as_log_trace("Error is non-fatal");
+			next_reader(cmd);
+			as_async_error_callback(cmd, err);
+			break;
+	}
+}
+
+void
+as_pipe_response_complete(as_async_command* cmd)
+{
+	as_log_trace("Response for command %p", cmd);
+	next_reader(cmd);
+	as_node_release(cmd->node);
+}
+
+void
+as_pipe_write_start(as_async_command* cmd)
+{
+	as_log_trace("Setting writer %p", cmd);
+	as_pipe_connection* conn = cmd->pipe_conn;
+	as_log_trace("Pipeline connection %p, FD %d", conn, conn->fd);
+	assert(conn != NULL);
+	assert(conn->writer == NULL);
+
+	conn->writer = cmd;
+}
+
+void
+as_pipe_read_start(as_async_command* cmd, bool has_event)
+{
+	as_log_trace("Writer %p becomes reader", cmd);
+	as_pipe_connection* conn = cmd->pipe_conn;
+	as_log_trace("Pipeline connection %p, FD %d", conn, conn->fd);
+	assert(conn != NULL);
+	assert(conn->writer == cmd);
+
+	conn->writer = NULL;
+	cf_ll_append(&conn->readers, &cmd->pipe_link);
+	as_log_trace("Pipeline connection %p has %d reader(s)", conn, cf_ll_size(&conn->readers));
+
+	put_connection(cmd);
+
+	if (cf_ll_size(&conn->readers) == 1) {
+		if (! has_event) {
+			as_log_trace("Registering read event for command %p", cmd);
+			as_event_register_read(&cmd->event);
+		}
+		else {
+			as_log_trace("Changing write event to read event for command %p", cmd);
+			as_event_set_read(&cmd->event);
+		}
+	}
+	else {
+		if (has_event) {
+			as_log_trace("Removing write event for command %p", cmd);
+			as_event_unregister(&cmd->event);
+		}
+	}
+}
+
+extern uint32_t as_event_loop_capacity;
+
+void
+as_pipe_node_destroy(as_node* node)
+{
+	for (uint32_t i = 0; i < as_event_loop_capacity; i++) {
+		as_pipe_connection* conn;
+
+		while (as_queue_pop(&node->pipe_conn_qs[i], &conn)) {
+			as_log_trace("Closing pipeline connection %p, FD %d, %s", conn, conn->fd, conn->active ? "active" : "inactive");
+			close(conn->fd);
+			cf_free(conn);
+		}
+
+		as_queue_destroy(&node->pipe_conn_qs[i]);
+	}
+
+	cf_free(node->pipe_conn_qs);
+}

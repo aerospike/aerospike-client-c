@@ -114,10 +114,10 @@ typedef struct as_node_s {
 	as_queue* async_conn_qs;
 	
 	/**
-	 *	@private
-	 *	Async pipeline loop.  Used for pipelined commands only.
+	 * 	@private
+	 * 	Pool of connections used in pipelined async commands.  Also not thread-safe.
 	 */
-	as_event_loop* pipeline_loop;
+	as_queue* pipe_conn_qs;
 
 	/**
 	 *	@private
@@ -239,6 +239,21 @@ typedef struct as_friend_s {
 /******************************************************************************
  * FUNCTIONS
  ******************************************************************************/
+
+/**
+ * 	@private
+ * 	Close all async connections in the pool.
+ */
+void
+as_async_node_destroy(as_node* node);
+
+/**
+ *	@private
+ *	Close all pipelined connections in the pool.
+ */
+
+void
+as_pipe_node_destroy(as_node* node);
 
 /**
  *	@private

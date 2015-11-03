@@ -20,6 +20,7 @@
 #include <aerospike/as_error.h>
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_node.h>
+#include <aerospike/as_pipe.h>
 #include <aerospike/as_socket.h>
 #include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_byte_order.h>
@@ -29,7 +30,7 @@
  * FUNCTIONS
  *****************************************************************************/
 
-static inline void
+void
 as_async_unregister(as_async_command* cmd)
 {
 	as_event_unregister(&cmd->event);
@@ -59,7 +60,7 @@ as_async_command_free(as_async_command* cmd)
 	cf_free(cmd);
 }
 
-static void
+void
 as_async_error_callback(as_async_command* cmd, as_error* err)
 {
 	as_node_release(cmd->node);
@@ -110,6 +111,11 @@ as_async_conn_error(as_async_command* cmd, as_error* err)
 static void
 as_async_socket_error(as_async_command* cmd, as_error* err)
 {
+	if (cmd->pipeline) {
+		as_pipe_socket_error(cmd, err);
+		return;
+	}
+
 	// Socket read/write failure.
 	// Stop watcher only if it has been initialized.
 	if (cmd->state > AS_ASYNC_STATE_UNREGISTERED) {
@@ -129,15 +135,20 @@ as_async_socket_error(as_async_command* cmd, as_error* err)
 void
 as_async_timeout(as_async_command* cmd)
 {
+	if (cmd->pipeline) {
+		as_pipe_timeout(cmd);
+		return;
+	}
+
 	as_error err;
 	as_error_set_message(&err, AEROSPIKE_ERR_TIMEOUT, as_error_string(AEROSPIKE_ERR_TIMEOUT));
-	
+
 	// Command has timed out.
 	// Stop watcher if it has been initialized.
 	if (cmd->state > AS_ASYNC_STATE_UNREGISTERED) {
 		as_event_unregister(&cmd->event);
 	}
-	
+
 	// Assume timer has already been stopped.
 	// Do not put connection back in pool.
 	as_event_close(&cmd->event);
@@ -147,10 +158,15 @@ as_async_timeout(as_async_command* cmd)
 void
 as_async_response_error(as_async_command* cmd, as_error* err)
 {
+	if (cmd->pipeline) {
+		as_pipe_response_error(cmd, err);
+		return;
+	}
+
 	// Server sent back error.
 	// Release resources, make callback and free command.
 	as_async_unregister(cmd);
-	
+
 	// Close socket on errors that can leave unread data in socket.
 	switch (err->code) {
 		case AEROSPIKE_ERR_QUERY_ABORTED:
@@ -159,7 +175,7 @@ as_async_response_error(as_async_command* cmd, as_error* err)
 		case AEROSPIKE_ERR_CLIENT:
 			as_event_close(&cmd->event);
 			break;
-			
+
 		default:
 			as_async_put_connection(cmd);
 			break;
@@ -170,6 +186,11 @@ as_async_response_error(as_async_command* cmd, as_error* err)
 static inline void
 as_async_response_complete(as_async_command* cmd)
 {
+	if (cmd->pipeline) {
+		as_pipe_response_complete(cmd);
+		return;
+	}
+
 	as_async_unregister(cmd);
 	as_async_put_connection(cmd);
 	as_node_release(cmd->node);
@@ -243,7 +264,7 @@ as_async_command_write(as_async_command* cmd)
 			return AS_ASYNC_WRITE_ERROR;
 		}
 	} while (cmd->pos < cmd->len);
-	
+
 	return AS_ASYNC_WRITE_COMPLETE;
 }
 
@@ -287,14 +308,14 @@ as_async_connected_auth(as_async_command* cmd)
 	}
 }
 
-static inline bool
+static inline int32_t
 as_async_connected(as_async_command* cmd)
 {
 	if (cmd->cluster->user) {
 		as_async_connected_auth(cmd);
-		return false;
+		return AS_ASYNC_CONNECTION_PENDING;
 	}
-	return true;
+	return AS_ASYNC_CONNECTION_COMPLETE;
 }
 
 static inline void
@@ -310,7 +331,7 @@ as_async_connect_in_progress(as_async_command* cmd)
 	as_event_register_write(&cmd->event);
 }
 
-static bool
+int32_t
 as_async_create_connection(as_async_command* cmd)
 {
 	// Create a non-blocking socket.
@@ -320,7 +341,7 @@ as_async_create_connection(as_async_command* cmd)
 		as_error err;
 		as_error_set_message(&err, AEROSPIKE_ERR_CLIENT, "Failed to create non-blocking socket");
 		as_async_conn_error(cmd, &err);
-		return false;
+		return AS_ASYNC_CONNECTION_ERROR;
 	}
 	
 	// Try primary address.
@@ -336,7 +357,7 @@ as_async_create_connection(as_async_command* cmd)
 	if (errno == EINPROGRESS) {
 		// Connection hasn't finished, so register new fd for write.
 		as_async_connect_in_progress(cmd);
-		return false;
+		return AS_ASYNC_CONNECTION_PENDING;
 	}
 	
 	// Try other addresses.
@@ -365,7 +386,7 @@ as_async_create_connection(as_async_command* cmd)
 				
 				// Connection hasn't finished, so register new fd for write.
 				as_async_connect_in_progress(cmd);
-				return false;
+				return AS_ASYNC_CONNECTION_PENDING;
 			}
 		}
 	}
@@ -376,7 +397,7 @@ as_async_create_connection(as_async_command* cmd)
 	as_error_update(&err, AEROSPIKE_ERR_CLIENT, "Failed to connect: %s %s:%d",
 					node->name, primary->name, (int)cf_swap_from_be16(primary->addr.sin_port));
 	as_async_conn_error(cmd, &err);
-	return false;
+	return AS_ASYNC_CONNECTION_ERROR;
 }
 
 static bool
@@ -385,7 +406,7 @@ as_async_get_connection(as_async_command* cmd)
 	as_queue* q = &cmd->node->async_conn_qs[cmd->event.event_loop->index];
 	
 	while (as_queue_pop(q, &cmd->event.fd)) {
-		if (as_socket_validate(cmd->event.fd, true)) {
+		if (as_socket_validate(cmd->event.fd, false)) {
 			return true;
 		}
 	}
@@ -399,14 +420,32 @@ as_async_command_begin(as_async_command* cmd)
 	if (cmd->event.timeout_ms) {
 		as_event_init_timer(&cmd->event);
 	}
-	
-	if (! as_async_get_connection(cmd)) {
-		if (! as_async_create_connection(cmd)) {
-			// Waiting on connection, authentication or error occurred.
-			return;
+
+	if (! cmd->pipeline) {
+		if (! as_async_get_connection(cmd)) {
+			if (as_async_create_connection(cmd) != AS_ASYNC_CONNECTION_COMPLETE) {
+				// Waiting on connection, authentication or error occurred.
+				return;
+			}
 		}
 	}
-		
+	else {
+		int32_t res = as_pipe_get_connection(cmd);
+
+		switch (res) {
+			case AS_ASYNC_CONNECTION_COMPLETE:
+				as_pipe_write_start(cmd);
+				break;
+
+			case AS_ASYNC_CONNECTION_PENDING:
+				as_pipe_write_start(cmd);
+				return;
+
+			case AS_ASYNC_CONNECTION_ERROR:
+				return;
+		}
+	}
+
 	// Try non-blocking write.
 	int ret = as_async_command_write(cmd);
 	
@@ -415,7 +454,14 @@ as_async_command_begin(as_async_command* cmd)
 		cmd->pos = 0;
 		cmd->len = sizeof(as_proto);
 		cmd->state = AS_ASYNC_STATE_READ_HEADER;
-		as_event_register_read(&cmd->event);
+
+		if (! cmd->pipeline) {
+			as_event_register_read(&cmd->event);
+		}
+		else {
+			as_pipe_read_start(cmd, false);
+		}
+
 		return;
 	}
 	
@@ -475,13 +521,20 @@ as_async_command_send(as_async_command* cmd)
 		// Done with write. Register for read.
 		if (cmd->state == AS_ASYNC_STATE_AUTH_WRITE) {
 			as_async_set_auth_read_header(cmd);
+			as_event_set_read(&cmd->event);
 		}
 		else {
 			cmd->pos = 0;
 			cmd->len = sizeof(as_proto);
 			cmd->state = AS_ASYNC_STATE_READ_HEADER;
+
+			if (! cmd->pipeline) {
+				as_event_set_read(&cmd->event);
+			}
+			else {
+				as_pipe_read_start(cmd, true);
+			}
 		}
-		as_event_set_read(&cmd->event);
 	}
 }
 
@@ -561,6 +614,10 @@ as_async_command_parse_authentication(as_async_command* cmd)
 	}
 	cmd->pos = 0;
 	
+	if (cmd->pipeline) {
+		as_pipe_write_start(cmd);
+	}
+
 	// Try non-blocking command write.
 	int ret = as_async_command_write(cmd);
 	
@@ -569,7 +626,14 @@ as_async_command_parse_authentication(as_async_command* cmd)
 		cmd->pos = 0;
 		cmd->len = sizeof(as_proto);
 		cmd->state = AS_ASYNC_STATE_READ_HEADER;
-		as_event_set_read(&cmd->event);
+
+		if (! cmd->pipeline) {
+			as_event_set_read(&cmd->event);
+		}
+		else {
+			as_pipe_read_start(cmd, true);
+		}
+
 		return;
 	}
 
@@ -802,4 +866,22 @@ as_async_command_parse_success_failure(as_async_command* cmd)
 		}
 	}
 	return true;
+}
+
+extern uint32_t as_event_loop_capacity;
+
+void
+as_async_node_destroy(as_node* node)
+{
+	for (uint32_t i = 0; i < as_event_loop_capacity; i++) {
+		int32_t fd;
+
+		while (as_queue_pop(&node->async_conn_qs[i], &fd)) {
+			close(fd);
+		}
+
+		as_queue_destroy(&node->async_conn_qs[i]);
+	}
+
+	cf_free(node->async_conn_qs);
 }

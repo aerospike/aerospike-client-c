@@ -37,7 +37,6 @@ bool
 as_partition_tables_update(struct as_cluster_s* cluster, as_node* node, char* buf, bool master);
 
 extern uint32_t as_event_loop_capacity;
-static uint32_t as_pipeline_current = 0;
 
 /******************************************************************************
  *	Functions.
@@ -72,18 +71,16 @@ as_node_create(as_cluster* cluster, struct sockaddr_in* addr, as_node_info* node
 	if (as_event_loop_capacity > 0) {
 		// Create one queue per event manager.
 		node->async_conn_qs = cf_malloc(sizeof(as_queue) * as_event_loop_capacity);
+		node->pipe_conn_qs = cf_malloc(sizeof(as_queue) * as_event_loop_capacity);
 		
 		for (uint32_t i = 0; i < as_event_loop_capacity; i++) {
 			as_queue_init(&node->async_conn_qs[i], sizeof(int), cluster->conns_per_node_event_loop);
+			as_queue_init(&node->pipe_conn_qs[i], sizeof(void*), cluster->conns_per_node_event_loop);
 		}
-		
-		// Assign pipeline event loop to this node.
-		uint32_t current = ck_pr_faa_32(&as_pipeline_current, 1);
-		node->pipeline_loop = &as_event_loops[current % as_event_loop_size];
 	}
 	else {
 		node->async_conn_qs = 0;
-		node->pipeline_loop = 0;
+		node->pipe_conn_qs = 0;
 	}
 	
 	node->info_fd = -1;
@@ -119,10 +116,12 @@ as_node_destroy(as_node* node)
 	// Release memory
 	as_vector_destroy(&node->addresses);
 	cf_queue_destroy(node->conn_q);
-	
-	for (uint32_t i = 0; i < as_event_loop_capacity; i++) {
-		as_queue_destroy(&node->async_conn_qs[i]);
+
+	if (as_event_loop_capacity > 0) {
+		as_async_node_destroy(node);
+		as_pipe_node_destroy(node);
 	}
+
 	cf_free(node->async_conn_qs);
 	cf_free(node);
 }
@@ -208,7 +207,7 @@ as_node_get_connection(as_error* err, as_node* node, uint64_t deadline_ms, int* 
 		int rv = cf_queue_pop(q, fd, CF_QUEUE_NOWAIT);
 		
 		if (rv == CF_QUEUE_OK) {
-			if (as_socket_validate(*fd, true)) {
+			if (as_socket_validate(*fd, false)) {
 				return AEROSPIKE_OK;
 			}
 		}

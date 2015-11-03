@@ -22,6 +22,7 @@
 #include <aerospike/as_listener.h>
 #include <aerospike/as_queue.h>
 #include <citrusleaf/alloc.h>
+#include <citrusleaf/cf_ll.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -48,8 +49,13 @@ extern "C" {
 
 #define AS_AUTHENTICATION_MAX_SIZE 158
 
+#define AS_ASYNC_CONNECTION_COMPLETE 0
+#define AS_ASYNC_CONNECTION_PENDING 1
+#define AS_ASYNC_CONNECTION_ERROR 2
+
 struct as_async_executor;
 struct as_async_command;
+typedef struct as_pipe_connection as_pipe_connection;
 	
 typedef bool (*as_async_parse_results_fn) (struct as_async_command* cmd);
 typedef void (*as_async_executor_complete_fn) (struct as_async_executor* executor, as_error* err);
@@ -70,6 +76,8 @@ typedef struct as_async_command {
 	
 	as_cluster* cluster;
 	as_node* node;
+	as_pipe_connection* pipe_conn;
+	cf_ll_element pipe_link;
 	void* udata;
 	as_async_parse_results_fn parse_results;
 
@@ -120,11 +128,12 @@ as_async_write_command_create(
 	size_t s = (sizeof(as_async_write_command) + size + AS_AUTHENTICATION_MAX_SIZE + 1023) & ~1023;
 	as_async_command* cmd = cf_malloc(s);
 	as_async_write_command* wcmd = (as_async_write_command*)cmd;
-	cmd->event.event_loop = pipeline? node->pipeline_loop : as_event_assign(event_loop);
+	cmd->event.event_loop = as_event_assign(event_loop);
 	cmd->event.fd = -1;
 	cmd->event.timeout_ms = timeout_ms;
 	cmd->cluster = cluster;
 	cmd->node = node;
+	cmd->pipe_conn = NULL;
 	cmd->udata = udata;
 	cmd->parse_results = parse_results;
 	cmd->buf = wcmd->space;
@@ -154,11 +163,12 @@ as_async_record_command_create(
 	size_t s = (sizeof(as_async_record_command) + size + AS_AUTHENTICATION_MAX_SIZE + 1023) & ~1023;
 	as_async_command* cmd = cf_malloc(s);
 	as_async_record_command* rcmd = (as_async_record_command*)cmd;
-	cmd->event.event_loop = pipeline? node->pipeline_loop : as_event_assign(event_loop);
+	cmd->event.event_loop = as_event_assign(event_loop);
 	cmd->event.fd = -1;
 	cmd->event.timeout_ms = timeout_ms;
 	cmd->cluster = cluster;
 	cmd->node = node;
+	cmd->pipe_conn = NULL;
 	cmd->udata = udata;
 	cmd->parse_results = parse_results;
 	cmd->buf = rcmd->space;
@@ -188,11 +198,12 @@ as_async_value_command_create(
 	size_t s = (sizeof(as_async_value_command) + size + AS_AUTHENTICATION_MAX_SIZE + 1023) & ~1023;
 	as_async_command* cmd = cf_malloc(s);
 	as_async_value_command* vcmd = (as_async_value_command*)cmd;
-	cmd->event.event_loop = pipeline? node->pipeline_loop : as_event_assign(event_loop);
+	cmd->event.event_loop = as_event_assign(event_loop);
 	cmd->event.fd = -1;
 	cmd->event.timeout_ms = timeout_ms;
 	cmd->cluster = cluster;
 	cmd->node = node;
+	cmd->pipe_conn = NULL;
 	cmd->udata = udata;
 	cmd->parse_results = parse_results;
 	cmd->buf = vcmd->space;
@@ -208,6 +219,12 @@ as_async_value_command_create(
 	vcmd->listener = listener;
 	return cmd;
 }
+
+void
+as_async_unregister(as_async_command* cmd);
+
+void
+as_async_error_callback(as_async_command* cmd, as_error* err);
 
 void
 as_async_command_execute(as_async_command* cmd);
@@ -238,6 +255,9 @@ as_async_timeout(as_async_command* cmd);
 	
 void
 as_async_executor_complete(as_async_command* cmd);
+
+int32_t
+as_async_create_connection(as_async_command* cmd);
 
 #ifdef __cplusplus
 } // end extern "C"

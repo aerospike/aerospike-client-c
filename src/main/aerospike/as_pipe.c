@@ -307,7 +307,11 @@ as_pipe_node_destroy(as_node* node)
 
 		while (as_queue_pop(&node->pipe_conn_qs[i], &conn)) {
 			as_log_trace("Closing pipeline connection %p, FD %d, %s", conn, conn->fd, conn->active ? "active" : "inactive");
-			close(conn->fd);
+
+			if (conn->active) {
+				close(conn->fd);
+			}
+
 			cf_free(conn);
 		}
 

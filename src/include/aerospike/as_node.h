@@ -241,13 +241,6 @@ typedef struct as_friend_s {
  ******************************************************************************/
 
 /**
- * 	@private
- * 	Close all async connections in the pool.
- */
-void
-as_async_node_destroy(as_node* node);
-
-/**
  *	@private
  *	Close all pipelined connections in the pool.
  */

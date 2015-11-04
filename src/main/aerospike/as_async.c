@@ -867,21 +867,3 @@ as_async_command_parse_success_failure(as_async_command* cmd)
 	}
 	return true;
 }
-
-extern uint32_t as_event_loop_capacity;
-
-void
-as_async_node_destroy(as_node* node)
-{
-	for (uint32_t i = 0; i < as_event_loop_capacity; i++) {
-		int32_t fd;
-
-		while (as_queue_pop(&node->async_conn_qs[i], &fd)) {
-			close(fd);
-		}
-
-		as_queue_destroy(&node->async_conn_qs[i]);
-	}
-
-	cf_free(node->async_conn_qs);
-}

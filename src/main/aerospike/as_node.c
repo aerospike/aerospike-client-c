@@ -116,13 +116,16 @@ as_node_destroy(as_node* node)
 	// Release memory
 	as_vector_destroy(&node->addresses);
 	cf_queue_destroy(node->conn_q);
+	
+	for (uint32_t i = 0; i < as_event_loop_capacity; i++) {
+		as_queue_destroy(&node->async_conn_qs[i]);
+	}
+	cf_free(node->async_conn_qs);
 
 	if (as_event_loop_capacity > 0) {
-		as_async_node_destroy(node);
 		as_pipe_node_destroy(node);
 	}
 
-	cf_free(node->async_conn_qs);
 	cf_free(node);
 }
 

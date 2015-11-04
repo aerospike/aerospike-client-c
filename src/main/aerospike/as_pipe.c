@@ -85,24 +85,29 @@ cancel_connection(as_async_command* cmd, as_error* err, int32_t source)
 {
 	as_pipe_connection* conn = cmd->pipe_conn;
 	as_log_trace("Canceling pipeline connection for command %p, error code %d, connection %p, FD %d", cmd, err->code, conn, conn->fd);
-	assert(cmd == conn->writer || cf_ll_get_head(&conn->readers) == &cmd->pipe_link);
+
+	if (source != CANCEL_CONNECTION_TIMEOUT) {
+		assert(cmd == conn->writer || cf_ll_get_head(&conn->readers) == &cmd->pipe_link);
+	}
 
 	as_event_close(&cmd->event);
 
-	uint32_t what = CANCEL_COMMAND_EVENT;
-
-	if (source != CANCEL_CONNECTION_TIMEOUT) {
-		what |= CANCEL_COMMAND_TIMER;
-	}
+	uint32_t what = CANCEL_COMMAND_EVENT | CANCEL_COMMAND_TIMER;
 
 	if (conn->writer != NULL) {
 		as_log_trace("Canceling writer %p", conn->writer);
 		cancel_command(conn->writer, err, what);
 	}
 
+	bool is_reader = false;
+
 	while (cf_ll_size(&conn->readers) > 0) {
 		cf_ll_element* link = cf_ll_get_head(&conn->readers);
 		as_async_command* walker = link_to_command(link);
+
+		if (cmd == walker) {
+			is_reader = true;
+		}
 
 		as_log_trace("Canceling reader %p", walker);
 		cf_ll_delete(&conn->readers, link);
@@ -110,6 +115,10 @@ cancel_connection(as_async_command* cmd, as_error* err, int32_t source)
 
 		// Only the first reader has an event registered.
 		what &= ~CANCEL_COMMAND_EVENT;
+	}
+
+	if (source == CANCEL_CONNECTION_TIMEOUT) {
+		assert(cmd == conn->writer || is_reader);
 	}
 
 	if (! conn->active) {

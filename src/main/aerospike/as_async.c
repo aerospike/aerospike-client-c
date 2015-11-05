@@ -255,13 +255,13 @@ as_async_command_write(as_async_command* cmd)
 			}
 			
 			as_error err;
-			as_error_update(&err, AEROSPIKE_ERR_CLIENT, "Socket %d write failed: %d", cmd->event.fd, errno);
+			as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Socket %d write failed: %d", cmd->event.fd, errno);
 			as_async_socket_error(cmd, &err);
 			return AS_ASYNC_WRITE_ERROR;
 		}
 		else {
 			as_error err;
-			as_error_update(&err, AEROSPIKE_ERR_CLIENT, "Socket %d write closed by peer", cmd->event.fd);
+			as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Socket %d write closed by peer", cmd->event.fd);
 			as_async_socket_error(cmd, &err);
 			return AS_ASYNC_WRITE_ERROR;
 		}
@@ -402,7 +402,7 @@ as_async_create_connection(as_async_command* cmd)
 	
 	// Failed to start a connection on any socket address.
 	close(cmd->event.fd);
-	as_error_update(&err, AEROSPIKE_ERR_CLIENT, "Failed to connect: %s %s:%d",
+	as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Failed to connect: %s %s:%d",
 					node->name, primary->name, (int)cf_swap_from_be16(primary->addr.sin_port));
 	as_async_conn_error(cmd, &err);
 	return AS_ASYNC_CONNECTION_ERROR;
@@ -564,14 +564,14 @@ as_async_read(as_async_command* cmd)
 		if (bytes < 0) {
 			if (errno != EWOULDBLOCK) {
 				as_error err;
-				as_error_update(&err, AEROSPIKE_ERR_CLIENT, "Socket %d read failed: %d", cmd->event.fd, errno);
+				as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Socket %d read failed: %d", cmd->event.fd, errno);
 				as_async_socket_error(cmd, &err);
 			}
 			return false;
 		}
 		else {
 			as_error err;
-			as_error_update(&err, AEROSPIKE_ERR_CLIENT, "Socket %d read closed by peer", cmd->event.fd);
+			as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Socket %d read closed by peer", cmd->event.fd);
 			as_async_socket_error(cmd, &err);
 			return false;
 		}

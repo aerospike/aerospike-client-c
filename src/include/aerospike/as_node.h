@@ -114,6 +114,13 @@ typedef struct as_node_s {
 	as_queue* async_conn_qs;
 	
 	/**
+	 *	@private
+	 *	Number of pending async commands (i.e., commands with an outstanding reply).
+	 */
+
+	uint32_t async_pending;
+
+	/**
 	 * 	@private
 	 * 	Pool of connections used in pipelined async commands.  Also not thread-safe.
 	 */

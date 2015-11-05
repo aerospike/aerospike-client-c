@@ -63,6 +63,7 @@ as_async_command_free(as_async_command* cmd)
 void
 as_async_error_callback(as_async_command* cmd, as_error* err)
 {
+	ck_pr_dec_32(&cmd->node->async_pending);
 	as_node_release(cmd->node);
 
 	switch (cmd->type) {
@@ -193,6 +194,7 @@ as_async_response_complete(as_async_command* cmd)
 
 	as_async_unregister(cmd);
 	as_async_put_connection(cmd);
+	ck_pr_dec_32(&cmd->node->async_pending);
 	as_node_release(cmd->node);
 }
 
@@ -496,6 +498,8 @@ as_async_command_thread_execute(as_async_command* cmd)
 void
 as_async_command_execute(as_async_command* cmd)
 {
+	ck_pr_inc_32(&cmd->node->async_pending);
+
 	// Use pointer comparison for performance.
 	// If portability becomes an issue, use "pthread_equal(event_loop->thread, pthread_self())"
 	// instead.

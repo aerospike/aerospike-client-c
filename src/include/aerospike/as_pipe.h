@@ -27,11 +27,19 @@
 #include <citrusleaf/cf_ll.h>
 
 #include <assert.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <inttypes.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <unistd.h>
 
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+
+#include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 
 typedef struct as_pipe_connection {
@@ -40,6 +48,9 @@ typedef struct as_pipe_connection {
 	int32_t fd;
 	bool active;
 } as_pipe_connection;
+
+extern bool
+as_pipe_connection_setup(int32_t fd, as_error* err);
 
 extern int32_t
 as_pipe_get_connection(as_async_command* cmd);

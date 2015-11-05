@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2014 Aerospike, Inc.
+ * Copyright 2008-2015 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -26,7 +26,8 @@
  * STATIC FUNCTIONS
  *****************************************************************************/
 
-static aerospike * aerospike_defaults(aerospike * as, bool free, as_config * config)
+static aerospike*
+aerospike_defaults(aerospike* as, bool free, as_config* config)
 {
 	as->_free = free;
 	as->cluster = NULL;
@@ -48,7 +49,8 @@ static aerospike * aerospike_defaults(aerospike * as, bool free, as_config * con
  * Initialize the aerospike object on the stack
  * @returns the initialized aerospike object
  */
-aerospike * aerospike_init(aerospike * as, as_config * config) 
+aerospike*
+aerospike_init(aerospike* as, as_config* config)
 {
 	if ( !as ) return as;
 	return aerospike_defaults(as, false, config);
@@ -58,7 +60,8 @@ aerospike * aerospike_init(aerospike * as, as_config * config)
  * Creates a new aerospike object on the heap
  * @returns a new aerospike object
  */
-aerospike * aerospike_new(as_config * config) 
+aerospike*
+aerospike_new(as_config* config)
 {
 	aerospike * as = (aerospike *) malloc(sizeof(aerospike));
 	if ( !as ) return as;
@@ -68,7 +71,8 @@ aerospike * aerospike_new(as_config * config)
 /**
  * Destroy the aerospike instance
  */
-void aerospike_destroy(aerospike * as) {
+void aerospike_destroy(aerospike* as)
+{
 	if ( as->_free ) {
 		free(as);
 	}
@@ -77,7 +81,8 @@ void aerospike_destroy(aerospike * as) {
 /**
  * Connect to the cluster
  */
-as_status aerospike_connect(aerospike * as, as_error * err) 
+as_status
+aerospike_connect(aerospike* as, as_error* err)
 {
 	as_error_reset(err);
 
@@ -110,7 +115,8 @@ as_status aerospike_connect(aerospike * as, as_error * err)
 /**
  * Close connections to the cluster
  */
-as_status aerospike_close(aerospike * as, as_error * err) 
+as_status
+aerospike_close(aerospike* as, as_error* err)
 {
 	as_error_reset(err);
 
@@ -122,4 +128,10 @@ as_status aerospike_close(aerospike * as, as_error * err)
 	}
 
 	return err->code;
+}
+
+bool
+aerospike_cluster_is_connected(aerospike* as)
+{
+	return as_cluster_is_connected(as->cluster);
 }

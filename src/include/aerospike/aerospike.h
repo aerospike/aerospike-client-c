@@ -207,7 +207,8 @@ typedef struct aerospike_s {
  *
  *	@relates aerospike
  */
-aerospike * aerospike_init(aerospike * as, as_config * config);
+aerospike*
+aerospike_init(aerospike* as, as_config* config);
 
 /**
  *	Creates a new heap allocated aerospike instance.
@@ -227,7 +228,8 @@ aerospike * aerospike_init(aerospike * as, as_config * config);
  *
  *	@relates aerospike
  */
-aerospike * aerospike_new(as_config * config);
+aerospike*
+aerospike_new(as_config* config);
 
 /**
  *	Destroy the aerospike instance and associated resources.
@@ -240,7 +242,8 @@ aerospike * aerospike_new(as_config * config);
  *
  *	@relates aerospike
  */
-void aerospike_destroy(aerospike * as);
+void
+aerospike_destroy(aerospike* as);
 
 /**
  *	Connect an aerospike instance to the cluster.
@@ -261,7 +264,8 @@ void aerospike_destroy(aerospike * as);
  *
  *	@relates aerospike
  */
-as_status aerospike_connect(aerospike * as, as_error * err);
+as_status
+aerospike_connect(aerospike* as, as_error* err);
 
 /**
  *	Close connections to the cluster.
@@ -277,7 +281,24 @@ as_status aerospike_connect(aerospike * as, as_error * err);
  *
  *	@relates aerospike
  */
-as_status aerospike_close(aerospike * as, as_error * err);
+as_status
+aerospike_close(aerospike* as, as_error* err);
+
+/**
+ *	Is cluster connected to any server nodes.
+ *
+ *	~~~~~~~~~~{.c}
+ *	bool connected = aerospike_cluster_is_connected(&as);
+ *	~~~~~~~~~~
+ *
+ *	@param as 		The aerospike instance to check.
+ *
+ *	@returns true when cluster is connected.
+ *
+ *	@relates aerospike
+ */
+bool
+aerospike_cluster_is_connected(aerospike* as);
 
 #ifdef __cplusplus
 } // end extern "C"

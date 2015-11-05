@@ -32,6 +32,10 @@ typedef enum as_status_e {
 	/***************************************************************************
 	 *	Client Errors
 	 **************************************************************************/
+	/**
+	 *	Asynchronous connection error.
+	 */
+	AEROSPIKE_ERR_ASYNC_CONNECTION = -6,
 	
 	/**
 	 *	Query or scan was aborted in user's callback.

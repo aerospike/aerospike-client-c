@@ -17,6 +17,9 @@
 
 #include <aerospike/as_pipe.h>
 
+#define PIPE_WRITE_BUFFER_SIZE (5 * 1024 * 1024)
+#define PIPE_READ_BUFFER_SIZE (15 * 1024 * 1024)
+
 static as_async_command*
 link_to_command(cf_ll_element* link)
 {
@@ -159,6 +162,124 @@ put_connection(as_async_command* cmd)
 	}
 }
 
+static bool
+read_file(const char* path, char* buffer, size_t size)
+{
+	bool res = false;
+	int fd = open(path, O_RDONLY);
+
+	if (fd < 0) {
+		as_log_error("Failed to open %s for reading", path);
+		goto cleanup0;
+	}
+
+	size_t len = 0;
+
+	while (len < size - 1) {
+		ssize_t n = read(fd, buffer + len, size - len - 1);
+
+		if (n < 0) {
+			as_log_error("Failed to read from %s", path);
+			goto cleanup1;
+		}
+
+		if (n == 0) {
+			buffer[len] = 0;
+			res = true;
+			goto cleanup1;
+		}
+
+		len += n;
+	}
+
+	as_log_error("%s is too large", path);
+
+cleanup1:
+	close(fd);
+
+cleanup0:
+	return res;
+}
+
+static bool
+read_integer(const char* path, int* value)
+{
+	char buffer[21];
+
+	if (! read_file(path, buffer, sizeof buffer)) {
+		return false;
+	}
+
+	char *end;
+	uint64_t x = strtoul(buffer, &end, 10);
+
+	if (*end != '\n' || x > INT_MAX) {
+		as_log_error("Invalid integer value in %s", path);
+		return false;
+	}
+
+	*value = (int)x;
+	return true;
+}
+
+static bool
+set_buffer(int fd, int option, int size)
+{
+	const char* proc = option == SO_RCVBUF ?
+			"/proc/sys/net/core/rmem_max" :
+			"/proc/sys/net/core/wmem_max";
+	int max;
+
+	if (! read_integer(proc, &max)) {
+		as_log_error("Failed to read %s", proc);
+		return false;
+	}
+
+	if (max < size) {
+		as_log_error("Buffer limit is %d, should be at least %d; please set %s accordingly",
+				max, size, proc);
+		return false;
+	}
+
+	if (setsockopt(fd, SOL_SOCKET, option, &size, sizeof size) < 0) {
+		as_log_error("Failed to set socket buffer, size %d, error %d (%s)",
+				size, errno, strerror(errno));
+		return false;
+	}
+
+	return true;
+}
+
+bool
+as_pipe_connection_setup(int32_t fd, as_error* err)
+{
+	if (! set_buffer(fd, SO_RCVBUF, PIPE_READ_BUFFER_SIZE)) {
+		as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to configure pipeline read buffer.");
+		return false;
+	}
+
+	if (! set_buffer(fd, SO_SNDBUF, PIPE_WRITE_BUFFER_SIZE)) {
+		as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to configure pipeline write buffer.");
+		return false;
+	}
+
+	int arg = PIPE_READ_BUFFER_SIZE;
+
+	if (setsockopt(fd, SOL_TCP, TCP_WINDOW_CLAMP, &arg, sizeof arg) < 0) {
+		as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to configure pipeline TCP window.");
+		return false;
+	}
+
+	arg = 0;
+
+	if (setsockopt(fd, SOL_TCP, TCP_NODELAY, &arg, sizeof arg) < 0) {
+		as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to configure pipeline Nagle algorithm.");
+		return false;
+	}
+
+	return true;
+}
+
 int32_t
 as_pipe_get_connection(as_async_command* cmd)
 {
@@ -201,6 +322,7 @@ as_pipe_get_connection(as_async_command* cmd)
 	cf_ll_init(&conn->readers, NULL, false);
 	conn->fd = cmd->event.fd;
 	conn->active = true;
+
 	as_log_trace("New pipeline connection %p, FD %d", conn, conn->fd);
 	cmd->pipe_conn = conn;
 	return res;

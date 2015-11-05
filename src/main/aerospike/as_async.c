@@ -334,16 +334,23 @@ as_async_connect_in_progress(as_async_command* cmd)
 int32_t
 as_async_create_connection(as_async_command* cmd)
 {
+	as_error err;
+
 	// Create a non-blocking socket.
 	cmd->event.fd = as_socket_create_nb();
 	
 	if (cmd->event.fd < 0) {
-		as_error err;
 		as_error_set_message(&err, AEROSPIKE_ERR_CLIENT, "Failed to create non-blocking socket");
 		as_async_conn_error(cmd, &err);
 		return AS_ASYNC_CONNECTION_ERROR;
 	}
 	
+	if (cmd->pipeline && ! as_pipe_connection_setup(cmd->event.fd, &err)) {
+		close(cmd->event.fd);
+		as_async_conn_error(cmd, &err);
+		return AS_ASYNC_CONNECTION_ERROR;
+	}
+
 	// Try primary address.
 	as_node* node = cmd->node;
 	as_address* primary = as_vector_get(&node->addresses, node->address_index);
@@ -393,7 +400,6 @@ as_async_create_connection(as_async_command* cmd)
 	
 	// Failed to start a connection on any socket address.
 	close(cmd->event.fd);
-	as_error err;
 	as_error_update(&err, AEROSPIKE_ERR_CLIENT, "Failed to connect: %s %s:%d",
 					node->name, primary->name, (int)cf_swap_from_be16(primary->addr.sin_port));
 	as_async_conn_error(cmd, &err);

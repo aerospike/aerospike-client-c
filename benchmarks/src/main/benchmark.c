@@ -228,7 +228,7 @@ run_benchmark(arguments* args)
 	data.debug = args->debug;
 	data.valid = 1;
 	data.async = args->async;
-	data.async_max_commands = args->async;
+	data.async_max_commands = args->async_max_commands;
 
 	if (args->debug) {
 		as_log_set_level(AS_LOG_LEVEL_DEBUG);

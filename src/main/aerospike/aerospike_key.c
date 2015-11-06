@@ -397,9 +397,10 @@ aerospike_key_put(
 }
 
 void
-aerospike_key_put_async(
+aerospike_key_put_async_ex(
 	aerospike* as, const as_policy_write* policy, const as_key* key, as_record* rec,
-	as_async_write_listener listener, void* udata, as_event_loop* event_loop, bool pipeline
+	as_async_write_listener listener, void* udata, as_event_loop* event_loop, bool pipeline,
+	size_t* length, size_t* comp_length
 	)
 {
 	if (! policy) {
@@ -440,6 +441,15 @@ aerospike_key_put_async(
 			p = as_command_write_bin(p, AS_OPERATOR_WRITE, &bins[i], &buffers[i]);
 		}
 		cmd->len = (uint32_t)as_command_write_end(cmd->buf, p);
+
+		if (length != NULL) {
+			*length = size;
+		}
+
+		if (comp_length != NULL) {
+			*comp_length = size;
+		}
+
 		as_async_command_execute(cmd);
 	}
 	else {
@@ -466,6 +476,15 @@ aerospike_key_put_async(
 		// Compress buffer and execute.
 		if (as_command_compress(&err, cmd, size, comp_cmd->buf, &comp_size) == AEROSPIKE_OK) {
 			comp_cmd->len = (uint32_t)comp_size;
+
+			if (length != NULL) {
+				*length = size;
+			}
+
+			if (comp_length != NULL) {
+				*comp_length = comp_size;
+			}
+
 			as_async_command_execute(comp_cmd);
 		}
 		else {
@@ -475,6 +494,15 @@ aerospike_key_put_async(
 		}
 		as_command_free(cmd, size);
 	}
+}
+
+void
+aerospike_key_put_async(
+	aerospike* as, const as_policy_write* policy, const as_key* key, as_record* rec,
+	as_async_write_listener listener, void* udata, as_event_loop* event_loop, bool pipeline
+	)
+{
+	aerospike_key_put_async_ex(as, policy, key, rec, listener, udata, event_loop, pipeline, NULL, NULL);
 }
 
 as_status
@@ -513,9 +541,10 @@ aerospike_key_remove(
 }
 
 void
-aerospike_key_remove_async(
+aerospike_key_remove_async_ex(
 	aerospike* as, const as_policy_remove* policy, const as_key* key,
-	as_async_write_listener listener, void* udata, as_event_loop* event_loop, bool pipeline
+	as_async_write_listener listener, void* udata, as_event_loop* event_loop, bool pipeline,
+	size_t* length
 	)
 {
 	if (! policy) {
@@ -538,7 +567,21 @@ aerospike_key_remove_async(
 	uint8_t* p = as_command_write_header(cmd->buf, 0, AS_MSG_INFO2_WRITE | AS_MSG_INFO2_DELETE, policy->commit_level, 0, AS_POLICY_EXISTS_IGNORE, policy->gen, policy->generation, 0, policy->timeout, n_fields, 0);
 	p = as_command_write_key(p, policy->key, key);
 	cmd->len = (uint32_t)as_command_write_end(cmd->buf, p);
+
+	if (length != NULL) {
+		*length = size;
+	}
+
 	as_async_command_execute(cmd);
+}
+
+void
+aerospike_key_remove_async(
+	aerospike* as, const as_policy_remove* policy, const as_key* key,
+	as_async_write_listener listener, void* udata, as_event_loop* event_loop, bool pipeline
+	)
+{
+	aerospike_key_remove_async_ex(as, policy, key, listener, udata, event_loop, pipeline, NULL);
 }
 
 as_status

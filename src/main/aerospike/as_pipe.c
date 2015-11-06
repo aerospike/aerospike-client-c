@@ -372,6 +372,7 @@ as_pipe_response_complete(as_async_command* cmd)
 {
 	as_log_trace("Response for command %p", cmd);
 	next_reader(cmd);
+	ck_pr_dec_32(&cmd->node->async_pending);
 	as_node_release(cmd->node);
 }
 

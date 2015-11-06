@@ -352,6 +352,7 @@ as_pipe_response_error(as_async_command* cmd, as_error* err)
 	switch (err->code) {
 		case AEROSPIKE_ERR_QUERY_ABORTED:
 		case AEROSPIKE_ERR_SCAN_ABORTED:
+		case AEROSPIKE_ERR_ASYNC_CONNECTION:
 		case AEROSPIKE_ERR_CLIENT_ABORT:
 		case AEROSPIKE_ERR_CLIENT:
 			as_log_trace("Error is fatal");

@@ -39,12 +39,12 @@ next_reader(as_async_command* reader)
 	if (cf_ll_size(&conn->readers) == 0) {
 		as_log_trace("No reader left");
 
-		if (conn->active) {
-			as_log_trace("Pipeline connection still active");
+		if (conn->in_pool) {
+			as_log_trace("Pipeline connection still in pool");
 			return;
 		}
 
-		as_log_trace("Closing inactive pipeline connection %p, FD %d", conn, conn->fd);
+		as_log_trace("Closing non-pooled pipeline connection %p, FD %d", conn, conn->fd);
 		close(conn->fd);
 		ck_pr_dec_32(&reader->node->async_conn);
 		cf_free(conn);
@@ -126,14 +126,14 @@ cancel_connection(as_async_command* cmd, as_error* err, int32_t source)
 		assert(cmd == conn->writer || is_reader);
 	}
 
-	if (! conn->active) {
+	if (! conn->in_pool) {
 		cf_free(conn);
 		return;
 	}
 
 	conn->writer = NULL;
 	conn->fd = -1;
-	conn->active = false;
+	conn->canceled = true;
 }
 
 static void
@@ -142,8 +142,7 @@ release_connection(as_pipe_connection* conn, as_node* node)
 	as_log_trace("Releasing pipeline connection %p, FD %d", conn, conn->fd);
 
 	if (conn->writer != NULL || cf_ll_size(&conn->readers) > 0) {
-		as_log_trace("Marking pipeline connection %p as inactive", conn);
-		conn->active = false;
+		as_log_trace("Pipeline connection %p is still draining", conn);
 		return;
 	}
 
@@ -160,9 +159,12 @@ put_connection(as_async_command* cmd)
 	as_log_trace("Returning pipeline connection for command %p, pipeline connection %p, FD %d", cmd, conn, conn->fd);
 	as_queue* q = &cmd->node->pipe_conn_qs[cmd->event.event_loop->index];
 
-	if (! as_queue_push_limit(q, &conn)) {
-		release_connection(conn, cmd->node);
+	if (as_queue_push_limit(q, &conn)) {
+		conn->in_pool = true;
+		return;
 	}
+
+	release_connection(conn, cmd->node);
 }
 
 static bool
@@ -293,11 +295,13 @@ as_pipe_get_connection(as_async_command* cmd)
 	while (as_queue_pop(q, &conn)) {
 		as_log_trace("Checking pipeline connection %p, FD %d", conn, conn->fd);
 
-		if (! conn->active) {
+		if (conn->canceled) {
 			as_log_trace("Pipeline connection %p was canceled earlier", conn);
 			cf_free(conn);
 			continue;
 		}
+
+		conn->in_pool = false;
 
 		if (as_socket_validate(conn->fd, true)) {
 			as_log_trace("Validation OK");
@@ -324,7 +328,8 @@ as_pipe_get_connection(as_async_command* cmd)
 	conn->writer = NULL;
 	cf_ll_init(&conn->readers, NULL, false);
 	conn->fd = cmd->event.fd;
-	conn->active = true;
+	conn->in_pool = false;
+	conn->canceled = false;
 
 	as_log_trace("New pipeline connection %p, FD %d", conn, conn->fd);
 	cmd->pipe_conn = conn;
@@ -433,9 +438,9 @@ as_pipe_node_destroy(as_node* node)
 		as_pipe_connection* conn;
 
 		while (as_queue_pop(&node->pipe_conn_qs[i], &conn)) {
-			as_log_trace("Closing pipeline connection %p, FD %d, %s", conn, conn->fd, conn->active ? "active" : "inactive");
+			as_log_trace("Closing pipeline connection %p, FD %d, %s", conn, conn->fd, conn->canceled ? "canceled" : "not canceled");
 
-			if (conn->active) {
+			if (! conn->canceled) {
 				close(conn->fd);
 				ck_pr_dec_32(&node->async_conn);
 			}

@@ -46,7 +46,8 @@ typedef struct as_pipe_connection {
 	as_async_command* writer;
 	cf_ll readers;
 	int32_t fd;
-	bool active;
+	bool canceled;
+	bool in_pool;
 } as_pipe_connection;
 
 extern bool

@@ -48,6 +48,7 @@ as_async_put_connection(as_async_command* cmd)
 	if (! as_queue_push_limit(q, &cmd->event.fd)) {
 		close(cmd->event.fd);
 		cmd->event.fd = -1;
+		ck_pr_dec_32(&cmd->node->async_conn);
 	}
 }
 
@@ -130,6 +131,7 @@ as_async_socket_error(as_async_command* cmd, as_error* err)
 	
 	// Do not put connection back in pool.
 	as_event_close(&cmd->event);
+	ck_pr_dec_32(&cmd->node->async_conn);
 	as_async_error_callback(cmd, err);
 }
 
@@ -153,6 +155,7 @@ as_async_timeout(as_async_command* cmd)
 	// Assume timer has already been stopped.
 	// Do not put connection back in pool.
 	as_event_close(&cmd->event);
+	ck_pr_dec_32(&cmd->node->async_conn);
 	as_async_error_callback(cmd, &err);
 }
 
@@ -176,6 +179,7 @@ as_async_response_error(as_async_command* cmd, as_error* err)
 		case AEROSPIKE_ERR_CLIENT_ABORT:
 		case AEROSPIKE_ERR_CLIENT:
 			as_event_close(&cmd->event);
+			ck_pr_dec_32(&cmd->node->async_conn);
 			break;
 
 		default:
@@ -354,6 +358,8 @@ as_async_create_connection(as_async_command* cmd)
 		return AS_ASYNC_CONNECTION_ERROR;
 	}
 
+	ck_pr_inc_32(&cmd->node->async_conn);
+
 	// Try primary address.
 	as_node* node = cmd->node;
 	as_address* primary = as_vector_get(&node->addresses, node->address_index);
@@ -403,6 +409,7 @@ as_async_create_connection(as_async_command* cmd)
 	
 	// Failed to start a connection on any socket address.
 	close(cmd->event.fd);
+	ck_pr_dec_32(&cmd->node->async_conn);
 	as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Failed to connect: %s %s:%d",
 					node->name, primary->name, (int)cf_swap_from_be16(primary->addr.sin_port));
 	as_async_conn_error(cmd, &err);
@@ -877,4 +884,32 @@ as_async_command_parse_success_failure(as_async_command* cmd)
 		}
 	}
 	return true;
+}
+
+uint32_t
+as_async_get_pending(as_cluster* cluster)
+{
+	as_nodes* nodes = as_nodes_reserve(cluster);
+	uint32_t pending = 0;
+
+	for (uint32_t i = 0; i < nodes->size; ++i) {
+		pending += ck_pr_load_32(&nodes->array[i]->async_pending);
+	}
+
+	as_nodes_release(nodes);
+	return pending;
+}
+
+uint32_t
+as_async_get_connections(as_cluster* cluster)
+{
+	as_nodes* nodes = as_nodes_reserve(cluster);
+	uint32_t count = 0;
+
+	for (uint32_t i = 0; i < nodes->size; ++i) {
+		count += ck_pr_load_32(&nodes->array[i]->async_conn);
+	}
+
+	as_nodes_release(nodes);
+	return count;
 }

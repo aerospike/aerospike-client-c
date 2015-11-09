@@ -259,6 +259,12 @@ as_async_executor_complete(as_async_command* cmd);
 int32_t
 as_async_create_connection(as_async_command* cmd);
 
+uint32_t
+as_async_get_pending(as_cluster* cluster);
+
+uint32_t
+as_async_get_connections(as_cluster* cluster);
+
 #ifdef __cplusplus
 } // end extern "C"
 #endif

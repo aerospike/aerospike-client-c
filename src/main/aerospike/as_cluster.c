@@ -1051,20 +1051,6 @@ as_cluster_get_node_names(as_cluster* cluster, int* n_nodes, char** node_names)
 	as_nodes_release(nodes);
 }
 
-uint32_t
-as_cluster_get_async_pending(as_cluster* cluster)
-{
-	as_nodes* nodes = as_nodes_reserve(cluster);
-	uint32_t pending = 0;
-
-	for (uint32_t i = 0; i < nodes->size; ++i) {
-		pending += ck_pr_load_32(&nodes->array[i]->async_pending);
-	}
-
-	as_nodes_release(nodes);
-	return pending;
-}
-
 bool
 as_cluster_is_connected(as_cluster* cluster)
 {

@@ -66,7 +66,7 @@ cancel_command(as_async_command* cmd, as_error* err, uint32_t what)
 {
 	as_log_trace("Canceling command %p, error code %d, mask 0x%x", cmd, err->code, what);
 
-	if ((what & CANCEL_COMMAND_EVENT) != 0) {
+	if ((what & CANCEL_COMMAND_EVENT) != 0 && cmd->state != AS_ASYNC_STATE_UNREGISTERED) {
 		as_log_trace("Unregistering event");
 		as_event_unregister(&cmd->event);
 	}

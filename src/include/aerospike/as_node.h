@@ -117,8 +117,13 @@ typedef struct as_node_s {
 	 *	@private
 	 *	Number of pending async commands (i.e., commands with an outstanding reply).
 	 */
-
 	uint32_t async_pending;
+
+	/**
+	 *	@private
+	 *	Number of active async connections.
+	 */
+	uint32_t async_conn;
 
 	/**
 	 * 	@private

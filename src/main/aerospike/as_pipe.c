@@ -46,6 +46,7 @@ next_reader(as_async_command* reader)
 
 		as_log_trace("Closing inactive pipeline connection %p, FD %d", conn, conn->fd);
 		close(conn->fd);
+		ck_pr_dec_32(&reader->node->async_conn);
 		cf_free(conn);
 		return;
 	}
@@ -94,6 +95,7 @@ cancel_connection(as_async_command* cmd, as_error* err, int32_t source)
 	}
 
 	as_event_close(&cmd->event);
+	ck_pr_dec_32(&cmd->node->async_conn);
 
 	uint32_t what = CANCEL_COMMAND_EVENT | CANCEL_COMMAND_TIMER;
 
@@ -135,7 +137,7 @@ cancel_connection(as_async_command* cmd, as_error* err, int32_t source)
 }
 
 static void
-release_connection(as_pipe_connection* conn)
+release_connection(as_pipe_connection* conn, as_node* node)
 {
 	as_log_trace("Releasing pipeline connection %p, FD %d", conn, conn->fd);
 
@@ -147,6 +149,7 @@ release_connection(as_pipe_connection* conn)
 
 	as_log_trace("Closing pipeline connection %p, FD %d", conn, conn->fd);
 	close(conn->fd);
+	ck_pr_dec_32(&node->async_conn);
 	cf_free(conn);
 }
 
@@ -158,7 +161,7 @@ put_connection(as_async_command* cmd)
 	as_queue* q = &cmd->node->pipe_conn_qs[cmd->event.event_loop->index];
 
 	if (! as_queue_push_limit(q, &conn)) {
-		release_connection(conn);
+		release_connection(conn, cmd->node);
 	}
 }
 
@@ -304,7 +307,7 @@ as_pipe_get_connection(as_async_command* cmd)
 		}
 
 		as_log_trace("Validation failed");
-		release_connection(conn);
+		release_connection(conn, cmd->node);
 	}
 
 	as_log_trace("Creating new pipeline connection for command %p", cmd);
@@ -434,6 +437,7 @@ as_pipe_node_destroy(as_node* node)
 
 			if (conn->active) {
 				close(conn->fd);
+				ck_pr_dec_32(&node->async_conn);
 			}
 
 			cf_free(conn);

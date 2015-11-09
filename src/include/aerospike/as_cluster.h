@@ -303,12 +303,6 @@ void
 as_cluster_destroy(as_cluster* cluster);
 
 /**
- *  The number of async commands pending for this cluster.
- */
-uint32_t
-as_cluster_get_async_pending(as_cluster* cluster);
-
-/**
  *	Is cluster connected to any server nodes.
  */
 bool

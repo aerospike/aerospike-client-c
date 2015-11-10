@@ -55,7 +55,7 @@ extern "C" {
 
 struct as_async_executor;
 struct as_async_command;
-typedef struct as_pipe_connection as_pipe_connection;
+struct as_pipe_connection;
 	
 typedef bool (*as_async_parse_results_fn) (struct as_async_command* cmd);
 typedef void (*as_async_executor_complete_fn) (struct as_async_executor* executor, as_error* err);
@@ -76,7 +76,7 @@ typedef struct as_async_command {
 	
 	as_cluster* cluster;
 	as_node* node;
-	as_pipe_connection* pipe_conn;
+	struct as_pipe_connection* pipe_conn;
 	cf_ll_element pipe_link;
 	void* udata;
 	as_async_parse_results_fn parse_results;

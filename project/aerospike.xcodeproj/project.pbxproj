@@ -48,6 +48,7 @@
 		BF2AA7F318BEBFA500E54AF3 /* as_scan.c in Sources */ = {isa = PBXBuildFile; fileRef = BF2AA7CD18BEBFA500E54AF3 /* as_scan.c */; };
 		BF2AA7F418BEBFA500E54AF3 /* as_udf.c in Sources */ = {isa = PBXBuildFile; fileRef = BF2AA7CE18BEBFA500E54AF3 /* as_udf.c */; };
 		BF5548ED19E36A7C007DDB9E /* as_log.c in Sources */ = {isa = PBXBuildFile; fileRef = BF5548EC19E36A7C007DDB9E /* as_log.c */; };
+		BF6FE4331BF2748E00175BF8 /* as_pipe.c in Sources */ = {isa = PBXBuildFile; fileRef = BF6FE4321BF2748E00175BF8 /* as_pipe.c */; };
 		BF843C5918D3E64900A06CFB /* cf_alloc.c in Sources */ = {isa = PBXBuildFile; fileRef = BF843C5618D3E64900A06CFB /* cf_alloc.c */; };
 		BF843C5A18D3E64900A06CFB /* cf_queue_priority.c in Sources */ = {isa = PBXBuildFile; fileRef = BF843C5718D3E64900A06CFB /* cf_queue_priority.c */; };
 		BF843C5B18D3E64900A06CFB /* cf_queue.c in Sources */ = {isa = PBXBuildFile; fileRef = BF843C5818D3E64900A06CFB /* cf_queue.c */; };
@@ -160,6 +161,7 @@
 		BF2AA7CD18BEBFA500E54AF3 /* as_scan.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_scan.c; path = ../src/main/aerospike/as_scan.c; sourceTree = "<group>"; };
 		BF2AA7CE18BEBFA500E54AF3 /* as_udf.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_udf.c; path = ../src/main/aerospike/as_udf.c; sourceTree = "<group>"; };
 		BF5548EC19E36A7C007DDB9E /* as_log.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_log.c; path = ../modules/common/src/main/aerospike/as_log.c; sourceTree = "<group>"; };
+		BF6FE4321BF2748E00175BF8 /* as_pipe.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_pipe.c; path = ../src/main/aerospike/as_pipe.c; sourceTree = "<group>"; };
 		BF843C5618D3E64900A06CFB /* cf_alloc.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = cf_alloc.c; path = ../modules/common/src/main/citrusleaf/cf_alloc.c; sourceTree = "<group>"; };
 		BF843C5718D3E64900A06CFB /* cf_queue_priority.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = cf_queue_priority.c; path = ../modules/common/src/main/citrusleaf/cf_queue_priority.c; sourceTree = "<group>"; };
 		BF843C5818D3E64900A06CFB /* cf_queue.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = cf_queue.c; path = ../modules/common/src/main/citrusleaf/cf_queue.c; sourceTree = "<group>"; };
@@ -243,6 +245,7 @@
 		BF07F62E18B4252500CE1850 = {
 			isa = PBXGroup;
 			children = (
+				BF6FE4321BF2748E00175BF8 /* as_pipe.c */,
 				BF2669911BBB74AE00C61962 /* as_queue.c */,
 				BF222CFE1BB3397E006827A6 /* mod_lua_geojson.c */,
 				BF222CFC1BB33961006827A6 /* as_geojson.c */,
@@ -504,6 +507,7 @@
 				BFBD205518BC3436009ED931 /* mod_lua_map.c in Sources */,
 				BF2AA7E518BEBFA500E54AF3 /* aerospike.c in Sources */,
 				BF2AA7E318BEBFA500E54AF3 /* aerospike_scan.c in Sources */,
+				BF6FE4331BF2748E00175BF8 /* as_pipe.c in Sources */,
 				BFBA106318B7D8B300A64E68 /* as_rec.c in Sources */,
 				BF2AA7EB18BEBFA500E54AF3 /* as_ldt.c in Sources */,
 				BF219F0E1A62255A001E321C /* as_proto.c in Sources */,

@@ -268,13 +268,17 @@ as_pipe_connection_setup(int32_t fd, as_error* err)
 		return false;
 	}
 
-	int arg = PIPE_READ_BUFFER_SIZE;
+	int arg;
+	
+#if defined(__linux__)
+	arg = PIPE_READ_BUFFER_SIZE;
 
 	if (setsockopt(fd, SOL_TCP, TCP_WINDOW_CLAMP, &arg, sizeof arg) < 0) {
 		as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to configure pipeline TCP window.");
 		return false;
 	}
-
+#endif
+	
 	arg = 0;
 
 	if (setsockopt(fd, SOL_TCP, TCP_NODELAY, &arg, sizeof arg) < 0) {

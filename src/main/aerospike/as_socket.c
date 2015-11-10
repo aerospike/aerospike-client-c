@@ -300,7 +300,11 @@ as_socket_write_limit(as_error* err, int fd, uint8_t *buf, size_t buf_len, uint6
 		// we only have one fd, so we know it's ours, but select seems confused sometimes - do the safest thing
 		if ((rv > 0) && as_fd_isset(fd, wset)) {
             
+#if defined(__linux__)
+			int r_bytes = (int)send(fd, buf + pos, buf_len - pos, MSG_NOSIGNAL);
+#else
 			int r_bytes = (int)write(fd, buf + pos, buf_len - pos);
+#endif
             
 			if (r_bytes > 0) {
 				pos += r_bytes;

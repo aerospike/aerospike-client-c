@@ -35,7 +35,7 @@
 
 #if defined(__APPLE__)
 #define SOL_TCP IPPROTO_TCP
-#define MSG_NOSIGNAL SO_NOSIGPIPE
+#define MSG_NOSIGNAL 0
 #endif
 
 #if defined(CF_WINDOWS)

@@ -50,6 +50,9 @@ as_async_put_connection(as_async_command* cmd)
 		cmd->event.fd = -1;
 		ck_pr_dec_32(&cmd->node->async_conn);
 	}
+	else {
+		ck_pr_inc_32(&cmd->node->async_conn_pool);
+	}
 }
 
 static inline void
@@ -422,9 +425,14 @@ as_async_get_connection(as_async_command* cmd)
 	as_queue* q = &cmd->node->async_conn_qs[cmd->event.event_loop->index];
 	
 	while (as_queue_pop(q, &cmd->event.fd)) {
+		ck_pr_dec_32(&cmd->node->async_conn_pool);
+
 		if (as_socket_validate(cmd->event.fd, false)) {
 			return true;
 		}
+
+		// as_socket_validate() closed the connection.
+		ck_pr_dec_32(&cmd->node->async_conn);
 	}
 	return false;
 }
@@ -900,16 +908,18 @@ as_async_get_pending(as_cluster* cluster)
 	return pending;
 }
 
-uint32_t
-as_async_get_connections(as_cluster* cluster)
+void
+as_async_get_connections(as_cluster* cluster, uint32_t* async_conn, uint32_t* async_conn_pool)
 {
+	*async_conn = 0;
+	*async_conn_pool = 0;
+
 	as_nodes* nodes = as_nodes_reserve(cluster);
-	uint32_t count = 0;
 
 	for (uint32_t i = 0; i < nodes->size; ++i) {
-		count += ck_pr_load_32(&nodes->array[i]->async_conn);
+		*async_conn += ck_pr_load_32(&nodes->array[i]->async_conn);
+		*async_conn_pool += ck_pr_load_32(&nodes->array[i]->async_conn_pool);
 	}
 
 	as_nodes_release(nodes);
-	return count;
 }

@@ -68,6 +68,14 @@ swap_seeds(as_cluster* cluster, as_seeds* seeds)
 	return old;
 }
 
+void
+as_cluster_set_async_pool_size(as_cluster* cluster, uint32_t size)
+{
+	cluster->conns_per_node_event_loop = size;
+	ck_pr_fence_store();
+	ck_pr_inc_32(&cluster->version);
+}
+
 static void gc_ip_map(void* ip_map)
 {
 	as_ip_map_release(ip_map);

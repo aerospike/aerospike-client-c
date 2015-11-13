@@ -97,6 +97,11 @@ cancel_connection(as_async_command* cmd, as_error* err, int32_t source)
 	as_event_close(&cmd->event);
 	ck_pr_dec_32(&cmd->node->async_conn);
 
+	// Don't count connection as being in the pool, if we're going to cancel it.
+	if (conn->in_pool) {
+		ck_pr_dec_32(&cmd->node->async_conn_pool);
+	}
+
 	uint32_t what = CANCEL_COMMAND_EVENT | CANCEL_COMMAND_TIMER;
 
 	if (conn->writer != NULL) {
@@ -160,6 +165,7 @@ put_connection(as_async_command* cmd)
 	as_queue* q = &cmd->node->pipe_conn_qs[cmd->event.event_loop->index];
 
 	if (as_queue_push_limit(q, &conn)) {
+		ck_pr_inc_32(&cmd->node->async_conn_pool);
 		conn->in_pool = true;
 		return;
 	}
@@ -305,6 +311,7 @@ as_pipe_get_connection(as_async_command* cmd)
 			continue;
 		}
 
+		ck_pr_dec_32(&cmd->node->async_conn_pool);
 		conn->in_pool = false;
 
 		if (as_socket_validate(conn->fd, true)) {
@@ -442,6 +449,7 @@ as_pipe_node_destroy(as_node* node)
 		as_pipe_connection* conn;
 
 		while (as_queue_pop(&node->pipe_conn_qs[i], &conn)) {
+			ck_pr_dec_32(&node->async_conn_pool);
 			as_log_trace("Closing pipeline connection %p, FD %d, %s", conn, conn->fd, conn->canceled ? "canceled" : "not canceled");
 
 			if (! conn->canceled) {

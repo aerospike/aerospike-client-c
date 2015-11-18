@@ -94,7 +94,7 @@ atf_test_result * atf_test_run_isolated(atf_test * test) {
         close(outfd[0]); // These are being used by the child
         close(infd[1]);
 
-        int wrc = write(outfd[1],"2^32\n",5); // Write to child’s stdin
+        int wrc = (int)write(outfd[1],"2^32\n",5); // Write to child’s stdin
         if (!wrc) {
             fprintf(stderr, "write to outfd failed\n");
 	    exit (-1);

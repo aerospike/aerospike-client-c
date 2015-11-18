@@ -379,7 +379,7 @@ as_command_write_bin(uint8_t* begin, uint8_t operation_type, const as_bin* bin, 
 void
 as_command_compress(uint8_t *cmd, size_t cmd_sz, uint8_t **compressed_cmd, size_t *compressed_cmd_sz)
 {
-	int max_comp_bufsz = compressBound(cmd_sz);
+	int max_comp_bufsz = (int)compressBound(cmd_sz);
 	int hdrsz = sizeof(as_compressed_proto);
 	bool alloced_here = false;
 

@@ -640,10 +640,6 @@ as_async_command_parse_authentication(as_async_command* cmd)
 	}
 	cmd->pos = 0;
 	
-	if (cmd->pipeline) {
-		as_pipe_write_start(cmd);
-	}
-
 	// Try non-blocking command write.
 	int ret = as_async_command_write(cmd);
 	

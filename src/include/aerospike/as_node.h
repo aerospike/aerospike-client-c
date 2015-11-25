@@ -108,7 +108,7 @@ typedef struct as_node_s {
 	
 	/**
 	 *	@private
-	 *	Array of pools of FDs used in async commands.  There is one pool per node/event loop.
+	 *	Array of connection pools used in async commands.  There is one pool per node/event loop.
 	 *	Only used by event loop threads. Not thread-safe.
 	 */
 	as_queue* async_conn_qs;
@@ -251,14 +251,6 @@ typedef struct as_friend_s {
 /******************************************************************************
  * FUNCTIONS
  ******************************************************************************/
-
-/**
- *	@private
- *	Close all pipelined connections in the pool.
- */
-
-void
-as_pipe_node_destroy(as_node* node);
 
 /**
  *	@private

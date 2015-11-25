@@ -50,6 +50,10 @@ ifeq ($(EVENT_LIB),libev)
   CC_FLAGS += -DAS_USE_LIBEV
 endif
 
+ifeq ($(EVENT_LIB),libuv)
+  CC_FLAGS += -DAS_USE_LIBUV
+endif
+
 ifeq ($(OS),Darwin)
   CC_FLAGS += -D_DARWIN_UNLIMITED_SELECT -I/usr/local/include
   LUA_PLATFORM = macosx
@@ -71,6 +75,10 @@ endif
 
 ifeq ($(EVENT_LIB),libev)
   LD_FLAGS += -L/usr/local/lib -lev
+endif
+
+ifeq ($(EVENT_LIB),libuv)
+  LD_FLAGS += -L/usr/local/lib -luv
 endif
 
 # DEBUG Settings
@@ -148,6 +156,9 @@ AEROSPIKE += as_config.o
 AEROSPIKE += as_cluster.o
 AEROSPIKE += as_error.o
 AEROSPIKE += as_event.o
+AEROSPIKE += as_event_ev.o
+AEROSPIKE += as_event_uv.o
+AEROSPIKE += as_event_none.o
 AEROSPIKE += as_info.o
 AEROSPIKE += as_job.o
 AEROSPIKE += as_key.o

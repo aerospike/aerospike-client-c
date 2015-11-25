@@ -15,25 +15,37 @@
  * the License.
  */
 #include <aerospike/as_event.h>
-#include <aerospike/as_async.h>
+#include <aerospike/as_event_internal.h>
+#include <aerospike/as_admin.h>
+#include <aerospike/as_command.h>
 #include <aerospike/as_log_macros.h>
-#include <aerospike/as_socket.h>
+#include <aerospike/as_pipe.h>
+#include <aerospike/as_proto.h>
 #include <citrusleaf/alloc.h>
 #include <errno.h>
 
 /******************************************************************************
- * COMMON
+ * GLOBALS
  *****************************************************************************/
 
 as_event_loop* as_event_loops = 0;
 uint32_t as_event_loop_capacity = 0;
 uint32_t as_event_loop_size = 0;
 uint32_t as_event_loop_current = 0;
-static bool as_event_threads_created = false;
+int as_event_send_buffer_size = 0;
+int as_event_recv_buffer_size = 0;
+bool as_event_threads_created = false;
+
+/******************************************************************************
+ * PUBLIC FUNCTIONS
+ *****************************************************************************/
 
 as_event_loop*
 as_event_create_loops(uint32_t capacity)
 {
+	as_event_send_buffer_size = as_pipe_get_send_buffer_size();
+	as_event_recv_buffer_size = as_pipe_get_recv_buffer_size();
+	
 	as_event_loops = cf_malloc(sizeof(as_event_loop) * capacity);
 	
 	if (! as_event_loops) {
@@ -45,7 +57,11 @@ as_event_create_loops(uint32_t capacity)
 	
 	for (uint32_t i = 0; i < capacity; i++) {
 		as_event_loop* event_loop = &as_event_loops[i];
+		event_loop->loop = 0;
+		pthread_mutex_init(&event_loop->lock, 0);
+		event_loop->thread = 0;
 		event_loop->index = i;
+		event_loop->initialized = false;
 		
 		if (! as_event_create_loop(event_loop)) {
 			as_event_close_loops();
@@ -59,6 +75,9 @@ as_event_create_loops(uint32_t capacity)
 bool
 as_event_set_external_loop_capacity(uint32_t capacity)
 {
+	as_event_send_buffer_size = as_pipe_get_send_buffer_size();
+	as_event_recv_buffer_size = as_pipe_get_recv_buffer_size();
+	
 	size_t mem_size = sizeof(as_event_loop) * capacity;
 	as_event_loops = cf_malloc(mem_size);
 	
@@ -73,7 +92,7 @@ as_event_set_external_loop_capacity(uint32_t capacity)
 }
 
 as_event_loop*
-as_event_set_external_loop(void* loop, pthread_t thread)
+as_event_set_external_loop(void* loop)
 {
 	uint32_t current = ck_pr_faa_32(&as_event_loop_size, 1);
 	
@@ -83,10 +102,12 @@ as_event_set_external_loop(void* loop, pthread_t thread)
 	}
 	
 	as_event_loop* event_loop = &as_event_loops[current];
-	event_loop->index = current;
 	event_loop->loop = loop;
-	event_loop->thread = thread;
-	as_event_register_wakeup(event_loop);
+	pthread_mutex_init(&event_loop->lock, 0);
+	event_loop->thread = pthread_self();  // Current thread must be same as event loop thread!
+	event_loop->index = current;
+	event_loop->initialized = false;
+	as_event_register_external_loop(event_loop);
 	return event_loop;
 }
 
@@ -94,12 +115,12 @@ void
 as_event_close_loops()
 {
 	if (as_event_loops) {
-		// Send stop signal to loops.
 		bool join = true;
 		
 		for (uint32_t i = 0; i < as_event_loop_size; i++) {
 			as_event_loop* event_loop = &as_event_loops[i];
 			
+			// Send stop signal to loop.
 			if (! as_event_close_loop(event_loop)) {
 				as_log_error("Failed to send stop command to event loop");
 				join = false;
@@ -117,251 +138,357 @@ as_event_close_loops()
 	}
 }
 
-#if defined(AS_USE_LIBEV)
-
 /******************************************************************************
- * LIBEV
+ * PRIVATE FUNCTIONS
  *****************************************************************************/
 
-static void*
-as_ev_worker(void* udata)
+void
+as_event_command_execute(as_event_command* cmd)
 {
-	struct ev_loop* loop = udata;
-	ev_loop(loop, 0);
-	ev_loop_destroy(loop);
-	return NULL;
-}
-
-static void
-as_ev_wakeup(struct ev_loop* loop, ev_async* watcher, int revents)
-{
-	// Read command pointers from queue.
-	as_event_loop* event_loop = (as_event_loop*)((uint8_t*)watcher - offsetof(as_event_loop, wakeup));
-	void* cmd;
+	ck_pr_inc_32(&cmd->node->async_pending);
 	
-	pthread_mutex_lock(&event_loop->lock);
-	
-	while (as_queue_pop(&event_loop->queue, &cmd)) {
-		if (cmd) {
-			// Process new command.
-			as_async_command_thread_execute(cmd);
-		}
-		else {
-			// Received stop signal.
-			ev_async_stop(event_loop->loop, &event_loop->wakeup);
-			
-			// Only stop event loop if client created event loop.
-			if (as_event_threads_created) {
-				ev_unloop(loop, EVUNLOOP_ALL);
-			}
-			
-			// Cleanup event loop resources.
-			as_queue_destroy(&event_loop->queue);
-			pthread_mutex_unlock(&event_loop->lock);
-			pthread_mutex_destroy(&event_loop->lock);
-			return;
-		}
-	}
-	pthread_mutex_unlock(&event_loop->lock);
-}
-
-static void
-as_ev_callback(struct ev_loop* loop, ev_io* watcher, int revents)
-{
-	void* cmd = watcher;
-	
-	if (revents & EV_READ) {
-		as_async_command_receive(cmd);
-	}
-	else if (revents & EV_WRITE) {
-		as_async_command_send(cmd);
-	}
-	else if (revents & EV_ERROR) {
-		as_log_error("Async error occurred: %d", revents);
+	// Use pointer comparison for performance.
+	// If portability becomes an issue, use "pthread_equal(event_loop->thread, pthread_self())"
+	// instead.
+	if (cmd->event_loop->thread == pthread_self()) {
+		// We are already in event loop thread, so start processing.
+		as_event_command_begin(cmd);
 	}
 	else {
-		as_log_warn("Unknown event received: %d", revents);
+		if (cmd->timeout_ms) {
+			// Store current time in first 8 bytes which is not used yet.
+			*(uint64_t*)cmd = cf_getms();
+		}
+		
+		// Send command through queue so it can be executed in event loop thread.
+		if (! as_event_send(cmd)) {
+			as_error err;
+			as_error_set_message(&err, AEROSPIKE_ERR_CLIENT, "Failed to queue command");
+			as_event_error_callback(cmd, &err);
+		}
 	}
 }
 
-static void
-as_ev_timeout(struct ev_loop* loop, ev_timer* timer, int revents)
+static inline void
+as_event_command_free(as_event_command* cmd)
 {
-	// One-off timers are automatically stopped by libev.
-	as_async_timeout((void*)((uint8_t*)timer - offsetof(as_event_command, timer)));
+	if (cmd->free_buf) {
+		cf_free(cmd->buf);
+	}
+	cf_free(cmd);
 }
 
-bool
-as_event_create_loop(as_event_loop* event_loop)
+static inline void
+as_event_put_connection(as_event_command* cmd)
 {
-	event_loop->loop = ev_loop_new(EVFLAG_AUTO);
+	as_queue* q = &cmd->node->async_conn_qs[cmd->event_loop->index];
 	
-	if (! event_loop->loop) {
-		return false;
+	if (! as_queue_push_limit(q, &cmd->conn)) {
+		as_event_close_connection(cmd->conn, cmd->node);
+	}
+}
+
+static inline void
+as_event_response_complete(as_event_command* cmd)
+{
+	if (cmd->pipeline) {
+		as_pipe_response_complete(cmd);
+		return;
 	}
 	
-	pthread_mutex_init(&event_loop->lock, 0);
-	as_queue_init(&event_loop->queue, sizeof(void*), 256);  // TODO make configurable.
-	as_event_register_wakeup(event_loop);
-	
-	return pthread_create(&event_loop->thread, NULL, as_ev_worker, event_loop->loop) == 0;
+	as_event_stop_timer(cmd);
+	as_event_stop_watcher(cmd, cmd->conn);
+	as_event_put_connection(cmd);
+	ck_pr_dec_32(&cmd->node->async_pending);
+	as_node_release(cmd->node);
 }
 
-bool
-as_event_close_loop(as_event_loop* event_loop)
+void
+as_event_executor_complete(as_event_command* cmd)
 {
-	// Send stop command through queue so it can be executed in event loop thread.
-	void* ptr = 0;
-	pthread_mutex_lock(&event_loop->lock);
-	bool status = as_queue_push(&event_loop->queue, &ptr);
-	pthread_mutex_unlock(&event_loop->lock);
+	as_event_response_complete(cmd);
 	
-	if (status) {
-		ev_async_send(event_loop->loop, &event_loop->wakeup);
+	// Only invoke user callback after all node commands have completed.
+	as_event_executor* executor = cmd->udata;
+	
+	if (++executor->count == executor->max) {
+		// All commands completed.
+		if (executor->valid) {
+			executor->complete_fn(executor, 0);
+		}
+		cf_free(executor->commands);
+		cf_free(executor);
 	}
-	return status;
-}
-
-void
-as_event_register_wakeup(as_event_loop* event_loop)
-{
-	ev_async_init(&event_loop->wakeup, as_ev_wakeup);
-	ev_async_start(event_loop->loop, &event_loop->wakeup);
-}
-
-bool
-as_event_send(as_event_command* cmd)
-{
-	// Send command through queue so it can be executed in event loop thread.
-	as_event_loop* event_loop = cmd->event_loop;
-	
-	pthread_mutex_lock(&event_loop->lock);
-	bool status = as_queue_push(&event_loop->queue, &cmd);
-	pthread_mutex_unlock(&event_loop->lock);
-
-	if (status) {
-		ev_async_send(event_loop->loop, &event_loop->wakeup);
+	else {
+		// Determine if a new command needs to be started.
+		if (executor->valid) {
+			int next = executor->count + executor->max_concurrent - 1;
+			
+			if (next < executor->max) {
+				// Start new command.
+				as_event_command_execute(executor->commands[next]);
+			}
+		}
 	}
-	return status;
-}
-
-void
-as_event_register_write(as_event_command* cmd)
-{
-	ev_io_init(&cmd->watcher, as_ev_callback, cmd->fd, EV_WRITE);
-	ev_io_start(cmd->event_loop->loop, &cmd->watcher);
-}
-
-void
-as_event_register_read(as_event_command* cmd)
-{
-	ev_io_init(&cmd->watcher, as_ev_callback, cmd->fd, EV_READ);
-	ev_io_start(cmd->event_loop->loop, &cmd->watcher);
-}
-
-void
-as_event_set_write(as_event_command* cmd)
-{
-	ev_io_stop(cmd->event_loop->loop, &cmd->watcher);
-	ev_io_set(&cmd->watcher, cmd->fd, EV_WRITE);
-	ev_io_start(cmd->event_loop->loop, &cmd->watcher);
-}
-
-void
-as_event_set_read(as_event_command* cmd)
-{
-	ev_io_stop(cmd->event_loop->loop, &cmd->watcher);
-	ev_io_set(&cmd->watcher, cmd->fd, EV_READ);
-	ev_io_start(cmd->event_loop->loop, &cmd->watcher);
-}
-
-void
-as_event_init_timer(as_event_command* cmd)
-{
-	ev_timer_init(&cmd->timer, as_ev_timeout, cmd->timeout_ms / 1000.0, 0.0);
-	ev_timer_start(cmd->event_loop->loop, &cmd->timer);
-}
-
-void
-as_event_stop_timer(as_event_command* cmd)
-{
-	ev_timer_stop(cmd->event_loop->loop, &cmd->timer);
-}
-
-void
-as_event_unregister(as_event_command* cmd)
-{
-	ev_io_stop(cmd->event_loop->loop, &cmd->watcher);
-}
-
-#elif defined(AS_USE_LIBUV)
-
-/******************************************************************************
- * LIBUV - TBD
- *****************************************************************************/
-
-#else
-
-/******************************************************************************
- * NO EVENT LIB DEFINED
- *****************************************************************************/
-
-bool
-as_event_create_loop(as_event_loop* event_loop)
-{
-	return false;
+	as_event_command_free(cmd);
 }
 
 bool
-as_event_close_loop(as_event_loop* event_loop)
+as_event_get_connection(as_event_command* cmd)
 {
+	as_queue* q = &cmd->node->async_conn_qs[cmd->event_loop->index];
+	as_async_connection* conn;
+
+	// Find connection.
+	while (as_queue_pop(q, &conn)) {
+		if (as_event_validate_connection(&conn->base, false)) {
+			conn->cmd = cmd;
+			cmd->conn = (as_event_connection*)conn;
+			return true;
+		}
+		as_event_close_connection(&conn->base, cmd->node);
+	}
+	
+	// Create connection.
+	conn = cf_malloc(sizeof(as_async_connection));
+	conn->base.pipeline = false;
+	conn->cmd = cmd;
+	cmd->conn = &conn->base;
 	return false;
 }
 
 void
-as_event_register_wakeup(as_event_loop* event_loop)
+as_event_error_callback(as_event_command* cmd, as_error* err)
 {
+	ck_pr_dec_32(&cmd->node->async_pending);
+	as_node_release(cmd->node);
+	
+	switch (cmd->type) {
+		case AS_ASYNC_TYPE_WRITE:
+			((as_async_write_command*)cmd)->listener(err, cmd->udata, cmd->event_loop);
+			break;
+		case AS_ASYNC_TYPE_RECORD:
+			((as_async_record_command*)cmd)->listener(err, 0, cmd->udata, cmd->event_loop);
+			break;
+		case AS_ASYNC_TYPE_VALUE:
+			((as_async_value_command*)cmd)->listener(err, 0, cmd->udata, cmd->event_loop);
+			break;
+			
+		default: {
+			// Handle command that is part of a group (batch, scan, query).
+			// Commands are issued on same event loop, so we can assume single threaded behavior.
+			as_event_executor* executor = cmd->udata;
+			
+			// Notify user of error only once.
+			if (executor->valid) {
+				executor->complete_fn(executor, err);
+				executor->valid = false;
+			}
+			
+			// Only free executor if all outstanding commands are complete.
+			if (++executor->count == executor->max) {
+				cf_free(executor->commands);
+				cf_free(executor);
+			}
+		}
+	}
+	as_event_command_free(cmd);
+}
+
+void
+as_event_connect_error(as_event_command* cmd, as_error* err)
+{
+	// Only timer needs to be released on socket connection failure.
+	// Watcher has not been registered yet.
+	as_event_stop_timer(cmd);
+
+	// Connection never opened, but memory still needs to be released.
+	cf_free(cmd->conn);
+	
+	as_event_error_callback(cmd, err);
+}
+
+void
+as_event_socket_error(as_event_command* cmd, as_error* err)
+{
+	if (cmd->pipeline) {
+		as_pipe_socket_error(cmd, err);
+		return;
+	}
+	
+	// Socket read/write failure.
+	// Stop watcher only if it has been initialized.
+	if (cmd->state > AS_ASYNC_STATE_UNREGISTERED) {
+		as_event_stop_watcher(cmd, cmd->conn);
+	}
+	
+	// Stop timer.
+	as_event_stop_timer(cmd);
+	
+	// Do not put connection back in pool.
+	as_event_close_connection(cmd->conn, cmd->node);
+	as_event_error_callback(cmd, err);
+}
+
+void
+as_event_response_error(as_event_command* cmd, as_error* err)
+{
+	if (cmd->pipeline) {
+		as_pipe_response_error(cmd, err);
+		return;
+	}
+	
+	// Server sent back error.
+	// Release resources, make callback and free command.
+	as_event_stop_timer(cmd);
+	as_event_stop_watcher(cmd, cmd->conn);
+	
+	// Close socket on errors that can leave unread data in socket.
+	switch (err->code) {
+		case AEROSPIKE_ERR_QUERY_ABORTED:
+		case AEROSPIKE_ERR_SCAN_ABORTED:
+		case AEROSPIKE_ERR_ASYNC_CONNECTION:
+		case AEROSPIKE_ERR_CLIENT_ABORT:
+		case AEROSPIKE_ERR_CLIENT:
+			as_event_close_connection(cmd->conn, cmd->node);
+			break;
+			
+		default:
+			as_event_put_connection(cmd);
+			break;
+	}
+	as_event_error_callback(cmd, err);
+}
+
+void
+as_event_timeout(as_event_command* cmd)
+{
+	if (cmd->pipeline) {
+		as_pipe_timeout(cmd);
+		return;
+	}
+	
+	as_error err;
+	as_error_set_message(&err, AEROSPIKE_ERR_TIMEOUT, as_error_string(AEROSPIKE_ERR_TIMEOUT));
+	
+	// Command has timed out.
+	// Stop watcher if it has been initialized.
+	if (cmd->state > AS_ASYNC_STATE_UNREGISTERED) {
+		as_event_stop_watcher(cmd, cmd->conn);
+	}
+	
+	// Assume timer has already been stopped.
+	// Do not put connection back in pool.
+	as_event_close_connection(cmd->conn, cmd->node);
+	as_event_error_callback(cmd, &err);
 }
 
 bool
-as_event_send(as_event_command* cmd)
+as_event_command_parse_header(as_event_command* cmd)
 {
-	return false;
+	as_msg* msg = (as_msg*)cmd->buf;
+	
+	if (msg->result_code == AEROSPIKE_OK) {
+		as_event_response_complete(cmd);
+		((as_async_write_command*)cmd)->listener(0, cmd->udata, cmd->event_loop);
+		as_event_command_free(cmd);
+	}
+	else {
+		as_error err;
+		as_error_set_message(&err, msg->result_code, as_error_string(msg->result_code));
+		as_event_response_error(cmd, &err);
+	}
+	return true;
 }
 
-void
-as_event_register_write(as_event_command* cmd)
+bool
+as_event_command_parse_result(as_event_command* cmd)
 {
+	as_msg* msg = (as_msg*)cmd->buf;
+	as_msg_swap_header_from_be(msg);
+	uint8_t* p = cmd->buf + sizeof(as_msg);
+	as_status status = msg->result_code;
+	
+	switch (status) {
+		case AEROSPIKE_OK: {
+			as_record rec;
+			
+			if (msg->n_ops < 1000) {
+				as_record_inita(&rec, msg->n_ops);
+			}
+			else {
+				as_record_init(&rec, msg->n_ops);
+			}
+			
+			rec.gen = msg->generation;
+			rec.ttl = cf_server_void_time_to_ttl(msg->record_ttl);
+			
+			p = as_command_ignore_fields(p, msg->n_fields);
+			as_command_parse_bins(&rec, p, msg->n_ops, cmd->deserialize);
+			
+			as_event_response_complete(cmd);
+			((as_async_record_command*)cmd)->listener(0, &rec, cmd->udata, cmd->event_loop);
+			as_event_command_free(cmd);
+			as_record_destroy(&rec);
+			break;
+		}
+			
+		case AEROSPIKE_ERR_UDF: {
+			as_error err;
+			as_command_parse_udf_failure(p, &err, msg, status);
+			as_event_response_error(cmd, &err);
+			break;
+		}
+			
+		default: {
+			as_error err;
+			as_error_set_message(&err, status, as_error_string(status));
+			as_event_response_error(cmd, &err);
+			break;
+		}
+	}
+	return true;
 }
 
-void
-as_event_register_read(as_event_command* cmd)
+bool
+as_event_command_parse_success_failure(as_event_command* cmd)
 {
+	as_msg* msg = (as_msg*)cmd->buf;
+	as_msg_swap_header_from_be(msg);
+	uint8_t* p = cmd->buf + sizeof(as_msg);
+	as_status status = msg->result_code;
+	
+	switch (status) {
+		case AEROSPIKE_OK: {
+			as_error err;
+			as_val* val = 0;
+			status = as_command_parse_success_failure_bins(&p, &err, msg, &val);
+			
+			if (status == AEROSPIKE_OK) {
+				as_event_response_complete(cmd);
+				((as_async_value_command*)cmd)->listener(0, val, cmd->udata, cmd->event_loop);
+				as_event_command_free(cmd);
+				as_val_destroy(val);
+			}
+			else {
+				as_event_response_error(cmd, &err);
+			}
+			break;
+		}
+			
+		case AEROSPIKE_ERR_UDF: {
+			as_error err;
+			as_command_parse_udf_failure(p, &err, msg, status);
+			as_event_response_error(cmd, &err);
+			break;
+		}
+			
+		default: {
+			as_error err;
+			as_error_set_message(&err, status, as_error_string(status));
+			as_event_response_error(cmd, &err);
+			break;
+		}
+	}
+	return true;
 }
-
-void
-as_event_set_write(as_event_command* cmd)
-{
-}
-
-void
-as_event_set_read(as_event_command* cmd)
-{
-}
-
-void
-as_event_init_timer(as_event_command* cmd)
-{
-}
-
-void
-as_event_stop_timer(as_event_command* cmd)
-{
-}
-
-void
-as_event_unregister(as_event_command* cmd)
-{
-}
-
-#endif

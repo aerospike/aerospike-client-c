@@ -38,11 +38,15 @@ for Linux and XCode clang for Mac OS X.
 
 ### Mac OS X
 
-	Download and install [XCode](https://itunes.apple.com/us/app/xcode/id497799835).
+Download and install [XCode](https://itunes.apple.com/us/app/xcode/id497799835).
 
 ### libev (Optional. Used for asynchronous functions)
 
-	Download and install [libev](http://dist.schmorp.de/libev)
+Download and install [libev](http://dist.schmorp.de/libev) version 4.20 or greater.
+
+### libuv (Optional. Used for asynchronous functions)
+
+Download and install [libuv](http://docs.libuv.org) version 1.7.5 or greater.
 
 ## Build
 

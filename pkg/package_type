@@ -61,11 +61,11 @@ function CreatePackage {
 
 case $platform in
 
-el5|el6)
+el5|el6|el7)
   CreatePackage usr opt
   rpmrev=`echo $rev | sed 's/-/_/g'`
   sed 's/@VERSION@/'$rpmrev'/g' < rpm/client$pkgSuffix.spec > $stageDir/rpm.spec
-  rpmbuild -bb -vv --define "_topdir $stageDir" --buildroot $buildDir $stageDir/rpm.spec
+  rpmbuild -bb -vv --define "dist .$platform" --define "_topdir $stageDir" --buildroot $buildDir $stageDir/rpm.spec
   mv $stageDir/RPMS/$arch/aerospike-client-c$pkgSuffix-$rpmrev*.rpm $targetDir
   rm $stageDir/rpm.spec
   ;;

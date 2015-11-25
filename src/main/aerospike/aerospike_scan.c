@@ -375,6 +375,11 @@ as_scan_command_init(uint8_t* cmd, const as_policy_scan* policy, const as_scan* 
 	if (policy->fail_on_cluster_change) {
 		priority |= 0x08;
 	}
+	
+	if (scan->include_ldt) {
+		priority |= 0x02;
+	}
+	
 	*p++ = priority;
 	*p++ = scan->percent;
 	

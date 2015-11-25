@@ -313,6 +313,11 @@ typedef enum as_status_e {
 	AEROSPIKE_ERR_BATCH_QUEUES_FULL = 152,
 
 	/**
+	 * Invalid/Unsupported GeoJSON
+	 */
+	AEROSPIKE_ERR_GEO_INVALID_GEOJSON = 160,
+
+	/**
 	 *	Index found.
 	 */
 	AEROSPIKE_ERR_INDEX_FOUND = 200,

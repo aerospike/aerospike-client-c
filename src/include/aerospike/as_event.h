@@ -28,11 +28,10 @@
  *  Generic asynchronous events abstraction.  Designed to support multiple event libraries
  *	such as libev and libuv.  Only one library can be supported per build.
  */
-
 #if defined(AS_USE_LIBEV)
 #include <ev.h>
 #elif defined(AS_USE_LIBUV)
-// TODO Support libuv
+#include <uv.h>
 #else
 #endif
 
@@ -43,7 +42,7 @@ extern "C" {
 /******************************************************************************
  * TYPES
  *****************************************************************************/
-
+	
 /**
  *	Generic asynchronous event loop abstraction.  There is one event loop per thread.
  *	Event loops can be created by the client, or be referenced to externally created event loops.
@@ -54,31 +53,19 @@ typedef struct {
 #if defined(AS_USE_LIBEV)
 	struct ev_loop* loop;
 	struct ev_async wakeup;
-	pthread_mutex_t lock;
-	as_queue queue;
 #elif defined(AS_USE_LIBUV)
-	// TODO Support libuv
+	uv_loop_t* loop;
+	uv_async_t* wakeup;
 #else
 	void* loop;
 #endif
 		
+	pthread_mutex_t lock;
+	as_queue queue;
 	pthread_t thread;
 	uint32_t index;
+	bool initialized;
 } as_event_loop;
-	
-typedef struct {
-#if defined(AS_USE_LIBEV)
-	struct ev_io watcher;
-	struct ev_timer timer;
-#elif defined(AS_USE_LIBUV)
-	// TODO Support libuv
-#else
-#endif
-
-	as_event_loop* event_loop;
-	int fd;
-	uint32_t timeout_ms;
-} as_event_command;
 
 /******************************************************************************
  * PUBLIC FUNCTIONS
@@ -102,7 +89,7 @@ as_event_create_loops(uint32_t capacity);
  *	can increase performance.
  *
  *	This method is used in conjunction with as_event_set_external_loop() to fully define the
- *	external loop to the client.
+ *	the external loop to the client and obtain a reference the client's event loop abstraction.
  *
  *	~~~~~~~~~~{.c}
  *	struct {
@@ -111,12 +98,22 @@ as_event_create_loops(uint32_t capacity);
  *		as_event_loop* as_loop;
  *	} my_loop;
  *
- *	struct my_loop loops[8];  // initialize these loops
- *	as_event_set_external_loop_capacity(8);
+ *  static void* my_loop_worker_thread(void* udata) {
+ *		struct my_loop* myloop = udata;
+ *		myloop->loop = ev_loop_new(EVFLAG_AUTO);
+ *		myloop->as_loop = as_event_set_external_loop(myloop->loop);
+ *		ev_loop(myloop->loop, 0);
+ *		ev_loop_destroy(myloop->loop);
+ *		return NULL;
+ *	}
  *
- *	for (int i = 0; i < 8; i++) {
- *		struct my_loop* loop = &loops[i];
- *		loop->as_loop = as_event_set_external_loop(loop->loop, loop->thread);
+ *	int capacity = 8;
+ *	struct my_loop* loops = malloc(sizeof(struct my_loop) * capacity);
+ *	as_event_set_external_loop_capacity(capacity);
+ *
+ *	for (int i = 0; i < capacity; i++) {
+ *		struct my_loop* myloop = &loops[i];
+ *		return pthread_create(&myloop->thread, NULL, my_loop_worker_thread, myloop) == 0;
  *	}
  *	~~~~~~~~~~
  *
@@ -128,12 +125,14 @@ bool
 as_event_set_external_loop_capacity(uint32_t capacity);
 
 /**
- *	Define the external loop and it's corresponding thread to the client. This method should be 
- *	called when the calling program wants to share event loops with the client.  This reduces
- *	resource usage and can increase performance.
+ *	Register an external event loop with the client. This method should be called when the 
+ *	calling program wants to share event loops with the client.  This reduces resource usage and
+ *	can increase performance.
  *
- *	This method is used in conjunction with as_event_set_external_loop() to fully define the
- *	external loop to the client and obtain a reference the client's event loop abstraction.
+ *	This method must be called in the same thread as the event loop that is being registered.
+ *
+ *	This method is used in conjunction with as_event_set_external_loop_capacity() to fully define
+ *	the external loop to the client and obtain a reference the client's event loop abstraction.
  *
  *	~~~~~~~~~~{.c}
  *	struct {
@@ -142,25 +141,33 @@ as_event_set_external_loop_capacity(uint32_t capacity);
  *		as_event_loop* as_loop;
  *	} my_loop;
  *
- *	struct my_loop loops[8];  // initialize these loops
- *	as_event_set_external_loop_capacity(8);
+ *  static void* my_loop_worker_thread(void* udata) {
+ *		struct my_loop* myloop = udata;
+ *		myloop->loop = ev_loop_new(EVFLAG_AUTO);
+ *		myloop->as_loop = as_event_set_external_loop(myloop->loop);
+ *		ev_loop(myloop->loop, 0);
+ *		ev_loop_destroy(myloop->loop);
+ *		return NULL;
+ *	}
  *
- *	for (int i = 0; i < 8; i++) {
- *		struct my_loop* loop = &loops[i];
- *		loop->as_loop = as_event_set_external_loop(loop->loop, loop->thread);
+ *	int capacity = 8;
+ *	struct my_loop* loops = malloc(sizeof(struct my_loop) * capacity);
+ *	as_event_set_external_loop_capacity(capacity);
+ *
+ *	for (int i = 0; i < capacity; i++) {
+ *		struct my_loop* myloop = &loops[i];
+ *		return pthread_create(&myloop->thread, NULL, my_loop_worker_thread, myloop) == 0;
  *	}
  *	~~~~~~~~~~
  *
  *	@param loop		External event loop.
- *	@param thread	Thread that the event loop is running on.  Used as a read-only reference to
- *					determine if a new async client command is running in the event loop thread.
- *	@return			Client's generic event_loop abstraction that is used in client async
- *					commands.
+ *	@return			Client's generic event loop abstraction that is used in client async commands.
+ *					Returns NULL if external loop capacity would be exceeded.
  *
  *	@ingroup async_events
  */
 as_event_loop*
-as_event_set_external_loop(void* loop, pthread_t thread);
+as_event_set_external_loop(void* loop);
 
 /**
  *	Close internally created event loops and release memory for event loop abstraction.
@@ -171,72 +178,6 @@ as_event_set_external_loop(void* loop, pthread_t thread);
  */
 void
 as_event_close_loops();
-
-/******************************************************************************
- * PRIVATE GLOBAL VARIABLES
- *****************************************************************************/
-
-extern as_event_loop* as_event_loops;
-extern uint32_t as_event_loop_size;
-extern uint32_t as_event_loop_current;
-	
-/******************************************************************************
- * PRIVATE FUNCTIONS
- *****************************************************************************/
-
-bool
-as_event_create_loop(as_event_loop* event_loop);
-
-bool
-as_event_close_loop(as_event_loop* event_loop);
-	
-void
-as_event_register_wakeup(as_event_loop* event_loop);
-	
-bool
-as_event_send(as_event_command* cmd);
-	
-void
-as_event_register_write(as_event_command* cmd);
-
-void
-as_event_register_read(as_event_command* cmd);
-
-void
-as_event_set_write(as_event_command* cmd);
-
-void
-as_event_set_read(as_event_command* cmd);
-
-void
-as_event_unregister(as_event_command* cmd);
-
-void
-as_event_init_timer(as_event_command* cmd);
-
-void
-as_event_stop_timer(as_event_command* cmd);
-
-static inline as_event_loop*
-as_event_assign(as_event_loop* event_loop)
-{
-	if (! event_loop) {
-		// Assign event loop using round robin distribution.
-		// Not atomic because doesn't need to be exactly accurate.
-		uint32_t current = as_event_loop_current++;
-		event_loop = &as_event_loops[current % as_event_loop_size];
-	}
-	return event_loop;
-}
-
-static inline void
-as_event_close(as_event_command* cmd)
-{
-	if (cmd->fd >= 0) {
-		close(cmd->fd);
-		cmd->fd = -1;
-	}
-}
 
 #ifdef __cplusplus
 } // end extern "C"

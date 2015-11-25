@@ -14,36 +14,51 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-#include <aerospike/as_async.h>
+#include <aerospike/as_event.h>
+#include <aerospike/as_event_internal.h>
 
 /******************************************************************************
- * FUNCTIONS
+ * EVENT_LIB NOT DEFINED FUNCTIONS
  *****************************************************************************/
 
-uint32_t
-as_async_get_pending(as_cluster* cluster)
+#if ! (defined(AS_USE_LIBEV) || defined(AS_USE_LIBUV))
+
+bool
+as_event_create_loop()
 {
-	as_nodes* nodes = as_nodes_reserve(cluster);
-	uint32_t pending = 0;
-
-	for (uint32_t i = 0; i < nodes->size; ++i) {
-		pending += ck_pr_load_32(&nodes->array[i]->async_pending);
-	}
-
-	as_nodes_release(nodes);
-	return pending;
+	return false;
 }
 
-uint32_t
-as_async_get_connections(as_cluster* cluster)
+void
+as_event_register_external_loop(as_event_loop* event_loop)
 {
-	as_nodes* nodes = as_nodes_reserve(cluster);
-	uint32_t count = 0;
-
-	for (uint32_t i = 0; i < nodes->size; ++i) {
-		count += ck_pr_load_32(&nodes->array[i]->async_conn);
-	}
-
-	as_nodes_release(nodes);
-	return count;
 }
+
+bool
+as_event_send(as_event_command* cmd)
+{
+	return false;
+}
+
+void
+as_event_command_begin(as_event_command* cmd)
+{
+}
+
+void
+as_event_close_connection(as_event_connection* conn, as_node* node)
+{
+}
+
+void
+as_event_node_destroy(as_node* node)
+{
+}
+
+bool
+as_event_close_loop(as_event_loop* event_loop)
+{
+	return false;
+}
+
+#endif

@@ -75,13 +75,13 @@ typedef struct as_batch_complete_task_s {
 } as_batch_complete_task;
 
 typedef struct {
-	as_async_executor executor;
+	as_event_executor executor;
 	as_batch_read_records* records;
 	as_async_batch_listener listener;
 } as_async_batch_executor;
 
 typedef struct as_async_batch_command {
-	as_async_command command;
+	as_event_command command;
 	uint8_t space[];
 } as_async_batch_command;
 
@@ -122,7 +122,7 @@ as_batch_parse_record(uint8_t* p, as_msg* msg, as_record* rec, bool deserialize)
 }
 
 static void
-as_batch_complete_async(as_async_executor* executor, as_error* err)
+as_batch_complete_async(as_event_executor* executor, as_error* err)
 {
 	as_async_batch_executor* e = (as_async_batch_executor*)executor;
 	e->listener(err, e->records, executor->udata, executor->event_loop);
@@ -131,7 +131,7 @@ as_batch_complete_async(as_async_executor* executor, as_error* err)
 }
 
 static bool
-as_batch_async_parse_records(as_async_command* cmd)
+as_batch_async_parse_records(as_event_command* cmd)
 {
 	as_async_batch_executor* executor = cmd->udata;  // udata is overloaded to contain executor.
 	as_vector* records = &executor->records->list;
@@ -145,13 +145,13 @@ as_batch_async_parse_records(as_async_command* cmd)
 		if (msg->result_code && msg->result_code != AEROSPIKE_ERR_RECORD_NOT_FOUND) {
 			as_error err;
 			as_error_set_message(&err, msg->result_code, as_error_string(msg->result_code));
-			as_async_response_error(cmd, &err);
+			as_event_response_error(cmd, &err);
 			return true;
 		}
 		p += sizeof(as_msg);
 		
 		if (msg->info3 & AS_MSG_INFO3_LAST) {
-			as_async_executor_complete(cmd);
+			as_event_executor_complete(cmd);
 			return true;
 		}
 		
@@ -174,7 +174,7 @@ as_batch_async_parse_records(as_async_command* cmd)
 			cf_digest_string((cf_digest*)digest, digest_string);
 			as_error err;
 			as_error_update(&err, AEROSPIKE_ERR_CLIENT, "Unexpected batch key returned: %s,%u", digest_string, offset);
-			as_async_response_error(cmd, &err);
+			as_event_response_error(cmd, &err);
 			return true;
 		}
 	}
@@ -944,7 +944,7 @@ as_batch_read_execute_async(
 	as_batch_node* batch_nodes, as_async_batch_executor* executor
 	)
 {
-	as_async_executor* exec = &executor->executor;
+	as_event_executor* exec = &executor->executor;
 	exec->max_concurrent = exec->max = n_batch_nodes;
 	
 	for (uint32_t i = 0; i < n_batch_nodes; i++) {
@@ -956,19 +956,18 @@ as_batch_read_execute_async(
 		// Allocate enough memory to cover, then, round up memory size in 8KB increments to reduce
 		// fragmentation and to allow socket read to reuse buffer.
 		size_t s = (sizeof(as_async_batch_command) + size + AS_AUTHENTICATION_MAX_SIZE + 8191) & ~8191;
-		as_async_command* cmd = cf_malloc(s);
-		cmd->event.event_loop = exec->event_loop;
-		cmd->event.fd = -1;
-		cmd->event.timeout_ms = policy->timeout;
+		as_event_command* cmd = cf_malloc(s);
+		cmd->event_loop = exec->event_loop;
+		cmd->conn = 0;
 		cmd->cluster = cluster;
 		cmd->node = batch_node->node;
-		cmd->pipe_conn = NULL;
 		cmd->udata = executor;  // Overload udata to be the executor.
 		cmd->parse_results = as_batch_async_parse_records;
 		cmd->buf = ((as_async_batch_command*)cmd)->space;
-		cmd->capacity = (uint32_t)(s - sizeof(as_async_command));
+		cmd->capacity = (uint32_t)(s - sizeof(as_async_batch_command));
 		cmd->pos = 0;
 		cmd->auth_len = 0;
+		cmd->timeout_ms = policy->timeout;
 		cmd->type = AS_ASYNC_TYPE_BATCH;
 		cmd->state = AS_ASYNC_STATE_UNREGISTERED;
 		cmd->pipeline = false;
@@ -976,7 +975,7 @@ as_batch_read_execute_async(
 		cmd->free_buf = false;
 		cmd->len = (uint32_t)as_batch_index_records_write(records, &batch_node->offsets, policy->timeout, policy->allow_inline, cmd->buf);
 		
-		as_async_command_execute(cmd);
+		as_event_command_execute(cmd);
 	}
 }
 
@@ -1131,7 +1130,7 @@ aerospike_batch_read_async(
 	// Batch will be split up into a command for each node.
 	// Allocate batch data shared by each command.
 	as_async_batch_executor* executor = cf_malloc(sizeof(as_async_batch_executor));
-	as_async_executor* exec = &executor->executor;
+	as_event_executor* exec = &executor->executor;
 	exec->commands = 0;
 	exec->event_loop = as_event_assign(event_loop);
 	exec->complete_fn = as_batch_complete_async;

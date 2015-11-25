@@ -43,33 +43,42 @@
 #include <sys/types.h>
 
 typedef struct as_pipe_connection {
-	as_async_command* writer;
+	as_event_connection base;
+	as_event_command* writer;
 	cf_ll readers;
-	int32_t fd;
 	bool canceled;
 	bool in_pool;
 } as_pipe_connection;
 
+extern int
+as_pipe_get_send_buffer_size();
+
+extern int
+as_pipe_get_recv_buffer_size();
+
 extern bool
-as_pipe_connection_setup(int32_t fd, as_error* err);
-
-extern int32_t
-as_pipe_get_connection(as_async_command* cmd);
+as_pipe_get_connection(as_event_command* cmd);
 
 extern void
-as_pipe_socket_error(as_async_command* cmd, as_error* err);
+as_pipe_socket_error(as_event_command* cmd, as_error* err);
 
 extern void
-as_pipe_timeout(as_async_command* cmd);
+as_pipe_timeout(as_event_command* cmd);
 
 extern void
-as_pipe_response_error(as_async_command* cmd, as_error* err);
+as_pipe_response_error(as_event_command* cmd, as_error* err);
 
 extern void
-as_pipe_response_complete(as_async_command* cmd);
+as_pipe_response_complete(as_event_command* cmd);
 
 extern void
-as_pipe_write_start(as_async_command* cmd);
+as_pipe_write_start(as_event_command* cmd);
 
 extern void
-as_pipe_read_start(as_async_command* cmd, bool has_event);
+as_pipe_read_start(as_event_command* cmd);
+
+static inline as_event_command*
+as_pipe_link_to_command(cf_ll_element* link)
+{
+	return (as_event_command*)((uint8_t*)link - offsetof(as_event_command, pipe_link));
+}

@@ -42,7 +42,7 @@ int g_port = 3000;
 static char g_user[AS_USER_SIZE];
 static char g_password[AS_PASSWORD_HASH_SIZE];
 
-#if defined(AS_USE_LIBEV)
+#if defined(AS_USE_LIBEV) || defined(AS_USE_LIBUV)
 static bool g_use_async = true;
 #else
 static bool g_use_async = false;
@@ -169,10 +169,6 @@ static bool after(atf_plan * plan) {
         return false;
     }
 	
-	if (g_use_async) {
-		as_event_close_loops();
-	}
-
 	as_error err;
 	as_error_reset(&err);
 	
@@ -185,8 +181,11 @@ static bool after(atf_plan * plan) {
 	else {
 		error("%s @ %s[%s:%d]", g_host, g_port, err.message, err.func, err.file, err.line);
 		aerospike_destroy(as);
-
 		return false;
+	}
+	
+	if (g_use_async) {
+		as_event_close_loops();
 	}
 	
     return true;
@@ -240,5 +239,6 @@ PLAN(aerospike_test) {
 		plan_add(key_apply_async);
 		plan_add(batch_async);
 		plan_add(scan_async);
+		plan_add(key_pipeline);
 	}
 }

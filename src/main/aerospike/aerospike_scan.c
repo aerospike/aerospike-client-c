@@ -57,12 +57,12 @@ typedef struct as_scan_complete_task_s {
 } as_scan_complete_task;
 
 typedef struct as_async_scan_executor {
-	as_async_executor executor;
+	as_event_executor executor;
 	as_async_scan_listener listener;
 } as_async_scan_executor;
 
 typedef struct as_async_scan_command {
-	as_async_command command;
+	as_event_command command;
 	uint8_t space[];
 } as_async_scan_command;
 
@@ -71,13 +71,13 @@ typedef struct as_async_scan_command {
  *****************************************************************************/
 
 static void
-as_scan_complete_async(as_async_executor* executor, as_error* err)
+as_scan_complete_async(as_event_executor* executor, as_error* err)
 {
 	((as_async_scan_executor*)executor)->listener(err, 0, executor->udata, executor->event_loop);
 }
 
 static bool
-as_scan_parse_record_async(as_async_command* cmd, uint8_t** pp, as_msg* msg)
+as_scan_parse_record_async(as_event_command* cmd, uint8_t** pp, as_msg* msg)
 {
 	as_record rec;
 	as_record_inita(&rec, msg->n_ops);
@@ -90,16 +90,16 @@ as_scan_parse_record_async(as_async_command* cmd, uint8_t** pp, as_msg* msg)
 	p = as_command_parse_bins(&rec, p, msg->n_ops, cmd->deserialize);
 	*pp = p;
 	
-	as_async_executor* executor = cmd->udata;  // udata is overloaded to contain executor.
+	as_event_executor* executor = cmd->udata;  // udata is overloaded to contain executor.
 	bool rv = ((as_async_scan_executor*)executor)->listener(0, &rec, executor->udata, executor->event_loop);
 	as_record_destroy(&rec);
 	return rv;
 }
 
 static bool
-as_scan_parse_records_async(as_async_command* cmd)
+as_scan_parse_records_async(as_event_command* cmd)
 {
-	as_async_executor* executor = cmd->udata;  // udata is overloaded to contain executor.
+	as_event_executor* executor = cmd->udata;  // udata is overloaded to contain executor.
 	uint8_t* p = cmd->buf;
 	uint8_t* end = p + cmd->len;
 	
@@ -118,13 +118,13 @@ as_scan_parse_records_async(as_async_command* cmd)
 			}
 			as_error err;
 			as_error_set_message(&err, msg->result_code, as_error_string(msg->result_code));
-			as_async_response_error(cmd, &err);
+			as_event_response_error(cmd, &err);
 			return true;
 		}
 		p += sizeof(as_msg);
 		
 		if (msg->info3 & AS_MSG_INFO3_LAST) {
-			as_async_executor_complete(cmd);
+			as_event_executor_complete(cmd);
 			return true;
 		}
 		
@@ -558,7 +558,7 @@ as_scan_async(
 	// Scan will be split up into a command for each node.
 	// Allocate scan data shared by each command.
 	as_async_scan_executor* executor = cf_malloc(sizeof(as_async_scan_executor));
-	as_async_executor* exec = &executor->executor;
+	as_event_executor* exec = &executor->executor;
 	exec->event_loop = as_event_assign(event_loop);
 	exec->complete_fn = as_scan_complete_async;
 	exec->udata = udata;
@@ -568,7 +568,7 @@ as_scan_async(
 	executor->listener = listener;
 	
 	if (daisy_chain) {
-		exec->commands = cf_malloc(sizeof(as_async_command*) * n_nodes);
+		exec->commands = cf_malloc(sizeof(as_event_command*) * n_nodes);
 		exec->max_concurrent = 1;
 	}
 	else {
@@ -589,20 +589,19 @@ as_scan_async(
 	
 	// Create all scan commands.
 	for (uint32_t i = 0; i < n_nodes; i++) {
-		as_async_command* cmd = cf_malloc(s);
-		cmd->event.event_loop = exec->event_loop;
-		cmd->event.fd = -1;
-		cmd->event.timeout_ms = policy->timeout;
+		as_event_command* cmd = cf_malloc(s);
+		cmd->event_loop = exec->event_loop;
+		cmd->conn = 0;
 		cmd->cluster = as->cluster;
 		cmd->node = nodes[i];
-		cmd->pipe_conn = NULL;
 		cmd->udata = executor;  // Overload udata to be the executor.
 		cmd->parse_results = as_scan_parse_records_async;
 		cmd->buf = ((as_async_scan_command*)cmd)->space;
-		cmd->capacity = (uint32_t)(s - sizeof(as_async_command));
+		cmd->capacity = (uint32_t)(s - sizeof(as_async_scan_command));
 		cmd->len = (uint32_t)size;
 		cmd->pos = 0;
 		cmd->auth_len = 0;
+		cmd->timeout_ms = policy->timeout;
 		cmd->type = AS_ASYNC_TYPE_SCAN;
 		cmd->state = AS_ASYNC_STATE_UNREGISTERED;
 		cmd->pipeline = false;
@@ -614,13 +613,13 @@ as_scan_async(
 			exec->commands[i] = cmd;
 		}
 		else {
-			as_async_command_execute(cmd);
+			as_event_command_execute(cmd);
 		}
 	}
 	
 	// If scanning one node at a time, start first command.
 	if (daisy_chain) {
-		as_async_command_execute(exec->commands[0]);
+		as_event_command_execute(exec->commands[0]);
 	}
 		
 	// Free command buffer.

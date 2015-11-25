@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		BF21EA561C06500700E2031E /* libuv.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BF21EA551C06500700E2031E /* libuv.a */; };
 		BF5DD9BF18E105080041F796 /* main.c in Sources */ = {isa = PBXBuildFile; fileRef = BF5DD9BE18E105080041F796 /* main.c */; };
 		BF5DD9C118E1096F0041F796 /* benchmark.c in Sources */ = {isa = PBXBuildFile; fileRef = BF5DD9C018E1096F0041F796 /* benchmark.c */; };
 		BFBA53FB18E1EF5800DC6D8B /* libaerospike.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFBA53F818E1EF4600DC6D8B /* libaerospike.a */; };
@@ -51,6 +52,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		BF21EA551C06500700E2031E /* libuv.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libuv.a; path = ../../../../usr/local/Cellar/libuv/1.7.5/lib/libuv.a; sourceTree = "<group>"; };
 		BF5DD9BE18E105080041F796 /* main.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = main.c; path = ../benchmarks/src/main/main.c; sourceTree = "<group>"; };
 		BF5DD9C018E1096F0041F796 /* benchmark.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = benchmark.c; path = ../benchmarks/src/main/benchmark.c; sourceTree = "<group>"; };
 		BFBA53F318E1EF4600DC6D8B /* aerospike.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = aerospike.xcodeproj; sourceTree = "<group>"; };
@@ -77,6 +79,7 @@
 				BFBA540118E1EFAA00DC6D8B /* libcrypto.dylib in Frameworks */,
 				BFBA540318E1EFF200DC6D8B /* liblua.a in Frameworks */,
 				BFC212AF1BDECA9F00E5730A /* libev.a in Frameworks */,
+				BF21EA561C06500700E2031E /* libuv.a in Frameworks */,
 				BFBA53FF18E1EF9300DC6D8B /* libpthread.dylib in Frameworks */,
 				BFBA53FD18E1EF8800DC6D8B /* libz.dylib in Frameworks */,
 			);
@@ -96,6 +99,7 @@
 		BFC79A7118DCB27D00CFE830 = {
 			isa = PBXGroup;
 			children = (
+				BF21EA551C06500700E2031E /* libuv.a */,
 				BFC212AE1BDECA9F00E5730A /* libev.a */,
 				BFBA540218E1EFF200DC6D8B /* liblua.a */,
 				BFBA540018E1EFAA00DC6D8B /* libcrypto.dylib */,
@@ -291,6 +295,10 @@
 					../modules/base/src/include,
 					../modules/ck/include,
 				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					/usr/local/Cellar/libuv/1.7.5/lib,
+				);
 				MACOSX_DEPLOYMENT_TARGET = 10.8;
 				OTHER_LDFLAGS = "-L/usr/local/lib";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -308,6 +316,10 @@
 					../modules/common/src/include,
 					../modules/base/src/include,
 					../modules/ck/include,
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					/usr/local/Cellar/libuv/1.7.5/lib,
 				);
 				MACOSX_DEPLOYMENT_TARGET = 10.8;
 				OTHER_LDFLAGS = "-L/usr/local/lib";

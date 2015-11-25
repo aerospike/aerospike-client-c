@@ -56,7 +56,7 @@ as_command_node_init(
 }
 
 static inline as_node*
-as_async_command_node_init(
+as_event_command_node_init(
 	aerospike* as, as_error* err, const as_key* key, as_policy_replica replica, bool write
 	)
 {
@@ -122,7 +122,7 @@ aerospike_key_get_async(
 	}
 	
 	as_error err;
-	as_node* node = as_async_command_node_init(as, &err, key, policy->replica, false);
+	as_node* node = as_event_command_node_init(as, &err, key, policy->replica, false);
 	if (! node) {
 		listener(&err, 0, udata, event_loop);
 		return;
@@ -131,13 +131,13 @@ aerospike_key_get_async(
 	uint16_t n_fields;
 	size_t size = as_command_key_size(policy->key, key, &n_fields);
 	
-	as_async_command* cmd = as_async_record_command_create(as->cluster, node, policy->timeout,
-		policy->deserialize, listener, udata, event_loop, pipeline, size, as_async_command_parse_result);
+	as_event_command* cmd = as_async_record_command_create(as->cluster, node, policy->timeout,
+		policy->deserialize, listener, udata, event_loop, pipeline, size, as_event_command_parse_result);
 
 	uint8_t* p = as_command_write_header_read(cmd->buf, AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_ALL, policy->consistency_level, policy->timeout, n_fields, 0);
 	p = as_command_write_key(p, policy->key, key);
 	cmd->len = (uint32_t)as_command_write_end(cmd->buf, p);
-	as_async_command_execute(cmd);
+	as_event_command_execute(cmd);
 }
 
 as_status
@@ -203,7 +203,7 @@ aerospike_key_select_async(
 	}
 	
 	as_error err;
-	as_node* node = as_async_command_node_init(as, &err, key, policy->replica, false);
+	as_node* node = as_event_command_node_init(as, &err, key, policy->replica, false);
 	if (! node) {
 		listener(&err, 0, udata, event_loop);
 		return;
@@ -222,8 +222,8 @@ aerospike_key_select_async(
 		}
 	}
 	
-	as_async_command* cmd = as_async_record_command_create(as->cluster, node, policy->timeout,
-			policy->deserialize, listener, udata, event_loop, pipeline, size, as_async_command_parse_result);
+	as_event_command* cmd = as_async_record_command_create(as->cluster, node, policy->timeout,
+			policy->deserialize, listener, udata, event_loop, pipeline, size, as_event_command_parse_result);
 
 	uint8_t* p = as_command_write_header_read(cmd->buf, AS_MSG_INFO1_READ, policy->consistency_level, policy->timeout, n_fields, nvalues);
 	p = as_command_write_key(p, policy->key, key);
@@ -232,7 +232,7 @@ aerospike_key_select_async(
 		p = as_command_write_bin_name(p, bins[i]);
 	}
 	cmd->len = (uint32_t)as_command_write_end(cmd->buf, p);
-	as_async_command_execute(cmd);
+	as_event_command_execute(cmd);
 }
 
 as_status
@@ -297,7 +297,7 @@ aerospike_key_exists_async(
 	}
 	
 	as_error err;
-	as_node* node = as_async_command_node_init(as, &err, key, policy->replica, false);
+	as_node* node = as_event_command_node_init(as, &err, key, policy->replica, false);
 	if (! node) {
 		listener(&err, 0, udata, event_loop);
 		return;
@@ -306,13 +306,13 @@ aerospike_key_exists_async(
 	uint16_t n_fields;
 	size_t size = as_command_key_size(policy->key, key, &n_fields);
 	
-	as_async_command* cmd = as_async_record_command_create(as->cluster, node, policy->timeout,
-				false, listener, udata, event_loop, pipeline, size, as_async_command_parse_result);
+	as_event_command* cmd = as_async_record_command_create(as->cluster, node, policy->timeout,
+				false, listener, udata, event_loop, pipeline, size, as_event_command_parse_result);
 
 	uint8_t* p = as_command_write_header_read(cmd->buf, AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA, policy->consistency_level, policy->timeout, n_fields, 0);
 	p = as_command_write_key(p, policy->key, key);
 	cmd->len = (uint32_t)as_command_write_end(cmd->buf, p);
-	as_async_command_execute(cmd);
+	as_event_command_execute(cmd);
 }
 
 as_status
@@ -408,7 +408,7 @@ aerospike_key_put_async_ex(
 	}
 
 	as_error err;
-	as_node* node = as_async_command_node_init(as, &err, key, AS_POLICY_REPLICA_MASTER, true);
+	as_node* node = as_event_command_node_init(as, &err, key, AS_POLICY_REPLICA_MASTER, true);
 	if (! node) {
 		listener(&err, udata, event_loop);
 		return;
@@ -428,9 +428,9 @@ aerospike_key_put_async_ex(
 	
 	if (policy->compression_threshold == 0 || (size <= policy->compression_threshold)) {
 		// Send uncompressed command.
-		as_async_command* cmd = as_async_write_command_create(as->cluster, node,
+		as_event_command* cmd = as_async_write_command_create(as->cluster, node,
 				policy->timeout, false, listener, udata, event_loop, pipeline, size,
-				as_async_command_parse_header);
+				as_event_command_parse_header);
 		
 		uint8_t* p = as_command_write_header(cmd->buf, 0, AS_MSG_INFO2_WRITE, policy->commit_level, 0,
 				policy->exists, policy->gen, rec->gen, rec->ttl, policy->timeout, n_fields, n_bins);
@@ -450,7 +450,7 @@ aerospike_key_put_async_ex(
 			*comp_length = size;
 		}
 
-		as_async_command_execute(cmd);
+		as_event_command_execute(cmd);
 	}
 	else {
 		// Send compressed command.
@@ -469,9 +469,9 @@ aerospike_key_put_async_ex(
 		// Allocate command with compressed upper bound.
 		size_t comp_size = as_command_compress_max_size(size);
 		
-		as_async_command* comp_cmd = as_async_write_command_create(as->cluster, node,
+		as_event_command* comp_cmd = as_async_write_command_create(as->cluster, node,
 			policy->timeout, false, listener, udata, event_loop, pipeline, comp_size,
-			as_async_command_parse_header);
+			as_event_command_parse_header);
 
 		// Compress buffer and execute.
 		if (as_command_compress(&err, cmd, size, comp_cmd->buf, &comp_size) == AEROSPIKE_OK) {
@@ -485,7 +485,7 @@ aerospike_key_put_async_ex(
 				*comp_length = comp_size;
 			}
 
-			as_async_command_execute(comp_cmd);
+			as_event_command_execute(comp_cmd);
 		}
 		else {
 			as_node_release(node);
@@ -552,7 +552,7 @@ aerospike_key_remove_async_ex(
 	}
 	
 	as_error err;
-	as_node* node = as_async_command_node_init(as, &err, key, AS_POLICY_REPLICA_MASTER, true);
+	as_node* node = as_event_command_node_init(as, &err, key, AS_POLICY_REPLICA_MASTER, true);
 	if (! node) {
 		listener(&err, udata, event_loop);
 		return;
@@ -561,8 +561,8 @@ aerospike_key_remove_async_ex(
 	uint16_t n_fields;
 	size_t size = as_command_key_size(policy->key, key, &n_fields);
 	
-	as_async_command* cmd = as_async_write_command_create(as->cluster, node, policy->timeout, false,
-							listener, udata, event_loop, pipeline, size, as_async_command_parse_header);
+	as_event_command* cmd = as_async_write_command_create(as->cluster, node, policy->timeout, false,
+							listener, udata, event_loop, pipeline, size, as_event_command_parse_header);
 
 	uint8_t* p = as_command_write_header(cmd->buf, 0, AS_MSG_INFO2_WRITE | AS_MSG_INFO2_DELETE, policy->commit_level, 0, AS_POLICY_EXISTS_IGNORE, policy->gen, policy->generation, 0, policy->timeout, n_fields, 0);
 	p = as_command_write_key(p, policy->key, key);
@@ -572,7 +572,7 @@ aerospike_key_remove_async_ex(
 		*length = size;
 	}
 
-	as_async_command_execute(cmd);
+	as_event_command_execute(cmd);
 }
 
 void
@@ -688,7 +688,7 @@ aerospike_key_operate_async(
 	}
 	
 	as_error err;
-	as_node* node = as_async_command_node_init(as, &err, key, policy->replica, write_attr != 0);
+	as_node* node = as_event_command_node_init(as, &err, key, policy->replica, write_attr != 0);
 	if (! node) {
 		for (uint32_t i = 0; i < n_operations; i++) {
 			as_buffer* buffer = &buffers[i];
@@ -701,8 +701,8 @@ aerospike_key_operate_async(
 		return;
 	}
 	
-	as_async_command* cmd = as_async_record_command_create(as->cluster, node, policy->timeout, false,
-						listener, udata, event_loop, pipeline, size, as_async_command_parse_result);
+	as_event_command* cmd = as_async_record_command_create(as->cluster, node, policy->timeout, false,
+						listener, udata, event_loop, pipeline, size, as_event_command_parse_result);
 
 	uint8_t* p = as_command_write_header(cmd->buf, read_attr, write_attr, policy->commit_level, policy->consistency_level,
 										 AS_POLICY_EXISTS_IGNORE, policy->gen, ops->gen, ops->ttl, policy->timeout, n_fields, n_operations);
@@ -713,7 +713,7 @@ aerospike_key_operate_async(
 		p = as_command_write_bin(p, op->op, &op->bin, &buffers[i]);
 	}
 	cmd->len = (uint32_t)as_command_write_end(cmd->buf, p);
-	as_async_command_execute(cmd);
+	as_event_command_execute(cmd);
 }
 
 as_status
@@ -778,7 +778,7 @@ aerospike_key_apply_async(
 	}
 	
 	as_error err;
-	as_node* node = as_async_command_node_init(as, &err, key, AS_POLICY_REPLICA_MASTER, true);
+	as_node* node = as_event_command_node_init(as, &err, key, AS_POLICY_REPLICA_MASTER, true);
 	if (! node) {
 		listener(&err, 0, udata, event_loop);
 		return;
@@ -797,8 +797,8 @@ aerospike_key_apply_async(
 	size += as_command_field_size(args.size);
 	n_fields += 3;
 	
-	as_async_command* cmd = as_async_value_command_create(as->cluster, node, policy->timeout, false,
-			listener, udata, event_loop, pipeline, size, as_async_command_parse_success_failure);
+	as_event_command* cmd = as_async_value_command_create(as->cluster, node, policy->timeout, false,
+			listener, udata, event_loop, pipeline, size, as_event_command_parse_success_failure);
 		
 	uint8_t* p = as_command_write_header(cmd->buf, 0, AS_MSG_INFO2_WRITE, policy->commit_level, 0, 0, 0, 0, policy->ttl, policy->timeout, n_fields, 0);
 	p = as_command_write_key(p, policy->key, key);
@@ -808,7 +808,7 @@ aerospike_key_apply_async(
 	cmd->len = (uint32_t)as_command_write_end(cmd->buf, p);
 	as_buffer_destroy(&args);
 	as_serializer_destroy(&ser);
-	as_async_command_execute(cmd);
+	as_event_command_execute(cmd);
 }
 
 bool

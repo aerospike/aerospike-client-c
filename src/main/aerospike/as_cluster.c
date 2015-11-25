@@ -329,8 +329,8 @@ as_cluster_seed_nodes(as_cluster* cluster, as_error* err, bool enable_warnings)
 	as_vector_inita(&addresses, sizeof(struct sockaddr_in), 5);
 	
 	as_node_info node_info;
-	as_error err_local;
-	err_local.message[0] = '\0'; // AEROSPIKE_ERR_TIMEOUT doesn't come with a message; make sure it's initialized
+	as_error error_local;
+	error_local.message[0] = '\0'; // AEROSPIKE_ERR_TIMEOUT doesn't come with a message; make sure it's initialized
 	as_status status = AEROSPIKE_OK;
 	
 	as_seeds* seeds = as_seeds_reserve(cluster);
@@ -339,18 +339,18 @@ as_cluster_seed_nodes(as_cluster* cluster, as_error* err, bool enable_warnings)
 		as_seed* seed = &seeds->array[i];
 		as_vector_clear(&addresses);
 		
-		status = as_lookup(cluster, &err_local, seed->name, seed->port, &addresses);
+		status = as_lookup(cluster, &error_local, seed->name, seed->port, &addresses);
 		
 		if (status != AEROSPIKE_OK) {
 			if (enable_warnings) {
-				as_log_warn("%s %s", as_error_string(status), err_local.message);
+				as_log_warn("%s %s", as_error_string(status), error_local.message);
 			}
 			continue;
 		}
 
 		for (uint32_t i = 0; i < addresses.size; i++) {
 			struct sockaddr_in* addr = as_vector_get(&addresses, i);
-			status = as_lookup_node(cluster, &err_local, addr, &node_info);
+			status = as_lookup_node(cluster, &error_local, addr, &node_info);
 			
 			if (status == AEROSPIKE_OK) {
 				as_node* node = as_cluster_find_node_in_vector(&nodes_to_add, node_info.name);
@@ -367,7 +367,7 @@ as_cluster_seed_nodes(as_cluster* cluster, as_error* err, bool enable_warnings)
 			}
 			else {
 				if (enable_warnings) {
-					as_log_warn("%s %s", as_error_string(status), err_local.message);
+					as_log_warn("%s %s", as_error_string(status), error_local.message);
 				}
 			}
 		}
@@ -705,7 +705,7 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings, b
 	}
 	
 	// Refresh all known nodes.
-	as_error err_local;
+	as_error error_local;
 	as_vector friends;
 	as_vector_inita(&friends, sizeof(as_friend), 8);
 	uint32_t refresh_count = 0;
@@ -714,16 +714,15 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings, b
 		as_node* node = nodes->array[i];
 		
 		if (node->active) {
-			if (as_node_refresh(cluster, &err_local, node, &friends) == AEROSPIKE_OK) {
+			if (as_node_refresh(cluster, &error_local, node, &friends) == AEROSPIKE_OK) {
 				node->failures = 0;
 				refresh_count++;
 			}
 			else {
-				if (err_local.code == AEROSPIKE_ERR_TIMEOUT) {
-					snprintf(err_local.message, sizeof err_local.message, "%s", "Network timeout");
+				if (error_local.code == AEROSPIKE_ERR_TIMEOUT) {
+					snprintf(error_local.message, sizeof error_local.message, "%s", "Network timeout");
 				}
-
-				as_log_info("Node %s refresh failed: %s %s", node->name, as_error_string(err_local.code), err_local.message);
+				as_log_info("Node %s refresh failed: %s %s", node->name, as_error_string(error_local.code), error_local.message);
 				node->failures++;
 			}
 		}

@@ -27,10 +27,18 @@ ifeq ($(EVENT_LIB),libev)
   CFLAGS += -DAS_USE_LIBEV -I/usr/local/include
 endif
 
+ifeq ($(EVENT_LIB),libuv)
+  CFLAGS += -DAS_USE_LIBUV -I/usr/local/include
+endif
+
 LDFLAGS =
 
 ifeq ($(EVENT_LIB),libev)
   LDFLAGS += -L/usr/local/lib -lev
+endif
+
+ifeq ($(EVENT_LIB),libuv)
+  LDFLAGS += -L/usr/local/lib -luv
 endif
 
 LDFLAGS += -lssl -lcrypto -lpthread

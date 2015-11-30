@@ -180,7 +180,7 @@ read_file(const char* path, char* buffer, size_t size)
 	int fd = open(path, O_RDONLY);
 
 	if (fd < 0) {
-		as_log_error("Failed to open %s for reading", path);
+		as_log_warn("Failed to open %s for reading", path);
 		goto cleanup0;
 	}
 
@@ -190,7 +190,7 @@ read_file(const char* path, char* buffer, size_t size)
 		ssize_t n = read(fd, buffer + len, size - len - 1);
 
 		if (n < 0) {
-			as_log_error("Failed to read from %s", path);
+			as_log_warn("Failed to read from %s", path);
 			goto cleanup1;
 		}
 
@@ -203,7 +203,7 @@ read_file(const char* path, char* buffer, size_t size)
 		len += n;
 	}
 
-	as_log_error("%s is too large", path);
+	as_log_warn("%s is too large", path);
 
 cleanup1:
 	close(fd);
@@ -225,7 +225,7 @@ read_integer(const char* path, int* value)
 	uint64_t x = strtoul(buffer, &end, 10);
 
 	if (*end != '\n' || x > INT_MAX) {
-		as_log_error("Invalid integer value in %s", path);
+		as_log_warn("Invalid integer value in %s", path);
 		return false;
 	}
 
@@ -247,7 +247,7 @@ set_buffer(int fd, int option, int size)
 	}
 
 	if (max < size) {
-		as_log_error("Buffer limit is %d, should be at least %d; please set %s accordingly",
+		as_log_warn("Buffer limit is %d, should be at least %d; please set %s accordingly",
 				max, size, proc);
 		return false;
 	}

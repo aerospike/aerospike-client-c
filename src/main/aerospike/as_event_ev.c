@@ -507,21 +507,19 @@ as_ev_connect(as_event_command* cmd)
 			}
 		}
 		
-		int arg;
-		
 #if defined(__linux__)
-		arg = PIPE_READ_BUFFER_SIZE;
-		
-		if (setsockopt(fd, SOL_TCP, TCP_WINDOW_CLAMP, &arg, sizeof(arg)) < 0) {
-			as_error err;
-			as_error_set_message(&err, AEROSPIKE_ERR_CLIENT, "Failed to configure pipeline TCP window.");
-			close(fd);
-			as_event_connect_error(cmd, &err);
-			return;
+		if (as_event_recv_buffer_size) {
+			if (setsockopt(fd, SOL_TCP, TCP_WINDOW_CLAMP, &as_event_recv_buffer_size, sizeof(as_event_recv_buffer_size)) < 0) {
+				as_error err;
+				as_error_set_message(&err, AEROSPIKE_ERR_CLIENT, "Failed to configure pipeline TCP window.");
+				close(fd);
+				as_event_connect_error(cmd, &err);
+				return;
+			}
 		}
 #endif
 		
-		arg = 0;
+		int arg = 0;
 		
 		if (setsockopt(fd, SOL_TCP, TCP_NODELAY, &arg, sizeof(arg)) < 0) {
 			as_error err;

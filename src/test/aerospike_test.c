@@ -172,23 +172,21 @@ static bool after(atf_plan * plan) {
 	as_error err;
 	as_error_reset(&err);
 	
-	if ( aerospike_close(as, &err) == AEROSPIKE_OK ) {
-		debug("disconnected from %s:%d", g_host, g_port);
-		aerospike_destroy(as);
+	as_status status = aerospike_close(as, &err);
+	aerospike_destroy(as);
 
-    	return true;
-	}
-	else {
-		error("%s @ %s[%s:%d]", g_host, g_port, err.message, err.func, err.file, err.line);
-		aerospike_destroy(as);
-		return false;
-	}
-	
 	if (g_use_async) {
 		as_event_close_loops();
 	}
-	
-    return true;
+
+	if (status == AEROSPIKE_OK) {
+		debug("disconnected from %s:%d", g_host, g_port);
+		return true;
+	}
+	else {
+		error("%s @ %s[%s:%d]", g_host, g_port, err.message, err.func, err.file, err.line);
+		return false;
+	}
 }
 
 /******************************************************************************

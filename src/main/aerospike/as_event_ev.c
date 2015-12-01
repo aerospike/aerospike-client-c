@@ -470,6 +470,21 @@ as_ev_watcher_init(as_event_command* cmd, int fd)
 }
 
 static void
+as_ev_connect_error(as_event_command* cmd, as_error* err, int fd)
+{
+	// Only timer needs to be released on socket connection failure.
+	// Watcher has not been registered yet.
+	as_event_stop_timer(cmd);
+	
+	// Close fd when valid.
+	if (fd >= 0) {
+		close(fd);
+	}
+	cf_free(cmd->conn);
+	as_event_error_callback(cmd, err);
+}
+
+static void
 as_ev_connect(as_event_command* cmd)
 {
 	// Create a non-blocking socket.
@@ -478,7 +493,7 @@ as_ev_connect(as_event_command* cmd)
 	if (fd < 0) {
 		as_error err;
 		as_error_set_message(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Failed to create non-blocking socket");
-		as_event_connect_error(cmd, &err);
+		as_ev_connect_error(cmd, &err, fd);
 		return;
 	}
 	
@@ -489,8 +504,7 @@ as_ev_connect(as_event_command* cmd)
 				as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION,
 								"Failed to configure pipeline send buffer. size %d error %d (%s)",
 								as_event_send_buffer_size, errno, strerror(errno));
-				close(fd);
-				as_event_connect_error(cmd, &err);
+				as_ev_connect_error(cmd, &err, fd);
 				return;
 			}
 		}
@@ -501,8 +515,7 @@ as_ev_connect(as_event_command* cmd)
 				as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION,
 								"Failed to configure pipeline receive buffer. size %d error %d (%s)",
 								as_event_recv_buffer_size, errno, strerror(errno));
-				close(fd);
-				as_event_connect_error(cmd, &err);
+				as_ev_connect_error(cmd, &err, fd);
 				return;
 			}
 		}
@@ -512,8 +525,7 @@ as_ev_connect(as_event_command* cmd)
 			if (setsockopt(fd, SOL_TCP, TCP_WINDOW_CLAMP, &as_event_recv_buffer_size, sizeof(as_event_recv_buffer_size)) < 0) {
 				as_error err;
 				as_error_set_message(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Failed to configure pipeline TCP window.");
-				close(fd);
-				as_event_connect_error(cmd, &err);
+				as_ev_connect_error(cmd, &err, fd);
 				return;
 			}
 		}
@@ -524,8 +536,7 @@ as_ev_connect(as_event_command* cmd)
 		if (setsockopt(fd, SOL_TCP, TCP_NODELAY, &arg, sizeof(arg)) < 0) {
 			as_error err;
 			as_error_set_message(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Failed to configure pipeline Nagle algorithm.");
-			close(fd);
-			as_event_connect_error(cmd, &err);
+			as_ev_connect_error(cmd, &err, fd);
 			return;
 		}
 	}
@@ -582,8 +593,7 @@ as_ev_connect(as_event_command* cmd)
 	as_error err;
 	as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Failed to connect: %s %s:%d",
 					node->name, primary->name, (int)cf_swap_from_be16(primary->addr.sin_port));
-	close(fd);
-	as_event_connect_error(cmd, &err);
+	as_ev_connect_error(cmd, &err, fd);
 }
 
 static void

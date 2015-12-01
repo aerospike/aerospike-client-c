@@ -236,7 +236,7 @@ as_pipe_get_send_buffer_size()
 #if defined(__linux__)
 	return get_buffer_size("/proc/sys/net/core/wmem_max", PIPE_WRITE_BUFFER_SIZE);
 #else
-	return PIPE_WRITE_BUFFER_SIZE;  // TODO: Try to find max for __APPLE__.
+	return 0;  // TODO: Try to find max for __APPLE__.
 #endif
 }
 

@@ -264,7 +264,14 @@ as_uv_command_write_complete(uv_write_t* req, int status)
 		if (cmd->pipeline) {
 			as_pipe_read_start(cmd);
 		}
-		uv_read_start(req->handle, as_uv_command_buffer, as_uv_command_read);
+		
+		status = uv_read_start(req->handle, as_uv_command_buffer, as_uv_command_read);
+		
+		if (status) {
+			as_error err;
+			as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "uv_read_start failed: %d", status);
+			as_event_socket_error(cmd, &err);
+		}
 	}
 	else {
 		as_error err;
@@ -281,7 +288,14 @@ as_uv_command_write_start(as_event_command* cmd, uv_stream_t* stream)
 	uv_write_t* write_req = &cmd->conn->req.write;
 	write_req->data = cmd;
 	uv_buf_t buf = uv_buf_init((char*)cmd->buf, cmd->len);
-	uv_write(write_req, stream, &buf, 1, as_uv_command_write_complete);
+	
+	int status = uv_write(write_req, stream, &buf, 1, as_uv_command_write_complete);
+	
+	if (status) {
+		as_error err;
+		as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "uv_write failed: %d", status);
+		as_event_socket_error(cmd, &err);
+	}
 }
 
 static inline as_event_command*
@@ -356,7 +370,13 @@ as_uv_auth_write_complete(uv_write_t* req, int status)
 	
 	if (status == 0) {
 		as_event_set_auth_read_header(cmd);
-		uv_read_start(req->handle, as_uv_auth_command_buffer, as_uv_auth_read);
+		status = uv_read_start(req->handle, as_uv_auth_command_buffer, as_uv_auth_read);
+		
+		if (status) {
+			as_error err;
+			as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Authenticate uv_read_start failed: %d", status);
+			as_event_socket_error(cmd, &err);
+		}
 	}
 	else {
 		as_error err;
@@ -374,7 +394,14 @@ as_uv_auth_write_start(as_event_command* cmd, uv_stream_t* stream)
 	uv_write_t* write_req = &cmd->conn->req.write;
 	write_req->data = cmd;
 	uv_buf_t buf = uv_buf_init((char*)cmd->buf + cmd->pos, cmd->auth_len);
-	uv_write(write_req, stream, &buf, 1, as_uv_auth_write_complete);
+	
+	int status = uv_write(write_req, stream, &buf, 1, as_uv_auth_write_complete);
+	
+	if (status) {
+		as_error err;
+		as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Authenticate uv_write failed: %d", status);
+		as_event_socket_error(cmd, &err);
+	}
 }
 
 static void
@@ -410,25 +437,69 @@ as_uv_connect(as_event_command* cmd)
 {
 	as_event_connection* conn = cmd->conn;
 	uv_tcp_t* socket = &conn->socket;
-	uv_tcp_init(cmd->event_loop->loop, socket);
+	int status = uv_tcp_init(cmd->event_loop->loop, socket);
 	
-	if (! cmd->pipeline) {
-		// libuv sockets are non-blocking and SO_NOSIGPIPE (when available) by default.
-		// Only need set to set nodelay option.
-		uv_tcp_nodelay(socket, 1);
+	if (status) {
+		as_error err;
+		as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "uv_tcp_init failed: %d", status);
+		as_event_connect_error(cmd, &err);
+		return;
 	}
-	else {
+	
+	if (cmd->pipeline) {
 		if (as_event_send_buffer_size) {
-			uv_send_buffer_size((uv_handle_t*)socket, &as_event_send_buffer_size);
+			status = uv_send_buffer_size((uv_handle_t*)socket, &as_event_send_buffer_size);
+			
+			if (status) {
+				as_error err;
+				as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "uv_send_buffer_size failed: %d", status);
+				as_event_connect_error(cmd, &err);
+				return;
+			}
 		}
 		
 		if (as_event_recv_buffer_size) {
-			uv_recv_buffer_size((uv_handle_t*)socket, &as_event_recv_buffer_size);
+			status = uv_recv_buffer_size((uv_handle_t*)socket, &as_event_recv_buffer_size);
+			
+			if (status) {
+				as_error err;
+				as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "uv_recv_buffer_size failed: %d", status);
+				as_event_connect_error(cmd, &err);
+				return;
+			}
+			
 #if defined(__linux__)
-			uv__socket_sockopt((uv_handle_t*)socket, TCP_WINDOW_CLAMP, &as_event_recv_buffer_size);
+			status = uv__socket_sockopt((uv_handle_t*)socket, TCP_WINDOW_CLAMP, &as_event_recv_buffer_size);
+			
+			if (status) {
+				as_error err;
+				as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "uv__socket_sockopt TCP_WINDOW_CLAMP failed: %d", status);
+				as_event_connect_error(cmd, &err);
+				return;
+			}
 #endif
 		}
-		uv_tcp_nodelay(socket, 0);
+		
+		status = uv_tcp_nodelay(socket, 0);
+		
+		if (status) {
+			as_error err;
+			as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "uv_tcp_nodelay disable failed: %d", status);
+			as_event_connect_error(cmd, &err);
+			return;
+		}
+	}
+	else {
+		// libuv sockets are non-blocking and SO_NOSIGPIPE (when available) by default.
+		// Only need set to set nodelay option.
+		status = uv_tcp_nodelay(socket, 1);
+		
+		if (status) {
+			as_error err;
+			as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "uv_tcp_nodelay enable failed: %d", status);
+			as_event_connect_error(cmd, &err);
+			return;
+		}
 	}
 	
 	socket->data = conn;
@@ -437,7 +508,13 @@ as_uv_connect(as_event_command* cmd)
 	as_node* node = cmd->node;
 	as_address* primary = as_vector_get(&node->addresses, node->address_index);
 	
-	uv_tcp_connect(&conn->req.connect, socket, (struct sockaddr*)&primary->addr, as_uv_connected);
+	status = uv_tcp_connect(&conn->req.connect, socket, (struct sockaddr*)&primary->addr, as_uv_connected);
+	
+	if (status) {
+		as_error err;
+		as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "uv_tcp_connect failed: %d", status);
+		as_event_connect_error(cmd, &err);
+	}
 }
 
 static void

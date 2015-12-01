@@ -299,19 +299,6 @@ as_event_error_callback(as_event_command* cmd, as_error* err)
 }
 
 void
-as_event_connect_error(as_event_command* cmd, as_error* err)
-{
-	// Only timer needs to be released on socket connection failure.
-	// Watcher has not been registered yet.
-	as_event_stop_timer(cmd);
-
-	// Connection never opened, but memory still needs to be released.
-	cf_free(cmd->conn);
-	
-	as_event_error_callback(cmd, err);
-}
-
-void
 as_event_socket_error(as_event_command* cmd, as_error* err)
 {
 	if (cmd->pipeline) {

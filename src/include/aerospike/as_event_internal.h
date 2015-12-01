@@ -151,9 +151,6 @@ void
 as_event_error_callback(as_event_command* cmd, as_error* err);
 	
 void
-as_event_connect_error(as_event_command* cmd, as_error* err);
-	
-void
 as_event_socket_error(as_event_command* cmd, as_error* err);
 
 void

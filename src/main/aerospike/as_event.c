@@ -114,28 +114,31 @@ as_event_set_external_loop(void* loop)
 void
 as_event_close_loops()
 {
-	if (as_event_loops) {
-		bool join = true;
+	if (! as_event_loops) {
+		return;
+	}
+	
+	bool join = true;
+	
+	for (uint32_t i = 0; i < as_event_loop_size; i++) {
+		as_event_loop* event_loop = &as_event_loops[i];
 		
+		// Send stop signal to loop.
+		if (! as_event_close_loop(event_loop)) {
+			as_log_error("Failed to send stop command to event loop");
+			join = false;
+		}
+	}
+	
+	if (as_event_threads_created && join) {
+		// Join threads.
 		for (uint32_t i = 0; i < as_event_loop_size; i++) {
 			as_event_loop* event_loop = &as_event_loops[i];
-			
-			// Send stop signal to loop.
-			if (! as_event_close_loop(event_loop)) {
-				as_log_error("Failed to send stop command to event loop");
-				join = false;
-			}
+			pthread_join(event_loop->thread, NULL);
 		}
-		
-		if (as_event_threads_created && join) {
-			// Join threads.
-			for (uint32_t i = 0; i < as_event_loop_size; i++) {
-				as_event_loop* event_loop = &as_event_loops[i];
-				pthread_join(event_loop->thread, NULL);
-			}
-		}
-		cf_free(as_event_loops);
 	}
+	cf_free(as_event_loops);
+	as_event_loops = NULL;
 }
 
 /******************************************************************************

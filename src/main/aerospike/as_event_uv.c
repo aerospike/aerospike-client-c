@@ -430,8 +430,6 @@ as_uv_connected(uv_connect_t* req, int status)
 	}
 }
 
-int uv__socket_sockopt(uv_handle_t* handle, int optname, int* value);
-
 static void
 as_uv_connect(as_event_command* cmd)
 {
@@ -469,11 +467,20 @@ as_uv_connect(as_event_command* cmd)
 			}
 			
 #if defined(__linux__)
-			status = uv__socket_sockopt((uv_handle_t*)socket, TCP_WINDOW_CLAMP, &as_event_recv_buffer_size);
-			
-			if (status) {
+			// libuv does not have a TCP_WINDOW_CLAMP function, so use fd directly.
+			uv_os_fd_t fd;
+
+			if (uv_fileno((uv_handle_t*)socket, &fd) == 0) {
+				if (setsockopt(fd, SOL_TCP, TCP_WINDOW_CLAMP, &as_event_recv_buffer_size, sizeof(as_event_recv_buffer_size)) < 0) {
+					as_error err;
+					as_error_set_message(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Failed to configure pipeline TCP window.");
+					as_event_connect_error(cmd, &err);
+					return;
+				}
+			}
+			else {
 				as_error err;
-				as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "uv__socket_sockopt TCP_WINDOW_CLAMP failed: %d", status);
+				as_error_set_message(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Failed to retrieve fd");
 				as_event_connect_error(cmd, &err);
 				return;
 			}

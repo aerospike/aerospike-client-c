@@ -21,10 +21,21 @@
 #define PIPE_READ_BUFFER_SIZE (15 * 1024 * 1024)
 
 static void
+write_start(as_event_command* cmd)
+{
+	as_pipe_connection* conn = (as_pipe_connection*)cmd->conn;
+	as_log_trace("Setting writer %p, pipeline connection %p", cmd, conn);
+	assert(conn != NULL);
+	assert(conn->writer == NULL);
+
+	conn->writer = cmd;
+}
+
+static void
 next_reader(as_event_command* reader)
 {
 	as_pipe_connection* conn = (as_pipe_connection*)reader->conn;
-	as_log_trace("Selecting next reader for command %p, pipeline connection %p", reader, conn);
+	as_log_trace("Selecting successor to reader %p, pipeline connection %p", reader, conn);
 	assert(cf_ll_get_head(&conn->readers) == &reader->pipe_link);
 
 	cf_ll_delete(&conn->readers, &reader->pipe_link);
@@ -47,15 +58,10 @@ next_reader(as_event_command* reader)
 	as_log_trace("Pipeline connection %p has %d reader(s)", conn, cf_ll_size(&conn->readers));
 }
 
-#define CANCEL_COMMAND_TIMER 1
-#define CANCEL_COMMAND_EVENT 2
-
 static void
 cancel_command(as_event_command* cmd, as_error* err)
 {
 	as_log_trace("Canceling command %p, error code %d", cmd, err->code);
-
-	as_log_trace("Canceling timeout");
 	as_event_stop_timer(cmd);
 
 	as_log_trace("Invoking callback function");
@@ -78,12 +84,8 @@ cancel_connection(as_event_command* cmd, as_error* err, int32_t source)
 		assert(cmd == conn->writer || cf_ll_get_head(&conn->readers) == &cmd->pipe_link);
 	}
 
-	as_log_trace("Stop watcher on connection");
+	as_log_trace("Stopping watcher");
 	as_event_stop_watcher(cmd, &conn->base);
-
-	// To eliminate libuv close race condition, do not close.  Just cancel and leave open.
-	//as_event_close(&cmd->event);
-	//ck_pr_dec_32(&cmd->node->async_conn);
 
 	if (conn->writer != NULL) {
 		as_log_trace("Canceling writer %p", conn->writer);
@@ -137,7 +139,7 @@ static void
 put_connection(as_event_command* cmd)
 {
 	as_pipe_connection* conn = (as_pipe_connection*)cmd->conn;
-	as_log_trace("Returning pipeline connection for command %p, pipeline connection %p", cmd, conn);
+	as_log_trace("Returning pipeline connection for writer %p, pipeline connection %p", cmd, conn);
 	as_queue* q = &cmd->node->pipe_conn_qs[cmd->event_loop->index];
 
 	if (as_queue_push_limit(q, &conn)) {
@@ -263,7 +265,7 @@ as_pipe_get_connection(as_event_command* cmd)
 		if (conn->canceled) {
 			as_log_trace("Pipeline connection %p was canceled earlier", conn);
 			// Do not need to stop watcher because it was stopped in cancel_connection().
-			as_event_close_connection(cmd->conn, cmd->node);
+			as_event_close_connection((as_event_connection*)conn, cmd->node);
 			continue;
 		}
 		
@@ -272,7 +274,7 @@ as_pipe_get_connection(as_event_command* cmd)
 		if (as_event_validate_connection(&conn->base, true)) {
 			as_log_trace("Validation OK");
 			cmd->conn = (as_event_connection*)conn;
-			as_pipe_write_start(cmd);
+			write_start(cmd);
 			return true;
 		}
 		
@@ -291,7 +293,7 @@ as_pipe_get_connection(as_event_command* cmd)
 	conn->in_pool = false;
 
 	cmd->conn = (as_event_connection*)conn;
-	as_pipe_write_start(cmd);
+	write_start(cmd);
 	return false;
 }
 
@@ -344,23 +346,10 @@ as_pipe_response_complete(as_event_command* cmd)
 }
 
 void
-as_pipe_write_start(as_event_command* cmd)
-{
-	as_log_trace("Setting writer %p", cmd);
-	as_pipe_connection* conn = (as_pipe_connection*)cmd->conn;
-	as_log_trace("Pipeline connection %p", conn);
-	assert(conn != NULL);
-	assert(conn->writer == NULL);
-
-	conn->writer = cmd;
-}
-
-void
 as_pipe_read_start(as_event_command* cmd)
 {
-	as_log_trace("Writer %p becomes reader", cmd);
 	as_pipe_connection* conn = (as_pipe_connection*)cmd->conn;
-	as_log_trace("Pipeline connection %p", conn);
+	as_log_trace("Writer %p becomes reader, pipeline connection %p", cmd, conn);
 	assert(conn != NULL);
 	assert(conn->writer == cmd);
 

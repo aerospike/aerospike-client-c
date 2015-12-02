@@ -218,4 +218,7 @@ PLAN( aerospike_test ) {
 
     // as_ldt module
     plan_add( ldt_lmap );
+
+	// cdt
+	plan_add( cdt_basics );
 }

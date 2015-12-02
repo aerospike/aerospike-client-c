@@ -316,7 +316,7 @@ TEST( cdt_basics_op , "CDT operations test on a single bin" ) {
 	as_testlist tlist;
 	as_testlist_init(&tlist, as);
 
-	info("insert 1");
+	debug("insert 1");
 	for (int i = 0; i < 100; i++) {
 		int ridx = rand() % 100;
 		int v = rand() % 1000;
@@ -328,7 +328,7 @@ TEST( cdt_basics_op , "CDT operations test on a single bin" ) {
 
 	as_arraylist list;
 
-	info("insert_list");
+	debug("insert_list");
 	make_random_list(&list, 5);
 	for (int i = 0; i < 10; i++) {
 		int ridx = rand() % 100;
@@ -339,14 +339,14 @@ TEST( cdt_basics_op , "CDT operations test on a single bin" ) {
 	as_arraylist_destroy(&list);
 	assert_true( as_testlist_compare(&tlist) );
 
-	info("append 1");
+	debug("append 1");
 	for (int i = 0; i < 20; i++) {
 		int v = rand() % 1000;
 
 		assert_true( as_testlist_append(&tlist, (as_val *)as_integer_new(v)) );
 	}
 
-	info("append_list");
+	debug("append_list");
 	make_random_list(&list, 10);
 	for (int i = 0; i < 8; i++) {
 		as_val_reserve((as_val *)&list);
@@ -355,13 +355,13 @@ TEST( cdt_basics_op , "CDT operations test on a single bin" ) {
 	as_arraylist_destroy(&list);
 	assert_true( as_testlist_compare(&tlist) );
 
-	info("pop -1");
+	debug("pop -1");
 	for (int i = 0; i < 50; i++) {
 		assert_true( as_testlist_remove(&tlist, -1, true) );
 	}
 	assert_true( as_testlist_compare(&tlist) );
 
-	info("pop_range");
+	debug("pop_range");
 	for (int i = 0; i < 10; i++) {
 		int ridx = rand() % 100;
 
@@ -369,7 +369,7 @@ TEST( cdt_basics_op , "CDT operations test on a single bin" ) {
 	}
 	assert_true( as_testlist_compare(&tlist) );
 
-	info("remove 1");
+	debug("remove 1");
 	for (int i = 0; i < 50; i++) {
 		int ridx = rand() % 100;
 
@@ -377,7 +377,7 @@ TEST( cdt_basics_op , "CDT operations test on a single bin" ) {
 	}
 	assert_true( as_testlist_compare(&tlist) );
 
-	info("remove_range");
+	debug("remove_range");
 	for (int i = 0; i < 50; i++) {
 		int ridx = rand() % 100;
 
@@ -385,7 +385,7 @@ TEST( cdt_basics_op , "CDT operations test on a single bin" ) {
 	}
 	assert_true( as_testlist_compare(&tlist) );
 
-	info("set");
+	debug("set");
 	for (int i = 0; i < 100; i++) {
 		int ridx = rand() % 100;
 		int v = rand() % 1000;
@@ -395,7 +395,7 @@ TEST( cdt_basics_op , "CDT operations test on a single bin" ) {
 
 	assert_true( as_testlist_compare(&tlist) );
 
-	info("trim 10%% x 5");
+	debug("trim 10%% x 5");
 	for (int i = 0; i < 5; i++) {
 		uint32_t size = as_arraylist_size(&tlist.arraylist);
 		int idx = size / 20;
@@ -404,7 +404,7 @@ TEST( cdt_basics_op , "CDT operations test on a single bin" ) {
 	}
 	assert_true( as_testlist_compare(&tlist) );
 
-	info("clear");
+	debug("clear");
 	as_testlist_clear(&tlist);
 	assert_true( as_testlist_compare(&tlist) );
 

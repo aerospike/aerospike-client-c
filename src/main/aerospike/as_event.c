@@ -320,10 +320,7 @@ as_event_socket_error(as_event_command* cmd, as_error* err)
 	}
 	
 	// Socket read/write failure.
-	// Stop watcher only if it has been initialized.
-	if (cmd->state > AS_ASYNC_STATE_UNREGISTERED) {
-		as_event_stop_watcher(cmd, cmd->conn);
-	}
+	as_event_stop_watcher(cmd, cmd->conn);
 	
 	// Stop timer.
 	as_event_stop_timer(cmd);

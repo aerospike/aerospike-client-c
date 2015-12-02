@@ -181,9 +181,7 @@ as_event_command_free_worker(as_event_command* cmd)
 	cf_free(cmd);
 }
 
-#if defined AS_USE_LIBEV
-#define as_event_command_free(x) as_event_command_free_worker(x)
-#elif defined AS_USE_LIBUV
+#if defined AS_USE_LIBUV
 static void
 as_event_command_free_callback(uv_handle_t* handle)
 {
@@ -200,6 +198,8 @@ as_event_command_free(as_event_command* cmd)
 		uv_close((uv_handle_t*)&cmd->timer, as_event_command_free_callback);
 	}
 }
+#else
+#define as_event_command_free(x) as_event_command_free_worker(x)
 #endif
 
 static inline void

@@ -28,6 +28,69 @@ extern "C" {
  *	TYPES
  *****************************************************************************/
 
+typedef enum as_cdt_paramtype_e {
+
+    AS_CDT_PARAM_INDEX = 3,
+	AS_CDT_PARAM_COUNT = 4,
+	AS_CDT_PARAM_PAYLOAD = 5,
+	AS_CDT_PARAM_LAST_INDEX = 6,
+
+	AS_CDT_PARAM_MAP_KEY = 11,
+	AS_CDT_PARAM_MAP_VALUE = 12,
+
+} as_cdt_paramtype;
+
+typedef enum as_cdt_optype_e {
+    // List Operation
+	// Add Value to the List
+	// Add to list
+	AS_CDT_OP_LIST_APPEND        = 1,
+	AS_CDT_OP_LIST_APPEND_LIST   = 2,
+	AS_CDT_OP_LIST_INSERT        = 3,
+	AS_CDT_OP_LIST_INSERT_LIST   = 4,
+
+	// Remove from list
+	AS_CDT_OP_LIST_POP           = 5,
+	AS_CDT_OP_LIST_POP_RANGE     = 6,
+	AS_CDT_OP_LIST_REMOVE        = 7,
+	AS_CDT_OP_LIST_REMOVE_RANGE  = 8,
+
+	// Other list modifies
+	AS_CDT_OP_LIST_SET           = 9,
+	AS_CDT_OP_LIST_TRIM          = 10,
+	AS_CDT_OP_LIST_CLEAR         = 11,
+	AS_CDT_OP_LIST_INCREMENT_BY  = 12,
+
+	// Read from list
+	AS_CDT_OP_LIST_SIZE          = 16,
+	AS_CDT_OP_LIST_GET           = 17,
+	AS_CDT_OP_LIST_GET_RANGE     = 18,
+
+	// ------------------------------------------------------------------------
+    // Map Operation
+
+	// Adding <key, value> to the Map
+	AS_CDT_OP_MAP_PUT            = 32,
+	AS_CDT_OP_MAP_PUT_ALL        = 33,
+
+	// Op by key
+	AS_CDT_OP_MAP_GET            = 34,
+	AS_CDT_OP_MAP_GET_MATCHING   = 35,
+	AS_CDT_OP_MAP_REMOVE         = 36,
+	AS_CDT_OP_MAP_REMOVE_ALL     = 37,
+    AS_CDT_OP_MAP_CONTAINS_KEY   = 38,
+	AS_CDT_OP_MAP_INCREMENT_BY   = 39,
+	AS_CDT_OP_MAP_CONTAINS_VALUE = 40,
+
+	// Misc
+	AS_CDT_OP_MAP_GET_ALL        = 41,
+	AS_CDT_OP_MAP_KEYS           = 42,
+	AS_CDT_OP_MAP_VALUES         = 43,
+	AS_CDT_OP_MAP_CLEAR          = 44,
+	AS_CDT_OP_MAP_SIZE           = 45,
+
+} as_cdt_optype;
+
 /**
  *	Operation Identifiers
  */
@@ -42,6 +105,9 @@ typedef enum as_operator_e {
 	 *	Update the bin.
 	 */
 	AS_OPERATOR_WRITE      = 2,
+
+	AS_OPERATOR_CDT_READ   = 3,
+	AS_OPERATOR_CDT_MODIFY = 4,
 
 	/**
 	 *	Increment a bin containing an
@@ -327,6 +393,12 @@ typedef struct as_operations_s {
 	(__ops)->binops.capacity = __nops;\
 	(__ops)->binops.size = 0;\
 	(__ops)->binops.entries = (as_binop *) alloca(sizeof(as_binop) * __nops);
+
+/**
+ * Add a CDT operation to ops.
+ * Get around needing to pass last named arg to va_start().
+ */
+#define AS_OPERATIONS_CDT_OP(ops, name, op, ...) as_operations_cdt_op(ops, name, op, as_cdt_op_param_count(op), ##__VA_ARGS__)
 
 /******************************************************************************
  *	FUNCTIONS
@@ -714,6 +786,92 @@ static inline bool as_operations_add_append_raw(as_operations * ops, const as_bi
  *	@ingroup as_operations_object
  */
 bool as_operations_add_touch(as_operations * ops);
+
+/******************************************************************************
+ *	CDT FUNCTIONS
+ *****************************************************************************/
+
+/**
+ * Support function for AS_OPERATIONS_CDT_OP.
+ */
+size_t as_cdt_op_param_count(as_cdt_optype op);
+
+/**
+ * Call with AS_OPERATIONS_CDT_OP only.
+ */
+bool as_operations_cdt_op(as_operations *ops, const as_bin_name name, as_cdt_optype op, size_t n, ...);
+
+//-----------------------------------------------------------------------------
+// Add to list
+
+/**
+ * Add element to end of list.
+ */
+bool as_operations_list_append(as_operations *ops, const as_bin_name name, as_val *val);
+/**
+ * Add list of elements to end of list.
+ */
+bool as_operations_list_append_list(as_operations *ops, const as_bin_name name, as_list *list);
+/**
+ * Add element to list at index.
+ */
+bool as_operations_list_insert(as_operations *ops, const as_bin_name name, int64_t index, as_val *val);
+/**
+ * Add list of elements to list at index.
+ */
+bool as_operations_list_insert_list(as_operations *ops, const as_bin_name name, int64_t index, as_list *list);
+
+//-----------------------------------------------------------------------------
+// Remove from list
+
+/**
+ * Remove and get back a list element at index.
+ */
+bool as_operations_list_pop(as_operations *ops, const as_bin_name name, int64_t index);
+/**
+ * Remove and get back list elements at index.
+ */
+bool as_operations_list_pop_range(as_operations *ops, const as_bin_name name, int64_t index, uint64_t count);
+/**
+ * Remove a list element at index.
+ */
+bool as_operations_list_remove(as_operations *ops, const as_bin_name name, int64_t index);
+/**
+ * Remove list elements at index.
+ */
+bool as_operations_list_remove_range(as_operations *ops, const as_bin_name name, int64_t index, uint64_t count);
+
+//-----------------------------------------------------------------------------
+// Other list modifies
+
+/**
+ * Remove all elements from list.
+ */
+bool as_operations_list_clear(as_operations *ops, const as_bin_name name);
+/**
+ * Set element of list at index.
+ */
+bool as_operations_list_set(as_operations *ops, const as_bin_name name, int64_t index, as_val *val);
+/**
+ * Remove elements not within range(index, count).
+ */
+bool as_operations_list_trim(as_operations *ops, const as_bin_name name, int64_t index, uint64_t count);
+
+//-----------------------------------------------------------------------------
+// Read operations
+
+/**
+ * Get element of list at index.
+ */
+bool as_operations_list_get(as_operations *ops, const as_bin_name name, int64_t index);
+/**
+ * Get elements of list at index, get back a list of items.
+ */
+bool as_operations_list_get_range(as_operations *ops, const as_bin_name name, int64_t index, uint64_t count);
+/**
+ * Get element count of list.
+ */
+bool as_operations_list_size(as_operations *ops, const as_bin_name name);
 
 #ifdef __cplusplus
 } // end extern "C"

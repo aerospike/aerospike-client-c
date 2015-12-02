@@ -41,8 +41,10 @@ typedef enum as_cdt_paramtype_e {
 } as_cdt_paramtype;
 
 typedef enum as_cdt_optype_e {
+
+	// ------------------------------------------------------------------------
     // List Operation
-	// Add Value to the List
+
 	// Add to list
 	AS_CDT_OP_LIST_APPEND        = 1,
 	AS_CDT_OP_LIST_APPEND_LIST   = 2,

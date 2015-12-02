@@ -289,6 +289,8 @@ as_event_command_execute_in_loop(as_event_command* cmd)
 	if (cmd->timeout_ms && (cf_getms() - *(uint64_t*)cmd) > cmd->timeout_ms) {
 		as_error err;
 		as_error_set_message(&err, AEROSPIKE_ERR_TIMEOUT, as_error_string(AEROSPIKE_ERR_TIMEOUT));
+		// Tell the libuv version of as_event_command_free() to not try to close the uv_timer_t.
+		cmd->timeout_ms = 0;
 		as_event_error_callback(cmd, &err);
 		return;
 	}

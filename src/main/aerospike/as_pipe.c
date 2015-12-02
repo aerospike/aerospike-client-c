@@ -41,8 +41,8 @@ next_reader(as_event_command* reader)
 	cf_ll_delete(&conn->readers, &reader->pipe_link);
 	as_event_stop_timer(reader);
 
-	if (cf_ll_size(&conn->readers) == 0) {
-		as_log_trace("No reader left");
+	if (conn->writer == NULL && cf_ll_size(&conn->readers) == 0) {
+		as_log_trace("No writer and no reader left");
 		as_event_stop_watcher(reader, reader->conn);
 
 		if (conn->in_pool) {

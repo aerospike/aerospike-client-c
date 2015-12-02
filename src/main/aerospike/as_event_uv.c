@@ -113,12 +113,13 @@ as_uv_worker(void* udata)
 	}
 	
 	event_loop->wakeup = cf_malloc(sizeof(uv_async_t));
-	event_loop->wakeup->data = event_loop;
 	
 	if (! event_loop->wakeup) {
 		as_log_error("Failed to create wakeup");
 		return 0;
 	}
+
+	event_loop->wakeup->data = event_loop;
 
 	uv_loop_init(event_loop->loop);
 	uv_async_init(event_loop->loop, event_loop->wakeup, as_uv_wakeup);

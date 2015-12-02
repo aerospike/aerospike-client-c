@@ -112,10 +112,12 @@ cancel_connection(as_event_command* cmd, as_error* err, int32_t source)
 	}
 
 	if (! conn->in_pool) {
+		as_log_trace("Closing canceled non-pooled pipeline connection %p", conn);
 		as_event_close_connection(&conn->base, node);
 		return;
 	}
 
+	as_log_trace("Marking pooled pipeline connection %p as canceled", conn);
 	conn->writer = NULL;
 	conn->canceled = true;
 }

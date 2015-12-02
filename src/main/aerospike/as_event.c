@@ -327,8 +327,7 @@ as_event_connect_error(as_event_command* cmd, as_error* err)
 	as_event_stop_timer(cmd);
 
 	// Connection never opened, but memory still needs to be released.
-	cf_free(cmd->conn);
-	
+	as_event_close_connection(cmd->conn, NULL);
 	as_event_error_callback(cmd, err);
 }
 

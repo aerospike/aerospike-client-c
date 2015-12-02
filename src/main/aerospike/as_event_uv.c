@@ -412,7 +412,7 @@ as_uv_connected(uv_connect_t* req, int status)
 
 	if (status == 0) {
 		ck_pr_inc_32(&cmd->node->async_conn);
-		
+
 		if (cmd->cluster->user) {
 			as_uv_auth_write_start(cmd, req->handle);
 		}
@@ -556,7 +556,10 @@ void
 as_event_close_connection(as_event_connection* conn, as_node* node)
 {
 	uv_close((uv_handle_t*)&conn->socket, as_uv_connection_closed);
-	ck_pr_dec_32(&node->async_conn);
+
+	if (node != NULL) {
+		ck_pr_dec_32(&node->async_conn);
+	}
 }
 
 static bool

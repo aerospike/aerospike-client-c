@@ -419,6 +419,12 @@ void
 as_ip_map_update(as_cluster* cluster, as_addr_map* ip_map_list, uint32_t size);
 
 /**
+ * 	Change the size of the async connection pool.
+ */
+void
+as_cluster_set_async_pool_size(as_cluster* cluster, uint32_t size);
+
+/**
  *	@private
  *	Change user and password that is used to authenticate with cluster servers.
  */

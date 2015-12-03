@@ -48,6 +48,12 @@ typedef struct {
 	void* ptr;
 } as_uv_command;
 
+void
+as_uv_timer_closed(uv_handle_t* handle)
+{
+	as_event_command_free(handle->data);
+}
+
 static void
 as_uv_wakeup_closed(uv_handle_t* handle)
 {
@@ -432,9 +438,8 @@ as_uv_auth_write_start(as_event_command* cmd, uv_stream_t* stream)
 static void
 as_uv_connect_error(as_event_command* cmd, as_error* err, bool close_conn)
 {
-	// Only timer needs to be released on socket connection failure.
+	// Timer will be stopped in as_event_command_release().
 	// Watcher has not been registered yet.
-	as_event_stop_timer(cmd);
 	
 	// libuv requires uv_close if socket released after uv_tcp_init succeeds.
 	if (close_conn) {
@@ -455,6 +460,8 @@ as_uv_connected(uv_connect_t* req, int status)
 	as_event_command* cmd = req->data;
 
 	if (status == 0) {
+		ck_pr_inc_32(&cmd->node->async_conn);
+		
 		if (cmd->cluster->user) {
 			as_uv_auth_write_start(cmd, req->handle);
 		}
@@ -476,8 +483,6 @@ as_uv_connected(uv_connect_t* req, int status)
 static void
 as_uv_connect(as_event_command* cmd)
 {
-	ck_pr_inc_32(&cmd->node->async_conn);
-
 	as_event_connection* conn = cmd->conn;
 	uv_tcp_t* socket = &conn->socket;
 	int status = uv_tcp_init(cmd->event_loop->loop, socket);

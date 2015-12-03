@@ -71,7 +71,7 @@ swap_seeds(as_cluster* cluster, as_seeds* seeds)
 void
 as_cluster_set_async_pool_size(as_cluster* cluster, uint32_t async_size, uint32_t pipe_size)
 {
-	// Note: This setting only affects pool in new nodes.  Existing nodes are not changed.
+	// Note: This setting only affects pools in new nodes.  Existing node pools are not changed.
 	cluster->async_max_conns_per_node_loop = async_size;
 	cluster->pipe_max_conns_per_node_loop = pipe_size;
 	ck_pr_fence_store();

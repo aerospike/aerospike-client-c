@@ -170,6 +170,18 @@ as_event_loop*
 as_event_set_external_loop(void* loop);
 
 /**
+ *	Find client's event loop abstraction given the external event loop.
+ *
+ *	@param loop		External event loop.
+ *	@return			Client's generic event loop abstraction that is used in client async commands.
+ *					Returns NULL if loop not found.
+ *
+ *	@ingroup async_events
+ */
+as_event_loop*
+as_event_loop_find(void* loop);
+
+/**
  *	Close internally created event loops and release memory for event loop abstraction.
  *	This method should be called once on program shutdown if as_event_create_loops() or
  *	as_event_set_external_loop_capacity() was called.

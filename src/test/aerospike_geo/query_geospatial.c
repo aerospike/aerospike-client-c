@@ -42,6 +42,7 @@
  *****************************************************************************/
 
 extern aerospike * as;
+static bool server_has_geo = false;
 
 /******************************************************************************
  * MACROS
@@ -192,6 +193,13 @@ TEST( valid_geojson, "valid geojson formats" ) {
  *****************************************************************************/
 
 SUITE( query_geospatial, "aerospike_query_geospatial tests" ) {
+
+	server_has_geo = aerospike_has_geo(as);
+
+	if (!server_has_geo) {
+		info("geospatial tests skipped");
+		return;
+	}
 
 	suite_before( before );
 	suite_after( after   );

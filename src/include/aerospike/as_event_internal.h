@@ -192,7 +192,16 @@ as_event_node_destroy(as_node* node);
 	
 bool
 as_event_close_loop(as_event_loop* event_loop);
-	
+
+static inline void
+as_event_command_free(as_event_command* cmd)
+{
+	if (cmd->free_buf) {
+		cf_free(cmd->buf);
+	}
+	cf_free(cmd);
+}
+
 /******************************************************************************
  * LIBEV INLINE FUNCTIONS
  *****************************************************************************/
@@ -219,6 +228,12 @@ as_event_stop_watcher(as_event_command* cmd, as_event_connection* conn)
 	ev_io_stop(cmd->event_loop->loop, &conn->watcher);
 }
 
+static inline void
+as_event_command_release(as_event_command* cmd)
+{
+	as_event_command_free(cmd);
+}
+
 /******************************************************************************
  * LIBUV INLINE FUNCTIONS
  *****************************************************************************/
@@ -240,15 +255,28 @@ as_event_validate_connection(as_event_connection* conn, bool pipeline)
 static inline void
 as_event_stop_timer(as_event_command* cmd)
 {
-	if (cmd->timeout_ms) {
-		uv_timer_stop(&cmd->timer);
-	}
+	// Timer is stopped in libuv by uv_close which occurs later in as_event_command_release().
 }
 
 static inline void
 as_event_stop_watcher(as_event_command* cmd, as_event_connection* conn)
 {
 	// Watcher already stopped by design in libuv.
+}
+
+void
+as_uv_timer_closed(uv_handle_t* handle);
+
+static inline void
+as_event_command_release(as_event_command* cmd)
+{
+	if (cmd->timeout_ms) {
+		// libuv requires that cmd can't be freed until timer is closed.
+		uv_close((uv_handle_t*)&cmd->timer, as_uv_timer_closed);
+	}
+	else {
+		as_event_command_free(cmd);
+	}
 }
 
 /******************************************************************************
@@ -270,6 +298,11 @@ as_event_stop_timer(as_event_command* cmd)
 
 static inline void
 as_event_stop_watcher(as_event_command* cmd, as_event_connection* conn)
+{
+}
+
+static inline void
+as_event_command_release(as_event_command* cmd)
 {
 }
 

@@ -173,36 +173,6 @@ as_event_command_execute(as_event_command* cmd)
 }
 
 static inline void
-as_event_command_free_worker(as_event_command* cmd)
-{
-	if (cmd->free_buf) {
-		cf_free(cmd->buf);
-	}
-	cf_free(cmd);
-}
-
-#if defined AS_USE_LIBUV
-static void
-as_event_command_free_callback(uv_handle_t* handle)
-{
-	as_event_command_free_worker(handle->data);
-}
-
-static inline void
-as_event_command_free(as_event_command* cmd)
-{
-	if (cmd->timeout_ms == 0) {
-		as_event_command_free_worker(cmd);
-	}
-	else {
-		uv_close((uv_handle_t*)&cmd->timer, as_event_command_free_callback);
-	}
-}
-#else
-#define as_event_command_free(x) as_event_command_free_worker(x)
-#endif
-
-static inline void
 as_event_put_connection(as_event_command* cmd)
 {
 	as_queue* q = &cmd->node->async_conn_qs[cmd->event_loop->index];
@@ -254,7 +224,7 @@ as_event_executor_complete(as_event_command* cmd)
 			}
 		}
 	}
-	as_event_command_free(cmd);
+	as_event_command_release(cmd);
 }
 
 bool
@@ -316,7 +286,7 @@ as_event_error_callback(as_event_command* cmd, as_error* err)
 			}
 		}
 	}
-	as_event_command_free(cmd);
+	as_event_command_release(cmd);
 }
 
 void
@@ -399,7 +369,7 @@ as_event_command_parse_header(as_event_command* cmd)
 	if (msg->result_code == AEROSPIKE_OK) {
 		as_event_response_complete(cmd);
 		((as_async_write_command*)cmd)->listener(0, cmd->udata, cmd->event_loop);
-		as_event_command_free(cmd);
+		as_event_command_release(cmd);
 	}
 	else {
 		as_error err;
@@ -436,7 +406,7 @@ as_event_command_parse_result(as_event_command* cmd)
 			
 			as_event_response_complete(cmd);
 			((as_async_record_command*)cmd)->listener(0, &rec, cmd->udata, cmd->event_loop);
-			as_event_command_free(cmd);
+			as_event_command_release(cmd);
 			as_record_destroy(&rec);
 			break;
 		}
@@ -475,7 +445,7 @@ as_event_command_parse_success_failure(as_event_command* cmd)
 			if (status == AEROSPIKE_OK) {
 				as_event_response_complete(cmd);
 				((as_async_value_command*)cmd)->listener(0, val, cmd->udata, cmd->event_loop);
-				as_event_command_free(cmd);
+				as_event_command_release(cmd);
 				as_val_destroy(val);
 			}
 			else {

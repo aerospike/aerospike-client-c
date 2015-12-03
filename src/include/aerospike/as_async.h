@@ -16,6 +16,7 @@
  */
 #pragma once
 
+#include <aerospike/as_async_proto.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_event_internal.h>
 #include <aerospike/as_listener.h>
@@ -165,12 +166,6 @@ as_async_value_command_create(
 	return cmd;
 }
 	
-uint32_t
-as_async_get_pending(as_cluster* cluster);
-
-void
-as_async_get_connections(as_cluster* cluster, uint32_t* async_conn, uint32_t* async_conn_pool);
-
 #ifdef __cplusplus
 } // end extern "C"
 #endif

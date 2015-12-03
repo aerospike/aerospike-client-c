@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2014 Aerospike, Inc.
+ * Copyright 2008-2015 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -430,8 +430,8 @@ as_status aerospike_key_operate(
 	for (int i = 0; i < n_operations; i++) {
 		as_binop* op = &ops->binops.entries[i];
 		
-		switch (op->op)
-		{
+		switch (op->op)	{
+			case AS_OPERATOR_CDT_READ:
 			case AS_OPERATOR_READ:
 				read_attr |= AS_MSG_INFO1_READ;
 				break;

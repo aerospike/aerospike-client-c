@@ -43,6 +43,7 @@ extern aerospike *as;
 #define NAMESPACE "test"
 #define SET "test_cdt"
 #define BIN_NAME "test-list-1"
+#define INFO_CALL "features"
 
 /******************************************************************************
  * TYPES
@@ -59,6 +60,24 @@ typedef struct as_testlist_s {
 /******************************************************************************
  * STATIC FUNCTIONS
  *****************************************************************************/
+
+static bool
+has_cdt_list()
+{
+	char *res = NULL;
+	as_error err;
+	int rc = aerospike_info_any(as, &err, NULL, INFO_CALL, &res);
+
+	if (rc == AEROSPIKE_OK) {
+		char *st = strstr(res, "cdt-list");
+		free(res);
+
+		if (st) {
+			return true;
+		}
+	}
+	return false;
+}
 
 void
 make_random_list(as_arraylist *list, uint32_t count)
@@ -313,6 +332,11 @@ as_testlist_compare(as_testlist *tlist)
  *****************************************************************************/
 
 TEST( cdt_basics_op , "CDT operations test on a single bin" ) {
+	if (! has_cdt_list()) {
+		info("cdt-list not enabled. skipping test");
+		return;
+	}
+
 	as_testlist tlist;
 	as_testlist_init(&tlist, as);
 

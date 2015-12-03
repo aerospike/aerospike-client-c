@@ -213,6 +213,12 @@ typedef struct as_cluster_s {
 	 *	Pool of threads used to query server nodes in parallel for batch, scan and query.
 	 */
 	as_thread_pool thread_pool;
+		
+	/**
+	 *	@private
+	 *	Cluster tend thread.
+	 */
+	pthread_t tend_thread;
 	
 	/**
 	 *	@private
@@ -243,11 +249,19 @@ typedef struct as_cluster_s {
 	
 	/**
 	 *	@private
-	 *	Initial connection capacity for each asynchronous connection pool. There is one asynchronous
-	 *	connection pool for each node/event loop combination.  This variable is ignored if
-	 *	asynchronous event loops are not created.
+	 *	Maximum number of asynchronous (non-pipeline) connections allowed for each node/event loop
+	 *	combination. New connections will be created and destroyed if the maximum is reached.
+	 *	This variable is ignored if asynchronous event loops are not created.
 	 */
-	uint32_t conns_per_node_event_loop;
+	uint32_t async_max_conns_per_node_loop;
+
+	/**
+	 *	@private
+	 *	Maximum number of pipeline connections allowed for each node/event loop combination.
+	 *	New connections will be created and destroyed if the maximum is reached.
+	 *	This variable is ignored if asynchronous event loops are not created.
+	 */
+	uint32_t pipe_max_conns_per_node_loop;
 
 	/**
 	 *	@private
@@ -278,12 +292,6 @@ typedef struct as_cluster_s {
 	 *	Should continue to tend cluster.
 	 */
 	volatile bool valid;
-		
-	/**
-	 *	@private
-	 *	Cluster tend thread.
-	 */
-	pthread_t tend_thread;
 } as_cluster;
 
 /******************************************************************************
@@ -419,10 +427,10 @@ void
 as_ip_map_update(as_cluster* cluster, as_addr_map* ip_map_list, uint32_t size);
 
 /**
- * 	Change the size of the async connection pool.
+ * 	Change the size of the async and pipeline connection pools.
  */
 void
-as_cluster_set_async_pool_size(as_cluster* cluster, uint32_t size);
+as_cluster_set_async_pool_size(as_cluster* cluster, uint32_t async_size, uint32_t pipe_size);
 
 /**
  *	@private

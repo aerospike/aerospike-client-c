@@ -279,12 +279,22 @@ typedef struct as_config_s {
 	uint32_t max_threads;
 	
 	/**
-	 *	Initial connection capacity for each asynchronous connection pool. There is one asynchronous
-	 *	connection pool for each node/event loop combination.  This variable is ignored if 
-	 *	asynchronous event loops are not created.
+	 *	@private
+	 *	Maximum number of asynchronous (non-pipeline) connections allowed for each node/event loop
+	 *	combination. New connections will be created and destroyed if the maximum is reached.
+	 *	This variable is ignored if asynchronous event loops are not created.
 	 *	Default: 32
 	 */
-	uint32_t conns_per_node_event_loop;
+	uint32_t async_max_conns_per_node_loop;
+	
+	/**
+	 *	@private
+	 *	Maximum number of pipeline connections allowed for each node/event loop combination.
+	 *	New connections will be created and destroyed if the maximum is reached.
+	 *	This variable is ignored if asynchronous event loops are not created.
+	 *	Default: 32
+	 */
+	uint32_t pipe_max_conns_per_node_loop;
 
 	/**
 	 *	@private

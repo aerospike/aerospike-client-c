@@ -111,6 +111,19 @@ as_event_set_external_loop(void* loop)
 	return event_loop;
 }
 
+as_event_loop*
+as_event_loop_find(void* loop)
+{
+	for (uint32_t i = 0; i < as_event_loop_size; i++) {
+		as_event_loop* event_loop = &as_event_loops[i];
+		
+		if (event_loop->loop == loop) {
+			return event_loop;
+		}
+	}
+	return NULL;
+}
+
 void
 as_event_close_loops()
 {

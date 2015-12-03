@@ -205,7 +205,7 @@ as_testlist_append_list(as_testlist *tlist, as_arraylist *list)
 	as_operations_inita(&ops, 1);
 
 	as_arraylist_concat(&tlist->arraylist, list);
-	AS_OPERATIONS_CDT_OP(&ops, BIN_NAME, AS_CDT_OP_LIST_APPEND_LIST, list);
+	AS_OPERATIONS_CDT_OP(&ops, BIN_NAME, AS_CDT_OP_LIST_APPEND_ITEMS, list);
 
 	return as_testlist_op(tlist, &ops);
 }
@@ -239,7 +239,7 @@ as_testlist_insert_list(as_testlist *tlist, int64_t index, as_arraylist *list)
 		as_arraylist_insert(&tlist->arraylist, uindex, val);
 	}
 
-	AS_OPERATIONS_CDT_OP(&ops, BIN_NAME, AS_CDT_OP_LIST_INSERT_LIST, index, list);
+	AS_OPERATIONS_CDT_OP(&ops, BIN_NAME, AS_CDT_OP_LIST_APPEND_ITEMS, index, list);
 
 	return as_testlist_op(tlist, &ops);
 }

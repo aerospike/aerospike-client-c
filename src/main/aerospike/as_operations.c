@@ -63,9 +63,9 @@ const cdt_op_table_entry cdt_op_table[] = {
 
 	// Add to list
 	CDT_OP_ENTRY(AS_CDT_OP_LIST_APPEND,			CDT_RW_TYPE_MODIFY, AS_CDT_PARAM_PAYLOAD),
-	CDT_OP_ENTRY(AS_CDT_OP_LIST_APPEND_LIST,	CDT_RW_TYPE_MODIFY, AS_CDT_PARAM_PAYLOAD),
+	CDT_OP_ENTRY(AS_CDT_OP_LIST_APPEND_ITEMS,	CDT_RW_TYPE_MODIFY, AS_CDT_PARAM_PAYLOAD),
 	CDT_OP_ENTRY(AS_CDT_OP_LIST_INSERT,			CDT_RW_TYPE_MODIFY, AS_CDT_PARAM_INDEX, AS_CDT_PARAM_PAYLOAD),
-	CDT_OP_ENTRY(AS_CDT_OP_LIST_INSERT_LIST,	CDT_RW_TYPE_MODIFY, AS_CDT_PARAM_INDEX, AS_CDT_PARAM_PAYLOAD),
+	CDT_OP_ENTRY(AS_CDT_OP_LIST_APPEND_ITEMS,	CDT_RW_TYPE_MODIFY, AS_CDT_PARAM_INDEX, AS_CDT_PARAM_PAYLOAD),
 
 	// Remove from list
 	CDT_OP_ENTRY(AS_CDT_OP_LIST_POP,			CDT_RW_TYPE_MODIFY, AS_CDT_PARAM_INDEX),
@@ -605,9 +605,9 @@ bool as_operations_list_append(as_operations *ops, const as_bin_name name, as_va
 	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_APPEND, val);
 }
 
-bool as_operations_list_append_list(as_operations *ops, const as_bin_name name, as_list *list)
+bool as_operations_list_append_items(as_operations *ops, const as_bin_name name, as_list *list)
 {
-	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_APPEND_LIST, list);
+	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_APPEND_ITEMS, list);
 }
 
 bool as_operations_list_insert(as_operations *ops, const as_bin_name name, int64_t index, as_val *val)
@@ -615,9 +615,9 @@ bool as_operations_list_insert(as_operations *ops, const as_bin_name name, int64
 	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_INSERT, index, val);
 }
 
-bool as_operations_list_insert_list(as_operations *ops, const as_bin_name name, int64_t index, as_list *list)
+bool as_operations_list_insert_items(as_operations *ops, const as_bin_name name, int64_t index, as_list *list)
 {
-	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_INSERT_LIST, index, list);
+	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_APPEND_ITEMS, index, list);
 }
 
 bool as_operations_list_pop(as_operations *ops, const as_bin_name name, int64_t index)

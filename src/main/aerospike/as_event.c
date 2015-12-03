@@ -179,6 +179,8 @@ as_event_put_connection(as_event_command* cmd)
 	
 	if (! as_queue_push_limit(q, &cmd->conn)) {
 		as_event_close_connection(cmd->conn, cmd->node);
+	} else {
+		ck_pr_inc_32(&cmd->node->async_conn_pool);
 	}
 }
 
@@ -235,6 +237,8 @@ as_event_get_connection(as_event_command* cmd)
 
 	// Find connection.
 	while (as_queue_pop(q, &conn)) {
+		ck_pr_dec_32(&cmd->node->async_conn_pool);
+
 		if (as_event_validate_connection(&conn->base, false)) {
 			conn->cmd = cmd;
 			cmd->conn = (as_event_connection*)conn;

@@ -399,7 +399,7 @@ as_ev_callback(struct ev_loop* loop, ev_io* watcher, int revents)
 		if (conn->pipeline) {
 			as_pipe_connection* pipe = (as_pipe_connection*)conn;
 			
-			if (pipe->writer) {
+			if (pipe->writer && cf_ll_size(&pipe->readers) == 0) {
 				// Authentication response will only have a writer.
 				cmd = pipe->writer;
 			}

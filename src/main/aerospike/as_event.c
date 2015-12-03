@@ -173,13 +173,34 @@ as_event_command_execute(as_event_command* cmd)
 }
 
 static inline void
-as_event_command_free(as_event_command* cmd)
+as_event_command_free_worker(as_event_command* cmd)
 {
 	if (cmd->free_buf) {
 		cf_free(cmd->buf);
 	}
 	cf_free(cmd);
 }
+
+#if defined AS_USE_LIBUV
+static void
+as_event_command_free_callback(uv_handle_t* handle)
+{
+	as_event_command_free_worker(handle->data);
+}
+
+static inline void
+as_event_command_free(as_event_command* cmd)
+{
+	if (cmd->timeout_ms == 0) {
+		as_event_command_free_worker(cmd);
+	}
+	else {
+		uv_close((uv_handle_t*)&cmd->timer, as_event_command_free_callback);
+	}
+}
+#else
+#define as_event_command_free(x) as_event_command_free_worker(x)
+#endif
 
 static inline void
 as_event_put_connection(as_event_command* cmd)
@@ -307,10 +328,7 @@ as_event_socket_error(as_event_command* cmd, as_error* err)
 	}
 	
 	// Socket read/write failure.
-	// Stop watcher only if it has been initialized.
-	if (cmd->state > AS_ASYNC_STATE_UNREGISTERED) {
-		as_event_stop_watcher(cmd, cmd->conn);
-	}
+	as_event_stop_watcher(cmd, cmd->conn);
 	
 	// Stop timer.
 	as_event_stop_timer(cmd);

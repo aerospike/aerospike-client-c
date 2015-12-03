@@ -24,7 +24,7 @@
 #if ! (defined(AS_USE_LIBEV) || defined(AS_USE_LIBUV))
 
 bool
-as_event_create_loop()
+as_event_create_loop(as_event_loop* event_loop)
 {
 	return false;
 }

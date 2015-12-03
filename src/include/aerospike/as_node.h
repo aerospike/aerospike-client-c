@@ -126,6 +126,12 @@ typedef struct as_node_s {
 	uint32_t async_conn;
 
 	/**
+	 *	@private
+	 *	Number of async connections in the pools.
+	 */
+	uint32_t async_conn_pool;
+
+	/**
 	 * 	@private
 	 * 	Pool of connections used in pipelined async commands.  Also not thread-safe.
 	 */

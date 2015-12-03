@@ -87,6 +87,11 @@ cancel_connection(as_event_command* cmd, as_error* err, int32_t source)
 	as_log_trace("Stopping watcher");
 	as_event_stop_watcher(cmd, &conn->base);
 
+	// Don't count connection as being in the pool, if we're going to cancel it.
+	if (conn->in_pool) {
+		ck_pr_dec_32(&cmd->node->async_conn_pool);
+	}
+
 	if (conn->writer != NULL) {
 		as_log_trace("Canceling writer %p", conn->writer);
 		cancel_command(conn->writer, err);
@@ -145,6 +150,7 @@ put_connection(as_event_command* cmd)
 	as_queue* q = &cmd->node->pipe_conn_qs[cmd->event_loop->index];
 
 	if (as_queue_push_limit(q, &conn)) {
+		ck_pr_inc_32(&cmd->node->async_conn_pool);
 		conn->in_pool = true;
 		return;
 	}
@@ -153,7 +159,6 @@ put_connection(as_event_command* cmd)
 }
 
 #if defined(__linux__)
-
 static bool
 read_file(const char* path, char* buffer, size_t size)
 {
@@ -161,7 +166,7 @@ read_file(const char* path, char* buffer, size_t size)
 	int fd = open(path, O_RDONLY);
 
 	if (fd < 0) {
-		as_log_error("Failed to open %s for reading", path);
+		as_log_warn("Failed to open %s for reading", path);
 		goto cleanup0;
 	}
 
@@ -171,7 +176,7 @@ read_file(const char* path, char* buffer, size_t size)
 		ssize_t n = read(fd, buffer + len, size - len - 1);
 
 		if (n < 0) {
-			as_log_error("Failed to read from %s", path);
+			as_log_warn("Failed to read from %s", path);
 			goto cleanup1;
 		}
 
@@ -184,7 +189,7 @@ read_file(const char* path, char* buffer, size_t size)
 		len += n;
 	}
 
-	as_log_error("%s is too large", path);
+	as_log_warn("%s is too large", path);
 
 cleanup1:
 	close(fd);
@@ -206,7 +211,7 @@ read_integer(const char* path, int* value)
 	uint64_t x = strtoul(buffer, &end, 10);
 
 	if (*end != '\n' || x > INT_MAX) {
-		as_log_error("Invalid integer value in %s", path);
+		as_log_warn("Invalid integer value in %s", path);
 		return false;
 	}
 
@@ -220,18 +225,18 @@ get_buffer_size(const char* proc, int size)
 	int max;
 	
 	if (! read_integer(proc, &max)) {
-		as_log_error("Failed to read %s", proc);
-		return 0;
+		as_log_warn("Failed to read %s; should be at least %d. Please verify.", proc, size);
+		return size;
 	}
 	
 	if (max < size) {
-		as_log_error("Buffer limit is %d, should be at least %d; please set %s accordingly",
-					 max, size, proc);
+		as_log_warn("Buffer limit is %d, should be at least %d. Please set %s accordingly.",
+				max, size, proc);
 		return 0;
 	}
+
 	return size;
 }
-
 #endif
 
 int
@@ -270,7 +275,8 @@ as_pipe_get_connection(as_event_command* cmd)
 			as_event_close_connection((as_event_connection*)conn, cmd->node);
 			continue;
 		}
-		
+
+		ck_pr_dec_32(&cmd->node->async_conn_pool);
 		conn->in_pool = false;
 
 		if (as_event_validate_connection(&conn->base, true)) {

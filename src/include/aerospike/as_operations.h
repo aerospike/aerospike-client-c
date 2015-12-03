@@ -30,7 +30,7 @@ extern "C" {
 
 typedef enum as_cdt_paramtype_e {
 
-    AS_CDT_PARAM_INDEX = 3,
+	AS_CDT_PARAM_INDEX = 3,
 	AS_CDT_PARAM_COUNT = 4,
 	AS_CDT_PARAM_PAYLOAD = 5,
 	AS_CDT_PARAM_LAST_INDEX = 6,
@@ -43,13 +43,13 @@ typedef enum as_cdt_paramtype_e {
 typedef enum as_cdt_optype_e {
 
 	// ------------------------------------------------------------------------
-    // List Operation
+	// List Operation
 
 	// Add to list
 	AS_CDT_OP_LIST_APPEND        = 1,
-	AS_CDT_OP_LIST_APPEND_LIST   = 2,
+	AS_CDT_OP_LIST_APPEND_ITEMS  = 2,
 	AS_CDT_OP_LIST_INSERT        = 3,
-	AS_CDT_OP_LIST_INSERT_LIST   = 4,
+	AS_CDT_OP_LIST_INSERT_ITEMS  = 4,
 
 	// Remove from list
 	AS_CDT_OP_LIST_POP           = 5,
@@ -73,19 +73,19 @@ typedef enum as_cdt_optype_e {
 
 	// Adding <key, value> to the Map
 	AS_CDT_OP_MAP_PUT            = 32,
-	AS_CDT_OP_MAP_PUT_ALL        = 33,
+	AS_CDT_OP_MAP_PUT_ITEMS      = 33,
 
 	// Op by key
 	AS_CDT_OP_MAP_GET            = 34,
 	AS_CDT_OP_MAP_GET_MATCHING   = 35,
 	AS_CDT_OP_MAP_REMOVE         = 36,
-	AS_CDT_OP_MAP_REMOVE_ALL     = 37,
+	AS_CDT_OP_MAP_REMOVE_ITEMS   = 37,
 	AS_CDT_OP_MAP_CONTAINS_KEY   = 38,
 	AS_CDT_OP_MAP_INCREMENT_BY   = 39,
 	AS_CDT_OP_MAP_CONTAINS_VALUE = 40,
 
 	// Misc
-	AS_CDT_OP_MAP_GET_ALL        = 41,
+	AS_CDT_OP_MAP_GET_ITEMS      = 41,
 	AS_CDT_OP_MAP_KEYS           = 42,
 	AS_CDT_OP_MAP_VALUES         = 43,
 	AS_CDT_OP_MAP_CLEAR          = 44,
@@ -813,7 +813,7 @@ bool as_operations_list_append(as_operations *ops, const as_bin_name name, as_va
 /**
  * Add list of elements to end of list.
  */
-bool as_operations_list_append_list(as_operations *ops, const as_bin_name name, as_list *list);
+bool as_operations_list_append_items(as_operations *ops, const as_bin_name name, as_list *list);
 /**
  * Add element to list at index.
  */
@@ -821,7 +821,7 @@ bool as_operations_list_insert(as_operations *ops, const as_bin_name name, int64
 /**
  * Add list of elements to list at index.
  */
-bool as_operations_list_insert_list(as_operations *ops, const as_bin_name name, int64_t index, as_list *list);
+bool as_operations_list_insert_items(as_operations *ops, const as_bin_name name, int64_t index, as_list *list);
 
 //-----------------------------------------------------------------------------
 // Remove from list

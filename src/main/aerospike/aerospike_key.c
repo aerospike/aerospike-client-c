@@ -36,6 +36,12 @@
 
 #include "as_stap.h"
 
+#if defined USE_XDR
+#define XDR_FLAG AS_MSG_INFO1_XDR
+#else
+#define XDR_FLAG 0
+#endif
+
 static const char* CLUSTER_EMPTY = "Cluster is empty";
 
 /******************************************************************************
@@ -432,7 +438,7 @@ aerospike_key_put_async_ex(
 				policy->timeout, false, listener, udata, event_loop, pipeline, size,
 				as_event_command_parse_header);
 		
-		uint8_t* p = as_command_write_header(cmd->buf, 0, AS_MSG_INFO2_WRITE, policy->commit_level, 0,
+		uint8_t* p = as_command_write_header(cmd->buf, XDR_FLAG, AS_MSG_INFO2_WRITE, policy->commit_level, 0,
 				policy->exists, policy->gen, rec->gen, rec->ttl, policy->timeout, n_fields, n_bins);
 		
 		p = as_command_write_key(p, policy->key, key);
@@ -564,7 +570,7 @@ aerospike_key_remove_async_ex(
 	as_event_command* cmd = as_async_write_command_create(as->cluster, node, policy->timeout, false,
 							listener, udata, event_loop, pipeline, size, as_event_command_parse_header);
 
-	uint8_t* p = as_command_write_header(cmd->buf, 0, AS_MSG_INFO2_WRITE | AS_MSG_INFO2_DELETE, policy->commit_level, 0, AS_POLICY_EXISTS_IGNORE, policy->gen, policy->generation, 0, policy->timeout, n_fields, 0);
+	uint8_t* p = as_command_write_header(cmd->buf, XDR_FLAG, AS_MSG_INFO2_WRITE | AS_MSG_INFO2_DELETE, policy->commit_level, 0, AS_POLICY_EXISTS_IGNORE, policy->gen, policy->generation, 0, policy->timeout, n_fields, 0);
 	p = as_command_write_key(p, policy->key, key);
 	cmd->len = (uint32_t)as_command_write_end(cmd->buf, p);
 

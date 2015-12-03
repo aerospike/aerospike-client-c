@@ -102,15 +102,33 @@ extern "C" {
 
 /**
  *	@private
+ *	Macros use these stand-ins for cf_malloc() / cf_free(), so that
+ *	instrumentation properly substitutes them.
+ */
+
+static inline void*
+local_malloc(size_t size)
+{
+	return cf_malloc(size);
+}
+
+static inline void
+local_free(void* memory)
+{
+	return cf_free(memory);
+}
+
+/**
+ *	@private
  *	Allocate command buffer on stack or heap depending on given size.
  */
-#define as_command_init(_sz) (_sz > AS_STACK_BUF_SIZE)? (uint8_t*)cf_malloc(_sz) : (uint8_t*)alloca(_sz)
+#define as_command_init(_sz) (_sz > AS_STACK_BUF_SIZE) ? (uint8_t*)local_malloc(_sz) : (uint8_t*)alloca(_sz)
 
 /**
  *	@private
  *	Free command buffer.
  */
-#define as_command_free(_buf, _sz) if (_sz > AS_STACK_BUF_SIZE) {cf_free(_buf);}
+#define as_command_free(_buf, _sz) if (_sz > AS_STACK_BUF_SIZE) {local_free(_buf);}
 
 /******************************************************************************
  *	TYPES

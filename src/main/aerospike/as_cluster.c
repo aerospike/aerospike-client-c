@@ -68,6 +68,14 @@ swap_seeds(as_cluster* cluster, as_seeds* seeds)
 	return old;
 }
 
+void
+as_cluster_set_async_pool_size(as_cluster* cluster, uint32_t size)
+{
+	cluster->conns_per_node_event_loop = size;
+	ck_pr_fence_store();
+	ck_pr_inc_32(&cluster->version);
+}
+
 static void gc_ip_map(void* ip_map)
 {
 	as_ip_map_release(ip_map);
@@ -667,19 +675,37 @@ as_cluster_gc(as_vector* /* <as_gc_item> */ vector)
 as_status
 as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings, bool config_change)
 {
-	// When the configuration changed, this function will call itself
-	// another time. Only run GC once, during this second invocation.
-	if (! config_change) {
-		// All node additions/deletions are performed in tend thread.
-		// Garbage collect data structures released in previous tend.
-		// This tend interval delay substantially reduces the chance of
-		// deleting a ref counted data structure when other threads
-		// are stuck between assigment and incrementing the ref count.
-		as_cluster_gc(cluster->gc);
-	}
-	
+	// All node additions/deletions are performed in tend thread.
+	// Garbage collect data structures released in previous tend.
+	// This tend interval delay substantially reduces the chance of
+	// deleting a ref counted data structure when other threads
+	// are stuck between assigment and incrementing the ref count.
+	as_cluster_gc(cluster->gc);
+
 	// If active nodes don't exist, seed cluster.
 	as_nodes* nodes = cluster->nodes;
+
+	if (config_change && nodes->size > 0) {
+		as_vector all_nodes;
+		as_vector_inita(&all_nodes, sizeof(as_node*), nodes->size);
+
+		for (uint32_t i = 0; i < nodes->size; i++) {
+			as_vector_append(&all_nodes, &nodes->array[i]);
+		}
+
+		as_cluster_remove_nodes(cluster, &all_nodes);
+		as_vector_destroy(&all_nodes);
+
+		as_partition_tables* tables = as_partition_tables_reserve(cluster);
+
+		for (uint32_t i = 0; i < tables->size; i++) {
+			as_partition_table_destroy(tables->array[i]);
+		}
+
+		tables->size = 0;
+		as_partition_tables_release(tables);
+	}
+
 	if (nodes->size == 0) {
 		as_status status = as_cluster_seed_nodes(cluster, err, enable_seed_warnings);
 		
@@ -735,15 +761,8 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings, b
 	as_vector nodes_to_remove;
 	as_vector_inita(&nodes_to_remove, sizeof(as_node*), nodes->size);
 
-	if (config_change) {
-		for (uint32_t i = 0; i < nodes->size; i++) {
-			as_vector_append(&nodes_to_remove, &nodes->array[i]);
-		}
-	}
-	else {
 	as_cluster_find_nodes_to_add(cluster, &friends, &nodes_to_add);
 	as_cluster_find_nodes_to_remove(cluster, refresh_count, &nodes_to_remove);
-	}
 	
 	// Remove nodes in a batch.
 	if (nodes_to_remove.size > 0) {
@@ -758,11 +777,6 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings, b
 	as_vector_destroy(&nodes_to_add);
 	as_vector_destroy(&nodes_to_remove);
 	as_vector_destroy(&friends);
-
-	if (config_change) {
-		return as_cluster_tend(cluster, err, enable_seed_warnings, false);
-	}
-
 	return AEROSPIKE_OK;
 }
 

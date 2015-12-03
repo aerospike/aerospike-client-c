@@ -113,12 +113,13 @@ as_uv_worker(void* udata)
 	}
 	
 	event_loop->wakeup = cf_malloc(sizeof(uv_async_t));
-	event_loop->wakeup->data = event_loop;
 	
 	if (! event_loop->wakeup) {
 		as_log_error("Failed to create wakeup");
 		return 0;
 	}
+
+	event_loop->wakeup->data = event_loop;
 
 	uv_loop_init(event_loop->loop);
 	uv_async_init(event_loop->loop, event_loop->wakeup, as_uv_wakeup);
@@ -258,6 +259,10 @@ as_uv_command_buffer(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf)
 static void
 as_uv_command_write_complete(uv_write_t* req, int status)
 {
+	if (uv_is_closing((uv_handle_t*)req->handle)) {
+		return;
+	}
+
 	as_event_command* cmd = req->data;
 	
 	if (status == 0) {
@@ -277,7 +282,7 @@ as_uv_command_write_complete(uv_write_t* req, int status)
 			as_event_socket_error(cmd, &err);
 		}
 	}
-	else {
+	else if (status != UV_ECANCELED) {
 		as_error err;
 		as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Socket write failed: %s", uv_strerror(status));
 		as_event_socket_error(cmd, &err);
@@ -292,9 +297,13 @@ as_uv_command_write_start(as_event_command* cmd, uv_stream_t* stream)
 	uv_write_t* write_req = &cmd->conn->req.write;
 	write_req->data = cmd;
 	uv_buf_t buf = uv_buf_init((char*)cmd->buf, cmd->len);
+
+	if (uv_is_closing((uv_handle_t*)stream)) {
+		return;
+	}
 	
 	int status = uv_write(write_req, stream, &buf, 1, as_uv_command_write_complete);
-	
+
 	if (status) {
 		as_error err;
 		as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "uv_write failed: %s", uv_strerror(status));
@@ -311,6 +320,10 @@ as_uv_auth_get_command(as_event_connection* conn)
 static void
 as_uv_auth_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 {
+	if (uv_is_closing((uv_handle_t*)stream)) {
+		return;
+	}
+
 	as_event_command* cmd = as_uv_auth_get_command(stream->data);
 		
 	if (nread < 0) {
@@ -370,6 +383,10 @@ as_uv_auth_command_buffer(uv_handle_t* handle, size_t suggested_size, uv_buf_t* 
 static void
 as_uv_auth_write_complete(uv_write_t* req, int status)
 {
+	if (uv_is_closing((uv_handle_t*)req->handle)) {
+		return;
+	}
+
 	as_event_command* cmd = req->data;
 	
 	if (status == 0) {
@@ -382,7 +399,7 @@ as_uv_auth_write_complete(uv_write_t* req, int status)
 			as_event_socket_error(cmd, &err);
 		}
 	}
-	else {
+	else if (status != UV_ECANCELED) {
 		as_error err;
 		as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Authenticate socket write failed: %s", uv_strerror(status));
 		as_event_socket_error(cmd, &err);
@@ -399,6 +416,10 @@ as_uv_auth_write_start(as_event_command* cmd, uv_stream_t* stream)
 	write_req->data = cmd;
 	uv_buf_t buf = uv_buf_init((char*)cmd->buf + cmd->pos, cmd->auth_len);
 	
+	if (uv_is_closing((uv_handle_t*)stream)) {
+		return;
+	}
+
 	int status = uv_write(write_req, stream, &buf, 1, as_uv_auth_write_complete);
 	
 	if (status) {
@@ -434,8 +455,6 @@ as_uv_connected(uv_connect_t* req, int status)
 	as_event_command* cmd = req->data;
 
 	if (status == 0) {
-		ck_pr_inc_32(&cmd->node->async_conn);
-		
 		if (cmd->cluster->user) {
 			as_uv_auth_write_start(cmd, req->handle);
 		}
@@ -443,7 +462,7 @@ as_uv_connected(uv_connect_t* req, int status)
 			as_uv_command_write_start(cmd, req->handle);
 		}
 	}
-	else {
+	else if (status != UV_ECANCELED) {
 		as_node* node = cmd->node;
 		as_address* primary = as_vector_get(&node->addresses, node->address_index);
 		
@@ -457,6 +476,8 @@ as_uv_connected(uv_connect_t* req, int status)
 static void
 as_uv_connect(as_event_command* cmd)
 {
+	ck_pr_inc_32(&cmd->node->async_conn);
+
 	as_event_connection* conn = cmd->conn;
 	uv_tcp_t* socket = &conn->socket;
 	int status = uv_tcp_init(cmd->event_loop->loop, socket);

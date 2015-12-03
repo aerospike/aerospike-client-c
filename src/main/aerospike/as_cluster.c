@@ -69,9 +69,11 @@ swap_seeds(as_cluster* cluster, as_seeds* seeds)
 }
 
 void
-as_cluster_set_async_pool_size(as_cluster* cluster, uint32_t size)
+as_cluster_set_async_pool_size(as_cluster* cluster, uint32_t async_size, uint32_t pipe_size)
 {
-	cluster->conns_per_node_event_loop = size;
+	// Note: This setting only affects pool in new nodes.  Existing nodes are not changed.
+	cluster->async_max_conns_per_node_loop = async_size;
+	cluster->pipe_max_conns_per_node_loop = pipe_size;
 	ck_pr_fence_store();
 	ck_pr_inc_32(&cluster->version);
 }
@@ -1124,7 +1126,8 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 	cluster->tend_interval = (config->tender_interval < 1000)? 1000 : config->tender_interval;
 	cluster->conn_queue_size = config->max_threads + 1;  // Add one connection for tend thread.
 	cluster->conn_timeout_ms = (config->conn_timeout_ms == 0) ? 1000 : config->conn_timeout_ms;
-	cluster->conns_per_node_event_loop = config->conns_per_node_event_loop;
+	cluster->async_max_conns_per_node_loop = config->async_max_conns_per_node_loop;
+	cluster->pipe_max_conns_per_node_loop = config->pipe_max_conns_per_node_loop;
 	
 	// Initialize seed hosts.
 	cluster->seeds = seeds_init(config);

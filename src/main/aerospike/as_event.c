@@ -177,10 +177,10 @@ as_event_put_connection(as_event_command* cmd)
 {
 	as_queue* q = &cmd->node->async_conn_qs[cmd->event_loop->index];
 	
-	if (! as_queue_push_limit(q, &cmd->conn)) {
-		as_event_close_connection(cmd->conn, cmd->node);
-	} else {
+	if (as_queue_push_limit(q, &cmd->conn)) {
 		ck_pr_inc_32(&cmd->node->async_conn_pool);
+	} else {
+		as_event_close_connection(cmd->conn, cmd->node);
 	}
 }
 

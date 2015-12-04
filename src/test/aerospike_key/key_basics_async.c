@@ -175,7 +175,6 @@ as_get_callback_found(as_error* err, as_record* rec, void* udata, as_event_loop*
 	
 	cdata->counter++;
 	if (cdata->counter == 2) {
-		free(cdata);
 		as_monitor_notify(&monitor);
 	}
 }
@@ -190,7 +189,6 @@ as_get_callback_not_found(as_error* err, as_record* rec, void* udata, as_event_l
 	
 	cdata->counter++;
 	if (cdata->counter == 2) {
-		free(cdata);
 		as_monitor_notify(&monitor);
 	}
 }
@@ -213,9 +211,10 @@ TEST(key_basics_async_exists, "async exists")
 {
 	as_monitor_begin(&monitor);
 	
-	counter_data* udata = malloc(sizeof(counter_data));
-	udata->result = __result__;
-	udata->counter = 0;
+	// udata can exist on stack only because this function doesn't exit until the test is completed.
+	counter_data udata;
+	udata.result = __result__;
+	udata.counter = 0;
 
 	as_key key;
 	as_key_init(&key, NAMESPACE, SET, "pa3");
@@ -224,7 +223,7 @@ TEST(key_basics_async_exists, "async exists")
 	as_record_inita(&rec, 1);
 	as_record_set_int64(&rec, "c", 55);
 	
-	aerospike_key_put_async(as, NULL, &key, &rec, as_put_callback3, udata, 0, false);
+	aerospike_key_put_async(as, NULL, &key, &rec, as_put_callback3, &udata, 0, false);
 	
 	as_key_destroy(&key);
 	as_record_destroy(&rec);

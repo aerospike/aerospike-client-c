@@ -16,6 +16,7 @@
  */
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
+#include <aerospike/aerospike_scan.h>
 #include <aerospike/as_arraylist.h>
 #include <aerospike/as_buffer.h>
 #include <aerospike/as_error.h>
@@ -696,6 +697,90 @@ TEST( key_basics_compression , "put with compression write policy: (test,test,fo
 	as_key_destroy(&key);
 	as_record_destroy(rrec);
 }
+
+static bool scan_cb(const as_val * val, void * udata)
+{
+	uint64_t *result = (uint64_t *) udata;
+
+	// NULL is END OF SCAN
+	if ( !val ) {
+		return false;
+	}
+
+	as_record * rec = as_record_fromval(val);
+	if ( !rec ) {
+		error("Expected a record, but got type %d", as_val_type(val));
+		*result = 1; // fail 1
+		return false;
+	}
+
+	// check key
+	if (!rec->key.valuep) {
+		error("Expected record to have key returned, but no key");
+		*result = 3; // fail 3
+		return false;
+	}
+
+	const char* key_val_as_str = as_val_tostring(rec->key.valuep);
+
+	if (! strcmp(key_val_as_str, "\"store_key\"")==0) {
+		error("Expected record to have key [\"store_key\"], but got [%s]",key_val_as_str);
+		*result = 4; // fail 4
+		free((void *)key_val_as_str);
+		return false;
+	}
+
+	// check set name
+	const char * set = rec->key.set[0] == '\0' ? NULL : rec->key.set;
+	if (! strcmp(set, "store_key_set")==0) {
+		error("Expected record in set [store_key_set], but got set in [%s]", set);
+		*result = 2; // fail 2
+		return false;
+	}
+
+
+	*result = 0;
+
+	free((void *)key_val_as_str);
+	return true;
+}
+
+TEST( key_basics_storekey , "store key" ) {
+
+	as_error err;
+	as_error_reset(&err);
+
+	as_key key;
+	as_key_init(&key, NAMESPACE, "store_key_set", "store_key");
+
+	as_record rec;
+	as_record_init(&rec, 1);
+	as_record_set_int64(&rec, "a", 123);
+
+	as_policy_write sendKeyPolicy;
+	as_policy_write_init(&sendKeyPolicy);
+	sendKeyPolicy.key = AS_POLICY_KEY_SEND;
+
+	as_status rc = aerospike_key_put(as, &err, &sendKeyPolicy, &key, &rec);
+    assert_int_eq(rc, AEROSPIKE_OK);
+
+	as_key_destroy(&key);
+	as_record_destroy(&rec);
+
+	// scan the 1 record set back, to get the key
+	as_scan scan;
+	as_scan_init(&scan, NAMESPACE, "store_key_set");
+
+	uint64_t myresult;
+	rc = aerospike_scan_foreach(as, &err, NULL, &scan, scan_cb, &myresult);
+
+	assert_int_eq( rc, AEROSPIKE_OK );
+	assert_int_eq( myresult, 0 );
+
+	as_scan_destroy(&scan);
+
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -724,4 +809,5 @@ SUITE( key_basics, "aerospike_key basic tests" ) {
 	suite_add( key_basics_read_raw_list );
 	suite_add( key_basics_list_map_double );
 	suite_add( key_basics_compression );
+	suite_add( key_basics_storekey );
 }

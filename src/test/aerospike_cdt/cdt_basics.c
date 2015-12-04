@@ -240,7 +240,7 @@ as_testlist_insert_list(as_testlist *tlist, int64_t index, as_arraylist *list)
 		as_arraylist_insert(&tlist->arraylist, uindex, val);
 	}
 
-	AS_OPERATIONS_CDT_OP(&ops, BIN_NAME, AS_CDT_OP_LIST_APPEND_ITEMS, index, list);
+	AS_OPERATIONS_CDT_OP(&ops, BIN_NAME, AS_CDT_OP_LIST_INSERT_ITEMS, index, list);
 
 	return as_testlist_op(tlist, &ops);
 }

@@ -97,6 +97,7 @@ aerospike_connect(aerospike* as, as_error* err)
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "No hosts provided");
 	}
 
+#if !defined USE_XDR
     mod_lua_config config = {
         .server_mode    = false,
         .cache_enabled  = as->config.lua.cache_enabled,
@@ -107,6 +108,7 @@ aerospike_connect(aerospike* as, as_error* err)
     memcpy(config.user_path, as->config.lua.user_path, sizeof(config.user_path));
     
     as_module_configure(&mod_lua, &config);
+#endif
 	
 	// Create the cluster object.
 	return as_cluster_create(&as->config, err, &as->cluster);

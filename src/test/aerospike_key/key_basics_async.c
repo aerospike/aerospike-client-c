@@ -54,7 +54,7 @@ static as_monitor monitor;
  *****************************************************************************/
 
 typedef struct {
-	atf_test_result* __result__;
+	atf_test_result* result;
 	uint32_t counter;
 } counter_data;
 
@@ -166,15 +166,16 @@ TEST(key_basics_async_select, "async select")
 static void
 as_get_callback_found(as_error* err, as_record* rec, void* udata, as_event_loop* event_loop)
 {
-	assert_success_async(&monitor, err, udata);
+	counter_data* cdata = udata;
+	assert_success_async(&monitor, err, cdata->result);
 	
     assert_async(&monitor, rec);
     assert_int_eq_async(&monitor, as_record_numbins(rec), 0);
     assert_async(&monitor, rec->gen > 0);
 	
-	counter_data* cdata = udata;
 	cdata->counter++;
 	if (cdata->counter == 2) {
+		free(cdata);
 		as_monitor_notify(&monitor);
 	}
 }
@@ -182,13 +183,14 @@ as_get_callback_found(as_error* err, as_record* rec, void* udata, as_event_loop*
 static void
 as_get_callback_not_found(as_error* err, as_record* rec, void* udata, as_event_loop* event_loop)
 {
-	atf_test_result* __result__ = udata;
+	counter_data* cdata = udata;
+	atf_test_result* __result__ = cdata->result;
     assert_async(&monitor, err && err->code == AEROSPIKE_ERR_RECORD_NOT_FOUND);
     assert_async(&monitor, !rec);
 	
-	counter_data* cdata = udata;
 	cdata->counter++;
 	if (cdata->counter == 2) {
+		free(cdata);
 		as_monitor_notify(&monitor);
 	}
 }
@@ -196,7 +198,8 @@ as_get_callback_not_found(as_error* err, as_record* rec, void* udata, as_event_l
 static void
 as_put_callback3(as_error* err, void* udata, as_event_loop* event_loop)
 {
-	assert_success_async(&monitor, err, udata);
+	counter_data* cdata = udata;
+	assert_success_async(&monitor, err, cdata->result);
 	
 	as_key key;
 	as_key_init(&key, NAMESPACE, SET, "pa3");
@@ -210,9 +213,9 @@ TEST(key_basics_async_exists, "async exists")
 {
 	as_monitor_begin(&monitor);
 	
-	counter_data udata;
-	udata.__result__ = __result__;
-	udata.counter = 0;
+	counter_data* udata = malloc(sizeof(counter_data));
+	udata->result = __result__;
+	udata->counter = 0;
 
 	as_key key;
 	as_key_init(&key, NAMESPACE, SET, "pa3");
@@ -221,7 +224,7 @@ TEST(key_basics_async_exists, "async exists")
 	as_record_inita(&rec, 1);
 	as_record_set_int64(&rec, "c", 55);
 	
-	aerospike_key_put_async(as, NULL, &key, &rec, as_put_callback3, &udata, 0, false);
+	aerospike_key_put_async(as, NULL, &key, &rec, as_put_callback3, udata, 0, false);
 	
 	as_key_destroy(&key);
 	as_record_destroy(&rec);

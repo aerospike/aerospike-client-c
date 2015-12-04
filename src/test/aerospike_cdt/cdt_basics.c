@@ -135,6 +135,11 @@ as_testlist_destroy(as_testlist *tlist)
 	as_arraylist_destroy(&tlist->arraylist);
 
 	as_key_destroy(&tlist->key);
+
+	if (tlist->rec) {
+		as_record_destroy(tlist->rec);
+		tlist->rec = NULL;
+	}
 }
 
 static uint32_t

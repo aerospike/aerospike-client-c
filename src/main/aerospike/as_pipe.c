@@ -77,6 +77,8 @@ cancel_connection(as_event_command* cmd, as_error* err, int32_t source)
 {
 	as_pipe_connection* conn = (as_pipe_connection*)cmd->conn;
 	as_node* node = cmd->node;
+	// So that cancel_command() doesn't free the node.
+	as_node_reserve(node);
 	
 	as_log_trace("Canceling pipeline connection for command %p, error code %d, connection %p", cmd, err->code, conn);
 
@@ -119,12 +121,15 @@ cancel_connection(as_event_command* cmd, as_error* err, int32_t source)
 	if (! conn->in_pool) {
 		as_log_trace("Closing canceled non-pooled pipeline connection %p", conn);
 		as_event_close_connection(&conn->base, node);
+		as_node_release(node);
 		return;
 	}
 
 	as_log_trace("Marking pooled pipeline connection %p as canceled", conn);
 	conn->writer = NULL;
 	conn->canceled = true;
+
+	as_node_release(node);
 }
 
 static void

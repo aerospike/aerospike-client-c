@@ -328,10 +328,11 @@ aerospike_batch_read(
  *	as_key_init(&record->key, ns, set, "key2");
  *	record->read_all_bins = true;
  *
- *	aerospike_batch_read_async(&as, &err, NULL, records, NULL, my_listener, NULL);
+ *	as_status status = aerospike_batch_read_async(&as, &err, NULL, records, NULL, my_listener, NULL);
  *	~~~~~~~~~~
  *
  *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param records		List of keys and bins to retrieve.  The returned records are located in the same array.
  *						Must be allocated on heap because async method will return immediately after queueing command.
@@ -339,11 +340,13 @@ aerospike_batch_read(
  *	@param udata 		User data to be forwarded to user callback.
  *	@param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
  *
+ *	@return AEROSPIKE_OK if async command succesfully queued. Otherwise an error.
+ *
  *	@ingroup batch_operations
  */
-void
+as_status
 aerospike_batch_read_async(
-	aerospike* as, const as_policy_batch* policy, as_batch_read_records* records,
+	aerospike* as, as_error* err, const as_policy_batch* policy, as_batch_read_records* records,
 	as_async_batch_listener listener, void* udata, as_event_loop* event_loop
 	);
 

@@ -111,10 +111,12 @@ TEST(key_apply_async1, "async key apply")
 	as_arraylist_append_int64(&arglist, 1);
 	as_arraylist_append_int64(&arglist, 2);
 
-	aerospike_key_apply_async(as, NULL, &key, UDF_FILE, "add", (as_list *) &arglist, as_apply_callback, __result__, 0, false);
-	
+	as_error err;
+	as_status status = aerospike_key_apply_async(as, &err, NULL, &key, UDF_FILE, "add", (as_list *) &arglist, as_apply_callback, __result__, 0, false);
 	as_key_destroy(&key);
     as_val_destroy(&arglist);
+    assert_int_eq(status, AEROSPIKE_OK);
+
 	as_monitor_wait(&monitor);
 }
 

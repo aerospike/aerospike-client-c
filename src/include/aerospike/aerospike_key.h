@@ -95,10 +95,11 @@ aerospike_key_get(
  *	as_key key;
  *	as_key_init(&key, "ns", "set", "key");
  *
- *	aerospike_key_get_async(&as, NULL, &key, my_listener, NULL, NULL, false);
+ *	as_status status = aerospike_key_get_async(&as, &err, NULL, &key, my_listener, NULL, NULL, false);
  *	~~~~~~~~~~
  *
  *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param key			The key of the record.
  *	@param listener 	User function to be called with command results.
@@ -106,11 +107,13 @@ aerospike_key_get(
  *	@param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
  *	@param pipeline 	Should responses be combined with other responses before sending back to client.
  *
+ *	@return AEROSPIKE_OK if async command succesfully queued. Otherwise an error.
+ *
  *	@ingroup key_operations
  */
-void
+as_status
 aerospike_key_get_async(
-	aerospike* as, const as_policy_read* policy, const as_key* key,
+	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key,
 	as_async_record_listener listener, void* udata, as_event_loop* event_loop, bool pipeline
 	);
 
@@ -168,10 +171,11 @@ aerospike_key_select(
  *	as_key key;
  *	as_key_init(&key, "ns", "set", "key");
  *
- *	aerospike_key_select_async(&as, &err, NULL, &key, select, my_listener, NULL, NULL, false);
+ *	as_status status = aerospike_key_select_async(&as, &err, NULL, &key, select, my_listener, NULL, NULL, false);
  *	~~~~~~~~~~
  *
  *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param key			The key of the record.
  *	@param bins			The bins to select. A NULL terminated array of NULL terminated strings.
@@ -180,11 +184,13 @@ aerospike_key_select(
  *	@param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
  *	@param pipeline 	Should responses be combined with other responses before sending back to client.
  *
+ *	@return AEROSPIKE_OK if async command succesfully queued. Otherwise an error.
+ *
  *	@ingroup key_operations
  */
-void
+as_status
 aerospike_key_select_async(
-	aerospike* as, const as_policy_read* policy, const as_key* key, const char* bins[],
+	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, const char* bins[],
 	as_async_record_listener listener, void* udata, as_event_loop* event_loop, bool pipeline
 	);
 
@@ -249,10 +255,11 @@ aerospike_key_exists(
  *	as_key key;
  *	as_key_init(&key, "ns", "set", "key");
  *
- *	aerospike_key_exists_async(&as, &err, NULL, &key, my_listener, NULL, NULL, false);
+ *	as_status status = aerospike_key_exists_async(&as, &err, NULL, &key, my_listener, NULL, NULL, false);
  *	~~~~~~~~~~
  *
  *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param key			The key of the record.
  *	@param listener		User function to be called with command results.
@@ -260,11 +267,13 @@ aerospike_key_exists(
  *	@param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
  *	@param pipeline 	Should responses be combined with other responses before sending back to client.
  *
+ *	@return AEROSPIKE_OK if async command succesfully queued. Otherwise an error.
+ *
  *	@ingroup key_operations
  */
-void
+as_status
 aerospike_key_exists_async(
-	aerospike* as, const as_policy_read* policy, const as_key* key,
+	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key,
 	as_async_record_listener listener, void* udata, as_event_loop* event_loop, bool pipeline
 	);
 
@@ -322,11 +331,12 @@ aerospike_key_put(
  *	as_record_set_str(&rec, "bin1", "abc");
  *	as_record_set_int64(&rec, "bin2", 123);
  *
- *	aerospike_key_put_async(&as, NULL, &key, &rec, my_listener, NULL, NULL, false);
+ *	as_status status = aerospike_key_put_async(&as, &err, NULL, &key, &rec, my_listener, NULL, NULL, false);
  *	as_record_destroy(&rec);
  *	~~~~~~~~~~
  *
  *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param key			The key of the record.
  *	@param rec 			The record containing the data to be written.
@@ -335,11 +345,13 @@ aerospike_key_put(
  *	@param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
  *	@param pipeline 	Should responses be combined with other responses before sending back to client.
  *
+ *	@return AEROSPIKE_OK if async command succesfully queued. Otherwise an error.
+ *
  *	@ingroup key_operations
  */
-void
+as_status
 aerospike_key_put_async(
-	aerospike* as, const as_policy_write* policy, const as_key* key, as_record* rec,
+	aerospike* as, as_error* err, const as_policy_write* policy, const as_key* key, as_record* rec,
 	as_async_write_listener listener, void* udata, as_event_loop* event_loop, bool pipeline
 	);
 
@@ -385,10 +397,11 @@ aerospike_key_remove(
  *	as_key key;
  *	as_key_init(&key, "ns", "set", "key");
  *
- *	aerospike_key_remove(&as, &err, NULL, &key, my_listener, NULL, NULL, false);
+ *	as_status status = aerospike_key_remove(&as, &err, NULL, &key, my_listener, NULL, NULL, false);
  *	~~~~~~~~~~
  *
  *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param key			The key of the record.
  *	@param listener 	User function to be called with command results.
@@ -396,11 +409,13 @@ aerospike_key_remove(
  *	@param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
  *	@param pipeline 	Should responses be combined with other responses before sending back to client.
  *
+ *	@return AEROSPIKE_OK if async command succesfully queued. Otherwise an error.
+ *
  *	@ingroup key_operations
  */
-void
+as_status
 aerospike_key_remove_async(
-	aerospike* as, const as_policy_remove* policy, const as_key* key,
+	aerospike* as, as_error* err, const as_policy_remove* policy, const as_key* key,
 	as_async_write_listener listener, void* udata, as_event_loop* event_loop, bool pipeline
 	);
 
@@ -468,11 +483,12 @@ aerospike_key_operate(
  *	as_operations_add_append_str(&ops, "bin2", "def");
  *	as_operations_add_read(&ops, "bin1")
  *
- *	aerospike_key_operate(&as, &err, NULL, &key, &ops, my_listener, NULL, NULL, false);
+ *	as_status status = aerospike_key_operate(&as, &err, NULL, &key, &ops, my_listener, NULL, NULL, false);
  *	as_operations_destroy(&ops);
  *	~~~~~~~~~~
  *
  *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param key			The key of the record.
  *	@param ops			The operations to perform on the record.
@@ -481,11 +497,13 @@ aerospike_key_operate(
  *	@param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
  *	@param pipeline 	Should responses be combined with other responses before sending back to client.
  *
+ *	@return AEROSPIKE_OK if async command succesfully queued. Otherwise an error.
+ *
  *	@ingroup key_operations
  */
-void
+as_status
 aerospike_key_operate_async(
-	aerospike* as, const as_policy_operate* policy, const as_key* key, const as_operations* ops,
+	aerospike* as, as_error* err, const as_policy_operate* policy, const as_key* key, const as_operations* ops,
 	as_async_record_listener listener, void* udata, as_event_loop* event_loop, bool pipeline
 	);
 
@@ -557,11 +575,12 @@ as_status aerospike_key_apply(
  *	as_arraylist_append_int64(&args, 1);
  *	as_arraylist_append_int64(&args, 2);
  *
- *	aerospike_key_apply(&as, &err, NULL, &key, "math", "add", &args, my_listener, NULL, NULL, false);
+ *	as_status status = aerospike_key_apply(&as, &err, NULL, &key, "math", "add", &args, my_listener, NULL, NULL, false);
  *	as_arraylist_destroy(&args);
  *	~~~~~~~~~~
  *
  *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param key			The key of the record.
  *	@param module		The module containing the function to execute.
@@ -572,11 +591,13 @@ as_status aerospike_key_apply(
  *	@param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
  *	@param pipeline 	Should responses be combined with other responses before sending back to client.
  *
+ *	@return AEROSPIKE_OK if async command succesfully queued. Otherwise an error.
+ *
  *	@ingroup key_operations
  */
-void
+as_status
 aerospike_key_apply_async(
-	aerospike* as, const as_policy_apply* policy, const as_key* key,
+	aerospike* as, as_error* err, const as_policy_apply* policy, const as_key* key,
 	const char* module, const char* function, as_list* arglist,
 	as_async_value_listener listener, void* udata, as_event_loop* event_loop, bool pipeline
 	);

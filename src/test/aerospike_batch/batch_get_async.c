@@ -199,7 +199,9 @@ TEST(batch_async_read_complex, "Batch Async Read Complex")
 	record->bin_names = bins;
 	record->n_bin_names = n_bins;
 
-	aerospike_batch_read_async(as, NULL, records, batch_callback, __result__, NULL);
+	as_error err;
+	as_status status = aerospike_batch_read_async(as, &err, NULL, records, batch_callback, __result__, NULL);
+    assert_int_eq(status, AEROSPIKE_OK);
 }
 
 TEST(batch_async_post, "Batch Async: Remove Records")

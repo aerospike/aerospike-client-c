@@ -23,6 +23,7 @@
 #include <aerospike/as_proto.h>
 #include <citrusleaf/alloc.h>
 #include <errno.h>
+#include <pthread.h>
 
 /******************************************************************************
  * GLOBALS
@@ -158,8 +159,8 @@ as_event_close_loops()
  * PRIVATE FUNCTIONS
  *****************************************************************************/
 
-void
-as_event_command_execute(as_event_command* cmd)
+as_status
+as_event_command_execute(as_event_command* cmd, as_error* err)
 {
 	ck_pr_inc_32(&cmd->node->async_pending);
 	
@@ -178,11 +179,13 @@ as_event_command_execute(as_event_command* cmd)
 		
 		// Send command through queue so it can be executed in event loop thread.
 		if (! as_event_send(cmd)) {
-			as_error err;
-			as_error_set_message(&err, AEROSPIKE_ERR_CLIENT, "Failed to queue command");
-			as_event_error_callback(cmd, &err);
+			ck_pr_dec_32(&cmd->node->async_pending);
+			as_node_release(cmd->node);
+			as_event_command_free(cmd);
+			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to queue command");
 		}
 	}
+	return AEROSPIKE_OK;
 }
 
 static inline void
@@ -212,30 +215,92 @@ as_event_response_complete(as_event_command* cmd)
 	as_node_release(cmd->node);
 }
 
+static inline void
+as_event_executor_destroy(as_event_executor* executor)
+{
+	if (executor->destroy_fn) {
+		executor->destroy_fn(executor);
+	}
+	pthread_mutex_unlock(&executor->lock);
+	pthread_mutex_destroy(&executor->lock);
+	cf_free(executor->commands);
+	cf_free(executor);
+}
+
+static void
+as_event_executor_error(as_event_executor* executor, as_error* err, int queued_count)
+{
+	pthread_mutex_lock(&executor->lock);
+	
+	// Notify user of error only once.
+	if (executor->valid) {
+		executor->complete_fn(executor, err);
+		executor->valid = false;
+	}
+	
+	if (queued_count >= 0) {
+		// Add tasks that were never queued.
+		executor->count += (executor->max - queued_count);
+	}
+	else {
+		executor->count++;
+	}
+	
+	if (executor->count == executor->max) {
+		as_event_executor_destroy(executor);
+	}
+	else {
+		pthread_mutex_unlock(&executor->lock);
+	}
+}
+
+void
+as_event_executor_cancel(as_event_executor* executor, int queued_count)
+{
+	// Cancel group of commands that already have been queued.
+	// We are cancelling commands running in the event loop thread when this method
+	// is NOT running in the event loop thread.  Enforce thread-safety.
+	pthread_mutex_lock(&executor->lock);
+	executor->valid = false;
+	
+	// Add tasks that were never queued.
+	executor->count += (executor->max - queued_count);
+	
+	if (executor->count == executor->max) {
+		as_event_executor_destroy(executor);
+	}
+	else {
+		pthread_mutex_unlock(&executor->lock);
+	}
+}
+
 void
 as_event_executor_complete(as_event_command* cmd)
 {
 	as_event_response_complete(cmd);
 	
-	// Only invoke user callback after all node commands have completed.
 	as_event_executor* executor = cmd->udata;
-	
+	pthread_mutex_lock(&executor->lock);
+
 	if (++executor->count == executor->max) {
 		// All commands completed.
 		if (executor->valid) {
 			executor->complete_fn(executor, 0);
 		}
-		cf_free(executor->commands);
-		cf_free(executor);
+		as_event_executor_destroy(executor);
 	}
 	else {
 		// Determine if a new command needs to be started.
-		if (executor->valid) {
-			int next = executor->count + executor->max_concurrent - 1;
+		int next = executor->count + executor->max_concurrent - 1;
+		bool start_new_command = next < executor->max && executor->valid;
+		pthread_mutex_unlock(&executor->lock);
+		
+		if (start_new_command) {
+			as_error err;
+			as_status status = as_event_command_execute(executor->commands[next], &err);
 			
-			if (next < executor->max) {
-				// Start new command.
-				as_event_command_execute(executor->commands[next]);
+			if (status != AEROSPIKE_OK) {
+				as_event_executor_error(executor, &err, next);
 			}
 		}
 	}
@@ -285,23 +350,10 @@ as_event_error_callback(as_event_command* cmd, as_error* err)
 			((as_async_value_command*)cmd)->listener(err, 0, cmd->udata, cmd->event_loop);
 			break;
 			
-		default: {
+		default:
 			// Handle command that is part of a group (batch, scan, query).
-			// Commands are issued on same event loop, so we can assume single threaded behavior.
-			as_event_executor* executor = cmd->udata;
-			
-			// Notify user of error only once.
-			if (executor->valid) {
-				executor->complete_fn(executor, err);
-				executor->valid = false;
-			}
-			
-			// Only free executor if all outstanding commands are complete.
-			if (++executor->count == executor->max) {
-				cf_free(executor->commands);
-				cf_free(executor);
-			}
-		}
+			as_event_executor_error(cmd->udata, err, -1);
+			break;
 	}
 	as_event_command_release(cmd);
 }

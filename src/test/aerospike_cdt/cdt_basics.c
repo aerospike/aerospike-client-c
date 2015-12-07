@@ -222,7 +222,7 @@ as_testlist_insert(as_testlist *tlist, int64_t index, as_val *val)
 	as_operations ops;
 	as_operations_inita(&ops, 1);
 
-	uint32_t uindex = index2uindex(tlist, index);
+	uint32_t uindex = index2uindex(tlist, (int)index);
 	as_val_reserve(val);
 	as_arraylist_insert(&tlist->arraylist, uindex, val);
 
@@ -237,7 +237,7 @@ as_testlist_insert_list(as_testlist *tlist, int64_t index, as_arraylist *list)
 	as_operations ops;
 	as_operations_inita(&ops, 1);
 
-	uint32_t uindex = index2uindex(tlist, index);
+	uint32_t uindex = index2uindex(tlist, (int)index);
 	uint32_t size = as_arraylist_size(list);
 	for (int i = size - 1; i >= 0; i--) {
 		as_val *val = as_arraylist_get(list, i);
@@ -256,7 +256,7 @@ as_testlist_set(as_testlist *tlist, int64_t index, as_val *val)
 	as_operations ops;
 	as_operations_inita(&ops, 1);
 
-	uint32_t uindex = index2uindex(tlist, index);
+	uint32_t uindex = index2uindex(tlist, (int)index);
 	as_val_reserve(val);
 	as_arraylist_set(&tlist->arraylist, uindex, val);
 
@@ -271,8 +271,8 @@ as_testlist_trim(as_testlist *tlist, int64_t index, uint64_t count)
 	as_operations ops;
 	as_operations_inita(&ops, 1);
 
-	uint32_t uindex = index2uindex(tlist, index);
-	as_arraylist_trim(&tlist->arraylist, uindex + count);
+	uint32_t uindex = index2uindex(tlist, (int)index);
+	as_arraylist_trim(&tlist->arraylist, uindex + (uint32_t)count);
 	for (int64_t i = 0; i < index; i++) {
 		as_arraylist_remove(&tlist->arraylist, 0);
 	}

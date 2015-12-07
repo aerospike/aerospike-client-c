@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		BF2717811B448C3B007B8BED /* query_background.c in Sources */ = {isa = PBXBuildFile; fileRef = BF2717801B448C3B007B8BED /* query_background.c */; };
+		BF5697511C16049F0029851B /* cdt_basics.c in Sources */ = {isa = PBXBuildFile; fileRef = BF5697501C16049F0029851B /* cdt_basics.c */; };
+		BF5697531C16057E0029851B /* query_geospatial.c in Sources */ = {isa = PBXBuildFile; fileRef = BF5697521C16057E0029851B /* query_geospatial.c */; };
 		BFB7BC9518CAAB0E00F0D4A0 /* aerospike_test.c in Sources */ = {isa = PBXBuildFile; fileRef = BFB7BC8A18CAAB0E00F0D4A0 /* aerospike_test.c */; };
 		BFB7BC9618CAAB0E00F0D4A0 /* test.c in Sources */ = {isa = PBXBuildFile; fileRef = BFB7BC9218CAAB0E00F0D4A0 /* test.c */; };
 		BFBC119918CE3D2400D0B5BE /* liblua.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFBC119818CE3D2400D0B5BE /* liblua.a */; };
@@ -68,6 +70,8 @@
 
 /* Begin PBXFileReference section */
 		BF2717801B448C3B007B8BED /* query_background.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = query_background.c; path = ../src/test/aerospike_query/query_background.c; sourceTree = "<group>"; };
+		BF5697501C16049F0029851B /* cdt_basics.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = cdt_basics.c; path = ../src/test/aerospike_cdt/cdt_basics.c; sourceTree = "<group>"; };
+		BF5697521C16057E0029851B /* query_geospatial.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = query_geospatial.c; path = ../src/test/aerospike_geo/query_geospatial.c; sourceTree = "<group>"; };
 		BF843C5018D3E61700A06CFB /* aerospike.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = aerospike.xcodeproj; sourceTree = "<group>"; };
 		BFB7BC6E18CAA88000F0D4A0 /* aerospike-test */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "aerospike-test"; sourceTree = BUILT_PRODUCTS_DIR; };
 		BFB7BC8A18CAAB0E00F0D4A0 /* aerospike_test.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = aerospike_test.c; path = ../src/test/aerospike_test.c; sourceTree = "<group>"; };
@@ -128,6 +132,8 @@
 			isa = PBXGroup;
 			children = (
 				BF843C5018D3E61700A06CFB /* aerospike.xcodeproj */,
+				BF5697501C16049F0029851B /* cdt_basics.c */,
+				BF5697521C16057E0029851B /* query_geospatial.c */,
 				BFBC11B518CE416100D0B5BE /* udf_basics.c */,
 				BFBC11B618CE416100D0B5BE /* udf_record.c */,
 				BFBC11B718CE416100D0B5BE /* udf_types.c */,
@@ -253,6 +259,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BF5697531C16057E0029851B /* query_geospatial.c in Sources */,
 				BFBC11F418CE416100D0B5BE /* test_aerospike.c in Sources */,
 				BFBC11EC18CE416100D0B5BE /* read.c in Sources */,
 				BFBC11DE18CE416100D0B5BE /* udf_record.c in Sources */,
@@ -265,6 +272,7 @@
 				BFBC11DD18CE416100D0B5BE /* udf_basics.c in Sources */,
 				BF2717811B448C3B007B8BED /* query_background.c in Sources */,
 				BFBC11A518CE406D00D0B5BE /* key_apply2.c in Sources */,
+				BF5697511C16049F0029851B /* cdt_basics.c in Sources */,
 				BFBC11AB18CE40C800D0B5BE /* index_basics.c in Sources */,
 				BFBC11AF18CE40EB00D0B5BE /* test_lmap.c in Sources */,
 				BFBC11B318CE411900D0B5BE /* scan_basics.c in Sources */,

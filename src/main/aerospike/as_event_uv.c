@@ -265,10 +265,6 @@ as_uv_command_buffer(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf)
 static void
 as_uv_command_write_complete(uv_write_t* req, int status)
 {
-	if (uv_is_closing((uv_handle_t*)req->handle)) {
-		return;
-	}
-
 	as_event_command* cmd = req->data;
 	
 	if (status == 0) {
@@ -283,12 +279,18 @@ as_uv_command_write_complete(uv_write_t* req, int status)
 		status = uv_read_start(req->handle, as_uv_command_buffer, as_uv_command_read);
 		
 		if (status) {
+			if (uv_is_closing((uv_handle_t*)req->handle)) {
+				return;
+			}
 			as_error err;
 			as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "uv_read_start failed: %s", uv_strerror(status));
 			as_event_socket_error(cmd, &err);
 		}
 	}
 	else if (status != UV_ECANCELED) {
+		if (uv_is_closing((uv_handle_t*)req->handle)) {
+			return;
+		}
 		as_error err;
 		as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Socket write failed: %s", uv_strerror(status));
 		as_event_socket_error(cmd, &err);
@@ -304,13 +306,12 @@ as_uv_command_write_start(as_event_command* cmd, uv_stream_t* stream)
 	write_req->data = cmd;
 	uv_buf_t buf = uv_buf_init((char*)cmd->buf, cmd->len);
 
-	if (uv_is_closing((uv_handle_t*)stream)) {
-		return;
-	}
-	
 	int status = uv_write(write_req, stream, &buf, 1, as_uv_command_write_complete);
 
 	if (status) {
+		if (uv_is_closing((uv_handle_t*)stream)) {
+			return;
+		}
 		as_error err;
 		as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "uv_write failed: %s", uv_strerror(status));
 		as_event_socket_error(cmd, &err);
@@ -326,13 +327,12 @@ as_uv_auth_get_command(as_event_connection* conn)
 static void
 as_uv_auth_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 {
-	if (uv_is_closing((uv_handle_t*)stream)) {
-		return;
-	}
-
 	as_event_command* cmd = as_uv_auth_get_command(stream->data);
 		
 	if (nread < 0) {
+		if (uv_is_closing((uv_handle_t*)stream)) {
+			return;
+		}
 		uv_read_stop(stream);
 		as_error err;
 		as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Authenticate socket read failed: %zd", nread);
@@ -351,6 +351,9 @@ as_uv_auth_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 		as_event_set_auth_parse_header(cmd);
 		
 		if (cmd->len > cmd->capacity) {
+			if (uv_is_closing((uv_handle_t*)stream)) {
+				return;
+			}
 			uv_read_stop(stream);
 			as_error err;
 			as_error_update(&err, AEROSPIKE_ERR_CLIENT, "Authenticate response size is corrupt: %u", cmd->auth_len);
@@ -369,6 +372,9 @@ as_uv_auth_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 	
 	if (code) {
 		// Can't authenticate socket, so must close it.
+		if (uv_is_closing((uv_handle_t*)stream)) {
+			return;
+		}
 		as_error err;
 		as_error_update(&err, code, "Authentication failed: %s", as_error_string(code));
 		as_event_socket_error(cmd, &err);
@@ -389,10 +395,6 @@ as_uv_auth_command_buffer(uv_handle_t* handle, size_t suggested_size, uv_buf_t* 
 static void
 as_uv_auth_write_complete(uv_write_t* req, int status)
 {
-	if (uv_is_closing((uv_handle_t*)req->handle)) {
-		return;
-	}
-
 	as_event_command* cmd = req->data;
 	
 	if (status == 0) {
@@ -400,12 +402,18 @@ as_uv_auth_write_complete(uv_write_t* req, int status)
 		status = uv_read_start(req->handle, as_uv_auth_command_buffer, as_uv_auth_read);
 		
 		if (status) {
+			if (uv_is_closing((uv_handle_t*)req->handle)) {
+				return;
+			}
 			as_error err;
 			as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Authenticate uv_read_start failed: %s", uv_strerror(status));
 			as_event_socket_error(cmd, &err);
 		}
 	}
 	else if (status != UV_ECANCELED) {
+		if (uv_is_closing((uv_handle_t*)req->handle)) {
+			return;
+		}
 		as_error err;
 		as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Authenticate socket write failed: %s", uv_strerror(status));
 		as_event_socket_error(cmd, &err);
@@ -422,13 +430,12 @@ as_uv_auth_write_start(as_event_command* cmd, uv_stream_t* stream)
 	write_req->data = cmd;
 	uv_buf_t buf = uv_buf_init((char*)cmd->buf + cmd->pos, cmd->auth_len);
 	
-	if (uv_is_closing((uv_handle_t*)stream)) {
-		return;
-	}
-
 	int status = uv_write(write_req, stream, &buf, 1, as_uv_auth_write_complete);
 	
 	if (status) {
+		if (uv_is_closing((uv_handle_t*)stream)) {
+			return;
+		}
 		as_error err;
 		as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Authenticate uv_write failed: %s", uv_strerror(status));
 		as_event_socket_error(cmd, &err);

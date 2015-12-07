@@ -126,8 +126,13 @@ as_batch_complete_async(as_event_executor* executor, as_error* err)
 {
 	as_async_batch_executor* e = (as_async_batch_executor*)executor;
 	e->listener(err, e->records, executor->udata, executor->event_loop);
+}
+
+static void
+as_batch_destroy_async(as_event_executor* executor)
+{
+	as_async_batch_executor* e = (as_async_batch_executor*)executor;
 	as_batch_read_destroy(e->records);
-	e->records = 0;
 }
 
 static bool
@@ -938,14 +943,16 @@ as_batch_read_execute_sync(
 	return status;
 }
 
-static void
+static as_status
 as_batch_read_execute_async(
-	as_cluster* cluster, const as_policy_batch* policy, as_vector* records, uint32_t n_batch_nodes,
+	as_cluster* cluster, as_error* err, const as_policy_batch* policy, as_vector* records, uint32_t n_batch_nodes,
 	as_batch_node* batch_nodes, as_async_batch_executor* executor
 	)
 {
 	as_event_executor* exec = &executor->executor;
 	exec->max_concurrent = exec->max = n_batch_nodes;
+	
+	as_status status = AEROSPIKE_OK;
 	
 	for (uint32_t i = 0; i < n_batch_nodes; i++) {
 		as_batch_node* batch_node = &batch_nodes[i];
@@ -975,18 +982,39 @@ as_batch_read_execute_async(
 		cmd->free_buf = false;
 		cmd->len = (uint32_t)as_batch_index_records_write(records, &batch_node->offsets, policy->timeout, policy->allow_inline, cmd->buf);
 		
-		as_event_command_execute(cmd);
+		status = as_event_command_execute(cmd, err);
+		
+		if (status != AEROSPIKE_OK) {
+			as_event_executor_cancel(exec, i);
+			break;
+		}
+	}
+	return status;
+}
+
+static void
+as_batch_read_cleanup(
+	as_batch_read_records* records, as_async_batch_executor* async_executor, as_nodes* nodes,
+	as_batch_node* batch_nodes, uint32_t n_batch_nodes
+	)
+{
+	as_batch_release_nodes(batch_nodes, n_batch_nodes);
+	as_nodes_release(nodes);
+	
+	if (async_executor) {
+		// Destroy batch async resources.
+		// Assume no async commands have been queued.
+		as_batch_read_destroy(records);
+		cf_free(async_executor);
 	}
 }
 
 static as_status
 as_batch_read_execute(
 	aerospike* as, as_error* err, const as_policy_batch* policy, as_batch_read_records* records,
-	as_async_batch_executor* executor
+	as_async_batch_executor* async_executor
 	)
 {
-	as_error_reset(err);
-	
 	if (! policy) {
 		policy = &as->config.policies.batch;
 	}
@@ -1003,7 +1031,7 @@ as_batch_read_execute(
 	uint32_t n_nodes = nodes->size;
 	
 	if (n_nodes == 0) {
-		as_nodes_release(nodes);
+		as_batch_read_cleanup(records, async_executor, nodes, NULL, 0);
 		return as_error_set_message(err, AEROSPIKE_ERR_SERVER, "Batch command failed because cluster is empty.");
 	}
 	
@@ -1031,22 +1059,19 @@ as_batch_read_execute(
 		status = as_key_set_digest(err, key);
 		
 		if (status != AEROSPIKE_OK) {
-			as_batch_release_nodes(batch_nodes, n_batch_nodes);
-			as_nodes_release(nodes);
+			as_batch_read_cleanup(records, async_executor, nodes, batch_nodes, n_batch_nodes);
 			return status;
 		}
 		
 		as_node* node = as_node_get(cluster, key->ns, key->digest.value, false, AS_POLICY_REPLICA_MASTER);
 		
 		if (! node) {
-			as_batch_release_nodes(batch_nodes, n_batch_nodes);
-			as_nodes_release(nodes);
+			as_batch_read_cleanup(records, async_executor, nodes, batch_nodes, n_batch_nodes);
 			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to find batch node for key.");
 		}
 		
 		if (! as_batch_use_new(policy, node)) {
-			as_batch_release_nodes(batch_nodes, n_batch_nodes);
-			as_nodes_release(nodes);
+			as_batch_read_cleanup(records, async_executor, nodes, batch_nodes, n_batch_nodes);
 			return as_error_set_message(err, AEROSPIKE_ERR_UNSUPPORTED_FEATURE, "aerospike_batch_read() requires a server that supports new batch index protocol.");
 		}
 		
@@ -1074,9 +1099,8 @@ as_batch_read_execute(
 	}
 	as_nodes_release(nodes);
 	
-	if (executor) {
-		as_batch_read_execute_async(cluster, policy, list, n_batch_nodes, batch_nodes, executor);
-		return AEROSPIKE_OK;
+	if (async_executor) {
+		return as_batch_read_execute_async(cluster, err, policy, list, n_batch_nodes, batch_nodes, async_executor);
 	}
 	
 	return as_batch_read_execute_sync(cluster, err, policy, list, n_keys, n_batch_nodes, batch_nodes);
@@ -1111,29 +1135,34 @@ aerospike_batch_read(
 	aerospike* as, as_error* err, const as_policy_batch* policy, as_batch_read_records* records
 	)
 {
+	as_error_reset(err);
 	return as_batch_read_execute(as, err, policy, records, 0);
 }
 
-void
+as_status
 aerospike_batch_read_async(
-	aerospike* as, const as_policy_batch* policy, as_batch_read_records* records,
+	aerospike* as, as_error* err, const as_policy_batch* policy, as_batch_read_records* records,
 	as_async_batch_listener listener, void* udata, as_event_loop* event_loop
 	)
 {
+	as_error_reset(err);
+	
 	// Check for empty batch.
 	if (records->list.size == 0) {
 		listener(0, records, udata, event_loop);
 		as_batch_read_destroy(records);
-		return;
+		return AEROSPIKE_OK;
 	}
 	
 	// Batch will be split up into a command for each node.
 	// Allocate batch data shared by each command.
 	as_async_batch_executor* executor = cf_malloc(sizeof(as_async_batch_executor));
 	as_event_executor* exec = &executor->executor;
+	pthread_mutex_init(&exec->lock, NULL);
 	exec->commands = 0;
 	exec->event_loop = as_event_assign(event_loop);
 	exec->complete_fn = as_batch_complete_async;
+	exec->destroy_fn = as_batch_destroy_async;
 	exec->udata = udata;
 	exec->max_concurrent = 0;
 	exec->max = 0;
@@ -1142,14 +1171,7 @@ aerospike_batch_read_async(
 	executor->records = records;
 	executor->listener = listener;
 	
-	as_error err;
-	as_status status = as_batch_read_execute(as, &err, policy, records, executor);
-	
-	if (status != AEROSPIKE_OK) {
-		listener(&err, records, udata, event_loop);
-		cf_free(executor);  // Only need to free on error.
-		as_batch_read_destroy(records);
-	}
+	return as_batch_read_execute(as, err, policy, records, executor);
 }
 
 /**

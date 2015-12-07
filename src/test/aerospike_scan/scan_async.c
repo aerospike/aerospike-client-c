@@ -87,6 +87,8 @@ insert_data(uint32_t numrecs, const char *setname)
 	put_counter counter = {.count = 0, .max = numrecs};
 	
 	char strval[SET_STRSZ], strkey[SET_STRSZ];
+	as_error err;
+	as_status status;
 		
 	as_monitor_begin(&monitor);
 	
@@ -110,11 +112,15 @@ insert_data(uint32_t numrecs, const char *setname)
 		as_key k;
 		as_key_init(&k, NS, setname, strkey);
 
-		aerospike_key_put_async(as, NULL, &k, &r, put_listener, &counter, 0, false);
-				
+		status = aerospike_key_put_async(as, &err, NULL, &k, &r, put_listener, &counter, 0, false);
 		as_hashmap_destroy(&m);
 		as_key_destroy(&k);
 		as_record_destroy(&r);
+		
+		if (status != AEROSPIKE_OK) {
+			error("Put failed: %d %s\n", err.code, err.message);
+			break;
+		}
 	}
 	as_monitor_wait(&monitor);
 }
@@ -380,11 +386,13 @@ TEST(scan_async_null_set, "full async scan using NULL setname")
 	as_scan_init(&scan, NS, NULL);
 
 	as_monitor_begin(&monitor);
-	aerospike_scan_async(as, NULL, &scan, 0, scan_listener, &check, 0);
-	
+
+	as_error err;
+	as_status status = aerospike_scan_async(as, &err, NULL, &scan, 0, scan_listener, &check, 0);
 	as_scan_destroy(&scan);
-	as_monitor_wait(&monitor);
 	
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_monitor_wait(&monitor);
 	assert_false(check.failed);
 }
 
@@ -402,11 +410,13 @@ TEST(scan_async_set1, "async scan "SET1"")
 	as_scan_init(&scan, NS, SET1);
 
 	as_monitor_begin(&monitor);
-	aerospike_scan_async(as, NULL, &scan, 0, scan_listener, &check, 0);
 	
+	as_error err;
+	as_status status = aerospike_scan_async(as, &err, NULL, &scan, 0, scan_listener, &check, 0);
 	as_scan_destroy(&scan);
-	as_monitor_wait(&monitor);
 	
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_monitor_wait(&monitor);
 	assert_false(check.failed);
 	assert_int_eq(check.count, NUM_RECS_SET1);
 	info("Got %d records in the scan. Expected %d", check.count, NUM_RECS_SET1);
@@ -427,11 +437,13 @@ TEST(scan_async_set1_concurrent, "async scan "SET1" concurrently")
 	as_scan_set_concurrent(&scan, true);
 
 	as_monitor_begin(&monitor);
-	aerospike_scan_async(as, NULL, &scan, 0, scan_listener, &check, 0);
 	
+	as_error err;
+	as_status status = aerospike_scan_async(as, &err, NULL, &scan, 0, scan_listener, &check, 0);
 	as_scan_destroy(&scan);
+	
+	assert_int_eq(status, AEROSPIKE_OK);
 	as_monitor_wait(&monitor);
-
 	assert_false(check.failed);
 	assert_int_eq( check.count, NUM_RECS_SET1);
 	info("Got %d records in the concurrent scan. Expected %d", check.count, NUM_RECS_SET1);
@@ -454,11 +466,13 @@ TEST(scan_async_set1_select, "scan "SET1" and select 'bin1'")
 	as_scan_select(&scan, "bin1");
 
 	as_monitor_begin(&monitor);
-	aerospike_scan_async(as, NULL, &scan, 0, scan_listener, &check, 0);
 	
+	as_error err;
+	as_status status = aerospike_scan_async(as, &err, NULL, &scan, 0, scan_listener, &check, 0);
 	as_scan_destroy(&scan);
-	as_monitor_wait(&monitor);
 	
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_monitor_wait(&monitor);
 	assert_false(check.failed);
 }
 
@@ -477,11 +491,13 @@ TEST(scan_async_set1_nodata, "scan "SET1" with no-bin-data")
 	as_scan_set_nobins(&scan, true);
 
 	as_monitor_begin(&monitor);
-	aerospike_scan_async(as, NULL, &scan, 0, scan_listener, &check, 0);
 	
+	as_error err;
+	as_status status = aerospike_scan_async(as, &err, NULL, &scan, 0, scan_listener, &check, 0);
 	as_scan_destroy(&scan);
-	as_monitor_wait(&monitor);
 	
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_monitor_wait(&monitor);
 	assert_false(check.failed);
 }
 
@@ -502,12 +518,14 @@ TEST(scan_async_single_node, "scan single node")
 	as_scan_init(&scan, NS, SET1);
 	
 	as_monitor_begin(&monitor);
-	aerospike_scan_node_async(as, NULL, &scan, 0, node->name, scan_listener, &check, 0);
 	
+	as_error err;
+	as_status status = aerospike_scan_node_async(as, &err, NULL, &scan, 0, node->name, scan_listener, &check, 0);
 	as_node_release(node);
 	as_scan_destroy(&scan);
+
+	assert_int_eq(status, AEROSPIKE_OK);
 	as_monitor_wait(&monitor);
-	
 	assert_false(check.failed);
 }
 

@@ -258,6 +258,12 @@ void atf_assert_log(atf_test_result * result, const char * exp, const char * fil
 		return;\
 	}
 
+#define assert_status_async(_mon_, _status_, _err_) \
+	if (_status_) {\
+		fail_async(_mon_, "Error %d: %s", _err_.code, _err_.message);\
+		return;\
+	}
+
 #define assert_async(_mon_, EXP) \
 	if (!(EXP)) {\
 		atf_assert(__result__, #EXP, __FILE__, __LINE__);\

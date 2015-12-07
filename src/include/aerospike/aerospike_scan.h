@@ -357,11 +357,12 @@ aerospike_scan_node(
  *	as_scan scan;
  *	as_scan_init(&scan, "test", "demo");
  *
- *	aerospike_scan_async(&as, NULL, &scan, NULL, my_listener, NULL, NULL);
+ *	as_status status = aerospike_scan_async(&as, &err, NULL, &scan, NULL, my_listener, NULL, NULL);
  *	as_scan_destroy(&scan);
  *	~~~~~~~~~~
  *
  *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param scan			The scan to execute against the cluster.
  *	@param scan_id		The id for the scan job.  Use NULL if the scan_id will not be used.
@@ -369,13 +370,13 @@ aerospike_scan_node(
  *	@param udata		User-data to be passed to the callback.
  *	@param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
  *
- *	@return AEROSPIKE_OK on success. Otherwise an error occurred.
+ *	@return AEROSPIKE_OK if async scan succesfully queued. Otherwise an error.
  *
  *	@ingroup scan_operations
  */
-void
+as_status
 aerospike_scan_async(
-	aerospike* as, const as_policy_scan* policy, const as_scan* scan, uint64_t* scan_id,
+	aerospike* as, as_error* err, const as_policy_scan* policy, const as_scan* scan, uint64_t* scan_id,
 	as_async_scan_listener listener, void* udata, as_event_loop* event_loop
 	);
 	
@@ -413,13 +414,14 @@ aerospike_scan_async(
  *	as_scan scan;
  *	as_scan_init(&scan, "test", "demo");
  *
- *	aerospike_scan_node_async(&as, NULL, &scan, NULL, node_names[0], my_listener, NULL, NULL);
+ *	as_status status = aerospike_scan_node_async(&as, &err, NULL, &scan, NULL, node_names[0], my_listener, NULL, NULL);
  *
  *	free(node_names);
  *	as_scan_destroy(&scan);
  *	~~~~~~~~~~
  *
  *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param scan			The scan to execute against the cluster.
  *	@param scan_id		The id for the scan job.  Use NULL if the scan_id will not be used.
@@ -428,11 +430,13 @@ aerospike_scan_async(
  *	@param udata		User-data to be passed to the callback.
  *	@param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
  *
+ *	@return AEROSPIKE_OK if async scan succesfully queued. Otherwise an error.
+ *
  *	@ingroup scan_operations
  */
-void
+as_status
 aerospike_scan_node_async(
-	aerospike* as, const as_policy_scan* policy, const as_scan* scan, uint64_t* scan_id,
+	aerospike* as, as_error* err, const as_policy_scan* policy, const as_scan* scan, uint64_t* scan_id,
 	const char* node_name, as_async_scan_listener listener, void* udata, as_event_loop* event_loop
 	);
 	

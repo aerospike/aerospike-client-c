@@ -535,9 +535,9 @@ as_scan_generic(
 	return status;
 }
 
-static void
+static as_status
 as_scan_async(
-	aerospike* as, const as_policy_scan* policy, const as_scan* scan, uint64_t* scan_id,
+	aerospike* as, as_error* err, const as_policy_scan* policy, const as_scan* scan, uint64_t* scan_id,
 	as_async_scan_listener listener, void* udata, as_event_loop* event_loop,
 	as_node** nodes, uint32_t n_nodes
 	)
@@ -559,13 +559,15 @@ as_scan_async(
 	}
 	
 	bool daisy_chain = ! (scan->concurrent || n_nodes == 1);
-	
+
 	// Scan will be split up into a command for each node.
 	// Allocate scan data shared by each command.
 	as_async_scan_executor* executor = cf_malloc(sizeof(as_async_scan_executor));
 	as_event_executor* exec = &executor->executor;
+	pthread_mutex_init(&exec->lock, NULL);
 	exec->event_loop = as_event_assign(event_loop);
 	exec->complete_fn = as_scan_complete_async;
+	exec->destroy_fn = NULL;
 	exec->udata = udata;
 	exec->max = n_nodes;
 	exec->count = 0;
@@ -580,7 +582,7 @@ as_scan_async(
 		exec->commands = 0;
 		exec->max_concurrent = n_nodes;
 	}
-	
+
 	// Create scan command buffer.
 	as_buffer argbuffer;
 	uint16_t n_fields = 0;
@@ -591,7 +593,9 @@ as_scan_async(
 	// Allocate enough memory to cover, then, round up memory size in 8KB increments to allow socket
 	// read to reuse buffer.
 	size_t s = (sizeof(as_async_scan_command) + size + AS_AUTHENTICATION_MAX_SIZE + 8191) & ~8191;
-	
+
+	as_status status = AEROSPIKE_OK;
+
 	// Create all scan commands.
 	for (uint32_t i = 0; i < n_nodes; i++) {
 		as_event_command* cmd = cf_malloc(s);
@@ -618,17 +622,28 @@ as_scan_async(
 			exec->commands[i] = cmd;
 		}
 		else {
-			as_event_command_execute(cmd);
+			status = as_event_command_execute(cmd, err);
+			
+			if (status != AEROSPIKE_OK) {
+				as_event_executor_cancel(exec, i);
+				break;
+			}
 		}
 	}
 	
-	// If scanning one node at a time, start first command.
-	if (daisy_chain) {
-		as_event_command_execute(exec->commands[0]);
-	}
-		
 	// Free command buffer.
 	as_command_free(cmd_buf, size);
+
+	// If scanning one node at a time, start first command.
+	if (status == AEROSPIKE_OK && daisy_chain) {
+		as_event_command* cmd = exec->commands[0];
+		status = as_event_command_execute(cmd, err);
+		
+		if (status != AEROSPIKE_OK) {
+			as_event_executor_cancel(exec, 0);
+		}
+	}
+	return status;
 }
 
 /******************************************************************************
@@ -749,21 +764,20 @@ aerospike_scan_node(
 	return status;
 }
 
-void
+as_status
 aerospike_scan_async(
-	aerospike* as, const as_policy_scan* policy, const as_scan* scan, uint64_t* scan_id,
+	aerospike* as, as_error* err, const as_policy_scan* policy, const as_scan* scan, uint64_t* scan_id,
 	as_async_scan_listener listener, void* udata, as_event_loop* event_loop
 	)
 {
+	as_error_reset(err);
+
 	as_nodes* nodes = as_nodes_reserve(as->cluster);
 	uint32_t n_nodes = nodes->size;
 	
 	if (n_nodes == 0) {
 		as_nodes_release(nodes);
-		as_error err;
-		as_error_set_message(&err, AEROSPIKE_ERR_SERVER, "Scan command failed because cluster is empty.");
-		listener(&err, 0, udata, event_loop);
-		return;
+		return as_error_set_message(err, AEROSPIKE_ERR_SERVER, "Scan command failed because cluster is empty.");
 	}
 
 	// Reserve each node in cluster.
@@ -771,25 +785,25 @@ aerospike_scan_async(
 		as_node_reserve(nodes->array[i]);
 	}
 	
-	as_scan_async(as, policy, scan, scan_id, listener, udata, event_loop, nodes->array, n_nodes);
+	as_status status = as_scan_async(as, err, policy, scan, scan_id, listener, udata, event_loop, nodes->array, n_nodes);
 	as_nodes_release(nodes);
+	return status;
 }
 
-void
+as_status
 aerospike_scan_node_async(
-	aerospike* as, const as_policy_scan* policy, const as_scan* scan, uint64_t* scan_id,
+	aerospike* as, as_error* err, const as_policy_scan* policy, const as_scan* scan, uint64_t* scan_id,
 	const char* node_name, as_async_scan_listener listener, void* udata, as_event_loop* event_loop
 	)
 {
+	as_error_reset(err);
+
 	// Retrieve and reserve node.
 	as_node* node = as_node_get_by_name(as->cluster, node_name);
 	
 	if (! node) {
-		as_error err;
-		as_error_update(&err, AEROSPIKE_ERR_PARAM, "Invalid node name: %s", node_name);
-		listener(&err, 0, udata, event_loop);
-		return;
+		return as_error_update(err, AEROSPIKE_ERR_PARAM, "Invalid node name: %s", node_name);
 	}
 	
-	as_scan_async(as, policy, scan, scan_id, listener, udata, event_loop, &node, 1);
+	return as_scan_async(as, err, policy, scan, scan_id, listener, udata, event_loop, &node, 1);
 }

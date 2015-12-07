@@ -128,11 +128,16 @@ as_put_callback2(as_error* err, void* udata, as_event_loop* event_loop)
 		as_key key;
 		char key_buf[64];
 
+		as_error e;
+		as_status status;
+
 		for (int i = 1; i <= 11; i++) {
 			//as_log_trace("Read rec %d", i);
 			sprintf(key_buf, "pipe%d", i);
 			as_key_init(&key, NAMESPACE, SET, key_buf);
-			aerospike_key_get_async(as, NULL, &key, as_get_callback, cdata, event_loop, true);
+			
+			status = aerospike_key_get_async(as, &e, NULL, &key, as_get_callback, cdata, event_loop, true);
+			assert_status_async(&monitor, status, &e);
 		}
 	}
 }
@@ -153,12 +158,17 @@ as_put_callback1(as_error* err, void* udata, as_event_loop* event_loop)
 	as_record rec;
 	as_record_inita(&rec, 1);
 
+	as_error e;
+	as_status status;
+
 	for (int i = 2; i <= 11; i++) {
 		//as_log_trace("Write rec %d", i);
 		sprintf(key_buf, "pipe%d", i);
 		as_key_init(&key, NAMESPACE, SET, key_buf);
 		as_record_set_int64(&rec, "a", i);
-		aerospike_key_put_async(as, NULL, &key, &rec, as_put_callback2, cdata, event_loop, true);
+
+		status = aerospike_key_put_async(as, &e, NULL, &key, &rec, as_put_callback2, cdata, event_loop, true);
+		assert_status_async(&monitor, status, &e);
 	}
 }
 
@@ -173,10 +183,10 @@ TEST(key_pipeline_put, "pipeline puts")
 	as_record_inita(&rec, 1);
 	as_record_set_int64(&rec, "a", 1);
 	
-	//as_log_trace("Write rec 1");
-		
 	// Execute put with pipeline set on any event loop and wait for callback.
-	aerospike_key_put_async(as, NULL, &key, &rec, as_put_callback1, __result__, NULL, true);
+	as_error err;
+	as_status status = aerospike_key_put_async(as, &err, NULL, &key, &rec, as_put_callback1, __result__, NULL, true);
+    assert_int_eq(status, AEROSPIKE_OK);
 
 	as_monitor_wait(&monitor);
 }

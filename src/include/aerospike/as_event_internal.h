@@ -85,6 +85,7 @@ typedef struct {
 
 typedef bool (*as_event_parse_results_fn) (struct as_event_command* cmd);
 typedef void (*as_event_executor_complete_fn) (struct as_event_executor* executor, as_error* err);
+typedef void (*as_event_executor_destroy_fn) (struct as_event_executor* executor);
 
 typedef struct as_event_command {
 #if defined(AS_USE_LIBEV)
@@ -116,9 +117,11 @@ typedef struct as_event_command {
 } as_event_command;
 		
 typedef struct as_event_executor {
+	pthread_mutex_t lock;
 	struct as_event_command** commands;
 	as_event_loop* event_loop;
 	as_event_executor_complete_fn complete_fn;
+	as_event_executor_destroy_fn destroy_fn;
 	void* udata;
 	uint32_t max_concurrent;
 	uint32_t max;
@@ -138,11 +141,14 @@ extern uint32_t as_event_loop_current;
  * COMMON FUNCTIONS
  *****************************************************************************/
 
-void
-as_event_command_execute(as_event_command* cmd);
+as_status
+as_event_command_execute(as_event_command* cmd, as_error* err);
 
 void
 as_event_executor_complete(as_event_command* cmd);
+
+void
+as_event_executor_cancel(as_event_executor* executor, int queued_count);
 
 bool
 as_event_get_connection(as_event_command* cmd);

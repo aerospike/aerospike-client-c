@@ -53,6 +53,12 @@ typedef struct {
 #define VA_NARGS(...) (sizeof((int[]){__VA_ARGS__})/sizeof(int))
 #define CDT_OP_ENTRY(op, ...) [op].args = (const as_cdt_paramtype[]){VA_REST(__VA_ARGS__, 0)}, [op].count = VA_NARGS(__VA_ARGS__) - 1, [op].rw_type = VA_FIRST(__VA_ARGS__)
 
+/**
+ * Add a CDT operation to ops.
+ * Get around needing to pass last named arg to va_start().
+ */
+#define AS_OPERATIONS_CDT_OP(ops, name, op, ...) as_operations_cdt_op(ops, name, op, as_cdt_op_param_count(op), ##__VA_ARGS__)
+
 /******************************************************************************
  *	DATA
  *****************************************************************************/
@@ -503,8 +509,10 @@ bool as_operations_add_cdt_read(as_operations *ops, const as_bin_name name, as_b
 	return true;
 }
 
-
-size_t as_cdt_op_param_count(as_cdt_optype op)
+/**
+ * Support function for AS_OPERATIONS_CDT_OP.
+ */
+static size_t as_cdt_op_param_count(as_cdt_optype op)
 {
 	if (op >= cdt_op_table_size) {
 		return 0;
@@ -519,7 +527,10 @@ size_t as_cdt_op_param_count(as_cdt_optype op)
 	return entry->count;
 }
 
-bool as_operations_cdt_op(as_operations *ops, const as_bin_name name, as_cdt_optype op, size_t n, ...)
+/**
+ * Call with AS_OPERATIONS_CDT_OP only.
+ */
+static bool as_operations_cdt_op(as_operations *ops, const as_bin_name name, as_cdt_optype op, size_t n, ...)
 {
 	if (op >= cdt_op_table_size) {
 		return false;
@@ -600,72 +611,156 @@ bool as_operations_cdt_op(as_operations *ops, const as_bin_name name, as_cdt_opt
 	return true;
 }
 
-bool as_operations_list_append(as_operations *ops, const as_bin_name name, as_val *val)
+bool as_operations_add_list_append(as_operations *ops, const as_bin_name name, as_val *val)
 {
 	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_APPEND, val);
 }
 
-bool as_operations_list_append_items(as_operations *ops, const as_bin_name name, as_list *list)
+bool as_operations_add_list_append_int64(as_operations *ops, const as_bin_name name, int64_t value)
+{
+	as_integer v;
+	as_integer_init(&v, value);
+	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_APPEND, &v);
+}
+
+bool as_operations_add_list_append_double(as_operations *ops, const as_bin_name name, double value)
+{
+	as_double v;
+	as_double_init(&v, value);
+	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_APPEND, &v);
+}
+
+bool as_operations_add_list_append_strp(as_operations *ops, const as_bin_name name, const char *value, bool free)
+{
+	as_string v;
+	as_string_init(&v, (char *)value, free);
+	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_APPEND, &v);
+}
+
+bool as_operations_add_list_append_rawp(as_operations *ops, const as_bin_name name, const uint8_t *value, uint32_t size, bool free)
+{
+	as_bytes v;
+	as_bytes_init_wrap(&v, (uint8_t *)value, size, free);
+	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_APPEND, &v);
+}
+
+bool as_operations_add_list_append_items(as_operations *ops, const as_bin_name name, as_list *list)
 {
 	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_APPEND_ITEMS, list);
 }
 
-bool as_operations_list_insert(as_operations *ops, const as_bin_name name, int64_t index, as_val *val)
+bool as_operations_add_list_insert(as_operations *ops, const as_bin_name name, int64_t index, as_val *val)
 {
 	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_INSERT, index, val);
 }
 
-bool as_operations_list_insert_items(as_operations *ops, const as_bin_name name, int64_t index, as_list *list)
+bool as_operations_add_list_insert_int64(as_operations *ops, const as_bin_name name, int64_t index, int64_t value)
+{
+	as_integer v;
+	as_integer_init(&v, value);
+	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_INSERT, index, &v);
+}
+
+bool as_operations_add_list_insert_double(as_operations *ops, const as_bin_name name, int64_t index, double value)
+{
+	as_double v;
+	as_double_init(&v, value);
+	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_INSERT, index, &v);
+}
+
+bool as_operations_add_list_insert_strp(as_operations *ops, const as_bin_name name, int64_t index, const char *value, bool free)
+{
+	as_string v;
+	as_string_init(&v, (char *)value, free);
+	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_INSERT, index, &v);
+}
+
+bool as_operations_add_list_insert_rawp(as_operations *ops, const as_bin_name name, int64_t index, const uint8_t *value, uint32_t size, bool free)
+{
+	as_bytes v;
+	as_bytes_init_wrap(&v, (uint8_t *)value, size, free);
+	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_INSERT, index, &v);
+}
+
+bool as_operations_add_list_insert_items(as_operations *ops, const as_bin_name name, int64_t index, as_list *list)
 {
 	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_INSERT_ITEMS, index, list);
 }
 
-bool as_operations_list_pop(as_operations *ops, const as_bin_name name, int64_t index)
+bool as_operations_add_list_pop(as_operations *ops, const as_bin_name name, int64_t index)
 {
 	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_POP, index);
 }
 
-bool as_operations_list_pop_range(as_operations *ops, const as_bin_name name, int64_t index, uint64_t count)
+bool as_operations_add_list_pop_range(as_operations *ops, const as_bin_name name, int64_t index, uint64_t count)
 {
 	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_POP_RANGE, index, count);
 }
 
-bool as_operations_list_remove(as_operations *ops, const as_bin_name name, int64_t index)
+bool as_operations_add_list_remove(as_operations *ops, const as_bin_name name, int64_t index)
 {
 	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_REMOVE, index);
 }
 
-bool as_operations_list_remove_range(as_operations *ops, const as_bin_name name, int64_t index, uint64_t count)
+bool as_operations_add_list_remove_range(as_operations *ops, const as_bin_name name, int64_t index, uint64_t count)
 {
 	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_REMOVE_RANGE, index, count);
 }
 
-bool as_operations_list_clear(as_operations *ops, const as_bin_name name)
+bool as_operations_add_list_clear(as_operations *ops, const as_bin_name name)
 {
 	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_CLEAR);
 }
 
-bool as_operations_list_set(as_operations *ops, const as_bin_name name, int64_t index, as_val *val)
+bool as_operations_add_list_set(as_operations *ops, const as_bin_name name, int64_t index, as_val *val)
 {
 	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_SET, index, val);
 }
 
-bool as_operations_list_trim(as_operations *ops, const as_bin_name name, int64_t index, uint64_t count)
+bool as_operations_add_list_set_int64(as_operations *ops, const as_bin_name name, int64_t index, int64_t value)
+{
+	as_integer v;
+	as_integer_init(&v, value);
+	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_SET, index, &v);
+}
+
+bool as_operations_add_list_set_double(as_operations *ops, const as_bin_name name, int64_t index, double value)
+{
+	as_double v;
+	as_double_init(&v, value);
+	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_SET, index, &v);
+}
+
+bool as_operations_add_list_set_strp(as_operations *ops, const as_bin_name name, int64_t index, const char *value, bool free)
+{
+	as_string v;
+	as_string_init(&v, (char *)value, free);
+	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_SET, index, &v);
+}
+
+bool as_operations_add_list_set_rawp(as_operations *ops, const as_bin_name name, int64_t index, const uint8_t *value, uint32_t size, bool free)
+{
+	as_bytes v;
+	as_bytes_init_wrap(&v, (uint8_t *)value, size, free);
+	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_SET, index, &v);
+}
+
+bool as_operations_add_list_trim(as_operations *ops, const as_bin_name name, int64_t index, uint64_t count)
 {
 	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_TRIM, index, count);
 }
 
-bool as_operations_list_get(as_operations *ops, const as_bin_name name, int64_t index)
+bool as_operations_add_list_get(as_operations *ops, const as_bin_name name, int64_t index)
 {
 	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_GET, index);
 }
 
-bool as_operations_list_get_range(as_operations *ops, const as_bin_name name, int64_t index, uint64_t count)
+bool as_operations_add_list_get_range(as_operations *ops, const as_bin_name name, int64_t index, uint64_t count)
 {
 	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_GET_RANGE, index, count);
 }
 
-bool as_operations_list_size(as_operations *ops, const as_bin_name name)
+bool as_operations_add_list_size(as_operations *ops, const as_bin_name name)
 {
 	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_SIZE);
 }

@@ -396,12 +396,6 @@ typedef struct as_operations_s {
 	(__ops)->binops.size = 0;\
 	(__ops)->binops.entries = (as_binop *) alloca(sizeof(as_binop) * __nops);
 
-/**
- * Add a CDT operation to ops.
- * Get around needing to pass last named arg to va_start().
- */
-#define AS_OPERATIONS_CDT_OP(ops, name, op, ...) as_operations_cdt_op(ops, name, op, as_cdt_op_param_count(op), ##__VA_ARGS__)
-
 /******************************************************************************
  *	FUNCTIONS
  *****************************************************************************/
@@ -793,35 +787,37 @@ bool as_operations_add_touch(as_operations * ops);
  *	CDT FUNCTIONS
  *****************************************************************************/
 
-/**
- * Support function for AS_OPERATIONS_CDT_OP.
- */
-size_t as_cdt_op_param_count(as_cdt_optype op);
-
-/**
- * Call with AS_OPERATIONS_CDT_OP only.
- */
-bool as_operations_cdt_op(as_operations *ops, const as_bin_name name, as_cdt_optype op, size_t n, ...);
-
 //-----------------------------------------------------------------------------
 // Add to list
 
 /**
  * Add element to end of list.
+ * @param val	Consumes a reference of this as_val.
  */
-bool as_operations_list_append(as_operations *ops, const as_bin_name name, as_val *val);
+bool as_operations_add_list_append(as_operations *ops, const as_bin_name name, as_val *val);
+bool as_operations_add_list_append_int64(as_operations *ops, const as_bin_name name, int64_t value);
+bool as_operations_add_list_append_double(as_operations *ops, const as_bin_name name, double value);
+bool as_operations_add_list_append_strp(as_operations *ops, const as_bin_name name, const char *value, bool free);
+bool as_operations_add_list_append_rawp(as_operations *ops, const as_bin_name name, const uint8_t *value, uint32_t size, bool free);
 /**
  * Add list of elements to end of list.
+ * @param list	Consumes a reference of this as_val.
  */
-bool as_operations_list_append_items(as_operations *ops, const as_bin_name name, as_list *list);
+bool as_operations_add_list_append_items(as_operations *ops, const as_bin_name name, as_list *list);
 /**
  * Add element to list at index.
+ * @param val	Consumes a reference of this as_val.
  */
-bool as_operations_list_insert(as_operations *ops, const as_bin_name name, int64_t index, as_val *val);
+bool as_operations_add_list_insert(as_operations *ops, const as_bin_name name, int64_t index, as_val *val);
+bool as_operations_add_list_insert_int64(as_operations *ops, const as_bin_name name, int64_t index, int64_t value);
+bool as_operations_add_list_insert_double(as_operations *ops, const as_bin_name name, int64_t index, double value);
+bool as_operations_add_list_insert_strp(as_operations *ops, const as_bin_name name, int64_t index, const char *value, bool free);
+bool as_operations_add_list_insert_rawp(as_operations *ops, const as_bin_name name, int64_t index, const uint8_t *value, uint32_t size, bool free);
 /**
  * Add list of elements to list at index.
+ * @param list	Consumes a reference of this as_val.
  */
-bool as_operations_list_insert_items(as_operations *ops, const as_bin_name name, int64_t index, as_list *list);
+bool as_operations_add_list_insert_items(as_operations *ops, const as_bin_name name, int64_t index, as_list *list);
 
 //-----------------------------------------------------------------------------
 // Remove from list
@@ -829,19 +825,19 @@ bool as_operations_list_insert_items(as_operations *ops, const as_bin_name name,
 /**
  * Remove and get back a list element at index.
  */
-bool as_operations_list_pop(as_operations *ops, const as_bin_name name, int64_t index);
+bool as_operations_add_list_pop(as_operations *ops, const as_bin_name name, int64_t index);
 /**
  * Remove and get back list elements at index.
  */
-bool as_operations_list_pop_range(as_operations *ops, const as_bin_name name, int64_t index, uint64_t count);
+bool as_operations_add_list_pop_range(as_operations *ops, const as_bin_name name, int64_t index, uint64_t count);
 /**
  * Remove a list element at index.
  */
-bool as_operations_list_remove(as_operations *ops, const as_bin_name name, int64_t index);
+bool as_operations_add_list_remove(as_operations *ops, const as_bin_name name, int64_t index);
 /**
  * Remove list elements at index.
  */
-bool as_operations_list_remove_range(as_operations *ops, const as_bin_name name, int64_t index, uint64_t count);
+bool as_operations_add_list_remove_range(as_operations *ops, const as_bin_name name, int64_t index, uint64_t count);
 
 //-----------------------------------------------------------------------------
 // Other list modifies
@@ -849,15 +845,20 @@ bool as_operations_list_remove_range(as_operations *ops, const as_bin_name name,
 /**
  * Remove all elements from list.
  */
-bool as_operations_list_clear(as_operations *ops, const as_bin_name name);
+bool as_operations_add_list_clear(as_operations *ops, const as_bin_name name);
 /**
  * Set element of list at index.
+ * @param val	Consumes a reference of this as_val.
  */
-bool as_operations_list_set(as_operations *ops, const as_bin_name name, int64_t index, as_val *val);
+bool as_operations_add_list_set(as_operations *ops, const as_bin_name name, int64_t index, as_val *val);
+bool as_operations_add_list_set_int64(as_operations *ops, const as_bin_name name, int64_t index, int64_t value);
+bool as_operations_add_list_set_double(as_operations *ops, const as_bin_name name, int64_t index, double value);
+bool as_operations_add_list_set_strp(as_operations *ops, const as_bin_name name, int64_t index, const char *value, bool free);
+bool as_operations_add_list_set_rawp(as_operations *ops, const as_bin_name name, int64_t index, const uint8_t *value, uint32_t size, bool free);
 /**
  * Remove elements not within range(index, count).
  */
-bool as_operations_list_trim(as_operations *ops, const as_bin_name name, int64_t index, uint64_t count);
+bool as_operations_add_list_trim(as_operations *ops, const as_bin_name name, int64_t index, uint64_t count);
 
 //-----------------------------------------------------------------------------
 // Read operations
@@ -865,15 +866,15 @@ bool as_operations_list_trim(as_operations *ops, const as_bin_name name, int64_t
 /**
  * Get element of list at index.
  */
-bool as_operations_list_get(as_operations *ops, const as_bin_name name, int64_t index);
+bool as_operations_add_list_get(as_operations *ops, const as_bin_name name, int64_t index);
 /**
  * Get elements of list at index, get back a list of items.
  */
-bool as_operations_list_get_range(as_operations *ops, const as_bin_name name, int64_t index, uint64_t count);
+bool as_operations_add_list_get_range(as_operations *ops, const as_bin_name name, int64_t index, uint64_t count);
 /**
  * Get element count of list.
  */
-bool as_operations_list_size(as_operations *ops, const as_bin_name name);
+bool as_operations_add_list_size(as_operations *ops, const as_bin_name name);
 
 #ifdef __cplusplus
 } // end extern "C"

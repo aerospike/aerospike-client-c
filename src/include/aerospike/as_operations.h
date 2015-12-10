@@ -872,6 +872,10 @@ bool as_operations_add_list_get(as_operations *ops, const as_bin_name name, int6
  */
 bool as_operations_add_list_get_range(as_operations *ops, const as_bin_name name, int64_t index, uint64_t count);
 /**
+ * Get elements of list from index to end of list, get back a list of items.
+ */
+bool as_operations_add_list_get_range_from(as_operations *ops, const as_bin_name name, int64_t index);
+/**
  * Get element count of list.
  */
 bool as_operations_add_list_size(as_operations *ops, const as_bin_name name);

@@ -74,7 +74,7 @@ typedef struct {
  *****************************************************************************/
 
 const cdt_op_table_entry cdt_op_table[] = {
-	// ------------------------------------------------------------------------------
+	//--------------------------------------------
 	// Modify OPs
 
 	// Add to list
@@ -94,7 +94,7 @@ const cdt_op_table_entry cdt_op_table[] = {
 	CDT_OP_ENTRY(AS_CDT_OP_LIST_TRIM,			CDT_RW_TYPE_MODIFY, 0, AS_CDT_PARAM_INDEX, AS_CDT_PARAM_COUNT),
 	CDT_OP_ENTRY(AS_CDT_OP_LIST_CLEAR,			CDT_RW_TYPE_MODIFY, 0),
 
-	// ------------------------------------------------------------------------------
+	//--------------------------------------------
 	// Read OPs
 
 	// Read from list
@@ -543,7 +543,7 @@ static bool as_operations_cdt_op(as_operations *ops, const as_bin_name name, as_
 	}
 
 	as_arraylist list;
-	as_arraylist_inita(&list, n + 1);	// +1 to avoid alloca(0) undefined behavior
+	as_arraylist_inita(&list, n + 1); // +1 to avoid alloca(0) undefined behavior
 
 	for (size_t i = 0; i < n; i++) {
 		as_cdt_paramtype type = entry->args[i];

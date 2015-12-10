@@ -161,10 +161,10 @@ as_testlist_remove(as_testlist *tlist, int index, bool is_pop)
 
 	as_arraylist_remove(&tlist->arraylist, uindex);
 	if (is_pop) {
-		AS_OPERATIONS_CDT_OP(&ops, BIN_NAME, AS_CDT_OP_LIST_POP, index);
+		as_operations_add_list_pop(&ops, BIN_NAME, index);
 	}
 	else {
-		AS_OPERATIONS_CDT_OP(&ops, BIN_NAME, AS_CDT_OP_LIST_REMOVE, index);
+		as_operations_add_list_remove(&ops, BIN_NAME, index);
 	}
 
 	return as_testlist_op(tlist, &ops);
@@ -182,10 +182,10 @@ as_testlist_remove_range(as_testlist *tlist, int index, uint32_t count, bool is_
 		as_arraylist_remove(&tlist->arraylist, uindex);
 	}
 	if (is_pop) {
-		AS_OPERATIONS_CDT_OP(&ops, BIN_NAME, AS_CDT_OP_LIST_POP_RANGE, (int64_t)index, (uint64_t)count);
+		as_operations_add_list_pop_range(&ops, BIN_NAME, (int64_t)index, (uint64_t)count);
 	}
 	else {
-		AS_OPERATIONS_CDT_OP(&ops, BIN_NAME, AS_CDT_OP_LIST_REMOVE_RANGE, (int64_t)index, (uint64_t)count);
+		as_operations_add_list_remove_range(&ops, BIN_NAME, (int64_t)index, (uint64_t)count);
 	}
 
 	return as_testlist_op(tlist, &ops);
@@ -199,7 +199,7 @@ as_testlist_append(as_testlist *tlist, as_val *val)
 
 	as_val_reserve(val);
 	as_arraylist_append(&tlist->arraylist, val);
-	AS_OPERATIONS_CDT_OP(&ops, BIN_NAME, AS_CDT_OP_LIST_APPEND, val);
+	as_operations_add_list_append(&ops, BIN_NAME, val);
 
 	return as_testlist_op(tlist, &ops);
 }
@@ -211,7 +211,7 @@ as_testlist_append_list(as_testlist *tlist, as_arraylist *list)
 	as_operations_inita(&ops, 1);
 
 	as_arraylist_concat(&tlist->arraylist, list);
-	AS_OPERATIONS_CDT_OP(&ops, BIN_NAME, AS_CDT_OP_LIST_APPEND_ITEMS, list);
+	as_operations_add_list_append_items(&ops, BIN_NAME, (as_list *)list);
 
 	return as_testlist_op(tlist, &ops);
 }
@@ -226,7 +226,7 @@ as_testlist_insert(as_testlist *tlist, int64_t index, as_val *val)
 	as_val_reserve(val);
 	as_arraylist_insert(&tlist->arraylist, uindex, val);
 
-	AS_OPERATIONS_CDT_OP(&ops, BIN_NAME, AS_CDT_OP_LIST_INSERT, index, val);
+	as_operations_add_list_insert(&ops, BIN_NAME, index, val);
 
 	return as_testlist_op(tlist, &ops);
 }
@@ -245,7 +245,7 @@ as_testlist_insert_list(as_testlist *tlist, int64_t index, as_arraylist *list)
 		as_arraylist_insert(&tlist->arraylist, uindex, val);
 	}
 
-	AS_OPERATIONS_CDT_OP(&ops, BIN_NAME, AS_CDT_OP_LIST_INSERT_ITEMS, index, list);
+	as_operations_add_list_insert_items(&ops, BIN_NAME, index, (as_list *)list);
 
 	return as_testlist_op(tlist, &ops);
 }
@@ -260,7 +260,7 @@ as_testlist_set(as_testlist *tlist, int64_t index, as_val *val)
 	as_val_reserve(val);
 	as_arraylist_set(&tlist->arraylist, uindex, val);
 
-	AS_OPERATIONS_CDT_OP(&ops, BIN_NAME, AS_CDT_OP_LIST_SET, index, val);
+	as_operations_add_list_set(&ops, BIN_NAME, index, val);
 
 	return as_testlist_op(tlist, &ops);
 }
@@ -277,7 +277,7 @@ as_testlist_trim(as_testlist *tlist, int64_t index, uint64_t count)
 		as_arraylist_remove(&tlist->arraylist, 0);
 	}
 
-	AS_OPERATIONS_CDT_OP(&ops, BIN_NAME, AS_CDT_OP_LIST_TRIM, index, count);
+	as_operations_add_list_trim(&ops, BIN_NAME, index, count);
 
 	return as_testlist_op(tlist, &ops);
 
@@ -291,7 +291,7 @@ as_testlist_clear(as_testlist *tlist)
 
 	as_arraylist_trim(&tlist->arraylist, 0);
 
-	AS_OPERATIONS_CDT_OP(&ops, BIN_NAME, AS_CDT_OP_LIST_CLEAR);
+	as_operations_add_list_clear(&ops, BIN_NAME);
 
 	return as_testlist_op(tlist, &ops);
 

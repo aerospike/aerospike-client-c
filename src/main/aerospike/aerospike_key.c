@@ -486,6 +486,7 @@ aerospike_key_put_async_ex(
 
 		// Compress buffer and execute.
 		status = as_command_compress(err, cmd, size, comp_cmd->buf, &comp_size);
+		as_command_free(cmd, size);
 		
 		if (status == AEROSPIKE_OK) {
 			comp_cmd->len = (uint32_t)comp_size;
@@ -505,7 +506,6 @@ aerospike_key_put_async_ex(
 			cf_free(comp_cmd);
 			return status;
 		}
-		as_command_free(cmd, size);
 	}
 }
 

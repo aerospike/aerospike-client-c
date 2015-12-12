@@ -543,7 +543,7 @@ static bool as_operations_cdt_op(as_operations *ops, const as_bin_name name, as_
 	}
 
 	as_arraylist list;
-	as_arraylist_inita(&list, n + 1); // +1 to avoid alloca(0) undefined behavior
+	as_arraylist_inita(&list, (uint32_t)n + 1); // +1 to avoid alloca(0) undefined behavior
 
 	for (size_t i = 0; i < n; i++) {
 		as_cdt_paramtype type = entry->args[i];

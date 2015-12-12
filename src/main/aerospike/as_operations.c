@@ -697,6 +697,11 @@ bool as_operations_add_list_pop_range(as_operations *ops, const as_bin_name name
 	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_POP_RANGE, index, count);
 }
 
+bool as_operations_add_list_pop_range_from(as_operations *ops, const as_bin_name name, int64_t index)
+{
+	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_POP_RANGE, index);
+}
+
 bool as_operations_add_list_remove(as_operations *ops, const as_bin_name name, int64_t index)
 {
 	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_REMOVE, index);
@@ -705,6 +710,11 @@ bool as_operations_add_list_remove(as_operations *ops, const as_bin_name name, i
 bool as_operations_add_list_remove_range(as_operations *ops, const as_bin_name name, int64_t index, uint64_t count)
 {
 	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_REMOVE_RANGE, index, count);
+}
+
+bool as_operations_add_list_remove_range_from(as_operations *ops, const as_bin_name name, int64_t index)
+{
+	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_REMOVE_RANGE, index);
 }
 
 bool as_operations_add_list_clear(as_operations *ops, const as_bin_name name)

@@ -798,7 +798,19 @@ bool as_operations_add_list_append(as_operations *ops, const as_bin_name name, a
 bool as_operations_add_list_append_int64(as_operations *ops, const as_bin_name name, int64_t value);
 bool as_operations_add_list_append_double(as_operations *ops, const as_bin_name name, double value);
 bool as_operations_add_list_append_strp(as_operations *ops, const as_bin_name name, const char *value, bool free);
+
+static inline bool as_operations_add_list_append_str(as_operations *ops, const as_bin_name name, const char *value, bool free)
+{
+	return as_operations_add_list_append_strp(ops, name, value, false);
+}
+
 bool as_operations_add_list_append_rawp(as_operations *ops, const as_bin_name name, const uint8_t *value, uint32_t size, bool free);
+
+static inline bool as_operations_add_list_append_raw(as_operations *ops, const as_bin_name name, const uint8_t *value, uint32_t size, bool free)
+{
+	return as_operations_add_list_append_rawp(ops, name, value, size, false);
+}
+
 /**
  * Add list of elements to end of list.
  * @param list	Consumes a reference of this as_val.
@@ -812,7 +824,18 @@ bool as_operations_add_list_insert(as_operations *ops, const as_bin_name name, i
 bool as_operations_add_list_insert_int64(as_operations *ops, const as_bin_name name, int64_t index, int64_t value);
 bool as_operations_add_list_insert_double(as_operations *ops, const as_bin_name name, int64_t index, double value);
 bool as_operations_add_list_insert_strp(as_operations *ops, const as_bin_name name, int64_t index, const char *value, bool free);
+
+static inline bool as_operations_add_list_insert_str(as_operations *ops, const as_bin_name name, int64_t index, const char *value)
+{
+	return as_operations_add_list_insert_strp(ops, name, index, value, false);
+}
+
 bool as_operations_add_list_insert_rawp(as_operations *ops, const as_bin_name name, int64_t index, const uint8_t *value, uint32_t size, bool free);
+
+static inline bool as_operations_add_list_insert_raw(as_operations *ops, const as_bin_name name, int64_t index, const uint8_t *value, uint32_t size)
+{
+	return as_operations_add_list_insert_rawp(ops, name, index, value, size, false);
+}
 /**
  * Add list of elements to list at index.
  * @param list	Consumes a reference of this as_val.
@@ -830,6 +853,7 @@ bool as_operations_add_list_pop(as_operations *ops, const as_bin_name name, int6
  * Remove and get back list elements at index.
  */
 bool as_operations_add_list_pop_range(as_operations *ops, const as_bin_name name, int64_t index, uint64_t count);
+bool as_operations_add_list_pop_range_from(as_operations *ops, const as_bin_name name, int64_t index);
 /**
  * Remove a list element at index.
  */
@@ -838,6 +862,7 @@ bool as_operations_add_list_remove(as_operations *ops, const as_bin_name name, i
  * Remove list elements at index.
  */
 bool as_operations_add_list_remove_range(as_operations *ops, const as_bin_name name, int64_t index, uint64_t count);
+bool as_operations_add_list_remove_range_from(as_operations *ops, const as_bin_name name, int64_t index);
 
 //-----------------------------------------------------------------------------
 // Other list modifies
@@ -854,7 +879,19 @@ bool as_operations_add_list_set(as_operations *ops, const as_bin_name name, int6
 bool as_operations_add_list_set_int64(as_operations *ops, const as_bin_name name, int64_t index, int64_t value);
 bool as_operations_add_list_set_double(as_operations *ops, const as_bin_name name, int64_t index, double value);
 bool as_operations_add_list_set_strp(as_operations *ops, const as_bin_name name, int64_t index, const char *value, bool free);
+
+static inline bool as_operations_add_list_set_str(as_operations *ops, const as_bin_name name, int64_t index, const char *value)
+{
+	return as_operations_add_list_set_strp(ops, name, index, value, false);
+}
+
 bool as_operations_add_list_set_rawp(as_operations *ops, const as_bin_name name, int64_t index, const uint8_t *value, uint32_t size, bool free);
+
+static inline bool as_operations_add_list_set_raw(as_operations *ops, const as_bin_name name, int64_t index, const uint8_t *value, uint32_t size)
+{
+	return as_operations_add_list_set_rawp(ops, name, index, value, size, false);
+}
+
 /**
  * Remove elements not within range(index, count).
  */

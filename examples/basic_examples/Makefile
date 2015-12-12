@@ -3,6 +3,7 @@ default: all
 
 %:
 	$(MAKE) -C append $@
+	$(MAKE) -C cdt $@
 	$(MAKE) -C expire $@
 	$(MAKE) -C generation $@
 	$(MAKE) -C get $@

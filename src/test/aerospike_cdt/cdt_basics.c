@@ -217,13 +217,13 @@ as_testlist_destroy(as_testlist *tlist)
 	}
 }
 
-static uint64_t
+static uint32_t
 index2uindex(as_testlist *tlist, int64_t index)
 {
 	if (index < 0) {
 		return as_arraylist_size(&tlist->arraylist) + index;
 	}
-	return (uint64_t)index;
+	return (uint32_t)index;
 }
 
 static bool
@@ -232,7 +232,7 @@ as_testlist_remove(as_testlist *tlist, int index, bool is_pop)
 	as_operations ops;
 	as_operations_inita(&ops, 1);
 
-	uint64_t uindex = index2uindex(tlist, index);
+	uint32_t uindex = index2uindex(tlist, index);
 
 	as_arraylist_remove(&tlist->arraylist, uindex);
 	if (is_pop) {
@@ -251,7 +251,7 @@ as_testlist_remove_range(as_testlist *tlist, int index, uint32_t count, bool is_
 	as_operations ops;
 	as_operations_inita(&ops, 1);
 
-	uint64_t uindex = index2uindex(tlist, index);
+	uint32_t uindex = index2uindex(tlist, index);
 
 	bool first_index_invalid = false;
 	for (uint32_t i = 0; i < count; i++) {
@@ -272,15 +272,15 @@ as_testlist_remove_range(as_testlist *tlist, int index, uint32_t count, bool is_
 
 	if (! ret) {
 		if (first_index_invalid) {
-			debug("remove_range: index=%d count=%d out_of_range=%s failed as expected", index, count, first_index_invalid ? "true" : "false");
+			debug("remove_range: index=%d count=%u out_of_range=%s failed as expected", index, count, first_index_invalid ? "true" : "false");
 			return true;
 		}
 
-		debug("remove_range: index=%d count=%d out_of_range=%s", index, count, first_index_invalid ? "true" : "false");
+		debug("remove_range: index=%d count=%u out_of_range=%s", index, count, first_index_invalid ? "true" : "false");
 		return false;
 	}
 
-	debug("remove_range: index=%d count=%d out_of_range=%s", index, count, first_index_invalid ? "true" : "false")
+	debug("remove_range: index=%d count=%u out_of_range=%s", index, count, first_index_invalid ? "true" : "false")
 	return true;
 }
 
@@ -319,7 +319,7 @@ as_testlist_get_range(as_testlist *tlist, int64_t index, uint32_t count)
 		return false;
 	}
 
-	uint64_t uindex = index2uindex(tlist, index);
+	uint32_t uindex = index2uindex(tlist, index);
 	as_list *list = as_record_get_list(tlist->rec, BIN_NAME);
 	uint32_t result_size = as_list_size(list);
 
@@ -346,7 +346,7 @@ as_testlist_get_range_from(as_testlist *tlist, int64_t index)
 		return false;
 	}
 
-	uint64_t uindex = index2uindex(tlist, index);
+	uint32_t uindex = index2uindex(tlist, index);
 	as_list *list = as_record_get_list(tlist->rec, BIN_NAME);
 	uint32_t result_size = as_list_size(list);
 
@@ -390,7 +390,7 @@ as_testlist_insert(as_testlist *tlist, int64_t index, as_val *val)
 	as_operations ops;
 	as_operations_inita(&ops, 1);
 
-	uint32_t uindex = (uint32_t)index2uindex(tlist, index);
+	uint32_t uindex = index2uindex(tlist, index);
 	as_val_reserve(val);
 	as_arraylist_insert(&tlist->arraylist, uindex, val);
 
@@ -405,7 +405,7 @@ as_testlist_insert_list(as_testlist *tlist, int64_t index, as_arraylist *list)
 	as_operations ops;
 	as_operations_inita(&ops, 1);
 
-	uint32_t uindex = (uint32_t)index2uindex(tlist, index);
+	uint32_t uindex = index2uindex(tlist, index);
 	uint32_t size = as_arraylist_size(list);
 	for (int i = size - 1; i >= 0; i--) {
 		as_val *val = as_arraylist_get(list, i);
@@ -424,7 +424,7 @@ as_testlist_set(as_testlist *tlist, int64_t index, as_val *val)
 	as_operations ops;
 	as_operations_inita(&ops, 1);
 
-	uint32_t uindex = (uint32_t)index2uindex(tlist, index);
+	uint32_t uindex = index2uindex(tlist, index);
 	as_val_reserve(val);
 	as_arraylist_set(&tlist->arraylist, uindex, val);
 
@@ -434,19 +434,19 @@ as_testlist_set(as_testlist *tlist, int64_t index, as_val *val)
 }
 
 static bool
-as_testlist_trim(as_testlist *tlist, int64_t index, uint64_t count)
+as_testlist_trim(as_testlist *tlist, int64_t index, uint32_t count)
 {
 	as_operations ops;
 	as_operations_inita(&ops, 1);
 
-	uint32_t uindex = (uint32_t)index2uindex(tlist, index);
-	as_arraylist_trim(&tlist->arraylist, uindex + (uint32_t)count);
+	uint32_t uindex = index2uindex(tlist, index);
+	as_arraylist_trim(&tlist->arraylist, uindex + count);
 
 	for (int64_t i = 0; i < index; i++) {
 		as_arraylist_remove(&tlist->arraylist, 0);
 	}
 
-	as_operations_add_list_trim(&ops, BIN_NAME, index, count);
+	as_operations_add_list_trim(&ops, BIN_NAME, index, (uint64_t)count);
 
 	return as_testlist_op(tlist, &ops);
 

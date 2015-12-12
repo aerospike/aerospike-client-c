@@ -123,3 +123,9 @@ as_status aerospike_close(aerospike * as, as_error * err)
 
 	return err->code;
 }
+
+bool
+aerospike_cluster_is_connected(aerospike* as)
+{
+	return as_cluster_is_connected(as->cluster);
+}

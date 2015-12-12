@@ -486,7 +486,6 @@ as_command_execute(as_cluster* cluster, as_error * err, as_command_node* cn, uin
 		}
 		else {
 			switch (status) {
-				// Retry on timeout.
 				case AEROSPIKE_ERR_TIMEOUT:
 					as_close(fd);
 					if (release_node) {

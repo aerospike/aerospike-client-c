@@ -89,11 +89,6 @@ cancel_connection(as_event_command* cmd, as_error* err, int32_t source)
 	as_log_trace("Stopping watcher");
 	as_event_stop_watcher(cmd, &conn->base);
 
-	// Don't count connection as being in the pool, if we're going to cancel it.
-	if (conn->in_pool) {
-		ck_pr_dec_32(&cmd->node->async_conn_pool);
-	}
-
 	if (conn->writer != NULL) {
 		as_log_trace("Canceling writer %p", conn->writer);
 		cancel_command(conn->writer, err);
@@ -273,6 +268,7 @@ as_pipe_get_connection(as_event_command* cmd)
 	
 	while (as_queue_pop(q, &conn)) {
 		as_log_trace("Checking pipeline connection %p", conn);
+		ck_pr_dec_32(&cmd->node->async_conn_pool);
 
 		if (conn->canceled) {
 			as_log_trace("Pipeline connection %p was canceled earlier", conn);
@@ -281,7 +277,6 @@ as_pipe_get_connection(as_event_command* cmd)
 			continue;
 		}
 
-		ck_pr_dec_32(&cmd->node->async_conn_pool);
 		conn->in_pool = false;
 
 		if (as_event_validate_connection(&conn->base, true)) {

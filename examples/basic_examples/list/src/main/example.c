@@ -25,26 +25,22 @@
 // Includes
 //
 
-#include <stdbool.h>
 #include <stddef.h>
-#include <stdint.h>
 #include <stdlib.h>
 
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
-#include <aerospike/as_arraylist.h>
 #include <aerospike/as_error.h>
-#include <aerospike/as_hashmap.h>
 #include <aerospike/as_operations.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_status.h>
-#include <aerospike/as_string.h>
+#include <aerospike/as_val.h>
 
 #include "example_utils.h"
 
 
 //==========================================================
-// CDT Example
+// List Example
 //
 
 int
@@ -63,18 +59,19 @@ main(int argc, char* argv[])
 	example_remove_test_record(&as);
 
 	as_error err;
-	as_record *p_rec = NULL;
 	as_operations ops;
 
 	LOG("append 10 values from 0 to 9");
 
 	// The first append will create the record and bin.
 	for (int i = 0; i < 10; i++) {
-		as_operations_init(&ops, 1);
+		as_operations_inita(&ops, 1);
 		as_operations_add_list_append_int64(&ops, "test-bin-1", i);
 
-		if (aerospike_key_operate(&as, &err, NULL, &g_key, &ops, NULL) != AEROSPIKE_OK) {
-			LOG("aerospike_key_operate() returned %d - %s", err.code, err.message);
+		if (aerospike_key_operate(&as, &err, NULL, &g_key, &ops, NULL) !=
+				AEROSPIKE_OK) {
+			LOG("aerospike_key_operate() returned %d - %s", err.code,
+					err.message);
 			example_cleanup(&as);
 			exit(-1);
 		}
@@ -88,19 +85,25 @@ main(int argc, char* argv[])
 	}
 
 	LOG("append operations succeeded");
+	LOG("pop from the tail (index -1)");
 
-	LOG("pop from the tail(-1) and insert to the front")
-
-	as_operations_init(&ops, 1);
+	as_operations_inita(&ops, 1);
 	as_operations_add_list_pop(&ops, "test-bin-1", -1);
 
-	if (aerospike_key_operate(&as, &err, NULL, &g_key, &ops, &p_rec) != AEROSPIKE_OK) {
+	as_record *p_rec = NULL;
+
+	if (aerospike_key_operate(&as, &err, NULL, &g_key, &ops, &p_rec) !=
+			AEROSPIKE_OK) {
 		LOG("aerospike_key_operate() returned %d - %s", err.code, err.message);
+		as_operations_destroy(&ops);
 		example_cleanup(&as);
 		exit(-1);
 	}
 
+	as_operations_destroy(&ops);
+
 	LOG("pop operation succeeded");
+	LOG("insert popped value at the head (index 0)");
 
 	as_val *val = (as_val *)as_record_get(p_rec, "test-bin-1");
 	// Take a reference so destroying record won't destroy val.
@@ -108,14 +111,18 @@ main(int argc, char* argv[])
 	as_record_destroy(p_rec);
 	p_rec = NULL;
 
-	as_operations_init(&ops, 1);
+	as_operations_inita(&ops, 1);
 	as_operations_add_list_insert(&ops, "test-bin-1", 0, val);
 
-	if (aerospike_key_operate(&as, &err, NULL, &g_key, &ops, NULL) != AEROSPIKE_OK) {
+	if (aerospike_key_operate(&as, &err, NULL, &g_key, &ops, NULL) !=
+			AEROSPIKE_OK) {
 		LOG("aerospike_key_operate() returned %d - %s", err.code, err.message);
+		as_operations_destroy(&ops);
 		example_cleanup(&as);
 		exit(-1);
 	}
+
+	as_operations_destroy(&ops);
 
 	LOG("insert operation succeeded");
 
@@ -127,7 +134,7 @@ main(int argc, char* argv[])
 	// Cleanup and disconnect from the database cluster.
 	example_cleanup(&as);
 
-	LOG("cdt example successfully completed");
+	LOG("list example successfully completed");
 
 	return 0;
 }

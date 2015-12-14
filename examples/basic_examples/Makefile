@@ -3,11 +3,11 @@ default: all
 
 %:
 	$(MAKE) -C append $@
-	$(MAKE) -C cdt $@
 	$(MAKE) -C expire $@
 	$(MAKE) -C generation $@
 	$(MAKE) -C get $@
 	$(MAKE) -C incr $@
+	$(MAKE) -C list $@
 	$(MAKE) -C llist $@
 	$(MAKE) -C lmap $@
 	$(MAKE) -C lset $@

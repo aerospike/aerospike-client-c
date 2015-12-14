@@ -142,6 +142,7 @@ as_testlist_op(as_testlist *tlist, as_operations *ops)
 
 	if (aerospike_key_operate(tlist->as, &err, NULL, &tlist->key, ops, &tlist->rec) != AEROSPIKE_OK) {
 		debug("as_testlist_op() returned %d - %s", err.code, err.message);
+		as_operations_destroy(ops);
 		return false;
 	}
 
@@ -346,6 +347,7 @@ as_testlist_get_range_from(as_testlist *tlist, int64_t index)
 		debug("get_range_from: index=%ld failed", index);
 		return false;
 	}
+
 
 	uint32_t uindex = index2uindex(tlist, index);
 	as_list *list = as_record_get_list(tlist->rec, BIN_NAME);

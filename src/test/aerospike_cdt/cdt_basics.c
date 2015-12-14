@@ -168,6 +168,7 @@ as_testlist_init(as_testlist *tlist, aerospike *as)
 	as_arraylist list;
 	as_arraylist_init(&list, 1, 1);
 
+	as_val_reserve((as_val *)&list);
 	as_operations_add_write(&ops, BIN_NAME, (as_bin_value *)&list);
 
 	if (! as_testlist_op(tlist, &ops)) {
@@ -188,7 +189,7 @@ as_testlist_init(as_testlist *tlist, aerospike *as)
 	}
 
 	as_operations_inita(&ops, 1);
-	as_operations_add_list_append_items(&ops, BIN_NAME, &list);
+	as_operations_add_list_append_items(&ops, BIN_NAME, (as_list *)&list);
 
 	debug("append empty list");
 	if (! as_testlist_op(tlist, &ops)) {

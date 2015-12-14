@@ -138,7 +138,7 @@ as_testlist_op(as_testlist *tlist, as_operations *ops)
 		tlist->rec = NULL;
 	}
 
-    as_error err;
+	as_error err;
 
 	if (aerospike_key_operate(tlist->as, &err, NULL, &tlist->key, ops, &tlist->rec) != AEROSPIKE_OK) {
 		debug("as_testlist_op() returned %d - %s", err.code, err.message);
@@ -157,8 +157,8 @@ as_testlist_init(as_testlist *tlist, aerospike *as)
 	tlist->rec = NULL;
 	as_key_init_int64(&tlist->key, NAMESPACE, SET, 1);
 
-    as_error err;
-    aerospike_key_remove(as, &err, NULL, &tlist->key);
+	as_error err;
+	aerospike_key_remove(as, &err, NULL, &tlist->key);
 
 	as_arraylist_init(&tlist->arraylist, 100, 100);
 

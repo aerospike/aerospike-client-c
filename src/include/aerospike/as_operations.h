@@ -69,7 +69,7 @@ typedef enum as_cdt_optype_e {
 	AS_CDT_OP_LIST_GET_RANGE     = 18,
 
 	// ------------------------------------------------------------------------
-    // Map Operation
+	// Map Operation
 
 	// Adding <key, value> to the Map
 	AS_CDT_OP_MAP_PUT            = 32,
@@ -799,14 +799,14 @@ bool as_operations_add_list_append_int64(as_operations *ops, const as_bin_name n
 bool as_operations_add_list_append_double(as_operations *ops, const as_bin_name name, double value);
 bool as_operations_add_list_append_strp(as_operations *ops, const as_bin_name name, const char *value, bool free);
 
-static inline bool as_operations_add_list_append_str(as_operations *ops, const as_bin_name name, const char *value, bool free)
+static inline bool as_operations_add_list_append_str(as_operations *ops, const as_bin_name name, const char *value)
 {
 	return as_operations_add_list_append_strp(ops, name, value, false);
 }
 
 bool as_operations_add_list_append_rawp(as_operations *ops, const as_bin_name name, const uint8_t *value, uint32_t size, bool free);
 
-static inline bool as_operations_add_list_append_raw(as_operations *ops, const as_bin_name name, const uint8_t *value, uint32_t size, bool free)
+static inline bool as_operations_add_list_append_raw(as_operations *ops, const as_bin_name name, const uint8_t *value, uint32_t size)
 {
 	return as_operations_add_list_append_rawp(ops, name, value, size, false);
 }

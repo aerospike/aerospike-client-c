@@ -870,11 +870,11 @@ static inline bool as_operations_add_list_append_raw(as_operations *ops, const a
 }
 
 /**
- *  Add multiple elements to end of list. 
+ *  Add multiple values to end of list. 
  *  
-  *	@param ops			The `as_operations` to append the operation to.
+ *	@param ops			The `as_operations` to append the operation to.
  *	@param name 		The name of the bin to perform the operation on.
-*	@param list			Consumes a reference of this as_list.
+ *	@param list			Consumes a reference of this as_list.
  *	
  *  @return true on success. Otherwise an error occurred.
  *
@@ -885,12 +885,12 @@ static inline bool as_operations_add_list_append_raw(as_operations *ops, const a
 bool as_operations_add_list_append_items(as_operations *ops, const as_bin_name name, as_list *list);
 
 /**
- *  Insert element to list at index position.
+ *  Insert values to list at index position.
  *  
  *	@param ops			The `as_operations` to append the operation to.
  *	@param name 		The name of the bin to perform the operation on.
  *  @param index 		index position which the as_val will be inserted at. Negative index counts from end of list.
- *	@param list			Consumes a reference of this as_val.
+ *	@param list			Consumes a reference of this as_list.
  *	
  *  @return true on success. Otherwise an error occurred.
  *
@@ -957,6 +957,7 @@ static inline bool as_operations_add_list_insert_str(as_operations *ops, const a
  *	@param name 		The name of the bin to perform the operation on.
  *  @param index 		index position which the blob will be inserted at. Negative index counts from end of list.
  *	@param value 		blob to add.
+ *	@param size 		size of the blob.
  *	@param free			If true, then the value will be freed when the operations is destroyed.
  *	
  *  @return true on success. Otherwise an error occurred.
@@ -972,12 +973,12 @@ static inline bool as_operations_add_list_insert_raw(as_operations *ops, const a
 }
 
 /**
- *  Insert multiple elements to list at index position.
+ *  Insert multiple values to list at index position.
  *  
  *	@param ops			The `as_operations` to append the operation to.
  *	@param name 		The name of the bin to perform the operation on.
  *  @param index 		index position which the blob will be inserted at. Negative index counts from end of list.
- *	@param list 		elements to add. Consumes reference of list.
+ *	@param list 		values to add. Consumes reference of list.
  *	
  *  @return true on success. Otherwise an error occurred.
  *
@@ -986,42 +987,164 @@ static inline bool as_operations_add_list_insert_raw(as_operations *ops, const a
  */
 bool as_operations_add_list_insert_items(as_operations *ops, const as_bin_name name, int64_t index, as_list *list);
 
-//-----------------------------------------------------------------------------
-// Remove from list
-
 /**
- * Remove and get back a list element at index.
+ *  Remove and return a value at index.
+ *  
+ *	@param ops			The `as_operations` to append the operation to.
+ *	@param name 		The name of the bin to perform the operation on.
+ *  @param index 		index position at which the value will be removed and returned.
+ *	
+ *  @return true on success. Otherwise an error occurred.
+ *
+ *	@relates as_operations
+ *	@ingroup as_operations_object
  */
 bool as_operations_add_list_pop(as_operations *ops, const as_bin_name name, int64_t index);
+
 /**
- * Remove and get back list elements at index.
+ *  Remove and return N values from index.
+ *  
+ *	@param ops			The `as_operations` to append the operation to.
+ *	@param name 		The name of the bin to perform the operation on.
+ *  @param index 		index position at which to start the removal.
+ *  @param count 		number of values to remove. If not enough values in list, will remove to list end.
+ *	
+ *  @return true on success. Otherwise an error occurred.
+ *
+ *	@relates as_operations
+ *	@ingroup as_operations_object
  */
 bool as_operations_add_list_pop_range(as_operations *ops, const as_bin_name name, int64_t index, uint64_t count);
-bool as_operations_add_list_pop_range_from(as_operations *ops, const as_bin_name name, int64_t index);
+
 /**
- * Remove a list element at index.
+ *  Remove and return all values from index.
+ *  
+ *	@param ops			The `as_operations` to append the operation to.
+ *	@param name 		The name of the bin to perform the operation on.
+ *  @param index 		index position at which to start the removal.
+ *	
+ *  @return true on success. Otherwise an error occurred.
+ *
+ *	@relates as_operations
+ *	@ingroup as_operations_object
+ */
+bool as_operations_add_list_pop_range_from(as_operations *ops, const as_bin_name name, int64_t index);
+
+/**
+ *  Remove value at index.
+ *  
+ *	@param ops			The `as_operations` to append the operation to.
+ *	@param name 		The name of the bin to perform the operation on.
+ *  @param index 		index position at which to start the removal.
+ *	
+ *  @return true on success. Otherwise an error occurred.
+ *
+ *	@relates as_operations
+ *	@ingroup as_operations_object
  */
 bool as_operations_add_list_remove(as_operations *ops, const as_bin_name name, int64_t index);
+
 /**
- * Remove list elements at index.
+ *  Remove N values from index.
+ *  
+ *	@param ops			The `as_operations` to append the operation to.
+ *	@param name 		The name of the bin to perform the operation on.
+ *  @param index 		index position at which to start the removal.
+ *  @param count 		number of values to remove. If not enough values in list, will remove to list end.
+ *	
+ *  @return true on success. Otherwise an error occurred.
+ *
+ *	@relates as_operations
+ *	@ingroup as_operations_object
  */
 bool as_operations_add_list_remove_range(as_operations *ops, const as_bin_name name, int64_t index, uint64_t count);
+
+/**
+ *  Remove all values from index.
+ *  
+ *	@param ops			The `as_operations` to append the operation to.
+ *	@param name 		The name of the bin to perform the operation on.
+ *  @param index 		index position at which to start the removal.
+ *  @param count 		number of values to remove. If not enough values in list, will remove to list end.
+ *	
+ *  @return true on success. Otherwise an error occurred.
+ *
+ *	@relates as_operations
+ *	@ingroup as_operations_object
+ */
 bool as_operations_add_list_remove_range_from(as_operations *ops, const as_bin_name name, int64_t index);
 
 //-----------------------------------------------------------------------------
 // Other list modifies
 
 /**
- * Remove all elements from list.
+ *  Remove all values. Will leave empty list in bin.
+ *  
+ *	@param ops			The `as_operations` to append the operation to.
+ *	@param name 		The name of the bin to perform the operation on.
+ *	
+ *  @return true on success. Otherwise an error occurred.
+ *
+ *	@relates as_operations
+ *	@ingroup as_operations_object
  */
 bool as_operations_add_list_clear(as_operations *ops, const as_bin_name name);
+
 /**
- * Set element of list at index.
- * @param val	Consumes a reference of this as_val.
+ *  Set value at index as new val.
+ *  
+ *	@param ops			The `as_operations` to append the operation to.
+ *	@param name 		The name of the bin to perform the operation on.
+ *  @param val			Consumes a reference of this as_val.
+ *	
+ *  @return true on success. Otherwise an error occurred.
+ *
+ *	@relates as_operations
+ *	@ingroup as_operations_object
  */
 bool as_operations_add_list_set(as_operations *ops, const as_bin_name name, int64_t index, as_val *val);
+
+/**
+ *  Set value at index as integer. Convenience function of as_operations_add_list_set()
+ *  
+ *	@param ops			The `as_operations` to append the operation to.
+ *	@param name 		The name of the bin to perform the operation on.
+ *  @param value		Integer to set.
+ *	
+ *  @return true on success. Otherwise an error occurred.
+ *
+ *	@relates as_operations
+ *	@ingroup as_operations_object
+ */
 bool as_operations_add_list_set_int64(as_operations *ops, const as_bin_name name, int64_t index, int64_t value);
+
+/**
+ *  Set value at index as double. Convenience function of as_operations_add_list_set()
+ *  
+ *	@param ops			The `as_operations` to append the operation to.
+ *	@param name 		The name of the bin to perform the operation on.
+ *  @param value		Double to set.
+ *	
+ *  @return true on success. Otherwise an error occurred.
+ *
+ *	@relates as_operations
+ *	@ingroup as_operations_object
+ */
 bool as_operations_add_list_set_double(as_operations *ops, const as_bin_name name, int64_t index, double value);
+
+/**
+ *  Set value at index as string. Convenience function of as_operations_add_list_set()
+ *  
+ *	@param ops			The `as_operations` to append the operation to.
+ *	@param name 		The name of the bin to perform the operation on.
+ *  @param value		String to set.
+ *	@param free			If true, then the value will be freed when the operations is destroyed.
+ *	
+ *  @return true on success. Otherwise an error occurred.
+ *
+ *	@relates as_operations
+ *	@ingroup as_operations_object
+ */
 bool as_operations_add_list_set_strp(as_operations *ops, const as_bin_name name, int64_t index, const char *value, bool free);
 
 static inline bool as_operations_add_list_set_str(as_operations *ops, const as_bin_name name, int64_t index, const char *value)
@@ -1029,6 +1152,20 @@ static inline bool as_operations_add_list_set_str(as_operations *ops, const as_b
 	return as_operations_add_list_set_strp(ops, name, index, value, false);
 }
 
+/**
+ *  Set value at index as blob. Convenience function of as_operations_add_list_set()
+ *  
+ *	@param ops			The `as_operations` to append the operation to.
+ *	@param name 		The name of the bin to perform the operation on.
+ *  @param value		Blob to set.
+ *	@param size 		size of the blob.
+ *	@param free			If true, then the value will be freed when the operations is destroyed.
+ *	
+ *  @return true on success. Otherwise an error occurred.
+ *
+ *	@relates as_operations
+ *	@ingroup as_operations_object
+ */
 bool as_operations_add_list_set_rawp(as_operations *ops, const as_bin_name name, int64_t index, const uint8_t *value, uint32_t size, bool free);
 
 static inline bool as_operations_add_list_set_raw(as_operations *ops, const as_bin_name name, int64_t index, const uint8_t *value, uint32_t size)
@@ -1037,7 +1174,17 @@ static inline bool as_operations_add_list_set_raw(as_operations *ops, const as_b
 }
 
 /**
- * Remove elements not within range(index, count).
+ * 	Remove values NOT within range(index, count).
+ *  
+ *	@param ops			The `as_operations` to append the operation to.
+ *	@param name 		The name of the bin to perform the operation on.
+ *  @param index 		Values from 0-index position are removed.
+ *  @param count 		number of values to keep. All other values beyond count are removed.
+ *	
+ *  @return true on success. Otherwise an error occurred.
+ *
+ *	@relates as_operations
+ *	@ingroup as_operations_object
  */
 bool as_operations_add_list_trim(as_operations *ops, const as_bin_name name, int64_t index, uint64_t count);
 
@@ -1045,19 +1192,56 @@ bool as_operations_add_list_trim(as_operations *ops, const as_bin_name name, int
 // Read operations
 
 /**
- * Get element of list at index.
+ *  Get value of list at index.
+ *  
+ *	@param ops			The `as_operations` to append the operation to.
+ *	@param name 		The name of the bin to perform the operation on.
+ *  @param index 		Values from 0-index position are removed.
+ *	
+ *  @return true on success. Otherwise an error occurred.
+ *
+ *	@relates as_operations
+ *	@ingroup as_operations_object
  */
 bool as_operations_add_list_get(as_operations *ops, const as_bin_name name, int64_t index);
 /**
- * Get elements of list at index, get back a list of items.
+ *  Get values of list at index.
+ *  
+ *	@param ops			The `as_operations` to append the operation to.
+ *	@param name 		The name of the bin to perform the operation on.
+ *  @param index 		index position at which to start.
+ * 	@param count 		number of values to get. If not enough in list, will return all remaining.
+ *	
+ *  @return true on success. Otherwise an error occurred.
+ *
+ *	@relates as_operations
+ *	@ingroup as_operations_object
  */
 bool as_operations_add_list_get_range(as_operations *ops, const as_bin_name name, int64_t index, uint64_t count);
+
 /**
- * Get elements of list from index to end of list, get back a list of items.
+ * Get all values from index, as a list.
+ *  
+ *	@param ops			The `as_operations` to append the operation to.
+ *	@param name 		The name of the bin to perform the operation on.
+ *  @param index 		index position at which to start.
+ *	
+ *  @return true on success. Otherwise an error occurred.
+ *
+ *	@relates as_operations
+ *	@ingroup as_operations_object
  */
 bool as_operations_add_list_get_range_from(as_operations *ops, const as_bin_name name, int64_t index);
 /**
- * Get element count of list.
+ * Get number of values
+ *  
+ *	@param ops			The `as_operations` to append the operation to.
+ *	@param name 		The name of the bin to perform the operation on.
+ *	
+ *  @return true on success. Otherwise an error occurred.
+ *
+ *	@relates as_operations
+ *	@ingroup as_operations_object
  */
 bool as_operations_add_list_size(as_operations *ops, const as_bin_name name);
 

@@ -536,6 +536,10 @@ TEST( cdt_basics_op , "CDT operations test on a single bin" ) {
 
 	as_arraylist list;
 
+	debug("insert_list of 1 item");
+	make_random_list(&list, 1);
+	as_testlist_insert_list(&tlist, 1, &list);
+
 	debug("insert_list");
 	make_random_list(&list, 5);
 	for (int i = 0; i < 10; i++) {

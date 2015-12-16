@@ -21,6 +21,7 @@
 #include <aerospike/as_string.h>
 #include <aerospike/as_bytes.h>
 
+#include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_byte_order.h>
 #include <citrusleaf/cf_digest.h>
 
@@ -144,7 +145,7 @@ as_key * as_key_new(const as_namespace ns, const as_set set, const char * value)
  */
 as_key * as_key_new_int64(const as_namespace ns, const as_set set, int64_t value)
 {
-	as_key * key = (as_key *) malloc(sizeof(as_key));
+	as_key * key = (as_key *) cf_malloc(sizeof(as_key));
 	if ( !key ) return key;
 
 	as_integer_init((as_integer *) &key->value, value);
@@ -157,7 +158,7 @@ as_key * as_key_new_int64(const as_namespace ns, const as_set set, int64_t value
  */
 as_key * as_key_new_strp(const as_namespace ns, const as_set set, const char * value, bool free)
 {
-	as_key * key = (as_key *) malloc(sizeof(as_key));
+	as_key * key = (as_key *) cf_malloc(sizeof(as_key));
 	if ( !key ) return key;
 	
 	as_string_init((as_string *) &key->value, (char *) value, free);
@@ -169,7 +170,7 @@ as_key * as_key_new_strp(const as_namespace ns, const as_set set, const char * v
  */
 as_key * as_key_new_rawp(const as_namespace ns, const as_set set, const uint8_t * value, uint32_t size, bool free)
 {
-	as_key * key = (as_key *) malloc(sizeof(as_key));
+	as_key * key = (as_key *) cf_malloc(sizeof(as_key));
 	if ( !key ) return key;
 	
 	as_bytes_init_wrap((as_bytes *) &key->value, (uint8_t *) value, size, free);
@@ -181,7 +182,7 @@ as_key * as_key_new_rawp(const as_namespace ns, const as_set set, const uint8_t 
  */
 as_key * as_key_new_digest(const as_namespace ns, const as_set set, const as_digest_value digest)
 {
-	as_key * key = (as_key *) malloc(sizeof(as_key));
+	as_key * key = (as_key *) cf_malloc(sizeof(as_key));
 	if ( !key ) return key;
 
 	return as_key_cons(key, true, ns, set, NULL, digest);
@@ -192,7 +193,7 @@ as_key * as_key_new_digest(const as_namespace ns, const as_set set, const as_dig
  */
 as_key * as_key_new_value(const as_namespace ns, const as_set set, const as_key_value * value)
 {
-	as_key * key = (as_key *) malloc(sizeof(as_key));
+	as_key * key = (as_key *) cf_malloc(sizeof(as_key));
 	if ( !key ) return key;
 
 	return as_key_cons(key, true, ns, set, value, NULL);
@@ -208,7 +209,7 @@ void as_key_destroy(as_key * key)
 	as_val_destroy((as_val *) key->valuep);
 
 	if ( key->_free ) {
-		free(key);
+		cf_free(key);
 	}
 }
 

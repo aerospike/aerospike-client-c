@@ -15,6 +15,8 @@
  * the License.
  */
 #include <aerospike/as_scan.h>
+
+#include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_random.h>
 
 /******************************************************************************
@@ -64,7 +66,7 @@ static as_scan * as_scan_defaults(as_scan * scan, bool free, const as_namespace 
  */
 as_scan * as_scan_new(const as_namespace ns, const as_set set)
 {
-	as_scan * scan = (as_scan *) malloc(sizeof(as_scan));
+	as_scan * scan = (as_scan *) cf_malloc(sizeof(as_scan));
 	if ( ! scan ) return NULL;
 	return as_scan_defaults(scan, true, ns, set);
 }
@@ -89,14 +91,14 @@ void as_scan_destroy(as_scan * scan)
 	scan->set[0] = '\0';
 
 	if ( scan->select._free ) {
-		free(scan->select.entries);
+		cf_free(scan->select.entries);
 	}
 
 	as_udf_call_destroy(&scan->apply_each);
 
 	// If the whole structure should be freed
 	if ( scan->_free ) {
-		free(scan);
+		cf_free(scan);
 	}
 }
 
@@ -128,7 +130,7 @@ bool as_scan_select_init(as_scan * scan, uint16_t n)
 	if ( !scan ) return false;
 	if ( scan->select.entries ) return false;
 
-	scan->select.entries = (as_bin_name *) calloc(n, sizeof(as_bin_name));
+	scan->select.entries = (as_bin_name *) cf_calloc(n, sizeof(as_bin_name));
 	if ( !scan->select.entries ) return false;
 
 	scan->select._free = true;

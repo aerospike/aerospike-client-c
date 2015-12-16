@@ -24,6 +24,8 @@
 #include <aerospike/as_socket.h>
 #include <aerospike/as_string.h>
 #include <aerospike/as_vector.h>
+
+#include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_byte_order.h>
 #include <citrusleaf/cf_clock.h>
 
@@ -223,14 +225,14 @@ as_lookup_node(as_cluster* cluster, as_error* err, struct sockaddr_in* addr, as_
 	node_info->has_replicas_all = has_replicas_all;
 	node_info->has_double = has_double;
 	node_info->has_geo = has_geo;
-	free(response);
+	cf_free(response);
 	return AEROSPIKE_OK;
 	
 Error: {
 		char addr_name[INET_ADDRSTRLEN];
 		as_socket_address_name(addr, addr_name);
 		as_error_update(err, status, "Invalid node info response from %s: %s", addr_name, response);
-		free(response);
+		cf_free(response);
 		return AEROSPIKE_ERR_CLIENT;
 	}
 }
@@ -640,7 +642,7 @@ as_cluster_set_partition_size(as_cluster* cluster, as_error* err)
 			as_socket_address_name(addr, name);
 			as_error_update(err, status, "Invalid partitions info response from %s: %s", name, response);
 		}
-		free(response);
+		cf_free(response);
 	}
 	
 	if (cluster->n_partitions > 0) {
@@ -1051,7 +1053,7 @@ as_cluster_get_node_names(as_cluster* cluster, int* n_nodes, char** node_names)
 		return;
 	}
 	
-	*node_names = malloc(AS_NODE_NAME_SIZE * size);
+	*node_names = cf_malloc(AS_NODE_NAME_SIZE * size);
 	if (*node_names == 0) {
 		as_nodes_release(nodes);
 		return;

@@ -17,6 +17,8 @@
 #include <aerospike/as_bin.h>
 #include <aerospike/as_operations.h>
 
+#include <citrusleaf/alloc.h>
+
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -49,7 +51,7 @@ static as_operations * as_operations_default(as_operations * ops, bool free, uin
 
 	as_binop * entries = NULL;
 	if ( nops > 0 ) {
-		entries = (as_binop *) malloc(sizeof(as_binop) * nops);
+		entries = (as_binop *) cf_malloc(sizeof(as_binop) * nops);
 	}
 
 	if ( entries ) {
@@ -135,7 +137,7 @@ as_operations * as_operations_init(as_operations * ops, uint16_t nops)
  */
 as_operations * as_operations_new(uint16_t nops)
 {
-	as_operations *	ops = (as_operations *) malloc(sizeof(as_operations));
+	as_operations *	ops = (as_operations *) cf_malloc(sizeof(as_operations));
 	if ( !ops ) return ops;
 	return as_operations_default(ops, false, nops);
 }
@@ -160,7 +162,7 @@ void as_operations_destroy(as_operations * ops)
 
 	// free binops
 	if ( ops->binops._free ) {
-		free(ops->binops.entries);
+		cf_free(ops->binops.entries);
 	}
 
 	// reset values 
@@ -170,7 +172,7 @@ void as_operations_destroy(as_operations * ops)
 	ops->binops.entries = NULL;
 
 	if ( ops->_free ) {
-		free(ops);
+		cf_free(ops);
 	}
 }
 

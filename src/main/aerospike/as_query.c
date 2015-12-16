@@ -19,6 +19,9 @@
 #include <aerospike/as_log.h>
 #include <aerospike/as_query.h>
 #include <aerospike/as_udf.h>
+
+#include <citrusleaf/alloc.h>
+
 #include <stdarg.h>
 
 /******************************************************************************
@@ -77,7 +80,7 @@ as_query * as_query_init(as_query * query, const as_namespace ns, const as_set s
  */
 as_query * as_query_new(const as_namespace ns, const as_set set)
 {
-	as_query * query = (as_query *) malloc(sizeof(as_query));
+	as_query * query = (as_query *) cf_malloc(sizeof(as_query));
 	if ( !query ) return query;
 	return as_query_defaults(query, true, ns, set);
 }
@@ -95,7 +98,7 @@ void as_query_destroy(as_query * query)
 	query->set[0] = '\0';
 
 	if ( query->select.entries && query->select._free ) {
-		free(query->select.entries);
+		cf_free(query->select.entries);
 	}
 
 	query->select._free = false;
@@ -104,7 +107,7 @@ void as_query_destroy(as_query * query)
 	query->select.entries = NULL;
 	
 	if ( query->where.entries && query->where._free ) {
-		free(query->where.entries);
+		cf_free(query->where.entries);
 	}
 
 	query->where._free = false;
@@ -113,7 +116,7 @@ void as_query_destroy(as_query * query)
 	query->where.entries = NULL;
 	
 	if ( query->orderby.entries && query->orderby._free ) {
-		free(query->orderby.entries);
+		cf_free(query->orderby.entries);
 	}
 
 	query->orderby._free = false;
@@ -124,7 +127,7 @@ void as_query_destroy(as_query * query)
 	as_udf_call_destroy(&query->apply);
 
 	if ( query->_free ) {
-		free(query);
+		cf_free(query);
 	}
 }
 
@@ -154,7 +157,7 @@ bool as_query_select_init(as_query * query, uint16_t n)
 	if ( !query ) return false;
 	if ( query->select.entries ) return false;
 
-	query->select.entries = (as_bin_name *) calloc(n, sizeof(as_bin_name));
+	query->select.entries = (as_bin_name *) cf_calloc(n, sizeof(as_bin_name));
 	if ( !query->select.entries ) return false;
 
 	query->select._free = true;
@@ -224,7 +227,7 @@ bool as_query_where_init(as_query * query, uint16_t n)
 	if ( !query ) return false;
 	if ( query->where.entries ) return false;
 
-	query->where.entries = (as_predicate *) calloc(n, sizeof(as_predicate));
+	query->where.entries = (as_predicate *) cf_calloc(n, sizeof(as_predicate));
 	if ( !query->where.entries ) return false;
 
 	query->where._free = true;
@@ -336,7 +339,7 @@ bool as_query_orderby_init(as_query * query, uint16_t n)
 	if ( !query ) return false;
 	if ( query->orderby.entries ) return false;
 
-	query->orderby.entries = (as_ordering *) calloc(n, sizeof(as_ordering));
+	query->orderby.entries = (as_ordering *) cf_calloc(n, sizeof(as_ordering));
 	if ( !query->orderby.entries ) return false;
 
 	query->orderby._free = true;

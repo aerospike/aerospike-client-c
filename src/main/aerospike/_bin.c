@@ -23,6 +23,8 @@
 #include <aerospike/as_nil.h>
 #include <aerospike/as_val.h>
 
+#include <citrusleaf/alloc.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -239,7 +241,7 @@ as_bins * as_bins_init(as_bins * bins, uint16_t capacity)
 {
 	if ( !bins ) return bins;
 
-	as_bin * entries = (as_bin *) malloc(sizeof(as_bin) * capacity);
+	as_bin * entries = (as_bin *) cf_malloc(sizeof(as_bin) * capacity);
 	if ( entries ) {
 		bins->_free = true;
 		bins->capacity = capacity;
@@ -270,7 +272,7 @@ void as_bins_destroy(as_bins * bins)
 	if ( !bins ) return;
 
 	if ( bins->_free && bins->entries ) {
-		free(bins->entries);
+		cf_free(bins->entries);
 	}
 
 	bins->capacity = 0;

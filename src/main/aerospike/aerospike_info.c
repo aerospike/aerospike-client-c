@@ -26,6 +26,9 @@
 #include <aerospike/as_policy.h>
 #include <aerospike/as_proto.h>
 #include <aerospike/as_socket.h>
+
+#include <citrusleaf/alloc.h>
+
 #include <netinet/in.h>
 #include <sys/socket.h>
 
@@ -264,7 +267,7 @@ as_status aerospike_info_foreach(
 		
 		if (status == AEROSPIKE_OK) {
 			bool result = callback(err, node, req, response, udata);
-			free(response);
+			cf_free(response);
 			
 			if (! result) {
 				status = AEROSPIKE_ERR_QUERY_ABORTED;

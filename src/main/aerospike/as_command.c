@@ -23,7 +23,10 @@
 #include <aerospike/as_record.h>
 #include <aerospike/as_serializer.h>
 #include <aerospike/as_socket.h>
+
+#include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_clock.h>
+
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>
@@ -687,7 +690,7 @@ as_command_parse_key(uint8_t* p, uint32_t n_fields, as_key* key)
 						break;
 					}
 					case AS_BYTES_STRING: {
-						char* value = malloc(len+1);
+						char* value = cf_malloc(len+1);
 						memcpy(value, p, len);
 						value[len] = 0;
 						as_string_init_wlen((as_string*)&key->value, value, len, true);
@@ -695,7 +698,7 @@ as_command_parse_key(uint8_t* p, uint32_t n_fields, as_key* key)
 						break;
 					}
 					case AS_BYTES_BLOB: {
-						void* value = malloc(len);
+						void* value = cf_malloc(len);
 						memcpy(value, p, len);
 						as_bytes_init_wrap((as_bytes*)&key->value, (uint8_t*)value, len, true);
 						key->valuep = &key->value;
@@ -734,7 +737,7 @@ as_command_parse_value(uint8_t* p, uint8_t type, uint32_t value_size, as_val** v
 			break;
 		}
 		case AS_BYTES_STRING: {
-			char* v = malloc(value_size + 1);
+			char* v = cf_malloc(value_size + 1);
 			memcpy(v, p, value_size);
 			v[value_size] = 0;
 			*value = (as_val*)as_string_new_wlen(v, value_size, true);
@@ -755,7 +758,7 @@ as_command_parse_value(uint8_t* p, uint8_t type, uint32_t value_size, as_val** v
 
 			// Use the json bytes.
 			size_t jsonsz = value_size - 1 - 2 - (ncells * sizeof(uint64_t));
-			char* v = malloc(jsonsz + 1);
+			char* v = cf_malloc(jsonsz + 1);
 			memcpy(v, ptr, jsonsz);
 			v[jsonsz] = 0;
 			*value = (as_val*) as_geojson_new_wlen(v, jsonsz, true);
@@ -774,7 +777,7 @@ as_command_parse_value(uint8_t* p, uint8_t type, uint32_t value_size, as_val** v
 			break;
 		}
 		default: {
-			void* v = malloc(value_size);
+			void* v = cf_malloc(value_size);
 			memcpy(v, p, value_size);
 			*value = (as_val*)as_bytes_new_wrap(v, value_size, true);
 			break;
@@ -929,7 +932,7 @@ as_command_parse_bins(as_record* rec, uint8_t* p, uint32_t n_bins, bool deserial
 				break;
 			}
 			case AS_BYTES_STRING: {
-				char* value = malloc(value_size + 1);
+				char* value = cf_malloc(value_size + 1);
 				memcpy(value, p, value_size);
 				value[value_size] = 0;
 				as_string_init_wlen((as_string*)&bin->value, (char*)value, value_size, true);
@@ -951,7 +954,7 @@ as_command_parse_bins(as_record* rec, uint8_t* p, uint32_t n_bins, bool deserial
 
 				// Use the json bytes.
 				size_t jsonsz = value_size - 1 - 2 - (ncells * sizeof(uint64_t));
-				char* v = malloc(jsonsz + 1);
+				char* v = cf_malloc(jsonsz + 1);
 				memcpy(v, ptr, jsonsz);
 				v[jsonsz] = 0;
 				as_geojson_init_wlen((as_geojson*)&bin->value,
@@ -977,7 +980,7 @@ as_command_parse_bins(as_record* rec, uint8_t* p, uint32_t n_bins, bool deserial
 					bin->valuep = (as_bin_value*)value;
 				}
 				else {
-					void* value = malloc(value_size);
+					void* value = cf_malloc(value_size);
 					memcpy(value, p, value_size);
 					as_bytes_init_wrap((as_bytes*)&bin->value, value, value_size, true);
 					bin->value.bytes.type = (as_bytes_type)type;
@@ -986,7 +989,7 @@ as_command_parse_bins(as_record* rec, uint8_t* p, uint32_t n_bins, bool deserial
 				break;
 			}
 			default: {
-				void* value = malloc(value_size);
+				void* value = cf_malloc(value_size);
 				memcpy(value, p, value_size);
 				as_bytes_init_wrap((as_bytes*)&bin->value, value, value_size, true);
 				bin->value.bytes.type = (as_bytes_type)type;
@@ -1039,11 +1042,11 @@ as_command_parse_result(as_error* err, int fd, uint64_t deadline_ms, void* user_
 				if (rec) {
 					if (msg.m.n_ops > rec->bins.capacity) {
 						if (rec->bins._free) {
-							free(rec->bins.entries);
+							cf_free(rec->bins.entries);
 						}
 						rec->bins.capacity = msg.m.n_ops;
 						rec->bins.size = 0;
-						rec->bins.entries = malloc(sizeof(as_bin) * msg.m.n_ops);
+						rec->bins.entries = cf_malloc(sizeof(as_bin) * msg.m.n_ops);
 						rec->bins._free = true;
 					}
 				}

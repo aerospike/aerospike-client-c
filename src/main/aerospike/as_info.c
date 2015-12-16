@@ -19,6 +19,8 @@
 #include <aerospike/as_command.h>
 #include <aerospike/as_proto.h>
 #include <aerospike/as_socket.h>
+
+#include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_types.h>
 #include <citrusleaf/cf_b64.h>
 
@@ -197,7 +199,7 @@ as_info_command(as_error* err, int fd, char* names, bool send_asis, uint64_t dea
 				   names, (uint64_t)header.sz, buf);
 		}
 		
-		char* response = malloc(header.sz + 1);
+		char* response = cf_malloc(header.sz + 1);
 		status = as_socket_read_deadline(err, fd, (uint8_t*)response, header.sz, deadline_ms);
 		
 		if (status) {
@@ -210,7 +212,7 @@ as_info_command(as_error* err, int fd, char* names, bool send_asis, uint64_t dea
 		
 		if (status) {
 			as_error_set_message(err, status, error);
-			free(response);
+			cf_free(response);
 			*values = 0;
 			return status;
 		}

@@ -18,6 +18,8 @@
 #include <aerospike/as_info.h>
 #include <aerospike/as_socket.h>
 
+#include <citrusleaf/alloc.h>
+
 /******************************************************************************
  * STATIC FUNCTIONS
  *****************************************************************************/
@@ -152,7 +154,7 @@ aerospike_job_info(
 		
 		if (status == AEROSPIKE_OK) {
 			as_job_process(response, info);
-			free(response);
+			cf_free(response);
 			
 			if (stop_if_in_progress && info->status == AS_JOB_STATUS_INPROGRESS) {
 				break;

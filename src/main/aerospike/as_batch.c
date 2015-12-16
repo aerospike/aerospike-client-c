@@ -15,6 +15,8 @@
  * the License.
  */
 #include <aerospike/as_batch.h>
+
+#include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_random.h>
 
 /******************************************************************************
@@ -38,7 +40,7 @@ extern inline as_key * as_batch_keyat(const as_batch * batch, uint32_t i);
  */
 as_batch * as_batch_new(uint32_t size)
 {
-	as_batch * batch = (as_batch *) malloc(sizeof(as_batch) + sizeof(as_key) * size);
+	as_batch * batch = (as_batch *) cf_malloc(sizeof(as_batch) + sizeof(as_key) * size);
 	if ( !batch ) return NULL;
 
 	batch->_free = true;
@@ -57,7 +59,7 @@ as_batch * as_batch_init(as_batch * batch, uint32_t size)
 
 	as_key * entries = NULL;
 	if ( size > 0 ) {
-		entries = (as_key *) malloc(sizeof(as_key) * size);
+		entries = (as_key *) cf_malloc(sizeof(as_key) * size);
 		if ( !entries ) return batch;
 	}
 
@@ -82,7 +84,7 @@ void as_batch_destroy(as_batch * batch)
 		}
 
 		if ( batch->keys._free ) {
-			free(batch->keys.entries);
+			cf_free(batch->keys.entries);
 		}
 
 		batch->keys._free = false;
@@ -91,6 +93,6 @@ void as_batch_destroy(as_batch * batch)
 	}
 
 	if ( batch->_free ) {
-		free(batch);
+		cf_free(batch);
 	}
 }

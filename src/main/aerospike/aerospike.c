@@ -22,6 +22,8 @@
 #include <aerospike/mod_lua.h>
 #include <aerospike/mod_lua_config.h>
 
+#include <citrusleaf/alloc.h>
+
 /******************************************************************************
  * STATIC FUNCTIONS
  *****************************************************************************/
@@ -63,7 +65,7 @@ aerospike_init(aerospike* as, as_config* config)
 aerospike*
 aerospike_new(as_config* config)
 {
-	aerospike * as = (aerospike *) malloc(sizeof(aerospike));
+	aerospike * as = (aerospike *) cf_malloc(sizeof(aerospike));
 	if ( !as ) return as;
 	return aerospike_defaults(as, true, config);
 }
@@ -74,7 +76,7 @@ aerospike_new(as_config* config)
 void aerospike_destroy(aerospike* as)
 {
 	if ( as->_free ) {
-		free(as);
+		cf_free(as);
 	}
 }
 

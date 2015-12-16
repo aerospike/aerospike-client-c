@@ -18,6 +18,8 @@
 #include <aerospike/as_key.h>
 #include <aerospike/as_udf.h>
 
+#include <citrusleaf/alloc.h>
+
 #include <stdlib.h>
 #include <stdio.h>
 
@@ -52,10 +54,10 @@
  */
 as_ldt * as_ldt_new(const as_bin_name name, const as_ldt_type type, const as_udf_module_name module)
 {
-	as_ldt * ldt = (as_ldt *) malloc(sizeof(as_ldt));
+	as_ldt * ldt = (as_ldt *) cf_malloc(sizeof(as_ldt));
 	if ( ldt ) {
 		if (!as_ldt_init(ldt, name, type, module)) {
-			free (ldt);
+			cf_free (ldt);
 			return NULL;
 		}
 		ldt->_free = true;
@@ -121,7 +123,7 @@ as_ldt * as_ldt_init(as_ldt * ldt, const as_bin_name name, const as_ldt_type typ
 void as_ldt_destroy(as_ldt * ldt)
 {
 	if (ldt && ldt->_free) {
-		free (ldt);
+		cf_free (ldt);
 	}
 }
 

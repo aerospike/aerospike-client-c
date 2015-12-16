@@ -25,6 +25,8 @@
 #include <aerospike/as_record.h>
 #include <aerospike/as_string.h>
 
+#include <citrusleaf/alloc.h>
+
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -81,7 +83,7 @@ static as_record * as_record_defaults(as_record * rec, bool free, uint16_t nbins
 		rec->bins._free = true;
 		rec->bins.capacity = nbins;
 		rec->bins.size = 0;
-		rec->bins.entries = (as_bin *) malloc(sizeof(as_bin) * nbins);
+		rec->bins.entries = (as_bin *) cf_malloc(sizeof(as_bin) * nbins);
 	}
 	else {
 		rec->bins._free = false;
@@ -136,7 +138,7 @@ void as_record_release(as_record * rec)
 				rec->bins.entries[i].valuep = NULL;
 			}
 			if ( rec->bins._free ) {
-				free(rec->bins.entries);
+				cf_free(rec->bins.entries);
 			}
 		}
 		rec->bins.entries = NULL;
@@ -164,7 +166,7 @@ void as_record_release(as_record * rec)
  */
 as_record * as_record_new(uint16_t nbins) 
 {
-	as_record * rec = (as_record *) malloc(sizeof(as_record));
+	as_record * rec = (as_record *) cf_malloc(sizeof(as_record));
 	if ( !rec ) return rec;
 	return as_record_defaults(rec, true, nbins);
 }

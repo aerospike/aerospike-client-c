@@ -18,6 +18,8 @@
 #include <aerospike/as_list.h>
 #include <aerospike/as_udf.h>
 
+#include <citrusleaf/alloc.h>
+
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -73,7 +75,7 @@ as_udf_call * as_udf_call_new(const as_udf_module_name module, const as_udf_func
 		 ( function && strlen(function) > AS_UDF_FUNCTION_MAX_LEN ) ) {
 		return NULL;
 	}
-	as_udf_call * call = (as_udf_call *) malloc(sizeof(as_udf_call));
+	as_udf_call * call = (as_udf_call *) cf_malloc(sizeof(as_udf_call));
 	return as_udf_call_defaults(call, true, module, function, arglist);
 }
 
@@ -93,7 +95,7 @@ void as_udf_call_destroy(as_udf_call * call)
 		}
 
 		if ( call->_free ) {
-			free(call);
+			cf_free(call);
 		}
 	}
 }
@@ -129,7 +131,7 @@ as_udf_file * as_udf_file_init(as_udf_file * file)
  */
 as_udf_file * as_udf_file_new()
 {
-	as_udf_file * file = (as_udf_file *) malloc(sizeof(as_udf_file));
+	as_udf_file * file = (as_udf_file *) cf_malloc(sizeof(as_udf_file));
 	if ( !file ) return file;
 	return as_udf_file_defaults(file, true);
 }
@@ -141,14 +143,14 @@ void as_udf_file_destroy(as_udf_file * file)
 {
 	if ( file ) {
 		if ( file->content.bytes && file->content._free ) {
-			free(file->content.bytes);
+			cf_free(file->content.bytes);
 		}
 		file->content._free = false;
 		file->content.capacity = 0;
 		file->content.size = 0;
 		file->content.bytes = NULL;
 		if ( file->_free ) {
-			free(file);
+			cf_free(file);
 			file = NULL;
 		}
 	}
@@ -167,7 +169,7 @@ as_udf_files * as_udf_files_defaults(as_udf_files * files, bool free, uint32_t c
 	files->size = 0;
 
 	if ( capacity > 0 ) {
-		files->entries = (as_udf_file *) malloc(sizeof(as_udf_file) * files->capacity);
+		files->entries = (as_udf_file *) cf_malloc(sizeof(as_udf_file) * files->capacity);
 	}
 	else {
 		files->entries = NULL;
@@ -199,7 +201,7 @@ as_udf_files * as_udf_files_init(as_udf_files * files, uint32_t capacity)
  */
 as_udf_files * as_udf_files_new(uint32_t capacity)
 {
-	as_udf_files * files = (as_udf_files *) malloc(sizeof(as_udf_files));
+	as_udf_files * files = (as_udf_files *) cf_malloc(sizeof(as_udf_files));
 	if ( !files ) return files;
 	return as_udf_files_defaults(files, true, capacity);
 }
@@ -213,12 +215,12 @@ void as_udf_files_destroy(as_udf_files * files)
 
 		// entries is malloced in both init and new
 		// so we can directly free it
-		free(files->entries);
+		cf_free(files->entries);
 
 		// files can be malloced or not.
 		// So handle both cases.
 		if ( files->_free ) {
-			free(files);
+			cf_free(files);
 			files = NULL;
 			return;
 		}

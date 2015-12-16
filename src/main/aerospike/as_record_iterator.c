@@ -27,6 +27,8 @@
 #include <aerospike/as_util.h>
 #include <aerospike/as_val.h>
 
+#include <citrusleaf/alloc.h>
+
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -70,7 +72,7 @@ static inline as_record_iterator * as_record_iterator_cons(as_record_iterator * 
  */
 as_record_iterator * as_record_iterator_new(const as_record * record)
 {
-	as_record_iterator * iterator = (as_record_iterator *) malloc(sizeof(as_record_iterator));
+	as_record_iterator * iterator = (as_record_iterator *) cf_malloc(sizeof(as_record_iterator));
 	return as_record_iterator_cons(iterator, record, true);
 }
 
@@ -116,7 +118,7 @@ void as_record_iterator_destroy(as_record_iterator * iterator)
 	iterator->pos = 0;
 
 	if ( iterator->_free ) {
-		free(iterator);
+		cf_free(iterator);
 	}
 }
 

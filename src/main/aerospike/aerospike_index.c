@@ -19,6 +19,8 @@
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_log.h>
 
+#include <citrusleaf/alloc.h>
+
 /******************************************************************************
  * FUNCTIONS
  *****************************************************************************/
@@ -124,7 +126,7 @@ as_status aerospike_index_create_complex(
 				as_strncpy(task->name, name, sizeof(task->name));
 				task->done = false;
 			}
-			free(response);
+			cf_free(response);
 			break;
 			
 		case AEROSPIKE_ERR_INDEX_FOUND:
@@ -175,7 +177,7 @@ aerospike_index_create_is_done(aerospike* as, as_error * err, as_policy_info* po
 					done = false;
 				}
 			}
-			free(response);
+			cf_free(response);
 		}
 	}
 	as_nodes_release(nodes);
@@ -250,7 +252,7 @@ as_status aerospike_index_remove(
 
 	switch (status) {
 		case AEROSPIKE_OK:
-			free(response);
+			cf_free(response);
 			break;
 			
 		case AEROSPIKE_ERR_INDEX_NOT_FOUND:

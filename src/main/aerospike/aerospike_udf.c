@@ -21,8 +21,11 @@
 #include <aerospike/as_log.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_status.h>
+
+#include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_b64.h>
 #include <citrusleaf/cf_crypto.h>
+
 #include <stdio.h>
 #include <openssl/sha.h>
 
@@ -86,7 +89,7 @@ as_status aerospike_udf_list(
 	
 	if (!p) {
 		as_error_update(err, AEROSPIKE_ERR_PARAM, "Invalid udf-list response: %s", response);
-		free(response);
+		cf_free(response);
 		return AEROSPIKE_ERR_PARAM;
 	}
 	p++;
@@ -159,7 +162,7 @@ as_status aerospike_udf_list(
 	}
 
 	as_vector_destroy(&ptrs);
-	free(response);
+	cf_free(response);
 	return AEROSPIKE_OK;
 }
 
@@ -191,7 +194,7 @@ as_status aerospike_udf_get(
 	
 	if (!p) {
 		as_error_update(err, AEROSPIKE_ERR_PARAM, "Invalid udf-get response: %s", response);
-		free(response);
+		cf_free(response);
 		return AEROSPIKE_ERR_PARAM;
 	}
 	p++;
@@ -200,7 +203,7 @@ as_status aerospike_udf_get(
 	
 	if (!p) {
 		as_error_update(err, AEROSPIKE_ERR_PARAM, "Invalid udf-get response: %s", response);
-		free(response);
+		cf_free(response);
 		return AEROSPIKE_ERR_PARAM;
 	}
 	p += 8;
@@ -239,10 +242,10 @@ as_status aerospike_udf_get(
 	file->content._free = true;
 	file->content.size = size;
 	file->content.capacity = size;
-	file->content.bytes = malloc(size);
+	file->content.bytes = cf_malloc(size);
 	memcpy(file->content.bytes, content, size);
 	
-	free(response);
+	cf_free(response);
 	return AEROSPIKE_OK;
 }
 
@@ -269,7 +272,7 @@ as_status aerospike_udf_put(
 	const char* filebase = as_basename(&filename_string, filename);
 		
 	uint32_t encoded_len = cf_b64_encoded_len(content->size);
-	char* content_base64 = malloc(encoded_len + 1);
+	char* content_base64 = cf_malloc(encoded_len + 1);
 	
 	cf_b64_encode(content->value, content->size, content_base64);
 	content_base64[encoded_len] = 0;
@@ -277,21 +280,21 @@ as_status aerospike_udf_put(
 	if (! asprintf(&command, "udf-put:filename=%s;content=%s;content-len=%d;udf-type=%s;",
 				   filebase, content_base64, encoded_len, as_udf_type_str[type])) {
 		as_string_destroy(&filename_string);
-		free(content_base64);
+		cf_free(content_base64);
 		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Udf put asprintf failed");
 	}
 	as_string_destroy(&filename_string);
 	
 	char* response = 0;
 	as_status status = aerospike_info_any(as, err, policy, command, &response);
-	free(command);
-	free(content_base64);
+	cf_free(command);
+	cf_free(content_base64);
 	
 	if (status) {
 		return status;
 	}
 	
-	free(response);
+	cf_free(response);
 	return AEROSPIKE_OK;
 }
 
@@ -315,7 +318,7 @@ aerospike_udf_put_is_done(aerospike* as, as_error * err, const as_policy_info* p
 			if (! p) {
 				done = false;
 			}
-			free(response);
+			cf_free(response);
 		}
 	}
 	as_nodes_release(nodes);
@@ -368,6 +371,6 @@ as_status aerospike_udf_remove(
 		return status;
 	}
 	
-	free(response);
+	cf_free(response);
 	return AEROSPIKE_OK;
 }

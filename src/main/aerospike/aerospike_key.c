@@ -68,6 +68,7 @@ as_event_command_node_init(
 	)
 {
 	as_error_reset(err);
+	*node_out = NULL;
 	
 	as_status status = as_key_set_digest(err, (as_key*)key);
 	

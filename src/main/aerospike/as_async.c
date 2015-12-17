@@ -23,29 +23,12 @@
 uint32_t
 as_async_get_pending(as_cluster* cluster)
 {
-	as_nodes* nodes = as_nodes_reserve(cluster);
-	uint32_t pending = 0;
-
-	for (uint32_t i = 0; i < nodes->size; ++i) {
-		pending += ck_pr_load_32(&nodes->array[i]->async_pending);
-	}
-
-	as_nodes_release(nodes);
-	return pending;
+	return ck_pr_load_32(&cluster->async_pending);
 }
 
 void
 as_async_get_connections(as_cluster* cluster, uint32_t* async_conn, uint32_t* async_conn_pool)
 {
-	*async_conn = 0;
-	*async_conn_pool = 0;
-
-	as_nodes* nodes = as_nodes_reserve(cluster);
-
-	for (uint32_t i = 0; i < nodes->size; ++i) {
-		*async_conn += ck_pr_load_32(&nodes->array[i]->async_conn);
-		*async_conn_pool += ck_pr_load_32(&nodes->array[i]->async_conn_pool);
-	}
-
-	as_nodes_release(nodes);
+	*async_conn = ck_pr_load_32(&cluster->async_conn);
+	*async_conn_pool = ck_pr_load_32(&cluster->async_conn_pool);
 }

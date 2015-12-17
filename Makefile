@@ -73,14 +73,6 @@ ifeq ($(OS),Darwin)
   LD_FLAGS += -undefined dynamic_lookup
 endif
 
-ifeq ($(EVENT_LIB),libev)
-  LD_FLAGS += -L/usr/local/lib -lev
-endif
-
-ifeq ($(EVENT_LIB),libuv)
-  LD_FLAGS += -L/usr/local/lib -luv
-endif
-
 # DEBUG Settings
 ifdef DEBUG
   O = 0

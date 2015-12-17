@@ -121,24 +121,6 @@ typedef struct as_node_s {
 	
 	/**
 	 *	@private
-	 *	Number of pending async commands (i.e., commands with an outstanding reply).
-	 */
-	uint32_t async_pending;
-
-	/**
-	 *	@private
-	 *	Number of active async connections.
-	 */
-	uint32_t async_conn;
-
-	/**
-	 *	@private
-	 *	Number of async connections in the pools.
-	 */
-	uint32_t async_conn_pool;
-
-	/**
-	 *	@private
 	 *	Socket used exclusively for cluster tend thread info requests.
 	 */
 	int info_fd;

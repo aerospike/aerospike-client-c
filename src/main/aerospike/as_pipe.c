@@ -150,7 +150,7 @@ put_connection(as_event_command* cmd)
 	as_queue* q = &cmd->node->pipe_conn_qs[cmd->event_loop->index];
 
 	if (as_queue_push_limit(q, &conn)) {
-		ck_pr_inc_32(&cmd->node->async_conn_pool);
+		ck_pr_inc_32(&cmd->node->cluster->async_conn_pool);
 		conn->in_pool = true;
 		return;
 	}
@@ -268,7 +268,7 @@ as_pipe_get_connection(as_event_command* cmd)
 	
 	while (as_queue_pop(q, &conn)) {
 		as_log_trace("Checking pipeline connection %p", conn);
-		ck_pr_dec_32(&cmd->node->async_conn_pool);
+		ck_pr_dec_32(&cmd->node->cluster->async_conn_pool);
 
 		if (conn->canceled) {
 			as_log_trace("Pipeline connection %p was canceled earlier", conn);
@@ -349,7 +349,7 @@ as_pipe_response_complete(as_event_command* cmd)
 {
 	as_log_trace("Response for command %p", cmd);
 	next_reader(cmd);
-	ck_pr_dec_32(&cmd->node->async_pending);
+	ck_pr_dec_32(&cmd->node->cluster->async_pending);
 	as_node_release(cmd->node);
 }
 

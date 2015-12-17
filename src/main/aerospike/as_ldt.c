@@ -57,7 +57,7 @@ as_ldt * as_ldt_new(const as_bin_name name, const as_ldt_type type, const as_udf
 	as_ldt * ldt = (as_ldt *) cf_malloc(sizeof(as_ldt));
 	if ( ldt ) {
 		if (!as_ldt_init(ldt, name, type, module)) {
-			cf_free (ldt);
+			cf_free(ldt);
 			return NULL;
 		}
 		ldt->_free = true;
@@ -123,7 +123,7 @@ as_ldt * as_ldt_init(as_ldt * ldt, const as_bin_name name, const as_ldt_type typ
 void as_ldt_destroy(as_ldt * ldt)
 {
 	if (ldt && ldt->_free) {
-		cf_free (ldt);
+		cf_free(ldt);
 	}
 }
 

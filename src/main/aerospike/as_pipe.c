@@ -20,6 +20,8 @@
 #define PIPE_WRITE_BUFFER_SIZE (5 * 1024 * 1024)
 #define PIPE_READ_BUFFER_SIZE (15 * 1024 * 1024)
 
+extern uint32_t as_event_loop_capacity;
+
 static void
 write_start(as_event_command* cmd)
 {
@@ -265,29 +267,37 @@ as_pipe_get_connection(as_event_command* cmd)
 	as_log_trace("Getting pipeline connection for command %p", cmd);
 	as_queue* q = &cmd->node->pipe_conn_qs[cmd->event_loop->index];
 	as_pipe_connection* conn;
-	
-	while (as_queue_pop(q, &conn)) {
-		as_log_trace("Checking pipeline connection %p", conn);
-		ck_pr_dec_32(&cmd->node->async_conn_pool);
 
-		if (conn->canceled) {
-			as_log_trace("Pipeline connection %p was canceled earlier", conn);
-			// Do not need to stop watcher because it was stopped in cancel_connection().
-			as_event_close_connection((as_event_connection*)conn, cmd->node);
-			continue;
+	// Prefer to open new connections, as long as we are below pool capacity. This is to
+	// make sure that we fully use the allowed number of connections. Pipelining otherwise
+	// tends to open very few connections, which isn't good for write parallelism on the
+	// server. The server processes all commands from the same connection sequentially.
+	// More connections thus mean more parallelism.
+	if (ck_pr_load_32(&cmd->node->async_conn) >=
+			cmd->cluster->pipe_max_conns_per_node_loop * as_event_loop_capacity) {
+		while (as_queue_pop(q, &conn)) {
+			as_log_trace("Checking pipeline connection %p", conn);
+			ck_pr_dec_32(&cmd->node->async_conn_pool);
+
+			if (conn->canceled) {
+				as_log_trace("Pipeline connection %p was canceled earlier", conn);
+				// Do not need to stop watcher because it was stopped in cancel_connection().
+				as_event_close_connection((as_event_connection*)conn, cmd->node);
+				continue;
+			}
+
+			conn->in_pool = false;
+
+			if (as_event_validate_connection(&conn->base, true)) {
+				as_log_trace("Validation OK");
+				cmd->conn = (as_event_connection*)conn;
+				write_start(cmd);
+				return true;
+			}
+
+			as_log_trace("Validation failed");
+			release_connection(cmd, conn, cmd->node);
 		}
-
-		conn->in_pool = false;
-
-		if (as_event_validate_connection(&conn->base, true)) {
-			as_log_trace("Validation OK");
-			cmd->conn = (as_event_connection*)conn;
-			write_start(cmd);
-			return true;
-		}
-		
-		as_log_trace("Validation failed");
-		release_connection(cmd, conn, cmd->node);
 	}
 	
 	as_log_trace("Creating new pipeline connection");

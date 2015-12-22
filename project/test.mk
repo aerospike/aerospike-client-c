@@ -36,6 +36,14 @@ else
   TEST_LDFLAGS += -lrt -ldl
 endif
 
+ifeq ($(EVENT_LIB),libev)
+  TEST_LDFLAGS += -L/usr/local/lib -lev
+endif
+
+ifeq ($(EVENT_LIB),libuv)
+  TEST_LDFLAGS += -L/usr/local/lib -luv
+endif
+
 AS_HOST := 127.0.0.1
 AS_PORT := 3000
 AS_ARGS := -h $(AS_HOST) -p $(AS_PORT)

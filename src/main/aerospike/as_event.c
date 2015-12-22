@@ -162,8 +162,16 @@ as_event_close_loops()
 as_status
 as_event_command_execute(as_event_command* cmd, as_error* err)
 {
-	ck_pr_inc_32(&cmd->node->async_pending);
+	ck_pr_inc_32(&cmd->node->cluster->async_pending);
 	
+	// Only do this after the above increment to avoid a race with as_cluster_destroy().
+	if (!cmd->node->cluster->valid) {
+		ck_pr_dec_32(&cmd->node->cluster->async_pending);
+		as_node_release(cmd->node);
+		as_event_command_free(cmd);
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Client shutting down");
+	}
+
 	// Use pointer comparison for performance.
 	// If portability becomes an issue, use "pthread_equal(event_loop->thread, pthread_self())"
 	// instead.
@@ -179,7 +187,7 @@ as_event_command_execute(as_event_command* cmd, as_error* err)
 		
 		// Send command through queue so it can be executed in event loop thread.
 		if (! as_event_send(cmd)) {
-			ck_pr_dec_32(&cmd->node->async_pending);
+			ck_pr_dec_32(&cmd->node->cluster->async_pending);
 			as_node_release(cmd->node);
 			as_event_command_free(cmd);
 			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to queue command");
@@ -194,7 +202,7 @@ as_event_put_connection(as_event_command* cmd)
 	as_queue* q = &cmd->node->async_conn_qs[cmd->event_loop->index];
 	
 	if (as_queue_push_limit(q, &cmd->conn)) {
-		ck_pr_inc_32(&cmd->node->async_conn_pool);
+		ck_pr_inc_32(&cmd->node->cluster->async_conn_pool);
 	} else {
 		as_event_close_connection(cmd->conn, cmd->node);
 	}
@@ -211,7 +219,7 @@ as_event_response_complete(as_event_command* cmd)
 	as_event_stop_timer(cmd);
 	as_event_stop_watcher(cmd, cmd->conn);
 	as_event_put_connection(cmd);
-	ck_pr_dec_32(&cmd->node->async_pending);
+	ck_pr_dec_32(&cmd->node->cluster->async_pending);
 	as_node_release(cmd->node);
 }
 
@@ -315,7 +323,7 @@ as_event_get_connection(as_event_command* cmd)
 
 	// Find connection.
 	while (as_queue_pop(q, &conn)) {
-		ck_pr_dec_32(&cmd->node->async_conn_pool);
+		ck_pr_dec_32(&cmd->node->cluster->async_conn_pool);
 
 		if (as_event_validate_connection(&conn->base, false)) {
 			conn->cmd = cmd;
@@ -336,9 +344,6 @@ as_event_get_connection(as_event_command* cmd)
 void
 as_event_error_callback(as_event_command* cmd, as_error* err)
 {
-	ck_pr_dec_32(&cmd->node->async_pending);
-	as_node_release(cmd->node);
-	
 	switch (cmd->type) {
 		case AS_ASYNC_TYPE_WRITE:
 			((as_async_write_command*)cmd)->listener(err, cmd->udata, cmd->event_loop);
@@ -355,6 +360,9 @@ as_event_error_callback(as_event_command* cmd, as_error* err)
 			as_event_executor_error(cmd->udata, err, -1);
 			break;
 	}
+
+	ck_pr_dec_32(&cmd->node->cluster->async_pending);
+	as_node_release(cmd->node);
 	as_event_command_release(cmd);
 }
 
@@ -436,8 +444,8 @@ as_event_command_parse_header(as_event_command* cmd)
 	as_msg* msg = (as_msg*)cmd->buf;
 	
 	if (msg->result_code == AEROSPIKE_OK) {
-		as_event_response_complete(cmd);
 		((as_async_write_command*)cmd)->listener(0, cmd->udata, cmd->event_loop);
+		as_event_response_complete(cmd);
 		as_event_command_release(cmd);
 	}
 	else {
@@ -473,8 +481,8 @@ as_event_command_parse_result(as_event_command* cmd)
 			p = as_command_ignore_fields(p, msg->n_fields);
 			as_command_parse_bins(&rec, p, msg->n_ops, cmd->deserialize);
 			
-			as_event_response_complete(cmd);
 			((as_async_record_command*)cmd)->listener(0, &rec, cmd->udata, cmd->event_loop);
+			as_event_response_complete(cmd);
 			as_event_command_release(cmd);
 			as_record_destroy(&rec);
 			break;
@@ -512,8 +520,8 @@ as_event_command_parse_success_failure(as_event_command* cmd)
 			status = as_command_parse_success_failure_bins(&p, &err, msg, &val);
 			
 			if (status == AEROSPIKE_OK) {
-				as_event_response_complete(cmd);
 				((as_async_value_command*)cmd)->listener(0, val, cmd->udata, cmd->event_loop);
+				as_event_response_complete(cmd);
 				as_event_command_release(cmd);
 				as_val_destroy(val);
 			}

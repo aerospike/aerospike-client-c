@@ -300,6 +300,22 @@ aerospike_close(aerospike* as, as_error* err);
 bool
 aerospike_cluster_is_connected(aerospike* as);
 
+/**
+ *	Is cluster connected to any server nodes.
+ *
+ *	~~~~~~~~~~{.c}
+ *	bool connected = aerospike_cluster_is_connected(&as);
+ *	~~~~~~~~~~
+ *
+ *	@param as 		The aerospike instance to check.
+ *
+ *	@returns true when cluster is connected.
+ *
+ *	@relates aerospike
+ */
+bool
+aerospike_cluster_is_connected(aerospike* as);
+
 #ifdef __cplusplus
 } // end extern "C"
 #endif

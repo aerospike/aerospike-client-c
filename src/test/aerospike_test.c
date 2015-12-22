@@ -233,6 +233,9 @@ PLAN(aerospike_test) {
 	// as_ldt module
 	plan_add(ldt_lmap);
 
+	// cdt
+	plan_add(cdt_basics);
+
 	if (g_use_async) {
 		plan_add(key_basics_async);
 		plan_add(key_apply_async);

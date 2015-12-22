@@ -7,6 +7,7 @@ default: all
 	$(MAKE) -C generation $@
 	$(MAKE) -C get $@
 	$(MAKE) -C incr $@
+	$(MAKE) -C list $@
 	$(MAKE) -C llist $@
 	$(MAKE) -C lmap $@
 	$(MAKE) -C lset $@

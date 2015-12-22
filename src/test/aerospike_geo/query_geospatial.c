@@ -42,6 +42,7 @@
  *****************************************************************************/
 
 extern aerospike * as;
+static bool server_has_geo = false;
 
 /******************************************************************************
  * MACROS
@@ -136,18 +137,6 @@ TEST( invalid_geojson, "various geojson formats supported" ) {
 	as_record_destroy(&rec);
 	as_key_destroy(&key);
 
-	// Invalid GeoJson - CRS
-	as_key_init(&key, NAMESPACE, SET, "crs");
-	as_record_inita(&rec, 1);
-	snprintf(buff, sizeof(buff),
-			 "{ \"type\": \"name\", \"properties\": { \"name\": \"urn:ogc:def:crs:OGC:1.3:CRS84\"] } }");
-	as_record_set_geojson_str(&rec, "geobin", buff);
-	rc = aerospike_key_put(as, &err, NULL, &key, &rec);
-
-	assert_int_eq( rc, AEROSPIKE_ERR_GEO_INVALID_GEOJSON );
-	as_record_destroy(&rec);
-	as_key_destroy(&key);
-
 }
 
 TEST( valid_geojson, "valid geojson formats" ) {
@@ -192,6 +181,13 @@ TEST( valid_geojson, "valid geojson formats" ) {
  *****************************************************************************/
 
 SUITE( query_geospatial, "aerospike_query_geospatial tests" ) {
+
+	server_has_geo = aerospike_has_geo(as);
+
+	if (!server_has_geo) {
+		info("geospatial tests skipped");
+		return;
+	}
 
 	suite_before( before );
 	suite_after( after   );

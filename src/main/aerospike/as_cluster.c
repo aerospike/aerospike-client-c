@@ -1139,6 +1139,10 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 		cluster->ip_map = ip_map_create(config->ip_map, config->ip_map_size);
 	}
 
+	cluster->async_pending = 0;
+	cluster->async_conn = 0;
+	cluster->async_conn_pool = 0;
+
 	// Initialize empty nodes.
 	cluster->nodes = as_nodes_create(0);
 	
@@ -1214,6 +1218,17 @@ as_cluster_destroy(as_cluster* cluster)
 		if (cluster->shm_info) {
 			as_shm_destroy(cluster);
 		}
+	}
+
+	while (true) {
+		int pending = ck_pr_load_32(&cluster->async_pending);
+
+		if (pending == 0) {
+			break;
+		}
+
+		as_log_trace("%d async operations pending, waiting", pending);
+		usleep(250 * 1000);
 	}
 
 	// Release everything in garbage collector.

@@ -219,8 +219,6 @@ as_event_response_complete(as_event_command* cmd)
 	as_event_stop_timer(cmd);
 	as_event_stop_watcher(cmd, cmd->conn);
 	as_event_put_connection(cmd);
-	ck_pr_dec_32(&cmd->cluster->async_pending);
-	as_node_release(cmd->node);
 }
 
 static inline void
@@ -361,8 +359,6 @@ as_event_error_callback(as_event_command* cmd, as_error* err)
 			break;
 	}
 
-	ck_pr_dec_32(&cmd->cluster->async_pending);
-	as_node_release(cmd->node);
 	as_event_command_release(cmd);
 }
 
@@ -444,8 +440,8 @@ as_event_command_parse_header(as_event_command* cmd)
 	as_msg* msg = (as_msg*)cmd->buf;
 	
 	if (msg->result_code == AEROSPIKE_OK) {
-		((as_async_write_command*)cmd)->listener(0, cmd->udata, cmd->event_loop);
 		as_event_response_complete(cmd);
+		((as_async_write_command*)cmd)->listener(0, cmd->udata, cmd->event_loop);
 		as_event_command_release(cmd);
 	}
 	else {
@@ -481,8 +477,8 @@ as_event_command_parse_result(as_event_command* cmd)
 			p = as_command_ignore_fields(p, msg->n_fields);
 			as_command_parse_bins(&rec, p, msg->n_ops, cmd->deserialize);
 			
-			((as_async_record_command*)cmd)->listener(0, &rec, cmd->udata, cmd->event_loop);
 			as_event_response_complete(cmd);
+			((as_async_record_command*)cmd)->listener(0, &rec, cmd->udata, cmd->event_loop);
 			as_event_command_release(cmd);
 			as_record_destroy(&rec);
 			break;
@@ -520,8 +516,8 @@ as_event_command_parse_success_failure(as_event_command* cmd)
 			status = as_command_parse_success_failure_bins(&p, &err, msg, &val);
 			
 			if (status == AEROSPIKE_OK) {
-				((as_async_value_command*)cmd)->listener(0, val, cmd->udata, cmd->event_loop);
 				as_event_response_complete(cmd);
+				((as_async_value_command*)cmd)->listener(0, val, cmd->udata, cmd->event_loop);
 				as_event_command_release(cmd);
 				as_val_destroy(val);
 			}

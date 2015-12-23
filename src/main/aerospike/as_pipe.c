@@ -359,8 +359,6 @@ as_pipe_response_complete(as_event_command* cmd)
 {
 	as_log_trace("Response for command %p", cmd);
 	next_reader(cmd);
-	ck_pr_dec_32(&cmd->cluster->async_pending);
-	as_node_release(cmd->node);
 }
 
 void

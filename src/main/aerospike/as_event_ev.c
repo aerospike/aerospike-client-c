@@ -452,7 +452,7 @@ as_ev_callback(struct ev_loop* loop, ev_io* watcher, int revents)
 static void
 as_ev_watcher_init(as_event_command* cmd, int fd)
 {
-	ck_pr_inc_32(&cmd->node->cluster->async_conn);
+	ck_pr_inc_32(&cmd->cluster->async_conn);
 	
 	if (cmd->cluster->user) {
 		as_event_set_auth_write(cmd);

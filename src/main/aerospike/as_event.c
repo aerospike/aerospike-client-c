@@ -162,11 +162,11 @@ as_event_close_loops()
 as_status
 as_event_command_execute(as_event_command* cmd, as_error* err)
 {
-	ck_pr_inc_32(&cmd->node->cluster->async_pending);
+	ck_pr_inc_32(&cmd->cluster->async_pending);
 	
 	// Only do this after the above increment to avoid a race with as_cluster_destroy().
-	if (!cmd->node->cluster->valid) {
-		ck_pr_dec_32(&cmd->node->cluster->async_pending);
+	if (!cmd->cluster->valid) {
+		ck_pr_dec_32(&cmd->cluster->async_pending);
 		as_node_release(cmd->node);
 		as_event_command_free(cmd);
 		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Client shutting down");
@@ -187,7 +187,7 @@ as_event_command_execute(as_event_command* cmd, as_error* err)
 		
 		// Send command through queue so it can be executed in event loop thread.
 		if (! as_event_send(cmd)) {
-			ck_pr_dec_32(&cmd->node->cluster->async_pending);
+			ck_pr_dec_32(&cmd->cluster->async_pending);
 			as_node_release(cmd->node);
 			as_event_command_free(cmd);
 			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to queue command");
@@ -202,7 +202,7 @@ as_event_put_connection(as_event_command* cmd)
 	as_queue* q = &cmd->node->async_conn_qs[cmd->event_loop->index];
 	
 	if (as_queue_push_limit(q, &cmd->conn)) {
-		ck_pr_inc_32(&cmd->node->cluster->async_conn_pool);
+		ck_pr_inc_32(&cmd->cluster->async_conn_pool);
 	} else {
 		as_event_close_connection(cmd->conn, cmd->node);
 	}
@@ -219,7 +219,7 @@ as_event_response_complete(as_event_command* cmd)
 	as_event_stop_timer(cmd);
 	as_event_stop_watcher(cmd, cmd->conn);
 	as_event_put_connection(cmd);
-	ck_pr_dec_32(&cmd->node->cluster->async_pending);
+	ck_pr_dec_32(&cmd->cluster->async_pending);
 	as_node_release(cmd->node);
 }
 
@@ -323,7 +323,7 @@ as_event_get_connection(as_event_command* cmd)
 
 	// Find connection.
 	while (as_queue_pop(q, &conn)) {
-		ck_pr_dec_32(&cmd->node->cluster->async_conn_pool);
+		ck_pr_dec_32(&cmd->cluster->async_conn_pool);
 
 		if (as_event_validate_connection(&conn->base, false)) {
 			conn->cmd = cmd;
@@ -361,7 +361,7 @@ as_event_error_callback(as_event_command* cmd, as_error* err)
 			break;
 	}
 
-	ck_pr_dec_32(&cmd->node->cluster->async_pending);
+	ck_pr_dec_32(&cmd->cluster->async_pending);
 	as_node_release(cmd->node);
 	as_event_command_release(cmd);
 }

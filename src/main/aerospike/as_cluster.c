@@ -149,6 +149,18 @@ as_seeds_add(as_cluster* cluster, as_seed* seed_list, uint32_t size) {
 	as_vector_append(cluster->gc, &item);
 }
 
+void
+as_seeds_update(as_cluster* cluster, as_seed* seed_list, uint32_t size)
+{
+	as_seeds* seeds = seeds_create(seed_list, size);
+	as_seeds* old = swap_seeds(cluster, seeds);
+
+	as_gc_item item;
+	item.data = old;
+	item.release_fn = gc_seeds;
+	as_vector_append(cluster->gc, &item);
+}
+
 static as_status
 as_lookup_node(as_cluster* cluster, as_error* err, struct sockaddr_in* addr, as_node_info* node_info)
 {

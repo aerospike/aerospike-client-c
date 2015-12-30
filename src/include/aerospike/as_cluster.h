@@ -404,6 +404,12 @@ void
 as_seeds_add(as_cluster* cluster, as_seed* seed_list, uint32_t size);
 
 /**
+ *	Replace the seeds of the cluster.
+ */
+void
+as_seeds_update(as_cluster* cluster, as_seed* seed_list, uint32_t size);
+
+/**
  *	Reserve reference counted access to IP map.
  */
 static inline as_addr_maps*

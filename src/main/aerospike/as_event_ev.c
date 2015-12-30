@@ -453,6 +453,7 @@ static void
 as_ev_watcher_init(as_event_command* cmd, int fd)
 {
 	ck_pr_inc_32(&cmd->cluster->async_conn);
+	ck_pr_inc_32(&cmd->node->async_conn);
 	
 	if (cmd->cluster->user) {
 		as_event_set_auth_write(cmd);
@@ -627,6 +628,7 @@ void
 as_event_close_connection(as_event_connection* conn, as_node* node)
 {
 	ck_pr_dec_32(&node->cluster->async_conn);
+	ck_pr_dec_32(&node->async_conn);
 	close(conn->fd);
 	cf_free(conn);
 }

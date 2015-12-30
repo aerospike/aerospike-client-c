@@ -273,7 +273,7 @@ as_pipe_get_connection(as_event_command* cmd)
 	// tends to open very few connections, which isn't good for write parallelism on the
 	// server. The server processes all commands from the same connection sequentially.
 	// More connections thus mean more parallelism.
-	if (ck_pr_load_32(&cmd->cluster->async_conn) >=
+	if (ck_pr_load_32(&cmd->node->async_conn) >=
 			cmd->cluster->pipe_max_conns_per_node_loop * as_event_loop_capacity) {
 		while (as_queue_pop(q, &conn)) {
 			as_log_trace("Checking pipeline connection %p", conn);

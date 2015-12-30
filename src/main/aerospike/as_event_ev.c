@@ -634,13 +634,14 @@ as_event_close_connection(as_event_connection* conn, as_node* node)
 }
 
 static void
-as_ev_close_connections(as_queue* conn_queue, uint32_t* cluster_conn, uint32_t* node_conn)
+as_ev_close_connections(as_queue* conn_queue, uint32_t* cluster_conn, uint32_t* cluster_conn_pool, uint32_t* node_conn)
 {
 	as_event_connection* conn;
 	
 	// Queue connection commands to event loops.
 	while (as_queue_pop(conn_queue, &conn)) {
 		ck_pr_dec_32(cluster_conn);
+		ck_pr_dec_32(cluster_conn_pool);
 		ck_pr_dec_32(node_conn);
 		close(conn->fd);
 		cf_free(conn);
@@ -654,9 +655,9 @@ as_event_node_destroy(as_node* node)
 	// Close connections.
 	for (uint32_t i = 0; i < as_event_loop_size; i++) {
 		as_ev_close_connections(&node->async_conn_qs[i],
-				&node->cluster->async_conn, &node->async_conn);
+				&node->cluster->async_conn, &node->cluster->async_conn_pool, &node->async_conn);
 		as_ev_close_connections(&node->pipe_conn_qs[i],
-				&node->cluster->async_conn, &node->async_conn);
+				&node->cluster->async_conn, &node->cluster->async_conn_pool, &node->async_conn);
 	}
 	cf_free(node->async_conn_qs);
 	cf_free(node->pipe_conn_qs);

@@ -191,6 +191,12 @@ typedef struct as_cluster_s {
 	 *	Milliseconds between cluster tends.
 	 */
 	uint32_t tend_interval;
+
+	/**
+	 *	@private
+	 *	If "services-alternate" should be used instead of "services"
+	 */
+	bool use_services_alternate;
 	
 	/**
 	 *	@private

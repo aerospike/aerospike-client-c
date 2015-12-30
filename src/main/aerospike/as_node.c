@@ -14,12 +14,13 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-#include <aerospike/as_node.h>
 #include <aerospike/as_admin.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_command.h>
 #include <aerospike/as_info.h>
 #include <aerospike/as_log_macros.h>
+#include <aerospike/as_lookup.h>
+#include <aerospike/as_node.h>
 #include <aerospike/as_socket.h>
 #include <aerospike/as_string.h>
 #include <citrusleaf/cf_byte_order.h>
@@ -357,8 +358,37 @@ as_cluster_find_friend(as_vector* /* <as_friend> */ friends, in_addr_t addr, in_
 	return false;
 }
 
-static void
-as_node_add_friends(as_cluster* cluster, as_node* node, char* buf, as_vector* /* <as_friend> */ friends)
+void
+as_node_add_friends(as_cluster* cluster, char* addr_str, int port, as_vector* /* <as_friend> */ friends)
+{
+	as_node* friend;
+	struct in_addr addr_tmp;
+	in_addr_t addr;
+
+	if (port > 0 && inet_aton(addr_str, &addr_tmp)) {
+		addr = addr_tmp.s_addr;
+		friend = as_cluster_find_node_given_address(cluster, addr, port);
+		
+		if (friend) {
+			friend->friends++;
+		}
+		else {
+			if (! as_cluster_find_friend(friends, addr, port)) {
+				as_friend f;
+				as_strncpy(f.name, addr_str, INET_ADDRSTRLEN);
+				f.addr = addr;
+				f.port = port;
+				as_vector_append(friends, &f);
+			}
+		}
+	}
+	else {
+		as_log_warn("Invalid services address: %s:%d", addr_str, (int)port);
+	}
+}
+
+void
+as_node_parse_and_add_friends(as_cluster* cluster, as_node* node, char* buf, as_vector* /* <as_friend> */ friends, bool resolve)
 {
 	// Friends format: <host1>:<port1>;<host2>:<port2>;...
 	if (buf == 0 || *buf == 0) {
@@ -370,9 +400,6 @@ as_node_add_friends(as_cluster* cluster, as_node* node, char* buf, as_vector* /*
 	char* p = buf;
 	char* addr_str = p;
 	char* port_str;
-	as_node* friend;
-	struct in_addr addr_tmp;
-	in_addr_t addr;
 	in_port_t port;
 	
 	while (*p) {
@@ -389,26 +416,30 @@ as_node_add_friends(as_cluster* cluster, as_node* node, char* buf, as_vector* /*
 			}
 			port = atoi(port_str);
 			
-			if (port > 0 && inet_aton(addr_str, &addr_tmp)) {
-				addr = addr_tmp.s_addr;
-				friend = as_cluster_find_node_given_address(cluster, addr, port);
-				
-				if (friend) {
-					friend->friends++;
-				}
-				else {
-					if (! as_cluster_find_friend(friends, addr, port)) {
-						as_friend f;
-						as_strncpy(f.name, addr_str, INET_ADDRSTRLEN);
-						f.addr = addr;
-						f.port = port;
-						as_vector_append(friends, &f);
+			// If what we get is a DNS entry (instead of an IP), we need to resolve it
+			// There could be multiple IP address corresponding to a DNS name
+			if (resolve) {
+				as_vector sockaddr_in_v;
+				as_error err_local;
+				as_vector_inita(&sockaddr_in_v, sizeof(struct sockaddr_in), 10);
+				int lookup_ret = as_lookup(cluster, &err_local, addr_str, port, &sockaddr_in_v);
+				if (lookup_ret == AEROSPIKE_OK) {
+					for (uint32_t i = 0; i < sockaddr_in_v.size ; i++) {
+						struct sockaddr_in* sa_in = as_vector_get(&sockaddr_in_v, i);
+						char *ip_addr = inet_ntoa(sa_in->sin_addr);
+						as_log_debug("Got IP %s for DNS name %s", ip_addr, addr_str);
+						as_node_add_friends(cluster, ip_addr, port, friends);
 					}
 				}
+				else {
+						as_log_warn("Failed to get IP for DNS name %s", addr_str);
+				}
+				as_vector_destroy(&sockaddr_in_v);
 			}
 			else {
-				as_log_warn("Invalid services address: %s:%d", addr_str, (int)port);
+				as_node_add_friends(cluster, addr_str, port, friends);
 			}
+
 			addr_str = ++p;
 		}
 		else {
@@ -444,7 +475,10 @@ as_node_process_response(as_cluster* cluster, as_node* node, as_vector* values,
 			}
 		}
 		else if (strcmp(nv->name, "services") == 0) {
-			as_node_add_friends(cluster, node, nv->value, friends);
+			as_node_parse_and_add_friends(cluster, node, nv->value, friends, false);
+		}
+		else if (strcmp(nv->name, "services-alternate") == 0) {
+			as_node_parse_and_add_friends(cluster, node, nv->value, friends, true);
 		}
 		else {
 			as_log_warn("Node %s did not request info '%s'", node->name, nv->name);
@@ -475,6 +509,7 @@ as_node_process_partitions(as_cluster* cluster, as_node* node, as_vector* values
 }
 
 const char INFO_STR_CHECK[] = "node\npartition-generation\nservices\n";
+const char INFO_STR_CHECK_SVCALT[] = "node\npartition-generation\nservices-alternate\n";
 const char INFO_STR_GET_REPLICAS[] = "partition-generation\nreplicas-master\nreplicas-prole\n";
 
 /**
@@ -491,7 +526,13 @@ as_node_refresh(as_cluster* cluster, as_error* err, as_node* node, as_vector* /*
 	}
 	
 	uint8_t stack_buf[INFO_STACK_BUF_SIZE];
-	uint8_t* buf = as_node_get_info(err, node, INFO_STR_CHECK, sizeof(INFO_STR_CHECK) - 1, deadline_ms, stack_buf);
+	uint8_t* buf;
+	if (cluster->use_services_alternate) {
+		buf = as_node_get_info(err, node, INFO_STR_CHECK_SVCALT, sizeof(INFO_STR_CHECK_SVCALT) - 1, deadline_ms, stack_buf);
+	}
+	else {
+		buf = as_node_get_info(err, node, INFO_STR_CHECK, sizeof(INFO_STR_CHECK) - 1, deadline_ms, stack_buf);
+	}
 	
 	if (! buf) {
 		as_node_close_info_connection(node);

@@ -240,7 +240,7 @@ typedef struct as_cluster_s {
 	 *	Milliseconds between cluster tends.
 	 */
 	uint32_t tend_interval;
-	
+
 	/**
 	 *	@private
 	 *	Size of node's synchronous connection pool.
@@ -304,6 +304,12 @@ typedef struct as_cluster_s {
 	 *	Total number of data partitions used by cluster.
 	 */
 	uint16_t n_partitions;
+	
+	/**
+	 *	@private
+	 *	If "services-alternate" should be used instead of "services"
+	 */
+	bool use_services_alternate;
 	
 	/**
 	 *	@private

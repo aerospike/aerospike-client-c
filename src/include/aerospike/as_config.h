@@ -364,6 +364,12 @@ typedef struct as_config_s {
 	bool fail_if_not_connected;
 	
 	/**
+	 *	Flag to signify if "services-alternate" should be used instead of "services"
+	 *	Default : false
+	 */
+	bool use_services_alternate;
+
+	/**
 	 *	Indicates if shared memory should be used for cluster tending.  Shared memory
 	 *	is useful when operating in single threaded mode with multiple client processes.
 	 *	This model is used by wrapper languages such as PHP and Python.  When enabled, 

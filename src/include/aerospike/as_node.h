@@ -121,6 +121,12 @@ typedef struct as_node_s {
 	
 	/**
 	 *	@private
+	 *	Number of active async connections.
+	 */
+	uint32_t async_conn;
+
+	/**
+	 *	@private
 	 *	Socket used exclusively for cluster tend thread info requests.
 	 */
 	int info_fd;

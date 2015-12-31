@@ -301,13 +301,6 @@ typedef struct as_config_s {
 	uint32_t tender_interval;
 
 	/**
-	 *	Flag to signify if "services-alternate" should be used instead of "services"
-	 *	Default : false
-	 */
-	 bool use_services_alternate;
-
-
-	/**
 	 *	Number of threads stored in underlying thread pool that is used in batch/scan/query commands.
 	 *	These commands are often sent to multiple server nodes in parallel threads.  A thread pool 
 	 *	improves performance because threads do not have to be created/destroyed for each command.
@@ -352,6 +345,12 @@ typedef struct as_config_s {
 	 */
 	bool fail_if_not_connected;
 	
+	/**
+	 *	Flag to signify if "services-alternate" should be used instead of "services"
+	 *	Default : false
+	 */
+	bool use_services_alternate;
+
 	/**
 	 *	Indicates if shared memory should be used for cluster tending.  Shared memory
 	 *	is useful when operating in single threaded mode with multiple client processes.

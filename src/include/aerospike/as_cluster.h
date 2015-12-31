@@ -194,12 +194,6 @@ typedef struct as_cluster_s {
 
 	/**
 	 *	@private
-	 *	If "services-alternate" should be used instead of "services"
-	 */
-	bool use_services_alternate;
-	
-	/**
-	 *	@private
 	 *	Size of node's synchronous connection pool.
 	 */
 	uint32_t conn_queue_size;
@@ -227,6 +221,12 @@ typedef struct as_cluster_s {
 	 *	Total number of data partitions used by cluster.
 	 */
 	cl_partition_id	n_partitions;
+	
+	/**
+	 *	@private
+	 *	If "services-alternate" should be used instead of "services"
+	 */
+	bool use_services_alternate;
 	
 	/**
 	 *	@private

@@ -83,7 +83,8 @@ as_node_create(as_cluster* cluster, struct sockaddr_in* addr, as_node_info* node
 		node->async_conn_qs = 0;
 		node->pipe_conn_qs = 0;
 	}
-	
+
+	node->async_conn = 0;
 	node->info_fd = -1;
 	node->friends = 0;
 	node->failures = 0;

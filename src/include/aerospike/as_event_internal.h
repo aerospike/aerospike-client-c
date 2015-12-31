@@ -237,6 +237,8 @@ as_event_stop_watcher(as_event_command* cmd, as_event_connection* conn)
 static inline void
 as_event_command_release(as_event_command* cmd)
 {
+	ck_pr_dec_32(&cmd->cluster->async_pending);
+	as_node_release(cmd->node);
 	as_event_command_free(cmd);
 }
 

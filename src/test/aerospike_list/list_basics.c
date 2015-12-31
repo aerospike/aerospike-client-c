@@ -223,7 +223,7 @@ static uint32_t
 index2uindex(as_testlist *tlist, int64_t index)
 {
 	if (index < 0) {
-		return as_arraylist_size(&tlist->arraylist) + index;
+		return as_arraylist_size(&tlist->arraylist) + (uint32_t)index;
 	}
 	return (uint32_t)index;
 }
@@ -515,7 +515,8 @@ as_testlist_compare(as_testlist *tlist)
  * TEST CASES
  *****************************************************************************/
 
-TEST( cdt_basics_op , "CDT operations test on a single bin" ) {
+TEST( cdt_basics_op , "CDT operations test on a single bin" )
+{
 	if (! has_cdt_list()) {
 		info("cdt-list not enabled. skipping test");
 		return;
@@ -642,6 +643,7 @@ TEST( cdt_basics_op , "CDT operations test on a single bin" ) {
  * TEST SUITE
  *****************************************************************************/
 
-SUITE( cdt_basics, "aerospike_cdt basic tests" ) {
-    suite_add( cdt_basics_op );
+SUITE(list_basics, "aerospike list basic tests")
+{
+    suite_add(cdt_basics_op);
 }

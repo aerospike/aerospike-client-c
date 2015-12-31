@@ -358,7 +358,7 @@ as_cluster_find_friend(as_vector* /* <as_friend> */ friends, in_addr_t addr, in_
 	return false;
 }
 
-void
+static void
 as_node_add_friends(as_cluster* cluster, char* addr_str, int port, as_vector* /* <as_friend> */ friends)
 {
 	as_node* friend;
@@ -387,7 +387,7 @@ as_node_add_friends(as_cluster* cluster, char* addr_str, int port, as_vector* /*
 	}
 }
 
-void
+static void
 as_node_parse_and_add_friends(as_cluster* cluster, as_node* node, char* buf, as_vector* /* <as_friend> */ friends, bool resolve)
 {
 	// Friends format: <host1>:<port1>;<host2>:<port2>;...

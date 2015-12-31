@@ -220,5 +220,5 @@ PLAN( aerospike_test ) {
     plan_add( ldt_lmap );
 
 	// cdt
-	plan_add( cdt_basics );
+	plan_add( list_basics );
 }

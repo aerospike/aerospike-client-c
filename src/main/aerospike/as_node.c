@@ -415,9 +415,9 @@ as_node_parse_and_add_friends(as_cluster* cluster, as_node* node, char* buf, as_
 			// There could be multiple IP address corresponding to a DNS name
 			if (resolve) {
 				as_vector sockaddr_in_v;
-				as_error err_local;
+				as_error err;
 				as_vector_inita(&sockaddr_in_v, sizeof(struct sockaddr_in), 10);
-				int lookup_ret = as_lookup(cluster, &err_local, addr_str, port, &sockaddr_in_v);
+				int lookup_ret = as_lookup(cluster, &err, addr_str, port, &sockaddr_in_v);
 				if (lookup_ret == AEROSPIKE_OK) {
 					for (uint32_t i = 0; i < sockaddr_in_v.size ; i++) {
 						struct sockaddr_in* sa_in = as_vector_get(&sockaddr_in_v, i);

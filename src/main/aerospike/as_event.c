@@ -166,8 +166,6 @@ as_event_command_execute(as_event_command* cmd, as_error* err)
 	
 	// Only do this after the above increment to avoid a race with as_cluster_destroy().
 	if (!cmd->cluster->valid) {
-		ck_pr_dec_32(&cmd->cluster->async_pending);
-		as_node_release(cmd->node);
 		as_event_command_free(cmd);
 		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Client shutting down");
 	}
@@ -187,8 +185,6 @@ as_event_command_execute(as_event_command* cmd, as_error* err)
 		
 		// Send command through queue so it can be executed in event loop thread.
 		if (! as_event_send(cmd)) {
-			ck_pr_dec_32(&cmd->cluster->async_pending);
-			as_node_release(cmd->node);
 			as_event_command_free(cmd);
 			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to queue command");
 		}

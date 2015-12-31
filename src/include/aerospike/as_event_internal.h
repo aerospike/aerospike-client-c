@@ -202,6 +202,9 @@ as_event_close_loop(as_event_loop* event_loop);
 static inline void
 as_event_command_free(as_event_command* cmd)
 {
+	ck_pr_dec_32(&cmd->cluster->async_pending);
+	as_node_release(cmd->node);
+	
 	if (cmd->free_buf) {
 		cf_free(cmd->buf);
 	}
@@ -237,8 +240,6 @@ as_event_stop_watcher(as_event_command* cmd, as_event_connection* conn)
 static inline void
 as_event_command_release(as_event_command* cmd)
 {
-	ck_pr_dec_32(&cmd->cluster->async_pending);
-	as_node_release(cmd->node);
 	as_event_command_free(cmd);
 }
 
@@ -327,7 +328,7 @@ as_event_command_execute_in_loop(as_event_command* cmd)
 	if (cmd->timeout_ms && (cf_getms() - *(uint64_t*)cmd) > cmd->timeout_ms) {
 		as_error err;
 		as_error_set_message(&err, AEROSPIKE_ERR_TIMEOUT, as_error_string(AEROSPIKE_ERR_TIMEOUT));
-		// Tell the libuv version of as_event_command_free() to not try to close the uv_timer_t.
+		// Tell the libuv version of as_event_command_release() to not try to close the uv_timer_t.
 		cmd->timeout_ms = 0;
 		as_event_error_callback(cmd, &err);
 		return;

@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		BF15F2401C0D22AB00C85306 /* query_geospatial.c in Sources */ = {isa = PBXBuildFile; fileRef = BF15F23F1C0D22AB00C85306 /* query_geospatial.c */; };
 		BF225C2E1BC70A8A00EEE0FB /* key_apply_async.c in Sources */ = {isa = PBXBuildFile; fileRef = BF225C2D1BC70A8A00EEE0FB /* key_apply_async.c */; };
 		BF22F9141BCD79E8002D04DD /* libev.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BF22F9131BCD79E8002D04DD /* libev.a */; settings = {ATTRIBUTES = (Required, ); }; };
 		BF230EA01BD5B19A007325AF /* batch_get_async.c in Sources */ = {isa = PBXBuildFile; fileRef = BF230E9F1BD5B19A007325AF /* batch_get_async.c */; };
@@ -77,7 +76,6 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		BF15F23F1C0D22AB00C85306 /* query_geospatial.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = query_geospatial.c; path = ../src/test/aerospike_geo/query_geospatial.c; sourceTree = "<group>"; };
 		BF225C2D1BC70A8A00EEE0FB /* key_apply_async.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = key_apply_async.c; path = ../src/test/aerospike_key/key_apply_async.c; sourceTree = "<group>"; };
 		BF22F9131BCD79E8002D04DD /* libev.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libev.a; path = ../../../../usr/local/lib/libev.a; sourceTree = "<group>"; };
 		BF230E9F1BD5B19A007325AF /* batch_get_async.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = batch_get_async.c; path = ../src/test/aerospike_batch/batch_get_async.c; sourceTree = "<group>"; };
@@ -150,7 +148,6 @@
 			isa = PBXGroup;
 			children = (
 				BF843C5018D3E61700A06CFB /* aerospike.xcodeproj */,
-				BF15F23F1C0D22AB00C85306 /* query_geospatial.c */,
 				BF22F9131BCD79E8002D04DD /* libev.a */,
 				BFCB24321BF167CA00B1A0EF /* libuv.a */,
 				BF225C2D1BC70A8A00EEE0FB /* key_apply_async.c */,
@@ -300,7 +297,6 @@
 				BFBC11B118CE410400D0B5BE /* query_foreach.c in Sources */,
 				BFBC11DD18CE416100D0B5BE /* udf_basics.c in Sources */,
 				BF2717811B448C3B007B8BED /* query_background.c in Sources */,
-				BF15F2401C0D22AB00C85306 /* query_geospatial.c in Sources */,
 				BFBC11A518CE406D00D0B5BE /* key_apply2.c in Sources */,
 				BFBC11AB18CE40C800D0B5BE /* index_basics.c in Sources */,
 				BFBC11AF18CE40EB00D0B5BE /* test_lmap.c in Sources */,

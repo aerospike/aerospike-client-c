@@ -467,6 +467,7 @@ as_uv_connected(uv_connect_t* req, int status)
 	as_event_command* cmd = req->data;
 
 	if (status == 0) {
+		ck_pr_inc_32(&cmd->cluster->async_conn);
 		ck_pr_inc_32(&cmd->node->async_conn);
 		
 		if (cmd->cluster->user) {
@@ -612,11 +613,12 @@ void
 as_event_close_connection(as_event_connection* conn, as_node* node)
 {
 	uv_close((uv_handle_t*)&conn->socket, as_uv_connection_closed);
+	ck_pr_dec_32(&node->cluster->async_conn);
 	ck_pr_dec_32(&node->async_conn);
 }
 
 static bool
-as_uv_queue_close_connections(as_queue* conn_queue, as_queue* cmd_queue)
+as_uv_queue_close_connections(as_node* node, as_queue* conn_queue, as_queue* cmd_queue)
 {
 	as_uv_command qcmd;
 	qcmd.type = AS_UV_CLOSE_CONNECTION;
@@ -627,6 +629,10 @@ as_uv_queue_close_connections(as_queue* conn_queue, as_queue* cmd_queue)
 	while (as_queue_pop(conn_queue, &conn)) {
 		qcmd.ptr = conn;
 		
+		ck_pr_dec_32(&node->cluster->async_conn);
+		ck_pr_dec_32(&node->cluster->async_conn_pool);
+		ck_pr_dec_32(&node->async_conn);
+
 		if (! as_queue_push(cmd_queue, &qcmd)) {
 			as_log_error("Failed to queue connection close");
 			return false;
@@ -643,8 +649,8 @@ as_event_node_destroy(as_node* node)
 		as_event_loop* event_loop = &as_event_loops[i];
 		
 		pthread_mutex_lock(&event_loop->lock);
-		as_uv_queue_close_connections(&node->async_conn_qs[i], &event_loop->queue);
-		as_uv_queue_close_connections(&node->pipe_conn_qs[i], &event_loop->queue);
+		as_uv_queue_close_connections(node, &node->async_conn_qs[i], &event_loop->queue);
+		as_uv_queue_close_connections(node, &node->pipe_conn_qs[i], &event_loop->queue);
 		pthread_mutex_unlock(&event_loop->lock);
 		
 		uv_async_send(event_loop->wakeup);

@@ -41,6 +41,7 @@ as_config * as_config_init(as_config * c)
 	c->max_socket_idle_sec = 14;
 	c->conn_timeout_ms = 1000;
 	c->tender_interval = 1000;
+	c->use_services_alternate = false;
 	c->thread_pool_size = 16;
 	c->hosts_size = 0;
 	memset(c->user, 0, sizeof(c->user));

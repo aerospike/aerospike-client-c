@@ -990,6 +990,7 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 	// Initialize seed hosts.
 	cluster->seeds_size = seeds_size(config);
 	cluster->seeds = seeds_create(config, cluster->seeds_size);
+	cluster->use_services_alternate = config->use_services_alternate;
 
 	// Initialize IP map translation if provided.
 	if (config->ip_map && config->ip_map_size > 0) {

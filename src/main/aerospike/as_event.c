@@ -220,9 +220,6 @@ as_event_response_complete(as_event_command* cmd)
 static inline void
 as_event_executor_destroy(as_event_executor* executor)
 {
-	if (executor->destroy_fn) {
-		executor->destroy_fn(executor);
-	}
 	pthread_mutex_unlock(&executor->lock);
 	pthread_mutex_destroy(&executor->lock);
 	cf_free(executor->commands);

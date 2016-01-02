@@ -121,7 +121,6 @@ typedef struct as_event_executor {
 	struct as_event_command** commands;
 	as_event_loop* event_loop;
 	as_event_executor_complete_fn complete_fn;
-	as_event_executor_destroy_fn destroy_fn;
 	void* udata;
 	uint32_t max_concurrent;
 	uint32_t max;

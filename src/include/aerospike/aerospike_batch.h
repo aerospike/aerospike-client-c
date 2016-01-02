@@ -301,7 +301,6 @@ aerospike_batch_read(
  *	{
  *		if (err) {
  *			fprintf(stderr, "Command failed: %d %s\n", err->code, err->message);
- *			return;
  *		}
  *		else {
  *			as_vector* list = &records->list;
@@ -309,8 +308,10 @@ aerospike_batch_read(
  *				as_batch_read_record* record = as_vector_get(list, i);
  *				// Process record
  *			}
- *			// Do not call as_batch_read_destroy() because the calling function will do that for you.
  *		}
+ *		// Must free batch records on both success and error conditions because it was created
+ *		// before calling aerospike_batch_read_async().
+ *		as_batch_read_destroy(records);
  *	}
  *
  *	as_batch_read_records* records = as_batch_read_create(10);
@@ -329,13 +330,20 @@ aerospike_batch_read(
  *	record->read_all_bins = true;
  *
  *	as_status status = aerospike_batch_read_async(&as, &err, NULL, records, NULL, my_listener, NULL);
+ *
+ *	if (status != AEROSPIKE_OK) {
+ *		// Must free batch records on queue error because the callback will not be called.
+ *		as_batch_read_destroy(records);
+ *	}
+ *
  *	~~~~~~~~~~
  *
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param records		List of keys and bins to retrieve.  The returned records are located in the same array.
- *						Must be allocated on heap because async method will return immediately after queueing command.
+ *						Must create using as_batch_read_create() (which allocates memory on heap) because 
+ *						async method will return immediately after queueing command.
  *	@param listener 	User function to be called with command results.
  *	@param udata 		User data to be forwarded to user callback.
  *	@param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.

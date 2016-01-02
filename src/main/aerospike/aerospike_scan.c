@@ -567,7 +567,6 @@ as_scan_async(
 	pthread_mutex_init(&exec->lock, NULL);
 	exec->event_loop = as_event_assign(event_loop);
 	exec->complete_fn = as_scan_complete_async;
-	exec->destroy_fn = NULL;
 	exec->udata = udata;
 	exec->max = n_nodes;
 	exec->count = 0;

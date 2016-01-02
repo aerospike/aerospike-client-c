@@ -128,13 +128,6 @@ as_batch_complete_async(as_event_executor* executor, as_error* err)
 	e->listener(err, e->records, executor->udata, executor->event_loop);
 }
 
-static void
-as_batch_destroy_async(as_event_executor* executor)
-{
-	as_async_batch_executor* e = (as_async_batch_executor*)executor;
-	as_batch_read_destroy(e->records);
-}
-
 static bool
 as_batch_async_parse_records(as_event_command* cmd)
 {
@@ -1150,7 +1143,6 @@ aerospike_batch_read_async(
 	// Check for empty batch.
 	if (records->list.size == 0) {
 		listener(0, records, udata, event_loop);
-		as_batch_read_destroy(records);
 		return AEROSPIKE_OK;
 	}
 	
@@ -1162,7 +1154,6 @@ aerospike_batch_read_async(
 	exec->commands = 0;
 	exec->event_loop = as_event_assign(event_loop);
 	exec->complete_fn = as_batch_complete_async;
-	exec->destroy_fn = as_batch_destroy_async;
 	exec->udata = udata;
 	exec->max_concurrent = 0;
 	exec->max = 0;

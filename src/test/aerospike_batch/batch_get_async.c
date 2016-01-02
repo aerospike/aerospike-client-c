@@ -98,6 +98,9 @@ TEST(batch_async_pre , "Batch Async: Create Records")
 static void
 batch_callback(as_error* err, as_batch_read_records* records, void* udata, as_event_loop* event_loop)
 {
+	if (err) {
+		as_batch_read_destroy(records);
+	}
 	assert_success_async(&monitor, err, udata);
 
 	as_vector* list = &records->list;
@@ -137,6 +140,7 @@ batch_callback(as_error* err, as_batch_read_records* records, void* udata, as_ev
 			error("Unexpected error(%u): %s", i, as_error_string(batch->result));
 		}
 	}
+	as_batch_read_destroy(records);
 	
     assert_int_eq_async(&monitor, found, 8);
     assert_int_eq_async(&monitor, errors, 0);
@@ -201,6 +205,10 @@ TEST(batch_async_read_complex, "Batch Async Read Complex")
 
 	as_error err;
 	as_status status = aerospike_batch_read_async(as, &err, NULL, records, batch_callback, __result__, NULL);
+	
+	if (status != AEROSPIKE_OK) {
+		as_batch_read_destroy(records);
+	}
     assert_int_eq(status, AEROSPIKE_OK);
 }
 

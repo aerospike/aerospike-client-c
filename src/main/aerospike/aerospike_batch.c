@@ -997,7 +997,6 @@ as_batch_read_cleanup(
 	if (async_executor) {
 		// Destroy batch async resources.
 		// Assume no async commands have been queued.
-		as_batch_read_destroy(records);
 		cf_free(async_executor);
 	}
 }

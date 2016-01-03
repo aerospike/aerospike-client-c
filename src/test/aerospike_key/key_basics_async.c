@@ -113,13 +113,9 @@ TEST(key_basics_async_get, "async get")
 	as_record rec;
 	as_record_inita(&rec, 1);
 	as_record_set_int64(&rec, "a", 123);
-	
-	as_policy_write p;
-	as_policy_write_init(&p);
-	p.timeout = 0;
-	
+		
 	as_error err;
-	as_status status = aerospike_key_put_async(as, &err, &p, &key, &rec, as_put_callback1, __result__, 0, false);
+	as_status status = aerospike_key_put_async(as, &err, NULL, &key, &rec, as_put_callback1, __result__, 0, false);
 	as_key_destroy(&key);
 	as_record_destroy(&rec);
 	

@@ -316,6 +316,7 @@ aerospike_batch_read(
  *
  *	as_batch_read_records* records = as_batch_read_create(10);
  *
+ *	// bin_names can be placed on stack because it's only referenced before being queued on event loop.
  *	char* bin_names[] = {"bin1", "bin2"};
  *	char* ns = "ns";
  *	char* set = "set";

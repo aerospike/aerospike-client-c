@@ -45,7 +45,7 @@ struct atf_test_s {
 struct atf_test_result_s {
     atf_test *      test;
     bool            success;
-    char            message[128];
+    char            message[1024];
 };
 
 atf_test_result * atf_test_run(atf_test * test);

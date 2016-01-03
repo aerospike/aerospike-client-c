@@ -396,7 +396,7 @@ void atf_assert_log(atf_test_result * result, const char * exp, const char * fil
     vsnprintf(msg, LOG_MESSAGE_MAX, fmt, ap);
     va_end(ap);
 
-    snprintf(result->message, LOG_MESSAGE_MAX, "assertion failed: %s. %s [at %s:%d]", exp, msg, file, line);
+    snprintf(result->message, sizeof(result->message), "assertion failed: %s. %s [at %s:%d]", exp, msg, file, line);
     result->success = false;
 }
 

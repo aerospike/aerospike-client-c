@@ -413,7 +413,7 @@
 					/usr/local/Cellar/libuv/1.7.5/lib,
 				);
 				MACOSX_DEPLOYMENT_TARGET = 10.8;
-				OTHER_CFLAGS = "-DAS_USE_LIBUV";
+				OTHER_CFLAGS = "-DAS_USE_LIBEV";
 				OTHER_LDFLAGS = "-L/usr/local/lib";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
@@ -439,7 +439,7 @@
 					/usr/local/Cellar/libuv/1.7.5/lib,
 				);
 				MACOSX_DEPLOYMENT_TARGET = 10.8;
-				OTHER_CFLAGS = "-DAS_USE_LIBUV";
+				OTHER_CFLAGS = "-DAS_USE_LIBEV";
 				OTHER_LDFLAGS = "-L/usr/local/lib";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;

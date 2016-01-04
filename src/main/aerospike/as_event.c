@@ -54,7 +54,6 @@ as_event_create_loops(uint32_t capacity)
 	}
 	
 	as_event_loop_capacity = capacity;
-	as_event_loop_size = 0;
 	as_event_threads_created = true;
 	
 	for (uint32_t i = 0; i < capacity; i++) {
@@ -154,6 +153,7 @@ as_event_close_loops()
 	}
 	cf_free(as_event_loops);
 	as_event_loops = NULL;
+	as_event_loop_size = 0;
 }
 
 /******************************************************************************

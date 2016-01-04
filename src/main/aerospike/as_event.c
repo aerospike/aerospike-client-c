@@ -333,6 +333,80 @@ as_event_get_connection(as_event_command* cmd)
 	return false;
 }
 
+int
+as_event_create_socket(as_event_command* cmd)
+{
+	// Create a non-blocking socket.
+	int fd = as_socket_create_nb();
+	
+	if (fd < 0) {
+		as_error err;
+		as_error_set_message(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Failed to create non-blocking socket");
+		as_event_connect_error(cmd, &err, fd);
+		return -1;
+	}
+	
+	if (cmd->pipeline) {
+		if (as_event_send_buffer_size) {
+			if (setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &as_event_send_buffer_size, sizeof(as_event_send_buffer_size)) < 0) {
+				as_error err;
+				as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION,
+								"Failed to configure pipeline send buffer. size %d error %d (%s)",
+								as_event_send_buffer_size, errno, strerror(errno));
+				as_event_connect_error(cmd, &err, fd);
+				return -1;
+			}
+		}
+		
+		if (as_event_recv_buffer_size) {
+			if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &as_event_recv_buffer_size, sizeof(as_event_recv_buffer_size)) < 0) {
+				as_error err;
+				as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION,
+								"Failed to configure pipeline receive buffer. size %d error %d (%s)",
+								as_event_recv_buffer_size, errno, strerror(errno));
+				as_event_connect_error(cmd, &err, fd);
+				return -1;
+			}
+		}
+		
+#if defined(__linux__)
+		if (as_event_recv_buffer_size) {
+			if (setsockopt(fd, SOL_TCP, TCP_WINDOW_CLAMP, &as_event_recv_buffer_size, sizeof(as_event_recv_buffer_size)) < 0) {
+				as_error err;
+				as_error_set_message(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Failed to configure pipeline TCP window.");
+				as_event_connect_error(cmd, &err, fd);
+				return -1;
+			}
+		}
+#endif
+		
+		int arg = 0;
+		
+		if (setsockopt(fd, SOL_TCP, TCP_NODELAY, &arg, sizeof(arg)) < 0) {
+			as_error err;
+			as_error_set_message(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Failed to configure pipeline Nagle algorithm.");
+			as_event_connect_error(cmd, &err, fd);
+			return -1;
+		}
+	}
+	return fd;
+}
+
+void
+as_event_connect_error(as_event_command* cmd, as_error* err, int fd)
+{
+	// Only timer needs to be released on socket connection failure.
+	// Watcher has not been registered yet.
+	as_event_stop_timer(cmd);
+	
+	// Close fd when valid.
+	if (fd >= 0) {
+		close(fd);
+	}
+	cf_free(cmd->conn);
+	as_event_error_callback(cmd, err);
+}
+
 void
 as_event_error_callback(as_event_command* cmd, as_error* err)
 {

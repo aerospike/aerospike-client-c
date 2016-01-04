@@ -443,21 +443,15 @@ as_uv_auth_write_start(as_event_command* cmd, uv_stream_t* stream)
 }
 
 static void
-as_uv_connect_error(as_event_command* cmd, as_error* err, bool close_conn)
+as_uv_connect_error(as_event_command* cmd, as_error* err)
 {
 	// Timer will be stopped in as_event_command_release().
 	// Watcher has not been registered yet.
 	
 	// libuv requires uv_close if socket released after uv_tcp_init succeeds.
-	if (close_conn) {
-		// The socket is the first field in as_event_connection, so just use connection.
-		// The close callback will also free as_event_connection memory.
-		uv_close((uv_handle_t*)cmd->conn, as_uv_connection_closed);
-	}
-	else {
-		// Free connection memory directly, because close should not be called.
-		cf_free(cmd->conn);
-	}
+	// The socket is the first field in as_event_connection, so just use connection.
+	// The close callback will also free as_event_connection memory.
+	uv_close((uv_handle_t*)cmd->conn, as_uv_connection_closed);
 	as_event_error_callback(cmd, err);
 }
 
@@ -484,13 +478,19 @@ as_uv_connected(uv_connect_t* req, int status)
 		as_error err;
 		as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Failed to connect: %s %s:%d",
 						node->name, primary->name, (int)cf_swap_from_be16(primary->addr.sin_port));
-		as_uv_connect_error(cmd, &err, true);
+		as_uv_connect_error(cmd, &err);
 	}
 }
 
 static void
 as_uv_connect(as_event_command* cmd)
 {
+	int fd = as_event_create_socket(cmd);
+	
+	if (fd < 0) {
+		return;
+	}
+	
 	as_event_connection* conn = cmd->conn;
 	uv_tcp_t* socket = &conn->socket;
 	int status = uv_tcp_init(cmd->event_loop->loop, socket);
@@ -498,73 +498,22 @@ as_uv_connect(as_event_command* cmd)
 	if (status) {
 		as_error err;
 		as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "uv_tcp_init failed: %s", uv_strerror(status));
-		as_uv_connect_error(cmd, &err, false);
+		// Call standard event connection error handler because as_uv_connect_error() requires that
+		// uv_tcp_init() has already succeeded.
+		as_event_connect_error(cmd, &err, fd);
 		return;
 	}
 	
-	if (cmd->pipeline) {
-		if (as_event_send_buffer_size) {
-			status = uv_send_buffer_size((uv_handle_t*)socket, &as_event_send_buffer_size);
-			
-			if (status) {
-				as_error err;
-				as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "uv_send_buffer_size failed: %s", uv_strerror(status));
-				as_uv_connect_error(cmd, &err, true);
-				return;
-			}
-		}
-		
-		if (as_event_recv_buffer_size) {
-			status = uv_recv_buffer_size((uv_handle_t*)socket, &as_event_recv_buffer_size);
-			
-			if (status) {
-				as_error err;
-				as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "uv_recv_buffer_size failed: %s", uv_strerror(status));
-				as_uv_connect_error(cmd, &err, true);
-				return;
-			}
-			
-#if defined(__linux__)
-			// libuv does not have a TCP_WINDOW_CLAMP function, so use fd directly.
-			uv_os_fd_t fd;
-
-			if (uv_fileno((uv_handle_t*)socket, &fd) == 0) {
-				if (setsockopt(fd, SOL_TCP, TCP_WINDOW_CLAMP, &as_event_recv_buffer_size, sizeof(as_event_recv_buffer_size)) < 0) {
-					as_error err;
-					as_error_set_message(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Failed to configure pipeline TCP window.");
-					as_uv_connect_error(cmd, &err, true);
-					return;
-				}
-			}
-			else {
-				as_error err;
-				as_error_set_message(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Failed to retrieve fd");
-				as_uv_connect_error(cmd, &err, true);
-				return;
-			}
-#endif
-		}
-		
-		status = uv_tcp_nodelay(socket, 0);
-		
-		if (status) {
-			as_error err;
-			as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "uv_tcp_nodelay disable failed: %s", uv_strerror(status));
-			as_uv_connect_error(cmd, &err, true);
-			return;
-		}
-	}
-	else {
-		// libuv sockets are non-blocking and SO_NOSIGPIPE (when available) by default.
-		// Only need set to set nodelay option.
-		status = uv_tcp_nodelay(socket, 1);
-		
-		if (status) {
-			as_error err;
-			as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "uv_tcp_nodelay enable failed: %s", uv_strerror(status));
-			as_uv_connect_error(cmd, &err, true);
-			return;
-		}
+	// Define externally created fd to uv_tcp_t.
+	status = uv_tcp_open(socket, fd);
+	
+	if (status) {
+		as_error err;
+		as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "uv_tcp_open failed: %s", uv_strerror(status));
+		// Close fd directly because we created it outside of libuv and uv_tcp_t does not know about it here.
+		close(fd);
+		as_uv_connect_error(cmd, &err);
+		return;
 	}
 	
 	socket->data = conn;
@@ -578,7 +527,7 @@ as_uv_connect(as_event_command* cmd)
 	if (status) {
 		as_error err;
 		as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "uv_tcp_connect failed: %s", uv_strerror(status));
-		as_uv_connect_error(cmd, &err, true);
+		as_uv_connect_error(cmd, &err);
 	}
 }
 

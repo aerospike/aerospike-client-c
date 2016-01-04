@@ -17,8 +17,13 @@
 
 #include <aerospike/as_pipe.h>
 
+#if defined(__linux__)
 #define PIPE_WRITE_BUFFER_SIZE (5 * 1024 * 1024)
 #define PIPE_READ_BUFFER_SIZE (15 * 1024 * 1024)
+#else
+#define PIPE_WRITE_BUFFER_SIZE (2 * 1024 * 1024)
+#define PIPE_READ_BUFFER_SIZE  (4 * 1024 * 1024)
+#endif
 
 extern uint32_t as_event_loop_capacity;
 
@@ -247,7 +252,7 @@ as_pipe_get_send_buffer_size()
 #if defined(__linux__)
 	return get_buffer_size("/proc/sys/net/core/wmem_max", PIPE_WRITE_BUFFER_SIZE);
 #else
-	return 0;  // TODO: Try to find max for __APPLE__.
+	return PIPE_WRITE_BUFFER_SIZE;
 #endif
 }
 
@@ -257,7 +262,7 @@ as_pipe_get_recv_buffer_size()
 #if defined(__linux__)
 	return get_buffer_size("/proc/sys/net/core/rmem_max", PIPE_READ_BUFFER_SIZE);
 #else
-	return 0;  // TODO: Try to find max for __APPLE__.
+	return PIPE_READ_BUFFER_SIZE;
 #endif
 }
 

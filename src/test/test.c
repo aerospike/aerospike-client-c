@@ -344,47 +344,47 @@ void atf_plan_result_destroy(atf_plan_result * result) {
 
 
 void atf_assert(atf_test_result * result, const char * exp, const char * file, int line) {
-    snprintf(result->message, LOG_MESSAGE_MAX, "assertion failed: %s [at %s:%d]", exp, file, line);
+    snprintf(result->message, sizeof(result->message), "assertion failed: %s [at %s:%d]", exp, file, line);
     result->success = false;
 }
 
 void atf_assert_true(atf_test_result * result, const char * exp, const char * file, int line) {
-    snprintf(result->message, LOG_MESSAGE_MAX, "assertion failed: %s is not true. [at %s:%d]", exp, file, line);
+    snprintf(result->message, sizeof(result->message), "assertion failed: %s is not true. [at %s:%d]", exp, file, line);
     result->success = false;
 }
 
 void atf_assert_false(atf_test_result * result, const char * exp, const char * file, int line) {
-    snprintf(result->message, LOG_MESSAGE_MAX, "assertion failed: %s is not false. [at %s:%d]", exp, file, line);
+    snprintf(result->message, sizeof(result->message), "assertion failed: %s is not false. [at %s:%d]", exp, file, line);
     result->success = false;
 }
 
 void atf_assert_null(atf_test_result * result, const char * exp, const char * file, int line) {
-    snprintf(result->message, LOG_MESSAGE_MAX, "assertion failed: %s is not NULL. [at %s:%d]", exp, file, line);
+    snprintf(result->message, sizeof(result->message), "assertion failed: %s is not NULL. [at %s:%d]", exp, file, line);
     result->success = false;
 }
 
 void atf_assert_not_null(atf_test_result * result, const char * exp, const char * file, int line) {
-    snprintf(result->message, LOG_MESSAGE_MAX, "assertion failed: %s is NULL. [at %s:%d]", exp, file, line);
+    snprintf(result->message, sizeof(result->message), "assertion failed: %s is NULL. [at %s:%d]", exp, file, line);
     result->success = false;
 }
 
 void atf_assert_int_eq(atf_test_result * result, const char * actual_exp, int64_t actual, int64_t expected, const char * file, int line) {
-    snprintf(result->message, LOG_MESSAGE_MAX, "assertion failed: %s == %" PRId64 ", when %" PRId64 " was expected. [at %s:%d]", actual_exp, actual, expected, file, line);
+    snprintf(result->message, sizeof(result->message), "assertion failed: %s == %" PRId64 ", when %" PRId64 " was expected. [at %s:%d]", actual_exp, actual, expected, file, line);
     result->success = false;
 }
 
 void atf_assert_int_ne(atf_test_result * result, const char * actual_exp, int64_t actual, int64_t expected, const char * file, int line) {
-    snprintf(result->message, LOG_MESSAGE_MAX, "assertion failed: %s == %" PRId64 ", when it shouldn't be. [at %s:%d]", actual_exp, actual, file, line);
+    snprintf(result->message, sizeof(result->message), "assertion failed: %s == %" PRId64 ", when it shouldn't be. [at %s:%d]", actual_exp, actual, file, line);
     result->success = false;
 }
 
 void atf_assert_double_eq(atf_test_result * result, const char * actual_exp, double actual, double expected, const char * file, int line) {
-    snprintf(result->message, LOG_MESSAGE_MAX, "assertion failed: %s == %f when %f was expected. [at %s:%d]", actual_exp, actual, expected, file, line);
+    snprintf(result->message, sizeof(result->message), "assertion failed: %s == %f when %f was expected. [at %s:%d]", actual_exp, actual, expected, file, line);
     result->success = false;
 }
 
 void atf_assert_string_eq(atf_test_result * result, const char * actual_exp, const char * actual, const char * expected, const char * file, int line) {
-    snprintf(result->message, LOG_MESSAGE_MAX, "assertion failed: %s == \"%s\", when \"%s\" was expected. [at %s:%d]", actual_exp, actual, expected, file, line);
+    snprintf(result->message, sizeof(result->message), "assertion failed: %s == \"%s\", when \"%s\" was expected. [at %s:%d]", actual_exp, actual, expected, file, line);
     result->success = false;
 }
 

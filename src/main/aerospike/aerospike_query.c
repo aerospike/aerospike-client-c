@@ -16,6 +16,7 @@
  */
 #include <aerospike/aerospike_query.h>
 #include <aerospike/as_aerospike.h>
+#include <aerospike/as_async.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_command.h>
 #include <aerospike/as_error.h>
@@ -83,6 +84,16 @@ typedef struct as_query_complete_task_s {
 	uint64_t task_id;
 	as_status result;
 } as_query_complete_task;
+
+typedef struct as_async_query_executor {
+	as_event_executor executor;
+	as_async_query_record_listener listener;
+} as_async_query_executor;
+
+typedef struct as_async_query_command {
+	as_event_command command;
+	uint8_t space[];
+} as_async_query_command;
 
 /******************************************************************************
  * STATIC FUNCTIONS
@@ -178,6 +189,74 @@ static const as_stream_hooks output_stream_hooks = {
     .read     = NULL,
     .write    = as_output_stream_write
 };
+
+static void
+as_query_complete_async(as_event_executor* executor, as_error* err)
+{
+	((as_async_query_executor*)executor)->listener(err, 0, executor->udata, executor->event_loop);
+}
+
+static bool
+as_query_parse_record_async(as_event_command* cmd, uint8_t** pp, as_msg* msg)
+{
+	as_record rec;
+	as_record_inita(&rec, msg->n_ops);
+	
+	rec.gen = msg->generation;
+	rec.ttl = cf_server_void_time_to_ttl(msg->record_ttl);
+	
+	uint8_t* p = *pp;
+	p = as_command_parse_key(p, msg->n_fields, &rec.key);
+	p = as_command_parse_bins(&rec, p, msg->n_ops, cmd->deserialize);
+	*pp = p;
+	
+	as_event_executor* executor = cmd->udata;  // udata is overloaded to contain executor.
+	bool rv = ((as_async_query_executor*)executor)->listener(0, &rec, executor->udata, executor->event_loop);
+	as_record_destroy(&rec);
+	return rv;
+}
+
+static bool
+as_query_parse_records_async(as_event_command* cmd)
+{
+	as_event_executor* executor = cmd->udata;  // udata is overloaded to contain executor.
+	uint8_t* p = cmd->buf;
+	uint8_t* end = p + cmd->len;
+	
+	while (p < end) {
+		as_msg* msg = (as_msg*)p;
+		as_msg_swap_header_from_be(msg);
+		
+		if (msg->result_code) {
+			as_error err;
+			as_error_set_message(&err, msg->result_code, as_error_string(msg->result_code));
+			as_event_response_error(cmd, &err);
+			return true;
+		}
+		p += sizeof(as_msg);
+		
+		if (msg->info3 & AS_MSG_INFO3_LAST) {
+			as_event_executor_complete(cmd);
+			return true;
+		}
+		
+		if (! as_query_parse_record_async(cmd, &p, msg)) {
+			executor->valid = false;
+			as_error err;
+			as_error_set_message(&err, AEROSPIKE_ERR_CLIENT_ABORT, "");
+			as_event_response_error(cmd, &err);
+			return true;
+		}
+		
+		if (! executor->valid) {
+			as_error err;
+			as_error_set_message(&err, AEROSPIKE_ERR_CLIENT_ABORT, "");
+			as_event_response_error(cmd, &err);
+			return true;
+		}
+	}
+	return false;
+}
 
 static as_status
 as_query_parse_record(uint8_t** pp, as_msg* msg, as_query_task* task, as_error* err)
@@ -448,12 +527,11 @@ as_query_write_range_integer(uint8_t* p, int64_t begin, int64_t end)
 	return p;
 }
 
-static as_status
-as_query_execute(as_query_task* task, const as_query * query, as_nodes* nodes, uint32_t n_nodes, uint8_t query_type)
+static size_t
+as_query_command_size(const as_query* query, uint16_t* fields, as_buffer* argbuffer,
+	uint32_t* filter_sz, uint32_t* bin_name_sz
+	)
 {
-	// Build Command.  It's okay to share command across threads because query does not have retries.
-	// If retries were allowed, the timeout field in the command would change on retry which
-	// would conflict with other threads.
 	size_t size = AS_HEADER_SIZE;
 	uint32_t filter_size = 0;
 	uint32_t bin_name_size = 0;
@@ -477,7 +555,7 @@ as_query_execute(as_query_task* task, const as_query * query, as_nodes* nodes, u
 		size += as_command_field_size(1);
 		n_fields++;
 	}
-
+	
 	// Estimate taskId size.
 	size += as_command_field_size(8);
 	n_fields++;
@@ -514,13 +592,13 @@ as_query_execute(as_query_task* task, const as_query * query, as_nodes* nodes, u
 		}
 		size += filter_size;
 		n_fields++;
-
+		
 		// Query bin names are specified as a field (Scan bin names are specified later as operations)
 		// Estimate size for selected bin names.
 		if (query->select.size > 0) {
 			size += AS_FIELD_HEADER_SIZE;
 			bin_name_size++;  // Add byte for num bin names.
-
+			
 			for (uint16_t i = 0; i < query->select.size; i++) {
 				bin_name_size += strlen(query->select.entries[i]) + 1;
 			}
@@ -535,8 +613,7 @@ as_query_execute(as_query_task* task, const as_query * query, as_nodes* nodes, u
 	}
 	
 	// Estimate background function size.
-	as_buffer argbuffer;
-	as_buffer_init(&argbuffer);
+	as_buffer_init(argbuffer);
 	
 	if (query->apply.function[0]) {
 		size += as_command_field_size(1);
@@ -547,10 +624,10 @@ as_query_execute(as_query_task* task, const as_query * query, as_nodes* nodes, u
 			// If the query has a udf w/ arglist, then serialize it.
 			as_serializer ser;
 			as_msgpack_init(&ser);
-            as_serializer_serialize(&ser, (as_val*)query->apply.arglist, &argbuffer);
+            as_serializer_serialize(&ser, (as_val*)query->apply.arglist, argbuffer);
 			as_serializer_destroy(&ser);
 		}
-		size += as_command_field_size(argbuffer.size);
+		size += as_command_field_size(argbuffer->size);
 		n_fields += 4;
 	}
 	
@@ -562,18 +639,28 @@ as_query_execute(as_query_task* task, const as_query * query, as_nodes* nodes, u
 			}
 		}
 	}
-	
+	*fields = n_fields;
+	*filter_sz = filter_size;
+	*bin_name_sz = bin_name_size;
+	return size;
+}
+
+static size_t
+as_query_command_init(
+	uint8_t* cmd, const as_query* query, uint8_t query_type, const as_policy_write* wp,
+	uint64_t task_id, uint32_t timeout, uint16_t n_fields, uint32_t filter_size,
+	uint32_t bin_name_size, as_buffer* argbuffer
+	)
+{
 	// Write command buffer.
-	uint8_t* cmd = as_command_init(size);
 	uint16_t n_ops = (query->where.size == 0)? query->select.size : 0;
 	uint8_t* p;
 	
-	if (task->write_policy) {
-		const as_policy_write* wp = task->write_policy;
-		p = as_command_write_header(cmd, AS_MSG_INFO1_READ, AS_MSG_INFO2_WRITE, wp->commit_level, 0, wp->exists, AS_POLICY_GEN_IGNORE, 0, 0, task->timeout, n_fields, n_ops);
+	if (wp) {
+		p = as_command_write_header(cmd, AS_MSG_INFO1_READ, AS_MSG_INFO2_WRITE, wp->commit_level, 0, wp->exists, AS_POLICY_GEN_IGNORE, 0, 0, timeout, n_fields, n_ops);
 	}
 	else {
-		p = as_command_write_header_read(cmd, AS_MSG_INFO1_READ, AS_POLICY_CONSISTENCY_LEVEL_ONE, task->timeout, n_fields, n_ops);
+		p = as_command_write_header_read(cmd, AS_MSG_INFO1_READ, AS_POLICY_CONSISTENCY_LEVEL_ONE, timeout, n_fields, n_ops);
 	}
 	
 	// Write namespace.
@@ -592,15 +679,15 @@ as_query_execute(as_query_task* task, const as_query * query, as_nodes* nodes, u
 		p = as_command_write_field_header(p, AS_FIELD_INDEX_TYPE, 1);
 		*p++ = pred->itype;
 	}
-
+	
 	// Write taskId field
-	p = as_command_write_field_uint64(p, AS_FIELD_TASK_ID, task->task_id);
-
+	p = as_command_write_field_uint64(p, AS_FIELD_TASK_ID, task_id);
+	
 	// Write query filters.
 	if (query->where.size > 0) {
 		p = as_command_write_field_header(p, AS_FIELD_INDEX_RANGE, filter_size);
 		*p++ = query->where.size;
-				
+		
 		for (uint16_t i = 0; i < query->where.size; i++ ) {
 			as_predicate* pred = &query->where.entries[i];
 			
@@ -672,9 +759,9 @@ as_query_execute(as_query_task* task, const as_query * query, as_nodes* nodes, u
 		*p++ = query_type;
 		p = as_command_write_field_string(p, AS_FIELD_UDF_PACKAGE_NAME, query->apply.module);
 		p = as_command_write_field_string(p, AS_FIELD_UDF_FUNCTION, query->apply.function);
-		p = as_command_write_field_buffer(p, AS_FIELD_UDF_ARGLIST, &argbuffer);
+		p = as_command_write_field_buffer(p, AS_FIELD_UDF_ARGLIST, argbuffer);
 	}
-    as_buffer_destroy(&argbuffer);
+    as_buffer_destroy(argbuffer);
 	
 	// Estimate size for selected bin names on scan (query bin names already handled).
 	if (query->where.size == 0) {
@@ -685,7 +772,25 @@ as_query_execute(as_query_task* task, const as_query * query, as_nodes* nodes, u
 		}
 	}
 	
-	size = as_command_write_end(cmd, p);
+	return as_command_write_end(cmd, p);
+}
+
+static as_status
+as_query_execute(as_query_task* task, const as_query* query, as_nodes* nodes, uint32_t n_nodes, uint8_t query_type)
+{
+	// Build Command.  It's okay to share command across threads because query does not have retries.
+	// If retries were allowed, the timeout field in the command would change on retry which
+	// would conflict with other threads.
+	as_buffer argbuffer;
+	uint32_t filter_size = 0;
+	uint32_t bin_name_size = 0;
+	uint16_t n_fields = 0;
+	
+	size_t size = as_query_command_size(query, &n_fields, &argbuffer, &filter_size, &bin_name_size);
+	uint8_t* cmd = as_command_init(size);
+	size = as_query_command_init(cmd, query, query_type, task->write_policy, task->task_id,
+								 task->timeout, n_fields, filter_size, bin_name_size, &argbuffer);
+	
 	task->cmd = cmd;
 	task->cmd_size = size;
 	task->complete_q = cf_queue_create(sizeof(as_query_complete_task), true);
@@ -808,36 +913,10 @@ as_query_aggregate(void* data)
  * FUNCTIONS
  *****************************************************************************/
 
-/**
- *	Execute a query and call the callback function for each result item.
- *
- *	~~~~~~~~~~{.c}
- *	as_query query;
- *	as_query_init(&query, "test", "demo");
- *	as_query_select(&query, "bin1");
- *	as_query_where(&query, "bin2", as_integer_equals(100));
- *
- *	if ( aerospike_query_foreach(&as, &err, NULL, &query, callback, NULL) != AEROSPIKE_OK ) {
- *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *	}
- *
- *	as_query_destroy(&query);
- *	~~~~~~~~~~
- *
- *	@param as			The aerospike instance to use for this operation.
- *	@param err			The as_error to be populated if an error occurs.
- *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param query		The query to execute against the cluster.
- *	@param callback		The callback function to call for each result value.
- *	@param udata		User-data to be passed to the callback.
- *
- *	@return AEROSPIKE_OK on success, otherwise an error.
- *
- *	@ingroup query_operations
- */
-as_status aerospike_query_foreach(
-	aerospike * as, as_error * err, const as_policy_query * policy, const as_query * query,
-	aerospike_query_foreach_callback callback, void * udata) 
+as_status
+aerospike_query_foreach(
+	aerospike* as, as_error* err, const as_policy_query* policy, const as_query* query,
+	aerospike_query_foreach_callback callback, void* udata)
 {
 	as_error_reset(err);
 	
@@ -874,7 +953,7 @@ as_status aerospike_query_foreach(
 		.err = err,
 		.input_queue = 0,
 		.complete_q = 0,
-		.task_id = cf_get_rand64() / 2,
+		.task_id = cf_get_rand64() >> 1,
 		.cmd = 0,
 		.cmd_size = 0,
 		.timeout = policy->timeout,
@@ -955,6 +1034,104 @@ as_status aerospike_query_foreach(
 }
 
 as_status
+aerospike_query_async(
+	aerospike* as, as_error* err, const as_policy_query* policy, const as_query* query,
+	as_async_query_record_listener listener, void* udata, as_event_loop* event_loop)
+{
+	as_error_reset(err);
+	
+	if (! policy) {
+		policy = &as->config.policies.query;
+	}
+	
+	if (query->apply.function[0]) {
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Async aggregate queries are not supported.");
+	}
+	
+	uint64_t task_id = cf_get_rand64() >> 1;
+	
+	as_nodes* nodes = as_nodes_reserve(as->cluster);
+	uint32_t n_nodes = nodes->size;
+	
+	if (n_nodes == 0) {
+		as_nodes_release(nodes);
+		return as_error_set_message(err, AEROSPIKE_ERR_SERVER, "Command failed because cluster is empty.");
+	}
+	
+	// Reserve each node in cluster.
+	for (uint32_t i = 0; i < n_nodes; i++) {
+		as_node_reserve(nodes->array[i]);
+	}
+	
+	// Query will be split up into a command for each node.
+	// Allocate query data shared by each command.
+	as_async_query_executor* executor = cf_malloc(sizeof(as_async_query_executor));
+	as_event_executor* exec = &executor->executor;
+	pthread_mutex_init(&exec->lock, NULL);
+	exec->event_loop = as_event_assign(event_loop);
+	exec->complete_fn = as_query_complete_async;
+	exec->udata = udata;
+	exec->max = n_nodes;
+	exec->max_concurrent = n_nodes;
+	exec->count = 0;
+	exec->commands = 0;
+	exec->valid = true;
+	executor->listener = listener;
+
+	as_buffer argbuffer;
+	uint32_t filter_size = 0;
+	uint32_t bin_name_size = 0;
+	uint16_t n_fields = 0;
+	
+	size_t size = as_query_command_size(query, &n_fields, &argbuffer, &filter_size, &bin_name_size);
+	uint8_t* cmd_buf = as_command_init(size);
+	size = as_query_command_init(cmd_buf, query, QUERY_FOREGROUND, NULL, task_id, policy->timeout,
+								 n_fields, filter_size, bin_name_size, &argbuffer);
+	
+	// Allocate enough memory to cover, then, round up memory size in 8KB increments to allow socket
+	// read to reuse buffer.
+	size_t s = (sizeof(as_async_query_command) + size + AS_AUTHENTICATION_MAX_SIZE + 8191) & ~8191;
+	
+	as_status status = AEROSPIKE_OK;
+
+	// Create all query commands.
+	for (uint32_t i = 0; i < n_nodes; i++) {
+		as_event_command* cmd = cf_malloc(s);
+		cmd->event_loop = exec->event_loop;
+		cmd->conn = 0;
+		cmd->cluster = as->cluster;
+		cmd->node = nodes->array[i];
+		cmd->udata = executor;  // Overload udata to be the executor.
+		cmd->parse_results = as_query_parse_records_async;
+		cmd->buf = ((as_async_query_command*)cmd)->space;
+		cmd->capacity = (uint32_t)(s - sizeof(as_async_query_command));
+		cmd->len = (uint32_t)size;
+		cmd->pos = 0;
+		cmd->auth_len = 0;
+		cmd->timeout_ms = policy->timeout;
+		cmd->type = AS_ASYNC_TYPE_QUERY;
+		cmd->state = AS_ASYNC_STATE_UNREGISTERED;
+		cmd->pipeline = false;
+		cmd->deserialize = policy->deserialize;
+		cmd->free_buf = false;
+		memcpy(cmd->buf, cmd_buf, size);
+		
+		status = as_event_command_execute(cmd, err);
+		
+		if (status != AEROSPIKE_OK) {
+			as_event_executor_cancel(exec, i);
+			break;
+		}
+	}
+	
+	// Free command buffer.
+	as_command_free(cmd_buf, size);
+	
+	as_nodes_release(nodes);
+	return status;
+}
+
+as_status
 aerospike_query_background(
 	aerospike* as, as_error* err, const as_policy_write* policy,
 	const as_query* query, uint64_t* query_id)
@@ -987,12 +1164,12 @@ aerospike_query_background(
 	uint64_t task_id;
 	if (query_id) {
 		if (*query_id == 0) {
-			*query_id = cf_get_rand64() / 2;
+			*query_id = cf_get_rand64() >> 1;
 		}
 		task_id = *query_id;
 	}
 	else {
-		task_id = cf_get_rand64() / 2;
+		task_id = cf_get_rand64() >> 1;
 	}
 
 	uint32_t error_mutex = 0;

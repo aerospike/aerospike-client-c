@@ -88,9 +88,11 @@
 
 #include <aerospike/aerospike.h>
 #include <aerospike/as_error.h>
+#include <aerospike/as_event.h>
 #include <aerospike/as_job.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_query.h>
+#include <aerospike/as_record.h>
 #include <aerospike/as_status.h>
 #include <aerospike/as_stream.h>
 
@@ -122,7 +124,25 @@ extern "C" {
  *
  *	@ingroup query_operations
  */
-typedef bool (* aerospike_query_foreach_callback)(const as_val * val, void * udata);
+typedef bool (*aerospike_query_foreach_callback)(const as_val* val, void* udata);
+
+/**
+ *	Asynchronous query user callback.  This function is called for each record returned.
+ *	This function is also called once when the query completes or an error has occurred.
+ *
+ *	@param err			This error structure is only populated when the command fails. Null on success.
+ *	@param record 		Returned record.  Use as_val_reserve() on record to prevent calling function from destroying.
+ *						The record will be null on final query completion or query error.
+ *	@param udata 		User data that is forwarded from asynchronous command function.
+ *	@param event_loop 	Event loop that this command was executed on.  Use this event loop when running
+ *						nested asynchronous commands when single threaded behavior is desired for the
+ *						group of commands.
+ *
+ *	@return `true` to continue to the next value. Otherwise, the query will end.
+ *
+ *	@ingroup query_operations
+ */
+typedef bool (*as_async_query_record_listener)(as_error* err, as_record* record, void* udata, as_event_loop* event_loop);
 
 /******************************************************************************
  *	FUNCTIONS
@@ -159,11 +179,62 @@ typedef bool (* aerospike_query_foreach_callback)(const as_val * val, void * uda
  */
 as_status
 aerospike_query_foreach(
-	aerospike * as, as_error * err, const as_policy_query * policy, 
-	const as_query * query, 
-	aerospike_query_foreach_callback callback, void * udata
+	aerospike* as, as_error* err, const as_policy_query* policy, const as_query* query,
+	aerospike_query_foreach_callback callback, void* udata
 	);
 
+/**
+ *	Asynchronously execute a query and call the listener function for each result item.
+ *	Standard secondary index queries are supported, but aggregation queries are not supported
+ *	in async mode.
+ *
+ *	~~~~~~~~~~{.c}
+ *	bool my_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
+ *	{
+ *		if (err) {
+ *			printf("Query failed: %d %s\n", err->code, err->message);
+ *			return false;
+ *		}
+ *
+ *		if (! record) {
+ *			printf("Query ended\n");
+ *			return false;
+ *		}
+ *
+ *		// Process record
+ *		// Do not call as_record_destroy() because the calling function will do that for you.
+ *		return true;
+ *	}
+ *	as_query query;
+ *	as_query_init(&query, "test", "demo");
+ *	as_query_select(&query, "bin1");
+ *	as_query_where(&query, "bin2", as_integer_equals(100));
+ *
+ *	if ( aerospike_query_foreach(&as, &err, NULL, &query, callback, NULL) != AEROSPIKE_OK ) {
+ *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *	}
+ *
+ *	as_query_destroy(&query);
+ *	~~~~~~~~~~
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param query		The query to execute against the cluster.
+ *	@param listener		The function to be called for each returned value.
+ *	@param udata		User-data to be passed to the callback.
+ *	@param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
+ *
+ *	@return AEROSPIKE_OK if async query succesfully queued. Otherwise an error.
+ *
+ *	@ingroup query_operations
+ */
+as_status
+aerospike_query_async(
+	aerospike* as, as_error* err, const as_policy_query* policy, const as_query* query,
+	as_async_query_record_listener listener, void* udata, as_event_loop* event_loop
+	);
+	
 /**
  *	Apply user defined function on records that match the query filter.
  *	Records are not returned to the client.

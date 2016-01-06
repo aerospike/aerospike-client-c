@@ -327,6 +327,7 @@ as_event_get_connection(as_event_command* cmd)
 	
 	// Create connection.
 	conn = cf_malloc(sizeof(as_async_connection));
+	conn->base.node = cmd->node;
 	conn->base.pipeline = false;
 	conn->cmd = cmd;
 	cmd->conn = &conn->base;

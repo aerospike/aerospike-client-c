@@ -130,10 +130,16 @@ as_scan_parse_records_async(as_event_command* cmd)
 		
 		if (! as_scan_parse_record_async(cmd, &p, msg)) {
 			executor->valid = false;
+			as_error err;
+			as_error_set_message(&err, AEROSPIKE_ERR_CLIENT_ABORT, "");
+			as_event_response_error(cmd, &err);
 			return true;
 		}
 
 		if (! executor->valid) {
+			as_error err;
+			as_error_set_message(&err, AEROSPIKE_ERR_CLIENT_ABORT, "");
+			as_event_response_error(cmd, &err);
 			return true;
 		}
 	}
@@ -432,12 +438,12 @@ as_scan_generic(
 	uint64_t task_id;
 	if (task_id_ptr) {
 		if (*task_id_ptr == 0) {
-			*task_id_ptr = cf_get_rand64() / 2;
+			*task_id_ptr = cf_get_rand64() >> 1;
 		}
 		task_id = *task_id_ptr;
 	}
 	else {
-		task_id = cf_get_rand64() / 2;
+		task_id = cf_get_rand64() >> 1;
 	}
 
 	// Create scan command
@@ -550,12 +556,12 @@ as_scan_async(
 	uint64_t task_id;
 	if (scan_id) {
 		if (*scan_id == 0) {
-			*scan_id = cf_get_rand64() / 2;
+			*scan_id = cf_get_rand64() >> 1;
 		}
 		task_id = *scan_id;
 	}
 	else {
-		task_id = cf_get_rand64() / 2;
+		task_id = cf_get_rand64() >> 1;
 	}
 	
 	bool daisy_chain = ! (scan->concurrent || n_nodes == 1);
@@ -724,7 +730,7 @@ aerospike_scan_node(
 	}
 
 	// Create scan command
-	uint64_t task_id = cf_get_rand64() / 2;
+	uint64_t task_id = cf_get_rand64() >> 1;
 	as_buffer argbuffer;
 	uint16_t n_fields = 0;
 	size_t size = as_scan_command_size(scan, &n_fields, &argbuffer);

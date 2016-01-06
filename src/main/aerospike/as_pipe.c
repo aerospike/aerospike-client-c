@@ -122,6 +122,8 @@ cancel_connection(as_event_command* cmd, as_error* err, int32_t source)
 
 	if (! conn->in_pool) {
 		as_log_trace("Closing canceled non-pooled pipeline connection %p", conn);
+		// For as_uv_connection_alive().
+		conn->canceled = true;
 		as_event_close_connection(&conn->base, node);
 		as_node_release(node);
 		return;
@@ -308,7 +310,8 @@ as_pipe_get_connection(as_event_command* cmd)
 	as_log_trace("Creating new pipeline connection");
 	conn = cf_malloc(sizeof(as_pipe_connection));
 	assert(conn != NULL);
-	
+
+	conn->base.node = cmd->node;
 	conn->base.pipeline = true;
 	conn->writer = NULL;
 	cf_ll_init(&conn->readers, NULL, false);

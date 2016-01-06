@@ -63,9 +63,14 @@ as_uv_wakeup_closed(uv_handle_t* handle)
 static void
 as_uv_connection_closed(uv_handle_t* socket)
 {
-	as_async_connection* conn = (as_async_connection*)socket;
-	ck_pr_dec_32(&conn->cmd->cluster->async_conn);
-	ck_pr_dec_32(&conn->cmd->node->async_conn);
+	as_event_connection* conn = (as_event_connection*)socket;
+
+	// as_uv_queue_close_connections() NULLs the node field, because the node and
+	// cluster might have been freed, before this callback happens.
+	if (conn->node != NULL) {
+		ck_pr_dec_32(&conn->node->cluster->async_conn);
+		ck_pr_dec_32(&conn->node->async_conn);
+	}
 
 	// socket->data has as_event_command ptr but that may have already been freed,
 	// so free as_event_connection ptr by socket which is first field in as_event_connection.
@@ -200,9 +205,29 @@ as_uv_get_command(as_event_connection* conn)
 	return link ? as_pipe_link_to_command(link) : NULL;
 }
 
+// With libuv, as_event_stop_watcher() is a no-op. So, after cancel_connection()
+// freed all commands, we might still get read or write callbacks. This function
+// tests, whether we're dealing with a canceled pipelined connection.
+static inline bool
+as_uv_connection_alive(uv_stream_t* handle)
+{
+	as_event_connection* econ = (as_event_connection*)handle;
+
+	if (!econ->pipeline) {
+		return true;
+	}
+
+	as_pipe_connection* pcon = (as_pipe_connection*)econ;
+	return !pcon->canceled;
+}
+
 static void
 as_uv_command_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 {
+	if (!as_uv_connection_alive(stream)) {
+		return;
+	}
+
 	as_event_command* cmd = as_uv_get_command(stream->data);
 			
 	if (nread < 0) {
@@ -269,13 +294,17 @@ as_uv_command_buffer(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf)
 static void
 as_uv_command_write_complete(uv_write_t* req, int status)
 {
+	if (!as_uv_connection_alive(req->handle)) {
+		return;
+	}
+
 	as_event_command* cmd = req->data;
 	
 	if (status == 0) {
 		cmd->len = sizeof(as_proto);
 		cmd->pos = 0;
 		cmd->state = AS_ASYNC_STATE_READ_HEADER;
-		
+
 		if (cmd->pipeline) {
 			as_pipe_read_start(cmd);
 		}
@@ -585,6 +614,7 @@ as_uv_queue_close_connections(as_node* node, as_queue* conn_queue, as_queue* cmd
 		qcmd.ptr = conn;
 		
 		ck_pr_dec_32(&node->cluster->async_conn_pool);
+		conn->node = NULL;
 
 		if (! as_queue_push(cmd_queue, &qcmd)) {
 			as_log_error("Failed to queue connection close");

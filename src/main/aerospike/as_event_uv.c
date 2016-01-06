@@ -63,6 +63,10 @@ as_uv_wakeup_closed(uv_handle_t* handle)
 static void
 as_uv_connection_closed(uv_handle_t* socket)
 {
+	as_async_connection* conn = (as_async_connection*)socket;
+	ck_pr_dec_32(&conn->cmd->cluster->async_conn);
+	ck_pr_dec_32(&conn->cmd->node->async_conn);
+
 	// socket->data has as_event_command ptr but that may have already been freed,
 	// so free as_event_connection ptr by socket which is first field in as_event_connection.
 	cf_free(socket);
@@ -461,9 +465,6 @@ as_uv_connected(uv_connect_t* req, int status)
 	as_event_command* cmd = req->data;
 
 	if (status == 0) {
-		ck_pr_inc_32(&cmd->cluster->async_conn);
-		ck_pr_inc_32(&cmd->node->async_conn);
-		
 		if (cmd->cluster->user) {
 			as_uv_auth_write_start(cmd, req->handle);
 		}
@@ -485,9 +486,14 @@ as_uv_connected(uv_connect_t* req, int status)
 static void
 as_uv_connect(as_event_command* cmd)
 {
+	ck_pr_inc_32(&cmd->cluster->async_conn);
+	ck_pr_inc_32(&cmd->node->async_conn);
+
 	int fd = as_event_create_socket(cmd);
 	
 	if (fd < 0) {
+		ck_pr_dec_32(&cmd->cluster->async_conn);
+		ck_pr_dec_32(&cmd->node->async_conn);
 		return;
 	}
 	
@@ -501,6 +507,8 @@ as_uv_connect(as_event_command* cmd)
 		// Call standard event connection error handler because as_uv_connect_error() requires that
 		// uv_tcp_init() has already succeeded.
 		as_event_connect_error(cmd, &err, fd);
+		ck_pr_dec_32(&cmd->cluster->async_conn);
+		ck_pr_dec_32(&cmd->node->async_conn);
 		return;
 	}
 	
@@ -562,8 +570,6 @@ void
 as_event_close_connection(as_event_connection* conn, as_node* node)
 {
 	uv_close((uv_handle_t*)&conn->socket, as_uv_connection_closed);
-	ck_pr_dec_32(&node->cluster->async_conn);
-	ck_pr_dec_32(&node->async_conn);
 }
 
 static bool
@@ -578,9 +584,7 @@ as_uv_queue_close_connections(as_node* node, as_queue* conn_queue, as_queue* cmd
 	while (as_queue_pop(conn_queue, &conn)) {
 		qcmd.ptr = conn;
 		
-		ck_pr_dec_32(&node->cluster->async_conn);
 		ck_pr_dec_32(&node->cluster->async_conn_pool);
-		ck_pr_dec_32(&node->async_conn);
 
 		if (! as_queue_push(cmd_queue, &qcmd)) {
 			as_log_error("Failed to queue connection close");

@@ -452,9 +452,6 @@ as_ev_callback(struct ev_loop* loop, ev_io* watcher, int revents)
 static void
 as_ev_watcher_init(as_event_command* cmd, int fd)
 {
-	ck_pr_inc_32(&cmd->cluster->async_conn);
-	ck_pr_inc_32(&cmd->node->async_conn);
-	
 	if (cmd->cluster->user) {
 		as_event_set_auth_write(cmd);
 		cmd->state = AS_ASYNC_STATE_AUTH_WRITE;
@@ -473,9 +470,14 @@ as_ev_watcher_init(as_event_command* cmd, int fd)
 static void
 as_ev_connect(as_event_command* cmd)
 {
+	ck_pr_inc_32(&cmd->cluster->async_conn);
+	ck_pr_inc_32(&cmd->node->async_conn);
+
 	int fd = as_event_create_socket(cmd);
 	
 	if (fd < 0) {
+		ck_pr_dec_32(&cmd->cluster->async_conn);
+		ck_pr_dec_32(&cmd->node->async_conn);
 		return;
 	}
 		
@@ -532,6 +534,9 @@ as_ev_connect(as_event_command* cmd)
 	as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Failed to connect: %s %s:%d",
 					node->name, primary->name, (int)cf_swap_from_be16(primary->addr.sin_port));
 	as_event_connect_error(cmd, &err, fd);
+
+	ck_pr_dec_32(&cmd->cluster->async_conn);
+	ck_pr_dec_32(&cmd->node->async_conn);
 }
 
 static void
@@ -564,24 +569,24 @@ as_event_command_begin(as_event_command* cmd)
 void
 as_event_close_connection(as_event_connection* conn, as_node* node)
 {
-	ck_pr_dec_32(&node->cluster->async_conn);
-	ck_pr_dec_32(&node->async_conn);
 	close(conn->fd);
 	cf_free(conn);
+	ck_pr_dec_32(&node->cluster->async_conn);
+	ck_pr_dec_32(&node->async_conn);
 }
 
 static void
-as_ev_close_connections(as_queue* conn_queue, uint32_t* cluster_conn, uint32_t* cluster_conn_pool, uint32_t* node_conn)
+as_ev_close_connections(as_node* node, as_queue* conn_queue)
 {
 	as_event_connection* conn;
 	
 	// Queue connection commands to event loops.
 	while (as_queue_pop(conn_queue, &conn)) {
-		ck_pr_dec_32(cluster_conn);
-		ck_pr_dec_32(cluster_conn_pool);
-		ck_pr_dec_32(node_conn);
 		close(conn->fd);
 		cf_free(conn);
+		ck_pr_dec_32(&node->cluster->async_conn);
+		ck_pr_dec_32(&node->cluster->async_conn_pool);
+		ck_pr_dec_32(&node->async_conn);
 	}
 	as_queue_destroy(conn_queue);
 }
@@ -591,10 +596,8 @@ as_event_node_destroy(as_node* node)
 {
 	// Close connections.
 	for (uint32_t i = 0; i < as_event_loop_size; i++) {
-		as_ev_close_connections(&node->async_conn_qs[i],
-				&node->cluster->async_conn, &node->cluster->async_conn_pool, &node->async_conn);
-		as_ev_close_connections(&node->pipe_conn_qs[i],
-				&node->cluster->async_conn, &node->cluster->async_conn_pool, &node->async_conn);
+		as_ev_close_connections(node, &node->async_conn_qs[i]);
+		as_ev_close_connections(node, &node->pipe_conn_qs[i]);
 	}
 	cf_free(node->async_conn_qs);
 	cf_free(node->pipe_conn_qs);

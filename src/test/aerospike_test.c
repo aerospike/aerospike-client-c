@@ -212,7 +212,7 @@ PLAN(aerospike_test) {
 	plan_add(udf_types);
 	plan_add(udf_record);
 
-	//aerospike_sindex module
+	// aerospike_sindex module
 	plan_add(index_basics);
 
 	// aerospike_query module
@@ -239,8 +239,9 @@ PLAN(aerospike_test) {
 	if (g_use_async) {
 		plan_add(key_basics_async);
 		plan_add(key_apply_async);
+		plan_add(key_pipeline);
 		plan_add(batch_async);
 		plan_add(scan_async);
-		plan_add(key_pipeline);
+		plan_add(query_async);
 	}
 }

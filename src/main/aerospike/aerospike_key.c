@@ -370,7 +370,7 @@ aerospike_key_put(
 	p = as_command_write_key(p, policy->key, key);
 	
 #if defined(USE_SYSTEMTAP)
-	uint64_t task_id = cf_get_rand64() / 2;
+	uint64_t task_id = cf_get_rand64() >> 1;
 	p = as_command_write_field_uint64(p, AS_FIELD_TASK_ID, task_id);
 #endif
 

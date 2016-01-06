@@ -58,6 +58,161 @@ static bool server_has_double = false;
  * STATIC FUNCTIONS
  *****************************************************************************/
 
+/**
+ * Creates 100 records and 4 indices.
+ *
+ * Records are structured as:
+ *      {a: String, b: Integer, c: Integer, d: Integer, e: Integer}
+ *
+ * The key is "a-b-c-d-e"
+ *
+ * The values are:
+ *      a = "abc"
+ *      b = 100
+ *      c = <current index>
+ *      d = c % 10
+ *      e = b + (c + 1) * (d + 1) / 2
+ */
+bool query_async_foreach_create()
+{
+	as_error err;
+	as_error_reset(&err);
+	
+	int n_recs = 100;
+	
+	as_status status;
+	as_index_task task;
+	
+	// create index on "a"
+	
+	status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, SET, "a", "idx_test_a", AS_INDEX_STRING);
+	if ( status == AEROSPIKE_OK ) {
+		aerospike_index_create_wait(&err, &task, 0);
+	}
+	else {
+		info("error(%d): %s", err.code, err.message);
+	}
+	
+	// create index on "b"
+	
+	status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, SET, "b", "idx_test_b", AS_INDEX_NUMERIC);
+	if ( status == AEROSPIKE_OK ) {
+		aerospike_index_create_wait(&err, &task, 0);
+	}
+	else {
+		info("error(%d): %s", err.code, err.message);
+	}
+	
+	// create index on "c"
+	
+	status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, SET, "c", "idx_test_c", AS_INDEX_NUMERIC);
+	if ( status == AEROSPIKE_OK ) {
+		aerospike_index_create_wait(&err, &task, 0);
+	}
+	else {
+		info("error(%d): %s", err.code, err.message);
+	}
+	
+	// create index on "d"
+	status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, SET, "d", "idx_test_d", AS_INDEX_NUMERIC);
+	if ( status == AEROSPIKE_OK ) {
+		aerospike_index_create_wait(&err, &task, 0);
+	}
+	else {
+		info("error(%d): %s", err.code, err.message);
+	}
+	
+	/* Uncomment once sindex on cdt is avaialable at server side.
+	 // create complex index on "x"
+	 
+	 status = aerospike_index_create_complex(as, &err, 0, NULL, NAMESPACE, SET, "x", "idx_test_x", AS_INDEX_TYPE_LIST, AS_INDEX_STRING);
+	 if (status != AEROSPIKE_OK) {
+	 info("error(%d): %s", err.code, err.message);
+	 }
+	 
+	 // create complex index on "y"
+	 
+	 status = aerospike_index_create_complex(as, &err, 0, NULL, NAMESPACE, SET, "y", "idx_test_y", AS_INDEX_TYPE_MAPKEYS, AS_INDEX_STRING);
+	 if (status != AEROSPIKE_OK) {
+	 info("error(%d): %s", err.code, err.message);
+	 }
+	 
+	 // create complex index on "y"
+	 
+	 status = aerospike_index_create_complex(as, &err, 0, NULL, NAMESPACE, SET, "y", "idx_test_y1", AS_INDEX_TYPE_MAPVALUES, AS_INDEX_STRING);
+	 if (status != AEROSPIKE_OK) {
+	 info("error(%d): %s", err.code, err.message);
+	 }
+	 */
+	// insert records
+	for ( int i = 0; i < n_recs; i++ ) {
+		
+		char * 	a = "abc";
+		int 	b = n_recs;
+		int 	c = i;
+		int 	d = i % 10;
+		int 	e = b + (c + 1) * (d + 1) / 2;
+		
+		char keystr[64] = { '\0' };
+		snprintf(keystr, 64, "%s-%d-%d-%d-%d", a, b, c, d, e);
+		
+		// Make list
+		
+		as_arraylist list;
+		as_arraylist_init(&list, 3, 0);
+		as_arraylist_append_str(&list, "x");
+		as_arraylist_append_str(&list, "x");
+		as_arraylist_append_str(&list, "x");
+		
+		// Make map
+		
+		as_hashmap map;
+		as_hashmap_init(&map, 1);
+		as_stringmap_set_str((as_map *) &map, "y", "y");
+		
+		
+		as_record r;
+		as_record_init(&r, 7);
+		as_record_set_str(&r, 	"a", a);
+		as_record_set_int64(&r, "b", b);
+		as_record_set_int64(&r, "c", c);
+		as_record_set_int64(&r, "d", d);
+		as_record_set_int64(&r, "e", e);
+		as_record_set_list(&r, "x", (as_list *) &list);
+		as_record_set_map(&r, "y", (as_map *) &map);
+		
+		
+		as_key key;
+		as_key_init(&key, NAMESPACE, SET, keystr);
+		
+		aerospike_key_put(as, &err, NULL, &key, &r);
+		as_record_destroy(&r);
+		
+		if (err.code != AEROSPIKE_OK) {
+			error("aerospike_key_put() failed %d %s", err.code, err.message);
+			return false;
+		}
+		
+		as_record *r1 = NULL;
+		
+		aerospike_key_exists(as, &err, NULL, &key, &r1);
+		as_key_destroy(&key);
+		
+		if (err.code != AEROSPIKE_OK) {
+			error("aerospike_key_exists() failed %d %s", err.code, err.message);
+			return false;
+		}
+		
+		if (! r1) {
+			error("key not found %s", keystr);
+			return false;
+		}
+		
+		as_record_destroy(r1);
+	}
+	return true;
+}
+
 static bool before(atf_suite * suite) {
 
 	if ( ! udf_put(LUA_FILE) ) {
@@ -70,8 +225,7 @@ static bool before(atf_suite * suite) {
 		return false;
 	}
 
-
-	return true;
+	return query_async_foreach_create();
 }
 
 static bool after(atf_suite * suite) {
@@ -90,152 +244,6 @@ static bool after(atf_suite * suite) {
 
 TEST( query_foreach_exists, UDF_FILE" exists" ) {
 	assert_true( udf_exists(LUA_FILE) );
-}
-
-/**
- * Creates 100 records and 4 indices.
- *
- * Records are structured as:
- *      {a: String, b: Integer, c: Integer, d: Integer, e: Integer}
- *
- * The key is "a-b-c-d-e"
- *
- * The values are:
- *      a = "abc"
- *      b = 100
- *      c = <current index>
- *      d = c % 10
- *      e = b + (c + 1) * (d + 1) / 2
- */
-TEST( query_foreach_create, "create 100 records and 4 indices" ) {
-
-	as_error err;
-	as_error_reset(&err);
-
-	int n_recs = 100;
-	
-	as_status status;
-	as_index_task task;
-
-	// create index on "a"
-	
-	status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, SET, "a", "idx_test_a", AS_INDEX_STRING);
-	if ( status == AEROSPIKE_OK ) {
-		aerospike_index_create_wait(&err, &task, 0);
-	}
-	else {
-		info("error(%d): %s", err.code, err.message);
-	}
-
-	// create index on "b"
-
-	status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, SET, "b", "idx_test_b", AS_INDEX_NUMERIC);
-	if ( status == AEROSPIKE_OK ) {
-		aerospike_index_create_wait(&err, &task, 0);
-	}
-	else {
-		info("error(%d): %s", err.code, err.message);
-	}
-
-	// create index on "c"
-
-	status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, SET, "c", "idx_test_c", AS_INDEX_NUMERIC);
-	if ( status == AEROSPIKE_OK ) {
-		aerospike_index_create_wait(&err, &task, 0);
-	}
-	else {
-		info("error(%d): %s", err.code, err.message);
-	}
-
-	// create index on "d"
-	status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, SET, "d", "idx_test_d", AS_INDEX_NUMERIC);
-	if ( status == AEROSPIKE_OK ) {
-		aerospike_index_create_wait(&err, &task, 0);
-	}
-	else {
-		info("error(%d): %s", err.code, err.message);
-	}
-
-/* Uncomment once sindex on cdt is avaialable at server side.
-	// create complex index on "x"
-
-	status = aerospike_index_create_complex(as, &err, 0, NULL, NAMESPACE, SET, "x", "idx_test_x", AS_INDEX_TYPE_LIST, AS_INDEX_STRING);
-    if (status != AEROSPIKE_OK) {
-        info("error(%d): %s", err.code, err.message);
-    }
-
-	// create complex index on "y"
-
-	status = aerospike_index_create_complex(as, &err, 0, NULL, NAMESPACE, SET, "y", "idx_test_y", AS_INDEX_TYPE_MAPKEYS, AS_INDEX_STRING);
-    if (status != AEROSPIKE_OK) {
-        info("error(%d): %s", err.code, err.message);
-    }
-
-	// create complex index on "y"
-
-	status = aerospike_index_create_complex(as, &err, 0, NULL, NAMESPACE, SET, "y", "idx_test_y1", AS_INDEX_TYPE_MAPVALUES, AS_INDEX_STRING);
-    if (status != AEROSPIKE_OK) {
-        info("error(%d): %s", err.code, err.message);
-    }
-*/
-	// insert records
-	for ( int i = 0; i < n_recs; i++ ) {
-
-		char * 	a = "abc";
-		int 	b = n_recs;
-		int 	c = i;
-		int 	d = i % 10;
-		int 	e = b + (c + 1) * (d + 1) / 2;
-
-		char keystr[64] = { '\0' };
-		snprintf(keystr, 64, "%s-%d-%d-%d-%d", a, b, c, d, e);
-
-		// Make list
-
-		as_arraylist list;
-		as_arraylist_init(&list, 3, 0);
-		as_arraylist_append_str(&list, "x");
-		as_arraylist_append_str(&list, "x");
-		as_arraylist_append_str(&list, "x");
-
-		// Make map
-
-		as_hashmap map;
-		as_hashmap_init(&map, 1);
-		as_stringmap_set_str((as_map *) &map, "y", "y");
-
-
-		as_record r;
-		as_record_init(&r, 7);
-		as_record_set_str(&r, 	"a", a);
-		as_record_set_int64(&r, "b", b);
-		as_record_set_int64(&r, "c", c);
-		as_record_set_int64(&r, "d", d);
-		as_record_set_int64(&r, "e", e);
-		as_record_set_list(&r, "x", (as_list *) &list);
-		as_record_set_map(&r, "y", (as_map *) &map);
-
-
-		as_key key;
-		as_key_init(&key, NAMESPACE, SET, keystr);
-
-		aerospike_key_put(as, &err, NULL, &key, &r);
-
-		assert_int_eq( err.code, AEROSPIKE_OK);
-
-
-		as_record_destroy(&r);
-
-		as_record *r1 = NULL;
-
-		aerospike_key_exists(as, &err, NULL, &key, &r1);
-
-		as_key_destroy(&key);	
-		assert_int_eq( err.code, AEROSPIKE_OK );
-		assert_not_null( r1 );
-
-		as_record_destroy(r1);
-	}
 }
 
 static bool query_foreach_1_callback(const as_val * v, void * udata) {
@@ -719,7 +727,6 @@ SUITE( query_foreach, "aerospike_query_foreach tests" ) {
 	suite_before( before );
 	suite_after( after   );
 	
-	suite_add( query_foreach_create );
 	suite_add( query_foreach_1 );
 	suite_add( query_foreach_2 );
 	suite_add( query_foreach_3 );

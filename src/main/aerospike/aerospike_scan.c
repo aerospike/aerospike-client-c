@@ -128,15 +128,15 @@ as_scan_parse_records_async(as_event_command* cmd)
 			return true;
 		}
 		
-		if (! as_scan_parse_record_async(cmd, &p, msg)) {
-			executor->valid = false;
+		if (! executor->valid) {
 			as_error err;
 			as_error_set_message(&err, AEROSPIKE_ERR_CLIENT_ABORT, "");
 			as_event_response_error(cmd, &err);
 			return true;
 		}
 
-		if (! executor->valid) {
+		if (! as_scan_parse_record_async(cmd, &p, msg)) {
+			executor->valid = false;
 			as_error err;
 			as_error_set_message(&err, AEROSPIKE_ERR_CLIENT_ABORT, "");
 			as_event_response_error(cmd, &err);

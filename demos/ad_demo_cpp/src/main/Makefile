@@ -13,12 +13,30 @@ CFLAGS += -fno-common -fno-strict-aliasing -fPIC
 CFLAGS += -DMARCH_$(ARCH) -D_FILE_OFFSET_BITS=64 
 CFLAGS += -D_REENTRANT -D_GNU_SOURCE
 
+ifeq ($(EVENT_LIB),libev)
+  CFLAGS += -DAS_USE_LIBEV -I/usr/local/include
+endif
+
+ifeq ($(EVENT_LIB),libuv)
+  CFLAGS += -DAS_USE_LIBUV -I/usr/local/include
+endif
+
+LDFLAGS = $(LIBRARY_PATH)/libaerospike.a
+
+ifeq ($(EVENT_LIB),libev)
+  LDFLAGS += -L/usr/local/lib -lev
+endif
+
+ifeq ($(EVENT_LIB),libuv)
+  LDFLAGS += -L/usr/local/lib -luv
+endif
+
 ifeq ($(OS),Darwin)
 CC = clang++
-LDFLAGS = $(LIBRARY_PATH)/libaerospike.a -lssl -lcrypto -lpthread -L/usr/local/lib -lm -lz
+LDFLAGS += -lssl -lcrypto -lpthread -L/usr/local/lib -lm -lz
 else
 CC = g++
-LDFLAGS = $(LIBRARY_PATH)/libaerospike.a -lssl -lcrypto -lpthread -lrt -lm -lz
+LDFLAGS += -lssl -lcrypto -lpthread -lrt -lm -lz
 endif
 
 LUA_CPATH += $(or \

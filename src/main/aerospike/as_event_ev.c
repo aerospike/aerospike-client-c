@@ -470,14 +470,9 @@ as_ev_watcher_init(as_event_command* cmd, int fd)
 static void
 as_ev_connect(as_event_command* cmd)
 {
-	ck_pr_inc_32(&cmd->cluster->async_conn);
-	ck_pr_inc_32(&cmd->node->async_conn);
-
 	int fd = as_event_create_socket(cmd);
 	
 	if (fd < 0) {
-		ck_pr_dec_32(&cmd->cluster->async_conn);
-		ck_pr_dec_32(&cmd->node->async_conn);
 		return;
 	}
 		

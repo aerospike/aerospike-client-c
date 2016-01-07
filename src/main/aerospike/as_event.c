@@ -327,7 +327,6 @@ as_event_get_connection(as_event_command* cmd)
 	
 	// Create connection.
 	conn = cf_malloc(sizeof(as_async_connection));
-	conn->base.node = cmd->node;
 	conn->base.pipeline = false;
 	conn->cmd = cmd;
 	cmd->conn = &conn->base;
@@ -337,6 +336,9 @@ as_event_get_connection(as_event_command* cmd)
 int
 as_event_create_socket(as_event_command* cmd)
 {
+	ck_pr_inc_32(&cmd->cluster->async_conn);
+	ck_pr_inc_32(&cmd->node->async_conn);
+	
 	// Create a non-blocking socket.
 	int fd = as_socket_create_nb();
 	
@@ -405,6 +407,9 @@ as_event_connect_error(as_event_command* cmd, as_error* err, int fd)
 		close(fd);
 	}
 	cf_free(cmd->conn);
+	ck_pr_dec_32(&cmd->cluster->async_conn);
+	ck_pr_dec_32(&cmd->node->async_conn);
+	
 	as_event_error_callback(cmd, err);
 }
 

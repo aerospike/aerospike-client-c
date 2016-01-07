@@ -534,9 +534,6 @@ as_ev_connect(as_event_command* cmd)
 	as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Failed to connect: %s %s:%d",
 					node->name, primary->name, (int)cf_swap_from_be16(primary->addr.sin_port));
 	as_event_connect_error(cmd, &err, fd);
-
-	ck_pr_dec_32(&cmd->cluster->async_conn);
-	ck_pr_dec_32(&cmd->node->async_conn);
 }
 
 static void

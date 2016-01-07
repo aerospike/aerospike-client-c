@@ -75,7 +75,6 @@ typedef struct {
 	} req;
 #else
 #endif
-	as_node* node;
 	bool pipeline;
 } as_event_connection;
 

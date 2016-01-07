@@ -300,7 +300,12 @@ linear_write_async(clientdata* cdata, threaddata* tdata, as_event_loop* event_lo
 	if (cdata->latency) {
 		tdata->begin = cf_getms();
 	}
-	aerospike_key_put_async(&cdata->client, 0, &tdata->key, &tdata->rec, linear_write_listener, tdata, event_loop, false);
+	
+	as_error err;
+	
+	if (aerospike_key_put_async(&cdata->client, &err, NULL, &tdata->key, &tdata->rec, linear_write_listener, tdata, event_loop, false) != AEROSPIKE_OK) {
+		linear_write_listener(&err, tdata, event_loop);
+	}
 }
 
 static void
@@ -364,12 +369,16 @@ random_read_write_async(clientdata* cdata, threaddata* tdata, as_event_loop* eve
 	tdata->key.value.integer.value = key;
 	
 	int die = cf_get_rand32() % 100;
-
+	as_error err;
+	
 	if (die < cdata->read_pct) {
 		if (cdata->latency) {
 			tdata->begin = cf_getms();
 		}
-		aerospike_key_get_async(&cdata->client, 0, &tdata->key, random_read_listener, tdata, event_loop, false);
+		
+		if (aerospike_key_get_async(&cdata->client, &err, NULL, &tdata->key, random_read_listener, tdata, event_loop, false) != AEROSPIKE_OK) {
+			random_read_listener(&err, NULL, tdata, event_loop);
+		}
 	}
 	else {
 		init_write_record(cdata, tdata);
@@ -377,7 +386,10 @@ random_read_write_async(clientdata* cdata, threaddata* tdata, as_event_loop* eve
 		if (cdata->latency) {
 			tdata->begin = cf_getms();
 		}
-		aerospike_key_put_async(&cdata->client, 0, &tdata->key, &tdata->rec, random_write_listener, tdata, event_loop, false);
+		
+		if (aerospike_key_put_async(&cdata->client, &err, NULL, &tdata->key, &tdata->rec, random_write_listener, tdata, event_loop, false) != AEROSPIKE_OK) {
+			random_write_listener(&err, tdata, event_loop);
+		}
 	}
 }
 

@@ -311,7 +311,6 @@ as_pipe_get_connection(as_event_command* cmd)
 	conn = cf_malloc(sizeof(as_pipe_connection));
 	assert(conn != NULL);
 
-	conn->base.node = cmd->node;
 	conn->base.pipeline = true;
 	conn->writer = NULL;
 	cf_ll_init(&conn->readers, NULL, false);

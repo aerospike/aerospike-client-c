@@ -107,3 +107,4 @@ void example_remove_index(aerospike* p_as, const char* index);
 void example_dump_record(const as_record* p_rec);
 void example_dump_operations(const as_operations* p_ops);
 int  example_handle_udf_error(as_error* err, const char* prefix);
+void example_event_loop_error();

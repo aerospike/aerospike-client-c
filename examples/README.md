@@ -2,69 +2,28 @@
 
 This directory contains a collection of examples of using the Aerospike client.
 
-## Prerequisites
-
-libc and openssl packages must be installed to compile the client library.
-
-### Debian-based Distributions
-
-For Debian-based distributions (Debian, Ubuntu, etc.):
-
-	$ sudo apt-get install libc6-dev libssl-dev liblua5.1-dev autoconf automake libtool g++
-	$ export CPATH=$CPATH:/usr/include/lua5.1
-
-For Debian:
-
-	$ sudo ln -s /usr/lib/liblua5.1.so /usr/lib/liblua.so
-	$ sudo ln -s /usr/lib/liblua5.1.a /usr/lib/liblua.a
-
-For Ubuntu:
-
-	$ sudo ln -s /usr/lib/x86_64-linux-gnu/liblua5.1.so /usr/lib/liblua.so
-	$ sudo ln -s /usr/lib/x86_64-linux-gnu/liblua5.1.a /usr/lib/liblua.a
-
-### Redhat-based Distributions
-
-For Redhat-based distributions (RHEL, CentOS, etc.):
-
-	$ sudo yum install openssl-devel glibc-devel lua-devel autoconf automake libtool
-
-	Installation of these packages will also install gcc. gcc -version must show a version of 4.1 or better. g++ is also supported with the same version restriction.
-
-### Mac OS X Distribution
-
-	Install XCode from https://developer.apple.com/technologies/mac/
-	Install Lua 5.1
-	$ curl -O http://www.lua.org/ftp/lua-5.1.5.tar.gz
-	$ tar -xvf lua-5.1.5.tar.gz
-	$ cd lua-5.1.5
-	$ make macosx
-	$ make test
-	$ sudo make install
-
 ## Build
 
 To build all examples:
 
-	$ make
+	$ make [EVENT_LIB=libev|libuv]
 
 To build a specific example:
 
-	$ make -C {example}
+	$ make [EVENT_LIB=libev|libuv] -C {example}
 
 ## Run
 
 To run all examples:
 
-	$ make AS_HOST=<server IP address> run
+	$ make [EVENT_LIB=libev|libuv] [AS_HOST=<server IP address>] run
 	
 To run a specific example:
 
-	$ make AS_HOST=<server IP address> -C {example} run
+	$ make [EVENT_LIB=libev|libuv] [AS_HOST=<server IP address>] -C {example} run
 
 
 # Summary of Examples
-
 
 The examples are intended to demonstrate client API usage. They do not
 exhaustively cover all features. Each example focuses on a particular API call
@@ -82,7 +41,6 @@ All examples clean up after themselves, leaving the database as they found it.
 
 
 ## Basic Examples
-
 
 These examples each use a single record to demonstrate particular API calls.
 
@@ -249,7 +207,6 @@ records as before.
 
 ## Query Examples
 
-
 These examples each use multiple records to demonstrate particular API calls.
 
 
@@ -289,9 +246,7 @@ demonstrates a simple query which finds all records satisfying a 'where' clause
 such record, in this case a single record.
 
 
-
 ## Scan Examples
-
 
 These examples each use multiple records to demonstrate particular API calls.
 
@@ -315,3 +270,15 @@ the effect of the scan.
 
 This example uses aerospike_scan_background() to do a standard foreground scan
 of the database, where a callback is made for each record found.
+
+
+## Async Examples
+
+These examples demonstrate particular asynchronous API calls.
+
+	as_event_create_loops()
+	as_event_close_loops()
+	aerospike_key_get_async()
+	aerospike_key_put_async()
+	aerospike_batch_read_async()
+	aerospike_query_async()

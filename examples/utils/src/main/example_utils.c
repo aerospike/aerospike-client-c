@@ -805,3 +805,9 @@ example_handle_udf_error(as_error* err, const char* prefix)
 		return -1;
 	}
 }
+
+void
+example_event_loop_error()
+{
+	LOG("Event library not defined. Skip async example.");
+}

@@ -68,6 +68,14 @@ typedef struct {
 } as_event_loop;
 
 /******************************************************************************
+ * GLOBAL VARIABLES
+ *****************************************************************************/
+
+extern as_event_loop* as_event_loops;
+extern uint32_t as_event_loop_size;
+extern uint32_t as_event_loop_current;
+
+/******************************************************************************
  * PUBLIC FUNCTIONS
  *****************************************************************************/
 
@@ -180,6 +188,21 @@ as_event_set_external_loop(void* loop);
  */
 as_event_loop*
 as_event_loop_find(void* loop);
+
+/**
+ *	Retrieve a random event loop using round robin distribution.
+ *
+ *	@return			Client's generic event loop abstraction that is used in client async commands.
+ *
+ *	@ingroup async_events
+ */
+static inline as_event_loop*
+as_event_loop_get()
+{
+	// Increment is not atomic because it doesn't need to be exactly accurate.
+	uint32_t current = as_event_loop_current++;
+	return &as_event_loops[current % as_event_loop_size];
+}
 
 /**
  *	Close internally created event loops and release memory for event loop abstraction.

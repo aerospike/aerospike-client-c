@@ -7,3 +7,4 @@ default: all
 	$(MAKE) -C query_examples $@
 	$(MAKE) -C scan_examples $@
 	$(MAKE) -C geospatial_examples $@
+	$(MAKE) -C async_examples $@

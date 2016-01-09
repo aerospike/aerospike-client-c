@@ -553,22 +553,20 @@ as_event_command_begin(as_event_command* cmd)
 	if (found) {
 		as_ev_command_write_start(cmd);
 	}
-	else {
+	else if (cmd->conn) {
 		as_ev_connect(cmd);
 	}
 }
 
 void
-as_event_close_connection(as_event_connection* conn, as_node* node)
+as_event_close_connection(as_event_connection* conn)
 {
 	close(conn->fd);
 	cf_free(conn);
-	ck_pr_dec_32(&node->cluster->async_conn);
-	ck_pr_dec_32(&node->async_conn);
 }
 
 static void
-as_ev_close_connections(as_node* node, as_queue* conn_queue)
+as_ev_close_connections(as_node* node, as_queue* conn_queue, bool pipeline)
 {
 	as_event_connection* conn;
 	
@@ -576,9 +574,8 @@ as_ev_close_connections(as_node* node, as_queue* conn_queue)
 	while (as_queue_pop(conn_queue, &conn)) {
 		close(conn->fd);
 		cf_free(conn);
-		ck_pr_dec_32(&node->cluster->async_conn);
+		as_event_decr_conn_count(node->cluster, node, pipeline);
 		ck_pr_dec_32(&node->cluster->async_conn_pool);
-		ck_pr_dec_32(&node->async_conn);
 	}
 	as_queue_destroy(conn_queue);
 }
@@ -588,8 +585,8 @@ as_event_node_destroy(as_node* node)
 {
 	// Close connections.
 	for (uint32_t i = 0; i < as_event_loop_size; i++) {
-		as_ev_close_connections(node, &node->async_conn_qs[i]);
-		as_ev_close_connections(node, &node->pipe_conn_qs[i]);
+		as_ev_close_connections(node, &node->async_conn_qs[i], false);
+		as_ev_close_connections(node, &node->pipe_conn_qs[i], true);
 	}
 	cf_free(node->async_conn_qs);
 	cf_free(node->pipe_conn_qs);

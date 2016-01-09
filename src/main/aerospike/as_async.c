@@ -29,6 +29,6 @@ as_async_get_pending(as_cluster* cluster)
 void
 as_async_get_connections(as_cluster* cluster, uint32_t* async_conn, uint32_t* async_conn_pool)
 {
-	*async_conn = ck_pr_load_32(&cluster->async_conn);
+	*async_conn = ck_pr_load_32(&cluster->async_conn_count);
 	*async_conn_pool = ck_pr_load_32(&cluster->async_conn_pool);
 }

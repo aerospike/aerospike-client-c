@@ -476,8 +476,7 @@ as_uv_connect_error(as_event_command* cmd, as_error* err)
 	// The socket is the first field in as_event_connection, so just use connection.
 	// The close callback will also free as_event_connection memory.
 	uv_close((uv_handle_t*)cmd->conn, as_uv_connection_closed);
-	ck_pr_dec_32(&cmd->cluster->async_conn);
-	ck_pr_dec_32(&cmd->node->async_conn);
+	as_event_decr_conn_count(cmd->cluster, cmd->node, cmd->pipeline);
 	as_event_error_callback(cmd, err);
 }
 
@@ -576,21 +575,19 @@ as_event_command_begin(as_event_command* cmd)
 	if (found) {
 		as_uv_command_write_start(cmd, (uv_stream_t*)&cmd->conn->socket);
 	}
-	else {
+	else if (cmd->conn) {
 		as_uv_connect(cmd);
 	}
 }
 
 void
-as_event_close_connection(as_event_connection* conn, as_node* node)
+as_event_close_connection(as_event_connection* conn)
 {
 	uv_close((uv_handle_t*)&conn->socket, as_uv_connection_closed);
-	ck_pr_dec_32(&node->cluster->async_conn);
-	ck_pr_dec_32(&node->async_conn);
 }
 
 static bool
-as_uv_queue_close_connections(as_node* node, as_queue* conn_queue, as_queue* cmd_queue)
+as_uv_queue_close_connections(as_node* node, as_queue* conn_queue, as_queue* cmd_queue, bool pipeline)
 {
 	as_uv_command qcmd;
 	qcmd.type = AS_UV_CLOSE_CONNECTION;
@@ -610,9 +607,8 @@ as_uv_queue_close_connections(as_node* node, as_queue* conn_queue, as_queue* cmd
 		// This is done because the node will be invalid when the deferred connection close occurs.
 		// Since node destroy always waits till there are no node references, all transactions that
 		// referenced this node should be completed by the time this code is executed.
-		ck_pr_dec_32(&node->cluster->async_conn);
+		as_event_decr_conn_count(node->cluster, node, pipeline);
 		ck_pr_dec_32(&node->cluster->async_conn_pool);
-		ck_pr_dec_32(&node->async_conn);
 	}
 	return true;
 }
@@ -625,8 +621,8 @@ as_event_node_destroy(as_node* node)
 		as_event_loop* event_loop = &as_event_loops[i];
 		
 		pthread_mutex_lock(&event_loop->lock);
-		as_uv_queue_close_connections(node, &node->async_conn_qs[i], &event_loop->queue);
-		as_uv_queue_close_connections(node, &node->pipe_conn_qs[i], &event_loop->queue);
+		as_uv_queue_close_connections(node, &node->async_conn_qs[i], &event_loop->queue, false);
+		as_uv_queue_close_connections(node, &node->pipe_conn_qs[i], &event_loop->queue, true);
 		pthread_mutex_unlock(&event_loop->lock);
 		
 		uv_async_send(event_loop->wakeup);

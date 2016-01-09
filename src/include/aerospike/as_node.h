@@ -121,10 +121,16 @@ typedef struct as_node_s {
 	
 	/**
 	 *	@private
-	 *	Number of active async connections.
+	 *	Number of active async (non-pipeline) connections.
 	 */
-	uint32_t async_conn;
+	uint32_t async_conn_count;
 
+	/**
+	 *	@private
+	 *	Number of active pipeline connections.
+	 */
+	uint32_t pipe_conn_count;
+	
 	/**
 	 *	@private
 	 *	Socket used exclusively for cluster tend thread info requests.

@@ -75,8 +75,8 @@ as_node_create(as_cluster* cluster, struct sockaddr_in* addr, as_node_info* node
 		node->pipe_conn_qs = cf_malloc(sizeof(as_queue) * as_event_loop_capacity);
 		
 		for (uint32_t i = 0; i < as_event_loop_capacity; i++) {
-			as_queue_init(&node->async_conn_qs[i], sizeof(void*), cluster->async_max_conns_per_node_loop);
-			as_queue_init(&node->pipe_conn_qs[i], sizeof(void*), cluster->pipe_max_conns_per_node_loop);
+			as_queue_init(&node->async_conn_qs[i], sizeof(void*), cluster->async_conn_qs_initial_capacity);
+			as_queue_init(&node->pipe_conn_qs[i], sizeof(void*), cluster->pipe_conn_qs_initial_capacity);
 		}
 	}
 	else {
@@ -84,7 +84,8 @@ as_node_create(as_cluster* cluster, struct sockaddr_in* addr, as_node_info* node
 		node->pipe_conn_qs = 0;
 	}
 
-	node->async_conn = 0;
+	node->async_conn_count = 0;
+	node->pipe_conn_count = 0;
 	node->info_fd = -1;
 	node->friends = 0;
 	node->failures = 0;

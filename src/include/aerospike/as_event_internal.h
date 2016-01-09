@@ -196,7 +196,7 @@ void
 as_event_command_begin(as_event_command* cmd);
 
 void
-as_event_close_connection(as_event_connection* conn, as_node* node);
+as_event_close_connection(as_event_connection* conn);
 
 void
 as_event_node_destroy(as_node* node);
@@ -386,7 +386,20 @@ as_event_set_auth_parse_header(as_event_command* cmd)
 	cmd->len = cmd->pos + cmd->auth_len;
 	cmd->state = AS_ASYNC_STATE_AUTH_READ_BODY;
 }
+
+static inline void
+as_event_decr_conn_count(as_cluster* cluster, as_node* node, bool pipeline)
+{
+	ck_pr_dec_32(&cluster->async_conn_count);
 	
+	if (pipeline) {
+		ck_pr_dec_32(&node->pipe_conn_count);
+	}
+	else {
+		ck_pr_dec_32(&node->async_conn_count);
+	}
+}
+
 #ifdef __cplusplus
 } // end extern "C"
 #endif

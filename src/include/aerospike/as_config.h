@@ -279,29 +279,27 @@ typedef struct as_config_s {
 	uint32_t max_threads;
 	
 	/**
-	 *	@private
-	 *	Maximum number of asynchronous (non-pipeline) connections allowed for each node/event loop
-	 *	combination. New connections will be created and destroyed if the maximum is reached.
+	 *	Maximum number of asynchronous (non-pipeline) connections allowed for each node.
+	 *	Async transactions will be rejected if the maximum async node connections would be exceeded.
 	 *	This variable is ignored if asynchronous event loops are not created.
-	 *	Default: 32
+	 *	Default: 300
 	 */
-	uint32_t async_max_conns_per_node_loop;
-	
+	uint32_t async_max_conns_per_node;
+
 	/**
-	 *	@private
-	 *	Maximum number of pipeline connections allowed for each node/event loop combination.
-	 *	New connections will be created and destroyed if the maximum is reached.
+	 *	Maximum number of pipeline connections allowed for each node.
+	 *	Pipeline transactions will be rejected if the maximum pipeline node connections would be exceeded.
 	 *	This variable is ignored if asynchronous event loops are not created.
-	 *	Default: 32
+	 *	Default: 300
 	 */
-	uint32_t pipe_max_conns_per_node_loop;
+	uint32_t pipe_max_conns_per_node;
 
 	/**
 	 *	@private
 	 *	Not currently used.
 	 *	Maximum socket idle in seconds.  Socket connection pools will discard sockets
 	 *	that have been idle longer than the maximum.
-	 *	Default: 14
+	 *	Default: 55
 	 */
 	uint32_t max_socket_idle_sec;
 	

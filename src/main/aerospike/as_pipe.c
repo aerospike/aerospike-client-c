@@ -38,6 +38,14 @@ write_start(as_event_command* cmd)
 	conn->writer = cmd;
 }
 
+static inline void
+close_connection(as_event_connection* conn, as_node* node)
+{
+	as_event_close_connection(conn);
+	ck_pr_dec_32(&node->cluster->async_conn_count);
+	ck_pr_dec_32(&node->pipe_conn_count);
+}
+
 static void
 next_reader(as_event_command* reader)
 {
@@ -58,7 +66,7 @@ next_reader(as_event_command* reader)
 		}
 
 		as_log_trace("Closing non-pooled pipeline connection %p", conn);
-		as_event_close_connection(reader->conn, reader->node);
+		close_connection(reader->conn, reader->node);
 		return;
 	}
 
@@ -124,7 +132,7 @@ cancel_connection(as_event_command* cmd, as_error* err, int32_t source)
 		as_log_trace("Closing canceled non-pooled pipeline connection %p", conn);
 		// For as_uv_connection_alive().
 		conn->canceled = true;
-		as_event_close_connection(&conn->base, node);
+		close_connection(&conn->base, node);
 		as_node_release(node);
 		return;
 	}
@@ -148,7 +156,7 @@ release_connection(as_event_command* cmd, as_pipe_connection* conn, as_node* nod
 
 	as_log_trace("Closing pipeline connection %p", conn);
 	as_event_stop_watcher(cmd, &conn->base);
-	as_event_close_connection(&conn->base, node);
+	close_connection(&conn->base, node);
 }
 
 static void
@@ -158,7 +166,7 @@ put_connection(as_event_command* cmd)
 	as_log_trace("Returning pipeline connection for writer %p, pipeline connection %p", cmd, conn);
 	as_queue* q = &cmd->node->pipe_conn_qs[cmd->event_loop->index];
 
-	if (as_queue_push_limit(q, &conn)) {
+	if (as_queue_push(q, &conn)) {
 		ck_pr_inc_32(&cmd->cluster->async_conn_pool);
 		conn->in_pool = true;
 		return;
@@ -280,8 +288,7 @@ as_pipe_get_connection(as_event_command* cmd)
 	// tends to open very few connections, which isn't good for write parallelism on the
 	// server. The server processes all commands from the same connection sequentially.
 	// More connections thus mean more parallelism.
-	if (ck_pr_load_32(&cmd->node->async_conn) >=
-			cmd->cluster->pipe_max_conns_per_node_loop * as_event_loop_capacity) {
+	if (ck_pr_load_32(&cmd->node->pipe_conn_count) >= cmd->cluster->pipe_max_conns_per_node) {
 		while (as_queue_pop(q, &conn)) {
 			as_log_trace("Checking pipeline connection %p", conn);
 			ck_pr_dec_32(&cmd->cluster->async_conn_pool);
@@ -289,7 +296,7 @@ as_pipe_get_connection(as_event_command* cmd)
 			if (conn->canceled) {
 				as_log_trace("Pipeline connection %p was canceled earlier", conn);
 				// Do not need to stop watcher because it was stopped in cancel_connection().
-				as_event_close_connection((as_event_connection*)conn, cmd->node);
+				close_connection((as_event_connection*)conn, cmd->node);
 				continue;
 			}
 
@@ -307,18 +314,33 @@ as_pipe_get_connection(as_event_command* cmd)
 		}
 	}
 	
+	// Create connection structure only when node connection count within limit.
 	as_log_trace("Creating new pipeline connection");
-	conn = cf_malloc(sizeof(as_pipe_connection));
-	assert(conn != NULL);
-
-	conn->base.pipeline = true;
-	conn->writer = NULL;
-	cf_ll_init(&conn->readers, NULL, false);
-	conn->canceled = false;
-	conn->in_pool = false;
-
-	cmd->conn = (as_event_connection*)conn;
-	write_start(cmd);
+	uint32_t count = ck_pr_faa_32(&cmd->node->pipe_conn_count, 1);
+	
+	if (count < cmd->cluster->pipe_max_conns_per_node) {
+		ck_pr_inc_32(&cmd->cluster->async_conn_count);
+		conn = cf_malloc(sizeof(as_pipe_connection));
+		assert(conn != NULL);
+		
+		conn->base.pipeline = true;
+		conn->writer = NULL;
+		cf_ll_init(&conn->readers, NULL, false);
+		conn->canceled = false;
+		conn->in_pool = false;
+		
+		cmd->conn = (as_event_connection*)conn;
+		write_start(cmd);
+	}
+	else {
+		ck_pr_dec_32(&cmd->node->pipe_conn_count);
+		as_error err;
+		as_error_update(&err, AEROSPIKE_ERR_NO_MORE_CONNECTIONS,
+						"Max node %s async connections would be exceeded: %u",
+						cmd->node->name, cmd->cluster->pipe_max_conns_per_node);
+		as_event_stop_timer(cmd);
+		as_event_error_callback(cmd, &err);
+	}
 	return false;
 }
 

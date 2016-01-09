@@ -30,6 +30,12 @@
 #include <citrusleaf/cf_clock.h>
 
 /******************************************************************************
+ *	Globals
+ *****************************************************************************/
+
+extern uint32_t as_event_loop_capacity;
+
+/******************************************************************************
  *	Function declarations
  *****************************************************************************/
 
@@ -70,12 +76,27 @@ swap_seeds(as_cluster* cluster, as_seeds* seeds)
 	return old;
 }
 
+static inline uint32_t
+async_queue_initial_capacity(uint32_t max_conns_per_node)
+{
+	if (max_conns_per_node <= as_event_loop_capacity) {
+		return 10;
+	}
+	else {
+		// Create initial key capacity for each node/loop combination + 25%.
+		uint32_t capacity = max_conns_per_node / as_event_loop_capacity;
+		return capacity + (capacity >> 2);
+	}
+}
+
 void
-as_cluster_set_async_pool_size(as_cluster* cluster, uint32_t async_size, uint32_t pipe_size)
+as_cluster_set_async_max_conns_per_node(as_cluster* cluster, uint32_t async_size, uint32_t pipe_size)
 {
 	// Note: This setting only affects pools in new nodes.  Existing node pools are not changed.
-	cluster->async_max_conns_per_node_loop = async_size;
-	cluster->pipe_max_conns_per_node_loop = pipe_size;
+	cluster->async_max_conns_per_node = async_size;
+	cluster->async_conn_qs_initial_capacity = async_queue_initial_capacity(async_size);
+	cluster->pipe_max_conns_per_node = pipe_size;
+	cluster->pipe_conn_qs_initial_capacity = async_queue_initial_capacity(pipe_size);
 	ck_pr_fence_store();
 	ck_pr_inc_32(&cluster->version);
 }
@@ -1140,9 +1161,11 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 	cluster->tend_interval = (config->tender_interval < 1000)? 1000 : config->tender_interval;
 	cluster->conn_queue_size = config->max_threads + 1;  // Add one connection for tend thread.
 	cluster->conn_timeout_ms = (config->conn_timeout_ms == 0) ? 1000 : config->conn_timeout_ms;
-	cluster->async_max_conns_per_node_loop = config->async_max_conns_per_node_loop;
-	cluster->pipe_max_conns_per_node_loop = config->pipe_max_conns_per_node_loop;
-	
+	cluster->async_max_conns_per_node = config->async_max_conns_per_node;
+	cluster->async_conn_qs_initial_capacity = async_queue_initial_capacity(config->async_max_conns_per_node);
+	cluster->pipe_max_conns_per_node = config->pipe_max_conns_per_node;;
+	cluster->pipe_conn_qs_initial_capacity = async_queue_initial_capacity(config->pipe_max_conns_per_node);
+		
 	// Initialize seed hosts.
 	cluster->seeds = seeds_init(config);
 	cluster->use_services_alternate = config->use_services_alternate;
@@ -1153,7 +1176,7 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 	}
 
 	cluster->async_pending = 0;
-	cluster->async_conn = 0;
+	cluster->async_conn_count = 0;
 	cluster->async_conn_pool = 0;
 
 	// Initialize empty nodes.

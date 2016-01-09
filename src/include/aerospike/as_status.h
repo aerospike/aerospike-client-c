@@ -35,6 +35,11 @@ typedef enum as_status_e {
 	/**
 	 *	Asynchronous connection error.
 	 */
+	AEROSPIKE_ERR_NO_MORE_CONNECTIONS = -7,
+
+	/**
+	 *	Asynchronous connection error.
+	 */
 	AEROSPIKE_ERR_ASYNC_CONNECTION = -6,
 	
 	/**

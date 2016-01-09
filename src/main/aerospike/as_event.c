@@ -194,14 +194,22 @@ as_event_command_execute(as_event_command* cmd, as_error* err)
 }
 
 static inline void
+as_event_release_connection(as_event_connection* conn, as_node* node)
+{
+	as_event_close_connection(conn);
+	ck_pr_dec_32(&node->cluster->async_conn_count);
+	ck_pr_dec_32(&node->async_conn_count);
+}
+
+static inline void
 as_event_put_connection(as_event_command* cmd)
 {
 	as_queue* q = &cmd->node->async_conn_qs[cmd->event_loop->index];
 	
-	if (as_queue_push_limit(q, &cmd->conn)) {
+	if (as_queue_push(q, &cmd->conn)) {
 		ck_pr_inc_32(&cmd->cluster->async_conn_pool);
 	} else {
-		as_event_close_connection(cmd->conn, cmd->node);
+		as_event_release_connection(cmd->conn, cmd->node);
 	}
 }
 
@@ -322,23 +330,34 @@ as_event_get_connection(as_event_command* cmd)
 			cmd->conn = (as_event_connection*)conn;
 			return true;
 		}
-		as_event_close_connection(&conn->base, cmd->node);
+		as_event_release_connection(&conn->base, cmd->node);
 	}
 	
-	// Create connection.
-	conn = cf_malloc(sizeof(as_async_connection));
-	conn->base.pipeline = false;
-	conn->cmd = cmd;
-	cmd->conn = &conn->base;
+	// Create connection structure only when node connection count within limit.
+	uint32_t count = ck_pr_faa_32(&cmd->node->async_conn_count, 1);
+	
+	if (count < cmd->cluster->async_max_conns_per_node) {
+		ck_pr_inc_32(&cmd->cluster->async_conn_count);
+		conn = cf_malloc(sizeof(as_async_connection));
+		conn->base.pipeline = false;
+		conn->cmd = cmd;
+		cmd->conn = &conn->base;
+	}
+	else {
+		ck_pr_dec_32(&cmd->node->async_conn_count);
+		as_error err;
+		as_error_update(&err, AEROSPIKE_ERR_NO_MORE_CONNECTIONS,
+						"Max node %s async connections would be exceeded: %u",
+						cmd->node->name, cmd->cluster->async_max_conns_per_node);
+		as_event_stop_timer(cmd);
+		as_event_error_callback(cmd, &err);
+	}
 	return false;
 }
 
 int
 as_event_create_socket(as_event_command* cmd)
 {
-	ck_pr_inc_32(&cmd->cluster->async_conn);
-	ck_pr_inc_32(&cmd->node->async_conn);
-	
 	// Create a non-blocking socket.
 	int fd = as_socket_create_nb();
 	
@@ -407,9 +426,7 @@ as_event_connect_error(as_event_command* cmd, as_error* err, int fd)
 		close(fd);
 	}
 	cf_free(cmd->conn);
-	ck_pr_dec_32(&cmd->cluster->async_conn);
-	ck_pr_dec_32(&cmd->node->async_conn);
-	
+	as_event_decr_conn_count(cmd->cluster, cmd->node, cmd->pipeline);
 	as_event_error_callback(cmd, err);
 }
 
@@ -451,7 +468,7 @@ as_event_socket_error(as_event_command* cmd, as_error* err)
 	as_event_stop_timer(cmd);
 	
 	// Do not put connection back in pool.
-	as_event_close_connection(cmd->conn, cmd->node);
+	as_event_release_connection(cmd->conn, cmd->node);
 	as_event_error_callback(cmd, err);
 }
 
@@ -475,7 +492,7 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 		case AEROSPIKE_ERR_ASYNC_CONNECTION:
 		case AEROSPIKE_ERR_CLIENT_ABORT:
 		case AEROSPIKE_ERR_CLIENT:
-			as_event_close_connection(cmd->conn, cmd->node);
+			as_event_release_connection(cmd->conn, cmd->node);
 			break;
 			
 		default:
@@ -504,7 +521,7 @@ as_event_timeout(as_event_command* cmd)
 	
 	// Assume timer has already been stopped.
 	// Do not put connection back in pool.
-	as_event_close_connection(cmd->conn, cmd->node);
+	as_event_release_connection(cmd->conn, cmd->node);
 	as_event_error_callback(cmd, &err);
 }
 

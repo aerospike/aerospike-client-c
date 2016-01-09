@@ -249,19 +249,34 @@ typedef struct as_cluster_s {
 	
 	/**
 	 *	@private
-	 *	Maximum number of asynchronous (non-pipeline) connections allowed for each node/event loop
-	 *	combination. New connections will be created and destroyed if the maximum is reached.
+	 *	Maximum number of asynchronous (non-pipeline) connections allowed for each node.
+	 *	Async transactions will be rejected if the maximum async node connections would be exceeded.
 	 *	This variable is ignored if asynchronous event loops are not created.
 	 */
-	uint32_t async_max_conns_per_node_loop;
+	uint32_t async_max_conns_per_node;
+	
+	/**
+	 *	@private
+	 *	Initial capacity for asynchronous (non-pipeline) connection pools.  There is one pool for 
+	 *	each node/event loop combination.  This variable is ignored if asynchronous event loops are 
+	 *	not created.
+	 */
+	uint32_t async_conn_qs_initial_capacity;
 
 	/**
 	 *	@private
-	 *	Maximum number of pipeline connections allowed for each node/event loop combination.
-	 *	New connections will be created and destroyed if the maximum is reached.
+	 *	Maximum number of pipeline connections allowed for each node.
+	 *	Pipeline transactions will be rejected if the maximum pipeline node connections would be exceeded.
 	 *	This variable is ignored if asynchronous event loops are not created.
 	 */
-	uint32_t pipe_max_conns_per_node_loop;
+	uint32_t pipe_max_conns_per_node;
+	
+	/**
+	 *	@private
+	 *	Initial capacity for pipeline connection pools.  There is one pool for each node/event loop 
+	 *	combination.  This variable is ignored if asynchronous event loops are not created.
+	 */
+	uint32_t pipe_conn_qs_initial_capacity;
 
 	/**
 	 *	@private
@@ -271,9 +286,9 @@ typedef struct as_cluster_s {
 
 	/**
 	 *	@private
-	 *	Number of active async connections.
+	 *	Number of active async pipeline and non-pipeline connections combined.
 	 */
-	uint32_t async_conn;
+	uint32_t async_conn_count;
 
 	/**
 	 *	@private
@@ -457,10 +472,10 @@ void
 as_ip_map_update(as_cluster* cluster, as_addr_map* ip_map_list, uint32_t size);
 
 /**
- * 	Change the size of the async and pipeline connection pools.
+ * 	Change maximum async connections per node.
  */
 void
-as_cluster_set_async_pool_size(as_cluster* cluster, uint32_t async_size, uint32_t pipe_size);
+as_cluster_set_async_max_conns_per_node(as_cluster* cluster, uint32_t async_size, uint32_t pipe_size);
 
 /**
  *	@private

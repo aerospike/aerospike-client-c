@@ -468,7 +468,7 @@ as_socket_read_limit(as_error* err, int fd, uint8_t *buf, size_t buf_len, uint64
         }
         else {
 			if (rv == -1)  {
-				status = as_error_update(err, AEROSPIKE_ERR_CLIENT, "Socket write error: %d", errno);
+				status = as_error_update(err, AEROSPIKE_ERR_CLIENT, "Socket read error: %d", errno);
 				goto Out;
 			}
         }

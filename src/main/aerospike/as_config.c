@@ -39,7 +39,7 @@ as_config * as_config_init(as_config * c)
 	c->ip_map_size = 0;
 	c->max_threads = 300;
 	c->async_max_conns_per_node = 300;
-	c->pipe_max_conns_per_node = 300;
+	c->pipe_max_conns_per_node = 100;
 	c->max_socket_idle_sec = 55;
 	c->conn_timeout_ms = 1000;
 	c->tender_interval = 1000;

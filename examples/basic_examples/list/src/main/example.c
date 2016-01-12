@@ -106,10 +106,6 @@ main(int argc, char* argv[])
 	LOG("insert popped value at the head (index 0)");
 
 	as_val *val = (as_val *)as_record_get(p_rec, "test-bin-1");
-	// Take a reference so destroying record won't destroy val.
-	as_val_reserve(val);
-	as_record_destroy(p_rec);
-	p_rec = NULL;
 
 	as_operations_inita(&ops, 1);
 	as_operations_add_list_insert(&ops, "test-bin-1", 0, val);
@@ -122,6 +118,7 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
+	as_record_destroy(p_rec);
 	as_operations_destroy(&ops);
 
 	LOG("insert operation succeeded");

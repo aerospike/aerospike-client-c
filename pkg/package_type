@@ -99,7 +99,7 @@ el5|el6|el7)
   rm $stageDir/rpm.spec
   ;;
 
-debian6|debian7|ubuntu10.04|ubuntu12.04)
+debian6|debian7|ubuntu10.04|ubuntu12.04|ubuntu14.04)
   CreatePackage usr opt
   mkdir -p $buildDir/DEBIAN
   install -m 755 deb/postinst.client $buildDir/DEBIAN/postinst

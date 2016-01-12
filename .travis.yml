@@ -22,6 +22,12 @@ install:
 script:
 - make
 - make test
+- make clean
+- make EVENT_LIB=libev
+- make EVENT_LIB=libev test
+- make clean
+- make EVENT_LIB=libuv
+- make EVENT_LIB=libuv test
 notifications:
   slack:
     secure: k1GG7xFMgcLemnI0LxK0Qw2mukjmTKloHOyHI1wljer7GdOGy8icbaI6n7t1PCZ7MDYSmeQ8MFH5XbaUJT1lVkZYe1MNEsT3dpdDgAHBSk5dAu+5ZvFvoDZpRe7WS8X/mEThGgV1sQY1eKFVW8iVhVxLsSiaFPSWz1z/gGryhK4=

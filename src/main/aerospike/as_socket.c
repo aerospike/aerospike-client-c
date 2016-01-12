@@ -24,6 +24,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+bool as_socket_stop_on_interrupt = false;
+
 #if defined(__linux__) || defined(__APPLE__)
 #include <fcntl.h>
 #include <netinet/tcp.h>
@@ -329,7 +331,7 @@ as_socket_write_limit(as_error* err, int fd, uint8_t *buf, size_t buf_len, uint6
 #endif
     	}
         else {
-			if (rv == -1) {
+			if (rv == -1 && (errno != EINTR || as_socket_stop_on_interrupt)) {
 				status = as_error_update(err, AEROSPIKE_ERR_CLIENT, "Socket write error: %d", errno);
 				goto Out;
 			}
@@ -467,7 +469,7 @@ as_socket_read_limit(as_error* err, int fd, uint8_t *buf, size_t buf_len, uint64
 #endif
         }
         else {
-			if (rv == -1)  {
+			if (rv == -1 && (errno != EINTR || as_socket_stop_on_interrupt)) {
 				status = as_error_update(err, AEROSPIKE_ERR_CLIENT, "Socket read error: %d", errno);
 				goto Out;
 			}

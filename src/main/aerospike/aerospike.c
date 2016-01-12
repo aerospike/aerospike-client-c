@@ -129,3 +129,11 @@ aerospike_cluster_is_connected(aerospike* as)
 {
 	return as_cluster_is_connected(as->cluster);
 }
+
+extern bool as_socket_stop_on_interrupt;
+
+void
+aerospike_stop_on_interrupt(bool stop)
+{
+	as_socket_stop_on_interrupt = stop;
+}

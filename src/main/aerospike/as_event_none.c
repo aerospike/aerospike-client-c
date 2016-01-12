@@ -46,7 +46,7 @@ as_event_command_begin(as_event_command* cmd)
 }
 
 void
-as_event_close_connection(as_event_connection* conn, as_node* node)
+as_event_close_connection(as_event_connection* conn)
 {
 }
 

@@ -79,7 +79,7 @@ swap_seeds(as_cluster* cluster, as_seeds* seeds)
 static inline uint32_t
 async_queue_initial_capacity(uint32_t max_conns_per_node)
 {
-	if (max_conns_per_node <= as_event_loop_capacity) {
+	if (max_conns_per_node <= as_event_loop_capacity || as_event_loop_capacity == 0) {
 		return 10;
 	}
 	else {

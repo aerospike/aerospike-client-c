@@ -74,6 +74,12 @@ This will generate the following files:
   **or**
 - `target/{target}/lib/libaerospike.dylib` – dynamic shared library (for MacOS)
 
+Build alias:
+
+If always building with the same asynchronous framework, creating an alias is recommended.
+
+	$ alias make="make EVENT_LIB=libev"
+
 Static linking with the `.a` prevents you from having to install the libraries on your 
 target platform. Dynamic linking with the `.so` avoids a client rebuild if you upgrade 
 the client. Choose the option that is right for you.

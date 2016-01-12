@@ -17,8 +17,7 @@ packageName=aerospike-client-c-$rev.$platform.x86_64
 
 # Define directories
 baseDir=`cd ..;pwd`
-packageDir=$baseDir/target/packages
-stageDir=$baseDir/target/stage
+stageDir=$baseDir/stage
 stageFinalDir=$stageDir/final/$packageName
 
 if [ "$platform" = "mac" ]
@@ -32,10 +31,14 @@ else
 	installDir=/usr
 fi
 
-# Initialize directories
-rm -rf $packageDir
+# Make default package
+echo Make default package
+make -C $baseDir clean
+make -C $baseDir all
+make -C $baseDir docs
+
+# Initialize stage dir
 rm -rf $stageDir
-mkdir -p $packageDir
 mkdir -p $stageFinalDir
 
 # Copy files
@@ -49,7 +52,8 @@ if [ -d $baseDir/target/docs/html ]
 then
   cp -pr $baseDir/target/docs/html/* $stageFinalDir/docs
 else
-  echo "WARNING: online docs not found."
+  echo "ERROR: online docs not found."
+  exit -1
 fi
 
 # Prepare benchmarks and examples
@@ -87,11 +91,27 @@ do
 	}' $baseDir/$i > $stageFinalDir/$i
 done
 
-# Create library package.
-./package_type lib $baseDir $stageDir $stageFinalDir
+# Create library package for default synchronous library.
+./package_type lib sync $baseDir $stageDir $stageFinalDir
 
 # Create devel package with library and header files.
-./package_type devel $baseDir $stageDir $stageFinalDir
+./package_type devel sync $baseDir $stageDir $stageFinalDir
+
+# Package event library targets
+for elib in libev libuv
+do
+	echo Make $elib package
+	make -C $baseDir clean
+	make EVENT_LIB=$elib -C $baseDir all
+
+	./package_type lib $elib $baseDir $stageDir $stageFinalDir
+	./package_type devel $elib $baseDir $stageDir $stageFinalDir
+done
+
+# Initialize package directory
+packageDir=$baseDir/target/packages
+rm -rf $packageDir
+mkdir -p $packageDir
 
 # Combine distribution into one final package.
 tar cf - -C $stageDir/final $packageName | gzip -c > $packageDir/$packageName.tgz

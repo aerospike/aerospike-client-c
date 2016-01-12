@@ -282,7 +282,7 @@ docs-clean:
 	rm -rf $(TARGET)/docs
 
 .PHONY: package
-package: clean all docs
+package:
 	pkg/package
 
 .PHONY: package-clean

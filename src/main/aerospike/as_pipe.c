@@ -247,8 +247,14 @@ get_buffer_size(const char* proc, int size)
 	}
 	
 	if (max < size) {
+#if defined(USE_XDR)
 		as_log_warn("Buffer limit is %d, should be at least %d. Please set %s accordingly.",
 				max, size, proc);
+#else
+		as_log_debug("Buffer limit is %d, should be at least %d. Please set %s accordingly.",
+					max, size, proc);
+#endif
+
 		return 0;
 	}
 

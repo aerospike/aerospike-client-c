@@ -1,7 +1,7 @@
-Name: aerospike-client-c
+Name: aerospike-client-c@EVENTNAME@
 Version: @VERSION@
 Release: 1%{?dist}
-Summary: Aerospike C Client Libraries
+Summary: Aerospike C Client Libraries@EVENTDESC@
 License: Proprietary
 Group: Development/Libraries
 BuildArch: x86_64

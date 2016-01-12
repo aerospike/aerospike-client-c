@@ -316,6 +316,15 @@ aerospike_cluster_is_connected(aerospike* as);
 bool
 aerospike_cluster_is_connected(aerospike* as);
 
+/**
+ *	Should stop socket operation if interrupted by a signal.  Default is false which means
+ *	the socket operation will be retried until timeout.
+ *
+ *	@relates aerospike
+ */
+void
+aerospike_stop_on_interrupt(bool stop);
+
 #ifdef __cplusplus
 } // end extern "C"
 #endif

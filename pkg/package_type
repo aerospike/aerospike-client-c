@@ -103,7 +103,7 @@ debian6|debian7|ubuntu10.04|ubuntu12.04|ubuntu14.04)
   CreatePackage usr opt
   mkdir -p $buildDir/DEBIAN
   install -m 755 deb/postinst.client $buildDir/DEBIAN/postinst
-  sed -e "s/@EVENTNAME@/$eventName/g" -e "s/@EVENTDESC@/$eventDesc/g" -e "s/@VERSION@/$rpmrev/g" < deb/client$pkgSuffix.spec > $buildDir/DEBIAN/control
+  sed -e "s/@EVENTNAME@/$eventName/g" -e "s/@EVENTDESC@/$eventDesc/g" -e "s/@VERSION@/$rev/g" < deb/client$pkgSuffix.spec > $buildDir/DEBIAN/control
   fakeroot dpkg-deb --build $buildDir $targetDir/aerospike-client-c$eventName$pkgSuffix-$rev.$platform.$arch.deb
   ;;
 

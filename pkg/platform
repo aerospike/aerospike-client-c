@@ -1,97 +1,39 @@
 #!/bin/bash
 # Display current operating system.
 
-if [ "$1" = "-long" ]
+rel=`uname`
+
+if [ "$rel" = "Darwin" ]
 then
-  longName=1
+  echo mac
+  exit 0
 fi
 
-function setPlatform {
-  if [ "$longName" = "1" ]
-  then
-    platform=$2
-  else
-    platform=$1
-  fi
-}
+if [ "$rel" != "Linux" ]
+then
+  echo "Unknown platform"
+  exit 1
+fi
 
 if [ -f /etc/redhat-release ]
 then
-  ver=`cat /etc/redhat-release | awk '{printf("%2.2s\n", $3)}'`
-  
-  if  [ "$ver" = "5." ]
-  then
-    setPlatform el5 centos5
-  elif [ "$ver" = "6." ]
-  then
-    setPlatform el6 centos6
-  else
-    ver=`cat /etc/redhat-release | awk '{printf("%2.2s\n", $4)}'`
-    
-    if [ "$ver" = "6." ]
-    then
-      setPlatform el6 centos6
-    elif [ "$ver" = "7." ]
-    then
-      setPlatform el7 centos7
-    else
-      ver=`cat /etc/redhat-release | awk '/Fedora/ {printf("%2s\n", $3)}'`
-
-      if [ "$ver" -gt "10" ]
-      then
-        setPlatform el6 centos6
-      else
-        echo "Unknown redhat version $ver"
-        exit 1
-      fi
-    fi
-  fi
+  uname -r | awk -F. '{if (index($NF,"el") == 1 || index($NF,"fc") == 1) print $NF; else print $(NF-1);}'
+  exit 0
 elif [ -f /etc/issue ]
 then
   os=`cat /etc/issue | awk '{print $1}'`
 
   if [ "$os" = "Debian" ]
   then
-    ver=`cat /etc/issue | tr -d '\n' | awk '{print $3}'`
-    ver=${ver:0:2}
-
-    if [ "$ver" = "6." ]
-    then
-      setPlatform debian6 debian6
-    elif [ "$ver" = "7" ]
-    then
-      setPlatform debian7 debian7
-    else
-      echo "Unknown debian version $ver"
-      exit 1
-    fi
+    ver=`cat /etc/issue | tr -d '\n' | awk '{print $3}' | awk -F'.' '{print $1}'`
+    echo debian$ver
   elif [ "$os" = "Ubuntu" ]
   then
-    ver=`cat /etc/issue | awk '{print $2}'`
-
-    if [ "$ver" != "" ]
-    then
-      ver2=`echo $ver | awk -F'.' '{printf("%s.%s\n",$1,$2)}'`
-      setPlatform ubuntu$ver2 ubuntu$ver2
-    else
-      echo "Unknown ubuntu version $ver"
-      exit 1
-    fi
-  else
-    echo "Unknown platform $os"
-    exit 1    
+    ver=`cat /etc/issue | tr -d '\n' | awk '{print $2}' | awk -F'.' '{printf("%s.%s\n",$1,$2)}'`
+    echo ubuntu$ver
   fi
-else
-  os=`uname`
-
-  if [ "$os" = "Darwin" ]
-  then
-      setPlatform mac mac
-  else
-    echo "Unknown platform."
-    exit 1
-  fi
+  exit 0
 fi
 
-echo $platform
-exit 0
+echo "Unknown platform"
+exit 1    

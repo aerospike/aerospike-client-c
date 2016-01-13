@@ -1,6 +1,8 @@
 #!/bin/bash
 # Package client.
 
+set -e
+
 cd `dirname $0`
 
 platform=`./platform`

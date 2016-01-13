@@ -88,9 +88,9 @@ function CreatePackage {
   fi
 }
 
-case $platform in
+case ${platform:0:2} in
 
-el5|el6|el7)
+el|fc)
   CreatePackage usr opt
   rpmrev=`echo $rev | sed 's/-/_/g'`
   sed -e "s/@EVENTNAME@/$eventName/g" -e "s/@EVENTDESC@/$eventDesc/g" -e "s/@VERSION@/$rpmrev/g" < rpm/client$pkgSuffix.spec > $stageDir/rpm.spec
@@ -99,7 +99,7 @@ el5|el6|el7)
   rm $stageDir/rpm.spec
   ;;
 
-debian6|debian7|ubuntu10.04|ubuntu12.04|ubuntu14.04)
+de|ub)
   CreatePackage usr opt
   mkdir -p $buildDir/DEBIAN
   install -m 755 deb/postinst.client $buildDir/DEBIAN/postinst
@@ -107,7 +107,7 @@ debian6|debian7|ubuntu10.04|ubuntu12.04|ubuntu14.04)
   fakeroot dpkg-deb --build $buildDir $targetDir/aerospike-client-c$eventName$pkgSuffix-$rev.$platform.$arch.deb
   ;;
 
-mac)
+ma)
   CreatePackage usr/local usr/local
   pkgbuild --identifier com.aerospike.client.c$eventId$idSuffix.$rev --root $buildDir $targetDir/aerospike-client-c$eventName$pkgSuffix-$rev.pkg
   ;;

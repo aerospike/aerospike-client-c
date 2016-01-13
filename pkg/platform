@@ -23,16 +23,18 @@ then
   then
     ver=`cat /etc/issue | tr -d '\n' | awk '{print $3}' | awk -F'.' '{print $1}'`
     echo el$ver
+    exit 0
   elif [ "$os" = "Fedora" ]
   then
     ver=`cat /etc/issue | tr -d '\n' | awk '{print $3}' | awk -F'.' '{print $1}'`
     echo fc$ver
+    exit 0
   elif [ "$os" = "Red" ]
   then
     ver=`cat /etc/issue | tr -d '\n' | awk '{print $7}' | awk -F'.' '{print $1}'`
     echo el$ver
+    exit 0
   fi
-  exit 0
 elif [ -f /etc/issue ]
 then
   os=`cat /etc/issue | awk '{print $1}'`
@@ -41,12 +43,13 @@ then
   then
     ver=`cat /etc/issue | tr -d '\n' | awk '{print $3}' | awk -F'.' '{print $1}'`
     echo debian$ver
+    exit 0
   elif [ "$os" = "Ubuntu" ]
   then
     ver=`cat /etc/issue | tr -d '\n' | awk '{print $2}' | awk -F'.' '{printf("%s.%s\n",$1,$2)}'`
     echo ubuntu$ver
+    exit 0
   fi
-  exit 0
 fi
 
 echo "Unknown platform"

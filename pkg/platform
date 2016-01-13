@@ -17,7 +17,21 @@ fi
 
 if [ -f /etc/redhat-release ]
 then
-  uname -r | awk -F. '{if (index($NF,"el") == 1 || index($NF,"fc") == 1) print $NF; else print $(NF-1);}'
+  os=`cat /etc/redhat-release | awk '{print $1}'`
+  
+  if [ "$os" = "CentOS" ]
+  then
+    ver=`cat /etc/issue | tr -d '\n' | awk '{print $3}' | awk -F'.' '{print $1}'`
+    echo el$ver
+  elif [ "$os" = "Fedora" ]
+  then
+    ver=`cat /etc/issue | tr -d '\n' | awk '{print $3}' | awk -F'.' '{print $1}'`
+    echo fc$ver
+  elif [ "$os" = "Red" ]
+  then
+    ver=`cat /etc/issue | tr -d '\n' | awk '{print $7}' | awk -F'.' '{print $1}'`
+    echo el$ver
+  fi
   exit 0
 elif [ -f /etc/issue ]
 then

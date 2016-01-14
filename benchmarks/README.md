@@ -7,16 +7,20 @@ This program is used to insert data and generate load.
 Build instructions:
 
     make clean
-    make [EVENTLIB=libev|libuv]
+    make [EVENT_LIB=libev|libuv]
 
-If an event library is defined, it must be installed separately.  The event library
-setting must also match the same setting when building the client itself.
+The EVENT_LIB setting must also match the same setting when building the client itself.
+If an event library is defined, it must be installed separately.  libev and libuv usually
+install into /usr/local/lib.  Most operating systems do not search /usr/local/lib by 
+default.  Therefore, the following LD_LIBRARY_PATH setting may be necessary.
+
+    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
 
 Build examples:
 
     make                 # synchronous functionality only
-    make EVENTLIB=libev  # synchronous and asynchronous functionality with libev   
-    make EVENTLIB=libuv  # synchronous and asynchronous functionality with libuv   
+    make EVENT_LIB=libev  # synchronous and asynchronous functionality with libev   
+    make EVENT_LIB=libuv  # synchronous and asynchronous functionality with libuv   
 
 The command line usage can be obtained by:
 

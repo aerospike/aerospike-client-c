@@ -48,6 +48,12 @@ Download and install [libev](http://dist.schmorp.de/libev) version 4.20 or great
 
 Download and install [libuv](http://docs.libuv.org) version 1.7.5 or greater.
 
+libev and libuv usually install into /usr/local/lib.  Most operating systems do not 
+search /usr/local/lib by default.  Therefore, the following LD_LIBRARY_PATH setting may 
+be necessary.
+
+    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
+
 ## Build
 
 Before building, please ensure you have the prerequisites installed.  This project uses 
@@ -66,7 +72,7 @@ Build examples:
 	$ make EVENT_LIB=libev  # Support asynchronous functions with libev
 	$ make EVENT_LIB=libuv  # Support asynchronous functions with libuv
 
-This will generate the following files:
+The build will generate the following files:
 
 - `target/{target}/include` – header files
 - `target/{target}/lib/libaerospike.a` – static archive
@@ -74,15 +80,15 @@ This will generate the following files:
   **or**
 - `target/{target}/lib/libaerospike.dylib` – dynamic shared library (for MacOS)
 
+Static linking with the `.a` prevents you from having to install the libraries on your 
+target platform. Dynamic linking with the `.so` avoids a client rebuild if you upgrade 
+the client. Choose the option that is right for you.
+
 Build alias:
 
 If always building with the same asynchronous framework, creating an alias is recommended.
 
 	$ alias make="make EVENT_LIB=libev"
-
-Static linking with the `.a` prevents you from having to install the libraries on your 
-target platform. Dynamic linking with the `.so` avoids a client rebuild if you upgrade 
-the client. Choose the option that is right for you.
 
 ## Clean
 

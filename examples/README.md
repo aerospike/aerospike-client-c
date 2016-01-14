@@ -8,6 +8,13 @@ To build all examples:
 
 	$ make [EVENT_LIB=libev|libuv]
 
+The EVENT_LIB setting must also match the same setting when building the client itself.
+If an event library is defined, it must be installed separately.  libev and libuv usually
+install into /usr/local/lib.  Most operating systems do not search /usr/local/lib by 
+default.  Therefore, the following LD_LIBRARY_PATH setting may be necessary.
+
+    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
+
 To build a specific example:
 
 	$ make [EVENT_LIB=libev|libuv] -C {example}

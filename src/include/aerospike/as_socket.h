@@ -81,8 +81,8 @@ as_socket_create_and_connect_nb(as_error* err, struct sockaddr_in *sa, int* fd);
  *	@private
  *	Peek for socket connection status.  Close socket if not connected.
  *
- *	@param fd				Socket identifier.
- *	@param pipelining 		Do not log message if socket contains data. Do not close the FD.
+ *	@param fd			Socket identifier.
+ *	@param pipe 		If true, do not log message if socket contains data and do not close fd.
  *
  *	@return if socket is connected.
  */

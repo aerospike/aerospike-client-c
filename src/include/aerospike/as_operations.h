@@ -1118,8 +1118,7 @@ bool as_operations_add_list_remove_range(as_operations *ops, const as_bin_name n
  *	@param ops			The `as_operations` to append the operation to.
  *	@param name 		The name of the bin to perform the operation on.
  *  @param index 		Index position at which to start the removal. Negative index counts from end of list.
- *  @param count 		Number of values to remove. If not enough values in list, will remove to list end.
- *	
+ *
  *  @return true on success. Otherwise an error occurred.
  *
  *	@relates as_operations

@@ -46,7 +46,7 @@
 /**
  *	@defgroup client_utilities Client Utilities
  *  @{
- *    @defgroup stringmap_t String Map
+ *    @defgroup stringmap_t StringMap
  *  @}
  */
 

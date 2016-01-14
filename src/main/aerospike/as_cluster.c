@@ -1104,6 +1104,10 @@ as_cluster_get_node_names(as_cluster* cluster, int* n_nodes, char** node_names)
 bool
 as_cluster_is_connected(as_cluster* cluster)
 {
+	if (! cluster) {
+		return false;
+	}
+	
 	as_nodes* nodes = as_nodes_reserve(cluster);
 	bool connected = false;
 	

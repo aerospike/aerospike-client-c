@@ -18,23 +18,16 @@ fi
 if [ -f /etc/redhat-release ]
 then
   os=`cat /etc/redhat-release | awk '{print $1}'`
-  
-  if [ "$os" = "CentOS" ]
+
+  if [ "$os" = "Fedora" ]
   then
-    ver=`cat /etc/issue | tr -d '\n' | awk '{print $3}' | awk -F'.' '{print $1}'`
-    echo el$ver
-    exit 0
-  elif [ "$os" = "Fedora" ]
-  then
-    ver=`cat /etc/issue | tr -d '\n' | awk '{print $3}' | awk -F'.' '{print $1}'`
-    echo fc$ver
-    exit 0
-  elif [ "$os" = "Red" ]
-  then
-    ver=`cat /etc/issue | tr -d '\n' | awk '{print $7}' | awk -F'.' '{print $1}'`
-    echo el$ver
-    exit 0
+    prefix="fc"
+  else
+    prefix="el"
   fi
+  ver=`cat /etc/redhat-release | awk '{for (i=1; i<NF; i++) {if ($i == "release") {print $(i+1); break;}}}' | awk -F'.' '{print $1}'`
+  echo $prefix$ver
+  exit 0
 elif [ -f /etc/issue ]
 then
   os=`cat /etc/issue | awk '{print $1}'`

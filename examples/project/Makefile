@@ -15,14 +15,6 @@ CFLAGS += -fno-common -fno-strict-aliasing
 CFLAGS += -march=nocona -DMARCH_$(ARCH)
 CFLAGS += -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_GNU_SOURCE
 
-ifeq ($(EVENT_LIB),libev)
-  CFLAGS += -DAS_USE_LIBEV -I/usr/local/include
-endif
-
-ifeq ($(EVENT_LIB),libuv)
-  CFLAGS += -DAS_USE_LIBUV -I/usr/local/include
-endif
-
 ifeq ($(OS),Darwin)
   CFLAGS += -D_DARWIN_UNLIMITED_SELECT
 else
@@ -31,6 +23,14 @@ endif
 
 CFLAGS += -I$(AEROSPIKE)/target/$(PLATFORM)/include
 CFLAGS += -I../../utils/src/include
+
+ifeq ($(EVENT_LIB),libev)
+  CFLAGS += -DAS_USE_LIBEV -I/usr/local/include
+endif
+
+ifeq ($(EVENT_LIB),libuv)
+  CFLAGS += -DAS_USE_LIBUV -I/usr/local/include
+endif
 
 LDFLAGS =
 

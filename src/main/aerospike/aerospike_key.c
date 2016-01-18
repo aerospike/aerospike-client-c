@@ -468,7 +468,7 @@ aerospike_key_put_async_ex(
 		// Send compressed command.
 		// First write uncompressed buffer.
 		uint8_t* cmd = as_command_init(size);
-		uint8_t* p = as_command_write_header(cmd, 0, AS_MSG_INFO2_WRITE, policy->commit_level, 0,
+		uint8_t* p = as_command_write_header(cmd, XDR_FLAG, AS_MSG_INFO2_WRITE, policy->commit_level, 0,
 				policy->exists, policy->gen, rec->gen, rec->ttl, policy->timeout, n_fields, n_bins);
 		
 		p = as_command_write_key(p, policy->key, key);

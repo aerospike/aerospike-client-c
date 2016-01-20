@@ -84,11 +84,16 @@ connect_to_server(arguments* args, aerospike* client)
 {
 	if (args->async) {
 		as_monitor_init(&monitor);
-		
+
+#if defined(AS_USE_LIBEV) || defined(AS_USE_LIBUV)
 		if (! as_event_create_loops(args->event_loop_capacity)) {
 			blog_error("Failed to create asynchronous event loops");
 			return 2;
 		}
+#else
+		blog_error("Must 'make EVENT_LIB=libev|libuv' to use asynchronous functions.");
+		return 2;
+#endif
 	}
 	
 	as_config cfg;

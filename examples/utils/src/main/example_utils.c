@@ -322,6 +322,20 @@ usage(const char* short_opts)
 	}
 }
 
+//==========================================================
+// Initialize asynchronous event loop
+//
+bool
+example_create_event_loop()
+{
+#if defined(AS_USE_LIBEV) || defined(AS_USE_LIBUV)
+	if (as_event_create_loops(1)) {
+		return true;
+	}
+#endif
+	LOG("Event library not defined. Skip async example.");
+	return false;
+}
 
 //==========================================================
 // Connect/Disconnect
@@ -804,10 +818,4 @@ example_handle_udf_error(as_error* err, const char* prefix)
 		LOG("%s returned %d - %s", prefix, err->code, err->message);
 		return -1;
 	}
-}
-
-void
-example_event_loop_error()
-{
-	LOG("Event library not defined. Skip async example.");
 }

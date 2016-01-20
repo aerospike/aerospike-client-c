@@ -245,7 +245,7 @@ as_shm_reset_nodes(as_cluster* cluster)
 				node_info.has_double = node_tmp.has_double;
 				node_info.has_geo = node_tmp.has_geo;
 				
-				node = as_node_create(cluster, &node_tmp.addr, &node_info);
+				node = as_node_create(cluster, NULL, &node_tmp.addr, &node_info);
 				node->index = i;
 				as_address* a = as_node_get_address_full(node);
 				as_log_info("Add node %s %s:%d", node_tmp.name, a->name, (int)cf_swap_from_be16(a->addr.sin_port));

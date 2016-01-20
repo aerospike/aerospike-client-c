@@ -185,6 +185,10 @@ as_command_write_header(uint8_t* cmd, uint8_t read_attr, uint8_t write_attr,
 		read_attr |= AS_MSG_INFO1_CONSISTENCY_ALL;
 	}
 
+#if defined USE_XDR
+	read_attr |= AS_MSG_INFO1_XDR;
+#endif
+
 	cmd[8] = 22;
 	cmd[9] = read_attr;
 	cmd[10] = write_attr;

@@ -56,7 +56,7 @@ as_pipe_get_send_buffer_size();
 extern int
 as_pipe_get_recv_buffer_size();
 
-extern bool
+extern as_connection_status
 as_pipe_get_connection(as_event_command* cmd);
 
 extern void

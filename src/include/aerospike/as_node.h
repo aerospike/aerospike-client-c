@@ -36,6 +36,11 @@ extern "C" {
  *****************************************************************************/
 
 /**
+ *	Maximum size (including NULL byte) of a hostname.
+ */
+#define AS_HOSTNAME_SIZE 56
+
+/**
  *	Maximum size of node name
  */
 #define AS_NODE_NAME_SIZE 20
@@ -98,6 +103,13 @@ typedef struct as_node_s {
 	 */
 	as_vector /* <as_address> */ addresses;
 	
+	/**
+	 *	@private
+	 *	Vector of aliases which the host is currently known by.
+	 *	Only used by tend thread. Not thread-safe.
+	 */
+	as_vector /* <as_host> */ aliases;
+
 	struct as_cluster_s* cluster;
 	
 	/**
@@ -228,25 +240,20 @@ typedef struct as_node_info_s {
  *	@private
  *	Friend host address information.
  */
-typedef struct as_friend_s {
+typedef struct as_host_s {
 	/**
 	 *	@private
-	 *	Socket IP address string representation (xxx.xxx.xxx.xxx).
+	 *	Hostname or IP address string representation (xxx.xxx.xxx.xxx).
 	 */
-	char name[INET_ADDRSTRLEN];
-	
-	/**
-	 *	@private
-	 *	Socket IP address.
-	 */
-	in_addr_t addr;
+	char name[AS_HOSTNAME_SIZE];
 	
 	/**
 	 *	@private
 	 *	Socket IP port.
 	 */
 	in_port_t port;
-} as_friend;
+	
+} as_host;
 
 /******************************************************************************
  * FUNCTIONS
@@ -257,7 +264,7 @@ typedef struct as_friend_s {
  *	Create new cluster node.
  */
 as_node*
-as_node_create(struct as_cluster_s* cluster, struct sockaddr_in* addr, as_node_info* node_info);
+as_node_create(struct as_cluster_s* cluster, as_host* host, struct sockaddr_in* addr, as_node_info* node_info);
 
 /**
  *	@private
@@ -310,7 +317,7 @@ as_node_release(as_node* node)
  *	Add socket address to node addresses.
  */
 void
-as_node_add_address(as_node* node, struct sockaddr_in* addr);
+as_node_add_address(as_node* node, as_host* host, struct sockaddr_in* addr);
 
 /**
  *	@private
@@ -349,6 +356,16 @@ as_node_put_connection(as_node* node, int fd, uint32_t limit)
 	if (! cf_queue_push_limit(node->conn_q, &fd, limit)) {
 		close(fd);
 	}
+}
+
+/**
+ *	@private
+ *	Are hosts equal.
+ */
+static inline bool
+as_host_equals(as_host* h1, as_host* h2)
+{
+	return strcmp(h1->name, h2->name) == 0 && h1->port == h2->port;
 }
 
 #ifdef __cplusplus

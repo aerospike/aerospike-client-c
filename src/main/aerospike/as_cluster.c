@@ -40,7 +40,7 @@ extern uint32_t as_event_loop_capacity;
  *****************************************************************************/
 
 as_status
-as_node_refresh(as_cluster* cluster, as_error* err, as_node* node, as_vector* /* <as_friend> */ friends);
+as_node_refresh(as_cluster* cluster, as_error* err, as_node* node, as_vector* /* <as_host> */ friends);
 
 static as_seeds*
 seeds_create(as_seed* seed_list, uint32_t size);
@@ -398,13 +398,19 @@ as_cluster_seed_nodes(as_cluster* cluster, as_error* err, bool enable_warnings)
 			status = as_lookup_node(cluster, &error_local, addr, &node_info);
 			
 			if (status == AEROSPIKE_OK) {
+				as_host host;
+				if (as_strncpy(host.name, seed->name, sizeof(host.name))) {
+					as_log_warn("Hostname has been truncated: %s", host.name);
+				}
+				host.port = seed->port;
+
 				as_node* node = as_cluster_find_node_in_vector(&nodes_to_add, node_info.name);
 				
 				if (node) {
-					as_node_add_address(node, addr);
+					as_node_add_address(node, &host, addr);
 				}
 				else {
-					node = as_node_create(cluster, addr, &node_info);
+					node = as_node_create(cluster, &host, addr, &node_info);
 					as_address* a = as_node_get_address_full(node);
 					as_log_info("Add node %s %s:%d", node->name, a->name, (int)cf_swap_from_be16(a->addr.sin_port));
 					as_vector_append(&nodes_to_add, &node);
@@ -434,7 +440,7 @@ as_cluster_seed_nodes(as_cluster* cluster, as_error* err, bool enable_warnings)
 }
 
 static void
-as_cluster_find_nodes_to_add(as_cluster* cluster, as_vector* /* <as_friend> */ friends, as_vector* /* <as_node*> */ nodes_to_add)
+as_cluster_find_nodes_to_add(as_cluster* cluster, as_vector* /* <as_host> */ friends, as_vector* /* <as_node*> */ nodes_to_add)
 {
 	as_error err;
 	as_vector addresses;
@@ -443,7 +449,7 @@ as_cluster_find_nodes_to_add(as_cluster* cluster, as_vector* /* <as_friend> */ f
 	as_node_info node_info;
 
 	for (uint32_t i = 0; i < friends->size; i++) {
-		as_friend* friend = as_vector_get(friends, i);
+		as_host* friend = as_vector_get(friends, i);
 		as_vector_clear(&addresses);
 		
 		as_status status = as_lookup(cluster, &err, friend->name, friend->port, &addresses);
@@ -468,11 +474,11 @@ as_cluster_find_nodes_to_add(as_cluster* cluster, as_vector* /* <as_friend> */ f
 					as_address* a = as_node_get_address_full(node);
 					as_log_info("Duplicate node found %s %s:%d", node->name, a->name, (int)cf_swap_from_be16(a->addr.sin_port));
 					node->friends++;
-					as_node_add_address(node, addr);
+					as_node_add_address(node, friend, addr);
 					continue;
 				}
 				
-				node = as_node_create(cluster, addr, &node_info);
+				node = as_node_create(cluster, friend, addr, &node_info);
 				as_address* a = as_node_get_address_full(node);
 				as_log_info("Add node %s %s:%d", node_info.name, a->name, (int)cf_swap_from_be16(a->addr.sin_port));
 				as_vector_append(nodes_to_add, &node);
@@ -770,7 +776,7 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings, b
 	// Refresh all known nodes.
 	as_error error_local;
 	as_vector friends;
-	as_vector_inita(&friends, sizeof(as_friend), 8);
+	as_vector_inita(&friends, sizeof(as_host), 8);
 	uint32_t refresh_count = 0;
 	
 	for (uint32_t i = 0; i < nodes->size; i++) {

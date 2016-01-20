@@ -30,15 +30,14 @@ as_lookup(as_cluster* cluster, as_error* err, char* hostname, uint16_t port, as_
 			as_addr_map* entry = ip_map->array;
 
 			for (uint32_t i = 0; i < ip_map->size; i++) {
-			if (strcmp(entry->orig, hostname) == 0) {
-				// Found mapping for this address.  Use alternate.
-				as_log_debug("Using %s instead of %s", entry->alt, hostname);
-				hostname = entry->alt;
-				break;
+				if (strcmp(entry->orig, hostname) == 0) {
+					// Found mapping for this address.  Use alternate.
+					as_log_debug("Using %s instead of %s", entry->alt, hostname);
+					hostname = entry->alt;
+					break;
+				}
+				entry++;
 			}
-			entry++;
-		}
-
 			as_ip_map_release(ip_map);
 		}
 	}

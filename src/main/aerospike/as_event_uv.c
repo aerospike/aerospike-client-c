@@ -570,12 +570,12 @@ as_event_command_begin(as_event_command* cmd)
 		uv_timer_start(&cmd->timer, as_uv_timeout, cmd->timeout_ms, 0);
 	}
 	
-	bool found = cmd->pipeline ? as_pipe_get_connection(cmd) : as_event_get_connection(cmd);
+	as_connection_status status = cmd->pipeline ? as_pipe_get_connection(cmd) : as_event_get_connection(cmd);
 	
-	if (found) {
+	if (status == AS_CONNECTION_FROM_POOL) {
 		as_uv_command_write_start(cmd, (uv_stream_t*)&cmd->conn->socket);
 	}
-	else if (cmd->conn) {
+	else if (status == AS_CONNECTION_NEW) {
 		as_uv_connect(cmd);
 	}
 }

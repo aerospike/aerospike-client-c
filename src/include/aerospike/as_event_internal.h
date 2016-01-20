@@ -128,6 +128,12 @@ typedef struct as_event_executor {
 	bool valid;
 } as_event_executor;
 	
+typedef enum as_connection_status_e {
+	AS_CONNECTION_FROM_POOL = 0,
+	AS_CONNECTION_NEW = 1,
+	AS_CONNECTION_TOO_MANY = 2
+} as_connection_status;
+	
 /******************************************************************************
  * GLOBAL VARIABLES
  *****************************************************************************/
@@ -149,7 +155,7 @@ as_event_executor_complete(as_event_command* cmd);
 void
 as_event_executor_cancel(as_event_executor* executor, int queued_count);
 
-bool
+as_connection_status
 as_event_get_connection(as_event_command* cmd);
 	
 int

@@ -282,7 +282,7 @@ as_pipe_get_recv_buffer_size()
 #endif
 }
 
-bool
+as_connection_status
 as_pipe_get_connection(as_event_command* cmd)
 {
 	as_log_trace("Getting pipeline connection for command %p", cmd);
@@ -312,7 +312,7 @@ as_pipe_get_connection(as_event_command* cmd)
 				as_log_trace("Validation OK");
 				cmd->conn = (as_event_connection*)conn;
 				write_start(cmd);
-				return true;
+				return AS_CONNECTION_FROM_POOL;
 			}
 
 			as_log_trace("Validation failed");
@@ -337,6 +337,7 @@ as_pipe_get_connection(as_event_command* cmd)
 		
 		cmd->conn = (as_event_connection*)conn;
 		write_start(cmd);
+		return AS_CONNECTION_NEW;
 	}
 	else {
 		ck_pr_dec_32(&cmd->node->pipe_conn_count);
@@ -346,8 +347,8 @@ as_pipe_get_connection(as_event_command* cmd)
 						cmd->node->name, cmd->cluster->pipe_max_conns_per_node);
 		as_event_stop_timer(cmd);
 		as_event_error_callback(cmd, &err);
+		return AS_CONNECTION_TOO_MANY;
 	}
-	return false;
 }
 
 void

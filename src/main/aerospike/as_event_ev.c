@@ -548,12 +548,12 @@ as_event_command_begin(as_event_command* cmd)
 		ev_timer_start(cmd->event_loop->loop, &cmd->timer);
 	}
 	
-	bool found = cmd->pipeline ? as_pipe_get_connection(cmd) : as_event_get_connection(cmd);
+	as_connection_status status = cmd->pipeline ? as_pipe_get_connection(cmd) : as_event_get_connection(cmd);
 	
-	if (found) {
+	if (status == AS_CONNECTION_FROM_POOL) {
 		as_ev_command_write_start(cmd);
 	}
-	else if (cmd->conn) {
+	else if (status == AS_CONNECTION_NEW) {
 		as_ev_connect(cmd);
 	}
 }

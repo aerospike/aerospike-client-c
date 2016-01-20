@@ -315,7 +315,7 @@ as_event_executor_complete(as_event_command* cmd)
 	as_event_command_release(cmd);
 }
 
-bool
+as_connection_status
 as_event_get_connection(as_event_command* cmd)
 {
 	as_queue* q = &cmd->node->async_conn_qs[cmd->event_loop->index];
@@ -328,7 +328,7 @@ as_event_get_connection(as_event_command* cmd)
 		if (as_event_validate_connection(&conn->base, false)) {
 			conn->cmd = cmd;
 			cmd->conn = (as_event_connection*)conn;
-			return true;
+			return AS_CONNECTION_FROM_POOL;
 		}
 		as_event_release_connection(&conn->base, cmd->node);
 	}
@@ -342,6 +342,7 @@ as_event_get_connection(as_event_command* cmd)
 		conn->base.pipeline = false;
 		conn->cmd = cmd;
 		cmd->conn = &conn->base;
+		return AS_CONNECTION_NEW;
 	}
 	else {
 		ck_pr_dec_32(&cmd->node->async_conn_count);
@@ -351,8 +352,8 @@ as_event_get_connection(as_event_command* cmd)
 						cmd->node->name, cmd->cluster->async_max_conns_per_node);
 		as_event_stop_timer(cmd);
 		as_event_error_callback(cmd, &err);
+		return AS_CONNECTION_TOO_MANY;
 	}
-	return false;
 }
 
 int

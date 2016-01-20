@@ -67,8 +67,7 @@ main(int argc, char* argv[])
 	as_monitor_begin(&monitor);
 	
 	// Create an asynchronous event loop.
-	if (! as_event_create_loops(1)) {
-		example_event_loop_error();
+	if (! example_create_event_loop()) {
 		return 0;
 	}
 

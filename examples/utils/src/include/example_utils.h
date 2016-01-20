@@ -89,6 +89,7 @@ bool example_get_opts(int argc, char* argv[], int which_opts);
 // Example Utilities
 //
 
+bool example_create_event_loop();
 void example_connect_to_aerospike(aerospike* p_as);
 void example_connect_to_aerospike_with_udf_config(aerospike* p_as,
 		const char* lua_user_path);
@@ -107,4 +108,3 @@ void example_remove_index(aerospike* p_as, const char* index);
 void example_dump_record(const as_record* p_rec);
 void example_dump_operations(const as_operations* p_ops);
 int  example_handle_udf_error(as_error* err, const char* prefix);
-void example_event_loop_error();

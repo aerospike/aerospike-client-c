@@ -41,6 +41,9 @@ bool as_event_threads_created = false;
  * PUBLIC FUNCTIONS
  *****************************************************************************/
 
+// Force link error on event initialization when libev/libuv not defined.
+#if defined(AS_USE_LIBEV) || defined(AS_USE_LIBUV)
+
 as_event_loop*
 as_event_create_loops(uint32_t capacity)
 {
@@ -91,6 +94,8 @@ as_event_set_external_loop_capacity(uint32_t capacity)
 	as_event_threads_created = false;
 	return true;
 }
+
+#endif
 
 as_event_loop*
 as_event_set_external_loop(void* loop)

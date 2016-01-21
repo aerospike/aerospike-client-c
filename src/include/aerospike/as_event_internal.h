@@ -208,6 +208,9 @@ void
 as_event_node_destroy(as_node* node);
 	
 bool
+as_event_send_close_loop(as_event_loop* event_loop);
+
+void
 as_event_close_loop(as_event_loop* event_loop);
 
 static inline void

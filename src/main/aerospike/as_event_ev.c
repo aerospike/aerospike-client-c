@@ -57,17 +57,7 @@ as_ev_wakeup(struct ev_loop* loop, ev_async* wakeup, int revents)
 		}
 		else {
 			// Received stop signal.
-			ev_async_stop(event_loop->loop, &event_loop->wakeup);
-			
-			// Only stop event loop if client created event loop.
-			if (as_event_threads_created) {
-				ev_unloop(loop, EVUNLOOP_ALL);
-			}
-			
-			// Cleanup event loop resources.
-			as_queue_destroy(&event_loop->queue);
-			pthread_mutex_unlock(&event_loop->lock);
-			pthread_mutex_destroy(&event_loop->lock);
+			as_event_close_loop(event_loop);
 			return;
 		}
 	}
@@ -593,7 +583,7 @@ as_event_node_destroy(as_node* node)
 }
 
 bool
-as_event_close_loop(as_event_loop* event_loop)
+as_event_send_close_loop(as_event_loop* event_loop)
 {
 	// Send stop command through queue so it can be executed in event loop thread.
 	void* ptr = 0;
@@ -605,6 +595,22 @@ as_event_close_loop(as_event_loop* event_loop)
 		ev_async_send(event_loop->loop, &event_loop->wakeup);
 	}
 	return queued;
+}
+
+void
+as_event_close_loop(as_event_loop* event_loop)
+{
+	ev_async_stop(event_loop->loop, &event_loop->wakeup);
+	
+	// Only stop event loop if client created event loop.
+	if (as_event_threads_created) {
+		ev_unloop(event_loop->loop, EVUNLOOP_ALL);
+	}
+	
+	// Cleanup event loop resources.
+	as_queue_destroy(&event_loop->queue);
+	pthread_mutex_unlock(&event_loop->lock);
+	pthread_mutex_destroy(&event_loop->lock);
 }
 
 #endif

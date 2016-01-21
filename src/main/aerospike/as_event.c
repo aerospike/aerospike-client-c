@@ -137,28 +137,39 @@ as_event_close_loops()
 		return;
 	}
 	
-	bool join = true;
+	pthread_t self = pthread_self();
+	bool status = true;
 	
+	// Close or send close signal to all event loops.
+	// This will eventually release resources associated with each event loop.
 	for (uint32_t i = 0; i < as_event_loop_size; i++) {
 		as_event_loop* event_loop = &as_event_loops[i];
-		
-		// Send stop signal to loop.
-		if (! as_event_close_loop(event_loop)) {
-			as_log_error("Failed to send stop command to event loop");
-			join = false;
+	
+		if (event_loop->thread == self) {
+			// Can close event loop immediately.
+			as_event_close_loop(event_loop);
+		}
+		else {
+			// Queue close command to event loop.
+			if (! as_event_send_close_loop(event_loop)) {
+				as_log_error("Failed to send stop command to event loop");
+				status = false;
+			}
 		}
 	}
-	
-	if (as_event_threads_created && join) {
-		// Join threads.
+
+	// Only join threads if event loops were created internally.
+	// It is not possible to join on externally created event loop threads.
+	if (as_event_threads_created && status) {
 		for (uint32_t i = 0; i < as_event_loop_size; i++) {
 			as_event_loop* event_loop = &as_event_loops[i];
 			pthread_join(event_loop->thread, NULL);
 		}
+		
+		cf_free(as_event_loops);
+		as_event_loops = NULL;
+		as_event_loop_size = 0;
 	}
-	cf_free(as_event_loops);
-	as_event_loops = NULL;
-	as_event_loop_size = 0;
 }
 
 /******************************************************************************

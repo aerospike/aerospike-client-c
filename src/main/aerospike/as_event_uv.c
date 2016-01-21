@@ -88,18 +88,7 @@ as_uv_wakeup(uv_async_t* wakeup)
 				break;
 				
 			case AS_UV_EXIT_LOOP:
-				// Close handles.
-				uv_close((uv_handle_t*)wakeup, as_uv_wakeup_closed);
-				
-				// Only stop event loop if client created event loop.
-				if (as_event_threads_created) {
-					uv_stop(event_loop->loop);
-				}
-				
-				// Cleanup event loop resources.
-				as_queue_destroy(&event_loop->queue);
-				pthread_mutex_unlock(&event_loop->lock);
-				pthread_mutex_destroy(&event_loop->lock);
+				as_event_close_loop(event_loop);
 				return;
 		}
 	}
@@ -638,7 +627,7 @@ as_event_node_destroy(as_node* node)
 }
 
 bool
-as_event_close_loop(as_event_loop* event_loop)
+as_event_send_close_loop(as_event_loop* event_loop)
 {
 	// Send stop command through queue so it can be executed in event loop thread.
 	pthread_mutex_lock(&event_loop->lock);
@@ -650,6 +639,22 @@ as_event_close_loop(as_event_loop* event_loop)
 		uv_async_send(event_loop->wakeup);
 	}
 	return queued;
+}
+
+void
+as_event_close_loop(as_event_loop* event_loop)
+{
+	uv_close((uv_handle_t*)event_loop->wakeup, as_uv_wakeup_closed);
+	
+	// Only stop event loop if client created event loop.
+	if (as_event_threads_created) {
+		uv_stop(event_loop->loop);
+	}
+	
+	// Cleanup event loop resources.
+	as_queue_destroy(&event_loop->queue);
+	pthread_mutex_unlock(&event_loop->lock);
+	pthread_mutex_destroy(&event_loop->lock);
 }
 
 #endif

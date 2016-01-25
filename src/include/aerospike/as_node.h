@@ -38,7 +38,7 @@ extern "C" {
 /**
  *	Maximum size (including NULL byte) of a hostname.
  */
-#define AS_HOSTNAME_SIZE 56
+#define AS_HOSTNAME_SIZE 256
 
 /**
  *	Maximum size of node name

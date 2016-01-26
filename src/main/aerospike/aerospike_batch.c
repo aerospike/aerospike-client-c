@@ -970,7 +970,7 @@ as_batch_read_execute_async(
 		cmd->timeout_ms = policy->timeout;
 		cmd->type = AS_ASYNC_TYPE_BATCH;
 		cmd->state = AS_ASYNC_STATE_UNREGISTERED;
-		cmd->pipeline = false;
+		cmd->pipe_listener = NULL;
 		cmd->deserialize = policy->deserialize;
 		cmd->free_buf = false;
 		cmd->len = (uint32_t)as_batch_index_records_write(records, &batch_node->offsets, policy->timeout, policy->allow_inline, cmd->buf);

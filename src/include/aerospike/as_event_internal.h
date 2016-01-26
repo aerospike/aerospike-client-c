@@ -18,6 +18,7 @@
 
 #include <aerospike/as_admin.h>
 #include <aerospike/as_cluster.h>
+#include <aerospike/as_listener.h>
 #include <aerospike/as_queue.h>
 #include <aerospike/as_proto.h>
 #include <aerospike/as_socket.h>
@@ -100,6 +101,7 @@ typedef struct as_event_command {
 	as_node* node;
 	void* udata;
 	as_event_parse_results_fn parse_results;
+	as_pipe_listener pipe_listener;
 	cf_ll_element pipe_link;
 	
 	uint8_t* buf;
@@ -111,7 +113,6 @@ typedef struct as_event_command {
 	
 	uint8_t type;
 	uint8_t state;
-	bool pipeline;
 	bool deserialize;
 	bool free_buf;
 } as_event_command;

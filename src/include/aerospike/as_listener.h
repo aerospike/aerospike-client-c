@@ -61,6 +61,8 @@ typedef void (*as_async_record_listener) (as_error* err, as_record* record, void
  */
 typedef void (*as_async_value_listener) (as_error* err, as_val* val, void* udata, as_event_loop* event_loop);
 
+typedef void (*as_pipe_listener) (void* udata, as_event_loop* event_loop);
+
 #ifdef __cplusplus
 } // end extern "C"
 #endif

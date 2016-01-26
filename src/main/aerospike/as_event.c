@@ -231,7 +231,7 @@ as_event_put_connection(as_event_command* cmd)
 static inline void
 as_event_response_complete(as_event_command* cmd)
 {
-	if (cmd->pipeline) {
+	if (cmd->pipe_listener != NULL) {
 		as_pipe_response_complete(cmd);
 		return;
 	}
@@ -381,7 +381,7 @@ as_event_create_socket(as_event_command* cmd)
 		return -1;
 	}
 	
-	if (cmd->pipeline) {
+	if (cmd->pipe_listener != NULL) {
 		if (as_event_send_buffer_size) {
 			if (setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &as_event_send_buffer_size, sizeof(as_event_send_buffer_size)) < 0) {
 				as_error err;
@@ -469,7 +469,7 @@ as_event_error_callback(as_event_command* cmd, as_error* err)
 void
 as_event_socket_error(as_event_command* cmd, as_error* err)
 {
-	if (cmd->pipeline) {
+	if (cmd->pipe_listener != NULL) {
 		as_pipe_socket_error(cmd, err);
 		return;
 	}
@@ -488,7 +488,7 @@ as_event_socket_error(as_event_command* cmd, as_error* err)
 void
 as_event_response_error(as_event_command* cmd, as_error* err)
 {
-	if (cmd->pipeline) {
+	if (cmd->pipe_listener != NULL) {
 		as_pipe_response_error(cmd, err);
 		return;
 	}
@@ -518,7 +518,7 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 void
 as_event_timeout(as_event_command* cmd)
 {
-	if (cmd->pipeline) {
+	if (cmd->pipe_listener != NULL) {
 		as_pipe_timeout(cmd);
 		return;
 	}

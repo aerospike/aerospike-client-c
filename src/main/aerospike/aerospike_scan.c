@@ -618,7 +618,7 @@ as_scan_async(
 		cmd->timeout_ms = policy->timeout;
 		cmd->type = AS_ASYNC_TYPE_SCAN;
 		cmd->state = AS_ASYNC_STATE_UNREGISTERED;
-		cmd->pipeline = false;
+		cmd->pipe_listener = NULL;
 		cmd->deserialize = scan->deserialize_list_map;
 		cmd->free_buf = false;
 		memcpy(cmd->buf, cmd_buf, size);

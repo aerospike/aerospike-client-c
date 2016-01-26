@@ -95,7 +95,7 @@ aerospike_key_get(
  *	as_key key;
  *	as_key_init(&key, "ns", "set", "key");
  *
- *	as_status status = aerospike_key_get_async(&as, &err, NULL, &key, my_listener, NULL, NULL, false);
+ *	as_status status = aerospike_key_get_async(&as, &err, NULL, &key, my_listener, NULL, NULL, NULL);
  *	~~~~~~~~~~
  *
  *	@param as			The aerospike instance to use for this operation.
@@ -114,7 +114,8 @@ aerospike_key_get(
 as_status
 aerospike_key_get_async(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key,
-	as_async_record_listener listener, void* udata, as_event_loop* event_loop, bool pipeline
+	as_async_record_listener listener, void* udata, as_event_loop* event_loop,
+	as_pipe_listener pipe_listener
 	);
 
 /**
@@ -171,7 +172,7 @@ aerospike_key_select(
  *	as_key key;
  *	as_key_init(&key, "ns", "set", "key");
  *
- *	as_status status = aerospike_key_select_async(&as, &err, NULL, &key, select, my_listener, NULL, NULL, false);
+ *	as_status status = aerospike_key_select_async(&as, &err, NULL, &key, select, my_listener, NULL, NULL, NULL);
  *	~~~~~~~~~~
  *
  *	@param as			The aerospike instance to use for this operation.
@@ -191,7 +192,7 @@ aerospike_key_select(
 as_status
 aerospike_key_select_async(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, const char* bins[],
-	as_async_record_listener listener, void* udata, as_event_loop* event_loop, bool pipeline
+	as_async_record_listener listener, void* udata, as_event_loop* event_loop, as_pipe_listener pipe_listener
 	);
 
 /**
@@ -255,7 +256,7 @@ aerospike_key_exists(
  *	as_key key;
  *	as_key_init(&key, "ns", "set", "key");
  *
- *	as_status status = aerospike_key_exists_async(&as, &err, NULL, &key, my_listener, NULL, NULL, false);
+ *	as_status status = aerospike_key_exists_async(&as, &err, NULL, &key, my_listener, NULL, NULL, NULL);
  *	~~~~~~~~~~
  *
  *	@param as			The aerospike instance to use for this operation.
@@ -274,7 +275,8 @@ aerospike_key_exists(
 as_status
 aerospike_key_exists_async(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key,
-	as_async_record_listener listener, void* udata, as_event_loop* event_loop, bool pipeline
+	as_async_record_listener listener, void* udata, as_event_loop* event_loop,
+	as_pipe_listener pipe_listener
 	);
 
 /**
@@ -331,7 +333,7 @@ aerospike_key_put(
  *	as_record_set_str(&rec, "bin1", "abc");
  *	as_record_set_int64(&rec, "bin2", 123);
  *
- *	as_status status = aerospike_key_put_async(&as, &err, NULL, &key, &rec, my_listener, NULL, NULL, false);
+ *	as_status status = aerospike_key_put_async(&as, &err, NULL, &key, &rec, my_listener, NULL, NULL, NULL);
  *	as_record_destroy(&rec);
  *	~~~~~~~~~~
  *
@@ -352,7 +354,7 @@ aerospike_key_put(
 as_status
 aerospike_key_put_async(
 	aerospike* as, as_error* err, const as_policy_write* policy, const as_key* key, as_record* rec,
-	as_async_write_listener listener, void* udata, as_event_loop* event_loop, bool pipeline
+	as_async_write_listener listener, void* udata, as_event_loop* event_loop, as_pipe_listener pipe_listener
 	);
 
 /**
@@ -397,7 +399,7 @@ aerospike_key_remove(
  *	as_key key;
  *	as_key_init(&key, "ns", "set", "key");
  *
- *	as_status status = aerospike_key_remove(&as, &err, NULL, &key, my_listener, NULL, NULL, false);
+ *	as_status status = aerospike_key_remove(&as, &err, NULL, &key, my_listener, NULL, NULL, NULL);
  *	~~~~~~~~~~
  *
  *	@param as			The aerospike instance to use for this operation.
@@ -416,7 +418,8 @@ aerospike_key_remove(
 as_status
 aerospike_key_remove_async(
 	aerospike* as, as_error* err, const as_policy_remove* policy, const as_key* key,
-	as_async_write_listener listener, void* udata, as_event_loop* event_loop, bool pipeline
+	as_async_write_listener listener, void* udata, as_event_loop* event_loop,
+	as_pipe_listener pipe_listener
 	);
 
 /**
@@ -483,7 +486,7 @@ aerospike_key_operate(
  *	as_operations_add_append_str(&ops, "bin2", "def");
  *	as_operations_add_read(&ops, "bin1")
  *
- *	as_status status = aerospike_key_operate(&as, &err, NULL, &key, &ops, my_listener, NULL, NULL, false);
+ *	as_status status = aerospike_key_operate(&as, &err, NULL, &key, &ops, my_listener, NULL, NULL, NULL);
  *	as_operations_destroy(&ops);
  *	~~~~~~~~~~
  *
@@ -504,7 +507,7 @@ aerospike_key_operate(
 as_status
 aerospike_key_operate_async(
 	aerospike* as, as_error* err, const as_policy_operate* policy, const as_key* key, const as_operations* ops,
-	as_async_record_listener listener, void* udata, as_event_loop* event_loop, bool pipeline
+	as_async_record_listener listener, void* udata, as_event_loop* event_loop, as_pipe_listener pipe_listener
 	);
 
 /**
@@ -575,7 +578,7 @@ as_status aerospike_key_apply(
  *	as_arraylist_append_int64(&args, 1);
  *	as_arraylist_append_int64(&args, 2);
  *
- *	as_status status = aerospike_key_apply(&as, &err, NULL, &key, "math", "add", &args, my_listener, NULL, NULL, false);
+ *	as_status status = aerospike_key_apply(&as, &err, NULL, &key, "math", "add", &args, my_listener, NULL, NULL, NULL);
  *	as_arraylist_destroy(&args);
  *	~~~~~~~~~~
  *
@@ -599,7 +602,8 @@ as_status
 aerospike_key_apply_async(
 	aerospike* as, as_error* err, const as_policy_apply* policy, const as_key* key,
 	const char* module, const char* function, as_list* arglist,
-	as_async_value_listener listener, void* udata, as_event_loop* event_loop, bool pipeline
+	as_async_value_listener listener, void* udata, as_event_loop* event_loop,
+	as_pipe_listener pipe_listener
 	);
 	
 /**

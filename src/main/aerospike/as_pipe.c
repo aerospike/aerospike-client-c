@@ -407,4 +407,8 @@ as_pipe_read_start(as_event_command* cmd)
 	as_log_trace("Pipeline connection %p has %d reader(s)", conn, cf_ll_size(&conn->readers));
 
 	put_connection(cmd);
+
+	if (cmd->pipe_listener != NULL) {
+		cmd->pipe_listener(cmd->udata, cmd->event_loop);
+	}
 }

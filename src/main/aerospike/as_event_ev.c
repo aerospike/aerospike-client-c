@@ -127,7 +127,7 @@ as_ev_watch_write(as_event_command* cmd)
 {
 	as_event_connection* conn = cmd->conn;
 	ev_io_stop(cmd->event_loop->loop, &conn->watcher);
-	ev_io_set(&conn->watcher, conn->fd, cmd->pipeline? EV_WRITE | EV_READ : EV_WRITE);
+	ev_io_set(&conn->watcher, conn->fd, cmd->pipe_listener != NULL ? EV_WRITE | EV_READ : EV_WRITE);
 	ev_io_start(cmd->event_loop->loop, &conn->watcher);
 }
 
@@ -223,7 +223,7 @@ as_ev_command_read_start(as_event_command* cmd)
 	cmd->pos = 0;
 	cmd->state = AS_ASYNC_STATE_READ_HEADER;
 	
-	if (cmd->pipeline) {
+	if (cmd->pipe_listener != NULL) {
 		as_pipe_read_start(cmd);
 	}
 	as_ev_watch_read(cmd);
@@ -452,7 +452,7 @@ as_ev_watcher_init(as_event_command* cmd, int fd)
 	
 	as_event_connection* conn = cmd->conn;
 	conn->fd = fd;
-	ev_io_init(&conn->watcher, as_ev_callback, fd, cmd->pipeline? EV_WRITE | EV_READ : EV_WRITE);
+	ev_io_init(&conn->watcher, as_ev_callback, fd, cmd->pipe_listener != NULL ? EV_WRITE | EV_READ : EV_WRITE);
 	conn->watcher.data = conn;
 	ev_io_start(cmd->event_loop->loop, &conn->watcher);
 }
@@ -538,7 +538,7 @@ as_event_command_begin(as_event_command* cmd)
 		ev_timer_start(cmd->event_loop->loop, &cmd->timer);
 	}
 	
-	as_connection_status status = cmd->pipeline ? as_pipe_get_connection(cmd) : as_event_get_connection(cmd);
+	as_connection_status status = cmd->pipe_listener != NULL ? as_pipe_get_connection(cmd) : as_event_get_connection(cmd);
 	
 	if (status == AS_CONNECTION_FROM_POOL) {
 		as_ev_command_write_start(cmd);

@@ -68,8 +68,8 @@ typedef struct as_async_value_command {
 static inline as_event_command*
 as_async_write_command_create(
 	as_cluster* cluster, as_node* node, uint32_t timeout_ms, bool deserialize,
-	as_async_write_listener listener, void* udata, as_event_loop* event_loop, bool pipeline,
-	size_t size, as_event_parse_results_fn parse_results
+	as_async_write_listener listener, void* udata, as_event_loop* event_loop,
+	as_pipe_listener pipe_listener, size_t size, as_event_parse_results_fn parse_results
 	)
 {
 	// Allocate enough memory to cover: struct size + write buffer size + auth max buffer size
@@ -91,7 +91,7 @@ as_async_write_command_create(
 	cmd->timeout_ms = timeout_ms;
 	cmd->type = AS_ASYNC_TYPE_WRITE;
 	cmd->state = AS_ASYNC_STATE_UNREGISTERED;
-	cmd->pipeline = pipeline;
+	cmd->pipe_listener = pipe_listener;
 	cmd->deserialize = deserialize;
 	cmd->free_buf = false;
 	wcmd->listener = listener;
@@ -101,8 +101,8 @@ as_async_write_command_create(
 static inline as_event_command*
 as_async_record_command_create(
 	as_cluster* cluster, as_node* node, uint32_t timeout_ms, bool deserialize,
-	as_async_record_listener listener, void* udata, as_event_loop* event_loop, bool pipeline,
-	size_t size, as_event_parse_results_fn parse_results
+	as_async_record_listener listener, void* udata, as_event_loop* event_loop,
+	as_pipe_listener pipe_listener, size_t size, as_event_parse_results_fn parse_results
 	)
 {
 	// Allocate enough memory to cover: struct size + write buffer size + auth max buffer size
@@ -125,7 +125,7 @@ as_async_record_command_create(
 	cmd->timeout_ms = timeout_ms;
 	cmd->type = AS_ASYNC_TYPE_RECORD;
 	cmd->state = AS_ASYNC_STATE_UNREGISTERED;
-	cmd->pipeline = pipeline;
+	cmd->pipe_listener = pipe_listener;
 	cmd->deserialize = deserialize;
 	cmd->free_buf = false;
 	rcmd->listener = listener;
@@ -135,8 +135,8 @@ as_async_record_command_create(
 static inline as_event_command*
 as_async_value_command_create(
    as_cluster* cluster, as_node* node, uint32_t timeout_ms, bool deserialize,
-   as_async_value_listener listener, void* udata, as_event_loop* event_loop, bool pipeline,
-   size_t size, as_event_parse_results_fn parse_results
+   as_async_value_listener listener, void* udata, as_event_loop* event_loop,
+   as_pipe_listener pipe_listener, size_t size, as_event_parse_results_fn parse_results
    )
 {
 	// Allocate enough memory to cover: struct size + write buffer size + auth max buffer size
@@ -159,7 +159,7 @@ as_async_value_command_create(
 	cmd->timeout_ms = timeout_ms;
 	cmd->type = AS_ASYNC_TYPE_VALUE;
 	cmd->state = AS_ASYNC_STATE_UNREGISTERED;
-	cmd->pipeline = pipeline;
+	cmd->pipe_listener = pipe_listener;
 	cmd->deserialize = deserialize;
 	cmd->free_buf = false;
 	vcmd->listener = listener;

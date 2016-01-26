@@ -120,7 +120,8 @@ aerospike_key_get(
 as_status
 aerospike_key_get_async(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key,
-	as_async_record_listener listener, void* udata, as_event_loop* event_loop, bool pipeline
+	as_async_record_listener listener, void* udata, as_event_loop* event_loop,
+	as_pipe_listener pipe_listener
 	)
 {
 	if (! policy) {
@@ -138,7 +139,7 @@ aerospike_key_get_async(
 	size_t size = as_command_key_size(policy->key, key, &n_fields);
 	
 	as_event_command* cmd = as_async_record_command_create(as->cluster, node, policy->timeout,
-		policy->deserialize, listener, udata, event_loop, pipeline, size, as_event_command_parse_result);
+		policy->deserialize, listener, udata, event_loop, pipe_listener, size, as_event_command_parse_result);
 
 	uint8_t* p = as_command_write_header_read(cmd->buf, AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_ALL, policy->consistency_level, policy->timeout, n_fields, 0);
 	p = as_command_write_key(p, policy->key, key);
@@ -201,7 +202,7 @@ aerospike_key_select(
 as_status
 aerospike_key_select_async(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, const char* bins[],
-	as_async_record_listener listener, void* udata, as_event_loop* event_loop, bool pipeline
+	as_async_record_listener listener, void* udata, as_event_loop* event_loop, as_pipe_listener pipe_listener
 	)
 {
 	if (! policy) {
@@ -229,7 +230,7 @@ aerospike_key_select_async(
 	}
 	
 	as_event_command* cmd = as_async_record_command_create(as->cluster, node, policy->timeout,
-			policy->deserialize, listener, udata, event_loop, pipeline, size, as_event_command_parse_result);
+			policy->deserialize, listener, udata, event_loop, pipe_listener, size, as_event_command_parse_result);
 
 	uint8_t* p = as_command_write_header_read(cmd->buf, AS_MSG_INFO1_READ, policy->consistency_level, policy->timeout, n_fields, nvalues);
 	p = as_command_write_key(p, policy->key, key);
@@ -295,7 +296,8 @@ aerospike_key_exists(
 as_status
 aerospike_key_exists_async(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key,
-	as_async_record_listener listener, void* udata, as_event_loop* event_loop, bool pipeline
+	as_async_record_listener listener, void* udata, as_event_loop* event_loop,
+	as_pipe_listener pipe_listener
 	)
 {
 	if (! policy) {
@@ -313,7 +315,7 @@ aerospike_key_exists_async(
 	size_t size = as_command_key_size(policy->key, key, &n_fields);
 	
 	as_event_command* cmd = as_async_record_command_create(as->cluster, node, policy->timeout,
-				false, listener, udata, event_loop, pipeline, size, as_event_command_parse_result);
+				false, listener, udata, event_loop, pipe_listener, size, as_event_command_parse_result);
 
 	uint8_t* p = as_command_write_header_read(cmd->buf, AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA, policy->consistency_level, policy->timeout, n_fields, 0);
 	p = as_command_write_key(p, policy->key, key);
@@ -405,7 +407,7 @@ aerospike_key_put(
 as_status
 aerospike_key_put_async_ex(
 	aerospike* as, as_error* err, const as_policy_write* policy, const as_key* key, as_record* rec,
-	as_async_write_listener listener, void* udata, as_event_loop* event_loop, bool pipeline,
+	as_async_write_listener listener, void* udata, as_event_loop* event_loop, as_pipe_listener pipe_listener,
 	size_t* length, size_t* comp_length
 	)
 {
@@ -435,7 +437,7 @@ aerospike_key_put_async_ex(
 	if (policy->compression_threshold == 0 || (size <= policy->compression_threshold)) {
 		// Send uncompressed command.
 		as_event_command* cmd = as_async_write_command_create(as->cluster, node,
-				policy->timeout, false, listener, udata, event_loop, pipeline, size,
+				policy->timeout, false, listener, udata, event_loop, pipe_listener, size,
 				as_event_command_parse_header);
 		
 		uint8_t* p = as_command_write_header(cmd->buf, 0, AS_MSG_INFO2_WRITE, policy->commit_level, 0,
@@ -476,7 +478,7 @@ aerospike_key_put_async_ex(
 		size_t comp_size = as_command_compress_max_size(size);
 		
 		as_event_command* comp_cmd = as_async_write_command_create(as->cluster, node,
-			policy->timeout, false, listener, udata, event_loop, pipeline, comp_size,
+			policy->timeout, false, listener, udata, event_loop, pipe_listener, comp_size,
 			as_event_command_parse_header);
 
 		// Compress buffer and execute.
@@ -507,10 +509,10 @@ aerospike_key_put_async_ex(
 as_status
 aerospike_key_put_async(
 	aerospike* as, as_error* err, const as_policy_write* policy, const as_key* key, as_record* rec,
-	as_async_write_listener listener, void* udata, as_event_loop* event_loop, bool pipeline
+	as_async_write_listener listener, void* udata, as_event_loop* event_loop, as_pipe_listener pipe_listener
 	)
 {
-	return aerospike_key_put_async_ex(as, err, policy, key, rec, listener, udata, event_loop, pipeline, NULL, NULL);
+	return aerospike_key_put_async_ex(as, err, policy, key, rec, listener, udata, event_loop, pipe_listener, NULL, NULL);
 }
 
 as_status
@@ -551,8 +553,8 @@ aerospike_key_remove(
 as_status
 aerospike_key_remove_async_ex(
 	aerospike* as, as_error* err, const as_policy_remove* policy, const as_key* key,
-	as_async_write_listener listener, void* udata, as_event_loop* event_loop, bool pipeline,
-	size_t* length
+	as_async_write_listener listener, void* udata, as_event_loop* event_loop,
+	as_pipe_listener pipe_listener, size_t* length
 	)
 {
 	if (! policy) {
@@ -570,7 +572,7 @@ aerospike_key_remove_async_ex(
 	size_t size = as_command_key_size(policy->key, key, &n_fields);
 	
 	as_event_command* cmd = as_async_write_command_create(as->cluster, node, policy->timeout, false,
-							listener, udata, event_loop, pipeline, size, as_event_command_parse_header);
+							listener, udata, event_loop, pipe_listener, size, as_event_command_parse_header);
 
 	uint8_t* p = as_command_write_header(cmd->buf, 0, AS_MSG_INFO2_WRITE | AS_MSG_INFO2_DELETE, policy->commit_level, 0, AS_POLICY_EXISTS_IGNORE, policy->gen, policy->generation, 0, policy->timeout, n_fields, 0);
 	p = as_command_write_key(p, policy->key, key);
@@ -586,10 +588,11 @@ aerospike_key_remove_async_ex(
 as_status
 aerospike_key_remove_async(
 	aerospike* as, as_error* err, const as_policy_remove* policy, const as_key* key,
-	as_async_write_listener listener, void* udata, as_event_loop* event_loop, bool pipeline
+	as_async_write_listener listener, void* udata, as_event_loop* event_loop,
+	as_pipe_listener pipe_listener
 	)
 {
-	return aerospike_key_remove_async_ex(as, err, policy, key, listener, udata, event_loop, pipeline, NULL);
+	return aerospike_key_remove_async_ex(as, err, policy, key, listener, udata, event_loop, pipe_listener, NULL);
 }
 
 as_status
@@ -663,7 +666,7 @@ aerospike_key_operate(
 as_status
 aerospike_key_operate_async(
 	aerospike* as, as_error* err, const as_policy_operate* policy, const as_key* key, const as_operations* ops,
-	as_async_record_listener listener, void* udata, as_event_loop* event_loop, bool pipeline
+	as_async_record_listener listener, void* udata, as_event_loop* event_loop, as_pipe_listener pipe_listener
 	)
 {
 	if (! policy) {
@@ -710,7 +713,7 @@ aerospike_key_operate_async(
 	}
 
 	as_event_command* cmd = as_async_record_command_create(as->cluster, node, policy->timeout, false,
-						listener, udata, event_loop, pipeline, size, as_event_command_parse_result);
+						listener, udata, event_loop, pipe_listener, size, as_event_command_parse_result);
 
 	uint8_t* p = as_command_write_header(cmd->buf, read_attr, write_attr, policy->commit_level, policy->consistency_level,
 										 AS_POLICY_EXISTS_IGNORE, policy->gen, ops->gen, ops->ttl, policy->timeout, n_fields, n_operations);
@@ -778,7 +781,8 @@ as_status
 aerospike_key_apply_async(
 	aerospike* as, as_error* err, const as_policy_apply* policy, const as_key* key,
 	const char* module, const char* function, as_list* arglist,
-	as_async_value_listener listener, void* udata, as_event_loop* event_loop, bool pipeline
+	as_async_value_listener listener, void* udata, as_event_loop* event_loop,
+	as_pipe_listener pipe_listener
 	)
 {
 	if (! policy) {
@@ -806,7 +810,7 @@ aerospike_key_apply_async(
 	n_fields += 3;
 	
 	as_event_command* cmd = as_async_value_command_create(as->cluster, node, policy->timeout, false,
-			listener, udata, event_loop, pipeline, size, as_event_command_parse_success_failure);
+			listener, udata, event_loop, pipe_listener, size, as_event_command_parse_success_failure);
 		
 	uint8_t* p = as_command_write_header(cmd->buf, 0, AS_MSG_INFO2_WRITE, policy->commit_level, 0, 0, 0, 0, policy->ttl, policy->timeout, n_fields, 0);
 	p = as_command_write_key(p, policy->key, key);

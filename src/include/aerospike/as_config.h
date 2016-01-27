@@ -280,7 +280,9 @@ typedef struct as_config_s {
 	
 	/**
 	 *	Maximum number of asynchronous (non-pipeline) connections allowed for each node.
-	 *	Async transactions will be rejected if the maximum async node connections would be exceeded.
+	 *	This limit will be enforced at the node/event loop level.  If the value is 100 and 2 event
+	 *	loops are created, then each node/event loop asynchronous (non-pipeline) connection pool 
+	 *	will have a limit of 50. Async transactions will be rejected if the limit would be exceeded.
 	 *	This variable is ignored if asynchronous event loops are not created.
 	 *	Default: 300
 	 */
@@ -288,9 +290,11 @@ typedef struct as_config_s {
 
 	/**
 	 *	Maximum number of pipeline connections allowed for each node.
-	 *	Pipeline transactions will be rejected if the maximum pipeline node connections would be exceeded.
+	 *	This limit will be enforced at the node/event loop level.  If the value is 100 and 2 event
+	 *	loops are created, then each node/event loop pipeline connection pool will have a limit of 50. 
+	 *	Async transactions will be rejected if the limit would be exceeded.
 	 *	This variable is ignored if asynchronous event loops are not created.
-	 *	Default: 300
+	 *	Default: 64
 	 */
 	uint32_t pipe_max_conns_per_node;
 

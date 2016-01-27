@@ -130,19 +130,7 @@ typedef struct as_node_s {
 	 * 	Pool of connections used in pipelined async commands.  Also not thread-safe.
 	 */
 	as_queue* pipe_conn_qs;
-	
-	/**
-	 *	@private
-	 *	Number of active async (non-pipeline) connections.
-	 */
-	uint32_t async_conn_count;
 
-	/**
-	 *	@private
-	 *	Number of active pipeline connections.
-	 */
-	uint32_t pipe_conn_count;
-	
 	/**
 	 *	@private
 	 *	Socket used exclusively for cluster tend thread info requests.

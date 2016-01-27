@@ -257,27 +257,12 @@ typedef struct as_cluster_s {
 	
 	/**
 	 *	@private
-	 *	Initial capacity for asynchronous (non-pipeline) connection pools.  There is one pool for 
-	 *	each node/event loop combination.  This variable is ignored if asynchronous event loops are 
-	 *	not created.
-	 */
-	uint32_t async_conn_qs_initial_capacity;
-
-	/**
-	 *	@private
 	 *	Maximum number of pipeline connections allowed for each node.
 	 *	Pipeline transactions will be rejected if the maximum pipeline node connections would be exceeded.
 	 *	This variable is ignored if asynchronous event loops are not created.
 	 */
 	uint32_t pipe_max_conns_per_node;
 	
-	/**
-	 *	@private
-	 *	Initial capacity for pipeline connection pools.  There is one pool for each node/event loop 
-	 *	combination.  This variable is ignored if asynchronous event loops are not created.
-	 */
-	uint32_t pipe_conn_qs_initial_capacity;
-
 	/**
 	 *	@private
 	 *	Number of pending async commands (i.e., commands with an outstanding reply).

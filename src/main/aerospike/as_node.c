@@ -21,6 +21,7 @@
 #include <aerospike/as_event_internal.h>
 #include <aerospike/as_info.h>
 #include <aerospike/as_log_macros.h>
+#include <aerospike/as_queue.h>
 #include <aerospike/as_socket.h>
 #include <aerospike/as_string.h>
 #include <citrusleaf/cf_byte_order.h>
@@ -41,6 +42,24 @@ extern uint32_t as_event_loop_capacity;
 /******************************************************************************
  *	Functions.
  *****************************************************************************/
+
+static as_queue*
+as_node_create_async_queues(uint32_t max_conns_per_node)
+{
+	// Create one queue per event manager.
+	as_queue* queues = cf_malloc(sizeof(as_queue) * as_event_loop_capacity);
+	
+	// Distribute max_conns_per_node over event loops taking remainder into account.
+	uint32_t max = max_conns_per_node / as_event_loop_capacity;
+	uint32_t rem = max_conns_per_node - (max * as_event_loop_capacity);
+	uint32_t capacity;
+	
+	for (uint32_t i = 0; i < as_event_loop_capacity; i++) {
+		capacity = i < rem ? max + 1 : max;
+		as_queue_init(&queues[i], sizeof(void*), capacity);
+	}
+	return queues;
+}
 
 as_node*
 as_node_create(as_cluster* cluster, as_host* host, struct sockaddr_in* addr, as_node_info* node_info)
@@ -70,22 +89,14 @@ as_node_create(as_cluster* cluster, as_host* host, struct sockaddr_in* addr, as_
 	
 	// Initialize async queue.
 	if (as_event_loop_capacity > 0) {
-		// Create one queue per event manager.
-		node->async_conn_qs = cf_malloc(sizeof(as_queue) * as_event_loop_capacity);
-		node->pipe_conn_qs = cf_malloc(sizeof(as_queue) * as_event_loop_capacity);
-		
-		for (uint32_t i = 0; i < as_event_loop_capacity; i++) {
-			as_queue_init(&node->async_conn_qs[i], sizeof(void*), cluster->async_conn_qs_initial_capacity);
-			as_queue_init(&node->pipe_conn_qs[i], sizeof(void*), cluster->pipe_conn_qs_initial_capacity);
-		}
+		node->async_conn_qs = as_node_create_async_queues(cluster->async_max_conns_per_node);
+		node->pipe_conn_qs = as_node_create_async_queues(cluster->pipe_max_conns_per_node);
 	}
 	else {
 		node->async_conn_qs = 0;
 		node->pipe_conn_qs = 0;
 	}
 
-	node->async_conn_count = 0;
-	node->pipe_conn_count = 0;
 	node->info_fd = -1;
 	node->friends = 0;
 	node->failures = 0;

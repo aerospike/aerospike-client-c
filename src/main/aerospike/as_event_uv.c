@@ -465,7 +465,7 @@ as_uv_connect_error(as_event_command* cmd, as_error* err)
 	// The socket is the first field in as_event_connection, so just use connection.
 	// The close callback will also free as_event_connection memory.
 	uv_close((uv_handle_t*)cmd->conn, as_uv_connection_closed);
-	as_event_decr_conn_count(cmd->cluster, cmd->node, cmd->pipeline);
+	as_event_decr_conn(cmd);
 	as_event_error_callback(cmd, err);
 }
 
@@ -576,7 +576,7 @@ as_event_close_connection(as_event_connection* conn)
 }
 
 static bool
-as_uv_queue_close_connections(as_node* node, as_queue* conn_queue, as_queue* cmd_queue, bool pipeline)
+as_uv_queue_close_connections(as_node* node, as_queue* conn_queue, as_queue* cmd_queue)
 {
 	as_uv_command qcmd;
 	qcmd.type = AS_UV_CLOSE_CONNECTION;
@@ -596,7 +596,7 @@ as_uv_queue_close_connections(as_node* node, as_queue* conn_queue, as_queue* cmd
 		// This is done because the node will be invalid when the deferred connection close occurs.
 		// Since node destroy always waits till there are no node references, all transactions that
 		// referenced this node should be completed by the time this code is executed.
-		as_event_decr_conn_count(node->cluster, node, pipeline);
+		as_event_decr_connection(node->cluster, conn_queue);
 		ck_pr_dec_32(&node->cluster->async_conn_pool);
 	}
 	return true;
@@ -610,8 +610,8 @@ as_event_node_destroy(as_node* node)
 		as_event_loop* event_loop = &as_event_loops[i];
 		
 		pthread_mutex_lock(&event_loop->lock);
-		as_uv_queue_close_connections(node, &node->async_conn_qs[i], &event_loop->queue, false);
-		as_uv_queue_close_connections(node, &node->pipe_conn_qs[i], &event_loop->queue, true);
+		as_uv_queue_close_connections(node, &node->async_conn_qs[i], &event_loop->queue);
+		as_uv_queue_close_connections(node, &node->pipe_conn_qs[i], &event_loop->queue);
 		pthread_mutex_unlock(&event_loop->lock);
 		
 		uv_async_send(event_loop->wakeup);

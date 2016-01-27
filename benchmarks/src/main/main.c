@@ -190,7 +190,7 @@ print_usage(const char* program)
 	blog_line("   Enable asynchronous mode.");
 	blog_line("");
 	
-	blog_line("-W, --asyncMaxCommands <command count> # Default: 200");
+	blog_line("-c, --asyncMaxCommands <command count> # Default: 200");
 	blog_line("   Maximum number of concurrent asynchronous commands that are active at any point");
 	blog_line("   in time.");
 	blog_line("");

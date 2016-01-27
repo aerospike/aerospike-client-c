@@ -222,11 +222,12 @@ as_ev_command_read_start(as_event_command* cmd)
 	cmd->len = sizeof(as_proto);
 	cmd->pos = 0;
 	cmd->state = AS_ASYNC_STATE_READ_HEADER;
+
+	as_ev_watch_read(cmd);
 	
 	if (cmd->pipe_listener != NULL) {
 		as_pipe_read_start(cmd);
 	}
-	as_ev_watch_read(cmd);
 }
 
 static inline void

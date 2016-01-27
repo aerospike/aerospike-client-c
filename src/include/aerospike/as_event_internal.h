@@ -397,16 +397,28 @@ as_event_set_auth_parse_header(as_event_command* cmd)
 }
 
 static inline void
-as_event_decr_conn_count(as_cluster* cluster, as_node* node, bool pipeline)
+as_event_release_connection(as_cluster* cluster, as_event_connection* conn, as_queue* queue)
+{
+	as_event_close_connection(conn);
+	ck_pr_dec_32(&cluster->async_conn_count);
+	as_queue_decr_total(queue);
+}
+
+static inline void
+as_event_decr_connection(as_cluster* cluster, as_queue* queue)
 {
 	ck_pr_dec_32(&cluster->async_conn_count);
+	as_queue_decr_total(queue);
+}
+
+static inline void
+as_event_decr_conn(as_event_command* cmd)
+{
+	as_queue* queue = cmd->pipeline ?
+		&cmd->node->pipe_conn_qs[cmd->event_loop->index] :
+		&cmd->node->async_conn_qs[cmd->event_loop->index];
 	
-	if (pipeline) {
-		ck_pr_dec_32(&node->pipe_conn_count);
-	}
-	else {
-		ck_pr_dec_32(&node->async_conn_count);
-	}
+	as_event_decr_connection(cmd->cluster, queue);
 }
 
 #ifdef __cplusplus

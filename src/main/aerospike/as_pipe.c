@@ -408,7 +408,23 @@ as_pipe_read_start(as_event_command* cmd)
 
 	put_connection(cmd);
 
+	as_event_loop* loop = cmd->event_loop;
+	as_queue* q = &loop->pipe_cb_queue;
+
 	if (cmd->pipe_listener != NULL) {
-		cmd->pipe_listener(cmd->udata, cmd->event_loop);
+		as_queue_push(q, &(as_queued_pipe_cb){ cmd->pipe_listener, cmd->udata });
 	}
+
+	if (loop->pipe_cb_calling) {
+		return;
+	}
+
+	loop->pipe_cb_calling = true;
+	as_queued_pipe_cb cb;
+
+	while (as_queue_pop(q, &cb)) {
+		cb.listener(cb.udata, loop);
+	}
+
+	loop->pipe_cb_calling = false;
 }

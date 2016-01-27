@@ -62,8 +62,10 @@ typedef struct {
 		
 	pthread_mutex_t lock;
 	as_queue queue;
+	as_queue pipe_cb_queue;
 	pthread_t thread;
 	uint32_t index;
+	bool pipe_cb_calling;
 	bool initialized;
 } as_event_loop;
 

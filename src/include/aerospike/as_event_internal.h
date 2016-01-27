@@ -84,6 +84,11 @@ typedef struct {
 	struct as_event_command* cmd;
 } as_async_connection;
 
+typedef struct {
+	as_pipe_listener listener;
+	void* udata;
+} as_queued_pipe_cb;
+
 typedef bool (*as_event_parse_results_fn) (struct as_event_command* cmd);
 typedef void (*as_event_executor_complete_fn) (struct as_event_executor* executor, as_error* err);
 typedef void (*as_event_executor_destroy_fn) (struct as_event_executor* executor);

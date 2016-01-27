@@ -653,6 +653,7 @@ as_event_close_loop(as_event_loop* event_loop)
 	
 	// Cleanup event loop resources.
 	as_queue_destroy(&event_loop->queue);
+	as_queue_destroy(&event_loop->pipe_cb_queue);
 	pthread_mutex_unlock(&event_loop->lock);
 	pthread_mutex_destroy(&event_loop->lock);
 }

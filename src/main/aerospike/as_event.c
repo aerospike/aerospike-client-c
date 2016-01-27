@@ -65,8 +65,10 @@ as_event_create_loops(uint32_t capacity)
 		pthread_mutex_init(&event_loop->lock, 0);
 		event_loop->thread = 0;
 		event_loop->index = i;
+		as_queue_init(&event_loop->pipe_cb_queue, sizeof(as_queued_pipe_cb), AS_EVENT_QUEUE_INITIAL_CAPACITY);
+		event_loop->pipe_cb_calling = false;
 		event_loop->initialized = false;
-		
+
 		if (! as_event_create_loop(event_loop)) {
 			as_event_close_loops();
 			return 0;
@@ -112,6 +114,8 @@ as_event_set_external_loop(void* loop)
 	pthread_mutex_init(&event_loop->lock, 0);
 	event_loop->thread = pthread_self();  // Current thread must be same as event loop thread!
 	event_loop->index = current;
+	as_queue_init(&event_loop->pipe_cb_queue, sizeof(as_queued_pipe_cb), AS_EVENT_QUEUE_INITIAL_CAPACITY);
+	event_loop->pipe_cb_calling = false;
 	event_loop->initialized = false;
 	as_event_register_external_loop(event_loop);
 	return event_loop;

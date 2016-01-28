@@ -98,14 +98,14 @@ aerospike_key_get(
  *	as_status status = aerospike_key_get_async(&as, &err, NULL, &key, my_listener, NULL, NULL, NULL);
  *	~~~~~~~~~~
  *
- *	@param as			The aerospike instance to use for this operation.
- *	@param err			The as_error to be populated if an error occurs.
- *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param key			The key of the record.
- *	@param listener 	User function to be called with command results.
- *	@param udata 		User data to be forwarded to user callback.
- *	@param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
- *	@param pipeline 	Should responses be combined with other responses before sending back to client.
+ *	@param as				The aerospike instance to use for this operation.
+ *	@param err				The as_error to be populated if an error occurs.
+ *	@param policy			The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param key				The key of the record.
+ *	@param listener			User function to be called with command results.
+ *	@param udata 			User data to be forwarded to user callback.
+ *	@param event_loop 		Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
+ *	@param pipe_listener	Enables command pipelining, if not NULL. The given callback is invoked after the current command has been sent to the server. This allows for issuing the next command even before receiving a result for the current command.
  *
  *	@return AEROSPIKE_OK if async command succesfully queued. Otherwise an error.
  *
@@ -175,15 +175,15 @@ aerospike_key_select(
  *	as_status status = aerospike_key_select_async(&as, &err, NULL, &key, select, my_listener, NULL, NULL, NULL);
  *	~~~~~~~~~~
  *
- *	@param as			The aerospike instance to use for this operation.
- *	@param err			The as_error to be populated if an error occurs.
- *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param key			The key of the record.
- *	@param bins			The bins to select. A NULL terminated array of NULL terminated strings.
- *	@param listener 	User function to be called with command results.
- *	@param udata 		User data to be forwarded to user callback.
- *	@param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
- *	@param pipeline 	Should responses be combined with other responses before sending back to client.
+ *	@param as				The aerospike instance to use for this operation.
+ *	@param err				The as_error to be populated if an error occurs.
+ *	@param policy			The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param key				The key of the record.
+ *	@param bins				The bins to select. A NULL terminated array of NULL terminated strings.
+ *	@param listener			User function to be called with command results.
+ *	@param udata			User data to be forwarded to user callback.
+ *	@param event_loop		Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
+ *	@param pipe_listener	Enables command pipelining, if not NULL. The given callback is invoked after the current command has been sent to the server. This allows for issuing the next command even before receiving a result for the current command.
  *
  *	@return AEROSPIKE_OK if async command succesfully queued. Otherwise an error.
  *
@@ -259,14 +259,14 @@ aerospike_key_exists(
  *	as_status status = aerospike_key_exists_async(&as, &err, NULL, &key, my_listener, NULL, NULL, NULL);
  *	~~~~~~~~~~
  *
- *	@param as			The aerospike instance to use for this operation.
- *	@param err			The as_error to be populated if an error occurs.
- *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param key			The key of the record.
- *	@param listener		User function to be called with command results.
- *	@param udata 		User data to be forwarded to user callback.
- *	@param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
- *	@param pipeline 	Should responses be combined with other responses before sending back to client.
+ *	@param as				The aerospike instance to use for this operation.
+ *	@param err				The as_error to be populated if an error occurs.
+ *	@param policy			The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param key				The key of the record.
+ *	@param listener			User function to be called with command results.
+ *	@param udata			User data to be forwarded to user callback.
+ *	@param event_loop		Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
+ *	@param pipe_listener	Enables command pipelining, if not NULL. The given callback is invoked after the current command has been sent to the server. This allows for issuing the next command even before receiving a result for the current command.
  *
  *	@return AEROSPIKE_OK if async command succesfully queued. Otherwise an error.
  *
@@ -337,15 +337,15 @@ aerospike_key_put(
  *	as_record_destroy(&rec);
  *	~~~~~~~~~~
  *
- *	@param as			The aerospike instance to use for this operation.
- *	@param err			The as_error to be populated if an error occurs.
- *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param key			The key of the record.
- *	@param rec 			The record containing the data to be written.
- *	@param listener		User function to be called with command results.
- *	@param udata 		User data to be forwarded to user callback.
- *	@param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
- *	@param pipeline 	Should responses be combined with other responses before sending back to client.
+ *	@param as				The aerospike instance to use for this operation.
+ *	@param err				The as_error to be populated if an error occurs.
+ *	@param policy			The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param key				The key of the record.
+ *	@param rec				The record containing the data to be written.
+ *	@param listener			User function to be called with command results.
+ *	@param udata			User data to be forwarded to user callback.
+ *	@param event_loop		Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
+ *	@param pipe_listener	Enables command pipelining, if not NULL. The given callback is invoked after the current command has been sent to the server. This allows for issuing the next command even before receiving a result for the current command.
  *
  *	@return AEROSPIKE_OK if async command succesfully queued. Otherwise an error.
  *
@@ -402,14 +402,14 @@ aerospike_key_remove(
  *	as_status status = aerospike_key_remove(&as, &err, NULL, &key, my_listener, NULL, NULL, NULL);
  *	~~~~~~~~~~
  *
- *	@param as			The aerospike instance to use for this operation.
- *	@param err			The as_error to be populated if an error occurs.
- *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param key			The key of the record.
- *	@param listener 	User function to be called with command results.
- *	@param udata 		User data to be forwarded to user callback.
- *	@param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
- *	@param pipeline 	Should responses be combined with other responses before sending back to client.
+ *	@param as				The aerospike instance to use for this operation.
+ *	@param err				The as_error to be populated if an error occurs.
+ *	@param policy			The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param key				The key of the record.
+ *	@param listener			User function to be called with command results.
+ *	@param udata			User data to be forwarded to user callback.
+ *	@param event_loop		Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
+ *	@param pipe_listener	Enables command pipelining, if not NULL. The given callback is invoked after the current command has been sent to the server. This allows for issuing the next command even before receiving a result for the current command.
  *
  *	@return AEROSPIKE_OK if async command succesfully queued. Otherwise an error.
  *
@@ -490,15 +490,15 @@ aerospike_key_operate(
  *	as_operations_destroy(&ops);
  *	~~~~~~~~~~
  *
- *	@param as			The aerospike instance to use for this operation.
- *	@param err			The as_error to be populated if an error occurs.
- *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param key			The key of the record.
- *	@param ops			The operations to perform on the record.
- *	@param listener		User function to be called with command results.
- *	@param udata 		User data to be forwarded to user callback.
- *	@param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
- *	@param pipeline 	Should responses be combined with other responses before sending back to client.
+ *	@param as				The aerospike instance to use for this operation.
+ *	@param err				The as_error to be populated if an error occurs.
+ *	@param policy			The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param key				The key of the record.
+ *	@param ops				The operations to perform on the record.
+ *	@param listener			User function to be called with command results.
+ *	@param udata			User data to be forwarded to user callback.
+ *	@param event_loop		Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
+ *	@param pipe_listener	Enables command pipelining, if not NULL. The given callback is invoked after the current command has been sent to the server. This allows for issuing the next command even before receiving a result for the current command.
  *
  *	@return AEROSPIKE_OK if async command succesfully queued. Otherwise an error.
  *
@@ -582,17 +582,17 @@ as_status aerospike_key_apply(
  *	as_arraylist_destroy(&args);
  *	~~~~~~~~~~
  *
- *	@param as			The aerospike instance to use for this operation.
- *	@param err			The as_error to be populated if an error occurs.
- *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param key			The key of the record.
- *	@param module		The module containing the function to execute.
- *	@param function 	The function to execute.
- *	@param arglist 		The arguments for the function.
- *	@param listener		User function to be called with command results.
- *	@param udata 		User data to be forwarded to user callback.
- *	@param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
- *	@param pipeline 	Should responses be combined with other responses before sending back to client.
+ *	@param as				The aerospike instance to use for this operation.
+ *	@param err				The as_error to be populated if an error occurs.
+ *	@param policy			The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param key				The key of the record.
+ *	@param module			The module containing the function to execute.
+ *	@param function			The function to execute.
+ *	@param arglist			The arguments for the function.
+ *	@param listener			User function to be called with command results.
+ *	@param udata			User data to be forwarded to user callback.
+ *	@param event_loop		Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
+ *	@param pipe_listener	Enables command pipelining, if not NULL. The given callback is invoked after the current command has been sent to the server. This allows for issuing the next command even before receiving a result for the current command.
  *
  *	@return AEROSPIKE_OK if async command succesfully queued. Otherwise an error.
  *

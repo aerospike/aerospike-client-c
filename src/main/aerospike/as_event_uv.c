@@ -202,6 +202,13 @@ as_uv_connection_alive(uv_stream_t* handle)
 }
 
 static void
+as_uv_command_buffer(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf)
+{
+	as_event_command* cmd = as_uv_get_command(handle->data);
+	*buf = uv_buf_init((char*)cmd->buf + cmd->pos, cmd->len - cmd->pos);
+}
+
+static void
 as_uv_command_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 {
 	if (!as_uv_connection_alive(stream)) {
@@ -253,8 +260,31 @@ as_uv_command_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 		return;
 	}
 
+	as_pipe_connection* conn_to_read = NULL;
+
+	if (cmd->pipe_listener != NULL) {
+		conn_to_read = (as_pipe_connection*)cmd->conn;
+
+		if (cf_ll_size(&conn_to_read->readers) < 2) {
+			conn_to_read = NULL;
+		}
+	}
+
 	if (cmd->parse_results(cmd)) {
 		uv_read_stop(stream);
+
+		// Register the next reader, if there are readers left.
+		if (cmd->pipe_listener != NULL && conn_to_read != NULL) {
+			stream->data = conn_to_read;
+
+			int status = uv_read_start(stream, as_uv_command_buffer, as_uv_command_read);
+
+			if (status && ! uv_is_closing((uv_handle_t*)stream)) {
+				as_error err;
+				as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "uv_read_start failed: %s", uv_strerror(status));
+				as_event_socket_error(cmd, &err);
+			}
+		}
 	}
 	else {
 		// Batch, scan, query is not finished.
@@ -262,13 +292,6 @@ as_uv_command_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 		cmd->pos = 0;
 		cmd->state = AS_ASYNC_STATE_READ_HEADER;
 	}
-}
-
-static void
-as_uv_command_buffer(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf)
-{
-	as_event_command* cmd = as_uv_get_command(handle->data);
-	*buf = uv_buf_init((char*)cmd->buf + cmd->pos, cmd->len - cmd->pos);
 }
 
 static void
@@ -287,6 +310,12 @@ as_uv_command_write_complete(uv_write_t* req, int status)
 
 		if (cmd->pipe_listener != NULL) {
 			as_pipe_read_start(cmd);
+			as_pipe_connection* conn = (as_pipe_connection*)cmd->conn;
+
+			// There already was an active reader for a previous command.
+			if (cf_ll_size(&conn->readers) > 1) {
+				return;
+			}
 		}
 		
 		status = uv_read_start(req->handle, as_uv_command_buffer, as_uv_command_read);

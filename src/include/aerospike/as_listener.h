@@ -61,6 +61,15 @@ typedef void (*as_async_record_listener) (as_error* err, as_record* record, void
  */
 typedef void (*as_async_value_listener) (as_error* err, as_val* val, void* udata, as_event_loop* event_loop);
 
+/**
+ *	User callback when pipelined command has been sent, i.e., when the connection is ready for sending
+ *	the next command.
+ *
+ *	@param udata 		User data that is forwarded from asynchronous command function.
+ *	@param event_loop 	Event loop that this command was executed on.  Use this event loop when running
+ *						nested asynchronous commands when single threaded behavior is desired for the
+ *						group of commands.
+ */
 typedef void (*as_pipe_listener) (void* udata, as_event_loop* event_loop);
 
 #ifdef __cplusplus

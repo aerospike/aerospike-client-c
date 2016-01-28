@@ -38,13 +38,6 @@ write_start(as_event_command* cmd)
 	conn->writer = cmd;
 }
 
-static inline void
-close_connection(as_event_command* cmd)
-{
-	as_queue* queue = &cmd->node->pipe_conn_qs[cmd->event_loop->index];
-	as_event_release_connection(cmd->cluster, cmd->conn, queue);
-}
-
 static void
 next_reader(as_event_command* reader)
 {
@@ -65,7 +58,8 @@ next_reader(as_event_command* reader)
 		}
 
 		as_log_trace("Closing non-pooled pipeline connection %p", conn);
-		close_connection(reader);
+		as_queue* queue = &reader->node->pipe_conn_qs[reader->event_loop->index];
+		as_event_release_connection(reader->cluster, reader->conn, queue);
 		return;
 	}
 
@@ -91,6 +85,7 @@ cancel_connection(as_event_command* cmd, as_error* err, int32_t source)
 {
 	as_pipe_connection* conn = (as_pipe_connection*)cmd->conn;
 	as_node* node = cmd->node;
+	as_event_loop* loop = cmd->event_loop;
 	// So that cancel_command() doesn't free the node.
 	as_node_reserve(node);
 	
@@ -131,7 +126,8 @@ cancel_connection(as_event_command* cmd, as_error* err, int32_t source)
 		as_log_trace("Closing canceled non-pooled pipeline connection %p", conn);
 		// For as_uv_connection_alive().
 		conn->canceled = true;
-		close_connection(cmd);
+		as_queue* queue = &node->pipe_conn_qs[loop->index];
+		as_event_release_connection(node->cluster, (as_event_connection*)conn, queue);
 		as_node_release(node);
 		return;
 	}

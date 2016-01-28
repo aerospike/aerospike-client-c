@@ -420,7 +420,7 @@ as_event_decr_connection(as_cluster* cluster, as_queue* queue)
 static inline void
 as_event_decr_conn(as_event_command* cmd)
 {
-	as_queue* queue = cmd->pipeline ?
+	as_queue* queue = cmd->pipe_listener != NULL ?
 		&cmd->node->pipe_conn_qs[cmd->event_loop->index] :
 		&cmd->node->async_conn_qs[cmd->event_loop->index];
 	

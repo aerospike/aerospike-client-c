@@ -34,7 +34,7 @@ extern "C" {
  *	case there are duplicates. Return zero on success.
  */
 as_status
-as_lookup(as_cluster* cluster, as_error* err, char* hostname, uint16_t port, as_vector* /*<struct sockaddr_in>*/ addresses);
+as_lookup(as_error* err, char* hostname, uint16_t port, as_vector* /*<struct sockaddr_in>*/ addresses);
 
 #ifdef __cplusplus
 } // end extern "C"

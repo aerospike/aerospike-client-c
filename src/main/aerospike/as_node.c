@@ -416,6 +416,34 @@ as_find_friend(as_vector* /* <as_host> */ friends, as_host* host)
 	return false;
 }
 
+static bool
+as_check_alternate_address(as_cluster* cluster, as_host* host)
+{
+	// Check if there is an alternate address that should be used for this hostname.
+	as_addr_maps* ip_map = as_ip_map_reserve(cluster);
+	bool status = true;
+
+	if (ip_map) {
+		as_addr_map* entry = ip_map->array;
+		
+		for (uint32_t i = 0; i < ip_map->size; i++) {
+			if (strcmp(entry->orig, host->name) == 0) {
+				// Found mapping for this address.  Use alternate.
+				as_log_debug("Using %s instead of %s", entry->alt, host->name);
+				
+				if (as_strncpy(host->name, entry->alt, sizeof(host->name))) {
+					as_log_warn("Hostname has been truncated: %s", host->name);
+					status = false;
+				}
+				break;
+			}
+			entry++;
+		}
+		as_ip_map_release(ip_map);
+	}
+	return status;
+}
+
 static void
 as_node_add_friends(as_cluster* cluster, as_node* node, char* buf, as_vector* /* <as_host> */ friends)
 {
@@ -456,6 +484,11 @@ as_node_add_friends(as_cluster* cluster, as_node* node, char* buf, as_vector* /*
 			
 			if (friend.port == 0) {
 				as_log_warn("Invalid port: %s", port_str);
+				addr_str = ++p;
+				continue;
+			}
+			
+			if (! as_check_alternate_address(cluster, &friend)) {
 				addr_str = ++p;
 				continue;
 			}

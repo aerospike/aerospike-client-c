@@ -369,7 +369,7 @@ as_cluster_seed_nodes(as_cluster* cluster, as_error* err, bool enable_warnings)
 		as_seed* seed = &seeds->array[i];
 		as_vector_clear(&addresses);
 		
-		status = as_lookup(cluster, &error_local, seed->name, seed->port, &addresses);
+		status = as_lookup(&error_local, seed->name, seed->port, &addresses);
 		
 		if (status != AEROSPIKE_OK) {
 			if (enable_warnings) {
@@ -437,7 +437,7 @@ as_cluster_find_nodes_to_add(as_cluster* cluster, as_vector* /* <as_host> */ fri
 		as_host* friend = as_vector_get(friends, i);
 		as_vector_clear(&addresses);
 		
-		as_status status = as_lookup(cluster, &err, friend->name, friend->port, &addresses);
+		as_status status = as_lookup(&err, friend->name, friend->port, &addresses);
 		
 		if (status != AEROSPIKE_OK) {
 			as_log_warn("%s %s", as_error_string(status), err.message);

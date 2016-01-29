@@ -135,7 +135,7 @@ insert_record(as_event_loop* event_loop, void* udata, uint32_t index)
 
 	// Write a record to the database.
 	as_error err;
-	if (aerospike_key_put_async(&as, &err, NULL, &key, &rec, insert_listener, udata, event_loop, false) != AEROSPIKE_OK) {
+	if (aerospike_key_put_async(&as, &err, NULL, &key, &rec, insert_listener, udata, event_loop, NULL) != AEROSPIKE_OK) {
 		insert_listener(&err, udata, event_loop);
 		return false;
 	}

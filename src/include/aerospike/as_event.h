@@ -192,6 +192,20 @@ as_event_loop*
 as_event_loop_find(void* loop);
 
 /**
+ *	Retrieve event loop by array index.
+ *
+ *	@param index	Event loop array index.
+ *	@return			Client's generic event loop abstraction that is used in client async commands.
+ *
+ *	@ingroup async_events
+ */
+static inline as_event_loop*
+as_event_loop_get_by_index(uint32_t index)
+{
+	return index < as_event_loop_size ? &as_event_loops[index] : NULL;
+}
+
+/**
  *	Retrieve a random event loop using round robin distribution.
  *
  *	@return			Client's generic event loop abstraction that is used in client async commands.

@@ -112,7 +112,7 @@ insert_data(uint32_t numrecs, const char *setname)
 		as_key k;
 		as_key_init(&k, NS, setname, strkey);
 
-		status = aerospike_key_put_async(as, &err, NULL, &k, &r, put_listener, &counter, 0, false);
+		status = aerospike_key_put_async(as, &err, NULL, &k, &r, put_listener, &counter, 0, NULL);
 		as_hashmap_destroy(&m);
 		as_key_destroy(&k);
 		as_record_destroy(&r);

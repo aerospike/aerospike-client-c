@@ -105,7 +105,9 @@ aerospike_key_get(
  *	@param listener			User function to be called with command results.
  *	@param udata 			User data to be forwarded to user callback.
  *	@param event_loop 		Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
- *	@param pipe_listener	Enables command pipelining, if not NULL. The given callback is invoked after the current command has been sent to the server. This allows for issuing the next command even before receiving a result for the current command.
+ *	@param pipe_listener	Enables command pipelining, if not NULL. The given callback is invoked after the current command
+ *							has been sent to the server. This allows for issuing the next command even before receiving a
+ *							result for the current command.
  *
  *	@return AEROSPIKE_OK if async command succesfully queued. Otherwise an error.
  *
@@ -183,7 +185,9 @@ aerospike_key_select(
  *	@param listener			User function to be called with command results.
  *	@param udata			User data to be forwarded to user callback.
  *	@param event_loop		Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
- *	@param pipe_listener	Enables command pipelining, if not NULL. The given callback is invoked after the current command has been sent to the server. This allows for issuing the next command even before receiving a result for the current command.
+ *	@param pipe_listener	Enables command pipelining, if not NULL. The given callback is invoked after the current command
+ *							has been sent to the server. This allows for issuing the next command even before receiving a
+ *							result for the current command.
  *
  *	@return AEROSPIKE_OK if async command succesfully queued. Otherwise an error.
  *
@@ -266,7 +270,9 @@ aerospike_key_exists(
  *	@param listener			User function to be called with command results.
  *	@param udata			User data to be forwarded to user callback.
  *	@param event_loop		Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
- *	@param pipe_listener	Enables command pipelining, if not NULL. The given callback is invoked after the current command has been sent to the server. This allows for issuing the next command even before receiving a result for the current command.
+ *	@param pipe_listener	Enables command pipelining, if not NULL. The given callback is invoked after the current command
+ *							has been sent to the server. This allows for issuing the next command even before receiving a
+ *							result for the current command.
  *
  *	@return AEROSPIKE_OK if async command succesfully queued. Otherwise an error.
  *
@@ -345,7 +351,9 @@ aerospike_key_put(
  *	@param listener			User function to be called with command results.
  *	@param udata			User data to be forwarded to user callback.
  *	@param event_loop		Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
- *	@param pipe_listener	Enables command pipelining, if not NULL. The given callback is invoked after the current command has been sent to the server. This allows for issuing the next command even before receiving a result for the current command.
+ *	@param pipe_listener	Enables command pipelining, if not NULL. The given callback is invoked after the current command
+ *							has been sent to the server. This allows for issuing the next command even before receiving a
+ *							result for the current command.
  *
  *	@return AEROSPIKE_OK if async command succesfully queued. Otherwise an error.
  *
@@ -409,7 +417,9 @@ aerospike_key_remove(
  *	@param listener			User function to be called with command results.
  *	@param udata			User data to be forwarded to user callback.
  *	@param event_loop		Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
- *	@param pipe_listener	Enables command pipelining, if not NULL. The given callback is invoked after the current command has been sent to the server. This allows for issuing the next command even before receiving a result for the current command.
+ *	@param pipe_listener	Enables command pipelining, if not NULL. The given callback is invoked after the current command
+ *							has been sent to the server. This allows for issuing the next command even before receiving a
+ *							result for the current command.
  *
  *	@return AEROSPIKE_OK if async command succesfully queued. Otherwise an error.
  *
@@ -498,7 +508,9 @@ aerospike_key_operate(
  *	@param listener			User function to be called with command results.
  *	@param udata			User data to be forwarded to user callback.
  *	@param event_loop		Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
- *	@param pipe_listener	Enables command pipelining, if not NULL. The given callback is invoked after the current command has been sent to the server. This allows for issuing the next command even before receiving a result for the current command.
+ *	@param pipe_listener	Enables command pipelining, if not NULL. The given callback is invoked after the current command
+ *							has been sent to the server. This allows for issuing the next command even before receiving a
+ *							result for the current command.
  *
  *	@return AEROSPIKE_OK if async command succesfully queued. Otherwise an error.
  *
@@ -592,7 +604,9 @@ as_status aerospike_key_apply(
  *	@param listener			User function to be called with command results.
  *	@param udata			User data to be forwarded to user callback.
  *	@param event_loop		Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
- *	@param pipe_listener	Enables command pipelining, if not NULL. The given callback is invoked after the current command has been sent to the server. This allows for issuing the next command even before receiving a result for the current command.
+ *	@param pipe_listener	Enables command pipelining, if not NULL. The given callback is invoked after the current command
+ *							has been sent to the server. This allows for issuing the next command even before receiving a
+ *							result for the current command.
  *
  *	@return AEROSPIKE_OK if async command succesfully queued. Otherwise an error.
  *

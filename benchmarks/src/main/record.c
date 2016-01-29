@@ -303,7 +303,7 @@ linear_write_async(clientdata* cdata, threaddata* tdata, as_event_loop* event_lo
 	
 	as_error err;
 	
-	if (aerospike_key_put_async(&cdata->client, &err, NULL, &tdata->key, &tdata->rec, linear_write_listener, tdata, event_loop, false) != AEROSPIKE_OK) {
+	if (aerospike_key_put_async(&cdata->client, &err, NULL, &tdata->key, &tdata->rec, linear_write_listener, tdata, event_loop, NULL) != AEROSPIKE_OK) {
 		linear_write_listener(&err, tdata, event_loop);
 	}
 }
@@ -376,7 +376,7 @@ random_read_write_async(clientdata* cdata, threaddata* tdata, as_event_loop* eve
 			tdata->begin = cf_getms();
 		}
 		
-		if (aerospike_key_get_async(&cdata->client, &err, NULL, &tdata->key, random_read_listener, tdata, event_loop, false) != AEROSPIKE_OK) {
+		if (aerospike_key_get_async(&cdata->client, &err, NULL, &tdata->key, random_read_listener, tdata, event_loop, NULL) != AEROSPIKE_OK) {
 			random_read_listener(&err, NULL, tdata, event_loop);
 		}
 	}
@@ -387,7 +387,7 @@ random_read_write_async(clientdata* cdata, threaddata* tdata, as_event_loop* eve
 			tdata->begin = cf_getms();
 		}
 		
-		if (aerospike_key_put_async(&cdata->client, &err, NULL, &tdata->key, &tdata->rec, random_write_listener, tdata, event_loop, false) != AEROSPIKE_OK) {
+		if (aerospike_key_put_async(&cdata->client, &err, NULL, &tdata->key, &tdata->rec, random_write_listener, tdata, event_loop, NULL) != AEROSPIKE_OK) {
 			random_write_listener(&err, tdata, event_loop);
 		}
 	}

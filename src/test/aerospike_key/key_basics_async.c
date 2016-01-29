@@ -99,7 +99,7 @@ as_put_callback1(as_error* err, void* udata, as_event_loop* event_loop)
 	as_key_init(&key, NAMESPACE, SET, "pa1");
 	
 	as_error e;
-	as_status status = aerospike_key_get_async(as, &e, NULL, &key, as_get_callback1, __result__, event_loop, false);
+	as_status status = aerospike_key_get_async(as, &e, NULL, &key, as_get_callback1, __result__, event_loop, NULL);
 	assert_status_async(&monitor, status, &e);
 }
 
@@ -115,7 +115,7 @@ TEST(key_basics_async_get, "async get")
 	as_record_set_int64(&rec, "a", 123);
 		
 	as_error err;
-	as_status status = aerospike_key_put_async(as, &err, NULL, &key, &rec, as_put_callback1, __result__, 0, false);
+	as_status status = aerospike_key_put_async(as, &err, NULL, &key, &rec, as_put_callback1, __result__, 0, NULL);
 	as_key_destroy(&key);
 	as_record_destroy(&rec);
 	
@@ -143,7 +143,7 @@ as_put_callback2(as_error* err, void* udata, as_event_loop* event_loop)
 	const char* select[] = {"bbb", NULL};
 	
 	as_error e;
-	as_status status = aerospike_key_select_async(as, &e, NULL, &key, select, as_get_callback2, __result__, event_loop, false);
+	as_status status = aerospike_key_select_async(as, &e, NULL, &key, select, as_get_callback2, __result__, event_loop, NULL);
 	assert_status_async(&monitor, status, &e);
 }
 
@@ -159,7 +159,7 @@ TEST(key_basics_async_select, "async select")
 	as_record_set_strp(&rec, "bbb", "pa2 value", false);
 	
 	as_error err;
-	as_status status = aerospike_key_put_async(as, &err, NULL, &key, &rec, as_put_callback2, __result__, 0, false);
+	as_status status = aerospike_key_put_async(as, &err, NULL, &key, &rec, as_put_callback2, __result__, 0, NULL);
 	as_key_destroy(&key);
 	as_record_destroy(&rec);
 	
@@ -207,12 +207,12 @@ as_put_callback3(as_error* err, void* udata, as_event_loop* event_loop)
 	as_key_init(&key, NAMESPACE, SET, "pa3");
 	
 	as_error e;
-	as_status status = aerospike_key_exists_async(as, &e, NULL, &key, as_get_callback_found, udata, event_loop, false);
+	as_status status = aerospike_key_exists_async(as, &e, NULL, &key, as_get_callback_found, udata, event_loop, NULL);
 	assert_status_async(&monitor, status, &e);
 	
 	as_key_init(&key, NAMESPACE, SET, "notfound");
 	
-	status = aerospike_key_exists_async(as, &e, NULL, &key, as_get_callback_not_found, udata, event_loop, false);
+	status = aerospike_key_exists_async(as, &e, NULL, &key, as_get_callback_not_found, udata, event_loop, NULL);
 	assert_status_async(&monitor, status, &e);
 }
 
@@ -233,7 +233,7 @@ TEST(key_basics_async_exists, "async exists")
 	as_record_set_int64(&rec, "c", 55);
 	
 	as_error err;
-	as_status status = aerospike_key_put_async(as, &err, NULL, &key, &rec, as_put_callback3, &udata, 0, false);
+	as_status status = aerospike_key_put_async(as, &err, NULL, &key, &rec, as_put_callback3, &udata, 0, NULL);
 	as_key_destroy(&key);
 	as_record_destroy(&rec);
 	
@@ -257,7 +257,7 @@ as_put_callback4(as_error* err, void* udata, as_event_loop* event_loop)
 	as_key_init(&key, NAMESPACE, SET, "pa4");
 	
 	as_error e;
-	as_status status = aerospike_key_remove_async(as, &e, NULL, &key, as_remove_callback, __result__, event_loop, false);
+	as_status status = aerospike_key_remove_async(as, &e, NULL, &key, as_remove_callback, __result__, event_loop, NULL);
 	assert_status_async(&monitor, status, &e);
 }
 
@@ -273,7 +273,7 @@ TEST(key_basics_async_remove, "async remove")
 	as_record_set_int64(&rec, "c", 55);
 	
 	as_error err;
-	as_status status = aerospike_key_put_async(as, &err, NULL, &key, &rec, as_put_callback4, __result__, 0, false);
+	as_status status = aerospike_key_put_async(as, &err, NULL, &key, &rec, as_put_callback4, __result__, 0, NULL);
 	as_key_destroy(&key);
 	as_record_destroy(&rec);
 	
@@ -310,7 +310,7 @@ as_put_operate_callback(as_error* err, void* udata, as_event_loop* event_loop)
 	as_operations_add_read(&ops, "b");
 	
 	as_error e;
-	as_status status = aerospike_key_operate_async(as, &e, NULL, &key, &ops, as_operate_callback, __result__, event_loop, false);
+	as_status status = aerospike_key_operate_async(as, &e, NULL, &key, &ops, as_operate_callback, __result__, event_loop, NULL);
 	assert_status_async(&monitor, status, &e);
 
 	as_key_destroy(&key);
@@ -330,7 +330,7 @@ TEST(key_basics_async_operate, "async operate")
 	as_record_set_strp(&rec, "b", "mid", false);
 
 	as_error err;
-	as_status status = aerospike_key_put_async(as, &err, NULL, &key, &rec, as_put_operate_callback, __result__, 0, false);
+	as_status status = aerospike_key_put_async(as, &err, NULL, &key, &rec, as_put_operate_callback, __result__, 0, NULL);
 	as_key_destroy(&key);
 	
     assert_int_eq(status, AEROSPIKE_OK);

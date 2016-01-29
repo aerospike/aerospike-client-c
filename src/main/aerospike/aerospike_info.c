@@ -77,7 +77,7 @@ as_status aerospike_info_host(
 	as_vector sockaddr_in_v;
 	as_vector_inita(&sockaddr_in_v, sizeof(struct sockaddr_in), 5);
 	
-	as_status status = as_lookup(NULL, err, (char*)addr, port, &sockaddr_in_v);
+	as_status status = as_lookup(err, (char*)addr, port, &sockaddr_in_v);
 	
 	if (status) {
 		as_vector_destroy(&sockaddr_in_v);

@@ -79,7 +79,7 @@ main(int argc, char* argv[])
 
 	// Try to read the test record from the database. This should fail since the record is not there.
 	as_error err;
-	if (aerospike_key_get_async(&as, &err, NULL, &g_key, expect_not_found, NULL, NULL, false) != AEROSPIKE_OK) {
+	if (aerospike_key_get_async(&as, &err, NULL, &g_key, expect_not_found, NULL, NULL, NULL) != AEROSPIKE_OK) {
 		LOG("aerospike_key_get_async() returned %d - %s", err.code, err.message);
 		example_cleanup(&as);
 		as_event_close_loops();
@@ -136,7 +136,7 @@ write_record(as_event_loop* event_loop)
 	example_dump_record(&rec);
 
 	// Write the record to the database.
-	if (aerospike_key_put_async(&as, &err, NULL, &g_key, &rec, write_listener, NULL, event_loop, false) != AEROSPIKE_OK) {
+	if (aerospike_key_put_async(&as, &err, NULL, &g_key, &rec, write_listener, NULL, event_loop, NULL) != AEROSPIKE_OK) {
 		write_listener(&err, NULL, event_loop);
 	}
 	as_record_destroy(&rec);
@@ -156,7 +156,7 @@ write_listener(as_error* err, void* udata, as_event_loop* event_loop)
 	as_error errloc;
 
 	// Read the (whole) test record from the database.
-	if (aerospike_key_get_async(&as, &errloc, NULL, &g_key, read_listener, NULL, event_loop, false) != AEROSPIKE_OK) {
+	if (aerospike_key_get_async(&as, &errloc, NULL, &g_key, read_listener, NULL, event_loop, NULL) != AEROSPIKE_OK) {
 		read_listener(&errloc, NULL, NULL, event_loop);
 	}
 }

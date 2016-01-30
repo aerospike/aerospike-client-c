@@ -686,6 +686,14 @@ typedef struct as_policy_batch_s {
 	bool allow_inline;
 	
 	/**
+	 * Send set name field to server for every key in the batch for batch index protocol.
+	 * This is only necessary when authentication is enabled and security roles are defined
+	 * on a per set basis.
+	 * Default: false
+	 */
+	bool send_set_name;
+
+	/**
 	 *	Should raw bytes be deserialized to as_list or as_map. Set to false for backup programs that
 	 *	just need access to raw bytes.
 	 *	Default: true
@@ -1088,6 +1096,7 @@ as_policy_batch_init(as_policy_batch* p)
 	p->concurrent = false;
 	p->use_batch_direct = false;
 	p->allow_inline = true;
+	p->send_set_name = false;
 	p->deserialize = true;
 	return p;
 }
@@ -1107,6 +1116,7 @@ as_policy_batch_copy(as_policy_batch* src, as_policy_batch* trg)
 	trg->concurrent = src->concurrent;
 	trg->use_batch_direct = src->use_batch_direct;
 	trg->allow_inline = src->allow_inline;
+	trg->send_set_name = src->send_set_name;
 	trg->deserialize = src->deserialize;
 }
 

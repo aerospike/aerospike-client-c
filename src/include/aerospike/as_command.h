@@ -53,6 +53,7 @@ extern "C" {
 #define AS_FIELD_UDF_OP 33
 #define AS_FIELD_QUERY_BINS 40
 #define AS_FIELD_BATCH_INDEX 41
+#define AS_FIELD_BATCH_INDEX_WITH_SET 42
 
 // Message info1 bits
 #define AS_MSG_INFO1_READ				(1 << 0) // contains a read operation

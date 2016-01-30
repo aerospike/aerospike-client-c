@@ -66,6 +66,7 @@ typedef struct as_batch_task_s {
 	bool use_batch_records;
 	bool use_new_batch;
 	bool allow_inline;
+	bool send_set_name;
 	bool deserialize;
 } as_batch_task;
 
@@ -308,7 +309,7 @@ as_batch_parse(as_error* err, int fd, uint64_t deadline_ms, void* udata)
 }
 
 static size_t
-as_batch_index_records_size(as_vector* records, as_vector* offsets)
+as_batch_index_records_size(as_vector* records, as_vector* offsets, bool send_set_name)
 {
 	// Estimate buffer size.
 	size_t size = AS_HEADER_SIZE + AS_FIELD_HEADER_SIZE + sizeof(uint32_t) + 1;
@@ -325,13 +326,19 @@ as_batch_index_records_size(as_vector* records, as_vector* offsets)
 		// Use reference equality only in hope that common namespaces/bin names are set from
 		// fixed variables.  It's fine if equality not determined correctly because it just
 		// results in more space used. The batch will still be correct.
-		if (prev && prev->key.ns == record->key.ns && prev->bin_names == record->bin_names && prev->read_all_bins == record->read_all_bins) {
+		if (prev && prev->key.ns == record->key.ns &&
+			(! send_set_name || prev->key.set == record->key.set) &&
+			prev->bin_names == record->bin_names && prev->read_all_bins == record->read_all_bins) {
 			// Can set repeat previous namespace/bin names to save space.
 			size++;
 		}
 		else {
 			// Estimate full header, namespace and bin names.
 			size += as_command_string_field_size(record->key.ns) + 6;
+			
+			if (send_set_name) {
+				size += as_command_string_field_size(record->key.set);
+			}
 			
 			if (record->bin_names) {
 				for (uint32_t i = 0; i < record->n_bin_names; i++) {
@@ -345,17 +352,18 @@ as_batch_index_records_size(as_vector* records, as_vector* offsets)
 }
 
 static size_t
-as_batch_index_records_write(as_vector* records, as_vector* offsets, uint32_t timeout_ms, bool allow_inline, uint8_t* cmd)
+as_batch_index_records_write(as_vector* records, as_vector* offsets, uint32_t timeout_ms, bool allow_inline, bool send_set_name, uint8_t* cmd)
 {
 	uint32_t n_offsets = offsets->size;
 	uint8_t* p = as_command_write_header_read(cmd, AS_MSG_INFO1_READ | AS_MSG_INFO1_BATCH_INDEX, AS_POLICY_CONSISTENCY_LEVEL_ONE, timeout_ms, 1, 0);
 	uint8_t* field_size_ptr = p;
-	p = as_command_write_field_header(p, AS_FIELD_BATCH_INDEX, 0);  // Need to update size at end
+	p = as_command_write_field_header(p, send_set_name ? AS_FIELD_BATCH_INDEX_WITH_SET : AS_FIELD_BATCH_INDEX, 0);  // Need to update size at end
 	*(uint32_t*)p = cf_swap_to_be32(n_offsets);
 	p += sizeof(uint32_t);
 	*p++ = allow_inline? 1 : 0;
 	
 	as_batch_read_record* prev = 0;
+	uint16_t field_count = send_set_name ? 2 : 1;
 	
 	for (uint32_t i = 0; i < n_offsets; i++) {
 		uint32_t offset = *(uint32_t*)as_vector_get(offsets, i);
@@ -370,7 +378,9 @@ as_batch_index_records_write(as_vector* records, as_vector* offsets, uint32_t ti
 		// Use reference equality only in hope that common namespaces/bin names are set from
 		// fixed variables.  It's fine if equality not determined correctly because it just
 		// results in more space used. The batch will still be correct.
-		if (prev && prev->key.ns == record->key.ns && prev->bin_names == record->bin_names && prev->read_all_bins == record->read_all_bins) {
+		if (prev && prev->key.ns == record->key.ns &&
+			(! send_set_name || prev->key.set == record->key.set) &&
+			prev->bin_names == record->bin_names && prev->read_all_bins == record->read_all_bins) {
 			// Can set repeat previous namespace/bin names to save space.
 			*p++ = 1;  // repeat
 		}
@@ -380,11 +390,15 @@ as_batch_index_records_write(as_vector* records, as_vector* offsets, uint32_t ti
 			
 			if (record->bin_names && record->n_bin_names) {
 				*p++ = AS_MSG_INFO1_READ;
-				*p++ = 0;  // pad
-				*p++ = 0;  // pad
+				*(uint16_t*)p = cf_swap_to_be16(field_count);
+				p += sizeof(uint16_t);
 				*(uint16_t*)p = cf_swap_to_be16((uint16_t)record->n_bin_names);
 				p += sizeof(uint16_t);
 				p = as_command_write_field_string(p, AS_FIELD_NAMESPACE, record->key.ns);
+			
+				if (send_set_name) {
+					p = as_command_write_field_string(p, AS_FIELD_SETNAME, record->key.set);
+				}
 				
 				for (uint32_t i = 0; i < record->n_bin_names; i++) {
 					p = as_command_write_bin_name(p, record->bin_names[i]);
@@ -392,11 +406,15 @@ as_batch_index_records_write(as_vector* records, as_vector* offsets, uint32_t ti
 			}
 			else {
 				*p++ = (AS_MSG_INFO1_READ | (record->read_all_bins? AS_MSG_INFO1_GET_ALL : AS_MSG_INFO1_GET_NOBINDATA));
-				*p++ = 0;  // pad
-				*p++ = 0;  // pad
+				*(uint16_t*)p = cf_swap_to_be16(field_count);
+				p += sizeof(uint16_t);
 				*p++ = 0;  // n_bin_names
 				*p++ = 0;  // n_bin_names
 				p = as_command_write_field_string(p, AS_FIELD_NAMESPACE, record->key.ns);
+				
+				if (send_set_name) {
+					p = as_command_write_field_string(p, AS_FIELD_SETNAME, record->key.set);
+				}
 			}
 			prev = record;
 		}
@@ -412,11 +430,11 @@ static as_status
 as_batch_index_records_execute(as_batch_task* task)
 {
 	// Estimate buffer size.
-	size_t size = as_batch_index_records_size(task->records, &task->offsets);
+	size_t size = as_batch_index_records_size(task->records, &task->offsets, task->send_set_name);
 		
 	// Write command
 	uint8_t* cmd = as_command_init(size);
-	size = as_batch_index_records_write(task->records, &task->offsets, task->timeout_ms, task->allow_inline, cmd);
+	size = as_batch_index_records_write(task->records, &task->offsets, task->timeout_ms, task->allow_inline, task->send_set_name, cmd);
 
 	as_command_node cn;
 	cn.node = task->node;
@@ -439,35 +457,41 @@ as_batch_index_records_execute(as_batch_task* task)
 static as_status
 as_batch_index_execute(as_batch_task* task)
 {
-	// Estimate full row size
-	// Add namespace(max size 31) field to header.
-	size_t row_size = AS_HEADER_SIZE + AS_FIELD_HEADER_SIZE + 31;
-	row_size += as_command_string_field_size(task->ns);
+	// Calculate size of bin names.
+	uint16_t field_count = task->send_set_name ? 2 : 1;
+	size_t bin_name_size = 0;
 	
 	if (task->n_bins) {
 		for (uint32_t i = 0; i < task->n_bins; i++) {
-			row_size += as_command_string_operation_size(task->bins[i]);
+			bin_name_size += as_command_string_operation_size(task->bins[i]);
 		}
 	}
 	
 	// Estimate buffer size.
 	size_t size = AS_HEADER_SIZE + AS_FIELD_HEADER_SIZE + 5;
-	char* prev_ns = 0;
+	as_key* prev = 0;
 	uint32_t n_offsets = task->offsets.size;
 	
 	for (uint32_t i = 0; i < n_offsets; i++) {
 		uint32_t offset = *(uint32_t*)as_vector_get(&task->offsets, i);
 		as_key* key = &task->keys[offset];
 		
+		size += 24;  // digest + int count.
+
 		// Try reference equality in hope that namespace for all keys is set from a fixed variable.
-		if (key->ns == prev_ns || (prev_ns && strcmp(prev_ns, key->ns) == 0)) {
+		if (prev && prev->ns == key->ns && (! task->send_set_name || prev->set == key->set)) {
 			// Can set repeat previous namespace/bin names to save space.
-			size += 25;
+			size++;
 		}
 		else {
-			// Must write full header and namespace/bin names.
-			size += row_size;
-			prev_ns = key->ns;
+			// Estimate full header, namespace and bin names.
+			size += as_command_string_field_size(key->ns) + 6;
+			
+			if (task->send_set_name) {
+				size += as_command_string_field_size(key->set);
+			}
+			size += bin_name_size;
+			prev = key;
 		}
 	}
 	
@@ -475,12 +499,12 @@ as_batch_index_execute(as_batch_task* task)
 	uint8_t* cmd = as_command_init(size);
 	uint8_t* p = as_command_write_header_read(cmd, task->read_attr | AS_MSG_INFO1_BATCH_INDEX, AS_POLICY_CONSISTENCY_LEVEL_ONE, task->timeout_ms, 1, 0);
 	uint8_t* field_size_ptr = p;
-	p = as_command_write_field_header(p, AS_FIELD_BATCH_INDEX, 0);  // Need to update size at end
+	p = as_command_write_field_header(p, task->send_set_name ? AS_FIELD_BATCH_INDEX_WITH_SET : AS_FIELD_BATCH_INDEX, 0);  // Need to update size at end
 	*(uint32_t*)p = cf_swap_to_be32(n_offsets);
 	p += sizeof(uint32_t);
 	*p++ = task->allow_inline? 1 : 0;
 	
-	prev_ns = 0;
+	prev = 0;
 	
 	for (uint32_t i = 0; i < n_offsets; i++) {
 		uint32_t offset = *(uint32_t*)as_vector_get(&task->offsets, i);
@@ -492,7 +516,7 @@ as_batch_index_execute(as_batch_task* task)
 		p += AS_DIGEST_VALUE_SIZE;
 		
 		// Try reference equality in hope that namespace for all keys is set from a fixed variable.
-		if (key->ns == prev_ns || (prev_ns && strcmp(prev_ns, key->ns) == 0)) {
+		if (prev && prev->ns == key->ns && (! task->send_set_name || prev->set == key->set)) {
 			// Can set repeat previous namespace/bin names to save space.
 			*p++ = 1;  // repeat
 		}
@@ -500,18 +524,22 @@ as_batch_index_execute(as_batch_task* task)
 			// Write full header, namespace and bin names.
 			*p++ = 0;  // do not repeat
 			*p++ = task->read_attr;
-			*p++ = 0;  // pad
-			*p++ = 0;  // pad
+			*(uint16_t*)p = cf_swap_to_be16(field_count);
+			p += sizeof(uint16_t);
 			*(uint16_t*)p = cf_swap_to_be16((uint16_t)task->n_bins);
 			p += sizeof(uint16_t);
 			p = as_command_write_field_string(p, AS_FIELD_NAMESPACE, key->ns);
 			
+			if (task->send_set_name) {
+				p = as_command_write_field_string(p, AS_FIELD_SETNAME, key->set);
+			}
+
 			if (task->n_bins) {
 				for (uint32_t i = 0; i < task->n_bins; i++) {
 					p = as_command_write_bin_name(p, task->bins[i]);
 				}
 			}
-			prev_ns = key->ns;
+			prev = key;
 		}
 	}
 	// Write real field size.
@@ -772,6 +800,7 @@ as_batch_execute(
 	task.read_attr = read_attr;
 	task.use_batch_records = false;
 	task.allow_inline = policy->allow_inline;
+	task.send_set_name = policy->send_set_name;
 	task.deserialize = policy->deserialize;
 	task.udata = udata;
 	task.callback_xdr = callback_xdr;
@@ -872,6 +901,7 @@ as_batch_read_execute_sync(
 	task.retry = 0;
 	task.use_batch_records = true;
 	task.allow_inline = policy->allow_inline;
+	task.send_set_name = policy->send_set_name;
 	task.deserialize = policy->deserialize;
 
 	if (policy->concurrent && n_batch_nodes > 1) {
@@ -951,7 +981,7 @@ as_batch_read_execute_async(
 		as_batch_node* batch_node = &batch_nodes[i];
 		
 		// Estimate buffer size.
-		size_t size = as_batch_index_records_size(records, &batch_node->offsets);
+		size_t size = as_batch_index_records_size(records, &batch_node->offsets, policy->send_set_name);
 		
 		// Allocate enough memory to cover, then, round up memory size in 8KB increments to reduce
 		// fragmentation and to allow socket read to reuse buffer.
@@ -973,7 +1003,7 @@ as_batch_read_execute_async(
 		cmd->pipe_listener = NULL;
 		cmd->deserialize = policy->deserialize;
 		cmd->free_buf = false;
-		cmd->len = (uint32_t)as_batch_index_records_write(records, &batch_node->offsets, policy->timeout, policy->allow_inline, cmd->buf);
+		cmd->len = (uint32_t)as_batch_index_records_write(records, &batch_node->offsets, policy->timeout, policy->allow_inline, policy->send_set_name, cmd->buf);
 		
 		status = as_event_command_execute(cmd, err);
 		

@@ -614,6 +614,11 @@ aerospike_key_operate(
 	}
 
 	uint32_t n_operations = ops->binops.size;
+	
+	if (n_operations == 0) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "No operations defined");
+	}
+	
 	as_buffer* buffers = (as_buffer*)alloca(sizeof(as_buffer) * n_operations);
 	memset(buffers, 0, sizeof(as_buffer) * n_operations);
 	
@@ -674,6 +679,11 @@ aerospike_key_operate_async(
 	}
 	
 	uint32_t n_operations = ops->binops.size;
+	
+	if (n_operations == 0) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "No operations defined");
+	}
+	
 	as_buffer* buffers = (as_buffer*)alloca(sizeof(as_buffer) * n_operations);
 	memset(buffers, 0, sizeof(as_buffer) * n_operations);
 	

@@ -7,7 +7,7 @@ also included.
 ## Build Prerequisites
 
 The C client can be built on most recent 64-bit Linux distributions
-and Mac OS X 10.8 or greater.  The build requires gcc 4.1 or newer 
+and Mac OS X 10.9 or greater.  The build requires gcc 4.1 or newer 
 for Linux and XCode clang for Mac OS X.
 
 ### Debian 6+ and Ubuntu 12+

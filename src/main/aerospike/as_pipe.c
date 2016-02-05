@@ -243,10 +243,10 @@ get_buffer_size(const char* proc, int size)
 	
 	if (max < size) {
 #if defined(USE_XDR)
-		as_log_warn("Buffer limit is %d, should be at least %d. Please set %s accordingly.",
+		as_log_warn("Buffer limit is %d, should be at least %d for async pipelining. Please set %s accordingly.",
 				max, size, proc);
 #else
-		as_log_debug("Buffer limit is %d, should be at least %d. Please set %s accordingly.",
+		as_log_debug("Buffer limit is %d, should be at least %d if async pipelining is used. Please set %s accordingly.",
 					max, size, proc);
 #endif
 

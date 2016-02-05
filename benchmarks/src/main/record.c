@@ -125,6 +125,10 @@ create_threaddata(clientdata* cdata, int key)
 	// Initialize a thread local key, record.
 	as_key_init_int64(&tdata->key, cdata->namespace, cdata->set, key);
 	as_record_init(&tdata->rec, 1);
+	tdata->rec.bins.entries[0].valuep = NULL;
+	tdata->rec.bins.size = 1;
+	
+	as_val_reserve(&cdata->fixed_value);
 	return tdata;
 }
 
@@ -188,7 +192,7 @@ init_write_record(clientdata* cdata, threaddata* tdata)
 	}
 	else {
 		// Use fixed value.
-		((as_val*)&bin->value)->type = AS_UNKNOWN;
+		((as_val*)&bin->value)->type = cdata->fixed_value.nil.type;
 		bin->valuep = &cdata->fixed_value;
 	}
 }

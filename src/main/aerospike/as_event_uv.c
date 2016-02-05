@@ -18,6 +18,7 @@
 #include <aerospike/as_event_internal.h>
 #include <aerospike/as_async.h>
 #include <aerospike/as_log_macros.h>
+#include <aerospike/as_monitor.h>
 #include <aerospike/as_pipe.h>
 #include <aerospike/as_socket.h>
 #include <citrusleaf/alloc.h>
@@ -42,6 +43,11 @@ extern bool as_event_threads_created;
 #define AS_UV_PROCESS_COMMAND 0
 #define AS_UV_CLOSE_CONNECTION 1
 #define AS_UV_EXIT_LOOP 2
+
+typedef struct {
+	as_event_loop* event_loop;
+	as_monitor monitor;
+} as_uv_thread_data;
 
 typedef struct {
 	uint64_t type;
@@ -98,7 +104,8 @@ as_uv_wakeup(uv_async_t* wakeup)
 static void*
 as_uv_worker(void* udata)
 {
-	as_event_loop* event_loop = udata;
+	as_uv_thread_data* data = udata;
+	as_event_loop* event_loop = data->event_loop;
 	
 	event_loop->loop = cf_malloc(sizeof(uv_loop_t));
 	
@@ -118,10 +125,7 @@ as_uv_worker(void* udata)
 
 	uv_loop_init(event_loop->loop);
 	uv_async_init(event_loop->loop, event_loop->wakeup, as_uv_wakeup);
-	
-	pthread_mutex_lock(&event_loop->lock);
-	event_loop->initialized = true;
-	pthread_mutex_unlock(&event_loop->lock);
+	as_monitor_notify(&data->monitor);
 	
 	uv_run(event_loop->loop, UV_RUN_DEFAULT);
 	
@@ -139,7 +143,19 @@ as_event_create_loop(as_event_loop* event_loop)
 {
 	event_loop->wakeup = 0;
 	as_queue_init(&event_loop->queue, sizeof(as_uv_command), AS_EVENT_QUEUE_INITIAL_CAPACITY);
-	return pthread_create(&event_loop->thread, NULL, as_uv_worker, event_loop) == 0;
+	
+	as_uv_thread_data thread_data;
+	thread_data.event_loop = event_loop;
+	as_monitor_init(&thread_data.monitor);
+	
+	if (pthread_create(&event_loop->thread, NULL, as_uv_worker, &thread_data) != 0) {
+		return false;
+	}
+	
+	// Must wait until uv_async_init() is called in event loop thread.
+	as_monitor_wait(&thread_data.monitor);
+	as_monitor_destroy(&thread_data.monitor);
+	return true;
 }
 
 void
@@ -151,7 +167,6 @@ as_event_register_external_loop(as_event_loop* event_loop)
 	
 	// Assume uv_async_init is called on the same thread as the event loop.
 	uv_async_init(event_loop->loop, event_loop->wakeup, as_uv_wakeup);
-	event_loop->initialized = true;
 }
 
 bool
@@ -163,10 +178,9 @@ as_event_send(as_event_command* cmd)
 	pthread_mutex_lock(&event_loop->lock);
 	as_uv_command qcmd = {.type = AS_UV_PROCESS_COMMAND, .ptr = cmd};
 	bool queued = as_queue_push(&event_loop->queue, &qcmd);
-	bool initialized = event_loop->initialized;
 	pthread_mutex_unlock(&event_loop->lock);
 	
-	if (queued && initialized) {
+	if (queued) {
 		uv_async_send(event_loop->wakeup);
 	}
 	return queued;

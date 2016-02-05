@@ -457,7 +457,9 @@ as_cluster_find_nodes_to_add(as_cluster* cluster, as_vector* /* <as_host> */ fri
 					// for the same node.  Add new host to list of alias filters
 					// and do not add new node.
 					as_address* a = as_node_get_address_full(node);
-					as_log_info("Duplicate node found %s %s:%d", node->name, a->name, (int)cf_swap_from_be16(a->addr.sin_port));
+					as_log_info("Node %s:%d already exists with nodeid %s and address %s:%d", 
+						friend->name, friend->port, node->name, a->name,
+						(int)cf_swap_from_be16(a->addr.sin_port));
 					node->friends++;
 					as_node_add_address(node, friend, addr);
 					continue;

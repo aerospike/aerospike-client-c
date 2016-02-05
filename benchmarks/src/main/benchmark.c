@@ -292,13 +292,14 @@ run_benchmark(arguments* args)
 		}
 	}
 
+	as_error err;
+	aerospike_close(&data.client, &err);
+	aerospike_destroy(&data.client);
+	
 	if (args->async) {
 		as_event_close_loops();
 		as_monitor_destroy(&monitor);
 	}
 	
-	as_error err;
-	aerospike_close(&data.client, &err);
-	aerospike_destroy(&data.client);
 	return ret;
 }

@@ -66,7 +66,6 @@ typedef struct {
 	pthread_t thread;
 	uint32_t index;
 	bool pipe_cb_calling;
-	bool initialized;
 } as_event_loop;
 
 /******************************************************************************

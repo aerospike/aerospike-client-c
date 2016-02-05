@@ -616,6 +616,7 @@ main(int argc, char * const * argv)
 	args.binlen = 50;
 	args.random = false;
 	args.transactions_limit = -1;
+	args.init = false;
 	args.init_pct = 100;
 	args.read_pct = 50;
 	args.threads = 16;

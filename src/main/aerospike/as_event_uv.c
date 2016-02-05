@@ -274,7 +274,7 @@ as_uv_command_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 		uv_read_stop(stream);
 
 		// Register the next reader, if there are readers left.
-		if (cmd->pipe_listener != NULL && conn_to_read != NULL) {
+		if (conn_to_read != NULL) {
 			stream->data = conn_to_read;
 
 			int status = uv_read_start(stream, as_uv_command_buffer, as_uv_command_read);

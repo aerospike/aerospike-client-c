@@ -67,7 +67,6 @@ as_event_create_loops(uint32_t capacity)
 		event_loop->index = i;
 		as_queue_init(&event_loop->pipe_cb_queue, sizeof(as_queued_pipe_cb), AS_EVENT_QUEUE_INITIAL_CAPACITY);
 		event_loop->pipe_cb_calling = false;
-		event_loop->initialized = false;
 
 		if (! as_event_create_loop(event_loop)) {
 			as_event_close_loops();
@@ -116,7 +115,6 @@ as_event_set_external_loop(void* loop)
 	event_loop->index = current;
 	as_queue_init(&event_loop->pipe_cb_queue, sizeof(as_queued_pipe_cb), AS_EVENT_QUEUE_INITIAL_CAPACITY);
 	event_loop->pipe_cb_calling = false;
-	event_loop->initialized = false;
 	as_event_register_external_loop(event_loop);
 	return event_loop;
 }

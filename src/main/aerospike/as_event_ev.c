@@ -80,9 +80,7 @@ as_ev_init_loop(as_event_loop* event_loop)
 	
 	ev_async_init(&event_loop->wakeup, as_ev_wakeup);
 	event_loop->wakeup.data = event_loop;
-	ev_async_start(event_loop->loop, &event_loop->wakeup);
-	
-	event_loop->initialized = true;
+	ev_async_start(event_loop->loop, &event_loop->wakeup);	
 }
 
 bool

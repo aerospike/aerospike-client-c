@@ -202,6 +202,7 @@ write_record_sync(clientdata* cdata, threaddata* tdata, int key)
 {
 	// Initialize key
 	tdata->key.value.integer.value = key;
+	tdata->key.digest.init = false;
 
 	// Initialize record
 	init_write_record(cdata, tdata);
@@ -359,6 +360,7 @@ linear_write_listener(as_error* err, void* udata, as_event_loop* event_loop)
 	}
 	
 	tdata->key.value.integer.value = count;
+	tdata->key.digest.init = false;
 	linear_write_async(cdata, tdata, event_loop);
 }
 
@@ -371,6 +373,7 @@ random_read_write_async(clientdata* cdata, threaddata* tdata, as_event_loop* eve
 	// Choose key at random.
 	int key = cf_get_rand32() % cdata->key_max + 1;
 	tdata->key.value.integer.value = key;
+	tdata->key.digest.init = false;
 	
 	int die = cf_get_rand32() % 100;
 	as_error err;

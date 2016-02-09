@@ -122,28 +122,27 @@ bool query_async_foreach_create()
 		info("error(%d): %s", err.code, err.message);
 	}
 	
-	/* Uncomment once sindex on cdt is avaialable at server side.
-	 // create complex index on "x"
+	// create complex index on "x"
 	 
-	 status = aerospike_index_create_complex(as, &err, 0, NULL, NAMESPACE, SET, "x", "idx_test_x", AS_INDEX_TYPE_LIST, AS_INDEX_STRING);
-	 if (status != AEROSPIKE_OK) {
-	 info("error(%d): %s", err.code, err.message);
-	 }
+	status = aerospike_index_create_complex(as, &err, 0, NULL, NAMESPACE, SET, "x", "idx_test_x", AS_INDEX_TYPE_LIST, AS_INDEX_STRING);
+	if (status != AEROSPIKE_OK) {
+		info("error(%d): %s", err.code, err.message);
+	}
 	 
-	 // create complex index on "y"
+	// create complex index on "y"
 	 
-	 status = aerospike_index_create_complex(as, &err, 0, NULL, NAMESPACE, SET, "y", "idx_test_y", AS_INDEX_TYPE_MAPKEYS, AS_INDEX_STRING);
-	 if (status != AEROSPIKE_OK) {
-	 info("error(%d): %s", err.code, err.message);
-	 }
+	status = aerospike_index_create_complex(as, &err, 0, NULL, NAMESPACE, SET, "y", "idx_test_y", AS_INDEX_TYPE_MAPKEYS, AS_INDEX_STRING);
+	if (status != AEROSPIKE_OK) {
+		info("error(%d): %s", err.code, err.message);
+	}
 	 
-	 // create complex index on "y"
+	// create complex index on "y"
 	 
-	 status = aerospike_index_create_complex(as, &err, 0, NULL, NAMESPACE, SET, "y", "idx_test_y1", AS_INDEX_TYPE_MAPVALUES, AS_INDEX_STRING);
-	 if (status != AEROSPIKE_OK) {
-	 info("error(%d): %s", err.code, err.message);
-	 }
-	 */
+	status = aerospike_index_create_complex(as, &err, 0, NULL, NAMESPACE, SET, "y", "idx_test_y1", AS_INDEX_TYPE_MAPVALUES, AS_INDEX_STRING);
+	if (status != AEROSPIKE_OK) {
+		info("error(%d): %s", err.code, err.message);
+	}
+
 	// insert records
 	for ( int i = 0; i < n_recs; i++ ) {
 		
@@ -173,7 +172,7 @@ bool query_async_foreach_create()
 		
 		as_record r;
 		as_record_init(&r, 7);
-		as_record_set_str(&r, 	"a", a);
+		as_record_set_str(&r,   "a", a);
 		as_record_set_int64(&r, "b", b);
 		as_record_set_int64(&r, "c", c);
 		as_record_set_int64(&r, "d", d);
@@ -731,15 +730,14 @@ SUITE( query_foreach, "aerospike_query_foreach tests" ) {
 	suite_add( query_foreach_2 );
 	suite_add( query_foreach_3 );
 	suite_add( query_foreach_4 );
-/* Uncomment once sindex on cdt feature is available at server side.
 	suite_add( query_foreach_5 );
 	suite_add( query_foreach_6 );
 	suite_add( query_foreach_7 );
-*/
 	suite_add( query_quit_early );
 	suite_add( query_agg_quit_early );
 	suite_add( query_filter_map_bytes );
 	suite_add( query_foreach_nullset );
+
 	if (server_has_double) {
 		suite_add( query_foreach_double );
 	}

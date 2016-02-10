@@ -338,6 +338,20 @@ example_create_event_loop()
 }
 
 //==========================================================
+// Logging
+//
+static bool
+example_log_callback(as_log_level level, const char * func, const char * file, uint32_t line, const char * fmt, ...)
+{
+	va_list ap;
+	va_start(ap, fmt);
+	vprintf(fmt, ap);
+	printf("\n");
+	va_end(ap);
+	return true;
+}
+
+//==========================================================
 // Connect/Disconnect
 //
 
@@ -358,6 +372,8 @@ void
 example_connect_to_aerospike_with_udf_config(aerospike* p_as,
 		const char* lua_user_path)
 {
+	as_log_set_callback(example_log_callback);
+
 	// Start with default configuration.
 	as_config cfg;
 	as_config_init(&cfg);

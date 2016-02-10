@@ -403,7 +403,7 @@ as_cluster_seed_nodes(as_cluster* cluster, as_error* err, bool enable_warnings)
 			}
 			else {
 				if (enable_warnings) {
-					as_log_warn("%s %s", as_error_string(status), error_local.message);
+					as_log_warn("Failed to connect to %s:%d. %s %s", seed->name, seed->port, as_error_string(status), error_local.message);
 				}
 			}
 		}

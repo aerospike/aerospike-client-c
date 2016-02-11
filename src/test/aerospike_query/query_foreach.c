@@ -143,6 +143,13 @@ bool query_async_foreach_create()
 		info("error(%d): %s", err.code, err.message);
 	}
 
+	// create complex index on "z"
+	 
+	status = aerospike_index_create_complex(as, &err, 0, NULL, NAMESPACE, SET, "z", "idx_test_z", AS_INDEX_TYPE_LIST, AS_INDEX_NUMERIC);
+	if (status != AEROSPIKE_OK) {
+		info("error(%d): %s", err.code, err.message);
+	}
+	 
 	// insert records
 	for ( int i = 0; i < n_recs; i++ ) {
 		
@@ -170,8 +177,18 @@ bool query_async_foreach_create()
 		as_stringmap_set_str((as_map *) &map, "y", "y");
 		
 		
+		// Make list of integers
+		
+		as_arraylist list2;
+		as_arraylist_init(&list2, 5, 0);
+		as_arraylist_append_int64(&list2, i);
+		as_arraylist_append_int64(&list2, i+1);
+		as_arraylist_append_int64(&list2, i+2);
+		as_arraylist_append_int64(&list2, i+3);
+		as_arraylist_append_int64(&list2, i+4);
+		
 		as_record r;
-		as_record_init(&r, 7);
+		as_record_init(&r, 8);
 		as_record_set_str(&r,   "a", a);
 		as_record_set_int64(&r, "b", b);
 		as_record_set_int64(&r, "c", c);
@@ -179,6 +196,7 @@ bool query_async_foreach_create()
 		as_record_set_int64(&r, "e", e);
 		as_record_set_list(&r, "x", (as_list *) &list);
 		as_record_set_map(&r, "y", (as_map *) &map);
+		as_record_set_list(&r, "z", (as_list *) &list2);
 		
 		
 		as_key key;
@@ -492,6 +510,42 @@ TEST( query_foreach_7, "IN MAPVALUES count(*) where y contains 'y'" ) {
 	as_query_destroy(&q);
 }
 
+TEST( query_foreach_8, "IN LIST count(*) where z between 50 and 51" ) {
+	
+	as_error err;
+	as_error_reset(&err);
+
+	int count = 0;
+
+	as_query q;
+	as_query_init(&q, NAMESPACE, SET);
+
+	as_query_where_inita(&q, 1);
+	as_query_where(&q, "z", as_range(LIST, NUMERIC, 50, 51));
+
+	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_count_callback, &count);
+
+	if ( err.code != AEROSPIKE_OK ) {
+		 fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+	}
+
+	// The following records should be found:
+	//
+	// [46, 47, 48, 49, 50]
+	// [47, 48, 49, 50, 51] *
+	// [48, 49, 50, 51, 52] *
+	// [49, 50, 51, 52, 53] *
+	// [50, 51, 52, 53, 54] *
+	// [51, 52, 53, 54, 55]
+	//
+	// In fact the middle 4 are found twice so we return the wrong value
+	
+	assert_int_eq( err.code, AEROSPIKE_OK );
+	assert_int_eq( count, 6 );
+
+	as_query_destroy(&q);
+}
+
 static bool query_quit_early_callback(const as_val * v, void * udata) {
 	if (v) {
 		int64_t* count = (int64_t*)udata;
@@ -733,6 +787,7 @@ SUITE( query_foreach, "aerospike_query_foreach tests" ) {
 	suite_add( query_foreach_5 );
 	suite_add( query_foreach_6 );
 	suite_add( query_foreach_7 );
+	suite_add( query_foreach_8 );
 	suite_add( query_quit_early );
 	suite_add( query_agg_quit_early );
 	suite_add( query_filter_map_bytes );

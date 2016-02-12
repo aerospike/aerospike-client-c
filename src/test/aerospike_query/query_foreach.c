@@ -59,7 +59,7 @@ static bool server_has_double = false;
  *****************************************************************************/
 
 /**
- * Creates 100 records and 4 indices.
+ * Creates 100 records and 9 indexes.
  *
  * Records are structured as:
  *      {a: String, b: Integer, c: Integer, d: Integer, e: Integer}
@@ -73,7 +73,7 @@ static bool server_has_double = false;
  *      d = c % 10
  *      e = b + (c + 1) * (d + 1) / 2
  */
-bool query_async_foreach_create()
+bool query_foreach_create()
 {
 	as_error err;
 	as_error_reset(&err);
@@ -124,36 +124,51 @@ bool query_async_foreach_create()
 	
 	// create complex index on "x"
 	 
-	status = aerospike_index_create_complex(as, &err, 0, NULL, NAMESPACE, SET, "x", "idx_test_x", AS_INDEX_TYPE_LIST, AS_INDEX_STRING);
-	if (status != AEROSPIKE_OK) {
+	status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE, SET, "x", "idx_test_x", AS_INDEX_TYPE_LIST, AS_INDEX_STRING);
+	if ( status == AEROSPIKE_OK ) {
+		aerospike_index_create_wait(&err, &task, 0);
+	}
+	else {
 		info("error(%d): %s", err.code, err.message);
 	}
 	 
 	// create complex index on "y"
 	 
-	status = aerospike_index_create_complex(as, &err, 0, NULL, NAMESPACE, SET, "y", "idx_test_y", AS_INDEX_TYPE_MAPKEYS, AS_INDEX_STRING);
-	if (status != AEROSPIKE_OK) {
+	status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE, SET, "y", "idx_test_y", AS_INDEX_TYPE_MAPKEYS, AS_INDEX_STRING);
+	if ( status == AEROSPIKE_OK ) {
+		aerospike_index_create_wait(&err, &task, 0);
+	}
+	else {
 		info("error(%d): %s", err.code, err.message);
 	}
 	 
 	// create complex index on "y"
 	 
-	status = aerospike_index_create_complex(as, &err, 0, NULL, NAMESPACE, SET, "y", "idx_test_y1", AS_INDEX_TYPE_MAPVALUES, AS_INDEX_STRING);
-	if (status != AEROSPIKE_OK) {
+	status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE, SET, "y", "idx_test_y1", AS_INDEX_TYPE_MAPVALUES, AS_INDEX_STRING);
+	if ( status == AEROSPIKE_OK ) {
+		aerospike_index_create_wait(&err, &task, 0);
+	}
+	else {
 		info("error(%d): %s", err.code, err.message);
 	}
 
 	// create complex index on "z"
 	 
-	status = aerospike_index_create_complex(as, &err, 0, NULL, NAMESPACE, SET, "z", "idx_test_z", AS_INDEX_TYPE_LIST, AS_INDEX_NUMERIC);
-	if (status != AEROSPIKE_OK) {
+	status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE, SET, "z", "idx_test_z", AS_INDEX_TYPE_LIST, AS_INDEX_NUMERIC);
+	if ( status == AEROSPIKE_OK ) {
+		aerospike_index_create_wait(&err, &task, 0);
+	}
+	else {
 		info("error(%d): %s", err.code, err.message);
 	}
 	 
 	// create complex index on "p"
 	 
-	status = aerospike_index_create_complex(as, &err, 0, NULL, NAMESPACE, SET, "p", "idx_test_p", AS_INDEX_TYPE_LIST, AS_INDEX_GEO2DSPHERE);
-	if (status != AEROSPIKE_OK) {
+	status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE, SET, "p", "idx_test_p", AS_INDEX_TYPE_LIST, AS_INDEX_GEO2DSPHERE);
+	if ( status == AEROSPIKE_OK ) {
+		aerospike_index_create_wait(&err, &task, 0);
+	}
+	else {
 		info("error(%d): %s", err.code, err.message);
 	}
 	 
@@ -281,6 +296,62 @@ bool query_async_foreach_create()
 	return true;
 }
 
+/**
+ * Destroy 9 indexes.
+ */
+bool query_foreach_destroy()
+{
+	as_error err;
+	as_error_reset(&err);
+
+	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_a");
+	if ( err.code != AEROSPIKE_OK ) {
+		info("error(%d): %s", err.code, err.message);
+	}
+
+	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_b");
+	if ( err.code != AEROSPIKE_OK ) {
+		info("error(%d): %s", err.code, err.message);
+	}
+
+	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_c");
+	if ( err.code != AEROSPIKE_OK ) {
+		info("error(%d): %s", err.code, err.message);
+	}
+
+	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_d");
+	if ( err.code != AEROSPIKE_OK ) {
+		info("error(%d): %s", err.code, err.message);
+	}
+
+	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_x");
+	if ( err.code != AEROSPIKE_OK ) {
+		info("error(%d): %s", err.code, err.message);
+	}
+
+	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_y");
+	if ( err.code != AEROSPIKE_OK ) {
+		info("error(%d): %s", err.code, err.message);
+	}
+
+	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_y1");
+	if ( err.code != AEROSPIKE_OK ) {
+		info("error(%d): %s", err.code, err.message);
+	}
+
+	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_z");
+	if ( err.code != AEROSPIKE_OK ) {
+		info("error(%d): %s", err.code, err.message);
+	}
+
+	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_p");
+	if ( err.code != AEROSPIKE_OK ) {
+		info("error(%d): %s", err.code, err.message);
+	}
+
+	return true;
+}
+
 static bool before(atf_suite * suite) {
 
 	if ( ! udf_put(LUA_FILE) ) {
@@ -293,7 +364,7 @@ static bool before(atf_suite * suite) {
 		return false;
 	}
 
-	return query_async_foreach_create();
+	return query_foreach_create();
 }
 
 static bool after(atf_suite * suite) {
@@ -303,7 +374,7 @@ static bool after(atf_suite * suite) {
 		return false;
 	}
 
-	return true;
+	return query_foreach_destroy();
 }
 
 /******************************************************************************
@@ -598,7 +669,7 @@ TEST( query_foreach_8, "IN LIST count(*) where z between 50 and 51" ) {
 }
 
 TEST( query_foreach_9, "IN LIST count(*) where p in <rectangle>" ) {
-	
+
 	as_error err;
 	as_error_reset(&err);
 
@@ -789,6 +860,11 @@ TEST( query_foreach_nullset, "test null-set behavior" ) {
 	info("my count: %d",count);
 	assert_true(count == 1);
 
+	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx2");
+	if ( err.code != AEROSPIKE_OK ) {
+		info("error(%d): %s", err.code, err.message);
+	}
+	assert_int_eq( err.code, AEROSPIKE_OK );
 }
 
 static bool query_foreach_double_callback(const as_val * v, void * udata) {
@@ -859,6 +935,12 @@ TEST( query_foreach_double, "test query on double behavior" ) {
 	assert_double_eq( recieved_sum, expected_sum );
 
 	as_query_destroy(&q);
+
+	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_int_bin");
+	if ( err.code != AEROSPIKE_OK ) {
+		info("error(%d): %s", err.code, err.message);
+	}
+	assert_int_eq( err.code, AEROSPIKE_OK );
 }
 
 /******************************************************************************

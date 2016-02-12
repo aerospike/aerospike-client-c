@@ -53,20 +53,20 @@ static query_data qdata;
  * STATIC FUNCTIONS
  *****************************************************************************/
 
-extern bool query_async_foreach_create();
+extern bool query_foreach_create();
 
 static bool
 before(atf_suite* suite)
 {
 	as_monitor_init(&monitor);
-	return query_async_foreach_create();
+	return query_foreach_create();
 }
 
 static bool
 after(atf_suite* suite)
 {
 	as_monitor_destroy(&monitor);
-	return true;
+	return query_foreach_destroy();
 }
 
 /******************************************************************************

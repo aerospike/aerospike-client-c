@@ -77,6 +77,14 @@ before(atf_suite * suite)
 static bool
 after(atf_suite * suite)
 {
+	as_error err;
+	as_error_reset(&err);
+
+	aerospike_index_remove(as, &err, NULL, NAMESPACE, "qeindex9");
+	if ( err.code != AEROSPIKE_OK ) {
+		info("error(%d): %s", err.code, err.message);
+	}
+
 	if (! udf_remove(LUA_FILE)) {
 		error("failure while removing: %s", LUA_FILE);
 		return false;
@@ -306,7 +314,14 @@ TEST(query_aggregation_double, "query aggregation validate")
 	assert_true( isInboundry);
 
 	as_query_destroy(&q);
+
+	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_a_int_bin");
+	if ( err.code != AEROSPIKE_OK ) {
+		info("error(%d): %s", err.code, err.message);
+	}
+	assert_int_eq( err.code, AEROSPIKE_OK );
 }
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/

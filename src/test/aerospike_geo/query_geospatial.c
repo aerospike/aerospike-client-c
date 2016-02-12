@@ -64,7 +64,7 @@ static bool before(atf_suite * suite) {
 	as_status status;
 	as_index_task task;
 
-	status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, SET, "geobin", "idx_test_a", AS_INDEX_GEO2DSPHERE);
+	status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, SET, "geobin", "idx_test_geo", AS_INDEX_GEO2DSPHERE);
 	if ( status == AEROSPIKE_OK ) {
 		aerospike_index_create_wait(&err, &task, 0);
 	}
@@ -80,7 +80,7 @@ static bool after(atf_suite * suite) {
 	as_error err;
 	as_error_reset(&err);
 
-	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_a");
+	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_geo");
 
 	return true;
 }

@@ -218,7 +218,7 @@ as_operations * as_operations_new(uint16_t nops)
 {
 	as_operations *	ops = (as_operations *) cf_malloc(sizeof(as_operations));
 	if ( !ops ) return ops;
-	return as_operations_default(ops, false, nops);
+	return as_operations_default(ops, true, nops);
 }
 
 /**

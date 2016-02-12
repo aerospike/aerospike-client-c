@@ -150,6 +150,13 @@ bool query_async_foreach_create()
 		info("error(%d): %s", err.code, err.message);
 	}
 	 
+	// create complex index on "p"
+	 
+	status = aerospike_index_create_complex(as, &err, 0, NULL, NAMESPACE, SET, "p", "idx_test_p", AS_INDEX_TYPE_LIST, AS_INDEX_GEO2DSPHERE);
+	if (status != AEROSPIKE_OK) {
+		info("error(%d): %s", err.code, err.message);
+	}
+	 
 	// insert records
 	for ( int i = 0; i < n_recs; i++ ) {
 		
@@ -186,9 +193,52 @@ bool query_async_foreach_create()
 		as_arraylist_append_int64(&list2, i+2);
 		as_arraylist_append_int64(&list2, i+3);
 		as_arraylist_append_int64(&list2, i+4);
+
+		// Make a list of points and regions
+
+		as_arraylist list3;
+		as_arraylist_init(&list3, 20, 0);
+		for ( int jj = 0; jj < 10; ++jj) {
+			//
+			// This creates a grid of points:
+			// [0.00, 0.00], [0.00, 0.10], ... [0.00, 0.90]
+			// [0.01, 0.00], [0.01, 0.10], ... [0.01, 0.90]
+			// ...
+			// [0.99, 0.00], [0.99, 0.10], ... [0.99, 0.90]
+			//
+			double plat = 0.0 + (0.01 * i);
+			double plng = 0.0 + (0.10 * jj);
+			char pntbuf[1024];
+			snprintf(pntbuf, sizeof(pntbuf),
+					 "{ \"type\": \"Point\", \"coordinates\": [%f, %f] }",
+					 plng, plat);
+			as_arraylist_append(&list3, (as_val *) as_geojson_new(pntbuf, false));
+
+			//
+			// This creates a grid of regions centered around the following points
+			// [0.00, 0.00], [0.00, -0.10], ... [0.00, -0.90]
+			// [0.01, 0.00], [0.01, -0.10], ... [0.01, -0.90]
+			// ...
+			// [0.99, 0.00], [0.99, -0.10], ... [0.99, -0.90]
+			//
+			double rlat = 0.0 + (0.01 * i);
+			double rlng = 0.0 - (0.10 * jj);
+			char rgnbuf[1024];
+			snprintf(rgnbuf, sizeof(rgnbuf),
+					 "{ \"type\": \"Polygon\", "
+					 "\"coordinates\": ["
+					 "[[%f, %f], [%f, %f], [%f, %f], [%f, %f], [%f, %f]] "
+					 "] }",
+					 rlng - 0.001, rlat - 0.001,
+					 rlng + 0.001, rlat - 0.001,
+					 rlng + 0.001, rlat + 0.001,
+					 rlng - 0.001, rlat + 0.001,
+					 rlng - 0.001, rlat - 0.001);
+			as_arraylist_append(&list3, (as_val *) as_geojson_new(rgnbuf, false));
+		}
 		
 		as_record r;
-		as_record_init(&r, 8);
+		as_record_init(&r, 9);
 		as_record_set_str(&r,   "a", a);
 		as_record_set_int64(&r, "b", b);
 		as_record_set_int64(&r, "c", c);
@@ -197,6 +247,7 @@ bool query_async_foreach_create()
 		as_record_set_list(&r, "x", (as_list *) &list);
 		as_record_set_map(&r, "y", (as_map *) &map);
 		as_record_set_list(&r, "z", (as_list *) &list2);
+		as_record_set_list(&r, "p", (as_list *) &list3);
 		
 		
 		as_key key;
@@ -538,10 +589,51 @@ TEST( query_foreach_8, "IN LIST count(*) where z between 50 and 51" ) {
 	// [50, 51, 52, 53, 54] *
 	// [51, 52, 53, 54, 55]
 	//
-	// In fact the middle 4 are found twice so we return the wrong value
+	// The middle 4 are found twice so we return the wrong value.
 	
 	assert_int_eq( err.code, AEROSPIKE_OK );
 	assert_int_eq( count, 6 );
+
+	as_query_destroy(&q);
+}
+
+TEST( query_foreach_9, "IN LIST count(*) where p in <rectangle>" ) {
+	
+	as_error err;
+	as_error_reset(&err);
+
+	int count = 0;
+
+	as_query q;
+	as_query_init(&q, NAMESPACE, SET);
+
+	char const * region =
+		"{ "
+		"    \"type\": \"Polygon\", "
+		"    \"coordinates\": [["
+		"        [-0.202, -0.202], "
+		"        [ 0.202, -0.202], "
+		"        [ 0.202,  0.202], "
+		"        [-0.202,  0.202], "
+		"        [-0.202, -0.202] "
+		"    ]]"
+		" } ";
+	
+	as_query_where_inita(&q, 1);
+	as_query_where(&q, "p", AS_PREDICATE_RANGE, AS_INDEX_TYPE_LIST, AS_INDEX_GEO2DSPHERE, region);
+
+	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_count_callback, &count);
+
+	if ( err.code != AEROSPIKE_OK ) {
+		 fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+	}
+
+	// We should find only points.
+	// The first 21 records have lat from 0.00 to 0.20.
+	// Each record has 3 points with lng 0.00, 0.10, 0.20
+	
+	assert_int_eq( err.code, AEROSPIKE_OK );
+	assert_int_eq( count, 21 );
 
 	as_query_destroy(&q);
 }
@@ -788,6 +880,7 @@ SUITE( query_foreach, "aerospike_query_foreach tests" ) {
 	suite_add( query_foreach_6 );
 	suite_add( query_foreach_7 );
 	suite_add( query_foreach_8 );
+	suite_add( query_foreach_9 );
 	suite_add( query_quit_early );
 	suite_add( query_agg_quit_early );
 	suite_add( query_filter_map_bytes );

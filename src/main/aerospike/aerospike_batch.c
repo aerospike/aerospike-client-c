@@ -159,6 +159,13 @@ as_batch_async_parse_records(as_event_command* cmd)
 		uint8_t* digest = 0;
 		p = as_batch_parse_fields(p, msg->n_fields, &digest);
 		
+		if (offset >= records->size) {
+			as_error err;
+			as_error_update(&err, AEROSPIKE_ERR_CLIENT, "Batch index %u >= batch size: %u", offset, records->size);
+			as_event_response_error(cmd, &err);
+			return true;
+		}
+		
 		as_batch_read_record* record = as_vector_get(records, offset);
 		
 		if (digest && memcmp(digest, record->key.digest.value, AS_DIGEST_VALUE_SIZE) == 0) {
@@ -205,6 +212,10 @@ as_batch_parse_records(as_error* err, uint8_t* buf, size_t size, as_batch_task* 
 		}
 		else {
 			offset = *(uint32_t*)as_vector_get(&task->offsets, task->index++);
+		}
+
+		if (offset >= task->n_keys) {
+			return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Batch index %u >= batch size: %u", offset, task->n_keys);
 		}
 
 		uint8_t* digest = 0;

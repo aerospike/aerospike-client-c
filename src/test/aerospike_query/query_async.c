@@ -54,6 +54,7 @@ static query_data qdata;
  *****************************************************************************/
 
 extern bool query_foreach_create();
+extern bool query_foreach_destroy();
 
 static bool
 before(atf_suite* suite)

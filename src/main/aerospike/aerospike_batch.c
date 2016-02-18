@@ -1028,8 +1028,8 @@ as_batch_read_execute_async(
 
 static void
 as_batch_read_cleanup(
-	as_batch_read_records* records, as_async_batch_executor* async_executor, as_nodes* nodes,
-	as_batch_node* batch_nodes, uint32_t n_batch_nodes
+	as_async_batch_executor* async_executor, as_nodes* nodes, as_batch_node* batch_nodes,
+	uint32_t n_batch_nodes
 	)
 {
 	as_batch_release_nodes(batch_nodes, n_batch_nodes);
@@ -1064,7 +1064,7 @@ as_batch_read_execute(
 	uint32_t n_nodes = nodes->size;
 	
 	if (n_nodes == 0) {
-		as_batch_read_cleanup(records, async_executor, nodes, NULL, 0);
+		as_batch_read_cleanup(async_executor, nodes, NULL, 0);
 		return as_error_set_message(err, AEROSPIKE_ERR_SERVER, "Batch command failed because cluster is empty.");
 	}
 	
@@ -1092,19 +1092,19 @@ as_batch_read_execute(
 		status = as_key_set_digest(err, key);
 		
 		if (status != AEROSPIKE_OK) {
-			as_batch_read_cleanup(records, async_executor, nodes, batch_nodes, n_batch_nodes);
+			as_batch_read_cleanup(async_executor, nodes, batch_nodes, n_batch_nodes);
 			return status;
 		}
 		
 		as_node* node = as_node_get(cluster, key->ns, key->digest.value, false, AS_POLICY_REPLICA_MASTER);
 		
 		if (! node) {
-			as_batch_read_cleanup(records, async_executor, nodes, batch_nodes, n_batch_nodes);
+			as_batch_read_cleanup(async_executor, nodes, batch_nodes, n_batch_nodes);
 			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to find batch node for key.");
 		}
 		
 		if (! as_batch_use_new(policy, node)) {
-			as_batch_read_cleanup(records, async_executor, nodes, batch_nodes, n_batch_nodes);
+			as_batch_read_cleanup(async_executor, nodes, batch_nodes, n_batch_nodes);
 			return as_error_set_message(err, AEROSPIKE_ERR_UNSUPPORTED_FEATURE, "aerospike_batch_read() requires a server that supports new batch index protocol.");
 		}
 		

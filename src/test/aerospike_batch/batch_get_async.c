@@ -144,6 +144,7 @@ batch_callback(as_error* err, as_batch_read_records* records, void* udata, as_ev
 	
     assert_int_eq_async(&monitor, found, 8);
     assert_int_eq_async(&monitor, errors, 0);
+	as_monitor_notify(&monitor);
 }
 
 TEST(batch_async_read_complex, "Batch Async Read Complex")
@@ -203,6 +204,8 @@ TEST(batch_async_read_complex, "Batch Async Read Complex")
 	record->bin_names = bins;
 	record->n_bin_names = n_bins;
 
+	as_monitor_begin(&monitor);
+
 	as_error err;
 	as_status status = aerospike_batch_read_async(as, &err, NULL, records, batch_callback, __result__, NULL);
 	
@@ -210,6 +213,7 @@ TEST(batch_async_read_complex, "Batch Async Read Complex")
 		as_batch_read_destroy(records);
 	}
     assert_int_eq(status, AEROSPIKE_OK);
+	as_monitor_wait(&monitor);
 }
 
 TEST(batch_async_post, "Batch Async: Remove Records")

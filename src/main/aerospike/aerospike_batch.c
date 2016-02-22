@@ -130,9 +130,45 @@ as_batch_complete_async(as_event_executor* executor, as_error* err)
 }
 
 static bool
+as_batch_async_skip_records(as_event_command* cmd)
+{
+	uint8_t* p = cmd->buf;
+	uint8_t* end = p + cmd->len;
+	
+	while (p < end) {
+		as_msg* msg = (as_msg*)p;
+		as_msg_swap_header_from_be(msg);
+		
+		if (msg->result_code && msg->result_code != AEROSPIKE_ERR_RECORD_NOT_FOUND) {
+			as_error err;
+			as_error_set_message(&err, msg->result_code, as_error_string(msg->result_code));
+			as_event_response_error(cmd, &err);
+			return true;
+		}
+		p += sizeof(as_msg);
+		
+		if (msg->info3 & AS_MSG_INFO3_LAST) {
+			as_event_executor_complete(cmd);
+			return true;
+		}
+		
+		p = as_command_ignore_fields(p, msg->n_fields);
+		p = as_command_ignore_bins(p, msg->n_ops);
+	}
+	return false;
+}
+
+static bool
 as_batch_async_parse_records(as_event_command* cmd)
 {
 	as_async_batch_executor* executor = cmd->udata;  // udata is overloaded to contain executor.
+
+	if (! executor->executor.valid) {
+		// An error has already been returned to the user and records have been deleted.
+		// Skip over remaining socket data so it's fully read and can be reused.
+		return as_batch_async_skip_records(cmd);
+	}
+	
 	as_vector* records = &executor->records->list;
 	uint8_t* p = cmd->buf;
 	uint8_t* end = p + cmd->len;

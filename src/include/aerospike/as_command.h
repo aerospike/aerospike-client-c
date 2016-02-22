@@ -475,6 +475,13 @@ as_command_ignore_fields(uint8_t* p, uint32_t n_fields);
 
 /**
  *	@private
+ *	Skip over bins in returned data.
+ */
+uint8_t*
+as_command_ignore_bins(uint8_t* p, uint32_t n_bins);
+
+/**
+ *	@private
  *	Parse key fields received from server.  Used for reads.
  */
 uint8_t*

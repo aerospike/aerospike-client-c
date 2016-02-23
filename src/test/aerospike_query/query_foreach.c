@@ -227,7 +227,7 @@ bool query_foreach_create()
 			snprintf(pntbuf, sizeof(pntbuf),
 					 "{ \"type\": \"Point\", \"coordinates\": [%f, %f] }",
 					 plng, plat);
-			as_arraylist_append(&list3, (as_val *) as_geojson_new(strdup(pntbuf), false));
+			as_arraylist_append(&list3, (as_val *) as_geojson_new(strdup(pntbuf), true));
 
 			//
 			// This creates a grid of regions centered around the following points
@@ -249,7 +249,7 @@ bool query_foreach_create()
 					 rlng + 0.001, rlat + 0.001,
 					 rlng - 0.001, rlat + 0.001,
 					 rlng - 0.001, rlat - 0.001);
-			as_arraylist_append(&list3, (as_val *) as_geojson_new(strdup(rgnbuf), false));
+			as_arraylist_append(&list3, (as_val *) as_geojson_new(strdup(rgnbuf), true));
 		}
 		
 		as_record r;
@@ -290,6 +290,7 @@ bool query_foreach_create()
 			return false;
 		}
 		
+		as_list_destroy((as_list *)&list3);
 		as_record_destroy(r1);
 	}
 	return true;

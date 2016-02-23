@@ -358,7 +358,7 @@ as_cluster_seed_nodes(as_cluster* cluster, as_error* err, bool enable_warnings)
 	
 	as_node_info node_info;
 	as_error error_local;
-	error_local.message[0] = '\0'; // AEROSPIKE_ERR_TIMEOUT doesn't come with a message; make sure it's initialized
+	as_error_init(&error_local); // AEROSPIKE_ERR_TIMEOUT doesn't come with a message; make sure it's initialized.
 	as_status status = AEROSPIKE_OK;
 	
 	as_seeds* seeds = as_seeds_reserve(cluster);
@@ -401,7 +401,7 @@ as_cluster_seed_nodes(as_cluster* cluster, as_error* err, bool enable_warnings)
 			}
 			else {
 				if (enable_warnings) {
-					as_log_warn("Failed to connect to %s:%d. %s %s", seed->name, seed->port, as_error_string(status), error_local.message);
+					as_log_warn("Failed to connect to seed %s:%d. %s %s", seed->name, seed->port, as_error_string(status), error_local.message);
 				}
 			}
 		}
@@ -470,7 +470,7 @@ as_cluster_find_nodes_to_add(as_cluster* cluster, as_vector* /* <as_host> */ fri
 				as_vector_append(nodes_to_add, &node);
 			}
 			else {
-				as_log_warn("Failed to connect to friend %s:%d %s %s", friend->name, friend->port, as_error_string(status), err.message);
+				as_log_warn("Failed to connect to friend %s:%d. %s %s", friend->name, friend->port, as_error_string(status), err.message);
 			}
 		}
 	}

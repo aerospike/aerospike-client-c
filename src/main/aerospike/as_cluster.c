@@ -33,8 +33,6 @@
  *	Globals
  *****************************************************************************/
 
-extern uint32_t as_event_loop_capacity;
-
 /******************************************************************************
  *	Function declarations
  *****************************************************************************/
@@ -373,7 +371,7 @@ as_cluster_seed_nodes(as_cluster* cluster, as_error* err, bool enable_warnings)
 		
 		if (status != AEROSPIKE_OK) {
 			if (enable_warnings) {
-				as_log_warn("%s %s", as_error_string(status), error_local.message);
+				as_log_warn("Failed to lookup %s:%d. %s %s", seed->name, seed->port, as_error_string(status), error_local.message);
 			}
 			continue;
 		}
@@ -428,6 +426,7 @@ static void
 as_cluster_find_nodes_to_add(as_cluster* cluster, as_vector* /* <as_host> */ friends, as_vector* /* <as_node*> */ nodes_to_add)
 {
 	as_error err;
+	as_error_init(&err);
 	as_vector addresses;
 	as_vector_inita(&addresses, sizeof(struct sockaddr_in), 5);
 	
@@ -471,7 +470,7 @@ as_cluster_find_nodes_to_add(as_cluster* cluster, as_vector* /* <as_host> */ fri
 				as_vector_append(nodes_to_add, &node);
 			}
 			else {
-				as_log_warn("%s %s", as_error_string(status), err.message);
+				as_log_warn("Failed to connect to friend %s:%d %s %s", friend->name, friend->port, as_error_string(status), err.message);
 			}
 		}
 	}
@@ -498,6 +497,7 @@ as_cluster_find_nodes_to_remove(as_cluster* cluster, uint32_t refresh_count, as_
 				if (node->failures >= 5) {
 					// 5 consecutive info requests failed. Try seeds.
 					as_error err;
+					as_error_init(&err);
 					if (as_cluster_seed_nodes(cluster, &err, false) == AEROSPIKE_OK) {
 						// Seed nodes found. Remove unresponsive node.
 						as_vector_append(nodes_to_remove, &node);

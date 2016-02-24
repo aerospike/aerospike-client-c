@@ -59,7 +59,7 @@ static bool server_has_double = false;
  *****************************************************************************/
 
 /**
- * Creates 100 records and 4 indices.
+ * Creates 100 records and 9 indexes.
  *
  * Records are structured as:
  *      {a: String, b: Integer, c: Integer, d: Integer, e: Integer}
@@ -73,7 +73,7 @@ static bool server_has_double = false;
  *      d = c % 10
  *      e = b + (c + 1) * (d + 1) / 2
  */
-bool query_async_foreach_create()
+bool query_foreach_create()
 {
 	as_error err;
 	as_error_reset(&err);
@@ -122,28 +122,56 @@ bool query_async_foreach_create()
 		info("error(%d): %s", err.code, err.message);
 	}
 	
-	/* Uncomment once sindex on cdt is avaialable at server side.
-	 // create complex index on "x"
+	// create complex index on "x"
 	 
-	 status = aerospike_index_create_complex(as, &err, 0, NULL, NAMESPACE, SET, "x", "idx_test_x", AS_INDEX_TYPE_LIST, AS_INDEX_STRING);
-	 if (status != AEROSPIKE_OK) {
-	 info("error(%d): %s", err.code, err.message);
-	 }
+	status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE, SET, "x", "idx_test_x", AS_INDEX_TYPE_LIST, AS_INDEX_STRING);
+	if ( status == AEROSPIKE_OK ) {
+		aerospike_index_create_wait(&err, &task, 0);
+	}
+	else {
+		info("error(%d): %s", err.code, err.message);
+	}
 	 
-	 // create complex index on "y"
+	// create complex index on "y"
 	 
-	 status = aerospike_index_create_complex(as, &err, 0, NULL, NAMESPACE, SET, "y", "idx_test_y", AS_INDEX_TYPE_MAPKEYS, AS_INDEX_STRING);
-	 if (status != AEROSPIKE_OK) {
-	 info("error(%d): %s", err.code, err.message);
-	 }
+	status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE, SET, "y", "idx_test_y", AS_INDEX_TYPE_MAPKEYS, AS_INDEX_STRING);
+	if ( status == AEROSPIKE_OK ) {
+		aerospike_index_create_wait(&err, &task, 0);
+	}
+	else {
+		info("error(%d): %s", err.code, err.message);
+	}
 	 
-	 // create complex index on "y"
+	// create complex index on "y"
 	 
-	 status = aerospike_index_create_complex(as, &err, 0, NULL, NAMESPACE, SET, "y", "idx_test_y1", AS_INDEX_TYPE_MAPVALUES, AS_INDEX_STRING);
-	 if (status != AEROSPIKE_OK) {
-	 info("error(%d): %s", err.code, err.message);
-	 }
-	 */
+	status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE, SET, "y", "idx_test_y1", AS_INDEX_TYPE_MAPVALUES, AS_INDEX_STRING);
+	if ( status == AEROSPIKE_OK ) {
+		aerospike_index_create_wait(&err, &task, 0);
+	}
+	else {
+		info("error(%d): %s", err.code, err.message);
+	}
+
+	// create complex index on "z"
+	 
+	status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE, SET, "z", "idx_test_z", AS_INDEX_TYPE_LIST, AS_INDEX_NUMERIC);
+	if ( status == AEROSPIKE_OK ) {
+		aerospike_index_create_wait(&err, &task, 0);
+	}
+	else {
+		info("error(%d): %s", err.code, err.message);
+	}
+	 
+	// create complex index on "p"
+	 
+	status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE, SET, "p", "idx_test_p", AS_INDEX_TYPE_LIST, AS_INDEX_GEO2DSPHERE);
+	if ( status == AEROSPIKE_OK ) {
+		aerospike_index_create_wait(&err, &task, 0);
+	}
+	else {
+		info("error(%d): %s", err.code, err.message);
+	}
+	 
 	// insert records
 	for ( int i = 0; i < n_recs; i++ ) {
 		
@@ -171,16 +199,70 @@ bool query_async_foreach_create()
 		as_stringmap_set_str((as_map *) &map, "y", "y");
 		
 		
+		// Make list of integers
+		
+		as_arraylist list2;
+		as_arraylist_init(&list2, 5, 0);
+		as_arraylist_append_int64(&list2, i);
+		as_arraylist_append_int64(&list2, i+1);
+		as_arraylist_append_int64(&list2, i+2);
+		as_arraylist_append_int64(&list2, i+3);
+		as_arraylist_append_int64(&list2, i+4);
+
+		// Make a list of points and regions
+
+		as_arraylist list3;
+		as_arraylist_init(&list3, 20, 0);
+		for ( int jj = 0; jj < 10; ++jj) {
+			//
+			// This creates a grid of points:
+			// [0.00, 0.00], [0.00, 0.10], ... [0.00, 0.90]
+			// [0.01, 0.00], [0.01, 0.10], ... [0.01, 0.90]
+			// ...
+			// [0.99, 0.00], [0.99, 0.10], ... [0.99, 0.90]
+			//
+			double plat = 0.0 + (0.01 * i);
+			double plng = 0.0 + (0.10 * jj);
+			char pntbuf[1024];
+			snprintf(pntbuf, sizeof(pntbuf),
+					 "{ \"type\": \"Point\", \"coordinates\": [%f, %f] }",
+					 plng, plat);
+			as_arraylist_append(&list3, (as_val *) as_geojson_new(strdup(pntbuf), true));
+
+			//
+			// This creates a grid of regions centered around the following points
+			// [0.00, 0.00], [0.00, -0.10], ... [0.00, -0.90]
+			// [0.01, 0.00], [0.01, -0.10], ... [0.01, -0.90]
+			// ...
+			// [0.99, 0.00], [0.99, -0.10], ... [0.99, -0.90]
+			//
+			double rlat = 0.0 + (0.01 * i);
+			double rlng = 0.0 - (0.10 * jj);
+			char rgnbuf[1024];
+			snprintf(rgnbuf, sizeof(rgnbuf),
+					 "{ \"type\": \"Polygon\", "
+					 "\"coordinates\": ["
+					 "[[%f, %f], [%f, %f], [%f, %f], [%f, %f], [%f, %f]] "
+					 "] }",
+					 rlng - 0.001, rlat - 0.001,
+					 rlng + 0.001, rlat - 0.001,
+					 rlng + 0.001, rlat + 0.001,
+					 rlng - 0.001, rlat + 0.001,
+					 rlng - 0.001, rlat - 0.001);
+			as_arraylist_append(&list3, (as_val *) as_geojson_new(strdup(rgnbuf), true));
+		}
+		
 		as_record r;
-		as_record_init(&r, 7);
-		as_record_set_str(&r, 	"a", a);
+		as_record_init(&r, 9);
+		as_record_set_str(&r,   "a", a);
 		as_record_set_int64(&r, "b", b);
 		as_record_set_int64(&r, "c", c);
 		as_record_set_int64(&r, "d", d);
 		as_record_set_int64(&r, "e", e);
 		as_record_set_list(&r, "x", (as_list *) &list);
 		as_record_set_map(&r, "y", (as_map *) &map);
-		
+		as_record_set_list(&r, "z", (as_list *) &list2);
+		as_record_set_list(&r, "p", (as_list *) &list3);
 		
 		as_key key;
 		as_key_init(&key, NAMESPACE, SET, keystr);
@@ -208,8 +290,65 @@ bool query_async_foreach_create()
 			return false;
 		}
 		
+		as_list_destroy((as_list *)&list3);
 		as_record_destroy(r1);
 	}
+	return true;
+}
+
+/**
+ * Destroy 9 indexes.
+ */
+bool query_foreach_destroy()
+{
+	as_error err;
+	as_error_reset(&err);
+
+	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_a");
+	if ( err.code != AEROSPIKE_OK ) {
+		info("error(%d): %s", err.code, err.message);
+	}
+
+	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_b");
+	if ( err.code != AEROSPIKE_OK ) {
+		info("error(%d): %s", err.code, err.message);
+	}
+
+	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_c");
+	if ( err.code != AEROSPIKE_OK ) {
+		info("error(%d): %s", err.code, err.message);
+	}
+
+	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_d");
+	if ( err.code != AEROSPIKE_OK ) {
+		info("error(%d): %s", err.code, err.message);
+	}
+
+	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_x");
+	if ( err.code != AEROSPIKE_OK ) {
+		info("error(%d): %s", err.code, err.message);
+	}
+
+	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_y");
+	if ( err.code != AEROSPIKE_OK ) {
+		info("error(%d): %s", err.code, err.message);
+	}
+
+	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_y1");
+	if ( err.code != AEROSPIKE_OK ) {
+		info("error(%d): %s", err.code, err.message);
+	}
+
+	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_z");
+	if ( err.code != AEROSPIKE_OK ) {
+		info("error(%d): %s", err.code, err.message);
+	}
+
+	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_p");
+	if ( err.code != AEROSPIKE_OK ) {
+		info("error(%d): %s", err.code, err.message);
+	}
+
 	return true;
 }
 
@@ -225,7 +364,7 @@ static bool before(atf_suite * suite) {
 		return false;
 	}
 
-	return query_async_foreach_create();
+	return query_foreach_create();
 }
 
 static bool after(atf_suite * suite) {
@@ -235,7 +374,7 @@ static bool after(atf_suite * suite) {
 		return false;
 	}
 
-	return true;
+	return query_foreach_destroy();
 }
 
 /******************************************************************************
@@ -493,6 +632,83 @@ TEST( query_foreach_7, "IN MAPVALUES count(*) where y contains 'y'" ) {
 	as_query_destroy(&q);
 }
 
+TEST( query_foreach_8, "IN LIST count(*) where z between 50 and 51" ) {
+	
+	as_error err;
+	as_error_reset(&err);
+
+	int count = 0;
+
+	as_query q;
+	as_query_init(&q, NAMESPACE, SET);
+
+	as_query_where_inita(&q, 1);
+	as_query_where(&q, "z", as_range(LIST, NUMERIC, 50, 51));
+
+	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_count_callback, &count);
+
+	if ( err.code != AEROSPIKE_OK ) {
+		 fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+	}
+
+	// The following records should be found:
+	//
+	// [46, 47, 48, 49, 50]
+	// [47, 48, 49, 50, 51] *
+	// [48, 49, 50, 51, 52] *
+	// [49, 50, 51, 52, 53] *
+	// [50, 51, 52, 53, 54] *
+	// [51, 52, 53, 54, 55]
+	//
+	// The middle 4 are found twice so we return the wrong value.
+	
+	assert_int_eq( err.code, AEROSPIKE_OK );
+	assert_int_eq( count, 6 );
+
+	as_query_destroy(&q);
+}
+
+TEST( query_foreach_9, "IN LIST count(*) where p in <rectangle>" ) {
+
+	as_error err;
+	as_error_reset(&err);
+
+	int count = 0;
+
+	as_query q;
+	as_query_init(&q, NAMESPACE, SET);
+
+	char const * region =
+		"{ "
+		"    \"type\": \"Polygon\", "
+		"    \"coordinates\": [["
+		"        [-0.202, -0.202], "
+		"        [ 0.202, -0.202], "
+		"        [ 0.202,  0.202], "
+		"        [-0.202,  0.202], "
+		"        [-0.202, -0.202] "
+		"    ]]"
+		" } ";
+	
+	as_query_where_inita(&q, 1);
+	as_query_where(&q, "p", AS_PREDICATE_RANGE, AS_INDEX_TYPE_LIST, AS_INDEX_GEO2DSPHERE, region);
+
+	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_count_callback, &count);
+
+	if ( err.code != AEROSPIKE_OK ) {
+		 fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+	}
+
+	// We should find only points.
+	// The first 21 records have lat from 0.00 to 0.20.
+	// Each record has 3 points with lng 0.00, 0.10, 0.20
+	
+	assert_int_eq( err.code, AEROSPIKE_OK );
+	assert_int_eq( count, 21 );
+
+	as_query_destroy(&q);
+}
+
 static bool query_quit_early_callback(const as_val * v, void * udata) {
 	if (v) {
 		int64_t* count = (int64_t*)udata;
@@ -644,6 +860,11 @@ TEST( query_foreach_nullset, "test null-set behavior" ) {
 	info("my count: %d",count);
 	assert_true(count == 1);
 
+	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx2");
+	if ( err.code != AEROSPIKE_OK ) {
+		info("error(%d): %s", err.code, err.message);
+	}
+	assert_int_eq( err.code, AEROSPIKE_OK );
 }
 
 static bool query_foreach_double_callback(const as_val * v, void * udata) {
@@ -714,6 +935,12 @@ TEST( query_foreach_double, "test query on double behavior" ) {
 	assert_double_eq( recieved_sum, expected_sum );
 
 	as_query_destroy(&q);
+
+	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_int_bin");
+	if ( err.code != AEROSPIKE_OK ) {
+		info("error(%d): %s", err.code, err.message);
+	}
+	assert_int_eq( err.code, AEROSPIKE_OK );
 }
 
 /******************************************************************************
@@ -731,15 +958,18 @@ SUITE( query_foreach, "aerospike_query_foreach tests" ) {
 	suite_add( query_foreach_2 );
 	suite_add( query_foreach_3 );
 	suite_add( query_foreach_4 );
-/* Uncomment once sindex on cdt feature is available at server side.
 	suite_add( query_foreach_5 );
 	suite_add( query_foreach_6 );
 	suite_add( query_foreach_7 );
-*/
+	/* NB:  Removing these failing test cases until the underlying (known) issue(s) are resolved:
+	suite_add( query_foreach_8 );
+	suite_add( query_foreach_9 );
+	*/
 	suite_add( query_quit_early );
 	suite_add( query_agg_quit_early );
 	suite_add( query_filter_map_bytes );
 	suite_add( query_foreach_nullset );
+
 	if (server_has_double) {
 		suite_add( query_foreach_double );
 	}

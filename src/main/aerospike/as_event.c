@@ -246,9 +246,12 @@ as_event_response_complete(as_event_command* cmd)
 static inline void
 as_event_executor_destroy(as_event_executor* executor)
 {
-	pthread_mutex_unlock(&executor->lock);
 	pthread_mutex_destroy(&executor->lock);
-	cf_free(executor->commands);
+	
+	if (executor->commands) {
+		cf_free(executor->commands);
+	}
+	
 	cf_free(executor);
 }
 
@@ -256,13 +259,9 @@ static void
 as_event_executor_error(as_event_executor* executor, as_error* err, int queued_count)
 {
 	pthread_mutex_lock(&executor->lock);
-	
-	// Notify user of error only once.
-	if (executor->valid) {
-		executor->complete_fn(executor, err);
-		executor->valid = false;
-	}
-	
+	bool notify = executor->valid;
+	executor->valid = false;
+
 	if (queued_count >= 0) {
 		// Add tasks that were never queued.
 		executor->count += (executor->max - queued_count);
@@ -270,12 +269,18 @@ as_event_executor_error(as_event_executor* executor, as_error* err, int queued_c
 	else {
 		executor->count++;
 	}
-	
-	if (executor->count == executor->max) {
-		as_event_executor_destroy(executor);
+
+	bool complete = executor->count == executor->max;
+	pthread_mutex_unlock(&executor->lock);
+
+	// Notify user only once on first error.
+	if (notify) {
+		executor->complete_fn(executor, err);
 	}
-	else {
-		pthread_mutex_unlock(&executor->lock);
+
+	// If all commands complete, destroy executor.
+	if (complete) {
+		as_event_executor_destroy(executor);
 	}
 }
 
@@ -291,11 +296,11 @@ as_event_executor_cancel(as_event_executor* executor, int queued_count)
 	// Add tasks that were never queued.
 	executor->count += (executor->max - queued_count);
 	
-	if (executor->count == executor->max) {
+	bool complete = executor->count == executor->max;
+	pthread_mutex_unlock(&executor->lock);
+
+	if (complete) {
 		as_event_executor_destroy(executor);
-	}
-	else {
-		pthread_mutex_unlock(&executor->lock);
 	}
 }
 
@@ -306,20 +311,22 @@ as_event_executor_complete(as_event_command* cmd)
 	
 	as_event_executor* executor = cmd->udata;
 	pthread_mutex_lock(&executor->lock);
+	bool notify = executor->valid;
+	executor->count++;
+	bool complete = executor->count == executor->max;
+	int next = executor->count + executor->max_concurrent - 1;
+	bool start_new_command = next < executor->max && executor->valid;
+	pthread_mutex_unlock(&executor->lock);
 
-	if (++executor->count == executor->max) {
+	if (complete) {
 		// All commands completed.
-		if (executor->valid) {
+		if (notify) {
 			executor->complete_fn(executor, 0);
 		}
 		as_event_executor_destroy(executor);
 	}
 	else {
 		// Determine if a new command needs to be started.
-		int next = executor->count + executor->max_concurrent - 1;
-		bool start_new_command = next < executor->max && executor->valid;
-		pthread_mutex_unlock(&executor->lock);
-		
 		if (start_new_command) {
 			as_error err;
 			as_status status = as_event_command_execute(executor->commands[next], &err);

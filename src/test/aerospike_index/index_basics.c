@@ -59,48 +59,52 @@ extern aerospike * as;
 
 TEST( index_basics_create , "Create index on bin" ) {
 
-    as_error err;
-    as_error_reset(&err);
+	as_error err;
+	as_error_reset(&err);
+
+	as_index_task task;
 
 	// DEFAULT type index
-	as_status status = aerospike_index_create(as, &err, 0, NULL, NAMESPACE, SET, "new_bin", "idx_test_new_bin", AS_INDEX_STRING);
-	
-    if (status != AEROSPIKE_OK) {
-        info("error(%d): %s", err.code, err.message);
-    }
-    assert_int_eq( status , AEROSPIKE_OK );
+	as_status status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, SET, "new_bin", "idx_test_new_bin", AS_INDEX_STRING);
+
+	if ( status == AEROSPIKE_OK ) {
+		aerospike_index_create_wait(&err, &task, 0);
+	}
+	else {
+		info("error(%d): %s", err.code, err.message);
+	}
+	assert_int_eq( status , AEROSPIKE_OK );
 
 	// LIST type index
-	/* TODO uncomment when server supports complex indicies.
-	status = aerospike_index_create_complex(as, &err, 0, NULL, NAMESPACE, SET, "new_bin[0]", "idx_test_listbin", AS_INDEX_TYPE_LIST, AS_INDEX_STRING);
-	
-    if (status != AEROSPIKE_OK) {
-        info("error(%d): %s", err.code, err.message);
-    }
-    assert_int_eq( status , AEROSPIKE_OK );
-	*/
+	status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE, SET, "new_bin[0]", "idx_test_listbin", AS_INDEX_TYPE_LIST, AS_INDEX_STRING);
+
+	if ( status == AEROSPIKE_OK ) {
+		aerospike_index_create_wait(&err, &task, 0);
+	}
+	else {
+		info("error(%d): %s", err.code, err.message);
+	}
+	assert_int_eq( status , AEROSPIKE_OK );
 }
 
 TEST( index_basics_drop , "Drop index" ) {
 
-    as_error err;
-    as_error_reset(&err);
+	as_error err;
+	as_error_reset(&err);
 
-	// DEFAUlT type index
-    aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_new_bin");
-    if ( err.code != AEROSPIKE_OK ) {
-        info("error(%d): %s", err.code, err.message);
-    }
-    assert_int_eq( err.code, AEROSPIKE_OK );
+	// DEFAULT type index
+	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_new_bin");
+	if ( err.code != AEROSPIKE_OK ) {
+		info("error(%d): %s", err.code, err.message);
+	}
+	assert_int_eq( err.code, AEROSPIKE_OK );
 
 	// LIST type index
-	/* TODO uncomment when server supports complex indicies.
 	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_listbin");
-    if ( err.code != AEROSPIKE_OK ) {
-        info("error(%d): %s", err.code, err.message);
-    }
-    assert_int_eq( err.code, AEROSPIKE_OK );
-	*/
+	if ( err.code != AEROSPIKE_OK ) {
+		info("error(%d): %s", err.code, err.message);
+	}
+	assert_int_eq( err.code, AEROSPIKE_OK );
 }
 
 
@@ -109,6 +113,6 @@ TEST( index_basics_drop , "Drop index" ) {
  *****************************************************************************/
 
 SUITE( index_basics, "aerospike_sindex basic tests" ) {
-    suite_add( index_basics_create );
-    suite_add( index_basics_drop );
+	suite_add( index_basics_create );
+	suite_add( index_basics_drop );
 }

@@ -636,10 +636,17 @@ as_command_bytes_to_int(uint8_t	*buf, int sz, int64_t *value)
 uint8_t*
 as_command_ignore_fields(uint8_t* p, uint32_t n_fields)
 {
-	if (n_fields > 0) {
-		for (uint32_t i = 0; i < n_fields; i++) {
-			p += cf_swap_from_be32(*(uint32_t*)p) + 4;
-		}
+	for (uint32_t i = 0; i < n_fields; i++) {
+		p += cf_swap_from_be32(*(uint32_t*)p) + 4;
+	}
+	return p;
+}
+
+uint8_t*
+as_command_ignore_bins(uint8_t* p, uint32_t n_bins)
+{
+	for (uint32_t i = 0; i < n_bins; i++) {
+		p += cf_swap_from_be32(*(uint32_t*)p) + 4;
 	}
 	return p;
 }

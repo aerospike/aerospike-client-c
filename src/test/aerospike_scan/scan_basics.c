@@ -48,6 +48,8 @@ extern aerospike * as;
  * MACROS
  *****************************************************************************/
 
+#define LUA_FILE "src/test/aerospike_scan/aerospike_scan_test.lua"
+
 #define NS "test"
 #define SET_STRSZ 20
 #define NUM_RECS_SET1 100
@@ -756,7 +758,13 @@ static bool before(atf_suite * suite) {
 	insert_data(NUM_RECS_SET2, SET2);
 	insert_data(NUM_RECS_NULLSET, NULL);
 
-	if (udf_put("src/test/aerospike_scan/aerospike_scan_test.lua") == false) {
+	if ( ! udf_put(LUA_FILE) ) {
+		error("failure while uploading: %s", LUA_FILE);
+		return false;
+	}
+
+	if ( ! udf_exists(LUA_FILE) ) {
+		error("lua file does not exist: %s", LUA_FILE);
 		return false;
 	}
 
@@ -764,6 +772,11 @@ static bool before(atf_suite * suite) {
 }
 
 static bool after(atf_suite * suite) {
+	if ( ! udf_remove(LUA_FILE) ) {
+		error("failure while removing: %s", LUA_FILE);
+		return false;
+	}
+
     return true;
 }
 

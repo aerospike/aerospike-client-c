@@ -287,6 +287,7 @@ as_socket_write_limit(as_error* err, int fd, uint8_t *buf, size_t buf_len, uint6
 			// Do not set error string to avoid affecting performance.
 			// Calling functions usually retry, so the error string is not used anyway.
 			status = err->code = AEROSPIKE_ERR_TIMEOUT;
+			err->message[0] = 0;
 			goto Out;
         }
         
@@ -432,6 +433,7 @@ as_socket_read_limit(as_error* err, int fd, uint8_t *buf, size_t buf_len, uint64
 			// Do not set error string to avoid affecting performance.
 			// Calling functions usually retry, so the error string is not used anyway.
 			status = err->code = AEROSPIKE_ERR_TIMEOUT;
+			err->message[0] = 0;
 			goto Out;
         }
         

@@ -722,7 +722,7 @@ aerospike_key_operate_async(
 		return status;
 	}
 
-	as_event_command* cmd = as_async_record_command_create(as->cluster, node, policy->timeout, false,
+	as_event_command* cmd = as_async_record_command_create(as->cluster, node, policy->timeout, policy->deserialize,
 						listener, udata, event_loop, pipe_listener, size, as_event_command_parse_result);
 
 	uint8_t* p = as_command_write_header(cmd->buf, read_attr, write_attr, policy->commit_level, policy->consistency_level,

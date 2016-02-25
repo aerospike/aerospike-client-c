@@ -1,0 +1,55 @@
+#!/bin/bash
+# Install libraries and header files.
+set -e
+
+if [ $EUID -ne 0 ]
+then
+  echo "This script requires root or sudo privileges."
+  exit 1
+fi
+
+if [ $# -ne 1 ]
+then
+  echo "Usage: install <target dir>"
+  exit 1
+fi
+
+targetDir=$1
+cd `dirname $0`/..
+
+platform=`./pkg/platform`
+
+if [ $? -ne 0 ]
+then
+  echo "Invalid platform."
+  exit 1
+fi
+
+if [ "$platform" = "mac" ]
+then
+	# Mac OS X does not have /usr or /opt, so use /usr/local instead.
+	installDir=/usr/local
+	luaDir=/usr/local
+else
+	installDir=/usr
+	luaDir=/opt
+fi
+
+# Install header files.
+rm -rf $installDir/include/{aerospike,citrusleaf}
+echo cp -r $targetDir/include/{aerospike,citrusleaf} $installDir/include
+cp -r $targetDir/include/{aerospike,citrusleaf} $installDir/include
+chmod -R g-w,o-w $installDir/include/{aerospike,citrusleaf}
+
+# Install libraries.
+echo cp $targetDir/lib/libaerospike.* $installDir/lib
+cp $targetDir/lib/libaerospike.* $installDir/lib
+chmod g-w,o-w $installDir/lib/libaerospike.*
+
+# Install Lua files.
+mkdir -p $luaDir/aerospike/client/sys/udf/lua
+mkdir -p $luaDir/aerospike/client/usr/udf/lua
+
+echo cp modules/lua-core/src/{aerospike.lua,as.lua,stream_ops.lua} $luaDir/aerospike/client/sys/udf/lua
+cp modules/lua-core/src/{aerospike.lua,as.lua,stream_ops.lua} $luaDir/aerospike/client/sys/udf/lua
+chmod g-w,o-w $luaDir/aerospike/client/sys/udf/lua/* $luaDir/aerospike/client/sys/udf/lua/*

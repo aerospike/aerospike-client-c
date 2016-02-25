@@ -64,7 +64,7 @@ typedef struct as_testlist_s {
 
 static bool as_testlist_compare(as_testlist *tlist);
 
-static bool
+bool
 has_cdt_list()
 {
 	char *res = NULL;

@@ -266,8 +266,6 @@ as_status aerospike_udf_put(
 		policy = &as->config.policies.info;
 	}
 		
-	char* command = NULL;
-	
 	as_string filename_string;
 	const char* filebase = as_basename(&filename_string, filename);
 		
@@ -277,18 +275,22 @@ as_status aerospike_udf_put(
 	cf_b64_encode(content->value, content->size, content_base64);
 	content_base64[encoded_len] = 0;
 	
-	if (! asprintf(&command, "udf-put:filename=%s;content=%s;content-len=%d;udf-type=%s;",
-				   filebase, content_base64, encoded_len, as_udf_type_str[type])) {
+	size_t size = encoded_len + 1024;
+	char* command = cf_malloc(size);
+	
+	if (snprintf(command, size, "udf-put:filename=%s;content=%s;content-len=%d;udf-type=%s;",
+				   filebase, content_base64, encoded_len, as_udf_type_str[type]) >= size) {
 		as_string_destroy(&filename_string);
 		cf_free(content_base64);
-		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Udf put asprintf failed");
+		cf_free(command);
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Udf put snprintf failed");
 	}
 	as_string_destroy(&filename_string);
 	
 	char* response = 0;
 	as_status status = aerospike_info_any(as, err, policy, command, &response);
-	cf_free(command);
 	cf_free(content_base64);
+	cf_free(command);
 	
 	if (status) {
 		return status;

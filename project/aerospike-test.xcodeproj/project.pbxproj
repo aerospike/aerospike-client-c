@@ -43,6 +43,7 @@
 		BFBC11F318CE416100D0B5BE /* producer_stream.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBC11D418CE416100D0B5BE /* producer_stream.c */; };
 		BFBC11F418CE416100D0B5BE /* test_aerospike.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBC11D618CE416100D0B5BE /* test_aerospike.c */; };
 		BFBC11F618CE416100D0B5BE /* udf.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBC11DA18CE416100D0B5BE /* udf.c */; };
+		BFC65ACF1C7F814B0079DF5A /* list_basics_async.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65ACE1C7F814B0079DF5A /* list_basics_async.c */; };
 		BFCB24331BF167CA00B1A0EF /* libuv.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFCB24321BF167CA00B1A0EF /* libuv.a */; };
 		BFD8C86F18D7E3A300CB8B6D /* libaerospike.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFD8C86C18D7E37800CB8B6D /* libaerospike.a */; };
 /* End PBXBuildFile section */
@@ -125,6 +126,7 @@
 		BFBC11D718CE416100D0B5BE /* test_aerospike.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = test_aerospike.h; path = ../src/test/util/test_aerospike.h; sourceTree = "<group>"; };
 		BFBC11DA18CE416100D0B5BE /* udf.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = udf.c; path = ../src/test/util/udf.c; sourceTree = "<group>"; };
 		BFBC11DB18CE416100D0B5BE /* udf.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = udf.h; path = ../src/test/util/udf.h; sourceTree = "<group>"; };
+		BFC65ACE1C7F814B0079DF5A /* list_basics_async.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = list_basics_async.c; path = ../src/test/aerospike_list/list_basics_async.c; sourceTree = "<group>"; };
 		BFCB24321BF167CA00B1A0EF /* libuv.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libuv.a; path = ../../../../usr/local/Cellar/libuv/1.7.5/lib/libuv.a; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -159,6 +161,7 @@
 				BF230E9F1BD5B19A007325AF /* batch_get_async.c */,
 				BF231A351BDAA6FE00280D6F /* scan_async.c */,
 				BF5E53671C34AE7500CA72A2 /* list_basics.c */,
+				BFC65ACE1C7F814B0079DF5A /* list_basics_async.c */,
 				BF5697521C16057E0029851B /* query_geospatial.c */,
 				BFBC11B518CE416100D0B5BE /* udf_basics.c */,
 				BFBC11B618CE416100D0B5BE /* udf_record.c */,
@@ -302,6 +305,7 @@
 				BF2717811B448C3B007B8BED /* query_background.c in Sources */,
 				BF24B06F1C3C759C00A37CD3 /* query_async.c in Sources */,
 				BFBC11A518CE406D00D0B5BE /* key_apply2.c in Sources */,
+				BFC65ACF1C7F814B0079DF5A /* list_basics_async.c in Sources */,
 				BFBC11AB18CE40C800D0B5BE /* index_basics.c in Sources */,
 				BFBC11AF18CE40EB00D0B5BE /* test_lmap.c in Sources */,
 				BFBC11B318CE411900D0B5BE /* scan_basics.c in Sources */,

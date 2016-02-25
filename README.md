@@ -72,7 +72,7 @@ Build examples:
 	$ make EVENT_LIB=libev  # Support asynchronous functions with libev
 	$ make EVENT_LIB=libuv  # Support asynchronous functions with libuv
 
-The build will generate the following files:
+The build adheres to the _GNU_SOURCE API level. The build will generate the following files:
 
 - `target/{target}/include` – header files
 - `target/{target}/lib/libaerospike.a` – static archive

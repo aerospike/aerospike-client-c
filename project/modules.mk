@@ -84,7 +84,7 @@ MOD_LUA-prepare: MOD_LUA-make-prepare
 
 .PHONY: MOD_LUA-make-prepare
 MOD_LUA-make-prepare:
-	$(MAKE) -e -C $(MOD_LUA) prepare COMMON=$(COMMON) LUA_CORE=$(LUA_CORE) USE_LUAJIT=$(USE_LUAJIT) LUAJIT=$(LUAJIT) USE_LUAMOD=$(USE_LUAMOD) LUAMOD=$(LUAMOD)
+	@$(MAKE) -e -C $(MOD_LUA) prepare COMMON=$(COMMON) LUA_CORE=$(LUA_CORE) USE_LUAJIT=$(USE_LUAJIT) LUAJIT=$(LUAJIT) USE_LUAMOD=$(USE_LUAMOD) LUAMOD=$(LUAMOD)
 
 ###############################################################################
 ##  LUA MODULE                                                               ##

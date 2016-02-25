@@ -281,6 +281,10 @@ docs:
 docs-clean:
 	rm -rf $(TARGET)/docs
 
+.PHONY: install
+install: all
+	pkg/install $(TARGET_BASE)
+
 .PHONY: package
 package:
 	pkg/package

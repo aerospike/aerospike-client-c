@@ -232,6 +232,14 @@ aerospike*
 aerospike_new(as_config* config);
 
 /**
+ * Initialize global lua configuration.
+ *
+ *	@param config 	The lua configuration to use for all cluster instances.
+ */
+void
+aerospike_init_lua(as_config_lua* config);	
+
+/**
  *	Destroy the aerospike instance and associated resources.
  *
  *	~~~~~~~~~~{.c}

@@ -350,10 +350,23 @@ typedef struct as_config_s {
 	as_policies policies;
 
 	/**
-	 *	lua config
+	 *	lua config.  This is a global config even though it's located here in cluster config.
+	 *	This config has been left here to avoid breaking the API.
+	 *
+	 *	The global lua config will only be changed once on first cluster initialization.
+	 *	A better method for initializing lua configuration is to leave this field alone and
+	 *	instead call aerospike_init_lua():
+	 *
+	 *	~~~~~~~~~~{.c}
+	 *	as_config_lua lua;
+	 *	lua.cache_enabled = <enable lua cache>;
+	 *	strcpy(lua.system_path, <lua system directory>);
+	 *	strcpy(lua.user_path, <lua user directory>);
+	 *	aerospike_init_lua(&lua);
+	 *	~~~~~~~~~~
 	 */
 	as_config_lua lua;
-	
+
 	/**
 	 *	Action to perform if client fails to connect to seed hosts.
 	 *

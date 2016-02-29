@@ -358,10 +358,16 @@ typedef struct as_config_s {
 	 *	instead call aerospike_init_lua():
 	 *
 	 *	~~~~~~~~~~{.c}
+	 *	// Get default global lua configuration.
 	 *	as_config_lua lua;
+	 *	as_config_lua_init(&lua);
+	 *
+	 *	// Optionally modify lua defaults.
 	 *	lua.cache_enabled = <enable lua cache>;
 	 *	strcpy(lua.system_path, <lua system directory>);
 	 *	strcpy(lua.user_path, <lua user directory>);
+	 *
+	 *	// Initialize global lua configuration.
 	 *	aerospike_init_lua(&lua);
 	 *	~~~~~~~~~~
 	 */
@@ -484,6 +490,17 @@ as_config_add_host(as_config* config, const char* addr, uint16_t port)
  */
 bool
 as_config_set_user(as_config* config, const char* user, const char* password);
+	
+/**
+ *	Initialize global lua configuration to defaults.
+ */
+static inline void
+as_config_lua_init(as_config_lua* lua)
+{
+	lua->cache_enabled = false;
+	strcpy(lua->system_path, AS_CONFIG_LUA_SYSTEM_PATH);
+	strcpy(lua->user_path, AS_CONFIG_LUA_USER_PATH);
+}
 
 #ifdef __cplusplus
 } // end extern "C"

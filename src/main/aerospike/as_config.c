@@ -24,12 +24,6 @@
 #include <stdint.h>
 
 /******************************************************************************
- * MACROS
- *****************************************************************************/
-
-#define MOD_LUA_CACHE_ENABLED false
-
-/******************************************************************************
  * FUNCTIONS
  *****************************************************************************/
 
@@ -50,9 +44,7 @@ as_config * as_config_init(as_config * c)
 	memset(c->password, 0, sizeof(c->password));
 	memset(c->hosts, 0, sizeof(c->hosts));
 	as_policies_init(&c->policies);
-	c->lua.cache_enabled = MOD_LUA_CACHE_ENABLED;
-	strcpy(c->lua.system_path, AS_CONFIG_LUA_SYSTEM_PATH);
-	strcpy(c->lua.user_path, AS_CONFIG_LUA_USER_PATH);
+	as_config_lua_init(&c->lua);
 	c->fail_if_not_connected = true;
 	
 	c->use_shm = false;

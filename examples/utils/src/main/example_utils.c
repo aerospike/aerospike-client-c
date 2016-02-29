@@ -372,33 +372,41 @@ void
 example_connect_to_aerospike_with_udf_config(aerospike* p_as,
 		const char* lua_user_path)
 {
+	// Initialize logging.
 	as_log_set_callback(example_log_callback);
 
-	// Start with default configuration.
-	as_config cfg;
-	as_config_init(&cfg);
-	as_config_add_host(&cfg, g_host, g_port);
-	as_config_set_user(&cfg, g_user, g_password);
+	// Initialize default lua configuration.
+	as_config_lua lua;
+	as_config_lua_init(&lua);
 
 	// Examples can be run from client binary package-installed lua files or
 	// from git client source tree lua files. If client binary package is not
 	// installed, look for lua system files in client source tree.
-	int rc = access(cfg.lua.system_path, R_OK);
-
+	int rc = access(lua.system_path, R_OK);
+	
 	if (rc != 0) {
 		// Use lua files in source tree if they exist.
 		char* path = "../../../modules/lua-core/src";
-
+		
 		rc = access(path, R_OK);
-
+		
 		if (rc == 0) {
-			strcpy(cfg.lua.system_path, path);
+			strcpy(lua.system_path, path);
 		}
 	}
-
+	
 	if (lua_user_path) {
-		strcpy(cfg.lua.user_path, lua_user_path);
+		strcpy(lua.user_path, lua_user_path);
 	}
+	
+	// Initialize global lua configuration.
+	aerospike_init_lua(&lua);
+		
+	// Initialize cluster configuration.
+	as_config cfg;
+	as_config_init(&cfg);
+	as_config_add_host(&cfg, g_host, g_port);
+	as_config_set_user(&cfg, g_user, g_password);
 
 	aerospike_init(p_as, &cfg);
 

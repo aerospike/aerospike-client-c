@@ -245,7 +245,7 @@ static inline as_status as_error_set(as_error * err, as_status code, const char 
  *
  *	@relates as_error
  */
-static inline void as_error_copy(as_error * trg, as_error * src) {
+static inline void as_error_copy(as_error * trg, const as_error * src) {
 	trg->code = src->code;
 	strcpy(trg->message, src->message);
 	trg->func = src->func;

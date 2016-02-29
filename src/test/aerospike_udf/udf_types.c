@@ -71,7 +71,8 @@ TEST( udf_types_pre , "upload udf_types.lua" ) {
 	as_bytes content;
 
 	info("reading: %s",LUA_FILE);
-	udf_readfile(LUA_FILE, &content);
+	bool b = udf_readfile(LUA_FILE, &content);
+	assert_true(b);
 
 	info("uploading: %s",filename);
 	aerospike_udf_put(as, &err, NULL, filename, AS_UDF_TYPE_LUA, &content);

@@ -24,6 +24,8 @@
 
 #include <citrusleaf/alloc.h>
 
+static bool lua_initialized = false;
+
 /******************************************************************************
  * STATIC FUNCTIONS
  *****************************************************************************/
@@ -71,6 +73,25 @@ aerospike_new(as_config* config)
 }
 
 /**
+ * Initialize global lua configuration.
+ */
+void
+aerospike_init_lua(as_config_lua* config)
+{
+    mod_lua_config lua = {
+        .server_mode    = false,
+        .cache_enabled  = config->cache_enabled,
+        .system_path    = {0},
+        .user_path      = {0}
+    };
+    as_strncpy(lua.system_path, config->system_path, sizeof(lua.system_path));
+    as_strncpy(lua.user_path, config->user_path, sizeof(lua.user_path));
+    
+    as_module_configure(&mod_lua, &lua);
+	lua_initialized = true;
+}
+
+/**
  * Destroy the aerospike instance
  */
 void aerospike_destroy(aerospike* as)
@@ -100,16 +121,10 @@ aerospike_connect(aerospike* as, as_error* err)
 	}
 
 #if !defined USE_XDR
-    mod_lua_config config = {
-        .server_mode    = false,
-        .cache_enabled  = as->config.lua.cache_enabled,
-        .system_path    = {0},
-        .user_path      = {0}
-    };
-    memcpy(config.system_path, as->config.lua.system_path, sizeof(config.system_path));
-    memcpy(config.user_path, as->config.lua.user_path, sizeof(config.user_path));
-    
-    as_module_configure(&mod_lua, &config);
+	// Only change global lua configuration once.
+	if (! lua_initialized) {
+		aerospike_init_lua(&as->config.lua);
+	}
 #endif
 	
 	// Create the cluster object.

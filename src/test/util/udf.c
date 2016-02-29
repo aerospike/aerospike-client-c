@@ -42,13 +42,13 @@ bool udf_readfile(const char * filename, as_bytes * content) {
 
     if ( !file ) { 
         error("cannot open script file %s : %s", filename, strerror(errno));  
-        return -1; 
+        return false;
     } 
 
     uint8_t * bytes = (uint8_t *) malloc(SCRIPT_LEN_MAX); 
     if ( bytes == NULL ) { 
         error("malloc failed"); 
-        return -1;
+        return false;
     }     
 
     int size = 0; 

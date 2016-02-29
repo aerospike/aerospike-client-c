@@ -128,6 +128,7 @@ static bool before(atf_plan * plan) {
     	return false;
     }
 	
+	// Initialize logging.
 	as_log_set_level(AS_LOG_LEVEL_INFO);
 	as_log_set_callback(as_client_log_callback);
 	
@@ -138,13 +139,18 @@ static bool before(atf_plan * plan) {
 		}
 	}
 	
+	// Initialize global lua configuration.
+	as_config_lua lua;
+	as_config_lua_init(&lua);
+	strcpy(lua.system_path, "modules/lua-core/src");
+	strcpy(lua.user_path, "src/test/lua");
+	aerospike_init_lua(&lua);
+
+	// Initialize cluster configuration.
 	as_config config;
 	as_config_init(&config);
 	as_config_add_host(&config, g_host, g_port);
 	as_config_set_user(&config, g_user, g_password);
-	config.lua.cache_enabled = false;
-	strcpy(config.lua.system_path, "modules/lua-core/src");
-	strcpy(config.lua.user_path, "src/test/lua");
     as_policies_init(&config.policies);
 
 	as_error err;

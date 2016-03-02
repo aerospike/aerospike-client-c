@@ -655,7 +655,7 @@ TEST( query_foreach_8, "IN LIST count(*) where z between 50 and 51" ) {
 	as_query_init(&q, NAMESPACE, SET);
 
 	as_query_where_inita(&q, 1);
-	as_query_where(&q, "z", as_range(LIST, NUMERIC, 50, 51));
+	as_query_where(&q, "z", as_range(LIST, NUMERIC, (int64_t)50, (int64_t)51));
 
 	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_count_callback, &count);
 

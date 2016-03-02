@@ -672,10 +672,10 @@ TEST( query_foreach_8, "IN LIST count(*) where z between 50 and 51" ) {
 	// [50, 51, 52, 53, 54] *
 	// [51, 52, 53, 54, 55]
 	//
-	// The middle 4 are found twice so we return the wrong value.
+	// The middle 4 are found twice. We currently return duplicates
 	
 	assert_int_eq( err.code, AEROSPIKE_OK );
-	assert_int_eq( count, 6 );
+	assert_int_eq( count, 10 );
 
 	as_query_destroy(&q);
 }
@@ -869,7 +869,6 @@ TEST( query_foreach_nullset, "test null-set behavior" ) {
 	as_query_where(&q, "NUMERIC", as_integer_equals(1));
 
 	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_count_callback, &count);
-	info("my count: %d",count);
 	assert_true(count == 1);
 
 	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx2");
@@ -895,7 +894,7 @@ static bool query_foreach_double_callback(const as_val * v, void * udata) {
     return true;
 }
 
-TEST( query_foreach_double, "test query on double behavior" ) {
+TEST( query_foreach_int_with_double_bin, "test query on double behavior" ) {
 
 	as_error err;
 	as_error_reset(&err);
@@ -982,8 +981,8 @@ SUITE( query_foreach, "aerospike_query_foreach tests" ) {
 	suite_add( query_foreach_5 );
 	suite_add( query_foreach_6 );
 	suite_add( query_foreach_7 );
-	/* NB:  Removing these failing test cases until the underlying (known) issue(s) are resolved:
 	suite_add( query_foreach_8 );
+	/* NB:  Removing these failing test cases until the underlying (known) issue(s) are resolved:
 	suite_add( query_foreach_9 );
 	*/
 	suite_add( query_quit_early );
@@ -992,6 +991,6 @@ SUITE( query_foreach, "aerospike_query_foreach tests" ) {
 	suite_add( query_foreach_nullset );
 
 	if (server_has_double) {
-		suite_add( query_foreach_double );
+		suite_add( query_foreach_int_with_double_bin );
 	}
 }

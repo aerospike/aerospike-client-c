@@ -188,15 +188,27 @@ bool query_foreach_create()
 		
 		as_arraylist list;
 		as_arraylist_init(&list, 3, 0);
-		as_arraylist_append_str(&list, "x");
-		as_arraylist_append_str(&list, "x");
-		as_arraylist_append_str(&list, "x");
+		if ( (i%3) == 0) {
+			as_arraylist_append_str(&list, "x");
+			as_arraylist_append_str(&list, "x1");
+			as_arraylist_append_str(&list, "x2");
+		} else {
+			as_arraylist_append_str(&list, "not_x1");
+			as_arraylist_append_str(&list, "not_x2");
+			as_arraylist_append_str(&list, "not_x3");
+
+		}
 		
 		// Make map
 		
 		as_hashmap map;
 		as_hashmap_init(&map, 1);
-		as_stringmap_set_str((as_map *) &map, "y", "y");
+		if ( (i%7) == 0) {
+			as_stringmap_set_str((as_map *) &map, "ykey", "yvalue");
+		} else {
+			as_stringmap_set_str((as_map *) &map, "ykey_not", "yvalue_not");
+
+		}
 		
 		
 		// Make list of integers
@@ -577,12 +589,12 @@ TEST( query_foreach_5, "IN LIST count(*) where x contains 'x'" ) {
 	}
 
 	assert_int_eq( err.code, AEROSPIKE_OK );
-	assert_int_eq( count, 100 );
+	assert_int_eq( count, 34 );
 
 	as_query_destroy(&q);
 }
 
-TEST( query_foreach_6, "IN MAPKEYS count(*) where y contains 'y'" ) {
+TEST( query_foreach_6, "IN MAPKEYS count(*) where y contains 'ykey'" ) {
 	
 	as_error err;
 	as_error_reset(&err);
@@ -593,7 +605,7 @@ TEST( query_foreach_6, "IN MAPKEYS count(*) where y contains 'y'" ) {
 	as_query_init(&q, NAMESPACE, SET);
 
 	as_query_where_inita(&q, 1);
-	as_query_where(&q, "y", as_contains(MAPKEYS, STRING, "y"));
+	as_query_where(&q, "y", as_contains(MAPKEYS, STRING, "ykey"));
 
 	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_count_callback, &count);
 
@@ -602,12 +614,12 @@ TEST( query_foreach_6, "IN MAPKEYS count(*) where y contains 'y'" ) {
 	}
 
 	assert_int_eq( err.code, AEROSPIKE_OK );
-	assert_int_eq( count, 100 );
+	assert_int_eq( count, 15 );
 
 	as_query_destroy(&q);
 }
 
-TEST( query_foreach_7, "IN MAPVALUES count(*) where y contains 'y'" ) {
+TEST( query_foreach_7, "IN MAPVALUES count(*) where y contains 'yvalue'" ) {
 
 	as_error err;
 	as_error_reset(&err);
@@ -618,7 +630,7 @@ TEST( query_foreach_7, "IN MAPVALUES count(*) where y contains 'y'" ) {
 	as_query_init(&q, NAMESPACE, SET);
 
 	as_query_where_inita(&q, 1);
-	as_query_where(&q, "y", as_contains(MAPVALUES, STRING, "y"));
+	as_query_where(&q, "y", as_contains(MAPVALUES, STRING, "yvalue"));
 
 	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_count_callback, &count);
 
@@ -627,7 +639,7 @@ TEST( query_foreach_7, "IN MAPVALUES count(*) where y contains 'y'" ) {
 	}
 
 	assert_int_eq( err.code, AEROSPIKE_OK );
-	assert_int_eq( count, 100 );
+	assert_int_eq( count, 15 );
 
 	as_query_destroy(&q);
 }
@@ -867,12 +879,18 @@ TEST( query_foreach_nullset, "test null-set behavior" ) {
 	assert_int_eq( err.code, AEROSPIKE_OK );
 }
 
+typedef struct foreach_double_udata_s {
+	uint64_t count;
+	double sum;
+} foreach_double_udata;
+
 static bool query_foreach_double_callback(const as_val * v, void * udata) {
 	
 	if (v) {
 		as_record* rec = as_record_fromval(v);
-		double * sum = (double *) udata;
-		*sum += as_record_get_double(rec,"double_bin", 0.0);
+		foreach_double_udata *d = (foreach_double_udata *)udata;
+		d->sum += as_record_get_double(rec,"double_bin", 0.0);
+		d->count++;
 	}
     return true;
 }
@@ -882,7 +900,9 @@ TEST( query_foreach_double, "test query on double behavior" ) {
 	as_error err;
 	as_error_reset(&err);
 
-	int n_recs = 1000, n_q_recs = 99;
+	int n_recs = 1000;
+	int n_start = 51;
+	int n_end = 70;
 	char *int_bin = "int_bin";
 	char *double_bin = "double_bin";
 
@@ -920,19 +940,20 @@ TEST( query_foreach_double, "test query on double behavior" ) {
 	as_query_select(&q, double_bin);
 
 	as_query_where_inita(&q, 1);
-	as_query_where(&q, int_bin, as_integer_range(0, n_q_recs));
+	as_query_where(&q, int_bin, as_integer_range(n_start, n_end));
 	
 	double expected_sum = 0;
-	double recieved_sum = 0;
+	foreach_double_udata udata = {0};
 
-	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_double_callback, &recieved_sum);
+	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_double_callback, &udata);
 
-	for ( int j = 1; j <= n_q_recs; j++ ) {
+	for ( int j = n_start; j <= n_end; j++ ) {
 		expected_sum += j/(double)10;
 	}
 
 	assert_int_eq( err.code, 0 );
-	assert_double_eq( recieved_sum, expected_sum );
+	assert_double_eq( udata.sum, expected_sum );
+	assert_int_eq( udata.count, 20 );
 
 	as_query_destroy(&q);
 

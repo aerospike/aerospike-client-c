@@ -194,45 +194,19 @@ as_socket_create_and_connect_nb(as_error* err, struct sockaddr_in *sa, int* fd_o
 	return AEROSPIKE_OK;
 }
 
-bool
-as_socket_validate(int fd, bool pipe)
+int
+as_socket_validate(int fd)
 {
 	uint8_t buf[8];
 	ssize_t rv = recv(fd, (void*)buf, sizeof(buf), MSG_PEEK | MSG_DONTWAIT | MSG_NOSIGNAL);
 	
 	if (rv < 0) {
-		// Handle normal case first.
-		if (errno == EWOULDBLOCK || errno == EAGAIN) {
-			return true;
-		}
-		
-		if (errno == EBADF) {
-			// Local problem, don't try closing.
-			as_log_warn("Connected check: Bad fd %d", fd);
-			return false;
-		}
-
-		// Close on socket error.
-		as_log_info("Connected check: fd %d error %d", fd, errno);
-		if (! pipe) {
-			as_close(fd);
-		}
-		return false;
-	}
-
-	if (rv > 0) {
-		if (! pipe) {
-			as_log_info("Connected check: Peek got unexpected data for fd %d", fd);
-		}
-		return true;
+		// Return zero if valid and no data available.
+		return (errno == EWOULDBLOCK || errno == EAGAIN) ? 0 : -1;
 	}
 	
-	// Close because already disconnected by peer.
-	as_log_debug("Connected check: Found disconnected fd %d", fd);
-	if (! pipe) {
-		as_close(fd);
-	}
-	return false;
+	// Return size of data available if peek succeeded.
+	return (rv > 0) ? (int)rv : -1;
 }
 
 as_status

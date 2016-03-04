@@ -147,10 +147,9 @@ aerospike_job_info(
 	
 	for (uint32_t i = 0; i < nodes->size; i++) {
 		as_node* node = nodes->array[i];
-		struct sockaddr_in* sa_in = as_node_get_address(node);
 		char* response = 0;
 		
-		status = as_info_command_host(cluster, err, sa_in, command, true, deadline, &response);
+		status = as_info_command_node(err, node, command, true, deadline, &response);
 		
 		if (status == AEROSPIKE_OK) {
 			as_job_process(response, info);

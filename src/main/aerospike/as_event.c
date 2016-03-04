@@ -349,11 +349,16 @@ as_event_get_connection(as_event_command* cmd)
 	while (as_queue_pop(queue, &conn)) {
 		ck_pr_dec_32(&cmd->cluster->async_conn_pool);
 		
-		if (as_event_validate_connection(&conn->base, false)) {
+		// Verify that socket is active and receive buffer is empty.
+		int len = as_event_validate_connection(&conn->base);
+		
+		if (len == 0) {
 			conn->cmd = cmd;
 			cmd->conn = (as_event_connection*)conn;
 			return AS_CONNECTION_FROM_POOL;
 		}
+		
+		as_log_debug("Invalid async socket from pool: %d", len);
 		as_event_release_connection(cmd->cluster, &conn->base, queue);
 	}
 	

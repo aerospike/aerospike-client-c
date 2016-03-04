@@ -97,7 +97,8 @@ as_node_create(as_cluster* cluster, as_host* host, struct sockaddr_in* addr, as_
 		node->pipe_conn_qs = 0;
 	}
 
-	node->info_fd = -1;
+	node->info_fd = node_info->fd;
+	node->conn_count = 0;
 	node->friends = 0;
 	node->failures = 0;
 	node->index = 0;
@@ -112,7 +113,7 @@ as_node_destroy(as_node* node)
 	int	fd;
 	
 	while (cf_queue_pop(node->conn_q, &fd, CF_QUEUE_NOWAIT) == CF_QUEUE_OK) {
-		as_close(fd);
+		as_node_close_connection(node, fd);
 	}
 		
 	if (node->info_fd >= 0) {
@@ -168,17 +169,16 @@ as_node_add_address(as_node* node, as_host* host, struct sockaddr_in* addr)
 	as_vector_append(aliases, host);
 }
 
-static as_status
-as_node_authenticate_connection(as_error* err, as_node* node, uint64_t deadline_ms, int* fd)
+static inline as_status
+as_node_authenticate_connection(as_error* err, as_node* node, uint64_t deadline_ms, int fd)
 {
 	as_cluster* cluster = node->cluster;
 	
 	if (cluster->user) {
-		as_status status = as_authenticate(err, *fd, cluster->user, cluster->password, deadline_ms);
+		as_status status = as_authenticate(err, fd, cluster->user, cluster->password, deadline_ms);
 		
 		if (status) {
-			as_close(*fd);
-			*fd = -1;
+			as_node_close_connection(node, fd);
 			return status;
 		}
 	}
@@ -192,6 +192,7 @@ as_node_create_connection(as_error* err, as_node* node, uint64_t deadline_ms, in
 	int fd = as_socket_create_nb();
 	
 	if (fd < 0) {
+		ck_pr_dec_32(&node->conn_count);
 		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Socket create failed");
 	}
 	*fd_out = fd;
@@ -203,7 +204,7 @@ as_node_create_connection(as_error* err, as_node* node, uint64_t deadline_ms, in
 	
 	if (as_socket_start_connect_nb(&error_local, fd, &primary->addr) == AEROSPIKE_OK) {
 		// Connection started ok - we have our socket.
-		return as_node_authenticate_connection(err, node, deadline_ms, fd_out);
+		return as_node_authenticate_connection(err, node, deadline_ms, fd);
 	}
 	
 	// Try other addresses.
@@ -219,39 +220,45 @@ as_node_create_connection(as_error* err, as_node* node, uint64_t deadline_ms, in
 				// It's just a hint, not a requirement to try this new address first.
 				as_log_debug("Change node address %s %s:%d", node->name, address->name, (int)cf_swap_from_be16(address->addr.sin_port));
 				ck_pr_store_32(&node->address_index, i);
-				return as_node_authenticate_connection(err, node, deadline_ms, fd_out);
+				return as_node_authenticate_connection(err, node, deadline_ms, fd);
 			}
 		}
 	}
 	
 	// Couldn't start a connection on any socket address - close the socket.
-	as_close(fd);
-	*fd_out = -1;
+	as_node_close_connection(node, fd);
 	return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to connect: %s %s:%d",
 			node->name, primary->name, (int)cf_swap_from_be16(primary->addr.sin_port))
 }
 
 as_status
-as_node_get_connection(as_error* err, as_node* node, uint64_t deadline_ms, int* fd)
+as_node_get_connection(as_error* err, as_node* node, uint64_t deadline_ms, int* fd_out)
 {
 	cf_queue* q = node->conn_q;
+	int fd;
 	
-	while (1) {
-		int rv = cf_queue_pop(q, fd, CF_QUEUE_NOWAIT);
+	while (cf_queue_pop(q, &fd, CF_QUEUE_NOWAIT) == CF_QUEUE_OK) {
+		// Verify that socket is active and receive buffer is empty.
+		int len = as_socket_validate(fd);
 		
-		if (rv == CF_QUEUE_OK) {
-			if (as_socket_validate(*fd, false)) {
-				return AEROSPIKE_OK;
-			}
+		if (len == 0) {
+			*fd_out = fd;
+			return AEROSPIKE_OK;
 		}
-		else if (rv == CF_QUEUE_EMPTY) {
-			// We exhausted the queue. Try creating a fresh socket.
-			return as_node_create_connection(err, node, deadline_ms, fd);
-		}
-		else {
-			*fd = -1;
-			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Bad return value from cf_queue_pop");
-		}
+
+		as_log_debug("Invalid socket %d from pool: %d", fd, len);
+		as_node_close_connection(node, fd);
+	}
+	
+	// We exhausted the queue. Try creating a fresh socket.
+	if (ck_pr_faa_32(&node->conn_count, 1) < node->cluster->conn_queue_size) {
+		return as_node_create_connection(err, node, deadline_ms, fd_out);
+	}
+	else {
+		ck_pr_dec_32(&node->conn_count);
+		return as_error_update(err, AEROSPIKE_ERR_NO_MORE_CONNECTIONS,
+						"Max node %s async connections would be exceeded: %u",
+						node->name, node->cluster->conn_queue_size);
 	}
 }
 

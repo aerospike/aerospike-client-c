@@ -193,7 +193,7 @@ as_admin_execute(aerospike* as, as_error* err, const as_policy_admin* policy, ui
 	status = as_admin_send(err, fd, buffer, end, deadline_ms);
 	
 	if (status) {
-		as_close(fd);
+		as_node_close_connection(node, fd);
 		as_node_release(node);
 		return status;
 	}
@@ -201,12 +201,12 @@ as_admin_execute(aerospike* as, as_error* err, const as_policy_admin* policy, ui
 	status = as_socket_read_deadline(err, fd, buffer, HEADER_SIZE, deadline_ms);
 	
 	if (status) {
-		as_close(fd);
+		as_node_close_connection(node, fd);
 		as_node_release(node);
 		return status;
 	}
 	
-	as_node_put_connection(node, fd, cluster->conn_queue_size);
+	as_node_put_connection(node, fd);
 	as_node_release(node);
 	
 	status = buffer[RESULT_CODE];
@@ -293,7 +293,7 @@ as_admin_read_list(aerospike* as, as_error* err, const as_policy_admin* policy, 
 	status = as_admin_send(err, fd, command, end, deadline_ms);
 	
 	if (status) {
-		as_close(fd);
+		as_node_close_connection(node, fd);
 		as_node_release(node);
 		return status;
 	}
@@ -301,12 +301,12 @@ as_admin_read_list(aerospike* as, as_error* err, const as_policy_admin* policy, 
 	status = as_admin_read_blocks(err, fd, deadline_ms, parse_fn, list);
 	
 	if (status) {
-		as_close(fd);
+		as_node_close_connection(node, fd);
 		as_node_release(node);
 		return status;
 	}
 
-	as_node_put_connection(node, fd, cluster->conn_queue_size);
+	as_node_put_connection(node, fd);
 	as_node_release(node);
 	return status;
 }

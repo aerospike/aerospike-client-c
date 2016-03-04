@@ -141,6 +141,12 @@ typedef struct as_node_s {
 	 *	@private
 	 *	Number of other nodes that consider this node a member of the cluster.
 	 */
+	uint32_t conn_count;
+
+	/**
+	 *	@private
+	 *	Number of other nodes that consider this node a member of the cluster.
+	 */
 	uint32_t friends;
 	
 	/**
@@ -197,7 +203,13 @@ typedef struct as_node_info_s {
 	 *	Node name.
 	 */
 	char name[AS_NODE_NAME_SIZE];
-	
+
+	/**
+	 *	@private
+	 *	Validated socket.
+	 */
+	int fd;
+
 	/**
 	 *	@private
 	 *	Does node support batch-index protocol?
@@ -336,13 +348,23 @@ as_node_get_connection(as_error* err, as_node* node, uint64_t deadline_ms, int* 
 
 /**
  *	@private
- *	Put connection back into pool if pool size < limit.  Otherwise, close connection.
+ *	Close a node's connection and do not put back into pool.
  */
 static inline void
-as_node_put_connection(as_node* node, int fd, uint32_t limit)
+as_node_close_connection(as_node* node, int fd) {
+	close(fd);
+	ck_pr_dec_32(&node->conn_count);
+}
+
+/**
+ *	@private
+ *	Put connection back into pool.
+ */
+static inline void
+as_node_put_connection(as_node* node, int fd)
 {
-	if (! cf_queue_push_limit(node->conn_q, &fd, limit)) {
-		close(fd);
+	if (cf_queue_push(node->conn_q, &fd) != CF_QUEUE_OK) {
+		as_node_close_connection(node, fd);
 	}
 }
 

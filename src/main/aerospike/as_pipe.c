@@ -302,15 +302,18 @@ as_pipe_get_connection(as_event_command* cmd)
 			}
 
 			conn->in_pool = false;
+			
+			// Verify that socket is active.  Socket receive buffer may already have data.
+			int len = as_event_validate_connection(&conn->base);
 
-			if (as_event_validate_connection(&conn->base, true)) {
+			if (len >= 0) {
 				as_log_trace("Validation OK");
 				cmd->conn = (as_event_connection*)conn;
 				write_start(cmd);
 				return AS_CONNECTION_FROM_POOL;
 			}
 
-			as_log_trace("Validation failed");
+			as_log_debug("Invalid pipeline socket from pool: %d", len);
 			release_connection(cmd, conn, q);
 		}
 	}

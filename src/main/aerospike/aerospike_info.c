@@ -195,8 +195,7 @@ as_status aerospike_info_any(
 	
 	for (uint32_t i = 0; i < nodes->size && loop; i++) {
 		as_node* node = nodes->array[i];
-		struct sockaddr_in* sa_in = as_node_get_address(node);
-		status = as_info_command_host(cluster, err, sa_in, (char*)req, policy->send_as_is, deadline, res);
+		status = as_info_command_node(err, node, (char*)req, policy->send_as_is, deadline, res);
 		
 		switch (status) {
 			case AEROSPIKE_OK:
@@ -260,10 +259,9 @@ as_status aerospike_info_foreach(
 	
 	for (uint32_t i = 0; i < nodes->size; i++) {
 		as_node* node = nodes->array[i];
-		struct sockaddr_in* sa_in = as_node_get_address(node);
 		char* response = 0;
 	
-		status = as_info_command_host(cluster, err, sa_in, (char*)req, policy->send_as_is, deadline, &response);
+		status = as_info_command_node(err, node, (char*)req, policy->send_as_is, deadline, &response);
 		
 		if (status == AEROSPIKE_OK) {
 			bool result = callback(err, node, req, response, udata);

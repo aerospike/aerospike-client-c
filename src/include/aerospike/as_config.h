@@ -272,11 +272,17 @@ typedef struct as_config_s {
 	uint32_t ip_map_size;
 	
 	/**
-	 *	Estimate of incoming threads concurrently using synchronous methods in the client instance.
-	 *	This field is used to size the synchronous connection pool for each server node.
-	 *	Default: 300
+	 * Maximum number of synchronous connections allowed per server node.  Synchronous transactions
+	 * will go through retry logic and potentially fail with error code "AEROSPIKE_ERR_NO_MORE_CONNECTIONS"
+	 * if the maximum number of connections would be exceeded.
+	 * 
+	 * The number of connections used per node depends on how many concurrent threads issue
+	 * database commands plus sub-threads used for parallel multi-node commands (batch, scan,
+	 * and query). One connection will be used for each thread.
+	 *
+	 * Default: 300
 	 */
-	uint32_t max_threads;
+	uint32_t max_conns_per_node;
 	
 	/**
 	 *	Maximum number of asynchronous (non-pipeline) connections allowed for each node.
@@ -297,15 +303,6 @@ typedef struct as_config_s {
 	 *	Default: 64
 	 */
 	uint32_t pipe_max_conns_per_node;
-
-	/**
-	 *	@private
-	 *	Not currently used.
-	 *	Maximum socket idle in seconds.  Socket connection pools will discard sockets
-	 *	that have been idle longer than the maximum.
-	 *	Default: 55
-	 */
-	uint32_t max_socket_idle_sec;
 	
 	/**
 	 *	Initial host connection timeout in milliseconds.  The timeout when opening a connection

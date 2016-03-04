@@ -79,15 +79,14 @@ as_socket_create_and_connect_nb(as_error* err, struct sockaddr_in *sa, int* fd);
 
 /**
  *	@private
- *	Peek for socket connection status.  Close socket if not connected.
+ *	Peek for socket connection status.
  *
- *	@param fd			Socket identifier.
- *	@param pipe 		If true, do not log message if socket contains data and do not close fd.
- *
- *	@return if socket is connected.
+ *	@return   0 : socket is connected, but no data available.
+ *			> 0 : byte size of data available.
+ *			< 0 : socket is invalid.
  */
-bool
-as_socket_validate(int fd, bool pipe);
+int
+as_socket_validate(int fd);
 
 #if defined(__linux__) || defined(__APPLE__)
 

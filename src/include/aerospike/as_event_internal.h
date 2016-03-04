@@ -237,10 +237,10 @@ as_event_command_free(as_event_command* cmd)
 
 #if defined(AS_USE_LIBEV)
 
-static inline bool
-as_event_validate_connection(as_event_connection* conn, bool pipeline)
+static inline int
+as_event_validate_connection(as_event_connection* conn)
 {
-	return as_socket_validate(conn->fd, pipeline);
+	return as_socket_validate(conn->fd);
 }
 
 static inline void
@@ -269,14 +269,14 @@ as_event_command_release(as_event_command* cmd)
 
 #elif defined(AS_USE_LIBUV)
 
-static inline bool
-as_event_validate_connection(as_event_connection* conn, bool pipeline)
+static inline int
+as_event_validate_connection(as_event_connection* conn)
 {
 	// Libuv does not have a peek function, so use fd directly.
 	uv_os_fd_t fd;
 	
 	if (uv_fileno((uv_handle_t*)&conn->socket, &fd) == 0) {
-		return as_socket_validate(fd, pipeline);
+		return as_socket_validate(fd);
 	}
 	return false;
 }
@@ -314,10 +314,10 @@ as_event_command_release(as_event_command* cmd)
 
 #else
 
-static inline bool
-as_event_validate_connection(as_event_connection* conn, bool pipeline)
+static inline int
+as_event_validate_connection(as_event_connection* conn)
 {
-	return false;
+	return -1;
 }
 
 static inline void

@@ -111,9 +111,52 @@ as_info_validate(char* response, char** message)
 	return AEROSPIKE_OK;
 }
 
-static as_status
+/******************************************************************************
+ * FUNCTIONS
+ *****************************************************************************/
+
+as_status
+as_info_command_node(as_error* err, as_node* node, char* command, bool send_asis, uint64_t deadline_ms, char** response)
+{
+	int fd;
+	as_status status = as_node_get_connection(err, node, deadline_ms, &fd);
+	
+	if (status) {
+		return status;
+	}
+	
+	status = as_info_command(err, fd, command, send_asis, deadline_ms, 0, response);
+	
+	if (status == AEROSPIKE_ERR_TIMEOUT || status == AEROSPIKE_ERR_CLIENT) {
+		as_node_close_connection(node, fd);
+	}
+	else {
+		as_node_put_connection(node, fd);
+	}
+	return status;
+}
+
+as_status
+as_info_command_host(as_cluster* cluster, as_error* err, struct sockaddr_in* sa_in, char* command,
+	 bool send_asis, uint64_t deadline_ms, char** response)
+{
+	int fd;
+	as_status status = as_info_create_socket(cluster, err, sa_in, deadline_ms, &fd);
+	
+	if (status) {
+		*response = 0;
+		return status;
+	}
+		
+	status = as_info_command(err, fd, command, send_asis, deadline_ms, 0, response);
+	shutdown(fd, SHUT_RDWR);
+	as_close(fd);
+	return status;
+}
+
+as_status
 as_info_command(as_error* err, int fd, char* names, bool send_asis, uint64_t deadline_ms,
-	uint64_t max_response_length, char** values)
+				uint64_t max_response_length, char** values)
 {
 	*values = 0;
 	
@@ -195,8 +238,8 @@ as_info_command(as_error* err, int fd, char* names, bool send_asis, uint64_t dea
 			
 			buf[read_len] = 0;
 			return as_error_update(err, AEROSPIKE_ERR_CLIENT,
-				   "Info request '%s' failed. Response buffer length %lu is excessive. Buffer: %s",
-				   names, (uint64_t)header.sz, buf);
+								   "Info request '%s' failed. Response buffer length %lu is excessive. Buffer: %s",
+								   names, (uint64_t)header.sz, buf);
 		}
 		
 		char* response = cf_malloc(header.sz + 1);
@@ -222,19 +265,14 @@ as_info_command(as_error* err, int fd, char* names, bool send_asis, uint64_t dea
 	return status;
 }
 
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
-
 as_status
-as_info_command_host(as_cluster* cluster, as_error* err, struct sockaddr_in* sa_in, char* command,
-	 bool send_asis, uint64_t deadline_ms, char** response)
+as_info_create_socket(as_cluster* cluster, as_error* err, struct sockaddr_in* sa_in,
+					  uint64_t deadline_ms, int* fd_out)
 {
 	int fd;
 	as_status status = as_socket_create_and_connect_nb(err, sa_in, &fd);
 	
 	if (status) {
-		*response = 0;
 		return status;
 	}
 	
@@ -243,15 +281,11 @@ as_info_command_host(as_cluster* cluster, as_error* err, struct sockaddr_in* sa_
 		
 		if (status) {
 			as_close(fd);
-			*response = 0;
 			return status;
 		}
 	}
-	
-	status = as_info_command(err, fd, command, send_asis, deadline_ms, 0, response);
-	shutdown(fd, SHUT_RDWR);
-	as_close(fd);
-	return status;
+	*fd_out = fd;
+	return AEROSPIKE_OK;
 }
 
 as_status

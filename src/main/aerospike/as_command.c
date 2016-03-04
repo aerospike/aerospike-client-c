@@ -411,7 +411,7 @@ as_command_compress(as_error* err, uint8_t* cmd, size_t cmd_sz, uint8_t* compres
 }
 
 as_status
-as_command_execute(as_cluster* cluster, as_error * err, as_command_node* cn, uint8_t* command, size_t command_len,
+as_command_execute(as_cluster* cluster, as_error* err, as_command_node* cn, uint8_t* command, size_t command_len,
 	uint32_t timeout_ms, uint32_t retry,
 	as_parse_results_fn parse_results_fn, void* parse_results_data
 )
@@ -437,6 +437,7 @@ as_command_execute(as_cluster* cluster, as_error * err, as_command_node* cn, uin
 		}
 		
 		if (!node) {
+			as_error_set_message(err, AEROSPIKE_ERR_INVALID_NODE, "Invalid node");
 			failed_nodes++;
 			sleep_between_retries_ms = 10;
 			goto Retry;
@@ -460,7 +461,7 @@ as_command_execute(as_cluster* cluster, as_error * err, as_command_node* cn, uin
 		if (status) {
 			// Socket errors are considered temporary anomalies.  Retry.
 			// Close socket to flush out possible garbage.	Do not put back in pool.
-			as_close(fd);
+			as_node_close_connection(node, fd);
 			if (release_node) {
 				as_node_release(node);
 			}
@@ -480,19 +481,20 @@ as_command_execute(as_cluster* cluster, as_error * err, as_command_node* cn, uin
 		else {
 			switch (status) {
 				case AEROSPIKE_ERR_TIMEOUT:
-					as_close(fd);
+					as_node_close_connection(node, fd);
 					if (release_node) {
 						as_node_release(node);
 					}
-					sleep_between_retries_ms = 0;
-					goto Retry;
+					return as_error_update(err, AEROSPIKE_ERR_TIMEOUT,
+							"Timeout: timeout=%d iterations=%u failedNodes=%u failedConns=%u",
+							timeout_ms, ++iterations, failed_nodes, failed_conns);
 				
 				// Close socket on errors that can leave unread data in socket.
 				case AEROSPIKE_ERR_QUERY_ABORTED:
 				case AEROSPIKE_ERR_SCAN_ABORTED:
 				case AEROSPIKE_ERR_CLIENT_ABORT:
 				case AEROSPIKE_ERR_CLIENT:
-					as_close(fd);
+					as_node_close_connection(node, fd);
 					if (release_node) {
 						as_node_release(node);
 					}
@@ -506,7 +508,7 @@ as_command_execute(as_cluster* cluster, as_error * err, as_command_node* cn, uin
 		}
 		
 		// Put connection back in pool.
-		as_node_put_connection(node, fd, cluster->conn_queue_size);
+		as_node_put_connection(node, fd);
 		
 		// Release resources.
 		if (release_node) {
@@ -538,9 +540,14 @@ Retry:
 		}
 	}
 	
-	return as_error_update(err, AEROSPIKE_ERR_TIMEOUT,
-		"Client timeout: timeout=%d iterations=%u failedNodes=%u failedConns=%u",
-		timeout_ms, iterations, failed_nodes, failed_conns);
+	// Retries have been exhausted.  Return last error.
+	// Fill in timeout stats if timeout occurred.
+	if (err->code == AEROSPIKE_ERR_TIMEOUT) {
+		as_error_update(err, AEROSPIKE_ERR_TIMEOUT,
+		   "Timeout: timeout=%d iterations=%u failedNodes=%u failedConns=%u",
+		   timeout_ms, iterations, failed_nodes, failed_conns);
+	}
+	return err->code;
 }
 
 as_status

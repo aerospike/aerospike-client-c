@@ -168,11 +168,19 @@ as_seeds_update(as_cluster* cluster, as_seed* seed_list, uint32_t size)
 static as_status
 as_lookup_node(as_cluster* cluster, as_error* err, struct sockaddr_in* addr, as_node_info* node_info)
 {
-	char* response = 0;
 	uint64_t deadline = as_socket_deadline(cluster->conn_timeout_ms);
-	as_status status = as_info_command_host(cluster, err, addr, "node\nfeatures\n", true, deadline, &response);
+	int fd;
+	as_status status = as_info_create_socket(cluster, err, addr, deadline, &fd);
 
 	if (status) {
+		return status;
+	}
+	
+	char* response = 0;
+	status = as_info_command(err, fd, "node\nfeatures\n", true, deadline, 0, &response);
+
+	if (status) {
+		as_close(fd);
 		return status;
 	}
 	
@@ -192,6 +200,7 @@ as_lookup_node(as_cluster* cluster, as_error* err, struct sockaddr_in* addr, as_
 		goto Error;
 	}
 	as_strncpy(node_info->name, node_name, AS_NODE_NAME_SIZE);
+	node_info->fd = fd;
 
 	nv = as_vector_get(&values, 1);
 	char* features = nv->value;
@@ -249,6 +258,7 @@ Error: {
 		as_socket_address_name(addr, addr_name);
 		as_error_update(err, status, "Invalid node info response from %s: %s", addr_name, response);
 		cf_free(response);
+		as_close(fd);
 		return AEROSPIKE_ERR_CLIENT;
 	}
 }
@@ -390,6 +400,7 @@ as_cluster_seed_nodes(as_cluster* cluster, as_error* err, bool enable_warnings)
 				as_node* node = as_cluster_find_node_in_vector(&nodes_to_add, node_info.name);
 				
 				if (node) {
+					as_close(node_info.fd);
 					as_node_add_address(node, &host, addr);
 				}
 				else {
@@ -455,6 +466,7 @@ as_cluster_find_nodes_to_add(as_cluster* cluster, as_vector* /* <as_host> */ fri
 					// services list contains both internal and external IP addresses
 					// for the same node.  Add new host to list of alias filters
 					// and do not add new node.
+					as_close(node_info.fd);
 					as_address* a = as_node_get_address_full(node);
 					as_log_info("Node %s:%d already exists with nodeid %s and address %s:%d", 
 						friend->name, friend->port, node->name, a->name,
@@ -647,16 +659,15 @@ as_cluster_set_partition_size(as_cluster* cluster, as_error* err)
 	
 	for (uint32_t i = 0; i < nodes->size && cluster->n_partitions == 0; i++) {
 		as_node* node = nodes->array[i];
-		struct sockaddr_in* addr = as_node_get_address(node);
-		
+
 		char* response = 0;
 		uint64_t deadline = as_socket_deadline(cluster->conn_timeout_ms);
-		as_status status = as_info_command_host(cluster, err, addr, "partitions", true, deadline, &response);
-				
+		status = as_info_command_node(err, node, "partitions", true, deadline, &response);
+
 		if (status != AEROSPIKE_OK) {
 			continue;
 		}
-		
+
 		char *value = 0;
 		status = as_info_parse_single_response(response, &value);
 			
@@ -664,9 +675,7 @@ as_cluster_set_partition_size(as_cluster* cluster, as_error* err)
 			cluster->n_partitions = atoi(value);
 		}
 		else {
-			char name[INET_ADDRSTRLEN];
-			as_socket_address_name(addr, name);
-			as_error_update(err, status, "Invalid partitions info response from %s: %s", name, response);
+			as_error_update(err, status, "Invalid partitions info response from node %s: %s", node->name, response);
 		}
 		cf_free(response);
 	}
@@ -1156,7 +1165,7 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 	
 	// Initialize cluster tend and node parameters
 	cluster->tend_interval = (config->tender_interval < 1000)? 1000 : config->tender_interval;
-	cluster->conn_queue_size = config->max_threads + 1;  // Add one connection for tend thread.
+	cluster->conn_queue_size = config->max_conns_per_node;
 	cluster->conn_timeout_ms = (config->conn_timeout_ms == 0) ? 1000 : config->conn_timeout_ms;
 	cluster->async_max_conns_per_node = config->async_max_conns_per_node;
 	cluster->pipe_max_conns_per_node = config->pipe_max_conns_per_node;;

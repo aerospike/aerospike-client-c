@@ -43,11 +43,35 @@ struct sockaddr_in;
 
 /**
  *	@private
+ *	Send info command to specific node. The values must be freed by the caller on success.
+ */
+as_status
+as_info_command_node(as_error* err, as_node* node, char* command, bool send_asis, uint64_t deadline_ms, char** response);
+
+/**
+ *	@private
  *	Send info command to specific host. The values must be freed by the caller on success.
  */
 as_status
 as_info_command_host(as_cluster* cluster, as_error* err, struct sockaddr_in* sa_in, char* command,
 	 bool send_asis, uint64_t deadline_ms, char** response);
+
+/**
+ *	@private
+ *	Send info command to specific socket. The values must be freed by the caller on success.
+ *	Set max_response_length to zero if response size should not be bounded.
+ */
+as_status
+as_info_command(as_error* err, int fd, char* names, bool send_asis, uint64_t deadline_ms,
+				uint64_t max_response_length, char** values);
+
+/**
+ *	@private
+ *	Create and authenticate socket for info requests.
+ */
+as_status
+as_info_create_socket(as_cluster* cluster, as_error* err, struct sockaddr_in* sa_in,
+					  uint64_t deadline_ms, int* fd_out);
 
 /**
  *	@private

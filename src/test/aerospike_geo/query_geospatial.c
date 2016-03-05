@@ -34,8 +34,9 @@
 #include <aerospike/mod_lua.h>
 
 #include "../test.h"
-#include "../util/udf.h"
 #include "../util/consumer_stream.h"
+#include "../util/log_helper.h"
+#include "../util/udf.h"
 
 /******************************************************************************
  * GLOBAL VARS
@@ -176,6 +177,312 @@ TEST( valid_geojson, "valid geojson formats" ) {
 
 }
 
+typedef struct foreach_udata_s {
+	uint64_t count;
+	char binname[128];
+	as_hashmap *hm;
+} foreach_udata;
+
+
+static bool query_foreach_count_callback(const as_val * v, void * udata) {
+	foreach_udata * m = (foreach_udata *) udata;
+	if ( v == NULL ) {
+		info("count: %d", m->count);
+	}
+	else {
+		// dump_record((as_record *)v);
+		char * uniq = as_record_get_str((as_record *)v, m->binname);
+		as_map_set(m->hm, (as_val *) as_string_new(strdup(uniq),true), (as_val *) as_integer_new(1));
+
+		m->count += 1;
+	}
+	return true;
+}
+
+TEST( query_geojson_in_list, "IN LIST count(*) where p in <rectangle>" ) {
+
+	// create complex index on a list of geojson regions
+	char *index_name = "idx_test_list_p";
+	char *indexed_bin_name = "geolistbin";
+
+	as_error err;
+	as_error_reset(&err);
+
+	as_index_task task;
+
+	as_status status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE, SET,
+			indexed_bin_name, index_name, AS_INDEX_TYPE_LIST, AS_INDEX_GEO2DSPHERE);
+	if ( status == AEROSPIKE_OK ) {
+		aerospike_index_create_wait(&err, &task, 0);
+	}
+	else {
+		info("error(%d): %s", err.code, err.message);
+	}
+
+	// insert records
+	int n_recs = 1000;
+
+	for ( int i = 0; i < n_recs; i++ ) {
+
+		// Make a list of points and regions
+		as_arraylist mylist;
+		as_arraylist_init(&mylist, 20, 0);
+
+
+		for ( int jj = 0; jj < 10; ++jj ) {
+			//
+			// This creates a grid of points:
+			// [0.00, 0.00], [0.00, 0.10], ... [0.00, 0.90]
+			// [0.01, 0.00], [0.01, 0.10], ... [0.01, 0.90]
+			// ...
+			// [0.99, 0.00], [0.99, 0.10], ... [0.99, 0.90]
+			//
+			double plat = 0.0 + (0.01 * i);
+			double plng = 0.0 + (0.10 * jj);
+			char pntbuf[1024];
+			snprintf(pntbuf, sizeof(pntbuf),
+					 "{ \"type\": \"Point\", \"coordinates\": [%f, %f] }",
+					 plng, plat);
+
+			as_arraylist_append(&mylist, (as_val *) as_geojson_new(strdup(pntbuf), true));
+
+			//
+			// This creates a grid of regions centered around the following points
+			// [0.00, 0.00], [0.00, -0.10], ... [0.00, -0.90]
+			// [0.01, 0.00], [0.01, -0.10], ... [0.01, -0.90]
+			// ...
+			// [0.99, 0.00], [0.99, -0.10], ... [0.99, -0.90]
+			//
+			double rlat = 0.0 + (0.01 * i);
+			double rlng = 0.0 - (0.10 * jj);
+			char rgnbuf[1024];
+			snprintf(rgnbuf, sizeof(rgnbuf),
+					 "{ \"type\": \"Polygon\", "
+					 "\"coordinates\": ["
+					 "[[%f, %f], [%f, %f], [%f, %f], [%f, %f], [%f, %f]] "
+					 "] }",
+					 rlng - 0.001, rlat - 0.001,
+					 rlng + 0.001, rlat - 0.001,
+					 rlng + 0.001, rlat + 0.001,
+					 rlng - 0.001, rlat + 0.001,
+					 rlng - 0.001, rlat - 0.001);
+
+			as_arraylist_append(&mylist, (as_val *) as_geojson_new(strdup(rgnbuf), true));
+		}
+
+		as_key key;
+		as_key_init_int64(&key, NAMESPACE, SET, (int64_t)i+1000);
+		as_record r;
+		as_record_init(&r, 2);
+
+		char binval[128];
+		snprintf(binval, sizeof(binval), "other_bin_value_%d", i);
+
+		as_record_set_str(&r, "a", binval);
+		as_record_set_list(&r, indexed_bin_name, (as_list *) &mylist);
+
+		aerospike_key_put(as, &err, NULL, &key, &r);
+
+		as_record_destroy(&r);
+	}
+
+	// Query
+	as_query q;
+	as_query_init(&q, NAMESPACE, SET);
+
+	char const * region =
+		"{ "
+		"    \"type\": \"Polygon\", "
+		"    \"coordinates\": [["
+		"        [-0.202, -0.202], "
+		"        [ 0.202, -0.202], "
+		"        [ 0.202,  0.202], "
+		"        [-0.202,  0.202], "
+		"        [-0.202, -0.202] "
+		"    ]]"
+		" } ";
+
+	as_query_where_inita(&q, 1);
+	as_query_where(&q, indexed_bin_name, AS_PREDICATE_RANGE, AS_INDEX_TYPE_LIST, AS_INDEX_GEO2DSPHERE, region);
+
+	foreach_udata udata = {0};
+	udata.hm = as_hashmap_new(32);
+	strncpy (udata.binname, "a", sizeof(udata.binname));
+
+	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_count_callback, &udata);
+
+	if ( err.code != AEROSPIKE_OK ) {
+		 fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+	}
+	assert_int_eq( err.code, AEROSPIKE_OK );
+
+	// We should find only points.
+	// The first 21 records have lat from 0.00 to 0.20.
+	// Each record has 3 points with lng 0.00, 0.10, 0.20
+
+	assert_int_eq( udata.hm->count, 21 );
+
+	// currently we return duplicates
+	assert_int_eq( udata.count,697);
+
+	as_hashmap_destroy(udata.hm);
+
+	as_query_destroy(&q);
+
+	// Cleanup
+	aerospike_index_remove(as, &err, NULL, NAMESPACE, index_name);
+
+	for ( int i = 0; i < n_recs; i++ ) {
+		as_key key;
+		as_key_init_int64(&key, NAMESPACE, SET, (int64_t)i+1000);
+
+		aerospike_key_remove(as, &err, NULL, &key);
+	}
+}
+
+
+TEST( query_geojson_in_mapvalue, "IN MAPVALUES count(*) where p in <rectangle>" ) {
+
+	// create complex index on a map with values of geojson regions
+	char *index_name = "idx_test_map_p";
+	char *indexed_bin_name = "geomapbin";
+
+	as_error err;
+	as_error_reset(&err);
+
+	as_index_task task;
+
+	as_status status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE, SET, indexed_bin_name, index_name, AS_INDEX_TYPE_MAPVALUES, AS_INDEX_GEO2DSPHERE);
+	if ( status == AEROSPIKE_OK ) {
+		aerospike_index_create_wait(&err, &task, 0);
+	}
+	else {
+		info("error(%d): %s", err.code, err.message);
+	}
+
+	// insert records
+	int n_recs = 1000;
+
+	for ( int i = 0; i < n_recs; i++ ) {
+		// Make a map of points and regions
+
+		as_hashmap mymap;
+		as_hashmap_init(&mymap, 20);
+		for ( int jj = 0; jj < 10; ++jj ) {
+			//
+			// This creates a grid of points:
+			// [0.00, 0.00], [0.00, 0.10], ... [0.00, 0.90]
+			// [0.01, 0.00], [0.01, 0.10], ... [0.01, 0.90]
+			// ...
+			// [0.99, 0.00], [0.99, 0.10], ... [0.99, 0.90]
+			//
+			double plat = 0.0 + (0.01 * i);
+			double plng = 0.0 + (0.10 * jj);
+			char pntbuf[1024];
+			snprintf(pntbuf, sizeof(pntbuf),
+					 "{ \"type\": \"Point\", \"coordinates\": [%f, %f] }",
+					 plng, plat);
+
+			char mkey[128];
+			snprintf(mkey, sizeof(mkey), "pointkey_%d", jj);
+			as_stringmap_set((as_map *) &mymap, mkey, (as_val *)as_geojson_new(strdup(pntbuf), true));
+
+			//
+			// This creates a grid of regions centered around the following points
+			// [0.00, 0.00], [0.00, -0.10], ... [0.00, -0.90]
+			// [0.01, 0.00], [0.01, -0.10], ... [0.01, -0.90]
+			// ...
+			// [0.99, 0.00], [0.99, -0.10], ... [0.99, -0.90]
+			//
+			double rlat = 0.0 + (0.01 * i);
+			double rlng = 0.0 - (0.10 * jj);
+			char rgnbuf[1024];
+			snprintf(rgnbuf, sizeof(rgnbuf),
+					 "{ \"type\": \"Polygon\", "
+					 "\"coordinates\": ["
+					 "[[%f, %f], [%f, %f], [%f, %f], [%f, %f], [%f, %f]] "
+					 "] }",
+					 rlng - 0.001, rlat - 0.001,
+					 rlng + 0.001, rlat - 0.001,
+					 rlng + 0.001, rlat + 0.001,
+					 rlng - 0.001, rlat + 0.001,
+					 rlng - 0.001, rlat - 0.001);
+
+			snprintf(mkey, sizeof(mkey), "regionkey_%d", jj);
+			as_stringmap_set((as_map *) &mymap, mkey, (as_val *)as_geojson_new(strdup(pntbuf), true));
+
+		}
+
+		as_key key;
+		as_key_init_int64(&key, NAMESPACE, SET, (int64_t)i+1000);
+		as_record r;
+		as_record_init(&r, 2);
+
+		char binval[128];
+		snprintf(binval, sizeof(binval), "other_bin_value_%d", i);
+
+		as_record_set_str(&r, "a", binval);
+		as_record_set_map(&r, indexed_bin_name, (as_map *) &mymap);
+
+		aerospike_key_put(as, &err, NULL, &key, &r);
+
+		as_record_destroy(&r);
+	}
+
+	// Query
+	as_query q;
+	as_query_init(&q, NAMESPACE, SET);
+
+	char const * region =
+		"{ "
+		"    \"type\": \"Polygon\", "
+		"    \"coordinates\": [["
+		"        [-0.202, -0.202], "
+		"        [ 0.202, -0.202], "
+		"        [ 0.202,  0.202], "
+		"        [-0.202,  0.202], "
+		"        [-0.202, -0.202] "
+		"    ]]"
+		" } ";
+
+	as_query_where_inita(&q, 1);
+	as_query_where(&q, indexed_bin_name, AS_PREDICATE_RANGE, AS_INDEX_TYPE_MAPVALUES, AS_INDEX_GEO2DSPHERE, region);
+
+	foreach_udata udata = {0};
+	udata.hm = as_hashmap_new(32);
+	strncpy (udata.binname, "a", sizeof(udata.binname));
+
+	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_count_callback, &udata);
+
+	if ( err.code != AEROSPIKE_OK ) {
+		 fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+	}
+	assert_int_eq( err.code, AEROSPIKE_OK );
+
+	// We should find only points.
+	// The first 21 records have lat from 0.00 to 0.20.
+	// Each record has 3 points with lng 0.00, 0.10, 0.20
+
+	assert_int_eq( udata.hm->count, 21 );
+
+	// currently we return duplicates
+	assert_int_eq( udata.count,63);
+
+	as_hashmap_destroy(udata.hm);
+
+	as_query_destroy(&q);
+
+	// Cleanup
+	aerospike_index_remove(as, &err, NULL, NAMESPACE, index_name);
+
+	for ( int i = 0; i < n_recs; i++ ) {
+		as_key key;
+		as_key_init_int64(&key, NAMESPACE, SET, (int64_t)i+1000);
+
+		aerospike_key_remove(as, &err, NULL, &key);
+	}
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -194,4 +501,7 @@ SUITE( query_geospatial, "aerospike_query_geospatial tests" ) {
 	
 	suite_add( invalid_geojson );
 	suite_add( valid_geojson );
+	suite_add( query_geojson_in_list );
+	suite_add( query_geojson_in_mapvalue );
+
 }

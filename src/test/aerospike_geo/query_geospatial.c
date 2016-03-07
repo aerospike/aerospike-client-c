@@ -192,7 +192,7 @@ static bool query_foreach_count_callback(const as_val * v, void * udata) {
 	else {
 		// dump_record((as_record *)v);
 		char * uniq = as_record_get_str((as_record *)v, m->binname);
-		as_map_set(m->hm, (as_val *) as_string_new(strdup(uniq),true), (as_val *) as_integer_new(1));
+		as_map_set((as_map*)m->hm, (as_val *) as_string_new(strdup(uniq),true), (as_val *) as_integer_new(1));
 
 		m->count += 1;
 	}

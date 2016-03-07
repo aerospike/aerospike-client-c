@@ -257,7 +257,7 @@ as_node_get_connection(as_error* err, as_node* node, uint64_t deadline_ms, int* 
 	else {
 		ck_pr_dec_32(&node->conn_count);
 		return as_error_update(err, AEROSPIKE_ERR_NO_MORE_CONNECTIONS,
-						"Max node %s async connections would be exceeded: %u",
+						"Max node %s connections would be exceeded: %u",
 						node->name, node->cluster->conn_queue_size);
 	}
 }

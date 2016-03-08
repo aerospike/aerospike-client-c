@@ -276,6 +276,7 @@ bool as_query_where(as_query * query, const char * bin, as_predicate_type type, 
 	if ( query->where.size >= query->where.capacity ) return false;
 
 	as_predicate * p = &query->where.entries[query->where.size++];
+	bool status = true;
 
 	strcpy(p->bin, bin);
 	p->type  = type;
@@ -293,7 +294,7 @@ bool as_query_where(as_query * query, const char * bin, as_predicate_type type, 
 				p->value.integer = va_arg(ap, int64_t);
 			}
 			else {
-				return false;
+				status = false;
 			}
     		break;
     	case AS_PREDICATE_RANGE:
@@ -305,14 +306,13 @@ bool as_query_where(as_query * query, const char * bin, as_predicate_type type, 
     			p->value.string = va_arg(ap, char *);
 			}
 			else {
-				return false;
+				status = false;
 			}
 			break;
     }
 
     va_end(ap);
-
-	return true;
+	return status;
 }
 
 /******************************************************************************

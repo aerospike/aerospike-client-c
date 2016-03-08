@@ -1,10 +1,18 @@
 #!/bin/bash
 # Package libraries.
 
+set -e
+
 function PrintUsage {
-  echo "Usage: $0 lib|devel sync|libev|libuv <client dir> <stage dir> <target dir>"
+  echo "Usage: $0 [-sign] lib|devel sync|libev|libuv <client dir> <stage dir> <target dir>"
   exit 1
 }
+
+if [ "$1" = "-sign" ]
+then
+  signPackage=$1
+  shift
+fi
 
 if [ $# -ne 5 ]
 then
@@ -109,7 +117,14 @@ de|ub)
 
 ma)
   CreatePackage usr/local usr/local
-  pkgbuild --identifier com.aerospike.client.c$eventId$idSuffix.$rev --root $buildDir $targetDir/aerospike-client-c$eventName$pkgSuffix-$rev.pkg
+  if [ "$signPackage" = "-sign" ]
+  then
+    pkgbuild --identifier com.aerospike.client.c$eventId$idSuffix.$rev --root $buildDir $targetDir/unsigned.pkg
+    productsign --sign "Developer ID Installer: Aerospike, Inc." $targetDir/unsigned.pkg $targetDir/aerospike-client-c$eventName$pkgSuffix-$rev.pkg
+    rm $targetDir/unsigned.pkg
+  else
+    pkgbuild --identifier com.aerospike.client.c$eventId$idSuffix.$rev --root $buildDir $targetDir/aerospike-client-c$eventName$pkgSuffix-$rev.pkg    
+  fi
   ;;
 
 *)

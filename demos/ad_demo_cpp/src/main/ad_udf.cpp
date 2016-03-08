@@ -206,6 +206,7 @@ int Ad_Udf::register_module(void)
 	uint8_t *script_code = (uint8_t *)malloc(max_script_len);
 	if (script_code == NULL) {
 		cout << "malloc failed\n";
+		fclose(fptr);
 		return -1;
 	}
 

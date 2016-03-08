@@ -107,7 +107,7 @@ void
 latency_print_results(latency* l, const char* prefix, char* out) {
 	// Capture snapshot and make buckets cumulative.
 	int max = l->last_bucket + 1;
-	uint32_t* array = malloc(max * sizeof(uint32_t));
+	uint32_t* array = alloca(max * sizeof(uint32_t));
 	uint32_t* buckets = l->buckets;
 	int sum = 0;
 	int count;

@@ -1,5 +1,9 @@
 #!/bin/bash
 # Package client.
+# Mac OS X packages will be signed when the first argument is "-sign".
+# Packages can only be signed by Aerospike.
+
+signPackage="$1"  # "-sign" or empty string.
 
 set -e
 
@@ -94,10 +98,10 @@ do
 done
 
 # Create library package for default synchronous library.
-./package_type lib sync $baseDir $stageDir $stageFinalDir
+./package_type $signPackage lib sync $baseDir $stageDir $stageFinalDir
 
 # Create devel package with library and header files.
-./package_type devel sync $baseDir $stageDir $stageFinalDir
+./package_type $signPackage devel sync $baseDir $stageDir $stageFinalDir
 
 # Package event library targets
 for elib in libev libuv
@@ -106,8 +110,8 @@ do
 	make -C $baseDir clean
 	make EVENT_LIB=$elib -C $baseDir all
 
-	./package_type lib $elib $baseDir $stageDir $stageFinalDir
-	./package_type devel $elib $baseDir $stageDir $stageFinalDir
+	./package_type $signPackage lib $elib $baseDir $stageDir $stageFinalDir
+	./package_type $signPackage devel $elib $baseDir $stageDir $stageFinalDir
 done
 
 # Initialize package directory

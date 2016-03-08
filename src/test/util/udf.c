@@ -47,7 +47,8 @@ bool udf_readfile(const char * filename, as_bytes * content) {
 
     uint8_t * bytes = (uint8_t *) malloc(SCRIPT_LEN_MAX); 
     if ( bytes == NULL ) { 
-        error("malloc failed"); 
+        error("malloc failed");
+		fclose(file);
         return false;
     }     
 
@@ -80,6 +81,7 @@ bool udf_put(const char * filename) {
     uint8_t * content = (uint8_t *) malloc(SCRIPT_LEN_MAX); 
     if ( content == NULL ) { 
         error("malloc failed"); 
+		fclose(file);
         return -1;
     }     
 

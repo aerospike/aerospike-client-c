@@ -584,6 +584,7 @@ example_register_udf(aerospike* p_as, const char* udf_file_path)
 
 	if (! content) {
 		LOG("script content allocation failed");
+		fclose(file);
 		return false;
 	}
 

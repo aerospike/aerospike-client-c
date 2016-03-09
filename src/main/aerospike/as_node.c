@@ -37,6 +37,9 @@
 bool
 as_partition_tables_update(struct as_cluster_s* cluster, as_node* node, char* buf, bool master);
 
+bool
+as_partition_tables_update_all(as_cluster* cluster, as_node* node, char* buf);
+
 extern uint32_t as_event_loop_capacity;
 
 /******************************************************************************
@@ -570,6 +573,9 @@ as_node_process_partitions(as_cluster* cluster, as_node* node, as_vector* values
 		if (strcmp(nv->name, "partition-generation") == 0) {
 			node->partition_generation = (uint32_t)atoi(nv->value);
 		}
+		else if (strcmp(nv->name, "replicas-all") == 0) {
+			as_partition_tables_update_all(cluster, node, nv->value);
+		}
 		else if (strcmp(nv->name, "replicas-master") == 0) {
 			as_partition_tables_update(cluster, node, nv->value, true);
 		}
@@ -585,6 +591,7 @@ as_node_process_partitions(as_cluster* cluster, as_node* node, as_vector* values
 const char INFO_STR_CHECK[] = "node\npartition-generation\nservices\n";
 const char INFO_STR_CHECK_SVCALT[] = "node\npartition-generation\nservices-alternate\n";
 const char INFO_STR_GET_REPLICAS[] = "partition-generation\nreplicas-master\nreplicas-prole\n";
+const char INFO_STR_GET_REPLICAS_ALL[] = "partition-generation\nreplicas-all\n";
 
 /**
  *	Request current status from server node.
@@ -626,8 +633,13 @@ as_node_refresh(as_cluster* cluster, as_error* err, as_node* node, as_vector* /*
 	}
 	
 	if (response_status && update_partitions) {
-		buf = as_node_get_info(err, node, INFO_STR_GET_REPLICAS, sizeof(INFO_STR_GET_REPLICAS) - 1, deadline_ms, stack_buf);
-		
+		if (node->has_replicas_all) {
+			buf = as_node_get_info(err, node, INFO_STR_GET_REPLICAS_ALL, sizeof(INFO_STR_GET_REPLICAS_ALL) - 1, deadline_ms, stack_buf);
+		}
+		else {
+			buf = as_node_get_info(err, node, INFO_STR_GET_REPLICAS, sizeof(INFO_STR_GET_REPLICAS) - 1, deadline_ms, stack_buf);
+		}
+
 		if (! buf) {
 			as_node_close_info_connection(node);
 			as_vector_destroy(&values);

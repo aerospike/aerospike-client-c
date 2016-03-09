@@ -133,7 +133,7 @@ target/obj: | target
 target/obj/%.o: src/main/%.c | target/obj
 	$(CC) $(CFLAGS) -o $@ -c $^
 
-target/benchmarks: $(addprefix target/obj/,$(OBJECTS)) | target
+target/benchmarks: $(addprefix target/obj/,$(OBJECTS)) $(AEROSPIKE)/target/$(PLATFORM)/lib/libaerospike.a | target
 	$(CC) -o $@ $^ $(AEROSPIKE)/target/$(PLATFORM)/lib/libaerospike.a $(LDFLAGS)
 
 

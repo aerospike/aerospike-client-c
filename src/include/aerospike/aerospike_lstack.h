@@ -17,7 +17,7 @@
 #pragma once
 
 /**
- *	@defgroup ldt_operations Large Data Type Operations (3.0 only)
+ *	@defgroup ldt_operations Large Data Type Operations
  *	@ingroup client_operations
  *
  *	The ldt_operations module provides API to manipulate

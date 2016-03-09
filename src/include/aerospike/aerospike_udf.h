@@ -17,7 +17,7 @@
 #pragma once
 
 /** 
- *	@defgroup udf_operations UDF Operations (3.0 only)
+ *	@defgroup udf_operations UDF Operations
  *	@ingroup client_operations
  *
  *	The UDF API provides the ability to manage UDFs in the cluster.

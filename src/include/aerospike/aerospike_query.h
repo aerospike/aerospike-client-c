@@ -17,7 +17,7 @@
 #pragma once
 
 /** 
- *	@defgroup query_operations Query Operations (3.0 only)
+ *	@defgroup query_operations Query Operations
  *	@ingroup client_operations
  *
  *	The Aerospike Query Operations provide the ability to query data in the 

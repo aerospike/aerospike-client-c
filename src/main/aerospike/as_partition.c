@@ -426,3 +426,104 @@ as_partition_tables_update(as_cluster* cluster, as_node* node, char* buf, bool m
 	as_vector_destroy(&tables_to_add);
 	return true;
 }
+
+bool
+as_partition_tables_update_all(as_cluster* cluster, as_node* node, char* buf)
+{
+	// Use destructive parsing (ie modifying input buffer with null termination) for performance.
+	as_partition_tables* tables = cluster->partition_tables;
+	uint32_t bitmap_size = (cluster->n_partitions + 7) / 8;
+	long expected_len = (long)cf_b64_encoded_len(bitmap_size);
+
+	char* p = buf;
+	char* ns = p;
+	char* begin = 0;
+	int64_t len;
+	
+	// Add all tables at once to avoid copying entire array multiple times.
+	as_vector tables_to_add;
+	as_vector_inita(&tables_to_add, sizeof(as_partition_table*), 16);
+	
+	while (*p) {
+		if (*p == ':') {
+			// Parse namespace.
+			*p = 0;
+			len = p - ns;
+			
+			if (len <= 0 || len >= 32) {
+				as_log_error("Partition update. Invalid partition namespace %s", ns);
+				as_vector_destroy(&tables_to_add);
+				return false;
+			}
+			begin = ++p;
+			
+			// Parse replica count.
+			while (*p) {
+				if (*p == ',') {
+					*p = 0;
+					break;
+				}
+				p++;
+			}
+			
+			int replica_count = atoi(begin);
+			
+			// Parse master and one prole partition bitmaps.
+			for (int i = 0; i < replica_count; i++) {
+				begin = ++p;
+				
+				while (*p) {
+					if (*p == ',' || *p == ';') {
+						*p = 0;
+						break;
+					}
+					p++;
+				}
+				int64_t len = p - begin;
+				
+				if (expected_len != len) {
+					as_log_error("Partition update. unexpected partition map encoded length %" PRId64 " for namespace %s", len, ns);
+					as_vector_destroy(&tables_to_add);
+					return false;
+				}
+				
+				// Only handle first two levels.  Do not process other proles.
+				// Level 0: master
+				// Level 1: prole 1
+				if (i < 2) {
+					bool master = (i == 0);
+					
+					if (cluster->shm_info) {
+						as_shm_update_partitions(cluster->shm_info, ns, begin, len, node, master);
+					}
+					else {
+						as_partition_table* table = as_partition_tables_get(tables, ns);
+						
+						if (! table) {
+							table = as_partition_vector_get(&tables_to_add, ns);
+							
+							if (! table) {
+								table = as_partition_table_create(ns, cluster->n_partitions);
+								as_vector_append(&tables_to_add, &table);
+							}
+						}
+						
+						// Decode partition bitmap and update client's view.
+						decode_and_update(begin, len, table, node, master);
+					}
+				}
+			}
+			ns = ++p;
+		}
+		else {
+			p++;
+		}
+	}
+	
+	if (tables_to_add.size > 0) {
+		// Make shallow copy of map and add new tables.
+		as_partition_tables_copy_add(cluster, tables, &tables_to_add);
+	}
+	as_vector_destroy(&tables_to_add);
+	return true;
+}

@@ -21,13 +21,12 @@
  ******************************************************************************/
 #include "benchmark.h"
 #include <aerospike/as_monitor.h>
+#include <aerospike/as_random.h>
 #include <citrusleaf/cf_clock.h>
 #include <pthread.h>
 #include <unistd.h>
 
 extern as_monitor monitor;
-
-uint32_t cf_get_rand32();
 
 static void*
 ticker_worker(void* udata)
@@ -112,10 +111,10 @@ random_worker(void* udata)
 	
 	while (cdata->valid) {
 		// Choose key at random.
-		key = cf_get_rand32() % key_max + 1;
+		key = as_random_next_uint32(tdata->random) % key_max + 1;
 		
 		// Roll a percentage die.
-		die = cf_get_rand32() % 100;
+		die = as_random_next_uint32(tdata->random) % 100;
 		
 		if (die < read_pct) {
 			read_record_sync(key, cdata);

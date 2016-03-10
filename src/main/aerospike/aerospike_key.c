@@ -28,11 +28,11 @@
 #include <aerospike/as_msgpack.h>
 #include <aerospike/as_operations.h>
 #include <aerospike/as_policy.h>
+#include <aerospike/as_random.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_serializer.h>
 #include <aerospike/as_status.h>
 #include <citrusleaf/cf_clock.h>
-#include <citrusleaf/cf_random.h>
 
 #include "as_stap.h"
 
@@ -366,7 +366,7 @@ aerospike_key_put(
 	p = as_command_write_key(p, policy->key, key);
 	
 #if defined(USE_SYSTEMTAP)
-	uint64_t task_id = cf_get_rand64() >> 1;
+	uint64_t task_id = as_random_get_uint64();
 	p = as_command_write_field_uint64(p, AS_FIELD_TASK_ID, task_id);
 #endif
 

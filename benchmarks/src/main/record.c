@@ -22,6 +22,7 @@
 #include "benchmark.h"
 #include <aerospike/aerospike_key.h>
 #include <aerospike/as_monitor.h>
+#include <aerospike/as_random.h>
 #include <citrusleaf/cf_clock.h>
 
 extern as_monitor monitor;
@@ -33,16 +34,13 @@ static const char alphanum[] =
 
 static int alphanum_len = sizeof(alphanum) - 1;
 
-uint32_t cf_get_rand32();
-int cf_get_rand_buf(uint8_t *buf, int len);
-
 int
 gen_value(arguments* args, as_bin_value* val)
 {
 	switch (args->bintype) {
 		case 'I': {
 			// Generate integer.
-			uint32_t v = cf_get_rand32();
+			uint32_t v = as_random_get_uint32();
 			as_integer_init((as_integer*)val, v);
 			break;
 		}
@@ -51,7 +49,7 @@ gen_value(arguments* args, as_bin_value* val)
 			// Generate byte array on heap.
 			int len = args->binlen;
 			uint8_t* buf = cf_malloc(len);
-			cf_get_rand_buf(buf, len);
+			as_random_get_bytes(buf, len);
 			as_bytes_init_wrap((as_bytes*)val, buf, len, true);
 			break;
 		}
@@ -60,7 +58,7 @@ gen_value(arguments* args, as_bin_value* val)
 			// Generate random bytes on heap and convert to alphanumeric string.
 			int len = args->binlen;
 			uint8_t* buf = cf_malloc(len+1);
-			cf_get_rand_buf(buf, len);
+			as_random_get_bytes(buf, len);
 			
 			for (int i = 0; i < len; i++) {
 				buf[i] = alphanum[buf[i] % alphanum_len];
@@ -113,6 +111,7 @@ create_threaddata(clientdata* cdata, int key)
 
 	threaddata* tdata = malloc(sizeof(threaddata));
 	tdata->cdata = cdata;
+	tdata->random = as_random_instance();
 	
 	if (len) {
 		tdata->buffer = malloc(len);
@@ -153,7 +152,7 @@ init_write_record(clientdata* cdata, threaddata* tdata)
 		{
 			case 'I': {
 				// Generate integer.
-				uint32_t i = cf_get_rand32();
+				uint32_t i = as_random_next_uint32(tdata->random);
 				as_integer_init((as_integer*)&bin->value, i);
 				bin->valuep = &bin->value;
 				break;
@@ -163,7 +162,7 @@ init_write_record(clientdata* cdata, threaddata* tdata)
 				// Generate byte array in thread local buffer.
 				uint8_t* buf = tdata->buffer;
 				int len = cdata->binlen;
-				cf_get_rand_buf(buf, len);
+				as_random_next_bytes(tdata->random, buf, len);
 				as_bytes_init_wrap((as_bytes*)&bin->value, buf, len, false);
 				bin->valuep = &bin->value;
 				break;
@@ -173,7 +172,7 @@ init_write_record(clientdata* cdata, threaddata* tdata)
 				// Generate random bytes on stack and convert to alphanumeric string.
 				uint8_t* buf = tdata->buffer;
 				int len = cdata->binlen;
-				cf_get_rand_buf(buf, len);
+				as_random_next_bytes(tdata->random, buf, len);
 				
 				for (int i = 0; i < len; i++) {
 					buf[i] = alphanum[buf[i] % alphanum_len];
@@ -371,11 +370,11 @@ void
 random_read_write_async(clientdata* cdata, threaddata* tdata, as_event_loop* event_loop)
 {
 	// Choose key at random.
-	int key = cf_get_rand32() % cdata->key_max + 1;
+	int key = as_random_next_uint32(tdata->random) % cdata->key_max + 1;
 	tdata->key.value.integer.value = key;
 	tdata->key.digest.init = false;
 	
-	int die = cf_get_rand32() % 100;
+	int die = as_random_next_uint32(tdata->random) % 100;
 	as_error err;
 	
 	if (die < cdata->read_pct) {

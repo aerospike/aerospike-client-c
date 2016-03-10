@@ -119,6 +119,49 @@
 		BFC38AE11948F7CA000C53D9 /* as_admin.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC38AE01948F7CA000C53D9 /* as_admin.c */; };
 		BFC3A8EB1B97D24D00F2F758 /* version.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC3A8EA1B97D24D00F2F758 /* version.c */; };
 		BFC65B181C910A900079DF5A /* as_random.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65B171C910A900079DF5A /* as_random.c */; };
+		BFC65B611C921E9E0079DF5A /* aerospike_batch.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B361C921E9E0079DF5A /* aerospike_batch.h */; };
+		BFC65B621C921E9E0079DF5A /* aerospike_index.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B371C921E9E0079DF5A /* aerospike_index.h */; };
+		BFC65B631C921E9E0079DF5A /* aerospike_info.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B381C921E9E0079DF5A /* aerospike_info.h */; };
+		BFC65B641C921E9E0079DF5A /* aerospike_key.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B391C921E9E0079DF5A /* aerospike_key.h */; };
+		BFC65B651C921E9E0079DF5A /* aerospike_llist.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B3A1C921E9E0079DF5A /* aerospike_llist.h */; };
+		BFC65B661C921E9E0079DF5A /* aerospike_lmap.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B3B1C921E9E0079DF5A /* aerospike_lmap.h */; };
+		BFC65B671C921E9E0079DF5A /* aerospike_lset.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B3C1C921E9E0079DF5A /* aerospike_lset.h */; };
+		BFC65B681C921E9E0079DF5A /* aerospike_lstack.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B3D1C921E9E0079DF5A /* aerospike_lstack.h */; };
+		BFC65B691C921E9E0079DF5A /* aerospike_query.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B3E1C921E9E0079DF5A /* aerospike_query.h */; };
+		BFC65B6A1C921E9E0079DF5A /* aerospike_scan.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B3F1C921E9E0079DF5A /* aerospike_scan.h */; };
+		BFC65B6B1C921E9E0079DF5A /* aerospike_udf.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B401C921E9E0079DF5A /* aerospike_udf.h */; };
+		BFC65B6C1C921E9E0079DF5A /* aerospike.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B411C921E9E0079DF5A /* aerospike.h */; };
+		BFC65B6D1C921E9E0079DF5A /* as_admin.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B421C921E9E0079DF5A /* as_admin.h */; };
+		BFC65B6E1C921E9E0079DF5A /* as_async_proto.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B431C921E9E0079DF5A /* as_async_proto.h */; };
+		BFC65B6F1C921E9E0079DF5A /* as_async.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B441C921E9E0079DF5A /* as_async.h */; };
+		BFC65B701C921E9E0079DF5A /* as_batch.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B451C921E9E0079DF5A /* as_batch.h */; };
+		BFC65B711C921E9E0079DF5A /* as_bin.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B461C921E9E0079DF5A /* as_bin.h */; };
+		BFC65B721C921E9E0079DF5A /* as_cluster.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B471C921E9E0079DF5A /* as_cluster.h */; };
+		BFC65B731C921E9E0079DF5A /* as_command.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B481C921E9E0079DF5A /* as_command.h */; };
+		BFC65B741C921E9E0079DF5A /* as_config.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B491C921E9E0079DF5A /* as_config.h */; };
+		BFC65B751C921E9E0079DF5A /* as_error.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B4A1C921E9E0079DF5A /* as_error.h */; };
+		BFC65B761C921E9E0079DF5A /* as_event_internal.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B4B1C921E9E0079DF5A /* as_event_internal.h */; };
+		BFC65B771C921E9E0079DF5A /* as_event.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B4C1C921E9E0079DF5A /* as_event.h */; };
+		BFC65B781C921E9E0079DF5A /* as_info.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B4D1C921E9E0079DF5A /* as_info.h */; };
+		BFC65B791C921E9E0079DF5A /* as_job.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B4E1C921E9E0079DF5A /* as_job.h */; };
+		BFC65B7A1C921E9E0079DF5A /* as_key.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B4F1C921E9E0079DF5A /* as_key.h */; };
+		BFC65B7B1C921E9E0079DF5A /* as_ldt.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B501C921E9E0079DF5A /* as_ldt.h */; };
+		BFC65B7C1C921E9E0079DF5A /* as_listener.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B511C921E9E0079DF5A /* as_listener.h */; };
+		BFC65B7D1C921E9E0079DF5A /* as_lookup.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B521C921E9E0079DF5A /* as_lookup.h */; };
+		BFC65B7E1C921E9E0079DF5A /* as_node.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B531C921E9E0079DF5A /* as_node.h */; };
+		BFC65B7F1C921E9E0079DF5A /* as_operations.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B541C921E9E0079DF5A /* as_operations.h */; };
+		BFC65B801C921E9E0079DF5A /* as_partition.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B551C921E9E0079DF5A /* as_partition.h */; };
+		BFC65B811C921E9E0079DF5A /* as_pipe.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B561C921E9E0079DF5A /* as_pipe.h */; };
+		BFC65B821C921E9E0079DF5A /* as_policy.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B571C921E9E0079DF5A /* as_policy.h */; };
+		BFC65B831C921E9E0079DF5A /* as_proto.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B581C921E9E0079DF5A /* as_proto.h */; };
+		BFC65B841C921E9E0079DF5A /* as_query.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B591C921E9E0079DF5A /* as_query.h */; };
+		BFC65B851C921E9E0079DF5A /* as_record_iterator.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B5A1C921E9E0079DF5A /* as_record_iterator.h */; };
+		BFC65B861C921E9E0079DF5A /* as_record.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B5B1C921E9E0079DF5A /* as_record.h */; };
+		BFC65B871C921E9E0079DF5A /* as_scan.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B5C1C921E9E0079DF5A /* as_scan.h */; };
+		BFC65B881C921E9E0079DF5A /* as_shm_cluster.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B5D1C921E9E0079DF5A /* as_shm_cluster.h */; };
+		BFC65B891C921E9E0079DF5A /* as_socket.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B5E1C921E9E0079DF5A /* as_socket.h */; };
+		BFC65B8A1C921E9E0079DF5A /* as_status.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B5F1C921E9E0079DF5A /* as_status.h */; };
+		BFC65B8B1C921E9E0079DF5A /* as_udf.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B601C921E9E0079DF5A /* as_udf.h */; };
 		BFCF26BF1AC1FBBF0062B75C /* as_string_builder.c in Sources */ = {isa = PBXBuildFile; fileRef = BFCF26BE1AC1FBBF0062B75C /* as_string_builder.c */; };
 /* End PBXBuildFile section */
 
@@ -236,6 +279,51 @@
 		BFC38AE01948F7CA000C53D9 /* as_admin.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; lineEnding = 0; name = as_admin.c; path = ../src/main/aerospike/as_admin.c; sourceTree = "<group>"; };
 		BFC3A8EA1B97D24D00F2F758 /* version.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = version.c; path = ../src/main/aerospike/version.c; sourceTree = "<group>"; };
 		BFC65B171C910A900079DF5A /* as_random.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_random.c; path = ../modules/common/src/main/aerospike/as_random.c; sourceTree = "<group>"; };
+		BFC65B361C921E9E0079DF5A /* aerospike_batch.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = aerospike_batch.h; path = ../src/include/aerospike/aerospike_batch.h; sourceTree = "<group>"; };
+		BFC65B371C921E9E0079DF5A /* aerospike_index.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = aerospike_index.h; path = ../src/include/aerospike/aerospike_index.h; sourceTree = "<group>"; };
+		BFC65B381C921E9E0079DF5A /* aerospike_info.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = aerospike_info.h; path = ../src/include/aerospike/aerospike_info.h; sourceTree = "<group>"; };
+		BFC65B391C921E9E0079DF5A /* aerospike_key.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = aerospike_key.h; path = ../src/include/aerospike/aerospike_key.h; sourceTree = "<group>"; };
+		BFC65B3A1C921E9E0079DF5A /* aerospike_llist.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = aerospike_llist.h; path = ../src/include/aerospike/aerospike_llist.h; sourceTree = "<group>"; };
+		BFC65B3B1C921E9E0079DF5A /* aerospike_lmap.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = aerospike_lmap.h; path = ../src/include/aerospike/aerospike_lmap.h; sourceTree = "<group>"; };
+		BFC65B3C1C921E9E0079DF5A /* aerospike_lset.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = aerospike_lset.h; path = ../src/include/aerospike/aerospike_lset.h; sourceTree = "<group>"; };
+		BFC65B3D1C921E9E0079DF5A /* aerospike_lstack.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = aerospike_lstack.h; path = ../src/include/aerospike/aerospike_lstack.h; sourceTree = "<group>"; };
+		BFC65B3E1C921E9E0079DF5A /* aerospike_query.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = aerospike_query.h; path = ../src/include/aerospike/aerospike_query.h; sourceTree = "<group>"; };
+		BFC65B3F1C921E9E0079DF5A /* aerospike_scan.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = aerospike_scan.h; path = ../src/include/aerospike/aerospike_scan.h; sourceTree = "<group>"; };
+		BFC65B401C921E9E0079DF5A /* aerospike_udf.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = aerospike_udf.h; path = ../src/include/aerospike/aerospike_udf.h; sourceTree = "<group>"; };
+		BFC65B411C921E9E0079DF5A /* aerospike.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = aerospike.h; path = ../src/include/aerospike/aerospike.h; sourceTree = "<group>"; };
+		BFC65B421C921E9E0079DF5A /* as_admin.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_admin.h; path = ../src/include/aerospike/as_admin.h; sourceTree = "<group>"; };
+		BFC65B431C921E9E0079DF5A /* as_async_proto.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_async_proto.h; path = ../src/include/aerospike/as_async_proto.h; sourceTree = "<group>"; };
+		BFC65B441C921E9E0079DF5A /* as_async.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_async.h; path = ../src/include/aerospike/as_async.h; sourceTree = "<group>"; };
+		BFC65B451C921E9E0079DF5A /* as_batch.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_batch.h; path = ../src/include/aerospike/as_batch.h; sourceTree = "<group>"; };
+		BFC65B461C921E9E0079DF5A /* as_bin.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_bin.h; path = ../src/include/aerospike/as_bin.h; sourceTree = "<group>"; };
+		BFC65B471C921E9E0079DF5A /* as_cluster.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_cluster.h; path = ../src/include/aerospike/as_cluster.h; sourceTree = "<group>"; };
+		BFC65B481C921E9E0079DF5A /* as_command.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_command.h; path = ../src/include/aerospike/as_command.h; sourceTree = "<group>"; };
+		BFC65B491C921E9E0079DF5A /* as_config.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_config.h; path = ../src/include/aerospike/as_config.h; sourceTree = "<group>"; };
+		BFC65B4A1C921E9E0079DF5A /* as_error.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_error.h; path = ../src/include/aerospike/as_error.h; sourceTree = "<group>"; };
+		BFC65B4B1C921E9E0079DF5A /* as_event_internal.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_event_internal.h; path = ../src/include/aerospike/as_event_internal.h; sourceTree = "<group>"; };
+		BFC65B4C1C921E9E0079DF5A /* as_event.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_event.h; path = ../src/include/aerospike/as_event.h; sourceTree = "<group>"; };
+		BFC65B4D1C921E9E0079DF5A /* as_info.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_info.h; path = ../src/include/aerospike/as_info.h; sourceTree = "<group>"; };
+		BFC65B4E1C921E9E0079DF5A /* as_job.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_job.h; path = ../src/include/aerospike/as_job.h; sourceTree = "<group>"; };
+		BFC65B4F1C921E9E0079DF5A /* as_key.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_key.h; path = ../src/include/aerospike/as_key.h; sourceTree = "<group>"; };
+		BFC65B501C921E9E0079DF5A /* as_ldt.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_ldt.h; path = ../src/include/aerospike/as_ldt.h; sourceTree = "<group>"; };
+		BFC65B511C921E9E0079DF5A /* as_listener.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_listener.h; path = ../src/include/aerospike/as_listener.h; sourceTree = "<group>"; };
+		BFC65B521C921E9E0079DF5A /* as_lookup.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_lookup.h; path = ../src/include/aerospike/as_lookup.h; sourceTree = "<group>"; };
+		BFC65B531C921E9E0079DF5A /* as_node.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_node.h; path = ../src/include/aerospike/as_node.h; sourceTree = "<group>"; };
+		BFC65B541C921E9E0079DF5A /* as_operations.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_operations.h; path = ../src/include/aerospike/as_operations.h; sourceTree = "<group>"; };
+		BFC65B551C921E9E0079DF5A /* as_partition.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_partition.h; path = ../src/include/aerospike/as_partition.h; sourceTree = "<group>"; };
+		BFC65B561C921E9E0079DF5A /* as_pipe.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_pipe.h; path = ../src/include/aerospike/as_pipe.h; sourceTree = "<group>"; };
+		BFC65B571C921E9E0079DF5A /* as_policy.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_policy.h; path = ../src/include/aerospike/as_policy.h; sourceTree = "<group>"; };
+		BFC65B581C921E9E0079DF5A /* as_proto.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_proto.h; path = ../src/include/aerospike/as_proto.h; sourceTree = "<group>"; };
+		BFC65B591C921E9E0079DF5A /* as_query.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_query.h; path = ../src/include/aerospike/as_query.h; sourceTree = "<group>"; };
+		BFC65B5A1C921E9E0079DF5A /* as_record_iterator.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_record_iterator.h; path = ../src/include/aerospike/as_record_iterator.h; sourceTree = "<group>"; };
+		BFC65B5B1C921E9E0079DF5A /* as_record.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_record.h; path = ../src/include/aerospike/as_record.h; sourceTree = "<group>"; };
+		BFC65B5C1C921E9E0079DF5A /* as_scan.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_scan.h; path = ../src/include/aerospike/as_scan.h; sourceTree = "<group>"; };
+		BFC65B5D1C921E9E0079DF5A /* as_shm_cluster.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_shm_cluster.h; path = ../src/include/aerospike/as_shm_cluster.h; sourceTree = "<group>"; };
+		BFC65B5E1C921E9E0079DF5A /* as_socket.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_socket.h; path = ../src/include/aerospike/as_socket.h; sourceTree = "<group>"; };
+		BFC65B5F1C921E9E0079DF5A /* as_status.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_status.h; path = ../src/include/aerospike/as_status.h; sourceTree = "<group>"; };
+		BFC65B601C921E9E0079DF5A /* as_udf.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_udf.h; path = ../src/include/aerospike/as_udf.h; sourceTree = "<group>"; };
+		BFC65BE61C9220E80079DF5A /* include */ = {isa = PBXFileReference; lastKnownFileType = folder; name = include; path = ../modules/common/src/include; sourceTree = "<group>"; };
+		BFC65BE71C92213F0079DF5A /* include */ = {isa = PBXFileReference; lastKnownFileType = folder; name = include; path = "../modules/mod-lua/src/include"; sourceTree = "<group>"; };
 		BFCF26BE1AC1FBBF0062B75C /* as_string_builder.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_string_builder.c; path = ../modules/common/src/main/aerospike/as_string_builder.c; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -253,41 +341,32 @@
 		BF07F62E18B4252500CE1850 = {
 			isa = PBXGroup;
 			children = (
-				BFC65B171C910A900079DF5A /* as_random.c */,
-				BF26CF831BFE7C7900E143DC /* as_async.c */,
-				BF6FE4321BF2748E00175BF8 /* as_pipe.c */,
-				BF25DA921BB0790F00AC7512 /* as_event.c */,
-				BF8EABF51BF3C2800027EF45 /* as_event_ev.c */,
-				BF8EABF71BF3C28F0027EF45 /* as_event_uv.c */,
-				BF21EA531C062FF500E2031E /* as_event_none.c */,
-				BF2669911BBB74AE00C61962 /* as_queue.c */,
-				BF222CFE1BB3397E006827A6 /* mod_lua_geojson.c */,
-				BF222CFC1BB33961006827A6 /* as_geojson.c */,
-				BFC3A8EA1B97D24D00F2F758 /* version.c */,
-				BF23379F1B4DC8BD00670C64 /* as_buffer_pool.c */,
-				BF2337A01B4DC8BD00670C64 /* as_double.c */,
-				BF26C4661B45AE8F00E6929D /* as_job.c */,
-				BF93AA051AE9E6EB003ECE3B /* as_thread_pool.c */,
-				BFCF26BE1AC1FBBF0062B75C /* as_string_builder.c */,
-				BF219F0F1A622C23001E321C /* as_socket.c */,
-				BF219F0D1A62255A001E321C /* as_proto.c */,
-				BF5548EC19E36A7C007DDB9E /* as_log.c */,
-				BF26A38819C2621000AE763C /* as_shm_cluster.c */,
-				BFC38AE01948F7CA000C53D9 /* as_admin.c */,
-				BF8EEB2C1A2CED34000F2B00 /* as_command.c */,
-				BFBA04B41947B42000F9924E /* as_password.c */,
-				BFBA04AA1947AA9C00F9924E /* crypt_blowfish.c */,
-				BFBA04A81947AA8400F9924E /* cf_random.c */,
-				BFBB3C8E192D729A00251B15 /* as_node.c */,
-				BFBDAFDF191B0C5C007EB07C /* as_info.c */,
-				BFBA916A1914344B00AADA9A /* as_partition.c */,
-				BFBB64821905D5B500682A6E /* as_cluster.c */,
-				BFBB647F190595E900682A6E /* as_timer.c */,
-				BFC002891901E08500CB9BC8 /* as_lookup.c */,
-				BFC002871901BCB200CB9BC8 /* as_vector.c */,
-				BF843C5618D3E64900A06CFB /* cf_alloc.c */,
-				BF843C5718D3E64900A06CFB /* cf_queue_priority.c */,
-				BF843C5818D3E64900A06CFB /* cf_queue.c */,
+				BFC65B2C1C921B490079DF5A /* modules */,
+				BFC65B291C92189A0079DF5A /* src */,
+				BF07F63818B4252500CE1850 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		BF07F63818B4252500CE1850 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				BF07F63718B4252500CE1850 /* libaerospike.a */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		BFC65B291C92189A0079DF5A /* src */ = {
+			isa = PBXGroup;
+			children = (
+				BFC65B351C921E3F0079DF5A /* include */,
+				BFC65B2A1C9218B40079DF5A /* main */,
+			);
+			name = src;
+			sourceTree = "<group>";
+		};
+		BFC65B2A1C9218B40079DF5A /* main */ = {
+			isa = PBXGroup;
+			children = (
 				BF2AA7A918BEBFA400E54AF3 /* _bin.c */,
 				BF2AA7AA18BEBFA400E54AF3 /* _bin.h */,
 				BF2AA7AB18BEBFA400E54AF3 /* _ldt.c */,
@@ -304,23 +383,147 @@
 				BF2AA7BD18BEBFA400E54AF3 /* aerospike_scan.c */,
 				BF2AA7BE18BEBFA400E54AF3 /* aerospike_udf.c */,
 				BF2AA7BF18BEBFA400E54AF3 /* aerospike.c */,
+				BFC38AE01948F7CA000C53D9 /* as_admin.c */,
+				BF26CF831BFE7C7900E143DC /* as_async.c */,
 				BF2AA7C018BEBFA400E54AF3 /* as_batch.c */,
+				BFBB64821905D5B500682A6E /* as_cluster.c */,
+				BF8EEB2C1A2CED34000F2B00 /* as_command.c */,
 				BF2AA7C218BEBFA400E54AF3 /* as_config.c */,
 				BF2AA7C318BEBFA400E54AF3 /* as_error.c */,
+				BF8EABF51BF3C2800027EF45 /* as_event_ev.c */,
+				BF21EA531C062FF500E2031E /* as_event_none.c */,
+				BF8EABF71BF3C28F0027EF45 /* as_event_uv.c */,
+				BF25DA921BB0790F00AC7512 /* as_event.c */,
+				BFBDAFDF191B0C5C007EB07C /* as_info.c */,
+				BF26C4661B45AE8F00E6929D /* as_job.c */,
 				BF2AA7C418BEBFA400E54AF3 /* as_key.c */,
 				BF2AA7C518BEBFA400E54AF3 /* as_ldt.c */,
+				BFC002891901E08500CB9BC8 /* as_lookup.c */,
+				BFBB3C8E192D729A00251B15 /* as_node.c */,
 				BF2AA7C718BEBFA400E54AF3 /* as_operations.c */,
+				BFBA916A1914344B00AADA9A /* as_partition.c */,
+				BF6FE4321BF2748E00175BF8 /* as_pipe.c */,
 				BF2AA7C818BEBFA400E54AF3 /* as_policy.c */,
+				BF219F0D1A62255A001E321C /* as_proto.c */,
 				BF2AA7C918BEBFA400E54AF3 /* as_query.c */,
 				BF2AA7CA18BEBFA400E54AF3 /* as_record_hooks.c */,
 				BF2AA7CB18BEBFA500E54AF3 /* as_record_iterator.c */,
 				BF2AA7CC18BEBFA500E54AF3 /* as_record.c */,
 				BF2AA7CD18BEBFA500E54AF3 /* as_scan.c */,
+				BF26A38819C2621000AE763C /* as_shm_cluster.c */,
+				BF219F0F1A622C23001E321C /* as_socket.c */,
 				BF2AA7CE18BEBFA500E54AF3 /* as_udf.c */,
-				BFBD204518BC3435009ED931 /* internal.c */,
+				BFC3A8EA1B97D24D00F2F758 /* version.c */,
+			);
+			name = main;
+			sourceTree = "<group>";
+		};
+		BFC65B2C1C921B490079DF5A /* modules */ = {
+			isa = PBXGroup;
+			children = (
+				BFC65B2D1C921B650079DF5A /* common */,
+				BFC65B311C921CB40079DF5A /* mod-lua */,
+			);
+			name = modules;
+			sourceTree = "<group>";
+		};
+		BFC65B2D1C921B650079DF5A /* common */ = {
+			isa = PBXGroup;
+			children = (
+				BFC65B2E1C921B760079DF5A /* src */,
+			);
+			name = common;
+			sourceTree = "<group>";
+		};
+		BFC65B2E1C921B760079DF5A /* src */ = {
+			isa = PBXGroup;
+			children = (
+				BFC65BE61C9220E80079DF5A /* include */,
+				BFC65B2F1C921B880079DF5A /* main */,
+			);
+			name = src;
+			sourceTree = "<group>";
+		};
+		BFC65B2F1C921B880079DF5A /* main */ = {
+			isa = PBXGroup;
+			children = (
+				BFC65B301C921B8E0079DF5A /* aerospike */,
+				BFC65B341C921D7A0079DF5A /* citrusleaf */,
+			);
+			name = main;
+			sourceTree = "<group>";
+		};
+		BFC65B301C921B8E0079DF5A /* aerospike */ = {
+			isa = PBXGroup;
+			children = (
+				BFBA102C18B7D8B200A64E68 /* as_aerospike.c */,
+				BFBA102D18B7D8B200A64E68 /* as_arraylist_hooks.c */,
 				BFBA102E18B7D8B200A64E68 /* as_arraylist_iterator_hooks.c */,
+				BFBA102F18B7D8B200A64E68 /* as_arraylist_iterator.c */,
+				BFBA103018B7D8B200A64E68 /* as_arraylist.c */,
+				BFBA103118B7D8B200A64E68 /* as_boolean.c */,
+				BF23379F1B4DC8BD00670C64 /* as_buffer_pool.c */,
+				BFBA103218B7D8B200A64E68 /* as_buffer.c */,
+				BFBA103318B7D8B200A64E68 /* as_bytes.c */,
+				BF2337A01B4DC8BD00670C64 /* as_double.c */,
+				BF222CFC1BB33961006827A6 /* as_geojson.c */,
+				BFBA103418B7D8B200A64E68 /* as_hashmap_hooks.c */,
+				BFBA103518B7D8B200A64E68 /* as_hashmap_iterator_hooks.c */,
+				BFBA103618B7D8B200A64E68 /* as_hashmap_iterator.c */,
+				BFBA103718B7D8B200A64E68 /* as_hashmap.c */,
+				BFBA103818B7D8B200A64E68 /* as_integer.c */,
+				BFBA103918B7D8B200A64E68 /* as_iterator.c */,
+				BFBA103A18B7D8B200A64E68 /* as_list.c */,
+				BF5548EC19E36A7C007DDB9E /* as_log.c */,
+				BFBA103C18B7D8B200A64E68 /* as_map.c */,
+				BFBA103D18B7D8B200A64E68 /* as_memtracker.c */,
+				BFBA103E18B7D8B200A64E68 /* as_module.c */,
+				BFBA106C18B7DFA100A64E68 /* as_msgpack_serializer.c */,
+				BFBA106D18B7DFA100A64E68 /* as_msgpack.c */,
+				BFBA104118B7D8B200A64E68 /* as_nil.c */,
+				BFBA104218B7D8B200A64E68 /* as_pair.c */,
+				BFBA04B41947B42000F9924E /* as_password.c */,
+				BF2669911BBB74AE00C61962 /* as_queue.c */,
+				BFC65B171C910A900079DF5A /* as_random.c */,
+				BFBA104318B7D8B200A64E68 /* as_rec.c */,
+				BFBA104418B7D8B200A64E68 /* as_result.c */,
+				BFBA104518B7D8B200A64E68 /* as_serializer.c */,
+				BFBA104618B7D8B200A64E68 /* as_stream.c */,
+				BFCF26BE1AC1FBBF0062B75C /* as_string_builder.c */,
+				BFBA104718B7D8B200A64E68 /* as_string.c */,
+				BF93AA051AE9E6EB003ECE3B /* as_thread_pool.c */,
+				BFBB647F190595E900682A6E /* as_timer.c */,
+				BFBA104918B7D8B300A64E68 /* as_val.c */,
+				BFC002871901BCB200CB9BC8 /* as_vector.c */,
+				BFBA04AA1947AA9C00F9924E /* crypt_blowfish.c */,
+			);
+			name = aerospike;
+			sourceTree = "<group>";
+		};
+		BFC65B311C921CB40079DF5A /* mod-lua */ = {
+			isa = PBXGroup;
+			children = (
+				BFC65B321C921CE10079DF5A /* src */,
+			);
+			name = "mod-lua";
+			sourceTree = "<group>";
+		};
+		BFC65B321C921CE10079DF5A /* src */ = {
+			isa = PBXGroup;
+			children = (
+				BFC65BE71C92213F0079DF5A /* include */,
+				BFC65B331C921CE70079DF5A /* main */,
+			);
+			name = src;
+			sourceTree = "<group>";
+		};
+		BFC65B331C921CE70079DF5A /* main */ = {
+			isa = PBXGroup;
+			children = (
+				BFBD204518BC3435009ED931 /* internal.c */,
 				BFBD204618BC3436009ED931 /* mod_lua_aerospike.c */,
 				BFBD204718BC3436009ED931 /* mod_lua_bytes.c */,
+				BF222CFE1BB3397E006827A6 /* mod_lua_geojson.c */,
 				BFBD204818BC3436009ED931 /* mod_lua_iterator.c */,
 				BFBD204918BC3436009ED931 /* mod_lua_list.c */,
 				BFBD204A18BC3436009ED931 /* mod_lua_map.c */,
@@ -329,33 +532,17 @@
 				BFBD204D18BC3436009ED931 /* mod_lua_stream.c */,
 				BFBD204E18BC3436009ED931 /* mod_lua_val.c */,
 				BFBD204F18BC3436009ED931 /* mod_lua.c */,
-				BFBA106C18B7DFA100A64E68 /* as_msgpack_serializer.c */,
-				BFBA106D18B7DFA100A64E68 /* as_msgpack.c */,
-				BFBA102C18B7D8B200A64E68 /* as_aerospike.c */,
-				BFBA102D18B7D8B200A64E68 /* as_arraylist_hooks.c */,
-				BFBA102F18B7D8B200A64E68 /* as_arraylist_iterator.c */,
-				BFBA103018B7D8B200A64E68 /* as_arraylist.c */,
-				BFBA103118B7D8B200A64E68 /* as_boolean.c */,
-				BFBA103218B7D8B200A64E68 /* as_buffer.c */,
-				BFBA103318B7D8B200A64E68 /* as_bytes.c */,
-				BFBA103418B7D8B200A64E68 /* as_hashmap_hooks.c */,
-				BFBA103518B7D8B200A64E68 /* as_hashmap_iterator_hooks.c */,
-				BFBA103618B7D8B200A64E68 /* as_hashmap_iterator.c */,
-				BFBA103718B7D8B200A64E68 /* as_hashmap.c */,
-				BFBA103818B7D8B200A64E68 /* as_integer.c */,
-				BFBA103918B7D8B200A64E68 /* as_iterator.c */,
-				BFBA103A18B7D8B200A64E68 /* as_list.c */,
-				BFBA103C18B7D8B200A64E68 /* as_map.c */,
-				BFBA103D18B7D8B200A64E68 /* as_memtracker.c */,
-				BFBA103E18B7D8B200A64E68 /* as_module.c */,
-				BFBA104118B7D8B200A64E68 /* as_nil.c */,
-				BFBA104218B7D8B200A64E68 /* as_pair.c */,
-				BFBA104318B7D8B200A64E68 /* as_rec.c */,
-				BFBA104418B7D8B200A64E68 /* as_result.c */,
-				BFBA104518B7D8B200A64E68 /* as_serializer.c */,
-				BFBA104618B7D8B200A64E68 /* as_stream.c */,
-				BFBA104718B7D8B200A64E68 /* as_string.c */,
-				BFBA104918B7D8B300A64E68 /* as_val.c */,
+			);
+			name = main;
+			sourceTree = "<group>";
+		};
+		BFC65B341C921D7A0079DF5A /* citrusleaf */ = {
+			isa = PBXGroup;
+			children = (
+				BFBA04A81947AA8400F9924E /* cf_random.c */,
+				BF843C5618D3E64900A06CFB /* cf_alloc.c */,
+				BF843C5718D3E64900A06CFB /* cf_queue_priority.c */,
+				BF843C5818D3E64900A06CFB /* cf_queue.c */,
 				BFBBBAE118B6D9D0003FFD88 /* cf_b64.c */,
 				BFBBBAE218B6D9D0003FFD88 /* cf_bits.c */,
 				BFBBBAE318B6D9D0003FFD88 /* cf_clock.c */,
@@ -366,16 +553,58 @@
 				BFBBBAE818B6D9D0003FFD88 /* cf_rchash.c */,
 				BFBBBAE918B6D9D0003FFD88 /* cf_shash.c */,
 				BFBBBAEA18B6D9D0003FFD88 /* cf_vector.c */,
-				BF07F63818B4252500CE1850 /* Products */,
 			);
+			name = citrusleaf;
 			sourceTree = "<group>";
 		};
-		BF07F63818B4252500CE1850 /* Products */ = {
+		BFC65B351C921E3F0079DF5A /* include */ = {
 			isa = PBXGroup;
 			children = (
-				BF07F63718B4252500CE1850 /* libaerospike.a */,
+				BFC65B361C921E9E0079DF5A /* aerospike_batch.h */,
+				BFC65B371C921E9E0079DF5A /* aerospike_index.h */,
+				BFC65B381C921E9E0079DF5A /* aerospike_info.h */,
+				BFC65B391C921E9E0079DF5A /* aerospike_key.h */,
+				BFC65B3A1C921E9E0079DF5A /* aerospike_llist.h */,
+				BFC65B3B1C921E9E0079DF5A /* aerospike_lmap.h */,
+				BFC65B3C1C921E9E0079DF5A /* aerospike_lset.h */,
+				BFC65B3D1C921E9E0079DF5A /* aerospike_lstack.h */,
+				BFC65B3E1C921E9E0079DF5A /* aerospike_query.h */,
+				BFC65B3F1C921E9E0079DF5A /* aerospike_scan.h */,
+				BFC65B401C921E9E0079DF5A /* aerospike_udf.h */,
+				BFC65B411C921E9E0079DF5A /* aerospike.h */,
+				BFC65B421C921E9E0079DF5A /* as_admin.h */,
+				BFC65B431C921E9E0079DF5A /* as_async_proto.h */,
+				BFC65B441C921E9E0079DF5A /* as_async.h */,
+				BFC65B451C921E9E0079DF5A /* as_batch.h */,
+				BFC65B461C921E9E0079DF5A /* as_bin.h */,
+				BFC65B471C921E9E0079DF5A /* as_cluster.h */,
+				BFC65B481C921E9E0079DF5A /* as_command.h */,
+				BFC65B491C921E9E0079DF5A /* as_config.h */,
+				BFC65B4A1C921E9E0079DF5A /* as_error.h */,
+				BFC65B4B1C921E9E0079DF5A /* as_event_internal.h */,
+				BFC65B4C1C921E9E0079DF5A /* as_event.h */,
+				BFC65B4D1C921E9E0079DF5A /* as_info.h */,
+				BFC65B4E1C921E9E0079DF5A /* as_job.h */,
+				BFC65B4F1C921E9E0079DF5A /* as_key.h */,
+				BFC65B501C921E9E0079DF5A /* as_ldt.h */,
+				BFC65B511C921E9E0079DF5A /* as_listener.h */,
+				BFC65B521C921E9E0079DF5A /* as_lookup.h */,
+				BFC65B531C921E9E0079DF5A /* as_node.h */,
+				BFC65B541C921E9E0079DF5A /* as_operations.h */,
+				BFC65B551C921E9E0079DF5A /* as_partition.h */,
+				BFC65B561C921E9E0079DF5A /* as_pipe.h */,
+				BFC65B571C921E9E0079DF5A /* as_policy.h */,
+				BFC65B581C921E9E0079DF5A /* as_proto.h */,
+				BFC65B591C921E9E0079DF5A /* as_query.h */,
+				BFC65B5A1C921E9E0079DF5A /* as_record_iterator.h */,
+				BFC65B5B1C921E9E0079DF5A /* as_record.h */,
+				BFC65B5C1C921E9E0079DF5A /* as_scan.h */,
+				BFC65B5D1C921E9E0079DF5A /* as_shm_cluster.h */,
+				BFC65B5E1C921E9E0079DF5A /* as_socket.h */,
+				BFC65B5F1C921E9E0079DF5A /* as_status.h */,
+				BFC65B601C921E9E0079DF5A /* as_udf.h */,
 			);
-			name = Products;
+			name = include;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -385,8 +614,51 @@
 			isa = PBXHeadersBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BFC65B631C921E9E0079DF5A /* aerospike_info.h in Headers */,
+				BFC65B8B1C921E9E0079DF5A /* as_udf.h in Headers */,
+				BFC65B671C921E9E0079DF5A /* aerospike_lset.h in Headers */,
+				BFC65B811C921E9E0079DF5A /* as_pipe.h in Headers */,
+				BFC65B761C921E9E0079DF5A /* as_event_internal.h in Headers */,
+				BFC65B741C921E9E0079DF5A /* as_config.h in Headers */,
+				BFC65B791C921E9E0079DF5A /* as_job.h in Headers */,
+				BFC65B651C921E9E0079DF5A /* aerospike_llist.h in Headers */,
+				BFC65B731C921E9E0079DF5A /* as_command.h in Headers */,
+				BFC65B821C921E9E0079DF5A /* as_policy.h in Headers */,
+				BFC65B801C921E9E0079DF5A /* as_partition.h in Headers */,
+				BFC65B7D1C921E9E0079DF5A /* as_lookup.h in Headers */,
+				BFC65B861C921E9E0079DF5A /* as_record.h in Headers */,
+				BFC65B781C921E9E0079DF5A /* as_info.h in Headers */,
+				BFC65B7F1C921E9E0079DF5A /* as_operations.h in Headers */,
+				BFC65B661C921E9E0079DF5A /* aerospike_lmap.h in Headers */,
+				BFC65B6C1C921E9E0079DF5A /* aerospike.h in Headers */,
+				BFC65B881C921E9E0079DF5A /* as_shm_cluster.h in Headers */,
+				BFC65B7A1C921E9E0079DF5A /* as_key.h in Headers */,
+				BFC65B6F1C921E9E0079DF5A /* as_async.h in Headers */,
+				BFC65B6D1C921E9E0079DF5A /* as_admin.h in Headers */,
+				BFC65B851C921E9E0079DF5A /* as_record_iterator.h in Headers */,
+				BFC65B701C921E9E0079DF5A /* as_batch.h in Headers */,
+				BFC65B611C921E9E0079DF5A /* aerospike_batch.h in Headers */,
+				BFC65B7B1C921E9E0079DF5A /* as_ldt.h in Headers */,
+				BFC65B8A1C921E9E0079DF5A /* as_status.h in Headers */,
+				BFC65B841C921E9E0079DF5A /* as_query.h in Headers */,
+				BFC65B641C921E9E0079DF5A /* aerospike_key.h in Headers */,
+				BFC65B621C921E9E0079DF5A /* aerospike_index.h in Headers */,
+				BFC65B831C921E9E0079DF5A /* as_proto.h in Headers */,
+				BFC65B721C921E9E0079DF5A /* as_cluster.h in Headers */,
+				BFC65B6B1C921E9E0079DF5A /* aerospike_udf.h in Headers */,
+				BFC65B891C921E9E0079DF5A /* as_socket.h in Headers */,
+				BFC65B6E1C921E9E0079DF5A /* as_async_proto.h in Headers */,
+				BFC65B711C921E9E0079DF5A /* as_bin.h in Headers */,
 				BF2AA7D218BEBFA500E54AF3 /* _ldt.h in Headers */,
+				BFC65B7E1C921E9E0079DF5A /* as_node.h in Headers */,
+				BFC65B751C921E9E0079DF5A /* as_error.h in Headers */,
+				BFC65B771C921E9E0079DF5A /* as_event.h in Headers */,
+				BFC65B681C921E9E0079DF5A /* aerospike_lstack.h in Headers */,
+				BFC65B7C1C921E9E0079DF5A /* as_listener.h in Headers */,
+				BFC65B6A1C921E9E0079DF5A /* aerospike_scan.h in Headers */,
+				BFC65B691C921E9E0079DF5A /* aerospike_query.h in Headers */,
 				BF2AA7D018BEBFA500E54AF3 /* _bin.h in Headers */,
+				BFC65B871C921E9E0079DF5A /* as_scan.h in Headers */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

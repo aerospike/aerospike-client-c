@@ -52,21 +52,21 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		BF21EA551C06500700E2031E /* libuv.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libuv.a; path = ../../../../usr/local/Cellar/libuv/1.7.5/lib/libuv.a; sourceTree = "<group>"; };
+		BF21EA551C06500700E2031E /* libuv.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libuv.a; path = /usr/local/Cellar/libuv/1.7.5/lib/libuv.a; sourceTree = "<absolute>"; };
 		BF5DD9BE18E105080041F796 /* main.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = main.c; path = ../benchmarks/src/main/main.c; sourceTree = "<group>"; };
 		BF5DD9C018E1096F0041F796 /* benchmark.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = benchmark.c; path = ../benchmarks/src/main/benchmark.c; sourceTree = "<group>"; };
 		BFBA53F318E1EF4600DC6D8B /* aerospike.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = aerospike.xcodeproj; sourceTree = "<group>"; };
 		BFBA53FC18E1EF8800DC6D8B /* libz.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libz.dylib; path = usr/lib/libz.dylib; sourceTree = SDKROOT; };
 		BFBA53FE18E1EF9300DC6D8B /* libpthread.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libpthread.dylib; path = usr/lib/libpthread.dylib; sourceTree = SDKROOT; };
 		BFBA540018E1EFAA00DC6D8B /* libcrypto.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libcrypto.dylib; path = usr/lib/libcrypto.dylib; sourceTree = SDKROOT; };
-		BFBA540218E1EFF200DC6D8B /* liblua.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = liblua.a; path = ../../../../usr/local/lib/liblua.a; sourceTree = "<group>"; };
+		BFBA540218E1EFF200DC6D8B /* liblua.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = liblua.a; path = /usr/local/lib/liblua.a; sourceTree = "<absolute>"; };
 		BFBA540818E1F2D300DC6D8B /* linear.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = linear.c; path = ../benchmarks/src/main/linear.c; sourceTree = "<group>"; };
 		BFBA540918E1F2D300DC6D8B /* random.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = random.c; path = ../benchmarks/src/main/random.c; sourceTree = "<group>"; };
 		BFBA540C18E20AE900DC6D8B /* latency.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = latency.c; path = ../benchmarks/src/main/latency.c; sourceTree = "<group>"; };
 		BFBA540E18E211A200DC6D8B /* record.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = record.c; path = ../benchmarks/src/main/record.c; sourceTree = "<group>"; };
 		BFBA541218E212CD00DC6D8B /* benchmark.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = benchmark.h; path = ../benchmarks/src/main/benchmark.h; sourceTree = "<group>"; };
 		BFBFE57818E3761900B07B6B /* latency.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = latency.h; path = ../benchmarks/src/main/latency.h; sourceTree = "<group>"; };
-		BFC212AE1BDECA9F00E5730A /* libev.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libev.a; path = ../../../../usr/local/lib/libev.a; sourceTree = "<group>"; };
+		BFC212AE1BDECA9F00E5730A /* libev.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libev.a; path = /usr/local/lib/libev.a; sourceTree = "<absolute>"; };
 		BFC79A7A18DCB27D00CFE830 /* benchmarks */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = benchmarks; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -96,16 +96,23 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		BFC79A7118DCB27D00CFE830 = {
+		BFC65BED1C9222C00079DF5A /* libs */ = {
 			isa = PBXGroup;
 			children = (
+				BFBA53F318E1EF4600DC6D8B /* aerospike.xcodeproj */,
 				BF21EA551C06500700E2031E /* libuv.a */,
 				BFC212AE1BDECA9F00E5730A /* libev.a */,
 				BFBA540218E1EFF200DC6D8B /* liblua.a */,
 				BFBA540018E1EFAA00DC6D8B /* libcrypto.dylib */,
 				BFBA53FE18E1EF9300DC6D8B /* libpthread.dylib */,
 				BFBA53FC18E1EF8800DC6D8B /* libz.dylib */,
-				BFBA53F318E1EF4600DC6D8B /* aerospike.xcodeproj */,
+			);
+			name = libs;
+			sourceTree = "<group>";
+		};
+		BFC65BEE1C9223110079DF5A /* src */ = {
+			isa = PBXGroup;
+			children = (
 				BF5DD9BE18E105080041F796 /* main.c */,
 				BF5DD9C018E1096F0041F796 /* benchmark.c */,
 				BFBA541218E212CD00DC6D8B /* benchmark.h */,
@@ -114,6 +121,15 @@
 				BFBA540C18E20AE900DC6D8B /* latency.c */,
 				BFBFE57818E3761900B07B6B /* latency.h */,
 				BFBA540918E1F2D300DC6D8B /* random.c */,
+			);
+			name = src;
+			sourceTree = "<group>";
+		};
+		BFC79A7118DCB27D00CFE830 = {
+			isa = PBXGroup;
+			children = (
+				BFC65BEE1C9223110079DF5A /* src */,
+				BFC65BED1C9222C00079DF5A /* libs */,
 				BFC79A7B18DCB27D00CFE830 /* Products */,
 			);
 			sourceTree = "<group>";

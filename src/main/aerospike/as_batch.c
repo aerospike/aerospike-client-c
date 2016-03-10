@@ -17,7 +17,6 @@
 #include <aerospike/as_batch.h>
 
 #include <citrusleaf/alloc.h>
-#include <citrusleaf/cf_random.h>
 
 /******************************************************************************
  *	INLINE FUNCTIONS

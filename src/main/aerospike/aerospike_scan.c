@@ -22,12 +22,12 @@
 #include <aerospike/as_key.h>
 #include <aerospike/as_log.h>
 #include <aerospike/as_msgpack.h>
+#include <aerospike/as_random.h>
 #include <aerospike/as_serializer.h>
 #include <aerospike/as_socket.h>
 #include <aerospike/as_thread_pool.h>
 #include <citrusleaf/cf_clock.h>
 #include <citrusleaf/cf_queue.h>
-#include <citrusleaf/cf_random.h>
 
 /******************************************************************************
  * TYPES
@@ -438,12 +438,12 @@ as_scan_generic(
 	uint64_t task_id;
 	if (task_id_ptr) {
 		if (*task_id_ptr == 0) {
-			*task_id_ptr = cf_get_rand64() >> 1;
+			*task_id_ptr = as_random_get_uint64();
 		}
 		task_id = *task_id_ptr;
 	}
 	else {
-		task_id = cf_get_rand64() >> 1;
+		task_id = as_random_get_uint64();
 	}
 
 	// Create scan command
@@ -556,12 +556,12 @@ as_scan_async(
 	uint64_t task_id;
 	if (scan_id) {
 		if (*scan_id == 0) {
-			*scan_id = cf_get_rand64() >> 1;
+			*scan_id = as_random_get_uint64();
 		}
 		task_id = *scan_id;
 	}
 	else {
-		task_id = cf_get_rand64() >> 1;
+		task_id = as_random_get_uint64();
 	}
 	
 	bool daisy_chain = ! (scan->concurrent || n_nodes == 1);
@@ -730,7 +730,7 @@ aerospike_scan_node(
 	}
 
 	// Create scan command
-	uint64_t task_id = cf_get_rand64() >> 1;
+	uint64_t task_id = as_random_get_uint64();
 	as_buffer argbuffer;
 	uint16_t n_fields = 0;
 	size_t size = as_scan_command_size(scan, &n_fields, &argbuffer);

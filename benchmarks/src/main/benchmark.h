@@ -24,6 +24,7 @@
 #include "aerospike/aerospike.h"
 #include "aerospike/as_event.h"
 #include "aerospike/as_password.h"
+#include "aerospike/as_random.h"
 #include "aerospike/as_record.h"
 #include "latency.h"
 
@@ -107,6 +108,7 @@ typedef struct clientdata_t {
 
 typedef struct threaddata_t {
 	clientdata* cdata;
+	as_random* random;
 	uint8_t* buffer;
 	uint64_t begin;
 	as_key key;

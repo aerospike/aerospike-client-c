@@ -25,6 +25,7 @@
 #include <aerospike/as_msgpack.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_query.h>
+#include <aerospike/as_random.h>
 #include <aerospike/as_serializer.h>
 #include <aerospike/as_socket.h>
 #include <aerospike/as_status.h>
@@ -32,7 +33,6 @@
 #include <aerospike/as_thread_pool.h>
 #include <aerospike/as_udf_context.h>
 #include <aerospike/mod_lua.h>
-#include <citrusleaf/cf_random.h>
 #include <stdint.h>
 
 #include "as_stap.h"
@@ -953,7 +953,7 @@ aerospike_query_foreach(
 		.err = err,
 		.input_queue = 0,
 		.complete_q = 0,
-		.task_id = cf_get_rand64() >> 1,
+		.task_id = as_random_get_uint64(),
 		.cmd = 0,
 		.cmd_size = 0,
 		.timeout = policy->timeout,
@@ -1048,7 +1048,7 @@ aerospike_query_async(
 		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Async aggregate queries are not supported.");
 	}
 	
-	uint64_t task_id = cf_get_rand64() >> 1;
+	uint64_t task_id = as_random_get_uint64();
 	
 	as_nodes* nodes = as_nodes_reserve(as->cluster);
 	uint32_t n_nodes = nodes->size;
@@ -1164,12 +1164,12 @@ aerospike_query_background(
 	uint64_t task_id;
 	if (query_id) {
 		if (*query_id == 0) {
-			*query_id = cf_get_rand64() >> 1;
+			*query_id = as_random_get_uint64();
 		}
 		task_id = *query_id;
 	}
 	else {
-		task_id = cf_get_rand64() >> 1;
+		task_id = as_random_get_uint64();
 	}
 
 	uint32_t error_mutex = 0;

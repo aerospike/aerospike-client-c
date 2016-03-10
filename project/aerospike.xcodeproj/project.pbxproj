@@ -118,6 +118,7 @@
 		BFC0028A1901E08500CB9BC8 /* as_lookup.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC002891901E08500CB9BC8 /* as_lookup.c */; };
 		BFC38AE11948F7CA000C53D9 /* as_admin.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC38AE01948F7CA000C53D9 /* as_admin.c */; };
 		BFC3A8EB1B97D24D00F2F758 /* version.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC3A8EA1B97D24D00F2F758 /* version.c */; };
+		BFC65B181C910A900079DF5A /* as_random.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65B171C910A900079DF5A /* as_random.c */; };
 		BFCF26BF1AC1FBBF0062B75C /* as_string_builder.c in Sources */ = {isa = PBXBuildFile; fileRef = BFCF26BE1AC1FBBF0062B75C /* as_string_builder.c */; };
 /* End PBXBuildFile section */
 
@@ -234,6 +235,7 @@
 		BFC002891901E08500CB9BC8 /* as_lookup.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_lookup.c; path = ../src/main/aerospike/as_lookup.c; sourceTree = "<group>"; };
 		BFC38AE01948F7CA000C53D9 /* as_admin.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; lineEnding = 0; name = as_admin.c; path = ../src/main/aerospike/as_admin.c; sourceTree = "<group>"; };
 		BFC3A8EA1B97D24D00F2F758 /* version.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = version.c; path = ../src/main/aerospike/version.c; sourceTree = "<group>"; };
+		BFC65B171C910A900079DF5A /* as_random.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_random.c; path = ../modules/common/src/main/aerospike/as_random.c; sourceTree = "<group>"; };
 		BFCF26BE1AC1FBBF0062B75C /* as_string_builder.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_string_builder.c; path = ../modules/common/src/main/aerospike/as_string_builder.c; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -251,6 +253,7 @@
 		BF07F62E18B4252500CE1850 = {
 			isa = PBXGroup;
 			children = (
+				BFC65B171C910A900079DF5A /* as_random.c */,
 				BF26CF831BFE7C7900E143DC /* as_async.c */,
 				BF6FE4321BF2748E00175BF8 /* as_pipe.c */,
 				BF25DA921BB0790F00AC7512 /* as_event.c */,
@@ -513,6 +516,7 @@
 				BF2AA7F418BEBFA500E54AF3 /* as_udf.c in Sources */,
 				BFBA105818B7D8B300A64E68 /* as_integer.c in Sources */,
 				BFBB3C8F192D729A00251B15 /* as_node.c in Sources */,
+				BFC65B181C910A900079DF5A /* as_random.c in Sources */,
 				BFBD205418BC3436009ED931 /* mod_lua_list.c in Sources */,
 				BF26C4671B45AE8F00E6929D /* as_job.c in Sources */,
 				BFBD205518BC3436009ED931 /* mod_lua_map.c in Sources */,

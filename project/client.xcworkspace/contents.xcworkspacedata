@@ -11,6 +11,6 @@
       location = "group:benchmarks.xcodeproj">
    </FileRef>
    <FileRef
-      location = "group:../examples">
+      location = "group:examples.xcodeproj">
    </FileRef>
 </Workspace>

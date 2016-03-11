@@ -93,11 +93,9 @@
 		BFBB6481190595E900682A6E /* as_timer.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBB647F190595E900682A6E /* as_timer.c */; };
 		BFBB64831905D5B500682A6E /* as_cluster.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBB64821905D5B500682A6E /* as_cluster.c */; };
 		BFBBBAEB18B6D9D0003FFD88 /* cf_b64.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBBBAE118B6D9D0003FFD88 /* cf_b64.c */; };
-		BFBBBAEC18B6D9D0003FFD88 /* cf_bits.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBBBAE218B6D9D0003FFD88 /* cf_bits.c */; };
 		BFBBBAED18B6D9D0003FFD88 /* cf_clock.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBBBAE318B6D9D0003FFD88 /* cf_clock.c */; };
 		BFBBBAEE18B6D9D0003FFD88 /* cf_crypto.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBBBAE418B6D9D0003FFD88 /* cf_crypto.c */; };
 		BFBBBAEF18B6D9D0003FFD88 /* cf_digest.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBBBAE518B6D9D0003FFD88 /* cf_digest.c */; };
-		BFBBBAF018B6D9D0003FFD88 /* cf_hooks.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBBBAE618B6D9D0003FFD88 /* cf_hooks.c */; };
 		BFBBBAF118B6D9D0003FFD88 /* cf_ll.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBBBAE718B6D9D0003FFD88 /* cf_ll.c */; };
 		BFBBBAF218B6D9D0003FFD88 /* cf_rchash.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBBBAE818B6D9D0003FFD88 /* cf_rchash.c */; };
 		BFBBBAF318B6D9D0003FFD88 /* cf_shash.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBBBAE918B6D9D0003FFD88 /* cf_shash.c */; };
@@ -253,11 +251,9 @@
 		BFBB647F190595E900682A6E /* as_timer.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_timer.c; path = ../modules/common/src/main/aerospike/as_timer.c; sourceTree = "<group>"; };
 		BFBB64821905D5B500682A6E /* as_cluster.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; lineEnding = 0; name = as_cluster.c; path = ../src/main/aerospike/as_cluster.c; sourceTree = "<group>"; };
 		BFBBBAE118B6D9D0003FFD88 /* cf_b64.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = cf_b64.c; path = ../modules/common/src/main/citrusleaf/cf_b64.c; sourceTree = "<group>"; };
-		BFBBBAE218B6D9D0003FFD88 /* cf_bits.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = cf_bits.c; path = ../modules/common/src/main/citrusleaf/cf_bits.c; sourceTree = "<group>"; };
 		BFBBBAE318B6D9D0003FFD88 /* cf_clock.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = cf_clock.c; path = ../modules/common/src/main/citrusleaf/cf_clock.c; sourceTree = "<group>"; };
 		BFBBBAE418B6D9D0003FFD88 /* cf_crypto.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = cf_crypto.c; path = ../modules/common/src/main/citrusleaf/cf_crypto.c; sourceTree = "<group>"; };
 		BFBBBAE518B6D9D0003FFD88 /* cf_digest.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = cf_digest.c; path = ../modules/common/src/main/citrusleaf/cf_digest.c; sourceTree = "<group>"; };
-		BFBBBAE618B6D9D0003FFD88 /* cf_hooks.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = cf_hooks.c; path = ../modules/common/src/main/citrusleaf/cf_hooks.c; sourceTree = "<group>"; };
 		BFBBBAE718B6D9D0003FFD88 /* cf_ll.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = cf_ll.c; path = ../modules/common/src/main/citrusleaf/cf_ll.c; sourceTree = "<group>"; };
 		BFBBBAE818B6D9D0003FFD88 /* cf_rchash.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; lineEnding = 0; name = cf_rchash.c; path = ../modules/common/src/main/citrusleaf/cf_rchash.c; sourceTree = "<group>"; };
 		BFBBBAE918B6D9D0003FFD88 /* cf_shash.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = cf_shash.c; path = ../modules/common/src/main/citrusleaf/cf_shash.c; sourceTree = "<group>"; };
@@ -544,11 +540,9 @@
 				BF843C5718D3E64900A06CFB /* cf_queue_priority.c */,
 				BF843C5818D3E64900A06CFB /* cf_queue.c */,
 				BFBBBAE118B6D9D0003FFD88 /* cf_b64.c */,
-				BFBBBAE218B6D9D0003FFD88 /* cf_bits.c */,
 				BFBBBAE318B6D9D0003FFD88 /* cf_clock.c */,
 				BFBBBAE418B6D9D0003FFD88 /* cf_crypto.c */,
 				BFBBBAE518B6D9D0003FFD88 /* cf_digest.c */,
-				BFBBBAE618B6D9D0003FFD88 /* cf_hooks.c */,
 				BFBBBAE718B6D9D0003FFD88 /* cf_ll.c */,
 				BFBBBAE818B6D9D0003FFD88 /* cf_rchash.c */,
 				BFBBBAE918B6D9D0003FFD88 /* cf_shash.c */,
@@ -816,14 +810,12 @@
 				BFBA105718B7D8B300A64E68 /* as_hashmap.c in Sources */,
 				BFBBBAF418B6D9D0003FFD88 /* cf_vector.c in Sources */,
 				BF26CF841BFE7C7900E143DC /* as_async.c in Sources */,
-				BFBBBAEC18B6D9D0003FFD88 /* cf_bits.c in Sources */,
 				BFBA04AF1947AA9C00F9924E /* crypt_blowfish.c in Sources */,
 				BFBB64831905D5B500682A6E /* as_cluster.c in Sources */,
 				BFBA105C18B7D8B300A64E68 /* as_map.c in Sources */,
 				BF2AA7E618BEBFA500E54AF3 /* as_batch.c in Sources */,
 				BFBA105418B7D8B300A64E68 /* as_hashmap_hooks.c in Sources */,
 				BFBBBAF318B6D9D0003FFD88 /* cf_shash.c in Sources */,
-				BFBBBAF018B6D9D0003FFD88 /* cf_hooks.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

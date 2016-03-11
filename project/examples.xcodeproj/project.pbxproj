@@ -26,7 +26,6 @@
 		BFC65CA51C923F6F0079DF5A /* libssl.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8B1C923E720079DF5A /* libssl.dylib */; };
 		BFC65CA61C923F6F0079DF5A /* libz.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C911C923EA70079DF5A /* libz.dylib */; };
 		BFC65CAF1C9240050079DF5A /* example.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65CAD1C923FCC0079DF5A /* example.c */; };
-		BFC65CB61C9241690079DF5A /* example.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65CB01C9240790079DF5A /* example.c */; };
 		BFC65CBA1C9241AA0079DF5A /* example_utils.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C881C923CEB0079DF5A /* example_utils.c */; };
 		BFC65CBC1C9241AA0079DF5A /* liblua.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C931C923EA70079DF5A /* liblua.a */; };
 		BFC65CBD1C9241AA0079DF5A /* libcrypto.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C921C923EA70079DF5A /* libcrypto.dylib */; };
@@ -237,6 +236,7 @@
 		BFC65E781C9251500079DF5A /* example.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65DB71C924D920079DF5A /* example.c */; };
 		BFC65E791C92516B0079DF5A /* example.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65DBB1C924E0F0079DF5A /* example.c */; };
 		BFC65E7A1C92518F0079DF5A /* example.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65DBC1C924E200079DF5A /* example.c */; };
+		BFC65E851C92560A0079DF5A /* example.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65E841C92560A0079DF5A /* example.c */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -473,7 +473,6 @@
 		BFC65C931C923EA70079DF5A /* liblua.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = liblua.a; path = /usr/local/lib/liblua.a; sourceTree = "<absolute>"; };
 		BFC65CAB1C923F6F0079DF5A /* get */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = get; sourceTree = BUILT_PRODUCTS_DIR; };
 		BFC65CAD1C923FCC0079DF5A /* example.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = example.c; path = ../examples/basic_examples/get/src/main/example.c; sourceTree = "<group>"; };
-		BFC65CB01C9240790079DF5A /* example.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = example.c; path = ../../examples/basic_examples/put/src/main/example.c; sourceTree = "<group>"; };
 		BFC65CC81C9241AA0079DF5A /* append */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = append; sourceTree = BUILT_PRODUCTS_DIR; };
 		BFC65CCA1C9241F90079DF5A /* example.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = example.c; path = ../examples/basic_examples/append/src/main/example.c; sourceTree = "<group>"; };
 		BFC65CCE1C9242E60079DF5A /* example.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = example.c; path = ../examples/basic_examples/expire/src/main/example.c; sourceTree = "<group>"; };
@@ -516,6 +515,7 @@
 		BFC65E4C1C924FB70079DF5A /* query_simple */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = query_simple; sourceTree = BUILT_PRODUCTS_DIR; };
 		BFC65E5E1C924FDB0079DF5A /* scan_background */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = scan_background; sourceTree = BUILT_PRODUCTS_DIR; };
 		BFC65E701C92501C0079DF5A /* scan_standard */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = scan_standard; sourceTree = BUILT_PRODUCTS_DIR; };
+		BFC65E841C92560A0079DF5A /* example.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = example.c; path = ../examples/basic_examples/put/src/main/example.c; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -895,7 +895,7 @@
 				BFC65CD61C92435D0079DF5A /* lmap */,
 				BFC65CD51C9243560079DF5A /* lset */,
 				BFC65CD41C9243460079DF5A /* lstack */,
-				BFC65C761C9237EE0079DF5A /* put */,
+				BFC65E831C9255D50079DF5A /* put */,
 				BFC65CD31C9243310079DF5A /* touch */,
 				BFC65CD21C9243290079DF5A /* udf */,
 			);
@@ -930,14 +930,6 @@
 				BFC65E701C92501C0079DF5A /* scan_standard */,
 			);
 			name = Products;
-			sourceTree = "<group>";
-		};
-		BFC65C761C9237EE0079DF5A /* put */ = {
-			isa = PBXGroup;
-			children = (
-				BFC65CB01C9240790079DF5A /* example.c */,
-			);
-			path = put;
 			sourceTree = "<group>";
 		};
 		BFC65C811C923A210079DF5A /* Products */ = {
@@ -1191,6 +1183,14 @@
 				BFC65DBB1C924E0F0079DF5A /* example.c */,
 			);
 			name = background;
+			sourceTree = "<group>";
+		};
+		BFC65E831C9255D50079DF5A /* put */ = {
+			isa = PBXGroup;
+			children = (
+				BFC65E841C92560A0079DF5A /* example.c */,
+			);
+			name = put;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -1655,7 +1655,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				BFC65CB61C9241690079DF5A /* example.c in Sources */,
+				BFC65E851C92560A0079DF5A /* example.c in Sources */,
 				BFC65C891C923CEB0079DF5A /* example_utils.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

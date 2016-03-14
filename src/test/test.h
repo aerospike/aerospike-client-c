@@ -116,9 +116,15 @@ void atf_suite_result_print(atf_suite_result * suite_result);
     atf_suite * __suite_name = & suite__##__suite_name; \
     static void suite_spec__##__suite_name(atf_suite * self)
 
-#define suite_add(__test) \
-    extern atf_test * __test; \
-    atf_suite_add(self, __test)
+extern char * g_test_filter;
+
+// Exclude all but the specified test.
+void atf_test_filter(char const * test);
+
+#define suite_add(__test)										\
+    extern atf_test * __test;									\
+	if (!g_test_filter || strcmp(#__test, g_test_filter) == 0)	\
+		atf_suite_add(self, __test)
 
 #define suite_before(__func) \
     atf_suite_before(self, __func)
@@ -180,10 +186,15 @@ void atf_plan_result_destroy(atf_plan_result * result);
     }\
     static void plan_spec__##__plan_name(atf_plan * self) \
 
+extern char * g_suite_filter;
 
-#define plan_add(__suite) \
-    extern atf_suite * __suite; \
-    atf_plan_add(self, __suite)
+// Exclude all but the specified suite.
+void atf_suite_filter(char const * suite);
+
+#define plan_add(__suite)											\
+    extern atf_suite * __suite;										\
+	if (!g_suite_filter || strcmp(#__suite, g_suite_filter) == 0)	\
+		atf_plan_add(self, __suite)
 
 #define plan_before(__func) \
     atf_plan_before(self, __func)

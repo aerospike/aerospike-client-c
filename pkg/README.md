@@ -54,7 +54,7 @@ This package contains Aerospike C client library installers, documentation and s
 
 The C client library requires other third-party libraries depending on your platform.
 
-#### Debian 6+ and Ubuntu 12+
+#### Debian 7+ and Ubuntu 12+
 
     $ sudo apt-get install libc6-dev libssl-dev autoconf automake libtool g++
 

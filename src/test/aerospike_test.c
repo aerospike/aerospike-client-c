@@ -211,7 +211,7 @@ PLAN(aerospike_test) {
 	// This needs to be done before we add the tests.
     if (! parse_opts(g_argc, g_argv)) {
         error("failed to parse options");
-    	return false;
+    	return;
     }
 	
 	plan_before(before);

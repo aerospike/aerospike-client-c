@@ -116,7 +116,7 @@ void atf_suite_result_print(atf_suite_result * suite_result);
     atf_suite * __suite_name = & suite__##__suite_name; \
     static void suite_spec__##__suite_name(atf_suite * self)
 
-extern char * g_test_filter;
+extern char const * g_test_filter;
 
 // Exclude all but the specified test.
 void atf_test_filter(char const * test);
@@ -186,7 +186,7 @@ void atf_plan_result_destroy(atf_plan_result * result);
     }\
     static void plan_spec__##__plan_name(atf_plan * self) \
 
-extern char * g_suite_filter;
+extern char const * g_suite_filter;
 
 // Exclude all but the specified suite.
 void atf_suite_filter(char const * suite);

@@ -302,11 +302,6 @@ bool query_foreach_destroy()
 		info("error(%d): %s", err.code, err.message);
 	}
 
-	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_p");
-	if ( err.code != AEROSPIKE_OK ) {
-		info("error(%d): %s", err.code, err.message);
-	}
-
 	return true;
 }
 

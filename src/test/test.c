@@ -140,7 +140,7 @@ void atf_test_result_destroy(atf_test_result * result) {
  * atf_suite
  *****************************************************************************/
 
-char * g_test_filter = NULL;
+char const * g_test_filter = NULL;
 
 void atf_test_filter(char const * test) {
 	g_test_filter = test;
@@ -252,7 +252,7 @@ atf_suite_result * atf_suite_result_add(atf_suite_result * suite_result, atf_tes
  * atf_plan
  *****************************************************************************/
 
-char * g_suite_filter = NULL;
+char const * g_suite_filter = NULL;
 
 void atf_suite_filter(char const * suite) {
 	g_suite_filter = suite;

@@ -62,13 +62,15 @@ as_client_log_callback(as_log_level level, const char * func, const char * file,
 	return true;
 }
 
-static const char* short_options = "h:p:U:P::";
+static const char* short_options = "h:p:U:P::S:T:";
 
 static struct option long_options[] = {
 	{"hosts",        1, 0, 'h'},
 	{"port",         1, 0, 'p'},
 	{"user",         1, 0, 'U'},
 	{"password",     2, 0, 'P'},
+	{"suite",        1, 0, 'S'},
+	{"test",         1, 0, 'T'},
 	{0,              0, 0, 0}
 };
 
@@ -107,6 +109,16 @@ static bool parse_opts(int argc, char* argv[])
 			as_password_prompt_hash(optarg, g_password);
 			break;
 				
+		case 'S':
+			// Exclude all but the specified suite from the plan.
+			atf_suite_filter(optarg);
+			break;
+				
+		case 'T':
+			// Exclude all but the specified test.
+			atf_test_filter(optarg);
+			break;
+				
 		default:
 	        error("unrecognized options");
 			return false;
@@ -123,11 +135,6 @@ static bool before(atf_plan * plan) {
         return false;
     }
 
-    if (! parse_opts(g_argc, g_argv)) {
-        error("failed to parse options");
-    	return false;
-    }
-	
 	// Initialize logging.
 	as_log_set_level(AS_LOG_LEVEL_INFO);
 	as_log_set_callback(as_client_log_callback);
@@ -201,6 +208,12 @@ static bool after(atf_plan * plan) {
 
 PLAN(aerospike_test) {
 
+	// This needs to be done before we add the tests.
+    if (! parse_opts(g_argc, g_argv)) {
+        error("failed to parse options");
+    	return false;
+    }
+	
 	plan_before(before);
 	plan_after(after);
 

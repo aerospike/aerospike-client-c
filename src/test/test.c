@@ -140,6 +140,12 @@ void atf_test_result_destroy(atf_test_result * result) {
  * atf_suite
  *****************************************************************************/
 
+char * g_test_filter = NULL;
+
+void atf_test_filter(char const * test) {
+	g_test_filter = test;
+}
+
 atf_suite * atf_suite_add(atf_suite * suite, atf_test * test) {
     suite->tests[suite->size] = test;
     suite->size++;
@@ -245,6 +251,12 @@ atf_suite_result * atf_suite_result_add(atf_suite_result * suite_result, atf_tes
 /******************************************************************************
  * atf_plan
  *****************************************************************************/
+
+char * g_suite_filter = NULL;
+
+void atf_suite_filter(char const * suite) {
+	g_suite_filter = suite;
+}
 
 atf_plan * atf_plan_add(atf_plan * plan, atf_suite * suite) {
     plan->suites[plan->size] = suite;

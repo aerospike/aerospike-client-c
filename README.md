@@ -10,7 +10,7 @@ The C client can be built on most recent 64-bit Linux distributions
 and Mac OS X 10.9 or greater.  The build requires gcc 4.1 or newer 
 for Linux and XCode clang for Mac OS X.
 
-### Debian 6+ and Ubuntu 12+
+### Debian 7+ and Ubuntu 12+
 
 	$ sudo apt-get install libc6-dev libssl-dev autoconf automake libtool g++
 

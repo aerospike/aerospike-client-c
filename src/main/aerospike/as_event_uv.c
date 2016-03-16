@@ -163,6 +163,7 @@ as_event_register_external_loop(as_event_loop* event_loop)
 {
 	// This method is only called when user sets an external event loop.
 	event_loop->wakeup = cf_malloc(sizeof(uv_async_t));
+	event_loop->wakeup->data = event_loop;
 	as_queue_init(&event_loop->queue, sizeof(as_uv_command), AS_EVENT_QUEUE_INITIAL_CAPACITY);
 	
 	// Assume uv_async_init is called on the same thread as the event loop.

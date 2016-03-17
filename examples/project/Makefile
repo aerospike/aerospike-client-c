@@ -138,7 +138,7 @@ target/obj/%.o: src/main/%.c | target/obj
 	$(CC) $(CFLAGS) -o $@ -c $^
 
 target/example: $(addprefix target/obj/,$(OBJECTS)) $(AEROSPIKE)/target/$(PLATFORM)/lib/libaerospike.a | target
-	$(CC) -o $@ $^ $(AEROSPIKE)/target/$(PLATFORM)/lib/libaerospike.a $(LDFLAGS)
+	$(CC) -o $@ $^ $(LDFLAGS)
 
 .PHONY: run
 run: build

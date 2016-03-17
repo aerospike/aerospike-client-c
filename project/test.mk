@@ -80,4 +80,4 @@ $(TARGET_TEST)/%.o: $(SOURCE_TEST)/%.c
 
 $(TARGET_TEST)/aerospike_test: CFLAGS += $(TEST_CFLAGS)
 $(TARGET_TEST)/aerospike_test: $(TEST_OBJECT) $(TARGET_TEST)/test.o $(TARGET_LIB)/libaerospike.a | build prepare
-	$(executable) $(TARGET_LIB)/libaerospike.a $(TEST_LDFLAGS)
+	$(executable) $(TEST_LDFLAGS)

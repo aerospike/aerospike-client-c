@@ -12,8 +12,11 @@ PLATFORM = $(OS)-$(ARCH)
 
 CFLAGS = -std=gnu99 -g -Wall -fPIC -O3
 CFLAGS += -fno-common -fno-strict-aliasing
-CFLAGS += -march=nocona -DMARCH_$(ARCH)
 CFLAGS += -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_GNU_SOURCE
+
+ifneq ($(ARCH),$(filter $(ARCH),ppc64 ppc64le))
+  CFLAGS += -march=nocona
+endif
 
 ifeq ($(OS),Darwin)
   CFLAGS += -D_DARWIN_UNLIMITED_SELECT 

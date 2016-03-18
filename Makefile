@@ -43,8 +43,11 @@ USE_SYSTEMTAP = 0
 # Make-local Compiler Flags
 CC_FLAGS = -std=gnu99 -g -Wall -fPIC -O$(O)
 CC_FLAGS += -fno-common -fno-strict-aliasing 
-CC_FLAGS += -march=nocona -DMARCH_$(ARCH)
 CC_FLAGS += -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_GNU_SOURCE $(EXT_CFLAGS)
+
+ifneq ($(ARCH),$(filter $(ARCH),ppc64 ppc64le))
+  CC_FLAGS += -march=nocona
+endif
 
 ifeq ($(EVENT_LIB),libev)
   CC_FLAGS += -DAS_USE_LIBEV
@@ -227,7 +230,6 @@ COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_util.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_val.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_vector.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/alloc.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_arch.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_atomic.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_b64.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_clock.h

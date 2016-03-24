@@ -190,7 +190,10 @@ as_event_command_parse_header(as_event_command* cmd);
 
 bool
 as_event_command_parse_success_failure(as_event_command* cmd);
-	
+
+void
+as_event_command_free(as_event_command* cmd);
+
 /******************************************************************************
  * IMPLEMENTATION SPECIFIC FUNCTIONS
  *****************************************************************************/
@@ -218,18 +221,6 @@ as_event_send_close_loop(as_event_loop* event_loop);
 
 void
 as_event_close_loop(as_event_loop* event_loop);
-
-static inline void
-as_event_command_free(as_event_command* cmd)
-{
-	ck_pr_dec_32(&cmd->cluster->async_pending);
-	as_node_release(cmd->node);
-	
-	if (cmd->free_buf) {
-		cf_free(cmd->buf);
-	}
-	cf_free(cmd);
-}
 
 /******************************************************************************
  * LIBEV INLINE FUNCTIONS

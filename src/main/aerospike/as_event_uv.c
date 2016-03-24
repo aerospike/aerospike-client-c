@@ -101,6 +101,15 @@ as_uv_wakeup(uv_async_t* wakeup)
 	pthread_mutex_unlock(&event_loop->lock);
 }
 
+static void
+as_uv_close_walk(uv_handle_t* handle, void* arg)
+{
+	if (! uv_is_closing(handle)) {
+		//as_log_debug("Handle found %p %d", handle, handle->type);
+		uv_close(handle, NULL);
+	}
+}
+
 static void*
 as_uv_worker(void* udata)
 {
@@ -127,6 +136,9 @@ as_uv_worker(void* udata)
 	uv_async_init(event_loop->loop, event_loop->wakeup, as_uv_wakeup);
 	as_monitor_notify(&data->monitor);
 	
+	uv_run(event_loop->loop, UV_RUN_DEFAULT);
+	
+	uv_walk(event_loop->loop, as_uv_close_walk, NULL);
 	uv_run(event_loop->loop, UV_RUN_DEFAULT);
 	
 	int status = uv_loop_close(event_loop->loop);

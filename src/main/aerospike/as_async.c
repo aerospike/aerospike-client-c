@@ -23,7 +23,10 @@
 uint32_t
 as_async_get_pending(as_cluster* cluster)
 {
-	return ck_pr_load_32(&cluster->async_pending);
+	// Subtract one to account for extra as_cluster_create() pending reference count.
+	// Maxint could be returned if pending is really zero, but that can only occur after
+	// as_cluster_destroy() was called, so the result is garbage anyway.
+	return ck_pr_load_32(&cluster->async_pending) - 1;
 }
 
 void

@@ -137,15 +137,26 @@ aerospike_connect(aerospike* as, as_error* err)
 as_status
 aerospike_close(aerospike* as, as_error* err)
 {
-	as_error_reset(err);
-
 	// This is not 100% bulletproof against simultaneous aerospike_close() calls
 	// from different threads.
-	if ( as->cluster ) {
-		as_cluster_destroy(as->cluster);
+	as_error_reset(err);
+	as_cluster* cluster = as->cluster;
+	
+	if (cluster) {
+		// Decrement extra pending reference count that was set in as_cluster_create().
+		bool destroy;
+		ck_pr_dec_32_zero(&cluster->async_pending, &destroy);
+		
+		// Only destroy cluster if there are no pending async commands.
+		if (destroy) {
+			as_cluster_destroy(cluster);
+		}
+		
+		// If there were pending commands, return control to user to allow pending commands
+		// to complete.  When the last command completes, async_pending will become zero and
+		// the cluster will be destroyed in as_event_command_free().
 		as->cluster = NULL;
 	}
-
 	return err->code;
 }
 

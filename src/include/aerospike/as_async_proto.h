@@ -16,22 +16,23 @@
  */
 #pragma once
 
-#include <aerospike/as_cluster.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+struct as_cluster_s;
+
 /******************************************************************************
  * FUNCTIONS
  *****************************************************************************/
 
 uint32_t
-as_async_get_pending(as_cluster* cluster);
+as_async_get_pending(struct as_cluster_s* cluster);
 
 void
-as_async_get_connections(as_cluster* cluster, uint32_t* async_conn, uint32_t* async_conn_pool);
+as_async_get_connections(struct as_cluster_s* cluster, uint32_t* async_conn, uint32_t* async_conn_pool);
 
 #ifdef __cplusplus
 } // end extern "C"

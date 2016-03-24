@@ -661,3 +661,24 @@ as_event_command_parse_success_failure(as_event_command* cmd)
 	}
 	return true;
 }
+
+void
+as_event_command_free(as_event_command* cmd)
+{
+	as_node_release(cmd->node);
+	
+	as_cluster* cluster = cmd->cluster;
+	bool destroy;
+	
+	ck_pr_dec_32_zero(&cluster->async_pending, &destroy);
+	
+	// Only destroy cluster if cluster was closed and there are no pending async commands.
+	if (destroy) {
+		as_cluster_destroy(cluster);
+	}
+	
+	if (cmd->free_buf) {
+		cf_free(cmd->buf);
+	}
+	cf_free(cmd);
+}

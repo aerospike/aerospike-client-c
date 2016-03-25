@@ -33,6 +33,8 @@
  *	Globals
  *****************************************************************************/
 
+uint32_t as_cluster_count = 0;
+
 /******************************************************************************
  *	Function declarations
  *****************************************************************************/
@@ -1151,6 +1153,8 @@ as_cluster_change_password(as_cluster* cluster, const char* user, const char* pa
 as_status
 as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 {
+	ck_pr_inc_32(&as_cluster_count);
+	
 	as_cluster* cluster = cf_malloc(sizeof(as_cluster));
 	memset(cluster, 0, sizeof(as_cluster));
 	
@@ -1296,4 +1300,5 @@ as_cluster_destroy(as_cluster* cluster)
 	
 	// Destroy cluster.
 	cf_free(cluster);
+	ck_pr_dec_32(&as_cluster_count);
 }

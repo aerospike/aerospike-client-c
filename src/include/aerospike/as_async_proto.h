@@ -29,6 +29,9 @@ struct as_cluster_s;
  *****************************************************************************/
 
 uint32_t
+as_async_get_cluster_count();
+
+uint32_t
 as_async_get_pending(struct as_cluster_s* cluster);
 
 void

@@ -62,12 +62,36 @@ as_client_log_callback(as_log_level level, const char * func, const char * file,
 	return true;
 }
 
-static const char* short_options = "h:p:U:P::S:T:";
+static void
+usage()
+{
+	fprintf(stderr, "Usage: ");
+	fprintf(stderr, "  -h, --host <host>\n");
+	fprintf(stderr, "    The host to connect to. Default: 127.0.0.1.\n\n");
+
+	fprintf(stderr, "  -p, --port <port>\n");
+	fprintf(stderr, "    The port to connect to. Default: 3000.\n\n");
+
+	fprintf(stderr, "  -U, --user <user>\n");
+	fprintf(stderr, "    The user to connect as. Default: no user.\n\n");
+
+	fprintf(stderr, "  -P[<password>], --password\n");
+	fprintf(stderr, "    The user's password. If empty, a prompt is shown. Default: no password.\n\n");
+
+	fprintf(stderr, "  -S, --suite <suite>\n");
+	fprintf(stderr, "    The suite to be run. Default: all suites.\n\n");
+
+	fprintf(stderr, "  -T, --testcase <testcase>\n");
+	fprintf(stderr, "    The test case to run. Default: all test cases.\n\n");
+}
+
+static const char* short_options = "h:p:U:uP::S:T:";
 
 static struct option long_options[] = {
 	{"hosts",        1, 0, 'h'},
 	{"port",         1, 0, 'p'},
 	{"user",         1, 0, 'U'},
+	{"usage",     	 0, 0, 'u'},
 	{"password",     2, 0, 'P'},
 	{"suite",        1, 0, 'S'},
 	{"test",         1, 0, 'T'},
@@ -105,6 +129,10 @@ static bool parse_opts(int argc, char* argv[])
 			error("user:           %s", g_user);
 			break;
 
+		case 'u':
+			usage();
+			return false;
+
 		case 'P':
 			as_password_prompt_hash(optarg, g_password);
 			break;
@@ -121,6 +149,7 @@ static bool parse_opts(int argc, char* argv[])
 				
 		default:
 	        error("unrecognized options");
+	        usage();
 			return false;
 		}
 	}
@@ -210,7 +239,6 @@ PLAN(aerospike_test) {
 
 	// This needs to be done before we add the tests.
     if (! parse_opts(g_argc, g_argv)) {
-        error("failed to parse options");
     	return;
     }
 	

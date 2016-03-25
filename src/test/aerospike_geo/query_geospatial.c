@@ -384,7 +384,7 @@ TEST( query_geojson_in_mapvalue, "IN MAPVALUES count(*) where p in <rectangle>" 
 					 plng, plat);
 
 			char mkey[128];
-			snprintf(mkey, sizeof(mkey), "pointkey_%d", jj);
+			snprintf(mkey, sizeof(mkey), "pointkey_%d_%d", i, jj);
 			as_stringmap_set((as_map *) &mymap, mkey, (as_val *)as_geojson_new(strdup(pntbuf), true));
 
 			//
@@ -408,8 +408,8 @@ TEST( query_geojson_in_mapvalue, "IN MAPVALUES count(*) where p in <rectangle>" 
 					 rlng - 0.001, rlat + 0.001,
 					 rlng - 0.001, rlat - 0.001);
 
-			snprintf(mkey, sizeof(mkey), "regionkey_%d", jj);
-			as_stringmap_set((as_map *) &mymap, mkey, (as_val *)as_geojson_new(strdup(pntbuf), true));
+			snprintf(mkey, sizeof(mkey), "regionkey_%d_%d", i,jj);
+			as_stringmap_set((as_map *) &mymap, mkey, (as_val *)as_geojson_new(strdup(rgnbuf), true));
 
 		}
 
@@ -466,7 +466,7 @@ TEST( query_geojson_in_mapvalue, "IN MAPVALUES count(*) where p in <rectangle>" 
 	assert_int_eq( udata.hm->count, 21 );
 
 	// currently we return duplicates
-	assert_int_eq( udata.count,63);
+	assert_int_eq( udata.count, 697);
 
 	as_hashmap_destroy(udata.hm);
 

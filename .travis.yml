@@ -7,6 +7,7 @@ os:
 before_install:
 - sudo apt-get install libssl-dev lua5.1 liblua5.1-0 liblua5.1-0-dev automake
 - sudo ln -s /usr/lib/x86_64-linux-gnu/liblua5.1.so.0 /usr/lib/liblua.so
+- export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
 install:
 - wget -O aerospike-server.tgz http://aerospike.com/download/server/latest/artifact/tgz
 - tar xvzf aerospike-server.tgz

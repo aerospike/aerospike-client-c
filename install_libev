@@ -1,0 +1,7 @@
+#!/bin/bash
+wget http://dist.schmorp.de/libev/libev-4.22.tar.gz
+tar xvf libev-4.22.tar.gz
+cd libev-4.22
+./configure
+make
+sudo make install

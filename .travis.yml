@@ -5,7 +5,7 @@ compiler:
 os:
 - linux
 before_install:
-- sudo apt-get install libssl-dev lua5.1 liblua5.1-0 liblua5.1-0-dev
+- sudo apt-get install libssl-dev lua5.1 liblua5.1-0 liblua5.1-0-dev automake
 - sudo ln -s /usr/lib/x86_64-linux-gnu/liblua5.1.so.0 /usr/lib/liblua.so
 install:
 - wget -O aerospike-server.tgz http://aerospike.com/download/server/latest/artifact/tgz
@@ -23,9 +23,11 @@ script:
 - make
 - make test
 - make clean
+- ./install_libev
 - make EVENT_LIB=libev
 - make EVENT_LIB=libev test
 - make clean
+- ./install_libuv
 - make EVENT_LIB=libuv
 - make EVENT_LIB=libuv test
 notifications:

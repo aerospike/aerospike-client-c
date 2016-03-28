@@ -1,0 +1,8 @@
+#!/bin/bash
+wget http://dist.libuv.org/dist/v1.8.0/libuv-v1.8.0.tar.gz
+tar xvf libuv-v1.8.0.tar.gz
+cd libuv-v1.8.0
+sh autogen.sh
+./configure
+make
+sudo make install

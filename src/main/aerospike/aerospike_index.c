@@ -18,60 +18,34 @@
 #include <aerospike/aerospike_info.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_log.h>
-
 #include <citrusleaf/alloc.h>
 
 /******************************************************************************
  * FUNCTIONS
  *****************************************************************************/
 
-/**
- *	Create secondary index.
- *
- *	This asynchronous server call will return before the command is complete.
- *	The user can optionally wait for command completion by using a task instance.
- *
- *	~~~~~~~~~~{.c}
- *	as_index_task task;
- *	if ( aerospike_index_create(&as, &err, &task, NULL, "test", "demo", "bin1", "idx_test_demo_bin1") == AEROSPIKE_OK ) {
- *		aerospike_index_create_wait(&err, &task, 0);
- *	}
- *	~~~~~~~~~~
- *
- *	@param as			The aerospike instance to use for this operation.
- *	@param err			The as_error to be populated if an error occurs.
- *	@param task			The optional task data used to poll for completion.
- *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param ns			The namespace to be indexed.
- *	@param set			The set to be indexed.
- *	@param bin			The bin to be indexed.
- *	@param name			The name of the index.
- *
- *	@return AEROSPIKE_OK if successful or index already exists. Otherwise an error.
- *
- *	@ingroup index_operations
- */
-as_status aerospike_index_create_complex(
-	aerospike * as, as_error * err, as_index_task * task, const as_policy_info * policy,
-	const as_namespace ns, const as_set set, const as_index_position position, const char * name,
+as_status
+aerospike_index_create_complex(
+	aerospike* as, as_error* err, as_index_task* task, const as_policy_info* policy,
+	const as_namespace ns, const as_set set, const as_index_position position, const char* name,
 	as_index_type itype, as_index_datatype dtype)
 {
 	as_error_reset(err);
 	
 	const char* dtype_string;
     switch (dtype) {
-    case AS_INDEX_NUMERIC:
-        dtype_string = "NUMERIC";
-        break;
-    case AS_INDEX_GEO2DSPHERE:
-        dtype_string = "GEO2DSPHERE";
-        break;
-    default:
-    case AS_INDEX_STRING:
-        dtype_string = "STRING";
-        break;
+		case AS_INDEX_NUMERIC:
+			dtype_string = "NUMERIC";
+			break;
+		case AS_INDEX_GEO2DSPHERE:
+			dtype_string = "GEO2DSPHERE";
+			break;
+		default:
+		case AS_INDEX_STRING:
+			dtype_string = "STRING";
+			break;
     }
-
+	
 	const char* itype_string;
 	switch (itype) {
 		default:
@@ -92,30 +66,35 @@ as_status aerospike_index_create_complex(
 			break;
 		}
 	}
-
-    char ddl[1024];
+	
+    char command[1024];
+	int count;
     
 	if (itype == AS_INDEX_TYPE_DEFAULT) {
 		// Use old format, so command can work with older servers.
-		sprintf(ddl,
-				"sindex-create:ns=%s%s%s;indexname=%s;"
-				"numbins=1;indexdata=%s,%s;priority=normal\n",
-				ns, set ? ";set=" : "", set ? set : "",
-				name, position, dtype_string
-				);
+		count = snprintf(command, sizeof(command),
+						 "sindex-create:ns=%s%s%s;indexname=%s;"
+						 "numbins=1;indexdata=%s,%s;priority=normal\n",
+						 ns, set ? ";set=" : "", set ? set : "",
+						 name, position, dtype_string
+						 );
 	}
 	else {
 		// Use new format.
-		sprintf(ddl,
-				"sindex-create:ns=%s%s%s;indexname=%s;"
-				"numbins=1;indextype=%s;indexdata=%s,%s;priority=normal\n",
-				ns, set ? ";set=" : "", set ? set : "",
-				name, itype_string, position, dtype_string
-				);
+		count = snprintf(command, sizeof(command),
+						 "sindex-create:ns=%s%s%s;indexname=%s;"
+						 "numbins=1;indextype=%s;indexdata=%s,%s;priority=normal\n",
+						 ns, set ? ";set=" : "", set ? set : "",
+						 name, itype_string, position, dtype_string
+						 );
 	}
-
+	
+	if (++count >= sizeof(command)) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Index create buffer overflow: %d", count);
+	}
+	
 	char* response = NULL;
-	as_status status = aerospike_info_any(as, err, policy, ddl, &response);
+	as_status status = aerospike_info_any(as, err, policy, command, &response);
 	
 	switch (status) {
 		case AEROSPIKE_OK:
@@ -184,19 +163,8 @@ aerospike_index_create_is_done(aerospike* as, as_error * err, as_policy_info* po
 	return done;
 }
 
-/**
- *	Wait for asynchronous task to complete using given polling interval.
- *
- *	@param err			The as_error to be populated if an error occurs.
- *	@param task			The task data used to poll for completion.
- *	@param interval_ms	The polling interval in milliseconds. If zero, 1000 ms is used.
- *
- *	@return AEROSPIKE_OK if successful. Otherwise an error.
- *
- *	@ingroup index_operations
- */
 as_status
-aerospike_index_create_wait(as_error * err, as_index_task * task, uint32_t interval_ms)
+aerospike_index_create_wait(as_error* err, as_index_task* task, uint32_t interval_ms)
 {
 	if (task->done) {
 		return AEROSPIKE_OK;
@@ -207,7 +175,7 @@ aerospike_index_create_wait(as_error * err, as_index_task * task, uint32_t inter
 	policy.send_as_is = false;
 	policy.check_bounds = true;
 	
-	char command[256];
+	char command[1024];
 	snprintf(command, sizeof(command), "sindex/%s/%s" , task->ns, task->name);
 	
 	uint32_t interval_micros = (interval_ms <= 0)? 1000 * 1000 : interval_ms * 1000;
@@ -219,37 +187,22 @@ aerospike_index_create_wait(as_error * err, as_index_task * task, uint32_t inter
 	return AEROSPIKE_OK;
 }
 
-/**
- *	Removes (drops) a secondary index.
- *
- *	~~~~~~~~~~{.c}
- *	if ( aerospike_index_remove(&as, &err, NULL, "test", idx_test_demo_bin1") != AEROSPIKE_OK ) {
- *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- *	}
- *	~~~~~~~~~~
- *
- *	@param as			The aerospike instance to use for this operation.
- *	@param err			The as_error to be populated if an error occurs.
- *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param ns			The namespace containing the index to be removed.
- *	@param name			The name of the index to be removed.
- *
- *	@return AEROSPIKE_OK if successful or index does not exist. Otherwise an error.
- *
- *	@ingroup index_operations
- */
-as_status aerospike_index_remove(
-	aerospike * as, as_error * err, const as_policy_info * policy, 
-	const char * ns, const char * name)
+as_status
+aerospike_index_remove(
+	aerospike* as, as_error* err, const as_policy_info* policy, const char* ns, const char* name)
 {
 	as_error_reset(err);
-
-	char ddl[1024];
-	sprintf(ddl, "sindex-delete:ns=%s;indexname=%s", ns, name);
-
+	
+	char command[1024];
+	int count = snprintf(command, sizeof(command), "sindex-delete:ns=%s;indexname=%s", ns, name);
+	
+	if (++count >= sizeof(command)) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Index remove buffer overflow: %d", count);
+	}
+	
 	char* response = NULL;
-	as_status status = aerospike_info_any(as, err, policy, ddl, &response);
-
+	as_status status = aerospike_info_any(as, err, policy, command, &response);
+	
 	switch (status) {
 		case AEROSPIKE_OK:
 			cf_free(response);

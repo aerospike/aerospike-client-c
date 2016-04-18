@@ -309,20 +309,16 @@ bool
 aerospike_cluster_is_connected(aerospike* as);
 
 /**
- *	Is cluster connected to any server nodes.
- *
- *	~~~~~~~~~~{.c}
- *	bool connected = aerospike_cluster_is_connected(&as);
- *	~~~~~~~~~~
+ *	Do all server nodes in the cluster support async pipelining.
  *
  *	@param as 		The aerospike instance to check.
  *
- *	@returns true when cluster is connected.
+ *	@returns true when all server nodes support pipelining.
  *
  *	@relates aerospike
  */
 bool
-aerospike_cluster_is_connected(aerospike* as);
+aerospike_has_pipelining(aerospike* as);
 
 /**
  *	Should stop socket operation if interrupted by a signal.  Default is false which means

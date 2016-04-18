@@ -82,6 +82,7 @@ as_node_create(as_cluster* cluster, as_host* host, struct sockaddr_in* addr, as_
 	node->has_replicas_all = node_info->has_replicas_all;
 	node->has_double = node_info->has_double;
 	node->has_geo = node_info->has_geo;
+	node->has_pipelining = node_info->has_pipelining;
 	node->address_index = 0;
 	
 	as_vector_init(&node->addresses, sizeof(as_address), 2);

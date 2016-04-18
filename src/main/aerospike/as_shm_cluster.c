@@ -167,6 +167,7 @@ as_shm_add_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_add)
 				node_shm->has_replicas_all = node_to_add->has_replicas_all;
 				node_shm->has_double = node_to_add->has_double;
 				node_shm->has_geo = node_to_add->has_geo;
+				node_shm->has_pipelining = node_to_add->has_pipelining;
 				ck_swlock_write_unlock(&node_shm->lock);
 				
 				// Set shared memory node array index.
@@ -244,6 +245,7 @@ as_shm_reset_nodes(as_cluster* cluster)
 				node_info.has_replicas_all = node_tmp.has_replicas_all;
 				node_info.has_double = node_tmp.has_double;
 				node_info.has_geo = node_tmp.has_geo;
+				node_info.has_pipelining = node_tmp.has_pipelining;
 				
 				node = as_node_create(cluster, NULL, &node_tmp.addr, &node_info);
 				node->index = i;

@@ -87,9 +87,15 @@ typedef struct as_node_shm_s {
 
 	/**
 	 *	@private
+	 *	Does node support pipelining?
+	 */
+	uint8_t has_pipelining;
+
+	/**
+	 *	@private
 	 *	Pad to 8 byte boundary.
 	 */
-	char pad[3];
+	char pad[2];
 } as_node_shm;
 
 /**

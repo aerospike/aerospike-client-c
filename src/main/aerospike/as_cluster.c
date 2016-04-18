@@ -217,11 +217,9 @@ as_lookup_node(as_cluster* cluster, as_error* err, struct sockaddr_in* addr, as_
 	uint8_t has_replicas_all = 0;
 	uint8_t has_double = 0;
 	uint8_t has_geo = 0;
+	uint8_t has_pipelining = 0;
 	
-	while (*begin && ! (has_batch_index &&
-						has_replicas_all &&
-						has_double &&
-						has_geo)) {
+	while (*begin) {
 		while (*end) {
 			if (*end == ';') {
 				*end++ = 0;
@@ -246,12 +244,17 @@ as_lookup_node(as_cluster* cluster, as_error* err, struct sockaddr_in* addr, as_
 			has_geo = 1;
 		}
 
+		if (strcmp(begin, "pipelining") == 0) {
+			has_pipelining = 1;
+		}
+		
 		begin = end;
 	}
 	node_info->has_batch_index = has_batch_index;
 	node_info->has_replicas_all = has_replicas_all;
 	node_info->has_double = has_double;
 	node_info->has_geo = has_geo;
+	node_info->has_pipelining = has_pipelining;
 	cf_free(response);
 	return AEROSPIKE_OK;
 	

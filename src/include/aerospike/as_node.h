@@ -191,6 +191,12 @@ typedef struct as_node_s {
 	 */
 	uint8_t has_geo;
 	
+	/**
+	 *	@private
+	 *	Does node support pipelining?
+	 */
+	uint8_t has_pipelining;
+
 } as_node;
 
 /**
@@ -234,6 +240,12 @@ typedef struct as_node_info_s {
 	 */
 	uint8_t has_geo;
 	
+	/**
+	 *	@private
+	 *	Does node support pipelining?
+	 */
+	uint8_t has_pipelining;
+
 } as_node_info;
 
 /**

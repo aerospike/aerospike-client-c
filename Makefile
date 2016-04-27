@@ -4,12 +4,12 @@
 include project/settings.mk
 
 # Modules
-COMMON		:= $(realpath modules/common)
-LUA_CORE	:= $(realpath modules/lua-core)
-LUAMOD		:= $(realpath modules/lua)
-LUAJIT		:= $(realpath modules/luajit)
-MOD_LUA		:= $(realpath modules/mod-lua)
-MODULES		:= COMMON MOD_LUA
+COMMON := modules/common
+LUA_CORE := modules/lua-core
+LUAMOD := modules/lua
+LUAJIT := modules/luajit
+MOD_LUA	:= modules/mod-lua
+MODULES	:= COMMON MOD_LUA
 
 # Use the Lua submodule?  [By default, yes.]
 USE_LUAMOD = 1

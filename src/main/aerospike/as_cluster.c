@@ -430,7 +430,7 @@ as_cluster_seed_nodes(as_cluster* cluster, as_error* err, bool enable_warnings)
 		status = AEROSPIKE_OK;
 	}
 	else {
-		status = as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to seed cluster");
+		status = as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to connect");
 	}
 	
 	as_vector_destroy(&nodes_to_add);

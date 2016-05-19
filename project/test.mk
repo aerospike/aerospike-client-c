@@ -4,15 +4,16 @@
 
 TEST_AEROSPIKE = aerospike_test.c
 TEST_AEROSPIKE += aerospike_batch/*.c
-TEST_AEROSPIKE += aerospike_list/*.c
 TEST_AEROSPIKE += aerospike_index/*.c
+TEST_AEROSPIKE += aerospike_geo/*.c
 TEST_AEROSPIKE += aerospike_info/*.c
 TEST_AEROSPIKE += aerospike_key/*.c
+TEST_AEROSPIKE += aerospike_list/*.c
+TEST_AEROSPIKE += aerospike_map/*.c
 TEST_AEROSPIKE += aerospike_query/*.c
 TEST_AEROSPIKE += aerospike_scan/*.c
 TEST_AEROSPIKE += aerospike_udf/*.c
 TEST_AEROSPIKE += aerospike_ldt/*.c
-TEST_AEROSPIKE += aerospike_geo/*.c
 TEST_AEROSPIKE += policy/*.c
 TEST_AEROSPIKE += util/*.c
 

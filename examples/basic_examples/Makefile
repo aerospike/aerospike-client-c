@@ -12,6 +12,7 @@ default: all
 	$(MAKE) -C lmap $@
 	$(MAKE) -C lset $@
 	$(MAKE) -C lstack $@
+	$(MAKE) -C map $@
 	$(MAKE) -C put $@
 	$(MAKE) -C touch $@
 	$(MAKE) -C udf $@

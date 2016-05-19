@@ -73,7 +73,7 @@ extern "C" {
 // (Note:  Bit 4 is unused.)
 #define AS_MSG_INFO2_CREATE_ONLY		(1 << 5) // write record only if it doesn't exist
 // (Note:  Bit 6 is unused.)
-// (Note:  Bit 7 is unused.)
+#define AS_MSG_INFO2_RESPOND_ALL_OPS	(1 << 7) // return a result for every operation.
 
 // Message info3 bits
 #define AS_MSG_INFO3_LAST				(1 << 0) // this is the last of a multi-part message

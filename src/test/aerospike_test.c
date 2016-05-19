@@ -241,7 +241,7 @@ PLAN(aerospike_test) {
     if (! parse_opts(g_argc, g_argv)) {
     	return;
     }
-	
+		
 	plan_before(before);
 	plan_after(after);
 
@@ -282,6 +282,8 @@ PLAN(aerospike_test) {
 
 	// cdt
 	plan_add(list_basics);
+	
+	plan_add(map_basics);
 
 	if (g_use_async) {
 		plan_add(key_basics_async);

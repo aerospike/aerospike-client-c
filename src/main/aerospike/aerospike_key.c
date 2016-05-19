@@ -595,6 +595,48 @@ aerospike_key_remove_async(
 	return aerospike_key_remove_async_ex(as, err, policy, key, listener, udata, event_loop, pipe_listener, NULL);
 }
 
+static size_t
+as_operate_set_attr(const as_operations* ops, as_buffer* buffers, size_t size, uint8_t* rattr, uint8_t* wattr)
+{
+	uint32_t n_operations = ops->binops.size;
+	uint8_t read_attr = 0;
+	uint8_t write_attr = 0;
+	bool respond_all_ops = false;
+	
+	for (int i = 0; i < n_operations; i++) {
+		as_binop* op = &ops->binops.entries[i];
+		
+		switch (op->op)	{
+			case AS_OPERATOR_MAP_READ:
+				// Map operations require respond_all_ops to be true.
+				respond_all_ops = true;
+				op->op = AS_OPERATOR_CDT_READ;
+				// Fall through to read.
+			case AS_OPERATOR_CDT_READ:
+			case AS_OPERATOR_READ:
+				read_attr |= AS_MSG_INFO1_READ;
+				break;
+				
+			case AS_OPERATOR_MAP_MODIFY:
+				// Map operations require respond_all_ops to be true.
+				respond_all_ops = true;
+				op->op = AS_OPERATOR_CDT_MODIFY;
+				// Fall through to write.
+			default:
+				write_attr |= AS_MSG_INFO2_WRITE;
+				break;
+		}
+		size += as_command_bin_size(&op->bin, &buffers[i]);
+	}
+	
+	if (respond_all_ops) {
+		write_attr |= AS_MSG_INFO2_RESPOND_ALL_OPS;
+	}
+	*rattr = read_attr;
+	*wattr = write_attr;
+	return size;
+}
+
 as_status
 aerospike_key_operate(
 	aerospike* as, as_error* err, const as_policy_operate* policy, const as_key* key,
@@ -624,25 +666,10 @@ aerospike_key_operate(
 	
 	uint16_t n_fields;
 	size_t size = as_command_key_size(policy->key, key, &n_fields);
-	uint8_t read_attr = 0;
-	uint8_t write_attr = 0;
+	uint8_t read_attr;
+	uint8_t write_attr;
+	size = as_operate_set_attr(ops, buffers, size, &read_attr, &write_attr);
 	
-	for (int i = 0; i < n_operations; i++) {
-		as_binop* op = &ops->binops.entries[i];
-		
-		switch (op->op)	{
-			case AS_OPERATOR_CDT_READ:
-			case AS_OPERATOR_READ:
-				read_attr |= AS_MSG_INFO1_READ;
-				break;
-
-			default:
-				write_attr |= AS_MSG_INFO2_WRITE;
-				break;
-		}
-		size += as_command_bin_size(&op->bin, &buffers[i]);
-	}
-
 	uint8_t* cmd = as_command_init(size);
 	uint8_t* p = as_command_write_header(cmd, read_attr, write_attr, policy->commit_level, policy->consistency_level,
 				 AS_POLICY_EXISTS_IGNORE, policy->gen, ops->gen, ops->ttl, policy->timeout, n_fields, n_operations);
@@ -689,24 +716,9 @@ aerospike_key_operate_async(
 	
 	uint16_t n_fields;
 	size_t size = as_command_key_size(policy->key, key, &n_fields);
-	uint8_t read_attr = 0;
-	uint8_t write_attr = 0;
-	
-	for (int i = 0; i < n_operations; i++) {
-		as_binop* op = &ops->binops.entries[i];
-		
-		switch (op->op)
-		{
-			case AS_OPERATOR_READ:
-				read_attr |= AS_MSG_INFO1_READ;
-				break;
-				
-			default:
-				write_attr |= AS_MSG_INFO2_WRITE;
-				break;
-		}
-		size += as_command_bin_size(&op->bin, &buffers[i]);
-	}
+	uint8_t read_attr;
+	uint8_t write_attr;
+	size = as_operate_set_attr(ops, buffers, size, &read_attr, &write_attr);
 
 	as_node* node;
 	as_status status = as_event_command_node_init(as, err, key, policy->replica, write_attr != 0, &node);

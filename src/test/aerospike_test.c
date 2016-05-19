@@ -251,6 +251,10 @@ PLAN(aerospike_test) {
 	plan_add(key_apply2);
 	plan_add(key_operate);
 
+	// cdt
+	plan_add(list_basics);
+	plan_add(map_basics);
+
 	// aerospike_info module
 	plan_add(info_basics);
 
@@ -279,11 +283,6 @@ PLAN(aerospike_test) {
 
 	// as_ldt module
 	plan_add(ldt_lmap);
-
-	// cdt
-	plan_add(list_basics);
-	
-	plan_add(map_basics);
 
 	if (g_use_async) {
 		plan_add(key_basics_async);

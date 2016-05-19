@@ -177,6 +177,7 @@ TEST(map_put, "Map put operations" )
 	// put_items() should be used instead for best performance.
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
 	
 	as_bin* results = rec->bins.entries;
 	uint32_t i = 0;
@@ -312,6 +313,7 @@ TEST(map_put_items, "Map put items operations" )
 	as_record* rec = 0;
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
 	
 	//example_dump_record(rec);
 
@@ -392,6 +394,7 @@ TEST(map_mixed, "Map mixed operations" )
 	as_record* rec = 0;
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
 	
 	//example_dump_record(rec);
 
@@ -413,6 +416,7 @@ TEST(map_mixed, "Map mixed operations" )
 	rec = 0;
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
 	
 	//example_dump_record(rec);
 	
@@ -471,6 +475,7 @@ TEST(map_switch, "Switch from unordered map to a key ordered map." )
 	as_record* rec = 0;
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
 	
 	// example_dump_record(rec);
 	
@@ -515,6 +520,7 @@ TEST(map_switch, "Switch from unordered map to a key ordered map." )
 	rec = 0;
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
 	
 	//example_dump_record(rec);
 
@@ -593,6 +599,7 @@ TEST(map_rank, "Map rank" )
 	as_record* rec = 0;
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
 	
 	as_record_destroy(rec);
 	as_operations_inita(&ops, 2);
@@ -608,6 +615,7 @@ TEST(map_rank, "Map rank" )
 	rec = 0;
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
 	
 	as_record_destroy(rec);
 	as_operations_inita(&ops, 12);
@@ -645,6 +653,7 @@ TEST(map_rank, "Map rank" )
 	rec = 0;
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
 
 	//example_dump_record(rec);
 	
@@ -782,6 +791,7 @@ TEST(map_remove, "Map remove" )
 	as_arraylist_append_str(&remove_list, "Lenny");
 	
 	as_operations_add_map_remove_by_key_list(&ops, BIN_NAME, (as_list*)&remove_list, AS_MAP_RETURN_COUNT);
+	as_arraylist_destroy(&remove_list);
 	
 	as_integer_init(&mval2, 55);
 	as_operations_add_map_remove_by_value(&ops, BIN_NAME, (as_val*)&mval2, AS_MAP_RETURN_KEY);
@@ -790,7 +800,7 @@ TEST(map_remove, "Map remove" )
 	as_record* rec = 0;
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);
-	as_arraylist_destroy(&remove_list);
+	as_operations_destroy(&ops);
 	
 	//example_dump_record(rec);
 
@@ -895,6 +905,7 @@ TEST(map_remove_range, "Map remove range" )
 	as_record* rec = 0;
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
 	
 	//example_dump_record(rec);
 
@@ -958,6 +969,7 @@ TEST(map_clear, "Map clear" )
 	as_record* rec = 0;
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
 	
 	as_bin* results = rec->bins.entries;
 	uint32_t i = 0;
@@ -965,6 +977,8 @@ TEST(map_clear, "Map clear" )
 	int64_t v = results[i++].valuep->integer.value;
 	assert_int_eq(v, 2);
 	
+	as_record_destroy(rec);
+
 	as_operations_inita(&ops, 2);
 	as_operations_add_map_clear(&ops, BIN_NAME);
 	as_operations_add_map_size(&ops, BIN_NAME);
@@ -972,6 +986,7 @@ TEST(map_clear, "Map clear" )
 	rec = 0;
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
 
 	//example_dump_record(rec);
 	
@@ -1037,6 +1052,7 @@ TEST(map_score, "Map score" )
 	as_record* rec = 0;
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
 	as_record_destroy(rec);
 	
 	// Change scores
@@ -1061,6 +1077,7 @@ TEST(map_score, "Map score" )
 	rec = 0;
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
 	as_record_destroy(rec);
 	
 	// Query top 3 scores
@@ -1070,6 +1087,7 @@ TEST(map_score, "Map score" )
 	rec = 0;
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
 	as_record_destroy(rec);
 	
 	// Remove people with score 10 and display top 3 again
@@ -1081,6 +1099,7 @@ TEST(map_score, "Map score" )
 	rec = 0;
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
 	
 	as_bin* results = rec->bins.entries;
 	uint32_t i = 0;

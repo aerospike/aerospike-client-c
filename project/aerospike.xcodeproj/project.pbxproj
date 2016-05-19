@@ -161,6 +161,8 @@
 		BFC65B8A1C921E9E0079DF5A /* as_status.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B5F1C921E9E0079DF5A /* as_status.h */; };
 		BFC65B8B1C921E9E0079DF5A /* as_udf.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B601C921E9E0079DF5A /* as_udf.h */; };
 		BFCF26BF1AC1FBBF0062B75C /* as_string_builder.c in Sources */ = {isa = PBXBuildFile; fileRef = BFCF26BE1AC1FBBF0062B75C /* as_string_builder.c */; };
+		BFF344B01CDAC67700FD1976 /* as_map_operations.h in Headers */ = {isa = PBXBuildFile; fileRef = BFF344AF1CDAC67700FD1976 /* as_map_operations.h */; };
+		BFF344C31CEA7ACD00FD1976 /* as_list_operations.h in Headers */ = {isa = PBXBuildFile; fileRef = BFF344C21CEA7ACD00FD1976 /* as_list_operations.h */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -321,6 +323,8 @@
 		BFC65BE61C9220E80079DF5A /* include */ = {isa = PBXFileReference; lastKnownFileType = folder; name = include; path = ../modules/common/src/include; sourceTree = "<group>"; };
 		BFC65BE71C92213F0079DF5A /* include */ = {isa = PBXFileReference; lastKnownFileType = folder; name = include; path = "../modules/mod-lua/src/include"; sourceTree = "<group>"; };
 		BFCF26BE1AC1FBBF0062B75C /* as_string_builder.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_string_builder.c; path = ../modules/common/src/main/aerospike/as_string_builder.c; sourceTree = "<group>"; };
+		BFF344AF1CDAC67700FD1976 /* as_map_operations.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_map_operations.h; path = ../src/include/aerospike/as_map_operations.h; sourceTree = "<group>"; };
+		BFF344C21CEA7ACD00FD1976 /* as_list_operations.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_list_operations.h; path = ../src/include/aerospike/as_list_operations.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -581,8 +585,10 @@
 				BFC65B4E1C921E9E0079DF5A /* as_job.h */,
 				BFC65B4F1C921E9E0079DF5A /* as_key.h */,
 				BFC65B501C921E9E0079DF5A /* as_ldt.h */,
+				BFF344C21CEA7ACD00FD1976 /* as_list_operations.h */,
 				BFC65B511C921E9E0079DF5A /* as_listener.h */,
 				BFC65B521C921E9E0079DF5A /* as_lookup.h */,
+				BFF344AF1CDAC67700FD1976 /* as_map_operations.h */,
 				BFC65B531C921E9E0079DF5A /* as_node.h */,
 				BFC65B541C921E9E0079DF5A /* as_operations.h */,
 				BFC65B551C921E9E0079DF5A /* as_partition.h */,
@@ -617,6 +623,7 @@
 				BFC65B791C921E9E0079DF5A /* as_job.h in Headers */,
 				BFC65B651C921E9E0079DF5A /* aerospike_llist.h in Headers */,
 				BFC65B731C921E9E0079DF5A /* as_command.h in Headers */,
+				BFF344B01CDAC67700FD1976 /* as_map_operations.h in Headers */,
 				BFC65B821C921E9E0079DF5A /* as_policy.h in Headers */,
 				BFC65B801C921E9E0079DF5A /* as_partition.h in Headers */,
 				BFC65B7D1C921E9E0079DF5A /* as_lookup.h in Headers */,
@@ -639,6 +646,7 @@
 				BFC65B621C921E9E0079DF5A /* aerospike_index.h in Headers */,
 				BFC65B831C921E9E0079DF5A /* as_proto.h in Headers */,
 				BFC65B721C921E9E0079DF5A /* as_cluster.h in Headers */,
+				BFF344C31CEA7ACD00FD1976 /* as_list_operations.h in Headers */,
 				BFC65B6B1C921E9E0079DF5A /* aerospike_udf.h in Headers */,
 				BFC65B891C921E9E0079DF5A /* as_socket.h in Headers */,
 				BFC65B6E1C921E9E0079DF5A /* as_async_proto.h in Headers */,

@@ -103,6 +103,7 @@ main(int argc, char* argv[])
 		example_cleanup(&as);
 		exit(-1);
 	}
+	as_operations_destroy(&ops);
 	as_record_destroy(rec);
 	
 	// Change multiple scores in one call.
@@ -126,6 +127,7 @@ main(int argc, char* argv[])
 		example_cleanup(&as);
 		exit(-1);
 	}
+	as_operations_destroy(&ops);
 	as_record_destroy(rec);
 	
 	// Retrieve keys and values for the top 2 scores.
@@ -138,6 +140,7 @@ main(int argc, char* argv[])
 		example_cleanup(&as);
 		exit(-1);
 	}
+	as_operations_destroy(&ops);
 	
 	// Operations are returned in same order they are added.  Since there is only one operation in
 	// the aerospike_key_operate() call, the results are located in the first returned bin.

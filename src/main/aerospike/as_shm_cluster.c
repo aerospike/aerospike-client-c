@@ -241,6 +241,7 @@ as_shm_reset_nodes(as_cluster* cluster)
 			if (! node) {
 				as_node_info node_info;
 				strcpy(node_info.name, node_tmp.name);
+				node_info.fd = -1;
 				node_info.has_batch_index = node_tmp.has_batch_index;
 				node_info.has_replicas_all = node_tmp.has_replicas_all;
 				node_info.has_double = node_tmp.has_double;

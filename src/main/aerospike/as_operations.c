@@ -108,11 +108,6 @@ typedef enum as_cdt_optype_e {
 	
 } as_cdt_optype;
 
-typedef enum {
-	CDT_RW_TYPE_READ = 0,
-	CDT_RW_TYPE_MODIFY = 1,
-} cdt_op_rw_type;
-
 typedef struct {
 	int count;
 	as_operator op_type;

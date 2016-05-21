@@ -24,6 +24,7 @@
 #include <aerospike/as_integer.h>
 #include <aerospike/as_map.h>
 #include <aerospike/as_map_operations.h>
+#include <aerospike/as_pair.h>
 #include <aerospike/as_nil.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_record_iterator.h>
@@ -338,7 +339,7 @@ TEST(map_put_items, "Map put items operations" )
 	assert_string_eq(s, "changed");
 	
 	as_list* list = &results[i++].valuep->list;
-	assert_int_eq(as_list_size(list), 2 * 2);
+	assert_int_eq(as_list_size(list), 2);
 	
 	as_record_destroy(rec);
 }
@@ -485,17 +486,19 @@ TEST(map_switch, "Switch from unordered map to a key ordered map." )
 	assert_int_eq(v, 4);
 	
 	as_list* list = &results[i++].valuep->list;
-	assert_int_eq(as_list_size(list), 1 * 2);
-	v = as_list_get_int64(list, 0);
+	assert_int_eq(as_list_size(list), 1);
+	as_pair* pair = (as_pair*)as_list_get(list, 0);
+	v = as_integer_get((as_integer*)as_pair_1(pair));
 	assert_int_eq(v, 3);
-	v = as_list_get_int64(list, 1);
+	v = as_integer_get((as_integer*)as_pair_2(pair));
 	assert_int_eq(v, 3);
 	
 	list = &results[i++].valuep->list;
-	assert_int_eq(as_list_size(list), 4 * 2);
-	v = as_list_get_int64(list, 2);
+	assert_int_eq(as_list_size(list), 4);
+	pair = (as_pair*)as_list_get(list, 1);
+	v = as_integer_get((as_integer*)as_pair_1(pair));
 	assert_int_eq(v, 2);
-	v = as_list_get_int64(list, 3);
+	v = as_integer_get((as_integer*)as_pair_2(pair));
 	assert_int_eq(v, 2);
 	
 	as_record_destroy(rec);
@@ -534,17 +537,19 @@ TEST(map_switch, "Switch from unordered map to a key ordered map." )
 	assert_int_eq(v, 2);
 	
 	list = &results[i++].valuep->list;
-	assert_int_eq(as_list_size(list), 1 * 2);
-	v = as_list_get_int64(list, 0);
+	assert_int_eq(as_list_size(list), 1);
+	pair = (as_pair*)as_list_get(list, 0);
+	v = as_integer_get((as_integer*)as_pair_1(pair));
 	assert_int_eq(v, 1);
-	v = as_list_get_int64(list, 1);
+	v = as_integer_get((as_integer*)as_pair_2(pair));
 	assert_int_eq(v, 1);
 	
 	list = &results[i++].valuep->list;
-	assert_int_eq(as_list_size(list), 4 * 2);
-	v = as_list_get_int64(list, 3 * 2);
+	assert_int_eq(as_list_size(list), 4);
+	pair = (as_pair*)as_list_get(list, 3);
+	v = as_integer_get((as_integer*)as_pair_1(pair));
 	assert_int_eq(v, 4);
-	v = as_list_get_int64(list, 3 * 2 + 1);
+	v = as_integer_get((as_integer*)as_pair_2(pair));
 	assert_int_eq(v, 4);
 
 	as_record_destroy(rec);
@@ -668,14 +673,16 @@ TEST(map_rank, "Map rank" )
 	assert_string_eq(s, "Jim");
 	
 	list = &results[i++].valuep->list;
-	assert_int_eq(as_list_size(list), 2 * 2);
-	s = as_list_get_str(list, 0);
+	assert_int_eq(as_list_size(list), 2);
+	as_pair* pair = (as_pair*)as_list_get(list, 0);
+	s = as_string_get((as_string*)as_pair_1(pair));
 	assert_string_eq(s, "Charlie");
-	int64_t v = as_list_get_int64(list, 1);
+	int64_t v = as_integer_get((as_integer*)as_pair_2(pair));
 	assert_int_eq(v, 55);
-	s = as_list_get_str(list, 2);
+	pair = (as_pair*)as_list_get(list, 1);
+	s = as_string_get((as_string*)as_pair_1(pair));
 	assert_string_eq(s, "John");
-	v = as_list_get_int64(list, 3);
+	v = as_integer_get((as_integer*)as_pair_2(pair));
 	assert_int_eq(v, 81);
 
 	v = results[i++].valuep->integer.value;
@@ -692,9 +699,10 @@ TEST(map_rank, "Map rank" )
 	assert_int_eq(v, 1);
 
 	list = &results[i++].valuep->list;
-	s = as_list_get_str(list, 0);
+	pair = (as_pair*)as_list_get(list, 0);
+	s = as_string_get((as_string*)as_pair_1(pair));
 	assert_string_eq(s, "Jim");
-	v = as_list_get_int64(list, 1);
+	v = as_integer_get((as_integer*)as_pair_2(pair));
 	assert_int_eq(v, 94);
 
 	list = &results[i++].valuep->list;

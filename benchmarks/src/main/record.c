@@ -21,6 +21,8 @@
  ******************************************************************************/
 #include "benchmark.h"
 #include <aerospike/aerospike_key.h>
+#include <aerospike/as_arraylist.h>
+#include <aerospike/as_hashmap.h>
 #include <aerospike/as_monitor.h>
 #include <aerospike/as_random.h>
 #include <citrusleaf/cf_clock.h>
@@ -34,14 +36,60 @@ static const char alphanum[] =
 
 static int alphanum_len = sizeof(alphanum) - 1;
 
+static int
+calc_list_or_map_ele_count(char bintype, int binlen, len_type binlen_type, int expected_ele_size)
+{
+	int len = binlen;
+
+	switch (binlen_type) {
+	case LEN_TYPE_KBYTES:
+		len *= 1024;
+		/* no break */
+	case LEN_TYPE_BYTES:
+		len /= expected_ele_size;
+		if (bintype == 'M') {
+			len /= 2;
+		}
+		break;
+	default:
+		break;
+	}
+
+	return len;
+}
+
+// Expected msgpack size is 9 bytes.
+static as_val *
+random_element_9b(as_random *ran)
+{
+	int type = (int)(as_random_next_uint64(ran) % 2);
+
+	if (type == 0) {
+		return (as_val *)as_integer_new(as_random_next_uint64(ran));
+	}
+
+	// Len is 4 to 10, average 7 with 2 bytes of msgpack
+	// string header results in an expected value of 9 bytes.
+	int len = (int)(as_random_next_uint64(ran) % 6) + 4;
+	uint8_t buf[len + 1];
+	as_random_next_bytes(ran, buf, len);
+
+	for (int i = 0; i < len; i++) {
+		buf[i] = alphanum[buf[i] % alphanum_len];
+	}
+	buf[len] = 0;
+
+	return (as_val *)as_string_new_strdup((char *)buf);
+}
+
 int
-gen_value(arguments* args, as_bin_value* val)
+gen_value(arguments* args, as_val** valpp)
 {
 	switch (args->bintype) {
 		case 'I': {
 			// Generate integer.
 			uint32_t v = as_random_get_uint32();
-			as_integer_init((as_integer*)val, v);
+			*valpp = (as_val *) as_integer_new(v);
 			break;
 		}
 			
@@ -50,7 +98,7 @@ gen_value(arguments* args, as_bin_value* val)
 			int len = args->binlen;
 			uint8_t* buf = cf_malloc(len);
 			as_random_get_bytes(buf, len);
-			as_bytes_init_wrap((as_bytes*)val, buf, len, true);
+			*valpp = (as_val *) as_bytes_new_wrap(buf, len, true);
 			break;
 		}
 			
@@ -64,10 +112,30 @@ gen_value(arguments* args, as_bin_value* val)
 				buf[i] = alphanum[buf[i] % alphanum_len];
 			}
 			buf[len] = 0;
-			as_string_init((as_string*)val, (char*)buf, true);
+			*valpp = (as_val *) as_string_new((char *)buf, true);
 			break;
 		}
-			
+
+		case 'L': {
+			size_t len = calc_list_or_map_ele_count(args->bintype, args->binlen, args->binlen_type, 9);
+			*valpp = (as_val *)as_arraylist_new(len, 0);
+
+			for (size_t i = 0; i < len; i++) {
+				as_list_append((as_list *)(*valpp), random_element_9b(as_random_instance()));
+			}
+			break;
+		}
+
+		case 'M': {
+			size_t len = calc_list_or_map_ele_count(args->bintype, args->binlen, args->binlen_type, 9);
+			*valpp = (as_val *)as_hashmap_new(len);
+
+			for (size_t i = 0; i < len; i++) {
+				as_map_set((as_map *)(*valpp), random_element_9b(as_random_instance()), random_element_9b(as_random_instance()));
+			}
+			break;
+		}
+
 		default: {
 			blog_error("Unknown type %c", args->bintype);
 			return -1;
@@ -101,6 +169,11 @@ create_threaddata(clientdata* cdata, int key)
 				len = cdata->binlen + 1;
 				break;
 			}
+
+			case 'L':
+			case 'M':
+				// Does not need buffer.
+				break;
 				
 			default: {
 				blog_error("Unknown type %c", cdata->bintype);
@@ -127,7 +200,7 @@ create_threaddata(clientdata* cdata, int key)
 	tdata->rec.bins.entries[0].valuep = NULL;
 	tdata->rec.bins.size = 1;
 	
-	as_val_reserve(&cdata->fixed_value);
+	as_val_reserve(cdata->fixed_value);
 	return tdata;
 }
 
@@ -167,7 +240,7 @@ init_write_record(clientdata* cdata, threaddata* tdata)
 				bin->valuep = &bin->value;
 				break;
 			}
-				
+
 			case 'S': {
 				// Generate random bytes on stack and convert to alphanumeric string.
 				uint8_t* buf = tdata->buffer;
@@ -183,6 +256,32 @@ init_write_record(clientdata* cdata, threaddata* tdata)
 				break;
 			}
 				
+			case 'L': {
+				size_t len = calc_list_or_map_ele_count(cdata->bintype, cdata->binlen, cdata->binlen_type, 9);
+				as_list *list = (as_list *)as_arraylist_new(len, 0);
+
+				for (size_t i = 0; i < len; i++) {
+					as_list_append(list, random_element_9b(tdata->random));
+				}
+
+				as_record_set_list(&tdata->rec, cdata->bin_name, list);
+				break;
+			}
+
+			case 'M': {
+				size_t len = calc_list_or_map_ele_count(cdata->bintype, cdata->binlen, cdata->binlen_type, 9);
+				as_map *map = (as_map *)as_hashmap_new(len);
+
+				for (size_t i = 0; i < len; i++) {
+					as_val *k = random_element_9b(tdata->random);
+					as_val *v = random_element_9b(tdata->random);
+					as_map_set(map, k, v);
+				}
+
+				as_record_set_map(&tdata->rec, cdata->bin_name, map);
+				break;
+			}
+
 			default: {
 				blog_error("Unknown type %c", cdata->bintype);
 				break;
@@ -191,8 +290,8 @@ init_write_record(clientdata* cdata, threaddata* tdata)
 	}
 	else {
 		// Use fixed value.
-		((as_val*)&bin->value)->type = cdata->fixed_value.nil.type;
-		bin->valuep = &cdata->fixed_value;
+		((as_val*)&bin->value)->type = cdata->fixed_value->type;
+		bin->valuep = (as_bin_value *)cdata->fixed_value;
 	}
 }
 

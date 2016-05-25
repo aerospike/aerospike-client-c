@@ -271,7 +271,14 @@ as_node_get_info_connection(as_error* err, as_node* node, uint64_t deadline_ms)
 {
 	if (node->info_fd < 0) {
 		// Try to open a new socket.
-		return as_node_create_connection(err, node, deadline_ms, &node->info_fd);
+		int info_fd;
+		as_status stat = as_node_create_connection(err, node, deadline_ms, &info_fd);
+
+		if (stat == AEROSPIKE_OK) {
+			node->info_fd = info_fd;
+		}
+
+		return stat;
 	}
 	return AEROSPIKE_OK;
 }

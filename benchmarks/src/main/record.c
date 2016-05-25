@@ -257,10 +257,10 @@ init_write_record(clientdata* cdata, threaddata* tdata)
 			}
 				
 			case 'L': {
-				size_t len = calc_list_or_map_ele_count(cdata->bintype, cdata->binlen, cdata->binlen_type, 9);
-				as_list *list = (as_list *)as_arraylist_new(len, 0);
+				int len = calc_list_or_map_ele_count(cdata->bintype, cdata->binlen, cdata->binlen_type, 9);
+				as_list *list = (as_list *)as_arraylist_new((uint32_t)len, 0);
 
-				for (size_t i = 0; i < len; i++) {
+				for (int i = 0; i < len; i++) {
 					as_list_append(list, random_element_9b(tdata->random));
 				}
 
@@ -269,10 +269,10 @@ init_write_record(clientdata* cdata, threaddata* tdata)
 			}
 
 			case 'M': {
-				size_t len = calc_list_or_map_ele_count(cdata->bintype, cdata->binlen, cdata->binlen_type, 9);
-				as_map *map = (as_map *)as_hashmap_new(len);
+				int len = calc_list_or_map_ele_count(cdata->bintype, cdata->binlen, cdata->binlen_type, 9);
+				as_map *map = (as_map *)as_hashmap_new((uint32_t)len);
 
-				for (size_t i = 0; i < len; i++) {
+				for (int i = 0; i < len; i++) {
 					as_val *k = random_element_9b(tdata->random);
 					as_val *v = random_element_9b(tdata->random);
 					as_map_set(map, k, v);

@@ -238,6 +238,8 @@ print_args(arguments* args)
 	blog_line("keys/records:   %d", args->keys);
 	blog("object spec:    ");
 	
+	static const char *units[3] = {"", "b", "k"};
+
 	switch (args->bintype) {
 		case 'I':
 			blog_line("int");
@@ -249,6 +251,14 @@ print_args(arguments* args)
 
 		case 'S':
 			blog_line("UTF8 string[%d]", args->binlen);
+			break;
+
+		case 'L':
+			blog_line("list[%d%s]", args->binlen, units[(int)args->binlen_type]);
+			break;
+
+		case 'M':
+			blog_line("map[%d%s]", args->binlen, units[(int)args->binlen_type]);
 			break;
 
 		default:

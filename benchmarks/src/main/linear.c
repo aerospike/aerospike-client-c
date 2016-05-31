@@ -62,6 +62,9 @@ ticker_worker(void* udata)
 			blog_line("%s", latency_detail);
 		}
 		
+		// Do not check for stop-writes anymore because it can cause benchmarks to shutdown
+		// when checking temporarily downed node.
+		/*
 		if (write_timeout_current + write_error_current > 10) {
 			if (is_stop_writes(&data->client, data->host, data->port, data->namespace)) {
 				if (data->valid) {
@@ -71,6 +74,7 @@ ticker_worker(void* udata)
 				}
 			}
 		}
+		*/
 		sleep(1);
 	}
 	return 0;

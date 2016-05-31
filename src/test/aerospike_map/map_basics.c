@@ -262,7 +262,6 @@ TEST(map_put_items, "Map put items operations" )
 	as_hashmap_set(&add_map, (as_val*)&mkey3, (as_val*)&mval3);
 		
 	as_operations_add_map_put_items(&ops, BIN_NAME, &add_mode, (as_map*)&add_map);
-	as_hashmap_destroy(&add_map);
 	
 	as_hashmap put_map;
 	as_hashmap_init(&put_map, 2);
@@ -274,7 +273,6 @@ TEST(map_put_items, "Map put items operations" )
 	as_hashmap_set(&put_map, (as_val*)&mkey2, (as_val*)&mval2);
 	
 	as_operations_add_map_put_items(&ops, BIN_NAME, &put_mode, (as_map*)&put_map);
-	as_hashmap_destroy(&put_map);
 	
 	as_hashmap update_map;
 	as_hashmap_init(&update_map, 2);
@@ -286,7 +284,6 @@ TEST(map_put_items, "Map put items operations" )
 	as_hashmap_set(&update_map, (as_val*)&mkey2, (as_val*)&mval2);
 	
 	as_operations_add_map_put_items(&ops, BIN_NAME, &update_mode, (as_map*)&update_map);
-	as_hashmap_destroy(&update_map);
 	
 	as_hashmap replace_map;
 	as_hashmap_init(&replace_map, 2);
@@ -298,7 +295,6 @@ TEST(map_put_items, "Map put items operations" )
 	as_hashmap_set(&replace_map, (as_val*)&mkey2, (as_val*)&mval2);
 	
 	as_operations_add_map_put_items(&ops, BIN_NAME, &update_mode, (as_map*)&replace_map);
-	as_hashmap_destroy(&replace_map);
 	
 	as_integer_init(&mkey1, 1);
 	as_operations_add_map_get_by_key(&ops, BIN_NAME, (as_val*)&mkey1, AS_MAP_RETURN_VALUE);
@@ -593,7 +589,6 @@ TEST(map_rank, "Map rank" )
 	as_hashmap_set(&item_map, (as_val*)&mkey4, (as_val*)&mval4);
 
 	as_operations_add_map_put_items(&ops, BIN_NAME, &mode, (as_map*)&item_map);
-	as_hashmap_destroy(&item_map);
 		
 	as_record* rec = 0;
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
@@ -775,7 +770,6 @@ TEST(map_remove, "Map remove" )
 	as_hashmap_set(&item_map, (as_val*)&mkey7, (as_val*)&mval7);
 	
 	as_operations_add_map_put_items(&ops, BIN_NAME, &mode, (as_map*)&item_map);
-	as_hashmap_destroy(&item_map);
 	
 	as_string_init(&mkey1, "NOTFOUND", false);
 	as_operations_add_map_remove_by_key(&ops, BIN_NAME, (as_val*)&mkey1, AS_MAP_RETURN_VALUE);
@@ -888,7 +882,6 @@ TEST(map_remove_range, "Map remove range" )
 	as_hashmap_set(&item_map, (as_val*)&mkey7, (as_val*)&mval7);
 	
 	as_operations_add_map_put_items(&ops, BIN_NAME, &mode, (as_map*)&item_map);
-	as_hashmap_destroy(&item_map);
 	
 	as_string_init(&mkey1, "J", false);
 	as_string_init(&mkey2, "K", false);
@@ -1045,7 +1038,6 @@ TEST(map_score, "Map score" )
 	as_hashmap_set(&item_map, (as_val*)&mkey4, (as_val*)&mval4);
 	
 	as_operations_add_map_put_items(&ops, BIN_NAME, &mode, (as_map*)&item_map);
-	as_hashmap_destroy(&item_map);
 	
 	as_record* rec = 0;
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);

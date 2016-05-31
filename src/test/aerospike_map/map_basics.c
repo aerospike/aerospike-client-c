@@ -387,7 +387,6 @@ TEST(map_mixed, "Map mixed operations" )
 	as_hashmap_set(&item_map, (as_val*)&mkey4, (as_val*)&mval4);
 	
 	as_operations_add_map_put_items(&ops, BIN_NAME, &mode, (as_map*)&item_map);
-	as_hashmap_destroy(&item_map);
 	
 	as_operations_add_write_strp(&ops, "otherbin", "hello", false);
 	
@@ -409,7 +408,7 @@ TEST(map_mixed, "Map mixed operations" )
 	
 	as_integer_init(&mkey1, 12);
 	as_operations_add_map_get_by_key(&ops, BIN_NAME, (as_val*)&mkey1, AS_MAP_RETURN_INDEX);
-	
+
 	as_operations_add_append_strp(&ops, "otherbin", "goodbye", false);
 	as_operations_add_read(&ops, "otherbin");
 	
@@ -964,7 +963,6 @@ TEST(map_clear, "Map clear" )
 	as_hashmap_set(&item_map, (as_val*)&mkey2, (as_val*)&mval2);
 	
 	as_operations_add_map_put_items(&ops, BIN_NAME, &mode, (as_map*)&item_map);
-	as_hashmap_destroy(&item_map);
 	
 	as_record* rec = 0;
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);

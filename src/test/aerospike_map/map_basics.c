@@ -553,7 +553,7 @@ TEST(map_rank, "Map rank" )
 	}
 	
 	as_key rkey;
-	as_key_init_int64(&rkey, NAMESPACE, SET, 4);
+	as_key_init_int64(&rkey, NAMESPACE, SET, 5);
 	
 	as_error err;
 	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
@@ -719,7 +719,7 @@ TEST(map_remove, "Map remove" )
 	}
 	
 	as_key rkey;
-	as_key_init_int64(&rkey, NAMESPACE, SET, 4);
+	as_key_init_int64(&rkey, NAMESPACE, SET, 6);
 	
 	as_error err;
 	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
@@ -831,7 +831,7 @@ TEST(map_remove_range, "Map remove range" )
 	}
 	
 	as_key rkey;
-	as_key_init_int64(&rkey, NAMESPACE, SET, 4);
+	as_key_init_int64(&rkey, NAMESPACE, SET, 7);
 	
 	as_error err;
 	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
@@ -930,7 +930,7 @@ TEST(map_clear, "Map clear" )
 	}
 	
 	as_key rkey;
-	as_key_init_int64(&rkey, NAMESPACE, SET, 4);
+	as_key_init_int64(&rkey, NAMESPACE, SET, 8);
 	
 	as_error err;
 	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
@@ -1001,7 +1001,7 @@ TEST(map_score, "Map score" )
 	}
 	
 	as_key rkey;
-	as_key_init_int64(&rkey, NAMESPACE, SET, 4);
+	as_key_init_int64(&rkey, NAMESPACE, SET, 9);
 	
 	as_error err;
 	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
@@ -1118,14 +1118,14 @@ TEST(map_remove_non_exist, "Remove non-existant keys" )
 	}
 	
 	as_key rkey;
-	as_key_init_int64(&rkey, NAMESPACE, SET, 4);
+	as_key_init_int64(&rkey, NAMESPACE, SET, 10);
 	
 	as_error err;
 	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
 	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
 	
 	as_hashmap item_map;
-	as_hashmap_init(&item_map, 4);
+	as_hashmap_init(&item_map, 3);
 	as_string  mkey1;
 	as_integer mval1;
 	as_string_init(&mkey1, "a", false);

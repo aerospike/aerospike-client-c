@@ -1165,8 +1165,22 @@ TEST(map_remove_non_exist, "Remove non-existant keys" )
 	as_arraylist_append_str(&remove_list, "xx");
 	as_arraylist_append_str(&remove_list, "yy");
 	as_arraylist_append_str(&remove_list, "zz");
+
+	for (int i = 0; i < 100; i++) {
+		char buf[3] = "##";
+		buf[0] = i % 10 + '0';
+		buf[1] = i / 10 + '0';
+		as_arraylist_append_str(&remove_list, buf);
+	}
+
 	as_arraylist_append_str(&remove_list, "c");
 	
+	for (int i = 0; i < 26; i++) {
+		char buf[3] = "_x";
+		buf[1] = i + 'A';
+		as_arraylist_append_str(&remove_list, buf);
+	}
+
 	as_operations_inita(&ops, 1);
 	as_operations_add_map_remove_by_key_list(&ops, BIN_NAME, (as_list*)&remove_list, AS_MAP_RETURN_KEY_VALUE);
 	
@@ -1175,8 +1189,13 @@ TEST(map_remove_non_exist, "Remove non-existant keys" )
 	assert_int_eq(status, AEROSPIKE_OK);
 	as_operations_destroy(&ops);
 
+	as_list *list = as_record_get_list(rec, BIN_NAME);
+	assert_int_eq(as_list_size(list), 2 * 2);
+	assert_int_eq(as_list_get_int64(list, 1), 1);
+	assert_int_eq(as_list_get_int64(list, 1 * 2 + 1), 3);
+
 	//example_dump_record(rec);
-		
+
 	as_record_destroy(rec);
 }
 

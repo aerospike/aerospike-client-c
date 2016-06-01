@@ -98,13 +98,17 @@ print_usage(const char* program)
 	blog_line("   Key/record count or key/record range.");
 	blog_line("");
 	
-	blog_line("-o --objectSpec I| B:<size> | S:<size>  # Default: I");
+	blog_line("-o --objectSpec I | B:<size> | S:<size> | L:<size> | M:<size> # Default: I");
 	blog_line("   Bin object specification.");
 	blog_line("   -o I     : Read/write integer bin.");
 	blog_line("   -o B:200 : Read/write byte array bin of length 200.");
 	blog_line("   -o S:50  : Read/write string bin of length 50.");
+	blog_line("   -o L:50  : Read/write cdt list bin of 50 elements.");
+	blog_line("   -o M:50  : Read/write cdt map bin of 50 map entries.");
+	blog_line("   -o M:50B : Read/write cdt map bin of ~50 bytes.");
+	blog_line("   -o M:50K : Read/write cdt map bin of ~50 kilobytes.");
 	blog_line("");
-	
+
 	blog_line("-R --random          # Default: static fixed bin values");
 	blog_line("   Use dynamically generated random bin values instead of default static fixed bin values.");
 	blog_line("");
@@ -234,6 +238,8 @@ print_args(arguments* args)
 	blog_line("keys/records:   %d", args->keys);
 	blog("object spec:    ");
 	
+	static const char *units[3] = {"", "b", "k"};
+
 	switch (args->bintype) {
 		case 'I':
 			blog_line("int");
@@ -245,6 +251,14 @@ print_args(arguments* args)
 
 		case 'S':
 			blog_line("UTF8 string[%d]", args->binlen);
+			break;
+
+		case 'L':
+			blog_line("list[%d%s]", args->binlen, units[(int)args->binlen_type]);
+			break;
+
+		case 'M':
+			blog_line("map[%d%s]", args->binlen, units[(int)args->binlen_type]);
 			break;
 
 		default:
@@ -309,6 +323,8 @@ validate_args(arguments* args)
 		case 'I':
 			break;
 			
+		case 'L':
+		case 'M':
 		case 'B':
 		case 'S':
 			if (args->binlen <= 0 || args->binlen > 1000000) {
@@ -436,11 +452,28 @@ set_args(int argc, char * const * argv, arguments* args)
 				
 			case 'o': {
 				args->bintype = *optarg;
-				
-				if (args->bintype == 'B' || args->bintype == 'S') {
+
+				if (args->bintype == 'B'
+						|| args->bintype == 'S'
+						|| args->bintype == 'L'
+						|| args->bintype == 'M') {
 					char *p = optarg + 1;
 					if (*p == ':') {
 						args->binlen = atoi(p+1);
+						if (args->bintype == 'L' || args->bintype == 'M') {
+							switch (p[strlen(p) - 1]) {
+							case 'b':
+							case 'B':
+								args->binlen_type = LEN_TYPE_BYTES;
+								break;
+							case 'k':
+							case 'K':
+								args->binlen_type = LEN_TYPE_KBYTES;
+								break;
+							default:
+								break;
+							}
+						}
 					}
 					else {
 						blog_line("Unspecified bin size.");
@@ -449,7 +482,7 @@ set_args(int argc, char * const * argv, arguments* args)
 				}
 				break;
 			}
-				
+
 			case 'R':
 				args->random = true;
 				break;
@@ -614,6 +647,7 @@ main(int argc, char * const * argv)
 	args.keys = 1000000;
 	args.bintype = 'I';
 	args.binlen = 50;
+	args.binlen_type = LEN_TYPE_COUNT;
 	args.random = false;
 	args.transactions_limit = -1;
 	args.init = false;

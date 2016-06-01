@@ -1110,6 +1110,76 @@ TEST(map_score, "Map score" )
 	as_record_destroy(rec);
 }
 
+TEST(map_remove_non_exist, "Remove non-existant keys" )
+{
+	if (! has_cdt_map()) {
+		info("cdt-map not enabled. skipping map tests.");
+		return;
+	}
+	
+	as_key rkey;
+	as_key_init_int64(&rkey, NAMESPACE, SET, 4);
+	
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
+	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+	
+	as_hashmap item_map;
+	as_hashmap_init(&item_map, 4);
+	as_string  mkey1;
+	as_integer mval1;
+	as_string_init(&mkey1, "a", false);
+	as_integer_init(&mval1, 1);
+	as_hashmap_set(&item_map, (as_val*)&mkey1, (as_val*)&mval1);
+	as_string  mkey2;
+	as_integer mval2;
+	as_string_init(&mkey2, "b", false);
+	as_integer_init(&mval2, 2);
+	as_hashmap_set(&item_map, (as_val*)&mkey2, (as_val*)&mval2);
+	as_string  mkey3;
+	as_integer mval3;
+	as_string_init(&mkey3, "c", false);
+	as_integer_init(&mval3, 3);
+	as_hashmap_set(&item_map, (as_val*)&mkey3, (as_val*)&mval3);
+	
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	
+	as_map_policy mode;
+	as_map_policy_init(&mode);
+	
+	as_operations_add_map_put_items(&ops, BIN_NAME, &mode, (as_map*)&item_map);
+	
+	as_record* rec = 0;
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
+	as_record_destroy(rec);
+	
+	as_arraylist remove_list;
+	as_arraylist_init(&remove_list, 8, 8);
+	as_arraylist_append_str(&remove_list, "a");
+	as_arraylist_append_str(&remove_list, "x");
+	as_arraylist_append_str(&remove_list, "y");
+	as_arraylist_append_str(&remove_list, "z");
+	as_arraylist_append_str(&remove_list, "xx");
+	as_arraylist_append_str(&remove_list, "yy");
+	as_arraylist_append_str(&remove_list, "zz");
+	as_arraylist_append_str(&remove_list, "c");
+	
+	as_operations_inita(&ops, 1);
+	as_operations_add_map_remove_by_key_list(&ops, BIN_NAME, (as_list*)&remove_list, AS_MAP_RETURN_KEY_VALUE);
+	
+	rec = 0;
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
+
+	//example_dump_record(rec);
+		
+	as_record_destroy(rec);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -1125,4 +1195,5 @@ SUITE(map_basics, "aerospike map basic tests")
     suite_add(map_remove_range);
     suite_add(map_clear);
     suite_add(map_score);
+    suite_add(map_remove_non_exist);
 }

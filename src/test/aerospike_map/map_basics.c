@@ -51,7 +51,7 @@ extern aerospike *as;
  * STATIC FUNCTIONS
  *****************************************************************************/
 
-static bool
+bool
 has_cdt_map()
 {
 	char *res = NULL;

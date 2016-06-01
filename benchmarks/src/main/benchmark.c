@@ -24,6 +24,7 @@
 #include "aerospike/as_event.h"
 #include "aerospike/as_log.h"
 #include "aerospike/as_monitor.h"
+#include "aerospike/as_random.h"
 #include <stdint.h>
 #include <time.h>
 
@@ -224,8 +225,9 @@ run_benchmark(arguments* args)
 	data.threads = args->threads;
 	data.throughput = args->throughput;
 	data.read_pct = args->read_pct;
-	data.binlen = args->binlen;
 	data.bintype = args->bintype;
+	data.binlen = args->binlen;
+	data.binlen_type = args->binlen_type;
 	data.random = args->random;
 	data.transactions_limit = args->transactions_limit;
 	data.transactions_count = 0;
@@ -234,6 +236,7 @@ run_benchmark(arguments* args)
 	data.valid = 1;
 	data.async = args->async;
 	data.async_max_commands = args->async_max_commands;
+	data.fixed_value = NULL;
 
 	if (args->debug) {
 		as_log_set_level(AS_LOG_LEVEL_DEBUG);
@@ -281,7 +284,7 @@ run_benchmark(arguments* args)
 	}
 	
 	if (! args->random) {
-		as_val_destroy(&data.fixed_value);
+		as_val_destroy(data.fixed_value);
 	}
 
 	if (args->latency) {

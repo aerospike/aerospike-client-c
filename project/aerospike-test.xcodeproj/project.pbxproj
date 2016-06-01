@@ -46,6 +46,8 @@
 		BFC65C5E1C9227640079DF5A /* index_basics.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C5D1C9227640079DF5A /* index_basics.c */; };
 		BFC65C611C9227860079DF5A /* query_geospatial.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C601C9227860079DF5A /* query_geospatial.c */; };
 		BFCB24331BF167CA00B1A0EF /* libuv.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFCB24321BF167CA00B1A0EF /* libuv.a */; };
+		BFD74AE11CFE699800D79E15 /* map_basics_async.c in Sources */ = {isa = PBXBuildFile; fileRef = BFD74AE01CFE699800D79E15 /* map_basics_async.c */; };
+		BFD74AE61CFE6E4B00D79E15 /* map_udf.c in Sources */ = {isa = PBXBuildFile; fileRef = BFD74AE51CFE6E4B00D79E15 /* map_udf.c */; };
 		BFD8C86F18D7E3A300CB8B6D /* libaerospike.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFD8C86C18D7E37800CB8B6D /* libaerospike.a */; };
 		BFF344C81CEA8FD200FD1976 /* map_basics.c in Sources */ = {isa = PBXBuildFile; fileRef = BFF344C61CEA8FD200FD1976 /* map_basics.c */; };
 /* End PBXBuildFile section */
@@ -141,6 +143,8 @@
 		BFC65C5D1C9227640079DF5A /* index_basics.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = index_basics.c; path = ../src/test/aerospike_index/index_basics.c; sourceTree = "<group>"; };
 		BFC65C601C9227860079DF5A /* query_geospatial.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = query_geospatial.c; path = ../src/test/aerospike_geo/query_geospatial.c; sourceTree = "<group>"; };
 		BFCB24321BF167CA00B1A0EF /* libuv.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libuv.a; path = /usr/local/Cellar/libuv/1.7.5/lib/libuv.a; sourceTree = "<absolute>"; };
+		BFD74AE01CFE699800D79E15 /* map_basics_async.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = map_basics_async.c; path = ../src/test/aerospike_map/map_basics_async.c; sourceTree = "<group>"; };
+		BFD74AE51CFE6E4B00D79E15 /* map_udf.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = map_udf.c; path = ../src/test/aerospike_map/map_udf.c; sourceTree = "<group>"; };
 		BFF344C61CEA8FD200FD1976 /* map_basics.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = map_basics.c; path = ../src/test/aerospike_map/map_basics.c; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -369,7 +373,9 @@
 		BFF344C41CEA8F3300FD1976 /* aerospike_map */ = {
 			isa = PBXGroup;
 			children = (
+				BFD74AE01CFE699800D79E15 /* map_basics_async.c */,
 				BFF344C61CEA8FD200FD1976 /* map_basics.c */,
+				BFD74AE51CFE6E4B00D79E15 /* map_udf.c */,
 			);
 			name = aerospike_map;
 			sourceTree = "<group>";
@@ -460,10 +466,12 @@
 				BFF344C81CEA8FD200FD1976 /* map_basics.c in Sources */,
 				BFC65C0A1C92256A0079DF5A /* batch_get.c in Sources */,
 				BFC65C491C9227070079DF5A /* test_lmap.c in Sources */,
+				BFD74AE61CFE6E4B00D79E15 /* map_udf.c in Sources */,
 				BFC65C611C9227860079DF5A /* query_geospatial.c in Sources */,
 				BFC65C1C1C9225AB0079DF5A /* test_aerospike.c in Sources */,
 				BFC65C051C92250B0079DF5A /* test.c in Sources */,
 				BFC65C091C92256A0079DF5A /* batch_get_async.c in Sources */,
+				BFD74AE11CFE699800D79E15 /* map_basics_async.c in Sources */,
 				BFC65C181C9225AB0079DF5A /* consumer_stream.c in Sources */,
 				BFC65C1A1C9225AB0079DF5A /* map_rec.c in Sources */,
 				BFC65C5B1C9227440079DF5A /* info_basics.c in Sources */,

@@ -361,6 +361,31 @@ as_cluster_add_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_a
 	}
 }
 
+const char*
+as_cluster_get_alternate_host(as_cluster* cluster, const char* hostname)
+{
+	// Return alternate IP address if specified in ip_map.
+	// Useful when there are both internal and external addresses for the same node.
+	const char* alt = hostname;
+	as_addr_maps* ip_map = as_ip_map_reserve(cluster);
+	
+	if (ip_map) {
+		as_addr_map* entry = ip_map->array;
+		
+		for (uint32_t i = 0; i < ip_map->size; i++) {
+			if (strcmp(entry->orig, hostname) == 0) {
+				// Found mapping for this address.  Use alternate.
+				as_log_debug("Using %s instead of %s", entry->alt, hostname);
+				alt = entry->alt;
+				break;
+			}
+			entry++;
+		}
+		as_ip_map_release(ip_map);
+	}
+	return alt;
+}
+
 static as_status
 as_cluster_seed_nodes(as_cluster* cluster, as_error* err, bool enable_warnings)
 {
@@ -382,11 +407,12 @@ as_cluster_seed_nodes(as_cluster* cluster, as_error* err, bool enable_warnings)
 		as_seed* seed = &seeds->array[i];
 		as_vector_clear(&addresses);
 		
-		status = as_lookup(&error_local, seed->name, seed->port, &addresses);
+		const char* hostname = as_cluster_get_alternate_host(cluster, seed->name);
+		status = as_lookup(&error_local, hostname, seed->port, &addresses);
 		
 		if (status != AEROSPIKE_OK) {
 			if (enable_warnings) {
-				as_log_warn("Failed to lookup %s:%d. %s %s", seed->name, seed->port, as_error_string(status), error_local.message);
+				as_log_warn("Failed to lookup %s:%d. %s %s", hostname, seed->port, as_error_string(status), error_local.message);
 			}
 			continue;
 		}
@@ -397,7 +423,7 @@ as_cluster_seed_nodes(as_cluster* cluster, as_error* err, bool enable_warnings)
 			
 			if (status == AEROSPIKE_OK) {
 				as_host host;
-				if (as_strncpy(host.name, seed->name, sizeof(host.name))) {
+				if (as_strncpy(host.name, hostname, sizeof(host.name))) {
 					as_log_warn("Hostname has been truncated: %s", host.name);
 				}
 				host.port = seed->port;
@@ -417,7 +443,7 @@ as_cluster_seed_nodes(as_cluster* cluster, as_error* err, bool enable_warnings)
 			}
 			else {
 				if (enable_warnings) {
-					as_log_warn("Failed to connect to seed %s:%d. %s %s", seed->name, seed->port, as_error_string(status), error_local.message);
+					as_log_warn("Failed to connect to seed %s:%d. %s %s", hostname, seed->port, as_error_string(status), error_local.message);
 				}
 			}
 		}

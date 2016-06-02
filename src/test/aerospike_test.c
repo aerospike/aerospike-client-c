@@ -255,6 +255,7 @@ PLAN(aerospike_test) {
 	plan_add(list_basics);
 	plan_add(map_basics);
 	plan_add(map_udf);
+	plan_add(map_index);
 
 	// aerospike_info module
 	plan_add(info_basics);

@@ -28,6 +28,12 @@
 #include "aerospike/as_record.h"
 #include "latency.h"
 
+typedef enum {
+	LEN_TYPE_COUNT,
+	LEN_TYPE_BYTES,
+	LEN_TYPE_KBYTES
+} len_type;
+
 typedef struct arguments_t {
 	char* host_string;
 	char** hosts;
@@ -40,6 +46,7 @@ typedef struct arguments_t {
 	int keys;
 	char bintype;
 	int binlen;
+	len_type binlen_type;
 	bool random;
 	bool init;
 	int init_pct;
@@ -72,7 +79,7 @@ typedef struct clientdata_t {
 	uint64_t period_begin;
 	
 	aerospike client;
-	as_bin_value fixed_value;
+	as_val *fixed_value;
 	
 	latency write_latency;
 	uint32_t write_count;
@@ -95,13 +102,14 @@ typedef struct clientdata_t {
 	int threads;
 	int throughput;
 	int read_pct;
-	int binlen;
 	char bintype;
+	int binlen;
+	len_type binlen_type;
 	
 	bool random;
 	bool latency;
 	bool debug;
-	
+
 	bool async;
 	int async_max_commands;
 } clientdata;
@@ -128,7 +136,7 @@ int read_record_sync(int key, clientdata* data);
 void linear_write_async(clientdata* cdata, threaddata* tdata, as_event_loop* event_loop);
 void random_read_write_async(clientdata* cdata, threaddata* tdata, as_event_loop* event_loop);
 
-int gen_value(arguments* args, as_bin_value* val);
+int gen_value(arguments* args, as_val** val);
 bool is_stop_writes(aerospike* client, const char* host, int port, const char* namespace);
 
 void blog_line(const char* fmt, ...);

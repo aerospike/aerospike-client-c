@@ -51,7 +51,7 @@ extern aerospike *as;
  * STATIC FUNCTIONS
  *****************************************************************************/
 
-static bool
+bool
 has_cdt_map()
 {
 	char *res = NULL;
@@ -262,7 +262,6 @@ TEST(map_put_items, "Map put items operations" )
 	as_hashmap_set(&add_map, (as_val*)&mkey3, (as_val*)&mval3);
 		
 	as_operations_add_map_put_items(&ops, BIN_NAME, &add_mode, (as_map*)&add_map);
-	as_hashmap_destroy(&add_map);
 	
 	as_hashmap put_map;
 	as_hashmap_init(&put_map, 2);
@@ -274,7 +273,6 @@ TEST(map_put_items, "Map put items operations" )
 	as_hashmap_set(&put_map, (as_val*)&mkey2, (as_val*)&mval2);
 	
 	as_operations_add_map_put_items(&ops, BIN_NAME, &put_mode, (as_map*)&put_map);
-	as_hashmap_destroy(&put_map);
 	
 	as_hashmap update_map;
 	as_hashmap_init(&update_map, 2);
@@ -286,7 +284,6 @@ TEST(map_put_items, "Map put items operations" )
 	as_hashmap_set(&update_map, (as_val*)&mkey2, (as_val*)&mval2);
 	
 	as_operations_add_map_put_items(&ops, BIN_NAME, &update_mode, (as_map*)&update_map);
-	as_hashmap_destroy(&update_map);
 	
 	as_hashmap replace_map;
 	as_hashmap_init(&replace_map, 2);
@@ -298,7 +295,6 @@ TEST(map_put_items, "Map put items operations" )
 	as_hashmap_set(&replace_map, (as_val*)&mkey2, (as_val*)&mval2);
 	
 	as_operations_add_map_put_items(&ops, BIN_NAME, &update_mode, (as_map*)&replace_map);
-	as_hashmap_destroy(&replace_map);
 	
 	as_integer_init(&mkey1, 1);
 	as_operations_add_map_get_by_key(&ops, BIN_NAME, (as_val*)&mkey1, AS_MAP_RETURN_VALUE);
@@ -557,7 +553,7 @@ TEST(map_rank, "Map rank" )
 	}
 	
 	as_key rkey;
-	as_key_init_int64(&rkey, NAMESPACE, SET, 4);
+	as_key_init_int64(&rkey, NAMESPACE, SET, 5);
 	
 	as_error err;
 	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
@@ -593,7 +589,6 @@ TEST(map_rank, "Map rank" )
 	as_hashmap_set(&item_map, (as_val*)&mkey4, (as_val*)&mval4);
 
 	as_operations_add_map_put_items(&ops, BIN_NAME, &mode, (as_map*)&item_map);
-	as_hashmap_destroy(&item_map);
 		
 	as_record* rec = 0;
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
@@ -724,7 +719,7 @@ TEST(map_remove, "Map remove" )
 	}
 	
 	as_key rkey;
-	as_key_init_int64(&rkey, NAMESPACE, SET, 4);
+	as_key_init_int64(&rkey, NAMESPACE, SET, 6);
 	
 	as_error err;
 	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
@@ -775,7 +770,6 @@ TEST(map_remove, "Map remove" )
 	as_hashmap_set(&item_map, (as_val*)&mkey7, (as_val*)&mval7);
 	
 	as_operations_add_map_put_items(&ops, BIN_NAME, &mode, (as_map*)&item_map);
-	as_hashmap_destroy(&item_map);
 	
 	as_string_init(&mkey1, "NOTFOUND", false);
 	as_operations_add_map_remove_by_key(&ops, BIN_NAME, (as_val*)&mkey1, AS_MAP_RETURN_VALUE);
@@ -837,7 +831,7 @@ TEST(map_remove_range, "Map remove range" )
 	}
 	
 	as_key rkey;
-	as_key_init_int64(&rkey, NAMESPACE, SET, 4);
+	as_key_init_int64(&rkey, NAMESPACE, SET, 7);
 	
 	as_error err;
 	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
@@ -888,7 +882,6 @@ TEST(map_remove_range, "Map remove range" )
 	as_hashmap_set(&item_map, (as_val*)&mkey7, (as_val*)&mval7);
 	
 	as_operations_add_map_put_items(&ops, BIN_NAME, &mode, (as_map*)&item_map);
-	as_hashmap_destroy(&item_map);
 	
 	as_string_init(&mkey1, "J", false);
 	as_string_init(&mkey2, "K", false);
@@ -937,7 +930,7 @@ TEST(map_clear, "Map clear" )
 	}
 	
 	as_key rkey;
-	as_key_init_int64(&rkey, NAMESPACE, SET, 4);
+	as_key_init_int64(&rkey, NAMESPACE, SET, 8);
 	
 	as_error err;
 	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
@@ -1008,7 +1001,7 @@ TEST(map_score, "Map score" )
 	}
 	
 	as_key rkey;
-	as_key_init_int64(&rkey, NAMESPACE, SET, 4);
+	as_key_init_int64(&rkey, NAMESPACE, SET, 9);
 	
 	as_error err;
 	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
@@ -1045,7 +1038,6 @@ TEST(map_score, "Map score" )
 	as_hashmap_set(&item_map, (as_val*)&mkey4, (as_val*)&mval4);
 	
 	as_operations_add_map_put_items(&ops, BIN_NAME, &mode, (as_map*)&item_map);
-	as_hashmap_destroy(&item_map);
 	
 	as_record* rec = 0;
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
@@ -1118,6 +1110,95 @@ TEST(map_score, "Map score" )
 	as_record_destroy(rec);
 }
 
+TEST(map_remove_non_exist, "Remove non-existant keys" )
+{
+	if (! has_cdt_map()) {
+		info("cdt-map not enabled. skipping map tests.");
+		return;
+	}
+	
+	as_key rkey;
+	as_key_init_int64(&rkey, NAMESPACE, SET, 10);
+	
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
+	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+	
+	as_hashmap item_map;
+	as_hashmap_init(&item_map, 3);
+	as_string  mkey1;
+	as_integer mval1;
+	as_string_init(&mkey1, "a", false);
+	as_integer_init(&mval1, 1);
+	as_hashmap_set(&item_map, (as_val*)&mkey1, (as_val*)&mval1);
+	as_string  mkey2;
+	as_integer mval2;
+	as_string_init(&mkey2, "b", false);
+	as_integer_init(&mval2, 2);
+	as_hashmap_set(&item_map, (as_val*)&mkey2, (as_val*)&mval2);
+	as_string  mkey3;
+	as_integer mval3;
+	as_string_init(&mkey3, "c", false);
+	as_integer_init(&mval3, 3);
+	as_hashmap_set(&item_map, (as_val*)&mkey3, (as_val*)&mval3);
+	
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	
+	as_map_policy mode;
+	as_map_policy_init(&mode);
+	
+	as_operations_add_map_put_items(&ops, BIN_NAME, &mode, (as_map*)&item_map);
+	
+	as_record* rec = 0;
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
+	as_record_destroy(rec);
+	
+	as_arraylist remove_list;
+	as_arraylist_init(&remove_list, 8, 8);
+	as_arraylist_append_str(&remove_list, "a");
+	as_arraylist_append_str(&remove_list, "x");
+	as_arraylist_append_str(&remove_list, "y");
+	as_arraylist_append_str(&remove_list, "z");
+	as_arraylist_append_str(&remove_list, "xx");
+	as_arraylist_append_str(&remove_list, "yy");
+	as_arraylist_append_str(&remove_list, "zz");
+
+	for (int i = 0; i < 100; i++) {
+		char buf[3] = "##";
+		buf[0] = i % 10 + '0';
+		buf[1] = i / 10 + '0';
+		as_arraylist_append_str(&remove_list, buf);
+	}
+
+	as_arraylist_append_str(&remove_list, "c");
+	
+	for (int i = 0; i < 26; i++) {
+		char buf[3] = "_x";
+		buf[1] = i + 'A';
+		as_arraylist_append_str(&remove_list, buf);
+	}
+
+	as_operations_inita(&ops, 1);
+	as_operations_add_map_remove_by_key_list(&ops, BIN_NAME, (as_list*)&remove_list, AS_MAP_RETURN_KEY_VALUE);
+	
+	rec = 0;
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
+
+	as_list *list = as_record_get_list(rec, BIN_NAME);
+	assert_int_eq(as_list_size(list), 2 * 2);
+	assert_int_eq(as_list_get_int64(list, 1), 1);
+	assert_int_eq(as_list_get_int64(list, 1 * 2 + 1), 3);
+
+	//example_dump_record(rec);
+
+	as_record_destroy(rec);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -1133,4 +1214,5 @@ SUITE(map_basics, "aerospike map basic tests")
     suite_add(map_remove_range);
     suite_add(map_clear);
     suite_add(map_score);
+    suite_add(map_remove_non_exist);
 }

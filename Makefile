@@ -226,6 +226,7 @@ COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_stream.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_string.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_geojson.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_stringmap.h
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_thread_pool.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_util.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_val.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_vector.h

@@ -15,7 +15,20 @@ then
   exit 1
 fi
 
-if [ -f /etc/redhat-release ]
+if [ -f /etc/os-release ]
+then
+  . /etc/os-release
+  
+  if [ "$ID" = "centos" ]
+  then
+    ID=el
+  elif [ "$ID" = "fedora" ]
+  then
+    ID=fc
+  fi
+  echo $ID$VERSION_ID
+  exit 0
+elif [ -f /etc/redhat-release ]
 then
   os=`cat /etc/redhat-release | awk '{print $1}'`
 

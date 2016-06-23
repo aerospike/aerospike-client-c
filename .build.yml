@@ -8,6 +8,7 @@ container:
       - docker.qe.aerospike.com/build/aerospike-client-c:debian-8
       - docker.qe.aerospike.com/build/aerospike-client-c:ubuntu-12.04
       - docker.qe.aerospike.com/build/aerospike-client-c:ubuntu-14.04
+      - docker.qe.aerospike.com/build/aerospike-client-c:ubuntu-16.04
 
 build:
   - name: default

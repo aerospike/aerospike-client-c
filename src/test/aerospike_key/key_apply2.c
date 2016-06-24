@@ -665,11 +665,13 @@ TEST( key_apply2_ttl, "apply: (test,test,foo_ttl_check)" ) {
 	as_record_init(&r, 0);
 
 	rc = aerospike_key_get(as, &err, NULL, &key, &rec);
-	info ("ttl = %d",rec->ttl);
-	assert_true (rec->ttl<=5);
+	info ("ttl = %d", rec->ttl);
+	
+	// Clock skew between client and server can cause calculated ttl to be larger than 5 seconds.
+	// Add 2 second buffer to expected 5 second ttl.
+	assert_true(rec->ttl <= 7);
 
 	as_record_destroy(rec);
-
 }
 
 /******************************************************************************

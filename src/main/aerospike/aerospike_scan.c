@@ -109,11 +109,9 @@ as_scan_parse_records_async(as_event_command* cmd)
 		
 		if (msg->result_code) {
 			// Special case - if we scan a set name that doesn't exist on a
-			// node, it will return "not found" - we unify this with the
-			// case where OK is returned and no callbacks were made. [AKG]
-			// We are sending "no more records back" to the caller which will
-			// send OK to the main worker thread.
+			// node, it will return "not found".
 			if (msg->result_code == AEROSPIKE_ERR_RECORD_NOT_FOUND) {
+				as_event_executor_complete(cmd);
 				return true;
 			}
 			as_error err;

@@ -1,1 +1,1 @@
-char* aerospike_client_version = "4.0.5";
+char* aerospike_client_version = "4.0.6";

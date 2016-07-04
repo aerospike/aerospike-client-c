@@ -120,7 +120,7 @@ rm -rf $packageDir
 mkdir -p $packageDir
 
 # Retain copies of all client packages for individual distribution
-cp $stageDir/final/$packageName/aerospike-client-c-*-$rev.* $packageDir/
+cp $stageDir/final/$packageName/aerospike-client-c-* $packageDir/
 
 # Combine distribution into one final package.
 tar cf - -C $stageDir/final $packageName | gzip -c > $packageDir/$packageName.tgz

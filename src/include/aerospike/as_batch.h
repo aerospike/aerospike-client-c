@@ -125,14 +125,16 @@ typedef struct as_batch_read_s {
  *	@ingroup batch_object
  */
 #define as_batch_inita(__batch, __size) \
-	if ( (__batch) != NULL ) {\
-		(__batch)->_free = false;\
-		(__batch)->keys.entries = (as_key *) alloca(sizeof(as_key) * __size);\
-		if ( (__batch)->keys.entries ) { \
-			(__batch)->keys._free = false;\
-			(__batch)->keys.size = __size;\
-		}\
- 	}
+	do { \
+		if ( (__batch) != NULL ) {\
+			(__batch)->_free = false;\
+			(__batch)->keys.entries = (as_key *) alloca(sizeof(as_key) * __size);\
+			if ( (__batch)->keys.entries ) { \
+				(__batch)->keys._free = false;\
+				(__batch)->keys.size = __size;\
+			}\
+	 	} \
+	} while(0)
 
 /*********************************************************************************
  *	INSTANCE FUNCTIONS

@@ -609,14 +609,16 @@ void as_query_destroy(as_query * query);
  *	@ingroup query_object
  */
 #define as_query_select_inita(__query, __n) \
-	if ( (__query) != NULL && (__query)->select.entries == NULL ) {\
-		(__query)->select.entries = (as_bin_name *) alloca(__n * sizeof(as_bin_name));\
-		if ( (__query)->select.entries ) { \
-			(__query)->select._free = false;\
-			(__query)->select.capacity = __n;\
-			(__query)->select.size = 0;\
-		}\
- 	}
+	do { \
+		if ( (__query) != NULL && (__query)->select.entries == NULL ) {\
+			(__query)->select.entries = (as_bin_name *) alloca(__n * sizeof(as_bin_name));\
+			if ( (__query)->select.entries ) { \
+				(__query)->select._free = false;\
+				(__query)->select.capacity = __n;\
+				(__query)->select.size = 0;\
+			}\
+	 	} \
+	} while(0)
 
 /** 
  *	Initializes `as_query.select` with a capacity of `n` using `malloc()`.
@@ -685,14 +687,16 @@ bool as_query_select(as_query * query, const char * bin);
  *	@relates as_query
  */
 #define as_query_where_inita(__query, __n) \
-	if ( (__query)  != NULL && (__query)->where.entries == NULL ) {\
-		(__query)->where.entries = (as_predicate *) alloca(__n * sizeof(as_predicate));\
-		if ( (__query)->where.entries ) { \
-			(__query)->where._free = false;\
-			(__query)->where.capacity = __n;\
-			(__query)->where.size = 0;\
-		}\
- 	}
+	do { \
+		if ( (__query)  != NULL && (__query)->where.entries == NULL ) {\
+			(__query)->where.entries = (as_predicate *) alloca(__n * sizeof(as_predicate));\
+			if ( (__query)->where.entries ) { \
+				(__query)->where._free = false;\
+				(__query)->where.capacity = __n;\
+				(__query)->where.size = 0;\
+			}\
+	 	} \
+	} while(0)
 
 /** 
  *	Initializes `as_query.where` with a capacity of `n` using `malloc()`.
@@ -767,14 +771,16 @@ bool as_query_where(as_query * query, const char * bin, as_predicate_type type, 
  *	@relates as_query
  */
 #define as_query_orderby_inita(__query, __n) \
-	if ( (__query) != NULL && (__query)->orderby.entries == NULL  ) {\
-		(__query)->orderby.entries = (as_ordering *) alloca(__n * sizeof(as_ordering));\
-		if ( (__query)->orderby.entries ) { \
-			(__query)->orderby._free = false;\
-			(__query)->orderby.capacity = __n;\
-			(__query)->orderby.size = 0;\
-		}\
- 	}
+	do { \
+		if ( (__query) != NULL && (__query)->orderby.entries == NULL  ) {\
+			(__query)->orderby.entries = (as_ordering *) alloca(__n * sizeof(as_ordering));\
+			if ( (__query)->orderby.entries ) { \
+				(__query)->orderby._free = false;\
+				(__query)->orderby.capacity = __n;\
+				(__query)->orderby.size = 0;\
+			}\
+	 	} \
+	} while(0)
 
 /** 
  *	Initializes `as_query.orderby` with a capacity of `n` using `malloc()`.

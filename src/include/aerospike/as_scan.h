@@ -467,14 +467,16 @@ void as_scan_destroy(as_scan * scan);
  *	@ingroup as_scan_object
  */
 #define as_scan_select_inita(__scan, __n) \
-	if ( (__scan) != NULL && (__scan)->select.entries == NULL ) {\
-		(__scan)->select.entries = (as_bin_name *) alloca(__n * sizeof(as_bin_name));\
-		if ( (__scan)->select.entries ) { \
-			(__scan)->select._free = false;\
-			(__scan)->select.capacity = __n;\
-			(__scan)->select.size = 0;\
-		}\
- 	}
+	do { \
+		if ( (__scan) != NULL && (__scan)->select.entries == NULL ) {\
+			(__scan)->select.entries = (as_bin_name *) alloca(__n * sizeof(as_bin_name));\
+			if ( (__scan)->select.entries ) { \
+				(__scan)->select._free = false;\
+				(__scan)->select.capacity = __n;\
+				(__scan)->select.size = 0;\
+			}\
+	 	} \
+	} while(0)
 
 /** 
  *	Initializes `as_scan.select` with a capacity of `n` using `malloc()`.

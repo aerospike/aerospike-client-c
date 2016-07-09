@@ -49,7 +49,7 @@ extern "C" {
  *
  *	@ingroup async_events
  */
-typedef struct {
+typedef struct as_event_loop {
 #if defined(AS_USE_LIBEV)
 	struct ev_loop* loop;
 	struct ev_async wakeup;
@@ -60,6 +60,7 @@ typedef struct {
 	void* loop;
 #endif
 		
+	struct as_event_loop* next;
 	pthread_mutex_t lock;
 	as_queue queue;
 	as_queue pipe_cb_queue;
@@ -73,8 +74,8 @@ typedef struct {
  *****************************************************************************/
 
 extern as_event_loop* as_event_loops;
+extern as_event_loop* as_event_loop_current;
 extern uint32_t as_event_loop_size;
-extern uint32_t as_event_loop_current;
 
 /******************************************************************************
  * PUBLIC FUNCTIONS
@@ -214,9 +215,12 @@ as_event_loop_get_by_index(uint32_t index)
 static inline as_event_loop*
 as_event_loop_get()
 {
-	// Increment is not atomic because it doesn't need to be exactly accurate.
-	uint32_t current = as_event_loop_current++;
-	return &as_event_loops[current % as_event_loop_size];
+	// Assign event loop using round robin distribution.
+	// The last event loop points to the first event loop to create a circular linked list.
+	// Not atomic because doesn't need to be exactly accurate.
+	as_event_loop* event_loop = as_event_loop_current;
+	as_event_loop_current = event_loop->next;
+	return event_loop;
 }
 
 /**

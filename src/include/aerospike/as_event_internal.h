@@ -139,15 +139,7 @@ typedef enum as_connection_status_e {
 	AS_CONNECTION_NEW = 1,
 	AS_CONNECTION_TOO_MANY = 2
 } as_connection_status;
-	
-/******************************************************************************
- * GLOBAL VARIABLES
- *****************************************************************************/
 
-extern as_event_loop* as_event_loops;
-extern uint32_t as_event_loop_size;
-extern uint32_t as_event_loop_current;
-	
 /******************************************************************************
  * COMMON FUNCTIONS
  *****************************************************************************/
@@ -352,13 +344,8 @@ as_event_command_execute_in_loop(as_event_command* cmd)
 static inline as_event_loop*
 as_event_assign(as_event_loop* event_loop)
 {
-	if (! event_loop) {
-		// Assign event loop using round robin distribution.
-		// Not atomic because doesn't need to be exactly accurate.
-		uint32_t current = as_event_loop_current++;
-		event_loop = &as_event_loops[current % as_event_loop_size];
-	}
-	return event_loop;
+	// Assign event loop using round robin distribution if not specified.
+	return event_loop ? event_loop : as_event_loop_get();
 }
 
 static inline void

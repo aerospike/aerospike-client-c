@@ -30,9 +30,9 @@
  *****************************************************************************/
 
 as_event_loop* as_event_loops = 0;
+as_event_loop* as_event_loop_current = 0;
 uint32_t as_event_loop_capacity = 0;
 uint32_t as_event_loop_size = 0;
-uint32_t as_event_loop_current = 0;
 int as_event_send_buffer_size = 0;
 int as_event_recv_buffer_size = 0;
 bool as_event_threads_created = false;
@@ -44,23 +44,50 @@ bool as_event_threads_created = false;
 // Force link error on event initialization when libev/libuv not defined.
 #if defined(AS_USE_LIBEV) || defined(AS_USE_LIBUV)
 
+static bool
+as_event_initialize_loops(uint32_t capacity)
+{
+	if (capacity == 0) {
+		return false;
+	}
+	
+	as_event_send_buffer_size = as_pipe_get_send_buffer_size();
+	as_event_recv_buffer_size = as_pipe_get_recv_buffer_size();
+
+	as_event_loops = cf_calloc(capacity, sizeof(as_event_loop));
+	
+	if (! as_event_loops) {
+		return false;
+	}
+
+	as_event_loop_capacity = capacity;
+	as_event_loop_current = as_event_loops;
+	
+	// Initialize first loop to circular linked list for efficient round-robin
+	// event loop distribution.
+	as_event_loops->next = as_event_loops;
+	return true;
+}
+
 as_event_loop*
 as_event_create_loops(uint32_t capacity)
 {
-	as_event_send_buffer_size = as_pipe_get_send_buffer_size();
-	as_event_recv_buffer_size = as_pipe_get_recv_buffer_size();
-	
-	as_event_loops = cf_malloc(sizeof(as_event_loop) * capacity);
-	
-	if (! as_event_loops) {
+	if (! as_event_initialize_loops(capacity)) {
 		return 0;
 	}
 	
-	as_event_loop_capacity = capacity;
 	as_event_threads_created = true;
 	
 	for (uint32_t i = 0; i < capacity; i++) {
 		as_event_loop* event_loop = &as_event_loops[i];
+		
+		if (i > 0) {
+			// This loop points to first loop to create circular round-robin linked list.
+			event_loop->next = as_event_loops;
+
+			// Adjust previous loop to point to this loop.
+			as_event_loops[i - 1].next = event_loop;
+		}
 		event_loop->loop = 0;
 		pthread_mutex_init(&event_loop->lock, 0);
 		event_loop->thread = 0;
@@ -80,18 +107,10 @@ as_event_create_loops(uint32_t capacity)
 bool
 as_event_set_external_loop_capacity(uint32_t capacity)
 {
-	as_event_send_buffer_size = as_pipe_get_send_buffer_size();
-	as_event_recv_buffer_size = as_pipe_get_recv_buffer_size();
-	
-	size_t mem_size = sizeof(as_event_loop) * capacity;
-	as_event_loops = cf_malloc(mem_size);
-	
-	if (! as_event_loops) {
-		return false;
+	if (! as_event_initialize_loops(capacity)) {
+		return 0;
 	}
 	
-	memset(as_event_loops, 0, mem_size);
-	as_event_loop_capacity = capacity;
 	as_event_threads_created = false;
 	return true;
 }
@@ -109,6 +128,17 @@ as_event_set_external_loop(void* loop)
 	}
 	
 	as_event_loop* event_loop = &as_event_loops[current];
+	
+	if (current > 0) {
+		// This loop points to first loop to create circular round-robin linked list.
+		event_loop->next = as_event_loops;
+
+		// Adjust previous loop to point to this loop.
+		// Warning: not synchronized with as_event_loop_get(), but doesn't need to be
+		// exactly accurate.
+		as_event_loops[current - 1].next = event_loop;
+	}
+	
 	event_loop->loop = loop;
 	pthread_mutex_init(&event_loop->lock, 0);
 	event_loop->thread = pthread_self();  // Current thread must be same as event loop thread!

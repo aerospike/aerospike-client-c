@@ -80,14 +80,7 @@ as_event_create_loops(uint32_t capacity)
 	
 	for (uint32_t i = 0; i < capacity; i++) {
 		as_event_loop* event_loop = &as_event_loops[i];
-		
-		if (i > 0) {
-			// This loop points to first loop to create circular round-robin linked list.
-			event_loop->next = as_event_loops;
 
-			// Adjust previous loop to point to this loop.
-			as_event_loops[i - 1].next = event_loop;
-		}
 		event_loop->loop = 0;
 		pthread_mutex_init(&event_loop->lock, 0);
 		event_loop->thread = 0;
@@ -98,6 +91,14 @@ as_event_create_loops(uint32_t capacity)
 		if (! as_event_create_loop(event_loop)) {
 			as_event_close_loops();
 			return 0;
+		}
+		
+		if (i > 0) {
+			// This loop points to first loop to create circular round-robin linked list.
+			event_loop->next = as_event_loops;
+			
+			// Adjust previous loop to point to this loop.
+			as_event_loops[i - 1].next = event_loop;
 		}
 		as_event_loop_size++;
 	}
@@ -128,17 +129,6 @@ as_event_set_external_loop(void* loop)
 	}
 	
 	as_event_loop* event_loop = &as_event_loops[current];
-	
-	if (current > 0) {
-		// This loop points to first loop to create circular round-robin linked list.
-		event_loop->next = as_event_loops;
-
-		// Adjust previous loop to point to this loop.
-		// Warning: not synchronized with as_event_loop_get(), but doesn't need to be
-		// exactly accurate.
-		as_event_loops[current - 1].next = event_loop;
-	}
-	
 	event_loop->loop = loop;
 	pthread_mutex_init(&event_loop->lock, 0);
 	event_loop->thread = pthread_self();  // Current thread must be same as event loop thread!
@@ -146,6 +136,15 @@ as_event_set_external_loop(void* loop)
 	as_queue_init(&event_loop->pipe_cb_queue, sizeof(as_queued_pipe_cb), AS_EVENT_QUEUE_INITIAL_CAPACITY);
 	event_loop->pipe_cb_calling = false;
 	as_event_register_external_loop(event_loop);
+
+	if (current > 0) {
+		// This loop points to first loop to create circular round-robin linked list.
+		event_loop->next = as_event_loops;
+		
+		// Adjust previous loop to point to this loop.
+		// Warning: not synchronized with as_event_loop_get()
+		as_event_loops[current - 1].next = event_loop;
+	}
 	return event_loop;
 }
 

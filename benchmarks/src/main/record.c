@@ -196,9 +196,11 @@ create_threaddata(clientdata* cdata, int key)
 	
 	// Initialize a thread local key, record.
 	as_key_init_int64(&tdata->key, cdata->namespace, cdata->set, key);
-	as_record_init(&tdata->rec, 1);
-	tdata->rec.bins.entries[0].valuep = NULL;
-	tdata->rec.bins.size = 1;
+	as_record_init(&tdata->rec, cdata->numbins);
+	for (int i=0; i<cdata->numbins; i++) {
+		tdata->rec.bins.entries[i].valuep = NULL;
+	}
+	tdata->rec.bins.size = cdata->numbins;
 	
 	as_val_reserve(cdata->fixed_value);
 	return tdata;
@@ -216,82 +218,102 @@ destroy_threaddata(threaddata* tdata)
 static void
 init_write_record(clientdata* cdata, threaddata* tdata)
 {
-	as_bin* bin = &tdata->rec.bins.entries[0];
-	strcpy(bin->name, cdata->bin_name);
-
-	if (cdata->random) {
-		// Generate random value.
-		switch (cdata->bintype)
-		{
-			case 'I': {
-				// Generate integer.
-				uint32_t i = as_random_next_uint32(tdata->random);
-				as_integer_init((as_integer*)&bin->value, i);
-				bin->valuep = &bin->value;
-				break;
+	if (cdata->del_bin) {
+		for (int i=0; i<cdata->numbins; i++) {
+			as_bin* bin = &tdata->rec.bins.entries[i];
+			if (i==0) {
+				sprintf(bin->name, "%s", cdata->bin_name);
+			} else {
+				sprintf(bin->name, "%s_%d", cdata->bin_name, i);
 			}
-				
-			case 'B': {
-				// Generate byte array in thread local buffer.
-				uint8_t* buf = tdata->buffer;
-				int len = cdata->binlen;
-				as_random_next_bytes(tdata->random, buf, len);
-				as_bytes_init_wrap((as_bytes*)&bin->value, buf, len, false);
-				bin->valuep = &bin->value;
-				break;
-			}
+			as_record_set_nil(&tdata->rec, bin->name);
+		}
+		return;
+	}
+	
+	for (int i=0; i<cdata->numbins; i++) {
 
-			case 'S': {
-				// Generate random bytes on stack and convert to alphanumeric string.
-				uint8_t* buf = tdata->buffer;
-				int len = cdata->binlen;
-				as_random_next_bytes(tdata->random, buf, len);
-				
-				for (int i = 0; i < len; i++) {
-					buf[i] = alphanum[buf[i] % alphanum_len];
-				}
-				buf[len] = 0;
-				as_string_init((as_string *)&bin->value, (char*)buf, false);
-				bin->valuep = &bin->value;
-				break;
-			}
-				
-			case 'L': {
-				int len = calc_list_or_map_ele_count(cdata->bintype, cdata->binlen, cdata->binlen_type, 9);
-				as_list *list = (as_list *)as_arraylist_new((uint32_t)len, 0);
+		as_bin* bin = &tdata->rec.bins.entries[i];
+		if (i==0) {
+			sprintf(bin->name, "%s", cdata->bin_name);
+		} else {
+			sprintf(bin->name, "%s_%d", cdata->bin_name, i);
+		}
 
-				for (int i = 0; i < len; i++) {
-					as_list_append(list, random_element_9b(tdata->random));
-				}
+		if (cdata->random) {
+			// Generate random value.
+			switch (cdata->bintype)
+			{
+				case 'I': {
+							  // Generate integer.
+							  uint32_t i = as_random_next_uint32(tdata->random);
+							  as_integer_init((as_integer*)&bin->value, i);
+							  bin->valuep = &bin->value;
+							  break;
+						  }
 
-				as_record_set_list(&tdata->rec, cdata->bin_name, list);
-				break;
-			}
+				case 'B': {
+							  // Generate byte array in thread local buffer.
+							  uint8_t* buf = tdata->buffer;
+							  int len = cdata->binlen;
+							  as_random_next_bytes(tdata->random, buf, len);
+							  as_bytes_init_wrap((as_bytes*)&bin->value, buf, len, false);
+							  bin->valuep = &bin->value;
+							  break;
+						  }
 
-			case 'M': {
-				int len = calc_list_or_map_ele_count(cdata->bintype, cdata->binlen, cdata->binlen_type, 9);
-				as_map *map = (as_map *)as_hashmap_new((uint32_t)len);
+				case 'S': {
+							  // Generate random bytes on stack and convert to alphanumeric string.
+							  uint8_t* buf = tdata->buffer;
+							  int len = cdata->binlen;
+							  as_random_next_bytes(tdata->random, buf, len);
 
-				for (int i = 0; i < len; i++) {
-					as_val *k = random_element_9b(tdata->random);
-					as_val *v = random_element_9b(tdata->random);
-					as_map_set(map, k, v);
-				}
+							  for (int i = 0; i < len; i++) {
+								  buf[i] = alphanum[buf[i] % alphanum_len];
+							  }
+							  buf[len] = 0;
+							  as_string_init((as_string *)&bin->value, (char*)buf, false);
+							  bin->valuep = &bin->value;
+							  break;
+						  }
 
-				as_record_set_map(&tdata->rec, cdata->bin_name, map);
-				break;
-			}
+				case 'L': {
+							  int len = calc_list_or_map_ele_count(cdata->bintype, cdata->binlen, cdata->binlen_type, 9);
+							  as_list *list = (as_list *)as_arraylist_new((uint32_t)len, 0);
 
-			default: {
-				blog_error("Unknown type %c", cdata->bintype);
-				break;
+							  for (int i = 0; i < len; i++) {
+								  as_list_append(list, random_element_9b(tdata->random));
+							  }
+
+							  as_record_set_list(&tdata->rec, cdata->bin_name, list);
+							  break;
+						  }
+
+				case 'M': {
+							  int len = calc_list_or_map_ele_count(cdata->bintype, cdata->binlen, cdata->binlen_type, 9);
+							  as_map *map = (as_map *)as_hashmap_new((uint32_t)len);
+
+							  for (int i = 0; i < len; i++) {
+								  as_val *k = random_element_9b(tdata->random);
+								  as_val *v = random_element_9b(tdata->random);
+								  as_map_set(map, k, v);
+							  }
+
+							  as_record_set_map(&tdata->rec, cdata->bin_name, map);
+							  break;
+						  }
+
+				default: {
+							 blog_error("Unknown type %c", cdata->bintype);
+							 break;
+						 }
 			}
 		}
-	}
-	else {
-		// Use fixed value.
-		((as_val*)&bin->value)->type = cdata->fixed_value->type;
-		bin->valuep = (as_bin_value *)cdata->fixed_value;
+		else {
+			// Use fixed value.
+			((as_val*)&bin->value)->type = cdata->fixed_value->type;
+			bin->valuep = (as_bin_value *)cdata->fixed_value;
+		}
 	}
 }
 

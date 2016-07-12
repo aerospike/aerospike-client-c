@@ -46,11 +46,13 @@ typedef struct arguments_t {
 	int keys;
 	char bintype;
 	int binlen;
+	int numbins;
 	len_type binlen_type;
 	bool random;
 	bool init;
 	int init_pct;
 	int read_pct;
+	bool del_bin;
 	int transactions_limit;
 	int threads;
 	int throughput;
@@ -102,8 +104,10 @@ typedef struct clientdata_t {
 	int threads;
 	int throughput;
 	int read_pct;
+	bool del_bin;
 	char bintype;
 	int binlen;
+	int numbins;
 	len_type binlen_type;
 	
 	bool random;

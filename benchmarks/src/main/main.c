@@ -26,7 +26,7 @@
 #include <string.h>
 #include <getopt.h>
 
-static const char* short_options = "h:p:U:P::n:s:k:o:Rt:w:z:g:T:dL:SC:N:M:ac:W:u";
+static const char* short_options = "h:p:U:P::n:s:k:o:Rt:w:z:g:T:dL:SC:N:M:ac:W:ub:";
 
 static struct option long_options[] = {
 	{"hosts",                required_argument, 0, 'h'},
@@ -36,6 +36,7 @@ static struct option long_options[] = {
 	{"namespace",            required_argument, 0, 'n'},
 	{"set",                  required_argument, 0, 's'},
 	{"keys",                 required_argument, 0, 'k'},
+	{"bins",                 optional_argument, 0, 'b'},
 	{"objectSpec",           required_argument, 0, 'o'},
 	{"random",               no_argument,       0, 'R'},
 	{"transactions",         required_argument, 0, 't'},
@@ -98,6 +99,10 @@ print_usage(const char* program)
 	blog_line("   Key/record count or key/record range.");
 	blog_line("");
 	
+	blog_line("-b --bins <count>     # Default: 1");
+	blog_line("   Number of bins");
+	blog_line("");
+	
 	blog_line("-o --objectSpec I | B:<size> | S:<size> | L:<size> | M:<size> # Default: I");
 	blog_line("   Bin object specification.");
 	blog_line("   -o I     : Read/write integer bin.");
@@ -117,10 +122,11 @@ print_usage(const char* program)
 	blog_line("    Minimum number of transactions to perform.");
 	blog_line("");
 
-	blog_line("-w --workload I,<percent> | RU,<read percent>  # Default: RU,50");
+	blog_line("-w --workload I,<percent> | RU,<read percent> | DB  # Default: RU,50");
 	blog_line("   Desired workload.");
 	blog_line("   -w I,60  : Linear 'insert' workload initializing 60%% of the keys.");
 	blog_line("   -w RU,80 : Random read/update workload with 80%% reads and 20%% writes.");
+	blog_line("   -w DB    : Bin delete workload.");
 	blog_line("");
 	
 	blog_line("-z --threads <count> # Default: 16");
@@ -236,6 +242,7 @@ print_args(arguments* args)
 	blog_line("namespace:      %s", args->namespace);
 	blog_line("set:            %s", args->set);
 	blog_line("keys/records:   %d", args->keys);
+	blog_line("bins:           %d", args->numbins);
 	blog("object spec:    ");
 	
 	static const char *units[3] = {"", "b", "k"};
@@ -273,8 +280,9 @@ print_args(arguments* args)
 
 	if (args->init) {
 		blog_line("initialize %d%% of records", args->init_pct);
-	}
-	else {
+	} else if (args->del_bin) {
+		blog_line("delete %d bins in %d records", args->numbins, args->keys);
+	} else if (args->read_pct) {
 		blog_line("read %d%% write %d%%", args->read_pct, 100 - args->read_pct);
 	}
 	
@@ -316,6 +324,11 @@ validate_args(arguments* args)
 {
 	if (args->keys <= 0) {
 		blog_line("Invalid number of keys: %d  Valid values: [> 0]", args->keys);
+		return 1;
+	}
+	
+	if (args->numbins <= 0) {
+		blog_line("Invalid number of bins: %d  Valid values: [> 0]", args->keys);
 		return 1;
 	}
 	
@@ -450,6 +463,10 @@ set_args(int argc, char * const * argv, arguments* args)
 				args->keys = atoi(optarg);
 				break;
 				
+			case 'b':
+				args->numbins = atoi(optarg);
+				break;
+				
 			case 'o': {
 				args->bintype = *optarg;
 
@@ -494,18 +511,23 @@ set_args(int argc, char * const * argv, arguments* args)
 			case 'w': {
 				char* tmp = strdup(optarg);
 				char* p = strchr(tmp, ',');
-				args->init = (*tmp == 'I');
 				
-				if (p) {
-					*p = 0;
-					
-					if (args->init) {
+				if (strncmp(tmp, "I", 1) == 0) {
+					args->init = true;
+					if (p) {
+						*p = 0;
 						args->init_pct = atoi(p + 1);
 					}
-					else {
+				} else if (strncmp(tmp, "RU", 2) == 0) {
+					if (p) {
+						*p = 0;
 						args->read_pct = atoi(p + 1);
 					}
+				} else if (strncmp(tmp, "DB", 2) == 0) {
+					args->init = true;
+					args->del_bin = true;
 				}
+
 				free(tmp);
 				break;
 			}
@@ -645,6 +667,7 @@ main(int argc, char * const * argv)
 	args.namespace = "test";
 	args.set = "testset";
 	args.keys = 1000000;
+	args.numbins = 1;
 	args.bintype = 'I';
 	args.binlen = 50;
 	args.binlen_type = LEN_TYPE_COUNT;
@@ -653,6 +676,7 @@ main(int argc, char * const * argv)
 	args.init = false;
 	args.init_pct = 100;
 	args.read_pct = 50;
+	args.del_bin = false;
 	args.threads = 16;
 	args.throughput = 0;
 	args.read_timeout = 0;

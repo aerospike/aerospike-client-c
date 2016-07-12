@@ -225,9 +225,11 @@ run_benchmark(arguments* args)
 	data.threads = args->threads;
 	data.throughput = args->throughput;
 	data.read_pct = args->read_pct;
+	data.del_bin = args->del_bin;
 	data.bintype = args->bintype;
 	data.binlen = args->binlen;
 	data.binlen_type = args->binlen_type;
+	data.numbins = args->numbins;
 	data.random = args->random;
 	data.transactions_limit = args->transactions_limit;
 	data.transactions_count = 0;

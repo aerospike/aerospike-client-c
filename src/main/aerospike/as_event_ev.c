@@ -42,6 +42,21 @@ extern bool as_event_threads_created;
 #if defined(AS_USE_LIBEV)
 
 static void
+as_ev_close_loop(as_event_loop* event_loop)
+{
+	ev_async_stop(event_loop->loop, &event_loop->wakeup);
+	
+	// Only stop event loop if client created event loop.
+	if (as_event_threads_created) {
+		ev_unloop(event_loop->loop, EVUNLOOP_ALL);
+	}
+	
+	// Cleanup event loop resources.
+	as_queue_destroy(&event_loop->queue);
+	as_queue_destroy(&event_loop->pipe_cb_queue);
+}
+
+static void
 as_ev_wakeup(struct ev_loop* loop, ev_async* wakeup, int revents)
 {
 	// Read command pointers from queue.
@@ -57,7 +72,9 @@ as_ev_wakeup(struct ev_loop* loop, ev_async* wakeup, int revents)
 		}
 		else {
 			// Received stop signal.
-			as_event_close_loop(event_loop);
+			as_ev_close_loop(event_loop);
+			pthread_mutex_unlock(&event_loop->lock);
+			pthread_mutex_destroy(&event_loop->lock);
 			return;
 		}
 	}
@@ -594,23 +611,6 @@ as_event_send_close_loop(as_event_loop* event_loop)
 		ev_async_send(event_loop->loop, &event_loop->wakeup);
 	}
 	return queued;
-}
-
-void
-as_event_close_loop(as_event_loop* event_loop)
-{
-	ev_async_stop(event_loop->loop, &event_loop->wakeup);
-	
-	// Only stop event loop if client created event loop.
-	if (as_event_threads_created) {
-		ev_unloop(event_loop->loop, EVUNLOOP_ALL);
-	}
-	
-	// Cleanup event loop resources.
-	as_queue_destroy(&event_loop->queue);
-	as_queue_destroy(&event_loop->pipe_cb_queue);
-	pthread_mutex_unlock(&event_loop->lock);
-	pthread_mutex_destroy(&event_loop->lock);
 }
 
 #endif

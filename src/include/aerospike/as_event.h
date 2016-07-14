@@ -87,6 +87,7 @@ extern uint32_t as_event_loop_size;
  *	it must be called before aerospike_connect().
  *
  *	@param capacity	Number of event loops to create.
+ *	@return			Event loop array.
  *
  *	@ingroup async_events
  */
@@ -128,6 +129,7 @@ as_event_create_loops(uint32_t capacity);
  *	~~~~~~~~~~
  *
  *	@param capacity	Number of externally created event loops.
+ *	@return			True if all external loops were initialized.
  *
  *	@ingroup async_events
  */
@@ -215,16 +217,15 @@ as_event_loop_get_by_index(uint32_t index)
 static inline as_event_loop*
 as_event_loop_get()
 {
-	// Assign event loop using round robin distribution.
 	// The last event loop points to the first event loop to create a circular linked list.
 	// Not atomic because doesn't need to be exactly accurate.
 	as_event_loop* event_loop = as_event_loop_current;
 	as_event_loop_current = event_loop->next;
 	return event_loop;
 }
-
+	
 /**
- *	Close internally created event loops and release memory for event loop abstraction.
+ *	Close internally created event loops and release resources for all event loops.
  *	This method should be called once on program shutdown if as_event_create_loops() or
  *	as_event_set_external_loop_capacity() was called.
  *

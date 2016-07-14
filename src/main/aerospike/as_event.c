@@ -168,7 +168,6 @@ as_event_close_loops()
 		return;
 	}
 	
-	pthread_t self = pthread_self();
 	bool status = true;
 	
 	// Close or send close signal to all event loops.
@@ -176,16 +175,11 @@ as_event_close_loops()
 	for (uint32_t i = 0; i < as_event_loop_size; i++) {
 		as_event_loop* event_loop = &as_event_loops[i];
 	
-		if (event_loop->thread == self) {
-			// Can close event loop immediately.
-			as_event_close_loop(event_loop);
-		}
-		else {
-			// Queue close command to event loop.
-			if (! as_event_send_close_loop(event_loop)) {
-				as_log_error("Failed to send stop command to event loop");
-				status = false;
-			}
+		// Calling close directly can cause previously queued commands to be dropped.
+		// Therefore, always queue close command to event loop.
+		if (! as_event_send_close_loop(event_loop)) {
+			as_log_error("Failed to send stop command to event loop");
+			status = false;
 		}
 	}
 

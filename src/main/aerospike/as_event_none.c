@@ -61,9 +61,4 @@ as_event_send_close_loop(as_event_loop* event_loop)
 	return false;
 }
 
-void
-as_event_close_loop(as_event_loop* event_loop)
-{
-}
-
 #endif

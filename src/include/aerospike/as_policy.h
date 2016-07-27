@@ -366,6 +366,15 @@ typedef struct as_policy_write_s {
 	 *  before returning transaction succeeded.
 	 */
 	as_policy_commit_level commit_level;
+	
+	/**
+	 *	If the transaction results in a record deletion, leave a tombstone for the record.
+	 *	This prevents deleted records from reappearing after node failures.
+	 *	Valid for Aerospike Server Enterprise Edition only.
+	 *
+	 *	Default: false (do not tombstone deleted records).
+	 */
+	bool durable_delete;
 
 } as_policy_write;
 
@@ -450,6 +459,15 @@ typedef struct as_policy_apply_s {
 	*/
 	uint32_t ttl;
 
+	/**
+	 *	If the transaction results in a record deletion, leave a tombstone for the record.
+	 *	This prevents deleted records from reappearing after node failures.
+	 *	Valid for Aerospike Server Enterprise Edition only.
+	 *
+	 *	Default: false (do not tombstone deleted records).
+	 */
+	bool durable_delete;
+
 } as_policy_apply;
 
 /**
@@ -506,6 +524,15 @@ typedef struct as_policy_operate_s {
 	 */
 	bool deserialize;
 
+	/**
+	 *	If the transaction results in a record deletion, leave a tombstone for the record.
+	 *	This prevents deleted records from reappearing after node failures.
+	 *	Valid for Aerospike Server Enterprise Edition only.
+	 *
+	 *	Default: false (do not tombstone deleted records).
+	 */
+	bool durable_delete;
+
 } as_policy_operate;
 
 /**
@@ -548,6 +575,15 @@ typedef struct as_policy_remove_s {
 	 *  before returning transaction succeeded.
 	 */
 	as_policy_commit_level commit_level;
+
+	/**
+	 *	If the transaction results in a record deletion, leave a tombstone for the record.
+	 *	This prevents deleted records from reappearing after node failures.
+	 *	Valid for Aerospike Server Enterprise Edition only.
+	 *
+	 *	Default: false (do not tombstone deleted records).
+	 */
+	bool durable_delete;
 
 } as_policy_remove;
 
@@ -594,6 +630,15 @@ typedef struct as_policy_scan_s {
 	 *	stable state.
 	 */
 	bool fail_on_cluster_change;
+
+	/**
+	 *	If the scan runs a UDF which results in a record deletion, leave a tombstone for the record.
+	 *	This prevents deleted records from reappearing after node failures.
+	 *	Valid for Aerospike Server Enterprise Edition only.
+	 *
+	 *	Default: false (do not tombstone deleted records).
+	 */
+	bool durable_delete;
 
 } as_policy_scan;
 
@@ -736,21 +781,21 @@ typedef struct as_policies_s {
 	 *
 	 *	Will be used if specific policies have a timeout of 0 (zero).
 	 *
-	 *	The default value is `AS_POLICY_TIMEOUT_DEFAULT`.
+	 *	Default: `AS_POLICY_TIMEOUT_DEFAULT`
 	 */
 	uint32_t timeout;
 
 	/**
 	 *	Maximum number of retries when a transaction fails due to a network error.
 	 *
-	 *	The default value is `AS_POLICY_RETRY_DEFAULT`.
+	 *	Default: `AS_POLICY_RETRY_DEFAULT`
 	 */
 	uint32_t retry;
 	
 	/**
 	 *	Specifies the behavior for the key.
 	 *	
-	 *	The default value is `AS_POLICY_KEY_DEFAULT`.
+	 *	Default: `AS_POLICY_KEY_DEFAULT`
 	 */
 	as_policy_key key;
 
@@ -758,7 +803,7 @@ typedef struct as_policies_s {
 	 *	Specifies the behavior for the generation
 	 *	value.
 	 *	
-	 *	The default value is `AS_POLICY_GEN_DEFAULT`.
+	 *	Default: `AS_POLICY_GEN_DEFAULT`
 	 */
 	as_policy_gen gen;
 
@@ -766,28 +811,28 @@ typedef struct as_policies_s {
 	 *	Specifies the behavior for the existence 
 	 *	of the record.
 	 *	
-	 *	The default value is `AS_POLICY_EXISTS_DEFAULT`.
+	 *	Default: `AS_POLICY_EXISTS_DEFAULT`
 	 */
 	as_policy_exists exists;
 
 	/**
 	 *	Specifies which replica to read.
 	 *
-	 *	The default value is `AS_POLICY_REPLICA_MASTER`.
+	 *	Default: `AS_POLICY_REPLICA_MASTER`
 	 */
 	as_policy_replica replica;
 
 	/**
 	 *	Specifies the consistency level for reading.
 	 *
-	 *	The default value is `AS_POLICY_CONSISTENCY_LEVEL_ONE`.
+	 *	Default: `AS_POLICY_CONSISTENCY_LEVEL_ONE`
 	 */
 	as_policy_consistency_level consistency_level;
 
 	/**
 	 *	Specifies the commit level for writing.
 	 *
-	 *	The default value is `AS_POLICY_COMMIT_LEVEL_ALL`.
+	 *	Default: `AS_POLICY_COMMIT_LEVEL_ALL`
 	 */
 	as_policy_commit_level commit_level;
 
@@ -908,6 +953,7 @@ as_policy_write_init(as_policy_write* p)
 	p->gen = AS_POLICY_GEN_DEFAULT;
 	p->exists = AS_POLICY_EXISTS_DEFAULT;
 	p->commit_level = AS_POLICY_COMMIT_LEVEL_DEFAULT;
+	p->durable_delete = false;
 	return p;
 }
 
@@ -929,6 +975,7 @@ as_policy_write_copy(as_policy_write* src, as_policy_write* trg)
 	trg->gen = src->gen;
 	trg->exists = src->exists;
 	trg->commit_level = src->commit_level;
+	trg->durable_delete = src->durable_delete;
 }
 
 /**
@@ -950,6 +997,7 @@ as_policy_operate_init(as_policy_operate* p)
 	p->consistency_level = AS_POLICY_CONSISTENCY_LEVEL_DEFAULT;
 	p->commit_level = AS_POLICY_COMMIT_LEVEL_DEFAULT;
 	p->deserialize = true;
+	p->durable_delete = false;
 	return p;
 }
 
@@ -972,6 +1020,7 @@ as_policy_operate_copy(as_policy_operate* src, as_policy_operate* trg)
 	trg->consistency_level = src->consistency_level;
 	trg->commit_level = src->commit_level;
 	trg->deserialize = src->deserialize;
+	trg->durable_delete = src->durable_delete;
 }
 
 /**
@@ -991,6 +1040,7 @@ as_policy_remove_init(as_policy_remove* p)
 	p->gen = AS_POLICY_GEN_DEFAULT;
 	p->generation = 0;
 	p->commit_level = AS_POLICY_COMMIT_LEVEL_DEFAULT;
+	p->durable_delete = false;
 	return p;
 }
 
@@ -1011,6 +1061,7 @@ as_policy_remove_copy(as_policy_remove* src, as_policy_remove* trg)
 	trg->gen = src->gen;
 	trg->generation = src->generation;
 	trg->commit_level = src->commit_level;
+	trg->durable_delete = src->durable_delete;
 }
 
 /**
@@ -1028,6 +1079,7 @@ as_policy_apply_init(as_policy_apply* p)
 	p->key = AS_POLICY_KEY_DEFAULT;
 	p->commit_level = AS_POLICY_COMMIT_LEVEL_DEFAULT;
 	p->ttl = 0; // AS_RECORD_DEFAULT_TTL
+	p->durable_delete = false;
 	return p;
 }
 
@@ -1046,6 +1098,7 @@ as_policy_apply_copy(as_policy_apply* src, as_policy_apply* trg)
 	trg->key = src->key;
 	trg->commit_level = src->commit_level;
 	trg->ttl = src->ttl;
+	trg->durable_delete = src->durable_delete;
 }
 
 /**
@@ -1162,6 +1215,7 @@ as_policy_scan_init(as_policy_scan* p)
 {
 	p->timeout = 0;
 	p->fail_on_cluster_change = false;
+	p->durable_delete = false;
 	return p;
 }
 
@@ -1178,6 +1232,7 @@ as_policy_scan_copy(as_policy_scan* src, as_policy_scan* trg)
 {
 	trg->timeout = src->timeout;
 	trg->fail_on_cluster_change = src->fail_on_cluster_change;
+	trg->durable_delete = src->durable_delete;
 }
 
 /**

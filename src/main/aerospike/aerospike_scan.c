@@ -357,7 +357,7 @@ as_scan_command_init(uint8_t* cmd, const as_policy_scan* policy, const as_scan* 
 	if (scan->apply_each.function[0]) {
 		p = as_command_write_header(cmd, AS_MSG_INFO1_READ, AS_MSG_INFO2_WRITE,
 			AS_POLICY_COMMIT_LEVEL_ALL, AS_POLICY_CONSISTENCY_LEVEL_ONE, AS_POLICY_EXISTS_IGNORE,
-			AS_POLICY_GEN_IGNORE, 0, 0, policy->timeout, n_fields, 0);
+			AS_POLICY_GEN_IGNORE, 0, 0, policy->timeout, n_fields, 0, policy->durable_delete);
 	}
 	else {
 		uint8_t read_attr = (scan->no_bins)? AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA : AS_MSG_INFO1_READ;

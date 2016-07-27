@@ -70,7 +70,7 @@ extern "C" {
 #define AS_MSG_INFO2_DELETE				(1 << 1) // delete record
 #define AS_MSG_INFO2_GENERATION			(1 << 2) // pay attention to the generation
 #define AS_MSG_INFO2_GENERATION_GT		(1 << 3) // apply write if new generation >= old, good for restore
-// (Note:  Bit 4 is unused.)
+#define AS_MSG_INFO2_DURABLE_DELETE		(1 << 4) // transaction resulting in record deletion leaves tombstone (Enterprise only).
 #define AS_MSG_INFO2_CREATE_ONLY		(1 << 5) // write record only if it doesn't exist
 // (Note:  Bit 6 is unused.)
 #define AS_MSG_INFO2_RESPOND_ALL_OPS	(1 << 7) // return a result for every operation.
@@ -244,7 +244,7 @@ uint8_t*
 as_command_write_header(uint8_t* cmd, uint8_t read_attr, uint8_t write_attr,
 	as_policy_commit_level commit_level, as_policy_consistency_level consistency,
 	as_policy_exists exists, as_policy_gen gen_policy, uint32_t gen, uint32_t ttl,
-	uint32_t timeout_ms, uint16_t n_fields, uint16_t n_bins);
+	uint32_t timeout_ms, uint16_t n_fields, uint16_t n_bins, bool durable_delete);
 
 /**
  *	@private

@@ -60,6 +60,7 @@ as_policies_init(as_policies* p)
 	p->write.gen = -1;
 	p->write.exists = -1;
 	p->write.commit_level = -1;
+	p->write.durable_delete = false;
 
 	p->operate.timeout = -1;
 	p->operate.retry = -1;
@@ -69,6 +70,7 @@ as_policies_init(as_policies* p)
 	p->operate.consistency_level = -1;
 	p->operate.commit_level = -1;
 	p->operate.deserialize = true;
+	p->operate.durable_delete = false;
 
 	p->remove.timeout = -1;
 	p->remove.retry = -1;
@@ -76,11 +78,13 @@ as_policies_init(as_policies* p)
 	p->remove.gen = -1;
 	p->remove.generation = 0;
 	p->remove.commit_level = -1;
+	p->remove.durable_delete = false;
 
 	p->apply.timeout = -1;
 	p->apply.key = -1;
 	p->apply.commit_level = -1;
 	p->apply.ttl = 0;	// Set to AS_RECORD_DEFAULT_TTL. TTL does not go through as_policies_resolve().
+	p->apply.durable_delete = false;
 
 	as_policy_info_init(&p->info);
 	p->info.timeout = -1;
@@ -114,7 +118,7 @@ as_policies_resolve(as_policies* p)
 	as_policy_resolve(p->write.gen, p->gen);
 	as_policy_resolve(p->write.exists, p->exists);
 	as_policy_resolve(p->write.commit_level, p->commit_level);
-
+	
 	as_policy_resolve(p->operate.timeout, p->timeout);
 	as_policy_resolve(p->operate.retry, p->retry);
 	as_policy_resolve(p->operate.key, p->key);

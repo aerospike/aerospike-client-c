@@ -133,7 +133,7 @@ uint8_t*
 as_command_write_header(uint8_t* cmd, uint8_t read_attr, uint8_t write_attr,
 	as_policy_commit_level commit_level, as_policy_consistency_level consistency,
 	as_policy_exists exists, as_policy_gen gen_policy, uint32_t gen, uint32_t ttl,
-	uint32_t timeout_ms, uint16_t n_fields, uint16_t n_bins)
+	uint32_t timeout_ms, uint16_t n_fields, uint16_t n_bins, bool durable_delete)
 {
 	uint32_t generation = 0;
 	uint8_t info_attr = 0;
@@ -183,6 +183,10 @@ as_command_write_header(uint8_t* cmd, uint8_t read_attr, uint8_t write_attr,
 
 	if (consistency == AS_POLICY_CONSISTENCY_LEVEL_ALL) {
 		read_attr |= AS_MSG_INFO1_CONSISTENCY_ALL;
+	}
+	
+	if (durable_delete) {
+		write_attr |= AS_MSG_INFO2_DURABLE_DELETE;
 	}
 
 #if defined USE_XDR

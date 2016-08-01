@@ -41,6 +41,7 @@ typedef struct arguments_t {
 	char password[AS_PASSWORD_HASH_SIZE];
 	const char* namespace;
 	const char* set;
+	int startKey;
 	int keys;
 	char bintype;
 	int binlen;
@@ -93,6 +94,7 @@ typedef struct clientdata_t {
 	uint32_t transactions_limit;
 	uint32_t transactions_count;
 
+	uint32_t key_min;
 	uint32_t key_max;
 	uint32_t key_count;
 	uint32_t valid;

@@ -212,7 +212,6 @@ is_stop_writes(aerospike* client, const char* host, int port, const char* namesp
 	}
 	else {
 		blog_error("Info request failed: %d - %s", err.code, err.message);
-		stop_writes = true;
 	}
 	free(res);
 	return stop_writes;
@@ -278,13 +277,15 @@ run_benchmark(arguments* args)
 			latency_init(&data.read_latency, args->latency_columns, args->latency_shift);
 		}
 	}
-	
+
+	data.key_min = args->startKey;
+
 	if (args->init) {
-		data.key_max = (int)((double)args->keys / 100.0 * args->init_pct + 0.5);
+		data.key_max = (int)((double)(args->keys + args->startKey) / 100.0 * args->init_pct + 0.5);
 		ret = linear_write(&data);
 	}
 	else {
-		data.key_max = args->keys;
+		data.key_max = args->keys + args->startKey;
 		ret = random_read_write(&data);
 	}
 	

@@ -106,7 +106,8 @@ random_worker(void* udata)
 {
 	clientdata* cdata = (clientdata*)udata;
 	threaddata* tdata = create_threaddata(cdata, 0);
-	uint32_t key_max = cdata->key_max;
+	uint32_t key_min = cdata->key_min;
+	uint32_t n_keys = cdata->key_max - key_min;
 	int throughput = cdata->throughput;
 	int read_pct = cdata->read_pct;
 	int key;
@@ -114,7 +115,7 @@ random_worker(void* udata)
 	
 	while (cdata->valid) {
 		// Choose key at random.
-		key = as_random_next_uint32(tdata->random) % key_max + 1;
+		key = as_random_next_uint32(tdata->random) % n_keys + key_min;
 		
 		// Roll a percentage die.
 		die = as_random_next_uint32(tdata->random) % 100;
@@ -167,7 +168,7 @@ random_worker_async(clientdata* cdata)
 int
 random_read_write(clientdata* data)
 {
-	blog_info("Read/write using %d records", data->key_max);
+	blog_info("Read/write using %u records", data->key_max - data->key_min);
 	
 	pthread_t ticker;
 	if (pthread_create(&ticker, 0, ticker_worker, data) != 0) {

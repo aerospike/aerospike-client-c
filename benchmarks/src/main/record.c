@@ -185,13 +185,7 @@ create_threaddata(clientdata* cdata, int key)
 	threaddata* tdata = malloc(sizeof(threaddata));
 	tdata->cdata = cdata;
 	tdata->random = as_random_instance();
-	
-	if (len) {
-		tdata->buffer = malloc(len);
-	}
-	else {
-		tdata->buffer = 0;
-	}
+	tdata->buffer = len != 0 ? malloc(len) : NULL;
 	tdata->begin = 0;
 	
 	// Initialize a thread local key, record.
@@ -461,24 +455,24 @@ linear_write_listener(as_error* err, void* udata, as_event_loop* event_loop)
 	}
 	
 	// Reuse tdata structures.
-	uint32_t count = ck_pr_faa_32(&cdata->key_count, 1) + 1;
+	uint32_t key = ck_pr_faa_32(&cdata->key_count, 1) + cdata->key_min;
 	
-	if (count == cdata->key_max) {
+	if (key == cdata->key_max) {
 		// We have reached max number of records.
 		destroy_threaddata(tdata);
 		as_monitor_notify(&monitor);
 		return;
 	}
 	
-	count += cdata->async_max_commands;
+	key += cdata->async_max_commands;
 	
-	if (count > cdata->key_max) {
+	if (key > cdata->key_max) {
 		// We already have enough records in progress, so do not issue any more puts.
 		destroy_threaddata(tdata);
 		return;
 	}
 	
-	tdata->key.value.integer.value = count;
+	tdata->key.value.integer.value = key;
 	tdata->key.digest.init = false;
 	linear_write_async(cdata, tdata, event_loop);
 }
@@ -489,8 +483,10 @@ static void random_read_listener(as_error* err, as_record* rec, void* udata, as_
 void
 random_read_write_async(clientdata* cdata, threaddata* tdata, as_event_loop* event_loop)
 {
+	uint32_t n_keys = cdata->key_max - cdata->key_min;
+
 	// Choose key at random.
-	int key = as_random_next_uint32(tdata->random) % cdata->key_max + 1;
+	int key = as_random_next_uint32(tdata->random) % n_keys + cdata->key_min;
 	tdata->key.value.integer.value = key;
 	tdata->key.digest.init = false;
 	

@@ -541,6 +541,17 @@ as_operations_add_list_set_raw(as_operations* ops, const as_bin_name name, int64
 bool
 as_operations_add_list_trim(as_operations* ops, const as_bin_name name, int64_t index, uint64_t count);
 
+/**
+ *	Create list increment operation.
+ *	Server increments value at index by incr and returns final result.
+ *	Valid only for numbers.
+ *
+ *	@relates as_operations
+ *	@ingroup as_operations_object
+ */
+bool
+as_operations_add_list_increment(as_operations *ops, const as_bin_name name, int64_t index, as_val *incr);
+
 //-----------------------------------------------------------------------------
 // Read operations
 

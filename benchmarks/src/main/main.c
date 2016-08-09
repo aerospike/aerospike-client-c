@@ -26,7 +26,7 @@
 #include <string.h>
 #include <getopt.h>
 
-static const char* short_options = "h:p:U:P::n:s:K:k:o:Rt:w:z:g:T:dL:SC:N:M:ac:W:ub:";
+static const char* short_options = "h:p:U:P::n:s:K:k:o:Rt:w:z:g:T:dL:SC:N:M:Dac:W:ub:";
 
 static struct option long_options[] = {
 	{"hosts",                required_argument, 0, 'h'},
@@ -56,6 +56,7 @@ static struct option long_options[] = {
 	{"commitLevel",          required_argument, 0, 'M'},
 	{"async",                no_argument,       0, 'a'},
 	{"asyncMaxCommands",     required_argument, 0, 'c'},
+	{"durable-delete",       no_argument,       0, 'D'},
 	{"asyncSelectorThreads", required_argument, 0, 'W'},
 	{"usage",                no_argument,       0, 'u'},
 	{0, 0, 0, 0}
@@ -214,6 +215,11 @@ print_usage(const char* program)
 	blog_line("-M --commitLevel {all,master} # Default: all");
 	blog_line("   Write commit guarantee level.");
 	blog_line("");
+
+	blog_line("-D --durable-delete  # Default: durable-delete mode is false.");
+	blog_line("   All transactions will set the durable-delete flag which indicates");
+	blog_line("   to the server that if the transaction results in a delete, to generate");
+	blog_line("   a tombstone for the deleted record.");
 
 	blog_line("-a, --async # Default: synchronous mode");
 	blog_line("   Enable asynchronous mode.");
@@ -637,6 +643,10 @@ set_args(int argc, char * const * argv, arguments* args)
 				}
 				break;
 
+			case 'D':
+				args->durable_deletes = true;
+				break;
+
 			case 'a':
 				args->async = true;
 				break;
@@ -692,6 +702,7 @@ main(int argc, char * const * argv)
 	args.read_replica = AS_POLICY_REPLICA_MASTER;
 	args.read_consistency_level = AS_POLICY_CONSISTENCY_LEVEL_ONE;
 	args.write_commit_level = AS_POLICY_COMMIT_LEVEL_ALL;
+	args.durable_deletes = false;
 	args.async = false;
 	args.async_max_commands = 200;
 	args.event_loop_capacity = 1;

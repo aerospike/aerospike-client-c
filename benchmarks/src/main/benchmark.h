@@ -66,6 +66,7 @@ typedef struct arguments_t {
 	as_policy_replica read_replica;
 	as_policy_consistency_level read_consistency_level;
 	as_policy_commit_level write_commit_level;
+	bool durable_deletes;
 	bool async;
 	int async_max_commands;
 	int event_loop_capacity;

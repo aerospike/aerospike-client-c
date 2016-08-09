@@ -128,6 +128,7 @@ connect_to_server(arguments* args, aerospike* client)
 
 	p->write.timeout = args->write_timeout;
 	p->write.commit_level = args->write_commit_level;
+	p->write.durable_delete = args->durable_deletes;
 
 	p->operate.timeout = args->write_timeout;
 	p->remove.timeout = args->write_timeout;

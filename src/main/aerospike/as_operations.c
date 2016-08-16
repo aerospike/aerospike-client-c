@@ -61,7 +61,7 @@ typedef enum as_cdt_optype_e {
 	AS_CDT_OP_LIST_SET           = 9,
 	AS_CDT_OP_LIST_TRIM          = 10,
 	AS_CDT_OP_LIST_CLEAR         = 11,
-	AS_CDT_OP_LIST_INCREMENT_BY  = 12,
+	AS_CDT_OP_LIST_INCREMENT     = 12,
 	
 	// Read from list
 	AS_CDT_OP_LIST_SIZE          = 16,
@@ -167,6 +167,7 @@ const cdt_op_table_entry cdt_op_table[] = {
 	CDT_OP_ENTRY(AS_CDT_OP_LIST_SET,			AS_OPERATOR_CDT_MODIFY, 0, AS_CDT_PARAM_INDEX, AS_CDT_PARAM_PAYLOAD),
 	CDT_OP_ENTRY(AS_CDT_OP_LIST_TRIM,			AS_OPERATOR_CDT_MODIFY, 0, AS_CDT_PARAM_INDEX, AS_CDT_PARAM_COUNT),
 	CDT_OP_ENTRY(AS_CDT_OP_LIST_CLEAR,			AS_OPERATOR_CDT_MODIFY, 0),
+	CDT_OP_ENTRY(AS_CDT_OP_LIST_INCREMENT,		AS_OPERATOR_CDT_MODIFY, 1, AS_CDT_PARAM_INDEX, AS_CDT_PARAM_PAYLOAD),
 
 	//--------------------------------------------
 	// Read OPs
@@ -853,6 +854,11 @@ bool as_operations_add_list_set_rawp(as_operations* ops, const as_bin_name name,
 bool as_operations_add_list_trim(as_operations* ops, const as_bin_name name, int64_t index, uint64_t count)
 {
 	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_TRIM, index, count);
+}
+
+bool as_operations_add_list_increment(as_operations *ops, const as_bin_name name, int64_t index, as_val *incr)
+{
+	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_INCREMENT, index, incr);
 }
 
 bool as_operations_add_list_get(as_operations* ops, const as_bin_name name, int64_t index)

@@ -207,6 +207,10 @@ typedef enum as_status_e {
 	 */
 	AEROSPIKE_ERR_FAIL_FORBIDDEN = 22,
 
+	AEROSPIKE_ERR_FAIL_ELEMENT_NOT_FOUND = 23,
+
+	AEROSPIKE_ERR_FAIL_ELEMENT_EXISTS = 24,
+
 	/**
 	 *	There are no more records left for query.
 	 */

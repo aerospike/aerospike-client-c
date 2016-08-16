@@ -146,7 +146,7 @@ TEST(map_put, "Map put operations" )
 	as_map_policy_set(&ordered_update_mode, AS_MAP_KEY_ORDERED, AS_MAP_UPDATE_ONLY);
 
 	as_operations ops;
-	as_operations_inita(&ops, 6);
+	as_operations_init(&ops, 5);
 	
 	as_integer mkey;
 	as_integer mval;
@@ -166,9 +166,6 @@ TEST(map_put, "Map put operations" )
 	as_integer_init(&mval, 1);
 	// Ordered type should be ignored since map has already been created in first put().
 	as_operations_add_map_put(&ops, BIN_NAME, &ordered_update_mode, (as_val*)&mkey, (as_val*)&mval);
-	as_integer_init(&mkey, 77);
-	as_integer_init(&mval, 5);
-	as_operations_add_map_put(&ops, BIN_NAME, &update_mode, (as_val*)&mkey, (as_val*)&mval);
 	
 	as_record* rec = 0;
 	
@@ -178,7 +175,7 @@ TEST(map_put, "Map put operations" )
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);
 	as_operations_destroy(&ops);
-	
+
 	as_bin* results = rec->bins.entries;
 	uint32_t i = 0;
 	int64_t v = results[i++].valuep->integer.value;
@@ -193,9 +190,6 @@ TEST(map_put, "Map put operations" )
 	v = results[i++].valuep->integer.value;
 	assert_int_eq(v, 4);
 	
-	v = results[i++].valuep->integer.value;
-	assert_int_eq(v, 4);
-
 	v = results[i++].valuep->integer.value;
 	assert_int_eq(v, 4);
 
@@ -215,6 +209,29 @@ TEST(map_put, "Map put operations" )
 	
 	as_record_destroy(rec);
 	as_operations_destroy(&ops);
+	rec = 0;
+
+	as_operations_init(&ops, 1);
+	as_integer_init(&mkey, 77);
+	as_integer_init(&mval, 5);
+	as_operations_add_map_put(&ops, BIN_NAME, &update_mode, (as_val*)&mkey, (as_val*)&mval);
+
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+	assert_int_eq(status, AEROSPIKE_ERR_FAIL_ELEMENT_NOT_FOUND);
+	as_operations_destroy(&ops);
+	as_record_destroy(rec);
+	rec = 0;
+	
+	as_operations_init(&ops, 1);
+	as_integer_init(&mkey, 10);
+	as_integer_init(&mval, 2);
+	as_operations_add_map_put(&ops, BIN_NAME, &add_mode, (as_val*)&mkey, (as_val*)&mval);
+
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+	assert_int_eq(status, AEROSPIKE_ERR_FAIL_ELEMENT_EXISTS);
+	as_operations_destroy(&ops);
+	as_record_destroy(rec);
+	rec = 0;
 }
 
 TEST(map_put_items, "Map put items operations" )
@@ -264,13 +281,16 @@ TEST(map_put_items, "Map put items operations" )
 	as_operations_add_map_put_items(&ops, BIN_NAME, &add_mode, (as_map*)&add_map);
 	
 	as_hashmap put_map;
-	as_hashmap_init(&put_map, 2);
+	as_hashmap_init(&put_map, 3);
 	as_integer_init(&mkey1, 12);
 	as_string_init(&mval1, "myval12222", false);
 	as_hashmap_set(&put_map, (as_val*)&mkey1, (as_val*)&mval1);
 	as_integer_init(&mkey2, 13);
 	as_string_init(&mval2, "str13", false);
 	as_hashmap_set(&put_map, (as_val*)&mkey2, (as_val*)&mval2);
+	as_integer_init(&mkey3, 14);
+	as_string_init(&mval3, "str14", false);
+	as_hashmap_set(&put_map, (as_val*)&mkey3, (as_val*)&mval3);
 	
 	as_operations_add_map_put_items(&ops, BIN_NAME, &put_mode, (as_map*)&put_map);
 	
@@ -319,13 +339,13 @@ TEST(map_put_items, "Map put items operations" )
 	assert_int_eq(v, 3);
 	
 	v = results[i++].valuep->integer.value;
-	assert_int_eq(v, 4);
+	assert_int_eq(v, 5);
 	
 	v = results[i++].valuep->integer.value;
-	assert_int_eq(v, 4);
+	assert_int_eq(v, 5);
 	
 	v = results[i++].valuep->integer.value;
-	assert_int_eq(v, 4);
+	assert_int_eq(v, 5);
 	
 	const char* s = results[i++].valuep->string.value;
 	assert_string_eq(s, "my default");
@@ -334,7 +354,7 @@ TEST(map_put_items, "Map put items operations" )
 	assert_string_eq(s, "changed");
 	
 	as_list* list = &results[i++].valuep->list;
-	assert_int_eq(as_list_size(list), 2 * 2);
+	assert_int_eq(as_list_size(list), 3 * 2);
 	
 	as_record_destroy(rec);
 }

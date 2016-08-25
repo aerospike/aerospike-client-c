@@ -142,8 +142,8 @@ as_event_send(as_event_command* cmd)
 static inline void
 as_ev_watch_write(as_event_command* cmd)
 {
-	uint8_t watch = cmd->pipe_listener != NULL ? EV_WRITE | EV_READ : EV_WRITE;
 	as_event_connection* conn = cmd->conn;
+	int watch = cmd->pipe_listener != NULL ? EV_WRITE | EV_READ : EV_WRITE;
 
 	// Skip if we're already watching the right stuff.
 	if (watch == conn->watching) {
@@ -159,8 +159,8 @@ as_ev_watch_write(as_event_command* cmd)
 static inline void
 as_ev_watch_read(as_event_command* cmd)
 {
-	uint8_t watch = EV_READ;
 	as_event_connection* conn = cmd->conn;
+	int watch = EV_READ;
 
 	// Skip if we're already watching the right stuff.
 	if (watch == conn->watching) {
@@ -683,13 +683,12 @@ as_ev_watcher_init(as_event_command* cmd, as_socket* sock)
 		cmd->state = AS_ASYNC_STATE_WRITE;
 	}
 
-	uint8_t watch = cmd->pipe_listener != NULL ? EV_WRITE | EV_READ : EV_WRITE;
+	int watch = cmd->pipe_listener != NULL ? EV_WRITE | EV_READ : EV_WRITE;
+	conn->watching = watch;
 	
 	ev_io_init(&conn->watcher, as_ev_callback, conn->socket.fd, watch);
 	conn->watcher.data = conn;
 	ev_io_start(cmd->event_loop->loop, &conn->watcher);
-
-	conn->watching = watch;
 }
 
 static int

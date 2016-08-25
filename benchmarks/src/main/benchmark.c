@@ -21,6 +21,7 @@
  ******************************************************************************/
 #include "benchmark.h"
 #include "aerospike/aerospike_info.h"
+#include "aerospike/as_config.h"
 #include "aerospike/as_event.h"
 #include "aerospike/as_log.h"
 #include "aerospike/as_monitor.h"

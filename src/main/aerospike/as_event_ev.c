@@ -344,6 +344,7 @@ static inline void
 as_ev_command_write_start(as_event_command* cmd)
 {
 	cmd->state = AS_ASYNC_STATE_WRITE;
+	as_ev_watch_write(cmd);
 
 	int ret = as_ev_write(cmd);
 	switch (ret) {

@@ -21,6 +21,7 @@
 #include <aerospike/as_batch.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_status.h>
+#include <aerospike/as_tls.h>
 
 #include <aerospike/as_record.h>
 #include <aerospike/as_integer.h>
@@ -231,6 +232,8 @@ void *batch_get_function(void  *thread_id)
     if ( err.code != AEROSPIKE_OK ) {
         info("multi-thread error(%d): %s", err.code, err.message);
     }
+
+	as_tls_thread_cleanup();
 	
     return(0);
 }

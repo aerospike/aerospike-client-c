@@ -36,63 +36,50 @@
  * FUNCTIONS
  *****************************************************************************/
 
-/**
- *	Send an info request to a specific host. The response must be freed by the caller on success.
- *
- *	~~~~~~~~~~{.c}
- *	char * res = NULL;
- *	if ( aerospike_info_host(&as, &err, NULL, "127.0.0.1", 3000, "info", &res) != AEROSPIKE_OK ) {
- *		// handle error
- *	}
- *	else {
- *		// handle response
- *		free(res);
- *		res = NULL;
- *	}
- *	~~~~~~~~~~
- *
- *	@param as			The aerospike instance to use for this operation.
- *	@param err			The as_error to be populated if an error occurs.
- *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param addr			The IP address or hostname to send the request to.
- *	@param port			The port to send the request to.
- *	@param req			The info request to send.
- *	@param res			The response from the node. The response will be a NULL terminated string, allocated by the function, and must be freed by the caller.
- *
- *	@return AEROSPIKE_OK on success. Otherwise an error.
- *
- *	@ingroup info_operations
- */
-as_status aerospike_info_host(
-	aerospike * as, as_error * err, const as_policy_info * policy, 
-	const char * addr, uint16_t port, const char * req, 
-	char ** res) 
+as_status
+aerospike_info_node(
+	aerospike* as, as_error* err, const as_policy_info* policy, as_node* node,
+	const char* req, char** res
+	)
 {
 	as_error_reset(err);
 	
 	if (! policy) {
 		policy = &as->config.policies.info;
 	}
+
+	uint64_t deadline = as_socket_deadline(policy->timeout);
+	return as_info_command_node(err, node, (char*)req, policy->send_as_is, deadline, res);
+}
+
+as_status
+aerospike_info_host(
+	aerospike* as, as_error* err, const as_policy_info* policy, const char* hostname, uint16_t port,
+	const char* req, char** res
+	)
+{
+	as_error_reset(err);
 	
-	as_vector sockaddr_in_v;
-	as_vector_inita(&sockaddr_in_v, sizeof(struct sockaddr_in), 5);
-	
-	as_status status = as_lookup(err, (char*)addr, port, &sockaddr_in_v);
+	if (! policy) {
+		policy = &as->config.policies.info;
+	}
+		
+	as_address_iterator iter;
+	as_status status = as_lookup_host(&iter, err, hostname, port);
 	
 	if (status) {
-		as_vector_destroy(&sockaddr_in_v);
 		return status;
 	}
 	
 	uint64_t deadline = as_socket_deadline(policy->timeout);
 	as_cluster* cluster = as->cluster;
+	struct sockaddr* addr;
 	status = AEROSPIKE_ERR_CLUSTER;
 	bool loop = true;
 	
-	for (uint32_t i = 0; i < sockaddr_in_v.size && loop; i++) {
-		struct sockaddr_in* sa_in = as_vector_get(&sockaddr_in_v, i);
-		status = as_info_command_host(cluster, err, sa_in, (char*)req, policy->send_as_is, deadline, res);
-
+	while (loop && as_lookup_next(&iter, &addr)) {
+		status = as_info_command_host(cluster, err, addr, (char*)req, policy->send_as_is, deadline, res, hostname);
+		
 		switch (status) {
 			case AEROSPIKE_OK:
 			case AEROSPIKE_ERR_TIMEOUT:
@@ -105,40 +92,15 @@ as_status aerospike_info_host(
 				break;
 		}
 	}
-	as_vector_destroy(&sockaddr_in_v);
+	as_lookup_end(&iter);
 	return status;
 }
 
-/**
- *	Send an info request to a specific socket address. The response must be freed by the caller on success.
- *
- *	~~~~~~~~~~{.c}
- *	char * res = NULL;
- *	if ( aerospike_info_socket_address(&as, &err, NULL, &socket_addr, "info", &res) != AEROSPIKE_OK ) {
- *		// handle error
- *	}
- *	else {
- *		// handle response
- *		free(res);
- *		res = NULL;
- *	}
- *	~~~~~~~~~~
- *
- *	@param as			The aerospike instance to use for this operation.
- *	@param err			The as_error to be populated if an error occurs.
- *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param sa_in		The IP address and port to send the request to.
- *	@param req			The info request to send.
- *	@param res			The response from the node. The response will be a NULL terminated string, allocated by the function, and must be freed by the caller.
- *
- *	@return AEROSPIKE_OK on success. Otherwise an error.
- *
- *	@ingroup info_operations
- */
-as_status aerospike_info_socket_address(
-	aerospike * as, as_error * err, const as_policy_info * policy,
-	struct sockaddr_in* sa_in, const char * req,
-	char ** res)
+as_status
+aerospike_info_socket_address(
+	aerospike* as, as_error* err, const as_policy_info* policy, struct sockaddr_in* sa_in,
+	const char* req, char** res
+	)
 {
 	as_error_reset(err);
 	
@@ -147,39 +109,13 @@ as_status aerospike_info_socket_address(
 	}
 	
 	uint64_t deadline = as_socket_deadline(policy->timeout);
-	return as_info_command_host(as->cluster, err, sa_in, (char*)req, policy->send_as_is, deadline, res);
+	return as_info_command_host(as->cluster, err, (struct sockaddr*)sa_in, (char*)req, policy->send_as_is, deadline, res, NULL);
 }
 
-/**
- *	Send an info request to a node in the cluster.  If node request fails, send request to the next
- *	node in the cluster.  Repeat until the node request succeeds. The response must be freed by 
- *	the caller on success.
- *
- *	~~~~~~~~~~{.c}
- *	char * res = NULL;
- *	if ( aerospike_info_any(&as, &err, NULL, "info", &res) != AEROSPIKE_OK ) {
- *		// handle error
- *	}
- *	else {
- *		// handle response
- *		free(res);
- *		res = NULL;
- *	}
- *	~~~~~~~~~~
- *
- *	@param as			The aerospike instance to use for this operation.
- *	@param err			The as_error to be populated if an error occurs.
- *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param req			The info request to send.
- *	@param res			The response from the node. The response will be a NULL terminated string, allocated by the function, and must be freed by the caller.
- *
- *	@return AEROSPIKE_OK on success. Otherwise an error.
- *
- *	@ingroup info_operations
- */
-as_status aerospike_info_any(
-	aerospike * as, as_error * err, const as_policy_info * policy,
-	const char * req, char ** res)
+as_status
+aerospike_info_any(
+	aerospike* as, as_error* err, const as_policy_info* policy, const char* req, char** res
+	)
 {
 	as_error_reset(err);
 	
@@ -213,38 +149,11 @@ as_status aerospike_info_any(
 	return status;
 }
 
-/**
- *	Send an info request to the entire cluster.
- *
- *	~~~~~~~~~~{.c}
- *	if ( aerospike_info_foreach(&as, &err, NULL, "info", callback, NULL) != AEROSPIKE_OK ) {
- *		// handle error
- *	}
- *	~~~~~~~~~~
- *
- *	The callback takes a response string. The caller should not free this string.
- *
- *	~~~~~~~~~~{.c}
- *	bool callback(const as_error * err, const as_node * node, const char * req, char * res, void * udata) {
- *		// handle response
- *	}
- *	~~~~~~~~~~
- *
- *
- *	@param as			The aerospike instance to use for this operation.
- *	@param err			The as_error to be populated if an error occurs.
- *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param req			The info request to send.
- *	@param callback		The function to call when a response is received.
- *	@param udata		User-data to send to the callback.
- *
- *	@return AEROSPIKE_OK on success. Otherwise an error.
- *
- *	@ingroup info_operations
- */
-as_status aerospike_info_foreach(
-	aerospike * as, as_error * err, const as_policy_info * policy, const char * req,
-	aerospike_info_foreach_callback callback, void * udata)
+as_status
+aerospike_info_foreach(
+	aerospike* as, as_error* err, const as_policy_info* policy, const char* req,
+	aerospike_info_foreach_callback callback, void* udata
+	)
 {
 	as_error_reset(err);
 	

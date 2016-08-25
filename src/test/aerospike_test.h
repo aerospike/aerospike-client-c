@@ -18,3 +18,5 @@
 
 #define MAX_HOST_SIZE 1024
 extern char g_host[MAX_HOST_SIZE];
+extern int g_port;
+extern bool g_enable_tls;

@@ -170,8 +170,7 @@ int Ad_Udf::init(void)
 	cout << "Startup: host " << host << " port " << port << " ns " << ns << " set " << set << " file \"" << module_file << "\"\n";
 
 	as_config_init(&config);
-	config.hosts[0].addr = host;
-	config.hosts[0].port = port;
+	as_config_add_host(&config, host, port);
 	config.policies.read.timeout = timeout_ms;
 	config.policies.apply.timeout = timeout_ms;
 

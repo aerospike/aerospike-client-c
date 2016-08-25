@@ -93,7 +93,7 @@ typedef struct as_async_batch_command {
 static inline bool
 as_batch_use_new(const as_policy_batch* policy, as_node* node)
 {
-	return ! policy->use_batch_direct && node->has_batch_index;
+	return ! policy->use_batch_direct && (node->features & AS_FEATURES_BATCH_INDEX);
 }
 
 static uint8_t*
@@ -308,7 +308,7 @@ as_batch_parse_records(as_error* err, uint8_t* buf, size_t size, as_batch_task* 
 }
 
 static as_status
-as_batch_parse(as_error* err, int fd, uint64_t deadline_ms, void* udata)
+as_batch_parse(as_error* err, as_socket* sock, uint64_t deadline_ms, void* udata)
 {
 	as_batch_task* task = udata;
 	as_status status = AEROSPIKE_OK;
@@ -318,7 +318,7 @@ as_batch_parse(as_error* err, int fd, uint64_t deadline_ms, void* udata)
 	while (true) {
 		// Read header
 		as_proto proto;
-		status = as_socket_read_deadline(err, fd, (uint8_t*)&proto, sizeof(as_proto), deadline_ms);
+		status = as_socket_read_deadline(err, sock, (uint8_t*)&proto, sizeof(as_proto), deadline_ms);
 		
 		if (status) {
 			break;
@@ -335,7 +335,7 @@ as_batch_parse(as_error* err, int fd, uint64_t deadline_ms, void* udata)
 			}
 			
 			// Read remaining message bytes in group
-			status = as_socket_read_deadline(err, fd, buf, size, deadline_ms);
+			status = as_socket_read_deadline(err, sock, buf, size, deadline_ms);
 			
 			if (status) {
 				break;
@@ -1190,7 +1190,7 @@ aerospike_has_batch_index(aerospike* as)
 	}
 	
 	for (uint32_t i = 0; i < nodes->size; i++) {
-		if (! nodes->array[i]->has_batch_index) {
+		if (! (nodes->array[i]->features & AS_FEATURES_BATCH_INDEX)) {
 			as_nodes_release(nodes);
 			return false;
 		}

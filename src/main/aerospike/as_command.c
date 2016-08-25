@@ -446,9 +446,9 @@ as_command_execute(as_cluster* cluster, as_error* err, as_command_node* cn, uint
 			sleep_between_retries_ms = 10;
 			goto Retry;
 		}
-		
-		int fd;
-		as_status status = as_node_get_connection(err, node, deadline_ms, &fd);
+
+		as_socket socket;
+		as_status status = as_node_get_connection(err, node, deadline_ms, &socket);
 		
 		if (status) {
 			if (release_node) {
@@ -460,12 +460,12 @@ as_command_execute(as_cluster* cluster, as_error* err, as_command_node* cn, uint
 		}
 		
 		// Send command.
-		status = as_socket_write_deadline(err, fd, command, command_len, deadline_ms);
+		status = as_socket_write_deadline(err, &socket, command, command_len, deadline_ms);
 		
 		if (status) {
 			// Socket errors are considered temporary anomalies.  Retry.
 			// Close socket to flush out possible garbage.	Do not put back in pool.
-			as_node_close_connection(node, fd);
+			as_node_close_connection(node, &socket);
 			if (release_node) {
 				as_node_release(node);
 			}
@@ -474,7 +474,7 @@ as_command_execute(as_cluster* cluster, as_error* err, as_command_node* cn, uint
 		}
 		
 		// Parse results returned by server.
-		status = parse_results_fn(err, fd, deadline_ms, parse_results_data);
+		status = parse_results_fn(err, &socket, deadline_ms, parse_results_data);
 		
 		if (status == AEROSPIKE_OK) {
 			// Reset error code if retry had occurred.
@@ -485,7 +485,7 @@ as_command_execute(as_cluster* cluster, as_error* err, as_command_node* cn, uint
 		else {
 			switch (status) {
 				case AEROSPIKE_ERR_TIMEOUT:
-					as_node_close_connection(node, fd);
+					as_node_close_connection(node, &socket);
 					if (release_node) {
 						as_node_release(node);
 					}
@@ -496,9 +496,10 @@ as_command_execute(as_cluster* cluster, as_error* err, as_command_node* cn, uint
 				// Close socket on errors that can leave unread data in socket.
 				case AEROSPIKE_ERR_QUERY_ABORTED:
 				case AEROSPIKE_ERR_SCAN_ABORTED:
+				case AEROSPIKE_ERR_TLS_ERROR:
 				case AEROSPIKE_ERR_CLIENT_ABORT:
 				case AEROSPIKE_ERR_CLIENT:
-					as_node_close_connection(node, fd);
+					as_node_close_connection(node, &socket);
 					if (release_node) {
 						as_node_release(node);
 					}
@@ -512,7 +513,7 @@ as_command_execute(as_cluster* cluster, as_error* err, as_command_node* cn, uint
 		}
 		
 		// Put connection back in pool.
-		as_node_put_connection(node, fd);
+		as_node_put_connection(node, &socket);
 		
 		// Release resources.
 		if (release_node) {
@@ -555,11 +556,11 @@ Retry:
 }
 
 as_status
-as_command_parse_header(as_error* err, int fd, uint64_t deadline_ms, void* user_data)
+as_command_parse_header(as_error* err, as_socket* sock, uint64_t deadline_ms, void* user_data)
 {
 	// Read header
 	as_proto_msg* msg = user_data;
-	as_status status = as_socket_read_deadline(err, fd, (uint8_t*)msg, sizeof(as_proto_msg), deadline_ms);
+	as_status status = as_socket_read_deadline(err, sock, (uint8_t*)msg, sizeof(as_proto_msg), deadline_ms);
 	
 	if (status) {
 		return status;
@@ -571,18 +572,18 @@ as_command_parse_header(as_error* err, int fd, uint64_t deadline_ms, void* user_
 	size_t size = msg->proto.sz  - msg->m.header_sz;
 	
 	if (size > 0) {
-		as_log_warn("Unexpected data received from socket after a write: fd=%d size=%zu", fd, size);
+		as_log_warn("Unexpected data received from socket after a write: fd=%d size=%zu", sock->fd, size);
 		
 		// Verify size is not corrupted.
 		if (size > 100000) {
 			// The socket will be closed on this error, so we don't have to worry about emptying it.
 			return as_error_update(err, AEROSPIKE_ERR_CLIENT,
-				"Unexpected data received from socket after a write: fd=%d size=%zu", fd, size);
+				"Unexpected data received from socket after a write: fd=%d size=%zu", sock->fd, size);
 		}
 		
 		// Empty socket.
 		uint8_t* buf = cf_malloc(size);
-		status = as_socket_read_deadline(err, fd, buf, size, deadline_ms);
+		status = as_socket_read_deadline(err, sock, buf, size, deadline_ms);
 		cf_free(buf);
 		
 		if (status) {
@@ -1025,11 +1026,11 @@ as_command_parse_bins(as_record* rec, uint8_t* p, uint32_t n_bins, bool deserial
 }
 
 as_status
-as_command_parse_result(as_error* err, int fd, uint64_t deadline_ms, void* user_data)
+as_command_parse_result(as_error* err, as_socket* sock, uint64_t deadline_ms, void* user_data)
 {
 	// Read header
 	as_proto_msg msg;
-	as_status status = as_socket_read_deadline(err, fd, (uint8_t*)&msg, sizeof(as_proto_msg), deadline_ms);
+	as_status status = as_socket_read_deadline(err, sock, (uint8_t*)&msg, sizeof(as_proto_msg), deadline_ms);
 	
 	if (status) {
 		return status;
@@ -1043,7 +1044,7 @@ as_command_parse_result(as_error* err, int fd, uint64_t deadline_ms, void* user_
 	if (size > 0) {
 		// Read remaining message bytes.
 		buf = as_command_init(size);
-		status = as_socket_read_deadline(err, fd, buf, size, deadline_ms);
+		status = as_socket_read_deadline(err, sock, buf, size, deadline_ms);
 		
 		if (status) {
 			as_command_free(buf, size);
@@ -1098,11 +1099,11 @@ as_command_parse_result(as_error* err, int fd, uint64_t deadline_ms, void* user_
 }
 
 as_status
-as_command_parse_success_failure(as_error* err, int fd, uint64_t deadline_ms, void* user_data)
+as_command_parse_success_failure(as_error* err, as_socket* sock, uint64_t deadline_ms, void* user_data)
 {
 	// Read header
 	as_proto_msg msg;
-	as_status status = as_socket_read_deadline(err, fd, (uint8_t*)&msg, sizeof(as_proto_msg), deadline_ms);
+	as_status status = as_socket_read_deadline(err, sock, (uint8_t*)&msg, sizeof(as_proto_msg), deadline_ms);
 	
 	if (status) {
 		return status;
@@ -1116,7 +1117,7 @@ as_command_parse_success_failure(as_error* err, int fd, uint64_t deadline_ms, vo
 	if (size > 0) {
 		// Read remaining message bytes.
 		buf = as_command_init(size);
-		status = as_socket_read_deadline(err, fd, buf, size, deadline_ms);
+		status = as_socket_read_deadline(err, sock, buf, size, deadline_ms);
 		
 		if (status) {
 			as_command_free(buf, size);

@@ -67,7 +67,7 @@ const char DEFAULT_SET[] = "eg-set";
 const char DEFAULT_KEY_STR[] = "eg-key";
 const uint32_t DEFAULT_NUM_KEYS = 20;
 
-const char SHORT_OPTS_BASIC[] = "h:p:U:P::n:s:k:";
+const char SHORT_OPTS_BASIC[] = "h:p:U:P::n:s:k:eEc:C:r:t:QRB:L";
 const struct option LONG_OPTS_BASIC[] = {
 	{ "hosts",		1, NULL, 'h' },
 	{ "port",		1, NULL, 'p' },
@@ -76,10 +76,20 @@ const struct option LONG_OPTS_BASIC[] = {
 	{ "namespace",	1, NULL, 'n' },
 	{ "set",		1, NULL, 's' },
 	{ "key",		1, NULL, 'k' },
+	{"tls-enable",             0, 0, 'e'},
+	{"tls-encrypt-only",       0, 0, 'E'},
+	{"tls-cafile",             1, 0, 'c'},
+	{"tls-capath",             1, 0, 'C'},
+	{"tls-protocol",           1, 0, 'r'},
+	{"tls-cipher-suite",       1, 0, 't'},
+	{"tls-crl-check",          0, 0, 'Q'},
+	{"tls-crl-check-all",      0, 0, 'R'},
+	{"tls-cert-blacklist",     1, 0, 'B'},
+	{"tls-log-session-info",   0, 0, 'L'},
 	{ NULL,			0, NULL, 0 }
 };
 
-const char SHORT_OPTS_MULTI_KEY[] = "h:p:U:P::n:s:K:";
+const char SHORT_OPTS_MULTI_KEY[] = "h:p:U:P::n:s:K:eEc:C:r:t:QRB:L";
 const struct option LONG_OPTS_MULTI_KEY[] = {
 	{ "hosts",		1, NULL, 'h' },
 	{ "port",		1, NULL, 'p' },
@@ -88,6 +98,16 @@ const struct option LONG_OPTS_MULTI_KEY[] = {
 	{ "namespace",	1, NULL, 'n' },
 	{ "set",		1, NULL, 's' },
 	{ "multikey",	1, NULL, 'K' },
+	{"tls-enable",             0, 0, 'e'},
+	{"tls-encrypt-only",       0, 0, 'E'},
+	{"tls-cafile",             1, 0, 'c'},
+	{"tls-capath",             1, 0, 'C'},
+	{"tls-protocol",           1, 0, 'r'},
+	{"tls-cipher-suite",       1, 0, 't'},
+	{"tls-crl-check",          0, 0, 'Q'},
+	{"tls-crl-check-all",      0, 0, 'R'},
+	{"tls-cert-blacklist",     1, 0, 'B'},
+	{"tls-log-session-info",   0, 0, 'L'},
 	{ NULL,			0, NULL, 0 }
 };
 
@@ -144,6 +164,17 @@ static char g_password[AS_PASSWORD_HASH_SIZE];
 // -k <key string>
 //
 static char g_key_str[MAX_KEY_STR_SIZE];
+
+bool g_tls_enable = false;
+bool g_tls_encrypt_only = false;
+char * g_tls_cafile = NULL;
+char * g_tls_capath = NULL;
+char * g_tls_protocol = NULL;
+char * g_tls_cipher_suite = NULL;
+bool g_tls_crl_check = false;
+bool g_tls_crl_check_all = false;
+char* g_tls_cert_blacklist = NULL;
+bool g_tls_log_session_info = false;
 
 
 //==========================================================
@@ -240,6 +271,46 @@ example_get_opts(int argc, char* argv[], int which_opts)
 			g_n_keys = atoi(optarg);
 			break;
 
+		case 'e':
+			g_tls_enable = true;
+			break;
+				
+		case 'E':
+			g_tls_encrypt_only = true;
+			break;
+				
+		case 'c':
+			g_tls_cafile = strdup(optarg);
+			break;
+				
+		case 'C':
+			g_tls_capath = strdup(optarg);
+			break;
+				
+		case 'r':
+			g_tls_protocol = strdup(optarg);
+			break;
+				
+		case 't':
+			g_tls_cipher_suite = strdup(optarg);
+			break;
+				
+		case 'Q':
+			g_tls_crl_check = true;
+			break;
+				
+		case 'R':
+			g_tls_crl_check_all = true;
+			break;
+				
+		case 'B':
+			g_tls_cert_blacklist = strdup(optarg);
+			break;
+				
+		case 'L':
+			g_tls_log_session_info = true;
+			break;
+			
 		default:
 			usage(short_opts);
 			return false;
@@ -288,13 +359,21 @@ static void
 usage(const char* short_opts)
 {
 	LOG("Usage:");
-
+	
 	if (strchr(short_opts, 'h')) {
-		LOG("-h host [default: %s]", DEFAULT_HOST);
+		LOG("-h host1[:tlsname1][:port1],... [default: %s]", DEFAULT_HOST);
+		LOG("   Seed hostnames or IP addresses.");
+		LOG("   The tlsname is only used when connecting with a secure TLS enabled server.");
+		LOG("   If the port is not specified, the default port is used.");
+		LOG("   Examples:");
+		LOG("   host1");
+		LOG("   host1:3000,host2:3000");
+		LOG("   192.168.1.10:cert1:3000,192.168.1.20:cert2:3000");
 	}
 
 	if (strchr(short_opts, 'p')) {
 		LOG("-p port [default: %d]", DEFAULT_PORT);
+		LOG("   Default port.");
 	}
 
 	if (strchr(short_opts, 'U')) {
@@ -319,6 +398,46 @@ usage(const char* short_opts)
 
 	if (strchr(short_opts, 'K')) {
 		LOG("-K number of keys [default: %u]", DEFAULT_NUM_KEYS);
+	}
+
+	if (strchr(short_opts, 'e')) {
+		LOG("-e enable TLS [default: disabled]");
+	}
+
+    if (strchr(short_opts, 'E')) {
+		LOG("-E disable TLS certificate validation [default: enabled]");
+	}
+
+    if (strchr(short_opts, 'c')) {
+		LOG("-c set the TLS certificate authority file [default: none]");
+	}
+
+    if (strchr(short_opts, 'C')) {
+		LOG("-C set the TLS certificate authority directory [default: none]");
+	}
+
+    if (strchr(short_opts, 'r')) {
+		LOG("-r set the TLS protocol selection criteria [default: standard]");
+	}
+
+    if (strchr(short_opts, 't')) {
+		LOG("-t set the TLS cipher selection criteria [default: standard]");
+	}
+
+    if (strchr(short_opts, 'Q')) {
+		LOG("-Q enable CRL checking for leaf certs");
+	}
+
+    if (strchr(short_opts, 'R')) {
+		LOG("-R enable CRL checking for all certs");
+	}
+
+    if (strchr(short_opts, 'B')) {
+		LOG("-B path to a certificate blacklist file");
+	}
+
+    if (strchr(short_opts, 'L')) {
+		LOG("-L log TLS connected session info");
 	}
 }
 
@@ -405,8 +524,23 @@ example_connect_to_aerospike_with_udf_config(aerospike* p_as,
 	// Initialize cluster configuration.
 	as_config cfg;
 	as_config_init(&cfg);
-	as_config_add_host(&cfg, g_host, g_port);
+	
+	if (! as_config_add_hosts(&cfg, g_host, g_port)) {
+		printf("Invalid host(s) %s\n", g_host);
+		exit(-1);
+	}
+	
 	as_config_set_user(&cfg, g_user, g_password);
+	cfg.tls.enable = g_tls_enable;
+	cfg.tls.encrypt_only = g_tls_encrypt_only;
+	cfg.tls.cafile = g_tls_cafile;
+	cfg.tls.capath = g_tls_capath;
+	cfg.tls.protocol = g_tls_protocol;
+	cfg.tls.cipher_suite = g_tls_cipher_suite;
+	cfg.tls.crl_check = g_tls_crl_check;
+	cfg.tls.crl_check_all = g_tls_crl_check_all;
+	cfg.tls.cert_blacklist = g_tls_cert_blacklist;
+	cfg.tls.log_session_info = g_tls_log_session_info;
 
 	aerospike_init(p_as, &cfg);
 
@@ -442,6 +576,22 @@ example_cleanup(aerospike* p_as)
 	// Disconnect from the database cluster and clean up the aerospike object.
 	aerospike_close(p_as, &err);
 	aerospike_destroy(p_as);
+
+	if (g_tls_cafile) {
+		free(g_tls_cafile);
+	}
+	if (g_tls_capath) {
+		free(g_tls_capath);
+	}
+	if (g_tls_protocol) {
+		free(g_tls_protocol);
+	}
+	if (g_tls_cipher_suite) {
+		free(g_tls_cipher_suite);
+	}
+	if (g_tls_cert_blacklist) {
+		free(g_tls_cert_blacklist);
+	}
 }
 
 

@@ -100,7 +100,7 @@ TEST( info_basics_help , "help" ) {
 
 	char * res = NULL;
 
-	rc = aerospike_info_host(as, &err, NULL, g_host, 3000, "help", &res);
+	rc = aerospike_info_host(as, &err, NULL, g_host, g_port, "help", &res);
 	
 	assert_not_null( res );
 	assert_string_eq(res, data.actual);
@@ -135,7 +135,7 @@ TEST( info_basics_features , "features" ) {
 
 	char * res = NULL;
 
-	rc = aerospike_info_host(as, &err, NULL, g_host, 3000, "features", &res);
+	rc = aerospike_info_host(as, &err, NULL, g_host, g_port, "features", &res);
 	
 	assert_not_null( res );
 	assert_string_eq(res, data.actual);

@@ -21,6 +21,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <openssl/ssl.h>
+
+#include <aerospike/as_config.h>
+
 #if defined(__linux__) || defined(__APPLE__)
 #include <unistd.h>
 #include <arpa/inet.h>
@@ -57,25 +61,90 @@ extern "C" {
 #endif
 
 /**
+ *	This structure holds TLS context which can be shared (read-only)
+ *	by all the connections to a specific cluster.
+ */
+typedef struct as_tls_context_s {
+	SSL_CTX* ssl_ctx;
+	void* cert_blacklist;
+	bool log_session_info;
+} as_tls_context;
+
+/**
+ *	This structure holds just an fd when we are not using TLS and additional
+ *	OpenSSL context when we are using TLS.
+ */
+typedef struct as_socket_s {
+	int fd;
+	int family;
+	as_tls_context* ctx;
+	const char* tls_name;
+	SSL* ssl;
+} as_socket;
+
+/**
+ * @private
+ * Initialize an as_socket structure.
+ */
+void
+as_socket_init(as_socket* sock);
+	
+/**
  *	@private
  *	Create non-blocking socket.
+ *	Family should be AF_INET or AF_INET6.
  */
 int
-as_socket_create_nb();
+as_socket_create_fd(int family);
 
+/**
+ *	@private
+ *	Create non-blocking socket.
+ *	Family should be AF_INET or AF_INET6.
+ */
+int
+as_socket_create(as_socket* sock, int family, as_tls_context* ctx, const char* tls_name);
+
+/**
+ *	@private
+ *	Wrap existing fd in a socket.
+ *	Family should be AF_INET or AF_INET6.
+ */
+bool
+as_socket_wrap(as_socket* sock, int family, int fd, as_tls_context* ctx, const char* tls_name);
+	
 /**
  *	@private
  *	Connect to non-blocking socket.
  */
-as_status
-as_socket_start_connect_nb(as_error* err, int fd, struct sockaddr_in *sa);
+bool
+as_socket_start_connect(as_socket* sock, struct sockaddr* addr);
 
 /**
  *	@private
  *	Create non-blocking socket and connect.
  */
 as_status
-as_socket_create_and_connect_nb(as_error* err, struct sockaddr_in *sa, int* fd);
+as_socket_create_and_connect(as_socket* sock, as_error* err, struct sockaddr* addr, as_tls_context* ctx, const char* tls_name);
+
+/**
+ * @private
+ * Close and release resources associated with a as_socket.
+ */
+void
+as_socket_close(as_socket* sock);
+	
+/**
+ *	@private
+ *	Peek for socket connection status using underlying fd.
+ *  Needed to support libuv.
+ *
+ *	@return   0 : socket is connected, but no data available.
+ *			> 0 : byte size of data available.
+ *			< 0 : socket is invalid.
+ */
+int
+as_socket_validate_fd(int fd);
 
 /**
  *	@private
@@ -86,7 +155,7 @@ as_socket_create_and_connect_nb(as_error* err, struct sockaddr_in *sa, int* fd);
  *			< 0 : socket is invalid.
  */
 int
-as_socket_validate(int fd);
+as_socket_validate(as_socket* sock);
 
 #if defined(__linux__) || defined(__APPLE__)
 
@@ -105,7 +174,7 @@ as_socket_deadline(uint32_t timeout_ms)
  *	Write socket data without timeouts.
  */
 as_status
-as_socket_write_forever(as_error* err, int fd, uint8_t *buf, size_t buf_len);
+as_socket_write_forever(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_len);
 
 /**
  *	@private
@@ -113,7 +182,7 @@ as_socket_write_forever(as_error* err, int fd, uint8_t *buf, size_t buf_len);
  *	Do not adjust for zero deadline.
  */
 as_status
-as_socket_write_limit(as_error* err, int fd, uint8_t *buf, size_t buf_len, uint64_t deadline);
+as_socket_write_limit(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_len, uint64_t deadline);
 
 /**
  *	@private
@@ -121,13 +190,13 @@ as_socket_write_limit(as_error* err, int fd, uint8_t *buf, size_t buf_len, uint6
  *	If deadline is zero, do not set deadline.
  */
 static inline as_status
-as_socket_write_deadline(as_error* err, int fd, uint8_t *buf, size_t buf_len, uint64_t deadline)
+as_socket_write_deadline(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_len, uint64_t deadline)
 {
 	if (deadline) {
-		return as_socket_write_limit(err, fd, buf, buf_len, deadline);
+		return as_socket_write_limit(err, sock, buf, buf_len, deadline);
 	}
 	else {
-		return as_socket_write_forever(err, fd, buf, buf_len);
+		return as_socket_write_forever(err, sock, buf, buf_len);
 	}
 }
 
@@ -137,13 +206,13 @@ as_socket_write_deadline(as_error* err, int fd, uint8_t *buf, size_t buf_len, ui
  *	If timeout is zero or > MAXINT, do not set timeout.
  */
 static inline as_status
-as_socket_write_timeout(as_error* err, int fd, uint8_t *buf, size_t buf_len, uint32_t timeout_ms)
+as_socket_write_timeout(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_len, uint32_t timeout_ms)
 {
 	if (timeout_ms && timeout_ms <= INT32_MAX) {
-		return as_socket_write_limit(err, fd, buf, buf_len, cf_getms() + timeout_ms);
+		return as_socket_write_limit(err, sock, buf, buf_len, cf_getms() + timeout_ms);
 	}
 	else {
-		return as_socket_write_forever(err, fd, buf, buf_len);
+		return as_socket_write_forever(err, sock, buf, buf_len);
 	}
 }
 
@@ -152,7 +221,7 @@ as_socket_write_timeout(as_error* err, int fd, uint8_t *buf, size_t buf_len, uin
  *	Read socket data without timeouts.
  */
 as_status
-as_socket_read_forever(as_error* err, int fd, uint8_t *buf, size_t buf_len);
+as_socket_read_forever(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_len);
 
 /**
  *	@private
@@ -160,7 +229,7 @@ as_socket_read_forever(as_error* err, int fd, uint8_t *buf, size_t buf_len);
  *	Do not adjust for zero deadline.
  */
 as_status
-as_socket_read_limit(as_error* err, int fd, uint8_t *buf, size_t buf_len, uint64_t deadline);
+as_socket_read_limit(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_len, uint64_t deadline);
 
 /**
  *	@private
@@ -168,13 +237,13 @@ as_socket_read_limit(as_error* err, int fd, uint8_t *buf, size_t buf_len, uint64
  *	If deadline is zero, do not set deadline.
  */
 static inline as_status
-as_socket_read_deadline(as_error* err, int fd, uint8_t *buf, size_t buf_len, uint64_t deadline)
+as_socket_read_deadline(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_len, uint64_t deadline)
 {
 	if (deadline) {
-		return as_socket_read_limit(err, fd, buf, buf_len, deadline);
+		return as_socket_read_limit(err, sock, buf, buf_len, deadline);
 	}
 	else {
-		return as_socket_read_forever(err, fd, buf, buf_len);
+		return as_socket_read_forever(err, sock, buf, buf_len);
 	}
 }
 
@@ -184,24 +253,14 @@ as_socket_read_deadline(as_error* err, int fd, uint8_t *buf, size_t buf_len, uin
  *	If timeout is zero or > MAXINT, do not set timeout.
  */
 static inline as_status
-as_socket_read_timeout(as_error* err, int fd, uint8_t *buf, size_t buf_len, uint32_t timeout_ms)
+as_socket_read_timeout(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_len, uint32_t timeout_ms)
 {
 	if (timeout_ms && timeout_ms <= INT32_MAX) {
-		return as_socket_read_limit(err, fd, buf, buf_len, cf_getms() + timeout_ms);
+		return as_socket_read_limit(err, sock, buf, buf_len, cf_getms() + timeout_ms);
 	}
 	else {
-		return as_socket_read_forever(err, fd, buf, buf_len);
+		return as_socket_read_forever(err, sock, buf, buf_len);
 	}
-}
-
-/**
- *	@private
- *	Convert socket address to a string.
- */
-static inline void
-as_socket_address_name(struct sockaddr_in* address, char* name)
-{
-	inet_ntop(AF_INET, &(address->sin_addr), name, INET_ADDRSTRLEN);
 }
 
 #endif

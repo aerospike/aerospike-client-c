@@ -546,11 +546,9 @@ as_uv_connected(uv_connect_t* req, int status)
 	}
 	else if (status != UV_ECANCELED) {
 		as_node* node = cmd->node;
-		as_address* primary = as_vector_get(&node->addresses, node->address_index);
-		
 		as_error err;
-		as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Failed to connect: %s %s:%d",
-						node->name, primary->name, (int)cf_swap_from_be16(primary->addr.sin_port));
+		as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Failed to connect: %s %s",
+						node->name, as_node_get_address_string(node));
 		as_uv_connect_error(cmd, &err);
 	}
 }
@@ -558,7 +556,9 @@ as_uv_connected(uv_connect_t* req, int status)
 static void
 as_uv_connect(as_event_command* cmd)
 {
-	int fd = as_event_create_socket(cmd);
+	// Create a non-blocking socket.
+	as_address* address = as_node_get_address(cmd->node);
+	int fd = as_event_create_socket(cmd, address->addr.ss_family);
 	
 	if (fd < 0) {
 		return;
@@ -571,9 +571,7 @@ as_uv_connect(as_event_command* cmd)
 	if (status) {
 		as_error err;
 		as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "uv_tcp_init failed: %s", uv_strerror(status));
-		// Call standard event connection error handler because as_uv_connect_error() requires that
-		// uv_tcp_init() has already succeeded.
-		as_event_connect_error(cmd, &err, fd);
+		as_event_fd_error(cmd, &err, fd);
 		return;
 	}
 	
@@ -591,11 +589,8 @@ as_uv_connect(as_event_command* cmd)
 	
 	socket->data = conn;
 	conn->req.connect.data = cmd;
-	
-	as_node* node = cmd->node;
-	as_address* primary = as_vector_get(&node->addresses, node->address_index);
-	
-	status = uv_tcp_connect(&conn->req.connect, socket, (struct sockaddr*)&primary->addr, as_uv_connected);
+		
+	status = uv_tcp_connect(&conn->req.connect, socket, (struct sockaddr*)&address->addr, as_uv_connected);
 	
 	if (status) {
 		as_error err;

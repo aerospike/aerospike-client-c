@@ -17,8 +17,10 @@
 #pragma once 
 
 #include <aerospike/as_error.h>
+#include <aerospike/as_host.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_password.h>
+#include <aerospike/as_vector.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -62,33 +64,9 @@ extern "C" {
  */
 #define AS_CONFIG_PATH_MAX_LEN 	(AS_CONFIG_PATH_MAX_SIZE - 1)
 
-/**
- * The size of as_config.hosts
- */
-#define AS_CONFIG_HOSTS_SIZE 256
-
 /******************************************************************************
  *	TYPES
  *****************************************************************************/
-
-/**
- *	Host Information
- *
- *	@ingroup as_config_object
- */
-typedef struct as_config_host_s {
-	
-	/**
-	 *	Host address
-	 */
-	const char * addr;
-	
-	/**
-	 *	Host port
-	 */
-	uint16_t port;
-
-} as_config_host;
 
 /**
  *	IP translation table.
@@ -100,12 +78,12 @@ typedef struct as_addr_map_s {
 	/**
 	 *	Original hostname or IP address in string format.
 	 */
-    char * orig;
+    char* orig;
 	
 	/**
 	 *	Use this IP address instead.
 	 */
-    char * alt;
+    char* alt;
 	
 } as_addr_map;
 
@@ -138,6 +116,98 @@ typedef struct as_config_lua_s {
 } as_config_lua;
 
 /**
+ *	TLS module config
+ *
+ *	@ingroup as_config_object
+ */
+typedef struct as_config_tls_s {
+
+	/**
+	 *	Enable TLS on connections.
+     *  By default TLS is disabled.
+	 */
+	bool enable;
+
+	/**
+	 *	Only encrypt connections; do not verify certificates.
+     *  By default TLS will verify certificates.
+	 */
+	bool encrypt_only;
+	
+	/**
+	 *  Path to a trusted CA certificate file.
+	 *  By default TLS will use system standard trusted CA certificates.
+	 */
+	char* cafile;
+
+	/**
+	 *  Path to a directory of trusted certificates.
+	 *  See the OpenSSL SSL_CTX_load_verify_locations manual page for
+	 *  more information about the format of the directory.
+	 */
+	char* capath;
+
+	/**
+	 *  Specifies enabled protocols.
+	 *
+	 *  This format is the same as Apache's SSLProtocol documented
+	 *  at https://httpd.apache.org/docs/current/mod/mod_ssl.html#sslprotocol
+	 *
+	 *  If not specified (NULL) the client will use "-all +TLSv1.2".
+	 *
+	 *  If you are not sure what protocols to select this option is
+	 *  best left unspecified (NULL).
+	 */
+	char* protocol;
+	
+	/**
+	 *  Specifies enabled cipher suites.
+	 *
+	 *  The format is the same as OpenSSL's Cipher List Format documented
+	 *  at https://www.openssl.org/docs/manmaster/apps/ciphers.html
+	 *
+	 *  If not specified the OpenSSL default cipher suite described in
+	 *  the ciphers documentation will be used.
+	 *
+	 *  If you are not sure what cipher suite to select this option
+	 *  is best left unspecified (NULL).
+	 */
+	char* cipher_suite;
+	
+	/**
+	 *	Enable CRL checking for the certificate chain leaf certificate.
+	 *  An error occurs if a suitable CRL cannot be found.
+     *  By default CRL checking is disabled.
+	 */
+	bool crl_check;
+
+	/**
+	 *	Enable CRL checking for the entire certificate chain.
+	 *  An error occurs if a suitable CRL cannot be found.
+     *  By default CRL checking is disabled.
+	 */
+	bool crl_check_all;
+
+	/**
+	 *  Path to a certificate blacklist file.
+	 *  The file should contain one line for each blacklisted certificate.
+	 *  Each line starts with the certificate serial number expressed in hex.
+	 *  Each entry may optionally specify the issuer name of the
+	 *  certificate (serial numbers are only required to be unique per
+	 *  issuer).  Example records:
+	 *  867EC87482B2 /C=US/ST=CA/O=Acme/OU=Engineering/CN=Test Chain CA
+	 *  E2D4B0E570F9EF8E885C065899886461
+	 */
+	char* cert_blacklist;
+
+	/**
+	 *  Log session information for each connection.
+	 */
+	bool log_session_info;
+	
+} as_config_tls;
+
+/**
  *	The `as_config` contains the settings for the `aerospike` client. Including
  *	default policies, seed hosts in the cluster and other settings.
  *
@@ -162,8 +232,7 @@ typedef struct as_config_lua_s {
  *	as_config_add_host(&config, "127.0.0.1", 3000);
  *	~~~~~~~~~~
  *
- *	You can define up to 256 hosts for the seed. The client will iterate over
- *	the list until it connects with one of the hosts. 
+ *	The client will iterate over the list until it connects with one of the hosts.
  *
  *	## Policies
  *
@@ -240,7 +309,12 @@ typedef struct as_config_lua_s {
  *	@ingroup client_objects
  */
 typedef struct as_config_s {
-
+	/**
+	 *	Seed hosts. Populate with one or more hosts in the cluster that you intend to connect with.
+	 *	Do not set directly.  Use as_config_add_hosts() or as_config_add_host() to add seed hosts.
+	 */
+	as_vector* hosts;
+	
 	/**
 	 *	User authentication to cluster.  Leave empty for clusters running without restricted access.
 	 */
@@ -253,6 +327,14 @@ typedef struct as_config_s {
 	char password[AS_PASSWORD_HASH_SIZE];
 	
 	/**
+	 *	Expected cluster ID.  If not null, server nodes must return this cluster ID in order to
+	 *	join the client's view of the cluster. Should only be set when connecting to servers that
+	 *	support the "cluster-id" info command.  Use as_config_set_cluster_id() to set this field.
+	 *	Default: NULL
+	 */
+	char* cluster_id;
+	
+	/**
 	 *	A IP translation table is used in cases where different clients use different server
 	 *	IP addresses.  This may be necessary when using clients from both inside and outside
 	 *	a local area network.  Default is no translation.
@@ -263,7 +345,7 @@ typedef struct as_config_s {
 	 *	A deep copy of ip_map is performed in aerospike_connect().  The caller is
 	 *  responsible for memory deallocation of the original data structure.
 	 */
-	as_addr_map * ip_map;
+	as_addr_map* ip_map;
 	
 	/**
 	 *	Length of ip_map array.
@@ -318,29 +400,18 @@ typedef struct as_config_s {
 	uint32_t tender_interval;
 
 	/**
-	 *	Number of threads stored in underlying thread pool that is used in batch/scan/query commands.
+	 *	Number of threads stored in underlying thread pool used by synchronous batch/scan/query commands.
 	 *	These commands are often sent to multiple server nodes in parallel threads.  A thread pool 
 	 *	improves performance because threads do not have to be created/destroyed for each command.
 	 *	Calculate your value using the following formula:
 	 *
-	 *	thread_pool_size = (concurrent batch/scan/query commands) * (server nodes)
+	 *	thread_pool_size = (concurrent synchronous batch/scan/query commands) * (server nodes)
 	 *
+	 *	If your application only uses async commands, this field can be set to zero.
 	 *	Default: 16
 	 */
 	uint32_t thread_pool_size;
-
-	/**
-	 *	Count of entries in hosts array.
-	 */
-	uint32_t hosts_size;
 	
-	/**
-	 *	(seed) hosts
-	 *	Populate with one or more hosts in the cluster
-	 *	that you intend to connect with.
-	 */
-	as_config_host hosts[AS_CONFIG_HOSTS_SIZE];
-
 	/**
 	 *	Client policies
 	 */
@@ -370,6 +441,11 @@ typedef struct as_config_s {
 	 */
 	as_config_lua lua;
 
+	/*
+	 * TLS configuration parameters.
+	 */
+	as_config_tls tls;
+	
 	/**
 	 *	Action to perform if client fails to connect to seed hosts.
 	 *
@@ -441,9 +517,9 @@ typedef struct as_config_s {
  *	populating it with custom options.
  *
  *	~~~~~~~~~~{.c}
- *		as_config config;
- *		as_config_init(&config);
- *		as_config_add_host(&config, "127.0.0.1", 3000);
+ *	as_config config;
+ *	as_config_init(&config);
+ *	as_config_add_host(&config, "127.0.0.1", 3000);
  *	~~~~~~~~~~
  *	
  *	@param c The configuration to initialize.
@@ -452,26 +528,58 @@ typedef struct as_config_s {
  *
  *	@relates as_config
  */
-as_config * as_config_init(as_config * c);
+as_config*
+as_config_init(as_config* config);
 
 /**
- *	Add host to seed the cluster.
+ *	Release memory associated with config.
+ *
+ *	This function should only be called on a cluster initialize error.
+ *	If a cluster is initialized, the config data will be transferred to as_cluster
+ *	which has it's own destructor.
+ */
+void
+as_config_destroy(as_config* config);
+
+/**
+ *	Add seed host(s) from a string with format: hostname1[:tlsname1][:port1],...
+ *	Hostname may also be an IP address in the following formats.
  *
  *	~~~~~~~~~~{.c}
- *		as_config config;
- *		as_config_init(&config);
- *		as_config_add_host(&config, "127.0.0.1", 3000);
+ *	IPv4: xxx.xxx.xxx.xxx
+ *	IPv6: [xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx]
+ *	IPv6: [xxxx::xxxx]
+ *	~~~~~~~~~~
+ *
+ *	The host addresses will be copied.
+ *	The caller is responsible for the original string.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_config config;
+ *	as_config_init(&config);
+ *	as_config_add_hosts_from_string(&config, "host1,host2:3010,192.168.20.1:3020,[2001::1000]:3030", 3000);
  *	~~~~~~~~~~
  *
  *	@relates as_config
  */
-static inline void
-as_config_add_host(as_config* config, const char* addr, uint16_t port)
-{
-	as_config_host* host = &config->hosts[config->hosts_size++];
-	host->addr = addr;
-	host->port = port;
-}
+bool
+as_config_add_hosts(as_config* config, const char* string, uint16_t default_port);
+	
+/**
+ *	Add host to seed the cluster.
+ *	The host address will be copied.
+ *	The caller is responsible for the original address string.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_config config;
+ *	as_config_init(&config);
+ *	as_config_add_host(&config, "127.0.0.1", 3000);
+ *	~~~~~~~~~~
+ *
+ *	@relates as_config
+ */
+void
+as_config_add_host(as_config* config, const char* address, uint16_t port);
 
 /**
  *	User authentication for servers with restricted access.  The password will be stored by the
@@ -487,7 +595,13 @@ as_config_add_host(as_config* config, const char* addr, uint16_t port)
  */
 bool
 as_config_set_user(as_config* config, const char* user, const char* password);
-	
+
+/**
+ *	Set expected cluster ID.
+ */
+void
+as_config_set_cluster_id(as_config* config, const char* cluster_id);
+
 /**
  *	Initialize global lua configuration to defaults.
  */

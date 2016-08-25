@@ -53,7 +53,19 @@ typedef struct as_node_shm_s {
 	 *	@private
 	 *	Socket address.
 	 */
-	struct sockaddr_in addr;
+	struct sockaddr_storage addr;
+
+	/**
+	 *	@private
+	 *	TLS certificate name (needed for TLS only).
+	 */
+	char tls_name[AS_HOSTNAME_SIZE];
+	
+	/**
+	 *	@private
+	 *	Features supported by server.  Stored in bitmap.
+	 */
+	uint32_t features;
 
 	/**
 	 *	@private
@@ -63,39 +75,9 @@ typedef struct as_node_shm_s {
 	
 	/**
 	 *	@private
-	 *	Does node support batch-index protocol?
-	 */
-	uint8_t has_batch_index;
-	
-	/**
-	 *	@private
-	 *	Does node support replicas-all info protocol?
-	 */
-	uint8_t has_replicas_all;
-
-	/**
-	 *	@private
-	 *	Does node support floating point type?
-	 */
-	uint8_t has_double;
-
-	/**
-	 *	@private
-	 *	Does node support geospatial?
-	 */
-	uint8_t has_geo;
-
-	/**
-	 *	@private
-	 *	Does node support pipelining?
-	 */
-	uint8_t has_pipelining;
-
-	/**
-	 *	@private
 	 *	Pad to 8 byte boundary.
 	 */
-	char pad[2];
+	char pad[3];
 } as_node_shm;
 
 /**

@@ -18,6 +18,7 @@
 
 #include <aerospike/as_error.h>
 #include <aerospike/as_event.h>
+#include <aerospike/as_socket.h>
 #include <aerospike/as_queue.h>
 #include <aerospike/as_vector.h>
 #include <citrusleaf/cf_queue.h>
@@ -48,6 +49,17 @@ extern "C" {
 // Leave this is in for backwards compatibility.
 #define AS_NODE_NAME_MAX_SIZE AS_NODE_NAME_SIZE
 
+#define AS_FEATURES_GEO          (1 << 0)
+#define AS_FEATURES_DOUBLE       (1 << 1)
+#define AS_FEATURES_BATCH_INDEX  (1 << 2)
+#define AS_FEATURES_REPLICAS_ALL (1 << 3)
+#define AS_FEATURES_PIPELINING   (1 << 4)
+#define AS_FEATURES_PEERS        (1 << 5)
+
+#define AS_IP_ADDRESS_SIZE 64
+#define AS_ADDRESS4_MAX 4
+#define AS_ADDRESS6_MAX 8
+
 /******************************************************************************
  *	TYPES
  *****************************************************************************/
@@ -59,13 +71,33 @@ typedef struct as_address_s {
 	/**
 	 *	Socket IP address.
 	 */
-	struct sockaddr_in addr;
+	struct sockaddr_storage addr;
 	
 	/**
-	 *	Socket IP address string representation (xxx.xxx.xxx.xxx).
+	 *	Socket IP address string representation including port.
 	 */
-	char name[INET_ADDRSTRLEN];
+	char name[AS_IP_ADDRESS_SIZE];
+	
 } as_address;
+	
+/**
+ *	@private
+ *	Host address alias information.
+ */
+typedef struct as_alias_s {
+	/**
+	 *	@private
+	 *	Hostname or IP address string representation.
+	 */
+	char name[AS_HOSTNAME_SIZE];
+	
+	/**
+	 *	@private
+	 *	Socket IP port.
+	 */
+	in_port_t port;
+	
+} as_alias;
 	
 struct as_cluster_s;
 
@@ -86,35 +118,51 @@ typedef struct as_node_s {
 	uint32_t partition_generation;
 	
 	/**
+	 *	@private
+	 *	TLS certificate name (needed for TLS only, NULL otherwise).
+	 */
+	char* tls_name;
+	
+	/**
 	 *	The name of the node.
 	 */
 	char name[AS_NODE_NAME_SIZE];
 	
 	/**
 	 *	@private
-	 *	Primary host address index into addresses array.
+	 *	Primary address index into addresses array.
 	 */
 	uint32_t address_index;
+		
+	/**
+	 *	@private
+	 *	Number of IPv4 addresses.
+	 */
+	uint32_t address4_size;
+
+	/**
+	 *	@private
+	 *	Number of IPv6 addresses.
+	 */
+	uint32_t address6_size;
+
+	/**
+	 *	@private
+	 *	Array of IP addresses. Not thread-safe.
+	 */
+	as_address* addresses;
 	
 	/**
 	 *	@private
-	 *	Vector of sockaddr_in which the host is currently known by.
-	 *	Only used by tend thread. Not thread-safe.
+	 *	Array of hostnames aliases. Not thread-safe.
 	 */
-	as_vector /* <as_address> */ addresses;
-	
-	/**
-	 *	@private
-	 *	Vector of aliases which the host is currently known by.
-	 *	Only used by tend thread. Not thread-safe.
-	 */
-	as_vector /* <as_host> */ aliases;
+	as_vector /* <as_alias> */ aliases;
 
 	struct as_cluster_s* cluster;
 	
 	/**
 	 *	@private
-	 *	Pool of current, cached FDs.
+	 *	Pool of current, cached sockets.
 	 */
 	cf_queue* conn_q;
 	
@@ -135,8 +183,20 @@ typedef struct as_node_s {
 	 *	@private
 	 *	Socket used exclusively for cluster tend thread info requests.
 	 */
-	int info_fd;
+	as_socket info_socket;
 		
+	/**
+	 *	@private
+	 *	Features supported by server.  Stored in bitmap.
+	 */
+	uint32_t features;
+
+	/**
+	 *	@private
+	 *	Server's generation count for peers.
+	 */
+	uint32_t peers_generation;
+
 	/**
 	 *	@private
 	 *	Number of other nodes that consider this node a member of the cluster.
@@ -169,34 +229,10 @@ typedef struct as_node_s {
 	
 	/**
 	 *	@private
-	 *	Does node support batch-index protocol?
+	 *	Did partition change in current cluster tend.
 	 */
-	uint8_t has_batch_index;
+	bool partition_changed;
 	
-	/**
-	 *	@private
-	 *	Does node support replicas-all info protocol?
-	 */
-	uint8_t has_replicas_all;
-	
-	/**
-	 *	@private
-	 *	Does node support floating point type?
-	 */
-	uint8_t has_double;
-	
-	/**
-	 *	@private
-	 *	Does node support geospatial queries?
-	 */
-	uint8_t has_geo;
-	
-	/**
-	 *	@private
-	 *	Does node support pipelining?
-	 */
-	uint8_t has_pipelining;
-
 } as_node;
 
 /**
@@ -212,60 +248,17 @@ typedef struct as_node_info_s {
 
 	/**
 	 *	@private
+	 *	Features supported by server.  Stored in bitmap.
+	 */
+	uint32_t features;
+
+	/**
+	 *	@private
 	 *	Validated socket.
 	 */
-	int fd;
-
-	/**
-	 *	@private
-	 *	Does node support batch-index protocol?
-	 */
-	uint8_t has_batch_index;
-	
-	/**
-	 *	@private
-	 *	Does node support replicas-all info protocol?
-	 */
-	uint8_t has_replicas_all;
-	
-	/**
-	 *	@private
-	 *	Does node support floating point type?
-	 */
-	uint8_t has_double;
-	
-	/**
-	 *	@private
-	 *	Does node support geospatial queries?
-	 */
-	uint8_t has_geo;
-	
-	/**
-	 *	@private
-	 *	Does node support pipelining?
-	 */
-	uint8_t has_pipelining;
+	as_socket socket;
 
 } as_node_info;
-
-/**
- *	@private
- *	Friend host address information.
- */
-typedef struct as_host_s {
-	/**
-	 *	@private
-	 *	Hostname or IP address string representation (xxx.xxx.xxx.xxx).
-	 */
-	char name[AS_HOSTNAME_SIZE];
-	
-	/**
-	 *	@private
-	 *	Socket IP port.
-	 */
-	in_port_t port;
-	
-} as_host;
 
 /******************************************************************************
  * FUNCTIONS
@@ -276,7 +269,10 @@ typedef struct as_host_s {
  *	Create new cluster node.
  */
 as_node*
-as_node_create(struct as_cluster_s* cluster, as_host* host, struct sockaddr_in* addr, as_node_info* node_info);
+as_node_create(
+	struct as_cluster_s* cluster, const char* hostname, const char* tls_name,
+	in_port_t port, bool is_alias, struct sockaddr* addr, as_node_info* node_info
+	);
 
 /**
  *	@private
@@ -329,26 +325,31 @@ as_node_release(as_node* node)
  *	Add socket address to node addresses.
  */
 void
-as_node_add_address(as_node* node, as_host* host, struct sockaddr_in* addr);
+as_node_add_address(as_node* node, struct sockaddr* addr);
 
 /**
  *	@private
- *	Get socket address and name.
+ *	Add hostname to node aliases.
  */
-static inline struct sockaddr_in*
+void
+as_node_add_alias(as_node* node, const char* hostname, in_port_t port);
+
+/**
+ *	Get primary socket address.
+ */
+static inline as_address*
 as_node_get_address(as_node* node)
 {
-	as_address* address = (as_address *)as_vector_get(&node->addresses, node->address_index);
-	return &address->addr;
+	return &node->addresses[node->address_index];
 }
 
 /**
- *	Get socket address and name.
+ *	Get socket address as a string.
  */
-static inline as_address*
-as_node_get_address_full(as_node* node)
+static inline const char*
+as_node_get_address_string(as_node* node)
 {
-	return (as_address *)as_vector_get(&node->addresses, node->address_index);
+	return node->addresses[node->address_index].name;
 }
 
 /**
@@ -356,15 +357,15 @@ as_node_get_address_full(as_node* node)
  *	Get a connection to the given node from pool and validate.  Return 0 on success.
  */
 as_status
-as_node_get_connection(as_error* err, as_node* node, uint64_t deadline_ms, int* fd);
+as_node_get_connection(as_error* err, as_node* node, uint64_t deadline_ms, as_socket* sock);
 
 /**
  *	@private
  *	Close a node's connection and do not put back into pool.
  */
 static inline void
-as_node_close_connection(as_node* node, int fd) {
-	close(fd);
+as_node_close_connection(as_node* node, as_socket* sock) {
+	as_socket_close(sock);
 	ck_pr_dec_32(&node->conn_count);
 }
 
@@ -373,10 +374,10 @@ as_node_close_connection(as_node* node, int fd) {
  *	Put connection back into pool.
  */
 static inline void
-as_node_put_connection(as_node* node, int fd)
+as_node_put_connection(as_node* node, as_socket* sock)
 {
-	if (cf_queue_push(node->conn_q, &fd) != CF_QUEUE_OK) {
-		as_node_close_connection(node, fd);
+	if (cf_queue_push(node->conn_q, sock) != CF_QUEUE_OK) {
+		as_node_close_connection(node, sock);
 	}
 }
 

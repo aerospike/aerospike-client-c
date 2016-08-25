@@ -34,21 +34,6 @@ extern "C" {
  *****************************************************************************/
 
 /**
- * Seed host.
- */
-typedef struct as_seed_s {
-	/**
-	 * Host name.
-	 */
-	char* name;
-	
-	/**
-	 * Host port.
-	 */
-	in_port_t port;
-} as_seed;
-
-/**
  *	@private
  *	Reference counted array of seed hosts.
  */
@@ -69,7 +54,7 @@ typedef struct as_seeds_s {
 	 *	@private
 	 *	Seed array.
 	 */
-	as_seed array[];
+	as_host array[];
 } as_seeds;
 
 /**
@@ -95,7 +80,6 @@ typedef struct as_nodes_s {
 	 */
 	as_node* array[];
 } as_nodes;
-
 
 /**
  *	@private
@@ -187,15 +171,15 @@ typedef struct as_cluster_s {
 	
 	/**
 	 *	@private
-	 *	Initial seed nodes specified by user.
+	 *	Expected cluster id for all nodes.  May be null.
 	 */
-	as_seeds* seeds;
+	char* cluster_id;
 	
 	/**
 	 *	@private
-	 *	Configuration version.  Incremented, when the configuration is changed.
+	 *	Initial seed nodes specified by user.
 	 */
-	uint32_t version;
+	as_seeds* seeds;
 	
 	/**
 	 *	@private
@@ -207,6 +191,12 @@ typedef struct as_cluster_s {
 	 *	value is the real IP address used to connect to the server.
 	 */
 	as_addr_maps* ip_map;
+	
+	/**
+	 *	@private
+	 *	TLS parameters
+	 */
+	as_tls_context tls_ctx;
 	
 	/**
 	 *	@private
@@ -234,6 +224,12 @@ typedef struct as_cluster_s {
 	 *	Tend thread identifier to be used with tend_lock.
 	 */
 	pthread_cond_t tend_cond;
+
+	/**
+	 *	@private
+	 *	Configuration version.  Incremented, when the configuration is changed.
+	 */
+	uint32_t version;
 	
 	/**
 	 *	@private
@@ -375,45 +371,16 @@ as_nodes_release(as_nodes* nodes)
 }
 
 /**
- *	Reserve reference counted access to seeds.
- */
-static inline as_seeds*
-as_seeds_reserve(as_cluster* cluster)
-{
-	as_seeds* seeds = (as_seeds *)ck_pr_load_ptr(&cluster->seeds);
-	ck_pr_inc_32(&seeds->ref_count);
-	return seeds;
-}
-
-/**
- *	Release reference counted access to seeds.
- */
-static inline void
-as_seeds_release(as_seeds* seeds)
-{
-	bool destroy;
-	ck_pr_dec_32_zero(&seeds->ref_count, &destroy);
-
-	if (destroy) {
-		for (uint32_t i = 0; i < seeds->size; i++) {
-			cf_free(seeds->array[i].name);
-		}
-
-		cf_free(seeds);
-	}
-}
-
-/**
  *	Add seeds to the cluster.
  */
 void
-as_seeds_add(as_cluster* cluster, as_seed* seed_list, uint32_t size);
+as_seeds_add(as_cluster* cluster, as_host* seed_list, uint32_t size);
 
 /**
  *	Replace the seeds of the cluster.
  */
 void
-as_seeds_update(as_cluster* cluster, as_seed* seed_list, uint32_t size);
+as_seeds_update(as_cluster* cluster, as_host* seed_list, uint32_t size);
 
 /**
  *	Reserve reference counted access to IP map.

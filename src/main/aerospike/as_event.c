@@ -390,6 +390,9 @@ as_event_get_connection(as_event_command* cmd)
 		ck_pr_inc_32(&cmd->cluster->async_conn_count);
 		conn = cf_malloc(sizeof(as_async_connection));
 		conn->base.pipeline = false;
+#if defined(AS_USE_LIBEV)
+		conn->base.watching = 0;
+#endif
 		conn->cmd = cmd;
 		cmd->conn = &conn->base;
 		return AS_CONNECTION_NEW;
@@ -406,58 +409,20 @@ as_event_get_connection(as_event_command* cmd)
 }
 
 int
-as_event_create_socket(as_event_command* cmd)
+as_event_create_socket(as_event_command* cmd, int family)
 {
 	// Create a non-blocking socket.
-	int fd = as_socket_create_nb();
+	int fd = as_socket_create_fd(family);
 	
 	if (fd < 0) {
 		as_error err;
 		as_error_set_message(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Failed to create non-blocking socket");
-		as_event_connect_error(cmd, &err, fd);
+		as_event_fd_error(cmd, &err, fd);
 		return -1;
 	}
 	
-	if (cmd->pipe_listener != NULL) {
-		if (as_event_send_buffer_size) {
-			if (setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &as_event_send_buffer_size, sizeof(as_event_send_buffer_size)) < 0) {
-				as_error err;
-				as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION,
-								"Failed to configure pipeline send buffer. size %d error %d (%s)",
-								as_event_send_buffer_size, errno, strerror(errno));
-				as_event_connect_error(cmd, &err, fd);
-				return -1;
-			}
-		}
-		
-		if (as_event_recv_buffer_size) {
-			if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &as_event_recv_buffer_size, sizeof(as_event_recv_buffer_size)) < 0) {
-				as_error err;
-				as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION,
-								"Failed to configure pipeline receive buffer. size %d error %d (%s)",
-								as_event_recv_buffer_size, errno, strerror(errno));
-				as_event_connect_error(cmd, &err, fd);
-				return -1;
-			}
-		}
-		
-#if defined(__linux__)
-		if (as_event_recv_buffer_size) {
-			if (setsockopt(fd, SOL_TCP, TCP_WINDOW_CLAMP, &as_event_recv_buffer_size, sizeof(as_event_recv_buffer_size)) < 0) {
-				as_error err;
-				as_error_set_message(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Failed to configure pipeline TCP window.");
-				as_event_connect_error(cmd, &err, fd);
-				return -1;
-			}
-		}
-#endif
-		
-		int arg = 0;
-		
-		if (setsockopt(fd, SOL_TCP, TCP_NODELAY, &arg, sizeof(arg)) < 0) {
-			as_error err;
-			as_error_set_message(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Failed to configure pipeline Nagle algorithm.");
-			as_event_connect_error(cmd, &err, fd);
+	if (cmd->pipe_listener) {
+		if (! as_pipe_modify_fd(cmd, fd)) {
 			return -1;
 		}
 	}
@@ -465,7 +430,7 @@ as_event_create_socket(as_event_command* cmd)
 }
 
 void
-as_event_connect_error(as_event_command* cmd, as_error* err, int fd)
+as_event_fd_error(as_event_command* cmd, as_error* err, int fd)
 {
 	// Only timer needs to be released on socket connection failure.
 	// Watcher has not been registered yet.
@@ -473,7 +438,23 @@ as_event_connect_error(as_event_command* cmd, as_error* err, int fd)
 	
 	// Close fd when valid.
 	if (fd >= 0) {
-		close(fd);
+		as_close(fd);
+	}
+	cf_free(cmd->conn);
+	as_event_decr_conn(cmd);
+	as_event_error_callback(cmd, err);
+}
+
+void
+as_event_connect_error(as_event_command* cmd, as_error* err, as_socket* sock)
+{
+	// Only timer needs to be released on socket connection failure.
+	// Watcher has not been registered yet.
+	as_event_stop_timer(cmd);
+	
+	// Close fd when valid.
+	if (sock->fd >= 0) {
+		as_socket_close(sock);
 	}
 	cf_free(cmd->conn);
 	as_event_decr_conn(cmd);
@@ -540,6 +521,7 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 		case AEROSPIKE_ERR_QUERY_ABORTED:
 		case AEROSPIKE_ERR_SCAN_ABORTED:
 		case AEROSPIKE_ERR_ASYNC_CONNECTION:
+		case AEROSPIKE_ERR_TLS_ERROR:
 		case AEROSPIKE_ERR_CLIENT_ABORT:
 		case AEROSPIKE_ERR_CLIENT:
 			as_event_release_async_connection(cmd);

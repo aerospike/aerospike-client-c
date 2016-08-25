@@ -48,6 +48,9 @@
 		BF2AA7F218BEBFA500E54AF3 /* as_record.c in Sources */ = {isa = PBXBuildFile; fileRef = BF2AA7CC18BEBFA500E54AF3 /* as_record.c */; };
 		BF2AA7F318BEBFA500E54AF3 /* as_scan.c in Sources */ = {isa = PBXBuildFile; fileRef = BF2AA7CD18BEBFA500E54AF3 /* as_scan.c */; };
 		BF2AA7F418BEBFA500E54AF3 /* as_udf.c in Sources */ = {isa = PBXBuildFile; fileRef = BF2AA7CE18BEBFA500E54AF3 /* as_udf.c */; };
+		BF4E4E2A1D48213700BEEF94 /* as_host.h in Headers */ = {isa = PBXBuildFile; fileRef = BF4E4E291D48213700BEEF94 /* as_host.h */; };
+		BF4E4E451D50150700BEEF94 /* as_peers.c in Sources */ = {isa = PBXBuildFile; fileRef = BF4E4E441D50150700BEEF94 /* as_peers.c */; };
+		BF4E4E471D50154000BEEF94 /* as_peers.h in Headers */ = {isa = PBXBuildFile; fileRef = BF4E4E461D50154000BEEF94 /* as_peers.h */; };
 		BF5548ED19E36A7C007DDB9E /* as_log.c in Sources */ = {isa = PBXBuildFile; fileRef = BF5548EC19E36A7C007DDB9E /* as_log.c */; };
 		BF6FE4331BF2748E00175BF8 /* as_pipe.c in Sources */ = {isa = PBXBuildFile; fileRef = BF6FE4321BF2748E00175BF8 /* as_pipe.c */; };
 		BF843C5918D3E64900A06CFB /* cf_alloc.c in Sources */ = {isa = PBXBuildFile; fileRef = BF843C5618D3E64900A06CFB /* cf_alloc.c */; };
@@ -57,6 +60,9 @@
 		BF8EABF81BF3C28F0027EF45 /* as_event_uv.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8EABF71BF3C28F0027EF45 /* as_event_uv.c */; };
 		BF8EEB2D1A2CED34000F2B00 /* as_command.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8EEB2C1A2CED34000F2B00 /* as_command.c */; };
 		BF93AA061AE9E6EB003ECE3B /* as_thread_pool.c in Sources */ = {isa = PBXBuildFile; fileRef = BF93AA051AE9E6EB003ECE3B /* as_thread_pool.c */; };
+		BFB8A5D81D0F3F77007B4E22 /* as_tls.c in Sources */ = {isa = PBXBuildFile; fileRef = BFB8A5D71D0F3F77007B4E22 /* as_tls.c */; };
+		BFB8A5DA1D0F3F9E007B4E22 /* as_tls.h in Headers */ = {isa = PBXBuildFile; fileRef = BFB8A5D91D0F3F9E007B4E22 /* as_tls.h */; };
+		BFB8A5EB1D1C66FC007B4E22 /* ssl_util_ssl.c in Sources */ = {isa = PBXBuildFile; fileRef = BFB8A5EA1D1C66FC007B4E22 /* ssl_util_ssl.c */; };
 		BFBA04A91947AA8400F9924E /* cf_random.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBA04A81947AA8400F9924E /* cf_random.c */; };
 		BFBA04AF1947AA9C00F9924E /* crypt_blowfish.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBA04AA1947AA9C00F9924E /* crypt_blowfish.c */; };
 		BFBA04B51947B42000F9924E /* as_password.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBA04B41947B42000F9924E /* as_password.c */; };
@@ -161,6 +167,8 @@
 		BFC65B8A1C921E9E0079DF5A /* as_status.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B5F1C921E9E0079DF5A /* as_status.h */; };
 		BFC65B8B1C921E9E0079DF5A /* as_udf.h in Headers */ = {isa = PBXBuildFile; fileRef = BFC65B601C921E9E0079DF5A /* as_udf.h */; };
 		BFCF26BF1AC1FBBF0062B75C /* as_string_builder.c in Sources */ = {isa = PBXBuildFile; fileRef = BFCF26BE1AC1FBBF0062B75C /* as_string_builder.c */; };
+		BFE3C3991D6270C200AA7F20 /* as_address.h in Headers */ = {isa = PBXBuildFile; fileRef = BFE3C3981D6270C200AA7F20 /* as_address.h */; };
+		BFE3C39B1D62720800AA7F20 /* as_address.c in Sources */ = {isa = PBXBuildFile; fileRef = BFE3C39A1D62720800AA7F20 /* as_address.c */; };
 		BFF344B01CDAC67700FD1976 /* as_map_operations.h in Headers */ = {isa = PBXBuildFile; fileRef = BFF344AF1CDAC67700FD1976 /* as_map_operations.h */; };
 		BFF344C31CEA7ACD00FD1976 /* as_list_operations.h in Headers */ = {isa = PBXBuildFile; fileRef = BFF344C21CEA7ACD00FD1976 /* as_list_operations.h */; };
 /* End PBXBuildFile section */
@@ -208,6 +216,9 @@
 		BF2AA7CC18BEBFA500E54AF3 /* as_record.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_record.c; path = ../src/main/aerospike/as_record.c; sourceTree = "<group>"; };
 		BF2AA7CD18BEBFA500E54AF3 /* as_scan.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_scan.c; path = ../src/main/aerospike/as_scan.c; sourceTree = "<group>"; };
 		BF2AA7CE18BEBFA500E54AF3 /* as_udf.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_udf.c; path = ../src/main/aerospike/as_udf.c; sourceTree = "<group>"; };
+		BF4E4E291D48213700BEEF94 /* as_host.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_host.h; path = ../src/include/aerospike/as_host.h; sourceTree = "<group>"; };
+		BF4E4E441D50150700BEEF94 /* as_peers.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_peers.c; path = ../src/main/aerospike/as_peers.c; sourceTree = "<group>"; };
+		BF4E4E461D50154000BEEF94 /* as_peers.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_peers.h; path = ../src/include/aerospike/as_peers.h; sourceTree = "<group>"; };
 		BF5548EC19E36A7C007DDB9E /* as_log.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_log.c; path = ../modules/common/src/main/aerospike/as_log.c; sourceTree = "<group>"; };
 		BF6FE4321BF2748E00175BF8 /* as_pipe.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_pipe.c; path = ../src/main/aerospike/as_pipe.c; sourceTree = "<group>"; };
 		BF843C5618D3E64900A06CFB /* cf_alloc.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = cf_alloc.c; path = ../modules/common/src/main/citrusleaf/cf_alloc.c; sourceTree = "<group>"; };
@@ -217,6 +228,9 @@
 		BF8EABF71BF3C28F0027EF45 /* as_event_uv.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_event_uv.c; path = ../src/main/aerospike/as_event_uv.c; sourceTree = "<group>"; };
 		BF8EEB2C1A2CED34000F2B00 /* as_command.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_command.c; path = ../src/main/aerospike/as_command.c; sourceTree = "<group>"; };
 		BF93AA051AE9E6EB003ECE3B /* as_thread_pool.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_thread_pool.c; path = ../modules/common/src/main/aerospike/as_thread_pool.c; sourceTree = "<group>"; };
+		BFB8A5D71D0F3F77007B4E22 /* as_tls.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_tls.c; path = ../src/main/aerospike/as_tls.c; sourceTree = "<group>"; };
+		BFB8A5D91D0F3F9E007B4E22 /* as_tls.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_tls.h; path = ../src/include/aerospike/as_tls.h; sourceTree = "<group>"; };
+		BFB8A5EA1D1C66FC007B4E22 /* ssl_util_ssl.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = ssl_util_ssl.c; path = ../src/main/aerospike/ssl_util_ssl.c; sourceTree = "<group>"; };
 		BFBA04A81947AA8400F9924E /* cf_random.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = cf_random.c; path = ../modules/common/src/main/citrusleaf/cf_random.c; sourceTree = "<group>"; };
 		BFBA04AA1947AA9C00F9924E /* crypt_blowfish.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = crypt_blowfish.c; path = ../modules/common/src/main/aerospike/crypt_blowfish.c; sourceTree = "<group>"; };
 		BFBA04B41947B42000F9924E /* as_password.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_password.c; path = ../modules/common/src/main/aerospike/as_password.c; sourceTree = "<group>"; };
@@ -323,6 +337,8 @@
 		BFC65BE61C9220E80079DF5A /* include */ = {isa = PBXFileReference; lastKnownFileType = folder; name = include; path = ../modules/common/src/include; sourceTree = "<group>"; };
 		BFC65BE71C92213F0079DF5A /* include */ = {isa = PBXFileReference; lastKnownFileType = folder; name = include; path = "../modules/mod-lua/src/include"; sourceTree = "<group>"; };
 		BFCF26BE1AC1FBBF0062B75C /* as_string_builder.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_string_builder.c; path = ../modules/common/src/main/aerospike/as_string_builder.c; sourceTree = "<group>"; };
+		BFE3C3981D6270C200AA7F20 /* as_address.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_address.h; path = ../src/include/aerospike/as_address.h; sourceTree = "<group>"; };
+		BFE3C39A1D62720800AA7F20 /* as_address.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_address.c; path = ../src/main/aerospike/as_address.c; sourceTree = "<group>"; };
 		BFF344AF1CDAC67700FD1976 /* as_map_operations.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_map_operations.h; path = ../src/include/aerospike/as_map_operations.h; sourceTree = "<group>"; };
 		BFF344C21CEA7ACD00FD1976 /* as_list_operations.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_list_operations.h; path = ../src/include/aerospike/as_list_operations.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -383,6 +399,7 @@
 				BF2AA7BD18BEBFA400E54AF3 /* aerospike_scan.c */,
 				BF2AA7BE18BEBFA400E54AF3 /* aerospike_udf.c */,
 				BF2AA7BF18BEBFA400E54AF3 /* aerospike.c */,
+				BFE3C39A1D62720800AA7F20 /* as_address.c */,
 				BFC38AE01948F7CA000C53D9 /* as_admin.c */,
 				BF26CF831BFE7C7900E143DC /* as_async.c */,
 				BF2AA7C018BEBFA400E54AF3 /* as_batch.c */,
@@ -402,6 +419,7 @@
 				BFBB3C8E192D729A00251B15 /* as_node.c */,
 				BF2AA7C718BEBFA400E54AF3 /* as_operations.c */,
 				BFBA916A1914344B00AADA9A /* as_partition.c */,
+				BF4E4E441D50150700BEEF94 /* as_peers.c */,
 				BF6FE4321BF2748E00175BF8 /* as_pipe.c */,
 				BF2AA7C818BEBFA400E54AF3 /* as_policy.c */,
 				BF219F0D1A62255A001E321C /* as_proto.c */,
@@ -412,7 +430,9 @@
 				BF2AA7CD18BEBFA500E54AF3 /* as_scan.c */,
 				BF26A38819C2621000AE763C /* as_shm_cluster.c */,
 				BF219F0F1A622C23001E321C /* as_socket.c */,
+				BFB8A5D71D0F3F77007B4E22 /* as_tls.c */,
 				BF2AA7CE18BEBFA500E54AF3 /* as_udf.c */,
+				BFB8A5EA1D1C66FC007B4E22 /* ssl_util_ssl.c */,
 				BFC3A8EA1B97D24D00F2F758 /* version.c */,
 			);
 			name = main;
@@ -570,6 +590,7 @@
 				BFC65B3F1C921E9E0079DF5A /* aerospike_scan.h */,
 				BFC65B401C921E9E0079DF5A /* aerospike_udf.h */,
 				BFC65B411C921E9E0079DF5A /* aerospike.h */,
+				BFE3C3981D6270C200AA7F20 /* as_address.h */,
 				BFC65B421C921E9E0079DF5A /* as_admin.h */,
 				BFC65B431C921E9E0079DF5A /* as_async_proto.h */,
 				BFC65B441C921E9E0079DF5A /* as_async.h */,
@@ -581,6 +602,7 @@
 				BFC65B4A1C921E9E0079DF5A /* as_error.h */,
 				BFC65B4B1C921E9E0079DF5A /* as_event_internal.h */,
 				BFC65B4C1C921E9E0079DF5A /* as_event.h */,
+				BF4E4E291D48213700BEEF94 /* as_host.h */,
 				BFC65B4D1C921E9E0079DF5A /* as_info.h */,
 				BFC65B4E1C921E9E0079DF5A /* as_job.h */,
 				BFC65B4F1C921E9E0079DF5A /* as_key.h */,
@@ -592,6 +614,7 @@
 				BFC65B531C921E9E0079DF5A /* as_node.h */,
 				BFC65B541C921E9E0079DF5A /* as_operations.h */,
 				BFC65B551C921E9E0079DF5A /* as_partition.h */,
+				BF4E4E461D50154000BEEF94 /* as_peers.h */,
 				BFC65B561C921E9E0079DF5A /* as_pipe.h */,
 				BFC65B571C921E9E0079DF5A /* as_policy.h */,
 				BFC65B581C921E9E0079DF5A /* as_proto.h */,
@@ -602,6 +625,7 @@
 				BFC65B5D1C921E9E0079DF5A /* as_shm_cluster.h */,
 				BFC65B5E1C921E9E0079DF5A /* as_socket.h */,
 				BFC65B5F1C921E9E0079DF5A /* as_status.h */,
+				BFB8A5D91D0F3F9E007B4E22 /* as_tls.h */,
 				BFC65B601C921E9E0079DF5A /* as_udf.h */,
 			);
 			name = include;
@@ -627,13 +651,16 @@
 				BFC65B821C921E9E0079DF5A /* as_policy.h in Headers */,
 				BFC65B801C921E9E0079DF5A /* as_partition.h in Headers */,
 				BFC65B7D1C921E9E0079DF5A /* as_lookup.h in Headers */,
+				BF4E4E2A1D48213700BEEF94 /* as_host.h in Headers */,
 				BFC65B861C921E9E0079DF5A /* as_record.h in Headers */,
 				BFC65B781C921E9E0079DF5A /* as_info.h in Headers */,
 				BFC65B7F1C921E9E0079DF5A /* as_operations.h in Headers */,
 				BFC65B661C921E9E0079DF5A /* aerospike_lmap.h in Headers */,
 				BFC65B6C1C921E9E0079DF5A /* aerospike.h in Headers */,
 				BFC65B881C921E9E0079DF5A /* as_shm_cluster.h in Headers */,
+				BF4E4E471D50154000BEEF94 /* as_peers.h in Headers */,
 				BFC65B7A1C921E9E0079DF5A /* as_key.h in Headers */,
+				BFB8A5DA1D0F3F9E007B4E22 /* as_tls.h in Headers */,
 				BFC65B6F1C921E9E0079DF5A /* as_async.h in Headers */,
 				BFC65B6D1C921E9E0079DF5A /* as_admin.h in Headers */,
 				BFC65B851C921E9E0079DF5A /* as_record_iterator.h in Headers */,
@@ -657,6 +684,7 @@
 				BFC65B771C921E9E0079DF5A /* as_event.h in Headers */,
 				BFC65B681C921E9E0079DF5A /* aerospike_lstack.h in Headers */,
 				BFC65B7C1C921E9E0079DF5A /* as_listener.h in Headers */,
+				BFE3C3991D6270C200AA7F20 /* as_address.h in Headers */,
 				BFC65B6A1C921E9E0079DF5A /* aerospike_scan.h in Headers */,
 				BFC65B691C921E9E0079DF5A /* aerospike_query.h in Headers */,
 				BF2AA7D018BEBFA500E54AF3 /* _bin.h in Headers */,
@@ -740,6 +768,7 @@
 				BF2AA7E118BEBFA500E54AF3 /* aerospike_lstack.c in Sources */,
 				BF219F101A622C23001E321C /* as_socket.c in Sources */,
 				BF2AA7DF18BEBFA500E54AF3 /* aerospike_lmap.c in Sources */,
+				BFE3C39B1D62720800AA7F20 /* as_address.c in Sources */,
 				BF8EABF81BF3C28F0027EF45 /* as_event_uv.c in Sources */,
 				BFBBBAEB18B6D9D0003FFD88 /* cf_b64.c in Sources */,
 				BF2AA7D118BEBFA500E54AF3 /* _ldt.c in Sources */,
@@ -760,6 +789,7 @@
 				BF222CFD1BB33961006827A6 /* as_geojson.c in Sources */,
 				BFBA105018B7D8B300A64E68 /* as_arraylist.c in Sources */,
 				BFC3A8EB1B97D24D00F2F758 /* version.c in Sources */,
+				BF4E4E451D50150700BEEF94 /* as_peers.c in Sources */,
 				BFBD205818BC3436009ED931 /* mod_lua_stream.c in Sources */,
 				BFBBBAED18B6D9D0003FFD88 /* cf_clock.c in Sources */,
 				BFBA106F18B7DFA100A64E68 /* as_msgpack.c in Sources */,
@@ -781,6 +811,7 @@
 				BF2AA7DD18BEBFA500E54AF3 /* aerospike_key.c in Sources */,
 				BFBA104C18B7D8B300A64E68 /* as_aerospike.c in Sources */,
 				BFBA106418B7D8B300A64E68 /* as_result.c in Sources */,
+				BFB8A5EB1D1C66FC007B4E22 /* ssl_util_ssl.c in Sources */,
 				BF2AA7F218BEBFA500E54AF3 /* as_record.c in Sources */,
 				BFBA105118B7D8B300A64E68 /* as_boolean.c in Sources */,
 				BF2669921BBB74AE00C61962 /* as_queue.c in Sources */,
@@ -798,6 +829,7 @@
 				BF2AA7E318BEBFA500E54AF3 /* aerospike_scan.c in Sources */,
 				BF6FE4331BF2748E00175BF8 /* as_pipe.c in Sources */,
 				BFBA106318B7D8B300A64E68 /* as_rec.c in Sources */,
+				BFB8A5D81D0F3F77007B4E22 /* as_tls.c in Sources */,
 				BF2AA7EB18BEBFA500E54AF3 /* as_ldt.c in Sources */,
 				BF219F0E1A62255A001E321C /* as_proto.c in Sources */,
 				BF843C5B18D3E64900A06CFB /* cf_queue.c in Sources */,

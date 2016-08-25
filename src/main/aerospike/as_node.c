@@ -15,15 +15,18 @@
  * the License.
  */
 #include <aerospike/as_node.h>
+#include <aerospike/as_address.h>
 #include <aerospike/as_admin.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_command.h>
 #include <aerospike/as_event_internal.h>
 #include <aerospike/as_info.h>
 #include <aerospike/as_log_macros.h>
+#include <aerospike/as_peers.h>
 #include <aerospike/as_queue.h>
 #include <aerospike/as_socket.h>
 #include <aerospike/as_string.h>
+#include <aerospike/as_tls.h>
 #include <citrusleaf/cf_byte_order.h>
 #include <errno.h> //errno
 
@@ -68,7 +71,10 @@ as_node_create_async_queues(uint32_t max_conns_per_node)
 }
 
 as_node*
-as_node_create(as_cluster* cluster, as_host* host, struct sockaddr_in* addr, as_node_info* node_info)
+as_node_create(
+	as_cluster* cluster, const char* hostname, const char* tls_name,
+	in_port_t port, bool is_alias, struct sockaddr* addr, as_node_info* node_info
+	)
 {
 	as_node* node = cf_malloc(sizeof(as_node));
 
@@ -77,22 +83,32 @@ as_node_create(as_cluster* cluster, as_host* host, struct sockaddr_in* addr, as_
 	}
 	
 	node->ref_count = 1;
+	node->peers_generation = 0xFFFFFFFF;
 	node->partition_generation = 0xFFFFFFFF;
 	node->cluster = cluster;
-			
+
 	strcpy(node->name, node_info->name);
-	node->has_batch_index = node_info->has_batch_index;
-	node->has_replicas_all = node_info->has_replicas_all;
-	node->has_double = node_info->has_double;
-	node->has_geo = node_info->has_geo;
-	node->has_pipelining = node_info->has_pipelining;
-	node->address_index = 0;
+	node->features = node_info->features;
+	node->address_index = (addr->sa_family == AF_INET) ? 0 : AS_ADDRESS4_MAX;
+	node->address4_size = 0;
+	node->address6_size = 0;
+	node->addresses = cf_malloc(sizeof(as_address) * (AS_ADDRESS6_MAX));
+	as_node_add_address(node, addr);
 	
-	as_vector_init(&node->addresses, sizeof(as_address), 2);
-	as_vector_init(&node->aliases, sizeof(as_host), 2);
-	as_node_add_address(node, host, addr);
-		
-	node->conn_q = cf_queue_create(sizeof(int), true);
+	as_vector_init(&node->aliases, sizeof(as_alias), 2);
+	if (is_alias) {
+		as_node_add_alias(node, hostname, port);
+	}
+	
+	memcpy(&node->info_socket, &node_info->socket, sizeof(as_socket));
+	node->tls_name = tls_name ? cf_strdup(tls_name) : NULL;
+
+	if (node->info_socket.ssl) {
+		// Required to keep as_socket tls_name in scope.
+		as_tls_set_name(&node->info_socket, node->tls_name);
+	}
+
+	node->conn_q = cf_queue_create(sizeof(as_socket), true);
 	
 	// Initialize async queue.
 	if (as_event_loop_capacity > 0) {
@@ -104,12 +120,12 @@ as_node_create(as_cluster* cluster, as_host* host, struct sockaddr_in* addr, as_
 		node->pipe_conn_qs = 0;
 	}
 
-	node->info_fd = node_info->fd;
 	node->conn_count = 0;
 	node->friends = 0;
 	node->failures = 0;
 	node->index = 0;
 	node->active = true;
+	node->partition_changed = false;
 	return node;
 }
 
@@ -117,18 +133,17 @@ void
 as_node_destroy(as_node* node)
 {
 	// Drain out connection queues and close the FDs
-	int	fd;
-	
-	while (cf_queue_pop(node->conn_q, &fd, CF_QUEUE_NOWAIT) == CF_QUEUE_OK) {
-		as_node_close_connection(node, fd);
+	as_socket socket;
+	while (cf_queue_pop(node->conn_q, &socket, CF_QUEUE_NOWAIT) == CF_QUEUE_OK) {
+		as_node_close_connection(node, &socket);
 	}
 		
-	if (node->info_fd >= 0) {
-		as_close(node->info_fd);
+	if (node->info_socket.fd >= 0) {
+		as_socket_close(&node->info_socket);
 	}
 
 	// Release memory
-	as_vector_destroy(&node->addresses);
+	cf_free(node->addresses);
 	as_vector_destroy(&node->aliases);
 	cf_queue_destroy(node->conn_q);
 	
@@ -137,129 +152,208 @@ as_node_destroy(as_node* node)
 		as_event_node_destroy(node);
 	}
 
+	if (node->tls_name) {
+		cf_free(node->tls_name);
+	}
 	cf_free(node);
 }
 
 void
-as_node_add_address(as_node* node, as_host* host, struct sockaddr_in* addr)
+as_node_add_address(as_node* node, struct sockaddr* addr)
 {
 	// Add IP address
 	as_address address;
-	address.addr = *addr;
-	as_socket_address_name(addr, address.name);
-	as_vector_append(&node->addresses, &address);
-	
-	if (! host) {
-		return;
+	as_address_copy_storage(addr, &address.addr);
+	as_address_name(addr, address.name, sizeof(address.name));
+
+	// Address array is currently a fixed size.
+	// Do not resize because multiple threads are accessing the array.
+	if (addr->sa_family == AF_INET) {
+		if (node->address4_size < AS_ADDRESS4_MAX) {
+			node->addresses[node->address4_size] = address;
+			node->address4_size++;
+		}
+		else {
+			as_log_info("Failed to add node %s ipv4 address %s. Max size = %d", node->name, address.name, AS_ADDRESS4_MAX);
+		}
 	}
-	
-	// Add alias if not IP address and does not already exist.
-	struct in_addr addr_tmp;
-	if (inet_aton(host->name, &addr_tmp)) {
-		// Do not add IP address to aliases.
-		return;
+	else {
+		uint32_t offset = AS_ADDRESS4_MAX + node->address6_size;
+		
+		if (offset < AS_ADDRESS6_MAX) {
+			node->addresses[offset] = address;
+			node->address6_size++;
+		}
+		else {
+			as_log_info("Failed to add node %s ipv6 address %s. Max size = %d", node->name, address.name, AS_ADDRESS6_MAX - AS_ADDRESS4_MAX);
+		}
 	}
-	
+}
+
+void
+as_node_add_alias(as_node* node, const char* hostname, in_port_t port)
+{
 	as_vector* aliases = &node->aliases;
-	as_host* alias;
+	as_alias* alias;
 	
 	for (uint32_t i = 0; i < aliases->size; i++) {
 		alias = as_vector_get(aliases, i);
 		
-		if (as_host_equals(alias, host)) {
+		if (strcmp(alias->name, hostname) == 0 && alias->port == port) {
 			// Already exists.
 			return;
 		}
 	}
 	
 	// Add new alias.
-	as_vector_append(aliases, host);
+	as_alias a;
+	
+	if (as_strncpy(a.name, hostname, sizeof(a.name))) {
+		as_log_warn("Hostname has been truncated: %s", hostname);
+	}
+	a.port = port;
+	
+	// Alias vector is currently a fixed size.
+	if (aliases->size < aliases->capacity) {
+		as_vector_append(aliases, &a);
+	}
+	else {
+		as_log_info("Failed to add node %s alias %s. Max size = %u", node->name, hostname, aliases->capacity);
+	}
 }
 
 static inline as_status
-as_node_authenticate_connection(as_error* err, as_node* node, uint64_t deadline_ms, int fd)
+as_node_authenticate_connection(as_error* err, as_node* node, uint64_t deadline_ms, as_socket* sock)
 {
 	as_cluster* cluster = node->cluster;
 	
 	if (cluster->user) {
-		as_status status = as_authenticate(err, fd, cluster->user, cluster->password, deadline_ms);
+		as_status status = as_authenticate(err, sock, cluster->user, cluster->password, deadline_ms);
 		
 		if (status) {
-			as_node_close_connection(node, fd);
+			as_node_close_connection(node, sock);
 			return status;
 		}
 	}
 	return AEROSPIKE_OK;
 }
 
-static as_status
-as_node_create_connection(as_error* err, as_node* node, uint64_t deadline_ms, int* fd_out)
+static int
+as_node_try_connections(as_socket* sock, as_address* addresses, int i, int max)
+{
+	while (i < max) {
+		if (as_socket_start_connect(sock, (struct sockaddr*)&addresses[i].addr)) {
+			return i;
+		}
+		i++;
+	}
+	return -1;
+}
+
+static int
+as_node_try_family_connections(as_node* node, int family, int begin, int end, int index, as_address* primary, as_socket* sock)
 {
 	// Create a non-blocking socket.
-	int fd = as_socket_create_nb();
+	int rv = as_socket_create(sock, family, &node->cluster->tls_ctx, node->tls_name);
 	
-	if (fd < 0) {
-		ck_pr_dec_32(&node->conn_count);
-		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Socket create failed");
-	}
-	*fd_out = fd;
-	
-	as_error error_local;
-	
-	// Try primary address.
-	as_address* primary = as_vector_get(&node->addresses, node->address_index);
-	
-	if (as_socket_start_connect_nb(&error_local, fd, &primary->addr) == AEROSPIKE_OK) {
-		// Connection started ok - we have our socket.
-		return as_node_authenticate_connection(err, node, deadline_ms, fd);
+	if (rv < 0) {
+		return rv;
 	}
 	
-	// Try other addresses.
-	as_vector* addresses = &node->addresses;
-	for (uint32_t i = 0; i < addresses->size; i++) {
-		as_address* address = as_vector_get(addresses, i);
+	// Try addresses.
+	as_address* addresses = node->addresses;
+	
+	if (index >= 0) {
+		// Try primary address.
+		if (as_socket_start_connect(sock, (struct sockaddr*)&primary->addr)) {
+			return index;
+		}
 		
-		// Address points into alias array, so pointer comparison is sufficient.
-		if (address != primary) {
-			if (as_socket_start_connect_nb(&error_local, fd, &address->addr) == AEROSPIKE_OK) {
-				// Replace invalid primary address with valid alias.
-				// Other threads may not see this change immediately.
-				// It's just a hint, not a requirement to try this new address first.
-				as_log_debug("Change node address %s %s:%d", node->name, address->name, (int)cf_swap_from_be16(address->addr.sin_port));
-				ck_pr_store_32(&node->address_index, i);
-				return as_node_authenticate_connection(err, node, deadline_ms, fd);
-			}
+		// Start from current index + 1 to end.
+		rv = as_node_try_connections(sock, addresses, index + 1, end);
+
+		if (rv < 0) {
+			// Start from begin to index.
+			rv = as_node_try_connections(sock, addresses, begin, index);
+		}
+	}
+	else {
+		rv = as_node_try_connections(sock, addresses, begin, end);
+	}
+	
+	if (rv < 0) {
+		// Couldn't start a connection on any socket address - close the socket.
+		as_socket_close(sock);
+		return -5;
+	}
+	return rv;
+}
+
+static as_status
+as_node_create_connection(as_error* err, as_node* node, uint64_t deadline_ms, as_socket* sock)
+{
+	// Try addresses.
+	uint32_t index = node->address_index;
+	as_address* primary = &node->addresses[index];
+	int rv;
+	
+	if (primary->addr.ss_family == AF_INET) {
+		// Try IPv4 addresses first.
+		rv = as_node_try_family_connections(node, AF_INET, 0, node->address4_size, index, primary, sock);
+		
+		if (rv < 0) {
+			// Try IPv6 addresses.
+			rv = as_node_try_family_connections(node, AF_INET6, AS_ADDRESS4_MAX, AS_ADDRESS4_MAX + node->address6_size, -1, NULL, sock);
+		}
+	}
+	else {
+		// Try IPv6 addresses first.
+		rv = as_node_try_family_connections(node, AF_INET6, AS_ADDRESS4_MAX, AS_ADDRESS4_MAX + node->address6_size, index, primary, sock);
+		
+		if (rv < 0) {
+			// Try IPv4 addresses.
+			rv = as_node_try_family_connections(node, AF_INET, 0, node->address4_size, -1, NULL, sock);
 		}
 	}
 	
-	// Couldn't start a connection on any socket address - close the socket.
-	as_node_close_connection(node, fd);
-	return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to connect: %s %s:%d",
-			node->name, primary->name, (int)cf_swap_from_be16(primary->addr.sin_port))
+	if (rv < 0) {
+		ck_pr_dec_32(&node->conn_count);
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to connect: %s %s", node->name, primary->name);
+	}
+	
+	if (rv != index) {
+		// Replace invalid primary address with valid alias.
+		// Other threads may not see this change immediately.
+		// It's just a hint, not a requirement to try this new address first.
+		ck_pr_store_32(&node->address_index, rv);
+		as_log_debug("Change node address %s %s", node->name, as_node_get_address_string(node));
+	}
+	
+	return as_node_authenticate_connection(err, node, deadline_ms, sock);
 }
 
 as_status
-as_node_get_connection(as_error* err, as_node* node, uint64_t deadline_ms, int* fd_out)
+as_node_get_connection(as_error* err, as_node* node, uint64_t deadline_ms, as_socket* sock_out)
 {
 	cf_queue* q = node->conn_q;
-	int fd;
-	
-	while (cf_queue_pop(q, &fd, CF_QUEUE_NOWAIT) == CF_QUEUE_OK) {
+
+	as_socket socket;
+	while (cf_queue_pop(q, &socket, CF_QUEUE_NOWAIT) == CF_QUEUE_OK) {
 		// Verify that socket is active and receive buffer is empty.
-		int len = as_socket_validate(fd);
+		int len = as_socket_validate(&socket);
 		
 		if (len == 0) {
-			*fd_out = fd;
+			memcpy(sock_out, &socket, sizeof(as_socket));
 			return AEROSPIKE_OK;
 		}
 
-		as_log_debug("Invalid socket %d from pool: %d", fd, len);
-		as_node_close_connection(node, fd);
+		as_log_debug("Invalid socket %d from pool: %d", socket.fd, len);
+		as_node_close_connection(node, &socket);
 	}
 	
 	// We exhausted the queue. Try creating a fresh socket.
 	if (ck_pr_faa_32(&node->conn_count, 1) < node->cluster->conn_queue_size) {
-		return as_node_create_connection(err, node, deadline_ms, fd_out);
+		return as_node_create_connection(err, node, deadline_ms, sock_out);
 	}
 	else {
 		ck_pr_dec_32(&node->conn_count);
@@ -272,13 +366,13 @@ as_node_get_connection(as_error* err, as_node* node, uint64_t deadline_ms, int* 
 static inline int
 as_node_get_info_connection(as_error* err, as_node* node, uint64_t deadline_ms)
 {
-	if (node->info_fd < 0) {
+	if (node->info_socket.fd < 0) {
 		// Try to open a new socket.
-		int info_fd;
-		as_status stat = as_node_create_connection(err, node, deadline_ms, &info_fd);
+		as_socket info_socket;
+		as_status stat = as_node_create_connection(err, node, deadline_ms, &info_socket);
 
 		if (stat == AEROSPIKE_OK) {
-			node->info_fd = info_fd;
+			memcpy(&node->info_socket, &info_socket, sizeof(as_socket));
 		}
 
 		return stat;
@@ -289,15 +383,14 @@ as_node_get_info_connection(as_error* err, as_node* node, uint64_t deadline_ms)
 static void
 as_node_close_info_connection(as_node* node)
 {
-	shutdown(node->info_fd, SHUT_RDWR);
-	as_close(node->info_fd);
-	node->info_fd = -1;
+	as_socket_close(&node->info_socket);
+	node->info_socket.fd = -1;
 }
 
 static uint8_t*
 as_node_get_info(as_error* err, as_node* node, const char* names, size_t names_len, uint64_t deadline_ms, uint8_t* stack_buf)
 {
-	int fd = node->info_fd;
+	as_socket* sock = &node->info_socket;
 	
 	// Prepare the write request buffer.
 	size_t write_size = sizeof(as_proto) + names_len;
@@ -311,12 +404,12 @@ as_node_get_info(as_error* err, as_node* node, const char* names, size_t names_l
 	memcpy((void*)(stack_buf + sizeof(as_proto)), (const void*)names, names_len);
 
 	// Write the request. Note that timeout_ms is never 0.
-	if (as_socket_write_deadline(err, fd, stack_buf, write_size, deadline_ms) != AEROSPIKE_OK) {
+	if (as_socket_write_deadline(err, sock, stack_buf, write_size, deadline_ms) != AEROSPIKE_OK) {
 		return 0;
 	}
 	
 	// Reuse the buffer, read the response - first 8 bytes contains body size.
-	if (as_socket_read_deadline(err, fd, stack_buf, sizeof(as_proto), deadline_ms) != AEROSPIKE_OK) {
+	if (as_socket_read_deadline(err, sock, stack_buf, sizeof(as_proto), deadline_ms) != AEROSPIKE_OK) {
 		return 0;
 	}
 	
@@ -341,7 +434,7 @@ as_node_get_info(as_error* err, as_node* node, const char* names, size_t names_l
 	}
 	
 	// Read the response body.
-	if (as_socket_read_deadline(err, fd, rbuf, proto_sz, deadline_ms) != AEROSPIKE_OK) {
+	if (as_socket_read_deadline(err, sock, rbuf, proto_sz, deadline_ms) != AEROSPIKE_OK) {
 		if (rbuf != stack_buf) {
 			cf_free(rbuf);
 		}
@@ -353,207 +446,202 @@ as_node_get_info(as_error* err, as_node* node, const char* names, size_t names_l
 	return rbuf;
 }
 
-static bool
-as_node_verify_name(as_node* node, const char* name)
+static as_status
+as_node_verify_name(as_error* err, as_node* node, const char* name)
 {
 	if (name == 0 || *name == 0) {
-		as_log_warn("Node name not returned from info request.");
-		return false;
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Node name not returned from info request.");
 	}
 	
 	if (strcmp(node->name, name) != 0) {
 		// Set node to inactive immediately.
-		as_log_warn("Node name has changed. Old=%s New=%s", node->name, name);
-		
 		// Make volatile write so changes are reflected in other threads.
 		ck_pr_store_8(&node->active, false);
-
-		return false;
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Node name has changed. Old=%s New=%s", node->name, name);
 	}
-	return true;
+	return AEROSPIKE_OK;
 }
 
-static as_node*
-as_cluster_find_node_by_address(as_cluster* cluster, in_addr_t addr, in_port_t port)
-{
-	as_nodes* nodes = (as_nodes*)cluster->nodes;
-	as_node* node;
-	as_vector* addresses;
-	as_address* address;
-	struct sockaddr_in* sockaddr;
-	in_port_t port_be = cf_swap_to_be16(port);
-	
-	for (uint32_t i = 0; i < nodes->size; i++) {
-		node = nodes->array[i];
-		addresses = &node->addresses;
-		
-		for (uint32_t j = 0; j < addresses->size; j++) {
-			address = as_vector_get(addresses, j);
-			sockaddr = &address->addr;
-			
-			if (sockaddr->sin_addr.s_addr == addr && sockaddr->sin_port == port_be) {
-				return node;
-			}
-		}
-	}
-	return NULL;
-}
+static const char INFO_STR_CHECK_PEERS[] = "node\npeers-generation\npartition-generation\n";
+static const char INFO_STR_CHECK[] = "node\npartition-generation\nservices\n";
+static const char INFO_STR_CHECK_SVCALT[] = "node\npartition-generation\nservices-alternate\n";
 
-static as_node*
-as_cluster_find_node_by_host(as_cluster* cluster, as_host* host)
+static as_status
+as_node_process_response(as_cluster* cluster, as_error* err, as_node* node, as_vector* values,
+						 as_peers* peers)
 {
-	as_nodes* nodes = (as_nodes*)cluster->nodes;
-	as_node* node;
-	as_vector* aliases;
-	as_host* alias;
-	
-	for (uint32_t i = 0; i < nodes->size; i++) {
-		node = nodes->array[i];
-		aliases = &node->aliases;
-		
-		for (uint32_t j = 0; j < aliases->size; j++) {
-			alias = as_vector_get(aliases, j);
-			
-			if (as_host_equals(alias, host)) {
-				return node;
-			}
-		}
-	}
-	return NULL;
-}
-
-static bool
-as_find_friend(as_vector* /* <as_host> */ friends, as_host* host)
-{
-	as_host* friend;
-	
-	for (uint32_t i = 0; i < friends->size; i++) {
-		friend = as_vector_get(friends, i);
-		
-		if (as_host_equals(friend, host)) {
-			return true;
-		}
-	}
-	return false;
-}
-
-static void
-as_node_add_friends(as_cluster* cluster, as_node* node, char* buf, as_vector* /* <as_host> */ friends)
-{
-	// Friends format: <host1>:<port1>;<host2>:<port2>;...
-	if (buf == 0 || *buf == 0) {
-		// Must be a single node cluster.
-		return;
-	}
-	
-	// Use single pass parsing.
-	char* p = buf;
-	char* addr_str = p;
-	char* port_str;
-	struct in_addr addr_tmp;
-	as_host friend;
-	as_node* friend_node;
-	
-	while (*p) {
-		if (*p == ':') {
-			*p = 0;
-			port_str = ++p;
-			
-			while (*p) {
-				if (*p == ';') {
-					*p = 0;
-					break;
-				}
-				p++;
-			}
-			
-			if (as_strncpy(friend.name, addr_str, sizeof(friend.name))) {
-				as_log_warn("Hostname has been truncated: %s", friend.name);
-				addr_str = ++p;
-				continue;
-			}
-			
-			friend.port = atoi(port_str);
-			
-			if (friend.port == 0) {
-				as_log_warn("Invalid port: %s", port_str);
-				addr_str = ++p;
-				continue;
-			}
-			
-			const char* hostname = as_cluster_get_alternate_host(cluster, friend.name);
-			
-			if (hostname != friend.name) {
-				if (as_strncpy(friend.name, hostname, sizeof(friend.name))) {
-					as_log_warn("Hostname has been truncated: %s", hostname);
-					addr_str = ++p;
-					continue;
-				}
-			}
-			
-			if (inet_aton(friend.name, &addr_tmp)) {
-				// Address is an IP Address
-				friend_node = as_cluster_find_node_by_address(cluster, addr_tmp.s_addr, friend.port);
-			}
-			else {
-				// Address is a hostname.
-				friend_node = as_cluster_find_node_by_host(cluster, &friend);
-			}
-						
-			if (friend_node) {
-				friend_node->friends++;
-			}
-			else {
-				if (! as_find_friend(friends, &friend)) {
-					as_vector_append(friends, &friend);
-				}
-			}
-			addr_str = ++p;
-		}
-		else {
-			p++;
-		}
-	}
-}
-
-static bool
-as_node_process_response(as_cluster* cluster, as_node* node, as_vector* values,
-	as_vector* /* <as_host> */ friends, bool* update_partitions)
-{
-	bool status = false;
-	*update_partitions = false;
-	
 	for (uint32_t i = 0; i < values->size; i++) {
 		as_name_value* nv = as_vector_get(values, i);
 		
 		if (strcmp(nv->name, "node") == 0) {
-			if (as_node_verify_name(node, nv->value)) {
-				status = true;
+			as_status status = as_node_verify_name(err, node, nv->value);
+			
+			if (status != AEROSPIKE_OK) {
+				return status;
 			}
-			else {
-				status = false;
-				break;
+		}
+		else if (strcmp(nv->name, "peers-generation") == 0) {
+			uint32_t gen = (uint32_t)atoi(nv->value);
+			if (node->peers_generation != gen) {
+				as_log_debug("Node %s peers generation changed: %u", node->name, gen);
+				peers->gen_changed = true;
 			}
 		}
 		else if (strcmp(nv->name, "partition-generation") == 0) {
 			uint32_t gen = (uint32_t)atoi(nv->value);
 			if (node->partition_generation != gen) {
 				as_log_debug("Node %s partition generation changed: %u", node->name, gen);
-				*update_partitions = true;
+				node->partition_changed = true;
 			}
 		}
 		else if (strcmp(nv->name, "services") == 0 || strcmp(nv->name, "services-alternate") == 0) {
-			as_node_add_friends(cluster, node, nv->value, friends);
+			as_peers_parse_services(peers, cluster, node, nv->value);
 		}
 		else {
-			as_log_warn("Node %s did not request info '%s'", node->name, nv->name);
+			return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Node %s did not request info '%s'", node->name, nv->name);
 		}
 	}
+	return AEROSPIKE_OK;
+}
+
+/**
+ *	Request current status from server node.
+ */
+as_status
+as_node_refresh(as_cluster* cluster, as_error* err, as_node* node, as_peers* peers)
+{
+	uint64_t deadline_ms = as_socket_deadline(cluster->conn_timeout_ms);
+	as_status status = as_node_get_info_connection(err, node, deadline_ms);
+	
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+	
+	const char* command;
+	size_t command_len;
+	
+	if (peers->use_peers) {
+		command = INFO_STR_CHECK_PEERS;
+		command_len = sizeof(INFO_STR_CHECK_PEERS) - 1;
+	}
+	else {
+		if (cluster->use_services_alternate) {
+			command = INFO_STR_CHECK_SVCALT;
+			command_len = sizeof(INFO_STR_CHECK_SVCALT) - 1;
+		}
+		else {
+			command = INFO_STR_CHECK;
+			command_len = sizeof(INFO_STR_CHECK) - 1;
+		}
+	}
+	
+	uint8_t stack_buf[INFO_STACK_BUF_SIZE];
+	uint8_t* buf = as_node_get_info(err, node, command, command_len, deadline_ms, stack_buf);
+	
+	if (! buf) {
+		as_node_close_info_connection(node);
+		return err->code;
+	}
+	
+	as_vector values;
+	as_vector_inita(&values, sizeof(as_name_value), 4);
+	
+	as_info_parse_multi_response((char*)buf, &values);
+	
+	status = as_node_process_response(cluster, err, node, &values, peers);
+		
+	if (buf != stack_buf) {
+		cf_free(buf);
+	}
+
+	as_vector_destroy(&values);
 	return status;
 }
 
-static void
-as_node_process_partitions(as_cluster* cluster, as_node* node, as_vector* values)
+static const char INFO_STR_PEERS_TLS_ALT[] = "peers-tls-alt\n";
+static const char INFO_STR_PEERS_TLS_STD[] = "peers-tls-std\n";
+static const char INFO_STR_PEERS_CLEAR_ALT[] = "peers-clear-alt\n";
+static const char INFO_STR_PEERS_CLEAR_STD[] = "peers-clear-std\n";
+
+static as_status
+as_node_process_peers(as_cluster* cluster, as_error* err, as_node* node, as_vector* values, as_peers* peers)
+{
+	for (uint32_t i = 0; i < values->size; i++) {
+		as_name_value* nv = as_vector_get(values, i);
+		
+		if (strcmp(nv->name, "peers-tls-alt") == 0 ||
+			strcmp(nv->name, "peers-tls-std") == 0 ||
+			strcmp(nv->name, "peers-clear-alt") == 0 ||
+			strcmp(nv->name, "peers-clear-std") == 0
+			) {
+			as_status status = as_peers_parse_peers(peers, err, cluster, node, nv->value);
+			
+			if (status != AEROSPIKE_OK) {
+				return status;
+			}
+		}
+		else {
+			return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Node %s did not request info '%s'", node->name, nv->name);
+		}
+	}
+	return AEROSPIKE_OK;
+}
+
+as_status
+as_node_refresh_peers(as_cluster* cluster, as_error* err, as_node* node, as_peers* peers)
+{
+	uint64_t deadline_ms = as_socket_deadline(cluster->conn_timeout_ms);
+	const char* command;
+	size_t command_len;
+
+	if (cluster->tls_ctx.ssl_ctx) {
+		if (cluster->use_services_alternate) {
+			command = INFO_STR_PEERS_TLS_ALT;
+			command_len = sizeof(INFO_STR_PEERS_TLS_ALT) - 1;
+		}
+		else {
+			command = INFO_STR_PEERS_TLS_STD;
+			command_len = sizeof(INFO_STR_PEERS_TLS_STD) - 1;
+		}
+	}
+	else {
+		if (cluster->use_services_alternate) {
+			command = INFO_STR_PEERS_CLEAR_ALT;
+			command_len = sizeof(INFO_STR_PEERS_CLEAR_ALT) - 1;
+		}
+		else {
+			command = INFO_STR_PEERS_CLEAR_STD;
+			command_len = sizeof(INFO_STR_PEERS_CLEAR_STD) - 1;
+		}
+	}
+	
+	uint8_t stack_buf[INFO_STACK_BUF_SIZE];
+	uint8_t* buf = as_node_get_info(err, node, command, command_len, deadline_ms, stack_buf);
+	
+	if (! buf) {
+		as_node_close_info_connection(node);
+		return err->code;
+	}
+	
+	as_vector values;
+	as_vector_inita(&values, sizeof(as_name_value), 4);
+	
+	as_info_parse_multi_response((char*)buf, &values);
+	as_status status = as_node_process_peers(cluster, err, node, &values, peers);
+	
+	if (buf != stack_buf) {
+		cf_free(buf);
+	}
+	
+	as_vector_destroy(&values);
+	return status;
+}
+
+static const char INFO_STR_GET_REPLICAS[] = "partition-generation\nreplicas-master\nreplicas-prole\n";
+static const char INFO_STR_GET_REPLICAS_ALL[] = "partition-generation\nreplicas-all\n";
+
+static as_status
+as_node_process_partitions(as_cluster* cluster, as_error* err, as_node* node, as_vector* values)
 {
 	for (uint32_t i = 0; i < values->size; i++) {
 		as_name_value* nv = as_vector_get(values, i);
@@ -571,37 +659,30 @@ as_node_process_partitions(as_cluster* cluster, as_node* node, as_vector* values
 			as_partition_tables_update(cluster, node, nv->value, false);
 		}
 		else {
-			as_log_warn("Node %s did not request info '%s'", node->name, nv->name);
+			return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Node %s did not request info '%s'", node->name, nv->name);
 		}
 	}
+	return AEROSPIKE_OK;
 }
 
-const char INFO_STR_CHECK[] = "node\npartition-generation\nservices\n";
-const char INFO_STR_CHECK_SVCALT[] = "node\npartition-generation\nservices-alternate\n";
-const char INFO_STR_GET_REPLICAS[] = "partition-generation\nreplicas-master\nreplicas-prole\n";
-const char INFO_STR_GET_REPLICAS_ALL[] = "partition-generation\nreplicas-all\n";
-
-/**
- *	Request current status from server node.
- */
 as_status
-as_node_refresh(as_cluster* cluster, as_error* err, as_node* node, as_vector* /* <as_host> */ friends)
+as_node_refresh_partitions(as_cluster* cluster, as_error* err, as_node* node, as_peers* peers)
 {
 	uint64_t deadline_ms = as_socket_deadline(cluster->conn_timeout_ms);
-	as_status status = as_node_get_info_connection(err, node, deadline_ms);
-	
-	if (status != AEROSPIKE_OK) {
-		return status;
+	const char* command;
+	size_t command_len;
+
+	if (node->features & AS_FEATURES_REPLICAS_ALL) {
+		command = INFO_STR_GET_REPLICAS_ALL;
+		command_len = sizeof(INFO_STR_GET_REPLICAS_ALL) - 1;
+	}
+	else {
+		command = INFO_STR_GET_REPLICAS;
+		command_len = sizeof(INFO_STR_GET_REPLICAS) - 1;
 	}
 	
 	uint8_t stack_buf[INFO_STACK_BUF_SIZE];
-	uint8_t* buf;
-	if (cluster->use_services_alternate) {
-		buf = as_node_get_info(err, node, INFO_STR_CHECK_SVCALT, sizeof(INFO_STR_CHECK_SVCALT) - 1, deadline_ms, stack_buf);
-	}
-	else {
-		buf = as_node_get_info(err, node, INFO_STR_CHECK, sizeof(INFO_STR_CHECK) - 1, deadline_ms, stack_buf);
-	}
+	uint8_t* buf = as_node_get_info(err, node, command, command_len, deadline_ms, stack_buf);
 	
 	if (! buf) {
 		as_node_close_info_connection(node);
@@ -610,41 +691,12 @@ as_node_refresh(as_cluster* cluster, as_error* err, as_node* node, as_vector* /*
 	
 	as_vector values;
 	as_vector_inita(&values, sizeof(as_name_value), 4);
-	
+
 	as_info_parse_multi_response((char*)buf, &values);
+	as_status status = as_node_process_partitions(cluster, err, node, &values);
 	
-	bool update_partitions;
-	bool response_status = as_node_process_response(cluster, node, &values, friends, &update_partitions);
-		
 	if (buf != stack_buf) {
 		cf_free(buf);
-	}
-	
-	if (response_status && update_partitions) {
-		if (node->has_replicas_all) {
-			buf = as_node_get_info(err, node, INFO_STR_GET_REPLICAS_ALL, sizeof(INFO_STR_GET_REPLICAS_ALL) - 1, deadline_ms, stack_buf);
-		}
-		else {
-			buf = as_node_get_info(err, node, INFO_STR_GET_REPLICAS, sizeof(INFO_STR_GET_REPLICAS) - 1, deadline_ms, stack_buf);
-		}
-
-		if (! buf) {
-			as_node_close_info_connection(node);
-			as_vector_destroy(&values);
-			return err->code;
-		}
-		
-		as_vector_clear(&values);
-		
-		as_info_parse_multi_response((char*)buf, &values);
-
-		if (buf) {
-			as_node_process_partitions(cluster, node, &values);
-			
-			if (buf != stack_buf) {
-				cf_free(buf);
-			}
-		}
 	}
 	
 	as_vector_destroy(&values);

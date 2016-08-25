@@ -26,6 +26,8 @@
 #endif
 
 extern uint32_t as_event_loop_capacity;
+extern int as_event_send_buffer_size;
+extern int as_event_recv_buffer_size;
 
 static void
 write_start(as_event_command* cmd)
@@ -325,7 +327,10 @@ as_pipe_get_connection(as_event_command* cmd)
 		ck_pr_inc_32(&cmd->cluster->async_conn_count);
 		conn = cf_malloc(sizeof(as_pipe_connection));
 		assert(conn != NULL);
-		
+
+#if defined(AS_USE_LIBEV)		
+		as_socket_init(&conn->base.socket);
+#endif
 		conn->base.pipeline = true;
 		conn->writer = NULL;
 		cf_ll_init(&conn->readers, NULL, false);
@@ -345,6 +350,53 @@ as_pipe_get_connection(as_event_command* cmd)
 		as_event_error_callback(cmd, &err);
 		return AS_CONNECTION_TOO_MANY;
 	}
+}
+
+bool
+as_pipe_modify_fd(as_event_command* cmd, int fd)
+{
+	if (as_event_send_buffer_size) {
+		if (setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &as_event_send_buffer_size, sizeof(as_event_send_buffer_size)) < 0) {
+			as_error err;
+			as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION,
+							"Failed to configure pipeline send buffer. size %d error %d (%s)",
+							as_event_send_buffer_size, errno, strerror(errno));
+			as_event_fd_error(cmd, &err, fd);
+			return false;
+		}
+	}
+	
+	if (as_event_recv_buffer_size) {
+		if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &as_event_recv_buffer_size, sizeof(as_event_recv_buffer_size)) < 0) {
+			as_error err;
+			as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION,
+							"Failed to configure pipeline receive buffer. size %d error %d (%s)",
+							as_event_recv_buffer_size, errno, strerror(errno));
+			as_event_fd_error(cmd, &err, fd);
+			return false;
+		}
+	}
+	
+#if defined(__linux__)
+	if (as_event_recv_buffer_size) {
+		if (setsockopt(fd, SOL_TCP, TCP_WINDOW_CLAMP, &as_event_recv_buffer_size, sizeof(as_event_recv_buffer_size)) < 0) {
+			as_error err;
+			as_error_set_message(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Failed to configure pipeline TCP window.");
+			as_event_fd_error(cmd, &err, fd);
+			return false;
+		}
+	}
+#endif
+	
+	int arg = 0;
+	
+	if (setsockopt(fd, SOL_TCP, TCP_NODELAY, &arg, sizeof(arg)) < 0) {
+		as_error err;
+		as_error_set_message(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Failed to configure pipeline Nagle algorithm.");
+		as_event_fd_error(cmd, &err, fd);
+		return false;
+	}
+	return true;
 }
 
 void
@@ -372,6 +424,7 @@ as_pipe_response_error(as_event_command* cmd, as_error* err)
 		case AEROSPIKE_ERR_QUERY_ABORTED:
 		case AEROSPIKE_ERR_SCAN_ABORTED:
 		case AEROSPIKE_ERR_ASYNC_CONNECTION:
+		case AEROSPIKE_ERR_TLS_ERROR:
 		case AEROSPIKE_ERR_CLIENT_ABORT:
 		case AEROSPIKE_ERR_CLIENT:
 			as_log_trace("Error is fatal");

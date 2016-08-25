@@ -124,7 +124,7 @@ aerospike_index_create_complex(
 }
 
 static bool
-aerospike_index_create_is_done(aerospike* as, as_error * err, as_policy_info* policy, char* command)
+aerospike_index_create_is_done(aerospike* as, as_error* err, as_policy_info* policy, char* command)
 {
 	// Index is not done if any node reports percent completed < 100.
 	// Errors are ignored and considered done.
@@ -133,10 +133,9 @@ aerospike_index_create_is_done(aerospike* as, as_error * err, as_policy_info* po
 	
 	for (uint32_t i = 0; i < nodes->size && done; i++) {
 		as_node* node = nodes->array[i];
-		struct sockaddr_in* sa_in = as_node_get_address(node);
 		
 		char* response = 0;
-		as_status status = aerospike_info_socket_address(as, err, policy, sa_in, command, &response);
+		as_status status = aerospike_info_node(as, err, policy, node, command, &response);
 		
 		if (status == AEROSPIKE_OK) {
 			char* find = "load_pct=";

@@ -100,10 +100,11 @@ connect_to_server(arguments* args, aerospike* client)
 	as_config cfg;
 	as_config_init(&cfg);
 	
-	for (int i = 0; i < args->host_count; i++) {
-		as_config_add_host(&cfg, args->hosts[i], args->port);
+	if (! as_config_add_hosts(&cfg, args->hosts, args->port)) {
+		blog_error("Invalid host(s) %s", args->hosts);
+		return 3;
 	}
-	
+
 	as_config_set_user(&cfg, args->user, args->password);
 	cfg.use_shm = args->use_shm;
 	cfg.conn_timeout_ms = 10000;
@@ -141,14 +142,14 @@ connect_to_server(arguments* args, aerospike* client)
 }
 
 static bool
-is_single_bin(aerospike* client, const char* host, int port, const char* namespace)
+is_single_bin(aerospike* client, const char* namespace)
 {
 	char filter[256];
 	sprintf(filter, "namespace/%s", namespace);
 	
 	char* res = 0;
 	as_error err;
-	as_status rc = aerospike_info_host(client, &err, 0, host, port, filter, &res);
+	as_status rc = aerospike_info_any(client, &err, 0, filter, &res);
 	bool single_bin = false;
 	
 	if (rc == AEROSPIKE_OK) {
@@ -168,11 +169,11 @@ is_single_bin(aerospike* client, const char* host, int port, const char* namespa
 				}
 			}
 		}
+		free(res);
 	}
 	else {
 		blog_error("Info request failed: %d - %s", err.code, err.message);
 	}
-	free(res);
 	return single_bin;
 }
 
@@ -218,8 +219,6 @@ run_benchmark(arguments* args)
 {
 	clientdata data;
 	memset(&data, 0, sizeof(clientdata));
-	data.host = args->hosts[0];
-	data.port = args->port;
 	data.namespace = args->namespace;
 	data.set = args->set;
 	data.threads = args->threads;
@@ -255,7 +254,7 @@ run_benchmark(arguments* args)
 		return ret;
 	}
 	
-	bool single_bin = is_single_bin(&data.client, args->hosts[0], args->port, args->namespace);
+	bool single_bin = is_single_bin(&data.client, args->namespace);
 	
 	if (single_bin) {
 		data.bin_name = "";

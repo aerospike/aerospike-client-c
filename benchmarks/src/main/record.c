@@ -117,7 +117,7 @@ gen_value(arguments* args, as_val** valpp)
 		}
 
 		case 'L': {
-			size_t len = calc_list_or_map_ele_count(args->bintype, args->binlen, args->binlen_type, 9);
+			int len = calc_list_or_map_ele_count(args->bintype, args->binlen, args->binlen_type, 9);
 			*valpp = (as_val *)as_arraylist_new(len, 0);
 
 			for (size_t i = 0; i < len; i++) {
@@ -127,7 +127,7 @@ gen_value(arguments* args, as_val** valpp)
 		}
 
 		case 'M': {
-			size_t len = calc_list_or_map_ele_count(args->bintype, args->binlen, args->binlen_type, 9);
+			int len = calc_list_or_map_ele_count(args->bintype, args->binlen, args->binlen_type, 9);
 			*valpp = (as_val *)as_hashmap_new(len);
 
 			for (size_t i = 0; i < len; i++) {

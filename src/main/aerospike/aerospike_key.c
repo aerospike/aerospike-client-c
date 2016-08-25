@@ -872,7 +872,7 @@ aerospike_has_double(aerospike* as)
 	}
 	
 	for (uint32_t i = 0; i < nodes->size; i++) {
-		if (! nodes->array[i]->has_double) {
+		if (! (nodes->array[i]->features & AS_FEATURES_DOUBLE)) {
 			as_nodes_release(nodes);
 			return false;
 		}
@@ -892,7 +892,7 @@ aerospike_has_geo(aerospike* as)
 	}
 	
 	for (uint32_t i = 0; i < nodes->size; i++) {
-		if (! nodes->array[i]->has_geo) {
+		if (! (nodes->array[i]->features & AS_FEATURES_GEO)) {
 			as_nodes_release(nodes);
 			return false;
 		}

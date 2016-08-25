@@ -158,13 +158,13 @@ as_admin_write_privileges(uint8_t** p, as_error* err, as_privilege** privileges,
 }
 
 static as_status
-as_admin_send(as_error* err, int fd, uint8_t* buffer, uint8_t* end, uint64_t deadline_ms)
+as_admin_send(as_error* err, as_socket* sock, uint8_t* buffer, uint8_t* end, uint64_t deadline_ms)
 {
 	uint64_t len = end - buffer;
 	uint64_t proto = (len - 8) | (MSG_VERSION << 56) | (MSG_TYPE << 48);
 	*(uint64_t*)buffer = cf_swap_to_be64(proto);
 	
-	return as_socket_write_deadline(err, fd, buffer, len, deadline_ms);
+	return as_socket_write_deadline(err, sock, buffer, len, deadline_ms);
 }
 
 static as_status
@@ -182,31 +182,31 @@ as_admin_execute(aerospike* as, as_error* err, const as_policy_admin* policy, ui
 		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to find server node.");
 	}
 	
-	int fd;
-	as_status status = as_node_get_connection(err, node, deadline_ms, &fd);
+	as_socket socket;
+	as_status status = as_node_get_connection(err, node, deadline_ms, &socket);
 	
 	if (status) {
 		as_node_release(node);
 		return status;
 	}
 
-	status = as_admin_send(err, fd, buffer, end, deadline_ms);
+	status = as_admin_send(err, &socket, buffer, end, deadline_ms);
 	
 	if (status) {
-		as_node_close_connection(node, fd);
+		as_node_close_connection(node, &socket);
 		as_node_release(node);
 		return status;
 	}
 	
-	status = as_socket_read_deadline(err, fd, buffer, HEADER_SIZE, deadline_ms);
+	status = as_socket_read_deadline(err, &socket, buffer, HEADER_SIZE, deadline_ms);
 	
 	if (status) {
-		as_node_close_connection(node, fd);
+		as_node_close_connection(node, &socket);
 		as_node_release(node);
 		return status;
 	}
 	
-	as_node_put_connection(node, fd);
+	as_node_put_connection(node, &socket);
 	as_node_release(node);
 	
 	status = buffer[RESULT_CODE];
@@ -218,7 +218,7 @@ as_admin_execute(aerospike* as, as_error* err, const as_policy_admin* policy, ui
 }
 
 static as_status
-as_admin_read_blocks(as_error* err, int fd, uint64_t deadline_ms, as_admin_parse_fn parse_fn, as_vector* list)
+as_admin_read_blocks(as_error* err, as_socket* sock, uint64_t deadline_ms, as_admin_parse_fn parse_fn, as_vector* list)
 {
 	as_status status = AEROSPIKE_OK;
 	uint8_t* buf = 0;
@@ -227,7 +227,7 @@ as_admin_read_blocks(as_error* err, int fd, uint64_t deadline_ms, as_admin_parse
 	while (true) {
 		// Read header
 		as_proto proto;
-		status = as_socket_read_deadline(err, fd, (uint8_t*)&proto, sizeof(as_proto), deadline_ms);
+		status = as_socket_read_deadline(err, sock, (uint8_t*)&proto, sizeof(as_proto), deadline_ms);
 		
 		if (status) {
 			break;
@@ -244,7 +244,7 @@ as_admin_read_blocks(as_error* err, int fd, uint64_t deadline_ms, as_admin_parse
 			}
 			
 			// Read remaining message bytes in group
-			status = as_socket_read_deadline(err, fd, buf, size, deadline_ms);
+			status = as_socket_read_deadline(err, sock, buf, size, deadline_ms);
 			
 			if (status) {
 				break;
@@ -281,32 +281,32 @@ as_admin_read_list(aerospike* as, as_error* err, const as_policy_admin* policy, 
 	if (! node) {
 		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to find server node.");
 	}
-	
-	int fd;
-	as_status status = as_node_get_connection(err, node, deadline_ms, &fd);
+
+	as_socket socket;
+	as_status status = as_node_get_connection(err, node, deadline_ms, &socket);
 	
 	if (status) {
 		as_node_release(node);
 		return status;
 	}
 	
-	status = as_admin_send(err, fd, command, end, deadline_ms);
+	status = as_admin_send(err, &socket, command, end, deadline_ms);
 	
 	if (status) {
-		as_node_close_connection(node, fd);
+		as_node_close_connection(node, &socket);
 		as_node_release(node);
 		return status;
 	}
 	
-	status = as_admin_read_blocks(err, fd, deadline_ms, parse_fn, list);
+	status = as_admin_read_blocks(err, &socket, deadline_ms, parse_fn, list);
 	
 	if (status) {
-		as_node_close_connection(node, fd);
+		as_node_close_connection(node, &socket);
 		as_node_release(node);
 		return status;
 	}
 
-	as_node_put_connection(node, fd);
+	as_node_put_connection(node, &socket);
 	as_node_release(node);
 	return status;
 }
@@ -331,7 +331,7 @@ as_authenticate_set(const char* user, const char* credential, uint8_t* buffer)
 }
 
 as_status
-as_authenticate(as_error* err, int fd, const char* user, const char* credential, uint64_t deadline_ms)
+as_authenticate(as_error* err, as_socket* sock, const char* user, const char* credential, uint64_t deadline_ms)
 {
 	uint8_t buffer[AS_STACK_BUF_SIZE];
 	uint8_t* p = buffer + 8;
@@ -340,13 +340,13 @@ as_authenticate(as_error* err, int fd, const char* user, const char* credential,
 	p = as_admin_write_field_string(p, USER, user);
 	p = as_admin_write_field_string(p, CREDENTIAL, credential);
 	
-	as_status status = as_admin_send(err, fd, buffer, p, deadline_ms);
+	as_status status = as_admin_send(err, sock, buffer, p, deadline_ms);
 	
 	if (status) {
 		return status;
 	}
 
-	status = as_socket_read_deadline(err, fd, buffer, HEADER_SIZE, deadline_ms);
+	status = as_socket_read_deadline(err, sock, buffer, HEADER_SIZE, deadline_ms);
 	
 	if (status) {
 		return status;

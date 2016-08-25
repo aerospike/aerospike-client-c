@@ -136,7 +136,7 @@ as_shm_add_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_add)
 	// Update shared memory and local nodes.
 	for (uint32_t i = 0; i < nodes_to_add->size; i++) {
 		as_node* node_to_add = as_vector_get_ptr(nodes_to_add, i);
-		as_address* address = as_node_get_address_full(node_to_add);
+		as_address* address = as_node_get_address(node_to_add);
 		int node_index = as_shm_find_node_index(cluster_shm, node_to_add->name);
 		
 		if (node_index >= 0) {
@@ -145,7 +145,14 @@ as_shm_add_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_add)
 			
 			// Update shared memory node in write lock.
 			ck_swlock_write_lock(&node_shm->lock);
-			memcpy(&node_shm->addr, &address->addr, sizeof(struct sockaddr_in));
+			memcpy(&node_shm->addr, &address->addr, sizeof(struct sockaddr_storage));
+			if (node_to_add->tls_name) {
+				strcpy(node_shm->tls_name, node_to_add->tls_name);
+			}
+			else {
+				node_shm->tls_name[0] = 0;
+			}
+			node_shm->features = node_to_add->features;
 			node_shm->active = true;
 			ck_swlock_write_unlock(&node_shm->lock);
 			
@@ -161,13 +168,15 @@ as_shm_add_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_add)
 				// Update shared memory node in write lock.
 				ck_swlock_write_lock(&node_shm->lock);
 				memcpy(node_shm->name, node_to_add->name, AS_NODE_NAME_SIZE);
-				memcpy(&node_shm->addr, &address->addr, sizeof(struct sockaddr_in));
+				memcpy(&node_shm->addr, &address->addr, sizeof(struct sockaddr_storage));
+				if (node_to_add->tls_name) {
+					strcpy(node_shm->tls_name, node_to_add->tls_name);
+				}
+				else {
+					node_shm->tls_name[0] = 0;
+				}
+				node_shm->features = node_to_add->features;
 				node_shm->active = true;
-				node_shm->has_batch_index = node_to_add->has_batch_index;
-				node_shm->has_replicas_all = node_to_add->has_replicas_all;
-				node_shm->has_double = node_to_add->has_double;
-				node_shm->has_geo = node_to_add->has_geo;
-				node_shm->has_pipelining = node_to_add->has_pipelining;
 				ck_swlock_write_unlock(&node_shm->lock);
 				
 				// Set shared memory node array index.
@@ -179,10 +188,8 @@ as_shm_add_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_add)
 			}
 			else {
 				// There are no more node slots available in shared memory.
-				as_log_error("Failed to add node %s %s:%d. Shared memory capacity exceeeded: %d",
-					node_to_add->name, address->name,
-					(int)cf_swap_from_be16(address->addr.sin_port),
-					cluster_shm->nodes_capacity);
+				as_log_error("Failed to add node %s %s. Shared memory capacity exceeeded: %d",
+					node_to_add->name, address->name, cluster_shm->nodes_capacity);
 			}
 		}
 		ck_pr_store_ptr(&shm_info->local_nodes[node_to_add->index], node_to_add);
@@ -241,17 +248,10 @@ as_shm_reset_nodes(as_cluster* cluster)
 			if (! node) {
 				as_node_info node_info;
 				strcpy(node_info.name, node_tmp.name);
-				node_info.fd = -1;
-				node_info.has_batch_index = node_tmp.has_batch_index;
-				node_info.has_replicas_all = node_tmp.has_replicas_all;
-				node_info.has_double = node_tmp.has_double;
-				node_info.has_geo = node_tmp.has_geo;
-				node_info.has_pipelining = node_tmp.has_pipelining;
-				
-				node = as_node_create(cluster, NULL, &node_tmp.addr, &node_info);
+				as_socket_init(&node_info.socket);
+				node_info.features = node_tmp.features;
+				node = as_node_create(cluster, NULL, node_tmp.tls_name, 0, false, (struct sockaddr*)&node_tmp.addr, &node_info);
 				node->index = i;
-				as_address* a = as_node_get_address_full(node);
-				as_log_info("Add node %s %s:%d", node_tmp.name, a->name, (int)cf_swap_from_be16(a->addr.sin_port));
 				as_vector_append(&nodes_to_add, &node);
 				ck_pr_store_ptr(&shm_info->local_nodes[i], node);
 			}

@@ -59,6 +59,9 @@ as_pipe_get_recv_buffer_size();
 extern as_connection_status
 as_pipe_get_connection(as_event_command* cmd);
 
+extern bool
+as_pipe_modify_fd(as_event_command* cmd, int fd);
+
 extern void
 as_pipe_socket_error(as_event_command* cmd, as_error* err);
 

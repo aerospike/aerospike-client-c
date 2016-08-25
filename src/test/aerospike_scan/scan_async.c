@@ -75,7 +75,7 @@ put_listener(as_error* err, void* udata, as_event_loop* event_loop)
 	}
 
 	if (err) {
-		error("Put failed: %d %s\n", err->code, err->message);
+		error("Put failed in listener: %d %s\n", err->code, err->message);
 		return;
 	}
 }
@@ -89,6 +89,10 @@ insert_data(uint32_t numrecs, const char *setname)
 	char strval[SET_STRSZ], strkey[SET_STRSZ];
 	as_error err;
 	as_status status;
+	
+	as_policy_write policy;
+	as_policy_write_init(&policy);
+	policy.timeout = 10000;
 		
 	as_monitor_begin(&monitor);
 	
@@ -112,7 +116,7 @@ insert_data(uint32_t numrecs, const char *setname)
 		as_key k;
 		as_key_init(&k, NS, setname, strkey);
 
-		status = aerospike_key_put_async(as, &err, NULL, &k, &r, put_listener, &counter, 0, NULL);
+		status = aerospike_key_put_async(as, &err, &policy, &k, &r, put_listener, &counter, 0, NULL);
 		as_hashmap_destroy(&m);
 		as_key_destroy(&k);
 		as_record_destroy(&r);

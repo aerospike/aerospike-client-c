@@ -19,6 +19,7 @@
 #include <aerospike/aerospike.h>
 #include <aerospike/as_config.h>
 #include <aerospike/as_key.h>
+#include <aerospike/as_socket.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -261,7 +262,7 @@ as_roles_destroy(as_role** roles, int roles_size);
  *  Do not use this method directly.
  */
 as_status
-as_authenticate(as_error* err, int fd, const char* user, const char* credential, uint64_t deadline_ms);
+as_authenticate(as_error* err, as_socket* sock, const char* user, const char* credential, uint64_t deadline_ms);
 	
 /**
  *	@private

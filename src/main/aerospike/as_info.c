@@ -116,47 +116,53 @@ as_info_validate(char* response, char** message)
  *****************************************************************************/
 
 as_status
-as_info_command_node(as_error* err, as_node* node, char* command, bool send_asis, uint64_t deadline_ms, char** response)
+as_info_command_node(
+	as_error* err, as_node* node, char* command, bool send_asis, uint64_t deadline_ms,
+	char** response
+	)
 {
-	int fd;
-	as_status status = as_node_get_connection(err, node, deadline_ms, &fd);
+	as_socket socket;
+	as_status status = as_node_get_connection(err, node, deadline_ms, &socket);
 	
 	if (status) {
 		return status;
 	}
 	
-	status = as_info_command(err, fd, command, send_asis, deadline_ms, 0, response);
+	status = as_info_command(err, &socket, command, send_asis, deadline_ms, 0, response);
 	
 	if (status == AEROSPIKE_ERR_TIMEOUT || status == AEROSPIKE_ERR_CLIENT) {
-		as_node_close_connection(node, fd);
+		as_node_close_connection(node, &socket);
 	}
 	else {
-		as_node_put_connection(node, fd);
+		as_node_put_connection(node, &socket);
 	}
 	return status;
 }
 
 as_status
-as_info_command_host(as_cluster* cluster, as_error* err, struct sockaddr_in* sa_in, char* command,
-	 bool send_asis, uint64_t deadline_ms, char** response)
+as_info_command_host(
+	as_cluster* cluster, as_error* err, struct sockaddr* addr, char* command,
+	bool send_asis, uint64_t deadline_ms, char** response, const char* tls_name
+	)
 {
-	int fd;
-	as_status status = as_info_create_socket(cluster, err, sa_in, deadline_ms, &fd);
+	as_socket sock;
+	as_status status = as_info_create_socket(cluster, err, addr, deadline_ms, tls_name, &sock);
 	
 	if (status) {
 		*response = 0;
 		return status;
 	}
 		
-	status = as_info_command(err, fd, command, send_asis, deadline_ms, 0, response);
-	shutdown(fd, SHUT_RDWR);
-	as_close(fd);
+	status = as_info_command(err, &sock, command, send_asis, deadline_ms, 0, response);
+	as_socket_close(&sock);
 	return status;
 }
 
 as_status
-as_info_command(as_error* err, int fd, char* names, bool send_asis, uint64_t deadline_ms,
-				uint64_t max_response_length, char** values)
+as_info_command(
+	as_error* err, as_socket* sock, char* names, bool send_asis, uint64_t deadline_ms,
+	uint64_t max_response_length, char** values
+	)
 {
 	*values = 0;
 	
@@ -207,7 +213,7 @@ as_info_command(as_error* err, int fd, char* names, bool send_asis, uint64_t dea
 	*(uint64_t*)cmd = cf_swap_to_be64(proto);
 	
 	// Write command
-	as_status status = as_socket_write_deadline(err, fd, cmd, size, deadline_ms);
+	as_status status = as_socket_write_deadline(err, sock, cmd, size, deadline_ms);
 	as_command_free(cmd, size);
 	
 	if (status) {
@@ -216,7 +222,7 @@ as_info_command(as_error* err, int fd, char* names, bool send_asis, uint64_t dea
 	
 	// Read response
 	as_proto header;
-	status = as_socket_read_deadline(err, fd, (uint8_t*)&header, sizeof(as_proto), deadline_ms);
+	status = as_socket_read_deadline(err, sock, (uint8_t*)&header, sizeof(as_proto), deadline_ms);
 	
 	if (status) {
 		return status;
@@ -230,7 +236,7 @@ as_info_command(as_error* err, int fd, char* names, bool send_asis, uint64_t dea
 			// Reuse command buffer.
 			int read_len = 100;
 			uint8_t* buf = alloca(read_len + 1);
-			status = as_socket_read_deadline(err, fd, buf, read_len, deadline_ms);
+			status = as_socket_read_deadline(err, sock, buf, read_len, deadline_ms);
 			
 			if (status) {
 				return status;
@@ -243,7 +249,7 @@ as_info_command(as_error* err, int fd, char* names, bool send_asis, uint64_t dea
 		}
 		
 		char* response = cf_malloc(header.sz + 1);
-		status = as_socket_read_deadline(err, fd, (uint8_t*)response, header.sz, deadline_ms);
+		status = as_socket_read_deadline(err, sock, (uint8_t*)response, header.sz, deadline_ms);
 		
 		if (status) {
 			return status;
@@ -266,25 +272,25 @@ as_info_command(as_error* err, int fd, char* names, bool send_asis, uint64_t dea
 }
 
 as_status
-as_info_create_socket(as_cluster* cluster, as_error* err, struct sockaddr_in* sa_in,
-					  uint64_t deadline_ms, int* fd_out)
+as_info_create_socket(
+	as_cluster* cluster, as_error* err, struct sockaddr* addr, uint64_t deadline_ms,
+	const char* tls_name, as_socket* sock
+	)
 {
-	int fd;
-	as_status status = as_socket_create_and_connect_nb(err, sa_in, &fd);
+	as_status status = as_socket_create_and_connect(sock, err, addr, &cluster->tls_ctx, tls_name);
 	
 	if (status) {
 		return status;
 	}
 	
 	if (cluster->user) {
-		status = as_authenticate(err, fd, cluster->user, cluster->password, deadline_ms);
+		status = as_authenticate(err, sock, cluster->user, cluster->password, deadline_ms);
 		
 		if (status) {
-			as_close(fd);
+			as_socket_close(sock);
 			return status;
 		}
 	}
-	*fd_out = fd;
 	return AEROSPIKE_OK;
 }
 

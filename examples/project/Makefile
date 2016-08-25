@@ -25,24 +25,24 @@ else
 endif
 
 CFLAGS += -I$(AEROSPIKE)/target/$(PLATFORM)/include
-CFLAGS += -I../../utils/src/include
+CFLAGS += -I../../utils/src/include -I/usr/local/include
 
 ifeq ($(EVENT_LIB),libev)
-  CFLAGS += -DAS_USE_LIBEV -I/usr/local/include
+  CFLAGS += -DAS_USE_LIBEV 
 endif
 
 ifeq ($(EVENT_LIB),libuv)
-  CFLAGS += -DAS_USE_LIBUV -I/usr/local/include
+  CFLAGS += -DAS_USE_LIBUV
 endif
 
-LDFLAGS =
+LDFLAGS = -L/usr/local/lib
 
 ifeq ($(EVENT_LIB),libev)
-  LDFLAGS += -L/usr/local/lib -lev
+  LDFLAGS += -lev
 endif
 
 ifeq ($(EVENT_LIB),libuv)
-  LDFLAGS += -L/usr/local/lib -luv
+  LDFLAGS += -luv
 endif
 
 LDFLAGS += -lssl -lcrypto -lpthread

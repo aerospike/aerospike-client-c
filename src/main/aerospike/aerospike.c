@@ -19,6 +19,7 @@
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_module.h>
+#include <aerospike/as_tls.h>
 #include <aerospike/mod_lua.h>
 #include <aerospike/mod_lua_config.h>
 
@@ -111,15 +112,38 @@ aerospike_connect(aerospike* as, as_error* err)
 
 	// This is not 100% bulletproof against, say, simultaneously calling
 	// aerospike_connect() from two different threads with the same as object...
-	if ( as->cluster ) {
+	if (as->cluster) {
 		return AEROSPIKE_OK;
 	}
 
-	// configuration checks
-	if ( as->config.hosts[0].addr == NULL ) {
+	as_config* config = &as->config;
+	as_vector* hosts = config->hosts;
+	
+	// Verify seed hosts are specified.
+	if (hosts == NULL || hosts->size == 0) {
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "No hosts provided");
 	}
-
+	
+	// Set TLS names to default when enabled.
+	if (config->tls.enable && ! config->tls.encrypt_only) {
+		for (uint32_t i = 0; i < hosts->size; i++) {
+			as_host* host = as_vector_get(hosts, i);
+			
+			if (! host->name) {
+				return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Seed host is null");
+			}
+			
+			if (! host->tls_name) {
+				if (config->cluster_id) {
+					host->tls_name = cf_strdup(config->cluster_id);
+				}
+				else {
+					host->tls_name = cf_strdup(host->name);
+				}
+			}
+		}
+	}
+	
 #if !defined USE_XDR
 	// Only change global lua configuration once.
 	if (! lua_initialized) {
@@ -177,7 +201,7 @@ aerospike_has_pipelining(aerospike* as)
 	}
 	
 	for (uint32_t i = 0; i < nodes->size; i++) {
-		if (! nodes->array[i]->has_pipelining) {
+		if (! (nodes->array[i]->features & AS_FEATURES_PIPELINING)) {
 			as_nodes_release(nodes);
 			return false;
 		}

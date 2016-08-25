@@ -17,11 +17,26 @@
 #pragma once
 
 #include <aerospike/as_cluster.h>
-#include <aerospike/as_vector.h>
+#include <netdb.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/******************************************************************************
+ * TYPES
+ ******************************************************************************/
+	
+/**
+ *	@private
+ *	Iterator for IP addresses.
+ */
+typedef struct as_sockaddr_iterator_s {
+	struct addrinfo* addresses;
+	struct addrinfo* current;
+	in_port_t port_be;
+	bool hostname_is_alias;
+} as_address_iterator;
 
 /******************************************************************************
  * FUNCTIONS
@@ -29,12 +44,51 @@ extern "C" {
 
 /**
  *	@private
- *	Lookup address(es) given hostname. Addresses are returned in the sockaddr_in vector
- *	if it's not null.  The addition to the vector will be done via a unique add just in
- *	case there are duplicates. Return zero on success.
+ *	Lookup hostname and initialize address iterator.
  */
 as_status
-as_lookup(as_error* err, const char* hostname, uint16_t port, as_vector* /*<struct sockaddr_in>*/ addresses);
+as_lookup_host(as_address_iterator* iter, as_error* err, const char* hostname, in_port_t port);
+	
+/**
+ *	@private
+ *	Get next socket address with assigned port.  Return false when there are no more addresses.
+ */
+static inline bool
+as_lookup_next(as_address_iterator* iter, struct sockaddr** addr)
+{
+	if (! iter->current) {
+		return false;
+	}
+	
+	struct sockaddr* sa = iter->current->ai_addr;
+	iter->current = iter->current->ai_next;
+	
+	if (sa->sa_family == AF_INET) {
+		((struct sockaddr_in*)sa)->sin_port = iter->port_be;
+	}
+	else {
+		((struct sockaddr_in6*)sa)->sin6_port = iter->port_be;
+	}
+	*addr = sa;
+	return true;
+}
+
+/**
+ *	@private
+ *	Release memory associated with address iterator.
+ */
+static inline void
+as_lookup_end(as_address_iterator* iter)
+{
+	freeaddrinfo(iter->addresses);
+}
+	
+/**
+ *	@private
+ *	Lookup and validate node.
+ */
+as_status
+as_lookup_node(as_cluster* cluster, as_error* err, const char* tls_name, struct sockaddr* addr, as_node_info* node_info);
 
 #ifdef __cplusplus
 } // end extern "C"

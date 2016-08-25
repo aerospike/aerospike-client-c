@@ -49,6 +49,7 @@ extern "C" {
  *	
  *	@param err			The status and possible error information for the info request.
  *	@param node			The node which provided the response.
+ *	@param req			The initial request.
  *	@param res			The response to the info request.
  *	@param udata		The udata provided to the aerospike_info_foreach()
  *
@@ -56,17 +57,49 @@ extern "C" {
  *
  *	@ingroup info_operations
  */
-typedef bool (* aerospike_info_foreach_callback)(const as_error * err, const as_node * node, const char * req, char * res, void * udata);
+typedef bool (*aerospike_info_foreach_callback)(const as_error* err, const as_node* node, const char* req, char* res, void* udata);
 
 /******************************************************************************
  *	FUNCTIONS
  *****************************************************************************/
 
 /**
- *	Send an info request to a specific host. The response must be freed by the caller on success.
- *	
+ *	Send an info request to a specific server node. The response must be freed by the caller on success.
+ *
  *	~~~~~~~~~~{.c}
- *	char * res = NULL;
+ *	char* res = NULL;
+ *	if ( aerospike_info_host(&as, &err, NULL, node, "info", &res) != AEROSPIKE_OK ) {
+ *		// handle error
+ *	}
+ *	else {
+ *		// handle response
+ *		free(res);
+ *	}
+ *	~~~~~~~~~~
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param node			The server node to send the request to.
+ *	@param req			The info request to send.
+ *	@param res			The response from the node. The response will be a NULL terminated string,
+ *						allocated by the function, and must be freed by the caller.
+ *
+ *	@return AEROSPIKE_OK on success. Otherwise an error.
+ *
+ *	@ingroup info_operations
+ */
+as_status
+aerospike_info_node(
+	aerospike* as, as_error* err, const as_policy_info* policy, as_node* node,
+	const char* req, char** res
+	);
+
+/**
+ *	Send an info request to a specific host. The response must be freed by the caller on success.
+ *
+ *	~~~~~~~~~~{.c}
+ *	char* res = NULL;
  *	if ( aerospike_info_host(&as, &err, NULL, "127.0.0.1", 3000, "info", &res) != AEROSPIKE_OK ) {
  *		// handle error
  *	}
@@ -77,29 +110,33 @@ typedef bool (* aerospike_info_foreach_callback)(const as_error * err, const as_
  *	}
  *	~~~~~~~~~~
  *
+ *	If TLS is enabled, this function will only work if the hostname is also the TLS certificate name.
+ *
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param addr			The IP address or hostname to send the request to.
+ *	@param hostname		The IP address or hostname to send the request to.
  *	@param port			The port to send the request to.
  *	@param req			The info request to send.
- *	@param res			The response from the node. The response will be a NULL terminated string, allocated by the function, and must be freed by the caller.
+ *	@param res			The response from the node. The response will be a NULL terminated string,
+ *						allocated by the function, and must be freed by the caller.
  *
  *	@return AEROSPIKE_OK on success. Otherwise an error.
  *
  *	@ingroup info_operations
  */
-as_status aerospike_info_host(
-	aerospike * as, as_error * err, const as_policy_info * policy, 
-	const char * addr, uint16_t port, const char * req, 
-	char ** res
+as_status
+aerospike_info_host(
+	aerospike* as, as_error* err, const as_policy_info* policy, const char* hostname, uint16_t port,
+	const char* req, char** res
 	);
 
 /**
  *	Send an info request to a specific socket address. The response must be freed by the caller on success.
+ *	This function does not support TLS connections nor IPv6.
  *
  *	~~~~~~~~~~{.c}
- *	char * res = NULL;
+ *	char* res = NULL;
  *	if ( aerospike_info_socket_address(&as, &err, NULL, &sa_in, "info", &res) != AEROSPIKE_OK ) {
  *		// handle error
  *	}
@@ -115,16 +152,17 @@ as_status aerospike_info_host(
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param sa_in		The IP address and port to send the request to.
  *	@param req			The info request to send.
- *	@param res			The response from the node. The response will be a NULL terminated string, allocated by the function, and must be freed by the caller.
+ *	@param res			The response from the node. The response will be a NULL terminated string,
+ *						allocated by the function, and must be freed by the caller.
  *
  *	@return AEROSPIKE_OK on success. Otherwise an error.
  *
  *	@ingroup info_operations
  */
-as_status aerospike_info_socket_address(
-	aerospike * as, as_error * err, const as_policy_info * policy,
-	struct sockaddr_in* sa_in, const char * req,
-	char ** res
+as_status
+aerospike_info_socket_address(
+	aerospike* as, as_error* err, const as_policy_info* policy, struct sockaddr_in* sa_in,
+	const char* req, char** res
 	);
 
 /**
@@ -133,7 +171,7 @@ as_status aerospike_info_socket_address(
  *	the caller on success.
  *
  *	~~~~~~~~~~{.c}
- *	char * res = NULL;
+ *	char* res = NULL;
  *	if ( aerospike_info_any(&as, &err, NULL, "info", &res) != AEROSPIKE_OK ) {
  *		// handle error
  *	}
@@ -148,15 +186,16 @@ as_status aerospike_info_socket_address(
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  *	@param req			The info request to send.
- *	@param res			The response from the node. The response will be a NULL terminated string, allocated by the function, and must be freed by the caller.
+ *	@param res			The response from the node. The response will be a NULL terminated string,
+ *						allocated by the function, and must be freed by the caller.
  *
  *	@return AEROSPIKE_OK on success. Otherwise an error.
  *
  *	@ingroup info_operations
  */
-as_status aerospike_info_any(
-	aerospike * as, as_error * err, const as_policy_info * policy,
-	const char * req, char ** res
+as_status
+aerospike_info_any(
+	aerospike* as, as_error* err, const as_policy_info* policy, const char* req, char** res
 	);
 
 /**
@@ -171,7 +210,7 @@ as_status aerospike_info_any(
  *	The callback takes a response string. The caller should not free this string.
  *
  *	~~~~~~~~~~{.c}
- *	bool callback(const as_error * err, const as_node * node, const char * req, char * res, void * udata) {
+ *	bool callback(const as_error* err, const as_node * node, const char* req, char* res, void* udata) {
  *		// handle response
  *	}
  *	~~~~~~~~~~
@@ -188,10 +227,10 @@ as_status aerospike_info_any(
  *
  *	@ingroup info_operations
  */
-as_status aerospike_info_foreach(
-	aerospike * as, as_error * err, const as_policy_info * policy, 
-	const char * req, 
-	aerospike_info_foreach_callback callback, void * udata
+as_status
+aerospike_info_foreach(
+	aerospike* as, as_error* err, const as_policy_info* policy, const char* req,
+	aerospike_info_foreach_callback callback, void* udata
 	);
 
 #ifdef __cplusplus

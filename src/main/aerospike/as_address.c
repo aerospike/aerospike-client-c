@@ -1,0 +1,62 @@
+/*
+ * Copyright 2008-2016 Aerospike, Inc.
+ *
+ * Portions may be licensed to Aerospike, Inc. under one or more contributor
+ * license agreements.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not
+ * use this file except in compliance with the License. You may obtain a copy of
+ * the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
+#include <aerospike/as_address.h>
+#include <arpa/inet.h>
+#include <stdio.h>
+
+/******************************************************************************
+ * FUNCTIONS
+ *****************************************************************************/
+
+void
+as_address_name(struct sockaddr* addr, char* name, socklen_t size)
+{
+	 // IPv4: xxx.xxx.xxx.xxx:<port>
+	 // IPv6: [xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx]:<port>
+	if (addr->sa_family == AF_INET) {
+		struct sockaddr_in* a = (struct sockaddr_in*)addr;
+		const char* result = inet_ntop(AF_INET, &a->sin_addr, name, size);
+		
+		if (result) {
+			size_t len = strlen(name);
+			
+			if (len + 5 < size) {
+				sprintf(name + len, ":%d", cf_swap_from_be16(a->sin_port));
+			}
+		}
+		else {
+			*name = 0;
+		}
+	}
+	else {
+		struct sockaddr_in6* a = (struct sockaddr_in6*)addr;
+		*name = '[';
+		
+		const char* result = inet_ntop(AF_INET6, &a->sin6_addr, name + 1, size - 1);
+		
+		if (result) {
+			size_t len = strlen(name);
+			
+			if (len + 7 < size) {
+				sprintf(name + len, "]:%d", cf_swap_from_be16(a->sin6_port));
+			}
+		}
+		else {
+			*name = 0;
+		}
+	}
+}

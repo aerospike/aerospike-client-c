@@ -23,6 +23,7 @@
 #include <aerospike/as_proto.h>
 #include <aerospike/as_socket.h>
 #include <aerospike/as_status.h>
+#include <aerospike/as_tls.h>
 #include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_byte_order.h>
 #include <errno.h>
@@ -87,6 +88,7 @@ as_ev_worker(void* udata)
 	struct ev_loop* loop = udata;
 	ev_loop(loop, 0);
 	ev_loop_destroy(loop);
+	as_tls_thread_cleanup();
 	return NULL;
 }
 
@@ -140,18 +142,34 @@ as_event_send(as_event_command* cmd)
 static inline void
 as_ev_watch_write(as_event_command* cmd)
 {
+	uint8_t watch = cmd->pipe_listener != NULL ? EV_WRITE | EV_READ : EV_WRITE;
 	as_event_connection* conn = cmd->conn;
+
+	// Skip if we're already watching the right stuff.
+	if (watch == conn->watching) {
+		return;
+	}
+	conn->watching = watch;
+
 	ev_io_stop(cmd->event_loop->loop, &conn->watcher);
-	ev_io_set(&conn->watcher, conn->fd, cmd->pipe_listener != NULL ? EV_WRITE | EV_READ : EV_WRITE);
+	ev_io_set(&conn->watcher, conn->socket.fd, watch);
 	ev_io_start(cmd->event_loop->loop, &conn->watcher);
 }
 
 static inline void
 as_ev_watch_read(as_event_command* cmd)
 {
+	uint8_t watch = EV_READ;
 	as_event_connection* conn = cmd->conn;
+
+	// Skip if we're already watching the right stuff.
+	if (watch == conn->watching) {
+		return;
+	}
+	conn->watching = watch;
+
 	ev_io_stop(cmd->event_loop->loop, &conn->watcher);
-	ev_io_set(&conn->watcher, conn->fd, EV_READ);
+	ev_io_set(&conn->watcher, conn->socket.fd, watch);
 	ev_io_start(cmd->event_loop->loop, &conn->watcher);
 }
 
@@ -159,76 +177,153 @@ as_ev_watch_read(as_event_command* cmd)
 #define AS_EVENT_WRITE_INCOMPLETE 1
 #define AS_EVENT_WRITE_ERROR 2
 
+#define AS_EVENT_READ_COMPLETE 3
+#define AS_EVENT_READ_INCOMPLETE 4
+#define AS_EVENT_READ_ERROR 5
+
+#define AS_EVENT_TLS_NEED_READ 6
+#define AS_EVENT_TLS_NEED_WRITE 7
+
+#define AS_EVENT_COMMAND_DONE 8
+
 static int
 as_ev_write(as_event_command* cmd)
 {
-	int fd = cmd->conn->fd;
-	ssize_t bytes;
-	
-	do {
-#if defined(__linux__)
-		bytes = send(fd, cmd->buf + cmd->pos, cmd->len - cmd->pos, MSG_NOSIGNAL);
-#else
-		bytes = write(fd, cmd->buf + cmd->pos, cmd->len - cmd->pos);
-#endif
-		
-		if (bytes > 0) {
-			cmd->pos += bytes;
-			continue;
-		}
-		
-		if (bytes < 0) {
-			if (errno == EWOULDBLOCK) {
+	if (cmd->conn->socket.ctx) {
+		do {
+			int rv = as_tls_write_once(&cmd->conn->socket,
+									   cmd->buf + cmd->pos,
+									   cmd->len - cmd->pos);
+			if (rv > 0) {
+				as_ev_watch_write(cmd);
+				cmd->pos += rv;
+				continue;
+			}
+			else if (rv == -1) {
+				// TLS sometimes need to read even when we are writing.
+				as_ev_watch_read(cmd);
+				return AS_EVENT_TLS_NEED_READ;
+			}
+			else if (rv == -2) {
+				// TLS wants a write, we're all set for that.
+				as_ev_watch_write(cmd);
 				return AS_EVENT_WRITE_INCOMPLETE;
 			}
+			else if (rv < -2) {
+				as_error err;
+				as_error_update(&err, AEROSPIKE_ERR_TLS_ERROR,
+								"TLS write failed: socket %d",
+								cmd->conn->socket.fd);
+				as_event_socket_error(cmd, &err);
+				return AS_EVENT_WRITE_ERROR;
+			}
+			// as_tls_write_once can't return 0
+		} while (cmd->pos < cmd->len);
+	}
+	else {
+		int fd = cmd->conn->socket.fd;
+		ssize_t bytes;
+	
+		do {
+#if defined(__linux__)
+			bytes = send(fd, cmd->buf + cmd->pos, cmd->len - cmd->pos, MSG_NOSIGNAL);
+#else
+			bytes = write(fd, cmd->buf + cmd->pos, cmd->len - cmd->pos);
+#endif
+			if (bytes > 0) {
+				cmd->pos += bytes;
+				continue;
+			}
+		
+			if (bytes < 0) {
+				if (errno == EWOULDBLOCK) {
+					return AS_EVENT_WRITE_INCOMPLETE;
+				}
 			
-			as_error err;
-			as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Socket %d write failed: %d", fd, errno);
-			as_event_socket_error(cmd, &err);
-			return AS_EVENT_WRITE_ERROR;
-		}
-		else {
-			as_error err;
-			as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Socket %d write closed by peer", fd);
-			as_event_socket_error(cmd, &err);
-			return AS_EVENT_WRITE_ERROR;
-		}
-	} while (cmd->pos < cmd->len);
+				as_error err;
+				as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Socket %d write failed: %d", fd, errno);
+				as_event_socket_error(cmd, &err);
+				return AS_EVENT_WRITE_ERROR;
+			}
+			else {
+				as_error err;
+				as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Socket %d write closed by peer", fd);
+				as_event_socket_error(cmd, &err);
+				return AS_EVENT_WRITE_ERROR;
+			}
+		} while (cmd->pos < cmd->len);
+	}
 	
 	return AS_EVENT_WRITE_COMPLETE;
 }
 
-static bool
+static int
 as_ev_read(as_event_command* cmd)
 {
-	int fd = cmd->conn->fd;
-	ssize_t bytes;
-	
-	do {
-		bytes = read(fd, cmd->buf + cmd->pos, cmd->len - cmd->pos);
-		
-		if (bytes > 0) {
-			cmd->pos += bytes;
-			continue;
-		}
-		
-		if (bytes < 0) {
-			if (errno != EWOULDBLOCK) {
-				as_error err;
-				as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Socket %d read failed: %d", fd, errno);
-				as_event_socket_error(cmd, &err);
+	if (cmd->conn->socket.ctx) {
+		do {
+			int rv = as_tls_read_once(&cmd->conn->socket,
+									   cmd->buf + cmd->pos,
+									  cmd->len - cmd->pos);
+			if (rv > 0) {
+				as_ev_watch_read(cmd);
+				cmd->pos += rv;
+				continue;
 			}
-			return false;
-		}
-		else {
-			as_error err;
-			as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Socket %d read closed by peer", fd);
-			as_event_socket_error(cmd, &err);
-			return false;
-		}
-	} while (cmd->pos < cmd->len);
+			else if (rv == -1) {
+				// TLS wants a read
+				as_ev_watch_read(cmd);
+				return AS_EVENT_READ_INCOMPLETE;
+			}
+			else if (rv == -2) {
+				// TLS sometimes needs to write, even when the app is reading.
+				as_ev_watch_write(cmd);
+				return AS_EVENT_TLS_NEED_WRITE;
+			}
+			else if (rv < -2) {
+				as_error err;
+				as_error_update(&err, AEROSPIKE_ERR_TLS_ERROR,
+								"TLS read failed: socket %d",
+								cmd->conn->socket.fd);
+				as_event_socket_error(cmd, &err);
+				return AS_EVENT_READ_ERROR;
+			}
+			// as_tls_read_once doesn't return 0
+		} while (cmd->pos < cmd->len);
+	}
+	else {
+		int fd = cmd->conn->socket.fd;
+		ssize_t bytes;
 	
-	return true;
+		do {
+			bytes = read(fd, cmd->buf + cmd->pos, cmd->len - cmd->pos);
+		
+			if (bytes > 0) {
+				cmd->pos += bytes;
+				continue;
+			}
+		
+			if (bytes < 0) {
+				if (errno == EWOULDBLOCK) {
+					return AS_EVENT_READ_INCOMPLETE;
+				}
+				else {
+					as_error err;
+					as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Socket %d read failed: %d", fd, errno);
+					as_event_socket_error(cmd, &err);
+					return AS_EVENT_READ_ERROR;
+				}
+			}
+			else {
+				as_error err;
+				as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Socket %d read closed by peer", fd);
+				as_event_socket_error(cmd, &err);
+				return AS_EVENT_READ_ERROR;
+			}
+		} while (cmd->pos < cmd->len);
+	}
+	
+	return AS_EVENT_READ_COMPLETE;
 }
 
 static inline void
@@ -249,22 +344,25 @@ static inline void
 as_ev_command_write_start(as_event_command* cmd)
 {
 	cmd->state = AS_ASYNC_STATE_WRITE;
-	
+
 	int ret = as_ev_write(cmd);
-	
-	if (ret == AS_EVENT_WRITE_COMPLETE) {
+	switch (ret) {
+	case AS_EVENT_WRITE_COMPLETE:
 		// Done with write. Register for read.
 		as_ev_command_read_start(cmd);
-		return;
-	}
-	
-	if (ret == AS_EVENT_WRITE_INCOMPLETE) {
+		break;
+	case AS_EVENT_WRITE_INCOMPLETE:
 		// Got would-block. Register for write.
 		as_ev_watch_write(cmd);
+		break;
+	case AS_EVENT_TLS_NEED_READ:
+		// TLS layer needs readable to make progress.
+		as_ev_watch_read(cmd);
+		break;
 	}
 }
 
-static void
+static int
 as_ev_command_peek_block(as_event_command* cmd)
 {
 	// Batch, scan, query may be waiting on end block.
@@ -272,9 +370,10 @@ as_ev_command_peek_block(as_event_command* cmd)
 	cmd->len = sizeof(as_proto);
 	cmd->pos = 0;
 	cmd->state = AS_ASYNC_STATE_READ_HEADER;
-	
-	if (! as_ev_read(cmd)) {
-		return;
+
+	int rv = as_ev_read(cmd);
+	if (rv != AS_EVENT_READ_COMPLETE) {
+		return rv;
 	}
 	
 	as_proto* proto = (as_proto*)cmd->buf;
@@ -288,15 +387,19 @@ as_ev_command_peek_block(as_event_command* cmd)
 	// Check for end block size.
 	if (cmd->len == sizeof(as_msg)) {
 		// Look like we received end block.  Read and parse to make sure.
-		if (! as_ev_read(cmd)) {
-			return;
+		rv = as_ev_read(cmd);
+		if (rv != AS_EVENT_READ_COMPLETE) {
+			return rv;
 		}
-		
+
 		if (! cmd->parse_results(cmd)) {
 			// We did not finish after all. Prepare to read next header.
 			cmd->len = sizeof(as_proto);
 			cmd->pos = 0;
 			cmd->state = AS_ASYNC_STATE_READ_HEADER;
+		}
+		else {
+			return AS_EVENT_COMMAND_DONE;
 		}
 	}
 	else {
@@ -311,15 +414,19 @@ as_ev_command_peek_block(as_event_command* cmd)
 			cmd->free_buf = true;
 		}
 	}
+
+	return AS_EVENT_READ_COMPLETE;
 }
 
-static void
+static int
 as_ev_parse_authentication(as_event_command* cmd)
 {
+	int rv;
 	if (cmd->state == AS_ASYNC_STATE_AUTH_READ_HEADER) {
 		// Read response length
-		if (! as_ev_read(cmd)) {
-			return;
+		rv = as_ev_read(cmd);
+		if (rv != AS_EVENT_READ_COMPLETE) {
+			return rv;
 		}
 		as_event_set_auth_parse_header(cmd);
 
@@ -327,12 +434,13 @@ as_ev_parse_authentication(as_event_command* cmd)
 			as_error err;
 			as_error_update(&err, AEROSPIKE_ERR_CLIENT, "Authenticate response size is corrupt: %u", cmd->auth_len);
 			as_event_socket_error(cmd, &err);
-			return;
+			return AS_EVENT_READ_ERROR;
 		}
 	}
-	
-	if (! as_ev_read(cmd)) {
-		return;
+
+	rv = as_ev_read(cmd);
+	if (rv != AS_EVENT_READ_COMPLETE) {
+		return rv;
 	}
 	
 	// Parse authentication response.
@@ -344,26 +452,29 @@ as_ev_parse_authentication(as_event_command* cmd)
 		as_error err;
 		as_error_update(&err, code, "Authentication failed: %s", as_error_string(code));
 		as_event_socket_error(cmd, &err);
-		return;
+		return AS_EVENT_READ_ERROR;
 	}
 	
 	cmd->pos = 0;
 	as_ev_command_write_start(cmd);
+	return AS_EVENT_READ_COMPLETE;
 }
 
-static void
+static int
 as_ev_command_read(as_event_command* cmd)
 {
+	int rv;
+	
 	// Check for authenticate read-header or read-body.
 	if (cmd->state & (AS_ASYNC_STATE_AUTH_READ_HEADER | AS_ASYNC_STATE_AUTH_READ_BODY)) {
-		as_ev_parse_authentication(cmd);
-		return;
+		return as_ev_parse_authentication(cmd);
 	}
 	
 	if (cmd->state == AS_ASYNC_STATE_READ_HEADER) {
 		// Read response length
-		if (! as_ev_read(cmd)) {
-			return;
+		rv = as_ev_read(cmd);
+		if (rv != AS_EVENT_READ_COMPLETE) {
+			return rv;
 		}
 		
 		as_proto* proto = (as_proto*)cmd->buf;
@@ -385,13 +496,123 @@ as_ev_command_read(as_event_command* cmd)
 	}
 	
 	// Read response body
-	if (! as_ev_read(cmd)) {
-		return;
+	rv = as_ev_read(cmd);
+	if (rv != AS_EVENT_READ_COMPLETE) {
+		return rv;
 	}
-	
+
 	if (! cmd->parse_results(cmd)) {
 		// Batch, scan, query is not finished.
-		as_ev_command_peek_block(cmd);
+		return as_ev_command_peek_block(cmd);
+	}
+
+	return AS_EVENT_COMMAND_DONE;		
+}
+
+bool
+as_ev_tls_connect(as_event_command* cmd, as_event_connection* conn)
+{
+	int rv = as_tls_connect_once(&conn->socket);
+	if (rv < -1) {
+		// Failed, error has been logged.
+		as_error err;
+		as_error_set_message(&err, AEROSPIKE_ERR_TLS_ERROR,
+							 "TLS connection failed");
+		as_event_socket_error(cmd, &err);
+		return false;
+	}
+	else if (rv == -1) {
+		// TLS needs a read.
+		as_ev_watch_read(cmd);
+	}
+	else if (rv == -2) {
+		// TLS needs a write.
+		as_ev_watch_write(cmd);
+	}
+	else if (rv == 0) {
+		as_error err;
+		as_error_set_message(&err, AEROSPIKE_ERR_TLS_ERROR,
+							 "TLS connection shutdown");
+		as_event_socket_error(cmd, &err);
+		return false;
+	}
+	else
+	{
+		// TLS connection established.
+		if (cmd->cluster->user) {
+			as_event_set_auth_write(cmd);
+			cmd->state = AS_ASYNC_STATE_AUTH_WRITE;
+		}
+		else {
+			cmd->state = AS_ASYNC_STATE_WRITE;
+		}
+		as_ev_watch_write(cmd);
+	}
+	return true;
+}
+
+static void
+as_ev_callback_common(as_event_command* cmd, as_event_connection* conn) {
+	switch (cmd->state) {
+	case AS_ASYNC_STATE_TLS_CONNECT:
+		do {
+			if (! as_ev_tls_connect(cmd, conn)) {
+				return;
+			}
+		} while (as_tls_read_pending(&cmd->conn->socket) > 0);
+		break;
+
+	case AS_ASYNC_STATE_AUTH_READ_HEADER:
+	case AS_ASYNC_STATE_AUTH_READ_BODY:
+	case AS_ASYNC_STATE_READ_HEADER:
+	case AS_ASYNC_STATE_READ_BODY:
+		// If we're using TLS we must loop until there are no bytes
+		// left in the encryption buffer because we won't get another
+		// read event from libev.
+		do {
+			switch (as_ev_command_read(cmd)) {
+			case AS_EVENT_TLS_NEED_WRITE:
+				as_ev_watch_write(cmd);
+				break;
+			case AS_EVENT_COMMAND_DONE:
+				// In this case we need to not touch cmd again because
+				// it's been deallocated.
+				return;
+			default:
+				as_ev_watch_read(cmd);
+				break;
+			}
+		} while (as_tls_read_pending(&cmd->conn->socket) > 0);
+		break;
+
+	case AS_ASYNC_STATE_AUTH_WRITE:
+	case AS_ASYNC_STATE_WRITE:
+
+		as_ev_watch_write(cmd);
+		
+		switch (as_ev_write(cmd)) {
+		case AS_EVENT_TLS_NEED_READ:
+			as_ev_watch_read(cmd);
+			break;
+		case AS_EVENT_WRITE_COMPLETE:
+			// Done with write. Register for read.
+			if (cmd->state == AS_ASYNC_STATE_AUTH_WRITE) {
+				as_event_set_auth_read_header(cmd);
+				as_ev_watch_read(cmd);
+			}
+			else {
+				as_ev_command_read_start(cmd);
+			}
+			break;
+		default:
+			as_ev_watch_write(cmd);
+			break;
+		}
+		break;
+
+	default:
+		as_log_error("unexpected cmd state %d", cmd->state);
+		break;
 	}
 }
 
@@ -425,7 +646,8 @@ as_ev_callback(struct ev_loop* loop, ev_io* watcher, int revents)
 		else {
 			cmd = ((as_async_connection*)conn)->cmd;
 		}
-		as_ev_command_read(cmd);
+
+		as_ev_callback_common(cmd, conn);
 	}
 	else if (revents & EV_WRITE) {
 		as_event_connection* conn = watcher->data;
@@ -433,19 +655,8 @@ as_ev_callback(struct ev_loop* loop, ev_io* watcher, int revents)
 		as_event_command* cmd = conn->pipeline ?
 			((as_pipe_connection*)conn)->writer :
 			((as_async_connection*)conn)->cmd;
-		
-		int ret = as_ev_write(cmd);
-		
-		if (ret == AS_EVENT_WRITE_COMPLETE) {
-			// Done with write. Register for read.
-			if (cmd->state == AS_ASYNC_STATE_AUTH_WRITE) {
-				as_event_set_auth_read_header(cmd);
-				as_ev_watch_read(cmd);
-			}
-			else {
-				as_ev_command_read_start(cmd);
-			}
-		}
+
+		as_ev_callback_common(cmd, conn);
 	}
 	else if (revents & EV_ERROR) {
 		as_log_error("Async error occurred: %d", revents);
@@ -456,85 +667,132 @@ as_ev_callback(struct ev_loop* loop, ev_io* watcher, int revents)
 }
 
 static void
-as_ev_watcher_init(as_event_command* cmd, int fd)
+as_ev_watcher_init(as_event_command* cmd, as_socket* sock)
 {
-	if (cmd->cluster->user) {
+	as_event_connection* conn = cmd->conn;
+	memcpy(&conn->socket, sock, sizeof(as_socket));
+
+	if (cmd->cluster->tls_ctx.ssl_ctx) {
+		cmd->state = AS_ASYNC_STATE_TLS_CONNECT;
+	}
+	else if (cmd->cluster->user) {
 		as_event_set_auth_write(cmd);
 		cmd->state = AS_ASYNC_STATE_AUTH_WRITE;
 	}
 	else {
 		cmd->state = AS_ASYNC_STATE_WRITE;
 	}
+
+	uint8_t watch = cmd->pipe_listener != NULL ? EV_WRITE | EV_READ : EV_WRITE;
 	
-	as_event_connection* conn = cmd->conn;
-	conn->fd = fd;
-	ev_io_init(&conn->watcher, as_ev_callback, fd, cmd->pipe_listener != NULL ? EV_WRITE | EV_READ : EV_WRITE);
+	ev_io_init(&conn->watcher, as_ev_callback, conn->socket.fd, watch);
 	conn->watcher.data = conn;
 	ev_io_start(cmd->event_loop->loop, &conn->watcher);
+
+	conn->watching = watch;
+}
+
+static int
+as_ev_try_connections(int fd, as_address* addresses, socklen_t size, int i, int max)
+{
+	while (i < max) {
+		if (connect(fd, (struct sockaddr*)&addresses[i].addr, size) == 0 || errno == EINPROGRESS) {
+			return i;
+		}
+		i++;
+	}
+	return -1;
+}
+
+static int
+as_ev_try_family_connections(as_event_command* cmd, int family, int begin, int end, int index, as_address* primary, as_socket* sock)
+{
+	// Create a non-blocking socket.
+	int fd = as_event_create_socket(cmd, family);
+	
+	if (fd < 0) {
+		return -1;
+	}
+	
+	if (! as_socket_wrap(sock, family, fd, &cmd->cluster->tls_ctx, cmd->node->tls_name)) {
+		return - 1;
+	}
+
+	// Try addresses.
+	as_address* addresses = cmd->node->addresses;
+	socklen_t size = (family == AF_INET)? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
+	int rv;
+	
+	if (index >= 0) {
+		// Try primary address.
+		if (connect(fd, (struct sockaddr*)&primary->addr, size) == 0 || errno == EINPROGRESS) {
+			return index;
+		}
+		
+		// Start from current index + 1 to end.
+		rv = as_ev_try_connections(fd, addresses, size, index + 1, end);
+		
+		if (rv < 0) {
+			// Start from begin to index.
+			rv = as_ev_try_connections(fd, addresses, size, begin, index);
+		}
+	}
+	else {
+		rv = as_ev_try_connections(fd, addresses, size, begin, end);
+	}
+	
+	if (rv < 0) {
+		// Couldn't start a connection on any socket address - close the socket.
+		as_socket_close(sock);
+		return -1;
+	}
+	return rv;
 }
 
 static void
 as_ev_connect(as_event_command* cmd)
 {
-	int fd = as_event_create_socket(cmd);
-	
-	if (fd < 0) {
-		return;
-	}
-		
-	// Try primary address.
+	// Try addresses.
+	as_socket sock;
 	as_node* node = cmd->node;
-	as_address* primary = as_vector_get(&node->addresses, node->address_index);
+	uint32_t index = node->address_index;
+	as_address* primary = &node->addresses[index];
+	int rv;
 	
-	// Attempt non-blocking connection.
-	if (connect(fd, (struct sockaddr*)&primary->addr, sizeof(struct sockaddr)) == 0) {
-		as_ev_watcher_init(cmd, fd);
-		return;
-	}
-	
-	// Check if connection is in progress.
-	if (errno == EINPROGRESS) {
-		as_ev_watcher_init(cmd, fd);
-		return;
-	}
-	
-	// Try other addresses.
-	as_vector* addresses = &node->addresses;
-	for (uint32_t i = 0; i < addresses->size; i++) {
-		as_address* address = as_vector_get(addresses, i);
+	if (primary->addr.ss_family == AF_INET) {
+		// Try IPv4 addresses first.
+		rv = as_ev_try_family_connections(cmd, AF_INET, 0, node->address4_size, index, primary, &sock);
 		
-		// Address points into alias array, so pointer comparison is sufficient.
-		if (address != primary) {
-			if (connect(fd, (struct sockaddr*)&address->addr, sizeof(struct sockaddr)) == 0) {
-				// Replace invalid primary address with valid alias.
-				// Other threads may not see this change immediately.
-				// It's just a hint, not a requirement to try this new address first.
-				as_log_debug("Change node address %s %s:%d", node->name, address->name, (int)cf_swap_from_be16(address->addr.sin_port));
-				ck_pr_store_32(&node->address_index, i);
-				as_ev_watcher_init(cmd, fd);
-				return;
-			}
-			
-			// Check if connection is in progress.
-			if (errno == EINPROGRESS) {
-				// Replace invalid primary address with valid alias.
-				// Other threads may not see this change immediately.
-				// It's just a hint, not a requirement to try this new address first.
-				as_log_debug("Change node address %s %s:%d", node->name, address->name, (int)cf_swap_from_be16(address->addr.sin_port));
-				ck_pr_store_32(&node->address_index, i);
-				
-				// Connection hasn't finished.
-				as_ev_watcher_init(cmd, fd);
-				return;
-			}
+		if (rv < 0) {
+			// Try IPv6 addresses.
+			rv = as_ev_try_family_connections(cmd, AF_INET6, AS_ADDRESS4_MAX, AS_ADDRESS4_MAX + node->address6_size, -1, NULL, &sock);
+		}
+	}
+	else {
+		// Try IPv6 addresses first.
+		rv = as_ev_try_family_connections(cmd, AF_INET6, AS_ADDRESS4_MAX, AS_ADDRESS4_MAX + node->address6_size, index, primary, &sock);
+		
+		if (rv < 0) {
+			// Try IPv4 addresses.
+			rv = as_ev_try_family_connections(cmd, AF_INET, 0, node->address4_size, -1, NULL, &sock);
 		}
 	}
 	
-	// Failed to start a connection on any socket address.
-	as_error err;
-	as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Failed to connect: %s %s:%d",
-					node->name, primary->name, (int)cf_swap_from_be16(primary->addr.sin_port));
-	as_event_connect_error(cmd, &err, fd);
+	if (rv < 0) {
+		as_error err;
+		as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Failed to connect: %s %s", node->name, primary->name);
+		as_event_connect_error(cmd, &err, &sock);
+	}
+	
+	if (rv != index) {
+		// Replace invalid primary address with valid alias.
+		// Other threads may not see this change immediately.
+		// It's just a hint, not a requirement to try this new address first.
+		ck_pr_store_32(&node->address_index, rv);
+		as_log_debug("Change node address %s %s", node->name, as_node_get_address_string(node));
+	}
+
+	as_ev_watcher_init(cmd, &sock);
 }
 
 static void
@@ -567,7 +825,7 @@ as_event_command_begin(as_event_command* cmd)
 void
 as_event_close_connection(as_event_connection* conn)
 {
-	close(conn->fd);
+	as_socket_close(&conn->socket);
 	cf_free(conn);
 }
 
@@ -578,7 +836,7 @@ as_ev_close_connections(as_node* node, as_queue* conn_queue)
 	
 	// Queue connection commands to event loops.
 	while (as_queue_pop(conn_queue, &conn)) {
-		close(conn->fd);
+		as_socket_close(&conn->socket);
 		cf_free(conn);
 		as_event_decr_connection(node->cluster, conn_queue);
 		ck_pr_dec_32(&node->cluster->async_conn_pool);

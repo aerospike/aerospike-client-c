@@ -15,7 +15,9 @@
  * the License.
  */
 #include <aerospike/as_socket.h>
+#include <aerospike/as_address.h>
 #include <aerospike/as_log_macros.h>
+#include <aerospike/as_tls.h>
 #include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_byte_order.h>
 #include <citrusleaf/cf_clock.h>
@@ -33,6 +35,8 @@ bool as_socket_stop_on_interrupt = false;
 #include <sys/types.h>
 #include <sys/time.h>
 #include <errno.h>
+#define IPV6_PREFER_SRC_PUBLIC 2
+#define IPV6_ADDR_PREFERENCES 72
 #define IS_CONNECTING() (errno == EINPROGRESS)
 #endif // __linux__ __APPLE__
 
@@ -131,71 +135,141 @@ as_fd_isset(int fd, fd_set *fdset)
  * FUNCTIONS
  *****************************************************************************/
 
+void
+as_socket_init(as_socket* sock)
+{
+	sock->fd = -1;
+	sock->family = 0;
+	sock->ctx = NULL;
+	sock->tls_name = NULL;
+	sock->ssl = NULL;
+}
+
 int
-as_socket_create_nb()
+as_socket_create_fd(int family)
 {
 	// Create the socket.
-	int fd = socket(AF_INET, SOCK_STREAM, 0);
-
+	int fd = socket(family, SOCK_STREAM, 0);
+	
 	if (fd == -1) {
 		return -1;
 	}
-
+	
     // Make the socket nonblocking.
 	int flags = fcntl(fd, F_GETFL, 0);
-
+	
     if (flags < 0) {
 		close(fd);
 		return -2;
 	}
-
+	
     if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
 		close(fd);
 		return -3;
 	}
-
+	
 	int f = 1;
 	setsockopt(fd, SOL_TCP, TCP_NODELAY, &f, sizeof(f));
 #ifdef __APPLE__
 	setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &f, sizeof(f));
 #endif
+	// May want to specify preference for permanent public addresses sometime in the future.
+	// int p = IPV6_PREFER_SRC_PUBLIC;
+	// setsockopt(fd, IPPROTO_IPV6, IPV6_ADDR_PREFERENCES, &p, sizeof(p));
+	
 	return fd;
 }
 
-as_status
-as_socket_start_connect_nb(as_error* err, int fd, struct sockaddr_in* sa)
+int
+as_socket_create(as_socket* sock, int family, as_tls_context* ctx, const char* tls_name)
 {
-	if (0 != connect(fd, (struct sockaddr*)sa, sizeof(*sa))) {
-        if (! IS_CONNECTING()) {
-			return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Socket connect failed, errno %d", errno);
+	int fd = as_socket_create_fd(family);
+	
+	if (fd < 0) {
+		return fd;
+	}
+	
+	if (! as_socket_wrap(sock, family, fd, ctx, tls_name)) {
+		return -4;
+	}
+	return 0;
+}
+
+bool
+as_socket_wrap(as_socket* sock, int family, int fd, as_tls_context* ctx, const char* tls_name)
+{
+	sock->fd = fd;
+	sock->family = family;
+	
+	if (ctx->ssl_ctx) {
+		if (as_tls_wrap(ctx, sock, tls_name) < 0) {
+			close(sock->fd);
+			sock->fd = -1;
+			return false;
 		}
 	}
-	return AEROSPIKE_OK;
+	else {
+		sock->ctx = NULL;
+		sock->tls_name = NULL;
+		sock->ssl = NULL;
+	}
+	return true;
+}
+
+bool
+as_socket_start_connect(as_socket* sock, struct sockaddr* addr)
+{
+	socklen_t size = as_address_size(addr);
+
+	if (connect(sock->fd, addr, size)) {
+        if (! IS_CONNECTING()) {
+			return false;
+		}
+	}
+
+	if (sock->ctx) {
+		if (as_tls_connect(sock)) {
+			return false;
+		}
+	}
+	return true;
 }
 
 as_status
-as_socket_create_and_connect_nb(as_error* err, struct sockaddr_in *sa, int* fd_out)
+as_socket_create_and_connect(as_socket* sock, as_error* err, struct sockaddr* addr, as_tls_context* ctx, const char* tls_name)
 {
 	// Create the socket.
-	int fd = as_socket_create_nb();
+	int rv = as_socket_create(sock, addr->sa_family, ctx, tls_name);
 	
-	if (fd < 0) {
-		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Socket create failed");
+	if (rv < 0) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Socket create failed: %d", rv);
 	}
 	
 	// Initiate non-blocking connect.
-	as_status status = as_socket_start_connect_nb(err, fd, sa);
-	
-	if (status) {
-		as_close(fd);
-		return status;
+	if (! as_socket_start_connect(sock, addr)) {
+		as_socket_close(sock);
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Socket connect failed");
 	}
-	*fd_out = fd;
 	return AEROSPIKE_OK;
 }
 
+void
+as_socket_close(as_socket* sock)
+{
+	if (sock->ctx) {
+		SSL_shutdown(sock->ssl);
+		shutdown(sock->fd, SHUT_RDWR);
+		SSL_free(sock->ssl);
+	}
+	else {
+		shutdown(sock->fd, SHUT_RDWR);
+	}
+	close(sock->fd);
+	sock->fd = -1;
+}
+
 int
-as_socket_validate(int fd)
+as_socket_validate_fd(int fd)
 {
 	uint8_t buf[8];
 	ssize_t rv = recv(fd, (void*)buf, sizeof(buf), MSG_PEEK | MSG_DONTWAIT | MSG_NOSIGNAL);
@@ -209,122 +283,156 @@ as_socket_validate(int fd)
 	return (rv > 0) ? (int)rv : -1;
 }
 
+int
+as_socket_validate(as_socket* sock)
+{
+	uint8_t buf[8];
+	if (sock->ctx) {
+		return as_tls_peek(sock, buf, sizeof(buf));
+	}
+	else {
+		return as_socket_validate_fd(sock->fd);
+	}
+}
+
 as_status
-as_socket_write_forever(as_error* err, int fd, uint8_t *buf, size_t buf_len)
+as_socket_write_forever(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_len)
 {
 	// MacOS will return "socket not connected" errors even when connection is
 	// blocking.  Therefore, select() is required before writing.  Since write
 	// timeout function also calls select(), use write timeout function with
 	// 1 minute timeout.
-	return as_socket_write_timeout(err, fd, buf, buf_len, 60000);
+	return as_socket_write_timeout(err, sock, buf, buf_len, 60000);
 }
 
 as_status
-as_socket_write_limit(as_error* err, int fd, uint8_t *buf, size_t buf_len, uint64_t deadline)
+as_socket_write_limit(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_len, uint64_t deadline)
 {
-#ifdef DEBUG_TIME
-	uint64_t start = cf_getms();
-#endif
-	struct timeval tv;
-	size_t pos = 0;
-    
-	int flags;
-	if (-1 == (flags = fcntl(fd, F_GETFL, 0)))
-		flags = 0;
-	if (! (flags & O_NONBLOCK)) {
-		if (-1 == fcntl(fd, F_SETFL, flags | O_NONBLOCK)) {
-			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Socket nonblocking set failed.");
+	if (sock->ctx) {
+		as_status status = AEROSPIKE_OK;
+		int rv = as_tls_write(sock, buf, buf_len, deadline);
+		if (rv < 0) {
+			status = as_error_update(err, AEROSPIKE_ERR_CLIENT,
+									 "TLS write error: %d", rv);
+			return status;
 		}
-	}
-	
-	// Setup fdset. This looks weird, but there's no guarantee that compiled
-	// FD_SETSIZE has much to do with the machine we're running on.
-	size_t wset_size = as_fdset_size(fd);
-	fd_set* wset = (fd_set*)(wset_size > STACK_LIMIT ? cf_malloc(wset_size) : alloca(wset_size));
-	
-	if (!wset) {
-		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Socket fdset allocation error: %d", wset_size);
-	}
-	
-	as_status status = AEROSPIKE_OK;
-	int try = 0;
-#ifdef DEBUG_TIME
-	int select_busy = 0;
-#endif
-    
-	do {
-		uint64_t now = cf_getms();
-		if (now > deadline) {
-#ifdef DEBUG_TIME
-			debug_time_printf("socket writeselect timeout", try, select_busy, start, now, deadline);
-#endif
+		else if (rv == 1) {
 			// Do not set error string to avoid affecting performance.
-			// Calling functions usually retry, so the error string is not used anyway.
+			// Calling functions usually retry, so the error string is
+			// not used anyway.
 			status = err->code = AEROSPIKE_ERR_TIMEOUT;
 			err->message[0] = 0;
-			goto Out;
-        }
-        
-		uint64_t ms_left = deadline - now;
-		tv.tv_sec = ms_left / 1000;
-		tv.tv_usec = (ms_left % 1000) * 1000;
-        
-		memset((void*)wset, 0, wset_size);
-		as_fd_set(fd, wset);
-        
-		int rv = select(fd +1, 0 /*readfd*/, wset /*writefd*/, 0/*oobfd*/, &tv);
-        
-		// we only have one fd, so we know it's ours, but select seems confused sometimes - do the safest thing
-		if ((rv > 0) && as_fd_isset(fd, wset)) {
-            
-#if defined(__linux__)
-			int r_bytes = (int)send(fd, buf + pos, buf_len - pos, MSG_NOSIGNAL);
-#else
-			int r_bytes = (int)write(fd, buf + pos, buf_len - pos);
-#endif
-            
-			if (r_bytes > 0) {
-				pos += r_bytes;
-				if (pos >= buf_len)	{
-					// done happily
-					goto Out;
-				}
-            }
-			else if (r_bytes == 0) {
-				// We shouldn't see 0 returned unless we try to write 0 bytes, which we don't.
-				status = as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Bad file descriptor");
-				goto Out;
-			}
-            else if (errno != ETIMEDOUT
-                     && errno != EWOULDBLOCK && errno != EINPROGRESS && errno != EAGAIN) {
+			return status;
+		}
+		else {
+			return status;
+		}
+	}
+	else {
 #ifdef DEBUG_TIME
-    			debug_time_printf("socket write timeout", try, select_busy, start, now, deadline);
+		uint64_t start = cf_getms();
 #endif
-				status = as_error_update(err, AEROSPIKE_ERR_CLIENT, "Socket write error: %d", errno);
-                goto Out;
+		struct timeval tv;
+		size_t pos = 0;
+    
+		int flags;
+		if (-1 == (flags = fcntl(sock->fd, F_GETFL, 0)))
+			flags = 0;
+		if (! (flags & O_NONBLOCK)) {
+			if (-1 == fcntl(sock->fd, F_SETFL, flags | O_NONBLOCK)) {
+				return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Socket nonblocking set failed.");
 			}
 		}
-        else if (rv == 0) {
+	
+		// Setup fdset. This looks weird, but there's no guarantee that compiled
+		// FD_SETSIZE has much to do with the machine we're running on.
+		size_t wset_size = as_fdset_size(sock->fd);
+		fd_set* wset = (fd_set*)(wset_size > STACK_LIMIT ? cf_malloc(wset_size) : alloca(wset_size));
+	
+		if (!wset) {
+			return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Socket fdset allocation error: %d", wset_size);
+		}
+	
+		as_status status = AEROSPIKE_OK;
+		int try = 0;
 #ifdef DEBUG_TIME
-        	select_busy++;
+		int select_busy = 0;
 #endif
-    	}
-        else {
-			if (rv == -1 && (errno != EINTR || as_socket_stop_on_interrupt)) {
-				status = as_error_update(err, AEROSPIKE_ERR_CLIENT, "Socket write error: %d", errno);
+    
+		do {
+			uint64_t now = cf_getms();
+			if (now > deadline) {
+#ifdef DEBUG_TIME
+				debug_time_printf("socket writeselect timeout", try, select_busy, start, now, deadline);
+#endif
+				// Do not set error string to avoid affecting performance.
+				// Calling functions usually retry, so the error string is not used anyway.
+				status = err->code = AEROSPIKE_ERR_TIMEOUT;
+				err->message[0] = 0;
 				goto Out;
 			}
-        }
         
-		try++;
+			uint64_t ms_left = deadline - now;
+			tv.tv_sec = ms_left / 1000;
+			tv.tv_usec = (ms_left % 1000) * 1000;
         
-	} while( pos < buf_len );
+			memset((void*)wset, 0, wset_size);
+			as_fd_set(sock->fd, wset);
+        
+			int rv = select(sock->fd +1, 0 /*readfd*/, wset /*writefd*/, 0/*oobfd*/, &tv);
+        
+			// we only have one fd, so we know it's ours, but select seems confused sometimes - do the safest thing
+			if ((rv > 0) && as_fd_isset(sock->fd, wset)) {
+            
+#if defined(__linux__)
+				int r_bytes = (int)send(sock->fd, buf + pos, buf_len - pos, MSG_NOSIGNAL);
+#else
+				int r_bytes = (int)write(sock->fd, buf + pos, buf_len - pos);
+#endif
+            
+				if (r_bytes > 0) {
+					pos += r_bytes;
+					if (pos >= buf_len)	{
+						// done happily
+						goto Out;
+					}
+				}
+				else if (r_bytes == 0) {
+					// We shouldn't see 0 returned unless we try to write 0 bytes, which we don't.
+					status = as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Bad file descriptor");
+					goto Out;
+				}
+				else if (errno != ETIMEDOUT
+						 && errno != EWOULDBLOCK && errno != EINPROGRESS && errno != EAGAIN) {
+#ifdef DEBUG_TIME
+					debug_time_printf("socket write timeout", try, select_busy, start, now, deadline);
+#endif
+					status = as_error_update(err, AEROSPIKE_ERR_CLIENT, "Socket write error: %d", errno);
+					goto Out;
+				}
+			}
+			else if (rv == 0) {
+#ifdef DEBUG_TIME
+				select_busy++;
+#endif
+			}
+			else {
+				if (rv == -1 && (errno != EINTR || as_socket_stop_on_interrupt)) {
+					status = as_error_update(err, AEROSPIKE_ERR_CLIENT, "Socket write error: %d", errno);
+					goto Out;
+				}
+			}
+        
+			try++;
+        
+		} while( pos < buf_len );
     
-Out:
-	if (wset_size > STACK_LIMIT) {
-		cf_free(wset);
+	Out:
+		if (wset_size > STACK_LIMIT) {
+			cf_free(wset);
+		}
+		return status;
 	}
-	return status;
 }
 
 //
@@ -332,138 +440,183 @@ Out:
 // for application level highly variable queries
 //
 as_status
-as_socket_read_forever(as_error* err, int fd, uint8_t *buf, size_t buf_len)
+as_socket_read_forever(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_len)
 {
-	// one way is to make sure the fd is blocking, and block
-	int flags;
-	if (-1 == (flags = fcntl(fd, F_GETFL, 0)))
-		flags = 0;
-	if (flags & O_NONBLOCK) {
-		if (-1 == fcntl(fd, F_SETFL, flags & ~O_NONBLOCK)) {
-			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Socket blocking set failed.");
+	if (sock->ctx) {
+		as_status status = AEROSPIKE_OK;
+		uint64_t deadline = cf_getms() + 60000;
+		int rv = as_tls_read(sock, buf, buf_len, deadline);
+		if (rv < 0) {
+			status = as_error_update(err, AEROSPIKE_ERR_CLIENT,
+									 "TLS write error: %d", rv);
+			return status;
 		}
-	}
-    
-	size_t pos = 0;
-	do {
-		int r_bytes = (int)read(fd, buf + pos, buf_len - pos );
-		if (r_bytes < 0) { // don't combine these into one line! think about it!
-			if (errno != ETIMEDOUT) {
-				return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Socket read forever failed, errno %d", errno);
-			}
-		}
-		else if (r_bytes == 0) {
-			// blocking read returns 0 bytes socket timedout at server side
-			// is closed
-			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Bad file descriptor");
+		else if (rv == 1) {
+			// Do not set error string to avoid affecting performance.
+			// Calling functions usually retry, so the error string is
+			// not used anyway.
+			status = err->code = AEROSPIKE_ERR_TIMEOUT;
+			err->message[0] = 0;
+			return status;
 		}
 		else {
-			pos += r_bytes;
+			return status;
 		}
-	} while (pos < buf_len);
+	}
+	else {
+		// one way is to make sure the fd is blocking, and block
+		int flags;
+		if (-1 == (flags = fcntl(sock->fd, F_GETFL, 0)))
+			flags = 0;
+		if (flags & O_NONBLOCK) {
+			if (-1 == fcntl(sock->fd, F_SETFL, flags & ~O_NONBLOCK)) {
+				return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Socket blocking set failed.");
+			}
+		}
     
-	return AEROSPIKE_OK;
+		size_t pos = 0;
+		do {
+			int r_bytes = (int)read(sock->fd, buf + pos, buf_len - pos );
+			if (r_bytes < 0) { // don't combine these into one line! think about it!
+				if (errno != ETIMEDOUT) {
+					return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Socket read forever failed, errno %d", errno);
+				}
+			}
+			else if (r_bytes == 0) {
+				// blocking read returns 0 bytes socket timedout at server side
+				// is closed
+				return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Bad file descriptor");
+			}
+			else {
+				pos += r_bytes;
+			}
+		} while (pos < buf_len);
+    
+		return AEROSPIKE_OK;
+	}
 }
 
 as_status
-as_socket_read_limit(as_error* err, int fd, uint8_t *buf, size_t buf_len, uint64_t deadline)
+as_socket_read_limit(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_len, uint64_t deadline)
 {
-#ifdef DEBUG_TIME
-	uint64_t start = cf_getms();
-#endif
-	struct timeval tv;
-	size_t pos = 0;
-    
-	int flags;
-	if (-1 == (flags = fcntl(fd, F_GETFL, 0)))
-		flags = 0;
-	if (! (flags & O_NONBLOCK)) {
-		if (-1 == fcntl(fd, F_SETFL, flags | O_NONBLOCK)) {
-			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Socket nonblocking set failed.");
+	if (sock->ctx) {
+		as_status status = AEROSPIKE_OK;
+		int rv = as_tls_read(sock, buf, buf_len, deadline);
+		if (rv < 0) {
+			status = as_error_update(err, AEROSPIKE_ERR_CLIENT,
+									 "TLS write error: %d", rv);
+			return status;
 		}
-	}
-    
-	// Setup fdset. This looks weird, but there's no guarantee that compiled
-	// FD_SETSIZE has much to do with the machine we're running on.
-	size_t rset_size = as_fdset_size(fd);
-	fd_set* rset = (fd_set*)(rset_size > STACK_LIMIT ? cf_malloc(rset_size) : alloca(rset_size));
-	
-	if (!rset) {
-		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Socket fdset allocation error: %d", rset_size);
-	}
-
-	int status = AEROSPIKE_OK;
-	int try = 0;
-#ifdef DEBUG_TIME
-	int select_busy = 0;
-#endif
-    
-	do {
-		uint64_t now = cf_getms();
-		if (now > deadline) {
-#ifdef DEBUG_TIME
-			debug_time_printf("socket readselect timeout", try, select_busy, start, now, deadline);
-#endif
+		else if (rv == 1) {
 			// Do not set error string to avoid affecting performance.
-			// Calling functions usually retry, so the error string is not used anyway.
+			// Calling functions usually retry, so the error string is
+			// not used anyway.
 			status = err->code = AEROSPIKE_ERR_TIMEOUT;
 			err->message[0] = 0;
-			goto Out;
-        }
-        
-		uint64_t ms_left = deadline - now;
-		tv.tv_sec = ms_left / 1000;
-		tv.tv_usec = (ms_left % 1000) * 1000;
-        
-		memset((void*)rset, 0, rset_size);
-		as_fd_set(fd, rset);
-		int rv = select(fd +1, rset /*readfd*/, 0 /*writefd*/, 0 /*oobfd*/, &tv);
-        
-		// we only have one fd, so we know it's ours?
-		if ((rv > 0) && as_fd_isset(fd, rset)) {
-            
-			int r_bytes = (int)read(fd, buf + pos, buf_len - pos);
-            
-			if (r_bytes > 0) {
-				pos += r_bytes;
-            }
-			else if (r_bytes == 0) {
-				// We believe this means that the server has closed this socket.
-				status = as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Bad file descriptor");
-				goto Out;
-			}
-            else if (errno != ETIMEDOUT
-                     // It's apparently possible that select() returns successfully yet
-                     // the socket is not ready for reading.
-                     && errno != EWOULDBLOCK && errno != EINPROGRESS && errno != EAGAIN) {
-#ifdef DEBUG_TIME
-    			debug_time_printf("socket read timeout", try, select_busy, start, now, deadline);
-#endif
-				status = as_error_update(err, AEROSPIKE_ERR_CLIENT, "Socket read error: %d", errno);
-				goto Out;
-            }
+			return status;
 		}
-		else if (rv == 0) {
+		else {
+			return status;
+		}
+	}
+	else {
 #ifdef DEBUG_TIME
-			select_busy++;
+		uint64_t start = cf_getms();
 #endif
-        }
-        else {
-			if (rv == -1 && (errno != EINTR || as_socket_stop_on_interrupt)) {
-				status = as_error_update(err, AEROSPIKE_ERR_CLIENT, "Socket read error: %d", errno);
+		struct timeval tv;
+		size_t pos = 0;
+    
+		int flags;
+		if (-1 == (flags = fcntl(sock->fd, F_GETFL, 0)))
+			flags = 0;
+		if (! (flags & O_NONBLOCK)) {
+			if (-1 == fcntl(sock->fd, F_SETFL, flags | O_NONBLOCK)) {
+				return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Socket nonblocking set failed.");
+			}
+		}
+    
+		// Setup fdset. This looks weird, but there's no guarantee that compiled
+		// FD_SETSIZE has much to do with the machine we're running on.
+		size_t rset_size = as_fdset_size(sock->fd);
+		fd_set* rset = (fd_set*)(rset_size > STACK_LIMIT ? cf_malloc(rset_size) : alloca(rset_size));
+	
+		if (!rset) {
+			return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Socket fdset allocation error: %d", rset_size);
+		}
+
+		int status = AEROSPIKE_OK;
+		int try = 0;
+#ifdef DEBUG_TIME
+		int select_busy = 0;
+#endif
+    
+		do {
+			uint64_t now = cf_getms();
+			if (now > deadline) {
+#ifdef DEBUG_TIME
+				debug_time_printf("socket readselect timeout", try, select_busy, start, now, deadline);
+#endif
+				// Do not set error string to avoid affecting performance.
+				// Calling functions usually retry, so the error string is not used anyway.
+				status = err->code = AEROSPIKE_ERR_TIMEOUT;
+				err->message[0] = 0;
 				goto Out;
 			}
-        }
         
-        try++;
+			uint64_t ms_left = deadline - now;
+			tv.tv_sec = ms_left / 1000;
+			tv.tv_usec = (ms_left % 1000) * 1000;
         
-	} while (pos < buf_len);
+			memset((void*)rset, 0, rset_size);
+			as_fd_set(sock->fd, rset);
+			int rv = select(sock->fd +1, rset /*readfd*/, 0 /*writefd*/, 0 /*oobfd*/, &tv);
+        
+			// we only have one fd, so we know it's ours?
+			if ((rv > 0) && as_fd_isset(sock->fd, rset)) {
+            
+				int r_bytes = (int)read(sock->fd, buf + pos, buf_len - pos);
+            
+				if (r_bytes > 0) {
+					pos += r_bytes;
+				}
+				else if (r_bytes == 0) {
+					// We believe this means that the server has closed this socket.
+					status = as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Bad file descriptor");
+					goto Out;
+				}
+				else if (errno != ETIMEDOUT
+						 // It's apparently possible that select() returns successfully yet
+						 // the socket is not ready for reading.
+						 && errno != EWOULDBLOCK && errno != EINPROGRESS && errno != EAGAIN) {
+#ifdef DEBUG_TIME
+					debug_time_printf("socket read timeout", try, select_busy, start, now, deadline);
+#endif
+					status = as_error_update(err, AEROSPIKE_ERR_CLIENT, "Socket read error: %d", errno);
+					goto Out;
+				}
+			}
+			else if (rv == 0) {
+#ifdef DEBUG_TIME
+				select_busy++;
+#endif
+			}
+			else {
+				if (rv == -1 && (errno != EINTR || as_socket_stop_on_interrupt)) {
+					status = as_error_update(err, AEROSPIKE_ERR_CLIENT, "Socket read error: %d", errno);
+					goto Out;
+				}
+			}
+        
+			try++;
+        
+		} while (pos < buf_len);
     
-Out:
-	if (rset_size > STACK_LIMIT) {
-		cf_free(rset);
+	Out:
+		if (rset_size > STACK_LIMIT) {
+			cf_free(rset);
+		}
+		return status;
 	}
-	return status;
 }
 
 #else // CF_WINDOWS

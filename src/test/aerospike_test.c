@@ -41,6 +41,16 @@ char g_host[MAX_HOST_SIZE];
 int g_port = 3000;
 static char g_user[AS_USER_SIZE];
 static char g_password[AS_PASSWORD_HASH_SIZE];
+bool g_tls_enable = false;
+bool g_tls_encrypt_only = false;
+char * g_tls_cafile = NULL;
+char * g_tls_capath = NULL;
+char * g_tls_protocol = NULL;
+char * g_tls_cipher_suite = NULL;
+bool g_tls_crl_check = false;
+bool g_tls_crl_check_all = false;
+char* g_tls_cert_blacklist = NULL;
+bool g_tls_log_session_info = false;
 
 #if defined(AS_USE_LIBEV) || defined(AS_USE_LIBUV)
 static bool g_use_async = true;
@@ -65,18 +75,53 @@ as_client_log_callback(as_log_level level, const char * func, const char * file,
 static void
 usage()
 {
-	fprintf(stderr, "Usage: ");
-	fprintf(stderr, "  -h, --host <host>\n");
-	fprintf(stderr, "    The host to connect to. Default: 127.0.0.1.\n\n");
+	fprintf(stderr, "Usage:\n");
+	fprintf(stderr, "  -h, --host <host1>[:<tlsname1>][:<port1>],...  Default: 127.0.0.1\n");
+	fprintf(stderr, "   Server seed hostnames or IP addresses.\n");
+	fprintf(stderr, "   The tlsname is only used when connecting with a secure TLS enabled server.\n");
+	fprintf(stderr, "   If the port is not specified, the default port is used. Examples:\n\n");
+	fprintf(stderr, "   host1\n");
+	fprintf(stderr, "   host1:3000,host2:3000\n");
+	fprintf(stderr, "   192.168.1.10:cert1:3000,192.168.1.20:cert2:3000\n\n");
 
 	fprintf(stderr, "  -p, --port <port>\n");
-	fprintf(stderr, "    The port to connect to. Default: 3000.\n\n");
+	fprintf(stderr, "    The default server port. Default: 3000.\n\n");
 
 	fprintf(stderr, "  -U, --user <user>\n");
 	fprintf(stderr, "    The user to connect as. Default: no user.\n\n");
 
 	fprintf(stderr, "  -P[<password>], --password\n");
 	fprintf(stderr, "    The user's password. If empty, a prompt is shown. Default: no password.\n\n");
+
+	fprintf(stderr, "  -e, --tls-enable\n");
+	fprintf(stderr, "    Enable TLS. Default: TLS disabled.\n\n");
+
+	fprintf(stderr, "  -E, --tls-encrypt-only\n");
+	fprintf(stderr, "    Disable TLS certificate verification. Default: enabled.\n\n");
+
+	fprintf(stderr, "  -c, --tls-cafile <path>\n");
+	fprintf(stderr, "    Set the TLS certificate authority file.\n\n");
+
+	fprintf(stderr, "  -C, --tls-capath <path>\n");
+	fprintf(stderr, "    Set the TLS certificate authority directory.\n\n");
+
+	fprintf(stderr, "  -r, --tls-protocol\n");
+	fprintf(stderr, "    Set the TLS protocol selection criteria.\n\n");
+
+	fprintf(stderr, "  -t, --tls-cipher-suite\n");
+	fprintf(stderr, "    Set the TLS cipher selection criteria.\n\n");
+
+	fprintf(stderr, "  -Q, --tls-crl-check\n");
+	fprintf(stderr, "    Enable CRL checking for leaf certs.\n\n");
+
+	fprintf(stderr, "  -R, --tls-crl-check-all\n");
+	fprintf(stderr, "    Enable CRL checking for all certs.\n\n");
+
+	fprintf(stderr, "  -B, --tls-cert-blacklist\n");
+	fprintf(stderr, "    Path to a certificate blacklist file.\n\n");
+
+	fprintf(stderr, "  -L, --tls-log-session-info\n");
+	fprintf(stderr, "    Log TLS connected session info.\n\n");
 
 	fprintf(stderr, "  -S, --suite <suite>\n");
 	fprintf(stderr, "    The suite to be run. Default: all suites.\n\n");
@@ -85,17 +130,27 @@ usage()
 	fprintf(stderr, "    The test case to run. Default: all test cases.\n\n");
 }
 
-static const char* short_options = "h:p:U:uP::S:T:";
+static const char* short_options = "h:p:U:uP::eEc:C:r:t:QRB:LS:T:";
 
 static struct option long_options[] = {
-	{"hosts",        1, 0, 'h'},
-	{"port",         1, 0, 'p'},
-	{"user",         1, 0, 'U'},
-	{"usage",     	 0, 0, 'u'},
-	{"password",     2, 0, 'P'},
-	{"suite",        1, 0, 'S'},
-	{"test",         1, 0, 'T'},
-	{0,              0, 0, 0}
+	{"hosts",                  1, 0, 'h'},
+	{"port",                   1, 0, 'p'},
+	{"user",                   1, 0, 'U'},
+	{"usage",     	           0, 0, 'u'},
+	{"password",               2, 0, 'P'},
+	{"tls-enable",             0, 0, 'e'},
+	{"tls-encrypt-only",       0, 0, 'E'},
+	{"tls-cafile",             1, 0, 'c'},
+	{"tls-capath",             1, 0, 'C'},
+	{"tls-protocol",           1, 0, 'r'},
+	{"tls-cipher-suite",       1, 0, 't'},
+	{"tls-crl-check",          0, 0, 'Q'},
+	{"tls-crl-check-all",      0, 0, 'R'},
+	{"tls-cert-blacklist",     1, 0, 'B'},
+	{"tls-log-session-info",   0, 0, 'L'},
+	{"suite",                  1, 0, 'S'},
+	{"test",                   1, 0, 'T'},
+	{0,                        0, 0,  0 }
 };
 
 static bool parse_opts(int argc, char* argv[])
@@ -135,6 +190,46 @@ static bool parse_opts(int argc, char* argv[])
 
 		case 'P':
 			as_password_prompt_hash(optarg, g_password);
+			break;
+				
+		case 'e':
+			g_tls_enable = true;
+			break;
+				
+		case 'E':
+			g_tls_encrypt_only = true;
+			break;
+				
+		case 'c':
+			g_tls_cafile = strdup(optarg);
+			break;
+				
+		case 'C':
+			g_tls_capath = strdup(optarg);
+			break;
+				
+		case 'r':
+			g_tls_protocol = strdup(optarg);
+			break;
+				
+		case 't':
+			g_tls_cipher_suite = strdup(optarg);
+			break;
+				
+		case 'Q':
+			g_tls_crl_check = true;
+			break;
+				
+		case 'R':
+			g_tls_crl_check_all = true;
+			break;
+				
+		case 'B':
+			g_tls_cert_blacklist = strdup(optarg);
+			break;
+				
+		case 'L':
+			g_tls_log_session_info = true;
 			break;
 				
 		case 'S':
@@ -185,10 +280,25 @@ static bool before(atf_plan * plan) {
 	// Initialize cluster configuration.
 	as_config config;
 	as_config_init(&config);
-	as_config_add_host(&config, g_host, g_port);
+
+	if (! as_config_add_hosts(&config, g_host, g_port)) {
+		error("Invalid host(s) %s", g_host);
+		return false;
+	}
+
 	as_config_set_user(&config, g_user, g_password);
     as_policies_init(&config.policies);
-
+	config.tls.enable = g_tls_enable;
+	config.tls.encrypt_only = g_tls_encrypt_only;
+	config.tls.cafile = g_tls_cafile;
+	config.tls.capath = g_tls_capath;
+	config.tls.protocol = g_tls_protocol;
+	config.tls.cipher_suite = g_tls_cipher_suite;
+	config.tls.crl_check = g_tls_crl_check;
+	config.tls.crl_check_all = g_tls_crl_check_all;
+	config.tls.cert_blacklist = g_tls_cert_blacklist;
+	config.tls.log_session_info = g_tls_log_session_info;
+	
 	as_error err;
 	as_error_reset(&err);
 
@@ -221,6 +331,22 @@ static bool after(atf_plan * plan) {
 		as_event_close_loops();
 	}
 
+	if (g_tls_cafile) {
+		free(g_tls_cafile);
+	}
+	if (g_tls_capath) {
+		free(g_tls_capath);
+	}
+	if (g_tls_protocol) {
+		free(g_tls_protocol);
+	}
+	if (g_tls_cipher_suite) {
+		free(g_tls_cipher_suite);
+	}
+	if (g_tls_cert_blacklist) {
+		free(g_tls_cert_blacklist);
+	}
+	
 	if (status == AEROSPIKE_OK) {
 		debug("disconnected from %s:%d", g_host, g_port);
 		return true;

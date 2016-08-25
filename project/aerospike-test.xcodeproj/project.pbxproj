@@ -8,9 +8,10 @@
 
 /* Begin PBXBuildFile section */
 		BF22F9141BCD79E8002D04DD /* libev.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BF22F9131BCD79E8002D04DD /* libev.a */; settings = {ATTRIBUTES = (Required, ); }; };
-		BF4E4E151D342FD200BEEF94 /* map_index.c in Sources */ = {isa = PBXBuildFile; fileRef = BF4E4E141D342FD200BEEF94 /* map_index.c */; };
+		BFB8A5DE1D0F4D33007B4E22 /* libcrypto.1.0.0.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFB8A5DD1D0F4D33007B4E22 /* libcrypto.1.0.0.dylib */; };
+		BFB8A5E01D0F4D4E007B4E22 /* libssl.1.0.0.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFB8A5DF1D0F4D4E007B4E22 /* libssl.1.0.0.dylib */; };
+		BFB8A5E21D0F4DB4007B4E22 /* map_index.c in Sources */ = {isa = PBXBuildFile; fileRef = BFB8A5E11D0F4DB4007B4E22 /* map_index.c */; };
 		BFBC119918CE3D2400D0B5BE /* liblua.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFBC119818CE3D2400D0B5BE /* liblua.a */; };
-		BFBC119B18CE3D8D00D0B5BE /* libcrypto.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFBC119A18CE3D8D00D0B5BE /* libcrypto.dylib */; };
 		BFBC119D18CE3E4E00D0B5BE /* libz.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFBC119C18CE3E4E00D0B5BE /* libz.dylib */; };
 		BFBC119F18CE3F4800D0B5BE /* libpthread.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFBC119E18CE3F4800D0B5BE /* libpthread.dylib */; };
 		BFC65C041C92250B0079DF5A /* aerospike_test.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65BFC1C92250B0079DF5A /* aerospike_test.c */; };
@@ -84,9 +85,12 @@
 
 /* Begin PBXFileReference section */
 		BF22F9131BCD79E8002D04DD /* libev.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libev.a; path = /usr/local/lib/libev.a; sourceTree = "<absolute>"; };
-		BF4E4E141D342FD200BEEF94 /* map_index.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = map_index.c; path = ../src/test/aerospike_map/map_index.c; sourceTree = "<group>"; };
 		BF843C5018D3E61700A06CFB /* aerospike.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = aerospike.xcodeproj; sourceTree = "<group>"; };
 		BFB7BC6E18CAA88000F0D4A0 /* aerospike-test */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "aerospike-test"; sourceTree = BUILT_PRODUCTS_DIR; };
+		BFB8A5DB1D0F4D0D007B4E22 /* libcrypto.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libcrypto.a; path = ../../../../usr/local/Cellar/openssl/1.0.2h_1/lib/libcrypto.a; sourceTree = "<group>"; };
+		BFB8A5DD1D0F4D33007B4E22 /* libcrypto.1.0.0.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libcrypto.1.0.0.dylib; path = ../../../../usr/local/Cellar/openssl/1.0.2h_1/lib/libcrypto.1.0.0.dylib; sourceTree = "<group>"; };
+		BFB8A5DF1D0F4D4E007B4E22 /* libssl.1.0.0.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libssl.1.0.0.dylib; path = ../../../../usr/local/Cellar/openssl/1.0.2h_1/lib/libssl.1.0.0.dylib; sourceTree = "<group>"; };
+		BFB8A5E11D0F4DB4007B4E22 /* map_index.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = map_index.c; path = ../src/test/aerospike_map/map_index.c; sourceTree = "<group>"; };
 		BFBC119518CE3BA900D0B5BE /* libssl.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libssl.dylib; path = usr/lib/libssl.dylib; sourceTree = SDKROOT; };
 		BFBC119818CE3D2400D0B5BE /* liblua.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = liblua.a; path = /usr/local/lib/liblua.a; sourceTree = "<absolute>"; };
 		BFBC119A18CE3D8D00D0B5BE /* libcrypto.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libcrypto.dylib; path = usr/lib/libcrypto.dylib; sourceTree = SDKROOT; };
@@ -155,9 +159,10 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BFB8A5E01D0F4D4E007B4E22 /* libssl.1.0.0.dylib in Frameworks */,
+				BFB8A5DE1D0F4D33007B4E22 /* libcrypto.1.0.0.dylib in Frameworks */,
 				BFCB24331BF167CA00B1A0EF /* libuv.a in Frameworks */,
 				BFD8C86F18D7E3A300CB8B6D /* libaerospike.a in Frameworks */,
-				BFBC119B18CE3D8D00D0B5BE /* libcrypto.dylib in Frameworks */,
 				BFBC119918CE3D2400D0B5BE /* liblua.a in Frameworks */,
 				BF22F9141BCD79E8002D04DD /* libev.a in Frameworks */,
 				BFBC119F18CE3F4800D0B5BE /* libpthread.dylib in Frameworks */,
@@ -171,6 +176,9 @@
 		BFB7BC6518CAA88000F0D4A0 = {
 			isa = PBXGroup;
 			children = (
+				BFB8A5DF1D0F4D4E007B4E22 /* libssl.1.0.0.dylib */,
+				BFB8A5DD1D0F4D33007B4E22 /* libcrypto.1.0.0.dylib */,
+				BFB8A5DB1D0F4D0D007B4E22 /* libcrypto.a */,
 				BFC65BF01C92246F0079DF5A /* src */,
 				BFC65BEF1C9223DA0079DF5A /* libs */,
 				BFB7BC6F18CAA88000F0D4A0 /* Products */,
@@ -375,7 +383,7 @@
 		BFF344C41CEA8F3300FD1976 /* aerospike_map */ = {
 			isa = PBXGroup;
 			children = (
-				BF4E4E141D342FD200BEEF94 /* map_index.c */,
+				BFB8A5E11D0F4DB4007B4E22 /* map_index.c */,
 				BFD74AE01CFE699800D79E15 /* map_basics_async.c */,
 				BFF344C61CEA8FD200FD1976 /* map_basics.c */,
 				BFD74AE51CFE6E4B00D79E15 /* map_udf.c */,
@@ -463,7 +471,7 @@
 				BFC65C551C9227260079DF5A /* key_basics_async.c in Sources */,
 				BFC65C561C9227260079DF5A /* key_basics.c in Sources */,
 				BFC65C5E1C9227640079DF5A /* index_basics.c in Sources */,
-				BF4E4E151D342FD200BEEF94 /* map_index.c in Sources */,
+				BFB8A5E21D0F4DB4007B4E22 /* map_index.c in Sources */,
 				BFC65C411C9226C90079DF5A /* query_foreach.c in Sources */,
 				BFC65C221C9225EA0079DF5A /* scan.c in Sources */,
 				BFC65C1D1C9225AB0079DF5A /* udf.c in Sources */,
@@ -587,6 +595,7 @@
 					"$(inherited)",
 					"$(USER_LIBRARY_DIR)/Developer/Xcode/DerivedData/client-adicdcootufiyydjubyxqelxfwcw/Build/Products/Debug",
 					/usr/local/Cellar/libuv/1.7.5/lib,
+					/usr/local/Cellar/openssl/1.0.2h_1/lib,
 				);
 				MACOSX_DEPLOYMENT_TARGET = 10.8;
 				OTHER_CFLAGS = "-DAS_USE_LIBEV";
@@ -613,6 +622,7 @@
 					"$(inherited)",
 					"$(USER_LIBRARY_DIR)/Developer/Xcode/DerivedData/client-adicdcootufiyydjubyxqelxfwcw/Build/Products/Debug",
 					/usr/local/Cellar/libuv/1.7.5/lib,
+					/usr/local/Cellar/openssl/1.0.2h_1/lib,
 				);
 				MACOSX_DEPLOYMENT_TARGET = 10.8;
 				OTHER_CFLAGS = "-DAS_USE_LIBEV";

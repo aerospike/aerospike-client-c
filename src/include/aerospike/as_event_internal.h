@@ -44,12 +44,13 @@ extern "C" {
  *****************************************************************************/
 	
 #define AS_ASYNC_STATE_UNREGISTERED 0
-#define AS_ASYNC_STATE_AUTH_WRITE 1
-#define AS_ASYNC_STATE_AUTH_READ_HEADER 2
-#define AS_ASYNC_STATE_AUTH_READ_BODY 4
-#define AS_ASYNC_STATE_WRITE 8
-#define AS_ASYNC_STATE_READ_HEADER 16
-#define AS_ASYNC_STATE_READ_BODY 32
+#define AS_ASYNC_STATE_TLS_CONNECT 1
+#define AS_ASYNC_STATE_AUTH_WRITE 2
+#define AS_ASYNC_STATE_AUTH_READ_HEADER 4
+#define AS_ASYNC_STATE_AUTH_READ_BODY 8
+#define AS_ASYNC_STATE_WRITE 16
+#define AS_ASYNC_STATE_READ_HEADER 32
+#define AS_ASYNC_STATE_READ_BODY 64
 	
 #define AS_ASYNC_AUTH_RETURN_CODE 1
 
@@ -65,10 +66,10 @@ struct as_event_executor;
 typedef struct {
 #if defined(AS_USE_LIBEV)
 	struct ev_io watcher;
-	int fd;
+	as_socket socket;
+	int watching;
 #elif defined(AS_USE_LIBUV)
 	uv_tcp_t socket;
-	
 	// Reuse memory for requests, because only one request is active at a time.
 	union {
 		uv_connect_t connect;
@@ -157,10 +158,13 @@ as_connection_status
 as_event_get_connection(as_event_command* cmd);
 	
 int
-as_event_create_socket(as_event_command* cmd);
-	
+as_event_create_socket(as_event_command* cmd, int family);
+
 void
-as_event_connect_error(as_event_command* cmd, as_error* err, int fd);
+as_event_fd_error(as_event_command* cmd, as_error* err, int fd);
+
+void
+as_event_connect_error(as_event_command* cmd, as_error* err, as_socket* sock);
 
 void
 as_event_error_callback(as_event_command* cmd, as_error* err);
@@ -220,7 +224,7 @@ as_event_send_close_loop(as_event_loop* event_loop);
 static inline int
 as_event_validate_connection(as_event_connection* conn)
 {
-	return as_socket_validate(conn->fd);
+	return as_socket_validate(&conn->socket);
 }
 
 static inline void
@@ -256,7 +260,7 @@ as_event_validate_connection(as_event_connection* conn)
 	uv_os_fd_t fd;
 	
 	if (uv_fileno((uv_handle_t*)&conn->socket, &fd) == 0) {
-		return as_socket_validate(fd);
+		return as_socket_validate_fd(fd);
 	}
 	return false;
 }

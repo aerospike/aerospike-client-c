@@ -67,12 +67,18 @@ print_usage(const char* program)
 	blog_line("options:");
 	blog_line("");
 	
-	blog_line("-h --hosts <address1>,<address2>...  # Default: localhost");
-	blog_line("   Aerospike server seed hostnames or IP addresses.");
+	blog_line("-h --hosts <host1>[:<tlsname1>][:<port1>],...  # Default: localhost");
+	blog_line("   Server seed hostnames or IP addresses.");
+	blog_line("   The tlsname is only used when connecting with a secure TLS enabled server.");
+	blog_line("   If the port is not specified, the default port is used. Examples:");
+	blog_line("");
+	blog_line("   host1");
+	blog_line("   host1:3000,host2:3000");
+	blog_line("   192.168.1.10:cert1:3000,192.168.1.20:cert2:3000");
 	blog_line("");
 	
-	blog_line("-p --port <port>      # Default: 3000");
-	blog_line("   Aerospike server seed hostname or IP address.");
+	blog_line("-p --port <port> # Default: 3000");
+	blog_line("   Server default port.");
 	blog_line("");
 	
 	blog_line("-U --user <user name> # Default: empty");
@@ -228,15 +234,7 @@ boolstring(bool val)
 static void
 print_args(arguments* args)
 {
-	blog("hosts:          ");
-	for (int i = 0; i < args->host_count; i++) {
-		if (i > 0) {
-			blog(", ");
-		}
-		blog("%s", args->hosts[i]);
-	}
-	blog_line("");
-	
+	blog_line("hosts:          %s", args->hosts);
 	blog_line("port:           %d", args->port);
 	blog_line("user:           %s", args->user);
 	blog_line("namespace:      %s", args->namespace);
@@ -400,13 +398,6 @@ validate_args(arguments* args)
 	return 0;
 }
 
-static void
-free_hosts(arguments* args)
-{
-	free(args->hosts);
-	free(args->host_string);
-}
-
 static int
 set_args(int argc, char * const * argv, arguments* args)
 {
@@ -416,26 +407,8 @@ set_args(int argc, char * const * argv, arguments* args)
 	while ((c = getopt_long(argc, argv, short_options, long_options, &option_index)) != -1) {
 		switch (c) {
 			case 'h': {
-				free_hosts(args);
-				args->host_string = strdup(optarg);
-				char* p = args->host_string;
-				int count = 1;
-				
-				strsep(&p, ",");
-				
-				while (p) {
-					strsep(&p, ",");
-					count++;
-				}
-				
-				args->hosts = malloc(count * sizeof(char*));
-				p = args->host_string;
-				
-				for (int i = 0; i < count; i++) {
-					args->hosts[i] = p;
-					p += strlen(p) + 1;
-				}
-				args->host_count = count;
+				free(args->hosts);
+				args->hosts = strdup(optarg);
 				break;
 			}
 				
@@ -647,20 +620,11 @@ set_args(int argc, char * const * argv, arguments* args)
 	return validate_args(args);
 }
 
-static void
-cleanup(arguments* args)
-{
-	free_hosts(args);
-}
-
 int
 main(int argc, char * const * argv)
 {
 	arguments args;
-	args.host_string = strdup("127.0.0.1");
-	args.hosts = malloc(sizeof(char*));
-	args.hosts[0] = args.host_string;
-	args.host_count = 1;
+	args.hosts = strdup("127.0.0.1");
 	args.port = 3000;
 	args.user = 0;
 	args.password[0] = 0;
@@ -703,6 +667,7 @@ main(int argc, char * const * argv)
 	else {
 		print_usage(argv[0]);
 	}
-	cleanup(&args);
+	
+	free(args.hosts);
 	return ret;
 }

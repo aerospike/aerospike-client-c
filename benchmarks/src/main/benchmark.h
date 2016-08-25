@@ -35,9 +35,7 @@ typedef enum {
 } len_type;
 
 typedef struct arguments_t {
-	char* host_string;
-	char** hosts;
-	int host_count;
+	char* hosts;
 	int port;
 	const char* user;
 	char password[AS_PASSWORD_HASH_SIZE];
@@ -73,7 +71,6 @@ typedef struct arguments_t {
 } arguments;
 
 typedef struct clientdata_t {
-	const char* host;
 	const char* namespace;
 	const char* set;
 	const char* bin_name;
@@ -100,7 +97,6 @@ typedef struct clientdata_t {
 	uint32_t key_count;
 	uint32_t valid;
 	
-	int port;
 	int threads;
 	int throughput;
 	int read_pct;

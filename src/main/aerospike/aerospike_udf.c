@@ -309,10 +309,9 @@ aerospike_udf_put_is_done(aerospike* as, as_error * err, const as_policy_info* p
 	
 	for (uint32_t i = 0; i < nodes->size && done; i++) {
 		as_node* node = nodes->array[i];
-		struct sockaddr_in* sa_in = as_node_get_address(node);
 		
 		char* response = 0;
-		as_status status = aerospike_info_socket_address(as, err, policy, sa_in, "udf-list", &response);
+		as_status status = aerospike_info_node(as, err, policy, node, "udf-list", &response);
 		
 		if (status == AEROSPIKE_OK) {
 			char* p = strstr(response, filter);

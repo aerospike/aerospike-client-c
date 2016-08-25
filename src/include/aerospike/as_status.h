@@ -35,6 +35,11 @@ typedef enum as_status_e {
 	/**
 	 *	Node invalid or could not be found.
 	 */
+	AEROSPIKE_ERR_TLS_ERROR = -9,
+	
+	/**
+	 *	Node invalid or could not be found.
+	 */
 	AEROSPIKE_ERR_INVALID_NODE = -8,
 	
 	/**

@@ -210,7 +210,7 @@ as_scan_parse_records(uint8_t* buf, size_t size, as_scan_task* task, as_error* e
 }
 
 static as_status
-as_scan_parse(as_error* err, int fd, uint64_t deadline_ms, void* udata)
+as_scan_parse(as_error* err, as_socket* sock, uint64_t deadline_ms, void* udata)
 {
 	as_scan_task* task = udata;
 	as_status status = AEROSPIKE_OK;
@@ -220,7 +220,7 @@ as_scan_parse(as_error* err, int fd, uint64_t deadline_ms, void* udata)
 	while (true) {
 		// Read header
 		as_proto proto;
-		status = as_socket_read_deadline(err, fd, (uint8_t*)&proto, sizeof(as_proto), deadline_ms);
+		status = as_socket_read_deadline(err, sock, (uint8_t*)&proto, sizeof(as_proto), deadline_ms);
 		
 		if (status) {
 			break;
@@ -237,7 +237,7 @@ as_scan_parse(as_error* err, int fd, uint64_t deadline_ms, void* udata)
 			}
 			
 			// Read remaining message bytes in group
-			status = as_socket_read_deadline(err, fd, buf, size, deadline_ms);
+			status = as_socket_read_deadline(err, sock, buf, size, deadline_ms);
 			
 			if (status) {
 				break;

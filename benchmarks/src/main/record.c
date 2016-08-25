@@ -197,7 +197,7 @@ create_threaddata(clientdata* cdata, int key)
 	// Initialize a thread local key, record.
 	as_key_init_int64(&tdata->key, cdata->namespace, cdata->set, key);
 	as_record_init(&tdata->rec, cdata->numbins);
-	for (int i=0; i<cdata->numbins; i++) {
+	for (int i = 0; i < cdata->numbins; i++) {
 		tdata->rec.bins.entries[i].valuep = NULL;
 	}
 	tdata->rec.bins.size = cdata->numbins;
@@ -219,10 +219,10 @@ static void
 init_write_record(clientdata* cdata, threaddata* tdata)
 {
 	if (cdata->del_bin) {
-		for (int i=0; i<cdata->numbins; i++) {
+		for (int i = 0; i < cdata->numbins; i++) {
 			as_bin* bin = &tdata->rec.bins.entries[i];
 			if (i==0) {
-				sprintf(bin->name, "%s", cdata->bin_name);
+				strcpy(bin->name, cdata->bin_name);
 			} else {
 				sprintf(bin->name, "%s_%d", cdata->bin_name, i);
 			}
@@ -231,11 +231,10 @@ init_write_record(clientdata* cdata, threaddata* tdata)
 		return;
 	}
 	
-	for (int i=0; i<cdata->numbins; i++) {
-
+	for (int i = 0; i <cdata->numbins; i++) {
 		as_bin* bin = &tdata->rec.bins.entries[i];
 		if (i==0) {
-			sprintf(bin->name, "%s", cdata->bin_name);
+			strcpy(bin->name, cdata->bin_name);
 		} else {
 			sprintf(bin->name, "%s_%d", cdata->bin_name, i);
 		}

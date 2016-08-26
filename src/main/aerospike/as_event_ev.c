@@ -191,9 +191,7 @@ as_ev_write(as_event_command* cmd)
 {
 	if (cmd->conn->socket.ctx) {
 		do {
-			int rv = as_tls_write_once(&cmd->conn->socket,
-									   cmd->buf + cmd->pos,
-									   cmd->len - cmd->pos);
+			int rv = as_tls_write_once(&cmd->conn->socket, cmd->buf + cmd->pos, cmd->len - cmd->pos);
 			if (rv > 0) {
 				as_ev_watch_write(cmd);
 				cmd->pos += rv;
@@ -211,9 +209,7 @@ as_ev_write(as_event_command* cmd)
 			}
 			else if (rv < -2) {
 				as_error err;
-				as_error_update(&err, AEROSPIKE_ERR_TLS_ERROR,
-								"TLS write failed: socket %d",
-								cmd->conn->socket.fd);
+				as_error_update(&err, AEROSPIKE_ERR_TLS_ERROR, "TLS write failed: socket %d", cmd->conn->socket.fd);
 				as_event_socket_error(cmd, &err);
 				return AS_EVENT_WRITE_ERROR;
 			}
@@ -237,6 +233,7 @@ as_ev_write(as_event_command* cmd)
 		
 			if (bytes < 0) {
 				if (errno == EWOULDBLOCK) {
+					as_ev_watch_write(cmd);
 					return AS_EVENT_WRITE_INCOMPLETE;
 				}
 			
@@ -262,9 +259,7 @@ as_ev_read(as_event_command* cmd)
 {
 	if (cmd->conn->socket.ctx) {
 		do {
-			int rv = as_tls_read_once(&cmd->conn->socket,
-									   cmd->buf + cmd->pos,
-									  cmd->len - cmd->pos);
+			int rv = as_tls_read_once(&cmd->conn->socket, cmd->buf + cmd->pos, cmd->len - cmd->pos);
 			if (rv > 0) {
 				as_ev_watch_read(cmd);
 				cmd->pos += rv;
@@ -282,9 +277,7 @@ as_ev_read(as_event_command* cmd)
 			}
 			else if (rv < -2) {
 				as_error err;
-				as_error_update(&err, AEROSPIKE_ERR_TLS_ERROR,
-								"TLS read failed: socket %d",
-								cmd->conn->socket.fd);
+				as_error_update(&err, AEROSPIKE_ERR_TLS_ERROR, "TLS read failed: socket %d", cmd->conn->socket.fd);
 				as_event_socket_error(cmd, &err);
 				return AS_EVENT_READ_ERROR;
 			}
@@ -305,6 +298,7 @@ as_ev_read(as_event_command* cmd)
 		
 			if (bytes < 0) {
 				if (errno == EWOULDBLOCK) {
+					as_ev_watch_read(cmd);
 					return AS_EVENT_READ_INCOMPLETE;
 				}
 				else {
@@ -346,20 +340,9 @@ as_ev_command_write_start(as_event_command* cmd)
 	cmd->state = AS_ASYNC_STATE_WRITE;
 	as_ev_watch_write(cmd);
 
-	int ret = as_ev_write(cmd);
-	switch (ret) {
-	case AS_EVENT_WRITE_COMPLETE:
+	if (as_ev_write(cmd) == AS_EVENT_WRITE_COMPLETE) {
 		// Done with write. Register for read.
 		as_ev_command_read_start(cmd);
-		break;
-	case AS_EVENT_WRITE_INCOMPLETE:
-		// Got would-block. Register for write.
-		as_ev_watch_write(cmd);
-		break;
-	case AS_EVENT_TLS_NEED_READ:
-		// TLS layer needs readable to make progress.
-		as_ev_watch_read(cmd);
-		break;
 	}
 }
 
@@ -517,8 +500,7 @@ as_ev_tls_connect(as_event_command* cmd, as_event_connection* conn)
 	if (rv < -1) {
 		// Failed, error has been logged.
 		as_error err;
-		as_error_set_message(&err, AEROSPIKE_ERR_TLS_ERROR,
-							 "TLS connection failed");
+		as_error_set_message(&err, AEROSPIKE_ERR_TLS_ERROR, "TLS connection failed");
 		as_event_socket_error(cmd, &err);
 		return false;
 	}
@@ -532,8 +514,7 @@ as_ev_tls_connect(as_event_command* cmd, as_event_connection* conn)
 	}
 	else if (rv == 0) {
 		as_error err;
-		as_error_set_message(&err, AEROSPIKE_ERR_TLS_ERROR,
-							 "TLS connection shutdown");
+		as_error_set_message(&err, AEROSPIKE_ERR_TLS_ERROR, "TLS connection shutdown");
 		as_event_socket_error(cmd, &err);
 		return false;
 	}
@@ -572,15 +553,16 @@ as_ev_callback_common(as_event_command* cmd, as_event_connection* conn) {
 		// read event from libev.
 		do {
 			switch (as_ev_command_read(cmd)) {
-			case AS_EVENT_TLS_NEED_WRITE:
-				as_ev_watch_write(cmd);
-				break;
 			case AS_EVENT_COMMAND_DONE:
-				// In this case we need to not touch cmd again because
-				// it's been deallocated.
+			case AS_EVENT_READ_ERROR:
+				// Do not touch cmd again because it's been deallocated.
 				return;
-			default:
+			
+			case AS_EVENT_READ_COMPLETE:
 				as_ev_watch_read(cmd);
+				break;
+				
+			default:
 				break;
 			}
 		} while (as_tls_read_pending(&cmd->conn->socket) > 0);
@@ -588,14 +570,9 @@ as_ev_callback_common(as_event_command* cmd, as_event_connection* conn) {
 
 	case AS_ASYNC_STATE_AUTH_WRITE:
 	case AS_ASYNC_STATE_WRITE:
-
 		as_ev_watch_write(cmd);
 		
-		switch (as_ev_write(cmd)) {
-		case AS_EVENT_TLS_NEED_READ:
-			as_ev_watch_read(cmd);
-			break;
-		case AS_EVENT_WRITE_COMPLETE:
+		if (as_ev_write(cmd) == AS_EVENT_WRITE_COMPLETE) {
 			// Done with write. Register for read.
 			if (cmd->state == AS_ASYNC_STATE_AUTH_WRITE) {
 				as_event_set_auth_read_header(cmd);
@@ -604,10 +581,6 @@ as_ev_callback_common(as_event_command* cmd, as_event_connection* conn) {
 			else {
 				as_ev_command_read_start(cmd);
 			}
-			break;
-		default:
-			as_ev_watch_write(cmd);
-			break;
 		}
 		break;
 

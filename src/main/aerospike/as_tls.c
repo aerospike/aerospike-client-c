@@ -19,6 +19,7 @@
 #include <pthread.h>
 
 #include <openssl/conf.h>
+#include <openssl/crypto.h>
 #include <openssl/engine.h>
 #include <openssl/err.h>
 #include <openssl/ssl.h>

@@ -265,7 +265,8 @@ as_scan_command_execute(as_scan_task* task)
 	
 	as_error err;
 	as_error_init(&err);
-	as_status status = as_command_execute(task->cluster, &err, &cn, task->cmd, task->cmd_size, task->policy->timeout, 0, as_scan_parse, task);
+	as_status status = as_command_execute(task->cluster, &err, &cn, task->cmd, task->cmd_size,
+										  task->policy->timeout, false, 0, 0, as_scan_parse, task);
 	
 	if (status) {
 		// Set main error only once.

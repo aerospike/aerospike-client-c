@@ -78,6 +78,13 @@ extern "C" {
 #define AS_POLICY_RETRY_DEFAULT 1
 
 /**
+ *	Default milliseconds to sleep before a command retry.
+ *
+ *	@ingroup client_policies
+ */
+#define AS_POLICY_RETRY_SLEEP_DEFAULT 0
+
+/**
  *	Default value for compression threshold
  *
  *	@ingroup client_policies
@@ -328,15 +335,23 @@ typedef enum as_policy_commit_level_e {
 typedef struct as_policy_write_s {
 
 	/**
-	 *	Maximum time in milliseconds to wait for 
-	 *	the operation to complete.
+	 *	Maximum time in milliseconds to wait for the operation to complete.
 	 */
 	uint32_t timeout;
 
 	/**
 	 *	Maximum number of retries when a transaction fails due to a network error.
+	 *	Used by synchronous commands only.
+	 *	Default: 1
 	 */
 	uint32_t retry;
+
+	/**
+	 *	Milliseconds to sleep between retries.
+	 *	Used by synchronous commands only.
+	 *	Default: 0 (do not sleep)
+	 */
+	uint32_t sleep_between_retries;
 
 	/**
 	 *	Minimum record size beyond which it is compressed and sent to the server.
@@ -368,6 +383,25 @@ typedef struct as_policy_write_s {
 	as_policy_commit_level commit_level;
 	
 	/**
+	 *	Should the client retry a command if the timeout is reached.
+	 *	Used by synchronous commands only.
+	 *	<p>
+	 *	Values:
+	 *	<ul>
+	 *	<li>
+	 *	false: Return error when the timeout has been reached.  Note that retries can still occur if
+	 *	a command fails on a network error before the timeout has been reached.
+	 *	</li>
+	 *	<li>
+	 *	true: Retry command with same timeout when the timeout has been reached.  The maximum number
+	 *	of retries is defined by `retry`.
+	 *	</li>
+	 *	</ul>
+	 *	Default: false
+	 */
+	bool retry_on_timeout;
+
+	/**
 	 *	If the transaction results in a record deletion, leave a tombstone for the record.
 	 *	This prevents deleted records from reappearing after node failures.
 	 *	Valid for Aerospike Server Enterprise Edition only.
@@ -386,15 +420,23 @@ typedef struct as_policy_write_s {
 typedef struct as_policy_read_s {
 
 	/**
-	 *	Maximum time in milliseconds to wait for 
-	 *	the operation to complete.
+	 *	Maximum time in milliseconds to wait for the operation to complete.
 	 */
 	uint32_t timeout;
-
+	
 	/**
 	 *	Maximum number of retries when a transaction fails due to a network error.
+	 *	Used by synchronous commands only.
+	 *	Default: 1
 	 */
 	uint32_t retry;
+	
+	/**
+	 *	Milliseconds to sleep between retries.
+	 *	Used by synchronous commands only.
+	 *	Default: 0 (do not sleep)
+	 */
+	uint32_t sleep_between_retries;
 
 	/**
 	 *	Specifies the behavior for the key.
@@ -413,6 +455,25 @@ typedef struct as_policy_read_s {
 	as_policy_consistency_level consistency_level;
 	
 	/**
+	 *	Should the client retry a command if the timeout is reached.
+	 *	Used by synchronous commands only.
+	 *	<p>
+	 *	Values:
+	 *	<ul>
+	 *	<li>
+	 *	false: Return error when the timeout has been reached.  Note that retries can still occur if
+	 *	a command fails on a network error before the timeout has been reached.
+	 *	</li>
+	 *	<li>
+	 *	true: Retry command with same timeout when the timeout has been reached.  The maximum number
+	 *	of retries is defined by `retry`.
+	 *	</li>
+	 *	</ul>
+	 *	Default: false
+	 */
+	bool retry_on_timeout;
+
+	/**
 	 *	Should raw bytes representing a list or map be deserialized to as_list or as_map. 
 	 *	Set to false for backup programs that just need access to raw bytes.
 	 *	Default: true
@@ -429,10 +490,23 @@ typedef struct as_policy_read_s {
 typedef struct as_policy_apply_s {
 
 	/**
-	 *	Maximum time in milliseconds to wait for 
-	 *	the operation to complete.
+	 *	Maximum time in milliseconds to wait for the operation to complete.
 	 */
 	uint32_t timeout;
+	
+	/**
+	 *	Maximum number of retries when a transaction fails due to a network error.
+	 *	Used by synchronous commands only.
+	 *	Default: 1
+	 */
+	uint32_t retry;
+	
+	/**
+	 *	Milliseconds to sleep between retries.
+	 *	Used by synchronous commands only.
+	 *	Default: 0 (do not sleep)
+	 */
+	uint32_t sleep_between_retries;
 
 	/**
 	 *	Specifies the behavior for the key.
@@ -460,6 +534,25 @@ typedef struct as_policy_apply_s {
 	uint32_t ttl;
 
 	/**
+	 *	Should the client retry a command if the timeout is reached.
+	 *	Used by synchronous commands only.
+	 *	<p>
+	 *	Values:
+	 *	<ul>
+	 *	<li>
+	 *	false: Return error when the timeout has been reached.  Note that retries can still occur if
+	 *	a command fails on a network error before the timeout has been reached.
+	 *	</li>
+	 *	<li>
+	 *	true: Retry command with same timeout when the timeout has been reached.  The maximum number
+	 *	of retries is defined by `retry`.
+	 *	</li>
+	 *	</ul>
+	 *	Default: false
+	 */
+	bool retry_on_timeout;
+
+	/**
 	 *	If the transaction results in a record deletion, leave a tombstone for the record.
 	 *	This prevents deleted records from reappearing after node failures.
 	 *	Valid for Aerospike Server Enterprise Edition only.
@@ -478,15 +571,23 @@ typedef struct as_policy_apply_s {
 typedef struct as_policy_operate_s {
 
 	/**
-	 *	Maximum time in milliseconds to wait for 
-	 *	the operation to complete.
+	 *	Maximum time in milliseconds to wait for the operation to complete.
 	 */
 	uint32_t timeout;
-
+	
 	/**
 	 *	Maximum number of retries when a transaction fails due to a network error.
+	 *	Used by synchronous commands only.
+	 *	Default: 1
 	 */
 	uint32_t retry;
+	
+	/**
+	 *	Milliseconds to sleep between retries.
+	 *	Used by synchronous commands only.
+	 *	Default: 0 (do not sleep)
+	 */
+	uint32_t sleep_between_retries;
 	
 	/**
 	 *	Specifies the behavior for the key.
@@ -518,6 +619,25 @@ typedef struct as_policy_operate_s {
 	as_policy_commit_level commit_level;
 
 	/**
+	 *	Should the client retry a command if the timeout is reached.
+	 *	Used by synchronous commands only.
+	 *	<p>
+	 *	Values:
+	 *	<ul>
+	 *	<li>
+	 *	false: Return error when the timeout has been reached.  Note that retries can still occur if
+	 *	a command fails on a network error before the timeout has been reached.
+	 *	</li>
+	 *	<li>
+	 *	true: Retry command with same timeout when the timeout has been reached.  The maximum number
+	 *	of retries is defined by `retry`.
+	 *	</li>
+	 *	</ul>
+	 *	Default: false
+	 */
+	bool retry_on_timeout;
+
+	/**
 	 *	Should raw bytes representing a list or map be deserialized to as_list or as_map.
 	 *	Set to false for backup programs that just need access to raw bytes.
 	 *	Default: true
@@ -543,21 +663,24 @@ typedef struct as_policy_operate_s {
 typedef struct as_policy_remove_s {
 
 	/**
-	 *	Maximum time in milliseconds to wait for 
-	 *	the operation to complete.
+	 *	Maximum time in milliseconds to wait for the operation to complete.
 	 */
 	uint32_t timeout;
-
-	/**
-	 *	The generation of the record.
-	 */
-	uint16_t generation;
-
+	
 	/**
 	 *	Maximum number of retries when a transaction fails due to a network error.
+	 *	Used by synchronous commands only.
+	 *	Default: 1
 	 */
 	uint32_t retry;
 	
+	/**
+	 *	Milliseconds to sleep between retries.
+	 *	Used by synchronous commands only.
+	 *	Default: 0 (do not sleep)
+	 */
+	uint32_t sleep_between_retries;
+
 	/**
 	 *	Specifies the behavior for the key.
 	 */
@@ -575,6 +698,30 @@ typedef struct as_policy_remove_s {
 	 *  before returning transaction succeeded.
 	 */
 	as_policy_commit_level commit_level;
+
+	/**
+	 *	The generation of the record.
+	 */
+	uint16_t generation;
+	
+	/**
+	 *	Should the client retry a command if the timeout is reached.
+	 *	Used by synchronous commands only.
+	 *	<p>
+	 *	Values:
+	 *	<ul>
+	 *	<li>
+	 *	false: Return error when the timeout has been reached.  Note that retries can still occur if
+	 *	a command fails on a network error before the timeout has been reached.
+	 *	</li>
+	 *	<li>
+	 *	true: Retry command with same timeout when the timeout has been reached.  The maximum number
+	 *	of retries is defined by `retry`.
+	 *	</li>
+	 *	</ul>
+	 *	Default: false
+	 */
+	bool retry_on_timeout;
 
 	/**
 	 *	If the transaction results in a record deletion, leave a tombstone for the record.
@@ -675,11 +822,43 @@ typedef struct as_policy_info_s {
 typedef struct as_policy_batch_s {
 
 	/**
-	 *	Maximum time in milliseconds to wait for 
-	 *	the operation to complete.
+	 *	Maximum time in milliseconds to wait for the operation to complete.
 	 */
 	uint32_t timeout;
+	
+	/**
+	 *	Maximum number of retries when a transaction fails due to a network error.
+	 *	Used by synchronous commands only.
+	 *	Default: 1
+	 */
+	uint32_t retry;
+	
+	/**
+	 *	Milliseconds to sleep between retries.
+	 *	Used by synchronous commands only.
+	 *	Default: 0 (do not sleep)
+	 */
+	uint32_t sleep_between_retries;
 
+	/**
+	 *	Should the client retry a command if the timeout is reached.
+	 *	Used by synchronous commands only.
+	 *	<p>
+	 *	Values:
+	 *	<ul>
+	 *	<li>
+	 *	false: Return error when the timeout has been reached.  Note that retries can still occur if
+	 *	a command fails on a network error before the timeout has been reached.
+	 *	</li>
+	 *	<li>
+	 *	true: Retry command with same timeout when the timeout has been reached.  The maximum number
+	 *	of retries is defined by `retry`.
+	 *	</li>
+	 *	</ul>
+	 *	Default: false
+	 */
+	bool retry_on_timeout;
+	
 	/**
 	 *	Determine if batch commands to each server are run in parallel threads.
 	 *	<p>
@@ -779,19 +958,24 @@ typedef struct as_policies_s {
 	/**
 	 *	Default timeout in milliseconds.
 	 *
-	 *	Will be used if specific policies have a timeout of 0 (zero).
-	 *
 	 *	Default: `AS_POLICY_TIMEOUT_DEFAULT`
 	 */
 	uint32_t timeout;
 
 	/**
-	 *	Maximum number of retries when a transaction fails due to a network error.
+	 *	Default maximum number of retries when a transaction fails due to a network error.
 	 *
 	 *	Default: `AS_POLICY_RETRY_DEFAULT`
 	 */
 	uint32_t retry;
 	
+	/**
+	 *	Default milliseconds to sleep between retries.
+	 *
+	 *	Default: `AS_POLICY_RETRY_SLEEP_DEFAULT`
+	 */
+	uint32_t sleep_between_retries;
+
 	/**
 	 *	Specifies the behavior for the key.
 	 *	
@@ -909,9 +1093,11 @@ as_policy_read_init(as_policy_read* p)
 {
 	p->timeout = AS_POLICY_TIMEOUT_DEFAULT;
 	p->retry = AS_POLICY_RETRY_DEFAULT;
+	p->sleep_between_retries = AS_POLICY_RETRY_SLEEP_DEFAULT;
 	p->key = AS_POLICY_KEY_DEFAULT;
 	p->replica = AS_POLICY_REPLICA_DEFAULT;
 	p->consistency_level = AS_POLICY_CONSISTENCY_LEVEL_DEFAULT;
+	p->retry_on_timeout = false;
 	p->deserialize = true;
 	return p;
 }
@@ -927,12 +1113,7 @@ as_policy_read_init(as_policy_read* p)
 static inline void
 as_policy_read_copy(as_policy_read* src, as_policy_read* trg)
 {
-	trg->timeout = src->timeout;
-	trg->retry = src->retry;
-	trg->key = src->key;
-	trg->replica = src->replica;
-	trg->consistency_level = src->consistency_level;
-	trg->deserialize = src->deserialize;
+	*trg = *src;
 }
 
 /**
@@ -948,11 +1129,13 @@ as_policy_write_init(as_policy_write* p)
 {
 	p->timeout = AS_POLICY_TIMEOUT_DEFAULT;
 	p->retry = AS_POLICY_RETRY_DEFAULT;
+	p->sleep_between_retries = AS_POLICY_RETRY_SLEEP_DEFAULT;
 	p->compression_threshold = AS_POLICY_COMPRESSION_THRESHOLD_DEFAULT;
 	p->key = AS_POLICY_KEY_DEFAULT;
 	p->gen = AS_POLICY_GEN_DEFAULT;
 	p->exists = AS_POLICY_EXISTS_DEFAULT;
 	p->commit_level = AS_POLICY_COMMIT_LEVEL_DEFAULT;
+	p->retry_on_timeout = false;
 	p->durable_delete = false;
 	return p;
 }
@@ -968,14 +1151,7 @@ as_policy_write_init(as_policy_write* p)
 static inline void
 as_policy_write_copy(as_policy_write* src, as_policy_write* trg)
 {
-	trg->timeout = src->timeout;
-	trg->retry = src->retry;
-	trg->compression_threshold = src->compression_threshold;
-	trg->key = src->key;
-	trg->gen = src->gen;
-	trg->exists = src->exists;
-	trg->commit_level = src->commit_level;
-	trg->durable_delete = src->durable_delete;
+	*trg = *src;
 }
 
 /**
@@ -991,11 +1167,13 @@ as_policy_operate_init(as_policy_operate* p)
 {
 	p->timeout = AS_POLICY_TIMEOUT_DEFAULT;
 	p->retry = AS_POLICY_RETRY_DEFAULT;
+	p->sleep_between_retries = AS_POLICY_RETRY_SLEEP_DEFAULT;
 	p->key = AS_POLICY_KEY_DEFAULT;
 	p->gen = AS_POLICY_GEN_DEFAULT;
 	p->replica = AS_POLICY_REPLICA_DEFAULT;
 	p->consistency_level = AS_POLICY_CONSISTENCY_LEVEL_DEFAULT;
 	p->commit_level = AS_POLICY_COMMIT_LEVEL_DEFAULT;
+	p->retry_on_timeout = false;
 	p->deserialize = true;
 	p->durable_delete = false;
 	return p;
@@ -1012,15 +1190,7 @@ as_policy_operate_init(as_policy_operate* p)
 static inline void
 as_policy_operate_copy(as_policy_operate* src, as_policy_operate* trg)
 {
-	trg->timeout = src->timeout;
-	trg->retry = src->retry;
-	trg->key = src->key;
-	trg->gen = src->gen;
-	trg->replica = src->replica;
-	trg->consistency_level = src->consistency_level;
-	trg->commit_level = src->commit_level;
-	trg->deserialize = src->deserialize;
-	trg->durable_delete = src->durable_delete;
+	*trg = *src;
 }
 
 /**
@@ -1036,10 +1206,12 @@ as_policy_remove_init(as_policy_remove* p)
 {
 	p->timeout = AS_POLICY_TIMEOUT_DEFAULT;
 	p->retry = AS_POLICY_RETRY_DEFAULT;
+	p->sleep_between_retries = AS_POLICY_RETRY_SLEEP_DEFAULT;
 	p->key = AS_POLICY_KEY_DEFAULT;
 	p->gen = AS_POLICY_GEN_DEFAULT;
-	p->generation = 0;
 	p->commit_level = AS_POLICY_COMMIT_LEVEL_DEFAULT;
+	p->generation = 0;
+	p->retry_on_timeout = false;
 	p->durable_delete = false;
 	return p;
 }
@@ -1055,13 +1227,7 @@ as_policy_remove_init(as_policy_remove* p)
 static inline void
 as_policy_remove_copy(as_policy_remove* src, as_policy_remove* trg)
 {
-	trg->timeout = src->timeout;
-	trg->retry = src->retry;
-	trg->key = src->key;
-	trg->gen = src->gen;
-	trg->generation = src->generation;
-	trg->commit_level = src->commit_level;
-	trg->durable_delete = src->durable_delete;
+	*trg = *src;
 }
 
 /**
@@ -1076,9 +1242,12 @@ static inline as_policy_apply*
 as_policy_apply_init(as_policy_apply* p)
 {
 	p->timeout = AS_POLICY_TIMEOUT_DEFAULT;
+	p->retry = AS_POLICY_RETRY_DEFAULT;
+	p->sleep_between_retries = AS_POLICY_RETRY_SLEEP_DEFAULT;
 	p->key = AS_POLICY_KEY_DEFAULT;
 	p->commit_level = AS_POLICY_COMMIT_LEVEL_DEFAULT;
 	p->ttl = 0; // AS_RECORD_DEFAULT_TTL
+	p->retry_on_timeout = false;
 	p->durable_delete = false;
 	return p;
 }
@@ -1094,11 +1263,7 @@ as_policy_apply_init(as_policy_apply* p)
 static inline void
 as_policy_apply_copy(as_policy_apply* src, as_policy_apply* trg)
 {
-	trg->timeout = src->timeout;
-	trg->key = src->key;
-	trg->commit_level = src->commit_level;
-	trg->ttl = src->ttl;
-	trg->durable_delete = src->durable_delete;
+	*trg = *src;
 }
 
 /**
@@ -1129,9 +1294,7 @@ as_policy_info_init(as_policy_info* p)
 static inline void
 as_policy_info_copy(as_policy_info* src, as_policy_info* trg)
 {
-	trg->timeout = src->timeout;
-	trg->send_as_is = src->send_as_is;
-	trg->check_bounds = src->check_bounds;
+	*trg = *src;
 }
 
 /**
@@ -1146,6 +1309,9 @@ static inline as_policy_batch*
 as_policy_batch_init(as_policy_batch* p)
 {
 	p->timeout = AS_POLICY_TIMEOUT_DEFAULT;
+	p->retry = AS_POLICY_RETRY_DEFAULT;
+	p->sleep_between_retries = AS_POLICY_RETRY_SLEEP_DEFAULT;
+	p->retry_on_timeout = false;
 	p->concurrent = false;
 	p->use_batch_direct = false;
 	p->allow_inline = true;
@@ -1165,12 +1331,7 @@ as_policy_batch_init(as_policy_batch* p)
 static inline void
 as_policy_batch_copy(as_policy_batch* src, as_policy_batch* trg)
 {
-	trg->timeout = src->timeout;
-	trg->concurrent = src->concurrent;
-	trg->use_batch_direct = src->use_batch_direct;
-	trg->allow_inline = src->allow_inline;
-	trg->send_set_name = src->send_set_name;
-	trg->deserialize = src->deserialize;
+	*trg = *src;
 }
 
 /**
@@ -1199,7 +1360,7 @@ as_policy_admin_init(as_policy_admin* p)
 static inline void
 as_policy_admin_copy(as_policy_admin* src, as_policy_admin* trg)
 {
-	trg->timeout = src->timeout;
+	*trg = *src;
 }
 
 /**
@@ -1230,9 +1391,7 @@ as_policy_scan_init(as_policy_scan* p)
 static inline void
 as_policy_scan_copy(as_policy_scan* src, as_policy_scan* trg)
 {
-	trg->timeout = src->timeout;
-	trg->fail_on_cluster_change = src->fail_on_cluster_change;
-	trg->durable_delete = src->durable_delete;
+	*trg = *src;
 }
 
 /**
@@ -1262,8 +1421,7 @@ as_policy_query_init(as_policy_query* p)
 static inline void
 as_policy_query_copy(as_policy_query* src, as_policy_query* trg)
 {
-	trg->timeout = src->timeout;
-	trg->deserialize = src->deserialize;
+	*trg = *src;
 }
 
 /**

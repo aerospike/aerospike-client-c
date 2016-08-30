@@ -415,13 +415,13 @@ as_command_compress(as_error* err, uint8_t* cmd, size_t cmd_sz, uint8_t* compres
 }
 
 as_status
-as_command_execute(as_cluster* cluster, as_error* err, as_command_node* cn, uint8_t* command, size_t command_len,
-	uint32_t timeout_ms, uint32_t retry,
+as_command_execute(
+	as_cluster* cluster, as_error* err, as_command_node* cn, uint8_t* command, size_t command_len,
+	uint32_t timeout_ms, bool retry_on_timeout, uint32_t max_retries, uint32_t sleep_between_retries_ms,
 	as_parse_results_fn parse_results_fn, void* parse_results_data
 )
 {
 	uint64_t deadline_ms = as_socket_deadline(timeout_ms);
-	uint32_t sleep_between_retries_ms = 0;
 	uint32_t failed_nodes = 0;
 	uint32_t failed_conns = 0;
 	uint32_t iterations = 0;
@@ -443,7 +443,6 @@ as_command_execute(as_cluster* cluster, as_error* err, as_command_node* cn, uint
 		if (!node) {
 			as_error_set_message(err, AEROSPIKE_ERR_INVALID_NODE, "Invalid node");
 			failed_nodes++;
-			sleep_between_retries_ms = 10;
 			goto Retry;
 		}
 
@@ -455,7 +454,6 @@ as_command_execute(as_cluster* cluster, as_error* err, as_command_node* cn, uint
 				as_node_release(node);
 			}
 			failed_conns++;
-			sleep_between_retries_ms = 1;
 			goto Retry;
 		}
 		
@@ -469,7 +467,6 @@ as_command_execute(as_cluster* cluster, as_error* err, as_command_node* cn, uint
 			if (release_node) {
 				as_node_release(node);
 			}
-			sleep_between_retries_ms = 0;
 			goto Retry;
 		}
 		
@@ -523,20 +520,34 @@ as_command_execute(as_cluster* cluster, as_error* err, as_command_node* cn, uint
 
 Retry:
 		// Check if max retries reached.
-		if (++iterations > retry) {
+		if (++iterations > max_retries) {
 			break;
 		}
 		
 		// Check for client timeout.
-		if (deadline_ms > 0) {
-			int remaining_ms = (int)(deadline_ms - cf_getms() - sleep_between_retries_ms);
-			
-			if (remaining_ms <= 0) {
-				break;
+		if (deadline_ms) {
+			if (retry_on_timeout) {
+				// Timeout is per each attempt.
+				if (sleep_between_retries_ms > 0) {
+					// Sleep before trying again.
+					usleep(sleep_between_retries_ms * 1000);
+				}
+				
+				// Reset deadline and rely on max retries check.
+				deadline_ms = as_socket_deadline(timeout_ms);
+				continue;
 			}
-			
-			// Reset timeout in send buffer (destined for server).
-			*(uint32_t*)(command + 22) = cf_swap_to_be32(remaining_ms);
+			else {
+				// Timeout is absolute.  Stop if timeout has been reached.
+				int remaining_ms = (int)(deadline_ms - cf_getms() - sleep_between_retries_ms);
+				
+				if (remaining_ms <= 0) {
+					break;
+				}
+				
+				// Reset timeout in send buffer (destined for server).
+				*(uint32_t*)(command + 22) = cf_swap_to_be32(remaining_ms);
+			}
 		}
 		
 		if (sleep_between_retries_ms > 0) {

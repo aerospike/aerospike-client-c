@@ -37,6 +37,7 @@ as_policies_init(as_policies* p)
 	// Global defaults
 	p->timeout = AS_POLICY_TIMEOUT_DEFAULT;
 	p->retry = AS_POLICY_RETRY_DEFAULT;
+	p->sleep_between_retries = AS_POLICY_RETRY_SLEEP_DEFAULT;
 	p->key = AS_POLICY_KEY_DEFAULT;
 	p->gen = AS_POLICY_GEN_DEFAULT;
 	p->exists = AS_POLICY_EXISTS_DEFAULT;
@@ -48,42 +49,53 @@ as_policies_init(as_policies* p)
 	// Undefined variables will be set to global defaults in as_policies_resolve().
 	p->read.timeout = -1;
 	p->read.retry = -1;
+	p->read.sleep_between_retries = -1;
 	p->read.key = -1;
 	p->read.replica = -1;
 	p->read.consistency_level = -1;
+	p->read.retry_on_timeout = false;
 	p->read.deserialize = true;
 
 	p->write.timeout = -1;
 	p->write.retry = -1;
+	p->write.sleep_between_retries = -1;
 	p->write.compression_threshold = AS_POLICY_COMPRESSION_THRESHOLD_DEFAULT;
 	p->write.key = -1;
 	p->write.gen = -1;
 	p->write.exists = -1;
 	p->write.commit_level = -1;
+	p->write.retry_on_timeout = false;
 	p->write.durable_delete = false;
 
 	p->operate.timeout = -1;
 	p->operate.retry = -1;
+	p->operate.sleep_between_retries = -1;
 	p->operate.key = -1;
 	p->operate.gen = -1;
 	p->operate.replica = -1;
 	p->operate.consistency_level = -1;
 	p->operate.commit_level = -1;
+	p->operate.retry_on_timeout = false;
 	p->operate.deserialize = true;
 	p->operate.durable_delete = false;
 
 	p->remove.timeout = -1;
 	p->remove.retry = -1;
+	p->remove.sleep_between_retries = -1;
 	p->remove.key = -1;
 	p->remove.gen = -1;
-	p->remove.generation = 0;
 	p->remove.commit_level = -1;
+	p->remove.generation = 0;
+	p->remove.retry_on_timeout = false;
 	p->remove.durable_delete = false;
 
 	p->apply.timeout = -1;
+	p->apply.retry = -1;
+	p->apply.sleep_between_retries = -1;
 	p->apply.key = -1;
 	p->apply.commit_level = -1;
 	p->apply.ttl = 0;	// Set to AS_RECORD_DEFAULT_TTL. TTL does not go through as_policies_resolve().
+	p->apply.retry_on_timeout = false;
 	p->apply.durable_delete = false;
 
 	as_policy_info_init(&p->info);
@@ -91,6 +103,8 @@ as_policies_init(as_policies* p)
 
 	as_policy_batch_init(&p->batch);
 	p->batch.timeout = -1;
+	p->batch.retry = -1;
+	p->batch.sleep_between_retries = -1;
 
 	p->admin.timeout = -1;
 
@@ -108,12 +122,14 @@ as_policies_resolve(as_policies* p)
 {
 	as_policy_resolve(p->read.timeout, p->timeout);
 	as_policy_resolve(p->read.retry, p->retry);
+	as_policy_resolve(p->read.sleep_between_retries, p->sleep_between_retries);
 	as_policy_resolve(p->read.key, p->key);
 	as_policy_resolve(p->read.replica, p->replica);
 	as_policy_resolve(p->read.consistency_level, p->consistency_level);
 
 	as_policy_resolve(p->write.timeout, p->timeout);
 	as_policy_resolve(p->write.retry, p->retry);
+	as_policy_resolve(p->write.sleep_between_retries, p->sleep_between_retries);
 	as_policy_resolve(p->write.key, p->key);
 	as_policy_resolve(p->write.gen, p->gen);
 	as_policy_resolve(p->write.exists, p->exists);
@@ -121,24 +137,31 @@ as_policies_resolve(as_policies* p)
 	
 	as_policy_resolve(p->operate.timeout, p->timeout);
 	as_policy_resolve(p->operate.retry, p->retry);
+	as_policy_resolve(p->operate.sleep_between_retries, p->sleep_between_retries);
 	as_policy_resolve(p->operate.key, p->key);
 	as_policy_resolve(p->operate.gen, p->gen);
+	as_policy_resolve(p->operate.replica, p->replica);
 	as_policy_resolve(p->operate.consistency_level, p->consistency_level);
 	as_policy_resolve(p->operate.commit_level, p->commit_level);
 
 	as_policy_resolve(p->remove.timeout, p->timeout);
 	as_policy_resolve(p->remove.retry, p->retry);
+	as_policy_resolve(p->remove.sleep_between_retries, p->sleep_between_retries);
 	as_policy_resolve(p->remove.key, p->key);
 	as_policy_resolve(p->remove.gen, p->gen);
 	as_policy_resolve(p->remove.commit_level, p->commit_level);
 
 	as_policy_resolve(p->apply.timeout, p->timeout);
+	as_policy_resolve(p->apply.retry, p->retry);
+	as_policy_resolve(p->apply.sleep_between_retries, p->sleep_between_retries);
 	as_policy_resolve(p->apply.key, p->key);
 	as_policy_resolve(p->apply.commit_level, p->commit_level);
 
 	as_policy_resolve(p->info.timeout, p->timeout);
 
 	as_policy_resolve(p->batch.timeout, p->timeout);
+	as_policy_resolve(p->batch.retry, p->retry);
+	as_policy_resolve(p->batch.sleep_between_retries, p->sleep_between_retries);
 
 	as_policy_resolve(p->admin.timeout, p->timeout);
 }

@@ -111,7 +111,9 @@ aerospike_key_get(
 	data.record = rec;
 	data.deserialize = policy->deserialize;
 	
-	status = as_command_execute(as->cluster, err, &cn, cmd, size, policy->timeout, policy->retry, as_command_parse_result, &data);
+	status = as_command_execute(as->cluster, err, &cn, cmd, size,
+			policy->timeout, policy->retry_on_timeout, policy->retry, policy->sleep_between_retries,
+			as_command_parse_result, &data);
 	
 	as_command_free(cmd, size);
 	return status;
@@ -193,7 +195,9 @@ aerospike_key_select(
 	data.record = rec;
 	data.deserialize = policy->deserialize;
 
-	status = as_command_execute(as->cluster, err, &cn, cmd, size, policy->timeout, policy->retry, as_command_parse_result, &data);
+	status = as_command_execute(as->cluster, err, &cn, cmd, size,
+			policy->timeout, policy->retry_on_timeout, policy->retry, policy->sleep_between_retries,
+			as_command_parse_result, &data);
 	
 	as_command_free(cmd, size);
 	return status;
@@ -271,7 +275,9 @@ aerospike_key_exists(
 	as_command_node_init(&cn, key->ns, key->digest.value, policy->replica, false);
 	
 	as_proto_msg msg;
-	status = as_command_execute(as->cluster, err, &cn, cmd, size, policy->timeout, policy->retry, as_command_parse_header, &msg);
+	status = as_command_execute(as->cluster, err, &cn, cmd, size,
+			policy->timeout, policy->retry_on_timeout, policy->retry, policy->sleep_between_retries,
+			as_command_parse_header, &msg);
 	
 	as_command_free(cmd, size);
 
@@ -382,8 +388,9 @@ aerospike_key_put(
 	if (policy->compression_threshold == 0 || (size <= policy->compression_threshold)) {
 		// Send uncompressed command.
 		AEROSPIKE_PUT_EXECUTE_STARTING(task_id);
-		status = as_command_execute(as->cluster, err, &cn, cmd, size, policy->timeout,
-					policy->retry, as_command_parse_header, &msg);
+		status = as_command_execute(as->cluster, err, &cn, cmd, size,
+			policy->timeout, policy->retry_on_timeout, policy->retry, policy->sleep_between_retries,
+			as_command_parse_header, &msg);
 		AEROSPIKE_PUT_EXECUTE_FINISHED(task_id);
 	}
 	else {
@@ -394,8 +401,9 @@ aerospike_key_put(
 		
 		if (status == AEROSPIKE_OK) {
 			AEROSPIKE_PUT_EXECUTE_STARTING(task_id);
-			status = as_command_execute(as->cluster, err, &cn, comp_cmd, comp_size, policy->timeout,
-										policy->retry, as_command_parse_header, &msg);
+			status = as_command_execute(as->cluster, err, &cn, comp_cmd, comp_size,
+				policy->timeout, policy->retry_on_timeout, policy->retry, policy->sleep_between_retries,
+				as_command_parse_header, &msg);
 			AEROSPIKE_PUT_EXECUTE_FINISHED(task_id);
 		}
 		as_command_free(comp_cmd, comp_size);
@@ -549,7 +557,9 @@ aerospike_key_remove(
 	as_command_node_init(&cn, key->ns, key->digest.value, AS_POLICY_REPLICA_MASTER, true);
 	
 	as_proto_msg msg;
-	status = as_command_execute(as->cluster, err, &cn, cmd, size, policy->timeout, policy->retry, as_command_parse_header, &msg);
+	status = as_command_execute(as->cluster, err, &cn, cmd, size,
+			policy->timeout, policy->retry_on_timeout, policy->retry, policy->sleep_between_retries,
+			as_command_parse_header, &msg);
 	
 	as_command_free(cmd, size);
 	return status;
@@ -699,7 +709,9 @@ aerospike_key_operate(
 	data.record = rec;
 	data.deserialize = policy->deserialize;
 
-	status = as_command_execute(as->cluster, err, &cn, cmd, size, policy->timeout, policy->retry, as_command_parse_result, &data);
+	status = as_command_execute(as->cluster, err, &cn, cmd, size,
+			policy->timeout, policy->retry_on_timeout, policy->retry, policy->sleep_between_retries,
+			as_command_parse_result, &data);
 	
 	as_command_free(cmd, size);
 	return status;
@@ -805,7 +817,9 @@ aerospike_key_apply(
 	as_command_node cn;
 	as_command_node_init(&cn, key->ns, key->digest.value, AS_POLICY_REPLICA_MASTER, true);
 	
-	status = as_command_execute(as->cluster, err, &cn, cmd, size, policy->timeout, 0, as_command_parse_success_failure, result);
+	status = as_command_execute(as->cluster, err, &cn, cmd, size,
+			policy->timeout, policy->retry_on_timeout, policy->retry, policy->sleep_between_retries,
+			as_command_parse_success_failure, result);
 	
 	as_command_free(cmd, size);
 	as_buffer_destroy(&args);

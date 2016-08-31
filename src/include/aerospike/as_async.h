@@ -75,7 +75,7 @@ as_async_write_command_create(
 	// Allocate enough memory to cover: struct size + write buffer size + auth max buffer size
 	// Then, round up memory size in 1KB increments.
 	size_t s = (sizeof(as_async_write_command) + size + AS_AUTHENTICATION_MAX_SIZE + 1023) & ~1023;
-	as_event_command* cmd = cf_malloc(s);
+	as_event_command* cmd = (as_event_command*)cf_malloc(s);
 	as_async_write_command* wcmd = (as_async_write_command*)cmd;
 	cmd->event_loop = as_event_assign(event_loop);
 	cmd->conn = 0;
@@ -109,7 +109,7 @@ as_async_record_command_create(
 	// Then, round up memory size in 1KB increments to reduce fragmentation and to allow socket
 	// read to reuse buffer for small socket write sizes.
 	size_t s = (sizeof(as_async_record_command) + size + AS_AUTHENTICATION_MAX_SIZE + 1023) & ~1023;
-	as_event_command* cmd = cf_malloc(s);
+	as_event_command* cmd = (as_event_command*)cf_malloc(s);
 	as_async_record_command* rcmd = (as_async_record_command*)cmd;
 	cmd->event_loop = as_event_assign(event_loop);
 	cmd->conn = 0;
@@ -143,7 +143,7 @@ as_async_value_command_create(
 	// Then, round up memory size in 1KB increments to reduce fragmentation and to allow socket
 	// read to reuse buffer for small socket write sizes.
 	size_t s = (sizeof(as_async_value_command) + size + AS_AUTHENTICATION_MAX_SIZE + 1023) & ~1023;
-	as_event_command* cmd = cf_malloc(s);
+	as_event_command* cmd = (as_event_command*)cf_malloc(s);
 	as_async_value_command* vcmd = (as_async_value_command*)cmd;
 	cmd->event_loop = as_event_assign(event_loop);
 	cmd->conn = 0;

@@ -270,18 +270,18 @@ typedef enum as_policy_exists_e {
 typedef enum as_policy_replica_e {
 
 	/**
-	 *  Read from the partition master replica node.
+	 *	Read from the partition master replica node.
 	 */
 	AS_POLICY_REPLICA_MASTER,
 
 	/**
-	 *  Distribute reads across nodes containing key's master and replicated partition
+	 *	Distribute reads across nodes containing key's master and replicated partition
 	 *	in round-robin fashion.  Currently restricted to master and one prole.
 	 */
 	AS_POLICY_REPLICA_ANY,
 
 	/**
-	 *  Always try node containing master partition first. If connection fails and
+	 *	Always try node containing master partition first. If connection fails and
 	 *	`retry_on_timeout` is true, try node containing prole partition.
 	 *	Currently restricted to master and one prole.
 	 */

@@ -33,6 +33,11 @@ typedef enum as_status_e {
 	 *	Client Errors
 	 **************************************************************************/
 	/**
+	 *	Synchronous connection error.
+	 */
+	AEROSPIKE_ERR_CONNECTION = -10,
+
+	/**
 	 *	Node invalid or could not be found.
 	 */
 	AEROSPIKE_ERR_TLS_ERROR = -9,

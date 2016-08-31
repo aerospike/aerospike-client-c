@@ -557,7 +557,7 @@ as_config_destroy(as_config* config);
  *	~~~~~~~~~~{.c}
  *	as_config config;
  *	as_config_init(&config);
- *	as_config_add_hosts_from_string(&config, "host1,host2:3010,192.168.20.1:3020,[2001::1000]:3030", 3000);
+ *	as_config_add_hosts(&config, "host1,host2:3010,192.168.20.1:3020,[2001::1000]:3030", 3000);
  *	~~~~~~~~~~
  *
  *	@relates as_config

@@ -83,6 +83,9 @@ The C client library requires other third-party libraries depending on your plat
 #### Mac OS X
 
 Download and install [XCode](https://itunes.apple.com/us/app/xcode/id497799835).
+Then, install openssl via brew.
+
+    $ brew install openssl
 
 #### libev (Optional. Used for asynchronous functions)
 

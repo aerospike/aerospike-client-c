@@ -619,8 +619,12 @@ log_session_info(as_socket* sock)
 	SSL_CIPHER const* cipher = SSL_get_current_cipher(sock->ssl);
 	if (cipher) {
 		char desc[1024];
-		as_log_info("TLS cipher: %s",
-					SSL_CIPHER_description(cipher, desc, sizeof(desc)));
+		SSL_CIPHER_description(cipher, desc, sizeof(desc));
+		int len = strlen(desc);
+		if (len > 0) {
+			desc[len-1] = '\0';	// Trim trailing \n
+		}
+		as_log_info("TLS cipher: %s", desc);
 	}
 	else {
 		as_log_warn("TLS no current cipher");

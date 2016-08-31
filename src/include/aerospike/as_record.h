@@ -141,7 +141,7 @@ extern "C" {
  *	`as_val_type()`.
  *
  *	~~~~~~~~~~{.c}
- *	as_val * value = as_record_get(rec, "bin1");
+ *	as_bin_value * value = as_record_get(rec, "bin1");
  *	switch ( as_val_type(value) ) {
  *		case AS_NIL: break;
  *		case AS_INTEGER: break;

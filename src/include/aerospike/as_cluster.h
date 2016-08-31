@@ -504,7 +504,7 @@ as_cluster_get_partition_table(as_cluster* cluster, const char* ns)
  *	as_nodes_release() must be called when done with node.
  */
 as_node*
-as_partition_table_get_node(as_cluster* cluster, as_partition_table* table, const uint8_t* digest, bool write, as_policy_replica replica);
+as_partition_table_get_node(as_cluster* cluster, as_partition_table* table, const uint8_t* digest, as_policy_replica replica, bool master);
 
 /**
  *	@private
@@ -512,7 +512,7 @@ as_partition_table_get_node(as_cluster* cluster, as_partition_table* table, cons
  *	as_nodes_release() must be called when done with node.
  */
 as_node*
-as_shm_node_get(as_cluster* cluster, const char* ns, const uint8_t* digest, bool write, as_policy_replica replica);
+as_shm_node_get(as_cluster* cluster, const char* ns, const uint8_t* digest, as_policy_replica replica, bool master);
 
 /**
  *	@private
@@ -520,17 +520,17 @@ as_shm_node_get(as_cluster* cluster, const char* ns, const uint8_t* digest, bool
  *	as_nodes_release() must be called when done with node.
  */
 static inline as_node*
-as_node_get(as_cluster* cluster, const char* ns, const uint8_t* digest, bool write, as_policy_replica replica)
+as_node_get(as_cluster* cluster, const char* ns, const uint8_t* digest, as_policy_replica replica, bool master)
 {
 #ifdef AS_TEST_PROXY
 	return as_node_get_random(cluster);
 #else
 	if (cluster->shm_info) {
-		return as_shm_node_get(cluster, ns, digest, write, replica);
+		return as_shm_node_get(cluster, ns, digest, replica, master);
 	}
 	else {
 		as_partition_table* table = as_cluster_get_partition_table(cluster, ns);
-		return as_partition_table_get_node(cluster, table, digest, write, replica);
+		return as_partition_table_get_node(cluster, table, digest, replica, master);
 	}
 #endif
 }

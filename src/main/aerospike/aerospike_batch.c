@@ -802,7 +802,7 @@ as_batch_execute(
 			return status;
 		}
 		
-		as_node* node = as_node_get(cluster, key->ns, key->digest.value, false, AS_POLICY_REPLICA_MASTER);
+		as_node* node = as_node_get(cluster, key->ns, key->digest.value, AS_POLICY_REPLICA_MASTER, false);
 		
 		if (! node) {
 			as_batch_release_nodes(batch_nodes, n_batch_nodes);
@@ -1144,7 +1144,7 @@ as_batch_read_execute(
 			return status;
 		}
 		
-		as_node* node = as_node_get(cluster, key->ns, key->digest.value, false, AS_POLICY_REPLICA_MASTER);
+		as_node* node = as_node_get(cluster, key->ns, key->digest.value, AS_POLICY_REPLICA_MASTER, false);
 		
 		if (! node) {
 			as_batch_read_cleanup(async_executor, nodes, batch_nodes, n_batch_nodes);

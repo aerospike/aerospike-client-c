@@ -421,22 +421,22 @@ as_command_execute(
 	as_parse_results_fn parse_results_fn, void* parse_results_data
 )
 {
+	as_node* node;
 	uint64_t deadline_ms = as_socket_deadline(timeout_ms);
 	uint32_t failed_nodes = 0;
 	uint32_t failed_conns = 0;
 	uint32_t iterations = 0;
+	bool master = true;
 	bool release_node;
 
 	// Execute command until successful, timed out or maximum iterations have been reached.
 	while (true) {
-		as_node* node;
-		
 		if (cn->node) {
 			node = cn->node;
 			release_node = false;
 		}
 		else {
-			node = as_node_get(cluster, cn->ns, cn->digest, cn->write, cn->replica);
+			node = as_node_get(cluster, cn->ns, cn->digest, cn->replica, master);
 			release_node = true;
 		}
 		
@@ -523,6 +523,9 @@ Retry:
 		if (++iterations > max_retries) {
 			break;
 		}
+		
+		// Switch master in case AS_POLICY_REPLICA_SEQUENCE is used.
+		master = !master;
 		
 		// Check for client timeout.
 		if (deadline_ms) {

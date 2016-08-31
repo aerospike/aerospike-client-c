@@ -275,10 +275,18 @@ typedef enum as_policy_replica_e {
 	AS_POLICY_REPLICA_MASTER,
 
 	/**
-	 *  Read from an unspecified replica node.
+	 *  Distribute reads across nodes containing key's master and replicated partition
+	 *	in round-robin fashion.  Currently restricted to master and one prole.
 	 */
-	AS_POLICY_REPLICA_ANY
+	AS_POLICY_REPLICA_ANY,
 
+	/**
+	 *  Always try node containing master partition first. If connection fails and
+	 *	`retry_on_timeout` is true, try node containing prole partition.
+	 *	Currently restricted to master and one prole.
+	 */
+	AS_POLICY_REPLICA_SEQUENCE
+	
 } as_policy_replica;
 
 /**

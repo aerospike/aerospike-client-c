@@ -1062,8 +1062,7 @@ static void* cert_blacklist_read(const char * path)
 		return NULL;
 	}
 
-	// FIXME - set the initial capacity to something larger.
-	size_t capacity = 1;
+	size_t capacity = 32;
 	size_t sz = sizeof(cert_blacklist) + (capacity * sizeof(cert_spec));
 	cert_blacklist* cbp = cf_malloc(sz);
 	cbp->ncerts = 0;

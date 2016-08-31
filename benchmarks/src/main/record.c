@@ -390,7 +390,7 @@ read_record_sync(int keyval, clientdata* data)
 		status = aerospike_key_get(&data->client, &err, 0, &key, &rec);
 		
 		// Record may not have been initialized, so not found is ok.
-		if (status == AEROSPIKE_OK|| status == AEROSPIKE_ERR_RECORD_NOT_FOUND) {
+		if (status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND) {
 			ck_pr_inc_32(&data->read_count);
 			as_record_destroy(rec);
 			return status;

@@ -39,6 +39,9 @@ for Linux and XCode clang for Mac OS X.
 ### Mac OS X
 
 Download and install [XCode](https://itunes.apple.com/us/app/xcode/id497799835).
+Then, install openssl via brew.
+
+	$ brew install openssl
 
 ### libev (Optional. Used for asynchronous functions)
 

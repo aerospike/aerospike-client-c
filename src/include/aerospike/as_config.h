@@ -478,7 +478,7 @@ typedef struct as_config_s {
 	/**
 	 *	Shared memory identifier.  This identifier should be the same for all applications
 	 *	that use the Aerospike C client. 
-	 *	Default: 0xA5000000
+	 *	Default: 0xA6000000
 	 */
 	int shm_key;
 	

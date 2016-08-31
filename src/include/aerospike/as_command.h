@@ -144,7 +144,6 @@ typedef struct as_command_node_s {
 	const char* ns;
 	const uint8_t* digest;
 	as_policy_replica replica;
-	bool write;
 } as_command_node;
 
 /**

@@ -427,7 +427,7 @@ as_shm_reserve_node_alternate(as_cluster* cluster, as_node** local_nodes, uint32
 static uint32_t g_shm_randomizer = 0;
 
 as_node*
-as_shm_node_get(as_cluster* cluster, const char* ns, const uint8_t* digest, bool write, as_policy_replica replica)
+as_shm_node_get(as_cluster* cluster, const char* ns, const uint8_t* digest, as_policy_replica replica, bool use_master)
 {
 	as_shm_info* shm_info = cluster->shm_info;
 	as_cluster_shm* cluster_shm = shm_info->cluster_shm;
@@ -440,45 +440,31 @@ as_shm_node_get(as_cluster* cluster, const char* ns, const uint8_t* digest, bool
 		// Make volatile reference so changes to tend thread will be reflected in this thread.
 		uint32_t master = ck_pr_load_32(&p->master);
 
-		if (write) {
-			// Writes always go to master.
+		if (replica == AS_POLICY_REPLICA_MASTER) {
 			return as_shm_reserve_node(cluster, shm_info->local_nodes, master);
 		}
 
-		bool use_master_replica = true;
-		switch (replica) {
-			case AS_POLICY_REPLICA_MASTER:
-				use_master_replica = true;
-				break;
-			case AS_POLICY_REPLICA_ANY:
-				use_master_replica = false;
-				break;
-			default:
-				// (No policy supplied ~~ Use the default.)
-				break;
+		uint32_t prole = ck_pr_load_32(&p->prole);
+
+		if (! prole) {
+			return as_shm_reserve_node(cluster, shm_info->local_nodes, master);
 		}
 
-		if (use_master_replica) {
-			return as_shm_reserve_node(cluster, shm_info->local_nodes, master);
-		} else {
-			uint32_t prole = ck_pr_load_32(&p->prole);
+		if (! master) {
+			return as_shm_reserve_node(cluster, shm_info->local_nodes, prole);
+		}
 
-			if (! prole) {
-				return as_shm_reserve_node(cluster, shm_info->local_nodes, master);
-			}
-
-			if (! master) {
-				return as_shm_reserve_node(cluster, shm_info->local_nodes, prole);
-			}
-
-			// Alternate between master and prole for reads.
+		if (replica == AS_POLICY_REPLICA_ANY) {
+			// Alternate between master and prole for reads with global iterator.
 			uint32_t r = ck_pr_faa_32(&g_shm_randomizer, 1);
-
-			if (r & 1) {
-				return as_shm_reserve_node_alternate(cluster, shm_info->local_nodes, master, prole);
-			}
-			return as_shm_reserve_node_alternate(cluster, shm_info->local_nodes, prole, master);
+			use_master = (r & 1);
 		}
+
+		// AS_POLICY_REPLICA_SEQUENCE uses the use_master preference without modification.
+		if (use_master) {
+			return as_shm_reserve_node_alternate(cluster, shm_info->local_nodes, master, prole);
+		}
+		return as_shm_reserve_node_alternate(cluster, shm_info->local_nodes, prole, master);
 	}
 
 	// as_log_debug("Choose random node for null partition table");

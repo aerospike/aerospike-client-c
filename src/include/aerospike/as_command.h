@@ -144,7 +144,6 @@ typedef struct as_command_node_s {
 	const char* ns;
 	const uint8_t* digest;
 	as_policy_replica replica;
-	bool write;
 } as_command_node;
 
 /**
@@ -420,9 +419,11 @@ as_command_compress(as_error* err, uint8_t* cmd, size_t cmd_sz, uint8_t* compres
  *	Send command to the server.
  */
 as_status
-as_command_execute(as_cluster* cluster, as_error* err, as_command_node* cn, uint8_t* command, size_t command_len,
-   uint32_t timeout_ms, uint32_t retry,
-   as_parse_results_fn parse_results_fn, void* parse_results_data);
+as_command_execute(
+	as_cluster* cluster, as_error* err, as_command_node* cn, uint8_t* command, size_t command_len,
+	uint32_t timeout_ms, bool timeout_per_try, uint32_t max_retries, uint32_t sleep_between_retries_ms,
+	as_parse_results_fn parse_results_fn, void* parse_results_data
+	);
 
 /**
  *	@private

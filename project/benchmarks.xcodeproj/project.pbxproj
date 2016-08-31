@@ -323,9 +323,6 @@
 					"$(inherited)",
 					/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include,
 					../src/include,
-					../modules/common/src/include,
-					../modules/base/src/include,
-					../modules/ck/include,
 				);
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
@@ -346,9 +343,6 @@
 					"$(inherited)",
 					/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include,
 					../src/include,
-					../modules/common/src/include,
-					../modules/base/src/include,
-					../modules/ck/include,
 				);
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",

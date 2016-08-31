@@ -141,7 +141,7 @@ extern "C" {
  *	`as_val_type()`.
  *
  *	~~~~~~~~~~{.c}
- *	as_val * value = as_record_get(rec, "bin1");
+ *	as_bin_value * value = as_record_get(rec, "bin1");
  *	switch ( as_val_type(value) ) {
  *		case AS_NIL: break;
  *		case AS_INTEGER: break;
@@ -371,7 +371,7 @@ bool as_record_set_double(as_record * rec, const as_bin_name name, double value)
  *
  *	@param rec		The record containing the bin.
  *	@param name		The name of the bin.
- *	@param value	The value of the bin.
+ *	@param value	The value of the bin. Must be in scope for the lifetime of the record.
  *	@param free		If true, then the value will be freed when the record is destroyed.
  *
  *	@return true on success, false on failure.
@@ -389,7 +389,7 @@ bool as_record_set_strp(as_record * rec, const as_bin_name name, const char * va
  *
  *	@param rec		The record containing the bin.
  *	@param name		The name of the bin.
- *	@param value	The value of the bin. Must last for the lifetime of the record.
+ *	@param value	The value of the bin. Must be in scope for the lifetime of the record.
  *
  *	@return true on success, false on failure.
  *
@@ -409,7 +409,7 @@ static inline bool as_record_set_str(as_record * rec, const as_bin_name name, co
  *
  *	@param rec		The record containing the bin.
  *	@param name		The name of the bin.
- *	@param value	The value of the bin.
+ *	@param value	The value of the bin. Must be in scope for the lifetime of the record.
  *	@param free		If true, then the value will be freed when the record is destroyed.
  *
  *	@return true on success, false on failure.
@@ -427,7 +427,7 @@ bool as_record_set_geojson_strp(as_record * rec, const as_bin_name name, const c
  *
  *	@param rec		The record containing the bin.
  *	@param name		The name of the bin.
- *	@param value	The value of the bin. Must last for the lifetime of the record.
+ *	@param value	The value of the bin. Must be in scope for the lifetime of the record.
  *
  *	@return true on success, false on failure.
  *
@@ -452,7 +452,7 @@ static inline bool as_record_set_geojson_str(as_record * rec, const as_bin_name 
  *
  *	@param rec		The record containing the bin.
  *	@param name		The name of the bin.
- *	@param value	The value of the bin.
+ *	@param value	The value of the bin. Must be in scope for the lifetime of the record.
  *	@param size		The size of the value.
  *	@param free		If true, then the value will be freed when the record is destroyed.
  *
@@ -476,7 +476,7 @@ bool as_record_set_rawp(as_record * rec, const as_bin_name name, const uint8_t *
  *
  *	@param rec		The record containing the bin.
  *	@param name		The name of the bin.
- *	@param value	The value of the bin.
+ *	@param value	The value of the bin. Must be in scope for the lifetime of the record.
  *	@param size		The size of the value.
  *	@param type 	The as_bytes_type designation (AS_BYTES_*)
  *	@param free		If true, then the value will be freed when the record is destroyed.
@@ -497,8 +497,8 @@ bool as_record_set_raw_typep(as_record * rec, const as_bin_name name, const uint
  *
  *	@param rec		The record containing the bin.
  *	@param name		The name of the bin.
- *	@param value	The value of the bin.
- *	@param size		The size of the value. Must last for the lifetime of the record.
+ *	@param value	The value of the bin. Must be in scope for the lifetime of the record.
+ *	@param size		The size of the value.
  *
  *	@return true on success, false on failure.
  *
@@ -518,7 +518,7 @@ static inline bool as_record_set_raw(as_record * rec, const as_bin_name name, co
  *
  *	@param rec		The record containing the bin.
  *	@param name		The name of the bin.
- *	@param value	The value of the bin.
+ *	@param value	The value of the bin. Must be in scope for the lifetime of the record.
  *
  *	@return true on success, false on failure.
  *
@@ -535,7 +535,7 @@ bool as_record_set_integer(as_record * rec, const as_bin_name name, as_integer *
  *
  *	@param rec		The record containing the bin.
  *	@param name		The name of the bin.
- *	@param value	The value of the bin.
+ *	@param value	The value of the bin. Must be in scope for the lifetime of the record.
  *
  *	@return true on success, false on failure.
  *
@@ -552,7 +552,7 @@ bool as_record_set_as_double(as_record * rec, const as_bin_name name, as_double 
  *
  *	@param rec		The record containing the bin.
  *	@param name		The name of the bin.
- *	@param value	The value of the bin.
+ *	@param value	The value of the bin. Must be in scope for the lifetime of the record.
  *
  *	@return true on success, false on failure.
  *
@@ -569,7 +569,7 @@ bool as_record_set_string(as_record * rec, const as_bin_name name, as_string * v
  *
  *	@param rec		The record containing the bin.
  *	@param name		The name of the bin.
- *	@param value	The value of the bin.
+ *	@param value	The value of the bin. Must be in scope for the lifetime of the record.
  *
  *	@return true on success, false on failure.
  *
@@ -586,7 +586,7 @@ bool as_record_set_geojson(as_record * rec, const as_bin_name name, as_geojson *
  *
  *	@param rec		The record containing the bin.
  *	@param name		The name of the bin.
- *	@param value	The value of the bin.
+ *	@param value	The value of the bin. Must be in scope for the lifetime of the record.
  *
  *	@return true on success, false on failure.
  *
@@ -609,7 +609,7 @@ bool as_record_set_bytes(as_record * rec, const as_bin_name name, as_bytes * val
  *
  *	@param rec		The record containing the bin.
  *	@param name		The name of the bin.
- *	@param value	The value of the bin.
+ *	@param value	The value of the bin. Must be in scope for the lifetime of the record.
  *
  *	@return true on success, false on failure.
  *
@@ -632,7 +632,7 @@ bool as_record_set_list(as_record * rec, const as_bin_name name, as_list * value
  *
  *	@param rec		The record containing the bin.
  *	@param name		The name of the bin.
- *	@param value	The value of the bin.
+ *	@param value	The value of the bin. Must be in scope for the lifetime of the record.
  *
  *	@return true on success, false on failure.
  *

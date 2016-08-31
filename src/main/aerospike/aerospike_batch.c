@@ -61,10 +61,12 @@ typedef struct as_batch_task_s {
 	uint32_t n_keys;
 	uint32_t timeout_ms;
 	uint32_t retry;
+	uint32_t sleep_between_retries;
 	
 	uint8_t read_attr;      // Old aerospike_batch_get()
 	bool use_batch_records;
 	bool use_new_batch;
+	bool retry_on_timeout;
 	bool allow_inline;
 	bool send_set_name;
 	bool deserialize;
@@ -488,7 +490,9 @@ as_batch_index_records_execute(as_batch_task* task)
 
 	as_error err;
 	as_error_init(&err);
-	as_status status = as_command_execute(task->cluster, &err, &cn, cmd, size, task->timeout_ms, task->retry, as_batch_parse, task);
+	as_status status = as_command_execute(task->cluster, &err, &cn, cmd, size,
+				task->timeout_ms, task->retry_on_timeout, task->retry, task->sleep_between_retries,
+				as_batch_parse, task);
 	
 	as_command_free(cmd, size);
 	
@@ -600,7 +604,9 @@ as_batch_index_execute(as_batch_task* task)
 	
 	as_error err;
 	as_error_init(&err);
-	as_status status = as_command_execute(task->cluster, &err, &cn, cmd, size, task->timeout_ms, task->retry, as_batch_parse, task);
+	as_status status = as_command_execute(task->cluster, &err, &cn, cmd, size,
+				task->timeout_ms, task->retry_on_timeout, task->retry, task->sleep_between_retries,
+				as_batch_parse, task);
 	
 	as_command_free(cmd, size);
 	
@@ -654,7 +660,9 @@ as_batch_direct_execute(as_batch_task* task)
 	
 	as_error err;
 	as_error_init(&err);
-	as_status status = as_command_execute(task->cluster, &err, &cn, cmd, size, task->timeout_ms, task->retry, as_batch_parse, task);
+	as_status status = as_command_execute(task->cluster, &err, &cn, cmd, size,
+				task->timeout_ms, task->retry_on_timeout, task->retry, task->sleep_between_retries,
+				as_batch_parse, task);
 	
 	as_command_free(cmd, size);
 	
@@ -794,7 +802,7 @@ as_batch_execute(
 			return status;
 		}
 		
-		as_node* node = as_node_get(cluster, key->ns, key->digest.value, false, AS_POLICY_REPLICA_MASTER);
+		as_node* node = as_node_get(cluster, key->ns, key->digest.value, AS_POLICY_REPLICA_MASTER, false);
 		
 		if (! node) {
 			as_batch_release_nodes(batch_nodes, n_batch_nodes);
@@ -843,9 +851,11 @@ as_batch_execute(
 	task.keys = batch->keys.entries;
 	task.timeout_ms = policy->timeout;
 	task.index = 0;
-	task.retry = 0;
+	task.retry = policy->retry;
+	task.sleep_between_retries = policy->sleep_between_retries;
 	task.read_attr = read_attr;
 	task.use_batch_records = false;
+	task.retry_on_timeout = policy->retry_on_timeout;
 	task.allow_inline = policy->allow_inline;
 	task.send_set_name = policy->send_set_name;
 	task.deserialize = policy->deserialize;
@@ -945,8 +955,10 @@ as_batch_read_execute_sync(
 	task.error_mutex = &error_mutex;
 	task.n_keys = n_keys;
 	task.timeout_ms = policy->timeout;
-	task.retry = 0;
+	task.retry = policy->retry;
+	task.sleep_between_retries = policy->sleep_between_retries;
 	task.use_batch_records = true;
+	task.retry_on_timeout = policy->retry_on_timeout;
 	task.allow_inline = policy->allow_inline;
 	task.send_set_name = policy->send_set_name;
 	task.deserialize = policy->deserialize;
@@ -1132,7 +1144,7 @@ as_batch_read_execute(
 			return status;
 		}
 		
-		as_node* node = as_node_get(cluster, key->ns, key->digest.value, false, AS_POLICY_REPLICA_MASTER);
+		as_node* node = as_node_get(cluster, key->ns, key->digest.value, AS_POLICY_REPLICA_MASTER, false);
 		
 		if (! node) {
 			as_batch_read_cleanup(async_executor, nodes, batch_nodes, n_batch_nodes);

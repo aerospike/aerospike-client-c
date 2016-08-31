@@ -137,7 +137,7 @@ reserve_node_alternate(as_cluster* cluster, as_node* chosen, as_node* alternate)
 static uint32_t g_randomizer = 0;
 
 as_node*
-as_partition_table_get_node(as_cluster* cluster, as_partition_table* table, const uint8_t* digest, bool write, as_policy_replica replica)
+as_partition_table_get_node(as_cluster* cluster, as_partition_table* table, const uint8_t* digest, as_policy_replica replica, bool use_master)
 {
 	if (table) {
 		uint32_t partition_id = as_partition_getid(digest, cluster->n_partitions);
@@ -146,45 +146,31 @@ as_partition_table_get_node(as_cluster* cluster, as_partition_table* table, cons
 		// Make volatile reference so changes to tend thread will be reflected in this thread.
 		as_node* master = ck_pr_load_ptr(&p->master);
 
-		if (write) {
-			// Writes always go to master.
+		if (replica == AS_POLICY_REPLICA_MASTER) {
 			return reserve_node(cluster, master);
 		}
-
-		bool use_master_replica = true;
-		switch (replica) {
-			case AS_POLICY_REPLICA_MASTER:
-				use_master_replica = true;
-				break;
-			case AS_POLICY_REPLICA_ANY:
-				use_master_replica = false;
-				break;
-			default:
-				// (No policy supplied ~~ Use the default.)
-				break;
-		}
-
-		if (use_master_replica) {
+		
+		as_node* prole = ck_pr_load_ptr(&p->prole);
+		
+		if (! prole) {
 			return reserve_node(cluster, master);
-		} else {
-			as_node* prole = ck_pr_load_ptr(&p->prole);
-
-			if (! prole) {
-				return reserve_node(cluster, master);
-			}
-
-			if (! master) {
-				return reserve_node(cluster, prole);
-			}
-
-			// Alternate between master and prole for reads.
+		}
+		
+		if (! master) {
+			return reserve_node(cluster, prole);
+		}
+		
+		if (replica == AS_POLICY_REPLICA_ANY) {
+			// Alternate between master and prole for reads with global iterator.
 			uint32_t r = ck_pr_faa_32(&g_randomizer, 1);
-				
-			if (r & 1) {
-				return reserve_node_alternate(cluster, master, prole);
-			}
-			return reserve_node_alternate(cluster, prole, master);
+			use_master = (r & 1);
 		}
+
+		// AS_POLICY_REPLICA_SEQUENCE uses the use_master preference without modification.
+		if (use_master) {
+			return reserve_node_alternate(cluster, master, prole);
+		}
+		return reserve_node_alternate(cluster, prole, master);
 	}
 	
 #ifdef DEBUG_VERBOSE

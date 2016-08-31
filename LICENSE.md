@@ -1,7 +1,7 @@
 Aerospike C Client License
 ==========================
 
-    Copyright 2012-2015 Aerospike, Inc.
+    Copyright 2008-2016 Aerospike, Inc.
 
     Portions may be licensed to Aerospike, Inc. under one or more contributor
     license agreements.

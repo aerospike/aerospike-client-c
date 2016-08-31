@@ -415,35 +415,34 @@ as_command_compress(as_error* err, uint8_t* cmd, size_t cmd_sz, uint8_t* compres
 }
 
 as_status
-as_command_execute(as_cluster* cluster, as_error* err, as_command_node* cn, uint8_t* command, size_t command_len,
-	uint32_t timeout_ms, uint32_t retry,
+as_command_execute(
+	as_cluster* cluster, as_error* err, as_command_node* cn, uint8_t* command, size_t command_len,
+	uint32_t timeout_ms, bool retry_on_timeout, uint32_t max_retries, uint32_t sleep_between_retries_ms,
 	as_parse_results_fn parse_results_fn, void* parse_results_data
 )
 {
+	as_node* node;
 	uint64_t deadline_ms = as_socket_deadline(timeout_ms);
-	uint32_t sleep_between_retries_ms = 0;
 	uint32_t failed_nodes = 0;
 	uint32_t failed_conns = 0;
 	uint32_t iterations = 0;
+	bool master = true;
 	bool release_node;
 
 	// Execute command until successful, timed out or maximum iterations have been reached.
 	while (true) {
-		as_node* node;
-		
 		if (cn->node) {
 			node = cn->node;
 			release_node = false;
 		}
 		else {
-			node = as_node_get(cluster, cn->ns, cn->digest, cn->write, cn->replica);
+			node = as_node_get(cluster, cn->ns, cn->digest, cn->replica, master);
 			release_node = true;
 		}
 		
 		if (!node) {
 			as_error_set_message(err, AEROSPIKE_ERR_INVALID_NODE, "Invalid node");
 			failed_nodes++;
-			sleep_between_retries_ms = 10;
 			goto Retry;
 		}
 
@@ -455,7 +454,6 @@ as_command_execute(as_cluster* cluster, as_error* err, as_command_node* cn, uint
 				as_node_release(node);
 			}
 			failed_conns++;
-			sleep_between_retries_ms = 1;
 			goto Retry;
 		}
 		
@@ -469,7 +467,6 @@ as_command_execute(as_cluster* cluster, as_error* err, as_command_node* cn, uint
 			if (release_node) {
 				as_node_release(node);
 			}
-			sleep_between_retries_ms = 0;
 			goto Retry;
 		}
 		
@@ -523,20 +520,37 @@ as_command_execute(as_cluster* cluster, as_error* err, as_command_node* cn, uint
 
 Retry:
 		// Check if max retries reached.
-		if (++iterations > retry) {
+		if (++iterations > max_retries) {
 			break;
 		}
 		
+		// Switch master in case AS_POLICY_REPLICA_SEQUENCE is used.
+		master = !master;
+		
 		// Check for client timeout.
-		if (deadline_ms > 0) {
-			int remaining_ms = (int)(deadline_ms - cf_getms() - sleep_between_retries_ms);
-			
-			if (remaining_ms <= 0) {
-				break;
+		if (deadline_ms) {
+			if (retry_on_timeout) {
+				// Timeout is per each attempt.
+				if (sleep_between_retries_ms > 0) {
+					// Sleep before trying again.
+					usleep(sleep_between_retries_ms * 1000);
+				}
+				
+				// Reset deadline and rely on max retries check.
+				deadline_ms = as_socket_deadline(timeout_ms);
+				continue;
 			}
-			
-			// Reset timeout in send buffer (destined for server).
-			*(uint32_t*)(command + 22) = cf_swap_to_be32(remaining_ms);
+			else {
+				// Timeout is absolute.  Stop if timeout has been reached.
+				int remaining_ms = (int)(deadline_ms - cf_getms() - sleep_between_retries_ms);
+				
+				if (remaining_ms <= 0) {
+					break;
+				}
+				
+				// Reset timeout in send buffer (destined for server).
+				*(uint32_t*)(command + 22) = cf_swap_to_be32(remaining_ms);
+			}
 		}
 		
 		if (sleep_between_retries_ms > 0) {

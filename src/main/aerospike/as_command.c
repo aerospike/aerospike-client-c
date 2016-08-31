@@ -480,31 +480,30 @@ as_command_execute(
 			}
 		}
 		else {
+			err->code = status;
+
+			// Close socket on errors that can leave unread data in socket.
 			switch (status) {
+				case AEROSPIKE_ERR_CONNECTION:
 				case AEROSPIKE_ERR_TIMEOUT:
+				case AEROSPIKE_ERR_TLS_ERROR:
 					as_node_close_connection(node, &socket);
 					if (release_node) {
 						as_node_release(node);
 					}
-					return as_error_update(err, AEROSPIKE_ERR_TIMEOUT,
-							"Timeout: timeout=%d iterations=%u failedNodes=%u failedConns=%u",
-							timeout_ms, ++iterations, failed_nodes, failed_conns);
-				
-				// Close socket on errors that can leave unread data in socket.
+					goto Retry;
+
 				case AEROSPIKE_ERR_QUERY_ABORTED:
 				case AEROSPIKE_ERR_SCAN_ABORTED:
-				case AEROSPIKE_ERR_TLS_ERROR:
 				case AEROSPIKE_ERR_CLIENT_ABORT:
 				case AEROSPIKE_ERR_CLIENT:
 					as_node_close_connection(node, &socket);
 					if (release_node) {
 						as_node_release(node);
 					}
-					err->code = status;
 					return status;
 				
 				default:
-					err->code = status;
 					break;
 			}
 		}

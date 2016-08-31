@@ -190,7 +190,7 @@ print_usage(const char* program)
 	blog_line("   Use shared memory cluster tending.");
 	blog_line("");
 
-	blog_line("-C --replica {master,any}       # Default: master");
+	blog_line("-C --replica {master,any,sequence} # Default: master");
 	blog_line("   Which replica to use for reads.");
 	blog_line("");
 
@@ -198,7 +198,7 @@ print_usage(const char* program)
 	blog_line("   Read consistency guarantee level.");
 	blog_line("");
 
-	blog_line("-M --commitLevel {all,master}   # Default: all");
+	blog_line("-M --commitLevel {all,master} # Default: all");
 	blog_line("   Write commit guarantee level.");
 	blog_line("");
 
@@ -306,7 +306,23 @@ print_args(arguments* args)
 	
 	blog_line("shared memory:  %s", boolstring(args->use_shm));
 
-	blog_line("read replica:   %s", (AS_POLICY_REPLICA_MASTER == args->read_replica ? "master" : "any"));
+	const char* rep;
+	switch (args->read_replica) {
+		case AS_POLICY_REPLICA_MASTER:
+			rep = "master";
+			break;
+		case AS_POLICY_REPLICA_ANY:
+			rep = "any";
+			break;
+		case AS_POLICY_REPLICA_SEQUENCE:
+			rep = "sequence";
+			break;
+		default:
+			rep = "unknown";
+			break;
+	}
+
+	blog_line("read replica:   %s", rep);
 	blog_line("read consistency level: %s", (AS_POLICY_CONSISTENCY_LEVEL_ONE == args->read_consistency_level ? "one" : "all"));
 	blog_line("write commit level: %s", (AS_POLICY_COMMIT_LEVEL_ALL == args->write_commit_level ? "all" : "master"));
 	blog_line("asynchronous mode:  %s", args->async ? "on" : "off");
@@ -568,8 +584,11 @@ set_args(int argc, char * const * argv, arguments* args)
 				else if (strcmp(optarg, "any") == 0) {
 					args->read_replica = AS_POLICY_REPLICA_ANY;
 				}
+				else if (strcmp(optarg, "sequence") == 0) {
+					args->read_replica = AS_POLICY_REPLICA_SEQUENCE;
+				}
 				else {
-					blog_line("replica must be master or any");
+					blog_line("replica must be master | any | sequence");
 					return 1;
 				}
 				break;

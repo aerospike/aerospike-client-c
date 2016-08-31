@@ -112,14 +112,17 @@ connect_to_server(arguments* args, aerospike* client)
 	
 	// Disable batch/scan/query thread pool because these commands are not used in benchmarks.
 	cfg.thread_pool_size = 0;
-		
+
 	as_policies* p = &cfg.policies;
 	p->timeout = args->read_timeout;
 	p->retry = args->max_retries;
 	p->key = AS_POLICY_KEY_DIGEST;
 	p->gen = AS_POLICY_GEN_IGNORE;
 	p->exists = AS_POLICY_EXISTS_IGNORE;
-	
+
+	if (args->read_replica == AS_POLICY_REPLICA_SEQUENCE) {
+		p->read.retry_on_timeout = true;
+	}
 	p->read.replica = args->read_replica;
 	p->read.consistency_level = args->read_consistency_level;
 

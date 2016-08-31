@@ -242,13 +242,13 @@ as_socket_create_and_connect(as_socket* sock, as_error* err, struct sockaddr* ad
 	int rv = as_socket_create(sock, addr->sa_family, ctx, tls_name);
 	
 	if (rv < 0) {
-		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Socket create failed: %d", rv);
+		return as_error_update(err, AEROSPIKE_ERR_CONNECTION, "Socket create failed: %d", rv);
 	}
 	
 	// Initiate non-blocking connect.
 	if (! as_socket_start_connect(sock, addr)) {
 		as_socket_close(sock);
-		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Socket connect failed");
+		return as_error_update(err, AEROSPIKE_ERR_CONNECTION, "Socket connect failed");
 	}
 	return AEROSPIKE_OK;
 }
@@ -312,9 +312,7 @@ as_socket_write_limit(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_l
 		as_status status = AEROSPIKE_OK;
 		int rv = as_tls_write(sock, buf, buf_len, deadline);
 		if (rv < 0) {
-			status = as_error_update(err, AEROSPIKE_ERR_CLIENT,
-									 "TLS write error: %d", rv);
-			return status;
+			return as_error_update(err, AEROSPIKE_ERR_CONNECTION, "TLS write error: %d", rv);
 		}
 		else if (rv == 1) {
 			// Do not set error string to avoid affecting performance.
@@ -340,7 +338,7 @@ as_socket_write_limit(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_l
 			flags = 0;
 		if (! (flags & O_NONBLOCK)) {
 			if (-1 == fcntl(sock->fd, F_SETFL, flags | O_NONBLOCK)) {
-				return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Socket nonblocking set failed.");
+				return as_error_set_message(err, AEROSPIKE_ERR_CONNECTION, "Socket nonblocking set failed.");
 			}
 		}
 	
@@ -350,7 +348,7 @@ as_socket_write_limit(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_l
 		fd_set* wset = (fd_set*)(wset_size > STACK_LIMIT ? cf_malloc(wset_size) : alloca(wset_size));
 	
 		if (!wset) {
-			return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Socket fdset allocation error: %d", wset_size);
+			return as_error_update(err, AEROSPIKE_ERR_CONNECTION, "Socket fdset allocation error: %d", wset_size);
 		}
 	
 		as_status status = AEROSPIKE_OK;
@@ -399,7 +397,7 @@ as_socket_write_limit(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_l
 				}
 				else if (r_bytes == 0) {
 					// We shouldn't see 0 returned unless we try to write 0 bytes, which we don't.
-					status = as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Bad file descriptor");
+					status = as_error_set_message(err, AEROSPIKE_ERR_CONNECTION, "Bad file descriptor");
 					goto Out;
 				}
 				else if (errno != ETIMEDOUT
@@ -407,7 +405,7 @@ as_socket_write_limit(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_l
 #ifdef DEBUG_TIME
 					debug_time_printf("socket write timeout", try, select_busy, start, now, deadline);
 #endif
-					status = as_error_update(err, AEROSPIKE_ERR_CLIENT, "Socket write error: %d", errno);
+					status = as_error_update(err, AEROSPIKE_ERR_CONNECTION, "Socket write error: %d", errno);
 					goto Out;
 				}
 			}
@@ -418,7 +416,7 @@ as_socket_write_limit(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_l
 			}
 			else {
 				if (rv == -1 && (errno != EINTR || as_socket_stop_on_interrupt)) {
-					status = as_error_update(err, AEROSPIKE_ERR_CLIENT, "Socket write error: %d", errno);
+					status = as_error_update(err, AEROSPIKE_ERR_CONNECTION, "Socket write error: %d", errno);
 					goto Out;
 				}
 			}
@@ -447,9 +445,7 @@ as_socket_read_forever(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_
 		uint64_t deadline = cf_getms() + 60000;
 		int rv = as_tls_read(sock, buf, buf_len, deadline);
 		if (rv < 0) {
-			status = as_error_update(err, AEROSPIKE_ERR_CLIENT,
-									 "TLS write error: %d", rv);
-			return status;
+			return as_error_update(err, AEROSPIKE_ERR_CONNECTION, "TLS write error: %d", rv);
 		}
 		else if (rv == 1) {
 			// Do not set error string to avoid affecting performance.
@@ -470,7 +466,7 @@ as_socket_read_forever(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_
 			flags = 0;
 		if (flags & O_NONBLOCK) {
 			if (-1 == fcntl(sock->fd, F_SETFL, flags & ~O_NONBLOCK)) {
-				return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Socket blocking set failed.");
+				return as_error_set_message(err, AEROSPIKE_ERR_CONNECTION, "Socket blocking set failed.");
 			}
 		}
     
@@ -479,13 +475,13 @@ as_socket_read_forever(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_
 			int r_bytes = (int)read(sock->fd, buf + pos, buf_len - pos );
 			if (r_bytes < 0) { // don't combine these into one line! think about it!
 				if (errno != ETIMEDOUT) {
-					return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Socket read forever failed, errno %d", errno);
+					return as_error_update(err, AEROSPIKE_ERR_CONNECTION, "Socket read forever failed, errno %d", errno);
 				}
 			}
 			else if (r_bytes == 0) {
 				// blocking read returns 0 bytes socket timedout at server side
 				// is closed
-				return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Bad file descriptor");
+				return as_error_set_message(err, AEROSPIKE_ERR_CONNECTION, "Bad file descriptor");
 			}
 			else {
 				pos += r_bytes;
@@ -503,9 +499,7 @@ as_socket_read_limit(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_le
 		as_status status = AEROSPIKE_OK;
 		int rv = as_tls_read(sock, buf, buf_len, deadline);
 		if (rv < 0) {
-			status = as_error_update(err, AEROSPIKE_ERR_CLIENT,
-									 "TLS write error: %d", rv);
-			return status;
+			return as_error_update(err, AEROSPIKE_ERR_CONNECTION, "TLS write error: %d", rv);
 		}
 		else if (rv == 1) {
 			// Do not set error string to avoid affecting performance.
@@ -531,7 +525,7 @@ as_socket_read_limit(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_le
 			flags = 0;
 		if (! (flags & O_NONBLOCK)) {
 			if (-1 == fcntl(sock->fd, F_SETFL, flags | O_NONBLOCK)) {
-				return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Socket nonblocking set failed.");
+				return as_error_set_message(err, AEROSPIKE_ERR_CONNECTION, "Socket nonblocking set failed.");
 			}
 		}
     
@@ -541,7 +535,7 @@ as_socket_read_limit(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_le
 		fd_set* rset = (fd_set*)(rset_size > STACK_LIMIT ? cf_malloc(rset_size) : alloca(rset_size));
 	
 		if (!rset) {
-			return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Socket fdset allocation error: %d", rset_size);
+			return as_error_update(err, AEROSPIKE_ERR_CONNECTION, "Socket fdset allocation error: %d", rset_size);
 		}
 
 		int status = AEROSPIKE_OK;
@@ -581,7 +575,7 @@ as_socket_read_limit(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_le
 				}
 				else if (r_bytes == 0) {
 					// We believe this means that the server has closed this socket.
-					status = as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Bad file descriptor");
+					status = as_error_set_message(err, AEROSPIKE_ERR_CONNECTION, "Bad file descriptor");
 					goto Out;
 				}
 				else if (errno != ETIMEDOUT
@@ -591,7 +585,7 @@ as_socket_read_limit(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_le
 #ifdef DEBUG_TIME
 					debug_time_printf("socket read timeout", try, select_busy, start, now, deadline);
 #endif
-					status = as_error_update(err, AEROSPIKE_ERR_CLIENT, "Socket read error: %d", errno);
+					status = as_error_update(err, AEROSPIKE_ERR_CONNECTION, "Socket read error: %d", errno);
 					goto Out;
 				}
 			}
@@ -602,7 +596,7 @@ as_socket_read_limit(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_le
 			}
 			else {
 				if (rv == -1 && (errno != EINTR || as_socket_stop_on_interrupt)) {
-					status = as_error_update(err, AEROSPIKE_ERR_CLIENT, "Socket read error: %d", errno);
+					status = as_error_update(err, AEROSPIKE_ERR_CONNECTION, "Socket read error: %d", errno);
 					goto Out;
 				}
 			}

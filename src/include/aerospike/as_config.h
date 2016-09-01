@@ -522,10 +522,6 @@ typedef struct as_config_s {
  *	as_config_add_host(&config, "127.0.0.1", 3000);
  *	~~~~~~~~~~
  *	
- *	@param c The configuration to initialize.
- *	
- *	@return The initialized configuration on success. Otherwise NULL.
- *
  *	@relates as_config
  */
 as_config*

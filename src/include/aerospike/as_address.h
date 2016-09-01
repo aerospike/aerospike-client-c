@@ -28,8 +28,12 @@ extern "C" {
 /**
  *	@private
  *	Convert socket address (including port) to a string.
+ *
+ *	Formats:
+ *	~~~~~~~~~~{.c}
  *	IPv4: xxx.xxx.xxx.xxx:<port>
  *	IPv6: [xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx]:<port>
+ *	~~~~~~~~~~
  */
 void
 as_address_name(struct sockaddr* addr, char* name, socklen_t size);

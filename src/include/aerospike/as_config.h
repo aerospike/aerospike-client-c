@@ -205,6 +205,24 @@ typedef struct as_config_tls_s {
 	 */
 	bool log_session_info;
 	
+	/**
+	 *  Path to the client's certificate for mutual authentication.
+	 *  By default mutual authentication is disabled.
+	 */
+	char* certfile;
+
+	/**
+	 *  Path to the client's key for mutual authentication.
+	 *  By default mutual authentication is disabled.
+	 */
+	char* keyfile;
+
+	/**
+	 *  Path to the client's chain file for mutual authentication.
+	 *  By default mutual authentication is disabled.
+	 */
+	char* chainfile;
+
 } as_config_tls;
 
 /**

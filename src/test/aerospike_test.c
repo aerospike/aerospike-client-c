@@ -51,6 +51,9 @@ bool g_tls_crl_check = false;
 bool g_tls_crl_check_all = false;
 char* g_tls_cert_blacklist = NULL;
 bool g_tls_log_session_info = false;
+char * g_tls_certfile = NULL;
+char * g_tls_keyfile = NULL;
+char * g_tls_chainfile = NULL;
 
 #if defined(AS_USE_LIBEV) || defined(AS_USE_LIBUV)
 static bool g_use_async = true;
@@ -123,6 +126,15 @@ usage()
 	fprintf(stderr, "  -L, --tls-log-session-info\n");
 	fprintf(stderr, "    Log TLS connected session info.\n\n");
 
+	fprintf(stderr, "  -X, --tls-certfile <path>\n");
+	fprintf(stderr, "    Set the TLS client certificate for mutual authentication.\n\n");
+
+	fprintf(stderr, "  -Y, --tls-keyfile <path>\n");
+	fprintf(stderr, "    Set the TLS client key file for mutual authentication.\n\n");
+
+	fprintf(stderr, "  -Z, --tls-chainfile <path>\n");
+	fprintf(stderr, "    Set the TLS client chain file for mutual authentication.\n\n");
+
 	fprintf(stderr, "  -S, --suite <suite>\n");
 	fprintf(stderr, "    The suite to be run. Default: all suites.\n\n");
 
@@ -130,7 +142,7 @@ usage()
 	fprintf(stderr, "    The test case to run. Default: all test cases.\n\n");
 }
 
-static const char* short_options = "h:p:U:uP::eEc:C:r:t:QRB:LS:T:";
+static const char* short_options = "h:p:U:uP::eEc:C:r:t:QRB:LX:Y:Z:S:T:";
 
 static struct option long_options[] = {
 	{"hosts",                  1, 0, 'h'},
@@ -148,6 +160,9 @@ static struct option long_options[] = {
 	{"tls-crl-check-all",      0, 0, 'R'},
 	{"tls-cert-blacklist",     1, 0, 'B'},
 	{"tls-log-session-info",   0, 0, 'L'},
+	{"tls-certfile",           1, 0, 'X'},
+	{"tls-keyfile",            1, 0, 'Y'},
+	{"tls-chainfile",          1, 0, 'Z'},
 	{"suite",                  1, 0, 'S'},
 	{"test",                   1, 0, 'T'},
 	{0,                        0, 0,  0 }
@@ -232,6 +247,18 @@ static bool parse_opts(int argc, char* argv[])
 			g_tls_log_session_info = true;
 			break;
 				
+		case 'X':
+			g_tls_certfile = strdup(optarg);
+			break;
+				
+		case 'Y':
+			g_tls_keyfile = strdup(optarg);
+			break;
+				
+		case 'Z':
+			g_tls_chainfile = strdup(optarg);
+			break;
+				
 		case 'S':
 			// Exclude all but the specified suite from the plan.
 			atf_suite_filter(optarg);
@@ -298,6 +325,9 @@ static bool before(atf_plan * plan) {
 	config.tls.crl_check_all = g_tls_crl_check_all;
 	config.tls.cert_blacklist = g_tls_cert_blacklist;
 	config.tls.log_session_info = g_tls_log_session_info;
+	config.tls.certfile = g_tls_certfile;
+	config.tls.keyfile = g_tls_keyfile;
+	config.tls.chainfile = g_tls_chainfile;
 	
 	as_error err;
 	as_error_reset(&err);
@@ -345,6 +375,15 @@ static bool after(atf_plan * plan) {
 	}
 	if (g_tls_cert_blacklist) {
 		free(g_tls_cert_blacklist);
+	}
+	if (g_tls_certfile) {
+		free(g_tls_certfile);
+	}
+	if (g_tls_keyfile) {
+		free(g_tls_keyfile);
+	}
+	if (g_tls_chainfile) {
+		free(g_tls_chainfile);
 	}
 	
 	if (status == AEROSPIKE_OK) {

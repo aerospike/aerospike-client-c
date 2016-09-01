@@ -535,6 +535,64 @@ as_tls_context_setup(as_config_tls* tlscfg,
 		}
 	}
 
+	if (tlscfg->chainfile) {
+		int rv = SSL_CTX_use_certificate_chain_file(ctx, tlscfg->chainfile);
+		if (rv != 1) {
+			// We seem to be seeing this bug:
+			// https://groups.google.com/
+			//          forum/#!topic/mailing.openssl.users/nRvRzmKnEQA
+			// If the rv is not 1 check the error stack; if it doesn't have an
+			// error assume we are OK.
+			//
+			unsigned long errcode = ERR_peek_error();
+			if (errcode != SSL_ERROR_NONE) {
+				// There *was* an error after all.
+				cert_blacklist_destroy(cert_blacklist);
+				SSL_CTX_free(ctx);
+				
+				unsigned long errcode = ERR_get_error();
+				char errbuf[1024];
+				ERR_error_string_n(errcode, errbuf, sizeof(errbuf));
+				return as_error_update(errp, AEROSPIKE_ERR_TLS_ERROR,
+							  "SSL_CTX_use_certificate_chain_file failed: %s",
+									   errbuf);
+			}
+		}
+	}
+
+	if (tlscfg->certfile) {
+		int rv = SSL_CTX_use_certificate_file(ctx, tlscfg->certfile,
+										  SSL_FILETYPE_PEM);
+		if (rv != 1) {
+				cert_blacklist_destroy(cert_blacklist);
+				SSL_CTX_free(ctx);
+				
+				unsigned long errcode = ERR_get_error();
+				char errbuf[1024];
+				ERR_error_string_n(errcode, errbuf, sizeof(errbuf));
+				return as_error_update(errp, AEROSPIKE_ERR_TLS_ERROR,
+							  "SSL_CTX_use_certificate_file failed: %s",
+									   errbuf);
+		}
+	}
+											  
+
+	if (tlscfg->keyfile) {
+		int rv = SSL_CTX_use_RSAPrivateKey_file(ctx, tlscfg->keyfile,
+											SSL_FILETYPE_PEM);
+		if (rv != 1) {
+				cert_blacklist_destroy(cert_blacklist);
+				SSL_CTX_free(ctx);
+				
+				unsigned long errcode = ERR_get_error();
+				char errbuf[1024];
+				ERR_error_string_n(errcode, errbuf, sizeof(errbuf));
+				return as_error_update(errp, AEROSPIKE_ERR_TLS_ERROR,
+							  "SSL_CTX_use_RSAPrivateKey_file failed: %s",
+									   errbuf);
+		}
+	}
+
 	if (tlscfg->cipher_suite) {
 		int rv = SSL_CTX_set_cipher_list(ctx, tlscfg->cipher_suite);
 		if (rv != 1) {

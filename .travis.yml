@@ -14,12 +14,14 @@ install:
 - cp -f .travis/aerospike.conf ./aerospike-server/share/etc
 - cd aerospike-server
 - mkdir instance1
+- mkdir instance2
 - ./bin/aerospike init --home instance1 --instance 1 --service-port 3000
+- ./bin/aerospike init --home instance2 --instance 2 --service-port 3010
 - cd instance1
 - sudo ./bin/aerospike start
-- cd ..
-- cd ..
-- sleep 3
+- ../../.travis/wait_for_node.sh var/log/aerospike.log
+- cd ../..
+- pwd
 script:
 - make
 - make test

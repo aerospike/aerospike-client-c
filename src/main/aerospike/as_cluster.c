@@ -694,7 +694,8 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings, b
 				refresh_count++;
 			}
 			else {
-				as_log_warn("Node %s refresh failed: %s %s", node->name, as_error_string(status), error_local.message);
+				// Use info level so aql doesn't see message by default.
+				as_log_info("Node %s refresh failed: %s %s", node->name, as_error_string(status), error_local.message);
 				node->failures++;
 			}
 		}

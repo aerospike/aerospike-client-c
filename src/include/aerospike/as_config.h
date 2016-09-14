@@ -137,6 +137,7 @@ typedef struct as_config_tls_s {
 	/**
 	 *  Path to a trusted CA certificate file.
 	 *  By default TLS will use system standard trusted CA certificates.
+	 *	Use as_config_tls_set_cafile() to set this field.
 	 */
 	char* cafile;
 
@@ -144,6 +145,7 @@ typedef struct as_config_tls_s {
 	 *  Path to a directory of trusted certificates.
 	 *  See the OpenSSL SSL_CTX_load_verify_locations manual page for
 	 *  more information about the format of the directory.
+	 *	Use as_config_tls_set_capath() to set this field.
 	 */
 	char* capath;
 
@@ -157,6 +159,8 @@ typedef struct as_config_tls_s {
 	 *
 	 *  If you are not sure what protocols to select this option is
 	 *  best left unspecified (NULL).
+	 *
+	 *	Use as_config_tls_set_protocol() to set this field.
 	 */
 	char* protocol;
 	
@@ -171,6 +175,8 @@ typedef struct as_config_tls_s {
 	 *
 	 *  If you are not sure what cipher suite to select this option
 	 *  is best left unspecified (NULL).
+	 *
+	 *	Use as_config_tls_set_cipher_suite() to set this field.
 	 */
 	char* cipher_suite;
 	
@@ -197,6 +203,8 @@ typedef struct as_config_tls_s {
 	 *  issuer).  Example records:
 	 *  867EC87482B2 /C=US/ST=CA/O=Acme/OU=Engineering/CN=Test Chain CA
 	 *  E2D4B0E570F9EF8E885C065899886461
+	 *
+	 *	Use as_config_tls_set_cert_blacklist() to set this field.
 	 */
 	char* cert_blacklist;
 
@@ -305,6 +313,9 @@ typedef struct as_config_tls_s {
  *	~~~~~~~~~~{.c}
  *	strcpy(config.mod_lua.user_path, "/home/me/lua");
  *	~~~~~~~~~~
+ *
+ *	Never call as_config_destroy() directly because ownership of config fields
+ *	is transferred to aerospike in aerospike_init() or aerospike_new().
  *
  *	@ingroup client_objects
  */
@@ -528,16 +539,6 @@ as_config*
 as_config_init(as_config* config);
 
 /**
- *	Release memory associated with config.
- *
- *	This function should only be called on a cluster initialize error.
- *	If a cluster is initialized, the config data will be transferred to as_cluster
- *	which has it's own destructor.
- */
-void
-as_config_destroy(as_config* config);
-
-/**
  *	Add seed host(s) from a string with format: hostname1[:tlsname1][:port1],...
  *	Hostname may also be an IP address in the following formats.
  *
@@ -608,6 +609,36 @@ as_config_lua_init(as_config_lua* lua)
 	strcpy(lua->system_path, AS_CONFIG_LUA_SYSTEM_PATH);
 	strcpy(lua->user_path, AS_CONFIG_LUA_USER_PATH);
 }
+
+/**
+ *	Set TLS path to a trusted CA certificate file.
+ */
+void
+as_config_tls_set_cafile(as_config* config, const char* cafile);
+
+/**
+ *	Set TLS path to a directory of trusted certificates.
+ */
+void
+as_config_tls_set_capath(as_config* config, const char* capath);
+
+/**
+ *	Set TLS enabled protocols.
+ */
+void
+as_config_tls_set_protocol(as_config* config, const char* protocol);
+
+/**
+ *	Set TLS enabled cipher suites.
+ */
+void
+as_config_tls_set_cipher_suite(as_config* config, const char* cipher_suite);
+
+/**
+ *	Set TLS path to a certificate blacklist file.
+ */
+void
+as_config_tls_set_cert_blacklist(as_config* config, const char* cert_blacklist);
 
 #ifdef __cplusplus
 } // end extern "C"

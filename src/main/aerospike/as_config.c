@@ -73,6 +73,10 @@ as_config_init(as_config* c)
 
 void
 as_config_destroy(as_config* config) {
+	// Private: For internal use only.
+	// Never call from applications because ownership of config fields is transferred
+	// to aerospike in aerospike_init() or aerospike_new().
+	// Only exception is ip_map which is left alone for legacy reasons.
 	as_vector* hosts = config->hosts;
 	
 	if (hosts) {
@@ -82,7 +86,32 @@ as_config_destroy(as_config* config) {
 		}
 		as_vector_destroy(hosts);
 	}
-	cf_free(config->cluster_id);
+
+	if (config->cluster_id) {
+		cf_free(config->cluster_id);
+	}
+
+	as_config_tls* tls = &config->tls;
+
+	if (tls->cafile) {
+		cf_free(tls->cafile);
+	}
+
+	if (tls->capath) {
+		cf_free(tls->capath);
+	}
+
+	if (tls->protocol) {
+		cf_free(tls->protocol);
+	}
+
+	if (tls->cipher_suite) {
+		cf_free(tls->cipher_suite);
+	}
+
+	if (tls->cert_blacklist) {
+		cf_free(tls->cert_blacklist);
+	}
 }
 
 bool
@@ -257,4 +286,34 @@ void
 as_config_set_cluster_id(as_config* config, const char* cluster_id)
 {
 	config->cluster_id = cluster_id ? cf_strdup(cluster_id) : NULL;
+}
+
+void
+as_config_tls_set_cafile(as_config* config, const char* cafile)
+{
+	config->tls.cafile = cafile ? cf_strdup(cafile) : NULL;
+}
+
+void
+as_config_tls_set_capath(as_config* config, const char* capath)
+{
+	config->tls.capath = capath ? cf_strdup(capath) : NULL;
+}
+
+void
+as_config_tls_set_protocol(as_config* config, const char* protocol)
+{
+	config->tls.protocol = protocol ? cf_strdup(protocol) : NULL;
+}
+
+void
+as_config_tls_set_cipher_suite(as_config* config, const char* cipher_suite)
+{
+	config->tls.cipher_suite = cipher_suite ? cf_strdup(cipher_suite) : NULL;
+}
+
+void
+as_config_tls_set_cert_blacklist(as_config* config, const char* cert_blacklist)
+{
+	config->tls.cert_blacklist = cert_blacklist ? cf_strdup(cert_blacklist) : NULL;
 }

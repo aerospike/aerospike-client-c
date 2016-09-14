@@ -287,16 +287,16 @@ static bool before(atf_plan * plan) {
 	}
 
 	as_config_set_user(&config, g_user, g_password);
-    as_policies_init(&config.policies);
+
 	config.tls.enable = g_tls_enable;
 	config.tls.encrypt_only = g_tls_encrypt_only;
-	config.tls.cafile = g_tls_cafile;
-	config.tls.capath = g_tls_capath;
-	config.tls.protocol = g_tls_protocol;
-	config.tls.cipher_suite = g_tls_cipher_suite;
+	as_config_tls_set_cafile(&config, g_tls_cafile);
+	as_config_tls_set_cafile(&config, g_tls_capath);
+	as_config_tls_set_protocol(&config, g_tls_protocol);
+	as_config_tls_set_cipher_suite(&config, g_tls_cipher_suite);
 	config.tls.crl_check = g_tls_crl_check;
 	config.tls.crl_check_all = g_tls_crl_check_all;
-	config.tls.cert_blacklist = g_tls_cert_blacklist;
+	as_config_tls_set_cert_blacklist(&config, g_tls_cert_blacklist);
 	config.tls.log_session_info = g_tls_log_session_info;
 	
 	as_error err;

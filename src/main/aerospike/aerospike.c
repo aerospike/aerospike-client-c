@@ -27,6 +27,9 @@
 
 static bool lua_initialized = false;
 
+void
+as_config_destroy(as_config* config);
+
 /******************************************************************************
  * STATIC FUNCTIONS
  *****************************************************************************/
@@ -36,7 +39,8 @@ aerospike_defaults(aerospike* as, bool free, as_config* config)
 {
 	as->_free = free;
 	as->cluster = NULL;
-	if ( config != NULL ) {
+
+	if (config) {
 		memcpy(&as->config, config, sizeof(as_config));
 	}
 	else {
@@ -57,7 +61,6 @@ aerospike_defaults(aerospike* as, bool free, as_config* config)
 aerospike*
 aerospike_init(aerospike* as, as_config* config)
 {
-	if ( !as ) return as;
 	return aerospike_defaults(as, false, config);
 }
 
@@ -68,8 +71,12 @@ aerospike_init(aerospike* as, as_config* config)
 aerospike*
 aerospike_new(as_config* config)
 {
-	aerospike * as = (aerospike *) cf_malloc(sizeof(aerospike));
-	if ( !as ) return as;
+	aerospike * as = cf_malloc(sizeof(aerospike));
+
+	if (!as) {
+		as_config_destroy(config);
+		return as;
+	}
 	return aerospike_defaults(as, true, config);
 }
 
@@ -97,7 +104,9 @@ aerospike_init_lua(as_config_lua* config)
  */
 void aerospike_destroy(aerospike* as)
 {
-	if ( as->_free ) {
+	as_config_destroy(&as->config);
+
+	if (as->_free) {
 		cf_free(as);
 	}
 }

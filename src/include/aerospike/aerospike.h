@@ -104,7 +104,9 @@ struct as_cluster_s;
  * 	- aerospike_init() — Initialize a stack allocated @ref aerospike.
  *	- aerospike_new() — Create and initialize a heap allocated @ref aerospike.
  *
- *	Both initialization functions require a configuration.
+ *	Both initialization functions require a configuration.  Once initialized, the ownership
+ *	of the as_config instance fields are transferred to @ref aerospike.  The user should never
+ *	call as_config_destroy() directly.
  *
  *	The following uses a stack allocated @ref aerospike and initializes it
  *	with aerospike_init():
@@ -172,7 +174,7 @@ typedef struct aerospike_s {
 	struct as_cluster_s * cluster;
 
 	/**
-	 *	Client configuration
+	 *	Client configuration.
 	 */
 	as_config config;
 
@@ -187,6 +189,9 @@ typedef struct aerospike_s {
  *
  *	The config parameter can be an instance of `as_config` or `NULL`. If `NULL`,
  *	then the default configuration will be used.
+ *
+ *	Ownership of the as_config instance fields are transferred to @ref aerospike.  
+ *	The user should never call as_config_destroy() directly.
  *
  *	~~~~~~~~~~{.c}
  *	aerospike as;
@@ -210,6 +215,9 @@ aerospike_init(aerospike* as, as_config* config);
 
 /**
  *	Creates a new heap allocated aerospike instance.
+ *
+ *	Ownership of the as_config instance fields are transferred to @ref aerospike.
+ *	The user should never call as_config_destroy() directly.
  *
  *	~~~~~~~~~~{.c}
  *	aerospike* as = aerospike_new(&config);

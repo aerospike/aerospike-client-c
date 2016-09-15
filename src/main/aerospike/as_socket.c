@@ -35,7 +35,12 @@ bool as_socket_stop_on_interrupt = false;
 #include <sys/types.h>
 #include <sys/time.h>
 #include <errno.h>
-#define IPV6_PREFER_SRC_PUBLIC 2
+
+// May want to specify preference for permanent public addresses sometime in the future.
+// #ifndef IPV6_PREFER_SRC_PUBLIC
+// #define IPV6_PREFER_SRC_PUBLIC 2
+// #endif
+
 #define IPV6_ADDR_PREFERENCES 72
 #define IS_CONNECTING() (errno == EINPROGRESS)
 #endif // __linux__ __APPLE__
@@ -173,6 +178,7 @@ as_socket_create_fd(int family)
 #ifdef __APPLE__
 	setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &f, sizeof(f));
 #endif
+
 	// May want to specify preference for permanent public addresses sometime in the future.
 	// int p = IPV6_PREFER_SRC_PUBLIC;
 	// setsockopt(fd, IPPROTO_IPV6, IPV6_ADDR_PREFERENCES, &p, sizeof(p));

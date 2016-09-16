@@ -1083,9 +1083,9 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 		cluster->password = cf_strdup(config->password);
 	}
 	
-	// Transfer ownership of heap allocated cluster_id.
-	cluster->cluster_id = config->cluster_id;
-	config->cluster_id = NULL;
+	// Transfer ownership of heap allocated cluster_name.
+	cluster->cluster_name = config->cluster_name;
+	config->cluster_name = NULL;
 	
 	// Initialize cluster tend and node parameters
 	cluster->tend_interval = (config->tender_interval < 250)? 250 : config->tender_interval;
@@ -1231,7 +1231,7 @@ as_cluster_destroy(as_cluster* cluster)
 	
 	cf_free(cluster->user);
 	cf_free(cluster->password);
-	cf_free(cluster->cluster_id);
+	cf_free(cluster->cluster_name);
 
 	as_tls_context_destroy(&cluster->tls_ctx);
 	

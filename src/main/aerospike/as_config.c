@@ -49,7 +49,7 @@ as_config_init(as_config* c)
 	c->hosts = NULL;
 	memset(c->user, 0, sizeof(c->user));
 	memset(c->password, 0, sizeof(c->password));
-	c->cluster_id = NULL;
+	c->cluster_name = NULL;
 	c->ip_map = NULL;
 	c->ip_map_size = 0;
 	c->max_conns_per_node = 300;
@@ -87,8 +87,8 @@ as_config_destroy(as_config* config) {
 		as_vector_destroy(hosts);
 	}
 
-	if (config->cluster_id) {
-		cf_free(config->cluster_id);
+	if (config->cluster_name) {
+		cf_free(config->cluster_name);
 	}
 
 	as_config_tls* tls = &config->tls;
@@ -283,9 +283,9 @@ as_config_set_user(as_config* config, const char* user, const char* password)
 }
 
 void
-as_config_set_cluster_id(as_config* config, const char* cluster_id)
+as_config_set_cluster_name(as_config* config, const char* cluster_name)
 {
-	config->cluster_id = cluster_id ? cf_strdup(cluster_id) : NULL;
+	config->cluster_name = cluster_name ? cf_strdup(cluster_name) : NULL;
 }
 
 void

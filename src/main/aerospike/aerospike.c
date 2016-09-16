@@ -143,8 +143,8 @@ aerospike_connect(aerospike* as, as_error* err)
 			}
 			
 			if (! host->tls_name) {
-				if (config->cluster_id) {
-					host->tls_name = cf_strdup(config->cluster_id);
+				if (config->cluster_name) {
+					host->tls_name = cf_strdup(config->cluster_name);
 				}
 				else {
 					host->tls_name = cf_strdup(host->name);

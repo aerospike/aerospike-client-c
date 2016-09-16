@@ -338,12 +338,12 @@ typedef struct as_config_s {
 	char password[AS_PASSWORD_HASH_SIZE];
 	
 	/**
-	 *	Expected cluster ID.  If not null, server nodes must return this cluster ID in order to
+	 *	Expected cluster name.  If not null, server nodes must return this cluster name in order to
 	 *	join the client's view of the cluster. Should only be set when connecting to servers that
-	 *	support the "cluster-id" info command.  Use as_config_set_cluster_id() to set this field.
+	 *	support the "cluster-name" info command.  Use as_config_set_cluster_name() to set this field.
 	 *	Default: NULL
 	 */
-	char* cluster_id;
+	char* cluster_name;
 	
 	/**
 	 *	A IP translation table is used in cases where different clients use different server
@@ -594,10 +594,10 @@ bool
 as_config_set_user(as_config* config, const char* user, const char* password);
 
 /**
- *	Set expected cluster ID.
+ *	Set expected cluster name.
  */
 void
-as_config_set_cluster_id(as_config* config, const char* cluster_id);
+as_config_set_cluster_name(as_config* config, const char* cluster_name);
 
 /**
  *	Initialize global lua configuration to defaults.

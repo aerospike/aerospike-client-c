@@ -353,26 +353,22 @@ as_pipe_get_connection(as_event_command* cmd)
 }
 
 bool
-as_pipe_modify_fd(as_event_command* cmd, int fd)
+as_pipe_modify_fd(int fd)
 {
 	if (as_event_send_buffer_size) {
 		if (setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &as_event_send_buffer_size, sizeof(as_event_send_buffer_size)) < 0) {
-			as_error err;
-			as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION,
-							"Failed to configure pipeline send buffer. size %d error %d (%s)",
-							as_event_send_buffer_size, errno, strerror(errno));
-			as_event_fd_error(cmd, &err, fd);
+			as_log_debug("Failed to configure pipeline send buffer. size %d error %d (%s)",
+						 as_event_send_buffer_size, errno, strerror(errno));
+			close(fd);
 			return false;
 		}
 	}
 	
 	if (as_event_recv_buffer_size) {
 		if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &as_event_recv_buffer_size, sizeof(as_event_recv_buffer_size)) < 0) {
-			as_error err;
-			as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION,
-							"Failed to configure pipeline receive buffer. size %d error %d (%s)",
-							as_event_recv_buffer_size, errno, strerror(errno));
-			as_event_fd_error(cmd, &err, fd);
+			as_log_debug("Failed to configure pipeline receive buffer. size %d error %d (%s)",
+						 as_event_recv_buffer_size, errno, strerror(errno));
+			close(fd);
 			return false;
 		}
 	}
@@ -380,9 +376,8 @@ as_pipe_modify_fd(as_event_command* cmd, int fd)
 #if defined(__linux__)
 	if (as_event_recv_buffer_size) {
 		if (setsockopt(fd, SOL_TCP, TCP_WINDOW_CLAMP, &as_event_recv_buffer_size, sizeof(as_event_recv_buffer_size)) < 0) {
-			as_error err;
-			as_error_set_message(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Failed to configure pipeline TCP window.");
-			as_event_fd_error(cmd, &err, fd);
+			as_log_debug("Failed to configure pipeline TCP window.");
+			close(fd);
 			return false;
 		}
 	}
@@ -391,9 +386,8 @@ as_pipe_modify_fd(as_event_command* cmd, int fd)
 	int arg = 0;
 	
 	if (setsockopt(fd, SOL_TCP, TCP_NODELAY, &arg, sizeof(arg)) < 0) {
-		as_error err;
-		as_error_set_message(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Failed to configure pipeline Nagle algorithm.");
-		as_event_fd_error(cmd, &err, fd);
+		as_log_debug("Failed to configure pipeline Nagle algorithm.");
+		close(fd);
 		return false;
 	}
 	return true;

@@ -681,14 +681,18 @@ static int
 as_ev_try_family_connections(as_event_command* cmd, int family, int begin, int end, int index, as_address* primary, as_socket* sock)
 {
 	// Create a non-blocking socket.
-	int fd = as_event_create_socket(cmd, family);
-	
+	int fd = as_socket_create_fd(family);
+
 	if (fd < 0) {
-		return -1;
+		return fd;
 	}
-	
+
+	if (cmd->pipe_listener && ! as_pipe_modify_fd(fd)) {
+		return -1000;
+	}
+
 	if (! as_socket_wrap(sock, family, fd, &cmd->cluster->tls_ctx, cmd->node->tls_name)) {
-		return - 1;
+		return -1001;
 	}
 
 	// Try addresses.
@@ -717,9 +721,46 @@ as_ev_try_family_connections(as_event_command* cmd, int family, int begin, int e
 	if (rv < 0) {
 		// Couldn't start a connection on any socket address - close the socket.
 		as_socket_close(sock);
-		return -1;
+		return -1002;
 	}
 	return rv;
+}
+
+static void
+as_ev_connect_error(as_event_command* cmd, as_address* primary, int rv)
+{
+	const char* msg;
+	rv = -rv;
+
+	if (rv < 1000) {
+		// rv is errno.
+		msg = strerror(rv);
+	}
+	else {
+		switch (rv) {
+			case 1000:
+				msg = "Failed to modify fd for pipeline";
+				break;
+			case 1001:
+				msg = "Failed to wrap socket for TLS";
+				break;
+			default:
+				msg = "Failed to connect";
+				break;
+		}
+	}
+
+	as_error err;
+	as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "%s: %s %s", msg, cmd->node->name, primary->name);
+
+	// Only timer needs to be released on socket connection failure.
+	// Watcher has not been registered yet.
+	as_event_stop_timer(cmd);
+
+	// Socket has already been closed.
+	cf_free(cmd->conn);
+	as_event_decr_conn(cmd);
+	as_event_error_callback(cmd, &err);
 }
 
 static void
@@ -731,13 +772,15 @@ as_ev_connect(as_event_command* cmd)
 	uint32_t index = node->address_index;
 	as_address* primary = &node->addresses[index];
 	int rv;
-	
+	int first_rv;
+
 	if (primary->addr.ss_family == AF_INET) {
 		// Try IPv4 addresses first.
 		rv = as_ev_try_family_connections(cmd, AF_INET, 0, node->address4_size, index, primary, &sock);
 		
 		if (rv < 0) {
 			// Try IPv6 addresses.
+			first_rv = rv;
 			rv = as_ev_try_family_connections(cmd, AF_INET6, AS_ADDRESS4_MAX, AS_ADDRESS4_MAX + node->address6_size, -1, NULL, &sock);
 		}
 	}
@@ -747,14 +790,14 @@ as_ev_connect(as_event_command* cmd)
 		
 		if (rv < 0) {
 			// Try IPv4 addresses.
+			first_rv = rv;
 			rv = as_ev_try_family_connections(cmd, AF_INET, 0, node->address4_size, -1, NULL, &sock);
 		}
 	}
 	
 	if (rv < 0) {
-		as_error err;
-		as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Failed to connect: %s %s", node->name, primary->name);
-		as_event_connect_error(cmd, &err, &sock);
+		as_ev_connect_error(cmd, primary, first_rv);
+		return;
 	}
 	
 	if (rv != index) {

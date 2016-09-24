@@ -122,8 +122,16 @@ static void
 as_uv_close_walk(uv_handle_t* handle, void* arg)
 {
 	if (! uv_is_closing(handle)) {
-		as_log_debug("Close handle %p %d", handle, handle->type);
-		uv_close(handle, as_uv_connection_closed);
+		// as_log_debug("Close handle %p %d", handle, handle->type);
+		if (handle->type == UV_TCP) {
+			// Give callback for known connection handles.
+			uv_close(handle, as_uv_connection_closed);
+		}
+		else {
+			// Received unexpected handle.
+			// Close handle, but do not provide callback that might free unallocated data.
+			uv_close(handle, NULL);
+		}
 	}
 }
 

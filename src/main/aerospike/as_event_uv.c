@@ -122,8 +122,8 @@ static void
 as_uv_close_walk(uv_handle_t* handle, void* arg)
 {
 	if (! uv_is_closing(handle)) {
-		//as_log_debug("Handle found %p %d", handle, handle->type);
-		uv_close(handle, NULL);
+		as_log_debug("Close handle %p %d", handle, handle->type);
+		uv_close(handle, as_uv_connection_closed);
 	}
 }
 

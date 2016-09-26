@@ -120,6 +120,7 @@ as_node_create(
 		node->pipe_conn_qs = 0;
 	}
 
+	node->peers_count = 0;
 	node->conn_count = 0;
 	node->friends = 0;
 	node->failures = 0;

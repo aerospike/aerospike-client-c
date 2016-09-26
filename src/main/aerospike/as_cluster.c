@@ -416,8 +416,8 @@ as_cluster_find_nodes_to_remove(as_cluster* cluster, uint32_t refresh_count, as_
 				break;
 				
 			default:
-				// Multi-node clusters require two successful node refreshes before removing.
-				if (refresh_count >= 2 && node->friends == 0) {
+				// Multi-node clusters require at least one successful refresh before removing.
+				if (refresh_count >= 1 && node->friends == 0) {
 					// Node is not referenced by other nodes.
 					// Check if node responded to info request.
 					if (node->failures == 0) {
@@ -716,7 +716,10 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings, b
 	for (uint32_t i = 0; i < nodes->size; i++) {
 		as_node* node = nodes->array[i];
 		
-		if (node->partition_changed && node->failures == 0 && node->active) {
+		// Avoid "split cluster" case where this node thinks it's a 1-node cluster.
+		// Unchecked, such a node can dominate the partition map and cause all other
+		// nodes to be dropped.
+		if (node->partition_changed && node->failures == 0 && node->active && (node->peers_count > 0 || refresh_count == 1)) {
 			as_status status = as_node_refresh_partitions(cluster, &error_local, node, &peers);
 			
 			if (status != AEROSPIKE_OK) {

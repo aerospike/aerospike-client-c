@@ -267,6 +267,20 @@ as_config_add_host(as_config* config, const char* addr, uint16_t port)
 	host->port = port;
 }
 
+void
+as_config_clear_hosts(as_config* config)
+{
+	as_vector* hosts = config->hosts;
+
+	if (hosts) {
+		for (uint32_t i = 0; i < hosts->size; i++) {
+			as_host* host = as_vector_get(hosts, i);
+			as_host_destroy(host);
+		}
+		as_vector_clear(hosts);
+	}
+}
+
 bool
 as_config_set_user(as_config* config, const char* user, const char* password)
 {
@@ -283,37 +297,11 @@ as_config_set_user(as_config* config, const char* user, const char* password)
 }
 
 void
-as_config_set_cluster_name(as_config* config, const char* cluster_name)
+as_config_set_string(char** str, const char* value)
 {
-	config->cluster_name = cluster_name ? cf_strdup(cluster_name) : NULL;
-}
+	if (*str) {
+		cf_free(*str);
+	}
 
-void
-as_config_tls_set_cafile(as_config* config, const char* cafile)
-{
-	config->tls.cafile = cafile ? cf_strdup(cafile) : NULL;
-}
-
-void
-as_config_tls_set_capath(as_config* config, const char* capath)
-{
-	config->tls.capath = capath ? cf_strdup(capath) : NULL;
-}
-
-void
-as_config_tls_set_protocol(as_config* config, const char* protocol)
-{
-	config->tls.protocol = protocol ? cf_strdup(protocol) : NULL;
-}
-
-void
-as_config_tls_set_cipher_suite(as_config* config, const char* cipher_suite)
-{
-	config->tls.cipher_suite = cipher_suite ? cf_strdup(cipher_suite) : NULL;
-}
-
-void
-as_config_tls_set_cert_blacklist(as_config* config, const char* cert_blacklist)
-{
-	config->tls.cert_blacklist = cert_blacklist ? cf_strdup(cert_blacklist) : NULL;
+	*str = value ? cf_strdup(value) : NULL;
 }

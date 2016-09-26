@@ -579,6 +579,14 @@ void
 as_config_add_host(as_config* config, const char* address, uint16_t port);
 
 /**
+ *	Remove all hosts.
+ *
+ *	@relates as_config
+ */
+void
+as_config_clear_hosts(as_config* config);
+
+/**
  *	User authentication for servers with restricted access.  The password will be stored by the
  *	client and sent to server in hashed format.
  *
@@ -594,13 +602,26 @@ bool
 as_config_set_user(as_config* config, const char* user, const char* password);
 
 /**
- *	Set expected cluster name.
+ *	Free existing string if not null and copy value to string.
  */
 void
-as_config_set_cluster_name(as_config* config, const char* cluster_name);
+as_config_set_string(char** str, const char* value);
+
+/**
+ *	Set expected cluster name.
+ *
+ *	@relates as_config
+ */
+static inline void
+as_config_set_cluster_name(as_config* config, const char* cluster_name)
+{
+	as_config_set_string(&config->cluster_name, cluster_name);
+}
 
 /**
  *	Initialize global lua configuration to defaults.
+ *
+ *	@relates as_config
  */
 static inline void
 as_config_lua_init(as_config_lua* lua)
@@ -612,33 +633,58 @@ as_config_lua_init(as_config_lua* lua)
 
 /**
  *	Set TLS path to a trusted CA certificate file.
+ *
+ *	@relates as_config
  */
-void
-as_config_tls_set_cafile(as_config* config, const char* cafile);
+static inline void
+as_config_tls_set_cafile(as_config* config, const char* cafile)
+{
+	as_config_set_string(&config->tls.cafile, cafile);
+}
 
 /**
  *	Set TLS path to a directory of trusted certificates.
+ *
+ *	@relates as_config
  */
-void
-as_config_tls_set_capath(as_config* config, const char* capath);
+static inline void
+as_config_tls_set_capath(as_config* config, const char* capath)
+{
+	as_config_set_string(&config->tls.capath, capath);
+}
 
 /**
  *	Set TLS enabled protocols.
+ *
+ *	@relates as_config
  */
-void
-as_config_tls_set_protocol(as_config* config, const char* protocol);
+static inline void
+as_config_tls_set_protocol(as_config* config, const char* protocol)
+{
+	as_config_set_string(&config->tls.protocol, protocol);
+}
 
 /**
  *	Set TLS enabled cipher suites.
+ *
+ *	@relates as_config
  */
-void
-as_config_tls_set_cipher_suite(as_config* config, const char* cipher_suite);
+static inline void
+as_config_tls_set_cipher_suite(as_config* config, const char* cipher_suite)
+{
+	as_config_set_string(&config->tls.cipher_suite, cipher_suite);
+}
 
 /**
  *	Set TLS path to a certificate blacklist file.
+ *
+ *	@relates as_config
  */
-void
-as_config_tls_set_cert_blacklist(as_config* config, const char* cert_blacklist);
+static inline void
+as_config_tls_set_cert_blacklist(as_config* config, const char* cert_blacklist)
+{
+	as_config_set_string(&config->tls.cert_blacklist, cert_blacklist);
+}
 
 #ifdef __cplusplus
 } // end extern "C"

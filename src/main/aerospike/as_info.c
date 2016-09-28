@@ -252,6 +252,8 @@ as_info_command(
 		status = as_socket_read_deadline(err, sock, (uint8_t*)response, header.sz, deadline_ms);
 		
 		if (status) {
+			cf_free(response);
+			*values = 0;
 			return status;
 		}
 		response[header.sz] = 0;

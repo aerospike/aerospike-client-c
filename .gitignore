@@ -61,3 +61,6 @@ xcuserdata
 *.swp
 *~.nib
 
+# Security Credentials #
+########################
+*.pem

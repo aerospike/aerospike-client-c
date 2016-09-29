@@ -678,7 +678,7 @@ log_session_info(as_socket* sock)
 	if (cipher) {
 		char desc[1024];
 		SSL_CIPHER_description(cipher, desc, sizeof(desc));
-		int len = strlen(desc);
+		size_t len = strlen(desc);
 		if (len > 0) {
 			desc[len-1] = '\0';	// Trim trailing \n
 		}

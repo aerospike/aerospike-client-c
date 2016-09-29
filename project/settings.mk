@@ -12,6 +12,7 @@ export ARFLAGS =
 
 NAME = $(shell basename $(CURDIR))
 OS = $(shell uname)
+ARCH = $(shell uname -m)
 
 PROJECT = project
 MODULES = modules
@@ -25,11 +26,9 @@ MODULES =
 ###############################################################################
 
 ifeq ($(OS),Darwin)
-  ARCH = $(shell uname -m)
   DYNAMIC_SUFFIX=dylib
   DYNAMIC_FLAG=-dynamiclib
 else
-  ARCH = $(shell arch)
   DYNAMIC_SUFFIX=so
   DYNAMIC_FLAG=-shared
 endif

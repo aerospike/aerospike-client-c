@@ -91,8 +91,8 @@ as_socket_init(as_socket* sock);
 	
 /**
  *	@private
- *	Create non-blocking socket.
- *	Family should be AF_INET or AF_INET6.
+ *	Create non-blocking socket.  Family should be AF_INET or AF_INET6.
+ *	If socket create fails, return -errno.
  */
 int
 as_socket_create_fd(int family);

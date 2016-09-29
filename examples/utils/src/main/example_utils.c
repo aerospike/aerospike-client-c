@@ -522,27 +522,28 @@ example_connect_to_aerospike_with_udf_config(aerospike* p_as,
 	aerospike_init_lua(&lua);
 		
 	// Initialize cluster configuration.
-	as_config cfg;
-	as_config_init(&cfg);
+	as_config config;
+	as_config_init(&config);
 	
-	if (! as_config_add_hosts(&cfg, g_host, g_port)) {
+	if (! as_config_add_hosts(&config, g_host, g_port)) {
 		printf("Invalid host(s) %s\n", g_host);
 		exit(-1);
 	}
 	
-	as_config_set_user(&cfg, g_user, g_password);
-	cfg.tls.enable = g_tls_enable;
-	cfg.tls.encrypt_only = g_tls_encrypt_only;
-	cfg.tls.cafile = g_tls_cafile;
-	cfg.tls.capath = g_tls_capath;
-	cfg.tls.protocol = g_tls_protocol;
-	cfg.tls.cipher_suite = g_tls_cipher_suite;
-	cfg.tls.crl_check = g_tls_crl_check;
-	cfg.tls.crl_check_all = g_tls_crl_check_all;
-	cfg.tls.cert_blacklist = g_tls_cert_blacklist;
-	cfg.tls.log_session_info = g_tls_log_session_info;
+	as_config_set_user(&config, g_user, g_password);
 
-	aerospike_init(p_as, &cfg);
+	config.tls.enable = g_tls_enable;
+	config.tls.encrypt_only = g_tls_encrypt_only;
+	as_config_tls_set_cafile(&config, g_tls_cafile);
+	as_config_tls_set_cafile(&config, g_tls_capath);
+	as_config_tls_set_protocol(&config, g_tls_protocol);
+	as_config_tls_set_cipher_suite(&config, g_tls_cipher_suite);
+	config.tls.crl_check = g_tls_crl_check;
+	config.tls.crl_check_all = g_tls_crl_check_all;
+	as_config_tls_set_cert_blacklist(&config, g_tls_cert_blacklist);
+	config.tls.log_session_info = g_tls_log_session_info;
+
+	aerospike_init(p_as, &config);
 
 	as_error err;
 

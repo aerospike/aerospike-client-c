@@ -73,8 +73,8 @@ as_lookup_node(as_cluster* cluster, as_error* err, const char* tls_name, struct 
 	char* command;
 	int args;
 	
-	if (cluster->cluster_id) {
-		command = "node\nfeatures\ncluster-id\n";
+	if (cluster->cluster_name) {
+		command = "node\nfeatures\ncluster-name\n";
 		args = 3;
 	}
 	else {
@@ -109,15 +109,15 @@ as_lookup_node(as_cluster* cluster, as_error* err, const char* tls_name, struct 
 	}
 	as_strncpy(node_info->name, node_name, AS_NODE_NAME_SIZE);
 	
-	if (cluster->cluster_id) {
+	if (cluster->cluster_name) {
 		nv = as_vector_get(&values, 2);
 		
-		if (strcmp(cluster->cluster_id, nv->value) != 0) {
+		if (strcmp(cluster->cluster_name, nv->value) != 0) {
 			char addr_name[AS_IP_ADDRESS_SIZE];
 			as_address_name(addr, addr_name, sizeof(addr_name));
 			as_error_update(err, AEROSPIKE_ERR_CLIENT,
-					"Invalid node %s %s Expected cluster ID '%s' Received '%s'",
-					node_info->name, addr_name, cluster->cluster_id, nv->value);
+					"Invalid node %s %s Expected cluster name '%s' Received '%s'",
+					node_info->name, addr_name, cluster->cluster_name, nv->value);
 			cf_free(response);
 			as_socket_close(sock);
 			return AEROSPIKE_ERR_CLIENT;

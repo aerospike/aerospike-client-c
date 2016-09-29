@@ -253,6 +253,8 @@ void
 as_peers_parse_services(as_peers* peers, as_cluster* cluster, as_node* node, char* buf)
 {
 	// Friends format: <host1>:<port1>;<host2>:<port2>;...
+	node->peers_count = 0;
+
 	if (buf == 0 || *buf == 0) {
 		// Must be a single node cluster.
 		return;
@@ -278,7 +280,8 @@ as_peers_parse_services(as_peers* peers, as_cluster* cluster, as_node* node, cha
 				}
 				p++;
 			}
-			
+
+			node->peers_count++;
 			port = atoi(port_str);
 			
 			if (port == 0) {
@@ -286,7 +289,7 @@ as_peers_parse_services(as_peers* peers, as_cluster* cluster, as_node* node, cha
 				addr_str = ++p;
 				continue;
 			}
-			
+
 			// Check global aliases for existing cluster.
 			const char* hostname = as_cluster_get_alternate_host(cluster, addr_str);
 			
@@ -371,6 +374,8 @@ as_peers_parse_peers(as_peers* peers, as_error* err, as_cluster* cluster, as_nod
 	//as_log_debug("Node %s peers: %s", node->name, buf);
 	char* p = buf;
 	
+	node->peers_count = 0;
+
 	// Parse generation.
 	uint32_t generation = (uint32_t)strtol(p, &p, 10);
 	
@@ -399,16 +404,6 @@ as_peers_parse_peers(as_peers* peers, as_error* err, as_cluster* cluster, as_nod
 	
 	if (*p == ']') {
 		// No peers defined.
-		// Detect "split cluster" case where this node thinks it's a 1-node cluster.
-		// Unchecked, such a node can dominate the partition map and cause all other
-		// nodes to be dropped.
-		uint32_t node_count = cluster->nodes->size;
-		
-		if (node_count > 2) {
-			return as_error_update(err, AEROSPIKE_ERR_CLIENT,
-								   "Node %s thinks it owns cluster, but client sees %u nodes",
-								   node->name, node_count);
-		}
 		node->peers_generation = generation;
 		return AEROSPIKE_OK;
 	}
@@ -437,6 +432,8 @@ as_peers_parse_peers(as_peers* peers, as_error* err, as_cluster* cluster, as_nod
 			node_validated = true;
 		}
 		
+		node->peers_count++;
+
 		// Parse peer TLS name
 		char* tls_name = p;
 		while (*p) {

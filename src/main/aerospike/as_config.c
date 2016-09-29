@@ -49,7 +49,7 @@ as_config_init(as_config* c)
 	c->hosts = NULL;
 	memset(c->user, 0, sizeof(c->user));
 	memset(c->password, 0, sizeof(c->password));
-	c->cluster_id = NULL;
+	c->cluster_name = NULL;
 	c->ip_map = NULL;
 	c->ip_map_size = 0;
 	c->max_conns_per_node = 300;
@@ -73,6 +73,10 @@ as_config_init(as_config* c)
 
 void
 as_config_destroy(as_config* config) {
+	// Private: For internal use only.
+	// Never call from applications because ownership of config fields is transferred
+	// to aerospike in aerospike_init() or aerospike_new().
+	// Only exception is ip_map which is left alone for legacy reasons.
 	as_vector* hosts = config->hosts;
 	
 	if (hosts) {
@@ -82,7 +86,32 @@ as_config_destroy(as_config* config) {
 		}
 		as_vector_destroy(hosts);
 	}
-	cf_free(config->cluster_id);
+
+	if (config->cluster_name) {
+		cf_free(config->cluster_name);
+	}
+
+	as_config_tls* tls = &config->tls;
+
+	if (tls->cafile) {
+		cf_free(tls->cafile);
+	}
+
+	if (tls->capath) {
+		cf_free(tls->capath);
+	}
+
+	if (tls->protocol) {
+		cf_free(tls->protocol);
+	}
+
+	if (tls->cipher_suite) {
+		cf_free(tls->cipher_suite);
+	}
+
+	if (tls->cert_blacklist) {
+		cf_free(tls->cert_blacklist);
+	}
 }
 
 bool
@@ -238,6 +267,20 @@ as_config_add_host(as_config* config, const char* addr, uint16_t port)
 	host->port = port;
 }
 
+void
+as_config_clear_hosts(as_config* config)
+{
+	as_vector* hosts = config->hosts;
+
+	if (hosts) {
+		for (uint32_t i = 0; i < hosts->size; i++) {
+			as_host* host = as_vector_get(hosts, i);
+			as_host_destroy(host);
+		}
+		as_vector_clear(hosts);
+	}
+}
+
 bool
 as_config_set_user(as_config* config, const char* user, const char* password)
 {
@@ -254,7 +297,11 @@ as_config_set_user(as_config* config, const char* user, const char* password)
 }
 
 void
-as_config_set_cluster_id(as_config* config, const char* cluster_id)
+as_config_set_string(char** str, const char* value)
 {
-	config->cluster_id = cluster_id ? cf_strdup(cluster_id) : NULL;
+	if (*str) {
+		cf_free(*str);
+	}
+
+	*str = value ? cf_strdup(value) : NULL;
 }

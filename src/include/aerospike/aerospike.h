@@ -85,19 +85,18 @@ struct as_cluster_s;
  *	~~~~~~~~~~{.c}
  *	as_config config;
  *	as_config_init(&config);
- *	config.hosts[0] = { "127.0.0.1", 3000 };
+ *	as_config_add_host(&config, "127.0.0.1", 3000);
  *	~~~~~~~~~~
  *
- *	A single host is used to specify a host in the database cluster to connect to. 
  *	Once connected to a host in the cluster, then client will gather information
- *	about the cluster, including all the other nodes in the cluster. So, all that
- *	is needed is a single valid host, because once a single host is connected, the 
- *	then no other hosts in the configuration will be processed.
+ *	about the cluster, including all other nodes in the cluster. So, all that
+ *	is needed is a single valid host.  Multiple hosts can still be provided in
+ *	case the first host is not currently active.
  *	
  *	## Initialization
  *
  *	An initialized @ref aerospike object is required to connect to the 
- *	database. Initialization requires a configuration, to bind to the client
+ *	database. Initialization requires a configuration to bind to the client
  *	instance. 
  *
  *	The @ref aerospike object can be initialized via either:
@@ -105,7 +104,9 @@ struct as_cluster_s;
  * 	- aerospike_init() — Initialize a stack allocated @ref aerospike.
  *	- aerospike_new() — Create and initialize a heap allocated @ref aerospike.
  *
- *	Both initialization functions require a configuration.
+ *	Both initialization functions require a configuration.  Once initialized, the ownership
+ *	of the as_config instance fields are transferred to @ref aerospike.  The user should never
+ *	call as_config_destroy() directly.
  *
  *	The following uses a stack allocated @ref aerospike and initializes it
  *	with aerospike_init():
@@ -118,12 +119,11 @@ struct as_cluster_s;
  *	## Connecting
  *
  *	An application can connect to the database with an initialized
- *	@ref aerospike. At this point, the client has not connected. The 
- *	client will be connected if `aerospike_connect()` completes 
+ *	@ref aerospike. The client will be connected if `aerospike_connect()` completes
  *	successfully:
  *	
  *	~~~~~~~~~~{.c}
- *	if ( aerospike_connect(&as, &err) != AEROSPIKE_OK ) {
+ *	if (aerospike_connect(&as, &err) != AEROSPIKE_OK) {
  *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *	}
  *	~~~~~~~~~~
@@ -163,7 +163,7 @@ typedef struct aerospike_s {
 
 	/**
 	 *	@private
-	 *	If true, then as_query_destroy() will free this instance.
+	 *	If true, then aerospike_destroy() will free this instance.
 	 */
 	bool _free;
 
@@ -174,7 +174,7 @@ typedef struct aerospike_s {
 	struct as_cluster_s * cluster;
 
 	/**
-	 *	client configuration
+	 *	Client configuration.
 	 */
 	as_config config;
 
@@ -189,6 +189,9 @@ typedef struct aerospike_s {
  *
  *	The config parameter can be an instance of `as_config` or `NULL`. If `NULL`,
  *	then the default configuration will be used.
+ *
+ *	Ownership of the as_config instance fields are transferred to @ref aerospike.  
+ *	The user should never call as_config_destroy() directly.
  *
  *	~~~~~~~~~~{.c}
  *	aerospike as;
@@ -213,8 +216,11 @@ aerospike_init(aerospike* as, as_config* config);
 /**
  *	Creates a new heap allocated aerospike instance.
  *
+ *	Ownership of the as_config instance fields are transferred to @ref aerospike.
+ *	The user should never call as_config_destroy() directly.
+ *
  *	~~~~~~~~~~{.c}
- *	aerospike * as = aerospike_new(&config);
+ *	aerospike* as = aerospike_new(&config);
  *	~~~~~~~~~~
  *
  *	Once you are finished using the instance, then you should destroy it via the 

@@ -143,7 +143,7 @@ as_find_seed(as_cluster* cluster, const char* hostname, in_port_t port) {
 }
 
 static as_seeds*
-seeds_create(as_host* seed_list, uint32_t size, bool duplicate)
+seeds_create(as_host* seed_list, uint32_t size)
 {
 	as_seeds* seeds = cf_malloc(sizeof(as_seeds) + sizeof(as_host) * size);
 	seeds->ref_count = 1;
@@ -152,21 +152,10 @@ seeds_create(as_host* seed_list, uint32_t size, bool duplicate)
 	as_host* src = seed_list;
 	as_host* trg = seeds->array;
 	
-	if (duplicate) {
-		for (uint32_t i = 0; i < size; i++) {
-			as_host_copy(src, trg);
-			src++;
-			trg++;
-		}
-	}
-	else {
-		for (uint32_t i = 0; i < size; i++) {
-			trg->name = src->name;
-			trg->tls_name = src->tls_name;
-			trg->port = src->port;
-			src++;
-			trg++;
-		}
+	for (uint32_t i = 0; i < size; i++) {
+		as_host_copy(src, trg);
+		src++;
+		trg++;
 	}
 	return seeds;
 }
@@ -207,7 +196,7 @@ as_seeds_add(as_cluster* cluster, as_host* seed_list, uint32_t size) {
 
 	as_seeds_release(current);
 
-	as_seeds* seeds = seeds_create(concat, current->size + size - dups, true);
+	as_seeds* seeds = seeds_create(concat, current->size + size - dups);
 	as_seeds* old = swap_seeds(cluster, seeds);
 
 	as_gc_item item;
@@ -219,7 +208,7 @@ as_seeds_add(as_cluster* cluster, as_host* seed_list, uint32_t size) {
 void
 as_seeds_update(as_cluster* cluster, as_host* seed_list, uint32_t size)
 {
-	as_seeds* seeds = seeds_create(seed_list, size, true);
+	as_seeds* seeds = seeds_create(seed_list, size);
 	as_seeds* old = swap_seeds(cluster, seeds);
 
 	as_gc_item item;
@@ -427,8 +416,8 @@ as_cluster_find_nodes_to_remove(as_cluster* cluster, uint32_t refresh_count, as_
 				break;
 				
 			default:
-				// Multi-node clusters require two successful node refreshes before removing.
-				if (refresh_count >= 2 && node->friends == 0) {
+				// Multi-node clusters require at least one successful refresh before removing.
+				if (refresh_count >= 1 && node->friends == 0) {
 					// Node is not referenced by other nodes.
 					// Check if node responded to info request.
 					if (node->failures == 0) {
@@ -727,7 +716,10 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings, b
 	for (uint32_t i = 0; i < nodes->size; i++) {
 		as_node* node = nodes->array[i];
 		
-		if (node->partition_changed && node->failures == 0 && node->active) {
+		// Avoid "split cluster" case where this node thinks it's a 1-node cluster.
+		// Unchecked, such a node can dominate the partition map and cause all other
+		// nodes to be dropped.
+		if (node->partition_changed && node->failures == 0 && node->active && (node->peers_count > 0 || refresh_count == 1)) {
 			as_status status = as_node_refresh_partitions(cluster, &error_local, node, &peers);
 			
 			if (status != AEROSPIKE_OK) {
@@ -1083,10 +1075,10 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 		cluster->password = cf_strdup(config->password);
 	}
 	
-	// Transfer ownership of heap allocated cluster_id.
-	cluster->cluster_id = config->cluster_id;
-	config->cluster_id = NULL;
-	
+	// Heap allocated cluster_name continues to be owned by as->config.
+	// Make a reference copy here.
+	cluster->cluster_name = config->cluster_name;
+
 	// Initialize cluster tend and node parameters
 	cluster->tend_interval = (config->tender_interval < 250)? 250 : config->tender_interval;
 	cluster->conn_queue_size = config->max_conns_per_node;
@@ -1096,11 +1088,8 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 	cluster->use_services_alternate = config->use_services_alternate;
 
 	// Initialize seed hosts.
-	cluster->seeds = seeds_create(config->hosts->list, config->hosts->size, false);
-	// Destroy config hosts vector after transferring data to cluster.
-	as_vector_destroy(config->hosts);
-	config->hosts = NULL;
-	
+	cluster->seeds = seeds_create(config->hosts->list, config->hosts->size);
+
 	// Initialize IP map translation if provided.
 	if (config->ip_map && config->ip_map_size > 0) {
 		cluster->ip_map = ip_map_create(config->ip_map, config->ip_map_size);
@@ -1231,7 +1220,9 @@ as_cluster_destroy(as_cluster* cluster)
 	
 	cf_free(cluster->user);
 	cf_free(cluster->password);
-	cf_free(cluster->cluster_id);
+
+	// Do not free cluster name because as->config owns it.
+	// cf_free(cluster->cluster_name);
 
 	as_tls_context_destroy(&cluster->tls_ctx);
 	

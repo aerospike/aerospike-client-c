@@ -122,8 +122,16 @@ static void
 as_uv_close_walk(uv_handle_t* handle, void* arg)
 {
 	if (! uv_is_closing(handle)) {
-		//as_log_debug("Handle found %p %d", handle, handle->type);
-		uv_close(handle, NULL);
+		// as_log_debug("Close handle %p %d", handle, handle->type);
+		if (handle->type == UV_TCP) {
+			// Give callback for known connection handles.
+			uv_close(handle, as_uv_connection_closed);
+		}
+		else {
+			// Received unexpected handle.
+			// Close handle, but do not provide callback that might free unallocated data.
+			uv_close(handle, NULL);
+		}
 	}
 }
 
@@ -514,6 +522,19 @@ as_uv_auth_write_start(as_event_command* cmd, uv_stream_t* stream)
 }
 
 static void
+as_uv_fd_error(as_event_command* cmd, as_error* err)
+{
+	// Only timer needs to be released on socket connection failure.
+	// Watcher has not been registered yet.
+	as_event_stop_timer(cmd);
+
+	// Socket has already been closed.
+	cf_free(cmd->conn);
+	as_event_decr_conn(cmd);
+	as_event_error_callback(cmd, err);
+}
+
+static void
 as_uv_connect_error(as_event_command* cmd, as_error* err)
 {
 	// Timer will be stopped in as_event_command_release().
@@ -558,12 +579,25 @@ as_uv_connect(as_event_command* cmd)
 {
 	// Create a non-blocking socket.
 	as_address* address = as_node_get_address(cmd->node);
-	int fd = as_event_create_socket(cmd, address->addr.ss_family);
-	
+	int fd = as_socket_create_fd(address->addr.ss_family);
+
 	if (fd < 0) {
+		// fd is really -errno on error.
+		char* msg = strerror(-fd);
+		as_error err;
+		as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "%s: %s %s", msg, cmd->node->name, address->name);
+		as_uv_fd_error(cmd, &err);
 		return;
 	}
-	
+
+	if (cmd->pipe_listener && ! as_pipe_modify_fd(fd)) {
+		// as_pipe_modify_fd() will close fd on error.
+		as_error err;
+		as_error_set_message(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Failed to modify fd for pipeline");
+		as_uv_fd_error(cmd, &err);
+		return;
+	}
+
 	as_event_connection* conn = cmd->conn;
 	uv_tcp_t* socket = &conn->socket;
 	int status = uv_tcp_init(cmd->event_loop->loop, socket);
@@ -571,7 +605,8 @@ as_uv_connect(as_event_command* cmd)
 	if (status) {
 		as_error err;
 		as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "uv_tcp_init failed: %s", uv_strerror(status));
-		as_event_fd_error(cmd, &err, fd);
+		close(fd);
+		as_uv_fd_error(cmd, &err);
 		return;
 	}
 	

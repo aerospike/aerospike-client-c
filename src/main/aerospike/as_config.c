@@ -35,7 +35,7 @@ as_config_tls_init(as_config_tls* tls)
 	tls->encrypt_only = false;
 	tls->cafile = NULL;
 	tls->capath = NULL;
-	tls->protocol = NULL;
+	tls->protocols = NULL;
 	tls->cipher_suite = NULL;
 	tls->crl_check = false;
 	tls->crl_check_all = false;
@@ -101,8 +101,8 @@ as_config_destroy(as_config* config) {
 		cf_free(tls->capath);
 	}
 
-	if (tls->protocol) {
-		cf_free(tls->protocol);
+	if (tls->protocols) {
+		cf_free(tls->protocols);
 	}
 
 	if (tls->cipher_suite) {

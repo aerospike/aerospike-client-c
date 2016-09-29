@@ -160,9 +160,9 @@ typedef struct as_config_tls_s {
 	 *  If you are not sure what protocols to select this option is
 	 *  best left unspecified (NULL).
 	 *
-	 *	Use as_config_tls_set_protocol() to set this field.
+	 *	Use as_config_tls_set_protocols() to set this field.
 	 */
-	char* protocol;
+	char* protocols;
 	
 	/**
 	 *  Specifies enabled cipher suites.
@@ -677,9 +677,9 @@ as_config_tls_set_capath(as_config* config, const char* capath)
  *	@relates as_config
  */
 static inline void
-as_config_tls_set_protocol(as_config* config, const char* protocol)
+as_config_tls_set_protocols(as_config* config, const char* protocols)
 {
-	as_config_set_string(&config->tls.protocol, protocol);
+	as_config_set_string(&config->tls.protocols, protocols);
 }
 
 /**

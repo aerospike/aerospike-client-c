@@ -62,22 +62,22 @@ typedef enum as_tls_protocol_e {
 } as_tls_protocol;
 
 static as_status
-protocol_parse(as_config_tls* tlscfg, uint16_t* oprotocol, as_error* errp)
+protocols_parse(as_config_tls* tlscfg, uint16_t* oprotocols, as_error* errp)
 {
 	// In case we don't make it all the way through ...
-	*oprotocol = AS_TLS_PROTOCOL_NONE;
+	*oprotocols = AS_TLS_PROTOCOL_NONE;
 	
 	// If no protocol_spec is provided, use a default value.
-	if (! tlscfg->protocol) {
-		*oprotocol = AS_TLS_PROTOCOL_DEFAULT;
+	if (! tlscfg->protocols) {
+		*oprotocols = AS_TLS_PROTOCOL_DEFAULT;
 		return AEROSPIKE_OK;
 	}
 
-	uint16_t protocol = AS_TLS_PROTOCOL_NONE;
+	uint16_t protocols = AS_TLS_PROTOCOL_NONE;
 	
 	char const* delim = " \t";
 	char* saveptr = NULL;
-	for (char* tok = strtok_r(tlscfg->protocol, delim, &saveptr);
+	for (char* tok = strtok_r(tlscfg->protocols, delim, &saveptr);
 		 tok != NULL;
 		 tok = strtok_r(NULL, delim, &saveptr)) {
 		char act = '\0';
@@ -114,23 +114,23 @@ protocol_parse(as_config_tls* tlscfg, uint16_t* oprotocol, as_error* errp)
 		}
 
 		if (act == '-') {
-			protocol &= ~current;
+			protocols &= ~current;
         }
         else if (act == '+') {
-            protocol |= current;
+            protocols |= current;
         }
 		else {
-			if (protocol != AS_TLS_PROTOCOL_NONE) {
+			if (protocols != AS_TLS_PROTOCOL_NONE) {
 				return as_error_update(errp, AEROSPIKE_ERR_TLS_ERROR,
 						   "TLS protocol %s overrides already set parameters."
 									   "Check if a +/- prefix is missing ...",
 									   tok);
 			}
-			protocol = current;
+			protocols = current;
 		}
 	}
 
-	*oprotocol = protocol;
+	*oprotocols = protocols;
 	return AEROSPIKE_OK;
 }
 
@@ -460,9 +460,9 @@ as_tls_context_setup(as_config_tls* tlscfg,
 		}
 	}
 	
-	uint16_t protocol = AS_TLS_PROTOCOL_NONE;
+	uint16_t protocols = AS_TLS_PROTOCOL_NONE;
 
-	as_status status = protocol_parse(tlscfg, &protocol, errp);
+	as_status status = protocols_parse(tlscfg, &protocols, errp);
 	if (status != AEROSPIKE_OK) {
 		cert_blacklist_destroy(cert_blacklist);
 		return status;
@@ -473,16 +473,16 @@ as_tls_context_setup(as_config_tls* tlscfg,
 	// If the selected protocol set is a single protocol we
 	// can use a specific method.
 	//
-	if (protocol == AS_TLS_PROTOCOL_SSLV3) {
+	if (protocols == AS_TLS_PROTOCOL_SSLV3) {
 		method = SSLv3_client_method();
 	}
-	else if (protocol == AS_TLS_PROTOCOL_TLSV1) {
+	else if (protocols == AS_TLS_PROTOCOL_TLSV1) {
 		method = TLSv1_client_method();
 	}
-	else if (protocol == AS_TLS_PROTOCOL_TLSV1_1) {
+	else if (protocols == AS_TLS_PROTOCOL_TLSV1_1) {
 		method = TLSv1_1_client_method();
 	}
-	else if (protocol == AS_TLS_PROTOCOL_TLSV1_2) {
+	else if (protocols == AS_TLS_PROTOCOL_TLSV1_2) {
 		method = TLSv1_2_client_method();
 	}
 	else {
@@ -504,16 +504,16 @@ as_tls_context_setup(as_config_tls* tlscfg,
     SSL_CTX_set_options(ctx, SSL_OP_NO_SSLv2);
 
 	// Turn off non-enabled protocols.
-	if (! (protocol & AS_TLS_PROTOCOL_SSLV3)) {
+	if (! (protocols & AS_TLS_PROTOCOL_SSLV3)) {
         SSL_CTX_set_options(ctx, SSL_OP_NO_SSLv3);
     }
-	if (! (protocol & AS_TLS_PROTOCOL_TLSV1)) {
+	if (! (protocols & AS_TLS_PROTOCOL_TLSV1)) {
         SSL_CTX_set_options(ctx, SSL_OP_NO_TLSv1);
     }
-	if (! (protocol & AS_TLS_PROTOCOL_TLSV1_1)) {
+	if (! (protocols & AS_TLS_PROTOCOL_TLSV1_1)) {
         SSL_CTX_set_options(ctx, SSL_OP_NO_TLSv1_1);
     }
-	if (! (protocol & AS_TLS_PROTOCOL_TLSV1_2)) {
+	if (! (protocols & AS_TLS_PROTOCOL_TLSV1_2)) {
         SSL_CTX_set_options(ctx, SSL_OP_NO_TLSv1_2);
     }
 	

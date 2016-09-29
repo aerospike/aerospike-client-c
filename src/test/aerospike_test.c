@@ -318,8 +318,8 @@ static bool before(atf_plan * plan) {
 	config.tls.enable = g_tls_enable;
 	config.tls.encrypt_only = g_tls_encrypt_only;
 	as_config_tls_set_cafile(&config, g_tls_cafile);
-	as_config_tls_set_cafile(&config, g_tls_capath);
-	as_config_tls_set_protocol(&config, g_tls_protocol);
+	as_config_tls_set_capath(&config, g_tls_capath);
+	as_config_tls_set_protocols(&config, g_tls_protocol);
 	as_config_tls_set_cipher_suite(&config, g_tls_cipher_suite);
 	config.tls.crl_check = g_tls_crl_check;
 	config.tls.crl_check_all = g_tls_crl_check_all;

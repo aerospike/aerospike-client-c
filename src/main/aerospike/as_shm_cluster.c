@@ -27,8 +27,11 @@
 #include <errno.h>
 #include <string.h>
 #include <signal.h>
-#include <sys/sysctl.h>
 #include <sys/shm.h>
+
+#ifdef __APPLE__
+#include <sys/sysctl.h>
+#endif
 
 /******************************************************************************
  * DECLARATIONS

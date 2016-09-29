@@ -408,59 +408,6 @@ as_event_get_connection(as_event_command* cmd)
 	}
 }
 
-int
-as_event_create_socket(as_event_command* cmd, int family)
-{
-	// Create a non-blocking socket.
-	int fd = as_socket_create_fd(family);
-	
-	if (fd < 0) {
-		as_error err;
-		as_error_set_message(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Failed to create non-blocking socket");
-		as_event_fd_error(cmd, &err, fd);
-		return -1;
-	}
-	
-	if (cmd->pipe_listener) {
-		if (! as_pipe_modify_fd(cmd, fd)) {
-			return -1;
-		}
-	}
-	return fd;
-}
-
-void
-as_event_fd_error(as_event_command* cmd, as_error* err, int fd)
-{
-	// Only timer needs to be released on socket connection failure.
-	// Watcher has not been registered yet.
-	as_event_stop_timer(cmd);
-	
-	// Close fd when valid.
-	if (fd >= 0) {
-		as_close(fd);
-	}
-	cf_free(cmd->conn);
-	as_event_decr_conn(cmd);
-	as_event_error_callback(cmd, err);
-}
-
-void
-as_event_connect_error(as_event_command* cmd, as_error* err, as_socket* sock)
-{
-	// Only timer needs to be released on socket connection failure.
-	// Watcher has not been registered yet.
-	as_event_stop_timer(cmd);
-	
-	// Close fd when valid.
-	if (sock->fd >= 0) {
-		as_socket_close(sock);
-	}
-	cf_free(cmd->conn);
-	as_event_decr_conn(cmd);
-	as_event_error_callback(cmd, err);
-}
-
 void
 as_event_error_callback(as_event_command* cmd, as_error* err)
 {

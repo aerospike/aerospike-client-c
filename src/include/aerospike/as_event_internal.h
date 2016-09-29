@@ -156,15 +156,6 @@ as_event_executor_cancel(as_event_executor* executor, int queued_count);
 
 as_connection_status
 as_event_get_connection(as_event_command* cmd);
-	
-int
-as_event_create_socket(as_event_command* cmd, int family);
-
-void
-as_event_fd_error(as_event_command* cmd, as_error* err, int fd);
-
-void
-as_event_connect_error(as_event_command* cmd, as_error* err, as_socket* sock);
 
 void
 as_event_error_callback(as_event_command* cmd, as_error* err);

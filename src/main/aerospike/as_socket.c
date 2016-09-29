@@ -35,7 +35,12 @@ bool as_socket_stop_on_interrupt = false;
 #include <sys/types.h>
 #include <sys/time.h>
 #include <errno.h>
-#define IPV6_PREFER_SRC_PUBLIC 2
+
+// May want to specify preference for permanent public addresses sometime in the future.
+// #ifndef IPV6_PREFER_SRC_PUBLIC
+// #define IPV6_PREFER_SRC_PUBLIC 2
+// #endif
+
 #define IPV6_ADDR_PREFERENCES 72
 #define IS_CONNECTING() (errno == EINPROGRESS)
 #endif // __linux__ __APPLE__
@@ -151,28 +156,40 @@ as_socket_create_fd(int family)
 	// Create the socket.
 	int fd = socket(family, SOCK_STREAM, 0);
 	
-	if (fd == -1) {
-		return -1;
+	if (fd < 0) {
+		return -errno;
 	}
 	
     // Make the socket nonblocking.
 	int flags = fcntl(fd, F_GETFL, 0);
 	
     if (flags < 0) {
+		int err = -errno;
 		close(fd);
-		return -2;
+		return err;
 	}
 	
     if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
+		int err = -errno;
 		close(fd);
-		return -3;
+		return err;
 	}
 	
 	int f = 1;
-	setsockopt(fd, SOL_TCP, TCP_NODELAY, &f, sizeof(f));
+	if (setsockopt(fd, SOL_TCP, TCP_NODELAY, &f, sizeof(f)) < 0) {
+		int err = -errno;
+		close(fd);
+		return err;
+	}
+
 #ifdef __APPLE__
-	setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &f, sizeof(f));
+	if (setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &f, sizeof(f)) < 0) {
+		int err = -errno;
+		close(fd);
+		return err;
+	}
 #endif
+
 	// May want to specify preference for permanent public addresses sometime in the future.
 	// int p = IPV6_PREFER_SRC_PUBLIC;
 	// setsockopt(fd, IPPROTO_IPV6, IPV6_ADDR_PREFERENCES, &p, sizeof(p));
@@ -186,7 +203,7 @@ as_socket_create(as_socket* sock, int family, as_tls_context* ctx, const char* t
 	int fd = as_socket_create_fd(family);
 	
 	if (fd < 0) {
-		return fd;
+		return -1;
 	}
 	
 	if (! as_socket_wrap(sock, family, fd, ctx, tls_name)) {

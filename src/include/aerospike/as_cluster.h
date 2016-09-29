@@ -171,9 +171,9 @@ typedef struct as_cluster_s {
 	
 	/**
 	 *	@private
-	 *	Expected cluster id for all nodes.  May be null.
+	 *	Expected cluster name for all nodes.  May be null.
 	 */
-	char* cluster_id;
+	char* cluster_name;
 	
 	/**
 	 *	@private

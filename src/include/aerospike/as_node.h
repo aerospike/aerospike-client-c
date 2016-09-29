@@ -199,6 +199,12 @@ typedef struct as_node_s {
 
 	/**
 	 *	@private
+	 *	Number of peers returned by server node.
+	 */
+	uint32_t peers_count;
+
+	/**
+	 *	@private
 	 *	Number of other nodes that consider this node a member of the cluster.
 	 */
 	uint32_t conn_count;

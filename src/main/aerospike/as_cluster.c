@@ -181,12 +181,12 @@ as_seeds_add(as_cluster* cluster, as_host* seed_list, uint32_t size) {
 
 	for (uint32_t i = 0; i < size; i++) {
 		if (as_find_seed(cluster, src->name, src->port)) {
-			as_log_debug("Duplicate seed %s:%d", src->name, src->port);
+			as_log_debug("Duplicate seed %s %d", src->name, src->port);
 			dups++;
 			continue;
 		}
 
-		as_log_debug("Add seed %s:%d", src->name, src->port);
+		as_log_debug("Add seed %s %d", src->name, src->port);
 		trg->name = src->name;
 		trg->tls_name = src->tls_name;
 		trg->port = src->port;
@@ -330,7 +330,7 @@ as_cluster_seed_nodes(as_cluster* cluster, as_error* err, bool enable_warnings)
 		
 		if (status != AEROSPIKE_OK) {
 			if (enable_warnings) {
-				as_log_warn("Failed to lookup %s:%d. %s %s", hostname, seed->port, as_error_string(status), error_local.message);
+				as_log_warn("Failed to lookup %s %d. %s %s", hostname, seed->port, as_error_string(status), error_local.message);
 			}
 			continue;
 		}
@@ -358,7 +358,7 @@ as_cluster_seed_nodes(as_cluster* cluster, as_error* err, bool enable_warnings)
 			}
 			else {
 				if (enable_warnings) {
-					as_log_warn("Failed to connect to seed %s:%d. %s %s", hostname, seed->port, as_error_string(status), error_local.message);
+					as_log_warn("Failed to connect to seed %s %d. %s %s", hostname, seed->port, as_error_string(status), error_local.message);
 				}
 			}
 		}
@@ -840,7 +840,7 @@ as_cluster_add_seeds(as_cluster* cluster)
 		as_seeds* seeds = as_seeds_reserve(cluster);
 		as_host* seed = seeds->array;
 		for (uint32_t i = 0; i < seeds->size; i++) {
-			as_log_debug("Add seed %s:%d", seed->name, seed->port);
+			as_log_debug("Add seed %s %d", seed->name, seed->port);
 			seed++;
 		}
 		as_seeds_release(seeds);

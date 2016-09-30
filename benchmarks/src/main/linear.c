@@ -36,6 +36,7 @@ ticker_worker(void* udata)
 	char latency_detail[512];
 	
 	uint64_t prev_time = cf_getms();
+	data->period_begin = prev_time;
 	
 	if (latency) {
 		latency_set_header(write_latency, latency_header);
@@ -53,6 +54,8 @@ ticker_worker(void* udata)
 		int32_t total_count = data->key_count;
 		int32_t write_tps = (int32_t)((double)write_current * 1000 / elapsed + 0.5);
 			
+		data->period_begin = time;
+
 		blog_info("write(tps=%d timeouts=%d errors=%d total=%d)",
 			write_tps, write_timeout_current, write_error_current, total_count);
 		
@@ -87,6 +90,7 @@ linear_write_worker(void* udata)
 	threaddata* tdata = create_threaddata(cdata, 0);
 	int32_t key_max = cdata->key_max;
 	int32_t key;
+	int throughput = cdata->throughput;
 	
 	while (cdata->valid) {
 		key = ck_pr_faa_32(&cdata->key_count, 1) + 1;
@@ -102,6 +106,18 @@ linear_write_worker(void* udata)
 			break;
 		}
 		write_record_sync(cdata, tdata, key);
+
+		if (throughput > 0) {
+			int transactions = cdata->write_count;
+			
+			if (transactions > throughput) {
+				int64_t millis = (int64_t)cdata->period_begin + 1000L - (int64_t)cf_getms();
+
+				if (millis > 0) {
+					usleep((uint32_t)millis * 1000);
+				}
+			}
+		}
 	}
 	destroy_threaddata(tdata);
 	return 0;

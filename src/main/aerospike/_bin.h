@@ -45,9 +45,9 @@
  */
 #define as_bins_inita(__bins, __capacity) \
 	(__bins)->_free = false;\
-	(__bins)->capacity = __capacity;\
+	(__bins)->capacity = (__capacity);\
 	(__bins)->size = 0;\
-	(__bins)->entries = (as_bin *) alloca(sizeof(as_bin) * __capacity);
+	(__bins)->entries = (as_bin*) alloca(sizeof(as_bin) * (__capacity));
 
 /******************************************************************************
  *	as_bin FUNCTIONS

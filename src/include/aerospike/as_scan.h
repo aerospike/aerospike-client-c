@@ -469,10 +469,10 @@ void as_scan_destroy(as_scan * scan);
 #define as_scan_select_inita(__scan, __n) \
 	do { \
 		if ( (__scan) != NULL && (__scan)->select.entries == NULL ) {\
-			(__scan)->select.entries = (as_bin_name *) alloca(__n * sizeof(as_bin_name));\
+			(__scan)->select.entries = (as_bin_name*) alloca(sizeof(as_bin_name) * (__n));\
 			if ( (__scan)->select.entries ) { \
 				(__scan)->select._free = false;\
-				(__scan)->select.capacity = __n;\
+				(__scan)->select.capacity = (__n);\
 				(__scan)->select.size = 0;\
 			}\
 	 	} \

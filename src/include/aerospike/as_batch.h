@@ -128,10 +128,10 @@ typedef struct as_batch_read_s {
 	do { \
 		if ( (__batch) != NULL ) {\
 			(__batch)->_free = false;\
-			(__batch)->keys.entries = (as_key *) alloca(sizeof(as_key) * __size);\
+			(__batch)->keys.entries = (as_key*) alloca(sizeof(as_key) * (__size));\
 			if ( (__batch)->keys.entries ) { \
 				(__batch)->keys._free = false;\
-				(__batch)->keys.size = __size;\
+				(__batch)->keys.size = (__size);\
 			}\
 	 	} \
 	} while(0)

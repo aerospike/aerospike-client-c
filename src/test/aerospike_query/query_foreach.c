@@ -31,6 +31,7 @@
 #include <aerospike/as_string.h>
 #include <aerospike/as_stringmap.h>
 #include <aerospike/as_val.h>
+#include <aerospike/ck/ck_pr.h>
 #include <aerospike/mod_lua.h>
 
 #include "../test.h"
@@ -339,12 +340,12 @@ TEST( query_foreach_exists, UDF_FILE" exists" ) {
 }
 
 static bool query_foreach_1_callback(const as_val * v, void * udata) {
-	int * count = (int *) udata;
+	uint32_t * count = (uint32_t *) udata;
 	if ( v == NULL ) {
-		info("count: %d", (*count));
+		info("count: %d", ck_pr_load_32(count);
 	}
 	else {
-		*count += 1;
+		ck_pr_inc_32(count);
 	}
 	return true;
 }
@@ -354,7 +355,7 @@ TEST( query_foreach_1, "count(*) where a == 'abc' (non-aggregating)" ) {
 	as_error err;
 	as_error_reset(&err);
 
-	int count = 0;
+	uint32_t count = 0;
 
 	as_query q;
 	as_query_init(&q, NAMESPACE, SET);

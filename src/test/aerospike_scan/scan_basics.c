@@ -65,10 +65,8 @@ typedef struct scan_check_s {
 	bool failed;
 	char * set;
 	bool nobindata; // flag to be set when you dont expect to get back any bins 
-	int count;
+	uint32_t count;
 	char * bins[10];
-	int unique_tcount;
-	pthread_t threadids[32];
 } scan_check;
 
 /******************************************************************************
@@ -237,8 +235,6 @@ static int check_bin4(as_record * rec, scan_check * check)
 
 static bool scan_check_callback(const as_val * val, void * udata) 
 {
-	int i;
-
 	// NULL is END OF SCAN
 	if ( !val ) {
 		return false;
@@ -254,22 +250,7 @@ static bool scan_check_callback(const as_val * val, void * udata)
 
 	const char * set = rec->key.set[0] == '\0' ? NULL : rec->key.set;
 
-	check->count++;
-	// Find the number of unique threads spawned under the hood.
-	// Note that the scan callback will be called in the thread context.
-	// As the number of threads is same as node count, they will be limited.
-	// A linear search is good enough for this.
-	pthread_t cur_thread = pthread_self();
-	for (i=0; i<check->unique_tcount; i++) {
-		if (check->threadids[i] == cur_thread) {
-			break;
-		}
-	}
-	// Found a new thread
-	if (i == check->unique_tcount) {
-		check->threadids[check->unique_tcount] = cur_thread;
-		check->unique_tcount++;
-	}
+	ck_pr_inc_32(&check->count);
 
 	// Check if we are getting the results only from the set the scan is triggered for
 	// If scan is called with NULL set, all the recs will come. So, no checks in this case.
@@ -420,8 +401,7 @@ TEST( scan_basics_set1 , "scan "SET1"" ) {
 		.set = SET1,
 		.count = 0,
 		.nobindata = false,
-		.bins = { "bin1", "bin2", "bin3", NULL },
-		.unique_tcount = 0
+		.bins = { "bin1", "bin2", "bin3", NULL }
 	};
 
 	as_error err;
@@ -436,7 +416,6 @@ TEST( scan_basics_set1 , "scan "SET1"" ) {
 
 	assert_int_eq( check.count, NUM_RECS_SET1 );
 	info("Got %d records in the scan. Expected %d", check.count, NUM_RECS_SET1);
-	info("Number of threads used = %d", check.unique_tcount);
 
 	as_scan_destroy(&scan);
 }
@@ -448,8 +427,7 @@ TEST( scan_basics_set1_concurrent , "scan "SET1" concurrently" ) {
 		.set = SET1,
 		.count = 0,
 		.nobindata = false,
-		.bins = { "bin1", "bin2", "bin3", NULL },
-		.unique_tcount = 0
+		.bins = { "bin1", "bin2", "bin3", NULL }
 	};
 
 	as_error err;
@@ -465,7 +443,6 @@ TEST( scan_basics_set1_concurrent , "scan "SET1" concurrently" ) {
 
 	assert_int_eq( check.count, NUM_RECS_SET1 );
 	info("Got %d records in the concurrent scan. Expected %d", check.count, NUM_RECS_SET1);
-	info("Number of threads used = %d", check.unique_tcount);
 
 	as_scan_destroy(&scan);
 }
@@ -601,8 +578,7 @@ TEST( scan_basics_background_delete_bins , "Apply scan to count num-records in S
 		.set = SET1,
 		.count = 0,
 		.nobindata = false,
-		.bins = { "bin1", "bin2", "bin3", NULL },
-		.unique_tcount = 0
+		.bins = { "bin1", "bin2", "bin3", NULL }
 	};
 
 	as_error err;
@@ -637,8 +613,7 @@ TEST( scan_basics_background_delete_bins , "Apply scan to count num-records in S
 		.set = SET1,
 		.count = 0,
 		.nobindata = false,
-		.bins = { NULL }, // look for all the bins 
-		.unique_tcount = 0
+		.bins = { NULL } // look for all the bins
 	};
 	as_scan scan2;
 	as_scan_init(&scan2, NS, SET1);
@@ -664,8 +639,7 @@ TEST( scan_basics_background_delete_records , "Apply scan to count num-records i
 		.set = SET1,
 		.count = 0,
 		.nobindata = false,
-		.bins = { NULL }, // look for all the bins 
-		.unique_tcount = 0
+		.bins = { NULL } // look for all the bins
 	};
 
 	as_error err;

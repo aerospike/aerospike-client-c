@@ -330,9 +330,9 @@ typedef struct as_operations_s {
 	(__ops)->gen = 0;\
 	(__ops)->ttl = 0;\
 	(__ops)->binops._free = false;\
-	(__ops)->binops.capacity = __nops;\
+	(__ops)->binops.capacity = (__nops);\
 	(__ops)->binops.size = 0;\
-	(__ops)->binops.entries = (as_binop *) alloca(sizeof(as_binop) * __nops);
+	(__ops)->binops.entries = (as_binop*) alloca(sizeof(as_binop) * (__nops));
 
 /******************************************************************************
  *	FUNCTIONS

@@ -774,6 +774,7 @@ TEST( query_foreach_nullset, "test null-set behavior" ) {
 typedef struct foreach_double_udata_s {
 	uint64_t count;
 	double sum;
+	pthread_mutex_t lock;
 } foreach_double_udata;
 
 static bool query_foreach_double_callback(const as_val * v, void * udata) {
@@ -781,8 +782,10 @@ static bool query_foreach_double_callback(const as_val * v, void * udata) {
 	if (v) {
 		as_record* rec = as_record_fromval(v);
 		foreach_double_udata *d = (foreach_double_udata *)udata;
+		pthread_mutex_lock(&d->lock);
 		d->sum += as_record_get_double(rec,"double_bin", 0.0);
 		d->count++;
+		pthread_mutex_unlock(&d->lock);
 	}
     return true;
 }
@@ -836,6 +839,7 @@ TEST( query_foreach_int_with_double_bin, "test query on double behavior" ) {
 	
 	double expected_sum = 0;
 	foreach_double_udata udata = {0};
+	pthread_mutex_init(&udata.lock, NULL);
 
 	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_double_callback, &udata);
 
@@ -848,6 +852,8 @@ TEST( query_foreach_int_with_double_bin, "test query on double behavior" ) {
 	assert_int_eq( udata.count, 20 );
 
 	as_query_destroy(&q);
+
+	pthread_mutex_destroy(&udata.lock);
 
 	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_int_bin");
 	if ( err.code != AEROSPIKE_OK ) {

@@ -178,6 +178,7 @@ TEST( valid_geojson, "valid geojson formats" ) {
 }
 
 typedef struct foreach_udata_s {
+	pthread_mutex_t lock;
 	uint64_t count;
 	char binname[128];
 	as_hashmap *hm;
@@ -187,14 +188,18 @@ typedef struct foreach_udata_s {
 static bool query_foreach_count_callback(const as_val * v, void * udata) {
 	foreach_udata * m = (foreach_udata *) udata;
 	if ( v == NULL ) {
-		info("count: %d", m->count);
+		pthread_mutex_lock(&m->lock);
+		uint64_t count = m->count;
+		pthread_mutex_unlock(&m->lock);
+		info("count: %d", count);
 	}
 	else {
 		// dump_record((as_record *)v);
 		char * uniq = as_record_get_str((as_record *)v, m->binname);
+		pthread_mutex_lock(&m->lock);
 		as_map_set((as_map*)m->hm, (as_val *) as_string_new(strdup(uniq),true), (as_val *) as_integer_new(1));
-
-		m->count += 1;
+		m->count++;
+		pthread_mutex_unlock(&m->lock);
 	}
 	return true;
 }
@@ -305,7 +310,9 @@ TEST( query_geojson_in_list, "IN LIST count(*) where p in <rectangle>" ) {
 	as_query_where_inita(&q, 1);
 	as_query_where(&q, indexed_bin_name, AS_PREDICATE_RANGE, AS_INDEX_TYPE_LIST, AS_INDEX_GEO2DSPHERE, region);
 
-	foreach_udata udata = {0};
+	foreach_udata udata;
+	memset(&udata, 0, sizeof(udata));
+	pthread_mutex_init(&udata.lock, NULL);
 	udata.hm = as_hashmap_new(32);
 	strncpy (udata.binname, "a", sizeof(udata.binname));
 
@@ -326,6 +333,7 @@ TEST( query_geojson_in_list, "IN LIST count(*) where p in <rectangle>" ) {
 	assert_int_eq( udata.count,697);
 
 	as_hashmap_destroy(udata.hm);
+	pthread_mutex_destroy(&udata.lock);
 
 	as_query_destroy(&q);
 
@@ -448,7 +456,9 @@ TEST( query_geojson_in_mapvalue, "IN MAPVALUES count(*) where p in <rectangle>" 
 	as_query_where_inita(&q, 1);
 	as_query_where(&q, indexed_bin_name, AS_PREDICATE_RANGE, AS_INDEX_TYPE_MAPVALUES, AS_INDEX_GEO2DSPHERE, region);
 
-	foreach_udata udata = {0};
+	foreach_udata udata;
+	memset(&udata, 0, sizeof(udata));
+	pthread_mutex_init(&udata.lock, NULL);
 	udata.hm = as_hashmap_new(32);
 	strncpy (udata.binname, "a", sizeof(udata.binname));
 
@@ -469,6 +479,7 @@ TEST( query_geojson_in_mapvalue, "IN MAPVALUES count(*) where p in <rectangle>" 
 	assert_int_eq( udata.count, 697);
 
 	as_hashmap_destroy(udata.hm);
+	pthread_mutex_destroy(&udata.lock);
 
 	as_query_destroy(&q);
 

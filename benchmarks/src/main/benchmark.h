@@ -135,6 +135,7 @@ void destroy_threaddata(threaddata* tdata);
 
 void write_record_sync(clientdata* cdata, threaddata* tdata, int key);
 int read_record_sync(int key, clientdata* data);
+void throttle(clientdata* cdata);
 
 void linear_write_async(clientdata* cdata, threaddata* tdata, as_event_loop* event_loop);
 void random_read_write_async(clientdata* cdata, threaddata* tdata, as_event_loop* event_loop);

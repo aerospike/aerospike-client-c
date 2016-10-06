@@ -65,19 +65,6 @@ ticker_worker(void* udata)
 			blog_line("%s", latency_detail);
 		}
 		
-		// Do not check for stop-writes anymore because it can cause benchmarks to shutdown
-		// when checking temporarily downed node.
-		/*
-		if (write_timeout_current + write_error_current > 10) {
-			if (is_stop_writes(&data->client, data->host, data->port, data->namespace)) {
-				if (data->valid) {
-					blog_error("Server is currently in readonly mode. Shutting down...");
-					data->valid = false;
-					continue;
-				}
-			}
-		}
-		*/
 		sleep(1);
 	}
 	return 0;
@@ -91,7 +78,6 @@ linear_write_worker(void* udata)
 	int32_t min_key = cdata->key_min;
 	int32_t key_max = cdata->key_max;
 	int32_t key;
-	int throughput = cdata->throughput;
 	
 	while (cdata->valid) {
 		key = ck_pr_faa_32(&cdata->key_count, 1) + min_key;
@@ -108,17 +94,7 @@ linear_write_worker(void* udata)
 		}
 		write_record_sync(cdata, tdata, key);
 
-		if (throughput > 0) {
-			int transactions = cdata->write_count;
-			
-			if (transactions > throughput) {
-				int64_t millis = (int64_t)cdata->period_begin + 1000L - (int64_t)cf_getms();
-
-				if (millis > 0) {
-					usleep((uint32_t)millis * 1000);
-				}
-			}
-		}
+		throttle(cdata);
 	}
 	destroy_threaddata(tdata);
 	return 0;

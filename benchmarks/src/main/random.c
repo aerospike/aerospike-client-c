@@ -83,19 +83,6 @@ ticker_worker(void* udata)
 			continue;
 		}
 
-		// Do not check for stop-writes anymore because it can cause benchmarks to shutdown
-		// when checking temporarily downed node.
-		/*
-		if (write_timeout_current + write_error_current > 10) {
-			if (is_stop_writes(&data->client, data->host, data->port, data->namespace)) {
-				if (data->valid) {
-					blog_error("Server is currently in readonly mode. Shutting down...");
-					data->valid = false;
-					continue;
-				}
-			}
-		}
-		*/
 		sleep(1);
 	}
 	return 0;
@@ -108,7 +95,6 @@ random_worker(void* udata)
 	threaddata* tdata = create_threaddata(cdata, 0);
 	uint32_t key_min = cdata->key_min;
 	uint32_t n_keys = cdata->key_max - key_min;
-	int throughput = cdata->throughput;
 	int read_pct = cdata->read_pct;
 	int key;
 	int die;
@@ -128,17 +114,7 @@ random_worker(void* udata)
 		}
 		ck_pr_inc_32(&cdata->transactions_count);
 
-		if (throughput > 0) {
-			int transactions = cdata->write_count + cdata->read_count;
-			
-			if (transactions > throughput) {
-				int64_t millis = (int64_t)cdata->period_begin + 1000L - (int64_t)cf_getms();
-				
-				if (millis > 0) {
-					usleep((uint32_t)millis * 1000);
-				}
-			}
-		}
+		throttle(cdata);
 	}
 	destroy_threaddata(tdata);
 	return 0;

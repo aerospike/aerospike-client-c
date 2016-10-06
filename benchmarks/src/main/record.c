@@ -408,6 +408,22 @@ read_record_sync(int keyval, clientdata* data)
 	return status;
 }
 
+void
+throttle(clientdata* cdata) {
+	if (cdata->throughput > 0) {
+		int transactions = cdata->write_count + cdata->read_count;
+
+		if (transactions >= cdata->throughput) {
+			int64_t millis = (int64_t)cdata->period_begin + 1000L -
+					(int64_t)cf_getms();
+
+			if (millis > 0) {
+				usleep((uint32_t)millis * 1000);
+			}
+		}
+	}
+}
+
 static void linear_write_listener(as_error* err, void* udata, as_event_loop* event_loop);
 
 void

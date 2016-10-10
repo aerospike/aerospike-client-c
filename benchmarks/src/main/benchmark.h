@@ -41,6 +41,7 @@ typedef struct arguments_t {
 	char password[AS_PASSWORD_HASH_SIZE];
 	const char* namespace;
 	const char* set;
+	int startKey;
 	int keys;
 	char bintype;
 	int binlen;
@@ -65,6 +66,7 @@ typedef struct arguments_t {
 	as_policy_replica read_replica;
 	as_policy_consistency_level read_consistency_level;
 	as_policy_commit_level write_commit_level;
+	bool durable_deletes;
 	bool async;
 	int async_max_commands;
 	int event_loop_capacity;
@@ -93,6 +95,7 @@ typedef struct clientdata_t {
 	uint32_t transactions_limit;
 	uint32_t transactions_count;
 
+	uint32_t key_min;
 	uint32_t key_max;
 	uint32_t key_count;
 	uint32_t valid;
@@ -132,6 +135,7 @@ void destroy_threaddata(threaddata* tdata);
 
 void write_record_sync(clientdata* cdata, threaddata* tdata, int key);
 int read_record_sync(int key, clientdata* data);
+void throttle(clientdata* cdata);
 
 void linear_write_async(clientdata* cdata, threaddata* tdata, as_event_loop* event_loop);
 void random_read_write_async(clientdata* cdata, threaddata* tdata, as_event_loop* event_loop);

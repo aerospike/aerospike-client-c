@@ -26,7 +26,7 @@
 #include <string.h>
 #include <getopt.h>
 
-static const char* short_options = "h:p:U:P::n:s:k:o:Rt:w:z:g:T:dL:SC:N:M:ac:W:ub:";
+static const char* short_options = "h:p:U:P::n:s:K:k:o:Rt:w:z:g:T:dL:SC:N:M:Dac:W:ub:";
 
 static struct option long_options[] = {
 	{"hosts",                required_argument, 0, 'h'},
@@ -35,6 +35,7 @@ static struct option long_options[] = {
 	{"password",             optional_argument, 0, 'P'},
 	{"namespace",            required_argument, 0, 'n'},
 	{"set",                  required_argument, 0, 's'},
+	{"startKey",             required_argument, 0, 'K'},
 	{"keys",                 required_argument, 0, 'k'},
 	{"bins",                 optional_argument, 0, 'b'},
 	{"objectSpec",           required_argument, 0, 'o'},
@@ -55,6 +56,7 @@ static struct option long_options[] = {
 	{"commitLevel",          required_argument, 0, 'M'},
 	{"async",                no_argument,       0, 'a'},
 	{"asyncMaxCommands",     required_argument, 0, 'c'},
+	{"durable-delete",       no_argument,       0, 'D'},
 	{"asyncSelectorThreads", required_argument, 0, 'W'},
 	{"usage",                no_argument,       0, 'u'},
 	{0, 0, 0, 0}
@@ -101,8 +103,20 @@ print_usage(const char* program)
 	blog_line("   Aerospike set name.");
 	blog_line("");
 	
+	blog_line("-K --startKey <start> # Default: 0");
+	blog_line("   Set the starting value of the working set of keys. If using an");
+	blog_line("   'insert' workload, the start_value indicates the first value to");
+	blog_line("   write. Otherwise, the start_value indicates the smallest value in");
+	blog_line("   the working set of keys.");
+	blog_line("");
+
 	blog_line("-k --keys <count>     # Default: 1000000");
-	blog_line("   Key/record count or key/record range.");
+	blog_line("   Set the number of keys the client is dealing with. If using an");
+	blog_line("   'insert' workload (detailed below), the client will write this");
+	blog_line("   number of keys, starting from value = startKey. Otherwise, the");
+	blog_line("   client will read and update randomly across the values between");
+	blog_line("   startKey and startKey + num_keys.  startKey can be set using");
+	blog_line("   '-K' or '--startKey'.");
 	blog_line("");
 	
 	blog_line("-b --bins <count>     # Default: 1");
@@ -202,6 +216,11 @@ print_usage(const char* program)
 	blog_line("   Write commit guarantee level.");
 	blog_line("");
 
+	blog_line("-D --durable-delete  # Default: durable-delete mode is false.");
+	blog_line("   All transactions will set the durable-delete flag which indicates");
+	blog_line("   to the server that if the transaction results in a delete, to generate");
+	blog_line("   a tombstone for the deleted record.");
+
 	blog_line("-a, --async # Default: synchronous mode");
 	blog_line("   Enable asynchronous mode.");
 	blog_line("");
@@ -239,6 +258,7 @@ print_args(arguments* args)
 	blog_line("user:           %s", args->user);
 	blog_line("namespace:      %s", args->namespace);
 	blog_line("set:            %s", args->set);
+	blog_line("startKey:       %d", args->startKey);
 	blog_line("keys/records:   %d", args->keys);
 	blog_line("bins:           %d", args->numbins);
 	blog("object spec:    ");
@@ -448,6 +468,10 @@ set_args(int argc, char * const * argv, arguments* args)
 				args->set = optarg;
 				break;
 				
+			case 'K':
+				args->startKey = atoi(optarg);
+				break;
+
 			case 'k':
 				args->keys = atoi(optarg);
 				break;
@@ -619,6 +643,10 @@ set_args(int argc, char * const * argv, arguments* args)
 				}
 				break;
 
+			case 'D':
+				args->durable_deletes = true;
+				break;
+
 			case 'a':
 				args->async = true;
 				break;
@@ -650,6 +678,7 @@ main(int argc, char * const * argv)
 	args.namespace = "test";
 	args.set = "testset";
 	args.keys = 1000000;
+	args.startKey = 1;
 	args.numbins = 1;
 	args.bintype = 'I';
 	args.binlen = 50;
@@ -673,6 +702,7 @@ main(int argc, char * const * argv)
 	args.read_replica = AS_POLICY_REPLICA_MASTER;
 	args.read_consistency_level = AS_POLICY_CONSISTENCY_LEVEL_ONE;
 	args.write_commit_level = AS_POLICY_COMMIT_LEVEL_ALL;
+	args.durable_deletes = false;
 	args.async = false;
 	args.async_max_commands = 200;
 	args.event_loop_capacity = 1;

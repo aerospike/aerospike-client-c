@@ -247,9 +247,9 @@ typedef struct as_record_s {
 #define as_record_inita(__rec, __nbins) \
 	as_record_init(__rec, 0);\
 	(__rec)->bins._free = false;\
-	(__rec)->bins.capacity = __nbins;\
+	(__rec)->bins.capacity = (__nbins);\
 	(__rec)->bins.size = 0;\
-	(__rec)->bins.entries = (as_bin *) alloca(sizeof(as_bin) * __nbins);
+	(__rec)->bins.entries = (as_bin*) alloca(sizeof(as_bin) * (__nbins));
 
 /******************************************************************************
  *	FUNCTIONS

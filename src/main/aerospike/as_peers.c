@@ -86,7 +86,7 @@ as_peers_duplicate(as_host* host, bool is_alias, as_node* node, as_node_info* no
 {
 	as_socket_close(&node_info->socket);
 	
-	as_log_info("Node %s:%d already exists with nodeid %s and address %s",
+	as_log_info("Node %s %d already exists with nodeid %s and address %s",
 				host->name, host->port, node->name, as_node_get_address_string(node));
 	
 	as_node_add_address(node, addr);
@@ -176,12 +176,12 @@ as_peers_validate_node(as_peers* peers, as_cluster* cluster, as_host* host, cons
 				break;
 			}
 			else {
-				as_log_warn("Peer node %s is different than actual node %s for host %s:%d",
+				as_log_warn("Peer node %s is different than actual node %s for host %s %d",
 							expected_name, node_info.name, host->name, host->port);
 			}
 		}
 		else {
-			as_log_warn("Failed to connect to peer %s:%d. %s %s",
+			as_log_warn("Failed to connect to peer %s %d. %s %s",
 						host->name, host->port, as_error_string(status), err.message);
 		}
 	}

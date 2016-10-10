@@ -31,6 +31,7 @@
 #include <aerospike/as_string.h>
 #include <aerospike/as_stringmap.h>
 #include <aerospike/as_val.h>
+#include <aerospike/ck/ck_pr.h>
 #include <aerospike/mod_lua.h>
 
 #include "../test.h"
@@ -338,13 +339,14 @@ TEST( query_foreach_exists, UDF_FILE" exists" ) {
 	assert_true( udf_exists(LUA_FILE) );
 }
 
-static bool query_foreach_1_callback(const as_val * v, void * udata) {
-	int * count = (int *) udata;
+static bool query_foreach_count_callback(const as_val * v, void * udata) {
+
+	uint32_t * count = (uint32_t *) udata;
 	if ( v == NULL ) {
-		info("count: %d", (*count));
+		info("count: %d", ck_pr_load_32(count));
 	}
 	else {
-		*count += 1;
+		ck_pr_inc_32(count);
 	}
 	return true;
 }
@@ -354,7 +356,7 @@ TEST( query_foreach_1, "count(*) where a == 'abc' (non-aggregating)" ) {
 	as_error err;
 	as_error_reset(&err);
 
-	int count = 0;
+	uint32_t count = 0;
 
 	as_query q;
 	as_query_init(&q, NAMESPACE, SET);
@@ -365,7 +367,7 @@ TEST( query_foreach_1, "count(*) where a == 'abc' (non-aggregating)" ) {
 	as_query_where_inita(&q, 1);
 	as_query_where(&q, "a", as_string_equals("abc"));
 	
-	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_1_callback, &count);
+	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_count_callback, &count);
 
 	assert_int_eq( err.code, 0 );
 	assert_int_eq( count, 100 );
@@ -499,23 +501,13 @@ TEST( query_foreach_4, "sum(d) where b == 100 and d == 1" ) {
 	as_query_destroy(&q);
 }
 
-static bool query_foreach_count_callback(const as_val * v, void * udata) {
-	int * count = (int *) udata;
-	if ( v == NULL ) {
-		info("count: %d", (*count));
-	}
-	else {
-		*count += 1;
-	}
-	return true;
-}
 
 TEST( query_foreach_5, "IN LIST count(*) where x contains 'x'" ) {
 	
 	as_error err;
 	as_error_reset(&err);
 
-	int count = 0;
+	uint32_t count = 0;
 
 	as_query q;
 	as_query_init(&q, NAMESPACE, SET);
@@ -540,7 +532,7 @@ TEST( query_foreach_6, "IN MAPKEYS count(*) where y contains 'ykey'" ) {
 	as_error err;
 	as_error_reset(&err);
 
-	int count = 0;
+	uint32_t count = 0;
 
 	as_query q;
 	as_query_init(&q, NAMESPACE, SET);
@@ -565,7 +557,7 @@ TEST( query_foreach_7, "IN MAPVALUES count(*) where y contains 'yvalue'" ) {
 	as_error err;
 	as_error_reset(&err);
 
-	int count = 0;
+	uint32_t count = 0;
 
 	as_query q;
 	as_query_init(&q, NAMESPACE, SET);
@@ -590,7 +582,7 @@ TEST( query_foreach_8, "IN LIST count(*) where z between 50 and 51" ) {
 	as_error err;
 	as_error_reset(&err);
 
-	int count = 0;
+	uint32_t count = 0;
 
 	as_query q;
 	as_query_init(&q, NAMESPACE, SET);
@@ -624,8 +616,8 @@ TEST( query_foreach_8, "IN LIST count(*) where z between 50 and 51" ) {
 
 static bool query_quit_early_callback(const as_val * v, void * udata) {
 	if (v) {
-		int64_t* count = (int64_t*)udata;
-		(*count)++;
+		uint32_t * count = (uint32_t *) udata;
+		ck_pr_inc_32(count);
 	}
 	return false;
 }
@@ -639,7 +631,7 @@ TEST( query_quit_early, "normal query and quit early" ) {
 	as_error err;
 	as_error_reset(&err);
 	
-	int64_t count = 0;
+	uint32_t count = 0;
 	
 	as_query q;
 	as_query_init(&q, NAMESPACE, SET);
@@ -668,7 +660,7 @@ TEST( query_agg_quit_early, "aggregation and quit early" ) {
 	as_error err;
 	as_error_reset(&err);
 	
-	int64_t count = 0;
+	uint32_t count = 0;
 	
 	as_query q;
 	as_query_init(&q, NAMESPACE, SET);
@@ -695,8 +687,8 @@ static bool query_quit_early_bytes_callback(const as_val * v, void * udata) {
 		as_bytes * bval = as_bytes_fromval(v);
 
 		if (bval) {
-			int64_t* byte_count = (int64_t*)udata;
-			(*byte_count) += as_bytes_size(bval);
+			uint32_t* byte_count = (uint32_t*)udata;
+			ck_pr_add_32( byte_count, as_bytes_size(bval));
 		}
 	}
 	return false;
@@ -707,7 +699,7 @@ TEST( query_filter_map_bytes, "return bytes from a mapper" ) {
 	as_error err;
 	as_error_reset(&err);
 
-	int64_t byte_count = 0;
+	uint32_t byte_count = 0;
 
 	as_query q;
 	as_query_init(&q, NAMESPACE, SET);
@@ -761,7 +753,7 @@ TEST( query_foreach_nullset, "test null-set behavior" ) {
 	as_record_destroy(&r);
 	as_key_destroy(&key);
 
-	int64_t count = 0;
+	uint32_t count = 0;
 
 	as_query q;
 	as_query_init(&q, NAMESPACE, setname);
@@ -782,6 +774,7 @@ TEST( query_foreach_nullset, "test null-set behavior" ) {
 typedef struct foreach_double_udata_s {
 	uint64_t count;
 	double sum;
+	pthread_mutex_t lock;
 } foreach_double_udata;
 
 static bool query_foreach_double_callback(const as_val * v, void * udata) {
@@ -789,8 +782,10 @@ static bool query_foreach_double_callback(const as_val * v, void * udata) {
 	if (v) {
 		as_record* rec = as_record_fromval(v);
 		foreach_double_udata *d = (foreach_double_udata *)udata;
+		pthread_mutex_lock(&d->lock);
 		d->sum += as_record_get_double(rec,"double_bin", 0.0);
 		d->count++;
+		pthread_mutex_unlock(&d->lock);
 	}
     return true;
 }
@@ -844,6 +839,7 @@ TEST( query_foreach_int_with_double_bin, "test query on double behavior" ) {
 	
 	double expected_sum = 0;
 	foreach_double_udata udata = {0};
+	pthread_mutex_init(&udata.lock, NULL);
 
 	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_double_callback, &udata);
 
@@ -856,6 +852,8 @@ TEST( query_foreach_int_with_double_bin, "test query on double behavior" ) {
 	assert_int_eq( udata.count, 20 );
 
 	as_query_destroy(&q);
+
+	pthread_mutex_destroy(&udata.lock);
 
 	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_int_bin");
 	if ( err.code != AEROSPIKE_OK ) {

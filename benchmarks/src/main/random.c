@@ -83,19 +83,6 @@ ticker_worker(void* udata)
 			continue;
 		}
 
-		// Do not check for stop-writes anymore because it can cause benchmarks to shutdown
-		// when checking temporarily downed node.
-		/*
-		if (write_timeout_current + write_error_current > 10) {
-			if (is_stop_writes(&data->client, data->host, data->port, data->namespace)) {
-				if (data->valid) {
-					blog_error("Server is currently in readonly mode. Shutting down...");
-					data->valid = false;
-					continue;
-				}
-			}
-		}
-		*/
 		sleep(1);
 	}
 	return 0;
@@ -106,15 +93,15 @@ random_worker(void* udata)
 {
 	clientdata* cdata = (clientdata*)udata;
 	threaddata* tdata = create_threaddata(cdata, 0);
-	uint32_t key_max = cdata->key_max;
-	int throughput = cdata->throughput;
+	uint32_t key_min = cdata->key_min;
+	uint32_t n_keys = cdata->key_max - key_min;
 	int read_pct = cdata->read_pct;
 	int key;
 	int die;
 	
 	while (cdata->valid) {
 		// Choose key at random.
-		key = as_random_next_uint32(tdata->random) % key_max + 1;
+		key = as_random_next_uint32(tdata->random) % n_keys + key_min;
 		
 		// Roll a percentage die.
 		die = as_random_next_uint32(tdata->random) % 100;
@@ -127,17 +114,7 @@ random_worker(void* udata)
 		}
 		ck_pr_inc_32(&cdata->transactions_count);
 
-		if (throughput > 0) {
-			int transactions = cdata->write_count + cdata->read_count;
-			
-			if (transactions > throughput) {
-				int64_t millis = (int64_t)cdata->period_begin + 1000L - (int64_t)cf_getms();
-				
-				if (millis > 0) {
-					usleep((uint32_t)millis * 1000);
-				}
-			}
-		}
+		throttle(cdata);
 	}
 	destroy_threaddata(tdata);
 	return 0;
@@ -167,7 +144,7 @@ random_worker_async(clientdata* cdata)
 int
 random_read_write(clientdata* data)
 {
-	blog_info("Read/write using %d records", data->key_max);
+	blog_info("Read/write using %u records", data->key_max - data->key_min);
 	
 	pthread_t ticker;
 	if (pthread_create(&ticker, 0, ticker_worker, data) != 0) {

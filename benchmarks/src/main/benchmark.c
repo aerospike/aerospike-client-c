@@ -183,14 +183,14 @@ is_single_bin(aerospike* client, const char* namespace)
 }
 
 bool
-is_stop_writes(aerospike* client, const char* host, int port, const char* namespace)
+is_stop_writes(aerospike* client, const char* namespace)
 {
 	char filter[256];
 	sprintf(filter, "namespace/%s", namespace);
 	
 	char* res = 0;
 	as_error err;
-	as_status rc = aerospike_info_host(client, &err, 0, host, port, filter, &res);
+	as_status rc = aerospike_info_any(client, &err, NULL, filter, &res);
 	bool stop_writes = false;
 	
 	if (rc == AEROSPIKE_OK) {

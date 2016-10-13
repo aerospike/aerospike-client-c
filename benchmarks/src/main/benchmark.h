@@ -141,7 +141,7 @@ void linear_write_async(clientdata* cdata, threaddata* tdata, as_event_loop* eve
 void random_read_write_async(clientdata* cdata, threaddata* tdata, as_event_loop* event_loop);
 
 int gen_value(arguments* args, as_val** val);
-bool is_stop_writes(aerospike* client, const char* host, int port, const char* namespace);
+bool is_stop_writes(aerospike* client, const char* namespace);
 
 void blog_line(const char* fmt, ...);
 void blog_detail(as_log_level level, const char* fmt, ...);

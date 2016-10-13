@@ -20,13 +20,8 @@
  *	@defgroup info_operations Info Operations
  *	@ingroup client_operations
  *
- *	The Info API provides the ability to query an Aerospike cluster for 
- *	information. 
- *
- *	The following API are provided:
- *	- aerospike_info_host() - Query a single host in the cluster.
- *	- aerospike_info_foreach() - Query every host in the cluster.
- *
+ *	The Info API provides the ability to query server node(s) for statistics and set dynamically
+ *	configurable variables.
  */
 
 #include <aerospike/aerospike.h>
@@ -68,7 +63,7 @@ typedef bool (*aerospike_info_foreach_callback)(const as_error* err, const as_no
  *
  *	~~~~~~~~~~{.c}
  *	char* res = NULL;
- *	if ( aerospike_info_host(&as, &err, NULL, node, "info", &res) != AEROSPIKE_OK ) {
+ *	if (aerospike_info_node(&as, &err, NULL, node, "info", &res) != AEROSPIKE_OK) {
  *		// handle error
  *	}
  *	else {
@@ -100,7 +95,7 @@ aerospike_info_node(
  *
  *	~~~~~~~~~~{.c}
  *	char* res = NULL;
- *	if ( aerospike_info_host(&as, &err, NULL, "127.0.0.1", 3000, "info", &res) != AEROSPIKE_OK ) {
+ *	if (aerospike_info_host(&as, &err, NULL, "127.0.0.1", 3000, "info", &res) != AEROSPIKE_OK) {
  *		// handle error
  *	}
  *	else {
@@ -111,6 +106,8 @@ aerospike_info_node(
  *	~~~~~~~~~~
  *
  *	If TLS is enabled, this function will only work if the hostname is also the TLS certificate name.
+ *
+ *	@deprecated			Use aerospike_info_node() or aerospike_info_any() instead.
  *
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
@@ -137,7 +134,7 @@ aerospike_info_host(
  *
  *	~~~~~~~~~~{.c}
  *	char* res = NULL;
- *	if ( aerospike_info_socket_address(&as, &err, NULL, &sa_in, "info", &res) != AEROSPIKE_OK ) {
+ *	if (aerospike_info_socket_address(&as, &err, NULL, &sa_in, "info", &res) != AEROSPIKE_OK) {
  *		// handle error
  *	}
  *	else {
@@ -172,7 +169,7 @@ aerospike_info_socket_address(
  *
  *	~~~~~~~~~~{.c}
  *	char* res = NULL;
- *	if ( aerospike_info_any(&as, &err, NULL, "info", &res) != AEROSPIKE_OK ) {
+ *	if (aerospike_info_any(&as, &err, NULL, "info", &res) != AEROSPIKE_OK) {
  *		// handle error
  *	}
  *	else {
@@ -202,7 +199,7 @@ aerospike_info_any(
  *	Send an info request to the entire cluster.
  *
  *	~~~~~~~~~~{.c}
- *	if ( aerospike_info_foreach(&as, &err, NULL, "info", callback, NULL) != AEROSPIKE_OK ) {
+ *	if (aerospike_info_foreach(&as, &err, NULL, "info", callback, NULL) != AEROSPIKE_OK) {
  *		// handle error
  *	}
  *	~~~~~~~~~~

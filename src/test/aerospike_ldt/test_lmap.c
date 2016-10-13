@@ -50,7 +50,7 @@ static bool is_ldt_enabled()
 {
 	char* res = NULL;
 	as_error err;
-	int rc = aerospike_info_host(as, &err, NULL, g_host, g_port, INFO_CALL, &res);
+	int rc = aerospike_info_any(as, &err, NULL, INFO_CALL, &res);
 
 	if (rc == AEROSPIKE_OK) {
 		char *st = strstr(res, "ldt-enabled=true");

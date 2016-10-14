@@ -35,30 +35,6 @@ extern "C" {
 
 /**
  *	@private
- *	Reference counted array of seed hosts.
- */
-typedef struct as_seeds_s {
-	/**
-	 *	@private
-	 *	Reference count.
-	 */
-	uint32_t ref_count;
-
-	/*
-	 *	@private
-	 *	Length of seed array.
-	 */
-	uint32_t size;
-
-	/**
-	 *	@private
-	 *	Seed array.
-	 */
-	as_host array[];
-} as_seeds;
-
-/**
- *	@private
  *  Reference counted array of server node pointers.
  */
 typedef struct as_nodes_s {
@@ -80,30 +56,6 @@ typedef struct as_nodes_s {
 	 */
 	as_node* array[];
 } as_nodes;
-
-/**
- *	@private
- *	Reference counted array of address maps.
- */
-typedef struct as_addr_maps_s {
-	/**
-	 *	@private
-	 *	Reference count.
-	 */
-	uint32_t ref_count;
-
-	/*
-	 *	@private
-	 *	Length of address map array.
-	 */
-	uint32_t size;
-
-	/**
-	 *	@private
-	 *	tAddress map array.
-	 */
-	as_addr_map array[];
-} as_addr_maps;
 
 /**
  *	@private
@@ -177,10 +129,10 @@ typedef struct as_cluster_s {
 	
 	/**
 	 *	@private
-	 *	Initial seed nodes specified by user.
+	 *	Initial seed hosts specified by user.
 	 */
-	as_seeds* seeds;
-	
+	as_vector* /* <as_host> */ seeds;
+
 	/**
 	 *	@private
 	 *	A IP translation table is used in cases where different clients use different server
@@ -190,8 +142,8 @@ typedef struct as_cluster_s {
 	 *	The key is the IP address returned from friend info requests to other servers.  The
 	 *	value is the real IP address used to connect to the server.
 	 */
-	as_addr_maps* ip_map;
-	
+	as_vector* /* <as_addr_map> */ ip_map;
+
 	/**
 	 *	@private
 	 *	TLS parameters
@@ -369,59 +321,6 @@ as_nodes_release(as_nodes* nodes)
 		cf_free(nodes);
 	}
 }
-
-/**
- *	Add seeds to the cluster.
- */
-void
-as_seeds_add(as_cluster* cluster, as_host* seed_list, uint32_t size);
-
-/**
- *	Replace the seeds of the cluster.
- */
-void
-as_seeds_update(as_cluster* cluster, as_host* seed_list, uint32_t size);
-
-/**
- *	Reserve reference counted access to IP map.
- */
-static inline as_addr_maps*
-as_ip_map_reserve(as_cluster* cluster)
-{
-	as_addr_maps* ip_map = (as_addr_maps *)ck_pr_load_ptr(&cluster->ip_map);
-
-	if (ip_map == NULL) {
-		return NULL;
-	}
-
-	ck_pr_inc_32(&ip_map->ref_count);
-	return ip_map;
-}
-
-/**
- *	Release reference counted access to IP map.
- */
-static inline void
-as_ip_map_release(as_addr_maps* ip_map)
-{
-	bool destroy;
-	ck_pr_dec_32_zero(&ip_map->ref_count, &destroy);
-
-	if (destroy) {
-		for (uint32_t i = 0; i < ip_map->size; i++) {
-			cf_free(ip_map->array[i].orig);
-			cf_free(ip_map->array[i].alt);
-		}
-
-		cf_free(ip_map);
-	}
-}
-
-/**
- *	Replace the IP address map of the cluster.
- */
-void
-as_ip_map_update(as_cluster* cluster, as_addr_map* ip_map_list, uint32_t size);
 
 /**
  * 	Change maximum async connections per node.

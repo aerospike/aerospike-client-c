@@ -58,8 +58,19 @@ static inline void
 as_host_copy(const as_host* src, as_host* trg)
 {
 	trg->name = (char*)cf_strdup(src->name);
-	trg->tls_name = src->tls_name ? (char*)strdup(src->tls_name) : NULL;
+	trg->tls_name = src->tls_name ? (char*)cf_strdup(src->tls_name) : NULL;
 	trg->port = src->port;
+}
+
+/**
+ * Deep copy host from fields.
+ */
+static inline void
+as_host_copy_fields(as_host* trg, const char* hostname, const char* tls_name, uint16_t port)
+{
+	trg->name = (char*)cf_strdup(hostname);
+	trg->tls_name = tls_name ? (char*)cf_strdup(tls_name) : NULL;
+	trg->port = port;
 }
 
 /**

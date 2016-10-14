@@ -72,151 +72,6 @@ set_nodes(as_cluster* cluster, as_nodes* nodes)
 	ck_pr_store_ptr(&cluster->nodes, nodes);
 }
 
-static inline as_addr_maps*
-swap_ip_map(as_cluster* cluster, as_addr_maps* ip_map)
-{
-	ck_pr_fence_store();
-	as_addr_maps* old = ck_pr_fas_ptr(&cluster->ip_map, ip_map);
-	ck_pr_fence_store();
-	ck_pr_inc_32(&cluster->version);
-	return old;
-}
-
-static inline as_seeds*
-as_seeds_reserve(as_cluster* cluster)
-{
-	as_seeds* seeds = (as_seeds *)ck_pr_load_ptr(&cluster->seeds);
-	ck_pr_inc_32(&seeds->ref_count);
-	return seeds;
-}
-
-static void
-as_seeds_release(as_seeds* seeds)
-{
-	bool destroy;
-	ck_pr_dec_32_zero(&seeds->ref_count, &destroy);
-	
-	if (destroy) {
-		for (uint32_t i = 0; i < seeds->size; i++) {
-			as_host* host = &seeds->array[i];
-			cf_free(host->name);
-			cf_free(host->tls_name);
-		}
-		cf_free(seeds);
-	}
-}
-
-static inline as_seeds*
-swap_seeds(as_cluster* cluster, as_seeds* seeds)
-{
-	ck_pr_fence_store();
-	as_seeds* old = ck_pr_fas_ptr(&cluster->seeds, seeds);
-	ck_pr_fence_store();
-	ck_pr_inc_32(&cluster->version);
-	return old;
-}
-
-static void gc_ip_map(void* ip_map)
-{
-	as_ip_map_release(ip_map);
-}
-
-static void gc_seeds(void* seeds)
-{
-	as_seeds_release(seeds);
-}
-
-static bool
-as_find_seed(as_cluster* cluster, const char* hostname, in_port_t port) {
-	as_seeds* seeds = as_seeds_reserve(cluster);
-	as_host* seed = seeds->array;
-	
-	for (uint32_t i = 0; i < seeds->size; i++) {
-		if (seed->port == port && strcmp(seed->name, hostname) == 0) {
-			as_seeds_release(seeds);
-			return true;
-		}
-		seed++;
-	}
-	as_seeds_release(seeds);
-	return false;
-}
-
-static as_seeds*
-seeds_create(as_host* seed_list, uint32_t size)
-{
-	as_seeds* seeds = cf_malloc(sizeof(as_seeds) + sizeof(as_host) * size);
-	seeds->ref_count = 1;
-	seeds->size = size;
-	
-	as_host* src = seed_list;
-	as_host* trg = seeds->array;
-	
-	for (uint32_t i = 0; i < size; i++) {
-		as_host_copy(src, trg);
-		src++;
-		trg++;
-	}
-	return seeds;
-}
-
-void
-as_seeds_add(as_cluster* cluster, as_host* seed_list, uint32_t size) {
-	as_seeds* current = as_seeds_reserve(cluster);
-	as_host concat[current->size + size];
-	
-	as_host* src = current->array;
-	as_host* trg = concat;
-
-	for (uint32_t i = 0; i < current->size; i++) {
-		trg->name = src->name;
-		trg->tls_name = src->tls_name;
-		trg->port = src->port;
-		src++;
-		trg++;
-	}
-
-	uint32_t dups = 0;
-	src = seed_list;
-
-	for (uint32_t i = 0; i < size; i++) {
-		if (as_find_seed(cluster, src->name, src->port)) {
-			as_log_debug("Duplicate seed %s %d", src->name, src->port);
-			dups++;
-			continue;
-		}
-
-		as_log_debug("Add seed %s %d", src->name, src->port);
-		trg->name = src->name;
-		trg->tls_name = src->tls_name;
-		trg->port = src->port;
-		src++;
-		trg++;
-	}
-
-	as_seeds_release(current);
-
-	as_seeds* seeds = seeds_create(concat, current->size + size - dups);
-	as_seeds* old = swap_seeds(cluster, seeds);
-
-	as_gc_item item;
-	item.data = old;
-	item.release_fn = gc_seeds;
-	as_vector_append(cluster->gc, &item);
-}
-
-void
-as_seeds_update(as_cluster* cluster, as_host* seed_list, uint32_t size)
-{
-	as_seeds* seeds = seeds_create(seed_list, size);
-	as_seeds* old = swap_seeds(cluster, seeds);
-
-	as_gc_item item;
-	item.data = old;
-	item.release_fn = gc_seeds;
-	as_vector_append(cluster->gc, &item);
-}
-
 static as_nodes*
 as_nodes_create(uint32_t capacity)
 {
@@ -288,21 +143,19 @@ as_cluster_get_alternate_host(as_cluster* cluster, const char* hostname)
 	// Return alternate IP address if specified in ip_map.
 	// Useful when there are both internal and external addresses for the same node.
 	const char* alt = hostname;
-	as_addr_maps* ip_map = as_ip_map_reserve(cluster);
-	
-	if (ip_map) {
-		as_addr_map* entry = ip_map->array;
+
+	if (cluster->ip_map) {
+		as_vector* ip_map = cluster->ip_map;
 		
 		for (uint32_t i = 0; i < ip_map->size; i++) {
+			as_addr_map* entry = as_vector_get(ip_map, i);
 			if (strcmp(entry->orig, hostname) == 0) {
 				// Found mapping for this address.  Use alternate.
 				as_log_debug("Using %s instead of %s", entry->alt, hostname);
 				alt = entry->alt;
 				break;
 			}
-			entry++;
 		}
-		as_ip_map_release(ip_map);
 	}
 	return alt;
 }
@@ -319,10 +172,10 @@ as_cluster_seed_nodes(as_cluster* cluster, as_error* err, bool enable_warnings)
 	as_error_init(&error_local); // AEROSPIKE_ERR_TIMEOUT doesn't come with a message; make sure it's initialized.
 	as_status status = AEROSPIKE_OK;
 	
-	as_seeds* seeds = as_seeds_reserve(cluster);
+	as_vector* seeds = cluster->seeds;
 
 	for (uint32_t i = 0; i < seeds->size; i++) {
-		as_host* seed = &seeds->array[i];
+		as_host* seed = as_vector_get(seeds, i);
 		
 		const char* hostname = as_cluster_get_alternate_host(cluster, seed->name);
 		as_address_iterator iter;
@@ -364,8 +217,6 @@ as_cluster_seed_nodes(as_cluster* cluster, as_error* err, bool enable_warnings)
 		}
 		as_lookup_end(&iter);
 	}
-	
-	as_seeds_release(seeds);
 
 	if (nodes_to_add.size > 0) {
 		as_cluster_add_nodes(cluster, &nodes_to_add);
@@ -832,61 +683,63 @@ as_cluster_tender(void* data)
 	return NULL;
 }
 
+static bool
+as_cluster_find_seed(as_vector* seeds, const char* hostname, in_port_t port) {
+	for (uint32_t i = 0; i < seeds->size; i++) {
+		as_host* seed = as_vector_get(seeds, i);
+
+		if (seed->port == port && strcmp(seed->name, hostname) == 0) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static void
+as_cluster_add_seed(as_node* node, as_vector* seeds, as_address* address)
+{
+	struct sockaddr* addr = (struct sockaddr*)&address->addr;
+	char address_name[AS_IP_ADDRESS_SIZE];
+
+	as_address_short_name(addr, address_name, sizeof(address_name));
+	in_port_t port = as_address_port(addr);
+
+	if (! as_cluster_find_seed(seeds, address_name, port)) {
+		as_host* seed = as_vector_reserve(seeds);
+		as_host_copy_fields(seed, address_name, node->tls_name, port);
+		as_log_debug("Add seed %s %d", seed->name, seed->port);
+	}
+}
+
 void
 as_cluster_add_seeds(as_cluster* cluster)
 {
 	// Add other nodes as seeds, if they don't already exist.
-	if (as_log_debug_enabled()) {
-		as_seeds* seeds = as_seeds_reserve(cluster);
-		as_host* seed = seeds->array;
-		for (uint32_t i = 0; i < seeds->size; i++) {
-			as_log_debug("Add seed %s %d", seed->name, seed->port);
-			seed++;
-		}
-		as_seeds_release(seeds);
-	}
-	
+	as_vector* seeds = cluster->seeds;
 	as_nodes* nodes = cluster->nodes;
-	as_vector seeds_to_add;
-	as_vector_inita(&seeds_to_add, sizeof(as_host), nodes->size);
-	
-	as_host seed;
-	
+
+	// Log initial seeds when debug enabled.
+	if (as_log_debug_enabled()) {
+		for (uint32_t i = 0; i < seeds->size; i++) {
+			as_host* seed = as_vector_get(seeds, i);
+			as_log_debug("Add seed %s %d", seed->name, seed->port);
+		}
+	}
+
 	for (uint32_t i = 0; i < nodes->size; i++) {
 		as_node* node = nodes->array[i];
 		as_address* addresses = node->addresses;
-		
+
 		for (uint32_t j = 0; j < node->address4_size; j++) {
-			as_address* address = &addresses[j];
-			in_port_t port = as_address_port((struct sockaddr*)&address->addr);
-			
-			if (! as_find_seed(cluster, address->name, port)) {
-				seed.name = address->name;
-				seed.tls_name = node->tls_name;
-				seed.port = port;
-				as_vector_append(&seeds_to_add, &seed);
-			}
+			as_cluster_add_seed(node, seeds, &addresses[j]);
 		}
 		
 		uint32_t max = AS_ADDRESS4_MAX + node->address6_size;
 		
 		for (uint32_t j = AS_ADDRESS4_MAX; j < max; j++) {
-			as_address* address = &addresses[j];
-			in_port_t port = as_address_port((struct sockaddr*)&address->addr);
-			
-			if (! as_find_seed(cluster, address->name, port)) {
-				seed.name = address->name;
-				seed.tls_name = node->tls_name;
-				seed.port = port;
-				as_vector_append(&seeds_to_add, &seed);
-			}
+			as_cluster_add_seed(node, seeds, &addresses[j]);
 		}
 	}
-	
-	if (seeds_to_add.size > 0) {
-		as_seeds_add(cluster, (as_host*)seeds_to_add.list, seeds_to_add.size);
-	}
-	as_vector_destroy(&seeds_to_add);
 }
 
 as_status
@@ -907,42 +760,6 @@ as_cluster_init(as_cluster* cluster, as_error* err, bool fail_if_not_connected)
 	as_cluster_add_seeds(cluster);
 	cluster->valid = true;
 	return AEROSPIKE_OK;
-}
-
-static as_addr_maps*
-ip_map_create(as_addr_map* ip_map_list, uint32_t size)
-{
-	as_addr_maps* ip_map = cf_malloc(sizeof(as_addr_maps) + sizeof(as_addr_map) * size);
-	ip_map->ref_count = 1;
-	ip_map->size = size;
-
-	as_addr_map* src = ip_map_list;
-	as_addr_map* trg = ip_map->array;
-
-	for (uint32_t i = 0; i < size; i++) {
-		trg->orig = cf_strdup(src->orig);
-		trg->alt = cf_strdup(src->alt);
-		src++;
-		trg++;
-	}
-
-	return ip_map;
-}
-
-void
-as_ip_map_update(as_cluster* cluster, as_addr_map* source_map, uint32_t size)
-{
-	as_addr_maps* ip_map = ip_map_create(source_map, size);
-	as_addr_maps* old = swap_ip_map(cluster, ip_map);
-
-	if (old == NULL) {
-		return;
-	}
-
-	as_gc_item item;
-	item.data = old;
-	item.release_fn = gc_ip_map;
-	as_vector_append(cluster->gc, &item);
 }
 
 as_node*
@@ -1087,12 +904,27 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 	cluster->pipe_max_conns_per_node = config->pipe_max_conns_per_node;;
 	cluster->use_services_alternate = config->use_services_alternate;
 
-	// Initialize seed hosts.
-	cluster->seeds = seeds_create(config->hosts->list, config->hosts->size);
+	// Initialize seed hosts.  Round initial capacity up to multiple of 16.
+	as_vector* src = config->hosts;
+	as_vector* trg = as_vector_create(sizeof(as_host), (src->size + 15) & ~15);
+	for (uint32_t i = 0; i < src->size; i++) {
+		as_host* src_seed = as_vector_get(src, i);
+		as_host* trg_seed = as_vector_reserve(trg);
+		as_host_copy(src_seed, trg_seed);
+	}
+	cluster->seeds = trg;
 
 	// Initialize IP map translation if provided.
 	if (config->ip_map && config->ip_map_size > 0) {
-		cluster->ip_map = ip_map_create(config->ip_map, config->ip_map_size);
+		cluster->ip_map = as_vector_create(sizeof(as_addr_map), config->ip_map_size);
+
+		for (uint32_t i = 0; i < config->ip_map_size; i++) {
+			as_addr_map* src_addr = &config->ip_map[i];
+			as_addr_map* trg_addr = as_vector_reserve(cluster->ip_map);
+
+			trg_addr->orig = cf_strdup(src_addr->orig);
+			trg_addr->alt = cf_strdup(src_addr->alt);
+		}
 	}
 
 	// Increment pending reference count to keep cluster alive until it's explicitly closed.
@@ -1208,12 +1040,23 @@ as_cluster_destroy(as_cluster* cluster)
 	
 	// Destroy IP map.
 	if (cluster->ip_map) {
-		as_ip_map_release(cluster->ip_map);
+		as_vector* ip_map = cluster->ip_map;
+		for (uint32_t i = 0; i < ip_map->size; i++) {
+			as_addr_map* addr = as_vector_get(ip_map, i);
+			cf_free(addr->orig);
+			cf_free(addr->alt);
+		}
+		as_vector_destroy(ip_map);
 	}
 
 	// Destroy seeds.
-	as_seeds_release(cluster->seeds);
-	
+	as_vector* seeds = cluster->seeds;
+	for (uint32_t i = 0; i < seeds->size; i++) {
+		as_host* seed = as_vector_get(seeds, i);
+		as_host_destroy(seed);
+	}
+	as_vector_destroy(seeds);
+
 	// Destroy tend lock and condition.
 	pthread_mutex_destroy(&cluster->tend_lock);
 	pthread_cond_destroy(&cluster->tend_cond);

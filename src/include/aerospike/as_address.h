@@ -37,7 +37,20 @@ extern "C" {
  */
 void
 as_address_name(struct sockaddr* addr, char* name, socklen_t size);
-	
+
+/**
+ *	@private
+ *	Convert socket address to a string without brackets or a port.
+ *
+ *	Formats:
+ *	~~~~~~~~~~{.c}
+ *	IPv4: xxx.xxx.xxx.xxx
+ *	IPv6: xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx
+ *	~~~~~~~~~~
+ */
+void
+as_address_short_name(struct sockaddr* addr, char* name, socklen_t size);
+
 /**
  *	@private
  *	Return port of address.

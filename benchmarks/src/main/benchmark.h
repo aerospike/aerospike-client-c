@@ -70,6 +70,7 @@ typedef struct arguments_t {
 	bool async;
 	int async_max_commands;
 	int event_loop_capacity;
+	as_config_tls tls;
 } arguments;
 
 typedef struct clientdata_t {

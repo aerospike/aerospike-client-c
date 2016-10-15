@@ -28,21 +28,6 @@
  * FUNCTIONS
  *****************************************************************************/
 
-static void
-as_config_tls_init(as_config_tls* tls)
-{
-	tls->enable = false;
-	tls->encrypt_only = false;
-	tls->cafile = NULL;
-	tls->capath = NULL;
-	tls->protocols = NULL;
-	tls->cipher_suite = NULL;
-	tls->crl_check = false;
-	tls->crl_check_all = false;
-	tls->cert_blacklist = NULL;
-	tls->log_session_info = false;
-}
-
 as_config*
 as_config_init(as_config* c)
 {
@@ -60,7 +45,7 @@ as_config_init(as_config* c)
 	c->thread_pool_size = 16;
 	as_policies_init(&c->policies);
 	as_config_lua_init(&c->lua);
-	as_config_tls_init(&c->tls);
+	memset(&c->tls, 0, sizeof(as_config_tls));
 	c->fail_if_not_connected = true;
 	c->use_services_alternate = false;
 	c->use_shm = false;
@@ -111,6 +96,18 @@ as_config_destroy(as_config* config) {
 
 	if (tls->cert_blacklist) {
 		cf_free(tls->cert_blacklist);
+	}
+
+	if (tls->certfile) {
+		cf_free(tls->certfile);
+	}
+
+	if (tls->keyfile) {
+		cf_free(tls->keyfile);
+	}
+
+	if (tls->chainfile) {
+		cf_free(tls->chainfile);
 	}
 }
 

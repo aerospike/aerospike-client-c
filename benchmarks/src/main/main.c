@@ -26,7 +26,7 @@
 #include <string.h>
 #include <getopt.h>
 
-static const char* short_options = "h:p:U:P::n:s:K:k:o:Rt:w:z:g:T:dL:SC:N:M:Dac:W:ub:";
+static const char* short_options = "h:p:U:P::n:s:K:k:b:o:Rt:w:z:g:T:dL:SC:N:M:Dac:W:u";
 
 static struct option long_options[] = {
 	{"hosts",                required_argument, 0, 'h'},
@@ -37,7 +37,7 @@ static struct option long_options[] = {
 	{"set",                  required_argument, 0, 's'},
 	{"startKey",             required_argument, 0, 'K'},
 	{"keys",                 required_argument, 0, 'k'},
-	{"bins",                 optional_argument, 0, 'b'},
+	{"bins",                 required_argument, 0, 'b'},
 	{"objectSpec",           required_argument, 0, 'o'},
 	{"random",               no_argument,       0, 'R'},
 	{"transactions",         required_argument, 0, 't'},
@@ -54,10 +54,23 @@ static struct option long_options[] = {
 	{"replica",              required_argument, 0, 'C'},
 	{"consistencyLevel",     required_argument, 0, 'N'},
 	{"commitLevel",          required_argument, 0, 'M'},
+	{"durableDelete",        no_argument,       0, 'D'},
 	{"async",                no_argument,       0, 'a'},
 	{"asyncMaxCommands",     required_argument, 0, 'c'},
-	{"durable-delete",       no_argument,       0, 'D'},
 	{"asyncSelectorThreads", required_argument, 0, 'W'},
+	{"tlsEnable",            no_argument,       0, 'A'},
+	{"tlsEncryptOnly",       no_argument,       0, 'B'},
+	{"tlsCafile",            required_argument, 0, 'E'},
+	{"tlsCapath",            required_argument, 0, 'F'},
+	{"tlsProtocols",         required_argument, 0, 'G'},
+	{"tlsCipherSuite",       required_argument, 0, 'H'},
+	{"tlsCrlCheck",          no_argument,       0, 'I'},
+	{"tlsCrlCheckAll",       no_argument,       0, 'J'},
+	{"tlsCertBlacklist",     required_argument, 0, 'O'},
+	{"tlsLogSessionInfo",    no_argument,       0, 'Q'},
+	{"tlsCertfile",          required_argument, 0, 'Y'},
+	{"tlsKeyfile",           required_argument, 0, 'Z'},
+	{"tlsChainfile",         required_argument, 0, 'y'},
 	{"usage",                no_argument,       0, 'u'},
 	{0, 0, 0, 0}
 };
@@ -216,22 +229,74 @@ print_usage(const char* program)
 	blog_line("   Write commit guarantee level.");
 	blog_line("");
 
-	blog_line("-D --durable-delete  # Default: durable-delete mode is false.");
+	blog_line("-D --durableDelete  # Default: durableDelete mode is false.");
 	blog_line("   All transactions will set the durable-delete flag which indicates");
 	blog_line("   to the server that if the transaction results in a delete, to generate");
 	blog_line("   a tombstone for the deleted record.");
 
-	blog_line("-a, --async # Default: synchronous mode");
+	blog_line("-a --async # Default: synchronous mode");
 	blog_line("   Enable asynchronous mode.");
 	blog_line("");
 	
-	blog_line("-c, --asyncMaxCommands <command count> # Default: 200");
+	blog_line("-c --asyncMaxCommands <command count> # Default: 200");
 	blog_line("   Maximum number of concurrent asynchronous commands that are active at any point");
 	blog_line("   in time.");
 	blog_line("");
 
-	blog_line("-W, --asyncSelectorThreads <thread count> # Default: 1");
+	blog_line("-W --asyncSelectorThreads <thread count> # Default: 1");
 	blog_line("   Number of event loops (or selector threads) when running in asynchronous mode.");
+	blog_line("");
+
+	blog_line("   --tlsEnable         # Default: TLS disabled");
+	blog_line("   Enable TLS.");
+	blog_line("");
+
+	blog_line("   --tlsEncryptOnly");
+	blog_line("   Disable TLS certificate verification.");
+	blog_line("");
+
+	blog_line("   --tlsCafile <path>");
+	blog_line("   Set the TLS certificate authority file.");
+	blog_line("");
+
+	blog_line("   --tlsCapath <path>");
+	blog_line("   Set the TLS certificate authority directory.");
+	blog_line("");
+
+	blog_line("   --tlsProtocols <protocols>");
+	blog_line("   Set the TLS protocol selection criteria.");
+	blog_line("");
+
+	blog_line("   --tlsCipherSuite <suite>");
+	blog_line("   Set the TLS cipher selection criteria.");
+	blog_line("");
+
+	blog_line("   --tlsCrlCheck");
+	blog_line("   Enable CRL checking for leaf certs.");
+	blog_line("");
+
+	blog_line("   --tlsCrlCheckAll");
+	blog_line("   Enable CRL checking for all certs.");
+	blog_line("");
+
+	blog_line("   --tlsCertBlacklist <path>");
+	blog_line("   Path to a certificate blacklist file.");
+	blog_line("");
+
+	blog_line("   --tlsLogSessionInfo");
+	blog_line("   Log TLS connected session info.");
+	blog_line("");
+
+	blog_line("   --tlsCertfile <path>");
+	blog_line("   Set the TLS client certificate for mutual authentication.");
+	blog_line("");
+
+	blog_line("   --tlsKeyfile <path>");
+	blog_line("   Set the TLS client key file for mutual authentication.");
+	blog_line("");
+
+	blog_line("   --tlsChainfile <path>");
+	blog_line("   Set the TLS client chain file for mutual authentication.");
 	blog_line("");
 
 	blog_line("-u --usage           # Default: usage not printed.");
@@ -350,6 +415,22 @@ print_args(arguments* args)
 	if (args->async) {
 		blog_line("async max commands:     %d", args->async_max_commands);
 		blog_line("async selector threads: %d", args->event_loop_capacity);
+	}
+
+	if (args->tls.enable) {
+		blog_line("TLS:                    enabled");
+		blog_line("TLS encrypt only:       %s", boolstring(args->tls.encrypt_only));
+		blog_line("TLS cafile:             %s", args->tls.cafile);
+		blog_line("TLS capath:             %s", args->tls.capath);
+		blog_line("TLS protocols:          %s", args->tls.protocols);
+		blog_line("TLS cipher suite:       %s", args->tls.cipher_suite);
+		blog_line("TLS crl check:          %s", boolstring(args->tls.crl_check));
+		blog_line("TLS crl check all:      %s", boolstring(args->tls.crl_check_all));
+		blog_line("TLS cert blacklist:     %s", args->tls.cert_blacklist);
+		blog_line("TLS log session info:   %s", boolstring(args->tls.log_session_info));
+		blog_line("TLS certfile:           %s", args->tls.certfile);
+		blog_line("TLS keyfile:            %s", args->tls.keyfile);
+		blog_line("TLS chainfile:          %s", args->tls.chainfile);
 	}
 }
 
@@ -659,6 +740,58 @@ set_args(int argc, char * const * argv, arguments* args)
 				args->event_loop_capacity = atoi(optarg);
 				break;
 
+			case 'A':
+				args->tls.enable = true;
+				break;
+
+			case 'B':
+				args->tls.encrypt_only = true;
+				break;
+
+			case 'E':
+				args->tls.cafile = strdup(optarg);
+				break;
+
+			case 'F':
+				args->tls.capath = strdup(optarg);
+				break;
+
+			case 'G':
+				args->tls.protocols = strdup(optarg);
+				break;
+
+			case 'H':
+				args->tls.cipher_suite = strdup(optarg);
+				break;
+
+			case 'I':
+				args->tls.crl_check = true;
+				break;
+
+			case 'J':
+				args->tls.crl_check_all = true;
+				break;
+
+			case 'O':
+				args->tls.cert_blacklist = strdup(optarg);
+				break;
+
+			case 'Q':
+				args->tls.log_session_info = true;
+				break;
+
+			case 'Y':
+				args->tls.certfile = strdup(optarg);
+				break;
+
+			case 'Z':
+				args->tls.keyfile = strdup(optarg);
+				break;
+
+			case 'y':
+				args->tls.chainfile = strdup(optarg);
+				break;
+
 			case 'u':
 			default:
 				return 1;
@@ -706,7 +839,8 @@ main(int argc, char * const * argv)
 	args.async = false;
 	args.async_max_commands = 200;
 	args.event_loop_capacity = 1;
-	
+	memset(&args.tls, 0, sizeof(as_config_tls));
+
 	int ret = set_args(argc, argv, &args);
 	
 	if (ret == 0) {

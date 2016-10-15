@@ -216,18 +216,24 @@ typedef struct as_config_tls_s {
 	/**
 	 *  Path to the client's certificate for mutual authentication.
 	 *  By default mutual authentication is disabled.
+	 *
+	 *	Use as_config_tls_set_certfile() to set this field.
 	 */
 	char* certfile;
 
 	/**
 	 *  Path to the client's key for mutual authentication.
 	 *  By default mutual authentication is disabled.
+	 *
+	 *	Use as_config_tls_set_keyfile() to set this field.
 	 */
 	char* keyfile;
 
 	/**
 	 *  Path to the client's chain file for mutual authentication.
 	 *  By default mutual authentication is disabled.
+	 *
+	 *	Use as_config_tls_set_chainfile() to set this field.
 	 */
 	char* chainfile;
 
@@ -702,6 +708,39 @@ static inline void
 as_config_tls_set_cert_blacklist(as_config* config, const char* cert_blacklist)
 {
 	as_config_set_string(&config->tls.cert_blacklist, cert_blacklist);
+}
+
+/**
+ *	Set TLS path to the client's certificate for mutual authentication.
+ *
+ *	@relates as_config
+ */
+static inline void
+as_config_tls_set_certfile(as_config* config, const char* certfile)
+{
+	as_config_set_string(&config->tls.certfile, certfile);
+}
+
+/**
+ *	Set TLS path to the client's key for mutual authentication.
+ *
+ *	@relates as_config
+ */
+static inline void
+as_config_tls_set_keyfile(as_config* config, const char* keyfile)
+{
+	as_config_set_string(&config->tls.keyfile, keyfile);
+}
+
+/**
+ *	Set TLS path to the client's chain file for mutual authentication.
+ *
+ *	@relates as_config
+ */
+static inline void
+as_config_tls_set_chainfile(as_config* config, const char* chainfile)
+{
+	as_config_set_string(&config->tls.chainfile, chainfile);
 }
 
 #ifdef __cplusplus

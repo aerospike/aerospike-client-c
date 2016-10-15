@@ -133,7 +133,10 @@ connect_to_server(arguments* args, aerospike* client)
 	p->operate.timeout = args->write_timeout;
 	p->remove.timeout = args->write_timeout;
 	p->info.timeout = 10000;
-	
+
+	// Transfer ownership of all heap allocated TLS fields via shallow copy.
+	memcpy(&cfg.tls, &args->tls, sizeof(as_config_tls));
+
 	aerospike_init(client, &cfg);
 	
 	as_error err;

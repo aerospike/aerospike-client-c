@@ -67,48 +67,54 @@ const char DEFAULT_SET[] = "eg-set";
 const char DEFAULT_KEY_STR[] = "eg-key";
 const uint32_t DEFAULT_NUM_KEYS = 20;
 
-const char SHORT_OPTS_BASIC[] = "h:p:U:P::n:s:k:eEc:C:r:t:QRB:L";
+const char SHORT_OPTS_BASIC[] = "h:p:U:P::n:s:k:";
 const struct option LONG_OPTS_BASIC[] = {
-	{ "hosts",		1, NULL, 'h' },
-	{ "port",		1, NULL, 'p' },
-	{ "user",		1, NULL, 'U' },
-	{ "password",	2, NULL, 'P' },
-	{ "namespace",	1, NULL, 'n' },
-	{ "set",		1, NULL, 's' },
-	{ "key",		1, NULL, 'k' },
-	{"tls-enable",             0, 0, 'e'},
-	{"tls-encrypt-only",       0, 0, 'E'},
-	{"tls-cafile",             1, 0, 'c'},
-	{"tls-capath",             1, 0, 'C'},
-	{"tls-protocol",           1, 0, 'r'},
-	{"tls-cipher-suite",       1, 0, 't'},
-	{"tls-crl-check",          0, 0, 'Q'},
-	{"tls-crl-check-all",      0, 0, 'R'},
-	{"tls-cert-blacklist",     1, 0, 'B'},
-	{"tls-log-session-info",   0, 0, 'L'},
-	{ NULL,			0, NULL, 0 }
+	{"hosts",                required_argument, 0, 'h'},
+	{"port",                 required_argument, 0, 'p'},
+	{"user",                 required_argument, 0, 'U'},
+	{"password",             optional_argument, 0, 'P'},
+	{"namespace",            required_argument, 0, 'n'},
+	{"set",                  required_argument, 0, 's'},
+	{"key",                  required_argument, 0, 'k'},
+	{"tlsEnable",            no_argument,       0, 'A'},
+	{"tlsEncryptOnly",       no_argument,       0, 'B'},
+	{"tlsCaFile",            required_argument, 0, 'E'},
+	{"tlsCaPath",            required_argument, 0, 'F'},
+	{"tlsProtocols",         required_argument, 0, 'G'},
+	{"tlsCipherSuite",       required_argument, 0, 'H'},
+	{"tlsCrlCheck",          no_argument,       0, 'I'},
+	{"tlsCrlCheckAll",       no_argument,       0, 'J'},
+	{"tlsCertBlackList",     required_argument, 0, 'O'},
+	{"tlsLogSessionInfo",    no_argument,       0, 'Q'},
+	{"tlsCertFile",          required_argument, 0, 'Y'},
+	{"tlsKeyFile",           required_argument, 0, 'Z'},
+	{"tlsChainFile",         required_argument, 0, 'y'},
+	{0, 0, 0, 0}
 };
 
-const char SHORT_OPTS_MULTI_KEY[] = "h:p:U:P::n:s:K:eEc:C:r:t:QRB:L";
+const char SHORT_OPTS_MULTI_KEY[] = "h:p:U:P::n:s:K:";
 const struct option LONG_OPTS_MULTI_KEY[] = {
-	{ "hosts",		1, NULL, 'h' },
-	{ "port",		1, NULL, 'p' },
-	{ "user",		1, NULL, 'U' },
-	{ "password",	2, NULL, 'P' },
-	{ "namespace",	1, NULL, 'n' },
-	{ "set",		1, NULL, 's' },
-	{ "multikey",	1, NULL, 'K' },
-	{"tls-enable",             0, 0, 'e'},
-	{"tls-encrypt-only",       0, 0, 'E'},
-	{"tls-cafile",             1, 0, 'c'},
-	{"tls-capath",             1, 0, 'C'},
-	{"tls-protocol",           1, 0, 'r'},
-	{"tls-cipher-suite",       1, 0, 't'},
-	{"tls-crl-check",          0, 0, 'Q'},
-	{"tls-crl-check-all",      0, 0, 'R'},
-	{"tls-cert-blacklist",     1, 0, 'B'},
-	{"tls-log-session-info",   0, 0, 'L'},
-	{ NULL,			0, NULL, 0 }
+	{"hosts",                required_argument, 0, 'h'},
+	{"port",                 required_argument, 0, 'p'},
+	{"user",                 required_argument, 0, 'U'},
+	{"password",             optional_argument, 0, 'P'},
+	{"namespace",            required_argument, 0, 'n'},
+	{"set",                  required_argument, 0, 's'},
+	{"multikey",             required_argument, 0, 'K'},
+	{"tlsEnable",            no_argument,       0, 'A'},
+	{"tlsEncryptOnly",       no_argument,       0, 'B'},
+	{"tlsCaFile",            required_argument, 0, 'E'},
+	{"tlsCaPath",            required_argument, 0, 'F'},
+	{"tlsProtocols",         required_argument, 0, 'G'},
+	{"tlsCipherSuite",       required_argument, 0, 'H'},
+	{"tlsCrlCheck",          no_argument,       0, 'I'},
+	{"tlsCrlCheckAll",       no_argument,       0, 'J'},
+	{"tlsCertBlackList",     required_argument, 0, 'O'},
+	{"tlsLogSessionInfo",    no_argument,       0, 'Q'},
+	{"tlsCertFile",          required_argument, 0, 'Y'},
+	{"tlsKeyFile",           required_argument, 0, 'Z'},
+	{"tlsChainFile",         required_argument, 0, 'y'},
+	{0, 0, 0, 0}
 };
 
 //==========================================================
@@ -165,16 +171,9 @@ static char g_password[AS_PASSWORD_HASH_SIZE];
 //
 static char g_key_str[MAX_KEY_STR_SIZE];
 
-bool g_tls_enable = false;
-bool g_tls_encrypt_only = false;
-char * g_tls_cafile = NULL;
-char * g_tls_capath = NULL;
-char * g_tls_protocol = NULL;
-char * g_tls_cipher_suite = NULL;
-bool g_tls_crl_check = false;
-bool g_tls_crl_check_all = false;
-char* g_tls_cert_blacklist = NULL;
-bool g_tls_log_session_info = false;
+//------------------------------------------------
+// TLS configuration variables.
+as_config_tls g_tls = {0};
 
 
 //==========================================================
@@ -271,46 +270,58 @@ example_get_opts(int argc, char* argv[], int which_opts)
 			g_n_keys = atoi(optarg);
 			break;
 
-		case 'e':
-			g_tls_enable = true;
+		case 'A':
+			g_tls.enable = true;
 			break;
-				
-		case 'E':
-			g_tls_encrypt_only = true;
-			break;
-				
-		case 'c':
-			g_tls_cafile = strdup(optarg);
-			break;
-				
-		case 'C':
-			g_tls_capath = strdup(optarg);
-			break;
-				
-		case 'r':
-			g_tls_protocol = strdup(optarg);
-			break;
-				
-		case 't':
-			g_tls_cipher_suite = strdup(optarg);
-			break;
-				
-		case 'Q':
-			g_tls_crl_check = true;
-			break;
-				
-		case 'R':
-			g_tls_crl_check_all = true;
-			break;
-				
+
 		case 'B':
-			g_tls_cert_blacklist = strdup(optarg);
+			g_tls.encrypt_only = true;
 			break;
-				
-		case 'L':
-			g_tls_log_session_info = true;
+
+		case 'E':
+			g_tls.cafile = strdup(optarg);
+			break;
+
+		case 'F':
+			g_tls.capath = strdup(optarg);
+			break;
+
+		case 'G':
+			g_tls.protocols = strdup(optarg);
+			break;
+
+		case 'H':
+			g_tls.cipher_suite = strdup(optarg);
+			break;
+
+		case 'I':
+			g_tls.crl_check = true;
+			break;
+
+		case 'J':
+			g_tls.crl_check_all = true;
+			break;
+
+		case 'O':
+			g_tls.cert_blacklist = strdup(optarg);
+			break;
+
+		case 'Q':
+			g_tls.log_session_info = true;
+			break;
+
+		case 'Y':
+			g_tls.certfile = strdup(optarg);
+			break;
+
+		case 'Z':
+			g_tls.keyfile = strdup(optarg);
 			break;
 			
+		case 'y':
+			g_tls.chainfile = strdup(optarg);
+			break;
+
 		default:
 			usage(short_opts);
 			return false;
@@ -372,73 +383,72 @@ usage(const char* short_opts)
 	}
 
 	if (strchr(short_opts, 'p')) {
-		LOG("-p port [default: %d]", DEFAULT_PORT);
+		LOG("-p <port> [default: %d]", DEFAULT_PORT);
 		LOG("   Default port.");
 	}
 
 	if (strchr(short_opts, 'U')) {
-		LOG("-U username [default: none]");
+		LOG("-U <username> [default: none]");
 	}
 
 	if (strchr(short_opts, 'P')) {
-		LOG("-P [password] [default: none]");
+		LOG("-P [<password>] [default: none]");
 	}
 
 	if (strchr(short_opts, 'n')) {
-		LOG("-n namespace [default: %s]", DEFAULT_NAMESPACE);
+		LOG("-n <namespace> [default: %s]", DEFAULT_NAMESPACE);
 	}
 
 	if (strchr(short_opts, 's')) {
-		LOG("-s set name [default: %s]", DEFAULT_SET);
+		LOG("-s <set name> [default: %s]", DEFAULT_SET);
 	}
 
 	if (strchr(short_opts, 'k')) {
-		LOG("-k key string [default: %s]", DEFAULT_KEY_STR);
+		LOG("-k <key string> [default: %s]", DEFAULT_KEY_STR);
 	}
 
 	if (strchr(short_opts, 'K')) {
-		LOG("-K number of keys [default: %u]", DEFAULT_NUM_KEYS);
+		LOG("-K <number of keys> [default: %u]", DEFAULT_NUM_KEYS);
 	}
 
-	if (strchr(short_opts, 'e')) {
-		LOG("-e enable TLS [default: disabled]");
-	}
+	LOG("--tlsEnable  [default: TLS disabled]");
+	LOG("  Enable TLS.");
 
-    if (strchr(short_opts, 'E')) {
-		LOG("-E disable TLS certificate validation [default: enabled]");
-	}
+	LOG("--tlsEncryptOnly");
+	LOG("  Disable TLS certificate verification.");
 
-    if (strchr(short_opts, 'c')) {
-		LOG("-c set the TLS certificate authority file [default: none]");
-	}
+	LOG("--tlsCaFile <path>");
+	LOG("  Set the TLS certificate authority file.");
 
-    if (strchr(short_opts, 'C')) {
-		LOG("-C set the TLS certificate authority directory [default: none]");
-	}
+	LOG("--tlsCaPath <path>");
+	LOG("  Set the TLS certificate authority directory.");
 
-    if (strchr(short_opts, 'r')) {
-		LOG("-r set the TLS protocol selection criteria [default: standard]");
-	}
+	LOG("--tlsProtocols <protocols>");
+	LOG("  Set the TLS protocol selection criteria.");
 
-    if (strchr(short_opts, 't')) {
-		LOG("-t set the TLS cipher selection criteria [default: standard]");
-	}
+	LOG("--tlsCipherSuite <suite>");
+	LOG("  Set the TLS cipher selection criteria.");
 
-    if (strchr(short_opts, 'Q')) {
-		LOG("-Q enable CRL checking for leaf certs");
-	}
+	LOG("--tlsCrlCheck");
+	LOG("  Enable CRL checking for leaf certs.");
 
-    if (strchr(short_opts, 'R')) {
-		LOG("-R enable CRL checking for all certs");
-	}
+	LOG("--tlsCrlCheckAll");
+	LOG("  Enable CRL checking for all certs.");
 
-    if (strchr(short_opts, 'B')) {
-		LOG("-B path to a certificate blacklist file");
-	}
+	LOG("--tlsCertBlackList <path>");
+	LOG("  Path to a certificate blacklist file.");
 
-    if (strchr(short_opts, 'L')) {
-		LOG("-L log TLS connected session info");
-	}
+	LOG("--tlsLogSessionInfo");
+	LOG("  Log TLS connected session info.");
+
+	LOG("--tlsCertFile <path>");
+	LOG("  Set the TLS client certificate for mutual authentication.");
+
+	LOG("--tlsKeyFile <path>");
+	LOG("  Set the TLS client key file for mutual authentication.");
+
+	LOG("--tlsChainFile <path>");
+	LOG("  Set the TLS client chain file for mutual authentication.");
 }
 
 //==========================================================
@@ -532,16 +542,8 @@ example_connect_to_aerospike_with_udf_config(aerospike* p_as,
 	
 	as_config_set_user(&config, g_user, g_password);
 
-	config.tls.enable = g_tls_enable;
-	config.tls.encrypt_only = g_tls_encrypt_only;
-	as_config_tls_set_cafile(&config, g_tls_cafile);
-	as_config_tls_set_capath(&config, g_tls_capath);
-	as_config_tls_set_protocols(&config, g_tls_protocol);
-	as_config_tls_set_cipher_suite(&config, g_tls_cipher_suite);
-	config.tls.crl_check = g_tls_crl_check;
-	config.tls.crl_check_all = g_tls_crl_check_all;
-	as_config_tls_set_cert_blacklist(&config, g_tls_cert_blacklist);
-	config.tls.log_session_info = g_tls_log_session_info;
+	// Transfer ownership of all heap allocated TLS fields via shallow copy.
+	memcpy(&config.tls, &g_tls, sizeof(as_config_tls));
 
 	aerospike_init(p_as, &config);
 
@@ -577,22 +579,6 @@ example_cleanup(aerospike* p_as)
 	// Disconnect from the database cluster and clean up the aerospike object.
 	aerospike_close(p_as, &err);
 	aerospike_destroy(p_as);
-
-	if (g_tls_cafile) {
-		free(g_tls_cafile);
-	}
-	if (g_tls_capath) {
-		free(g_tls_capath);
-	}
-	if (g_tls_protocol) {
-		free(g_tls_protocol);
-	}
-	if (g_tls_cipher_suite) {
-		free(g_tls_cipher_suite);
-	}
-	if (g_tls_cert_blacklist) {
-		free(g_tls_cert_blacklist);
-	}
 }
 
 

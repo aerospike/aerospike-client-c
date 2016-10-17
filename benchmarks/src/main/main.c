@@ -60,17 +60,17 @@ static struct option long_options[] = {
 	{"asyncSelectorThreads", required_argument, 0, 'W'},
 	{"tlsEnable",            no_argument,       0, 'A'},
 	{"tlsEncryptOnly",       no_argument,       0, 'B'},
-	{"tlsCafile",            required_argument, 0, 'E'},
-	{"tlsCapath",            required_argument, 0, 'F'},
+	{"tlsCaFile",            required_argument, 0, 'E'},
+	{"tlsCaPath",            required_argument, 0, 'F'},
 	{"tlsProtocols",         required_argument, 0, 'G'},
 	{"tlsCipherSuite",       required_argument, 0, 'H'},
 	{"tlsCrlCheck",          no_argument,       0, 'I'},
 	{"tlsCrlCheckAll",       no_argument,       0, 'J'},
-	{"tlsCertBlacklist",     required_argument, 0, 'O'},
+	{"tlsCertBlackList",     required_argument, 0, 'O'},
 	{"tlsLogSessionInfo",    no_argument,       0, 'Q'},
-	{"tlsCertfile",          required_argument, 0, 'Y'},
-	{"tlsKeyfile",           required_argument, 0, 'Z'},
-	{"tlsChainfile",         required_argument, 0, 'y'},
+	{"tlsCertFile",          required_argument, 0, 'Y'},
+	{"tlsKeyFile",           required_argument, 0, 'Z'},
+	{"tlsChainFile",         required_argument, 0, 'y'},
 	{"usage",                no_argument,       0, 'u'},
 	{0, 0, 0, 0}
 };
@@ -255,11 +255,11 @@ print_usage(const char* program)
 	blog_line("   Disable TLS certificate verification.");
 	blog_line("");
 
-	blog_line("   --tlsCafile <path>");
+	blog_line("   --tlsCaFile <path>");
 	blog_line("   Set the TLS certificate authority file.");
 	blog_line("");
 
-	blog_line("   --tlsCapath <path>");
+	blog_line("   --tlsCaPath <path>");
 	blog_line("   Set the TLS certificate authority directory.");
 	blog_line("");
 
@@ -279,7 +279,7 @@ print_usage(const char* program)
 	blog_line("   Enable CRL checking for all certs.");
 	blog_line("");
 
-	blog_line("   --tlsCertBlacklist <path>");
+	blog_line("   --tlsCertBlackList <path>");
 	blog_line("   Path to a certificate blacklist file.");
 	blog_line("");
 
@@ -287,15 +287,15 @@ print_usage(const char* program)
 	blog_line("   Log TLS connected session info.");
 	blog_line("");
 
-	blog_line("   --tlsCertfile <path>");
+	blog_line("   --tlsCertFile <path>");
 	blog_line("   Set the TLS client certificate for mutual authentication.");
 	blog_line("");
 
-	blog_line("   --tlsKeyfile <path>");
+	blog_line("   --tlsKeyFile <path>");
 	blog_line("   Set the TLS client key file for mutual authentication.");
 	blog_line("");
 
-	blog_line("   --tlsChainfile <path>");
+	blog_line("   --tlsChainFile <path>");
 	blog_line("   Set the TLS client chain file for mutual authentication.");
 	blog_line("");
 

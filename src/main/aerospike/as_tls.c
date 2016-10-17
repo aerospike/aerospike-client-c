@@ -912,8 +912,9 @@ as_tls_read_once(as_socket* sock, void* buf, size_t len)
 }
 
 int
-as_tls_read(as_socket* sock, void* buf, size_t len, uint64_t deadline)
+as_tls_read(as_socket* sock, void* bufp, size_t len, uint64_t deadline)
 {
+	uint8_t* buf = (uint8_t *) bufp;
 	size_t pos = 0;
 
 	while (true) {
@@ -924,7 +925,7 @@ as_tls_read(as_socket* sock, void* buf, size_t len, uint64_t deadline)
 				return 0;
 			}
 		}
-		else if (rv <= 0) {
+		else /* if (rv <= 0) */ {
 			int sslerr = SSL_get_error(sock->ssl, rv);
 			unsigned long errcode;
 			char errbuf[1024];
@@ -1018,8 +1019,9 @@ as_tls_write_once(as_socket* sock, void* buf, size_t len)
 }
 
 int
-as_tls_write(as_socket* sock, void* buf, size_t len, uint64_t deadline)
+as_tls_write(as_socket* sock, void* bufp, size_t len, uint64_t deadline)
 {
+	uint8_t* buf = (uint8_t *) bufp;
 	size_t pos = 0;
 
 	while (true) {
@@ -1030,7 +1032,7 @@ as_tls_write(as_socket* sock, void* buf, size_t len, uint64_t deadline)
 				return 0;
 			}
 		}
-		else if (rv <= 0) {
+		else /* if (rv <= 0) */ {
 			int sslerr = SSL_get_error(sock->ssl, rv);
 			unsigned long errcode;
 			char errbuf[1024];

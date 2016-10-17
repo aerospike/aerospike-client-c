@@ -41,19 +41,7 @@ char g_host[MAX_HOST_SIZE];
 int g_port = 3000;
 static char g_user[AS_USER_SIZE];
 static char g_password[AS_PASSWORD_HASH_SIZE];
-bool g_tls_enable = false;
-bool g_tls_encrypt_only = false;
-char * g_tls_cafile = NULL;
-char * g_tls_capath = NULL;
-char * g_tls_protocol = NULL;
-char * g_tls_cipher_suite = NULL;
-bool g_tls_crl_check = false;
-bool g_tls_crl_check_all = false;
-char* g_tls_cert_blacklist = NULL;
-bool g_tls_log_session_info = false;
-char * g_tls_certfile = NULL;
-char * g_tls_keyfile = NULL;
-char * g_tls_chainfile = NULL;
+as_config_tls g_tls = {0};
 
 #if defined(AS_USE_LIBEV) || defined(AS_USE_LIBUV)
 static bool g_use_async = true;
@@ -80,92 +68,95 @@ usage()
 {
 	fprintf(stderr, "Usage:\n");
 	fprintf(stderr, "  -h, --host <host1>[:<tlsname1>][:<port1>],...  Default: 127.0.0.1\n");
-	fprintf(stderr, "   Server seed hostnames or IP addresses.\n");
-	fprintf(stderr, "   The tlsname is only used when connecting with a secure TLS enabled server.\n");
-	fprintf(stderr, "   If the port is not specified, the default port is used. Examples:\n\n");
-	fprintf(stderr, "   host1\n");
-	fprintf(stderr, "   host1:3000,host2:3000\n");
-	fprintf(stderr, "   192.168.1.10:cert1:3000,192.168.1.20:cert2:3000\n\n");
+	fprintf(stderr, "  Server seed hostnames or IP addresses.\n");
+	fprintf(stderr, "  The tlsname is only used when connecting with a secure TLS enabled server.\n");
+	fprintf(stderr, "  If the port is not specified, the default port is used. Examples:\n\n");
+	fprintf(stderr, "  host1\n");
+	fprintf(stderr, "  host1:3000,host2:3000\n");
+	fprintf(stderr, "  192.168.1.10:cert1:3000,192.168.1.20:cert2:3000\n\n");
 
 	fprintf(stderr, "  -p, --port <port>\n");
-	fprintf(stderr, "    The default server port. Default: 3000.\n\n");
+	fprintf(stderr, "  The default server port. Default: 3000.\n\n");
 
 	fprintf(stderr, "  -U, --user <user>\n");
-	fprintf(stderr, "    The user to connect as. Default: no user.\n\n");
+	fprintf(stderr, "  The user to connect as. Default: no user.\n\n");
 
 	fprintf(stderr, "  -P[<password>], --password\n");
-	fprintf(stderr, "    The user's password. If empty, a prompt is shown. Default: no password.\n\n");
-
-	fprintf(stderr, "  -e, --tls-enable\n");
-	fprintf(stderr, "    Enable TLS. Default: TLS disabled.\n\n");
-
-	fprintf(stderr, "  -E, --tls-encrypt-only\n");
-	fprintf(stderr, "    Disable TLS certificate verification. Default: enabled.\n\n");
-
-	fprintf(stderr, "  -c, --tls-cafile <path>\n");
-	fprintf(stderr, "    Set the TLS certificate authority file.\n\n");
-
-	fprintf(stderr, "  -C, --tls-capath <path>\n");
-	fprintf(stderr, "    Set the TLS certificate authority directory.\n\n");
-
-	fprintf(stderr, "  -r, --tls-protocol\n");
-	fprintf(stderr, "    Set the TLS protocol selection criteria.\n\n");
-
-	fprintf(stderr, "  -t, --tls-cipher-suite\n");
-	fprintf(stderr, "    Set the TLS cipher selection criteria.\n\n");
-
-	fprintf(stderr, "  -Q, --tls-crl-check\n");
-	fprintf(stderr, "    Enable CRL checking for leaf certs.\n\n");
-
-	fprintf(stderr, "  -R, --tls-crl-check-all\n");
-	fprintf(stderr, "    Enable CRL checking for all certs.\n\n");
-
-	fprintf(stderr, "  -B, --tls-cert-blacklist\n");
-	fprintf(stderr, "    Path to a certificate blacklist file.\n\n");
-
-	fprintf(stderr, "  -L, --tls-log-session-info\n");
-	fprintf(stderr, "    Log TLS connected session info.\n\n");
-
-	fprintf(stderr, "  -X, --tls-certfile <path>\n");
-	fprintf(stderr, "    Set the TLS client certificate for mutual authentication.\n\n");
-
-	fprintf(stderr, "  -Y, --tls-keyfile <path>\n");
-	fprintf(stderr, "    Set the TLS client key file for mutual authentication.\n\n");
-
-	fprintf(stderr, "  -Z, --tls-chainfile <path>\n");
-	fprintf(stderr, "    Set the TLS client chain file for mutual authentication.\n\n");
+	fprintf(stderr, "  The user's password. If empty, a prompt is shown. Default: no password.\n\n");
 
 	fprintf(stderr, "  -S, --suite <suite>\n");
-	fprintf(stderr, "    The suite to be run. Default: all suites.\n\n");
+	fprintf(stderr, "  The suite to be run. Default: all suites.\n\n");
 
 	fprintf(stderr, "  -T, --testcase <testcase>\n");
-	fprintf(stderr, "    The test case to run. Default: all test cases.\n\n");
+	fprintf(stderr, "  The test case to run. Default: all test cases.\n\n");
+
+	fprintf(stderr, "  --tlsEnable         # Default: TLS disabled\n");
+	fprintf(stderr, "  Enable TLS.\n\n");
+
+	fprintf(stderr, "  --tlsEncryptOnly\n");
+	fprintf(stderr, "  Disable TLS certificate verification.\n\n");
+
+	fprintf(stderr, "  --tlsCaFile <path>\n");
+	fprintf(stderr, "  Set the TLS certificate authority file.\n\n");
+
+	fprintf(stderr, "  --tlsCaPath <path>\n");
+	fprintf(stderr, "  Set the TLS certificate authority directory.\n\n");
+
+	fprintf(stderr, "  --tlsProtocols <protocols>\n");
+	fprintf(stderr, "  Set the TLS protocol selection criteria.\n\n");
+
+	fprintf(stderr, "  --tlsCipherSuite <suite>\n");
+	fprintf(stderr, "  Set the TLS cipher selection criteria.\n\n");
+
+	fprintf(stderr, "  --tlsCrlCheck\n");
+	fprintf(stderr, "  Enable CRL checking for leaf certs.\n\n");
+
+	fprintf(stderr, "  --tlsCrlCheckAll\n");
+	fprintf(stderr, "  Enable CRL checking for all certs.\n\n");
+
+	fprintf(stderr, "  --tlsCertBlackList <path>\n");
+	fprintf(stderr, "  Path to a certificate blacklist file.\n\n");
+
+	fprintf(stderr, "  --tlsLogSessionInfo\n");
+	fprintf(stderr, "  Log TLS connected session info.\n\n");
+
+	fprintf(stderr, "  --tlsCertFile <path>\n");
+	fprintf(stderr, "  Set the TLS client certificate for mutual authentication.\n\n");
+
+	fprintf(stderr, "  --tlsKeyFile <path>\n");
+	fprintf(stderr, "  Set the TLS client key file for mutual authentication.\n\n");
+
+	fprintf(stderr, "  --tlsChainFile <path>\n");
+	fprintf(stderr, "  Set the TLS client chain file for mutual authentication.\n\n");
+
+	fprintf(stderr, "  -u --usage         # Default: usage not printed.\n");
+	fprintf(stderr, "  Display program usage.\n\n");
 }
 
-static const char* short_options = "h:p:U:uP::eEc:C:r:t:QRB:LX:Y:Z:S:T:";
+static const char* short_options = "h:p:U:P::S:T:u";
 
 static struct option long_options[] = {
-	{"hosts",                  1, 0, 'h'},
-	{"port",                   1, 0, 'p'},
-	{"user",                   1, 0, 'U'},
-	{"usage",     	           0, 0, 'u'},
-	{"password",               2, 0, 'P'},
-	{"tls-enable",             0, 0, 'e'},
-	{"tls-encrypt-only",       0, 0, 'E'},
-	{"tls-cafile",             1, 0, 'c'},
-	{"tls-capath",             1, 0, 'C'},
-	{"tls-protocol",           1, 0, 'r'},
-	{"tls-cipher-suite",       1, 0, 't'},
-	{"tls-crl-check",          0, 0, 'Q'},
-	{"tls-crl-check-all",      0, 0, 'R'},
-	{"tls-cert-blacklist",     1, 0, 'B'},
-	{"tls-log-session-info",   0, 0, 'L'},
-	{"tls-certfile",           1, 0, 'X'},
-	{"tls-keyfile",            1, 0, 'Y'},
-	{"tls-chainfile",          1, 0, 'Z'},
-	{"suite",                  1, 0, 'S'},
-	{"test",                   1, 0, 'T'},
-	{0,                        0, 0,  0 }
+	{"hosts",                required_argument, 0, 'h'},
+	{"port",                 required_argument, 0, 'p'},
+	{"user",                 required_argument, 0, 'U'},
+	{"password",             optional_argument, 0, 'P'},
+	{"suite",                required_argument, 0, 'S'},
+	{"test",                 required_argument, 0, 'T'},
+	{"tlsEnable",            no_argument,       0, 'A'},
+	{"tlsEncryptOnly",       no_argument,       0, 'B'},
+	{"tlsCaFile",            required_argument, 0, 'E'},
+	{"tlsCaPath",            required_argument, 0, 'F'},
+	{"tlsProtocols",         required_argument, 0, 'G'},
+	{"tlsCipherSuite",       required_argument, 0, 'H'},
+	{"tlsCrlCheck",          no_argument,       0, 'I'},
+	{"tlsCrlCheckAll",       no_argument,       0, 'J'},
+	{"tlsCertBlackList",     required_argument, 0, 'O'},
+	{"tlsLogSessionInfo",    no_argument,       0, 'Q'},
+	{"tlsCertFile",          required_argument, 0, 'Y'},
+	{"tlsKeyFile",           required_argument, 0, 'Z'},
+	{"tlsChainFile",         required_argument, 0, 'y'},
+	{"usage",     	         no_argument,       0, 'u'},
+	{0, 0, 0, 0}
 };
 
 static bool parse_opts(int argc, char* argv[])
@@ -199,75 +190,75 @@ static bool parse_opts(int argc, char* argv[])
 			error("user:           %s", g_user);
 			break;
 
-		case 'u':
-			usage();
-			return false;
-
 		case 'P':
 			as_password_prompt_hash(optarg, g_password);
-			break;
-				
-		case 'e':
-			g_tls_enable = true;
-			break;
-				
-		case 'E':
-			g_tls_encrypt_only = true;
-			break;
-				
-		case 'c':
-			g_tls_cafile = strdup(optarg);
-			break;
-				
-		case 'C':
-			g_tls_capath = strdup(optarg);
-			break;
-				
-		case 'r':
-			g_tls_protocol = strdup(optarg);
-			break;
-				
-		case 't':
-			g_tls_cipher_suite = strdup(optarg);
-			break;
-				
-		case 'Q':
-			g_tls_crl_check = true;
-			break;
-				
-		case 'R':
-			g_tls_crl_check_all = true;
-			break;
-				
-		case 'B':
-			g_tls_cert_blacklist = strdup(optarg);
-			break;
-				
-		case 'L':
-			g_tls_log_session_info = true;
-			break;
-				
-		case 'X':
-			g_tls_certfile = strdup(optarg);
-			break;
-				
-		case 'Y':
-			g_tls_keyfile = strdup(optarg);
-			break;
-				
-		case 'Z':
-			g_tls_chainfile = strdup(optarg);
 			break;
 				
 		case 'S':
 			// Exclude all but the specified suite from the plan.
 			atf_suite_filter(optarg);
 			break;
-				
+
 		case 'T':
 			// Exclude all but the specified test.
 			atf_test_filter(optarg);
 			break;
+				
+		case 'A':
+			g_tls.enable = true;
+			break;
+
+		case 'B':
+			g_tls.encrypt_only = true;
+			break;
+
+		case 'E':
+			g_tls.cafile = strdup(optarg);
+			break;
+
+		case 'F':
+			g_tls.capath = strdup(optarg);
+			break;
+
+		case 'G':
+			g_tls.protocols = strdup(optarg);
+			break;
+
+		case 'H':
+			g_tls.cipher_suite = strdup(optarg);
+			break;
+
+		case 'I':
+			g_tls.crl_check = true;
+			break;
+
+		case 'J':
+			g_tls.crl_check_all = true;
+			break;
+
+		case 'O':
+			g_tls.cert_blacklist = strdup(optarg);
+			break;
+
+		case 'Q':
+			g_tls.log_session_info = true;
+			break;
+
+		case 'Y':
+			g_tls.certfile = strdup(optarg);
+			break;
+
+		case 'Z':
+			g_tls.keyfile = strdup(optarg);
+			break;
+
+		case 'y':
+			g_tls.chainfile = strdup(optarg);
+			break;
+
+		case 'u':
+			usage();
+			return false;
 				
 		default:
 	        error("unrecognized options");
@@ -315,20 +306,9 @@ static bool before(atf_plan * plan) {
 
 	as_config_set_user(&config, g_user, g_password);
 
-	config.tls.enable = g_tls_enable;
-	config.tls.encrypt_only = g_tls_encrypt_only;
-	as_config_tls_set_cafile(&config, g_tls_cafile);
-	as_config_tls_set_capath(&config, g_tls_capath);
-	as_config_tls_set_protocols(&config, g_tls_protocol);
-	as_config_tls_set_cipher_suite(&config, g_tls_cipher_suite);
-	config.tls.crl_check = g_tls_crl_check;
-	config.tls.crl_check_all = g_tls_crl_check_all;
-	as_config_tls_set_cert_blacklist(&config, g_tls_cert_blacklist);
-	config.tls.log_session_info = g_tls_log_session_info;
-	config.tls.certfile = g_tls_certfile;
-	config.tls.keyfile = g_tls_keyfile;
-	config.tls.chainfile = g_tls_chainfile;
-	
+	// Transfer ownership of all heap allocated TLS fields via shallow copy.
+	memcpy(&config.tls, &g_tls, sizeof(as_config_tls));
+
 	as_error err;
 	as_error_reset(&err);
 
@@ -361,31 +341,6 @@ static bool after(atf_plan * plan) {
 		as_event_close_loops();
 	}
 
-	if (g_tls_cafile) {
-		free(g_tls_cafile);
-	}
-	if (g_tls_capath) {
-		free(g_tls_capath);
-	}
-	if (g_tls_protocol) {
-		free(g_tls_protocol);
-	}
-	if (g_tls_cipher_suite) {
-		free(g_tls_cipher_suite);
-	}
-	if (g_tls_cert_blacklist) {
-		free(g_tls_cert_blacklist);
-	}
-	if (g_tls_certfile) {
-		free(g_tls_certfile);
-	}
-	if (g_tls_keyfile) {
-		free(g_tls_keyfile);
-	}
-	if (g_tls_chainfile) {
-		free(g_tls_chainfile);
-	}
-	
 	if (status == AEROSPIKE_OK) {
 		debug("disconnected from %s %d", g_host, g_port);
 		return true;

@@ -98,10 +98,6 @@ as_config_destroy(as_config* config) {
 		cf_free(tls->cert_blacklist);
 	}
 
-	if (tls->certfile) {
-		cf_free(tls->certfile);
-	}
-
 	if (tls->keyfile) {
 		cf_free(tls->keyfile);
 	}

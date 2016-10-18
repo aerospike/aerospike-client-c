@@ -68,7 +68,6 @@ static struct option long_options[] = {
 	{"tlsCrlCheckAll",       no_argument,       0, 'J'},
 	{"tlsCertBlackList",     required_argument, 0, 'O'},
 	{"tlsLogSessionInfo",    no_argument,       0, 'Q'},
-	{"tlsCertFile",          required_argument, 0, 'Y'},
 	{"tlsKeyFile",           required_argument, 0, 'Z'},
 	{"tlsChainFile",         required_argument, 0, 'y'},
 	{"usage",                no_argument,       0, 'u'},
@@ -287,10 +286,6 @@ print_usage(const char* program)
 	blog_line("   Log TLS connected session info.");
 	blog_line("");
 
-	blog_line("   --tlsCertFile <path>");
-	blog_line("   Set the TLS client certificate for mutual authentication.");
-	blog_line("");
-
 	blog_line("   --tlsKeyFile <path>");
 	blog_line("   Set the TLS client key file for mutual authentication.");
 	blog_line("");
@@ -428,7 +423,6 @@ print_args(arguments* args)
 		blog_line("TLS crl check all:      %s", boolstring(args->tls.crl_check_all));
 		blog_line("TLS cert blacklist:     %s", args->tls.cert_blacklist);
 		blog_line("TLS log session info:   %s", boolstring(args->tls.log_session_info));
-		blog_line("TLS certfile:           %s", args->tls.certfile);
 		blog_line("TLS keyfile:            %s", args->tls.keyfile);
 		blog_line("TLS chainfile:          %s", args->tls.chainfile);
 	}
@@ -778,10 +772,6 @@ set_args(int argc, char * const * argv, arguments* args)
 
 			case 'Q':
 				args->tls.log_session_info = true;
-				break;
-
-			case 'Y':
-				args->tls.certfile = strdup(optarg);
 				break;
 
 			case 'Z':

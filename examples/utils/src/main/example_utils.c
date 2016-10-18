@@ -86,7 +86,6 @@ const struct option LONG_OPTS_BASIC[] = {
 	{"tlsCrlCheckAll",       no_argument,       0, 'J'},
 	{"tlsCertBlackList",     required_argument, 0, 'O'},
 	{"tlsLogSessionInfo",    no_argument,       0, 'Q'},
-	{"tlsCertFile",          required_argument, 0, 'Y'},
 	{"tlsKeyFile",           required_argument, 0, 'Z'},
 	{"tlsChainFile",         required_argument, 0, 'y'},
 	{0, 0, 0, 0}
@@ -111,7 +110,6 @@ const struct option LONG_OPTS_MULTI_KEY[] = {
 	{"tlsCrlCheckAll",       no_argument,       0, 'J'},
 	{"tlsCertBlackList",     required_argument, 0, 'O'},
 	{"tlsLogSessionInfo",    no_argument,       0, 'Q'},
-	{"tlsCertFile",          required_argument, 0, 'Y'},
 	{"tlsKeyFile",           required_argument, 0, 'Z'},
 	{"tlsChainFile",         required_argument, 0, 'y'},
 	{0, 0, 0, 0}
@@ -310,10 +308,6 @@ example_get_opts(int argc, char* argv[], int which_opts)
 			g_tls.log_session_info = true;
 			break;
 
-		case 'Y':
-			g_tls.certfile = strdup(optarg);
-			break;
-
 		case 'Z':
 			g_tls.keyfile = strdup(optarg);
 			break;
@@ -440,9 +434,6 @@ usage(const char* short_opts)
 
 	LOG("--tlsLogSessionInfo");
 	LOG("  Log TLS connected session info.");
-
-	LOG("--tlsCertFile <path>");
-	LOG("  Set the TLS client certificate for mutual authentication.");
 
 	LOG("--tlsKeyFile <path>");
 	LOG("  Set the TLS client key file for mutual authentication.");

@@ -560,23 +560,6 @@ as_tls_context_setup(as_config_tls* tlscfg,
 		}
 	}
 
-	if (tlscfg->certfile) {
-		int rv = SSL_CTX_use_certificate_file(ctx, tlscfg->certfile,
-										  SSL_FILETYPE_PEM);
-		if (rv != 1) {
-				cert_blacklist_destroy(cert_blacklist);
-				SSL_CTX_free(ctx);
-				
-				unsigned long errcode = ERR_get_error();
-				char errbuf[1024];
-				ERR_error_string_n(errcode, errbuf, sizeof(errbuf));
-				return as_error_update(errp, AEROSPIKE_ERR_TLS_ERROR,
-							  "SSL_CTX_use_certificate_file failed: %s",
-									   errbuf);
-		}
-	}
-											  
-
 	if (tlscfg->keyfile) {
 		int rv = SSL_CTX_use_RSAPrivateKey_file(ctx, tlscfg->keyfile,
 											SSL_FILETYPE_PEM);

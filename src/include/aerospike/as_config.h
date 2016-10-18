@@ -214,14 +214,6 @@ typedef struct as_config_tls_s {
 	bool log_session_info;
 	
 	/**
-	 *  Path to the client's certificate for mutual authentication.
-	 *  By default mutual authentication is disabled.
-	 *
-	 *	Use as_config_tls_set_certfile() to set this field.
-	 */
-	char* certfile;
-
-	/**
 	 *  Path to the client's key for mutual authentication.
 	 *  By default mutual authentication is disabled.
 	 *
@@ -708,17 +700,6 @@ static inline void
 as_config_tls_set_cert_blacklist(as_config* config, const char* cert_blacklist)
 {
 	as_config_set_string(&config->tls.cert_blacklist, cert_blacklist);
-}
-
-/**
- *	Set TLS path to the client's certificate for mutual authentication.
- *
- *	@relates as_config
- */
-static inline void
-as_config_tls_set_certfile(as_config* config, const char* certfile)
-{
-	as_config_set_string(&config->tls.certfile, certfile);
 }
 
 /**

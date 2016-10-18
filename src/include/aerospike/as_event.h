@@ -225,14 +225,42 @@ as_event_loop_get()
 }
 	
 /**
- *	Close internally created event loops and release resources for all event loops.
+ *	Close internal event loops and release watchers for internal and external event loops.
+ *	The global event loop array will also be destroyed for internal event loops.
+ *
  *	This method should be called once on program shutdown if as_event_create_loops() or
  *	as_event_set_external_loop_capacity() was called.
+ *
+ *	The shutdown sequence is slightly different for internal and external event loops.
+ *
+ *	Internal:
+ *	~~~~~~~~~~{.c}
+ *	as_event_close_loops();
+ *	~~~~~~~~~~
+ *
+ *	External:
+ *	~~~~~~~~~~{.c}
+ *	as_event_close_loops();
+ *	Join on external loop threads.
+ *	as_event_destroy_loops();
+ *	~~~~~~~~~~
+ *
+ *	@return		True if event loop close was successful.  If false, as_event_destroy_loops() should
+ *				not be called.
+ *
+ *	@ingroup async_events
+ */
+bool
+as_event_close_loops();
+
+/**
+ *	Destroy global event loop array.  This function only needs to be called for external
+ *	event loops.
  *
  *	@ingroup async_events
  */
 void
-as_event_close_loops();
+as_event_destroy_loops();
 
 #ifdef __cplusplus
 } // end extern "C"

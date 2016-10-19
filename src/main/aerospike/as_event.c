@@ -161,15 +161,14 @@ as_event_loop_find(void* loop)
 	return NULL;
 }
 
-void
+bool
 as_event_close_loops()
 {
 	if (! as_event_loops) {
-		return;
+		return true;
 	}
-	
+
 	bool status = true;
-	
 	// Close or send close signal to all event loops.
 	// This will eventually release resources associated with each event loop.
 	for (uint32_t i = 0; i < as_event_loop_size; i++) {
@@ -190,11 +189,18 @@ as_event_close_loops()
 			as_event_loop* event_loop = &as_event_loops[i];
 			pthread_join(event_loop->thread, NULL);
 		}
-		
-		cf_free(as_event_loops);
-		as_event_loops = NULL;
-		as_event_loop_size = 0;
+
+		as_event_destroy_loops();
 	}
+
+	return true;
+}
+
+void as_event_destroy_loops()
+{
+	cf_free(as_event_loops);
+	as_event_loops = NULL;
+	as_event_loop_size = 0;
 }
 
 /******************************************************************************

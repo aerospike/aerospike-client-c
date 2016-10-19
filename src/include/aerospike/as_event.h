@@ -230,9 +230,22 @@ as_event_loop_get()
  *	as_event_set_external_loop_capacity() was called.
  *
  *	@ingroup async_events
+ *	@return true if the loops have been closed. In the case of external loops,
+ *	as_event_destroy_loops() must be called as soon as all the external threads
+ *	were joined.
+ */
+bool
+as_event_close_loops();
+
+
+/**
+ *	Destroy the memory managed by the aerospike library for the event loops.
+ *	This is only safe to call if as_event_close_loops returned true.
+ *
+ *	@ingroup async_events
  */
 void
-as_event_close_loops();
+as_event_destroy_loops();
 
 #ifdef __cplusplus
 } // end extern "C"

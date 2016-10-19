@@ -584,6 +584,18 @@ as_tls_context_setup(as_config_tls* tlscfg,
 			return as_error_set_message(errp, AEROSPIKE_ERR_TLS_ERROR,
 										"no compatible cipher found");
 		}
+		// It's bogus that we have to create an SSL just to get the
+		// cipher list, but SSL_CTX_get_ciphers doesn't appear to
+		// exist ...
+		SSL * ssl = SSL_new(ctx);
+		for (int prio = 0; true; ++prio) {
+			char const * cipherstr = SSL_get_cipher_list(ssl, prio);
+			if (!cipherstr) {
+				break;
+			}
+			as_log_info("cipher %d: %s", prio+1, cipherstr);
+		}
+		SSL_free(ssl);
 	}
 
 	if (tlscfg->crl_check || tlscfg->crl_check_all) {

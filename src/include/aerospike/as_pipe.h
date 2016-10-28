@@ -46,6 +46,7 @@ typedef struct as_pipe_connection {
 	as_event_connection base;
 	as_event_command* writer;
 	cf_ll readers;
+	bool canceling;
 	bool canceled;
 	bool in_pool;
 } as_pipe_connection;

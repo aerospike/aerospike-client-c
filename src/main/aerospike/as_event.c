@@ -161,11 +161,11 @@ as_event_loop_find(void* loop)
 	return NULL;
 }
 
-void
+bool
 as_event_close_loops()
 {
 	if (! as_event_loops) {
-		return;
+		return false;
 	}
 	
 	bool status = true;
@@ -190,7 +190,15 @@ as_event_close_loops()
 			as_event_loop* event_loop = &as_event_loops[i];
 			pthread_join(event_loop->thread, NULL);
 		}
-		
+		as_event_destroy_loops();
+	}
+	return status;
+}
+
+void
+as_event_destroy_loops()
+{
+	if (as_event_loops) {
 		cf_free(as_event_loops);
 		as_event_loops = NULL;
 		as_event_loop_size = 0;

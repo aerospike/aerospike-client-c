@@ -60,3 +60,24 @@ as_address_name(struct sockaddr* addr, char* name, socklen_t size)
 		}
 	}
 }
+
+void
+as_address_short_name(struct sockaddr* addr, char* name, socklen_t size)
+{
+	// IPv4: xxx.xxx.xxx.xxx
+	// IPv6: xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx
+	const char* result;
+
+	if (addr->sa_family == AF_INET) {
+		struct sockaddr_in* a = (struct sockaddr_in*)addr;
+		result = inet_ntop(AF_INET, &a->sin_addr, name, size);
+	}
+	else {
+		struct sockaddr_in6* a = (struct sockaddr_in6*)addr;
+		result = inet_ntop(AF_INET6, &a->sin6_addr, name, size);
+	}
+
+	if (! result) {
+		*name = 0;
+	}
+}

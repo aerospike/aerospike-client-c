@@ -649,7 +649,7 @@ static void*
 as_cluster_tender(void* data)
 {
 	as_cluster* cluster = (as_cluster*)data;
-	uint32_t version = ck_pr_load_32(&cluster->version);
+	uint32_t version = 0;
 	
 	struct timespec delta;
 	cf_clock_set_timespec_ms(cluster->tend_interval, &delta);

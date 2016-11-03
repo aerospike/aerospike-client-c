@@ -138,6 +138,7 @@ cancel_connection(as_event_command* cmd, as_error* err, int32_t source)
 	as_log_trace("Marking pooled pipeline connection %p as canceled", conn);
 	conn->writer = NULL;
 	conn->canceled = true;
+	conn->canceling = false;
 
 	as_node_release(node);
 }

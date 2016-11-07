@@ -54,5 +54,3 @@ int as_tls_read(as_socket* sock, void* buf, size_t num, uint64_t deadline);
 int as_tls_write_once(as_socket* sock, void* buf, size_t num);
 
 int as_tls_write(as_socket* sock, void* buf, size_t num, uint64_t deadline);
-
-bool as_tls_match_name(X509 *x509, const char *name, bool allow_wildcard);

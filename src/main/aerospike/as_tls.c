@@ -27,6 +27,7 @@
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_socket.h>
 #include <aerospike/as_tls.h>
+#include <aerospike/ssl_util.h>
 #include <citrusleaf/cf_clock.h>
 
 static void* cert_blacklist_read(const char * path);

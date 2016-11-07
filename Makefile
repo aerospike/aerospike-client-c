@@ -179,7 +179,6 @@ AEROSPIKE += as_shm_cluster.o
 AEROSPIKE += as_socket.o
 AEROSPIKE += as_tls.o
 AEROSPIKE += as_udf.o
-AEROSPIKE += ssl_util_ssl.o
 AEROSPIKE += version.o
 
 OBJECTS := 

@@ -462,7 +462,7 @@ as_socket_read_forever(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_
 		uint64_t deadline = cf_getms() + 60000;
 		int rv = as_tls_read(sock, buf, buf_len, deadline);
 		if (rv < 0) {
-			return as_error_update(err, AEROSPIKE_ERR_CONNECTION, "TLS write error: %d", rv);
+			return as_error_update(err, AEROSPIKE_ERR_CONNECTION, "TLS read error: %d", rv);
 		}
 		else if (rv == 1) {
 			// Do not set error string to avoid affecting performance.
@@ -516,7 +516,7 @@ as_socket_read_limit(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_le
 		as_status status = AEROSPIKE_OK;
 		int rv = as_tls_read(sock, buf, buf_len, deadline);
 		if (rv < 0) {
-			return as_error_update(err, AEROSPIKE_ERR_CONNECTION, "TLS write error: %d", rv);
+			return as_error_update(err, AEROSPIKE_ERR_CONNECTION, "TLS read error: %d", rv);
 		}
 		else if (rv == 1) {
 			// Do not set error string to avoid affecting performance.

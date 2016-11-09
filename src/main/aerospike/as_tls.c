@@ -17,6 +17,7 @@
 
 #include <ctype.h>
 #include <pthread.h>
+#include <signal.h>
 
 #include <openssl/conf.h>
 #include <openssl/crypto.h>
@@ -35,6 +36,8 @@ static bool cert_blacklist_check(void* cert_blacklist,
 								 const char* snhex,
 								 const char* issuer_name);
 static void cert_blacklist_destroy(void* cert_blacklist);
+
+static void manage_sigpipe();
 
 static bool s_tls_inited = false;
 static pthread_mutex_t s_tls_init_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -615,6 +618,8 @@ as_tls_context_setup(as_config_tls* tlscfg,
 	} else {
 		SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, verify_callback);
 	}
+
+	manage_sigpipe();
 
 	octx->ssl_ctx = ctx;
 	octx->log_session_info = tlscfg->log_session_info;
@@ -1218,4 +1223,43 @@ static void cert_blacklist_destroy(void* cbl)
 	}
 
 	cf_free(cbp);
+}
+
+static void manage_sigpipe()
+{
+	// OpenSSL can encounter a SIGPIPE in the SSL_shutdown sequence.
+	// The default behavior is to terminate the program.
+	//
+	// 1) We can't fix this by calling send with MSG_NOSIGNAL because
+	// the call is deep inside OpenSSL and there doesn't appear to be
+	// any way to get the flag set there.
+	//
+	// 2) We can't set SO_NOSIGNAL on the socket because linux doesn't
+	// support it.
+	//
+	// 3) Instead, we specify alternate global signal handling
+	// behavior ONLY if the user hasn't already set the SIGPIPE signal
+	// handler.  See the accepted answer to the following thread for
+	// inspiration:
+	// http://stackoverflow.com/questions/25144550/is-it-possible-to-force-openssl-to-not-generate-sigpipe-without-global-signal-ha?rq=1
+
+	struct sigaction old_handler;
+	int rv = sigaction(SIGPIPE, NULL, &old_handler);
+	if (rv != 0) {
+		return;		// Failed, should never happen
+	}
+
+	// Was there already an signal handler installed?
+	if (old_handler.sa_handler != SIG_DFL) {
+		// Yes, leave it alone ...
+		return;
+	}
+
+	struct sigaction new_handler;
+	new_handler.sa_handler = SIG_IGN;
+	new_handler.sa_flags = 0;
+	rv = sigaction(SIGPIPE, &new_handler, NULL);
+	if (rv != 0) {
+		return;		// Failed, should never happen
+	}
 }

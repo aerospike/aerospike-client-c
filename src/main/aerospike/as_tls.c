@@ -1246,7 +1246,9 @@ static void manage_sigpipe()
 	struct sigaction old_handler;
 	int rv = sigaction(SIGPIPE, NULL, &old_handler);
 	if (rv != 0) {
-		return;		// Failed, should never happen
+		as_log_warn("sigaction failed to read old handler for SIGPIPE: %s",
+					strerror(errno));
+		return;
 	}
 
 	// Was there already an signal handler installed?
@@ -1260,6 +1262,8 @@ static void manage_sigpipe()
 	new_handler.sa_flags = 0;
 	rv = sigaction(SIGPIPE, &new_handler, NULL);
 	if (rv != 0) {
-		return;		// Failed, should never happen
+		as_log_warn("sigaction failed to set SIGPIPE to SIG_IGN: %s",
+					strerror(errno));
+		return;
 	}
 }

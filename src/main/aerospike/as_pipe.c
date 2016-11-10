@@ -74,7 +74,7 @@ cancel_command(as_event_command* cmd, as_error* err)
 	as_log_trace("Canceling command %p, error code %d", cmd, err->code);
 	as_event_stop_timer(cmd);
 
-	as_log_trace("Invoking callback function");
+	as_log_trace("Invoking callback function for command %p", cmd);
 	as_event_error_callback(cmd, err);
 }
 
@@ -90,8 +90,9 @@ cancel_connection(as_event_command* cmd, as_error* err, int32_t source)
 	as_event_loop* loop = cmd->event_loop;
 	// So that cancel_command() doesn't free the node.
 	as_node_reserve(node);
-	
 	as_log_trace("Canceling pipeline connection for command %p, error code %d, connection %p", cmd, err->code, conn);
+
+	conn->canceling = true;
 
 	if (source != CANCEL_CONNECTION_TIMEOUT) {
 		assert(cmd == conn->writer || cf_ll_get_head(&conn->readers) == &cmd->pipe_link);
@@ -101,7 +102,7 @@ cancel_connection(as_event_command* cmd, as_error* err, int32_t source)
 	as_event_stop_watcher(cmd, &conn->base);
 
 	if (conn->writer != NULL) {
-		as_log_trace("Canceling writer %p", conn->writer);
+		as_log_trace("Canceling writer %p on %p", conn->writer, conn);
 		cancel_command(conn->writer, err);
 	}
 
@@ -115,7 +116,7 @@ cancel_connection(as_event_command* cmd, as_error* err, int32_t source)
 			is_reader = true;
 		}
 
-		as_log_trace("Canceling reader %p", walker);
+		as_log_trace("Canceling reader %p on %p", walker, conn);
 		cf_ll_delete(&conn->readers, link);
 		cancel_command(walker, err);
 	}
@@ -137,6 +138,7 @@ cancel_connection(as_event_command* cmd, as_error* err, int32_t source)
 	as_log_trace("Marking pooled pipeline connection %p as canceled", conn);
 	conn->writer = NULL;
 	conn->canceled = true;
+	conn->canceling = false;
 
 	as_node_release(node);
 }
@@ -296,6 +298,12 @@ as_pipe_get_connection(as_event_command* cmd)
 			as_log_trace("Checking pipeline connection %p", conn);
 			ck_pr_dec_32(&cmd->cluster->async_conn_pool);
 
+			if (conn->canceling) {
+				as_log_trace("Pipeline connection %p is being canceled", conn);
+				conn->in_pool = false;
+				continue;
+			}
+
 			if (conn->canceled) {
 				as_log_trace("Pipeline connection %p was canceled earlier", conn);
 				// Do not need to stop watcher because it was stopped in cancel_connection().
@@ -304,7 +312,7 @@ as_pipe_get_connection(as_event_command* cmd)
 			}
 
 			conn->in_pool = false;
-			
+
 			// Verify that socket is active.  Socket receive buffer may already have data.
 			int len = as_event_validate_connection(&conn->base);
 
@@ -334,6 +342,7 @@ as_pipe_get_connection(as_event_command* cmd)
 		conn->base.pipeline = true;
 		conn->writer = NULL;
 		cf_ll_init(&conn->readers, NULL, false);
+		conn->canceling = false;
 		conn->canceled = false;
 		conn->in_pool = false;
 		

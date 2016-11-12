@@ -189,12 +189,15 @@ typedef struct as_record_s {
 
 	/**
 	 *	The time-to-live (expiration) of the record in seconds.
-	 *	There are two special values that can be set in the record TTL:
+	 *	There are also special values that can be set in the record TTL:
 	 *	(*) ZERO (defined as AS_RECORD_DEFAULT_TTL), which means that the
 	 *	    record will adopt the default TTL value from the namespace.
 	 *	(*) 0xFFFFFFFF (also, -1 in a signed 32 bit int)
 	 *	    (defined as AS_RECORD_NO_EXPIRE_TTL), which means that the record
 	 *	    will get an internal "void_time" of zero, and thus will never expire.
+	 *	(*) 0xFFFFFFFE (also, -2 in a signed 32 bit int)
+	 *	    (defined as AS_RECORD_NO_CHANGE_TTL), which means that the record
+	 *	    ttl will not change when the record is updated.
 	 *
 	 *	Note that the TTL value will be employed ONLY on write/update calls.
 	 */
@@ -219,6 +222,12 @@ typedef struct as_record_s {
  * will expire) to zero, which means the record will never expire
  */
 #define AS_RECORD_NO_EXPIRE_TTL 0xFFFFFFFF
+
+/**
+ * When the record is given a TTL value of 0xFFFFFFFE, the TTL will not change
+ * when a record is updated.
+ */
+#define AS_RECORD_NO_CHANGE_TTL 0xFFFFFFFE
 
 /******************************************************************************
  *	MACROS

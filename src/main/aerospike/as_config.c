@@ -248,16 +248,29 @@ as_config_add_hosts(as_config* config, const char* string, uint16_t default_port
 	return true;
 }
 
-void
-as_config_add_host(as_config* config, const char* addr, uint16_t port)
+static void
+add_host(as_config* config, char* addr, char* tls_name, uint16_t port)
 {
 	if (! config->hosts) {
 		config->hosts = as_vector_create(sizeof(as_host), 16);
 	}
-	
+
 	as_host* host = as_vector_reserve(config->hosts);
-	host->name = cf_strdup(addr);
+	host->name = addr;
+	host->tls_name = tls_name;
 	host->port = port;
+}
+
+void
+as_config_add_host(as_config* config, const char* addr, uint16_t port)
+{
+	add_host(config, strdup(addr), NULL, port);
+}
+
+void
+as_config_tls_add_host(as_config* config, const char* addr, const char* tls_name, uint16_t port)
+{
+	add_host(config, strdup(addr), strdup(tls_name), port);
 }
 
 void

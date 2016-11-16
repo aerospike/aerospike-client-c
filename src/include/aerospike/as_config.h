@@ -724,6 +724,22 @@ as_config_tls_set_chainfile(as_config* config, const char* chainfile)
 	as_config_set_string(&config->tls.chainfile, chainfile);
 }
 
+/**
+ *	Add TLS host to seed the cluster.
+ *	The host address and TLS name will be copied.
+ *	The caller is responsible for the original address string.
+ *
+ *	~~~~~~~~~~{.c}
+ *	as_config config;
+ *	as_config_init(&config);
+ *	as_config_tls_add_host(&config, "127.0.0.1", "node1.test.org", 3000);
+ *	~~~~~~~~~~
+ *
+ *	@relates as_config
+ */
+void
+as_config_tls_add_host(as_config* config, const char* address, const char* tls_name, uint16_t port);
+
 #ifdef __cplusplus
 } // end extern "C"
 #endif

@@ -422,8 +422,14 @@ static int verify_callback(int preverify_ok, X509_STORE_CTX* ctx)
 
 		bool allow_wildcard = true;
 		bool matched = as_tls_match_name(ctx->cert, hostname, allow_wildcard);
-		as_log_info("NAME: '%s' %s",
-					hostname, matched ? "MATCHED" : "NO MATCH");
+
+		if (matched) {
+			as_log_debug("TLS name '%s' matches", hostname);
+		}
+		else {
+			as_log_warn("TLS name '%s' mismatch", hostname);
+		}
+
 		return matched ? 1 : 0;
 	}
 

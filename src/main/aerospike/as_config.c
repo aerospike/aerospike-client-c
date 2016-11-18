@@ -264,13 +264,13 @@ add_host(as_config* config, char* addr, char* tls_name, uint16_t port)
 void
 as_config_add_host(as_config* config, const char* addr, uint16_t port)
 {
-	add_host(config, strdup(addr), NULL, port);
+	add_host(config, cf_strdup(addr), NULL, port);
 }
 
 void
 as_config_tls_add_host(as_config* config, const char* addr, const char* tls_name, uint16_t port)
 {
-	add_host(config, strdup(addr), strdup(tls_name), port);
+	add_host(config, cf_strdup(addr), cf_strdup(tls_name), port);
 }
 
 void

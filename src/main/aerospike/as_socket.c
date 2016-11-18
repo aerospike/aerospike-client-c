@@ -303,13 +303,7 @@ as_socket_validate_fd(int fd)
 int
 as_socket_validate(as_socket* sock)
 {
-	uint8_t buf[8];
-	if (sock->ctx) {
-		return as_tls_peek(sock, buf, sizeof(buf));
-	}
-	else {
-		return as_socket_validate_fd(sock->fd);
-	}
+	return as_socket_validate_fd(sock->fd);
 }
 
 as_status

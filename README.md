@@ -111,6 +111,13 @@ or with valgrind:
 
 	$ make [EVENT_LIB=libev|libuv] [AS_HOST=<hostname>] test-valgrind
 
+## Compiling Async Applications
+
+When compiling async applications with aerospike header files, the event library
+must be defined (-DAS_USE_LIBEV or -DAS_USE_LIBUV). Example:
+
+	$ gcc -DAS_USE_LIBEV -o myapp myapp.c -laerospike -lev -lssl -lcrypto -lpthread -lm -lz
+
 ## Lua
 
 The C client requires [Lua](http://www.lua.org) 5.1 support for the

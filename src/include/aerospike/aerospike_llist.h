@@ -56,6 +56,8 @@ extern "C" {
  *	}
  *	~~~~~~~~~~
  *
+ *	@deprecated LDT functionality has been deprecated.
+ *
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
@@ -88,6 +90,8 @@ as_status aerospike_llist_add(
  *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *	}
  *	~~~~~~~~~~
+ *
+ *	@deprecated LDT functionality has been deprecated.
  *
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
@@ -130,6 +134,8 @@ as_status aerospike_llist_update(
  *
  *	~~~~~~~~~~
  *
+ *	@deprecated LDT functionality has been deprecated.
+ *
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
@@ -170,6 +176,8 @@ as_status aerospike_llist_add_all(
  *
  *	~~~~~~~~~~
  *
+ *	@deprecated LDT functionality has been deprecated.
+ *
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
@@ -207,6 +215,8 @@ as_status aerospike_llist_update_all(
  *		// do logic because element exists
  *	}
  *	~~~~~~~~~~
+ *
+ *	@deprecated LDT functionality has been deprecated.
  *
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
@@ -247,6 +257,8 @@ as_status aerospike_llist_find(
  *	}
  *	~~~~~~~~~~
  *
+ *	@deprecated LDT functionality has been deprecated.
+ *
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
@@ -284,6 +296,8 @@ as_status aerospike_llist_find_first(
  *		as_arraylist_destroy(result_list);
  *	}
  *	~~~~~~~~~~
+ *
+ *	@deprecated LDT functionality has been deprecated.
  *
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
@@ -326,6 +340,8 @@ as_status aerospike_llist_find_first_filter(
  *	}
  *	~~~~~~~~~~
  *
+ *	@deprecated LDT functionality has been deprecated.
+ *
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
@@ -363,6 +379,8 @@ as_status aerospike_llist_find_last(
  *		as_arraylist_destroy(result_list);
  *	}
  *	~~~~~~~~~~
+ *
+ *	@deprecated LDT functionality has been deprecated.
  *
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
@@ -408,6 +426,8 @@ as_status aerospike_llist_find_last_filter(
  *	}
  *	~~~~~~~~~~
  *
+ *	@deprecated LDT functionality has been deprecated.
+ *
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
@@ -449,6 +469,8 @@ as_status aerospike_llist_find_from(
  *		as_arraylist_destroy(result_list);
  *	}
  *	~~~~~~~~~~
+ *
+ *	@deprecated LDT functionality has been deprecated.
  *
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
@@ -492,6 +514,8 @@ as_status aerospike_llist_find_from_filter(
  *	}
  *	~~~~~~~~~~
  *
+ *	@deprecated LDT functionality has been deprecated.
+ *
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
@@ -530,6 +554,8 @@ as_status aerospike_llist_scan(
  *		as_arraylist_destroy(result_list);
  *	}
  *	~~~~~~~~~~
+ *
+ *	@deprecated LDT functionality has been deprecated.
  *
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
@@ -582,6 +608,8 @@ as_status aerospike_llist_filter(
  *		as_arraylist_destroy(result_list);
  *	}
  *	~~~~~~~~~~
+ *
+ *	@deprecated LDT functionality has been deprecated.
  *
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
@@ -637,6 +665,8 @@ as_status aerospike_llist_range_limit(
  *	}
  *	~~~~~~~~~~
  *
+ *	@deprecated LDT functionality has been deprecated.
+ *
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
@@ -679,6 +709,8 @@ static inline as_status aerospike_llist_range(
  *	}
  *	~~~~~~~~~~
  *
+ *	@deprecated LDT functionality has been deprecated.
+ *
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
@@ -714,6 +746,8 @@ as_status aerospike_llist_size(
  *	}
  *	~~~~~~~~~~
  *
+ *	@deprecated LDT functionality has been deprecated.
+ *
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
@@ -745,6 +779,8 @@ as_status aerospike_llist_remove(
  *	}
  *	~~~~~~~~~~
  *
+ *	@deprecated LDT functionality has been deprecated.
+ *
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
@@ -775,6 +811,8 @@ as_status aerospike_llist_destroy(
  *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *	}
  *	~~~~~~~~~~
+ *
+ *	@deprecated LDT functionality has been deprecated.
  *
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
@@ -809,6 +847,8 @@ as_status aerospike_llist_set_capacity(
  *	}
  *	~~~~~~~~~~
  *
+ *	@deprecated LDT functionality has been deprecated.
+ *
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
@@ -842,6 +882,8 @@ as_status aerospike_llist_get_capacity(
  *	}
  *	~~~~~~~~~~
  *
+ *	@deprecated LDT functionality has been deprecated.
+ *
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
@@ -874,6 +916,8 @@ as_status aerospike_llist_ldt_exists(
  *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *	}
  *	~~~~~~~~~~
+ *
+ *	@deprecated LDT functionality has been deprecated.
  *
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.

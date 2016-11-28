@@ -933,7 +933,15 @@ as_tls_read(as_socket* sock, void* bufp, size_t len, uint64_t deadline)
 			}
 		}
 		else /* if (rv <= 0) */ {
-			int sslerr = SSL_get_error(sock->ssl, rv);
+			int sslerr;
+			// Avoid the expensive call to SSL_get_error() in the most common case.
+			BIO* bio = SSL_get_rbio(sock->ssl);
+			if (SSL_want_read(sock->ssl) && BIO_should_read(bio) && BIO_should_retry(bio)) {
+				sslerr = SSL_ERROR_WANT_READ;
+			}
+			else {
+				sslerr = SSL_get_error(sock->ssl, rv);
+			}
 			unsigned long errcode;
 			char errbuf[1024];
 			switch (sslerr) {

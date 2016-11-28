@@ -57,6 +57,8 @@ extern "C" {
  *	}
  *	~~~~~~~~~~
  *
+ *	@deprecated LDT functionality has been deprecated.
+ *
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
@@ -99,6 +101,8 @@ as_status aerospike_lmap_put(
  *
  *	~~~~~~~~~~
  *
+ *	@deprecated LDT functionality has been deprecated.
+ *
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
@@ -138,6 +142,8 @@ as_status aerospike_lmap_put_all(
  *	}
  *	~~~~~~~~~~
  *
+ *	@deprecated LDT functionality has been deprecated.
+ *
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
@@ -176,6 +182,8 @@ as_status aerospike_lmap_get(
  *		// do logic because element exists
  *	}
  *	~~~~~~~~~~
+ *
+ *	@deprecated LDT functionality has been deprecated.
  *
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
@@ -219,6 +227,8 @@ as_status aerospike_lmap_get_all(
  *	}
  *	~~~~~~~~~~
  *
+ *	@deprecated LDT functionality has been deprecated.
+ *
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
@@ -257,6 +267,8 @@ as_status aerospike_lmap_filter(
  *	}
  *	~~~~~~~~~~
  *
+ *	@deprecated LDT functionality has been deprecated.
+ *
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
@@ -292,6 +304,8 @@ as_status aerospike_lmap_size(
  *	}
  *	~~~~~~~~~~
  *
+ *	@deprecated LDT functionality has been deprecated.
+ *
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
@@ -323,6 +337,8 @@ as_status aerospike_lmap_remove(
  *	}
  *	~~~~~~~~~~
  *
+ *	@deprecated LDT functionality has been deprecated.
+ *
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
@@ -353,6 +369,8 @@ as_status aerospike_lmap_destroy(
  *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *	}
  *	~~~~~~~~~~
+ *
+ *	@deprecated LDT functionality has been deprecated.
  *
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
@@ -386,6 +404,8 @@ as_status aerospike_lmap_set_capacity(
  *	}
  *	~~~~~~~~~~
  *
+ *	@deprecated LDT functionality has been deprecated.
+ *
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
@@ -418,6 +438,8 @@ as_status aerospike_lmap_get_capacity(
  *		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  *	}
  *	~~~~~~~~~~
+ *
+ *	@deprecated LDT functionality has been deprecated.
  *
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.

@@ -32,6 +32,8 @@
 #include <ev.h>
 #elif defined(AS_USE_LIBUV)
 #include <uv.h>
+#elif defined(AS_USE_LIBEVENT)
+#include <event2/event_struct.h>
 #else
 #endif
 
@@ -56,6 +58,9 @@ typedef struct as_event_loop {
 #elif defined(AS_USE_LIBUV)
 	uv_loop_t* loop;
 	uv_async_t* wakeup;
+#elif defined(AS_USE_LIBEVENT)
+    struct event_base *loop;
+    struct event wakeup;
 #else
 	void* loop;
 #endif

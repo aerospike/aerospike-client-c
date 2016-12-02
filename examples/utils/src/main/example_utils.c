@@ -447,7 +447,7 @@ usage(const char* short_opts)
 bool
 example_create_event_loop()
 {
-#if defined(AS_USE_LIBEV) || defined(AS_USE_LIBUV)
+#if defined(AS_USE_LIBEV) || defined(AS_USE_LIBUV) || defined(AS_USE_LIBEVENT)
 	if (as_event_create_loops(1)) {
 		return true;
 	}

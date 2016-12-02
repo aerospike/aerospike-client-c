@@ -52,7 +52,7 @@ bool g_tls_crl_check_all = false;
 char* g_tls_cert_blacklist = NULL;
 bool g_tls_log_session_info = false;
 
-#if defined(AS_USE_LIBEV) || defined(AS_USE_LIBUV)
+#if defined(AS_USE_LIBEV) || defined(AS_USE_LIBUV) || defined(AS_USE_LIBEVENT)
 static bool g_use_async = true;
 #else
 static bool g_use_async = false;

@@ -328,7 +328,7 @@ as_pipe_get_connection(as_event_command* cmd)
 		conn = cf_malloc(sizeof(as_pipe_connection));
 		assert(conn != NULL);
 
-#if defined(AS_USE_LIBEV)		
+#if defined(AS_USE_LIBEV) || defined(AS_USE_LIBEVENT)
 		as_socket_init(&conn->base.socket);
 #endif
 		conn->base.pipeline = true;

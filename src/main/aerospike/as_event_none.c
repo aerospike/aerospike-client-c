@@ -21,7 +21,7 @@
  * EVENT_LIB NOT DEFINED FUNCTIONS
  *****************************************************************************/
 
-#if ! (defined(AS_USE_LIBEV) || defined(AS_USE_LIBUV))
+#if ! (defined(AS_USE_LIBEV) || defined(AS_USE_LIBUV) || defined(AS_USE_LIBEVENT))
 
 bool
 as_event_create_loop(as_event_loop* event_loop)

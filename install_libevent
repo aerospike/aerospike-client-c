@@ -1,0 +1,9 @@
+#!/bin/bash
+VERSION="2.0.22-stable"
+wget https://github.com/libevent/libevent/archive/release-$VERSION.tar.gz
+tar xvf release-$VERSION.tar.gz
+cd libevent-release-$VERSION
+./autogen.sh
+./configure
+make
+sudo make install

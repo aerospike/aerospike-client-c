@@ -21,6 +21,10 @@ ifeq ($(EVENT_LIB),libuv)
   CFLAGS += -DAS_USE_LIBUV -I/usr/local/include
 endif
 
+ifeq ($(EVENT_LIB),libevent)
+  CFLAGS += -DAS_USE_LIBUV -I/usr/local/include
+endif
+
 LDFLAGS = $(LIBRARY_PATH)/libaerospike.a
 
 ifeq ($(EVENT_LIB),libev)
@@ -29,6 +33,10 @@ endif
 
 ifeq ($(EVENT_LIB),libuv)
   LDFLAGS += -L/usr/local/lib -luv
+endif
+
+ifeq ($(EVENT_LIB),libevent)
+  LDFLAGS += -L/usr/local/lib -levent -levent_pthreads
 endif
 
 ifeq ($(OS),Darwin)

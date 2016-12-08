@@ -307,7 +307,6 @@ static bool before(atf_plan * plan) {
 	as = aerospike_new(&config);
 
 	if ( aerospike_connect(as, &err) == AEROSPIKE_OK ) {
-		debug("connected to %s %d", g_host, g_port);
     	return true;
 	}
 	else {
@@ -334,7 +333,6 @@ static bool after(atf_plan * plan) {
 	}
 
 	if (status == AEROSPIKE_OK) {
-		debug("disconnected from %s %d", g_host, g_port);
 		return true;
 	}
 	else {

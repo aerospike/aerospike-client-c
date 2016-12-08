@@ -948,7 +948,6 @@
 				OTHER_CFLAGS = (
 					"-D_DARWIN_UNLIMITED_SELECT",
 					"-DLUA_DEBUG_HOOK",
-					"-DAS_USE_LIBEV",
 				);
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
@@ -972,7 +971,6 @@
 				OTHER_CFLAGS = (
 					"-D_DARWIN_UNLIMITED_SELECT",
 					"-DLUA_DEBUG_HOOK",
-					"-DAS_USE_LIBEV",
 				);
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};

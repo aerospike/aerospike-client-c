@@ -43,7 +43,7 @@ static char g_user[AS_USER_SIZE];
 static char g_password[AS_PASSWORD_HASH_SIZE];
 as_config_tls g_tls = {0};
 
-#if defined(AS_USE_LIBEV) || defined(AS_USE_LIBUV)
+#if AS_EVENT_LIB_DEFINED
 static bool g_use_async = true;
 #else
 static bool g_use_async = false;

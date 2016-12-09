@@ -28,6 +28,8 @@
  *  Generic asynchronous events abstraction.  Designed to support multiple event libraries
  *	such as libev and libuv.  Only one library can be supported per build.
  */
+#define AS_EVENT_LIB_DEFINED (defined(AS_USE_LIBEV) || defined(AS_USE_LIBUV))
+
 #if defined(AS_USE_LIBEV)
 #include <ev.h>
 #elif defined(AS_USE_LIBUV)

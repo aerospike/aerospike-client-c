@@ -161,7 +161,7 @@ void as_record_release(as_record * rec)
  *	as_record * r = as_record_new(2);
  *	as_record_set_int64(r, "bin1", 123);
  *	as_record_set_str(r, "bin1", "abc");
- *	@param nbins - the number of bins to initialize. Set to 0, if unknown.
+ *	@param nbins - the number of bins to initialize.
  *	@return a pointer to the new as_record if successful, otherwise NULL.
  */
 as_record * as_record_new(uint16_t nbins) 
@@ -178,7 +178,7 @@ as_record * as_record_new(uint16_t nbins)
  *	as_record_set_int64(&r, "bin1", 123);
  *	as_record_set_str(&r, "bin1", "abc");
  *	@param rec 	- the record to initialize
- *	@param nbins - the number of bins to initialize. Set to 0, if unknown.
+ *	@param nbins - the number of bins to initialize.
  *	@return a pointer to the initialized as_record if successful, otherwise NULL.
  */
 as_record * as_record_init(as_record * rec, uint16_t nbins) 

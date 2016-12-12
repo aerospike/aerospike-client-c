@@ -43,15 +43,17 @@ Then, install openssl via brew.
 
 	$ brew install openssl
 
-### libev (Optional. Used for asynchronous functions)
+### Event Library
 
-Download and install [libev](http://dist.schmorp.de/libev) version 4.20 or greater.
+An event library is required when C client asynchronous functionality is used.
+This event library must be installed independently of the C client.
+The supported event libraries are:
 
-### libuv (Optional. Used for asynchronous functions)
+* [libev](http://dist.schmorp.de/libev) version 4.20 or greater.  libev is the preferred event library.
+* [libuv](http://docs.libuv.org) version 1.7.5 or greater.
+* [libevent](http://libevent.org) version 2.0.22 or greater.
 
-Download and install [libuv](http://docs.libuv.org) version 1.7.5 or greater.
-
-libev and libuv usually install into /usr/local/lib.  Most operating systems do not 
+Event libraries usually install into /usr/local/lib.  Most operating systems do not 
 search /usr/local/lib by default.  Therefore, the following LD_LIBRARY_PATH setting may 
 be necessary.
 
@@ -67,13 +69,14 @@ this project.
 
 Build default library:
 
-	$ make [EVENT_LIB=libev|libuv]
+	$ make [EVENT_LIB=libev|libuv|libevent]
 
 Build examples:
 
 	$ make
-	$ make EVENT_LIB=libev  # Support asynchronous functions with libev
-	$ make EVENT_LIB=libuv  # Support asynchronous functions with libuv
+	$ make EVENT_LIB=libev    # Support asynchronous functions with libev
+	$ make EVENT_LIB=libuv    # Support asynchronous functions with libuv
+	$ make EVENT_LIB=libevent # Support asynchronous functions with libevent
 
 The build adheres to the _GNU_SOURCE API level. The build will generate the following files:
 
@@ -105,16 +108,17 @@ This will remove all files in the `target` directory.
 
 To run unit tests:
 
-	$ make [EVENT_LIB=libev|libuv] [AS_HOST=<hostname>] test
+	$ make [EVENT_LIB=libev|libuv|libevent] [AS_HOST=<hostname>] test
 
 or with valgrind:
 
-	$ make [EVENT_LIB=libev|libuv] [AS_HOST=<hostname>] test-valgrind
+	$ make [EVENT_LIB=libev|libuv|libevent] [AS_HOST=<hostname>] test-valgrind
 
 ## Compiling Async Applications
 
 When compiling async applications with aerospike header files, the event library
-must be defined (-DAS_USE_LIBEV or -DAS_USE_LIBUV). Example:
+must be defined (-DAS_USE_LIBEV, -DAS_USE_LIBUV or -DAS_USE_LIBEVENT).
+Example:
 
 	$ gcc -DAS_USE_LIBEV -o myapp myapp.c -laerospike -lev -lssl -lcrypto -lpthread -lm -lz
 

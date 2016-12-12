@@ -276,7 +276,7 @@ typedef struct as_record_s {
  *	When you are finished using the `as_record` instance, you should release the 
  *	resources allocated to it by calling `as_record_destroy()`.
  *
- *	@param nbins 	The number of bins to initialize. Set to 0, if unknown.
+ *	@param nbins 	The number of bins to initialize.
  *
  *	@return a pointer to the new as_record if successful, otherwise NULL.
  *
@@ -298,7 +298,7 @@ as_record * as_record_new(uint16_t nbins);
  *	resources allocated to it by calling `as_record_destroy()`.
  *
  *	@param rec		The record to initialize.
- *	@param nbins	The number of bins to initialize. Set to 0, if unknown.
+ *	@param nbins	The number of bins to initialize.
  *
  *	@return a pointer to the initialized as_record if successful, otherwise NULL.
  *

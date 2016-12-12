@@ -34,6 +34,10 @@ ifeq ($(EVENT_LIB),libuv)
   CFLAGS += -DAS_USE_LIBUV
 endif
 
+ifeq ($(EVENT_LIB),libevent)
+  CFLAGS += -DAS_USE_LIBEVENT
+endif
+
 LDFLAGS = -L/usr/local/lib
 
 ifeq ($(EVENT_LIB),libev)
@@ -42,6 +46,10 @@ endif
 
 ifeq ($(EVENT_LIB),libuv)
   LDFLAGS += -luv
+endif
+
+ifeq ($(EVENT_LIB),libevent)
+  LDFLAGS += -levent_core -levent_pthreads
 endif
 
 LDFLAGS += -lssl -lcrypto -lpthread

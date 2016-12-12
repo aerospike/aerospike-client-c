@@ -398,7 +398,7 @@ as_event_get_connection(as_event_command* cmd)
 		ck_pr_inc_32(&cmd->cluster->async_conn_count);
 		conn = cf_malloc(sizeof(as_async_connection));
 		conn->base.pipeline = false;
-#if defined(AS_USE_LIBEV)
+#if defined(AS_USE_LIBEV) || defined(AS_USE_LIBEVENT)
 		conn->base.watching = 0;
 #endif
 		conn->cmd = cmd;

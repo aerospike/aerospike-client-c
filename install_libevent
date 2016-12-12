@@ -1,6 +1,6 @@
-#!/bin/bash
+#!/bin/bash -e
 ver="2.0.22-stable"
-wget https://github.com/libevent/libevent/releases/download/release-$ver-stable/libevent-$ver.tar.gz
+wget https://github.com/libevent/libevent/releases/download/release-$ver/libevent-$ver.tar.gz
 tar xvf libevent-$ver.tar.gz
 cd libevent-$ver
 ./configure

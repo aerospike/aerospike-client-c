@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -e
 ver=1.8.0
 wget http://dist.libuv.org/dist/v1.8.0/libuv-v$ver.tar.gz
 tar xvf libuv-v$ver.tar.gz

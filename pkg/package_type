@@ -44,6 +44,12 @@ case $eventlib in
     eventDesc=" with libuv"
     ;;
 
+  libevent)
+    eventId=".libevent"
+    eventName="-libevent"
+    eventDesc=" with libevent"
+    ;;
+
   *)
     echo Invalid eventlib $eventlib
     PrintUsage

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -e
 ver=4.22
 wget http://dist.schmorp.de/libev/Attic/libev-$ver.tar.gz
 tar xvf libev-$ver.tar.gz

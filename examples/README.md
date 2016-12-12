@@ -6,10 +6,10 @@ This directory contains a collection of examples of using the Aerospike client.
 
 To build all examples:
 
-	$ make [EVENT_LIB=libev|libuv]
+	$ make [EVENT_LIB=libev|libuv|libevent]
 
 The EVENT_LIB setting must also match the same setting when building the client itself.
-If an event library is defined, it must be installed separately.  libev and libuv usually
+If an event library is defined, it must be installed separately.  Event libraries usually
 install into /usr/local/lib.  Most operating systems do not search /usr/local/lib by 
 default.  Therefore, the following LD_LIBRARY_PATH setting may be necessary.
 
@@ -17,17 +17,17 @@ default.  Therefore, the following LD_LIBRARY_PATH setting may be necessary.
 
 To build a specific example:
 
-	$ make [EVENT_LIB=libev|libuv] -C {example}
+	$ make [EVENT_LIB=libev|libuv|libevent] -C {example}
 
 ## Run
 
 To run all examples:
 
-	$ make [EVENT_LIB=libev|libuv] [AS_HOST=<server IP address>] run
+	$ make [EVENT_LIB=libev|libuv|libevent] [AS_HOST=<server IP address>] run
 	
 To run a specific example:
 
-	$ make [EVENT_LIB=libev|libuv] [AS_HOST=<server IP address>] -C {example} run
+	$ make [EVENT_LIB=libev|libuv|libevent] [AS_HOST=<server IP address>] -C {example} run
 
 
 # Summary of Examples

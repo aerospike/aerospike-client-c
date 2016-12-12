@@ -104,7 +104,7 @@ done
 ./package_type $signPackage devel sync $baseDir $stageDir $stageFinalDir
 
 # Package event library targets
-for elib in libev libuv
+for elib in libev libuv libevent
 do
 	echo Make $elib package
 	make -C $baseDir clean

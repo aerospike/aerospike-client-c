@@ -1,0 +1,8 @@
+#!/bin/bash
+ver="2.0.22-stable"
+wget https://github.com/libevent/libevent/releases/download/release-$ver-stable/libevent-$ver.tar.gz
+tar xvf libevent-$ver.tar.gz
+cd libevent-$ver
+./configure
+make
+sudo make install

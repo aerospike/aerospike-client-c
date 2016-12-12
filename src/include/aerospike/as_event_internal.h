@@ -32,6 +32,8 @@
 #include <ev.h>
 #elif defined(AS_USE_LIBUV)
 #include <uv.h>
+#elif defined(AS_USE_LIBEVENT)
+#include <event2/event.h>
 #else
 #endif
 
@@ -75,6 +77,10 @@ typedef struct {
 		uv_connect_t connect;
 		uv_write_t write;
 	} req;
+#elif defined(AS_USE_LIBEVENT)
+	struct event watcher;
+	as_socket socket;
+	int watching;
 #else
 #endif
 	bool pipeline;
@@ -99,6 +105,8 @@ typedef struct as_event_command {
 	struct ev_timer timer;
 #elif defined(AS_USE_LIBUV)
 	uv_timer_t timer;
+#elif defined(AS_USE_LIBEVENT)
+	struct event timer;
 #else
 #endif
 	as_event_loop* event_loop;
@@ -281,6 +289,38 @@ as_event_command_release(as_event_command* cmd)
 	else {
 		as_event_command_free(cmd);
 	}
+}
+
+/******************************************************************************
+ * LIBEVENT INLINE FUNCTIONS
+ *****************************************************************************/
+
+#elif defined(AS_USE_LIBEVENT)
+
+static inline int
+as_event_validate_connection(as_event_connection* conn)
+{
+	return as_socket_validate(&conn->socket);
+}
+
+static inline void
+as_event_stop_timer(as_event_command* cmd)
+{
+	if (cmd->timeout_ms) {
+		evtimer_del(&cmd->timer);
+	}
+}
+
+static inline void
+as_event_stop_watcher(as_event_command* cmd, as_event_connection* conn)
+{
+	event_del(&conn->watcher);
+}
+
+static inline void
+as_event_command_release(as_event_command* cmd)
+{
+	as_event_command_free(cmd);
 }
 
 /******************************************************************************

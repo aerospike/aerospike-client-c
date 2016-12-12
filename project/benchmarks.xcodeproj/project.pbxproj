@@ -21,6 +21,8 @@
 		BFBA540D18E20AE900DC6D8B /* latency.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBA540C18E20AE900DC6D8B /* latency.c */; };
 		BFBA540F18E211A200DC6D8B /* record.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBA540E18E211A200DC6D8B /* record.c */; };
 		BFC212AF1BDECA9F00E5730A /* libev.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC212AE1BDECA9F00E5730A /* libev.a */; };
+		BFCB38A91DFB9A0700C73D0F /* libevent_core.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFCB38A81DFB9A0700C73D0F /* libevent_core.a */; };
+		BFCB38AB1DFB9A2D00C73D0F /* libevent_pthreads.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFCB38AA1DFB9A2D00C73D0F /* libevent_pthreads.a */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -70,6 +72,8 @@
 		BFBFE57818E3761900B07B6B /* latency.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = latency.h; path = ../benchmarks/src/main/latency.h; sourceTree = "<group>"; };
 		BFC212AE1BDECA9F00E5730A /* libev.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libev.a; path = /usr/local/lib/libev.a; sourceTree = "<absolute>"; };
 		BFC79A7A18DCB27D00CFE830 /* benchmarks */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = benchmarks; sourceTree = BUILT_PRODUCTS_DIR; };
+		BFCB38A81DFB9A0700C73D0F /* libevent_core.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libevent_core.a; path = ../../../../usr/local/lib/libevent_core.a; sourceTree = "<group>"; };
+		BFCB38AA1DFB9A2D00C73D0F /* libevent_pthreads.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libevent_pthreads.a; path = ../../../../usr/local/lib/libevent_pthreads.a; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -82,6 +86,8 @@
 				BFBA540318E1EFF200DC6D8B /* liblua.a in Frameworks */,
 				BFC212AF1BDECA9F00E5730A /* libev.a in Frameworks */,
 				BF21EA561C06500700E2031E /* libuv.a in Frameworks */,
+				BFCB38A91DFB9A0700C73D0F /* libevent_core.a in Frameworks */,
+				BFCB38AB1DFB9A2D00C73D0F /* libevent_pthreads.a in Frameworks */,
 				BF4E4E3A1D4AD71A00BEEF94 /* libssl.a in Frameworks */,
 				BFBA53FF18E1EF9300DC6D8B /* libpthread.dylib in Frameworks */,
 				BFBA53FD18E1EF8800DC6D8B /* libz.dylib in Frameworks */,
@@ -131,6 +137,8 @@
 		BFC79A7118DCB27D00CFE830 = {
 			isa = PBXGroup;
 			children = (
+				BFCB38AA1DFB9A2D00C73D0F /* libevent_pthreads.a */,
+				BFCB38A81DFB9A0700C73D0F /* libevent_core.a */,
 				BF4E4E391D4AD71A00BEEF94 /* libssl.a */,
 				BFC65BEE1C9223110079DF5A /* src */,
 				BFC65BED1C9222C00079DF5A /* libs */,
@@ -273,7 +281,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 10.8;
 				ONLY_ACTIVE_ARCH = YES;
-				OTHER_CFLAGS = "-DAS_USE_LIBEV";
+				OTHER_CFLAGS = "";
 				SDKROOT = macosx;
 			};
 			name = Debug;
@@ -311,7 +319,7 @@
 					/usr/local/include,
 				);
 				MACOSX_DEPLOYMENT_TARGET = 10.8;
-				OTHER_CFLAGS = "-DAS_USE_LIBEV";
+				OTHER_CFLAGS = "";
 				SDKROOT = macosx;
 			};
 			name = Release;

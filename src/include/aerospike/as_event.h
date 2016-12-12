@@ -25,15 +25,17 @@
 /**
  *	@defgroup async_events Asynchronous Event Abstraction
  *
- *  Generic asynchronous events abstraction.  Designed to support multiple event libraries
- *	such as libev and libuv.  Only one library can be supported per build.
+ *  Generic asynchronous events abstraction.  Designed to support multiple event libraries.
+ *	Only one library is supported per build.
  */
-#define AS_EVENT_LIB_DEFINED (defined(AS_USE_LIBEV) || defined(AS_USE_LIBUV))
+#define AS_EVENT_LIB_DEFINED (defined(AS_USE_LIBEV) || defined(AS_USE_LIBUV) || defined(AS_USE_LIBEVENT))
 
 #if defined(AS_USE_LIBEV)
 #include <ev.h>
 #elif defined(AS_USE_LIBUV)
 #include <uv.h>
+#elif defined(AS_USE_LIBEVENT)
+#include <event2/event_struct.h>
 #else
 #endif
 
@@ -58,6 +60,9 @@ typedef struct as_event_loop {
 #elif defined(AS_USE_LIBUV)
 	uv_loop_t* loop;
 	uv_async_t* wakeup;
+#elif defined(AS_USE_LIBEVENT)
+	struct event_base* loop;
+	struct event wakeup;
 #else
 	void* loop;
 #endif

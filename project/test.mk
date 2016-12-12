@@ -46,6 +46,10 @@ ifeq ($(EVENT_LIB),libuv)
   TEST_LDFLAGS += -luv
 endif
 
+ifeq ($(EVENT_LIB),libevent)
+  TEST_LDFLAGS += -levent_core -levent_pthreads
+endif
+
 AS_HOST := 127.0.0.1
 AS_PORT := 3000
 AS_ARGS := -h $(AS_HOST) -p $(AS_PORT)

@@ -7,28 +7,36 @@ PREFIX = ../../../../target/$(PLATFORM)
 LIBRARY_PATH = $(PREFIX)/lib
 INCLUDE_PATH = $(PREFIX)/include
 
-CFLAGS = -I$(INCLUDE_PATH)
+CFLAGS = -I$(INCLUDE_PATH) -I/usr/local/include 
 CFLAGS += -std=c++0x -g -rdynamic -Wall 
 CFLAGS += -fno-common -fno-strict-aliasing -fPIC 
 CFLAGS += -DMARCH_$(ARCH) -D_FILE_OFFSET_BITS=64 
 CFLAGS += -D_REENTRANT -D_GNU_SOURCE
 
 ifeq ($(EVENT_LIB),libev)
-  CFLAGS += -DAS_USE_LIBEV -I/usr/local/include
+  CFLAGS += -DAS_USE_LIBEV
 endif
 
 ifeq ($(EVENT_LIB),libuv)
-  CFLAGS += -DAS_USE_LIBUV -I/usr/local/include
+  CFLAGS += -DAS_USE_LIBUV
 endif
 
-LDFLAGS = $(LIBRARY_PATH)/libaerospike.a
+ifeq ($(EVENT_LIB),libevent)
+  CFLAGS += -DAS_USE_LIBEVENT
+endif
+
+LDFLAGS = $(LIBRARY_PATH)/libaerospike.a -L/usr/local/lib
 
 ifeq ($(EVENT_LIB),libev)
-  LDFLAGS += -L/usr/local/lib -lev
+  LDFLAGS += -lev
 endif
 
 ifeq ($(EVENT_LIB),libuv)
-  LDFLAGS += -L/usr/local/lib -luv
+  LDFLAGS += -luv
+endif
+
+ifeq ($(EVENT_LIB),libevent)
+  LDFLAGS += -levent_core -levent_pthreads
 endif
 
 ifeq ($(OS),Darwin)

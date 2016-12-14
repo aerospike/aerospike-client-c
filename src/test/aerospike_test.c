@@ -123,8 +123,8 @@ usage()
 	fprintf(stderr, "  --tlsKeyFile <path>\n");
 	fprintf(stderr, "  Set the TLS client key file for mutual authentication.\n\n");
 
-	fprintf(stderr, "  --tlsChainFile <path>\n");
-	fprintf(stderr, "  Set the TLS client chain file for mutual authentication.\n\n");
+	fprintf(stderr, "  --tlsCertFile <path>\n");
+	fprintf(stderr, "  Set the TLS client certificate chain file for mutual authentication.\n\n");
 
 	fprintf(stderr, "  -u --usage         # Default: usage not printed.\n");
 	fprintf(stderr, "  Display program usage.\n\n");
@@ -150,7 +150,7 @@ static struct option long_options[] = {
 	{"tlsCertBlackList",     required_argument, 0, 'O'},
 	{"tlsLogSessionInfo",    no_argument,       0, 'Q'},
 	{"tlsKeyFile",           required_argument, 0, 'Z'},
-	{"tlsChainFile",         required_argument, 0, 'y'},
+	{"tlsCertFile",          required_argument, 0, 'y'},
 	{"usage",     	         no_argument,       0, 'u'},
 	{0, 0, 0, 0}
 };
@@ -245,7 +245,7 @@ static bool parse_opts(int argc, char* argv[])
 			break;
 
 		case 'y':
-			g_tls.chainfile = strdup(optarg);
+			g_tls.certfile = strdup(optarg);
 			break;
 
 		case 'u':

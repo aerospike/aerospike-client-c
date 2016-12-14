@@ -222,12 +222,12 @@ typedef struct as_config_tls_s {
 	char* keyfile;
 
 	/**
-	 *  Path to the client's chain file for mutual authentication.
+	 *  Path to the client's certificate chain file for mutual authentication.
 	 *  By default mutual authentication is disabled.
 	 *
-	 *	Use as_config_tls_set_chainfile() to set this field.
+	 *	Use as_config_tls_set_certfile() to set this field.
 	 */
-	char* chainfile;
+	char* certfile;
 
 } as_config_tls;
 
@@ -714,14 +714,14 @@ as_config_tls_set_keyfile(as_config* config, const char* keyfile)
 }
 
 /**
- *	Set TLS path to the client's chain file for mutual authentication.
+ *	Set TLS path to the client's certificate chain file for mutual authentication.
  *
  *	@relates as_config
  */
 static inline void
-as_config_tls_set_chainfile(as_config* config, const char* chainfile)
+as_config_tls_set_certfile(as_config* config, const char* certfile)
 {
-	as_config_set_string(&config->tls.chainfile, chainfile);
+	as_config_set_string(&config->tls.certfile, certfile);
 }
 
 /**

@@ -545,8 +545,8 @@ as_tls_context_setup(as_config_tls* tlscfg,
 		}
 	}
 
-	if (tlscfg->chainfile) {
-		int rv = SSL_CTX_use_certificate_chain_file(ctx, tlscfg->chainfile);
+	if (tlscfg->certfile) {
+		int rv = SSL_CTX_use_certificate_chain_file(ctx, tlscfg->certfile);
 		if (rv != 1) {
 			// We seem to be seeing this bug:
 			// https://groups.google.com/

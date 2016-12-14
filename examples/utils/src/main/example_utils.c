@@ -87,7 +87,7 @@ const struct option LONG_OPTS_BASIC[] = {
 	{"tlsCertBlackList",     required_argument, 0, 'O'},
 	{"tlsLogSessionInfo",    no_argument,       0, 'Q'},
 	{"tlsKeyFile",           required_argument, 0, 'Z'},
-	{"tlsChainFile",         required_argument, 0, 'y'},
+	{"tlsCertFile",          required_argument, 0, 'y'},
 	{0, 0, 0, 0}
 };
 
@@ -111,7 +111,7 @@ const struct option LONG_OPTS_MULTI_KEY[] = {
 	{"tlsCertBlackList",     required_argument, 0, 'O'},
 	{"tlsLogSessionInfo",    no_argument,       0, 'Q'},
 	{"tlsKeyFile",           required_argument, 0, 'Z'},
-	{"tlsChainFile",         required_argument, 0, 'y'},
+	{"tlsCertFile",          required_argument, 0, 'y'},
 	{0, 0, 0, 0}
 };
 
@@ -313,7 +313,7 @@ example_get_opts(int argc, char* argv[], int which_opts)
 			break;
 			
 		case 'y':
-			g_tls.chainfile = strdup(optarg);
+			g_tls.certfile = strdup(optarg);
 			break;
 
 		default:
@@ -438,8 +438,8 @@ usage(const char* short_opts)
 	LOG("--tlsKeyFile <path>");
 	LOG("  Set the TLS client key file for mutual authentication.");
 
-	LOG("--tlsChainFile <path>");
-	LOG("  Set the TLS client chain file for mutual authentication.");
+	LOG("--tlsCertFile <path>");
+	LOG("  Set the TLS client certificate chain file for mutual authentication.");
 }
 
 //==========================================================

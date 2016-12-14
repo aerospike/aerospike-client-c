@@ -102,8 +102,8 @@ as_config_destroy(as_config* config) {
 		cf_free(tls->keyfile);
 	}
 
-	if (tls->chainfile) {
-		cf_free(tls->chainfile);
+	if (tls->certfile) {
+		cf_free(tls->certfile);
 	}
 }
 

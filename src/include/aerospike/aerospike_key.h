@@ -634,6 +634,27 @@ aerospike_has_double(aerospike* as);
 bool
 aerospike_has_geo(aerospike* as);
 
+/**
+ * @cond SKIP_DOXYGEN
+ * doxygen skips this section till endcond
+ */
+as_status
+aerospike_key_put_async_ex(
+	aerospike* as, as_error* err, const as_policy_write* policy, const as_key* key, as_record* rec,
+	as_async_write_listener listener, void* udata, as_event_loop* event_loop, as_pipe_listener pipe_listener,
+	size_t* length, size_t* comp_length
+	);
+
+as_status
+aerospike_key_remove_async_ex(
+	aerospike* as, as_error* err, const as_policy_remove* policy, const as_key* key,
+	as_async_write_listener listener, void* udata, as_event_loop* event_loop,
+	as_pipe_listener pipe_listener, size_t* length
+	);
+/**
+ * @endcond
+ */
+
 #ifdef __cplusplus
 } // end extern "C"
 #endif

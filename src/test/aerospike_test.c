@@ -43,12 +43,6 @@ static char g_user[AS_USER_SIZE];
 static char g_password[AS_PASSWORD_HASH_SIZE];
 as_config_tls g_tls = {0};
 
-#if AS_EVENT_LIB_DEFINED
-static bool g_use_async = true;
-#else
-static bool g_use_async = false;
-#endif
-
 /******************************************************************************
  * STATIC FUNCTIONS
  *****************************************************************************/
@@ -273,13 +267,13 @@ static bool before(atf_plan * plan) {
 	as_log_set_level(AS_LOG_LEVEL_INFO);
 	as_log_set_callback(as_client_log_callback);
 	
-	if (g_use_async) {
-		if (as_event_create_loops(1) == 0) {
-			error("failed to create event loops");
-			return false;
-		}
+#if AS_EVENT_LIB_DEFINED
+	if (as_event_create_loops(1) == 0) {
+		error("failed to create event loops");
+		return false;
 	}
-	
+#endif
+
 	// Initialize global lua configuration.
 	as_config_lua lua;
 	as_config_lua_init(&lua);
@@ -328,9 +322,9 @@ static bool after(atf_plan * plan) {
 	as_status status = aerospike_close(as, &err);
 	aerospike_destroy(as);
 
-	if (g_use_async) {
-		as_event_close_loops();
-	}
+#if AS_EVENT_LIB_DEFINED
+	as_event_close_loops();
+#endif
 
 	if (status == AEROSPIKE_OK) {
 		return true;
@@ -396,14 +390,14 @@ PLAN(aerospike_test) {
 	// as_ldt module
 	plan_add(ldt_lmap);
 
-	if (g_use_async) {
-		plan_add(key_basics_async);
-		plan_add(list_basics_async);
-		plan_add(map_basics_async);
-		plan_add(key_apply_async);
-		plan_add(key_pipeline);
-		plan_add(batch_async);
-		plan_add(scan_async);
-		plan_add(query_async);
-	}
+#if AS_EVENT_LIB_DEFINED
+	plan_add(key_basics_async);
+	plan_add(list_basics_async);
+	plan_add(map_basics_async);
+	plan_add(key_apply_async);
+	plan_add(key_pipeline);
+	plan_add(batch_async);
+	plan_add(scan_async);
+	plan_add(query_async);
+#endif
 }

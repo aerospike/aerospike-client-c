@@ -911,9 +911,12 @@ as_tls_read_once(as_socket* sock, void* buf, size_t len)
 				}
 			}
 			return -4;
+		case SSL_ERROR_ZERO_RETURN:
+			as_log_debug("SSL_read_once: server closed connection");
+			return -5;
 		default:
 			as_log_warn("SSL_read_once: unexpected ssl error: %d", sslerr);
-			return -5;
+			return -6;
 		}
 	}
 }

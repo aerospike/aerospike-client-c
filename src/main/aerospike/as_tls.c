@@ -31,6 +31,8 @@
 #include <aerospike/ssl_util.h>
 #include <citrusleaf/cf_clock.h>
 
+#define MAX_SOCKET_IDLE_LIMIT (60 * 60 * 24)  // 24 hours
+
 static void* cert_blacklist_read(const char * path);
 static bool cert_blacklist_check(void* cert_blacklist,
 								 const char* snhex,
@@ -445,9 +447,10 @@ as_tls_context_setup(as_config_tls* tlscfg,
 {
 	// Clear the destination, in case we don't make it.
 	octx->ssl_ctx = NULL;
-	octx->log_session_info = false;
 	octx->cert_blacklist = NULL;
-	
+	octx->max_socket_idle = 0;
+	octx->log_session_info = false;
+
 	if (! tlscfg->enable) {
 		return AEROSPIKE_OK;
 	}
@@ -457,6 +460,9 @@ as_tls_context_setup(as_config_tls* tlscfg,
 		"TLS not supported with libuv");
 #endif
 	
+	// Limit max_socket_idle.
+	octx->max_socket_idle = (tlscfg->max_socket_idle <= MAX_SOCKET_IDLE_LIMIT) ? tlscfg->max_socket_idle : MAX_SOCKET_IDLE_LIMIT;
+
 	// Only initialize OpenSSL if we've enabled TLS.
 	as_tls_check_init();
 	

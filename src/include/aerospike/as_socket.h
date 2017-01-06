@@ -67,6 +67,7 @@ extern "C" {
 typedef struct as_tls_context_s {
 	SSL_CTX* ssl_ctx;
 	void* cert_blacklist;
+	uint64_t max_socket_idle;
 	bool log_session_info;
 } as_tls_context;
 
@@ -77,6 +78,7 @@ typedef struct as_tls_context_s {
 typedef struct as_socket_s {
 	int fd;
 	int family;
+	uint64_t last_used;
 	as_tls_context* ctx;
 	const char* tls_name;
 	SSL* ssl;

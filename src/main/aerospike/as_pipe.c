@@ -161,6 +161,7 @@ release_connection(as_event_command* cmd, as_pipe_connection* conn, as_queue* qu
 static void
 put_connection(as_event_command* cmd)
 {
+	as_event_set_conn_last_used(cmd->conn);
 	as_pipe_connection* conn = (as_pipe_connection*)cmd->conn;
 	as_log_trace("Returning pipeline connection for writer %p, pipeline connection %p", cmd, conn);
 	as_queue* q = &cmd->node->pipe_conn_qs[cmd->event_loop->index];

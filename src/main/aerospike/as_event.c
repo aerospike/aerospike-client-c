@@ -252,8 +252,9 @@ as_event_release_async_connection(as_event_command* cmd)
 static inline void
 as_event_put_connection(as_event_command* cmd)
 {
+	as_event_set_conn_last_used(cmd->conn);
 	as_queue* queue = &cmd->node->async_conn_qs[cmd->event_loop->index];
-	
+
 	if (as_queue_push(queue, &cmd->conn)) {
 		ck_pr_inc_32(&cmd->cluster->async_conn_pool);
 	} else {

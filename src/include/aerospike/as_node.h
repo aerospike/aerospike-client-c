@@ -382,6 +382,11 @@ as_node_close_connection(as_node* node, as_socket* sock) {
 static inline void
 as_node_put_connection(as_node* node, as_socket* sock)
 {
+	// Update last_used for TLS connections.
+	if (sock->ctx) {
+		sock->last_used = cf_get_seconds();
+	}
+
 	if (cf_queue_push(node->conn_q, sock) != CF_QUEUE_OK) {
 		as_node_close_connection(node, sock);
 	}

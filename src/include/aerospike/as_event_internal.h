@@ -227,6 +227,14 @@ as_event_validate_connection(as_event_connection* conn)
 }
 
 static inline void
+as_event_set_conn_last_used(as_event_connection* conn)
+{
+	if (conn->socket.ctx) {
+		conn->socket.last_used = cf_get_seconds();
+	}
+}
+
+static inline void
 as_event_stop_timer(as_event_command* cmd)
 {
 	if (cmd->timeout_ms) {
@@ -264,6 +272,11 @@ as_event_validate_connection(as_event_connection* conn)
 	return false;
 }
 	
+static inline void
+as_event_set_conn_last_used(as_event_connection* conn)
+{
+}
+
 static inline void
 as_event_stop_timer(as_event_command* cmd)
 {
@@ -304,6 +317,14 @@ as_event_validate_connection(as_event_connection* conn)
 }
 
 static inline void
+as_event_set_conn_last_used(as_event_connection* conn)
+{
+	if (conn->socket.ctx) {
+		conn->socket.last_used = cf_get_seconds();
+	}
+}
+
+static inline void
 as_event_stop_timer(as_event_command* cmd)
 {
 	if (cmd->timeout_ms) {
@@ -333,6 +354,11 @@ static inline int
 as_event_validate_connection(as_event_connection* conn)
 {
 	return -1;
+}
+
+static inline void
+as_event_set_conn_last_used(as_event_connection* conn)
+{
 }
 
 static inline void

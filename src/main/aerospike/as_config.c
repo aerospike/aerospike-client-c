@@ -46,6 +46,7 @@ as_config_init(as_config* c)
 	as_policies_init(&c->policies);
 	as_config_lua_init(&c->lua);
 	memset(&c->tls, 0, sizeof(as_config_tls));
+	c->tls.max_socket_idle = 55;
 	c->fail_if_not_connected = true;
 	c->use_services_alternate = false;
 	c->use_shm = false;

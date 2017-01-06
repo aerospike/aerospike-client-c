@@ -38,6 +38,18 @@ This package contains Aerospike C client library installers, documentation and s
   This installer is used for developers when compiling/linking their applications with the 
   libaerospike static or dynamic shared library.
 
+* aerospike-client-c-libevent-<version>
+
+  Aerospike C client library installer for synchronous and asynchronous functionality
+  implemented with the libevent framework.  libevent must be installed separately on your machine.
+
+* aerospike-client-c-libevent-devel-<version>
+
+  Aerospike C client library and header file installer for synchronous and asynchronous functionality
+  implemented with the libevent framework.  libevent must be installed separately on your machine.
+  This installer is used for developers when compiling/linking their applications with the 
+  libaerospike static or dynamic shared library.
+
 * benchmarks
 
   C client read/write benchmarks.
@@ -87,20 +99,21 @@ Then, install openssl via brew.
 
     $ brew install openssl
 
-#### libev (Optional. Used for asynchronous functions)
+### Event Library
 
-Download and install [libev](http://dist.schmorp.de/libev) version 4.20 or greater.
+An event library is required when C client asynchronous functionality is used.
+This event library must be installed independently of the C client.
+The supported event libraries are:
 
-#### libuv (Optional. Used for asynchronous functions)
+* [libev](http://dist.schmorp.de/libev) version 4.20 or greater.  libev is the preferred event library.
+* [libuv](http://docs.libuv.org) version 1.7.5 or greater.
+* [libevent](http://libevent.org) version 2.0.22 or greater.
 
-Download and install [libuv](http://docs.libuv.org) version 1.7.5 or greater.
-
-libev and libuv usually install into /usr/local/lib.  Most operating systems do not 
+Event libraries usually install into /usr/local/lib.  Most operating systems do not 
 search /usr/local/lib by default.  Therefore, the following LD_LIBRARY_PATH setting may 
 be necessary.
 
     export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
-
 
 ### Installation instructions
 
@@ -115,4 +128,3 @@ libaerospike library with same name, but different implementation.
 
 #### Mac OS X
     open aerospike-client-c[-<eventlib>][-devel]-<version>.pkg
-

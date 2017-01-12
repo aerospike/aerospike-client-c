@@ -1032,9 +1032,9 @@ as_command_parse_bins(as_record* rec, uint8_t* p, uint32_t n_bins, bool deserial
 				break;
 			}
 		}
-		rec->bins.size++;
 		p += value_size;
 	}
+	rec->bins.size = n_bins;
 	return p;
 }
 
@@ -1075,6 +1075,13 @@ as_command_parse_result(as_error* err, as_socket* sock, uint64_t deadline_ms, vo
 				as_record* rec = *data->record;
 				
 				if (rec) {
+					// Must destroy existing record bin values before populating new bin values.
+					as_bin* bin = rec->bins.entries;
+					for (uint16_t i = 0; i < rec->bins.size; i++, bin++) {
+						as_val_destroy((as_val*)bin->valuep);
+						bin->valuep = NULL;
+					}
+
 					if (msg.m.n_ops > rec->bins.capacity) {
 						if (rec->bins._free) {
 							cf_free(rec->bins.entries);

@@ -489,10 +489,13 @@ as_tls_context_setup(as_config_tls* tlscfg,
 	// If the selected protocol set is a single protocol we
 	// can use a specific method.
 	//
+#ifndef OPENSSL_NO_SSL3_METHOD
 	if (protocols == AS_TLS_PROTOCOL_SSLV3) {
 		method = SSLv3_client_method();
 	}
-	else if (protocols == AS_TLS_PROTOCOL_TLSV1) {
+	else
+#endif
+	if (protocols == AS_TLS_PROTOCOL_TLSV1) {
 		method = TLSv1_client_method();
 	}
 	else if (protocols == AS_TLS_PROTOCOL_TLSV1_1) {

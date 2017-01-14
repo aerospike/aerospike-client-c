@@ -490,7 +490,12 @@ as_tls_context_setup(as_config_tls* tlscfg,
 	// can use a specific method.
 	//
 	if (protocols == AS_TLS_PROTOCOL_SSLV3) {
+#ifndef OPENSSL_NO_SSL3_METHOD
 		method = SSLv3_client_method();
+#else
+		cert_blacklist_destroy(cert_blacklist);
+		return as_error_update(errp, AEROSPIKE_ERR_TLS_ERROR, "SSLV3 protocol is not allowed");
+#endif
 	}
 	else if (protocols == AS_TLS_PROTOCOL_TLSV1) {
 		method = TLSv1_client_method();

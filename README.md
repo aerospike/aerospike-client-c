@@ -30,7 +30,7 @@ for Linux and XCode clang for Mac OS X.
 
 ### Fedora 20+
 
-	$ sudo yum install openssl-devel glibc-devel autoconf automake libtool
+	$ sudo yum install openssl-devel glibc-devel autoconf automake libtool readline-devel
 
 	[Optional:]
 	$ sudo yum install compat-lua-devel-5.1.5

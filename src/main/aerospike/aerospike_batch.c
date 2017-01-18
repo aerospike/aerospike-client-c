@@ -115,13 +115,13 @@ as_batch_parse_fields(uint8_t* p, uint32_t n_fields, uint8_t** digest)
 	return p;
 }
 
-static inline uint8_t*
-as_batch_parse_record(uint8_t* p, as_msg* msg, as_record* rec, bool deserialize)
+static inline as_status
+as_batch_parse_record(uint8_t** pp, as_error* err, as_msg* msg, as_record* rec, bool deserialize)
 {
 	as_record_init(rec, msg->n_ops);
 	rec->gen = msg->generation;
 	rec->ttl = cf_server_void_time_to_ttl(msg->record_ttl);
-	return as_command_parse_bins(rec, p, msg->n_ops, deserialize);
+	return as_command_parse_bins(pp, err, rec, msg->n_ops, deserialize);
 }
 
 static void
@@ -171,16 +171,16 @@ as_batch_async_parse_records(as_event_command* cmd)
 		return as_batch_async_skip_records(cmd);
 	}
 	
+	as_error err;
 	as_vector* records = &executor->records->list;
 	uint8_t* p = cmd->buf;
 	uint8_t* end = p + cmd->len;
-	
+
 	while (p < end) {
 		as_msg* msg = (as_msg*)p;
 		as_msg_swap_header_from_be(msg);
 		
 		if (msg->result_code && msg->result_code != AEROSPIKE_ERR_RECORD_NOT_FOUND) {
-			as_error err;
 			as_error_set_message(&err, msg->result_code, as_error_string(msg->result_code));
 			as_event_response_error(cmd, &err);
 			return true;
@@ -198,7 +198,6 @@ as_batch_async_parse_records(as_event_command* cmd)
 		p = as_batch_parse_fields(p, msg->n_fields, &digest);
 		
 		if (offset >= records->size) {
-			as_error err;
 			as_error_update(&err, AEROSPIKE_ERR_CLIENT, "Batch index %u >= batch size: %u", offset, records->size);
 			as_event_response_error(cmd, &err);
 			return true;
@@ -210,13 +209,17 @@ as_batch_async_parse_records(as_event_command* cmd)
 			record->result = msg->result_code;
 			
 			if (msg->result_code == AEROSPIKE_OK) {
-				p = as_batch_parse_record(p, msg, &record->record, cmd->deserialize);
+				as_status status = as_batch_parse_record(&p, &err, msg, &record->record, cmd->deserialize);
+
+				if (status != AEROSPIKE_OK) {
+					as_event_response_error(cmd, &err);
+					return true;
+				}
 			}
 		}
 		else {
 			char digest_string[64];
 			cf_digest_string((cf_digest*)digest, digest_string);
-			as_error err;
 			as_error_update(&err, AEROSPIKE_ERR_CLIENT, "Unexpected batch key returned: %s,%u", digest_string, offset);
 			as_event_response_error(cmd, &err);
 			return true;
@@ -266,7 +269,11 @@ as_batch_parse_records(as_error* err, uint8_t* buf, size_t size, as_batch_task* 
 				record->result = msg->result_code;
 				
 				if (msg->result_code == AEROSPIKE_OK) {
-					p = as_batch_parse_record(p, msg, &record->record, task->deserialize);
+					as_status status = as_batch_parse_record(&p, err, msg, &record->record, task->deserialize);
+
+					if (status != AEROSPIKE_OK) {
+						return status;
+					}
 				}
 			}
 			else {
@@ -281,7 +288,13 @@ as_batch_parse_records(as_error* err, uint8_t* buf, size_t size, as_batch_task* 
 				if (task->callback_xdr) {
 					if (msg->result_code == AEROSPIKE_OK) {
 						as_record rec;
-						p = as_batch_parse_record(p, msg, &rec, task->deserialize);
+						as_status status = as_batch_parse_record(&p, err, msg, &rec, task->deserialize);
+
+						if (status != AEROSPIKE_OK) {
+							as_record_destroy(&rec);
+							return status;
+						}
+
 						bool rv = task->callback_xdr(key, &rec, task->udata);
 						as_record_destroy(&rec);
 						
@@ -295,7 +308,11 @@ as_batch_parse_records(as_error* err, uint8_t* buf, size_t size, as_batch_task* 
 					result->result = msg->result_code;
 					
 					if (msg->result_code == AEROSPIKE_OK) {
-						p = as_batch_parse_record(p, msg, &result->record, task->deserialize);
+						as_status status = as_batch_parse_record(&p, err, msg, &result->record, task->deserialize);
+
+						if (status != AEROSPIKE_OK) {
+							return status;
+						}
 					}
 				}
 			}

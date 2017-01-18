@@ -927,11 +927,22 @@ as_command_parse_udf_failure(uint8_t* p, as_error* err, as_msg* msg, as_status s
 	return as_error_set_message(err, status, as_error_string(status));
 }
 
-uint8_t*
-as_command_parse_bins(as_record* rec, uint8_t* p, uint32_t n_bins, bool deserialize)
+static as_status
+abort_record_memory(as_error* err, as_record* rec, size_t size)
 {
+	// Bin values prior to failure will be destroyed later when entire record is destroyed.
+	return as_error_update(err, AEROSPIKE_ERR_CLIENT, "malloc failure: %zu", size);
+}
+
+as_status
+as_command_parse_bins(uint8_t** pp, as_error* err, as_record* rec, uint32_t n_bins, bool deserialize)
+{
+	uint8_t* p = *pp;
 	as_bin* bin = rec->bins.entries;
-	
+
+	// Reset size in case we are reusing a record.
+	rec->bins.size = 0;
+
 	// Parse bins
 	for (uint32_t i = 0; i < n_bins; i++, bin++) {
 		uint32_t op_size = cf_swap_from_be32(*(uint32_t*)p);
@@ -968,6 +979,10 @@ as_command_parse_bins(as_record* rec, uint8_t* p, uint32_t n_bins, bool deserial
 			}
 			case AS_BYTES_STRING: {
 				char* value = cf_malloc(value_size + 1);
+
+				if (! value) {
+					return abort_record_memory(err, rec, value_size + 1);
+				}
 				memcpy(value, p, value_size);
 				value[value_size] = 0;
 				as_string_init_wlen((as_string*)&bin->value, (char*)value, value_size, true);
@@ -990,6 +1005,10 @@ as_command_parse_bins(as_record* rec, uint8_t* p, uint32_t n_bins, bool deserial
 				// Use the json bytes.
 				size_t jsonsz = value_size - 1 - 2 - (ncells * sizeof(uint64_t));
 				char* v = cf_malloc(jsonsz + 1);
+
+				if (! v) {
+					return abort_record_memory(err, rec, jsonsz + 1);
+				}
 				memcpy(v, ptr, jsonsz);
 				v[jsonsz] = 0;
 				as_geojson_init_wlen((as_geojson*)&bin->value,
@@ -1009,13 +1028,20 @@ as_command_parse_bins(as_record* rec, uint8_t* p, uint32_t n_bins, bool deserial
 					
 					as_serializer ser;
 					as_msgpack_init(&ser);
-					as_serializer_deserialize(&ser, &buffer, &value);
+					int rv = as_serializer_deserialize(&ser, &buffer, &value);
 					as_serializer_destroy(&ser);
-					
+
+					if (rv != 0) {
+						return as_error_update(err, AEROSPIKE_ERR_CLIENT, "deserialize error: %d", rv);
+					}
 					bin->valuep = (as_bin_value*)value;
 				}
 				else {
 					void* value = cf_malloc(value_size);
+
+					if (! value) {
+						return abort_record_memory(err, rec, value_size);
+					}
 					memcpy(value, p, value_size);
 					as_bytes_init_wrap((as_bytes*)&bin->value, value, value_size, true);
 					bin->value.bytes.type = (as_bytes_type)type;
@@ -1025,6 +1051,10 @@ as_command_parse_bins(as_record* rec, uint8_t* p, uint32_t n_bins, bool deserial
 			}
 			default: {
 				void* value = cf_malloc(value_size);
+
+				if (! value) {
+					return abort_record_memory(err, rec, value_size);
+				}
 				memcpy(value, p, value_size);
 				as_bytes_init_wrap((as_bytes*)&bin->value, value, value_size, true);
 				bin->value.bytes.type = (as_bytes_type)type;
@@ -1032,10 +1062,11 @@ as_command_parse_bins(as_record* rec, uint8_t* p, uint32_t n_bins, bool deserial
 				break;
 			}
 		}
+		rec->bins.size++;
 		p += value_size;
 	}
-	rec->bins.size = n_bins;
-	return p;
+	*pp = p;
+	return AEROSPIKE_OK;
 }
 
 as_status
@@ -1073,6 +1104,7 @@ as_command_parse_result(as_error* err, as_socket* sock, uint64_t deadline_ms, vo
 		case AEROSPIKE_OK: {
 			if (data->record) {
 				as_record* rec = *data->record;
+				bool free_on_error;
 				
 				if (rec) {
 					// Must destroy existing record bin values before populating new bin values.
@@ -1091,16 +1123,22 @@ as_command_parse_result(as_error* err, as_socket* sock, uint64_t deadline_ms, vo
 						rec->bins.entries = cf_malloc(sizeof(as_bin) * msg.m.n_ops);
 						rec->bins._free = true;
 					}
+					free_on_error = false;
 				}
 				else {
 					rec = as_record_new(msg.m.n_ops);
 					*data->record = rec;
+					free_on_error = true;
 				}
 				rec->gen = msg.m.generation;
 				rec->ttl = cf_server_void_time_to_ttl(msg.m.record_ttl);
 				
 				uint8_t* p = as_command_ignore_fields(buf, msg.m.n_fields);
-				as_command_parse_bins(rec, p, msg.m.n_ops, data->deserialize);
+				status = as_command_parse_bins(&p, err, rec, msg.m.n_ops, data->deserialize);
+
+				if (status != AEROSPIKE_OK && free_on_error) {
+					as_record_destroy(rec);
+				}
 			}
 			break;
 		}

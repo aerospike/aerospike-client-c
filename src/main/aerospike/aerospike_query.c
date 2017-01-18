@@ -196,29 +196,37 @@ as_query_complete_async(as_event_executor* executor, as_error* err)
 	((as_async_query_executor*)executor)->listener(err, 0, executor->udata, executor->event_loop);
 }
 
-static bool
-as_query_parse_record_async(as_event_command* cmd, uint8_t** pp, as_msg* msg)
+static as_status
+as_query_parse_record_async(as_event_command* cmd, uint8_t** pp, as_msg* msg, as_error* err)
 {
 	as_record rec;
 	as_record_inita(&rec, msg->n_ops);
 	
 	rec.gen = msg->generation;
 	rec.ttl = cf_server_void_time_to_ttl(msg->record_ttl);
-	
-	uint8_t* p = *pp;
-	p = as_command_parse_key(p, msg->n_fields, &rec.key);
-	p = as_command_parse_bins(&rec, p, msg->n_ops, cmd->deserialize);
-	*pp = p;
-	
+	*pp = as_command_parse_key(*pp, msg->n_fields, &rec.key);
+
+	as_status status = as_command_parse_bins(pp, err, &rec, msg->n_ops, cmd->deserialize);
+
+	if (status != AEROSPIKE_OK) {
+		as_record_destroy(&rec);
+		return status;
+	}
+
 	as_event_executor* executor = cmd->udata;  // udata is overloaded to contain executor.
 	bool rv = ((as_async_query_executor*)executor)->listener(0, &rec, executor->udata, executor->event_loop);
 	as_record_destroy(&rec);
-	return rv;
+
+	if (! rv) {
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT_ABORT, "");
+	}
+	return AEROSPIKE_OK;
 }
 
 static bool
 as_query_parse_records_async(as_event_command* cmd)
 {
+	as_error err;
 	as_event_executor* executor = cmd->udata;  // udata is overloaded to contain executor.
 	uint8_t* p = cmd->buf;
 	uint8_t* end = p + cmd->len;
@@ -228,7 +236,6 @@ as_query_parse_records_async(as_event_command* cmd)
 		as_msg_swap_header_from_be(msg);
 		
 		if (msg->result_code) {
-			as_error err;
 			as_error_set_message(&err, msg->result_code, as_error_string(msg->result_code));
 			as_event_response_error(cmd, &err);
 			return true;
@@ -241,16 +248,13 @@ as_query_parse_records_async(as_event_command* cmd)
 		}
 		
 		if (! executor->valid) {
-			as_error err;
 			as_error_set_message(&err, AEROSPIKE_ERR_CLIENT_ABORT, "");
 			as_event_response_error(cmd, &err);
 			return true;
 		}
 
-		if (! as_query_parse_record_async(cmd, &p, msg)) {
+		if (as_query_parse_record_async(cmd, &p, msg, &err) != AEROSPIKE_OK) {
 			executor->valid = false;
-			as_error err;
-			as_error_set_message(&err, AEROSPIKE_ERR_CLIENT_ABORT, "");
 			as_event_response_error(cmd, &err);
 			return true;
 		}
@@ -294,16 +298,18 @@ as_query_parse_record(uint8_t** pp, as_msg* msg, as_query_task* task, as_error* 
 		
 		rec.gen = msg->generation;
 		rec.ttl = cf_server_void_time_to_ttl(msg->record_ttl);
-		
-		uint8_t* p = *pp;
-		p = as_command_parse_key(p, msg->n_fields, &rec.key);
+		*pp = as_command_parse_key(*pp, msg->n_fields, &rec.key);
 
 		AEROSPIKE_QUERY_RECPARSE_BINS(task->task_id, task->node->name);
 
-		p = as_command_parse_bins(&rec, p, msg->n_ops, task->deserialize);
-		*pp = p;
-		
+		as_status status = as_command_parse_bins(pp, err, &rec, msg->n_ops, task->deserialize);
+
 		AEROSPIKE_QUERY_RECPARSE_FINISHED(task->task_id, task->node->name);
+
+		if (status != AEROSPIKE_OK) {
+			as_record_destroy(&rec);
+			return status;
+		}
 
 		if (task->callback) {
 			AEROSPIKE_QUERY_RECCB_STARTING(task->task_id, task->node->name);

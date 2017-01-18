@@ -534,6 +534,7 @@ as_event_command_parse_header(as_event_command* cmd)
 bool
 as_event_command_parse_result(as_event_command* cmd)
 {
+	as_error err;
 	as_msg* msg = (as_msg*)cmd->buf;
 	as_msg_swap_header_from_be(msg);
 	uint8_t* p = cmd->buf + sizeof(as_msg);
@@ -554,24 +555,27 @@ as_event_command_parse_result(as_event_command* cmd)
 			rec.ttl = cf_server_void_time_to_ttl(msg->record_ttl);
 			
 			p = as_command_ignore_fields(p, msg->n_fields);
-			as_command_parse_bins(&rec, p, msg->n_ops, cmd->deserialize);
-			
-			as_event_response_complete(cmd);
-			((as_async_record_command*)cmd)->listener(0, &rec, cmd->udata, cmd->event_loop);
-			as_event_command_release(cmd);
+			status = as_command_parse_bins(&p, &err, &rec, msg->n_ops, cmd->deserialize);
+
+			if (status == AEROSPIKE_OK) {
+				as_event_response_complete(cmd);
+				((as_async_record_command*)cmd)->listener(0, &rec, cmd->udata, cmd->event_loop);
+				as_event_command_release(cmd);
+			}
+			else {
+				as_event_response_error(cmd, &err);
+			}
 			as_record_destroy(&rec);
 			break;
 		}
 			
 		case AEROSPIKE_ERR_UDF: {
-			as_error err;
 			as_command_parse_udf_failure(p, &err, msg, status);
 			as_event_response_error(cmd, &err);
 			break;
 		}
 			
 		default: {
-			as_error err;
 			as_error_set_message(&err, status, as_error_string(status));
 			as_event_response_error(cmd, &err);
 			break;

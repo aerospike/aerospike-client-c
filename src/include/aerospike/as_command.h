@@ -457,8 +457,8 @@ as_command_parse_success_failure_bins(uint8_t** pp, as_error* err, as_msg* msg, 
  *	@private
  *	Parse bins received from the server.
  */
-uint8_t*
-as_command_parse_bins(as_record* rec, uint8_t* buf, uint32_t n_bins, bool deserialize);
+as_status
+as_command_parse_bins(uint8_t** pp, as_error* err, as_record* rec, uint32_t n_bins, bool deserialize);
 
 /**
  *	@private

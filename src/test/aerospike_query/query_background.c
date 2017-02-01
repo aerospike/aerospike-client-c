@@ -179,8 +179,8 @@ as_query_callback(const as_val* v, void* udata)
 		return true;
 	}
 	qdata* data = udata;
-	data->count++;
-	
+	ck_pr_inc_int(&data->count);
+
 	as_record* rec = (as_record*)v;
 	int v1 = (int)as_record_get_int64(rec, "qebin1", 0);
 	int v2 = (int)as_record_get_int64(rec, "qebin2", 0);

@@ -563,7 +563,7 @@ as_status aerospike_llist_filter(
 		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
 				"filter arguments without filter name specification");
 	}
-	if (filter && (!ldt->module || ldt->module[0] == '\0')) {
+	if (filter && (ldt->module[0] == '\0')) {
 		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
 				"filter name without ldt udf module name specification");
 	}
@@ -639,7 +639,7 @@ as_status aerospike_llist_range_limit(
 		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
 				"filter arguments without filter name specification");
 	}
-	if (filter && (!ldt->module || ldt->module[0] == '\0')) {
+	if (filter && (ldt->module[0] == '\0')) {
 		return as_error_set(err, AEROSPIKE_ERR_PARAM, "invalid parameter. "
 				"filter name without ldt udf module name specification");
 	}

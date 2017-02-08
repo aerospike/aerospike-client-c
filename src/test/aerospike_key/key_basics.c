@@ -723,7 +723,7 @@ static bool scan_cb(const as_val * val, void * udata)
 
 	const char* key_val_as_str = as_val_tostring(rec->key.valuep);
 
-	if (! strcmp(key_val_as_str, "\"store_key\"")==0) {
+	if (strcmp(key_val_as_str, "\"store_key\"") != 0) {
 		error("Expected record to have key [\"store_key\"], but got [%s]",key_val_as_str);
 		*result = 4; // fail 4
 		free((void *)key_val_as_str);
@@ -732,12 +732,11 @@ static bool scan_cb(const as_val * val, void * udata)
 
 	// check set name
 	const char * set = rec->key.set[0] == '\0' ? NULL : rec->key.set;
-	if (! strcmp(set, "store_key_set")==0) {
+	if (strcmp(set, "store_key_set") != 0) {
 		error("Expected record in set [store_key_set], but got set in [%s]", set);
 		*result = 2; // fail 2
 		return false;
 	}
-
 
 	*result = 0;
 

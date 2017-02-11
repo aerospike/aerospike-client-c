@@ -1,8 +1,23 @@
 #!/bin/bash -e
 ver="2.0.22-stable"
-wget https://github.com/libevent/libevent/releases/download/release-$ver/libevent-$ver.tar.gz
-tar xvf libevent-$ver.tar.gz
-cd libevent-$ver
-./configure
-make
+dir=libevent-$ver
+fn=$dir.tar.gz
+url=https://github.com/libevent/libevent/releases/download/release-$ver/$fn
+
+rm -rf $fn $dir
+
+echo Download $url
+wget $url
+
+echo Extract $fn 
+tar xf $fn
+
+echo Make $dir
+cd $dir
+./configure -q
+make CFLAGS=-w
 sudo make install
+
+echo Remove source $fn $dir
+cd ..
+rm -rf $fn $dir

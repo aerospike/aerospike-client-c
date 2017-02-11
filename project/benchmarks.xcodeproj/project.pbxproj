@@ -7,22 +7,19 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		BF21EA561C06500700E2031E /* libuv.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BF21EA551C06500700E2031E /* libuv.a */; };
-		BF4E4E3A1D4AD71A00BEEF94 /* libssl.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BF4E4E391D4AD71A00BEEF94 /* libssl.a */; };
+		BE9280D11E4ACA2B007F7DA7 /* libssl.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BE9280D01E4ACA2B007F7DA7 /* libssl.dylib */; };
+		BE9280D31E4ACA39007F7DA7 /* libcrypto.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BE9280D21E4ACA39007F7DA7 /* libcrypto.dylib */; };
+		BE9280D51E4ACA3E007F7DA7 /* libz.1.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BE9280D41E4ACA3E007F7DA7 /* libz.1.dylib */; };
+		BE9280D61E4ACBC9007F7DA7 /* liblua.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BE9280CF1E4ACA01007F7DA7 /* liblua.a */; };
 		BF5DD9BF18E105080041F796 /* main.c in Sources */ = {isa = PBXBuildFile; fileRef = BF5DD9BE18E105080041F796 /* main.c */; };
 		BF5DD9C118E1096F0041F796 /* benchmark.c in Sources */ = {isa = PBXBuildFile; fileRef = BF5DD9C018E1096F0041F796 /* benchmark.c */; };
+		BF9750151E4ECA7700B737CF /* libev.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BF9750141E4ECA7700B737CF /* libev.a */; settings = {ATTRIBUTES = (Weak, ); }; };
+		BF9750171E4ECA8C00B737CF /* libuv.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BF9750161E4ECA8C00B737CF /* libuv.a */; settings = {ATTRIBUTES = (Weak, ); }; };
 		BFBA53FB18E1EF5800DC6D8B /* libaerospike.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFBA53F818E1EF4600DC6D8B /* libaerospike.a */; };
-		BFBA53FD18E1EF8800DC6D8B /* libz.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFBA53FC18E1EF8800DC6D8B /* libz.dylib */; };
-		BFBA53FF18E1EF9300DC6D8B /* libpthread.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFBA53FE18E1EF9300DC6D8B /* libpthread.dylib */; };
-		BFBA540118E1EFAA00DC6D8B /* libcrypto.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFBA540018E1EFAA00DC6D8B /* libcrypto.dylib */; };
-		BFBA540318E1EFF200DC6D8B /* liblua.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFBA540218E1EFF200DC6D8B /* liblua.a */; };
 		BFBA540A18E1F2D300DC6D8B /* linear.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBA540818E1F2D300DC6D8B /* linear.c */; };
 		BFBA540B18E1F2D300DC6D8B /* random.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBA540918E1F2D300DC6D8B /* random.c */; };
 		BFBA540D18E20AE900DC6D8B /* latency.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBA540C18E20AE900DC6D8B /* latency.c */; };
 		BFBA540F18E211A200DC6D8B /* record.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBA540E18E211A200DC6D8B /* record.c */; };
-		BFC212AF1BDECA9F00E5730A /* libev.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC212AE1BDECA9F00E5730A /* libev.a */; };
-		BFCB38A91DFB9A0700C73D0F /* libevent_core.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFCB38A81DFB9A0700C73D0F /* libevent_core.a */; };
-		BFCB38AB1DFB9A2D00C73D0F /* libevent_pthreads.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFCB38AA1DFB9A2D00C73D0F /* libevent_pthreads.a */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -55,25 +52,22 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		BF21EA551C06500700E2031E /* libuv.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libuv.a; path = /usr/local/Cellar/libuv/1.7.5/lib/libuv.a; sourceTree = "<absolute>"; };
-		BF4E4E391D4AD71A00BEEF94 /* libssl.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libssl.a; path = ../../../../usr/local/Cellar/openssl/1.0.2h_1/lib/libssl.a; sourceTree = "<group>"; };
+		BE9280CF1E4ACA01007F7DA7 /* liblua.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = liblua.a; path = ../modules/lua/src/liblua.a; sourceTree = "<group>"; };
+		BE9280D01E4ACA2B007F7DA7 /* libssl.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libssl.dylib; path = /usr/local/opt/openssl/lib/libssl.dylib; sourceTree = "<group>"; };
+		BE9280D21E4ACA39007F7DA7 /* libcrypto.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libcrypto.dylib; path = /usr/local/opt/openssl/lib/libcrypto.dylib; sourceTree = "<group>"; };
+		BE9280D41E4ACA3E007F7DA7 /* libz.1.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libz.1.dylib; path = ../../../../../usr/lib/libz.1.dylib; sourceTree = "<group>"; };
 		BF5DD9BE18E105080041F796 /* main.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = main.c; path = ../benchmarks/src/main/main.c; sourceTree = "<group>"; };
 		BF5DD9C018E1096F0041F796 /* benchmark.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = benchmark.c; path = ../benchmarks/src/main/benchmark.c; sourceTree = "<group>"; };
+		BF9750141E4ECA7700B737CF /* libev.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libev.a; path = /usr/local/lib/libev.a; sourceTree = "<group>"; };
+		BF9750161E4ECA8C00B737CF /* libuv.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libuv.a; path = /usr/local/lib/libuv.a; sourceTree = "<group>"; };
 		BFBA53F318E1EF4600DC6D8B /* aerospike.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = aerospike.xcodeproj; sourceTree = "<group>"; };
-		BFBA53FC18E1EF8800DC6D8B /* libz.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libz.dylib; path = usr/lib/libz.dylib; sourceTree = SDKROOT; };
-		BFBA53FE18E1EF9300DC6D8B /* libpthread.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libpthread.dylib; path = usr/lib/libpthread.dylib; sourceTree = SDKROOT; };
-		BFBA540018E1EFAA00DC6D8B /* libcrypto.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libcrypto.dylib; path = usr/lib/libcrypto.dylib; sourceTree = SDKROOT; };
-		BFBA540218E1EFF200DC6D8B /* liblua.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = liblua.a; path = /usr/local/lib/liblua.a; sourceTree = "<absolute>"; };
 		BFBA540818E1F2D300DC6D8B /* linear.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = linear.c; path = ../benchmarks/src/main/linear.c; sourceTree = "<group>"; };
 		BFBA540918E1F2D300DC6D8B /* random.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = random.c; path = ../benchmarks/src/main/random.c; sourceTree = "<group>"; };
 		BFBA540C18E20AE900DC6D8B /* latency.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = latency.c; path = ../benchmarks/src/main/latency.c; sourceTree = "<group>"; };
 		BFBA540E18E211A200DC6D8B /* record.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = record.c; path = ../benchmarks/src/main/record.c; sourceTree = "<group>"; };
 		BFBA541218E212CD00DC6D8B /* benchmark.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = benchmark.h; path = ../benchmarks/src/main/benchmark.h; sourceTree = "<group>"; };
 		BFBFE57818E3761900B07B6B /* latency.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = latency.h; path = ../benchmarks/src/main/latency.h; sourceTree = "<group>"; };
-		BFC212AE1BDECA9F00E5730A /* libev.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libev.a; path = /usr/local/lib/libev.a; sourceTree = "<absolute>"; };
 		BFC79A7A18DCB27D00CFE830 /* benchmarks */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = benchmarks; sourceTree = BUILT_PRODUCTS_DIR; };
-		BFCB38A81DFB9A0700C73D0F /* libevent_core.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libevent_core.a; path = ../../../../usr/local/lib/libevent_core.a; sourceTree = "<group>"; };
-		BFCB38AA1DFB9A2D00C73D0F /* libevent_pthreads.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libevent_pthreads.a; path = ../../../../usr/local/lib/libevent_pthreads.a; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -82,15 +76,12 @@
 			buildActionMask = 2147483647;
 			files = (
 				BFBA53FB18E1EF5800DC6D8B /* libaerospike.a in Frameworks */,
-				BFBA540118E1EFAA00DC6D8B /* libcrypto.dylib in Frameworks */,
-				BFBA540318E1EFF200DC6D8B /* liblua.a in Frameworks */,
-				BFC212AF1BDECA9F00E5730A /* libev.a in Frameworks */,
-				BF21EA561C06500700E2031E /* libuv.a in Frameworks */,
-				BFCB38A91DFB9A0700C73D0F /* libevent_core.a in Frameworks */,
-				BFCB38AB1DFB9A2D00C73D0F /* libevent_pthreads.a in Frameworks */,
-				BF4E4E3A1D4AD71A00BEEF94 /* libssl.a in Frameworks */,
-				BFBA53FF18E1EF9300DC6D8B /* libpthread.dylib in Frameworks */,
-				BFBA53FD18E1EF8800DC6D8B /* libz.dylib in Frameworks */,
+				BE9280D61E4ACBC9007F7DA7 /* liblua.a in Frameworks */,
+				BF9750151E4ECA7700B737CF /* libev.a in Frameworks */,
+				BF9750171E4ECA8C00B737CF /* libuv.a in Frameworks */,
+				BE9280D11E4ACA2B007F7DA7 /* libssl.dylib in Frameworks */,
+				BE9280D31E4ACA39007F7DA7 /* libcrypto.dylib in Frameworks */,
+				BE9280D51E4ACA3E007F7DA7 /* libz.1.dylib in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -109,12 +100,10 @@
 			isa = PBXGroup;
 			children = (
 				BFBA53F318E1EF4600DC6D8B /* aerospike.xcodeproj */,
-				BF21EA551C06500700E2031E /* libuv.a */,
-				BFC212AE1BDECA9F00E5730A /* libev.a */,
-				BFBA540218E1EFF200DC6D8B /* liblua.a */,
-				BFBA540018E1EFAA00DC6D8B /* libcrypto.dylib */,
-				BFBA53FE18E1EF9300DC6D8B /* libpthread.dylib */,
-				BFBA53FC18E1EF8800DC6D8B /* libz.dylib */,
+				BE9280CF1E4ACA01007F7DA7 /* liblua.a */,
+				BE9280D01E4ACA2B007F7DA7 /* libssl.dylib */,
+				BE9280D21E4ACA39007F7DA7 /* libcrypto.dylib */,
+				BE9280D41E4ACA3E007F7DA7 /* libz.1.dylib */,
 			);
 			name = libs;
 			sourceTree = "<group>";
@@ -137,9 +126,8 @@
 		BFC79A7118DCB27D00CFE830 = {
 			isa = PBXGroup;
 			children = (
-				BFCB38AA1DFB9A2D00C73D0F /* libevent_pthreads.a */,
-				BFCB38A81DFB9A0700C73D0F /* libevent_core.a */,
-				BF4E4E391D4AD71A00BEEF94 /* libssl.a */,
+				BF9750161E4ECA8C00B737CF /* libuv.a */,
+				BF9750141E4ECA7700B737CF /* libev.a */,
 				BFC65BEE1C9223110079DF5A /* src */,
 				BFC65BED1C9222C00079DF5A /* libs */,
 				BFC79A7B18DCB27D00CFE830 /* Products */,
@@ -277,9 +265,9 @@
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
 					/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include,
-					/usr/local/include,
+					/usr/local/include/openssl,
 				);
-				MACOSX_DEPLOYMENT_TARGET = 10.8;
+				MACOSX_DEPLOYMENT_TARGET = "";
 				ONLY_ACTIVE_ARCH = YES;
 				OTHER_CFLAGS = "";
 				SDKROOT = macosx;
@@ -316,9 +304,9 @@
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
 					/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include,
-					/usr/local/include,
+					/usr/local/include/openssl,
 				);
-				MACOSX_DEPLOYMENT_TARGET = 10.8;
+				MACOSX_DEPLOYMENT_TARGET = "";
 				OTHER_CFLAGS = "";
 				SDKROOT = macosx;
 			};
@@ -335,13 +323,15 @@
 				);
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-					/usr/local/Cellar/openssl/1.0.2h_1/lib,
+					/usr/local/opt/openssl/lib,
 				);
-				MACOSX_DEPLOYMENT_TARGET = 10.8;
-				OTHER_LDFLAGS = "-L/usr/local/lib";
+				MACOSX_DEPLOYMENT_TARGET = "";
+				OTHER_LDFLAGS = (
+					"-L/usr/local/lib",
+					"-L../modules/lua/src",
+				);
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = macosx10.8;
+				SDKROOT = macosx;
 			};
 			name = Debug;
 		};
@@ -356,13 +346,15 @@
 				);
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-					/usr/local/Cellar/openssl/1.0.2h_1/lib,
+					/usr/local/opt/openssl/lib,
 				);
-				MACOSX_DEPLOYMENT_TARGET = 10.8;
-				OTHER_LDFLAGS = "-L/usr/local/lib";
+				MACOSX_DEPLOYMENT_TARGET = "";
+				OTHER_LDFLAGS = (
+					"-L/usr/local/lib",
+					"-L../modules/lua/src",
+				);
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = macosx10.8;
+				SDKROOT = macosx;
 			};
 			name = Release;
 		};

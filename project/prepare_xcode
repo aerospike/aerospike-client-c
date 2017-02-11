@@ -1,0 +1,18 @@
+#!/bin/bash -e
+# Install all prequisites that are required by the Aerospike xcode project
+# on MacOS.  This script only needs to be run once.
+
+cd `dirname $0`
+
+# Install MacOS prerequisites
+brew install wget
+brew install automake
+brew install libtool
+brew install openssl
+
+# Must perform make to create liblua.a that is referenced in xcode project.
+cd ..
+git submodule update --init
+make
+
+open project/client.xcworkspace

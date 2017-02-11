@@ -7,13 +7,13 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		BF22F9141BCD79E8002D04DD /* libev.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BF22F9131BCD79E8002D04DD /* libev.a */; settings = {ATTRIBUTES = (Required, ); }; };
-		BFB8A5DE1D0F4D33007B4E22 /* libcrypto.1.0.0.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFB8A5DD1D0F4D33007B4E22 /* libcrypto.1.0.0.dylib */; };
-		BFB8A5E01D0F4D4E007B4E22 /* libssl.1.0.0.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFB8A5DF1D0F4D4E007B4E22 /* libssl.1.0.0.dylib */; };
+		BE9280C61E4AC2F0007F7DA7 /* liblua.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BE9280C51E4AC2F0007F7DA7 /* liblua.a */; };
+		BE9280C81E4AC521007F7DA7 /* libz.1.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BE9280C71E4AC521007F7DA7 /* libz.1.dylib */; };
+		BF8A328B1E4E73FD00DE2F4D /* libssl.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BF8A328A1E4E73FD00DE2F4D /* libssl.dylib */; };
+		BF9750111E4EC8C900B737CF /* libev.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BF9750101E4EC8C900B737CF /* libev.a */; settings = {ATTRIBUTES = (Weak, ); }; };
+		BF9750131E4ECA1C00B737CF /* libuv.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BF9750121E4ECA1C00B737CF /* libuv.a */; settings = {ATTRIBUTES = (Weak, ); }; };
 		BFB8A5E21D0F4DB4007B4E22 /* map_index.c in Sources */ = {isa = PBXBuildFile; fileRef = BFB8A5E11D0F4DB4007B4E22 /* map_index.c */; };
-		BFBC119918CE3D2400D0B5BE /* liblua.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFBC119818CE3D2400D0B5BE /* liblua.a */; };
-		BFBC119D18CE3E4E00D0B5BE /* libz.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFBC119C18CE3E4E00D0B5BE /* libz.dylib */; };
-		BFBC119F18CE3F4800D0B5BE /* libpthread.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFBC119E18CE3F4800D0B5BE /* libpthread.dylib */; };
+		BFC25E551E4E80D600FD7756 /* libcrypto.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC25E541E4E80D600FD7756 /* libcrypto.dylib */; };
 		BFC65C041C92250B0079DF5A /* aerospike_test.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65BFC1C92250B0079DF5A /* aerospike_test.c */; };
 		BFC65C051C92250B0079DF5A /* test.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C011C92250B0079DF5A /* test.c */; };
 		BFC65C091C92256A0079DF5A /* batch_get_async.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C071C92256A0079DF5A /* batch_get_async.c */; };
@@ -47,7 +47,6 @@
 		BFC65C5B1C9227440079DF5A /* info_basics.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C5A1C9227440079DF5A /* info_basics.c */; };
 		BFC65C5E1C9227640079DF5A /* index_basics.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C5D1C9227640079DF5A /* index_basics.c */; };
 		BFC65C611C9227860079DF5A /* query_geospatial.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C601C9227860079DF5A /* query_geospatial.c */; };
-		BFCB24331BF167CA00B1A0EF /* libuv.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFCB24321BF167CA00B1A0EF /* libuv.a */; };
 		BFD74AE11CFE699800D79E15 /* map_basics_async.c in Sources */ = {isa = PBXBuildFile; fileRef = BFD74AE01CFE699800D79E15 /* map_basics_async.c */; };
 		BFD74AE61CFE6E4B00D79E15 /* map_udf.c in Sources */ = {isa = PBXBuildFile; fileRef = BFD74AE51CFE6E4B00D79E15 /* map_udf.c */; };
 		BFD8C86F18D7E3A300CB8B6D /* libaerospike.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFD8C86C18D7E37800CB8B6D /* libaerospike.a */; };
@@ -84,18 +83,15 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		BF22F9131BCD79E8002D04DD /* libev.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libev.a; path = /usr/local/lib/libev.a; sourceTree = "<absolute>"; };
+		BE9280C51E4AC2F0007F7DA7 /* liblua.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = liblua.a; path = ../modules/lua/src/liblua.a; sourceTree = "<group>"; };
+		BE9280C71E4AC521007F7DA7 /* libz.1.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libz.1.dylib; path = ../../../../../usr/lib/libz.1.dylib; sourceTree = "<group>"; };
 		BF843C5018D3E61700A06CFB /* aerospike.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = aerospike.xcodeproj; sourceTree = "<group>"; };
+		BF8A328A1E4E73FD00DE2F4D /* libssl.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libssl.dylib; path = /usr/local/opt/openssl/lib/libssl.dylib; sourceTree = "<absolute>"; };
+		BF9750101E4EC8C900B737CF /* libev.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libev.a; path = /usr/local/lib/libev.a; sourceTree = "<group>"; };
+		BF9750121E4ECA1C00B737CF /* libuv.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libuv.a; path = /usr/local/lib/libuv.a; sourceTree = "<group>"; };
 		BFB7BC6E18CAA88000F0D4A0 /* aerospike-test */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "aerospike-test"; sourceTree = BUILT_PRODUCTS_DIR; };
-		BFB8A5DB1D0F4D0D007B4E22 /* libcrypto.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libcrypto.a; path = ../../../../usr/local/Cellar/openssl/1.0.2h_1/lib/libcrypto.a; sourceTree = "<group>"; };
-		BFB8A5DD1D0F4D33007B4E22 /* libcrypto.1.0.0.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libcrypto.1.0.0.dylib; path = ../../../../usr/local/Cellar/openssl/1.0.2h_1/lib/libcrypto.1.0.0.dylib; sourceTree = "<group>"; };
-		BFB8A5DF1D0F4D4E007B4E22 /* libssl.1.0.0.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libssl.1.0.0.dylib; path = ../../../../usr/local/Cellar/openssl/1.0.2h_1/lib/libssl.1.0.0.dylib; sourceTree = "<group>"; };
 		BFB8A5E11D0F4DB4007B4E22 /* map_index.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = map_index.c; path = ../src/test/aerospike_map/map_index.c; sourceTree = "<group>"; };
-		BFBC119518CE3BA900D0B5BE /* libssl.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libssl.dylib; path = usr/lib/libssl.dylib; sourceTree = SDKROOT; };
-		BFBC119818CE3D2400D0B5BE /* liblua.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = liblua.a; path = /usr/local/lib/liblua.a; sourceTree = "<absolute>"; };
-		BFBC119A18CE3D8D00D0B5BE /* libcrypto.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libcrypto.dylib; path = usr/lib/libcrypto.dylib; sourceTree = SDKROOT; };
-		BFBC119C18CE3E4E00D0B5BE /* libz.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libz.dylib; path = usr/lib/libz.dylib; sourceTree = SDKROOT; };
-		BFBC119E18CE3F4800D0B5BE /* libpthread.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libpthread.dylib; path = usr/lib/libpthread.dylib; sourceTree = SDKROOT; };
+		BFC25E541E4E80D600FD7756 /* libcrypto.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libcrypto.dylib; path = /usr/local/opt/openssl/lib/libcrypto.dylib; sourceTree = "<absolute>"; };
 		BFC65BFC1C92250B0079DF5A /* aerospike_test.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = aerospike_test.c; path = ../src/test/aerospike_test.c; sourceTree = "<group>"; };
 		BFC65BFD1C92250B0079DF5A /* aerospike_test.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = aerospike_test.h; path = ../src/test/aerospike_test.h; sourceTree = "<group>"; };
 		BFC65C011C92250B0079DF5A /* test.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = test.c; path = ../src/test/test.c; sourceTree = "<group>"; };
@@ -148,7 +144,6 @@
 		BFC65C5A1C9227440079DF5A /* info_basics.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = info_basics.c; path = ../src/test/aerospike_info/info_basics.c; sourceTree = "<group>"; };
 		BFC65C5D1C9227640079DF5A /* index_basics.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = index_basics.c; path = ../src/test/aerospike_index/index_basics.c; sourceTree = "<group>"; };
 		BFC65C601C9227860079DF5A /* query_geospatial.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = query_geospatial.c; path = ../src/test/aerospike_geo/query_geospatial.c; sourceTree = "<group>"; };
-		BFCB24321BF167CA00B1A0EF /* libuv.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libuv.a; path = /usr/local/Cellar/libuv/1.7.5/lib/libuv.a; sourceTree = "<absolute>"; };
 		BFD74AE01CFE699800D79E15 /* map_basics_async.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = map_basics_async.c; path = ../src/test/aerospike_map/map_basics_async.c; sourceTree = "<group>"; };
 		BFD74AE51CFE6E4B00D79E15 /* map_udf.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = map_udf.c; path = ../src/test/aerospike_map/map_udf.c; sourceTree = "<group>"; };
 		BFF344C61CEA8FD200FD1976 /* map_basics.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = map_basics.c; path = ../src/test/aerospike_map/map_basics.c; sourceTree = "<group>"; };
@@ -159,29 +154,35 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				BFB8A5E01D0F4D4E007B4E22 /* libssl.1.0.0.dylib in Frameworks */,
-				BFB8A5DE1D0F4D33007B4E22 /* libcrypto.1.0.0.dylib in Frameworks */,
-				BFCB24331BF167CA00B1A0EF /* libuv.a in Frameworks */,
 				BFD8C86F18D7E3A300CB8B6D /* libaerospike.a in Frameworks */,
-				BFBC119918CE3D2400D0B5BE /* liblua.a in Frameworks */,
-				BF22F9141BCD79E8002D04DD /* libev.a in Frameworks */,
-				BFBC119F18CE3F4800D0B5BE /* libpthread.dylib in Frameworks */,
-				BFBC119D18CE3E4E00D0B5BE /* libz.dylib in Frameworks */,
+				BE9280C61E4AC2F0007F7DA7 /* liblua.a in Frameworks */,
+				BF9750111E4EC8C900B737CF /* libev.a in Frameworks */,
+				BF9750131E4ECA1C00B737CF /* libuv.a in Frameworks */,
+				BF8A328B1E4E73FD00DE2F4D /* libssl.dylib in Frameworks */,
+				BFC25E551E4E80D600FD7756 /* libcrypto.dylib in Frameworks */,
+				BE9280C81E4AC521007F7DA7 /* libz.1.dylib in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		BE9280BA1E4ABCD7007F7DA7 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				BF9750121E4ECA1C00B737CF /* libuv.a */,
+				BF9750101E4EC8C900B737CF /* libev.a */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		BFB7BC6518CAA88000F0D4A0 = {
 			isa = PBXGroup;
 			children = (
-				BFB8A5DF1D0F4D4E007B4E22 /* libssl.1.0.0.dylib */,
-				BFB8A5DD1D0F4D33007B4E22 /* libcrypto.1.0.0.dylib */,
-				BFB8A5DB1D0F4D0D007B4E22 /* libcrypto.a */,
 				BFC65BF01C92246F0079DF5A /* src */,
 				BFC65BEF1C9223DA0079DF5A /* libs */,
 				BFB7BC6F18CAA88000F0D4A0 /* Products */,
+				BE9280BA1E4ABCD7007F7DA7 /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -197,13 +198,10 @@
 			isa = PBXGroup;
 			children = (
 				BF843C5018D3E61700A06CFB /* aerospike.xcodeproj */,
-				BF22F9131BCD79E8002D04DD /* libev.a */,
-				BFCB24321BF167CA00B1A0EF /* libuv.a */,
-				BFBC119E18CE3F4800D0B5BE /* libpthread.dylib */,
-				BFBC119C18CE3E4E00D0B5BE /* libz.dylib */,
-				BFBC119A18CE3D8D00D0B5BE /* libcrypto.dylib */,
-				BFBC119818CE3D2400D0B5BE /* liblua.a */,
-				BFBC119518CE3BA900D0B5BE /* libssl.dylib */,
+				BE9280C51E4AC2F0007F7DA7 /* liblua.a */,
+				BF8A328A1E4E73FD00DE2F4D /* libssl.dylib */,
+				BFC25E541E4E80D600FD7756 /* libcrypto.dylib */,
+				BE9280C71E4AC521007F7DA7 /* libz.1.dylib */,
 			);
 			name = libs;
 			sourceTree = "<group>";
@@ -541,8 +539,9 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				MACOSX_DEPLOYMENT_TARGET = "";
 				ONLY_ACTIVE_ARCH = YES;
+				OTHER_CFLAGS = "";
 				SDKROOT = macosx;
 			};
 			name = Debug;
@@ -573,7 +572,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				MACOSX_DEPLOYMENT_TARGET = "";
+				OTHER_CFLAGS = "";
 				SDKROOT = macosx;
 			};
 			name = Release;
@@ -589,17 +589,18 @@
 					../modules/common/src/include,
 					"../modules/mod-lua/src/include",
 					../modules/ck/include,
-					/usr/local/include,
 				);
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(USER_LIBRARY_DIR)/Developer/Xcode/DerivedData/client-adicdcootufiyydjubyxqelxfwcw/Build/Products/Debug",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-					/usr/local/Cellar/openssl/1.0.2h_1/lib,
+					/usr/local/opt/openssl/lib,
+					"/Users/bnichols/aerospike-client-c/modules/lua/src",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 10.8;
+				MACOSX_DEPLOYMENT_TARGET = "";
 				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = "-L/usr/local/lib";
+				OTHER_LDFLAGS = (
+					"-L/usr/local/lib",
+					"-L../modules/lua/src",
+				);
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 			};
@@ -616,17 +617,18 @@
 					../modules/common/src/include,
 					"../modules/mod-lua/src/include",
 					../modules/ck/include,
-					/usr/local/include,
 				);
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(USER_LIBRARY_DIR)/Developer/Xcode/DerivedData/client-adicdcootufiyydjubyxqelxfwcw/Build/Products/Debug",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-					/usr/local/Cellar/openssl/1.0.2h_1/lib,
+					/usr/local/opt/openssl/lib,
+					"/Users/bnichols/aerospike-client-c/modules/lua/src",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 10.8;
+				MACOSX_DEPLOYMENT_TARGET = "";
 				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = "-L/usr/local/lib";
+				OTHER_LDFLAGS = (
+					"-L/usr/local/lib",
+					"-L../modules/lua/src",
+				);
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 			};

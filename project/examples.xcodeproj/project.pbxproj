@@ -7,225 +7,48 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		BE9280DA1E4BA672007F7DA7 /* libssl.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BE9280D91E4BA672007F7DA7 /* libssl.dylib */; };
+		BE9280DC1E4BA677007F7DA7 /* libcrypto.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BE9280DB1E4BA677007F7DA7 /* libcrypto.dylib */; };
+		BE9280DE1E4BA67D007F7DA7 /* libz.1.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BE9280DD1E4BA67D007F7DA7 /* libz.1.dylib */; };
+		BE9280EA1E4E649D007F7DA7 /* liblua.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BE9280D81E4BA65D007F7DA7 /* liblua.a */; };
+		BF9750191E4ECABA00B737CF /* libev.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BF9750181E4ECABA00B737CF /* libev.a */; };
+		BF97501C1E4ECAC700B737CF /* libuv.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BF97501B1E4ECAC700B737CF /* libuv.a */; };
 		BFC65C891C923CEB0079DF5A /* example_utils.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C881C923CEB0079DF5A /* example_utils.c */; };
-		BFC65C8A1C923E490079DF5A /* libaerospike.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C851C923A210079DF5A /* libaerospike.a */; };
-		BFC65C8C1C923E720079DF5A /* libssl.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8B1C923E720079DF5A /* libssl.dylib */; };
-		BFC65C941C923EA70079DF5A /* libev.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8E1C923EA70079DF5A /* libev.a */; };
-		BFC65C951C923EA80079DF5A /* libuv.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8F1C923EA70079DF5A /* libuv.a */; };
-		BFC65C961C923EA80079DF5A /* libpthread.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C901C923EA70079DF5A /* libpthread.dylib */; };
-		BFC65C971C923EA80079DF5A /* libz.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C911C923EA70079DF5A /* libz.dylib */; };
-		BFC65C981C923EA80079DF5A /* libcrypto.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C921C923EA70079DF5A /* libcrypto.dylib */; };
-		BFC65C991C923EA80079DF5A /* liblua.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C931C923EA70079DF5A /* liblua.a */; };
 		BFC65C9C1C923F6F0079DF5A /* example_utils.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C881C923CEB0079DF5A /* example_utils.c */; };
-		BFC65C9F1C923F6F0079DF5A /* liblua.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C931C923EA70079DF5A /* liblua.a */; };
-		BFC65CA01C923F6F0079DF5A /* libcrypto.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C921C923EA70079DF5A /* libcrypto.dylib */; };
-		BFC65CA11C923F6F0079DF5A /* libpthread.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C901C923EA70079DF5A /* libpthread.dylib */; };
-		BFC65CA21C923F6F0079DF5A /* libuv.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8F1C923EA70079DF5A /* libuv.a */; };
-		BFC65CA31C923F6F0079DF5A /* libev.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8E1C923EA70079DF5A /* libev.a */; };
-		BFC65CA41C923F6F0079DF5A /* libaerospike.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C851C923A210079DF5A /* libaerospike.a */; };
-		BFC65CA51C923F6F0079DF5A /* libssl.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8B1C923E720079DF5A /* libssl.dylib */; };
-		BFC65CA61C923F6F0079DF5A /* libz.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C911C923EA70079DF5A /* libz.dylib */; };
 		BFC65CAF1C9240050079DF5A /* example.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65CAD1C923FCC0079DF5A /* example.c */; };
 		BFC65CBA1C9241AA0079DF5A /* example_utils.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C881C923CEB0079DF5A /* example_utils.c */; };
-		BFC65CBC1C9241AA0079DF5A /* liblua.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C931C923EA70079DF5A /* liblua.a */; };
-		BFC65CBD1C9241AA0079DF5A /* libcrypto.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C921C923EA70079DF5A /* libcrypto.dylib */; };
-		BFC65CBE1C9241AA0079DF5A /* libpthread.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C901C923EA70079DF5A /* libpthread.dylib */; };
-		BFC65CBF1C9241AA0079DF5A /* libuv.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8F1C923EA70079DF5A /* libuv.a */; };
-		BFC65CC01C9241AA0079DF5A /* libev.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8E1C923EA70079DF5A /* libev.a */; };
 		BFC65CC11C9241AA0079DF5A /* libaerospike.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C851C923A210079DF5A /* libaerospike.a */; };
-		BFC65CC21C9241AA0079DF5A /* libssl.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8B1C923E720079DF5A /* libssl.dylib */; };
-		BFC65CC31C9241AA0079DF5A /* libz.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C911C923EA70079DF5A /* libz.dylib */; };
 		BFC65CCC1C9242120079DF5A /* example.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65CCA1C9241F90079DF5A /* example.c */; };
 		BFC65CE51C9245530079DF5A /* example_utils.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C881C923CEB0079DF5A /* example_utils.c */; };
-		BFC65CE71C9245530079DF5A /* liblua.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C931C923EA70079DF5A /* liblua.a */; };
-		BFC65CE81C9245530079DF5A /* libcrypto.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C921C923EA70079DF5A /* libcrypto.dylib */; };
-		BFC65CE91C9245530079DF5A /* libpthread.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C901C923EA70079DF5A /* libpthread.dylib */; };
-		BFC65CEA1C9245530079DF5A /* libuv.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8F1C923EA70079DF5A /* libuv.a */; };
-		BFC65CEB1C9245530079DF5A /* libev.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8E1C923EA70079DF5A /* libev.a */; };
-		BFC65CEC1C9245530079DF5A /* libaerospike.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C851C923A210079DF5A /* libaerospike.a */; };
-		BFC65CED1C9245530079DF5A /* libssl.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8B1C923E720079DF5A /* libssl.dylib */; };
-		BFC65CEE1C9245530079DF5A /* libz.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C911C923EA70079DF5A /* libz.dylib */; };
 		BFC65CF41C92457C0079DF5A /* example.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65CCE1C9242E60079DF5A /* example.c */; };
 		BFC65CF81C9245A20079DF5A /* example_utils.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C881C923CEB0079DF5A /* example_utils.c */; };
-		BFC65CFA1C9245A20079DF5A /* liblua.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C931C923EA70079DF5A /* liblua.a */; };
-		BFC65CFB1C9245A20079DF5A /* libcrypto.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C921C923EA70079DF5A /* libcrypto.dylib */; };
-		BFC65CFC1C9245A20079DF5A /* libpthread.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C901C923EA70079DF5A /* libpthread.dylib */; };
-		BFC65CFD1C9245A20079DF5A /* libuv.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8F1C923EA70079DF5A /* libuv.a */; };
-		BFC65CFE1C9245A20079DF5A /* libev.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8E1C923EA70079DF5A /* libev.a */; };
-		BFC65CFF1C9245A20079DF5A /* libaerospike.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C851C923A210079DF5A /* libaerospike.a */; };
-		BFC65D001C9245A20079DF5A /* libssl.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8B1C923E720079DF5A /* libssl.dylib */; };
-		BFC65D011C9245A20079DF5A /* libz.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C911C923EA70079DF5A /* libz.dylib */; };
 		BFC65D071C9245B40079DF5A /* example.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65CD11C92431C0079DF5A /* example.c */; };
 		BFC65D0B1C9245E80079DF5A /* example_utils.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C881C923CEB0079DF5A /* example_utils.c */; };
-		BFC65D0D1C9245E80079DF5A /* liblua.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C931C923EA70079DF5A /* liblua.a */; };
-		BFC65D0E1C9245E80079DF5A /* libcrypto.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C921C923EA70079DF5A /* libcrypto.dylib */; };
-		BFC65D0F1C9245E80079DF5A /* libpthread.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C901C923EA70079DF5A /* libpthread.dylib */; };
-		BFC65D101C9245E80079DF5A /* libuv.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8F1C923EA70079DF5A /* libuv.a */; };
-		BFC65D111C9245E80079DF5A /* libev.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8E1C923EA70079DF5A /* libev.a */; };
-		BFC65D121C9245E80079DF5A /* libaerospike.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C851C923A210079DF5A /* libaerospike.a */; };
-		BFC65D131C9245E80079DF5A /* libssl.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8B1C923E720079DF5A /* libssl.dylib */; };
-		BFC65D141C9245E80079DF5A /* libz.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C911C923EA70079DF5A /* libz.dylib */; };
 		BFC65D1A1C9245FF0079DF5A /* example.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65CDA1C9243EE0079DF5A /* example.c */; };
 		BFC65D1E1C92460B0079DF5A /* example_utils.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C881C923CEB0079DF5A /* example_utils.c */; };
-		BFC65D201C92460B0079DF5A /* liblua.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C931C923EA70079DF5A /* liblua.a */; };
-		BFC65D211C92460B0079DF5A /* libcrypto.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C921C923EA70079DF5A /* libcrypto.dylib */; };
-		BFC65D221C92460B0079DF5A /* libpthread.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C901C923EA70079DF5A /* libpthread.dylib */; };
-		BFC65D231C92460B0079DF5A /* libuv.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8F1C923EA70079DF5A /* libuv.a */; };
-		BFC65D241C92460B0079DF5A /* libev.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8E1C923EA70079DF5A /* libev.a */; };
-		BFC65D251C92460B0079DF5A /* libaerospike.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C851C923A210079DF5A /* libaerospike.a */; };
-		BFC65D261C92460B0079DF5A /* libssl.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8B1C923E720079DF5A /* libssl.dylib */; };
-		BFC65D271C92460B0079DF5A /* libz.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C911C923EA70079DF5A /* libz.dylib */; };
 		BFC65D2D1C9246380079DF5A /* example.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65CDB1C9244060079DF5A /* example.c */; };
 		BFC65D311C9246420079DF5A /* example_utils.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C881C923CEB0079DF5A /* example_utils.c */; };
-		BFC65D331C9246420079DF5A /* liblua.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C931C923EA70079DF5A /* liblua.a */; };
-		BFC65D341C9246420079DF5A /* libcrypto.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C921C923EA70079DF5A /* libcrypto.dylib */; };
-		BFC65D351C9246420079DF5A /* libpthread.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C901C923EA70079DF5A /* libpthread.dylib */; };
-		BFC65D361C9246420079DF5A /* libuv.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8F1C923EA70079DF5A /* libuv.a */; };
-		BFC65D371C9246420079DF5A /* libev.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8E1C923EA70079DF5A /* libev.a */; };
-		BFC65D381C9246420079DF5A /* libaerospike.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C851C923A210079DF5A /* libaerospike.a */; };
-		BFC65D391C9246420079DF5A /* libssl.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8B1C923E720079DF5A /* libssl.dylib */; };
-		BFC65D3A1C9246420079DF5A /* libz.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C911C923EA70079DF5A /* libz.dylib */; };
 		BFC65D401C9246540079DF5A /* example.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65CDC1C92441E0079DF5A /* example.c */; };
 		BFC65D441C92465F0079DF5A /* example_utils.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C881C923CEB0079DF5A /* example_utils.c */; };
-		BFC65D461C92465F0079DF5A /* liblua.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C931C923EA70079DF5A /* liblua.a */; };
-		BFC65D471C92465F0079DF5A /* libcrypto.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C921C923EA70079DF5A /* libcrypto.dylib */; };
-		BFC65D481C92465F0079DF5A /* libpthread.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C901C923EA70079DF5A /* libpthread.dylib */; };
-		BFC65D491C92465F0079DF5A /* libuv.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8F1C923EA70079DF5A /* libuv.a */; };
-		BFC65D4A1C92465F0079DF5A /* libev.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8E1C923EA70079DF5A /* libev.a */; };
-		BFC65D4B1C92465F0079DF5A /* libaerospike.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C851C923A210079DF5A /* libaerospike.a */; };
-		BFC65D4C1C92465F0079DF5A /* libssl.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8B1C923E720079DF5A /* libssl.dylib */; };
-		BFC65D4D1C92465F0079DF5A /* libz.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C911C923EA70079DF5A /* libz.dylib */; };
 		BFC65D531C9246710079DF5A /* example.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65CDD1C92443D0079DF5A /* example.c */; };
 		BFC65D571C92469B0079DF5A /* example_utils.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C881C923CEB0079DF5A /* example_utils.c */; };
-		BFC65D591C92469B0079DF5A /* liblua.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C931C923EA70079DF5A /* liblua.a */; };
-		BFC65D5A1C92469B0079DF5A /* libcrypto.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C921C923EA70079DF5A /* libcrypto.dylib */; };
-		BFC65D5B1C92469B0079DF5A /* libpthread.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C901C923EA70079DF5A /* libpthread.dylib */; };
-		BFC65D5C1C92469B0079DF5A /* libuv.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8F1C923EA70079DF5A /* libuv.a */; };
-		BFC65D5D1C92469B0079DF5A /* libev.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8E1C923EA70079DF5A /* libev.a */; };
-		BFC65D5E1C92469B0079DF5A /* libaerospike.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C851C923A210079DF5A /* libaerospike.a */; };
-		BFC65D5F1C92469B0079DF5A /* libssl.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8B1C923E720079DF5A /* libssl.dylib */; };
-		BFC65D601C92469B0079DF5A /* libz.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C911C923EA70079DF5A /* libz.dylib */; };
 		BFC65D661C9246AC0079DF5A /* example.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65CDE1C9244530079DF5A /* example.c */; };
 		BFC65D6A1C9246B00079DF5A /* example_utils.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C881C923CEB0079DF5A /* example_utils.c */; };
-		BFC65D6C1C9246B00079DF5A /* liblua.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C931C923EA70079DF5A /* liblua.a */; };
-		BFC65D6D1C9246B00079DF5A /* libcrypto.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C921C923EA70079DF5A /* libcrypto.dylib */; };
-		BFC65D6E1C9246B00079DF5A /* libpthread.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C901C923EA70079DF5A /* libpthread.dylib */; };
-		BFC65D6F1C9246B00079DF5A /* libuv.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8F1C923EA70079DF5A /* libuv.a */; };
-		BFC65D701C9246B00079DF5A /* libev.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8E1C923EA70079DF5A /* libev.a */; };
-		BFC65D711C9246B00079DF5A /* libaerospike.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C851C923A210079DF5A /* libaerospike.a */; };
-		BFC65D721C9246B00079DF5A /* libssl.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8B1C923E720079DF5A /* libssl.dylib */; };
-		BFC65D731C9246B00079DF5A /* libz.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C911C923EA70079DF5A /* libz.dylib */; };
 		BFC65D791C9246C70079DF5A /* example.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65CDF1C9244750079DF5A /* example.c */; };
 		BFC65D7D1C9246CC0079DF5A /* example_utils.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C881C923CEB0079DF5A /* example_utils.c */; };
-		BFC65D7F1C9246CC0079DF5A /* liblua.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C931C923EA70079DF5A /* liblua.a */; };
-		BFC65D801C9246CC0079DF5A /* libcrypto.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C921C923EA70079DF5A /* libcrypto.dylib */; };
-		BFC65D811C9246CC0079DF5A /* libpthread.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C901C923EA70079DF5A /* libpthread.dylib */; };
-		BFC65D821C9246CC0079DF5A /* libuv.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8F1C923EA70079DF5A /* libuv.a */; };
-		BFC65D831C9246CC0079DF5A /* libev.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8E1C923EA70079DF5A /* libev.a */; };
-		BFC65D841C9246CC0079DF5A /* libaerospike.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C851C923A210079DF5A /* libaerospike.a */; };
-		BFC65D851C9246CC0079DF5A /* libssl.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8B1C923E720079DF5A /* libssl.dylib */; };
-		BFC65D861C9246CC0079DF5A /* libz.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C911C923EA70079DF5A /* libz.dylib */; };
 		BFC65D8C1C9246E10079DF5A /* example.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65CE01C9244940079DF5A /* example.c */; };
 		BFC65D901C9246E70079DF5A /* example_utils.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C881C923CEB0079DF5A /* example_utils.c */; };
-		BFC65D921C9246E70079DF5A /* liblua.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C931C923EA70079DF5A /* liblua.a */; };
-		BFC65D931C9246E70079DF5A /* libcrypto.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C921C923EA70079DF5A /* libcrypto.dylib */; };
-		BFC65D941C9246E70079DF5A /* libpthread.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C901C923EA70079DF5A /* libpthread.dylib */; };
-		BFC65D951C9246E70079DF5A /* libuv.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8F1C923EA70079DF5A /* libuv.a */; };
-		BFC65D961C9246E70079DF5A /* libev.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8E1C923EA70079DF5A /* libev.a */; };
-		BFC65D971C9246E70079DF5A /* libaerospike.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C851C923A210079DF5A /* libaerospike.a */; };
-		BFC65D981C9246E70079DF5A /* libssl.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8B1C923E720079DF5A /* libssl.dylib */; };
-		BFC65D991C9246E70079DF5A /* libz.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C911C923EA70079DF5A /* libz.dylib */; };
 		BFC65D9F1C9246F90079DF5A /* example.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65CE11C9244B40079DF5A /* example.c */; };
 		BFC65DC01C924E4F0079DF5A /* example_utils.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C881C923CEB0079DF5A /* example_utils.c */; };
-		BFC65DC21C924E4F0079DF5A /* liblua.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C931C923EA70079DF5A /* liblua.a */; };
-		BFC65DC31C924E4F0079DF5A /* libcrypto.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C921C923EA70079DF5A /* libcrypto.dylib */; };
-		BFC65DC41C924E4F0079DF5A /* libpthread.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C901C923EA70079DF5A /* libpthread.dylib */; };
-		BFC65DC51C924E4F0079DF5A /* libuv.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8F1C923EA70079DF5A /* libuv.a */; };
-		BFC65DC61C924E4F0079DF5A /* libev.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8E1C923EA70079DF5A /* libev.a */; };
-		BFC65DC71C924E4F0079DF5A /* libaerospike.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C851C923A210079DF5A /* libaerospike.a */; };
-		BFC65DC81C924E4F0079DF5A /* libssl.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8B1C923E720079DF5A /* libssl.dylib */; };
-		BFC65DC91C924E4F0079DF5A /* libz.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C911C923EA70079DF5A /* libz.dylib */; };
 		BFC65DD21C924E880079DF5A /* example_utils.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C881C923CEB0079DF5A /* example_utils.c */; };
-		BFC65DD41C924E880079DF5A /* liblua.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C931C923EA70079DF5A /* liblua.a */; };
-		BFC65DD51C924E880079DF5A /* libcrypto.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C921C923EA70079DF5A /* libcrypto.dylib */; };
-		BFC65DD61C924E880079DF5A /* libpthread.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C901C923EA70079DF5A /* libpthread.dylib */; };
-		BFC65DD71C924E880079DF5A /* libuv.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8F1C923EA70079DF5A /* libuv.a */; };
-		BFC65DD81C924E880079DF5A /* libev.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8E1C923EA70079DF5A /* libev.a */; };
-		BFC65DD91C924E880079DF5A /* libaerospike.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C851C923A210079DF5A /* libaerospike.a */; };
-		BFC65DDA1C924E880079DF5A /* libssl.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8B1C923E720079DF5A /* libssl.dylib */; };
-		BFC65DDB1C924E880079DF5A /* libz.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C911C923EA70079DF5A /* libz.dylib */; };
 		BFC65DE41C924EC20079DF5A /* example_utils.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C881C923CEB0079DF5A /* example_utils.c */; };
-		BFC65DE61C924EC20079DF5A /* liblua.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C931C923EA70079DF5A /* liblua.a */; };
-		BFC65DE71C924EC20079DF5A /* libcrypto.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C921C923EA70079DF5A /* libcrypto.dylib */; };
-		BFC65DE81C924EC20079DF5A /* libpthread.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C901C923EA70079DF5A /* libpthread.dylib */; };
-		BFC65DE91C924EC20079DF5A /* libuv.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8F1C923EA70079DF5A /* libuv.a */; };
-		BFC65DEA1C924EC20079DF5A /* libev.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8E1C923EA70079DF5A /* libev.a */; };
-		BFC65DEB1C924EC20079DF5A /* libaerospike.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C851C923A210079DF5A /* libaerospike.a */; };
-		BFC65DEC1C924EC20079DF5A /* libssl.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8B1C923E720079DF5A /* libssl.dylib */; };
-		BFC65DED1C924EC20079DF5A /* libz.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C911C923EA70079DF5A /* libz.dylib */; };
 		BFC65DF61C924EF40079DF5A /* example_utils.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C881C923CEB0079DF5A /* example_utils.c */; };
-		BFC65DF81C924EF40079DF5A /* liblua.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C931C923EA70079DF5A /* liblua.a */; };
-		BFC65DF91C924EF40079DF5A /* libcrypto.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C921C923EA70079DF5A /* libcrypto.dylib */; };
-		BFC65DFA1C924EF40079DF5A /* libpthread.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C901C923EA70079DF5A /* libpthread.dylib */; };
-		BFC65DFB1C924EF40079DF5A /* libuv.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8F1C923EA70079DF5A /* libuv.a */; };
-		BFC65DFC1C924EF40079DF5A /* libev.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8E1C923EA70079DF5A /* libev.a */; };
-		BFC65DFD1C924EF40079DF5A /* libaerospike.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C851C923A210079DF5A /* libaerospike.a */; };
-		BFC65DFE1C924EF40079DF5A /* libssl.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8B1C923E720079DF5A /* libssl.dylib */; };
-		BFC65DFF1C924EF40079DF5A /* libz.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C911C923EA70079DF5A /* libz.dylib */; };
 		BFC65E081C924F3B0079DF5A /* example_utils.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C881C923CEB0079DF5A /* example_utils.c */; };
-		BFC65E0A1C924F3B0079DF5A /* liblua.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C931C923EA70079DF5A /* liblua.a */; };
-		BFC65E0B1C924F3B0079DF5A /* libcrypto.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C921C923EA70079DF5A /* libcrypto.dylib */; };
-		BFC65E0C1C924F3B0079DF5A /* libpthread.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C901C923EA70079DF5A /* libpthread.dylib */; };
-		BFC65E0D1C924F3B0079DF5A /* libuv.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8F1C923EA70079DF5A /* libuv.a */; };
-		BFC65E0E1C924F3B0079DF5A /* libev.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8E1C923EA70079DF5A /* libev.a */; };
-		BFC65E0F1C924F3B0079DF5A /* libaerospike.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C851C923A210079DF5A /* libaerospike.a */; };
-		BFC65E101C924F3B0079DF5A /* libssl.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8B1C923E720079DF5A /* libssl.dylib */; };
-		BFC65E111C924F3B0079DF5A /* libz.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C911C923EA70079DF5A /* libz.dylib */; };
 		BFC65E1A1C924F640079DF5A /* example_utils.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C881C923CEB0079DF5A /* example_utils.c */; };
-		BFC65E1C1C924F640079DF5A /* liblua.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C931C923EA70079DF5A /* liblua.a */; };
-		BFC65E1D1C924F640079DF5A /* libcrypto.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C921C923EA70079DF5A /* libcrypto.dylib */; };
-		BFC65E1E1C924F640079DF5A /* libpthread.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C901C923EA70079DF5A /* libpthread.dylib */; };
-		BFC65E1F1C924F640079DF5A /* libuv.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8F1C923EA70079DF5A /* libuv.a */; };
-		BFC65E201C924F640079DF5A /* libev.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8E1C923EA70079DF5A /* libev.a */; };
-		BFC65E211C924F640079DF5A /* libaerospike.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C851C923A210079DF5A /* libaerospike.a */; };
-		BFC65E221C924F640079DF5A /* libssl.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8B1C923E720079DF5A /* libssl.dylib */; };
-		BFC65E231C924F640079DF5A /* libz.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C911C923EA70079DF5A /* libz.dylib */; };
 		BFC65E2C1C924F930079DF5A /* example_utils.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C881C923CEB0079DF5A /* example_utils.c */; };
-		BFC65E2E1C924F930079DF5A /* liblua.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C931C923EA70079DF5A /* liblua.a */; };
-		BFC65E2F1C924F930079DF5A /* libcrypto.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C921C923EA70079DF5A /* libcrypto.dylib */; };
-		BFC65E301C924F930079DF5A /* libpthread.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C901C923EA70079DF5A /* libpthread.dylib */; };
-		BFC65E311C924F930079DF5A /* libuv.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8F1C923EA70079DF5A /* libuv.a */; };
-		BFC65E321C924F930079DF5A /* libev.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8E1C923EA70079DF5A /* libev.a */; };
-		BFC65E331C924F930079DF5A /* libaerospike.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C851C923A210079DF5A /* libaerospike.a */; };
-		BFC65E341C924F930079DF5A /* libssl.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8B1C923E720079DF5A /* libssl.dylib */; };
-		BFC65E351C924F930079DF5A /* libz.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C911C923EA70079DF5A /* libz.dylib */; };
 		BFC65E3E1C924FB70079DF5A /* example_utils.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C881C923CEB0079DF5A /* example_utils.c */; };
-		BFC65E401C924FB70079DF5A /* liblua.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C931C923EA70079DF5A /* liblua.a */; };
-		BFC65E411C924FB70079DF5A /* libcrypto.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C921C923EA70079DF5A /* libcrypto.dylib */; };
-		BFC65E421C924FB70079DF5A /* libpthread.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C901C923EA70079DF5A /* libpthread.dylib */; };
-		BFC65E431C924FB70079DF5A /* libuv.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8F1C923EA70079DF5A /* libuv.a */; };
-		BFC65E441C924FB70079DF5A /* libev.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8E1C923EA70079DF5A /* libev.a */; };
-		BFC65E451C924FB70079DF5A /* libaerospike.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C851C923A210079DF5A /* libaerospike.a */; };
-		BFC65E461C924FB70079DF5A /* libssl.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8B1C923E720079DF5A /* libssl.dylib */; };
-		BFC65E471C924FB70079DF5A /* libz.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C911C923EA70079DF5A /* libz.dylib */; };
 		BFC65E501C924FDB0079DF5A /* example_utils.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C881C923CEB0079DF5A /* example_utils.c */; };
-		BFC65E521C924FDB0079DF5A /* liblua.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C931C923EA70079DF5A /* liblua.a */; };
-		BFC65E531C924FDB0079DF5A /* libcrypto.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C921C923EA70079DF5A /* libcrypto.dylib */; };
-		BFC65E541C924FDB0079DF5A /* libpthread.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C901C923EA70079DF5A /* libpthread.dylib */; };
-		BFC65E551C924FDB0079DF5A /* libuv.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8F1C923EA70079DF5A /* libuv.a */; };
-		BFC65E561C924FDB0079DF5A /* libev.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8E1C923EA70079DF5A /* libev.a */; };
-		BFC65E571C924FDB0079DF5A /* libaerospike.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C851C923A210079DF5A /* libaerospike.a */; };
-		BFC65E581C924FDB0079DF5A /* libssl.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8B1C923E720079DF5A /* libssl.dylib */; };
-		BFC65E591C924FDB0079DF5A /* libz.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C911C923EA70079DF5A /* libz.dylib */; };
 		BFC65E621C92501C0079DF5A /* example_utils.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C881C923CEB0079DF5A /* example_utils.c */; };
-		BFC65E641C92501C0079DF5A /* liblua.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C931C923EA70079DF5A /* liblua.a */; };
-		BFC65E651C92501C0079DF5A /* libcrypto.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C921C923EA70079DF5A /* libcrypto.dylib */; };
-		BFC65E661C92501C0079DF5A /* libpthread.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C901C923EA70079DF5A /* libpthread.dylib */; };
-		BFC65E671C92501C0079DF5A /* libuv.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8F1C923EA70079DF5A /* libuv.a */; };
-		BFC65E681C92501C0079DF5A /* libev.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8E1C923EA70079DF5A /* libev.a */; };
-		BFC65E691C92501C0079DF5A /* libaerospike.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C851C923A210079DF5A /* libaerospike.a */; };
-		BFC65E6A1C92501C0079DF5A /* libssl.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8B1C923E720079DF5A /* libssl.dylib */; };
-		BFC65E6B1C92501C0079DF5A /* libz.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C911C923EA70079DF5A /* libz.dylib */; };
 		BFC65E711C92505A0079DF5A /* example.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65DA61C924B630079DF5A /* example.c */; };
 		BFC65E721C9250860079DF5A /* example.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65DAC1C924C540079DF5A /* example.c */; };
 		BFC65E731C9250A50079DF5A /* example.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65DA91C924BC60079DF5A /* example.c */; };
@@ -238,15 +61,6 @@
 		BFC65E7A1C92518F0079DF5A /* example.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65DBC1C924E200079DF5A /* example.c */; };
 		BFC65E851C92560A0079DF5A /* example.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65E841C92560A0079DF5A /* example.c */; };
 		BFF344DB1CEE41DB00FD1976 /* example_utils.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C881C923CEB0079DF5A /* example_utils.c */; };
-		BFF344DD1CEE41DB00FD1976 /* liblua.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C931C923EA70079DF5A /* liblua.a */; };
-		BFF344DE1CEE41DB00FD1976 /* libcrypto.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C921C923EA70079DF5A /* libcrypto.dylib */; };
-		BFF344DF1CEE41DB00FD1976 /* libpthread.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C901C923EA70079DF5A /* libpthread.dylib */; };
-		BFF344E01CEE41DB00FD1976 /* libuv.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8F1C923EA70079DF5A /* libuv.a */; };
-		BFF344E11CEE41DB00FD1976 /* libev.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8E1C923EA70079DF5A /* libev.a */; };
-		BFF344E21CEE41DB00FD1976 /* libaerospike.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C851C923A210079DF5A /* libaerospike.a */; };
-		BFF344E31CEE41DB00FD1976 /* libssl.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C8B1C923E720079DF5A /* libssl.dylib */; };
-		BFF344E41CEE41DB00FD1976 /* libz.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C911C923EA70079DF5A /* libz.dylib */; };
-		BFF344EB1CEE420100FD1976 /* example.c in Sources */ = {isa = PBXBuildFile; fileRef = BFF344EA1CEE420100FD1976 /* example.c */; };
 		BFF344EC1CEE420100FD1976 /* example.c in Sources */ = {isa = PBXBuildFile; fileRef = BFF344EA1CEE420100FD1976 /* example.c */; };
 /* End PBXBuildFile section */
 
@@ -480,17 +294,16 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		BE9280D81E4BA65D007F7DA7 /* liblua.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = liblua.a; path = ../modules/lua/src/liblua.a; sourceTree = "<group>"; };
+		BE9280D91E4BA672007F7DA7 /* libssl.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libssl.dylib; path = /usr/local/opt/openssl/lib/libssl.dylib; sourceTree = "<group>"; };
+		BE9280DB1E4BA677007F7DA7 /* libcrypto.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libcrypto.dylib; path = /usr/local/opt/openssl/lib/libcrypto.dylib; sourceTree = "<group>"; };
+		BE9280DD1E4BA67D007F7DA7 /* libz.1.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libz.1.dylib; path = ../../../../../usr/lib/libz.1.dylib; sourceTree = "<group>"; };
+		BF9750181E4ECABA00B737CF /* libev.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libev.a; path = /usr/local/lib/libev.a; sourceTree = "<group>"; };
+		BF97501B1E4ECAC700B737CF /* libuv.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libuv.a; path = /usr/local/lib/libuv.a; sourceTree = "<group>"; };
 		BFC65C741C9237EE0079DF5A /* put */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = put; sourceTree = BUILT_PRODUCTS_DIR; };
 		BFC65C801C923A210079DF5A /* aerospike.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = aerospike.xcodeproj; sourceTree = SOURCE_ROOT; };
 		BFC65C871C923CD80079DF5A /* example_utils.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = example_utils.h; path = ../examples/utils/src/include/example_utils.h; sourceTree = "<group>"; };
 		BFC65C881C923CEB0079DF5A /* example_utils.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = example_utils.c; path = ../examples/utils/src/main/example_utils.c; sourceTree = "<group>"; };
-		BFC65C8B1C923E720079DF5A /* libssl.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libssl.dylib; path = usr/lib/libssl.dylib; sourceTree = SDKROOT; };
-		BFC65C8E1C923EA70079DF5A /* libev.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libev.a; path = /usr/local/lib/libev.a; sourceTree = "<absolute>"; };
-		BFC65C8F1C923EA70079DF5A /* libuv.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libuv.a; path = /usr/local/Cellar/libuv/1.7.5/lib/libuv.a; sourceTree = "<absolute>"; };
-		BFC65C901C923EA70079DF5A /* libpthread.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libpthread.dylib; path = /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.9.sdk/usr/lib/libpthread.dylib; sourceTree = "<absolute>"; };
-		BFC65C911C923EA70079DF5A /* libz.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libz.dylib; path = /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.9.sdk/usr/lib/libz.dylib; sourceTree = "<absolute>"; };
-		BFC65C921C923EA70079DF5A /* libcrypto.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libcrypto.dylib; path = /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.9.sdk/usr/lib/libcrypto.dylib; sourceTree = "<absolute>"; };
-		BFC65C931C923EA70079DF5A /* liblua.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = liblua.a; path = /usr/local/lib/liblua.a; sourceTree = "<absolute>"; };
 		BFC65CAB1C923F6F0079DF5A /* get */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = get; sourceTree = BUILT_PRODUCTS_DIR; };
 		BFC65CAD1C923FCC0079DF5A /* example.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = example.c; path = ../examples/basic_examples/get/src/main/example.c; sourceTree = "<group>"; };
 		BFC65CC81C9241AA0079DF5A /* append */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = append; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -541,363 +354,17 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		BFC65C711C9237EE0079DF5A /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				BFC65C991C923EA80079DF5A /* liblua.a in Frameworks */,
-				BFC65C981C923EA80079DF5A /* libcrypto.dylib in Frameworks */,
-				BFC65C961C923EA80079DF5A /* libpthread.dylib in Frameworks */,
-				BFC65C951C923EA80079DF5A /* libuv.a in Frameworks */,
-				BFC65C941C923EA70079DF5A /* libev.a in Frameworks */,
-				BFC65C8A1C923E490079DF5A /* libaerospike.a in Frameworks */,
-				BFC65C8C1C923E720079DF5A /* libssl.dylib in Frameworks */,
-				BFC65C971C923EA80079DF5A /* libz.dylib in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		BFC65C9E1C923F6F0079DF5A /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				BFC65C9F1C923F6F0079DF5A /* liblua.a in Frameworks */,
-				BFC65CA01C923F6F0079DF5A /* libcrypto.dylib in Frameworks */,
-				BFC65CA11C923F6F0079DF5A /* libpthread.dylib in Frameworks */,
-				BFC65CA21C923F6F0079DF5A /* libuv.a in Frameworks */,
-				BFC65CA31C923F6F0079DF5A /* libev.a in Frameworks */,
-				BFC65CA41C923F6F0079DF5A /* libaerospike.a in Frameworks */,
-				BFC65CA51C923F6F0079DF5A /* libssl.dylib in Frameworks */,
-				BFC65CA61C923F6F0079DF5A /* libz.dylib in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		BFC65CBB1C9241AA0079DF5A /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				BFC65CBC1C9241AA0079DF5A /* liblua.a in Frameworks */,
-				BFC65CBD1C9241AA0079DF5A /* libcrypto.dylib in Frameworks */,
-				BFC65CBE1C9241AA0079DF5A /* libpthread.dylib in Frameworks */,
-				BFC65CBF1C9241AA0079DF5A /* libuv.a in Frameworks */,
-				BFC65CC01C9241AA0079DF5A /* libev.a in Frameworks */,
 				BFC65CC11C9241AA0079DF5A /* libaerospike.a in Frameworks */,
-				BFC65CC21C9241AA0079DF5A /* libssl.dylib in Frameworks */,
-				BFC65CC31C9241AA0079DF5A /* libz.dylib in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		BFC65CE61C9245530079DF5A /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				BFC65CE71C9245530079DF5A /* liblua.a in Frameworks */,
-				BFC65CE81C9245530079DF5A /* libcrypto.dylib in Frameworks */,
-				BFC65CE91C9245530079DF5A /* libpthread.dylib in Frameworks */,
-				BFC65CEA1C9245530079DF5A /* libuv.a in Frameworks */,
-				BFC65CEB1C9245530079DF5A /* libev.a in Frameworks */,
-				BFC65CEC1C9245530079DF5A /* libaerospike.a in Frameworks */,
-				BFC65CED1C9245530079DF5A /* libssl.dylib in Frameworks */,
-				BFC65CEE1C9245530079DF5A /* libz.dylib in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		BFC65CF91C9245A20079DF5A /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				BFC65CFA1C9245A20079DF5A /* liblua.a in Frameworks */,
-				BFC65CFB1C9245A20079DF5A /* libcrypto.dylib in Frameworks */,
-				BFC65CFC1C9245A20079DF5A /* libpthread.dylib in Frameworks */,
-				BFC65CFD1C9245A20079DF5A /* libuv.a in Frameworks */,
-				BFC65CFE1C9245A20079DF5A /* libev.a in Frameworks */,
-				BFC65CFF1C9245A20079DF5A /* libaerospike.a in Frameworks */,
-				BFC65D001C9245A20079DF5A /* libssl.dylib in Frameworks */,
-				BFC65D011C9245A20079DF5A /* libz.dylib in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		BFC65D0C1C9245E80079DF5A /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				BFC65D0D1C9245E80079DF5A /* liblua.a in Frameworks */,
-				BFC65D0E1C9245E80079DF5A /* libcrypto.dylib in Frameworks */,
-				BFC65D0F1C9245E80079DF5A /* libpthread.dylib in Frameworks */,
-				BFC65D101C9245E80079DF5A /* libuv.a in Frameworks */,
-				BFC65D111C9245E80079DF5A /* libev.a in Frameworks */,
-				BFC65D121C9245E80079DF5A /* libaerospike.a in Frameworks */,
-				BFC65D131C9245E80079DF5A /* libssl.dylib in Frameworks */,
-				BFC65D141C9245E80079DF5A /* libz.dylib in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		BFC65D1F1C92460B0079DF5A /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				BFC65D201C92460B0079DF5A /* liblua.a in Frameworks */,
-				BFC65D211C92460B0079DF5A /* libcrypto.dylib in Frameworks */,
-				BFC65D221C92460B0079DF5A /* libpthread.dylib in Frameworks */,
-				BFC65D231C92460B0079DF5A /* libuv.a in Frameworks */,
-				BFC65D241C92460B0079DF5A /* libev.a in Frameworks */,
-				BFC65D251C92460B0079DF5A /* libaerospike.a in Frameworks */,
-				BFC65D261C92460B0079DF5A /* libssl.dylib in Frameworks */,
-				BFC65D271C92460B0079DF5A /* libz.dylib in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		BFC65D321C9246420079DF5A /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				BFC65D331C9246420079DF5A /* liblua.a in Frameworks */,
-				BFC65D341C9246420079DF5A /* libcrypto.dylib in Frameworks */,
-				BFC65D351C9246420079DF5A /* libpthread.dylib in Frameworks */,
-				BFC65D361C9246420079DF5A /* libuv.a in Frameworks */,
-				BFC65D371C9246420079DF5A /* libev.a in Frameworks */,
-				BFC65D381C9246420079DF5A /* libaerospike.a in Frameworks */,
-				BFC65D391C9246420079DF5A /* libssl.dylib in Frameworks */,
-				BFC65D3A1C9246420079DF5A /* libz.dylib in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		BFC65D451C92465F0079DF5A /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				BFC65D461C92465F0079DF5A /* liblua.a in Frameworks */,
-				BFC65D471C92465F0079DF5A /* libcrypto.dylib in Frameworks */,
-				BFC65D481C92465F0079DF5A /* libpthread.dylib in Frameworks */,
-				BFC65D491C92465F0079DF5A /* libuv.a in Frameworks */,
-				BFC65D4A1C92465F0079DF5A /* libev.a in Frameworks */,
-				BFC65D4B1C92465F0079DF5A /* libaerospike.a in Frameworks */,
-				BFC65D4C1C92465F0079DF5A /* libssl.dylib in Frameworks */,
-				BFC65D4D1C92465F0079DF5A /* libz.dylib in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		BFC65D581C92469B0079DF5A /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				BFC65D591C92469B0079DF5A /* liblua.a in Frameworks */,
-				BFC65D5A1C92469B0079DF5A /* libcrypto.dylib in Frameworks */,
-				BFC65D5B1C92469B0079DF5A /* libpthread.dylib in Frameworks */,
-				BFC65D5C1C92469B0079DF5A /* libuv.a in Frameworks */,
-				BFC65D5D1C92469B0079DF5A /* libev.a in Frameworks */,
-				BFC65D5E1C92469B0079DF5A /* libaerospike.a in Frameworks */,
-				BFC65D5F1C92469B0079DF5A /* libssl.dylib in Frameworks */,
-				BFC65D601C92469B0079DF5A /* libz.dylib in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		BFC65D6B1C9246B00079DF5A /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				BFC65D6C1C9246B00079DF5A /* liblua.a in Frameworks */,
-				BFC65D6D1C9246B00079DF5A /* libcrypto.dylib in Frameworks */,
-				BFC65D6E1C9246B00079DF5A /* libpthread.dylib in Frameworks */,
-				BFC65D6F1C9246B00079DF5A /* libuv.a in Frameworks */,
-				BFC65D701C9246B00079DF5A /* libev.a in Frameworks */,
-				BFC65D711C9246B00079DF5A /* libaerospike.a in Frameworks */,
-				BFC65D721C9246B00079DF5A /* libssl.dylib in Frameworks */,
-				BFC65D731C9246B00079DF5A /* libz.dylib in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		BFC65D7E1C9246CC0079DF5A /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				BFC65D7F1C9246CC0079DF5A /* liblua.a in Frameworks */,
-				BFC65D801C9246CC0079DF5A /* libcrypto.dylib in Frameworks */,
-				BFC65D811C9246CC0079DF5A /* libpthread.dylib in Frameworks */,
-				BFC65D821C9246CC0079DF5A /* libuv.a in Frameworks */,
-				BFC65D831C9246CC0079DF5A /* libev.a in Frameworks */,
-				BFC65D841C9246CC0079DF5A /* libaerospike.a in Frameworks */,
-				BFC65D851C9246CC0079DF5A /* libssl.dylib in Frameworks */,
-				BFC65D861C9246CC0079DF5A /* libz.dylib in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		BFC65D911C9246E70079DF5A /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				BFC65D921C9246E70079DF5A /* liblua.a in Frameworks */,
-				BFC65D931C9246E70079DF5A /* libcrypto.dylib in Frameworks */,
-				BFC65D941C9246E70079DF5A /* libpthread.dylib in Frameworks */,
-				BFC65D951C9246E70079DF5A /* libuv.a in Frameworks */,
-				BFC65D961C9246E70079DF5A /* libev.a in Frameworks */,
-				BFC65D971C9246E70079DF5A /* libaerospike.a in Frameworks */,
-				BFC65D981C9246E70079DF5A /* libssl.dylib in Frameworks */,
-				BFC65D991C9246E70079DF5A /* libz.dylib in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		BFC65DC11C924E4F0079DF5A /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				BFC65DC21C924E4F0079DF5A /* liblua.a in Frameworks */,
-				BFC65DC31C924E4F0079DF5A /* libcrypto.dylib in Frameworks */,
-				BFC65DC41C924E4F0079DF5A /* libpthread.dylib in Frameworks */,
-				BFC65DC51C924E4F0079DF5A /* libuv.a in Frameworks */,
-				BFC65DC61C924E4F0079DF5A /* libev.a in Frameworks */,
-				BFC65DC71C924E4F0079DF5A /* libaerospike.a in Frameworks */,
-				BFC65DC81C924E4F0079DF5A /* libssl.dylib in Frameworks */,
-				BFC65DC91C924E4F0079DF5A /* libz.dylib in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		BFC65DD31C924E880079DF5A /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				BFC65DD41C924E880079DF5A /* liblua.a in Frameworks */,
-				BFC65DD51C924E880079DF5A /* libcrypto.dylib in Frameworks */,
-				BFC65DD61C924E880079DF5A /* libpthread.dylib in Frameworks */,
-				BFC65DD71C924E880079DF5A /* libuv.a in Frameworks */,
-				BFC65DD81C924E880079DF5A /* libev.a in Frameworks */,
-				BFC65DD91C924E880079DF5A /* libaerospike.a in Frameworks */,
-				BFC65DDA1C924E880079DF5A /* libssl.dylib in Frameworks */,
-				BFC65DDB1C924E880079DF5A /* libz.dylib in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		BFC65DE51C924EC20079DF5A /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				BFC65DE61C924EC20079DF5A /* liblua.a in Frameworks */,
-				BFC65DE71C924EC20079DF5A /* libcrypto.dylib in Frameworks */,
-				BFC65DE81C924EC20079DF5A /* libpthread.dylib in Frameworks */,
-				BFC65DE91C924EC20079DF5A /* libuv.a in Frameworks */,
-				BFC65DEA1C924EC20079DF5A /* libev.a in Frameworks */,
-				BFC65DEB1C924EC20079DF5A /* libaerospike.a in Frameworks */,
-				BFC65DEC1C924EC20079DF5A /* libssl.dylib in Frameworks */,
-				BFC65DED1C924EC20079DF5A /* libz.dylib in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		BFC65DF71C924EF40079DF5A /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				BFC65DF81C924EF40079DF5A /* liblua.a in Frameworks */,
-				BFC65DF91C924EF40079DF5A /* libcrypto.dylib in Frameworks */,
-				BFC65DFA1C924EF40079DF5A /* libpthread.dylib in Frameworks */,
-				BFC65DFB1C924EF40079DF5A /* libuv.a in Frameworks */,
-				BFC65DFC1C924EF40079DF5A /* libev.a in Frameworks */,
-				BFC65DFD1C924EF40079DF5A /* libaerospike.a in Frameworks */,
-				BFC65DFE1C924EF40079DF5A /* libssl.dylib in Frameworks */,
-				BFC65DFF1C924EF40079DF5A /* libz.dylib in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		BFC65E091C924F3B0079DF5A /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				BFC65E0A1C924F3B0079DF5A /* liblua.a in Frameworks */,
-				BFC65E0B1C924F3B0079DF5A /* libcrypto.dylib in Frameworks */,
-				BFC65E0C1C924F3B0079DF5A /* libpthread.dylib in Frameworks */,
-				BFC65E0D1C924F3B0079DF5A /* libuv.a in Frameworks */,
-				BFC65E0E1C924F3B0079DF5A /* libev.a in Frameworks */,
-				BFC65E0F1C924F3B0079DF5A /* libaerospike.a in Frameworks */,
-				BFC65E101C924F3B0079DF5A /* libssl.dylib in Frameworks */,
-				BFC65E111C924F3B0079DF5A /* libz.dylib in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		BFC65E1B1C924F640079DF5A /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				BFC65E1C1C924F640079DF5A /* liblua.a in Frameworks */,
-				BFC65E1D1C924F640079DF5A /* libcrypto.dylib in Frameworks */,
-				BFC65E1E1C924F640079DF5A /* libpthread.dylib in Frameworks */,
-				BFC65E1F1C924F640079DF5A /* libuv.a in Frameworks */,
-				BFC65E201C924F640079DF5A /* libev.a in Frameworks */,
-				BFC65E211C924F640079DF5A /* libaerospike.a in Frameworks */,
-				BFC65E221C924F640079DF5A /* libssl.dylib in Frameworks */,
-				BFC65E231C924F640079DF5A /* libz.dylib in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		BFC65E2D1C924F930079DF5A /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				BFC65E2E1C924F930079DF5A /* liblua.a in Frameworks */,
-				BFC65E2F1C924F930079DF5A /* libcrypto.dylib in Frameworks */,
-				BFC65E301C924F930079DF5A /* libpthread.dylib in Frameworks */,
-				BFC65E311C924F930079DF5A /* libuv.a in Frameworks */,
-				BFC65E321C924F930079DF5A /* libev.a in Frameworks */,
-				BFC65E331C924F930079DF5A /* libaerospike.a in Frameworks */,
-				BFC65E341C924F930079DF5A /* libssl.dylib in Frameworks */,
-				BFC65E351C924F930079DF5A /* libz.dylib in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		BFC65E3F1C924FB70079DF5A /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				BFC65E401C924FB70079DF5A /* liblua.a in Frameworks */,
-				BFC65E411C924FB70079DF5A /* libcrypto.dylib in Frameworks */,
-				BFC65E421C924FB70079DF5A /* libpthread.dylib in Frameworks */,
-				BFC65E431C924FB70079DF5A /* libuv.a in Frameworks */,
-				BFC65E441C924FB70079DF5A /* libev.a in Frameworks */,
-				BFC65E451C924FB70079DF5A /* libaerospike.a in Frameworks */,
-				BFC65E461C924FB70079DF5A /* libssl.dylib in Frameworks */,
-				BFC65E471C924FB70079DF5A /* libz.dylib in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		BFC65E511C924FDB0079DF5A /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				BFC65E521C924FDB0079DF5A /* liblua.a in Frameworks */,
-				BFC65E531C924FDB0079DF5A /* libcrypto.dylib in Frameworks */,
-				BFC65E541C924FDB0079DF5A /* libpthread.dylib in Frameworks */,
-				BFC65E551C924FDB0079DF5A /* libuv.a in Frameworks */,
-				BFC65E561C924FDB0079DF5A /* libev.a in Frameworks */,
-				BFC65E571C924FDB0079DF5A /* libaerospike.a in Frameworks */,
-				BFC65E581C924FDB0079DF5A /* libssl.dylib in Frameworks */,
-				BFC65E591C924FDB0079DF5A /* libz.dylib in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		BFC65E631C92501C0079DF5A /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				BFC65E641C92501C0079DF5A /* liblua.a in Frameworks */,
-				BFC65E651C92501C0079DF5A /* libcrypto.dylib in Frameworks */,
-				BFC65E661C92501C0079DF5A /* libpthread.dylib in Frameworks */,
-				BFC65E671C92501C0079DF5A /* libuv.a in Frameworks */,
-				BFC65E681C92501C0079DF5A /* libev.a in Frameworks */,
-				BFC65E691C92501C0079DF5A /* libaerospike.a in Frameworks */,
-				BFC65E6A1C92501C0079DF5A /* libssl.dylib in Frameworks */,
-				BFC65E6B1C92501C0079DF5A /* libz.dylib in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		BFF344DC1CEE41DB00FD1976 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				BFF344DD1CEE41DB00FD1976 /* liblua.a in Frameworks */,
-				BFF344DE1CEE41DB00FD1976 /* libcrypto.dylib in Frameworks */,
-				BFF344DF1CEE41DB00FD1976 /* libpthread.dylib in Frameworks */,
-				BFF344E01CEE41DB00FD1976 /* libuv.a in Frameworks */,
-				BFF344E11CEE41DB00FD1976 /* libev.a in Frameworks */,
-				BFF344E21CEE41DB00FD1976 /* libaerospike.a in Frameworks */,
-				BFF344E31CEE41DB00FD1976 /* libssl.dylib in Frameworks */,
-				BFF344E41CEE41DB00FD1976 /* libz.dylib in Frameworks */,
+				BE9280EA1E4E649D007F7DA7 /* liblua.a in Frameworks */,
+				BF9750191E4ECABA00B737CF /* libev.a in Frameworks */,
+				BF97501C1E4ECAC700B737CF /* libuv.a in Frameworks */,
+				BE9280DA1E4BA672007F7DA7 /* libssl.dylib in Frameworks */,
+				BE9280DC1E4BA677007F7DA7 /* libcrypto.dylib in Frameworks */,
+				BE9280DE1E4BA67D007F7DA7 /* libz.1.dylib in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -907,6 +374,8 @@
 		BFC65C641C9234A90079DF5A = {
 			isa = PBXGroup;
 			children = (
+				BF97501B1E4ECAC700B737CF /* libuv.a */,
+				BF9750181E4ECABA00B737CF /* libev.a */,
 				BFC65C8D1C923E8F0079DF5A /* libs */,
 				BFC65DA71C924B910079DF5A /* async_examples */,
 				BFC65C6D1C9236B60079DF5A /* basic_examples */,
@@ -992,13 +461,10 @@
 			isa = PBXGroup;
 			children = (
 				BFC65C801C923A210079DF5A /* aerospike.xcodeproj */,
-				BFC65C8E1C923EA70079DF5A /* libev.a */,
-				BFC65C8F1C923EA70079DF5A /* libuv.a */,
-				BFC65C901C923EA70079DF5A /* libpthread.dylib */,
-				BFC65C911C923EA70079DF5A /* libz.dylib */,
-				BFC65C921C923EA70079DF5A /* libcrypto.dylib */,
-				BFC65C931C923EA70079DF5A /* liblua.a */,
-				BFC65C8B1C923E720079DF5A /* libssl.dylib */,
+				BE9280D81E4BA65D007F7DA7 /* liblua.a */,
+				BE9280D91E4BA672007F7DA7 /* libssl.dylib */,
+				BE9280DB1E4BA677007F7DA7 /* libcrypto.dylib */,
+				BE9280DD1E4BA67D007F7DA7 /* libz.1.dylib */,
 			);
 			name = libs;
 			sourceTree = "<group>";
@@ -1248,7 +714,7 @@
 			buildConfigurationList = BFC65C7B1C9237EE0079DF5A /* Build configuration list for PBXNativeTarget "put" */;
 			buildPhases = (
 				BFC65C701C9237EE0079DF5A /* Sources */,
-				BFC65C711C9237EE0079DF5A /* Frameworks */,
+				BFC65CBB1C9241AA0079DF5A /* Frameworks */,
 				BFC65C721C9237EE0079DF5A /* CopyFiles */,
 			);
 			buildRules = (
@@ -1265,7 +731,7 @@
 			buildConfigurationList = BFC65CA81C923F6F0079DF5A /* Build configuration list for PBXNativeTarget "get" */;
 			buildPhases = (
 				BFC65C9B1C923F6F0079DF5A /* Sources */,
-				BFC65C9E1C923F6F0079DF5A /* Frameworks */,
+				BFC65CBB1C9241AA0079DF5A /* Frameworks */,
 				BFC65CA71C923F6F0079DF5A /* CopyFiles */,
 			);
 			buildRules = (
@@ -1299,7 +765,7 @@
 			buildConfigurationList = BFC65CF01C9245530079DF5A /* Build configuration list for PBXNativeTarget "expire" */;
 			buildPhases = (
 				BFC65CE31C9245530079DF5A /* Sources */,
-				BFC65CE61C9245530079DF5A /* Frameworks */,
+				BFC65CBB1C9241AA0079DF5A /* Frameworks */,
 				BFC65CEF1C9245530079DF5A /* CopyFiles */,
 			);
 			buildRules = (
@@ -1316,7 +782,7 @@
 			buildConfigurationList = BFC65D031C9245A20079DF5A /* Build configuration list for PBXNativeTarget "generation" */;
 			buildPhases = (
 				BFC65CF61C9245A20079DF5A /* Sources */,
-				BFC65CF91C9245A20079DF5A /* Frameworks */,
+				BFC65CBB1C9241AA0079DF5A /* Frameworks */,
 				BFC65D021C9245A20079DF5A /* CopyFiles */,
 			);
 			buildRules = (
@@ -1333,7 +799,7 @@
 			buildConfigurationList = BFC65D161C9245E80079DF5A /* Build configuration list for PBXNativeTarget "incr" */;
 			buildPhases = (
 				BFC65D091C9245E80079DF5A /* Sources */,
-				BFC65D0C1C9245E80079DF5A /* Frameworks */,
+				BFC65CBB1C9241AA0079DF5A /* Frameworks */,
 				BFC65D151C9245E80079DF5A /* CopyFiles */,
 			);
 			buildRules = (
@@ -1350,7 +816,7 @@
 			buildConfigurationList = BFC65D291C92460B0079DF5A /* Build configuration list for PBXNativeTarget "list" */;
 			buildPhases = (
 				BFC65D1C1C92460B0079DF5A /* Sources */,
-				BFC65D1F1C92460B0079DF5A /* Frameworks */,
+				BFC65CBB1C9241AA0079DF5A /* Frameworks */,
 				BFC65D281C92460B0079DF5A /* CopyFiles */,
 			);
 			buildRules = (
@@ -1367,7 +833,7 @@
 			buildConfigurationList = BFC65D3C1C9246420079DF5A /* Build configuration list for PBXNativeTarget "llist" */;
 			buildPhases = (
 				BFC65D2F1C9246420079DF5A /* Sources */,
-				BFC65D321C9246420079DF5A /* Frameworks */,
+				BFC65CBB1C9241AA0079DF5A /* Frameworks */,
 				BFC65D3B1C9246420079DF5A /* CopyFiles */,
 			);
 			buildRules = (
@@ -1384,7 +850,7 @@
 			buildConfigurationList = BFC65D4F1C92465F0079DF5A /* Build configuration list for PBXNativeTarget "lmap" */;
 			buildPhases = (
 				BFC65D421C92465F0079DF5A /* Sources */,
-				BFC65D451C92465F0079DF5A /* Frameworks */,
+				BFC65CBB1C9241AA0079DF5A /* Frameworks */,
 				BFC65D4E1C92465F0079DF5A /* CopyFiles */,
 			);
 			buildRules = (
@@ -1401,7 +867,7 @@
 			buildConfigurationList = BFC65D621C92469B0079DF5A /* Build configuration list for PBXNativeTarget "lset" */;
 			buildPhases = (
 				BFC65D551C92469B0079DF5A /* Sources */,
-				BFC65D581C92469B0079DF5A /* Frameworks */,
+				BFC65CBB1C9241AA0079DF5A /* Frameworks */,
 				BFC65D611C92469B0079DF5A /* CopyFiles */,
 			);
 			buildRules = (
@@ -1418,7 +884,7 @@
 			buildConfigurationList = BFC65D751C9246B00079DF5A /* Build configuration list for PBXNativeTarget "lstack" */;
 			buildPhases = (
 				BFC65D681C9246B00079DF5A /* Sources */,
-				BFC65D6B1C9246B00079DF5A /* Frameworks */,
+				BFC65CBB1C9241AA0079DF5A /* Frameworks */,
 				BFC65D741C9246B00079DF5A /* CopyFiles */,
 			);
 			buildRules = (
@@ -1435,7 +901,7 @@
 			buildConfigurationList = BFC65D881C9246CC0079DF5A /* Build configuration list for PBXNativeTarget "touch" */;
 			buildPhases = (
 				BFC65D7B1C9246CC0079DF5A /* Sources */,
-				BFC65D7E1C9246CC0079DF5A /* Frameworks */,
+				BFC65CBB1C9241AA0079DF5A /* Frameworks */,
 				BFC65D871C9246CC0079DF5A /* CopyFiles */,
 			);
 			buildRules = (
@@ -1452,7 +918,7 @@
 			buildConfigurationList = BFC65D9B1C9246E70079DF5A /* Build configuration list for PBXNativeTarget "udf" */;
 			buildPhases = (
 				BFC65D8E1C9246E70079DF5A /* Sources */,
-				BFC65D911C9246E70079DF5A /* Frameworks */,
+				BFC65CBB1C9241AA0079DF5A /* Frameworks */,
 				BFC65D9A1C9246E70079DF5A /* CopyFiles */,
 			);
 			buildRules = (
@@ -1469,7 +935,7 @@
 			buildConfigurationList = BFC65DCB1C924E4F0079DF5A /* Build configuration list for PBXNativeTarget "async_get" */;
 			buildPhases = (
 				BFC65DBE1C924E4F0079DF5A /* Sources */,
-				BFC65DC11C924E4F0079DF5A /* Frameworks */,
+				BFC65CBB1C9241AA0079DF5A /* Frameworks */,
 				BFC65DCA1C924E4F0079DF5A /* CopyFiles */,
 			);
 			buildRules = (
@@ -1486,7 +952,7 @@
 			buildConfigurationList = BFC65DDD1C924E880079DF5A /* Build configuration list for PBXNativeTarget "async_batch_get" */;
 			buildPhases = (
 				BFC65DD01C924E880079DF5A /* Sources */,
-				BFC65DD31C924E880079DF5A /* Frameworks */,
+				BFC65CBB1C9241AA0079DF5A /* Frameworks */,
 				BFC65DDC1C924E880079DF5A /* CopyFiles */,
 			);
 			buildRules = (
@@ -1503,7 +969,7 @@
 			buildConfigurationList = BFC65DEF1C924EC20079DF5A /* Build configuration list for PBXNativeTarget "async_query" */;
 			buildPhases = (
 				BFC65DE21C924EC20079DF5A /* Sources */,
-				BFC65DE51C924EC20079DF5A /* Frameworks */,
+				BFC65CBB1C9241AA0079DF5A /* Frameworks */,
 				BFC65DEE1C924EC20079DF5A /* CopyFiles */,
 			);
 			buildRules = (
@@ -1520,7 +986,7 @@
 			buildConfigurationList = BFC65E011C924EF40079DF5A /* Build configuration list for PBXNativeTarget "batch_get" */;
 			buildPhases = (
 				BFC65DF41C924EF40079DF5A /* Sources */,
-				BFC65DF71C924EF40079DF5A /* Frameworks */,
+				BFC65CBB1C9241AA0079DF5A /* Frameworks */,
 				BFC65E001C924EF40079DF5A /* CopyFiles */,
 			);
 			buildRules = (
@@ -1537,7 +1003,7 @@
 			buildConfigurationList = BFC65E131C924F3B0079DF5A /* Build configuration list for PBXNativeTarget "geo_filter" */;
 			buildPhases = (
 				BFC65E061C924F3B0079DF5A /* Sources */,
-				BFC65E091C924F3B0079DF5A /* Frameworks */,
+				BFC65CBB1C9241AA0079DF5A /* Frameworks */,
 				BFC65E121C924F3B0079DF5A /* CopyFiles */,
 			);
 			buildRules = (
@@ -1554,7 +1020,7 @@
 			buildConfigurationList = BFC65E251C924F640079DF5A /* Build configuration list for PBXNativeTarget "geo_simple" */;
 			buildPhases = (
 				BFC65E181C924F640079DF5A /* Sources */,
-				BFC65E1B1C924F640079DF5A /* Frameworks */,
+				BFC65CBB1C9241AA0079DF5A /* Frameworks */,
 				BFC65E241C924F640079DF5A /* CopyFiles */,
 			);
 			buildRules = (
@@ -1571,7 +1037,7 @@
 			buildConfigurationList = BFC65E371C924F930079DF5A /* Build configuration list for PBXNativeTarget "query_aggregate" */;
 			buildPhases = (
 				BFC65E2A1C924F930079DF5A /* Sources */,
-				BFC65E2D1C924F930079DF5A /* Frameworks */,
+				BFC65CBB1C9241AA0079DF5A /* Frameworks */,
 				BFC65E361C924F930079DF5A /* CopyFiles */,
 			);
 			buildRules = (
@@ -1588,7 +1054,7 @@
 			buildConfigurationList = BFC65E491C924FB70079DF5A /* Build configuration list for PBXNativeTarget "query_simple" */;
 			buildPhases = (
 				BFC65E3C1C924FB70079DF5A /* Sources */,
-				BFC65E3F1C924FB70079DF5A /* Frameworks */,
+				BFC65CBB1C9241AA0079DF5A /* Frameworks */,
 				BFC65E481C924FB70079DF5A /* CopyFiles */,
 			);
 			buildRules = (
@@ -1605,7 +1071,7 @@
 			buildConfigurationList = BFC65E5B1C924FDB0079DF5A /* Build configuration list for PBXNativeTarget "scan_background" */;
 			buildPhases = (
 				BFC65E4E1C924FDB0079DF5A /* Sources */,
-				BFC65E511C924FDB0079DF5A /* Frameworks */,
+				BFC65CBB1C9241AA0079DF5A /* Frameworks */,
 				BFC65E5A1C924FDB0079DF5A /* CopyFiles */,
 			);
 			buildRules = (
@@ -1622,7 +1088,7 @@
 			buildConfigurationList = BFC65E6D1C92501C0079DF5A /* Build configuration list for PBXNativeTarget "scan_standard" */;
 			buildPhases = (
 				BFC65E601C92501C0079DF5A /* Sources */,
-				BFC65E631C92501C0079DF5A /* Frameworks */,
+				BFC65CBB1C9241AA0079DF5A /* Frameworks */,
 				BFC65E6C1C92501C0079DF5A /* CopyFiles */,
 			);
 			buildRules = (
@@ -1639,7 +1105,7 @@
 			buildConfigurationList = BFF344E61CEE41DB00FD1976 /* Build configuration list for PBXNativeTarget "map" */;
 			buildPhases = (
 				BFF344D91CEE41DB00FD1976 /* Sources */,
-				BFF344DC1CEE41DB00FD1976 /* Frameworks */,
+				BFC65CBB1C9241AA0079DF5A /* Frameworks */,
 				BFF344E51CEE41DB00FD1976 /* CopyFiles */,
 			);
 			buildRules = (
@@ -1739,7 +1205,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				BFC65CCC1C9242120079DF5A /* example.c in Sources */,
-				BFF344EB1CEE420100FD1976 /* example.c in Sources */,
 				BFC65CBA1C9241AA0079DF5A /* example_utils.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1941,12 +1406,16 @@
 			buildSettings = {
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
-					/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include,
 					../src/include,
 					../modules/common/src/include,
 				);
-				OTHER_LDFLAGS = "-L/usr/local/lib";
-				SDKROOT = macosx10.9;
+				LIBRARY_SEARCH_PATHS = /usr/local/opt/openssl/lib;
+				MACOSX_DEPLOYMENT_TARGET = "";
+				OTHER_LDFLAGS = (
+					"-L/usr/local/lib",
+					"-L../modules/lua/src",
+				);
+				SDKROOT = macosx;
 			};
 			name = Debug;
 		};
@@ -1955,12 +1424,16 @@
 			buildSettings = {
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
-					/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include,
 					../src/include,
 					../modules/common/src/include,
 				);
-				OTHER_LDFLAGS = "-L/usr/local/lib";
-				SDKROOT = macosx10.9;
+				LIBRARY_SEARCH_PATHS = /usr/local/opt/openssl/lib;
+				MACOSX_DEPLOYMENT_TARGET = "";
+				OTHER_LDFLAGS = (
+					"-L/usr/local/lib",
+					"-L../modules/lua/src",
+				);
+				SDKROOT = macosx;
 			};
 			name = Release;
 		};
@@ -1996,11 +1469,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -2035,11 +1505,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
@@ -2078,11 +1545,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = get;
@@ -2117,11 +1581,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				PRODUCT_NAME = get;
 				SDKROOT = macosx;
@@ -2160,11 +1621,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = append;
@@ -2199,11 +1657,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				PRODUCT_NAME = append;
 				SDKROOT = macosx;
@@ -2242,11 +1697,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = expire;
@@ -2281,11 +1733,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				PRODUCT_NAME = expire;
 				SDKROOT = macosx;
@@ -2324,11 +1773,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = generation;
@@ -2363,11 +1809,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				PRODUCT_NAME = generation;
 				SDKROOT = macosx;
@@ -2406,11 +1849,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = incr;
@@ -2445,11 +1885,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				PRODUCT_NAME = incr;
 				SDKROOT = macosx;
@@ -2488,11 +1925,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = list;
@@ -2527,11 +1961,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				PRODUCT_NAME = list;
 				SDKROOT = macosx;
@@ -2570,11 +2001,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = llist;
@@ -2609,11 +2037,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				PRODUCT_NAME = llist;
 				SDKROOT = macosx;
@@ -2652,11 +2077,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = lmap;
@@ -2691,11 +2113,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				PRODUCT_NAME = lmap;
 				SDKROOT = macosx;
@@ -2734,11 +2153,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = lset;
@@ -2773,11 +2189,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				PRODUCT_NAME = lset;
 				SDKROOT = macosx;
@@ -2816,11 +2229,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = lstack;
@@ -2855,11 +2265,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				PRODUCT_NAME = lstack;
 				SDKROOT = macosx;
@@ -2898,11 +2305,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = touch;
@@ -2937,11 +2341,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				PRODUCT_NAME = touch;
 				SDKROOT = macosx;
@@ -2980,11 +2381,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = udf;
@@ -3019,11 +2417,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				PRODUCT_NAME = udf;
 				SDKROOT = macosx;
@@ -3062,11 +2457,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = async_get;
@@ -3101,11 +2493,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				PRODUCT_NAME = async_get;
 				SDKROOT = macosx;
@@ -3144,11 +2533,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = async_batch_get;
@@ -3183,11 +2569,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				PRODUCT_NAME = async_batch_get;
 				SDKROOT = macosx;
@@ -3226,11 +2609,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = async_query;
@@ -3265,11 +2645,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				PRODUCT_NAME = async_query;
 				SDKROOT = macosx;
@@ -3308,11 +2685,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = batch_get;
@@ -3347,11 +2721,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				PRODUCT_NAME = batch_get;
 				SDKROOT = macosx;
@@ -3390,11 +2761,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = geo_filter;
@@ -3429,11 +2797,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				PRODUCT_NAME = geo_filter;
 				SDKROOT = macosx;
@@ -3472,11 +2837,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = geo_simple;
@@ -3511,11 +2873,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				PRODUCT_NAME = geo_simple;
 				SDKROOT = macosx;
@@ -3554,11 +2913,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = query_aggregate;
@@ -3593,11 +2949,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				PRODUCT_NAME = query_aggregate;
 				SDKROOT = macosx;
@@ -3636,11 +2989,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = query_simple;
@@ -3675,11 +3025,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				PRODUCT_NAME = query_simple;
 				SDKROOT = macosx;
@@ -3718,11 +3065,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = scan_background;
@@ -3757,11 +3101,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				PRODUCT_NAME = scan_background;
 				SDKROOT = macosx;
@@ -3804,7 +3145,7 @@
 					"$(inherited)",
 					/usr/local/Cellar/libuv/1.7.5/lib,
 				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = scan_standard;
@@ -3843,7 +3184,7 @@
 					"$(inherited)",
 					/usr/local/Cellar/libuv/1.7.5/lib,
 				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				PRODUCT_NAME = scan_standard;
 				SDKROOT = macosx;
@@ -3882,11 +3223,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = map;
@@ -3921,11 +3259,8 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					/usr/local/Cellar/libuv/1.7.5/lib,
-				);
-				MACOSX_DEPLOYMENT_TARGET = 10.9;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				PRODUCT_NAME = map;
 				SDKROOT = macosx;

@@ -1,8 +1,23 @@
 #!/bin/bash -e
 ver=4.22
-wget http://dist.schmorp.de/libev/Attic/libev-$ver.tar.gz
-tar xvf libev-$ver.tar.gz
-cd libev-$ver
-./configure
-make
+dir=libev-$ver
+fn=$dir.tar.gz
+url=http://dist.schmorp.de/libev/Attic/$fn
+
+rm -rf $fn $dir
+
+echo Download $url
+wget $url
+
+echo Extract $fn 
+tar xf $fn
+
+echo Make $dir
+cd $dir
+./configure -q
+make CFLAGS=-w
 sudo make install
+
+echo Remove source $fn $dir
+cd ..
+rm -rf $fn $dir

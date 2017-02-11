@@ -38,10 +38,15 @@ for Linux and XCode clang for Mac OS X.
 
 ### Mac OS X
 
-Download and install [XCode](https://itunes.apple.com/us/app/xcode/id497799835).
-Then, install openssl via brew.
+Download and install:
 
-	$ brew install openssl
+* [XCode](https://itunes.apple.com/us/app/xcode/id497799835)
+* [Brew Package Manager](http://brew.sh)
+
+Then, run the following:
+
+    $ cd aerospike-client-c
+	$ project/prepare_xcode
 
 ### Event Library
 

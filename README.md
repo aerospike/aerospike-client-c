@@ -45,7 +45,6 @@ Download and install:
 
 Then, run the following:
 
-    $ cd aerospike-client-c
 	$ project/prepare_xcode
 
 ### Event Library
@@ -54,15 +53,21 @@ An event library is required when C client asynchronous functionality is used.
 This event library must be installed independently of the C client.
 The supported event libraries are:
 
-* [libev](http://dist.schmorp.de/libev) version 4.20 or greater.  libev is the preferred event library.
-* [libuv](http://docs.libuv.org) version 1.7.5 or greater.
-* [libevent](http://libevent.org) version 2.0.22 or greater.
+* [libev](http://dist.schmorp.de/libev) version 4.20 or greater.  libev is the preferred event library.  Use `install_libev` to install.
+* [libuv](http://docs.libuv.org) version 1.7.5 or greater.  Use `install_libuv` to install.
+* [libevent](http://libevent.org) version 2.0.22 or greater.  Use `install_libevent` to install.
 
 Event libraries usually install into /usr/local/lib.  Most operating systems do not 
-search /usr/local/lib by default.  Therefore, the following LD_LIBRARY_PATH setting may 
+search /usr/local/lib by default.  Therefore, the following `LD_LIBRARY_PATH` setting may 
 be necessary.
 
     export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
+
+When compiling your async applications with aerospike header files, the event library
+must be defined (`-DAS_USE_LIBEV`, `-DAS_USE_LIBUV` or `-DAS_USE_LIBEVENT`) on the command line or
+in an IDE.  Example:
+
+	$ gcc -DAS_USE_LIBEV -o myapp myapp.c -laerospike -lev -lssl -lcrypto -lpthread -lm -lz
 
 ## Build
 
@@ -118,14 +123,6 @@ To run unit tests:
 or with valgrind:
 
 	$ make [EVENT_LIB=libev|libuv|libevent] [AS_HOST=<hostname>] test-valgrind
-
-## Compiling Async Applications
-
-When compiling async applications with aerospike header files, the event library
-must be defined (-DAS_USE_LIBEV, -DAS_USE_LIBUV or -DAS_USE_LIBEVENT).
-Example:
-
-	$ gcc -DAS_USE_LIBEV -o myapp myapp.c -laerospike -lev -lssl -lcrypto -lpthread -lm -lz
 
 ## Lua
 

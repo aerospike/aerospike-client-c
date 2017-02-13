@@ -13,6 +13,9 @@ brew install openssl
 # Must perform make to create liblua.a that is referenced in xcode project.
 cd ..
 git submodule update --init
-make
+cd modules/lua
+make macosx
+cd ../..
 
+# Open C client workspace in xcode.
 open project/client.xcworkspace

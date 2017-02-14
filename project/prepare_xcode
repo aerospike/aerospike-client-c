@@ -14,7 +14,7 @@ brew install openssl
 cd ..
 git submodule update --init
 cd modules/lua/src
-ln -s luaconf.h.orig luaconf.h
+ln -sf luaconf.h.orig luaconf.h
 cd ..
 make macosx
 cd ../..

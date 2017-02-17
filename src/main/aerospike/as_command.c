@@ -487,6 +487,7 @@ as_command_execute(
 				case AEROSPIKE_ERR_CONNECTION:
 				case AEROSPIKE_ERR_TIMEOUT:
 				case AEROSPIKE_ERR_TLS_ERROR:
+				case AEROSPIKE_NOT_AUTHENTICATED:
 					as_node_close_connection(node, &socket);
 					if (release_node) {
 						as_node_release(node);

@@ -480,6 +480,7 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 		case AEROSPIKE_ERR_TLS_ERROR:
 		case AEROSPIKE_ERR_CLIENT_ABORT:
 		case AEROSPIKE_ERR_CLIENT:
+		case AEROSPIKE_NOT_AUTHENTICATED:
 			as_event_release_async_connection(cmd);
 			break;
 			

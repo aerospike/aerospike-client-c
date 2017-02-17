@@ -431,6 +431,7 @@ as_pipe_response_error(as_event_command* cmd, as_error* err)
 		case AEROSPIKE_ERR_TLS_ERROR:
 		case AEROSPIKE_ERR_CLIENT_ABORT:
 		case AEROSPIKE_ERR_CLIENT:
+		case AEROSPIKE_NOT_AUTHENTICATED:
 			as_log_trace("Error is fatal");
 			cancel_connection(cmd, err, CANCEL_CONNECTION_RESPONSE);
 			break;

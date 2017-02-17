@@ -548,8 +548,12 @@ as_node_refresh(as_cluster* cluster, as_error* err, as_node* node, as_peers* pee
 	as_vector_inita(&values, sizeof(as_name_value), 4);
 	
 	as_info_parse_multi_response((char*)buf, &values);
-	
+
 	status = as_node_process_response(cluster, err, node, &values, peers);
+
+	if (status == AEROSPIKE_ERR_CLIENT) {
+		as_node_close_info_connection(node);
+	}
 		
 	if (buf != stack_buf) {
 		cf_free(buf);

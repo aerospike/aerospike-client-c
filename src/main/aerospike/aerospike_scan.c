@@ -301,12 +301,13 @@ as_scan_worker(void* data)
 }
 
 static size_t
-as_scan_command_size(const as_scan* scan, uint16_t* fields, as_buffer* argbuffer)
+as_scan_command_size(const as_scan* scan, uint16_t* fields, as_buffer* argbuffer, uint32_t* predexp_sz)
 {
 	// Build Command.  It's okay to share command across threads because scan does not have retries.
 	// If retries were allowed, the timeout field in the command would change on retry which
 	// would conflict with other threads.
 	size_t size = AS_HEADER_SIZE;
+	uint32_t predexp_size = 0;
 	uint16_t n_fields = 0;
 	
 	if (scan->ns) {
@@ -352,13 +353,25 @@ as_scan_command_size(const as_scan* scan, uint16_t* fields, as_buffer* argbuffer
 			size += as_command_string_operation_size(scan->select.entries[i]);
 		}
 	}
+
+	if (scan->predexp.size > 0) {
+		size += AS_FIELD_HEADER_SIZE;
+		for (uint16_t ii = 0; ii < scan->predexp.size; ++ii) {
+			as_predexp_base * bp = scan->predexp.entries[ii];
+			predexp_size += (*bp->size_fn)(bp);
+		}
+		size += predexp_size;
+		n_fields++;
+	}
+
 	*fields = n_fields;
+	*predexp_sz = predexp_size;
 	return size;
 }
 
 static size_t
 as_scan_command_init(uint8_t* cmd, const as_policy_scan* policy, const as_scan* scan,
-	uint64_t task_id, uint16_t n_fields, as_buffer* argbuffer)
+uint64_t task_id, uint16_t n_fields, as_buffer* argbuffer, uint32_t predexp_size)
 {
 	uint8_t* p;
 	
@@ -413,6 +426,16 @@ as_scan_command_init(uint8_t* cmd, const as_policy_scan* policy, const as_scan* 
 			p = as_command_write_bin_name(p, scan->select.entries[i]);
 		}
 	}
+
+	// Write predicate expressions.
+	if (scan->predexp.size > 0) {
+		p = as_command_write_field_header(p, AS_FIELD_PREDEXP, predexp_size);
+		for (uint16_t ii = 0; ii < scan->predexp.size; ++ii) {
+			as_predexp_base * bp = scan->predexp.entries[ii];
+			p = (*bp->write_fn)(bp, p);
+		}
+	}
+	
 	return as_command_write_end(cmd, p);
 }
 
@@ -455,9 +478,10 @@ as_scan_generic(
 	// Create scan command
 	as_buffer argbuffer;
 	uint16_t n_fields = 0;
-	size_t size = as_scan_command_size(scan, &n_fields, &argbuffer);
+	uint32_t predexp_sz = 0;
+	size_t size = as_scan_command_size(scan, &n_fields, &argbuffer, &predexp_sz);
 	uint8_t* cmd = as_command_init(size);
-	size = as_scan_command_init(cmd, policy, scan, task_id, n_fields, &argbuffer);
+	size = as_scan_command_init(cmd, policy, scan, task_id, n_fields, &argbuffer, predexp_sz);
 	
 	// Initialize task.
 	uint32_t error_mutex = 0;
@@ -597,9 +621,10 @@ as_scan_async(
 	// Create scan command buffer.
 	as_buffer argbuffer;
 	uint16_t n_fields = 0;
-	size_t size = as_scan_command_size(scan, &n_fields, &argbuffer);
+	uint32_t predexp_sz = 0;
+	size_t size = as_scan_command_size(scan, &n_fields, &argbuffer, &predexp_sz);
 	uint8_t* cmd_buf = as_command_init(size);
-	size = as_scan_command_init(cmd_buf, policy, scan, task_id, n_fields, &argbuffer);
+	size = as_scan_command_init(cmd_buf, policy, scan, task_id, n_fields, &argbuffer, predexp_sz);
 	
 	// Allocate enough memory to cover, then, round up memory size in 8KB increments to allow socket
 	// read to reuse buffer.
@@ -739,9 +764,10 @@ aerospike_scan_node(
 	uint64_t task_id = as_random_get_uint64();
 	as_buffer argbuffer;
 	uint16_t n_fields = 0;
-	size_t size = as_scan_command_size(scan, &n_fields, &argbuffer);
+	uint32_t predexp_sz = 0;
+	size_t size = as_scan_command_size(scan, &n_fields, &argbuffer, &predexp_sz);
 	uint8_t* cmd = as_command_init(size);
-	size = as_scan_command_init(cmd, policy, scan, task_id, n_fields, &argbuffer);
+	size = as_scan_command_init(cmd, policy, scan, task_id, n_fields, &argbuffer, predexp_sz);
 	
 	// Initialize task.
 	uint32_t error_mutex = 0;

@@ -318,7 +318,7 @@ uint8_t * as_predexp_string_value_write(as_predexp_base * bp, uint8_t * p)
 {
 	as_predexp_string_value_t * dp = (as_predexp_string_value_t *) bp;
 
-	uint32_t vlen = strlen(dp->value);
+	uint32_t vlen = (uint32_t)strlen(dp->value);
 
 	// TAG
 	uint16_t * tag_ptr = (uint16_t *) p;
@@ -385,7 +385,7 @@ uint8_t * as_predexp_geojson_value_write(as_predexp_base * bp, uint8_t * p)
 	as_predexp_geojson_value_t * dp = (as_predexp_geojson_value_t *) bp;
 
 	size_t slen = strlen(dp->value);
-	uint32_t vlen = sizeof(uint8_t) + sizeof(uint16_t) + slen;
+	uint32_t vlen = (uint32_t)(sizeof(uint8_t) + sizeof(uint16_t) + slen);
 
 	// TAG
 	uint16_t * tag_ptr = (uint16_t *) p;

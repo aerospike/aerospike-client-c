@@ -14,13 +14,16 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
+
 #include <aerospike/as_bin.h>
 #include <aerospike/as_key.h>
 #include <aerospike/as_log.h>
+#include <aerospike/as_predexp.h>
 #include <aerospike/as_query.h>
 #include <aerospike/as_udf.h>
 
 #include <citrusleaf/alloc.h>
+#include <citrusleaf/cf_byte_order.h>
 
 #include <stdarg.h>
 
@@ -44,6 +47,11 @@ static as_query * as_query_defaults(as_query * query, bool free, const as_namesp
 	query->where.capacity = 0;
 	query->where.size = 0;
 	query->where.entries = NULL;
+	
+	query->predexp._free = false;
+	query->predexp.capacity = 0;
+	query->predexp.size = 0;
+	query->predexp.entries = NULL;
 	
 	query->orderby._free = false;
 	query->orderby.capacity = 0;
@@ -119,6 +127,26 @@ void as_query_destroy(as_query * query)
 		cf_free(query->orderby.entries);
 	}
 
+	// NOTE - we need to check all of the registered predexp
+	// entries ... if they have a registered destructor (heap
+	// allocated) call it.
+	//
+	for (uint16_t ndx = 0; ndx < query->predexp.size; ++ndx) {
+		as_predexp_base * bp = query->predexp.entries[ndx];
+		if (bp->dtor_fn) {
+			(*bp->dtor_fn)(bp);
+		}
+	}
+
+	if ( query->predexp.entries && query->predexp._free) {
+		cf_free(query->predexp.entries);
+	}
+
+	query->predexp._free = false;
+	query->predexp.capacity = 0;
+	query->predexp.size = 0;
+	query->predexp.entries = NULL;
+	
 	query->orderby._free = false;
 	query->orderby.capacity = 0;
 	query->orderby.size = 0;
@@ -313,6 +341,47 @@ bool as_query_where(as_query * query, const char * bin, as_predicate_type type, 
 
     va_end(ap);
 	return status;
+}
+
+/******************************************************************************
+ *	PREDEXP FUNCTIONS
+ *****************************************************************************/
+
+bool as_query_predexp_init(as_query * query, uint16_t n)
+{
+	if ( !query ) return false;
+	if ( query->predexp.entries ) return false;
+
+	query->predexp.entries = (as_predexp_base **) cf_calloc(n, sizeof(as_bin_name));
+	if ( !query->predexp.entries ) return false;
+
+	query->predexp._free = true;
+	query->predexp.capacity = n;
+	query->predexp.size = 0;
+
+	return true;
+}
+
+bool as_query_predexp_add(as_query * query, as_predexp_base * predexp)
+{
+	// test preconditions
+	if ( !query ) {
+		return false;
+	}
+
+	// missing predexp
+	if ( !predexp ) {
+		return false;
+	}
+	
+	// insufficient capacity
+	if ( query->predexp.size >= query->predexp.capacity ) {
+		return false;
+	}
+
+	query->predexp.entries[query->predexp.size++] = predexp;
+
+	return true;
 }
 
 /******************************************************************************

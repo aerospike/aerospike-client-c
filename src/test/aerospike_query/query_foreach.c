@@ -14,6 +14,9 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
+
+#include <regex.h>
+
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
 #include <aerospike/aerospike_index.h>
@@ -44,6 +47,7 @@
 
 extern aerospike * as;
 static bool server_has_double = false;
+static uint64_t g_epochns;
 
 /******************************************************************************
  * MACROS
@@ -162,15 +166,46 @@ bool query_foreach_create()
 	else {
 		info("error(%d): %s", err.code, err.message);
 	}
-	 
+
+	uint32_t the_ttl = AS_RECORD_NO_EXPIRE_TTL;
+	
 	// insert records
 	for ( int i = 0; i < n_recs; i++ ) {
+
+		if (i == 10) {
+			// We change the TTL from never to 100 days
+			the_ttl = 100 * 24 * 60 * 60;
+		}
+		else if (i == 42) {
+			// NOTE - We pause on the 42nd iteration for a few
+			// milliseconds and note the time.  We can then use the
+			// as_predexp_last_update_after predicate below to find
+			// the later records.
+
+			usleep(5 * 1000);
+
+			struct timeval tv;
+			gettimeofday(&tv, NULL);
+			g_epochns =
+				(tv.tv_sec * 1000L * 1000L * 1000L) +
+				(tv.tv_usec * 1000L);
+			
+			usleep(5 * 1000);
+
+			// Also on the 42nd iteration we change the TTL to
+			// 10 days for the remaining records.
+			the_ttl = 10 * 24 * 60 * 60;
+		}
 		
 		char * 	a = "abc";
 		int 	b = n_recs;
 		int 	c = i;
 		int 	d = i % 10;
 		int 	e = b + (c + 1) * (d + 1) / 2;
+		int		g = i;	// Only set on odd records.
+		
+		char f[64];
+		snprintf(f, sizeof(f), "0x%04x", i);
 		
 		char keystr[64] = { '\0' };
 		snprintf(keystr, 64, "%s-%d-%d-%d-%d", a, b, c, d, e);
@@ -212,17 +247,34 @@ bool query_foreach_create()
 		as_arraylist_append_int64(&list2, i+3);
 		as_arraylist_append_int64(&list2, i+4);
 
+		// Make a string of variable size
+
+		char buffer[n_recs * 1024 + 1];
+		for (int jj = 0; jj < i * 1024; ++jj) {
+			buffer[jj] = 'X';
+		}
+		buffer[i * 1024] = '\0';
+
+		// We only create the g bin for odd records.
+		bool create_g_bin = i % 2 == 1;
 		
 		as_record r;
-		as_record_init(&r, 9);
+		as_record_init(&r, 10 + (create_g_bin ? 1 : 0));
 		as_record_set_str(&r,   "a", a);
 		as_record_set_int64(&r, "b", b);
 		as_record_set_int64(&r, "c", c);
 		as_record_set_int64(&r, "d", d);
 		as_record_set_int64(&r, "e", e);
+		as_record_set_str(&r,   "f", f);
+		if (create_g_bin) {
+			as_record_set_int64(&r, "g", g);
+		}
 		as_record_set_list(&r, "x", (as_list *) &list);
 		as_record_set_map(&r, "y", (as_map *) &map);
 		as_record_set_list(&r, "z", (as_list *) &list2);
+		as_record_set_str(&r,   "bigstr", buffer);
+
+		r.ttl = the_ttl;
 		
 		as_key key;
 		as_key_init(&key, NAMESPACE, SET, keystr);
@@ -329,6 +381,17 @@ static bool after(atf_suite * suite) {
 	}
 
 	return query_foreach_destroy();
+}
+
+static bool count_callback(const as_val * v, void * udata) {
+	uint32_t * count = (uint32_t *) udata;
+	if ( v == NULL ) {
+		info("count: %d", ck_pr_load_32(count));
+	}
+	else {
+		ck_pr_inc_32(count);
+	}
+	return true;
 }
 
 /******************************************************************************
@@ -613,6 +676,563 @@ TEST( query_foreach_8, "IN LIST count(*) where z between 50 and 51" ) {
 	as_query_destroy(&q);
 }
 
+TEST( query_with_range_predexp, "query_with_range_predexp" ) {
+
+	as_error err;
+	as_error_reset(&err);
+
+	int count = 0;
+
+	as_query q;
+	as_query_init(&q, NAMESPACE, SET);
+
+	as_query_select_inita(&q, 1);
+	as_query_select(&q, "c");
+	
+	as_query_where_inita(&q, 1);
+	as_query_where(&q, "a", as_string_equals("abc"));
+
+	as_query_predexp_inita(&q, 15);
+	as_query_predexp_add(&q, as_predexp_integer_value(11));
+	as_query_predexp_add(&q, as_predexp_integer_bin("c"));
+	as_query_predexp_add(&q, as_predexp_integer_greatereq());
+	as_query_predexp_add(&q, as_predexp_integer_value(20));
+	as_query_predexp_add(&q, as_predexp_integer_bin("c"));
+	as_query_predexp_add(&q, as_predexp_integer_lesseq());
+	as_query_predexp_add(&q, as_predexp_and(2));
+	as_query_predexp_add(&q, as_predexp_integer_value(3));
+	as_query_predexp_add(&q, as_predexp_integer_bin("d"));
+	as_query_predexp_add(&q, as_predexp_integer_greatereq());
+	as_query_predexp_add(&q, as_predexp_integer_value(5));
+	as_query_predexp_add(&q, as_predexp_integer_bin("d"));
+	as_query_predexp_add(&q, as_predexp_integer_lesseq());
+	as_query_predexp_add(&q, as_predexp_and(2));
+	as_query_predexp_add(&q, as_predexp_and(2));
+	
+	aerospike_query_foreach(as, &err, NULL, &q, count_callback, &count);
+
+	// The first range filter should match records 11, 12, ... 20.
+	// The second range filter should match all records that mod 10
+	// returns 3, 4 and 5.  The combination should match only 13, 14
+	// and 15.
+	
+	assert_int_eq( err.code, 0 );
+	assert_int_eq( count, 3 );
+
+	as_query_destroy(&q);
+}
+
+TEST( query_with_equality_predexp, "query_with_equality_predexp" ) {
+
+	as_error err;
+	as_error_reset(&err);
+
+	int count = 0;
+
+	as_query q;
+	as_query_init(&q, NAMESPACE, SET);
+
+	as_query_select_inita(&q, 1);
+	as_query_select(&q, "c");
+	
+	as_query_where_inita(&q, 1);
+	as_query_where(&q, "a", as_string_equals("abc"));
+
+	
+	as_query_predexp_inita(&q, 3);
+	as_query_predexp_add(&q, as_predexp_string_value("0x001d"));
+	as_query_predexp_add(&q, as_predexp_string_bin("f"));
+	as_query_predexp_add(&q, as_predexp_string_equal());
+	
+	aerospike_query_foreach(as, &err, NULL, &q, count_callback, &count);
+
+	// We should only match one record.
+	
+	assert_int_eq( err.code, 0 );
+	assert_int_eq( count, 1 );
+
+	as_query_destroy(&q);
+}
+
+TEST( query_with_recsize_predexp, "query_with_recsize_predexp" ) {
+
+	as_error err;
+	as_error_reset(&err);
+
+	int count = 0;
+
+	as_query q;
+	as_query_init(&q, NAMESPACE, SET);
+
+	as_query_select_inita(&q, 1);
+	as_query_select(&q, "c");
+	
+	as_query_where_inita(&q, 1);
+	as_query_where(&q, "a", as_string_equals("abc"));
+
+	as_query_predexp_inita(&q, 3);
+	as_query_predexp_add(&q, as_predexp_integer_value(65 * 1024));
+	as_query_predexp_add(&q, as_predexp_recsize());
+	as_query_predexp_add(&q, as_predexp_integer_greatereq());
+
+	aerospike_query_foreach(as, &err, NULL, &q, count_callback, &count);
+
+	// We should match 100 - 65 records
+	
+	assert_int_eq( err.code, 0 );
+	assert_int_eq( count, 35 );
+
+	as_query_destroy(&q);
+}
+
+TEST( query_intermittent_bin_predexp, "query_intermittent_bin_predexp" ) {
+
+	as_error err;
+	as_error_reset(&err);
+
+	int count = 0;
+
+	as_query q;
+	as_query_init(&q, NAMESPACE, SET);
+
+	as_query_select_inita(&q, 1);
+	as_query_select(&q, "c");
+	
+	as_query_where_inita(&q, 1);
+	as_query_where(&q, "c", as_integer_range(10, 30));
+
+	as_query_predexp_inita(&q, 3);
+	as_query_predexp_add(&q, as_predexp_integer_value(20));
+	as_query_predexp_add(&q, as_predexp_integer_bin("g"));
+	as_query_predexp_add(&q, as_predexp_integer_greater());
+
+	aerospike_query_foreach(as, &err, NULL, &q, count_callback, &count);
+
+	// Where clause matches c between 10, 11, 12 ... 28, 29, 30.
+	// The "g" bin is larger than 20 for 21, 23, 25, 27, 29
+	// The "g" bin is missing for even numbers, should be false.
+	
+	assert_int_eq( err.code, 0 );
+	assert_int_eq( count, 5 );
+
+	as_query_destroy(&q);
+}
+
+TEST( scan_with_last_update_predexp, "scan_with_last_update_predexp" ) {
+
+	as_error err;
+	as_error_reset(&err);
+
+	int count = 0;
+
+	as_query q;
+	as_query_init(&q, NAMESPACE, SET);
+
+	as_query_select_inita(&q, 1);
+	as_query_select(&q, "c");
+	
+	as_query_predexp_inita(&q, 3);
+	as_query_predexp_add(&q, as_predexp_integer_value(g_epochns));
+	as_query_predexp_add(&q, as_predexp_last_update());
+	as_query_predexp_add(&q, as_predexp_integer_greater());
+
+	aerospike_query_foreach(as, &err, NULL, &q,
+							count_callback, &count);
+
+	// We should match 100 - 42 records
+	
+	assert_int_eq( err.code, 0 );
+	assert_int_eq( count, 100 - 42 );
+
+	as_query_destroy(&q);
+}
+
+TEST( scan_with_last_update_predexp_less, "scan_with_last_update_predexp_less" ) {
+
+	as_error err;
+	as_error_reset(&err);
+
+	int count = 0;
+
+	as_query q;
+	as_query_init(&q, NAMESPACE, SET);
+
+	as_query_select_inita(&q, 1);
+	as_query_select(&q, "c");
+	
+	as_query_predexp_inita(&q, 3);
+	as_query_predexp_add(&q, as_predexp_integer_value(g_epochns));
+	as_query_predexp_add(&q, as_predexp_last_update());
+	as_query_predexp_add(&q, as_predexp_integer_lesseq());
+
+	aerospike_query_foreach(as, &err, NULL, &q,
+							count_callback, &count);
+
+	// We should match 42 records
+	
+	assert_int_eq( err.code, 0 );
+	assert_int_eq( count, 42 );
+
+	as_query_destroy(&q);
+}
+
+TEST( scan_with_void_time_predexp_1, "scan_with_void_time_predexp_1" ) {
+
+	as_error err;
+	as_error_reset(&err);
+
+	int count = 0;
+
+	as_query q;
+	as_query_init(&q, NAMESPACE, SET);
+
+	as_query_select_inita(&q, 1);
+	as_query_select(&q, "c");
+	
+	as_query_predexp_inita(&q, 3);
+	as_query_predexp_add(&q, as_predexp_integer_value(0));
+	as_query_predexp_add(&q, as_predexp_void_time());
+	as_query_predexp_add(&q, as_predexp_integer_equal());
+
+	aerospike_query_foreach(as, &err, NULL, &q,
+							count_callback, &count);
+
+	// These are the 0 TTL, from [0:9]
+	
+	assert_int_eq( err.code, 0 );
+	assert_int_eq( count, 10 );
+
+	as_query_destroy(&q);
+}
+
+TEST( scan_with_void_time_predexp_2, "scan_with_void_time_predexp_2" ) {
+
+	as_error err;
+	as_error_reset(&err);
+
+	int count = 0;
+
+	as_query q;
+	as_query_init(&q, NAMESPACE, SET);
+
+	as_query_select_inita(&q, 1);
+	as_query_select(&q, "c");
+
+	int64_t tstamp_5_days =
+		((int64_t) time(NULL) + ((int64_t) 5 * 24 * 60 * 60)) * 1e9;
+	int64_t tstamp_15_days =
+		((int64_t) time(NULL) + ((int64_t) 15 * 24 * 60 * 60)) * 1e9;
+	
+	as_query_predexp_inita(&q, 7);
+	as_query_predexp_add(&q, as_predexp_integer_value(tstamp_5_days));
+	as_query_predexp_add(&q, as_predexp_void_time());
+	as_query_predexp_add(&q, as_predexp_integer_greater());
+	as_query_predexp_add(&q, as_predexp_integer_value(tstamp_15_days));
+	as_query_predexp_add(&q, as_predexp_void_time());
+	as_query_predexp_add(&q, as_predexp_integer_less());
+	as_query_predexp_add(&q, as_predexp_and(2));
+
+	aerospike_query_foreach(as, &err, NULL, &q,
+							count_callback, &count);
+
+	// These are the 10 day TTL, from [42:99]
+	
+	assert_int_eq( err.code, 0 );
+	assert_int_eq( count, 58 );
+
+	as_query_destroy(&q);
+}
+
+TEST( scan_with_void_time_predexp_3, "scan_with_void_time_predexp_3" ) {
+
+	as_error err;
+	as_error_reset(&err);
+
+	int count = 0;
+
+	as_query q;
+	as_query_init(&q, NAMESPACE, SET);
+
+	as_query_select_inita(&q, 1);
+	as_query_select(&q, "c");
+
+	int64_t tstamp_15_days =
+		((int64_t) time(NULL) + ((int64_t) 15 * 24 * 60 * 60)) * 1e9;
+	
+	as_query_predexp_inita(&q, 3);
+	as_query_predexp_add(&q, as_predexp_integer_value(tstamp_15_days));
+	as_query_predexp_add(&q, as_predexp_void_time());
+	as_query_predexp_add(&q, as_predexp_integer_greater());
+
+	aerospike_query_foreach(as, &err, NULL, &q,
+							count_callback, &count);
+
+	// These are the 100 day TTL, from index [10:41]
+	
+	assert_int_eq( err.code, 0 );
+	assert_int_eq( count, 32 );
+
+	as_query_destroy(&q);
+}
+
+TEST( query_with_or_predexp, "query_with_or_predexp" ) {
+
+	as_error err;
+	as_error_reset(&err);
+
+	int count = 0;
+
+	as_query q;
+	as_query_init(&q, NAMESPACE, SET);
+
+	as_query_select_inita(&q, 1);
+	as_query_select(&q, "c");
+	
+	as_query_where_inita(&q, 1);
+	as_query_where(&q, "a", as_string_equals("abc"));
+
+	as_query_predexp_inita(&q, 15);
+	as_query_predexp_add(&q, as_predexp_integer_value(11));
+	as_query_predexp_add(&q, as_predexp_integer_bin("c"));
+	as_query_predexp_add(&q, as_predexp_integer_greatereq());
+	as_query_predexp_add(&q, as_predexp_integer_value(20));
+	as_query_predexp_add(&q, as_predexp_integer_bin("c"));
+	as_query_predexp_add(&q, as_predexp_integer_lesseq());
+	as_query_predexp_add(&q, as_predexp_and(2));
+	as_query_predexp_add(&q, as_predexp_integer_value(3));
+	as_query_predexp_add(&q, as_predexp_integer_bin("d"));
+	as_query_predexp_add(&q, as_predexp_integer_greatereq());
+	as_query_predexp_add(&q, as_predexp_integer_value(5));
+	as_query_predexp_add(&q, as_predexp_integer_bin("d"));
+	as_query_predexp_add(&q, as_predexp_integer_lesseq());
+	as_query_predexp_add(&q, as_predexp_and(2));
+	as_query_predexp_add(&q, as_predexp_or(2));
+
+	aerospike_query_foreach(as, &err, NULL, &q, count_callback, &count);
+
+	// The first range filter should match records 11, 12, ... 20 (10
+	// total) The second range filter should match all records that
+	// mod 10 returns 3, 4 and 5 (30 total).  The combination should
+	// match 40 less the 3 in common, so 37.
+	
+	assert_int_eq( err.code, 0 );
+	assert_int_eq( count, 37 );
+
+	as_query_destroy(&q);
+}
+
+TEST( query_with_not_predexp, "query_with_not_predexp" ) {
+
+	as_error err;
+	as_error_reset(&err);
+
+	int count = 0;
+
+	as_query q;
+	as_query_init(&q, NAMESPACE, SET);
+
+	as_query_select_inita(&q, 1);
+	as_query_select(&q, "c");
+	
+	as_query_where_inita(&q, 1);
+	as_query_where(&q, "a", as_string_equals("abc"));
+
+	as_query_predexp_inita(&q, 16);
+	as_query_predexp_add(&q, as_predexp_integer_value(11));
+	as_query_predexp_add(&q, as_predexp_integer_bin("c"));
+	as_query_predexp_add(&q, as_predexp_integer_greatereq());
+	as_query_predexp_add(&q, as_predexp_integer_value(20));
+	as_query_predexp_add(&q, as_predexp_integer_bin("c"));
+	as_query_predexp_add(&q, as_predexp_integer_lesseq());
+	as_query_predexp_add(&q, as_predexp_and(2));
+	as_query_predexp_add(&q, as_predexp_integer_value(3));
+	as_query_predexp_add(&q, as_predexp_integer_bin("d"));
+	as_query_predexp_add(&q, as_predexp_integer_greatereq());
+	as_query_predexp_add(&q, as_predexp_integer_value(5));
+	as_query_predexp_add(&q, as_predexp_integer_bin("d"));
+	as_query_predexp_add(&q, as_predexp_integer_lesseq());
+	as_query_predexp_add(&q, as_predexp_and(2));
+	as_query_predexp_add(&q, as_predexp_or(2));
+	as_query_predexp_add(&q, as_predexp_not());
+
+	aerospike_query_foreach(as, &err, NULL, &q, count_callback, &count);
+
+	// The first range filter should match records 11, 12, ... 20 (10
+	// total) The second range filter should match all records that
+	// mod 10 returns 3, 4 and 5 (30 total).  The combination should
+	// match 40 less the 3 in common, so 37.  The not inverts to 63.
+	
+	assert_int_eq( err.code, 0 );
+	assert_int_eq( count, 63 );
+
+	as_query_destroy(&q);
+}
+
+TEST( query_with_regex_predexp, "query_with_regex_predexp" ) {
+
+	as_error err;
+	as_error_reset(&err);
+
+	int count = 0;
+
+	as_query q;
+	as_query_init(&q, NAMESPACE, SET);
+
+	as_query_select_inita(&q, 1);
+	as_query_select(&q, "c");
+	
+	as_query_where_inita(&q, 1);
+	as_query_where(&q, "a", as_string_equals("abc"));
+
+	as_query_predexp_inita(&q, 3);
+	as_query_predexp_add(&q, as_predexp_string_value("0x00.[12]"));
+	as_query_predexp_add(&q, as_predexp_string_bin("f"));
+	as_query_predexp_add(&q, as_predexp_string_regex(0));
+
+	aerospike_query_foreach(as, &err, NULL, &q, count_callback, &count);
+
+	// I think we match:
+	//     0x0001, 0x0002, 0x0011, 0x0012 ... 0x0061, 0x0062
+	// for a total of 14 matches
+	
+	assert_int_eq( err.code, 0 );
+	assert_int_eq( count, 14 );
+
+	as_query_destroy(&q);
+}
+
+TEST( query_with_regex_predexp_icase, "query_with_regex_predexp_icase" ) {
+
+	as_error err;
+	as_error_reset(&err);
+
+	int count = 0;
+
+	as_query q;
+	as_query_init(&q, NAMESPACE, SET);
+
+	as_query_select_inita(&q, 1);
+	as_query_select(&q, "c");
+	
+	as_query_where_inita(&q, 1);
+	as_query_where(&q, "a", as_string_equals("abc"));
+
+	as_query_predexp_inita(&q, 3);
+	as_query_predexp_add(&q, as_predexp_string_value("0X00.[12]"));
+	as_query_predexp_add(&q, as_predexp_string_bin("f"));
+	as_query_predexp_add(&q, as_predexp_string_regex(REG_ICASE));
+
+	aerospike_query_foreach(as, &err, NULL, &q, count_callback, &count);
+
+	// I think we match:
+	//     0x0001, 0x0002, 0x0011, 0x0012 ... 0x0061, 0x0062
+	// for a total of 14 matches
+	
+	assert_int_eq( err.code, 0 );
+	assert_int_eq( count, 14 );
+
+	as_query_destroy(&q);
+}
+
+TEST( query_with_list_predexp, "query_with_list_predexp" ) {
+
+	as_error err;
+	as_error_reset(&err);
+
+	int count = 0;
+
+	as_query q;
+	as_query_init(&q, NAMESPACE, SET);
+
+	as_query_select_inita(&q, 1);
+	as_query_select(&q, "c");
+	
+	as_query_where_inita(&q, 1);
+	as_query_where(&q, "a", as_string_equals("abc"));
+
+	as_query_predexp_inita(&q, 5);
+	as_query_predexp_add(&q, as_predexp_string_value("x2"));
+	as_query_predexp_add(&q, as_predexp_string_var("vv"));
+	as_query_predexp_add(&q, as_predexp_string_equal());
+	as_query_predexp_add(&q, as_predexp_list_bin("x"));
+	as_query_predexp_add(&q, as_predexp_list_iterate_or("vv"));
+
+	aerospike_query_foreach(as, &err, NULL, &q, count_callback, &count);
+
+	// Should match on records 0, 3, 6 ... 99
+	
+	assert_int_eq( err.code, 0 );
+	assert_int_eq( count, 34 );
+
+	as_query_destroy(&q);
+}
+
+TEST( query_with_mapkey_predexp, "query_with_mapkey_predexp" ) {
+
+	as_error err;
+	as_error_reset(&err);
+
+	int count = 0;
+
+	as_query q;
+	as_query_init(&q, NAMESPACE, SET);
+
+	as_query_select_inita(&q, 1);
+	as_query_select(&q, "c");
+	
+	as_query_where_inita(&q, 1);
+	as_query_where(&q, "a", as_string_equals("abc"));
+
+	as_query_predexp_inita(&q, 5);
+	as_query_predexp_add(&q, as_predexp_string_value("ykey_not"));
+	as_query_predexp_add(&q, as_predexp_string_var("vv"));
+	as_query_predexp_add(&q, as_predexp_string_equal());
+	as_query_predexp_add(&q, as_predexp_map_bin("y"));
+	as_query_predexp_add(&q, as_predexp_mapkey_iterate_or("vv"));
+
+	aerospike_query_foreach(as, &err, NULL, &q, count_callback, &count);
+
+	// Should skip 0, 7, 14, 21, 28, 35, 42, 49, 56, 63, 70, 77, 84, 91, 98
+	// 100 - 15 = 85
+	
+	assert_int_eq( err.code, 0 );
+	assert_int_eq( count, 85 );
+
+	as_query_destroy(&q);
+}
+
+TEST( query_with_mapval_predexp, "query_with_mapval_predexp" ) {
+
+	as_error err;
+	as_error_reset(&err);
+
+	int count = 0;
+
+	as_query q;
+	as_query_init(&q, NAMESPACE, SET);
+
+	as_query_select_inita(&q, 1);
+	as_query_select(&q, "c");
+	
+	as_query_where_inita(&q, 1);
+	as_query_where(&q, "a", as_string_equals("abc"));
+
+	as_query_predexp_inita(&q, 5);
+	as_query_predexp_add(&q, as_predexp_string_value("yvalue"));
+	as_query_predexp_add(&q, as_predexp_string_var("vv"));
+	as_query_predexp_add(&q, as_predexp_string_equal());
+	as_query_predexp_add(&q, as_predexp_map_bin("y"));
+	as_query_predexp_add(&q, as_predexp_mapval_iterate_or("vv"));
+
+	aerospike_query_foreach(as, &err, NULL, &q, count_callback, &count);
+
+	// Should match on  0, 7, 14, 21, 28, 35, 42, 49, 56, 63, 70, 77, 84, 91, 98
+	
+	assert_int_eq( err.code, 0 );
+	assert_int_eq( count, 15 );
+
+	as_query_destroy(&q);
+}
 
 static bool query_quit_early_callback(const as_val * v, void * udata) {
 	if (v) {
@@ -872,7 +1492,7 @@ SUITE( query_foreach, "aerospike_query_foreach tests" ) {
 
 	suite_before( before );
 	suite_after( after   );
-	
+
 	suite_add( query_foreach_1 );
 	suite_add( query_foreach_2 );
 	suite_add( query_foreach_3 );
@@ -881,6 +1501,22 @@ SUITE( query_foreach, "aerospike_query_foreach tests" ) {
 	suite_add( query_foreach_6 );
 	suite_add( query_foreach_7 );
 	suite_add( query_foreach_8 );
+	suite_add( query_with_range_predexp );
+	suite_add( query_with_equality_predexp );
+	suite_add( query_with_recsize_predexp );
+	suite_add( query_intermittent_bin_predexp );
+	suite_add( scan_with_last_update_predexp );
+	suite_add( scan_with_last_update_predexp_less );
+	suite_add( scan_with_void_time_predexp_1 );
+	suite_add( scan_with_void_time_predexp_2 );
+	suite_add( scan_with_void_time_predexp_3 );
+	suite_add( query_with_or_predexp );
+	suite_add( query_with_not_predexp );
+	suite_add( query_with_regex_predexp );
+	suite_add( query_with_regex_predexp_icase );
+	suite_add( query_with_list_predexp );
+	suite_add( query_with_mapkey_predexp );
+	suite_add( query_with_mapval_predexp );
 	suite_add( query_quit_early );
 	suite_add( query_agg_quit_early );
 	suite_add( query_filter_map_bytes );

@@ -44,6 +44,7 @@
 
 extern aerospike * as;
 static bool server_has_geo = false;
+static int g_n_keys = 20;
 
 /******************************************************************************
  * MACROS
@@ -51,6 +52,8 @@ static bool server_has_geo = false;
 
 #define NAMESPACE "test"
 #define SET "query_geo"
+#define SET2 "query_geo_points"
+#define SET3 "query_geo_regions"
 
 /******************************************************************************
  * STATIC FUNCTIONS
@@ -175,6 +178,602 @@ TEST( valid_geojson, "valid geojson formats" ) {
 	as_record_destroy(&rec);
 	as_key_destroy(&key);
 
+}
+
+static bool
+insert_points(char const * set)
+{
+	// Create an as_record object with one (GeoJSON value) bin. By using
+	// as_record_inita(), we won't need to destroy the record if we only set
+	// bins using as_record_set_geojson().
+	as_record rec;
+	as_record_inita(&rec, 1);
+
+	// Re-using rec, write records into the database such that each record's key
+	// and (test-bin) value is based on the loop index.
+	for (uint32_t i = 0; i < g_n_keys; i++) {
+		as_error err;
+
+		// No need to destroy a stack as_key object, if we only use
+		// as_key_init_int64().
+		as_key key;
+		as_key_init_int64(&key, NAMESPACE, set, (int64_t)i);
+
+		double lng = -122 + (0.1 * i);
+		double lat = 37.5 + (0.1 * i);
+		char buff[1024];
+		snprintf(buff, sizeof(buff),
+				 "{ \"type\": \"Point\", \"coordinates\": [%f, %f] }", lng, lat);
+		as_record_set_geojson_str(&rec, "loc", buff);
+
+		// Write a record to the database.
+		if (aerospike_key_put(as, &err, NULL, &key, &rec) != AEROSPIKE_OK) {
+			info("aerospike_key_put() returned %d - %s", err.code, err.message);
+			return false;
+		}
+	}
+	return true;
+}
+
+static void
+remove_points(char const * set)
+{
+	for ( int i = 0; i < g_n_keys; i++ ) {
+		as_error err;
+		as_key key;
+		as_key_init_int64(&key, NAMESPACE, set, (int64_t)i);
+		aerospike_key_remove(as, &err, NULL, &key);
+	}
+}
+
+#define NSTARBUCKS	15
+
+static bool
+insert_regions(char const * set)
+{
+	double starbucks[NSTARBUCKS][2] = {
+		{ -122.1708441, 37.4241193 },
+		{ -122.1492040, 37.4273569 },
+		{ -122.1441078, 37.4268202 },
+		{ -122.1251714, 37.4130590 },
+		{ -122.0964289, 37.4218102 },
+		{ -122.0776641, 37.4158199 },
+		{ -122.0943475, 37.4114654 },
+		{ -122.1122861, 37.4028493 },
+		{ -122.0947230, 37.3909250 },
+		{ -122.0831037, 37.3876090 },
+		{ -122.0707119, 37.3787855 },
+		{ -122.0303178, 37.3882739 },
+		{ -122.0464861, 37.3786236 },
+		{ -122.0582128, 37.3726980 },
+		{ -122.0365083, 37.3676930 }
+	};
+	
+	// Create an as_record object with one (GeoJSON value) bin. By using
+	// as_record_inita(), we won't need to destroy the record if we only set
+	// bins using as_record_set_geojson().
+	as_record rec;
+	as_record_inita(&rec, 1);
+
+	// Re-using rec, write records into the database such that each record's key
+	// and (test-bin) value is based on the loop index.
+	for (uint32_t i = 0; i < NSTARBUCKS; i++) {
+		as_error err;
+
+		// No need to destroy a stack as_key object, if we only use
+		// as_key_init_int64().
+		as_key key;
+		as_key_init_int64(&key, NAMESPACE, set, (int64_t)i);
+
+		char buff[1024];
+		snprintf(buff, sizeof(buff),
+				 "{ \"type\": \"AeroCircle\", "
+				 "  \"coordinates\": [[%f, %f], 3000.0 ] }",
+				 starbucks[i][0], starbucks[i][1]);
+
+		as_record_set_geojson_str(&rec, "loc", buff);
+
+		// Write a record to the database.
+		if (aerospike_key_put(as, &err, NULL, &key, &rec) != AEROSPIKE_OK) {
+			info("aerospike_key_put() returned %d - %s", err.code, err.message);
+			return false;
+		}
+	}
+	return true;
+}
+
+static void
+remove_regions(char const * set)
+{
+	for ( int i = 0; i < NSTARBUCKS; i++ ) {
+		as_error err;
+		as_key key;
+		as_key_init_int64(&key, NAMESPACE, set, (int64_t)i);
+		aerospike_key_remove(as, &err, NULL, &key);
+	}
+}
+
+typedef struct predexp_points_within_region_udata_s {
+	uint64_t count;
+	pthread_mutex_t lock;
+} predexp_points_within_region_udata;
+
+static bool predexp_points_within_region_callback(const as_val * v, void * udata) {
+	
+	if (v) {
+		// as_record* rec = as_record_fromval(v);
+		predexp_points_within_region_udata *d = (predexp_points_within_region_udata *)udata;
+		pthread_mutex_lock(&d->lock);
+		d->count++;
+		pthread_mutex_unlock(&d->lock);
+	}
+    return true;
+}
+
+TEST( predexp_points_within_region, "predexp_points_within_region" ) {
+
+	if (! insert_points(SET2)) {
+		assert_true(false);
+	}
+
+	as_error err;
+
+	// Create an as_query object.
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET2);
+
+	// Our query region:
+	char const * region =
+		"{ "
+		"    \"type\": \"Polygon\", "
+		"    \"coordinates\": [ "
+		"        [[-122.500000, 37.000000],[-121.000000, 37.000000], "
+		"         [-121.000000, 38.080000],[-122.500000, 38.080000], "
+		"         [-122.500000, 37.000000]] "
+		"    ] "
+		" } ";
+
+	as_query_predexp_inita(&query, 3);
+	as_query_predexp_add(&query, as_predexp_geojson_value(region));
+	as_query_predexp_add(&query, as_predexp_geojson_bin("loc"));
+	as_query_predexp_add(&query, as_predexp_geojson_within());
+	
+	// Execute the query. This call blocks - callbacks are made in the scope of
+	// this call.
+	predexp_points_within_region_udata udata = { 0, PTHREAD_MUTEX_INITIALIZER };
+	aerospike_query_foreach(as, &err, NULL, &query,
+							predexp_points_within_region_callback, &udata);
+	assert_int_eq( err.code, AEROSPIKE_OK );
+
+	assert_int_eq( udata.count, 6 );
+
+	as_query_destroy(&query);
+	
+	remove_points(SET2);
+}
+
+TEST( predexp_pir_rchild_wrong_type, "predexp_pir_rchild_wrong_type" ) {
+
+	if (! insert_points(SET2)) {
+		assert_true(false);
+	}
+
+	as_error err;
+
+	// Create an as_query object.
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET2);
+
+	// Our query region:
+	char const * region =
+		"{ "
+		"    \"type\": \"Polygon\", "
+		"    \"coordinates\": [ "
+		"        [[-122.500000, 37.000000],[-121.000000, 37.000000], "
+		"         [-121.000000, 38.080000],[-122.500000, 38.080000], "
+		"         [-122.500000, 37.000000]] "
+		"    ] "
+		" } ";
+
+	as_query_predexp_inita(&query, 3);
+	as_query_predexp_add(&query, as_predexp_string_value(region)); // !GEOJSON
+	as_query_predexp_add(&query, as_predexp_geojson_bin("loc"));
+	as_query_predexp_add(&query, as_predexp_geojson_within());
+	
+	// Execute the query. This call blocks - callbacks are made in the scope of
+	// this call.
+	predexp_points_within_region_udata udata = { 0, PTHREAD_MUTEX_INITIALIZER };
+	aerospike_query_foreach(as, &err, NULL, &query,
+							predexp_points_within_region_callback, &udata);
+	assert_int_eq( err.code, AEROSPIKE_ERR_REQUEST_INVALID );
+
+	as_query_destroy(&query);
+	
+	remove_points(SET2);
+}
+
+TEST( predexp_pir_lchild_wrong_type, "predexp_pir_lchild_wrong_type" ) {
+
+	if (! insert_points(SET2)) {
+		assert_true(false);
+	}
+
+	as_error err;
+
+	// Create an as_query object.
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET2);
+
+	// Our query region:
+	char const * region =
+		"{ "
+		"    \"type\": \"Polygon\", "
+		"    \"coordinates\": [ "
+		"        [[-122.500000, 37.000000],[-121.000000, 37.000000], "
+		"         [-121.000000, 38.080000],[-122.500000, 38.080000], "
+		"         [-122.500000, 37.000000]] "
+		"    ] "
+		" } ";
+
+	as_query_predexp_inita(&query, 3);
+	as_query_predexp_add(&query, as_predexp_geojson_value(region));
+	as_query_predexp_add(&query, as_predexp_string_bin("loc"));	// !GEOJSON
+	as_query_predexp_add(&query, as_predexp_geojson_within());
+	
+	// Execute the query. This call blocks - callbacks are made in the scope of
+	// this call.
+	predexp_points_within_region_udata udata = { 0, PTHREAD_MUTEX_INITIALIZER };
+	aerospike_query_foreach(as, &err, NULL, &query,
+							predexp_points_within_region_callback, &udata);
+	assert_int_eq( err.code, AEROSPIKE_ERR_REQUEST_INVALID );
+
+	as_query_destroy(&query);
+	
+	remove_points(SET2);
+}
+
+TEST( predexp_pir_rchild_not_immed, "predexp_pir_rchild_not_immed" ) {
+
+	if (! insert_points(SET2)) {
+		assert_true(false);
+	}
+
+	as_error err;
+
+	// Create an as_query object.
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET2);
+
+	as_query_predexp_inita(&query, 3);
+	as_query_predexp_add(&query, as_predexp_geojson_bin("loc")); // !IMMED
+	as_query_predexp_add(&query, as_predexp_geojson_bin("loc"));
+	as_query_predexp_add(&query, as_predexp_geojson_within());
+	
+	// Execute the query. This call blocks - callbacks are made in the scope of
+	// this call.
+	predexp_points_within_region_udata udata = { 0, PTHREAD_MUTEX_INITIALIZER };
+	aerospike_query_foreach(as, &err, NULL, &query,
+							predexp_points_within_region_callback, &udata);
+	assert_int_eq( err.code, AEROSPIKE_ERR_REQUEST_INVALID );
+
+	as_query_destroy(&query);
+	
+	remove_points(SET2);
+}
+
+TEST( predexp_pir_parse_failed, "predexp_pir_parse_failed" ) {
+
+	if (! insert_points(SET2)) {
+		assert_true(false);
+	}
+
+	as_error err;
+
+	// Create an as_query object.
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET2);
+
+	// Our query region:
+	char const * region =
+		"{ "
+		"    \"type\": \"XPolygon\", "		/* !Polygon */
+		"    \"coordinates\": [ "
+		"        [[-122.500000, 37.000000],[-121.000000, 37.000000], "
+		"         [-121.000000, 38.080000],[-122.500000, 38.080000], "
+		"         [-122.500000, 37.000000]] "
+		"    ] "
+		" } ";
+
+	as_query_predexp_inita(&query, 3);
+	as_query_predexp_add(&query, as_predexp_geojson_value(region));
+	as_query_predexp_add(&query, as_predexp_geojson_bin("loc"));
+	as_query_predexp_add(&query, as_predexp_geojson_within());
+	
+	// Execute the query. This call blocks - callbacks are made in the scope of
+	// this call.
+	predexp_points_within_region_udata udata = { 0, PTHREAD_MUTEX_INITIALIZER };
+	aerospike_query_foreach(as, &err, NULL, &query,
+							predexp_points_within_region_callback, &udata);
+	assert_int_eq( err.code, AEROSPIKE_ERR_REQUEST_INVALID );
+
+	as_query_destroy(&query);
+	
+	remove_points(SET2);
+}
+
+TEST( predexp_pir_on_regions, "predexp_pir_on_regions" ) {
+
+	if (! insert_regions(SET2)) {
+		assert_true(false);
+	}
+
+	as_error err;
+
+	// Create an as_query object.
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET2);
+
+	// Our query region:
+	char const * region =
+		"{ "
+		"    \"type\": \"Polygon\", "
+		"    \"coordinates\": [ "
+		"        [[-122.500000, 37.000000],[-121.000000, 37.000000], "
+		"         [-121.000000, 38.080000],[-122.500000, 38.080000], "
+		"         [-122.500000, 37.000000]] "
+		"    ] "
+		" } ";
+
+	as_query_predexp_inita(&query, 3);
+	as_query_predexp_add(&query, as_predexp_geojson_value(region));
+	as_query_predexp_add(&query, as_predexp_geojson_bin("loc"));
+	as_query_predexp_add(&query, as_predexp_geojson_within());
+	
+	// Execute the query. This call blocks - callbacks are made in the scope of
+	// this call.
+	predexp_points_within_region_udata udata = { 0, PTHREAD_MUTEX_INITIALIZER };
+	aerospike_query_foreach(as, &err, NULL, &query,
+							predexp_points_within_region_callback, &udata);
+	assert_int_eq( err.code, AEROSPIKE_OK );
+
+	// Should succeed but match nothing.
+	assert_int_eq( udata.count, 0 );
+
+	as_query_destroy(&query);
+	
+	remove_regions(SET2);
+}
+
+typedef struct predexp_regions_containing_point_udata_s {
+	uint64_t count;
+	pthread_mutex_t lock;
+} predexp_regions_containing_point_udata;
+
+static bool predexp_regions_containing_point_callback(const as_val * v, void * udata) {
+	
+	if (v) {
+		// as_record* rec = as_record_fromval(v);
+		predexp_regions_containing_point_udata *d = (predexp_regions_containing_point_udata *)udata;
+		pthread_mutex_lock(&d->lock);
+		d->count++;
+		pthread_mutex_unlock(&d->lock);
+	}
+    return true;
+}
+
+TEST( predexp_regions_containing_point, "predexp_regions_containing_point" ) {
+
+	if (! insert_regions(SET3)) {
+		assert_true(false);
+	}
+
+	as_error err;
+
+	// Create an as_query object.
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET3);
+
+	// Our query point:
+	char const * point =
+		"{ "
+		"    \"type\": \"Point\", "
+		"    \"coordinates\": [ -122.0986857, 37.4214209 ] "
+		"} ";
+
+	as_query_predexp_inita(&query, 3);
+	as_query_predexp_add(&query, as_predexp_geojson_value(point));
+	as_query_predexp_add(&query, as_predexp_geojson_bin("loc"));
+	as_query_predexp_add(&query, as_predexp_geojson_contains());
+	
+	// Execute the query. This call blocks - callbacks are made in the scope of
+	// this call.
+	predexp_regions_containing_point_udata udata = { 0, PTHREAD_MUTEX_INITIALIZER };
+	aerospike_query_foreach(as, &err, NULL, &query,
+							predexp_regions_containing_point_callback, &udata);
+	assert_int_eq( err.code, AEROSPIKE_OK );
+
+	// Look at ./starbucks_3k.png for insight that 5 is the correct answer.
+	assert_int_eq( udata.count, 5 );
+
+	as_query_destroy(&query);
+	
+	remove_regions(SET3);
+}
+
+TEST( predexp_rcp_rchild_wrong_type, "predexp_rcp_rchild_wrong_type" ) {
+
+	if (! insert_regions(SET3)) {
+		assert_true(false);
+	}
+
+	as_error err;
+
+	// Create an as_query object.
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET3);
+
+	// Our query point:
+	char const * point =
+		"{ "
+		"    \"type\": \"Point\", "
+		"    \"coordinates\": [ -122.0986857, 37.4214209 ] "
+		"} ";
+
+	as_query_predexp_inita(&query, 3);
+	as_query_predexp_add(&query, as_predexp_string_value(point)); // !GEOJSON
+	as_query_predexp_add(&query, as_predexp_geojson_bin("loc"));
+	as_query_predexp_add(&query, as_predexp_geojson_contains());
+	
+	// Execute the query. This call blocks - callbacks are made in the scope of
+	// this call.
+	predexp_regions_containing_point_udata udata = { 0, PTHREAD_MUTEX_INITIALIZER };
+	aerospike_query_foreach(as, &err, NULL, &query,
+							predexp_regions_containing_point_callback, &udata);
+	assert_int_eq( err.code, AEROSPIKE_ERR_REQUEST_INVALID );
+
+	as_query_destroy(&query);
+	
+	remove_regions(SET3);
+}
+
+TEST( predexp_rcp_lchild_wrong_type, "predexp_rcp_lchild_wrong_type" ) {
+
+	if (! insert_regions(SET3)) {
+		assert_true(false);
+	}
+
+	as_error err;
+
+	// Create an as_query object.
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET3);
+
+	// Our query point:
+	char const * point =
+		"{ "
+		"    \"type\": \"Point\", "
+		"    \"coordinates\": [ -122.0986857, 37.4214209 ] "
+		"} ";
+
+	as_query_predexp_inita(&query, 3);
+	as_query_predexp_add(&query, as_predexp_geojson_value(point));
+	as_query_predexp_add(&query, as_predexp_string_bin("loc")); // !GEOJSON
+	as_query_predexp_add(&query, as_predexp_geojson_contains());
+	
+	// Execute the query. This call blocks - callbacks are made in the scope of
+	// this call.
+	predexp_regions_containing_point_udata udata = { 0, PTHREAD_MUTEX_INITIALIZER };
+	aerospike_query_foreach(as, &err, NULL, &query,
+							predexp_regions_containing_point_callback, &udata);
+	assert_int_eq( err.code, AEROSPIKE_ERR_REQUEST_INVALID );
+
+	as_query_destroy(&query);
+	
+	remove_regions(SET3);
+}
+
+TEST( predexp_rcp_rchild_not_immed, "predexp_rcp_rchild_not_immed" ) {
+
+	if (! insert_regions(SET3)) {
+		assert_true(false);
+	}
+
+	as_error err;
+
+	// Create an as_query object.
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET3);
+
+	as_query_predexp_inita(&query, 3);
+	as_query_predexp_add(&query, as_predexp_geojson_bin("loc")); // !IMMED
+	as_query_predexp_add(&query, as_predexp_geojson_bin("loc"));
+	as_query_predexp_add(&query, as_predexp_geojson_contains());
+	
+	// Execute the query. This call blocks - callbacks are made in the scope of
+	// this call.
+	predexp_regions_containing_point_udata udata = { 0, PTHREAD_MUTEX_INITIALIZER };
+	aerospike_query_foreach(as, &err, NULL, &query,
+							predexp_regions_containing_point_callback, &udata);
+	assert_int_eq( err.code, AEROSPIKE_ERR_REQUEST_INVALID );
+
+	as_query_destroy(&query);
+	
+	remove_regions(SET3);
+}
+
+TEST( predexp_rcp_parse_failed, "predexp_rcp_parse_failed" ) {
+
+	if (! insert_regions(SET3)) {
+		assert_true(false);
+	}
+
+	as_error err;
+
+	// Create an as_query object.
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET3);
+
+	// Our query point:
+	char const * point =
+		"{ "
+		"    \"type\": \"XPoint\", "	/* !Point */
+		"    \"coordinates\": [ -122.0986857, 37.4214209 ] "
+		"} ";
+
+	as_query_predexp_inita(&query, 3);
+	as_query_predexp_add(&query, as_predexp_geojson_value(point));
+	as_query_predexp_add(&query, as_predexp_geojson_bin("loc"));
+	as_query_predexp_add(&query, as_predexp_geojson_contains());
+	
+	// Execute the query. This call blocks - callbacks are made in the scope of
+	// this call.
+	predexp_regions_containing_point_udata udata = { 0, PTHREAD_MUTEX_INITIALIZER };
+	aerospike_query_foreach(as, &err, NULL, &query,
+							predexp_regions_containing_point_callback, &udata);
+	assert_int_eq( err.code, AEROSPIKE_ERR_REQUEST_INVALID );
+
+	as_query_destroy(&query);
+	
+	remove_regions(SET3);
+}
+
+TEST( predexp_rcp_on_points, "predexp_rcp_on_points" ) {
+
+	if (! insert_points(SET3)) {
+		assert_true(false);
+	}
+
+	as_error err;
+
+	// Create an as_query object.
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET3);
+
+	// Our query point:
+	char const * point =
+		"{ "
+		"    \"type\": \"Point\", "
+		"    \"coordinates\": [ -122.0986857, 37.4214209 ] "
+		"} ";
+
+	as_query_predexp_inita(&query, 3);
+	as_query_predexp_add(&query, as_predexp_geojson_value(point));
+	as_query_predexp_add(&query, as_predexp_geojson_bin("loc"));
+	as_query_predexp_add(&query, as_predexp_geojson_contains());
+	
+	// Execute the query. This call blocks - callbacks are made in the scope of
+	// this call.
+	predexp_regions_containing_point_udata udata = { 0, PTHREAD_MUTEX_INITIALIZER };
+	aerospike_query_foreach(as, &err, NULL, &query,
+							predexp_regions_containing_point_callback, &udata);
+	assert_int_eq( err.code, AEROSPIKE_OK );
+
+	// Should succeed but match nothing.
+	assert_int_eq( udata.count, 0 );
+
+	as_query_destroy(&query);
+	
+	remove_points(SET3);
 }
 
 typedef struct foreach_udata_s {
@@ -512,6 +1111,17 @@ SUITE( query_geospatial, "aerospike_query_geospatial tests" ) {
 	
 	suite_add( invalid_geojson );
 	suite_add( valid_geojson );
+	suite_add( predexp_points_within_region );
+	suite_add( predexp_pir_rchild_wrong_type );
+	suite_add( predexp_pir_lchild_wrong_type );
+	suite_add( predexp_pir_rchild_not_immed );
+	suite_add( predexp_pir_parse_failed );
+	suite_add( predexp_pir_on_regions );
+	suite_add( predexp_regions_containing_point );
+	suite_add( predexp_rcp_rchild_wrong_type );
+	suite_add( predexp_rcp_lchild_wrong_type );
+	suite_add( predexp_rcp_rchild_not_immed );
+	suite_add( predexp_rcp_on_points );
 	suite_add( query_geojson_in_list );
 	suite_add( query_geojson_in_mapvalue );
 

@@ -767,7 +767,7 @@ TEST( scan_basics_background_delete_records_md_predexp , "scan_basics_background
 	as_scan_init(&scan_del, NS, SET4);
 	as_scan_predexp_inita(&scan_del, 3);
 	as_scan_predexp_add(&scan_del, as_predexp_integer_value(0));
-	as_scan_predexp_add(&scan_del, as_predexp_void_time());
+	as_scan_predexp_add(&scan_del, as_predexp_rec_void_time());
 	as_scan_predexp_add(&scan_del, as_predexp_integer_equal());
 	as_scan_apply_each(&scan_del, "aerospike_scan_test", "scan_delete_rec", NULL);
 

@@ -406,7 +406,7 @@ as_predexp_geojson_var(char const * varname);
  *	~~~~~~~~~~{.c}
  *	as_query_predexp_inita(&q, 3);
  *	as_query_predexp_add(&q, as_predexp_integer_value(65 * 1024));
- *	as_query_predexp_add(&q, as_predexp_recsize());
+ *	as_query_predexp_add(&q, as_predexp_rec_device_size());
  *	as_query_predexp_add(&q, as_predexp_integer_greatereq());
  *	~~~~~~~~~~
  *
@@ -414,7 +414,7 @@ as_predexp_geojson_var(char const * varname);
  *  scan.
  */
 as_predexp_base*
-as_predexp_recsize();
+as_predexp_rec_device_size();
 
 /**
  *	Create a last update record metadata predicate expression.
@@ -425,7 +425,7 @@ as_predexp_recsize();
  *	~~~~~~~~~~{.c}
  *	as_query_predexp_inita(&q, 3);
  *	as_query_predexp_add(&q, as_predexp_integer_value(g_tstampns));
- *	as_query_predexp_add(&q, as_predexp_last_update());
+ *	as_query_predexp_add(&q, as_predexp_rec_last_update());
  *	as_query_predexp_add(&q, as_predexp_integer_greater());
  *	~~~~~~~~~~
  *
@@ -433,7 +433,7 @@ as_predexp_recsize();
  *  scan.
  */
 as_predexp_base*
-as_predexp_last_update();
+as_predexp_rec_last_update();
 
 /**
  *	Create a void time record metadata predicate expression.
@@ -444,7 +444,7 @@ as_predexp_last_update();
  *	~~~~~~~~~~{.c}
  *  as_query_predexp_inita(&q, 3);
  *	as_query_predexp_add(&q, as_predexp_integer_value(0));
- *	as_query_predexp_add(&q, as_predexp_void_time());
+ *	as_query_predexp_add(&q, as_predexp_rec_void_time());
  *	as_query_predexp_add(&q, as_predexp_integer_equal());
  *	~~~~~~~~~~
  *
@@ -452,7 +452,7 @@ as_predexp_last_update();
  *  scan.
  */
 as_predexp_base*
-as_predexp_void_time();
+as_predexp_rec_void_time();
 
 /**
  *	Create an integer comparison predicate expression.

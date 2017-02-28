@@ -41,9 +41,9 @@
 #define AS_PREDEXP_STRING_VAR			121
 #define AS_PREDEXP_GEOJSON_VAR			122
 
-#define AS_PREDEXP_RECSIZE				150
-#define AS_PREDEXP_LAST_UPDATE			151
-#define AS_PREDEXP_VOID_TIME			152
+#define AS_PREDEXP_REC_DEVICE_SIZE		150
+#define AS_PREDEXP_REC_LAST_UPDATE		151
+#define AS_PREDEXP_REC_VOID_TIME		152
 
 #define AS_PREDEXP_INTEGER_EQUAL		200
 #define AS_PREDEXP_INTEGER_UNEQUAL		201
@@ -618,36 +618,36 @@ as_predexp_base * as_predexp_geojson_var(char const * varname)
 }
 
 // ----------------------------------------------------------------
-// as_predexp_recsize
+// as_predexp_rec_device_size
 // ----------------------------------------------------------------
 
 typedef struct {
 	as_predexp_base		base;
-} as_predexp_recsize_t;
+} as_predexp_rec_device_size_t;
 
-void as_predexp_recsize_dtor(as_predexp_base * bp)
+void as_predexp_rec_device_size_dtor(as_predexp_base * bp)
 {
-	as_predexp_recsize_t * dp = (as_predexp_recsize_t *) bp;
+	as_predexp_rec_device_size_t * dp = (as_predexp_rec_device_size_t *) bp;
 	cf_free(dp);
 }
 
-size_t as_predexp_recsize_size(as_predexp_base * bp)
+size_t as_predexp_rec_device_size_size(as_predexp_base * bp)
 {
-	// as_predexp_recsize_t * dp = (as_predexp_recsize_t *) bp;
+	// as_predexp_rec_device_size_t * dp = (as_predexp_rec_device_size_t *) bp;
 
 	size_t sz = sizeof(uint16_t) + sizeof(uint32_t);	// TAG + LEN
 
 	return sz;
 }
 
-uint8_t * as_predexp_recsize_write(as_predexp_base * bp, uint8_t * p)
+uint8_t * as_predexp_rec_device_size_write(as_predexp_base * bp, uint8_t * p)
 {
-	// as_predexp_recsize_t * dp = (as_predexp_recsize_t *) bp;
+	// as_predexp_rec_device_size_t * dp = (as_predexp_rec_device_size_t *) bp;
 
 	// TAG
 	uint16_t * tag_ptr = (uint16_t *) p;
 	p += sizeof(uint16_t);
-	*tag_ptr = cf_swap_to_be16(AS_PREDEXP_RECSIZE);
+	*tag_ptr = cf_swap_to_be16(AS_PREDEXP_REC_DEVICE_SIZE);
 
 	// LEN
 	uint32_t * len_ptr = (uint32_t *) p;
@@ -657,48 +657,48 @@ uint8_t * as_predexp_recsize_write(as_predexp_base * bp, uint8_t * p)
 	return p;
 }
 
-as_predexp_base * as_predexp_recsize()
+as_predexp_base * as_predexp_rec_device_size()
 {
-	as_predexp_recsize_t * dp =
-		(as_predexp_recsize_t *)
-		cf_malloc(sizeof(as_predexp_recsize_t));
-	dp->base.dtor_fn = as_predexp_recsize_dtor;
-	dp->base.size_fn = as_predexp_recsize_size;
-	dp->base.write_fn = as_predexp_recsize_write;
+	as_predexp_rec_device_size_t * dp =
+		(as_predexp_rec_device_size_t *)
+		cf_malloc(sizeof(as_predexp_rec_device_size_t));
+	dp->base.dtor_fn = as_predexp_rec_device_size_dtor;
+	dp->base.size_fn = as_predexp_rec_device_size_size;
+	dp->base.write_fn = as_predexp_rec_device_size_write;
 	return (as_predexp_base *) dp;
 }
 
 // ----------------------------------------------------------------
-// as_predexp_last_update
+// as_predexp_rec_last_update
 // ----------------------------------------------------------------
 
 typedef struct {
 	as_predexp_base		base;
-} as_predexp_last_update_t;
+} as_predexp_rec_last_update_t;
 
-void as_predexp_last_update_dtor(as_predexp_base * bp)
+void as_predexp_rec_last_update_dtor(as_predexp_base * bp)
 {
-	as_predexp_last_update_t * dp = (as_predexp_last_update_t *) bp;
+	as_predexp_rec_last_update_t * dp = (as_predexp_rec_last_update_t *) bp;
 	cf_free(dp);
 }
 
-size_t as_predexp_last_update_size(as_predexp_base * bp)
+size_t as_predexp_rec_last_update_size(as_predexp_base * bp)
 {
-	// as_predexp_last_update_t * dp = (as_predexp_last_update_t *) bp;
+	// as_predexp_rec_last_update_t * dp = (as_predexp_rec_last_update_t *) bp;
 
 	size_t sz = sizeof(uint16_t) + sizeof(uint32_t);	// TAG + LEN
 
 	return sz;
 }
 
-uint8_t * as_predexp_last_update_write(as_predexp_base * bp, uint8_t * p)
+uint8_t * as_predexp_rec_last_update_write(as_predexp_base * bp, uint8_t * p)
 {
-	// as_predexp_last_update_t * dp = (as_predexp_last_update_t *) bp;
+	// as_predexp_rec_last_update_t * dp = (as_predexp_rec_last_update_t *) bp;
 
 	// TAG
 	uint16_t * tag_ptr = (uint16_t *) p;
 	p += sizeof(uint16_t);
-	*tag_ptr = cf_swap_to_be16(AS_PREDEXP_LAST_UPDATE);
+	*tag_ptr = cf_swap_to_be16(AS_PREDEXP_REC_LAST_UPDATE);
 
 	// LEN
 	uint32_t * len_ptr = (uint32_t *) p;
@@ -708,48 +708,48 @@ uint8_t * as_predexp_last_update_write(as_predexp_base * bp, uint8_t * p)
 	return p;
 }
 
-as_predexp_base * as_predexp_last_update()
+as_predexp_base * as_predexp_rec_last_update()
 {
-	as_predexp_last_update_t * dp =
-		(as_predexp_last_update_t *)
-		cf_malloc(sizeof(as_predexp_last_update_t));
-	dp->base.dtor_fn = as_predexp_last_update_dtor;
-	dp->base.size_fn = as_predexp_last_update_size;
-	dp->base.write_fn = as_predexp_last_update_write;
+	as_predexp_rec_last_update_t * dp =
+		(as_predexp_rec_last_update_t *)
+		cf_malloc(sizeof(as_predexp_rec_last_update_t));
+	dp->base.dtor_fn = as_predexp_rec_last_update_dtor;
+	dp->base.size_fn = as_predexp_rec_last_update_size;
+	dp->base.write_fn = as_predexp_rec_last_update_write;
 	return (as_predexp_base *) dp;
 }
 
 // ----------------------------------------------------------------
-// as_predexp_void_time
+// as_predexp_rec_void_time
 // ----------------------------------------------------------------
 
 typedef struct {
 	as_predexp_base		base;
-} as_predexp_void_time_t;
+} as_predexp_rec_void_time_t;
 
-void as_predexp_void_time_dtor(as_predexp_base * bp)
+void as_predexp_rec_void_time_dtor(as_predexp_base * bp)
 {
-	as_predexp_void_time_t * dp = (as_predexp_void_time_t *) bp;
+	as_predexp_rec_void_time_t * dp = (as_predexp_rec_void_time_t *) bp;
 	cf_free(dp);
 }
 
-size_t as_predexp_void_time_size(as_predexp_base * bp)
+size_t as_predexp_rec_void_time_size(as_predexp_base * bp)
 {
-	// as_predexp_void_time_t * dp = (as_predexp_void_time_t *) bp;
+	// as_predexp_rec_void_time_t * dp = (as_predexp_rec_void_time_t *) bp;
 
 	size_t sz = sizeof(uint16_t) + sizeof(uint32_t);	// TAG + LEN
 
 	return sz;
 }
 
-uint8_t * as_predexp_void_time_write(as_predexp_base * bp, uint8_t * p)
+uint8_t * as_predexp_rec_void_time_write(as_predexp_base * bp, uint8_t * p)
 {
-	// as_predexp_void_time_t * dp = (as_predexp_void_time_t *) bp;
+	// as_predexp_rec_void_time_t * dp = (as_predexp_rec_void_time_t *) bp;
 
 	// TAG
 	uint16_t * tag_ptr = (uint16_t *) p;
 	p += sizeof(uint16_t);
-	*tag_ptr = cf_swap_to_be16(AS_PREDEXP_VOID_TIME);
+	*tag_ptr = cf_swap_to_be16(AS_PREDEXP_REC_VOID_TIME);
 
 	// LEN
 	uint32_t * len_ptr = (uint32_t *) p;
@@ -759,14 +759,14 @@ uint8_t * as_predexp_void_time_write(as_predexp_base * bp, uint8_t * p)
 	return p;
 }
 
-as_predexp_base * as_predexp_void_time()
+as_predexp_base * as_predexp_rec_void_time()
 {
-	as_predexp_void_time_t * dp =
-		(as_predexp_void_time_t *)
-		cf_malloc(sizeof(as_predexp_void_time_t));
-	dp->base.dtor_fn = as_predexp_void_time_dtor;
-	dp->base.size_fn = as_predexp_void_time_size;
-	dp->base.write_fn = as_predexp_void_time_write;
+	as_predexp_rec_void_time_t * dp =
+		(as_predexp_rec_void_time_t *)
+		cf_malloc(sizeof(as_predexp_rec_void_time_t));
+	dp->base.dtor_fn = as_predexp_rec_void_time_dtor;
+	dp->base.size_fn = as_predexp_rec_void_time_size;
+	dp->base.write_fn = as_predexp_rec_void_time_write;
 	return (as_predexp_base *) dp;
 }
 

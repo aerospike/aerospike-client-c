@@ -131,10 +131,10 @@ as_info_command_node(
 	status = as_info_command(err, &socket, command, send_asis, deadline_ms, 0, response);
 	
 	if (status == AEROSPIKE_ERR_TIMEOUT || status == AEROSPIKE_ERR_CLIENT) {
-		as_node_close_connection(node, &socket);
+		as_node_close_connection(&socket);
 	}
 	else {
-		as_node_put_connection(node, &socket);
+		as_node_put_connection(&socket);
 	}
 	return status;
 }

@@ -112,6 +112,7 @@ connect_to_server(arguments* args, aerospike* client)
 	
 	// Disable batch/scan/query thread pool because these commands are not used in benchmarks.
 	cfg.thread_pool_size = 0;
+	cfg.conn_pools_per_node = args->conn_pools_per_node;
 
 	as_policies* p = &cfg.policies;
 	p->timeout = args->read_timeout;

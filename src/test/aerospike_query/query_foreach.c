@@ -693,18 +693,18 @@ TEST( query_with_range_predexp, "query_with_range_predexp" ) {
 	as_query_where(&q, "a", as_string_equals("abc"));
 
 	as_query_predexp_inita(&q, 15);
+	as_query_predexp_add(&q, as_predexp_integer_bin("c"));
 	as_query_predexp_add(&q, as_predexp_integer_value(11));
-	as_query_predexp_add(&q, as_predexp_integer_bin("c"));
 	as_query_predexp_add(&q, as_predexp_integer_greatereq());
-	as_query_predexp_add(&q, as_predexp_integer_value(20));
 	as_query_predexp_add(&q, as_predexp_integer_bin("c"));
+	as_query_predexp_add(&q, as_predexp_integer_value(20));
 	as_query_predexp_add(&q, as_predexp_integer_lesseq());
 	as_query_predexp_add(&q, as_predexp_and(2));
+	as_query_predexp_add(&q, as_predexp_integer_bin("d"));
 	as_query_predexp_add(&q, as_predexp_integer_value(3));
-	as_query_predexp_add(&q, as_predexp_integer_bin("d"));
 	as_query_predexp_add(&q, as_predexp_integer_greatereq());
-	as_query_predexp_add(&q, as_predexp_integer_value(5));
 	as_query_predexp_add(&q, as_predexp_integer_bin("d"));
+	as_query_predexp_add(&q, as_predexp_integer_value(5));
 	as_query_predexp_add(&q, as_predexp_integer_lesseq());
 	as_query_predexp_add(&q, as_predexp_and(2));
 	as_query_predexp_add(&q, as_predexp_and(2));
@@ -771,8 +771,8 @@ TEST( query_with_rec_device_size_predexp, "query_with_rec_device_size_predexp" )
 	as_query_where(&q, "a", as_string_equals("abc"));
 
 	as_query_predexp_inita(&q, 3);
-	as_query_predexp_add(&q, as_predexp_integer_value(65 * 1024));
 	as_query_predexp_add(&q, as_predexp_rec_device_size());
+	as_query_predexp_add(&q, as_predexp_integer_value(65 * 1024));
 	as_query_predexp_add(&q, as_predexp_integer_greatereq());
 
 	aerospike_query_foreach(as, &err, NULL, &q, count_callback, &count);
@@ -802,8 +802,8 @@ TEST( query_intermittent_bin_predexp, "query_intermittent_bin_predexp" ) {
 	as_query_where(&q, "c", as_integer_range(10, 30));
 
 	as_query_predexp_inita(&q, 3);
-	as_query_predexp_add(&q, as_predexp_integer_value(20));
 	as_query_predexp_add(&q, as_predexp_integer_bin("g"));
+	as_query_predexp_add(&q, as_predexp_integer_value(20));
 	as_query_predexp_add(&q, as_predexp_integer_greater());
 
 	aerospike_query_foreach(as, &err, NULL, &q, count_callback, &count);
@@ -832,8 +832,8 @@ TEST( scan_with_rec_last_update_predexp, "scan_with_rec_last_update_predexp" ) {
 	as_query_select(&q, "c");
 	
 	as_query_predexp_inita(&q, 3);
-	as_query_predexp_add(&q, as_predexp_integer_value(g_epochns));
 	as_query_predexp_add(&q, as_predexp_rec_last_update());
+	as_query_predexp_add(&q, as_predexp_integer_value(g_epochns));
 	as_query_predexp_add(&q, as_predexp_integer_greater());
 
 	aerospike_query_foreach(as, &err, NULL, &q,
@@ -861,8 +861,8 @@ TEST( scan_with_rec_last_update_predexp_less, "scan_with_rec_last_update_predexp
 	as_query_select(&q, "c");
 	
 	as_query_predexp_inita(&q, 3);
-	as_query_predexp_add(&q, as_predexp_integer_value(g_epochns));
 	as_query_predexp_add(&q, as_predexp_rec_last_update());
+	as_query_predexp_add(&q, as_predexp_integer_value(g_epochns));
 	as_query_predexp_add(&q, as_predexp_integer_lesseq());
 
 	aerospike_query_foreach(as, &err, NULL, &q,
@@ -924,11 +924,11 @@ TEST( scan_with_rec_void_time_predexp_2, "scan_with_rec_void_time_predexp_2" ) {
 		((int64_t) time(NULL) + ((int64_t) 15 * 24 * 60 * 60)) * 1e9;
 	
 	as_query_predexp_inita(&q, 7);
+	as_query_predexp_add(&q, as_predexp_rec_void_time());
 	as_query_predexp_add(&q, as_predexp_integer_value(tstamp_5_days));
-	as_query_predexp_add(&q, as_predexp_rec_void_time());
 	as_query_predexp_add(&q, as_predexp_integer_greater());
-	as_query_predexp_add(&q, as_predexp_integer_value(tstamp_15_days));
 	as_query_predexp_add(&q, as_predexp_rec_void_time());
+	as_query_predexp_add(&q, as_predexp_integer_value(tstamp_15_days));
 	as_query_predexp_add(&q, as_predexp_integer_less());
 	as_query_predexp_add(&q, as_predexp_and(2));
 
@@ -960,8 +960,8 @@ TEST( scan_with_rec_void_time_predexp_3, "scan_with_rec_void_time_predexp_3" ) {
 		((int64_t) time(NULL) + ((int64_t) 15 * 24 * 60 * 60)) * 1e9;
 	
 	as_query_predexp_inita(&q, 3);
-	as_query_predexp_add(&q, as_predexp_integer_value(tstamp_15_days));
 	as_query_predexp_add(&q, as_predexp_rec_void_time());
+	as_query_predexp_add(&q, as_predexp_integer_value(tstamp_15_days));
 	as_query_predexp_add(&q, as_predexp_integer_greater());
 
 	aerospike_query_foreach(as, &err, NULL, &q,
@@ -992,18 +992,18 @@ TEST( query_with_or_predexp, "query_with_or_predexp" ) {
 	as_query_where(&q, "a", as_string_equals("abc"));
 
 	as_query_predexp_inita(&q, 15);
+	as_query_predexp_add(&q, as_predexp_integer_bin("c"));
 	as_query_predexp_add(&q, as_predexp_integer_value(11));
-	as_query_predexp_add(&q, as_predexp_integer_bin("c"));
 	as_query_predexp_add(&q, as_predexp_integer_greatereq());
-	as_query_predexp_add(&q, as_predexp_integer_value(20));
 	as_query_predexp_add(&q, as_predexp_integer_bin("c"));
+	as_query_predexp_add(&q, as_predexp_integer_value(20));
 	as_query_predexp_add(&q, as_predexp_integer_lesseq());
 	as_query_predexp_add(&q, as_predexp_and(2));
+	as_query_predexp_add(&q, as_predexp_integer_bin("d"));
 	as_query_predexp_add(&q, as_predexp_integer_value(3));
-	as_query_predexp_add(&q, as_predexp_integer_bin("d"));
 	as_query_predexp_add(&q, as_predexp_integer_greatereq());
-	as_query_predexp_add(&q, as_predexp_integer_value(5));
 	as_query_predexp_add(&q, as_predexp_integer_bin("d"));
+	as_query_predexp_add(&q, as_predexp_integer_value(5));
 	as_query_predexp_add(&q, as_predexp_integer_lesseq());
 	as_query_predexp_add(&q, as_predexp_and(2));
 	as_query_predexp_add(&q, as_predexp_or(2));
@@ -1038,18 +1038,18 @@ TEST( query_with_not_predexp, "query_with_not_predexp" ) {
 	as_query_where(&q, "a", as_string_equals("abc"));
 
 	as_query_predexp_inita(&q, 16);
+	as_query_predexp_add(&q, as_predexp_integer_bin("c"));
 	as_query_predexp_add(&q, as_predexp_integer_value(11));
-	as_query_predexp_add(&q, as_predexp_integer_bin("c"));
 	as_query_predexp_add(&q, as_predexp_integer_greatereq());
-	as_query_predexp_add(&q, as_predexp_integer_value(20));
 	as_query_predexp_add(&q, as_predexp_integer_bin("c"));
+	as_query_predexp_add(&q, as_predexp_integer_value(20));
 	as_query_predexp_add(&q, as_predexp_integer_lesseq());
 	as_query_predexp_add(&q, as_predexp_and(2));
+	as_query_predexp_add(&q, as_predexp_integer_bin("d"));
 	as_query_predexp_add(&q, as_predexp_integer_value(3));
-	as_query_predexp_add(&q, as_predexp_integer_bin("d"));
 	as_query_predexp_add(&q, as_predexp_integer_greatereq());
-	as_query_predexp_add(&q, as_predexp_integer_value(5));
 	as_query_predexp_add(&q, as_predexp_integer_bin("d"));
+	as_query_predexp_add(&q, as_predexp_integer_value(5));
 	as_query_predexp_add(&q, as_predexp_integer_lesseq());
 	as_query_predexp_add(&q, as_predexp_and(2));
 	as_query_predexp_add(&q, as_predexp_or(2));
@@ -1085,8 +1085,8 @@ TEST( query_with_regex_predexp, "query_with_regex_predexp" ) {
 	as_query_where(&q, "a", as_string_equals("abc"));
 
 	as_query_predexp_inita(&q, 3);
-	as_query_predexp_add(&q, as_predexp_string_value("0x00.[12]"));
 	as_query_predexp_add(&q, as_predexp_string_bin("f"));
+	as_query_predexp_add(&q, as_predexp_string_value("0x00.[12]"));
 	as_query_predexp_add(&q, as_predexp_string_regex(0));
 
 	aerospike_query_foreach(as, &err, NULL, &q, count_callback, &count);
@@ -1118,8 +1118,8 @@ TEST( query_with_regex_predexp_icase, "query_with_regex_predexp_icase" ) {
 	as_query_where(&q, "a", as_string_equals("abc"));
 
 	as_query_predexp_inita(&q, 3);
-	as_query_predexp_add(&q, as_predexp_string_value("0X00.[12]"));
 	as_query_predexp_add(&q, as_predexp_string_bin("f"));
+	as_query_predexp_add(&q, as_predexp_string_value("0X00.[12]"));
 	as_query_predexp_add(&q, as_predexp_string_regex(REG_ICASE));
 
 	aerospike_query_foreach(as, &err, NULL, &q, count_callback, &count);

@@ -40,6 +40,10 @@ endif
 
 LDFLAGS = -L/usr/local/lib
 
+ifeq ($(OS),Darwin)
+  LDFLAGS += -L/usr/local/opt/openssl/lib
+endif
+
 ifeq ($(EVENT_LIB),libev)
   LDFLAGS += -lev
 endif

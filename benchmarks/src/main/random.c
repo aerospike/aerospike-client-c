@@ -57,7 +57,7 @@ ticker_worker(void* udata)
 		uint32_t read_current = ck_pr_fas_32(&data->read_count, 0);
 		uint32_t read_timeout_current = ck_pr_fas_32(&data->read_timeout_count, 0);
 		uint32_t read_error_current = ck_pr_fas_32(&data->read_error_count, 0);
-		uint32_t transactions_current = ck_pr_load_32(&data->transactions_count);
+		uint64_t transactions_current = ck_pr_load_64(&data->transactions_count);
 
 		data->period_begin = time;
 	
@@ -78,7 +78,7 @@ ticker_worker(void* udata)
 		}
 
 		if ((data->transactions_limit > 0) && (transactions_current > data->transactions_limit)) {
-			blog_line("Performed %d (> %d) transactions. Shutting down...", transactions_current, data->transactions_limit);
+			blog_line("Performed %" PRIu64 " (> %" PRIu64 ") transactions. Shutting down...", transactions_current, data->transactions_limit);
 			data->valid = false;
 			continue;
 		}
@@ -93,15 +93,15 @@ random_worker(void* udata)
 {
 	clientdata* cdata = (clientdata*)udata;
 	threaddata* tdata = create_threaddata(cdata, 0);
-	uint32_t key_min = cdata->key_min;
-	uint32_t n_keys = cdata->key_max - key_min;
+	uint64_t key_min = cdata->key_min;
+	uint64_t n_keys = cdata->key_max - key_min;
+	uint64_t key;
 	int read_pct = cdata->read_pct;
-	int key;
 	int die;
 	
 	while (cdata->valid) {
 		// Choose key at random.
-		key = as_random_next_uint32(tdata->random) % n_keys + key_min;
+		key = as_random_next_uint64(tdata->random) % n_keys + key_min;
 		
 		// Roll a percentage die.
 		die = as_random_next_uint32(tdata->random) % 100;
@@ -112,7 +112,7 @@ random_worker(void* udata)
 		else {
 			write_record_sync(cdata, tdata, key);
 		}
-		ck_pr_inc_32(&cdata->transactions_count);
+		ck_pr_inc_64(&cdata->transactions_count);
 
 		throttle(cdata);
 	}

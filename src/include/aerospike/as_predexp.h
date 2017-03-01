@@ -64,11 +64,11 @@ typedef struct as_predexp_base_s {
  *
  *	~~~~~~~~~~{.c}
  *	as_query_predexp_inita(&q, 7);
+ *	as_query_predexp_add(&q, as_predexp_integer_bin("c"));
  *	as_query_predexp_add(&q, as_predexp_integer_value(11));
- *	as_query_predexp_add(&q, as_predexp_integer_bin("c"));
  *  as_query_predexp_add(&q, as_predexp_integer_greatereq());
- *  as_query_predexp_add(&q, as_predexp_integer_value(20));
  *	as_query_predexp_add(&q, as_predexp_integer_bin("c"));
+ *  as_query_predexp_add(&q, as_predexp_integer_value(20));
  *	as_query_predexp_add(&q, as_predexp_integer_lesseq());
  *	as_query_predexp_add(&q, as_predexp_and(2));
  *	~~~~~~~~~~
@@ -151,11 +151,11 @@ as_predexp_not();
  *
  *	~~~~~~~~~~{.c}
  *	as_query_predexp_inita(&q, 7);
+ *	as_query_predexp_add(&q, as_predexp_integer_bin("c"));
  *	as_query_predexp_add(&q, as_predexp_integer_value(11));
- *	as_query_predexp_add(&q, as_predexp_integer_bin("c"));
  *  as_query_predexp_add(&q, as_predexp_integer_greatereq());
- *  as_query_predexp_add(&q, as_predexp_integer_value(20));
  *	as_query_predexp_add(&q, as_predexp_integer_bin("c"));
+ *  as_query_predexp_add(&q, as_predexp_integer_value(20));
  *	as_query_predexp_add(&q, as_predexp_integer_lesseq());
  *	as_query_predexp_add(&q, as_predexp_and(2));
  *	~~~~~~~~~~
@@ -218,8 +218,8 @@ as_predexp_string_value(char const * value);
  *		" } ";
  *
  *	as_query_predexp_inita(&query, 3);
- *	as_query_predexp_add(&query, as_predexp_geojson_value(region));
  *	as_query_predexp_add(&query, as_predexp_geojson_bin("loc"));
+ *	as_query_predexp_add(&query, as_predexp_geojson_value(region));
  *	as_query_predexp_add(&query, as_predexp_geojson_within());
  *	~~~~~~~~~~
  *
@@ -243,11 +243,11 @@ as_predexp_geojson_value(char const * value);
  *
  *	~~~~~~~~~~{.c}
  *	as_query_predexp_inita(&q, 7);
+ *	as_query_predexp_add(&q, as_predexp_integer_bin("c"));
  *	as_query_predexp_add(&q, as_predexp_integer_value(11));
- *	as_query_predexp_add(&q, as_predexp_integer_bin("c"));
  *  as_query_predexp_add(&q, as_predexp_integer_greatereq());
- *  as_query_predexp_add(&q, as_predexp_integer_value(20));
  *	as_query_predexp_add(&q, as_predexp_integer_bin("c"));
+ *  as_query_predexp_add(&q, as_predexp_integer_value(20));
  *	as_query_predexp_add(&q, as_predexp_integer_lesseq());
  *	as_query_predexp_add(&q, as_predexp_and(2));
  *	~~~~~~~~~~
@@ -310,8 +310,8 @@ as_predexp_string_bin(char const * binname);
  *		" } ";
  *
  *	as_query_predexp_inita(&query, 3);
- *	as_query_predexp_add(&query, as_predexp_geojson_value(region));
  *	as_query_predexp_add(&query, as_predexp_geojson_bin("loc"));
+ *	as_query_predexp_add(&query, as_predexp_geojson_value(region));
  *	as_query_predexp_add(&query, as_predexp_geojson_within());
  *	~~~~~~~~~~
  *
@@ -391,8 +391,8 @@ as_predexp_map_bin(char const * binname);
  *
  *	~~~~~~~~~~{.c}
  *	as_query_predexp_inita(&q, 5);
- *	as_query_predexp_add(&q, as_predexp_integer_value(42));
  *	as_query_predexp_add(&q, as_predexp_integer_var("item"));
+ *	as_query_predexp_add(&q, as_predexp_integer_value(42));
  *	as_query_predexp_add(&q, as_predexp_integer_equal());
  *	as_query_predexp_add(&q, as_predexp_list_bin("numbers"));
  *	as_query_predexp_add(&q, as_predexp_list_iterate_or("item"));
@@ -459,8 +459,8 @@ as_predexp_geojson_var(char const * varname);
  *
  *	~~~~~~~~~~{.c}
  *	as_query_predexp_inita(&q, 3);
- *	as_query_predexp_add(&q, as_predexp_integer_value(65 * 1024));
  *	as_query_predexp_add(&q, as_predexp_rec_device_size());
+ *	as_query_predexp_add(&q, as_predexp_integer_value(65 * 1024));
  *	as_query_predexp_add(&q, as_predexp_integer_greater());
  *	~~~~~~~~~~
  *
@@ -482,8 +482,8 @@ as_predexp_rec_device_size();
  *
  *	~~~~~~~~~~{.c}
  *	as_query_predexp_inita(&q, 3);
- *	as_query_predexp_add(&q, as_predexp_integer_value(g_tstampns));
  *	as_query_predexp_add(&q, as_predexp_rec_last_update());
+ *	as_query_predexp_add(&q, as_predexp_integer_value(g_tstampns));
  *	as_query_predexp_add(&q, as_predexp_integer_greater());
  *	~~~~~~~~~~
  *
@@ -505,8 +505,8 @@ as_predexp_rec_last_update();
  *
  *	~~~~~~~~~~{.c}
  *  as_query_predexp_inita(&q, 3);
- *	as_query_predexp_add(&q, as_predexp_integer_value(0));
  *	as_query_predexp_add(&q, as_predexp_rec_void_time());
+ *	as_query_predexp_add(&q, as_predexp_integer_value(0));
  *	as_query_predexp_add(&q, as_predexp_integer_equal());
  *	~~~~~~~~~~
  *
@@ -521,9 +521,9 @@ as_predexp_rec_void_time();
  *
  *  The integer comparison expressions pop a pair of value expressions
  *  off the expression stack and compare them.  The deeper of the two
- *  child expressions (pushed earlier) is considered the right side of
+ *  child expressions (pushed earlier) is considered the left side of
  *  the expression and the shallower (pushed later) is considered the
- *  left side.
+ *  right side.
  *
  *  If the value of either of the child expressions is unknown because
  *  a specified bin does not exist or contains a value of the wrong
@@ -535,9 +535,9 @@ as_predexp_rec_void_time();
  *  selects records that have bin "foo" greater than 42:
  *
  *	~~~~~~~~~~{.c}
- *  as_query_predexp_inita(&q, 3);
- *	as_query_predexp_add(&q, as_predexp_integer_value(42));
+ *	as_query_predexp_inita(&q, 3);
  *	as_query_predexp_add(&q, as_predexp_integer_bin("foo"));
+ *	as_query_predexp_add(&q, as_predexp_integer_value(42));
  *	as_query_predexp_add(&q, as_predexp_integer_greater());
  *	~~~~~~~~~~
  *
@@ -567,9 +567,9 @@ as_predexp_integer_lesseq();
  *
  *  The string comparison expressions pop a pair of value expressions
  *  off the expression stack and compare them.  The deeper of the two
- *  child expressions (pushed earlier) is considered the right side of
+ *  child expressions (pushed earlier) is considered the left side of
  *  the expression and the shallower (pushed later) is considered the
- *  left side.
+ *  right side.
  *
  *  If the value of either of the child expressions is unknown because
  *  a specified bin does not exist or contains a value of the wrong
@@ -601,12 +601,11 @@ as_predexp_string_unequal();
  *
  *  The string regex expression pops two children off the expression
  *  stack and compares a child value expression to a regular
- *  expression.  The deeper of the two children (pushed earlier) must
- *  be a string value containing a valid regular expression.  The
- *  shallower child (pushed later) must contain the string value to be
- *  matched.
+ *  expression.  The left child (pushed earlier) must contain the
+ *  string value to be matched.  The right child (pushed later) must
+ *  be a string value containing a valid regular expression..
  *
- *  If the value of the shallower child is unknown because a specified
+ *  If the value of the left child is unknown because a specified
  *  bin does not exist or contains a value of the wrong type the
  *  result of the regex match is false.
  *
@@ -615,8 +614,8 @@ as_predexp_string_unequal();
  *
  *	~~~~~~~~~~{.c}
  *	as_query_predexp_inita(&q, 3);
- *	as_query_predexp_add(&q, as_predexp_string_value("0x00.[12]"));
  *	as_query_predexp_add(&q, as_predexp_string_bin("hex"));
+ *	as_query_predexp_add(&q, as_predexp_string_value("0x00.[12]"));
  *	as_query_predexp_add(&q, as_predexp_string_regex(0));
  *	~~~~~~~~~~
  *
@@ -633,14 +632,14 @@ as_predexp_string_regex(uint32_t opts);
  *
  *  The Points-in-Region (within) expression pops two children off the
  *  expression stack and checks to see if a child GeoJSON point is
- *  inside a specified GeoJSON region.  The deeper of the two children
- *  (pushed earlier) must be a GeoJSON value containing a region.  The
- *  shallower child (pushed later) must contain a GeoJSON value
- *  specifying a point.
+ *  inside a specified GeoJSON region.  The left child (pushed
+ *  earlier) must contain a GeoJSON value specifying a point.  The
+ *  right child (pushed later) must be a GeoJSON value containing a
+ *  region.
  *
- *  If the value of the shallower child is unknown because a specified
- *  bin does not exist or contains a value of the wrong type the
- *  result of the within expression is false.
+ *  If the value of the left child is unknown because a specified bin
+ *  does not exist or contains a value of the wrong type the result of
+ *  the within expression is false.
  *
  *  For example, the following sequence of predicate expressions
  *  selects records where a point in bin "loc" is inside the
@@ -658,8 +657,8 @@ as_predexp_string_regex(uint32_t opts);
  *		" } ";
  *
  *	as_query_predexp_inita(&query, 3);
- *	as_query_predexp_add(&query, as_predexp_geojson_value(region));
  *	as_query_predexp_add(&query, as_predexp_geojson_bin("loc"));
+ *	as_query_predexp_add(&query, as_predexp_geojson_value(region));
  *	as_query_predexp_add(&query, as_predexp_geojson_within());
  *	~~~~~~~~~~
  *
@@ -674,18 +673,18 @@ as_predexp_geojson_within();
  *
  *  The Regions-Containing-Point (contains) expression pops two
  *  children off the expression stack and checks to see if a child
- *  GeoJSON region contains a specified GeoJSON point.  The deeper of
- *  the two children (pushed earlier) must be a GeoJSON value
- *  containing a point.  The shallower child (pushed later) must
- *  contain a GeoJSON value specifying a possibly enclosing region.
+ *  GeoJSON region contains a specified GeoJSON point.  The left child
+ *  (pushed earlier) must contain a GeoJSON value specifying a
+ *  possibly enclosing region.  The right child (pushed later) must be
+ *  a GeoJSON value containing a point.
  *
- *  If the value of the shallower child is unknown because a specified
- *  bin does not exist or contains a value of the wrong type the
- *  result of the contains expression is false.
+ *  If the value of the left child is unknown because a specified bin
+ *  does not exist or contains a value of the wrong type the result of
+ *  the contains expression is false.
  *
  *  For example, the following sequence of predicate expressions
- *  selects records where a region in bin "loc" is contains the
- *  specified query point:
+ *  selects records where a region in bin "rgn" contains the specified
+ *  query point:
  *
  *	~~~~~~~~~~{.c}
  *	char const * point =
@@ -695,8 +694,8 @@ as_predexp_geojson_within();
  *		"} ";
  *
  *	as_query_predexp_inita(&query, 3);
+ *	as_query_predexp_add(&query, as_predexp_geojson_bin("rgn"));
  *	as_query_predexp_add(&query, as_predexp_geojson_value(point));
- *	as_query_predexp_add(&query, as_predexp_geojson_bin("loc"));
  *	as_query_predexp_add(&query, as_predexp_geojson_contains());
  *	~~~~~~~~~~
  *
@@ -710,10 +709,10 @@ as_predexp_geojson_contains();
  *	Create an list iteration OR logical predicate expression.
  *
  *  The list iteration expression pops two children off the expression
- *  stack.  The shallower child (pushed later) must specify a list
- *  bin.  The deeper child (pushed earlier) must contain a logical
+ *  stack.  The left child (pushed earlier) must contain a logical
  *  subexpression containing one or more matching iteration variable
- *  expressions.  The list iteration traverses the list and repeatedly
+ *  expressions.  The right child (pushed later) must specify a list
+ *  bin.  The list iteration traverses the list and repeatedly
  *  evaluates the subexpression substituting each list element's value
  *  into the matching iteration variable.  The result of the iteration
  *  expression is a logical OR of all of the individual element
@@ -743,10 +742,10 @@ as_predexp_list_iterate_or(char const * varname);
  *	Create an list iteration AND logical predicate expression.
  *
  *  The list iteration expression pops two children off the expression
- *  stack.  The shallower child (pushed later) must specify a list
- *  bin.  The deeper child (pushed earlier) must contain a logical
+ *  stack.  The left child (pushed earlier) must contain a logical
  *  subexpression containing one or more matching iteration variable
- *  expressions.  The list iteration traverses the list and repeatedly
+ *  expressions.  The right child (pushed later) must specify a list
+ *  bin.  The list iteration traverses the list and repeatedly
  *  evaluates the subexpression substituting each list element's value
  *  into the matching iteration variable.  The result of the iteration
  *  expression is a logical AND of all of the individual element
@@ -777,14 +776,14 @@ as_predexp_list_iterate_and(char const * varname);
  *	Create an map key iteration OR logical predicate expression.
  *
  *  The mapkey iteration expression pops two children off the
- *  expression stack.  The shallower child (pushed later) must specify
- *  a map bin.  The deeper child (pushed earlier) must contain a
+ *  expression stack.  The left child (pushed earlier) must contain a
  *  logical subexpression containing one or more matching iteration
- *  variable expressions.  The mapkey iteration traverses the map and
- *  repeatedly evaluates the subexpression substituting each map key
- *  value into the matching iteration variable.  The result of the
- *  iteration expression is a logical OR of all of the individual
- *  element evaluations.
+ *  variable expressions.  The right child (pushed later) must specify
+ *  a map bin.  The mapkey iteration traverses the map and repeatedly
+ *  evaluates the subexpression substituting each map key value into
+ *  the matching iteration variable.  The result of the iteration
+ *  expression is a logical OR of all of the individual element
+ *  evaluations.
  *
  *  For example, the following sequence of predicate expressions
  *  selects records where one of the map keys is "cat":
@@ -810,14 +809,14 @@ as_predexp_mapkey_iterate_or(char const * varname);
  *	Create an map key iteration AND logical predicate expression.
  *
  *  The mapkey iteration expression pops two children off the
- *  expression stack.  The shallower child (pushed later) must specify
- *  a map bin.  The deeper child (pushed earlier) must contain a
+ *  expression stack.  The left child (pushed earlier) must contain a
  *  logical subexpression containing one or more matching iteration
- *  variable expressions.  The mapkey iteration traverses the map and
- *  repeatedly evaluates the subexpression substituting each map key
- *  value into the matching iteration variable.  The result of the
- *  iteration expression is a logical AND of all of the individual
- *  element evaluations.
+ *  variable expressions.  The right child (pushed later) must specify
+ *  a map bin.  The mapkey iteration traverses the map and repeatedly
+ *  evaluates the subexpression substituting each map key value into
+ *  the matching iteration variable.  The result of the iteration
+ *  expression is a logical AND of all of the individual element
+ *  evaluations.
  *
  *  For example, the following sequence of predicate expressions
  *  selects records where none of the map keys is "cat":
@@ -844,12 +843,12 @@ as_predexp_mapkey_iterate_and(char const * varname);
  *	Create an map value iteration OR logical predicate expression.
  *
  *  The mapval iteration expression pops two children off the
- *  expression stack.  The shallower child (pushed later) must specify
- *  a map bin.  The deeper child (pushed earlier) must contain a
+ *  expression stack.  The left child (pushed earlier) must contain a
  *  logical subexpression containing one or more matching iteration
- *  variable expressions.  The mapval iteration traverses the map and
- *  repeatedly evaluates the subexpression substituting each map value
- *  into the matching iteration variable.  The result of the iteration
+ *  variable expressions.  The right child (pushed later) must specify
+ *  a map bin.  The mapval iteration traverses the map and repeatedly
+ *  evaluates the subexpression substituting each map value into the
+ *  matching iteration variable.  The result of the iteration
  *  expression is a logical OR of all of the individual element
  *  evaluations.
  *
@@ -858,8 +857,8 @@ as_predexp_mapkey_iterate_and(char const * varname);
  *
  *	~~~~~~~~~~{.c}
  *	as_query_predexp_inita(&q, 5);
- *	as_query_predexp_add(&q, as_predexp_integer_value(0));
  *	as_query_predexp_add(&q, as_predexp_integer_var("count"));
+ *	as_query_predexp_add(&q, as_predexp_integer_value(0));
  *	as_query_predexp_add(&q, as_predexp_integer_equal());
  *	as_query_predexp_add(&q, as_predexp_map_bin("petcount"));
  *	as_query_predexp_add(&q, as_predexp_mapval_iterate_or("count"));
@@ -877,12 +876,12 @@ as_predexp_mapval_iterate_or(char const * varname);
  *	Create an map value iteration AND logical predicate expression.
  *
  *  The mapval iteration expression pops two children off the
- *  expression stack.  The shallower child (pushed later) must specify
- *  a map bin.  The deeper child (pushed earlier) must contain a
+ *  expression stack.  The left child (pushed earlier) must contain a
  *  logical subexpression containing one or more matching iteration
- *  variable expressions.  The mapval iteration traverses the map and
- *  repeatedly evaluates the subexpression substituting each map value
- *  into the matching iteration variable.  The result of the iteration
+ *  variable expressions.  The right child (pushed later) must specify
+ *  a map bin.  The mapval iteration traverses the map and repeatedly
+ *  evaluates the subexpression substituting each map value into the
+ *  matching iteration variable.  The result of the iteration
  *  expression is a logical AND of all of the individual element
  *  evaluations.
  *
@@ -891,8 +890,8 @@ as_predexp_mapval_iterate_or(char const * varname);
  *
  *	~~~~~~~~~~{.c}
  *	as_query_predexp_inita(&q, 6);
- *	as_query_predexp_add(&q, as_predexp_integer_value(0));
  *	as_query_predexp_add(&q, as_predexp_integer_var("count"));
+ *	as_query_predexp_add(&q, as_predexp_integer_value(0));
  *	as_query_predexp_add(&q, as_predexp_integer_equal());
  *	as_query_predexp_add(&q, as_predexp_not());
  *	as_query_predexp_add(&q, as_predexp_map_bin("petcount"));

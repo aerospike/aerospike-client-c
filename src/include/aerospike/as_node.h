@@ -21,7 +21,6 @@
 #include <aerospike/as_socket.h>
 #include <aerospike/as_queue.h>
 #include <aerospike/as_vector.h>
-#include <citrusleaf/cf_queue.h>
 #include <netinet/in.h>
 #include <sys/uio.h>
 
@@ -98,6 +97,26 @@ typedef struct as_alias_s {
 	in_port_t port;
 	
 } as_alias;
+
+/**
+ *	@private
+ *	Queue with lock.
+ */
+typedef struct as_queue_lock_s {
+	/**
+	 *	@private
+	 *	Mutex lock.
+	 */
+	pthread_mutex_t lock;
+
+	/**
+	 *	@private
+	 *	Queue.
+	 */
+	as_queue queue;
+	
+} as_queue_lock;
+
 	
 struct as_cluster_s;
 
@@ -162,9 +181,9 @@ typedef struct as_node_s {
 	
 	/**
 	 *	@private
-	 *	Pool of current, cached sockets.
+	 *	Pools of current, cached sockets.
 	 */
-	cf_queue* conn_q;
+	as_queue_lock* conn_qs;
 	
 	/**
 	 *	@private
@@ -193,6 +212,12 @@ typedef struct as_node_s {
 
 	/**
 	 *	@private
+	 *	Connection queue iterator.  Not atomic by design.
+	 */
+	uint32_t conn_iter;
+
+	/**
+	 *	@private
 	 *	Server's generation count for peers.
 	 */
 	uint32_t peers_generation;
@@ -202,12 +227,6 @@ typedef struct as_node_s {
 	 *	Number of peers returned by server node.
 	 */
 	uint32_t peers_count;
-
-	/**
-	 *	@private
-	 *	Number of other nodes that consider this node a member of the cluster.
-	 */
-	uint32_t conn_count;
 
 	/**
 	 *	@private
@@ -370,9 +389,12 @@ as_node_get_connection(as_error* err, as_node* node, uint64_t deadline_ms, as_so
  *	Close a node's connection and do not put back into pool.
  */
 static inline void
-as_node_close_connection(as_node* node, as_socket* sock) {
+as_node_close_connection(as_socket* sock) {
+	as_queue_lock* queue = sock->queue;
 	as_socket_close(sock);
-	ck_pr_dec_32(&node->conn_count);
+	pthread_mutex_lock(&queue->lock);
+	queue->queue.total--;
+	pthread_mutex_unlock(&queue->lock);
 }
 
 /**
@@ -380,15 +402,26 @@ as_node_close_connection(as_node* node, as_socket* sock) {
  *	Put connection back into pool.
  */
 static inline void
-as_node_put_connection(as_node* node, as_socket* sock)
+as_node_put_connection(as_socket* sock)
 {
+	// Save queue.
+	as_queue_lock* queue = sock->queue;
+
 	// Update last_used for TLS connections.
 	if (sock->ctx) {
 		sock->last_used = cf_get_seconds();
 	}
 
-	if (cf_queue_push(node->conn_q, sock) != CF_QUEUE_OK) {
-		as_node_close_connection(node, sock);
+	// Push into queue.
+	pthread_mutex_lock(&queue->lock);
+	bool status = as_queue_push(&queue->queue, sock);
+	pthread_mutex_unlock(&queue->lock);
+
+	if (! status) {
+		as_socket_close(sock);
+		pthread_mutex_lock(&queue->lock);
+		queue->queue.total--;
+		pthread_mutex_unlock(&queue->lock);
 	}
 }
 

@@ -898,10 +898,11 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 
 	// Initialize cluster tend and node parameters
 	cluster->tend_interval = (config->tender_interval < 250)? 250 : config->tender_interval;
-	cluster->conn_queue_size = config->max_conns_per_node;
+	cluster->max_conns_per_node = config->max_conns_per_node;
 	cluster->conn_timeout_ms = (config->conn_timeout_ms == 0) ? 1000 : config->conn_timeout_ms;
 	cluster->async_max_conns_per_node = config->async_max_conns_per_node;
 	cluster->pipe_max_conns_per_node = config->pipe_max_conns_per_node;;
+	cluster->conn_pools_per_node = config->conn_pools_per_node;
 	cluster->use_services_alternate = config->use_services_alternate;
 
 	// Initialize seed hosts.  Round initial capacity up to multiple of 16.

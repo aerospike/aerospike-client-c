@@ -191,9 +191,9 @@ typedef struct as_cluster_s {
 
 	/**
 	 *	@private
-	 *	Size of node's synchronous connection pool.
+	 *	Maximum number of synchronous connections allowed per server node.
 	 */
-	uint32_t conn_queue_size;
+	uint32_t max_conns_per_node;
 	
 	/**
 	 *	@private
@@ -211,6 +211,12 @@ typedef struct as_cluster_s {
 	 */
 	uint32_t pipe_max_conns_per_node;
 	
+	/**
+	 *	@private
+	 *	Number of synchronous connection pools used for each node.
+	 */
+	uint32_t conn_pools_per_node;
+
 	/**
 	 *	@private
 	 *	Number of pending async commands (i.e., commands with an outstanding reply).

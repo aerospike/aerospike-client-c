@@ -48,15 +48,15 @@ ticker_worker(void* udata)
 		int64_t elapsed = time - prev_time;
 		prev_time = time;
 
-		int32_t write_current = ck_pr_fas_32(&data->write_count, 0);
-		int32_t write_timeout_current = ck_pr_fas_32(&data->write_timeout_count, 0);
-		int32_t write_error_current = ck_pr_fas_32(&data->write_error_count, 0);
-		int32_t total_count = data->key_count;
-		int32_t write_tps = (int32_t)((double)write_current * 1000 / elapsed + 0.5);
-			
+		uint32_t write_current = ck_pr_fas_32(&data->write_count, 0);
+		uint32_t write_timeout_current = ck_pr_fas_32(&data->write_timeout_count, 0);
+		uint32_t write_error_current = ck_pr_fas_32(&data->write_error_count, 0);
+		uint32_t write_tps = (uint32_t)((double)write_current * 1000 / elapsed + 0.5);
+		uint64_t total_count = data->key_count;
+
 		data->period_begin = time;
 
-		blog_info("write(tps=%d timeouts=%d errors=%d total=%d)",
+		blog_info("write(tps=%u timeouts=%u errors=%u total=%" PRIu64 ")",
 			write_tps, write_timeout_current, write_error_current, total_count);
 		
 		if (latency) {
@@ -75,16 +75,16 @@ linear_write_worker(void* udata)
 {
 	clientdata* cdata = (clientdata*)udata;
 	threaddata* tdata = create_threaddata(cdata, 0);
-	int32_t min_key = cdata->key_min;
-	int32_t key_max = cdata->key_max;
-	int32_t key;
+	uint64_t min_key = cdata->key_min;
+	uint64_t key_max = cdata->key_max;
+	uint64_t key;
 	
 	while (cdata->valid) {
-		key = ck_pr_faa_32(&cdata->key_count, 1) + min_key;
+		key = ck_pr_faa_64(&cdata->key_count, 1) + min_key;
 
 		if (key > key_max) {
 			if (key - 1 == key_max) {
-				blog_info("write(tps=%d timeouts=%d errors=%d total=%d)",
+				blog_info("write(tps=%u timeouts=%u errors=%u total=%" PRIu64 ")",
 					ck_pr_load_32(&cdata->write_count),
 					ck_pr_load_32(&cdata->write_timeout_count),
 					ck_pr_load_32(&cdata->write_error_count),
@@ -110,7 +110,7 @@ linear_write_worker_async(clientdata* cdata)
 	as_monitor_begin(&monitor);
 
 	if (cdata->async_max_commands > (cdata->key_max - cdata->key_min)) {
-		cdata->async_max_commands = cdata->key_max - cdata->key_min;
+		cdata->async_max_commands = (int)(cdata->key_max - cdata->key_min);
 	}
 
 	int max = cdata->async_max_commands;
@@ -124,7 +124,7 @@ linear_write_worker_async(clientdata* cdata)
 	}
 	as_monitor_wait(&monitor);
 	
-	blog_info("write(tps=%d timeouts=%d errors=%d total=%d)",
+	blog_info("write(tps=%u timeouts=%u errors=%u total=%" PRIu64 ")",
 			  ck_pr_load_32(&cdata->write_count),
 			  ck_pr_load_32(&cdata->write_timeout_count),
 			  ck_pr_load_32(&cdata->write_error_count),

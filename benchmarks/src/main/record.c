@@ -145,7 +145,7 @@ gen_value(arguments* args, as_val** valpp)
 }
 
 threaddata*
-create_threaddata(clientdata* cdata, int key)
+create_threaddata(clientdata* cdata, uint64_t key)
 {
 	int len = 0;
 	
@@ -311,7 +311,7 @@ init_write_record(clientdata* cdata, threaddata* tdata)
 }
 
 void
-write_record_sync(clientdata* cdata, threaddata* tdata, int key)
+write_record_sync(clientdata* cdata, threaddata* tdata, uint64_t key)
 {
 	// Initialize key
 	tdata->key.value.integer.value = key;
@@ -358,7 +358,7 @@ write_record_sync(clientdata* cdata, threaddata* tdata, int key)
 }
 
 int
-read_record_sync(int keyval, clientdata* data)
+read_record_sync(uint64_t keyval, clientdata* data)
 {
 	as_key key;
 	as_key_init_int64(&key, data->namespace, data->set, keyval);
@@ -471,7 +471,7 @@ linear_write_listener(as_error* err, void* udata, as_event_loop* event_loop)
 	}
 	
 	// Reuse tdata structures.
-	uint32_t key = ck_pr_faa_32(&cdata->key_count, 1) + cdata->key_min;
+	uint64_t key = ck_pr_faa_64(&cdata->key_count, 1) + cdata->key_min;
 	
 	if (key == cdata->key_max) {
 		// We have reached max number of records.
@@ -499,10 +499,10 @@ static void random_read_listener(as_error* err, as_record* rec, void* udata, as_
 void
 random_read_write_async(clientdata* cdata, threaddata* tdata, as_event_loop* event_loop)
 {
-	uint32_t n_keys = cdata->key_max - cdata->key_min;
+	uint64_t n_keys = cdata->key_max - cdata->key_min;
 
 	// Choose key at random.
-	int key = as_random_next_uint32(tdata->random) % n_keys + cdata->key_min;
+	uint64_t key = as_random_next_uint64(tdata->random) % n_keys + cdata->key_min;
 	tdata->key.value.integer.value = key;
 	tdata->key.digest.init = false;
 	
@@ -559,10 +559,17 @@ random_write_listener(as_error* err, void* udata, as_event_loop* event_loop)
 		}
 	}
 	
-	ck_pr_inc_32(&cdata->transactions_count);
-	
-	// Start a new command on same event loop to keep the queue full.
-	random_read_write_async(cdata, tdata, event_loop);
+	ck_pr_inc_64(&cdata->transactions_count);
+
+	if (cdata->valid) {
+		// Start a new command on same event loop to keep the queue full.
+		random_read_write_async(cdata, tdata, event_loop);
+	}
+	else {
+		// We have reached max number of records.
+		destroy_threaddata(tdata);
+		as_monitor_notify(&monitor);
+	}
 }
 
 static void
@@ -592,8 +599,15 @@ random_read_listener(as_error* err, as_record* rec, void* udata, as_event_loop* 
 			}
 		}
 	}
-	ck_pr_inc_32(&cdata->transactions_count);
-	
-	// Start a new command on same event loop to keep the queue full.
-	random_read_write_async(cdata, tdata, event_loop);
+	ck_pr_inc_64(&cdata->transactions_count);
+
+	if (cdata->valid) {
+		// Start a new command on same event loop to keep the queue full.
+		random_read_write_async(cdata, tdata, event_loop);
+	}
+	else {
+		// We have reached max number of records.
+		destroy_threaddata(tdata);
+		as_monitor_notify(&monitor);
+	}
 }

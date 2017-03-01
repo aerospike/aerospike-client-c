@@ -41,8 +41,8 @@ typedef struct arguments_t {
 	char password[AS_PASSWORD_HASH_SIZE];
 	const char* namespace;
 	const char* set;
-	int startKey;
-	int keys;
+	uint64_t start_key;
+	uint64_t keys;
 	char bintype;
 	int binlen;
 	int numbins;
@@ -52,7 +52,7 @@ typedef struct arguments_t {
 	int init_pct;
 	int read_pct;
 	bool del_bin;
-	int transactions_limit;
+	uint64_t transactions_limit;
 	int threads;
 	int throughput;
 	int read_timeout;
@@ -78,6 +78,11 @@ typedef struct clientdata_t {
 	const char* set;
 	const char* bin_name;
 	
+	uint64_t transactions_limit;
+	uint64_t transactions_count;
+	uint64_t key_min;
+	uint64_t key_max;
+	uint64_t key_count;
 	uint64_t period_begin;
 	
 	aerospike client;
@@ -88,34 +93,27 @@ typedef struct clientdata_t {
 	uint32_t write_timeout_count;
 	uint32_t write_error_count;
 	
-	latency read_latency;
 	uint32_t read_count;
 	uint32_t read_timeout_count;
 	uint32_t read_error_count;
-	
-	uint32_t transactions_limit;
-	uint32_t transactions_count;
+	latency read_latency;
 
-	uint32_t key_min;
-	uint32_t key_max;
-	uint32_t key_count;
 	uint32_t valid;
 	
+	int async_max_commands;
 	int threads;
 	int throughput;
 	int read_pct;
-	bool del_bin;
-	char bintype;
 	int binlen;
 	int numbins;
 	len_type binlen_type;
 	
+	char bintype;
+	bool del_bin;
 	bool random;
 	bool latency;
 	bool debug;
-
 	bool async;
-	int async_max_commands;
 } clientdata;
 
 typedef struct threaddata_t {
@@ -131,11 +129,11 @@ int run_benchmark(arguments* args);
 int linear_write(clientdata* data);
 int random_read_write(clientdata* data);
 
-threaddata* create_threaddata(clientdata* cdata, int key);
+threaddata* create_threaddata(clientdata* cdata, uint64_t key);
 void destroy_threaddata(threaddata* tdata);
 
-void write_record_sync(clientdata* cdata, threaddata* tdata, int key);
-int read_record_sync(int key, clientdata* data);
+void write_record_sync(clientdata* cdata, threaddata* tdata, uint64_t key);
+int read_record_sync(uint64_t key, clientdata* data);
 void throttle(clientdata* cdata);
 
 void linear_write_async(clientdata* cdata, threaddata* tdata, as_event_loop* event_loop);

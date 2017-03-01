@@ -318,8 +318,8 @@ print_args(arguments* args)
 	blog_line("user:           %s", args->user);
 	blog_line("namespace:      %s", args->namespace);
 	blog_line("set:            %s", args->set);
-	blog_line("startKey:       %d", args->startKey);
-	blog_line("keys/records:   %d", args->keys);
+	blog_line("startKey:       %" PRIu64, args->start_key);
+	blog_line("keys/records:   %" PRIu64, args->keys);
 	blog_line("bins:           %d", args->numbins);
 	blog("object spec:    ");
 	
@@ -352,7 +352,7 @@ print_args(arguments* args)
 	}
 	
 	blog_line("random values:  %s", boolstring(args->random));
-	blog_line("minimum number of transactions:  %d", args->transactions_limit);
+	blog_line("minimum number of transactions:  %" PRIu64, args->transactions_limit);
 
 	blog("workload:       ");
 
@@ -431,8 +431,13 @@ print_args(arguments* args)
 static int
 validate_args(arguments* args)
 {
-	if (args->keys <= 0) {
-		blog_line("Invalid number of keys: %d  Valid values: [> 0]", args->keys);
+	if (args->start_key == ULLONG_MAX) {
+		blog_line("Invalid start key: %" PRIu64, args->start_key);
+		return 1;
+	}
+
+	if (args->keys == ULLONG_MAX) {
+		blog_line("Invalid number of keys: %" PRIu64, args->keys);
 		return 1;
 	}
 	
@@ -544,11 +549,11 @@ set_args(int argc, char * const * argv, arguments* args)
 				break;
 				
 			case 'K':
-				args->startKey = atoi(optarg);
+				args->start_key = strtoull(optarg, NULL, 10);
 				break;
 
 			case 'k':
-				args->keys = atoi(optarg);
+				args->keys = strtoull(optarg, NULL, 10);
 				break;
 				
 			case 'b':
@@ -593,7 +598,7 @@ set_args(int argc, char * const * argv, arguments* args)
 				break;
 				
 			case 't':
-				args->transactions_limit = atoi(optarg);
+				args->transactions_limit = strtoull(optarg, NULL, 10);
 				break;
 
 			case 'w': {
@@ -800,14 +805,14 @@ main(int argc, char * const * argv)
 	args.password[0] = 0;
 	args.namespace = "test";
 	args.set = "testset";
+	args.start_key = 1;
 	args.keys = 1000000;
-	args.startKey = 1;
 	args.numbins = 1;
 	args.bintype = 'I';
 	args.binlen = 50;
 	args.binlen_type = LEN_TYPE_COUNT;
 	args.random = false;
-	args.transactions_limit = -1;
+	args.transactions_limit = 0;
 	args.init = false;
 	args.init_pct = 100;
 	args.read_pct = 50;

@@ -427,6 +427,17 @@ typedef struct as_config_s {
 	uint32_t pipe_max_conns_per_node;
 	
 	/**
+	 *	Number of synchronous connection pools used for each node.  Machines with 8 cpu cores or
+	 *	less usually need just one connection pool per node.  Machines with a large number of cpu
+	 *	cores may have their synchronous performance limited by contention for pooled connections.
+	 *	Contention for pooled connections can be reduced by creating multiple mini connection pools
+	 *	per node.
+	 *
+	 *	Default: 1
+	 */
+	uint32_t conn_pools_per_node;
+
+	/**
 	 *	Initial host connection timeout in milliseconds.  The timeout when opening a connection
 	 *	to the server host for the first time.
 	 *	Default: 1000

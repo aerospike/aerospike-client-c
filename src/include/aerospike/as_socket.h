@@ -71,14 +71,18 @@ typedef struct as_tls_context_s {
 	bool log_session_info;
 } as_tls_context;
 
+struct as_queue_lock_s;
+
 /**
- *	This structure holds just an fd when we are not using TLS and additional
- *	OpenSSL context when we are using TLS.
+ *	Socket fields for both regular and TLS sockets.
  */
 typedef struct as_socket_s {
 	int fd;
 	int family;
-	uint64_t last_used;
+	union {
+		struct as_queue_lock_s* queue; // Used when sync socket is active.
+		uint64_t last_used;            // Used when socket in pool.
+	};
 	as_tls_context* ctx;
 	const char* tls_name;
 	SSL* ssl;

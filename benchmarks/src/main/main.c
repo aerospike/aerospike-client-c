@@ -54,6 +54,7 @@ static struct option long_options[] = {
 	{"replica",              required_argument, 0, 'C'},
 	{"consistencyLevel",     required_argument, 0, 'N'},
 	{"commitLevel",          required_argument, 0, 'M'},
+	{"connPoolsPerNode",     required_argument, 0, 'Y'},
 	{"durableDelete",        no_argument,       0, 'D'},
 	{"async",                no_argument,       0, 'a'},
 	{"asyncMaxCommands",     required_argument, 0, 'c'},
@@ -228,10 +229,15 @@ print_usage(const char* program)
 	blog_line("   Write commit guarantee level.");
 	blog_line("");
 
+	blog_line("-Y --connPoolsPerNode <num>  # Default: 1");
+	blog_line("   Number of connection pools per node.");
+	blog_line("");
+
 	blog_line("-D --durableDelete  # Default: durableDelete mode is false.");
 	blog_line("   All transactions will set the durable-delete flag which indicates");
 	blog_line("   to the server that if the transaction results in a delete, to generate");
 	blog_line("   a tombstone for the deleted record.");
+	blog_line("");
 
 	blog_line("-a --async # Default: synchronous mode");
 	blog_line("   Enable asynchronous mode.");
@@ -405,6 +411,8 @@ print_args(arguments* args)
 	blog_line("read replica:   %s", rep);
 	blog_line("read consistency level: %s", (AS_POLICY_CONSISTENCY_LEVEL_ONE == args->read_consistency_level ? "one" : "all"));
 	blog_line("write commit level: %s", (AS_POLICY_COMMIT_LEVEL_ALL == args->write_commit_level ? "all" : "master"));
+	blog_line("Conn pools per node: %d", args->conn_pools_per_node);
+
 	blog_line("asynchronous mode:  %s", args->async ? "on" : "off");
 	
 	if (args->async) {
@@ -500,6 +508,11 @@ validate_args(arguments* args)
 		return 1;
 	}
 	
+	if (args->conn_pools_per_node <= 0 || args->conn_pools_per_node > 1000) {
+		blog_line("Invalid connPoolsPerNode: %d  Valid values: [1-1000]", args->conn_pools_per_node);
+		return 1;
+	}
+
 	if (args->async) {
 		if (args->async_max_commands <= 0 || args->async_max_commands > 5000) {
 			blog_line("Invalid asyncMaxCommands: %d  Valid values: [1-5000]", args->async_max_commands);
@@ -723,6 +736,10 @@ set_args(int argc, char * const * argv, arguments* args)
 				}
 				break;
 
+			case 'Y':
+				args->conn_pools_per_node = atoi(optarg);
+				break;
+
 			case 'D':
 				args->durable_deletes = true;
 				break;
@@ -831,6 +848,7 @@ main(int argc, char * const * argv)
 	args.read_consistency_level = AS_POLICY_CONSISTENCY_LEVEL_ONE;
 	args.write_commit_level = AS_POLICY_COMMIT_LEVEL_ALL;
 	args.durable_deletes = false;
+	args.conn_pools_per_node = 1;
 	args.async = false;
 	args.async_max_commands = 200;
 	args.event_loop_capacity = 1;

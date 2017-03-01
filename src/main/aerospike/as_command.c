@@ -463,7 +463,7 @@ as_command_execute(
 		if (status) {
 			// Socket errors are considered temporary anomalies.  Retry.
 			// Close socket to flush out possible garbage.	Do not put back in pool.
-			as_node_close_connection(node, &socket);
+			as_node_close_connection(&socket);
 			if (release_node) {
 				as_node_release(node);
 			}
@@ -488,7 +488,7 @@ as_command_execute(
 				case AEROSPIKE_ERR_TIMEOUT:
 				case AEROSPIKE_ERR_TLS_ERROR:
 				case AEROSPIKE_NOT_AUTHENTICATED:
-					as_node_close_connection(node, &socket);
+					as_node_close_connection(&socket);
 					if (release_node) {
 						as_node_release(node);
 					}
@@ -498,7 +498,7 @@ as_command_execute(
 				case AEROSPIKE_ERR_SCAN_ABORTED:
 				case AEROSPIKE_ERR_CLIENT_ABORT:
 				case AEROSPIKE_ERR_CLIENT:
-					as_node_close_connection(node, &socket);
+					as_node_close_connection(&socket);
 					if (release_node) {
 						as_node_release(node);
 					}
@@ -510,7 +510,7 @@ as_command_execute(
 		}
 		
 		// Put connection back in pool.
-		as_node_put_connection(node, &socket);
+		as_node_put_connection(&socket);
 		
 		// Release resources.
 		if (release_node) {

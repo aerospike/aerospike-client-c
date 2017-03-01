@@ -1286,8 +1286,8 @@ static void manage_sigpipe()
 	}
 
 	struct sigaction new_handler;
+	memset(&new_handler, 0, sizeof(new_handler));
 	new_handler.sa_handler = SIG_IGN;
-	new_handler.sa_flags = 0;
 	rv = sigaction(SIGPIPE, &new_handler, NULL);
 	if (rv != 0) {
 		as_log_warn("sigaction failed to set SIGPIPE to SIG_IGN: %s",

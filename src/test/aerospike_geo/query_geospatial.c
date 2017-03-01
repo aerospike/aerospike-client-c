@@ -334,8 +334,8 @@ TEST( predexp_points_within_region, "predexp_points_within_region" ) {
 		" } ";
 
 	as_query_predexp_inita(&query, 3);
-	as_query_predexp_add(&query, as_predexp_geojson_value(region));
 	as_query_predexp_add(&query, as_predexp_geojson_bin("loc"));
+	as_query_predexp_add(&query, as_predexp_geojson_value(region));
 	as_query_predexp_add(&query, as_predexp_geojson_within());
 	
 	// Execute the query. This call blocks - callbacks are made in the scope of
@@ -376,8 +376,8 @@ TEST( predexp_pir_rchild_wrong_type, "predexp_pir_rchild_wrong_type" ) {
 		" } ";
 
 	as_query_predexp_inita(&query, 3);
-	as_query_predexp_add(&query, as_predexp_string_value(region)); // !GEOJSON
 	as_query_predexp_add(&query, as_predexp_geojson_bin("loc"));
+	as_query_predexp_add(&query, as_predexp_string_value(region)); // !GEOJSON
 	as_query_predexp_add(&query, as_predexp_geojson_within());
 	
 	// Execute the query. This call blocks - callbacks are made in the scope of
@@ -416,8 +416,8 @@ TEST( predexp_pir_lchild_wrong_type, "predexp_pir_lchild_wrong_type" ) {
 		" } ";
 
 	as_query_predexp_inita(&query, 3);
-	as_query_predexp_add(&query, as_predexp_geojson_value(region));
 	as_query_predexp_add(&query, as_predexp_string_bin("loc"));	// !GEOJSON
+	as_query_predexp_add(&query, as_predexp_geojson_value(region));
 	as_query_predexp_add(&query, as_predexp_geojson_within());
 	
 	// Execute the query. This call blocks - callbacks are made in the scope of
@@ -445,8 +445,8 @@ TEST( predexp_pir_rchild_not_immed, "predexp_pir_rchild_not_immed" ) {
 	as_query_init(&query, NAMESPACE, SET2);
 
 	as_query_predexp_inita(&query, 3);
-	as_query_predexp_add(&query, as_predexp_geojson_bin("loc")); // !IMMED
 	as_query_predexp_add(&query, as_predexp_geojson_bin("loc"));
+	as_query_predexp_add(&query, as_predexp_geojson_bin("loc")); // !IMMED
 	as_query_predexp_add(&query, as_predexp_geojson_within());
 	
 	// Execute the query. This call blocks - callbacks are made in the scope of
@@ -485,8 +485,8 @@ TEST( predexp_pir_parse_failed, "predexp_pir_parse_failed" ) {
 		" } ";
 
 	as_query_predexp_inita(&query, 3);
-	as_query_predexp_add(&query, as_predexp_geojson_value(region));
 	as_query_predexp_add(&query, as_predexp_geojson_bin("loc"));
+	as_query_predexp_add(&query, as_predexp_geojson_value(region));
 	as_query_predexp_add(&query, as_predexp_geojson_within());
 	
 	// Execute the query. This call blocks - callbacks are made in the scope of
@@ -525,8 +525,8 @@ TEST( predexp_pir_on_regions, "predexp_pir_on_regions" ) {
 		" } ";
 
 	as_query_predexp_inita(&query, 3);
-	as_query_predexp_add(&query, as_predexp_geojson_value(region));
 	as_query_predexp_add(&query, as_predexp_geojson_bin("loc"));
+	as_query_predexp_add(&query, as_predexp_geojson_value(region));
 	as_query_predexp_add(&query, as_predexp_geojson_within());
 	
 	// Execute the query. This call blocks - callbacks are made in the scope of
@@ -581,8 +581,8 @@ TEST( predexp_regions_containing_point, "predexp_regions_containing_point" ) {
 		"} ";
 
 	as_query_predexp_inita(&query, 3);
-	as_query_predexp_add(&query, as_predexp_geojson_value(point));
 	as_query_predexp_add(&query, as_predexp_geojson_bin("loc"));
+	as_query_predexp_add(&query, as_predexp_geojson_value(point));
 	as_query_predexp_add(&query, as_predexp_geojson_contains());
 	
 	// Execute the query. This call blocks - callbacks are made in the scope of
@@ -620,8 +620,8 @@ TEST( predexp_rcp_rchild_wrong_type, "predexp_rcp_rchild_wrong_type" ) {
 		"} ";
 
 	as_query_predexp_inita(&query, 3);
-	as_query_predexp_add(&query, as_predexp_string_value(point)); // !GEOJSON
 	as_query_predexp_add(&query, as_predexp_geojson_bin("loc"));
+	as_query_predexp_add(&query, as_predexp_string_value(point)); // !GEOJSON
 	as_query_predexp_add(&query, as_predexp_geojson_contains());
 	
 	// Execute the query. This call blocks - callbacks are made in the scope of
@@ -656,8 +656,8 @@ TEST( predexp_rcp_lchild_wrong_type, "predexp_rcp_lchild_wrong_type" ) {
 		"} ";
 
 	as_query_predexp_inita(&query, 3);
-	as_query_predexp_add(&query, as_predexp_geojson_value(point));
 	as_query_predexp_add(&query, as_predexp_string_bin("loc")); // !GEOJSON
+	as_query_predexp_add(&query, as_predexp_geojson_value(point));
 	as_query_predexp_add(&query, as_predexp_geojson_contains());
 	
 	// Execute the query. This call blocks - callbacks are made in the scope of
@@ -685,8 +685,8 @@ TEST( predexp_rcp_rchild_not_immed, "predexp_rcp_rchild_not_immed" ) {
 	as_query_init(&query, NAMESPACE, SET3);
 
 	as_query_predexp_inita(&query, 3);
-	as_query_predexp_add(&query, as_predexp_geojson_bin("loc")); // !IMMED
 	as_query_predexp_add(&query, as_predexp_geojson_bin("loc"));
+	as_query_predexp_add(&query, as_predexp_geojson_bin("loc")); // !IMMED
 	as_query_predexp_add(&query, as_predexp_geojson_contains());
 	
 	// Execute the query. This call blocks - callbacks are made in the scope of
@@ -721,8 +721,8 @@ TEST( predexp_rcp_parse_failed, "predexp_rcp_parse_failed" ) {
 		"} ";
 
 	as_query_predexp_inita(&query, 3);
-	as_query_predexp_add(&query, as_predexp_geojson_value(point));
 	as_query_predexp_add(&query, as_predexp_geojson_bin("loc"));
+	as_query_predexp_add(&query, as_predexp_geojson_value(point));
 	as_query_predexp_add(&query, as_predexp_geojson_contains());
 	
 	// Execute the query. This call blocks - callbacks are made in the scope of
@@ -757,8 +757,8 @@ TEST( predexp_rcp_on_points, "predexp_rcp_on_points" ) {
 		"} ";
 
 	as_query_predexp_inita(&query, 3);
-	as_query_predexp_add(&query, as_predexp_geojson_value(point));
 	as_query_predexp_add(&query, as_predexp_geojson_bin("loc"));
+	as_query_predexp_add(&query, as_predexp_geojson_value(point));
 	as_query_predexp_add(&query, as_predexp_geojson_contains());
 	
 	// Execute the query. This call blocks - callbacks are made in the scope of

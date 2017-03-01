@@ -449,11 +449,11 @@ TEST( scan_predexp_set1 , "scan "SET1" w/ 25 <= bin1 <= 33" ) {
 	as_scan_init(&scan, NS, SET1);
 
 	as_scan_predexp_inita(&scan, 7);
+	as_scan_predexp_add(&scan, as_predexp_integer_bin("bin1"));
 	as_scan_predexp_add(&scan, as_predexp_integer_value(25));
-	as_scan_predexp_add(&scan, as_predexp_integer_bin("bin1"));
 	as_scan_predexp_add(&scan, as_predexp_integer_greatereq());
-	as_scan_predexp_add(&scan, as_predexp_integer_value(33));
 	as_scan_predexp_add(&scan, as_predexp_integer_bin("bin1"));
+	as_scan_predexp_add(&scan, as_predexp_integer_value(33));
 	as_scan_predexp_add(&scan, as_predexp_integer_lesseq());
 	as_scan_predexp_add(&scan, as_predexp_and(2));
 
@@ -707,8 +707,8 @@ TEST( scan_basics_background_delete_records_rec_predexp , "scan_basics_backgroun
 	as_scan scan_del;
 	as_scan_init(&scan_del, NS, SET3);
 	as_scan_predexp_inita(&scan_del, 3);
-	as_scan_predexp_add(&scan_del, as_predexp_integer_value(90));
 	as_scan_predexp_add(&scan_del, as_predexp_integer_bin("bin1"));
+	as_scan_predexp_add(&scan_del, as_predexp_integer_value(90));
 	as_scan_predexp_add(&scan_del, as_predexp_integer_greatereq());
 	as_scan_apply_each(&scan_del, "aerospike_scan_test", "scan_delete_rec", NULL);
 

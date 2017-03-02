@@ -38,6 +38,7 @@
 #include <aerospike/mod_lua.h>
 
 #include "../test.h"
+#include "../util/info_helper.h"
 #include "../util/udf.h"
 #include "../util/consumer_stream.h"
 
@@ -58,6 +59,7 @@ static uint64_t g_epochns;
 
 #define NAMESPACE "test"
 #define SET "query_foreach"
+#define NAMESPACE_INFO "namespace/test"
 
 /******************************************************************************
  * STATIC FUNCTIONS
@@ -1493,6 +1495,14 @@ SUITE( query_foreach, "aerospike_query_foreach tests" ) {
 	suite_before( before );
 	suite_after( after   );
 
+	// find out storage type of namespace
+	bool namespace_has_persistence = false;
+	char namespace_storage[128];
+	get_info_field(NAMESPACE_INFO,"storage-engine", namespace_storage, 128);
+	if ( strcmp(namespace_storage,"device")==0 || strcmp(namespace_storage,"file")==0 ) {
+		namespace_has_persistence = true;
+	}
+
 	suite_add( query_foreach_1 );
 	suite_add( query_foreach_2 );
 	suite_add( query_foreach_3 );
@@ -1503,7 +1513,11 @@ SUITE( query_foreach, "aerospike_query_foreach tests" ) {
 	suite_add( query_foreach_8 );
 	suite_add( query_with_range_predexp );
 	suite_add( query_with_equality_predexp );
-	suite_add( query_with_rec_device_size_predexp );
+
+	if (namespace_has_persistence) {
+		suite_add( query_with_rec_device_size_predexp );
+	}
+
 	suite_add( query_intermittent_bin_predexp );
 	suite_add( scan_with_rec_last_update_predexp );
 	suite_add( scan_with_rec_last_update_predexp_less );

@@ -609,6 +609,10 @@ as_predexp_string_unequal();
  *  bin does not exist or contains a value of the wrong type the
  *  result of the regex match is false.
  *
+ *  The cflags argument is passed to the regcomp library routine on
+ *  the server.  Useful values include REG_EXTENDED, REG_ICASE and
+ *  REG_NEWLINE.
+ *
  *  For example, the following sequence of predicate expressions
  *  selects records that have bin "hex" value ending in '1' or '2':
  *
@@ -616,16 +620,16 @@ as_predexp_string_unequal();
  *	as_query_predexp_inita(&q, 3);
  *	as_query_predexp_add(&q, as_predexp_string_bin("hex"));
  *	as_query_predexp_add(&q, as_predexp_string_value("0x00.[12]"));
- *	as_query_predexp_add(&q, as_predexp_string_regex(0));
+ *	as_query_predexp_add(&q, as_predexp_string_regex(REG_ICASE));
  *	~~~~~~~~~~
  *
- *  @param opts	POSIX regex cflags value.
+ *  @param cflags	POSIX regex cflags value.
  *
  *  @returns a predicate expression suitable for adding to a query or
  *  scan.
  */
 as_predexp_base*
-as_predexp_string_regex(uint32_t opts);
+as_predexp_string_regex(uint32_t cflags);
 
 /**
  *	Create an GeoJSON Points-in-Region logical predicate expression.
@@ -718,6 +722,9 @@ as_predexp_geojson_contains();
  *  expression is a logical OR of all of the individual element
  *  evaluations.
  *
+ *  If the list bin contains zero elements as_predexp_list_iterate_or
+ *  will return false.
+ *
  *  For example, the following sequence of predicate expressions
  *  selects records where one of the list items is "cat":
  *
@@ -750,6 +757,10 @@ as_predexp_list_iterate_or(char const * varname);
  *  into the matching iteration variable.  The result of the iteration
  *  expression is a logical AND of all of the individual element
  *  evaluations.
+ *
+ *  If the list bin contains zero elements as_predexp_list_iterate_and
+ *  will return true.  This is useful when testing for exclusion (see
+ *  example).
  *
  *  For example, the following sequence of predicate expressions
  *  selects records where none of the list items is "cat":
@@ -785,6 +796,9 @@ as_predexp_list_iterate_and(char const * varname);
  *  expression is a logical OR of all of the individual element
  *  evaluations.
  *
+ *  If the map bin contains zero elements as_predexp_mapkey_iterate_or
+ *  will return false.
+ *
  *  For example, the following sequence of predicate expressions
  *  selects records where one of the map keys is "cat":
  *
@@ -817,6 +831,10 @@ as_predexp_mapkey_iterate_or(char const * varname);
  *  the matching iteration variable.  The result of the iteration
  *  expression is a logical AND of all of the individual element
  *  evaluations.
+ *
+ *  If the map bin contains zero elements as_predexp_mapkey_iterate_and
+ *  will return true.  This is useful when testing for exclusion (see
+ *  example).
  *
  *  For example, the following sequence of predicate expressions
  *  selects records where none of the map keys is "cat":
@@ -852,6 +870,9 @@ as_predexp_mapkey_iterate_and(char const * varname);
  *  expression is a logical OR of all of the individual element
  *  evaluations.
  *
+ *  If the map bin contains zero elements as_predexp_mapval_iterate_or
+ *  will return false.
+ *
  *  For example, the following sequence of predicate expressions
  *  selects records where one of the map values is 0:
  *
@@ -884,6 +905,10 @@ as_predexp_mapval_iterate_or(char const * varname);
  *  matching iteration variable.  The result of the iteration
  *  expression is a logical AND of all of the individual element
  *  evaluations.
+ *
+ *  If the map bin contains zero elements as_predexp_mapval_iterate_and
+ *  will return true.  This is useful when testing for exclusion (see
+ *  example).
  *
  *  For example, the following sequence of predicate expressions
  *  selects records where none of the map values is 0:

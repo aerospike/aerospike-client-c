@@ -53,6 +53,7 @@
 		BF4E4E451D50150700BEEF94 /* as_peers.c in Sources */ = {isa = PBXBuildFile; fileRef = BF4E4E441D50150700BEEF94 /* as_peers.c */; };
 		BF4E4E471D50154000BEEF94 /* as_peers.h in Headers */ = {isa = PBXBuildFile; fileRef = BF4E4E461D50154000BEEF94 /* as_peers.h */; };
 		BF5548ED19E36A7C007DDB9E /* as_log.c in Sources */ = {isa = PBXBuildFile; fileRef = BF5548EC19E36A7C007DDB9E /* as_log.c */; };
+		BF5D22651E67B50F00724AE3 /* as_predexp.h in Headers */ = {isa = PBXBuildFile; fileRef = BF5D22641E67B50F00724AE3 /* as_predexp.h */; };
 		BF6FE4331BF2748E00175BF8 /* as_pipe.c in Sources */ = {isa = PBXBuildFile; fileRef = BF6FE4321BF2748E00175BF8 /* as_pipe.c */; };
 		BF843C5918D3E64900A06CFB /* cf_alloc.c in Sources */ = {isa = PBXBuildFile; fileRef = BF843C5618D3E64900A06CFB /* cf_alloc.c */; };
 		BF843C5A18D3E64900A06CFB /* cf_queue_priority.c in Sources */ = {isa = PBXBuildFile; fileRef = BF843C5718D3E64900A06CFB /* cf_queue_priority.c */; };
@@ -223,6 +224,7 @@
 		BF4E4E441D50150700BEEF94 /* as_peers.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_peers.c; path = ../src/main/aerospike/as_peers.c; sourceTree = "<group>"; };
 		BF4E4E461D50154000BEEF94 /* as_peers.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_peers.h; path = ../src/include/aerospike/as_peers.h; sourceTree = "<group>"; };
 		BF5548EC19E36A7C007DDB9E /* as_log.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_log.c; path = ../modules/common/src/main/aerospike/as_log.c; sourceTree = "<group>"; };
+		BF5D22641E67B50F00724AE3 /* as_predexp.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_predexp.h; path = ../src/include/aerospike/as_predexp.h; sourceTree = "<group>"; };
 		BF6FE4321BF2748E00175BF8 /* as_pipe.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_pipe.c; path = ../src/main/aerospike/as_pipe.c; sourceTree = "<group>"; };
 		BF843C5618D3E64900A06CFB /* cf_alloc.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = cf_alloc.c; path = ../modules/common/src/main/citrusleaf/cf_alloc.c; sourceTree = "<group>"; };
 		BF843C5718D3E64900A06CFB /* cf_queue_priority.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = cf_queue_priority.c; path = ../modules/common/src/main/citrusleaf/cf_queue_priority.c; sourceTree = "<group>"; };
@@ -623,6 +625,7 @@
 				BF4E4E461D50154000BEEF94 /* as_peers.h */,
 				BFC65B561C921E9E0079DF5A /* as_pipe.h */,
 				BFC65B571C921E9E0079DF5A /* as_policy.h */,
+				BF5D22641E67B50F00724AE3 /* as_predexp.h */,
 				BFC65B581C921E9E0079DF5A /* as_proto.h */,
 				BFC65B591C921E9E0079DF5A /* as_query.h */,
 				BFC65B5A1C921E9E0079DF5A /* as_record_iterator.h */,
@@ -673,6 +676,7 @@
 				BFC65B701C921E9E0079DF5A /* as_batch.h in Headers */,
 				BFC65B611C921E9E0079DF5A /* aerospike_batch.h in Headers */,
 				BFC65B7B1C921E9E0079DF5A /* as_ldt.h in Headers */,
+				BF5D22651E67B50F00724AE3 /* as_predexp.h in Headers */,
 				BFC65B8A1C921E9E0079DF5A /* as_status.h in Headers */,
 				BFC65B841C921E9E0079DF5A /* as_query.h in Headers */,
 				BFC65B641C921E9E0079DF5A /* aerospike_key.h in Headers */,

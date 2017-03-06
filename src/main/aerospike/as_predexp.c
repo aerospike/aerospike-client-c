@@ -23,6 +23,27 @@
 
 #include <citrusleaf/cf_byte_order.h>
 
+/*
+Wire Protocol Notes
+
+Predicate expressions are marshaled into a message field with
+type AS_MSG_FIELD_TYPE_PREDEXP.
+
+The field data consists of a sequence of TLV (Tag-Length-Value)
+encoded expressions.  All values are represented in network byte order
+(big-endian).  The tag field is 2 bytes and descriminates the
+expression type.  The length field is 4 bytes long and describes the
+length of the value field.  The value field is expression-specific.
+
+For example a predexp string value of "foo" would be encoded as:
+
+TAG:	0x00 0x0b
+LEN:	0x00 0x00 0x00 0x03
+VAL:	0x66 0x6f 0x6f
+*/
+
+// Predicate Expression Tag Values
+
 #define AS_PREDEXP_AND					1
 #define AS_PREDEXP_OR					2
 #define AS_PREDEXP_NOT					3

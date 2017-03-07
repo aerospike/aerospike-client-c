@@ -127,11 +127,16 @@ static bool
 aerospike_index_create_is_done(aerospike* as, as_error* err, as_policy_info* policy, char* command)
 {
 	// Index is not done if any node reports percent completed < 100.
-	// Errors are ignored and considered done.
-	bool done = true;
 	as_nodes* nodes = as_nodes_reserve(as->cluster);
+
+	if (nodes->size == 0) {
+		as_nodes_release(nodes);
+		return false;
+	}
 	
-	for (uint32_t i = 0; i < nodes->size && done; i++) {
+	bool done = true;
+
+	for (uint32_t i = 0; i < nodes->size; i++) {
 		as_node* node = nodes->array[i];
 		
 		char* response = 0;
@@ -153,9 +158,15 @@ aerospike_index_create_is_done(aerospike* as, as_error* err, as_policy_info* pol
 				
 				if (pct >= 0 && pct < 100) {
 					done = false;
+					cf_free(response);
+					break;
 				}
 			}
 			cf_free(response);
+		}
+		else {
+			done = false;
+			break;
 		}
 	}
 	as_nodes_release(nodes);

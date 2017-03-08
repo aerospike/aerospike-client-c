@@ -31,30 +31,39 @@
 static as_status
 as_info_parse_error(char* begin, char** message)
 {
-	// Parse error format: <code>:<message>\n
-	char* end = strchr(begin, ':');
-	
-	if (! end) {
-		*message = 0;
-		return AEROSPIKE_ERR_SERVER;
+	// Parse error format: [<code>][:<message>][\t|\n]
+	// Terminate tab.
+	char* p = strchr(begin, '\t');
+	int rc;
+
+	if (p) {
+		*p = 0;
 	}
-	*end = 0;
-	
-	int rc = atoi(begin);
-	
-	if (rc == 0) {
-		*message = 0;
-		return AEROSPIKE_ERR_SERVER;
+	else {
+		// Terminate newline.
+		p = strchr(begin, '\n');
+
+		if (p) {
+			*p = 0;
+		}
 	}
-	end++;
-	
-	char* newline = strchr(end, '\n');
-	
-	if (newline) {
-		*newline = 0;
+
+	p = strchr(begin, ':');
+
+	if (p) {
+		*p++ = 0;
+		*message = p;
+
+		rc = atoi(begin);
+
+		if (rc == 0) {
+			rc = AEROSPIKE_ERR_SERVER;
+		}
 	}
-	
-	*message = end;
+	else {
+		*message = begin;
+		rc = AEROSPIKE_ERR_SERVER;
+	}
 	return rc;
 }
 
@@ -136,6 +145,33 @@ as_info_command_node(
 	else {
 		as_node_put_connection(&socket);
 	}
+	return status;
+}
+
+as_status
+as_info_command_random_node(aerospike* as, as_error* err, as_policy_info* policy, char* command)
+{
+	as_error_reset(err);
+
+	if (! policy) {
+		policy = &as->config.policies.info;
+	}
+
+	uint64_t deadline = as_socket_deadline(policy->timeout);
+	as_node* node = as_node_get_random(as->cluster);
+
+	if (! node) {
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to find server node.");
+	}
+
+	char* response;
+	as_status status = as_info_command_node(err, node, command, true, deadline, &response);
+
+	if (status == AEROSPIKE_OK) {
+		cf_free(response);
+	}
+
+	as_node_release(node);
 	return status;
 }
 

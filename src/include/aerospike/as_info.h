@@ -16,6 +16,7 @@
  */
 #pragma once
 
+#include <aerospike/aerospike.h>
 #include <aerospike/as_cluster.h>
 
 #ifdef __cplusplus
@@ -48,6 +49,13 @@ as_info_command_node(
 	as_error* err, as_node* node, char* command, bool send_asis, uint64_t deadline_ms,
 	char** response
 	);
+
+/**
+ *	@private
+ *	Send info command to random node. The values must be freed by the caller on success.
+ */
+as_status
+as_info_command_random_node(aerospike* as, as_error* err, as_policy_info* policy, char* command);
 
 /**
  *	@private

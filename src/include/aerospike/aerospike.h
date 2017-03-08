@@ -335,6 +335,30 @@ aerospike_has_pipelining(aerospike* as);
 void
 aerospike_stop_on_interrupt(bool stop);
 
+/**
+ *	Remove records in specified namespace/set efficiently.  This method is many orders of magnitude
+ *	faster than deleting records one at a time.  Works with Aerospike Server versions >= 3.12.
+ *
+ *	This asynchronous server call may return before the truncation is complete.  The user can still
+ *	write new records after the server returns because new records will have last update times
+ *	greater than the truncate cutoff (set at the time of truncate call).
+ *
+ *	@param as			Aerospike instance.
+ *	@param err			If an error occurs, the err will be populated.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param ns			Required namespace.
+ *	@param set			Optional set name.  Pass in NULL to delete all sets in namespace.
+ *	@param before_nanos	Optionally delete records before record last update time.
+ *						Units are in nanoseconds since unix epoch (1970-01-01).
+ * 						If specified, value must be before the current time.
+ * 						Pass in 0 to delete all records in namespace/set regardless of last update time.
+ *	@returns AEROSPIKE_OK on success. Otherwise an error occurred.
+ *
+ *	@relates aerospike
+ */
+as_status
+aerospike_truncate(aerospike* as, as_error* err, as_policy_info* policy, const char* ns, const char* set, uint64_t before_nanos);
+
 #ifdef __cplusplus
 } // end extern "C"
 #endif

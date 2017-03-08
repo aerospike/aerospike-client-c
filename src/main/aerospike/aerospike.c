@@ -17,6 +17,7 @@
 #include <aerospike/aerospike.h>
 #include <aerospike/as_config.h>
 #include <aerospike/as_cluster.h>
+#include <aerospike/as_info.h>
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_module.h>
 #include <aerospike/as_tls.h>
@@ -225,4 +226,25 @@ void
 aerospike_stop_on_interrupt(bool stop)
 {
 	as_socket_stop_on_interrupt = stop;
+}
+
+as_status
+aerospike_truncate(aerospike* as, as_error* err, as_policy_info* policy, const char* ns, const char* set, uint64_t before_nanos)
+{
+	char command[500];
+	char* p = stpcpy(command, "truncate:namespace=");
+	p = stpncpy(p, ns, sizeof(command) - (p - command));
+
+	if (set) {
+		p = stpncpy(p, ";set=", sizeof(command) - (p - command));
+		p = stpncpy(p, set, sizeof(command) - (p - command));
+	}
+
+	if (before_nanos) {
+		p = stpncpy(p, ";lut=", sizeof(command) - (p - command));
+		snprintf(p, sizeof(command) - (p - command), "%" PRIu64, before_nanos);
+	}
+
+	// Send truncate command to one node. That node will distribute the command to other nodes.
+	return as_info_command_random_node(as, err, policy, command);
 }

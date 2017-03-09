@@ -51,10 +51,10 @@ typedef struct as_predexp_base_s {
 /**
  *	Create an AND logical predicate expression.
  *
- *  The AND predicate expression returns true if all of it's children
+ *  The AND predicate expression returns true if all of its children
  *  are true.
  *
- *  The nexpr parameter specifies how many childen to pop off the
+ *  The nexpr parameter specifies how many children to pop off the
  *  expression stack.  These children must be "logical" expressions
  *  and not "value" expressions.
  *
@@ -84,7 +84,7 @@ as_predexp_and(uint16_t nexpr);
 /**
  *	Create an OR logical predicate expression.
  *
- *  The OR predicate expression returns true if any of it's children
+ *  The OR predicate expression returns true if any of its children
  *  are true.
  *
  *  The nexpr parameter specifies how many children to pop off the
@@ -116,7 +116,7 @@ as_predexp_or(uint16_t nexpr);
 /**
  *	Create a NOT logical predicate expression.
  *
- *  The NOT predicate expression returns true if it's child is false.
+ *  The NOT predicate expression returns true if its child is false.
  *
  *  The NOT expression pops a single child off the expression stack.
  *  This child must be a "logical" expression and not a "value"
@@ -452,10 +452,11 @@ as_predexp_geojson_var(char const * varname);
  *	Create a record device size metadata value predicate expression.
  *
  *  The record device size expression assumes the value of the size in
- *  bytes that the record occupies on device storage.
+ *  bytes that the record occupies on device storage. For non-persisted
+ *  records, this value is 0.
  *
  *  For example, the following sequence of predicate expressions
- *  selects records whoese device storage size is larger than 65K:
+ *  selects records whose device storage size is larger than 65K:
  *
  *	~~~~~~~~~~{.c}
  *	as_query_predexp_inita(&q, 3);

@@ -830,6 +830,7 @@ as_query_execute(as_query_task* task, const as_query* query, as_nodes* nodes, ui
 
 	as_status status = AEROSPIKE_OK;
 	uint32_t n_wait_nodes = n_nodes;
+	uint32_t thread_pool_size = task->cluster->thread_pool.thread_size;
 
 	// Run tasks in parallel.
 	for (uint32_t i = 0; i < n_nodes; i++) {
@@ -839,31 +840,40 @@ as_query_execute(as_query_task* task, const as_query* query, as_nodes* nodes, ui
 		memcpy(task_node, task, sizeof(as_query_task));
 		task_node->node = nodes->array[i];
 		
-		int rc = as_thread_pool_queue_task(&task->cluster->thread_pool, as_query_worker, task_node);
-		
-		if (rc) {
-			// Thread could not be added. Abort entire query.
-			if (ck_pr_fas_32(task->error_mutex, 1) == 0) {
-				status = as_error_update(task->err, AEROSPIKE_ERR_CLIENT, "Failed to add query thread: %d", rc);
- 			}
+		// If the thread pool size is > 0 farm out the tasks to the pool, otherwise run in current thread.
+		if (thread_pool_size > 0) {
+			int rc = as_thread_pool_queue_task(&task->cluster->thread_pool, as_query_worker, task_node);
 			
-			// Reset node count to threads that were run.
-			n_wait_nodes = i;
-			break;
-		}
+			if (rc) {
+				// Thread could not be added. Abort entire query.
+				if (ck_pr_fas_32(task->error_mutex, 1) == 0) {
+					status = as_error_update(task->err, AEROSPIKE_ERR_CLIENT, "Failed to add query thread: %d", rc);
+	 			}
+				
+				// Reset node count to threads that were run.
+				n_wait_nodes = i;
+				break;
+			}
 
-		AEROSPIKE_QUERY_ENQUEUE_TASK(task->task_id, task_node->node->name);
+			AEROSPIKE_QUERY_ENQUEUE_TASK(task->task_id, task_node->node->name);
+		} else {
+			if ((status = as_query_command_execute(task_node)) != AEROSPIKE_OK) {
+				break;
+			}
+		}
 	}
 
 	// Wait for tasks to complete.
-	for (uint32_t i = 0; i < n_wait_nodes; i++) {
-		as_query_complete_task complete;
-		cf_queue_pop(task->complete_q, &complete, CF_QUEUE_FOREVER);
-		
-		AEROSPIKE_QUERY_COMMAND_COMPLETE(task->task_id, complete.node->name);
+	if (thread_pool_size > 0) {
+		for (uint32_t i = 0; i < n_wait_nodes; i++) {
+			as_query_complete_task complete;
+			cf_queue_pop(task->complete_q, &complete, CF_QUEUE_FOREVER);
+			
+			AEROSPIKE_QUERY_COMMAND_COMPLETE(task->task_id, complete.node->name);
 
-		if (complete.result != AEROSPIKE_OK && status == AEROSPIKE_OK) {
-			status = complete.result;
+			if (complete.result != AEROSPIKE_OK && status == AEROSPIKE_OK) {
+				status = complete.result;
+			}
 		}
 	}
 	

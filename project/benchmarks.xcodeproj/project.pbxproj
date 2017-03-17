@@ -266,6 +266,7 @@
 					"$(inherited)",
 					/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include,
 					/usr/local/include/openssl,
+					/usr/local/include,
 				);
 				MACOSX_DEPLOYMENT_TARGET = "";
 				ONLY_ACTIVE_ARCH = YES;
@@ -305,6 +306,7 @@
 					"$(inherited)",
 					/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include,
 					/usr/local/include/openssl,
+					/usr/local/include,
 				);
 				MACOSX_DEPLOYMENT_TARGET = "";
 				OTHER_CFLAGS = "";

@@ -1088,6 +1088,14 @@ as_batch_read_execute_async(
 			break;
 		}
 	}
+
+	as_batch_node* batch_node = batch_nodes;
+
+	for (uint32_t i = 0; i < n_batch_nodes; i++) {
+		as_vector_destroy(&batch_node->offsets);
+		batch_node++;
+	}
+
 	return status;
 }
 

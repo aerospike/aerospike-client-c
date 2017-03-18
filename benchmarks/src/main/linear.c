@@ -42,8 +42,11 @@ ticker_worker(void* udata)
 		latency_set_header(write_latency, latency_header);
 	}
 	sleep(1);
+
+	uint64_t total_count = 0;
+	bool complete = false;
 	
-	while (data->valid) {
+	while (total_count < data->n_keys) {
 		uint64_t time = cf_getms();
 		int64_t elapsed = time - prev_time;
 		prev_time = time;
@@ -52,7 +55,7 @@ ticker_worker(void* udata)
 		uint32_t write_timeout_current = ck_pr_fas_32(&data->write_timeout_count, 0);
 		uint32_t write_error_current = ck_pr_fas_32(&data->write_error_count, 0);
 		uint32_t write_tps = (uint32_t)((double)write_current * 1000 / elapsed + 0.5);
-		uint64_t total_count = data->key_count;
+		total_count += write_current;
 
 		data->period_begin = time;
 
@@ -64,8 +67,17 @@ ticker_worker(void* udata)
 			latency_print_results(write_latency, "write", latency_detail);
 			blog_line("%s", latency_detail);
 		}
+
+		if (complete) {
+			break;
+		}
 		
 		sleep(1);
+
+		if (! data->valid) {
+			// Go through one more iteration to print last line.
+			complete = true;
+		}
 	}
 	return 0;
 }
@@ -73,27 +85,17 @@ ticker_worker(void* udata)
 static void*
 linear_write_worker(void* udata)
 {
-	clientdata* cdata = (clientdata*)udata;
-	threaddata* tdata = create_threaddata(cdata, 0);
-	uint64_t min_key = cdata->key_min;
-	uint64_t key_max = cdata->key_max;
-	uint64_t key;
-	
-	while (cdata->valid) {
-		key = ck_pr_faa_64(&cdata->key_count, 1) + min_key;
+	threaddata* tdata = (threaddata*)udata;
+	clientdata* cdata = tdata->cdata;
+	uint64_t key_start = tdata->key_start;
+	uint64_t n_keys = tdata->n_keys;
 
-		if (key > key_max) {
-			if (key - 1 == key_max) {
-				blog_info("write(tps=%u timeouts=%u errors=%u total=%" PRIu64 ")",
-					ck_pr_load_32(&cdata->write_count),
-					ck_pr_load_32(&cdata->write_timeout_count),
-					ck_pr_load_32(&cdata->write_error_count),
-					key_max - min_key);
-			}
-			break;
+	for (uint64_t i = 0; i < n_keys && cdata->valid; i++) {
+		if (! write_record_sync(cdata, tdata, key_start + i)) {
+			// An error occurred.
+			// Keys must be linear, so repeat last key.
+			i--;
 		}
-		write_record_sync(cdata, tdata, key);
-
 		throttle(cdata);
 	}
 	destroy_threaddata(tdata);
@@ -109,54 +111,61 @@ linear_write_worker_async(clientdata* cdata)
 	// asyncMaxCommands at any point in time.
 	as_monitor_begin(&monitor);
 
-	if (cdata->async_max_commands > (cdata->key_max - cdata->key_min)) {
-		cdata->async_max_commands = (int)(cdata->key_max - cdata->key_min);
+	if (cdata->async_max_commands > cdata->n_keys) {
+		cdata->async_max_commands = (int)cdata->n_keys;
 	}
 
 	int max = cdata->async_max_commands;
-	
+	uint64_t keys_per_command = cdata->n_keys / max;
+	uint64_t rem = cdata->n_keys - (keys_per_command * max);
+	uint64_t start = cdata->key_start;
+
 	for (int i = 1; i <= max; i++) {
 		// Allocate separate buffers for each seed command and reuse them in callbacks.
-		threaddata* tdata = create_threaddata(cdata, i);
-		
+		uint64_t key_count = (i < rem)? keys_per_command + 1 : keys_per_command;
+		threaddata* tdata = create_threaddata(cdata, start, key_count);
+		start += key_count;
+
 		// Start seed commands on random event loops.
-		linear_write_async(cdata, tdata, 0);
+		linear_write_async(cdata, tdata, NULL);
 	}
 	as_monitor_wait(&monitor);
-	
-	blog_info("write(tps=%u timeouts=%u errors=%u total=%" PRIu64 ")",
-			  ck_pr_load_32(&cdata->write_count),
-			  ck_pr_load_32(&cdata->write_timeout_count),
-			  ck_pr_load_32(&cdata->write_error_count),
-			  cdata->key_max - cdata->key_min);
 }
 
 int
-linear_write(clientdata* data)
+linear_write(clientdata* cdata)
 {
-	blog_info("Initialize %u records", data->key_max - data->key_min);
+	blog_info("Initialize %u records", cdata->n_keys);
 	
 	pthread_t ticker;
-	if (pthread_create(&ticker, 0, ticker_worker, data) != 0) {
-		data->valid = false;
+	if (pthread_create(&ticker, 0, ticker_worker, cdata) != 0) {
+		cdata->valid = false;
 		blog_error("Failed to create thread.");
 		return -1;
 	}
 	
-	if (data->async) {
+	if (cdata->async) {
 		// Asynchronous mode.
-		linear_write_worker_async(data);
+		linear_write_worker_async(cdata);
 	}
 	else {
 		// Synchronous mode.
 		// Start threads with each thread performing writes in a loop.
-		int max = data->threads;
+		int max = cdata->threads;
 		blog_info("Start %d generator threads", max);
 		pthread_t threads[max];
+		uint64_t keys_per_thread = cdata->n_keys / max;
+		uint64_t rem = cdata->n_keys - (keys_per_thread * max);
+		uint64_t start = cdata->key_start;
 
 		for (int i = 0; i < max; i++) {
-			if (pthread_create(&threads[i], 0, linear_write_worker, data) != 0) {
-				data->valid = false;
+			uint64_t key_count = (i < rem)? keys_per_thread + 1 : keys_per_thread;
+			threaddata* tdata = create_threaddata(cdata, start, key_count);
+			start += key_count;
+
+			if (pthread_create(&threads[i], 0, linear_write_worker, tdata) != 0) {
+				destroy_threaddata(tdata);
+				cdata->valid = false;
 				blog_error("Failed to create thread.");
 				return -1;
 			}
@@ -166,7 +175,7 @@ linear_write(clientdata* data)
 			pthread_join(threads[i], 0);
 		}
 	}
-	data->valid = false;
+	cdata->valid = false;
 	pthread_join(ticker, 0);
 	return 0;
 }

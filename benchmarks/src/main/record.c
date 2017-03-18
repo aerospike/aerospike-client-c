@@ -145,7 +145,7 @@ gen_value(arguments* args, as_val** valpp)
 }
 
 threaddata*
-create_threaddata(clientdata* cdata, uint64_t key)
+create_threaddata(clientdata* cdata, uint64_t key_start, uint64_t n_keys)
 {
 	int len = 0;
 	
@@ -187,9 +187,12 @@ create_threaddata(clientdata* cdata, uint64_t key)
 	tdata->random = as_random_instance();
 	tdata->buffer = len != 0 ? malloc(len) : NULL;
 	tdata->begin = 0;
-	
+	tdata->key_start = key_start;
+	tdata->key_count = 0;
+	tdata->n_keys = n_keys;
+
 	// Initialize a thread local key, record.
-	as_key_init_int64(&tdata->key, cdata->namespace, cdata->set, key);
+	as_key_init_int64(&tdata->key, cdata->namespace, cdata->set, key_start);
 	as_record_init(&tdata->rec, cdata->numbins);
 	for (int i = 0; i < cdata->numbins; i++) {
 		tdata->rec.bins.entries[i].valuep = NULL;
@@ -310,7 +313,7 @@ init_write_record(clientdata* cdata, threaddata* tdata)
 	}
 }
 
-void
+bool
 write_record_sync(clientdata* cdata, threaddata* tdata, uint64_t key)
 {
 	// Initialize key
@@ -331,7 +334,7 @@ write_record_sync(clientdata* cdata, threaddata* tdata, uint64_t key)
 		if (status == AEROSPIKE_OK) {
 			ck_pr_inc_32(&cdata->write_count);
 			latency_add(&cdata->write_latency, end - begin);
-			return;
+			return true;
 		}
 	}
 	else {
@@ -339,7 +342,7 @@ write_record_sync(clientdata* cdata, threaddata* tdata, uint64_t key)
 		
 		if (status == AEROSPIKE_OK) {
 			ck_pr_inc_32(&cdata->write_count);
-			return;
+			return true;
 		}
 	}
 	
@@ -355,6 +358,7 @@ write_record_sync(clientdata* cdata, threaddata* tdata, uint64_t key)
 					   cdata->namespace, cdata->set, key, cdata->bin_name, status, err.message);
 		}
 	}
+	return false;
 }
 
 int
@@ -447,13 +451,14 @@ linear_write_listener(as_error* err, void* udata, as_event_loop* event_loop)
 {
 	threaddata* tdata = udata;
 	clientdata* cdata = tdata->cdata;
-	
+
 	if (!err) {
 		if (cdata->latency) {
 			uint64_t end = cf_getms();
 			latency_add(&cdata->write_latency, end - tdata->begin);
 		}
 		ck_pr_inc_32(&cdata->write_count);
+		tdata->key_count++;
 	}
 	else {
 		if (err->code == AEROSPIKE_ERR_TIMEOUT) {
@@ -471,24 +476,19 @@ linear_write_listener(as_error* err, void* udata, as_event_loop* event_loop)
 	}
 	
 	// Reuse tdata structures.
-	uint64_t key = ck_pr_faa_64(&cdata->key_count, 1) + cdata->key_min;
-	
-	if (key == cdata->key_max) {
-		// We have reached max number of records.
+	if (tdata->key_count == tdata->n_keys) {
+		// We have reached max number of records for this command.
+		uint64_t total = ck_pr_faa_64(&cdata->key_count, tdata->n_keys) + tdata->n_keys;
 		destroy_threaddata(tdata);
-		as_monitor_notify(&monitor);
+
+		if (total >= cdata->n_keys) {
+			// All commands have been written.
+			as_monitor_notify(&monitor);
+		}
 		return;
 	}
-	
-	key += cdata->async_max_commands;
-	
-	if (key > cdata->key_max) {
-		// We already have enough records in progress, so do not issue any more puts.
-		destroy_threaddata(tdata);
-		return;
-	}
-	
-	tdata->key.value.integer.value = key;
+
+	tdata->key.value.integer.value = tdata->key_start + tdata->key_count;
 	tdata->key.digest.init = false;
 	linear_write_async(cdata, tdata, event_loop);
 }
@@ -499,10 +499,8 @@ static void random_read_listener(as_error* err, as_record* rec, void* udata, as_
 void
 random_read_write_async(clientdata* cdata, threaddata* tdata, as_event_loop* event_loop)
 {
-	uint64_t n_keys = cdata->key_max - cdata->key_min;
-
 	// Choose key at random.
-	uint64_t key = as_random_next_uint64(tdata->random) % n_keys + cdata->key_min;
+	uint64_t key = as_random_next_uint64(tdata->random) % cdata->n_keys + cdata->key_start;
 	tdata->key.value.integer.value = key;
 	tdata->key.digest.init = false;
 	

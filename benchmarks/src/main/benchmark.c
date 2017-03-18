@@ -283,14 +283,15 @@ run_benchmark(arguments* args)
 		}
 	}
 
-	data.key_min = args->start_key;
+	data.key_start = args->start_key;
+	data.key_count = 0;
 
 	if (args->init) {
-		data.key_max = (uint64_t)((double)(args->keys + args->start_key) / 100.0 * args->init_pct + 0.5);
+		data.n_keys = (uint64_t)((double)args->keys / 100.0 * args->init_pct + 0.5);
 		ret = linear_write(&data);
 	}
 	else {
-		data.key_max = args->keys + args->start_key;
+		data.n_keys = args->keys;
 		ret = random_read_write(&data);
 	}
 	

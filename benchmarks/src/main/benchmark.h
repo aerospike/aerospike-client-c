@@ -81,9 +81,9 @@ typedef struct clientdata_t {
 	
 	uint64_t transactions_limit;
 	uint64_t transactions_count;
-	uint64_t key_min;
-	uint64_t key_max;
+	uint64_t key_start;
 	uint64_t key_count;
+	uint64_t n_keys;
 	uint64_t period_begin;
 	
 	aerospike client;
@@ -122,6 +122,9 @@ typedef struct threaddata_t {
 	as_random* random;
 	uint8_t* buffer;
 	uint64_t begin;
+	uint64_t key_start;
+	uint64_t key_count;
+	uint64_t n_keys;
 	as_key key;
 	as_record rec;
 } threaddata;
@@ -130,10 +133,10 @@ int run_benchmark(arguments* args);
 int linear_write(clientdata* data);
 int random_read_write(clientdata* data);
 
-threaddata* create_threaddata(clientdata* cdata, uint64_t key);
+threaddata* create_threaddata(clientdata* cdata, uint64_t key_start, uint64_t n_keys);
 void destroy_threaddata(threaddata* tdata);
 
-void write_record_sync(clientdata* cdata, threaddata* tdata, uint64_t key);
+bool write_record_sync(clientdata* cdata, threaddata* tdata, uint64_t key);
 int read_record_sync(uint64_t key, clientdata* data);
 void throttle(clientdata* cdata);
 

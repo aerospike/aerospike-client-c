@@ -92,9 +92,9 @@ static void*
 random_worker(void* udata)
 {
 	clientdata* cdata = (clientdata*)udata;
-	threaddata* tdata = create_threaddata(cdata, 0);
-	uint64_t key_min = cdata->key_min;
-	uint64_t n_keys = cdata->key_max - key_min;
+	threaddata* tdata = create_threaddata(cdata, cdata->key_start, cdata->n_keys);
+	uint64_t key_min = cdata->key_start;
+	uint64_t n_keys = cdata->n_keys;
 	uint64_t key;
 	int read_pct = cdata->read_pct;
 	int die;
@@ -133,7 +133,7 @@ random_worker_async(clientdata* cdata)
 	
 	for (int i = 1; i <= max; i++) {
 		// Allocate separate buffers for each seed command and reuse them in callbacks.
-		threaddata* tdata = create_threaddata(cdata, 0);
+		threaddata* tdata = create_threaddata(cdata, cdata->key_start, cdata->n_keys);
 		
 		// Start seed commands on random event loops.
 		random_read_write_async(cdata, tdata, 0);
@@ -142,30 +142,30 @@ random_worker_async(clientdata* cdata)
 }
 
 int
-random_read_write(clientdata* data)
+random_read_write(clientdata* cdata)
 {
-	blog_info("Read/write using %u records", data->key_max - data->key_min);
+	blog_info("Read/write using %u records", cdata->n_keys);
 	
 	pthread_t ticker;
-	if (pthread_create(&ticker, 0, ticker_worker, data) != 0) {
-		data->valid = false;
+	if (pthread_create(&ticker, 0, ticker_worker, cdata) != 0) {
+		cdata->valid = false;
 		blog_error("Failed to create thread.");
 		return -1;
 	}
 	
-	if (data->async) {
+	if (cdata->async) {
 		// Asynchronous mode.
-		random_worker_async(data);
+		random_worker_async(cdata);
 	}
 	else {
 		// Synchronous mode.
-		int max = data->threads;
+		int max = cdata->threads;
 		blog_info("Start %d generator threads", max);
 		pthread_t threads[max];
 		
 		for (int i = 0; i < max; i++) {
-			if (pthread_create(&threads[i], 0, random_worker, data) != 0) {
-				data->valid = false;
+			if (pthread_create(&threads[i], 0, random_worker, cdata) != 0) {
+				cdata->valid = false;
 				blog_error("Failed to create thread.");
 				return -1;
 			}
@@ -175,7 +175,7 @@ random_read_write(clientdata* data)
 			pthread_join(threads[i], 0);
 		}
 	}
-	data->valid = false;
+	cdata->valid = false;
 	pthread_join(ticker, 0);
 	return 0;
 }

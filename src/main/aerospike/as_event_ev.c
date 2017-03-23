@@ -63,10 +63,17 @@ as_ev_wakeup(struct ev_loop* loop, ev_async* wakeup, int revents)
 	// Read command pointers from queue.
 	as_event_loop* event_loop = wakeup->data;
 	void* cmd;
-	
+	uint32_t i = 0;
+
+	// Only process original size of queue.  Recursive pre-registration errors can
+	// result in new commands being added while the loop is in process.  If we process
+	// them, we could end up in an infinite loop.
 	pthread_mutex_lock(&event_loop->lock);
-	
-	while (as_queue_pop(&event_loop->queue, &cmd)) {
+	uint32_t size = as_queue_size(&event_loop->queue);
+	bool status = as_queue_pop(&event_loop->queue, &cmd);
+	pthread_mutex_unlock(&event_loop->lock);
+
+	while (status) {
 		if (cmd) {
 			// Process new command.
 			as_event_command_execute_in_loop(cmd);
@@ -74,12 +81,19 @@ as_ev_wakeup(struct ev_loop* loop, ev_async* wakeup, int revents)
 		else {
 			// Received stop signal.
 			as_ev_close_loop(event_loop);
-			pthread_mutex_unlock(&event_loop->lock);
 			pthread_mutex_destroy(&event_loop->lock);
 			return;
 		}
+
+		if (++i < size) {
+			pthread_mutex_lock(&event_loop->lock);
+			status = as_queue_pop(&event_loop->queue, &cmd);
+			pthread_mutex_unlock(&event_loop->lock);
+		}
+		else {
+			break;
+		}
 	}
-	pthread_mutex_unlock(&event_loop->lock);
 }
 
 static void*
@@ -334,16 +348,20 @@ as_ev_command_read_start(as_event_command* cmd)
 	}
 }
 
-static inline void
+static inline bool
 as_ev_command_write_start(as_event_command* cmd)
 {
 	cmd->state = AS_ASYNC_STATE_WRITE;
 	as_ev_watch_write(cmd);
 
-	if (as_ev_write(cmd) == AS_EVENT_WRITE_COMPLETE) {
+	int status = as_ev_write(cmd);
+
+	if (status == AS_EVENT_WRITE_COMPLETE) {
 		// Done with write. Register for read.
 		as_ev_command_read_start(cmd);
+		return true;
 	}
+	return (status == AS_EVENT_WRITE_ERROR) ? false : true;
 }
 
 static int
@@ -763,7 +781,7 @@ as_ev_connect_error(as_event_command* cmd, as_address* primary, int rv)
 	as_event_error_callback(cmd, &err);
 }
 
-static void
+static bool
 as_ev_connect(as_event_command* cmd)
 {
 	// Try addresses.
@@ -797,7 +815,7 @@ as_ev_connect(as_event_command* cmd)
 	
 	if (rv < 0) {
 		as_ev_connect_error(cmd, primary, first_rv);
-		return;
+		return false;
 	}
 	
 	if (rv != index) {
@@ -809,6 +827,7 @@ as_ev_connect(as_event_command* cmd)
 	}
 
 	as_ev_watcher_init(cmd, &sock);
+	return true;
 }
 
 static void
@@ -818,7 +837,7 @@ as_ev_timeout(struct ev_loop* loop, ev_timer* timer, int revents)
 	as_event_timeout(timer->data);
 }
 
-void
+bool
 as_event_command_begin(as_event_command* cmd)
 {
 	// Always initialize timer first when timeouts are specified.
@@ -831,11 +850,13 @@ as_event_command_begin(as_event_command* cmd)
 	as_connection_status status = cmd->pipe_listener != NULL ? as_pipe_get_connection(cmd) : as_event_get_connection(cmd);
 	
 	if (status == AS_CONNECTION_FROM_POOL) {
-		as_ev_command_write_start(cmd);
+		return as_ev_command_write_start(cmd);
 	}
-	else if (status == AS_CONNECTION_NEW) {
-		as_ev_connect(cmd);
+
+	if (status == AS_CONNECTION_NEW) {
+		return as_ev_connect(cmd);
 	}
+	return false;
 }
 
 void

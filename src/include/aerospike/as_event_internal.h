@@ -202,7 +202,7 @@ as_event_register_external_loop(as_event_loop* event_loop);
 bool
 as_event_send(as_event_command* cmd);
 
-void
+bool
 as_event_command_begin(as_event_command* cmd);
 
 void

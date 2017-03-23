@@ -99,6 +99,7 @@ typedef struct clientdata_t {
 	uint32_t read_error_count;
 	latency read_latency;
 
+	uint32_t tdata_count;
 	uint32_t valid;
 	
 	int async_max_commands;

@@ -131,10 +131,11 @@ random_worker_async(clientdata* cdata)
 	
 	int max = cdata->async_max_commands;
 	
-	for (int i = 1; i <= max; i++) {
+	for (int i = 0; i < max; i++) {
 		// Allocate separate buffers for each seed command and reuse them in callbacks.
 		threaddata* tdata = create_threaddata(cdata, cdata->key_start, cdata->n_keys);
-		
+		ck_pr_inc_32(&cdata->tdata_count);
+
 		// Start seed commands on random event loops.
 		random_read_write_async(cdata, tdata, 0);
 	}

@@ -120,7 +120,7 @@ linear_write_worker_async(clientdata* cdata)
 	uint64_t rem = cdata->n_keys - (keys_per_command * max);
 	uint64_t start = cdata->key_start;
 
-	for (int i = 1; i <= max; i++) {
+	for (int i = 0; i < max; i++) {
 		// Allocate separate buffers for each seed command and reuse them in callbacks.
 		uint64_t key_count = (i < rem)? keys_per_command + 1 : keys_per_command;
 		threaddata* tdata = create_threaddata(cdata, start, key_count);

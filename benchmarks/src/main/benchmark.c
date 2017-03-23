@@ -114,6 +114,10 @@ connect_to_server(arguments* args, aerospike* client)
 	cfg.thread_pool_size = 0;
 	cfg.conn_pools_per_node = args->conn_pools_per_node;
 
+	if (cfg.async_max_conns_per_node < args->async_max_commands) {
+		cfg.async_max_conns_per_node = args->async_max_commands;
+	}
+
 	as_policies* p = &cfg.policies;
 	p->timeout = args->read_timeout;
 	p->retry = args->max_retries;

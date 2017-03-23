@@ -41,6 +41,8 @@ extern int as_event_send_buffer_size;
 extern int as_event_recv_buffer_size;
 extern bool as_event_threads_created;
 
+static struct timeval as_immediate_tv;
+
 static void
 as_event_callback(evutil_socket_t sock, short revents, void* udata);
 
@@ -79,10 +81,17 @@ as_event_wakeup(evutil_socket_t socket, short revents, void* udata)
 	// Read command pointers from queue.
 	as_event_loop* event_loop = udata;
 	void* cmd;
-	
+	uint32_t i = 0;
+
+	// Only process original size of queue.  Recursive pre-registration errors can
+	// result in new commands being added while the loop is in process.  If we process
+	// them, we could end up in an infinite loop.
 	pthread_mutex_lock(&event_loop->lock);
-	
-	while (as_queue_pop(&event_loop->queue, &cmd)) {
+	uint32_t size = as_queue_size(&event_loop->queue);
+	bool status = as_queue_pop(&event_loop->queue, &cmd);
+	pthread_mutex_unlock(&event_loop->lock);
+
+	while (status) {
 		if (cmd) {
 			// Process new command.
 			as_event_command_execute_in_loop(cmd);
@@ -90,12 +99,19 @@ as_event_wakeup(evutil_socket_t socket, short revents, void* udata)
 		else {
 			// Received stop signal.
 			as_event_close_loop(event_loop);
-			pthread_mutex_unlock(&event_loop->lock);
 			pthread_mutex_destroy(&event_loop->lock);
 			return;
 		}
+
+		if (++i < size) {
+			pthread_mutex_lock(&event_loop->lock);
+			status = as_queue_pop(&event_loop->queue, &cmd);
+			pthread_mutex_unlock(&event_loop->lock);
+		}
+		else {
+			break;
+		}
 	}
-	pthread_mutex_unlock(&event_loop->lock);
 }
 
 static void*
@@ -122,12 +138,15 @@ as_event_init_loop(as_event_loop* event_loop)
         return;
     }
 
+	evtimer_assign(&event_loop->wakeup, event_loop->loop, as_event_wakeup, event_loop);
+	/*
 	event_assign(&event_loop->wakeup, event_loop->loop, -1, EV_PERSIST | EV_READ, as_event_wakeup, event_loop);
 
 	if (event_add(&event_loop->wakeup, NULL) == -1) {
         as_log_error("as_event_init_loop: event_add failed");
 		return;
 	}
+	*/
 }
 
 void event_base_add_virtual(struct event_base *);
@@ -168,7 +187,11 @@ as_event_send(as_event_command* cmd)
 	pthread_mutex_unlock(&event_loop->lock);
 	
 	if (queued) {
-		event_active(&event_loop->wakeup, 0, 0);
+		if (! evtimer_pending(&event_loop->wakeup, NULL)) {
+			event_del(&event_loop->wakeup);
+			evtimer_add(&event_loop->wakeup, &as_immediate_tv);
+		}
+		//event_active(&event_loop->wakeup, 0, 0);
 	}
 	return queued;
 }
@@ -366,16 +389,20 @@ as_event_command_read_start(as_event_command* cmd)
 	}
 }
 
-static inline void
+static inline bool
 as_event_command_write_start(as_event_command* cmd)
 {
 	cmd->state = AS_ASYNC_STATE_WRITE;
 	as_event_watch_write(cmd);
 
-	if (as_event_write(cmd) == AS_EVENT_WRITE_COMPLETE) {
+	int status = as_event_write(cmd);
+
+	if (status == AS_EVENT_WRITE_COMPLETE) {
 		// Done with write. Register for read.
 		as_event_command_read_start(cmd);
+		return true;
 	}
+	return (status == AS_EVENT_WRITE_ERROR) ? false : true;
 }
 
 static int
@@ -794,7 +821,7 @@ as_event_connect_error(as_event_command* cmd, as_address* primary, int rv)
 	as_event_error_callback(cmd, &err);
 }
 
-static void
+static bool
 as_event_connect(as_event_command* cmd)
 {
 	// Try addresses.
@@ -828,7 +855,7 @@ as_event_connect(as_event_command* cmd)
 	
 	if (rv < 0) {
 		as_event_connect_error(cmd, primary, first_rv);
-		return;
+		return false;
 	}
 	
 	if (rv != index) {
@@ -840,6 +867,7 @@ as_event_connect(as_event_command* cmd)
 	}
 
 	as_event_watcher_init(cmd, &sock);
+	return true;
 }
 
 static void
@@ -849,7 +877,7 @@ as_event_timeout_cb(evutil_socket_t sock, short events, void* udata)
 	as_event_timeout(udata);
 }
 
-void
+bool
 as_event_command_begin(as_event_command* cmd)
 {
 	// Always initialize timer first when timeouts are specified.
@@ -868,11 +896,13 @@ as_event_command_begin(as_event_command* cmd)
 	as_connection_status status = cmd->pipe_listener != NULL ? as_pipe_get_connection(cmd) : as_event_get_connection(cmd);
 	
 	if (status == AS_CONNECTION_FROM_POOL) {
-		as_event_command_write_start(cmd);
+		return as_event_command_write_start(cmd);
 	}
-	else if (status == AS_CONNECTION_NEW) {
-		as_event_connect(cmd);
+
+	if (status == AS_CONNECTION_NEW) {
+		return as_event_connect(cmd);
 	}
+	return false;
 }
 
 void
@@ -919,7 +949,11 @@ as_event_send_close_loop(as_event_loop* event_loop)
 	pthread_mutex_unlock(&event_loop->lock);
 	
 	if (queued) {
-		event_active(&event_loop->wakeup, 0, 0);
+		if (! evtimer_pending(&event_loop->wakeup, NULL)) {
+			event_del(&event_loop->wakeup);
+			evtimer_add(&event_loop->wakeup, &as_immediate_tv);
+		}
+		//event_active(&event_loop->wakeup, 0, 0);
 	}
 	return queued;
 }

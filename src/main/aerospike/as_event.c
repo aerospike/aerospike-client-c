@@ -85,6 +85,7 @@ as_event_create_loops(uint32_t capacity)
 		pthread_mutex_init(&event_loop->lock, 0);
 		event_loop->thread = 0;
 		event_loop->index = i;
+		event_loop->errors = 0;
 		as_queue_init(&event_loop->pipe_cb_queue, sizeof(as_queued_pipe_cb), AS_EVENT_QUEUE_INITIAL_CAPACITY);
 		event_loop->pipe_cb_calling = false;
 
@@ -133,6 +134,7 @@ as_event_set_external_loop(void* loop)
 	pthread_mutex_init(&event_loop->lock, 0);
 	event_loop->thread = pthread_self();  // Current thread must be same as event loop thread!
 	event_loop->index = current;
+	event_loop->errors = 0;
 	as_queue_init(&event_loop->pipe_cb_queue, sizeof(as_queued_pipe_cb), AS_EVENT_QUEUE_INITIAL_CAPACITY);
 	event_loop->pipe_cb_calling = false;
 	as_event_register_external_loop(event_loop);
@@ -214,30 +216,41 @@ as_event_command_execute(as_event_command* cmd, as_error* err)
 {
 	ck_pr_inc_32(&cmd->cluster->async_pending);
 	
+	as_event_loop* event_loop = cmd->event_loop;
+
 	// Only do this after the above increment to avoid a race with as_cluster_destroy().
 	if (!cmd->cluster->valid) {
+		event_loop->errors++;  // May not be in event loop thread, so not exactly accurate.
 		as_event_command_free(cmd);
 		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Client shutting down");
 	}
 
-	// Use pointer comparison for performance.
-	// If portability becomes an issue, use "pthread_equal(event_loop->thread, pthread_self())"
-	// instead.
-	if (cmd->event_loop->thread == pthread_self()) {
+	// Use pointer comparison for performance.  If portability becomes an issue, use
+	// "pthread_equal(event_loop->thread, pthread_self())" instead.
+	// Also, avoid recursive error death spiral by forcing command to be queued to
+	// event loop when consecutive recursive errors reaches an approximate limit.
+	if (event_loop->thread == pthread_self() && event_loop->errors < 5) {
 		// We are already in event loop thread, so start processing.
-		as_event_command_begin(cmd);
+		if (as_event_command_begin(cmd)) {
+			cmd->type |= AS_ASYNC_TYPE_REGISTERED;
+			event_loop->errors = 0;
+		}
 	}
 	else {
+		cmd->type |= AS_ASYNC_TYPE_REGISTERED;
+
 		if (cmd->timeout_ms) {
 			// Store current time in first 8 bytes which is not used yet.
 			*(uint64_t*)cmd = cf_getms();
 		}
-		
+
 		// Send command through queue so it can be executed in event loop thread.
 		if (! as_event_send(cmd)) {
+			event_loop->errors++;  // Not in event loop thread, so not exactly accurate.
 			as_event_command_free(cmd);
 			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to queue command");
 		}
+		event_loop->errors = 0;
 	}
 	return AEROSPIKE_OK;
 }
@@ -420,7 +433,12 @@ as_event_get_connection(as_event_command* cmd)
 void
 as_event_error_callback(as_event_command* cmd, as_error* err)
 {
-	switch (cmd->type) {
+	if (! (cmd->type & AS_ASYNC_TYPE_REGISTERED)) {
+		// Must increment recursive error count before callback is made.
+		cmd->event_loop->errors++;
+	}
+
+	switch (cmd->type & AS_ASYNC_TYPE_MASK) {
 		case AS_ASYNC_TYPE_WRITE:
 			((as_async_write_command*)cmd)->listener(err, cmd->udata, cmd->event_loop);
 			break;

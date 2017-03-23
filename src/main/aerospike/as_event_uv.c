@@ -95,27 +95,41 @@ as_uv_wakeup(uv_async_t* wakeup)
 	// Read command pointers from queue.
 	as_event_loop* event_loop = wakeup->data;
 	as_uv_command cmd;
-	
+	uint32_t i = 0;
+
+	// Only process original size of queue.  Recursive pre-registration errors can
+	// result in new commands being added while the loop is in process.  If we process
+	// them, we could end up in an infinite loop.
 	pthread_mutex_lock(&event_loop->lock);
-	
-	while (as_queue_pop(&event_loop->queue, &cmd)) {
+	uint32_t size = as_queue_size(&event_loop->queue);
+	bool status = as_queue_pop(&event_loop->queue, &cmd);
+	pthread_mutex_unlock(&event_loop->lock);
+
+	while (status) {
 		switch (cmd.type) {
 			case AS_UV_PROCESS_COMMAND:
 				as_event_command_execute_in_loop(cmd.ptr);
 				break;
-				
+
 			case AS_UV_CLOSE_CONNECTION:
 				uv_close((uv_handle_t*)cmd.ptr, as_uv_connection_closed);
 				break;
-				
+
 			case AS_UV_EXIT_LOOP:
 				as_uv_close_loop(event_loop);
-				pthread_mutex_unlock(&event_loop->lock);
 				pthread_mutex_destroy(&event_loop->lock);
 				return;
 		}
+
+		if (++i < size) {
+			pthread_mutex_lock(&event_loop->lock);
+			status = as_queue_pop(&event_loop->queue, &cmd);
+			pthread_mutex_unlock(&event_loop->lock);
+		}
+		else {
+			break;
+		}
 	}
-	pthread_mutex_unlock(&event_loop->lock);
 }
 
 static void
@@ -389,7 +403,7 @@ as_uv_command_write_complete(uv_write_t* req, int status)
 	}
 }
 
-static inline void
+static inline bool
 as_uv_command_write_start(as_event_command* cmd, uv_stream_t* stream)
 {
 	cmd->state = AS_ASYNC_STATE_WRITE;
@@ -404,7 +418,9 @@ as_uv_command_write_start(as_event_command* cmd, uv_stream_t* stream)
 		as_error err;
 		as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "uv_write failed: %s", uv_strerror(status));
 		as_event_socket_error(cmd, &err);
+		return false;
 	}
+	return true;
 }
 
 static inline as_event_command*
@@ -574,7 +590,7 @@ as_uv_connected(uv_connect_t* req, int status)
 	}
 }
 
-static void
+static bool
 as_uv_connect(as_event_command* cmd)
 {
 	// Create a non-blocking socket.
@@ -587,7 +603,7 @@ as_uv_connect(as_event_command* cmd)
 		as_error err;
 		as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "%s: %s %s", msg, cmd->node->name, address->name);
 		as_uv_fd_error(cmd, &err);
-		return;
+		return false;
 	}
 
 	if (cmd->pipe_listener && ! as_pipe_modify_fd(fd)) {
@@ -595,7 +611,7 @@ as_uv_connect(as_event_command* cmd)
 		as_error err;
 		as_error_set_message(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Failed to modify fd for pipeline");
 		as_uv_fd_error(cmd, &err);
-		return;
+		return false;
 	}
 
 	as_event_connection* conn = cmd->conn;
@@ -607,7 +623,7 @@ as_uv_connect(as_event_command* cmd)
 		as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "uv_tcp_init failed: %s", uv_strerror(status));
 		close(fd);
 		as_uv_fd_error(cmd, &err);
-		return;
+		return false;
 	}
 	
 	// Define externally created fd to uv_tcp_t.
@@ -619,7 +635,7 @@ as_uv_connect(as_event_command* cmd)
 		// Close fd directly because we created it outside of libuv and uv_tcp_t does not know about it here.
 		close(fd);
 		as_uv_connect_error(cmd, &err);
-		return;
+		return false;
 	}
 	
 	socket->data = conn;
@@ -631,7 +647,9 @@ as_uv_connect(as_event_command* cmd)
 		as_error err;
 		as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "uv_tcp_connect failed: %s", uv_strerror(status));
 		as_uv_connect_error(cmd, &err);
+		return false;
 	}
+	return true;
 }
 
 static void
@@ -641,7 +659,7 @@ as_uv_timeout(uv_timer_t* timer)
 	as_event_timeout(timer->data);
 }
 
-void
+bool
 as_event_command_begin(as_event_command* cmd)
 {
 	// Always initialize timer first when timeouts are specified.
@@ -654,11 +672,13 @@ as_event_command_begin(as_event_command* cmd)
 	as_connection_status status = cmd->pipe_listener != NULL ? as_pipe_get_connection(cmd) : as_event_get_connection(cmd);
 	
 	if (status == AS_CONNECTION_FROM_POOL) {
-		as_uv_command_write_start(cmd, (uv_stream_t*)&cmd->conn->socket);
+		return as_uv_command_write_start(cmd, (uv_stream_t*)&cmd->conn->socket);
 	}
-	else if (status == AS_CONNECTION_NEW) {
-		as_uv_connect(cmd);
+
+	if (status == AS_CONNECTION_NEW) {
+		return as_uv_connect(cmd);
 	}
+	return false;
 }
 
 void

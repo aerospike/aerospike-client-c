@@ -73,6 +73,9 @@ typedef struct as_event_loop {
 	as_queue pipe_cb_queue;
 	pthread_t thread;
 	uint32_t index;
+	// Count of consecutive errors occurring before event loop registration.
+	// Used to prevent deep recursion.
+	uint32_t errors;
 	bool pipe_cb_calling;
 } as_event_loop;
 

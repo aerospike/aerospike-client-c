@@ -530,6 +530,28 @@ random_read_write_async(clientdata* cdata, threaddata* tdata, as_event_loop* eve
 }
 
 static void
+random_read_write_next(clientdata* cdata, threaddata* tdata, as_event_loop* event_loop)
+{
+	ck_pr_inc_64(&cdata->transactions_count);
+
+	if (cdata->valid) {
+		// Start a new command on same event loop to keep the queue full.
+		random_read_write_async(cdata, tdata, event_loop);
+	}
+	else {
+		destroy_threaddata(tdata);
+
+		bool complete;
+		ck_pr_dec_32_zero(&cdata->tdata_count, &complete);
+
+		if (complete) {
+			// All tdata instances are complete.
+			as_monitor_notify(&monitor);
+		}
+	}
+}
+
+static void
 random_write_listener(as_error* err, void* udata, as_event_loop* event_loop)
 {
 	threaddata* tdata = udata;
@@ -556,18 +578,7 @@ random_write_listener(as_error* err, void* udata, as_event_loop* event_loop)
 			}
 		}
 	}
-	
-	ck_pr_inc_64(&cdata->transactions_count);
-
-	if (cdata->valid) {
-		// Start a new command on same event loop to keep the queue full.
-		random_read_write_async(cdata, tdata, event_loop);
-	}
-	else {
-		// We have reached max number of records.
-		destroy_threaddata(tdata);
-		as_monitor_notify(&monitor);
-	}
+	random_read_write_next(cdata, tdata, event_loop);
 }
 
 static void
@@ -597,15 +608,5 @@ random_read_listener(as_error* err, as_record* rec, void* udata, as_event_loop* 
 			}
 		}
 	}
-	ck_pr_inc_64(&cdata->transactions_count);
-
-	if (cdata->valid) {
-		// Start a new command on same event loop to keep the queue full.
-		random_read_write_async(cdata, tdata, event_loop);
-	}
-	else {
-		// We have reached max number of records.
-		destroy_threaddata(tdata);
-		as_monitor_notify(&monitor);
-	}
+	random_read_write_next(cdata, tdata, event_loop);
 }

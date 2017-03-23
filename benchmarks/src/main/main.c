@@ -152,7 +152,7 @@ print_usage(const char* program)
 	blog_line("");
 	
 	blog_line("-t --transactions       # Default: -1 (unlimited)");
-	blog_line("    Minimum number of transactions to perform.");
+	blog_line("    Stop approximately after number of transaction performed in random read/write mode.");
 	blog_line("");
 
 	blog_line("-w --workload I,<percent> | RU,<read percent> | DB  # Default: RU,50");
@@ -358,7 +358,6 @@ print_args(arguments* args)
 	}
 	
 	blog_line("random values:  %s", boolstring(args->random));
-	blog_line("minimum number of transactions:  %" PRIu64, args->transactions_limit);
 
 	blog("workload:       ");
 
@@ -368,6 +367,7 @@ print_args(arguments* args)
 		blog_line("delete %d bins in %d records", args->numbins, args->keys);
 	} else if (args->read_pct) {
 		blog_line("read %d%% write %d%%", args->read_pct, 100 - args->read_pct);
+		blog_line("stop after:     %" PRIu64 " transactions", args->transactions_limit);
 	}
 	
 	blog_line("threads:        %d", args->threads);

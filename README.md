@@ -47,11 +47,11 @@ Then, run the following:
 
 	$ project/prepare_xcode
 
-### Event Library
+### Event Library (Optional)
 
 An event library is required when C client asynchronous functionality is used.
 This event library must be installed independently of the C client.
-The supported event libraries are:
+Install one of the supported event libraries:
 
 * [libev](http://dist.schmorp.de/libev) version 4.20 or greater.  libev is the preferred event library.  Use `install_libev` to install.
 * [libuv](http://docs.libuv.org) version 1.7.5 or greater.  Use `install_libuv` to install.

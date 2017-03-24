@@ -40,9 +40,10 @@ as_event_send(as_event_command* cmd)
 	return false;
 }
 
-void
+bool
 as_event_command_begin(as_event_command* cmd)
 {
+	return false;
 }
 
 void

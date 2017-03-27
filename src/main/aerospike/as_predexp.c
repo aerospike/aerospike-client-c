@@ -65,6 +65,7 @@ VAL:	0x66 0x6f 0x6f
 #define AS_PREDEXP_REC_DEVICE_SIZE		150
 #define AS_PREDEXP_REC_LAST_UPDATE		151
 #define AS_PREDEXP_REC_VOID_TIME		152
+#define AS_PREDEXP_REC_DIGEST_MODULO	153
 
 #define AS_PREDEXP_INTEGER_EQUAL		200
 #define AS_PREDEXP_INTEGER_UNEQUAL		201
@@ -788,6 +789,65 @@ as_predexp_base * as_predexp_rec_void_time()
 	dp->base.dtor_fn = as_predexp_rec_void_time_dtor;
 	dp->base.size_fn = as_predexp_rec_void_time_size;
 	dp->base.write_fn = as_predexp_rec_void_time_write;
+	return (as_predexp_base *) dp;
+}
+
+// ----------------------------------------------------------------
+// as_predexp_rec_digest_modulo
+// ----------------------------------------------------------------
+
+typedef struct {
+	as_predexp_base		base;
+	int32_t				mod;
+} as_predexp_rec_digest_modulo_t;
+
+void as_predexp_rec_digest_modulo_dtor(as_predexp_base * bp)
+{
+	as_predexp_rec_digest_modulo_t * dp = (as_predexp_rec_digest_modulo_t *) bp;
+	cf_free(dp);
+}
+
+size_t as_predexp_rec_digest_modulo_size(as_predexp_base * bp)
+{
+	// as_predexp_rec_digest_modulo_t * dp = (as_predexp_rec_digest_modulo_t *) bp;
+
+	size_t sz = sizeof(uint16_t) + sizeof(uint32_t);	// TAG + LEN
+	sz += sizeof(int32_t);
+
+	return sz;
+}
+
+uint8_t * as_predexp_rec_digest_modulo_write(as_predexp_base * bp, uint8_t * p)
+{
+	as_predexp_rec_digest_modulo_t * dp = (as_predexp_rec_digest_modulo_t *) bp;
+
+	// TAG
+	uint16_t * tag_ptr = (uint16_t *) p;
+	p += sizeof(uint16_t);
+	*tag_ptr = cf_swap_to_be16(AS_PREDEXP_REC_DIGEST_MODULO);
+
+	// LEN
+	uint32_t * len_ptr = (uint32_t *) p;
+	p += sizeof(uint32_t);
+	*len_ptr = cf_swap_to_be32(sizeof(int32_t));
+
+	// value
+	int32_t * mod_ptr = (int32_t *) p;
+	p += sizeof(int32_t);
+	*mod_ptr = cf_swap_to_be32(dp->mod);
+
+	return p;
+}
+
+as_predexp_base * as_predexp_rec_digest_modulo(int32_t mod)
+{
+	as_predexp_rec_digest_modulo_t * dp =
+		(as_predexp_rec_digest_modulo_t *)
+		cf_malloc(sizeof(as_predexp_rec_digest_modulo_t));
+	dp->base.dtor_fn = as_predexp_rec_digest_modulo_dtor;
+	dp->base.size_fn = as_predexp_rec_digest_modulo_size;
+	dp->base.write_fn = as_predexp_rec_digest_modulo_write;
+	dp->mod = mod;
 	return (as_predexp_base *) dp;
 }
 

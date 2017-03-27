@@ -977,6 +977,39 @@ TEST( scan_with_rec_void_time_predexp_3, "scan_with_rec_void_time_predexp_3" ) {
 	as_query_destroy(&q);
 }
 
+TEST( scan_with_rec_digest_modulo_predexp, "scan_with_rec_digest_modulo_predexp" ) {
+
+	as_error err;
+	as_error_reset(&err);
+
+	int count[3];
+
+	for (int ii = 0; ii < 3; ++ii) {
+		count[ii] = 0;
+		
+		as_query q;
+		as_query_init(&q, NAMESPACE, SET);
+
+		as_query_select_init(&q, 1);
+		as_query_select(&q, "c");
+	
+		as_query_predexp_init(&q, 3);
+		as_query_predexp_add(&q, as_predexp_rec_digest_modulo(3));
+		as_query_predexp_add(&q, as_predexp_integer_value(ii));
+		as_query_predexp_add(&q, as_predexp_integer_equal());
+
+		aerospike_query_foreach(as, &err, NULL, &q,
+								count_callback, &count[ii]);
+
+		as_query_destroy(&q);
+	}
+	
+	assert_int_eq( err.code, 0 );
+	assert_int_eq( count[0], 31 );
+	assert_int_eq( count[1], 30 );
+	assert_int_eq( count[2], 39 );
+}
+
 TEST( query_with_or_predexp, "query_with_or_predexp" ) {
 
 	as_error err;
@@ -1524,6 +1557,7 @@ SUITE( query_foreach, "aerospike_query_foreach tests" ) {
 	suite_add( scan_with_rec_void_time_predexp_1 );
 	suite_add( scan_with_rec_void_time_predexp_2 );
 	suite_add( scan_with_rec_void_time_predexp_3 );
+	suite_add( scan_with_rec_digest_modulo_predexp );
 	suite_add( query_with_or_predexp );
 	suite_add( query_with_not_predexp );
 	suite_add( query_with_regex_predexp );

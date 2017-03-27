@@ -784,6 +784,15 @@ typedef struct as_policy_scan_s {
 	uint32_t timeout;
 
 	/**
+	 *	Maximum time in milliseconds to wait when polling socket for availability prior to
+	 *	performing an operation on the socket on the server side.  Zero means there is no
+	 *	socket timeout.
+	 *
+	 *	Default: 10000 ms
+	 */
+	uint32_t socket_timeout;
+
+	/**
 	 *	Abort the scan if the cluster is not in a 
 	 *	stable state.
 	 */
@@ -1386,6 +1395,7 @@ static inline as_policy_scan*
 as_policy_scan_init(as_policy_scan* p)
 {
 	p->timeout = 0;
+	p->socket_timeout = 10000;
 	p->fail_on_cluster_change = false;
 	p->durable_delete = false;
 	return p;

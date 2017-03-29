@@ -414,7 +414,7 @@ uint64_t task_id, uint16_t n_fields, as_buffer* argbuffer, uint32_t predexp_size
 
 	// Write socket timeout.
 	p = as_command_write_field_header(p, AS_FIELD_SCAN_TIMEOUT, sizeof(uint32_t));
-	*(uint32_t*)p = policy->socket_timeout;
+	*(uint32_t*)p = cf_swap_to_be32(policy->socket_timeout);
 	p += sizeof(uint32_t);
 
 	// Write taskId field

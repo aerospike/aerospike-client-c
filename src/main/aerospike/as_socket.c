@@ -321,8 +321,8 @@ as_socket_error_append(as_error* err, struct sockaddr* addr)
 	char name[AS_IP_ADDRESS_SIZE];
 	as_address_name(addr, name, sizeof(name));
 
-	int alen = strlen(name);
-	int elen = strlen(err->message);
+	int alen = (int)strlen(name);
+	int elen = (int)strlen(err->message);
 
 	if (alen + 2 < sizeof(err->message) - elen) {
 		char* p = stpcpy(err->message + elen, ", ");

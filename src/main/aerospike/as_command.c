@@ -458,7 +458,7 @@ as_command_execute(
 		}
 		
 		// Send command.
-		status = as_socket_write_deadline(err, &socket, command, command_len, deadline_ms);
+		status = as_socket_write_deadline(err, &socket, node, command, command_len, deadline_ms);
 		
 		if (status) {
 			// Socket errors are considered temporary anomalies.  Retry.
@@ -471,7 +471,7 @@ as_command_execute(
 		}
 		
 		// Parse results returned by server.
-		status = parse_results_fn(err, &socket, deadline_ms, parse_results_data);
+		status = parse_results_fn(err, &socket, node, deadline_ms, parse_results_data);
 		
 		if (status == AEROSPIKE_OK) {
 			// Reset error code if retry had occurred.
@@ -570,11 +570,11 @@ Retry:
 }
 
 as_status
-as_command_parse_header(as_error* err, as_socket* sock, uint64_t deadline_ms, void* user_data)
+as_command_parse_header(as_error* err, as_socket* sock, as_node* node, uint64_t deadline_ms, void* user_data)
 {
 	// Read header
 	as_proto_msg* msg = user_data;
-	as_status status = as_socket_read_deadline(err, sock, (uint8_t*)msg, sizeof(as_proto_msg), deadline_ms);
+	as_status status = as_socket_read_deadline(err, sock, node, (uint8_t*)msg, sizeof(as_proto_msg), deadline_ms);
 	
 	if (status) {
 		return status;
@@ -597,7 +597,7 @@ as_command_parse_header(as_error* err, as_socket* sock, uint64_t deadline_ms, vo
 		
 		// Empty socket.
 		uint8_t* buf = cf_malloc(size);
-		status = as_socket_read_deadline(err, sock, buf, size, deadline_ms);
+		status = as_socket_read_deadline(err, sock, node, buf, size, deadline_ms);
 		cf_free(buf);
 		
 		if (status) {
@@ -1071,11 +1071,11 @@ as_command_parse_bins(uint8_t** pp, as_error* err, as_record* rec, uint32_t n_bi
 }
 
 as_status
-as_command_parse_result(as_error* err, as_socket* sock, uint64_t deadline_ms, void* user_data)
+as_command_parse_result(as_error* err, as_socket* sock, as_node* node, uint64_t deadline_ms, void* user_data)
 {
 	// Read header
 	as_proto_msg msg;
-	as_status status = as_socket_read_deadline(err, sock, (uint8_t*)&msg, sizeof(as_proto_msg), deadline_ms);
+	as_status status = as_socket_read_deadline(err, sock, node, (uint8_t*)&msg, sizeof(as_proto_msg), deadline_ms);
 	
 	if (status) {
 		return status;
@@ -1089,7 +1089,7 @@ as_command_parse_result(as_error* err, as_socket* sock, uint64_t deadline_ms, vo
 	if (size > 0) {
 		// Read remaining message bytes.
 		buf = as_command_init(size);
-		status = as_socket_read_deadline(err, sock, buf, size, deadline_ms);
+		status = as_socket_read_deadline(err, sock, node, buf, size, deadline_ms);
 		
 		if (status) {
 			as_command_free(buf, size);
@@ -1158,11 +1158,11 @@ as_command_parse_result(as_error* err, as_socket* sock, uint64_t deadline_ms, vo
 }
 
 as_status
-as_command_parse_success_failure(as_error* err, as_socket* sock, uint64_t deadline_ms, void* user_data)
+as_command_parse_success_failure(as_error* err, as_socket* sock, as_node* node, uint64_t deadline_ms, void* user_data)
 {
 	// Read header
 	as_proto_msg msg;
-	as_status status = as_socket_read_deadline(err, sock, (uint8_t*)&msg, sizeof(as_proto_msg), deadline_ms);
+	as_status status = as_socket_read_deadline(err, sock, node, (uint8_t*)&msg, sizeof(as_proto_msg), deadline_ms);
 	
 	if (status) {
 		return status;
@@ -1176,7 +1176,7 @@ as_command_parse_success_failure(as_error* err, as_socket* sock, uint64_t deadli
 	if (size > 0) {
 		// Read remaining message bytes.
 		buf = as_command_init(size);
-		status = as_socket_read_deadline(err, sock, buf, size, deadline_ms);
+		status = as_socket_read_deadline(err, sock, node, buf, size, deadline_ms);
 		
 		if (status) {
 			as_command_free(buf, size);

@@ -147,7 +147,7 @@ connect_to_server(arguments* args, aerospike* client)
 	as_error err;
 	
 	if (aerospike_connect(client, &err) != AEROSPIKE_OK) {
-		blog_error("Aerospike connect failed: %d : %s", err.code, err.message);
+		blog_error("%s", err.message);
 		aerospike_destroy(client);
 		return 1;
 	}

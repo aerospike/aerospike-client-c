@@ -74,7 +74,7 @@ as_info_command_host(
  */
 as_status
 as_info_command(
-	as_error* err, as_socket* sock, char* names, bool send_asis, uint64_t deadline_ms,
+	as_error* err, as_socket* sock, as_node* node, char* names, bool send_asis, uint64_t deadline_ms,
 	uint64_t max_response_length, char** values
 	);
 

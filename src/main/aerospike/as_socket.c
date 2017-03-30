@@ -17,6 +17,7 @@
 #include <aerospike/as_socket.h>
 #include <aerospike/as_address.h>
 #include <aerospike/as_log_macros.h>
+#include <aerospike/as_node.h>
 #include <aerospike/as_tls.h>
 #include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_byte_order.h>
@@ -261,13 +262,17 @@ as_socket_create_and_connect(as_socket* sock, as_error* err, struct sockaddr* ad
 	int rv = as_socket_create(sock, addr->sa_family, ctx, tls_name);
 	
 	if (rv < 0) {
-		return as_error_update(err, AEROSPIKE_ERR_CONNECTION, "Socket create failed: %d", rv);
+		char name[AS_IP_ADDRESS_SIZE];
+		as_address_name(addr, name, sizeof(name));
+		return as_error_update(err, AEROSPIKE_ERR_CONNECTION, "Socket create failed: %d, %s", rv, name);
 	}
 	
 	// Initiate non-blocking connect.
 	if (! as_socket_start_connect(sock, addr)) {
 		as_socket_close(sock);
-		return as_error_update(err, AEROSPIKE_ERR_CONNECTION, "Socket connect failed");
+		char name[AS_IP_ADDRESS_SIZE];
+		as_address_name(addr, name, sizeof(name));
+		return as_error_update(err, AEROSPIKE_ERR_CONNECTION, "Socket connect failed: %s", name);
 	}
 	return AEROSPIKE_OK;
 }
@@ -285,6 +290,46 @@ as_socket_close(as_socket* sock)
 	}
 	close(sock->fd);
 	sock->fd = -1;
+}
+
+as_status
+as_socket_error(int fd, as_node* node, as_error* err, as_status status, const char* msg, int code)
+{
+	if (node) {
+		// Print code, address and local port when node present.
+		struct sockaddr_storage sa;
+		socklen_t len = sizeof(sa);
+		in_port_t local_port;
+
+		if (getsockname(fd, (struct sockaddr*)&sa, &len) == 0) {
+			local_port = as_address_port((struct sockaddr*)&sa);
+		}
+		else {
+			local_port = 0;
+		}
+		return as_error_update(err, status, "%s: %d, %s, %d", msg, code, as_node_get_address_string(node), local_port);
+	}
+	else {
+		// Print code only when node not present.  Address will be appended by caller.
+		return as_error_update(err, status, "%s: %d", msg, code);
+	}
+}
+
+void
+as_socket_error_append(as_error* err, struct sockaddr* addr)
+{
+	char name[AS_IP_ADDRESS_SIZE];
+	as_address_name(addr, name, sizeof(name));
+
+	int alen = strlen(name);
+	int elen = strlen(err->message);
+
+	if (alen + 2 < sizeof(err->message) - elen) {
+		char* p = stpcpy(err->message + elen, ", ");
+		memcpy(p, name, alen);
+		p += alen;
+		*p = 0;
+	}
 }
 
 int
@@ -316,23 +361,23 @@ as_socket_validate(as_socket* sock)
 }
 
 as_status
-as_socket_write_forever(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_len)
+as_socket_write_forever(as_error* err, as_socket* sock, as_node* node, uint8_t *buf, size_t buf_len)
 {
 	// MacOS will return "socket not connected" errors even when connection is
 	// blocking.  Therefore, select() is required before writing.  Since write
 	// timeout function also calls select(), use write timeout function with
 	// 1 minute timeout.
-	return as_socket_write_timeout(err, sock, buf, buf_len, 60000);
+	return as_socket_write_timeout(err, sock, node, buf, buf_len, 60000);
 }
 
 as_status
-as_socket_write_limit(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_len, uint64_t deadline)
+as_socket_write_limit(as_error* err, as_socket* sock, as_node* node, uint8_t *buf, size_t buf_len, uint64_t deadline)
 {
 	if (sock->ctx) {
 		as_status status = AEROSPIKE_OK;
 		int rv = as_tls_write(sock, buf, buf_len, deadline);
 		if (rv < 0) {
-			return as_error_update(err, AEROSPIKE_ERR_CONNECTION, "TLS write error: %d", rv);
+			return as_socket_error(sock->fd, node, err, AEROSPIKE_ERR_CONNECTION, "TLS write error", rv);
 		}
 		else if (rv == 1) {
 			// Do not set error string to avoid affecting performance.
@@ -368,7 +413,7 @@ as_socket_write_limit(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_l
 		fd_set* wset = (fd_set*)(wset_size > STACK_LIMIT ? cf_malloc(wset_size) : alloca(wset_size));
 	
 		if (!wset) {
-			return as_error_update(err, AEROSPIKE_ERR_CONNECTION, "Socket fdset allocation error: %d", wset_size);
+			return as_socket_error(sock->fd, node, err, AEROSPIKE_ERR_CONNECTION, "Socket fdset allocation error", (int)wset_size);
 		}
 	
 		as_status status = AEROSPIKE_OK;
@@ -425,7 +470,7 @@ as_socket_write_limit(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_l
 #ifdef DEBUG_TIME
 					debug_time_printf("socket write timeout", try, select_busy, start, now, deadline);
 #endif
-					status = as_error_update(err, AEROSPIKE_ERR_CONNECTION, "Socket write error: %d", errno);
+					status = as_socket_error(sock->fd, node, err, AEROSPIKE_ERR_CONNECTION, "Socket write error", errno);
 					goto Out;
 				}
 			}
@@ -436,7 +481,7 @@ as_socket_write_limit(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_l
 			}
 			else {
 				if (rv == -1 && (errno != EINTR || as_socket_stop_on_interrupt)) {
-					status = as_error_update(err, AEROSPIKE_ERR_CONNECTION, "Socket write error: %d", errno);
+					status = as_socket_error(sock->fd, node, err, AEROSPIKE_ERR_CONNECTION, "Socket write error", errno);
 					goto Out;
 				}
 			}
@@ -458,14 +503,14 @@ as_socket_write_limit(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_l
 // for application level highly variable queries
 //
 as_status
-as_socket_read_forever(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_len)
+as_socket_read_forever(as_error* err, as_socket* sock, as_node* node, uint8_t *buf, size_t buf_len)
 {
 	if (sock->ctx) {
 		as_status status = AEROSPIKE_OK;
 		uint64_t deadline = cf_getms() + 60000;
 		int rv = as_tls_read(sock, buf, buf_len, deadline);
 		if (rv < 0) {
-			return as_error_update(err, AEROSPIKE_ERR_CONNECTION, "TLS read error: %d", rv);
+			return as_socket_error(sock->fd, node, err, AEROSPIKE_ERR_CONNECTION, "TLS read error", rv);
 		}
 		else if (rv == 1) {
 			// Do not set error string to avoid affecting performance.
@@ -495,7 +540,7 @@ as_socket_read_forever(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_
 			int r_bytes = (int)read(sock->fd, buf + pos, buf_len - pos );
 			if (r_bytes < 0) { // don't combine these into one line! think about it!
 				if (errno != ETIMEDOUT) {
-					return as_error_update(err, AEROSPIKE_ERR_CONNECTION, "Socket read forever failed, errno %d", errno);
+					return as_socket_error(sock->fd, node, err, AEROSPIKE_ERR_CONNECTION, "Socket read forever failed", errno);
 				}
 			}
 			else if (r_bytes == 0) {
@@ -513,13 +558,13 @@ as_socket_read_forever(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_
 }
 
 as_status
-as_socket_read_limit(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_len, uint64_t deadline)
+as_socket_read_limit(as_error* err, as_socket* sock, as_node* node, uint8_t *buf, size_t buf_len, uint64_t deadline)
 {
 	if (sock->ctx) {
 		as_status status = AEROSPIKE_OK;
 		int rv = as_tls_read(sock, buf, buf_len, deadline);
 		if (rv < 0) {
-			return as_error_update(err, AEROSPIKE_ERR_CONNECTION, "TLS read error: %d", rv);
+			return as_socket_error(sock->fd, node, err, AEROSPIKE_ERR_CONNECTION, "TLS read error", rv);
 		}
 		else if (rv == 1) {
 			// Do not set error string to avoid affecting performance.
@@ -555,7 +600,7 @@ as_socket_read_limit(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_le
 		fd_set* rset = (fd_set*)(rset_size > STACK_LIMIT ? cf_malloc(rset_size) : alloca(rset_size));
 	
 		if (!rset) {
-			return as_error_update(err, AEROSPIKE_ERR_CONNECTION, "Socket fdset allocation error: %d", rset_size);
+			return as_socket_error(sock->fd, node, err, AEROSPIKE_ERR_CONNECTION, "Socket fdset allocation error", (int)rset_size);
 		}
 
 		int status = AEROSPIKE_OK;
@@ -605,7 +650,7 @@ as_socket_read_limit(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_le
 #ifdef DEBUG_TIME
 					debug_time_printf("socket read timeout", try, select_busy, start, now, deadline);
 #endif
-					status = as_error_update(err, AEROSPIKE_ERR_CONNECTION, "Socket read error: %d", errno);
+					status = as_socket_error(sock->fd, node, err, AEROSPIKE_ERR_CONNECTION, "Socket read error", errno);
 					goto Out;
 				}
 			}
@@ -616,7 +661,7 @@ as_socket_read_limit(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_le
 			}
 			else {
 				if (rv == -1 && (errno != EINTR || as_socket_stop_on_interrupt)) {
-					status = as_error_update(err, AEROSPIKE_ERR_CONNECTION, "Socket read error: %d", errno);
+					status = as_socket_error(sock->fd, node, err, AEROSPIKE_ERR_CONNECTION, "Socket read error", errno);
 					goto Out;
 				}
 			}

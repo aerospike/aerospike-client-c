@@ -327,7 +327,7 @@ as_batch_parse_records(as_error* err, uint8_t* buf, size_t size, as_batch_task* 
 }
 
 static as_status
-as_batch_parse(as_error* err, as_socket* sock, uint64_t deadline_ms, void* udata)
+as_batch_parse(as_error* err, as_socket* sock, as_node* node, uint64_t deadline_ms, void* udata)
 {
 	as_batch_task* task = udata;
 	as_status status = AEROSPIKE_OK;
@@ -337,7 +337,7 @@ as_batch_parse(as_error* err, as_socket* sock, uint64_t deadline_ms, void* udata
 	while (true) {
 		// Read header
 		as_proto proto;
-		status = as_socket_read_deadline(err, sock, (uint8_t*)&proto, sizeof(as_proto), deadline_ms);
+		status = as_socket_read_deadline(err, sock, node, (uint8_t*)&proto, sizeof(as_proto), deadline_ms);
 		
 		if (status) {
 			break;
@@ -354,7 +354,7 @@ as_batch_parse(as_error* err, as_socket* sock, uint64_t deadline_ms, void* udata
 			}
 			
 			// Read remaining message bytes in group
-			status = as_socket_read_deadline(err, sock, buf, size, deadline_ms);
+			status = as_socket_read_deadline(err, sock, node, buf, size, deadline_ms);
 			
 			if (status) {
 				break;

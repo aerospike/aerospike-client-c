@@ -345,7 +345,7 @@ as_node_create_connection(as_error* err, as_node* node, uint64_t deadline_ms, as
 	as_cluster* cluster = node->cluster;
 
 	if (cluster->user) {
-		as_status status = as_authenticate(err, sock, cluster->user, cluster->password, deadline_ms);
+		as_status status = as_authenticate(err, sock, node, cluster->user, cluster->password, deadline_ms);
 
 		if (status) {
 			as_socket_close(sock);
@@ -491,12 +491,12 @@ as_node_get_info(as_error* err, as_node* node, const char* names, size_t names_l
 	memcpy((void*)(stack_buf + sizeof(as_proto)), (const void*)names, names_len);
 
 	// Write the request. Note that timeout_ms is never 0.
-	if (as_socket_write_deadline(err, sock, stack_buf, write_size, deadline_ms) != AEROSPIKE_OK) {
+	if (as_socket_write_deadline(err, sock, node, stack_buf, write_size, deadline_ms) != AEROSPIKE_OK) {
 		return 0;
 	}
 	
 	// Reuse the buffer, read the response - first 8 bytes contains body size.
-	if (as_socket_read_deadline(err, sock, stack_buf, sizeof(as_proto), deadline_ms) != AEROSPIKE_OK) {
+	if (as_socket_read_deadline(err, sock, node, stack_buf, sizeof(as_proto), deadline_ms) != AEROSPIKE_OK) {
 		return 0;
 	}
 	
@@ -521,7 +521,7 @@ as_node_get_info(as_error* err, as_node* node, const char* names, size_t names_l
 	}
 	
 	// Read the response body.
-	if (as_socket_read_deadline(err, sock, rbuf, proto_sz, deadline_ms) != AEROSPIKE_OK) {
+	if (as_socket_read_deadline(err, sock, node, rbuf, proto_sz, deadline_ms) != AEROSPIKE_OK) {
 		if (rbuf != stack_buf) {
 			cf_free(rbuf);
 		}

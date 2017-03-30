@@ -223,7 +223,7 @@ as_ev_write(as_event_command* cmd)
 			}
 			else if (rv < -2) {
 				as_error err;
-				as_error_update(&err, AEROSPIKE_ERR_TLS_ERROR, "TLS write failed: socket %d", cmd->conn->socket.fd);
+				as_socket_error(cmd->conn->socket.fd, cmd->node, &err, AEROSPIKE_ERR_TLS_ERROR, "TLS write failed", rv);
 				as_event_socket_error(cmd, &err);
 				return AS_EVENT_WRITE_ERROR;
 			}
@@ -250,15 +250,15 @@ as_ev_write(as_event_command* cmd)
 					as_ev_watch_write(cmd);
 					return AS_EVENT_WRITE_INCOMPLETE;
 				}
-			
+
 				as_error err;
-				as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Socket %d write failed: %d", fd, errno);
+				as_socket_error(fd, cmd->node, &err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Socket write failed", errno);
 				as_event_socket_error(cmd, &err);
 				return AS_EVENT_WRITE_ERROR;
 			}
 			else {
 				as_error err;
-				as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Socket %d write closed by peer", fd);
+				as_socket_error(fd, cmd->node, &err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Socket write closed by peer", 0);
 				as_event_socket_error(cmd, &err);
 				return AS_EVENT_WRITE_ERROR;
 			}
@@ -291,7 +291,7 @@ as_ev_read(as_event_command* cmd)
 			}
 			else if (rv < -2) {
 				as_error err;
-				as_error_update(&err, AEROSPIKE_ERR_TLS_ERROR, "TLS read failed: socket %d", cmd->conn->socket.fd);
+				as_socket_error(cmd->conn->socket.fd, cmd->node, &err, AEROSPIKE_ERR_TLS_ERROR, "TLS read failed", rv);
 				as_event_socket_error(cmd, &err);
 				return AS_EVENT_READ_ERROR;
 			}
@@ -317,14 +317,14 @@ as_ev_read(as_event_command* cmd)
 				}
 				else {
 					as_error err;
-					as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Socket %d read failed: %d", fd, errno);
+					as_socket_error(fd, cmd->node, &err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Socket read failed", errno);
 					as_event_socket_error(cmd, &err);
 					return AS_EVENT_READ_ERROR;
 				}
 			}
 			else {
 				as_error err;
-				as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Socket %d read closed by peer", fd);
+				as_socket_error(fd, cmd->node, &err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Socket read closed by peer", 0);
 				as_event_socket_error(cmd, &err);
 				return AS_EVENT_READ_ERROR;
 			}

@@ -56,6 +56,8 @@
 #define SHUT_RDWR		SD_BOTH
 #endif // CF_WINDOWS
 
+#define AS_IP_ADDRESS_SIZE 64
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -72,6 +74,7 @@ typedef struct as_tls_context_s {
 } as_tls_context;
 
 struct as_queue_lock_s;
+struct as_node_s;
 
 /**
  *	Socket fields for both regular and TLS sockets.
@@ -139,7 +142,21 @@ as_socket_create_and_connect(as_socket* sock, as_error* err, struct sockaddr* ad
  */
 void
 as_socket_close(as_socket* sock);
-	
+
+/**
+ * @private
+ * Create error message for socket error.
+ */
+as_status
+as_socket_error(int fd, struct as_node_s* node, as_error* err, as_status status, const char* msg, int code);
+
+/**
+ * @private
+ * Append address to error message.
+ */
+void
+as_socket_error_append(as_error* err, struct sockaddr* addr);
+
 /**
  *	@private
  *	Peek for socket connection status using underlying fd.
@@ -180,7 +197,7 @@ as_socket_deadline(uint32_t timeout_ms)
  *	Write socket data without timeouts.
  */
 as_status
-as_socket_write_forever(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_len);
+as_socket_write_forever(as_error* err, as_socket* sock, struct as_node_s* node, uint8_t *buf, size_t buf_len);
 
 /**
  *	@private
@@ -188,7 +205,7 @@ as_socket_write_forever(as_error* err, as_socket* sock, uint8_t *buf, size_t buf
  *	Do not adjust for zero deadline.
  */
 as_status
-as_socket_write_limit(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_len, uint64_t deadline);
+as_socket_write_limit(as_error* err, as_socket* sock, struct as_node_s* node, uint8_t *buf, size_t buf_len, uint64_t deadline);
 
 /**
  *	@private
@@ -196,13 +213,13 @@ as_socket_write_limit(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_l
  *	If deadline is zero, do not set deadline.
  */
 static inline as_status
-as_socket_write_deadline(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_len, uint64_t deadline)
+as_socket_write_deadline(as_error* err, as_socket* sock, struct as_node_s* node, uint8_t *buf, size_t buf_len, uint64_t deadline)
 {
 	if (deadline) {
-		return as_socket_write_limit(err, sock, buf, buf_len, deadline);
+		return as_socket_write_limit(err, sock, node, buf, buf_len, deadline);
 	}
 	else {
-		return as_socket_write_forever(err, sock, buf, buf_len);
+		return as_socket_write_forever(err, sock, node, buf, buf_len);
 	}
 }
 
@@ -212,13 +229,13 @@ as_socket_write_deadline(as_error* err, as_socket* sock, uint8_t *buf, size_t bu
  *	If timeout is zero or > MAXINT, do not set timeout.
  */
 static inline as_status
-as_socket_write_timeout(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_len, uint32_t timeout_ms)
+as_socket_write_timeout(as_error* err, as_socket* sock, struct as_node_s* node, uint8_t *buf, size_t buf_len, uint32_t timeout_ms)
 {
 	if (timeout_ms && timeout_ms <= INT32_MAX) {
-		return as_socket_write_limit(err, sock, buf, buf_len, cf_getms() + timeout_ms);
+		return as_socket_write_limit(err, sock, node, buf, buf_len, cf_getms() + timeout_ms);
 	}
 	else {
-		return as_socket_write_forever(err, sock, buf, buf_len);
+		return as_socket_write_forever(err, sock, node, buf, buf_len);
 	}
 }
 
@@ -227,7 +244,7 @@ as_socket_write_timeout(as_error* err, as_socket* sock, uint8_t *buf, size_t buf
  *	Read socket data without timeouts.
  */
 as_status
-as_socket_read_forever(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_len);
+as_socket_read_forever(as_error* err, as_socket* sock, struct as_node_s* node, uint8_t *buf, size_t buf_len);
 
 /**
  *	@private
@@ -235,7 +252,7 @@ as_socket_read_forever(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_
  *	Do not adjust for zero deadline.
  */
 as_status
-as_socket_read_limit(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_len, uint64_t deadline);
+as_socket_read_limit(as_error* err, as_socket* sock, struct as_node_s* node, uint8_t *buf, size_t buf_len, uint64_t deadline);
 
 /**
  *	@private
@@ -243,13 +260,13 @@ as_socket_read_limit(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_le
  *	If deadline is zero, do not set deadline.
  */
 static inline as_status
-as_socket_read_deadline(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_len, uint64_t deadline)
+as_socket_read_deadline(as_error* err, as_socket* sock, struct as_node_s* node, uint8_t *buf, size_t buf_len, uint64_t deadline)
 {
 	if (deadline) {
-		return as_socket_read_limit(err, sock, buf, buf_len, deadline);
+		return as_socket_read_limit(err, sock, node, buf, buf_len, deadline);
 	}
 	else {
-		return as_socket_read_forever(err, sock, buf, buf_len);
+		return as_socket_read_forever(err, sock, node, buf, buf_len);
 	}
 }
 
@@ -259,13 +276,13 @@ as_socket_read_deadline(as_error* err, as_socket* sock, uint8_t *buf, size_t buf
  *	If timeout is zero or > MAXINT, do not set timeout.
  */
 static inline as_status
-as_socket_read_timeout(as_error* err, as_socket* sock, uint8_t *buf, size_t buf_len, uint32_t timeout_ms)
+as_socket_read_timeout(as_error* err, as_socket* sock, struct as_node_s* node, uint8_t *buf, size_t buf_len, uint32_t timeout_ms)
 {
 	if (timeout_ms && timeout_ms <= INT32_MAX) {
-		return as_socket_read_limit(err, sock, buf, buf_len, cf_getms() + timeout_ms);
+		return as_socket_read_limit(err, sock, node, buf, buf_len, cf_getms() + timeout_ms);
 	}
 	else {
-		return as_socket_read_forever(err, sock, buf, buf_len);
+		return as_socket_read_forever(err, sock, node, buf, buf_len);
 	}
 }
 

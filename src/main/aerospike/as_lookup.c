@@ -83,9 +83,10 @@ as_lookup_node(as_cluster* cluster, as_error* err, const char* tls_name, struct 
 	}
 	
 	char* response = 0;
-	status = as_info_command(err, sock, command, true, deadline, 0, &response);
+	status = as_info_command(err, sock, NULL, command, true, deadline, 0, &response);
 	
 	if (status) {
+		as_socket_error_append(err, addr);
 		as_socket_close(sock);
 		return status;
 	}

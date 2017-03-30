@@ -137,7 +137,7 @@ as_info_command_node(
 		return status;
 	}
 	
-	status = as_info_command(err, &socket, command, send_asis, deadline_ms, 0, response);
+	status = as_info_command(err, &socket, node, command, send_asis, deadline_ms, 0, response);
 	
 	if (status == AEROSPIKE_ERR_TIMEOUT || status == AEROSPIKE_ERR_CLIENT) {
 		as_node_close_connection(&socket);
@@ -189,14 +189,18 @@ as_info_command_host(
 		return status;
 	}
 		
-	status = as_info_command(err, &sock, command, send_asis, deadline_ms, 0, response);
+	status = as_info_command(err, &sock, NULL, command, send_asis, deadline_ms, 0, response);
+
+	if (status) {
+		as_socket_error_append(err, addr);
+	}
 	as_socket_close(&sock);
 	return status;
 }
 
 as_status
 as_info_command(
-	as_error* err, as_socket* sock, char* names, bool send_asis, uint64_t deadline_ms,
+	as_error* err, as_socket* sock, as_node* node, char* names, bool send_asis, uint64_t deadline_ms,
 	uint64_t max_response_length, char** values
 	)
 {
@@ -249,7 +253,7 @@ as_info_command(
 	*(uint64_t*)cmd = cf_swap_to_be64(proto);
 	
 	// Write command
-	as_status status = as_socket_write_deadline(err, sock, cmd, size, deadline_ms);
+	as_status status = as_socket_write_deadline(err, sock, node, cmd, size, deadline_ms);
 	as_command_free(cmd, size);
 	
 	if (status) {
@@ -258,7 +262,7 @@ as_info_command(
 	
 	// Read response
 	as_proto header;
-	status = as_socket_read_deadline(err, sock, (uint8_t*)&header, sizeof(as_proto), deadline_ms);
+	status = as_socket_read_deadline(err, sock, node, (uint8_t*)&header, sizeof(as_proto), deadline_ms);
 	
 	if (status) {
 		return status;
@@ -272,7 +276,7 @@ as_info_command(
 			// Reuse command buffer.
 			int read_len = 100;
 			uint8_t* buf = alloca(read_len + 1);
-			status = as_socket_read_deadline(err, sock, buf, read_len, deadline_ms);
+			status = as_socket_read_deadline(err, sock, node, buf, read_len, deadline_ms);
 			
 			if (status) {
 				return status;
@@ -285,7 +289,7 @@ as_info_command(
 		}
 		
 		char* response = cf_malloc(header.sz + 1);
-		status = as_socket_read_deadline(err, sock, (uint8_t*)response, header.sz, deadline_ms);
+		status = as_socket_read_deadline(err, sock, node, (uint8_t*)response, header.sz, deadline_ms);
 		
 		if (status) {
 			cf_free(response);
@@ -322,9 +326,10 @@ as_info_create_socket(
 	}
 	
 	if (cluster->user) {
-		status = as_authenticate(err, sock, cluster->user, cluster->password, deadline_ms);
+		status = as_authenticate(err, sock, NULL, cluster->user, cluster->password, deadline_ms);
 		
 		if (status) {
+			as_socket_error_append(err, addr);
 			as_socket_close(sock);
 			return status;
 		}

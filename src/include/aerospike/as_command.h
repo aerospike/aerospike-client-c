@@ -161,7 +161,7 @@ typedef struct as_command_parse_result_data_s {
  *	@private
  *	Parse results callback used in as_command_execute().
  */
-typedef as_status (*as_parse_results_fn) (as_error* err, as_socket* sock, uint64_t deadline_ms, void* user_data);
+typedef as_status (*as_parse_results_fn) (as_error* err, as_socket* sock, as_node* node, uint64_t deadline_ms, void* user_data);
 
 /******************************************************************************
  * FUNCTIONS
@@ -432,21 +432,21 @@ as_command_execute(
  *	Parse header of server response.
  */
 as_status
-as_command_parse_header(as_error* err, as_socket* sock, uint64_t deadline_ms, void* user_data);
+as_command_parse_header(as_error* err, as_socket* sock, as_node* node, uint64_t deadline_ms, void* user_data);
 
 /**
  *	@private
  *	Parse server record.  Used for reads.
  */
 as_status
-as_command_parse_result(as_error* err, as_socket* sock, uint64_t deadline_ms, void* user_data);
+as_command_parse_result(as_error* err, as_socket* sock, as_node* node, uint64_t deadline_ms, void* user_data);
 
 /**
  *	@private
  *	Parse server success or failure result.
  */
 as_status
-as_command_parse_success_failure(as_error* err, as_socket* sock, uint64_t deadline_ms, void* user_data);
+as_command_parse_success_failure(as_error* err, as_socket* sock, as_node* node, uint64_t deadline_ms, void* user_data);
 
 /**
  *	@private

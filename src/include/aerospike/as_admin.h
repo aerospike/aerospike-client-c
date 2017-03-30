@@ -139,6 +139,8 @@ typedef struct as_user_s {
 	char roles[][AS_ROLE_SIZE];
 } as_user;
 
+struct as_node_s;
+
 /******************************************************************************
  * FUNCTIONS
  ******************************************************************************/
@@ -262,7 +264,7 @@ as_roles_destroy(as_role** roles, int roles_size);
  *  Do not use this method directly.
  */
 as_status
-as_authenticate(as_error* err, as_socket* sock, const char* user, const char* credential, uint64_t deadline_ms);
+as_authenticate(as_error* err, as_socket* sock, struct as_node_s* node, const char* user, const char* credential, uint64_t deadline_ms);
 	
 /**
  *	@private

@@ -248,13 +248,9 @@ as_cluster_find_nodes_to_remove(as_cluster* cluster, uint32_t refresh_count, as_
 			case 1:
 				// Single node clusters rely on whether it responded to info requests.
 				if (node->failures >= 5) {
-					// 5 consecutive info requests failed. Try seeds.
-					as_error err;
-					as_error_init(&err);
-					if (as_cluster_seed_nodes(cluster, &err, false) == AEROSPIKE_OK) {
-						// Seed nodes found. Remove unresponsive node.
-						as_vector_append(nodes_to_remove, &node);
-					}
+					// 5 consecutive info requests failed.
+					// Remove node.  Seeds will be tried in next cluster tend iteration.
+					as_vector_append(nodes_to_remove, &node);
 				}
 				break;
 				
@@ -536,6 +532,7 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings, b
 			else {
 				// Use info level so aql doesn't see message by default.
 				as_log_info("Node %s refresh failed: %s %s", node->name, as_error_string(status), error_local.message);
+				peers.gen_changed = true;
 				node->failures++;
 			}
 		}

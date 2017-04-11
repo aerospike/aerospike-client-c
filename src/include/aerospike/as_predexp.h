@@ -521,7 +521,7 @@ as_predexp_rec_void_time();
  *	Create a digest modulo record metadata value predicate expression.
  *
  *  The digest modulo expression assumes the value of 4 bytes of the
- *  record's key digest modulo it's argument.
+ *  record's key digest modulo it's modulus argument.
  *
  *  For example, the following sequence of predicate expressions
  *  selects records that have digest(key) % 3 == 1):
@@ -533,11 +533,13 @@ as_predexp_rec_void_time();
  *	as_query_predexp_add(&q, as_predexp_integer_equal());
  *	~~~~~~~~~~
  *
+ *  @param mod	The modulus argument.
+ *
  *  @returns a predicate expression suitable for adding to a query or
  *  scan.
  */
 as_predexp_base*
-as_predexp_rec_digest_modulo();
+as_predexp_rec_digest_modulo(int32_t mod);
 
 /**
  *	Create an integer comparison logical predicate expression.

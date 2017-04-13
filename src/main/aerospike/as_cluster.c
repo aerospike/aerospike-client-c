@@ -453,7 +453,7 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings, b
 	// Garbage collect data structures released in previous tend.
 	// This tend interval delay substantially reduces the chance of
 	// deleting a ref counted data structure when other threads
-	// are stuck between assigment and incrementing the ref count.
+	// are stuck between assignment and incrementing the ref count.
 	as_cluster_gc(cluster->gc);
 
 	// If active nodes don't exist, seed cluster.
@@ -571,7 +571,7 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings, b
 			as_status status = as_node_refresh_partitions(cluster, &error_local, node, &peers);
 			
 			if (status != AEROSPIKE_OK) {
-				as_log_warn("Node %s parition refresh failed: %s %s", node->name, as_error_string(status), error_local.message);
+				as_log_warn("Node %s partition refresh failed: %s %s", node->name, as_error_string(status), error_local.message);
 				node->failures++;
 			}
 		}

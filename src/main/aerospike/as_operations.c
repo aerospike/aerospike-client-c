@@ -17,7 +17,7 @@
 #include <aerospike/as_operations.h>
 #include <aerospike/as_arraylist.h>
 #include <aerospike/as_bin.h>
-#include "aerospike/as_map_operations.h"
+#include <aerospike/as_map_operations.h>
 #include <aerospike/as_msgpack.h>
 #include <aerospike/as_serializer.h>
 #include <citrusleaf/alloc.h>

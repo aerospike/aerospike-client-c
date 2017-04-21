@@ -650,7 +650,7 @@ TEST( key_basics_list_map_double , "put/get double: (test,test,foo_double) = {b1
 				assert_double_eq( as_double_get(as_double_fromval(p_val)), 6.78);
 			} else {
 				warn ("unexpected type %d", as_val_type(p_val));
-				assert(FALSE);
+				assert(false);
 			}
 		}
 

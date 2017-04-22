@@ -378,6 +378,13 @@ as_node_get_address_string(as_node* node)
 
 /**
  *	@private
+ *	Attempt to authenticate given user and password.
+ */
+as_status
+as_node_authenticate_connection(struct as_cluster_s* cluster, const char* user, const char* password);
+
+/**
+ *	@private
  *	Get a connection to the given node from pool and validate.  Return 0 on success.
  */
 as_status

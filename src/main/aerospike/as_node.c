@@ -298,7 +298,7 @@ as_node_try_family_connections(as_node* node, int family, int begin, int end, in
 }
 
 static as_status
-as_node_create_connection(as_error* err, as_node* node, uint64_t deadline_ms, as_queue_lock* queue, as_socket* sock)
+as_node_create_socket(as_error* err, as_node* node, as_queue_lock* queue, as_socket* sock)
 {
 	// Try addresses.
 	uint32_t index = node->address_index;
@@ -340,6 +340,17 @@ as_node_create_connection(as_error* err, as_node* node, uint64_t deadline_ms, as
 		ck_pr_store_32(&node->address_index, rv);
 		as_log_debug("Change node address %s %s", node->name, as_node_get_address_string(node));
 	}
+	return AEROSPIKE_OK;
+}
+
+static as_status
+as_node_create_connection(as_error* err, as_node* node, uint64_t deadline_ms, as_queue_lock* queue, as_socket* sock)
+{
+	as_status status = as_node_create_socket(err, node, queue, sock);
+
+	if (status) {
+		return status;
+	}
 
 	// Authenticate connection.
 	as_cluster* cluster = node->cluster;
@@ -360,6 +371,37 @@ as_node_create_connection(as_error* err, as_node* node, uint64_t deadline_ms, as
 	}
 	sock->queue = queue;
 	return AEROSPIKE_OK;
+}
+
+as_status
+as_node_authenticate_connection(as_cluster* cluster, const char* user, const char* password)
+{
+	char hash[AS_PASSWORD_HASH_SIZE];
+
+	if (! as_password_get_constant_hash(password, hash)) {
+		return AEROSPIKE_ERR_CLIENT;
+	}
+
+	as_node* node = as_node_get_random(cluster);
+
+	if (! node) {
+		return AEROSPIKE_ERR_INVALID_NODE;
+	}
+
+	as_socket sock;
+	as_error err;
+	as_status status = as_node_create_socket(&err, node, NULL, &sock);
+
+	if (status) {
+		as_node_release(node);
+		return status;
+	}
+
+	uint64_t deadline_ms = as_socket_deadline(2000);
+	status = as_authenticate(&err, &sock, node, user, hash, deadline_ms);
+	as_socket_close(&sock);
+	as_node_release(node);
+	return status;
 }
 
 as_status
@@ -451,7 +493,7 @@ as_node_get_connection(as_error* err, as_node* node, uint64_t deadline_ms, as_so
 						   node->name, node->cluster->max_conns_per_node);
 }
 
-static inline int
+static inline as_status
 as_node_get_info_connection(as_error* err, as_node* node, uint64_t deadline_ms)
 {
 	if (node->info_socket.fd < 0) {

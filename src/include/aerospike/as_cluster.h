@@ -164,6 +164,12 @@ typedef struct as_cluster_s {
 	
 	/**
 	 *	@private
+	 *	Lock for adding/removing seeds.
+	 */
+	pthread_mutex_t seed_lock;
+
+	/**
+	 *	@private
 	 *	Lock for the tend thread to wait on with the tend interval as timeout.
 	 *	Normally locked, resulting in waiting a full interval between
 	 *	tend iterations.  Upon cluster shutdown, unlocked by the main
@@ -327,6 +333,18 @@ as_nodes_release(as_nodes* nodes)
 		cf_free(nodes);
 	}
 }
+
+/**
+ * 	Add seed to cluster.
+ */
+void
+as_cluster_add_seed(as_cluster* cluster, const char* hostname, const char* tls_name, uint16_t port);
+
+/**
+ * 	Remove seed from cluster.
+ */
+void
+as_cluster_remove_seed(as_cluster* cluster, const char* hostname, uint16_t port);
 
 /**
  * 	Change maximum async connections per node.

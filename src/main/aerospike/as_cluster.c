@@ -700,7 +700,7 @@ as_cluster_add_seed(as_cluster* cluster, const char* hostname, const char* tls_n
 	pthread_mutex_lock(&cluster->seed_lock);
 	as_vector* seeds = cluster->seeds;
 
-	if (as_cluster_find_seed(seeds, hostname, port) >= 0) {
+	if (as_cluster_find_seed(seeds, hostname, port) < 0) {
 		as_host* seed = as_vector_reserve(seeds);
 		as_host_copy_fields(seed, hostname, tls_name, port);
 		as_log_debug("Add seed %s %d", seed->name, seed->port);

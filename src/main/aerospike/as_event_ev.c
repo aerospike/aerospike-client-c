@@ -515,7 +515,7 @@ bool
 as_ev_tls_connect(as_event_command* cmd, as_event_connection* conn)
 {
 	int rv = as_tls_connect_once(&conn->socket);
-	if (rv < -1) {
+	if (rv < -2) {
 		// Failed, error has been logged.
 		as_error err;
 		as_error_set_message(&err, AEROSPIKE_ERR_TLS_ERROR, "TLS connection failed");

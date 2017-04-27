@@ -373,7 +373,7 @@ as_peers_parse_peers(as_peers* peers, as_error* err, as_cluster* cluster, as_nod
 {
 	//as_log_debug("Node %s peers: %s", node->name, buf);
 	char* p = buf;
-	
+
 	node->peers_count = 0;
 
 	// Parse generation.
@@ -407,7 +407,9 @@ as_peers_parse_peers(as_peers* peers, as_error* err, as_cluster* cluster, as_nod
 		node->peers_generation = generation;
 		return AEROSPIKE_OK;
 	}
-	
+
+	bool peers_validated = true;
+
 	while (*p) {
 		// Parse peer
 		if (*p != '[') {
@@ -483,14 +485,21 @@ as_peers_parse_peers(as_peers* peers, as_error* err, as_cluster* cluster, as_nod
 				return as_peers_expected_error(err, ',', p);
 			}
 		}
-		
+
+		if (! node_validated) {
+			peers_validated = false;
+		}
+
 		if (*p != ']') {
 			return as_peers_expected_error(err, ']', p);
 		}
 		p++;
 		
 		if (*p == ']') {
-			node->peers_generation = generation;
+			// Only set new peers generation if all referenced peers are added to the cluster.
+			if (peers_validated) {
+				node->peers_generation = generation;
+			}
 			return AEROSPIKE_OK;
 		}
 		

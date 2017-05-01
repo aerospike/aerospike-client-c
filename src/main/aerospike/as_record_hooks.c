@@ -80,7 +80,7 @@ static int as_record_rec_set(const as_rec * r, const char * name, const as_val *
 
 static int as_record_rec_remove(const as_rec * r, const char * name) 
 {
-	return r && name ? as_record_set_nil((as_record *) r, name) : 1;
+	return r && name ? !as_record_set_nil((as_record *) r, name) : 1;
 }
 
 static uint32_t as_record_rec_ttl(const as_rec * r) 

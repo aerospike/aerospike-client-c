@@ -167,9 +167,7 @@ aerospike_job_info(
 			status = AEROSPIKE_OK;
 		}
 		else {
-			if (status != AEROSPIKE_ERR_CLUSTER) {
-				break;
-			}
+			break;
 		}
 	}
 	as_nodes_release(nodes);

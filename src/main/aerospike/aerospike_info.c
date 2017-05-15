@@ -182,9 +182,7 @@ aerospike_info_foreach(
 			}
 		}
 		else {
-			if (status != AEROSPIKE_ERR_CLUSTER) {
-				break;
-			}
+			break;
 		}
 	}
 	as_nodes_release(nodes);

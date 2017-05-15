@@ -544,6 +544,43 @@ TEST( predexp_pir_on_regions, "predexp_pir_on_regions" ) {
 	remove_regions(SET2);
 }
 
+TEST( predexp_geojson_crash_aer_5650, "predexp_geojson_crash_aer_5650" ) {
+
+	if (! insert_points(SET2)) {
+		assert_true(false);
+	}
+
+	as_error err;
+
+	// Create an as_query object.
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET2);
+
+	// Our query region:
+	char const * region =
+		"{ "
+		"    \"type\": \"AeroCircle\", "
+		"    \"coordinates\": [[-122.0, 37.5], 50000.0] }";
+
+	as_query_predexp_inita(&query, 3);
+	as_query_predexp_add(&query, as_predexp_geojson_bin("loc"));
+	as_query_predexp_add(&query, as_predexp_geojson_value(region));
+	as_query_predexp_add(&query, as_predexp_geojson_within());
+	
+	// Execute the query. This call blocks - callbacks are made in the scope of
+	// this call.
+	predexp_points_within_region_udata udata = { 0, PTHREAD_MUTEX_INITIALIZER };
+	aerospike_query_foreach(as, &err, NULL, &query,
+							predexp_points_within_region_callback, &udata);
+	assert_int_eq( err.code, AEROSPIKE_OK );
+
+	assert_int_eq( udata.count, 4 );
+
+	as_query_destroy(&query);
+	
+	remove_points(SET2);
+}
+
 typedef struct predexp_regions_containing_point_udata_s {
 	uint64_t count;
 	pthread_mutex_t lock;
@@ -1117,6 +1154,7 @@ SUITE( query_geospatial, "aerospike_query_geospatial tests" ) {
 	suite_add( predexp_pir_rchild_not_immed );
 	suite_add( predexp_pir_parse_failed );
 	suite_add( predexp_pir_on_regions );
+	suite_add( predexp_geojson_crash_aer_5650 );
 	suite_add( predexp_regions_containing_point );
 	suite_add( predexp_rcp_rchild_wrong_type );
 	suite_add( predexp_rcp_lchild_wrong_type );

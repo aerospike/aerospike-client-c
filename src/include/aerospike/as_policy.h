@@ -861,6 +861,12 @@ typedef struct as_policy_batch_s {
 	uint32_t sleep_between_retries;
 
 	/**
+	 *  Specifies the number of replicas consulted
+	 *  when reading for the desired consistency guarantee.
+	 */
+	as_policy_consistency_level consistency_level;
+
+	/**
 	 *	Should the client retry a command if the timeout is reached.
 	 *	Used by synchronous commands only.
 	 *	<p>
@@ -1331,6 +1337,7 @@ as_policy_batch_init(as_policy_batch* p)
 	p->timeout = AS_POLICY_TIMEOUT_DEFAULT;
 	p->retry = AS_POLICY_RETRY_DEFAULT;
 	p->sleep_between_retries = AS_POLICY_RETRY_SLEEP_DEFAULT;
+	p->consistency_level = AS_POLICY_CONSISTENCY_LEVEL_ONE;
 	p->retry_on_timeout = false;
 	p->concurrent = false;
 	p->use_batch_direct = false;

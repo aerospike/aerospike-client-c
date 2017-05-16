@@ -45,6 +45,7 @@ typedef struct as_batch_task_s {
 	as_vector offsets;
 	
 	as_cluster* cluster;
+	const as_policy_batch* policy;
 	as_error* err;
 	cf_queue* complete_q;
 	uint32_t* error_mutex;
@@ -59,17 +60,10 @@ typedef struct as_batch_task_s {
 	uint32_t n_bins;        // Old aerospike_batch_get()
 	uint32_t index;         // Old aerospike_batch_get()
 	uint32_t n_keys;
-	uint32_t timeout_ms;
-	uint32_t retry;
-	uint32_t sleep_between_retries;
-	
+
 	uint8_t read_attr;      // Old aerospike_batch_get()
 	bool use_batch_records;
 	bool use_new_batch;
-	bool retry_on_timeout;
-	bool allow_inline;
-	bool send_set_name;
-	bool deserialize;
 } as_batch_task;
 
 typedef struct as_batch_complete_task_s {
@@ -231,6 +225,8 @@ as_batch_async_parse_records(as_event_command* cmd)
 static as_status
 as_batch_parse_records(as_error* err, uint8_t* buf, size_t size, as_batch_task* task)
 {
+	bool deserialize = task->policy->deserialize;
+
 	uint8_t* p = buf;
 	uint8_t* end = buf + size;
 	
@@ -269,7 +265,7 @@ as_batch_parse_records(as_error* err, uint8_t* buf, size_t size, as_batch_task* 
 				record->result = msg->result_code;
 				
 				if (msg->result_code == AEROSPIKE_OK) {
-					as_status status = as_batch_parse_record(&p, err, msg, &record->record, task->deserialize);
+					as_status status = as_batch_parse_record(&p, err, msg, &record->record, deserialize);
 
 					if (status != AEROSPIKE_OK) {
 						return status;
@@ -288,7 +284,7 @@ as_batch_parse_records(as_error* err, uint8_t* buf, size_t size, as_batch_task* 
 				if (task->callback_xdr) {
 					if (msg->result_code == AEROSPIKE_OK) {
 						as_record rec;
-						as_status status = as_batch_parse_record(&p, err, msg, &rec, task->deserialize);
+						as_status status = as_batch_parse_record(&p, err, msg, &rec, deserialize);
 
 						if (status != AEROSPIKE_OK) {
 							as_record_destroy(&rec);
@@ -308,7 +304,7 @@ as_batch_parse_records(as_error* err, uint8_t* buf, size_t size, as_batch_task* 
 					result->result = msg->result_code;
 					
 					if (msg->result_code == AEROSPIKE_OK) {
-						as_status status = as_batch_parse_record(&p, err, msg, &result->record, task->deserialize);
+						as_status status = as_batch_parse_record(&p, err, msg, &result->record, deserialize);
 
 						if (status != AEROSPIKE_OK) {
 							return status;
@@ -418,18 +414,24 @@ as_batch_index_records_size(as_vector* records, as_vector* offsets, bool send_se
 }
 
 static size_t
-as_batch_index_records_write(as_vector* records, as_vector* offsets, uint32_t timeout_ms, bool allow_inline, bool send_set_name, uint8_t* cmd)
+as_batch_index_records_write(as_vector* records, as_vector* offsets, const as_policy_batch* policy, uint8_t* cmd)
 {
+	uint8_t read_attr = AS_MSG_INFO1_READ;
+
+	if (policy->consistency_level == AS_POLICY_CONSISTENCY_LEVEL_ALL) {
+		read_attr |= AS_MSG_INFO1_CONSISTENCY_ALL;
+	}
+
 	uint32_t n_offsets = offsets->size;
-	uint8_t* p = as_command_write_header_read(cmd, AS_MSG_INFO1_READ | AS_MSG_INFO1_BATCH_INDEX, AS_POLICY_CONSISTENCY_LEVEL_ONE, timeout_ms, 1, 0);
+	uint8_t* p = as_command_write_header_read(cmd, read_attr | AS_MSG_INFO1_BATCH_INDEX, policy->consistency_level, policy->timeout, 1, 0);
 	uint8_t* field_size_ptr = p;
-	p = as_command_write_field_header(p, send_set_name ? AS_FIELD_BATCH_INDEX_WITH_SET : AS_FIELD_BATCH_INDEX, 0);  // Need to update size at end
+	p = as_command_write_field_header(p, policy->send_set_name ? AS_FIELD_BATCH_INDEX_WITH_SET : AS_FIELD_BATCH_INDEX, 0);  // Need to update size at end
 	*(uint32_t*)p = cf_swap_to_be32(n_offsets);
 	p += sizeof(uint32_t);
-	*p++ = allow_inline? 1 : 0;
+	*p++ = policy->allow_inline? 1 : 0;
 	
 	as_batch_read_record* prev = 0;
-	uint16_t field_count = send_set_name ? 2 : 1;
+	uint16_t field_count = policy->send_set_name ? 2 : 1;
 	
 	for (uint32_t i = 0; i < n_offsets; i++) {
 		uint32_t offset = *(uint32_t*)as_vector_get(offsets, i);
@@ -445,7 +447,7 @@ as_batch_index_records_write(as_vector* records, as_vector* offsets, uint32_t ti
 		// fixed variables.  It's fine if equality not determined correctly because it just
 		// results in more space used. The batch will still be correct.
 		if (prev && prev->key.ns == record->key.ns &&
-			(! send_set_name || prev->key.set == record->key.set) &&
+			(! policy->send_set_name || prev->key.set == record->key.set) &&
 			prev->bin_names == record->bin_names && prev->read_all_bins == record->read_all_bins) {
 			// Can set repeat previous namespace/bin names to save space.
 			*p++ = 1;  // repeat
@@ -455,14 +457,14 @@ as_batch_index_records_write(as_vector* records, as_vector* offsets, uint32_t ti
 			*p++ = 0;  // do not repeat
 			
 			if (record->bin_names && record->n_bin_names) {
-				*p++ = AS_MSG_INFO1_READ;
+				*p++ = read_attr;
 				*(uint16_t*)p = cf_swap_to_be16(field_count);
 				p += sizeof(uint16_t);
 				*(uint16_t*)p = cf_swap_to_be16((uint16_t)record->n_bin_names);
 				p += sizeof(uint16_t);
 				p = as_command_write_field_string(p, AS_FIELD_NAMESPACE, record->key.ns);
 			
-				if (send_set_name) {
+				if (policy->send_set_name) {
 					p = as_command_write_field_string(p, AS_FIELD_SETNAME, record->key.set);
 				}
 				
@@ -471,14 +473,14 @@ as_batch_index_records_write(as_vector* records, as_vector* offsets, uint32_t ti
 				}
 			}
 			else {
-				*p++ = (AS_MSG_INFO1_READ | (record->read_all_bins? AS_MSG_INFO1_GET_ALL : AS_MSG_INFO1_GET_NOBINDATA));
+				*p++ = (read_attr | (record->read_all_bins? AS_MSG_INFO1_GET_ALL : AS_MSG_INFO1_GET_NOBINDATA));
 				*(uint16_t*)p = cf_swap_to_be16(field_count);
 				p += sizeof(uint16_t);
 				*p++ = 0;  // n_bin_names
 				*p++ = 0;  // n_bin_names
 				p = as_command_write_field_string(p, AS_FIELD_NAMESPACE, record->key.ns);
 				
-				if (send_set_name) {
+				if (policy->send_set_name) {
 					p = as_command_write_field_string(p, AS_FIELD_SETNAME, record->key.set);
 				}
 			}
@@ -495,12 +497,14 @@ as_batch_index_records_write(as_vector* records, as_vector* offsets, uint32_t ti
 static as_status
 as_batch_index_records_execute(as_batch_task* task)
 {
+	const as_policy_batch* policy = task->policy;
+
 	// Estimate buffer size.
-	size_t size = as_batch_index_records_size(task->records, &task->offsets, task->send_set_name);
+	size_t size = as_batch_index_records_size(task->records, &task->offsets, policy->send_set_name);
 		
 	// Write command
 	uint8_t* cmd = as_command_init(size);
-	size = as_batch_index_records_write(task->records, &task->offsets, task->timeout_ms, task->allow_inline, task->send_set_name, cmd);
+	size = as_batch_index_records_write(task->records, &task->offsets, policy, cmd);
 
 	as_command_node cn;
 	cn.node = task->node;
@@ -508,7 +512,7 @@ as_batch_index_records_execute(as_batch_task* task)
 	as_error err;
 	as_error_init(&err);
 	as_status status = as_command_execute(task->cluster, &err, &cn, cmd, size,
-				task->timeout_ms, task->retry_on_timeout, task->retry, task->sleep_between_retries,
+				policy->timeout, policy->retry_on_timeout, policy->retry, policy->sleep_between_retries,
 				as_batch_parse, task);
 	
 	as_command_free(cmd, size);
@@ -525,8 +529,10 @@ as_batch_index_records_execute(as_batch_task* task)
 static as_status
 as_batch_index_execute(as_batch_task* task)
 {
+	const as_policy_batch* policy = task->policy;
+
 	// Calculate size of bin names.
-	uint16_t field_count = task->send_set_name ? 2 : 1;
+	uint16_t field_count = policy->send_set_name ? 2 : 1;
 	size_t bin_name_size = 0;
 	
 	if (task->n_bins) {
@@ -547,7 +553,7 @@ as_batch_index_execute(as_batch_task* task)
 		size += 24;  // digest + int count.
 
 		// Try reference equality in hope that namespace for all keys is set from a fixed variable.
-		if (prev && prev->ns == key->ns && (! task->send_set_name || prev->set == key->set)) {
+		if (prev && prev->ns == key->ns && (! policy->send_set_name || prev->set == key->set)) {
 			// Can set repeat previous namespace/bin names to save space.
 			size++;
 		}
@@ -555,22 +561,26 @@ as_batch_index_execute(as_batch_task* task)
 			// Estimate full header, namespace and bin names.
 			size += as_command_string_field_size(key->ns) + 6;
 			
-			if (task->send_set_name) {
+			if (policy->send_set_name) {
 				size += as_command_string_field_size(key->set);
 			}
 			size += bin_name_size;
 			prev = key;
 		}
 	}
-	
+
+	if (policy->consistency_level == AS_POLICY_CONSISTENCY_LEVEL_ALL) {
+		task->read_attr |= AS_MSG_INFO1_CONSISTENCY_ALL;
+	}
+
 	// Write command
 	uint8_t* cmd = as_command_init(size);
-	uint8_t* p = as_command_write_header_read(cmd, task->read_attr | AS_MSG_INFO1_BATCH_INDEX, AS_POLICY_CONSISTENCY_LEVEL_ONE, task->timeout_ms, 1, 0);
+	uint8_t* p = as_command_write_header_read(cmd, task->read_attr | AS_MSG_INFO1_BATCH_INDEX, policy->consistency_level, policy->timeout, 1, 0);
 	uint8_t* field_size_ptr = p;
-	p = as_command_write_field_header(p, task->send_set_name ? AS_FIELD_BATCH_INDEX_WITH_SET : AS_FIELD_BATCH_INDEX, 0);  // Need to update size at end
+	p = as_command_write_field_header(p, policy->send_set_name ? AS_FIELD_BATCH_INDEX_WITH_SET : AS_FIELD_BATCH_INDEX, 0);  // Need to update size at end
 	*(uint32_t*)p = cf_swap_to_be32(n_offsets);
 	p += sizeof(uint32_t);
-	*p++ = task->allow_inline? 1 : 0;
+	*p++ = policy->allow_inline? 1 : 0;
 	
 	prev = 0;
 	
@@ -584,7 +594,7 @@ as_batch_index_execute(as_batch_task* task)
 		p += AS_DIGEST_VALUE_SIZE;
 		
 		// Try reference equality in hope that namespace for all keys is set from a fixed variable.
-		if (prev && prev->ns == key->ns && (! task->send_set_name || prev->set == key->set)) {
+		if (prev && prev->ns == key->ns && (! policy->send_set_name || prev->set == key->set)) {
 			// Can set repeat previous namespace/bin names to save space.
 			*p++ = 1;  // repeat
 		}
@@ -598,7 +608,7 @@ as_batch_index_execute(as_batch_task* task)
 			p += sizeof(uint16_t);
 			p = as_command_write_field_string(p, AS_FIELD_NAMESPACE, key->ns);
 			
-			if (task->send_set_name) {
+			if (policy->send_set_name) {
 				p = as_command_write_field_string(p, AS_FIELD_SETNAME, key->set);
 			}
 
@@ -622,7 +632,7 @@ as_batch_index_execute(as_batch_task* task)
 	as_error err;
 	as_error_init(&err);
 	as_status status = as_command_execute(task->cluster, &err, &cn, cmd, size,
-				task->timeout_ms, task->retry_on_timeout, task->retry, task->sleep_between_retries,
+				policy->timeout, policy->retry_on_timeout, policy->retry, policy->sleep_between_retries,
 				as_batch_parse, task);
 	
 	as_command_free(cmd, size);
@@ -639,6 +649,8 @@ as_batch_index_execute(as_batch_task* task)
 static as_status
 as_batch_direct_execute(as_batch_task* task)
 {
+	const as_policy_batch* policy = task->policy;
+
 	size_t size = AS_HEADER_SIZE;
 	size += as_command_string_field_size(task->ns);
 	
@@ -653,7 +665,7 @@ as_batch_direct_execute(as_batch_task* task)
 	}
 	
 	uint8_t* cmd = as_command_init(size);
-	uint8_t* p = as_command_write_header_read(cmd, task->read_attr, AS_POLICY_CONSISTENCY_LEVEL_ONE, task->timeout_ms, 2, task->n_bins);
+	uint8_t* p = as_command_write_header_read(cmd, task->read_attr, policy->consistency_level, policy->timeout, 2, task->n_bins);
 	p = as_command_write_field_string(p, AS_FIELD_NAMESPACE, task->ns);
 	p = as_command_write_field_header(p, AS_FIELD_DIGEST_ARRAY, byte_size);
 	
@@ -678,7 +690,7 @@ as_batch_direct_execute(as_batch_task* task)
 	as_error err;
 	as_error_init(&err);
 	as_status status = as_command_execute(task->cluster, &err, &cn, cmd, size,
-				task->timeout_ms, task->retry_on_timeout, task->retry, task->sleep_between_retries,
+				policy->timeout, policy->retry_on_timeout, policy->retry, policy->sleep_between_retries,
 				as_batch_parse, task);
 	
 	as_command_free(cmd, size);
@@ -858,6 +870,7 @@ as_batch_execute(
 	as_batch_task task;
 	memset(&task, 0, sizeof(as_batch_task));
 	task.cluster = cluster;
+	task.policy = policy;
 	task.ns = ns;
 	task.err = err;
 	task.results = results;
@@ -866,16 +879,9 @@ as_batch_execute(
 	task.bins = bins;
 	task.n_bins = n_bins;
 	task.keys = batch->keys.entries;
-	task.timeout_ms = policy->timeout;
 	task.index = 0;
-	task.retry = policy->retry;
-	task.sleep_between_retries = policy->sleep_between_retries;
 	task.read_attr = read_attr;
 	task.use_batch_records = false;
-	task.retry_on_timeout = policy->retry_on_timeout;
-	task.allow_inline = policy->allow_inline;
-	task.send_set_name = policy->send_set_name;
-	task.deserialize = policy->deserialize;
 	task.udata = udata;
 	task.callback_xdr = callback_xdr;
 
@@ -967,18 +973,12 @@ as_batch_read_execute_sync(
 	as_batch_task task;
 	memset(&task, 0, sizeof(as_batch_task));
 	task.cluster = cluster;
+	task.policy = policy;
 	task.err = err;
 	task.records = records;
 	task.error_mutex = &error_mutex;
 	task.n_keys = n_keys;
-	task.timeout_ms = policy->timeout;
-	task.retry = policy->retry;
-	task.sleep_between_retries = policy->sleep_between_retries;
 	task.use_batch_records = true;
-	task.retry_on_timeout = policy->retry_on_timeout;
-	task.allow_inline = policy->allow_inline;
-	task.send_set_name = policy->send_set_name;
-	task.deserialize = policy->deserialize;
 
 	if (policy->concurrent && n_batch_nodes > 1) {
 		// Run batch requests in parallel in separate threads.
@@ -1079,7 +1079,7 @@ as_batch_read_execute_async(
 		cmd->pipe_listener = NULL;
 		cmd->deserialize = policy->deserialize;
 		cmd->free_buf = false;
-		cmd->len = (uint32_t)as_batch_index_records_write(records, &batch_node->offsets, policy->timeout, policy->allow_inline, policy->send_set_name, cmd->buf);
+		cmd->len = (uint32_t)as_batch_index_records_write(records, &batch_node->offsets, policy, cmd->buf);
 		
 		status = as_event_command_execute(cmd, err);
 		

@@ -119,7 +119,8 @@ as_status aerospike_udf_get(
 	);
 
 /**
- *	Put a UDF file into the cluster.
+ *	Put a UDF file into the cluster.  This function will return before the put is completed on
+ *	all nodes.  Use aerospike_udf_put_wait() when need to wait for completion.
  *
  *	~~~~~~~~~~{.c}
  *	as_bytes content;
@@ -141,7 +142,7 @@ as_status aerospike_udf_get(
  *	@param type			The type of UDF file.
  *	@param content		The file of the UDF file.
  *
- *	@return AEROSPIKE_OK if successful. Otherwise an error occurred.
+ *	@return AEROSPIKE_OK if UDF put was started. Otherwise an error occurred.
  *
  *	@ingroup udf_operations
  */
@@ -178,7 +179,8 @@ as_status aerospike_udf_put_wait(
 	const char * filename, uint32_t interval_ms);
 
 /**
- *	Remove a UDF file from the cluster.
+ *	Remove a UDF file from the cluster. This function will return before the remove is completed on
+ *	all nodes.  Use aerospike_udf_remove_wait() when need to wait for completion.
  *
  *	~~~~~~~~~~{.c}
  *	if ( aerospike_udf_remove(&as, &err, NULL, "my.lua") != AEROSPIKE_OK ) {
@@ -189,16 +191,38 @@ as_status aerospike_udf_put_wait(
  *	@param as			The aerospike instance to use for this operation.
  *	@param err			The as_error to be populated if an error occurs.
  *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- *	@param filename 		The name of the UDF file.
+ *	@param filename 	The name of the UDF file.
+ *
+ *	@return AEROSPIKE_OK if remove was started. Otherwise an error occurred.
+ *
+ *	@ingroup udf_operations
+ */
+as_status aerospike_udf_remove(
+	aerospike * as, as_error * err, const as_policy_info * policy, const char * filename
+	);
+
+/**
+ *	Wait for asynchronous udf remove to complete using given polling interval.
+ *
+ *	~~~~~~~~~~{.c} *
+ *	if (aerospike_udf_remove(&as, &err, NULL, "my.lua") == AEROSPIKE_OK) {
+ *	    aerospike_udf_remove_wait(&as, &err, NULL, "my.lua", 0);
+ *	}
+ *	~~~~~~~~~~
+ *
+ *	@param as			The aerospike instance to use for this operation.
+ *	@param err			The as_error to be populated if an error occurs.
+ *	@param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ *	@param filename		The name of the UDF file.
+ *	@param interval_ms	The polling interval in milliseconds. If zero, 1000 ms is used.
  *
  *	@return AEROSPIKE_OK if successful. Otherwise an error occurred.
  *
  *	@ingroup udf_operations
  */
-as_status aerospike_udf_remove(
-	aerospike * as, as_error * err, const as_policy_info * policy, 
-	const char * filename
-	);
+as_status aerospike_udf_remove_wait(
+	aerospike * as, as_error * err, const as_policy_info * policy,
+	const char * filename, uint32_t interval_ms);
 
 #ifdef __cplusplus
 } // end extern "C"

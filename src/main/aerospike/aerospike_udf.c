@@ -375,3 +375,52 @@ as_status aerospike_udf_remove(
 	cf_free(response);
 	return AEROSPIKE_OK;
 }
+
+static bool
+aerospike_udf_remove_is_done(aerospike* as, as_error* err, const as_policy_info* policy, char* filter)
+{
+	// Query all nodes for task completion status.
+	bool done = true;
+	as_nodes* nodes = as_nodes_reserve(as->cluster);
+
+	for (uint32_t i = 0; i < nodes->size && done; i++) {
+		as_node* node = nodes->array[i];
+
+		char* response = 0;
+		as_status status = aerospike_info_node(as, err, policy, node, "udf-list", &response);
+
+		if (status == AEROSPIKE_OK) {
+			char* p = strstr(response, filter);
+
+			if (p) {
+				done = false;
+			}
+			cf_free(response);
+		}
+	}
+	as_nodes_release(nodes);
+	return done;
+}
+
+as_status aerospike_udf_remove_wait(
+	aerospike * as, as_error * err, const as_policy_info * policy,
+	const char * filename, uint32_t interval_ms)
+{
+	if (! policy) {
+		policy = &as->config.policies.info;
+	}
+
+	char filter[256];
+	snprintf(filter, sizeof(filter), "filename=%s", filename);
+
+	uint32_t interval_micros = (interval_ms <= 0)? 1000 * 1000 : interval_ms * 1000;
+
+	bool done;
+
+	do {
+		usleep(interval_micros);
+		done = aerospike_udf_remove_is_done(as, err, policy, filter);
+	} while (! done);
+
+	return AEROSPIKE_OK;
+}

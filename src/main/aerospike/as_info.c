@@ -143,7 +143,7 @@ as_info_command_node(
 		as_node_close_connection(&socket);
 	}
 	else {
-		as_node_put_connection(&socket);
+		as_node_put_connection(&socket, node->cluster->max_socket_idle);
 	}
 	return status;
 }

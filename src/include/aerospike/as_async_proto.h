@@ -16,6 +16,7 @@
  */
 #pragma once
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -36,6 +37,12 @@ as_async_get_pending(struct as_cluster_s* cluster);
 
 void
 as_async_get_connections(struct as_cluster_s* cluster, uint32_t* async_conn, uint32_t* async_conn_pool);
+
+void
+as_async_update_max_idle(struct as_cluster_s* cluster, uint32_t max_idle);
+
+void
+as_async_update_max_conns(struct as_cluster_s* cluster, bool pipe, uint32_t max_conns);
 
 #ifdef __cplusplus
 } // end extern "C"

@@ -227,10 +227,19 @@ as_event_validate_connection(as_event_connection* conn)
 }
 
 static inline void
-as_event_set_conn_last_used(as_event_connection* conn)
+as_event_set_conn_last_used(as_event_connection* conn, uint32_t max_socket_idle)
 {
-	if (conn->socket.ctx) {
-		conn->socket.last_used = cf_get_seconds();
+	// TLS connections default to 55 seconds.
+	if (max_socket_idle == 0 && conn->socket.ctx) {
+		max_socket_idle = 55;
+	}
+
+	if (max_socket_idle > 0) {
+		conn->socket.idle_check.max_socket_idle = max_socket_idle;
+		conn->socket.idle_check.last_used = (uint32_t)cf_get_seconds();
+	}
+	else {
+		conn->socket.idle_check.max_socket_idle = conn->socket.idle_check.last_used = 0;
 	}
 }
 
@@ -273,7 +282,7 @@ as_event_validate_connection(as_event_connection* conn)
 }
 	
 static inline void
-as_event_set_conn_last_used(as_event_connection* conn)
+as_event_set_conn_last_used(as_event_connection* conn, uint32_t max_socket_idle)
 {
 }
 
@@ -317,10 +326,19 @@ as_event_validate_connection(as_event_connection* conn)
 }
 
 static inline void
-as_event_set_conn_last_used(as_event_connection* conn)
+as_event_set_conn_last_used(as_event_connection* conn, uint32_t max_socket_idle)
 {
-	if (conn->socket.ctx) {
-		conn->socket.last_used = cf_get_seconds();
+	// TLS connections default to 55 seconds.
+	if (max_socket_idle == 0 && conn->socket.ctx) {
+		max_socket_idle = 55;
+	}
+
+	if (max_socket_idle > 0) {
+		conn->socket.idle_check.max_socket_idle = max_socket_idle;
+		conn->socket.idle_check.last_used = (uint32_t)cf_get_seconds();
+	}
+	else {
+		conn->socket.idle_check.max_socket_idle = conn->socket.idle_check.last_used = 0;
 	}
 }
 
@@ -357,7 +375,7 @@ as_event_validate_connection(as_event_connection* conn)
 }
 
 static inline void
-as_event_set_conn_last_used(as_event_connection* conn)
+as_event_set_conn_last_used(as_event_connection* conn, uint32_t max_socket_idle)
 {
 }
 
@@ -439,28 +457,28 @@ as_event_set_auth_parse_header(as_event_command* cmd)
 }
 
 static inline void
-as_event_release_connection(as_cluster* cluster, as_event_connection* conn, as_queue* queue)
+as_event_release_connection(as_cluster* cluster, as_event_connection* conn, as_conn_pool* pool)
 {
 	as_event_close_connection(conn);
 	ck_pr_dec_32(&cluster->async_conn_count);
-	as_queue_decr_total(queue);
+	as_conn_pool_dec(pool);
 }
 
 static inline void
-as_event_decr_connection(as_cluster* cluster, as_queue* queue)
+as_event_decr_connection(as_cluster* cluster, as_conn_pool* pool)
 {
 	ck_pr_dec_32(&cluster->async_conn_count);
-	as_queue_decr_total(queue);
+	as_conn_pool_dec(pool);
 }
 
 static inline void
 as_event_decr_conn(as_event_command* cmd)
 {
-	as_queue* queue = cmd->pipe_listener != NULL ?
-		&cmd->node->pipe_conn_qs[cmd->event_loop->index] :
-		&cmd->node->async_conn_qs[cmd->event_loop->index];
+	as_conn_pool* pool = cmd->pipe_listener != NULL ?
+		&cmd->node->pipe_conn_pools[cmd->event_loop->index] :
+		&cmd->node->async_conn_pools[cmd->event_loop->index];
 	
-	as_event_decr_connection(cmd->cluster, queue);
+	as_event_decr_connection(cmd->cluster, pool);
 }
 
 #ifdef __cplusplus

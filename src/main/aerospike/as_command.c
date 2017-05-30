@@ -510,7 +510,7 @@ as_command_execute(
 		}
 		
 		// Put connection back in pool.
-		as_node_put_connection(&socket);
+		as_node_put_connection(&socket, cluster->max_socket_idle);
 		
 		// Release resources.
 		if (release_node) {

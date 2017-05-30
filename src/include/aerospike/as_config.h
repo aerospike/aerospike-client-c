@@ -229,19 +229,6 @@ typedef struct as_config_tls_s {
 	 */
 	char* certfile;
 
-	/**
-	 *	Maximum socket idle in seconds for TLS connections.  TLS Socket connection pools will
-	 *	discard sockets that have been idle longer than the maximum.  The value is limited to
-	 *	24 hours (86400).
-	 *
-	 *	It's important to set this value to a few seconds less than the server's proto-fd-idle-ms
-	 *	(default 60000 milliseconds or 1 minute), so the client does not attempt to use a socket
-	 *	that has already been reaped by the server.
-	 *
-	 *	Default: 55 seconds
-	 */
-	uint32_t max_socket_idle;
-
 } as_config_tls;
 
 /**
@@ -443,6 +430,18 @@ typedef struct as_config_s {
 	 *	Default: 1000
 	 */
 	uint32_t conn_timeout_ms;
+
+	/**
+	 *	Maximum socket idle time in seconds.  Connection pools will discard sockets that have
+	 *	been idle longer than the maximum.  The value is limited to 24 hours (86400).
+	 *
+	 *	It's important to set this value to a few seconds less than the server's proto-fd-idle-ms
+	 *	(default 60000 milliseconds or 1 minute), so the client does not attempt to use a socket
+	 *	that has already been reaped by the server.
+	 *
+	 *	Default: 0 seconds (disabled) for non-TLS connections, 55 seconds for TLS connections.
+	 */
+	uint32_t max_socket_idle;
 
 	/**
 	 *	Polling interval in milliseconds for cluster tender

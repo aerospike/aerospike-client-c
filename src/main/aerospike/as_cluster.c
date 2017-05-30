@@ -55,16 +55,6 @@ as_node_refresh_partitions(as_cluster* cluster, as_error* err, as_node* node, as
  *	Functions
  *****************************************************************************/
 
-void
-as_cluster_set_async_max_conns_per_node(as_cluster* cluster, uint32_t async_size, uint32_t pipe_size)
-{
-	// Note: This setting only affects pools in new nodes.  Existing node pools are not changed.
-	cluster->async_max_conns_per_node = async_size;
-	cluster->pipe_max_conns_per_node = pipe_size;
-	ck_pr_fence_store();
-	ck_pr_inc_32(&cluster->version);
-}
-
 static inline void
 set_nodes(as_cluster* cluster, as_nodes* nodes)
 {
@@ -449,7 +439,7 @@ as_cluster_gc(as_vector* /* <as_gc_item> */ vector)
  * Check health of all nodes in the cluster.
  */
 as_status
-as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings, bool config_change)
+as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings)
 {
 	// All node additions/deletions are performed in tend thread.
 	// Garbage collect data structures released in previous tend.
@@ -460,27 +450,6 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings, b
 
 	// If active nodes don't exist, seed cluster.
 	as_nodes* nodes = cluster->nodes;
-
-	if (config_change && nodes->size > 0) {
-		as_vector all_nodes;
-		as_vector_inita(&all_nodes, sizeof(as_node*), nodes->size);
-
-		for (uint32_t i = 0; i < nodes->size; i++) {
-			as_vector_append(&all_nodes, &nodes->array[i]);
-		}
-
-		as_cluster_remove_nodes(cluster, &all_nodes);
-		as_vector_destroy(&all_nodes);
-
-		as_partition_tables* tables = as_partition_tables_reserve(cluster);
-
-		for (uint32_t i = 0; i < tables->size; i++) {
-			as_partition_table_destroy(tables->array[i]);
-		}
-
-		tables->size = 0;
-		as_partition_tables_release(tables);
-	}
 
 	if (nodes->size == 0) {
 		as_status status = as_cluster_seed_nodes(cluster, err, enable_seed_warnings);
@@ -625,7 +594,7 @@ as_wait_till_stabilized(as_cluster* cluster, as_error* err)
 	uint32_t count = -1;
 	
 	do {
-		as_status status = as_cluster_tend(cluster, err, true, false);
+		as_status status = as_cluster_tend(cluster, err, true);
 		
 		if (status != AEROSPIKE_OK) {
 			return status;
@@ -648,7 +617,6 @@ static void*
 as_cluster_tender(void* data)
 {
 	as_cluster* cluster = (as_cluster*)data;
-	uint32_t version = 0;
 	
 	struct timespec delta;
 	cf_clock_set_timespec_ms(cluster->tend_interval, &delta);
@@ -661,9 +629,7 @@ as_cluster_tender(void* data)
 	pthread_mutex_lock(&cluster->tend_lock);
 
 	while (cluster->valid) {
-		uint32_t new_version = ck_pr_load_32(&cluster->version);
-		status = as_cluster_tend(cluster, &err, false, new_version != version);
-		version = new_version;
+		status = as_cluster_tend(cluster, &err, false);
 		
 		if (status != AEROSPIKE_OK) {
 			as_log_warn("Tend error: %s %s", as_error_string(status), err.message);
@@ -923,6 +889,7 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 	cluster->tend_interval = (config->tender_interval < 250)? 250 : config->tender_interval;
 	cluster->max_conns_per_node = config->max_conns_per_node;
 	cluster->conn_timeout_ms = (config->conn_timeout_ms == 0) ? 1000 : config->conn_timeout_ms;
+	cluster->max_socket_idle = (config->max_socket_idle > 86400) ? 86400 : config->max_socket_idle;
 	cluster->async_max_conns_per_node = config->async_max_conns_per_node;
 	cluster->pipe_max_conns_per_node = config->pipe_max_conns_per_node;;
 	cluster->conn_pools_per_node = config->conn_pools_per_node;

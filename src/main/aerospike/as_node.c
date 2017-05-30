@@ -52,11 +52,11 @@ extern uint32_t as_event_loop_capacity;
  *	Functions.
  *****************************************************************************/
 
-static as_queue*
-as_node_create_async_queues(uint32_t max_conns_per_node)
+static as_conn_pool*
+as_node_create_async_pools(uint32_t max_conns_per_node)
 {
 	// Create one queue per event manager.
-	as_queue* queues = cf_malloc(sizeof(as_queue) * as_event_loop_capacity);
+	as_conn_pool* pools = cf_malloc(sizeof(as_conn_pool) * as_event_loop_capacity);
 	
 	// Distribute max_conns_per_node over event loops taking remainder into account.
 	uint32_t max = max_conns_per_node / as_event_loop_capacity;
@@ -65,9 +65,9 @@ as_node_create_async_queues(uint32_t max_conns_per_node)
 	
 	for (uint32_t i = 0; i < as_event_loop_capacity; i++) {
 		capacity = i < rem ? max + 1 : max;
-		as_queue_init(&queues[i], sizeof(void*), capacity);
+		as_conn_pool_init(&pools[i], sizeof(void*), capacity);
 	}
-	return queues;
+	return pools;
 }
 
 as_node*
@@ -109,27 +109,27 @@ as_node_create(
 	}
 
 	// Create connection pool queues.
-	node->conn_qs = cf_malloc(sizeof(as_queue_lock) * cluster->conn_pools_per_node);
+	node->conn_pool_locks = cf_malloc(sizeof(as_conn_pool_lock) * cluster->conn_pools_per_node);
 	node->conn_iter = 0;
 
 	uint32_t max = cluster->max_conns_per_node / cluster->conn_pools_per_node;
 	uint32_t rem = cluster->max_conns_per_node - (max * cluster->conn_pools_per_node);
 
 	for (uint32_t i = 0; i < cluster->conn_pools_per_node; i++) {
-		as_queue_lock* q = &node->conn_qs[i];
+		as_conn_pool_lock* pool_lock = &node->conn_pool_locks[i];
 		uint32_t capacity = i < rem ? max + 1 : max;
-		pthread_mutex_init(&q->lock, NULL);
-		as_queue_init(&q->queue, sizeof(as_socket), capacity);
+		pthread_mutex_init(&pool_lock->lock, NULL);
+		as_conn_pool_init(&pool_lock->pool, sizeof(as_socket), capacity);
 	}
 
 	// Initialize async queue.
 	if (as_event_loop_capacity > 0) {
-		node->async_conn_qs = as_node_create_async_queues(cluster->async_max_conns_per_node);
-		node->pipe_conn_qs = as_node_create_async_queues(cluster->pipe_max_conns_per_node);
+		node->async_conn_pools = as_node_create_async_pools(cluster->async_max_conns_per_node);
+		node->pipe_conn_pools = as_node_create_async_pools(cluster->pipe_max_conns_per_node);
 	}
 	else {
-		node->async_conn_qs = 0;
-		node->pipe_conn_qs = 0;
+		node->async_conn_pools = 0;
+		node->pipe_conn_pools = 0;
 	}
 
 	node->peers_count = 0;
@@ -153,18 +153,18 @@ as_node_destroy(as_node* node)
 	uint32_t max = node->cluster->conn_pools_per_node;
 
 	for (uint32_t i = 0; i < max; i++) {
-		as_queue_lock* q = &node->conn_qs[i];
+		as_conn_pool_lock* pool_lock = &node->conn_pool_locks[i];
 		as_socket sock;
 
-		pthread_mutex_lock(&q->lock);
-		while (as_queue_pop(&q->queue, &sock)) {
+		pthread_mutex_lock(&pool_lock->lock);
+		while (as_conn_pool_get(&pool_lock->pool, &sock)) {
 			as_socket_close(&sock);
 		}
-		as_queue_destroy(&q->queue);
-		pthread_mutex_unlock(&q->lock);
-		pthread_mutex_destroy(&q->lock);
+		as_conn_pool_destroy(&pool_lock->pool);
+		pthread_mutex_unlock(&pool_lock->lock);
+		pthread_mutex_destroy(&pool_lock->lock);
 	}
-	cf_free(node->conn_qs);
+	cf_free(node->conn_pool_locks);
 
 	// Drain async connection pools.
 	if (as_event_loop_capacity > 0) {
@@ -298,7 +298,7 @@ as_node_try_family_connections(as_node* node, int family, int begin, int end, in
 }
 
 static as_status
-as_node_create_socket(as_error* err, as_node* node, as_queue_lock* queue, as_socket* sock)
+as_node_create_socket(as_error* err, as_node* node, as_conn_pool_lock* pool_lock, as_socket* sock)
 {
 	// Try addresses.
 	uint32_t index = node->address_index;
@@ -325,10 +325,10 @@ as_node_create_socket(as_error* err, as_node* node, as_queue_lock* queue, as_soc
 	}
 	
 	if (rv < 0) {
-		if (queue) {
-			pthread_mutex_lock(&queue->lock);
-			queue->queue.total--;
-			pthread_mutex_unlock(&queue->lock);
+		if (pool_lock) {
+			pthread_mutex_lock(&pool_lock->lock);
+			as_conn_pool_dec(&pool_lock->pool);
+			pthread_mutex_unlock(&pool_lock->lock);
 		}
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to connect: %s %s", node->name, primary->name);
 	}
@@ -344,9 +344,9 @@ as_node_create_socket(as_error* err, as_node* node, as_queue_lock* queue, as_soc
 }
 
 static as_status
-as_node_create_connection(as_error* err, as_node* node, uint64_t deadline_ms, as_queue_lock* queue, as_socket* sock)
+as_node_create_connection(as_error* err, as_node* node, uint64_t deadline_ms, as_conn_pool_lock* pool_lock, as_socket* sock)
 {
-	as_status status = as_node_create_socket(err, node, queue, sock);
+	as_status status = as_node_create_socket(err, node, pool_lock, sock);
 
 	if (status) {
 		return status;
@@ -361,15 +361,15 @@ as_node_create_connection(as_error* err, as_node* node, uint64_t deadline_ms, as
 		if (status) {
 			as_socket_close(sock);
 
-			if (queue) {
-				pthread_mutex_lock(&queue->lock);
-				queue->queue.total--;
-				pthread_mutex_unlock(&queue->lock);
+			if (pool_lock) {
+				pthread_mutex_lock(&pool_lock->lock);
+				as_conn_pool_dec(&pool_lock->pool);
+				pthread_mutex_unlock(&pool_lock->lock);
 			}
 			return status;
 		}
 	}
-	sock->queue = queue;
+	sock->pool_lock = pool_lock;
 	return AEROSPIKE_OK;
 }
 
@@ -407,7 +407,7 @@ as_node_authenticate_connection(as_cluster* cluster, const char* user, const cha
 as_status
 as_node_get_connection(as_error* err, as_node* node, uint64_t deadline_ms, as_socket* sock)
 {
-	as_queue_lock* queues = node->conn_qs;
+	as_conn_pool_lock* pool_locks = node->conn_pool_locks;
 	uint32_t max = node->cluster->conn_pools_per_node;
 	uint32_t initial_index;
 	bool backward;
@@ -423,26 +423,19 @@ as_node_get_connection(as_error* err, as_node* node, uint64_t deadline_ms, as_so
 	}
 
 	as_socket s;
-	as_queue_lock* queue = &queues[initial_index];
-	uint32_t queue_index = initial_index;
+	as_conn_pool_lock* pool_lock = &pool_locks[initial_index];
+	uint32_t pool_index = initial_index;
 	int len;
 	int ret;
 
 	while (1) {
 		ret = 0;
-		pthread_mutex_lock(&queue->lock);
+		pthread_mutex_lock(&pool_lock->lock);
 
-		if (! as_queue_pop(&queue->queue, &s)) {
-			if (queue->queue.total < queue->queue.capacity) {
-				// Allocate slot for new socket.
-				queue->queue.total++;
-				ret = 1;
-			}
-			else {
-				ret = -1;
-			}
+		if (! as_conn_pool_get(&pool_lock->pool, &s)) {
+			ret = as_conn_pool_inc(&pool_lock->pool) ? 1 : -1;
 		}
-		pthread_mutex_unlock(&queue->lock);
+		pthread_mutex_unlock(&pool_lock->lock);
 
 		if (ret == 0) {
 			// Found socket.
@@ -451,40 +444,40 @@ as_node_get_connection(as_error* err, as_node* node, uint64_t deadline_ms, as_so
 
 			if (len == 0) {
 				*sock = s;
-				sock->queue = queue;
+				sock->pool_lock = pool_lock;
 				return AEROSPIKE_OK;
 			}
 
 			as_log_debug("Invalid socket %d from pool: %d", s.fd, len);
 			as_socket_close(&s);
-			pthread_mutex_lock(&queue->lock);
-			queue->queue.total--;
-			pthread_mutex_unlock(&queue->lock);
+			pthread_mutex_lock(&pool_lock->lock);
+			as_conn_pool_dec(&pool_lock->pool);
+			pthread_mutex_unlock(&pool_lock->lock);
 		}
 		else if (ret == 1) {
 			// Socket not found and queue has available slot.
 			// Create new connection.
-			return as_node_create_connection(err, node, deadline_ms, queue, sock);
+			return as_node_create_connection(err, node, deadline_ms, pool_lock, sock);
 		}
 		else {
 			// Socket not found and queue is full.  Try another queue.
 			if (backward) {
-				if (queue_index > 0) {
-					queue_index--;
+				if (pool_index > 0) {
+					pool_index--;
 				}
 				else {
-					queue_index = initial_index;
+					pool_index = initial_index;
 
-					if (++queue_index >= max) {
+					if (++pool_index >= max) {
 						break;
 					}
 					backward = false;
 				}
 			}
-			else if (++queue_index >= max) {
+			else if (++pool_index >= max) {
 				break;
 			}
-			queue = &queues[queue_index];
+			pool_lock = &pool_locks[pool_index];
 		}
 	}
 	// All queues full.

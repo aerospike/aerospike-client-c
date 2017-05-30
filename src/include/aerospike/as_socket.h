@@ -69,11 +69,10 @@ extern "C" {
 typedef struct as_tls_context_s {
 	SSL_CTX* ssl_ctx;
 	void* cert_blacklist;
-	uint64_t max_socket_idle;
 	bool log_session_info;
 } as_tls_context;
 
-struct as_queue_lock_s;
+struct as_conn_pool_lock_s;
 struct as_node_s;
 
 /**
@@ -83,8 +82,11 @@ typedef struct as_socket_s {
 	int fd;
 	int family;
 	union {
-		struct as_queue_lock_s* queue; // Used when sync socket is active.
-		uint64_t last_used;            // Used when socket in pool.
+		struct as_conn_pool_lock_s* pool_lock; // Used when sync socket is active.
+		struct {
+			uint32_t max_socket_idle;
+			uint32_t last_used;
+		} idle_check;                          // Used when socket in pool.
 	};
 	as_tls_context* ctx;
 	const char* tls_name;

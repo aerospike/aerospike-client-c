@@ -42,12 +42,12 @@ as_config_init(as_config* c)
 	c->pipe_max_conns_per_node = 64;
 	c->conn_pools_per_node = 1;
 	c->conn_timeout_ms = 1000;
+	c->max_socket_idle = 0;
 	c->tender_interval = 1000;
 	c->thread_pool_size = 16;
 	as_policies_init(&c->policies);
 	as_config_lua_init(&c->lua);
 	memset(&c->tls, 0, sizeof(as_config_tls));
-	c->tls.max_socket_idle = 55;
 	c->fail_if_not_connected = true;
 	c->use_services_alternate = false;
 	c->use_shm = false;

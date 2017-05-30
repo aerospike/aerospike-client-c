@@ -185,12 +185,6 @@ typedef struct as_cluster_s {
 
 	/**
 	 *	@private
-	 *	Configuration version.  Incremented, when the configuration is changed.
-	 */
-	uint32_t version;
-	
-	/**
-	 *	@private
 	 *	Milliseconds between cluster tends.
 	 */
 	uint32_t tend_interval;
@@ -345,12 +339,6 @@ as_cluster_add_seed(as_cluster* cluster, const char* hostname, const char* tls_n
  */
 void
 as_cluster_remove_seed(as_cluster* cluster, const char* hostname, uint16_t port);
-
-/**
- * 	Change maximum async connections per node.
- */
-void
-as_cluster_set_async_max_conns_per_node(as_cluster* cluster, uint32_t async_size, uint32_t pipe_size);
 
 /**
  *	@private

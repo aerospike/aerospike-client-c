@@ -258,20 +258,20 @@ as_event_command_execute(as_event_command* cmd, as_error* err)
 static inline void
 as_event_release_async_connection(as_event_command* cmd)
 {
-	as_queue* queue = &cmd->node->async_conn_qs[cmd->event_loop->index];
-	as_event_release_connection(cmd->cluster, cmd->conn, queue);
+	as_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
+	as_event_release_connection(cmd->cluster, cmd->conn, pool);
 }
 
 static inline void
 as_event_put_connection(as_event_command* cmd)
 {
-	as_event_set_conn_last_used(cmd->conn);
-	as_queue* queue = &cmd->node->async_conn_qs[cmd->event_loop->index];
+	as_event_set_conn_last_used(cmd->conn, cmd->cluster->max_socket_idle);
+	as_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
 
-	if (as_queue_push(queue, &cmd->conn)) {
+	if (as_conn_pool_put(pool, &cmd->conn)) {
 		ck_pr_inc_32(&cmd->cluster->async_conn_pool);
 	} else {
-		as_event_release_connection(cmd->cluster, cmd->conn, queue);
+		as_event_release_connection(cmd->cluster, cmd->conn, pool);
 	}
 }
 
@@ -387,11 +387,11 @@ as_event_executor_complete(as_event_command* cmd)
 as_connection_status
 as_event_get_connection(as_event_command* cmd)
 {
-	as_queue* queue = &cmd->node->async_conn_qs[cmd->event_loop->index];
+	as_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
 	as_async_connection* conn;
 
 	// Find connection.
-	while (as_queue_pop(queue, &conn)) {
+	while (as_conn_pool_get(pool, &conn)) {
 		ck_pr_dec_32(&cmd->cluster->async_conn_pool);
 		
 		// Verify that socket is active and receive buffer is empty.
@@ -404,11 +404,11 @@ as_event_get_connection(as_event_command* cmd)
 		}
 		
 		as_log_debug("Invalid async socket from pool: %d", len);
-		as_event_release_connection(cmd->cluster, &conn->base, queue);
+		as_event_release_connection(cmd->cluster, &conn->base, pool);
 	}
 	
 	// Create connection structure only when node connection count within queue limit.
-	if (as_queue_incr_total(queue)) {
+	if (as_conn_pool_inc(pool)) {
 		ck_pr_inc_32(&cmd->cluster->async_conn_count);
 		conn = cf_malloc(sizeof(as_async_connection));
 		conn->base.pipeline = false;
@@ -423,7 +423,7 @@ as_event_get_connection(as_event_command* cmd)
 		as_error err;
 		as_error_update(&err, AEROSPIKE_ERR_NO_MORE_CONNECTIONS,
 						"Max node/event loop %s async connections would be exceeded: %u",
-						cmd->node->name, queue->capacity);
+						cmd->node->name, pool->limit);
 		as_event_stop_timer(cmd);
 		as_event_error_callback(cmd, &err);
 		return AS_CONNECTION_TOO_MANY;

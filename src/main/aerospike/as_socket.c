@@ -146,7 +146,7 @@ as_socket_init(as_socket* sock)
 {
 	sock->fd = -1;
 	sock->family = 0;
-	sock->last_used = 0;
+	sock->idle_check.max_socket_idle = sock->idle_check.last_used = 0;
 	sock->ctx = NULL;
 	sock->tls_name = NULL;
 	sock->ssl = NULL;
@@ -219,7 +219,7 @@ as_socket_wrap(as_socket* sock, int family, int fd, as_tls_context* ctx, const c
 {
 	sock->fd = fd;
 	sock->family = family;
-	sock->last_used = 0;
+	sock->idle_check.max_socket_idle = sock->idle_check.last_used = 0;
 
 	if (ctx->ssl_ctx) {
 		if (as_tls_wrap(ctx, sock, tls_name) < 0) {
@@ -350,14 +350,15 @@ as_socket_validate_fd(int fd)
 int
 as_socket_validate(as_socket* sock)
 {
-	if (sock->ctx) {
-		// Validate TLS connections using max_socket_idle convention because peeking in
-		// TLS mode is expensive.
-		return (cf_get_seconds() - sock->last_used <= sock->ctx->max_socket_idle) ? 0 : -1;
+	if (sock->idle_check.max_socket_idle > 0) {
+		uint32_t idle = (uint32_t)cf_get_seconds() - sock->idle_check.last_used;
+
+		if (idle > sock->idle_check.max_socket_idle) {
+			return -1;
+		}
 	}
-	else {
-		return as_socket_validate_fd(sock->fd);
-	}
+
+	return as_socket_validate_fd(sock->fd);
 }
 
 as_status

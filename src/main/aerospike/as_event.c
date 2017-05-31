@@ -86,6 +86,7 @@ as_event_create_loops(uint32_t capacity)
 		event_loop->thread = 0;
 		event_loop->index = i;
 		event_loop->errors = 0;
+		as_queue_init(&event_loop->queue, sizeof(as_event_commander), AS_EVENT_QUEUE_INITIAL_CAPACITY);
 		as_queue_init(&event_loop->pipe_cb_queue, sizeof(as_queued_pipe_cb), AS_EVENT_QUEUE_INITIAL_CAPACITY);
 		event_loop->pipe_cb_calling = false;
 
@@ -135,6 +136,7 @@ as_event_set_external_loop(void* loop)
 	event_loop->thread = pthread_self();  // Current thread must be same as event loop thread!
 	event_loop->index = current;
 	event_loop->errors = 0;
+	as_queue_init(&event_loop->queue, sizeof(as_event_commander), AS_EVENT_QUEUE_INITIAL_CAPACITY);
 	as_queue_init(&event_loop->pipe_cb_queue, sizeof(as_queued_pipe_cb), AS_EVENT_QUEUE_INITIAL_CAPACITY);
 	event_loop->pipe_cb_calling = false;
 	as_event_register_external_loop(event_loop);
@@ -179,7 +181,7 @@ as_event_close_loops()
 	
 		// Calling close directly can cause previously queued commands to be dropped.
 		// Therefore, always queue close command to event loop.
-		if (! as_event_send_close_loop(event_loop)) {
+		if (! as_event_execute(event_loop, NULL, NULL)) {
 			as_log_error("Failed to send stop command to event loop");
 			status = false;
 		}
@@ -210,6 +212,23 @@ as_event_destroy_loops()
 /******************************************************************************
  * PRIVATE FUNCTIONS
  *****************************************************************************/
+
+static void
+as_event_command_execute_in_loop(as_event_command* cmd)
+{
+	// Check if command timed out after coming off queue.
+	if (cmd->timeout_ms && (cf_getms() - *(uint64_t*)cmd) > cmd->timeout_ms) {
+		as_error err;
+		as_error_set_message(&err, AEROSPIKE_ERR_TIMEOUT, as_error_string(AEROSPIKE_ERR_TIMEOUT));
+		// Tell the libuv version of as_event_command_release() to not try to close the uv_timer_t.
+		cmd->timeout_ms = 0;
+		as_event_error_callback(cmd, &err);
+		return;
+	}
+
+	// Start processing.
+	as_event_command_begin(cmd);
+}
 
 as_status
 as_event_command_execute(as_event_command* cmd, as_error* err)
@@ -245,7 +264,7 @@ as_event_command_execute(as_event_command* cmd, as_error* err)
 		}
 
 		// Send command through queue so it can be executed in event loop thread.
-		if (! as_event_send(cmd)) {
+		if (! as_event_execute(cmd->event_loop, (as_event_executable)as_event_command_execute_in_loop, cmd)) {
 			event_loop->errors++;  // Not in event loop thread, so not exactly accurate.
 			as_event_command_free(cmd);
 			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to queue command");

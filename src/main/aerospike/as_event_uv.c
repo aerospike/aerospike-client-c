@@ -40,19 +40,10 @@ extern bool as_event_threads_created;
 
 #if defined(AS_USE_LIBUV)
 
-#define AS_UV_PROCESS_COMMAND 0
-#define AS_UV_CLOSE_CONNECTION 1
-#define AS_UV_EXIT_LOOP 2
-
 typedef struct {
 	as_event_loop* event_loop;
 	as_monitor monitor;
 } as_uv_thread_data;
-
-typedef struct {
-	uint64_t type;
-	void* ptr;
-} as_uv_command;
 
 void
 as_uv_timer_closed(uv_handle_t* handle)
@@ -87,6 +78,7 @@ as_uv_close_loop(as_event_loop* event_loop)
 	// Cleanup event loop resources.
 	as_queue_destroy(&event_loop->queue);
 	as_queue_destroy(&event_loop->pipe_cb_queue);
+	pthread_mutex_destroy(&event_loop->lock);
 }
 
 static void
@@ -94,7 +86,7 @@ as_uv_wakeup(uv_async_t* wakeup)
 {
 	// Read command pointers from queue.
 	as_event_loop* event_loop = wakeup->data;
-	as_uv_command cmd;
+	as_event_commander cmd;
 	uint32_t i = 0;
 
 	// Only process original size of queue.  Recursive pre-registration errors can
@@ -106,20 +98,12 @@ as_uv_wakeup(uv_async_t* wakeup)
 	pthread_mutex_unlock(&event_loop->lock);
 
 	while (status) {
-		switch (cmd.type) {
-			case AS_UV_PROCESS_COMMAND:
-				as_event_command_execute_in_loop(cmd.ptr);
-				break;
-
-			case AS_UV_CLOSE_CONNECTION:
-				uv_close((uv_handle_t*)cmd.ptr, as_uv_connection_closed);
-				break;
-
-			case AS_UV_EXIT_LOOP:
-				as_uv_close_loop(event_loop);
-				pthread_mutex_destroy(&event_loop->lock);
-				return;
+		if (! cmd.executable) {
+			// Received stop signal.
+			as_uv_close_loop(event_loop);
+			return;
 		}
+		cmd.executable(cmd.udata);
 
 		if (++i < size) {
 			pthread_mutex_lock(&event_loop->lock);
@@ -193,7 +177,6 @@ bool
 as_event_create_loop(as_event_loop* event_loop)
 {
 	event_loop->wakeup = 0;
-	as_queue_init(&event_loop->queue, sizeof(as_uv_command), AS_EVENT_QUEUE_INITIAL_CAPACITY);
 	
 	as_uv_thread_data thread_data;
 	thread_data.event_loop = event_loop;
@@ -215,23 +198,20 @@ as_event_register_external_loop(as_event_loop* event_loop)
 	// This method is only called when user sets an external event loop.
 	event_loop->wakeup = cf_malloc(sizeof(uv_async_t));
 	event_loop->wakeup->data = event_loop;
-	as_queue_init(&event_loop->queue, sizeof(as_uv_command), AS_EVENT_QUEUE_INITIAL_CAPACITY);
-	
+
 	// Assume uv_async_init is called on the same thread as the event loop.
 	uv_async_init(event_loop->loop, event_loop->wakeup, as_uv_wakeup);
 }
 
 bool
-as_event_send(as_event_command* cmd)
+as_event_execute(as_event_loop* event_loop, as_event_executable executable, void* udata)
 {
 	// Send command through queue so it can be executed in event loop thread.
-	as_event_loop* event_loop = cmd->event_loop;
-	
 	pthread_mutex_lock(&event_loop->lock);
-	as_uv_command qcmd = {.type = AS_UV_PROCESS_COMMAND, .ptr = cmd};
+	as_event_commander qcmd = {.executable = executable, .udata = udata};
 	bool queued = as_queue_push(&event_loop->queue, &qcmd);
 	pthread_mutex_unlock(&event_loop->lock);
-	
+
 	if (queued) {
 		uv_async_send(event_loop->wakeup);
 	}
@@ -690,14 +670,14 @@ as_event_close_connection(as_event_connection* conn)
 static bool
 as_uv_queue_close_connections(as_node* node, as_conn_pool* pool, as_queue* cmd_queue)
 {
-	as_uv_command qcmd;
-	qcmd.type = AS_UV_CLOSE_CONNECTION;
+	as_event_commander qcmd;
+	qcmd.executable = (as_event_executable)as_event_close_connection;
 	
 	as_event_connection* conn;
 	
 	// Queue connection commands to event loops.
 	while (as_conn_pool_get(pool, &conn)) {
-		qcmd.ptr = conn;
+		qcmd.udata = conn;
 		
 		if (! as_queue_push(cmd_queue, &qcmd)) {
 			as_log_error("Failed to queue connection close");
@@ -736,21 +716,6 @@ as_event_node_destroy(as_node* node)
 	}
 	cf_free(node->async_conn_pools);
 	cf_free(node->pipe_conn_pools);
-}
-
-bool
-as_event_send_close_loop(as_event_loop* event_loop)
-{
-	// Send stop command through queue so it can be executed in event loop thread.
-	pthread_mutex_lock(&event_loop->lock);
-	as_uv_command qcmd = {.type = AS_UV_EXIT_LOOP, .ptr = 0};
-	bool queued = as_queue_push(&event_loop->queue, &qcmd);
-	pthread_mutex_unlock(&event_loop->lock);
-	
-	if (queued) {
-		uv_async_send(event_loop->wakeup);
-	}
-	return queued;
 }
 
 #endif

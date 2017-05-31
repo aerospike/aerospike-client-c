@@ -55,6 +55,7 @@ as_ev_close_loop(as_event_loop* event_loop)
 	// Cleanup event loop resources.
 	as_queue_destroy(&event_loop->queue);
 	as_queue_destroy(&event_loop->pipe_cb_queue);
+	pthread_mutex_destroy(&event_loop->lock);
 }
 
 static void
@@ -62,7 +63,7 @@ as_ev_wakeup(struct ev_loop* loop, ev_async* wakeup, int revents)
 {
 	// Read command pointers from queue.
 	as_event_loop* event_loop = wakeup->data;
-	void* cmd;
+	as_event_commander cmd;
 	uint32_t i = 0;
 
 	// Only process original size of queue.  Recursive pre-registration errors can
@@ -74,16 +75,12 @@ as_ev_wakeup(struct ev_loop* loop, ev_async* wakeup, int revents)
 	pthread_mutex_unlock(&event_loop->lock);
 
 	while (status) {
-		if (cmd) {
-			// Process new command.
-			as_event_command_execute_in_loop(cmd);
-		}
-		else {
+		if (! cmd.executable) {
 			// Received stop signal.
 			as_ev_close_loop(event_loop);
-			pthread_mutex_destroy(&event_loop->lock);
 			return;
 		}
+		cmd.executable(cmd.udata);
 
 		if (++i < size) {
 			pthread_mutex_lock(&event_loop->lock);
@@ -109,8 +106,6 @@ as_ev_worker(void* udata)
 static inline void
 as_ev_init_loop(as_event_loop* event_loop)
 {
-	as_queue_init(&event_loop->queue, sizeof(void*), AS_EVENT_QUEUE_INITIAL_CAPACITY);
-	
 	ev_async_init(&event_loop->wakeup, as_ev_wakeup);
 	event_loop->wakeup.data = event_loop;
 	ev_async_start(event_loop->loop, &event_loop->wakeup);	
@@ -138,15 +133,14 @@ as_event_register_external_loop(as_event_loop* event_loop)
 }
 
 bool
-as_event_send(as_event_command* cmd)
+as_event_execute(as_event_loop* event_loop, as_event_executable executable, void* udata)
 {
-	// Notify other event loop thread that queue needs to be processed.
-	as_event_loop* event_loop = cmd->event_loop;
-	
+	// Send command through queue so it can be executed in event loop thread.
 	pthread_mutex_lock(&event_loop->lock);
-	bool queued = as_queue_push(&event_loop->queue, &cmd);
+	as_event_commander qcmd = {.executable = executable, .udata = udata};
+	bool queued = as_queue_push(&event_loop->queue, &qcmd);
 	pthread_mutex_unlock(&event_loop->lock);
-	
+
 	if (queued) {
 		ev_async_send(event_loop->loop, &event_loop->wakeup);
 	}
@@ -891,21 +885,6 @@ as_event_node_destroy(as_node* node)
 	}
 	cf_free(node->async_conn_pools);
 	cf_free(node->pipe_conn_pools);
-}
-
-bool
-as_event_send_close_loop(as_event_loop* event_loop)
-{
-	// Send stop command through queue so it can be executed in event loop thread.
-	void* ptr = 0;
-	pthread_mutex_lock(&event_loop->lock);
-	bool queued = as_queue_push(&event_loop->queue, &ptr);
-	pthread_mutex_unlock(&event_loop->lock);
-	
-	if (queued) {
-		ev_async_send(event_loop->loop, &event_loop->wakeup);
-	}
-	return queued;
 }
 
 #endif

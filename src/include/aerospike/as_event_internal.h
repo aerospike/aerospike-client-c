@@ -96,6 +96,7 @@ typedef struct {
 	void* udata;
 } as_queued_pipe_cb;
 
+typedef void (*as_event_executable) (void* udata);
 typedef bool (*as_event_parse_results_fn) (struct as_event_command* cmd);
 typedef void (*as_event_executor_complete_fn) (struct as_event_executor* executor, as_error* err);
 typedef void (*as_event_executor_destroy_fn) (struct as_event_executor* executor);
@@ -130,7 +131,12 @@ typedef struct as_event_command {
 	bool deserialize;
 	bool free_buf;
 } as_event_command;
-		
+
+typedef struct {
+	as_event_executable executable;
+	void* udata;
+} as_event_commander;
+
 typedef struct as_event_executor {
 	pthread_mutex_t lock;
 	struct as_event_command** commands;
@@ -199,8 +205,12 @@ as_event_create_loop(as_event_loop* event_loop);
 void
 as_event_register_external_loop(as_event_loop* event_loop);
 
+/**
+ * Schedule execution of function on specified event loop.
+ * Command is placed on event loop queue and is never executed directly.
+ */
 bool
-as_event_send(as_event_command* cmd);
+as_event_execute(as_event_loop* event_loop, as_event_executable executable, void* udata);
 
 bool
 as_event_command_begin(as_event_command* cmd);
@@ -210,9 +220,6 @@ as_event_close_connection(as_event_connection* conn);
 
 void
 as_event_node_destroy(as_node* node);
-	
-bool
-as_event_send_close_loop(as_event_loop* event_loop);
 
 /******************************************************************************
  * LIBEV INLINE FUNCTIONS
@@ -399,23 +406,6 @@ as_event_command_release(as_event_command* cmd)
 /******************************************************************************
  * COMMON INLINE FUNCTIONS
  *****************************************************************************/
-
-static inline void
-as_event_command_execute_in_loop(as_event_command* cmd)
-{
-	// Check if command timed out after coming off queue.
-	if (cmd->timeout_ms && (cf_getms() - *(uint64_t*)cmd) > cmd->timeout_ms) {
-		as_error err;
-		as_error_set_message(&err, AEROSPIKE_ERR_TIMEOUT, as_error_string(AEROSPIKE_ERR_TIMEOUT));
-		// Tell the libuv version of as_event_command_release() to not try to close the uv_timer_t.
-		cmd->timeout_ms = 0;
-		as_event_error_callback(cmd, &err);
-		return;
-	}
-	
-	// Start processing.
-	as_event_command_begin(cmd);
-}
 
 static inline as_event_loop*
 as_event_assign(as_event_loop* event_loop)

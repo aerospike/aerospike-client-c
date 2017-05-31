@@ -35,7 +35,7 @@ as_event_register_external_loop(as_event_loop* event_loop)
 }
 
 bool
-as_event_send(as_event_command* cmd)
+as_event_execute(as_event_loop* event_loop, as_event_executable executable, void* udata)
 {
 	return false;
 }
@@ -54,12 +54,6 @@ as_event_close_connection(as_event_connection* conn)
 void
 as_event_node_destroy(as_node* node)
 {
-}
-
-bool
-as_event_send_close_loop(as_event_loop* event_loop)
-{
-	return false;
 }
 
 #endif

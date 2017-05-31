@@ -52,12 +52,7 @@ static as_query * as_query_defaults(as_query * query, bool free, const as_namesp
 	query->predexp.capacity = 0;
 	query->predexp.size = 0;
 	query->predexp.entries = NULL;
-	
-	query->orderby._free = false;
-	query->orderby.capacity = 0;
-	query->orderby.size = 0;
-	query->orderby.entries = NULL;
-	
+
 	as_udf_call_init(&query->apply, NULL, NULL, NULL);
 
 	return query;
@@ -122,10 +117,6 @@ void as_query_destroy(as_query * query)
 	query->where.capacity = 0;
 	query->where.size = 0;
 	query->where.entries = NULL;
-	
-	if ( query->orderby.entries && query->orderby._free ) {
-		cf_free(query->orderby.entries);
-	}
 
 	// NOTE - we need to check all of the registered predexp
 	// entries ... if they have a registered destructor (heap
@@ -146,12 +137,7 @@ void as_query_destroy(as_query * query)
 	query->predexp.capacity = 0;
 	query->predexp.size = 0;
 	query->predexp.entries = NULL;
-	
-	query->orderby._free = false;
-	query->orderby.capacity = 0;
-	query->orderby.size = 0;
-	query->orderby.entries = NULL;
-	
+
 	as_udf_call_destroy(&query->apply);
 
 	if ( query->_free ) {
@@ -385,78 +371,8 @@ bool as_query_predexp_add(as_query * query, as_predexp_base * predexp)
 }
 
 /******************************************************************************
- *	ORDERBY FUNCTIONS
- *****************************************************************************/
-
-/** 
- *	Initializes `as_query.orderby` with a capacity of `n` using `malloc()`.
- *
- *	For stack allocation, use `as_query_orderby_inita()`.
- *
- *	~~~~~~~~~~{.c}
- *	as_query_orderby_init(&q, 1);
- *	as_query_orderby(&q, "bin1", AS_ORDER_ASCENDING);
- *	~~~~~~~~~~
- *
- *	@param query	The query to initialize.
- *	@param n		The number of as_query_ordering to allocate.
- *
- *	@return On success, true. Otherwise an error occurred.
- */
-bool as_query_orderby_init(as_query * query, uint16_t n)
-{
-	if ( !query ) return false;
-	if ( query->orderby.entries ) return false;
-
-	query->orderby.entries = (as_ordering *) cf_calloc(n, sizeof(as_ordering));
-	if ( !query->orderby.entries ) return false;
-
-	query->orderby._free = true;
-	query->orderby.capacity = n;
-	query->orderby.size = 0;
-	
-	return true;
-}
-
-/**
- *	Add a bin to sort by to the query.
- *	
- *	You have to ensure as_query.orderby has sufficient capacity, prior to 
- *	adding an ordering. If capacity is sufficient then false is returned.
- *
- *	~~~~~~~~~~{.c}
- *	as_query_orderby_init(&q, 1);
- *	as_query_orderby(&q, "bin1", AS_ORDER_ASCENDING);
- *	~~~~~~~~~~
- *
- *	@param query	The query to modify.
- *	@param bin		The name of the bin to sort by.
- *	@param order	The direction to order by: `AS_ORDER_ASCENDING` or `AS_ORDER_DESCENDING`.
- *	
- *	@return On success, true. Otherwise an error occurred.
- */
-bool as_query_orderby(as_query * query, const as_bin_name bin, as_order order)
-{
-	// test preconditions
-	if ( !query || !bin || strlen(bin) >= AS_BIN_NAME_MAX_SIZE ) {
-		return false;
-	}
-
-	// insufficient capacity
-	if ( query->orderby.size >= query->orderby.capacity ) return false;
-
-	as_ordering * o = &query->orderby.entries[query->orderby.size++];
-
-	strcpy(o->bin, bin);
-	o->order = order;
-
-	return true;
-}
-
-/******************************************************************************
  *	QUERY MODIFIER FUNCTIONS
  *****************************************************************************/
-
 
 /**
  * Apply a function to the results of the query.

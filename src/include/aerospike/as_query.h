@@ -562,17 +562,6 @@ typedef struct as_query_s {
 	as_query_predexp predexp;
 
 	/**
-	 *	Bins to order by.
-	 *	
-	 *	Use either of the following function to initialize:
-	 *	-	as_query_orderby_init() -	To initialize on the heap.
-	 *	-	as_query_orderby_inita() -	To initialize on the stack.
-	 *
-	 *	Use as_query_orderby() to populate.
-	 */
-	as_query_ordering orderby;
-
-	/**
 	 *	UDF to apply to results of the query
 	 *
 	 *	Should be set via `as_query_apply()`.
@@ -873,79 +862,6 @@ bool as_query_predexp_init(as_query * query, uint16_t n);
  *	@ingroup query_object
  */
 bool as_query_predexp_add(as_query * query, as_predexp_base * predexp);
-
-/******************************************************************************
- *	ORDERBY FUNCTIONS
- *****************************************************************************/
-
-/** 
- *	Initializes `as_query.where` with a capacity of `n` using `alloca()`.
- *
- *	For heap allocation, use `as_query_where_init()`.
- *
- *	~~~~~~~~~~{.c}
- *	as_query_orderby_inita(&query, 1);
- *	as_query_orderby(&query, "bin1", AS_ORDER_ASCENDING);
- *	~~~~~~~~~~
- *
- *	@param __query	The query to initialize.
- *	@param __n		The number of as_orders to allocate.
- *
- *	@return On success, true. Otherwise an error occurred.
- *
- *	@relates as_query
- */
-#define as_query_orderby_inita(__query, __n) \
-	do { \
-		if ( (__query) != NULL && (__query)->orderby.entries == NULL  ) {\
-			(__query)->orderby.entries = (as_ordering*) alloca(sizeof(as_ordering) * (__n));\
-			if ( (__query)->orderby.entries ) { \
-				(__query)->orderby._free = false;\
-				(__query)->orderby.capacity = (__n);\
-				(__query)->orderby.size = 0;\
-			}\
-	 	} \
-	} while(0)
-
-/** 
- *	Initializes `as_query.orderby` with a capacity of `n` using `malloc()`.
- *	
- *	For stack allocation, use `as_query_orderby_inita()`.
- *	
- *	~~~~~~~~~~{.c}
- *	as_query_orderby_init(&query, 1);
- *	as_query_orderby(&query, "bin1", AS_ORDER_ASCENDING);
- *	~~~~~~~~~~
- *
- *	@param query	The query to initialize.
- *	@param n		The number of as_orders to allocate.
- *
- *	@return On success, true. Otherwise an error occurred.
- *
- *	@relates as_query
- */
-bool as_query_orderby_init(as_query * query, uint16_t n);
-
-/**
- *	Add a bin to sort by to the query.
- *	
- *	You have to ensure as_query.orderby has sufficient capacity, prior to 
- *	adding an ordering. If capacity is insufficient then false is returned.
- *
- *	~~~~~~~~~~{.c}
- *	as_query_orderby_init(&query, 1);
- *	as_query_orderby(&query, "bin1", AS_ORDER_ASCENDING);
- *	~~~~~~~~~~
- *
- *	@param query	The query to modify.
- *	@param bin		The name of the bin to sort by.
- *	@param order	The sort order: `AS_ORDER_ASCENDING` or `AS_ORDER_DESCENDING`.
- *
- *	@return On success, true. Otherwise an error occurred.
- *
- *	@relates as_query
- */
-bool as_query_orderby(as_query * query, const char * bin, as_order order);
 
 /******************************************************************************
  *	QUERY MODIFIER FUNCTIONS

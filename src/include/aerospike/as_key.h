@@ -459,7 +459,7 @@ as_key * as_key_init_value(as_key * key, const as_namespace ns, const as_set set
 as_key * as_key_new(const as_namespace ns, const as_set set, const char * value);
 
 /**
- *	Initialize a stack allocated as_key to a int64_t value.
+ *	Creates and initializes a heap allocated as_key to a int64_t value.
  *
  *	~~~~~~~~~~{.c}
  *	as_key * key = as_key_new_int64("ns", "set", 123);
@@ -526,7 +526,7 @@ static inline as_key * as_key_new_str(const as_namespace ns, const as_set set, c
 }
 
 /**
- *	Initialize a stack allocated as_key to a byte array.
+ *	Creates and initializes a heap allocated as_key to a byte array.
  *
  *	~~~~~~~~~~{.c}
  *	uint8_t * rgb = (uint8_t *) malloc(3);
@@ -554,7 +554,7 @@ static inline as_key * as_key_new_str(const as_namespace ns, const as_set set, c
 as_key * as_key_new_rawp(const as_namespace ns, const as_set set, const uint8_t * value, uint32_t size, bool free);
 
 /**
- *	Initialize a stack allocated as_key to a byte array.
+ *	Creates and initializes a heap allocated as_key to a byte array.
  *
  *	~~~~~~~~~~{.c}
  *	uint8_t rgb[3] = {254,254,120};
@@ -581,7 +581,7 @@ static inline as_key * as_key_new_raw(const as_namespace ns, const as_set set, c
 }
 
 /**
- *	Initialize a stack allocated as_key with a digest.
+ *	Creates and initializes a heap allocated as_key with a digest.
  *
  *	~~~~~~~~~~{.c}
  *	as_digest_value digest = {0};
@@ -604,7 +604,7 @@ static inline as_key * as_key_new_raw(const as_namespace ns, const as_set set, c
 as_key * as_key_new_digest(const as_namespace ns, const as_set set, const as_digest_value digest);
 
 /**
- *	Initialize a stack allocated as_key to a an as_key_value.
+ *	Creates and initializes a heap allocated as_key to a an as_key_value.
  *
  *	~~~~~~~~~~{.c}
  *	as_string str;

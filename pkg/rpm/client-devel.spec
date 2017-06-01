@@ -17,9 +17,6 @@ The Aerospike C client is used to connect with an Aerospike server and perform d
 /usr/include/aerospike
 /usr/include/citrusleaf
 /usr/lib/libaerospike.a
-/usr/lib/libaerospike.so
-%defattr(-,aerospike,aerospike)
-/opt/aerospike/client
 
 %pre
 if ! id -g aerospike >/dev/null 2>&1; then
@@ -28,7 +25,7 @@ if ! id -g aerospike >/dev/null 2>&1; then
 fi
 if ! id -u aerospike >/dev/null 2>&1; then
 	echo "Adding user aerospike"
-	/usr/sbin/useradd -d /opt/aerospike -c 'Aerospike server' -g aerospike aerospike
+	/usr/sbin/useradd -d /opt/aerospike -c 'Aerospike' -g aerospike aerospike
 fi
 
 %post

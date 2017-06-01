@@ -90,15 +90,20 @@ function CreatePackage {
   optDir=$buildDir/$2
 
   mkdir -p $topDir/lib
-  cp -p $baseDir/target/$os/lib/* $topDir/lib
-  mkdir -p $optDir/aerospike/client/sys/udf/lua
-  mkdir -p $optDir/aerospike/client/usr/udf/lua
-  cp -p $baseDir/modules/lua-core/src/{aerospike.lua,as.lua,stream_ops.lua} $optDir/aerospike/client/sys/udf/lua
 
   if [ "$pkgType" = "devel" ]
   then
+    cp -p $baseDir/target/$os/lib/libaerospike.a $topDir/lib
+    chmod g-w,o-w $topDir/lib/libaerospike.a
     cp -pr $baseDir/target/$os/include $topDir
     chmod -R g-w,o-w $topDir/include/*
+  else
+    cp -p $baseDir/target/$os/lib/libaerospike.* $topDir/lib
+    rm $topDir/lib/libaerospike.a
+    chmod g-w,o-w $topDir/lib/libaerospike.*
+    mkdir -p $optDir/aerospike/client/sys/udf/lua
+    mkdir -p $optDir/aerospike/client/usr/udf/lua
+    cp -p $baseDir/modules/lua-core/src/{aerospike.lua,as.lua,stream_ops.lua} $optDir/aerospike/client/sys/udf/lua   
   fi
 }
 

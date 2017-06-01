@@ -1,7 +1,7 @@
 Name: aerospike-client-c@EVENTNAME@
 Version: @VERSION@
 Release: 1%{?dist}
-Summary: Aerospike C Client Libraries@EVENTDESC@
+Summary: Aerospike C Client Shared Library@EVENTDESC@
 License: Proprietary
 Group: Development/Libraries
 BuildArch: x86_64
@@ -14,7 +14,6 @@ The Aerospike C client is used to connect with an Aerospike server and perform d
 
 %files
 %defattr(-,root,root)
-/usr/lib/libaerospike.a
 /usr/lib/libaerospike.so
 %defattr(-,aerospike,aerospike)
 /opt/aerospike/client
@@ -26,7 +25,7 @@ if ! id -g aerospike >/dev/null 2>&1; then
 fi
 if ! id -u aerospike >/dev/null 2>&1; then
 	echo "Adding user aerospike"
-	/usr/sbin/useradd -d /opt/aerospike -c 'Aerospike server' -g aerospike aerospike
+	/usr/sbin/useradd -d /opt/aerospike -c 'Aerospike' -g aerospike aerospike
 fi
 
 %post

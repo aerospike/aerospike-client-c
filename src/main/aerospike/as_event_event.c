@@ -144,7 +144,11 @@ as_event_init_loop(as_event_loop* event_loop)
 	*/
 }
 
-void event_base_add_virtual(struct event_base *);
+#if LIBEVENT_VERSION_NUMBER >= 0x02010000
+void event_base_add_virtual_(struct event_base*);
+#else
+void event_base_add_virtual(struct event_base*);
+#endif
 
 bool
 as_event_create_loop(as_event_loop* event_loop)
@@ -157,7 +161,11 @@ as_event_create_loop(as_event_loop* event_loop)
 	}
 
 	// Add a virtual event to prevent event_base_dispatch() from returning prematurely.
+#if LIBEVENT_VERSION_NUMBER >= 0x02010000
+	event_base_add_virtual_(event_loop->loop);
+#else
 	event_base_add_virtual(event_loop->loop);
+#endif
 
 	as_event_init_loop(event_loop);
 

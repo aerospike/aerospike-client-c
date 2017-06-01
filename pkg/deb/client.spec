@@ -4,6 +4,5 @@ Section: Databases
 Priority: optional
 Architecture: amd64
 Maintainer: Aerospike, Inc. <info@aerospike.com>
-Description: Aerospike Client Libraries@EVENTDESC@
+Description: Aerospike C Client Shared Library@EVENTDESC@
 Installed-Size: 3000
-
